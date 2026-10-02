@@ -87,10 +87,11 @@ const plot = (b, x, y, c) => {
 const HEADS = [];
 for (let i = 0; i < 3; i++) HEADS.push({ x0: 0, y0: 0, x1: 0, y1: 0, on: false });
 const box4 = () => ({ x0: 0, y0: 0, x1: 0, y1: 0 });
-const LAYOUT = { heads: 0, top: box4(), left: box4(), right: box4(), full: box4(), vis: box4(), band: 0, sx0: 0, sy0: 0, k: 1 };
+const LAYOUT = { heads: 0, top: box4(), left: box4(), right: box4(), full: box4(), vis: box4(), band: 0, sx0: 0, sy0: 0, k: 1, headTop: Infinity, headCx: 0 };
 // the screen area wall text and emblems may use: clear of the graphics top row (y 8-21) and above
 // the caption band (y 136), so nothing on the wall sits under the graphics
 const USABLE = { x0: 8, y0: 22, x1: 376, y1: 136 };
+const HEAD_HW = 12.5, HEAD_TOP = 28.5; // a head's half width and top above the neck base, in rig units (s)
 const clampN = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 /**
@@ -113,15 +114,29 @@ function computeLayout(L, cam, solo, wx0, wy0, w, h, k) {
     for (const X of seats) {
       const nx = sxOf(cam, kp, X), ny = syOf(cam, kp, SET.neckY);
       const hb = HEADS[n];
-      hb.x0 = Math.floor(nx - 11 * s) - wx0 - MARGIN;
-      hb.x1 = Math.ceil(nx + 11 * s) - wx0 + MARGIN;
-      hb.y0 = Math.floor(ny - 27 * s) - wy0 - MARGIN;
+      // the head with its hair, measured on the cast's rigs: up to 27.2 s above the neck base
+      // (Sam's quiff, Max's spikes) and 11.8 s either side (Nova's curls)
+      hb.x0 = Math.floor(nx - HEAD_HW * s) - wx0 - MARGIN;
+      hb.x1 = Math.ceil(nx + HEAD_HW * s) - wx0 + MARGIN;
+      hb.y0 = Math.floor(ny - HEAD_TOP * s) - wy0 - MARGIN;
       hb.y1 = Math.ceil(ny + 2 * s) - wy0 + MARGIN;
       hb.on = hb.x1 > vx0 && hb.x0 < vx1 && hb.y1 > vy0 && hb.y0 < yb;
       if (hb.on) n++;
     }
   }
   L.heads = n;
+  // the highest head top (margin included) and the heads' mean centre, in wall-local px: the field's
+  // value transition ends above it, and a picture in the top band leans away from it
+  L.headTop = Infinity;
+  L.headCx = w / 2;
+  if (n) {
+    let cx = 0;
+    for (let i = 0; i < n; i++) {
+      L.headTop = Math.min(L.headTop, HEADS[i].y0);
+      cx += (HEADS[i].x0 + HEADS[i].x1) / 2;
+    }
+    L.headCx = cx / n;
+  }
   // the part of the wall on screen at all (pictures and maps fill it when no head is in front)
   set4(L.vis, clampN(-wx0, 0, w), clampN(-wy0, 0, h), clampN(384 - wx0, 0, w), clampN(216 - wy0, 0, h));
   set4(L.full, vx0, vy0, vx1, yb);
@@ -149,11 +164,13 @@ function layoutOf(spec, env, w, h) {
     computeLayout(L, env.cam, spec.solo, env.wx0, env.wy0, w, h, env.k);
     const u = 1 / env.k;
     const cp = (b) => ({ x0: b.x0 * u, y0: b.y0 * u, x1: b.x1 * u, y1: b.y1 * u });
-    F = spec._lay = { heads: L.heads, band: L.band * u, top: cp(L.top), left: cp(L.left), right: cp(L.right), full: cp(L.full), vis: cp(L.vis), sx0: L.sx0, sy0: L.sy0 };
+    F = spec._lay = { heads: L.heads, band: L.band * u, top: cp(L.top), left: cp(L.left), right: cp(L.right), full: cp(L.full), vis: cp(L.vis), sx0: L.sx0, sy0: L.sy0, headTop: L.headTop * u, headCx: L.headCx * u };
   }
   const k = env.k;
   const sc = (src, dst) => set4(dst, Math.round(src.x0 * k), Math.round(src.y0 * k), Math.round(src.x1 * k), Math.round(src.y1 * k));
   L.heads = F.heads;
+  L.headTop = F.headTop * k;
+  L.headCx = F.headCx * k;
   L.band = Math.round(F.band * k);
   sc(F.top, L.top);
   sc(F.left, L.left);
@@ -202,10 +219,10 @@ function pickBox(L, needW, needH, preferSide = true) {
 const CLIP = { x0: 0, y0: 0, x1: 0, y1: 0 };
 // The last field drawn, kept so a wall re-rendered for its content alone (the globe turning, the
 // planet's light, a map flying in) copies its field instead of dithering it again.
-const FIELD = { cap: null, buf: null, w: 0, h: 0, style: '', soft: false, ax: -1, ay: -1, fy: NaN, hf: NaN, x0: 0, y0: 0, x1: 0, y1: 0 };
+const FIELD = { cap: null, buf: null, w: 0, h: 0, style: '', soft: false, ax: -1, ay: -1, fy: NaN, hf: NaN, fe: NaN, x0: 0, y0: 0, x1: 0, y1: 0 };
 function fillField(b, style, soft) {
   const f = FIELD;
-  if (f.buf && f.w === b.w && f.h === b.h && f.style === style.id && f.soft === soft && f.ax === ENV.ax && f.ay === ENV.ay && f.fy === ENV.fy && f.hf === ENV.hf && f.x0 === CLIP.x0 && f.y0 === CLIP.y0 && f.x1 === CLIP.x1 && f.y1 === CLIP.y1) {
+  if (f.buf && f.w === b.w && f.h === b.h && f.style === style.id && f.soft === soft && f.ax === ENV.ax && f.ay === ENV.ay && f.fy === ENV.fy && f.hf === ENV.hf && f.fe === ENV.fe && f.x0 === CLIP.x0 && f.y0 === CLIP.y0 && f.x1 === CLIP.x1 && f.y1 === CLIP.y1) {
     b.px.set(f.buf);
     return;
   }
@@ -214,7 +231,7 @@ function fillField(b, style, soft) {
   if (!f.cap || f.cap.length < n) f.cap = new Uint32Array(Math.ceil(n * 1.25));
   f.buf = f.cap.subarray(0, n);
   f.buf.set(b.px);
-  Object.assign(f, { w: b.w, h: b.h, style: style.id, soft, ax: ENV.ax, ay: ENV.ay, fy: ENV.fy, hf: ENV.hf, x0: CLIP.x0, y0: CLIP.y0, x1: CLIP.x1, y1: CLIP.y1 });
+  Object.assign(f, { w: b.w, h: b.h, style: style.id, soft, ax: ENV.ax, ay: ENV.ay, fy: ENV.fy, hf: ENV.hf, fe: ENV.fe, x0: CLIP.x0, y0: CLIP.y0, x1: CLIP.x1, y1: CLIP.y1 });
 }
 function fieldPixels(b, style, soft) {
   const [a, z] = style.wallField;
@@ -233,10 +250,19 @@ function fieldPixels(b, style, soft) {
   // light. The level uses the wall's unrounded span and the Bayer index the screen position, so a
   // dolly never re-dithers it.
   const ax = ENV.ax, ay = ENV.ay, fy = ENV.fy, hf = Math.max(1, ENV.hf);
-  const [u0, u1] = style.wallBand || FIELD_BAND;
-  const iu = 1 / (u1 - u0);
+  let [u0, u1] = style.wallBand || FIELD_BAND;
+  // the transition is over above every head in front of the wall (no value seam behind a head,
+  // ART_DIRECTION): squeezed toward the top when a head rises into it, gone when it reaches the top
+  const ue = (ENV.fe + fy) / hf;
+  if (ue < u1) {
+    u0 *= Math.max(0, ue) / u1;
+    u1 = Math.max(0, ue);
+  }
+  const iu = 1 / Math.max(1e-6, u1 - u0);
   for (let y = y0; y < y1; y++) {
-    const q = Math.round(Math.max(0, Math.min(1, ((y + 0.5 + fy) / hf - u0) * iu)) * 16);
+    let q = Math.round(Math.max(0, Math.min(1, ((y + 0.5 + fy) / hf - u0) * iu)) * 16);
+    if (q <= 2) q = 0; // no lone Bayer specks at the ends of the band
+    else if (q >= 14) q = 16;
     const row = y * w, br = ((y + ay) & 3) << 2;
     if (q <= 0 || q >= 16) {
       px.fill(q <= 0 ? ca : cz, row + x0, row + x1);
@@ -929,51 +955,94 @@ function clampScreen(box, L, sx0, sx1, sy1) {
   return bw(CLAMP) > 8 && bh(CLAMP) > 8 ? CLAMP : box;
 }
 
-/** Size of a plate (rule, kicker, source line) at text scale ts. */
-function plateSize(label, sub, ts) {
-  const kw = label ? textWidth(label, 'body', ts) : 0, sw = sub ? textWidth(sub, 'micro', ts) : 0;
-  const kh = label ? capHeight('body', ts) : 0, sh = sub ? capHeight('micro', ts) + 3 * ts : 0;
-  return { w: Math.max(kw, sw), h: ts + 3 * ts + kh + sh, kh };
+/**
+ * The words of `text` in at most `max` lines of at most maxW px each (greedy), or null when it
+ * needs more lines or one word alone is wider than maxW.
+ */
+function wrapWords(text, maxW, font, scale, max) {
+  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+  const lines = [];
+  let cur = '';
+  for (const wd of words) {
+    const next = cur ? `${cur} ${wd}` : wd;
+    if (textWidth(next, font, scale) <= maxW) {
+      cur = next;
+      continue;
+    }
+    if (!cur || textWidth(wd, font, scale) > maxW) return null;
+    lines.push(cur);
+    cur = wd;
+  }
+  if (cur) lines.push(cur);
+  return lines.length <= max ? lines : null;
 }
 
-/** Where a plate goes in layout L: { ts, kicker, sub, x0, top, w, h, kh } in wall-local px, or null. */
+/** Size of a plate (rule, kicker lines, source line) at text scale ts. */
+function plateSize(lines, sub, ts) {
+  let w = 0;
+  for (const l of lines) w = Math.max(w, textWidth(l, 'body', ts));
+  if (sub) w = Math.max(w, textWidth(sub, 'micro', ts));
+  const kh = capHeight('body', ts), n = lines.length;
+  const sh = sub ? capHeight('micro', ts) + 3 * ts : 0;
+  return { w, h: ts + 3 * ts + n * kh + Math.max(0, n - 1) * 3 * ts + sh, kh };
+}
+
+/** The free boxes in the order a plate or a block tries them: the wider side first, the top band, the other side. */
+function boxOrder(L) {
+  if (!L.heads) return [L.full];
+  const side = bw(L.left) >= bw(L.right) ? L.left : L.right;
+  return [side, L.top, side === L.left ? L.right : L.left];
+}
+
+/**
+ * Where a plate goes in layout L: { ts, lines, sub, x0, top, w, h, kh } in wall-local px, or null.
+ * The largest form some free box holds, in this order: the wall's text scale on one line with the
+ * source, then the kicker wrapped on two lines, then 1x (one line, two lines), then 1x without the
+ * source. Each box is tried with its own width and height, so a long kicker (the writer allows 18
+ * characters) wraps in a tall narrow box instead of failing the wide short one. Never under a
+ * bezel, a head or the frame edge; null only when no free box holds even the kicker at 1x.
+ */
 function layoutPlate(L, label0, sub0, ts0) {
-  // the largest form some free area holds: 2x, else 1x, else the kicker alone at 1x (lines are cut
-  // at words to the box width); when even that has no room (a head fills the wall), no plate at all
-  let ts = ts0, full = null;
-  for (const [s2, withSub] of [[ts0, true], [1, true], [1, false]]) {
-    if (!withSub && !sub0) continue;
-    const z = plateSize(label0, withSub ? sub0 : '', s2);
-    const zw = Math.min(z.w, (L.heads ? Math.max(bw(L.top), bw(L.left), bw(L.right)) : bw(L.full)) - 6);
-    if (fitsSomewhere(L, Math.max(24, zw) + 6, z.h + 4)) {
-      ts = s2;
-      full = z;
-      if (!withSub) sub0 = '';
-      break;
+  const boxes = boxOrder(L);
+  const tries = [];
+  for (const s of ts0 > 1 ? [ts0, 1] : [1]) tries.push([s, 1, true], [s, 2, true]);
+  if (sub0) tries.push([1, 1, false], [1, 2, false]);
+  for (const [ts, n, withSub] of tries) {
+    for (const box of boxes) {
+      const maxW = bw(box) - 4;
+      if (maxW < 8) continue;
+      const lines = label0 ? wrapWords(label0, maxW, 'body', ts, n) : [];
+      if (!lines || (n === 2 && lines.length < 2)) continue;
+      let sub = '';
+      if (withSub && sub0) {
+        // the source is only shortened at 1x (a larger plate never pays with a cut name)
+        sub = ts > 1 ? (textWidth(sub0, 'micro', ts) <= maxW ? sub0 : '') : fitLine(sub0, maxW, 'micro', ts);
+        if (!sub) continue;
+      }
+      if (!lines.length && !sub) continue;
+      const z = plateSize(lines, sub, ts);
+      if (z.w + 4 > bw(box) || z.h + 4 > bh(box)) continue;
+      const cx = Math.round((box.x0 + box.x1) / 2);
+      const top = Math.round(box.y0 + Math.max(2, (bh(box) - z.h) * 0.42));
+      const x0 = Math.max(box.x0 + 2, Math.min(box.x1 - 2 - z.w, cx - Math.round(z.w / 2)));
+      return { ts, lines, sub, x0, top, w: z.w, h: z.h, kh: z.kh };
     }
   }
-  if (!full) return null;
-  const box = pickBox(L, full.w + 6, full.h + 4, true);
-  // every line fits the box it is set in (never under a bezel, a head or the frame edge)
-  const maxW = Math.max(8, bw(box) - 4);
-  const kicker = fitLine(label0, maxW, 'body', ts);
-  const sub = sub0 ? fitLine(sub0, maxW, 'micro', ts) : '';
-  if (!kicker && !sub) return null;
-  const { w, h, kh } = plateSize(kicker, sub, ts);
-  const cx = Math.round((box.x0 + box.x1) / 2);
-  const top = Math.round(box.y0 + Math.max(2, (bh(box) - h) * 0.42));
-  const x0 = Math.max(box.x0 + 2, Math.min(box.x1 - 2 - w, cx - Math.round(w / 2)));
-  return { ts, kicker, sub, x0, top, w, h, kh };
+  return null;
 }
 
 function drawPlate(b, L, spec, style, ts0) {
   const P = layoutPlate(L, spec.label || '', spec.sub || '', ts0);
   if (!P) return;
-  const { ts, kicker, sub, x0, top, w: needW, kh } = P;
+  const { ts, lines, sub, x0, top, w: needW, kh } = P;
   const accent = style.id === 'money-minute' ? C.darkGreen : C[style.accentName];
   rect(b, x0, top, x0 + Math.min(needW, 12 * ts), top + ts, accent);
-  if (kicker) stampText(b.px, b.w, b.h, kicker, x0, top + 4 * ts, C.silver, 'body', ts, 'left');
-  if (sub) stampText(b.px, b.w, b.h, sub, x0, top + 4 * ts + kh + 3 * ts, C.fog, 'micro', ts, 'left');
+  let y = top + 4 * ts;
+  for (const l of lines) {
+    stampText(b.px, b.w, b.h, l, x0, y, C.silver, 'body', ts, 'left');
+    y += kh + 3 * ts;
+  }
+  if (sub) stampText(b.px, b.w, b.h, sub, x0, lines.length ? y : top + 4 * ts, C.fog, 'micro', ts, 'left');
 }
 
 /**
@@ -993,48 +1062,73 @@ export function plateRectFor(cam, label, sub, styleIn) {
     const hb = HEADS[i];
     heads.push({ x0: hb.x0 + o.x + MARGIN, y0: hb.y0 + o.y + MARGIN, x1: hb.x1 + o.x - MARGIN, y1: hb.y1 + o.y - MARGIN });
   }
-  return { x0: P.x0 + o.x, y0: P.top + o.y, x1: P.x0 + P.w + o.x, y1: P.top + P.h + o.y, ts: P.ts, kicker: P.kicker, sub: P.sub, heads };
+  return { x0: P.x0 + o.x, y0: P.top + o.y, x1: P.x0 + P.w + o.x, y1: P.top + P.h + o.y, ts: P.ts, kicker: P.lines.join(' '), lines: P.lines, sub: P.sub, heads };
+}
+
+/**
+ * The picture / map rectangle in SCREEN px for a camera (as laid out on a cut), plus the head boxes:
+ * { x0, y0, x1, y1, framed, heads: [...] }; x1 === x0 when no free area holds a picture (tests, labs).
+ */
+export function mediaRectFor(cam, styleIn) {
+  const style = resolveStyle(styleIn);
+  const k = kAt(cam, SET.wallZ);
+  const o = wallOrigin(cam);
+  const w = Math.round((SET.screen.x1 - SET.screen.x0) * k), h = Math.round((SET.screen.y1 - SET.screen.y0) * k);
+  const L = computeLayout(LAYOUT, cam, style.solo, o.x, o.y, w, h, k);
+  const m = mediaRect(L, { w, h }, wallTextScale(k));
+  const heads = [];
+  for (let i = 0; i < L.heads; i++) {
+    const hb = HEADS[i];
+    heads.push({ x0: hb.x0 + o.x + MARGIN, y0: hb.y0 + o.y + MARGIN, x1: hb.x1 + o.x - MARGIN, y1: hb.y1 + o.y - MARGIN });
+  }
+  return { x0: m.x + o.x, y0: m.y + o.y, x1: m.x + m.w + o.x, y1: m.y + m.h + o.y, framed: m.framed, heads, wall: { x0: o.x, y0: o.y, x1: o.x + w, y1: o.y + h } };
 }
 
 // ---------------------------------------------------------------------------
 // Pictures and maps: where they go on the wall
 
 const MEDIA = { x: 0, y: 0, w: 0, h: 0, framed: false };
+const MEDIA_MIN_W = 34, MEDIA_MIN_H = 20; // wide px: a picture smaller than this does not read (the field shows)
 /**
  * The rectangle a picture or a map takes: the visible wall when no head is in front of it (the
- * wide, the two-shot, a single that sees the wall beside the head); otherwise a picture box in
- * the larger free area beside or above the head (news-60.md: the MCU-L picture box).
+ * wide, the two-shot, a single that sees the wall beside the head); otherwise the largest picture
+ * box (4:3 to 16:9) that a free area beside or above the head holds (news-60.md: the MCU-L picture
+ * box), top-aligned, and in the band above a head pushed to the side away from it. It never falls
+ * back to the wall behind a head: when no free area holds a readable box, m.w is 0 (field only).
  */
 function mediaRect(L, b, ts) {
   const m = MEDIA;
   if (L.heads) {
-    let best = null, area = 0;
-    for (const bx of [L.left, L.right, L.top]) {
-      const a = bw(bx) * bh(bx);
-      if (a > area) {
-        area = a;
-        best = bx;
-      }
-    }
-    // a tight 2 px (wide) pad: the free box already keeps 6 px from the head, and the picture gets
-    // the room it needs (the solo dark band at the wall's foot stays dark, money-minute.md / ART_DIRECTION)
     const pad = 2 * ts;
-    const aw = bw(best) - 2 * pad, ah = bh(best) - 2 * pad;
-    const w = Math.floor(Math.min(aw, ah * 1.6)), h = Math.floor(w / 1.6);
-    if (w >= 36 && h >= 22) {
-      m.x = Math.round(best.x0 + (bw(best) - w) / 2);
-      m.y = best.y0 + pad;
+    let area = 0;
+    m.x = m.y = m.w = m.h = 0;
+    m.framed = true;
+    for (const bx of [L.left, L.right, L.top]) {
+      const aw = bw(bx) - 2 * pad, ah = bh(bx) - 2 * pad;
+      if (aw <= 0 || ah <= 0) continue;
+      let w = aw, h = ah;
+      if (aw > ah * 1.78) w = Math.floor(ah * 1.78);
+      else if (aw < ah * 1.33) h = Math.floor(aw / 1.33);
+      if (w < MEDIA_MIN_W * ts || h < MEDIA_MIN_H * ts || w * h <= area) continue;
+      area = w * h;
       m.w = w;
       m.h = h;
-      m.framed = true;
-      return m;
+      m.y = bx.y0 + pad;
+      if (bx === L.top) {
+        // above the head: lean away from it (left when it is centred, the MCU-R side)
+        const mid = (bx.x0 + bx.x1) / 2;
+        m.x = L.headCx >= mid - 1 ? bx.x0 + pad : bx.x1 - pad - w;
+      } else m.x = Math.round(bx.x0 + (bw(bx) - w) / 2);
     }
+    return m;
   }
   const v = L.vis;
   m.x = v.x0;
   m.y = v.y0;
+  // in singles the graphics' top row (y 8-21) covers the top of the frame: the picture starts under it
+  if (ts > 1 && m.y < L.full.y0) m.y = L.full.y0;
   m.w = bw(v);
-  m.h = Math.max(0, Math.min(v.y1, b.h - L.band) - v.y0);
+  m.h = Math.max(0, Math.min(v.y1, b.h - L.band) - m.y);
   m.framed = false;
   return m;
 }
@@ -1089,7 +1183,7 @@ function resampleSub(b, sub, x0, y0, w, h) {
 // ---------------------------------------------------------------------------
 // Rendering one wall state into a buffer
 
-const ENV = { k: 1, cs: 1, ts: 1, soft: false, cam: null, wx0: 0, wy0: 0, ax: 0, ay: 0, fy: 0, hf: 63, t: 0, lod: 0, frozenLam: -10, frozenAz: 55 * DEG };
+const ENV = { k: 1, cs: 1, ts: 1, soft: false, cam: null, wx0: 0, wy0: 0, ax: 0, ay: 0, fy: 0, hf: 63, fe: Infinity, t: 0, lod: 0, frozenLam: -10, frozenAz: 55 * DEG };
 
 /** Integer scale for wall text and emblems: 1 in the wide and two-shot, 2-3 in singles. */
 export const wallTextScale = (k) => (k < 1.25 ? 1 : 2);
@@ -1100,6 +1194,7 @@ function renderSpec(b, spec, style, env) {
   const L = layoutOf(spec, env, b.w, b.h);
   // what of the wall is on screen with the CURRENT camera (a move may show more than at the cut)
   set4(CLIP, clampN(-env.wx0 - 2, 0, b.w), clampN(-env.wy0 - 2, 0, b.h), clampN(386 - env.wx0, 0, b.w), clampN(218 - env.wy0, 0, b.h));
+  env.fe = L.headTop;
   fillField(b, style, soft);
   let sig = 0;
   switch (spec.mode) {
@@ -1107,6 +1202,12 @@ function renderSpec(b, spec, style, env) {
       const src = sourceOf(spec.image);
       const maxL = (style.wallMaxL || 45) - (soft ? 6 : 2);
       const m = mediaRect(L, b, ts);
+      if (m.framed && m.w <= 0) {
+        // a head fills the wall: no room for a readable picture, the story's kicker plate if it fits
+        drawPlate(b, L, spec, style, ts);
+        darkBand(b, L.band, style, soft);
+        break;
+      }
       if (m.framed) {
         frameBox(b, m, style, env);
         drawPicture(b, src, m.x, m.y, m.w, m.h, maxL);
@@ -1122,6 +1223,14 @@ function renderSpec(b, spec, style, env) {
     case 'map': {
       const dt = Math.max(0, env.t - spec.since);
       const m = mediaRect(L, b, ts);
+      if (m.framed && m.w <= 0) {
+        // no room for a locator beside the head: the place as a plate
+        PLATE_SPEC.label = spec.location?.place || spec.label || '';
+        PLATE_SPEC.sub = spec.location?.place ? '' : spec.sub || '';
+        drawPlate(b, L, PLATE_SPEC, style, ts);
+        darkBand(b, L.band, style, soft);
+        break;
+      }
       if (!m.framed && m.y < L.full.y0 && L.full.y0 < m.y + m.h - 24) {
         // the locator's place tab rides on its top edge: keep that edge under the graphics top row
         m.h -= L.full.y0 - m.y;
@@ -1186,6 +1295,8 @@ function renderSpec(b, spec, style, env) {
   }
   return sig;
 }
+
+const PLATE_SPEC = { label: '', sub: '' };
 
 function drawIdle(b, L, spec, style, env) {
   const { cs, ts, soft } = env;
@@ -1306,8 +1417,9 @@ function readSpec(req, style, t) {
   IN.image = mode === 'picture' ? r.image : null;
   IN.location = mode === 'map' ? loc : null;
   IN.figure = mode === 'figure' ? r.figure : null;
-  IN.label = mode === 'plate' ? String(r.label || (loc && !hasLoc ? loc.place : '') || '') : '';
-  IN.sub = mode === 'plate' ? String(r.sub || '') : '';
+  // a picture, map or figure keeps the story's kicker and source: its plate when a head leaves it no room
+  IN.label = mode === 'idle' ? '' : String(r.label || (mode === 'plate' && loc && !hasLoc ? loc.place : '') || '');
+  IN.sub = mode === 'idle' ? '' : String(r.sub || '');
   IN.phase = r.phase === 'outro' ? 'outro' : 'intro';
   IN.focus = r.focus || '';
   IN.solo = r.solo ?? style.solo;
@@ -1615,6 +1727,10 @@ export function wallFromScene(scene, styleIn) {
   if (F2.out && F2.wall === w && F2.img === img && F2.seg === seg && F2.kicker === kicker && F2.framing === framing && F2.styleId === style.id && F2.phase === phase && F2.focus === focus && F2.solo === solo) return F2.out;
   let out;
   const mode = w?.mode;
+  // the story's kicker plate: what a picture, map or figure falls back to when it cannot show
+  const label0 = kicker || (w?.category && KICKER_CATS[w.category] !== undefined ? KICKER_CATS[w.category] : w?.category || seg?.category || '') || '';
+  const source0 = w?.source || seg?.source || '';
+  const plate = { mode: 'plate', label: label0 || source0, sub: label0 ? source0 : '' };
   if (mode === 'idle' || mode === 'picture' || mode === 'map' || mode === 'figure' || mode === 'plate') {
     out = { ...w };
     if (mode === 'picture' && !out.image) out.image = img;
@@ -1623,9 +1739,6 @@ export function wallFromScene(scene, styleIn) {
   } else {
     const loc = seg?.location;
     const fig = seg?.numbers?.[0] || seg?.fact || null;
-    const label = kicker || (w?.category && KICKER_CATS[w.category] !== undefined ? KICKER_CATS[w.category] : w?.category || seg?.category || '') || '';
-    const source = w?.source || seg?.source || '';
-    const plate = { mode: 'plate', label: label || source, sub: label ? source : '' };
     if (style.id === 'money-minute' && framing === 'mcu-r') {
       const carded = (scene?.segPlan?.ctx?.shots || []).some((s) => s.shot === 'fact');
       out = fig && !carded ? { mode: 'figure', figure: fig } : plate;
@@ -1640,6 +1753,19 @@ export function wallFromScene(scene, styleIn) {
       }
       if (!out) out = { mode: 'idle' };
     }
+  }
+  // every field, every time: INTEGRATION keeps one wall object and Object.assign()s this into it per
+  // cut, so a field left out would carry the previous story's kicker, image or place into this one
+  out.image = out.mode === 'picture' ? out.image || null : null;
+  out.location = out.mode === 'map' ? out.location || null : null;
+  out.figure = out.mode === 'figure' ? out.figure ?? null : null;
+  if (out.mode === 'idle') out.label = out.sub = '';
+  else if (out.mode !== 'plate') {
+    out.label = out.label || plate.label;
+    out.sub = out.sub || plate.sub;
+  } else {
+    out.label = out.label || '';
+    out.sub = out.sub || '';
   }
   out.phase = phase;
   out.focus = focus;

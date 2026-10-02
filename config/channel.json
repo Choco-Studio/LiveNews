@@ -273,6 +273,9 @@
         "science",
         "tech"
       ],
+      "beat": {
+        "tech": ["SPACE", "ASTRONOMY", "CLIMATE", "OCEANS", "WILDLIFE", "HEALTH", "HISTORY", "VOLCANO", "EARTHQUAKE", "WEATHER"]
+      },
       "stories": 7,
       "maxChats": 6,
       "targetSeconds": [360, 480],

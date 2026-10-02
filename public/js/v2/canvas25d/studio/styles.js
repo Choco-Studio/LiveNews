@@ -169,8 +169,9 @@ const DEFS = {
     glow: 0.15,
     practical: 'off',
     bezel: { base: 'slate', top: 'steel', left: 'steel', soft: 'ink' },
-    wallField: ['ink', 'black'],
-    wallBand: [0.62, 0.82],
+    // a flat ink field: no value transition anywhere behind Sam's head, and the solo band at the
+    // wall's foot is only a place where no content goes (same ink), never a darker slab
+    wallField: ['ink', 'ink'],
     values: { face: [60, 100], ringMean: 35, ringMax: 45, wall: 45, yellowMax: 0.015, saturatedMax: 0.06, tintMax: 0.04 },
   },
 };

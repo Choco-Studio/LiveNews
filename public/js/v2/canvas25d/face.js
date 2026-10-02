@@ -110,6 +110,7 @@ export function drawFace(buf, L, head, f, s) {
     const squash = clamp(1 - Math.max(0, -turn) * 0.55, 0.55, 1);
     drawEye(buf, L, mt, sk, F.x, F.y, E.w * s * squash, E.h * s, f, side, tier, open);
   }
+  if (tier === 2) browSheen(buf, L, sk, s); // before the brows, so a raised brow paints over it
   drawBrows(buf, L, mt, sk, f, s, tier);
   drawNose(buf, L, sk, s, tier);
   drawMouth(buf, L, mt, sk, head, f, s, tier);
@@ -188,6 +189,9 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
   }
 
   // ---- close-up: an almond, lids, crease, iris
+  // Two passes: the lid rows of every column first (made monotone, so no single
+  // column dips below its neighbours: a 1 px "drip" under the eye reads as a tear),
+  // then the paint.
   const half = W / 2;
   const mid = x0 + half;
   const heavy = W >= 10; // s >= ~3.6
@@ -198,21 +202,49 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
   const icy = cy + Hh * 0.05 + ly * Hh * 0.16;
   const blink = 1 - clamp(open, 0, 1);
   const squint = clamp(f.squint || 0, 0, 1);
-  for (let x = x0 - 1; x <= x0 + W; x++) {
+  // a warm smile lifts the lower lid's middle (the cheek pushes up): the eye smiles
+  // without the upper lid coming down, which at this size reads as sleepy or smug
+  const cheek = clamp(((f.smile || 0) - 0.25) / 0.4, 0, 1);
+  const n = W + 2;
+  for (let k = 0; k < n; k++) {
+    const x = x0 - 1 + k;
     const u = (x + 0.5 - mid) / half; // -1 left .. 1 right
     const o = u * side; // -1 inner corner .. 1 outer corner
-    if (o < -1.05 || o > 1.08) continue;
-    const ao = Math.abs(o);
+    EO[k] = o;
+    if (o < -1.05 || o > 1.08) {
+      EA[k] = EB[k] = -9999;
+      continue;
+    }
     // almond: the upper lid peaks toward the nose, the lower lid dips toward the outer corner
     const up = restTop * Math.pow(Math.max(0, 1 - Math.pow((o + 0.18) / 1.18, 2)), 0.6) - Hh * 0.06 * o;
-    const lo = restBot * Math.pow(Math.max(0, 1 - Math.pow((o - 0.12) / 1.12, 2)), 0.75) - Hh * 0.04 * o - squint * Hh * 0.22;
+    let lo = restBot * Math.pow(Math.max(0, 1 - Math.pow((o - 0.12) / 1.12, 2)), 0.75) - Hh * 0.04 * o - squint * Hh * 0.22;
+    lo -= cheek * Hh * 0.13 * Math.max(0, 1 - o * o);
     const top = up + (lo - 0.6 - up) * blink; // the upper lid comes down to close
-    const yA = Math.round(cy + top), yB = Math.round(cy + lo);
+    EA[k] = Math.round(cy + top);
+    EB[k] = Math.round(cy + lo);
+    EC[k] = Math.round(cy + up);
+    EM[k] = Math.round(cy + (up + (lo - up) * 0.62));
+  }
+  // no column below both neighbours (lower lid) or above both (upper lid)
+  for (let k = 1; k < n - 1; k++) {
+    if (EB[k] < -9000 || EB[k - 1] < -9000 || EB[k + 1] < -9000) continue;
+    const mb = Math.max(EB[k - 1], EB[k + 1]);
+    if (EB[k] > mb) EB[k] = mb;
+    const ma = Math.min(EA[k - 1], EA[k + 1]);
+    if (EA[k] < ma) EA[k] = ma;
+  }
+  // pupil: 1 px in a small iris (a 1x2 bar reads as a slit), 2x2 in a large one
+  const pw = ir >= 2.4 ? 1.0 : 0.5;
+  for (let k = 0; k < n; k++) {
+    const x = x0 - 1 + k;
+    const o = EO[k], ao = Math.abs(o);
+    if (EA[k] < -9000) continue;
+    const yA = EA[k], yB = EB[k];
     // crease above the lid (skin fold), stays while blinking
-    if (ao < 0.72 && W >= 6) deepen(buf, x, Math.round(cy + up) - (heavy ? 2 : 1) - 1, sk);
+    if (ao < 0.72 && W >= 6) deepen(buf, x, EC[k] - (heavy ? 2 : 1) - 1, sk);
     if (blink > 0.82 || yB - yA < 1) {
       // closed: the lash line where the lids meet
-      if (ao <= 1) buf.plot(x, Math.round(cy + (up + (lo - up) * 0.62)), mt.lash, 1);
+      if (ao <= 1) buf.plot(x, EM[k], mt.lash, 1);
       continue;
     }
     if (ao > 1) {
@@ -224,10 +256,10 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
       const dx = x + 0.5 - icx, dy = y + 0.5 - icy;
       let m;
       if (dx * dx + dy * dy <= ir * ir) {
-        const pr = heavy ? 1.15 : 0.62;
-        if (Math.abs(dx) <= pr && Math.abs(dy) <= pr + 0.3) m = mt.pupil;
-        // the upper lid shades the top of the iris (a relaxed eye, never a lit disc that stares)
-        else if (y === yA + 1 || (heavy && (dy < -ir * 0.45 || Math.abs(dx) > ir - 0.9))) m = mt.irisDark;
+        if (Math.abs(dx) <= pw && Math.abs(dy) <= pw) m = mt.pupil;
+        // the iris's rim is a touch darker; under the lid only its edges are (a dark top row
+        // across the whole iris leaves one row of colour: a drowsy eye)
+        else if (y === yA + 1 ? Math.abs(dx) > ir * 0.45 : heavy && (dy < -ir * 0.55 || Math.abs(dx) > ir - 0.7)) m = mt.irisDark;
         else m = mt.iris;
       } else {
         // sclera: lit toward the key (left of the iris), cooler on the far side, under the lid and in the corners
@@ -235,11 +267,16 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
       }
       buf.plot(x, y, m, 1);
     }
-    // lash line: 1 px, 2 px over the outer half of a large eye
-    buf.plot(x, yA, mt.lash, 1);
-    if (heavy && o > 0.15 && yA + 1 < yB - 1) buf.plot(x, yA + 1, mt.lash, 1);
+    // lash line: the lash colour over the outer three quarters; at the inner corner the
+    // lid's fold in the skin's own deep tone, so the eye opens toward the nose
+    if (o < -0.62) deepen(buf, x, yA, sk, 3);
+    else buf.plot(x, yA, mt.lash, 1);
+    // large eyes: a second lash row only at the outer corner (a full one reads as heavy liner)
+    if (heavy && o > 0.55 && yA + 1 < yB - 1) buf.plot(x, yA + 1, mt.lash, 1);
     // lower lid: a soft shade line under the outer two-thirds
     if (o > -0.45 && o < 0.95) deepen(buf, x, yB, sk);
+    // a smile: the cheek's fold under the lower lid (close-ups, s >= 3)
+    if (cheek > 0.5 && W >= 8 && o > -0.15 && o < 0.75) deepen(buf, x, yB + 1, sk);
   }
   // catchlight: one white pixel up and left on the iris (key light from camera-left)
   if (blink < 0.5) {
@@ -253,6 +290,8 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
     for (let x = Math.round(mid + side * half * 0.05); side > 0 ? x <= Math.round(mid + half * 0.8) : x >= Math.round(mid - half * 0.8); x += side) deepen(buf, x, yb, sk);
   }
 }
+// per-column scratch for the close-up eye (lid rows, crease, closed line, corner coordinate)
+const EA = new Int32Array(64), EB = new Int32Array(64), EC = new Int32Array(64), EM = new Int32Array(64), EO = new Float64Array(64);
 
 // ---------------------------------------------------------------------------
 // Brows: tapered strokes on the brow ridge (head at the inner end, soft tail)
@@ -330,11 +369,52 @@ function drawNose(buf, L, sk, s, tier) {
   if (tier === 2) {
     mapF(-N.w * 0.36, N.y1 + 0.1, 0.7);
     buf.plot(Math.round(F.x), Math.round(F.y), sk, 2);
+    ridgeLight(buf, L, sk, s);
   } else {
     // medium: the tip's shadow on the far side
     mapF(N.w * 0.1, N.y1 + 0.35, 0.9);
     buf.plot(Math.round(F.x), Math.round(F.y), sk, 2);
   }
+}
+
+/**
+ * Close-ups: the key light on the nose ridge, a 1 px stroke on the key side of the
+ * ridge from mid-bridge to just above the tip. A fixed-shape decal (its length
+ * depends on the scale only) placed with faceX like the nostrils, so it slides
+ * with the head and never blinks on and off as the head moves with speech.
+ */
+function ridgeLight(buf, L, sk, s) {
+  const N = L.nose, E = L.eyes;
+  const skin = L._mats.skin;
+  const y0 = (E.y + N.y1) * 0.5 - 0.1, y1 = N.y1 - 0.55;
+  const n = Math.max(2, Math.round((y1 - y0) * s));
+  mapF(-N.w * 0.17, y0, 0.8);
+  const x = Math.round(F.x), ya = Math.round(F.y);
+  for (let k = 0; k < n; k++) litPlot(buf, x, ya + k, sk, skin, 2);
+}
+
+/**
+ * Close-ups: the forehead's sheen, a short lozenge just above the key-side brow,
+ * toward the centre (never under the hairline: there it reads as a bald patch).
+ * Fixed shape per scale, placed with faceX; only on lit bare skin (hair drawn later covers it).
+ */
+function browSheen(buf, L, sk, s) {
+  const B = L.brows, E = L.eyes;
+  const skin = L._mats.skin;
+  const wa = Math.max(3, Math.round(E.x * 0.6 * s));
+  mapF(-E.x * 0.42, B.y - 1.2);
+  const cx = Math.round(F.x - wa / 2), cy = Math.round(F.y);
+  // two rows: the upper one shorter and set toward the centre (the brow ridge's curve)
+  for (let i = 0; i < wa; i++) litPlot(buf, cx + i, cy, sk, skin, 1);
+  for (let i = 2; i < wa - 1; i++) litPlot(buf, cx + i, cy - 1, sk, skin, 1);
+}
+
+/** A highlight pixel, only over bare skin no darker than `maxTone` (never over a feature or a shadow). */
+function litPlot(buf, x, y, sk, skin, maxTone) {
+  if (x < 1 || y < 1 || x >= buf.w - 1 || y >= buf.h - 1) return;
+  const i = y * buf.w + x;
+  if (buf.mat[i] !== skin || buf.tone[i] > maxTone) return;
+  buf.plot(x, y, sk, 0);
 }
 
 // ---------------------------------------------------------------------------

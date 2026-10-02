@@ -5,7 +5,7 @@
 // casting, quiet intervals and the onset detector used by the sync checks.
 
 import assert from 'node:assert/strict';
-import { deriveCues, speechRegions, quietIntervals } from './lib/music.mjs';
+import { deriveCues, speechRegions, quietIntervals, bedPace } from './lib/music.mjs';
 import { voiceFor, workerRequest, loadPresets } from './lib/voices.mjs';
 import { envelope, onsetAfter } from './lib/analysis.mjs';
 
@@ -126,6 +126,32 @@ test('onset detector finds a click 120 ms into a quiet signal', () => {
   for (let i = Math.round(0.62 * sr); i < Math.round(0.7 * sr); i++) x[i] = Math.sin(i * 0.2) * 0.5;
   const o = onsetAfter(envelope(x, sr), 0.5, 0.9);
   assert.ok(o && Math.abs(o.t - 0.62) < 0.006, `onset ${o?.t}`);
+});
+
+test('bed changes are counted per programme against the pace rules', () => {
+  const A = (t, moment, action, detail = '', programId = 'world-now') => ({ t, moment, programId, action, detail });
+  const actions = [
+    A(-3, 'open', 'silence'),
+    A(2, 'headlines', 'headline'), // chords start: change 1
+    A(9, 'greeting', 'silence'), // stop: change 2
+    A(20, 'roundup', 'bed', 'world-now/roundup:roundup'), // bed starts: change 3
+    A(24, 'pip', 'pip'), // no change
+    A(30, 'story', 'bed', 'world-now/story:story'), // another song: change 4 (the round-up bed played 10 s)
+    A(40, 'story', 'bed', 'world-now/story:quiet'), // same song, new arrangement
+    A(70, 'outro', 'silence'), // change 5
+    A(75, 'silence', 'silence', '', 'channel'), // break: not counted
+    A(80, 'ad', 'silence', '', 'channel'),
+  ];
+  const r = bedPace(actions, { seconds: 90, rulesFor: (id) => ({ minBed: 25, maxChangesPerMin: 1.5, id }) });
+  assert.deepEqual(Object.keys(r), ['world-now']);
+  const w = r['world-now'];
+  assert.equal(w.changes, 5);
+  assert.equal(w.arrangement, 1);
+  assert.equal(w.beds, 3);
+  assert.equal(w.shortestBed, 7, 'the headline chords 2-9 s');
+  assert.deepEqual(w.short.map((b) => [b.song, b.seconds]), [['headlines', 7], ['world-now/roundup', 10]]);
+  assert.equal(w.seconds, 73, 'from its first action in the window to the break');
+  assert.equal(w.maxPerMin, 1.5);
 });
 
 console.log(`${passed} passed`);

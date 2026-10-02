@@ -125,6 +125,13 @@ harness voices those lines itself, with the same casting, and the clock waits fo
    decides what plays per programme (style bibles): grave stories and the segment after them get no
    bed, ads and idents carry their own music. **Once the music stream integrates its engine into the
    channel, the WebAudio capture records the beds by itself: use `--music none`.**
+   Every action the bed engine resolved is kept (`reports.beds.actions`, recording clock) and measured
+   against the pace table's music rules (`public/js/pace.js` `music.minBed`, `maxChangesPerMin`):
+   `reports.beds.pace[programme] = { seconds, changes, perMin, maxPerMin, arrangement, beds, shortestBed,
+   minBed, short[] }` — a change is a bed starting, stopping or handing over to another song, or the
+   headline chords starting/stopping (arrangement changes inside one song are counted apart); channel
+   music (break, ads, promo) is not counted. The recorder prints it as `bed changes vs pace`. The rules
+   themselves belong to the bed engine's cue sheet; the harness only measures them.
 5. **Mix** (`mix.py`). Harness voices (24 kHz, polyphase-upsampled) placed sample-exactly + WebAudio
    (with the server voices in it) + beds. On top of the bed engine's own duck an extra duck makes every
    voice sit **>= 16 dB** over the bed (lead 0.12 s, hold 0.35 s, release 0.7 s; deeper where the engine

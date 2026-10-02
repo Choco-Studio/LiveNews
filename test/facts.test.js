@@ -187,3 +187,14 @@ describe('isGrave', () => {
     assert.equal(isGrave('Studies show the audience loved the fireworks'), false);
   });
 });
+
+describe('isGrave: disaster and emergency vocabulary (editorial-2)', () => {
+  test('natural disasters, accidents and emergencies are grave', () => {
+    for (const t of ['Hurricane Elena makes landfall', 'Typhoon hits the coast', 'Cyclone batters islands', 'Tornado flattens homes', 'Tsunami warning lifted', 'Landslide blocks road', 'Drought ruins harvest', 'Heatwave grips Spain', 'Bridge collapses', 'Train derails near Lyon', 'Ferry capsizes off Crete', 'Boat sank overnight', 'Two drowned at sea', 'Cholera spreads in camps', 'A life-threatening situation', 'Storm surge floods the seafront', 'Spain issues a red alert as temperatures hit 44 degrees', 'Extreme heat closes schools', 'State of emergency declared']) {
+      assert.equal(isGrave(t), true, t);
+    }
+  });
+  test('light stories with near-miss words stay light', () => {
+    for (const t of ['Tidal power station starts sending electricity', 'Fireworks light up the harbour', 'Coffee prices reach a ten-year high', 'Bank announces red-alert pricing', 'Startup raises funds']) assert.equal(isGrave(t), false, t);
+  });
+});

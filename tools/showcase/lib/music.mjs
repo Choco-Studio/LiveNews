@@ -207,14 +207,23 @@ export async function renderBedsInPage({ engine, cues, speech, seconds, sampleRa
       }
     }
     events.sort((x, y) => x.t - y.t || (x.cue ? -1 : 1));
+    // Every resolved action (the engine keeps only its recent history): the
+    // bed-change report reads them against the pace rules.
+    const actions = [];
     for (const e of events) {
       music.pump(e.t + LOOK);
-      if (e.cue) music.cue(e.cue, e.opts, e.t);
-      else music.speak(e.speak, e.t);
+      if (e.cue) {
+        const before = music.log().length;
+        const last = music.log()[before - 1];
+        music.cue(e.cue, e.opts, e.t);
+        const lg = music.log();
+        const a = lg[lg.length - 1];
+        if (a && (lg.length > before || a !== last)) actions.push({ t: e.t, moment: e.cue, programId: e.opts?.programId ?? null, action: a.action, detail: a.detail });
+      } else music.speak(e.speak, e.t);
     }
     music.pump(seconds + 2);
     const buf = await ctx.startRendering();
-    return { L: buf.getChannelData(0), R: buf.getChannelData(1), log: music.log() };
+    return { L: buf.getChannelData(0), R: buf.getChannelData(1), log: music.log(), actions };
   };
   const wet = await run(true);
   window.__beds = [wet.L, wet.R];
@@ -224,7 +233,7 @@ export async function renderBedsInPage({ engine, cues, speech, seconds, sampleRa
   }
   let peak = 0;
   for (const ch of window.__beds) for (let i = 0; i < ch.length; i += 7) peak = Math.max(peak, Math.abs(ch[i]));
-  return { version, samples: len, peak, log: (wet.log || []).slice(-80) };
+  return { version, samples: len, peak, log: (wet.log || []).slice(-80), actions: wet.actions };
 }
 
 /** Runs in the browser: base64 of a slice of window.__beds / __bedsDry channel `ch`. */
@@ -235,4 +244,80 @@ export function bedChunkInPage([which, ch, from, count]) {
   let s = '';
   for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
   return btoa(s);
+}
+
+/**
+ * Bed changes measured against the pace rules (public/js/pace.js `music`:
+ * minBed = a bed plays at least this long, maxChangesPerMin), from the bed
+ * engine's resolved actions [{ t (s on the recording clock), moment, programId,
+ * action, detail }]. A "change" is any switch of what the music is doing: a bed
+ * starting, stopping or handing over to another song, the headline chords
+ * starting or stopping (an arrangement change inside the same song is counted
+ * apart, as `arrangement`). Channel music (break, ads, promo) is not counted.
+ * Returns per programme { seconds, changes, perMin, maxPerMin, arrangement,
+ * beds, shortestBed, minBed, short: [{ song, start, seconds, endedBy }] }.
+ */
+export function bedPace(actions, { seconds, rulesFor = () => null } = {}) {
+  const stateOf = (a, cur) => {
+    if (a.action === 'bed') return { key: String(a.detail || '').split(':')[0] || 'bed', arr: a.detail };
+    if (a.action === 'gravePad') return { key: 'gravePad', arr: a.detail };
+    if (a.action === 'headline') return { key: 'headlines', arr: 'headlines' };
+    if (a.action === 'silence' || a.action === 'cut') return null;
+    return cur; // sting, pip, accent, shot, keep: the bed state is unchanged
+  };
+  const per = new Map();
+  const prog = (id) => {
+    if (!per.has(id)) per.set(id, { from: Infinity, to: -Infinity, changes: 0, arrangement: 0, beds: [] });
+    return per.get(id);
+  };
+  const sorted = [...actions].sort((a, b) => a.t - b.t);
+  let cur = null;
+  let since = 0;
+  let owner = null;
+  sorted.forEach((a, i) => {
+    const id = a.programId || 'channel';
+    const inWindow = a.t >= 0 && a.t <= seconds;
+    if (inWindow && id !== 'channel') {
+      const p = prog(id);
+      p.from = Math.min(p.from, a.t);
+      const next = sorted.slice(i + 1).find((x) => (x.programId || 'channel') !== id);
+      p.to = Math.max(p.to, Math.min(seconds, next ? next.t : seconds));
+    }
+    const st = stateOf(a, cur);
+    const changed = (st?.key ?? null) !== (cur?.key ?? null);
+    if (changed) {
+      if (cur && owner && owner !== 'channel') {
+        const start = Math.max(0, since);
+        const end = Math.min(seconds, a.t);
+        if (end > start) prog(owner).beds.push({ song: cur.key, start: +start.toFixed(2), seconds: +(end - start).toFixed(2), endedBy: a.moment, cutByRecording: since < 0 });
+      }
+      if (inWindow && id !== 'channel') prog(id).changes++;
+      cur = st;
+      since = a.t;
+      owner = id;
+    } else if (st && cur && st.arr !== cur.arr) {
+      if (inWindow && id !== 'channel') prog(id).arrangement++;
+      cur = st;
+    }
+  });
+  if (cur && owner && owner !== 'channel' && since < seconds) prog(owner).beds.push({ song: cur.key, start: +Math.max(0, since).toFixed(2), seconds: +(seconds - Math.max(0, since)).toFixed(2), endedBy: '(recording end)', cutByRecording: true });
+  const out = {};
+  for (const [id, p] of per) {
+    const rules = rulesFor(id) || {};
+    const span = Math.max(0, p.to - p.from);
+    const whole = p.beds.filter((b) => !b.cutByRecording);
+    const minBed = rules.minBed ?? null;
+    out[id] = {
+      seconds: +span.toFixed(1),
+      changes: p.changes,
+      perMin: span > 0 ? +((p.changes * 60) / span).toFixed(2) : null,
+      maxPerMin: rules.maxChangesPerMin ?? null,
+      arrangement: p.arrangement,
+      beds: p.beds.length,
+      shortestBed: whole.length ? Math.min(...whole.map((b) => b.seconds)) : null,
+      minBed,
+      short: minBed == null ? [] : whole.filter((b) => b.seconds < minBed).slice(0, 12),
+    };
+  }
+  return out;
 }

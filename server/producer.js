@@ -1,6 +1,7 @@
 import { buildPrompt, buildReviewPrompt, extractJson, normalizeBulletin } from './writer.js';
 import { castOf } from './channel.js';
 import { embedCues } from '../public/js/cues.js';
+import { onBeat } from './topics.js';
 
 /**
  * The visual beats a story offers, in the order the desk suggests (`visuals`:
@@ -57,14 +58,20 @@ export class Producer {
    * left for it: TECH BYTES does not use up the science COSMOS airs next.
    */
   select(program, { upcoming = [] } = {}) {
-    const avoid = {};
+    // Stories another programme due soon will want as its own: its primary section (science for COSMOS), and
+    // the topics its beat takes from our sections (COSMOS's space stories filed under tech) weigh half here.
+    const wanted = [];
     for (const next of upcoming) {
       const beat = next?.categories?.[0] || null;
-      if (beat && beat !== program.categories?.[0] && program.categories?.includes(beat)) avoid[beat] = 0.5;
+      if (beat && beat !== program.categories?.[0] && program.categories?.includes(beat)) wanted.push((s) => s.category === beat);
+      for (const [section, topics] of Object.entries(next?.beat || {})) {
+        if (program.categories?.includes(section) && next !== program) wanted.push((s) => s.category === section && onBeat(s, { [section]: topics }));
+      }
     }
+    const avoid = wanted.length ? (s) => (wanted.some((f) => f(s)) ? 0.5 : 1) : null;
     // Long programmes (pace: up to ~10 min) need a deeper pool than the default 12: at least 1.5 x their stories.
     const pool = Math.max(this.config.candidatePool, Math.ceil((program.stories || 0) * 1.5));
-    return this.news.candidates(pool, { categories: program.categories, ...(Object.keys(avoid).length ? { avoid } : {}) });
+    return this.news.candidates(pool, { categories: program.categories, ...(avoid ? { avoid } : {}), ...(program.beat ? { beat: program.beat } : {}) });
   }
 
   canProduce(channel, programId) {

@@ -1460,3 +1460,30 @@ describe('news: editorial fixes (round 1)', () => {
     assert.equal(plainTitle('Record-breaking heatwave hits Europe'), 'Record-breaking heatwave hits Europe');
   });
 });
+
+describe('editorial-2 r3: Guardian live patterns and shouting headlines', () => {
+  test('the Guardian\'s live pages are spotted, and their markers never reach speech', async () => {
+    const { plainTitle } = await import('../server/news.js');
+    const cases = {
+      'UK inflation falls to 2.3% as energy bills ease – business live': 'UK inflation falls to 2.3% as energy bills ease',
+      'Politics live: PM faces questions on housing': 'Politics: PM faces questions on housing',
+      'Ukraine war live: talks resume in Geneva': 'Ukraine war: talks resume in Geneva',
+      'Election night – as it happened': 'Election night',
+    };
+    for (const [title, said] of Object.entries(cases)) {
+      assert.equal(isLiveBlog(title), true, title);
+      assert.equal(isBreaking(title), false, title);
+      assert.equal(plainTitle(title), said, title);
+    }
+    for (const title of ['Live music festival opens in Lisbon', 'Olive harvest: a record year', 'Deliver the goods, says union']) assert.equal(isLiveBlog(title), false, title);
+  });
+
+  test('sentenceCase keeps place names (also a two-word place at the very end) and acronyms, and never throws', async () => {
+    const { sentenceCase } = await import('../server/news.js');
+    assert.equal(sentenceCase('THOUSANDS FLEE AS WILDFIRE SPREADS NEAR LOS ANGELES'), 'Thousands flee as wildfire spreads near Los Angeles');
+    assert.equal(sentenceCase('FLOODS IN NEW ZEALAND'), 'Floods in New Zealand');
+    assert.equal(sentenceCase('UN SAYS AID REACHES SOUTH SUDAN'), 'UN says aid reaches South Sudan');
+    assert.equal(sentenceCase('Normal headline stays as written'), 'Normal headline stays as written');
+    for (const t of ['NEW YORK', 'IN NEW YORK CITY', 'TO SAN FRANCISCO', '!!! LOS ANGELES !!!']) assert.doesNotThrow(() => sentenceCase(t), t);
+  });
+});

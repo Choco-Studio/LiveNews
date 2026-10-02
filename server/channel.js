@@ -3,6 +3,7 @@ import path from 'node:path';
 import { ROOT } from './config.js';
 import { FEATURES } from './writer.js';
 import { ACTIONS } from '../public/js/cues.js';
+import { TOPIC_NAMES } from './topics.js';
 
 const FILE = path.join(ROOT, 'config', 'channel.json');
 
@@ -84,6 +85,14 @@ function validateEditorial(id, p) {
   };
   if (p.headlineMax !== undefined && !(Number.isInteger(p.headlineMax) && p.headlineMax >= 20 && p.headlineMax <= 80)) fail('has a "headlineMax" outside 20..80');
   if (p.intro !== undefined && !['headlines', 'teaser', 'frame'].includes(p.intro)) fail('has an unknown "intro" (headlines, teaser or frame)');
+  // Optional: the topics a secondary section's stories must have to be on this programme's beat (server/topics.js).
+  if (p.beat !== undefined) {
+    if (!p.beat || typeof p.beat !== 'object' || Array.isArray(p.beat)) fail('has a "beat" that is not { section: [topics] }');
+    for (const [section, topics] of Object.entries(p.beat)) {
+      if (!p.categories?.includes(section)) fail(`has a "beat" for "${section}", which is not one of its categories`);
+      if (!isList(topics) || !topics.length || !topics.every((t) => TOPIC_NAMES.includes(t))) fail(`has a "beat" for "${section}" naming an unknown topic (known: ${TOPIC_NAMES.join(', ')})`);
+    }
+  }
   if (p.numberSlot !== undefined && !['main', 'second', 'last'].includes(p.numberSlot)) fail('has an unknown "numberSlot" (main, second or last)');
   if (p.toss !== undefined && (typeof p.toss !== 'string' || !p.toss.includes('{name}'))) fail('has a "toss" without {name}');
   if (p.outroAnchor !== undefined && !['A', 'B'].includes(p.outroAnchor)) fail('has an "outroAnchor" that is not A or B');

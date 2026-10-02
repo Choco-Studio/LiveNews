@@ -12,6 +12,7 @@ import { isBreaking, plainTitle } from '../news.js';
 import { GRAVE, LIGHT, contentWords, extractFigures, numbersIn, quotesIn } from '../facts.js';
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
 import { shortHeadline } from '../writer.js';
+import { topicOf } from '../topics.js';
 
 const DEATHS = /\b(?:dead|deaths?|die[sd]|killed|killings?|victims?|mourn\w*|funeral)\b/i;
 // Not grave, but not something to smile about either.
@@ -27,43 +28,7 @@ const OWN_ATTRIBUTION = /\b(?:says?|said|according to|reports?|reported|announce
 // Live pages: lines that point at the outlet's own coverage are not news.
 const LIVE_BOILERPLATE = /^(?:follow|read|watch|see) (?:the |our |all the )?(?:latest|live|updates)|\blive updates?\b|\bas it happened\b/i;
 
-// Most specific first, matched on the headline before the summary.
-const KICKERS = [
-  [/volcan|eruption|lava/i, 'VOLCANO'],
-  [/earthquake|quake|tremor/i, 'EARTHQUAKE'],
-  [/wildfire|bushfire|forest fire/i, 'WILDFIRE'],
-  [/flood|monsoon|heavy rain|storm|hurricane|typhoon|cyclone|strong winds|heatwave|heat alert|degrees celsius/i, 'WEATHER'],
-  [/festival|concert|exhibition|museum|gallery|opera|theatre/i, 'CULTURE'],
-  [/\binternet\b|broadband|\b5G\b/i, 'CONNECTIVITY'],
-  [/telescope|galaxy|galaxies|planet|comet|asteroid|eclipse|\bstars?\b|\bmoon\b|nebula/i, 'ASTRONOMY'],
-  [/rocket|\borbit|astronaut|space station|spacecraft|\bprobe\b|\brover\b|\bmars\b/i, 'SPACE'],
-  [/\b(?:tram|train|rail|metro|ferry|ferries|airport|flights?|bus|buses|bicycle|cycling|bike|tunnel)\b/i, 'TRANSPORT'],
-  [/deforest|climate|emission|carbon|glacier|ice sheet/i, 'CLIMATE'],
-  [/archaeolog|temple|ancient|ruins|fossil|dinosaur|tomb|footprints/i, 'HISTORY'],
-  [/\bschools?\b|education|students?|universit/i, 'EDUCATION'],
-  [/clean water|drinking water|water projects|reservoir/i, 'WATER'],
-  [/wildlife|zoo|panda|penguins?|elephants?|tortoises?|leopards?|turtles?|mangroves?|birds?\b|species|bees?\b/i, 'WILDLIFE'],
-  [/\btrees\b|city parks?|gardens?\b|green spaces?/i, 'GREEN CITIES'],
-  [/\bstocks?\b|shares|index|markets?\b|investors/i, 'MARKETS'],
-  [/inflation|prices|interest rates?|economy|growth|recession/i, 'ECONOMY'],
-  [/\btrade\b|exports?|imports?|tariffs?|shipping|port\b|canal/i, 'TRADE'],
-  [/\bjobs\b|unemployment|wages|workers/i, 'JOBS'],
-  [/robot/i, 'ROBOTICS'],
-  [/\bAI\b|artificial intelligence|chatbot/i, 'AI'],
-  [/\bchips?\b|semiconductor|processor/i, 'CHIPS'],
-  [/smartphone|\bphones?\b|gadget|headset|wearable|earbuds|glasses/i, 'GADGETS'],
-  [/\bapps?\b|software|update|browser/i, 'SOFTWARE'],
-  [/video games?|gaming|console/i, 'GAMING'],
-  [/satellite/i, 'SPACE'],
-  [/solar (?:farm|panels?|plant|power|park)|wind farm|turbines?|tidal power|power grid|energy|electricity|batter(?:y|ies)|geothermal/i, 'ENERGY'],
-  [/vaccine|hospital|health|medicine|disease|patients|nurses|doctors/i, 'HEALTH'],
-  [/ocean|whales?|reef|coral|dolphins?|sea turtles?/i, 'OCEANS'],
-  [/\b(?:cars?|diesel|petrol|electric vehicles?|EVs?|motoring|carmakers?)\b/i, 'MOTORING'],
-  [/\bcourts?\b|judges?|ruling|lawsuit|trial\b/i, 'JUSTICE'],
-  [/\bstrikes?\b|walkout|unions?\b/i, 'INDUSTRY'],
-];
-// When nothing more specific fits, the desk section names the strap.
-const SECTION_KICKERS = { world: 'WORLD', business: 'BUSINESS', tech: 'TECHNOLOGY', science: 'SCIENCE' };
+// The strap's kicker is the story's topic (server/topics.js, shared with the desk's programme beats).
 
 // ---------------------------------------------------------------- the presenters' own lines (no facts, no figures)
 // A line may carry `needs`: it is only used when the story's own words match
@@ -290,11 +255,7 @@ function spokenPlace(entry) {
   return entry.name;
 }
 
-function kickerFor(s) {
-  for (const [re, k] of KICKERS) if (re.test(s.title)) return k;
-  for (const [re, k] of KICKERS) if (re.test(s.summary || '')) return k;
-  return SECTION_KICKERS[s.category] || null;
-}
+const kickerFor = (s) => topicOf(s);
 
 /** Greeting by the London studio clock, unless the episode might air across a boundary (it is made minutes ahead). */
 function timeGreeting(now) {

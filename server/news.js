@@ -7,6 +7,7 @@ import { config, ROOT } from './config.js';
 import { GOOD_WIDTH, feedCandidates, pageCandidates, rankPictures } from './pictures.js';
 import { guardedFetch, readCapped } from './net.js';
 import { locate, lookupPlace } from './gazetteer.js';
+import { onBeat } from './topics.js';
 
 export { extractImage, isUsableImage } from './pictures.js';
 
@@ -152,7 +153,7 @@ const LIVE_RES = [
   /\blive updates?\b/i,
   /\blive blog\b/i,
   /^\s*live\s*[:|]/i,
-  /\s\w+\s+live\s*:/i, // "Ukraine war live: …", "Middle East crisis live: …"
+  /(?:^|\s)\w+\s+live\s*:/i, // "Ukraine war live: …", "Politics live: …", "Middle East crisis live: …"
   /\bas it happened\b/i,
   /\blive!/i,
 ];
@@ -175,7 +176,7 @@ export function sentenceCase(title) {
       if (bare.length < 3) continue;
       const e = lookupPlace(bare);
       if (e && [e.name, ...e.aliases].some((a) => a.toLowerCase() === bare)) {
-        for (let k = i; k < i + n; k += 2) words[k] = words[k].replace(/\p{L}+/gu, (w) => w[0].toUpperCase() + w.slice(1));
+        for (let k = i; k < Math.min(i + n, words.length); k += 2) words[k] = words[k].replace(/\p{L}+/gu, (w) => w[0].toUpperCase() + w.slice(1));
         break;
       }
     }
@@ -196,6 +197,7 @@ export const plainTitle = (title) =>
       .replace(/\s*[-–—]\s*(?:[\w-]+\s+)?live(?: updates| blog)?!?\s*$/i, '')
       .replace(/\s*[-–—:]\s*as it happened\s*$/i, '')
       .replace(/\s*[:|]\s*live updates?\s*$/i, '')
+      .replace(/^(\s*\w+)\s+live\s*:\s*/i, '$1: ')
       .replace(/(\s\w+)\s+live\s*:\s*/i, '$1: ')
       .replace(/\s*\blive!\s*/i, ' ')
       .trim()
@@ -607,24 +609,34 @@ export class NewsDesk {
    * The most interesting uncovered stories, one per event, at most
    * `perSource` from the same outlet. The writer makes the final selection.
    * `avoid` lowers categories another programme due soon will want as its
-   * own beat ({ science: 0.5 }: COSMOS airs next, leave it the science).
+   * own beat ({ science: 0.5 }: COSMOS airs next, leave it the science), or
+   * is a function giving each story its factor.
+   * `beat` keeps a section's stories only on the programme's topics
+   * ({ tech: ['SPACE', ...] }: COSMOS takes a rocket, not a games console).
    */
-  candidates(count, { perSource = 3, categories = null, now = Date.now(), avoid = null } = {}) {
+  candidates(count, { perSource = 3, categories = null, now = Date.now(), avoid = null, beat = null } = {}) {
     const primary = categories && categories.length > 1 ? categories[0] : null;
     const ranked = this.uncovered()
       .filter((s) => !categories || categories.includes(s.category))
-      .map((s) => ({ s, score: interestScore(s, now) * (s.category === primary ? PRIMARY_CATEGORY_WEIGHT : 1) * (avoid?.[s.category] ?? 1) }))
+      .map((s) => ({ s, score: interestScore(s, now) * (s.category === primary ? PRIMARY_CATEGORY_WEIGHT : 1) * (typeof avoid === 'function' ? avoid(s) : avoid?.[s.category] ?? 1) }))
       .sort((a, b) => b.score - a.score);
     const picked = [];
     const perSourceCount = new Map();
-    for (const { s } of ranked) {
-      if (picked.length >= count) break;
-      if ((perSourceCount.get(s.source) || 0) >= perSource) continue;
-      if (picked.some((p) => this.sameStory(p, s))) continue;
-      picked.push(s);
-      perSourceCount.set(s.source, (perSourceCount.get(s.source) || 0) + 1);
+    // Variety of outlets first; then, when a section has only one or two outlets (a niche beat, a small
+    // feed list, the offline demo), the rest of the pool from them rather than a programme starved of stories.
+    for (const capped of [true, false]) {
+      for (const { s } of ranked) {
+        if (picked.length >= count) break;
+        if (picked.includes(s) || (capped && (perSourceCount.get(s.source) || 0) >= perSource)) continue;
+        if (beat && !onBeat(s, beat)) continue;
+        if (picked.some((p) => this.sameStory(p, s))) continue;
+        picked.push(s);
+        perSourceCount.set(s.source, (perSourceCount.get(s.source) || 0) + 1);
+      }
     }
-    return picked;
+    // The second pass appended its stories after the first pass's: back into ranking order.
+    const rank = new Map(ranked.map(({ s }, i) => [s, i]));
+    return picked.sort((a, b) => rank.get(a) - rank.get(b));
   }
 
   /** Kept for compatibility: the top `count` candidates. */

@@ -7,10 +7,11 @@
 // together with the voice synthesis rate from a server log
 // (tools/pace/analyse.mjs --server-log).
 //
-//   node tools/pace/simulate.mjs [--count 7] [--pool 24] [--json out.json] [--episodes out-episodes.json]
+//   node tools/pace/simulate.mjs [--count 7] [--pool 24] [--channel alt-channel.json] [--json out.json] [--episodes out-episodes.json]
 //
 // --pool sets the producer's candidate pool (CANDIDATE_POOL; the server default 12
-// caps how many stories a long programme can choose from).
+// caps how many stories a long programme can choose from); --channel tries another line-up
+// (a copy of config/channel.json) without touching the shared one.
 
 import fs from 'node:fs';
 
@@ -31,7 +32,7 @@ const { paceFor, estimateAir, gapAfter, wordCount } = await import('../../public
 const quiet = { info() {}, warn() {}, error() {}, log() {} };
 const count = Number(arg('count', 7));
 const pool = Number(arg('pool', config.candidatePool));
-const channel = loadChannel();
+const channel = arg('channel') ? loadChannel(arg('channel')) : loadChannel();
 const desk = new NewsDesk({ log: quiet });
 await desk.refresh();
 const chain = new ProviderChain([createMockProvider()], { record() {} }, { log: quiet });

@@ -63,7 +63,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { VoicePool, voiceFor, workerRequest, loadPresets, FAKE_VOICES } from './lib/voices.mjs';
-import { deriveCues, speechRegions, quietIntervals, renderBedsInPage, bedChunkInPage } from './lib/music.mjs';
+import { deriveCues, speechRegions, quietIntervals, renderBedsInPage, bedChunkInPage, bedPace } from './lib/music.mjs';
 import { syncReport, loadMono, levels } from './lib/analysis.mjs';
 import { composeSheetInPage, composeAudioSheetInPage } from './lib/sheet.mjs';
 
@@ -526,6 +526,20 @@ if (opts.music !== 'none') {
       fs.closeSync(fd);
     }
     say(`beds (${opts.music}): ${engineCues.length} cues rendered in ${bedsInfo.ms} ms · ${elapsed()}`);
+    // What the bed engine did, on the recording clock, against the pace rules
+    // (public/js/pace.js music: minBed, maxChangesPerMin), when both exist.
+    if (Array.isArray(bedsInfo.actions)) {
+      bedsInfo.actions = bedsInfo.actions.map((a) => ({ ...a, t: +(a.t - PREROLL).toFixed(3) }));
+      let rulesFor = () => null;
+      try {
+        const pace = await import(path.join(HERE, '..', '..', 'public', 'js', 'pace.js'));
+        if (typeof pace.paceFor === 'function') rulesFor = (id) => pace.paceFor(id)?.music ?? null;
+      } catch {
+        // no pace table: the report carries the measurements without limits
+      }
+      bedsInfo.pace = bedPace(bedsInfo.actions, { seconds, rulesFor });
+      say(`bed changes vs pace: ${Object.entries(bedsInfo.pace).map(([id, p]) => `${id} ${p.changes} in ${p.seconds} s (${p.perMin}/min, max ${p.maxPerMin}), shortest bed ${p.shortestBed} s (min ${p.minBed}), ${p.short.length} short`).join('; ') || '(none)'}`);
+    }
   } catch (err) {
     say(`beds failed (${err.message}); mixing without music`);
     bedsInfo = { error: err.message };
@@ -569,7 +583,9 @@ const mux = spawnSync('ffmpeg', [
   '-v', 'error', '-y', '-i', videoPath, '-i', manifest.aac, '-map', '0:v', '-map', '1:a',
   '-vf', `scale=iw*${opts.scale}:ih*${opts.scale}:flags=neighbor`,
   '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', String(opts.preset || 'veryfast'),
-  '-c:a', 'copy', '-shortest', '-movflags', '+faststart', OUT,
+  // -t, not -shortest: -shortest stops at the end of the first stream to run
+  // out in the interleaver and dropped the last 3 video frames of a 90 s show.
+  '-c:a', 'copy', '-t', seconds.toFixed(4), '-movflags', '+faststart', OUT,
 ], { encoding: 'utf8', maxBuffer: 16 << 20 });
 if (mux.status !== 0) throw new Error(`encode/mux failed: ${mux.stderr}`);
 say(`encoded ${opts.scale}x H.264 + AAC in ${((Date.now() - tEnc) / 1000).toFixed(0)} s · ${elapsed()}`);
