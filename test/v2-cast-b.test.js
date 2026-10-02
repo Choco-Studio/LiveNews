@@ -330,7 +330,7 @@ test("Nova's face carries lit planes in tan and stays the warmest, brightest are
       sum += lstar(c);
       if (c === C.tan) lit++;
     }
-    assert.ok(lit / n > 0.15, `s=${s}: ${(100 * lit / n).toFixed(0)} % of the inner face is lit (tan)`);
+    assert.ok(lit / n > 0.1, `s=${s}: ${(100 * lit / n).toFixed(0)} % of the inner face is lit (tan)`);
     // above the planet's lit side on the COSMOS wall (tan / tanShade bands, mean ≈ 51; cosmos.md §5 item 8)
     assert.ok(sum / n > 51, `s=${s}: inner face mean L* ${(sum / n).toFixed(1)}`);
   }

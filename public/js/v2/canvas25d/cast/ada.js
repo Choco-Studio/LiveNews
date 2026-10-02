@@ -17,12 +17,12 @@
 // keeps the silhouette, the part and two tones; the medium adds broad clumps
 // and the sheen; the close-up adds separations and a steel specular.
 import { P } from '../../../palette.js';
-import { decal } from '../pixbuf.js';
+import { decal, material } from '../pixbuf.js';
 import { headHW } from '../head.js';
 import { drawGlasses } from '../glasses.js';
 import { clamp } from '../space.js';
 import { defineLook, SKIN_LIGHT } from './base.js';
-import { local, screen, tier, hwAt, fastAtan2, strandTone, hashInt } from './wardrobe-b.js';
+import { local, screen, tier, hwAt, fastAtan2, strandTone, rimRuns } from './wardrobe-b.js';
 
 export const ada = defineLook({
   id: 'ada',
@@ -52,6 +52,8 @@ export const ada = defineLook({
   persona: { sway: 0.5, headMotion: 0.75, blinkMin: 2.8, blinkMax: 6.2, energy: 0.8, smile: 0.05 },
   mats: {
     collar: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black, rim: P.silver }, // the roll of the same knit
+    // the hair without the resolve rim (it would dot the stepped outline); drawStraight paints it as arcs
+    strands: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black, th: [0.62, 0.08, -0.42] },
   },
   parts: { hairBack: drawHairBack, hair: drawStraight, over: drawOver },
 });
@@ -101,7 +103,7 @@ function drawStraight(buf, L, m, head, s, sk) {
   ST.spec = tr === 2;
   const chin12 = hwAt(L, H.chinY - 1.2);
   const PI2 = Math.PI / 2;
-  buf.shape(x0, y0, x1, y1, m.hair, (px, py) => {
+  buf.shape(x0, y0, x1, y1, m.strands, (px, py) => {
     local(head, px, py, LC);
     const y = LC[1];
     const k = y > 2 ? clamp((y - 2) / (END - 2), 0, 1) : 0;
@@ -215,7 +217,12 @@ function drawStraight(buf, L, m, head, s, sk) {
     if (depth < px1 && t > form) t = form;
     return t;
   });
+  // the rim: continuous silver arcs over the crown (never single pixels on the outline's steps)
+  const g = buf.g;
+  rimRuns(buf, g, g, x0, x1, y0, head.cy + (cyc + 1) * s, rimDecal(), tr === 1 ? 2 : 3);
 }
+
+const rimDecal = () => material('cast-b:rim', { ramp: [P.silver], line: P.ink, decal: true });
 
 // Glasses (FACES' drawGlasses), then the stud on the tucked-side ear.
 function drawOver(buf, L, m, head, s, sk) {

@@ -25,6 +25,8 @@ import { FLAT, STEEPLE } from './shapes.js';
 const LOOSE = [0.24, 0.16, 0.2, 0.26, 0.32];
 // the beat hand: fingers together and softly bent (a calm hand, not a fan)
 const BEAT = [0.26, 0.2, 0.24, 0.3, 0.36];
+// the offering palm: open, the fingers a touch bent, the little finger more (never a flat board)
+const OFFER = [0.1, 0.08, 0.1, 0.16, 0.24];
 const SOFT = [0.3, 0.3, 0.34, 0.4, 0.46];
 
 export const BEATS = {
@@ -81,14 +83,16 @@ export const BEATS = {
       hold: 1.02,
       focus: 'near',
       tracks: {
-        // the hand leaves the desk palm down, rises in front of the body and opens, the palm turning
-        // to the lens and then a little up on the word (no flip through palm-down: no dangling fingers)
-        wrist: [[0, 'R'], [0.1, [-5.8, 19.55, 13.4]], [0.3, [-5.7, 13.8, 15.8]], [0.46, [-5.5, 11.2, 16.7]], [0.54, [-5.4, 10.8, 16.95]], [0.68, [-5.45, 11.1, 16.9], 's'], [1.02, [-5.5, 11.3, 16.85], 's'], [1.3, [-5.7, 17.0, 14.6]], [1.56, 'R', 's']],
-        dir: [[0, 'R'], [0.2, [-0.72, 0.1, 0.68]], [0.42, [-0.64, -0.22, 0.74]], [0.58, [-0.58, -0.36, 0.73]], [0.72, [-0.59, -0.33, 0.74], 's'], [1.08, [-0.59, -0.33, 0.74], 's'], [1.36, [-0.75, 0.15, 0.62]], [1.56, 'R']],
-        curl: [[0, 'R'], [0.3, SOFT], [0.56, FLAT, 's'], [1.08, FLAT, 's'], [1.4, 'R']],
-        // palm to the lens first, then (sup, while it faces the lens: a small, continuous turn) up
-        facing: [[0, 'R'], [0.3, 0.1], [0.46, 0.92], [0.62, 0.62, 's'], [1.04, 0.62, 's'], [1.18, 0.92], [1.32, 0.1], [1.46, 'R']],
-        sup: [[0, 0], [0.42, 0, 's'], [0.56, 1, 's'], [1.06, 1, 's'], [1.2, 0, 's'], [1.56, 0]],
+        // the hand leaves the desk, rises in front of the body and turns palm-up (supination from the
+        // resting back-of-hand pose, never a flip through palm-out), fingers forward and a little in,
+        // the thumb opening outward: "here is the thing"
+        wrist: [[0, 'R'], [0.1, [-5.8, 19.55, 13.4]], [0.3, [-5.6, 14.4, 16.2]], [0.46, [-5.2, 12.2, 17.4]], [0.54, [-5.1, 11.8, 17.7]], [0.68, [-5.15, 12.1, 17.6], 's'], [1.02, [-5.2, 12.3, 17.5], 's'], [1.3, [-5.6, 17.4, 14.6]], [1.56, 'R', 's']],
+        dir: [[0, 'R'], [0.2, [-0.7, 0.05, 0.7]], [0.42, [-0.55, -0.12, 0.83]], [0.58, [-0.5, -0.14, 0.86]], [0.72, [-0.51, -0.12, 0.85], 's'], [1.08, [-0.51, -0.12, 0.85], 's'], [1.36, [-0.75, 0.15, 0.62]], [1.56, 'R']],
+        curl: [[0, 'R'], [0.3, SOFT], [0.56, OFFER, 's'], [1.08, OFFER, 's'], [1.4, 'R']],
+        // sup flips only while the back of the hand faces the lens (facing −1: both sides give the same
+        // palm), then the forearm supinates as facing rises: the palm turns up and a little inward
+        sup: [[0, 0], [0.04, 0, 's'], [0.14, 1, 's'], [1.4, 1, 's'], [1.5, 0, 's'], [1.56, 0]],
+        facing: [[0, 'R'], [0.16, -1, 's'], [0.5, 0.05], [0.6, 0.12, 's'], [1.04, 0.1, 's'], [1.36, -1, 's'], [1.56, 'R']],
         spread: [[0, 'R'], [0.56, 0.14], [1.06, 0.12], [1.4, 'R']],
         pole: [[0, 'R'], [0.4, [0.7, 1, -0.6]], [1.06, [0.7, 1, -0.6]], [1.56, 'R']],
         shN: [[0, 0], [0.12, 0.1], [0.4, -0.3], [1.02, -0.22], [1.4, 0.03], [1.56, 0]],

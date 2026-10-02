@@ -640,9 +640,9 @@ function cosmos(ctx, tl) {
   if (ctx.feature === 'number' && !ctx.isLead) {
     // the Reading on UNIT-8's first word; the single on sentence 2, no earlier than 4 s after the cut
     out = [ev(ctx, 0, 0, 'fact', null, me, 'number')];
-    const b = boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
+    const b = readingSingle(ctx, tl);
     if (b) {
-      out.push(ev(ctx, b.t, b.char, 'close', single, me, 'single'));
+      out.push(ev(ctx, b.t, b.char, 'close', single, me, 'single', b.word ? { place: 'word' } : null));
       if (ctx.hasImage) addPicture(ctx, tl, out, b.t, single, S);
     }
   } else {
@@ -668,6 +668,35 @@ function cosmos(ctx, tl) {
   // cosmos.md: the wide carries the last AND FINALLY line and the idiom reply
   chatLeadIn(ctx, tl, out, ctx.feature === 'lighter');
   return out;
+}
+
+/**
+ * Where COSMOS cuts from the Reading to the reader's single (cosmos.md: "first word of sentence 2, no
+ * earlier than 4 s after the cut"; the voice's planned 1.5 s pause after the figure normally puts it
+ * there). Sentence 2's first word when it comes ≥ 4 s in; when the voice had no such pause (browser TTS,
+ * mute) the cut waits inside sentence 2 for the first word ≥ 4 s in, preferring one that opens a phrase
+ * (after a comma or colon, within 1.5 s); else a later sentence start. Both shots keep ≥ MIN_SHOT, so
+ * the reader is seen in his own story whenever it is long enough. → { t, char, word? } | null
+ */
+function readingSingle(ctx, tl) {
+  const s2 = ctx.sentences[1];
+  if (!s2) return null;
+  if (s2.t0 >= MIN_SHOT - 1e-6) return boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
+  const text = ctx.seg.text;
+  let best = null;
+  for (const w of ctx.words) {
+    if (w.char <= s2.start || w.char >= s2.end || w.t < MIN_SHOT - 1e-6 || tl.end - w.t < MIN_SHOT - 1e-6) continue;
+    if (insideDry(ctx, w.t)) continue;
+    const phrase = /[,:;]\s*$/.test(text.slice(Math.max(0, w.char - 3), w.char));
+    if (!best) best = w;
+    if (phrase && w.t - MIN_SHOT <= 1.5) {
+      best = w;
+      break;
+    }
+    if (w.t - MIN_SHOT > 1.5) break;
+  }
+  if (best) return { t: best.t, char: best.char, word: true };
+  return boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
 }
 
 /** The picture (6-10 s) from the first sentence start ≥ MIN_SHOT after `from`, then back to the single. */
