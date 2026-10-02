@@ -8,6 +8,7 @@ import { pickAds } from './ads/index.js';
 import { splitSentences } from './audio.js';
 import { ACTIONS } from './cues.js';
 import { openFor } from './scenes/opens.js';
+import { VoicePlayer } from './voice/player.js';
 
 const now = () => performance.now() / 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -25,6 +26,7 @@ export class Director {
     setPresenters(channel.presenters);
     this.images = new Map(); // storyId -> { small, full, card }
     this.recentAds = [];
+    this.voices = new VoicePlayer({ audio }); // recorded neural voices from the server (voice/player.js)
     this.scene = {
       channel: { name: channel.name, slogan: channel.slogan },
       program: null,
@@ -118,6 +120,7 @@ export class Director {
 
   async playBreak(item) {
     const s = this.scene;
+    this.voices.refreshAds(); // advert voice-overs (fetched while the ident runs)
     s.lowerThird = null;
     s.subtitle = null;
     if (!item.filler) {
@@ -153,16 +156,19 @@ export class Director {
 
   async playAd(ad) {
     const s = this.scene;
-    const started = now();
+    // The ad's picture clock started at the stinger's cut (setShot), 0.4 s before
+    // this runs: voice-over lines and the bed follow that clock, not this call.
+    const started = s.shot === 'ad' && Number.isFinite(s.shotSince) ? s.shotSince : now();
     this.audio.setVoices?.({ ad: ad.voice });
-    const tune = this.audio.playTune?.(ad.tune, { loop: true, volume: 0.45 });
+    this.voices.prepareAd(ad);
+    const tune = this.audio.playTune?.(ad.tune, { loop: true, volume: 0.45, startAt: started * 1000 });
     try {
       for (let i = 0; i < ad.script.length; i++) {
         const line = ad.script[i];
         const wait = line.at - (now() - started);
         if (wait > 0) await sleep(wait * 1000);
         s.card = { ad, line: i };
-        await this.audio.speak(line.text, 'ad');
+        await this.audio.speak(line.text, 'ad', { audio: this.voices.adLine(ad, line.text, ad.script[i + 1]?.text) });
       }
       s.card = { ad, line: -1 };
       const rest = ad.duration - (now() - started);
@@ -237,10 +243,12 @@ export class Director {
     // speech timeline, re-synced on TTS word boundaries; after the last word
     // they fire as the speech ends).
     const cues = this.defaultCues(seg);
+    // The server's recorded voice (or one that finished after the episode was fetched); null = browser voice.
+    const recorded = await this.voices.audioFor(seg);
     const v2 = this.v2?.begin(seg); // v2: scene.segPlan (speech start/end for the cue clock) + its shot cues
     const v2marks = v2?.speak?.marks || []; // v2 cuts that fall inside a sentence
     await this.audio.speak(seg.text, seg.anchor, {
-      audio: seg.audio, // recorded voice from the server, when the episode has one (voice contract)
+      audio: recorded, // recorded voice from the server, when the episode has one (voice contract)
       onSentence: (sentence, i) => {
         s.subtitle = sentence;
         v2?.sentence(i);
@@ -255,6 +263,7 @@ export class Director {
 
   async playEpisode(episode) {
     const s = this.scene;
+    this.voices.episode(episode); // warm up the first recorded voices while the open plays
     const imagesReady = this.prepareImages(episode);
     // Each programme has its own opening titles and theme tune. The tune starts
     // on the open's own clock (the shot change, dt = 0), so its final chord

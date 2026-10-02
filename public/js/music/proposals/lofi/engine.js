@@ -30,7 +30,7 @@ export const MIX = {
   duckHold: 0.35, // s of speech-off before releasing (bridges sentence gaps)
   pocketHz: 2500,
   pocketSpeech: -6, // dB dip at 2.5 kHz while anyone speaks
-  headline: { level: -10, duckDb: -10 }, // WORLD NOW headline bus (dB)
+  headline: { level: -11.5, duckDb: -10 }, // WORLD NOW headline bus (dB)
   graveFade: 2.5,
   output: 0.7, // calibrated against Kokoro voices at -16 LUFS (the house voice target)
 };
@@ -94,6 +94,14 @@ class Bed {
     this.nodes.push(this.lp);
     this.sum = g(1);
     this.sum.connect(this.lp).connect(this.out).connect(this.shot);
+    // Reverb and echo returns follow the bed's level and its shot gain (a hidden COSMOS bed is
+    // silent, reverb included), but release more slowly so tails ring on naturally.
+    const level0 = dbToGain(arr.gain + (this.pal.trim || 0));
+    this.sendOut = g(0);
+    this.sendOut.gain.setValueAtTime(0, Math.max(0, t0 - 0.01));
+    this.sendOut.gain.setValueAtTime(level0, t0);
+    this.sendShot = g(arr.hidden ? 0 : 1);
+    this.sendOut.connect(this.sendShot).connect(rig.reverbIn);
 
     // Ping-pong tape echo (dotted 8th), wobbling slightly like old tape.
     this.echoIn = g(1);
@@ -120,7 +128,10 @@ class Bed {
     ehp.connect(dr);
     dr.connect(pr).connect(this.echoWet);
     dr.connect(fb).connect(dl);
-    this.echoWet.connect(this.shot);
+    this.echoOut = g(0);
+    this.echoOut.gain.setValueAtTime(0, Math.max(0, t0 - 0.01));
+    this.echoOut.gain.setValueAtTime(level0, t0);
+    this.echoWet.connect(this.echoOut).connect(this.shot);
     const wob = ctx.createOscillator();
     wob.frequency.value = 0.45;
     const wobG = g(0.0012);
@@ -139,7 +150,7 @@ class Bed {
       d.connect(AIR.has(grp) ? this.out : this.sum);
       const verb = g(this.pal.fx.reverb * SENDS[grp].verb);
       const echo = g(this.pal.fx.echo * SENDS[grp].echo);
-      d.connect(verb).connect(rig.reverbIn);
+      d.connect(verb).connect(this.sendOut);
       d.connect(echo).connect(this.echoIn);
       this.duck[grp] = d;
       this.sends[grp] = [verb, echo];
@@ -204,7 +215,10 @@ class Bed {
     this.timeline.push({ bar, arr });
     this.current = arr;
     for (const name of LAYERS) rampTo(this.layer[name].gain, this.engine.level(arr, name), t, dur);
-    rampTo(this.out.gain, dbToGain(arr.gain + (this.pal.trim || 0)), t, dur);
+    const level = dbToGain(arr.gain + (this.pal.trim || 0));
+    rampTo(this.out.gain, level, t, dur);
+    rampTo(this.sendOut.gain, level, t, dur);
+    rampTo(this.echoOut.gain, level, t, dur);
     targetTo(this.lp.frequency, arr.lp, t, dur / 2);
     if (this.engine.speaking) for (const grp of GROUPS) targetTo(this.duck[grp].gain, duckDepth(this.pal, arr, grp), t, dur / 3);
   }
@@ -221,8 +235,12 @@ class Bed {
   showBus(show, t) {
     if (show) {
       targetTo(this.shot.gain, 1, t, 1.0 / 3);
+      targetTo(this.sendShot.gain, 1, t, 1.0 / 3);
       this.lastFadeIn = t;
-    } else targetTo(this.shot.gain, 0, t, 1.5 / 3);
+    } else {
+      targetTo(this.shot.gain, 0, t, 1.5 / 3);
+      targetTo(this.sendShot.gain, 0, t, 1.5 / 2); // the reverb tail lingers a little longer
+    }
     this.shown = show;
   }
 
@@ -233,11 +251,11 @@ class Bed {
     this.out.gain.setValueAtTime(0, t + dur * 1.8);
     if (sweep) targetTo(this.lp.frequency, 320, t, dur / 3);
     if (!tail) {
-      for (const [verb, echo] of Object.values(this.sends)) {
-        targetTo(verb.gain, 0, t, dur / 4);
-        targetTo(echo.gain, 0, t, dur / 6);
-      }
+      targetTo(this.sendOut.gain, 0, t, dur / 4);
+      targetTo(this.echoOut.gain, 0, t, dur / 5);
     } else {
+      targetTo(this.sendOut.gain, 0, t, Math.max(0.8, dur / 2)); // returns ring on, then die away
+      targetTo(this.echoOut.gain, 0, t + this.spb, 0.9);
       // Echo throw: the last notes before the cut repeat into the transition.
       const melody = this.sends.melody[1].gain;
       const keys = this.sends.keys[1].gain;

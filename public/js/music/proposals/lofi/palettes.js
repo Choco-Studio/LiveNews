@@ -49,7 +49,7 @@ export const PALETTES = {
     fx: { reverb: 0.16, echo: 0.06, tremolo: 0 },
     duckDb: -9,
     moments: {
-      roundup: { energy: 0.6, gain: -12, lp: 2400, pocket: 0, bright: 0.9, layers: { arp: 1, bass: 0.85 } },
+      roundup: { energy: 0.6, gain: -13, lp: 2400, pocket: 0, bright: 0.9, layers: { arp: 1, bass: 0.85 } },
     },
   },
   'world-now/finally': {
@@ -68,8 +68,8 @@ export const PALETTES = {
     fx: { reverb: 0.22, echo: 0.12, tremolo: 0 },
     duckDb: -9,
     moments: {
-      finally: { energy: 0.45, gain: -12, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.8 }, lead: 'sparse' },
-      chat: { energy: 0.45, gain: -12, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.6 }, lead: 'sparse' },
+      finally: { energy: 0.45, gain: -6, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.8 }, lead: 'sparse' },
+      chat: { energy: 0.45, gain: -6, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.6 }, lead: 'sparse' },
     },
   },
 
@@ -192,8 +192,8 @@ export const PALETTES = {
     fx: { reverb: 0.14, echo: 0, tremolo: 0 },
     duckDb: -4, // -24 dB under speech, -20 dB in gaps (bible): a small duck on a quiet bed
     moments: {
-      bed: { energy: 0.5, gain: -15, lp: 2000, pocket: 0, bright: 0.9, layers: { pad: 0.8, bass: 0.8, perc: 0.9 } },
-      grave: { energy: 0.1, gain: -15, lp: 1600, pocket: 0, bright: 0.8, layers: { pad: 0.8 }, immediate: true },
+      bed: { energy: 0.5, gain: -12, lp: 2000, pocket: 0, bright: 0.9, layers: { pad: 0.8, bass: 0.8, perc: 0.9 } },
+      grave: { energy: 0.1, gain: -12, lp: 1600, pocket: 0, bright: 0.8, layers: { pad: 0.8 }, immediate: true },
     },
   },
 

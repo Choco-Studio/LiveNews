@@ -68,8 +68,8 @@ const WORLD = {
       form: 'A',
       layers: [
         // Low brass chords: D3 and below while anyone speaks.
-        pad({ wave: 'horn', n: 3, lo: 38, hi: 52, a: 0.35, r: 1.2, cut: 760, cutTo: 1000, detune: 5, level: -11, rev: 0.35, frame: true }),
-        bass({ pattern: [[0, 8.6, 'r', 0.75]], a: 0.04, r: 0.6, level: -11, frame: true }),
+        pad({ wave: 'horn', n: 3, lo: 38, hi: 52, a: 0.35, r: 0.8, cut: 760, cutTo: 1000, detune: 5, level: -11, rev: 0.35, frame: true }),
+        bass({ pattern: [[0, 8.6, 'r', 0.75]], a: 0.04, r: 0.4, level: -11, frame: true }),
       ],
     },
     roundup: {
@@ -122,9 +122,10 @@ const techBed = (light) => ({
   layers: [
     pad({ n: 4, lo: 52, hi: 71, a: 1, r: 2, cut: 700, cutTo: 1000, level: -13, no7: true }),
     bass({ pattern: [[0, 1.7, 'r', 0.8], [2.5, 1.2, 'r', 0.55]], level: -12 }),
-    arp({ wave: 'pulse12', rate: 2, shape: 'up', lo: 57, span: 2, decay: 0.16, cut: 1700, cutEnd: 450, level: -17, vel: 0.5, dly: 0.35, no7: true }),
+    // The arpeggio carries the 9th (motif cell: 1, 2, 5) above the triad pad.
+    arp({ wave: 'pulse12', rate: 2, shape: 'cell', lo: 69, span: 1, decay: 0.16, cut: 1700, cutEnd: 450, level: -18, vel: 0.5, dly: 0.35 }),
     ...(light ? [kit({ shaker: '..3...3...3...3.', level: -15 })] : []),
-    motif({ inst: 'pluck', gate: true, oct: 69, level: -17 }),
+    motif({ inst: 'pluck', gate: true, at: 4, oct: 69, level: -17 }), // on Am9: its b7 colour is a chord tone
   ],
 });
 const TECH = {

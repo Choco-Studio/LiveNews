@@ -66,4 +66,18 @@ export const config = {
   // News sources; FEEDS_FILE points elsewhere (e.g. config/feeds.fixture.json for offline demos)
   feedsFile: path.resolve(ROOT, env('FEEDS_FILE', path.join('config', 'feeds.json'))),
   dataDir: path.join(ROOT, 'data'),
+  // Presenter voices: 'kokoro' synthesises every segment ahead of air with local neural voices
+  // (tools/voice, server/voice); 'browser' (or Kokoro missing) leaves it to the viewer's speechSynthesis.
+  voice: {
+    engine: env('VOICE_ENGINE', 'kokoro').trim().toLowerCase() === 'kokoro' ? 'kokoro' : 'browser',
+    // Where kokoro-v1.0.onnx and voices-v1.0.bin live (empty: data/models, then ~/.cache/kokoro)
+    kokoroDir: env('KOKORO_DIR', ''),
+    // CPU threads for the voice model (0 = all), so OBS and the browser keep theirs
+    threads: num('KOKORO_THREADS', 0),
+    python: env('VOICE_PYTHON', 'python3'),
+    // Seconds an episode waits for its voices before it is queued anyway (late clips still air when ready)
+    budgetSeconds: num('VOICE_BUDGET_S', 90),
+    cacheMb: num('VOICE_CACHE_MB', 300),
+    dir: path.join(ROOT, 'data', 'voice'),
+  },
 };

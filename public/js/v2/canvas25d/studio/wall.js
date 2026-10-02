@@ -542,9 +542,9 @@ function drawDial(b, cx, cy, r, phase, ts) {
 // ---------------------------------------------------------------------------
 // Pictures: indexed once per image, palette-mapped and dimmed per programme
 
-// Palette colours a wall picture may use: no white/cream (over L* 85), no skin (faces stay the
+// Palette colours a wall picture may use: nothing above fog (no white, cream or silver), no skin (faces stay the
 // warmest thing in frame), no programme accents or brand red (they keep their meaning on set).
-const PICTURE_NAMES = new Set(['black', 'ink', 'slate', 'steel', 'fog', 'silver', 'darkRed', 'maroon', 'rust', 'orange', 'skinShade', 'tan', 'tanShade', 'brown', 'darkGreen', 'blue', 'navy', 'purple']);
+const PICTURE_NAMES = new Set(['black', 'ink', 'slate', 'steel', 'fog', 'darkRed', 'maroon', 'rust', 'orange', 'skinShade', 'tan', 'tanShade', 'brown', 'darkGreen', 'blue', 'navy', 'purple']);
 const SRC = new WeakMap();
 
 function pixelsOf(img) {
@@ -603,7 +603,7 @@ const unlin = (v) => Math.round(255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * Math
 
 /**
  * Colour table (source colour → palette u32), dimmed in linear light until the picture's mean L*
- * is at most maxL and at most 8 % of it is brighter than L* 66 (ART_DIRECTION: wall average ≤ 45,
+ * is at most maxL and at most 6 % of it is brighter than L* 60 (ART_DIRECTION: wall average ≤ 45,
  * highlights on at most 10 % of the wall).
  */
 function pictureMap(src, maxL) {
@@ -619,9 +619,9 @@ function pictureMap(src, maxL) {
       const name = nearestName(r, g, b2, PICTURE_NAMES);
       tab[j] = C[name];
       sum += LSTAR[name] * src.hist[j];
-      if (LSTAR[name] > 66) bright += src.hist[j];
+      if (LSTAR[name] > 60) bright += src.hist[j];
     }
-    return sum / total <= maxL && bright / total <= 0.08;
+    return sum / total <= maxL && bright / total <= 0.06;
   };
   if (!build(1)) {
     let lo = 0.04, hi = 1;
@@ -903,6 +903,18 @@ function blitSub(b, sub, x0, y0) {
   }
 }
 
+function resampleSub(b, sub, x0, y0, w, h) {
+  for (let y = 0; y < h; y++) {
+    const yy = y0 + y;
+    if (yy < 0 || yy >= b.h) continue;
+    const sy = Math.min(sub.h - 1, Math.floor(((y + 0.5) * sub.h) / h)) * sub.w;
+    for (let x = 0; x < w; x++) {
+      const xx = x0 + x;
+      if (xx >= 0 && xx < b.w) b.px[yy * b.w + xx] = sub.px[sy + Math.min(sub.w - 1, Math.floor(((x + 0.5) * sub.w) / w))];
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Rendering one wall state into a buffer
 
@@ -937,10 +949,14 @@ function renderSpec(b, spec, style, env) {
     case 'map': {
       const dt = Math.max(0, env.t - spec.since);
       const m = mediaRect(L, b, ts);
-      SUB.size(Math.max(8, m.w), Math.max(8, m.h));
+      // the map renders at the size it had at the cut (worldmap.js keeps buffers per size), and a
+      // slow camera move resamples it instead of asking for a new size every frame
+      if (!spec._mapWH) spec._mapWH = [Math.max(8, m.w), Math.max(8, m.h)];
+      SUB.size(spec._mapWH[0], spec._mapWH[1]);
       if (!drawMiniMap(SUB, spec, style, env.t, Math.min(dt, MAP_ANIM[style.id] || MAP_ANIM.default))) drawStaticLocator(SUB, spec, style, ts);
       if (m.framed) frameBox(b, m, style, env);
-      blitSub(b, SUB, m.x, m.y);
+      if (SUB.w === m.w && SUB.h === m.h) blitSub(b, SUB, m.x, m.y);
+      else resampleSub(b, SUB, m.x, m.y, m.w, m.h);
       if (!m.framed) darkBand(b, L.band, style, soft);
       sig = 1;
       break;
@@ -1032,9 +1048,9 @@ function clockOf(spec, style, env) {
   if (spec.mode !== 'idle') return 0;
   if (style.wallIdle === 'planet') {
     if (env.lod >= 2) return 0;
-    // the terminator moves at most ~0.5 px/s: a step every 1/30 of a px-radian is plenty
-    const R = Math.max(5, Math.round(12 * env.cs));
-    return Math.round(planetAzimuth(env.t) * R * (env.lod >= 1 ? 4 : 8));
+    // re-shaded every frame (a few hundred pixels): each row's terminator steps on its own frame,
+    // and the background cache only invalidates when a pixel actually changed (the signature)
+    return Math.round(env.t * (env.lod >= 1 ? 30 : 60));
   }
   if (style.wallIdle === 'globe' || !['chip', 'wordmark', 'dial'].includes(style.wallIdle)) {
     if (env.lod >= 2) return 0;
@@ -1194,8 +1210,8 @@ export function updateWall(req, styleIn, w, h, k, t, cam, opts, lod = 0) {
   const cut = isCut(cam, opts, style, t);
   if (cut) {
     // a new shot re-lays the wall out for its framing
-    if (S.shown) S.shown._lay = null;
-    if (S.next) S.next._lay = null;
+    if (S.shown) S.shown._lay = S.shown._mapWH = null;
+    if (S.next) S.next._lay = S.next._mapWH = null;
     S.aKey.cam = S.bKey.cam = NaN;
   }
   let changed = false;

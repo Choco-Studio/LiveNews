@@ -10,9 +10,8 @@
 // TECH BYTES' accent belongs to the graphics.
 import { P } from '../../../palette.js';
 import { toneN } from '../pixbuf.js';
-import { headHW, headBox } from '../head.js';
 import { defineLook, SKIN_TAN } from './base.js';
-import { stroke, local, screen, tier } from './wardrobe-b.js';
+import { stroke, local, screen, tier, hwAt } from './wardrobe-b.js';
 
 export const max = defineLook({
   id: 'max',
@@ -75,7 +74,8 @@ function drawTextured(buf, L, m, head, s, sk) {
   const cyc = H.craniumY - 0.4;
   const RV = H.R + 0.55;
   const hairline = (fx) => H.top + 4.05 + pitchShift + fx * fx * 0.018 - Math.exp(-((Math.abs(fx) - 5.2) ** 2) / 1.6) * 0.7;
-  const [x0, y0, x1, y1] = headBox(head, 2.6);
+  const x0 = head.cx - (H.R + 1.4) * s, x1 = head.cx + (H.R + 1.4) * s;
+  const y0 = head.cy + (H.top - 1.6) * s, y1 = head.cy + 1.2 * s;
   // ---- the cap under the clumps: skull-tight faded sides, sideburns, a darker top
   buf.shape(x0, y0, x1, y1, m.hair, (px, py) => {
     local(head, px, py, LC);
@@ -83,14 +83,16 @@ function drawTextured(buf, L, m, head, s, sk) {
     if (y > 0.6) return -1;
     const dy = y - cyc;
     const top = y < H.craniumY - 2.2;
-    const vol = top ? RV : headHW(H, Math.max(y, H.top + 0.5), 0) + 0.4;
+    const vol = top ? RV : hwAt(L, Math.max(y, H.top + 0.5)) + 0.4;
     if (top ? x * x + dy * dy > vol * vol : Math.abs(x) > vol) return -1;
     const fx = x - yawX;
-    const hw = headHW(H, y, 0);
+    const hw = hwAt(L, y);
     const sideburn = Math.abs(x) > hw - 0.6 && y < -0.9 && y > H.craniumY - 1.5;
     if (y > hairline(fx) && !sideburn && Math.abs(x) < hw - 0.05) return -1;
     if (y > H.craniumY + 0.6 && !sideburn) return -1;
-    let t = toneN(m.hair, (x / RV) * 0.9, (dy / RV) * 0.9);
+    // the cap as a dome lit from the key (no square root per pixel: the front of the dome faces the lens)
+    const l = -0.55 * (x / RV) - 0.7 * (dy / RV);
+    let t = l > 0.62 ? 0 : l > -0.1 ? 1 : l > -0.55 ? 2 : 3;
     // faded sides read darker and flatter than the top; the top sits under the clumps
     if (y > H.craniumY - 2.0) t = x > 0 ? 2 : 1;
     else if (tr > 0) t = y > hairline(fx) - 1.4 ? (x > 2.5 ? 2 : 1) : Math.min(3, t + 1); // short front hairs stay lit
@@ -139,5 +141,5 @@ function clump(buf, L, m, head, s, c, yawX, lag, back, tr, streak = true) {
       if (back) t += 1;
       return t > 3 ? 3 : t;
     };
-  stroke(buf, m.hair, P0[0], P0[1], P1[0], P1[1], P2[0], P2[1], 0.85 * s, 0.45 * s, tone, 8, belly * s * 0.7);
+  stroke(buf, m.hair, P0[0], P0[1], P1[0], P1[1], P2[0], P2[1], 0.85 * s, 0.45 * s, tone, tr === 2 ? 7 : 5, belly * s * 0.7);
 }

@@ -536,6 +536,7 @@ const HULL_IN = new Float64Array(PALM_N * 4 + 4);
 const HULL = new Float64Array(PALM_N * 4 + 8);
 const ORDER = new Int32Array(PALM_N * 2 + 2);
 const SEGSHADE = new Float64Array(20);
+const EDGE = new Float64Array((PALM_N * 2 + 4) * 4);
 
 let bx0 = 0, by0 = 0, bw = 0, bh = 0;
 
@@ -797,50 +798,50 @@ function rasterPalm(g, B, s, hn, lod) {
     gy = (dz2 * p1x - dz1 * p2x) / det;
   }
   const zc = W[2] + PALM_THICK * H * Math.abs(n[2]) - 0.15; // the visible face; a hair behind finger roots
-  // hull bbox
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (let i = 0; i < hn; i++) {
-    const x = HULL[i * 2], y = HULL[i * 2 + 1];
-    if (x < minX) minX = x;
-    if (x > maxX) maxX = x;
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
-  }
-  const x0 = Math.max(0, Math.floor(minX) - bx0), x1 = Math.min(bw, Math.ceil(maxX) + 1 - bx0);
-  const y0 = Math.max(0, Math.floor(minY) - by0), y1 = Math.min(bh, Math.ceil(maxY) + 1 - by0);
-  const ew = lod >= 2 ? 1.6 : 1.05; // edge band width (px)
-  // hull orientation: sign of the area
+  // hull orientation, then per-edge unit normals (inside positive): no square roots per pixel
   let area = 0;
   for (let i = 0; i < hn; i++) {
     const j = (i + 1) % hn;
     area += HULL[i * 2] * HULL[j * 2 + 1] - HULL[j * 2] * HULL[i * 2 + 1];
   }
   const orient = area >= 0 ? 1 : -1;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (let e = 0; e < hn; e++) {
+    const e2 = e + 1 === hn ? 0 : e + 1;
+    const ax = HULL[e * 2], ay = HULL[e * 2 + 1];
+    const ex = HULL[e2 * 2] - ax, ey = HULL[e2 * 2 + 1] - ay;
+    const el = Math.hypot(ex, ey) || 1;
+    // inside distance d = nx * x + ny * y + c
+    const nx = (-orient * ey) / el, ny = (orient * ex) / el;
+    EDGE[e * 4] = nx;
+    EDGE[e * 4 + 1] = ny;
+    EDGE[e * 4 + 2] = -(nx * ax + ny * ay);
+    EDGE[e * 4 + 3] = -nx * L2X - ny * L2Y; // outward normal · key light
+    if (ax < minX) minX = ax;
+    if (ax > maxX) maxX = ax;
+    if (ay < minY) minY = ay;
+    if (ay > maxY) maxY = ay;
+  }
+  const x0 = Math.max(0, Math.floor(minX) - bx0), x1 = Math.min(bw, Math.ceil(maxX) + 1 - bx0);
+  const y0 = Math.max(0, Math.floor(minY) - by0), y1 = Math.min(bh, Math.ceil(maxY) + 1 - by0);
+  const ew = lod >= 2 ? 1.6 : 1.05; // edge band width (px)
+  const base = 0.32 + lFace * 0.55;
   for (let j = y0; j < y1; j++) {
     const cy = by0 + j + 0.5;
     const o = j * LW;
     for (let i = x0; i < x1; i++) {
       const cx = bx0 + i + 0.5;
-      let inside = true, md = 1e9, mnx = 0, mny = 0;
-      for (let e = 0; e < hn; e++) {
-        const e2 = e + 1 === hn ? 0 : e + 1;
-        const ax = HULL[e * 2], ay = HULL[e * 2 + 1];
-        const ex = HULL[e2 * 2] - ax, ey = HULL[e2 * 2 + 1] - ay;
-        const el = Math.hypot(ex, ey) || 1;
-        // signed distance to the edge line, positive inside
-        const d = (orient * (ex * (cy - ay) - ey * (cx - ax))) / el;
-        if (d < 0) {
-          inside = false;
-          break;
-        }
+      let md = 1e9, mel = 0;
+      let e = 0;
+      for (; e < hn; e++) {
+        const d = EDGE[e * 4] * cx + EDGE[e * 4 + 1] * cy + EDGE[e * 4 + 2];
+        if (d < 0) break;
         if (d < md) {
           md = d;
-          // outward normal of this edge
-          mnx = (orient * ey) / el;
-          mny = (-orient * ex) / el;
+          mel = EDGE[e * 4 + 3];
         }
       }
-      if (!inside) continue;
+      if (e < hn) continue;
       const depth = zc + gx * (cx - p0x) + gy * (cy - p0y);
       const k = o + i;
       if (depth <= ZB[k]) continue;
@@ -849,13 +850,10 @@ function rasterPalm(g, B, s, hn, lod) {
       SEG[k] = 0;
       UU[k] = 0;
       VV[k] = 0;
-      let l = 0.32 + lFace * 0.55;
-      if (md < ew) {
-        // form shading at the rim of the plate: shade where the edge turns from the key,
-        // a lit edge only where it faces the key squarely
-        const el = mnx * L2X + mny * L2Y;
-        l += el < 0 ? 0.95 * el : el > 0.72 ? 0.9 * el : 0;
-      }
+      let l = base;
+      // form shading at the rim of the plate: shade where the edge turns from the key,
+      // a lit edge only where it faces the key squarely
+      if (md < ew) l += mel < 0 ? 0.95 * mel : mel > 0.72 ? 0.9 * mel : 0;
       TN[k] = toneOfL(l);
     }
   }

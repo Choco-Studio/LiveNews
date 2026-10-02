@@ -162,13 +162,13 @@ function demoWorld() {
     { at: 1.2, say: 'wn-h1' }, c(4.3, 'frame'),
     { at: 5.3, say: 'wn-h2' }, c(8.2, 'frame'),
     { at: 9.2, say: 'wn-h3' }, c(11.85, 'frame'),
-    c(13.4, 'greeting'),
-    c(13.8, 'story', { emotion: 'serious' }), { at: 14.3, say: 'wn-grave' },
-    c(24.7, 'story', { emotion: 'happy' }), { at: 25.1, say: 'wn-light' },
-    { at: 34.8, say: 'wn-finally' }, c(35.9, 'story', { feature: 'lighter' }),
-    c(41.6, 'chat'), { at: 41.8, say: 'wn-chat1' }, { at: 43.4, say: 'wn-chat2' }, { at: 47.4, say: 'wn-chat3' },
-    c(50.0, 'outro'), { at: 50.3, say: 'wn-outro' },
-    c(55.5, 'endcard'),
+    c(13.2, 'greeting'),
+    c(13.5, 'story', { emotion: 'serious' }), { at: 14.0, say: 'wn-grave' },
+    c(24.3, 'story', { emotion: 'happy' }), { at: 24.6, say: 'wn-light' },
+    { at: 34.2, say: 'wn-finally' }, c(35.2, 'story', { feature: 'lighter' }),
+    c(40.9, 'chat'), { at: 41.1, say: 'wn-chat1' }, { at: 42.7, say: 'wn-chat2' }, { at: 46.6, say: 'wn-chat3' },
+    c(49.1, 'outro'), { at: 49.3, say: 'wn-outro' },
+    c(54.4, 'endcard'),
   ];
 }
 

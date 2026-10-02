@@ -8,10 +8,11 @@ import { embedCues } from '../public/js/cues.js';
  * (extra fact checks, better images, server-side voices...) slot in here.
  */
 export class Producer {
-  constructor({ config, newsDesk, chain, log = console }) {
+  constructor({ config, newsDesk, chain, voice = null, log = console }) {
     this.config = config;
     this.news = newsDesk;
     this.chain = chain;
+    this.voice = voice; // server/voice VoiceService (neural voices), optional
     this.log = log;
     this.seq = 0;
     this.stages = [
@@ -19,6 +20,8 @@ export class Producer {
       { name: 'review', run: (ctx) => this.review(ctx), enabled: () => this.config.reviewPass },
       { name: 'fit', run: (ctx) => this.fit(ctx), enabled: (ctx) => !!ctx.program.timing },
       { name: 'assets', run: (ctx) => this.assets(ctx) },
+      // Presenter voices synthesised ahead of air; never fails the episode (late or missing clips air with browser voices).
+      { name: 'voice', run: (ctx) => this.voice.voiceEpisode(ctx).catch((err) => ({ voice: 'browser', error: err.message })), enabled: () => !!this.voice?.enabled },
     ];
   }
 

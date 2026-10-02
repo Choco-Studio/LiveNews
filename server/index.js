@@ -8,6 +8,7 @@ import { createProviders, ProviderChain } from './providers/index.js';
 import { UsageTracker } from './usage.js';
 import { Station } from './station.js';
 import { Producer } from './producer.js';
+import { createVoiceService } from './voice/index.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const MIME = {
@@ -25,7 +26,9 @@ const newsDesk = new NewsDesk();
 // Pictures of local (offline fixture) feeds are served from their own folders only.
 const images = new ImageCache({ localRoots: () => newsDesk.localImageRoots });
 const chain = new ProviderChain(createProviders(config), usage);
-const producer = new Producer({ config, newsDesk, chain });
+// Neural presenter voices (VOICE_ENGINE=kokoro), synthesised ahead of air; browser voices otherwise.
+const voice = createVoiceService(config, { root: ROOT });
+const producer = new Producer({ config, newsDesk, chain, voice });
 const station = new Station({ config, newsDesk, producer, chain });
 
 function sendJson(res, status, body) {
@@ -103,6 +106,8 @@ const server = http.createServer(async (req, res) => {
       if (!devAllowed(req)) return sendJson(res, 404, { error: 'not found' });
       return sendJson(res, 200, url.pathname === '/api/desk' ? newsDesk.deskView() : station.queue);
     }
+    // Recorded voices: /api/voice/<id>.ogg|.json (content-addressed clips), /api/voice/ads, /api/voice/status.
+    if (req.method === 'GET' && url.pathname.startsWith('/api/voice/') && voice.handle(req, res, url.pathname)) return;
     const img = url.pathname.match(/^\/api\/img\/(s[0-9a-f]{10})$/);
     if (req.method === 'GET' && img) return await serveImage(res, img[1]);
     if (req.method === 'POST' && url.pathname === '/api/refresh') {

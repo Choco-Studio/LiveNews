@@ -8,10 +8,9 @@
 // No P.magenta / P.purple anywhere: on COSMOS those are programme accent pixels
 // (cosmos.md §5 item 9).
 import { P } from '../../../palette.js';
-import { headHW, headBox } from '../head.js';
 import { clamp } from '../space.js';
 import { defineLook } from './base.js';
-import { blob, local, screen, tier } from './wardrobe-b.js';
+import { blob, local, screen, tier, hwAt, fastAtan2 } from './wardrobe-b.js';
 
 export const nova = defineLook({
   id: 'nova',
@@ -50,24 +49,41 @@ const hash = (a, b) => {
   return h - Math.floor(h);
 };
 
-/** Signed "inside" of the halo outline at (x, y): > 0 inside. Scalloped by ~11 lobes. */
+// The scallop of the outline by angle, tabulated once (11 lobes plus a slower 7-lobe variation).
+const SC_N = 512;
+const SCALLOP = new Float32Array(SC_N);
+for (let i = 0; i < SC_N; i++) {
+  const a = (i / SC_N) * 2 * Math.PI - Math.PI;
+  SCALLOP[i] = 0.045 * Math.cos(a * 11) + 0.02 * Math.cos(a * 7 + 1.3);
+}
+
+/** Signed "inside" of the halo outline at (x, y): > 0 inside. Scalloped by the outer clusters. */
 function halo(x, y, lag) {
   const dy = y - HALO.cy;
   const ry = dy < 0 ? HALO.up : HALO.down;
   const xx = x - (dy > 0 ? lag * (dy / HALO.down) * 0.8 : 0);
-  const a = Math.atan2(dy / ry, xx / HALO.rx);
-  const scallop = 0.045 * Math.cos(a * 11) + 0.02 * Math.cos(a * 7 + 1.3);
-  const r = Math.sqrt((xx / HALO.rx) ** 2 + (dy / ry) ** 2);
-  return 1 + scallop - r;
+  const u = xx / HALO.rx, v = dy / ry;
+  const a = fastAtan2(v, u);
+  const k = ((((a + Math.PI) / (2 * Math.PI)) * SC_N) | 0) & (SC_N - 1);
+  return 1 + SCALLOP[k] - Math.sqrt(u * u + v * v);
 }
 
-// The back of the hair: fills behind the head and neck (always in shadow).
+/** Tight screen box of the halo (+ pad units), ignoring roll (≤ a few degrees). */
+function haloBox(head, pad, yFrom = HALO.cy - HALO.up) {
+  const s = head.s;
+  return [head.cx - (HALO.rx + pad) * s, head.cy + (yFrom - pad) * s, head.cx + (HALO.rx + pad) * s, head.cy + (HALO.cy + HALO.down + pad) * s];
+}
+
+// The back of the hair: only where it can show (behind the neck and jaw, under the front mass).
 function drawHaloBack(buf, L, m, head, s, sk) {
   const lag = sk.hairLag || 0;
-  const [x0, y0, x1, y1] = headBox(head, 4.5);
+  const H = L.head;
+  const [x0, y0, x1, y1] = haloBox(head, 1, H.cheekY - 0.5);
   buf.shape(x0, y0, x1, y1, m.hairBack, (px, py) => {
     local(head, px, py, LC);
     const x = LC[0], y = LC[1];
+    if (y < H.cheekY) return -1;
+    if (Math.abs(x) > hwAt(L, Math.min(y, H.chinY - 0.2)) + 1.6 && y < H.chinY) return -1;
     if (halo(x, y, lag) < 0.04) return -1;
     return x < -2 ? 2 : 3;
   });
@@ -84,11 +100,10 @@ function drawCoils(buf, L, m, head, s, sk) {
   // a face window: open forehead and cheeks, hair down the sides to the jaw
   const inFace = (x, y) => {
     const fx = x - yawX;
-    const hw = headHW(H, y, 0);
-    return y > hairline(fx) && Math.abs(x) < hw - 0.25 && y < H.chinY + 3;
+    return y > hairline(fx) && y < H.chinY + 3 && Math.abs(x) < hwAt(L, y) - 0.25;
   };
-  const below = (x, y) => y > H.cheekY + 1.2 && Math.abs(x) < headHW(H, Math.min(y, H.chinY), 0) + 0.8;
-  const [x0, y0, x1, y1] = headBox(head, 4.2);
+  const below = (x, y) => y > H.cheekY + 1.2 && Math.abs(x) < hwAt(L, Math.min(y, H.chinY)) + 0.8;
+  const [x0, y0, x1, y1] = haloBox(head, 0.8);
   buf.shape(x0, y0, x1, y1, m.hair, (px, py) => {
     local(head, px, py, LC);
     const x = LC[0], y = LC[1];

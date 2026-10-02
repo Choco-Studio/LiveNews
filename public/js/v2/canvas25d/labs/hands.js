@@ -17,7 +17,7 @@
 import { C, PartBuffer } from '../pixbuf.js';
 import { frame, parts, actor, drawActors } from '../scene.js';
 import { poseAt } from '../rig.js';
-import { GESTURES } from '../gestures/index.js';
+import { GESTURES, defOf } from '../gestures/index.js';
 import { SHAPES } from '../gestures/shapes.js';
 import { PRESENTER_IDS, lookFor } from '../cast/index.js';
 import { makeCamera, placeActor } from '../camera.js';
@@ -106,7 +106,8 @@ function gestureView(t) {
   } else {
     // a still window on the upper body (a moving window would hide the motion)
     focus.x = pl.x + (seat === 1 ? 6 : -6) * pl.s;
-    focus.y = pl.y + (state.focusY ?? 14) * pl.s;
+    const faceWork = /^(chin|facepalm|glasses|nod|shake_head|laugh|look_partner|lean_in)$/.test(state.gesture);
+    focus.y = pl.y + (state.focusY ?? (faceWork ? 0 : 14)) * pl.s;
   }
 }
 
@@ -268,6 +269,18 @@ export function createHandsLab(canvas) {
       return { rig, arms, armsScale: state.scale >= 3 ? state.scale : 4 };
     },
     gestures: () => Object.keys(GESTURES),
+    /** Key instants of a gesture played at t0 = 0.3: [stroke, apex, hold, release mid] (s). */
+    keyTimes(name, variant = null, n = null) {
+      const d = defOf({ name, variant, n });
+      if (!d) return [];
+      return [0.3 + d.stroke, 0.3 + d.apex, 0.3 + d.hold, 0.3 + (d.hold + d.dur) / 2];
+    },
+    /** Overview: the k-th of 4 key instants of the i-th gesture in `list` ('name' or 'name:variant'). */
+    overview(list, idx) {
+      const [name, variant] = String(list[Math.floor(idx / 4)] || '').split(':');
+      lab.set({ mode: 'gesture', gesture: name, variant: variant || null });
+      lab.render(lab.keyTimes(name, variant || null)[idx % 4] ?? 0);
+    },
     shapes: () => Object.keys(SHAPES),
     presenters: () => PRESENTER_IDS.slice(),
   };

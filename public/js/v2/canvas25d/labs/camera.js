@@ -22,6 +22,8 @@ import { drawBackground, drawDesk } from '../studio/set.js';
 import { SET } from '../studio/geometry.js';
 import { framing, cameraAt, framingInfo, placeActor, moveScale } from '../camera.js';
 import { planSegment } from '../direction/index.js';
+import { segmentContext } from '../direction/context.js';
+import { planShots } from '../direction/shots.js';
 import { lookFor } from '../cast/index.js';
 import { drawText } from '../../../font.js';
 import { P } from '../../../palette.js';
@@ -36,10 +38,8 @@ const CASTS = {
 
 const state = { mode: 'gallery', programme: 'world-now', framing: 'wide', focus: 'A', move: 'greeting', overlay: false, episode: null };
 const clipRows = new Int16Array(384);
-let styleFn = null; // studio/styles.js setStyle (SET stream), loaded with ?styles=1 once it exists
-if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('styles')) {
-  import('../studio/styles.js').then((m) => (styleFn = typeof m.setStyle === 'function' ? m.setStyle : null)).catch(() => {});
-}
+// SET's per-programme dressing: drawBackground(fr, cam, t, { style: programId, wall, cut }) (CONTRACTS w2-set);
+// the old 3-argument form still works if SET's file is mid-edit.
 
 // ---------------------------------------------------------------------------
 // Actors per cast (idle performance, seeded)
@@ -59,18 +59,25 @@ function actorsFor(cast) {
   return list;
 }
 
-function drawStudio(cam, t, cast, programId) {
-  let style = null;
+function drawStudio(cam, t, cast, programId, wall = null, focus = 'A') {
+  const solo = !cast.B;
+  const w = wall ? { ...wall, focus: solo ? 'solo' : focus, solo } : { mode: 'idle', focus: solo ? 'solo' : focus, solo };
   try {
-    style = styleFn ? styleFn(programId) : null;
+    drawBackground(frame, cam, t, { style: programId, wall: w, cut: true });
+    drawDesk(frame, cam, clipRows);
   } catch {
-    style = null;
+    drawBackground(frame, cam, t);
+    drawDesk(frame, cam, clipRows, C.red);
   }
-  if (style) drawBackground(frame, cam, t, { style });
-  else drawBackground(frame, cam, t);
-  drawDesk(frame, cam, clipRows, style?.accent ?? C.red);
   const list = actorsFor(cast).map(({ a, X }) => ({ actor: a, ...placeActor(cam, X) }));
   drawActors(t, list, clipRows);
+}
+
+/** Wall content for a storyboard shot from the segment's data (SET draws it). */
+function wallFor(seg) {
+  if (!seg || seg.type !== 'story') return null;
+  if (seg.location?.lat !== undefined) return { mode: 'map', location: seg.location, since: 0 };
+  return { mode: 'plate', label: seg.kicker || seg.source || seg.category || '' };
 }
 
 // ---------------------------------------------------------------------------
@@ -124,32 +131,60 @@ function moveSpec() {
 // Storyboard: a real episode through planSegment, laid out on one clock
 
 const GAP = 0.3; // the director's pause after each segment (s)
+const HOLD = { 'world-now': 1.5, 'news-60': 1.0, cosmos: 0.6 }; // sign-off holds before the end card
 let board = null;
+
+/**
+ * Plans of every segment. planSegment's first step is planShots(ctx); the lab gives
+ * the context neighbour access (ctx.contextAt, requested from INTEGRATION) so the
+ * storyboard shows what the runtime will air; planSegment itself runs too, as a
+ * check that the whole planner chain accepts the episode.
+ */
+function planEpisode(ep) {
+  const memo = new Map();
+  const at = (j) => {
+    if (memo.has(j)) return memo.get(j);
+    const c = segmentContext(ep, j, {});
+    if (typeof c.contextAt !== 'function') c.contextAt = at;
+    memo.set(j, c);
+    return c;
+  };
+  return (ep.segments || []).map((_, i) => {
+    let errors = [];
+    try {
+      errors = planSegment(ep, i, {}).errors;
+    } catch (err) {
+      errors = [String(err?.message || err)];
+    }
+    const ctx = at(i);
+    return { ctx, events: planShots(ctx), errors };
+  });
+}
 
 function buildBoard(ep) {
   const shots = [];
   let T = 0;
   const cast = ep.cast || { A: 'paco' };
-  for (let i = 0; i < (ep.segments || []).length; i++) {
-    const { ctx, events } = planSegment(ep, i, {});
-    if (!ctx) continue;
+  const plans = planEpisode(ep);
+  plans.forEach(({ ctx, events }, i) => {
     for (const e of events) {
-      if (e.kind !== 'shot') continue;
       const prev = shots[shots.length - 1];
-      const same = prev && prev.shot === e.shot && prev.framing === e.framing && prev.focus === e.focus && prev.card === (e.card ?? null);
-      if (same && !e.move) continue;
-      if (same && e.move) {
-        prev.move = e.move;
-        prev.moveAt = T + e.at;
+      const two = e.framing === 'wide' || e.framing === 'two';
+      const same = (prev && e.zoom) || (prev && prev.shot === e.shot && prev.framing === e.framing && (two || prev.focus === e.focus) && (e.framing || prev.seg === i) && prev.card === (e.card ?? null));
+      if (same) {
+        if (e.move) {
+          prev.move = e.move;
+          prev.moveAt = T + e.at;
+        }
         continue;
       }
       if (prev) prev.t1 = T + e.at;
       shots.push({ t0: T + e.at, t1: null, seg: i, type: ctx.type, shot: e.shot, framing: e.framing || null, focus: e.focus, move: e.move || null, moveAt: T + e.at, card: e.card ?? null, beat: e.beat || null, text: ctx.seg.text });
     }
-    T += ctx.duration + (Number.isFinite(ctx.gapAfter) ? ctx.gapAfter : GAP);
-  }
+    T += ctx.duration + (Number.isFinite(ctx.gapAfter) ? ctx.gapAfter : ctx.type === 'outro' ? HOLD[ctx.programId] ?? GAP : GAP);
+  });
   if (shots.length) shots[shots.length - 1].t1 = T;
-  return { ep, cast, programId: ep.program?.id || 'world-now', shots, total: T };
+  return { ep, cast, programId: ep.program?.id || 'world-now', shots, total: T, errors: plans.flatMap((p) => p.errors) };
 }
 
 const STUDIO = new Set(['wide', 'close', 'two', 'single']);
@@ -175,7 +210,7 @@ function drawBoard(i, ctx2d) {
     // show the end of the move when there is one, else the middle of the shot
     const dt = s.move ? s.move.delay + s.move.dur + 0.05 : len / 2;
     const cam = cameraAt({ framing: s.framing, focus: s.focus, cast: board.cast, solo: !board.cast.B, programId: board.programId, move: s.move }, dt);
-    drawStudio(cam, s.t0 + dt, board.cast, board.programId);
+    drawStudio(cam, (s.move ? s.moveAt : s.t0) + dt, board.cast, board.programId, wallFor(board.ep.segments[s.seg]), s.focus);
   } else {
     label = slate([]);
   }
@@ -241,7 +276,7 @@ export function createCameraLab(canvas) {
         const spec = moveSpec();
         cast = spec.cast;
         cam = cameraAt(spec, t);
-        drawStudio(cam, t, cast, spec.programId);
+        drawStudio(cam, t, cast, spec.programId, null, spec.focus || 'A');
         frame.present(ctx2d);
         if (state.overlay) overlay(ctx2d, cam, cast);
         return { scale: moveScale(spec.move, t) };
@@ -256,7 +291,7 @@ export function createCameraLab(canvas) {
         tt = 2.0;
       }
       cam = framing(name, { cast, focus, programId: programme });
-      drawStudio(cam, tt, cast, programme);
+      drawStudio(cam, tt, cast, programme, state.wall ? { mode: state.wall, location: { place: 'LISBON', lat: 38.7, lon: -9.1 }, label: 'TRANSPORT', figure: { value: '40,000', label: 'PASSENGERS A DAY' }, since: 0 } : null, focus);
       frame.present(ctx2d);
       if (state.overlay) overlay(ctx2d, cam, cast);
       return { name, focus };

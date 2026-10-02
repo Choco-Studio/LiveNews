@@ -8,11 +8,11 @@
 // A dry, intelligent resting face: straight brows, a low resting smile.
 import { P } from '../../../palette.js';
 import { decal } from '../pixbuf.js';
-import { headHW, headBox } from '../head.js';
+import { headHW } from '../head.js';
 import { drawGlasses } from '../glasses.js';
 import { clamp } from '../space.js';
 import { defineLook, SKIN_LIGHT } from './base.js';
-import { local, screen, tier } from './wardrobe-b.js';
+import { local, screen, tier, hwAt } from './wardrobe-b.js';
 
 export const ada = defineLook({
   id: 'ada',
@@ -56,25 +56,24 @@ const strandAt = (u) => {
   return h - Math.floor(h);
 };
 
-// The hair behind the head and neck (only visible beside the neck and under the jaw).
+// The hair behind the head and neck. Only the tucked side can show (a sliver behind the ear
+// and the neck); on the long side the front panel and the body cover it.
 function drawHairBack(buf, L, m, head, s, sk) {
   const H = L.head;
   const lag = sk.hairLag || 0;
   const cyc = H.craniumY - 0.3;
-  const [x0, y0] = headBox(head, 3.0);
-  const [, , x1] = headBox(head, 3.0);
-  const y1 = screen(head, 0, END + 1, SC)[1] + 2;
+  const x0 = head.cx - 1 * s, x1 = head.cx + (H.R + 2.2) * s;
+  const y0 = head.cy + (H.craniumY - 1) * s, y1 = head.cy + (END + 1) * s;
   buf.shape(x0, y0, x1, y1, m.hairBack, (px, py) => {
     local(head, px, py, LC);
     const y = LC[1];
     if (y < cyc || y > END - 0.4) return -1;
     const k = clamp((y - 2) / (END - 2), 0, 1);
     const x = LC[0] - lag * k * k;
-    // the long side: a full panel; the tucked side: only a sliver behind the ear and neck
-    const jaw = headHW(H, Math.min(y, H.chinY - 0.5), 0);
-    const hw = x < 0 ? H.R + 1.0 + k * 0.9 : y < H.craniumY + 1 ? H.R + 0.6 : Math.min(jaw + 0.55, H.R + 0.4) - Math.max(0, y - H.chinY) * 0.08;
-    if (Math.abs(x) > hw) return -1;
-    return x < 0 ? 2 : 3;
+    if (x < 0) return -1;
+    const jaw = hwAt(L, Math.min(y, H.chinY - 0.5));
+    const hw = y < H.craniumY + 1 ? H.R + 0.6 : Math.min(jaw + 0.55, H.R + 0.4) - Math.max(0, y - H.chinY) * 0.08;
+    return x > hw ? -1 : 3;
   });
 }
 
@@ -88,23 +87,24 @@ function drawStraight(buf, L, m, head, s, sk) {
   const cyc = H.craniumY - 0.3;
   const RV = H.R + 1.15;
   const earTop = E.y - E.h * 0.5 - 0.15;
-  const [x0, y0, x1] = headBox(head, 3.2);
-  const y1 = screen(head, 0, END + 1.2, SC)[1] + 2;
+  const x0 = head.cx - (H.R + 2.4) * s, x1 = head.cx + (H.R + 1.6) * s;
+  const y0 = head.cy + (H.top - 2) * s, y1 = head.cy + (END + 1.2) * s;
   const strandW = tr === 2 ? 1.25 : 2.2;
   buf.shape(x0, y0, x1, y1, m.hair, (px, py) => {
     local(head, px, py, LC);
     const y = LC[1];
     const k = y > 2 ? clamp((y - 2) / (END - 2), 0, 1) : 0;
     const x = LC[0] - lag * k * k; // the ends swing a moment after the head
+    if (x > 0 && y > earTop + 0.6) return -1; // the tucked side has nothing in front below the ear
     const fx = x - yawX;
-    const hw = headHW(H, y, 0);
+    const hw = hwAt(L, y);
     // ---- where is hair?
     let zone = 0; // 1 crown, 2 long side (screen left), 3 tucked side
     if (y < cyc) {
       if (x * x + (y - cyc) * (y - cyc) <= RV * RV) zone = 1;
     } else if (x < 0) {
       const outer = H.R + 1.15 + k * 0.55;
-      const inner = y < H.chinY - 1.2 ? Math.max(0.5, hw - 0.45) : Math.max(2.4, headHW(H, H.chinY - 1.2, 0) - 0.45 - (y - H.chinY + 1.2) * 0.12);
+      const inner = y < H.chinY - 1.2 ? Math.max(0.5, hw - 0.45) : Math.max(2.4, hwAt(L, H.chinY - 1.2) - 0.45 - (y - H.chinY + 1.2) * 0.12);
       const endY = END + 0.5 - (-x - inner) * 0.08; // blunt cut, a touch longer at the front
       if (-x <= outer && -x >= inner && y <= endY) zone = 2;
       else if (y < H.chinY - 1.2 && -x < inner && y < -0.5 && -x > hw - 1.0) zone = 2;

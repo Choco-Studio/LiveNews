@@ -33,7 +33,7 @@ import { LOOK, tier } from './wardrobe-b.js';
 
 // Head-local design (units; 1 u = 1 px in the wide). Wide: head 18 x 16, visor 13 x 8.
 // Wider than a human head (a helmet-like casing) but never a big-headed mascot: ~1.2x a human head.
-export const CASE = { hw: 9.0, top: -8.1, bot: 7.7, nTop: 3.6, nBot: 3.0, taper: 0.2 };
+export const CASE = { hw: 9.0, top: -8.1, bot: 7.7, taper: 0.2 }; // superellipse: power 4 on the crown, 3 on the jaw
 export const VISOR = { hw: 6.4, top: -4.0, bot: 4.3, rc: 1.7, taper: 0.1 };
 export const POD = { y: 0.2, h: 3.0, w: 0.8 }; // flush side plates (they make it a head, not a box)
 export const EYE = { x: 3.6, y: -1.05, share: 0.12 };
@@ -102,7 +102,8 @@ function drawCasing(buf, L, m, head, s) {
     const px = cx + side * (caseHW(POD.y) - 0.15) * s, py = cy + POD.y * s;
     buf.shape(px - POD.w * s - 1, py - POD.h * s - 1, px + POD.w * s + 1, py + POD.h * s + 1, m.joint, (qx, qy) => {
       const u = (qx - px) / (POD.w * s), v = (qy - py) / (POD.h * s);
-      if (u ** 4 + v ** 4 > 1) return -1;
+      const u2 = u * u, v2 = v * v;
+      if (u2 * u2 + v2 * v2 > 1) return -1;
       return side < 0 ? (v < -0.5 ? 0 : 1) : v < -0.5 ? 1 : 2;
     });
   }
@@ -115,10 +116,10 @@ function drawCasing(buf, L, m, head, s) {
     const x = (px - cx) / s, y = (py - cy) / s;
     const a = caseHW(y);
     const b = y < 0 ? -CASE.top : CASE.bot;
-    const n = y < 0 ? CASE.nTop : CASE.nBot;
     const u = x / a, v = y / b;
     const au = u < 0 ? -u : u, av = v < 0 ? -v : v;
-    if (au ** n + av ** n > 1) return -1;
+    const u2 = au * au, v2 = av * av;
+    if (y < 0 ? u2 * u2 + v2 * v2 > 1 : u2 * au + v2 * av > 1) return -1;
     // a gently domed face plate: lit along the left and the crown, shaded right and underneath
     const l = -0.62 * u - 0.55 * v;
     let t = l > 0.5 ? 0 : l > -0.42 ? 1 : l > -0.7 ? 2 : 3;

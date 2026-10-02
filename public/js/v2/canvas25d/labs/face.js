@@ -460,7 +460,28 @@ function drawConversation(t, st) {
   const cv = convSetup(st);
   const cam = convCam(st, cv, t);
   drawRoom(cam, t);
-  drawActors(t, cv.actors.map(({ a, X }) => ({ actor: a, ...placeActor(cam, X) })), clipRows);
+  const heads = drawActors(t, cv.actors.map(({ a, X }) => ({ actor: a, ...placeActor(cam, X) })), clipRows);
+  HEADS.length = 0;
+  for (const h of heads) HEADS.push(h.cx, h.cy, h.s);
+}
+const HEADS = [];
+
+/** Side-by-side 2x crops (96 x 108 px each) round every head of the last conversation frame. */
+function zoomHeads() {
+  sheet.set(frame.px);
+  frame.px.fill(C.black);
+  const n = Math.min(2, HEADS.length / 3);
+  for (let k = 0; k < n; k++) {
+    const cx = HEADS[k * 3], cy = HEADS[k * 3 + 1], hs = HEADS[k * 3 + 2];
+    const sx = Math.round(cx - 48), sy = Math.round(cy - 30 - 2 * hs);
+    for (let y = 0; y < H; y++) {
+      const fy = Math.min(H - 1, Math.max(0, sy + (y >> 1)));
+      for (let x = 0; x < 190; x++) {
+        const fx = Math.min(W - 1, Math.max(0, sx + (x >> 1)));
+        frame.px[y * W + k * 194 + x] = sheet[fy * W + fx];
+      }
+    }
+  }
 }
 
 const HUD_COL = { partner: P.yellow, notes: P.green, wall: P.cyan, camera: P.white };
@@ -519,13 +540,14 @@ export function createFaceLab(canvas, { drawText = null } = {}) {
   const state = {
     mode: 'sheet', tier: 'close', presenter: 'paco', presenters: null, emotion: null, seat: 1,
     text: 'Good evening. Markets moved sharply today, as the bank promised more support.', sample: null,
-    episode: 'world-now', cam: 'auto', k: 4.0, hud: true, tileT: 0.3, zoom: 1, zx: 0, zy: 0, glasses: null,
+    episode: 'world-now', cam: 'auto', k: 4.0, hud: true, tileT: 0.3, zoom: 1, zx: 0, zy: 0, glasses: null, zoomHeads: false,
   };
   const lab = {
     state,
     render(t = 0) {
       (MODES[state.mode] || drawSheet)(t, state);
       if (state.zoom > 1) zoomFrame(state.zoom, state.zx || 0, state.zy || 0);
+      else if (state.zoomHeads && state.mode === 'conversation') zoomHeads();
       if (!ctx) return;
       frame.present(ctx);
       if (state.mode === 'strip' && drawText) for (const l of stripLabels) drawText(ctx, l.text, l.x, l.y, { color: P.fog, font: 'micro' });

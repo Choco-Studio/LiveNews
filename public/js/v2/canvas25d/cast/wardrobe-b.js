@@ -24,6 +24,7 @@
 import { P } from '../../../palette.js';
 import { decal, line, toneN } from '../pixbuf.js';
 import { clamp } from '../space.js';
+import { headHW } from '../head.js';
 import { GROUPS } from '../character.js';
 import { registerOutfit, torsoFrame } from './outfit.js';
 
@@ -46,6 +47,39 @@ export function screen(head, x, y, out) {
   out[0] = head.cx + head.s * (x * head.cr - y * head.sr);
   out[1] = head.cy + head.s * (x * head.sr + y * head.cr);
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Fast per-pixel helpers (hair drawers call them for every pixel of a large box)
+
+const HW_STEP = 1 / 32;
+const HW_TABLES = new WeakMap();
+/** headHW(L.head, y, 0) from a per-look table (1/32 u steps, built once); ≤ 0 outside the head. */
+export function hwAt(L, y) {
+  let tb = HW_TABLES.get(L);
+  if (!tb) {
+    const H = L.head;
+    const y0 = H.top - 4, n = Math.ceil((H.chinY + 4 - y0) / HW_STEP) + 1;
+    const a = new Float32Array(n);
+    for (let i = 0; i < n; i++) a[i] = headHW(H, y0 + i * HW_STEP, 0);
+    tb = { y0, n, a };
+    HW_TABLES.set(L, tb);
+  }
+  const i = Math.round((y - tb.y0) / HW_STEP);
+  return i < 0 || i >= tb.n ? -1 : tb.a[i];
+}
+
+/** atan2 approximation (|error| < 0.0015 rad), enough for outline wobbles and lobes. */
+export function fastAtan2(y, x) {
+  const ax = x < 0 ? -x : x, ay = y < 0 ? -y : y;
+  const mx = ax > ay ? ax : ay;
+  if (mx === 0) return 0;
+  const a = (ax < ay ? ax : ay) / mx;
+  const s2 = a * a;
+  let r = ((-0.0464964749 * s2 + 0.15931422) * s2 - 0.327622764) * s2 * a + a;
+  if (ay > ax) r = 1.57079637 - r;
+  if (x < 0) r = 3.14159274 - r;
+  return y < 0 ? -r : r;
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +125,8 @@ export function stroke(buf, m, ax, ay, bx, by, cx, cy, r0, r1, tone = null, n = 
       if (clip && y >= clipY[x]) continue;
       if (ONLY && (grp[y * w + x] !== ONLY || !mat[y * w + x])) continue;
       const px = x + 0.5;
-      let best = 2, bu = 0, bex = 0, bey = 0, br = 1, bside = 0;
+      // nearest segment by (distance / radius)², one square root per pixel at the end
+      let best = 4, bu = 0, bex = 0, bey = 0, br = 1, bside = 0;
       for (let j = 0; j < n; j++) {
         const sx = SX[j], sy = SY[j];
         const dx = SX[j + 1] - sx, dy = SY[j + 1] - sy;
@@ -101,9 +136,9 @@ export function stroke(buf, m, ax, ay, bx, by, cx, cy, r0, r1, tone = null, n = 
         const ex = px - (sx + dx * t), ey = py - (sy + dy * t);
         const r = SR[j] + (SR[j + 1] - SR[j]) * t;
         if (r <= 0.05) continue;
-        const d = Math.sqrt(ex * ex + ey * ey) / r;
-        if (d < best) {
-          best = d;
+        const d2 = (ex * ex + ey * ey) / (r * r);
+        if (d2 < best) {
+          best = d2;
           bu = (j + t) / n;
           bex = ex;
           bey = ey;
@@ -112,6 +147,7 @@ export function stroke(buf, m, ax, ay, bx, by, cx, cy, r0, r1, tone = null, n = 
         }
       }
       if (best >= 1) continue;
+      best = Math.sqrt(best);
       const nx = bex / br, ny = bey / br;
       const tt = tone ? tone(nx, ny, bu, bside < 0 ? -best : best) : toneN(m, nx * 0.95, ny * 0.95);
       if (tt < 0) continue;
@@ -162,13 +198,21 @@ export function blob(buf, m, cx, cy, r, wob, ph, bias = 0, sph = null, hi = true
   const { w, mat, tone: tn, grp, z, clipY } = buf;
   const g = buf.g, cz = buf.cz, clip = buf.clip;
   if (sph) sph(cx, cy, BLOB);
+  // lobes: sin(3a + ph) and sin(5a - 1.7 ph) from the unit direction (no atan2 / sin per pixel)
+  const c3 = Math.cos(ph), s3 = Math.sin(ph), c5 = Math.cos(-1.7 * ph), s5 = Math.sin(-1.7 * ph);
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
       if (clip && y >= clipY[x]) continue;
       const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
-      const a = Math.atan2(dy, dx);
-      const rr = r * (1 + wob * Math.sin(a * 3 + ph) * 0.7 + wob * 0.3 * Math.sin(a * 5 - ph * 1.7));
-      const d2 = (dx * dx + dy * dy) / (rr * rr);
+      const dl2 = dx * dx + dy * dy;
+      if (dl2 >= R * R) continue;
+      const il = dl2 > 1e-9 ? 1 / Math.sqrt(dl2) : 0;
+      const ca = dx * il, sa = dy * il;
+      const sa2 = sa * sa, ca2 = ca * ca;
+      const sin3 = sa * (3 - 4 * sa2), cos3 = ca * (4 * ca2 - 3);
+      const sin5 = sa * (16 * sa2 * sa2 - 20 * sa2 + 5), cos5 = ca * (16 * ca2 * ca2 - 20 * ca2 + 5);
+      const rr = r * (1 + wob * (sin3 * c3 + cos3 * s3) * 0.7 + wob * 0.3 * (sin5 * c5 + cos5 * s5));
+      const d2 = dl2 / (rr * rr);
       if (d2 >= 1) continue;
       let nx = dx / rr, ny = dy / rr;
       if (sph) {

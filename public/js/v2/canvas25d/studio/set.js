@@ -76,16 +76,29 @@ const poolLight = (p, X, Y) => {
 
 const BAKED = new Map();
 
-/** Bake (once per style) the wall light: texel = pair * 16 + fraction (Bayer share of the pair's upper colour). */
+/**
+ * Bake (once per style) the wall light into a 16-bit texture: bits 0-3 the Bayer share of the
+ * pair's upper colour, bits 4-7 the ramp pair (black/ink, ink/slate, slate/steel...), bits 8-11
+ * the tint strength inside the style's tint pools. A tinted pixel swaps its colour for the
+ * style's tint colour (ink → maroon, slate → brown, slate → purple), so warmth rises with the
+ * light, every pixel stays a palette colour, and the render is still one read per pixel.
+ */
 function bakeWall(style) {
   let b = BAKED.get(style.bakeKey);
   if (b) return b;
-  const lo = new Uint32Array(16), hi = new Uint32Array(16);
+  const lo = new Uint32Array(16), hi = new Uint32Array(16), tlo = new Uint32Array(16), thi = new Uint32Array(16);
+  const tint = (c) => {
+    if (!style.tints) return c;
+    for (const [from, to] of Object.entries(style.tints)) if (C[from] === c) return C[to];
+    return c;
+  };
   for (let i = 0; i < RAMP.length - 1; i++) {
     lo[i] = C[RAMP[i]];
     hi[i] = C[RAMP[i + 1]];
+    tlo[i] = tint(lo[i]);
+    thi[i] = tint(hi[i]);
   }
-  const tex = new Uint8Array(TW * TH);
+  const tex = new Uint16Array(TW * TH);
   const S = SET.screen;
   const cove = style.cove;
   for (let ty = 0; ty < TH; ty++) {
@@ -116,10 +129,16 @@ function bakeWall(style) {
       if (pos < 0) pos = 0;
       if (pos > RAMP.length - 1.01) pos = RAMP.length - 1.01;
       const q = Math.round(pos * 16);
-      tex[ty * TW + tx] = ((q >> 4) << 4) | (q & 15);
+      let tq = 0;
+      if (style.tints) {
+        let tv = 0;
+        for (const p of style.tintPools) tv += poolLight(p, X, Y);
+        tq = Math.min(15, Math.round(tv * 16));
+      }
+      tex[ty * TW + tx] = (tq << 8) | ((q >> 4) << 4) | (q & 15);
     }
   }
-  b = { tex, lo, hi };
+  b = { tex, lo, hi, tlo, thi };
   BAKED.set(style.bakeKey, b);
   return b;
 }
@@ -132,8 +151,12 @@ export function warmSet(id) {
 const COL = new Int32Array(W);
 const THR = new Uint8Array(4);
 
-/** Render the baked wall light into rows [ya, yb), skipping the screen rectangle [sx0, sx1) x [sy0, sy1). */
-function renderWall(fr, cam, baked, sx0, sy0, sx1, sy1) {
+/**
+ * Render the baked wall light above row `yEnd` (the floor covers the rest), skipping the screen
+ * rectangle [sx0, sx1) x [sy0, sy1) (the wall content covers it). One texture read and one or two
+ * Bayer compares per pixel; the dither is anchored to the layer's whole-pixel offset.
+ */
+function renderWall(fr, cam, baked, sx0, sy0, sx1, sy1, yEnd) {
   const k = kAt(cam, SET.wallZ);
   const inv = 1 / k;
   const ox = Math.round(sxOf(cam, k, 0)), oy = Math.round(syOf(cam, k, 0));
@@ -141,9 +164,10 @@ function renderWall(fr, cam, baked, sx0, sy0, sx1, sy1) {
     let tx = Math.floor(cam.x + (x + 0.5 - 192) * inv - TX0);
     COL[x] = tx < 0 ? 0 : tx >= TW ? TW - 1 : tx;
   }
-  const { tex, lo, hi } = baked;
+  const { tex, lo, hi, tlo, thi } = baked;
   const px = fr.px;
-  for (let y = 0; y < H; y++) {
+  const ye = Math.min(H, yEnd);
+  for (let y = 0; y < ye; y++) {
     let ty = Math.floor(cam.y + (y + 0.5 - cam.hy) * inv - TY0);
     ty = ty < 0 ? 0 : ty >= TH ? TH - 1 : ty;
     const rb = ty * TW;
@@ -155,15 +179,16 @@ function renderWall(fr, cam, baked, sx0, sy0, sx1, sy1) {
     const skip = y >= sy0 && y < sy1;
     const xa = skip ? Math.max(0, Math.min(W, sx0)) : W;
     const xb = skip ? Math.max(0, Math.min(W, sx1)) : W;
-    let i = y * W;
-    for (let x = 0; x < xa; x++, i++) {
-      const v = tex[rb + COL[x]];
-      px[i] = (v & 15) > THR[(x - ox) & 3] ? hi[v >> 4] : lo[v >> 4];
-    }
-    i = y * W + xb;
-    for (let x = xb; x < W; x++, i++) {
-      const v = tex[rb + COL[x]];
-      px[i] = (v & 15) > THR[(x - ox) & 3] ? hi[v >> 4] : lo[v >> 4];
+    for (let pass = 0; pass < 2; pass++) {
+      const x0 = pass ? xb : 0, x1 = pass ? W : xa;
+      let i = y * W + x0;
+      for (let x = x0; x < x1; x++, i++) {
+        const v = tex[rb + COL[x]];
+        const T = THR[(x - ox) & 3];
+        const p = (v >> 4) & 15;
+        if (v >> 8 > T) px[i] = (v & 15) > T ? thi[p] : tlo[p];
+        else px[i] = (v & 15) > T ? hi[p] : lo[p];
+      }
     }
   }
 }
@@ -256,8 +281,9 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   const baked = bakeWall(style);
   const kw = r.k;
   const b = Math.max(1, Math.round(2 * kw));
-  renderWall(fr, cam, baked, r.x0 - b - 1, r.y0 - b - 1, r.x1 + b + 1, r.y1 + b + 1);
-  if (style.tints) tintPools(fr, cam, style);
+  // rows below the back wall's foot belong to the floor (drawn after)
+  const yFloor = Math.max(0, Math.round(syOf(cam, kw, SET.floorY)));
+  renderWall(fr, cam, baked, r.x0 - b - 1, r.y0 - b - 1, r.x1 + b + 1, r.y1 + b + 1, yFloor);
   if (!soft) drawWallDetails(fr, cam, style);
   drawScreen(fr, r, b, style, soft, wall);
   drawFlats(fr, cam, style, soft);
@@ -267,47 +293,6 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
     CACHE.bgKey.set(KEY);
   }
   CACHE.deskReady = CACHE.on;
-}
-
-/**
- * Scenery tint inside the style's tint pools: a palette swap (ink → maroon, slate → brown...)
- * with Bayer coverage following the pool's falloff, in screen space with the wall's dither
- * anchor, so the warmth rises with the light instead of drawing hard edges.
- */
-const TINT_FROM = new Uint32Array(4), TINT_TO = new Uint32Array(4);
-function tintPools(fr, cam, style) {
-  let n = 0;
-  for (const [from, to] of Object.entries(style.tints)) {
-    if (n >= 4) break;
-    TINT_FROM[n] = C[from];
-    TINT_TO[n++] = C[to];
-  }
-  const k = kAt(cam, SET.wallZ);
-  const ox = Math.round(sxOf(cam, k, 0)), oy = Math.round(syOf(cam, k, 0));
-  const px = fr.px;
-  for (const p of style.tintPools) {
-    const cx = sxOf(cam, k, p.X), cy = syOf(cam, k, p.Y), rx = p.rx * k, ry = p.ry * k;
-    const x0 = Math.max(0, Math.floor(cx - rx)), x1 = Math.min(W, Math.ceil(cx + rx));
-    const y0 = Math.max(0, Math.floor(cy - ry)), y1 = Math.min(H, Math.ceil(cy + ry));
-    for (let y = y0; y < y1; y++) {
-      const dy = (y + 0.5 - cy) / ry;
-      const br = ((y - oy) & 3) << 2;
-      for (let x = x0; x < x1; x++) {
-        const dx = (x + 0.5 - cx) / rx;
-        const d = dx * dx + dy * dy;
-        if (d >= 1) continue;
-        const q = Math.round(p.amount * (1 - d) * (1 - d * 0.35) * 16);
-        if (q <= B16[br + ((x - ox) & 3)]) continue;
-        const i = y * W + x, c = px[i];
-        for (let j = 0; j < n; j++) {
-          if (c === TINT_FROM[j]) {
-            px[i] = TINT_TO[j];
-            break;
-          }
-        }
-      }
-    }
-  }
 }
 
 /** Seams and the one static ceiling line (in focus only). */
@@ -362,8 +347,9 @@ function blitWall(fr, wall, x0, y0, x1, y1) {
   if (xb <= xa) return;
   const px = fr.px;
   for (let y = Math.max(0, y0); y < Math.min(H, y1); y++) {
-    const src = (y - y0) * w + (xa - x0);
-    px.set(buf.subarray(src, src + (xb - xa)), y * W + xa);
+    let src = (y - y0) * w + (xa - x0);
+    const end = y * W + xb;
+    for (let i = y * W + xa; i < end; i++) px[i] = buf[src++];
   }
 }
 

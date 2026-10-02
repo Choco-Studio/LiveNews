@@ -196,7 +196,8 @@ export function set(o = {}) {
   if ('cache' in o) setCacheEnabled(o.cache);
   const after = `${LAB.programme}|${LAB.framing}|${LAB.wall}|${LAB.image}|${LAB.place}`;
   // a lab change is a cut: the wall shows the new state at once
-  if (before !== after || 'figure' in o || 'phase' in o) LAB.shotSince = (LAB.shotSince || 0) + 1;
+  // (noCut: true changes the wall in the same shot, as a director update without a cut: it wipes)
+  if (!o.noCut && (before !== after || 'figure' in o || 'phase' in o)) LAB.shotSince = (LAB.shotSince || 0) + 1;
   return { ...LAB };
 }
 

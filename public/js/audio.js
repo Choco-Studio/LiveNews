@@ -89,14 +89,27 @@ class Run {
     if (!l) return 1;
     if (!Number.isFinite(l.value)) l.value = 0;
     if (now - l.at < 8) return l.value;
-    l.analyser.getFloatTimeDomainData(l.data);
-    let sum = 0;
-    for (let i = 0; i < l.data.length; i++) {
-      const v = l.data[i];
-      if (Number.isFinite(v)) sum += v * v;
+    let target;
+    if (l.env) {
+      // The clip's own loudness envelope (voice service, 0..1 over the clip's
+      // top 40 dB, frame i at i/rate s): exact in any context, offline renders
+      // included, where an analyser reads silence. Mapped like the analyser.
+      const x = ((now - l.env.perf0) / 1000) * l.env.rate;
+      const i = Math.floor(x);
+      const vals = l.env.values;
+      const a = i >= 0 && i < vals.length ? Number(vals[i]) || 0 : 0;
+      const b = i + 1 >= 0 && i + 1 < vals.length ? Number(vals[i + 1]) || 0 : 0;
+      target = Math.min(1, Math.max(0, (a + (b - a) * (x - i) - 0.2) / 0.75));
+    } else {
+      l.analyser.getFloatTimeDomainData(l.data);
+      let sum = 0;
+      for (let i = 0; i < l.data.length; i++) {
+        const v = l.data[i];
+        if (Number.isFinite(v)) sum += v * v;
+      }
+      const dbv = 10 * Math.log10(sum / l.data.length + 1e-10);
+      target = Math.min(1, Math.max(0, (dbv + 48) / 30));
     }
-    const dbv = 10 * Math.log10(sum / l.data.length + 1e-10);
-    const target = Math.min(1, Math.max(0, (dbv + 48) / 30));
     const dt = l.at < 0 ? 1000 : Math.max(0, now - l.at);
     // Fast to open, a little slower to close, like a jaw.
     l.value += (target - l.value) * (1 - Math.exp(-dt / (target > l.value ? 25 : 60)));
@@ -360,7 +373,8 @@ export class AudioEngine {
   // `anchor` is any slot key. Resolves when the text has been spoken or stop() ran.
   // opts.onSentence(sentence, i) fires as each sentence starts. opts.audio is a
   // recorded voice for the whole text: { url | buffer (AudioBuffer), words:
-  // [{ t: seconds, char: index into text }] }; it is played through WebAudio
+  // [{ t: seconds, char: index into text }], levels?: { rate, values: [0..1] }
+  // (loudness envelope: the jaw follows it) }; it is played through WebAudio
   // unless blips were asked for, and browser TTS is the fallback.
   // opts.marks: [char offsets into text] and opts.onMark(i) fire when the
   // voice reaches each offset (gestures on the right word, in every mode);
@@ -668,7 +682,9 @@ export class AudioEngine {
     this.#voiceOn();
     const t0 = ctx.currentTime + 0.12;
     const perf0 = this.#heardAt(t0);
-    run.loud = { analyser, data: new Float32Array(analyser.fftSize), at: -1, value: 0 };
+    const lv = audio.levels;
+    const env = lv && Array.isArray(lv.values) && lv.values.length && Number(lv.rate) > 0 ? { rate: Number(lv.rate), values: lv.values, perf0 } : null;
+    run.loud = { analyser, data: new Float32Array(analyser.fftSize), at: -1, value: 0, env };
     let ended = false;
     src.onended = () => {
       ended = true;

@@ -31,6 +31,12 @@ const KEYS = [
   'MIN_NEW_STORIES',
   'MAX_STORY_AGE_HOURS',
   'FEED_REFRESH_MINUTES',
+  'VOICE_ENGINE',
+  'KOKORO_DIR',
+  'KOKORO_THREADS',
+  'VOICE_PYTHON',
+  'VOICE_BUDGET_S',
+  'VOICE_CACHE_MB',
 ];
 
 let copies = 0;
@@ -146,6 +152,23 @@ describe('config from the environment', () => {
     }
   });
 
+  test('voices: Kokoro by default, browser for anything else, with the cache under data/voice', async () => {
+    const config = await loadConfig();
+    assert.deepEqual(config.voice, {
+      engine: 'kokoro',
+      kokoroDir: '',
+      threads: 0,
+      python: 'python3',
+      budgetSeconds: 90,
+      cacheMb: 300,
+      dir: path.join(REPO, 'data', 'voice'),
+    });
+    assert.equal((await loadConfig({ VOICE_ENGINE: ' Kokoro ' })).voice.engine, 'kokoro');
+    for (const value of ['browser', 'tts', 'off', 'none']) assert.equal((await loadConfig({ VOICE_ENGINE: value })).voice.engine, 'browser', value);
+    const tuned = (await loadConfig({ KOKORO_DIR: '/models', KOKORO_THREADS: '2', VOICE_BUDGET_S: '30', VOICE_CACHE_MB: 'lots' })).voice;
+    assert.deepEqual([tuned.kokoroDir, tuned.threads, tuned.budgetSeconds, tuned.cacheMb], ['/models', 2, 30, 300]);
+  });
+
   test('CODEX_EXTRA_ARGS is split on whitespace', async () => {
     const config = await loadConfig({ CODEX_EXTRA_ARGS: '-c model_reasoning_effort=low   --flag ' });
     assert.deepEqual(config.codex.extraArgs, ['-c', 'model_reasoning_effort=low', '--flag']);
@@ -178,8 +201,9 @@ describe('.env.example', () => {
   test('the example values for the tuning knobs are the defaults', async () => {
     const defaults = await loadConfig();
     const fromExample = await loadConfig(
-      Object.fromEntries(['HOST', 'PORT', 'PROVIDERS', 'QUEUE_SIZE', 'CANDIDATE_POOL', 'REVIEW_PASS', 'MIN_NEW_STORIES', 'MAX_STORY_AGE_HOURS', 'FEED_REFRESH_MINUTES', 'CODEX_TIMEOUT_MS'].map((k) => [k, example[k]]))
+      Object.fromEntries(['HOST', 'PORT', 'PROVIDERS', 'QUEUE_SIZE', 'CANDIDATE_POOL', 'REVIEW_PASS', 'MIN_NEW_STORIES', 'MAX_STORY_AGE_HOURS', 'FEED_REFRESH_MINUTES', 'CODEX_TIMEOUT_MS', 'VOICE_ENGINE', 'KOKORO_DIR', 'KOKORO_THREADS', 'VOICE_PYTHON', 'VOICE_BUDGET_S', 'VOICE_CACHE_MB'].map((k) => [k, example[k]]))
     );
+    assert.deepEqual(fromExample.voice, defaults.voice);
     for (const key of ['host', 'port', 'providers', 'queueSize', 'candidatePool', 'reviewPass', 'minNewStories', 'maxStoryAgeHours', 'feedRefreshMinutes']) {
       assert.deepEqual(fromExample[key], defaults[key], key);
     }

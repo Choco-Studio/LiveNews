@@ -208,8 +208,10 @@ export function torsoFrame(o) {
     return 3;
   };
   let rows = null;
+  const liftL = A + sk.shoulder.L, liftR = A + sk.shoulder.R;
   return {
     T, lift, unlift, outline, jacketPts, vY, torsoTone,
+    liftK: liftL !== 0 || liftR !== 0, liftL, liftR,
     get rows() {
       return rows || (rows = silhouetteRows(outline));
     },
@@ -225,55 +227,96 @@ export function torsoFrame(o) {
  * right whose width follows the ribcage, a deep core at close-ups, and drag
  * folds from the closure toward the armpits (a shadow crescent under a ridge).
  */
-function jacketTone(o, F, tier) {
+function shadeJacket(o, F, tier, g, mat) {
   const s = o.s, T = F.T, vY = F.vY;
-  F.rows; // fill ROW_L / ROW_R / COL_TOP
-  const hasInv = !!o.inv;
-  const v = o.inv;
+  const R = F.rows; // fills ROW_L / ROW_R / COL_TOP
+  const A = affine(o);
+  if (!A.ok) return;
+  const buf = o.buf, W = buf.w, mats = buf.mat, grps = buf.grp, tones = buf.tone;
+  const lift = F.liftK, liftL = F.liftL, liftR = F.liftR, shTop = T.shoulderTop;
+  const is = 1 / s;
   // fold geometry (body units): from just outside the closure to under the arm
   const fsx = 1.7, fsy = vY + 0.9;
   const fex = T.sideHW * 0.6, fey = Math.min(vY - 3, T.shoulderJoint[1] + 6.5);
+  const fdx = 1 / (fex - fsx);
   const sag = 2.0;
   const foldTh = Math.max(0.3, 1.15 / s); // ~1-2 px at the thickest point
+  const fyLo = fey - 3, fyHi = fsy + 0.5;
   // the approved prototype's broad shade on the far third, following the ribcage
   const sideBase = T.sideHW * 0.34, sideBulge = T.sideHW * 0.06;
-  return (px, py) => {
-    const dl = (px + 0.5 - ROW_L[py]) / s;
-    const dr = (ROW_R[py] - px - 0.5) / s;
-    const top = (py + 0.5 - COL_TOP[px]) / s;
-    let x = 0, y = 10;
-    if (hasInv) {
-      v.at(px + 0.5, py + 0.5);
-      x = v.x;
-      y = F.unlift(v.x, v.y);
+  const band = tier === 0 ? 1.4 : 1.9;
+  const keyW = tier === 0 ? 1.1 : 1.0;
+  const nhw = T.neckHW + 1.2;
+  const detail = tier === 2;
+  const ridge = s >= 3;
+  const y0 = Math.max(1, R.y0), y1 = Math.min(buf.h - 2, R.y1);
+  for (let py = y0; py <= y1; py++) {
+    const l = ROW_L[py], r = ROW_R[py];
+    if (!(r > l)) continue;
+    const xa = Math.max(1, Math.floor(l)), xb = Math.min(W - 2, Math.ceil(r));
+    const qy = py + 0.5;
+    // body coordinates at the row's first pixel centre, then incremental along the row
+    let x = A.xa * (xa + 0.5) + A.xb * qy + A.xc;
+    let y0b = A.ya * (xa + 0.5) + A.yb * qy + A.yc;
+    let dl = (xa + 0.5 - l) * is, dr = (r - xa - 0.5) * is;
+    // the side plane's bump depends on height only: once per row (the lean is small)
+    const dyr = y0b - 7;
+    const bump = 1 / (1 + (dyr * dyr) / 40);
+    const sideW = sideBase + sideBulge * bump, deepW = 1.5 + 0.4 * bump;
+    for (let px = xa; px <= xb; px++, x += A.xa, y0b += A.ya, dl += is, dr -= is) {
+      const i = py * W + px;
+      if (mats[i] !== mat || grps[i] !== g) continue;
+      let y = y0b;
+      if (lift) {
+        const k = 1 - (y - shTop) / 12;
+        if (k > 0) y += (x < 0 ? liftL : liftR) * (k > 1 ? 1 : k);
+      }
+      const ax = x < 0 ? -x : x;
+      let t = 1;
+      if (dr < sideW) t = 2;
+      if (detail && dr < deepW) t = 3;
+      // shoulder tops catch the key (a band that follows the slope), the left one more
+      if (ax > nhw && (qy - COL_TOP[px]) * is < band) {
+        if (x < 0) t = 0;
+        else if (t >= 2) t = 1; // the far shoulder's top still faces the light (the rim sits on it)
+      }
+      // the key-light edge on the left
+      if (dl < keyW) t = 0;
+      if (detail && ax > fsx && ax < fex && y < fyHi && y > fyLo) {
+        // drag folds: a soft shadow crescent; on the lit side a short ridge above it in close-ups
+        const u = (ax - fsx) * fdx;
+        const sn = 4 * u * (1 - u); // ~ sin(pi u), cheaper
+        const d = y - (fsy + (fey - fsy) * u + sag * sn);
+        const th = foldTh * Math.sqrt(sn);
+        if (d >= 0 && d < th && u > 0.08 && u < 0.92) t = x < 0 ? (t > 2 ? t : 2) : Math.min(3, Math.max(t, 2) + (t >= 2 ? 1 : 0));
+        else if (ridge && x < 0 && d < 0 && d > -th * 0.6 && t === 1 && u > 0.3 && u < 0.7) t = 0;
+      }
+      tones[i] = t;
     }
-    const ax = Math.abs(x);
-    let t = 1;
-    // the far side turns away: a side plane wider over the deltoid and ribcage
-    const sideW = sideBase + sideBulge * Math.exp(-((y - 7) * (y - 7)) / 40);
-    if (dr < sideW) t = 2;
-    if (tier === 2 && dr < 1.5 + 0.4 * Math.exp(-((y - 7) * (y - 7)) / 40)) t = 3;
-    // shoulder tops catch the key (a band that follows the slope), the left one more
-    const band = tier === 0 ? 1.4 : 1.9;
-    if (top < band && ax > T.neckHW + 1.2) {
-      if (x < 0) t = 0;
-      else if (t >= 2) t = 1; // the far shoulder's top still faces the light (the rim sits on it)
-    }
-    // the key-light edge on the left
-    if (dl < (tier === 0 ? 1.1 : 1.0)) t = 0;
-    if (tier < 2 || !hasInv) return t;
-    // drag folds: shadow crescent under a ridge; deeper on the far side
-    if (ax > fsx && ax < fex && y < fsy + 0.5 && y > fey - 3) {
-      const u = (ax - fsx) / (fex - fsx);
-      const fy = fsy + (fey - fsy) * u + sag * 4 * u * (1 - u);
-      const th = foldTh * Math.pow(Math.sin(Math.PI * u), 0.7);
-      const d = y - fy;
-      // a soft shadow crescent; on the lit side a short ridge above it only in close-ups
-      if (d >= 0 && d < th && u > 0.08 && u < 0.92) t = x < 0 ? Math.max(t, 2) : Math.min(3, Math.max(t, 2) + (t >= 2 ? 1 : 0));
-      else if (s >= 3 && x < 0 && d < 0 && d > -th * 0.6 && t === 1 && u > 0.3 && u < 0.7) t = 0;
-    }
-    return t;
-  };
+  }
+}
+
+// Affine screen → body coefficients for the current outfit context (lean is a rotation about HIP):
+// x = xa·px + xb·py + xc, y = ya·px + yb·py + yc. `ok` is false without o.inv (no detail shading).
+const AFF = { ok: false, xa: 0, xb: 0, xc: 0, ya: 0, yb: 0, yc: 0 };
+function affine(o) {
+  const v = o.inv;
+  if (!v) {
+    AFF.ok = false;
+    AFF.xa = AFF.xb = AFF.xc = AFF.ya = AFF.yb = 0;
+    AFF.yc = 10;
+    return AFF;
+  }
+  const k = 1 / v.s;
+  const X0 = -v.ox * k - v.bx, Y0 = -v.oy * k - v.by - HIP;
+  AFF.ok = true;
+  AFF.xa = v.cl * k;
+  AFF.xb = v.sl * k;
+  AFF.xc = X0 * v.cl + Y0 * v.sl;
+  AFF.ya = -v.sl * k;
+  AFF.yb = v.cl * k;
+  AFF.yc = -X0 * v.sl + Y0 * v.cl + HIP;
+  return AFF;
 }
 
 // ---------------------------------------------------------------------------
@@ -314,7 +357,11 @@ function drawJacketOutfit(o) {
 
   // ---- jacket body, folds and lapels
   buf.part(gb + G.jacket, 8, clip);
-  buf.poly(F.jacketPts, m.jacket, tier >= 1 && o.inv ? jacketTone(o, F, tier) : F.torsoTone(m.jacket));
+  if (tier >= 1 && o.inv) {
+    // one flat fill, then the planes and folds in one incremental pass (no per-pixel closure)
+    buf.poly(F.jacketPts, m.jacket, 1);
+    shadeJacket(o, F, tier, gb + G.jacket, m.jacket);
+  } else buf.poly(F.jacketPts, m.jacket, F.torsoTone(m.jacket));
   drawLapels(buf, L, m, o.toS, s, vY, gb + G.jacket, o, F);
 
   // ---- shirt collar points over the jacket edge

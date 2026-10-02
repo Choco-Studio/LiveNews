@@ -58,61 +58,69 @@ export function drawProps(buf, L, m, sk, toS, s, g, z) {
 // ---------------------------------------------------------------------------
 // Papers: a stack of sheets, its pose blended between the desk and the hands
 
+// Attachment of the stack's front-bottom edge to the hands (midpoint of the wrists), flat and upright
+const OFF0 = [0, 2.6, 5.2], OFF1 = [0, 4.1, 1.5];
+const BAND = new Float64Array(8);
+
 function drawPapers(buf, sk, s, g, z, M, pr) {
   const hold = clamp(pr.hold || 0, 0, 1);
   const tilt = clamp(pr.tilt || 0, 0, 1);
-  // centre: on the desk, or between the two wrists (a little forward of them, where the fingers grip)
-  const wl = sk.arms.L.wrist, wr = sk.arms.R.wrist;
-  const hx = (wl[0] + wr[0]) / 2, hy = (wl[1] + wr[1]) / 2 + 3.4, hz = (wl[2] + wr[2]) / 2 + 2.2;
   const e = hold * hold * (3 - 2 * hold);
-  const cx = REST_X + (hx - REST_X) * e;
-  const cy = DESK_Y - PT + (Math.min(hy, DESK_Y - PT) - (DESK_Y - PT)) * e;
-  const cz = REST_Z + (hz - REST_Z) * e;
-  // tilt: the stack turns about its x axis from flat (normal up) to upright (normal toward the camera)
-  const a = tilt * 1.25;
-  const ca = Math.cos(a), sa = Math.sin(a);
-  // local corner (lx, ly thickness, lz depth) → body: y' = ly*ca - lz*sa, z' = ly*sa + lz*ca
+  // the rotation axis = the stack's front-bottom edge: on the desk, or carried by the hands
+  const wl = sk.arms.L.wrist, wr = sk.arms.R.wrist;
+  const ox = OFF0[0] + (OFF1[0] - OFF0[0]) * tilt, oy = OFF0[1] + (OFF1[1] - OFF0[1]) * tilt, oz = OFF0[2] + (OFF1[2] - OFF0[2]) * tilt;
+  const hx = (wl[0] + wr[0]) / 2 + ox, hy = (wl[1] + wr[1]) / 2 + oy, hz = (wl[2] + wr[2]) / 2 + oz;
+  const ax = REST_X + (hx - REST_X) * e;
+  const ay = DESK_Y + (Math.min(hy, DESK_Y) - DESK_Y) * e; // never through the desk
+  const az = REST_Z + PD + (hz - REST_Z - PD) * e;
+  // standing it up lifts the back edge about the front edge (77 degrees at tilt 1)
+  const al = tilt * 1.35;
+  const ca = Math.cos(al), sa = Math.sin(al);
+  // corners: top face (ly = -PT) 0..3 = back-left, back-right, front-right, front-left; 4, 5 = bottom front edge
   let q = 0;
-  for (const ly of [-PT, 0]) {
-    for (const [lx, lz] of [[-PW, -PD], [PW, -PD], [PW, PD], [-PW, PD]]) {
-      // upright: the bottom edge (lz = +PD) stays at the hands' height, the stack rises above it
-      C3[q++] = cx + lx;
-      C3[q++] = cy + ly * ca - (lz - PD) * sa - PD * sa * 0;
-      C3[q++] = cz + ly * sa + (lz - PD) * ca + PD;
-    }
-  }
-  const P0 = (i) => px(C3[i * 3], C3[i * 3 + 1], C3[i * 3 + 2]);
-  const Q0 = (i) => py(C3[i * 3], C3[i * 3 + 1], C3[i * 3 + 2]);
-  buf.part(g, z, false);
-  // the sides of the stack (front edge band), then the top sheet
+  const put = (lx, ly, lz) => {
+    C3[q++] = ax + lx;
+    C3[q++] = ay + ly * ca + lz * sa;
+    C3[q++] = az - ly * sa + lz * ca;
+  };
+  put(-PW, -PT, -2 * PD);
+  put(PW, -PT, -2 * PD);
+  put(PW, -PT, 0);
+  put(-PW, -PT, 0);
+  put(PW, 0, 0);
+  put(-PW, 0, 0);
   for (let i = 0; i < 4; i++) {
-    PTS[i * 2] = P0(4 + i);
-    PTS[i * 2 + 1] = Q0(4 + i);
+    PTS[i * 2] = px(C3[i * 3], C3[i * 3 + 1], C3[i * 3 + 2]);
+    PTS[i * 2 + 1] = py(C3[i * 3], C3[i * 3 + 1], C3[i * 3 + 2]);
   }
-  // front band: bottom corners 6,7 (top face) to the lower face 2,3
-  const band = [P0(3), Q0(3), P0(2), Q0(2), P0(6), Q0(6), P0(7), Q0(7)];
-  buf.poly(band, M.paper, 2);
+  BAND[0] = PTS[6];
+  BAND[1] = PTS[7];
+  BAND[2] = PTS[4];
+  BAND[3] = PTS[5];
+  BAND[4] = px(C3[12], C3[13], C3[14]);
+  BAND[5] = py(C3[12], C3[13], C3[14]);
+  BAND[6] = px(C3[15], C3[16], C3[17]);
+  BAND[7] = py(C3[15], C3[16], C3[17]);
+  buf.part(g, z, false);
+  // the edge band (sheet edges) under the top sheet; the top sheet catches the key light
+  buf.poly(BAND, M.paper, 2);
   buf.poly(PTS.subarray(0, 8), M.paper, 1);
   if (s >= 1.6) {
-    // sheet edges along the front band: alternate light / shade rows read as a stack
-    const n = Math.max(1, Math.round(PT * s * (1 - tilt * 0.6)));
-    for (let r = 0; r < n; r++) {
-      if (r % 2) continue;
+    // sheet edges along the band: alternate light rows read as a stack
+    const bandH = Math.abs(BAND[5] - BAND[3]);
+    const n = Math.max(1, Math.round(bandH));
+    for (let r = 0; r < n; r += 2) {
       const k = (r + 0.5) / (n + 0.5);
-      const x0 = P0(7) + (P0(3) - P0(7)) * k, y0 = Q0(7) + (Q0(3) - Q0(7)) * k;
-      const x1 = P0(6) + (P0(2) - P0(6)) * k, y1 = Q0(6) + (Q0(2) - Q0(6)) * k;
-      paintSpan(buf, x0, y0, x1, y1, M.paperD, 1, g);
+      paintSpan(buf, BAND[0] + (BAND[6] - BAND[0]) * k, BAND[1] + (BAND[7] - BAND[1]) * k, BAND[2] + (BAND[4] - BAND[2]) * k, BAND[3] + (BAND[5] - BAND[3]) * k, M.paperD, 1, g);
     }
   }
-  if (s >= 2.4) {
+  if (s >= 2.0) {
     // printed lines on the top sheet (fog), in the sheet's own perspective
-    const lines = s >= 3.4 ? 6 : 4;
+    const lines = s >= 3.4 ? 7 : s >= 2.6 ? 5 : 3;
     for (let r = 0; r < lines; r++) {
-      const v = 0.2 + (0.62 * r) / (lines - 1);
-      const inset = 0.16, end = r === lines - 1 ? 0.55 : 0.84;
-      const x0 = lerp4(PTS, inset, v, 0), y0 = lerp4(PTS, inset, v, 1);
-      const x1 = lerp4(PTS, end, v, 0), y1 = lerp4(PTS, end, v, 1);
-      paintSpan(buf, x0, y0, x1, y1, M.paperD, 1, g);
+      const v = 0.18 + (0.64 * r) / Math.max(1, lines - 1);
+      const inset = 0.14, end = r === lines - 1 ? 0.5 : r % 3 === 1 ? 0.78 : 0.86;
+      paintSpan(buf, lerp4(PTS, inset, v, 0), lerp4(PTS, inset, v, 1), lerp4(PTS, end, v, 0), lerp4(PTS, end, v, 1), M.paperD, 1, g);
     }
   }
 }

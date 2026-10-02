@@ -69,15 +69,17 @@ export function drawCrop(buf, L, m, head, s) {
   buf.shape(x0, y0, x1, y1, m.hair, (px, py) => {
     q.at(px, py);
     const x = q.x, y = q.y;
-    if (y > 0.4) return -1;
-    const hw = headHW(H, y, 0);
+    if (y > 0.4 || y < topY) return -1;
     const ax0 = Math.abs(x);
+    if (ax0 > a) return -1;
+    const hw = headHW(H, y, 0);
     if (y < cyc) {
       // a squarer top than Paco's round volume
       // the front-left (camera-left) is pushed up a little higher than the back-right
       const lean = 1 + 0.15 * clamp1(-x / a);
       const ux = ax0 / a, uy = (cyc - y) / (b * lean);
-      if (Math.pow(ux, 2.35) + Math.pow(uy, 2.35) > 1) return -1;
+      if (ux > 1 || uy > 1) return -1;
+      if (ux * ux * Math.sqrt(ux) + uy * uy * Math.sqrt(uy) > 1) return -1; // superellipse, p = 2.5
       if (hw > 0 && ax0 > hw + 0.3 + (cyc - y) * 0.6) return -1; // the volume tapers into the short sides
     } else if (ax0 > hw + 0.3) return -1;
     const fx = x - yawX;

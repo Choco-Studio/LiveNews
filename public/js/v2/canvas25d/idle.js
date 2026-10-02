@@ -91,7 +91,7 @@ function eventBlink(perf, fr, t, seed) {
   }
   if (fr) {
     if (t - fr.endAt < 0.3 && t >= fr.endAt && eventHash(fr.endAt, seed + 2) < 0.6 && fr.endAt + 0.05 > tb) tb = fr.endAt + 0.05;
-    if (t - fr.pauseAt < 0.3 && t >= fr.pauseAt && eventHash(fr.pauseAt, seed + 3) < 0.45 && fr.pauseAt + 0.03 > tb) tb = fr.pauseAt + 0.03;
+    if (t - fr.pauseAt < 0.3 && t >= fr.pauseAt && eventHash(fr.pauseAt, seed + 3) < 0.35 && fr.pauseAt + 0.03 > tb) tb = fr.pauseAt + 0.03;
   }
   return tb;
 }
@@ -123,13 +123,13 @@ export function applyIdle(c, persona, perf, t, seed, gestLook) {
   const sch = schedule(seed, p);
   const fr = perf.speech ? sampleSpeech(perf.speech, t) : null;
   const act = fr ? fr.act || 0 : 0;
-  // blinks: the timetable, unless an event blink sits within 0.6 s of it
+  // blinks: the timetable, unless an event blink sits within 1.2 s of it (about one blink every 3-4 s overall)
   const tb = eventBlink(perf, fr, t, seed);
   const bi = upperBound(sch.blinks, t);
   let blink = tb > FAR ? blinkCurve(t - tb) : 0;
   for (let q = Math.max(0, bi - 1); q <= bi && q >= 0; q++) {
     const b = sch.blinks[q];
-    if (tb > FAR && Math.abs(b - tb) < 0.6) continue;
+    if (tb > FAR && Math.abs(b - tb) < 1.2) continue;
     blink = Math.max(blink, blinkCurve(t - b));
   }
   c.blink = blink;

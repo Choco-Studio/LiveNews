@@ -199,6 +199,7 @@ const SINGLES = {
 };
 
 const CLEAR = 10; // px kept between a head and a bezel edge (ART_DIRECTION: none within 6 px; tests: 4)
+const CROWN_MIN = 24; // the crown stays below the top graphics row (bug, tag, clock: y 8-21)
 
 /** The bezel edge nearest a head box: { gap, vertical, edge } (edge = its screen x or y). */
 function nearestEdge(h, bz) {
@@ -229,6 +230,12 @@ function fitSingle(spec, slot) {
   for (let i = 0; i < 40; i++) {
     const info = framingInfo(cam, [{ slot, X: spec.X, look: spec.look }]);
     const h = info.heads[0];
+    if (h.y0 < CROWN_MIN) {
+      // big hair (or an antenna): keep the crown below the top graphics row
+      spec = { ...spec, eyeY: spec.eyeY + (CROWN_MIN - h.y0) };
+      cam = compose(spec);
+      continue;
+    }
     const e = nearestEdge(h, info.bezel);
     if (e.gap >= CLEAR) break;
     if (e.vertical) {
@@ -352,15 +359,29 @@ export function moveScale(move, dt) {
 }
 
 const SCRATCH = makeCamera();
+const SPECS = new WeakMap(); // spec object → { fields, cam }: per-frame calls allocate nothing
+
+function baseOf(spec) {
+  if (!spec || typeof spec !== 'object') return framing('wide', {});
+  const name = spec.framing || 'wide';
+  const cast = spec.cast;
+  const e = SPECS.get(spec);
+  if (e && e.name === name && e.programId === spec.programId && e.focus === spec.focus && e.solo === spec.solo && e.side === spec.side && e.A === cast?.A && e.B === cast?.B) return e.cam;
+  const cam = framing(name, spec);
+  if (e) Object.assign(e, { name, programId: spec.programId, focus: spec.focus, solo: spec.solo, side: spec.side, A: cast?.A, B: cast?.B, cam });
+  else SPECS.set(spec, { name, programId: spec.programId, focus: spec.focus, solo: spec.solo, side: spec.side, A: cast?.A, B: cast?.B, cam });
+  return cam;
+}
 
 /**
  * The camera of a shot at dt s after the event that started its move.
- * @param spec  { framing, cast, focus, solo, side, programId, move }
+ * @param spec  { framing, cast, focus, solo, side, programId, move } (reuse the same
+ *              object across frames: its framing camera is cached on it)
  * @param out   optional camera to write into (default: a shared scratch object,
  *              valid until the next call; framing cameras are never mutated)
  */
 export function cameraAt(spec, dt = 0, out = SCRATCH) {
-  const base = framing(spec?.framing || 'wide', spec || {});
+  const base = baseOf(spec);
   const f = moveScale(spec?.move, dt);
   if (f === 1) return base;
   // dolly: the presenters' depth gets k·f; x, y, hy and zoom stay, so the move is monotone

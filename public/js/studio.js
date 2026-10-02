@@ -2,7 +2,7 @@
 // package (graphics/index.js: bug, clock, lower third, captions, ticker) and
 // transitions. Everything is drawn at the native 384x216 pixel grid.
 import { P } from './palette.js';
-import { drawText, measureText } from './font.js';
+import { drawText } from './font.js';
 import { drawAnchor, drawHands } from './anchors.js';
 import { W, H, DESK_Y, ANCHOR_X, ANCHOR_Y, drawSet, drawDesk, drawStripes } from './set.js';
 import { r, longDate, easeOut } from './util.js';

@@ -172,12 +172,11 @@ export class Bed {
     this.frameIdx = k;
     this.lastFrameAt = t;
     const ch = chord(d.frames[k % d.frames.length]);
-    for (const h of this.held) h.release?.(t);
-    this.held = [];
+    this.releaseHeld(t);
     for (const lay of this.layers) {
       const L = lay.L;
       if (!L.frame || !this.active(L, { i: 99, pos: 0, phrase: 0 })) continue;
-      const handle = {};
+      const handle = { t, from: this.s.log ? this.s.log.length : 0 };
       if (L.type === 'pad') {
         const notes = voice(L.no7 ? no7(ch) : ch, this.prev.pad, { n: L.n, lo: L.lo, hi: L.hi });
         this.prev.pad = notes;
@@ -187,12 +186,17 @@ export class Bed {
         this.prev.bass = root;
         this.s.tone(lay.in, t, 30, root, 0.75, { wave: L.wave, a: L.a, d: 0.4, s: L.s, r: L.r, gain: 0.36, handle });
       }
+      handle.to = this.s.log ? this.s.log.length : 0;
       this.held.push(handle);
     }
   }
 
   releaseHeld(t) {
-    for (const h of this.held) h.release?.(t);
+    for (const h of this.held) {
+      h.release?.(t);
+      // Keep the note log honest for the harmony checker: the held note ended here.
+      if (this.s.log) for (let k = h.from; k < h.to; k++) this.s.log[k].dur = Math.max(0.05, t - h.t);
+    }
     this.held = [];
   }
 
@@ -359,11 +363,13 @@ export function timpDo(tonic) {
 
 // The chord without its 7th, for a layer that sits under an arpeggio of roots.
 const no7 = (c) => {
+  // Minor chords become plain triads (their 7th and 9th would sit a semitone
+  // from the root or the minor third); on major and sus chords the 9th
+  // replaces the 7th, which keeps the colour without the rub.
+  if (c.minor) return { ...c, tones: c.tones.filter((t) => ![10, 11, 14, 2].includes(t)) };
   if (!c.tones.some((t) => t === 10 || t === 11)) return c;
   const tones = c.tones.filter((t) => t !== 10 && t !== 11);
-  // Keep it rich: on major and sus chords the 9th replaces the 7th (on minor
-  // chords a 9th would sit a semitone under the minor third, so it is left out).
-  if (!c.minor && !tones.some((t) => t % 12 === 2)) tones.push(14);
+  if (!tones.some((t) => t % 12 === 2)) tones.push(14);
   return { ...c, tones };
 };
 const digit = (ch) => (ch >= '1' && ch <= '9' ? Number(ch) / 9 : 0);
@@ -571,8 +577,9 @@ const LAYERS = {
     const play = INST[L.inst] || INST.glock;
     const cell = SHAPES.cell;
     let count = 0;
+    const changing = b.next !== b.chord; // a ringing bell must not cross into the next chord
     for (let k = 0; k < 8; k++) {
-      if (!b.r.chance(L.chance) || count >= (L.max ?? 8)) continue;
+      if (!b.r.chance(L.chance) || count >= (L.max ?? 8) || (changing && k >= 6)) continue;
       count++;
       const m = fit(atOrAbove((bed.def.tonic + b.r.pick(cell)) % 12, L.lo) + (b.r.chance(0.3) ? 12 : 0), b.chord);
       play(bed.s, lay.in, b.time(k * 0.5), 0.2, m, 0.35 + b.r() * 0.3, L);
