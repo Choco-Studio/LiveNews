@@ -538,6 +538,155 @@ describe('normalizeBulletin: structure', () => {
   });
 });
 
+// ---------------------------------------------------------------- normalizeBulletin: stage-direction cues
+
+describe('normalizeBulletin: stage-direction cues', () => {
+  const cuesOf = (text, extra = {}, opts) => storyOf({ text, ...extra }, opts).cues;
+  const NO_UNDERSCORE = Object.keys(ACTIONS).filter((name) => !name.includes('_'));
+
+  test('every segment has a cues list, empty when the text has none', () => {
+    const b = normalize([otherSeg('intro'), storySeg('s1'), otherSeg('chat'), otherSeg('outro')]);
+    for (const seg of b.segments) assert.deepEqual(seg.cues, [], seg.type);
+  });
+
+  test('a cue is taken out of the spoken text and recorded with its offset in the clean text', () => {
+    const s = storyOf({ text: 'Good evening [wave] and welcome.' });
+    assert.equal(s.text, 'Good evening and welcome.');
+    assert.deepEqual(s.cues, [{ char: 12, slot: null, action: 'wave' }]);
+  });
+
+  test('several cues keep their order, and a cue at the very start or end is allowed', () => {
+    const s = storyOf({ text: '[nod] Yes. Then [shrug] maybe. [wave]' });
+    assert.equal(s.text, 'Yes. Then maybe.');
+    assert.deepEqual(s.cues, [
+      { char: 0, slot: null, action: 'nod' },
+      { char: 9, slot: null, action: 'shrug' },
+      { char: 16, slot: null, action: 'wave' },
+    ]);
+  });
+
+  test('no stray spaces are left before punctuation where a cue was removed', () => {
+    const s = storyOf({ text: 'Hello [nod], world [nod]!' });
+    assert.equal(s.text, 'Hello, world!');
+    assert.deepEqual(s.cues.map((c) => c.char), [5, 12]);
+  });
+
+  test('cue names are case-insensitive and may have spaces inside the brackets', () => {
+    const s = storyOf({ text: 'Hello [WAVE] there [ B : Nod ] ok.' });
+    assert.equal(s.text, 'Hello there ok.');
+    assert.deepEqual(s.cues, [
+      { char: 5, slot: null, action: 'wave' },
+      { char: 11, slot: 'B', action: 'nod' },
+    ]);
+  });
+
+  test('works on every segment type', () => {
+    const b = normalize([otherSeg('intro', { text: 'Hi [wave] there' }), storySeg('s1'), otherSeg('chat', { anchor: 'B', text: '[wow] Really? [B:nod]' }), otherSeg('outro', { text: 'Bye. [wave]' })]);
+    const [intro, , chat, outro] = b.segments;
+    assert.deepEqual([intro.text, intro.cues], ['Hi there', [{ char: 2, slot: null, action: 'wave' }]]);
+    assert.deepEqual([chat.text, chat.cues], ['Really?', [{ char: 0, slot: null, action: 'wow' }, { char: 7, slot: null, action: 'nod' }]]);
+    assert.deepEqual([outro.text, outro.cues], ['Bye.', [{ char: 4, slot: null, action: 'wave' }]]);
+  });
+
+  test('the actions without an underscore in their name are all accepted', () => {
+    for (const name of NO_UNDERSCORE) {
+      assert.deepEqual(cuesOf(`Hello [${name}] there.`), [{ char: 5, slot: null, action: name }], name);
+    }
+  });
+
+  test('every action of the shared vocabulary in public/js/cues.js reaches the bulletin', {
+    todo:
+      'BUG server/writer.js:195 - the text goes through clean() (which deletes "_", see line 148) before parseCues(), so "[point_screen]" becomes the unknown cue "[pointscreen]" and is dropped: raise_hand, point_screen, point_camera, point_partner, thumbs_up, fist_pump, shake_head, lean_in and look_partner (9 of the 20 actions, including most of those the mock provider writes) never reach the episode',
+  }, () => {
+    const dropped = Object.keys(ACTIONS).filter((name) => !cuesOf(`Hello [${name}] there.`).some((c) => c.action === name));
+    assert.deepEqual(dropped, []);
+  });
+
+  test('emotion names in brackets become expression cues', () => {
+    for (const emotion of CUE_EMOTIONS) {
+      assert.deepEqual(cuesOf(`Well [${emotion}] that is odd.`), [{ char: 4, slot: null, emotion }], emotion);
+    }
+    assert.equal(storyOf({ text: 'Well [surprised] that is odd.' }).emotion, 'neutral', 'the segment emotion itself is not changed');
+  });
+
+  test('unknown cues are removed from the text and ignored', () => {
+    const s = storyOf({ text: 'Hello [dance] there [world] again.' });
+    assert.equal(s.text, 'Hello there again.');
+    assert.deepEqual(s.cues, []);
+  });
+
+  test('a text that is only a cue has nothing to say, so the segment is dropped', () => {
+    assert.throws(() => normalize([storySeg('s1', { text: '[wave]' })]), /bulletin has no valid stories/);
+    const b = normalize([storySeg('s1'), otherSeg('chat', { text: '[nod]' })]);
+    assert.ok(!types(b).includes('chat'));
+  });
+
+  test('keeps at most 4 cues per segment', () => {
+    const s = storyOf({ text: '[nod] a [shrug] b [wave] c [wow] d [chin] e [glasses] f' });
+    assert.equal(s.text, 'a b c d e f');
+    assert.deepEqual(s.cues.map((c) => c.action), ['nod', 'shrug', 'wave', 'wow']);
+  });
+
+  test('"[B:action]" makes the other presenter react; "[A:action]" from presenter A is just A acting', () => {
+    const s = storyOf({ anchor: 'A', text: 'a [nod] b [B:shrug] c [A:wave]' });
+    assert.deepEqual(s.cues, [
+      { char: 1, slot: null, action: 'nod' },
+      { char: 3, slot: 'B', action: 'shrug' },
+      { char: 5, slot: null, action: 'wave' },
+    ]);
+  });
+
+  test('when presenter B speaks, "[A:action]" is the other presenter and "[B:action]" is the speaker', () => {
+    const s = storyOf({ anchor: 'B', text: 'a [nod] b [B:shrug] c [A:wave]' });
+    assert.deepEqual(s.cues, [
+      { char: 1, slot: null, action: 'nod' },
+      { char: 3, slot: null, action: 'shrug' },
+      { char: 5, slot: 'A', action: 'wave' },
+    ]);
+  });
+
+  test('a solo programme drops cues aimed at a presenter B who does not exist', () => {
+    const s = storyOf({ anchor: 'B', text: 'a [nod] b [B:shrug] c [A:wave]' }, { solo: true });
+    assert.equal(s.anchor, 'A');
+    assert.deepEqual(s.cues, [
+      { char: 1, slot: null, action: 'nod' },
+      { char: 5, slot: null, action: 'wave' },
+    ]);
+  });
+
+  test('grave stories (serious or sad) get no light gestures; other gestures stay', () => {
+    const text = 'A [wow] [laugh] [facepalm] [wave] [nod] [shrug] b';
+    for (const emotion of ['serious', 'sad']) {
+      assert.deepEqual(cuesOf(text, { emotion }).map((c) => c.action), ['nod', 'shrug'], emotion);
+    }
+    assert.deepEqual(cuesOf(text, { emotion: 'neutral' }).map((c) => c.action), ['wow', 'laugh', 'facepalm', 'wave'], 'neutral allows them (4 cues at most)');
+    assert.deepEqual(cuesOf('A [steeple] b [chin]', { emotion: 'serious' }).map((c) => c.action), ['steeple', 'chin']);
+  });
+
+  test('the "grave" rule follows the emotion after validation: an invalid emotion is neutral, so light gestures are allowed', () => {
+    assert.deepEqual(cuesOf('A [wow] b', { emotion: 'devastated' }).map((c) => c.action), ['wow']);
+  });
+
+  test('cues that fall in text cut off by the 520-character limit are dropped', () => {
+    const long = 'Sentence number one is here. '.repeat(30).trim();
+    const s = storyOf({ text: `${long} [nod]` });
+    assert.ok(s.text.length <= 520);
+    assert.deepEqual(s.cues, []);
+  });
+
+  test('cues inside the kept text survive the clip, at their offsets', () => {
+    const s = storyOf({ text: `[nod] ${'word '.repeat(150)}` });
+    assert.ok(s.text.length <= 520);
+    assert.deepEqual(s.cues, [{ char: 0, slot: null, action: 'nod' }]);
+  });
+
+  test('markdown around a cue is stripped as usual', () => {
+    const s = storyOf({ text: '**Hello** [nod] _world_' });
+    assert.equal(s.text, 'Hello world');
+    assert.deepEqual(s.cues, [{ char: 5, slot: null, action: 'nod' }]);
+  });
+});
+
 describe('normalizeBulletin: solo programmes', () => {
   const solo = { solo: true };
 
@@ -675,6 +824,33 @@ describe('buildPrompt', () => {
 
   test('gives the time in UTC, in English', () => {
     assert.match(prompt(), /Current time: Thursday,? 15 October,?( at)? 10:30 UTC\./);
+  });
+
+  test('has a STAGE DIRECTIONS section that lists every action of the shared vocabulary with its description', () => {
+    const p = prompt();
+    assert.match(p, /STAGE DIRECTIONS/);
+    assert.match(p, /cues in square brackets/);
+    for (const [name, action] of Object.entries(ACTIONS)) assert.ok(p.includes(`${name} (${action.desc})`), name);
+    assert.match(p, /An emotion name in brackets \(e\.g\. "\[surprised\]"\)/);
+    assert.ok(EMOTIONS.includes('surprised'));
+  });
+
+  test('tells the writer not to use the light gestures in grave stories, naming exactly the light actions', () => {
+    const line = prompt().split('\n').find((l) => l.startsWith('- Never use'));
+    assert.ok(line, 'the rule is there');
+    const light = Object.entries(ACTIONS).filter(([, a]) => a.light).map(([name]) => name);
+    for (const name of light) assert.ok(line.includes(name), `${name} is missing from: ${line}`);
+    assert.match(line, /in grave stories/);
+  });
+
+  test('duo programmes may address either presenter and use hand-over gestures; solo programmes may not', () => {
+    const duo = prompt();
+    assert.match(duo, /"\[A:action\]" or "\[B:action\]"/);
+    assert.match(duo, /look_partner or point_partner on hand-overs/);
+    const solo = prompt({ presenters: SOLO });
+    assert.ok(!solo.includes('[B:action]'));
+    assert.ok(!solo.includes('look_partner or point_partner on hand-overs'));
+    assert.match(solo, /"\[action\]" is performed by the presenter speaking\./);
   });
 
   test('never contains the string "undefined"', () => {

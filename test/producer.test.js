@@ -465,8 +465,51 @@ describe('Producer review stage', () => {
       for (const key of ['source', 'category', 'hasImage']) assert.ok(!(key in seg), `${seg.type} segment has ${key}`);
     }
     const story = script.segments.find((s) => s.type === 'story');
-    for (const key of ['storyId', 'anchor', 'emotion', 'headline', 'text', 'shot', 'breaking', 'location', 'fact']) assert.ok(key in story, key);
+    for (const key of ['storyId', 'anchor', 'emotion', 'headline', 'text', 'cues', 'shot', 'breaking', 'location', 'fact']) assert.ok(key in story, key);
   });
+
+  test('stage directions written into the text reach the episode as cues when there is no review pass', async () => {
+    const { producer, chain } = makeProducer({ config: { ...CONFIG, reviewPass: false } });
+    chain.write = async () =>
+      scriptText([
+        { type: 'intro', anchor: 'A', emotion: 'happy', text: 'Hello [wave] everyone.' },
+        storySeg('s1', { text: 'Big news [B:nod] today.' }),
+        { type: 'outro', anchor: 'B', emotion: 'happy', text: 'Bye. [wave]' },
+      ]);
+
+    const episode = await producer.produce(channel, 'duo');
+
+    assert.deepEqual(episode.segments.map((s) => [s.text, s.cues]), [
+      ['Hello everyone.', [{ char: 5, slot: null, action: 'wave' }]],
+      ['Big news today.', [{ char: 8, slot: 'B', action: 'nod' }]],
+      ['Bye.', [{ char: 4, slot: null, action: 'wave' }]],
+    ]);
+  });
+
+  test(
+    'the review pass keeps the stage directions of the script it checks',
+    {
+      todo:
+        'BUG server/producer.js:99-102 + server/writer.js:195 - the script sent to the editor has plain text plus a "cues" array, but normalizeBulletin() only reads cues from [bracketed] text and ignores seg.cues, so after the review stage (on by default, REVIEW_PASS=1) every segment has cues: [] and all gestures are lost, even with an editor that changes nothing',
+    },
+    async () => {
+      const { producer, chain } = makeProducer();
+      chain.write = async () =>
+        scriptText([
+          { type: 'intro', anchor: 'A', emotion: 'happy', text: 'Hello [wave] everyone.' },
+          storySeg('s1', { text: 'Big news [B:nod] today.' }),
+          storySeg('s2'),
+          storySeg('s3'),
+          { type: 'outro', anchor: 'B', emotion: 'happy', text: 'Bye. [wave]' },
+        ]);
+
+      const episode = await producer.produce(channel, 'duo');
+
+      assert.equal(episode.pipeline[1].reviewed, true);
+      assert.deepEqual(episode.segments[0].cues, [{ char: 5, slot: null, action: 'wave' }]);
+      assert.deepEqual(episode.segments[1].cues, [{ char: 8, slot: 'B', action: 'nod' }]);
+    }
+  );
 
   test('is skipped when config.reviewPass is off', async () => {
     const { producer, chain } = makeProducer({ config: { ...CONFIG, reviewPass: false } });

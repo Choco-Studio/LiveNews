@@ -68,6 +68,18 @@ function rgba(hex, a) {
   return s;
 }
 
+let clockCache = { at: -1, time: '', date: '', sec: '00' };
+/** Studio time/date strings, refreshed at most once per second (Intl is slow). */
+function studioClock() {
+  const now = Date.now();
+  const s = Math.floor(now / 1000);
+  if (clockCache.at !== s) {
+    const d = new Date(now);
+    clockCache = { at: s, time: zoneTime(undefined, d).label, date: longDate(d), sec: String(d.getSeconds()).padStart(2, '0') };
+  }
+  return clockCache;
+}
+
 const memo = new Map();
 function cached(key, fn) {
   let v = memo.get(key);
@@ -649,7 +661,7 @@ const stripeCache = new Map();
  * Endless slanted stripes (cached strip, scrolled by t * speed) filling
  * x..x+W horizontally and `h` rows from y. Callers clip if needed.
  */
-function stripes(ctx, t, { color, a, period, width, slope, speed, x = 0, y = 0, h = H, sx = 0, sh = h }) {
+function stripes(ctx, t, { color, a, period, width, slope, speed, x = 0, y = 0, h = H, sh = h }) {
   const key = `${color}|${a}|${period}|${width}|${slope}|${h}`;
   let c = stripeCache.get(key);
   if (!c) {
@@ -661,7 +673,8 @@ function stripes(ctx, t, { color, a, period, width, slope, speed, x = 0, y = 0, 
     stripeCache.set(key, c);
   }
   const off = ((Math.floor(t * speed) % period) + period) % period;
-  ctx.drawImage(c, sx, 0, c.width - sx, Math.min(sh, h), x - period + off + sx, y, c.width - sx, Math.min(sh, h));
+  const rows = Math.min(sh, h);
+  ctx.drawImage(c, 0, 0, c.width, rows, x - period + off, y, c.width, rows);
 }
 
 /** Red brand ribbon with sheen stripes, top highlight and bottom shade. */
@@ -840,7 +853,7 @@ export function drawTitleCard(ctx, t, dt, { channel = 'LIVENEWS', subtitle = 'WO
   // date line types on, flanked by rules
   const dp = seg(dt, 1.3, 0.55);
   if (dp > 0) {
-    const ds = ellipsis(date || longDate(), 300);
+    const ds = ellipsis(date || studioClock().date, 300);
     const dw = measureText(ds);
     const dx = (W - dw) >> 1;
     const dy = 170;
@@ -925,7 +938,7 @@ export function drawEndCard(ctx, t, dt, { channel = 'LIVENEWS', line1 = 'STAY WI
   }
   const cp = seg(dt, 1.3, 0.4);
   if (cp > 0) {
-    const ck = `LONDON ${zoneTime().label}`;
+    const ck = `LONDON ${studioClock().time}`;
     const cx0 = W - X0 - measureText(ck);
     drawText(ctx, typed(ck, cp), cx0, RY - 11, { color: P.fog });
     if (cp >= 1 && Math.floor(t * 1.5) % 2 === 0) r(ctx, cx0 - 7, RY - 9, 3, 3, P.red);
@@ -1058,8 +1071,8 @@ export function drawStandby(ctx, t, { channel = 'LIVENEWS', message = '' } = {})
   r(ctx, bx + bw - 10, by + 8, 4, 4, Math.floor(t * 1.5) % 2 ? P.red : P.maroon);
 
   // clock
-  const now = new Date();
-  const clock = `${zoneTime().label}:${String(now.getSeconds()).padStart(2, '0')}`;
+  const clk = studioClock();
+  const clock = `${clk.time}:${clk.sec}`;
   const cw = measureText(clock, 2) + 12;
   r(ctx, cx - (cw >> 1), 155, cw, 20, P.black);
   r(ctx, cx - (cw >> 1), 174, cw, 1, P.steel);
@@ -1164,7 +1177,7 @@ export function drawStartScreen(ctx, t, { channel = 'LIVENEWS', prompt = 'CLICK 
   sparkle(ctx, GX - 50, GY - 52, every(t, 1.5, 6, 0.5));
 
   // date / time line
-  const info = `${longDate()}  •  LONDON ${zoneTime().label}`;
+  const info = `${studioClock().date}  •  LONDON ${studioClock().time}`;
   r(ctx, 0, 199, W, 1, P.slate);
   drawText(ctx, ellipsis(info, W - 40), X0, 204, { color: P.fog });
 }
@@ -1257,7 +1270,7 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
   if (image) {
     shadeBottom(ctx, chipY - 56, chipY + 10, 0.8);
     r(ctx, 0, chipY + 10, W, H - chipY - 10, rgba(P.black, 0.8));
-    const s = every(dt, 1.1, 99, 1.1);
+    const s = every(dt, 1.1, 3.4, 1.1);
     if (s >= 0) sweep(ctx, 0, 0, W, chipY - 4, s, 40, 0.07);
   } else shadeBottom(ctx, chipY - 30, 202, 0.6);
 
