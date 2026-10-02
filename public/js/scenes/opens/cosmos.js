@@ -5,7 +5,7 @@
 import { P } from '../../palette.js';
 import { u32, clamp, seg, easeOut, easeOutQuint, easeInOut, bayer } from '../../gfx/index.js';
 import { mulberry32 } from '../../util.js';
-import { backdrop, frameBuffer, playOpen, CENTRE, ZOOM, W, H } from './kit.js';
+import { lazyBackdrop, frameBuffer, playOpen, CENTRE, ZOOM, W, H } from './kit.js';
 
 const PR0 = 19; // planet radius in the lock-up (x ZOOM at centre stage)
 const RING_IN = 1.36;
@@ -229,7 +229,7 @@ function starTexture(d, level) {
   return level;
 }
 
-const background = () => backdrop({ key: 'cosmos', colors: [P.black, P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 240, texture: starTexture });
+const background = lazyBackdrop({ key: 'cosmos', colors: [P.black, P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 240, texture: starTexture });
 
 export const COSMOS = {
   accent: P.magenta,

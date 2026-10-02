@@ -16,9 +16,9 @@ import { drawText, measureText } from '../font.js';
 import { drawLogo, measureLogo } from '../logo.js';
 import {
   mk, memo, rgba, u32, clamp, lerp, seg, easeOutQuint, easeInOut, slab, clipRect, disc,
-  ellipsis, wrapLines, clockIn,
+  ellipsis, wrapLines, clockIn, textCache,
 } from '../gfx/index.js';
-import { backdrop } from './opens/kit.js';
+import { backdrop, lazyBackdrop } from './opens/kit.js';
 import { drawEarth, globeTexture } from './opens/world.js';
 import { drawOpen } from './opens.js';
 
@@ -57,9 +57,10 @@ function plate(ctx, x, y, w, h, color, p = 1) {
   return vis;
 }
 
-/** Best headline layout: 2x in up to `big` lines, else 1x in up to `small` lines. */
+const LAYOUTS = textCache(200);
+/** Best headline layout: 2x in up to `big` lines, else 1x in up to `small` lines (cached, no per-frame keys). */
 function layout(text, maxW, big = 3, small = 4) {
-  return cached(`lay|${maxW}|${big}|${small}|${text}`, () => {
+  return LAYOUTS(String(text ?? ''), maxW * 100 + big * 10 + small, () => {
     const two = wrapLines(text, maxW, 2, 99);
     if (two.length <= big && two.every((l) => !l.endsWith('...'))) return { scale: 2, lines: two, lh: 18 };
     return { scale: 1, lines: wrapLines(text, maxW, 1, small), lh: 11 };
@@ -131,7 +132,8 @@ function category(name) {
   return CATEGORIES[k] || CATEGORIES[CATEGORY_ALIASES[k]] || CATEGORIES.general;
 }
 
-const catField = (cat) => backdrop({
+const CAT_FIELDS = new Map();
+const catField = (cat) => CAT_FIELDS.get(cat) || CAT_FIELDS.set(cat, backdrop({
   key: `cat|${cat.label}`,
   colors: [P.black, P.ink],
   cx: 290,
@@ -139,7 +141,7 @@ const catField = (cat) => backdrop({
   reach: 280,
   // the world in dots, tinted with the category's dark tone where the field is lit
   texture: (d, level) => worldDots(d, (x, y) => level(x, y) * 2, [P.ink, cat.a === P.ink ? P.slate : cat.a, cat.a === P.ink ? P.steel : cat.a]),
-});
+})).get(cat);
 
 export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline = '', source = '', category: catName = 'general', image = null } = {}) {
   const cat = category(catName);
@@ -229,10 +231,11 @@ function formatCount(f, k) {
   return `${f.pre}${s}${f.after}`;
 }
 
-const factField = () => backdrop({ key: 'fact', colors: [P.black, P.ink], cx: 192, cy: 82, reach: 230, texture: (d, level) => worldDots(d, level) });
+const factField = lazyBackdrop({ key: 'fact', colors: [P.black, P.ink], cx: 192, cy: 82, reach: 230, texture: (d, level) => worldDots(d, level) });
 
+const FACT_LAYOUTS = textCache(100);
 function factLayout(fact, source) {
-  return cached(`factlay|${fact}|${source}`, () => {
+  return FACT_LAYOUTS(String(fact ?? ''), String(source ?? ''), () => {
     const f = parseFact(fact);
     const PW = 300;
     const inner = PW - 36;
@@ -334,7 +337,7 @@ export function drawFactCard(ctx, t, dt, { fact = '', label = 'KEY FACT', source
 // BREAKING NEWS card: a calm colour change, done in about a second and held
 // (the card lasts at most 3 s). No flash, no siren, no flashing borders.
 
-const breakingField = () => backdrop({ key: 'breaking', colors: [P.black, P.ink], cx: 192, cy: 112, reach: 230 });
+const breakingField = lazyBackdrop({ key: 'breaking', colors: [P.black, P.ink], cx: 192, cy: 112, reach: 230 });
 
 export function drawBreakingCard(ctx, t, dt, { headline = '', source = '' } = {}) {
   ctx.drawImage(breakingField(), 0, 0);
@@ -371,8 +374,9 @@ export function drawBreakingCard(ctx, t, dt, { headline = '', source = '' } = {}
 // END CARD (show close): the channel logo, the programme plate, the sign-off
 // lines and an outro rail with the studio clock. Everything settles by 1.2 s.
 
+const END_FIELD = lazyBackdrop({ key: 'end', colors: [P.black, P.ink], cx: 192, cy: 80, reach: 230 });
 export function drawEndCard(ctx, t, dt, { channel = 'GLOBIT 24', line1 = 'STAY WITH US', line2 = 'NEXT BULLETIN SHORTLY', accent = P.red } = {}) {
-  ctx.drawImage(backdrop({ key: 'end', colors: [P.black, P.ink], cx: 192, cy: 80, reach: 230 }), 0, 0);
+  ctx.drawImage(END_FIELD(), 0, 0);
   // logo rises into place (its glint plays once, during the first 0.9 s)
   const LS = 2;
   const ls = measureLogo({ variant: 'full', scale: LS });
@@ -542,8 +546,9 @@ export function drawStandby(ctx, t, { channel = 'GLOBIT 24', message = '' } = {}
 // START SCREEN (before the viewer clicks): the logo, a slowly turning earth
 // (the one moving thing), a steady prompt and the studio date and time.
 
+const START_FIELD = lazyBackdrop({ key: 'start', colors: [P.black, P.ink], cx: 300, cy: 96, reach: 220 });
 export function drawStartScreen(ctx, t, { channel = 'GLOBIT 24', prompt = 'CLICK TO TUNE IN' } = {}) {
-  ctx.drawImage(backdrop({ key: 'start', colors: [P.black, P.ink], cx: 300, cy: 96, reach: 220 }), 0, 0);
+  ctx.drawImage(START_FIELD(), 0, 0);
   drawEarth(ctx, 300, 96, 58, -10 + ((t * 4) % 360));
   const LX = 20;
   // live tag with a steady red square
@@ -616,8 +621,9 @@ export function drawPromoCard(ctx, t, dt, card = {}, nameOf = (id) => String(id 
 // IDENT (between programmes and breaks): the GLOBIT 24 logo rises in with its
 // slogan, glints once and holds.
 
+const IDENT_FIELD = lazyBackdrop({ key: 'ident', colors: [P.black, P.ink], cx: 192, cy: 100, reach: 230 });
 export function drawIdentCard(ctx, t, dt) {
-  ctx.drawImage(backdrop({ key: 'ident', colors: [P.black, P.ink], cx: 192, cy: 100, reach: 230 }), 0, 0);
+  ctx.drawImage(IDENT_FIELD(), 0, 0);
   const sc = measureLogo({ variant: 'full', scale: 3, slogan: true }).w <= W - 40 ? 3 : 2;
   const size = measureLogo({ variant: 'full', scale: sc, slogan: true });
   const y = Math.round((H - size.h) / 2) - 4;

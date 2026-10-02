@@ -5,7 +5,7 @@
 // open, hops onto the title plate. Same package and clock as the others.
 import { P } from '../../palette.js';
 import { u32, seg, easeOutQuint, ring } from '../../gfx/index.js';
-import { backdrop, clipDisc, frameBuffer, playOpen, CENTRE, ZOOM } from './kit.js';
+import { lazyBackdrop, clipDisc, frameBuffer, playOpen, CENTRE, ZOOM } from './kit.js';
 
 const R0 = 30;
 const DEG = Math.PI / 180;
@@ -80,7 +80,7 @@ function emblem(ctx, dt, x, y, k = 1) {
   } else ctx.drawImage(fb.cv, x - (S >> 1), y - (S >> 1));
 }
 
-const background = () => backdrop({ key: 'generic', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230 });
+const background = lazyBackdrop({ key: 'generic', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230 });
 
 export const GENERIC = {
   accent: P.red,

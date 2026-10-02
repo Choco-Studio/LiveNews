@@ -105,6 +105,12 @@ export function backdrop(spec) {
   });
 }
 
+/** A backdrop baked on first use (call the returned function every frame: no allocation). */
+export function lazyBackdrop(spec) {
+  let c = null;
+  return () => c || (c = backdrop(spec));
+}
+
 // ---------------------------------------------------------------------------
 // The seed bit (the yellow square from the GLOBIT 24 logo)
 
@@ -158,8 +164,10 @@ function titleCanvas(text, ink) {
 
 /** Lock-up geometry for a title/tagline/credits set (cached). */
 export function lockupLayout(info, style) {
-  const key = `lay|${style.ink}|${info.title}|${info.tagline}|${info.presenters.join(',')}`;
-  return cached(key, () => {
+  const hit = info.layouts?.get(style.ink);
+  if (hit) return hit;
+  const key = `lay|${style.ink}|${info.key || `${info.title}|${info.tagline}|${info.presenters.join(',')}`}`;
+  const v = cached(key, () => {
     const titleX = SLOT.x + 52;
     const maxTitle = W - 19 - 12 - titleX;
     let lines = [String(info.title || '').toUpperCase().trim() || 'GLOBIT 24'];
@@ -186,22 +194,23 @@ export function lockupLayout(info, style) {
     const names = nameList(info.presenters);
     const credits = names ? { label: 'WITH', names: ellipsis(names, textW - measureText('WITH ') - 2) } : null;
     const tagY = plateY + plateH + 9;
-    return {
+    const out = {
       titles, titleX, titleW, plateX, plateY, plateW, plateH,
       tagline, tagY, credits, credY: tagY + (tagline ? 12 : 0),
       bitX: plateX + plateW - 2, bitY: plateY - 2,
     };
+    return out;
   });
+  info.layouts?.set(style.ink, v);
+  return v;
 }
 
-/** Text that rises `rise` px into place inside a mask at its own rows. */
-function riseIn(ctx, p, x, y, h, rise, draw) {
-  if (p <= 0) return;
-  const off = Math.round((1 - easeOutQuint(p)) * rise);
+/** Opens a mask for text that rises `rise` px into place at its own rows; returns the offset or -1. */
+function riseMask(ctx, p, x, y, h, rise) {
+  if (p <= 0) return -1;
   ctx.save();
   clipRect(ctx, x - 2, y - 1, W, h + 2);
-  draw(off);
-  ctx.restore();
+  return Math.round((1 - easeOutQuint(p)) * rise);
 }
 
 /**
@@ -238,15 +247,19 @@ export function drawLockup(ctx, dt, info, style) {
   }
   // tagline and credits
   if (L.tagline) {
-    riseIn(ctx, seg(dt, TL.tag, 0.3), L.titleX, L.tagY, 7, 7, (off) => {
+    const off = riseMask(ctx, seg(dt, TL.tag, 0.3), L.titleX, L.tagY, 7, 7);
+    if (off >= 0) {
       drawText(ctx, L.tagline, L.titleX, L.tagY + off, { color: P.silver });
-    });
+      ctx.restore();
+    }
   }
   if (L.credits) {
-    riseIn(ctx, seg(dt, TL.credits, 0.3), L.titleX, L.credY, 7, 7, (off) => {
+    const off = riseMask(ctx, seg(dt, TL.credits, 0.3), L.titleX, L.credY, 7, 7);
+    if (off >= 0) {
       const lw = drawText(ctx, L.credits.label, L.titleX, L.credY + off, { color: P.fog });
       drawText(ctx, L.credits.names, L.titleX + lw + 4, L.credY + off, { color: P.white });
-    });
+      ctx.restore();
+    }
   }
   return L;
 }
@@ -310,26 +323,46 @@ export function clipDisc(ctx, cx, cy, rad) {
   ctx.clip();
 }
 
-/** A pixel buffer canvas for per-frame emblem rendering (allocated once per key). */
+const FB = new Map();
+/** A pixel buffer canvas for per-frame emblem rendering (allocated once per key and size). */
 export function frameBuffer(key, w, h) {
-  return cached(`fb|${key}|${w}x${h}`, () => {
+  let m = FB.get(key);
+  if (!m) FB.set(key, (m = new Map()));
+  const k = w * 4096 + h;
+  let fb = m.get(k);
+  if (!fb) {
     const cv = mk(w, h);
     const cx = cv.getContext('2d');
     const img = cx.createImageData(w, h);
-    return { cv, cx, img, d: new Uint32Array(img.data.buffer), w, h, key: null };
-  });
+    fb = { cv, cx, img, d: new Uint32Array(img.data.buffer), w, h, key: null };
+    m.set(k, fb);
+  }
+  return fb;
 }
 
-/** Normalised open info (title, tagline, presenters, channel). */
+let LAST = null;
+/**
+ * Normalised open info (title, tagline, presenters, channel). The caller may pass a fresh object
+ * every frame: while the values are the same the previous normalised object (and its cached
+ * layouts) is returned, so nothing is rebuilt.
+ */
 export function normInfo(info) {
   const i = info || {};
-  return {
-    title: String(i.title || i.channel || 'GLOBIT 24'),
-    tagline: String(i.tagline || ''),
-    presenters: Array.isArray(i.presenters) ? i.presenters.map((n) => String(n ?? '')) : [],
+  const title = String(i.title || i.channel || 'GLOBIT 24');
+  const tagline = String(i.tagline || '');
+  const pres = Array.isArray(i.presenters) ? i.presenters : [];
+  if (LAST && LAST.title === title && LAST.tagline === tagline && LAST.presenters.length === pres.length && pres.every((p, k) => LAST.presenters[k] === String(p ?? ''))) return LAST;
+  const presenters = pres.map((n) => String(n ?? ''));
+  LAST = {
+    title,
+    tagline,
+    presenters,
     date: String(i.date || ''),
     channel: String(i.channel || 'GLOBIT 24'),
+    key: `${title}|${tagline}|${presenters.join(',')}`,
+    layouts: new Map(),
   };
+  return LAST;
 }
 
 /**

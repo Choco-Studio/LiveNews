@@ -4,15 +4,19 @@
 // the chip pulls back to the lock-up. Accent: cyan (thin lines only).
 import { P } from '../../palette.js';
 import { u32, seg, easeOutQuint, easeInOut, linePts, Pix, memo } from '../../gfx/index.js';
-import { backdrop, playOpen, CENTRE, ZOOM, W, H } from './kit.js';
+import { lazyBackdrop, playOpen, CENTRE, ZOOM, W, H } from './kit.js';
 
 const cached = memo(64);
 const BYTE = [1, 0, 1, 1, 0, 1, 0, 1]; // 0xB5, drawn as 4 x 2 cells
 
-/** Chip dimensions at size factor k (1 = lock-up). */
+/** Chip dimensions at size factor k (1 = lock-up), cached per 1/100 of k. */
+const DIMS = new Map();
 function dims(k) {
+  const q = Math.round(k * 100);
+  const hit = DIMS.get(q);
+  if (hit) return hit;
   const half = Math.round(23 * k);
-  return {
+  const d = {
     half,
     body: half * 2,
     pin: Math.round(5 * k),
@@ -22,6 +26,8 @@ function dims(k) {
     cellH: Math.round(6 * k),
     gap: Math.max(2, Math.round(2 * k)),
   };
+  DIMS.set(q, d);
+  return d;
 }
 
 /** Polyline (screen edge first) to pixels, as a flat Int16Array. */
@@ -67,7 +73,7 @@ const traces = () => cached('traces', () => {
 /** Chip body and pins at size factor k (baked per integer size). */
 function chipSprite(k) {
   const D = dims(k);
-  return cached(`chip|${D.body}|${D.pin}|${D.pinW}`, () => {
+  return cached(D.body * 10000 + D.pin * 100 + D.pinW, () => {
     const S = D.body + D.pin * 2;
     const p = new Pix(S, S);
     const o = D.pin;
@@ -194,7 +200,7 @@ function gridTexture(d, level) {
   }
 }
 
-const background = () => backdrop({ key: 'tech', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230, texture: gridTexture });
+const background = lazyBackdrop({ key: 'tech', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230, texture: gridTexture });
 
 export const TECH = {
   accent: P.cyan,

@@ -189,18 +189,20 @@ export const storyId = (key) => 's' + crypto.createHash('sha1').update(key).dige
  * `baseDir` is given only for local feeds from the operator's list: their
  * stories may carry pictures stored next to the feed file.
  */
-export function parseFeed(xml, feed, { baseDir = null } = {}) {
+export function parseFeed(xml, feed, { baseDir = null, now = Date.now() } = {}) {
   const doc = parser.parse(xml);
   const items = doc?.rss?.channel?.item ?? doc?.feed?.entry ?? doc?.['rdf:RDF']?.item ?? [];
   const stories = [];
-  for (const item of asArray(items)) {
+  for (const [index, item] of asArray(items).entries()) {
     const title = cleanHtml(text(item.title));
     const link = itemLink(item);
     if (!title || !link) continue;
     const rawSummary = text(item.description) || text(item.summary) || text(item['content:encoded']) || text(item.content);
     const summary = stripBoilerplate(cleanHtml(rawSummary)).slice(0, 900);
     const dateStr = text(item.pubDate) || text(item.published) || text(item.updated) || text(item['dc:date']);
-    const published = Date.parse(dateStr) || Date.now();
+    // Undated items: "now", one second older per position (feeds list the newest first),
+    // so the desk ranks them the same way on every run.
+    const published = Date.parse(dateStr) || now - index * 1000;
     stories.push({
       id: storyId(link.replace(/[?#].*$/, '')),
       title,
@@ -306,13 +308,14 @@ export class NewsDesk {
 
   async refresh() {
     const feeds = this.loadFeeds();
+    const startedAt = Date.now();
     const results = await Promise.allSettled(
       feeds.map(async (feed) => {
         const xml = await this.readFeed(feed.url);
         const file = localFeedPath(feed.url);
         const baseDir = file ? path.dirname(file) : null;
         if (baseDir) this.localImageRoots.add(baseDir);
-        return parseFeed(xml, feed, { baseDir });
+        return parseFeed(xml, feed, { baseDir, now: startedAt });
       })
     );
     const maxAge = config.maxStoryAgeHours * 3600_000;

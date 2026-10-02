@@ -4,7 +4,7 @@
 // text on the yellow title plate.
 import { P } from '../../palette.js';
 import { seg, easeInOut, easeOutQuint, ringPts, memo } from '../../gfx/index.js';
-import { backdrop, playOpen, CENTRE } from './kit.js';
+import { lazyBackdrop, playOpen, CENTRE } from './kit.js';
 
 const R0 = 32; // dial radius in the lock-up (x ZOOM at centre stage)
 const TAU = Math.PI * 2;
@@ -12,7 +12,7 @@ const cached = memo(48);
 
 /** Bezel pixels sorted clockwise from twelve (so it can draw round) and tick pixels, per radius. */
 function dial(R) {
-  return cached(`dial|${R}`, () => {
+  return cached(R, () => {
     const pts = ringPts(R + 2);
     const bezel = [];
     for (let i = 0; i < pts.length; i += 2) bezel.push([pts[i], pts[i + 1], (Math.atan2(pts[i], -pts[i + 1]) / TAU + 1) % 1]);
@@ -35,7 +35,7 @@ function dial(R) {
 
 // seven-segment digits: segments a..g as rects relative to the digit's top-left
 function segs(k) {
-  return cached(`segs|${Math.round(k * 20)}`, () => {
+  return cached(-1 - Math.round(k * 20), () => {
     const dw = Math.round(10 * k);
     const dh = Math.round(17 * k);
     const t = Math.max(2, Math.round(2 * k));
@@ -117,7 +117,7 @@ function emblem(ctx, dt, x, y, k = 1) {
   }
 }
 
-const background = () => backdrop({ key: 'flash', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230 });
+const background = lazyBackdrop({ key: 'flash', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230 });
 
 export const FLASH = {
   accent: P.yellow,

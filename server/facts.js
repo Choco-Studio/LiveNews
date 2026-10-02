@@ -9,7 +9,7 @@ export const GRAVE =
   /\b(?:dead|deaths?|die[sd]?|dying|killed|killings?|kills?|war|wars|attacks?|victims?|murder\w*|shootings?|earthquakes?|fires?|wildfires?|blaze|crash\w*|violen\w*|injur\w*|bomb\w*|strikes? on|crisis|floods?|flooded|flooding|hostages?|famine|casualt\w*|missing|evacuat\w*|disaster\w*|tragedy|mourn\w*|funeral|cancer|outbreak|epidemic|pandemic)\b/i;
 // Lighter material: technology, science, curiosities.
 export const LIGHT =
-  /\bAI\b|robot|\bchips?\b|phone|\bapps?\b|software|\bspace\b|nasa|planet|science|scientist|discover|study finds|telescope|\bgames?\b|record|festival|zoo|panda|penguin|dinosaur|fossil|museum|trees?\b|garden|bicycle|bike|tram|train|music|chocolate|coffee|parrot|whale|dolphin|stars?\b|comet|moon/i;
+  /\bAI\b|robot|\bchips?\b|phone|\bapps?\b|software|\bspace\b|nasa|planet|science|scientist|discover|study finds|telescope|\bgames?\b|record|festival|zoo|panda|penguin|dinosaur|fossil|museum|trees?\b|garden|bicycle|bike|tram|train|music|chocolate|coffee|parrot|whale|dolphin|stars?\b|comet|moon|reef|coral|tortoises?|leopards?|mangroves?|tomatoes|drones/i;
 
 export const isGrave = (text) => GRAVE.test(String(text ?? ''));
 

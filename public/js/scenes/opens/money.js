@@ -3,18 +3,18 @@
 // white trend line climbs across them to an arrow head. Accent: green.
 import { P } from '../../palette.js';
 import { seg, easeOutQuint, easeInOut, linePts, memo } from '../../gfx/index.js';
-import { backdrop, playOpen, CENTRE } from './kit.js';
+import { lazyBackdrop, playOpen, CENTRE } from './kit.js';
 
 const cached = memo(48);
 const BARS = [13, 21, 17, 29, 40];
 
 /** Chart geometry at size factor k, cached per integer layout. */
 function layout(k) {
-  const bw = Math.round(8 * k);
-  const gap = Math.round(4 * k);
-  const base = Math.round(22 * k);
-  const hs = BARS.map((h) => Math.round(h * k));
-  return cached(`mm|${bw}|${gap}|${base}|${hs.join(',')}`, () => {
+  return cached(Math.round(k * 100), () => {
+    const bw = Math.round(8 * k);
+    const gap = Math.round(4 * k);
+    const base = Math.round(22 * k);
+    const hs = BARS.map((h) => Math.round(h * k));
     const span = BARS.length * bw + (BARS.length - 1) * gap;
     const pts = hs.map((h, i) => [Math.round(-span / 2 + i * (bw + gap) + bw / 2), base - h - Math.round(6 * k)]);
     pts[pts.length - 1][1] -= Math.round(2 * k);
@@ -90,7 +90,7 @@ function emblem(ctx, dt, x, y, k = 1) {
   }
 }
 
-const background = () => backdrop({ key: 'money', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230 });
+const background = lazyBackdrop({ key: 'money', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230 });
 
 export const MONEY = {
   accent: P.green,

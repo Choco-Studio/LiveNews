@@ -5,7 +5,7 @@
 import { P } from '../../palette.js';
 import { LAND } from '../worlddata.js';
 import { u32, clamp, seg, easeOut, easeOutQuint, bayer, ring } from '../../gfx/index.js';
-import { backdrop, frameBuffer, clipDisc, playOpen, CENTRE } from './kit.js';
+import { lazyBackdrop, frameBuffer, clipDisc, playOpen, CENTRE } from './kit.js';
 
 const DEG = Math.PI / 180;
 const R0 = 34; // globe radius in the lock-up (x ZOOM at centre stage)
@@ -262,7 +262,7 @@ function emblem(ctx, dt, x, y, k = 1) {
   }
 }
 
-const background = () => backdrop({ key: 'world', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230 });
+const background = lazyBackdrop({ key: 'world', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230 });
 
 export const WORLD = {
   accent: P.red,

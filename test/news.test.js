@@ -334,15 +334,17 @@ describe('parseFeed', () => {
     assert.deepEqual(stories.map((s) => [s.title, s.link]), [['With guid', 'https://example.com/guid']]);
   });
 
-  test('a missing or invalid date falls back to the current time', () => {
+  test('a missing or invalid date falls back to the current time, one second older per position (newest first)', () => {
     const before = Date.now();
     const xml = rssFeed(
       '<item><title>No date</title><link>https://example.com/nodate</link></item>',
       rssItem({ title: 'Broken date', link: 'https://example.com/baddate', pubDate: 'yesterday afternoon' })
     );
-    for (const s of parseFeed(xml, FEED)) {
-      assert.ok(s.published >= before && s.published <= Date.now() + 1000, `published=${s.published}`);
-    }
+    const [a, b] = parseFeed(xml, FEED);
+    assert.ok(a.published >= before && a.published <= Date.now() + 1000, `published=${a.published}`);
+    assert.equal(a.published - b.published, 1000);
+    const fixed = parseFeed(xml, FEED, { now: 5_000_000 });
+    assert.deepEqual(fixed.map((s) => s.published), [5_000_000, 4_999_000], 'a given "now" makes it deterministic');
   });
 
   test('returns [] for empty or non-feed documents', () => {

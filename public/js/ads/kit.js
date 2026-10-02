@@ -3159,6 +3159,28 @@ export function contact(ctx, cx, y, rx, a = 0.5, color = P.black) {
   for (let i = 3; i >= 1; i--) oval(ctx, cx, y, round((rx * (2 + i)) / 5), max(1, round((rx * i) / 14)), A(color, a / 3));
 }
 
+/** One-pixel ellipse outline (rims of glasses, plates, turntables). */
+export function ovalRing(ctx, cx, cy, rx, ry, c) {
+  cx = round(cx);
+  cy = round(cy);
+  rx = round(rx);
+  ry = max(1, round(ry));
+  ctx.fillStyle = c;
+  const hw = (dy) => (abs(dy) > ry ? -1 : floor((rx + 0.5) * sqrt(max(0, 1 - (dy / (ry + 0.5)) ** 2))));
+  for (let dy = -ry; dy <= ry; dy++) {
+    const w0 = hw(dy);
+    const lo = min(w0, min(hw(dy - 1), hw(dy + 1)) + 1);
+    ctx.fillRect(cx + lo, cy + dy, w0 - lo + 1, 1);
+    ctx.fillRect(cx - w0, cy + dy, w0 - lo + 1, 1);
+  }
+}
+
+/** Fill the first `h` entries of `out` with radii from [[t, r, ease], ...] keys (no allocation). */
+export function profileInto(out, h, keys) {
+  for (let j = 0; j < h; j++) out[j] = key(j / max(1, h - 1), keys);
+  return out;
+}
+
 /** Light shaft from (x0, y0) to (x1, y1), w0 -> w1 wide, soft edges (layered). */
 export function beam(ctx, x0, y0, x1, y1, w0, w1, { color = P.cream, alpha = 0.06, layers = 3 } = {}) {
   for (let i = 0; i < layers; i++) {
@@ -3260,8 +3282,11 @@ const L_RIM = [0.85, -0.25, -0.45];
  *     normalised x (-1..1) — the commercial look on glass and metal,
  *   label: { cv, top, h, turn } a texture (one full turn wide) wrapped on rows
  *     top..top+h, shaded with palette shadow colours; transparent texels show the material,
- *   glass: { top, edge } rows above `top` are empty glass: transparent except the
- *     outer `edge` px (darkest ramp colour) and the stripes,
+ *   glass: { top, edge, wall, edgeColor } rows above `top` are empty glass:
+ *     transparent except the outer `edge` px and the stripes; below it the outer
+ *     `wall` px are glass too (edgeColor, default the darkest ramp colour),
+ *   rows: only the first `rows` entries of prof are used (reuse one big array),
+ *   key (1): key light intensity (animate 0 -> 1 for "lights up" reveals),
  *   tilt (0): the front of every ring bulges down by tilt * r (seen from above),
  *   seam (0.6): share of each ramp step that is dithered (1 = full Bayer blend),
  *   alpha (1)
@@ -3269,7 +3294,7 @@ const L_RIM = [0.85, -0.25, -0.45];
  * Cost is one pass over the bounding box into a pooled buffer, then one drawImage.
  */
 export function lathe(ctx, cx, y, prof, o = {}) {
-  const n = prof.length;
+  const n = min(prof.length, o.rows ?? prof.length);
   if (!n) return;
   const B = latheBuf();
   let rmax = 0;
@@ -3284,6 +3309,7 @@ export function lathe(ctx, cx, y, prof, o = {}) {
   const nr = ramp.length - 1;
   const amb = o.ambient ?? 0.15;
   const L = o.light || L_KEY;
+  const keyK = o.key ?? 1;
   const rim = o.rim === false ? null : o.rim || {};
   const RD = rim?.dir || L_RIM;
   const rk = rim ? rim.k ?? 0.9 : 0;
@@ -3294,6 +3320,7 @@ export function lathe(ctx, cx, y, prof, o = {}) {
   const glass = o.glass || null;
   const seam = o.seam ?? 0.6;
   const edgeC = ramp[0];
+  const glassC = glass?.edgeColor ? pack(glass.edgeColor) : edgeC;
   const half = bw / 2;
   const ox = cx - half; // buffer x -> canvas x
   for (let j = 0; j < n; j++) {
@@ -3330,10 +3357,14 @@ export function lathe(ctx, cx, y, prof, o = {}) {
       }
       const edge = (1 - abs(xn)) * r; // px to the silhouette edge
       if (empty) {
-        if (edge < (glass.edge ?? 1.2)) buf[di] = glass.edgeColor ? pack(glass.edgeColor) : edgeC;
+        if (edge < (glass.edge ?? 1.2)) buf[di] = glassC;
         continue;
       }
-      let diff = nx * L[0] + ny * L[1] + nzz * L[2];
+      if (glass && edge < (glass.wall ?? 0)) {
+        buf[di] = glassC;
+        continue;
+      }
+      let diff = (nx * L[0] + ny * L[1] + nzz * L[2]) * keyK;
       if (diff < 0) diff = 0;
       let v = amb + (1 - amb) * diff;
       let rv = 0;
