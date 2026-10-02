@@ -21,6 +21,7 @@ const COLOR = {
   K: P.black, // outline / ink
   Q: P.black, // bug plate (separate key so the glint can sheen it)
   I: P.ink,
+  N: P.navy, // globe gaps: the brand background showing through
   R: P.red,
   D: P.darkRed,
   H: P.pink,
@@ -33,7 +34,6 @@ const COLOR = {
 // What each key turns into under the glint (missing = untouched).
 const GLINT = { R: 'H', D: 'R', H: 'W', S: 'W', Y: 'C', C: 'W', O: 'Y', Q: 'I' };
 
-const GAP_KEY = 'K';
 const mirrorV = (top) => [...top, ...top.slice(0, -1).reverse()];
 
 // Large globe, 21x21. R red, D shadow, H highlight, '-' gap (transparent but
@@ -182,7 +182,7 @@ function tint(s, fromY, from, to) {
 // Logo parts at 1x
 function buildMark() {
   // globe 23x23 with outline, bit 6x6 with outline, square 27x27 overall
-  const globe = gaps(outline(fromRows(GLOBE_L)), GAP_KEY);
+  const globe = gaps(outline(fromRows(GLOBE_L)), 'N');
   const bit = sprite(4, 4);
   fill(bit, 0, 0, 4, 4, 'Y');
   set(bit, 0, 0, 'C');
@@ -243,7 +243,7 @@ function buildFull(slogan) {
 }
 
 function buildBug() {
-  const globe = gaps(fromRows(GLOBE_S), 'Q');
+  const globe = gaps(fromRows(GLOBE_S), 'N');
   const letters = word(WORD_S, 'GLOBIT', 1, 'W');
   const digits = word(DIGITS_S, '24', 1, 'W');
   const H = 13;
