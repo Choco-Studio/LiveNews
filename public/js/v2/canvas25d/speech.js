@@ -144,6 +144,7 @@ export function applySpeech(c, persona, perf, t) {
   mouthParams(fr, c, perf.gain ?? 1);
   c.level = fr.env || 0;
   c.t = t;
+  c.speech = perf.speech || null;
   const act = fr.act || 0;
   const seed = perf.seed ?? 0;
   if (act > 0.001 || fr.emph > 0.001) {

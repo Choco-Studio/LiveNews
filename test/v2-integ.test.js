@@ -107,13 +107,14 @@ test('context and planSegment: malformed episodes never throw', () => {
   assert.equal(segmentContext(EP, 99, {}).valid, false);
 });
 
-test('planSegment: events sorted, solo casts get no partner looks, one listener nod per turn', () => {
+test('planSegment: events sorted, solo casts get no partner looks, at most one listener nod per turn', () => {
   const p1 = planSegment(EP, 1, {});
   assert.ok(p1.events.every((e, i, a) => !i || a[i - 1].at <= e.at), 'sorted by at');
   const solo = planSegment({ ...EP, cast: { A: 'penny' } }, 1, {});
   assert.ok(!solo.events.some((x) => x.kind === 'look' && x.target === 'partner'));
   const p3 = planSegment(EP, 3, {});
-  assert.equal(p3.events.filter((e) => e.kind === 'gesture' && e.name === 'nod' && e.slot === 'B').length, 1);
+  // two [B:nod] hints in one turn: FACES decides whether to nod; arbitration allows one at most
+  assert.ok(p3.events.filter((e) => e.kind === 'gesture' && e.name === 'nod' && e.slot === 'B').length <= 1);
 });
 
 test('arbitrate: nod and look ownership', () => {
@@ -471,6 +472,24 @@ test('Stage: one speechFrame per slot per frame; the plan fires into the actors;
   assert.equal(st.clock.plan, null);
 });
 
+test('Stage: every visible cut reaches the cue clock; a new focus on the same camera is not a cut', () => {
+  const ep = episodeOf('tech-bytes');
+  const st = new Stage({ audio: fakeAudio(), channel: { presenters: {} } });
+  const scene = sceneOf(ep, { shot: 'wide', framing: 'wide', focus: 'A', shotSince: 1 });
+  st.update(1, scene);
+  assert.equal(st.clock.lastCut, 1);
+  Object.assign(scene, { focus: 'B', shotSince: 2 }); // chat hand-over on the same wide
+  st.update(2, scene);
+  assert.equal(st.clock.lastCut, 1, 'the identical picture is no cut');
+  assert.equal(st.visibleSince, 1);
+  Object.assign(scene, { shot: 'close', framing: 'single', focus: 'B', shotSince: 3 });
+  st.update(3, scene);
+  assert.equal(st.clock.lastCut, 3);
+  Object.assign(scene, { shot: 'map', framing: null, shotSince: 4 });
+  st.update(4, scene);
+  assert.equal(st.clock.lastCut, 4, 'cuts to full-screen beats count too');
+});
+
 test('Stage: errors are logged once and reported, the frame returns false', () => {
   const st = new Stage({ audio: fakeAudio(), channel: {} });
   const errors = [];
@@ -671,6 +690,13 @@ test('direction: plans go on air as scene.segPlan with speech start/end; chats c
   for (let si = 0; si < h2.plan.ctx.sentences.length; si++) h2.sentence(si);
   assert.deepEqual(got, cues.filter((c) => c.k > 0 && !c.mid).map((c) => c.k));
   h2.end();
+  // the plan follows the voice that really plays: a late recording re-times it, a missing one un-times it
+  const words = recordedWords(EP.segments[1].text);
+  const late = live.begin(EP.segments[1], { url: 'late', duration: 8, words });
+  assert.equal(late.plan.ctx.timing, 'recorded');
+  assert.equal(live.begin(EP.segments[1], { url: 'late', duration: 8, words }).plan.ctx.timing, 'recorded');
+  assert.equal(live.begin(EP.segments[2], null).plan.ctx.timing, 'estimated', 'recording unavailable: browser voice');
+  assert.equal(live.begin(EP.segments[2]).plan.ctx.timing, 'recorded', 'no answer from the voice player: the episode as sent');
   // the montage is never cut away from by a chat/intro cue
   director.scene.shot = 'montage';
   shots.length = 0;

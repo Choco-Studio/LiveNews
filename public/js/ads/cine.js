@@ -255,8 +255,9 @@ export const bayer = (x, y) => (BAYER[((y & 3) << 2) | (x & 3)] + 0.5) / 16;
 
 /**
  * Per-pixel painter (bake time only), as a generator that yields every few
- * rows: fn(x, y) returns a position 0..1 along `colors` (a ramp) or a negative
- * number for "leave as is"; between two ramp steps the 4x4 Bayer picks one.
+ * rows: fn(x, y) returns a position 0..1 along `colors` (a ramp) or -1 for
+ * "leave as is" (values just below 0 are clamped to 0, so a full-frame bake is
+ * always opaque); between two ramp steps the 4x4 Bayer picks one.
  * Use `yield* shadeSteps(...)` inside generator paints, shadeInto() elsewhere.
  */
 export function* shadeSteps(ctx, x0, y0, w, h, colors, fn) {
@@ -270,7 +271,9 @@ export function* shadeSteps(ctx, x0, y0, w, h, colors, fn) {
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const v = fn(x + x0, y + y0);
-      if (!(v >= 0)) continue;
+      // -1 (anything <= -0.5, or NaN) means "leave as is"; a shader that dips a
+      // hair below 0 by accident is clamped instead, so bakes never leave holes
+      if (!(v > -0.5)) continue;
       const u = clamp(v) * n;
       let i = floor(u);
       if (i < n && u - i > bayer(x + x0, y + y0)) i++;
@@ -558,6 +561,10 @@ function buffer() {
   BUF.c.setTransform(1, 0, 0, 1, 0, 0);
   BUF.c.globalAlpha = 1;
   BUF.c.globalCompositeOperation = 'source-over';
+  // opaque black first: a hole in the outgoing shot must never show what the
+  // last transition (possibly of another ad) left in this buffer
+  BUF.c.fillStyle = '#000000';
+  BUF.c.fillRect(0, 0, W, H);
   return BUF;
 }
 
@@ -586,6 +593,12 @@ const TD = { dissolve: 0.6, dip: 0.8, fade: 0.5, black: 0.5 };
  * black) | 'black' (in from black). The last shot holds while the VO overruns.
  */
 export function film(ctx, t, info, shots) {
+  // the studio never clears before an ad draws: start every frame opaque so
+  // no stray pixel of the previous frame (or programme) can ever show through
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, W, H);
   let i = 0;
   while (i + 1 < shots.length && t >= shots[i + 1].at) i++;
   const s = shots[i];
@@ -858,16 +871,41 @@ export function thin(ctx, s, x, y, { color = P.white, style = 'sans', track = 1,
   return w;
 }
 
+// Tracked lines are baked once into small canvases (font -> track -> colour ->
+// string), so a super redrawn every frame is one drawImage and no allocation.
+const TRACKED = new Map();
+function nest(m, k) {
+  let v = m.get(k);
+  if (!v) m.set(k, (v = new Map()));
+  return v;
+}
+function trackedArt(s, color, track, font) {
+  const m = nest(nest(nest(TRACKED, font), track), color);
+  let art = m.get(s);
+  if (!art) {
+    const fm = font === 'micro' ? { lh: 8, asc: 2 } : { lh: 11, asc: 3 };
+    let w = 0;
+    for (let i = 0; i < s.length; i++) w += measureText(s[i], 1, font) + (i ? track + 1 : 0);
+    const cv = canvas(max(1, w + 2), fm.lh);
+    const c = cv.getContext('2d');
+    let cx = 0;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch !== ' ') drawText(c, ch, cx, fm.asc, { color, font });
+      cx += measureText(ch, 1, font) + track + 1;
+    }
+    art = { cv, w, asc: fm.asc };
+    m.set(s, art);
+  }
+  return art;
+}
+
 /** Body (5x7) or micro (3x5) text with extra letter spacing; y = cap top. */
 export function tracked(ctx, s, x, y, { color = P.white, track = 1, font = 'body', align = 'left' } = {}) {
-  let w = 0;
-  for (let i = 0; i < s.length; i++) w += measureText(s[i], 1, font) + (i ? track + 1 : 0);
-  let cx = round(align === 'center' ? x - w / 2 : align === 'right' ? x - w : x);
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
-    if (ch !== ' ') drawText(ctx, ch, cx, y, { color, font });
-    cx += measureText(ch, 1, font) + track + 1;
-  }
+  const art = trackedArt(s, color, track, font);
+  const w = art.w;
+  const cx = round(align === 'center' ? x - w / 2 : align === 'right' ? x - w : x);
+  ctx.drawImage(art.cv, cx, round(y) - art.asc);
   return w;
 }
 export function trackedWidth(s, { track = 1, font = 'body' } = {}) {
@@ -882,15 +920,16 @@ export function text(ctx, s, x, y, { color = P.white, font = 'body', align = 'le
 }
 
 /**
- * The legal line: micro type, centred, wrapped to two lines, drawn at y (top of
- * the block). Fades in with `a` (0..1) so it never pops.
+ * The legal line: micro type, centred, wrapped (to as many lines as it needs at
+ * maxW), drawn at y (top of the block), baked once per string and colour. Fades
+ * in with `a` (0..1) so it never pops. Style bible: P.fog or P.silver only.
  */
-const PRINT_LINES = new Map();
-export function smallPrint(ctx, s, y, { color = P.steel, a = 1, maxW = 344, cx = W / 2 } = {}) {
-  if (a <= 0) return;
-  let lines = PRINT_LINES.get(s);
-  if (!lines) {
-    lines = [];
+const PRINT = new Map();
+export function printArt(s, color = P.fog, maxW = 344) {
+  const m = nest(nest(PRINT, color), maxW);
+  let art = m.get(s);
+  if (!art) {
+    const lines = [];
     let cur = '';
     for (const word of s.split(' ')) {
       const next = cur ? `${cur} ${word}` : word;
@@ -900,10 +939,19 @@ export function smallPrint(ctx, s, y, { color = P.steel, a = 1, maxW = 344, cx =
       } else cur = next;
     }
     if (cur) lines.push(cur);
-    PRINT_LINES.set(s, lines);
+    const cv = canvas(maxW + 8, lines.length * 7 + 2);
+    const c = cv.getContext('2d');
+    for (let i = 0; i < lines.length; i++) drawText(c, lines[i], (maxW + 8) / 2, 2 + i * 7, { color, font: 'micro', align: 'center' });
+    art = { cv, lines: lines.length, w: maxW + 8 };
+    m.set(s, art);
   }
+  return art;
+}
+export function smallPrint(ctx, s, y, { color = P.fog, a = 1, maxW = 344, cx = W / 2 } = {}) {
+  if (a <= 0) return;
+  const art = printArt(s, color, maxW);
   ctx.globalAlpha = clamp(a);
-  for (let i = 0; i < lines.length; i++) drawText(ctx, lines[i], cx, y + i * 7, { color, font: 'micro', align: 'center' });
+  ctx.drawImage(art.cv, round(cx - art.w / 2), round(y) - 2);
   ctx.globalAlpha = 1;
 }
 

@@ -490,7 +490,9 @@ export class LofiEngine {
     }
     const bed = new Bed(this, id, t0, arr, { entry, speaking: this.speaking });
     if (arr.dwellBars) bed.dwellUntil = t0 + arr.dwellBars * bed.barSec;
-    if (entry === 'xfade' && t0 - spb >= at && pal.lead?.inst) this.pickup(bed, t0);
+    // The signature's pickup between songs only on channel music: inside programmes the next
+    // segment's first words would land on it.
+    if (entry === 'xfade' && t0 - spb >= at && pal.programme === 'channel' && !this.speaking) this.pickup(bed, t0);
     this.bed = bed;
     this.beds.add(bed);
     this.setPocket(arr.pocket, at);

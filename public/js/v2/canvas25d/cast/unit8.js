@@ -64,7 +64,9 @@ export const unit8 = defineLook({
   // low sway, small head motion, rare "blinks" (drawn as a dim); breath / doubleBlink are hints for idle.js
   persona: { sway: 0.25, headMotion: 0.35, blinkMin: 7, blinkMax: 12, energy: 0.35, smile: 0, breath: 0.15, doubleBlink: 0 },
   mats: {
-    casing: { ramp: [P.fog, P.steel, P.slate, P.ink], line: P.ink, rim: P.silver, rimTop: true },
+    // brushed steel lit from camera-left: light enough that the head (visor included) clears the
+    // COSMOS head zone by 20 L* (cosmos.md §5 item 8); the body stays a step darker (graphite)
+    casing: { ramp: [P.silver, P.fog, P.steel, P.slate], line: P.ink, rim: P.silver, rimTop: true },
     joint: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black },
     plate: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black, rim: P.silver },
     rod: { ramp: [P.silver, P.steel, P.slate, P.ink], line: P.ink, noLine: true },

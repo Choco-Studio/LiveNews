@@ -180,11 +180,12 @@ export class Bed {
       if (L.type === 'pad') {
         const notes = voice(L.no7 ? no7(ch) : ch, this.prev.pad, { n: L.n, lo: L.lo, hi: L.hi });
         this.prev.pad = notes;
-        this.s.pad(lay.in, t, 30, notes, L.vel, { wave: L.wave, a: L.a, r: L.r, cut: L.cut, cutTo: L.cutTo, detune: L.detune, handle });
+        // The first chord blooms under the first line (the catch already carried the hit).
+        this.s.pad(lay.in, t, 30, notes, L.vel, { wave: L.wave, a: k === 0 ? 1.2 : L.a, r: L.r, cut: L.cut, cutTo: L.cutTo, detune: L.detune, handle });
       } else if (L.type === 'bass') {
         const root = bassNote(ch, this.prev.bass, L.lo, L.hi);
         this.prev.bass = root;
-        this.s.tone(lay.in, t, 30, root, 0.75, { wave: L.wave, a: L.a, d: 0.4, s: L.s, r: L.r, gain: 0.36, handle });
+        this.s.tone(lay.in, t, 30, root, 0.75, { wave: L.wave, a: k === 0 ? 0.6 : L.a, d: 0.4, s: L.s, r: L.r, gain: 0.36, handle });
       }
       handle.to = this.s.log ? this.s.log.length : 0;
       this.held.push(handle);
@@ -299,10 +300,12 @@ export class Bed {
     const d = this.def;
     const lay = this.layers.find((l) => l.L.type === 'pad') || this.layers[0];
     const home = chord(d.pkg.home);
-    s.pad(lay.in, t, this.barSec * 1.2, voice(home, null, { n: 4, lo: 50, hi: 70 }), 0.9, { wave: 'soft', a: 0.04, r: 2.2, cut: 1600, cutTo: 800 });
-    s.timp(this.fx, t, timpDo(d.tonic), 0.75);
-    s.cymbal(this.fx, t, 0.55, { decay: 2.4 });
-    s.tone(this.fx, t, this.barSec * 0.9, bassNote(home, null), 0.8, { wave: 'tri', a: 0.01, d: 0.6, s: 0.6, r: 0.6, cut: 700, gain: 0.5 });
+    // Short and soft: the presenter's first word comes about a second after the cut.
+    const wave = d.pkg.timbre.lead === 'horn' ? 'horn' : 'soft';
+    s.pad(lay.in, t, this.barSec * 0.6, voice(home, null, { n: 4, lo: wave === 'horn' ? 38 : 50, hi: wave === 'horn' ? 55 : 70 }), 0.7, { wave, a: 0.04, r: 1.2, cut: 1300, cutTo: 700 });
+    s.timp(this.fx, t, timpDo(d.tonic), 0.45);
+    if (d.pkg.timbre.noise !== false) s.cymbal(this.fx, t, 0.4, { decay: 2 });
+    s.tone(this.fx, t, this.barSec * 0.6, bassNote(home, null), 0.6, { wave: 'tri', a: 0.01, d: 0.6, s: 0.6, r: 0.5, gain: 0.5 });
   }
 
   // ------------------------------------------------------------ fades

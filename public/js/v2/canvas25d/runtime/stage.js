@@ -88,6 +88,10 @@ function wallVisible(cam) {
 
 const REST_FRAME = Object.freeze({ slot: null, speaking: false, level: 0, viseme: 'rest', next: 'rest', mix: 0, wordIndex: -1, charIndex: -1, sentenceIndex: -1, accent: 0, pause: false });
 
+function sameCamera(a, b) {
+  return a === b || (a.x === b.x && a.y === b.y && a.z === b.z && a.zoom === b.zoom && a.hy === b.hy && a.soft === b.soft);
+}
+
 function lap(prof, key, since) {
   const now = performance.now();
   prof[key] = (prof[key] || 0) + now - since;
@@ -156,6 +160,7 @@ export class Stage {
     this.cutFocus = null;
     this.cutFraming = null;
     this.cutAt = -Infinity;
+    this.visibleSince = 0; // shotSince of the last cut the viewer could see
     this.spec = { framing: 'wide', cast: null, focus: 'A', solo: false, side: undefined, programId: 'world-now', move: null };
     this.base = null; // camera of the current framing
     this.camOut = CAM.makeCamera();
@@ -268,29 +273,24 @@ export class Stage {
       }
     }
     this.cutSince = undefined; // re-frame on the next update
+    this.base = null;
   }
 
   /** A real cut: cue clock guard, camera framing, wall latch, rig clock rebase. */
   onCut(t, scene) {
+    const prevShot = this.cutShot;
+    const prevBase = this.base;
     this.cutSince = scene.shotSince;
     this.cutShot = scene.shot;
     this.cutFocus = scene.focus;
     this.cutFraming = scene.framing ?? null;
     this.cutAt = t;
-    this.clock.cut(t);
-    if (t - this.epoch > CLOCK_REBASE) {
-      const d = t - this.epoch;
-      for (const a of this.actors) shiftPerf(a.perf, d);
-      this.epoch = t;
-      this.clock.epoch = t;
-    }
     const plan = scene.segPlan ?? null;
     const wall = this.wall;
     if (typeof SETM.wallFromScene === 'function') {
       const w = SETM.wallFromScene(scene, this.style || this.programId);
       Object.assign(wall, w);
     } else wallOf(scene, plan, wall);
-    wall.since = scene.shotSince ?? t;
     wall.focus = this.solo ? 'solo' : scene.focus === 'B' ? 'B' : 'A';
     wall.solo = this.solo;
     this.inset = scene.shot === 'close' && wall.mode === 'picture' && scene.framing !== 'ots' ? wall.image?.small || null : null;
@@ -306,7 +306,21 @@ export class Stage {
     this.base = this.frameCamera(spec, scene);
     // SET shows the picture on the wall itself: the inset box only when this framing hides the wall
     if (this.inset && typeof SETM.wallFromScene === 'function' && wallVisible(this.base) >= INSET_AREA) this.inset = null;
-    this.bgOpts.cut = true;
+    // A "cut" to the identical picture (a chat hand-over on the same wide: new focus, same
+    // camera) is no cut for the eye: no cut guard, and the wall changes with a wipe, not a jump.
+    const invisible = !!prevBase && STUDIO_SHOTS.has(prevShot) && STUDIO_SHOTS.has(scene.shot) && !spec.move && sameCamera(prevBase, this.base);
+    if (!invisible) {
+      this.clock.cut(t);
+      this.visibleSince = scene.shotSince ?? t;
+      this.bgOpts.cut = true;
+      if (t - this.epoch > CLOCK_REBASE) {
+        const d = t - this.epoch;
+        for (const a of this.actors) shiftPerf(a.perf, d);
+        this.epoch = t;
+        this.clock.epoch = t;
+      }
+    }
+    wall.since = this.visibleSince;
   }
 
   frameCamera(spec, scene) {
@@ -334,7 +348,7 @@ export class Stage {
     let p0 = prof ? performance.now() : 0;
     const o = this.bgOpts;
     o.style = this.style || this.programId;
-    o.shotSince = scene.shotSince ?? this.cutAt;
+    o.shotSince = this.visibleSince; // SET: a change = a cut (instant wall switch)
     o.lod = this.lod;
     SETM.drawBackground(frame, cam, t, o);
     o.cut = false;

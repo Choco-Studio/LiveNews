@@ -76,6 +76,8 @@ export const config = {
     // CPU threads for the voice model (0 = all), so OBS and the browser keep theirs
     threads: num('KOKORO_THREADS', 0),
     python: env('VOICE_PYTHON', 'python3'),
+    // Voice processes working in parallel (~0.6 GB each); 1 is plenty where Kokoro runs faster than real time
+    workers: num('VOICE_WORKERS', 1),
     // Seconds an episode waits for its voices before it is queued anyway (late clips still air when ready)
     budgetSeconds: num('VOICE_BUDGET_S', 90),
     cacheMb: num('VOICE_CACHE_MB', 300),

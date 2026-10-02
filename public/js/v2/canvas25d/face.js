@@ -195,7 +195,7 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
   const icx = mid + lx * W * 0.19;
   const ir = Math.min(Hh * 0.56, W * 0.29); // iris radius in px
   // the iris sits a little low: the upper lid rests over its top (relaxed, never a stare)
-  const icy = cy + Hh * 0.08 + ly * Hh * 0.16;
+  const icy = cy + Hh * 0.05 + ly * Hh * 0.16;
   const blink = 1 - clamp(open, 0, 1);
   const squint = clamp(f.squint || 0, 0, 1);
   for (let x = x0 - 1; x <= x0 + W; x++) {
@@ -226,7 +226,7 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
       if (dx * dx + dy * dy <= ir * ir) {
         const pr = heavy ? 1.15 : 0.62;
         if (Math.abs(dx) <= pr && Math.abs(dy) <= pr + 0.3) m = mt.pupil;
-        else if (y === yA + 1 || dy < -ir * 0.45 || (heavy && Math.abs(dx) > ir - 0.9)) m = mt.irisDark;
+        else if ((heavy && (y === yA + 1 || dy < -ir * 0.45)) || (heavy && Math.abs(dx) > ir - 0.9)) m = mt.irisDark;
         else m = mt.iris;
       } else {
         // sclera: lit toward the key (left of the iris), cooler on the far side, under the lid and in the corners

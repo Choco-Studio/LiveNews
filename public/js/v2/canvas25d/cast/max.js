@@ -17,7 +17,7 @@ export const max = defineLook({
   id: 'max',
   name: 'Max Circuit',
   head: { top: -10.0, craniumY: -2.5, R: 7.0, cheekY: 1.4, cheekHW: 6.65, chinY: 9.3, chinHW: 2.8, jawPow: 2.55 },
-  headAt: [0, -13.3],
+  headAt: [0, -13.0],
   neck: { hw: 2.85 },
   eyes: { y: -0.6, x: 2.8, w: 2.65, h: 1.5, iris: [P.brown, P.maroon], lash: P.black, lashes: false, bags: false },
   brows: { y: -2.5, len: 3.35, thick: 0.62, color: P.maroon, arch: 0.28 },
@@ -47,19 +47,19 @@ export const max = defineLook({
 // open; the back layer is drawn first and one step darker.
 const CLUMPS = [
   // crown and sides (behind), one step darker
-  [-6.0, -6.2, -6.9, -9.1, -4.6, -11.1, 1.4, 0.5],
-  [5.7, -6.4, 6.9, -8.9, 6.5, -10.6, 1.3, 0.5],
-  [-3.4, -8.6, -3.0, -11.1, -0.6, -11.9, 1.5, 0.7],
-  [0.6, -8.8, 1.8, -11.3, 4.4, -12.0, 1.7, 0.8],
-  [3.4, -8.0, 5.0, -10.2, 6.9, -10.8, 1.3, 0.7],
+  [-6.0, -6.2, -6.9, -9.7, -4.6, -12.1, 1.4, 0.5],
+  [5.7, -6.4, 6.9, -9.5, 6.5, -11.6, 1.3, 0.5],
+  [-3.4, -8.6, -3.0, -11.7, -0.6, -12.9, 1.5, 0.7],
+  [0.6, -8.8, 1.8, -11.9, 4.4, -13.0, 1.7, 0.8],
+  [3.4, -8.0, 5.0, -10.8, 6.9, -11.8, 1.3, 0.7],
   // front: brushed up and to the right; uneven widths and lengths, a few lying lower
-  [-5.4, -6.8, -5.8, -9.2, -3.6, -11.2, 1.25, 0.8],
-  [-3.6, -7.2, -3.2, -10.0, -0.9, -11.7, 1.6, 0.9],
-  [-1.5, -7.6, -0.8, -10.3, 1.8, -12.0, 1.45, 1.0],
-  [0.6, -7.5, 1.6, -10.1, 4.1, -11.5, 1.7, 1.0],
-  [2.9, -7.2, 4.2, -9.5, 6.2, -10.5, 1.35, 0.9],
+  [-5.4, -6.8, -5.8, -9.8, -3.6, -12.2, 1.25, 0.8],
+  [-3.6, -7.2, -3.2, -10.6, -0.9, -12.7, 1.6, 0.9],
+  [-1.5, -7.6, -0.8, -10.9, 1.8, -13.0, 1.45, 1.0],
+  [0.6, -7.5, 1.6, -10.7, 4.1, -12.5, 1.7, 1.0],
+  [2.9, -7.2, 4.2, -10.1, 6.2, -11.5, 1.35, 0.9],
   [4.9, -6.5, 6.4, -8.2, 7.3, -8.9, 1.0, 0.7],
-  [-2.6, -6.9, -2.9, -8.7, -1.4, -9.7, 0.8, 0.6],
+  [-2.6, -6.9, -2.9, -9.0, -1.4, -10.2, 0.8, 0.6],
 ];
 const P0 = [0, 0], P1 = [0, 0], P2 = [0, 0], LC = [0, 0];
 
@@ -83,7 +83,7 @@ function drawTextured(buf, L, m, head, s, sk) {
     if (y > 0.6) return -1;
     const dy = y - cyc;
     const top = y < H.craniumY - 2.2;
-    const vol = top ? RV : hwAt(L, Math.max(y, H.top + 0.5)) + 0.4;
+    const vol = top ? RV : hwAt(L, Math.max(y, H.top + 0.5)) + (y < H.craniumY - 1 ? 0.75 : 0.4);
     if (top ? x * x + dy * dy > vol * vol : Math.abs(x) > vol) return -1;
     const fx = x - yawX;
     const hw = hwAt(L, y);

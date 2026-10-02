@@ -78,11 +78,19 @@
       this.__captured = true;
       this.__origin = now();
       this.__closed = false;
+      // The page connects to a stand-in destination; at render time a tap
+      // worklet sits between it and the real one, so the recorder can stop the
+      // render at the last recorded frame instead of rendering the whole length.
+      this.__dest = super.destination;
+      this.__vdest = this.createGain();
       SC.contexts.push(this);
       log({ ev: 'audioContext', origin: this.__origin, sampleRate: this.sampleRate, length: LENGTH });
     }
     get currentTime() {
       return Math.max(0, (now() - this.__origin) / 1000);
+    }
+    get destination() {
+      return this.__vdest ?? super.destination;
     }
     get state() {
       return this.__closed ? 'closed' : 'running';
@@ -246,6 +254,60 @@
     for (let i = 0; i < u8.length; i += CH) s += String.fromCharCode.apply(null, u8.subarray(i, i + CH));
     return btoa(s);
   }
+  const TAP = `registerProcessor('sc-tap', class extends AudioWorkletProcessor {
+    process(inputs, outputs) {
+      const i = inputs[0];
+      const o = outputs[0];
+      const L = i[0] || new Float32Array(128);
+      const R = i[1] || L;
+      if (o[0]) o[0].set(L);
+      if (o[1]) o[1].set(R);
+      this.port.postMessage([currentFrame, L.slice(), R.slice()]);
+      return true;
+    }
+  });`;
+  // A real macrotask (MessageChannel is not faked) to let worklet messages land.
+  const yieldTask = () => new Promise((r) => {
+    const ch = new MessageChannel();
+    ch.port1.onmessage = () => r();
+    ch.port2.postMessage(0);
+  });
+  /** Render a context up to `untilSec` (its own clock) through the tap; falls back to a full render. */
+  async function renderUntil(ctx, untilSec) {
+    const sr = ctx.sampleRate;
+    const need = Math.min(ctx.length, Math.ceil(untilSec * sr / 128) * 128 + 128);
+    try {
+      const url = URL.createObjectURL(new Blob([TAP], { type: 'application/javascript' }));
+      await ctx.audioWorklet.addModule(url);
+      const tap = new AudioWorkletNode(ctx, 'sc-tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' });
+      const L = new Float32Array(need);
+      const R = new Float32Array(need);
+      let got = 0;
+      tap.port.onmessage = (e) => {
+        const [frame, l, r] = e.data;
+        if (frame >= need) return;
+        const m = Math.min(l.length, need - frame);
+        L.set(m === l.length ? l : l.subarray(0, m), frame);
+        R.set(m === r.length ? r : r.subarray(0, m), frame);
+        got = Math.max(got, frame + m);
+      };
+      ctx.__vdest.connect(tap);
+      tap.connect(ctx.__dest);
+      if (need < ctx.length) {
+        const stop = Offline.prototype.suspend.call(ctx, need / sr);
+        Offline.prototype.startRendering.call(ctx).catch(() => {});
+        await stop;
+      } else await Offline.prototype.startRendering.call(ctx);
+      for (let k = 0; got < need && k < 20000; k++) await yieldTask();
+      return { L, R, sampleRate: sr, tapped: true, frames: got };
+    } catch (err) {
+      SC.errors.push(`tap render failed (${err?.message}); full render`);
+      ctx.__vdest.connect(ctx.__dest);
+      const buf = await Offline.prototype.startRendering.call(ctx);
+      return { L: buf.getChannelData(0), R: buf.numberOfChannels > 1 ? buf.getChannelData(1) : buf.getChannelData(0), sampleRate: buf.sampleRate, tapped: false, frames: buf.length };
+    }
+  }
+
   /** Render every captured context and keep [fromPerf, toPerf) (ms, fake clock) as stereo float. */
   SC.renderAudio = async (fromPerf, toPerf) => {
     const n = Math.max(1, Math.round(((toPerf - fromPerf) / 1000) * SR));
@@ -253,10 +315,10 @@
     const info = [];
     for (const ctx of SC.contexts) {
       const t0 = Date.now();
-      const buf = await Offline.prototype.startRendering.call(ctx);
+      const buf = await renderUntil(ctx, (toPerf - ctx.__origin) / 1000 + 0.05);
       const off = Math.round(((fromPerf - ctx.__origin) / 1000) * buf.sampleRate);
-      const L = buf.getChannelData(0);
-      const R = buf.numberOfChannels > 1 ? buf.getChannelData(1) : L;
+      const L = buf.L;
+      const R = buf.R;
       let covered = 0;
       for (let i = 0; i < n; i++) {
         const j = off + i;
@@ -265,7 +327,7 @@
         out[1][i] += R[j];
         covered++;
       }
-      info.push({ origin: ctx.__origin, renderMs: Date.now() - t0, covered, length: L.length });
+      info.push({ origin: ctx.__origin, renderMs: Date.now() - t0, covered, frames: buf.frames, tapped: buf.tapped });
     }
     let peak = 0;
     for (const ch of out) for (let i = 0; i < ch.length; i++) peak = Math.max(peak, Math.abs(ch[i]));
@@ -598,6 +660,16 @@
     if (line !== last.adLine) {
       last.adLine = line;
       if (line != null && line >= 0) log({ ev: 'adLine', ad: s.card.ad.id, line });
+    }
+    // A voice is heard (browser TTS, a recorded clip or blips): the engine's own duck flag.
+    let voiced = null;
+    try {
+      const a = window.__showcase?.audio;
+      if (a && 'voiced' in a) voiced = Boolean(a.voiced);
+    } catch { /* engine changed */ }
+    if (voiced !== null && voiced !== last.voiced) {
+      last.voiced = voiced;
+      log({ ev: 'voiced', on: voiced });
     }
     const pid = s.program?.id ?? null;
     if (pid !== last.program) {

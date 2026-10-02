@@ -269,6 +269,20 @@ function slate(ctx, shot, show, s) {
   drawText(ctx, what.slice(0, 46), 192, 104, { color: P.fog, align: 'center' });
 }
 
+// zoom: { x, y, w, h } of the frame blown up to fill the screen (nearest neighbour), to judge
+// eyelines and hands in wide shots at a glance
+let ZOOM = null;
+function zoomInto(ctx, z) {
+  if (typeof document === 'undefined') return;
+  ZOOM ||= document.createElement('canvas');
+  ZOOM.width = 384;
+  ZOOM.height = 216;
+  const zc = ZOOM.getContext('2d');
+  zc.drawImage(ctx.canvas, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(ZOOM, z.x, z.y, z.w, z.h, 0, 0, 384, 216);
+}
+
 function guides(ctx) {
   ctx.fillStyle = P.red;
   const box = (x0, y0, x1, y1) => {
@@ -288,7 +302,7 @@ function guides(ctx) {
 export function createIntegLab(canvas, { episodes = EPISODES, presenters = PRESENTERS } = {}) {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
-  const opts = { programme: 'world-now', voice: 'mute', guides: false, hud: false };
+  const opts = { programme: 'world-now', voice: 'mute', guides: false, hud: false, zoom: null };
   let show = null;
   let stage = null;
   let audio = null;
@@ -366,6 +380,7 @@ export function createIntegLab(canvas, { episodes = EPISODES, presenters = PRESE
     const ok = stage.frame(ctx, T, scene, studio);
     simT = T;
     if (!studio || !ok) slate(ctx, show.shots[shotIx] || { shot: scene.shot }, show, segAt(show, T));
+    if (opts.zoom) zoomInto(ctx, opts.zoom);
     if (opts.guides) guides(ctx);
     if (opts.hud) {
       const p = scene.segPlan;

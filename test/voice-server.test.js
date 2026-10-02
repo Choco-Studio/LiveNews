@@ -351,6 +351,18 @@ describe('voice service', () => {
     assert.ok(always.made.length <= 3);
   });
 
+  test('VOICE_WORKERS=2 shares the queue between two worker processes', async () => {
+    const factory = fakeWorkerFactory({ delayMs: 30 });
+    const service = new VoiceService({ config: { engine: 'kokoro', dir: tmpdir(), budgetSeconds: 5, workers: 2 }, root: REPO, log: silent, createWorker: factory, loadSpeech: async () => speech, loadAds: async () => [] });
+    const ctx = episodeCtx(SEGMENTS());
+    const note = await service.voiceEpisode(ctx);
+    assert.equal(note.ready, 4);
+    assert.equal(factory.made.length, 2);
+    assert.ok(factory.made.every((w) => w.requests.length >= 1), factory.made.map((w) => w.requests.length).join('/'));
+    service.close();
+    assert.ok(factory.made.every((w) => w.closed));
+  });
+
   test('VOICE_ENGINE=browser, or no worker script on disk, switches the service off', async () => {
     assert.equal(makeService({ engine: 'browser' }).service.enabled, false);
     assert.equal(makeService({ root: tmpdir() }).service.enabled, false);

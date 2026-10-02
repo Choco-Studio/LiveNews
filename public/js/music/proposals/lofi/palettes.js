@@ -116,7 +116,7 @@ export const PALETTES = {
     duckDb: -6,
     duck: { melody: 0 }, // bells never sound under a voice
     moments: {
-      coldOpen: { energy: 0.4, gain: -12, lp: 1200, pocket: 0, bright: 0.9, layers: { pad: 0.9, bass: 0.8, lead: 1 }, lead: 'sparse' },
+      coldOpen: { energy: 0.4, gain: -12, lp: 1200, pocket: 0, bright: 0.9, layers: { pad: 0.9, bass: 0.8, lead: 1 }, lead: 'sparse', entry: 'xfade' },
       story: { energy: 0.35, gain: -12, lp: 1200, pocket: 0, bright: 0.9, layers: { pad: 0.9, bass: 0.8, lead: 0.8 }, lead: 'sparse', hidden: true },
     },
   },
@@ -192,7 +192,7 @@ export const PALETTES = {
     fx: { reverb: 0.14, echo: 0, tremolo: 0 },
     duckDb: -4, // -24 dB under speech, -20 dB in gaps (bible): a small duck on a quiet bed
     moments: {
-      bed: { energy: 0.5, gain: -12, lp: 2000, pocket: 0, bright: 0.9, layers: { pad: 0.8, bass: 0.8, perc: 0.9 } },
+      bed: { energy: 0.5, gain: -12, lp: 2000, pocket: 0, bright: 0.9, layers: { pad: 0.8, bass: 0.8, perc: 0.9 }, entry: 'instant', immediate: true }, // from the downbeat; back on the cut
       grave: { energy: 0.1, gain: -12, lp: 1600, pocket: 0, bright: 0.8, layers: { pad: 0.8 }, immediate: true },
     },
   },

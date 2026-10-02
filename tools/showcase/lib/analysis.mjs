@@ -67,15 +67,42 @@ export function onsetAfter(e, from, to, { rise = 12, floor = -50 } = {}) {
   return null;
 }
 
+/** Time of the steepest 10 ms level rise in [from, to] (a transient: the stinger's thump). */
+export function steepestRise(e, from, to) {
+  const { env, hop } = e;
+  const d = Math.max(1, Math.round(0.01 / hop));
+  let best = -Infinity;
+  let at = null;
+  for (let k = Math.max(0, Math.round(from / hop)); k + d < Math.min(env.length, Math.round(to / hop)); k++) {
+    const rise = env[k + d] - env[k];
+    if (rise > best) {
+      best = rise;
+      at = (k + d / 2) * hop;
+    }
+  }
+  return at;
+}
+
 const median = (a) => (a.length ? [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] : null);
 
 export function syncReport({ events, speech, webaudio, voice, sr }) {
   const out = { stingers: [], captions: [], voiceOnsets: [] };
   if (webaudio) {
     const e = envelope(webaudio, sr);
+    // The stinger is an air swell from the wipe's first frame into a felt thump
+    // on the cut (the shot change at mid-wipe): check both against the picture.
+    const shots = events.filter((x) => x.ev === 'shot');
     for (const s of events.filter((x) => x.ev === 'stinger' && x.at >= 0.3)) {
-      const o = onsetAfter(e, s.at - 0.05, s.at + 0.6);
-      out.stingers.push({ at: +s.at.toFixed(3), onset: o ? +o.t.toFixed(3) : null, offsetMs: o ? Math.round((o.t - s.at) * 1000) : null });
+      const start = onsetAfter(e, s.at - 0.05, s.at + 0.4, { rise: 20, floor: -85 });
+      const cut = shots.find((x) => (x.at ?? x.t) > s.at + 0.05 && (x.at ?? x.t) <= s.at + 0.9);
+      const cutAt = cut ? cut.at ?? cut.t : null;
+      const thump = cutAt != null ? steepestRise(e, cutAt - 0.15, cutAt + 0.25) : null;
+      out.stingers.push({
+        at: +s.at.toFixed(3),
+        soundStartMs: start ? Math.round((start.t - s.at) * 1000) : null,
+        cut: cutAt != null ? +cutAt.toFixed(3) : null,
+        thumpVsCutMs: thump != null ? Math.round((thump - cutAt) * 1000) : null,
+      });
     }
   }
   const subs = events.filter((x) => x.ev === 'subtitle' && x.text);
@@ -92,11 +119,13 @@ export function syncReport({ events, speech, webaudio, voice, sr }) {
       out.voiceOnsets.push({ start: +sp.start.toFixed(3), onsetMs: o ? Math.round((o.t - sp.start) * 1000) : null });
     }
   }
-  const st = out.stingers.map((x) => x.offsetMs).filter((x) => x != null);
+  const st = out.stingers.map((x) => x.thumpVsCutMs).filter((x) => x != null);
+  const ss = out.stingers.map((x) => x.soundStartMs).filter((x) => x != null);
   const cap = out.captions.map((x) => x.leadMs);
   const vo = out.voiceOnsets.map((x) => x.onsetMs).filter((x) => x != null);
   out.summary = {
-    stingerOffsetMs: { n: st.length, median: median(st), min: st.length ? Math.min(...st) : null, max: st.length ? Math.max(...st) : null },
+    stingerSoundStartMs: { n: ss.length, median: median(ss), min: ss.length ? Math.min(...ss) : null, max: ss.length ? Math.max(...ss) : null },
+    stingerThumpVsCutMs: { n: st.length, median: median(st), min: st.length ? Math.min(...st) : null, max: st.length ? Math.max(...st) : null },
     captionLeadMs: { n: cap.length, median: median(cap), min: cap.length ? Math.min(...cap) : null, max: cap.length ? Math.max(...cap) : null },
     voiceOnsetMs: { n: vo.length, median: median(vo), min: vo.length ? Math.min(...vo) : null, max: vo.length ? Math.max(...vo) : null },
   };

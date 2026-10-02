@@ -26,14 +26,18 @@ export class StageHost {
     this.audio = audio;
     this.channel = channel;
     this.now = now;
-    this.log = log || ((m) => console.info(`[v2] ${m}`));
+    // degradation transitions are warnings (rare, and a capture should show them); perf reports are info
+    this.log = log || ((m) => console.warn(`[v2] ${m}`));
+    this.info = log || ((m) => console.info(`[v2] ${m}`));
     this.makeStage = makeStage || ((o) => new Stage(o));
     this.policy = new FallbackPolicy({ log: this.log });
-    this.watch = new PerfWatchdog({ log: this.log, report: !!perf });
+    this.watch = new PerfWatchdog({ log: this.log, info: this.info, report: !!perf });
     this.key = null;
     this.stage = null;
     this.t = 0;
     this.start(0);
+    // dev handle for captures and sync checks (tools in $SP, the browser console): window.__v2.stats()
+    if (typeof window !== 'undefined' && !makeStage) window.__v2 = this;
   }
 
   setChannel(channel) {

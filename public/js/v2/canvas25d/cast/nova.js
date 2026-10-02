@@ -19,9 +19,10 @@ export const nova = defineLook({
   headAt: [0, -13.0],
   neck: { hw: 2.6 },
   eyes: { y: -0.5, x: 2.9, w: 2.8, h: 1.5, iris: [P.brown, P.maroon], lash: P.black, lashes: true },
-  brows: { y: -2.3, len: 3.2, thick: 0.5, color: P.black, arch: 0.45 },
+  brows: { y: -2.3, len: 3.2, thick: 0.42, color: P.black, arch: 0.45 },
   nose: { y0: -0.2, y1: 3.45, w: 1.6, big: false },
-  mouth: { y: 5.95, w: 3.7, lip: P.maroon, lipHi: P.brown, upper: P.brown, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
+  // lips one step from the skin: a maroon line, a tanShade upper lip, the lower lip catching the key in tan
+  mouth: { y: 5.95, w: 3.7, lip: P.maroon, lipHi: P.tan, upper: P.tanShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   ears: { y: -0.1, h: 2.8, w: 1.0 },
   skin: [P.tan, P.tanShade, P.brown, P.maroon],
   skinLine: P.maroon,
@@ -105,7 +106,7 @@ function drawCoils(buf, L, m, head, s, sk) {
   const tr = tier(s);
   const yawX = Math.sin(head.yaw) * H.R * 0.75;
   const pitchShift = Math.sin(head.pitch) * 2.0;
-  const hairline = (fx) => H.top + 4.4 + pitchShift + fx * fx * 0.012 + 0.25 * HL_WAVE[clampIdx(fx)];
+  const hairline = (fx) => H.top + 4.55 + pitchShift + fx * fx * 0.012 + 0.2 * HL_WAVE[clampIdx(fx)];
   // a face window: open forehead and cheeks, hair down the sides to the jaw
   const inFace = (x, y) => {
     const fx = x - yawX;
@@ -155,7 +156,10 @@ function drawCoils(buf, L, m, head, s, sk) {
       screen(head, jx + yawX * 0.6 + lag * k * 0.6, jy, SC);
       const nx = jx / HALO.rx, ny = (jy - HALO.cy) / HALO.up;
       const facing = -0.55 * nx - 0.7 * ny;
-      blob(buf, m.hair, SC[0], SC[1], rr * s, 0.16, hash(j * 3.1, jx) * 6.28, facing < -0.45 ? 1 : 0, sph, facing > 0.42 && hash(jy, j) > 0.4);
+      // the crown clusters are rounder and slightly fuller, so the silver rim along the top reads as
+      // short continuous arcs rather than scattered sparkles
+      const crown = jy < HALO.cy - HALO.up * 0.55;
+      blob(buf, m.hair, SC[0], SC[1], rr * s * (crown ? 1.12 : 1), crown ? 0.07 : 0.16, hash(j * 3.1, jx) * 6.28, facing < -0.45 ? 1 : 0, sph, facing > 0.42 && hash(jy, j) > 0.4);
     }
   }
 }

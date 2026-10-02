@@ -43,7 +43,7 @@ export const TARGET = {
 // Bed trims (dB) per 'programme:moment' so every bed lands on its target.
 // Measured with the lab renders (ffmpeg ebur128) and fed back here.
 export const TRIM = {
-  'world-now:headlines': -5.7, 'world-now:roundup': -4.4, 'world-now:lighter': -5.3,
+  'world-now:headlines': -6.2, 'world-now:roundup': -4.4, 'world-now:lighter': -5.3,
   'tech-bytes:headlines': -6.7, 'tech-bytes:chat': -6.6, 'tech-bytes:number': -7.8, 'tech-bytes:lighter': -7.6, 'tech-bytes:outro': -6.7,
   'cosmos:headlines': -7.7, 'cosmos:story': -8.7, 'cosmos:lighter': -12.5,
   'money-minute:intro': -1.6, 'money-minute:outro': 0.9, 'money-minute:number': -0.7, 'money-minute:drone': -12.4,

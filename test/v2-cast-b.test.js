@@ -156,8 +156,9 @@ test('no cyan on any presenter B (TECH BYTES accent belongs to the graphics; nev
 
 /** Rows and runs of the slit colours (white / silver) above the indicator row, inside the visor. */
 function slits(px, head, s) {
-  const x0 = Math.round(head.cx - VISOR.hw * s) + 1, x1 = Math.round(head.cx + VISOR.hw * s) - 1;
-  const yTop = Math.round(head.cy - 5 * s), yInd = Math.round(head.cy + IND_Y * s);
+  // around the left slit only (inside the visor; the lit casing next to it may be silver too)
+  const x0 = Math.round(head.cx - (EYE.x + 1.9) * s) - 1, x1 = Math.round(head.cx - (EYE.x - 1.9) * s) + 1;
+  const yTop = Math.round(head.cy + VISOR.top * s) + 1, yInd = Math.round(head.cy + IND_Y * s);
   const rows = new Set();
   let run = 0, bestRun = 0;
   for (let y = yTop; y < yInd - 1; y++) {

@@ -212,21 +212,24 @@ function fillField(b, style, soft) {
     for (let y = y0; y < y1; y++) px.fill(c, y * w + x0, y * w + x1);
     return;
   }
-  // top colour easing into the bottom colour (keeps the area behind heads dark)
+  // top colour easing into the bottom colour (keeps the area behind heads dark); the level uses the
+  // wall's unrounded span and the Bayer index the screen position, so a dolly never re-dithers it
+  const ax = ENV.ax, ay = ENV.ay, fy = ENV.fy, hf = Math.max(1, ENV.hf);
   for (let y = y0; y < y1; y++) {
-    const q = Math.round(Math.max(0, Math.min(1, (y / Math.max(1, h)) * 1.25 - 0.15)) * 16);
-    const row = y * w, br = (y & 3) << 2;
-    for (let x = x0; x < x1; x++) px[row + x] = q > B16[br + (x & 3)] ? cz : ca;
+    const q = Math.round(Math.max(0, Math.min(1, ((y + 0.5 + fy) / hf) * 1.25 - 0.15)) * 16);
+    const row = y * w, br = ((y + ay) & 3) << 2;
+    for (let x = x0; x < x1; x++) px[row + x] = q > B16[br + ((x + ax) & 3)] ? cz : ca;
   }
 }
 
 /** A Bayer falloff from `c` at the top edge into the field over `rows` px (MONEY MINUTE's top 12 px). */
 function topFalloff(b, c, rows) {
   const { w, px } = b;
+  const ax = ENV.ax, ay = ENV.ay;
   for (let y = 0; y < Math.min(rows, b.h); y++) {
     const q = Math.round((1 - y / rows) * 12);
-    const row = y * w, br = (y & 3) << 2;
-    for (let x = 0; x < w; x++) if (q > B16[br + (x & 3)]) px[row + x] = c;
+    const row = y * w, br = ((y + ay) & 3) << 2;
+    for (let x = 0; x < w; x++) if (q > B16[br + ((x + ax) & 3)]) px[row + x] = c;
   }
 }
 
@@ -925,7 +928,7 @@ function resampleSub(b, sub, x0, y0, w, h) {
 // ---------------------------------------------------------------------------
 // Rendering one wall state into a buffer
 
-const ENV = { k: 1, cs: 1, ts: 1, soft: false, cam: null, wx0: 0, wy0: 0, t: 0, lod: 0, frozenLam: -10, frozenAz: 55 * DEG };
+const ENV = { k: 1, cs: 1, ts: 1, soft: false, cam: null, wx0: 0, wy0: 0, ax: 0, ay: 0, fy: 0, hf: 63, t: 0, lod: 0, frozenLam: -10, frozenAz: 55 * DEG };
 
 /** Integer scale for wall text and emblems: 1 in the wide and two-shot, 2-3 in singles. */
 export const wallTextScale = (k) => (k < 1.25 ? 1 : 2);
@@ -1090,8 +1093,8 @@ const S = {
   A: new Buf(),
   B: new Buf(),
   O: new Buf(),
-  aKey: { spec: null, w: 0, h: 0, clock: NaN, sig: NaN, style: null, ts: 0, cam: NaN },
-  bKey: { spec: null, w: 0, h: 0, clock: NaN, sig: NaN, style: null, ts: 0, cam: NaN },
+  aKey: { spec: null, w: 0, h: 0, clock: NaN, sig: NaN, style: null, ts: 0, cam: NaN, c0: 0, c1: 0, c2: 0, c3: 0 },
+  bKey: { spec: null, w: 0, h: 0, clock: NaN, sig: NaN, style: null, ts: 0, cam: NaN, c0: 0, c1: 0, c2: 0, c3: 0 },
   version: 1,
   outVersion: 0,
   last: { x: NaN, z: NaN, zoom: NaN, hy: NaN, shotSince: undefined, style: null, t: NaN },
@@ -1181,12 +1184,20 @@ function isCut(cam, opts, style, t) {
   return cut;
 }
 
-/** Bring buffer `buf` (with its key) up to date for `spec` at the current size / clock; true if pixels changed. */
+/**
+ * Bring buffer `buf` (with its key) up to date for `spec` at the current size / clock; true if
+ * pixels changed. The buffer is in wall-local pixels, so a camera that only trucks or pedestals
+ * reuses it; it is redrawn when the wall's pixel size, the content clock or the state changes, or
+ * when the camera reveals a part of the wall that was off screen when it was drawn.
+ */
 function ensure(buf, key, spec, style, env, w, h) {
   const clock = clockOf(spec, style, env);
-  const camSig = env.cam ? env.cam.x * 7 + env.cam.hy * 13 + env.k * 101 : 0;
-  if (key.spec === spec && key.w === w && key.h === h && key.style === style && key.clock === clock && key.ts === env.ts && key.soft === env.soft && key.cam === camSig) return false;
-  const sizeChanged = key.w !== w || key.h !== h || key.spec !== spec || key.style !== style || key.ts !== env.ts || key.soft !== env.soft || key.cam !== camSig;
+  // the on-screen part of the wall now (what renderSpec's CLIP will be)
+  const cx0 = clampN(-env.wx0 - 2, 0, w), cy0 = clampN(-env.wy0 - 2, 0, h), cx1 = clampN(386 - env.wx0, 0, w), cy1 = clampN(218 - env.wy0, 0, h);
+  const inside = cx0 >= key.c0 && cy0 >= key.c1 && cx1 <= key.c2 && cy1 <= key.c3;
+  const phase = env.ax | (env.ay << 2);
+  if (key.spec === spec && key.w === w && key.h === h && key.style === style && key.clock === clock && key.ts === env.ts && key.soft === env.soft && key.cam === 0 && key.phase === phase && inside) return false;
+  const sizeChanged = key.w !== w || key.h !== h || key.spec !== spec || key.style !== style || key.ts !== env.ts || key.soft !== env.soft || key.cam !== 0 || key.phase !== phase || !inside;
   buf.size(w, h);
   const sig = renderSpec(buf, spec, style, env);
   const changed = sizeChanged || sig !== key.sig || spec.mode === 'map';
@@ -1198,7 +1209,12 @@ function ensure(buf, key, spec, style, env, w, h) {
   key.sig = sig;
   key.ts = env.ts;
   key.soft = env.soft;
-  key.cam = camSig;
+  key.cam = 0;
+  key.phase = phase;
+  key.c0 = CLIP.x0;
+  key.c1 = CLIP.y0;
+  key.c2 = CLIP.x1;
+  key.c3 = CLIP.y1;
   return changed;
 }
 
@@ -1220,6 +1236,11 @@ export function updateWall(req, styleIn, w, h, k, t, cam, opts, lod = 0) {
     const r = wallOrigin(cam);
     env.wx0 = r.x;
     env.wy0 = r.y;
+    // screen phase of the buffer's origin (Bayer anchored to the screen) and the unrounded wall span
+    env.ax = r.x & 3;
+    env.ay = r.y & 3;
+    env.fy = r.y - r.yf;
+    env.hf = (SET.screen.y1 - SET.screen.y0) * k;
   }
   if (lod < 2) {
     env.frozenLam = globeLam(t, 0, 0);
@@ -1299,11 +1320,12 @@ function swapBuffers() {
   S.bKey = k;
 }
 
-const ORIGIN = { x: 0, y: 0 };
+const ORIGIN = { x: 0, y: 0, yf: 0 };
 function wallOrigin(cam) {
   const k = kAt(cam, SET.wallZ);
   ORIGIN.x = Math.round(sxOf(cam, k, SET.screen.x0));
-  ORIGIN.y = Math.round(syOf(cam, k, SET.screen.y0));
+  ORIGIN.yf = syOf(cam, k, SET.screen.y0);
+  ORIGIN.y = Math.round(ORIGIN.yf);
   return ORIGIN;
 }
 
@@ -1331,7 +1353,7 @@ export function drawWallContent(fr, x0, y0, x1, y1, k, t, soft) {
   const style = resolveStyle(null);
   const b = LEGACY;
   b.size(w, h);
-  Object.assign(ENV, { k, cs: k / WIDE_K, ts: wallTextScale(k), soft: !!soft, cam: null, t, lod: 0, wx0: x0, wy0: y0 });
+  Object.assign(ENV, { k, cs: k / WIDE_K, ts: wallTextScale(k), soft: !!soft, cam: null, t, lod: 0, wx0: x0, wy0: y0, ax: x0 & 3, ay: y0 & 3, fy: 0, hf: h });
   renderSpec(b, LEGACY_SPEC, style, ENV);
   for (let y = Math.max(0, y0); y < Math.min(fr.h, y1); y++) {
     for (let x = Math.max(0, x0); x < Math.min(fr.w, x1); x++) fr.px[y * fr.w + x] = b.px[(y - y0) * w + (x - x0)];

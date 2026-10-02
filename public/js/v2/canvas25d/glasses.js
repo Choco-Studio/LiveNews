@@ -19,7 +19,8 @@
 //
 // Levels of detail: wide shots (s < 1.35) show the frame on the eye line (a pixel
 // either side of each eye and the bridge), medium shots full 1 px rims, close-ups
-// add a lit top edge toward the key light and one small lens glare up and left.
+// a heavier top bar from s 3.2 (rect / half), a lit point on the upper-left of each rim
+// (specular, key from camera-left) and a 1 px P.fog glint top-left on each lens.
 // A look wears glasses when L.glasses is truthy; the planners substitute the
 // `glasses` gesture for looks without them.
 import { P } from '../../palette.js';
@@ -36,7 +37,7 @@ function matsFor(L) {
   let m = MATS.get(L);
   if (m) return m;
   const r = (L.glasses && L.glasses.ramp) || [P.slate, P.ink, P.black, P.black];
-  m = { hi: decal(r[0]), base: decal(r[1]), shade: decal(r[2] || r[1]), glare: decal(P.silver) };
+  m = { hi: decal(r[0]), base: decal(r[1]), shade: decal(r[2] || r[1]), glare: decal(P.fog) };
   MATS.set(L, m);
   return m;
 }
@@ -132,7 +133,8 @@ export function drawGlasses(buf, L, head, f, s) {
       const upper = vk <= -0.55 && vj <= -0.55;
       const mtl = upper ? m.base : m.shade;
       seg(buf, PX[k], PY[k], PX[j], PY[j], mtl);
-      if (style === 'half' && upper && tier === 2) seg(buf, PX[k], PY[k] + 1, PX[j], PY[j] + 1, m.base);
+      // the browline: half-rims and rectangular frames carry a heavier top bar in close-ups
+      if (upper && tier === 2 && s >= 3.2 && style !== 'round') seg(buf, PX[k], PY[k] + 1, PX[j], PY[j] + 1, m.base);
     }
     if (tier === 2) {
       // a lit edge on the upper-left of the rim (specular, key from camera-left)
@@ -140,13 +142,9 @@ export function drawGlasses(buf, L, head, f, s) {
       buf.plot(Math.round(PT[0]), Math.round(PT[1]), m.hi, 1);
       mapG(head, R.cx - R.rw * 0.25, R.top, PROTRUDE, PT);
       buf.plot(Math.round(PT[0]), Math.round(PT[1]), m.hi, 1);
-      // one small glare on the lens, up and left, clear of the iris
-      if (side < 0 || s >= 3.2) {
-        mapG(head, R.cx - R.rw * 0.62, R.top + hh * 0.55, PROTRUDE, PT);
-        const gx = Math.round(PT[0]) + 1, gy = Math.round(PT[1]) + 1;
-        buf.plot(gx, gy, m.glare, 1);
-        if (s >= 3.2 && side < 0) buf.plot(gx + 1, gy - 1, m.glare, 1);
-      }
+      // one small glint on the lens, top-left, clear of the iris (never a glare over the eye)
+      mapG(head, R.cx - R.rw * 0.66, R.top + hh * 0.42, PROTRUDE, PT);
+      buf.plot(Math.round(PT[0]) + 1, Math.round(PT[1]) + 1, m.glare, 1);
     }
     // temple arm: from the hinge back toward the ear, while it stays on the head
     const hinge = side * (Math.abs(R.cx) + R.rw);
@@ -159,11 +157,12 @@ export function drawGlasses(buf, L, head, f, s) {
       seg(buf, hx, hy, PT[0], PT[1], m.shade);
     }
   }
-  // the bridge, between the inner rim tops
+  // the bridge, between the inner rims at eye level
   const Rl = rim(L, -1), Rr = rim(L, 1);
-  mapG(head, Rl.cx + Rl.rw, Rl.top + 0.45, PROTRUDE, PT);
+  const by = L.eyes.y - L.eyes.h * 0.2;
+  mapG(head, Rl.cx + Rl.rw, by, PROTRUDE, PT);
   const ax = PT[0], ay = PT[1];
-  mapG(head, Rr.cx - Rr.rw, Rr.top + 0.45, PROTRUDE, PT);
+  mapG(head, Rr.cx - Rr.rw, by, PROTRUDE, PT);
   buf.part(gb + G_GLASSES, 14, false);
   seg(buf, ax, ay, PT[0], PT[1], m.base);
   buf.part(g0, z0, c0);
@@ -182,6 +181,5 @@ export function glassesAnchor(head, which = 'bridge', out = [0, 0]) {
     const R = rim(L, side);
     return mapG(head, side * (Math.abs(R.cx) + R.rw), R.top + 0.35, PROTRUDE, out);
   }
-  const R = rim(L, -1);
-  return mapG(head, 0, R.top + 0.45, PROTRUDE + 0.4, out);
+  return mapG(head, 0, L.eyes.y - L.eyes.h * 0.2, PROTRUDE + 0.4, out);
 }

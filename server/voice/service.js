@@ -54,6 +54,7 @@ export class VoiceService {
       budgetMs: Math.max(0, Number(config.budgetSeconds ?? 90) * 1000),
       dir: config.dir || path.join(root || '.', 'data', 'voice'),
       maxBytes: Math.max(10, Number(config.cacheMb ?? 300)) * 1024 * 1024,
+      workers: Math.max(1, Math.min(8, Math.floor(Number(config.workers) || 1))),
     };
     this.root = root || path.resolve(HERE, '..', '..');
     this.log = log;
@@ -67,8 +68,8 @@ export class VoiceService {
     this.loadSpeech = loadSpeech || (() => import(pathToFileURL(this.speechFile).href));
     this.loadAds = loadAds || (async () => (await import(pathToFileURL(path.join(this.root, 'public', 'js', 'ads', 'index.js')).href)).ADS);
     this.cache = new VoiceCache({ dir: this.cfg.dir, maxBytes: this.cfg.maxBytes, log });
-    this.worker = null;
-    this.starting = null;
+    // One lane per worker process (VOICE_WORKERS); lanes beyond the first start only when there is a queue.
+    this.lanes = Array.from({ length: this.cfg.workers }, () => ({ worker: null, starting: null, busy: false }));
     this.state = 'idle'; // idle | ready | unavailable
     this.lastError = null;
     this.disabledUntil = 0;
@@ -76,7 +77,6 @@ export class VoiceService {
     this.queue = []; // { id, req, priority, seq, waiters: [{resolve, reject}] }
     this.jobs = new Map(); // id -> queued/in-flight job (one synthesis per clip id)
     this.seq = 0;
-    this.pumping = false;
     this.pinned = new Map(); // id -> last use (ms); Infinity = always keep (adverts)
     this.ads = {}; // adId -> { lineText: audio }
     this.adFit = {}; // adId -> [{ line, duration, slot, over }]
@@ -142,19 +142,25 @@ export class VoiceService {
     this.state = 'unavailable';
   }
 
-  /** A running worker, starting one if needed. Resolves false when the engine is unavailable. */
-  async ensureWorker() {
-    if (this.worker?.alive) return true;
+  /** The first lane's worker (status, tests). */
+  get worker() {
+    return this.lanes[0].worker;
+  }
+
+  /** A running worker for `lane`, starting one if needed. Resolves false when the engine is unavailable. */
+  async ensureWorker(lane = 0) {
+    const L = this.lanes[lane];
+    if (L.worker?.alive) return true;
     if (Date.now() < this.disabledUntil) return false;
-    if (this.starting) return this.starting;
-    this.starting = (async () => {
+    if (L.starting) return L.starting;
+    L.starting = (async () => {
       const env = {};
       if (this.cfg.kokoroDir) env.KOKORO_DIR = this.cfg.kokoroDir;
       if (this.cfg.threads > 0) env.KOKORO_THREADS = String(this.cfg.threads);
       const worker = this.createWorker({ python: this.cfg.python, script: this.script, env });
       try {
         const info = await worker.start();
-        this.worker = worker;
+        L.worker = worker;
         if (this.state !== 'ready') {
           this.log.info?.(`[voice] Kokoro ready (${info?.voices?.length ?? '?'} voices): presenters speak with neural voices`);
         }
@@ -168,10 +174,10 @@ export class VoiceService {
         this.unavailable(err);
         return false;
       } finally {
-        this.starting = null;
+        L.starting = null;
       }
     })();
-    return this.starting;
+    return L.starting;
   }
 
   // ------------------------------------------------------------------ queue
@@ -208,34 +214,46 @@ export class VoiceService {
     }
   }
 
-  async pump() {
-    if (this.pumping) return;
-    this.pumping = true;
+  // Episodes (priority 0) before adverts (1); first come, first served within a priority.
+  take() {
+    let best = 0;
+    for (let i = 1; i < this.queue.length; i++) {
+      const a = this.queue[i];
+      const b = this.queue[best];
+      if (a.priority < b.priority || (a.priority === b.priority && a.seq < b.seq)) best = i;
+    }
+    return this.queue.splice(best, 1)[0];
+  }
+
+  pump() {
+    // Lane 0 always serves; further lanes join while there is more queued than lanes at work.
+    for (let i = 0; i < this.lanes.length; i++) {
+      const busy = this.lanes.filter((l) => l.busy).length;
+      if (!this.lanes[i].busy && this.queue.length > (i === 0 ? 0 : busy)) this.lane(i);
+    }
+  }
+
+  async lane(i) {
+    const L = this.lanes[i];
+    L.busy = true;
     try {
       while (this.queue.length) {
-        // Episodes (priority 0) before adverts (1); first come, first served within a priority.
-        let best = 0;
-        for (let i = 1; i < this.queue.length; i++) {
-          const a = this.queue[i];
-          const b = this.queue[best];
-          if (a.priority < b.priority || (a.priority === b.priority && a.seq < b.seq)) best = i;
-        }
-        const job = this.queue.splice(best, 1)[0];
-        if (!(await this.ensureWorker())) {
+        const job = this.take();
+        if (!(await this.ensureWorker(i))) {
           // Engine down: everything waiting falls back to browser voices.
           const err = new Error(this.lastError || 'voice engine unavailable');
           this.settle(job, err);
           for (const j of this.queue.splice(0)) this.settle(j, err);
           break;
         }
-        await this.run(job);
+        await this.run(job, L.worker);
       }
     } finally {
-      this.pumping = false;
+      L.busy = false;
     }
   }
 
-  async run(job) {
+  async run(job, worker = this.worker) {
     const out = this.cache.audioPath(job.id);
     const t0 = Date.now();
     try {
@@ -243,7 +261,7 @@ export class VoiceService {
       // Generous: on a busy machine Kokoro can run 10x slower than real time, and
       // killing a slow but healthy worker only adds a model reload.
       const timeoutMs = 240_000 + estimateSeconds(job.req.text) * 30_000;
-      const reply = await this.worker.request({ ...job.req, out, levels: true }, { timeoutMs });
+      const reply = await worker.request({ ...job.req, out, levels: true }, { timeoutMs });
       const meta = {
         id: job.id,
         duration: reply.duration,
@@ -267,7 +285,7 @@ export class VoiceService {
       if (this.cache.writes % 25 === 0) this.prune();
     } catch (err) {
       this.stats.failed++;
-      if (this.worker && !this.worker.alive) {
+      if (worker && !worker.alive) {
         // The worker died or hung: three times within ten minutes and the engine rests.
         const now = Date.now();
         this.crashes = this.crashes.filter((t) => now - t < RETRY_MS);
@@ -479,9 +497,11 @@ export class VoiceService {
   }
 
   close() {
-    try {
-      this.worker?.close();
-    } catch { /* ignore */ }
-    this.worker = null;
+    for (const L of this.lanes) {
+      try {
+        L.worker?.close();
+      } catch { /* ignore */ }
+      L.worker = null;
+    }
   }
 }

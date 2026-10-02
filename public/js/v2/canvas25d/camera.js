@@ -252,6 +252,7 @@ const SINGLES = {
 const CLEAR = 10; // px kept between a head and a bezel edge (ART_DIRECTION: none within 6 px; tests: 4)
 const CROWN_MIN = 24; // the crown stays below the top graphics row (bug, tag, clock: y 8-21)
 const EYE_MAX = 78; // eye lines stay on the upper third (y 60-80)
+const EDGE_MIN = 20; // px of air kept between a head (with its hair) and the frame's side
 
 /** The bezel edge nearest a head box: { gap, vertical, edge } (edge = its screen x or y). */
 function nearestEdge(h, bz) {
@@ -296,8 +297,8 @@ function fitSingle(spec, slot) {
       const kp = kAt(cam, SET.presenterZ), kw = info.kw;
       const dir = h.cx < e.edge ? -1 : 1;
       const step = dir * Math.max(1, (CLEAR - e.gap + 1) / Math.max(0.2, 1 - kw / kp));
-      // the frame edge wins over the bezel: a head that would leave the frame gets a looser shot instead
-      if (h.x0 + step < 2 || h.x1 + step > 382) spec = { ...spec, k: spec.k * 0.94 };
+      // the frame edge wins over the bezel: a head that would crowd the frame edge gets a looser shot instead
+      if (h.x0 + step < EDGE_MIN || h.x1 + step > 384 - EDGE_MIN) spec = { ...spec, k: spec.k * 0.95 };
       else spec = { ...spec, headX: spec.headX + step };
     } else {
       const below = e.edge >= (h.y0 + h.y1) / 2;

@@ -265,18 +265,20 @@ function clothTone(o, opts = {}) {
   const c = toS(0, 10);
   const halfW = T.shoulderHW * s;
   const topY = toS(0, T.shoulderTop)[1];
-  const neckY = toS(0, 0)[1];
   const litEdge = opts.litEdge ?? -0.8, shadeEdge = opts.shadeEdge ?? 0.58, deepEdge = opts.deepEdge ?? 0.9;
-  const under = (opts.under ?? 0) * s; // occlusion band height under the chin / collar (px)
+  const chest = (opts.chest ?? 1) && s >= 1.35; // the widening lit plane needs room to read
   return (x, y) => {
     const nx = (x + 0.5 - c[0]) / halfW;
-    const top = (y + 0.5 - topY) / s;
+    const top = (y + 0.5 - topY) / s; // units below the shoulder line
     const ax = nx < 0 ? -nx : nx;
     if (top < 2.0 && ax > 0.36 && ax < 0.9) return nx < 0 ? 0 : 1;
-    if (under > 0 && y + 0.5 - neckY < under && ax < 0.3) return 2;
-    if (nx < litEdge) return 0;
-    if (nx < shadeEdge) return 1;
-    if (nx < deepEdge) return 2;
+    // the torso turns away more toward the waist: the terminator slants in as it goes down
+    const k = top < 0 ? 0 : top > 28 ? 1 : top / 28;
+    // the lit strip on the key side is widest across the upper chest and narrows toward the waist
+    const lit = litEdge + (chest ? 0.16 * (1 - k) * (1 - k) : 0) + 0.04 * k;
+    if (nx < lit) return 0;
+    if (nx < shadeEdge - 0.1 * k) return 1;
+    if (nx < deepEdge - 0.05 * k) return 2;
     return 3;
   };
 }
@@ -298,9 +300,9 @@ function drape(o, mat, group, t, soft = 0) {
       bodyPaint(o, [[side * (xa - 3), 13.2], [side * xb, 17.6]], mat, side < 0 ? 1 : 2, group);
       continue;
     }
-    const lit = side < 0 ? 0 : 1;
-    fabricFold(o, mat, group, [side * xa, 12.0], [side * (xa - 3.4 * k), 13.4], [side * xb, 17.4 - soft], 0.6 * k, lit, 2);
-    if (o.s >= 3) fabricFold(o, mat, group, [side * (xa + 0.4), 20.0], [side * (xa - 2.2), 21.0], [side * (xb + 2.8), 22.8 - soft], 0.4 * k, lit, 2);
+    const lit = side < 0 ? 0 : 1, core = side < 0 ? 2 : 3;
+    fabricFold(o, mat, group, [side * xa, 13.4], [side * (xa - 3.4 * k), 14.6], [side * xb, 18.4 - soft], 0.7 * k, lit, core);
+    if (o.s >= 3 && !soft) fabricFold(o, mat, group, [side * (xa + 0.4), 21.0], [side * (xa - 2.2), 22.0], [side * (xb + 2.8), 23.6 - soft], 0.45 * k, lit, core);
   }
 }
 
@@ -376,14 +378,17 @@ function knitBlazer(o) {
   if (t >= 1) {
     // the open fronts: a slight roll where each front edge turns back, and the button
     for (const side of [-1, 1]) bodyPaint(o, [[side * 3.4, vY - 1.0], [side * 3.0, T.bottom]], m.jacket, side < 0 ? 0 : 2, gJ, side < 0 ? -1 : 1);
-    const [bx, by] = o.toS(-4.4, vY + 3.4);
-    buf.paint(Math.round(bx), Math.round(by), m.jacket, 3, gJ);
-    if (t === 2) buf.paint(Math.round(bx) + 1, Math.round(by), m.jacket, 3, gJ);
+    if (t === 2) {
+      // the button on the open front: a small dark disc with a lit rim toward the key
+      const [bx, by] = o.toS(-4.6, vY + 3.4);
+      const r = Math.max(1, Math.round(o.s * 0.3));
+      for (let j = 0; j <= r; j++) for (let i = 0; i <= r; i++) buf.paint(Math.round(bx) + i, Math.round(by) + j, m.jacket, i === 0 && j === 0 ? 1 : 3, gJ);
+    }
   }
   if (t === 2) {
     // shoulder seams (soft shoulders, no padding) and a patch pocket on the far chest
     for (const side of [-1, 1]) bodyPaint(o, [[side * (nk + 5.4), 0.6], [side * (T.shoulderHW * 0.84), T.shoulderTop + 0.9]], m.jacket, side < 0 ? 1 : 3, gJ);
-    const px0 = T.shoulderHW * 0.36, py0 = 11.8, pw = 4.8, ph = 4.2;
+    const px0 = T.shoulderHW * 0.36, py0 = 8.6, pw = 4.6, ph = 3.9;
     bodyPaint(o, [[px0, py0], [px0 + pw, py0]], m.jacket, 0, gJ); // the pocket's top edge catches the key
     bodyPaint(o, [[px0, py0 + 0.4], [px0 + pw, py0 + 0.4]], m.jacket, 3, gJ, 0);
     bodyPaint(o, [[px0 + pw, py0 + 0.6], [px0 + pw - 0.1, py0 + ph]], m.jacket, 3, gJ);

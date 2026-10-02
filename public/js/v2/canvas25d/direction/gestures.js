@@ -373,7 +373,7 @@ class SegmentPlan {
     const apex = d.apex / rate, stroke = d.stroke / rate, dur = d.dur / rate;
     // stroke starts `lead` before the word; the apex lands within ±0.1 s of it
     const lead = opts.lead ?? this.lead();
-    const offset = Math.max(-0.1, Math.min(0.1, apex - stroke - lead));
+    const offset = Math.max(-0.095, Math.min(0.095, apex - stroke - lead));
     ev.at = w.t + offset - apex;
     if (opts.atOverride != null) ev.at = opts.atOverride;
     if (ev.at < 0) return null;

@@ -32,7 +32,7 @@ function mats() {
     // studio paper is never pure white (ART_DIRECTION values: white only for collars, glints, text)
     paper: material('props:paper', { ramp: [P.silver, P.silver, P.fog, P.steel], line: P.slate, th: [2, -0.3, -0.8] }),
     paperD: material('props:paperD', { ramp: [P.silver, P.fog, P.steel, P.slate], decal: true }),
-    pen: material('props:pen', { ramp: [P.slate, P.ink, P.black, P.black], line: P.black, th: [0.7, 0.1, -0.4] }),
+    pen: material('props:pen', { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black, th: [0.7, 0.1, -0.4] }),
     penD: material('props:penD', { ramp: [P.silver, P.fog, P.steel, P.slate], decal: true }),
   };
   return MAT;
@@ -161,18 +161,19 @@ function drawPen(buf, L, sk, s, g, z, M) {
   HG ||= newHandGeometry();
   handGeometry(L, arm, -1, HG);
   const { W, f, t, n, H } = HG;
-  // the pen crosses the hand through the thumb-index web, lying along the index, tilted out
-  const cxp = W[0] + f[0] * H * 0.46 + t[0] * H * 0.2 + n[0] * H * 0.1;
-  const cyp = W[1] + f[1] * H * 0.46 + t[1] * H * 0.2 + n[1] * H * 0.1;
-  const czp = W[2] + f[2] * H * 0.46 + t[2] * H * 0.2 + n[2] * H * 0.1;
-  let dx = f[0] * 0.82 + t[0] * 0.48 - n[0] * 0.3, dy = f[1] * 0.82 + t[1] * 0.48 - n[1] * 0.3, dz = f[2] * 0.82 + t[2] * 0.48 - n[2] * 0.3;
+  // the pen crosses the hand through the thumb-index web, lying along the index and tilted out:
+  // a loose hand covers its middle, the nib shows past the knuckles and the cap behind the thumb
+  const cxp = W[0] + f[0] * H * 0.42 + t[0] * H * 0.16 + n[0] * H * 0.12;
+  const cyp = W[1] + f[1] * H * 0.42 + t[1] * H * 0.16 + n[1] * H * 0.12;
+  const czp = W[2] + f[2] * H * 0.42 + t[2] * H * 0.16 + n[2] * H * 0.12;
+  let dx = f[0] * 0.8 + t[0] * 0.52 - n[0] * 0.25, dy = f[1] * 0.8 + t[1] * 0.52 - n[1] * 0.25, dz = f[2] * 0.8 + t[2] * 0.52 - n[2] * 0.25;
   const dl = Math.hypot(dx, dy, dz) || 1;
   dx /= dl;
   dy /= dl;
   dz /= dl;
-  const half = H * 0.62; // a pen is a little longer than the hand
+  const half = H * 0.78; // a pen is longer than the hand: both ends show
   const tipX = px(cxp + dx * half, cyp + dy * half, czp + dz * half), tipY = py(cxp + dx * half, cyp + dy * half, czp + dz * half);
-  const endX = px(cxp - dx * half, cyp - dy * half, czp - dz * half), endY = py(cxp - dx * half, cyp - dy * half, czp - dz * half);
+  const endX = px(cxp - dx * half * 0.8, cyp - dy * half * 0.8, czp - dz * half * 0.8), endY = py(cxp - dx * half * 0.8, cyp - dy * half * 0.8, czp - dz * half * 0.8);
   buf.part(g, z, false);
   const r = Math.max(0.55, 0.42 * s);
   buf.capsule(endX, endY, tipX, tipY, r, Math.max(0.5, r * 0.8), M.pen);

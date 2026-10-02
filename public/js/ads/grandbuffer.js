@@ -510,7 +510,8 @@ function dots(ctx, cx, cy, r, d, lit, on, mid, off) {
 const SKIN = { d: P.tan, f: 0.3, m: 1, dd: P.skinShade, df: 0.1, side: 1 };
 const SKIN_TAN = { d: P.skinShade, f: 0.3, m: 1, dd: P.tanShade, df: 0.1, side: 1 };
 const SUIT_SH = { d: P.black, f: 0.32, m: 1, l: P.slate, lf: 0.06, lm: 1, r: P.steel, side: 1 };
-const SUIT_ARM = { base: P.ink, shade: P.black, lit: P.slate, rim: P.silver };
+const SUIT_ARM = { base: P.ink, shade: P.black, lit: P.slate, rim: P.steel };
+const SUIT_ARM_LIT = { base: P.ink, shade: P.black, lit: P.slate, rim: P.silver };
 const SHIRT_SH = { d: P.silver, f: 0.32, m: 1, side: 1 };
 const HAIR_SILVER = { d: P.fog, f: 0.36, m: 1, dd: P.steel, df: 0.1, l: P.white, lf: 0.1, lm: 1, side: 1 };
 const HAIR_BROWN = { d: P.maroon, f: 0.38, m: 1, l: P.tanShade, lf: 0.12, lm: 1, side: 1 };
@@ -524,16 +525,17 @@ const CONCIERGE = {
   skin: P.skin, skinSh: SKIN, skinD: P.skinShade, skinL: P.cream, lip: P.skinShade, lash: P.tanShade, brow: P.fog,
   hair: P.silver, hairSh: HAIR_SILVER, hairD: P.steel, hairHi: P.white, hairStyle: 'part', cuff: P.white,
 };
+const CONCIERGE_UP = { ...CONCIERGE, arm: SUIT_ARM_LIT };
 const GUEST = {
-  kind: 'coatBack', top: P.tan, topSh: { d: P.tanShade, f: 0.3, m: 1, dd: P.brown, df: 0.07, l: P.skin, lf: 0.07, lm: 1, side: 1 },
-  arm: { base: P.tan, shade: P.tanShade, lit: P.skin, rim: null }, waist: 0.9,
-  seam: P.tanShade, belt: P.tanShade, button: P.brown, rimHi: P.cream,
+  kind: 'coatBack', top: P.tanShade, topSh: { d: P.brown, f: 0.3, m: 1, dd: P.maroon, df: 0.07, l: P.tan, lf: 0.08, lm: 1, side: 1 },
+  arm: { base: P.tanShade, shade: P.brown, lit: P.tan, rim: null }, waist: 0.9,
+  seam: P.brown, belt: P.brown, button: P.maroon, rimHi: P.tan, scarf: P.slate, scarfSh: { d: P.ink, f: 0.35, m: 1, l: P.steel, lf: 0.15, lm: 1, side: 1 },
   skin: P.skin, skinSh: SKIN, skinD: P.skinShade, skinL: P.cream, lip: P.skinShade, lash: P.tanShade, brow: P.brown,
   hair: P.brown, hairSh: HAIR_BROWN, hairD: P.maroon, hairHi: P.tanShade, hairStyle: 'bun', cuff: null,
 };
 const MAID = {
   kind: 'dress', top: P.ink, topSh: SUIT_SH, arm: { base: P.ink, shade: P.black, lit: P.slate, rim: P.steel }, waist: 0.8,
-  collar: P.white, collarSh: { d: P.silver, f: 0.4, m: 1, side: 1 }, apron: P.white, apronSh: { d: P.silver, f: 0.3, m: 1, dd: P.fog, df: 0.08, side: 1 },
+  collar: P.white, collarSh: { d: P.silver, f: 0.4, m: 1, side: 1 }, apron: P.silver, apronSh: { d: P.fog, f: 0.3, m: 1, dd: P.steel, df: 0.08, l: P.white, lf: 0.12, lm: 1, side: 1 },
   rimHi: P.steel,
   skin: P.skin, skinSh: SKIN, skinD: P.skinShade, skinL: P.cream, lip: P.skinShade, lash: P.tanShade, brow: P.brown,
   hair: P.brown, hairSh: HAIR_BROWN, hairD: P.maroon, hairHi: P.tanShade, hairStyle: 'bun', cuff: P.white,
@@ -545,9 +547,9 @@ const DINER = {
   hair: P.black, hairSh: HAIR_BLACK, hairD: P.black, hairHi: P.slate, hairStyle: 'slick', cuff: P.white,
 };
 const WAITER = {
-  kind: 'mess', top: P.silver, topSh: { d: P.fog, f: 0.32, m: 1, dd: P.steel, df: 0.08, l: P.white, lf: 0.06, lm: 1, side: 1 },
-  arm: { base: P.silver, shade: P.fog, lit: P.white, rim: null }, waist: 0.86,
-  shirt: P.white, shirtSh: SHIRT_SH, bow: P.black, lapelD: P.fog, lapelL: P.white, button: P.steel, rimHi: null,
+  kind: 'mess', top: P.fog, topSh: { d: P.steel, f: 0.32, m: 1, dd: P.slate, df: 0.08, l: P.silver, lf: 0.07, lm: 1, side: 1 },
+  arm: { base: P.fog, shade: P.steel, lit: P.silver, rim: null }, waist: 0.86,
+  shirt: P.white, shirtSh: SHIRT_SH, bow: P.black, lapelD: P.steel, lapelL: P.silver, button: P.silver, rimHi: null,
   skin: P.skin, skinSh: SKIN, skinD: P.skinShade, skinL: P.cream, lip: P.skinShade, lash: P.tanShade, brow: P.brown,
   hair: P.brown, hairSh: HAIR_BROWN, hairD: P.maroon, hairHi: P.tanShade, hairStyle: 'part', cuff: P.silver,
   hand: P.white, handSh: { d: P.silver, f: 0.35, m: 1, side: 1 }, handD: P.fog, handL: P.white,
@@ -703,11 +705,7 @@ function hairFront(ctx, F, S, cx, top, hh, hw) {
   }
   // rim light on the crown (art direction: 1 px silver on every head)
   ctx.fillStyle = P.silver;
-  ctx.fillRect(round(cx + hw * 0.1), round(top - hh * 0.07), max(2, round(hw * 0.6)), 1);
-  if (style === 'bun') {
-    // the bun peeks out behind the crown on the far side
-    ellipse(ctx, cx + hw * 0.55 - F.turn * hw * 0.9, top + hh * 0.06, hh * 0.15, hh * 0.12, S.hair, BUN_SH);
-  }
+  ctx.fillRect(round(cx + hw * 0.15), round(top - hh * 0.07), max(2, round(hw * 0.35)), 1);
 }
 
 function headBack(ctx, F, S, cx, top, hh, hw) {
@@ -774,6 +772,11 @@ function bust(ctx, F, S, bottom) {
   R(ctx, hx + nw * 0.3, chin - hh * 0.12, nw * 0.7, neckB - chin + hh * 0.12, S.skinD);
   if (!F.back) R(ctx, hx - nw, chin - hh * 0.02, nw * 2, max(1, hh * 0.07), S.skinD);
   garment(ctx, F, S, cx, hh, neckB, shY, sw, bottom);
+  if (!F.back && S.hairStyle === 'bun' && abs(F.turn) > 0.2) {
+    // in three-quarter view the chignon shows behind the head
+    ellipse(ctx, hx - F.turn * hh * 0.37 * 2.9, top + hh * 0.36, hh * 0.18, hh * 0.16, S.hair, BUN_SH);
+    R(ctx, hx - F.turn * hh * 0.37 * 2.9 - hh * 0.08, top + hh * 0.28, hh * 0.1, 1, S.hairHi);
+  }
   if (F.back) headBack(ctx, F, S, hx, top, hh, hh * 0.37);
   else {
     const hw = hh * 0.37;
@@ -795,6 +798,18 @@ function garment(ctx, F, S, cx, hh, neckB, shY, sw, bottom) {
     pt(cx - hh * 0.36, nY + hh * 0.16);
     fillPts(ctx, S.top, S.topSh);
     line(ctx, cx - hh * 0.34, nY + hh * 0.17, cx + hh * 0.34, nY + hh * 0.17, S.seam);
+    // a silk scarf at the collar, its knot fallen to one shoulder
+    pt(cx - hh * 0.36, nY - hh * 0.1);
+    pt(cx + hh * 0.34, nY - hh * 0.1);
+    pt(cx + hh * 0.38, nY + hh * 0.06);
+    pt(cx - hh * 0.4, nY + hh * 0.08);
+    fillPts(ctx, S.scarf, S.scarfSh);
+    pt(cx - hh * 0.4, nY);
+    pt(cx - hh * 0.26, nY + hh * 0.04);
+    pt(cx - hh * 0.3, nY + hh * 0.42);
+    pt(cx - hh * 0.42, nY + hh * 0.36);
+    fillPts(ctx, S.scarf, S.scarfSh);
+    line(ctx, cx - hh * 0.2, nY - hh * 0.04, cx + hh * 0.2, nY + hh * 0.02, S.scarfSh.l);
     line(ctx, cx - hh * 0.36, nY + hh * 0.2, cx - sw * 0.86, shY + hh * 0.14, S.seam);
     line(ctx, cx + hh * 0.36, nY + hh * 0.2, cx + sw * 0.86, shY + hh * 0.14, S.seam);
     line(ctx, cx, nY + hh * 0.2, cx, bottom, S.seam);
@@ -813,13 +828,18 @@ function garment(ctx, F, S, cx, hh, neckB, shY, sw, bottom) {
   if (k === 'dress') {
     // housekeeper: black dress, a round white collar, the apron's bib and straps
     const ay = shY + hh * 0.42;
-    pt(cx - hh * 0.36, ay);
-    pt(cx + hh * 0.34, ay);
-    pt(cx + hh * 0.42, bottom);
-    pt(cx - hh * 0.44, bottom);
+    pt(cx - hh * 0.3, ay);
+    pt(cx + hh * 0.28, ay);
+    pt(cx + hh * 0.36, bottom);
+    pt(cx - hh * 0.38, bottom);
     fillPts(ctx, S.apron, S.apronSh);
-    line(ctx, cx - hh * 0.36, ay, cx - sw * 0.62, shY + hh * 0.02, S.apron);
-    line(ctx, cx + hh * 0.34, ay, cx + sw * 0.6, shY + hh * 0.02, S.collarSh.d);
+    line(ctx, cx - hh * 0.3, ay, cx - sw * 0.6, shY + hh * 0.02, S.apron);
+    line(ctx, cx + hh * 0.28, ay, cx + sw * 0.58, shY + hh * 0.02, S.collarSh.d);
+    const fy0 = shY + hh * 1.7;
+    if (fy0 < bottom) {
+      line(ctx, cx - hh * 0.1, fy0, cx - hh * 0.16, bottom, S.apronSh.d);
+      line(ctx, cx + hh * 0.12, fy0 + hh * 0.2, cx + hh * 0.16, bottom, S.apronSh.dd);
+    }
     const wy = round(shY + hh * 1.55);
     if (wy < bottom) R(ctx, cx - sw * 0.8, wy, sw * 1.6, 2, S.apronSh.dd);
     ellipse(ctx, cx - hh * 0.14, nY + hh * 0.04, hh * 0.17, hh * 0.1, S.collar, S.collarSh);
@@ -909,14 +929,18 @@ function ik(jx, jy, tx, ty, l1, l2, px, py) {
   IK[1] = my + side * (dx / d) * h;
 }
 const ARM = { sx: 0, sy: 0, ex: 0, ey: 0, wx: 0, wy: 0, dx: 0, dy: 1 };
-/** Solve an arm of pose F (side -1 screen left, 1 screen right) with the wrist on (tx, ty). */
-function armTo(F, side, tx, ty, pole = 1) {
+/**
+ * Solve an arm of pose F (side -1 screen left, 1 screen right) with the wrist
+ * on (tx, ty). `fore` < 1 foreshortens the forearm when it points at the lens
+ * (hands working on a desk in front of the body keep their elbows in).
+ */
+function armTo(F, side, tx, ty, pole = 1, fore = 1) {
   const hh = F.hh;
   const sw = hh * F.sw * (1 - abs(F.turn) * 0.12);
   ARM.sx = F.x + side * (sw - hh * 0.27);
   ARM.sy = F.top + hh * 1.27 + hh * 0.3;
-  const up = hh * 1.28;
-  const fo = hh * 1.1;
+  const up = hh * 1.28 * (0.85 + 0.15 * fore);
+  const fo = hh * 1.1 * fore;
   ik(ARM.sx, ARM.sy, tx, ty, up, fo, ARM.sx + side * hh * 1.2 * pole, ARM.sy + hh * 2.2);
   ARM.ex = IK[0];
   ARM.ey = IK[1];
@@ -1496,12 +1520,12 @@ function shotLobby(ctx, lt) {
   const tap = keys(lt, L_TAP);
   bell(ctx, tap > 0.5 ? 1 : 0);
   const wr = 1 - smooth(prog(lt, TAP + 0.3, TAP + 0.9)) * 0.85;
-  armTo(QC, -1, 233 + sin(lt * 5.3) * 2.2 * wr + (mod(lt, 1.6) > 1.45 ? -2 : 0) * wr, 112 + sin(lt * 10.6) * 0.6 * wr, 1);
+  armTo(QC, -1, 233 + sin(lt * 5.3) * 2.2 * wr + (mod(lt, 1.6) > 1.45 ? -2 : 0) * wr, 112 + sin(lt * 10.6) * 0.6 * wr, 0.25, 0.6);
   armDraw(ctx, QC, CONCIERGE, 'pen');
   const raise = ramp(lt, TAP + 0.45, TAP + 1.3);
   const settle = sin(PI * prog(lt, TAP + 1.2, TAP + 1.6)) * 0.8;
-  armTo(QC, 1, bez(263, 292, 281, raise), bez(112, 104, 66, raise) - settle, 1);
-  armDraw(ctx, QC, CONCIERGE, raise > 0.12 ? 'point' : 'rest', smooth(prog(lt, TAP + 0.95, TAP + 1.35)));
+  armTo(QC, 1, bez(263, 292, 281, raise), bez(112, 104, 66, raise) - settle, lerp(0.25, 1, raise), lerp(0.6, 1, raise));
+  armDraw(ctx, QC, CONCIERGE_UP, raise > 0.12 ? 'point' : 'rest', smooth(prog(lt, TAP + 0.95, TAP + 1.35)));
   // the guest, from behind, nearer the lens; she tilts her head a touch: patience
   QG.x = G_X;
   QG.top = 60 + round((1 - cos(lt * 1.3 + 1)) / 2);
@@ -1510,12 +1534,23 @@ function shotLobby(ctx, lt) {
   QG.back = true;
   QG.tilt = round(ramp(lt, TAP + 1.6, TAP + 2.3) * 2);
   bust(ctx, QG, GUEST, H + 2);
-  armTo(QG, -1, 70, 168, 0.4);
+  armTo(QG, -1, 72, 182, 0.4);
   armDraw(ctx, QG, GUEST, 'back');
   const reach = keys(lt, L_REACH);
-  armTo(QG, 1, bez(124, 152, 172, reach), bez(168, 150, 104, reach) + tap * 2, 1);
+  armTo(QG, 1, bez(121, 150, 170, reach), bez(182, 156, 111, reach) + tap * 2, 1);
   armDraw(ctx, QG, GUEST, 'back');
+  // the foreground falls off into shadow toward the bottom of the frame
+  ctx.drawImage(fgShade(), 0, 150);
 }
+const fgShade = () => bake('gb-fg', 170, 66, (c) => {
+  c.fillStyle = A(P.black, 0.45);
+  for (let y = 0; y < 66; y++) {
+    for (let x = 0; x < 170; x++) {
+      const d = c01((y - 8) / 60) * c01((170 - x) / 40);
+      if (d * 16 > BAYER[(y & 3) * 4 + (x & 3)] + 0.5) c.fillRect(x, y, 1, 1);
+    }
+  }
+});
 
 // --- 3. the heirloom: pearls under glass, turned by hand ------------------------------
 const velvet = () => bake('gb-velvet', W, H, (c) => {
@@ -1542,12 +1577,12 @@ function gloveHand(ctx, gx, gy, s) {
   const ey = gy + 34 * s;
   const wx = gx + 11 * s;
   const wy = gy + 5 * s;
-  capsule(ctx, ex, ey - 2, wx + 4 * s, wy - 1, 11 * s, 7.5 * s, P.steel);
-  capsule(ctx, ex, ey - 1, wx + 4 * s, wy, 11 * s, 7.5 * s, P.slate);
-  capsule(ctx, ex + 1, ey + 2, wx + 5 * s, wy + 2, 10 * s, 6.5 * s, P.ink);
-  capsule(ctx, wx + 3 * s, wy, wx - 1 * s, wy - 1.5 * s, 6.4 * s, 6 * s, P.silver);
-  capsule(ctx, wx + 3 * s, wy - 1, wx - 1 * s, wy - 2.5 * s, 5.6 * s, 5 * s, P.white);
-  line(ctx, wx - 1.5 * s, wy - 7 * s, wx - 2.5 * s, wy + 4 * s, P.steel);
+  capsule(ctx, ex, ey - 2, wx + 5 * s, wy - 1, 8 * s, 4.6 * s, P.steel);
+  capsule(ctx, ex, ey - 1, wx + 5 * s, wy, 8 * s, 4.6 * s, P.slate);
+  capsule(ctx, ex + 1, ey + 2, wx + 6 * s, wy + 1.5, 7.2 * s, 3.8 * s, P.ink);
+  capsule(ctx, wx + 3 * s, wy - 0.5 * s, wx + 0.5 * s, wy - 1.2 * s, 3.9 * s, 3.6 * s, P.silver);
+  capsule(ctx, wx + 3 * s, wy - 1.2 * s, wx + 0.5 * s, wy - 1.9 * s, 3.2 * s, 2.9 * s, P.white);
+  line(ctx, wx - 0.5 * s, wy - 5 * s, wx - 1.5 * s, wy + 2.5 * s, P.fog);
   // back of the hand, then four curled fingers with a seam between each
   ellipse(ctx, gx + 3.5 * s, gy + 1.5 * s, 6 * s, 5.2 * s, P.fog);
   ellipse(ctx, gx + 2.8 * s, gy + 0.6 * s, 5.4 * s, 4.6 * s, P.silver);
@@ -1716,11 +1751,15 @@ const suite = () => bake('gb-suite', W, H, (c) => {
   R(c, 22, 62, 186, 70, P.slate);
   R(c, 22, 62, 186, 2, P.steel);
   R(c, 22, 64, 186, 1, P.fog);
-  for (let y = 70; y < 128; y += 9) {
-    for (let x = 28 + ((y / 9) & 1) * 7; x < 206; x += 14) {
-      R(c, x, y, 1, 1, P.ink);
-      R(c, x - 3, y + 4, 2, 1, P.ink);
-      R(c, x + 2, y + 4, 2, 1, P.ink);
+  // tufting: a button in each diamond, creases running to its neighbours
+  for (let y = 72; y < 128; y += 10) {
+    for (let x = 30 + ((y / 10) & 1) * 8; x < 206; x += 16) {
+      R(c, x, y - 1, 1, 1, P.steel);
+      R(c, x, y, 1, 1, P.black);
+      for (let k = 1; k <= 3; k++) {
+        R(c, x - k * 2, y + k, 1, 1, P.ink);
+        R(c, x + k * 2, y + k, 1, 1, P.ink);
+      }
     }
   }
   shadeBake(c, 22, 62, 186, 70, 0.78, (x) => (x - 100) / 120);
@@ -1742,27 +1781,27 @@ const suite = () => bake('gb-suite', W, H, (c) => {
   R(c, 212, 168, W - 212, 1, P.ink);
 });
 const bed = () => bake('gb-bed', W, H, (c) => {
-  // the duvet's top: moonlight on the right, lamplight on the left, soft folds
+  // the duvet's top: lamplight on the left, the room's dark on the right, soft folds
   pt(18, 126);
   pt(214, 126);
   pt(236, 172);
   pt(0, 172);
-  fillPts(c, P.silver, { d: P.fog, f: 0.22, m: 1, l: P.white, lf: 0.18, lm: 1, side: 1 });
+  fillPts(c, P.fog, { d: P.steel, f: 0.24, m: 1, l: P.silver, lf: 0.2, lm: 1, side: 1 });
   for (let k = 0; k < 5; k++) {
     const x = 40 + k * 38;
-    line(c, x, 130, x - 10 + (k & 1) * 6, 170, P.fog);
-    line(c, x + 1, 130, x - 9 + (k & 1) * 6, 170, P.white);
+    line(c, x, 131, x - 10 + (k & 1) * 6, 169, P.steel);
+    line(c, x + 1, 131, x - 9 + (k & 1) * 6, 169, P.silver);
   }
   // the turned-down corner: the duvet folded back shows the sheet
   pt(150, 128);
   pt(214, 128);
   pt(226, 152);
-  fillPts(c, P.white);
+  fillPts(c, P.silver);
   pt(150, 128);
   pt(226, 152);
   pt(176, 150);
-  fillPts(c, P.fog);
-  line(c, 150, 128, 226, 152, P.steel);
+  fillPts(c, P.steel);
+  line(c, 150, 128, 226, 152, P.fog);
   // a navy runner across the foot of the bed
   pt(14, 156);
   pt(230, 156);
@@ -1776,18 +1815,18 @@ const bed = () => bake('gb-bed', W, H, (c) => {
   pt(236, 172);
   pt(236, 216);
   pt(0, 216);
-  fillPts(c, P.fog);
-  R(c, 0, 172, 236, 1, P.white);
-  shadeBake(c, 0, 173, 236, 43, 0.72, (x, y) => (y - 176) / 34);
-  shadeBake(c, 0, 173, 236, 43, 0.8, (x, y) => (y - 196) / 24);
-  for (let x = 20; x < 236; x += 30) line(c, x, 174, x - 2, 216, A(P.steel, 0.6));
+  fillPts(c, P.steel);
+  R(c, 0, 172, 236, 1, P.silver);
+  shadeBake(c, 0, 173, 236, 43, 0.7, (x, y) => (y - 176) / 30);
+  shadeBake(c, 0, 173, 236, 43, 0.75, (x, y) => (y - 194) / 22);
+  for (let x = 20; x < 236; x += 30) line(c, x, 174, x - 2, 216, A(P.slate, 0.7));
   // the far pillow, already perfect, with its chocolate
   pillow(c, 72, 124, 54, 18, 1);
   R(c, 70, 120, 5, 3, P.brown);
   R(c, 70, 120, 5, 1, P.yellow);
   R(c, 74, 121, 1, 2, P.maroon);
 });
-const PILLOW_SH = { d: P.silver, f: 0.36, m: 1, dd: P.fog, df: 0.12, l: P.white, lf: 0.1, side: 1 };
+const PILLOW_SH = { d: P.fog, f: 0.36, m: 1, dd: P.steel, df: 0.12, l: P.white, lf: 0.14, side: 1 };
 /** A feather pillow: soft corners, three tones lit from the left, piping; sq < 1 squeezes it. */
 function pillow(ctx, cx, cy, w, h, sq) {
   const hw = (w / 2) * sq;
@@ -1800,10 +1839,10 @@ function pillow(ctx, cx, cy, w, h, sq) {
   pt(cx, cy + hh - 0.8);
   pt(cx - hw, cy + hh);
   pt(cx - hw + 2, cy);
-  fillPts(ctx, P.white, PILLOW_SH);
-  line(ctx, cx - hw + 2, cy - hh + 1, cx + hw - 3, cy - hh + 1, P.silver);
-  line(ctx, cx - hw + 3, cy + hh - 1, cx + hw - 2, cy + hh - 1, P.fog);
-  line(ctx, cx - hw * 0.3, cy - hh * 0.2, cx + hw * 0.2, cy + hh * 0.35, P.silver);
+  fillPts(ctx, P.silver, PILLOW_SH);
+  line(ctx, cx - hw + 2, cy - hh + 1, cx + hw - 3, cy - hh + 1, P.white);
+  line(ctx, cx - hw + 3, cy + hh - 1, cx + hw - 2, cy + hh - 1, P.steel);
+  line(ctx, cx - hw * 0.3, cy - hh * 0.2, cx + hw * 0.2, cy + hh * 0.35, P.fog);
 }
 // The plumping routine, 2.6 s, then it starts again from the top. The pillow's
 // path (0 on the bed .. 1 at her chest), the pats and the smoothing hand.
@@ -1931,6 +1970,15 @@ const diningTable = () => bake('gb-table', W, H, (c) => {
     R(c, cx + k - 1, 102, 1, 16, P.white);
     R(c, cx + k - 2, 117, 5, 1, P.fog);
   }
+  // wine glasses: a thin stem, a silver rim, a little claret
+  for (const [gx, gy] of [[104, 160], [318, 156]]) {
+    ellipse(c, gx, gy, 3, 0.9, P.fog);
+    R(c, gx, gy - 6, 1, 6, P.silver);
+    ellipse(c, gx, gy - 10, 3.4, 4, A(P.fog, 0.45));
+    R(c, gx - 2, gy - 9, 5, 2, P.maroon);
+    R(c, gx - 3, gy - 14, 7, 1, P.silver);
+    R(c, gx - 3, gy - 13, 1, 3, P.white);
+  }
   // the second place setting, and the guest's plate under its cloche
   ellipse(c, 300, 162, 16, 3.5, P.fog);
   ellipse(c, 300, 161.5, 15, 3, P.white);
@@ -1998,7 +2046,7 @@ function shotDinnerWide(ctx, lt) {
   armTo(QW, -1, CL_X + 3, 140, 1);
   armDraw(ctx, QW, WAITER, 'grip');
   // the diner's hands: one resting, the other up to read the watch
-  armTo(QN, -1, 112, 160, 0.6);
+  armTo(QN, -1, 114, 157, 0.35);
   armDraw(ctx, QN, DINER, 'rest');
   armTo(QN, 1, lerp(146, 140, watch), lerp(161, 122, watch), 1);
   armDraw(ctx, QN, DINER, watch > 0.3 ? 'grip' : 'rest');
@@ -2009,32 +2057,46 @@ function shotDinnerWide(ctx, lt) {
 }
 // The insert: the plate from above. A gloved hand lifts the cloche out of frame;
 // on the plate, eight truffles in a ring, lit one after another: the spinner.
+const PL_X = 192;
+const PL_Y = 124;
+/** Bands with narrow dithered seams (big flat areas, no noisy gradients). */
+const sharp = (v, n) => {
+  const q = c01(v) * n;
+  const i = floor(q);
+  return (i + smooth((q - i - 0.35) / 0.3)) / n;
+};
 const plateBg = () => bake('gb-plate', W, H, (c) => {
-  ditherField(c, 0, 0, W, H, [P.steel, P.fog, P.silver], (x, y) => 0.98 - hypot((x - 40) / 420, (y + 10) / 300) * 1.15);
-  R(c, 0, 186, W, 1, P.fog);
-  R(c, 0, 187, W, 1, P.silver);
-  glowBake(c, 30, 10, 200, 110, P.yellow, 0.1);
-  // the plate: shadow, rim, gold band, the well
-  ellipse(c, 196, 134, 84, 38, P.steel);
-  ellipse(c, 192, 130, 82, 36, P.fog);
-  ellipse(c, 191, 129, 80, 35, P.white, { d: P.silver, f: 0.16, m: 1, side: 1 });
-  ellipse(c, 191, 129, 67, 29, P.yellow);
-  ellipse(c, 191, 129, 66, 28.4, P.white);
-  ellipse(c, 192, 130, 56, 24, P.silver);
-  ellipse(c, 191, 129, 55, 23, P.white);
-  // cutlery
-  for (const [x, knife] of [[90, false], [100, false], [286, true], [296, true]]) {
-    R(c, x, 104, 3, 56, P.fog);
-    R(c, x, 104, 1, 56, P.white);
-    R(c, x + 3, 106, 1, 56, P.steel);
-    if (!knife) for (let k = 0; k < 3; k++) R(c, x - 1 + k * 2, 96, 1, 9, P.silver);
-    else R(c, x, 92, 4, 14, P.silver);
+  // linen from above: the candles' warm pool at the upper left, falling off
+  ditherField(c, 0, 0, W, H, [P.steel, P.fog, P.silver], (x, y) => sharp(1.05 - hypot((x - 70) / 330, (y + 10) / 240), 2));
+  R(c, 0, 196, W, 1, P.steel);
+  R(c, 0, 197, W, 1, P.fog);
+  glowBake(c, 40, 0, 220, 120, P.yellow, 0.08);
+  // the plate: its shadow, the rim, a gold band, the well
+  ellipse(c, PL_X + 5, PL_Y + 6, 95, 42, P.steel);
+  ellipse(c, PL_X, PL_Y, 94, 41, P.fog);
+  ellipse(c, PL_X - 1, PL_Y - 1, 92, 39.5, P.white, { d: P.silver, f: 0.14, m: 1, side: 1 });
+  for (let y = PL_Y - 40; y <= PL_Y + 40; y++) {
+    for (let x = PL_X - 92; x <= PL_X + 92; x++) {
+      const q = hypot((x + 0.5 - PL_X) / 78, (y + 0.5 - PL_Y) / 34);
+      if (q > 0.985 && q < 1.02) {
+        c.fillStyle = x < PL_X - 20 && y < PL_Y ? P.yellow : P.orange;
+        c.fillRect(x, y, 1, 1);
+      }
+    }
   }
-  // a wine glass, top right
-  ellipse(c, 334, 50, 16, 7, P.fog);
-  ellipse(c, 334, 50, 14.5, 5.8, P.silver);
-  ellipse(c, 335, 51, 12, 4.4, P.maroon);
-  R(c, 326, 48, 5, 1, P.white);
+  ellipse(c, PL_X + 1, PL_Y + 1, 64, 27, P.silver);
+  ellipse(c, PL_X, PL_Y, 63, 26, P.white);
+  // cutlery, laid square
+  for (const [x, knife] of [[70, false], [80, false], [304, true], [314, true]]) {
+    R(c, x + 1, 102, 3, 62, P.steel);
+    R(c, x, 100, 3, 62, P.fog);
+    R(c, x, 100, 1, 62, P.white);
+    if (!knife) for (let k = 0; k < 3; k++) R(c, x - 1 + k * 2, 90, 1, 11, P.silver);
+    else {
+      R(c, x, 84, 4, 18, P.silver);
+      R(c, x, 84, 1, 18, P.white);
+    }
+  }
 });
 const TRUFFLE_DARK = { d: P.black, f: 0.45, m: 1, l: P.slate, lf: 0.2, lm: 1, side: 1 };
 const TRUFFLE_GOLD = { d: P.orange, f: 0.4, m: 1, dd: P.tanShade, df: 0.12, l: P.cream, lf: 0.2, lm: 1, side: 1 };
@@ -2042,17 +2104,18 @@ const TRUFFLE_WARM = { d: P.brown, f: 0.4, m: 1, l: P.tanShade, lf: 0.2, lm: 1, 
 function shotPlate(ctx, t) {
   ctx.drawImage(plateBg(), 0, 0);
   // eight truffles in a ring; the lit one walks round like a loading spinner
-  const head = floor(mod(t * 7, 8));
+  const head = floor(mod(t * 5, 8));
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * TAU - PI / 2;
-    const x = 191 + cos(a) * 31;
-    const y = 128 + sin(a) * 13;
+    const x = PL_X + cos(a) * 38;
+    const y = PL_Y - 1 + sin(a) * 15.5;
     const age = (head - k + 8) % 8;
-    ellipse(ctx, x + 1.5, y + 2.5, 5, 2.4, P.fog);
-    if (age === 0) ellipse(ctx, x, y, 4.6, 3.8, P.yellow, TRUFFLE_GOLD);
-    else if (age <= 2) ellipse(ctx, x, y, 4.6, 3.8, P.tanShade, TRUFFLE_WARM);
-    else ellipse(ctx, x, y, 4.6, 3.8, P.ink, TRUFFLE_DARK);
-    R(ctx, x - 2, y - 2, 1, 1, age === 0 ? P.white : P.fog);
+    ellipse(ctx, x + 2, y + 3, 6.5, 2.8, P.silver);
+    if (age === 0) ellipse(ctx, x, y, 6, 5, P.yellow, TRUFFLE_GOLD);
+    else if (age <= 2) ellipse(ctx, x, y, 6, 5, P.tanShade, TRUFFLE_WARM);
+    else ellipse(ctx, x, y, 6, 5, P.ink, TRUFFLE_DARK);
+    R(ctx, x - 3, y - 3, 2, 1, age === 0 ? P.white : P.steel);
+    R(ctx, x - 3, y - 2, 1, 1, age === 0 ? P.cream : P.slate);
   }
   // steam, once the cloche is off
   const st = prog(t, 0.75, 1.3);
@@ -2060,8 +2123,8 @@ function shotPlate(ctx, t) {
     for (let w = 0; w < 3; w++) {
       for (let i = 0; i < 9; i++) {
         const u = mod(i / 9 + t * 0.35 + w * 0.31, 1);
-        const sx = 172 + w * 19 + sin(u * 5 + w * 2 + t * 1.5) * (2 + u * 4);
-        const sy = 122 - u * 46;
+        const sx = PL_X - 22 + w * 21 + sin(u * 5 + w * 2 + t * 1.5) * (2 + u * 4);
+        const sy = PL_Y - 4 - u * 50;
         ctx.fillStyle = A(P.white, 0.45 * st * (1 - u) * (u < 0.1 ? u * 10 : 1));
         ctx.fillRect(round(sx), round(sy), 1, 2);
       }
@@ -2072,17 +2135,17 @@ function shotPlate(ctx, t) {
   const oy = -lift * 190;
   if (lift < 0.35) {
     ctx.globalAlpha = 0.45 * (1 - lift / 0.35);
-    ellipse(ctx, 194, 134, 70, 28, P.steel);
+    ellipse(ctx, PL_X + 4, PL_Y + 6, 84, 34, P.steel);
     ctx.globalAlpha = 1;
   }
-  if (oy > -170) {
-    cloche(ctx, 191, 134 + oy, 70, 60);
-    // the gloved hand on the knob, the white sleeve running out of frame
-    const kx = 191;
-    const ky = 134 + oy - 64;
-    capsule(ctx, kx + 8, ky - 4, kx + 60, ky - 70, 7, 9, P.fog);
-    capsule(ctx, kx + 8, ky - 5, kx + 60, ky - 71, 5.5, 7.5, P.silver);
-    capsule(ctx, kx + 5, ky - 2, kx + 10, ky - 7, 5, 5, P.white);
+  if (oy > -175) {
+    cloche(ctx, PL_X, PL_Y + 8 + oy, 82, 64);
+    // the gloved hand on the knob, the grey sleeve running out of frame
+    const kx = PL_X;
+    const ky = PL_Y + 8 + oy - 68;
+    capsule(ctx, kx + 8, ky - 4, kx + 60, ky - 70, 7, 9, P.steel);
+    capsule(ctx, kx + 8, ky - 5, kx + 60, ky - 71, 5.5, 7.5, P.fog);
+    capsule(ctx, kx + 5, ky - 2, kx + 10, ky - 7, 5, 5, P.silver);
     ellipse(ctx, kx + 1, ky + 1, 6, 5, P.silver, { d: P.fog, f: 0.35, m: 1, side: 1 });
     for (let k = 0; k < 3; k++) R(ctx, kx - 4 + k * 3, ky + 3, 2, 1, P.fog);
     R(ctx, kx - 3, ky - 3, 3, 1, P.white);

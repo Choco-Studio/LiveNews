@@ -28,17 +28,19 @@ export function wobble(t, seed) {
 }
 
 const SCHEDULES = new Map();
-/** Blink and saccade timetables for a seed, generated once for 15 minutes. */
+const SPAN = 900; // s covered by one timetable; later times wrap (t mod SPAN)
+/** Blink and saccade timetables for a seed, generated once for 15 minutes (applyIdle wraps t). */
 export function schedule(seed, persona) {
-  const key = `${seed}|${persona.blinkMin}|${persona.blinkMax}`;
+  const doubles = persona.doubleBlink ?? 0.12;
+  const key = `${seed}|${persona.blinkMin}|${persona.blinkMax}|${doubles}`;
   let s = SCHEDULES.get(key);
   if (s) return s;
   const rnd = mulberry(seed * 7919 + 13);
   const blinks = [];
   let t = 0.6 + rnd() * 1.5;
-  while (t < 900) {
+  while (t < SPAN - 1) {
     blinks.push(t);
-    if (rnd() < 0.12) blinks.push(t + 0.27 + rnd() * 0.06); // a double blink now and then
+    if (rnd() < doubles) blinks.push(t + 0.27 + rnd() * 0.06); // a double blink now and then (persona.doubleBlink: 0 for UNIT-8)
     // spread a little wider than the persona's range: speech and gaze shifts add their
     // own blinks, and a newsreader who blinks too often reads as nervous (~15/min overall)
     t += (persona.blinkMin + rnd() * (persona.blinkMax - persona.blinkMin)) * 1.4;
@@ -46,7 +48,7 @@ export function schedule(seed, persona) {
   const sacc = [];
   t = 0;
   let x = 0, y = 0;
-  while (t < 900) {
+  while (t < SPAN) {
     sacc.push(t, x, y);
     t += 0.5 + rnd() * 1.9;
     // mostly small fixations near the lens, sometimes a slightly bigger glance
@@ -113,7 +115,7 @@ export function blinkCurve(dt) {
  */
 export function applyIdle(c, persona, perf, t, seed, gestLook) {
   const p = persona;
-  const br = 0.5 - 0.5 * Math.cos((t * 2 * Math.PI) / (4.1 + 0.3 * Math.sin(seed)) + seed);
+  const br = (0.5 - 0.5 * Math.cos((t * 2 * Math.PI) / (4.1 + 0.3 * Math.sin(seed)) + seed)) * (p.breath ?? 1);
   c.breathe = br;
   c.bx += p.sway * (0.45 * Math.sin(t * 0.68 + seed) + 0.22 * Math.sin(t * 1.53 + seed * 2));
   c.lean += p.sway * 0.006 * Math.sin(t * 0.55 + seed * 3);
@@ -127,19 +129,22 @@ export function applyIdle(c, persona, perf, t, seed, gestLook) {
   const act = fr ? fr.act || 0 : 0;
   // blinks: the timetable, unless an event blink sits within 1.2 s of it (about one blink every 3-4 s overall)
   const tb = eventBlink(perf, fr, t, seed);
-  const bi = upperBound(sch.blinks, t);
+  // the timetables cover SPAN s; later instants wrap (a blink or a fixation may be cut at the seam once every 15 min)
+  const tw = t >= 0 && t < SPAN ? t : ((t % SPAN) + SPAN) % SPAN;
+  const off = t - tw;
+  const bi = upperBound(sch.blinks, tw);
   let blink = tb > FAR ? blinkCurve(t - tb) : 0;
   for (let q = Math.max(0, bi - 1); q <= bi && q >= 0; q++) {
-    const b = sch.blinks[q];
+    const b = sch.blinks[q] + off;
     if (tb > FAR && Math.abs(b - tb) < 1.2) continue;
     blink = Math.max(blink, blinkCurve(t - b));
   }
   c.blink = blink;
   // saccades: 45 ms eased jumps between fixations, closer to the lens while talking,
   // damped while a look or a gesture drives the eyes
-  const si = upperBound(sch.sacc, t, 3);
+  const si = upperBound(sch.sacc, tw, 3);
   if (si >= 0) {
-    const t0 = sch.sacc[si * 3];
+    const t0 = sch.sacc[si * 3] + off;
     const px = si > 0 ? sch.sacc[si * 3 - 2] : 0, py = si > 0 ? sch.sacc[si * 3 - 1] : 0;
     const u = smooth((t - t0) / 0.045);
     const sx = px + (sch.sacc[si * 3 + 1] - px) * u, sy = py + (sch.sacc[si * 3 + 2] - py) * u;

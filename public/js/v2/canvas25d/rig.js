@@ -163,6 +163,22 @@ function fromPose(list, i) {
   return f;
 }
 
+const TMPW = [0, 0, 0];
+/** How long the hand takes to blend from the interrupted pose into this gesture (memoised on the event). */
+function fromTime(g, d, from) {
+  if (g._fromT && g._fromTFor === from) return g._fromT;
+  let dist = 0;
+  for (const ch of d._ch) {
+    if (ch.ch !== 'wrist' && ch.ch !== 'wristF') continue;
+    const v = evalTrack(ch.keys, d.apex, TMPW);
+    const f = from[ch.ch];
+    dist = Math.max(dist, Math.hypot(v[0] - f[0], v[1] - f[1], v[2] - f[2]));
+  }
+  g._fromT = Math.max(0.15, d.apex, 0.25 + dist / 40);
+  g._fromTFor = from;
+  return g._fromT;
+}
+
 function applyGestureRange(c, list, upto, t, mode) {
   let gestLook = 0;
   for (let i = 0; i < upto; i++) {
@@ -178,10 +194,14 @@ function applyGestureRange(c, list, upto, t, mode) {
     const lt = (t - g.t0) * rate;
     const amp = g.amp == null ? 1 : clamp(g.amp, 0.5, 1);
     // an interrupted gesture hands its head/body motion over to the interrupter
-    const cut = mode === MODE_ARM ? Infinity : interruptAt(list, i, d);
+    const cut = interruptAt(list, i, d);
+    // (its arm channels too: once the interrupter has taken over, the old gesture must not come back
+    // when the new one ends)
     const wAdd = cut === Infinity ? w : w * (1 - smooth((t - cut) / 0.3));
+    const wArm = cut === Infinity ? w : w * (1 - smooth((t - cut - INTERRUPT_FADE) / 0.3));
     const from = ii >= 0 && mode !== MODE_LAG ? fromPose(list, i) : null;
-    const decay = from ? 1 - smooth(lt / Math.max(0.15, d.apex)) : 0;
+    // the offset from the interrupted pose decays by the apex, or later when the hand has far to go
+    const decay = from ? 1 - smooth(lt / fromTime(g, d, from)) : 0;
     const chs = d._ch;
     for (let q = 0; q < chs.length; q++) {
       const ch = chs[q];
@@ -199,11 +219,11 @@ function applyGestureRange(c, list, upto, t, mode) {
             const r = ch.rest, k2 = ch.ch[0] === 'w' ? amp : 0.5 + amp * 0.5;
             for (let k = 0; k < v.length; k++) v[k] = r[k] + (v[k] - r[k]) * k2;
           }
-          for (let k = 0; k < dst.length; k++) dst[k] += (v[k] - dst[k]) * w;
+          for (let k = 0; k < dst.length; k++) dst[k] += (v[k] - dst[k]) * wArm;
         } else {
           let v = evalTrack(ch.keys, tt);
           if (from) v += (from[ch.ch] - ch.start) * decay;
-          c[ch.ch] += (v - c[ch.ch]) * w;
+          c[ch.ch] += (v - c[ch.ch]) * wArm;
         }
       } else {
         c[ch.ch] += (evalTrack(ch.keys, tt) - ch.rest) * wAdd * amp;

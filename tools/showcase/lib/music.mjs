@@ -91,8 +91,13 @@ export function deriveCues(log, { headlineLead = 0.3 } = {}) {
         if (last) add(last.end + 100, 'introEnd', {}, 'end of the intro');
       } else if (e.type === 'story') {
         add(e.t - 20, 'item', {}, 'item cut');
-        const moment = e.breaking ? 'story' : e.feature === 'roundup' ? 'roundup' : e.feature === 'lighter' ? 'finally' : e.feature === 'number' ? 'number' : 'story';
-        add(e.t, moment, { emotion, grave, breaking: Boolean(e.breaking), segment }, `${moment} (${emotion}${e.breaking ? ', breaking' : ''})`);
+        // Grave items stay 'story' whatever their feature, so the cue sheet keeps
+        // them and the next segment dry. A breaking story is treated as grave:
+        // the channel has just played its own breaking cue on the card, so the
+        // bed engine must not add a second sting.
+        const heavy = grave || Boolean(e.breaking);
+        const moment = heavy ? 'story' : e.feature === 'roundup' ? 'roundup' : e.feature === 'lighter' ? 'finally' : e.feature === 'number' ? 'number' : 'story';
+        add(e.t, moment, { emotion, grave: heavy, breaking: false, segment }, `${moment} (${emotion}${e.breaking ? ', breaking' : ''}${e.feature ? `, ${e.feature}` : ''})`);
         if (e.feature === 'lighter' && last) add(last.end + 150, 'featureEnd', {}, 'end of the feature');
       } else if (e.type === 'chat') {
         add(e.t, 'chat', { emotion, grave, segment }, `chat (${emotion})`);

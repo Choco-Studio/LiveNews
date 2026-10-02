@@ -49,7 +49,7 @@ function drawBobAndStuds(buf, L, m, head, s, sk) {
 // clumps fall from the crown with broken separations. LOD: wides keep the
 // silhouette and two tones, mediums a narrow sheen band, close-ups the clumps.
 const LXY = new LocalXY();
-const CO = { cw: 1.55, s: 1, seed: 11, sep: true, hiLo: 2.4, hiHi: 8.6, hiW: 0.42, gap: 4.2, keepLit: true };
+const CO = { cw: 1.55, s: 1, seed: 11, sep: true, hiLo: 3.6, hiHi: 9.2, hiW: 0.42, gap: 4.2, keepLit: true };
 export function drawBob(buf, L, m, head, s, lag) {
   const H = L.head;
   const cyc = H.craniumY - 0.3;
@@ -120,8 +120,10 @@ export function drawBob(buf, L, m, head, s, lag) {
     const v = Math.atan2(dxc, Math.max(0.2, dyc)) * Math.max(5.2, u) + 30;
     if (nearFace) return Math.max(t, x > 0 ? 3 : 2);
     if (underside) return Math.max(t, x > 0 ? 3 : 2);
-    if (x * x + (y - cyc) * (y - cyc) > (RV - 0.5) * (RV - 0.5) && y < cyc && t >= 2) return t; // clean outer edge for the rim
-    return clumpTone(t, v, u, CO);
+    const d2 = x * x + (y - cyc) * (y - cyc);
+    if (d2 > (RV - 0.5) * (RV - 0.5) && y < cyc && t >= 2) return t; // clean outer edge for the rim
+    // the sheen is a band at a fixed "latitude" of the dome (distance from the dome's centre), not round the crown
+    return clumpTone(t, v, Math.sqrt(d2), CO);
   });
 }
 

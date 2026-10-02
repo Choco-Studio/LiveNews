@@ -26,6 +26,7 @@ export const FACE_KEYS = ['brow', 'browIn', 'smile', 'squint', 'lid', 'wide', 'l
 //   level   the voice envelope 0..1 (30 ms attack, 120 ms release) for UNIT-8's
 //           speech indicator (PRESENTERS B), written by speech.js
 //   t       the evaluation time (s), so face hooks can quantise their own updates
+// (solveFace also passes f.speech = perf.speech and f.speaking, set by speech.js)
 export const FACE_REST = { mwide: 0, level: 0, t: 0 };
 
 /** Layer 2: perf.emotions = [{ t0, name }] (sorted), crossfaded; plus the persona's resting smile. */
@@ -69,5 +70,8 @@ export function solveFace(c, f, m) {
   f.jaw = c.jaw || 0;
   f.level = c.level || 0;
   f.t = c.t || 0;
+  // for faces drawn by a look's own hook (UNIT-8's indicator): the live source and its state
+  f.speech = c.speech || null;
+  f.speaking = !!c.speaking;
   return f;
 }

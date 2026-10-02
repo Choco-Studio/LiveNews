@@ -123,7 +123,7 @@ const techBed = (light) => ({
     pad({ n: 4, lo: 52, hi: 71, a: 1, r: 2, cut: 700, cutTo: 1000, level: -13, no7: true }),
     bass({ pattern: [[0, 1.7, 'r', 0.8], [2.5, 1.2, 'r', 0.55]], level: -12 }),
     // The arpeggio carries the 9th (motif cell: 1, 2, 5) above the triad pad.
-    arp({ wave: 'pulse12', rate: 2, shape: 'cell', lo: 69, span: 1, decay: 0.16, cut: 1700, cutEnd: 450, level: -18, vel: 0.5, dly: 0.35 }),
+    arp({ wave: 'pulse12', rate: 2, shape: 'cell', variants: ['cell', 'cell', 'up', 'updown'], lo: 69, span: 1, decay: 0.16, cut: 1700, cutEnd: 450, level: -18, vel: 0.5, dly: 0.35 }),
     ...(light ? [kit({ shaker: '..3...3...3...3.', level: -15 })] : []),
     motif({ inst: 'pluck', gate: true, at: 4, oct: 69, level: -17 }), // on Am9: its b7 colour is a chord tone
   ],

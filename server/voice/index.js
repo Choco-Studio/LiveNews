@@ -7,8 +7,15 @@ export { VoiceService } from './service.js';
 
 export function createVoiceService(config, { root, log = console } = {}) {
   const service = new VoiceService({ config: config.voice || {}, root, log });
-  // The worker must not outlive the server (it would hold ~0.5 GB and a CPU).
+  // The workers must not outlive the server (each holds ~0.6 GB and a CPU):
+  // close them on exit and on SIGINT/SIGTERM, then let the signal do its default.
   const stop = () => service.close();
   process.once('exit', stop);
+  for (const sig of ['SIGINT', 'SIGTERM']) {
+    process.once(sig, () => {
+      stop();
+      process.kill(process.pid, sig);
+    });
+  }
   return service;
 }

@@ -35,6 +35,7 @@ const KEYS = [
   'KOKORO_DIR',
   'KOKORO_THREADS',
   'VOICE_PYTHON',
+  'VOICE_WORKERS',
   'VOICE_BUDGET_S',
   'VOICE_CACHE_MB',
 ];
@@ -159,6 +160,7 @@ describe('config from the environment', () => {
       kokoroDir: '',
       threads: 0,
       python: 'python3',
+      workers: 1,
       budgetSeconds: 90,
       cacheMb: 300,
       dir: path.join(REPO, 'data', 'voice'),
@@ -201,7 +203,7 @@ describe('.env.example', () => {
   test('the example values for the tuning knobs are the defaults', async () => {
     const defaults = await loadConfig();
     const fromExample = await loadConfig(
-      Object.fromEntries(['HOST', 'PORT', 'PROVIDERS', 'QUEUE_SIZE', 'CANDIDATE_POOL', 'REVIEW_PASS', 'MIN_NEW_STORIES', 'MAX_STORY_AGE_HOURS', 'FEED_REFRESH_MINUTES', 'CODEX_TIMEOUT_MS', 'VOICE_ENGINE', 'KOKORO_DIR', 'KOKORO_THREADS', 'VOICE_PYTHON', 'VOICE_BUDGET_S', 'VOICE_CACHE_MB'].map((k) => [k, example[k]]))
+      Object.fromEntries(['HOST', 'PORT', 'PROVIDERS', 'QUEUE_SIZE', 'CANDIDATE_POOL', 'REVIEW_PASS', 'MIN_NEW_STORIES', 'MAX_STORY_AGE_HOURS', 'FEED_REFRESH_MINUTES', 'CODEX_TIMEOUT_MS', 'VOICE_ENGINE', 'KOKORO_DIR', 'KOKORO_THREADS', 'VOICE_PYTHON', 'VOICE_WORKERS', 'VOICE_BUDGET_S', 'VOICE_CACHE_MB'].map((k) => [k, example[k]]))
     );
     // A .env made from the example turns the neural voices on; everything else about them is the default.
     assert.deepEqual(fromExample.voice, { ...defaults.voice, engine: 'kokoro' });

@@ -84,8 +84,9 @@ const N = 8192; // ring size: 120 s at 60 fps fits
 const BINS = 400; // histogram: 0.1 ms bins up to 40 ms (+ overflow)
 
 export class PerfWatchdog {
-  constructor({ log = null, report = false } = {}) {
+  constructor({ log = null, info = log, report = false } = {}) {
     this.log = log;
+    this.info = info;
     this.report = report; // ?perf=1: p50/p95 every 10 s
     this.ts = new Float64Array(N);
     this.ms = new Float32Array(N);
@@ -112,7 +113,7 @@ export class PerfWatchdog {
     if (this.report && t >= this.nextReport) {
       if (this.nextReport) {
         const r = this.percentiles(t, 10);
-        this.log?.(`v2 perf p50 ${r.p50.toFixed(2)} ms, p95 ${r.p95.toFixed(2)} ms over ${r.count} frames (level ${this.level})`);
+        this.info?.(`v2 perf p50 ${r.p50.toFixed(2)} ms, p95 ${r.p95.toFixed(2)} ms over ${r.count} frames (level ${this.level})`);
       }
       this.nextReport = t + 10;
     }

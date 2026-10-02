@@ -295,7 +295,7 @@ const ENDS_NEAR = [
   ['...kkkkk...', '..kmmmmmk..', '.kmbtbbbmk.', 'kmbbbmmmbmk', 'kmbbmkkkmmk', 'kmbbmkkkmmk', 'kmbbbmmmbmk', 'kmbbbbbbbmk', '.kmbbbbbmk.', '..kmmmmmk..', '...kkkkk...'],
   ['...kkkkk...', '..kbbbbbk..', '.kbtttttbk.', 'kbttoootbbk', 'kbtobbbotbk', 'kbtobkbotbk', 'kbtobbbotbk', 'kbttoootbbk', '.kbtttttbk.', '..kbbbbbk..', '...kkkkk...'],
 ];
-const ENDS_FAR = [['.kmk.', 'kmbmk', 'mbkbm', 'kmbmk', '.kmk.'], ['.kmk.', 'kbbmk', 'mbkmm', 'kmmmk', '.kmk.'], ['.kbk.', 'kbtbk', 'btobb', 'kbtbk', '.kbk.']];
+const ENDS_FAR = [['.mmm.', 'mbbbm', 'mbkbm', 'mbbbm', '.mmm.'], ['.mmm.', 'mtbbm', 'mbkbm', 'mmbbm', '.mmm.'], ['.bbb.', 'bttob', 'btkob', 'bttob', '.bbb.']];
 const DARK_KEY = { k: P.black, m: P.maroon, b: P.brown, t: P.tanShade, o: P.tanShade, c: P.cream };
 // in the beam: one step warmer, the glass rim catches the light
 const LIT_KEY = { k: P.maroon, m: P.brown, b: P.tanShade, t: P.orange, o: P.yellow, c: P.cream };
@@ -452,7 +452,7 @@ const CUTS = { cv: null, top: 0, h: 0, turn: 0.3 };
 const TUMBLER_O = { rows: 0, ramp: AMBER, ambient: 0.16, glass: TGLASS, stripes: T_STRIPES, label: CUTS, rim: RIM, tilt: 0.2, seam: 0.5 };
 const BASE_O = { rows: 0, ramp: CRYSTAL, ambient: 0.3, stripes: T_STRIPES, rim: false, tilt: 0.2, seam: 0.12 }; // clean bands, no dither noise
 const cutsTex = lazy(() =>
-  cached('bf-cuts', 220, 28, (c) => {
+  cached('bf-cuts', 220, 28, function paintCuts(c) {
     // a band of diamond cuts: two families of diagonals, brighter where they cross
     for (let y = 0; y < 28; y++) {
       for (let x = 0; x < 220; x++) {
@@ -463,7 +463,7 @@ const cutsTex = lazy(() =>
       }
     }
     R(c, 0, 0, 220, 1, P.tanShade);
-  }),
+  }, { cpu: true }),
 );
 
 const ICE = [[0, 0], [0, 0], [0, 0], [0, 0]];
@@ -1039,7 +1039,7 @@ function shotHero(ctx, lt) {
   ctx.restore();
   contact(ctx, 192, base + 1, round(36 * k), 0.5);
   BO.rimK = 0.95 * up;
-  BO.text = 0.35 + 0.65 * up;
+  BO.text = 0.15 + 0.85 * up;
   bottle(ctx, 192, base + 2, k, texHero(), BO);
   glintStar(ctx, 188, base + 2 - round((BODY_H + STOP_H) * k) + 3, (lt - 2.55) / 0.8, P.white);
   vignette(ctx, 0.65);

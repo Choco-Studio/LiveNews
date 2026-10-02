@@ -74,6 +74,13 @@ const poolLight = (p, X, Y) => {
   return d >= 1 ? 0 : p.amount * (1 - d) * (1 - d * 0.35);
 };
 
+const BAND0 = 0.24, BAND1 = 0.76;
+const band = (f) => (f <= BAND0 ? 0 : f >= BAND1 ? 1 : (f - BAND0) / (BAND1 - BAND0));
+const posterise = (pos) => {
+  const i = Math.floor(pos);
+  return i + band(pos - i);
+};
+
 const BAKED = new Map();
 
 /**
@@ -128,12 +135,14 @@ function bakeWall(style) {
       if (ax > sd.x0) pos *= 1 - smooth((ax - sd.x0) / (sd.x1 - sd.x0));
       if (pos < 0) pos = 0;
       if (pos > RAMP.length - 1.01) pos = RAMP.length - 1.01;
-      const q = Math.round(pos * 16);
+      // clean clusters: flat ramp steps with the Bayer only in the band between them (a pixel
+      // artist's posterised gradient), instead of dither over the whole pool
+      const q = Math.round(posterise(pos) * 16);
       let tq = 0;
       if (style.tints) {
         let tv = 0;
         for (const p of style.tintPools) tv += poolLight(p, X, Y);
-        tq = Math.min(15, Math.round(tv * 16));
+        tq = Math.min(15, Math.round(band(tv) * 16));
       }
       tex[ty * TW + tx] = (tq << 8) | ((q >> 4) << 4) | (q & 15);
     }
@@ -154,12 +163,15 @@ const THR = new Uint8Array(4);
 /**
  * Render the baked wall light above row `yEnd` (the floor covers the rest), skipping the screen
  * rectangle [sx0, sx1) x [sy0, sy1) (the wall content covers it). One texture read and one or two
- * Bayer compares per pixel; the dither is anchored to the layer's whole-pixel offset.
+ * Bayer compares per pixel; the dither is anchored to the screen.
  */
 function renderWall(fr, cam, baked, sx0, sy0, sx1, sy1, yEnd) {
   const k = kAt(cam, SET.wallZ);
   const inv = 1 / k;
-  const ox = Math.round(sxOf(cam, k, 0)), oy = Math.round(syOf(cam, k, 0));
+  // the Bayer index is anchored to the SCREEN: the camera only dollies (CAMERA), so each pixel's
+  // light level changes monotonically during a move and flips at most once (a layer anchor would
+  // re-step and re-dither whole pools)
+  const ox = 0, oy = 0;
   for (let x = 0; x < W; x++) {
     let tx = Math.floor(cam.x + (x + 0.5 - 192) * inv - TX0);
     COL[x] = tx < 0 ? 0 : tx >= TW ? TW - 1 : tx;
@@ -205,6 +217,8 @@ const CACHE = {
   deskClip: new Int16Array(W),
   hits: 0,
   misses: 0,
+  patches: 0,
+  deskSafe: false, // the desk never covers the wall (so a wall patch can go into the composite)
   lastMs: 0,
   // the last background drawn (for drawDesk's default style and its cache key)
   style: null,
@@ -228,7 +242,7 @@ export function setCacheEnabled(on) {
 }
 /** Cache counters for labs and the INTEGRATION watchdog. */
 export function bgStats() {
-  return { hits: CACHE.hits, misses: CACHE.misses, enabled: CACHE.on };
+  return { hits: CACHE.hits, misses: CACHE.misses, patches: CACHE.patches, enabled: CACHE.on };
 }
 /** Forget the cached frames (e.g. after an external change of shared images). */
 export function invalidateSet() {
@@ -253,6 +267,10 @@ const sameKey = (a, b, n) => {
   for (let i = 0; i < n; i++) if (a[i] !== b[i]) return false;
   return true;
 };
+const sameKeyBut = (a, b, skip) => {
+  for (let i = 0; i < 10; i++) if (i !== skip && a[i] !== b[i]) return false;
+  return true;
+};
 
 // ---------------------------------------------------------------------------
 // Background: back wall, video wall, set flats, practicals, floor
@@ -273,6 +291,20 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   if (CACHE.on && sameKey(KEY, CACHE.bgKey, 10)) {
     fr.px.set(CACHE.bg);
     CACHE.hits++;
+    CACHE.deskReady = true;
+    return;
+  }
+  // same camera, style and set; only the wall's pixels changed (the globe turning, the planet's
+  // light, a map flying in, a wipe): patch the wall into the cached frames instead of redrawing
+  if (CACHE.on && sameKeyBut(KEY, CACHE.bgKey, 7)) {
+    blitWall(CACHE.bg, wall, r.x0, r.y0, r.x1, r.y1);
+    if (CACHE.deskSafe && sameKey(CACHE.deskKey, CACHE.bgKey, 10)) {
+      blitWall(CACHE.desk, wall, r.x0, r.y0, r.x1, r.y1);
+      CACHE.deskKey[7] = KEY[7];
+    }
+    CACHE.bgKey[7] = KEY[7];
+    fr.px.set(CACHE.bg);
+    CACHE.patches++;
     CACHE.deskReady = true;
     return;
   }
@@ -339,13 +371,14 @@ function drawScreen(fr, r, b, style, soft, wall) {
   blitWall(fr, wall, x0, y0, x1, y1);
 }
 
+/** Copy the wall buffer into its rectangle of a frame (or of a cached Uint32 frame). */
 function blitWall(fr, wall, x0, y0, x1, y1) {
   const w = x1 - x0;
   const buf = wall.buf;
   if (!buf || w <= 0) return;
   const xa = Math.max(0, x0), xb = Math.min(W, x1);
   if (xb <= xa) return;
-  const px = fr.px;
+  const px = fr.px || fr;
   for (let y = Math.max(0, y0); y < Math.min(H, y1); y++) {
     let src = (y - y0) * w + (xa - x0);
     const end = y * W + xb;
@@ -405,6 +438,7 @@ function drawFloor(fr, cam, style) {
 // The wall's interior rectangle on screen
 
 const RECT = { x0: 0, y0: 0, x1: 0, y1: 0, k: 1 };
+const RECT2 = { x0: 0, y0: 0, x1: 0, y1: 0, k: 1 };
 
 /** Screen rectangle [x0, x1) x [y0, y1) of the video wall's interior for a camera, and its px per unit. */
 export function wallRect(cam, out = { x0: 0, y0: 0, x1: 0, y1: 0, k: 1 }) {
@@ -492,9 +526,10 @@ function interpCol(xs, ys, n, x) {
 }
 
 // Front panel layout in world units below the desk top (Y = 0 .. deskH)
-const LED_Y = 4; // the accent line, right under the fascia
-const PLATE_Y0 = 9, PLATE_Y1 = 25, PLATE_HW = 26;
-const PANEL_SPLIT = 34; // the front panel's upper colour down to here, its lower colour below (a shadow line)
+// the plate sits high, so y 136-168 (captions over the wide) stays plain (graphics request)
+const LED_Y = 2; // the accent line, right under the silver edge
+const PLATE_Y0 = 3.2, PLATE_Y1 = 15.6, PLATE_HW = 30;
+const PANEL_SPLIT = 28; // the front panel's upper colour down to here (above y 150 in the wide), its lower colour below
 const REFLECT = { red: 'maroon', cyan: 'navy', magenta: 'purple', yellow: 'brown', darkGreen: null };
 
 /** Draw the desk; fills clipRows (Int16Array W) with the desk top's back edge per column. */
@@ -521,6 +556,11 @@ export function drawDesk(fr, cam, clipRows, accent) {
     }
   }
   rasterDesk(fr, cam, clipRows, led, style);
+  // is every desk column under the wall's bottom bezel? (then wall patches may go into the composite)
+  const r = wallRect(cam, RECT2);
+  let safe = true;
+  for (let x = Math.max(0, r.x0 - 4); x < Math.min(W, r.x1 + 4); x++) if (clipRows[x] < r.y1 + 4) safe = false;
+  CACHE.deskSafe = safe;
   if (deskKeyOk) {
     CACHE.desk.set(fr.px);
     CACHE.deskClip.set(clipRows);

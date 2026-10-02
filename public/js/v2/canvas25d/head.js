@@ -248,8 +248,8 @@ function faceMap(L) {
 // Light-term thresholds per level of detail: [highlight, base, shade] (below: deep).
 const TONES = [
   [9, 0.3, -0.42], // wide: lit / shade, no highlight, deep only under the jaw
-  [0.985, 0.32, -0.16], // medium
-  [0.95, 0.36, -0.07], // close-up
+  [0.985, 0.26, -0.2], // medium
+  [0.95, 0.28, -0.1], // close-up
 ];
 const HW_LUT = new Float32Array(1024);
 // Per-frame state of the head being drawn (module scratch: no closure, no allocation).
@@ -412,16 +412,27 @@ export function drawEars(buf, L, m, head, s) {
     const ex = side * (hw + 0.25 - Math.max(0, turn) * 2.4 + Math.min(0, turn) * 0.4);
     head.toScreenInto(ex, E.y, EP);
     const sx = EP[0], sy = EP[1];
+    const rx = E.w * s, ry = E.h * 0.5 * s, rot = head.roll + side * 0.12;
     // lit from camera-left: the near (left) ear one tone lighter than the far one
-    buf.ellipse(sx, sy, E.w * s, E.h * 0.5 * s, m.skin, head.roll + side * 0.12, side > 0 ? 1 : 0);
-    if (s >= 2) {
-      // the inner fold: a short curve of shade inside the rim, open toward the face
-      const r = E.h * 0.5 * s;
-      const ix = Math.round(sx - side * 0.2 * s);
-      const iy = Math.round(sy);
-      const len = Math.max(1, Math.round(r * 0.55));
-      for (let j = -len; j <= len; j++) buf.paint(ix + (Math.abs(j) === len ? -side : 0), iy + j, m.skin, 2);
-      if (s >= 3) buf.paint(ix - side, iy + len, m.skin, 3);
+    buf.ellipse(sx, sy, rx, ry, m.skin, rot, side > 0 ? 1 : 0);
+    if (s < 2) continue;
+    // close-ups: the helix rim stays lit, the bowl inside it (concha) sits in shade with
+    // a deeper canal toward the face, and the lobe below is fleshy and lit
+    const c = Math.cos(rot), sn = Math.sin(rot);
+    const g = buf.g, far = side > 0 ? 1 : 0;
+    const x0 = Math.floor(sx - rx - 1), x1 = Math.ceil(sx + rx + 1), y0 = Math.floor(sy - ry - 1), y1 = Math.ceil(sy + ry + 1);
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const px = x + 0.5 - sx, py = y + 0.5 - sy;
+        const u = (px * c + py * sn) / rx, v = (-px * sn + py * c) / ry;
+        const r2 = u * u + v * v;
+        if (r2 > 1) continue;
+        const inward = -u * side; // toward the face
+        let t = -1;
+        if (v > 0.5) t = 1 + far; // lobe
+        else if (r2 < 0.36 && v > -0.62) t = inward > 0.25 && r2 < 0.16 ? 3 : 2 + far * (r2 < 0.2 ? 1 : 0); // bowl and canal
+        if (t >= 0) buf.paint(x, y, m.skin, Math.min(3, t), g);
+      }
     }
   }
 }
