@@ -840,7 +840,36 @@
         playing?.stop();
         engine?.stop();
       });
-      window.__lab = { render, views: VIEWS, stats: () => stats, analyse };
+      // The current presenters (studio.js) with their mouths driven by the
+      // speech timeline at `ms` into the sample sentence: a deterministic film
+      // strip of what viewers see. shot: 'close' | 'wide'.
+      let studio = null;
+      async function mouth(ms, shot = 'close') {
+        if (!studio) {
+          const [{ Renderer }, cast] = await Promise.all([import('../js/studio.js'), import('../js/cast.js')]);
+          cast.setPresenters?.({ paco: { name: 'Paco Pixel' }, lola: { name: 'Lola Byte' } });
+          const tl = buildTimeline(SAMPLE, { rate: 1 });
+          const fake = {
+            at: 0,
+            isSpeaking: (slot) => slot === 'A',
+            level: (slot) => (slot === 'A' ? sampleTimeline(tl, fake.at).level : 0),
+            speechFrame: (now, slot) => ({ slot: 'A', ...sampleTimeline(tl, slot && slot !== 'A' ? -1e9 : fake.at), sentenceIndex: 0 }),
+            get speaking() { return true; },
+          };
+          studio = { renderer: new Renderer(canvas, fake), fake, tl };
+        }
+        studio.fake.at = ms;
+        const scene = {
+          channel: { name: 'GLOBIT 24', slogan: '' }, program: { id: 'world-now', title: 'WORLD NOW', theme: 'world' },
+          cast: { A: 'paco', B: 'lola' }, shot, shotSince: 0, focus: 'A', storyId: null, wall: { mode: 'logo' },
+          anchors: { A: { emotion: 'neutral' }, B: { emotion: 'neutral' } }, actions: {}, lowerThird: null, subtitle: null,
+          subtitles: false, ticker: [], rundown: [], images: new Map(), replay: false, breaking: null, card: null, stinger: null, panDir: 1,
+        };
+        studio.renderer.render(10 + ms / 1000, scene);
+        const f = sampleTimeline(studio.tl, ms);
+        return `${ms.toFixed(0)} ${f.viseme}>${f.next} ${f.level.toFixed(2)}`;
+      }
+      window.__lab = { render, views: VIEWS, stats: () => stats, analyse, mouth };
       const q = new URLSearchParams(location.search);
       render(Number(q.get('view') || 0));
     </script>

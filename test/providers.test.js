@@ -552,9 +552,9 @@ describe('mock provider', () => {
     const intro = spoken(script.segments[0].text);
     assert.ok(intro.startsWith('New robot learns to cook.'), intro);
     assert.match(intro, /TECH BYTES/);
-    assert.match(intro, /TEST/);
-    assert.match(intro, /I'm Max Circuit, here with Ada Volt\./);
+    assert.match(intro, /I'm Max Circuit, with Ada Volt\./);
     assert.match(intro, /Also coming up: NASA telescope spots a new planet/);
+    assert.ok(intro.length < 170, `the intro runs under a 3-picture montage: keep it short (${intro.length} chars)`);
     assert.ok(script.segments[0].text.includes('[wave]'), 'a light top story gets a wave');
     assert.ok(script.segments[0].text.includes('[B:nod]'), 'the co-presenter acknowledges the introduction');
   });

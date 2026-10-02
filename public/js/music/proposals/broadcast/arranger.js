@@ -197,7 +197,7 @@ export class Bed {
       if (Math.abs(f - 0.5) < 1e-6) b += sw * 0.5;
       else if (Math.abs(f - 0.25) < 1e-6 || Math.abs(f - 0.75) < 1e-6) b += sw * 0.25;
     }
-    return t0 + b * this.spb + (r ? (r() - 0.5) * 0.006 : 0);
+    return Math.max(0, t0 + b * this.spb + (r ? (r() - 0.5) * 0.006 : 0));
   }
 
   active(L, b) {
@@ -419,8 +419,8 @@ const LAYERS = {
     const play = {
       kick: (t, v) => s.kick(lay.in, t, v),
       shaker: (t, v) => s.shaker(lay.in, t, v),
-      tick: (t, v) => s.tick(lay.in, t, v, { f: 9200 }),
-      tock: (t, v) => s.tick(lay.in, t, v, { f: 6800, gain: 0.26 }),
+      tick: (t, v) => s.tick(lay.in, t, v),
+      tock: (t, v) => s.tick(lay.in, t, v, { tock: true, gain: 0.26 }),
       brush: (t, v) => s.brush(lay.in, t, v),
     };
     for (const key of Object.keys(play)) {

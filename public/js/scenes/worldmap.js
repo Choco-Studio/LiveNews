@@ -493,14 +493,19 @@ function sunPosition(ms) {
 // leads, the zoom follows) and the target travels to its spot along a gentle arc, so the move
 // reads like a camera crane rather than a straight digital zoom.
 // ---------------------------------------------------------------------------------------------
-function computeView(w, h, mini, t, dt, lat, lon) {
+function computeView(out, w, h, mini, t, dt, lat, lon) {
   const s0 = w / 360; // world view: the whole globe across the width
   if (lat === null) {
     const s = s0 * (mini ? 1.7 : 1.4);
     // pan whole pixels so coastlines never swim and the base layer is rebuilt only on a pixel step
-    const clon = Math.round(t * (mini ? 2.2 : 3.2) * s) / s - 20;
-    const clat = Math.round((mini ? 18 : 16) * s) / s;
-    return { clon, clat, s, kx: 1, ax: -1, ay: -1, idle: true };
+    out.clon = Math.round(t * (mini ? 2.2 : 3.2) * s) / s - 20;
+    out.clat = Math.round((mini ? 18 : 16) * s) / s;
+    out.s = s;
+    out.kx = 1;
+    out.ax = -1;
+    out.ay = -1;
+    out.idle = true;
+    return out;
   }
   const zoom = mini ? 4.5 : 5.5;
   const kxEnd = clamp(Math.cos(lat * DEG), 0.5, 1);
@@ -513,9 +518,14 @@ function computeView(w, h, mini, t, dt, lat, lon) {
   const ax0 = w / 2 + START_LON_OFFSET * s0, ay0 = h / 2 - lat * s0;
   const arc = (mini ? 6 : 16) * Math.sin(Math.PI * ep);
   const ax = ax0 + (pinX - ax0) * ep, ay = ay0 + (pinY - ay0) * ep - arc;
-  const clon = lon - (ax - w / 2) / (s * kx);
-  const clat = lat + (ay - h / 2) / s;
-  return { clon, clat, s, kx, ax, ay, idle: false };
+  out.clon = lon - (ax - w / 2) / (s * kx);
+  out.clat = lat + (ay - h / 2) / s;
+  out.s = s;
+  out.kx = kx;
+  out.ax = ax;
+  out.ay = ay;
+  out.idle = false;
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -542,6 +552,7 @@ function getInstance(w, h) {
     ty0: new Int32Array(h), ty1: new Int32Array(h), tfy: new Float32Array(h),
     rowLat: new Float64Array(h), rowSpace: new Uint8Array(h), grow: new Uint8Array(h), rowA: new Float32Array(h), rowB: new Float32Array(h),
     lastClon: NaN, lastClat: NaN, lastS: NaN, lastKx: NaN, phase: NaN, minute: NaN, labelFor: null, context: null,
+    view: { clon: 0, clat: 0, s: 1, kx: 1, ax: -1, ay: -1, idle: true },
   };
   INSTANCES.set(key, rt);
   return rt;
@@ -873,8 +884,8 @@ export function drawWorldMap(ctx, t, dt, { lat = null, lon = null, place = '', x
   lat = lat === null || lat === undefined || lat === '' ? NaN : Number(lat);
   lon = lon === null || lon === undefined || lon === '' ? NaN : Number(lon);
   const hasTarget = Number.isFinite(lat) && Number.isFinite(lon);
-  const view = computeView(w, h, mini, t, dt, hasTarget ? clamp(lat, -89.9, 89.9) : null, hasTarget ? lon : null);
   const rt = getInstance(w, h);
+  const view = computeView(rt.view, w, h, mini, t, dt, hasTarget ? clamp(lat, -89.9, 89.9) : null, hasTarget ? lon : null);
   const viewChanged = view.clon !== rt.lastClon || view.clat !== rt.lastClat || view.s !== rt.lastS || view.kx !== rt.lastKx;
   if (viewChanged) {
     renderBase(rt, view);
@@ -1052,10 +1063,10 @@ function drawLabel(rt, ctx, ox, oy, w, h, pin, place, lat, lon, dt) {
   // text rises in once the plate is out
   const tx = ox + bx + (right ? 9 : 7);
   let cy = oy + by + 6;
-  L.lines.forEach((ln, i) => {
-    riseIn(ctx, ln, tx, cy, seg(tl, 0.16 + i * 0.06, 0.3), L.scale, 'body', P.white, ox + bx, L.bw);
+  for (let i = 0; i < L.lines.length; i++) {
+    riseIn(ctx, L.lines[i], tx, cy, seg(tl, 0.16 + i * 0.06, 0.3), L.scale, 'body', P.white, ox + bx, L.bw);
     cy += L.lineH + L.gap;
-  });
+  }
   riseIn(ctx, L.coords, tx, cy - L.gap + 5, seg(tl, 0.3, 0.3), 1, 'micro', P.fog, ox + bx, L.bw);
   const box = L.box;
   box.x = bx;
@@ -1145,18 +1156,21 @@ function drawContext(rt, ctx, ox, oy, w, h, view, pin, box, place, dt) {
     rt.context = C;
   }
   const list = C.list;
-  list.forEach((r, i) => {
+  for (let i = 0; i < list.length; i++) {
+    const r = list[i];
     const p = seg(tc, i * 0.08, 0.3);
-    if (p <= 0) return;
+    if (p <= 0) continue;
     const off = Math.round((1 - easeOutQuint(p)) * 6);
     ctx.save();
     ctx.beginPath();
     ctx.rect(ox + r.x - 1, oy + r.y - 1, r.w + 2, r.h + 1);
     ctx.clip();
-    drawText(ctx, r.name, ox + r.x + 1, oy + r.y + 1 + off, r.dark ? { color: P.black, font: 'micro' } : { color: P.silver, font: 'micro', shadow: P.black });
+    drawText(ctx, r.name, ox + r.x + 1, oy + r.y + 1 + off, r.dark ? NAME_DARK : NAME_LIGHT);
     ctx.restore();
-  });
+  }
 }
+const NAME_DARK = { color: P.black, font: 'micro' };
+const NAME_LIGHT = { color: P.silver, font: 'micro', shadow: P.black };
 
 /**
  * Mini (video wall) locator: the place in micro type on a black tab along the top edge (the wall's

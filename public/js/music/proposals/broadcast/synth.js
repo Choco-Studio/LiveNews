@@ -6,6 +6,7 @@
 // Timbres are chosen to leave the 1-5 kHz speech band mostly empty.
 
 import { hz } from './theory.js';
+import { Baker } from './baker.js';
 
 // Harmonic recipes for PeriodicWaves. `nc` is the taper: harmonic n is scaled
 // by exp(-(n/nc)^2), so low nc = rounder, warmer; high nc = more "8-bit".
@@ -32,6 +33,7 @@ function pulse(real, duty, nc) {
 
 const tableCache = new WeakMap();
 const noiseCache = new WeakMap();
+const bakerCache = new WeakMap();
 
 const E = 1e-4; // floor for exponential ramps
 
@@ -53,6 +55,36 @@ export class Synth {
     }
     this.noiseBuf = noiseCache.get(ctx);
     this.noiseSeed = 0;
+    if (!bakerCache.has(ctx)) bakerCache.set(ctx, new Baker(ctx));
+    this.bake = bakerCache.get(ctx);
+    this.hits = 0;
+  }
+
+  /** Plays a baked buffer through a velocity gain; the pair is freed when done. */
+  play(buf, dest, t, gain) {
+    const c = this.ctx;
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const g = c.createGain();
+    g.gain.value = gain;
+    src.connect(g).connect(dest);
+    src.start(t);
+    src.onended = () => {
+      src.disconnect();
+      g.disconnect();
+    };
+    return t + buf.duration;
+  }
+
+  // Frees a live voice's nodes once its source has ended (long sessions on air).
+  free(src, ...nodes) {
+    src.onended = () => {
+      for (const n of [src, ...nodes]) {
+        try {
+          n.disconnect();
+        } catch { /* gone */ }
+      }
+    };
   }
 
   wave(name) {
@@ -128,19 +160,9 @@ export class Synth {
   // ------------------------------------------------------------------ voices
 
   /** Plucked pulse: bright attack closing to a warm tail (ostinatos, arps). */
-  pluck(dest, t, m, vel, { wave = 'pulse25', decay = 0.22, cut = 2200, cutEnd = 500, q = 1, detune = 0, gain = 0.5 } = {}) {
-    const c = this.ctx;
-    const o = this.osc(wave, hz(m), t);
-    if (detune) o.detune.setValueAtTime(detune, t);
-    const f = this.filter('lowpass', cut, q);
-    f.frequency.setValueAtTime(cut, t);
-    f.frequency.exponentialRampToValueAtTime(Math.max(60, cutEnd), t + decay * 0.9);
-    const g = c.createGain();
-    const end = this.perc(g.gain, t, decay, vel * gain, 0.003);
-    o.connect(f).connect(g).connect(dest);
-    o.start(t);
-    o.stop(end);
-    return end;
+  pluck(dest, t, m, vel, { wave = 'pulse25', decay = 0.22, cut = 2200, cutEnd = 500, q = 1, gain = 0.5 } = {}) {
+    const d = Math.round(decay * 100) / 100;
+    return this.play(this.bake.pluck(wave, Math.round(m), d, Math.round(cut), Math.round(Math.max(60, cutEnd)), q), dest, t, vel * gain);
   }
 
   /** Sustained tone with optional delayed vibrato and glide (horn, lead, bass). */
@@ -179,6 +201,7 @@ export class Synth {
     node.connect(g).connect(dest);
     o.start(t);
     o.stop(end);
+    this.free(o, g, node === o ? null : node);
     return end;
   }
 
@@ -200,6 +223,7 @@ export class Synth {
     pl.connect(f);
     pr.connect(f);
     f.connect(g).connect(dest);
+    let last = null;
     for (const m of notes) {
       for (const side of [-1, 1]) {
         const o = this.osc(wave, hz(m), t);
@@ -207,35 +231,23 @@ export class Synth {
         o.connect(side < 0 ? pl : pr);
         o.start(t);
         o.stop(end);
+        this.free(o);
+        last = o;
       }
+    }
+    if (last) {
+      const prev = last.onended;
+      last.onended = () => {
+        prev?.();
+        for (const n of [pl, pr, f, g]) n.disconnect();
+      };
     }
     return end;
   }
 
   /** Soft timpani: settling pitch, an inharmonic partial and a felt-mallet thump. */
   timp(dest, t, m, vel, { decay = 1.5, gain = 0.9 } = {}) {
-    const c = this.ctx;
-    const f0 = hz(m);
-    const out = c.createGain();
-    out.gain.value = vel * gain;
-    out.connect(dest);
-    const parts = [[1, 1, decay], [1.504, 0.32, decay * 0.45], [1.995, 0.12, decay * 0.3]];
-    let end = t;
-    for (const [ratio, lvl, dk] of parts) {
-      const o = this.osc('sine', f0 * ratio * 1.035, t);
-      o.frequency.exponentialRampToValueAtTime(f0 * ratio, t + 0.09);
-      const g = c.createGain();
-      end = Math.max(end, this.perc(g.gain, t, dk, lvl, 0.004));
-      o.connect(g).connect(out);
-      o.start(t);
-      o.stop(t + dk + 0.05);
-    }
-    const n = this.noise(t, 0.12);
-    const lp = this.filter('lowpass', 380, 0.8);
-    const ng = c.createGain();
-    this.perc(ng.gain, t, 0.08, 0.5, 0.002);
-    n.connect(lp).connect(ng).connect(out);
-    return end;
+    return this.play(this.bake.timp(Math.round(m), Math.round(decay * 10) / 10), dest, t, vel * gain);
   }
 
   /** A roll that swells into the next downbeat. */
@@ -248,96 +260,39 @@ export class Synth {
   }
 
   /** Round, short kick that stays under 120 Hz (no click in the speech band). */
-  kick(dest, t, vel, { gain = 0.9, decay = 0.32, f0 = 120, f1 = 46 } = {}) {
-    const c = this.ctx;
-    const o = this.osc('sine', f0, t);
-    o.frequency.exponentialRampToValueAtTime(f1, t + 0.1);
-    const g = c.createGain();
-    const end = this.perc(g.gain, t, decay, vel * gain, 0.003);
-    o.connect(g).connect(dest);
-    o.start(t);
-    o.stop(end);
-    return end;
+  kick(dest, t, vel, { gain = 0.9, decay = 0.32 } = {}) {
+    return this.play(this.bake.kick(decay), dest, t, vel * gain);
   }
 
   /** Air: high-passed noise grain (shaker / hat), above the speech band. */
-  shaker(dest, t, vel, { len = 0.045, hp = 7500, gain = 0.25, a = 0.004 } = {}) {
-    const c = this.ctx;
-    const n = this.noise(t, len + 0.02);
-    const f = this.filter('highpass', hp, 0.6);
-    const g = c.createGain();
-    this.perc(g.gain, t, len, vel * gain, a);
-    n.connect(f).connect(g).connect(dest);
-    return t + len;
+  shaker(dest, t, vel, { gain = 0.25 } = {}) {
+    return this.play(this.bake.noise('shaker', this.hits++ % 4), dest, t, vel * gain);
   }
 
-  /** Clock tick: a very short band of noise up at 8-10 kHz. */
-  tick(dest, t, vel, { f = 9000, gain = 0.3 } = {}) {
-    const c = this.ctx;
-    const n = this.noise(t, 0.03);
-    const bp = this.filter('bandpass', f, 4);
-    const g = c.createGain();
-    this.perc(g.gain, t, 0.014, vel * gain, 0.001);
-    n.connect(bp).connect(g).connect(dest);
-    return t + 0.03;
+  /** Clock tick: a very short band of noise up at 9 kHz ('tock' at 6.8 kHz). */
+  tick(dest, t, vel, { tock = false, gain = 0.3 } = {}) {
+    return this.play(this.bake.noise(tock ? 'tock' : 'tick', this.hits++ % 3), dest, t, vel * gain);
   }
 
   /** Soft brushed snare/clap, low-passed so it never cracks at 3 kHz. */
-  brush(dest, t, vel, { gain = 0.22, len = 0.16, cut = 2400 } = {}) {
-    const c = this.ctx;
-    const n = this.noise(t, len + 0.02);
-    const bp = this.filter('bandpass', 1300, 0.6);
-    const lp = this.filter('lowpass', cut, 0.5);
-    const g = c.createGain();
-    this.perc(g.gain, t, len, vel * gain, 0.006);
-    n.connect(bp).connect(lp).connect(g).connect(dest);
-    return t + len;
+  brush(dest, t, vel, { gain = 0.22 } = {}) {
+    return this.play(this.bake.noise('brush', this.hits++ % 3), dest, t, vel * gain);
   }
 
-  /** FM bell / glockenspiel. ratio 2 = glock, 3.5 = bell, 1.4 = music box. */
+  /** FM bell / glockenspiel. ratio 2 = glock, 3.5 = bell, 4 = music box. */
   bell(dest, t, dur, m, vel, { ratio = 2, index = 1.6, gain = 0.28, cut = 3800 } = {}) {
-    const c = this.ctx;
-    const f = hz(m);
-    const car = this.osc('sine', f, t);
-    const mod = this.osc('sine', f * ratio, t);
-    const mg = c.createGain();
-    mg.gain.setValueAtTime(f * index, t);
-    mg.gain.exponentialRampToValueAtTime(f * index * 0.05, t + Math.min(dur, 0.9));
-    mod.connect(mg).connect(car.frequency);
-    const lp = this.filter('lowpass', cut, 0.5);
-    const g = c.createGain();
-    const end = this.perc(g.gain, t, dur, vel * gain, 0.003);
-    car.connect(lp).connect(g).connect(dest);
-    car.start(t);
-    mod.start(t);
-    car.stop(end);
-    mod.stop(end);
-    return end;
+    const d = Math.round(dur * 10) / 10;
+    return this.play(this.bake.bell(Math.round(m), d, ratio, index / ratio, cut), dest, t, vel * gain);
   }
 
   /** Reverse-cymbal swell into a downbeat (only where nobody speaks). */
   swell(dest, t, dur, vel, { hp = 3000, gain = 0.18, cut = 9000 } = {}) {
-    const c = this.ctx;
-    const n = this.noise(t, dur + 0.02);
-    const f = this.filter('highpass', hp, 0.5);
-    const lp = this.filter('lowpass', cut, 0.5);
-    const g = c.createGain();
-    g.gain.setValueAtTime(E, t);
-    g.gain.exponentialRampToValueAtTime(vel * gain, t + dur - 0.012);
-    g.gain.linearRampToValueAtTime(0, t + dur);
-    n.connect(f).connect(lp).connect(g).connect(dest);
-    return t + dur;
+    return this.play(this.bake.wash(Math.round(dur * 20) / 20, { hp, swell: true, cut }), dest, t, vel * gain);
   }
 
   /** Soft cymbal wash after a hit. */
   cymbal(dest, t, vel, { decay = 2.2, gain = 0.1, hp = 5200 } = {}) {
-    const c = this.ctx;
-    const n = this.noise(t, decay + 0.02);
-    const f = this.filter('highpass', hp, 0.4);
-    const g = c.createGain();
-    this.perc(g.gain, t, decay, vel * gain, 0.01);
-    n.connect(f).connect(g).connect(dest);
-    return t + decay;
+    return this.play(this.bake.wash(Math.round(decay * 10) / 10, { hp }), dest, t, vel * gain);
   }
 
   /** Pitch glide (tape rewind / power-down). */
@@ -351,6 +306,7 @@ export class Synth {
     o.connect(f).connect(g).connect(dest);
     o.start(t);
     o.stop(end);
+    this.free(o, f, g);
     return end;
   }
 }

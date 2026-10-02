@@ -68,8 +68,12 @@ function layout(text, maxW, big = 3, small = 4) {
 }
 
 /** A stepped bottom shade so text reads over photos (palette black, quantised alpha). */
+const SHADES = new Map();
 function shade(y0, y1, maxA) {
-  return cached(`shade|${y0}|${y1}|${maxA}`, () => {
+  const k = (y0 * 1000 + y1) * 100 + Math.round(maxA * 100);
+  const hit = SHADES.get(k);
+  if (hit) return hit;
+  const v = (() => {
     const c = mk(W, H);
     const cx = c.getContext('2d');
     for (let y = y0; y < H; y += 2) {
@@ -80,7 +84,9 @@ function shade(y0, y1, maxA) {
       cx.fillRect(0, y, W, 2);
     }
     return c;
-  });
+  })();
+  SHADES.set(k, v);
+  return v;
 }
 
 /** Static dot-matrix world map baked into a backdrop: dots one palette step above the field. */
@@ -430,8 +436,11 @@ export function drawEndCard(ctx, t, dt, { channel = 'GLOBIT 24', line1 = 'STAY W
 
 const TC = { cx: 192, cy: 108, R: 100 };
 
+const TESTCARDS = new Map();
 function testCardLayer(channel) {
-  return cached(`testcard|${channel}`, () => {
+  const hit = TESTCARDS.get(channel);
+  if (hit) return hit;
+  const built = (() => {
     const c = mk(W, H);
     const x = c.getContext('2d');
     // background grid
@@ -511,7 +520,9 @@ function testCardLayer(channel) {
     x.fillRect(cx - (nw >> 1), 37, nw, 1);
     drawText(x, nm, cx, 19, { color: P.white, scale: 2, align: 'center' });
     return c;
-  });
+  })();
+  TESTCARDS.set(channel, built);
+  return built;
 }
 
 export function drawStandby(ctx, t, { channel = 'GLOBIT 24', message = '' } = {}) {

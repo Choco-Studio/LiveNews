@@ -57,10 +57,11 @@ const OPENERS = [
 const GRAVE_OPENERS = [0, 1, 3];
 
 const WHY_LEADS = ['Why does it matter?', 'Why it matters:', 'What it means:'];
+// One sentence with the names: the cold open runs under a 3-picture montage, so the intro stays short.
 const GREETINGS = [
-  (title, channel) => `Hello [wave] and welcome to ${title} on ${channel}.`,
-  (title) => `Good to have you with us. [wave] This is ${title}.`,
-  (title, channel) => `Welcome [wave] to ${title}, here on ${channel}.`,
+  (title, channel, names) => `Hello [wave] and welcome to ${title}, I'm ${names}.`,
+  (title, channel, names) => `This is ${title} on ${channel}. [wave] I'm ${names}.`,
+  (title, channel, names) => `Welcome [wave] to ${title}, I'm ${names}.`,
 ];
 const SIGNOFFS_DUO = [
   (title, channel, partner) => `That's ${title} for now. [wave] From ${partner} and from me, thanks for watching. Stay with us here on ${channel}.`,
@@ -242,13 +243,13 @@ function writeEpisode({ stories, channelName, program, presenters, count }) {
   // Cold open: the top story's headline, the greeting, a teaser.
   const top = order[0];
   const second = order[1];
-  const greet = choose(GREETINGS, seed)(title, channelName);
+  const names = solo ? presenters.A.name : `${presenters.A.name}, with ${presenters.B.name}`;
+  const greet = choose(GREETINGS, seed)(title, channelName, names) + (solo ? '' : ' [B:nod]');
   const sober = top?.grave || second?.grave; // no waving at the viewer while teasing grave news
   const intro = [
     top ? `${top.grave ? '[serious] ' : ''}${asSentence(top.s.title)}` : '',
     sober ? greet.replace('[wave]', '[nod]') : greet,
-    `I'm ${presenters.A.name}${solo ? '' : `, here with ${presenters.B.name}. [B:nod]`}${solo ? '.' : ''}`,
-    second ? `[point_camera] Also coming up: ${unstop(second.s.title)}${numberStory && numberStory !== second ? ', and our number of the day' : ''}.` : '',
+    second ? `[point_camera] Also coming up: ${caption(second.s.title)}${numberStory && numberStory !== second ? ', and our number of the day' : ''}.` : '',
   ];
   segments.push({ type: 'intro', anchor: 'A', emotion: top?.grave ? 'serious' : sober ? 'neutral' : 'happy', text: intro.filter(Boolean).join(' ').replace(/\.\./g, '.') });
 
