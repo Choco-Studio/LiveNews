@@ -59,7 +59,7 @@
         { id: 'promo', label: 'UP NEXT PROMO', tune: PROMO, accent: P.yellow },
         ...ADS.map((ad) => ({ id: `ad-${ad.id}`, label: `AD ${String(ad.brand || ad.id).toUpperCase()}`, tune: ad.tune, accent: P.orange, seconds: 12, loop: true })),
       ];
-      const VIEWS = ['signature', ...TUNES.map((t) => t.id), 'loudness', 'ducking', 'visemes', 'resync', 'blips', 'voices'];
+      const VIEWS = ['signature', ...TUNES.map((t) => t.id), 'loudness', 'ducking', 'visemes', 'resync', 'blips', 'voices', 'recorded'];
 
       // --------------------------------------------------------- drawing kit
       const rect = (x, y, w, h, c) => {
@@ -290,24 +290,25 @@
         const lo = -30;
         const hi = -8;
         const xv = (v) => x0 + Math.round(((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * w);
-        rect(xv(TARGET_LUFS - 3), 18, xv(TARGET_LUFS + 3) - xv(TARGET_LUFS - 3), rows.length * 10 + 2, '#24304a');
-        rect(xv(TARGET_LUFS), 18, 1, rows.length * 10 + 2, P.steel);
+        rect(xv(TARGET_LUFS - 3), 17, xv(TARGET_LUFS + 3) - xv(TARGET_LUFS - 3), rows.length * 9 + 1, '#24304a');
+        rect(xv(TARGET_LUFS), 17, 1, rows.length * 9 + 1, P.steel);
         rows.forEach((r, i) => {
           stats[r.item.id] = { lufs: r.L.integrated, model: r.est.integrated + r.est.gainDb, peak: r.L.peakDb, worstStep: r.probe.worst, clicks: r.probe.clicks.length, trim: r.song.trim };
-          const y = 19 + i * 10;
+          const y = 18 + i * 9;
           const target = TARGET_LUFS + (r.song.trim || 0);
           const ok = Math.abs(r.L.integrated - target) <= 3;
           micro(r.item.label.replace(/^OPEN /, '').slice(0, 22), 6, y + 1, P.fog);
-          rect(x0, y + 2, xv(r.L.integrated) - x0, 5, ok ? r.item.accent : P.red);
-          rect(xv(target), y, 1, 9, P.white);
+          rect(x0, y + 2, xv(r.L.integrated) - x0, 4, ok ? r.item.accent : P.red);
+          rect(xv(target), y, 1, 8, P.white);
           micro(db(r.L.integrated), 330, y + 1, ok ? P.silver : P.red);
           micro(db(r.L.peakDb), 358, y + 1, r.L.peakDb < -1 ? P.steel : P.red);
         });
-        micro('LUFS', 330, H - 9, P.steel);
-        micro('PEAK', 358, H - 9, P.steel);
+        const axisY = 20 + rows.length * 9;
+        micro('LUFS', 330, axisY, P.steel);
+        micro('PEAK', 358, axisY, P.steel);
         for (const v of [-30, -25, -20, -15, -10]) {
-          rect(xv(v), H - 12, 1, 3, P.steel);
-          micro(String(v), xv(v) - 6, H - 8, P.steel);
+          rect(xv(v), axisY - 2, 1, 3, P.steel);
+          micro(String(v), xv(v) - 6, axisY + 1, P.steel);
         }
         // The mixer must pass quiet material at unity (compressor make-up removed).
         const off = new OfflineAudioContext(2, SR, SR);
@@ -322,11 +323,12 @@
         let pk = 0;
         for (const v of buf.getChannelData(0).subarray(SR / 2)) pk = Math.max(pk, Math.abs(v));
         const unity = 20 * Math.log10(pk) + 30;
-        micro(`MIXER GAIN AT -30 DBFS ${unity.toFixed(2)} DB`, 250, H - 26, Math.abs(unity) < 0.5 ? P.green : P.red);
+        micro(`MIXER GAIN AT -30 DBFS ${unity.toFixed(2)} DB`, 6, H - 9, Math.abs(unity) < 0.5 ? P.green : P.red);
         stats.unity = unity;
         const meas = rows.map((r) => r.L.integrated - (r.song.trim || 0));
+        const maxErr = Math.max(...rows.map((r) => Math.abs(r.L.integrated - (r.est.integrated + r.est.gainDb))));
         const spread = Math.max(...meas) - Math.min(...meas);
-        micro(`SPREAD ${spread.toFixed(1)} LU (TRIM REMOVED)`, 96, H - 26, spread <= 6 ? P.green : P.red);
+        micro(`SPREAD ${spread.toFixed(1)} LU (TRIMS REMOVED)  MODEL ERROR MAX ${maxErr.toFixed(1)} LU`, 6, H - 18, spread <= 6 ? P.green : P.red);
       }
 
       async function drawDucking() {
@@ -341,12 +343,14 @@
         const w = 372;
         panel(x0, 18, w, 40, 'MUSIC ALONE');
         waveform(x0, 19, w, 38, plain.buffer, seconds, P.steel);
-        panel(x0, 62, w, 40, 'MUSIC WITH SPEECH (CYAN = PRESENTER TALKING)');
+        panel(x0, 62, w, 40, '');
         for (const [a, b] of speech) rect(x0 + (a / seconds) * w, 62, ((b - a) / seconds) * w, 40, '#173a4a');
+        micro('MUSIC WITH SPEECH (CYAN = PRESENTER TALKING)', x0 + 2, 63, P.steel);
         waveform(x0, 63, w, 38, ducked.buffer, seconds, P.cyan);
-        panel(x0, 106, w, 64, 'MOMENTARY LOUDNESS: WHITE ALONE, CYAN DUCKED');
+        panel(x0, 106, w, 64, '');
         const ly = (v) => 106 + 63 - Math.max(0, Math.min(63, ((v + 45) / 40) * 63));
         for (const [a, b] of speech) rect(x0 + (a / seconds) * w, 106, ((b - a) / seconds) * w, 64, '#173a4a');
+        micro('MOMENTARY LOUDNESS: WHITE ALONE, CYAN DUCKED', x0 + 2, 107, P.steel);
         for (let col = 0; col < w; col++) {
           const idx = Math.round(((col / w) * seconds) / 0.1 - 2);
           const va = La.momentary[Math.max(0, Math.min(La.momentary.length - 1, idx))];
@@ -420,12 +424,12 @@
           if (xt(s.t1) - xt(s.t0) >= 10 && s.v !== 'rest') micro(s.v, xt(s.t0) + 1, 41, s.v === 'OO' || s.v === 'WQ' || s.v === 'MBP' ? P.white : P.black);
         }
         // Level (jaw) and blend curves.
-        panel(x0, 53, w, 44, 'JAW LEVEL (WHITE)  BLEND TO NEXT SHAPE (BLUE)  BEEPS (YELLOW)');
+        panel(x0, 53, w, 44, 'JAW LEVEL (WHITE)  BLENDING (BLUE)  BEEPS (YELLOW)');
         for (let col = 0; col < w; col++) {
           const ms = (col / w) * span - 100;
           const f = sampleTimeline(tl, ms);
           rect(x0 + col, 96 - Math.round(f.level * 38), 1, 1, P.white);
-          if (f.mix > 0 && f.mix < 1) rect(x0 + col, 96 - Math.round(f.mix * 38), 1, 1, P.blue);
+          if (f.mix > 0.02 && f.mix < 0.98) rect(x0 + col, 95, 1, 1, P.blue);
           if (f.accent > 0.5) rect(x0 + col, 54, 1, 2, P.orange);
         }
         for (const b of beeps) rect(xt(b.at), 96 - Math.round(b.peak * 12), Math.max(1, (b.dur / span) * w), 1, P.yellow);
@@ -449,8 +453,8 @@
           mouth(x + 4, 150, v, 1);
           micro(v, x - 4, 159, P.silver);
         });
-        micro('LETTERS AND DIGRAPHS -> 11 SHAPES WITH NATURAL DURATIONS; K/G/H TAKE THE NEXT VOWEL; M/B/P ALWAYS CLOSE', 6, 174, P.fog);
-        micro('NUMBERS SPOKEN AS WORDS ("24" = TWENTY FOUR); COMMAS AND DASHES REST THE MOUTH; STRESS = ORANGE TICKS', 6, 182, P.fog);
+        micro('LETTERS -> 11 SHAPES, NATURAL DURATIONS; K/G/H TAKE THE NEXT VOWEL; M/B/P CLOSE', 6, 174, P.fog);
+        micro('"24" IS SPOKEN AS TWENTY FOUR; COMMAS AND DASHES REST; ORANGE = STRESS', 6, 182, P.fog);
         // How calm is it?
         let wide = 0;
         let closed = 0;
@@ -526,32 +530,43 @@
       }
 
       async function drawBlips() {
-        const tl = buildTimeline(SAMPLE, { rate: 1.02 });
-        const beeps = blipPlan(tl);
-        const seconds = tl.total / 1000 + 0.4;
-        const off = new OfflineAudioContext(2, Math.ceil(seconds * SR), SR);
-        const buses = buildBuses(off, { volume: 1 });
-        let seed = 3;
-        const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-        const voices = resolveVoices({ profiles: new Map([['A', normProfile({ gender: 'male' })], ['B', normProfile({ gender: 'female' })]]) });
-        scheduleBlips(off, buses.speech, voices.get('A').blip, beeps, 0.1, tl.total / 1000, rnd);
-        const buf = await off.startRendering();
-        const L = measureLoudness([buf.getChannelData(0), buf.getChannelData(1)], SR);
-        frame('BLIP VOICE (PACO)', 'ONE BEEP PER VOWEL FROM THE SAME TIMELINE AS THE MOUTH', P.cyan);
+        frame('BLIP VOICES', 'ONE BEEP PER VOWEL FROM THE SAME TIMELINE AS THE MOUTH', P.cyan);
         const x0 = 6;
         const w = 372;
-        panel(x0, 18, w, 54, 'WAVEFORM');
-        waveform(x0, 19, w, 52, buf, seconds, P.cyan);
-        panel(x0, 76, w, 14);
-        const xt = (ms) => x0 + ((ms + 100) / (seconds * 1000)) * w;
-        for (const s of tl.segs) rect(xt(s.t0), 77, Math.max(1, xt(s.t1) - xt(s.t0)), 12, VIS_COLOR[s.v]);
-        panel(x0, 94, w, 60, 'SPECTROGRAM');
-        spectrogram(x0, 94, w, 60, mono(buf), seconds);
-        tl.words.forEach((wd, i) => micro(SAMPLE.slice(wd.ci, wd.end).toUpperCase(), xt(wd.t0), 158 + (i % 2) * 8, P.silver));
-        micro(`LOUDNESS ${db(L.integrated)} LUFS   PEAK ${db(L.peakDb)} DBFS   ${beeps.length} BEEPS`, 6, 186, L.peakDb < -1 ? P.green : P.red);
-        micro('BEEPS START 0.1 S IN: THE MOUTH IS SAMPLED AT HEARD TIME (OUTPUT TIMESTAMP / LATENCY)', 6, 196, P.fog);
-        stats.blips = { lufs: L.integrated, peak: L.peakDb, beeps: beeps.length };
+        const voices = resolveVoices({ profiles: new Map([['A', normProfile({ gender: 'male' })], ['B', normProfile({ gender: 'female' })], ['unit8', normProfile({ gender: 'robot' })]]) });
+        const rows = [['A', 'PACO (MALE)'], ['B', 'LOLA (FEMALE)'], ['unit8', 'UNIT-8 (ROBOT)']];
+        stats.blips = {};
+        let y = 18;
+        for (const [slot, label] of rows) {
+          const cfg = voices.get(slot);
+          const tl = buildTimeline(SAMPLE, { rate: cfg.rate });
+          const beeps = blipPlan(tl);
+          const seconds = 6.2;
+          const off = new OfflineAudioContext(2, Math.ceil(seconds * SR), SR);
+          const buses = buildBuses(off, { volume: 1 });
+          let seed = 3;
+          const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+          scheduleBlips(off, buses.speech, cfg.blip, beeps, 0.1, tl.total / 1000, rnd);
+          const buf = await off.startRendering();
+          const L = measureLoudness([buf.getChannelData(0), buf.getChannelData(1)], SR);
+          panel(x0, y, w, 34, '');
+          waveform(x0, y + 1, w, 32, buf, seconds, P.cyan);
+          micro(label, x0 + 2, y + 1, P.silver);
+          micro(`${db(L.integrated)} LUFS  PEAK ${db(L.peakDb)}`, x0 + w - 2, y + 1, Math.abs(L.integrated - BLIP_TARGET) <= 2 && L.peakDb < -1 ? P.green : P.red, 'right');
+          stats.blips[slot] = { lufs: L.integrated, peak: L.peakDb, beeps: beeps.length };
+          if (slot === 'A') {
+            const xt = (ms) => x0 + ((ms + 100) / (seconds * 1000)) * w;
+            panel(x0, 128, w, 14);
+            for (const sg of tl.segs) rect(xt(sg.t0), 129, Math.max(1, xt(sg.t1) - xt(sg.t0)), 12, VIS_COLOR[sg.v]);
+            panel(x0, 145, w, 40, 'SPECTROGRAM (PACO)');
+            spectrogram(x0, 145, w, 40, mono(buf), seconds);
+            tl.words.forEach((wd, i) => micro(SAMPLE.slice(wd.ci, wd.end).toUpperCase(), xt(wd.t0), 187 + (i % 2) * 8, P.silver));
+          }
+          y += 36;
+        }
+        micro(`TARGET ${BLIP_TARGET} LUFS: ~10 LU OVER THE DUCKED MUSIC`, 6, 205, P.fog);
       }
+      const BLIP_TARGET = -18;
 
       function drawSignature() {
         frame('THE GLOBIT SIGNATURE', 'LOW 5 - 1 - 2 - HIGH 5, THEN A COLOUR NOTE', P.red);
@@ -617,6 +632,99 @@
         }
       }
 
+      // A recorded voice (here: blips rendered offline, 15 % slower than the
+      // engine would guess, with a long pause between the sentences) played by
+      // the real AudioEngine; the mouth is sampled live on every frame.
+      async function drawRecorded() {
+        const text = 'Good evening from the newsroom. Tonight, markets rallied on Friday.';
+        const sents = ['Good evening from the newsroom.', 'Tonight, markets rallied on Friday.'];
+        const lead = 0.15;
+        const gap = 0.55;
+        const voices = resolveVoices({ profiles: new Map([['B', normProfile({ gender: 'female' })]]) });
+        const tls = sents.map((x) => buildTimeline(x, { rate: 0.85 }));
+        const offsets = [lead, lead + tls[0].total / 1000 + gap];
+        const seconds = offsets[1] + tls[1].total / 1000 + 0.3;
+        const off = new OfflineAudioContext(1, Math.ceil(seconds * SR), SR);
+        const buses = buildBuses(off, { volume: 1, raw: true });
+        let seed = 9;
+        const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+        tls.forEach((tl, i) => scheduleBlips(off, buses.speech, voices.get('B').blip, blipPlan(tl), offsets[i], tl.total / 1000, rnd));
+        const buffer = await off.startRendering();
+        const words = [];
+        tls.forEach((tl, i) => {
+          const base = text.indexOf(sents[i]);
+          for (const wd of tl.words) words.push({ t: offsets[i] + wd.t0 / 1000, char: base + wd.ci });
+        });
+        engine ??= new AudioEngine({ lang: 'en' });
+        await engine.unlock();
+        engine.setVoices({ B: { gender: 'female' } });
+        engine.setMode('mute');
+        const frames = [];
+        const subs = [];
+        let t0 = null;
+        let done = false;
+        const sampler = () => {
+          const now = performance.now();
+          if (t0 === null) t0 = now;
+          const f = engine.speechFrame(now, 'B');
+          frames.push({ t: (now - t0) / 1000, level: f.level, vis: f.mix > 0.5 ? f.next : f.viseme, wi: f.wordIndex, si: f.sentenceIndex, speaking: f.speaking });
+          if (!done) requestAnimationFrame(sampler);
+        };
+        const started = performance.now();
+        requestAnimationFrame(sampler);
+        await engine.speak(text, 'B', { audio: { buffer, words }, onSentence: (x, i) => subs.push({ i, t: (performance.now() - started) / 1000 }) });
+        done = true;
+        engine.setMode('tts');
+        // Align: the engine starts the buffer ~60 ms after speak() plus output latency.
+        const shift = frames.length ? (started - (t0 ?? started)) / 1000 : 0;
+        frame('RECORDED VOICE -> MOUTH', 'WEBAUDIO BUFFER + WORD TIMES, SAMPLED LIVE', P.cyan);
+        const x0 = 6;
+        const w = 372;
+        const span = seconds + 0.4;
+        const xs = (sec) => x0 + (sec / span) * w;
+        panel(x0, 18, w, 40, 'THE RECORDING (BLIPS STAND IN FOR A NEURAL VOICE)');
+        waveform(x0, 19, w, 38, buffer, span, P.cyan);
+        for (const wd of words) rect(xs(wd.t + 0.06), 18, 1, 40, P.slate);
+        panel(x0, 62, w, 60, 'MOUTH LEVEL SAMPLED EVERY FRAME (WHITE), SPEAKING (GREEN)');
+        // Measure the engine's real start: first frame that speaks.
+        const firstSpeak = frames.find((f) => f.speaking);
+        const startT = firstSpeak ? firstSpeak.t : 0;
+        const delay = startT - (words[0].t - lead) ; // where the sentence clock started vs buffer zero
+        for (const f of frames) {
+          const x = xs(f.t - shift - (startT - words[0].t));
+          if (x < x0 || x >= x0 + w) continue;
+          rect(x, 121 - Math.round(f.level * 56), 1, 1, P.white);
+          if (f.speaking) rect(x, 119, 1, 2, P.green);
+        }
+        panel(x0, 125, w, 14);
+        for (const f of frames) {
+          const x = xs(f.t - shift - (startT - words[0].t));
+          if (x >= x0 && x < x0 + w) rect(x, 126, 2, 12, VIS_COLOR[f.vis]);
+        }
+        // Word timing error: when the sampled wordIndex reaches each word vs the recording.
+        let err = 0;
+        let n = 0;
+        let prevKey = '';
+        const reach = [];
+        for (const f of frames) {
+          const key = `${f.si}:${f.wi}`;
+          if (f.speaking && key !== prevKey) reach.push({ si: f.si, wi: f.wi, t: f.t - shift - (startT - words[0].t) });
+          prevKey = key;
+        }
+        tls.forEach((tl, si) => tl.words.forEach((wd, wi) => {
+          const r = reach.find((x) => x.si === si && x.wi === wi);
+          if (!r) return;
+          err += Math.abs(r.t - (offsets[si] + wd.t0 / 1000));
+          n++;
+        }));
+        const meanErr = n ? (err / n) * 1000 : NaN;
+        micro(`SUBTITLE CUES AT ${subs.map((x) => x.t.toFixed(2)).join(' / ')} S (RECORDING ${offsets.map((x) => x.toFixed(2)).join(' / ')} S)`, 6, 146, P.fog);
+        micro(`WORD TIMING ERROR ${meanErr.toFixed(0)} MS OVER ${n} WORDS   FRAMES ${frames.length}`, 6, 156, meanErr < 60 ? P.green : P.red);
+        micro('THE JAW CLOSES IN THE PAUSE BETWEEN THE SENTENCES BECAUSE THE RECORDING IS SILENT THERE', 6, 166, P.fog);
+        timeAxis(x0, 140, w, span);
+        stats.recorded = { meanErr, words: n, subs: subs.map((x) => x.t), delay };
+      }
+
       // ------------------------------------------------------------- driver
       const stats = {};
       async function render(t = 0) {
@@ -631,6 +739,7 @@
         else if (name === 'resync') drawResync();
         else if (name === 'blips') await drawBlips();
         else if (name === 'voices') drawVoices();
+        else if (name === 'recorded') await drawRecorded();
         else {
           const item = TUNES.find((x) => x.id === name);
           await drawTune(item);

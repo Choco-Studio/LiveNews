@@ -190,12 +190,13 @@ def compress(x, sr, o):
     return x * gain, float(-gr.min()) if len(gr) else 0.0, mean_gr
 
 
-def limit(x, sr, ceiling_db, radius_s=0.004):
+def limit(x, sr, ceiling_db, radius_s=0.012):
     """Look-ahead true-peak limiter (offline, zero-phase gain curve).
 
     The gain is a sliding minimum of the required gain, then a box average no
     wider than that minimum, so it is never above what any sample in reach
-    needs: no overs, and ramps of a few ms instead of hard clipping.
+    needs: no overs. The 12 ms radius keeps gain changes slower than a pitch
+    period, so peaks are turned down instead of being clipped into buzz.
     """
     ceiling = 10 ** (ceiling_db / 20)
     n = len(x)
@@ -210,20 +211,33 @@ def limit(x, sr, ceiling_db, radius_s=0.004):
     return x * np.minimum(gain, 1.0)
 
 
-def loudness_normalise(x, sr, target, ceiling_db):
-    """Gain to target LUFS, then limit to the true-peak ceiling (re-measured)."""
+def _limit_to(x, sr, ceiling_db):
     y = x
-    for _ in range(4):
-        lufs = integrated_loudness(y, sr)
-        if not math.isfinite(lufs):
-            return y
-        y = y * 10 ** ((target - lufs) / 20)
-        for _ in range(3):
-            if true_peak(y) <= ceiling_db + 0.02:
-                break
-            y = limit(y, sr, ceiling_db - 0.15)
-        if abs(integrated_loudness(y, sr) - target) < 0.1:
+    for _ in range(3):
+        if true_peak(y) <= ceiling_db + 0.02:
             break
+        y = limit(y, sr, ceiling_db - 0.15)
+    return y
+
+
+def loudness_normalise(x, sr, target, ceiling_db):
+    """Gain to target LUFS with the true peak held under the ceiling.
+
+    The limiter always works on the unlimited signal times a gain, and only the
+    gain is iterated (limiting costs a little loudness, the next pass makes it
+    up), so limiting never compounds into distortion.
+    """
+    lufs = integrated_loudness(x, sr)
+    if not math.isfinite(lufs):
+        return x
+    gain = 10 ** ((target - lufs) / 20)
+    y = x
+    for _ in range(8):
+        y = _limit_to(x * gain, sr, ceiling_db)
+        got = integrated_loudness(y, sr)
+        if abs(got - target) < 0.08:
+            break
+        gain *= 10 ** ((target - got) / 20)
     return y
 
 
@@ -342,8 +356,11 @@ def vocode(x, sr, f0=104.0, n_fft=512, hop=128, lifter_ms=1.4, seed=8):
     t = np.arange(n) / sr
     harmonics = np.arange(1, int((sr / 2 - 200) / f0) + 1)
     pulse = np.zeros(n)
+    # Schroeder phases: same harmonic spectrum as a pulse train but a flat
+    # envelope, so the buzz does not add peaks the limiter has to fight
+    count = len(harmonics)
     for k in harmonics:
-        pulse += np.cos(2 * np.pi * k * f0 * t)
+        pulse += np.cos(2 * np.pi * k * f0 * t + np.pi * k * (k - 1) / count)
     pulse /= math.sqrt(len(harmonics) / 2)
     noise = np.random.default_rng(seed).standard_normal(n)
     X, win = _stft(x, n_fft, hop)

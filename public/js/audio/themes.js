@@ -88,7 +88,7 @@ const OPENS = {
       const k = D4;
       const m0 = H - 4; // motif start: colour note lands 1.5 beats before the hit
       const total = C + 2;
-      const roll = range(0, m0, 0.25).map((b, i, a) => [b, k - 24, 0.25, 0.3 + (0.6 * i) / Math.max(1, a.length - 1)]);
+      const roll = range(0, m0, 0.25).map((b, i, a) => [b, k - 24, 0.25, 0.2 + (0.45 * i) / Math.max(1, a.length - 1)]);
       return {
         bpm: this.tempo,
         room: 0.22,
@@ -103,8 +103,8 @@ const OPENS = {
           ], total), pan: -0.2 },
           { kind: 'bass', inst: 'timpani', notes: part([...roll, [m0, k - 24, 1.5], [m0 + 1.5, k - 19, 1], [m0 + 2.5, k - 17, 1.5], [H, k - 24, C - H], [C, k - 24, 1.5, 0.8]], total) },
           { kind: 'bass', inst: 'tri', notes: part([[m0, k - 24, 1.4, 0.8], [m0 + 1.5, k - 19, 0.9, 0.8], [m0 + 2.5, k - 17, 1.4, 0.8], [H, [k - 24], total - H, 0.9]], total), gain: 0.6 },
-          { drums: drums([...range(0, m0, 0.25).map((b, i, a) => [b, 'S', 0.25 + (0.55 * i) / Math.max(1, a.length - 1)]), [m0, 'K'], [m0 + 1.5, 'K', 0.8], [m0 + 2.5, 'S', 0.9], [H, 'K'], [C, 'K', 0.85]], total) },
-          { drums: drums([[m0, 'O', 0.5], [H, 'C', 0.9]], total) },
+          { drums: drums([...range(0, m0, 0.25).map((b, i, a) => [b, 'S', 0.15 + (0.45 * i) / Math.max(1, a.length - 1)]), [m0, 'K', 0.8], [m0 + 1.5, 'K', 0.7], [m0 + 2.5, 'S', 0.8], [H, 'K'], [C, 'K', 0.85]], total) },
+          { drums: drums([[m0, 'O', 0.5], [H, 'C']], total) },
           { kind: 'lead', inst: 'bell', notes: part([[H, k + 12, 0.25, 0.5], [H + 0.25, k + 16, 0.25, 0.5], [H + 0.5, k + 19, 0.25, 0.5], [H + 0.75, k + 24, 1, 0.55]], total), gain: 0.4, echo: 0.5, pan: 0.3 },
         ],
       };
@@ -174,7 +174,7 @@ const OPENS = {
       const m0 = H - 4;
       const total = C + 2;
       const walk = [...range(0, m0, 0.5).map((b, i) => [b, i % 2 ? k - 12 : k - 24, 0.5, 0.85]),
-        [m0, k - 24, 1], [m0 + 1, k - 20, 0.5], [m0 + 1.5, k - 17, 1], [m0 + 2.5, k - 26, 1], [m0 + 3.5, k - 17, 0.5], [H, k - 24, 2.5]];
+        [m0, k - 24, 1], [m0 + 1, k - 20, 0.5], [m0 + 1.5, k - 17, 1], [m0 + 2.5, k - 19, 1], [m0 + 3.5, k - 17, 0.5], [H, k - 24, 2.5]];
       return {
         bpm: this.tempo,
         swing: 0.18,
@@ -321,8 +321,8 @@ export const BREAKING = (() => {
     tracks: [
       { kind: 'lead', inst: 'brass', notes: part(motif(k, COLOURS.breaking, 0), total), gain: 1.1 },
       { kind: 'lead', inst: 'pulse50', notes: part(motif(k + 12, COLOURS.breaking, 0, { vel: 0.5 }), total), gain: 0.4, pan: 0.15 },
-      { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 3, k], 2.5, 0.7], [2.5, [k - 2, k + 2], 1.5, 0.75], [H, [k, k + 3, k + 7], total - H, 0.9]], total), pan: -0.15 },
-      { kind: 'bass', inst: 'timpani', notes: part([[0, k - 12, 2.5], [2.5, k - 14, 1.5, 0.8], ...range(3, H, 0.25).map((b, i) => [b, k - 12, 0.25, 0.4 + i * 0.12]), [H, k - 12, 2]], total) },
+      { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 5, k], 2.5, 0.7], [2.5, [k - 4, k], 1.5, 0.75], [H, [k, k + 3, k + 7], total - H, 0.9]], total), pan: -0.15 },
+      { kind: 'bass', inst: 'timpani', notes: part([[0, k - 12, 2.5], [2.5, k - 16, 0.5, 0.8], ...range(3, H, 0.25).map((b, i) => [b, k - 12, 0.25, 0.4 + i * 0.12]), [H, k - 12, 2]], total) },
       { drums: drums([[0, 'K'], [2.5, 'S', 0.7], ...range(3, H, 0.25).map((b, i) => [b, 'S', 0.35 + i * 0.12]), [H, 'K']], total) },
       { drums: drums([[H, 'C', 0.6]], total) },
     ],
@@ -343,7 +343,7 @@ export const OUTRO = (() => {
     fadeOut: 0.8,
     tracks: [
       { kind: 'lead', inst: 'softtri', notes: part(lead, total), gain: 1.1 },
-      { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 8, k - 5], 1.5, 0.6], [1.5, [k - 7, k - 3], 1, 0.65], [2.5, [k - 5, k - 3], 1, 0.7], [3.5, [k - 12, k - 8, k - 5], 2, 0.75]], total), pan: -0.2 },
+      { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 8, k - 5], 1.5, 0.6], [1.5, [k - 7, k - 3], 1, 0.65], [2.5, [k - 5, k - 1], 1, 0.7], [3.5, [k - 12, k - 8, k - 5], 2, 0.75]], total), pan: -0.2 },
       { kind: 'lead', inst: 'bell', notes: part([[3.5, k + 12, 0.5, 0.45], [4, k + 16, 0.5, 0.4], [4.5, k + 19, 1, 0.4]], total), gain: 0.4, echo: 0.6, pan: 0.3 },
       { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, 1.5], [1.5, k - 19, 1], [2.5, k - 17, 1], [3.5, k - 24, 2]], total) },
       { drums: drums([[0, 'O', 0.35], [3.5, 'K', 0.6]], total) },
@@ -357,7 +357,7 @@ export const OUTRO = (() => {
 export const PROMO = (() => {
   const k = D4;
   const total = 8.4;
-  const bassNotes = [[0, k - 24], [2, k - 25], [4, k - 29], [6, k - 17]];
+  const bassNotes = [[0, k - 24], [2, k - 27], [4, k - 31], [6, k - 29]]; // D  Bm  G  A
   const bass = bassNotes.flatMap(([b, m]) => range(b, b + 2, 0.5).map((x, i) => [x, i % 2 ? m + 12 : m, 0.45, 0.8]));
   return {
     bpm: 120,
@@ -367,7 +367,7 @@ export const PROMO = (() => {
     fadeOut: 0.5,
     tracks: [
       { kind: 'lead', inst: 'pulse25', notes: part([...motif(k, COLOURS.next, 2, { colourBeats: 1.5 }), ...motif(k, null, 6, { vel: 0.85 }).slice(0, 3).map(([b, m, d, v], i) => [b, m, i === 2 ? 1.4 : d, v])], total) },
-      { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 8, k - 5], 2, 0.55], [2, [k - 10, k - 6], 2, 0.6], [4, [k - 10, k - 5], 2, 0.6], [6, [k - 8, k - 5, k - 1], 2.4, 0.65]], total), gain: 0.8, pan: -0.25 },
+      { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 8, k - 5], 2, 0.55], [2, [k - 8, k - 3], 2, 0.6], [4, [k - 7, k - 3], 2, 0.6], [6, [k - 5, k, k + 2], 2.4, 0.65]], total), gain: 0.8, pan: -0.25 },
       { kind: 'bass', inst: { wave: 'tri', preset: 'tri', s: 0.6, d: 0.12 }, notes: part(bass, total) },
       { drums: drums(range(0, 8, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.3 : 0.5]), total) },
       { drums: drums(range(0, 8, 1).map((b, i) => [b, i % 2 ? 'S' : 'K', i % 2 ? 0.6 : 0.8]), total) },

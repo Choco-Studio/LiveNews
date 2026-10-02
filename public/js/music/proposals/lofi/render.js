@@ -201,6 +201,7 @@ export async function render(opts = {}) {
   musicOut.gain.value = opts.stem === 'voice' ? 0 : 1;
   musicOut.connect(ctx.destination);
   const engine = new LofiEngine(ctx, musicOut, { gravePad: Boolean(opts.gravePad) });
+  if (opts.solo) engine.solo = new Set(String(opts.solo).split(','));
 
   const events = [];
   for (const [t, moment, o] of plan.cues) events.push({ t, cue: moment, opts: { programId: plan.programme, ...(o || {}) } });

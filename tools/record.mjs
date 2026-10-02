@@ -10,6 +10,7 @@
 //     --seconds 30 [--skip 0] [--fps 30] [--scale 5] --out /tmp/clip.mp4
 //
 // --skip    seconds of channel time to run (fast, not recorded) before recording
+// --eval    optional JS run once after load (e.g. window.__lab.set({ demo: 'rig' }))
 // --step    optional JS run before each frame with T = time since recording started,
 //           for lab pages that render a given instant (then the clock is not needed)
 
@@ -53,6 +54,7 @@ page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 
 if (!opts.step) await page.clock.install();
 await page.goto(opts.url, { waitUntil: 'load' });
+if (opts.eval) await page.evaluate(opts.eval); // e.g. pick a demo in a lab page
 
 const frameMs = 1000 / opts.fps;
 // Network replies (fetch, SSE) resolve in real time, so let real time pass a

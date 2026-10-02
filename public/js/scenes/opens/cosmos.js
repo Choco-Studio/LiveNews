@@ -18,8 +18,6 @@ const STL = Math.sin(TILT);
 const BANDS = [
   [-0.7, [P.cream, P.tan, P.tanShade]],
   [-0.42, [P.skin, P.skinShade, P.brown]],
-  [-0.1, [P.cream, P.tan, P.tanShade]],
-  [0.04, [P.pink, P.magenta, P.purple]],
   [0.36, [P.cream, P.tan, P.tanShade]],
   [0.62, [P.skin, P.skinShade, P.brown]],
   [2, [P.cream, P.tan, P.tanShade]],

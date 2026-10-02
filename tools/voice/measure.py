@@ -81,6 +81,26 @@ def spectrogram(src, png, title=None):
                     '-lavfi', vf, png], check=True)
 
 
+def timing_png(wav, reply, text, png, width=1600):
+    """Spectrogram + waveform with a line and label at every word start (to eyeball sync)."""
+    dur = reply['duration']
+    font = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+    marks = []
+    for i, w in enumerate(reply['words']):
+        x = int(w['t'] / dur * width)
+        word = text[w['char']:w['char'] + w['len']].replace("'", '’').replace(':', r'\:').replace(',', r'\,')
+        y = 4 + (i % 3) * 16
+        marks.append(f"drawbox=x={x}:y=0:w=1:h=ih:color=cyan@0.8:t=fill")
+        marks.append(f"drawtext=fontfile={font}:text='{word}':x={x + 2}:y={y}:fontsize=13:fontcolor=white:box=1:boxcolor=black@0.6")
+    for p in reply['phrases']:
+        x0, x1 = int(p['t'] / dur * width), int((p['t'] + p['dur']) / dur * width)
+        marks.append(f"drawbox=x={x0}:y=ih-6:w={max(1, x1 - x0)}:h=6:color=yellow@0.9:t=fill")
+    graph = (f"[0:a]showspectrumpic=s={width}x300:legend=0:scale=log:fscale=lin:color=intensity[s];"
+             f"[0:a]showwavespic=s={width}x120:colors=white[w];[s][w]vstack=2[v];[v]{','.join(marks)}[out]")
+    subprocess.run(['ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'error', '-y', '-i', wav,
+                    '-filter_complex', graph, '-map', '[out]', '-frames:v', '1', png], check=True)
+
+
 def make_engine():
     from engine import VoiceEngine
     return VoiceEngine()
@@ -144,6 +164,7 @@ def cmd_samples(args):
         write_audio(os.path.join(out, 'raw', pid + '.m4a'), raw, sr)
         spectrogram(wav, os.path.join(out, pid + '.png'))
         spectrogram(os.path.join(out, 'raw', pid + '.wav'), os.path.join(out, 'raw', pid + '.png'))
+        timing_png(wav, reply, text, os.path.join(out, 'wav', pid + '-words.png'))
         with open(os.path.join(out, 'wav', pid + '.json'), 'w', encoding='utf-8') as f:
             json.dump({'text': text, **reply}, f, ensure_ascii=False)
         entry = {

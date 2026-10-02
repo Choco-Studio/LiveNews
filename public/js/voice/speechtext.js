@@ -452,38 +452,25 @@ const isCountNoun = (w) => !!w && w === w.toLowerCase() && (COUNT_NOUNS.has(w) |
 // plain words (no digits, no runs of capitals) so later rules leave them alone.
 export const LEXICON = {
   // places
-  Qatar: 'Kattar', Reykjavik: 'Rake-yavik', Niger: 'Neezhair', Lviv: 'Luh-veev', Tbilisi: 'Tuhbilisee',
-  Wroclaw: 'Vrotswaf', 'Wrocław': 'Vrotswaf', Lodz: 'Wooj', 'Łódź': 'Wooj', Bydgoszcz: 'Bidgosh', Szczecin: 'Shchetcheen',
-  Xinjiang: 'Shinjyang', Xiamen: 'Shyahmen', Chongqing: 'Chong-ching', Qingdao: 'Ching-dow', Tianjin: 'Tyen-jin',
-  Chisinau: 'Keesheenow', 'Chișinău': 'Keesheenow', Tigray: 'Teegray', Sanaa: 'Sanah', "Sana'a": 'Sanah',
-  Maui: 'Mowee', Caracas: 'Karakas', Bogota: 'Bogotah', 'Bogotá': 'Bogotah', Montevideo: 'Montevidayo',
-  Kyiv: 'Keev', Kharkiv: 'Harkiv', Mykolaiv: 'Mikolayiv', Zaporizhzhia: 'Zaporizhya', Donetsk: 'Donyetsk',
-  Luhansk: 'Loohansk', Bakhmut: 'Bakhmoot', Kherson: 'Hairson', Odesa: 'Odessa', Mariupol: 'Mariyoopol',
-  Phuket: 'Pooket', 'Ho Chi Minh': 'Hoe Chee Min', Hanoi: 'Hanoy', 'Phnom Penh': 'Puhnom Pen', Yangon: 'Yangonn',
-  Naypyidaw: 'Nay-pyee-daw', Guangzhou: 'Gwangjoe', Shenzhen: 'Shenjen', Urumqi: 'Ooroomchee', Lhasa: 'Lahsa',
-  Aleppo: 'Aleppoh', Raqqa: 'Rakka', Idlib: 'Idlib', Khartoum: 'Kartoom', Darfur: 'Darfoor', Mogadishu: 'Mogadeeshoo',
-  Ouagadougou: 'Wagadoogoo', Bamako: 'Bamakoh', Niamey: 'Nee-ahmay', 'N\'Djamena': 'Enjameena', Antananarivo: 'Antananareevo',
-  Gloucester: 'Gloster', Worcester: 'Wooster', Leicester: 'Lester', Edinburgh: 'Edinbruh', Greenwich: 'Grennitch',
-  Thames: 'Temz', Derry: 'Derry', Guernsey: 'Gurnzee', Taoiseach: 'Teeshock', 'Dáil': 'Doyle',
+  Reykjavik: 'Rake-yavik', Niger: 'Neezhair', Lviv: 'Luh-veev', Kyiv: 'Keev', Tbilisi: 'Tbih-leesee',
+  Wroclaw: 'Vrotswaf', 'Wrocław': 'Vrotswaf', Lodz: 'Wooj', 'Łódź': 'Wooj', Bydgoszcz: 'Bidgosh', Szczecin: 'Shetcheen',
+  Xinjiang: 'Shinjyang', Xiamen: 'Shyahmen', Chongqing: 'Chong-ching', Qingdao: 'Ching-dow', Tianjin: 'Tee-en-jin',
+  Urumqi: 'Ooroomchee', Chisinau: 'Keeshee-now', 'Chișinău': 'Keeshee-now', Tigray: 'Teegray', Sanaa: 'Sah-nah',
+  "Sana'a": 'Sah-nah', Mykolaiv: 'Mikolah-yiv', Bakhmut: 'Bahkmoot', Phuket: 'Pooket', 'Ho Chi Minh': 'Hoe Chee Min',
+  Niamey: 'Nee-ahmay', "N'Djamena": 'Enjahmayna', Taoiseach: 'Teeshock', 'Dáil': 'Doyle',
   // people
-  'Xi Jinping': 'Shee Jinping', Guterres: 'Gooterresh', Mbappe: 'Embappay', 'Mbappé': 'Embappay', Milei: 'Meelay',
-  Erdogan: 'Erdowan', 'Erdoğan': 'Erdowan', Zelensky: 'Zelenskee', Zelenskyy: 'Zelenskee', Volodymyr: 'Volodimir',
-  Macron: 'Macrohn', Sheinbaum: 'Shinebowm', Lula: 'Loola', Maduro: 'Madooro', Netanyahu: 'Netanyahoo',
-  Khamenei: 'Hahmenay', Pezeshkian: 'Pezeshkeeyan', Modi: 'Mohdee', Starmer: 'Starmer', Merz: 'Mairts',
-  Scholz: 'Sholts', Meloni: 'Meloanee', Sanchez: 'Sanchez', 'Sánchez': 'Sanchez', Albanese: 'Albaneezee',
-  Ramaphosa: 'Ramapohsa', Tinubu: 'Tinooboo', Kagame: 'Kagahmay', Orban: 'Orbahn', 'Orbán': 'Orbahn',
-  Tusk: 'Tusk', Rutte: 'Rutteh', Lagarde: 'Lagard', 'von der Leyen': 'fon der Lyen', Putin: 'Pootin',
-  Navalny: 'Navalnee', Lukashenko: 'Lookashenko', Ishiba: 'Isheeba', 'Kim Jong Un': 'Kim Jong Oon',
-  Houthi: 'Hoothee', Houthis: 'Hootheez', Hezbollah: 'Hezbolah', Taliban: 'Taleebahn', Uyghur: 'Weeger', Uyghurs: 'Weegers',
-  Uighur: 'Weeger', Uighurs: 'Weegers', Rohingya: 'Rohinja', Bundestag: 'Boondestahk', Knesset: 'Kuhnesset',
+  'Xi Jinping': 'Shee Jinping', Guterres: 'Goo-terresh', Mbappe: 'Embappay', 'Mbappé': 'Embappay', Milei: 'Mee-lay',
+  Erdogan: 'Erdowan', 'Erdoğan': 'Erdowan', Zelenskyy: 'Zelensky', Maduro: 'Mah-doo-roh', Merz: 'Mairts',
+  Scholz: 'Sholts', 'Sánchez': 'Sanchez', Kagame: 'Ka-gahmay', Orban: 'Orbahn', 'Orbán': 'Orbahn',
+  Lagarde: 'Luh-gard', 'von der Leyen': 'fon der Lyen', Putin: 'Pootin', Navalny: 'Nuh-valnee',
+  'Kim Jong Un': 'Kim Jong Oon', Houthi: 'Hoothee', Houthis: 'Hootheez', Uyghur: 'Weeger', Uyghurs: 'Weegers',
+  Uighur: 'Weeger', Uighurs: 'Weegers', Bundestag: 'Boondestahk',
   // organisations, brands and tech words
-  UNRWA: 'Unrah', NOAA: 'Noah', ECOWAS: 'Ekohwas', APEC: 'Aypek', ICANN: 'Eye-can', ISRO: 'Izroh',
-  JAXA: 'Jacksa', IKEA: 'Ikeeya', MAGA: 'Magga', DOGE: 'Dohj', UEFA: 'Yoo-ayfa', FTSE: 'Footsie',
-  Nasdaq: 'Nazdak', NASDAQ: 'Nazdak', 'S&P': 'S and P', 'AT&T': 'eigh T and T', 'A&E': 'eigh and E',
-  'M&S': 'M and S', 'P&O': 'P and O', 'Wi-Fi': 'Why-fye', WiFi: 'Why-fye', iOS: 'eye O-S', macOS: 'mac O-S',
-  mRNA: 'M-R-N-eigh', PhD: 'P-H-D', 'Ph.D.': 'P-H-D', AfD: 'eigh-F-D', xAI: 'ex eigh-I', GIF: 'gif', JPEG: 'jaypeg',
-  SQL: 'sequel', Huawei: 'Wahway', Xiaomi: 'Shaomee', Hyundai: 'Hundai', Porsche: 'Porsha', Nvidia: 'Envidia',
-  NVIDIA: 'Envidia', Anthropic: 'Anthropic', Kokoro: 'Kokoro', plc: 'P-L-C', Ltd: 'Limited',
+  UNRWA: 'Unrah', NOAA: 'Noah', ECOWAS: 'Ekohwas', UEFA: 'Yoo-wayfa', FTSE: 'Footsie',
+  'S&P': 'S and P', 'AT&T': 'A-T and T', 'A&E': 'eigh and E', 'M&S': 'M and S', 'P&O': 'P and O',
+  iOS: 'eye O-S', macOS: 'mac O-S', mRNA: 'M-R-N-eigh', PhD: 'P-H-D', 'Ph.D.': 'P-H-D', AfD: 'eigh-F-D',
+  xAI: 'ex eigh-I', Huawei: 'Wahway', Xiaomi: 'Shau-mee', Porsche: 'Porsha', Nvidia: 'Envidia', NVIDIA: 'Envidia',
+  plc: 'P-L-C', Ltd: 'Limited',
   // our own channel
   'GLOBIT 24': 'Globit twenty-four', 'UNIT-8': 'Unit Eight', Reyes: 'Rayess',
 };
@@ -520,6 +507,7 @@ function applyLexicon(st, lex) {
 // ================================================================ acronyms
 
 // Read as words, with the spoken form ("NATO" -> "Nato", not "N-A-T-O").
+const WORD_ACRONYMS_ES = { ONU: 'Onu', OTAN: 'Otan', OPEP: 'Opep', PSOE: 'Pesoe', OVNI: 'ovni', SIDA: 'sida', UNICEF: 'Unicef', UNESCO: 'Unesco', COVID: 'Covid', FIFA: 'Fifa', UEFA: 'Uefa', NASA: 'Nasa', BRICS: 'Brics', OCDE: 'Ocde', ERE: 'ere', IVA: 'iva', DANA: 'dana', RENFE: 'Renfe', AENA: 'Aena', IBEX: 'Ibex' };
 const WORD_ACRONYMS = {
   NASA: 'Nasa', NATO: 'Nato', UNICEF: 'Unicef', UNESCO: 'Unesco', COVID: 'Covid', OPEC: 'Opec', FIFA: 'Fifa',
   ASEAN: 'Asean', BRICS: 'Brics', CERN: 'Cern', NAFTA: 'Nafta', OFCOM: 'Ofcom', OFSTED: 'Ofsted', OFGEM: 'Ofgem',
@@ -537,7 +525,7 @@ const LETTER_ACRONYMS = new Set(('UK US USA EU UN BBC IMF WHO WTO AI NHS FBI CIA
   'WFP ILO IPCC ISS IPO ETF CPI VAT GPS USB PC TV BMW VW HSBC IBM AMD TSMC LG HP BP BYD CNN ABC NBC CBS AP AFP NPR ' +
   'PBS ITV RTE DW NFL NBA MLB NHL UFC HIV DNA RNA UV ICU GP NYC LA DC MBA LLM GPU CPU API VPN PR HR QR ID EV ATM SUV ' +
   'CCTV MRI IVF AGM SMS NGO UNSC FAQ RAF MOD FIA UCL PSG AC FC UAW AFL CIO GMT BST UTC EST EDT PST PDT CET CEST JST ' +
-  'IST AEST AM PSOE CDU SPD FDP LDP ANC EFF RN SNCF TGV CEO OPCW NATO_ UNDP UNEP UNFPA WWF RSPCA NSPCC USAID').split(' '));
+  'IST AEST AM PSOE CDU SPD FDP LDP ANC EFF RN SNCF TGV CEO OPCW UNDP UNEP UNFPA WWF RSPCA NSPCC USAID').split(' '));
 
 // Kept unhyphenated: espeak and browser voices already spell these well with
 // the natural stress on the last letter ("the BBC" -> bee-bee-SEE).
@@ -583,7 +571,7 @@ const TITLES = {
   Dr: 'Doctor', Mr: 'Mister', Mrs: 'Missus', Ms: 'Miz', Mx: 'Mix', Prof: 'Professor', Gen: 'General', Lt: 'Lieutenant',
   Col: 'Colonel', Capt: 'Captain', Sgt: 'Sergeant', Cpl: 'Corporal', Adm: 'Admiral', Gov: 'Governor', Sen: 'Senator',
   Rep: 'Representative', Rev: 'Reverend', Fr: 'Father', Hon: 'Honourable', Pres: 'President', Supt: 'Superintendent',
-  Insp: 'Inspector', Det: 'Detective', Cllr: 'Councillor', Gen_: '',
+  Insp: 'Inspector', Det: 'Detective', Cllr: 'Councillor',
 };
 const TITLES_ES = { Sr: 'señor', Sra: 'señora', Srta: 'señorita', Dr: 'doctor', Dra: 'doctora', Lic: 'licenciado', Ing: 'ingeniero', Prof: 'profesor', Profa: 'profesora' };
 const ABBR_EN = [
@@ -637,11 +625,11 @@ function cleanup(st) {
 }
 
 function webJunk(st) {
-  st = sub(st, /\b(?:https?:\/\/|www\.)[^\s]*[^\s.,;:!?)\]'"]/gi, () => '');
+  st = sub(st, /(?:\s(?:at|on|via|visit)\s+)?\b(?:https?:\/\/|www\.)[^\s]*[^\s.,;:!?)\]'"]/gi, () => ' ');
   st = sub(st, /\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b/g, () => '');
-  st = sub(st, /(?<![\w@])@\w{1,30}\b/g, () => '');
+  st = sub(st, /(?:\s(?:via|follow|from|by)\s+)?(?<![\w@])@\w{1,30}\b/g, () => ' ');
   st = sub(st, /\b([A-Za-z][\w-]*)((?:\.(?:co|com|org|net|gov|ac))?\.(?:com|org|net|io|ai|tv|uk|gov|edu|news|es|de|fr))\b(?![\w-])/g, (mt) =>
-    `${mt[1]} ${mt[2].slice(1).split('.').map((p) => `dot ${p}`).join(' ')}`.replace(/^(\S+) dot /, '$1 dot '));
+    [mt[1], ...mt[2].slice(1).split('.')].map((p, k) => (k ? 'dot ' : '') + (/^[^aeiouy]{2,4}$/i.test(p) ? spellLetters(p) : p)).join(' '));
   // Hashtags are read as their words: "#ClimateWeek" -> "Climate Week".
   st = sub(st, /(?<![\w#&])#([A-Za-z][A-Za-z0-9_]*)/g, (mt) => mt[1].replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2'));
   st = sub(st, /[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\u{FE0E}\u{FE0F}\u{20E3}\u{200D}\u{E0020}-\u{E007F}]/gu, () => '');
@@ -662,9 +650,8 @@ function abbreviations(st, L) {
       const prev = wordBefore(s, mt.index);
       const next = /^\.?\s+[A-Z]/.test(s.slice(mt.index + 2));
       const prevCap = /^[A-Z]/.test(prev) && !SENTENCE_STARTERS.has(prev) && !/^(?:Near|Of|From|To)$/.test(prev);
-      if (prevCap && !/\s$/.test(s.slice(Math.max(0, mt.index - 1), mt.index)) === false) {
-        const word = 'Street';
-        return mt[0].endsWith('.') && endsSentence(s, mt.index + mt[0].length) ? `${word}.` : word;
+      if (prevCap && /\s$/.test(s.slice(Math.max(0, mt.index - 1), mt.index))) {
+        return mt[0].endsWith('.') && endsSentence(s, mt.index + mt[0].length) ? 'Street.' : 'Street';
       }
       if (next) return 'Saint';
       return null;
@@ -722,7 +709,7 @@ function datesAndTimes(st, L) {
     return L.gb ? `the ${day(d)} of ${MONTHS_EN[m - 1]}, ${yearWords(+mt[3], L)}` : `${MONTHS_EN[m - 1]} ${day(d)}, ${yearWords(+mt[3], L)}`;
   });
   // Times: "14:30", "9.30pm", "9am", "10:00 GMT".
-  const ampm = (x) => (x ? ` ${/^p/i.test(x) ? 'P-M' : 'eigh-M'}` : '');
+  const ampm = (x) => (x ? ` ${/^p/i.test(x) ? 'P-M' : 'A-M'}` : '');
   const clock = (h, m, x) => {
     if (!m) {
       if (x) return `${cardinalEn(h, L.gb)}${ampm(x)}`;
@@ -735,6 +722,13 @@ function datesAndTimes(st, L) {
   st = sub(st, /\b([01]?\d|2[0-4]):([0-5]\d)(?:\s?([ap])\.?m\b\.?)?/gi, (mt, s) => {
     const out = clock(+mt[1], +mt[2], mt[3]);
     return mt[0].endsWith('.') && endsSentence(s, mt.index + mt[0].length) ? `${out}.` : out;
+  });
+  // Four-digit clock times: "0600 GMT", "at 1430 hrs".
+  st = sub(st, /\b([01]\d|2[0-3])([0-5]\d)(?=\s?(?:GMT|UTC|BST|CET|CEST|EST|EDT|PST|PDT|hrs|hours|local time)\b)/g, (mt) => {
+    const h = +mt[1];
+    const m = +mt[2];
+    const hh = mt[1].startsWith('0') ? `${L.gb ? 'oh' : 'zero'} ${ONES[h]}` : cardinalEn(h, L.gb);
+    return `${hh} ${m ? (m < 10 ? `oh ${ONES[m]}` : tensEn(m)) : 'hundred'}`;
   });
   st = sub(st, /\b(1[0-2]|0?\d)(?:\.([0-5]\d))?\s?([ap])\.?m\b\.?/gi, (mt, s) => {
     const out = clock(+mt[1], mt[2] ? +mt[2] : 0, mt[3]);
@@ -794,8 +788,10 @@ function percentAndUnits(st, L) {
   const NUM = L.es ? NUM_ES : NUM_EN;
   const w = W[L.es ? 'es' : 'en'];
   const sign = (x) => (x === '-' || x === '−' ? `${w.minus} ` : x === '+' ? `${w.plus} ` : '');
+  // Spanish ordinals "1º", "2ª" look like degrees.
+  if (L.es) st = sub(st, /\b(\d{1,3})\.?([ºª])(?=[\s,.;:!?)]|$)/g, (mt) => ordinalWords(+mt[1], L, mt[2] === 'ª'));
   // Percent: "50%", "-0.3%", "10-15%", "5pc".
-  st = sub(st, new RegExp(`(?<![\\p{L}\\p{N}.,])([-+]?)(${NUM})(?:\\s?(?:-|–|to)\\s?(${NUM}))?(?:\\s?%|pc\\b|pct\\b)`, 'gu'), (mt) =>
+  st = sub(st, new RegExp(`(?<![\\p{L}\\p{N}.,%])([-+]?)(${NUM})(?:%?\\s?(?:-|–|to)\\s?(${NUM}))?(?:\\s?%|pc\\b|pct\\b)`, 'gu'), (mt) =>
     `${sign(mt[1])}${numberWords(mt[2], L)}${mt[3] ? ` ${w.to} ${numberWords(mt[3], L)}` : ''} ${w.percent}`);
   // Units: "100 km/h", "30°C", "a 10-km race", "128GB".
   st = sub(st, new RegExp(`(?<![\\p{L}\\p{N}.,])([-+]?)(${NUM})(?:\\s?(?:-|–|to)\\s?(${NUM}))?(-|\\s?)(${UNIT_RE})(?![\\p{L}\\p{N}])`, 'gu'), (mt, s) => {
@@ -861,6 +857,9 @@ function otherNumbers(st, L) {
     const y2 = mt[2].length === 2 ? (L.es ? cardinalEs(+mt[2]) : tensEn(+mt[2])) : yearWords(+mt[2], L);
     return [[yearWords(+mt[1], L), 0], [` ${w.to} `, mt[1].length], [y2, mt[0].length - mt[2].length]];
   });
+  // Seasons: "the 2026/27 season" -> "twenty twenty-six twenty-seven".
+  st = sub(st, /(?<![\w.,$€£¥/])(20\d\d|19\d\d)\/(\d\d)\b(?![\/.,]\d)/g, (mt) =>
+    [[yearWords(+mt[1], L), 0], [` ${L.es ? cardinalEs(+mt[2]) : tensEn(+mt[2])}`, mt[1].length + 1]]);
   // Decades: "1990s", "the '80s", "in her 30s".
   st = sub(st, /(?<![\w.,])'?(1[0-9]\d0|20[0-9]0|[1-9]0)s\b/g, (mt) => {
     const n = +mt[1];
@@ -868,9 +867,8 @@ function otherNumbers(st, L) {
     if (n < 100) return pluralWords(tensEn(n));
     return pluralWords(yearEn(n, L.gb));
   });
-  // Ordinals: "21st", "3rd"; Spanish "1º", "2ª".
-  if (L.es) st = sub(st, /\b(\d{1,3})\.?([ºª°])(?=[\s,.;:!?)]|$)/g, (mt) => ordinalWords(+mt[1], L, mt[2] === 'ª'));
-  else st = sub(st, /\b(\d+)(st|nd|rd|th)\b/gi, (mt) => ordinalWords(+mt[1], L));
+  // Ordinals: "21st", "3rd" (Spanish "1º" is read before the units).
+  if (!L.es) st = sub(st, /\b(\d+)(st|nd|rd|th)\b/gi, (mt) => ordinalWords(+mt[1], L));
   // Scores: "won 3-1", "a 2-0 win", "drew 1-1".
   st = sub(st, /(?<![\w.,])(\d{1,2})\s?[-–]\s?(\d{1,2})\b(?![,.]?\d|\s?%)/g, (mt, s) => {
     const before = s.slice(Math.max(0, mt.index - 40), mt.index);
@@ -967,10 +965,14 @@ function plainNumbers(st, L) {
       signWord = `${w.minus} `;
     } else if (mt[1] === '+') signWord = `${w.plus} `;
     const after = wordAfter(s, mt.index + mt[0].length);
-    const apocope = L.es && /^(?:millones|millón|mil)$/.test(after);
-    const first = signWord + numberWords(mt[2], L, { apocope: apocope && !mt[5] });
+    // Spanish agrees with the noun: "un millón", "veintiún heridos", "quinientas personas".
+    const noun = L.es && after && after === after.toLowerCase() && !/^(?:de|del|y|o|a|en|por|para|con|que|es|son|fue)$/.test(after);
+    const apocope = noun || (L.es && /^(?:millones|millón|mil)$/.test(after));
+    const fem = noun && /as?$/.test(after) && !/^(?:millones|millón|mil|problemas?|días?|mapas?|sistemas?|programas?|temas?|idiomas?|planetas?)$/.test(after);
+    const agree = (words) => (fem ? words.replace(/ientos\b/g, 'ientas').replace(/(?:uno|ún|un)$/, 'una') : words);
+    const first = signWord + agree(numberWords(mt[2], L, { apocope: apocope && !mt[5] }));
     if (!mt[5]) return first;
-    const second = (mt[4] ? `${w.minus} ` : '') + numberWords(mt[5], L, { apocope });
+    const second = (mt[4] ? `${w.minus} ` : '') + agree(numberWords(mt[5], L, { apocope }));
     const at2 = mt[0].length - mt[5].length - mt[4].length;
     return [[first, 0], [` ${w.to} `, mt[1].length + mt[2].length], [second, at2]];
   });
@@ -993,7 +995,7 @@ function symbols(st, L) {
   st = sub(st, /(?<=\p{N})\s?°(?![CF])/gu, () => ` ${w.degrees[1]}`);
   st = sub(st, /\s*%/g, () => ` ${w.percent}`);
   // Slashes: "and/or", "$5/month" (per), "Israel/Gaza" (or).
-  st = sub(st, /\band\/or\b/gi, () => (L.es ? 'y o' : 'and or'));
+  st = sub(st, /\band\/or\b/gi, (mt) => (L.es ? 'y o' : mt[0][0] === 'A' ? 'And or' : 'and or'));
   st = sub(st, /\/(?=(?:month|year|day|week|hour|night|person|head|year|barrel|tonne|ton|litre|liter|gallon|kilo|kg|unit|share)\b)/g, () => (L.es ? ' por ' : ' a '));
   st = sub(st, /(?<=\p{L})\/(?=\p{L})/gu, () => (L.es ? ' o ' : ' or '));
   st = sub(st, /\s+\/\s+/g, () => ', ');
@@ -1025,7 +1027,11 @@ function acronyms(st, L) {
     const tok = mt[1];
     const suffix = mt[2] ? (mt[2] === 's' ? 's' : "'s") : '';
     const i = mt.index;
-    if (tok in WORD_ACRONYMS) return WORD_ACRONYMS[tok] + (suffix === 's' ? 's' : suffix);
+    const words = L.es ? WORD_ACRONYMS_ES : WORD_ACRONYMS;
+    if (tok in words) {
+      const word = words[tok];
+      return (sentenceStart(s, i) ? word[0].toUpperCase() + word.slice(1) : word) + suffix;
+    }
     const shout = inShouty(i);
     if (tok === 'WHO') {
       if (shout && !/\bthe\s+$/i.test(s.slice(Math.max(0, i - 4), i)) && !suffix) return lowerWord(tok, s, i);
@@ -1201,9 +1207,13 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
 function classify(spokenCh, origCh, origBetween) {
   if (/\n/.test(origBetween)) return 'paragraph';
+  if (spokenCh === ',' || spokenCh === ';') {
+    if (/[()[\]{}]/.test(origBetween)) return 'paren';
+    if (/[—–]|\s-+\s/.test(origBetween)) return 'dash';
+    if (/^[^\p{L}\p{N}]*$/u.test(origBetween) && [...origBetween].some((c) => QUOTE_CHARS.includes(c))) return 'quote';
+  }
   if (origCh === '(' || origCh === ')' || origCh === '[' || origCh === ']') return 'paren';
-  if (origCh === '—' || origCh === '–' || origCh === '-') return 'dash';
-  if (QUOTE_CHARS.includes(origCh)) return 'quote';
+  if (origCh === '—' || origCh === '–') return 'dash';
   return { ',': 'comma', ';': 'semicolon', ':': 'colon', '.': 'stop', '!': 'exclaim', '?': 'question', '…': 'ellipsis' }[spokenCh] || 'comma';
 }
 
@@ -1270,11 +1280,13 @@ export function planSpeech(text, opts = {}) {
 
   // 3. Nova's wonder pause: a breath before the big reveal in a sentence.
   if (persona.wonder && !/^(?:ad|headline|roundup)$/.test(opts.segmentType || '')) {
+    const wondered = new Set();
+    const sentenceOf = (k) => pieces.slice(0, k).filter((q) => /[.!?…]/.test(q.mark)).length;
     for (let k = 0; k < pieces.length; k++) {
       const p = pieces[k];
       const chunk = spoken.slice(p.ss, p.se);
       const m = WONDER_RE.exec(chunk);
-      if (!m || !/[.!?…]/.test(p.mark || '.')) continue;
+      if (!m || wondered.has(sentenceOf(k))) continue;
       // Step back to the start of the noun phrase: "about twice the size", "a planet one hundred light years".
       const before = chunk.slice(0, m.index);
       const lead = /(?:\b(?:about|nearly|almost|some|more than|roughly|over|around|just|the|a|an)\s+)?(?:[\p{L}-]+\s+){0,4}$/u.exec(before);
@@ -1282,7 +1294,8 @@ export function planSpeech(text, opts = {}) {
       const numStart = /\b(?:about|nearly|almost|some|roughly|more than|over|around|twice|one|two|three|four|five|six|seven|eight|nine|ten|hundred|a hundred)\b/i.exec(before.slice(cutRel));
       if (numStart) cutRel += numStart.index;
       if (wordCount(chunk.slice(0, cutRel)) < 3 || wordCount(chunk.slice(cutRel)) < 2) continue;
-      if (rand() > 0.75) continue;
+      if (rand() > 0.85) continue;
+      wondered.add(sentenceOf(k));
       const cut = p.ss + cutRel;
       pieces.splice(k, 1, { ss: p.ss, se: cut, mark: '', wonder: true }, { ss: cut, se: p.se, mark: p.mark, revealed: true });
       k++;
@@ -1306,6 +1319,8 @@ export function planSpeech(text, opts = {}) {
     const markOrig = p.mark ? src[toOriginal(map, p.se - 1)] : '';
     const between = next ? src.slice(toOriginal(map, p.se - 1), toOriginal(map, next.ss)) : '';
     let kind = p.wonder ? 'wonder' : p.breath ? 'breath' : p.mark ? classify(p.mark, markOrig, between) : 'stop';
+    // '"Yes!" he replied.' - a quoted line running into its attribution.
+    if ((kind === 'exclaim' || kind === 'question') && next && /^\s*\p{Ll}/u.test(spoken.slice(next.ss, next.se))) kind = 'quote';
     const spokenText = spoken.slice(p.ss, p.se).trim();
     const words = wordCount(spokenText);
     if (kind === 'comma') {

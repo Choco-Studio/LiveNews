@@ -1,9 +1,15 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { config } from '../server/config.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   NewsDesk,
   cleanHtml,
+  extractLocalImage,
+  localFeedPath,
   decodeEntities,
   extractImage,
   interestScore,
@@ -1327,5 +1333,87 @@ describe('NewsDesk.resolveImage', () => {
     assert.equal(await desk.resolveImage(story), null);
     assert.equal(fetchImpl.requested.length, 1);
     assert.equal(story.imageChecked, true);
+  });
+});
+
+// ---------------------------------------------------------------- local feeds: pictures shipped with offline fixtures
+
+describe('local feed pictures (offline fixtures only)', () => {
+  const item = (url) => ({ title: 't', 'media:content': { '@_url': url, '@_medium': 'image' } });
+
+  test('extractLocalImage resolves a relative picture path inside the feed folder, as a file: URL', () => {
+    const dir = path.join(os.tmpdir(), 'feeds');
+    assert.equal(extractLocalImage(item('img/a.png'), dir), pathToFileURL(path.join(dir, 'img', 'a.png')).href);
+    assert.equal(extractLocalImage({ enclosure: { '@_url': 'b.jpg', '@_type': 'image/jpeg' } }, dir), pathToFileURL(path.join(dir, 'b.jpg')).href);
+  });
+
+  test('it never escapes the folder, never takes absolute paths or URLs, and only picture files', () => {
+    const dir = path.join(os.tmpdir(), 'feeds');
+    for (const url of ['../secret.png', 'img/../../x.png', '/etc/passwd.png', 'file:///etc/a.png', 'https://img.test/a.png', 'img/a.svg', 'notes.txt', '\\\\server\\a.png']) {
+      assert.equal(extractLocalImage(item(url), dir), null, url);
+    }
+  });
+
+  test('parseFeed uses it only when told the feed is local, and marks those stories local', () => {
+    const xml = rssFeed('<item><title>Local</title><link>https://fixtures.test/1</link><description>Text.</description><media:content url="img/x.png" medium="image"/></item>');
+    const remote = parseFeed(xml, FEED)[0];
+    assert.equal(remote.image, null);
+    assert.ok(!('local' in remote));
+    const dir = path.join(os.tmpdir(), 'feeds');
+    const local = parseFeed(xml, FEED, { baseDir: dir })[0];
+    assert.equal(local.image, pathToFileURL(path.join(dir, 'img', 'x.png')).href);
+    assert.equal(local.local, true);
+  });
+
+  test('localFeedPath: repo-relative paths and file: URLs are local, web URLs are not', () => {
+    assert.ok(localFeedPath('config/fixtures/world.xml').endsWith(path.join('config', 'fixtures', 'world.xml')));
+    assert.equal(localFeedPath(pathToFileURL('/tmp/feed.xml').href), path.resolve('/tmp/feed.xml'));
+    assert.equal(localFeedPath('https://example.test/rss'), null);
+  });
+
+  test('refresh() remembers the folders of local feeds (the only places pictures may be served from)', async (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'livenews-local-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, 'feed.xml');
+    fs.writeFileSync(file, rssFeed('<item><title>A local story here</title><link>https://fixtures.test/a</link><description>Text.</description><media:content url="pic.png" medium="image"/></item>'));
+    const desk = makeDesk({ feeds: [{ name: 'Local', url: pathToFileURL(file).href, category: 'world' }] });
+    await desk.refresh();
+    assert.deepEqual([...desk.localImageRoots], [dir]);
+    const story = [...desk.stories.values()][0];
+    assert.equal(fileURLToPath(story.image), path.join(dir, 'pic.png'));
+  });
+
+  test('resolveImage never looks for an article page behind a local story', async () => {
+    const story = { id: 'l1', link: 'https://fixtures.globit.invalid/1', image: null, local: true };
+    assert.equal(await makeDesk({ fetchImpl: noNetwork }).resolveImage(story), null);
+  });
+});
+
+describe('parseFeed: live blogs', () => {
+  test('a live blog is flagged "live" (for the writer) but is not breaking news', () => {
+    const xml = rssFeed('<item><title>Election night – live</title><link>https://example.test/live</link><description>Updates.</description></item>');
+    const [s] = parseFeed(xml, FEED);
+    assert.equal(s.live, true);
+    assert.equal(isBreaking(s.title), false);
+  });
+});
+
+describe('NewsDesk.deskView', () => {
+  test('lists the most interesting stories first with what an editor needs to see, and nothing more', () => {
+    const now = Date.now();
+    const desk = makeDesk({
+      stories: [
+        { id: 'a', title: 'Old story', summary: 'x'.repeat(100), source: 'A', category: 'world', weight: 1, published: now - 20 * 3600_000, image: null },
+        { id: 'b', title: 'BREAKING: fresh story', summary: 'x'.repeat(100), source: 'B', category: 'tech', weight: 1, published: now, image: 'https://img.test/b.jpg', live: false },
+      ],
+    });
+    desk.covered.set('a', now);
+    const view = desk.deskView(80, now);
+    assert.deepEqual(view.map((v) => v.id), ['b', 'a']);
+    assert.deepEqual(Object.keys(view[0]).sort(), ['breaking', 'category', 'covered', 'hasImage', 'id', 'live', 'outlets', 'score', 'source', 'title']);
+    assert.equal(view[0].breaking, true);
+    assert.equal(view[0].hasImage, true);
+    assert.equal(view[1].covered, true);
+    assert.equal(desk.deskView(1, now).length, 1);
   });
 });

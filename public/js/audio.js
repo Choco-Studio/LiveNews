@@ -9,7 +9,7 @@
 // tune format, themes.js the channel's sonic identity, voices.js the TTS voice
 // choice and loudness.js levels tunes from different authors.
 
-import { buildTimeline, sampleTimeline, blipPlan, SpeechClock } from './audio/visemes.js';
+import { buildTimeline, sampleTimeline, blipPlan, SpeechClock, wordAtChar } from './audio/visemes.js';
 import { buildBuses, setDuck, TunePlayer, asSong, scheduleBlips, DUCK_LEVEL } from './audio/synth.js';
 import { CUES } from './audio/themes.js';
 import { langPlan, normProfile, resolveVoices } from './audio/voices.js';
@@ -123,6 +123,9 @@ class Run {
     this.clock = null; // tts / mute: wall clock -> timeline time
     this.perf0 = null; // blips: performance.now() at which the first beep is heard
     this.sentence = -1;
+    this.anchors = null; // recorded voice: [{ perf, w }] word starts still to apply
+    this.nextAnchor = 0;
+    this.loud = null; // recorded voice: analyser for the real loudness
   }
 
   setTimeline(tl, clock, perf0 = null) {
@@ -135,10 +138,33 @@ class Run {
     this.tl = null;
     this.clock = null;
     this.perf0 = null;
+    this.anchors = null;
+  }
+
+  // Recorded voice: smoothed loudness 0..1 of what is playing right now.
+  loudness(now) {
+    const l = this.loud;
+    if (!l) return 1;
+    if (now - l.at < 8) return l.value;
+    l.analyser.getFloatTimeDomainData(l.data);
+    let sum = 0;
+    for (let i = 0; i < l.data.length; i++) sum += l.data[i] * l.data[i];
+    const dbv = 10 * Math.log10(sum / l.data.length + 1e-10);
+    const target = Math.min(1, Math.max(0, (dbv + 48) / 30));
+    const dt = l.at < 0 ? 1000 : now - l.at;
+    // Fast to open, a little slower to close, like a jaw.
+    l.value += (target - l.value) * (1 - Math.exp(-dt / (target > l.value ? 25 : 60)));
+    l.at = now;
+    return l.value;
   }
 
   timeAt(now) {
     if (!this.tl) return null;
+    const a = this.anchors;
+    while (a && this.clock && this.nextAnchor < a.length && a[this.nextAnchor].perf <= now) {
+      const { w, perf } = a[this.nextAnchor++];
+      this.clock.anchorWord(w, perf);
+    }
     if (this.clock) return this.clock.timeAt(now);
     return this.perf0 === null ? null : now - this.perf0;
   }
@@ -196,6 +222,7 @@ export class AudioEngine {
   #speed = new Map(); // slot -> learned TTS speed (timeline ms per wall ms)
   #last = new Map(); // slot -> { at, viseme, level } last sampled mouth, for releases
   #scratch = {};
+  #voiceCache = new Map(); // url -> decoded recorded voice
 
   // `lang` picks the voice language ('en', 'es', or 'en-AU' to prefer a region).
   constructor(opts) {
@@ -316,8 +343,13 @@ export class AudioEngine {
   }
 
   // `anchor` is any slot key. Resolves when the text has been spoken or stop() ran.
+  // opts.onSentence(sentence, i) fires as each sentence starts. opts.audio is a
+  // recorded voice for the whole text: { url | buffer (AudioBuffer), words:
+  // [{ t: seconds, char: index into text }] }; it is played through WebAudio
+  // unless blips were asked for, and browser TTS is the fallback.
   speak(text, anchor = 'A', opts = {}) {
     const onSentence = opts?.onSentence;
+    const audio = opts?.audio && typeof opts.audio === 'object' ? opts.audio : null;
     this.#stopSpeech();
     const sentences = splitSentences(text);
     if (!sentences.length) {
@@ -327,7 +359,7 @@ export class AudioEngine {
     const run = new Run(typeof anchor === 'string' && anchor ? anchor : 'A');
     this.#run = run;
     this.#duck(true);
-    return this.#play(run, sentences, onSentence);
+    return this.#play(run, sentences, onSentence, audio ? { audio, text: String(text) } : null);
   }
 
   stop() {
@@ -357,7 +389,8 @@ export class AudioEngine {
     if (live && t !== null) {
       const s = sampleTimeline(live.tl, t, this.#scratch);
       f.speaking = s.speaking;
-      f.level = s.level;
+      // A recorded voice: the jaw also follows what is actually heard.
+      f.level = live.loud ? s.level * Math.min(1, 0.25 + live.loudness(now) * 0.9) : s.level;
       f.viseme = s.viseme;
       f.next = s.next;
       f.mix = s.mix;
@@ -422,8 +455,9 @@ export class AudioEngine {
     } catch { /* ignore */ }
   }
 
-  async #play(run, sentences, onSentence) {
+  async #play(run, sentences, onSentence, recorded = null) {
     try {
+      if (recorded && this.#requested !== 'blips' && (await this.#playRecorded(run, recorded, sentences, onSentence))) return;
       for (let i = 0; i < sentences.length && !run.cancelled; i++) {
         run.sentence = i;
         try {
@@ -447,6 +481,133 @@ export class AudioEngine {
         this.#duck(false);
       }
     }
+  }
+
+  // ---------------------------------------------------------- recorded voice
+
+  // AudioBuffer for a recorded line (decoded once, a few kept), or null.
+  async #loadVoiceBuffer(audio) {
+    const ctx = this.#ctx;
+    if (!ctx) return null;
+    if (audio.buffer && typeof audio.buffer.getChannelData === 'function') return audio.buffer;
+    const url = typeof audio.url === 'string' ? audio.url : null;
+    if (!url) return null;
+    const hit = this.#voiceCache.get(url);
+    if (hit) return hit;
+    const job = (async () => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`voice ${res.status}`);
+      return ctx.decodeAudioData(await res.arrayBuffer());
+    })();
+    const buf = await Promise.race([job, new Promise((_, rej) => setTimeout(() => rej(new Error('voice timeout')), 4000))]);
+    this.#voiceCache.set(url, buf);
+    if (this.#voiceCache.size > 8) this.#voiceCache.delete(this.#voiceCache.keys().next().value);
+    return buf;
+  }
+
+  // Plays a recorded voice for the whole text. Each sentence gets its own mouth
+  // timeline, anchored to the recording's word times, and the jaw also follows
+  // the real loudness. Returns false (nothing played) if the audio is unusable.
+  async #playRecorded(run, { audio, text }, sentences, onSentence) {
+    const ctx = this.#ctx;
+    if (!ctx || !this.#buses || ctx.state !== 'running') return false;
+    let buffer = null;
+    try {
+      buffer = await this.#loadVoiceBuffer(audio);
+    } catch (err) {
+      console.warn('[audio] recorded voice unavailable, using TTS', err?.message ?? err);
+    }
+    if (!buffer || run.cancelled) return Boolean(run.cancelled);
+    // Where each sentence starts in the text, and which recorded words fall in it.
+    const starts = [];
+    let from = 0;
+    for (const sentence of sentences) {
+      const at = text.indexOf(sentence.slice(0, 12), from);
+      starts.push(at >= 0 ? at : from);
+      from = (at >= 0 ? at : from) + sentence.length;
+    }
+    const words = (Array.isArray(audio.words) ? audio.words : [])
+      .map((w) => ({ t: Number(w?.t) * 1000, char: Number(w?.char) }))
+      .filter((w) => Number.isFinite(w.t) && Number.isFinite(w.char))
+      .sort((a, b) => a.t - b.t);
+    const durMs = buffer.duration * 1000;
+    const plan = sentences.map((sentence, i) => {
+      const a = starts[i];
+      const b = i + 1 < starts.length ? starts[i + 1] : Infinity;
+      const tl = this.#timeline(run.key, sentence);
+      const mine = words.filter((w) => w.char >= a && w.char < b);
+      // Sentence start: its first recorded word, else proportional to the text.
+      const begin = mine.length ? mine[0].t : (a / Math.max(1, text.length)) * durMs;
+      const anchors = mine.map((w) => ({ at: w.t, w: wordAtChar(tl, w.char - a) }));
+      // Sentence end: the last word plus the rest of the timeline at the pace
+      // the recording showed (the gap after it is silence, mouth at rest).
+      let end = begin + tl.total;
+      if (anchors.length >= 2) {
+        const f = anchors[0];
+        const l = anchors[anchors.length - 1];
+        const span = tl.words[l.w].t0 - tl.words[f.w].t0;
+        const pace = span > 50 ? Math.min(2, Math.max(0.5, (l.at - f.at) / span)) : 1;
+        end = l.at + (tl.total - tl.words[l.w].t0) * pace;
+      }
+      return { sentence, tl, begin, end, anchors };
+    });
+    for (let i = 0; i + 1 < plan.length; i++) plan[i].end = Math.min(plan[i].end, plan[i + 1].begin);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    src.connect(analyser);
+    analyser.connect(this.#buses.speech);
+    const t0 = ctx.currentTime + 0.06;
+    const perf0 = this.#heardAt(t0);
+    run.loud = { analyser, data: new Float32Array(analyser.fftSize), at: -1, value: 0 };
+    let ended = false;
+    src.onended = () => {
+      ended = true;
+      run.wake();
+    };
+    src.start(t0);
+    const stopSource = () => {
+      try {
+        src.stop();
+      } catch { /* already stopped */ }
+    };
+    try {
+      for (let i = 0; i < plan.length && !run.cancelled && !ended; i++) {
+        const p = plan[i];
+        const startPerf = perf0 + p.begin;
+        if (startPerf > performance.now()) await run.sleep(startPerf - performance.now());
+        if (run.cancelled || ended) break;
+        run.sentence = i;
+        try {
+          onSentence?.(p.sentence, i);
+        } catch (err) {
+          console.warn('[audio] onSentence failed', err);
+        }
+        const clock = new SpeechClock(p.tl, { speed: p.anchors.length ? 1 : p.tl.total / Math.max(200, p.end - p.begin), soft: false });
+        clock.start(startPerf);
+        run.setTimeline(p.tl, clock);
+        run.anchors = p.anchors.map((x) => ({ perf: perf0 + x.at, w: x.w }));
+        run.nextAnchor = 0;
+        const endPerf = perf0 + p.end;
+        while (!run.cancelled && !ended && performance.now() < endPerf - 1) await run.sleep(endPerf - performance.now());
+        run.clearTimeline(); // silence until the next sentence: the mouth rests
+        const next = i + 1 < plan.length ? perf0 + plan[i + 1].begin : perf0 + durMs + 40;
+        while (!run.cancelled && !ended && performance.now() < next - 1) await run.sleep(next - performance.now());
+      }
+      while (!run.cancelled && !ended) await run.sleep(Math.max(20, perf0 + durMs + 300 - performance.now()));
+    } finally {
+      if (run.cancelled) stopSource();
+      run.clearTimeline();
+      run.loud = null;
+      setTimeout(() => {
+        try {
+          analyser.disconnect();
+          src.disconnect();
+        } catch { /* ignore */ }
+      }, 200);
+    }
+    return true;
   }
 
   #timeline(key, sentence, rate) {

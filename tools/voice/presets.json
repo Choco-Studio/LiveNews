@@ -1,0 +1,13 @@
+{
+ "note": "Presenter voices for GLOBIT 24 (ids match config/channel.json). Each keeps the orchestrator's base Kokoro voice dominant and blends in a second voice of the same accent for a timbre no other Kokoro user has. Speeds are tuned to a per-character speaking rate measured with measure.py rates. chain: optional dsp.DEFAULTS overrides.",
+ "presets": {
+  "paco": {"voice": "bm_george:0.7+bm_fable:0.3", "lang": "en-gb", "speed": 1.0, "effect": null},
+  "lola": {"voice": "af_heart:0.75+af_bella:0.25", "lang": "en-us", "speed": 1.0, "effect": null},
+  "max": {"voice": "am_puck:0.75+am_fenrir:0.25", "lang": "en-us", "speed": 1.0, "effect": null},
+  "ada": {"voice": "bf_emma:0.75+bf_lily:0.25", "lang": "en-gb", "speed": 1.0, "effect": null},
+  "nova": {"voice": "af_nova:0.6+af_bella:0.4", "lang": "en-us", "speed": 1.0, "effect": null},
+  "unit8": {"voice": "am_echo:0.7+am_fenrir:0.3", "lang": "en-us", "speed": 1.0, "effect": "robot"},
+  "penny": {"voice": "bf_isabella:0.7+bf_emma:0.3", "lang": "en-gb", "speed": 1.0, "effect": null},
+  "sam": {"voice": "am_michael:0.75+am_onyx:0.25", "lang": "en-us", "speed": 1.0, "effect": null}
+ }
+}

@@ -145,7 +145,7 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
   const cat = category(catName);
   if (image) ctx.drawImage(image, 0, 0);
   else ctx.drawImage(catField(cat), 0, 0);
-  ctx.drawImage(shade(96, 200, image ? 0.85 : 0.6), 0, 0);
+  if (image) ctx.drawImage(shade(96, 200, 0.85), 0, 0); // photos get a stepped shade; the field is already dark there
 
   // TOP STORIES tag and pips under the bug: animate in on the first frame only
   const tagP = index === 0 ? easeOutQuint(seg(dt, 0.1, 0.35)) : 1;

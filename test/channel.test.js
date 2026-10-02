@@ -154,6 +154,28 @@ describe('validateChannel', () => {
     assert.doesNotThrow(() => validateChannel(withProgram('duo', { categories: ['world', 'business'] })));
   });
 
+  test('"features" is optional; when present it is a list of known features (round-up, number of the day, and finally)', () => {
+    const ok = makeChannel();
+    ok.programs.duo.features = ['roundup', 'number', 'lighter'];
+    ok.programs.solo.features = [];
+    assert.doesNotThrow(() => validateChannel(ok));
+    const unknown = makeChannel();
+    unknown.programs.duo.features = ['roundup', 'weather'];
+    assert.throws(() => validateChannel(unknown), /programme "duo" has an unknown feature "weather"/);
+    const notList = makeChannel();
+    notList.programs.duo.features = 'roundup';
+    assert.throws(() => validateChannel(notList), /programme "duo" has "features" that are not a list/);
+  });
+
+  test('"chemistry" is optional text for the writer', () => {
+    const ok = makeChannel();
+    ok.programs.duo.chemistry = 'Ann is dry; Bob is warm.';
+    assert.doesNotThrow(() => validateChannel(ok));
+    const bad = makeChannel();
+    bad.programs.duo.chemistry = ['Ann', 'Bob'];
+    assert.throws(() => validateChannel(bad), /programme "duo" has a "chemistry" that is not text/);
+  });
+
   test('"theme" and "maxChats" stay optional', () => {
     const channel = makeChannel();
     delete channel.programs.solo.theme;
@@ -228,6 +250,14 @@ describe('publicChannel', () => {
     for (const key of ['personality', 'style', 'storyLength', 'categories', 'maxChats', 'stories', 'breaks']) {
       assert.ok(!json.includes(`"${key}"`), `"${key}" leaked`);
     }
+  });
+
+  test('the writer-only "chemistry" and "features" of a programme do not leak either', () => {
+    const ch = makeChannel();
+    ch.programs.duo.chemistry = 'SECRET-CHEMISTRY';
+    ch.programs.duo.features = ['roundup'];
+    const json = JSON.stringify(publicChannel(ch));
+    assert.ok(!json.includes('SECRET') && !json.includes('"features"'), json);
   });
 
   test('does not leak anything from the real channel either', () => {
@@ -557,6 +587,18 @@ describe('config/channel.json', () => {
       assert.ok(p.voice.pitch >= 0.1 && p.voice.pitch <= 2, `${id}: pitch`);
       assert.ok(p.voice.rate >= 0.5 && p.voice.rate <= 2, `${id}: rate`);
     }
+  });
+
+  test('the programmes use the recurring features where they fit, and every duo has a chemistry note', () => {
+    assert.deepEqual([...channel.programs['world-now'].features].sort(), ['lighter', 'number', 'roundup']);
+    assert.ok(channel.programs['news-60'].features.includes('roundup'));
+    for (const [id, p] of programs) {
+      if (p.presenters.length === 2) assert.ok(typeof p.chemistry === 'string' && p.chemistry.length > 40, `${id}.chemistry`);
+    }
+  });
+
+  test('presenter personalities read as grown-up broadcasters (the owner: "not a children\'s programme")', () => {
+    for (const [id, p] of Object.entries(channel.presenters)) assert.doesNotMatch(p.personality, /\bpuns?\b|excitable|wacky|\bcute\b|bubbly/i, id);
   });
 
   test('commercial breaks are configured', () => {

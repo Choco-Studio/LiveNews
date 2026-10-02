@@ -39,8 +39,8 @@ function renderGlobe(fb, R, rot) {
       const ny = -dy / RR;
       const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
       const dif = nx * L[0] + ny * L[1] + nz * L[2];
-      // flat cel bands like the logo: pink highlight, red body, dark red crescent
-      let col = dif > 0.965 ? C.pink : dif > 0.12 ? C.red : C.darkRed;
+      // flat cel bands like the logo: red body, dark red crescent (no glossy highlight)
+      let col = dif > 0.12 ? C.red : C.darkRed;
       const lit = dif > 0.12;
       // seams of light: the equator row and two meridians either side of the centre
       if (dy === 0) col = lit ? C.white : C.silver;

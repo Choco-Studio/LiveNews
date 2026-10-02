@@ -52,14 +52,13 @@ function emblem(ctx, dt, x, y, k = 1) {
     if (hh <= 0) return;
     const bx = x0 + i * (L.bw + L.gap);
     const top = by - hh;
-    ctx.fillStyle = P.green;
-    ctx.fillRect(bx, top, L.bw, hh);
+    // restrained bars: dark green bodies with a lit green cap, the accent kept to a sliver
     ctx.fillStyle = P.darkGreen;
-    ctx.fillRect(bx + L.bw - shade, top, shade, hh);
-    if (hh > 1) {
-      ctx.fillStyle = P.cream;
-      ctx.fillRect(bx, top, L.bw - shade, 1);
-    }
+    ctx.fillRect(bx, top, L.bw, hh);
+    ctx.fillStyle = P.black;
+    ctx.fillRect(bx + L.bw - shade + 1, top, shade - 1, hh);
+    ctx.fillStyle = P.green;
+    ctx.fillRect(bx, top, L.bw - shade + 1, Math.min(hh, 2));
   });
   // trend line climbs across them (1 px white with a 1 px black underline)
   const n = L.line.length / 2;

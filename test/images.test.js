@@ -1,5 +1,9 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { ImageCache } from '../server/images.js';
 
 // ---------------------------------------------------------------- helpers
@@ -168,5 +172,52 @@ describe('ImageCache', () => {
     assert.equal(fetchImpl.calls.length, 121, 'id0 survived because it was used recently');
     await cache.get('id1', url(1));
     assert.equal(fetchImpl.calls.length, 122, 'id1 had to be downloaded again');
+  });
+});
+
+// ---------------------------------------------------------------- local pictures (offline fixtures)
+
+describe('ImageCache: local pictures', () => {
+  const setup = (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'livenews-img-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    fs.writeFileSync(path.join(dir, 'ok.png'), PNG);
+    fs.writeFileSync(path.join(dir, 'fake.png'), 'not really a picture');
+    fs.writeFileSync(path.join(dir, 'note.txt'), 'hello');
+    return dir;
+  };
+  const url = (...p) => pathToFileURL(path.join(...p)).href;
+
+  test('reads a picture from an allowed folder, typed by its bytes, without any network', async (t) => {
+    const dir = setup(t);
+    const fetchImpl = makeFetch(() => {
+      throw new Error('no network expected');
+    });
+    const entry = await new ImageCache({ fetchImpl, localRoots: () => [dir] }).get('s1', url(dir, 'ok.png'));
+    assert.equal(entry.type, 'image/png');
+    assert.deepEqual(entry.body, PNG);
+    assert.equal(fetchImpl.calls.length, 0);
+  });
+
+  test('accepts the roots as a list or a Set returned by a function', async (t) => {
+    const dir = setup(t);
+    assert.equal((await new ImageCache({ localRoots: [dir] }).get('a', url(dir, 'ok.png'))).type, 'image/png');
+    assert.equal((await new ImageCache({ localRoots: () => new Set([dir]) }).get('b', url(dir, 'ok.png'))).type, 'image/png');
+  });
+
+  test('refuses files outside the allowed folders, non-picture names and files that are not pictures', async (t) => {
+    const dir = setup(t);
+    const cache = new ImageCache({ localRoots: () => [path.join(dir, 'sub')] });
+    assert.deepEqual(await cache.get('x1', url(dir, 'ok.png')), { error: 'invalid URL' }, 'outside the root');
+    const open = new ImageCache({ localRoots: () => [dir] });
+    assert.deepEqual(await open.get('x2', url(dir, 'note.txt')), { error: 'invalid URL' });
+    assert.deepEqual(await open.get('x3', url(dir, 'fake.png')), { error: 'content type not allowed: not an image' });
+    assert.match((await open.get('x4', url(dir, 'missing.png'))).error, /ENOENT/);
+    assert.deepEqual(await open.get('x5', url(dir, '..', 'ok.png')), { error: 'invalid URL' });
+  });
+
+  test('without local roots (the default) a file: URL is refused like any other non-http URL', async (t) => {
+    const dir = setup(t);
+    assert.deepEqual(await new ImageCache().get('d', url(dir, 'ok.png')), { error: 'invalid URL' });
   });
 });

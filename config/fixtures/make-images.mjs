@@ -337,8 +337,12 @@ export const SCENES = {
   ferry(c, r) {
     c.gradient(0, H * 0.55, [[0, '#2a3038'], [1, '#6a747c']]);
     for (let i = 0; i < 14; i++) cloud(c, r() * W, H * (0.04 + r() * 0.3), 70 + r() * 80, r() < 0.5 ? '#3a4048' : '#4a525a', 0.75);
-    c.ridge(H * 0.5, 24, 0.003, '#4a5248', 91, { octaves: 2, bottom: H * 0.56 });
-    c.rect(W * 0.12, H * 0.44, 30, 40, '#e8e4dc');
+    c.ridge(H * 0.5, 24, 0.003, '#323a36', 91, { octaves: 2, bottom: H * 0.56 });
+    // a lighthouse on the headland, its lamp lit
+    c.poly([[W * 0.12, H * 0.48], [W * 0.13, H * 0.36], [W * 0.14, H * 0.36], [W * 0.15, H * 0.48]], '#c8c4bc');
+    c.rect(W * 0.125, H * 0.4, W * 0.02, 8, '#8a3a32');
+    c.rect(W * 0.128, H * 0.33, W * 0.014, H * 0.03, '#ffe8b0');
+    c.glow(W * 0.135, H * 0.345, 90, '#ffe0a0', 0.5);
     c.gradient(H * 0.54, H, [[0, '#3a5a64'], [1, '#14262e']]);
     // the ferry, slightly tilted
     const fx = W * 0.32;
@@ -346,10 +350,10 @@ export const SCENES = {
     const tilt = 0.06;
     const P = (x, y) => [fx + x, fy + y + x * tilt];
     c.poly([P(0, 40), P(520, 40), P(560, 0), P(-30, 0)].map(([x, y]) => [x, y]), '#c8d2dc');
-    c.poly([P(-30, 0), P(560, 0), P(520, 40), P(0, 40)], '#e8eef4');
+    c.poly([P(-30, 0), P(560, 0), P(520, 40), P(0, 40)], '#c8ccd0');
     c.poly([P(-20, 40), P(530, 40), P(500, 86), P(10, 86)], '#1f3f7a');
-    c.poly([P(60, 0), P(420, 0), P(400, -50), P(90, -50)], '#f2f4f6');
-    c.poly([P(120, -50), P(360, -50), P(340, -88), P(150, -88)], '#e6eaee');
+    c.poly([P(60, 0), P(420, 0), P(400, -50), P(90, -50)], '#d4d6d8');
+    c.poly([P(120, -50), P(360, -50), P(340, -88), P(150, -88)], '#c4c8cc');
     for (let k = 0; k < 9; k++) c.poly([P(100 + k * 34, -38), P(122 + k * 34, -38), P(122 + k * 34, -24), P(100 + k * 34, -24)], '#3a4a5e');
     c.poly([P(240, -88), P(272, -88), P(276, -130), P(244, -130)], '#c8463a');
     // waves in front
@@ -466,10 +470,7 @@ export const SCENES = {
       const spread = (r() + r() + r() - 1.5) * 260;
       c.circle(t * W + spread * 0.4, H * 0.85 - t * H * 0.8 + spread, r() < 0.97 ? 1.4 : 2.8, '#ffffff', 0.2 + r() * 0.5);
     }
-    for (let i = 0; i < 18; i++) {
-      const t = 0.1 + r() * 0.8;
-      c.ellipse(t * W + (r() - 0.5) * 80, H * 0.85 - t * H * 0.8 + (r() - 0.5) * 60, 40 + r() * 60, 14 + r() * 16, '#0a0c20', 0.5);
-    }
+
     stars(c, r, 300, H * 0.8, 0.9);
     // mountain and dome
     c.ridge(H * 0.74, 90, 0.0018, '#0e0e18', 131, { octaves: 3 });

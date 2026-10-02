@@ -129,11 +129,13 @@ export const DEFAULT_PROFILES = new Map([['A', normProfile('male', false)], ['B'
 export const NEUTRAL_PROFILE = normProfile('neutral', false);
 
 // Blip timbres per gender. Robots are low, flat, staccato and heavily filtered.
+// Gains put every voice at about -18 LUFS (measured in public/lab/audio.html),
+// ~10 LU above the ducked music.
 const BLIP_KINDS = {
-  male: { base: 200, wave: 'pulse50', gain: 0.1, cut: 2600, vary: 0.12, flat: 0, len: 0.78 },
-  female: { base: 350, wave: 'tri', gain: 0.26, cut: 2600, vary: 0.12, flat: 0, len: 0.78 },
-  neutral: { base: 270, wave: 'tri', gain: 0.24, cut: 2600, vary: 0.12, flat: 0, len: 0.78 },
-  robot: { base: 130, wave: 'pulse50', gain: 0.11, cut: 1400, vary: 0.03, flat: 0.8, len: 0.55 },
+  male: { base: 200, wave: 'pulse50', gain: 0.25, cut: 2600, vary: 0.12, flat: 0, len: 0.78 },
+  female: { base: 350, wave: 'tri', gain: 0.35, cut: 2600, vary: 0.12, flat: 0, len: 0.78 },
+  neutral: { base: 270, wave: 'tri', gain: 0.34, cut: 2600, vary: 0.12, flat: 0, len: 0.78 },
+  robot: { base: 130, wave: 'pulse50', gain: 0.33, cut: 1400, vary: 0.03, flat: 0.8, len: 0.55 },
 };
 
 function hash01(str) {

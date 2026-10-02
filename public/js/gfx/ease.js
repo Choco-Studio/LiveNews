@@ -37,6 +37,7 @@ export function easeOutBack(x, s = 1.70158) {
  */
 export function dropBounce(x, hop = 0.18) {
   const v = clamp(x, 0, 1);
+  if (v >= 1) return 0;
   const fall = 0.55;
   if (v < fall) {
     const k = v / fall;

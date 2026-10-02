@@ -319,7 +319,7 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
       const midi = seq[i % seq.length] + (a.oct - 12);
       const accent = (i * a.rate) % 1 === 0 ? 1 : 0.7;
       out.push({
-        inst: a.inst, layer: 'arp', at: i * a.rate, dur: a.rate * 0.9, midi, vel: 0.6 * accent * human(),
+        inst: a.inst, layer: 'arp', at: i * a.rate, dur: a.rate * 0.9, midi, vel: 0.8 * accent * human(),
         p: { wave: a.wave, decay: a.inst === 'bell' ? 0.35 : 0.12, bright: 1600, pan: ((i % 4) - 1.5) * 0.25 },
       });
     }

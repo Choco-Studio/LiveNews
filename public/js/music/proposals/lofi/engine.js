@@ -22,21 +22,23 @@ import { SCALES, degreeToMidi, rng, hash } from './theory.js';
 
 export const LOOKAHEAD = 0.6; // seconds of music scheduled ahead of the clock
 export const MIX = {
-  duck: { melody: 0.08, keys: 0.35, drums: 0.4, bed: 0.56, tex: 0.3 }, // linear gain while speaking
+  duck: { melody: 0.08, keys: 0.35, drums: 0.4, bed: 0.56, air: 0.4, tex: 0.3 }, // linear gain while speaking
   duckAttack: 0.035, // time constant (s): ~100 ms to settle
   duckRelease: 0.28, // time constant (s): ~800 ms to come back
   duckHold: 0.35, // s of speech-off before releasing (bridges sentence gaps)
   pocketSpeech: -6, // extra dB of 2.4 kHz dip while speaking
   graveFade: 2.5,
-  output: 1.0,
+  output: 0.53, // calibrated: headlines bed alone ~ -29 LUFS, standby ~ -23 LUFS
 };
 const SENDS = {
   melody: { verb: 1.2, echo: 1 },
   keys: { verb: 0.7, echo: 0.35 },
   drums: { verb: 0.3, echo: 0 },
   bed: { verb: 0.8, echo: 0 },
+  air: { verb: 0.15, echo: 0 },
   tex: { verb: 0, echo: 0 },
 };
+const AIR = new Set(['air', 'tex']); // bypass the bed low-pass
 const GROUPS = Object.keys(SENDS);
 const dbToGain = (db) => 10 ** (db / 20);
 
@@ -135,7 +137,7 @@ class Bed {
     this.sends = {};
     for (const grp of GROUPS) {
       const d = g(speaking ? MIX.duck[grp] : 1);
-      d.connect(this.sum);
+      d.connect(AIR.has(grp) ? this.out : this.sum);
       const verb = g(this.pal.fx.reverb * SENDS[grp].verb);
       const echo = g(this.pal.fx.echo * SENDS[grp].echo);
       d.connect(verb).connect(rig.reverbIn);
@@ -149,7 +151,7 @@ class Bed {
     const fade = entry === 'instant' ? 0 : entry === 'xfade' ? this.barSec * 0.5 : this.barSec * 1.5;
     for (const name of LAYERS) {
       const lg = g(0);
-      const level = arr.layers[name] || 0;
+      const level = engine.level(arr, name);
       lg.gain.setValueAtTime(fade ? 0 : level, t0);
       if (fade) lg.gain.linearRampToValueAtTime(level, t0 + fade);
       let tail = lg;
@@ -194,7 +196,7 @@ class Bed {
     this.timeline = this.timeline.filter((e) => e.bar < bar);
     this.timeline.push({ bar, arr });
     this.current = arr;
-    for (const name of LAYERS) rampTo(this.layer[name].gain, arr.layers[name] || 0, t, dur);
+    for (const name of LAYERS) rampTo(this.layer[name].gain, this.engine.level(arr, name), t, dur);
     rampTo(this.out.gain, dbToGain(arr.gain), t, dur);
     targetTo(this.lp.frequency, arr.lp, t, dur / 2);
   }
@@ -295,6 +297,7 @@ export class LofiEngine {
     this.rig.out.gain.value = MIX.output;
     this.rig.out.connect(destination);
     this.gravePad = gravePad;
+    this.solo = null; // Set of layer names, or null for all
     this.bed = null;
     this.beds = new Set();
     this.speaking = false;
@@ -307,6 +310,12 @@ export class LofiEngine {
     const sv = ctx.createGain();
     sv.gain.value = 0.3;
     this.stingBus.connect(sv).connect(this.rig.reverbIn);
+  }
+
+  /** Layer level of an arrangement (a `solo` set mutes the other layers: lab diagnostics). */
+  level(arr, name) {
+    if (this.solo && !this.solo.has(name)) return 0;
+    return arr.layers[name] || 0;
   }
 
   // ------------------------------------------------------------- scheduling

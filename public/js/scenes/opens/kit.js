@@ -251,36 +251,20 @@ export function drawLockup(ctx, dt, info, style) {
 }
 
 /**
- * The bit pops out of the emblem's top-right shoulder, then hops along an arc
- * (anticipation dip, ease-in-out flight, one-frame squash) onto the plate.
+ * The bit pops out of the emblem's top-right shoulder (like the logo's bit off its globe), then
+ * travels on a shallow eased arc to the plate's top-right corner and stays there.
  */
 export function drawHopBit(ctx, dt, ex, ey, L, shoulder = 30, popAt = TL.pop) {
   if (dt < popAt) return;
   const sx = ex + shoulder - 2;
   const sy = ey - shoulder - 2;
   if (dt < TL.hop) {
-    const s = Math.round(4 * easeOutQuint(seg(dt, popAt, 0.14)));
-    const dip = dt > TL.hop - 0.08 ? 1 : 0; // anticipation
-    drawBit(ctx, sx, sy + dip + (4 - s), s);
+    drawBit(ctx, sx, sy, Math.round(4 * easeOutQuint(seg(dt, popAt, 0.16))));
     return;
   }
-  const k = seg(dt, TL.hop, TL.hopDur);
-  const e = easeInOut(k);
+  const e = easeInOut(seg(dt, TL.hop, TL.hopDur));
   const x = Math.round(lerp(sx, L.bitX, e));
-  const base = lerp(sy, L.bitY, e);
-  const arc = 12 * Math.sin(Math.PI * Math.min(1, e));
-  const y = Math.round(base - arc);
-  if (k >= 1) {
-    const land = dt - (TL.hop + TL.hopDur);
-    if (land < 0.06) {
-      // squash on landing: one frame wider and flatter
-      ctx.fillStyle = P.yellow;
-      ctx.fillRect(L.bitX - 1, L.bitY + 1, 6, 3);
-      ctx.fillStyle = P.orange;
-      ctx.fillRect(L.bitX - 1, L.bitY + 3, 6, 1);
-    } else drawBit(ctx, L.bitX, L.bitY, 4);
-    return;
-  }
+  const y = Math.round(lerp(sy, L.bitY, e) - 7 * Math.sin(Math.PI * e));
   drawBit(ctx, x, y, 4);
 }
 

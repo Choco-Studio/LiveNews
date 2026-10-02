@@ -144,7 +144,7 @@ export class Rig {
     this.shelf = ctx.createBiquadFilter();
     this.shelf.type = 'highshelf';
     this.shelf.frequency.value = 5500;
-    this.shelf.gain.value = -4;
+    this.shelf.gain.value = -2;
     this.glue = ctx.createDynamicsCompressor();
     this.glue.threshold.value = -22;
     this.glue.knee.value = 12;
@@ -263,13 +263,13 @@ export class Rig {
     const mod = this.osc('sine', f, t, false);
     const mg = this.gain(0);
     mg.gain.setValueAtTime(f * idx, t);
-    mg.gain.setTargetAtTime(f * idx * 0.16, t + 0.004, 0.32);
+    mg.gain.setTargetAtTime(f * idx * 0.34, t + 0.004, 0.45);
     mod.connect(mg);
     mg.connect(car.frequency);
     mg.connect(car2.frequency);
     const twin = this.gain(0.55);
     const amp = this.gain(0);
-    const peak = 0.085 * vel;
+    const peak = 0.1 * vel;
     const atk = p.attack ?? 0.012;
     amp.gain.setValueAtTime(0, t);
     amp.gain.linearRampToValueAtTime(peak, t + atk);
@@ -296,7 +296,7 @@ export class Rig {
     lp.frequency.setValueAtTime(p.lpFrom ?? 260, t);
     lp.frequency.setTargetAtTime(p.lpTo ?? 1100, t, atk / 2.2);
     const amp = this.gain(0);
-    const peak = 0.032 * vel;
+    const peak = 0.06 * vel;
     amp.gain.setValueAtTime(0, t);
     if (atk >= dur) {
       amp.gain.linearRampToValueAtTime(peak, t + dur); // reverse swell: cut right at the downbeat
@@ -322,7 +322,7 @@ export class Rig {
     const bg = this.gain(0.55);
     const lp = this.filter('lowpass', p.lp ?? 650, 0.6);
     const amp = this.gain(0);
-    const peak = 0.2 * vel;
+    const peak = 0.1 * vel;
     amp.gain.setValueAtTime(0, t);
     amp.gain.linearRampToValueAtTime(peak, t + 0.014);
     amp.gain.setTargetAtTime(peak * 0.72, t + 0.014, 0.3);
@@ -417,7 +417,7 @@ export class Rig {
     o.frequency.exponentialRampToValueAtTime(46, t + 0.1);
     const amp = this.gain(0);
     amp.gain.setValueAtTime(0, t);
-    amp.gain.linearRampToValueAtTime(0.42 * vel, t + 0.004);
+    amp.gain.linearRampToValueAtTime(0.24 * vel, t + 0.004);
     amp.gain.setTargetAtTime(0, t + 0.004, 0.11);
     o.connect(amp).connect(dest);
     // A felt "knock" so the kick reads on small speakers, kept below 1 kHz.
@@ -426,7 +426,7 @@ export class Rig {
     const lp = this.filter('lowpass', 900, 0.7);
     const ng = this.gain(0);
     ng.gain.setValueAtTime(0, t);
-    ng.gain.linearRampToValueAtTime(0.07 * vel, t + 0.002);
+    ng.gain.linearRampToValueAtTime(0.05 * vel, t + 0.002);
     ng.gain.setTargetAtTime(0, t + 0.002, 0.012);
     n.connect(lp).connect(ng).connect(dest);
     this.play([o, n], [amp, lp, ng], t, t + 0.7);
@@ -440,7 +440,7 @@ export class Rig {
     const bp = this.filter('bandpass', brush ? 1900 : 1600, brush ? 0.45 : 0.7);
     const lp = this.filter('lowpass', brush ? 3600 : 4200, 0.5);
     const amp = this.gain(0);
-    const peak = (brush ? 0.13 : 0.17) * vel;
+    const peak = (brush ? 0.19 : 0.22) * vel;
     const atk = brush ? 0.014 : 0.002;
     amp.gain.setValueAtTime(0, t);
     amp.gain.linearRampToValueAtTime(peak, t + atk);
@@ -478,7 +478,7 @@ export class Rig {
     const lp = this.filter('lowpass', 12000, 0.5);
     const amp = this.gain(0);
     amp.gain.setValueAtTime(0, t);
-    amp.gain.linearRampToValueAtTime(0.055 * vel, t + 0.002);
+    amp.gain.linearRampToValueAtTime(0.15 * vel, t + 0.002);
     amp.gain.setTargetAtTime(0, t + 0.002, open ? 0.11 : 0.022);
     n.connect(hp).connect(lp).connect(amp).connect(dest);
     this.play([n], [hp, lp, amp], t, t + (open ? 0.8 : 0.2));
@@ -490,7 +490,7 @@ export class Rig {
     const bp = this.filter('bandpass', 7400, 1.3);
     const amp = this.gain(0);
     amp.gain.setValueAtTime(0, t);
-    amp.gain.linearRampToValueAtTime(0.05 * vel, t + 0.014);
+    amp.gain.linearRampToValueAtTime(0.12 * vel, t + 0.014);
     amp.gain.setTargetAtTime(0, t + 0.014, 0.03);
     n.connect(bp).connect(amp).connect(dest);
     this.play([n], [bp, amp], t, t + 0.25);
@@ -583,7 +583,7 @@ export class Rig {
     hiss.__offset = (t * 1.7) % 4;
     const hhp = this.filter('highpass', 600, 0.5);
     const hlp = this.filter('lowpass', 6500, 0.5);
-    const hg = this.gain(0.0045 * amount);
+    const hg = this.gain(0.012 * amount);
     hiss.connect(hhp).connect(hlp).connect(hg).connect(dest);
     const cr = this.noise(t, this.crackle);
     cr.loop = true;
@@ -591,7 +591,7 @@ export class Rig {
     cr.playbackRate.value = 0.94;
     const chp = this.filter('highpass', 700, 0.5);
     const clp = this.filter('lowpass', 7000, 0.5);
-    const cg = this.gain(0.09 * amount);
+    const cg = this.gain(0.24 * amount);
     cr.connect(chp).connect(clp).connect(cg).connect(dest);
     const far = 1e6;
     this.play([hiss, cr], [hhp, hlp, hg, chp, clp, cg], t, t + far);

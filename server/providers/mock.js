@@ -20,7 +20,6 @@ const KICKERS = [
   [/earthquake|quake|tremor/i, 'EARTHQUAKE'],
   [/flood|monsoon|heavy rain|storm|hurricane|typhoon|cyclone|strong winds|heatwave/i, 'WEATHER'],
   [/\b(?:tram|train|rail|metro|ferry|ferries|airport|flights?|bus|buses|bicycle|cycling|bike)\b/i, 'TRANSPORT'],
-  [/solar|wind farm|turbine|power grid|energy|electricity|battery|batteries/i, 'ENERGY'],
   [/deforest|forest|climate|emission|carbon|glacier|ice sheet/i, 'CLIMATE'],
   [/archaeolog|temple|ancient|ruins|fossil|dinosaur|tomb/i, 'HISTORY'],
   [/\bschools?\b|education|students?|universit/i, 'EDUCATION'],
@@ -37,7 +36,8 @@ const KICKERS = [
   [/\bapps?\b|software|update|browser/i, 'SOFTWARE'],
   [/video games?|gaming|console/i, 'GAMING'],
   [/rocket|launch|orbit|satellite|astronaut|space station|spacecraft|probe/i, 'SPACE'],
-  [/telescope|galaxy|galaxies|planet|comet|asteroid|\bstars?\b|\bmoon\b|nebula/i, 'ASTRONOMY'],
+  [/telescope|galaxy|galaxies|planet|comet|asteroid|eclipse|\bstars?\b|\bmoon\b|nebula/i, 'ASTRONOMY'],
+  [/solar (?:farm|panels?|plant|power|park)|wind farm|turbines?|tidal power|power grid|energy|electricity|batter(?:y|ies)/i, 'ENERGY'],
   [/vaccine|hospital|health|medicine|disease|patients/i, 'HEALTH'],
   [/ocean|whales?|reef|coral|dolphins?|sea turtles?/i, 'OCEANS'],
   [/wildlife|zoo|panda|penguins?|elephants?|birds?\b|species|bees?\b/i, 'WILDLIFE'],
@@ -238,13 +238,14 @@ function writeEpisode({ stories, channelName, program, presenters, count }) {
   const top = order[0];
   const second = order[1];
   const greet = choose(GREETINGS, seed)(title, channelName);
+  const sober = top?.grave || second?.grave; // no waving at the viewer while teasing grave news
   const intro = [
     top ? `${top.grave ? '[serious] ' : ''}${asSentence(top.s.title)}` : '',
-    top?.grave ? greet.replace('[wave]', '[nod]') : greet,
+    sober ? greet.replace('[wave]', '[nod]') : greet,
     `I'm ${presenters.A.name}${solo ? '' : `, here with ${presenters.B.name}. [B:nod]`}${solo ? '.' : ''}`,
     second ? `[point_camera] Also coming up: ${unstop(second.s.title)}${numberStory && numberStory !== second ? ', and our number of the day' : ''}.` : '',
   ];
-  segments.push({ type: 'intro', anchor: 'A', emotion: top?.grave ? 'serious' : 'happy', text: intro.filter(Boolean).join(' ').replace(/\.\./g, '.') });
+  segments.push({ type: 'intro', anchor: 'A', emotion: top?.grave ? 'serious' : sober ? 'neutral' : 'happy', text: intro.filter(Boolean).join(' ').replace(/\.\./g, '.') });
 
   let chats = 0;
   let whyCount = 0;
@@ -267,10 +268,10 @@ function writeEpisode({ stories, channelName, program, presenters, count }) {
       // One sentence per item, place first, attributed.
       const idx = roundup.indexOf(info);
       const line = unstop(body(info, 1, { keepFirst: true })[0] || s.title);
-      // Lead with the place, or with its country when the sentence names the place itself.
+      // Lead with the place, or with its country when the sentence names the region itself ("the Reykjanes peninsula").
       const { entry } = info.loc;
       const country = entry.kind !== 'country' && entry.country ? placesIn(entry.country)[0]?.entry : null;
-      const place = country && line.includes(entry.name) ? spokenPlace(country) : spokenPlace(entry);
+      const place = entry.kind === 'region' && country && line.includes(entry.name) ? spokenPlace(country) : spokenPlace(entry);
       const lead = idx === 0 ? `[point_screen] Now, around the world in 30 seconds. First, ${place}.` : idx === roundup.length - 1 ? `And lastly, ${place}.` : choose([`To ${place} next.`, `Now ${place}.`, `Over to ${place}.`], key);
       parts.push(lead, `${line}, ${s.source} reports.`);
     } else {

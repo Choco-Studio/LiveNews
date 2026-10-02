@@ -42,19 +42,21 @@ const pack = (hex) => {
   return (0xff000000 | ((n & 255) << 16) | (n & 0xff00) | ((n >> 16) & 255)) >>> 0;
 };
 const T_SPACE = 0, T_STAR = 1, T_STAR2 = 2, T_DEEP = 3, T_OCEAN = 4, T_HALO = 5, T_LAND0 = 7, T_LAND1 = 11;
-// [base, light, dark, night, nightLight, nightDark]
+// [base, light, dark, night, nightLight, nightDark]. The map speaks the same language as the
+// WORLD NOW globe: a navy-to-ink sea, land in neutral steps (lowland steel, dry land fog, ice
+// silver), red only for the pin; city lights are the one warm note on the night side.
 const TONES = {
   [T_SPACE]: ['black', 'black', 'black', 'black', 'black', 'black'],
   [T_STAR]: ['fog', 'fog', 'fog', 'fog', 'fog', 'fog'],
   [T_STAR2]: ['steel', 'steel', 'steel', 'steel', 'steel', 'steel'],
   [T_DEEP]: ['ink', 'slate', 'black', 'black', 'ink', 'black'],
-  [T_OCEAN]: ['navy', 'steel', 'ink', 'ink', 'slate', 'black'],
-  [T_HALO]: ['blue', 'blue', 'navy', 'navy', 'navy', 'ink'],
-  7: ['darkGreen', 'darkGreen', 'black', 'ink', 'ink', 'black'], // forest
-  8: ['green', 'green', 'darkGreen', 'darkGreen', 'darkGreen', 'ink'], // grass
-  9: ['tan', 'tan', 'tanShade', 'tanShade', 'tanShade', 'brown'], // arid
-  10: ['cream', 'cream', 'tan', 'tan', 'tan', 'tanShade'], // desert, tundra
-  11: ['white', 'white', 'silver', 'silver', 'silver', 'fog'], // ice
+  [T_OCEAN]: ['navy', 'slate', 'ink', 'ink', 'slate', 'black'],
+  [T_HALO]: ['navy', 'navy', 'ink', 'ink', 'ink', 'black'],
+  7: ['steel', 'steel', 'slate', 'slate', 'slate', 'ink'], // forest
+  8: ['steel', 'steel', 'slate', 'slate', 'slate', 'ink'], // grass
+  9: ['fog', 'fog', 'steel', 'steel', 'steel', 'slate'], // arid
+  10: ['fog', 'fog', 'steel', 'steel', 'steel', 'slate'], // desert, tundra
+  11: ['silver', 'silver', 'fog', 'fog', 'fog', 'steel'], // ice
 };
 // index = night << 7 | variant << 4 | tone; variant 0 plain, 1 minor graticule, 2 major graticule, 3 border/coast
 const PAL = new Uint32Array(256);
@@ -355,20 +357,17 @@ function* stageTerrain() {
       while (v > stops[k + 1]) k++;
       L = k;
       const q = (v - stops[k]) / (stops[k + 1] - stops[k]);
-      const s = clamp((q - 0.22) / 0.56, 0, 1);
+      const s = clamp((q - 0.38) / 0.24, 0, 1); // narrow dithered seams between terrain steps
       fs = s * s * (3 - 2 * s);
     }
     lvl[i] = L; fr[i] = Math.round(fs * 255);
   }
   // value x 4x4 dither cell -> final tone, so the per-pixel work is a single lookup.
-  // Land: adjacent terrain tones. Sea: open ocean (navy) to deep ocean (ink) with distance.
   const landTone = new Uint8Array(4096), seaTone = new Uint8Array(4096);
   for (let v = 0; v < 256; v++) {
-    const q = clamp((v - 26) / 120, 0, 1);
-    const deep = Math.round(q * q * (3 - 2 * q) * 255);
     for (let k = 0; k < 16; k++) {
       landTone[(v << 4) | k] = T_LAND0 + lvl[v] + (fr[v] > B4_255[k] ? 1 : 0);
-      seaTone[(v << 4) | k] = deep > B4_255[k] ? T_DEEP : T_OCEAN;
+      seaTone[(v << 4) | k] = T_OCEAN; // the sea is one flat navy (depth bands read as blotches)
     }
   }
   GEO.landTone = landTone; GEO.seaTone = seaTone;
@@ -464,7 +463,7 @@ function warmStep() {
   }
   setTimeout(warmStep, 20);
 }
-if (typeof setTimeout === 'function' && typeof atob === 'function') {
+if (typeof setTimeout === 'function' && typeof document !== 'undefined') {
   const kick = () => {
     if (stepInit()) setTimeout(kick, 0);
     else setTimeout(warmStep, 50);
@@ -643,10 +642,7 @@ function renderBase(rt, view) {
   for (let y = 0; y < h; y++) {
     const row = y * w;
     if (rowSpace[y]) {
-      for (let x = 0; x < w; x++) {
-        const hv = hash2(x * 7 + 13, y * 5 + 7);
-        base[row + x] = hv < 0.006 ? T_STAR : hv < 0.02 ? T_STAR2 : T_SPACE;
-      }
+      base.fill(T_SPACE, row, row + w); // beyond the poles: plain black
       continue;
     }
     const ye = y & ~1;
@@ -1022,10 +1018,18 @@ function drawLabel(rt, ctx, ox, oy, w, h, pin, place, lat, lon, dt) {
     rt.labelFor = L;
   }
   const gap = 14;
-  const right = pin.cx + gap + L.bw <= w - 13;
+  const by = clamp(Math.round(pin.head - L.bh / 2), 26, Math.max(26, 138 - L.bh));
+  // the label goes on the side where it hides less land (right on a tie), decided once per place
+  if (L.right === undefined) {
+    const fitsR = pin.cx + gap + L.bw <= w - 13;
+    const fitsL = pin.cx - gap - L.bw >= 13;
+    const landR = fitsR ? landUnder(rt, pin.cx + gap, by, L.bw, L.bh) : 2;
+    const landL = fitsL ? landUnder(rt, pin.cx - gap - L.bw, by, L.bw, L.bh) : 2;
+    L.right = landR <= landL + 0.08;
+  }
+  const right = L.right;
   let bx = right ? pin.cx + gap : pin.cx - gap - L.bw;
   bx = clamp(bx, 13, w - 13 - L.bw);
-  const by = clamp(Math.round(pin.head - L.bh / 2), 26, Math.max(26, 138 - L.bh));
   const e = easeOutQuint(clamp(tl / 0.36, 0, 1));
   const vis = Math.max(1, Math.round((L.bw + gap) * e));
   ctx.save();
@@ -1061,6 +1065,18 @@ function drawLabel(rt, ctx, ox, oy, w, h, pin, place, lat, lon, dt) {
   return box;
 }
 
+/** Fraction of land pixels under a rectangle of the current view. */
+function landUnder(rt, x0, y0, bw, bh) {
+  let n = 0, l = 0;
+  for (let y = Math.max(0, y0); y < Math.min(rt.h, y0 + bh); y += 2) {
+    for (let x = Math.max(0, x0); x < Math.min(rt.w, x0 + bw); x += 2) {
+      n++;
+      if (rt.land[y * rt.w + x] === 1) l++;
+    }
+  }
+  return n ? l / n : 1;
+}
+
 function riseIn(ctx, text, x, y, p, scale, font, color, clipX, clipW) {
   if (p <= 0) return;
   const cap = font === 'micro' ? 5 : 7 * scale;
@@ -1077,7 +1093,7 @@ function riseIn(ctx, text, x, y, p, scale, font, color, clipX, clipW) {
  * Up to five neighbouring country names in micro type, placed where they do not collide with
  * the pin, the label or each other; computed once the camera has settled, then cached.
  */
-function contextLabels(w, h, view, pin, box, place) {
+function contextLabels(rtU32, w, h, view, pin, box, place) {
   {
     const sx = view.s * view.kx, sy = view.s;
     const up = String(place || '').toUpperCase();
@@ -1088,7 +1104,7 @@ function contextLabels(w, h, view, pin, box, place) {
       dl -= Math.round(dl / 360) * 360;
       const px = Math.round(dl * sx + w / 2), py = Math.round((view.clat - la) * sy + h / 2);
       const tw = measureText(name, 1, 'micro');
-      const r = { x: px - (tw >> 1) - 1, y: py - 3, w: tw + 3, h: 8, name, d: Math.hypot(px - pin.cx, py - pin.cy) };
+      const r = { x: px - (tw >> 1) - 1, y: py - 3, w: tw + 3, h: 8, name, d: Math.hypot(px - pin.cx, py - pin.cy), dark: false };
       if (r.x < 13 || r.x + r.w > w - 13 || r.y < 28 || r.y + r.h > 138) continue;
       if (r.d < 22) continue;
       cand.push(r);
@@ -1102,6 +1118,19 @@ function contextLabels(w, h, view, pin, box, place) {
       if (keepOut.some((k) => hit(r, k, 4)) || placed.some((p) => hit(r, p))) continue;
       placed.push(r);
     }
+    // on light land (dry land, ice) the names are black; elsewhere silver with a black shadow
+    for (const r of placed) {
+      let lum = 0, n = 0;
+      for (let yy = r.y; yy < r.y + r.h; yy += 2) {
+        for (let xx = r.x; xx < r.x + r.w; xx += 2) {
+          if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+          const c = rtU32[yy * w + xx];
+          lum += (c & 255) * 0.3 + ((c >> 8) & 255) * 0.59 + ((c >> 16) & 255) * 0.11;
+          n++;
+        }
+      }
+      r.dark = n > 0 && lum / n > 120;
+    }
     return placed;
   }
 }
@@ -1112,7 +1141,7 @@ function drawContext(rt, ctx, ox, oy, w, h, view, pin, box, place, dt) {
   // computed once per place when the camera has settled (it no longer moves after FLY_T)
   let C = rt.context;
   if (!C || C.place !== place || C.clon !== view.clon || C.clat !== view.clat || C.s !== view.s) {
-    C = { place, clon: view.clon, clat: view.clat, s: view.s, list: contextLabels(w, h, view, pin, box, place) };
+    C = { place, clon: view.clon, clat: view.clat, s: view.s, list: contextLabels(rt.u32, w, h, view, pin, box, place) };
     rt.context = C;
   }
   const list = C.list;
@@ -1124,12 +1153,15 @@ function drawContext(rt, ctx, ox, oy, w, h, view, pin, box, place, dt) {
     ctx.beginPath();
     ctx.rect(ox + r.x - 1, oy + r.y - 1, r.w + 2, r.h + 1);
     ctx.clip();
-    drawText(ctx, r.name, ox + r.x + 1, oy + r.y + 1 + off, { color: P.silver, font: 'micro', shadow: P.black });
+    drawText(ctx, r.name, ox + r.x + 1, oy + r.y + 1 + off, r.dark ? { color: P.black, font: 'micro' } : { color: P.silver, font: 'micro', shadow: P.black });
     ctx.restore();
   });
 }
 
-/** Mini (video wall) locator: the place in micro type on a black strip along the bottom. */
+/**
+ * Mini (video wall) locator: the place in micro type on a black tab along the top edge (the wall's
+ * bottom rows stay clear because a solo presenter's head overlaps them).
+ */
 function drawMiniTag(ctx, ox, oy, w, h, place, tl) {
   if (tl < 0) return;
   const text = ellipsis(place, w - 10, 1);
@@ -1138,13 +1170,13 @@ function drawMiniTag(ctx, ox, oy, w, h, place, tl) {
   const vis = Math.round(tw * e);
   if (vis <= 0) return;
   ctx.fillStyle = P.black;
-  ctx.fillRect(ox, oy + h - 9, vis, 9);
+  ctx.fillRect(ox, oy, vis, 9);
   ctx.fillStyle = P.red;
-  ctx.fillRect(ox, oy + h - 9, 2, 9);
+  ctx.fillRect(ox, oy, 2, 9);
   ctx.save();
   ctx.beginPath();
-  ctx.rect(ox, oy + h - 9, vis, 9);
+  ctx.rect(ox, oy, vis, 9);
   ctx.clip();
-  drawText(ctx, text, ox + 5, oy + h - 7, { color: P.white, font: 'micro' });
+  drawText(ctx, text, ox + 5, oy + 2, { color: P.white, font: 'micro' });
   ctx.restore();
 }

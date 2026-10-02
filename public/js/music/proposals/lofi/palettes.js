@@ -11,8 +11,9 @@
 export const LAYERS = ['pad', 'keys', 'bass', 'kick', 'snare', 'hat', 'perc', 'arp', 'lead', 'tex'];
 
 // Speech-duck groups: how far each layer drops while a presenter talks.
+// 'air' and 'tex' (hats, shakers, ticks, vinyl) live above the speech band and skip the bed low-pass.
 export const DUCK_GROUP = {
-  pad: 'bed', bass: 'bed', keys: 'keys', kick: 'drums', snare: 'drums', hat: 'drums', perc: 'drums',
+  pad: 'bed', bass: 'bed', keys: 'keys', kick: 'drums', snare: 'drums', hat: 'air', perc: 'air',
   arp: 'melody', lead: 'melody', tex: 'tex',
 };
 
