@@ -8,8 +8,8 @@
 // Every frame is a pure function of the ad clock: sets are baked once with
 // dithered light (cine.js), people and props use the crisp rasteriser.
 import {
-  P, W, H, clamp, lerp, prog, smooth, easeInOut, track, window01, hash, blinkAt, mix, bake, shader, shadeInto, ditherInto,
-  pool, rect, line, begin, pt, fill, ellipse, capsule, film, vignette, letterbox, thin, tracked, text, smallPrint,
+  P, W, H, clamp, lerp, prog, smooth, easeInOut, track, window01, hash, blinkAt, mix, bake, prewarm, shader, shadeSteps,
+  pool, rect, line, begin, pt, fill, ellipse, capsule, film, vignette, vignetteArt, letterbox, thin, tracked, text, smallPrint,
   figure, bust, arm, wrist, profile, standing,
 } from './cine.js';
 
@@ -54,8 +54,8 @@ const C = {
 const S1W = 440;
 const HORIZON = 146;
 const streetSky = () =>
-  bake('sn-sky', S1W, H, (c) => {
-    shadeInto(c, 0, 0, S1W, HORIZON + 4, [C.sky0, C.sky1, C.sky2, C.sky3, C.sky4], (x, y) => clamp((y - 18) / (HORIZON - 18)) ** 1.25 + 0.04 * sin(x * 0.012));
+  bake('sn-sky', S1W, H, function* paint(c) {
+    yield* shadeSteps(c, 0, 0, S1W, HORIZON + 4, [C.sky0, C.sky1, C.sky2, C.sky3, C.sky4], (x, y) => clamp((y - 18) / (HORIZON - 18)) ** 1.25 + 0.04 * sin(x * 0.012));
     // a thin crescent moon
     ellipse(c, 330, 46, 5, 5, mix(P.cream, P.fog, 0.3));
     ellipse(c, 332, 45, 5, 5, C.sky1);
@@ -94,7 +94,7 @@ function house(c, x, w, roof, wins, aerial = true) {
 }
 
 const streetSet = () =>
-  bake('sn-street', S1W, H, (c) => {
+  bake('sn-street', S1W, H, function* paint(c) {
     house(c, 10, 84, 30, [[14, 128, 'warm'], [58, 128, 'dark'], [14, 150, 'dark'], [58, 150, 'warm']]);
     house(c, 118, 76, 26, [[12, 128, 'dark'], [50, 128, 'dark'], [30, 150, 'warm']], false);
     house(c, 222, 92, 32, [[16, 126, 'crt'], [62, 126, 'dark'], [16, 150, 'dark'], [62, 150, 'warm']]);
@@ -102,7 +102,7 @@ const streetSet = () =>
     // hedges and garden walls
     for (let x = 0; x < S1W; x += 4) rect(c, x, 168 - floor(hash(x * 0.7) * 3), 4, 12, mix(C.house, P.darkGreen, 0.15));
     // pavement and kerb
-    shadeInto(c, 0, 178, S1W, 14, [P.black, mix(P.black, P.ink, 0.6), P.ink], (x, y) => 0.3 + (y - 178) * 0.02);
+    yield* shadeSteps(c, 0, 178, S1W, 14, [P.black, mix(P.black, P.ink, 0.6), P.ink], (x, y) => 0.3 + (y - 178) * 0.02);
     rect(c, 0, 178, S1W, 1, mix(P.ink, P.slate, 0.4));
     // telephone pole and street lamps
     rect(c, 204, 70, 3, 110, P.black);
@@ -160,8 +160,8 @@ function shotStreet(ctx, lt) {
 
 // --- S1b: the house, closer: one window glows blue -------------------------------------------
 const houseSet = () =>
-  bake('sn-house', 400, H, (c) => {
-    shadeInto(c, 0, 0, 400, H, [C.sky0, C.sky1, C.sky2], (x, y) => clamp((y - 10) / 160) + 0.1 * (x / 400));
+  bake('sn-house', 400, H, function* paint(c) {
+    yield* shadeSteps(c, 0, 0, 400, H, [C.sky0, C.sky1, C.sky2], (x, y) => clamp((y - 10) / 160) + 0.1 * (x / 400));
     // gable wall, siding boards
     begin();
     pt(40, H);
@@ -228,27 +228,27 @@ const windowGlow = () =>
 
 // --- S2: the bedroom, a CRT, CONNECT -------------------------------------------------------
 const roomSet = () =>
-  bake('sn-room', 400, H, (c) => {
+  bake('sn-room', 400, H, function* paint(c) {
     // dark wall lit by the screen (right of centre)
-    shadeInto(c, 0, 0, 400, 150, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.45), mix(P.navy, P.blue, 0.25)], (x, y) => {
+    yield* shadeSteps(c, 0, 0, 400, 150, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.45), mix(P.navy, P.blue, 0.25)], (x, y) => {
       const d = sqrt(((x - 250) / 210) ** 2 + ((y - 96) / 110) ** 2);
       return clamp(1 - d) * 0.9 + 0.04;
     });
     // window with blinds at the left: dusk outside
-    shadeInto(c, 26, 34, 64, 70, [C.sky1, C.sky2, C.sky3], (x, y) => (y - 34) / 70);
+    yield* shadeSteps(c, 26, 34, 64, 70, [C.sky1, C.sky2, C.sky3], (x, y) => (y - 34) / 70);
     for (let y = 36; y < 104; y += 4) rect(c, 26, y, 64, 2, mix(P.black, P.ink, 0.5));
     rect(c, 22, 30, 72, 4, P.black);
     rect(c, 22, 104, 72, 4, mix(P.black, P.ink, 0.4));
     // posters, dim in the blue spill (no real bands, no real films)
     rect(c, 300, 30, 40, 54, mix(P.ink, P.black, 0.2));
-    shadeInto(c, 302, 32, 36, 50, [mix(P.ink, P.purple, 0.3), mix(P.navy, P.purple, 0.3), mix(P.slate, P.navy, 0.3)], (x, y) => clamp(1 - sqrt(((x - 320) / 16) ** 2 + ((y - 50) / 16) ** 2)));
+    yield* shadeSteps(c, 302, 32, 36, 50, [mix(P.ink, P.purple, 0.3), mix(P.navy, P.purple, 0.3), mix(P.slate, P.navy, 0.3)], (x, y) => clamp(1 - sqrt(((x - 320) / 16) ** 2 + ((y - 50) / 16) ** 2)));
     ellipse(c, 320, 52, 9, 9, mix(P.slate, P.navy, 0.35));
     rect(c, 304, 74, 32, 2, mix(P.fog, P.navy, 0.55));
     rect(c, 352, 40, 30, 42, mix(P.ink, P.black, 0.2));
     rect(c, 355, 43, 24, 22, mix(P.maroon, P.ink, 0.5));
     rect(c, 355, 70, 24, 2, mix(P.fog, P.ink, 0.6));
     // desk
-    shadeInto(c, 0, 150, 400, H - 150, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.4)], (x, y) => {
+    yield* shadeSteps(c, 0, 150, 400, H - 150, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.4)], (x, y) => {
       const d = sqrt(((x - 250) / 170) ** 2 + ((y - 156) / 30) ** 2);
       return clamp(1 - d) * 0.9 + 0.08;
     });
@@ -257,7 +257,7 @@ const roomSet = () =>
 
 /** The beige CRT monitor (screen drawn by the caller). */
 const monitorArt = () =>
-  bake('sn-monitor', 96, 84, (c) => {
+  bake('sn-monitor', 96, 84, function* paint(c) {
     // body seen slightly from the left: front bezel + side depth
     begin();
     pt(8, 4);
@@ -383,11 +383,11 @@ const pnlBot = (x) => lerp(PNL.b0, PNL.b1, clamp((x - PNL.x0) / (PNL.x1 - PNL.x0
 const ledX = (i) => lerp(150, 392, (i / 7) ** 0.82);
 const ledY = (i) => lerp(pnlTop(ledX(i)), pnlBot(ledX(i)), 0.5);
 const modemSet = () =>
-  bake('sn-modem', 430, H, (c) => {
+  bake('sn-modem', 430, H, function* paint(c) {
     // darkness, a cool wash from the screen above-right
-    shadeInto(c, 0, 0, 430, H, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.5)], (x, y) => clamp(1 - sqrt(((x - 300) / 300) ** 2 + ((y + 30) / 190) ** 2)) * 0.85);
+    yield* shadeSteps(c, 0, 0, 430, H, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.5)], (x, y) => clamp(1 - sqrt(((x - 300) / 300) ** 2 + ((y + 30) / 190) ** 2)) * 0.85);
     // top surface (catching the blue light), with vent slots receding
-    shadeInto(c, 0, 0, 430, H, [C.beigeDD, mix(C.beigeD, C.crt, 0.25), mix(C.beige, C.crtL, 0.3)], (x, y) => {
+    yield* shadeSteps(c, 0, 0, 430, H, [C.beigeDD, mix(C.beigeD, C.crt, 0.25), mix(C.beige, C.crtL, 0.3)], (x, y) => {
       const top = pnlTop(x);
       const back = top - lerp(30, 12, clamp(x / 430));
       if (y < back || y >= top) return -1;
@@ -400,7 +400,7 @@ const modemSet = () =>
       line(c, x, back + (top - back) * 0.3, x + 6 * (1 - i / 30), back + (top - back) * 0.3, C.beigeDD);
     }
     // front panel: beige, lit from the top edge, falling into shadow to the right
-    shadeInto(c, 0, 0, 430, H, [mix(C.beigeDD, P.black, 0.45), mix(C.beigeDD, P.black, 0.15), C.beigeDD, mix(C.beigeDD, C.beigeD, 0.5), C.beigeD], (x, y) => {
+    yield* shadeSteps(c, 0, 0, 430, H, [mix(C.beigeDD, P.black, 0.45), mix(C.beigeDD, P.black, 0.15), C.beigeDD, mix(C.beigeDD, C.beigeD, 0.5), C.beigeD], (x, y) => {
       const t = pnlTop(x);
       const b = pnlBot(x);
       if (y < t || y >= b) return -1;
@@ -409,7 +409,7 @@ const modemSet = () =>
     });
     line(c, 0, pnlTop(0), 430, pnlTop(430), mix(C.beige, P.white, 0.35));
     // LED window strip (recessed), perspective
-    shadeInto(c, 0, 0, 430, H, [mix(P.black, P.maroon, 0.35), mix(P.black, P.maroon, 0.15)], (x, y) => {
+    yield* shadeSteps(c, 0, 0, 430, H, [mix(P.black, P.maroon, 0.35), mix(P.black, P.maroon, 0.15)], (x, y) => {
       if (x < 136 || x > 404) return -1;
       const mid = lerp(pnlTop(x), pnlBot(x), 0.5);
       const hh = (pnlBot(x) - pnlTop(x)) * 0.17;
@@ -425,7 +425,7 @@ const modemSet = () =>
     thin(c, '56K', 26, 114, { color: mix(P.ink, C.beigeDD, 0.1), track: 1, scale: 2 });
     text(c, 'DATA / FAX / VOICE', 26, 140, { color: mix(P.ink, C.beigeDD, 0.35), font: 'micro' });
     // the desk: dark, glossy enough to hold the LEDs' reflections
-    shadeInto(c, 0, 0, 430, H, [P.black, mix(P.black, P.ink, 0.6), P.ink], (x, y) => (y < pnlBot(x) ? -1 : clamp(0.55 - (y - pnlBot(x)) * 0.015 + (x / 430) * 0.2)));
+    yield* shadeSteps(c, 0, 0, 430, H, [P.black, mix(P.black, P.ink, 0.6), P.ink], (x, y) => (y < pnlBot(x) ? -1 : clamp(0.55 - (y - pnlBot(x)) * 0.015 + (x / 430) * 0.2)));
   });
 const ledGlow = () => pool('sn-ledglow', 10, 8, C.led, 4, 0.55);
 
@@ -533,10 +533,10 @@ const photoArt = () =>
     return clamp((y / 58) * 0.62 + sun);
   });
 const crtFrame = () =>
-  bake('sn-crtframe', W, H, (c) => {
+  bake('sn-crtframe', W, H, function* paint(c) {
     // bezel around a slightly curved screen
     rect(c, 0, 0, W, H, C.beigeD);
-    shadeInto(c, 0, 0, W, H, [C.beigeD, mix(C.beigeD, C.beige, 0.5)], (x, y) => 0.2 + 0.6 * (1 - y / H) - 0.3 * (x / W));
+    yield* shadeSteps(c, 0, 0, W, H, [C.beigeD, mix(C.beigeD, C.beige, 0.5)], (x, y) => 0.2 + 0.6 * (1 - y / H) - 0.3 * (x / W));
     c.clearRect(40, 32, 304, 152);
     rect(c, 38, 30, 308, 2, P.black);
     rect(c, 38, 184, 308, 2, mix(C.beige, P.white, 0.3));
@@ -584,15 +584,15 @@ function shotPhoto(ctx, lt) {
 
 // --- S6: downstairs, mum picks up the phone; then NO CARRIER ----------------------------------
 const hallSet = () =>
-  bake('sn-hall', W, H, (c) => {
-    shadeInto(c, 0, 0, W, 180, [P.black, mix(P.black, P.maroon, 0.55), P.maroon, mix(P.maroon, P.brown, 0.55), mix(P.brown, P.tanShade, 0.5)], (x, y) => {
+  bake('sn-hall', W, H, function* paint(c) {
+    yield* shadeSteps(c, 0, 0, W, 180, [P.black, mix(P.black, P.maroon, 0.55), P.maroon, mix(P.maroon, P.brown, 0.55), mix(P.brown, P.tanShade, 0.5)], (x, y) => {
       const d = sqrt(((x - 150) / 190) ** 2 + ((y - 110) / 120) ** 2);
       return clamp(1 - d) * 0.92 + 0.03 * ((x >> 3) & 1);
     });
     // dado rail, skirting, floor
     rect(c, 0, 130, W, 2, mix(P.brown, P.black, 0.3));
     rect(c, 0, 130, W, 1, mix(P.tanShade, P.brown, 0.5));
-    shadeInto(c, 0, 176, W, H - 176, [P.black, mix(P.black, P.maroon, 0.6), P.maroon], (x, y) => clamp(1 - sqrt(((x - 150) / 200) ** 2 + ((y - 180) / 40) ** 2)) * 0.8);
+    yield* shadeSteps(c, 0, 176, W, H - 176, [P.black, mix(P.black, P.maroon, 0.6), P.maroon], (x, y) => clamp(1 - sqrt(((x - 150) / 200) ** 2 + ((y - 180) / 40) ** 2)) * 0.8);
     rect(c, 0, 176, W, 1, mix(P.brown, P.tanShade, 0.4));
     // staircase banister on the right, in silhouette
     for (let i = 0; i < 9; i++) rect(c, 290 + i * 11, 60 + i * 13, 2, 120 - i * 13, P.black);
@@ -744,6 +744,11 @@ const LEAD = { wave: 'pulse25', a: 0.03, d: 0.5, s: 0.55, r: 0.35, vib: [12, 5, 
 const KEYS = { wave: 'triangle', a: 0.004, d: 1.2, s: 0, r: 0.6, vib: false };
 const PAD = { wave: 'sine', a: 0.4, d: 1, s: 0.8, r: 1.0, vib: [5, 4, 0.4], legato: 1 };
 
+// Everything this spot bakes, in shot order: prewarmed in idle-time slices so
+// no cut ever waits for a bake (see cine.js prewarm).
+const WARM = [streetSky, streetSet, lampPool, lampHalo, houseSet, porchGlow, windowGlow, roomSet, monitorArt, desktopArt, screenSpill, modemSet, ledGlow, faceBg, photoArt, crtFrame, hallSet, hallGlow, slateBg, () => vignetteArt(0.6), () => vignetteArt(0.62), () => vignetteArt(0.7), () => vignetteArt(0.5), () => vignetteArt(0.55)];
+prewarm(WARM, 7000);
+
 export default {
   id: 'screechnet',
   brand: 'SCREECHNET',
@@ -785,6 +790,7 @@ export default {
     ],
   },
   draw(ctx, t, dt, info) {
+    prewarm(WARM);
     film(ctx, dt, info, SHOTS);
   },
 };

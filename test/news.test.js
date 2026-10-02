@@ -1419,3 +1419,42 @@ describe('NewsDesk.deskView', () => {
     assert.equal(desk.deskView(1, now).length, 1);
   });
 });
+
+describe('news: editorial fixes (round 1)', () => {
+  test('the WordPress boilerplate regex stays linear on hostile input (no ReDoS)', async () => {
+    const { stripBoilerplate } = await import('../server/news.js');
+    for (const tail of ['A'.repeat(200) + ' x', 'ABCDEFGHIJ'.repeat(40) + 'z more words', 'Big News Site '.repeat(60) + 'x']) {
+      const t0 = performance.now();
+      stripBoilerplate(`Real text. The post Some title appeared first on ${tail}`);
+      assert.ok(performance.now() - t0 < 50, `${(performance.now() - t0).toFixed(1)} ms`);
+    }
+    assert.equal(stripBoilerplate('Real story text. The post Big news appeared first on Example News Site.'), 'Real story text.');
+    assert.equal(stripBoilerplate('Real story text. The post Big news appeared first on example.com'), 'Real story text.');
+  });
+
+  test('breaking news tops the desk (x3); a live page sinks (x0.5)', () => {
+    const base = { published: 1000, outlets: 1, weight: 1, summary: 'x'.repeat(100) };
+    const plain = interestScore({ ...base, title: 'Canal reopens' }, 1000);
+    assert.equal(interestScore({ ...base, title: 'BREAKING: Canal reopens' }, 1000), plain * 3);
+    assert.equal(interestScore({ ...base, title: 'Talks – live', live: true }, 1000), plain * 0.5);
+  });
+
+  test('a programme\'s first category weighs 1.5x in its candidates', () => {
+    const desk = new NewsDesk({ log: { info() {}, warn() {} } });
+    const now = Date.now();
+    const add = (id, category, ageMin) => desk.stories.set(id, { id, title: `Story ${id} about ${category} things`, summary: 'x'.repeat(100), source: `Outlet ${id}`, category, weight: 1, published: now - ageMin * 60_000, kw: new Set([id, category]) });
+    add('t1', 'tech', 0);
+    add('s1', 'science', 30);
+    assert.deepEqual(desk.candidates(2, { categories: ['science', 'tech'], now }).map((s) => s.id), ['s1', 't1']);
+    assert.deepEqual(desk.candidates(2, { categories: ['tech', 'science'], now }).map((s) => s.id), ['t1', 's1']);
+  });
+
+  test('plainTitle strips the outlet\'s BREAKING and live markers', async () => {
+    const { plainTitle } = await import('../server/news.js');
+    assert.equal(plainTitle('BREAKING: Panama Canal reopens'), 'Panama Canal reopens');
+    assert.equal(plainTitle('Minister resigns – BREAKING'), 'Minister resigns');
+    assert.equal(plainTitle('Climate talks in Nairobi – live'), 'Climate talks in Nairobi');
+    assert.equal(plainTitle('Live updates: election night'), 'Election night');
+    assert.equal(plainTitle('Record-breaking heatwave hits Europe'), 'Record-breaking heatwave hits Europe');
+  });
+});

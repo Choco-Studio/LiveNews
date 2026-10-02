@@ -606,3 +606,39 @@ describe('config/channel.json', () => {
     assert.ok(Number.isInteger(channel.breaks.maxExtraAds) && channel.breaks.maxExtraAds >= 0);
   });
 });
+
+describe('validateChannel: optional editorial keys (style bibles)', () => {
+  const withProgram = (extra) => {
+    const ch = makeChannel();
+    Object.assign(ch.programs.duo, extra);
+    return ch;
+  };
+  test('accepts the keys the real channel uses', () => {
+    assert.doesNotThrow(() => validateChannel(JSON.parse(fs.readFileSync(REAL_CHANNEL_FILE, 'utf8'))));
+    assert.doesNotThrow(() =>
+      validateChannel(withProgram({ headlineMax: 45, intro: 'headlines', numberSlot: 'main', toss: '{name}.', noQuestions: true, thanksMax: 1, happyOnly: ['lighter'], roundup: { opener: 'Around the world.', min: 2, max: 3 }, chats: { after: ['lighter'] }, timing: { target: 60, wpm: 170 }, gestures: { allow: { ann: ['nod'] }, grave: ['nod'] } }))
+    );
+  });
+
+  test('rejects wrong types and unknown values with a clear message', () => {
+    for (const [extra, re] of [
+      [{ headlineMax: 5 }, /headlineMax/],
+      [{ intro: 'montage' }, /intro/],
+      [{ numberSlot: 'first' }, /numberSlot/],
+      [{ toss: 'Over to you.' }, /toss/],
+      [{ chats: { after: ['anywhere'] } }, /chats/],
+      [{ roundup: { max: 9 } }, /round-up "max"/],
+      [{ timing: { target: 60 } }, /timing/],
+      [{ gestures: { allow: 'nod' } }, /gestures "allow"/],
+    ]) assert.throws(() => validateChannel(withProgram(extra)), re, JSON.stringify(extra));
+  });
+
+  test('a presenter role reaches the public channel (for the strap: "NAME • ROLE")', () => {
+    const ch = makeChannel();
+    ch.presenters.ann.role = 'Anchor';
+    assert.equal(publicChannel(ch).presenters.ann.role, 'Anchor');
+    assert.ok(!('role' in publicChannel(ch).presenters.bob));
+    ch.presenters.bob.role = 7;
+    assert.throws(() => validateChannel(ch), /role/);
+  });
+});

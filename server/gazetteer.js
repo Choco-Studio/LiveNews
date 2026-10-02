@@ -545,8 +545,9 @@ export function placeSupported(place, text) {
 
 // How far a writer's pin may sit from our point before it is put back: a city is
 // small, a region bigger, and the widest countries span tens of degrees.
-const WIDE = new Set(['Russia', 'Canada', 'United States', 'China', 'Brazil', 'Australia', 'India', 'Argentina', 'Kazakhstan', 'Algeria', 'Democratic Republic of the Congo', 'Saudi Arabia', 'Mexico', 'Indonesia', 'Chile', 'Norway', 'Antarctica']);
-const snapRadius = (e) => (e.kind === 'city' ? 3 : e.kind === 'region' ? (e.broad ? 30 : 8) : WIDE.has(e.name) ? 25 : 12);
+const HUGE = new Set(['Russia', 'Canada', 'United States', 'China', 'Brazil', 'Australia', 'Antarctica']);
+const WIDE = new Set(['India', 'Argentina', 'Kazakhstan', 'Algeria', 'Democratic Republic of the Congo', 'Saudi Arabia', 'Mexico', 'Indonesia', 'Chile', 'Norway', 'Sudan', 'Libya', 'Iran', 'Mongolia', 'Peru']);
+const snapRadius = (e) => (e.kind === 'city' ? 3 : e.kind === 'region' ? (e.broad ? 30 : 8) : HUGE.has(e.name) ? 40 : WIDE.has(e.name) ? 25 : 12);
 
 /**
  * Put a writer's pin where the place really is: a known place (any kind) whose

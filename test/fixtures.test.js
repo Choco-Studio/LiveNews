@@ -146,4 +146,53 @@ describe('the offline demo, end to end (fixture feeds -> desk -> mock writer -> 
     assert.equal(new Set(ids).size, ids.length, 'no story airs twice in a rotation');
     for (const e of episodes) assert.equal(e.pipeline.find((p) => p.stage === 'review').reviewed, false);
   });
+
+  test('two rotations of offline copy pass the critics\' audits: clean captions, no repeats, varied openings, rules kept', async () => {
+    const desk = makeDesk();
+    await desk.refresh();
+    const channel = loadChannel();
+    const chain = new ProviderChain([createMockProvider()], { record() {} }, { log: silentLogger });
+    const producer = new Producer({ config: { candidatePool: 12, minNewStories: 3, reviewPass: true }, newsDesk: desk, chain, log: silentLogger });
+    const episodes = [];
+    for (let r = 0; r < 2; r++) for (const id of channel.rotation) {
+      const ep = await producer.produce(channel, id);
+      if (ep) episodes.push(ep);
+    }
+    const STOP_END = /\b(?:a|an|the|of|to|in|on|at|for|from|by|with|and|or|as)$/i;
+    const opener = (t) => (/^From [^:]+: /.test(t) ? 'colon' : /^According to /.test(t) ? 'according' : / reports that /.test(t.split('. ')[0]) ? 'that' : / reports\.$/.test(t.split('. ')[0] + '.') ? 'tail' : 'none');
+    for (const e of episodes) {
+      const stories = e.segments.filter((x) => x.type === 'story');
+      const title = (id) => desk.get(id).title;
+      for (const x of stories) {
+        assert.ok(!STOP_END.test(x.headline), `caption "${x.headline}" ends mid-phrase`);
+        if (/\d$/.test(x.headline)) assert.ok(title(x.storyId).endsWith(x.headline.split(' ').pop()), `caption "${x.headline}" cuts a figure from its unit`);
+        assert.ok(!/Follow the latest/i.test(x.text));
+        if (x.fact && /\d/.test(x.fact)) {
+          const n = x.fact.match(/[\d,.]+/)[0].replace(/[.,]$/, '');
+          assert.ok(x.text.includes(n), `${e.program.title}: fact ${x.fact} is never said in "${x.text}"`);
+        }
+        for (const n of x.numbers || []) assert.ok(n.label, 'no figure without a label');
+        if (x.roundup) assert.ok(x.fact === null && !x.numbers, 'no fact card inside the round-up');
+      }
+      assert.notEqual(stories[0].feature, 'number', `${e.program.title}: the number of the day leads`);
+      const introFirst = e.segments[0].text.split('. ')[0];
+      assert.ok(!stories[0].text.includes(introFirst), `${e.program.title}: the lead repeats the cold open "${introFirst}"`);
+      // Consecutive stories on air (a feature item has its own fixed lead-in, so it counts as a break).
+      const kinds = stories.map((x) => (x.feature ? 'none' : opener(x.text.replace(/^Thanks, \w+\. /, ''))));
+      for (let i = 1; i < kinds.length; i++) if (kinds[i] !== 'none') assert.notEqual(kinds[i], kinds[i - 1], `${e.program.title}: two openings in a row: ${kinds.join(' ')}`);
+      e.segments.forEach((x, i) => {
+        if (x.type !== 'chat') return;
+        const prev = e.segments.slice(0, i).filter((y) => y.type === 'story').at(-1);
+        assert.ok(!['serious', 'sad'].includes(prev.emotion), 'no chat after grave news');
+        if (e.program.id === 'world-now') assert.equal(prev.feature, 'lighter', 'WORLD NOW chats only after And finally');
+        assert.ok(!/\d/.test(x.text) || e.program.id === 'cosmos', `a chat states a figure: ${x.text}`);
+      });
+      if (e.program.id === 'world-now') {
+        assert.ok(!e.segments.some((x) => x.type !== 'chat' && /\?/.test(x.text)), 'WORLD NOW: no question marks outside chats');
+        assert.ok(!stories.some((x) => x.emotion === 'happy' && x.feature !== 'lighter'), 'WORLD NOW: no smiles outside And finally');
+        assert.ok(e.segments.filter((x) => /\bThanks, \w+\./.test(x.text)).length <= 1);
+      }
+      if (e.program.id === 'news-60') assert.equal(e.segments[0].text, "This is NEWS IN 60. I'm Sam Night.");
+    }
+  });
 });

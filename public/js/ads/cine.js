@@ -140,19 +140,84 @@ export function canvas(w, h) {
 }
 
 const BAKED = new Map();
-/** How long each bake took (ms), for the lab's performance checks. */
+const JOBS = new Map(); // key -> { key, cv, it, ms } bakes started but not finished
+let deferring = false;
+/** How long each bake took (ms of work), for the lab's performance checks. */
 export const BAKE_MS = new Map();
-/** Static art painted once into a cached w x h canvas: paint(ctx, canvas). */
+
+function finish(job) {
+  BAKED.set(job.key, job.cv);
+  BAKE_MS.set(job.key, job.ms);
+  JOBS.delete(job.key);
+}
+
+/**
+ * Static art painted once into a cached w x h canvas: paint(ctx, canvas).
+ * `paint` may be a generator function that yields every few rows of heavy
+ * per-pixel work: then prewarm() can bake it in small idle-time slices. When a
+ * frame needs art that is not finished yet, the rest is painted at once.
+ */
 export function bake(key, w, h, paint) {
-  let cv = BAKED.get(key);
-  if (!cv) {
+  const cv = BAKED.get(key);
+  if (cv) return cv;
+  let job = JOBS.get(key);
+  if (!job) {
     const t0 = performance.now();
-    cv = canvas(w, h);
-    paint(cv.getContext('2d'), cv);
-    BAKED.set(key, cv);
-    BAKE_MS.set(key, performance.now() - t0);
+    const c = canvas(w, h);
+    const r = paint(c.getContext('2d'), c);
+    job = { key, cv: c, it: r && typeof r.next === 'function' ? r : null, ms: performance.now() - t0 };
+    if (!job.it) {
+      finish(job);
+      return c;
+    }
+    JOBS.set(key, job);
   }
-  return cv;
+  if (deferring) return job.cv; // prewarm only registers the job (never drawn unfinished)
+  const t0 = performance.now();
+  while (!job.it.next().done);
+  job.ms += performance.now() - t0;
+  finish(job);
+  return job.cv;
+}
+
+const WARM = new WeakSet();
+/**
+ * Bakes everything in `list` (thunks that call bake getters) in idle time, in
+ * slices of ~4 ms, so no frame ever waits for a whole bake (browser only;
+ * a no-op in Node). Safe to call every frame: starts once per list.
+ */
+export function prewarm(list, delayMs = 0) {
+  if (WARM.has(list) || typeof window === 'undefined') return;
+  WARM.add(list);
+  let i = 0;
+  const idle = typeof requestIdleCallback === 'function' ? (fn) => requestIdleCallback(fn, { timeout: 250 }) : (fn) => setTimeout(fn, 16);
+  const tick = () => {
+    const until = performance.now() + 4;
+    do {
+      let job = null;
+      for (const j of JOBS.values()) {
+        job = j;
+        break;
+      }
+      if (job) {
+        const t0 = performance.now();
+        const done = job.it.next().done;
+        job.ms += performance.now() - t0;
+        if (done) finish(job);
+      } else if (i < list.length) {
+        deferring = true;
+        try {
+          list[i++]();
+        } catch {
+          /* a failed bake is retried (synchronously) when a frame needs it */
+        } finally {
+          deferring = false;
+        }
+      } else return;
+    } while (performance.now() < until);
+    idle(tick);
+  };
+  setTimeout(() => idle(tick), delayMs);
 }
 
 export const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
@@ -160,12 +225,13 @@ export const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 export const bayer = (x, y) => (BAYER[((y & 3) << 2) | (x & 3)] + 0.5) / 16;
 
 /**
- * Per-pixel painter into an existing context (bake time only): fn(x, y)
- * returns a position 0..1 along `colors` (a ramp) or a negative number for
- * "leave as is". Between two ramp steps the 4x4 Bayer picks one of them.
+ * Per-pixel painter (bake time only), as a generator that yields every few
+ * rows: fn(x, y) returns a position 0..1 along `colors` (a ramp) or a negative
+ * number for "leave as is"; between two ramp steps the 4x4 Bayer picks one.
+ * Use `yield* shadeSteps(...)` inside generator paints, shadeInto() elsewhere.
  */
-export function shadeInto(ctx, x0, y0, w, h, colors, fn) {
-  // Painted into a scratch canvas and composited (no getImageData readback).
+export function* shadeSteps(ctx, x0, y0, w, h, colors, fn) {
+  // painted into a scratch canvas and composited (no getImageData readback)
   const tmp = canvas(w, h);
   const tc = tmp.getContext('2d');
   const img = tc.createImageData(w, h);
@@ -186,23 +252,35 @@ export function shadeInto(ctx, x0, y0, w, h, colors, fn) {
       d[o + 2] = c[2];
       d[o + 3] = 255;
     }
+    if ((y & 3) === 3) yield;
   }
   tc.putImageData(img, 0, 0);
   ctx.drawImage(tmp, x0, y0);
 }
 
+/** Synchronous shadeSteps (for plain, non-generator paints). */
+export function shadeInto(ctx, x0, y0, w, h, colors, fn) {
+  const it = shadeSteps(ctx, x0, y0, w, h, colors, fn);
+  while (!it.next().done);
+}
+
 /**
- * Dithered overlay (bake time): paints colour position v(x, y) from `colors`
- * only where the 4x4 Bayer threshold is below density(x, y) (0..1), so a
- * reflection or glow fades out with an ordered-dither edge instead of a hard one.
+ * Dithered overlay: paints colour position v(x, y) from `colors` only where
+ * the 4x4 Bayer threshold is below density(x, y) (0..1), so a reflection or
+ * glow fades out with an ordered-dither edge instead of a hard one.
  */
+export function* ditherSteps(ctx, x0, y0, w, h, colors, density, v = () => 0.5) {
+  yield* shadeSteps(ctx, x0, y0, w, h, colors, (x, y) => (density(x, y) > bayer(x, y) ? v(x, y) : -1));
+}
 export function ditherInto(ctx, x0, y0, w, h, colors, density, v = () => 0.5) {
   shadeInto(ctx, x0, y0, w, h, colors, (x, y) => (density(x, y) > bayer(x, y) ? v(x, y) : -1));
 }
 
-/** Cached transparent canvas painted by a shader (see shadeInto). */
+/** Cached transparent canvas painted by a shader (resumable, see shadeSteps). */
 export function shader(key, w, h, colors, fn) {
-  return bake(key, w, h, (c) => shadeInto(c, 0, 0, w, h, colors, fn));
+  return bake(key, w, h, function* paint(c) {
+    yield* shadeSteps(c, 0, 0, w, h, colors, fn);
+  });
 }
 
 /**
@@ -212,7 +290,7 @@ export function shader(key, w, h, colors, fn) {
 export function pool(key, rx, ry, color, steps = 5, peak = 0.5) {
   const w = ceil(rx * 2);
   const h = ceil(ry * 2);
-  return bake(key, w, h, (c) => {
+  return bake(key, w, h, function* paint(c) {
     const img = c.createImageData(w, h);
     const d = img.data;
     const [r, g, b] = rgb(color);
@@ -232,6 +310,7 @@ export function pool(key, rx, ry, color, steps = 5, peak = 0.5) {
         d[o + 2] = b;
         d[o + 3] = round((min(i, steps) / steps) * peak * 255);
       }
+      if ((y & 7) === 7) yield;
     }
     c.putImageData(img, 0, 0);
   });
@@ -545,14 +624,12 @@ export function letterbox(ctx, h = 24, c = '#000000') {
   rect(ctx, 0, H - h, W, h, c);
 }
 
-/** Vignette (baked once per amount, dithered): darkens the corners by up to `amount`. */
-const VIG = new Map(); // amount -> canvas (no key strings built per frame)
-export function vignette(ctx, amount = 0.55) {
-  let cv = VIG.get(amount);
-  if (!cv) {
-    cv = canvas(W, H);
-    VIG.set(amount, cv);
-    const c = cv.getContext('2d');
+const VIG_KEYS = new Map(); // amount -> bake key (built once, not per frame)
+/** The vignette art for `amount` (baked once, resumable). */
+export function vignetteArt(amount = 0.55) {
+  let key = VIG_KEYS.get(amount);
+  if (!key) VIG_KEYS.set(amount, (key = `vig${amount}`));
+  return bake(key, W, H, function* paint(c) {
     const img = c.createImageData(W, H);
     const d = img.data;
     for (let y = 0; y < H; y++) {
@@ -566,10 +643,14 @@ export function vignette(ctx, amount = 0.55) {
         if (k <= 0) continue;
         d[(y * W + x) * 4 + 3] = round((k / 4) * amount * 255);
       }
+      if ((y & 7) === 7) yield;
     }
     c.putImageData(img, 0, 0);
-  }
-  ctx.drawImage(cv, 0, 0);
+  });
+}
+/** Vignette (baked once per amount, dithered): darkens the corners by up to `amount`. */
+export function vignette(ctx, amount = 0.55) {
+  ctx.drawImage(vignetteArt(amount), 0, 0);
 }
 
 // ---------------------------------------------------------------- type

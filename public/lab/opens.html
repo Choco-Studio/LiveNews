@@ -59,6 +59,12 @@
         reykjavik: { place: 'REYKJAVIK, ICELAND', lat: 64.15, lon: -21.94 },
         tokyo: { place: 'TOKYO, JAPAN', lat: 35.68, lon: 139.69 },
         'buenos-aires': { place: 'BUENOS AIRES, ARGENTINA', lat: -34.6, lon: -58.38 },
+        reykjanes: { place: 'REYKJANES PENINSULA, ICELAND', lat: 63.9, lon: -22.4 },
+        crete: { place: 'HERAKLION, CRETE', lat: 35.34, lon: 25.13 },
+        honolulu: { place: 'HONOLULU, HAWAII', lat: 21.31, lon: -157.86 },
+        suva: { place: 'SUVA, FIJI', lat: -18.14, lon: 178.44 },
+        longyearbyen: { place: 'LONGYEARBYEN, SVALBARD', lat: 78.22, lon: 15.65 },
+        mcmurdo: { place: 'MCMURDO STATION, ANTARCTICA', lat: -77.85, lon: 166.67 },
       };
 
       // A procedural "news photo" (street at dusk) run through the real pixelate pipeline.
@@ -110,17 +116,42 @@
       }
 
       const PROMO = { label: 'UP NEXT', footer: 'AFTER THE BREAK', next: { id: 'tech-bytes', title: 'TECH BYTES', tagline: 'THE FUTURE, ONE BYTE AT A TIME', theme: 'tech', presenters: ['max', 'ada'] } };
+      const PROMO_60 = { label: 'UP NEXT', footer: 'AFTER THE BREAK', next: { id: 'news-60', title: 'NEWS IN 60', tagline: 'THE HEADLINES IN A MINUTE', theme: 'flash', presenters: ['sam'] } };
+      const PROMO_LONG = { label: 'UP NEXT', footer: 'AFTER THE BREAK', next: { id: 'weekend-review', title: 'THE WEEKEND FOREIGN CORRESPONDENTS REVIEW', tagline: 'THE WEEK THAT WAS', theme: 'world', presenters: ['paco', 'lola'] } };
+      const NAMES = { max: 'MAX CIRCUIT', ada: 'ADA VOLT', sam: 'SAM NIGHT', paco: 'PACO PIXEL', lola: 'LOLA BYTE' };
+      const N3 = [{ value: '40,000', label: 'PASSENGERS A DAY' }, { value: '$2.5BN', label: 'COST OF THE LINE' }, { value: '12 KM', label: 'OF NEW TUNNEL' }];
+      const N_BARS = [{ value: '3.1%', label: 'INFLATION' }, { value: '2.4%', label: 'INFLATION' }];
+      const N_ONE = [{ value: '1.2 MILLION', label: 'HOMES WITHOUT POWER' }];
+      const N_COSMOS = [{ value: '40,000', label: 'TONNES OF ICE PER SECOND' }];
+      const N_PCT = [{ value: '3.5%', label: 'RISE IN SEA SURFACE HEAT' }];
+      const N_MONEY = [{ value: '4.2%', label: 'BANK RATE' }];
+      const fact = (id, o) => (t) => cards.drawFactCard(ctx, 1000 + t, t, { ...o, programId: id });
       const CARDS = {
-        'montage-photo': (t) => cards.drawHeadlineFrame(ctx, 1000 + t, t, { index: 0, total: 3, headline: 'Storm closes ports across the north as ferries cancel', source: 'BBC News', category: 'world', image: photo().card }),
-        'montage-2': (t) => cards.drawHeadlineFrame(ctx, 1000 + t, t, { index: 1, total: 3, headline: 'New chip promises week-long phone battery', source: 'The Verge', category: 'tech', image: null }),
-        'montage-3': (t) => cards.drawHeadlineFrame(ctx, 1000 + t, t, { index: 2, total: 3, headline: 'Markets close higher after rate decision', source: 'Reuters', category: 'business', image: null }),
-        'fact-number': (t) => cards.drawFactCard(ctx, 1000 + t, t, { fact: '2,400 flights cancelled across Europe on Friday', label: 'BY THE NUMBERS', source: 'Reuters', image: photo().card }),
-        'fact-text': (t) => cards.drawFactCard(ctx, 1000 + t, t, { fact: 'The bridge was the longest of its kind when it opened', label: 'KEY FACT', source: 'AP', image: null }),
+        'montage-photo': (t) => cards.drawHeadlineFrame(ctx, 1000 + t, t, { index: 0, total: 3, headline: 'Storm closes ports across the north as ferries cancel', source: 'BBC News', category: 'world', image: photo().card, programId: 'world-now' }),
+        'montage-2': (t) => cards.drawHeadlineFrame(ctx, 1000 + t, t, { index: 1, total: 3, headline: 'New chip promises week-long phone battery', source: 'The Verge', category: 'tech', image: null, programId: 'tech-bytes' }),
+        'montage-3': (t) => cards.drawHeadlineFrame(ctx, 1000 + t, t, { index: 2, total: 3, headline: 'Markets close higher after rate decision', source: 'Reuters', category: 'business', image: null, programId: 'money-minute' }),
+        'montage-culture': (t) => cards.drawHeadlineFrame(ctx, 1000 + t, t, { index: 1, total: 3, headline: 'Lost silent film found in a Lisbon attic', source: 'AP', category: 'culture', image: null, programId: 'world-now' }),
+        'fact-number': fact('world-now', { fact: '2,400 flights cancelled across Europe on Friday', label: 'BY THE NUMBERS', source: 'Reuters', image: photo().card }),
+        'fact-text': fact('world-now', { fact: 'The bridge was the longest of its kind when it opened', label: 'KEY FACT', source: 'AP', image: null }),
+        'fact-world': fact('world-now', { fact: '1.2 million homes without power', numbers: N_ONE, label: 'BY THE NUMBERS', source: 'Pixelburg Post' }),
+        'fact-60': fact('news-60', { fact: '2,400 flights cancelled across Europe on Friday', label: 'KEY FACT', source: 'Reuters' }),
+        'fact-tech': fact('tech-bytes', { fact: '40,000 passengers a day', numbers: [N3[0]], label: 'NUMBER OF THE DAY', source: 'Circuit Weekly' }),
+        'numbers-tech': (t) => cards.drawNumbersCard(ctx, 1000 + t, t, { numbers: N3, programId: 'tech-bytes', source: 'Bitport Herald' }),
+        'numbers-world': (t) => cards.drawNumbersCard(ctx, 1000 + t, t, { numbers: N3, programId: 'world-now', source: 'Pixelburg Post' }),
+        'fact-cosmos': fact('cosmos', { fact: '40,000 tonnes of ice per second', numbers: N_COSMOS, source: 'Starfield Journal' }),
+        'fact-cosmos-pct': fact('cosmos', { fact: '3.5% rise in sea surface heat', numbers: N_PCT, source: 'Starfield Journal' }),
+        'fact-paper': fact('money-minute', { fact: '4.2% bank rate', numbers: N_MONEY, headline: 'The bank holds rates for a third month', source: 'Ledger Line' }),
+        'fact-paper-bars': fact('money-minute', { fact: '2.4% inflation', numbers: N_BARS, headline: 'Inflation eases for the first time this year', source: 'Ledger Line' }),
+        'quote-world': (t) => cards.drawQuoteCard(ctx, 1000 + t, t, { text: 'We will rebuild every bridge the river took, and we will start on Monday', by: 'the mayor', programId: 'world-now', image: photo().card }),
+        'quote-tech': (t) => cards.drawQuoteCard(ctx, 1000 + t, t, { text: 'The battery is not the product. The week is the product', by: 'Ana Silva', programId: 'tech-bytes' }),
+        'quote-cosmos': (t) => cards.drawQuoteCard(ctx, 1000 + t, t, { text: 'It is the clearest view of a newborn star we have ever had', by: null, programId: 'cosmos' }),
         breaking: (t) => cards.drawBreakingCard(ctx, 1000 + t, t, { headline: 'Earthquake of magnitude 6.1 strikes off the coast of Chile', source: 'Reuters' }),
         end: (t) => cards.drawEndCard(ctx, 1000 + t, t, { channel: 'WORLD NOW', line1: 'STAY WITH US', line2: 'GLOBIT 24 · LIVE 24 HOURS' }),
         standby: (t) => cards.drawStandby(ctx, 1000 + t, { channel: 'GLOBIT 24', message: 'PREPARING THE NEXT PROGRAMME' }),
         start: (t) => cards.drawStartScreen(ctx, 1000 + t, { channel: 'GLOBIT 24', prompt: 'CLICK TO TUNE IN' }),
-        promo: (t) => cards.drawPromoCard(ctx, 1000 + t, t, PROMO, (id) => ({ max: 'MAX CIRCUIT', ada: 'ADA VOLT' })[id] || id),
+        promo: (t) => cards.drawPromoCard(ctx, 1000 + t, t, PROMO, (id) => NAMES[id] || id),
+        'promo-60': (t) => cards.drawPromoCard(ctx, 1000 + t, t, PROMO_60, (id) => NAMES[id] || id),
+        'promo-long': (t) => cards.drawPromoCard(ctx, 1000 + t, t, PROMO_LONG, (id) => NAMES[id] || id),
         ident: (t) => cards.drawIdentCard(ctx, 1000 + t, t),
         stinger: (t) => {
           cards.drawHeadlineFrame(ctx, 1000, 3, { index: 0, total: 3, headline: 'Storm closes ports across the north', source: 'BBC News', category: 'world', image: photo().card });
@@ -139,10 +170,29 @@
         };
       }
       MAPS.idle = (t) => drawWorldMap(ctx, 1000 + t, t, { now: FIXED_NOW });
+      MAPS['lisbon-60'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...PLACES.lisbon, programId: 'news-60', accent: PAL.yellow, now: FIXED_NOW });
+      MAPS['tokyo-tech'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...PLACES.tokyo, programId: 'tech-bytes', accent: PAL.cyan, now: FIXED_NOW });
+      MAPS['short-nairobi'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...PLACES.nairobi, duration: 2.1, now: FIXED_NOW });
+      // a round-up: the camera pans pin to pin (from the previous place) instead of flying in again
+      MAPS['roundup-nairobi'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...PLACES.nairobi, from: PLACES.lisbon, now: FIXED_NOW });
+      MAPS['roundup-60'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...PLACES.crete, from: PLACES.lisbon, programId: 'news-60', accent: PAL.yellow, now: FIXED_NOW });
+      MAPS['roundup-tokyo'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...PLACES.tokyo, from: PLACES.nairobi, now: FIXED_NOW });
+      // a story naming two places: both marked, framed together
+      const SHANGHAI = { place: 'SHANGHAI, CHINA', lat: 31.23, lon: 121.47 };
+      const PINS = [{ place: 'ROTTERDAM', lat: 51.92, lon: 4.48 }];
+      MAPS['pins-shanghai'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...SHANGHAI, pins: PINS, now: FIXED_NOW });
+      const OTTAWA = { place: 'OTTAWA, CANADA', lat: 45.42, lon: -75.7 };
+      const PINS2 = [{ place: 'MEXICO CITY', lat: 19.43, lon: -99.13 }, { place: 'WASHINGTON', lat: 38.9, lon: -77.04 }];
+      MAPS['pins-ottawa'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...OTTAWA, pins: PINS2, now: FIXED_NOW });
 
       const OPEN_IDS = Object.keys(PROGRAMS);
+      const OPEN_INFO = Object.fromEntries(OPEN_IDS.map((id) => [id, { ...PROGRAMS[id], date: 'FRIDAY 2 OCTOBER', channel: 'GLOBIT 24' }]));
+      const REPLAY_INFO = { ...OPEN_INFO['world-now'], replay: true };
       const KINDS = {
-        open: Object.fromEntries(OPEN_IDS.map((id) => [id, (t) => drawOpen(ctx, t, t, id, { ...PROGRAMS[id], date: 'FRIDAY 2 OCTOBER', channel: 'GLOBIT 24' })])),
+        open: {
+          ...Object.fromEntries(OPEN_IDS.map((id) => [id, (t) => drawOpen(ctx, t, t, id, OPEN_INFO[id])])),
+          'world-now-replay': (t) => drawOpen(ctx, t, t, 'world-now', REPLAY_INFO),
+        },
         card: CARDS,
         map: MAPS,
       };

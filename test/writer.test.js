@@ -1375,3 +1375,105 @@ describe('buildReviewPrompt: graphics fields', () => {
     assert.match(p, /including "kicker" and "feature"/);
   });
 });
+
+describe('normalizeBulletin: programme rules (config/channel.json)', () => {
+  const S = [
+    makeStory('g1', { title: 'Lisbon opens a new tram line', summary: 'Lisbon has opened a tram line along the river.' }),
+    makeStory('g2', { title: 'Earthquake kills 12 in northern Chile', summary: 'An earthquake killed 12 people in northern Chile, officials said.' }),
+    makeStory('g3', { title: 'Paris zoo welcomes twin panda cubs', summary: 'A zoo in Paris says its pandas have had twins.' }),
+  ];
+  const run = (segments, program, extra = {}) => normalizeBulletin({ segments }, S, { program, ...extra });
+
+  test('kicker: alarm words go on the strap only when the outlet uses them', () => {
+    const k = (kicker, id = 'g1') => run([storySeg(id, { kicker })], null).segments[1].kicker;
+    assert.equal(k('DEAD IN LISBON'), undefined);
+    assert.equal(k('TRAM CHAOS'), undefined);
+    assert.equal(k('TRANSPORT'), 'TRANSPORT');
+    assert.equal(k('CHILE QUAKE KILLS', 'g2'), 'CHILE QUAKE KILLS', 'the source says "kills"');
+  });
+
+  test('a known country with a wrong pin is put back (any kind of place, not only cities)', () => {
+    const seg = run([storySeg('g2', { location: { place: 'CHILE', lat: 10, lon: 10 }, shot: 'map', emotion: 'sad' })], null).segments[1];
+    assert.deepEqual(seg.location, { place: 'CHILE', lat: -35.7, lon: -71.5 });
+  });
+
+  test('gestures: only the programme\'s list, remapped, a grave subset and a cap per segment; defaults nod instead of wave', () => {
+    const program = { gestures: { allow: ['nod', 'lean_in', 'steeple'], listener: ['nod'], grave: ['nod'], map: { count: 'steeple', wave: 'nod' }, perSegment: 2, defaults: { intro: 'nod', outro: 'nod' } } };
+    const b = run(
+      [storySeg('g1', { text: '[wave] Lisbon has a tram. [count] It runs along the river. [lean_in] It opened. [B:nod] [B:laugh] Good.' }), storySeg('g2', { emotion: 'sad', text: '[lean_in] An earthquake killed 12 people in northern Chile. [nod]' })],
+      program
+    );
+    const [intro, a, grave, outro] = b.segments;
+    assert.deepEqual(a.cues.map((c) => `${c.slot || ''}${c.action}`), ['nod', 'steeple', 'Bnod']);
+    assert.deepEqual(grave.cues.map((c) => c.action), ['nod']);
+    assert.deepEqual([intro.cues[0].action, outro.cues[0].action, intro.emotion], ['nod', 'nod', 'neutral']);
+  });
+
+  test('gestures may differ per presenter (TECH BYTES: Max and Ada) and be capped per episode (NEWS IN 60)', () => {
+    const program = { gestures: { allow: { max: ['lean_in', 'count'], ada: ['steeple'] }, perSegment: { max: 2, ada: 1 } } };
+    const presenters = { A: { id: 'max' }, B: { id: 'ada' } };
+    const b = run([storySeg('g1', { anchor: 'A', text: '[lean_in] [steeple] Lisbon. [count] Tram.' }), storySeg('g3', { anchor: 'B', text: '[lean_in] [steeple] Zoo. [steeple] Pandas.' })], program, { presenters });
+    assert.deepEqual(b.segments[1].cues.map((c) => c.action), ['lean_in', 'count']);
+    assert.deepEqual(b.segments[2].cues.map((c) => c.action), ['steeple']);
+    const capped = run([storySeg('g1', { text: '[nod] Lisbon. [lean_in] Tram.' }), storySeg('g3', { text: '[nod] Zoo.' })], { gestures: { allow: ['nod', 'lean_in'], perEpisode: 2, only: { lean_in: 'lead' } } });
+    assert.deepEqual(capped.segments.slice(1, 3).map((s) => s.cues.map((c) => c.action)), [['nod', 'lean_in'], []]);
+  });
+
+  test('happyOnly: WORLD NOW smiles only in "And finally", the chat and the sign-off', () => {
+    const b = run(
+      [storySeg('g1', { emotion: 'happy' }), storySeg('g3', { emotion: 'happy', feature: 'lighter' }), otherSeg('chat', { emotion: 'happy', text: 'Lovely.' })],
+      { happyOnly: ['lighter', 'chat', 'outro'] },
+      { features: ['lighter'] }
+    );
+    assert.deepEqual(b.segments.slice(1, 4).map((s) => s.emotion), ['neutral', 'happy', 'happy']);
+  });
+
+  test('noQuestions: a "Lola?" toss becomes "Lola.", other questions leave story text, one question allowed in a chat', () => {
+    const b = run(
+      [storySeg('g1', { text: 'Lisbon has a new tram. Is it any good? [look_partner] Lola?' }), otherSeg('chat', { anchor: 'B', text: 'Will it run on time? I hope so.' }), storySeg('g3', { anchor: 'B' }), otherSeg('chat', { text: 'Why not? Fine.' })],
+      { noQuestions: true }
+    );
+    assert.equal(b.segments[1].text, 'Lisbon has a new tram. Lola.');
+    assert.equal(b.segments[2].text, 'Will it run on time? I hope so.');
+    assert.equal(b.segments[4].text, 'Fine.');
+  });
+
+  test('thanksMax: "Thanks, Paco" at most once per episode', () => {
+    const b = run([storySeg('g1'), storySeg('g3', { anchor: 'B', text: 'Thanks, Paco. A zoo in Paris has pandas.' }), storySeg('g2', { text: 'Thanks, Lola. An earthquake killed 12 people.' })], { thanksMax: 1 });
+    assert.match(b.segments[2].text, /^Thanks, Paco\./);
+    assert.equal(b.segments[3].text, 'An earthquake killed 12 people.');
+  });
+
+  test('the intro may say which story each sentence is about (teases), checked against the rundown', () => {
+    const b = run([{ type: 'intro', text: 'Lisbon has a tram. Pandas in Paris. Hello.', teases: ['g1', 'g3', null, 'g2'] }, storySeg('g1'), storySeg('g3')], null);
+    assert.deepEqual(b.segments[0].teases, ['g1', 'g3', null]);
+    const none = run([{ type: 'intro', text: 'Hello.', teases: ['nope'] }, storySeg('g1')], null);
+    assert.ok(!('teases' in none.segments[0]));
+  });
+
+  test('rundown items carry the kicker, so the strap can show it before the director copies it', () => {
+    const b = run([storySeg('g1', { kicker: 'TRANSPORT' }), storySeg('g3')], null);
+    assert.deepEqual(b.rundown.map((r) => r.kicker ?? null), ['TRANSPORT', null]);
+  });
+});
+
+describe('buildPrompt: programme rules from the style bibles', () => {
+  const prompt = (program) => buildPrompt({ channelName: 'GLOBIT 24', program: { ...PROGRAM, ...program }, presenters: DUO, stories: STORIES, now: new Date('2026-10-15T10:30:00Z') });
+
+  test('headline limit, intro shape, allowed gestures and the no-question rule come from the programme', () => {
+    const p = prompt({ headlineMax: 36, intro: 'headlines', noQuestions: true, gestures: { allow: ['nod', 'steeple'], listener: ['nod'], defaults: { intro: 'nod' } } });
+    assert.match(p, /on-screen caption, max 36 characters/);
+    assert.match(p, /reads the headlines of the first three stories, in running order/);
+    assert.match(p, /Actions: nod \([^)]+\), steeple \([^)]+\) \(only these in this programme\)/);
+    assert.match(p, /Greet and sign off with a "nod", never a wave/);
+    assert.match(p, /No question marks in headlines, story text/);
+    assert.match(prompt({ intro: 'frame', title: 'NEWS IN 60' }), /The intro is only the greeting: "This is NEWS IN 60\./);
+  });
+
+  test('marks breaking candidates, says a breaking story leads, and that the lead must not repeat the intro', () => {
+    const p = buildPrompt({ channelName: 'GLOBIT 24', program: PROGRAM, presenters: DUO, stories: [makeStory('b1', { title: 'BREAKING: canal reopens' })], now: new Date('2026-10-15T10:30:00Z') });
+    assert.equal(JSON.parse(p.split('CANDIDATES\n')[1])[0].breaking, true);
+    assert.match(p, /a breaking story \("breaking": true\) always leads/);
+    assert.match(p, /The lead story must not repeat the intro's line about it/);
+  });
+});

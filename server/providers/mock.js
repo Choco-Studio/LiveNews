@@ -419,7 +419,8 @@ function writeEpisode({ stories, channelName, program, presenters, count, now })
         return out;
       }
     }
-    return `${unstop(sentence)}, ${src} reports.`;
+    // Nothing fits without repeating the last opening: a sentence with its own source stands as it is.
+    return OWN_ATTRIBUTION.test(sentence) ? asSentence(sentence) : `${unstop(sentence)}, ${src} reports.`;
   };
 
   order.forEach((info, k) => {

@@ -108,3 +108,38 @@ describe('placeSupported', () => {
     assert.equal(placeSupported('', 'Paris'), false);
   });
 });
+
+describe('gazetteer: false positives and wrong pins (round 1)', () => {
+  test('a person named like a place is not a pin: Israel Adesanya, Sydney Sweeney, Santiago Abascal', () => {
+    assert.equal(locate('Israel Adesanya wins the title'), null);
+    assert.equal(locate('Sydney Sweeney stars in a new film'), null);
+    assert.equal(locate('Santiago Abascal speaks to supporters'), null);
+    assert.equal(locate('Floods hit Sydney suburbs')?.place, 'SYDNEY, AUSTRALIA');
+    assert.equal(locate('Sydney Harbour bridge closes')?.place, 'SYDNEY, AUSTRALIA');
+    assert.equal(locate('Rally in Paris Monday draws crowds')?.place, 'PARIS, FRANCE');
+  });
+
+  test('"New Mexico", "Washington state" and the Thanksgiving turkey are not Mexico, the capital or the country', () => {
+    assert.equal(locate('New Mexico governor resigns'), null);
+    assert.equal(locate('Washington state wildfire spreads'), null);
+    assert.equal(locate('Turkey prices rise ahead of Thanksgiving'), null);
+    assert.equal(locate('New York stocks close at a record high')?.place, 'NEW YORK, USA');
+    assert.equal(locate('Turkey and Greece sign a deal')?.place, 'TURKEY');
+  });
+
+  test('placeSupported does not accept a place the text only uses as a name', () => {
+    assert.equal(placeSupported('SYDNEY, AUSTRALIA', 'Sydney Sweeney stars in a film.'), false);
+    assert.equal(placeSupported('SYDNEY, AUSTRALIA', 'Floods hit Sydney.'), true);
+    assert.equal(placeSupported('NORTHERN CHILE', 'An earthquake shook northern Chile.'), true);
+  });
+
+  test('snapLocation puts a wrong pin back for any kind of place, and drops (0, 0) for unknown ones', async () => {
+    const { snapLocation } = await import('../server/gazetteer.js');
+    assert.deepEqual(snapLocation({ place: 'CHILE', lat: 10, lon: 10 }), { place: 'CHILE', lat: -35.7, lon: -71.5 });
+    assert.deepEqual(snapLocation({ place: 'INDIA', lat: -40, lon: -30 }), { place: 'INDIA', lat: 20.6, lon: 78.9 });
+    assert.deepEqual(snapLocation({ place: 'KERALA, INDIA', lat: 0, lon: 0 }), { place: 'KERALA, INDIA', lat: 10.5, lon: 76.3 });
+    assert.equal(snapLocation({ place: 'ATLANTIS', lat: 0, lon: 0 }), null);
+    assert.deepEqual(snapLocation({ place: 'NAIROBI, KENYA', lat: -1.3, lon: 36.8 }), { place: 'NAIROBI, KENYA', lat: -1.3, lon: 36.8 }, 'close enough stays');
+    assert.deepEqual(snapLocation({ place: 'RUSSIA', lat: 55.75, lon: 37.6 }), { place: 'RUSSIA', lat: 55.75, lon: 37.6 }, 'a wide country allows a pin far from its middle');
+  });
+});

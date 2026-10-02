@@ -1,17 +1,22 @@
 // GLOBIT 24's sonic identity. One four-note signature - low 5, 1, 2, high 5
 // ("da-da-da-DAH") - rises by a fourth, a step and a fourth: open, confident,
 // with no third, so it belongs to no mode until a fifth "colour" note gives
-// each use its own mood:
-//   channel / WORLD NOW  -> 3   (down a minor third: warm, resolved, home)
-//   TECH BYTES           -> b7  (up a minor third: dorian, cool synth)
-//   COSMOS DESK          -> #4  (down a semitone: lydian wonder)
-//   MONEY MINUTE         -> 6   (up a step: cheeky major-sixth lift)
-//   NEWS IN 60           -> 8   (up a fourth to the octave: done, next!)
-//   BREAKING             -> b3  (minor, low, firm - never an alarm)
-//   UP NEXT promo        -> 2   (left hanging: "stay with us")
-//   sign-off             -> 3 then 1 (home)
-// Every cue is a plain tune object (see tune.js / CONTRACTS.md), so the
-// opens, the director and the lab play them like any other tune.
+// each use its own mood. The colour always sounds over a tonic pedal (the
+// bass stays on 1 while the harmony moves above it), so it is heard as a
+// degree of the key, not as a tone of some passing chord:
+//   channel / WORLD NOW  -> 3   (D major; resolves 3 -> 1 at the sign-off)
+//   TECH BYTES           -> b7  (A dorian: the Am6/9, F# against C)
+//   COSMOS DESK          -> #4  (E lydian: Emaj9#11)
+//   MONEY MINUTE         -> 6   (F major, F6/9)
+//   NEWS IN 60           -> 8   (G: the octave, "the minute starts")
+//   BREAKING             -> b3  (the programme's key, minor, low and firm)
+//   UP NEXT promo        -> 2   (three notes, left hanging on 2 over IV add9)
+// Harmony leans on sevenths, ninths and plagal moves (no V-I fanfares, no
+// pentatonic jingles); voices are filtered (tune.js), with no chip arpeggios,
+// crashes or whooshes. The motif is reserved for opens, the ident, sign-offs,
+// breaking news and promos - the 0.8 s stinger is a felt thump, not a tune.
+// Arrangements follow docs/programmes/*.md ("Music and sound").
+// Every cue is a plain tune object (see tune.js / CONTRACTS.md).
 
 import { midiToName } from './tune.js';
 
@@ -73,155 +78,194 @@ export function motif(tonic, colour, beat = 0, { scale = 1, colourBeats = 1.5, o
   return out;
 }
 
+// Soft lead voices used across the package.
+const LEAD = {
+  softPulse: { wave: 'pulse25', preset: 'pulse25', a: 0.022, vib: [10, 5.2, 0.35], cutoff: 2600 },
+  darkPulse: { wave: 'pulse25', preset: 'pulse25', a: 0.015, cutoff: 2000 },
+  glass: { wave: 'pulse12', preset: 'pulse12', a: 0.006, d: 0.3, s: 0.45, r: 0.2, cutoff: 2600 },
+  tick: { wave: 'pulse25', preset: 'pluck', a: 0.003, d: 0.08, s: 0, r: 0.05, cutoff: 1800, fenv: false },
+};
+
 // ------------------------------------------------------------------ opens
 
 // Each open: preferred tempo, then a builder that receives H (the beat of the
 // final chord, landing exactly on the title lock-up) and C (the beat of the
-// cut to the studio, possibly fractional) and returns the tune.
+// cut to the studio, possibly fractional) and returns the tune. The motif
+// starts at H - 4 so its colour note ends on the hit.
 const OPENS = {
-  // Flagship: brass in D major over a timpani roll; IV - V - I into the title.
+  // Flagship, 88-96 BPM: low brass over timpani. Lowe's minor-to-major arc in
+  // the pads (Bm7 - Gmaj9 - open fifth) over a D pedal; the colour (F#, the
+  // 3rd) sounds against the pedal and the brass falls 3 -> 1 on the hit.
   'world-now': {
-    bpm: 112,
+    bpm: 94,
     key: D4,
     build(H, C) {
       const k = D4;
-      const m0 = H - 4; // motif start: colour note lands 1.5 beats before the hit
+      const m0 = H - 4;
       const total = C + 2;
-      const roll = range(0, m0, 0.25).map((b, i, a) => [b, k - 24, 0.25, 0.2 + (0.45 * i) / Math.max(1, a.length - 1)]);
+      const lead = [...motif(k - 12, COLOURS.home, m0), [H, k - 12, total - H, 0.9]];
+      const roll = range(0, m0, 0.25).map((b, i, a) => [b, k - 24, 0.25, 0.18 + (0.3 * i) / Math.max(1, a.length - 1)]);
       return {
         bpm: this.tempo,
-        room: 0.22,
-        echo: { amount: 0.8, beats: 0.75, feedback: 0.28 },
+        room: 0.24,
+        echo: { amount: 0.7, beats: 0.75, feedback: 0.26 },
         fadeOut: 0.9,
         tracks: [
-          { kind: 'lead', inst: 'brass', notes: part(motif(k - 12 + 12, COLOURS.home, m0, { colourBeats: 1.5 }), total), gain: 1.05 },
-          { kind: 'lead', inst: 'pulse12', notes: part(motif(k + 12, COLOURS.home, m0, { vel: 0.55 }), total), gain: 0.45, pan: 0.2, echo: 0.35 },
+          { kind: 'lead', inst: 'brass', notes: part(lead, total), gain: 1.1 },
+          { kind: 'lead', inst: 'brass', notes: part([...motif(k, COLOURS.home, m0, { vel: 0.55 }), [H, [k - 3, k + 2, k + 4], total - H, 0.5]], total), gain: 0.5, pan: 0.18, echo: 0.3 },
           { kind: 'harmony', inst: 'pad', notes: part([
-            [0, [k - 12, k - 5], m0, 0.5], [m0, [k - 8, k - 5], 1.5, 0.75], [m0 + 1.5, [k - 7, k - 3], 1, 0.8],
-            [m0 + 2.5, [k - 5, k - 1], 1.5, 0.85], [H, [k, k + 4, k + 7], total - H, 0.95],
+            [0, [k - 3, k, k + 4, k + 7], m0 + 1, 0.55], // Bm7 over the D pedal
+            [m0 + 1, [k - 7, k - 3, k, k + 4], 1.5, 0.62], // Gmaj9
+            [m0 + 2.5, [k - 5, k, k + 7], 1.5, 0.66], // open fifth: the colour decides
+            [H, [k - 12, k - 5, k + 2, k + 4, k + 7], total - H, 0.8], // D add9
           ], total), pan: -0.2 },
-          { kind: 'bass', inst: 'timpani', notes: part([...roll, [m0, k - 24, 1.5], [m0 + 1.5, k - 19, 1], [m0 + 2.5, k - 17, 1.5], [H, k - 24, C - H], [C, k - 24, 1.5, 0.8]], total) },
-          { kind: 'bass', inst: 'tri', notes: part([[m0, k - 24, 1.4, 0.8], [m0 + 1.5, k - 19, 0.9, 0.8], [m0 + 2.5, k - 17, 1.4, 0.8], [H, [k - 24], total - H, 0.9]], total), gain: 0.6 },
-          { drums: drums([...range(0, m0, 0.25).map((b, i, a) => [b, 'S', 0.15 + (0.45 * i) / Math.max(1, a.length - 1)]), [m0, 'K', 0.8], [m0 + 1.5, 'K', 0.7], [m0 + 2.5, 'S', 0.8], [H, 'K'], [C, 'K', 0.85]], total) },
-          { drums: drums([[m0, 'O', 0.5], [H, 'C']], total) },
-          { kind: 'lead', inst: 'bell', notes: part([[H, k + 12, 0.25, 0.5], [H + 0.25, k + 16, 0.25, 0.5], [H + 0.5, k + 19, 0.25, 0.5], [H + 0.75, k + 24, 1, 0.55]], total), gain: 0.4, echo: 0.5, pan: 0.3 },
+          { kind: 'bass', inst: 'timpani', notes: part([...roll, [m0, k - 24, 2.5, 0.65], [m0 + 2.5, k - 24, 1.5, 0.75], [H, k - 24, C - H], [C, k - 24, 1.5, 0.7]], total) },
+          { kind: 'bass', inst: 'tri', notes: part([[m0, k - 24, 2.4, 0.75], [m0 + 2.5, k - 24, 1.4, 0.8], [H, k - 24, total - H, 0.85]], total), gain: 0.6 },
+          { drums: drums([[H, 'F', 0.7], [C, 'F', 0.55]], total) },
         ],
       };
     },
   },
-  // Cool synth: A dorian, a 12.5 % pulse arpeggio, chip-chord arpeggio on the hit.
+  // Technological, classy, half-time (100-108 BPM): A dorian. A quiet pulse12
+  // arpeggio in eighths with a dotted echo over Am9 -> D9 (the dorian IV);
+  // the b7 sounds over the A pedal; the hit is Am6/9 (F# against C).
   'tech-bytes': {
-    bpm: 150,
+    bpm: 104,
     key: 69,
     build(H, C) {
       const k = 69; // A4
       const m0 = H - 4;
       const total = C + 2;
-      const arpNotes = [k - 12, k - 9, k - 5, k - 2, k + 2, k - 2, k - 5, k - 9];
-      const arp = range(1, H, 0.25).map((b, i) => [b, arpNotes[i % 8], 0.25, 0.45 + 0.1 * (i % 2 ? 0 : 1)]);
-      const bass = [...range(2, m0 + 2.5, 0.5).map((b, i) => [b, i % 2 ? k - 24 : k - 36, 0.5, 0.85]),
-        ...range(m0 + 2.5, H, 0.5).map((b, i) => [b, i % 2 ? k - 26 : k - 38, 0.5, 0.85]), [H, k - 36, 2.5]];
+      const am9 = [k - 12, k - 9, k - 5, k - 2, k + 2, k - 2, k - 5, k - 9];
+      const d9 = [k - 7, k - 3, k, k + 3, k + 7, k + 3, k, k - 3];
+      const arp = range(0, H, 0.5).map((b, i) => [b, (b >= m0 + 1.5 && b < m0 + 3 ? d9 : am9)[i % 8], 0.5, 0.32 + 0.06 * (i % 2 ? 0 : 1)]);
       return {
         bpm: this.tempo,
-        room: 0.14,
-        echo: { amount: 1, beats: 0.75, feedback: 0.35 },
+        room: 0.16,
+        echo: { amount: 1, beats: 0.75, feedback: 0.34 },
         fadeOut: 0.8,
         tracks: [
-          { kind: 'lead', inst: 'pulse25', notes: part(motif(k - 12, COLOURS.tech, m0), total), gain: 1 },
-          { kind: 'lead', inst: 'bell', notes: part([[0, k + 24, 0.25, 0.6], [0.5, k + 19, 0.25, 0.5], [H, [k, k + 7, k + 10, k + 14], total - H, 0.8]], total), arp: 0.045, gain: 0.55, echo: 0.3 },
-          { kind: 'harmony', inst: 'pulse12', notes: part(arp, total), gain: 0.55, pan: 0.3, echo: 0.45 },
-          { kind: 'bass', inst: { wave: 'pulse50', preset: 'pulse50', s: 0.6, d: 0.1 }, notes: part(bass, total), gain: 0.75 },
-          { drums: drums([...range(2, H, 0.25).map((b, i) => [b, 'H', i % 2 ? 0.35 : 0.6]), [H, 'C', 0.8], [C, 'H', 0.4]], total) },
-          { drums: drums([[0, 'X', 0.6], [0.5, 'X', 0.5], ...range(m0, H, 1).map((b) => [b, (b - m0) % 2 ? 'S' : 'K', 0.9]), [H, 'K'], [C, 'K', 0.8]], total) },
+          { kind: 'lead', inst: LEAD.softPulse, notes: part(motif(k - 12, COLOURS.tech, m0), total), gain: 1 },
+          { kind: 'harmony', inst: { wave: 'pulse12', preset: 'pulse12', a: 0.004, d: 0.2, s: 0.35, r: 0.12, cutoff: 1800, vib: false }, notes: part(arp, total), gain: 0.5, pan: 0.3, echo: 0.55 },
+          { kind: 'harmony', inst: 'pad', notes: part([
+            [0, [k - 12, k - 9, k - 5, k - 2, k + 2], m0 + 1.5, 0.55], // Am9
+            [m0 + 1.5, [k - 7, k - 5, k - 3, k + 3], 1.5, 0.6], // D9 (dorian IV)
+            [m0 + 3, [k - 12, k - 5], 1, 0.6], // open fifth under the b7
+            [H, [k - 12, k - 9, k - 3, k + 2, k - 5], total - H, 0.75], // Am6/9
+          ], total), pan: -0.2 },
+          { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, m0 + 1.5], [m0 + 1.5, k - 31, 1.5, 0.9], [m0 + 3, k - 24, 1], [H, k - 24, total - H]], total) },
+          { drums: drums([[0, 'K', 0.5], [2, 'S', 0.3], [4, 'K', 0.45], [H, 'K', 0.65], [C, 'F', 0.55]], total) },
+          { drums: drums(range(0, H, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.16 : 0.24]), total) },
         ],
       };
     },
   },
-  // Wonder: E lydian, soft triangle with long echo, a sweep into Emaj7(#11).
+  // Wonder, 72-88 BPM: E lydian. A soft triangle with long echo over Emaj7 ->
+  // F#/E (lydian II over the I pedal); sparse bells (at most four a bar) and
+  // Emaj9#11 on the hit. No sweeps, no cymbals.
   cosmos: {
-    bpm: 92,
+    bpm: 82,
     key: 64,
     build(H, C) {
       const k = 64; // E4
       const m0 = H - 4;
       const total = C + 2.5;
-      const dust = [k + 12, k + 19, k + 26, k + 28, k + 31, k + 26];
       return {
         bpm: this.tempo,
         room: 0.42,
-        echo: { amount: 1.4, beats: 0.75, feedback: 0.45 },
+        echo: { amount: 1.3, beats: 0.75, feedback: 0.45 },
         fadeOut: 1.2,
         tracks: [
-          { kind: 'lead', inst: 'softtri', notes: part(motif(k - 12 + 12, COLOURS.cosmos, m0, { colourBeats: 1.5 }), total), gain: 1.1 },
-          { kind: 'lead', inst: 'sine', notes: part(motif(k + 12, COLOURS.cosmos, m0, { vel: 0.5 }), total), gain: 0.4, echo: 0.5, pan: -0.25 },
-          { kind: 'harmony', inst: 'bell', notes: part([...range(0, Math.max(1, m0 + 0.01), 0.25).map((b, i) => [b, dust[i % dust.length], 0.25, 0.55]),
-            [H, k + 18, 2, 0.5]], total), gain: 0.5, echo: 0.6, pan: 0.35 },
-          { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 12, k - 5], m0 + 2.5, 0.6], [m0 + 2.5, [k - 10, k - 6], 1.5, 0.7], [H, [k - 12, k - 8, k - 5, k - 1], total - H, 0.85]], total), pan: 0.15 },
-          { kind: 'bass', inst: 'sine', notes: part([[0, k - 24, m0 + 2.5, 0.8], [m0 + 2.5, k - 22, 1.5, 0.8], [H, k - 24, total - H, 0.9]], total) },
-          { drums: drums([[0, 'O', 0.45], [Math.max(0.5, H - 2), 'W', 0.8], [H, 'C', 0.5], [C, 'T', 0.4]], total) },
-          { drums: drums([[H, 'T', 0.7]], total) },
+          { kind: 'lead', inst: 'softtri', notes: part(motif(k, COLOURS.cosmos, m0, { colourBeats: 1.5 }), total), gain: 1.1 },
+          { kind: 'lead', inst: 'sine', notes: part(motif(k + 12, COLOURS.cosmos, m0, { vel: 0.45 }), total), gain: 0.38, echo: 0.5, pan: -0.25 },
+          { kind: 'harmony', inst: 'bell', notes: part([[0, k + 19, 1, 0.34], [m0 + 2, k + 14, 1, 0.28], [m0 + 3, k + 18, 1, 0.3], [H, k + 19, 2, 0.32]], total), gain: 0.5, echo: 0.65, pan: 0.35 },
+          { kind: 'harmony', inst: 'pad', notes: part([
+            [0, [k - 12, k - 5, k - 1, k + 4], m0 + 2.5, 0.55], // Emaj7
+            [m0 + 2.5, [k - 10, k - 6, k - 3, k + 2], 1.5, 0.6], // F#/E: the lydian II
+            [H, [k - 12, k - 5, k - 1, k + 2, k + 6], total - H, 0.75], // Emaj9#11
+          ], total), pan: 0.15 },
+          { kind: 'bass', inst: 'sine', notes: part([[0, k - 24, H, 0.75], [H, k - 24, total - H, 0.85]], total) },
+          { drums: drums([[H, 'F', 0.5], [C, 'F', 0.4]], total) },
         ],
       };
     },
   },
-  // Strut: F major with swing, "cha-ching" sparkle, a 6/9 chord on the title.
+  // After the close, 112-116 BPM, straight (money-minute.md): F major. A soft
+  // pulse25 lead, short electric-piano chords on the "and" of 2 and 4, a tri
+  // bass in half notes, a filtered pad; Fmaj9 | Dm9 | Bbmaj9 | C6sus, the 6th
+  // over the F pedal and an F6/9 button. No brass, no swing, no bells.
   'money-minute': {
-    bpm: 128,
+    bpm: 114,
     key: 65,
     build(H, C) {
       const k = 65; // F4
       const m0 = H - 4;
       const total = C + 2;
-      const walk = [...range(0, m0, 0.5).map((b, i) => [b, i % 2 ? k - 12 : k - 24, 0.5, 0.85]),
-        [m0, k - 24, 1], [m0 + 1, k - 20, 0.5], [m0 + 1.5, k - 17, 1], [m0 + 2.5, k - 19, 1], [m0 + 3.5, k - 17, 0.5], [H, k - 24, 2.5]];
+      const ch = {
+        fmaj9: [k - 8, k - 5, k - 1, k + 2], // A C E G
+        dm9: [k - 12, k - 8, k - 5, k - 1], // F A C E
+        bbmaj9: [k - 8, k - 5, k - 3, k], // A C D F
+        c6sus: [k - 5, k, k + 2, k + 4], // C F G A
+        f69: [k - 8, k - 3, k + 2, k + 7], // A D G C
+      };
       return {
         bpm: this.tempo,
-        swing: 0.18,
+        swing: 0,
         room: 0.18,
-        echo: { amount: 0.7, beats: 0.75, feedback: 0.25 },
+        echo: { amount: 0.5, beats: 0.75, feedback: 0.22 },
         fadeOut: 0.8,
         tracks: [
-          { kind: 'lead', inst: 'brass', notes: part(motif(k - 12, COLOURS.money, m0), total), gain: 1 },
-          { kind: 'lead', inst: 'bell', notes: part([[0, k + 19, 0.25, 0.7], [0.25, k + 24, 0.75, 0.8], [H, [k + 12, k + 16, k + 19, k + 21, k + 26], total - H, 0.75]], total), arp: 0.04, gain: 0.55, echo: 0.3, pan: 0.25 },
-          { kind: 'harmony', inst: 'pluck', notes: part([...range(1, m0, 1).map((b) => [b, [k - 8, k - 5], 0.5, 0.6]), [m0, [k - 8, k - 5], 1.5, 0.7], [m0 + 1.5, [k - 10, k - 5], 1, 0.7], [m0 + 2.5, [k - 7, k - 3], 1.5, 0.75], [H, [k - 8, k - 5, k - 3], total - H, 0.8]], total), pan: -0.25 },
-          { kind: 'bass', inst: 'tri', notes: part(walk, total) },
-          { drums: drums([...range(0, H, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.35 : 0.55]), [H, 'C', 0.8]], total) },
-          { drums: drums([...range(0, H, 1).map((b, i) => [b, i % 2 ? 'S' : 'K', 0.85]), [H, 'K'], [C, 'K', 0.8]], total) },
+          { kind: 'lead', inst: LEAD.softPulse, notes: part(motif(k, COLOURS.money, m0), total), gain: 0.95 },
+          { kind: 'harmony', inst: 'pad', notes: part([
+            [0, ch.fmaj9, 2, 0.5], [2, ch.dm9, 1.5, 0.52], [3.5, ch.bbmaj9, 1, 0.55], [m0 + 2.5, ch.c6sus, 1.5, 0.56], [H, ch.f69, total - H, 0.66],
+          ], total), pan: -0.22 },
+          { kind: 'harmony', inst: 'keys', notes: part([
+            [1.5, ch.fmaj9.slice(1), 0.4, 0.45], [3.5, ch.bbmaj9.slice(1), 0.4, 0.45], [5.5, ch.c6sus.slice(1), 0.4, 0.42], [H, ch.f69, 1.5, 0.5],
+          ], total), pan: 0.25, echo: 0.2 },
+          { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, 2], [2, k - 27, 1.5], [3.5, k - 31, 1], [m0 + 2.5, k - 24, 1.5], [H, k - 24, total - H]], total) },
+          { drums: drums([...range(0, H, 0.5).map((b) => [b, 'H', 0.14]), [H, 'F', 0.7], [C, 'F', 0.5]], total) },
         ],
       };
     },
   },
-  // The clock: G major, ticking, the signature leaps to the octave - next story!
+  // The clock, 120 BPM (news-60.md): G. A low-passed pulse25 lead, soft ticks
+  // on the off-beats only, a staccato bass on each beat, G(add9) -> C/G over
+  // the G pedal; the octave colour ("the minute starts") and a Gadd9 bell
+  // chord with one soft kick on the hit.
   'news-60': {
-    bpm: 150,
+    bpm: 120,
     key: 67,
     build(H, C) {
       const k = 67; // G4
       const m0 = H - 4;
       const total = C + 1.5;
-      const ticks = range(0, m0, 0.5).map((b, i) => [b, i % 2 ? k + 16 : k + 21, 0.25, 0.55]);
-      const bass = [...range(0, m0 + 1.5, 0.5).map((b) => [b, k - 24, 0.3, 0.8]), [m0 + 1.5, k - 19, 1], [m0 + 2.5, k - 17, 1.5], [H, k - 24, 2]];
+      const ticks = range(0.5, H, 1).map((b) => [b, k + 12, 0.25, 0.32]);
       return {
         bpm: this.tempo,
-        room: 0.12,
-        echo: { amount: 0.6, beats: 0.5, feedback: 0.25 },
+        room: 0.14,
+        echo: { amount: 0.6, beats: 0.5, feedback: 0.24 },
         fadeOut: 0.6,
         tracks: [
-          { kind: 'lead', inst: 'pulse50', notes: part(motif(k - 12, COLOURS.sixty, m0, { colourBeats: 1.5 }), total), gain: 1 },
-          { kind: 'harmony', inst: 'pluck', notes: part([...ticks, [m0, [k - 8, k - 5], 1.5, 0.7], [m0 + 1.5, [k - 7, k - 3], 1, 0.7], [m0 + 2.5, [k - 5, k - 1], 1.5, 0.75]], total), gain: 0.7, pan: 0.2 },
-          { kind: 'lead', inst: 'bell', notes: part([[H, [k, k + 4, k + 7, k + 12], total - H, 0.8]], total), arp: 0.04, gain: 0.6, echo: 0.25 },
-          { kind: 'bass', inst: { wave: 'pulse25', preset: 'pulse25', s: 0.5, d: 0.08 }, notes: part(bass, total), gain: 0.65 },
-          { drums: drums([...range(0, m0, 1).map((b, i) => [b, 'X', i % 2 ? 0.55 : 0.8]), ...range(m0, H, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.35 : 0.55]), [H, 'C', 0.75]], total) },
-          { drums: drums([...range(m0, H, 1).map((b, i) => [b, i % 2 ? 'S' : 'K', 0.9]), [H, 'K'], [C, 'K', 0.8]], total) },
+          { kind: 'lead', inst: LEAD.darkPulse, notes: part(motif(k - 12, COLOURS.sixty, m0, { colourBeats: 1.5 }), total), gain: 0.85 },
+          { kind: 'harmony', inst: LEAD.tick, notes: part(ticks, total), gain: 0.55, pan: 0.22, echo: 0.3 },
+          { kind: 'harmony', inst: 'pad', notes: part([
+            [0, [k - 12, k - 8, k - 5, k + 2], m0 + 1.5, 0.52], // G add9
+            [m0 + 1.5, [k - 12, k - 7, k - 3, k], 1, 0.55], // C/G
+            [m0 + 2.5, [k - 12, k - 10, k - 5], 1.5, 0.55], // G sus2 under the octave
+            [H, [k - 12, k - 8, k - 5, k + 2], total - H, 0.62],
+          ], total), pan: -0.18 },
+          { kind: 'lead', inst: 'bell', notes: part([[H, [k, k + 4, k + 7, k + 14], total - H, 0.6]], total), gain: 0.5, echo: 0.3, pan: 0.15 },
+          { kind: 'bass', inst: { wave: 'tri', preset: 'tri', s: 0.4, d: 0.12 }, notes: part([...range(0, H, 1).map((b) => [b, k - 24, 0.4, 0.75]), [H, k - 24, total - H, 0.85]], total) },
+          { drums: drums([[H, 'K', 0.6], [C, 'F', 0.5]], total) },
         ],
       };
     },
   },
 };
 
-// Unknown programmes: the channel signature in C major.
+// Unknown programmes: the channel signature in C major, sober.
 const GENERIC = {
-  bpm: 120,
+  bpm: 100,
   key: 60,
   build(H, C) {
     const k = 60;
@@ -229,37 +273,40 @@ const GENERIC = {
     const total = C + 2;
     return {
       bpm: this.tempo,
-      room: 0.18,
-      echo: { amount: 0.8, beats: 0.75, feedback: 0.28 },
+      room: 0.2,
+      echo: { amount: 0.7, beats: 0.75, feedback: 0.26 },
       fadeOut: 0.8,
       tracks: [
-        { kind: 'lead', inst: 'pulse50', notes: part(motif(k, COLOURS.home, m0), total) },
-        { kind: 'harmony', inst: 'pad', notes: part([[m0, [k - 8, k - 5], 1.5, 0.7], [m0 + 1.5, [k - 7, k - 3], 1, 0.75], [m0 + 2.5, [k - 5, k - 1], 1.5, 0.8], [H, [k, k + 4, k + 7], total - H, 0.9]], total) },
-        { kind: 'bass', inst: 'tri', notes: part([...range(0, m0, 1).map((b) => [b, k - 24, 0.9, 0.8]), [m0, k - 24, 1.5], [m0 + 1.5, k - 19, 1], [m0 + 2.5, k - 17, 1.5], [H, k - 24, 2.5]], total) },
-        { drums: drums([...range(0, H, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.3 : 0.5]), [H, 'C', 0.8]], total) },
-        { drums: drums([...range(0, H, 1).map((b, i) => [b, i % 2 ? 'S' : 'K', 0.85]), [H, 'K'], [C, 'K', 0.8]], total) },
+        { kind: 'lead', inst: LEAD.softPulse, notes: part([...motif(k, COLOURS.home, m0), [H, k, total - H, 0.85]], total) },
+        { kind: 'harmony', inst: 'pad', notes: part([
+          [0, [k - 3, k, k + 4, k + 7], m0 + 1, 0.55], [m0 + 1, [k - 7, k - 3, k, k + 4], 1.5, 0.6], [m0 + 2.5, [k - 5, k, k + 7], 1.5, 0.62], [H, [k - 12, k - 5, k + 2, k + 4], total - H, 0.75],
+        ], total) },
+        { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, H], [H, k - 24, total - H]], total) },
+        { drums: drums([[H, 'F', 0.65], [C, 'F', 0.5]], total) },
       ],
     };
   },
 };
 
+const COLOUR_OF = { 'world-now': 'home', 'tech-bytes': 'tech', cosmos: 'cosmos', 'money-minute': 'money', 'news-60': 'sixty' };
+
 /**
  * Theme tune for a programme's open. The final chord lands on the title
- * lock-up (`duration - 0.8` s) and a soft timpani button on the cut.
+ * lock-up (`duration - 0.8` s) and a soft felt/timpani button on the cut.
  * Returns a tune with `meta: { programId, motif, colour, key, bpm, hitAt, cutAt }`.
  */
 export function themeFor(programId, { duration = 4 } = {}) {
   const def = OPENS[programId] ?? GENERIC;
   const dur = Math.min(8, Math.max(2.5, Number(duration) || 4));
   const lockAt = Math.max(2.2, dur - 0.8);
-  const H = Math.max(5, Math.round((lockAt * def.bpm) / 60));
+  // The hit on a whole or half beat, close to the programme's tempo.
+  const H = Math.max(4.5, Math.round(((lockAt * def.bpm) / 60) * 2) / 2);
   const tempo = (H * 60) / lockAt;
   const C = (dur * tempo) / 60;
   const tune = def.build.call({ tempo }, H, C);
-  const colourKey = { 'world-now': 'home', 'tech-bytes': 'tech', cosmos: 'cosmos', 'money-minute': 'money', 'news-60': 'sixty' }[programId] ?? 'home';
   return {
     ...tune,
-    meta: { programId: OPENS[programId] ? programId : 'generic', motif: MOTIF, colour: colourKey, key: midiToName(def.key), bpm: tempo, hitAt: lockAt, cutAt: dur },
+    meta: { programId: OPENS[programId] ? programId : 'generic', motif: MOTIF, colour: COLOUR_OF[programId] ?? 'home', key: midiToName(def.key), bpm: tempo, hitAt: lockAt, cutAt: dur },
   };
 }
 
@@ -267,115 +314,212 @@ export const THEME_IDS = Object.keys(OPENS);
 
 // -------------------------------------------------------------- channel cues
 
-// Ident before every break (~3.2 s): the signature with its home colour, full band.
-export const IDENT = (() => {
+// Key and lead voice of each programme's cues (breaking, sign-off, promo).
+const VOICE = {
+  'world-now': { key: D4, lead: 'brass', pad: 'pad' },
+  'tech-bytes': { key: 69, lead: LEAD.softPulse, pad: 'pad' },
+  cosmos: { key: 64, lead: 'softtri', pad: 'pad' },
+  'money-minute': { key: 65, lead: LEAD.softPulse, pad: 'pad' },
+  'news-60': { key: 67, lead: LEAD.darkPulse, pad: 'pad' },
+  channel: { key: D4, lead: LEAD.softPulse, pad: 'pad' },
+};
+const keyOf = (programId) => (VOICE[programId] ? programId : 'channel');
+// Fold a tonic into the D3-B3 range for low cues.
+const low = (k) => { let m = k; while (m > 59) m -= 12; while (m < 48) m += 12; return m; };
+
+/**
+ * Break ident (channel-and-breaks.md): the motif once on pulse12 with a
+ * dotted echo, over a pad and a triangle pedal, 100 BPM by day and 88 at
+ * night; the last motif note lands as the logo's rule finishes drawing
+ * (~0.9-1.0 s) and a pad + pluck hold rings to the end of the card (3.6 s).
+ * The harmony moves plagally (Gmaj7/D -> D add9): an arrival, not a second
+ * cadence right after the programme's own sign-off.
+ */
+function buildIdent(night) {
   const k = D4;
-  const H = 4;
-  const total = 6.5;
+  const bpm = night ? 88 : 100;
+  const total = Math.round(((3.6 * bpm) / 60) * 2) / 2;
   return {
-    bpm: 120,
-    room: 0.22,
-    echo: { amount: 0.9, beats: 0.75, feedback: 0.3 },
+    bpm,
+    room: 0.3,
+    echo: { amount: 1.2, beats: 0.75, feedback: 0.36 },
+    loudness: -1,
     fadeOut: 0.6,
     tracks: [
-      { kind: 'lead', inst: 'brass', notes: part(motif(k, COLOURS.home, 0), total), gain: 1.05 },
-      { kind: 'lead', inst: 'pulse12', notes: part(motif(k + 12, COLOURS.home, 0, { vel: 0.5 }), total), gain: 0.45, pan: 0.2, echo: 0.35 },
-      { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 8, k - 5], 1.5, 0.7], [1.5, [k - 7, k - 3], 1, 0.75], [2.5, [k - 5, k - 1], 1.5, 0.8], [H, [k, k + 4, k + 7], total - H, 0.9]], total), pan: -0.2 },
-      { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, 1.5], [1.5, k - 19, 1], [2.5, k - 17, 1.5], [H, k - 24, 2.5]], total) },
-      { kind: 'lead', inst: 'bell', notes: part([[H, k + 12, 0.25, 0.5], [H + 0.25, k + 16, 0.25, 0.5], [H + 0.5, k + 19, 0.25, 0.55], [H + 0.75, k + 24, 0.25, 0.55], [H + 1, k + 26, 1.5, 0.5]], total), gain: 0.45, echo: 0.55, pan: 0.3 },
-      { drums: drums([[0, 'K'], [1.5, 'K', 0.85], [2.5, 'S', 0.8], [3.5, 'S', 0.5], [3.75, 'S', 0.7], [H, 'K']], total) },
-      { drums: drums([[0, 'O', 0.4], [H, 'C', 0.85]], total) },
+      { kind: 'lead', inst: LEAD.glass, notes: part(motif(k, null, 0), total), gain: 0.9, echo: 0.6 },
+      { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 7, k - 3, k, k + 4], 1.5, 0.5], [1.5, [k - 5, k, k + 2, k + 4], total - 1.5, 0.58]], total), pan: -0.2 },
+      { kind: 'harmony', inst: 'pluck', notes: part([[2.5, k + 4, 1, 0.42], [3.5, k + 7, 1, 0.36], [4.5, k + 2, 1, 0.34]].filter(([b]) => b < total - 0.5), total), gain: 0.7, pan: 0.25, echo: 0.4 },
+      { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, total, 0.7]], total), gain: 0.7 },
     ],
-    meta: { cue: 'ident', colour: 'home', key: 'D4' },
+    meta: { cue: 'ident', colour: 'home', key: 'D4', night },
   };
-})();
+}
 
-// Stinger (0.8 s): a rising hiss with the first notes of the signature glinting on top.
-export const STINGER = (() => {
-  const k = D4 + 24;
+/** Stinger (0.8 s): a soft air swell into a low felt thump on the cut, with a quiet low D. */
+function buildStinger() {
   return {
     bpm: 150,
-    room: 0.2,
-    echo: { amount: 1.2, beats: 0.5, feedback: 0.35 },
-    loudness: -4,
+    room: 0.25,
+    loudness: -6,
     fadeOut: 0.3,
     tracks: [
-      { drums: drums([[0, 'W', 0.9]], 2) },
-      { kind: 'lead', inst: 'bell', notes: part(motif(k, null, 0.5, { scale: 0.5, vel: 0.7 }).map(([b, m, d, v], i, a) => [b, m, i === a.length - 1 ? 0.75 : d, v]), 2.5), gain: 0.55, echo: 0.6 },
+      { drums: drums([[0, 'A', 0.7], [1, 'F', 0.9]], 2) },
+      { kind: 'bass', inst: 'timpani', notes: part([[1, D4 - 24, 1, 0.45]], 2) },
     ],
     meta: { cue: 'stinger' },
   };
-})();
+}
 
-// Breaking news (~2.6 s): the signature in D minor, low brass over timpani.
-export const BREAKING = (() => {
-  const k = D4 - 12; // D3
-  const H = 4;
-  const total = 6;
+/** Breaking (~2.8 s): the motif with its b3 in the programme's key, low brass over timpani. */
+function buildBreaking(programId) {
+  const v = VOICE[keyOf(programId)];
+  const k = low(v.key); // D3 for the channel
+  const total = 5.5;
   return {
-    bpm: 132,
+    bpm: 116,
     room: 0.2,
-    echo: { amount: 0.5, beats: 0.75, feedback: 0.25 },
+    echo: { amount: 0.5, beats: 0.75, feedback: 0.24 },
+    loudness: -1,
     fadeOut: 0.6,
     tracks: [
-      { kind: 'lead', inst: 'brass', notes: part(motif(k, COLOURS.breaking, 0), total), gain: 1.1 },
-      { kind: 'lead', inst: 'pulse50', notes: part(motif(k + 12, COLOURS.breaking, 0, { vel: 0.5 }), total), gain: 0.4, pan: 0.15 },
-      { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 5, k], 2.5, 0.7], [2.5, [k - 4, k], 1.5, 0.75], [H, [k, k + 3, k + 7], total - H, 0.9]], total), pan: -0.15 },
-      { kind: 'bass', inst: 'timpani', notes: part([[0, k - 12, 2.5], [2.5, k - 16, 0.5, 0.8], ...range(3, H, 0.25).map((b, i) => [b, k - 12, 0.25, 0.4 + i * 0.12]), [H, k - 12, 2]], total) },
-      { drums: drums([[0, 'K'], [2.5, 'S', 0.7], ...range(3, H, 0.25).map((b, i) => [b, 'S', 0.35 + i * 0.12]), [H, 'K']], total) },
-      { drums: drums([[H, 'C', 0.6]], total) },
+      { kind: 'lead', inst: 'brass', notes: part([...motif(k, COLOURS.breaking, 0)], total), gain: 1.1 },
+      { kind: 'lead', inst: 'brass', notes: part(motif(k + 12, COLOURS.breaking, 0, { vel: 0.45 }), total), gain: 0.4, pan: 0.15 },
+      { kind: 'harmony', inst: 'pad', notes: part([[0, [k + 7, k + 12], 2.5, 0.55], [2.5, [k + 7, k + 12, k + 15], total - 2.5, 0.65]], total), pan: -0.15 },
+      { kind: 'bass', inst: 'timpani', notes: part([[0, k - 12, 2.5, 0.8], [2.5, k - 12, 1.5, 0.7], [4, k - 12, 1.5, 0.55]], total) },
+      { kind: 'bass', inst: 'tri', notes: part([[0, k - 12, total, 0.7]], total), gain: 0.55 },
     ],
-    meta: { cue: 'breaking', colour: 'breaking', key: 'D3 minor' },
+    meta: { cue: 'breaking', colour: 'breaking', key: `${midiToName(k)} minor`, programId: keyOf(programId) },
   };
-})();
+}
 
-// Sign-off (~3.2 s): slower, softer, the signature comes home to the tonic.
-export const OUTRO = (() => {
-  const k = D4;
-  const total = 5.5;
-  const lead = [...motif(k, COLOURS.home, 0, { colourBeats: 1 }), [3.5, k, 2, 0.85]];
+/** Sign-off on the end card (~3 s): each programme comes home in its own key and voice. */
+function buildOutro(programId) {
+  const id = keyOf(programId);
+  const v = VOICE[id];
+  const k = v.key;
+  const meta = { cue: 'outro', colour: COLOUR_OF[id] ?? 'home', key: midiToName(k), programId: id };
+  if (id === 'news-60') {
+    // news-60.md: the sign-off is one Gadd9 bell chord, not the motif.
+    return {
+      bpm: 120,
+      room: 0.3,
+      echo: { amount: 0.8, beats: 0.75, feedback: 0.3 },
+      loudness: -2,
+      fadeOut: 0.8,
+      tracks: [
+        { kind: 'lead', inst: 'bell', notes: part([[0, [k, k + 4, k + 7, k + 14], 5, 0.6]], 6), gain: 0.7, echo: 0.4 },
+        { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 12, k - 8, k - 5, k + 2], 6, 0.55]], 6) },
+        { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, 6, 0.7]], 6), gain: 0.7 },
+      ],
+      meta,
+    };
+  }
+  if (id === 'money-minute') {
+    // money-minute.md: the button lands on the end card's first downbeat, then
+    // the motif comes home over the F6/9.
+    const total = 6;
+    return {
+      bpm: 114,
+      room: 0.22,
+      echo: { amount: 0.6, beats: 0.75, feedback: 0.26 },
+      loudness: -1,
+      fadeOut: 0.8,
+      tracks: [
+        { kind: 'lead', inst: v.lead, notes: part([...motif(k, COLOURS.money, 1, { colourBeats: 1, vel: 0.8 }), [4.5, k, 1.5, 0.75]], total), gain: 0.9 },
+        { kind: 'harmony', inst: 'keys', notes: part([[0, [k - 8, k - 3, k + 2, k + 7], 1.5, 0.5]], total), gain: 0.9 },
+        { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 8, k - 3, k + 2, k + 7], total, 0.55]], total), pan: -0.2 },
+        { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, total]], total) },
+        { drums: drums([[0, 'F', 0.6]], total) },
+      ],
+      meta,
+    };
+  }
+  // The motif with the programme's colour, then home to 1 (the channel and
+  // WORLD NOW: 3 -> 1 on brass; COSMOS #4 -> 5 -> 1; TECH b7 -> 1 on a pluck button).
+  const colour = COLOURS[meta.colour] ?? COLOURS.home;
+  const total = 6;
+  const pedal = k - 24;
+  const tonic = id === 'world-now' ? k - 12 : k; // WORLD NOW: low brass
+  const home = id === 'cosmos' ? [[3.5, k + 7, 0.5, 0.8], [4, k, 2, 0.85]] : [[3.5, tonic, 2.5, 0.85]]; // #4 rises to 5 first
+  const lead = [...motif(tonic, colour, 0, { colourBeats: 1 }), ...home];
+  const padHome = id === 'tech-bytes' ? [k - 12, k - 9, k - 3, k + 2] : id === 'cosmos' ? [k - 12, k - 5, k - 1, k + 2, k + 6] : [k - 12, k - 5, k + 2, k + 4];
+  const tracks = [
+    { kind: 'lead', inst: v.lead, notes: part(lead, total), gain: id === 'world-now' ? 1.05 : 1 },
+    { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 7, k - 3, k, k + 4], 1.5, 0.5], [1.5, [k - 5, k, k + 2], 2, 0.55], [3.5, padHome, 2.5, 0.62]], total), pan: -0.2 },
+    { kind: 'bass', inst: id === 'world-now' ? 'timpani' : 'tri', notes: part(id === 'world-now' ? [[0, pedal, 3.5, 0.55], [3.5, pedal, 2.5, 0.7]] : [[0, pedal, total, 0.7]], total), gain: id === 'world-now' ? 1 : 0.7 },
+  ];
+  if (id === 'tech-bytes') tracks.push({ kind: 'harmony', inst: 'pluck', notes: part([[3.5, k - 5, 0.5, 0.5], [4, k, 1.5, 0.55]], total), gain: 0.8, pan: 0.25 });
+  if (id === 'cosmos') tracks.push({ kind: 'harmony', inst: 'bell', notes: part([[4, k + 19, 2, 0.28]], total), gain: 0.45, echo: 0.6, pan: 0.3 });
   return {
-    bpm: 104,
-    room: 0.35,
-    echo: { amount: 1.2, beats: 0.75, feedback: 0.4 },
+    bpm: id === 'cosmos' ? 84 : id === 'tech-bytes' ? 104 : 96,
+    room: id === 'cosmos' ? 0.4 : 0.3,
+    echo: { amount: 1, beats: 0.75, feedback: 0.36 },
     loudness: -1,
     fadeOut: 0.8,
-    tracks: [
-      { kind: 'lead', inst: 'softtri', notes: part(lead, total), gain: 1.1 },
-      { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 8, k - 5], 1.5, 0.6], [1.5, [k - 7, k - 3], 1, 0.65], [2.5, [k - 5, k - 1], 1, 0.7], [3.5, [k - 12, k - 8, k - 5], 2, 0.75]], total), pan: -0.2 },
-      { kind: 'lead', inst: 'bell', notes: part([[3.5, k + 12, 0.5, 0.45], [4, k + 16, 0.5, 0.4], [4.5, k + 19, 1, 0.4]], total), gain: 0.4, echo: 0.6, pan: 0.3 },
-      { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, 1.5], [1.5, k - 19, 1], [2.5, k - 17, 1], [3.5, k - 24, 2]], total) },
-      { drums: drums([[0, 'O', 0.35], [3.5, 'K', 0.6]], total) },
-    ],
-    meta: { cue: 'outro', colour: 'home', key: 'D4' },
+    tracks,
+    meta,
   };
-})();
+}
 
-// "Up next" promo bed (~4.2 s): a light groove; the signature ends on 2 and
-// the last bar sits on the dominant - the story is still to come.
-export const PROMO = (() => {
-  const k = D4;
-  const total = 8.4;
-  const bassNotes = [[0, k - 24], [2, k - 27], [4, k - 31], [6, k - 29]]; // D  Bm  G  A
-  const bass = bassNotes.flatMap(([b, m]) => range(b, b + 2, 0.5).map((x, i) => [x, i % 2 ? m + 12 : m, 0.45, 0.8]));
+/**
+ * "Up next" promo (channel-and-breaks.md: the `promo` cue, 4.2 s card): the
+ * motif's first three notes on pulse12 with echo, in the NEXT programme's
+ * key, left hanging on 2 over a IV(add9) pad as the trailer's title settles
+ * (1.6 s). No drums, no bass line.
+ */
+function buildPromo(programId) {
+  const id = keyOf(programId);
+  const k = VOICE[id].key;
+  const total = 6;
+  const iv = [k - 7, k - 3, k, k + 7]; // IV add9, e.g. G B D A in D
   return {
-    bpm: 120,
-    room: 0.18,
-    echo: { amount: 0.9, beats: 0.75, feedback: 0.3 },
-    loudness: -2,
-    fadeOut: 0.5,
+    bpm: 90,
+    room: 0.3,
+    echo: { amount: 1.2, beats: 0.75, feedback: 0.38 },
+    loudness: -3,
+    fadeOut: 0.6,
     tracks: [
-      { kind: 'lead', inst: 'pulse25', notes: part([...motif(k, COLOURS.next, 2, { colourBeats: 1.5 }), ...motif(k, null, 6, { vel: 0.85 }).slice(0, 3).map(([b, m, d, v], i) => [b, m, i === 2 ? 1.4 : d, v])], total) },
-      { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 8, k - 5], 2, 0.55], [2, [k - 8, k - 3], 2, 0.6], [4, [k - 7, k - 3], 2, 0.6], [6, [k - 5, k, k + 2], 2.4, 0.65]], total), gain: 0.8, pan: -0.25 },
-      { kind: 'bass', inst: { wave: 'tri', preset: 'tri', s: 0.6, d: 0.12 }, notes: part(bass, total) },
-      { drums: drums(range(0, 8, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.3 : 0.5]), total) },
-      { drums: drums(range(0, 8, 1).map((b, i) => [b, i % 2 ? 'S' : 'K', i % 2 ? 0.6 : 0.8]), total) },
+      { kind: 'lead', inst: LEAD.glass, notes: part(motif(k, null, 1.4).slice(0, 3).map(([b, m, d, v], i) => [b, m, i === 2 ? 3 : d, v]), total), gain: 0.9, echo: 0.6 },
+      { kind: 'harmony', inst: 'pad', notes: part([[0, iv, total, 0.5]], total), pan: -0.2 },
+      { kind: 'bass', inst: 'tri', notes: part([[0, k - 19, total, 0.55]], total), gain: 0.6 },
     ],
-    meta: { cue: 'promo', colour: 'next', key: 'D4' },
+    meta: { cue: 'promo', colour: 'next', key: midiToName(k), programId: id },
   };
-})();
+}
 
-/** Named channel cues, as played by AudioEngine.sfx(name). */
+const CUE_NAMES = { jingle: 'ident', ident: 'ident', bumper: 'ident', whoosh: 'stinger', stinger: 'stinger', breaking: 'breaking', outro: 'outro', signoff: 'outro', promo: 'promo', upnext: 'promo' };
+const cueCache = new Map();
+
+/**
+ * A channel cue by name, voiced for a programme where that matters:
+ * 'breaking', 'outro'/'signoff' and 'promo'/'upnext' take the programme's key
+ * and lead (unknown ids: the channel's D major); 'ident'/'jingle'/'bumper'
+ * follows the local hour (opts.hour, 7-20 is day); 'stinger'/'whoosh' is one
+ * sound for everything. Returns a tune, or null for an unknown name.
+ */
+export function cueFor(cue, programId, { hour } = {}) {
+  const kind = CUE_NAMES[cue];
+  if (!kind) return null;
+  const h = Number.isFinite(Number(hour)) && hour !== null ? Number(hour) : new Date().getHours();
+  const night = h < 7 || h >= 21;
+  const key = kind === 'ident' ? `ident:${night}` : kind === 'stinger' ? 'stinger' : `${kind}:${keyOf(programId)}`;
+  let tune = cueCache.get(key);
+  if (!tune) {
+    tune = kind === 'ident' ? buildIdent(night) : kind === 'stinger' ? buildStinger() : kind === 'breaking' ? buildBreaking(programId) : kind === 'outro' ? buildOutro(programId) : buildPromo(programId);
+    cueCache.set(key, tune);
+  }
+  return tune;
+}
+
+export const IDENT = buildIdent(false);
+export const IDENT_NIGHT = buildIdent(true);
+export const STINGER = buildStinger();
+export const BREAKING = buildBreaking(null);
+export const OUTRO = buildOutro(null);
+export const PROMO = buildPromo(null);
+export const CUE_PROGRAMMES = Object.keys(VOICE);
+
+/** Named channel cues (channel voicing), as played by AudioEngine.sfx(name). */
 export const CUES = Object.freeze({
   jingle: IDENT, ident: IDENT, bumper: IDENT,
   whoosh: STINGER, stinger: STINGER,

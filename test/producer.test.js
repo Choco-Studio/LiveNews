@@ -817,3 +817,32 @@ describe('Producer with the real NewsDesk, ProviderChain and mock provider', () 
     assert.equal(producer.canProduce(realChannel, 'news-60'), true, 'all categories together are enough');
   });
 });
+
+describe('Producer.fit (timed programmes)', () => {
+  const seg = (type, words, extra = {}) => ({ type, anchor: 'A', text: Array.from({ length: words }, () => 'word').join(' '), ...extra });
+  const ctx = (segments) => ({
+    program: { timing: { target: 60, wpm: 170, gap: 0.7, minStories: 2, accept: [55, 65] } },
+    episode: {
+      segments,
+      rundown: segments.filter((s) => s.storyId).map((s) => ({ storyId: s.storyId })),
+      storyIds: segments.filter((s) => s.storyId).map((s) => s.storyId),
+    },
+  });
+  const producer = new Producer({ config: {}, newsDesk: {}, chain: {}, log: silentLogger });
+
+  test('drops tail stories (never the lead, a round-up item or breaking news) while that brings the estimate nearer the target', () => {
+    const c = ctx([seg('intro', 8), seg('story', 40, { storyId: 'a' }), seg('story', 30, { storyId: 'b' }), seg('story', 30, { storyId: 'c', roundup: { index: 0, count: 2 } }), seg('story', 30, { storyId: 'd' }), seg('story', 30, { storyId: 'e' }), seg('story', 30, { storyId: 'f', breaking: true }), seg('outro', 8)]);
+    const note = producer.fit(c);
+    assert.deepEqual(c.episode.storyIds, ['a', 'b', 'c', 'f']);
+    assert.deepEqual(c.episode.rundown.map((r) => r.storyId), ['a', 'b', 'c', 'f']);
+    assert.equal(note.dropped, 2);
+    assert.ok(Math.abs(note.estimate - 60) < 8, JSON.stringify(note));
+  });
+
+  test('never pads: a short script airs short and says so', () => {
+    const c = ctx([seg('intro', 8), seg('story', 20, { storyId: 'a' }), seg('story', 20, { storyId: 'b' }), seg('outro', 8)]);
+    const note = producer.fit(c);
+    assert.equal(c.episode.storyIds.length, 2);
+    assert.equal(note.short, true);
+  });
+});

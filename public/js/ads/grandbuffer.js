@@ -1155,7 +1155,8 @@ function shotLobby(ctx, lt) {
   QG.a0 = 0.06;
   QG.b0 = 0.1;
   QG.fl0 = 1;
-  QG.turn = 0;
+  // she takes the finger in, and tilts her head a touch: patience
+  QG.turn = ramp(lt, 3.5, 4.3) * 0.9;
   frontPerson(ctx, gx, 228, 19, GUEST, QG);
   ctx.drawImage(column(), -12 - round(truck * 22), 0);
 }

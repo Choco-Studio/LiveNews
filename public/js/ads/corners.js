@@ -10,8 +10,8 @@
 // facets, rotated and projected each frame and lit per facet, so they turn and
 // settle smoothly. Sets are baked once (cine.js).
 import {
-  P, W, H, clamp, lerp, prog, smooth, easeOut, track, window01, hash, blinkAt, mix, ramp, bake, shader, shadeInto,
-  pool, rect, line, begin, pt, fill, ellipse, capsule, film, vignette, thin, tracked, text, smallPrint, figure, bust,
+  P, W, H, clamp, lerp, prog, smooth, easeOut, track, window01, hash, blinkAt, mix, ramp, bake, prewarm, shader, shadeSteps,
+  pool, rect, line, begin, pt, fill, ellipse, capsule, film, vignette, vignetteArt, thin, tracked, text, smallPrint, figure, bust,
   arm, wrist,
 } from './cine.js';
 
@@ -177,10 +177,10 @@ function shotHero(ctx, lt) {
 // --- S2: slow motion, crisps settle on slate --------------------------------------------------
 const SLATE_Y = 150;
 const slateSet = () =>
-  bake('cn-slate', 420, H, (c) => {
-    shadeInto(c, 0, 0, 420, SLATE_Y, [P.black, mix(P.black, P.maroon, 0.4), mix(P.maroon, P.black, 0.2)], (x, y) => clamp(1 - sqrt(((x - 240) / 260) ** 2 + ((y - 40) / 160) ** 2)) * 0.8);
+  bake('cn-slate', 420, H, function* paint(c) {
+    yield* shadeSteps(c, 0, 0, 420, SLATE_Y, [P.black, mix(P.black, P.maroon, 0.4), mix(P.maroon, P.black, 0.2)], (x, y) => clamp(1 - sqrt(((x - 240) / 260) ** 2 + ((y - 40) / 160) ** 2)) * 0.8);
     // slate board: dark, slightly blue grey, with a warm backlit edge
-    shadeInto(c, 0, SLATE_Y, 420, H - SLATE_Y, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.slate, 0.4)], (x, y) => {
+    yield* shadeSteps(c, 0, SLATE_Y, 420, H - SLATE_Y, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.slate, 0.4)], (x, y) => {
       const d = sqrt(((x - 220) / 240) ** 2 + ((y - SLATE_Y - 6) / 50) ** 2);
       return clamp(1 - d) * 0.8 + 0.05 * sin(x * 0.07 + y * 0.9);
     });
@@ -235,8 +235,8 @@ function shotTumble(ctx, lt) {
 
 // --- S3: Ian, master squarer ------------------------------------------------------------------
 const workshopSet = () =>
-  bake('cn-workshop', 400, H, (c) => {
-    shadeInto(c, 0, 0, 400, H, [P.black, mix(P.black, P.maroon, 0.5), P.maroon, mix(P.maroon, P.brown, 0.5), P.brown], (x, y) => {
+  bake('cn-workshop', 400, H, function* paint(c) {
+    yield* shadeSteps(c, 0, 0, 400, H, [P.black, mix(P.black, P.maroon, 0.5), P.maroon, mix(P.maroon, P.brown, 0.5), P.brown], (x, y) => {
       const d = sqrt(((x - 210) / 200) ** 2 + ((y - 30) / 170) ** 2);
       return clamp(1 - d) * 0.85 + 0.03 * ((x >> 2) & 1) * (y < 120 ? 1 : 0);
     });
@@ -251,7 +251,7 @@ const workshopSet = () =>
       rect(c, x + 4, 38, 2, 26 + (i & 1) * 8, mix(P.maroon, P.black, 0.3));
     }
     // workbench
-    shadeInto(c, 0, 176, 400, H - 176, [P.black, mix(P.black, P.maroon, 0.6), P.maroon, P.brown], (x, y) => clamp(1 - sqrt(((x - 210) / 200) ** 2 + ((y - 178) / 40) ** 2)) * 0.9);
+    yield* shadeSteps(c, 0, 176, 400, H - 176, [P.black, mix(P.black, P.maroon, 0.6), P.maroon, P.brown], (x, y) => clamp(1 - sqrt(((x - 210) / 200) ** 2 + ((y - 178) / 40) ** 2)) * 0.9);
     rect(c, 0, 176, 400, 1, mix(P.tanShade, P.brown, 0.4));
     // pendant lamp at the top
     begin();
@@ -367,7 +367,7 @@ function shotIan(ctx, lt, info) {
 
 // --- S4: salt through a shaft of light ------------------------------------------------------
 const shaftArt = () =>
-  bake('cn-shaft', 150, H, (c) => {
+  bake('cn-shaft', 150, H, function* paint(c) {
     const img = c.createImageData(150, H);
     const d = img.data;
     const steps = 6;
@@ -385,6 +385,7 @@ const shaftArt = () =>
         d[o + 2] = 150;
         d[o + 3] = round((i / steps) * 0.16 * 255);
       }
+      if ((y & 3) === 3) yield;
     }
     c.putImageData(img, 0, 0);
   });
@@ -417,13 +418,14 @@ const FLAVOURS = [
 
 const PACK_W = 80;
 const PACK_H = 116;
+const PACK_KEYS = ['cn-pack-0', 'cn-pack-1', 'cn-pack-2'];
 function packArt(i) {
-  return bake(`cn-pack-${i}`, PACK_W, PACK_H, (c) => {
+  return bake(PACK_KEYS[i], PACK_W, PACK_H, function* paint(c) {
     const f = FLAVOURS[i];
     const w = PACK_W;
     const h = PACK_H;
     // pillow-shaped matte pack: crimped seals top and bottom, soft sheen
-    shadeInto(c, 2, 7, w - 4, h - 14, [P.black, mix(P.black, P.ink, 0.6), mix(P.ink, P.black, 0.15)], (x, y) => clamp(0.12 + 0.6 * sin(((x - 2) / (w - 4)) * PI) - (x > w * 0.68 ? 0.25 : 0) - abs(y - h / 2) * 0.002));
+    yield* shadeSteps(c, 2, 7, w - 4, h - 14, [P.black, mix(P.black, P.ink, 0.6), mix(P.ink, P.black, 0.15)], (x, y) => clamp(0.12 + 0.6 * sin(((x - 2) / (w - 4)) * PI) - (x > w * 0.68 ? 0.25 : 0) - abs(y - h / 2) * 0.002));
     for (let x = 2; x < w - 2; x += 2) {
       rect(c, x, 2 + (x & 2 ? 1 : 0), 2, 6, mix(P.ink, P.black, 0.25));
       rect(c, x, h - 8 + (x & 2 ? 1 : 0), 2, 6, mix(P.ink, P.black, 0.25));
@@ -447,11 +449,11 @@ function packArt(i) {
 }
 
 const plinthSet = () =>
-  bake('cn-plinth', 420, H, (c) => {
-    shadeInto(c, 0, 0, 420, H, [P.black, mix(P.black, P.ink, 0.5), P.ink, mix(P.ink, P.slate, 0.3)], (x, y) => clamp(1 - sqrt(((x - 210) / 230) ** 2 + ((y - 70) / 150) ** 2)) * 0.85);
+  bake('cn-plinth', 420, H, function* paint(c) {
+    yield* shadeSteps(c, 0, 0, 420, H, [P.black, mix(P.black, P.ink, 0.5), P.ink, mix(P.ink, P.slate, 0.3)], (x, y) => clamp(1 - sqrt(((x - 210) / 230) ** 2 + ((y - 70) / 150) ** 2)) * 0.85);
     // plinth top and front face
-    shadeInto(c, 30, 160, 360, 8, [mix(P.slate, P.ink, 0.3), P.slate, mix(P.slate, P.steel, 0.5)], (x) => clamp(1 - abs(x - 210) / 190));
-    shadeInto(c, 30, 168, 360, 48, [P.black, mix(P.black, P.ink, 0.6), P.ink], (x, y) => clamp(1 - abs(x - 210) / 200) * (1 - (y - 168) / 60));
+    yield* shadeSteps(c, 30, 160, 360, 8, [mix(P.slate, P.ink, 0.3), P.slate, mix(P.slate, P.steel, 0.5)], (x) => clamp(1 - abs(x - 210) / 190));
+    yield* shadeSteps(c, 30, 168, 360, 48, [P.black, mix(P.black, P.ink, 0.6), P.ink], (x, y) => clamp(1 - abs(x - 210) / 200) * (1 - (y - 168) / 60));
     rect(c, 30, 160, 360, 1, mix(P.steel, P.fog, 0.4));
   });
 
@@ -519,6 +521,11 @@ const SHOTS = [
 const EP = { wave: 'triangle', a: 0.006, d: 1.4, s: 0.1, r: 0.8, vib: [6, 5, 0.3] };
 const LEADV = { wave: 'sine', a: 0.04, d: 0.6, s: 0.6, r: 0.5, vib: [10, 5, 0.3] };
 
+// Everything this spot bakes, in shot order: prewarmed in idle-time slices so
+// no cut ever waits for a bake (see cine.js prewarm).
+const WARM = [voidBg, keyPool, slateSet, workshopSet, lampCone, shaftArt, plinthSet, slateBg, () => packArt(0), () => packArt(1), () => packArt(2), () => vignetteArt(0.7), () => vignetteArt(0.65), () => vignetteArt(0.55)];
+prewarm(WARM, 8000);
+
 export default {
   id: 'corners',
   brand: 'CORNERS',
@@ -556,6 +563,7 @@ export default {
     ],
   },
   draw(ctx, t, dt, info) {
+    prewarm(WARM);
     film(ctx, dt, info, SHOTS);
   },
 };

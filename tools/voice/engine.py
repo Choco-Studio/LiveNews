@@ -298,8 +298,15 @@ class VoiceEngine:
                 i += 1
         return gaps
 
-    def align_phrase(self, token_ph, dur, gaps):
-        """Start time (s, from phrase onset) of each token and of its phonemes."""
+    def align_phrase(self, token_ph, dur, gaps, env=None):
+        """Start time (s, from phrase onset) of each token and of its phonemes.
+
+        Words are spread by phoneme weight over the time the phrase is actually
+        sounding (`env` = (frame times, active mask)), so stop closures and
+        micro-pauses consume no weight and a word that would land in a silence
+        starts at the next sound onset. Clause marks are pinned to the pauses
+        the model leaves at them.
+        """
         weights, phones = [], []
         for tok, ph in token_ph:
             pw = phone_weights(ph) if ph else []
@@ -315,11 +322,10 @@ class VoiceEngine:
         total = cum[-1] or 1.0
         speech = max(1e-3, dur - sum(e - s for s, e in gaps))
 
-        # Expected boundary time after token i if speech were uniform in weight
         def expected(i):
             return cum[i + 1] / total * speech
 
-        # Pin clause marks (and long unexplained silences) to detected gaps
+        # Pin clause marks to the pauses the model leaves at them
         anchors = []  # (token index after which the gap falls, gap)
         free = list(gaps)
         for i, (tok, _) in enumerate(token_ph[:-1]):
@@ -331,29 +337,54 @@ class VoiceEngine:
                     if not anchors or best[0] > anchors[-1][1][1]:
                         anchors.append((i, best))
                         free.remove(best)
-        for g in free:
-            if g[1] - g[0] < 0.11:
-                continue
-            centre = (g[0] + g[1]) / 2
-            lo = max([a[0] for a in anchors if a[1][1] <= g[0]], default=-1)
-            hi = min([a[0] for a in anchors if a[1][0] >= g[1]], default=n - 1)
-            choices = [i for i in range(lo + 1, hi) if i < n - 1]
-            if choices:
-                i = min(choices, key=lambda k: abs(expected(k) - centre))
-                anchors.append((i, g))
-        anchors.sort()
+
+        # Active-time clock: t -> seconds of sound before t, and back
+        if env is not None and len(env[0]) > 1:
+            ft, active = env
+            hop = float(ft[1] - ft[0])
+            acc = np.concatenate([[0.0], np.cumsum(active.astype(float) * hop)])
+            edges = np.concatenate([ft - hop / 2, [ft[-1] + hop / 2]])
+
+            def to_active(t):
+                i = int(np.clip(np.searchsorted(edges, t), 0, len(acc) - 1))
+                return acc[i]
+
+            def from_active(a, t_min):
+                # First instant at which `a` seconds of sound have passed;
+                # silent frames add nothing, so this lands on a sound onset
+                i = int(np.searchsorted(acc, a, side='left'))
+                if i <= 0:
+                    return max(t_min, edges[0])
+                if i >= len(acc):
+                    return max(t_min, edges[-1])
+                return max(t_min, min(edges[i], edges[i - 1] + (a - acc[i - 1])))
+        else:
+            def to_active(t):
+                return t
+
+            def from_active(a, t_min):
+                return max(t_min, a)
+
+        def spread(t0, t1, fracs):
+            """Times in [t0, t1) at the given fractions of the sounding time."""
+            a0, a1 = to_active(t0), to_active(t1)
+            if a1 - a0 <= 1e-6:
+                return [t0 + f * (t1 - t0) for f in fracs]
+            return [min(t1, from_active(a0 + f * (a1 - a0), t0)) for f in fracs]
 
         starts = [0.0] * n
         seg_tok, seg_t = 0, 0.0
-        bounds = anchors + [(n - 1, (dur, dur))]
-        for last, (g0, g1) in bounds:
-            span_w = cum[last + 1] - cum[seg_tok]
-            span_t = max(1e-3, g0 - seg_t)
-            for k in range(seg_tok, last + 1):
-                starts[k] = seg_t + (cum[k] - cum[seg_tok]) / (span_w or 1.0) * span_t
+        for last, (g0, g1) in anchors + [(n - 1, (dur, dur))]:
+            span_w = cum[last + 1] - cum[seg_tok] or 1.0
+            fracs = [(cum[k] - cum[seg_tok]) / span_w for k in range(seg_tok, last + 1)]
+            for k, t in zip(range(seg_tok, last + 1), spread(seg_t, g0, fracs)):
+                starts[k] = t
+            starts[seg_tok] = seg_t
             seg_tok, seg_t = last + 1, g1
             if seg_tok >= n:
                 break
+        for k in range(1, n):
+            starts[k] = max(starts[k], starts[k - 1])
         ends = starts[1:] + [dur]
         timeline = []
         for k in range(n):
@@ -361,11 +392,12 @@ class VoiceEngine:
             if not pw:
                 continue
             tot = sum(w for _, w in pw)
-            span = max(0.0, min(ends[k], starts[k] + weights[k] / total * speech * 1.6) - starts[k])
-            acc = 0.0
-            for c, w in pw:
-                timeline.append((starts[k] + acc / tot * span, c))
-                acc += w
+            fracs, acc_w = [], 0.0
+            for _, w in pw:
+                fracs.append(acc_w / tot)
+                acc_w += w
+            for (c, _), t in zip(pw, spread(starts[k], ends[k], fracs)):
+                timeline.append((t, c))
         return starts, timeline
 
     # ------------------------------------------------------------ main entry
@@ -416,7 +448,9 @@ class VoiceEngine:
                 seg, cut = tighten_gaps(seg, sr, self._gaps(seg, sr), gap_max)
                 dur -= cut
             gaps = [(a - onset, b - onset) for a, b in self._gaps(seg, sr)]
-            starts, timeline = self.align_phrase(token_ph, dur, gaps)
+            centres, level = dsp.frame_rms_db(seg, sr, hop=0.005, win=0.012)
+            env = (centres / sr - onset, level > level.max() - 32)
+            starts, timeline = self.align_phrase(token_ph, dur, gaps, env)
             clips.append({'phrase': ph, 'audio': seg, 'onset': onset, 'dur': dur,
                           'tokens': [t for t, _ in token_ph], 'starts': starts,
                           'timeline': timeline, 'level': dsp.active_level_db(seg, sr)})
