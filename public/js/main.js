@@ -32,11 +32,23 @@ fit();
 // One bad frame must never freeze the picture: keep looping and log each
 // distinct error once (a broken scene would otherwise flood the console).
 const seenErrors = new Set();
+// A throw between save() and restore() leaves its clip, transform or alpha on
+// the context, and every later frame would be drawn through it (a frozen
+// picture). Resizing a canvas resets all of its state; re-apply pixel art.
+function resetContexts() {
+  for (const c of [canvas, renderer.stage]) {
+    if (!(c instanceof HTMLCanvasElement)) continue;
+    c.width = c.width; // eslint-disable-line no-self-assign
+    const x = c.getContext('2d');
+    if (x) x.imageSmoothingEnabled = false;
+  }
+}
 function loop() {
   requestAnimationFrame(loop);
   try {
     renderer.render(performance.now() / 1000, scene);
   } catch (err) {
+    resetContexts();
     const key = `${err?.name}: ${err?.message}`;
     if (!seenErrors.has(key) && seenErrors.size < 50) {
       seenErrors.add(key);
@@ -79,15 +91,9 @@ async function start() {
   player.run();
 }
 if (params.get('autostart') === '1') {
+  // Autoplay may still be blocked: AudioEngine.unlock() then arms itself on the
+  // first click / key / touch (capture phase) and retries until audio runs.
   start();
-  // Autoplay may still be blocked: the first gesture unlocks audio.
-  const unlock = () => {
-    audio.unlock?.().catch?.(() => {});
-    window.removeEventListener('pointerdown', unlock);
-    window.removeEventListener('keydown', unlock);
-  };
-  window.addEventListener('pointerdown', unlock);
-  window.addEventListener('keydown', unlock);
 } else {
   canvas.addEventListener('click', start);
   window.addEventListener('keydown', (e) => e.key === 'Enter' && start());

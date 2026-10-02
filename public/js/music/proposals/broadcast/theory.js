@@ -133,7 +133,11 @@ export function voice(ch, prev, { n = 4, lo = 50, hi = 72 } = {}) {
         cur = atOrAbove(pc, cur + 1);
         out.push(cur);
       }
-      if (out[0] % 12 !== seq[0] || out[out.length - 1] > hi) continue;
+      if (out[out.length - 1] > hi) continue;
+      // No semitone between neighbouring voices: clusters sound muddy, not lush.
+      let rub = false;
+      for (let i = 1; i < out.length; i++) if (out[i] - out[i - 1] === 1) rub = true;
+      if (rub) continue;
       sets.push(out);
     }
   }
@@ -151,6 +155,20 @@ export function voice(ch, prev, { n = 4, lo = 50, hi = 72 } = {}) {
 }
 
 const avg = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+
+/**
+ * Avoid-note filter for pedals and cells: a note that is not in the chord but
+ * sits a semitone from a chord tone bends onto that tone (a D pedal becomes C#
+ * over A major, E becomes F over Bb), the way a written pedal would.
+ */
+export function fit(m, ch) {
+  const pcs = chordPcs(ch);
+  const p = ((m % 12) + 12) % 12;
+  if (pcs.includes(p)) return m;
+  if (pcs.includes((p + 11) % 12)) return m - 1;
+  if (pcs.includes((p + 1) % 12)) return m + 1;
+  return m;
+}
 
 /** Bass note for a chord, kept near the previous one inside [lo, hi]. */
 export function bassNote(ch, prev, lo = 33, hi = 50) {

@@ -15,6 +15,14 @@
 // fingers; curled fingers melt into the palm group so a fist stays one shape.
 import { TILT, clamp } from './space.js';
 
+/**
+ * Props in front of the torso and behind the arms (papers on the desk, a pen):
+ * called by character.js before the arms with the actor's `extra` group.
+ * The skeleton may carry prop state from rig channels (e.g. sk.props).
+ * Empty in the approved prototype; the HANDS stream fills it.
+ */
+export function drawProps(buf, L, m, sk, toS, s, g, z) {}
+
 export function drawArm(buf, L, m, arm, side, toS, s, ga, gc, gh, z) {
   const A = L.arm;
   const [sx, sy] = toS(...arm.shoulder);

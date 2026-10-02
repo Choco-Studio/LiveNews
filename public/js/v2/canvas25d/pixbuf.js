@@ -18,6 +18,7 @@
 // Rotation and scale are therefore free: the part is re-rasterised at the
 // new angle and size, the pixel grid stays crisp ("RotSprite" without
 // sprites).
+import { P } from '../../palette.js';
 
 export const W = 384;
 export const H = 216;

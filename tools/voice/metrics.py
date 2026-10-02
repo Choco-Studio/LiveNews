@@ -162,6 +162,13 @@ def clicks(x, sr, ratio=10.0):
     local = np.sqrt((c[hi] - c[lo]) / np.maximum(1, hi - lo))
     floor = 1e-4  # ignore spikes in near-silence below -80 dBFS
     spikes = (d2 > ratio * local) & (d2 > floor)
+    # A plosive release (/t/, /k/) is also a sharp onset, but noise follows it;
+    # a click is isolated: the spike towers over the next 2 ms
+    after = int(0.002 * sr)
+    for i in np.flatnonzero(spikes):
+        nxt = d2[i + 3:i + 3 + after]
+        if len(nxt) and d2[i] < 4 * nxt.max():
+            spikes[i] = False
     # One click spans a few samples; count events, not samples
     events = np.flatnonzero(spikes)
     if len(events) == 0:

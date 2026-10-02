@@ -38,9 +38,13 @@ const wordCount = (s) => {
  * pages, dur }. The source label leads the first page when the item still
  * fits in as many pages with it as without it.
  */
+// Outlets prefix titles with "BREAKING:" or "LIVE:"; under a LATEST plate that
+// reads as an alarm the channel is not raising (real breaking news has its own plate).
+const ALARM = /^\s*(breaking(\s+news)?|live|urgent|just in)\s*[:\-–—|]\s*/i;
+
 export function makeEntries({ label = 'LATEST', plate = P.yellow, source = '', text = '', breaking = false }) {
   const src = String(source || '').trim();
-  const body = String(text || '').trim();
+  const body = String(text || '').replace(ALARM, '').trim();
   if (!body) return [];
   const base = `${label}|${src}|${body}`;
   const srcW = src ? measureText(src, 1, 'micro') + SOURCE_GAP : 0;
@@ -48,7 +52,8 @@ export function makeEntries({ label = 'LATEST', plate = P.yellow, source = '', t
   let withSource = false;
   if (srcW && TICKER_ROOM - srcW > TICKER_ROOM / 2) {
     const sourced = linePages(body, TICKER_ROOM, { firstMaxW: TICKER_ROOM - srcW, maxPages: MAX_PAGES });
-    if (sourced.length <= pages.length && sourced.join(' ').length >= pages.join(' ').length) {
+    // the source leads only when it costs no page and leaves the first page a real phrase
+    if (sourced.length <= pages.length && sourced.join(' ').length >= pages.join(' ').length && (sourced.length === 1 || wordCount(sourced[0]) >= 3)) {
       pages = sourced;
       withSource = true;
     }

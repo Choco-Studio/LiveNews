@@ -58,6 +58,11 @@ export class Synth {
     if (!bakerCache.has(ctx)) bakerCache.set(ctx, new Baker(ctx));
     this.bake = bakerCache.get(ctx);
     this.hits = 0;
+    this.log = null; // set to [] to record { t, dur, m, kind, layer } for analysis
+  }
+
+  note(kind, dest, t, dur, m) {
+    if (this.log) this.log.push({ t, dur, m, kind, layer: dest?.__layer || kind });
   }
 
   /** Plays a baked buffer through a velocity gain; the pair is freed when done. */
@@ -162,12 +167,14 @@ export class Synth {
   /** Plucked pulse: bright attack closing to a warm tail (ostinatos, arps). */
   pluck(dest, t, m, vel, { wave = 'pulse25', decay = 0.22, cut = 2200, cutEnd = 500, q = 1, gain = 2.5 } = {}) {
     const d = Math.round(decay * 100) / 100;
+    this.note('pluck', dest, t, Math.min(d, 0.25), m);
     return this.play(this.bake.pluck(wave, Math.round(m), d, Math.round(cut), Math.round(Math.max(60, cutEnd)), q), dest, t, vel * gain);
   }
 
   /** Sustained tone with optional delayed vibrato and glide (horn, lead, bass). */
   tone(dest, t, dur, m, vel, { wave = 'tri', a = 0.01, d = 0.2, s = 0.7, r = 0.15, cut = 0, cutEnv = 0, q = 0.7, vib = 0, vibRate = 5.2, vibDelay = 0.25, glide = 0, detune = 0, gain = 0.5 } = {}) {
     const c = this.ctx;
+    this.note('tone', dest, t, dur, m);
     const o = this.osc(wave, hz(m), t);
     if (glide) {
       o.frequency.setValueAtTime(hz(m + glide), t);
@@ -211,6 +218,7 @@ export class Synth {
    */
   pad(dest, t, dur, notes, vel, { wave = 'soft', a = 0.8, r = 1.4, cut = 900, cutTo = 0, q = 0.5, detune = 7, spread = 0.7, gain = 0.32, s = 1, d = 0.5 } = {}) {
     const c = this.ctx;
+    for (const m of notes) this.note('pad', dest, t, dur, m);
     const f = this.filter('lowpass', cut, q);
     f.frequency.setValueAtTime(cut, t);
     if (cutTo) f.frequency.exponentialRampToValueAtTime(cutTo, t + Math.max(a, dur));
@@ -282,6 +290,7 @@ export class Synth {
   /** FM bell / glockenspiel. ratio 2 = glock, 3.5 = bell, 4 = music box. */
   bell(dest, t, dur, m, vel, { ratio = 2, index = 1.6, gain = 0.28, cut = 3800 } = {}) {
     const d = Math.round(dur * 10) / 10;
+    this.note('bell', dest, t, Math.min(d, 0.5), m);
     return this.play(this.bake.bell(Math.round(m), d, ratio, index / ratio, cut), dest, t, vel * gain);
   }
 

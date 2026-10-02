@@ -14,7 +14,7 @@ export const F = 1000;
 export const SET = {
   presenterZ: 1000,
   neckY: -30, // neck base of a seated presenter, relative to the desk top (desk at elbow height)
-  seatX: { A: -74, B: 74 },
+  seatX: { A: -74, B: 74, solo: 0 }, // solo programmes sit centred, in front of the wall
   wallZ: 1400,
   flatsZ: 1180,
   deskFrontZ: 900,

@@ -26,16 +26,12 @@ import { STINGS, graveDrone } from './stings.js';
 
 const MAX_WAIT = 1.25; // never wait longer than this for a boundary (seconds)
 
-// Bed trims (dB) so every moment lands on its loudness target (see DESIGN.md:
-// headlines -26, story -30, chat -28, round-up -27, outro -26, standby -27
-// LUFS, unducked). Measured with tools/render-audio.mjs and fed back here.
+// Loudness targets per moment (integrated LUFS of the bed alone, unducked).
+export const TARGET = { headlines: -26, story: -30, chat: -28, roundup: -27, outro: -26, standby: -27 };
+
+// Bed trims (dB) per 'programme:moment' so every bed lands on its target.
+// Measured with the lab renders (ffmpeg ebur128) and fed back here.
 export const TRIM = {
-  headlines: 0,
-  story: 0,
-  chat: 0,
-  roundup: 0,
-  outro: 0,
-  standby: 0,
   sting: 0,
 };
 
@@ -138,28 +134,28 @@ export class BroadcastMusic {
     if (moment === 'openTail') {
       // The open's cut IS the downbeat: no waiting, the tail catches its chord.
       if (cur) this.fadeOut(cur.bed, at, 0.25, { echo: false });
-      return this.startBed(def, at, 'fromOpen', 0);
+      return this.startBed(def, at, 'fromOpen', 0, { cued: 'headlines' });
     }
-    if (!cur) return this.startBed(def, at + 0.05, 'soft', this.barOf(def) * 1.2, { sweepIn: true });
+    if (!cur) return this.startBed(def, at + 0.05, 'soft', this.barOf(def) * 1.2, { sweepIn: true, cued: moment });
 
     const b = this.boundary(cur.bed, at);
     if (moment === 'headlines' || moment === 'roundup') {
       this.fadeOut(cur.bed, b, cur.bed.barSec * 0.5, { echo: true });
-      const next = this.startBed(def, b, 'cut', 0.02);
+      const next = this.startBed(def, b, 'cut', 0.02, { cued: moment });
       this.synth.timp(next.bed.fx, b, timpDo(def.tonic), 0.6);
       return next;
     }
     this.fadeOut(cur.bed, b, cur.bed.barSec, { echo: true });
-    return this.startBed(def, b, 'xfade', cur.bed.barSec, { sweepIn: true });
+    return this.startBed(def, b, 'xfade', cur.bed.barSec, { sweepIn: true, cued: moment });
   }
 
   barOf(def) {
     return (60 / def.bpm) * 4;
   }
 
-  startBed(def, origin, entry, fadeIn, { sweepIn = false } = {}) {
+  startBed(def, origin, entry, fadeIn, { sweepIn = false, cued = def.moment } = {}) {
     const phrase = this.memory.get(def.id) ?? 0;
-    const trim = (this.trim[def.moment] ?? 0) + (def.colour === 'light' ? 0.5 : 0);
+    const trim = (this.trim[`${def.programme}:${cued}`] ?? this.trim[cued] ?? 0) + (def.colour === 'light' ? 0.5 : 0);
     const bed = new Bed(this, def, { origin, entry, phrase, seed: this.seed, trim });
     if (fadeIn > 0.03) {
       bed.faderLevel = { t: origin, dur: 0, from: 0, to: 0 };

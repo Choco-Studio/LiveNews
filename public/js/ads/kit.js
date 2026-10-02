@@ -2992,13 +2992,22 @@ export function trackIn(ctx, s, x, y, lt, { face = 'serif', color = P.white, tra
   const n = L.S.length;
   const w = (L.w + tr * (n - 1)) * scale;
   const x0 = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
+  // the letter canvases of this line in this colour/scale, looked up once
+  let lm = L.letters;
+  if (!lm) lm = L.letters = new Map();
+  const lk = Array.isArray(color) ? color : `${color}|${scale}`;
+  let cvs = lm.get(lk);
+  if (!cvs || cvs.scale !== scale) {
+    cvs = [];
+    for (let i = 0; i < n; i++) cvs.push(L.S[i] === ' ' ? null : typeCanvas(L.S[i], face, 0, color, scale));
+    cvs.scale = scale;
+    lm.set(lk, cvs);
+  }
   const a0 = ctx.globalAlpha;
   ctx.globalAlpha = a0 * alpha * clamp(lt / (dur * fade), 0, 1);
   for (let i = 0; i < n; i++) {
-    const ch = L.S[i];
-    if (ch === ' ') continue;
-    const cv = typeCanvas(ch, face, 0, color, scale);
-    ctx.drawImage(cv, round(x0 + (L.xs[i] + tr * i) * scale), round(y));
+    const cv = cvs[i];
+    if (cv) ctx.drawImage(cv, round(x0 + (L.xs[i] + tr * i) * scale), round(y));
   }
   ctx.globalAlpha = a0;
   return round(w);
@@ -3242,7 +3251,8 @@ function latheBuf() {
     const cv = document.createElement('canvas');
     cv.width = S;
     cv.height = S;
-    const c = cv.getContext('2d');
+    // CPU-backed: putImageData becomes a copy instead of a GPU upload per call
+    const c = cv.getContext('2d', { willReadFrequently: true });
     const img = c.createImageData(S, S);
     LATHE = { cv, c, img, u32: new Uint32Array(img.data.buffer), S };
   }
@@ -3268,6 +3278,7 @@ function darkOf(u) {
   }
   return v;
 }
+const STRIPE_C = new Uint32Array(16);
 const L_KEY = [-0.55, -0.45, 0.7];
 const L_RIM = [0.85, -0.25, -0.45];
 
@@ -3317,6 +3328,7 @@ export function lathe(ctx, cx, y, prof, o = {}) {
   const rk = rim ? rim.k ?? 0.9 : 0;
   const rimC = rim?.color ? pack(rim.color) : 0;
   const stripes = o.stripes || null;
+  if (stripes) for (let k = 0; k < stripes.length && k < 16; k++) STRIPE_C[k] = pack(stripes[k][2]);
   const lab = o.label || null;
   const tex = lab ? texOf(lab.cv) : null;
   const glass = o.glass || null;
@@ -3326,15 +3338,25 @@ export function lathe(ctx, cx, y, prof, o = {}) {
   const half = bw / 2;
   const ox = cx - half; // buffer x -> canvas x
   for (let j = 0; j < n; j++) {
-    const r = prof[j];
-    if (r < 0.5) continue;
+    const rA = prof[j];
+    const rB = j + 1 < n ? prof[j + 1] : rA;
+    if (rA < 0.5 && rB < 0.5) continue;
     const dr = ((prof[min(n - 1, j + 1)] || 0) - (prof[max(0, j - 1)] || 0)) / 2;
     const inv = 1 / sqrt(1 + dr * dr);
-    const x0 = max(0, floor(half - r));
-    const x1 = min(bw, ceil(half + r));
     const empty = glass && j < glass.top;
     const inLabel = tex && j >= lab.top && j < lab.top + lab.h;
     const ty = inLabel ? min(tex.h - 1, floor(((j - lab.top) / lab.h) * tex.h)) : 0;
+    // seen from above (tilt), a ring whose radius jumps between rows would leave
+    // a sawtooth silhouette: such rows are drawn as several interpolated rings
+    const m = tilt ? min(8, max(1, ceil(abs(rB - rA) * 0.8))) : 1;
+    for (let sub = 0; sub < m; sub++) {
+    const r = rA + ((rB - rA) * sub) / m;
+    if (r < 0.5) continue;
+    const jj = j + sub / m;
+    const rN = sub + 1 < m ? rA + ((rB - rA) * (sub + 1)) / m : rB;
+    const jN = jj + 1 / m;
+    const x0 = max(0, floor(half - r));
+    const x1 = min(bw, ceil(half + r));
     for (let bx = x0; bx < x1; bx++) {
       const xn = (bx + 0.5 - half) / r;
       if (xn <= -1 || xn >= 1) continue;
@@ -3342,79 +3364,96 @@ export function lathe(ctx, cx, y, prof, o = {}) {
       const nx = xn * inv;
       const ny = -dr * inv;
       const nzz = nz * inv;
-      const by = j + (tilt ? floor(tilt * r * nz) : 0);
+      const by = tilt ? floor(jj + tilt * r * nz) : j;
       if (by >= bh) continue;
-      const di = by * S + bx;
-      // softbox reflections (on glass and metal; a paper label stays matte)
-      let col = 0;
-      if (stripes) {
-        const fr = j / n;
-        for (let k = 0; k < stripes.length; k++) {
-          const st = stripes[k];
-          if (abs(xn - st[0]) < st[1] && (st[3] === undefined || (fr >= st[3] && fr < st[4]))) col = pack(st[2]);
+      // with tilt, consecutive rings can land more than a row apart: this
+      // pixel also covers the rows down to where the next ring starts
+      let span = 1;
+      if (tilt && (j + 1 < n || sub + 1 < m)) {
+        const x1n = (bx + 0.5 - half) / rN;
+        if (rN >= 0.5 && x1n > -1 && x1n < 1) span = max(1, floor(jN + tilt * rN * sqrt(1 - x1n * x1n)) - by);
+        span = min(span, bh - by);
+      }
+      let out = 0;
+      let qi = -1; // ramp level and blend of a shaded pixel (re-dithered per filled row)
+      let qf = 0;
+      px: {
+        // softbox reflections (on glass and metal; a paper label stays matte)
+        let col = 0;
+        if (stripes) {
+          const fr = j / n;
+          for (let k = 0; k < stripes.length; k++) {
+            const st = stripes[k];
+            if (abs(xn - st[0]) < st[1] && (st[3] === undefined || (fr >= st[3] && fr < st[4]))) col = STRIPE_C[k];
+          }
         }
-      }
-      if (col && inLabel) {
-        let u = Math.asin(xn) / (2 * PI) + (lab.turn || 0);
-        u -= floor(u);
-        if (tex.u32[ty * tex.w + min(tex.w - 1, floor(u * tex.w))] >>> 24 > 127) col = 0;
-      }
-      if (col) {
-        buf[di] = col;
-        continue;
-      }
-      const edge = (1 - abs(xn)) * r; // px to the silhouette edge
-      if (empty) {
+        if (col && inLabel) {
+          let u = Math.asin(xn) / (2 * PI) + (lab.turn || 0);
+          u -= floor(u);
+          if (tex.u32[ty * tex.w + min(tex.w - 1, floor(u * tex.w))] >>> 24 > 127) col = 0;
+        }
+        if (col) {
+          out = col;
+          break px;
+        }
+        const edge = (1 - abs(xn)) * r; // px to the silhouette edge
+        if (empty) {
+          if (inLabel) {
+            // labels/cuts on empty glass still show (e.g. cut-crystal facets)
+            let u = Math.asin(xn) / (2 * PI) + (lab.turn || 0);
+            u -= floor(u);
+            const t = tex.u32[ty * tex.w + min(tex.w - 1, floor(u * tex.w))];
+            if (t >>> 24 > 127) {
+              out = t | 0xff000000;
+              break px;
+            }
+          }
+          if (edge < (glass.edge ?? 1.2)) out = glassC;
+          break px;
+        }
+        if (glass && edge < (glass.wall ?? 0)) {
+          out = glassC;
+          break px;
+        }
+        let diff = (nx * L[0] + ny * L[1] + nzz * L[2]) * keyK;
+        if (diff < 0) diff = 0;
+        let v = amb + (1 - amb) * diff;
+        let rv = 0;
+        if (rk) {
+          rv = nx * RD[0] + ny * RD[1] + nzz * RD[2];
+          if (rv > 0) {
+            rv = rv * rv * rv * rk;
+            if (!rimC) v += rv;
+          } else rv = 0;
+        }
+        const th = bayer(bx, by);
         if (inLabel) {
-          // labels/cuts on empty glass still show (e.g. cut-crystal facets)
           let u = Math.asin(xn) / (2 * PI) + (lab.turn || 0);
           u -= floor(u);
           const t = tex.u32[ty * tex.w + min(tex.w - 1, floor(u * tex.w))];
           if (t >>> 24 > 127) {
-            buf[di] = t | 0xff000000;
-            continue;
+            const d = darkOf(t | 0xff000000);
+            const shadeV = v * 1.6; // labels hold their colour further into the shade
+            col = shadeV > 0.72 + th * 0.2 ? t | 0xff000000 : shadeV > 0.35 + th * 0.2 ? d[0] : d[1];
+            if (rimC && rv > 0.35 + th * 0.3) col = rimC;
+            out = col;
+            break px;
           }
         }
-        if (edge < (glass.edge ?? 1.2)) buf[di] = glassC;
-        continue;
-      }
-      if (glass && edge < (glass.wall ?? 0)) {
-        buf[di] = glassC;
-        continue;
-      }
-      let diff = (nx * L[0] + ny * L[1] + nzz * L[2]) * keyK;
-      if (diff < 0) diff = 0;
-      let v = amb + (1 - amb) * diff;
-      let rv = 0;
-      if (rk) {
-        rv = nx * RD[0] + ny * RD[1] + nzz * RD[2];
-        if (rv > 0) {
-          rv = rv * rv * rv * rk;
-          if (!rimC) v += rv;
-        } else rv = 0;
-      }
-      const th = bayer(bx, by);
-      if (inLabel) {
-        let u = Math.asin(xn) / (2 * PI) + (lab.turn || 0);
-        u -= floor(u);
-        const t = tex.u32[ty * tex.w + min(tex.w - 1, floor(u * tex.w))];
-        if (t >>> 24 > 127) {
-          const d = darkOf(t | 0xff000000);
-          const shadeV = v * 1.6; // labels hold their colour further into the shade
-          col = shadeV > 0.72 + th * 0.2 ? t | 0xff000000 : shadeV > 0.35 + th * 0.2 ? d[0] : d[1];
-          if (rimC && rv > 0.35 + th * 0.3) col = rimC;
-          buf[di] = col;
-          continue;
+        if (rimC && rv > 0.35 + th * 0.3) {
+          out = rimC;
+          break px;
         }
+        const q = clamp(v, 0, 1) * nr;
+        qi = floor(q);
+        qf = seam >= 1 ? q - qi : clamp((q - qi - 0.5) / seam + 0.5, 0, 1);
+        out = ramp[min(nr, qf > th ? qi + 1 : qi)];
       }
-      if (rimC && rv > 0.35 + th * 0.3) {
-        buf[di] = rimC;
-        continue;
-      }
-      const q = clamp(v, 0, 1) * nr;
-      const i = floor(q);
-      const f = seam >= 1 ? q - i : clamp((q - i - 0.5) / seam + 0.5, 0, 1);
-      buf[di] = ramp[min(nr, f > th ? i + 1 : i)];
+      if (!out) continue;
+      if (span === 1) buf[by * S + bx] = out;
+      else if (qi < 0) for (let q = 0, di = by * S + bx; q < span; q++, di += S) buf[di] = out;
+      else for (let q = 0, di = by * S + bx; q < span; q++, di += S) buf[di] = ramp[min(nr, qf > bayer(bx, by + q) ? qi + 1 : qi)];
+    }
     }
   }
   B.c.putImageData(B.img, 0, 0, 0, 0, bw, bh);

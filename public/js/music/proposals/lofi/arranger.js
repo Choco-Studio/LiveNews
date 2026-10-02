@@ -251,7 +251,11 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
   if (isOn(arr, prev, 'keys')) {
     const style = arr.comp || PALETTE_COMP[pal.keys.inst] || 'lofi';
     const pats = COMP[pal.keys.inst === 'pulse' && style !== 'long' ? 'stabs' : style] || COMP.lofi;
-    const pat = n === 0 ? pats[0] : r.pick(pats);
+    // One groove per 4-bar phrase (repetition is what makes a loop feel good), a variation
+    // on the phrase's last bar half the time (the turnaround), a new groove next phrase.
+    const pr = rng(hash(id, style, 'comp', Math.floor(n / 4)));
+    const phrasePat = n < 4 ? pats[0] : pr.pick(pats);
+    const pat = n % 4 === 3 && pr.chance(0.5) ? pr.pick(pats) : phrasePat;
     const v = voiceChord(chord, state.voicing, pal.keys.lo);
     state.voicing = v;
     const inst = pal.keys.inst === 'pulse' ? 'stab' : pal.keys.inst;

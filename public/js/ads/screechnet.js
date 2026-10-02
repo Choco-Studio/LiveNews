@@ -10,7 +10,7 @@
 import {
   P, W, H, clamp, lerp, prog, smooth, easeInOut, track, window01, hash, blinkAt, mix, bake, shader, shadeInto, ditherInto,
   pool, rect, line, begin, pt, fill, ellipse, capsule, film, vignette, letterbox, thin, tracked, text, smallPrint,
-  figure, bust, arm, profile, standing,
+  figure, bust, arm, wrist, profile, standing,
 } from './cine.js';
 
 const { round, floor, sin, cos, abs, min, max, PI, sqrt } = Math;
@@ -24,7 +24,7 @@ const T_PHOTO = 15.2;
 const T_HALL = 18.4;
 const T_LOST = 19.6;
 const T_SLATE = 20.4;
-const DURATION = 24.8;
+const DURATION = 25.0;
 const LB = 24; // letterbox bars (2.39:1)
 
 // --- palette -----------------------------------------------------------------------------
@@ -310,37 +310,37 @@ const desktopArt = () => shader('sn-desktop', 58, 50, [P.navy, mix(P.navy, P.blu
 const screenSpill = () => pool('sn-spill', 120, 70, C.crt, 6, 0.3);
 
 const DANIEL = figure({
-  hh: 30,
+  hh: 50,
   hair: 'messy',
   garment: 'hoodie',
   back: true,
-  shoulders: 0.95,
+  shoulders: 1.0,
   pal: {
     skin: mix(P.tanShade, P.ink, 0.25),
     skinD: mix(P.brown, P.black, 0.45),
-    hair: mix(P.black, P.maroon, 0.4),
+    hair: mix(P.black, P.maroon, 0.35),
     hairD: P.black,
-    hairL: mix(P.maroon, C.crt, 0.35),
-    top: mix(P.darkGreen, P.ink, 0.55),
+    hairL: mix(P.maroon, C.crt, 0.25),
+    top: mix(P.darkGreen, P.ink, 0.7),
     topD: P.black,
-    topL: mix(P.darkGreen, C.crt, 0.35),
+    topL: mix(P.darkGreen, C.crt, 0.3),
     shirt: mix(P.fog, P.ink, 0.5),
-    rim: mix(C.crt, P.white, 0.2),
+    rim: mix(C.crt, P.silver, 0.4),
   },
 });
 
 function shotRoom(ctx, lt) {
   const camX = track(lt, [[0, 0], [3.2, 12, 'smooth']]);
   ctx.drawImage(roomSet(), round(camX * 0.5), 0, W, 150, 0, 0, W, 150);
-  ctx.drawImage(roomSet(), round(camX), 150, W, H - 150, 0, 150, W, H - 150);
+  ctx.drawImage(roomSet(), round(camX * 0.8), 150, W, H - 150, 0, 150, W, H - 150);
   ctx.save();
-  ctx.translate(-round(camX), 0);
+  ctx.translate(-round(camX * 0.8), 0);
   ctx.globalCompositeOperation = 'lighter';
   ctx.drawImage(screenSpill(), 120, 60);
   ctx.globalCompositeOperation = 'source-over';
   // monitor and screen
-  const mx = 214;
-  const my = 70;
+  const mx = 200;
+  const my = 64;
   ctx.drawImage(monitorArt(), mx, my);
   screenUI(ctx, mx + 16, my + 10, 58, 50, lt);
   // modem and phone on the desk
@@ -348,25 +348,16 @@ function shotRoom(ctx, lt) {
   rect(ctx, 300, 142, 50, 1, mix(C.beige, P.white, 0.4));
   rect(ctx, 300, 150, 50, 1, C.beigeDD);
   for (let i = 0; i < 6; i++) rect(ctx, 306 + i * 6, 147, 2, 1, i < 2 || (lt > 1.6 && (i === 3 || floor(lt * 8 + i) % 2 === 0)) ? C.led : C.ledOff);
-  rect(ctx, 150, 146, 26, 6, C.beigeD);
-  rect(ctx, 152, 142, 22, 4, C.beige);
-  // Daniel, from behind, reaching for the mouse
+  ctx.restore();
+  // Daniel in the foreground, from behind (over his shoulder)
+  ctx.save();
+  ctx.translate(-round(camX * 1.4), 0);
   const d = DANIEL;
-  d.x = 168;
-  d.y = 72;
+  d.x = 118;
+  d.y = 100;
   d.nod = round(track(lt, [[1.2, 0], [1.6, 1], [2.4, 0]]));
-  d.armR.a = 0.5;
-  d.armR.e = track(lt, [[0, 0.9], [1.0, 1.15, 'inOut']]);
-  d.armR.fore = 0.9;
-  d.armR.hand = 'rest';
-  d.armL.a = 0.15;
-  d.armL.e = 1.2;
-  d.armL.fore = 0.7;
-  d.armL.hand = 'rest';
+  d.tiltX = round(track(lt, [[0, 0], [1.2, 2, 'inOut']]));
   bust(ctx, d, 216);
-  arm(ctx, d, 1);
-  // mouse under the hand
-  ellipse(ctx, 214, 160, 5, 3, C.beige, { d: C.beigeD, f: 0.4, m: 1, side: 1 });
   ctx.restore();
   vignette(ctx, 0.62, 'sn2');
   letterbox(ctx, LB);
@@ -430,18 +421,18 @@ const faceBg = () =>
   shader('sn-facebg', W, H, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.5), mix(P.navy, C.crt, 0.3)], (x, y) => clamp(1 - sqrt(((x - 420) / 300) ** 2 + ((y - 90) / 150) ** 2)) * 0.95);
 
 const FACE = {
-  x: 150,
-  y: 34,
-  hh: 112,
+  x: 160,
+  y: 46,
+  hh: 92,
   hair: 'messy',
   eye: 0,
   mouth: 0,
   smile: 0,
-  light: mix(P.skin, C.crtL, 0.45),
-  litF: 0.14,
+  light: mix(P.skin, P.silver, 0.45),
+  rimPx: 2,
   pal: {
-    skin: mix(P.tanShade, P.ink, 0.45),
-    skinD: mix(P.brown, P.black, 0.55),
+    skin: mix(P.brown, P.tanShade, 0.35),
+    skinD: mix(P.maroon, P.black, 0.45),
     hair: mix(P.black, P.maroon, 0.35),
     hairD: P.black,
     hairL: mix(P.maroon, C.crt, 0.3),
@@ -453,12 +444,26 @@ const FACE = {
 function shotFace(ctx, lt) {
   ctx.drawImage(faceBg(), 0, 0);
   const f = FACE;
-  f.x = 150 - round(track(lt, [[0, 0], [3.2, 8, 'smooth']]));
-  f.y = 36 + round(sin(lt * 1.1) * 0.6);
+  f.x = 160 - round(track(lt, [[0, 0], [3.2, 8, 'smooth']]));
+  f.y = 46 + round(sin(lt * 1.1) * 0.6);
   // eyes close slowly on the swell; the smallest smile
   f.eye = lt > 1.1 && lt < 3.0 ? 1 : blinkAt(lt, 5);
   f.smile = lt > 2.0 ? 1 : 0;
   profile(ctx, f);
+  // hoodie: hood bunched behind the neck, shoulders falling out of frame
+  const hx = f.x;
+  const hy = f.y + f.hh * 1.12;
+  const hood = mix(P.darkGreen, P.black, 0.72);
+  ellipse(ctx, hx - f.hh * 0.32, hy - f.hh * 0.08, f.hh * 0.34, f.hh * 0.24, hood, { d: P.black, f: 0.6, m: 1, side: -1 });
+  begin();
+  pt(hx - f.hh * 1.1, 216);
+  pt(hx - f.hh * 0.7, hy + f.hh * 0.05);
+  pt(hx - f.hh * 0.1, hy - f.hh * 0.02);
+  pt(hx + f.hh * 0.3, hy + f.hh * 0.06);
+  pt(hx + f.hh * 0.62, hy + f.hh * 0.28);
+  pt(hx + f.hh * 0.8, 216);
+  fill(ctx, hood, { d: P.black, f: 0.55, m: 1, side: -1, l: mix(P.darkGreen, P.silver, 0.25), lf: 0, lm: 1 });
+  line(ctx, hx + f.hh * 0.06, hy + f.hh * 0.06, hx + f.hh * 0.1, hy + f.hh * 0.42, mix(P.fog, P.ink, 0.5));
   // the screen's light flickers faintly across the face
   ctx.globalAlpha = 0.06 + 0.04 * sin(lt * 17);
   rect(ctx, 0, LB, W, H - LB * 2, C.crt);
@@ -482,7 +487,7 @@ const crtFrame = () =>
   bake('sn-crtframe', W, H, (c) => {
     // bezel around a slightly curved screen
     rect(c, 0, 0, W, H, C.beigeD);
-    shadeInto(c, 0, 0, W, H, [C.beigeDD, C.beigeD, C.beige], (x, y) => 0.4 + 0.3 * (1 - y / H) - 0.2 * (x / W));
+    shadeInto(c, 0, 0, W, H, [C.beigeD, mix(C.beigeD, C.beige, 0.5)], (x, y) => 0.2 + 0.6 * (1 - y / H) - 0.3 * (x / W));
     c.clearRect(40, 32, 304, 152);
     rect(c, 38, 30, 308, 2, P.black);
     rect(c, 38, 184, 308, 2, mix(C.beige, P.white, 0.3));
@@ -490,8 +495,8 @@ const crtFrame = () =>
 
 function shotPhoto(ctx, lt) {
   // screen: desktop, a viewer window, the photo arriving line by line
-  rect(ctx, 40, 32, 304, 152, P.navy);
-  ctx.drawImage(desktopArt(), 0, 0, 58, 50, 40, 32, 304, 152);
+  rect(ctx, 40, 32, 304, 152, mix(P.navy, P.darkGreen, 0.35));
+  rect(ctx, 40, 32, 304, 76, mix(P.navy, P.darkGreen, 0.25));
   const wx = 98;
   const wy = 50;
   rect(ctx, wx, wy, 190, 126, mix(P.fog, P.silver, 0.4));
@@ -505,10 +510,17 @@ function shotPhoto(ctx, lt) {
   const mins = 17 - floor(lt * 0.9);
   text(ctx, `RECEIVING  ${pct}%`, wx + 20, wy + 110, { color: P.ink, font: 'micro' });
   text(ctx, `2.1 KB/S   ${mins} MIN LEFT`, wx + 170, wy + 110, { color: P.ink, font: 'micro', align: 'right' });
-  // his reflection on the glass, very faint
-  ctx.globalAlpha = 0.1;
-  ellipse(ctx, 256, 92, 26, 32, P.black);
-  ellipse(ctx, 256, 170, 60, 34, P.black);
+  // his reflection on the glass, very faint: head and shoulders
+  ctx.globalAlpha = 0.12;
+  ellipse(ctx, 252, 104, 22, 27, P.black);
+  begin();
+  pt(196, 186);
+  pt(208, 146);
+  pt(236, 134);
+  pt(268, 134);
+  pt(296, 146);
+  pt(308, 186);
+  fill(ctx, P.black);
   ctx.globalAlpha = 0.07;
   for (let y = 33; y < 184; y += 2) rect(ctx, 40, y, 304, 1, P.black);
   ctx.globalAlpha = 1;
@@ -549,50 +561,63 @@ const hallSet = () =>
   });
 const hallGlow = () => pool('sn-hallglow', 70, 60, P.yellow, 5, 0.2);
 
-const MUM = {
-  x: 196,
-  gy: 182,
-  hh: 15,
+const MUM = figure({
+  hh: 32,
   hair: 'bob',
-  coat: true,
-  turn: 0,
+  garment: 'cardigan',
+  shoulders: 0.84,
   pal: {
-    ...figure().pal,
     skin: mix(P.skin, P.tan, 0.3),
-    skinD: P.skinShade,
-    hair: mix(P.brown, P.maroon, 0.5),
+    skinD: mix(P.skinShade, P.tanShade, 0.5),
+    hair: mix(P.brown, P.maroon, 0.4),
     hairD: P.maroon,
-    hairL: P.tanShade,
-    top: mix(P.purple, P.slate, 0.4),
-    topD: mix(P.purple, P.black, 0.5),
-    topL: mix(P.purple, P.fog, 0.4),
-    lip: P.skinShade,
+    hairL: mix(P.tanShade, P.brown, 0.4),
+    top: mix(P.purple, P.slate, 0.45),
+    topD: mix(P.purple, P.black, 0.6),
+    topL: mix(P.purple, P.fog, 0.35),
+    shirt: mix(P.cream, P.tan, 0.3),
+    shirtD: P.tan,
+    lip: mix(P.skinShade, P.darkRed, 0.3),
   },
-  armL: { a: 0.08, e: 0.1 },
-  armR: { a: 0.08, e: 0.1 },
-  belt: mix(P.purple, P.fog, 0.3),
-};
+});
 
+const TARGET = { x: 0, y: 0 };
 function shotHall(ctx, lt) {
   ctx.drawImage(hallSet(), 0, 0);
   ctx.globalCompositeOperation = 'lighter';
   ctx.drawImage(hallGlow(), 46, 58);
   ctx.globalCompositeOperation = 'source-over';
   const m = MUM;
-  // she lifts the receiver from the table to her ear
-  const lift = track(lt, [[0.15, 0], [0.75, 1, 'inOut']]);
-  m.armL.a = lerp(0.35, 0.5, lift);
-  m.armL.e = lerp(0.6, 2.75, lift);
-  m.headX = round(lerp(0, -1, lift));
-  standing(ctx, m);
-  // receiver in her hand, its curly cord back to the base on the table
-  const hx = m.armL.wx;
-  const hy = m.armL.wy;
-  capsule(ctx, hx - 3, hy - 3, hx + 2, hy + 5, 2, 2, C.beige);
-  ctx.fillStyle = mix(C.beigeD, P.black, 0.2);
-  for (let i = 0; i <= 14; i++) {
-    const u = i / 14;
-    ctx.fillRect(round(lerp(hx, 150, u) + sin(u * 30) * 1), round(lerp(hy + 4, 142, u) + 6 * u * (1 - u) * 4), 1, 1);
+  m.x = 214;
+  m.y = 60;
+  // she lifts the receiver from the table to her ear, glancing down at it first
+  const lift = track(lt, [[0.1, 0], [0.7, 1, 'inOut']]);
+  m.turn = lerp(-0.25, -0.1, lift);
+  m.look = lift < 0.5 ? -1 : 0;
+  m.nod = round(lerp(1, 0, lift));
+  m.blink = blinkAt(lt, 2);
+  // the hand travels from the table edge to her ear; the elbow follows (IK)
+  TARGET.x = lerp(178, m.x - m.hh * 0.42, lift);
+  TARGET.y = lerp(150, m.y + m.hh * 0.62, lift);
+  m.armL.to = TARGET;
+  m.armL.len = lerp(1, 0.62, lift);
+  m.armL.fore = 1;
+  m.armL.hand = 'hold';
+  m.armR.a = 0.12;
+  m.armR.e = 0.25;
+  m.armR.hand = 'fist';
+  bust(ctx, m, 216);
+  arm(ctx, m, 1);
+  const w = wrist(m, -1);
+  const hx = w.wx;
+  const hy = w.wy;
+  // the receiver (beige), then her hand over it; the curly cord back to the base
+  capsule(ctx, hx - 5, hy - 8, hx + 1, hy + 9, 3, 3, C.beige, { d: C.beigeD, f: 0.4, m: 1, side: 1 });
+  arm(ctx, m, -1);
+  ctx.fillStyle = mix(C.beigeD, P.black, 0.15);
+  for (let i = 0; i <= 26; i++) {
+    const u = i / 26;
+    ctx.fillRect(round(lerp(hx + 1, 150, u) + sin(u * 44) * 1.5), round(lerp(hy + 9, 142, u) + 40 * u * (1 - u)), 1, 1);
   }
   vignette(ctx, 0.6, 'sn6');
   letterbox(ctx, LB);
@@ -673,9 +698,9 @@ export default {
   script: [
     { at: 0.5, text: 'Nineteen ninety-seven.' },
     { at: 2.8, text: 'Somewhere in the suburbs, a young man waits for the only voice that ever understood him.' },
-    { at: 12.3, text: 'Some call it noise. He calls it connection.' },
-    { at: 15.8, text: 'ScreechNet. Fifty-six kilobits of pure feeling.' },
-    { at: 20.8, text: 'ScreechNet. Some connections are worth the wait.' },
+    { at: 12.1, text: 'Some call it noise. He calls it connection.' },
+    { at: 16.0, text: 'Fifty-six kilobits of pure feeling.' },
+    { at: 20.6, text: 'ScreechNet. Some connections are worth the wait.' },
   ],
   tune: {
     bpm: 75,
@@ -687,22 +712,22 @@ export default {
         kind: 'lead',
         inst: LEAD,
         gain: 0.85,
-        notes: 'R:1 A4:1@0.45 F#4:0.5@0.4 E4:0.5@0.4 D4:1@0.45 R:0.5 B4:1@0.45 A4:0.5@0.4 F#4:1@0.4 D4:1@0.4 R:0.5 E4:0.5@0.4 F#4:0.5@0.4 G4:0.5@0.45 A4:1.5@0.5 R:0.5 A6:1@0.35 F#5:0.5@0.6 D5:0.5@0.55 D6:0.125@0.3 A5:0.125@0.3 F#5:0.125@0.3 A5:0.125@0.3 D6:0.125@0.3 A5:0.125@0.3 F#5:0.125@0.3 A5:0.125@0.3 F#5:1.5@0.7 E5:0.5@0.6 D5:1@0.65 A4:1@0.55 G4:0.5@0.55 B4:0.5@0.55 D5:1@0.6 C#5:0.5@0.55 E5:0.5@0.6 A4:1@0.55 F#5:1.5@0.6 R:1 R:0.5 A4:0.5@0.45 F#5:1@0.55 E5:0.5@0.5 D5:3@0.5',
+        notes: 'R:1 A4:1@0.45 F#4:0.5@0.4 E4:0.5@0.4 D4:1@0.45 R:0.5 B4:1@0.45 A4:0.5@0.4 F#4:1@0.4 D4:1@0.4 R:0.5 E4:0.5@0.4 F#4:0.5@0.4 G4:0.5@0.45 A4:1.5@0.5 R:0.5 A6:1@0.35 F#5:0.5@0.6 D5:0.5@0.55 D6:0.125@0.3 A5:0.125@0.3 F#5:0.125@0.3 A5:0.125@0.3 D6:0.125@0.3 A5:0.125@0.3 F#5:0.125@0.3 A5:0.125@0.3 F#5:1.5@0.7 E5:0.5@0.6 D5:1@0.65 A4:1@0.55 G4:0.5@0.55 B4:0.5@0.55 D5:1@0.6 C#5:0.5@0.55 E5:0.5@0.6 A4:1@0.55 F#5:1.5@0.6 R:1 R:0.5 A4:0.5@0.45 F#5:1@0.55 E5:0.5@0.5 D5:3@0.5 R:2',
       },
       {
         kind: 'harmony',
         inst: KEYS,
         gain: 0.7,
-        notes: 'D3:0.5@0.5 A3:0.5@0.4 C#4:0.5@0.4 F#4:0.5@0.4 D3:0.5@0.45 A3:0.5@0.4 C#4:0.5@0.4 F#4:0.5@0.4 B2:0.5@0.45 F#3:0.5@0.4 A3:0.5@0.4 D4:0.5@0.4 G2:0.5@0.45 D3:0.5@0.4 F#3:0.5@0.4 B3:0.5@0.4 E3:0.5@0.45 B3:0.5@0.4 D4:0.5@0.4 G4:0.5@0.4 A2:0.5@0.45 E3:0.5@0.4 G3:0.5@0.4 D4:0.5@0.4 A2+E3+A3:3@0.35 D3:0.5@0.5 A3:0.5@0.45 D4:0.5@0.45 F#4:0.5@0.45 F#2:0.5@0.5 C#3:0.5@0.45 F#3:0.5@0.45 A3:0.5@0.45 G2:0.5@0.5 D3:0.5@0.45 G3:0.5@0.45 B3:0.5@0.45 A2:0.5@0.5 E3:0.5@0.45 A3:0.5@0.45 C#4:0.5@0.45 B2:0.5@0.45 F#3:0.5@0.4 D4:0.5@0.4 R:1 G2:0.5@0.45 D3:0.5@0.4 F#3:0.5@0.4 B3:0.5@0.4 D3:0.5@0.45 A3:0.5@0.4 F#4:0.5@0.4 D4:2@0.45',
+        notes: 'D3:0.5@0.5 A3:0.5@0.4 C#4:0.5@0.4 F#4:0.5@0.4 D3:0.5@0.45 A3:0.5@0.4 C#4:0.5@0.4 F#4:0.5@0.4 B2:0.5@0.45 F#3:0.5@0.4 A3:0.5@0.4 D4:0.5@0.4 G2:0.5@0.45 D3:0.5@0.4 F#3:0.5@0.4 B3:0.5@0.4 E3:0.5@0.45 B3:0.5@0.4 D4:0.5@0.4 G4:0.5@0.4 A2:0.5@0.45 E3:0.5@0.4 G3:0.5@0.4 D4:0.5@0.4 A2+E3+A3:3@0.35 D3:0.5@0.5 A3:0.5@0.45 D4:0.5@0.45 F#4:0.5@0.45 F#2:0.5@0.5 C#3:0.5@0.45 F#3:0.5@0.45 A3:0.5@0.45 G2:0.5@0.5 D3:0.5@0.45 G3:0.5@0.45 B3:0.5@0.45 A2:0.5@0.5 E3:0.5@0.45 A3:0.5@0.45 C#4:0.5@0.45 B2:0.5@0.45 F#3:0.5@0.4 D4:0.5@0.4 R:1 G2:0.5@0.45 D3:0.5@0.4 F#3:0.5@0.4 B3:0.5@0.4 D3:0.5@0.45 A3:0.5@0.4 F#4:0.5@0.4 D4:2@0.45 R:2',
       },
       {
         kind: 'harmony',
         inst: PAD,
         gain: 0.4,
-        notes: 'D3+F#3+A3+C#4:4@0.4 B2+D3+F#3+A3:2@0.4 G2+B2+D3+F#3:2@0.4 E3+G3+B3+D4:2@0.4 A2+D3+E3+G3:2@0.4 A2+E3+A3:3@0.45 D3+F#3+A3:2@0.55 F#2+A2+C#3:2@0.55 G2+B2+D3:2@0.55 A2+C#3+E3:2@0.55 B2+D3+F#3:1.5@0.5 R:1 G2+B2+D3+F#3:2@0.45 D3+F#3+A3:3.5@0.45',
+        notes: 'D3+F#3+A3+C#4:4@0.4 B2+D3+F#3+A3:2@0.4 G2+B2+D3+F#3:2@0.4 E3+G3+B3+D4:2@0.4 A2+D3+E3+G3:2@0.4 A2+E3+A3:3@0.45 D3+F#3+A3:2@0.55 F#2+A2+C#3:2@0.55 G2+B2+D3:2@0.55 A2+C#3+E3:2@0.55 B2+D3+F#3:1.5@0.5 R:1 G2+B2+D3+F#3:2@0.45 D3+F#3+A3:3.5@0.45 R:2',
       },
-      { kind: 'bass', inst: 'tri', gain: 0.6, notes: 'D2:4 B1:2 G1:2 E2:2 A1:2 A1:3 D2:2 F#1:2 G1:2 A1:2 B1:1.5 R:1 G1:2 D2:3.5' },
-      { drums: 'R:12 W:1@0.3 W:1@0.4 X:0.25@0.25 X:0.25@0.25 X:0.25@0.25 X:0.25@0.25 K:1@0.3 H:1@0.18 K:1@0.3 H:1@0.18 K:1@0.3 H:1@0.18 K:1@0.3 H:1@0.18 R:1.5 R:1 R:5.5' },
+      { kind: 'bass', inst: 'tri', gain: 0.6, notes: 'D2:4 B1:2 G1:2 E2:2 A1:2 A1:3 D2:2 F#1:2 G1:2 A1:2 B1:1.5 R:1 G1:2 D2:3.5 R:2' },
+      { drums: 'R:12 W:1@0.3 W:1@0.4 X:0.25@0.25 X:0.25@0.25 X:0.25@0.25 X:0.25@0.25 K:1@0.3 H:1@0.18 K:1@0.3 H:1@0.18 K:1@0.3 H:1@0.18 K:1@0.3 H:1@0.18 R:1.5 R:1 R:5.5 R:2' },
     ],
   },
   draw(ctx, t, dt, info) {

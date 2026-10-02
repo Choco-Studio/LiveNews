@@ -35,6 +35,7 @@
     </div>
     <script type="module">
       import { Graphics } from '../js/graphics/index.js';
+      import { drawTopRow } from '../js/graphics/bug.js';
       import { P } from '../js/palette.js';
       import { setPresenters } from '../js/cast.js';
 
@@ -66,6 +67,17 @@
         'Oil prices fell for a third day as traders expect weaker demand this winter, with analysts warning that a mild season in Europe and slower factory output in Asia could keep prices under pressure well into next year.',
         'Central banks are watching closely.',
       ];
+      // the offline demo's real ticker: most items are wider than the band once their source is added
+      const REAL_TICKER = [
+        { source: 'Circuit Weekly', text: 'Chipmaker unveils a laptop processor with all-day battery life' },
+        { source: 'Circuit Weekly', text: 'Robot vacuum learns to climb stairs' },
+        { source: 'Circuit Weekly', text: 'Handheld games console sells 2 million units in its first week' },
+        { source: 'Starfield Journal', text: 'Telescope in Chile spots water vapour on a distant planet' },
+        { source: 'Pixelburg Post', text: 'New Zealand city of Wellington trials four-day school week for one term across twelve schools' },
+      ];
+      const LONG_BREAK = { source: 'Fixture World Wire', text: 'Earthquake of magnitude 7.4 strikes off the coast of central Chile, tsunami warning issued for the Pacific coast and residents told to move to higher ground' };
+      const LONG_HEADLINE = { headline: 'Wellington trials a four-day school week across twelve schools', source: 'Pixelburg Post', category: 'world', kicker: 'EDUCATION' };
+      const ACCENT_STORY = { headline: 'México votes in tight regional élections', source: 'Fixture World Wire', category: 'world', kicker: 'MÉXICO' };
       const STORY1 = { headline: 'Oil prices slide as global demand cools', source: 'Fixture Business Wire', category: 'business', kicker: 'OIL MARKETS' };
       const STORY2 = { headline: 'Coffee futures reach a ten-year high after poor harvests', source: 'Fixture Business Wire', category: 'business', kicker: 'COMMODITIES' };
       const BREAK = { source: 'Fixture World Wire', text: 'Earthquake of magnitude 6.1 strikes off northern Japan' };
@@ -159,6 +171,30 @@
         'caption-montage': () => (t) => ({ shot: 'montage', programTagUntil: 10, subtitle: SHORT[0], subtitleSince: -0.5 }),
         ticker: () => (t) => ({ shot: 'wide' }),
         ad: () => (t) => ({ shot: t < 0.2 ? 'ident' : 'ad' }),
+        // a raw RSS breaking title (~150 chars): strap pages, held until the last page is read,
+        // then the ticker takes it
+        'breaking-long': () => {
+          const a = lt(STORY1, -3);
+          const br = { ...LONG_BREAK, since: 0.2 };
+          return (t) => ({ shot: 'wide', lowerThird: a, breaking: t >= 0.2 ? br : null });
+        },
+        'headline-long': () => {
+          const a = lt(LONG_HEADLINE, 0.2);
+          return (t) => ({ shot: 'wide', lowerThird: a });
+        },
+        'ticker-pages': () => (t) => ({ shot: 'wide', ticker: REAL_TICKER }),
+        'ticker-empty': () => (t) => ({ shot: 'wide', ticker: t < 1 ? [] : TICKER }),
+        accents: () => {
+          const a = { ...lt(ACCENT_STORY, -3), kicker: 'MÉXICO' }; // always with its accented kicker
+          return (t) => ({ shot: 'wide', lowerThird: a, subtitle: 'En México, las élections regionales se deciden hoy.', subtitleSince: -1 });
+        },
+        // the cut from a programme open: the open ends on the top row (opens/kit.js drawBug),
+        // so the wide shot must not wipe it in again or replay the glint
+        'open-cut': () => (t) => ({ shot: t < 0.2 ? 'open' : 'wide', programTagUntil: 0.2 + 8.5 }),
+        'caption-dup': () => {
+          const a = lt({ headline: 'Iceland volcano erupts again', source: 'Fixture World Wire', category: 'world' }, -3);
+          return (t) => ({ shot: 'wide', lowerThird: a, ...(t < 3 ? { subtitle: "Iceland's volcano erupts again.", subtitleSince: 0 } : { subtitle: 'Lava has reached the edge of the evacuated town of Grindavik.', subtitleSince: 3 }) });
+        },
       };
 
       // --- backgrounds ---------------------------------------------------------
@@ -267,6 +303,10 @@
           ctx.fillStyle = P.black;
           ctx.fillRect(0, 0, 384, 216);
         } else ctx.drawImage(background(bg), 0, 0);
+        if (shot === 'open') {
+          // the last instants of an open: its lock-up ends with our top row (as opens/kit.js draws it)
+          drawTopRow(ctx, 4 + t, { onAt: 1.7, replay: false, program: null, programIn: null, programOut: null, clock: '15:42' });
+        }
         if (shot === 'ad') {
           ctx.fillStyle = P.navy;
           ctx.fillRect(0, 0, 384, 216);

@@ -19,9 +19,10 @@ const WEAK_END = words('A AN THE OF TO IN ON AT BY FOR FROM WITH INTO ONTO OVER 
 // Avoid ending on these if a better break is close (auxiliaries, determiners, relatives).
 const SOFT_END = words('IS ARE WAS WERE BE BEEN WILL WOULD CAN COULD SHOULD MAY MIGHT MUST HAS HAVE HAD NOT NO VERY MORE MOST LESS THIS THESE THOSE THAT WHICH WHO SOME ANY EACH EVERY');
 // Good places to start a line: a new clause...
-const CLAUSE_START = words('AND BUT OR NOR SO YET WHILE WHEREAS BECAUSE ALTHOUGH THOUGH SINCE UNLESS UNTIL WHEN WHERE WHICH WHO WHOSE THAT IF WITH WITHOUT AMID DESPITE AS');
+const CLAUSE_START = words('BUT NOR SO YET WHILE WHEREAS BECAUSE ALTHOUGH THOUGH SINCE UNLESS UNTIL WHEN WHERE WHICH WHO WHOSE THAT IF WITH WITHOUT AMID DESPITE AS');
+// ...("and"/"or" also join two nouns: "Canada and Mexico", so they count as a phrase start)...
 // ...or a prepositional phrase.
-const PHRASE_START = words('IN ON AT FOR FROM TO OF BY INTO OVER UNDER ABOUT ACROSS AGAINST AMONG AROUND BETWEEN DURING NEAR THROUGH TOWARDS TOWARD WITHIN AFTER BEFORE');
+const PHRASE_START = words('AND OR IN ON AT FOR FROM TO OF BY INTO OVER UNDER ABOUT ACROSS AGAINST AMONG AROUND BETWEEN DURING NEAR THROUGH TOWARDS TOWARD WITHIN AFTER BEFORE');
 const UNIT = words('PER CENT PERCENT MILLION MILLIONS BILLION BILLIONS TRILLION THOUSAND THOUSANDS HUNDRED BN KM KG MPH %');
 const NUMBER = /^[$£€]?\d[\d.,:]*(%|BN|M|K|KM|KG|S)?$/;
 const DASH = words('- – —');
@@ -30,7 +31,12 @@ const sq = (x) => x * x;
 
 // Cost weights: a page costs more than a line, a page break at a weak word costs
 // more than a line break there, balance and fill keep text from looking ragged.
-const COST = { page: 1, line: 0.25, fill: 0.6, widow: 0.8, balance: 1, lineBreak: 1, pageBreak: 1.6, overlong: 10 };
+// A one-line page (strap, ticker) is read as a unit, so it should carry most of
+// the text ("fill1"), and a page with only a word or two on it is never right.
+const COST = { page: 1, line: 0.25, fill: 0.6, fill1: 1, widow: 0.8, scrap: 2.5, balance: 1, lineBreak: 1, pageBreak: 1.6, overlong: 10 };
+// A one-line page under this share of its width is a scrap (ramped, no cliff);
+// a closing page may be shorter ("...across the Greek islands").
+const SCRAP = { page: 0.35, last: 0.22 };
 
 /** Word tokens of `text` with their character offsets and lookup forms. */
 function tokenize(text) {
@@ -57,8 +63,10 @@ function boundary(a, b) {
   if (last === ',' || last === ';' || last === ':' || DASH.has(a.raw) || DASH.has(b.raw)) return 0.4;
   if (last === ')' || b.raw[0] === '(') return 0.7;
   let c = 1.2;
-  if (CLAUSE_START.has(b.bare)) c -= 0.4;
-  else if (PHRASE_START.has(b.bare)) c -= 0.2;
+  // between two content words ("water | vapour", "historic | centre") is the
+  // worst ordinary break: compounds and adjective + noun pairs live there
+  if (CLAUSE_START.has(b.bare)) c -= 0.6;
+  else if (PHRASE_START.has(b.bare)) c -= 0.5;
   if (WEAK_END.has(a.bare)) c += 2;
   else if (SOFT_END.has(a.bare)) c += 0.6;
   if (NUMBER.test(a.bare)) c += UNIT.has(b.bare) ? 2.5 : 1.2;
@@ -72,15 +80,14 @@ const EMPTY = Object.freeze([]);
  * Break `text` into pages of `perPage` lines (1 or 2), each line at most
  * `maxW` pixels in the body face (`firstMaxW` for the very first line, e.g.
  * when a source label sits before it). `more` pixels are reserved on the last
- * line of every page but the final one (room for an ellipsis). `pack` puts the
- * fewest pages first and phrasing second.
+ * line of every page but the final one (room for an ellipsis).
  * Returns frozen pages [{ lines: [string], start }] where `start` is the
  * character offset of the page's first word in `text`. Words are never split
  * or dropped: joining every line with spaces gives the words of `text`.
  */
-export function layoutText(text, { maxW, firstMaxW = maxW, perPage = 1, more = 0, pack = false }) {
+export function layoutText(text, { maxW, firstMaxW = maxW, perPage = 1, more = 0 }) {
   const s = typeof text === 'string' ? text : String(text ?? '');
-  const key = `${maxW}|${firstMaxW}|${perPage}|${more}|${pack ? 1 : 0}|${s}`;
+  const key = `${maxW}|${firstMaxW}|${perPage}|${more}|${s}`;
   const hit = memo.get(key);
   if (hit) return hit;
   const tokens = tokenize(s);
@@ -88,13 +95,13 @@ export function layoutText(text, { maxW, firstMaxW = maxW, perPage = 1, more = 0
   const fits = tokens.length && measureText(s.trim().replace(/\s+/g, ' ')) <= firstMaxW;
   const pages = fits
     ? Object.freeze([Object.freeze({ lines: Object.freeze([tokens.map((t) => t.raw).join(' ')]), start: tokens[0].start })])
-    : tokens.length ? solve(tokens, maxW, firstMaxW, perPage === 2 ? 2 : 1, more, pack ? 6 : COST.page) : EMPTY;
+    : tokens.length ? solve(tokens, maxW, firstMaxW, perPage === 2 ? 2 : 1, more) : EMPTY;
   if (memo.size >= 400) memo.delete(memo.keys().next().value);
   memo.set(key, pages);
   return pages;
 }
 
-function solve(tokens, maxW, firstMaxW, perPage, more, pageCost) {
+function solve(tokens, maxW, firstMaxW, perPage, more) {
   const n = tokens.length;
   const pre = new Float64Array(n + 1);
   for (let i = 0; i < n; i++) pre[i + 1] = pre[i] + tokens[i].w;
@@ -118,8 +125,11 @@ function solve(tokens, maxW, firstMaxW, perPage, more, pageCost) {
       const last = j === n;
       const lim = cap1 - (last ? 0 : more);
       if (w1 <= lim || single) {
-        const fill = last ? (i === 0 ? 0 : COST.widow * sq((maxW - w1) / maxW)) : COST.fill * sq((lim - Math.min(w1, lim)) / lim);
-        const cost = pageCost + COST.line + fill + over1 + (w1 > lim ? COST.overlong : 0) + (last ? 0 : COST.pageBreak * cut[j]) + best[j];
+        const share = w1 / (last ? maxW : lim);
+        const floor = last ? SCRAP.last : SCRAP.page;
+        const scrap = i === 0 && last ? 0 : COST.scrap * Math.max(0, (floor - share) / floor);
+        const fill = scrap + (last ? (i === 0 ? 0 : COST.widow * sq(1 - share)) : COST.fill1 * sq(1 - Math.min(1, share)));
+        const cost = COST.page + COST.line + fill + over1 + (w1 > lim ? COST.overlong : 0) + (last ? 0 : COST.pageBreak * cut[j]) + best[j];
         if (cost < best[i]) {
           best[i] = cost;
           endA[i] = j;
@@ -140,7 +150,7 @@ function solve(tokens, maxW, firstMaxW, perPage, more, pageCost) {
         const over2 = w2 > lim2 ? COST.overlong : 0;
         const bal = COST.balance * sq((w1 - w2) / maxW);
         const fill = COST.fill * sq((maxW - Math.max(w1, w2)) / maxW);
-        const cost = pageCost + 2 * COST.line + bal + fill + over1 + over2 + lineCut + (fin ? 0 : COST.pageBreak * cut[m]) + best[m];
+        const cost = COST.page + 2 * COST.line + bal + fill + over1 + over2 + lineCut + (fin ? 0 : COST.pageBreak * cut[m]) + best[m];
         if (cost < best[i]) {
           best[i] = cost;
           endA[i] = j;
@@ -176,9 +186,9 @@ export function linePages(text, maxW, { firstMaxW = maxW, maxPages = 3 } = {}) {
   const s = String(text ?? '').trim();
   if (!s) return EMPTY;
   if (measureText(s) <= firstMaxW) return Object.freeze([s]);
-  let pages = layoutText(s, { maxW, firstMaxW, perPage: 1, more: ELLIPSIS_W });
-  // too many pages: pack them as tightly as the words allow before cutting
-  if (pages.length > maxPages) pages = layoutText(s, { maxW, firstMaxW, perPage: 1, more: ELLIPSIS_W, pack: true });
+  // past maxPages the tail is cut rather than packing every page into weak breaks
+  // ("...THE COAST OF..."): a strap or ticker page must read as a phrase
+  const pages = layoutText(s, { maxW, firstMaxW, perPage: 1, more: ELLIPSIS_W });
   const out = [];
   const n = Math.min(pages.length, maxPages);
   for (let i = 0; i < n; i++) {

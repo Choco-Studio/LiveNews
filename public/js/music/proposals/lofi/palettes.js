@@ -50,7 +50,7 @@ export const MOMENTS = {
     layers: { pad: 0.45, keys: 1, bass: 1, kick: 0.55, snare: 0.4, hat: 0.55, perc: 0.6, arp: 0.15, lead: 0, tex: 0.4 },
   },
   map: {
-    energy: 0.6, gain: -10, lp: 3000, pocket: -5, bright: 1,
+    energy: 0.6, gain: -10, lp: 3000, pocket: -5, bright: 1, duck: { melody: 0.3 },
     layers: { pad: 0.5, keys: 0.4, bass: 0.9, kick: 0.6, snare: 0.25, hat: 0.55, perc: 0.85, arp: 1, lead: 0, tex: 0.35 },
   },
   outro: {

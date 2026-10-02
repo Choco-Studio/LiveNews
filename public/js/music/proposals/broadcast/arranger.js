@@ -6,7 +6,7 @@
 // form cycles through its progressions, layers come and go by phrase masks,
 // ostinato variants rotate, and a seeded random source adds small variations.
 
-import { MOTIF, motifShapes, parseChord, voice, bassNote, nearest, atOrAbove, rng, hashStr, SCALES } from './theory.js';
+import { MOTIF, motifShapes, parseChord, voice, bassNote, nearest, atOrAbove, rng, hashStr, SCALES, fit, chordPcs } from './theory.js';
 import { makeDelay } from './synth.js';
 
 export const db = (x) => 10 ** (x / 20);
@@ -103,6 +103,7 @@ export class Bed {
         this.nodes.push(d);
       }
       this.nodes.push(g, pump, pan);
+      g.__layer = L.type; // tag for the note log (synth.note)
       return { L, in: g, pump };
     });
   }
@@ -178,13 +179,28 @@ export class Bed {
       r: rng(hashStr(this.def.id) ^ Math.imul(li + 1, 2654435761) ^ this.seed),
     };
     b.time = (beat) => this.time(t0, beat, b.r);
+    b.motifBusy = this.motifBusy(b);
     for (const lay of this.layers) {
       if (!this.active(lay.L, b)) continue;
+      if (lay.L.yieldTo === 'motif' && b.motifBusy) continue; // call and response
       const fn = LAYERS[lay.L.type];
       if (fn) fn(this, lay, b);
       this.lastActive.set(lay, i);
     }
     if (i === 0 && this.entry === 'fromOpen') this.catchOpen(t0);
+  }
+
+  // True when a motif statement of this bed sounds during bar b: arpeggios and
+  // sparkles rest so the signature is heard alone (and nothing rubs against it).
+  motifBusy(b) {
+    for (const { L } of this.layers) {
+      if (L.type !== 'motif' || !this.active(L, b)) continue;
+      const len = (SHAPES.total + (L.retro ? 0 : 1.5)) * L.aug + L.beat;
+      const bars = Math.ceil(len / 4);
+      const rel = ((b.li - L.at) % L.every + L.every) % L.every;
+      if (rel < bars) return true;
+    }
+    return false;
   }
 
   // Swing moves off-beat 8ths (and 16ths by half as much); a few ms of human
@@ -275,18 +291,30 @@ export function timpDo(tonic) {
   return 45 + ((((tonic - 45) % 12) + 12) % 12);
 }
 
+// The chord without its 7th, for a layer that sits under an arpeggio of roots.
+const no7 = (c) => {
+  if (!c.tones.some((t) => t === 10 || t === 11)) return c;
+  const tones = c.tones.filter((t) => t !== 10 && t !== 11);
+  // Keep it rich: on major and sus chords the 9th replaces the 7th (on minor
+  // chords a 9th would sit a semitone under the minor third, so it is left out).
+  if (!c.minor && !tones.some((t) => t % 12 === 2)) tones.push(14);
+  return { ...c, tones };
+};
 const digit = (ch) => (ch >= '1' && ch <= '9' ? Number(ch) / 9 : 0);
 const jit = (r, amt = 0.08) => 1 - amt / 2 + r() * amt;
 const matchPos = (f, pos) => f === 'all' || (f === 'even' && pos % 2 === 0) || (f === 'odd' && pos % 2 === 1) || f === pos || (Array.isArray(f) && f.includes(pos));
 
-// Nearest scale tone next to `target`, approached from `from`'s side.
-function approach(bed, from, target) {
+// Passing note into the next chord's bass: a scale step next to the target,
+// preferring one that does not rub (a semitone) against the chord still held.
+function approach(bed, from, target, ch) {
   if (target === from) return from + 7;
   const tonicPc = bed.def.tonic % 12;
   const inScale = (m) => bed.scale.includes((((m - tonicPc) % 12) + 12) % 12);
+  const pcs = chordPcs(ch);
+  const rubs = (m) => pcs.some((pc) => (pc - m + 1200) % 12 === 1 || (m - pc + 1200) % 12 === 1);
   const dir = target > from ? -1 : 1;
-  for (const k of [1, 2]) if (inScale(target + dir * k)) return target + dir * k;
-  return target + dir;
+  const cands = [target + dir, target + 2 * dir, target - dir, target - 2 * dir].filter(inScale);
+  return cands.find((m) => !rubs(m)) ?? (pcs.includes(((target + 7) % 12 + 12) % 12) ? target + 7 : from + 7);
 }
 
 // ----------------------------------------------------------------- layers
@@ -325,7 +353,8 @@ const LAYERS = {
     if (!fresh && !change) return;
     let k = 1;
     while (k < 8 && bed.chordAt(b.li + k) === b.chord && (b.pos + k) % 8 !== 0) k++;
-    const notes = voice(b.chord, bed.prev[L.type], { n: L.n, lo: L.lo, hi: L.hi });
+    const ch = L.power ? { root: b.chord.root, bass: b.chord.bass, tones: [0, 7], minor: b.chord.minor } : L.no7 ? no7(b.chord) : b.chord;
+    const notes = voice(ch, bed.prev[L.type], { n: L.n, lo: L.lo, hi: L.hi });
     bed.prev[L.type] = notes;
     s.pad(lay.in, b.t0, k * bed.barSec + 0.06, notes, L.vel * jit(b.r), { wave: L.wave, a: L.a, r: L.r, cut: L.cut, cutTo: L.cutTo, detune: L.detune, s: L.s ?? 1, d: L.d ?? 0.5 });
   },
@@ -335,13 +364,18 @@ const LAYERS = {
     const pats = L.patterns || [L.pattern];
     const pat = pats[b.phrase % pats.length];
     const root = bassNote(b.chord, bed.prev.bass, L.lo, L.hi);
-    const third = root + (b.chord.minor ? 3 : 4);
+    // Degrees are counted from the chord's real root, not a slash bass, and a
+    // sus chord has no third: it gets the fifth instead.
+    const r0 = nearest(b.chord.root, root);
+    const t3 = b.chord.tones.includes(3) ? 3 : b.chord.tones.includes(4) ? 4 : 7;
+    const third = r0 + t3 < root ? r0 + t3 + 12 : r0 + t3;
+    const fifth = r0 + 7 > L.hi + 5 ? r0 - 5 : r0 + 7;
     for (const [beat, beats, deg, vel] of pat) {
       let m = root;
-      if (deg === '5') m = root + 7 > L.hi + 5 ? root - 5 : root + 7;
+      if (deg === '5') m = fifth;
       else if (deg === '8') m = root + 12;
       else if (deg === '3') m = third;
-      else if (deg === 'a') m = approach(bed, root, bassNote(b.next, root, L.lo, L.hi));
+      else if (deg === 'a') m = approach(bed, root, bassNote(b.next, root, L.lo, L.hi), b.chord);
       bed.s.tone(lay.in, b.time(beat), beats * bed.spb * 0.92, m, vel * jit(b.r), { wave: L.wave, a: L.a, d: 0.3, s: L.s, r: L.r, cut: L.wave === 'tri' || L.wave === 'sub' ? 0 : L.cut, gain: 0.36 });
     }
     bed.prev.bass = root;
@@ -356,7 +390,8 @@ const LAYERS = {
     for (let k = 0; k < v.notes.length; k++) {
       const vel = digit(v.acc[k % v.acc.length]);
       if (!vel) continue;
-      bed.s.pluck(lay.in, b.time(k * step), base + v.notes[k], vel * jit(b.r, 0.12), { wave: L.wave, decay: L.decay, cut: L.cut, cutEnd: L.cutEnd });
+      const m = fit(base + v.notes[k], b.chord);
+      bed.s.pluck(lay.in, b.time(k * step), m, vel * jit(b.r, 0.12), { wave: L.wave, decay: L.decay, cut: L.cut, cutEnd: L.cutEnd });
     }
   },
 
@@ -364,11 +399,11 @@ const LAYERS = {
     const { L } = lay;
     const shape = L.variants ? L.variants[b.phrase % L.variants.length] : L.shape;
     const steps = 4 * L.rate;
-    const ch = b.chord;
     let tones;
+    const ch = L.no7 ? no7(b.chord) : b.chord;
     if (shape === 'cell') {
       const r0 = atOrAbove(ch.root, L.lo);
-      tones = [0, 2, 7, 12, 14, 19].map((x) => r0 + x).filter((m) => m < L.lo + 12 * L.span + 3);
+      tones = [0, 2, 7, 12, 14, 19].map((x) => fit(r0 + x, ch)).filter((m) => m < L.lo + 12 * L.span + 3);
     } else {
       const pcs = [...new Set(ch.tones.map((t) => (ch.root + t) % 12))];
       const one = pcs.map((pc) => atOrAbove(pc, L.lo)).sort((x, y) => x - y);
@@ -395,7 +430,7 @@ const LAYERS = {
 
   stabs(bed, lay, b) {
     const { L } = lay;
-    const notes = voice(b.chord, bed.prev.stabs, { n: L.n, lo: L.lo, hi: L.hi });
+    const notes = voice(L.no7 ? no7(b.chord) : b.chord, bed.prev.stabs, { n: L.n, lo: L.lo, hi: L.hi });
     bed.prev.stabs = notes;
     for (const [beat, beats, vel] of L.pattern) {
       bed.s.pad(lay.in, b.time(beat), beats * bed.spb, notes, vel * jit(b.r), { wave: L.wave, a: L.a, r: L.r, cut: L.cut, detune: 3, spread: 0.35, s: 0.6, d: 0.35, gain: 0.4 });
@@ -465,7 +500,7 @@ const LAYERS = {
     const cell = SHAPES.cell;
     for (let k = 0; k < 8; k++) {
       if (!b.r.chance(L.chance)) continue;
-      const m = atOrAbove((bed.def.tonic + b.r.pick(cell)) % 12, L.lo) + (b.r.chance(0.3) ? 12 : 0);
+      const m = fit(atOrAbove((bed.def.tonic + b.r.pick(cell)) % 12, L.lo) + (b.r.chance(0.3) ? 12 : 0), b.chord);
       play(bed.s, lay.in, b.time(k * 0.5), 0.2, m, 0.35 + b.r() * 0.3, L);
     }
   },

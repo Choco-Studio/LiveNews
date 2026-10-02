@@ -40,6 +40,7 @@ export const PROGRAM_TAG = { delay: 0.5, hold: 8 }; // programme name beside the
 export const BREAKING_STRAP = 12; // minimum seconds a live breaking item takes over the strap
 export const BREAKING_TICKER = 90; // seconds it stays in the ticker rotation
 const BREAKING_LEAD = STRAP_TIMING.in + STRAP_TIMING.textDelay + STRAP_TIMING.textRise; // until its text is up
+const TICKER_AFTER_STRAP = 1; // the ticker takes a breaking item a beat after the strap hands it back (one push at a time)
 const LIFT = 0.3; // captions rise above a strap before it wipes in, and settle after it has gone
 
 const ON = new Set(['news', 'bug']);
@@ -199,7 +200,7 @@ export class Graphics {
       // the strap carries the item first (the same words twice on screen read as a
       // glitch); the ticker takes it into its rotation once the strap hands back
       this.breakingContent(raw);
-      if (t >= this.brUntil) b = raw;
+      if (t >= this.brUntil + TICKER_AFTER_STRAP) b = raw;
     }
     const next = scene.schedule?.upcoming?.[0] || null;
     if (items === this.tickerItems && b === this.tickerBreak && next === this.tickerNext) return;

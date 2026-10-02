@@ -8,19 +8,20 @@ import { drawText, measureText } from '../font.js';
 import { W, TOP, inkOn, easeOut, easeIn, clamp01, rect, clipped } from './layout.js';
 
 // The 11x11 brand globe (logo.js GLOBE_S) redrawn for 1x on air: at this size
-// white seams read as crosshairs, so the equator is silver and the meridian
-// lens a lighter red. R red, D shadow, H highlight/seam, S equator.
+// two straight white seams read as crosshairs, so the seams are one meridian
+// ellipse and the equator in silver, dimmed to a lighter red where the globe
+// turns into shadow. R red, D shadow, H highlight, S lit seam, h seam in shadow.
 const GLOBE = [
   '...RRRRR...',
-  '..RHRRRRR..',
-  '.RHHRRRHRR.',
-  'RRHRRRRRHRR',
-  'RRHRRRRRHRD',
-  'SSSSSSSSSSD',
-  'RRHRRRRRHDD',
-  'RRHRRRRRHDD',
-  '.RRHRRRHDD.',
-  '..RRRRDDD..',
+  '..RHRSRRR..',
+  '.RHRSRSRRR.',
+  'RRRSRRRSRRR',
+  'RRRSRRRSRRD',
+  'SSSSSSSShhD',
+  'RRRSRRRhRDD',
+  'RRRSRRRhDDD',
+  '.RRRSRhDDD.',
+  '..RRRhDDD..',
   '...DDDDD...',
 ];
 // Hand-set 5 px wordmark (a logo, not the micro text face): round G and O.
@@ -34,9 +35,9 @@ const WORD = {
   2: ['##.', '..#', '.#.', '#..', '###'],
   4: ['#.#', '#.#', '###', '..#', '..#'],
 };
-const COLOR = { K: P.black, R: P.red, D: P.darkRed, H: P.pink, W: P.white, S: P.silver, Y: P.yellow, C: P.cream };
+const COLOR = { K: P.black, R: P.red, D: P.darkRed, H: P.pink, h: P.pink, W: P.white, S: P.silver, Y: P.yellow, C: P.cream };
 // Each colour under the glint (missing = untouched), as in logo.js.
-const GLINT = { R: 'H', D: 'R', H: 'W', S: 'W', Y: 'C', C: 'W', K: null };
+const GLINT = { R: 'H', D: 'R', H: 'W', h: 'W', S: 'W', Y: 'C', C: 'W', K: null };
 
 /** Paint `text` from WORD into px (keys) at x, top row y; returns the x after it. */
 function paintWord(px, text, x, y, key) {

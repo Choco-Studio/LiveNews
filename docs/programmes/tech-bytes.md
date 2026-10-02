@@ -1,180 +1,455 @@
-# TECH BYTES — programme style bible
+# TECH BYTES: programme style bible
 
-This programme is a technology magazine presented by Max Circuit (the enthusiast) and Ada Volt (the sceptic). This bible extends `docs/ART_DIRECTION.md`; anything not covered here follows that file.
+The late-evening technology magazine with Max Circuit, who gets interested first, and Ada Volt, who asks the hard question. It builds on `docs/ART_DIRECTION.md` and does not repeat it. Anything not covered here follows that file, except the overrides listed in §3.1.
 
-*Research note: the proxy blocked direct page fetches and YouTube thumbnails. The claims come from linked search summaries; frame-level timings are not claimed.*
+**Source status (revised 2026-10-02).** None of the outside claims here was checked against a live page.
+- **First draft:** claims came from search-engine summaries of the linked pages.
+- **This revision:** WebSearch was out of budget (200 of 200 calls used). WebFetch returned EGRESS_BLOCKED for journalistsresource.org and en.wikipedia.org. A curl probe of 30 hosts reached only api.github.com, registry.npmjs.org and pypi.org. Nothing was newly verified.
+- **What changed:** claims that a reviewer showed were risky, unsupported or off-brief have been removed. They are listed at the end of §2. The claims that remain are search-summary claims.
+
+**How to read the tags.** Every rule in §3 carries one of these tags:
+- a **link:** a search-summary claim (page not opened; a quote may be in the summary's words);
+- **via ART_DIRECTION:** a source that the ART_DIRECTION researcher opened or viewed;
+- a **repo path:** a fact in our code or in another bible, checked on 2026-10-02;
+- ***(owner, time)*:** an entry in `$SP/v2/OWNER_FEEDBACK.md`;
+- ***(our rule)*:** a design decision with no outside source.
 
 ## 1. Identity
 
-TECH BYTES is a late-evening tech show for adults who use technology daily and are tired of hype. It should feel like a product studio at night: matte charcoal surroundings, the object lit like a commercial, and two colleagues at a desk. One of them leans in; the other raises an eyebrow. Every story answers "what does this change for me?" and then asks the question the press release avoided. It is more conversational than WORLD NOW, and never a kids' gadget show.
+TECH BYTES is the channel's technology magazine for adults who use technology every day and are tired of hype.
 
-## 2. Real references
+**The room** is a product studio after hours:
+- a seamless charcoal cove;
+- two soft pools of light from above;
+- one thin cyan line;
+- two colleagues at a desk.
 
-**BBC Click → BBC Tech Now (30 min)**
-- Click ended in 2025 ([Click](https://en.wikipedia.org/wiki/Click_(TV_programme))). Tech Now is "more global, reporter-led" ([tech-ish](https://tech-ish.com/2025/03/26/bbc-tech-now-show/)); episode one went from Bitcoin in Zambia to SXSW ([TechBuzz](https://techbuzzireland.com/2025/03/24/bbc-launches-flagship-technology-programme-tech-now/)).
-- Spencer Kelly made complex subjects "engaging, entertaining, and accessible" ([bio](https://performingartistes.co.uk/artistes/spencer-kelly)).
-- Titles by Made in Colour ([site](https://madeincolour.com/click)); electronic theme by Bella Saer and Yoad Nevo ([SoundCloud](https://soundcloud.com/bella-saer/bbc-click-title-theme)).
-- **What works:** link, report, link. Clarity plus one human touch; wit beside the journalism, never instead of it.
+**The presenters:** Max leans in, and Ada raises an eyebrow.
 
-**Bloomberg Technology (daily, 1 h)**
-- "Analysis, commentary, interviews and interactive graphics" ([Bloomberg Technology](https://en.wikipedia.org/wiki/Bloomberg_Technology)), co-hosted from New York and San Francisco ([Bloomberg](https://www.bloomberg.com/btv/series/bloomberg-technology)).
-- Each show has one colour plus one typographic symbol (Bloomberg West, the tech show's former name: green "+"), matched by set accent lights ([NCS](https://www.newscaststudio.com/2015/10/06/bloomberg-mixes-color-coding-symbols-in-new-graphics-package/)). Since 2021: "chart and data visuals in a nod to the Bloomberg Terminal" ([NCS](https://www.newscaststudio.com/2021/05/07/bloomberg-redesign/)). Mark Porter: "Clutter is a major problem" ([Porter](https://markporter.com/work/bloomberg-television)).
-- Music: 50+ themes on one two-note sonic logo ([PR Newswire](https://www.prnewswire.com/news-releases/reelworld--reel2media-create-new-sonic-brand-for-bloomberg-television-and-radio-301376292.html)); David Lowe's earlier brief: "pacy, contemporary, positive, technological, classy" ([NCS](https://www.newscaststudio.com/2015/10/05/bloomberg-moves-to-beat-of-new-theme-music/)).
-- **What works:** colour plus symbol per show, calm charts, no screen full of data.
+**Each story** says what it changes for the viewer, but only when the summary says so, and then asks the question the press release avoided.
 
-**MKBHD (Marques Brownlee)**
-- Matte black and deep grey, the product as hero, one accent ([analysis](https://www.thumix.com/thumbnail-style/mkbhd)); precise robot-arm moves ([Fast Company](https://www.fastcompany.com/90978935/marques-brownlee-mkbhd-youtube-tech-review), [Fstoppers](https://fstoppers.com/software/marques-brownlee-shows-us-what-camera-mounted-robot-can-do-238687)).
-- Reviews almost fully scripted, with research and script-supervision staff ([Stratechery](https://stratechery.com/2024/an-interview-with-marques-brownlee-mkbhd-about-being-a-youtube-star/), [Think with Google](https://business.google.com/uk/think/search-and-video/marques-brownlee-interview/)). Three-point light, practicals at one colour temperature ([MasterClass](https://www.masterclass.com/articles/best-lighting-for-video-recording-tips-from-marques-brownlee)).
-- **What works:** beauty shots on black, slow exact moves, a conversational tone that is actually written.
+**Against the other shows:** more conversational than WORLD NOW, lighter in tone and value than COSMOS DESK's near-black observatory, and never a kids' gadget show.
 
-**Hard Fork (NYT, 2022–26): the two-hander**
-- Built on hosts "with genuine chemistry"; Newton came from improv ([Platformer](https://www.platformer.news/hard-fork-machine-gods/), [Roose](https://kevinroose.substack.com/p/leaving-the-times)). Named segments: "HatGPT" rounds up headlines, "Hot Mess Express" rates them ([Apple Podcasts](https://podcasts.apple.com/mt/podcast/hard-fork/id1528594034)). Theme by Dan Powell ([Spotify](https://open.spotify.com/episode/432Ox9zz4cxWuYJlvVfNkz)).
-- **What works:** named segments give a live show its skeleton; the banter lands because both hosts are reporters, not foils.
+## 2. Real references (search summaries, not verified)
 
-**WIRED Tech Support, The Verge, CNET: editorial confidence**
-- Tech Support: one internet question card at a time ([Boing Boing](https://boingboing.net/2020/12/15/wireds-tech-support-video-series.html)). The Verge: one signature colour (Ultraviolet `#5200ff`), huge display type, saturated tiles ([Fonts In Use](https://fontsinuse.com/uses/48536/the-verge-2022-rebranding), [tokens](https://oh-my-design.kr/design-systems/theverge)), whole-number scores ([Daring Fireball](https://daringfireball.net/linked/2024/04/11/the-verge-review-scale)). CNET: a serif from the "golden era of journalism" ([Design Week](https://www.designweek.co.uk/issues/30-may-6-june-2022/cnet-rebrand/)).
-- **What works:** grown-up tech brands look editorial. Take the question card and the one big figure; leave the candy tiles.
+**BBC Click, now BBC Tech Now (TV, 30 min)**
+- **History:** Click ended in 2025 ([Wikipedia](https://en.wikipedia.org/wiki/Click_(TV_programme))).
+- **Format:** Tech Now is "more global, reporter-led" ([tech-ish](https://tech-ish.com/2025/03/26/bbc-tech-now-show/)). Its first episode went from Bitcoin in Zambia to SXSW ([TechBuzz](https://techbuzzireland.com/2025/03/24/bbc-launches-flagship-technology-programme-tech-now/)).
+- **Presenter:** Spencer Kelly's agency bio says he made complex subjects "engaging, entertaining, and accessible" ([bio](https://performingartistes.co.uk/artistes/spencer-kelly)).
+- **Titles and theme:** titles by Made in Colour ([site](https://madeincolour.com/click)). The theme is electronic, by Bella Saer and Yoad Nevo ([SoundCloud](https://soundcloud.com/bella-saer/bbc-click-title-theme)).
+- **What we take:** wit beside the journalism, never instead of it.
+- **Not inspected:** no frame, set or staging of Click or Tech Now. Nothing in §3 copies their look.
+
+**Bloomberg Technology (TV, daily, 1 h)**
+- **Format:** "analysis, commentary, interviews and interactive graphics" ([Wikipedia](https://en.wikipedia.org/wiki/Bloomberg_Technology)), co-hosted from New York and San Francisco ([Bloomberg](https://www.bloomberg.com/btv/series/bloomberg-technology)).
+- **Show colours:** the 2015 package gave each show one colour and one typographic symbol, matched by accent lights on set. The tech show, then called Bloomberg West, had a green "+" ([NCS](https://www.newscaststudio.com/2015/10/06/bloomberg-mixes-color-coding-symbols-in-new-graphics-package/)).
+- **Graphics since 2021:** "chart and data visuals in a nod to the Bloomberg Terminal" ([NCS](https://www.newscaststudio.com/2021/05/07/bloomberg-redesign/)). Mark Porter's case study presents the redesign as a reduction of on-screen clutter ([Porter](https://markporter.com/work/bloomberg-television)).
+- **Music:** more than 50 themes are built on one two-note sonic logo ([PR Newswire](https://www.prnewswire.com/news-releases/reelworld--reel2media-create-new-sonic-brand-for-bloomberg-television-and-radio-301376292.html)). David Lowe's earlier brief was "pacy, contemporary, positive, technological, classy" ([NCS](https://www.newscaststudio.com/2015/10/05/bloomberg-moves-to-beat-of-new-theme-music/)).
+- **What we take:** one programme colour, repeated on set as a single accent; calm data graphics; one motif under every cue.
+- **Not inspected:** no frame or set detail.
+
+**Two-presenter staging**
+- No real two-presenter tech or business desk was inspected for this file, because no frame could be opened.
+- The chat staging in §3.5 comes from the owner's listener note *(owner, 17:47)* and from ART_DIRECTION §5, whose bulletin frames were viewed. Everything else there is tagged *(our rule)*.
+
+**Light and materials (via ART_DIRECTION)**
+- **CNN London:** soft, "relatively flat" light at about 5000 K, with coloured light used only as "pools" on the architecture ([TM Broadcast](https://tmbroadcast.com/cnn-london-lighting-workflow/)).
+- **BBC Studio B:** a set that is "real, that you could touch" ([TVBEurope](https://www.tvbeurope.com/live-production/we-wanted-a-studio-that-was-physical-not-virtual-behind-the-design-and-technology-of-bbc-news-studio-b)).
+- **Devlin:** many sets look alike because they are "either completely virtual or just covered in LED monitors" ([SVG](https://www.sportsvideo.org/2026/05/19/inside-studio-design-trends-and-how-to-make-the-right-moves-with-devlin-design-group/)).
+- **What we take:** matte, physical surfaces lit in pools, not screens.
+
+**Outside TV, used for writing only**
+- **Hard Fork (NYT podcast):** a two-host tech show with recurring named segments such as "HatGPT" and "Hot Mess Express" ([Apple Podcasts](https://podcasts.apple.com/mt/podcast/hard-fork/id1528594034)). The theme is by Dan Powell ([Spotify](https://open.spotify.com/episode/432Ox9zz4cxWuYJlvVfNkz)).
+- **What we take:** fixed named slots give a live show its skeleton *(our reading)*. Its banter-driven segments are not copied.
 
 **Pace**
-- 170–190 words per minute (wpm) rates "normal"; recall peaks at 170 for dense items, 190 for light ([Journalist's Resource](https://journalistsresource.org/media/radio-news-pace-words/)). British radio: about 3 words per second ([Broadcast Journalism](https://www.oreilly.com/library/view/broadcast-journalism-6th/9780240810249/xhtml/ch17.xhtml)).
+- In Rodero's 2015 study, as summarised by Journalist's Resource, 150 words per minute (wpm) felt slow and 170–190 felt normal. The best rate for dense news was 170 wpm ([Journalist's Resource](https://journalistsresource.org/media/radio-news-pace-words/)). This is the same reading as `money-minute.md`.
+- British radio works at about 3 words per second ([Broadcast Journalism](https://www.oreilly.com/library/view/broadcast-journalism-6th/9780240810249/xhtml/ch17.xhtml)).
+
+**Removed in this revision**
+- "Recall peaks at 190 wpm for light news": not supported by the reading of the same page in `money-minute.md`.
+- "Hard Fork, 2022–26": the only support was a host's post about leaving the Times, which does not end the show.
+- "Newton came from improv": the cited post's title points to a different subject.
+- Porter's quotation "Clutter is a major problem": the wording could not be checked. A paraphrase replaces it.
+- MKBHD, WIRED Tech Support, The Verge and CNET: web brands with no set or camera, so off-brief for "real newscasts". MKBHD's look rested on a thumbnail-marketing page, and the Verge colour `#5200ff` on a third-party aggregator.
+- The cursor symbol after "TECH BYTES", borrowed from Bloomberg's per-show symbols: dropped. The built open has none.
+
+**What depends on a search-summary claim**
+- **Story pace (§3.2):** if the 170 wpm finding is wrong, the targets still stand as our rule and are measured.
+- **One accent line on set (§3.4):** it is also an ART_DIRECTION rule, so it stands either way.
 
 ## 3. Our style
 
-### Delivery and writing (writer prompt and prosody)
+### 3.1 Overrides of ART_DIRECTION
 
-**Pace**
-- Stories: 165–175 wpm. Chats: 180–190 wpm.
-- Max is about 10 wpm faster than Ada. His enthusiasm shows in tempo and pitch range, never in volume.
+1. **Scenery tint.** ART_DIRECTION's re-dressing table gives TECH BYTES "blue `#0099db` ≤ 10%". Here the scenery has no added tint: it is the palette's own `P.slate`, `P.ink` and `P.black`. Neutral grey is what separates it from WORLD NOW's navy and COSMOS DESK's purple *(our rule)*.
+2. **Camera.** ART_DIRECTION §3 ("must stay still: … the camera") and §6 ("Move the camera on the set") are relaxed for exactly one push-in per episode, in THE CATCH (§3.5). It is rendered by the canvas25d 2.5D camera. `world-now.md` makes the same exception for its own moves.
+3. **Listener.** ART_DIRECTION §5 rule 6 ("the listener looking at the speaker") is read as the owner's glance rule: a brief look, never a sustained one *(owner, 17:47)*.
 
-**Sentences**
-- 9–15 words on average, 22 at most. One idea and at most one figure per sentence.
-- End each story on a "for you" line, but only if the summary supports it.
+Everything else follows ART_DIRECTION unchanged. That includes the three static non-screen accents (one accent line, one practical pair, the logo plate), the wall limits, the type sizes and the graphics timings.
 
-**Register**
+### 3.2 Delivery and writing (writer prompt and prosody)
+
+**Pace** (measured from the voice's word timings; see §4 item 9)
+
+| Who, what | Target | Mechanism |
+| --- | --- | --- |
+| Max, stories and intro | 170–178 wpm, aim 175 | `tools/voice/presets.json` `speed`, calibrated with `python3 tools/voice/measure.py rates` (`TARGET_WPM` max = 175, unchanged) |
+| Ada, stories | 162–170 wpm, aim 166 | Same tool; `TARGET_WPM` ada = 166, unchanged |
+| Chats, both | story pace × 1.03 (Max about 180, Ada about 171) | `speed` × 1.03 in the voice request, the value `SEGMENT_PROSODY.chat` already uses in `public/js/voice/speechtext.js` |
+| Grave stories | about 4–6% slower | `EMOTION_PROSODY.serious` 0.955 and `sad` 0.935 in `speechtext.js` |
+
+- **Basis:** stories sit around 170 wpm, the rate the Rodero summary links to dense news. Chats are a little lighter *(our rule)*.
+- **Max vs Ada:** Max is about 9 wpm faster than Ada. His enthusiasm shows in tempo and pitch range, never in volume or exclamations.
+- **Fix needed:** `PERSONAS.max.desc` in `speechtext.js` reads "excitable, quick on the exclamations", which is off-tone (see §5).
+
+**Sentences** *(our rule; close to world-now's 11–14 average)*
+- 10–15 words on average, 22 at most. One idea and at most one figure per sentence.
+- The lead story is 3–5 sentences and the other stories 2–4 (see the `storyLength` request in §3.3).
+- A story ends on a "what it means for you" line only when the summary says what follows. This is the writer's existing ACCURACY rule (`server/writer.js` `buildPrompt`).
+
+**Register** *(our rule, from the BRIEF's tone correction)*
 - Plain and adult.
 - Banned: "game-changer", "revolutionary", "mind-blowing", "wow", exclamation marks and puns.
-- Quote jargon only so Ada can translate it flatly: "A 'reimagined experience'. A new menu."
+- Jargon that the summary quotes may be quoted once. Ada then translates it flatly.
 
-**Humour**
-- At most one dry line per story, and only in a chat.
-- Aim it at hype, jargon and the industry. Never at the viewer or at real people.
-- No jokes near grave stories: harmful breaches, layoffs, deaths.
+**Humour** *(our rule)*
+- Only in chats, with at most one dry line per exchange.
+- Aim it at hype, jargon and the industry, never at the viewer or at real people.
+- No chat after a grave story: harmful breaches, layoffs, deaths.
 
 **Banter and hand-overs**
-- An exchange is two chats, A then B; the last word alternates, seeded per episode.
-- Ada's question must be answerable from the summary, or left hanging ("That's the question."). Never claim what a company "hasn't said".
-- Prefer topic bridges ("Ada's been reading the small print."); first-name tosses only before a question; "Thanks, Max" at most once per episode.
+- **The exchange:** Ada asks, Max answers. Who gets the last word alternates, seeded per episode *(our rule)*.
+- **Grounding:** Ada's question must be answerable from the summary, or left plainly open. Never claim what a company "hasn't said", or what "the small print" contains, unless the summary says so (`server/writer.js` ACCURACY rules).
+- **Tosses:** a first-name toss comes only before a question, and "Thanks, Max" or "Thanks, Ada" at most once per episode. No hand-over phrase may be used twice in one episode *(our rule)*.
+- **Examples of register only, never to be used verbatim:** "A 'reimagined experience'. A new menu." / "So what does it cost?" / "Which brings us to the bill." The writer must vary the wording, and §4 item 7 flags these strings if they appear.
 
-**Spoken forms:** units in full ("gigabytes", "999 dollars"); AI, GPU and USB-C as letters, other acronyms expanded first time; versions as words ("iOS nineteen"); full product name first, short after; city first, country only if the city is not world-famous.
+**Spoken forms**
+- Units in full ("gigabytes", "999 dollars").
+- AI, GPU and USB-C as letters. Expand other acronyms the first time.
+- Versions as words ("iOS nineteen").
+- The full product name first, the short name after.
+- City first; the country only when the city is not world-famous.
+- The normaliser in `speechtext.js` (`normalizeForSpeech`) expands units and currencies itself.
 
-**Prosody:** 250 ms pause after an attribution, 400 ms before Ada's question, a 600–800 ms beat after a punchline. Only yes/no questions rise.
+**Prosody** *(our rule)*
+- Pauses: 250 ms after an attribution, 400 ms before Ada's question, and a 600–800 ms beat after a dry line.
+- Only yes/no questions rise.
 
-### Structure (built live from feeds; skip any slot with no grounded material)
+### 3.3 Structure (built live from feeds)
 
-| # | Segment | Built from | Duration |
-| --- | --- | --- | --- |
-| 1 | Cold open: Max's hook, then Ada's one-line qualifier | intro + chat | 8–14 s |
-| 2 | Open | template | 4 s |
-| 3 | Lead story | story | 25–35 s |
-| 4 | THE CATCH: Ada asks, Max answers | 2 chats | 8–14 s |
-| 5 | Story 2, read by the other presenter | story | 20–30 s |
-| 6 | NUMBER OF THE DAY | `number` | 15–20 s |
-| 7 | Story 3, with an optional catch | story | 20–30 s |
-| 8 | AND FINALLY, plus a one-line exchange | `lighter` + chat | 25–35 s |
-| 9 | Sign-off, one line each | outro | 5–8 s |
+**What the code already fixes**
+- **Story and chat counts:** `config/channel.json` sets `stories: 4` and `maxChats: 4`. The producer waits for at least 3 fresh candidates (`min(stories, MIN_NEW_STORIES = 3)`, `server/producer.js`, `server/config.js`). `normalizeBulletin` keeps at most 4 stories and 4 chats.
+- **Features:** `number` and `lighter` are features of a story, not extra segments (`server/writer.js` `FEATURES`, `applyFeatures`). So NUMBER OF THE DAY is one of the 4 stories, and AND FINALLY is always the last story.
+- **No chat before the first story:** a chat placed there is deleted (`server/writer.js` line 423). So the cold open cannot hold a second voice.
+- **Opening order:** the director plays the open template, then the intro over the headline montage (2.6 s per headline), then cuts to the wide (`public/js/director.js` `playIntro`).
 
-- At most 4 chats per episode, and never after a grave story.
-- A story with 2–3 `numbers` gets a BY THE NUMBERS card. A story with a `quote` gets a quote card.
-- Optional new feature, `quickfire`: 2–3 one-sentence items over pictures, in the style of HatGPT, with no map. It goes after slot 5 when there are spare candidates.
+| # | Segment | Built from | Words | Expected length |
+| --- | --- | --- | --- | --- |
+| 1 | Open | template | — | 4 s |
+| 2 | Cold open: Max's hook, a greeting naming both, one teaser | `intro`, anchor = Max, at most 3 sentences | 22–39 | 9–15 s |
+| 3 | Lead story, read by Max | story 1 | 45–75 (12–24 s if `storyLength` is unchanged) | 17–29 s |
+| 4 | THE CATCH: Ada asks, Max answers | 2 chats, 1–2 sentences each | 6–20 each | 6–16 s, usually 8–12 |
+| 5 | Story 2 (Ada), or NUMBER OF THE DAY | story 2 | 25–50 | 10–20 s; 11–22 s as the number |
+| 6 | Optional one-line exchange | 1 chat | 6–20 | 4–9 s |
+| 7 | Story 3 (Max), or NUMBER OF THE DAY if story 2 was not | story 3 | 25–50 | 10–20 s |
+| 8 | AND FINALLY, then a one-line button | story 4 (`lighter`) + 1 chat | 25–50, then 6–20 | 15–30 s |
+| 9 | Sign-off | `outro`, one voice; the partner glances | 8–16 | 4–7 s |
 
-### Set and light: "product studio at night"
+**Durations come from the words, not from this table.**
+- **Formula:** seconds = words × 60 ÷ wpm, plus pauses, plus holds.
+- **Pauses:** 0.35 s per sentence end, 0.25 s after an attribution, and the segment-end pause from `SEGMENT_PROSODY` (story 0.6, chat 0.35, outro 0.9). Add the director's 0.3 s gap after every segment.
+- **Holds:** 0.4 s before Ada's question, 1.2 s after a dry line, 1.5 s on the number card, and 0.8 s before "And finally".
+- **Precedence:** the table shows what the writing rules produce. When the two disagree, the formula wins.
+- **Total:** with four stories, an episode runs about 1:15–2:35 before the end card *(our rule)*.
 
-- Scenery one palette step darker than WORLD NOW (`P.black`/`P.ink` fields); no navy (WORLD NOW's); blue tint at most 6%.
-- Key and faces as ART_DIRECTION; faces never tinted cyan; rim stays `P.silver`.
-- Cyan only on the 1 px desk LED and wall bezel (at most 2% of pixels). One static mirrored `P.slate` slit per side, like a softbox edge.
-- Wall idle: near-black, a 1 px `P.slate` circuit trace and one 2×2 `P.cyan` node, static. In a story: the picture, dimmed to average L\* 40 or less.
-- Product stories, "beauty" treatment: image on `P.black` with a Bayer black-to-ink vignette; one 1 px highlight sweep (0.8 s) when it arrives.
+**Request (editorial stream, owner of `config/channel.json`).** Set TECH BYTES `storyLength` to: "lead story 3 to 5 sentences, max 520 characters; other stories 2 to 4 sentences, max 450 characters; sentences average 10 to 15 words, never more than 22". 520 is the validator's hard cap (`LIMITS.text`). Until this lands, the lead is 2–4 sentences (12–24 s) and the rest of the table holds.
 
-### Camera and directing (runtime rules)
+**Slot rules**
+- **NUMBER OF THE DAY** goes on story 2 or 3. It is never the lead and never grave (from `cosmos.md`'s ordering rule). If the writer puts `feature: 'number'` on story 1, the director plays it as an ordinary story with a fact card and no sting.
+- **AND FINALLY** is the last story, only when a light story exists. It never directly follows a grave story: in that case the feature is dropped and the story plays as an ordinary one (from `world-now.md`).
+- **With 3 grounded stories:** the lead; then NUMBER OF THE DAY if a non-grave story states a striking figure, otherwise an ordinary story; then AND FINALLY if a light story exists, otherwise an ordinary story.
+- **With 2:** the lead plus AND FINALLY; otherwise the lead plus NUMBER; otherwise the lead plus an ordinary story.
+- **With 1:** the lead and THE CATCH only.
 
-- **Links:** `close` single to lens; lower third 1 s after the cut. With an image: first sentence over the shoulder (wall), then `full` 4–6 s, then back to `close` for the "for you" line.
-- **Chats:** `wide` two-shot, speaker turned to partner (`look_partner`). Ada's deflating last line goes to lens while Max keeps looking at her. Never cut on a punchline; hold 1.2 s after the last word.
-- **THE CATCH exception:** Ada's question may play on her `close` (cut on her first word) with the episode's only push-in, 3–5% over 6–8 s, eased, rendered by the 2.5D camera (never sprite scaling). Max's answer returns to the wide.
-- **Length and moves:** shots 3–12 s, average about 6–7 s. Full-screen pictures push 2–4% or pan at up to 6 px/s. Otherwise locked off; cut between segments, move only within one.
+**Chat budget** (`maxChats` 4), in priority order *(our rule)*
+1. **THE CATCH:** 2 chats after the lead. If the lead is grave, THE CATCH follows the first non-grave story among stories 2–3, or is dropped.
+2. **The AND FINALLY button:** 1 chat after the last story.
+3. **One optional one-line exchange:** 1 chat after story 2 or 3.
+
+That is 4 chats at most. When grave stories or thin material force a cut, drop 3 first, then 2, then 1. Never put a chat right after a grave story.
+
+**Enforcement**
+- The rule goes into the writer prompt through the programme's `style`.
+- The validator keeps the first 4 chats in script order (`server/writer.js` line 397). A script with too many chats would therefore lose the AND FINALLY button first.
+- The no-chat-after-grave rule is prompt-only today.
+- Both need the editorial request in §5.
+
+**Not used:** `quickfire` is deferred. It is not in `FEATURES`, and WORLD NOW's round-up and NEWS IN 60 already carry quick items. `roundup` stays off for this programme.
+
+### 3.4 Set and light: "product studio after hours"
+
+**The structural difference** from COSMOS DESK and WORLD NOW: a lighter, neutral cove lit in pools, instead of near-black architecture.
+- COSMOS is "black, ink and slate", one step darker than home (`cosmos.md`).
+- WORLD NOW is ink and black, with a slate pool behind each head (`world-now.md`).
+- In palette terms, ink is L\* 18, slate 29 and steel 44 (computed from `public/js/palette.js`).
+
+**Cove** *(our rule)*
+- The back wall is one seamless curved sweep, with no flats and no seams in the head zones.
+- The head zones (x 80–140 and 244–304, y 40–110) are `P.slate`, grading up through a Bayer 4x4 slate↔ink band to `P.ink` by about y 30, and to `P.black` above y 10. The sides fall to black, as ART_DIRECTION requires.
+- The background in the head zones averages L\* 28–35. That is inside ART_DIRECTION's 18–45 range, at its upper end.
+
+**Light pools**
+- There is one soft pool from above behind each head, which ART_DIRECTION allows in the head zones. The centre of each pool is at most `P.steel` (L\* 44).
+- Faces (L\* 55–73) stay the brightest, warmest pixels.
+- Sources: CNN London's coloured "pools" on the architecture (via ART_DIRECTION) and the BRIEF's "product beauty shots lit like real ads".
+
+**Desk as plinth** *(our rule)*
+- A matte `P.steel` top face, with ART_DIRECTION's 1 px `P.silver` highlight at y 118.
+- The front is `P.slate`, falling to `P.ink`.
+- A 1 px `P.cyan` LED runs along the front edge. It is the set's one accent line.
+- The zone at y 150–216 stays the darkest in the frame.
+
+**Fixed elements**
+- **Practicals:** one mirrored, static `P.steel` softbox edge per side (x ≈ 40 and 344, y 20–110). This is ART_DIRECTION's "one symmetric pair of practical lights".
+- **Logo plate:** the channel desk plate, as in ART_DIRECTION.
+- **Bezel:** the wall bezel is `P.slate`, not cyan.
+- **Ambient effects:** none. ART_DIRECTION allows one; TECH BYTES uses none *(our rule)*.
+
+**Cyan on set:** outside wall content, the only cyan is the desk LED, at most 1% of set pixels.
+
+**Video wall** (the only screen)
+- **Idle:** the open's chip emblem, static, in two tones (`P.steel` and `P.slate` on `P.ink`), with its cells in `P.cyan`. Cyan here is wall content, so it is outside the set count. The emblem sits in the wall's upper half, and the bottom 16 px stay dark. Sources: ART_DIRECTION's "static two-tone chip/grid" and the built open.
+- **In a story:** the picture sits on a 2 px `P.black` mat inside the bezel, dimmed so the wall averages L\* 45 or less (ART_DIRECTION).
+- **The mat applies to every TECH BYTES wall picture.** The episode carries no `product` flag: a story has category, shot, hasImage, fact, numbers, quote, kicker, map and location (`server/writer.js` `normalizeBulletin`). So nothing is decided per story.
+- **No processing on photos:** no Bayer, vignette or sweep. ART_DIRECTION limits Bayer to walls, glow and floors.
+
+**Key and rim:** as ART_DIRECTION. Faces are never tinted cyan, and the rim stays `P.silver`.
+
+### 3.5 Camera and directing (runtime rules from episode data, seeded per episode)
+
+The shots are the writer's `SHOTS` (wide, close, full, map; `server/writer.js` line 12) plus the director's cards. No new shot names.
+
+**Cold open:** as the director plays it for every programme: open, then intro over the montage, then the wide (`director.js` `playIntro`).
+
+**Story links** (from ART_DIRECTION §5, rules 3–4)
+- A `close` single, to the lens. The lower third enters 1 s after the cut; `director.js` already sets `since: now() + 1`.
+- With a picture: `close` for the first sentence, `full` for 4–8 s, then back to `close` for the last sentence.
+
+**Chats** stay on the `wide`, which is what `director.js` line 288 does today.
+- **Speaker:** may open the reply with one brief `look_partner`. In canvas25d that gesture lasts 1.9 s: about 0.4 s to turn, 0.7 s held, then 0.7 s back to the lens (`public/js/v2/canvas25d/gestures.js`) *(our rule)*.
+- **Listener:** glances at the speaker in the first 1 s of the turn and at hand-overs, then returns to the lens or notes. At most one nod per turn, placed on one of the speaker's stressed words (`speechFrame().accent`) *(owner, 17:47)*.
+- **Ada's deflating last line** goes to the lens. Max glances at her as it starts and is back on the lens or his notes before it ends *(owner, 17:47)*.
+- **Dry lines:** never cut on one; hold 1.2 s after its last word *(our rule)*.
+- **Presenter-stream fix:** canvas25d's listen mode nods on a fixed 5.2 s cycle (`rig.js`, `perf.listen`, `(t + seed) % 5.2`). That is the mechanical repetition the owner ruled out, and it needs the motivated nod above (§5).
+
+**THE CATCH**
+- Ada's question plays on her `close`, cut on her first word. Max's answer returns to the `wide` *(our rule)*.
+- **The push-in** is the episode's only camera move *(our rule)*:
+  - it starts 0.3 s after the cut;
+  - it advances by 0.5% of scale per second, with eased ends;
+  - it stops 0.5 s before the shot ends and holds still from then on;
+  - it never exceeds 3%;
+  - a shot under 2 s gets no push.
+  - A 4 s question gives about 1.6%, or 6 px across 384.
+- **Rendering:** the canvas25d studio camera re-projects every layer each frame at its own scale, snaps layer edges to whole pixels and quantises the head scale to whole pixels (`public/js/v2/canvas25d/studio25d.js`: header, `kAt` and the draw helpers). So there is no sprite scaling and no sub-pixel shimmer. Never scale a baked bitmap.
+- **Fallback:** without the 2.5D camera (old renderer, late asset), hard-cut to Ada's `close` with no push. If the close is unavailable too, stay on the wide.
+
+**Shot length:** 3–12 s. Full pictures pan at up to 4 px/s or push 3% at most. Studio shots are otherwise locked off (ART_DIRECTION §3, §5).
+
+**Sign-off**
+- One `outro` segment in one voice; the anchor alternates, seeded per episode.
+- On the wide: the partner glances at the start and nods once at most.
+- Then the end card (`director.js`, `case 'outro'`).
 
 **Gestures**
-- Max: up to 2 per segment, from `lean_in`, `raise_hand`, `point_screen` (only when introducing pictures) and `count`.
-- Ada: 1 per segment, from `steeple`, `chin`, `glasses` (before her question), a slow `shake_head` and `shrug`.
-- Listener: only `nod` and `look_partner`.
-- Timing: start 0.2–0.3 s before the stressed word, hold the apex through it, and release over at least 0.4 s.
-- Banned: `wow`, `fist_pump`, `thumbs_up`, `facepalm`. `laugh` is allowed only as a closed-mouth smile on the lighter story.
 
-### Graphics
+| Who | Allowed | Cap |
+| --- | --- | --- |
+| Max (speaking) | `lean_in`, `raise_hand`, `point_screen` (only when the next beat is a picture), `count` | 2 per segment |
+| Ada (speaking) | `steeple`, `chin`, `glasses` (before her question), a slow `shake_head`, `shrug` | 1 per segment |
+| Listener (`[A:…]`/`[B:…]`) | `nod`, `look_partner` | 1 of each per segment |
 
-**Accent and symbol**
-- `P.cyan`, for 1 px rules and the tag row (black text, via `inkOn`).
-- The programme symbol, after Bloomberg's per-show symbols, is a static 2×5 px cyan cursor after "TECH BYTES". It blinks once, at the open.
+*(our rule; the roles come from the presenters' `personality` in `config/channel.json`)*
 
-**Lower third**
-- Kicker in the tag row (AI, CHIPS, PRIVACY). Headline in white on `P.ink`.
-- Name supers appear once per presenter: "MAX CIRCUIT · TECHNOLOGY CORRESPONDENT" and "ADA VOLT · TECH ANALYST".
+- **Everything else is dropped,** including `wave`, `wow`, `fist_pump`, `thumbs_up`, `facepalm`, `point_camera`, `point_partner`, `papers` and `laugh`.
+- **`laugh` is banned:** `public/js/scenes/portraits.js` (`laugh`, line 2136) animates it as alternating open-mouth shapes with a body bounce, which the BRIEF forbids.
+- **A closed smile,** for AND FINALLY, is the emotion cue `happy` on the listener. canvas25d renders `happy` as a face preset (smile 0.62, squint 0.35, crossfaded over 0.45 s; `rig.js` emotion presets), and a silent listener's mouth stays at rest. No new gesture is needed.
+- **Timing:** start 0.2–0.3 s before the stressed word, hold the apex through it, and release over at least 0.4 s *(our rule)*.
+- **What the rig can perform:** canvas25d implements `raise_hand`, `wave`, `point_screen`, `nod`, `look_partner`, `shrug` and `count` (`gestures.js` `GESTURES`). `lean_in`, `steeple`, `chin`, `glasses` and `shake_head` come with the wave-2 gesture work. Until then those cues are dropped, never substituted.
+- **Director defaults:** the director adds `wave` to the intro and outro when the writer gives no cues (`director.js` `defaultCues`). For TECH BYTES the default is `nod`.
+- **Where it is enforced:** a `gestures` block for tech-bytes in `config/channel.json` (request in §5):
 
-**Cards and charts**
-- Number card: on `P.black`, figure in display type (5×7 at 2×, white), label in micro 3×5 `P.fog`. A 1 px cyan underline draws in 0.3 s; the figure cuts in 0.1 s later. No count-up: in-between values would be false.
-- BY THE NUMBERS: up to 3 rows with right-aligned figures, labels in fog and `P.slate` rules between rows.
-- Charts: one cyan series, the others in `P.steel`, axes in `P.slate`.
-- Quote card: a 1 px cyan bar on the left, the attribution in micro type in fog.
+```json
+"gestures": {
+  "allow": { "max": ["lean_in", "raise_hand", "point_screen", "count"],
+             "ada": ["steeple", "chin", "glasses", "shake_head", "shrug"] },
+  "listener": ["nod", "look_partner"],
+  "perSegment": { "max": 2, "ada": 1 },
+  "defaults": { "intro": "nod", "outro": "nod" }
+}
+```
 
-**Motion**
-- In 0.35 s (ease-out), out 0.25 s (ease-in). Whole pixels only, no bounce.
+- **How it is applied:**
+  1. The producer maps presenter ids to slots A and B and passes the block to `normalizeBulletin`.
+  2. `normalizeBulletin` filters `parsed.cues` after `parseCues`. A stripped cue is dropped silently, and emotion cues are untouched.
+  3. The writer prompt lists only this programme's allowed actions.
+  4. The director applies the same filter to its defaults.
 
-### Music and sound
+### 3.6 Graphics
 
-**Theme**
-- Keep the network motif with its dorian ♭7 colour, in A (`themes.js`).
+**Accent** (ART_DIRECTION §4)
+- `P.cyan` is used for 1 px rules and the strap's tag row, which carries black text via `inkOn` (`public/js/graphics/layout.js`).
+- On set it appears only as the desk LED. No coloured text.
 
-**Beds** (cued with `music.cue(moment, { programId: 'tech-bytes', emotion })`)
-- 100–108 bpm, half-time feel: soft `tri` bass on roots, `pulse12` arpeggio (velocity 0.4 or less, dotted-eighth echo), `pad` on Am9 and D, soft closed hats on light beds only.
-- No kick or snare under speech; low-pass the pulses at about 2.5 kHz while anyone speaks. Beds sit 18–22 dB below the voice.
+**Signature: the spec-sheet row** *(our rule)*
+
+This is TECH BYTES' own device, as the red rule is WORLD NOW's and the centred "NASA-manual" figure is COSMOS DESK's.
+
+- **NUMBER OF THE DAY card:** one ledger row on the card field (`P.black` to `P.ink`).
+  - The label is left-aligned at x 19, in micro 3x5 `P.fog`: `numbers[0].label`, or the fact's words.
+  - A 1 px `P.slate` leader rule runs from the label to the figure.
+  - The figure is right-aligned at x 365, in display type (5x7 at 2x, `P.white`).
+  - **Timing:** a 1 px `P.cyan` rule under the whole row draws left to right in 0.3 s. The figure cuts in 0.1 s after it finishes, then everything holds.
+  - **Position:** the row is centred near y 80, inside y 26–136 (graphics contract in `$SP/v2/CONTRACTS.md`).
+  - **No count-up:** the in-between values were never stated.
+- **BY THE NUMBERS:** the same rows stacked, up to 3 from `numbers[]`, 18 px apart, with `P.slate` rules between them.
+  - Each row appears on its spoken figure (word timings), at least 0.3 s apart.
+  - The cyan rule sits only under the row being spoken.
+- **Quote card:** a 1 px cyan bar on the left, with the attribution in micro `P.fog`.
+- **No charts:** `numbers` are labelled figures, not series, so a chart would invent a scale *(our rule)*.
+- **Cards-stream request:** `drawFactCard` in `public/js/scenes/cards.js` has no programme variant today. The ledger variant is in §5.
+
+**Lower third** (ART_DIRECTION §4)
+- **Kicker:** in the tag row (AI, CHIPS, PRIVACY). Feature stories get `FEATURE_KICKERS` (`server/writer.js` line 17).
+- **Headline:** white on `P.ink`, 45 characters at most.
+  - Today the writer schema asks for 48 characters and the validator clips at 56 (`LIMITS.headline`).
+  - The 45-character clip is an editorial request (§5). Until it lands, the strap shows what arrives.
+- **Name supers:** once per presenter; the director already tracks `introduced`.
+  - The intended text is "MAX CIRCUIT • TECHNOLOGY CORRESPONDENT" and "ADA VOLT • TECH ANALYST".
+  - Presenters have no `role` field, and the strap renders only `anchorName` (`public/js/graphics/strap.js`). The role comes from a requested `role` field (§5).
+  - Without a role, the super shows the name only. Never hard-code the strings in graphics.
+
+**Open and end card** (owned by the opens stream; observed at `$SP/shots/opens/final_open_tech-bytes/sheet.png`)
+- **The built open:** circuit traces converge on a chip, then "TECH BYTES" settles with a cyan underline and holds. It has no cursor and needs none.
+- **One caution:** the traces fill the frame edge to edge for about 0.8 s (t 0.5–1.3 s) before they resolve. That is its single motion idea, and it settles, so it passes. Nothing on set or on the wall may echo full-frame circuitry.
+
+**Motion:** in over 0.35 s (ease-out), out over 0.25 s (ease-in). Whole pixels only, no bounce (ART_DIRECTION §4).
+
+### 3.7 Music and sound
+
+**This spec supersedes the current TECH entries in both music proposals.** The music stream changes whichever one is adopted.
+- **Broadcast proposal:** `public/js/music/proposals/broadcast/packages.js` `TECH`, "Bitstream": A minor, 122 BPM, syncopated kick, side-chain pump, described in the file as "Playful, bright".
+- **Lofi proposal:** `public/js/music/proposals/lofi/palettes.js` `'tech-bytes'`: 88 BPM, swing 0.55, "playful geek: chip plucks, bouncy sine bass".
+
+**Theme:** the network motif with the TECH colour note, the ♭7 in A dorian (`public/js/audio/themes.js`). The precedent for one motif in every cue is Bloomberg's 50+ themes on one sonic logo (§2).
+
+**Beds** *(our rule; "technological, classy" from Lowe's Bloomberg brief, §2)*
+- 100–108 BPM, with a half-time feel.
+- `tri` bass on the roots.
+- A `pulse12` arpeggio at velocity 0.4 or less, low-passed at 1.8 kHz or lower, with a dotted-eighth echo.
+- A `pad` on Am9 and D9 (the dorian IV).
+- A closed hat (tune.js drum `H`, or the proposal's `kit` shaker) on light beds only.
+- No kick, snare, side-chain pump or swing under speech.
+
+**Under speech**
+- The broadcast conductor already ducks the bed 9 dB, 120 ms before the first syllable, and cuts 6 dB at 2.5 kHz while anyone speaks (`public/js/music/proposals/broadcast/conductor.js`, header). No extra hook is needed.
+- If the lofi proposal wins, it must do the same.
+- Beds measure at least 18 dB under the voice with `tools/render-audio.mjs`.
 
 **Where beds play**
-- Under the cold open, chats, NUMBER OF THE DAY, quickfire, AND FINALLY and the outro.
-- Story links have no bed. Grave stories get total silence.
+- Under the cold-open montage, chats, the NUMBER OF THE DAY card, AND FINALLY and the sign-off.
+- Story links have no bed.
+- Grave stories get silence, and the next bed waits one segment (from `world-now.md`).
 
-**Stings and effects**
-- NUMBER OF THE DAY: the motif on `bell`, 1.2 s.
-- End of a feature: a two-note button resolving to A, 0.6 s.
-- No swooshes, glitches, modem sounds, typing, beeps or boings.
+**Stings** *(our rule)*
+- **NUMBER OF THE DAY:** the motif's head (low 5 → 1) on `pluck`, dry, 0.8 s, landing on the card's figure. Not `bell`, which COSMOS DESK uses.
+- **End of a feature:** a two-note `pluck` button resolving to A, 0.6 s.
 
-### Transitions
+**Banned:** swooshes, glitches, modem sounds, typing, beeps, boings, saw leads and four-on-the-floor.
 
-- Cuts throughout.
-- A wall picture change gets a 1 px cyan scan-line wipe on the wall only, lasting 0.4 s.
-- Into breaks: the lock-up holds 2 s, then the network stinger plays (0.8 s).
-- Out of breaks: stinger, then the wide shot, the bug glint and the programme tag for 8 s.
+### 3.8 Transitions
 
-### Do / Don't
+- **Between shots and stories:** cuts throughout (ART_DIRECTION).
+- **Wall picture changes:** a 1 px `P.silver` edge wipe, left to right, over 0.4 s (ease-in-out). It runs on the wall only *(our rule)*.
+- **NUMBER OF THE DAY:** the strap tag flips to the feature kicker in 0.3 s (ART_DIRECTION strap flip).
+- **No break inside an episode:** it ends with the wide, the sign-off and the end card (`director.js`, `case 'outro'`). `channel-and-breaks.md` governs what follows.
 
-**Do:** light the object like an ad, on black; one cyan line; Ada asks what viewers think; exact figures; deadpan held on the wide; empty space around the number.
+### 3.9 Do / Don't
+
+**Do:**
+- light a matte cove in pools;
+- keep one cyan line on set;
+- show figures as spec-sheet rows, exactly as stated;
+- let Ada ask what viewers are thinking;
+- hold the deadpan on the wide;
+- glance, never stare.
 
 **Don't**
-- Glitch titles, RGB split or magenta. `set.js` still has the tech glitch and a magenta palette; both go.
-- Matrix rain, binary code, HUD rings, wall-to-wall circuitry, neon gradients, candy-coloured tiles.
-- Robots or objects with faces, emoji.
-- Bouncy gestures, captions with exclamation marks, sound effects, sitcom zooms.
+- **Glitch titles, RGB split or magenta.** `public/js/set.js` still has the magenta tech palette and the RGB-split glitch title (confirmed by review, 2026-10-02). Both go.
+- **Busy tech decoration:** matrix rain, binary code, HUD rings, wall-to-wall circuitry, neon gradients, candy-coloured tiles.
+- **Cute objects:** robots or objects with faces, emoji.
+- **Cheap comedy:** bouncy gestures, `laugh`, captions with exclamation marks, sound effects, sitcom zooms.
+- **Canned lines** repeated across episodes.
 
-## 4. Acceptance checklist
+## 4. Acceptance checklist (each with how it is checked)
 
-1. In set shots, cyan is at most 2% of pixels and never on a face.
-2. No magenta, purple, glitch or RGB-split frame anywhere.
-3. The head-zone background is L\* 35 or less, darker than WORLD NOW. Faces are the brightest, warmest area.
-4. Chats are on the wide shot, with the listener looking at the speaker. No cut comes within 1.2 s of a punchline.
-5. Studio shots last 3–12 s. At most one push-in (THE CATCH), 5% or less, with no 1 px jitter.
-6. No `wow`, `fist_pump`, `thumbs_up` or `facepalm`. Gesture caps hold: 2 for Max, 1 for Ada.
-7. The script has no exclamation marks, banned hype words or puns. At most one dry line per story, and no chat after a grave story.
-8. Every on-screen and spoken figure matches the source summary exactly, and nothing counts up.
-9. Measured pace is 165–175 wpm for stories and 180–190 wpm for chats, with Max faster than Ada.
-10. No bed under story links or grave stories. Beds sit at least 18 dB under the voice. Stings come only at features.
-11. One name super per presenter. Headlines are 45 characters or fewer, with the kicker in the cyan tag.
-12. On the number card the rule comes first and the figure 0.1 s later, then it holds. The cursor blinks only at the open.
-13. Shown 3 frames, a neutral viewer says "grown-up tech show", not "kids' gadget show". If in doubt, it is a blocker.
+**Tools**
+- Frames from `tools/shoot.mjs`, from a deterministic lab page or the offline channel.
+- **Requested:** `tools/measure-frame.mjs`, which counts palette pixels and gives the mean L\* in named zones of a PNG, with presenter silhouettes masked or hidden.
+- **Requested:** `tools/check-episode.mjs`, which runs over the episodes from `GET /api/queue` and their voice word timings.
+- Unit tests in `test/writer.test.js`.
+
+1. **Cyan:** in set shots, cyan is at most 1% of set pixels (wall content and graphics excluded) and never on a face. *Check:* measure-frame on wide and close frames.
+2. **No COSMOS colours:** no `P.magenta` or `P.purple` pixel (presenters' clothing excluded), glitch or RGB split in any TECH BYTES frame. *Check:* palette census of a whole-episode shoot.
+3. **Values:** the head-zone background averages L\* 28–35, and faces are the brightest warm pixels. *Check:* measure-frame on background pixels only.
+4. **Chat staging:** chats are on the wide, except Ada's question in THE CATCH.
+   - The listener's look at the speaker starts within the first 1 s of the turn and is back on the lens or notes within 3 s.
+   - At most one nod per turn.
+   - No cut within 1.2 s after a dry line.
+   - *Check:* the director's shot log plus shoot frames every 0.25 s.
+5. **Camera:** studio shots last 3–12 s. At most one push-in, in THE CATCH: 3% or less, ending on a still hold of at least 0.5 s. In consecutive frames, no layer edge moves backwards or by more than 1 px. *Check:* a deterministic shoot at `--every 0.0167` across the push.
+6. **Gestures:** no unlisted cue reaches the client, and the caps hold (Max 2, Ada 1, listener 1 nod). *Check:* a test in `test/writer.test.js` feeding banned and excess cues to `normalizeBulletin` with the tech-bytes `gestures` block.
+7. **Script:**
+   - no "!" and no banned word (regex);
+   - humour only in chats, and no chat directly after a grave story;
+   - no hand-over phrase twice, and none of §3.2's example lines verbatim;
+   - no pun, and at most one dry line per exchange.
+   - *Check:* the regex parts in check-episode. The puns and dry lines need an LLM judge asked "Mark every sentence that is a joke, pun or dry aside". Pass: 0 marks in stories, at most 1 per exchange, 0 puns.
+8. **Figures:** every on-screen and spoken figure matches the source summary, and nothing counts up. *Check:* the validator already drops ungrounded figures (`server/writer.js`), and check-episode re-checks `fact` and `numbers` against the source.
+9. **Pace:** Max 170–178 wpm and Ada 162–170 wpm on stories; chats about 3% faster. *Check:* check-episode computes wpm per segment from the voice stream's `words: [{ t, char }]` as (words − 1) × 60 ÷ (t_last − t_first). `tools/voice/measure.py rates` calibrates the presets.
+10. **Music:** no bed under story links or grave stories, beds at least 18 dB under the voice, and stings only at features. *Check:* `tools/render-audio.mjs`.
+11. **Lower third:** one name super per presenter. Headlines are 45 characters or fewer once the editorial clip lands (48 or fewer before), with the kicker in the cyan tag. *Check:* check-episode plus a strap frame.
+12. **Number card:** the rule draws first, the figure follows 0.1 s after the rule finishes, and the card holds. The ledger stays inside y 26–136, and the sting is `pluck`, not `bell`. *Check:* a shoot every 0.05 s over the card, plus render-audio.
+13. **Grown-up test (protocol):**
+    - **Frames:** three, at 1x and 5x: the wide during a chat, a close with the strap, and the number card.
+    - **Reviewer:** a fresh agent that has not read this file.
+    - **Question:** "What kind of programme is this, and who is it for? Pick one: grown-up tech news / business news / children's gadget show / video-game menu. Then list anything that looks childish."
+    - **Pass:** "grown-up tech news" or "business news", with no item from the BRIEF's AVOID list.
+    - **Blocker:** "children's" as the answer, or any AVOID item.
+14. **Distinct from COSMOS:** shown side by side, the TECH BYTES and COSMOS DESK wides differ by at least 8 in head-zone mean L\*. A reviewer can also tell them apart in greyscale. *Check:* measure-frame plus the item 13 reviewer.
+
+## 5. Requests to other streams
+
+| To | Request |
+| --- | --- |
+| Editorial (`config/channel.json`, `server/writer.js`, `server/producer.js`) | Set the TECH BYTES `storyLength` given in §3.3. |
+| Editorial | Add the `gestures` block (§3.5) and filter cues with it in `normalizeBulletin`. |
+| Editorial | Trim chats by the §3.3 priority, not by script order, and drop a chat whose preceding story is grave. |
+| Editorial | Clip TECH BYTES headlines at 45 characters, either as a per-programme `headlineMax` or as 45 channel-wide, which is what ART_DIRECTION asks for. |
+| Editorial | Add `role` to the presenters ("Technology correspondent", "Tech analyst"). |
+| Editorial | Write `tools/check-episode.mjs`. |
+| Director | Build `anchorName` as "NAME • ROLE" when a role exists. |
+| Director | Use `nod` as the TECH BYTES default cue for intro and outro, and apply the gesture filter to defaults. |
+| Director | Play a `number` feature on story 1 as an ordinary story. |
+| Director | Stage THE CATCH and its push-in, with the no-camera fallback. |
+| Presenter stream (canvas25d) | Replace the fixed 5.2 s listening nod with motivated glances and nods (§3.5). |
+| Presenter stream (canvas25d) | Add `lean_in`, `steeple`, `chin`, `glasses` and `shake_head`. |
+| Studio / set stream (wave 2) | Build the cove, light pools, plinth desk, cyan desk LED, slate bezel and wall mat (§3.4). |
+| Studio / set stream (wave 2) | Remove the magenta palette and glitch title from `set.js`. |
+| Studio / set stream (wave 2) | Write `tools/measure-frame.mjs`. |
+| Cards (opens stream) | Add a `ledger` variant to `drawFactCard` taking `rows: numbers[]`, used when `program.id === 'tech-bytes'`. |
+| Music stream | Replace the TECH package in the adopted proposal with §3.7. |
+| Music stream | Move the NUMBER OF THE DAY sting to `pluck`. |
+| Speech text (`speechtext.js`) | Reword `PERSONAS.max.desc` without "exclamations". |
+| Speech text (`speechtext.js`) | Keep `SEGMENT_PROSODY.chat.speed` at 1.03 or more. |

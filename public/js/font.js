@@ -271,13 +271,27 @@ export function measureText(text, scale = 1, font = 'body') {
   return rawWidth(fontOf(font), normalizeText(text)) * scale;
 }
 
+// Rendered strings, nested font -> scale -> colour -> text so a lookup never
+// builds a key string (drawText runs dozens of times per frame). Each leaf
+// table is bounded on its own; there are only a handful of font/scale/colour
+// combinations on air.
 const renderCache = new Map();
-const RENDER_LIMIT = 600;
+const RENDER_LIMIT = 400;
+
+function leafFor(f, scale, color) {
+  let byScale = renderCache.get(f.id);
+  if (!byScale) renderCache.set(f.id, (byScale = new Map()));
+  let byColor = byScale.get(scale);
+  if (!byColor) byScale.set(scale, (byColor = new Map()));
+  let leaf = byColor.get(color);
+  if (!leaf) byColor.set(color, (leaf = new Map()));
+  return leaf;
+}
 
 /** Render text to a cached offscreen canvas (cap line at y = ascent*scale). */
 function renderText(f, text, color, scale) {
-  const key = `${f.id}|${scale}|${color}|${text}`;
-  let c = renderCache.get(key);
+  const leaf = leafFor(f, scale, color);
+  let c = leaf.get(text);
   if (c) return c;
   const norm = normalizeText(text);
   const w = Math.max(1, rawWidth(f, norm) * scale + scale);
@@ -301,8 +315,8 @@ function renderText(f, text, color, scale) {
     for (const [px, py] of g.pixels) ctx.fillRect((x + px) * scale, (py + f.ascent) * scale, scale, scale);
     x += g.width + 1;
   }
-  if (renderCache.size >= RENDER_LIMIT) renderCache.delete(renderCache.keys().next().value);
-  renderCache.set(key, c);
+  if (leaf.size >= RENDER_LIMIT) leaf.delete(leaf.keys().next().value);
+  leaf.set(text, c);
   return c;
 }
 

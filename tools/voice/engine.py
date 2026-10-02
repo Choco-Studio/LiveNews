@@ -210,6 +210,8 @@ class VoiceEngine:
                     out[key] = p[key]
             if 'chain' in p:
                 out['chain'] = {**p['chain'], **(req.get('chain') or {})}
+            if 'pauses' in p:
+                out['pauses'] = {**p['pauses'], **(req.get('pauses') or {})}
         if not out.get('voice'):
             raise ValueError('missing voice')
         return out
@@ -403,7 +405,7 @@ class VoiceEngine:
             phonemes, token_ph = self.phonemize_phrase(ph, lang)
             if not phonemes.strip(' .,;:!?—…"“”()'):
                 continue
-            raw = self.synth_phrase(phonemes, style, speed)
+            raw = self.synth_phrase(phonemes, style, min(2.0, max(0.5, speed * ph.speed)))
             s, e = dsp.speech_bounds(raw, sr)
             if e <= s:
                 continue
@@ -434,7 +436,7 @@ class VoiceEngine:
             phr.append({'t': round(base, 3), 'dur': round(c['dur'], 3),
                         'char': c['phrase'].start, 'len': c['phrase'].end - c['phrase'].start})
             for tok, st in zip(c['tokens'], c['starts']):
-                if re.search(r'[A-Za-z0-9]', tok.spoken):
+                if tok.primary and re.search(r'[A-Za-z0-9]', tok.spoken):
                     words.append({'t': round(base + st, 3), 'char': tok.start,
                                   'len': tok.end - tok.start})
             phones.extend([round(base + t, 3), p] for t, p in c['timeline'])

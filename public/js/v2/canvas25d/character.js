@@ -13,7 +13,8 @@
 //   cast/<id>.js     the presenter's look and bespoke parts (hair, facial hair...)
 //   hands.js         sleeves, cuffs and articulated hands
 // Draw order (back to front): hairBack → neck → outfit → ears → head → face →
-// hair → over (facial hair, glasses) → arms, the one nearer the camera last.
+// hair → over (facial hair, glasses) → props → arms, the one nearer the camera
+// last.
 // Rigid parts snap their origin to whole pixels so they never "boil" while
 // they translate; only parts that rotate or scale are re-sampled.
 import { HIP, TILT } from './space.js';
@@ -21,7 +22,7 @@ import { matsOf } from './cast/base.js';
 import { drawOutfit } from './cast/outfit.js';
 import { headFrame, drawHead, drawEars } from './head.js';
 import { drawFace } from './face.js';
-import { drawArm } from './hands.js';
+import { drawArm, drawProps } from './hands.js';
 
 export { TILT } from './space.js';
 export { matsOf };
@@ -87,7 +88,8 @@ export function drawCharacter(buf, L, sk, xf) {
     parts.over(buf, L, m, head, s, sk);
   }
 
-  // ---- arms: the one nearer the camera last
+  // ---- desk props (hands.js), then the arms: the one nearer the camera last
+  drawProps(buf, L, m, sk, toS, s, gb + G.extra, 16);
   const arms = [
     ['L', sk.arms.L, gb + G.armA, gb + G.cuffA, gb + G.handA],
     ['R', sk.arms.R, gb + G.armB, gb + G.cuffB, gb + G.handB],

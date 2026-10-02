@@ -9,8 +9,9 @@ import grandbuffer from './grandbuffer.js';
 import cloudbrella from './cloudbrella.js';
 import hiresgym from './hiresgym.js';
 import corners from './corners.js';
+import serene from './serene.js';
 
-export const ADS = [bitfizz, screechnet, safesector, grandbuffer, cloudbrella, hiresgym, corners];
+export const ADS = [bitfizz, screechnet, safesector, grandbuffer, cloudbrella, hiresgym, corners, serene];
 
 /**
  * `count` distinct ads for a break. Ads never seen in `recentIds` (the play

@@ -26,9 +26,9 @@
 // left and a silver rim, posed by eased keys so each gesture travels its whole
 // arc. Scenery is baked once into cached canvases; polygons fill through one
 // preallocated span buffer; transitions use two pooled scratch canvases.
-import { P, W, H, A, R, bands, cached, drawText, measureText, glint, prog, lerp } from './kit.js';
+import { P, W, H, A, R, bands, drawText, measureText, glint, prog, lerp } from './kit.js';
 
-const { sin, cos, PI, round, floor, ceil, min, max, abs, sqrt, hypot } = Math;
+const { sin, cos, PI, round, floor, ceil, min, max, abs, sqrt, hypot, atan2 } = Math;
 const TAU = PI * 2;
 
 // --- timing ------------------------------------------------------------------------
@@ -272,6 +272,30 @@ function shadeBake(c, x0, y0, w, h, k, f) {
   c.putImageData(img, x0, y0);
 }
 
+/**
+ * Static art painted once. Bakes that read pixels back (dither, glow, shade)
+ * paint on a read-friendly canvas, then the result is copied to a plain one.
+ */
+const BAKED = new Map();
+function bake(key, w, h, paint) {
+  let cv = BAKED.get(key);
+  if (cv) return cv;
+  const tmp = document.createElement('canvas');
+  tmp.width = w;
+  tmp.height = h;
+  const c = tmp.getContext('2d', { willReadFrequently: true });
+  c.imageSmoothingEnabled = false;
+  paint(c);
+  cv = document.createElement('canvas');
+  cv.width = w;
+  cv.height = h;
+  const out = cv.getContext('2d');
+  out.imageSmoothingEnabled = false;
+  out.drawImage(tmp, 0, 0);
+  BAKED.set(key, cv);
+  return cv;
+}
+
 // --- pooled scratch canvases -----------------------------------------------------------
 const BUF = {};
 function buf(name) {
@@ -324,7 +348,7 @@ function serif(key, s, track, rows = GOLD_ROWS, shadow = P.black) {
   const hit = LETTERING.get(key);
   if (hit) return hit;
   const w = serifWidth(s, track);
-  const cv = cached(key, w + 2, 13, (c) => {
+  const cv = bake(key, w + 2, 13, (c) => {
     let x = 0;
     for (const ch of s) {
       if (ch === ' ') {
@@ -352,7 +376,7 @@ function label(key, s, track, color, font = 'micro') {
   const asc = font === 'micro' ? 2 : 3;
   let w = 0;
   for (const ch of s) w += (ch === ' ' ? 2 : ch === '*' ? 1 : measureText(ch, 1, font)) + track;
-  const cv = cached(key, max(1, w - track + 1), cap + asc + 2, (c) => {
+  const cv = bake(key, max(1, w - track + 1), cap + asc + 2, (c) => {
     let x = 0;
     for (const ch of s) {
       if (ch === ' ') x += 2 + track;
@@ -413,6 +437,20 @@ function ik(jx, jy, tx, ty, l1, l2, px, py) {
   IK[0] = mx + side * (-dy / d) * h;
   IK[1] = my + side * (dx / d) * h;
 }
+/** Hand target swung on an arc round the shoulder (jx, jy) from A to B: reaches stay long, like a pendulum. */
+function swing(out, jx, jy, ax, ay, bx, by, p) {
+  const ra = hypot(ax - jx, ay - jy);
+  const rb = hypot(bx - jx, by - jy);
+  const aa = atan2(ay - jy, ax - jx);
+  let ab = atan2(by - jy, bx - jx);
+  if (ab - aa > PI) ab -= TAU;
+  else if (aa - ab > PI) ab += TAU;
+  const a = aa + (ab - aa) * p;
+  const r = ra + (rb - ra) * p;
+  out[0] = jx + cos(a) * r;
+  out[1] = jy + sin(a) * r;
+  return out;
+}
 /** Upper arm, forearm, cuff and hand from shoulder (jx, jy) via elbow (ex, ey) to wrist (wx, wy). */
 function armParts(ctx, jx, jy, ex, ey, wx, wy, u, S, finger, slot, far) {
   const top = far ? S.topS : S.top;
@@ -448,7 +486,7 @@ function armFront(ctx, x, fy, u, S, sd, a, b, fl, finger, lift) {
 function armReach(ctx, x, fy, u, S, sd, tx, ty, lift) {
   const jx = x + sd * (S.sw - 0.17) * u;
   const jy = fy - 5.25 * u - lift;
-  ik(jx, jy, tx, ty, 1.18 * u, 0.98 * u + 0.3 * u, jx + sd * 1.1 * u, jy + 1.4 * u);
+  ik(jx, jy, tx, ty, 1.18 * u, 0.98 * u + 0.3 * u, jx + sd * 0.7 * u, jy + 2.4 * u);
   const ex = IK[0];
   const ey = IK[1];
   const len = hypot(tx - ex, ty - ey) || 1;
@@ -753,7 +791,7 @@ function cornice(c, x, y, w) {
   R(c, x - 2, y + 3, w + 4, 1, P.black);
   for (let k = x; k < x + w; k += 4) R(c, k, y + 4, 2, 1, P.ink);
 }
-const facade = () => cached('gb-facade', W, FAC_H, (c) => {
+const facade = () => bake('gb-facade', W, FAC_H, (c) => {
   bands(c, 0, 0, W, 210, [P.black, P.black, P.black, P.ink]);
   R(c, 0, 210, W, FAC_H - 210, P.ink);
   for (let i = 0; i < 16; i++) R(c, floor(hash(i) * W), floor(hash(i + 40) * 70), 1, 1, A(P.fog, 0.35 + hash(i + 9) * 0.3));
@@ -859,10 +897,16 @@ const facade = () => cached('gb-facade', W, FAC_H, (c) => {
   for (let k = 0; k < 10; k++) {
     const ax = k < 5 ? 30 + k * 17 : 278 + (k - 5) * 17;
     if (k === 4 || k === 5) continue;
+    const lit = hash(k + 500) > 0.3;
     R(c, ax - 1, 231, 13, 31, P.black);
-    R(c, ax, 233, 11, 29, P.orange);
-    R(c, ax + 1, 234, 9, 12, P.yellow);
+    R(c, ax, 233, 11, 29, lit ? P.brown : P.ink);
+    if (lit) {
+      R(c, ax + 1, 234, 9, 10, P.tanShade);
+      R(c, ax + 2, 235, 7, 5, P.yellow);
+      R(c, ax + 3, 235, 5, 2, P.cream);
+    }
     R(c, ax + 5, 233, 1, 29, P.black);
+    R(c, ax, 245, 11, 1, P.black);
     R(c, ax, 232, 11, 1, P.black);
     R(c, ax + 1, 231, 9, 1, P.black);
   }
@@ -888,12 +932,7 @@ const facade = () => cached('gb-facade', W, FAC_H, (c) => {
   R(c, 156, 266, 72, 2, P.steel);
   // lanterns either side of the door
   for (const lx of [148, 236]) {
-    c.globalAlpha = 0.1;
-    c.fillStyle = P.yellow;
-    for (let r = 18; r > 4; r -= 5) {
-      ellipse(c, lx, 240, r, r * 0.9, P.yellow);
-    }
-    c.globalAlpha = 1;
+    glowBake(c, lx, 240, 20, 18, P.yellow, 0.3);
     R(c, lx, 246, 1, 16, P.black);
     R(c, lx - 2, 234, 5, 8, P.black);
     R(c, lx - 1, 235, 3, 6, P.cream);
@@ -903,17 +942,17 @@ const facade = () => cached('gb-facade', W, FAC_H, (c) => {
   R(c, 0, GROUND, W, FAC_H - GROUND, P.black);
   R(c, 0, GROUND, W, 1, P.slate);
   R(c, 0, 292, W, 1, P.ink);
-  c.globalAlpha = 0.35;
+  c.globalAlpha = 0.22;
+  for (let y = GROUND + 2; y < GROUND + 26; y += 2) R(c, 178, y, 28, 1, y < GROUND + 12 ? P.yellow : P.orange);
+  for (const lx of [148, 236]) for (let y = GROUND + 2; y < GROUND + 18; y += 2) R(c, lx - 1, y, 3, 1, P.yellow);
   for (let k = 0; k < 10; k++) {
     const ax = k < 5 ? 30 + k * 17 : 278 + (k - 5) * 17;
-    if (k === 4 || k === 5) continue;
-    for (let y = GROUND + 2; y < GROUND + 22; y += 2) R(c, ax + 2, y, 7, 1, y < GROUND + 12 ? P.orange : P.brown);
+    if (k === 4 || k === 5 || hash(k + 500) <= 0.3) continue;
+    for (let y = GROUND + 3; y < GROUND + 13; y += 3) R(c, ax + 3, y, 5, 1, P.tanShade);
   }
-  for (let y = GROUND + 2; y < GROUND + 28; y += 2) R(c, 176, y, 32, 1, y < GROUND + 14 ? P.yellow : P.orange);
-  for (const lx of [148, 236]) for (let y = GROUND + 2; y < GROUND + 20; y += 2) R(c, lx - 1, y, 3, 1, P.yellow);
   c.globalAlpha = 1;
 });
-const lampHead = () => cached('gb-lamp', 15, 24, (c) => {
+const lampHead = () => bake('gb-lamp', 15, 24, (c) => {
   R(c, 6, 10, 3, 14, P.black);
   R(c, 2, 2, 11, 9, P.black);
   R(c, 3, 3, 9, 7, P.cream);
@@ -961,250 +1000,219 @@ function rain(ctx, lt, a) {
 }
 
 // --- 2. the lobby: the bell, the finger ------------------------------------------------
-const LW = 416;
-const LC = 208; // centre of the lobby art
-const lobbyBack = () => cached('gb-lobby', LW, H, (c) => {
-  R(c, 0, 0, LW, 22, P.black);
-  R(c, 0, 12, LW, 1, P.ink);
-  R(c, 0, 20, LW, 2, P.brown);
-  R(c, 0, 22, LW, 1, P.orange);
-  R(c, 0, 23, LW, 1, P.black);
-  R(c, 0, 24, LW, 108, P.ink);
-  // panelled wall
-  for (let x = 6; x < LW; x += 44) {
-    if (x > LC - 100 && x < LC + 90) continue;
-    R(c, x, 34, 36, 86, P.ink);
-    R(c, x, 34, 36, 1, P.slate);
-    R(c, x, 34, 1, 86, P.slate);
-    R(c, x, 119, 36, 1, P.black);
-    R(c, x + 35, 34, 1, 86, P.black);
+// A medium two-shot over the reception desk, so the gag reads: the guest (from
+// behind, left) taps the bell; the concierge goes on writing and raises one
+// finger beside his face. The house clock between them is the spinner.
+const LW = W + 24;
+const CLOCK_X = 180;
+const CLOCK_Y = 44;
+const lobby = () => bake('gb-lobby', LW, H, (c) => {
+  R(c, 0, 0, LW, H, P.ink);
+  R(c, 0, 0, LW, 10, P.black);
+  R(c, 0, 10, LW, 2, P.brown);
+  R(c, 0, 12, LW, 1, P.orange);
+  R(c, 0, 13, LW, 1, P.black);
+  for (let x = 6; x < LW; x += 52) {
+    R(c, x, 22, 44, 78, P.ink);
+    R(c, x, 22, 44, 1, P.slate);
+    R(c, x, 22, 1, 78, P.slate);
+    R(c, x, 99, 44, 1, P.black);
+    R(c, x + 43, 22, 1, 78, P.black);
   }
-  // sconces and their pools of light
-  for (const sx of [LC - 124, LC + 124]) {
-    c.globalAlpha = 0.07;
-    for (let r = 34; r > 6; r -= 7) ellipse(c, sx, 52, r, r * 0.8, P.yellow);
-    c.globalAlpha = 1;
-    R(c, sx - 1, 52, 3, 8, P.orange);
-    R(c, sx - 2, 47, 5, 5, P.cream);
-    R(c, sx - 1, 46, 3, 1, P.white);
-  }
-  // key cabinets either side of the clock
-  for (const x0 of [LC - 94, LC + 30]) {
-    R(c, x0, 30, 64, 56, P.maroon);
-    R(c, x0 + 2, 32, 60, 52, P.brown);
-    for (let row = 0; row < 5; row++) {
-      for (let col = 0; col < 7; col++) {
-        const cx = x0 + 4 + col * 8 + 1;
-        const cy = 34 + row * 10;
-        R(c, cx, cy, 7, 9, P.black);
-        if (hash(row * 7 + col + x0) > 0.35) {
-          R(c, cx + 3, cy + 2, 1, 4, P.yellow);
-          R(c, cx + 2, cy + 6, 3, 2, P.cream);
-        }
-      }
-    }
-    R(c, x0 + 2, 32, 60, 1, P.tanShade);
-  }
-  // the clock: its face is the house spinner (dots drawn live)
-  ellipse(c, LC, 46, 19, 19, P.maroon);
-  ellipse(c, LC, 46, 16, 16, P.tanShade);
-  ellipse(c, LC, 46, 15, 15, P.orange);
-  ellipse(c, LC - 0.5, 45.5, 14, 14, P.yellow);
-  ellipse(c, LC, 46, 13, 13, P.cream);
-  R(c, 0, 131, LW, H - 131, P.black);
-});
-// The marble floor, bright under the desk lights and Bayer-darkened towards
-// the lens, with the red runner leading up to the desk.
-const lobbyFloor = () => cached('gb-lobby-floor', LW, H, (c) => {
-  c.drawImage(lobbyBack(), 0, 0);
-  const hz = 40;
-  for (let k = 0; k < 6; k++) {
-    const za = 1 - k * 0.1;
-    const zb = za - 0.1;
-    const ya = hz + 91 / za;
-    const yb = min(H, hz + 91 / zb);
-    for (let j = -12; j < 12; j++) {
-      pt(LC + (j * 28) / za, ya);
-      pt(LC + ((j + 1) * 28) / za, ya);
-      pt(LC + ((j + 1) * 28) / zb, yb);
-      pt(LC + (j * 28) / zb, yb);
-      fillPts(c, (j + k) & 1 ? P.cream : P.ink);
-    }
-  }
-  c.globalAlpha = 0.4;
-  R(c, LC - 80, 131, 160, 16, P.brown);
-  for (let y = 147; y < 160; y += 2) R(c, LC - 80, y, 160, 1, P.brown);
-  c.globalAlpha = 1;
-  // falloff: darker rows towards the bottom (Bayer-dithered black)
-  const img = c.getImageData(0, 131, LW, H - 131);
-  const d = img.data;
-  for (let y = 0; y < H - 131; y++) {
-    const v = c01((y - 8) / 70) * 0.85;
-    for (let x = 0; x < LW; x++) {
-      if (v * 16 > BAYER[(y & 3) * 4 + (x & 3)] + 0.5) {
-        const o = (y * LW + x) * 4;
-        d[o] = (d[o] * 0.45) | 0;
-        d[o + 1] = (d[o + 1] * 0.45) | 0;
-        d[o + 2] = (d[o + 2] * 0.5) | 0;
+  // sconce at the far left
+  glowBake(c, 36, 44, 46, 40, P.yellow, 0.22);
+  R(c, 35, 46, 3, 9, P.orange);
+  R(c, 34, 40, 5, 6, P.cream);
+  R(c, 35, 39, 3, 1, P.white);
+  // key cabinet behind the concierge's shoulder
+  const kx = 286;
+  R(c, kx, 18, 88, 80, P.maroon);
+  R(c, kx + 2, 20, 84, 76, P.brown);
+  for (let row = 0; row < 7; row++) {
+    for (let col = 0; col < 10; col++) {
+      const cx = kx + 4 + col * 8;
+      const cy = 22 + row * 10 + 1;
+      R(c, cx, cy, 7, 9, P.black);
+      if (hash(row * 10 + col + 33) > 0.3) {
+        R(c, cx + 3, cy + 2, 1, 3, P.orange);
+        R(c, cx + 2, cy + 5, 3, 2, P.cream);
       }
     }
   }
-  c.putImageData(img, 0, 131);
-  // runner on top of the falloff, with its own gentle shading
-  pt(LC - 34, 131);
-  pt(LC + 34, 131);
-  pt(LC + 74, H);
-  pt(LC - 74, H);
-  fillPts(c, P.darkRed);
-  pt(LC - 31, 131);
-  pt(LC + 31, 131);
-  pt(LC + 68, H);
-  pt(LC - 68, H);
-  fillPts(c, P.maroon);
-  c.globalAlpha = 0.5;
-  pt(LC - 31, 170);
-  pt(LC + 31, 170);
-  pt(LC + 68, H);
-  pt(LC - 68, H);
-  fillPts(c, P.black);
-  c.globalAlpha = 1;
+  R(c, kx + 2, 20, 84, 1, P.tanShade);
+  // the clock: brass bezel, cream face; the eight dots are drawn live
+  glowBake(c, CLOCK_X, CLOCK_Y, 40, 34, P.yellow, 0.1);
+  ellipse(c, CLOCK_X, CLOCK_Y, 22, 22, P.maroon);
+  ellipse(c, CLOCK_X, CLOCK_Y, 19, 19, P.tanShade);
+  ellipse(c, CLOCK_X, CLOCK_Y, 18, 18, P.orange);
+  ellipse(c, CLOCK_X - 0.5, CLOCK_Y - 0.5, 17, 17, P.yellow);
+  ellipse(c, CLOCK_X, CLOCK_Y, 15, 15, P.cream);
+  ellipse(c, CLOCK_X + 1, CLOCK_Y + 1, 14, 14, A(P.tan, 0.35));
+  ellipse(c, CLOCK_X, CLOCK_Y, 14, 14, P.cream);
+  // desk lamp light on the wall
+  glowBake(c, 330, 84, 44, 30, P.yellow, 0.2);
 });
-const lobbyDesk = () => cached('gb-desk', LW, H, (c) => {
-  R(c, LC - 81, 86, 162, 3, P.cream);
-  R(c, LC - 81, 86, 162, 1, P.white);
-  R(c, LC - 79, 89, 158, 1, P.yellow);
-  R(c, LC - 79, 90, 158, 1, P.orange);
-  R(c, LC - 79, 91, 158, 39, P.brown);
-  for (let k = 0; k < 4; k++) {
-    const x = LC - 74 + k * 38;
-    R(c, x, 96, 34, 28, P.maroon);
-    R(c, x + 1, 97, 32, 26, P.brown);
-    R(c, x + 1, 97, 32, 1, P.tanShade);
-    R(c, x + 1, 97, 1, 26, P.tanShade);
+const desk = () => bake('gb-desk', LW, H, (c) => {
+  R(c, 0, 103, LW, 1, P.white);
+  R(c, 0, 104, LW, 3, P.cream);
+  R(c, 0, 107, LW, 1, P.tan);
+  R(c, 0, 108, LW, 1, P.yellow);
+  R(c, 0, 109, LW, 1, P.orange);
+  R(c, 0, 110, LW, H - 110, P.brown);
+  R(c, 0, 114, LW, 1, P.tanShade);
+  for (let x = 6; x < LW; x += 64) {
+    R(c, x, 120, 56, 96, P.maroon);
+    R(c, x + 1, 121, 54, 95, P.brown);
+    R(c, x + 1, 121, 54, 1, P.tanShade);
+    R(c, x + 1, 121, 1, 95, P.tanShade);
   }
-  R(c, LC - 81, 128, 162, 3, P.maroon);
-  // brass bell, ledger, lamp
-  ellipse(c, LC - 26, 84, 3, 2, P.orange);
-  ellipse(c, LC - 26.5, 83.5, 2, 1.5, P.yellow);
-  R(c, LC - 30, 85, 8, 1, P.tanShade);
-  R(c, LC - 26, 81, 1, 1, P.cream);
-  R(c, LC + 2, 84, 24, 2, P.cream);
-  R(c, LC + 2, 84, 24, 1, P.white);
-  R(c, LC + 13, 84, 1, 2, P.tan);
-  R(c, LC + 56, 74, 1, 12, P.orange);
-  R(c, LC + 52, 85, 9, 1, P.orange);
-  pt(LC + 51, 75);
-  pt(LC + 62, 75);
-  pt(LC + 60, 69);
-  pt(LC + 53, 69);
+  shadeBake(c, 0, 110, LW, H - 110, 0.62, (x, y) => (y - 140) / 70);
+  // the bell, the ledger, the lamp
+  R(c, 157, 102, 13, 1, P.tanShade);
+  ellipse(c, 163.5, 99.5, 5, 3.5, P.orange);
+  ellipse(c, 162.5, 98.5, 3.5, 2.5, P.yellow);
+  R(c, 161, 97, 2, 1, P.cream);
+  R(c, 163, 94, 1, 2, P.orange);
+  R(c, 216, 101, 44, 3, P.cream);
+  R(c, 216, 101, 44, 1, P.white);
+  R(c, 238, 101, 1, 3, P.tan);
+  for (let k = 0; k < 3; k++) R(c, 220 + k * 5, 102, 3, 1, A(P.steel, 0.6));
+  R(c, 329, 88, 2, 15, P.orange);
+  R(c, 323, 102, 14, 2, P.orange);
+  R(c, 323, 102, 14, 1, P.yellow);
+  pt(320, 89);
+  pt(340, 89);
+  pt(336, 78);
+  pt(324, 78);
   fillPts(c, P.cream);
-  c.globalAlpha = 0.08;
-  ellipse(c, LC + 56, 78, 22, 14, P.yellow);
-  c.globalAlpha = 1;
+  R(c, 324, 78, 12, 1, P.white);
+  R(c, 321, 88, 18, 1, P.tan);
 });
-const column = () => cached('gb-column', 32, H, (c) => {
+const column = () => bake('gb-column', 32, H, (c) => {
   const cols = [P.white, P.cream, P.cream, P.cream, P.cream, P.cream, P.cream, P.cream, P.cream, P.cream, P.tan, P.tan, P.tan, P.tan, P.tan, P.tanShade, P.tanShade, P.tanShade, P.brown, P.brown, P.maroon, P.maroon, P.black, P.black];
-  for (let i = 0; i < cols.length; i++) R(c, 4 + i, 12, 1, 186, cols[i]);
-  for (let x = 8; x < 26; x += 4) R(c, x, 12, 1, 186, A(P.black, 0.18));
+  for (let i = 0; i < cols.length; i++) R(c, 4 + i, 12, 1, 204, cols[i]);
+  for (let x = 8; x < 26; x += 4) R(c, x, 12, 1, 204, A(P.black, 0.16));
   for (let k = 0; k < 6; k++) line(c, 5 + k * 3, 30 + k * 31, 14 + k * 2, 52 + k * 31, A(P.fog, 0.4));
   R(c, 0, 0, 32, 4, P.black);
   R(c, 1, 4, 30, 3, P.orange);
   R(c, 1, 4, 30, 1, P.yellow);
   R(c, 2, 7, 28, 5, P.tanShade);
   R(c, 2, 7, 28, 1, P.cream);
-  R(c, 1, 198, 30, 3, P.cream);
-  R(c, 0, 201, 32, 15, P.tanShade);
-  R(c, 0, 201, 32, 1, P.cream);
-  R(c, 24, 201, 8, 15, P.brown);
+  shadeBake(c, 0, 0, 32, H, 0.6, (x, y) => (y - 120) / 90);
 });
-// Guest's arm: from her side to the bell, a tap, and back.
-const REACH_P = [0, 0, 1.05, 0, 1.55, 1, 1.75, 1, 1.8, 1.08, 1.86, 1, 2.0, 1, 2.6, 0];
+// The guest's arm: rest, reach, tap the bell, hold, back. Values 0..1.
+const L_REACH = [0, 0, 1.0, 0, 1.6, 1, 2.05, 1, 2.65, 0];
+const L_TAP = [0, 0, 1.68, 0, 1.76, 1, 1.86, 0];
+const W0 = [0, 0];
+const W1 = [0, 0];
 function shotLobby(ctx, lt) {
-  const truck = io(prog(lt, 0, 5.4));
-  const off = round(26 - truck * 22);
-  ctx.drawImage(lobbyFloor(), -off, 0);
+  const truck = io(prog(lt, 0, 5.6));
+  const off = round(4 + truck * 12);
+  ctx.drawImage(lobby(), -off, 0);
   // the clock-spinner ticks round, one dot every half second
-  dots(ctx, LC - off, 46, 9, 1.6, (T_LOBBY + lt) * 2, P.black, P.steel, P.fog);
-  // concierge, writing; at the bell he raises one finger without looking up
-  const cx = LC - off;
-  const raise = ramp(lt, 2.35, 3.15);
+  dots(ctx, CLOCK_X - off, CLOCK_Y, 10, 2, (T_LOBBY + lt) * 2, P.black, P.steel, P.silver);
+  // concierge: writes; at the bell he raises one finger without looking up
+  const cx = 240 - off;
+  const raise = ramp(lt, 2.4, 3.25);
+  const wr = 1 - smooth(prog(lt, 2.3, 2.8)) * 0.85;
   QC.breath = (1 - cos(lt * 1.5)) / 2;
   QC.down = 1;
   QC.turn = 0;
   QC.look = 0;
-  QC.a0 = lerp(0.12, 0.42, raise);
-  QC.b0 = lerp(0.85, 3.3, raise);
-  QC.fl0 = lerp(0.42, 1, raise);
-  QC.finger0 = smooth(prog(lt, 2.85, 3.15));
-  QC.reach0 = null;
-  QC.a1 = 0.3 + sin(lt * 7.3) * 0.03 * (1 - raise * 0.6);
-  QC.b1 = 1.1 + sin(lt * 9.1) * 0.05 * (1 - raise * 0.6);
-  QC.fl1 = 0.5;
-  frontPerson(ctx, cx, 124, 10, CONCIERGE, QC);
-  // pen in the writing hand
-  line(ctx, HAND[2], HAND[3], HAND[2] + 2, HAND[3] - 3, P.black);
-  ctx.drawImage(lobbyDesk(), -off, 0);
-  // guest, seen from behind: reaches, taps, waits
-  const gx = cx - 50 + round(truck * 4);
-  const reach = keys(lt, REACH_P);
-  const restX = gx + 7;
-  const restY = 150 - 2.8 * 10;
-  REACH[0] = lerp(restX, cx - 25, reach);
-  REACH[1] = lerp(restY, 82, smooth(reach)) - sin(PI * c01(reach)) * 4;
+  QC.arms = false;
+  W1[0] = cx + 9 + sin(lt * 5.3) * 2.2 * wr;
+  W1[1] = 101.5 + sin(lt * 10.6) * 0.7 * wr;
+  W0[0] = cx - 9 - sin(PI * raise) * 6 - raise * 6;
+  W0[1] = lerp(103, 62, raise);
+  QC.reach0 = W0;
+  QC.reach1 = W1;
+  QC.finger0 = smooth(prog(lt, 2.95, 3.3));
+  frontPerson(ctx, cx, 150, 15, CONCIERGE, QC);
+  ctx.drawImage(desk(), -off, 0);
+  frontArms(ctx, cx, 150, 15, CONCIERGE, QC);
+  line(ctx, HAND[2], HAND[3], HAND[2] + 3, HAND[3] - 4, P.black);
+  // the guest, nearer the lens, drifts a little faster with the camera
+  const gx = 122 - round(truck * 16);
+  const reach = keys(lt, L_REACH);
+  const gl = (1 - cos(lt * 1.3 + 1)) / 2;
+  swing(REACH, gx + 0.57 * 19, 228 - 5.25 * 19 - gl * 0.45, gx + 12, 228 - 2.7 * 19, 163 - off, 97, reach);
+  REACH[1] += keys(lt, L_TAP) * 2;
   QG.reach1 = REACH;
-  QG.breath = (1 - cos(lt * 1.3 + 1)) / 2;
-  QG.a0 = 0.1;
-  QG.b0 = 0.15;
+  QG.breath = gl;
+  QG.a0 = 0.06;
+  QG.b0 = 0.1;
   QG.fl0 = 1;
   QG.turn = 0;
-  // suitcase at her side
-  R(ctx, gx - 24, 132, 15, 18, P.black);
-  R(ctx, gx - 23, 133, 13, 16, P.tanShade);
-  R(ctx, gx - 23, 133, 13, 1, P.tan);
-  R(ctx, gx - 18, 129, 4, 1, P.black);
-  R(ctx, gx - 23, 140, 13, 1, P.yellow);
-  frontPerson(ctx, gx, 150, 10, GUEST, QG);
-  // foreground columns drift past faster than the room
-  const cOff = round(truck * 30);
-  ctx.drawImage(column(), 10 - cOff + 14, 0);
-  ctx.drawImage(column(), 344 - cOff + 14, 0);
+  frontPerson(ctx, gx, 228, 19, GUEST, QG);
+  ctx.drawImage(column(), -12 - round(truck * 22), 0);
 }
 
 // --- 3. the heirloom: pearls under glass, turned by hand ------------------------------
-const velvet = () => cached('gb-velvet', W, H, (c) => {
+const velvet = () => bake('gb-velvet', W, H, (c) => {
   ditherField(c, 0, 0, W, H, [P.black, P.ink, P.slate], (x, y) => {
-    const d = hypot((x - 226) / 210, (y - 40) / 170);
-    return (1 - d) * 1.15;
+    const d = hypot((x - 236) / 210, (y - 40) / 170);
+    return (1 - d) * 1.12;
   });
 });
+// The slow push-in scales every coordinate about the product (module state,
+// so the helpers below cost no closures per frame).
 const JX = 250;
 const JY = 116;
+let ZS = 1;
+const zx = (v) => JX + (v - JX) * ZS;
+const zy = (v) => JY + (v - JY) * ZS;
+function gloveHand(ctx, gx, gy, s) {
+  // a black tailcoat sleeve catching the key light on top, a white cuff, and a
+  // white-gloved hand closed round the crank knob, knuckles to camera
+  const ex = W + 44;
+  const ey = gy + 34 * s;
+  const wx = gx + 11 * s;
+  const wy = gy + 5 * s;
+  capsule(ctx, ex, ey - 2, wx + 4 * s, wy - 1, 11 * s, 7.5 * s, P.steel);
+  capsule(ctx, ex, ey - 1, wx + 4 * s, wy, 11 * s, 7.5 * s, P.slate);
+  capsule(ctx, ex + 1, ey + 2, wx + 5 * s, wy + 2, 10 * s, 6.5 * s, P.ink);
+  capsule(ctx, wx + 3 * s, wy, wx - 1 * s, wy - 1.5 * s, 6.4 * s, 6 * s, P.silver);
+  capsule(ctx, wx + 3 * s, wy - 1, wx - 1 * s, wy - 2.5 * s, 5.6 * s, 5 * s, P.white);
+  // back of the hand
+  ellipse(ctx, gx + 3.5 * s, gy + 1.5 * s, 6 * s, 5.2 * s, P.fog);
+  ellipse(ctx, gx + 2.8 * s, gy + 0.6 * s, 5.4 * s, 4.6 * s, P.silver);
+  // four curled fingers
+  for (let k = 0; k < 4; k++) {
+    const fy = gy - 2.4 * s + k * 2.2 * s;
+    capsule(ctx, gx - 1 * s, fy, gx - 4.2 * s, fy + 0.8 * s, 1.4 * s, 1.2 * s, P.silver);
+    R(ctx, round(gx - 4 * s), round(fy + 1.3 * s), round(3.5 * s), 1, P.fog);
+  }
+  // thumb over the top, a highlight on the knuckles
+  capsule(ctx, gx + 3 * s, gy - 4.4 * s, gx - 2.8 * s, gy - 5.2 * s, 1.6 * s, 1.3 * s, P.silver);
+  R(ctx, round(gx + 1 * s), round(gy - 6 * s), round(4 * s), 1, P.white);
+  R(ctx, round(gx + 0.5 * s), round(gy - 2 * s), 1, round(6 * s), P.white);
+}
 function shotJewel(ctx, lt) {
   ctx.drawImage(velvet(), 0, 0);
-  const s = 1 + 0.16 * sine(lt / 4.6);
-  const X = (v) => JX + (v - JX) * s;
-  const Y = (v) => JY + (v - JY) * s;
+  ZS = 1 + 0.16 * sine(lt / 4.6);
+  const s = ZS;
   // pedestal: black lacquer with a gold inlay
-  const pTop = Y(162);
+  const pTop = zy(162);
   const pw = 46 * s;
-  R(ctx, X(JX - 46), pTop, pw * 2, H - pTop, P.black);
-  R(ctx, X(JX - 40), pTop, 7 * s, H - pTop, P.ink);
-  R(ctx, X(JX - 38), pTop, 1, H - pTop, P.steel);
-  R(ctx, X(JX - 46), Y(170), pw * 2, 1, P.orange);
+  R(ctx, zx(JX - 46), pTop, pw * 2, H - pTop, P.black);
+  R(ctx, zx(JX - 40), pTop, 7 * s, H - pTop, P.ink);
+  R(ctx, zx(JX - 38), pTop, 1, H - pTop, P.steel);
+  R(ctx, zx(JX + 44), pTop, 1, H - pTop, A(P.slate, 0.8));
+  R(ctx, zx(JX - 46), zy(170), pw * 2, 1, P.orange);
   ellipse(ctx, JX, pTop, pw, 7 * s, P.ink);
   ellipse(ctx, JX, pTop + 0.5, pw - 1, 6 * s, P.black);
   // velvet cushion
-  ellipse(ctx, JX, Y(154), 31 * s, 8 * s, P.maroon);
-  ellipse(ctx, JX - 1, Y(152), 29 * s, 6 * s, P.darkRed);
-  ellipse(ctx, JX - 8 * s, Y(150), 14 * s, 3 * s, A(P.red, 0.35));
+  ellipse(ctx, JX, zy(154), 31 * s, 8 * s, P.maroon);
+  ellipse(ctx, JX - 1, zy(152), 29 * s, 6 * s, P.darkRed);
+  ellipse(ctx, JX - 8 * s, zy(150), 14 * s, 3 * s, A(P.red, 0.3));
   // stand
-  R(ctx, round(JX - 1), Y(JY + 22), 2, Y(149) - Y(JY + 22), P.orange);
-  R(ctx, round(JX - 1), Y(JY + 22), 1, Y(149) - Y(JY + 22), P.yellow);
-  ellipse(ctx, JX, Y(148), 5 * s, 1.6 * s, P.orange);
+  R(ctx, round(JX - 1), zy(JY + 22), 2, zy(149) - zy(JY + 22), P.orange);
+  R(ctx, round(JX - 1), zy(JY + 22), 1, zy(149) - zy(JY + 22), P.yellow);
+  ellipse(ctx, JX, zy(148), 5 * s, 1.6 * s, P.orange);
   // the ring and its eight pearls
   const rr = 22 * s;
-  const cy = Y(JY - 10);
-  const n = ceil(TAU * rr);
+  const cy = zy(JY - 10);
+  const n = ceil(TAU * rr * 1.2);
   for (let i = 0; i < n; i++) {
     const a = (i / n) * TAU;
     const lightSide = cos(a + PI * 0.75);
@@ -1212,8 +1220,7 @@ function shotJewel(ctx, lt) {
   }
   // turned by hand: the crank drives the pearls (8 per turn)
   const turn = max(0, lt - 1.7) * 0.55 * TAU;
-  const lit = (turn / TAU) * 8;
-  const head = floor(mod(lit, 8));
+  const head = floor(mod((turn / TAU) * 8, 8));
   const pr = 4.2 * s;
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * TAU - PI / 2;
@@ -1238,36 +1245,39 @@ function shotJewel(ctx, lt) {
     R(ctx, round(px - pr * 0.5), round(py - pr * 0.5), 2, 1, P.white);
     R(ctx, round(px - pr * 0.5), round(py - pr * 0.5) + 1, 1, 1, P.white);
   }
-  // the bell jar
-  const gl = X(JX - 38);
-  const gr = X(JX + 38);
-  const gTop = Y(78);
+  // the bell jar: edge highlights only, like real glass
+  const gl = zx(JX - 38);
+  const gr = zx(JX + 38);
+  const gTop = zy(80);
   const gBot = pTop - 1;
-  ctx.globalAlpha = 0.06;
+  const domeR = (gr - gl) / 2;
+  ctx.globalAlpha = 0.05;
   R(ctx, gl, gTop, gr - gl, gBot - gTop, P.fog);
   ctx.globalAlpha = 1;
-  const domeR = (gr - gl) / 2;
-  ctx.fillStyle = A(P.silver, 0.35);
+  ctx.fillStyle = A(P.silver, 0.3);
   ctx.fillRect(round(gl), round(gTop), 1, round(gBot - gTop));
   ctx.fillRect(round(gr), round(gTop), 1, round(gBot - gTop));
-  for (let i = 0; i <= 40; i++) {
-    const a = PI + (i / 40) * PI;
-    ctx.fillRect(round(JX + cos(a) * domeR), round(gTop + sin(a) * domeR * 0.9), 1, 1);
+  const na = ceil(PI * domeR * 1.4);
+  for (let i = 0; i <= na; i++) {
+    const a = PI + (i / na) * PI;
+    ctx.fillRect(round(JX + cos(a) * domeR), round(gTop + sin(a) * domeR * 0.85), 1, 1);
   }
-  ctx.fillStyle = A(P.white, 0.4);
-  ctx.fillRect(round(gl + 5 * s), round(gTop - domeR * 0.2), 2, round(gBot - gTop - 8));
-  for (let i = 6; i <= 14; i++) {
-    const a = PI + (i / 40) * PI;
-    ctx.fillRect(round(JX + cos(a) * (domeR - 5 * s)), round(gTop + sin(a) * (domeR - 5 * s) * 0.9), 2, 1);
+  ctx.fillStyle = A(P.white, 0.38);
+  ctx.fillRect(round(gl + 5 * s), round(gTop - domeR * 0.15), 2, round(gBot - gTop - 10));
+  const nb = ceil(domeR * 0.9);
+  for (let i = 0; i <= nb; i++) {
+    const a = PI * 1.12 + (i / nb) * PI * 0.28;
+    ctx.fillRect(round(JX + cos(a) * (domeR - 5 * s)), round(gTop + sin(a) * (domeR - 5 * s) * 0.85), 2, 1);
   }
   R(ctx, round(gl - 2), round(gBot - 1), round(gr - gl + 5), 2, P.orange);
   R(ctx, round(gl - 2), round(gBot - 1), round(gr - gl + 5), 1, P.yellow);
-  ellipse(ctx, JX, gTop - domeR * 0.9 - 2, 2.5 * s, 2.5 * s, A(P.silver, 0.5));
+  ellipse(ctx, JX, gTop - domeR * 0.85 - 2, 2.5 * s, 2.5 * s, A(P.silver, 0.45));
   // brass crank on the pedestal front
-  const ax = X(JX + 30);
-  const ay = Y(190);
-  const hx = ax + cos(turn - PI / 2) * 7 * s;
-  const hy = ay + sin(turn - PI / 2) * 7 * s;
+  const ax = zx(JX + 26);
+  const ay = zy(186);
+  const hx = ax + cos(turn - PI / 2) * 8 * s;
+  const hy = ay + sin(turn - PI / 2) * 8 * s;
+  ellipse(ctx, ax, ay, 4 * s, 4 * s, P.tanShade);
   ellipse(ctx, ax, ay, 3 * s, 3 * s, P.orange);
   R(ctx, round(ax - 1), round(ay - 1), 1, 1, P.yellow);
   line(ctx, ax, ay, hx, hy, P.orange);
@@ -1275,270 +1285,266 @@ function shotJewel(ctx, lt) {
   ellipse(ctx, hx, hy, 2 * s, 2 * s, P.yellow);
   // a gloved hand comes in from the right and takes the crank
   const reach = ramp(lt, 0.8, 1.7);
-  const gx = lerp(W + 30, hx + 4 * s, reach);
-  const gy = lerp(hy + 30, hy + 1, reach);
-  const elx = W + 46;
-  const ely = gy + 34 + (hy - ay) * 0.6;
-  limb(ctx, elx, ely, gx + 10 * s, gy + 6 * s, 9 * s, 6.5 * s, P.ink, P.black);
-  capsule(ctx, gx + 9 * s, gy + 5.5 * s, gx + 6.5 * s, gy + 3.5 * s, 5.5 * s, 5.5 * s, P.white);
-  limb(ctx, gx + 6 * s, gy + 3 * s, gx, gy, 4.6 * s, 4 * s, P.silver, P.fog);
-  capsule(ctx, gx - 1.5 * s, gy - 2.5 * s, gx - 3.5 * s, gy - 3.5 * s, 1.6 * s, 1.4 * s, P.silver);
-  R(ctx, round(gx + 1), round(gy - 2), 2, 1, P.white);
+  gloveHand(ctx, lerp(W + 40, hx + 4 * s, reach), lerp(hy + 30, hy + 1, reach), s * 1.2);
   // the super: name of the piece, then the provenance
   const a1 = ramp(lt, 1.6, 2.4);
   art(ctx, serif('gb-heirloom', 'THE HEIRLOOM', 2), 92, 88, a1);
   art(ctx, serif('gb-spinner', 'SPINNER', 2), 92, 104, a1);
   if (a1 > 0) R(ctx, round(92 - 30 * a1), 121, round(60 * a1), 1, A(P.orange, 0.8));
-  art(ctx, label('gb-hand', 'HAND-TURNED IN GENEVA', 1, P.fog), 92, 127, ramp(lt, 2.2, 3.0));
+  art(ctx, label('gb-hand', 'HAND-TURNED IN GENEVA', 1, P.silver), 92, 127, ramp(lt, 2.2, 3.0));
 }
 
 // --- 4. the suite: the pillow that is never quite done ----------------------------------
-const suite = () => cached('gb-suite', W, H, (c) => {
-  R(c, 0, 0, W, 146, P.ink);
+// She stands at the head of the bed (the pillow's depth) so her hands can reach it.
+const suite = () => bake('gb-suite', W, H, (c) => {
+  R(c, 0, 0, W, 150, P.ink);
   R(c, 0, 0, W, 10, P.black);
   R(c, 0, 10, W, 1, P.slate);
-  R(c, 0, 140, W, 6, P.black);
-  R(c, 0, 140, W, 1, P.slate);
   // tall window: moonlight and a sleeping city
-  R(c, 30, 22, 82, 112, P.black);
-  ditherField(c, 32, 24, 78, 108, [P.ink, P.navy], (x, y) => 1 - (y - 24) / 130);
-  ellipse(c, 92, 42, 6, 6, P.silver);
-  ellipse(c, 91.5, 41.5, 5, 5, P.white);
+  R(c, 20, 20, 82, 106, P.black);
+  ditherField(c, 22, 22, 78, 102, [P.ink, P.navy], (x, y) => 1 - (y - 22) / 124);
+  ellipse(c, 82, 40, 6, 6, P.silver);
+  ellipse(c, 81.5, 39.5, 5, 5, P.white);
   for (let k = 0; k < 9; k++) {
-    const bx = 32 + k * 9;
-    const bh = 14 + floor(hash(k + 70) * 24);
-    R(c, bx, 132 - bh, 9, bh, P.black);
-    if (hash(k + 90) > 0.4) R(c, bx + 3, 134 - bh + 4, 1, 1, P.yellow);
+    const bx = 22 + k * 9;
+    const bh = 12 + floor(hash(k + 70) * 24);
+    R(c, bx, 124 - bh, 9, bh, P.black);
+    if (hash(k + 90) > 0.4) R(c, bx + 3, 126 - bh + 4, 1, 1, P.yellow);
   }
-  R(c, 70, 24, 2, 108, P.black);
-  R(c, 32, 78, 78, 2, P.black);
-  R(c, 28, 132, 86, 3, P.slate);
-  R(c, 28, 132, 86, 1, P.fog);
-  // heavy curtains to the floor
-  for (const [x, w] of [[12, 22], [108, 22]]) {
-    R(c, x, 14, w, 132, P.maroon);
-    for (let k = 2; k < w; k += 5) R(c, x + k, 14, 2, 132, P.darkRed);
+  R(c, 60, 22, 2, 102, P.black);
+  R(c, 22, 72, 78, 2, P.black);
+  R(c, 18, 124, 86, 3, P.slate);
+  R(c, 18, 124, 86, 1, P.fog);
+  for (const [x, w] of [[6, 20], [96, 20]]) {
+    R(c, x, 14, w, 136, P.maroon);
+    for (let k = 2; k < w; k += 5) R(c, x + k, 14, 2, 136, P.darkRed);
     R(c, x, 14, w, 2, P.orange);
+    shadeBake(c, x, 14, w, 136, 0.7, (xx, y) => (y - 90) / 60);
   }
-  R(c, 8, 12, 126, 2, P.orange);
-  // floor: dark boards in perspective, moonlight lying across them
-  R(c, 0, 146, W, H - 146, P.black);
-  for (let k = -10; k < 22; k++) line(c, 192 + k * 22, 146, 192 + k * 60, H, P.maroon);
-  for (const y of [152, 162, 176, 196]) R(c, 0, y, W, 1, A(P.maroon, 0.6));
-  c.globalAlpha = 0.12;
-  pt(30, 146);
-  pt(114, 146);
-  pt(196, H);
-  pt(70, H);
-  fillPts(c, P.fog);
+  R(c, 2, 12, 118, 2, P.orange);
+  R(c, 0, 146, W, 4, P.black);
+  R(c, 0, 146, W, 1, P.slate);
+  // floor: dark boards receding, moonlight lying across them
+  R(c, 0, 150, W, H - 150, P.black);
+  c.globalAlpha = 0.45;
+  for (let k = -14; k < 16; k++) line(c, 300 + k * 26, 150, 300 + k * 26 * 1.6, H, P.maroon);
   c.globalAlpha = 1;
-  // headboard, tufted velvet
-  R(c, 190, 60, 150, 62, P.black);
-  R(c, 192, 62, 146, 60, P.slate);
-  for (let y = 68; y < 120; y += 8) for (let x = 198 + ((y / 8) % 2) * 6; x < 336; x += 12) R(c, x, y, 1, 1, P.ink);
-  R(c, 192, 62, 146, 1, P.steel);
-  // nightstands with lamps
-  for (const nx of [174, 356]) {
-    R(c, nx - 13, 112, 26, 34, P.brown);
-    R(c, nx - 13, 112, 26, 1, P.tanShade);
-    R(c, nx - 11, 124, 22, 1, P.maroon);
-    c.globalAlpha = 0.09;
-    for (let r = 30; r > 6; r -= 8) ellipse(c, nx, 92, r, r * 0.8, P.yellow);
-    c.globalAlpha = 1;
-    R(c, nx - 1, 98, 2, 14, P.orange);
-    pt(nx - 7, 99);
-    pt(nx + 7, 99);
-    pt(nx + 5, 88);
-    pt(nx - 5, 88);
-    fillPts(c, P.cream);
-  }
-  // the bed: duvet, the turned-down sheet, the far pillow (the near one is live)
-  pt(188, 116);
-  pt(342, 116);
-  pt(360, 184);
-  pt(176, 184);
+  glowBake(c, 92, 186, 90, 30, P.fog, 0.18);
+  // headboard, tufted velvet, warmed by a sconce
+  R(c, 202, 72, 182, 78, P.black);
+  R(c, 204, 74, 180, 76, P.slate);
+  for (let y = 80; y < 146; y += 8) for (let x = 210 + ((y / 8) % 2) * 6; x < 384; x += 12) R(c, x, y, 1, 1, P.ink);
+  R(c, 204, 74, 180, 1, P.steel);
+  glowBake(c, 352, 66, 70, 52, P.yellow, 0.26);
+  R(c, 351, 50, 3, 8, P.orange);
+  R(c, 349, 44, 7, 6, P.cream);
+  R(c, 350, 43, 5, 1, P.white);
+  // the bed: duvet in moonlight, the turned-down sheet, the far pillow
+  pt(200, 132);
+  pt(W, 132);
+  pt(W, 198);
+  pt(176, 198);
+  fillPts(c, P.steel);
+  pt(202, 134);
+  pt(W, 134);
+  pt(W, 160);
+  pt(193, 160);
   fillPts(c, P.fog);
-  pt(190, 118);
-  pt(340, 118);
-  pt(354, 178);
-  pt(180, 178);
-  fillPts(c, P.silver);
-  R(c, 186, 138, 166, 4, P.white);
-  R(c, 186, 142, 166, 1, P.fog);
-  for (let x = 200; x < 344; x += 22) R(c, x, 148, 1, 26, A(P.fog, 0.6));
-  R(c, 176, 184, 186, 9, P.slate);
-  R(c, 176, 184, 186, 1, P.fog);
-  ellipse(c, 300, 112, 25, 7, P.fog);
-  ellipse(c, 299, 111, 24, 6, P.white);
+  R(c, 192, 160, 192, 4, P.silver);
+  R(c, 191, 164, 193, 1, P.fog);
+  for (let x = 210; x < W; x += 24) line(c, x, 166, x - 8, 196, A(P.slate, 0.7));
+  pt(176, 198);
+  pt(W, 198);
+  pt(W, 210);
+  pt(178, 210);
+  fillPts(c, P.slate);
+  R(c, 176, 198, W - 176, 1, P.fog);
+  ellipse(c, 312, 136, 22, 6, P.fog);
+  ellipse(c, 311, 135, 21, 5, P.silver);
+  R(c, 296, 139, 30, 1, A(P.steel, 0.6));
 });
 // The plumping routine, 2.2 s, then it starts again from the top.
 const LOOP = 2.2;
-const M_LEAN = [0, 0.08, 0.45, 0.66, 0.8, 0.12, 1.25, 0.1, 1.6, 0.6, 1.9, 0.55, 2.2, 0.08];
-const M_ARM = [0, 0.25, 0.45, 1.35, 0.8, 0.85, 1.0, 0.95, 1.1, 0.8, 1.2, 0.95, 1.3, 0.85, 1.6, 1.3, 1.9, 1.35, 2.2, 0.25];
-const M_ELB = [0, 0.2, 0.45, 0.25, 0.8, 1.25, 1.25, 1.25, 1.6, 0.35, 2.2, 0.2];
+const M_LEAN = [0, 0.1, 0.45, 0.8, 0.8, 0.14, 1.25, 0.12, 1.6, 0.78, 1.9, 0.72, 2.2, 0.1];
+const M_ARM = [0, 0.25, 0.45, 0.95, 0.8, 0.8, 1.0, 0.9, 1.1, 0.75, 1.2, 0.9, 1.3, 0.8, 1.6, 0.95, 1.9, 1.0, 2.2, 0.25];
+const M_ELB = [0, 0.2, 0.45, 0.3, 0.8, 0.95, 1.25, 0.95, 1.6, 0.3, 1.9, 0.35, 2.2, 0.2];
 const M_PIL = [0, 0, 0.45, 0, 0.8, 1, 1.4, 1, 1.6, 0, 2.2, 0];
-const PIL_X = 210;
-const PIL_Y = 113;
+const PIL_X = 224;
+const PIL_Y = 136;
 function pillow(ctx, x, y, w, sq) {
-  ellipse(ctx, x, y, w * sq, 6.5, P.fog);
-  ellipse(ctx, x - 1, y - 1, w * sq - 1, 5.5, P.white);
-  R(ctx, round(x - w * sq * 0.5), round(y + 3), round(w * sq), 1, A(P.fog, 0.7));
+  ellipse(ctx, x, y, w * sq, 6, P.fog);
+  ellipse(ctx, x - 1, y - 1, w * sq - 1, 5, P.white);
+  R(ctx, round(x - w * sq * 0.5), round(y + 3), round(w * sq), 1, A(P.steel, 0.6));
 }
 function shotSuite(ctx, lt) {
   ctx.drawImage(suite(), 0, 0);
   const p = mod(lt + 0.15, LOOP);
   const pil = keys(p, M_PIL);
-  // on the bed the pillow sits behind her; in her hands it is in front
-  if (pil < 0.02) pillow(ctx, PIL_X, PIL_Y, 18, 1);
-  const u = 9.8;
+  // on the bed the pillow sits behind her hands; held, it is in front of her
+  if (pil < 0.02) pillow(ctx, PIL_X, PIL_Y, 17, 1);
   QM.lean = keys(p, M_LEAN);
   QM.hipX = -QM.lean * 0.35;
   QM.hipY = QM.lean * 0.22;
   QM.thN = -0.06 + QM.lean * 0.18;
-  QM.knN = QM.lean * 0.32;
+  QM.knN = QM.lean * 0.3;
   QM.thF = 0.06 + QM.lean * 0.2;
-  QM.knF = QM.lean * 0.3;
+  QM.knF = QM.lean * 0.28;
   const arm = keys(p, M_ARM);
   const elb = keys(p, M_ELB);
   const pat = (p > 0.95 && p < 1.35 ? sin(((p - 0.95) / 0.4) * TAU * 2) : 0) * 0.1;
   QM.aN = arm - QM.lean * 0.45;
   QM.eN = elb + pat;
-  QM.aF = arm - QM.lean * 0.45 + 0.08;
+  QM.aF = arm - QM.lean * 0.45 + 0.06;
   QM.eF = elb - pat;
-  QM.head = 0.12 + QM.lean * 0.25;
+  QM.head = 0.14 + QM.lean * 0.2;
   QM.eyes = 1;
-  sidePerson(ctx, 170, 168, u, MAID, QM, 1);
+  sidePerson(ctx, 172, 158, 12.6, MAID, QM, 1);
   if (pil >= 0.02) {
     const hx = (HAND[0] + HAND[2]) / 2 + 6;
     const hy = (HAND[1] + HAND[3]) / 2;
-    const squash = 1 - abs(pat) * 1.4;
-    pillow(ctx, lerp(PIL_X, hx, smooth(pil)), lerp(PIL_Y, hy, smooth(pil)), lerp(18, 13, pil), squash);
-    // her near hand on top of the pillow
-    ellipse(ctx, HAND[0] + 1, HAND[1], 1.6, 1.5, P.skin);
+    const e = smooth(pil);
+    pillow(ctx, lerp(PIL_X, hx, e), lerp(PIL_Y, hy, e), lerp(17, 12, pil), 1 - abs(pat) * 1.4);
+    ellipse(ctx, HAND[0] + 1, HAND[1], 1.8, 1.6, P.skin);
   }
 }
 
 // --- 5. dinner: the cloche ---------------------------------------------------------------
-const diningBack = () => cached('gb-dining', W, H, (c) => {
+const diningBack = () => bake('gb-dining', W, H, (c) => {
   R(c, 0, 0, W, H, P.maroon);
-  for (let y = 4; y < 120; y += 8) for (let x = ((y / 8) % 2) * 6; x < W; x += 12) R(c, x, y, 1, 2, A(P.darkRed, 0.6));
+  for (let y = 4; y < 124; y += 8) for (let x = ((y / 8) % 2) * 6; x < W; x += 12) R(c, x, y, 1, 2, A(P.darkRed, 0.55));
   R(c, 0, 0, W, 8, P.black);
   R(c, 0, 8, W, 1, P.orange);
-  // gilt-framed painting: a dark lake at dusk
-  R(c, 120, 20, 144, 66, P.orange);
-  R(c, 121, 21, 142, 64, P.yellow);
-  R(c, 124, 24, 136, 58, P.tanShade);
-  R(c, 126, 26, 132, 54, P.black);
-  ditherField(c, 127, 27, 130, 52, [P.black, P.ink, P.slate], (x, y) => 0.9 - (y - 27) / 38);
-  for (let k = 0; k < 6; k++) {
-    pt(127 + k * 24, 68);
-    pt(139 + k * 24, 54 + (k % 3) * 4);
-    pt(151 + k * 24, 68);
+  // a dark lake at dusk in a slim gilt frame
+  const fx = 214;
+  const fy = 22;
+  const fw = 120;
+  const fh = 62;
+  R(c, fx, fy, fw, fh, P.orange);
+  R(c, fx, fy, fw, 1, P.yellow);
+  R(c, fx + 1, fy + 1, fw - 2, fh - 2, P.tanShade);
+  R(c, fx + 2, fy + 2, fw - 4, fh - 4, P.black);
+  ditherField(c, fx + 3, fy + 3, fw - 6, fh - 6, [P.black, P.ink, P.slate], (x, y) => 0.95 - (y - fy) / (fh * 0.7));
+  for (let k = 0; k < 4; k++) {
+    pt(fx + 3 + k * 28, fy + fh - 18);
+    pt(fx + 17 + k * 28, fy + fh - 30 + (k % 2) * 6);
+    pt(fx + 31 + k * 28, fy + fh - 18);
     fillPts(c, P.black);
   }
-  R(c, 127, 68, 130, 11, P.ink);
-  R(c, 127, 70, 130, 1, A(P.steel, 0.5));
+  R(c, fx + 3, fy + fh - 18, fw - 6, 15, P.ink);
+  R(c, fx + 3, fy + fh - 16, fw - 6, 1, A(P.steel, 0.5));
+  // candlelight on the wall
+  glowBake(c, 84, 100, 80, 60, P.yellow, 0.2);
   // wainscot
-  R(c, 0, 108, W, 30, P.brown);
-  R(c, 0, 108, W, 1, P.tanShade);
+  R(c, 0, 118, W, 32, P.brown);
+  R(c, 0, 118, W, 1, P.tanShade);
   for (let x = 8; x < W; x += 40) {
-    R(c, x, 112, 32, 22, P.maroon);
-    R(c, x + 1, 113, 30, 20, P.brown);
+    R(c, x, 122, 32, 26, P.maroon);
+    R(c, x + 1, 123, 30, 25, P.brown);
   }
 });
-const diningTable = () => cached('gb-table', W, H, (c) => {
-  R(c, 0, 132, W, 10, P.cream);
-  R(c, 0, 132, W, 1, P.white);
-  R(c, 0, 142, W, 74, P.silver);
-  for (let x = 6; x < W; x += 26) {
-    R(c, x, 142, 2, 74, P.fog);
-    R(c, x + 2, 142, 1, 74, P.white);
+const TABLE_Y = 148;
+const diningTable = () => bake('gb-table', W, H, (c) => {
+  // the top lit by the candles, the drop of the cloth in its own shade
+  R(c, 0, TABLE_Y, W, 8, P.cream);
+  R(c, 0, TABLE_Y, W, 1, P.white);
+  R(c, 0, TABLE_Y + 8, W, H - TABLE_Y - 8, P.steel);
+  R(c, 0, TABLE_Y + 8, W, 1, P.fog);
+  for (let x = 10; x < W; x += 28) {
+    R(c, x, TABLE_Y + 9, 1, H, P.slate);
+    R(c, x + 1, TABLE_Y + 9, 1, H, A(P.fog, 0.5));
   }
-  ditherField(c, 0, 172, W, 44, [P.silver, P.fog, P.steel, P.slate], (x, y) => (y - 172) / 44);
+  shadeBake(c, 0, TABLE_Y + 9, W, H - TABLE_Y - 9, 0.6, (x, y) => (y - TABLE_Y - 14) / 50);
   // candelabra
-  const cx = 92;
-  R(c, cx - 6, 130, 13, 3, P.fog);
-  R(c, cx - 1, 108, 3, 22, P.silver);
-  R(c, cx - 14, 108, 29, 2, P.silver);
-  for (const k of [-14, 0, 14]) {
-    R(c, cx + k - 1, 98, 3, 10, P.cream);
-    R(c, cx + k - 2, 107, 5, 1, P.fog);
+  const cx = 84;
+  R(c, cx - 7, TABLE_Y + 1, 15, 3, P.fog);
+  R(c, cx - 7, TABLE_Y + 1, 15, 1, P.white);
+  R(c, cx - 1, 116, 3, 33, P.silver);
+  R(c, cx, 116, 1, 33, P.white);
+  R(c, cx - 16, 116, 33, 2, P.silver);
+  for (const k of [-16, 0, 16]) {
+    R(c, cx + k - 1, 102, 3, 14, P.cream);
+    R(c, cx + k - 1, 102, 1, 14, P.white);
+    R(c, cx + k - 2, 115, 5, 1, P.fog);
   }
-  // the second place setting, unused
-  ellipse(c, 318, 136, 13, 3, P.fog);
-  ellipse(c, 318, 135.5, 12, 2.5, P.white);
-  R(c, 302, 133, 1, 6, P.fog);
-  R(c, 334, 133, 1, 6, P.fog);
-  // the plate in front of the guest
-  ellipse(c, 204, 137, 15, 3.5, P.fog);
-  ellipse(c, 204, 136.5, 14, 3, P.white);
-  R(c, 185, 134, 1, 6, P.fog);
-  R(c, 223, 134, 1, 6, P.fog);
+  // the unused place setting, then the guest's plate
+  ellipse(c, 300, TABLE_Y + 4, 15, 3, P.fog);
+  ellipse(c, 300, TABLE_Y + 3.5, 14, 2.5, P.white);
+  R(c, 282, TABLE_Y + 2, 1, 5, P.fog);
+  R(c, 318, TABLE_Y + 2, 1, 5, P.fog);
+  ellipse(c, 172, TABLE_Y + 4, 16, 3.5, P.fog);
+  ellipse(c, 172, TABLE_Y + 3.5, 15, 3, P.white);
+  R(c, 151, TABLE_Y + 2, 1, 5, P.fog);
+  R(c, 193, TABLE_Y + 2, 1, 5, P.fog);
 });
 function flame(ctx, x, y, lt, k) {
   const f = sin(lt * 9 + k * 2) + sin(lt * 13.7 + k);
-  ctx.globalAlpha = 0.08;
-  ellipse(ctx, x, y - 2, 14, 12, P.yellow);
+  ctx.globalAlpha = 0.07;
+  ellipse(ctx, x, y - 2, 12, 10, P.yellow);
   ctx.globalAlpha = 1;
   R(ctx, x, y - 4 - (f > 0.8 ? 1 : 0), 1, 4 + (f > 0.8 ? 1 : 0), P.yellow);
   R(ctx, x, y - 2, 1, 2, P.cream);
 }
-const D_WATCH = [0, 0, 0.5, 0, 1.0, 1, 1.75, 1, 2.25, 0];
-const CL_X = 204;
-const CL_Y = 134;
+const D_WATCH = [0, 0, 0.45, 0, 1.0, 1, 1.75, 1, 2.3, 0];
+const CL_X = 172;
+const WREST = [0, 0];
+const WWATCH = [0, 0];
 function shotDinner(ctx, lt) {
   ctx.drawImage(diningBack(), 0, 0);
-  // the diner checks his watch, later looks down at what is served
+  // the seated guest checks his watch, later looks down at what is served
   const watch = keys(lt, D_WATCH);
-  const look = ramp(lt, 2.9, 3.3);
+  const look = ramp(lt, 2.95, 3.35);
   QN.breath = (1 - cos(lt * 1.4)) / 2;
   QN.down = watch > 0.6 || look > 0.5 ? 1 : 0;
-  QN.turn = look * 0.4;
-  QN.a0 = 0.25;
-  QN.b0 = 1.0;
-  QN.fl0 = 0.45;
-  QN.finger0 = 0;
-  QN.reach0 = null;
-  QN.reach1 = null;
-  QN.a1 = lerp(0.22, 0.55, watch);
-  QN.b1 = lerp(1.0, 2.9, watch);
-  QN.fl1 = lerp(0.45, 0.85, watch);
-  frontPerson(ctx, 168, 178, 11, DINER, QN);
-  const wx = HAND[2];
-  const wy = HAND[3];
+  QN.turn = look * 0.4 - watch * 0.3;
+  QN.arms = false;
+  WWATCH[0] = lerp(130, 140, watch);
+  WWATCH[1] = lerp(TABLE_Y + 4, 127, watch) - sin(PI * watch) * 2;
+  WREST[0] = 153;
+  WREST[1] = TABLE_Y + 5;
+  QN.reach0 = WWATCH;
+  QN.reach1 = WREST;
+  frontPerson(ctx, 144, 208, 14, DINER, QN);
   // the waiter, standing, hand on the cloche; at "shortly" he lifts it
   const lift = ramp(lt, 2.45, 3.05);
-  REACH[0] = CL_X + 1 + lift * 9;
-  REACH[1] = CL_Y - 17 - lift * 14;
+  REACH[0] = CL_X + 1 + lift * 8;
+  REACH[1] = TABLE_Y - 15 - lift * 15;
   QW.breath = (1 - cos(lt * 1.2 + 2)) / 2;
-  QW.down = 0;
+  QW.down = lift > 0.6 ? 1 : 0;
   QW.turn = -0.5;
   QW.look = -1;
+  QW.arms = false;
   QW.reach0 = REACH;
   QW.reach1 = null;
   QW.a1 = 0.1;
   QW.b1 = 0.1;
-  frontPerson(ctx, 230, 158, 11, WAITER, QW);
-  const hx = HAND[0];
-  const hy = HAND[1];
+  frontPerson(ctx, 200, 186, 14, WAITER, QW);
   ctx.drawImage(diningTable(), 0, 0);
-  for (const k of [-14, 0, 14]) flame(ctx, 92 + k, 98, lt, k);
-  // the hands that rest on the table sit in front of the cloth
-  if (watch > 0.15) R(ctx, round(wx - 1), round(wy + 2), 2, 1, P.yellow);
-  if (lift > 0.25) dots(ctx, CL_X, CL_Y - 2, 5, 1.1, (T_DINNER + lt) * 6, P.yellow, P.orange, P.tanShade);
-  // the cloche follows his hand
+  for (const k of [-16, 0, 16]) flame(ctx, 84 + k, 102, lt, k);
+  frontArms(ctx, 144, 208, 14, DINER, QN);
+  if (watch > 0.15) R(ctx, round(HAND[0] - 1), round(HAND[1] + 2), 2, 1, P.yellow);
+  // under the cloche: the spinner, served
+  if (lift > 0.2) {
+    const a = ramp(lt, 2.6, 3.0);
+    ctx.globalAlpha = 0.18 * a;
+    ellipse(ctx, CL_X, TABLE_Y - 4, 11, 9, P.yellow);
+    ctx.globalAlpha = a;
+    dots(ctx, CL_X, TABLE_Y - 4, 6, 1.5, (T_DINNER + lt) * 5, P.yellow, P.orange, P.tanShade);
+    ctx.globalAlpha = 1;
+  }
+  frontArms(ctx, 200, 186, 14, WAITER, QW);
   const kx = REACH[0] - 1;
-  const ky = REACH[1] + 17;
-  ellipse(ctx, kx, ky - 6, 12, 8, P.fog);
-  ellipse(ctx, kx - 1, ky - 7, 11, 7, P.silver);
-  R(ctx, round(kx - 12), round(ky - 2), 25, 2, P.fog);
-  R(ctx, round(kx - 7), round(ky - 11), 3, 2, P.white);
-  R(ctx, round(kx - 1), round(ky - 16), 3, 2, P.fog);
-  ellipse(ctx, hx, hy, 2.2, 1.8, P.white);
+  const ky = REACH[1] + 15;
+  ellipse(ctx, kx, ky - 6, 13, 9, P.fog);
+  ellipse(ctx, kx - 1, ky - 7, 12, 8, P.silver);
+  R(ctx, round(kx - 13), round(ky - 2), 27, 2, P.fog);
+  R(ctx, round(kx - 13), round(ky - 2), 27, 1, P.silver);
+  R(ctx, round(kx - 8), round(ky - 12), 3, 2, P.white);
+  R(ctx, round(kx - 1), round(ky - 17), 3, 2, P.fog);
+  ellipse(ctx, HAND[0], HAND[1], 2.2, 1.8, P.white);
 }
 
 // --- 6. end slate ------------------------------------------------------------------------
-const slateBg = () => cached('gb-slate', W, H, (c) => {
+const slateBg = () => bake('gb-slate', W, H, (c) => {
   ditherField(c, 0, 0, W, H, [P.black, P.ink], (x, y) => 1 - hypot((x - 192) / 260, (y - 92) / 150));
 });
 const SLATE_LEGAL = 'CHECK-OUT TIME: CALCULATING. LUGGAGE MAY ARRIVE IN 2-4 BUSINESS DECADES.';

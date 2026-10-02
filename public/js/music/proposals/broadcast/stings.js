@@ -165,7 +165,7 @@ export const STINGS = {
     s.tone(B, hit, 1.3, tonic - 12, 0.9, { wave: 'tri', a: 0.008, d: 0.6, s: 0.6, r: 0.5, cut: 600, gain: 0.6 });
     s.pad(P, hit, 1.3, voice(chord('Dmadd9'), null, { n: 5, lo: 50, hi: 72 }), 0.8, { a: 0.02, r: 0.7, cut: 1500, cutTo: 700 });
     const spb = 60 / 150;
-    statement(bed, L, hit, 62, spb, { colour: COLOURS.breaking, inst: INST.horn, harm: [-7], vel: 0.85, hold: 0.9, L: { cut: 1600 } });
+    statement(bed, L, hit, 62, spb, { colour: COLOURS.breaking, inst: INST.horn, harm: [-12], vel: 0.85, hold: 0.9, L: { cut: 1600 } });
     return 2.9;
   },
 

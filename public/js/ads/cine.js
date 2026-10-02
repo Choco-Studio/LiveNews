@@ -988,11 +988,12 @@ export function bust(ctx, o, bottom = H + 2) {
     arc(cx, nY - hh * 0.06, hh * 0.26, hh * 0.16, 0, PI, 6);
     fill(ctx, pal.topD);
   }
-  // neck (chin shadow at the top)
+  // neck (chin shadow at the top; from behind just the nape)
   const nw = hh * 0.2;
   rect(ctx, round(G.hx - nw), round(G.chin - hh * 0.1), round(nw * 2), round(G.neckB - G.chin + hh * 0.08), pal.skin);
   rect(ctx, round(G.hx + nw * 0.25), round(G.chin - hh * 0.1), round(nw * 0.75), round(G.neckB - G.chin + hh * 0.08), pal.skinD);
-  rect(ctx, round(G.hx - nw), round(G.chin - hh * 0.02), round(nw * 2), max(1, round(hh * 0.07)), pal.skinD);
+  if (!o.back) rect(ctx, round(G.hx - nw), round(G.chin - hh * 0.02), round(nw * 2), max(1, round(hh * 0.07)), pal.skinD);
+  else if (pal.rim) rect(ctx, round(G.hx + nw) - 1, round(G.chin - hh * 0.1), 1, round(G.neckB - G.chin + hh * 0.08), pal.rim);
   head(ctx, o);
 }
 
@@ -1008,11 +1009,41 @@ export function head(ctx, o) {
   if (o.back) {
     // seen from behind: the hair covers the head, an ear and the nape show
     const eYb = top + hh * 0.5;
+    if (o.garment === 'hoodie') ellipse(ctx, cx, top + hh * 1.12, hw * 1.25, hh * 0.3, pal.top, rc.top);
     ellipse(ctx, cx + hw + 0.5, eYb, max(1, hh * 0.06), hh * 0.1, pal.skinD);
     ellipse(ctx, cx - hw - 0.5, eYb, max(1, hh * 0.06), hh * 0.1, pal.skinD);
-    headSpans(cx, top - hh * 0.04, hh * 1.0, hw + (o.hair === 'messy' ? 1.2 : 0.6), 0, 0, 0.86);
+    headSpans(cx, top - hh * 0.04, hh * 1.0, hw + (o.hair === 'messy' ? 1.2 : 0.6), 0, 0, o.hair === 'bun' ? 0.76 : 0.86);
     paint(ctx, pal.hair, rc.hair);
+    if (o.hair === 'bun') {
+      // hair combed back to a low chignon at the nape: a few strands converge on it
+      ctx.fillStyle = mix(pal.hair, pal.hairL, 0.6);
+      for (let k = -1; k <= 1; k++) {
+        for (let i = 0; i < 14; i++) {
+          const u = i / 14;
+          const sx = cx + k * hw * 0.45 * (1 - u * 0.7) + hw * 0.08 * u;
+          ctx.fillRect(round(sx), round(top + hh * (0.08 + u * 0.6)), 1, 1);
+        }
+      }
+      ellipse(ctx, cx + hw * 0.05, top + hh * 0.8, hh * 0.25, hh * 0.15, pal.hair, { d: pal.hairD, f: 0.4, m: 1, side: 1 });
+      ctx.fillStyle = pal.hairL;
+      ctx.fillRect(round(cx - hw * 0.4), round(top + hh * 0.74), round(hw * 0.5), 1);
+      ctx.fillStyle = pal.hairD;
+      ctx.fillRect(round(cx - hw * 0.25), round(top + hh * 0.84), round(hw * 0.7), 1);
+    }
     if (o.hair === 'messy') {
+      // tufts break the dome's outline; strands run down the back
+      ctx.fillStyle = pal.hair;
+      for (let k = 0; k < 7; k++) {
+        const u = (k - 3) / 3.4;
+        const tx = cx + u * hw * 0.95;
+        const ty = top - hh * 0.04 + (1 - sqrt(max(0, 1 - u * u))) * hh * 0.42;
+        ctx.fillRect(round(tx - 1), round(ty - 2 - (k & 1)), 2 + (k % 3 === 0 ? 1 : 0), 3);
+      }
+      if (pal.rim) {
+        ctx.fillStyle = pal.rim;
+        ctx.fillRect(round(cx + hw * 0.62), round(top + hh * 0.06), 2, 1);
+        ctx.fillRect(round(cx + hw * 0.85), round(top + hh * 0.2), 1, 2);
+      }
       ctx.fillStyle = pal.hairD;
       ctx.fillRect(round(cx - hw * 0.3), round(top + hh * 0.3), 1, round(hh * 0.3));
       ctx.fillRect(round(cx + hw * 0.25), round(top + hh * 0.42), 1, round(hh * 0.28));
@@ -1226,6 +1257,27 @@ function armGeom(o, side) {
   ARM.sy = G.shY + hh * 0.24;
   const up = hh * 1.3 * (a.len ?? 1);
   const fo = hh * 1.15 * (a.fore ?? 1);
+  if (a.to) {
+    // two-bone IK: put the wrist on the target, elbow outward (bend 1) or inward (-1)
+    const tx = a.to.x - ARM.sx;
+    const ty = a.to.y - ARM.sy;
+    const d = clamp(sqrt(tx * tx + ty * ty), abs(up - fo) + 0.01, up + fo - 0.01);
+    const A = Math.acos(clamp((up * up + d * d - fo * fo) / (2 * up * d), -1, 1));
+    // of the two solutions, bend 1 keeps the elbow on the outer side of the body
+    const base = Math.atan2(ty, tx);
+    const e1x = ARM.sx + cos(base + A) * up;
+    const e2x = ARM.sx + cos(base - A) * up;
+    const outer = (e1x - o.x) * side > (e2x - o.x) * side ? 1 : -1;
+    const ang = base + outer * (a.bend ?? 1) * A;
+    ARM.ex = ARM.sx + cos(ang) * up;
+    ARM.ey = ARM.sy + sin(ang) * up;
+    const fx = a.to.x - ARM.ex;
+    const fy = a.to.y - ARM.ey;
+    const fl = sqrt(fx * fx + fy * fy) || 1;
+    ARM.wx = ARM.ex + (fx / fl) * fo;
+    ARM.wy = ARM.ey + (fy / fl) * fo;
+    return a;
+  }
   // a: upper arm angle from hanging straight down, positive = out to the side
   const a1 = a.a;
   ARM.ex = ARM.sx + side * sin(a1) * up;
@@ -1238,14 +1290,19 @@ function armGeom(o, side) {
 }
 
 /** One arm (sleeve + hand); call after bust() and after any desk drawn over the body. */
-export function arm(ctx, o, side, { sleeve = true } = {}) {
+export function arm(ctx, o, side, { sleeve = true, bare = false } = {}) {
   const a = armGeom(o, side);
   const { pal } = o;
   const rc = recipes(pal);
   const hh = o.hh;
   const r0 = hh * 0.24;
   const r1 = hh * 0.19;
-  if (sleeve) {
+  if (bare) {
+    // a bare arm: slimmer, skin shaded like the face (rim included)
+    const sh = pal.rim ? { ...rc.skin } : rc.skin;
+    capsule(ctx, ARM.sx, ARM.sy, ARM.ex, ARM.ey, hh * 0.14, hh * 0.11, pal.skin, sh);
+    capsule(ctx, ARM.ex, ARM.ey, ARM.wx, ARM.wy, hh * 0.11, hh * 0.085, pal.skin, sh);
+  } else if (sleeve) {
     capsule(ctx, ARM.sx, ARM.sy, ARM.ex, ARM.ey, r0, r1, pal.top, rc.limb);
     capsule(ctx, ARM.ex, ARM.ey, ARM.wx, ARM.wy, r1, hh * 0.16, pal.top, rc.limb);
     // cuff
@@ -1310,9 +1367,9 @@ const PROFILE = [
   0.44, 0.66, 0.43, 0.71, 0.46, 0.74, 0.43, 0.775, 0.45, 0.8, 0.41, 0.84, 0.405, 0.88, 0.43, 0.93, 0.38, 0.99, 0.3,
   1.0, 0.12, 0.96, -0.02, 0.86, -0.12, 0.76, -0.24, 0.66, -0.31, 0.5, -0.3, 0.28, -0.2, 0.09,
 ];
-const NECK = [0.18, 0.92, 0.26, 1.5, -0.2, 1.5, -0.16, 0.78];
+const NECK = [0.18, 0.92, 0.24, 1.32, -0.2, 1.32, -0.16, 0.78];
 const PROFILE_HAIR = {
-  messy: [0.36, 0.3, 0.33, 0.2, 0.28, 0.22, 0.24, 0.13, 0.14, 0.15, 0.1, 0.06, -0.04, 0.05, -0.08, -0.04, -0.18, 0.02, -0.26, 0.06, -0.3, 0.16, -0.36, 0.22, -0.33, 0.34, -0.37, 0.44, -0.3, 0.52, -0.28, 0.66, -0.2, 0.64, -0.14, 0.5, -0.06, 0.36, 0.06, 0.3, 0.12, 0.24, 0.22, 0.26, 0.3, 0.34],
+  messy: [0.38, 0.31, 0.37, 0.19, 0.31, 0.09, 0.25, -0.01, 0.17, -0.06, 0.1, -0.1, 0.02, -0.07, -0.06, -0.11, -0.14, -0.06, -0.22, -0.05, -0.3, 0.03, -0.36, 0.13, -0.39, 0.27, -0.36, 0.42, -0.33, 0.56, -0.27, 0.69, -0.19, 0.67, -0.14, 0.5, -0.07, 0.38, 0.03, 0.3, 0.13, 0.27, 0.22, 0.25, 0.28, 0.3, 0.33, 0.35],
   short: [0.33, 0.17, 0.2, 0.0, -0.05, -0.04, -0.24, 0.06, -0.33, 0.24, -0.33, 0.44, -0.26, 0.56, -0.14, 0.46, -0.05, 0.3, 0.12, 0.2, 0.3, 0.2],
 };
 
@@ -1329,7 +1386,11 @@ export function profile(ctx, o) {
   const X = (u) => o.x + u * hh * f;
   const Y = (v) => o.y + v * hh;
   const side = -f; // the dark side is the back of the head
-  const lit = o.light ? { d: pal.skinD, f: 0.55, m: 1, side, l: o.light, lf: o.litF ?? 0.12, lm: 1 } : { d: pal.skinD, f: 0.4, m: 1, side };
+  // rim from the face side: a fixed 2 px edge, a half-lit band, then shadow
+  const lit = o.light
+    ? { d: pal.skinD, f: 0.5, m: 1, side, l: o.light, lf: 0, lm: o.rimPx ?? 2, dd: mix(pal.skinD, P.black, 0.35), df: 0.2 }
+    : { d: pal.skinD, f: 0.4, m: 1, side };
+  const half = o.light ? { l: mix(pal.skin, o.light, 0.45), lf: 0.1, lm: 2, side } : null;
   begin();
   for (let i = 0; i < NECK.length; i += 2) pt(X(NECK[i]), Y(NECK[i + 1]));
   fill(ctx, pal.skin, lit);
@@ -1343,9 +1404,21 @@ export function profile(ctx, o) {
   begin();
   for (let i = 0; i < PROFILE.length; i += 2) pt(X(PROFILE[i]), Y(PROFILE[i + 1]));
   fill(ctx, pal.skin, lit);
-  // ear
-  ellipse(ctx, X(-0.06), Y(0.52), hh * 0.065, hh * 0.11, pal.skinD);
-  ellipse(ctx, X(-0.05), Y(0.52), hh * 0.035, hh * 0.07, mix(pal.skinD, P.black, 0.3));
+  if (half) {
+    // a softer second band just inside the rim (light wrapping round the cheek)
+    begin();
+    for (let i = 0; i < PROFILE.length; i += 2) pt(X(PROFILE[i]) - f * 2, Y(PROFILE[i + 1]));
+    collect();
+    ctx.fillStyle = half.l;
+    for (let i = 0; i < SN; i++) {
+      const w = SR[i] - SL[i];
+      const k = min(w, max(2, round(w * 0.08)));
+      ctx.fillRect(f > 0 ? SR[i] - k : SL[i], SY[i], k, 1);
+    }
+  }
+  // ear: skin with a darker inner fold
+  ellipse(ctx, X(-0.06), Y(0.53), hh * 0.06, hh * 0.1, pal.skin, { d: pal.skinD, f: 0.5, m: 1, side });
+  ellipse(ctx, X(-0.055), Y(0.54), hh * 0.025, hh * 0.055, pal.skinD);
   // eye, brow, nostril, mouth line
   const eyeY = Y(0.47);
   ctx.fillStyle = pal.hairD;
@@ -1371,7 +1444,15 @@ export function profile(ctx, o) {
   const hp = PROFILE_HAIR[o.hair] || PROFILE_HAIR.short;
   begin();
   for (let i = 0; i < hp.length; i += 2) pt(X(hp[i]), Y(hp[i + 1]));
-  fill(ctx, pal.hair, { d: pal.hairD, f: 0.6, m: 1, side, l: o.light ? mix(pal.hair, o.light, 0.35) : pal.hairL, lf: 0.1, lm: 1 });
+  fill(ctx, pal.hair, { d: pal.hairD, f: 0.55, m: 1, side, l: o.light ? mix(pal.hair, o.light, 0.4) : pal.hairL, lf: 0, lm: 1 });
+  // a few strands catching the light
+  if (o.light) {
+    ctx.fillStyle = mix(pal.hair, o.light, 0.25);
+    for (let i = 0; i < 5; i++) {
+      const u = 0.06 + i * 0.07;
+      ctx.fillRect(round(X(u)), round(Y(0.02 + i * 0.035 + (i & 1) * 0.02)), max(2, round(hh * 0.05)), 1);
+    }
+  }
 }
 
 // ---------------------------------------------------------------- full figures
@@ -1459,6 +1540,10 @@ export function standing(ctx, o) {
   headSpans(hx, ht, hh, hw);
   paint(ctx, pal.skin, skinSh);
   const hairStyle = o.hair || 'short';
+  if (hairStyle === 'bun') {
+    const bx = hx - (o.turn || 0) * hw * 0.7;
+    ellipse(ctx, bx, ht + hh * 0.12, hh * 0.24, hh * 0.2, pal.hair, o.silhouette ? { d: pal.hairD, f: 0.6, m: 1, side: o.rimSide ?? 1, r: o.silhouette } : recipes(pal).hair);
+  }
   if (hairStyle !== 'none') {
     SN = 0;
     const long = hairStyle === 'long' || hairStyle === 'bob';

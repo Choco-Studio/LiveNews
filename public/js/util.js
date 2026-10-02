@@ -28,7 +28,10 @@ function formatter(key, options) {
   }
   return f;
 }
-const toMs = (now) => (typeof now === 'number' ? now : now instanceof Date ? now.getTime() : Date.now());
+const toMs = (now) => {
+  const ms = typeof now === 'number' ? now : now instanceof Date ? now.getTime() : NaN;
+  return Number.isFinite(ms) ? ms : Date.now(); // a broken clock must not throw out of the frame
+};
 
 const zoneMemo = new Map(); // timeZone -> { minute, value }
 /** Wall-clock time in `timeZone`: frozen { h, m, label: 'HH:MM' }. `now` is a Date or epoch ms. */

@@ -14,6 +14,7 @@ Public API:
   spell_number(n, lang), say_year(y, lang), say_decimal(s, lang)
 """
 
+import difflib
 import re
 from dataclasses import dataclass, field
 
@@ -63,6 +64,25 @@ def spell_number(n, lang='en-us'):
             parts.append('and')
         parts.append(_below_1000(n, british))
     return ' '.join(parts)
+
+
+_ORDINAL_ONES = ['zeroth', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth',
+                 'ninth', 'tenth', 'eleventh', 'twelfth', 'thirteenth', 'fourteenth', 'fifteenth',
+                 'sixteenth', 'seventeenth', 'eighteenth', 'nineteenth']
+_MONTHS = {'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september',
+           'october', 'november', 'december', 'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep',
+           'sept', 'oct', 'nov', 'dec'}
+
+
+def say_ordinal(n):
+    """1 -> 'first', 22 -> 'twenty-second', 30 -> 'thirtieth' (up to 99)."""
+    n = int(n)
+    if n < 20:
+        return _ORDINAL_ONES[n]
+    tens, ones = divmod(n, 10)
+    if ones == 0:
+        return _TENS[tens][:-1] + 'ieth'
+    return _TENS[tens] + '-' + _ORDINAL_ONES[ones]
 
 
 def say_decimal(text, lang='en-us'):
@@ -192,6 +212,7 @@ class Token:
     original: str
     spoken: str         # may be empty (pure symbols), or several words
     words: int = 0      # spoken word count, filled by the engine
+    primary: bool = True  # False for the 2nd+ spoken word of one original token
 
 
 @dataclass
@@ -202,6 +223,7 @@ class Phrase:
     text: str
     pause: float
     tokens: list = field(default_factory=list)
+    speed: float = 1.0  # factor on the voice speed for this phrase
 
     @property
     def spoken(self):
@@ -299,6 +321,16 @@ def _say_core(core, prev_word, next_core, lang, shouting):
             return base, None
         tens = _plural_of_tens(_TENS[int(decade)]) if int(decade) >= 2 else 'tens'
         return ((_below_100(int(century)) + ' ') if century else '') + tens, None
+
+    # Dates: "2 October" -> "the second of October", "October 2" -> "October second"
+    if re.fullmatch(r'\d{1,2}(?:st|nd|rd|th)?', core):
+        day = int(re.match(r'\d+', core).group())
+        nxt = (next_core or '').lower().rstrip('.')
+        prev = (prev_word or '').lower().strip('.,;:')
+        if 1 <= day <= 31 and nxt in _MONTHS:
+            return f'the {say_ordinal(day)} of', None
+        if 1 <= day <= 31 and prev in _MONTHS:
+            return say_ordinal(day), None
 
     m = _RE_YEARS_POSS.match(core)
     if m:
@@ -408,6 +440,57 @@ def normalize_tokens(text, base=0, lang='en-us'):
     return tokens
 
 
+def _plain(word):
+    return re.sub(r"[^a-z0-9]", '', word.lower())
+
+
+def tokens_from_say(say, text, base, lang):
+    """Tokens for an already-normalised phrase (`say`) mapped onto the original.
+
+    The caller (e.g. public/js/voice/speechtext.js) did its own normalisation;
+    we synthesise its words as given and find, for each, the original token it
+    came from: our own normalisation of `text` is aligned to `say` word by word
+    (difflib), and words with no match (expansions, respellings) inherit the
+    token of the word before them.
+    """
+    orig = normalize_tokens(text, base, lang)
+    if not orig:
+        return [Token(base, base + len(text), text, w) for w in say.split()]
+    flat = []  # (plain spoken word, original token index)
+    for i, tok in enumerate(orig):
+        for w in tok.spoken.split():
+            if _plain(w):
+                flat.append((_plain(w), i))
+    say_words = say.split()
+    plain_say = [_plain(w) for w in say_words]
+    owner = [None] * len(say_words)
+    matcher = difflib.SequenceMatcher(a=plain_say, b=[f for f, _ in flat], autojunk=False)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == 'equal':
+            for k in range(i2 - i1):
+                owner[i1 + k] = flat[j1 + k][1]
+        elif tag == 'replace':
+            # "on 2 October" vs "on the second of October": spread the
+            # replacement over the original tokens it stands for, in order
+            cands = list(dict.fromkeys(i for _, i in flat[j1:j2]))
+            m = i2 - i1
+            for k in range(m):
+                owner[i1 + k] = cands[min(len(cands) - 1, k * len(cands) // m)]
+    last = next((o for o in owner if o is not None), 0)
+    for k in range(len(owner)):
+        if owner[k] is None:  # pure insertion: belongs to the word before
+            owner[k] = last
+        last = owner[k]
+    out, seen = [], set()
+    for w, i in zip(say_words, owner):
+        tok = orig[i]
+        primary = i not in seen and bool(_plain(w))
+        if primary:
+            seen.add(i)
+        out.append(Token(tok.start, tok.end, tok.original, w, primary=primary))
+    return out
+
+
 # ---------------------------------------------------------------- phrases
 
 # Planned silence after a phrase, by its final mark, in seconds at speed 1.
@@ -515,7 +598,14 @@ def plan_phrases(text, lang='en-us', phrases=None, speed=1.0, pauses=None, pause
             if pause is None:
                 pause = pause_for(ptext, 0.1)
             ph = Phrase(at, at + len(ptext), ptext, float(max(0.0, min(3.0, pause))))
-            ph.tokens = normalize_tokens(ptext, at, lang)
+            say = (p.get('say') or p.get('spoken')) if isinstance(p, dict) else None
+            if isinstance(say, str) and say.strip():
+                ph.tokens = tokens_from_say(say.strip(), ptext, at, lang)
+            else:
+                ph.tokens = normalize_tokens(ptext, at, lang)
+            factor = (p.get('speedFactor') or p.get('speed')) if isinstance(p, dict) else None
+            if isinstance(factor, (int, float)) and factor > 0:
+                ph.speed = float(min(1.3, max(0.7, factor)))
             out.append(ph)
             cursor = at + len(ptext)
     else:

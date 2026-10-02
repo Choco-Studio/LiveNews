@@ -106,6 +106,22 @@ class TextNormTest(unittest.TestCase):
         self.assertGreater(len(phrases), 1)
         self.assertTrue(phrases[0].text.endswith(';'))
 
+    def test_dates(self):
+        self.assertIn('the second of October', self.spoken('It opens on 2 October.', 'en-gb'))
+        self.assertIn('October twenty-first', self.spoken('It opens on October 21, they said.'))
+
+    def test_caller_say_maps_back_to_original_words(self):
+        text = 'The IMF lent $2bn on 2 October, officials said.'
+        phrases = plan_phrases(text, 'en-gb', [
+            {'text': 'The IMF lent $2bn on 2 October,', 'pauseAfter': 0.15, 'speedFactor': 0.95,
+             'say': 'The I-M-F lent two billion dollars on the second of October,'},
+            {'text': 'officials said.', 'say': 'officials said.'}])
+        self.assertEqual(phrases[0].speed, 0.95)
+        primary = [text[t.start:t.end] for p in phrases for t in p.tokens if t.primary]
+        self.assertEqual(primary, text.split())
+        self.assertEqual(' '.join(t.spoken for t in phrases[0].tokens),
+                         'The I-M-F lent two billion dollars on the second of October,')
+
     def test_caller_phrases(self):
         text = 'Good evening. Here is the news.'
         phrases = plan_phrases(text, 'en-us', [{'text': 'Good evening.', 'pauseAfter': 0.7},

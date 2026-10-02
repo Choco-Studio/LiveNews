@@ -140,7 +140,7 @@ class Bed {
     this.duck = {};
     this.sends = {};
     for (const grp of GROUPS) {
-      const d = g(speaking ? MIX.duck[grp] : 1);
+      const d = g(speaking ? arr.duck?.[grp] ?? MIX.duck[grp] : 1);
       d.connect(AIR.has(grp) ? this.out : this.sum);
       const verb = g(this.pal.fx.reverb * SENDS[grp].verb);
       const echo = g(this.pal.fx.echo * SENDS[grp].echo);
@@ -202,12 +202,15 @@ class Bed {
     this.current = arr;
     for (const name of LAYERS) rampTo(this.layer[name].gain, this.engine.level(arr, name), t, dur);
     rampTo(this.out.gain, dbToGain(arr.gain + (this.pal.trim || 0)), t, dur);
+    if (this.engine.speaking) for (const grp of GROUPS) targetTo(this.duck[grp].gain, arr.duck?.[grp] ?? MIX.duck[grp], t, dur / 3);
     targetTo(this.lp.frequency, arr.lp, t, dur / 2);
   }
 
   duckTo(on, t) {
     for (const grp of GROUPS) {
-      if (on) targetTo(this.duck[grp].gain, MIX.duck[grp], t, MIX.duckAttack);
+      // An arrangement may keep one group a little more present (the map's travelling arpeggio).
+      const depth = this.current.duck?.[grp] ?? MIX.duck[grp];
+      if (on) targetTo(this.duck[grp].gain, depth, t, MIX.duckAttack);
       else targetTo(this.duck[grp].gain, 1, t + MIX.duckHold, MIX.duckRelease);
     }
   }
@@ -358,6 +361,7 @@ export class LofiEngine {
     const action = resolveCue(moment, opts, { gravePad: this.gravePad, sharedStings: this.sharedStings });
     this.pump(at + LOOKAHEAD);
     this.log.push({ t: at, moment, action: action.kind, detail: action.moment || action.name || '' });
+    if (this.log.length > 200) this.log.splice(0, this.log.length - 200); // 24/7: keep the recent history only
     switch (action.kind) {
       case 'bed': return this.toBed(action.palette, action.moment, at);
       case 'gravePad': return this.toGravePad(action.palette, at);
@@ -378,7 +382,7 @@ export class LofiEngine {
       const tb = cur.barTime(bar);
       if (up) {
         // Lift on the bar line; a riser leads in when there is a beat to spare.
-        if (tb - cur.spb >= at && arr.energy - cur.current.energy > 0.2) this.rig.riser(tb - cur.spb, cur.spb, 0.6, cur.layer.perc);
+        if (tb - cur.spb >= at && arr.energy - cur.current.energy > 0.2) this.rig.riser(tb - cur.spb, cur.spb, 0.6, cur.duck.air);
         cur.setArrangement(arr, bar, tb, cur.spb);
       } else {
         // Get out of the way on the next beat, over a beat and a half.

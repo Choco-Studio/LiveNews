@@ -71,8 +71,8 @@ const labelTex = (r) =>
     let y = big ? 7 : 6;
     type(c, 'BITFIZZ', cx, y, { face: big ? 'serif' : 'body', color: big ? GOLD : P.cream, track: big ? 0 : 1, align: 'center' });
     y += big ? 15 : 11;
-    type(c, 'RESERVE', cx, y, { face: 'micro', color: P.yellow, track: 2, align: 'center' });
-    y += 9;
+    type(c, 'RESERVE', cx, y, { face: big ? 'body' : 'micro', color: P.yellow, track: 2, align: 'center' });
+    y += big ? 11 : 9;
     R(c, cx - 10, y, 21, 1, P.tanShade);
     y += 4;
     type(c, 'AGED 12 YEARS', cx, y, { face: 'micro', color: P.cream, track: 1, align: 'center' });
@@ -331,8 +331,9 @@ function shotCellar(ctx, lt) {
   R(ctx, nx + 7, 75, 3, 4, A(P.green, g * 0.15));
   // foreground post: out of focus, crossing fast
   const fx = 470 - round(cam * 2.4);
-  R(ctx, fx, 0, 26, H, A(P.black, 0.85));
-  R(ctx, fx + 26, 0, 3, H, A(P.black, 0.45));
+  R(ctx, fx - 2, 0, 2, H, A(P.black, 0.5)); // soft, out-of-focus edges
+  R(ctx, fx, 0, 24, H, P.black);
+  R(ctx, fx + 24, 0, 2, H, A(P.black, 0.5));
   vignette(ctx, 0.6);
   // documentary caption, bottom left above the bar
   fadeUp(ctx, 'SERVER FARM 7', 20, H - BAR - 22, lt - 1.2, { face: 'body', color: P.cream, track: 2, dur: 1 });
@@ -608,7 +609,7 @@ const HAIR_LIGHT = [[P.tanShade, 0, 0], [P.black, 1, 1]];
 const SUIT_LIGHT = [[P.brown, 0, 0], [P.black, 1, 1]];
 const HAND_LIGHT = [[P.cream, 0, 0], [P.brown, 1, 0], [P.maroon, 2, 1]];
 const EAR_LIGHT = [[P.maroon, 0, 0]];
-const COLLAR_LIGHT = [[P.slate, 0, 0], [P.ink, 1, 1]];
+const COLLAR_LIGHT = [[P.tanShade, 0, 0], [P.brown, 1, 1]];
 function lit(ctx, pts, layers) {
   PT = pts;
   litShape(ctx, paintPts, layers);
