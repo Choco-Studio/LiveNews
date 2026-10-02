@@ -49,7 +49,7 @@ export const PALETTES = {
     fx: { reverb: 0.16, echo: 0.06, tremolo: 0 },
     duckDb: -9,
     moments: {
-      roundup: { energy: 0.6, gain: -13, lp: 2400, pocket: 0, bright: 0.9, layers: { arp: 1, bass: 0.85 } },
+      roundup: { energy: 0.6, gain: -7, lp: 2400, pocket: 0, bright: 0.9, layers: { arp: 1, bass: 0.85 } },
     },
   },
   'world-now/finally': {
@@ -68,8 +68,8 @@ export const PALETTES = {
     fx: { reverb: 0.22, echo: 0.12, tremolo: 0 },
     duckDb: -9,
     moments: {
-      finally: { energy: 0.45, gain: -6, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.8 }, lead: 'sparse' },
-      chat: { energy: 0.45, gain: -6, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.6 }, lead: 'sparse' },
+      finally: { energy: 0.45, gain: -1, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.8 }, lead: 'sparse' },
+      chat: { energy: 0.45, gain: -1, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.6 }, lead: 'sparse' },
     },
   },
 
@@ -90,11 +90,11 @@ export const PALETTES = {
     fx: { reverb: 0.16, echo: 0.32, tremolo: 0 },
     duckDb: -9,
     moments: {
-      headlines: { energy: 0.6, gain: -10, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.9, arp: 1, hat: 0.6 } },
-      chat: { energy: 0.5, gain: -11, lp: 2000, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.9, arp: 0.8 } },
-      number: { energy: 0.45, gain: -12, lp: 1900, pocket: 0, bright: 0.9, layers: { pad: 0.8, bass: 0.8, arp: 0.6 } },
-      finally: { energy: 0.6, gain: -10, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.9, arp: 1, hat: 0.6 } },
-      signoff: { energy: 0.55, gain: -10, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.9, bass: 0.9, arp: 0.8 } },
+      headlines: { energy: 0.6, gain: -8, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.9, arp: 1, hat: 0.6 } },
+      chat: { energy: 0.5, gain: -9, lp: 2000, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.9, arp: 0.8 } },
+      number: { energy: 0.45, gain: -10, lp: 1900, pocket: 0, bright: 0.9, layers: { pad: 0.8, bass: 0.8, arp: 0.6 } },
+      finally: { energy: 0.6, gain: -8, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.9, arp: 1, hat: 0.6 } },
+      signoff: { energy: 0.55, gain: -8, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.9, bass: 0.9, arp: 0.8 } },
     },
   },
 
@@ -156,7 +156,7 @@ export const PALETTES = {
     lead: { inst: 'ep', oct: 12 },
     perc: 'none', tex: 0,
     fx: { reverb: 0.15, echo: 0.06, tremolo: 0.15 },
-    duckDb: -8,
+    duckDb: -4, // Money bible: beds 20 LU under the voice (target), 18 LU floor
     moments: {
       intro: { energy: 0.5, gain: -11, lp: 2400, pocket: 0, bright: 1, comp: 'andTwoFour', layers: { pad: 0.8, bass: 0.9, keys: 0.9 }, stagger: { pad: 0, bass: 1, keys: 2 } },
       signoff: { energy: 0.5, gain: -11, lp: 2400, pocket: 0, bright: 1, comp: 'andTwoFour', layers: { bass: 0.9, keys: 0.9 } },
@@ -277,7 +277,7 @@ function tape(kind, chords, mood) {
     lead: { inst: 'ep', oct: 12 },
     perc: 'none', tex: 0,
     fx: { reverb: 0.15, echo: 0.06, tremolo: 0.15 },
-    duckDb: -8,
+    duckDb: -4, // Money bible: beds 20 LU under the voice (target), 18 LU floor
     moments: {
       number: { energy: 0.45, gain: -12, lp: 2200, pocket: 0, bright: 0.95, comp: 'andTwoFour', layers: { keys: 0.9, bass: 0.9 } },
     },

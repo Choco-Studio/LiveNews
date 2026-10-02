@@ -968,7 +968,9 @@ function renderSpec(b, spec, style, env) {
       }
       // the map renders at the size it had at the cut (worldmap.js keeps buffers per size), and a
       // slow camera move resamples it instead of asking for a new size every frame
-      if (!spec._mapWH) spec._mapWH = [Math.max(8, m.w), Math.max(8, m.h)];
+      // out of focus (singles) the locator renders at half size and is shown pixel-doubled: lower
+      // detail where the eye does not look, half the cost while it flies in
+      if (!spec._mapWH) spec._mapWH = soft && m.w > 160 ? [Math.max(104, Math.round(m.w / 2)), Math.max(62, Math.round(m.h / 2))] : [Math.max(8, m.w), Math.max(8, m.h)];
       const end = MAP_ANIM[style.id] || MAP_ANIM.default;
       // once the locator has settled its last frame is kept: a camera move only resamples it
       if (!(spec._mapDone && SUB.w === spec._mapWH[0] && SUB.h === spec._mapWH[1] && SUB.owner === spec)) {

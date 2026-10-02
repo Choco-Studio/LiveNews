@@ -314,7 +314,11 @@ function handMats(L, m) {
 // capsule's oriented bounding box (a diagonal close-up arm costs ~1/3).
 
 const SPAN = new Float64Array(8);
-function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0) {
+// silhouette pixels of the sleeve facing up / right, collected while rasterising (for the rim pass)
+const EDGE_IDX = new Int32Array(4096);
+let edgeN = 0;
+
+function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0, collect = false) {
   const dx = bx - ax, dy = by - ay;
   const len = Math.hypot(dx, dy);
   const R = Math.max(ra, rb);
@@ -377,6 +381,7 @@ function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0
       // the start of an upper arm under the shoulder stays flat-lit: no dome highlight on the cap
       if (flatStart && u < flatStart && tt < 1) tt = 1;
       tone[i] = tt < 0 ? 0 : tt > 3 ? 3 : tt;
+      if (collect && d2 > (r - 1.5) * (r - 1.5) && (ey < 0 || ex > 0) && edgeN < EDGE_IDX.length) EDGE_IDX[edgeN++] = i;
       grp[i] = g;
       z[i] = cz;
     }
@@ -442,14 +447,16 @@ export function drawArm(buf, L, m, arm, side, toS, s, ga, gc, gh, z) {
   const jacketG = ga - (ga % GROUPS_PER_ACTOR) + GROUPS.jacket;
   shoulderCap(buf, sxp, syp, cx0, cy0, A.rUpper * s, m.sleeve, jacketG);
   buf.part(ga, z, false);
-  capsuleFast(buf, cx0, cy0, exp, eyp, A.rUpper * 0.99 * s, A.rElbow * s, m.sleeve, 0, 0.22);
+  edgeN = 0;
+  const rimOn = s >= 1.6;
+  capsuleFast(buf, cx0, cy0, exp, eyp, A.rUpper * 0.99 * s, A.rElbow * s, m.sleeve, 0, 0.22, rimOn);
   const fx = wxp - exp, fy = wyp - eyp;
   const fl = Math.hypot(fx, fy) || 1;
   const cuffLen = Math.min(fl * 0.4, 1.3 * s); // shirt cuff showing past the jacket sleeve
   const hemX = wxp - (fx / fl) * cuffLen, hemY = wyp - (fy / fl) * cuffLen;
-  capsuleFast(buf, exp, eyp, hemX, hemY, A.rElbow * s, A.rWrist * 1.12 * s, m.sleeve);
+  capsuleFast(buf, exp, eyp, hemX, hemY, A.rElbow * s, A.rWrist * 1.12 * s, m.sleeve, 0, 0, rimOn);
   if (s >= 1.6) sleeveFolds(buf, L, hm, arm, sxp, syp, exp, eyp, hemX, hemY, s, ga);
-  if (s >= 1.6) sleeveRim(buf, ga, m.sleeve, hm.rim, Math.min(sxp, exp, hemX) - A.rUpper * s - 1, Math.max(sxp, exp, hemX) + A.rUpper * s + 1, Math.min(syp, eyp, hemY) - A.rUpper * s - 1, Math.max(syp, eyp, hemY) + A.rUpper * s + 1);
+  if (rimOn) sleeveRim(buf, ga, m.sleeve, hm.rim);
 
   // ---- wrist skin, under the cuff (same group as the hand: no line between them)
   buf.part(gh, z + 1, false);
@@ -561,22 +568,16 @@ function shoulderCap(buf, ax, ay, bx, by, r, m, g) {
  * up to the right (no pixel above or to the upper right) the silver continues instead of breaking into
  * the dots the per-pixel rim leaves on a curved edge. Only against the background (empty pixels).
  */
-function sleeveRim(buf, g, mSleeve, mRim, x0, x1, y0, y1) {
+function sleeveRim(buf, g, mSleeve, mRim) {
   const W = buf.w;
-  x0 = Math.max(1, Math.floor(x0));
-  x1 = Math.min(W - 2, Math.ceil(x1));
-  y0 = Math.max(1, Math.floor(y0));
-  y1 = Math.min(buf.h - 2, Math.ceil(y1));
   const { mat, grp } = buf;
-  for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
-      const i = y * W + x;
-      if (mat[i] !== mSleeve || grp[i] !== g) continue;
-      if (!mat[i + 1]) continue; // the resolve rim lights this one already
-      if (!mat[i - W] && !mat[i - W + 1] && mat[i - 1]) {
-        mat[i] = mRim;
-        buf.tone[i] = 0;
-      }
+  for (let q = 0; q < edgeN; q++) {
+    const i = EDGE_IDX[q];
+    if (mat[i] !== mSleeve || grp[i] !== g) continue; // painted over since (the other bone, a crease)
+    if (!mat[i + 1]) continue; // the resolve rim lights this one already
+    if (!mat[i - W] && !mat[i - W + 1] && mat[i - 1]) {
+      mat[i] = mRim;
+      buf.tone[i] = 0;
     }
   }
 }

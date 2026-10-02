@@ -30,7 +30,7 @@ export const MIX = {
   duckHold: 0.35, // s of speech-off before releasing (bridges sentence gaps)
   pocketHz: 2500,
   pocketSpeech: -6, // dB dip at 2.5 kHz while anyone speaks
-  headline: { level: -11.5, duckDb: -10 }, // WORLD NOW headline bus (dB)
+  headline: { level: -12, duckDb: -6 }, // WORLD NOW headline bus (dB): -10 LU in the gaps, ~24 LU under speech
   graveFade: 2.5,
   output: 0.7, // calibrated against Kokoro voices at -16 LUFS (the house voice target)
 };

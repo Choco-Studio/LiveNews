@@ -10,7 +10,7 @@
 
 import { isBreaking, plainTitle } from '../news.js';
 import { GRAVE, LIGHT, contentWords, extractFigures, numbersIn, quotesIn } from '../facts.js';
-import { locate, placesIn } from '../gazetteer.js';
+import { locate, lookupPlace, placesIn } from '../gazetteer.js';
 import { shortHeadline } from '../writer.js';
 
 const DEATHS = /\b(?:dead|deaths?|die[sd]|killed|killings?|victims?|mourn\w*|funeral)\b/i;
@@ -54,25 +54,64 @@ const KICKERS = [
   [/video games?|gaming|console/i, 'GAMING'],
   [/satellite/i, 'SPACE'],
   [/solar (?:farm|panels?|plant|power|park)|wind farm|turbines?|tidal power|power grid|energy|electricity|batter(?:y|ies)|geothermal/i, 'ENERGY'],
-  [/vaccine|hospital|health|medicine|disease|patients/i, 'HEALTH'],
+  [/vaccine|hospital|health|medicine|disease|patients|nurses|doctors/i, 'HEALTH'],
   [/ocean|whales?|reef|coral|dolphins?|sea turtles?/i, 'OCEANS'],
+  [/\b(?:cars?|diesel|petrol|electric vehicles?|EVs?|motoring|carmakers?)\b/i, 'MOTORING'],
+  [/\bcourts?\b|judges?|ruling|lawsuit|trial\b/i, 'JUSTICE'],
+  [/\bstrikes?\b|walkout|unions?\b/i, 'INDUSTRY'],
 ];
+// When nothing more specific fits, the desk section names the strap.
+const SECTION_KICKERS = { world: 'WORLD', business: 'BUSINESS', tech: 'TECHNOLOGY', science: 'SCIENCE' };
 
 // ---------------------------------------------------------------- the presenters' own lines (no facts, no figures)
+// A line may carry `needs`: it is only used when the story's own words match
+// (a line about "a researcher" never follows a story about rangers). Lines are
+// picked by the episode seed, skipping the ones aired recently (24/7: no line
+// should come round again within a long rotation).
+
+const RESEARCH = /\b(?:researchers?|scientists?|study|studies|team|university|astronomers?|engineers?|archaeologists?|biologists?)\b/i;
+const NATURE = /\b(?:bees?|birds?|animals?|species|tortoises?|leopards?|pandas?|whales?|turtles?|plants?|trees?|forests?|reefs?|corals?|mangroves?|mushrooms?|wildlife)\b/i;
+const TRAVEL = /\b(?:trains?|trams?|buses|bus|ferr(?:y|ies)|flights?|airports?|tunnels?|metro|rail)\b/i;
 
 // WORLD NOW, after "And finally" only: Paco's dry line, then Lola's deflation.
 const WORLD_PAIRS = {
-  HISTORY: [['[nod] Older than this building, I suspect.', 'Older than your jokes, Paco. Just.']],
-  ASTRONOMY: [['I may look up tonight.', '[shrug] Take a coat.']],
-  SPACE: [['I may look up tonight.', '[shrug] Take a coat.']],
-  WILDLIFE: [['[nod] Finally, some news nobody will complain about.', 'Give it an hour.']],
+  HISTORY: [
+    ['[nod] Older than this building, I suspect.', 'Older than your jokes, Paco. Just.'],
+    ['Patience, it seems, is an archaeological virtue.', '[shrug] So is a very small brush.'],
+    ['[nod] Some things are worth the wait.', 'Some of us are still waiting for the coffee machine.'],
+  ],
+  ASTRONOMY: [
+    ['I may look up tonight.', '[shrug] Take a coat.'],
+    ['[nod] Puts the commute in perspective.', 'Nothing puts your commute in perspective, Paco.'],
+    ['A reminder of how small we are.', '[shrug] Speak for yourself.'],
+  ],
+  WILDLIFE: [
+    ['[nod] Finally, some news nobody will complain about.', 'Give it an hour.'],
+    ['[nod] They seem to be managing perfectly well without us.', 'Most things do, Paco.'],
+    ['I am told they are camera shy.', '[shrug] Unlike some people at this desk.'],
+  ],
+  TRANSPORT: [
+    ['[nod] On time, apparently. Imagine that.', 'I would rather not get my hopes up.'],
+    ['I may take the long way home tonight.', 'You always take the long way home, Paco.'],
+  ],
+  'GREEN CITIES': [
+    ['[nod] Quietly, that is the kind of thing that changes a city.', 'Quietly is how most good things happen.'],
+    ['[nod] I approve. From a shaded bench, ideally.', 'Noted. We will find you one.'],
+  ],
+  OCEANS: [['[nod] Good to hear the sea is having a better day than most of us.', 'Low bar. But we will take it.']],
   any: [
     ['[nod] A good note to end on.', 'Rare enough that we should enjoy it.'],
     ['Well. That is the most cheerful thing I have read all day.', '[shrug] It is a low bar, Paco. But yes.'],
     ['I have nothing to add. A first.', 'Let the record show it.'],
     ['[nod] Some stories do not need us at all.', 'Do not tell the management.'],
+    ['[nod] I will allow myself a small smile.', 'Steady, Paco. People are watching.'],
+    ['Not every headline has to be bad.', 'Write that down. We may need it later.'],
+    ['[nod] Quietly encouraging.', 'High praise, by your standards.'],
+    ['That one I will be repeating at dinner.', '[shrug] Your guests have my sympathy.'],
+    ['[nod] There is hope for us yet.', 'Let us not get carried away.'],
   ],
 };
+WORLD_PAIRS.SPACE = WORLD_PAIRS.ASTRONOMY;
 
 // TECH BYTES, THE CATCH: Ada asks what a remaining summary sentence answers; Max answers with it.
 const CATCH = [
@@ -82,37 +121,70 @@ const CATCH = [
   { test: /\b(?:using|uses|by (?:using|\w+ing)|works (?:by|without)|without an?)\b/i, q: () => '[chin] How does it actually work?' },
 ];
 // The button after "And finally", by what kind of story it was: a product, or science.
-const PRODUCT_KICKERS = new Set(['GADGETS', 'ROBOTICS', 'CHIPS', 'GAMING', 'SOFTWARE', 'AI', 'CONNECTIVITY']);
+const PRODUCT_KICKERS = new Set(['GADGETS', 'ROBOTICS', 'CHIPS', 'GAMING', 'SOFTWARE', 'AI', 'CONNECTIVITY', 'MOTORING']);
 const TECH_BUTTONS = {
   product: {
-    ada: ['[shrug] We will see how it holds up outside the press release.', '[chin] Promising. I will believe it when it survives its first software update.'],
-    max: ['[raise_hand] For the record, I would like one. Purely for research.', '[nod] Clever. Quietly, properly clever.'],
+    ada: [
+      '[shrug] We will see how it holds up outside the press release.',
+      '[chin] Promising. I will believe it when it survives its first software update.',
+      '[chin] I would like to see the figures from someone who is not selling it.',
+      '[nod] Fine. Wake me when it ships.',
+      '[shrug] The second version is usually the one to buy.',
+    ],
+    max: [
+      '[raise_hand] For the record, I would like one. Purely for research.',
+      '[nod] Clever. Quietly, properly clever.',
+      '[nod] I want to take it apart. Respectfully.',
+      '[shrug] My wallet has already left the building.',
+      '[nod] The engineer in me approves. The accountant in me is less sure.',
+    ],
   },
   science: {
-    ada: ['[nod] No launch event, no price tag. I approve.', '[nod] Fair enough. That one I like.'],
-    max: ['[nod] I have questions. Most of them start with how.', '[look_partner] Somewhere, a researcher is very pleased with themselves. Rightly.'],
+    ada: ['[nod] No launch event, no price tag. I approve.', '[nod] Fair enough. That one I like.', '[chin] Careful work, done properly. Rarer than it should be.', '[nod] That is what patience buys you.'],
+    max: [
+      '[nod] I have questions. Most of them start with how.',
+      { text: '[look_partner] Somewhere, a researcher is very pleased with themselves. Rightly.', needs: RESEARCH },
+      { text: '[nod] Nature, out-engineering us again.', needs: NATURE },
+      { text: '[nod] I will be reading the paper tonight. All of it.', needs: RESEARCH },
+      '[chin] Not a gadget in sight, and still the best story of the day.',
+    ],
   },
 };
 
 // COSMOS: UNIT-8's literal line after "And finally".
 const UNIT8_LINES = {
-  ASTRONOMY: ['I will keep one sensor pointed upwards, Dr Reyes. For the record.'],
-  SPACE: ['I will keep one sensor pointed upwards, Dr Reyes. For the record.'],
-  any: ['[nod] Logged under good news, Dr Reyes. The file is short. I am glad to add to it.', 'I have no further data, Dr Reyes. I find I do not mind.', '[nod] Noted. My circuits remain calm. This is how I express enthusiasm.'],
+  ASTRONOMY: [
+    'I will keep one sensor pointed upwards, Dr Reyes. For the record.',
+    '[nod] Noted. I have adjusted my sense of scale.',
+    'I have recalculated how small we are, Dr Reyes. The result is consistent.',
+    '[nod] Logged. I find the distances reassuring.',
+  ],
+  any: [
+    '[nod] Logged under good news, Dr Reyes. The file is short. I am glad to add to it.',
+    'I have no further data, Dr Reyes. I find I do not mind.',
+    '[nod] Noted. My circuits remain calm. This is how I express enthusiasm.',
+    '[nod] Filed. Cross-referenced. Quietly appreciated.',
+    '[nod] A satisfying result. I have saved it twice.',
+    'I have flagged that one as hopeful, Dr Reyes. It is a new category.',
+  ],
 };
+UNIT8_LINES.SPACE = UNIT8_LINES.ASTRONOMY;
+// UNIT-8 after the lead, when the lead has no figure to repeat.
+const UNIT8_NOTED = ['[nod] Logged, Dr Reyes.', '[nod] Noted. Filed under remarkable.', '[nod] Recorded. I will be thinking about that one.', '[nod] Understood, Dr Reyes. Logged.'];
+const NOVA_THANKS = ['Thank you, UNIT-8.', 'Precise as ever, UNIT-8.', 'Noted, UNIT-8. Thank you.'];
 
 // Programmes without a chat policy: a short dry reaction after a light story.
 const CHATS = {
-  paco: ['[nod] Well. Not a sentence I expected to read tonight.', '[nod] File that under good news. We do have some.'],
-  lola: ['[chin] Not what I expected when I came in this morning.', '[nod] Some good news, for once.'],
-  max: ['[nod] Clever. Quietly, properly clever.', '[look_partner] I did not see that one coming.'],
-  ada: ['[nod] Fair enough. That one I like.', '[chin] Noted. I will want to see how that plays out.'],
-  nova: ['[chin] Every answer comes with a new question attached. That is the job.', '[steeple] Science at its best: patient, careful and slightly stubborn.'],
+  paco: ['[nod] Well. Not a sentence I expected to read tonight.', '[nod] File that under good news. We do have some.', '[nod] I shall allow it.'],
+  lola: ['[chin] Not what I expected when I came in this morning.', '[nod] Some good news, for once.', '[nod] I will take that.'],
+  max: ['[nod] Clever. Quietly, properly clever.', '[look_partner] I did not see that one coming.', '[nod] Engineers, doing engineer things.'],
+  ada: ['[nod] Fair enough. That one I like.', '[chin] Noted. I will want to see how that plays out.', '[shrug] Cautiously impressed.'],
+  nova: ['[chin] Every answer comes with a new question attached. That is the job.', '[steeple] Science at its best: patient, careful and slightly stubborn.', '[nod] Lovely work.'],
   unit8: UNIT8_LINES.any,
-  penny: ['[nod] Worth keeping an eye on.'],
-  sam: ['[nod] Quick one, but worth knowing.'],
+  penny: ['[nod] Worth keeping an eye on.', '[nod] One to watch.'],
+  sam: ['[nod] Quick one, but worth knowing.', '[nod] Noted.'],
 };
-const GENERIC_CHATS = ['[nod] Remarkable. Moving on.', '[chin] Something to think about.', '[nod] Well, there we are.'];
+const GENERIC_CHATS = ['[nod] Remarkable. Moving on.', '[chin] Something to think about.', '[nod] Well, there we are.', '[nod] Interesting times.'];
 
 // ---------------------------------------------------------------- helpers
 
@@ -123,6 +195,25 @@ function hash(s) {
   return h >>> 0;
 }
 const choose = (list, key) => list[hash(key) % list.length];
+const lineText = (line) => (typeof line === 'string' ? line : line.text);
+const plainLine = (line) => lineText(line).replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+
+/**
+ * A presenter line for this story: only lines whose `needs` the story's words
+ * meet, in an order seeded by `key`, skipping lines aired recently (`recent`:
+ * plain texts of the last lines on air). Every line recent: the seeded one.
+ */
+function chooseFresh(list, key, { recent = null, text = '' } = {}) {
+  const fits = list.filter((l) => typeof l === 'string' || !l.needs || l.needs.test(text));
+  const pool = fits.length ? fits : list.filter((l) => typeof l === 'string');
+  if (!pool.length) return null;
+  const start = hash(key) % pool.length;
+  for (let k = 0; k < pool.length; k++) {
+    const line = pool[(start + k) % pool.length];
+    if (!recent || !recent.has(plainLine(line))) return lineText(line);
+  }
+  return lineText(pool[start]);
+}
 
 const sentencesOf = (s) =>
   String(s || '')
@@ -135,8 +226,24 @@ const wordCount = (t) => String(t).replace(/\[[^\]]*\]/g, ' ').split(/\s+/).filt
 const firstName = (p) => String(p?.name || 'my colleague').replace(/^(?:Dr|Mr|Ms|Mrs|Prof)\.?\s+/i, '').split(/\s+/)[0];
 const lowerArticle = (by) => by.replace(/^(The|A|An) /, (m) => m.toLowerCase());
 // A sentence can follow "According to X," only if its first word is not a name.
-const COMMON_START = /^(?:A|An|The|This|These|Those|Its|Their|Some|More|Most|Many|Several|Scientists|Researchers|Officials|Astronomers|Archaeologists|Rangers|Volunteers|Engineers|Doctors|Experts|Shops|Traders|Policymakers|Curators|Investors|Workers|Students|Residents|Visitors|Users|Strong|Heavy|Rail|Oil|Coffee|Rice|Prices|Sales|Shares|Stocks)\b/;
+const COMMON_START = /^(?:A|An|The|This|These|Those|Its|Their|Some|More|Most|Many|Several|Scientists|Researchers|Officials|Astronomers|Archaeologists|Rangers|Volunteers|Engineers|Doctors|Nurses|Experts|Shops|Traders|Policymakers|Curators|Investors|Workers|Students|Residents|Visitors|Users|Strong|Heavy|Rail|Oil|Coffee|Rice|Prices|Sales|Shares|Stocks|Emergency|Local|Firefighters|Organisers|Unions?|Hospitals?|Thousands|Hundreds|Dozens|Ten|Two|Three|Four|Five|Farmers|Fishermen|Families|Passengers|Drivers|Teachers|Judges|Lava|Flights|Ferries|Trains|Schools|Tourists|Police)\b/;
 const lcFirst = (s) => (COMMON_START.test(s) ? s[0].toLowerCase() + s.slice(1) : null);
+
+/**
+ * A headline as the middle of a spoken sentence ("Also coming up: a startup
+ * launches..."): its first word goes lower-case only when it is clearly a
+ * common word (on the starter list, or written in lower case elsewhere in the
+ * story), never a name or a place.
+ */
+function lowerFirstWord(text, info) {
+  const m = String(text).match(/^([A-Z][a-z'’-]+)(\s|$)/);
+  if (!m) return text;
+  const word = m[1];
+  if (lookupPlace(word) || /^[A-Z][a-z]+[A-Z]/.test(word)) return text;
+  const story = `${info.s.title} ${info.s.summary || ''}`;
+  const lower = new RegExp(`(?<![\\p{L}])${word.toLowerCase()}(?![\\p{L}])`, 'u').test(story);
+  return lower || COMMON_START.test(text) ? word.toLowerCase() + text.slice(word.length) : text;
+}
 // Content-word overlap relative to the headline: does this sentence just restate it?
 function restates(sentence, title) {
   const t = new Set(contentWords(title));
@@ -161,7 +268,7 @@ function spokenPlace(entry) {
 function kickerFor(s) {
   for (const [re, k] of KICKERS) if (re.test(s.title)) return k;
   for (const [re, k] of KICKERS) if (re.test(s.summary || '')) return k;
-  return null;
+  return SECTION_KICKERS[s.category] || null;
 }
 
 /** Greeting by the London studio clock, unless the episode might air across a boundary (it is made minutes ahead). */

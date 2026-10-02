@@ -219,13 +219,16 @@ describe('AudioEngine with a recorded voice', () => {
     const buffer = e.context.createBuffer(1, 48000 * 3, 48000);
     const words = [...text.matchAll(/\S+/g)].map((m, i) => ({ t: 0.05 + i * 0.25, char: m.index }));
     const run = e.speak(text, 'A', { audio: { buffer, words, ...(levels ? { levels } : {}) } });
+    const out = {};
+    // Wait (real time) until the recording is heard, then sample the next 1.2 s
+    // at exact instants: the timeline is already anchored, so no timer can starve the test.
+    const t0 = performance.now();
+    while (!e.speechFrame(performance.now(), 'A', out).speaking && performance.now() - t0 < 5000) await sleep(5);
+    const start = performance.now();
     let sum = 0;
     let n = 0;
-    const out = {};
-    const t0 = performance.now();
-    while (performance.now() - t0 < 1500) {
-      await sleep(15);
-      const f = e.speechFrame(performance.now(), 'A', out);
+    for (let k = 0; k < 80; k++) {
+      const f = e.speechFrame(start + k * 15, 'A', out);
       if (f.speaking) {
         sum += f.level;
         n++;

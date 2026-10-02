@@ -1164,31 +1164,31 @@ function revealParts(c, ids) {
   const x = RX;
   partMask(c, ids, 1, (k) => {
     pt(x - 9, 62);
-    pt(x - 26, 67);
-    pt(x - 40, 73);
-    pt(x - 45, 84);
-    pt(x - 39, 104);
-    pt(x - 28, 132);
-    pt(x - 30, 200);
-    pt(x + 30, 200);
-    pt(x + 28, 132);
-    pt(x + 39, 104);
-    pt(x + 45, 84);
-    pt(x + 40, 73);
-    pt(x + 26, 67);
+    pt(x - 24, 67);
+    pt(x - 35, 73);
+    pt(x - 39, 84);
+    pt(x - 34, 104);
+    pt(x - 26, 132);
+    pt(x - 28, 200);
+    pt(x + 28, 200);
+    pt(x + 26, 132);
+    pt(x + 34, 104);
+    pt(x + 39, 84);
+    pt(x + 35, 73);
+    pt(x + 24, 67);
     pt(x + 9, 62);
     fillPts(k, P.white);
   });
   partMask(c, ids, 2, (k) => {
     pt(x - 10, 63);
-    pt(x - 17, 63);
-    pt(x - 30, 94);
-    pt(x - 29, 132);
-    pt(x - 31, 200);
-    pt(x + 31, 200);
-    pt(x + 29, 132);
-    pt(x + 30, 94);
-    pt(x + 17, 63);
+    pt(x - 16, 63);
+    pt(x - 26, 94);
+    pt(x - 27, 132);
+    pt(x - 29, 200);
+    pt(x + 29, 200);
+    pt(x + 27, 132);
+    pt(x + 26, 94);
+    pt(x + 16, 63);
     pt(x + 10, 63);
     pt(x + 6, 78);
     pt(x, 83);
@@ -1197,10 +1197,10 @@ function revealParts(c, ids) {
   });
   for (let sd = -1; sd <= 1; sd += 2) {
     partMask(c, ids, sd < 0 ? 3 : 4, (k) => {
-      ellipse(k, x + sd * 38, 83, 11, 12.5, P.white);
-      capsule(k, x + sd * 39, 86, x + sd * 44, 126, 10, 8, P.white);
-      capsule(k, x + sd * 44, 126, x + sd * 42, 165, 7.6, 5.6, P.white);
-      ellipse(k, x + sd * 42, 174, 6, 7.5, P.white);
+      ellipse(k, x + sd * 34, 83, 9, 11, P.white);
+      capsule(k, x + sd * 35, 86, x + sd * 39, 126, 8.5, 7, P.white);
+      capsule(k, x + sd * 39, 126, x + sd * 38, 165, 6.6, 5, P.white);
+      ellipse(k, x + sd * 38, 173, 5.2, 6.6, P.white);
     });
   }
   partMask(c, ids, 5, (k) => {
@@ -1245,7 +1245,7 @@ const revealArt = (lit) => bake(lit ? 'hg-reveal-lit' : 'hg-reveal-dark', W, H, 
       if (y > RT + RH * 0.86) b += 1;
     }
     if (id === 5 && y < RT + RH + 4) b += 2; // under the jaw
-    if (id === 1 && y > 66 && y < 70 && abs(x - RX) < 20) b += 1; // the collarbones' shadow
+    if (id === 3 || id === 4) b += 1; // the arms sit a step under the face
     return max(0, min(6, b));
   }, idx);
   // the back light: a rim on every edge that faces screen right
@@ -1296,35 +1296,35 @@ const revealArt = (lit) => bake(lit ? 'hg-reveal-lit' : 'hg-reveal-dark', W, H, 
   // the ears
   R(c, x - 13, t + 14, 1, 4, P.fog);
   R(c, x + 12, t + 14, 1, 4, P.ink);
-  // collarbones, the vest's neckline and straps, a crease of the vest over the chest
-  line(c, x - 3, 66, x - 18, 68, P.fog);
-  line(c, x + 3, 66, x + 18, 68, P.slate);
+  // collarbones, the vest's neckline and straps, creases of the vest over the chest
+  line(c, x - 3, 66, x - 16, 68, P.steel);
+  line(c, x + 3, 66, x + 16, 68, P.ink);
   line(c, x - 6, 78, x, 83, P.ink);
   line(c, x + 6, 78, x, 83, P.black);
-  line(c, x - 17, 64, x - 30, 94, P.ink);
-  line(c, x - 22, 96, x - 10, 104, P.slate);
-  line(c, x - 26, 120, x - 14, 150, P.ink);
-  line(c, x + 14, 112, x + 22, 160, P.black);
+  line(c, x - 16, 64, x - 26, 94, P.ink);
+  line(c, x - 21, 97, x - 10, 104, P.slate);
+  line(c, x - 24, 120, x - 13, 150, P.ink);
+  line(c, x + 13, 112, x + 20, 160, P.black);
   // deltoids, biceps, forearms: the separations, one vein on the lit forearm
-  line(c, x - 46, 92, x - 36, 98, P.ink);
-  line(c, x + 46, 92, x + 36, 98, P.black);
-  line(c, x - 48, 104, x - 46, 124, P.fog);
-  line(c, x - 46, 134, x - 44, 150, P.steel);
-  line(c, x - 44, 150, x - 45, 160, P.steel);
+  line(c, x - 41, 92, x - 32, 98, P.ink);
+  line(c, x + 41, 92, x + 32, 98, P.black);
+  line(c, x - 43, 104, x - 42, 122, P.steel);
+  line(c, x - 41, 134, x - 40, 150, P.slate);
+  line(c, x - 40, 150, x - 41, 160, P.slate);
   // hands wrapped in tape, knuckles lit
   for (let sd = -1; sd <= 1; sd += 2) {
-    const hx = x + sd * 42;
-    for (let k = 0; k < 4; k++) R(c, hx - 5, 168 + k * 3, 10, 1, sd < 0 ? P.fog : P.slate);
-    R(c, hx - 5, 180, 10, 1, sd < 0 ? P.silver : P.steel);
+    const hx = x + sd * 38;
+    for (let k = 0; k < 4; k++) R(c, hx - 4, 168 + k * 3, 9, 1, sd < 0 ? P.steel : P.slate);
+    R(c, hx - 4, 179, 9, 1, sd < 0 ? P.fog : P.steel);
   }
   // the red square: the brand's pixel, on the lit side of his chest
-  R(c, x - 21, 88, 7, 6, P.red);
-  R(c, x - 15, 88, 1, 6, P.darkRed);
-  R(c, x - 21, 93, 7, 1, P.darkRed);
+  R(c, x - 19, 88, 6, 6, P.red);
+  R(c, x - 14, 88, 1, 6, P.darkRed);
+  R(c, x - 19, 93, 6, 1, P.darkRed);
   // sweat: specular points on the lit forehead and shoulder
   R(c, x - 6, t + 6, 1, 1, P.white);
-  R(c, x - 35, 74, 2, 1, P.white);
-  R(c, x - 47, 88, 1, 1, P.white);
+  R(c, x - 31, 74, 2, 1, P.white);
+  R(c, x - 42, 88, 1, 1, P.white);
 });
 function shotReveal(c, lt) {
   c.drawImage(concrete(), 0, 0);

@@ -75,6 +75,7 @@ const S = {
   microWhite: { color: P.white, font: 'micro' },
   ink: { color: P.ink },
   ink2: { color: P.ink, scale: 2 },
+  ink3: { color: P.ink, scale: 3 },
   white2Right: { color: P.white, scale: 2, align: 'right' },
   black: { color: P.black },
 };
@@ -151,7 +152,7 @@ function layoutCache(limit = 120) {
 /** Programme accents (THEME_ACCENT values); anything else falls back to brand red. */
 const ACCENTS = new Set([P.red, P.cyan, P.magenta, P.green, P.yellow]);
 const PROGRAM_ACCENT = { 'world-now': P.red, 'tech-bytes': P.cyan, cosmos: P.magenta, 'money-minute': P.green, 'news-60': P.yellow };
-const accentFor = (programId, accent) => (ACCENTS.has(accent) ? accent : PROGRAM_ACCENT[programId] || P.red);
+const accentFor = (programId, accent) => (ACCENTS.has(accent) ? accent : (typeof programId === 'string' && Object.hasOwn(PROGRAM_ACCENT, programId) && PROGRAM_ACCENT[programId]) || P.red);
 
 // ---------------------------------------------------------------------------
 // HEADLINE MONTAGE FRAME (cold open). One frame per headline with hard cuts
@@ -182,24 +183,27 @@ function categoryLabel(name) {
 // one neutral field for every headline without a picture: the world in slate dots on ink
 const MONTAGE_FIELD = lazyBackdrop({ key: 'montage', colors: [P.black, P.ink], cx: 290, cy: 60, reach: 280, texture: (d, level) => worldDots(d, (x, y) => level(x, y) * 2) });
 
+let TOP_STORIES_W = 0;
 export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline = '', source = '', category = 'general', image = null, accent = null, programId = '' } = {}) {
   const acc = accentFor(programId, accent);
+  if (!TOP_STORIES_W) TOP_STORIES_W = measureText('TOP STORIES', 1, 'micro');
   if (image) {
     ctx.drawImage(image, 0, 0);
     ctx.drawImage(shade(96, 200, 0.85), 0, 0); // photos get a stepped shade; the field is already dark there
   } else ctx.drawImage(MONTAGE_FIELD(), 0, 0);
 
-  // TOP STORIES tag and pips under the bug: animate in on the first frame only
-  const tagP = index === 0 ? easeOutQuint(seg(dt, 0.1, 0.35)) : 1;
-  const tagW = textW('TOP STORIES') + 10;
+  // TOP STORIES tag and pips under the bug, micro white on ink (brand red stays with the bug, LIVE
+  // and BREAKING): it wipes in on the first frame only and stays put across the cuts
+  const tagP = index === 0 ? easeOutQuint(seg(dt, 0.05, 0.35)) : 1;
+  const tagW = TOP_STORIES_W + 10;
   const n = clamp(Math.floor(total) || 1, 1, 12);
   const pipsW = n * 11 + 4;
   ctx.save();
   try {
     clipRect(ctx, 13, 25, Math.round((tagW + pipsW) * tagP), 12);
-    plate(ctx, 13, 25, tagW, 11, P.red);
-    drawText(ctx, 'TOP STORIES', 18, 27, S.white);
-    plate(ctx, 13 + tagW, 25, pipsW, 11, P.black);
+    plate(ctx, 13, 25, tagW + pipsW, 11, P.ink);
+    plate(ctx, 13, 25, 1, 11, P.slate);
+    drawText(ctx, 'TOP STORIES', 18, 28, S.microWhite);
     for (let i = 0; i < n; i++) {
       ctx.fillStyle = i === index ? P.white : i < index ? P.fog : P.slate;
       ctx.fillRect(13 + tagW + 4 + i * 11, 29, 9, 3);
@@ -219,7 +223,10 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
   const cw = textW(label) + 13;
   const src = source ? ellipsis(source, 200) : '';
   const sw = src ? textW(src) + 10 : 0;
-  const cp = easeOutQuint(seg(dt, 0.12, 0.32));
+  // the first frame comes straight out of the open's lock-up on the theme's last hit: its chip and
+  // bar start at once (the cut never lands on an empty field), the words 0.1 s after the bar
+  const t0 = index === 0 ? 0 : 0.12;
+  const cp = easeOutQuint(seg(dt, t0, 0.32));
   if (cp > 0) {
     ctx.save();
     try {
@@ -236,13 +243,13 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
     }
   }
   // accent rule grows down beside the headline
-  const bar = Math.round((blockH + 4) * easeOutQuint(seg(dt, 0.18, 0.4)));
+  const bar = Math.round((blockH + 4) * easeOutQuint(seg(dt, index === 0 ? 0 : 0.18, 0.4)));
   if (bar > 0) {
     ctx.fillStyle = acc;
     ctx.fillRect(13, top - 2, 2, bar);
   }
   for (let i = 0; i < lay.lines.length; i++) {
-    rise(ctx, lay.lines[i], X0, top + i * lay.lh, seg(dt, 0.24 + i * 0.07, 0.34), lay.scale === 2 ? S.white2Shadow : S.whiteShadow);
+    rise(ctx, lay.lines[i], X0, top + i * lay.lh, seg(dt, (index === 0 ? 0.1 : 0.24) + i * 0.07, 0.34), lay.scale === 2 ? S.white2Shadow : S.whiteShadow);
   }
 }
 
@@ -318,14 +325,19 @@ function rowsFor(fact, numbers) {
 // ---------------------------------------------------------------------------
 // FACT CARD: one look per programme (docs/programmes/*.md), all inside y 26-134.
 //   WORLD NOW / NEWS IN 60 / new shows: a black panel wipes in, a 1 px accent rule draws under
-//     the figure's slot, then the figure cuts in at 2x white with its words under it.
+//     the figure's slot, then the figure cuts in at 2x white with its words under it. Two or
+//     three figures stack in the same grammar (figure, accent underline, words beside it).
 //   TECH BYTES: ledger rows (label left in micro fog, slate leader, figure right at 2x white),
-//     a cyan rule draws under each row, the figure cuts in 0.1 s after it.
+//     a rule draws under each row, the figure cuts in 0.1 s after it. A fact without a figure
+//     is set as ledger text rows (2x white lines on slate rules, the last rule cyan).
 //   COSMOS DESK: "the Reading": the figure, its label and a powers-of-ten ruler with a magenta
-//     measurement line growing to the figure's magnitude.
+//     measurement line growing to the figure's magnitude (no figure: the words at 2x on the
+//     Reading's column, no ruler).
 //   MONEY MINUTE: a cream "paper" panel on ink: the headline states the point, a dark-green
-//     rule, one figure in ink (two comparable values become proportional bars).
-// No count-ups, no meters, no rolling digits.
+//     rule, then one figure at 3x in ink, two comparable values as proportional bars, or the
+//     fact itself in ink.
+// A qualifier stated with a figure (ABOUT, MORE THAN, UP TO...) is always drawn with it, in
+// micro type. No count-ups, no meters, no rolling digits.
 
 const factField = lazyBackdrop({ key: 'fact', colors: [P.black, P.ink], cx: 192, cy: 82, reach: 300, texture: (d, level) => worldDots(d, level) });
 const inkField = lazyBackdrop({ key: 'fact-ink', colors: [P.black, P.ink], cx: 192, cy: 82, reach: 520 });
@@ -340,25 +352,29 @@ function cardGround(ctx, dt, image, field) {
   } else ctx.drawImage(field(), 0, 0);
 }
 
+const srcText = (source, maxW) => (source ? ellipsis(`SOURCE: ${String(source).toUpperCase()}`, maxW, 1) : '');
+
+// WORLD NOW / NEWS IN 60 / new shows: one figure (or the words) on a black panel
 const RULE_LAYOUTS = layoutCache(120);
 function ruleLayout(fact, label, source, rows) {
-  return RULE_LAYOUTS(String(fact ?? ''), label, source, rows[0]?.figure, () => {
+  return RULE_LAYOUTS(String(fact ?? ''), label, source, rows, () => {
     const PX = 40;
     const PW = W - 2 * PX;
     const inner = PW - 24;
     const r = rows[0] || null;
     const kicker = ellipsis(label || (r ? 'BY THE NUMBERS' : 'KEY FACT'), inner, 1);
+    const qual = r && r.qual ? ellipsis(r.qual, inner, 1) : '';
     const big = r ? ellipsis(r.figure, inner, 2) : null;
     const words = r ? (r.label ? balanceLines(r.label, inner, 1, 3) : []) : null;
     const text = r ? null : layout(fact, inner, 3, 4);
-    const src = source ? ellipsis(`SOURCE: ${String(source).toUpperCase()}`, inner, 1) : '';
+    const src = srcText(source, inner);
     let h = 10 + 5 + 7; // top pad, micro kicker, gap
-    if (big) h += 14 + 5 + 1 + 6 + (words.length ? words.length * 11 - 4 : 0);
+    if (big) h += (qual ? 7 : 0) + 14 + 5 + 1 + 6 + (words.length ? words.length * 11 - 4 : 0);
     else h += text.lines.length * text.lh - (text.lh - 7 * text.scale) + 5 + 1;
     if (src) h += 10 + 5;
     h += 10;
-    const PY = clamp(Math.round(80 - h / 2), 30, SAFE_BOTTOM - h);
-    return { PX, PW, PH: h, PY, inner, kicker, big, words, text, src };
+    const PY = clamp(Math.round(80 - h / 2), 28, SAFE_BOTTOM - h);
+    return { PX, PW, PH: h, PY, inner, kicker, qual, big, words, text, src };
   });
 }
 
@@ -381,6 +397,11 @@ function drawRuleCard(ctx, dt, o, rows, acc, wipeDur) {
     // the panel's words are revealed by the wipe itself (no empty box); the figure waits for its rule
     const ruleAt = wipeDur * 0.6;
     if (L.big) {
+      if (L.qual) {
+        // the qualifier belongs to the figure: it is on the panel before the figure cuts in
+        drawText(ctx, L.qual, tx, y, S.microFog);
+        y += 7;
+      }
       const ruleY = y + 14 + 5;
       const rw = Math.round(L.inner * easeOutQuint(seg(dt, ruleAt, 0.3)));
       if (rw > 0) {
@@ -408,22 +429,86 @@ function drawRuleCard(ctx, dt, o, rows, acc, wipeDur) {
   }
 }
 
+// WORLD NOW / NEWS IN 60 / new shows: two or three figures stacked in the fact card's grammar
+const STACK_PITCH = 24;
+const STACK_LAYOUTS = layoutCache(60);
+function stackLayout(label, source, rows) {
+  return STACK_LAYOUTS(String(label ?? ''), source, rows, null, () => {
+    const PX = 40;
+    const PW = W - 2 * PX;
+    const figs = rows.map((r) => ellipsis(r.figure, 150, 2));
+    let fw = 0;
+    for (const f of figs) fw = Math.max(fw, textW(f, 2));
+    const lx = 12 + fw + 12; // the words' column, from the panel's left edge
+    const lw = PW - lx - 12;
+    const items = rows.map((r, i) => ({
+      fig: figs[i],
+      figW: textW(figs[i], 2),
+      lines: r.label ? balanceLines(r.label, lw, 1, 2) : [],
+      qual: r.qual ? ellipsis(r.qual, fw + 8, 1) : '',
+    }));
+    const kicker = ellipsis(label || 'BY THE NUMBERS', PW - 24, 1);
+    const src = srcText(source, PW - 24);
+    const top = 10 + 5 + 9; // kicker, then room for a qualifier above the first figure
+    const h = top + items.length * STACK_PITCH - 6 + (src ? 13 : 0) + 9;
+    const PY = clamp(Math.round(80 - h / 2), 28, SAFE_BOTTOM - h);
+    return { PX, PW, PH: h, PY, lx, items, kicker, src, y0: PY + top };
+  });
+}
+
+function drawStack(ctx, dt, o, rows, acc) {
+  const L = stackLayout(o.label, o.source, rows);
+  const vis = Math.round(L.PW * easeOutQuint(seg(dt, 0, 0.3)));
+  if (vis <= 0) return;
+  const tx = L.PX + 12;
+  ctx.save();
+  try {
+    clipRect(ctx, L.PX, L.PY, vis, L.PH);
+    ctx.fillStyle = P.black;
+    ctx.fillRect(L.PX, L.PY, L.PW, L.PH);
+    ctx.fillStyle = P.slate;
+    ctx.fillRect(L.PX, L.PY, L.PW, 1);
+    drawText(ctx, L.kicker, tx, L.PY + 10, S.microFog);
+    for (let i = 0; i < L.items.length; i++) {
+      const it = L.items[i];
+      const y = L.y0 + i * STACK_PITCH;
+      if (it.qual) drawText(ctx, it.qual, tx, y - 7, S.microFog);
+      // the words beside the figure's slot, centred on it
+      const ly = it.lines.length > 1 ? y - 2 : y + 4;
+      for (let k = 0; k < it.lines.length; k++) drawText(ctx, it.lines[k], L.PX + L.lx, ly + k * 11, S.white);
+      // each figure gets its accent underline, then cuts in (rows one after another)
+      const at = 0.25 + i * 0.3;
+      const rw = Math.round(it.figW * easeOutQuint(seg(dt, at, 0.25)));
+      if (rw > 0) {
+        ctx.fillStyle = acc;
+        ctx.fillRect(tx, y + 16, rw, 1);
+      }
+      if (dt >= at + 0.35) drawText(ctx, it.fig, tx, y, S.white2);
+    }
+    if (L.src) drawText(ctx, L.src, tx, L.y0 + L.items.length * STACK_PITCH - 6 + 6, S.microFog);
+  } finally {
+    ctx.restore();
+  }
+}
+
 // TECH BYTES ledger
+const LEDGER_PITCH = 24;
 const LEDGER_LAYOUTS = new WeakMap();
 function ledgerLayout(rows, label, source) {
   let L = LEDGER_LAYOUTS.get(rows);
   if (L && L.label === label && L.source === source) return L;
   const n = rows.length;
-  const PITCH = 18;
-  const blockH = 12 + n * PITCH + (source ? 12 : 0);
+  const blockH = 12 + n * LEDGER_PITCH - 4 + (source ? 12 : 0);
   const top = clamp(Math.round(82 - blockH / 2), 30, SAFE_BOTTOM - blockH);
   const items = rows.map((r, i) => {
     const fig = ellipsis(r.figure, 170, 2);
     const fw = textW(fig, 2);
-    const lab = ellipsis(r.label || '', W - 2 * X0 - fw - 24, 1);
-    return { fig, fw, lab, labW: measureText(lab, 1, 'micro'), y: top + 12 + i * PITCH };
+    const qual = r.qual ? ellipsis(r.qual, 80, 1) : '';
+    const qualW = qual ? measureText(qual, 1, 'micro') + 4 : 0;
+    const lab = ellipsis(r.label || '', W - 2 * X0 - fw - qualW - 24, 1);
+    return { fig, fw, qual, qualW, lab, labW: measureText(lab, 1, 'micro'), y: top + 12 + i * LEDGER_PITCH };
   });
-  L = { label, source, top, items, kicker: ellipsis(label || (n > 1 ? 'BY THE NUMBERS' : 'NUMBER OF THE DAY'), 200, 1), src: source ? ellipsis(`SOURCE: ${String(source).toUpperCase()}`, 300, 1) : '' };
+  L = { label, source, top, items, kicker: ellipsis(label || (n > 1 ? 'BY THE NUMBERS' : 'NUMBER OF THE DAY'), 200, 1), src: srcText(source, 300) };
   LEDGER_LAYOUTS.set(rows, L);
   return L;
 }
@@ -443,21 +528,61 @@ function drawLedger(ctx, dt, o, rows, acc) {
     for (let i = 0; i < n; i++) {
       const it = L.items[i];
       const at = 0.15 + i * 0.3;
-      // label in micro on the figure's baseline, then a dotted slate leader to the figure
+      // label in micro on the figure's baseline, a dotted slate leader, then the qualifier (micro)
+      // right before the figure
       drawText(ctx, it.lab, X0, it.y + 9, S.microFog);
       ctx.fillStyle = P.slate;
       const lx = X0 + it.labW + 4;
-      const rx = W - X0 - it.fw - 4;
+      const rx = W - X0 - it.fw - 4 - it.qualW;
       for (let x = lx + ((lx & 1) ^ 1); x < rx; x += 2) ctx.fillRect(x, it.y + 13, 1, 1);
+      if (it.qual) drawText(ctx, it.qual, rx + 2, it.y + 9, S.microFog);
       // the rule under the row: slate between rows, the accent under the last one
       const rw = Math.round(RW * easeOutQuint(seg(dt, at, 0.3)));
       if (rw > 0) {
         ctx.fillStyle = i === n - 1 ? acc : P.slate;
-        ctx.fillRect(X0, it.y + 16, rw, 1);
+        ctx.fillRect(X0, it.y + 17, rw, 1);
       }
       if (dt >= at + 0.4) drawText(ctx, it.fig, W - X0, it.y, S.white2Right);
     }
-    if (L.src) drawText(ctx, L.src, X0, L.items[n - 1].y + 22, S.microFog);
+    if (L.src) drawText(ctx, L.src, X0, L.items[n - 1].y + 24, S.microFog);
+  } finally {
+    ctx.restore();
+  }
+}
+
+// TECH BYTES, a fact without a figure: the words as ledger rows (each line on its rule)
+const LEDGER_TEXT = layoutCache(60);
+function ledgerTextLayout(fact, label, source) {
+  return LEDGER_TEXT(String(fact ?? ''), label, source, null, () => {
+    const T = layout(fact, W - 2 * X0, 3, 4);
+    const lh = T.scale === 2 ? 22 : 15;
+    const blockH = 12 + T.lines.length * lh - 3 + (source ? 12 : 0);
+    const top = clamp(Math.round(82 - blockH / 2), 30, SAFE_BOTTOM - blockH);
+    return { T, lh, top, kicker: ellipsis(label || 'KEY FACT', 200, 1), src: srcText(source, 300) };
+  });
+}
+
+function drawLedgerText(ctx, dt, o, acc) {
+  const L = ledgerTextLayout(o.fact, o.label, o.source);
+  const enter = easeOutQuint(seg(dt, 0, 0.3));
+  if (enter <= 0) return;
+  const RW = W - 2 * X0;
+  const T = L.T;
+  const n = T.lines.length;
+  ctx.save();
+  try {
+    clipRect(ctx, X0, L.top - 2, Math.round(RW * enter), SAFE_BOTTOM - L.top + 2);
+    drawText(ctx, L.kicker, X0, L.top, S.microFog);
+    for (let i = 0; i < n; i++) {
+      const y = L.top + 12 + i * L.lh;
+      drawText(ctx, T.lines[i], X0, y, T.scale === 2 ? S.white2 : S.white);
+      const rw = Math.round(RW * easeOutQuint(seg(dt, 0.15 + i * 0.2, 0.3)));
+      if (rw > 0) {
+        ctx.fillStyle = i === n - 1 ? acc : P.slate;
+        ctx.fillRect(X0, y + 7 * T.scale + 3, rw, 1);
+      }
+    }
+    if (L.src) drawText(ctx, L.src, X0, L.top + 12 + n * L.lh + 2, S.microFog);
   } finally {
     ctx.restore();
   }
@@ -482,6 +607,7 @@ function drawReading(ctx, dt, o, rows) {
     }
     const f = r.f;
     const ruler = Number.isFinite(f.value) && f.value >= 1 && f.value <= 1e12 && !f.pct && !f.year && !f.range;
+    if (r.qual) drawText(ctx, ellipsis(r.qual, 200, 1), x0, 48, S.microSilver);
     // the figure wipes on (absent, then whole: no count-up, no typing)
     const fp = easeOutQuint(seg(dt, 0.3, 0.25));
     if (fp > 0) {
@@ -489,7 +615,7 @@ function drawReading(ctx, dt, o, rows) {
       const fw = textW(fig, 2);
       ctx.save();
       try {
-        clipRect(ctx, x0, 52, Math.round((fw + 2) * fp), 20);
+        clipRect(ctx, x0, 55, Math.round((fw + 2) * fp), 17);
         drawText(ctx, fig, x0, 56, S.white2);
       } finally {
         ctx.restore();
@@ -534,11 +660,18 @@ const MICRO_FOG_C = { color: P.fog, font: 'micro', align: 'center' };
 // MONEY MINUTE: the paper card
 const PAPER = { x: 40, y: 32, w: 304, h: 88 };
 const PAPER_LAYOUTS = layoutCache(120);
-function paperLayout(headline, rows, source) {
-  const r0 = rows[0];
-  return PAPER_LAYOUTS(String(headline ?? ''), rows, source, r0?.figure, () => {
+function paperLayout(headline, rows, source, fact) {
+  return PAPER_LAYOUTS(String(headline ?? ''), rows, source, fact, () => {
+    const { y, h } = PAPER;
     const inner = PAPER.w - 16;
     const title = headline ? balanceLines(headline, inner, 1, 2) : [];
+    const ruleY = title.length ? y + 9 + title.length * 11 - 4 + 4 : y + 9;
+    const src = srcText(source, inner);
+    // the body sits centred between the rule and the source line
+    const bodyTop = ruleY + 6;
+    const bodyBot = src ? y + h - 15 : y + h - 7;
+    const room = bodyBot - bodyTop;
+    const r0 = rows[0];
     // two non-negative values with the same unit and label: proportional bars
     let bars = null;
     if (rows.length >= 2) {
@@ -546,16 +679,33 @@ function paperLayout(headline, rows, source) {
       const unit = (x) => x.figure.replace(/[\d.,\s]/g, '');
       if (a.label === b.label && unit(a) === unit(b) && a.f.value >= 0 && b.f.value >= 0 && Number.isFinite(a.f.value) && Number.isFinite(b.f.value)) {
         const max = Math.max(a.f.value, b.f.value) || 1;
-        bars = [a, b].map((r) => ({ figure: r.figure, len: Math.max(1, Math.round((200 * r.f.value) / max)) }));
+        bars = [a, b].map((r) => ({ figure: r.qual ? `${r.qual} ${r.figure}` : r.figure, len: Math.max(1, Math.round((200 * r.f.value) / max)) }));
       }
     }
-    return {
-      title,
-      figure: r0 ? ellipsis(r0.figure, inner, 2) : null,
-      label: r0 && r0.label ? ellipsis(r0.label, inner, 1) : '',
-      bars,
-      src: source ? ellipsis(`SOURCE: ${String(source).toUpperCase()}`, inner, 1) : '',
-    };
+    const out = { title, ruleY, src, bars, barsY: bodyTop + Math.max(0, (room - 22) >> 1), figure: null, text: null };
+    if (!bars && r0) {
+      // one figure: 3x when it fits the panel (the number of the day), else 2x
+      const qual = r0.qual ? ellipsis(r0.qual, inner, 1) : '';
+      const label = r0.label ? ellipsis(r0.label, inner, 1) : '';
+      const extra = (qual ? 7 : 0) + (label ? 11 : 0);
+      const scale = textW(r0.figure, 3) <= inner && 21 + extra <= room ? 3 : 2;
+      const figure = ellipsis(r0.figure, inner, scale);
+      const blockH = extra + 7 * scale;
+      const top = bodyTop + Math.max(0, (room - blockH) >> 1);
+      out.figure = { text: figure, scale, qual, label, qualY: top, figY: top + (qual ? 7 : 0), labelY: top + (qual ? 7 : 0) + 7 * scale + 4 };
+    } else if (!bars && fact) {
+      // no figure: the fact itself in ink, 2x when it fits in two lines, else 1x
+      let scale = 2;
+      let lines = balanceLines(fact, inner, 2, 99);
+      if (lines.length > 2 || lines.length * 18 - 4 > room || lines.some((l) => l.endsWith('...'))) {
+        scale = 1;
+        lines = balanceLines(fact, inner, 1, Math.max(1, Math.floor((room + 4) / 11)));
+      }
+      const lh = scale === 2 ? 18 : 11;
+      const blockH = lines.length * lh - (lh - 7 * scale);
+      out.text = { lines, scale, lh, y: bodyTop + Math.max(0, (room - blockH) >> 1) };
+    }
+    return out;
   });
 }
 
@@ -564,7 +714,7 @@ function drawPaper(ctx, dt, o, rows) {
   const p = easeOutQuint(seg(dt, 0.05, 0.25));
   const vis = Math.round(PAPER.w * p);
   if (vis <= 0) return;
-  const L = paperLayout(o.headline || (rows[0] ? '' : o.fact), rows, o.source);
+  const L = paperLayout(o.headline, rows, o.source, typeof o.fact === 'string' ? o.fact : String(o.fact ?? ''));
   const { x, y, w, h } = PAPER;
   ctx.save();
   try {
@@ -578,28 +728,28 @@ function drawPaper(ctx, dt, o, rows) {
     ctx.fillRect(x + 1, y + h, w, 1);
     ctx.fillRect(x + w, y + 1, 1, h);
     const tx = x + 8;
-    let ty = y + 9;
-    for (let i = 0; i < L.title.length; i++) drawText(ctx, L.title[i], tx, ty + i * 11, S.ink);
-    ty += L.title.length ? L.title.length * 11 - 4 + 4 : 0;
+    for (let i = 0; i < L.title.length; i++) drawText(ctx, L.title[i], tx, y + 9 + i * 11, S.ink);
     ctx.fillStyle = P.darkGreen;
-    ctx.fillRect(tx, ty, w - 16, 1);
-    ty += 7;
+    ctx.fillRect(tx, L.ruleY, w - 16, 1);
     if (L.bars) {
       const bp = easeOutQuint(seg(dt, 0.4, 0.5));
       for (let i = 0; i < 2; i++) {
         const b = L.bars[i];
-        const by = ty + 2 + i * 14;
+        const by = L.barsY + i * 14;
         const len = Math.max(1, Math.round(b.len * bp));
         ctx.fillStyle = i === 0 ? P.steel : P.ink;
         ctx.fillRect(tx, by, len, 8);
         if (bp >= 1) drawText(ctx, b.figure, tx + len + 6, by + 1, S.ink);
       }
     } else if (L.figure) {
-      drawText(ctx, L.figure, tx, ty, S.ink2);
-      if (L.label) drawText(ctx, L.label, tx, ty + 19, S.ink);
-    } else if (!L.title.length) {
-      const T = balanceLines(o.fact, w - 16, 1, 3);
-      for (let i = 0; i < T.length; i++) drawText(ctx, T[i], tx, ty + i * 11, S.ink);
+      const F = L.figure;
+      if (F.qual) drawText(ctx, F.qual, tx, F.qualY, S.microSlate);
+      // the figure is set after the panel is out (absent, then whole)
+      if (dt >= 0.35) drawText(ctx, F.text, tx, F.figY, F.scale === 3 ? S.ink3 : S.ink2);
+      if (F.label) drawText(ctx, F.label, tx, F.labelY, S.ink);
+    } else if (L.text) {
+      const T = L.text;
+      for (let i = 0; i < T.lines.length; i++) drawText(ctx, T.lines[i], tx, T.y + i * T.lh, T.scale === 2 ? S.ink2 : S.ink);
     }
     if (L.src) drawText(ctx, L.src, tx, y + h - 11, S.microSlate);
   } finally {
@@ -607,8 +757,9 @@ function drawPaper(ctx, dt, o, rows) {
   }
 }
 
+const RULE_STYLE = { look: 'rule', wipe: 0.3 };
 const FACT_STYLES = {
-  'world-now': { look: 'rule', wipe: 0.3 },
+  'world-now': RULE_STYLE,
   'news-60': { look: 'rule', wipe: 0.25 },
   'tech-bytes': { look: 'ledger' },
   cosmos: { look: 'reading' },
@@ -616,8 +767,8 @@ const FACT_STYLES = {
 };
 
 /**
- * Fact card. o = { fact, label, source, image, numbers: [{ value, label }], programId, accent,
- * headline (MONEY MINUTE's paper title), quote: { text, by } (shown when there is no fact) }.
+ * Fact card. o = { fact, label, source, image, numbers: [{ value, label, qualifier? }], programId,
+ * accent, headline (MONEY MINUTE's paper title), quote: { text, by } (shown when there is no fact) }.
  */
 export function drawFactCard(ctx, t, dt, o = {}) {
   const opts = o || {};
@@ -629,7 +780,7 @@ export function drawFactCard(ctx, t, dt, o = {}) {
     QUOTE.programId = opts.programId ?? '';
     return drawQuoteCard(ctx, t, dt, QUOTE);
   }
-  const style = FACT_STYLES[opts.programId] || { look: 'rule', wipe: 0.3 };
+  const style = typeof opts.programId === 'string' && Object.hasOwn(FACT_STYLES, opts.programId) ? FACT_STYLES[opts.programId] : RULE_STYLE;
   const acc = accentFor(opts.programId, opts.accent);
   const rows = rowsFor(opts.fact, opts.numbers);
   if (style.look === 'paper') {
@@ -641,9 +792,12 @@ export function drawFactCard(ctx, t, dt, o = {}) {
     ctx.fillRect(0, 0, W, H);
     return drawReading(ctx, dt, opts, rows);
   }
-  cardGround(ctx, dt, opts.image, style.look === 'ledger' ? inkField : factField);
-  if (style.look === 'ledger' && rows.length) return drawLedger(ctx, dt, opts, rows, acc);
-  if (rows.length > 1) return drawLedger(ctx, dt, opts, rows, acc);
+  if (style.look === 'ledger') {
+    cardGround(ctx, dt, opts.image, inkField);
+    return rows.length ? drawLedger(ctx, dt, opts, rows, acc) : drawLedgerText(ctx, dt, opts, acc);
+  }
+  cardGround(ctx, dt, opts.image, factField);
+  if (rows.length > 1) return drawStack(ctx, dt, opts, rows, acc);
   return drawRuleCard(ctx, dt, opts, rows, acc, style.wipe || 0.3);
 }
 
@@ -665,9 +819,28 @@ export function drawNumbersCard(ctx, t, dt, o = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// QUOTE CARD: words quoted in the story, in body type on an ink plate, the attribution in micro
-// fog. TECH BYTES carries a 1 px cyan bar on the left; the others a 1 px accent rule that draws
-// under the quote on entry.
+// QUOTE CARD: words quoted in the story, in body type on an ink plate under a hand-pixelled
+// opening quotation mark in the programme accent, the attribution in micro fog ("- THE MAYOR"),
+// so a quote never reads as a fact. TECH BYTES carries a 1 px cyan bar on the left; the others
+// a 1 px accent rule that draws under the quote on entry.
+
+// an opening quotation mark, two "6" shapes (4x6 each, 2 px apart)
+const QUOTE_MARK = ['..##..##', '.##..##.', '##..##..', '########', '########', '.##..##.'];
+function quoteMark(ctx, x, y, color) {
+  ctx.fillStyle = color;
+  for (let r = 0; r < QUOTE_MARK.length; r++) {
+    const row = QUOTE_MARK[r];
+    let run = -1;
+    for (let c = 0; c <= row.length; c++) {
+      const on = row[c] === '#';
+      if (on && run < 0) run = c;
+      else if (!on && run >= 0) {
+        ctx.fillRect(x + run, y + r, c - run, 1);
+        run = -1;
+      }
+    }
+  }
+}
 
 const QUOTE_LAYOUTS = layoutCache(80);
 export function drawQuoteCard(ctx, t, dt, { text = '', by = null, image = null, accent = null, programId = '' } = {}) {
@@ -683,9 +856,9 @@ export function drawQuoteCard(ctx, t, dt, { text = '', by = null, image = null, 
     }
     const lh = scale === 2 ? 18 : 11;
     const blockH = lines.length * lh - (lh - 7 * scale);
-    const attr = by ? ellipsis(String(by).toUpperCase(), inner, 1) : '';
-    const h = 12 + blockH + 6 + 1 + (attr ? 12 : 0) + 10;
-    const y = clamp(Math.round(80 - h / 2), 30, SAFE_BOTTOM - h);
+    const attr = by ? ellipsis(`— ${String(by).toUpperCase()}`, inner, 1) : '';
+    const h = 9 + 6 + 7 + blockH + 6 + 1 + (attr ? 12 : 0) + 10;
+    const y = clamp(Math.round(80 - h / 2), 28, SAFE_BOTTOM - h);
     return { lines, scale, lh, blockH, attr, h, y, x: 40, w: W - 80 };
   });
   const wipe = easeOutQuint(seg(dt, 0, 0.35));
@@ -699,12 +872,13 @@ export function drawQuoteCard(ctx, t, dt, { text = '', by = null, image = null, 
     ctx.fillStyle = P.slate;
     ctx.fillRect(L.x, L.y, L.w, 1);
     const tx = L.x + 14;
-    let y = L.y + 12;
+    quoteMark(ctx, tx, L.y + 9, acc);
+    let y = L.y + 9 + 6 + 7;
     const st = L.scale === 2 ? S.white2 : S.white;
     for (let i = 0; i < L.lines.length; i++) drawText(ctx, L.lines[i], tx, y + i * L.lh, st);
     if (programId === 'tech-bytes') {
       ctx.fillStyle = acc;
-      ctx.fillRect(L.x + 7, y - 1, 1, L.blockH + 2);
+      ctx.fillRect(L.x + 7, L.y + 9, 1, y - L.y - 9 + L.blockH + 1);
     }
     y += L.blockH + 6;
     if (programId !== 'tech-bytes') {

@@ -88,7 +88,7 @@ export const STINGS = {
 
   /** In each headline gap: one soft timpani hit, then the pip (bell low 5 -> 1). */
   pip(eng, t, { line = 0, lines = 3 } = {}) {
-    const dest = bus(eng, 0.55, { echo: 0.25, time: 0.33 });
+    const dest = bus(eng, 0.5, { echo: 0.25, time: 0.33 });
     const name = eng.headlineVoice?.name || 'D';
     eng.rig.timpani(t, BRASS[name].root + 12, 0.42, dest);
     const spb = 60 / 92;

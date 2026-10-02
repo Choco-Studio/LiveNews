@@ -67,8 +67,7 @@ function halo(x, y, lag) {
   const u = xx / HALO.rx, v = dy / ry;
   const r2 = u * u + v * v;
   // the scallop only matters near the outline: skip the angle well inside and well outside
-  if (r2 > 1.16) return 1 - Math.sqrt(r2) + SC_MAX;
-  if (r2 < 0.82) return 1 - Math.sqrt(r2) - SC_MAX + 0.001 > 0 ? 0.1 : 1 - Math.sqrt(r2);
+  if (r2 > 1.16 || r2 < 0.8) return 1 - Math.sqrt(r2); // the sign cannot change there (|scallop| ≤ SC_MAX)
   const a = fastAtan2(v, u);
   const k = ((((a + Math.PI) / (2 * Math.PI)) * SC_N) | 0) & (SC_N - 1);
   return 1 + SCALLOP[k] - Math.sqrt(r2);
