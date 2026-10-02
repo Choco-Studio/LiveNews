@@ -227,6 +227,14 @@ function fitScale(text, maxW, maxScale, minScale = 1) {
   for (let s = maxScale; s > minScale; s--) if (measureText(text, s) <= maxW) return s;
   return minScale;
 }
+/** Channel name at the biggest scale (≤ maxScale) that fits; ellipsized as a last resort. */
+function fitName(channel, maxW, maxScale) {
+  return cached(`name|${channel}|${maxW}|${maxScale}`, () => {
+    const name = normalizeText(channel || 'LIVENEWS').trim() || 'LIVENEWS';
+    const scale = fitScale(name, maxW, maxScale, 1);
+    return { scale, text: ellipsis(name, maxW, scale) };
+  });
+}
 function ellipsis(text, maxW, scale = 1, force = false) {
   let s = normalizeText(text).trim();
   if (!force && measureText(s, scale) <= maxW) return s;
@@ -706,8 +714,10 @@ function sweep(ctx, x, y, w, h, p, bandW = 16, a = 0.22) {
 }
 
 /** Channel lockup: mini globe tile + red name plate. Returns its size. */
-function lockup(ctx, x, y, channel, scale, t) {
-  const tw = measureText(channel, scale);
+function lockup(ctx, x, y, channel, maxScale, t) {
+  const nm = fitName(channel, 280, maxScale);
+  const scale = nm.scale;
+  const tw = measureText(nm.text, scale);
   const pad = 3 * scale;
   const bh = 7 * scale + pad * 2;
   const icon = bh;
@@ -718,7 +728,7 @@ function lockup(ctx, x, y, channel, scale, t) {
   r(ctx, x + icon, y, tw + pad * 2, 1, P.pink);
   r(ctx, x, y + bh, icon + tw + pad * 2, scale, P.darkRed);
   r(ctx, x + icon, y + bh, 4 * scale, scale, P.yellow);
-  drawText(ctx, channel, x + icon + pad, y + pad, { color: P.white, scale, shadow: P.darkRed });
+  drawText(ctx, nm.text, x + icon + pad, y + pad, { color: P.white, scale, shadow: P.darkRed });
   return { w: icon + tw + pad * 2, h: bh + scale, textX: x + icon + pad, textY: y + pad };
 }
 
@@ -748,7 +758,7 @@ export function drawTitleCard(ctx, t, dt, { channel = 'LIVENEWS', subtitle = 'WO
   ctx.drawImage(brandField(192, CY), 0, 0);
   drawMap(ctx, t, 3);
   drawBeams(ctx, t);
-  if (dt > 0.6) drawPulses(ctx, 192, CY, t - 0.6, 62, 240, 2.6, P.blue, 2, 0.6);
+  if (dt > 0.6) drawPulses(ctx, 192, CY, dt - 0.6, 62, 240, 2.6, P.blue, 2, 0.6 * seg(dt, 0.6, 1.2));
   drawSpecks(ctx, t);
   // fade up from black with an ordered dissolve
   const fade = 1 - easeOut(seg(dt, 0.05, 0.6));
@@ -772,7 +782,7 @@ export function drawTitleCard(ctx, t, dt, { channel = 'LIVENEWS', subtitle = 'WO
     r(ctx, (W - lw) >> 1, CY - 1, lw, 2, P.white);
   } else {
     ribbon(ctx, 0, top, W, rh, t);
-    if (openP < 1) {
+    if (openP < 0.55) {
       r(ctx, 0, top, W, 1, P.white);
       r(ctx, 0, top + rh - 1, W, 1, P.white);
     }
@@ -787,14 +797,15 @@ export function drawTitleCard(ctx, t, dt, { channel = 'LIVENEWS', subtitle = 'WO
   sparkle(ctx, 152, CY - 40, every(dt, 0.95, 5, 0.45));
 
   // channel name: letters drop into the ribbon one by one
-  const sc = fitScale(channel, 344, 4, 2);
-  const tw = measureText(channel, sc);
+  const nm = fitName(channel, 344, 4);
+  const sc = nm.scale;
+  const tw = measureText(nm.text, sc);
   const tx = (W - tw) >> 1;
   const capY = CY - round((7 * sc) / 2) - 1;
   if (openP > 0.4) {
     ctx.save();
     clipRect(ctx, 0, top + 1, W, rh - 1);
-    letters(channel, sc).forEach(({ ch, x }, i) => {
+    letters(nm.text, sc).forEach(({ ch, x }, i) => {
       if (ch === ' ') return;
       const st = 0.48 + i * 0.045;
       const p = seg(dt, st, 0.3);
@@ -984,6 +995,7 @@ function testCardLayer(channel) {
   r(ix, 0, 152, W, 26, P.ink);
   r(ix, 0, 178, W, 40, P.darkRed);
   r(ix, cx - 30, 178, 60, 40, P.red);
+  drawText(ix, 'STANDBY', cx, 186, { color: P.white, align: 'center', shadow: P.darkRed });
   // centre cross
   r(ix, cx, 60, 1, 58, P.fog);
   r(ix, bx0, cy, 2 * R + 1, 1, P.fog);
@@ -997,11 +1009,12 @@ function testCardLayer(channel) {
   discOutline(x, cx, cy, R + 1, P.black);
 
   // station name plate (overlaps the top of the circle)
-  const sc = fitScale(channel, 120, 2);
-  const nw = measureText(channel, sc) + 14;
+  const nm = fitName(channel, 170, 2);
+  const sc = nm.scale;
+  const nw = measureText(nm.text, sc) + 14;
   r(x, cx - (nw >> 1), 15, nw, 7 * sc + 8, P.black);
   r(x, cx - (nw >> 1), 15 + 7 * sc + 8, nw, 1, P.red);
-  drawText(x, channel, cx, 19, { color: P.white, scale: sc, align: 'center' });
+  drawText(x, nm.text, cx, 19, { color: P.white, scale: sc, align: 'center' });
 
   TESTCARD = c;
   TESTCARD_KEY = channel;
@@ -1120,14 +1133,15 @@ export function drawStartScreen(ctx, t, { channel = 'LIVENEWS', prompt = 'CLICK 
   if (Math.floor(t * 1.5) % 2 === 0) r(ctx, X0 + 4, 54, 4, 4, P.red);
   drawText(ctx, 'LIVE • 24 HOURS', X0 + 11, 53, { color: P.white });
   // channel plate
-  const sc = fitScale(channel, 200, 4, 2);
-  const tw = measureText(channel, sc);
+  const nm = fitName(channel, 290, 4);
+  const sc = nm.scale;
+  const tw = measureText(nm.text, sc);
   const ph = 7 * sc + 14;
   r(ctx, X0, 64, tw + 16, ph, P.red);
   r(ctx, X0, 64, tw + 16, 1, P.pink);
   r(ctx, X0, 64 + ph - 3, tw + 16, 3, P.darkRed);
   r(ctx, X0, 64 + ph, tw + 16, 2, P.yellow);
-  extruded(ctx, channel, X0 + 8, 71, sc, P.white, P.darkRed, 2);
+  extruded(ctx, nm.text, X0 + 8, 71, sc, P.white, P.darkRed, 2);
   const gl = every(t, 0.8, 3.6, 0.6);
   if (gl >= 0) sweep(ctx, X0, 64, tw + 16, ph - 3, gl, 14, 0.25);
   drawText(ctx, 'WORLD NEWS AROUND THE CLOCK', X0, 64 + ph + 9, { color: P.cream, shadow: P.black });
@@ -1189,12 +1203,13 @@ const catFields = new Map();
 function categoryBackground(ctx, t, cat) {
   let f = catFields.get(cat.label);
   if (!f) {
-    const rmp = ramp([P.black, cat.a, cat.b]);
-    f = field(W, H, (x, y) => rmp(1.55 - Math.hypot((x - 300) / 300, (y - 50) / 220) * 1.9, x, y));
+    const rmp = ramp([P.black, cat.a]);
+    f = field(W, H, (x, y) => rmp(1.3 - Math.hypot((x - 310) / 330, (y - 40) / 230) * 1.25, x, y));
     catFields.set(cat.label, f);
   }
   ctx.drawImage(f, 0, 0);
-  drawMap(ctx, t, 5, 0.35);
+  drawMap(ctx, t, 5, 0.4);
+  drawPulses(ctx, 310, 52, t, 20, 300, 3.4, cat.b, 3, 0.45);
   // marching diagonal stripes
   stripes(ctx, t, { color: cat.b, a: 0.08, period: 24, width: 10, slope: 0.5, speed: 14 });
   // giant repeating category words scrolling in opposite directions
@@ -1291,7 +1306,7 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
   r(ctx, X - 8, chipY, 3, ab, P.red);
   // lines rise in one after another
   lay.lines.forEach((ln, i) => {
-    const p = seg(dt, 0.45 + i * 0.09, 0.4);
+    const p = seg(dt, 0.4 + i * 0.08, 0.38);
     riseText(ctx, ln, X, textTop + i * lay.lh + 3 * lay.scale, p, { color: P.white, scale: lay.scale, shadow: P.black });
   });
 }
@@ -1375,8 +1390,8 @@ export function drawBreakingCard(ctx, t, dt, { headline = '', source = '' } = {}
     const k = dt - t0;
     return k > 0 && k < 0.3 ? round(Math.sin(k * 75) * 4 * (1 - k / 0.3)) : 0;
   };
-  const shx = impact(0.62);
-  const shy = impact(0.44);
+  const shx = impact(0.54);
+  const shy = impact(0.36);
   ctx.save();
   ctx.translate(shx, shy);
 
@@ -1403,17 +1418,17 @@ export function drawBreakingCard(ctx, t, dt, { headline = '', source = '' } = {}
   if (sh > 0) {
     ctx.save();
     clipRect(ctx, -8, sTop, W + 16, sh);
-    const p1 = seg(dt, 0.26, 0.18);
+    const p1 = seg(dt, 0.18, 0.18);
     if (p1 > 0) extruded(ctx, 'BREAKING', tx, capY - round(60 * (1 - easeIn(p1))), sc, P.white, P.black, 3);
-    const p2 = seg(dt, 0.46, 0.16);
+    const p2 = seg(dt, 0.38, 0.16);
     if (p2 > 0) extruded(ctx, 'NEWS', newsX + round((W - newsX + 20) * (1 - easeIn(p2))), capY, sc, P.yellow, P.black, 3);
     const g = every(dt, 1.1, 1.8, 0.5);
     if (g >= 0) textGlint(ctx, 'BREAKING', tx, capY, sc, lerp(tx - 30, tx + tw + 30, g), 8, P.cream);
     ctx.restore();
     // impact streaks
     for (const [t0, x0, x1] of [
-      [0.44, tx, tx + measureText('BREAKING', sc)],
-      [0.62, newsX, tx + tw],
+      [0.36, tx, tx + measureText('BREAKING', sc)],
+      [0.54, newsX, tx + tw],
     ]) {
       const k = (dt - t0) / 0.25;
       if (k <= 0 || k >= 1) continue;
@@ -1434,7 +1449,7 @@ export function drawBreakingCard(ctx, t, dt, { headline = '', source = '' } = {}
   const by = 104;
   const bh = lay.lines.length * lay.lh + 12;
   const bp = easeOut(seg(dt, 0.95, 0.35));
-  if (bp > 0) {
+  if (bp > 0 && lay.lines.length) {
     const cw = round(BW * bp);
     r(ctx, BX + 2, by + 3, cw, bh, rgba(P.black, 0.45));
     r(ctx, BX, by, cw, bh, P.white);
@@ -1657,7 +1672,8 @@ export function drawStinger(ctx, t, p, { channel = 'LIVENEWS' } = {}) {
   clipSlab(ctx, red.tail, 0, red.lead - red.tail, H, -SL);
   stripes(ctx, p * 1.5, { color: P.darkRed, a: 0.28, period: 34, width: 12, slope: -SL, speed: 160 });
   const cy = H >> 1;
-  const sc = fitScale(channel, 250, 4, 2);
+  const nm = fitName(channel, 344, 4);
+  const sc = nm.scale;
   const bandH = 7 * sc + 26;
   r(ctx, 0, cy - (bandH >> 1), W, bandH, rgba(P.darkRed, 0.55));
   r(ctx, 0, cy - (bandH >> 1), W, 1, rgba(P.pink, 0.6));
@@ -1675,18 +1691,18 @@ export function drawStinger(ctx, t, p, { channel = 'LIVENEWS' } = {}) {
   // logo sweeps through while the screen is covered
   const lp = seg(p, 0.24, 0.52);
   if (lp > 0 && lp < 1) {
-    const tw = measureText(channel, sc);
-    const gR = 7 * sc - 7;
-    const total = gR * 2 + 10 + tw;
+    const tw = measureText(nm.text, sc);
+    const gR = sc > 1 && tw + 14 * sc + 10 <= 344 ? 7 * sc - 7 : 0;
+    const total = (gR ? gR * 2 + 10 : 0) + tw;
     const drift = round(lerp(-22, 22, lp) + (easeInOut(lp) - lp) * 40);
     const x0 = ((W - total) >> 1) + drift;
-    globe(ctx, x0 + gR, cy, gR, t * 60, t);
-    const tx = x0 + gR * 2 + 10;
+    if (gR) globe(ctx, x0 + gR, cy, gR, t * 60, t);
+    const tx = x0 + (gR ? gR * 2 + 10 : 0);
     const ty = cy - round((7 * sc) / 2);
-    extruded(ctx, channel, tx, ty, sc, P.white, P.maroon, 2);
+    extruded(ctx, nm.text, tx, ty, sc, P.white, P.maroon, 2);
     const ulw = round(tw * easeOut(seg(lp, 0.1, 0.5)));
     r(ctx, tx, ty + 7 * sc + 4, ulw, 2, P.yellow);
-    textGlint(ctx, channel, tx, ty, sc, lerp(tx - 20, tx + tw + 20, easeInOut(seg(lp, 0.2, 0.6))), 6, P.yellow);
+    textGlint(ctx, nm.text, tx, ty, sc, lerp(tx - 20, tx + tw + 20, easeInOut(seg(lp, 0.2, 0.6))), 6, P.yellow);
   }
   ctx.restore();
 }

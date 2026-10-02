@@ -592,7 +592,7 @@ const STARS = (() => {
 
 const BOKEH = (() => {
   const rand = mulberry32(99);
-  const cols = [P.yellow, P.cream, P.cyan, P.orange, P.yellow];
+  const cols = [P.yellow, P.orange, P.cyan, P.yellow, P.pink];
   return Array.from({ length: 5 }, (_, i) => ({
     x: 4 + Math.floor(rand() * (WIN.w - 8)),
     y: 16 + Math.floor(rand() * 32),
@@ -690,18 +690,19 @@ function drawWindow(ctx, side, t, tm, phase) {
   if (th.bokeh) {
     // out-of-focus city lights drifting in and out
     for (const b of BOKEH) {
-      const a = 0.24 + 0.16 * Math.sin(t * b.rate + b.ph + (side === 'L' ? 0 : 2));
-      if (a < 0.12) continue;
+      const a = 0.5 + 0.5 * Math.sin(t * b.rate + b.ph + (side === 'L' ? 0 : 2));
+      if (a < 0.2) continue;
       const x = side === 'L' ? b.x : WIN.w - b.x;
-      c.fillStyle = rgba(b.color, a * 0.55);
       if (b.big) {
+        c.fillStyle = rgba(b.color, 0.18 * a);
         c.fillRect(x - 2, b.y - 1, 5, 3);
         c.fillRect(x - 1, b.y - 2, 3, 1);
         c.fillRect(x - 1, b.y + 2, 3, 1);
       }
-      c.fillStyle = rgba(b.color, a);
+      c.fillStyle = rgba(b.color, 0.45 * a);
       c.fillRect(x - 1, b.y, 3, 1);
       c.fillRect(x, b.y - 1, 1, 3);
+      fill(c, x, b.y, 1, 1, a > 0.6 ? b.color : rgba(b.color, a));
     }
   }
   c.drawImage(glass(), 0, 0);
@@ -1324,12 +1325,13 @@ function drawWallContent(ctx, wall, scene, t) {
   c.drawImage(scanlines(), 0, 0);
   // a glint of studio light sliding across the glass now and then
   const g = t % 13;
-  if (g < 1) {
-    const pos = Math.round(easeInOut(g) * (WALL.w + 70)) - 40;
+  if (g < 0.7) {
+    const pos = Math.round(easeInOut(g / 0.7) * (WALL.w + 40)) - 32;
     for (let y = 0; y < WALL.h; y++) {
-      const x = pos + Math.floor(y * 0.5);
-      fill(c, x, y, 5, 1, rgba(P.white, 0.08));
-      fill(c, x + 1, y, 2, 1, rgba(P.white, 0.1));
+      const x = pos + Math.floor(y / 2);
+      fill(c, x - 3, y, 3, 1, rgba(P.white, 0.07));
+      fill(c, x, y, 1, 1, rgba(P.white, 0.4));
+      fill(c, x + 4, y, 1, 1, rgba(P.white, 0.15));
     }
   }
   ctx.drawImage(wallState.cv, WALL.x, WALL.y);

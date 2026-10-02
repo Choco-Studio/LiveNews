@@ -1,9 +1,10 @@
 // GLOBIT 24 brand mark: "the world, pixel by pixel".
 //
-// The symbol is a flat red globe cut into tiles by pixel gaps (equator +
-// one meridian lens), with a single yellow square "bit" popping out of its
-// top-right edge: GLOBE + BIT. The wordmark is custom chamfered lettering with
-// a chrome split (white over silver) and a red digital "24" badge.
+// The symbol is a red pixel globe split into tiles by 1px seams of light
+// (equator + one meridian lens), with a single yellow square "bit" popping
+// out of its top-right edge: GLOBE + BIT. The wordmark is custom chamfered
+// lettering with a chrome split (white over silver) that continues the
+// globe's equator, plus a red digital "24" badge.
 //
 // Every variant is hand-drawn at 1x as character art, composed into a 1x
 // sprite once, then rendered into a cached offscreen canvas per integer
@@ -59,7 +60,7 @@ const GLOBE_L = [
   '.......DDDDDDD.......',
 ];
 
-// Small globe for the on-screen bug, 11x11, flat.
+// Small globe for the on-screen bug, 11x11, same lighting in fewer pixels.
 const GLOBE_S = [
   '...RRRRR...',
   '..RHRRRRR..',
@@ -185,7 +186,7 @@ function tint(s, fromY, from, to) {
 // ---------------------------------------------------------------------------
 // Logo parts at 1x
 function buildMark() {
-  // globe 23x23 with outline, bit 6x6 with outline, square 27x27 overall
+  // globe 23x23 with outline at (0, 4), bit 6x6 with outline at (21, 0): 27x27
   const globe = outline(fromRows(GLOBE_L));
   const bit = sprite(4, 4);
   fill(bit, 0, 0, 4, 4, 'Y');
@@ -237,7 +238,8 @@ function buildFull(slogan) {
   const gapMW = 3;
   const w = mark.w + gapMW + wm.w + 1 + badge.w;
   // the wordmark's chrome split (cap row 7) continues the globe's equator
-  const textY = 4 + 1 + 10 - 7 - 1;
+  const equatorY = 4 + 1 + 10; // globe offset + outline + equator row
+  const textY = equatorY - 7 - 1; // minus split row, minus outline
   const h = mark.h + (slogan ? 11 : 0);
   const s = sprite(w, h);
   blit(s, mark, 0, 0);

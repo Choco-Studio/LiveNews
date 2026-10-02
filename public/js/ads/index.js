@@ -1,8 +1,9 @@
 // Commercial breaks: joke adverts for completely fictional pixel-world
 // products. Each ad draws the full 384x216 frame from (t, dt, info) alone.
 import bitfizz from './bitfizz.js';
+import screechnet from './screechnet.js';
 
-export const ADS = [bitfizz];
+export const ADS = [bitfizz, screechnet];
 
 /** `count` distinct ads in random order, avoiding `recentIds` when possible. */
 export function pickAds(count, recentIds = []) {

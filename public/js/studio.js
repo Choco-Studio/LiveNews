@@ -12,6 +12,7 @@ import { drawWorldMap } from './scenes/worldmap.js';
 import * as cards from './scenes/cards.js';
 import { drawOpen } from './scenes/opens.js';
 import { drawLogo, measureLogo } from './logo.js';
+import { ACTIONS } from './cues.js';
 
 export { W, H };
 
@@ -35,6 +36,24 @@ const OVERLAYS = {
   breakingCard: 'bug',
   ad: 'ad',
 };
+
+// Automatic body language when the script gives no stage directions:
+// [action, weight] pools for whoever is speaking or listening, by mood.
+const AUTO = {
+  speak: [['raise_hand', 3], ['nod', 2], ['count', 1], ['lean_in', 1], ['steeple', 1], ['point_camera', 1], ['point_screen', 1], ['look_partner', 1]],
+  speakGrave: [['lean_in', 2], ['steeple', 2], ['nod', 1], ['raise_hand', 1], ['shake_head', 0.5]],
+  speakSurprised: [['wow', 1], ['shrug', 1], ['raise_hand', 2], ['point_screen', 1]],
+  listen: [['nod', 3], ['look_partner', 2], ['papers', 1], ['chin', 1], ['glasses', 0.5]],
+  listenGrave: [['nod', 2], ['look_partner', 2], ['steeple', 1]],
+};
+
+function pickWeighted(pool, exclude) {
+  const options = pool.filter(([name]) => !exclude.includes(name));
+  const total = options.reduce((a, [, w]) => a + w, 0);
+  let x = Math.random() * total;
+  for (const [name, w] of options) if ((x -= w) <= 0) return name;
+  return options[0]?.[0];
+}
 
 export function slotPositions(cast) {
   return cast?.B ? { A: ANCHOR_X.A, B: ANCHOR_X.B } : { A: SOLO_X };
@@ -65,6 +84,7 @@ export class Renderer {
       a.gestureUntil = t + 0.6 + Math.random() * 0.8;
       a.nextGesture = t + 2.5 + Math.random() * 4;
     }
+    this.autoPerform(slot, t, scene, speaking, a);
     const level = this.audio.level(slot);
     const other = slot === 'A' ? 'B' : 'A';
     let look = 0;
@@ -82,6 +102,44 @@ export class Renderer {
       bob: speaking && Math.sin(t * 5.3) > 0.7 ? 1 : 0,
       gesture: !action && speaking && t < a.gestureUntil ? 1 : 0,
     };
+  }
+
+  /** Keep presenters alive: occasional natural actions when none is scripted. */
+  autoPerform(slot, t, scene, speaking, a) {
+    if (!['wide', 'close'].includes(scene.shot)) return;
+    const current = scene.actions[slot];
+    if (current && t < current.t0 + current.dur + 0.6) {
+      a.nextAuto = Math.max(a.nextAuto || 0, current.t0 + current.dur + 1.5);
+      return;
+    }
+    if (a.wasSpeaking !== speaking) {
+      // settle in before the first gesture of a new turn
+      a.wasSpeaking = speaking;
+      a.nextAuto = t + (speaking ? 1.2 + Math.random() * 1.5 : 2 + Math.random() * 3);
+      return;
+    }
+    if (t < (a.nextAuto || 0)) return;
+    const duo = !!scene.cast?.B;
+    const emotion = scene.anchors[slot]?.emotion;
+    const grave = emotion === 'serious' || emotion === 'sad';
+    const pool = speaking
+      ? grave
+        ? AUTO.speakGrave
+        : emotion === 'surprised'
+          ? AUTO.speakSurprised
+          : AUTO.speak
+      : grave
+        ? AUTO.listenGrave
+        : AUTO.listen;
+    const exclude = [a.lastAuto];
+    if (!duo) exclude.push('look_partner', 'point_partner');
+    if (scene.wall?.mode !== 'image') exclude.push('point_screen');
+    const name = pickWeighted(pool, exclude);
+    if (name && ACTIONS[name]) {
+      scene.actions[slot] = { name, t0: t, dur: ACTIONS[name].dur, auto: true };
+      a.lastAuto = name;
+    }
+    a.nextAuto = t + (speaking ? 3 + Math.random() * 3.5 : 5 + Math.random() * 6);
   }
 
   drawStudio(ctx, t, scene) {

@@ -1,6 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EMOTIONS, SHOTS, buildPrompt, buildReviewPrompt, extractJson, normalizeBulletin } from '../server/writer.js';
+import { ACTIONS, EMOTIONS as CUE_EMOTIONS } from '../public/js/cues.js';
 
 // ---------------------------------------------------------------- helpers
 
@@ -147,7 +148,7 @@ describe('normalizeBulletin: story segments', () => {
 
   test('the story segment has exactly the fields the renderer expects', () => {
     const [, s] = normalize([storySeg('s1')]).segments;
-    assert.deepEqual(Object.keys(s).sort(), ['anchor', 'breaking', 'category', 'emotion', 'fact', 'hasImage', 'headline', 'location', 'shot', 'source', 'storyId', 'text', 'type']);
+    assert.deepEqual(Object.keys(s).sort(), ['anchor', 'breaking', 'category', 'cues', 'emotion', 'fact', 'hasImage', 'headline', 'location', 'shot', 'source', 'storyId', 'text', 'type']);
   });
 
   test('drops segments with an unknown storyId', () => {
@@ -459,6 +460,12 @@ describe('normalizeBulletin: structure', () => {
     assert.equal(b.segments.at(-1).anchor, 'B');
     assert.equal(b.segments.at(-1).emotion, 'happy');
     assert.equal(b.segments.at(-1).text, "That's all for now. Stay with us, GLOBIT 24 is live around the clock.");
+  });
+
+  test('the default intro and outro start with a wave', () => {
+    const b = normalize([storySeg('s1')]);
+    assert.deepEqual(b.segments[0].cues, [{ char: 0, slot: null, action: 'wave' }]);
+    assert.deepEqual(b.segments.at(-1).cues, [{ char: 0, slot: null, action: 'wave' }]);
   });
 
   test('default channel name is LIVENEWS', () => {

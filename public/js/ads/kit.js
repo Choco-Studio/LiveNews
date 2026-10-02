@@ -1243,7 +1243,8 @@ const ARM_POSES = {
   forward: [[-1, 8], [3, 14]],
 };
 
-function stroke(ctx, pts, w, col, ol) {
+/** Thick outlined polyline (limbs, tails, cables). */
+export function stroke(ctx, pts, w, col, ol) {
   const o = floor(w / 2);
   if (ol) for (let i = 0; i + 1 < pts.length; i++) line(ctx, pts[i][0] - o - 1, pts[i][1] - o - 1, pts[i + 1][0] - o - 1, pts[i + 1][1] - o - 1, ol, w + 2);
   for (let i = 0; i + 1 < pts.length; i++) line(ctx, pts[i][0] - o, pts[i][1] - o, pts[i + 1][0] - o, pts[i + 1][1] - o, col, w);
