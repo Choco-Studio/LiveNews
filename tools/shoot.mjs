@@ -13,6 +13,14 @@
 // --frames   number of frames (default 8); --every seconds between frames (default 0.5)
 // --eval     JavaScript run in the page after load, before waiting (e.g. to set up a preview)
 // --video    also record a .webm of the whole session (for people; agents should read the PNGs)
+//
+// Deterministic mode (exact animation times, independent of machine speed):
+// --step     JavaScript run before each frame with T replaced by the frame time in seconds,
+//            e.g. --step "window.__lab.render(T)" for a lab page that draws a given instant
+// --times    comma-separated list of times, or use --t0 (default 0) with --every for --frames frames
+//
+//   node tools/shoot.mjs --url "http://127.0.0.1:8080/lab/rig.html" --step "window.__lab.render(T)" \
+//     --t0 0 --every 0.1 --frames 16 --out /tmp/shots/raise_hand --label "raise_hand"
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -79,9 +87,22 @@ await sleep(opts.wait);
 
 const frames = [];
 const t0 = Date.now();
-for (let i = 0; i < opts.frames; i++) {
-  const target = t0 + i * opts.every * 1000;
-  if (Date.now() < target) await sleep((target - Date.now()) / 1000);
+const times = opts.times ? String(opts.times).split(',').map(Number) : null;
+const count = times ? times.length : opts.frames;
+for (let i = 0; i < count; i++) {
+  let tFrame;
+  if (opts.step) {
+    tFrame = times ? times[i] : Number(opts.t0 || 0) + i * opts.every;
+    try {
+      await page.evaluate(String(opts.step).replace(/\bT\b/g, String(tFrame)));
+    } catch (err) {
+      logs.push(`[step] ${err.message}`);
+      errors++;
+    }
+  } else {
+    const target = t0 + i * opts.every * 1000;
+    if (Date.now() < target) await sleep((target - Date.now()) / 1000);
+  }
   const shot = await page.evaluate((sel) => {
     const c = document.querySelector(sel);
     return c ? { url: c.toDataURL('image/png'), w: c.width, h: c.height } : null;
@@ -91,7 +112,7 @@ for (let i = 0; i < opts.frames; i++) {
     errors++;
     break;
   }
-  const t = (Date.now() - t0) / 1000;
+  const t = opts.step ? tFrame : (Date.now() - t0) / 1000;
   frames.push({ ...shot, t });
   fs.writeFileSync(path.join(opts.out, `frame_${String(i).padStart(2, '0')}.png`), Buffer.from(shot.url.split(',')[1], 'base64'));
 }
