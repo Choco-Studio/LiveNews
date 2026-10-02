@@ -106,7 +106,7 @@ function fillPoly(ctx, pts, n, c) {
     }
   }
 }
-const PT = new Float64Array(200);
+const PT = new Float64Array(800);
 let NP = 0;
 function pt(x, y) {
   PT[NP * 2] = x;
@@ -533,16 +533,17 @@ const locker = () => bake('hg-locker', W, H, (c) => {
   R(c, 0, 0, W, H, P.black);
   for (let k = 0; k < 11; k++) {
     const x = 16 + k * 32;
-    R(c, x, 24, 31, 150, P.ink);
-    R(c, x, 24, 31, 1, P.slate);
-    R(c, x, 24, 1, 150, P.slate);
-    R(c, x + 30, 24, 1, 150, P.black);
-    for (let v = 0; v < 5; v++) R(c, x + 8, 34 + v * 4, 15, 1, P.black);
-    R(c, x + 23, 100, 3, 12, P.slate);
+    R(c, x, 24, 31, 150, P.steel);
+    R(c, x, 24, 31, 1, P.fog);
+    R(c, x, 24, 1, 150, P.fog);
+    R(c, x + 30, 24, 1, 150, P.slate);
+    for (let v = 0; v < 5; v++) R(c, x + 8, 34 + v * 4, 15, 1, P.slate);
+    R(c, x + 23, 100, 3, 12, P.fog);
   }
   R(c, 0, 174, W, 2, P.ink);
-  shadeBake(c, 0, 0, W, H, 0.55, (x, y) => hypot((x - 192) / 160, (y - 60) / 130) - 0.3);
-  shadeBake(c, 0, 0, W, H, 0.5, (x, y) => hypot((x - 192) / 200, (y - 60) / 160) - 0.45);
+  shadeBake(c, 0, 0, W, H, 0.6, (x, y) => hypot((x - 192) / 130, (y - 70) / 120) - 0.25);
+  shadeBake(c, 0, 0, W, H, 0.55, (x, y) => hypot((x - 192) / 170, (y - 70) / 150) - 0.4);
+  shadeBake(c, 0, 0, W, H, 0.5, (x, y) => hypot((x - 192) / 220, (y - 70) / 190) - 0.55);
   glowBake(c, 192, 192, 150, 22, P.slate, 0.9);
   R(c, 70, 160, 244, 2, P.steel);
   R(c, 70, 162, 244, 5, P.slate);
@@ -588,7 +589,7 @@ function seated(c, x, seatY, u, bow) {
   for (let sd = -1; sd <= 1; sd += 2) {
     const kx = x + sd * 0.56 * u;
     const ky = seatY + 0.5 * u;
-    rimCap(c, kx, ky, x + sd * 0.6 * u, seatY + 1.95 * u, 0.24 * u, 0.15 * u, P.ink, P.slate);
+    rimCap(c, kx, ky, x + sd * 0.6 * u, seatY + 1.95 * u, 0.24 * u, 0.15 * u, P.black, P.slate);
     rimCap(c, x + sd * 0.38 * u, seatY - 0.15 * u, kx, ky, 0.42 * u, 0.34 * u, P.black, P.steel);
   }
   // torso, hunched: a lit edge across the shoulders, then the dark body
@@ -599,7 +600,7 @@ function seated(c, x, seatY, u, bow) {
   // head: bowed it drops in front of the shoulders and shows the crown
   const hy = sy - (0.62 - 0.55 * bow) * u;
   ellipse(c, x, hy - 1.5, 0.38 * u, 0.5 * u, P.silver);
-  ellipse(c, x, hy, 0.38 * u, 0.5 * u, P.ink);
+  ellipse(c, x, hy, 0.38 * u, 0.5 * u, P.black);
   ellipse(c, x, hy - (0.18 - 0.2 * bow) * u, 0.39 * u, (0.3 + 0.18 * bow) * u, P.black);
   ellipse(c, x, hy - 0.5 * u + 1, 0.22 * u, 1, P.fog);
   if (bow < 0.6) {
@@ -611,20 +612,20 @@ function seated(c, x, seatY, u, bow) {
     c.globalAlpha = 1;
   }
   // towel round the neck, bright under the lamp
-  rimCap(c, x - 0.34 * u, sy - 0.02 * u, x - 0.28 * u, sy + 1.15 * u, 0.17 * u, 0.15 * u, P.fog, P.white);
-  rimCap(c, x + 0.34 * u, sy - 0.02 * u, x + 0.28 * u, sy + 1.15 * u, 0.17 * u, 0.15 * u, P.fog, P.white);
-  capsule(c, x - 0.34 * u, sy - 0.05 * u, x + 0.34 * u, sy - 0.05 * u, 0.15 * u, 0.15 * u, P.silver);
+  rimCap(c, x - 0.34 * u, sy - 0.02 * u, x - 0.28 * u, sy + 1.15 * u, 0.17 * u, 0.15 * u, P.ink, P.fog);
+  rimCap(c, x + 0.34 * u, sy - 0.02 * u, x + 0.28 * u, sy + 1.15 * u, 0.17 * u, 0.15 * u, P.ink, P.fog);
+  capsule(c, x - 0.34 * u, sy - 0.05 * u, x + 0.34 * u, sy - 0.05 * u, 0.15 * u, 0.15 * u, P.slate);
   // arms: elbows on the knees, hands clasped between them
   for (let sd = -1; sd <= 1; sd += 2) {
     const jx = x + sd * (sw - 0.15 * u);
     const jy = sy + 0.18 * u;
     const ex = x + sd * 0.72 * u;
     const ey = seatY + 0.28 * u;
-    rimCap(c, jx, jy, ex, ey, 0.27 * u, 0.21 * u, P.ink, P.fog);
-    rimCap(c, ex, ey, x + sd * 0.16 * u, seatY + 0.78 * u, 0.2 * u, 0.15 * u, P.ink, P.steel);
+    rimCap(c, jx, jy, ex, ey, 0.27 * u, 0.21 * u, P.black, P.fog);
+    rimCap(c, ex, ey, x + sd * 0.16 * u, seatY + 0.78 * u, 0.2 * u, 0.15 * u, P.black, P.slate);
   }
-  ellipse(c, x, seatY + 0.86 * u, 0.24 * u, 0.2 * u, P.slate);
-  ellipse(c, x, seatY + 0.82 * u, 0.2 * u, 0.12 * u, P.steel);
+  ellipse(c, x, seatY + 0.86 * u, 0.24 * u, 0.2 * u, P.ink);
+  ellipse(c, x, seatY + 0.82 * u, 0.2 * u, 0.12 * u, P.slate);
 }
 function shotLocker(c, lt) {
   c.drawImage(locker(), 0, 0);
@@ -818,6 +819,32 @@ const FACE = [
   6, 50,
 ];
 const HAIR = [40, 0, 56, 1, 66, 5, 58, 9, 46, 13, 34, 22, 24, 34, 18, 48, 14, 62, 8, 62, 6, 50, 8, 40, 6, 28, 12, 14, 24, 5];
+/** Catmull-Rom subdivision of a closed polygon (flat x, y list), built once at load. */
+function smoothPath(src, steps) {
+  const n = src.length / 2;
+  const out = new Float64Array(n * steps * 2);
+  let o = 0;
+  for (let i = 0; i < n; i++) {
+    const i0 = (i - 1 + n) % n;
+    const i2 = (i + 1) % n;
+    const i3 = (i + 2) % n;
+    for (let k = 0; k < steps; k++) {
+      const t = k / steps;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      for (let a = 0; a < 2; a++) {
+        const p0 = src[i0 * 2 + a];
+        const p1 = src[i * 2 + a];
+        const p2 = src[i2 * 2 + a];
+        const p3 = src[i3 * 2 + a];
+        out[o++] = 0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (3 * p1 - p0 - 3 * p2 + p3) * t3);
+      }
+    }
+  }
+  return out;
+}
+const FACE_S = smoothPath(FACE, 3);
+const HAIR_S = smoothPath(HAIR, 3);
 const FK = 1.75;
 const FX = 58;
 const FY = -24;
@@ -826,7 +853,7 @@ function facePts(arr, ox, oy) {
   for (let i = 0; i < arr.length; i += 2) pt(FX + arr[i] * FK + ox, FY + FO + arr[i + 1] * FK + oy);
 }
 function paintFace(c, col, ox, oy) {
-  facePts(FACE, ox, oy);
+  facePts(FACE_S, ox, oy);
   fillPts(c, col);
 }
 const FACE_LAYERS = [[P.white, 0, 0], [P.silver, -1, 0], [P.fog, -2, 0], [P.steel, -3, 0], [P.slate, -6, 0], [P.ink, -12, 0], [P.black, -24, 1]];
@@ -842,9 +869,9 @@ function shotFace(c, lt) {
   FO = -((1 - cos(lt * 1.6)) / 2) * 1.2;
   litShape(c, paintFace, FACE_LAYERS);
   // close-cropped hair over the crown and the back of the head
-  facePts(HAIR, 0, 0);
+  facePts(HAIR_S, 0, 0);
   fillPts(c, P.black);
-  for (let k = 0; k < 16; k++) R(c, round(FX + (12 + hash(k) * 30) * FK), round(FY + FO + (10 + hash(k + 30) * 40) * FK), 1, 1, P.ink);
+  for (let k = 0; k < 14; k++) R(c, round(FX + (12 + hash(k) * 24) * FK), round(FY + FO + (12 + hash(k + 30) * 34) * FK), 1, 1, P.ink);
   // ear
   ellipse(c, FX + 42 * FK, FY + FO + 56 * FK, 5 * FK, 9 * FK, P.ink);
   ellipse(c, FX + 43 * FK, FY + FO + 56 * FK, 3 * FK, 6.5 * FK, P.black);
@@ -868,12 +895,9 @@ function shotFace(c, lt) {
   ellipse(c, FX + 87.5 * FK, FY + FO + 73.5 * FK, 2.2, 1.2, P.black);
   line(c, FX + 84 * FK, FY + FO + 84 * FK, FX + 79 * FK, FY + FO + 84.5 * FK, P.black);
   line(c, FX + 60 * FK, FY + FO + 92 * FK, FX + 74 * FK, FY + FO + 102 * FK, P.ink);
-  // beads of sweat on the temple and the brow
-  for (let k = 0; k < 6; k++) {
-    const bx = FX + (62 + hash(k + 70) * 18) * FK;
-    const by = FY + FO + (26 + hash(k + 80) * 14) * FK;
-    R(c, round(bx), round(by), 1, 1, P.silver);
-  }
+  // two beads of sweat on the lit brow
+  R(c, round(FX + 82 * FK), round(FY + FO + 30 * FK), 1, 2, P.white);
+  R(c, round(FX + 84 * FK), round(FY + FO + 37 * FK), 1, 1, P.white);
   // the drop: slides, gathers at the chin, falls in slow motion
   let dx;
   let dy;
@@ -907,69 +931,99 @@ const revealBg = () => bake('hg-reveal-bg', W, H, (c) => {
   // two soft strip lights out of focus, the source of the rims
   for (const x of [34, 350]) glowBake(c, x, 110, 16, 110, P.slate, 0.8);
 });
-let RU = 28;
-let RY = 40;
+let RU = 36;
+let RY = 28;
 let RC = 0; // chin lift
-/** The torso silhouette grown (d > 0) or shrunk (d < 0) by d px: stacked, it shades from the rims inward. */
-function paintTorso(c, col, d) {
+/** Chest-up silhouette in one colour (procedural, so the push-in redraws it natively). */
+function paintBust(c, col) {
   const u = RU;
   const x = 192;
   const top = RY;
   for (let sd = -1; sd <= 1; sd += 2) {
-    capsule(c, x + sd * 1.02 * u, top + 1.62 * u, x + sd * 1.12 * u, top + 3.15 * u, 0.33 * u + d, 0.26 * u + d, col);
-    capsule(c, x + sd * 1.12 * u, top + 3.15 * u, x + sd * 1.1 * u, top + 4.6 * u, 0.26 * u + d, 0.21 * u + d, col);
-    ellipse(c, x + sd * 0.98 * u, top + 1.62 * u, 0.36 * u + d, 0.34 * u + d, col);
+    capsule(c, x + sd * 1.04 * u, top + 1.7 * u, x + sd * 1.16 * u, top + 3.3 * u, 0.35 * u, 0.28 * u, col);
+    capsule(c, x + sd * 1.16 * u, top + 3.3 * u, x + sd * 1.12 * u, top + 4.8 * u, 0.28 * u, 0.24 * u, col);
+    ellipse(c, x + sd * 0.99 * u, top + 1.62 * u, 0.37 * u, 0.38 * u, col);
+    ellipse(c, x + sd * 0.37 * u, top + 0.53 * u - RC, 0.07 * u, 0.13 * u, col);
   }
-  pt(x - 0.26 * u - d, top + 1.02 * u - d);
-  pt(x - 0.95 * u - d, top + 1.42 * u - d);
-  pt(x - 0.86 * u - d, top + 2.1 * u);
-  pt(x - 0.66 * u - d, top + 3.6 * u);
-  pt(x - 0.66 * u - d, top + 5 * u);
-  pt(x + 0.66 * u + d, top + 5 * u);
-  pt(x + 0.66 * u + d, top + 3.6 * u);
-  pt(x + 0.86 * u + d, top + 2.1 * u);
-  pt(x + 0.95 * u + d, top + 1.42 * u - d);
-  pt(x + 0.26 * u + d, top + 1.02 * u - d);
+  pt(x - 0.24 * u, top + 1.0 * u);
+  pt(x - 0.92 * u, top + 1.36 * u);
+  pt(x - 1.0 * u, top + 2.0 * u);
+  pt(x - 0.82 * u, top + 3.4 * u);
+  pt(x - 0.76 * u, top + 5 * u);
+  pt(x + 0.76 * u, top + 5 * u);
+  pt(x + 0.82 * u, top + 3.4 * u);
+  pt(x + 1.0 * u, top + 2.0 * u);
+  pt(x + 0.92 * u, top + 1.36 * u);
+  pt(x + 0.24 * u, top + 1.0 * u);
   fillPts(c, col);
-  capsule(c, x, top + 0.8 * u, x, top + 1.25 * u, 0.24 * u + d, 0.28 * u + d, col);
-  ellipse(c, x, top + 0.5 * u - RC, 0.37 * u + d, 0.5 * u + d, col);
-  ellipse(c, x, top + 0.86 * u - RC, 0.26 * u + d, 0.17 * u + d, col);
+  capsule(c, x, top + 0.82 * u - RC, x, top + 1.3 * u, 0.26 * u, 0.31 * u, col);
+  ellipse(c, x, top + 0.5 * u - RC, 0.37 * u, 0.5 * u, col);
+  ellipse(c, x, top + 0.83 * u - RC, 0.27 * u, 0.19 * u, col);
 }
-// [colour, grow]: silver rims, then darker and darker towards the core
-const REVEAL_SHADE = [P.silver, 1, P.fog, 0, P.steel, -1, P.slate, -2.5, P.ink, -5, P.black, -9];
+// Light bands: [colour, dx, dy, width, gap]. A band keeps the silhouette's
+// pixels within `width` of an edge facing (dx, dy) that has at least `gap`
+// empty pixels in front of it, so narrow inner gaps stay dark.
+const BANDS = [
+  P.ink, -1, 0, 8, 5, P.ink, 1, 0, 8, 5, P.slate, 0, -1, 3, 4,
+  P.steel, -1, 0, 3, 6, P.slate, 1, 0, 3, 6,
+  P.silver, -1, 0, 1, 6, P.fog, 1, 0, 1, 6,
+];
+function rimLit(ctx, paint) {
+  const S = buf('hg-sil');
+  paint(S.c, P.white);
+  const T = buf('hg-tint');
+  T.c.drawImage(S.cv, 0, 0);
+  T.c.globalCompositeOperation = 'source-in';
+  T.c.fillStyle = P.black;
+  T.c.fillRect(0, 0, W, H);
+  ctx.drawImage(T.cv, 0, 0);
+  for (let b = 0; b < BANDS.length; b += 5) {
+    const B = buf('hg-band');
+    B.c.drawImage(S.cv, 0, 0);
+    B.c.globalCompositeOperation = 'destination-out';
+    const dx = BANDS[b + 1];
+    const dy = BANDS[b + 2];
+    for (let k = BANDS[b + 3]; k <= BANDS[b + 3] + BANDS[b + 4]; k++) B.c.drawImage(S.cv, -dx * k, -dy * k);
+    B.c.globalCompositeOperation = 'source-in';
+    B.c.fillStyle = BANDS[b];
+    B.c.fillRect(0, 0, W, H);
+    ctx.drawImage(B.cv, 0, 0);
+  }
+}
 function shotReveal(c, lt) {
   c.drawImage(revealBg(), 0, 0);
   const push = sine(lt / 3.2);
-  RU = 28 + push * 4;
-  RY = 44 - push * 8 - ((1 - cos(lt * 1.5)) / 2) * 0.8;
+  RU = 36 + push * 4;
+  RY = 30 - push * 5 - ((1 - cos(lt * 1.5)) / 2) * 0.8;
   RC = ramp(lt, 1.2, 2.0) * 1.5;
-  for (let i = 0; i < REVEAL_SHADE.length; i += 2) paintTorso(c, REVEAL_SHADE[i], REVEAL_SHADE[i + 1]);
+  rimLit(c, paintBust);
   const u = RU;
   const x = 192;
   const top = RY;
   // muscle definition from a soft top light
   for (let sd = -1; sd <= 1; sd += 2) {
-    capsule(c, x + sd * 1.0 * u, top + 1.36 * u, x + sd * 0.82 * u, top + 1.32 * u, 0.1 * u, 0.05 * u, P.slate);
-    line(c, x + sd * 0.12 * u, top + 2.12 * u, x + sd * 0.7 * u, top + 2.26 * u, P.slate);
-    line(c, x + sd * 0.3 * u, top + 1.12 * u, x + sd * 0.8 * u, top + 1.38 * u, P.slate);
+    capsule(c, x + sd * 1.0 * u, top + 1.32 * u, x + sd * 0.8 * u, top + 1.3 * u, 0.06 * u, 0.03 * u, P.slate);
+    line(c, x + sd * 0.1 * u, top + 2.12 * u, x + sd * 0.66 * u, top + 2.24 * u, P.ink);
+    line(c, x + sd * 0.28 * u, top + 1.1 * u, x + sd * 0.78 * u, top + 1.34 * u, P.ink);
+    line(c, x + sd * 0.4 * u, top + 1.12 * u, x + sd * 0.5 * u, top + 2.4 * u, P.ink);
   }
-  // tank-top straps
-  for (let sd = -1; sd <= 1; sd += 2) line(c, x + sd * 0.38 * u, top + 1.14 * u, x + sd * 0.48 * u, top + 2.3 * u, P.black);
   // the red mark on the chest
-  for (let k = 0; k < 4; k++) R(c, round(x - 0.52 * u + 3 - k), round(top + 2.5 * u + k), 5, 1, P.red);
-  // face: brow, nose, two glints that keep the eyes alive
+  const mw = round(u * 0.16);
+  for (let k = 0; k < round(u * 0.09); k++) R(c, round(x - 0.55 * u + mw * 0.5 - k), round(top + 2.55 * u + k), mw, 1, P.red);
+  // face: brow, nose, mouth, two glints that keep the eyes alive
   const hy = top + 0.5 * u - RC;
-  R(c, round(x - 0.25 * u), round(hy - 0.09 * u), round(0.5 * u), 1, P.slate);
-  R(c, round(x), round(hy), 1, round(0.22 * u), P.slate);
-  R(c, round(x - 0.18 * u), round(hy + 0.04 * u), 2, 1, P.black);
-  R(c, round(x + 0.11 * u), round(hy + 0.04 * u), 2, 1, P.black);
-  R(c, round(x - 0.17 * u), round(hy + 0.04 * u), 1, 1, P.silver);
-  R(c, round(x + 0.12 * u), round(hy + 0.04 * u), 1, 1, P.silver);
+  R(c, round(x - 0.27 * u), round(hy - 0.1 * u), round(0.54 * u), 1, P.slate);
+  R(c, round(x), round(hy - 0.02 * u), 1, round(0.22 * u), P.slate);
+  R(c, round(x - 1), round(hy + 0.2 * u), 3, 1, P.slate);
+  R(c, round(x - 0.2 * u), round(hy + 0.03 * u), 3, 1, P.black);
+  R(c, round(x + 0.1 * u), round(hy + 0.03 * u), 3, 1, P.black);
+  R(c, round(x - 0.19 * u), round(hy + 0.03 * u), 1, 1, P.silver);
+  R(c, round(x + 0.12 * u), round(hy + 0.03 * u), 1, 1, P.fog);
   R(c, round(x - 0.1 * u), round(hy + 0.32 * u), round(0.2 * u), 1, P.black);
   // sweat glints on the shoulders
   for (let k = 0; k < 5; k++) {
     const sd = k % 2 ? 1 : -1;
-    R(c, round(x + sd * (0.7 + hash(k) * 0.4) * u), round(top + (1.3 + hash(k + 9) * 0.4) * u), 1, 1, P.white);
+    R(c, round(x + sd * (0.75 + hash(k) * 0.35) * u), round(top + (1.32 + hash(k + 9) * 0.3) * u), 1, 1, P.white);
   }
 }
 
