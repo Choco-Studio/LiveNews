@@ -277,60 +277,59 @@ export const SCENES = {
 
   /** A white high-speed train crossing a viaduct below a snowy peak (Japan). */
   train(c, r) {
-    c.gradient(0, H * 0.6, [[0, '#4a86d4'], [1, '#cfe4f2']]);
-    c.poly([[W * 0.42, H * 0.6], [W * 0.62, H * 0.16], [W * 0.66, H * 0.15], [W * 0.88, H * 0.6]], '#6e7fa8');
+    c.gradient(0, H * 0.6, [[0, '#2e4468'], [0.7, '#a89aa0'], [1, '#e0b890']]);
+    c.poly([[W * 0.42, H * 0.6], [W * 0.62, H * 0.16], [W * 0.66, H * 0.15], [W * 0.88, H * 0.6]], '#4e5670');
     c.poly([[W * 0.565, H * 0.28], [W * 0.62, H * 0.16], [W * 0.66, H * 0.15], [W * 0.72, H * 0.29], [W * 0.68, H * 0.27], [W * 0.65, H * 0.31], [W * 0.61, H * 0.27]], '#f4f8fc');
-    c.ridge(H * 0.6, 26, 0.003, '#4f7a5a', 81, { octaves: 2 });
-    c.gradient(H * 0.62, H, [[0, '#6e9a5a'], [1, '#3e6a3a']]);
-    for (let i = 0; i < 40; i++) c.circle(r() * W, H * 0.66 + r() * H * 0.3, 20 + r() * 30, r() < 0.5 ? '#4f7f44' : '#5f9050', 0.8);
+    c.ridge(H * 0.6, 26, 0.003, '#2e3e34', 81, { octaves: 2 });
+    c.gradient(H * 0.62, H, [[0, '#4a5a3a'], [1, '#222a1c']]);
+    for (let i = 0; i < 40; i++) c.circle(r() * W, H * 0.66 + r() * H * 0.3, 20 + r() * 30, r() < 0.5 ? '#2e3a26' : '#3a4830', 0.8);
     // viaduct
     const dy = H * 0.58;
-    c.rect(0, dy, W, 24, '#c8ccd2');
-    c.rect(0, dy + 24, W, 8, '#8a9098');
-    for (let x = 40; x < W; x += 160) c.rect(x, dy + 30, 30, H - dy, '#a8aeb6');
+    c.rect(0, dy, W, 24, '#8a8c92');
+    c.rect(0, dy + 24, W, 8, '#4a4e56');
+    for (let x = 40; x < W; x += 160) c.rect(x, dy + 30, 30, H - dy, '#5e626a');
     // the train: a long nose to the right
     const ty = dy - 64;
-    c.poly([[-10, ty], [W * 0.7, ty], [W * 0.84, ty + 30], [W * 0.88, ty + 60], [-10, ty + 60]], '#f6f8fa', 1, shadeV(ty, ty + 60, '#ffffff', '#c8d0d8'));
+    c.poly([[-10, ty], [W * 0.7, ty], [W * 0.84, ty + 30], [W * 0.88, ty + 60], [-10, ty + 60]], '#e8e6e4', 1, shadeV(ty, ty + 60, '#f4e8dc', '#9aa0aa'));
     c.rect(-10, ty + 36, W * 0.84, 10, '#1f5fb4');
     c.poly([[W * 0.7, ty + 4], [W * 0.8, ty + 24], [W * 0.7, ty + 24]], '#24304a');
-    for (let x = 20; x < W * 0.66; x += 44) c.rect(x, ty + 12, 26, 14, '#2e3a56');
+    for (let x = 20; x < W * 0.66; x += 44) c.rect(x, ty + 12, 26, 14, '#f0d8a8');
     for (let x = 180; x < W * 0.7; x += 210) c.rect(x, ty + 4, 4, 52, '#b8c0c8');
     // speed lines
     for (let i = 0; i < 18; i++) c.rect(-20 + r() * W * 0.5, ty + r() * 60, 80 + r() * 160, 2, '#ffffff', 0.5);
   },
 
-  /** A boulevard of cream stone facades behind a row of young trees (Paris). */
+  /** A boulevard of stone facades in low evening sun, young plane trees casting long shadows (Paris). */
   trees(c, r) {
-    c.gradient(0, H * 0.4, [[0, '#6aa8e0'], [1, '#d6ecf6']]);
-    // facades
+    c.gradient(0, H * 0.4, [[0, '#3e5a80'], [1, '#c8b49a']]);
     const fy = H * 0.12;
     for (let x = -40; x < W; x += 230) {
-      c.rect(x, fy + 40, 226, H * 0.6, '#efe2c4');
-      c.poly([[x - 4, fy + 44], [x + 20, fy], [x + 206, fy], [x + 230, fy + 44]], '#7d8a9a');
-      for (let k = 0; k < 3; k++) c.rect(x + 40 + k * 60, fy + 8, 22, 26, '#5a6878');
+      // sunlit stone on the left of each block, shade on the right
+      c.rect(x, fy + 40, 226, H * 0.6, '#d8c4a0', 1, null);
+      c.rect(x + 150, fy + 40, 76, H * 0.6, '#8a7a66');
+      c.poly([[x - 4, fy + 44], [x + 20, fy], [x + 206, fy], [x + 230, fy + 44]], '#5a6270');
+      for (let k = 0; k < 3; k++) c.rect(x + 40 + k * 60, fy + 8, 22, 26, '#2e3440');
       for (let row = 0; row < 5; row++) {
         for (let k = 0; k < 4; k++) {
           const wx = x + 18 + k * 52;
           const wy = fy + 64 + row * 70;
-          c.rect(wx, wy, 26, 44, '#4a5868');
-          c.rect(wx, wy, 26, 10, '#9fb4c8', 0.6);
+          c.rect(wx, wy, 26, 44, '#2a303c');
+          c.rect(wx, wy, 26, 8, '#e8c890', k < 2 && r() < 0.5 ? 0.7 : 0.15);
         }
-        c.rect(x + 8, fy + 110 + row * 70, 210, 4, '#3a3a40', 0.8);
+        c.rect(x + 8, fy + 110 + row * 70, 210, 4, '#1e1e24', 0.85);
       }
-      c.rect(x + 222, fy + 40, 4, H * 0.6, '#d0c2a4');
+      c.rect(x + 222, fy + 40, 4, H * 0.6, '#6a5e50');
     }
-    // pavement and road
-    c.rect(0, H * 0.74, W, H * 0.06, '#b8b2a8');
-    c.gradient(H * 0.8, H, [[0, '#6a6a70'], [1, '#4a4a52']]);
-    for (let x = 30; x < W; x += 160) c.rect(x, H * 0.9, 80, 8, '#e8e8e0');
-    // trees: trunk, then layered round crowns
+    c.glow(-60, H * 0.3, 700, '#ffc890', 0.25);
+    c.rect(0, H * 0.74, W, H * 0.06, '#8a8278');
+    c.gradient(H * 0.8, H, [[0, '#3e3e44'], [1, '#26262c']]);
+    for (let x = 30; x < W; x += 160) c.rect(x, H * 0.9, 80, 8, '#bdbab0');
+    // long shadows to the right, then the trees: dark irregular crowns, warm rim on the sunny side
+    for (let x = 60; x < W; x += 200) c.poly([[x - 10, H * 0.76], [x + 10, H * 0.76], [x + 230, H * 0.8], [x + 160, H * 0.8]], '#000000', 0.3);
     for (let x = 60; x < W; x += 200) {
-      c.rect(x - 7, H * 0.5, 14, H * 0.26, '#5a4636');
-      c.circle(x, H * 0.44, 92, '#3f7a3a');
-      c.circle(x - 34, H * 0.4, 58, '#4f8f44');
-      c.circle(x + 30, H * 0.36, 52, '#5fa04e');
-      c.circle(x - 10, H * 0.32, 40, '#72b45a');
-      c.ellipse(x, H * 0.76, 70, 8, '#3a3a36', 0.35);
+      c.rect(x - 7, H * 0.5, 14, H * 0.26, '#2e2620');
+      for (let k = 0; k < 9; k++) c.circle(x + (r() - 0.5) * 120, H * (0.3 + r() * 0.18), 30 + r() * 30, k % 2 ? '#2e4228' : '#38502e');
+      for (let k = 0; k < 5; k++) c.circle(x - 40 + (r() - 0.5) * 40, H * (0.3 + r() * 0.14), 16 + r() * 12, '#7a8a48', 0.6);
     }
   },
 
@@ -369,22 +368,22 @@ export const SCENES = {
 
   /** A river winding through dense rainforest canopy, seen from above (Amazon). */
   forest(c, r) {
-    c.fill('#1f4a26');
+    c.fill('#18301c');
     for (let i = 0; i < 1400; i++) {
       const x = r() * W;
       const y = r() * H;
       const s = 18 + r() * 34;
-      const g = ['#1f5a2a', '#2a6a30', '#357a36', '#3f8a3e', '#2a5a2e'][Math.floor(r() * 5)];
+      const g = ['#1c3a20', '#244626', '#2c522c', '#355c30', '#22401f'][Math.floor(r() * 5)];
       c.circle(x, y, s, g);
-      c.circle(x - s * 0.25, y - s * 0.25, s * 0.5, '#5aa04a', 0.5);
+      c.circle(x - s * 0.25, y - s * 0.25, s * 0.5, '#5a7a3e', 0.45);
     }
     // the river
     const pts = [];
     for (let y = -20; y <= H + 20; y += 10) pts.push([W * 0.5 + Math.sin(y * 0.008) * 260 + Math.sin(y * 0.021) * 60, y]);
     const left = pts.map(([x, y]) => [x - 46, y]);
     const right = pts.map(([x, y]) => [x + 46, y]).reverse();
-    c.poly([...left, ...right], '#8a6a42');
-    c.poly([...pts.map(([x, y]) => [x - 30, y]), ...pts.map(([x, y]) => [x + 30, y]).reverse()], '#a07a4a');
+    c.poly([...left, ...right], '#5a4a34');
+    c.poly([...pts.map(([x, y]) => [x - 30, y]), ...pts.map(([x, y]) => [x + 30, y]).reverse()], '#7a6444');
     for (const [x, y] of pts) if (r() < 0.3) c.rect(x - 20, y, 30, 3, '#d0b080', 0.5);
     // morning mist
     for (let i = 0; i < 12; i++) c.ellipse(r() * W, r() * H, 200 + r() * 200, 40 + r() * 40, '#e8f0e8', 0.12);
@@ -539,14 +538,14 @@ export const SCENES = {
 
   /** Container stacks and gantry cranes at a busy port (trade). */
   port(c, r) {
-    c.gradient(0, H * 0.6, [[0, '#5a8ac8'], [1, '#d8e4ec']]);
-    cloud(c, W * 0.2, H * 0.14, 60, '#ffffff', 0.8);
+    c.gradient(0, H * 0.6, [[0, '#3a5272'], [1, '#c8c4bc']]);
+    cloud(c, W * 0.2, H * 0.14, 60, '#d0d4d8', 0.6);
     c.gradient(H * 0.66, H, [[0, '#3a6a8a'], [1, '#1a3a5a']]);
     // ship hull
     c.poly([[W * 0.05, H * 0.6], [W * 0.95, H * 0.6], [W * 0.9, H * 0.74], [W * 0.1, H * 0.74]], '#2a3a4a');
     c.rect(W * 0.05, H * 0.6, W * 0.9, 10, '#c8463a');
     // containers
-    const colors = ['#c8463a', '#2a6ab0', '#e8a830', '#3a8a5a', '#8a4a9a', '#d8d8d8', '#e46a2a'];
+    const colors = ['#8a3a32', '#2a4a70', '#a8823a', '#3a5a46', '#5a4a5e', '#9a9a96', '#9a5a32'];
     for (let row = 0; row < 5; row++) {
       for (let x = W * 0.08; x < W * 0.86; x += 70) {
         if (r() < 0.12 * row) continue;

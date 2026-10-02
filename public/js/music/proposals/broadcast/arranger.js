@@ -77,6 +77,9 @@ export class Bed {
     this.echo.output.connect(this.echoOut).connect(cond.mix);
     this.nodes = [this.pre, this.tone, this.fader, this.wetPre, this.wetFader, this.dlyIn, this.echoOut, this.echo.output];
 
+    this.buses = new Map();
+    this.fx = this.bus('fx', -8, { rev: 0.35 });
+
     const solo = cond.solo;
     const muted = cond.mute || [];
     this.layers = def.layers.map((L) => {
@@ -102,6 +105,33 @@ export class Bed {
       this.nodes.push(g, pump, pan);
       return { L, in: g, pump };
     });
+  }
+
+  /** Named extra bus (stings, accents): level in dB, optional pan and sends. */
+  bus(name, level = -10, { pan = 0, rev = 0, dly = 0 } = {}) {
+    let b = this.buses.get(name);
+    if (b) return b;
+    const c = this.ctx;
+    b = c.createGain();
+    b.gain.value = this.cond.solo && this.cond.solo !== name ? 0 : db(level);
+    const p = c.createStereoPanner();
+    p.pan.value = pan;
+    b.connect(p).connect(this.pre);
+    this.nodes.push(b, p);
+    if (rev) {
+      const r = c.createGain();
+      r.gain.value = rev;
+      p.connect(r).connect(this.wetPre);
+      this.nodes.push(r);
+    }
+    if (dly) {
+      const d = c.createGain();
+      d.gain.value = dly;
+      p.connect(d).connect(this.dlyIn);
+      this.nodes.push(d);
+    }
+    this.buses.set(name, b);
+    return b;
   }
 
   get logicalBar() {
@@ -186,9 +216,9 @@ export class Bed {
     const lay = this.layers.find((l) => l.L.type === 'pad') || this.layers[0];
     const home = chord(d.pkg.home);
     s.pad(lay.in, t, this.barSec * 1.2, voice(home, null, { n: 4, lo: 50, hi: 70 }), 0.9, { wave: 'soft', a: 0.04, r: 2.2, cut: 1600, cutTo: 800 });
-    s.timp(this.cond.fxIn(this), t, timpDo(d.tonic), 0.75);
-    s.cymbal(this.cond.fxIn(this), t, 0.55, { decay: 2.4 });
-    s.tone(this.cond.fxIn(this), t, this.barSec * 0.9, bassNote(home, null), 0.8, { wave: 'tri', a: 0.01, d: 0.6, s: 0.6, r: 0.6, cut: 700, gain: 0.5 });
+    s.timp(this.fx, t, timpDo(d.tonic), 0.75);
+    s.cymbal(this.fx, t, 0.55, { decay: 2.4 });
+    s.tone(this.fx, t, this.barSec * 0.9, bassNote(home, null), 0.8, { wave: 'tri', a: 0.01, d: 0.6, s: 0.6, r: 0.6, cut: 700, gain: 0.5 });
   }
 
   // ------------------------------------------------------------ fades

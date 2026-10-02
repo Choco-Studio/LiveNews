@@ -186,7 +186,7 @@ export class Canvas {
    * illustrations sober (news pictures, not posters) after the channel's
    * pixelate filter boosts saturation again.
    */
-  grade({ saturation = 0.72, shadow = '#16203a', highlight = '#fff1dc', tint = 0.22, contrast = 0.12, vignette = 0.38 } = {}) {
+  grade({ saturation = 0.62, shadow = '#16203a', highlight = '#fff1dc', tint = 0.22, contrast = 0.12, vignette = 0.38 } = {}) {
     const sh = hex(shadow);
     const hi = hex(highlight);
     const { w, h, d } = this;
