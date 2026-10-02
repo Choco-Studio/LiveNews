@@ -750,21 +750,35 @@ export class NewsDesk {
   /**
    * The picture desk for a set of stories (the candidates of an episode):
    * article pages are read for those without a picture (and those with a small
-   * one), a few at a time, within `budgetMs`; then pictures are borrowed across
-   * the same-event cluster. Late pages keep resolving in the background and
-   * help the next stage. Returns counts for the pipeline log.
+   * one), a few at a time, within `budgetMs`; then, for the stories still
+   * without one, the pages of other outlets' reports of the same event; then
+   * pictures are borrowed across the same-event cluster (credited). Late pages
+   * keep resolving in the background and help the next stage. Returns counts
+   * for the pipeline log.
    */
   async findPictures(stories, { budgetMs = 6000, concurrency = 4 } = {}) {
     const had = new Set(stories.filter((s) => s.image).map((s) => s.id));
-    const todo = stories
-      .filter((s) => !s.imageChecked && (!s.image || s.imageFrom || (s.imageWidth && s.imageWidth < GOOD_WIDTH)) && !(s.local && !s.page))
-      .sort((a, b) => Number(!!a.image && !a.imageFrom) - Number(!!b.image && !b.imageFrom));
+    const needs = (s) => !s.imageChecked && (!s.image || s.imageFrom || (s.imageWidth && s.imageWidth < GOOD_WIDTH)) && !(s.local && !s.page) && (s.local || /^https?:\/\//i.test(s.link || ''));
+    const todo = stories.filter(needs).sort((a, b) => Number(!!a.image && !a.imageFrom) - Number(!!b.image && !b.imageFrom));
     const deadline = Date.now() + budgetMs;
-    let next = 0;
-    const worker = async () => {
-      while (next < todo.length && Date.now() < deadline) await this.resolveImage(todo[next++]);
+    const run = async (list) => {
+      let next = 0;
+      const worker = async () => {
+        while (next < list.length && Date.now() < deadline) await this.resolveImage(list[next++]);
+      };
+      const left = deadline - Date.now();
+      if (list.length && left > 0) await Promise.race([Promise.all(Array.from({ length: Math.min(concurrency, list.length) }, worker)), wait(left)]);
     };
-    if (todo.length) await Promise.race([Promise.all(Array.from({ length: Math.min(concurrency, todo.length) }, worker)), wait(budgetMs)]);
+    await run(todo);
+    // Still without a picture of its own: another outlet's report of the same event may have one on its article
+    // page (the cluster lends pictures, not only from feeds). Those pages are read next, within the same budget.
+    const all = [...this.stories.values()];
+    const siblings = [];
+    for (const s of stories) {
+      if (s.image && !s.imageFrom) continue;
+      for (const o of all) if (o !== s && o.source !== s.source && !o.image && needs(o) && !siblings.includes(o) && !todo.includes(o) && this.samePictureEvent(s, o)) siblings.push(o);
+    }
+    await run(siblings.slice(0, 8));
     this.borrowPictures(stories);
     const withPicture = stories.filter((s) => s.image);
     return {

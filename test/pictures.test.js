@@ -358,6 +358,20 @@ describe('pictures: the desk finds, filters and lends pictures', () => {
     assert.equal(out.borrowed, 1);
   });
 
+  test('same-event cluster: another outlet\'s article page is read when no report has a feed picture, and lends it', async () => {
+    const asked = story('Bitport Herald', 'Hurricane Elena cuts power to homes in Yucatan');
+    const sibling = story('Pixelburg Post', 'Hurricane Elena makes landfall on Yucatan coast');
+    const fetchImpl = routes({ [asked.link]: page('<title>no picture here</title>'), [sibling.link]: page('<meta property="og:image" content="https://cdn.test/elena.jpg"><meta property="og:image:width" content="1200">') });
+    const d = desk([asked, sibling], fetchImpl);
+    d.updateTrending();
+    const out = await d.findPictures([asked]);
+    assert.equal(sibling.image, 'https://cdn.test/elena.jpg', 'the sibling found its own picture');
+    assert.equal(asked.image, 'https://cdn.test/elena.jpg');
+    assert.equal(asked.imageCredit, 'Pixelburg Post');
+    assert.equal(out.borrowed, 1);
+    assert.deepEqual(fetchImpl.asked, [asked.link, sibling.link], 'its own page first, then the sibling\'s');
+  });
+
   test('the cluster never lends across countries, from the same outlet, or from a weak keyword match', () => {
     const donor = story('Pixelburg Post', 'Tokyo stocks close at a record high', { image: 'https://cdn.test/tokyo.jpg', imageWidth: 1000 });
     const otherCountry = story('Ledger Line', 'New York stocks close at a record high');
