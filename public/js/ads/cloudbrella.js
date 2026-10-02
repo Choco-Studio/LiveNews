@@ -11,7 +11,7 @@ const COMMUTER = { S: P.tan, s: P.tanShade, H: P.black, h: P.slate, E: P.black, 
 // --- brand -------------------------------------------------------------------
 
 const MARK = () => wordmark('CLOUDBRELLA', {
-  h: 22, pen: 3, wide: 0.78, gap: 1,
+  h: 22, pen: 3, wide: 0.74, gap: 2,
   fill: [P.white, P.white, P.silver], hi: P.white,
   outline: [[P.blue, 2], [P.navy, 1]], depth: 2, depthColor: P.navy,
   wave: (i) => Math.round(Math.sin(i * 0.9) * 2),
@@ -187,8 +187,8 @@ function shotDownpour(ctx, lt) {
   const scroll = lt * 40;
   street(ctx, lt, scroll, false);
   const x = 176;
-  const pile = Math.min(5, Math.floor(lt * 1.4));
-  iconRain(ctx, lt, { x0: x - 40, w: 80, y0: 60, ground: 152, n: 16, seed: 4 });
+  const pile = Math.min(7, Math.floor(lt * 1.8));
+  iconRain(ctx, lt, { x0: x - 46, w: 92, y0: 58, ground: 160, n: 26, seed: 4, speed: 80 });
   const me = hero(ctx, x, 168, { pal: COMMUTER, eyes: 'sad', mouth: 'frown', legs: 'walk', step: Math.floor(lt * 5), armL: 'down', armR: 'down', sweat: lt });
   rrect(ctx, me.handR[0] - 2, me.handR[1], 16, 12, P.black, 1);
   rrect(ctx, me.handR[0] - 1, me.handR[1] + 1, 14, 10, P.brown, 1);
@@ -201,7 +201,9 @@ function shotDownpour(ctx, lt) {
 // 2. Close-up: popups stuck to his face.
 function shotSticky(ctx, lt) {
   bands(ctx, 0, 0, W, H, [P.ink, P.slate]);
-  iconRain(ctx, lt, { x0: 0, w: W, y0: -10, ground: H, n: 22, seed: 7, speed: 90 });
+  clipRect(ctx, 0, 24, W, H);
+  iconRain(ctx, lt, { x0: 0, w: W, y0: 10, ground: H, n: 22, seed: 7, speed: 90 });
+  ctx.restore();
   faceCU(ctx, 192, 124, 44, { pal: COMMUTER, eyes: lt % 1.6 < 0.12 ? 'closed' : 'sad', mouth: 'wavy', iris: P.brown });
   // sticky popup on his forehead
   const sy = Math.round(easeOutBack(prog(lt, 0.2, 0.5), 2) * 10);
@@ -271,11 +273,14 @@ function shotDemo(ctx, lt) {
     disc(ctx, 340, Math.round(lerp(110, 46, p)), 14, P.yellow);
   }
   const x = 176;
-  const me = hero(ctx, x, 168, { pal: COMMUTER, eyes: 'happy', mouth: 'smile', legs: 'walk', step: Math.floor(lt * 5), armL: 'down', armR: [[1, 1], [8, -10]], blush: true });
-  const cp = { cx: x, cy: me.top - 4, rx: 50, ry: 36 };
-  stroke(ctx, [[me.handR[0], me.handR[1] + 6], [x, cp.cy]], 1, P.black, null);
-  canopy(ctx, x, cp.cy, cp.rx, cp.ry);
-  iconRain(ctx, lt, { x0: x - 70, w: 140, y0: 30, ground: 160, n: 14, seed: 11, canopy: cp });
+  const me = hero(ctx, x, 168, { pal: COMMUTER, eyes: 'happy', mouth: 'smile', legs: 'walk', step: Math.floor(lt * 5), armL: 'down', armR: [[-5, -6], [-6, -12]], blush: true });
+  const cp = { cx: me.handR[0], cy: me.top - 6, rx: 52, ry: 36 };
+  R(ctx, cp.cx - 1, cp.cy, 3, me.handR[1] - cp.cy, P.black);
+  R(ctx, cp.cx, cp.cy, 1, me.handR[1] - cp.cy, P.silver);
+  disc(ctx, me.handR[0], me.handR[1], 3, P.black);
+  disc(ctx, me.handR[0], me.handR[1], 2, COMMUTER.S);
+  canopy(ctx, cp.cx, cp.cy, cp.rx, cp.ry);
+  iconRain(ctx, lt, { x0: x - 70, w: 150, y0: 30, ground: 160, n: 16, seed: 11, canopy: cp });
   const mood = lt > 1.2 ? 'angry' : 'mean';
   stormCloud(ctx, x - 6, 22 + wave(lt, 0.7, 2), 20, lt, mood);
   // terms & conditions scroll falls and bounces away
@@ -308,12 +313,28 @@ function shotBliss(ctx, lt) {
   glow(ctx, 340, 40, 50, P.yellow, 0.1);
   disc(ctx, 340, 40, 16, P.yellow);
   faceCU(ctx, 192, 130, 42, { pal: COMMUTER, eyes: 'happy', mouth: 'grin', blush: true });
-  // the inside of the canopy fills the top of the frame
-  canopy(ctx, 192, 62, 230, 110, P.blue, P.white, false);
+  // under the canopy: dark underside, ribs to the shaft, scalloped rim
+  const tips = [];
+  for (let i = 0; i <= 8; i++) tips.push([-40 + i * 58, 58 + Math.round(Math.sin((i / 8) * Math.PI) * 14)]);
+  const rim = [];
+  for (let i = 0; i < 8; i++) {
+    rim.push(tips[i]);
+    rim.push([(tips[i][0] + tips[i + 1][0]) / 2, (tips[i][1] + tips[i + 1][1]) / 2 - 8]);
+  }
+  rim.push(tips[8]);
+  poly(ctx, [[-40, -2], [424, -2], ...rim.slice().reverse().map(([x, y]) => [x, y + 2])], P.black);
+  poly(ctx, [[-40, -2], [424, -2], ...rim.slice().reverse()], P.navy);
+  for (let i = 0; i < 8; i += 2) poly(ctx, [[220, -30], tips[i], [(tips[i][0] + tips[i + 1][0]) / 2, (tips[i][1] + tips[i + 1][1]) / 2 - 8], tips[i + 1]], P.blue);
+  for (let i = 1; i < 8; i++) line(ctx, 220, -30, tips[i][0], tips[i][1], P.ink);
+  for (let i = 0; i <= 8; i++) disc(ctx, tips[i][0], tips[i][1], 2, P.white);
+  R(ctx, 218, 0, 4, 160, P.black);
+  R(ctx, 219, 0, 2, 160, P.silver);
+  disc(ctx, 220, 164, 7, P.black);
+  disc(ctx, 220, 164, 6, COMMUTER.S);
   for (let i = 0; i < 6; i++) {
     const t = (lt * 1.3 + i / 6) % 1;
     const sd = i % 2 ? 1 : -1;
-    icon(ctx, KINDS[i], 192 + sd * (130 + t * 140), 40 + t * 90 - Math.sin(t * Math.PI) * 30);
+    icon(ctx, KINDS[i], 220 + sd * (40 + t * 220), 40 - t * 30 + t * t * 120);
   }
   // a sad popup slides away
   const p = prog(lt, 0.6, 2.2);
