@@ -29,17 +29,37 @@ window.addEventListener('resize', fit);
 fit();
 
 // --- render loop ------------------------------------------------------------
+// One bad frame must never freeze the picture: keep looping and log each
+// distinct error once (a broken scene would otherwise flood the console).
+const seenErrors = new Set();
 function loop() {
-  renderer.render(performance.now() / 1000, scene);
   requestAnimationFrame(loop);
+  try {
+    renderer.render(performance.now() / 1000, scene);
+  } catch (err) {
+    const key = `${err?.name}: ${err?.message}`;
+    if (!seenErrors.has(key) && seenErrors.size < 50) {
+      seenErrors.add(key);
+      console.error('[render]', err);
+    }
+  }
 }
 requestAnimationFrame(loop);
 
 // --- live events from the control room --------------------------------------
 function connectEvents() {
   const es = new EventSource('/api/events');
-  es.addEventListener('ticker', (e) => (scene.ticker = JSON.parse(e.data)));
-  es.addEventListener('breaking', (e) => player.breaking(JSON.parse(e.data)));
+  const on = (name, fn) =>
+    es.addEventListener(name, (e) => {
+      try {
+        fn(JSON.parse(e.data));
+      } catch (err) {
+        console.warn(`[events] bad ${name} event`, err);
+      }
+    });
+  on('ticker', (data) => (scene.ticker = data));
+  on('breaking', (data) => player.breaking(data));
+  on('schedule', (data) => (scene.schedule = data)); // "NEXT" item in the ticker
   es.onerror = () => {
     es.close();
     setTimeout(connectEvents, 5000);
@@ -58,8 +78,17 @@ async function start() {
   document.body.classList.add('on-air');
   player.run();
 }
-if (params.get('autostart') === '1') start();
-else {
+if (params.get('autostart') === '1') {
+  start();
+  // Autoplay may still be blocked: the first gesture unlocks audio.
+  const unlock = () => {
+    audio.unlock?.().catch?.(() => {});
+    window.removeEventListener('pointerdown', unlock);
+    window.removeEventListener('keydown', unlock);
+  };
+  window.addEventListener('pointerdown', unlock);
+  window.addEventListener('keydown', unlock);
+} else {
   canvas.addEventListener('click', start);
   window.addEventListener('keydown', (e) => e.key === 'Enter' && start());
 }
@@ -76,7 +105,7 @@ function notify(msg) {
 }
 
 window.addEventListener('keydown', (e) => {
-  if (!started) return;
+  if (!started || e.ctrlKey || e.metaKey || e.altKey) return; // leave browser shortcuts alone
   switch (e.key.toLowerCase()) {
     case 'v': {
       const next = MODES[(MODES.indexOf(audio.mode) + 1) % MODES.length];
@@ -92,10 +121,11 @@ window.addEventListener('keydown', (e) => {
       player.skip();
       notify('Skip');
       break;
-    case 'f':
-      if (document.fullscreenElement) document.exitFullscreen();
-      else document.documentElement.requestFullscreen?.();
+    case 'f': {
+      const req = document.fullscreenElement ? document.exitFullscreen?.() : document.documentElement.requestFullscreen?.();
+      Promise.resolve(req).catch(() => notify('Fullscreen not available'));
       break;
+    }
     case 'd':
       toggleDebug();
       break;

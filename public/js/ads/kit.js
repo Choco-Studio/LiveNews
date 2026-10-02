@@ -1,12 +1,53 @@
-// Commercial-break toolkit: integer-only pixel primitives, an ASCII sprite
-// compiler with automatic outlines, little pixel people, a scene sequencer
-// with pixel-stepped wipes and the shared pack-shot furniture (logo, slogan,
-// fine print). Every function is a pure function of its inputs; the only
-// module state is lazily-built caches of static art plus one scratch buffer
-// for full-screen per-pixel effects (rewritten before every use).
+// Commercial-break toolkit (owner: ads-1). Integer-only pixel primitives, an
+// ASCII sprite compiler with automatic outlines, little pixel people, a shot
+// sequencer with transitions, motion/easing helpers, camera moves, kinetic
+// type, product hero furniture and the shared end slate. Every draw function
+// is a pure function of its inputs; module state is only lazily-built caches
+// of static art and a few pooled scratch canvases (rewritten before each use).
+// Nothing here allocates canvases, gradients or JSON per frame.
+//
+// AN AD MODULE default-exports { id, brand, duration, voice, script:[{at,text}],
+// tune, draw(ctx, t, dt, info) } and usually draws with play(ctx, dt, info, SHOTS).
+//
+// SHOTS: play(ctx, dt, info, [{ at, draw(ctx, lt, info, dt), wipe, wd, ...o }])
+//   lt = seconds since the shot started; the last shot holds while the VO overruns.
+//   wipe (transition INTO this shot, wd seconds): 'cut' (default) | 'whip' (fast
+//   smeared pan, o.dir = 1 | -1) | 'match' (match dissolve growing from the shared
+//   shape at o.cx, o.cy) | 'iris' (circle opens at o.cx, o.cy) | 'irisInOut'
+//   (closes to black on o.fx, o.fy then opens on o.cx, o.cy) | 'slide' (new shot
+//   slides over, o.dir) | 'push' | 'blocks' | 'bars' | 'dissolve' | 'diag' | 'flash'.
+// MOTION: key(t, [[t0, v0], [t1, v1, ease], ...]) keyframe track (numbers or arrays,
+//   ease names in EASE or functions); tween(t, t0, t1, a, b, ease); spring(x),
+//   wobble(t, t0, amp, hz, damp) damped jiggle after an impact; easeInBack (anticipation),
+//   easeOutBack (overshoot), easeInOutBack, easeOutElastic, smooth; jump(t, t0, o) ->
+//   { y, sx, sy } hop with crouch, stretch and landing squash; squashArt(ctx, art, cx,
+//   by, sx, sy) draws cached art scaled about its bottom centre; blink(t, seed),
+//   breath(t, period, amp) idle life.
+// LIMBS: armPose(name), poseLerp(a, b, p) and poseAt(t, keys) tween hero() arm poses
+//   with preserved bone lengths (arcs, not straight lines); pass the result as armL/armR.
+// CAMERA: key() for x/y, withCam(ctx, x, y, fn) integer pan, par(x, depth) parallax,
+//   kick(t, t0, dur, amp, seed) decaying comedy shake, zoomed(ctx, z, fx, fy, fn) scale
+//   about a focus point (nearest neighbour: use for crash zooms or integer scales only;
+//   for slow push-ins redraw art natively bigger, e.g. faceCU size or canFront scale).
+// TYPE: kinetic(ctx, s, x, y, lt, { style: 'pop'|'drop'|'slide'|'stamp'|'wave'|'type' }),
+//   words(ctx, s, x, y, lt, { per }) word-by-word, micro(ctx, s, x, y, o) 3x5 micro font,
+//   microWidth(s), bigText, para, bubble, slogan, finePrint (micro font legal strip).
+// PRODUCT: cylinder(ctx, label, cx, y, r, turn, o) 2.5D turntable of a label texture,
+//   spotlight(ctx, cx, floorY, o), badge(ctx, cx, cy, r, p, o) starburst sticker,
+//   glint(ctx, art, x, y, p) light sweep, glow, sparkle, shadow.
+// END SLATE: endSlate(ctx, lt, { bg, product, mark, sub, tagline, tag, url, pill,
+//   legal }) the shared layout and timing (logo 0.15 s, tagline 0.9 s, url 1.4 s,
+//   legal 1.6 s, a light sweep every 3.5 s).
+// BRAND: wordmark(str, style) cached custom lettering + drawMark; lazy(fn) memoises a
+//   factory so `const MARK = lazy(() => wordmark(...))` costs nothing per frame.
+// MUSIC: tune(...parts), rep(s, n) build tune strings (format in audio.js).
 import { P } from '../palette.js';
-import { drawText, measureText, wrapText } from '../font.js';
+import * as FONT from '../font.js';
 import { clamp, easeOut, easeInOut, mulberry32 } from '../util.js';
+
+const { drawText, measureText, wrapText } = FONT;
+// Cached, frozen wrap (font.js wrapLines) when available: no array per frame.
+const wrapL = FONT.wrapLines || wrapText;
 
 export { P, drawText, measureText, wrapText, clamp, easeOut, easeInOut, mulberry32 };
 
@@ -34,8 +75,6 @@ export function easeOutBounce(x) {
   if (v < 2.5 / d) return n * (v -= 2.25 / d) * v + 0.9375;
   return n * (v -= 2.625 / d) * v + 0.984375;
 }
-/** Square wave: true for the first half of every 1/hz period. */
-export const on = (v, hz) => floor(v * hz * 2) % 2 === 0;
 /** Integer sine wobble. */
 export const wave = (v, hz, amp, ph = 0) => round(sin((v * hz + ph) * PI * 2) * amp);
 /** Frame index of an n-frame loop at fps. */
@@ -46,8 +85,110 @@ export function shake(v, amp, seed = 1) {
   const rr = mulberry32(floor(v * 30) * 977 + seed);
   return [round((rr() * 2 - 1) * amp), round((rr() * 2 - 1) * amp)];
 }
+
+/** Smoothstep. */
+export const smooth = (x) => {
+  const v = clamp(x, 0, 1);
+  return v * v * (3 - 2 * v);
+};
+/** Anticipation: dips below 0 before accelerating to 1. */
+export function easeInBack(x, s = 1.70158) {
+  const v = clamp(x, 0, 1);
+  return v * v * ((s + 1) * v - s);
+}
+export function easeInOutBack(x, s = 1.70158) {
+  const v = clamp(x, 0, 1);
+  const k = s * 1.525;
+  return v < 0.5 ? ((2 * v) ** 2 * ((k + 1) * 2 * v - k)) / 2 : ((2 * v - 2) ** 2 * ((k + 1) * (v * 2 - 2) + k) + 2) / 2;
+}
+export function easeOutElastic(x, period = 0.3) {
+  const v = clamp(x, 0, 1);
+  if (v === 0 || v === 1) return v;
+  return 2 ** (-10 * v) * sin(((v - period / 4) * (2 * PI)) / period) + 1;
+}
+/** 0 -> 1 with a natural overshoot and settle (critically under-damped spring). */
+export const spring = (x, hz = 1.6, damp = 5) => (x <= 0 ? 0 : 1 - Math.exp(-damp * x) * Math.cos(2 * PI * hz * x));
+/** Damped jiggle after an impact at t0 (0 before t0): follow-through for props and squash. */
+export const wobble = (v, t0, amp = 1, hz = 4, damp = 6) => (v < t0 ? 0 : amp * Math.exp(-damp * (v - t0)) * sin(2 * PI * hz * (v - t0)));
+
+const ease0 = (x) => clamp(x, 0, 1);
+/** Easing curves by name, for key() / tween() and shot data. */
+export const EASE = {
+  linear: ease0,
+  in: (x) => clamp(x, 0, 1) ** 3,
+  out: (x) => 1 - (1 - clamp(x, 0, 1)) ** 3,
+  inOut: (x) => easeInOut(clamp(x, 0, 1)),
+  smooth,
+  inBack: easeInBack,
+  outBack: easeOutBack,
+  inOutBack: easeInOutBack,
+  outBounce: easeOutBounce,
+  outElastic: easeOutElastic,
+  spring: (x) => spring(x * 1.2),
+  step: (x) => (x >= 1 ? 1 : 0),
+};
+const easeFn = (e) => (typeof e === 'function' ? e : EASE[e] || EASE.inOut);
+
+/**
+ * Keyframe track: keys = [[t0, v0], [t1, v1, ease?], ...] sorted by time.
+ * Values are numbers or same-length arrays; `ease` shapes the segment that ends
+ * at that key (default 'inOut'). Holds the first/last value outside the range.
+ */
+export function key(v, keys) {
+  const n = keys.length;
+  if (!n) return 0;
+  if (v <= keys[0][0]) return keys[0][1];
+  for (let i = 1; i < n; i++) {
+    const k1 = keys[i];
+    if (v < k1[0]) {
+      const k0 = keys[i - 1];
+      const p = easeFn(k1[2])((v - k0[0]) / (k1[0] - k0[0] || 1));
+      const a = k0[1];
+      const b = k1[1];
+      if (typeof a === 'number') return a + (b - a) * p;
+      const out = new Array(a.length);
+      for (let j = 0; j < a.length; j++) out[j] = a[j] + (b[j] - a[j]) * p;
+      return out;
+    }
+  }
+  return keys[n - 1][1];
+}
+/** a -> b between t0 and t1 with an easing (name or function). */
+export const tween = (v, t0, t1, a, b, ease = 'inOut') => a + (b - a) * easeFn(ease)((v - t0) / (t1 - t0 || 1));
+
+/**
+ * A hop starting at t0 (feet leave the ground): 0.12 s crouch before it, a
+ * parabolic flight of `dur` seconds with stretch, and a squash that springs back
+ * after landing. Returns { y (<= 0 is up), sx, sy } to feed squashArt().
+ */
+export function jump(v, t0, { dur = 0.5, height = 20, crouch = 0.12, squash = 0.22 } = {}) {
+  const lt = v - t0;
+  if (lt < -crouch) return { y: 0, sx: 1, sy: 1 };
+  if (lt < 0) {
+    const p = smooth((lt + crouch) / crouch);
+    return { y: 0, sx: 1 + squash * 0.7 * p, sy: 1 - squash * p };
+  }
+  if (lt < dur) {
+    const p = lt / dur;
+    const st = 0.18 * (1 - Math.sin(p * PI)); // stretched when fast (take-off, landing)
+    return { y: -4 * height * p * (1 - p), sx: 1 - st * 0.5, sy: 1 + st };
+  }
+  const s = wobble(v, t0 + dur, squash, 3, 7);
+  return { y: 0, sx: 1 + s * 0.8, sy: 1 - s };
+}
+
 /** Typewriter: first n characters after `lt` seconds at `cps`. */
 export const typed = (s, lt, cps = 20) => s.slice(0, max(0, floor(lt * cps)));
+
+/** Deterministic blink: true for ~0.12 s every 2.5-4.5 s (seeded per character). */
+export function blink(v, seed = 1, every = 3.4) {
+  const slot = floor(v / every);
+  const r = ((slot * 7919 + seed * 104729) % 1000) / 1000;
+  const at = slot * every + 0.3 + r * (every - 0.6);
+  return v >= at && v < at + 0.12;
+}
+/** Idle breathing bob in whole pixels (period seconds). */
+export const breath = (v, period = 3.2, amp = 1, ph = 0) => round(((1 - Math.cos(((v + ph) / period) * 2 * PI)) / 2) * amp);
 
 /** Is the announcer speaking one of `lines` right now (for mouth flaps)? */
 export function talking(info, dt, lines = null) {
@@ -62,12 +203,13 @@ export function talking(info, dt, lines = null) {
 const ALPHA = new Map();
 /** rgba() string of a palette colour with alpha (for shadows and glows). */
 export function A(hex, a) {
-  const k = hex + round(a * 100);
-  let v = ALPHA.get(k);
+  let row = ALPHA.get(hex);
+  if (!row) ALPHA.set(hex, (row = new Array(101)));
+  const k = clamp(round(a * 100), 0, 100);
+  let v = row[k];
   if (!v) {
     const n = parseInt(hex.slice(1), 16);
-    v = `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${round(a * 100) / 100})`;
-    ALPHA.set(k, v);
+    v = row[k] = `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${k / 100})`;
   }
   return v;
 }
@@ -272,37 +414,29 @@ export function shadow(ctx, cx, y, rx, a = 0.35) {
 }
 
 // ---------------------------------------------------------------------------
-// Full-screen per-pixel effects (scratch ImageData, then drawn so clips apply)
+// Full-screen per-pixel patterns (sunburst, ripples). The polar table of a
+// centre is compact (angle in 1/4096 turns, distance in 1/8 px) and each pattern
+// keeps its own canvas, re-rendered only when its phase moves by a whole step,
+// so most frames are a single drawImage.
 
-let FX = null;
-function fx() {
-  if (!FX) {
-    const cv = document.createElement('canvas');
-    cv.width = W;
-    cv.height = H;
-    const c = cv.getContext('2d');
-    const img = c.createImageData(W, H);
-    FX = { cv, c, img, u32: new Uint32Array(img.data.buffer), tabs: new Map() };
-  }
-  return FX;
-}
+const POLAR = new Map();
 function polar(cx, cy) {
-  const F = fx();
-  const key = `${cx},${cy}`;
-  let t = F.tabs.get(key);
+  const key = cx * 4096 + cy;
+  let t = POLAR.get(key);
   if (!t) {
-    const ang = new Float32Array(W * H);
-    const dist = new Float32Array(W * H);
+    const ang = new Uint16Array(W * H);
+    const dist = new Uint16Array(W * H);
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         const dx = x + 0.5 - cx;
         const dy = y + 0.5 - cy;
-        ang[y * W + x] = (Math.atan2(dy, dx) / (2 * PI) + 1) % 1;
-        dist[y * W + x] = sqrt(dx * dx + dy * dy);
+        ang[y * W + x] = floor(((Math.atan2(dy, dx) / (2 * PI) + 1) % 1) * 4096) & 4095;
+        dist[y * W + x] = min(65535, round(sqrt(dx * dx + dy * dy) * 8));
       }
     }
     t = { ang, dist };
-    F.tabs.set(key, t);
+    if (POLAR.size >= 6) POLAR.delete(POLAR.keys().next().value);
+    POLAR.set(key, t);
   }
   return t;
 }
@@ -316,31 +450,81 @@ function u32(hex) {
   }
   return v;
 }
+const PATTERNS = new Map();
+function patternBuf(key) {
+  let e = PATTERNS.get(key);
+  if (!e) {
+    const cv = document.createElement('canvas');
+    cv.width = W;
+    cv.height = H;
+    const c = cv.getContext('2d');
+    const img = c.createImageData(W, H);
+    e = { cv, c, img, u32: new Uint32Array(img.data.buffer), step: NaN };
+    if (PATTERNS.size >= 6) PATTERNS.delete(PATTERNS.keys().next().value);
+    PATTERNS.set(key, e);
+  }
+  return e;
+}
 
 /** Rotating sunburst filling the whole frame. `turn` in revolutions. */
 export function sunburst(ctx, cx, cy, turn, rays, c1, c2) {
-  const F = fx();
-  const { ang } = polar(round(cx), round(cy));
-  const a = u32(c1);
-  const b = u32(c2);
-  const buf = F.u32;
-  const off = turn - floor(turn);
-  const k = rays * 2;
-  for (let i = 0; i < buf.length; i++) buf[i] = (((ang[i] + off) * k) | 0) & 1 ? a : b;
-  F.c.putImageData(F.img, 0, 0);
-  ctx.drawImage(F.cv, 0, 0);
+  cx = round(cx);
+  cy = round(cy);
+  const e = patternBuf(`sb|${cx}|${cy}|${rays}|${c1}|${c2}`);
+  // the pattern repeats every 1/rays turn; 48 steps per repeat is smooth at the edges
+  const step = floor((((turn * rays) % 1) + 1) % 1 * 48);
+  if (step !== e.step) {
+    e.step = step;
+    const { ang } = polar(cx, cy);
+    const a = u32(c1);
+    const b = u32(c2);
+    const buf = e.u32;
+    const off = round((step / 48 / rays) * 4096);
+    const k = rays * 2;
+    for (let i = 0; i < buf.length; i++) buf[i] = ((((ang[i] + off) & 4095) * k) >> 12) & 1 ? a : b;
+    e.c.putImageData(e.img, 0, 0);
+  }
+  ctx.drawImage(e.cv, 0, 0);
 }
 
 /** Concentric rings cycling through colours; phase in ring widths. */
 export function ripples(ctx, cx, cy, phase, width, colors) {
-  const F = fx();
-  const { dist } = polar(round(cx), round(cy));
-  const cs = colors.map(u32);
-  const n = cs.length;
-  const buf = F.u32;
-  for (let i = 0; i < buf.length; i++) buf[i] = cs[(((floor(dist[i] / width - phase) % n) + n) % n)];
-  F.c.putImageData(F.img, 0, 0);
-  ctx.drawImage(F.cv, 0, 0);
+  cx = round(cx);
+  cy = round(cy);
+  const n = colors.length;
+  const e = patternBuf(`rp|${cx}|${cy}|${width}|${colors.join()}`);
+  // whole-pixel steps of the ring position
+  const period = n * width;
+  const step = ((round(phase * width) % period) + period) % period;
+  if (step !== e.step) {
+    e.step = step;
+    const { dist } = polar(cx, cy);
+    const cs = colors.map(u32);
+    const buf = e.u32;
+    const w8 = width * 8;
+    const off = step * 8;
+    for (let i = 0; i < buf.length; i++) buf[i] = cs[floor((dist[i] + period * 8 * 64 - off) / w8) % n];
+    e.c.putImageData(e.img, 0, 0);
+  }
+  ctx.drawImage(e.cv, 0, 0);
+}
+
+/** Pooled full-frame scratch canvases (transitions, zooms); index = nesting slot. */
+const POOL = [];
+export function scratch(i = 0) {
+  let e = POOL[i];
+  if (!e) {
+    const cv = document.createElement('canvas');
+    cv.width = W;
+    cv.height = H;
+    const c = cv.getContext('2d');
+    c.imageSmoothingEnabled = false;
+    POOL[i] = e = { cv, c };
+  }
+  e.c.setTransform(1, 0, 0, 1, 0, 0);
+  e.c.globalAlpha = 1;
+  e.c.clearRect(0, 0, W, H);
+  return e;
 }
 
 // ---------------------------------------------------------------------------
@@ -448,71 +632,150 @@ export function bigText(ctx, s, x, y, { scale = 2, color = P.white, outline = P.
 
 /** Wrapped paragraph; returns its height. */
 export function para(ctx, s, x, y, maxW, { scale = 1, color = P.white, align = 'left', lh = 10, shadow = null, outline = null, maxLines = 9 } = {}) {
-  const lines = wrapText(s, maxW, scale).slice(0, maxLines);
-  lines.forEach((ln, i) => {
+  const lines = wrapL(s, maxW, scale);
+  const nl = min(lines.length, maxLines);
+  for (let i = 0; i < nl; i++) {
     const yy = y + i * lh * scale;
-    if (outline) bigText(ctx, ln, x, yy, { scale, color, outline, align });
-    else text(ctx, ln, x, yy, { scale, color, align, shadow });
-  });
-  return lines.length * lh * scale;
+    if (outline) bigText(ctx, lines[i], x, yy, { scale, color, outline, align });
+    else text(ctx, lines[i], x, yy, { scale, color, align, shadow });
+  }
+  return nl * lh * scale;
 }
 
-/** x offset of character i inside s (matches font.js spacing). */
-function charX(s, i, scale) {
-  const pre = s.slice(0, i);
-  return pre ? measureText(pre, scale) + scale : 0;
+/** 3x5 micro font (font.js 'micro'): small print, labels. (x, y) = cap line. */
+export function micro(ctx, s, x, y, { color = P.fog, align = 'left', shadow = null } = {}) {
+  return drawText(ctx, s, round(x), round(y), { color, align, shadow, font: 'micro' });
+}
+export const microWidth = (s) => measureText(s, 1, 'micro');
+
+/** Fine print strip along the bottom edge, in the micro font (up to 3 lines). */
+export function finePrint(ctx, s, { color = P.fog, bg = P.black, lt = 99 } = {}) {
+  const lines = wrapL(s, W - 26, 1, 'micro');
+  const n = min(3, lines.length);
+  const h = n * 7 + 4;
+  if (bg) R(ctx, 0, H - h, W, h, bg);
+  if (lt < 0.15) return h;
+  for (let i = 0; i < n; i++) micro(ctx, lines[i], W / 2, H - h + 3 + i * 7, { color, align: 'center' });
+  return h;
+}
+
+// Letter x offsets of a string at a scale (cached; matches font.js spacing).
+const OFFS = new Map();
+function letterOffsets(s, scale) {
+  const k = `${scale}|${s}`;
+  let o = OFFS.get(k);
+  if (!o) {
+    o = [];
+    for (let i = 0; i < s.length; i++) o.push(i ? measureText(s.slice(0, i), scale) + scale : 0);
+    if (OFFS.size > 400) OFFS.delete(OFFS.keys().next().value);
+    OFFS.set(k, o);
+  }
+  return o;
 }
 
 /**
- * Brand logo: letters drop in one by one with a bounce, then a white glint
- * sweeps across every few seconds.
+ * Kinetic display type (cap line at y). style:
+ *  'pop'   letters rise in one by one with overshoot      'drop'  fall in and bounce
+ *  'slide' the word whips in from the side (o.dir)        'stamp' slams in big, settles
+ *  'wave'  pops in, then keeps a gentle travelling bob    'type'  typewriter + cursor
+ * lt < 0 draws nothing. Returns the text width.
  */
-export function logo(ctx, s, cx, y, lt, o = {}) {
-  const { scale = 4, color = P.white, outline = P.black, ow = 2, depth = 3, depthColor = P.darkRed, stagger = 0.05, dur = 0.5, from = 70, glint = P.white, every = 3 } = o;
-  const S = s.toUpperCase();
+export function kinetic(ctx, s, x, y, lt, o = {}) {
+  const { style = 'pop', scale = 2, color = P.white, outline = P.black, ow = 1, depth = 0, depthColor = P.black, align = 'center', stagger = 0.035, dur = 0.28, from = 18, dir = -1, cps = 24, amp = 2, hz = 1.1 } = o;
+  const S = String(s).toUpperCase();
   const tw = measureText(S, scale);
-  const x0 = round(cx - tw / 2);
-  const landed = lt > stagger * (S.length - 1) + dur;
-  if (landed) bigText(ctx, S, x0, y, { scale, color, outline, ow, depth, depthColor });
-  else {
-    for (let i = 0; i < S.length; i++) {
-      if (S[i] === ' ') continue;
-      const p = prog(lt, i * stagger, i * stagger + dur);
-      if (p <= 0) continue;
-      const yy = y - round((1 - easeOutBack(p, 2.2)) * from);
-      bigText(ctx, S[i], x0 + charX(S, i, scale), yy, { scale, color, outline, ow, depth, depthColor });
+  const x0 = round(align === 'center' ? x - tw / 2 : align === 'right' ? x - tw : x);
+  if (lt < 0) return tw;
+  const st = { scale, color, outline, ow, depth, depthColor };
+  if (style === 'stamp') {
+    if (lt < 0.06) {
+      const big = scale + max(1, round(scale / 2));
+      const bw = measureText(S, big);
+      bigText(ctx, S, round(x0 + tw / 2 - bw / 2), round(y - (big - scale) * 3.5), { ...st, scale: big });
+    } else {
+      const [dx, dy] = kick(lt, 0.06, 0.16, 2, 7);
+      bigText(ctx, S, x0 + dx, y + dy, st);
     }
     return tw;
   }
-  // glint
-  const gp = ((lt - stagger * S.length - dur) % every) / 0.6;
-  if (glint && gp >= 0 && gp < 1) {
-    const gx = x0 - 10 + round(gp * (tw + 20));
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(gx, y - 4 * scale, 2 * scale, 12 * scale);
-    ctx.rect(gx + 3 * scale, y - 4 * scale, scale, 12 * scale);
-    ctx.clip();
-    text(ctx, S, x0, y, { color: glint, scale });
-    ctx.restore();
+  if (style === 'slide') {
+    const p = prog(lt, 0, dur * 1.4);
+    const off = round((1 - easeOutBack(p, 1.3)) * (W * 0.7)) * dir;
+    if (p < 1) for (let k = 1; k <= 3; k++) R(ctx, x0 + off - dir * k * 9, y + k * 3, round(tw * 0.5), 1, A(color, 0.5 - k * 0.12));
+    bigText(ctx, S, x0 + off, y, st);
+    return tw;
+  }
+  if (style === 'type') {
+    const n = min(S.length, floor(lt * cps));
+    const part = S.slice(0, n);
+    if (part) bigText(ctx, part, x0, y, st);
+    if (n < S.length || floor(lt * 2.5) % 2 === 0) {
+      const cx = x0 + (n ? measureText(part, scale) + scale : 0);
+      R(ctx, cx, y, 2 * scale, 7 * scale, color);
+    }
+    return tw;
+  }
+  const offs = letterOffsets(S, scale);
+  const last = stagger * (S.length - 1) + dur;
+  if (lt >= last && style !== 'wave') {
+    bigText(ctx, S, x0, y, st);
+    return tw;
+  }
+  for (let i = 0; i < S.length; i++) {
+    if (S[i] === ' ') continue;
+    const p = prog(lt, i * stagger, i * stagger + dur);
+    if (p <= 0) continue;
+    let yy = y;
+    if (style === 'drop') yy = y - round((1 - easeOutBounce(p)) * from * 2);
+    else yy = y + round((1 - easeOutBack(p, 2.6)) * from * 0.6);
+    if (style === 'wave' && p >= 1) yy = y - round(((1 - Math.cos((lt - last) * hz * 2 * PI - i * 0.6)) / 2) * amp);
+    bigText(ctx, S[i], x0 + offs[i], yy, st);
   }
   return tw;
 }
 
-/** Fine print strip along the bottom edge. */
-export function finePrint(ctx, s, { color = P.fog, bg = P.black, lt = 99 } = {}) {
-  const lines = wrapText(s, W - 20, 1).slice(0, 3);
-  const h = lines.length * 9 + 3;
-  R(ctx, 0, H - h, W, h, bg);
-  if (lt < 0.15) return;
-  lines.forEach((ln, i) => text(ctx, ln, W / 2, H - h + 2 + i * 9, { color, align: 'center' }));
+// Word layout of a line for words(): [{ w, x }] centred on 0 (cached).
+const WORDS = new Map();
+function wordLayout(s, scale) {
+  const k = `${scale}|${s}`;
+  let L = WORDS.get(k);
+  if (!L) {
+    const parts = String(s).toUpperCase().split(' ');
+    const gap = 4 * scale;
+    const ws = parts.map((w) => measureText(w, scale));
+    const total = ws.reduce((a, b) => a + b, 0) + gap * (parts.length - 1);
+    let x = -total / 2;
+    L = parts.map((w, i) => {
+      const e = { s: w, x: round(x), w: ws[i] };
+      x += ws[i] + gap;
+      return e;
+    });
+    L.total = total;
+    if (WORDS.size > 200) WORDS.delete(WORDS.keys().next().value);
+    WORDS.set(k, L);
+  }
+  return L;
+}
+
+/** A line revealed word by word (every `per` s) with a small pop, centred on x. */
+export function words(ctx, s, x, y, lt, { per = 0.22, scale = 2, color = P.white, outline = P.black, ow = 1, depth = 0, depthColor = P.black, accent = null, accentIndex = -1 } = {}) {
+  const L = wordLayout(s, scale);
+  for (let i = 0; i < L.length; i++) {
+    const p = prog(lt, i * per, i * per + 0.2);
+    if (p <= 0) break;
+    const yy = y + round((1 - easeOutBack(p, 2.4)) * 6);
+    bigText(ctx, L[i].s, round(x + L[i].x), yy, { scale, color: i === accentIndex && accent ? accent : color, outline, ow, depth, depthColor });
+  }
+  return L.total;
 }
 
 /** Slogan on a ribbon; types in. Returns the ribbon's bottom y. */
 export function slogan(ctx, s, cx, y, lt, { scale = 2, color = P.white, bg = P.red, edge = P.darkRed, cps = 26, maxW = W - 40 } = {}) {
-  const lines = wrapText(s, maxW, scale);
+  const lines = wrapL(s, maxW, scale);
   const lh = 10 * scale;
-  const w = max(...lines.map((l) => measureText(l, scale))) + 8 * scale;
+  let w = 0;
+  for (const l of lines) w = max(w, measureText(l, scale));
+  w += 8 * scale;
   const h = lines.length * lh + 2 * scale;
   const open = easeOut(prog(lt, 0, 0.25));
   const ww = round(w * open);
@@ -535,7 +798,7 @@ export function slogan(ctx, s, cx, y, lt, { scale = 2, color = P.white, bg = P.r
 
 /** Speech bubble with wrapped text. tail: 'down' | 'up' | 'left' | 'right' | null */
 export function bubble(ctx, x, y, w, s, { tail = 'down', tx = null, fill = P.white, border = P.black, color = P.black, scale = 1, lh = 10, pad = 4 } = {}) {
-  const lines = wrapText(s, w - pad * 2, scale);
+  const lines = wrapL(s, w - pad * 2, scale);
   const h = lines.length * lh * scale + pad * 2 - (lh - 7) * scale;
   x = round(x);
   y = round(y);
@@ -600,7 +863,7 @@ export function cloud(ctx, cx, cy, s, c, shade = null) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenes & transitions
+// Shots, transitions and camera
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 
@@ -621,7 +884,7 @@ function wipeClip(ctx, kind, p, o = {}) {
   } else if (kind === 'iris') {
     const cx = round(o.cx ?? W / 2);
     const cy = round(o.cy ?? H / 2);
-    const rad = round(easeIn(p) * 0 + p * p * 260);
+    const rad = round(p * p * 260);
     const rr = (rad + 0.5) ** 2;
     for (let dy = -rad; dy <= rad; dy += 2) {
       const hw = floor(sqrt(max(0, rr - dy * dy)) / 2) * 2;
@@ -638,6 +901,20 @@ function wipeClip(ctx, kind, p, o = {}) {
         if (p * 16 > BAYER[(gy % 4) * 4 + (gx % 4)]) ctx.rect(gx * S, gy * S, S, S);
       }
     }
+  } else if (kind === 'match') {
+    // 4px cells switch in order of distance from the shape both shots share,
+    // jittered by Bayer order: the matched shape "becomes" the new shot first
+    const S = 4;
+    const cx = o.cx ?? W / 2;
+    const cy = o.cy ?? H / 2;
+    const far = Math.hypot(max(cx, W - cx), max(cy, H - cy));
+    const reach = p * 1.25;
+    for (let gy = 0; gy < H / S; gy++) {
+      for (let gx = 0; gx < W / S; gx++) {
+        const d = Math.hypot(gx * S + 2 - cx, gy * S + 2 - cy) / far;
+        if (reach > d * 0.8 + (BAYER[(gy % 4) * 4 + (gx % 4)] / 16) * 0.25) ctx.rect(gx * S, gy * S, S, S);
+      }
+    }
   } else {
     // 'diag': stepped diagonal sweep left to right
     const S = 8;
@@ -647,10 +924,35 @@ function wipeClip(ctx, kind, p, o = {}) {
   ctx.clip();
 }
 
+/** Clip to a pixel-stepped disc of radius rad (2-row steps). Caller restores. */
+function discClip(ctx, cx, cy, rad) {
+  ctx.save();
+  ctx.beginPath();
+  cx = round(cx);
+  cy = round(cy);
+  rad = max(0, round(rad));
+  const rr = (rad + 0.5) ** 2;
+  for (let dy = -rad; dy <= rad; dy += 2) {
+    const hw = floor(sqrt(max(0, rr - dy * dy)));
+    ctx.rect(cx - hw, cy + dy, hw * 2 + 1, 2);
+  }
+  ctx.clip();
+}
+
+/** Draw a full-frame image shifted by x with wrap-around (whip pans). */
+function wrapDraw(ctx, cv, x) {
+  x = round(x);
+  ctx.drawImage(cv, x, 0);
+  if (x > 0) ctx.drawImage(cv, x - W, 0);
+  else if (x < 0) ctx.drawImage(cv, x + W, 0);
+}
+
+const WD = { whip: 0.36, match: 0.4, slide: 0.4, irisInOut: 0.8, flash: 0.3 };
+
 /**
- * Run a list of scenes [{ at, draw(ctx, lt, info, dt), wipe, wd, cx, cy }].
- * The last scene holds for as long as the ad runs (the voice-over may overrun).
- * wipe: 'cut' | 'blocks' | 'iris' | 'bars' | 'dissolve' | 'diag' | 'push' | 'flash'
+ * Run a list of shots [{ at, draw(ctx, lt, info, dt), wipe, wd, cx, cy, fx, fy, dir }].
+ * The last shot holds for as long as the ad runs (the voice-over may overrun).
+ * wipe is the transition INTO the shot (see the header for the kinds).
  */
 export function play(ctx, dt, info, list) {
   let i = 0;
@@ -658,34 +960,100 @@ export function play(ctx, dt, info, list) {
   const s = list[i];
   const lt = dt - s.at;
   const kind = s.wipe || 'cut';
-  const wd = s.wd ?? 0.5;
+  const wd = s.wd ?? WD[kind] ?? 0.5;
   if (i === 0 || kind === 'cut' || lt >= wd) {
     s.draw(ctx, lt, info, dt);
-  } else {
-    const prev = list[i - 1];
-    const plt = dt - prev.at;
-    const p = lt / wd;
-    if (kind === 'push') {
-      const off = round(easeInOut(p) * W);
-      ctx.save();
-      ctx.translate(-off, 0);
-      prev.draw(ctx, plt, info, dt);
-      ctx.restore();
-      ctx.save();
-      ctx.translate(W - off, 0);
-      s.draw(ctx, lt, info, dt);
-      ctx.restore();
-    } else if (kind === 'flash') {
-      if (p < 0.5) prev.draw(ctx, plt, info, dt);
-      else s.draw(ctx, lt, info, dt);
-      R(ctx, 0, 0, W, H, A(P.white, 0.85 * (1 - abs(p - 0.5) * 2)));
-    } else {
-      prev.draw(ctx, plt, info, dt);
-      wipeClip(ctx, kind, p, s);
-      s.draw(ctx, lt, info, dt);
-      ctx.restore();
-    }
+    return;
   }
+  const prev = list[i - 1];
+  const plt = dt - prev.at;
+  const p = lt / wd;
+  const dir = s.dir ?? 1;
+  if (kind === 'push') {
+    const off = round(easeInOut(p) * W) * dir;
+    ctx.save();
+    ctx.translate(-off, 0);
+    prev.draw(ctx, plt, info, dt);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(W * dir - off, 0);
+    s.draw(ctx, lt, info, dt);
+    ctx.restore();
+  } else if (kind === 'slide') {
+    const off = round((1 - easeOut(p)) * W) * dir;
+    prev.draw(ctx, plt, info, dt);
+    ctx.save();
+    ctx.translate(off, 0);
+    s.draw(ctx, lt, info, dt);
+    R(ctx, dir > 0 ? -2 : W, 0, 2, H, P.black);
+    ctx.restore();
+  } else if (kind === 'whip') {
+    // out on an accelerating pan, in on a decelerating one, smeared by speed
+    const first = p < 0.5;
+    const q = first ? easeIn(p * 2) : 1 - easeOut((p - 0.5) * 2);
+    const b = scratch(0);
+    if (first) prev.draw(b.c, plt, info, dt);
+    else s.draw(b.c, lt, info, dt);
+    const x0 = (first ? -q : q) * W * 0.6 * dir;
+    const smear = round(q * 30) * dir;
+    ctx.save();
+    for (let k = 0; k < 4; k++) {
+      ctx.globalAlpha = 1 / (k + 1);
+      wrapDraw(ctx, b.cv, x0 + (smear * k) / 3);
+    }
+    ctx.restore();
+    if (q > 0.3) {
+      const rand = mulberry32(floor(dt * 30));
+      for (let k = 0; k < 10; k++) R(ctx, 0, floor(rand() * H), W, 1, A(rand() < 0.5 ? P.white : P.black, 0.12 + q * 0.12));
+    }
+  } else if (kind === 'irisInOut') {
+    R(ctx, 0, 0, W, H, P.black);
+    if (p < 0.5) {
+      discClip(ctx, s.fx ?? W / 2, s.fy ?? H / 2, (1 - easeIn(p * 2)) * 240);
+      prev.draw(ctx, plt, info, dt);
+    } else {
+      discClip(ctx, s.cx ?? W / 2, s.cy ?? H / 2, easeOut((p - 0.5) * 2) * 240);
+      s.draw(ctx, lt, info, dt);
+    }
+    ctx.restore();
+  } else if (kind === 'flash') {
+    if (p < 0.5) prev.draw(ctx, plt, info, dt);
+    else s.draw(ctx, lt, info, dt);
+    R(ctx, 0, 0, W, H, A(P.white, 0.85 * (1 - abs(p - 0.5) * 2)));
+  } else {
+    prev.draw(ctx, plt, info, dt);
+    wipeClip(ctx, kind, p, s);
+    s.draw(ctx, lt, info, dt);
+    ctx.restore();
+  }
+}
+
+/** Integer camera pan: everything fn draws is offset by (-x, -y). */
+export function withCam(ctx, x, y, fn) {
+  ctx.save();
+  ctx.translate(-round(x), -round(y));
+  fn(ctx);
+  ctx.restore();
+}
+/** Parallax offset of a layer at `depth` (0 = sky, 1 = the camera's plane). */
+export const par = (x, depth) => round(x * depth);
+/** Decaying comedy shake [dx, dy] for `dur` seconds after t0. */
+export function kick(v, t0, dur = 0.3, amp = 3, seed = 1) {
+  if (v < t0 || v >= t0 + dur) return [0, 0];
+  return shake(v, amp * (1 - (v - t0) / dur) + 0.5, seed);
+}
+/**
+ * Draw fn scaled by z about the focus (fx, fy), nearest neighbour. Pixels
+ * become uneven at fractional zooms, so keep it to crash zooms and integer holds.
+ */
+export function zoomed(ctx, z, fx, fy, fn, slot = 2) {
+  if (abs(z - 1) < 0.002) return fn(ctx);
+  const b = scratch(slot);
+  fn(b.c);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(b.cv, fx - fx / z, fy - fy / z, W / z, H / z, 0, 0, W, H);
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------------------
@@ -1243,6 +1611,53 @@ const ARM_POSES = {
   forward: [[-1, 8], [3, 14]],
 };
 
+/** A named arm pose as [[elbowX, elbowY], [handX, handY]] (left-arm space, x < 0 = out). */
+export const armPose = (name) => (Array.isArray(name) ? name : ARM_POSES[name] || ARM_POSES.down);
+
+const angLerp = (a, b, p) => {
+  let d = b - a;
+  while (d > PI) d -= 2 * PI;
+  while (d < -PI) d += 2 * PI;
+  return a + d * p;
+};
+/**
+ * Blend two arm poses as a two-bone chain (shoulder->elbow, elbow->hand): the
+ * angles interpolate and the bone lengths stay put, so the hand travels on an
+ * arc. `swing` adds radians to the forearm (waves, flourishes).
+ */
+export function poseLerp(a, b, p, swing = 0) {
+  const [e0, h0] = armPose(a);
+  const [e1, h1] = armPose(b);
+  const u0 = Math.atan2(e0[1], e0[0]);
+  const u1 = Math.atan2(e1[1], e1[0]);
+  const l0 = Math.hypot(e0[0], e0[1]);
+  const l1 = Math.hypot(e1[0], e1[1]);
+  const f0 = Math.atan2(h0[1] - e0[1], h0[0] - e0[0]);
+  const f1 = Math.atan2(h1[1] - e1[1], h1[0] - e1[0]);
+  const m0 = Math.hypot(h0[0] - e0[0], h0[1] - e0[1]);
+  const m1 = Math.hypot(h1[0] - e1[0], h1[1] - e1[1]);
+  const ua = angLerp(u0, u1, p);
+  const ul = l0 + (l1 - l0) * p;
+  const fa = angLerp(f0, f1, p) + swing;
+  const fl = m0 + (m1 - m0) * p;
+  const ex = Math.cos(ua) * ul;
+  const ey = sin(ua) * ul;
+  return [[ex, ey], [ex + Math.cos(fa) * fl, ey + sin(fa) * fl]];
+}
+/** Arm pose over time: keys = [[t, pose, ease?], ...] like key(). */
+export function poseAt(v, keys, swing = 0) {
+  const n = keys.length;
+  if (v <= keys[0][0]) return poseLerp(keys[0][1], keys[0][1], 0, swing);
+  for (let i = 1; i < n; i++) {
+    if (v < keys[i][0]) {
+      const k0 = keys[i - 1];
+      const p = easeFn(keys[i][2])((v - k0[0]) / (keys[i][0] - k0[0] || 1));
+      return poseLerp(k0[1], keys[i][1], p, swing);
+    }
+  }
+  return poseLerp(keys[n - 1][1], keys[n - 1][1], 0, swing);
+}
+
 /** Thick outlined polyline (limbs, tails, cables). */
 export function stroke(ctx, pts, w, col, ol) {
   const o = floor(w / 2);
@@ -1532,7 +1947,7 @@ export function hero(ctx, x, gy, o = {}) {
   }
   // hands raised to the face stay in front of it
   for (const [pose, hd] of [[o.armL, handL], [o.armR, handR]]) {
-    if (pose === 'mouth' || pose === 'ear') {
+    if (pose === 'mouth' || pose === 'ear' || o.handsFront) {
       disc(ctx, hd[0], hd[1], 3, pal.K);
       disc(ctx, hd[0], hd[1], 2, pal.S);
     }
@@ -1668,7 +2083,35 @@ function layoutWord(str, st) {
   return { letters, width: cur - gap + ceil(h * slant), h, r };
 }
 
-const WORDMARKS = new Map();
+const WORDMARKS = new Map(); // str -> [{ st, wm }]
+const MARK_BY_STYLE = new WeakMap(); // style object -> Map(str -> wm)
+function sameStyle(a, b) {
+  if (a === b) return true;
+  if (typeof a !== typeof b || a === null || b === null) return false;
+  if (typeof a === 'function') return a.toString() === b.toString();
+  if (typeof a !== 'object') return false;
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b) || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!sameStyle(a[i], b[i])) return false;
+    return true;
+  }
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  for (const k of ka) if (!sameStyle(a[k], b[k])) return false;
+  return true;
+}
+/** Memoise a factory: `const MARK = lazy(() => wordmark(...))` builds once. */
+export function lazy(fn) {
+  let done = false;
+  let v;
+  return () => {
+    if (!done) {
+      v = fn();
+      done = true;
+    }
+    return v;
+  };
+}
 /**
  * Render (once) a brand wordmark. Style:
  *  h, pen, square, wide, gap, slant, wave(i) | [..]
@@ -1678,9 +2121,20 @@ const WORDMARKS = new Map();
  * Returns { cv, w, h, ox, oy, letters } — draw with drawMark().
  */
 export function wordmark(str, st = {}) {
-  const key = `${str}|${JSON.stringify(st, (k, v) => (typeof v === 'function' ? v.toString() : v))}`;
-  let wm = WORDMARKS.get(key);
+  // Fast paths: the same style object (see lazy()), else a structural match
+  // against marks already built for this string. No JSON per frame.
+  let byStyle = MARK_BY_STYLE.get(st);
+  let wm = byStyle?.get(str);
   if (wm) return wm;
+  let list = WORDMARKS.get(str);
+  if (!list) WORDMARKS.set(str, (list = []));
+  for (const e of list) {
+    if (sameStyle(e.st, st)) {
+      if (!byStyle) MARK_BY_STYLE.set(st, (byStyle = new Map()));
+      byStyle.set(str, e.wm);
+      return e.wm;
+    }
+  }
   const L = layoutWord(str, st);
   const outlines = st.outline ?? [[P.black, 2]];
   const ow = outlines.reduce((s, o) => s + o[1], 0);
@@ -1732,7 +2186,9 @@ export function wordmark(str, st = {}) {
   const info = { pad, letters: L.letters, r, h: L.h, w: L.width };
   if (st.deco) st.deco(c, info);
   wm = { cv, w: L.width, h: L.h, ox: pad, oy: pad, letters: L.letters, depth };
-  WORDMARKS.set(key, wm);
+  list.push({ st, wm });
+  if (!byStyle) MARK_BY_STYLE.set(st, (byStyle = new Map()));
+  byStyle.set(str, wm);
   return wm;
 }
 
@@ -1811,6 +2267,104 @@ export function urlPill(ctx, s, cx, y, { bg = P.black, color = P.white, border =
   const w = measureText(s) + 14;
   panel(ctx, round(cx - w / 2), y, w, 13, bg, border, 2);
   return text(ctx, s, cx, y + 3, { color, align: 'center' });
+}
+
+/** Draw cached art scaled about its bottom centre (cx, by): squash & stretch. */
+export function squashArt(ctx, art, cx, by, sx = 1, sy = 1) {
+  const w = max(1, round(art.width * sx));
+  const h = max(1, round(art.height * sy));
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(art, round(cx - w / 2), round(by - h), w, h);
+}
+
+// ---------------------------------------------------------------------------
+// Product hero furniture
+
+/**
+ * 2.5D turntable: wraps a label texture (any width = one full turn) around a
+ * vertical cylinder of radius r with its top-left at (cx - r, y). turn in
+ * revolutions; the key light stays put while the label turns under it.
+ * o: { light (-1..1 across the face, default -0.4), shade, spec, rim }
+ */
+export function cylinder(ctx, label, cx, y, r, turn, { light = -0.4, shade = true, spec = true, h = label.height } = {}) {
+  cx = round(cx);
+  y = round(y);
+  const lw = label.width;
+  const t = turn - floor(turn);
+  for (let i = -r; i < r; i++) {
+    const xn = (i + 0.5) / r;
+    const u = Math.asin(xn) / (2 * PI) + t;
+    const col = floor((u - floor(u)) * lw) % lw;
+    ctx.drawImage(label, col, 0, 1, h, cx + i, y, 1, h);
+    if (!shade) continue;
+    const d = abs(xn - light);
+    if (abs(xn) > 0.82) R(ctx, cx + i, y, 1, h, A(P.black, 0.42));
+    else if (abs(xn) > 0.6 && xn > light) R(ctx, cx + i, y, 1, h, A(P.black, 0.22));
+    if (spec && d < 0.07) R(ctx, cx + i, y, 1, h, A(P.white, 0.55));
+    else if (spec && d < 0.16) R(ctx, cx + i, y, 1, h, A(P.white, 0.2));
+  }
+}
+
+/** Theatre spotlight: stepped translucent cone from above plus a floor pool. */
+export function spotlight(ctx, cx, floorY, { top = -4, w0 = 16, w1 = 64, color = P.white, a = 0.05, layers = 3, pool = P.slate, poolRx = null } = {}) {
+  for (let i = 0; i < layers; i++) {
+    const k = i * 0.22;
+    poly(ctx, [[cx - w0 * (1 + k), top], [cx + w0 * (1 + k), top], [cx + w1 * (1 + k), floorY], [cx - w1 * (1 + k), floorY]], A(color, a));
+  }
+  if (pool) {
+    const rx = poolRx ?? w1;
+    oval(ctx, cx, floorY, rx, max(2, round(rx / 7)), pool);
+    oval(ctx, cx, floorY, round(rx * 0.75), max(1, round(rx / 10)), A(color, 0.12));
+  }
+}
+
+/** Starburst sticker; s = scale 0..1 (feed spring() for a pop). Draw text on top. */
+export function badge(ctx, cx, cy, r, s, { n = 14, fill = P.yellow, outline = P.black, rot = 0, inner = 0.8, ring: ringC = null } = {}) {
+  const rr = round(r * s);
+  if (rr < 2) return 0;
+  poly(ctx, starPts(cx, cy, n, rr + 2, rr * inner + 2, rot), outline);
+  poly(ctx, starPts(cx, cy, n, rr, rr * inner, rot), fill);
+  if (ringC && rr > 8) ring(ctx, cx, cy, round(rr * inner) - 3, ringC);
+  return rr;
+}
+
+// ---------------------------------------------------------------------------
+// The shared end slate: the same layout and beat for every brand, so the
+// break feels like one channel. Product left (drawn by the ad), wordmark
+// top right, tagline ribbon, URL pill and micro-font legal line.
+
+/**
+ * o: { bg(ctx, lt), product(ctx, lt), mark: wordmark | () => wordmark, markX, markY,
+ *      sub: wordmark | fn (second lettering under the mark), subY, line: text under the mark,
+ *      lineColor, lineY, tagline, tag: { bg, edge, color }, tagY, url, pill: { bg, border, color },
+ *      urlY, legal, legalColor, legalBg }
+ * Timing: mark letters 0.15-0.85 s, sub 0.7 s, line 0.95 s, tagline 1.0 s, url 1.5 s,
+ * legal 1.7 s, light sweep across the mark every 3.5 s.
+ */
+export function endSlate(ctx, lt, o = {}) {
+  const { markX = 262, markY = 30, subY = null, lineY = null, tagY = 146, urlY = 172 } = o;
+  o.bg?.(ctx, lt);
+  o.product?.(ctx, lt);
+  let below = markY;
+  if (o.mark) {
+    const mk = typeof o.mark === 'function' ? o.mark() : o.mark;
+    const x0 = drawMark(ctx, mk, markX, markY, { reveal: prog(lt, 0.15, 0.85), drop: 34 });
+    if (lt > 1.2) glint(ctx, mk.cv, x0 - mk.ox, markY - mk.oy, ((lt - 1.2) % 3.5) / 0.7, { width: 6 });
+    below = markY + mk.h + mk.depth + 6;
+  }
+  if (o.sub && lt > 0.7) {
+    const sb = typeof o.sub === 'function' ? o.sub() : o.sub;
+    const sy = subY ?? below;
+    drawMark(ctx, sb, markX, sy - round((1 - easeOutBack(prog(lt, 0.7, 1.0), 2.2)) * 10));
+    below = sy + sb.h + sb.depth + 6;
+  }
+  if (o.line && lt > 0.95) micro(ctx, o.line, markX, lineY ?? below + 2, { color: o.lineColor || P.white, align: 'center' });
+  if (o.tagline && lt > 1.0) slogan(ctx, o.tagline, W / 2, tagY, lt - 1.0, { scale: 2, ...(o.tag || {}) });
+  if (o.url && lt > 1.5) {
+    const p = easeOutBack(prog(lt, 1.5, 1.75), 2.5);
+    urlPill(ctx, o.url, W / 2, urlY + round((1 - p) * 8), o.pill || {});
+  }
+  if (o.legal) finePrint(ctx, o.legal, { lt: lt - 1.7, color: o.legalColor || P.fog, bg: o.legalBg === undefined ? P.black : o.legalBg });
 }
 
 // ---------------------------------------------------------------------------

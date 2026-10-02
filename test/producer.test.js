@@ -493,10 +493,6 @@ describe('Producer review stage', () => {
 
   test(
     'the review pass keeps the stage directions of the script it checks',
-    {
-      todo:
-        'BUG server/producer.js:99-102 + server/writer.js:195 - the script sent to the editor has plain text plus a "cues" array, but normalizeBulletin() only reads cues from [bracketed] text and ignores seg.cues, so after the review stage (on by default, REVIEW_PASS=1) every segment has cues: [] and all gestures are lost, even with an editor that changes nothing',
-    },
     async () => {
       const { producer, chain } = makeProducer();
       chain.write = async () =>

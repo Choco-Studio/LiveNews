@@ -841,22 +841,23 @@ describe('Station ticker and news refresh', () => {
       return breaking;
     };
 
-    test('announces headlines that say BREAKING, "– live", "live updates" or "última hora"', async () => {
+    test('announces headlines that say BREAKING or "última hora"', async () => {
       const titles = [
         'BREAKING: Magnitude 7 earthquake hits Japan',
         'Breaking news: minister resigns',
         'Minister resigns, breaking',
-        'Iran strikes – live',
-        'Iran strikes - live',
-        'Election night — live',
-        'Election night -live',
-        'Live updates: vote count under way',
-        'Live update: vote count under way',
+        'Minister resigns – BREAKING',
         'Última hora: dimite el ministro',
         'ÚLTIMA HORA: dimite el ministro',
       ];
       for (const title of titles) {
         assert.deepEqual(await breakingFor(title), [{ source: 'Outlet 2', text: title }], title);
+      }
+    });
+
+    test('does not announce live blogs ("– live", "live updates"): they are rolling coverage, not breaking news', async () => {
+      for (const title of ['Iran strikes – live', 'Election night -live', 'Live updates: vote count under way', 'Premier League – live']) {
+        assert.deepEqual(await breakingFor(title), [], title);
       }
     });
 
@@ -867,10 +868,6 @@ describe('Station ticker and news refresh', () => {
 
     test(
       'does not mistake "record-breaking", "ground-breaking" or "breaking into" for breaking news',
-      {
-        todo:
-          'BUG server/station.js:3 - BREAKING_RE = /\\bbreaking\\b|.../i matches the word inside "Record-breaking heatwave hits Europe", "Ground-breaking study" and "Man charged with breaking into home", so the on-air BREAKING banner is triggered for ordinary headlines',
-      },
       async () => {
         for (const title of ['Record-breaking heatwave hits southern Europe', 'Ground-breaking study on sleep published', 'Man charged with breaking into home']) {
           assert.deepEqual(await breakingFor(title), [], title);

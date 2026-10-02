@@ -8,6 +8,7 @@ import {
   extractImage,
   interestScore,
   isBreaking,
+  isLiveBlog,
   keywords,
   normalizeTitleKey,
   parseFeed,
@@ -299,10 +300,6 @@ describe('parseFeed', () => {
 
   test(
     'does not cut a real sentence that happens to end with "read more" or "continue reading"',
-    {
-      todo:
-        'STILL BROKEN server/news.js:53 - the end-anchored /\\s*(?:Read more|Continue reading)\\s*\\.?$/i cannot tell the feed link from a sentence: "Experts say children should read more." is stored as "Experts say children should", "Please continue reading." as "Please"',
-    },
     () => {
       assert.equal(summaryOf('Experts say children should read more.'), 'Experts say children should read more.');
       assert.equal(summaryOf('Please continue reading.'), 'Please continue reading.');
@@ -311,10 +308,6 @@ describe('parseFeed', () => {
 
   test(
     'does not wipe a sentence that merely contains "the post ... appeared first on"',
-    {
-      todo:
-        'STILL BROKEN server/news.js:53 - /The post .{0,200}? appeared first on .{0,80}?\\./ is neither anchored nor limited to the end: "The post office said it appeared first on Monday that stamps rise." leaves an EMPTY summary',
-    },
     () => {
       assert.equal(summaryOf('The post office said it appeared first on Monday that stamps rise.'), 'The post office said it appeared first on Monday that stamps rise.');
     }
@@ -567,9 +560,17 @@ describe('isBreaking', () => {
     assert.equal(isBreaking('BREAKING NEWS'), true);
   });
 
-  test('recognises "– live" and "live updates"', () => {
-    for (const title of ['Iran strikes – live', 'Iran strikes - live', 'Election night — live', 'Election night -live', 'Live updates: vote count under way', 'Live update: vote count under way', 'Vote count: live updates']) {
-      assert.equal(isBreaking(title), true, title);
+  test('live blogs ("– live", "live updates") are rolling coverage, not breaking news, but isLiveBlog() spots them', () => {
+    for (const title of ['Iran strikes – live', 'Iran strikes - live', 'Election night — live', 'Election night -live', 'Live updates: vote count under way', 'Live update: vote count under way', 'Vote count: live updates', 'Premier League – live', 'Live: storm reaches the coast']) {
+      assert.equal(isBreaking(title), false, title);
+      assert.equal(isLiveBlog(title), true, title);
+    }
+    assert.equal(isBreaking('BREAKING: storm hits the coast – live'), true, 'an explicit marker still wins');
+  });
+
+  test('isLiveBlog() ignores headlines that merely contain "live"', () => {
+    for (const title of ['Live music festival opens in Lisbon', 'Olive harvest begins early', 'Alive and well after ten days at sea', 'Long-lived trees found in Chile', 'Minister resigns', '', undefined]) {
+      assert.equal(isLiveBlog(title), false, String(title));
     }
   });
 
@@ -608,10 +609,6 @@ describe('isBreaking', () => {
 
   test(
     'does not mistake a headline that ENDS in "record-breaking" (or is all capitals) for breaking news',
-    {
-      todo:
-        'STILL BROKEN server/news.js:61 - /[,|–—-]\\s*breaking\\s*$/i also matches the hyphen of "-breaking": "The heatwave is record-breaking" and "Sales are record-breaking" are flagged; and /\\bBREAKING\\b/ (case-sensitive) matches "RECORD-BREAKING HEATWAVE HITS EUROPE" in an all-caps headline',
-    },
     () => {
       for (const title of ['The heatwave is record-breaking', 'Sales are record-breaking', 'The scenes were heart-breaking', 'RECORD-BREAKING HEATWAVE HITS EUROPE']) {
         assert.equal(isBreaking(title), false, title);

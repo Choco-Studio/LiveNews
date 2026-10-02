@@ -33,11 +33,11 @@ export function portraitOf(id, supported = ['paco', 'lola', 'max', 'ada', 'nova'
   return fallbackBase(id);
 }
 
-/** Accent colour for each programme theme. */
+/** Accent colour for each programme theme (docs/ART_DIRECTION.md "Re-dressing by programme"). */
 export const THEME_ACCENT = {
   world: P.red,
-  tech: P.magenta,
-  space: P.purple,
+  tech: P.cyan,
+  space: P.magenta,
   money: P.green,
   flash: P.yellow,
 };

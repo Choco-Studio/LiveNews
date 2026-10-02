@@ -96,10 +96,16 @@
         "world",
         "business"
       ],
-      "stories": 5,
-      "maxChats": 3,
-      "style": "Flagship world news bulletin. Lead with the biggest global story. Serious but warm; brief exchanges between presenters only on lighter stories.",
-      "storyLength": "2 to 4 sentences, max 450 characters"
+      "stories": 6,
+      "maxChats": 2,
+      "features": [
+        "roundup",
+        "number",
+        "lighter"
+      ],
+      "style": "Flagship world news bulletin. Lead with the biggest global story, told with authority. Two or three main stories, then 'Around the world in 30 seconds' for quick items with a clear place, and 'And finally' a lighter story to close. Serious but warm; brief exchanges between presenters only around lighter stories.",
+      "storyLength": "2 to 4 sentences, max 450 characters; round-up items exactly 1 sentence",
+      "chemistry": "Paco is the steady veteran with a dry one-liner; Lola brings warmth, curiosity and the human angle. Paco tosses with a single word (\"Lola?\"); Lola often picks up with \"Thanks, Paco\" and sometimes teases his dryness. Never banter around grave stories."
     },
     "tech-bytes": {
       "title": "TECH BYTES",
@@ -115,8 +121,13 @@
       ],
       "stories": 4,
       "maxChats": 4,
-      "style": "Fun technology magazine show. Explain why each story matters to normal people. Max brings the enthusiasm, Ada the healthy scepticism; short back-and-forth exchanges are welcome.",
-      "storyLength": "2 to 4 sentences, max 450 characters"
+      "features": [
+        "number",
+        "lighter"
+      ],
+      "style": "Fun technology magazine show. For every story say plainly what it means for ordinary people, but only what the summary supports. Max brings the enthusiasm and the odd pun, Ada the healthy scepticism and the hard question; short back-and-forth exchanges are welcome. A number of the day when a summary has a striking figure.",
+      "storyLength": "2 to 4 sentences, max 450 characters",
+      "chemistry": "Max gets excited first; Ada raises an eyebrow and asks the question viewers are thinking, using only what the summary says. They tease each other like old colleagues: Max calls Ada the sceptic, Ada calls Max the early adopter."
     },
     "cosmos": {
       "title": "COSMOS DESK",
@@ -132,8 +143,13 @@
       ],
       "stories": 3,
       "maxChats": 3,
-      "style": "Science and space show full of wonder. Nova explains with simple analogies; UNIT-8 adds deadpan robot remarks about the data (never invent data).",
-      "storyLength": "2 to 4 sentences, max 450 characters"
+      "features": [
+        "number",
+        "lighter"
+      ],
+      "style": "Science and space show full of wonder. Nova explains with simple, everyday analogies that add no new facts; UNIT-8 reads out the figures exactly as stated, deadpan, and takes idioms literally (never invent data). The number of the day is UNIT-8's moment.",
+      "storyLength": "2 to 4 sentences, max 450 characters",
+      "chemistry": "Nova is the warm explainer; UNIT-8 is the literal-minded robot who loves a stated figure and misreads a human idiom now and then, which Nova gently corrects."
     },
     "money-minute": {
       "title": "MONEY MINUTE",
@@ -147,7 +163,10 @@
       ],
       "stories": 3,
       "maxChats": 0,
-      "style": "Short business and economy round-up by a single presenter. Focus on what each story means for ordinary people. Crisp and clear.",
+      "features": [
+        "number"
+      ],
+      "style": "Short business and economy round-up by a single presenter. Lead with the figure that matters, then what it means for people's wallets when the summary says so. Crisp, calm and clear; a number of the day when a summary has a striking figure.",
       "storyLength": "2 to 3 sentences, max 360 characters"
     },
     "news-60": {
@@ -163,9 +182,12 @@
         "tech",
         "science"
       ],
-      "stories": 4,
+      "stories": 5,
       "maxChats": 0,
-      "style": "Rapid-fire headline round-up by a single presenter. One or two short sentences per story. No banter.",
+      "features": [
+        "roundup"
+      ],
+      "style": "Rapid-fire headline round-up by a single presenter. One or two short sentences per story, no banter. Stories with a clear place can run as a quick 'around the world' sequence on the map.",
       "storyLength": "1 or 2 short sentences, max 200 characters"
     }
   },

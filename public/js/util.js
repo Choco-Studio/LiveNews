@@ -17,15 +17,43 @@ export function mulberry32(seed) {
 // The studio is "located" in London: sky colour and the main clock follow it.
 export const STUDIO_TZ = 'Europe/London';
 
-export function zoneTime(timeZone = STUDIO_TZ, now = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(now);
+// Intl formatters are expensive to build, and the clock is read every frame:
+// keep one formatter per zone and recompute the label once per minute.
+const formatters = new Map();
+function formatter(key, options) {
+  let f = formatters.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-GB', options);
+    formatters.set(key, f);
+  }
+  return f;
+}
+const toMs = (now) => (typeof now === 'number' ? now : now instanceof Date ? now.getTime() : Date.now());
+
+const zoneMemo = new Map(); // timeZone -> { minute, value }
+/** Wall-clock time in `timeZone`: frozen { h, m, label: 'HH:MM' }. `now` is a Date or epoch ms. */
+export function zoneTime(timeZone = STUDIO_TZ, now = Date.now()) {
+  const ms = toMs(now);
+  const minute = Math.floor(ms / 60000);
+  const hit = zoneMemo.get(timeZone);
+  if (hit && hit.minute === minute) return hit.value;
+  const parts = formatter(`t|${timeZone}`, { timeZone, hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(ms);
   const get = (t) => parts.find((p) => p.type === t)?.value ?? '00';
   const hh = get('hour') === '24' ? '00' : get('hour');
-  return { h: Number(hh), m: Number(get('minute')), label: `${hh}:${get('minute')}` };
+  const value = Object.freeze({ h: Number(hh), m: Number(get('minute')), label: `${hh}:${get('minute')}` });
+  zoneMemo.set(timeZone, { minute, value });
+  return value;
 }
 
-export function longDate(now = new Date()) {
-  return now.toLocaleDateString('en-GB', { timeZone: STUDIO_TZ, weekday: 'long', day: 'numeric', month: 'long' });
+let dateMemo = { minute: -1, value: '' };
+/** Studio date, e.g. "Friday 2 October". `now` is a Date or epoch ms. */
+export function longDate(now = Date.now()) {
+  const ms = toMs(now);
+  const minute = Math.floor(ms / 60000);
+  if (dateMemo.minute === minute) return dateMemo.value;
+  const value = formatter('date', { timeZone: STUDIO_TZ, weekday: 'long', day: 'numeric', month: 'long' }).format(ms);
+  dateMemo = { minute, value };
+  return value;
 }
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));

@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lab · graphics package</title>
+    <style>
+      body { background: #101014; color: #c0cbdc; font: 12px/1.5 monospace; margin: 12px; }
+      #screen { width: 1152px; height: 648px; image-rendering: pixelated; display: block; background: #000; }
+      #ui { margin: 8px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      input[type='range'] { width: 420px; }
+      select, button { font: inherit; }
+      #note { color: #8b9bb4; max-width: 1152px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="screen" width="384" height="216"></canvas>
+    <div id="ui">
+      <label>scenario <select id="scenario"></select></label>
+      <label>background <select id="bg"></select></label>
+      <label>theme <select id="theme"></select></label>
+      <label><input id="replay" type="checkbox" /> replay</label>
+      <label><input id="kicker" type="checkbox" /> kicker</label>
+      <label><input id="breaking" type="checkbox" /> breaking story</label>
+      <label>captions <select id="caption"><option>short</option><option>long</option><option>none</option></select></label>
+      <label>t <input id="t" type="range" min="0" max="40" step="0.01" value="0" /></label>
+      <span id="tv">0.00 s</span>
+      <label><input id="play" type="checkbox" /> play</label>
+    </div>
+    <div id="note">
+      Dev tool for public/js/graphics. Every frame is a pure function of t: a fresh Graphics replays the scenario
+      timeline at 120 Hz up to t, with a frozen clock (15:42 London). window.__lab.render(t, opts?) draws instant t;
+      window.__lab.set({ scenario, bg, theme, replay, kicker, breaking, caption }). URL params use the same names.
+      Backgrounds: neutral, photo (bright picture), wide / close (real studio shots, drawn by studio.js), montage (cards.js).
+    </div>
+    <script type="module">
+      import { Graphics } from '../js/graphics/index.js';
+      import { P } from '../js/palette.js';
+      import { setPresenters } from '../js/cast.js';
+
+      // Friday 2 October 2026, 15:42 in London: the clock never moves in the lab.
+      const FIXED_NOW = Date.UTC(2026, 9, 2, 14, 42, 7);
+      const canvas = document.getElementById('screen');
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+
+      const PROGRAMS = {
+        world: { id: 'world-now', title: 'WORLD NOW', tagline: 'THE STORIES SHAPING OUR WORLD', theme: 'world' },
+        tech: { id: 'tech-bytes', title: 'TECH BYTES', tagline: 'THE FUTURE, ONE BYTE AT A TIME', theme: 'tech' },
+        space: { id: 'cosmos', title: 'COSMOS DESK', tagline: 'SCIENCE, SPACE & OUR PLANET', theme: 'space' },
+        money: { id: 'money-minute', title: 'MONEY MINUTE', tagline: 'MARKETS & YOUR MONEY', theme: 'money' },
+        flash: { id: 'news-60', title: 'NEWS IN 60', tagline: 'THE HEADLINES IN A MINUTE', theme: 'flash' },
+      };
+      const TICKER = [
+        { source: 'Fixture Science Wire', text: 'Scientists map the ocean floor near Antarctica' },
+        { source: 'Fixture Tech Wire', text: 'Robot vacuum learns to climb stairs' },
+        { source: 'Fixture World Wire', text: 'New Zealand city of Wellington trials four-day school week for one term across twelve schools' },
+        { source: 'Fixture Business Wire', text: 'Coffee futures reach a ten-year high' },
+      ];
+      const SHORT = [
+        'Good evening, and welcome to World Now.',
+        'Oil prices slid again today as global demand cools.',
+        'Traders expect weaker demand this winter.',
+      ];
+      const LONG = [
+        'Oil prices fell for a third day as traders expect weaker demand this winter, with analysts warning that a mild season in Europe and slower factory output in Asia could keep prices under pressure well into next year.',
+        'Central banks are watching closely.',
+      ];
+      const STORY1 = { headline: 'Oil prices slide as global demand cools', source: 'Fixture Business Wire', category: 'business', kicker: 'OIL MARKETS' };
+      const STORY2 = { headline: 'Coffee futures reach a ten-year high after poor harvests', source: 'Fixture Business Wire', category: 'business', kicker: 'COMMODITIES' };
+      const BREAK = { source: 'Fixture World Wire', text: 'Earthquake of magnitude 6.1 strikes off northern Japan' };
+
+      const state = { scenario: 'channel', bg: 'wide', theme: 'world', replay: false, kicker: false, breaking: false, caption: 'short' };
+      const params = new URLSearchParams(location.search);
+      for (const k of Object.keys(state)) {
+        if (!params.has(k)) continue;
+        const v = params.get(k);
+        state[k] = typeof state[k] === 'boolean' ? v === '1' || v === 'true' : v;
+      }
+
+      // --- scenario timelines: each returns a scene builder over t ---------------
+      // Objects are created once per build so identity is stable over time (like the director's scene).
+      function lt(story, since, extra = {}) {
+        const s = { ...story, anchorName: 'PACO PIXEL', showName: false, breaking: state.breaking, since, ...extra };
+        if (!state.kicker) delete s.kicker;
+        return s;
+      }
+      function speech(lines, from, gap = 0.4) {
+        // sentence i starts after the previous one, at 15 chars per second (the mute pace)
+        const out = [];
+        let at = from;
+        for (const text of lines) {
+          out.push({ text, at });
+          at += text.length / 15 + gap;
+        }
+        return { list: out, end: at };
+      }
+      function subtitleAt(sp, t) {
+        let cur = null;
+        for (const s of sp.list) if (t >= s.at) cur = s;
+        if (!cur || t >= sp.end - 0.4 + 0.05) return { subtitle: null };
+        return { subtitle: cur.text, subtitleSince: cur.at };
+      }
+
+      const SCENARIOS = {
+        // the whole package over ~40 s: graphics on, programme tag, strap with name super, flip,
+        // live breaking item (strap turns red, ticker interrupts), strap exit, captions throughout
+        channel() {
+          const a = lt(STORY1, 1.2, { showName: true });
+          const b = lt(STORY2, 12.0);
+          const br = { ...BREAK, since: 19 };
+          const sp = speech(state.caption === 'long' ? [...LONG, ...LONG] : [...SHORT, ...SHORT, ...SHORT, ...SHORT], 0.6);
+          return (t) => ({
+            shot: t < 0 ? 'open' : 'wide',
+            programTagUntil: 15,
+            lowerThird: t < 1.2 ? null : t < 12 ? a : t < 30 ? b : null,
+            breaking: t >= 19 ? br : null,
+            ...(state.caption === 'none' ? {} : subtitleAt(sp, t)),
+          });
+        },
+        'graphics-on': () => (t) => ({ shot: t < 0.2 ? 'open' : 'wide', programTagUntil: 15.2 }),
+        'strap-in': () => {
+          const a = lt(STORY1, 0.2, { showName: true });
+          return (t) => ({ shot: 'wide', lowerThird: a });
+        },
+        'strap-out': () => {
+          const a = lt(STORY1, -3);
+          return (t) => ({ shot: 'wide', lowerThird: t < 0.2 ? a : null });
+        },
+        flip: () => {
+          const a = lt(STORY1, -3);
+          const b = lt(STORY2, 0.2);
+          return (t) => ({ shot: 'wide', lowerThird: t < 0.2 ? a : b });
+        },
+        'name-super': () => {
+          const a = lt(STORY1, -4.8, { showName: true });
+          return (t) => ({ shot: 'close', lowerThird: a });
+        },
+        breaking: () => {
+          const a = lt(STORY1, -3);
+          const br = { ...BREAK, since: 0.2 };
+          return (t) => ({ shot: 'wide', lowerThird: a, breaking: t >= 0.2 ? br : null });
+        },
+        'breaking-end': () => {
+          const a = lt(STORY1, -20);
+          const br = { ...BREAK, since: -11.8 };
+          return (t) => ({ shot: 'wide', lowerThird: a, breaking: br });
+        },
+        'caption-in': () => (t) => ({ shot: 'wide', ...(t >= 0.2 ? { subtitle: SHORT[1], subtitleSince: 0.2 } : { subtitle: null }) }),
+        'caption-pages': () => {
+          const sp = speech(LONG, 0.2);
+          return (t) => ({ shot: 'wide', lowerThird: null, ...subtitleAt(sp, t) });
+        },
+        'caption-strap': () => {
+          const a = lt(STORY1, 0.4);
+          return (t) => ({ shot: 'wide', lowerThird: a, subtitle: SHORT[1], subtitleSince: -1 });
+        },
+        'caption-montage': () => (t) => ({ shot: 'montage', programTagUntil: 10, subtitle: SHORT[0], subtitleSince: -0.5 }),
+        ticker: () => (t) => ({ shot: 'wide' }),
+        ad: () => (t) => ({ shot: t < 0.2 ? 'ident' : 'ad' }),
+      };
+
+      // --- backgrounds ---------------------------------------------------------
+      const bgCache = new Map();
+      let studio = null;
+      let cards = null;
+      async function loadReal() {
+        try {
+          studio = await import('../js/studio.js');
+        } catch (err) {
+          console.warn('[lab] studio.js unavailable, real-shot backgrounds fall back to neutral', err.message);
+        }
+        try {
+          cards = await import('../js/scenes/cards.js');
+        } catch (err) {
+          console.warn('[lab] cards.js unavailable', err.message);
+        }
+      }
+      function mk() {
+        const c = document.createElement('canvas');
+        c.width = 384;
+        c.height = 216;
+        const x = c.getContext('2d');
+        x.imageSmoothingEnabled = false;
+        return [c, x];
+      }
+      function neutral() {
+        const [c, x] = mk();
+        x.fillStyle = P.slate;
+        x.fillRect(0, 0, 384, 216);
+        x.fillStyle = P.steel;
+        for (let i = 0; i < 384; i += 32) x.fillRect(i, 0, 1, 216);
+        for (let j = 0; j < 216; j += 27) x.fillRect(0, j, 384, 1);
+        return c;
+      }
+      function photo() {
+        // a bright, busy "picture": sky, sea, white buildings, sand (legibility worst case)
+        const [c, x] = mk();
+        const band = (y, h, col) => { x.fillStyle = col; x.fillRect(0, y, 384, h); };
+        band(0, 70, '#8fd3ff'); band(70, 30, '#c7ecff'); band(100, 40, P.blue); band(140, 20, P.cyan); band(160, 56, P.cream);
+        x.fillStyle = P.white;
+        for (let i = 0; i < 14; i++) x.fillRect(10 + i * 27, 60 + ((i * 37) % 30), 18, 50 - ((i * 37) % 30));
+        x.fillStyle = P.yellow;
+        x.fillRect(300, 14, 26, 26);
+        x.fillStyle = P.orange;
+        for (let i = 0; i < 30; i++) x.fillRect((i * 53) % 384, 170 + ((i * 29) % 40), 6, 3);
+        return c;
+      }
+      function realShot(shot) {
+        if (!studio) return neutral();
+        const [c] = mk();
+        const audio = { isSpeaking: () => false, level: () => 0, speechFrame: () => null };
+        setPresenters({ paco: { name: 'Paco Pixel', voice: { gender: 'male' } }, lola: { name: 'Lola Byte', voice: { gender: 'female' } } });
+        const r = new studio.Renderer(c, audio);
+        const scene = {
+          channel: { name: 'GLOBIT 24', slogan: '' }, program: PROGRAMS[state.theme], cast: { A: 'paco', B: 'lola' },
+          shot, shotSince: 0, focus: 'A', storyId: null, wall: { mode: 'logo' }, anchors: { A: { emotion: 'neutral' }, B: { emotion: 'neutral' } },
+          actions: {}, lowerThird: null, subtitle: null, ticker: [], rundown: [], images: new Map(), card: null,
+        };
+        try {
+          r.drawShot(2, scene);
+        } catch (err) {
+          console.warn('[lab] drawShot failed', err.message);
+        }
+        return c;
+      }
+      function montage() {
+        const [c, x] = mk();
+        if (!cards) return neutral();
+        try {
+          cards.drawHeadlineFrame(x, 2, 1.6, { index: 0, total: 3, headline: 'Central bank holds interest rates steady', source: 'Fixture Business Wire', category: 'business' });
+        } catch (err) {
+          console.warn('[lab] montage failed', err.message);
+        }
+        return c;
+      }
+      function background(name) {
+        const key = `${name}|${state.theme}`;
+        let c = bgCache.get(key);
+        if (c) return c;
+        c = name === 'photo' ? photo() : name === 'wide' || name === 'close' ? realShot(name) : name === 'montage' ? montage() : neutral();
+        bgCache.set(key, c);
+        return c;
+      }
+
+      // --- deterministic render ---------------------------------------------------
+      const STEP = 1 / 120;
+      function sceneAt(build, t) {
+        const s = build(t);
+        return {
+          subtitles: true, rundown: [], ticker: TICKER, replay: state.replay, program: PROGRAMS[state.theme],
+          lowerThird: null, breaking: null, subtitle: null, ...s,
+        };
+      }
+      function render(t, opts) {
+        if (opts) set(opts, false);
+        const build = (SCENARIOS[state.scenario] || SCENARIOS.channel)();
+        const g = new Graphics({ now: () => FIXED_NOW });
+        // replay from a little before 0 so states that started "earlier" are settled
+        for (let k = -4; k < t; k += STEP) g.update(k, sceneAt(build, k));
+        const scene = sceneAt(build, t);
+        g.update(t, scene);
+        const shot = scene.shot;
+        const bg = shot === 'montage' ? 'montage' : shot === 'open' || shot === 'ident' ? 'black' : state.bg;
+        if (bg === 'black') {
+          ctx.fillStyle = P.black;
+          ctx.fillRect(0, 0, 384, 216);
+        } else ctx.drawImage(background(bg), 0, 0);
+        if (shot === 'ad') {
+          ctx.fillStyle = P.navy;
+          ctx.fillRect(0, 0, 384, 216);
+        }
+        g.render(ctx, t, scene);
+        tIn.value = t;
+        tv.textContent = `${t.toFixed(2)} s`;
+        return g;
+      }
+
+      // --- UI ------------------------------------------------------------------------
+      const $ = (id) => document.getElementById(id);
+      const tIn = $('t');
+      const tv = $('tv');
+      const fill = (sel, values) => { for (const v of values) sel.add(new Option(v, v)); };
+      fill($('scenario'), Object.keys(SCENARIOS));
+      fill($('bg'), ['neutral', 'photo', 'wide', 'close', 'montage']);
+      fill($('theme'), Object.keys(PROGRAMS));
+      function syncUi() {
+        for (const k of ['scenario', 'bg', 'theme', 'caption']) $(k).value = state[k];
+        for (const k of ['replay', 'kicker', 'breaking']) $(k).checked = state[k];
+      }
+      function set(opts, draw = true) {
+        Object.assign(state, opts);
+        syncUi();
+        if (draw) render(Number(tIn.value));
+      }
+      for (const k of ['scenario', 'bg', 'theme', 'caption']) $(k).addEventListener('change', (e) => set({ [k]: e.target.value }));
+      for (const k of ['replay', 'kicker', 'breaking']) $(k).addEventListener('change', (e) => set({ [k]: e.target.checked }));
+      tIn.addEventListener('input', () => render(Number(tIn.value)));
+      let playing = false;
+      let last = 0;
+      $('play').addEventListener('change', (e) => {
+        playing = e.target.checked;
+        last = performance.now();
+        if (playing) requestAnimationFrame(tick);
+      });
+      function tick(now) {
+        if (!playing) return;
+        const t = (Number(tIn.value) + (now - last) / 1000) % 40;
+        last = now;
+        render(t);
+        requestAnimationFrame(tick);
+      }
+
+      await loadReal();
+      syncUi();
+      render(Number(params.get('t') || 0));
+      window.__lab = { render, set, state, SCENARIOS: Object.keys(SCENARIOS) };
+    </script>
+  </body>
+</html>

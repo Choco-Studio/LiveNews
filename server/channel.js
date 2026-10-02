@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './config.js';
+import { FEATURES } from './writer.js';
 
 const FILE = path.join(ROOT, 'config', 'channel.json');
 
@@ -50,6 +51,14 @@ export function validateChannel(ch) {
     for (const who of p.presenters) {
       if (!ch.presenters[who]) throw new Error(`programme "${id}" references unknown presenter "${who}"`);
     }
+    // Optional: recurring features (see FEATURES in server/writer.js) and a note on the presenters' chemistry.
+    if (p.features !== undefined) {
+      if (!Array.isArray(p.features)) throw new Error(`programme "${id}" has "features" that are not a list`);
+      for (const f of p.features) {
+        if (!FEATURES.includes(f)) throw new Error(`programme "${id}" has an unknown feature "${f}" (known: ${FEATURES.join(', ')})`);
+      }
+    }
+    if (p.chemistry !== undefined && typeof p.chemistry !== 'string') throw new Error(`programme "${id}" has a "chemistry" that is not text`);
   }
 }
 

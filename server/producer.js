@@ -80,6 +80,7 @@ export class Producer {
         maxStories: ctx.program.stories,
         maxChats: ctx.program.maxChats ?? 3,
         solo: !ctx.presenters.B,
+        features: ctx.program.features || [],
       });
   }
 
@@ -111,7 +112,9 @@ export class Producer {
       ctx.episode = value;
       return { provider, reviewed: true };
     } catch (err) {
-      this.log.warn?.(`[producer] review skipped: ${err.message}`);
+      // Without an AI editor (offline demo: the mock only writes) nothing is checked, and the pipeline says so.
+      if (err.code === 'NO_REVIEWER') this.log.info?.(`[producer] review skipped: ${err.message}`);
+      else this.log.warn?.(`[producer] review skipped: ${err.message}`);
       return { reviewed: false, error: err.message };
     }
   }

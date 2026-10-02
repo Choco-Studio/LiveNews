@@ -409,10 +409,6 @@ describe('codex exec provider (fake CLI)', () => {
 
   test(
     'a CLI that exits without reading a very large prompt rejects the call instead of crashing the process',
-    {
-      todo:
-        'BUG server/providers/codexExec.js:102 - child.stdin.end(input) has no "error" listener on child.stdin: when the child exits before reading the whole prompt Node emits an unhandled EPIPE and the whole server process dies with an uncaught exception instead of the call rejecting',
-    },
     (t) => {
       const fake = makeFake(t, { exitImmediately: true, exit: 1 });
       const script = `

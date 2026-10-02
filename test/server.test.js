@@ -317,7 +317,6 @@ describe('server/index.js: HTTP API of a running channel', () => {
 
     test(
       'the 404 explains itself in English',
-      { todo: 'BUG server/index.js:66 - the only Spanish string left in the server: GET /api/img/<story without a picture> answers {"error":"sin imagen"}' },
       async () => {
         const res = await app.request(`/api/img/${withoutImage}`);
         assert.match(res.json.error, /no image/i);

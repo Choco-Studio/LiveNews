@@ -55,12 +55,44 @@ export function cleanHtml(html) {
     .trim();
 }
 
-// Feed boilerplate that is not part of the story
-const BOILERPLATE_RE = /\s*(?:Leer la noticia completa|Continue reading|Read more)\s*(?:\.{1,3}|…|»|→)?\s*$|(?<=[.!?])\s*Comments?\s*$|The post .{0,200}? appeared first on .{0,80}?\./gi;
+// Feed boilerplate that is not part of the story. Each pattern only matches a
+// trailing fragment that stands on its own (after a sentence end, or the
+// capitalised link text glued to the excerpt), so a real sentence such as
+// "Experts say children should read more." is never cut.
+const BOILERPLATE_RES = [
+  // "… Useful text. Read more…" / "Continue reading »" / "Leer la noticia completa."
+  /(?:^|(?<=[.!?…»"”':]))\s*(?:Leer la noticia completa|Continue reading|Read more)\s*(?:\.{1,3}|…|»|→)?\s*$/i,
+  // link text glued to the excerpt without a full stop: "… the end Read more »" (capitalised only)
+  /(?<=[a-z0-9,;)])\s+(?:Continue reading|Read more)\s*(?:\.{3}|…|»|→)?\s*$/,
+  /(?<=[.!?])\s*Comments?\s*$/i,
+  // WordPress: "The post <title> appeared first on <Site Name>." (site = capitalised words or a domain)
+  /(?:^|(?<=[.!?…"”]))\s*The post .{1,200}? appeared first on (?:(?:[A-Z0-9][\w.&'’-]*|[a-z0-9-]+(?:\.[a-z0-9-]+)+)\s?){1,6}\.?\s*$/,
+];
+export const stripBoilerplate = (summary) => BOILERPLATE_RES.reduce((s, re) => s.replace(re, ''), String(summary)).trim();
 
 // Explicit breaking-news markers only ("Record-breaking heatwave" is not breaking news).
-const BREAKING_RES = [/^\s*breaking(?: news)?\s*[:|–—-]/i, /[,|–—-]\s*breaking\s*$/i, /\bBREAKING\b/, /[-–—]\s*live\b/i, /\blive updates?\b/i, /última hora/i];
-export const isBreaking = (title) => BREAKING_RES.some((re) => re.test(title));
+const BREAKING_START = /^\s*breaking(?: news)?\s*[:|–—-]/i;
+const BREAKING_END = /(?:,|\s[|–—-])\s*breaking\s*$/i; // the separator needs a space: "record-breaking" has none
+const BREAKING_WORD = /(?<![\w\-–—])BREAKING(?![\w\-–—])/; // the capitalised word, not part of a compound
+const BREAKING_LEAD = /^\s*BREAKING(?![\w\-–—])/;
+const ULTIMA_HORA = /última hora/i;
+// In a headline written in capitals, capitals say nothing: only a leading BREAKING counts.
+const shouting = (t) => {
+  const letters = t.replace(/[^A-Za-z]/g, '');
+  return letters.length >= 8 && letters === letters.toUpperCase();
+};
+export const isBreaking = (title) => {
+  const t = String(title ?? '');
+  if (BREAKING_START.test(t) || BREAKING_END.test(t) || ULTIMA_HORA.test(t)) return true;
+  return shouting(t) ? BREAKING_LEAD.test(t) : BREAKING_WORD.test(t);
+};
+
+// Live blogs ("Election night – live", "Live updates: …") are rolling coverage,
+// not breaking news: The Guardian alone runs several a day, sport included. They
+// are flagged so the writer can call them developing stories, but they never
+// trigger the BREAKING banner.
+const LIVE_RES = [/[-–—]\s*live\b(?![-'’])/i, /\blive updates?\b/i, /\blive blog\b/i, /^\s*live\s*[:|]/i];
+export const isLiveBlog = (title) => LIVE_RES.some((re) => re.test(String(title ?? '')));
 
 const TRACKER_RE = /imrworldwide|doubleclick|feedburner|pixel|1x1|tracking|gravatar|\/stats?\b|\.gif(\?|$)/i;
 
@@ -126,7 +158,7 @@ export function parseFeed(xml, feed) {
     const link = itemLink(item);
     if (!title || !link) continue;
     const rawSummary = text(item.description) || text(item.summary) || text(item['content:encoded']) || text(item.content);
-    const summary = cleanHtml(rawSummary).replace(BOILERPLATE_RE, '').trim().slice(0, 900);
+    const summary = stripBoilerplate(cleanHtml(rawSummary)).slice(0, 900);
     const dateStr = text(item.pubDate) || text(item.published) || text(item.updated) || text(item['dc:date']);
     const published = Date.parse(dateStr) || Date.now();
     stories.push({

@@ -669,10 +669,6 @@ describe('mock provider', () => {
 
   test(
     'does not read harmless words that merely contain "die", such as "studies" or "audience", as grave news',
-    {
-      todo:
-        'BUG server/providers/mock.js:4 - GRAVE has no word boundaries: /die[sd]?/ matches inside "studies", "audience", "soldiers" and /fire/ inside "fireworks", so "Studies show coffee helps memory" gets emotion "serious" (and no chat)',
-    },
     async () => {
       const harmless = [{ id: 'h1', title: 'Studies show coffee helps memory', summary: 'A large audience of readers agreed.', source: 'BBC News', category: 'science', image: null }];
       const [seg] = storySegs(await raw({ stories: harmless }));
@@ -682,10 +678,6 @@ describe('mock provider', () => {
 
   test(
     'only flags a story as breaking when it is breaking news, not for "record-breaking" or "breaking into"',
-    {
-      todo:
-        'BUG server/providers/mock.js:43 (same regex as server/station.js:3) - /\\bbreaking\\b/i matches "Record-breaking heatwave" and "Man charged with breaking into home", so they are marked breaking: true',
-    },
     async () => {
       const normal = [{ id: 'b1', title: 'Record-breaking heatwave hits southern Europe', summary: 'Temperatures soared.', source: 'BBC News', category: 'world', image: null }];
       const [seg] = storySegs(await raw({ stories: normal }));

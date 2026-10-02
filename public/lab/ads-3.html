@@ -35,11 +35,19 @@
       // it in real time with its jingle and voice-over to check the sync.
       import { ADS } from '../js/ads/index.js';
 
-      const canvas = document.getElementById('screen');
-      const ctx = canvas.getContext('2d');
-      ctx.imageSmoothingEnabled = false;
-      const $ = (id) => document.getElementById(id);
       const params = new URLSearchParams(location.search);
+      const canvas = document.getElementById('screen');
+      const out = canvas.getContext('2d');
+      out.imageSmoothingEnabled = false;
+      // The ad draws into an offscreen frame; ?zoom=x,y,factor (or opts.zoom)
+      // magnifies a region of it with nearest-neighbour for detail checks.
+      const frame = document.createElement('canvas');
+      frame.width = 384;
+      frame.height = 216;
+      const ctx = frame.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      let zoom = params.get('zoom') ? params.get('zoom').split(',').map(Number) : null;
+      const $ = (id) => document.getElementById(id);
       const MINE = ['safesector', 'screechnet', 'corners', 'kartesia'];
       let ad = ADS.find((a) => a.id === (params.get('ad') || MINE[0])) || ADS[0];
       let t = Number(params.get('t')) || 0;
@@ -65,12 +73,18 @@
 
       function render(time, opts = {}) {
         if (opts.ad) set(opts.ad);
+        if (opts.zoom !== undefined) zoom = opts.zoom;
         t = Math.max(0, Number(time) || 0);
         const info = infoAt(t);
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalAlpha = 1;
         ctx.clearRect(0, 0, 384, 216);
         ad.draw(ctx, t, t, info);
+        out.clearRect(0, 0, 384, 216);
+        if (zoom) {
+          const [zx, zy, zf] = zoom;
+          out.drawImage(frame, zx, zy, 384 / zf, 216 / zf, 0, 0, 384, 216);
+        } else out.drawImage(frame, 0, 0);
         $('clock').textContent = `${t.toFixed(2)} s / ${ad.duration} s`;
         $('scrub').value = String(t);
         $('vo').textContent = info.line >= 0 ? `VO ${info.line + 1}: ${ad.script[info.line].text}` : '';
