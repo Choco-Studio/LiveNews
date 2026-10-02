@@ -104,8 +104,8 @@ const DEFS = {
     pools: duoPools(1.08, 96, 74),
     tintPools: [],
     scallops: [
-      { X: -166, Y: -124, up: 1, down: 120, w0: 2.5, spread: 0.3, cone: 0.45, amount: 1.05, hard: 0.62 },
-      { X: 166, Y: -124, up: 1, down: 120, w0: 2.5, spread: 0.3, cone: 0.45, amount: 1.05, hard: 0.62 },
+      { X: -166, Y: -126, up: 1, down: 110, w0: 2, spread: 0.2, beam: true, amount: 1.05, tint: 1.25 },
+      { X: 166, Y: -126, up: 1, down: 110, w0: 2, spread: 0.2, beam: true, amount: 1.05, tint: 1.25 },
     ],
     tints: { slate: 'purple', ink: 'purple' },
     tintNames: ['purple'],

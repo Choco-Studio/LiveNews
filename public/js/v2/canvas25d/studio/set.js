@@ -151,10 +151,24 @@ function bakeWall(style) {
       const dy = TY0 + ty + 0.5 - sc.Y;
       const d = Math.abs(dy) / (dy < 0 ? sc.up : sc.down);
       if (d >= 1) continue;
-      // a wall-washer fades from the fixture; a beam (cone) keeps its light along most of its reach
-      const fall = sc.cone ? 1 - smooth((d - sc.cone) / (1 - sc.cone)) : (1 - d) * (1 - 0.5 * d);
       const hw = sc.w0 + sc.spread * Math.abs(dy);
       let i = (ty - tya) * lw + (xa - txa);
+      if (sc.beam) {
+        // a beam grazing the wall from a ceiling fixture: straight diverging edges (flat across with a
+        // 1-2 px edge), its light fading only along its length; the tint fades sooner, so its Bayer
+        // band falls on lit (ink) pixels: tint ↔ ink, never tint specks on black
+        const lightAlong = 1 - smooth((d - 0.35) / 0.65), tintAlong = 1 - smooth((d - 0.12) / 0.55);
+        for (let tx = xa; tx < xb; tx++, i++) {
+          const ax = Math.abs(TX0 + tx + 0.5 - sc.X) / hw;
+          if (ax >= 1) continue;
+          const across = Math.min(1, (1 - ax) / 0.2);
+          acc[i] += sc.amount * across * lightAlong;
+          if (tints) tv[i] = Math.max(tv[i], sc.tint * across * tintAlong);
+        }
+        continue;
+      }
+      // a wall-washer: brightest at the fixture, fading with distance
+      const fall = (1 - d) * (1 - 0.5 * d);
       for (let tx = xa; tx < xb; tx++, i++) {
         const dx = (TX0 + tx + 0.5 - sc.X) / hw;
         if (dx <= -1 || dx >= 1) continue;
