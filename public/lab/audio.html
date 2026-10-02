@@ -456,9 +456,13 @@
         const settled = [[1.6, 2.6], [3.4, 4.4], [5.2, 6.2], [6.9, 8.1]];
         const depth = settled.map(([a, b]) => mean(Lb, a, b) - mean(La, a, b)).reduce((x, y) => x + y, 0) / settled.length;
         const adDepth = settled.map(([a, b]) => mean(Lc, a, b) - mean(La, a, b)).reduce((x, y) => x + y, 0) / settled.length;
-        // Swell: the bed's loudest 400 ms block across the short gaps vs its level under speech
-        // (momentary block i covers [i*0.1, i*0.1 + 0.4]: windows whose block straddles a gap).
-        const swell = Math.max(...[[2.4, 3.2], [4.2, 5.0], [6.0, 6.8]].map(([a, b]) => maxOf(Lb, a, b))) - mean(Lb, 1.6, 8.1);
+        // Swell: the duck's own gain (ducked minus plain, block by block) in the
+        // short gaps vs under speech, so the bed's melody does not count.
+        const gainAt = (i) => Lb.momentary[i] - La.momentary[i];
+        const gains = (a, b) => { const out = []; for (let i = Math.round(a / 0.1); i < Math.round(b / 0.1); i++) if (Number.isFinite(gainAt(i))) out.push(gainAt(i)); return out; };
+        const underSpeech = settled.flatMap(([a, b]) => gains(a, b - 0.4));
+        const inGaps = [[2.3, 3.1], [4.1, 4.9], [5.9, 6.7]].flatMap(([a, b]) => gains(a, b));
+        const swell = Math.max(...inGaps) - underSpeech.reduce((x, y) => x + y, 0) / underSpeech.length;
         const voiceOverBed = settled.map(([a, b]) => mean(Lv, a, b) - mean(Lb, a, b)).reduce((x, y) => x + y, 0) / settled.length;
         const voiceOverAd = settled.map(([a, b]) => mean(Lv, a, b) - mean(Lc, a, b)).reduce((x, y) => x + y, 0) / settled.length;
         const back = mean(Lb, 9.5, 9.9) - mean(La, 9.5, 9.9);

@@ -135,10 +135,10 @@ export const NEUTRAL_PROFILE = normProfile('neutral', false);
 // through a wall. Gains put every voice at the house voice level, -16 LUFS
 // (measured in public/lab/audio.html). The robot is monotone and darker.
 const BLIP_KINDS = {
-  male: { base: 112, wave: 'pulse25', gain: 0.52, cut: 2400, formant: 1 },
-  female: { base: 196, wave: 'pulse25', gain: 0.5, cut: 2700, formant: 1.15 },
-  neutral: { base: 150, wave: 'pulse25', gain: 0.5, cut: 2500, formant: 1.07 },
-  robot: { base: 104, wave: 'pulse50', gain: 0.4, cut: 2000, formant: 0.96, monotone: true },
+  male: { base: 112, wave: 'pulse25', gain: 1.93, cut: 2400, formant: 1 },
+  female: { base: 196, wave: 'pulse25', gain: 1.15, cut: 2700, formant: 1.15 },
+  neutral: { base: 150, wave: 'pulse25', gain: 1.45, cut: 2500, formant: 1.07 },
+  robot: { base: 104, wave: 'pulse50', gain: 1.16, cut: 2000, formant: 0.96, monotone: true },
 };
 
 function hash01(str) {

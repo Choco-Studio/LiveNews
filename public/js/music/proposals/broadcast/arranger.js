@@ -320,12 +320,12 @@ function approach(bed, from, target, ch) {
 // ----------------------------------------------------------------- layers
 
 const INST = {
-  horn: (s, out, t, dur, m, v, L) => s.tone(out, t, dur, m, v, { wave: 'horn', a: 0.035, d: 0.35, s: 0.72, r: 0.3, cut: L.cut || 1500, cutEnv: 0.7, vib: 9, vibDelay: 0.22, gain: 0.5 }),
-  reed: (s, out, t, dur, m, v, L) => s.tone(out, t, dur, m, v, { wave: 'reed', a: 0.05, d: 0.4, s: 0.7, r: 0.35, cut: L.cut || 1100, vib: 7, gain: 0.5 }),
-  square: (s, out, t, dur, m, v, L) => s.tone(out, t, dur, m, v, { wave: 'square', a: 0.006, d: 0.18, s: 0.45, r: 0.2, cut: L.cut || 1500, gain: 0.45 }),
-  pulse: (s, out, t, dur, m, v, L) => s.tone(out, t, dur, m, v, { wave: 'pulse25', a: 0.006, d: 0.2, s: 0.5, r: 0.18, cut: L.cut || 1400, gain: 0.45 }),
-  glass: (s, out, t, dur, m, v, L) => s.tone(out, t, dur, m, v, { wave: 'glass', a: 0.015, d: 1.2, s: 0.25, r: 1.2, cut: L.cut || 2400, gain: 0.55 }),
-  pluck: (s, out, t, dur, m, v, L) => s.pluck(out, t, m, v, { wave: 'warmsq', decay: Math.min(0.9, dur + 0.2), cut: L.cut || 1500, cutEnd: 380 }),
+  horn: (s, out, t, dur, m, v, L = {}) => s.tone(out, t, dur, m, v, { wave: 'horn', a: 0.035, d: 0.35, s: 0.72, r: 0.3, cut: L.cut || 1500, cutEnv: 0.7, vib: 9, vibDelay: 0.22, gain: 0.5 }),
+  reed: (s, out, t, dur, m, v, L = {}) => s.tone(out, t, dur, m, v, { wave: 'reed', a: 0.05, d: 0.4, s: 0.7, r: 0.35, cut: L.cut || 1100, vib: 7, gain: 0.5 }),
+  square: (s, out, t, dur, m, v, L = {}) => s.tone(out, t, dur, m, v, { wave: 'square', a: 0.006, d: 0.18, s: 0.45, r: 0.2, cut: L.cut || 1500, gain: 0.45 }),
+  pulse: (s, out, t, dur, m, v, L = {}) => s.tone(out, t, dur, m, v, { wave: 'pulse25', a: 0.006, d: 0.2, s: 0.5, r: 0.18, cut: L.cut || 1400, gain: 0.45 }),
+  glass: (s, out, t, dur, m, v, L = {}) => s.tone(out, t, dur, m, v, { wave: 'glass', a: 0.015, d: 1.2, s: 0.25, r: 1.2, cut: L.cut || 2400, gain: 0.55 }),
+  pluck: (s, out, t, dur, m, v, L = {}) => s.pluck(out, t, m, v, { wave: 'warmsq', decay: Math.min(0.9, dur + 0.2), cut: L.cut || 1500, cutEnd: 380 }),
   bell: (s, out, t, dur, m, v) => s.bell(out, t, Math.max(0.8, dur + 0.6), m, v, { ratio: 3.5, index: 1.1 }),
   glock: (s, out, t, dur, m, v) => s.bell(out, t, Math.max(0.6, dur + 0.4), m, v, { ratio: 2, index: 0.9, gain: 0.22 }),
   musicbox: (s, out, t, dur, m, v) => s.bell(out, t, 1.3, m, v, { ratio: 4, index: 0.55, gain: 0.3, cut: 3200 }),

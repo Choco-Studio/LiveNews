@@ -11,7 +11,8 @@ before air; this module is that chain, run once per clip:
      octave restored (SBR-style) on voices trained without one
   2. optional character effect (UNIT-8's robot)
   3. gentle compressor (RMS, soft knee, ~2-4 dB on vowels)
-  4. de-esser (split-band, only the 5 kHz+ band is turned down, only on 's')
+  4. de-esser (split-band, only the 5 kHz+ band is turned down, only on 's'),
+     then crest control (peaks held 13 dB over the speech level)
   5. very short, low-level studio room (synthetic IR, -22 dB wet)
   6. loudness to -16 LUFS integrated, true-peak limiter at -2.5 dBTP so lossy
      encoding stays under -1.5 dBTP (Opus overshot by up to 0.7 dB in tests)
@@ -42,6 +43,7 @@ DEFAULTS = {
     'deess_max_db': 10.0,
     'comp_threshold': -21.0, 'comp_ratio': 2.2, 'comp_knee': 8.0,
     'comp_attack': 0.004, 'comp_release': 0.09,
+    'crest_db': 13.0,
     'room_db': -22.0, 'room_rt60': 0.26,
     'target_lufs': -16.0, 'ceiling_dbtp': -2.5,
     'fade_in': 0.006, 'fade_out': 0.045, 'tail_max': 0.30,
@@ -353,6 +355,9 @@ def loudness_normalise(x, sr, target, ceiling_db):
     if not math.isfinite(lufs):
         return x
     g_db = target - lufs
+    # Never drive the limiter more than this past the plain gain: a peaky clip
+    # ends up a little under target rather than squashed into distortion
+    g_max = g_db + 3.0
     y = x
     prev = None  # (gain dB, loudness) of the previous pass
     for _ in range(8):
@@ -366,7 +371,9 @@ def loudness_normalise(x, sr, target, ceiling_db):
         if prev and abs(got - prev[1]) > 1e-3 and abs(g_db - prev[0]) > 1e-3:
             slope = min(1.0, max(0.15, (got - prev[1]) / (g_db - prev[0])))
         prev = (g_db, got)
-        g_db += min(6.0, (target - got) / slope)
+        if g_db >= g_max - 1e-6:
+            break
+        g_db = min(g_max, g_db + min(6.0, (target - got) / slope))
     return y
 
 
@@ -594,6 +601,10 @@ def broadcast(x, sr, tone=None, effect=None, overrides=None):
     # quieter fricatives, which would bring the 's' sounds back up
     y, comp_max, comp_mean = compress(y, sr, o)
     y, deess_max = deess(y, sr, o, active_level_db(y, sr))
+    # Crest control: hold peaks to crest_db over the speech level now, gently,
+    # so the final limiter only has to shave (a peaky clip would otherwise be
+    # squashed there, or end up under the loudness target)
+    y = limit(y, sr, active_level_db(y, sr) + o['crest_db'])
     y = np.concatenate([y, np.zeros(int((o['tail_max'] + 0.05) * sr))])
     y = add_room(y, sr, o['room_db'], o['room_rt60'])
     y = trim_tail(y, sr, speech_end, o['tail_max'])

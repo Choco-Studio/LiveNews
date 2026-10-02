@@ -7,10 +7,9 @@
 // pin-1 dimple) with a recessed die whose surface carries a fine grid.
 // Accent: cyan (thin lines and the booted cells only).
 import { P } from '../../palette.js';
-import { u32, seg, easeOutQuint, easeInOut, linePts, Pix, memo } from '../../gfx/index.js';
+import { u32, seg, easeOutQuint, easeInOut, linePts, Pix, memoFn } from '../../gfx/index.js';
 import { lazyBackdrop, playOpen, CENTRE, ZOOM, W, H } from './kit.js';
 
-const cached = memo(64);
 const BYTE = [1, 0, 1, 1, 0, 1, 0, 1]; // 0xB5, drawn as 4 x 2 cells
 
 /** Chip dimensions at size factor k (1 = lock-up), cached per 1/100 of k. */
@@ -49,7 +48,9 @@ function polyPix(verts) {
 }
 
 /** Traces from every pin to the frame edge, for the chip at centre stage. */
-const traces = () => cached('traces', () => {
+let TRACES = null;
+const traces = () => TRACES || (TRACES = buildTraces());
+const buildTraces = () => {
   const D = dims(ZOOM);
   const cx = CENTRE.x;
   const cy = CENTRE.y;
@@ -72,67 +73,68 @@ const traces = () => cached('traces', () => {
     add([[W, cy + o + sp * 0.5], [rx, cy + o + sp * 0.5], [rx - Math.abs(sp * 0.5), cy + o], [rtip, cy + o]], { x: D.half, y: o, v: false }, k);
   });
   return list;
-});
+};
 
 /** Chip body and pins at size factor k (baked per integer size). */
+const chipSpriteK = memoFn(64, (key, D, k) => {
+  const S = D.body + D.pin * 2 + 1; // +1: drop shadow
+  const p = new Pix(S, S);
+  const o = D.pin;
+  const pw = D.pinW;
+  const B = D.body;
+  // pins: steel legs; the key side (top, left) is lit, the far side (bottom, right) is in
+  // shade; each tip carries a bright solder spot on its lit corner
+  for (const off of D.offs) {
+    const c = D.half + off + o - (pw >> 1);
+    // top and bottom rows (vertical legs): lit column on the left, shaded column on the right
+    for (const [y0, lit] of [[0, true], [o + B, false]]) {
+      p.rect(c, y0, pw, o, lit ? P.steel : P.slate);
+      p.rect(c, y0, 1, o, lit ? P.silver : P.steel);
+      p.rect(c + pw - 1, y0, 1, o, lit ? P.slate : P.ink);
+      p.px(c, lit ? y0 : y0 + o - 1, lit ? P.white : P.fog); // solder tip
+    }
+    // left and right columns (horizontal legs): lit row on top, shaded row below
+    for (const [x0, lit] of [[0, true], [o + B, false]]) {
+      p.rect(x0, c, o, pw, lit ? P.steel : P.slate);
+      p.rect(x0, c, o, 1, lit ? P.silver : P.steel);
+      p.rect(x0, c + pw - 1, o, 1, lit ? P.slate : P.ink);
+      p.px(lit ? x0 : x0 + o - 1, c, lit ? P.white : P.fog);
+    }
+  }
+  // drop shadow on the board/field, down and right
+  p.rect(o + 1, o + B, B, 1, P.black);
+  p.rect(o + B, o + 1, 1, B, P.black);
+  // package: black epoxy top face, a 2 px bevel lit on the key side, shaded on the far side
+  p.rect(o, o, B, B, P.black);
+  p.rect(o, o, B, 1, P.silver);
+  p.rect(o, o + 1, 1, B - 1, P.silver);
+  p.rect(o + 1, o + 1, B - 2, 1, P.steel);
+  p.rect(o + 1, o + 2, 1, B - 3, P.steel);
+  p.rect(o + B - 1, o + 1, 1, B - 1, P.slate);
+  p.rect(o + 1, o + B - 1, B - 1, 1, P.slate);
+  p.rect(o + B - 2, o + 2, 1, B - 3, P.ink);
+  p.rect(o + 2, o + B - 2, B - 3, 1, P.ink);
+  p.px(o, o, P.white); // the specular corner
+  // moulded pin-1 dimple: a small pit, dark on its lit rim, catching light on its far rim
+  const dot = Math.max(2, Math.round(2 * k));
+  const dx = o + 3 * dot;
+  p.rect(dx, dx, dot, dot, P.ink);
+  p.rect(dx, dx, dot, 1, P.black);
+  p.rect(dx + dot - 1, dx + 1, 1, dot - 1, P.slate);
+  // recessed die window: shadowed inner edge on the key side, lit inner edge on the far side,
+  // and a fine grid on the die surface
+  const { x0, y0, w, h } = dieRect(D, o + D.half, o + D.half);
+  p.rect(x0, y0, w, h, P.ink);
+  for (let yy = y0 + 2; yy < y0 + h - 1; yy += 3) for (let xx = x0 + 2; xx < x0 + w - 1; xx += 3) p.px(xx, yy, P.black);
+  p.rect(x0 - 1, y0 - 1, w + 2, 1, P.black);
+  p.rect(x0 - 1, y0, 1, h + 1, P.black);
+  p.rect(x0, y0 + h, w + 1, 1, P.slate);
+  p.rect(x0 + w, y0, 1, h, P.slate);
+  return { cv: p.canvas(), S: S - 1 };
+});
 function chipSprite(k) {
   const D = dims(k);
-  return cached(D.body * 10000 + D.pin * 100 + D.pinW, () => {
-    const S = D.body + D.pin * 2 + 1; // +1: drop shadow
-    const p = new Pix(S, S);
-    const o = D.pin;
-    const pw = D.pinW;
-    const B = D.body;
-    // pins: steel legs; the key side (top, left) is lit, the far side (bottom, right) is in
-    // shade; each tip carries a bright solder spot on its lit corner
-    for (const off of D.offs) {
-      const c = D.half + off + o - (pw >> 1);
-      // top and bottom rows (vertical legs): lit column on the left, shaded column on the right
-      for (const [y0, lit] of [[0, true], [o + B, false]]) {
-        p.rect(c, y0, pw, o, lit ? P.steel : P.slate);
-        p.rect(c, y0, 1, o, lit ? P.silver : P.steel);
-        p.rect(c + pw - 1, y0, 1, o, lit ? P.slate : P.ink);
-        p.px(c, lit ? y0 : y0 + o - 1, lit ? P.white : P.fog); // solder tip
-      }
-      // left and right columns (horizontal legs): lit row on top, shaded row below
-      for (const [x0, lit] of [[0, true], [o + B, false]]) {
-        p.rect(x0, c, o, pw, lit ? P.steel : P.slate);
-        p.rect(x0, c, o, 1, lit ? P.silver : P.steel);
-        p.rect(x0, c + pw - 1, o, 1, lit ? P.slate : P.ink);
-        p.px(lit ? x0 : x0 + o - 1, c, lit ? P.white : P.fog);
-      }
-    }
-    // drop shadow on the board/field, down and right
-    p.rect(o + 1, o + B, B, 1, P.black);
-    p.rect(o + B, o + 1, 1, B, P.black);
-    // package: black epoxy top face, a 2 px bevel lit on the key side, shaded on the far side
-    p.rect(o, o, B, B, P.black);
-    p.rect(o, o, B, 1, P.silver);
-    p.rect(o, o + 1, 1, B - 1, P.silver);
-    p.rect(o + 1, o + 1, B - 2, 1, P.steel);
-    p.rect(o + 1, o + 2, 1, B - 3, P.steel);
-    p.rect(o + B - 1, o + 1, 1, B - 1, P.slate);
-    p.rect(o + 1, o + B - 1, B - 1, 1, P.slate);
-    p.rect(o + B - 2, o + 2, 1, B - 3, P.ink);
-    p.rect(o + 2, o + B - 2, B - 3, 1, P.ink);
-    p.px(o, o, P.white); // the specular corner
-    // moulded pin-1 dimple: a small pit, dark on its lit rim, catching light on its far rim
-    const dot = Math.max(2, Math.round(2 * k));
-    const dx = o + 3 * dot;
-    p.rect(dx, dx, dot, dot, P.ink);
-    p.rect(dx, dx, dot, 1, P.black);
-    p.rect(dx + dot - 1, dx + 1, 1, dot - 1, P.slate);
-    // recessed die window: shadowed inner edge on the key side, lit inner edge on the far side,
-    // and a fine grid on the die surface
-    const { x0, y0, w, h } = dieRect(D, o + D.half, o + D.half);
-    p.rect(x0, y0, w, h, P.ink);
-    for (let yy = y0 + 2; yy < y0 + h - 1; yy += 3) for (let xx = x0 + 2; xx < x0 + w - 1; xx += 3) p.px(xx, yy, P.black);
-    p.rect(x0 - 1, y0 - 1, w + 2, 1, P.black);
-    p.rect(x0 - 1, y0, 1, h + 1, P.black);
-    p.rect(x0, y0 + h, w + 1, 1, P.slate);
-    p.rect(x0 + w, y0, 1, h, P.slate);
-    return { cv: p.canvas(), S: S - 1 };
-  });
+  return chipSpriteK(D.body * 10000 + D.pin * 100 + D.pinW, D, k);
 }
 
 /** The die window (inside the cyan outline) for a chip centred at (cx, cy). */

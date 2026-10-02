@@ -73,6 +73,27 @@ export function memo(limit = 256) {
   return cached;
 }
 
+/**
+ * A bounded memo around a build function: fn(key, ...args) returns the cached value for key or
+ * builds it with build(key, ...args). Unlike memo(), the call site passes no closure, so a hit
+ * allocates nothing (use it in per-frame code).
+ */
+export function memoFn(limit, build) {
+  const m = new Map();
+  const fn = (key, a, b, c) => {
+    let v = m.get(key);
+    if (v === undefined) {
+      v = build(key, a, b, c);
+      if (m.size >= limit) m.delete(m.keys().next().value);
+      m.set(key, v);
+    }
+    return v;
+  };
+  fn.clear = () => m.clear();
+  fn.size = () => m.size;
+  return fn;
+}
+
 /** A pattern fill created once per (canvas, context) pair. */
 export function patternOf(ctx, cv, repeat = 'repeat') {
   if (!cv.__pat) cv.__pat = new WeakMap();

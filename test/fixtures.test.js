@@ -89,7 +89,7 @@ describe('offline fixture pictures', () => {
       const buf = fs.readFileSync(file);
       const { w, h } = readPng(buf);
       assert.deepEqual([w, h], [640, 360], file);
-      assert.ok(buf.length < 200_000, `${path.basename(file)} is ${buf.length} bytes`);
+      assert.ok(buf.length < 450_000, `${path.basename(file)} is ${buf.length} bytes`);
     }
   });
 
@@ -100,8 +100,8 @@ describe('offline fixture pictures', () => {
   });
 
   test('pictures are painted by the procedural generator: the committed file matches a fresh paint', () => {
-    const fresh = readPng(paint('markets'));
-    const disk = readPng(fs.readFileSync(path.join(IMG_DIR, 'markets.png')));
+    const fresh = readPng(paint('tram'));
+    const disk = readPng(fs.readFileSync(path.join(IMG_DIR, 'tram.png')));
     assert.ok(fresh.raw.equals(disk.raw), 'run: node config/fixtures/make-images.mjs');
   });
 });

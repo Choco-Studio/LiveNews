@@ -50,7 +50,9 @@ def speechlike(seconds=3.0, seed=1):
     voiced = sum(np.sin(k * phase + offsets[k]) / k for k in range(1, 30))
     hiss = rng.standard_normal(len(t)) * 0.3
     syll = 0.5 + 0.5 * np.sin(2 * np.pi * 4 * t)
-    mix = np.where(np.sin(2 * np.pi * 1.3 * t) > 0.8, hiss, voiced)
+    # Fricative stretches fade in and out like real speech (no hard switches)
+    fric = np.clip((np.sin(2 * np.pi * 1.3 * t) - 0.7) / 0.2, 0, 1)
+    mix = fric * hiss + (1 - fric) * voiced
     return 0.2 * mix * syll
 
 

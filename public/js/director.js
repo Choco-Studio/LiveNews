@@ -75,7 +75,7 @@ export class Director {
 
   breaking(item) {
     this.scene.breaking = { ...item, since: now() };
-    this.audio.sfx('breaking');
+    this.audio.sfx('breaking', { programId: this.scene.program?.id });
   }
 
   skip() {
@@ -115,8 +115,11 @@ export class Director {
     s.lowerThird = null;
     s.subtitle = null;
     if (!item.filler) {
-      await this.stinger(() => this.setShot('ident', { card: null }));
-      this.audio.sfx('jingle');
+      // Cues start on the shot change they belong to (startAt), not 0.4 s later.
+      await this.stinger(() => {
+        this.setShot('ident', { card: null });
+        this.audio.sfx('jingle', { startAt: performance.now() });
+      });
       await sleep(3200);
     }
     const ads = pickAds(item.ads || 1, this.recentAds);
@@ -127,16 +130,17 @@ export class Director {
       await this.playAd(ad);
     }
     if (item.next) {
-      await this.stinger(() =>
+      await this.stinger(() => {
         this.setShot('promo', {
           card: {
             next: item.next,
             label: item.next.ready ? 'UP NEXT' : 'COMING UP',
             footer: item.next.ready ? 'AFTER THE BREAK' : 'STAY WITH US',
           },
-        })
-      );
-      this.audio.sfx('promo'); // the signature left hanging: "stay with us"
+        });
+        // The signature left hanging in the next programme's key: "stay with us".
+        this.audio.sfx('promo', { programId: item.next.id, startAt: performance.now() });
+      });
       await sleep(4200);
     }
   }
@@ -222,42 +226,29 @@ export class Director {
       if (slot === seg.anchor) continue;
       s.anchors[slot] = { emotion: seg.emotion === 'happy' ? 'happy' : seg.emotion === 'serious' || seg.emotion === 'sad' ? 'serious' : 'neutral' };
     }
-    // Map each cue to the sentence it falls in, then fire it at roughly the
-    // right word (speech runs at about 15 characters per second).
-    const sentences = splitSentences(seg.text);
-    const starts = [];
-    let from = 0;
-    for (const sentence of sentences) {
-      const at = seg.text.indexOf(sentence.slice(0, 12), from);
-      starts.push(at >= 0 ? at : from);
-      from = (at >= 0 ? at : from) + sentence.length;
-    }
+    // Gestures fire when the voice reaches their character (the engine's
+    // speech timeline, re-synced on TTS word boundaries; after the last word
+    // they fire as the speech ends).
     const cues = this.defaultCues(seg);
-    const timers = [];
-    const fire = (i) => {
-      const start = starts[i] ?? 0;
-      const end = i + 1 < starts.length ? starts[i + 1] : Infinity;
-      for (const cue of cues) {
-        if (cue.char < start || cue.char >= end) continue;
-        const delay = Math.min(6, (cue.char - start) / 15) * 1000;
-        timers.push(setTimeout(() => this.perform(cue.slot || seg.anchor, cue), delay));
-      }
-    };
     await this.audio.speak(seg.text, seg.anchor, {
       onSentence: (sentence, i) => {
         s.subtitle = sentence;
-        fire(i);
         onSentence?.(i);
       },
+      marks: cues.map((cue) => cue.char),
+      onMark: (i) => this.perform(cues[i].slot || seg.anchor, cues[i]),
     });
     s.subtitle = null;
-    // Reactions placed after the last word still play out; anything else is dropped.
-    setTimeout(() => timers.forEach(clearTimeout), 2500);
   }
 
   async playEpisode(episode) {
     const s = this.scene;
     const imagesReady = this.prepareImages(episode);
+    // Each programme has its own opening titles and theme tune. The tune starts
+    // on the open's own clock (the shot change, dt = 0), so its final chord
+    // lands on the title lock-up and its button on the cut, `duration` later.
+    const open = openFor(episode.program.id);
+    let tune = null;
     await this.stinger(() => {
       s.program = episode.program;
       s.replay = !!episode.replay;
@@ -266,12 +257,10 @@ export class Director {
       s.subtitle = null;
       this.setCast(episode);
       this.setShot('open', { storyId: null, card: null });
+      tune = this.audio.playTune?.(open.tune, { volume: 0.6, startAt: performance.now() });
     });
-    // Each programme has its own opening titles and theme tune.
     this.introduced = new Set();
-    const open = openFor(episode.program.id);
-    const tune = this.audio.playTune?.(open.tune, { volume: 0.6 });
-    await Promise.all([sleep(open.duration * 1000), imagesReady]);
+    await Promise.all([sleep(open.duration * 1000 - STINGER_DURATION * 500), imagesReady]);
     tune?.stop?.();
     s.programTagUntil = now() + 15;
 
@@ -293,8 +282,10 @@ export class Director {
           this.setShot(s.cast.B ? 'wide' : 'close', { focus: seg.anchor, wall: { mode: 'logo' }, storyId: null, card: null });
           await this.say(seg);
           await sleep(300);
-          await this.stinger(() => this.setShot('endcard', { card: { line1: 'STAY WITH US', line2: `${this.channel.name} · LIVE 24 HOURS` } }));
-          this.audio.sfx('outro');
+          await this.stinger(() => {
+            this.setShot('endcard', { card: { line1: 'STAY WITH US', line2: `${this.channel.name} · LIVE 24 HOURS` } });
+            this.audio.sfx('outro', { programId: s.program?.id, startAt: performance.now() });
+          });
           await sleep(3000);
           break;
         default:
@@ -352,8 +343,10 @@ export class Director {
     const wall = hasImg ? { mode: 'image', storyId: seg.storyId } : { mode: 'source', source: seg.source, category: seg.category || 'general' };
 
     if (seg.breaking) {
-      await this.stinger(() => this.setShot('breakingCard', { storyId: seg.storyId, card: { headline: seg.headline, source: seg.source } }));
-      this.audio.sfx('breaking');
+      await this.stinger(() => {
+        this.setShot('breakingCard', { storyId: seg.storyId, card: { headline: seg.headline, source: seg.source } });
+        this.audio.sfx('breaking', { programId: s.program?.id, startAt: performance.now() });
+      });
       await sleep(2600); // the card is on air for at most 3 s (stinger tail + hold): a calm colour change, not a show
     }
     let pending = null;

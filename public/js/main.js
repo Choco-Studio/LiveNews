@@ -114,11 +114,11 @@ window.addEventListener('keydown', (e) => {
   if (!started || e.ctrlKey || e.metaKey || e.altKey) return; // leave browser shortcuts alone
   switch (e.key.toLowerCase()) {
     case 'v': {
-      // Only modes that can play (no 'tts' without voices, so 'blips' never shows twice).
+      // Each mode once, in order; the label says when 'tts' has no system voice (captions only).
       const modes = audio.modes ?? MODES;
       const next = modes[(modes.indexOf(audio.mode) + 1) % modes.length];
       audio.setMode(next);
-      notify(`Voice: ${audio.mode}`);
+      notify(`Voice: ${audio.modeLabel ?? audio.mode}`);
       break;
     }
     case 's':
@@ -180,7 +180,7 @@ async function refreshDebug() {
       <h3>Usage this month</h3>
       <table><tr><th>AI</th><th>Calls</th><th>Errors</th><th>Tokens in</th><th>Tokens out</th></tr>${rows || '<tr><td colspan="5">no data</td></tr>'}</table>
       <h3>Feeds</h3><ul>${feeds}</ul>
-      <p class="keys">V voice (${audio.mode}) · S subtitles · N skip · F fullscreen · ↑↓ volume · D close</p>`;
+      <p class="keys">V voice (${audio.modeLabel ?? audio.mode}) · S subtitles · N skip · F fullscreen · ↑↓ volume · D close</p>`;
   } catch {
     panel.innerHTML = '<p class="bad">Master control unreachable</p>';
   }

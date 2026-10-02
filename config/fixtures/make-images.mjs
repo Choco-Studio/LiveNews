@@ -91,7 +91,8 @@ function tree(c, r, x, groundY, height, { tone, bark = ramp([[0, '#2a221e'], [1,
     c.litPoly(blob(p.x, p.y, lrx, lry, Math.floor(r() * 1e9), 0.3), p.x, p.y, lrx, lry, tone, {
       ...light,
       ambient: p.back ? 0.08 : 0.15,
-      jitter: (px, py) => leaf(px * 0.11, py * 0.11) * 0.22 + (p.back ? -0.12 : 0),
+      // leaf clusters, not noise: a coarse pattern of lit and shaded clumps
+      jitter: (px, py) => smooth(-0.2, 0.4, leaf(px * 0.045, py * 0.05)) * 0.24 - 0.1 + (p.back ? -0.12 : 0),
     });
   }
 }
@@ -242,18 +243,18 @@ export const SCENES = {
     sparkle(c, r, 220, 0, 0, W, H * 0.3, '#c8c8e0', 0.5, [1, 1, 2]);
     // the plume: a heavy column leaning downwind, lit orange underneath and dark violet at the top
     const sm = noise2(41);
-    const smokeTone = ramp([[0, '#120e16'], [0.35, '#3a2228'], [0.7, '#a0441e'], [1, '#f49040']]);
+    const smokeTone = ramp([[0, '#1e1620'], [0.35, '#4a2a2c'], [0.7, '#b8522a'], [1, '#f8a050']]);
     c.paintBox(0, 0, W, H * 0.64, (x, y) => {
       const lift = (H * 0.62 - y) / (H * 0.62);
       const cx = W * 0.48 + lift * lift * 330 + sm(y * 0.003, 3) * 90;
       const spread = 170 + lift * 330;
       const d = Math.abs(x - cx) / spread;
-      const v = sm.fbm(x * 0.0035, y * 0.005, 5) * 0.7 + (1 - d) * 0.9 - lift * 0.15;
-      if (v < 0.45) return null;
+      const v = sm.fbm(x * 0.0035, y * 0.005, 5) * 0.7 + (1 - d) * 0.9 - lift * 0.1;
+      if (v < 0.4) return null;
       const above = sm.fbm(x * 0.0035, (y - 18) * 0.005, 5);
       const rim = clamp01(0.5 + (sm.fbm(x * 0.0035, y * 0.005, 5) - above) * 5);
       const heat = clamp01(1 - lift * 1.6) * clamp01(1.2 - d);
-      return [smokeTone(clamp01(heat * 0.85 + rim * 0.25 - 0.05)), smooth(0.45, 0.8, v) * 0.95];
+      return [smokeTone(clamp01(heat * 0.9 + rim * 0.3)), smooth(0.4, 0.75, v) * 0.95];
     });
     // the far ridge, rimmed by the glow
     const ridgeTop = c.ridge(H * 0.585, 46, 0.0022, '#120c10', 6, { octaves: 4, shade: (x, y) => mix(hex('#160e12'), hex('#4a2018'), smooth(H * 0.6, H * 0.52, y) * (1 - Math.abs(x - W * 0.5) / W)) });
@@ -391,7 +392,7 @@ export const SCENES = {
       const u = Math.min(1, Math.abs(x - peakX) / half);
       profile[x] = peakY + 6 * Math.min(1, Math.abs(x - peakX) / 30) + (baseY - peakY) * u ** 0.64 + m.fbm(x * 0.012, 0.5, 3) * 7 * u;
     }
-    const rockTone = ramp([[0, '#2e3448'], [0.45, '#55607a'], [0.8, '#8a8a98'], [1, '#c8b8a8']]);
+    const rockTone = ramp([[0, '#2a3044'], [0.45, '#525a70'], [0.8, '#8e8890'], [1, '#d8bca4']]);
     const snowTone = ramp([[0, '#7a8cac'], [0.5, '#c4cede'], [0.85, '#f4f2ee'], [1, '#fff8ee']]);
     c.paintBox(0, peakY - 10, W, baseY + 4, (x, y) => {
       if (y < profile[x]) return null;
@@ -401,11 +402,14 @@ export const SCENES = {
       const along = (x - peakX) * 0.9 / (1 + alt);
       const g = m.ridged(along * 0.03, y * 0.004, 4);
       const gl = m.ridged((along - 3) * 0.03, y * 0.004, 4);
-      const facing = clamp01(0.55 - dx * 1.2 + (g - gl) * 6);
-      const snowLine = 0.55 + (0.42 - g) * 0.9 + m(x * 0.008, 3) * 0.08;
+      // gullies are crisp up high and soften down the lower flanks
+      const facing = clamp01(0.55 - dx * 1.2 + (g - gl) * (1.5 + alt * 4));
+      const snowLine = 0.7 + (0.45 - g) * 0.55 + m(x * 0.008, 3) * 0.06;
       const isSnow = alt > snowLine;
-      const colour = isSnow ? snowTone(clamp01(facing * 0.85 + 0.15)) : rockTone(clamp01(facing * 0.75 + alt * 0.2));
-      return [mix(colour, hex('#aebdd0'), 0.22 + (1 - alt) * 0.25), 1];
+      let colour = isSnow ? snowTone(clamp01(facing * 0.85 + 0.15)) : rockTone(clamp01(facing * 0.75 + alt * 0.2));
+      // the lower flanks are wooded: darker and greener toward the foothills
+      if (!isSnow) colour = mix(colour, hex('#2a3a34'), smooth(0.35, 0.05, alt) * 0.7);
+      return [mix(colour, hex('#aebdd0'), 0.2 + (1 - alt) * 0.22), 1];
     });
     // forested foothills, two layers, nearer = darker and greener
     const hillTone = ramp([[0, '#1a2a22'], [0.6, '#34503a'], [1, '#6a845a']]);
@@ -419,9 +423,9 @@ export const SCENES = {
     const field = noise2(65);
     c.paintBox(0, H * 0.78, W, H, (x, y) => {
       const k = (y - H * 0.78) / (H * 0.22);
-      const vx = (x - W * 0.5) / (0.25 + k);
-      const row = Math.sin(vx * 0.05) * 0.5 + 0.5;
-      const water = smooth(0.82, 0.92, row);
+      const vx = (x - W * 0.35) / (0.7 + k * 0.6) + field(x * 0.002, y * 0.01) * 30;
+      const row = Math.sin(vx * 0.06) * 0.5 + 0.5;
+      const water = smooth(0.86, 0.95, row) * 0.8;
       const green = mix(hex('#3a5a26'), hex('#8aa048'), clamp01(0.35 + field.fbm(x * 0.01, y * 0.05, 3) * 0.6 + k * 0.2));
       return [mix(green, mix(hex('#b8c8d4'), hex('#5a7a8a'), k), water), 1];
     });

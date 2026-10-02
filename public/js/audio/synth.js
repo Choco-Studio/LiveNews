@@ -17,8 +17,9 @@ export const CEILING = 0.87; // master peak limit, -1.2 dBFS
 // -5..-3 dBFS, so the compressor (a limiter here) leaves normal material alone.
 const COMP = { threshold: -5, knee: 3, ratio: 12 };
 // WebAudio's DynamicsCompressor adds make-up gain, (1 / gain at 0 dBFS) ^ 0.6;
-// with its soft knee that is 3.3 dB for these settings (measured in the lab).
-export const COMP_MAKEUP = 10 ** (3.3 / 20);
+// with its soft knee that is 2.2 dB for these settings (measured in the lab:
+// the mixer passes a -30 dBFS tone at 0.00 dB).
+export const COMP_MAKEUP = 10 ** (2.2 / 20);
 const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
 const dbToGain = (db) => 10 ** (db / 20);
 

@@ -300,9 +300,10 @@ export class Canvas {
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = (y * w + x) * 3;
-        let r = d[i] / 255;
-        let g = d[i + 1] / 255;
-        let b = d[i + 2] / 255;
+        // additive light (glows) can overshoot: clip first, or the S-curve would fold it back to black
+        let r = Math.min(1, Math.max(0, d[i] / 255));
+        let g = Math.min(1, Math.max(0, d[i + 1] / 255));
+        let b = Math.min(1, Math.max(0, d[i + 2] / 255));
         const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
         r = l + (r - l) * saturation;
         g = l + (g - l) * saturation;

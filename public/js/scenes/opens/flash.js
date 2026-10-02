@@ -5,12 +5,11 @@
 // hub, so the hand never crosses it. Accent: yellow, with black text on the
 // yellow title plate; red stays in the bug, LIVE and BREAKING (news-60.md).
 import { P } from '../../palette.js';
-import { seg, easeInOut, easeInOutSine, ringPts, memo, Pix, discSpans } from '../../gfx/index.js';
+import { seg, easeInOut, easeInOutSine, ringPts, memoFn, Pix, discSpans } from '../../gfx/index.js';
 import { lazyBackdrop, playOpen, CENTRE, ZOOM } from './kit.js';
 
 const R0 = 32; // tick-ring radius in the lock-up (x ZOOM at centre stage); the bezel sits at R + 2
 const TAU = Math.PI * 2;
-const cached = memo(64);
 const SWEEP_T = 0.25;
 const SWEEP_DUR = 1.3;
 
@@ -20,104 +19,102 @@ const SWEEP_DUR = 1.3;
  * clockwise from twelve as flat typed arrays (so it can draw round without allocating),
  * and the 60 ticks as an 8-fold symmetric pixel set (1 px, 2 px at the fives).
  */
-function dial(R) {
-  return cached(R, () => {
-    const B = R + 2;
-    const S = 2 * B + 1;
-    // bezel (radius B) and its inner wall (B - 1), ordered clockwise from twelve so they draw round
-    const ring = [];
-    const outer = ringPts(B);
-    for (let i = 0; i < outer.length; i += 2) {
-      const x = outer[i];
-      const y = outer[i + 1];
-      const lit = -x * 0.7 - y * 0.7; // dot with the key light direction (upper left)
-      ring.push([x, y, lit > B * 0.55 ? 1 : lit < -B * 0.45 ? 2 : 0]); // silver / slate / steel
+const dial = memoFn(64, (R) => {
+  const B = R + 2;
+  const S = 2 * B + 1;
+  // bezel (radius B) and its inner wall (B - 1), ordered clockwise from twelve so they draw round
+  const ring = [];
+  const outer = ringPts(B);
+  for (let i = 0; i < outer.length; i += 2) {
+    const x = outer[i];
+    const y = outer[i + 1];
+    const lit = -x * 0.7 - y * 0.7; // dot with the key light direction (upper left)
+    ring.push([x, y, lit > B * 0.55 ? 1 : lit < -B * 0.45 ? 2 : 0]); // silver / slate / steel
+  }
+  const inner = ringPts(B - 1);
+  // the inner wall catches light on the far (lower right) side and is in shadow under the lit rim
+  for (let i = 0; i < inner.length; i += 2) ring.push([inner[i], inner[i + 1], inner[i] + inner[i + 1] > 0 ? 3 : 4]);
+  for (const r of ring) r.push((Math.atan2(r[0], -r[1]) / TAU + 1) % 1);
+  ring.sort((a, b) => a[3] - b[3]);
+  const n = ring.length;
+  const bx = new Int16Array(n);
+  const by = new Int16Array(n);
+  const ba = new Float32Array(n);
+  const bc = new Uint8Array(n); // 0 steel, 1 silver, 2 slate (bezel); 3 slate, 4 black (inner wall)
+  for (let i = 0; i < n; i++) {
+    bx[i] = ring[i][0];
+    by[i] = ring[i][1];
+    bc[i] = ring[i][2];
+    ba[i] = ring[i][3];
+  }
+  // face: a flat ink disc inside the inner wall; each pixel's angle lets it open with the bezel
+  const face = new Pix(S, S);
+  const faceAng = new Float32Array(S * S).fill(2);
+  const sp = discSpans(B - 2);
+  for (let i = 0; i < sp.length; i++) {
+    face.rect(B - sp[i], 2 + i, sp[i] * 2 + 1, 1, P.ink);
+    for (let x = B - sp[i]; x <= B + sp[i]; x++) faceAng[(2 + i) * S + x] = (Math.atan2(x - B, B - 2 - i) / TAU + 1) % 1;
+  }
+  // ticks: compute the first octant (ticks 0..7 = 0..42 degrees) and mirror it 8 ways
+  const tx = [];
+  const ty = [];
+  const tk = [];
+  const add = (k, x, y) => {
+    tx.push(x);
+    ty.push(y);
+    tk.push(k);
+  };
+  for (let k = 0; k <= 7; k++) {
+    const a = (k / 60) * TAU;
+    const len = k % 5 === 0 ? 2 : 1;
+    for (let q = 0; q < len; q++) {
+      const rr = R - 2 - q;
+      const x = Math.round(Math.sin(a) * rr);
+      const y = -Math.round(Math.cos(a) * rr);
+      // octant images: tick index for each reflection of angle a (degrees from twelve, clockwise)
+      const imgs = [
+        [k, x, y], [15 - k, -y, -x], [15 + k, -y, x], [30 - k, x, -y],
+        [30 + k, -x, -y], [45 - k, y, x], [45 + k, y, -x], [60 - k, -x, y],
+      ];
+      for (const [kk, xx, yy] of imgs) add(((kk % 60) + 60) % 60, xx, yy);
     }
-    const inner = ringPts(B - 1);
-    // the inner wall catches light on the far (lower right) side and is in shadow under the lit rim
-    for (let i = 0; i < inner.length; i += 2) ring.push([inner[i], inner[i + 1], inner[i] + inner[i + 1] > 0 ? 3 : 4]);
-    for (const r of ring) r.push((Math.atan2(r[0], -r[1]) / TAU + 1) % 1);
-    ring.sort((a, b) => a[3] - b[3]);
-    const n = ring.length;
-    const bx = new Int16Array(n);
-    const by = new Int16Array(n);
-    const ba = new Float32Array(n);
-    const bc = new Uint8Array(n); // 0 steel, 1 silver, 2 slate (bezel); 3 slate, 4 black (inner wall)
-    for (let i = 0; i < n; i++) {
-      bx[i] = ring[i][0];
-      by[i] = ring[i][1];
-      bc[i] = ring[i][2];
-      ba[i] = ring[i][3];
-    }
-    // face: a flat ink disc inside the inner wall; each pixel's angle lets it open with the bezel
-    const face = new Pix(S, S);
-    const faceAng = new Float32Array(S * S).fill(2);
-    const sp = discSpans(B - 2);
-    for (let i = 0; i < sp.length; i++) {
-      face.rect(B - sp[i], 2 + i, sp[i] * 2 + 1, 1, P.ink);
-      for (let x = B - sp[i]; x <= B + sp[i]; x++) faceAng[(2 + i) * S + x] = (Math.atan2(x - B, B - 2 - i) / TAU + 1) % 1;
-    }
-    // ticks: compute the first octant (ticks 0..7 = 0..42 degrees) and mirror it 8 ways
-    const tx = [];
-    const ty = [];
-    const tk = [];
-    const add = (k, x, y) => {
-      tx.push(x);
-      ty.push(y);
-      tk.push(k);
-    };
-    for (let k = 0; k <= 7; k++) {
-      const a = (k / 60) * TAU;
-      const len = k % 5 === 0 ? 2 : 1;
-      for (let q = 0; q < len; q++) {
-        const rr = R - 2 - q;
-        const x = Math.round(Math.sin(a) * rr);
-        const y = -Math.round(Math.cos(a) * rr);
-        // octant images: tick index for each reflection of angle a (degrees from twelve, clockwise)
-        const imgs = [
-          [k, x, y], [15 - k, -y, -x], [15 + k, -y, x], [30 - k, x, -y],
-          [30 + k, -x, -y], [45 - k, y, x], [45 + k, y, -x], [60 - k, -x, y],
-        ];
-        for (const [kk, xx, yy] of imgs) add(((kk % 60) + 60) % 60, xx, yy);
-      }
-    }
-    // dedupe (ticks on the axes map onto themselves)
-    const seen = new Set();
-    const fx = [];
-    const fy = [];
-    const fk = [];
-    for (let i = 0; i < tx.length; i++) {
-      const key = (tx[i] + 512) * 1024 + ty[i] + 512;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      fx.push(tx[i]);
-      fy.push(ty[i]);
-      fk.push(tk[i]);
-    }
-    return {
-      B, S, face: face.canvas(), faceAng, bx, by, ba, bc, n,
-      tx: Int16Array.from(fx), ty: Int16Array.from(fy), tk: Uint8Array.from(fk),
-    };
-  });
-}
+  }
+  // dedupe (ticks on the axes map onto themselves)
+  const seen = new Set();
+  const fx = [];
+  const fy = [];
+  const fk = [];
+  for (let i = 0; i < tx.length; i++) {
+    const key = (tx[i] + 512) * 1024 + ty[i] + 512;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    fx.push(tx[i]);
+    fy.push(ty[i]);
+    fk.push(tk[i]);
+  }
+  return {
+    B, S, face: face.canvas(), faceAng, bx, by, ba, bc, n,
+    tx: Int16Array.from(fx), ty: Int16Array.from(fy), tk: Uint8Array.from(fk),
+  };
+});
 
 const RING_COLOURS = [P.steel, P.silver, P.slate, P.slate, P.black];
 
 // seven-segment digits: segments a..g as rects relative to the digit's top-left
-function segs(k) {
-  return cached(-1 - Math.round(k * 20), () => {
-    const dw = Math.round(9 * k);
-    const dh = Math.round(14 * k);
-    const t = Math.max(2, Math.round(2 * k));
-    const mid = (dh >> 1) - (t >> 1);
-    const hv = mid - 1;
-    return {
-      dw, dh,
-      a: [1, 0, dw - 2, t], b: [dw - t, 1, t, hv], c: [dw - t, mid + t, t, dh - mid - t - 1], d: [1, dh - t, dw - 2, t],
-      e: [0, mid + t, t, dh - mid - t - 1], f: [0, 1, t, hv], g: [1, mid, dw - 2, Math.max(1, t - 1)],
-    };
-  });
-}
+const segsQ = memoFn(64, (q) => {
+  const k = q / 20;
+  const dw = Math.round(9 * k);
+  const dh = Math.round(14 * k);
+  const t = Math.max(2, Math.round(2 * k));
+  const mid = (dh >> 1) - (t >> 1);
+  const hv = mid - 1;
+  return {
+    dw, dh,
+    a: [1, 0, dw - 2, t], b: [dw - t, 1, t, hv], c: [dw - t, mid + t, t, dh - mid - t - 1], d: [1, dh - t, dw - 2, t],
+    e: [0, mid + t, t, dh - mid - t - 1], f: [0, 1, t, hv], g: [1, mid, dw - 2, Math.max(1, t - 1)],
+  };
+});
+const segs = (k) => segsQ(Math.round(k * 20));
 const DIGITS = { 6: 'afgedc', 0: 'abcdef' };
 
 function digit(ctx, ch, x, y, color, S) {
