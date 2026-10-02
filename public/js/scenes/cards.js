@@ -132,6 +132,25 @@ function worldDots(d, level, steps = [P.ink, P.slate, P.slate]) {
   }
 }
 
+/**
+ * A layout cache keyed by one string, whose value also records the other inputs it was built
+ * from: a hit with different inputs rebuilds (rare), so no key strings are built per frame.
+ */
+function layoutCache(limit = 120) {
+  const m = new Map();
+  return (key, a, b, c, build) => {
+    let v = m.get(key);
+    if (v && v.$a === a && v.$b === b && v.$c === c) return v;
+    v = build();
+    v.$a = a;
+    v.$b = b;
+    v.$c = c;
+    if (m.size >= limit) m.delete(m.keys().next().value);
+    m.set(key, v);
+    return v;
+  };
+}
+
 /** Programme accents (THEME_ACCENT values); anything else falls back to brand red. */
 const ACCENTS = new Set([P.red, P.cyan, P.magenta, P.green, P.yellow]);
 const PROGRAM_ACCENT = { 'world-now': P.red, 'tech-bytes': P.cyan, cosmos: P.magenta, 'money-minute': P.green, 'news-60': P.yellow };
@@ -310,9 +329,9 @@ function cardGround(ctx, dt, image, field) {
   } else ctx.drawImage(field(), 0, 0);
 }
 
-const RULE_LAYOUTS = textCache(120);
+const RULE_LAYOUTS = layoutCache(120);
 function ruleLayout(fact, label, source, rows) {
-  return RULE_LAYOUTS(String(fact ?? ''), 0, () => {
+  return RULE_LAYOUTS(String(fact ?? ''), label, source, rows[0]?.figure, () => {
     const PX = 40;
     const PW = W - 2 * PX;
     const inner = PW - 24;
@@ -489,10 +508,10 @@ const MICRO_FOG_C = { color: P.fog, font: 'micro', align: 'center' };
 
 // MONEY MINUTE: the paper card
 const PAPER = { x: 40, y: 32, w: 304, h: 88 };
-const PAPER_LAYOUTS = textCache(120);
+const PAPER_LAYOUTS = layoutCache(120);
 function paperLayout(headline, rows, source) {
   const r0 = rows[0];
-  return PAPER_LAYOUTS(String(headline ?? ''), rows.length * 1000 + (r0 ? r0.figure.length : 0), () => {
+  return PAPER_LAYOUTS(String(headline ?? ''), rows, source, r0?.figure, () => {
     const inner = PAPER.w - 16;
     const title = headline ? balanceLines(headline, inner, 1, 2) : [];
     // two non-negative values with the same unit and label: proportional bars
@@ -574,7 +593,14 @@ const FACT_STYLES = {
  */
 export function drawFactCard(ctx, t, dt, o = {}) {
   const opts = o || {};
-  if (!opts.fact && !(Array.isArray(opts.numbers) && opts.numbers.length) && opts.quote?.text) return drawQuoteCard(ctx, t, dt, { ...opts.quote, image: opts.image, accent: opts.accent, programId: opts.programId, source: opts.source });
+  if (!opts.fact && !(Array.isArray(opts.numbers) && opts.numbers.length) && opts.quote?.text) {
+    QUOTE.text = opts.quote.text;
+    QUOTE.by = opts.quote.by ?? null;
+    QUOTE.image = opts.image ?? null;
+    QUOTE.accent = opts.accent ?? null;
+    QUOTE.programId = opts.programId ?? '';
+    return drawQuoteCard(ctx, t, dt, QUOTE);
+  }
   const style = FACT_STYLES[opts.programId] || { look: 'rule', wipe: 0.3 };
   const acc = accentFor(opts.programId, opts.accent);
   const rows = rowsFor(opts.fact, opts.numbers);
@@ -593,9 +619,21 @@ export function drawFactCard(ctx, t, dt, o = {}) {
   return drawRuleCard(ctx, dt, opts, rows, acc, style.wipe || 0.3);
 }
 
+const QUOTE = { text: '', by: null, image: null, accent: null, programId: '' };
+const NUMBERS = { fact: '', label: 'BY THE NUMBERS', source: '', image: null, numbers: null, programId: '', accent: null, headline: '' };
+
 /** BY THE NUMBERS: up to three stated figures (numbers[]) in the programme's look. */
 export function drawNumbersCard(ctx, t, dt, o = {}) {
-  return drawFactCard(ctx, t, dt, { label: 'BY THE NUMBERS', ...(o || {}) });
+  const src = o || {};
+  NUMBERS.fact = src.fact || '';
+  NUMBERS.label = src.label || 'BY THE NUMBERS';
+  NUMBERS.source = src.source || '';
+  NUMBERS.image = src.image || null;
+  NUMBERS.numbers = src.numbers || null;
+  NUMBERS.programId = src.programId || '';
+  NUMBERS.accent = src.accent || null;
+  NUMBERS.headline = src.headline || '';
+  return drawFactCard(ctx, t, dt, NUMBERS);
 }
 
 // ---------------------------------------------------------------------------
@@ -603,11 +641,11 @@ export function drawNumbersCard(ctx, t, dt, o = {}) {
 // fog. TECH BYTES carries a 1 px cyan bar on the left; the others a 1 px accent rule that draws
 // under the quote on entry.
 
-const QUOTE_LAYOUTS = textCache(80);
+const QUOTE_LAYOUTS = layoutCache(80);
 export function drawQuoteCard(ctx, t, dt, { text = '', by = null, image = null, accent = null, programId = '' } = {}) {
   const acc = accentFor(programId, accent);
   cardGround(ctx, dt, image, inkField);
-  const L = QUOTE_LAYOUTS(String(text ?? ''), String(by ?? '').length, () => {
+  const L = QUOTE_LAYOUTS(String(text ?? ''), by, null, null, () => {
     const inner = W - 2 * 40 - 28;
     let scale = 2;
     let lines = balanceLines(text, inner, 2, 3);
@@ -927,7 +965,7 @@ export function drawPromoCard(ctx, t, dt, card = {}, nameOf = (id) => String(id 
   drawOpen(ctx, t, 1.6 + Math.max(0, dt), id, info);
   const L = lockupFor(id, info);
   const tag = ellipsis(label || 'UP NEXT', 160, 1);
-  rise(ctx, tag, L.titleX, L.plateY - 10, seg(dt, 0.9, 0.3), S.microSilver, 4);
+  rise(ctx, tag, L.titleX, L.plateY - 10, seg(dt, 0.9, 0.3), S.microFog, 4);
   if (footer) rise(ctx, ellipsis(footer, W - 19 - L.titleX, 1), L.titleX, L.bottom + 8, seg(dt, 1.5, 0.3), S.microFog, 4);
 }
 
