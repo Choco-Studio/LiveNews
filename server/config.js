@@ -58,6 +58,7 @@ export const config = {
   minNewStories: num('MIN_NEW_STORIES', 3),
   maxStoryAgeHours: num('MAX_STORY_AGE_HOURS', 36),
   feedRefreshMinutes: num('FEED_REFRESH_MINUTES', 10),
-  feedsFile: path.join(ROOT, 'config', 'feeds.json'),
+  // News sources; FEEDS_FILE points elsewhere (e.g. config/feeds.fixture.json for offline demos)
+  feedsFile: path.resolve(ROOT, env('FEEDS_FILE', path.join('config', 'feeds.json'))),
   dataDir: path.join(ROOT, 'data'),
 };

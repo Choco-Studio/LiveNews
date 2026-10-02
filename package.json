@@ -8,7 +8,9 @@
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "demo": "PROVIDERS=mock node server/index.js",
-    "test": "node --test"
+    "demo:offline": "PROVIDERS=mock FEEDS_FILE=config/feeds.fixture.json node server/index.js",
+    "test": "node --test",
+    "shoot": "node tools/shoot.mjs"
   },
   "engines": {
     "node": ">=20"

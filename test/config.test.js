@@ -10,6 +10,7 @@ import { ROOT } from '../server/config.js';
 
 const KEYS = [
   'HOST',
+  'FEEDS_FILE',
   'PORT',
   'PROVIDERS',
   'CODEX_BIN',

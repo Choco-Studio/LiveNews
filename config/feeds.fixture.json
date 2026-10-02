@@ -1,0 +1,6 @@
+[
+  {"name": "Fixture World Wire", "url": "config/fixtures/world.xml", "category": "world"},
+  {"name": "Fixture Business Wire", "url": "config/fixtures/business.xml", "category": "business"},
+  {"name": "Fixture Tech Wire", "url": "config/fixtures/tech.xml", "category": "tech"},
+  {"name": "Fixture Science Wire", "url": "config/fixtures/science.xml", "category": "science"}
+]

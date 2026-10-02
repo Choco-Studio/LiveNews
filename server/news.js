@@ -1,7 +1,9 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { XMLParser } from 'fast-xml-parser';
-import { config } from './config.js';
+import { config, ROOT } from './config.js';
 
 const UA = 'Mozilla/5.0 (compatible; LiveNewsBot/0.1; +https://github.com/choco-studio/livenews)';
 const parser = new XMLParser({
@@ -204,7 +206,21 @@ export class NewsDesk {
     return JSON.parse(fs.readFileSync(config.feedsFile, 'utf8'));
   }
 
+  /**
+   * Feed XML. Feeds listed in the feeds file may also be local (offline demos
+   * and fixtures): a file: URL or a path relative to the repo. Only the
+   * operator's feed list gets this; links found inside feeds never do.
+   */
+  async readFeed(url) {
+    if (/^file:/i.test(url) || !/^[a-z][a-z0-9+.-]*:/i.test(url)) {
+      const file = /^file:/i.test(url) ? fileURLToPath(url) : path.resolve(ROOT, url);
+      return (await fs.promises.readFile(file)).subarray(0, 3_000_000).toString('utf8');
+    }
+    return this.fetchText(url);
+  }
+
   async fetchText(url, { timeoutMs = 10000, maxBytes = 3_000_000 } = {}) {
+    if (!/^https?:\/\//i.test(url)) throw new Error(`not an http(s) URL: ${String(url).slice(0, 80)}`);
     const res = await this.fetch(url, {
       headers: { 'user-agent': UA, accept: '*/*' },
       signal: AbortSignal.timeout(timeoutMs),
@@ -219,7 +235,7 @@ export class NewsDesk {
     const feeds = this.loadFeeds();
     const results = await Promise.allSettled(
       feeds.map(async (feed) => {
-        const xml = await this.fetchText(feed.url);
+        const xml = await this.readFeed(feed.url);
         return parseFeed(xml, feed);
       })
     );
