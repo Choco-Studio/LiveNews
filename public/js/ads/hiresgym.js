@@ -988,6 +988,7 @@ function localPts(arr) {
 // gives the rim. The form comes from planes painted like a hand-shaded portrait:
 // each a cluster of one tone, the ones that face the light lighter.
 const FACE_DIRS = [1, 0, 1, -0.45, 1, 0.45];
+const FACE_BACK = [1, 0];
 const rimBand = (d) => (d <= 1 ? 0 : d <= 2 ? 1 : d <= 3 ? 2 : 9);
 const FACE_PLANES = [
   // [ramp index, polygon in face units]
@@ -1045,16 +1046,10 @@ const faceArt = () => bake('hg-face', W, H, (c) => {
     localPts(SHOULDER);
     fillPts(k, P.white);
   });
-  // the skin in shadow: ink, the back of the head and the shoulder darker
+  // the skin in shadow: ink near the lit side, black further back (the line
+  // between them follows the profile, at a fixed depth from the lit edge)
   const idx = new Int8Array(W * H).fill(-1);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      if (!ids[y * W + x]) continue;
-      const lx = (x - FX) / FK;
-      const ly = (y - FY) / FK;
-      idx[y * W + x] = lx < 52 || ly > 112 ? 6 : 5;
-    }
-  }
+  distanceLight(ids, 0, 0, W, H, FACE_BACK, 48, (x, y, id, d) => (d > 40 || (y - FY) / FK > 112 ? 6 : 5), idx);
   for (const [v, poly] of FACE_PLANES) polyIndex(idx, ids, poly, v);
   // the rim along every edge that faces the light, wrapping the nose and chin
   const rim = new Int8Array(W * H).fill(9);
@@ -1198,16 +1193,16 @@ function revealParts(c, ids) {
   for (let sd = -1; sd <= 1; sd += 2) {
     partMask(c, ids, sd < 0 ? 3 : 4, (k) => {
       ellipse(k, x + sd * 34, 83, 9, 11, P.white);
-      capsule(k, x + sd * 35, 86, x + sd * 39, 126, 8.5, 7, P.white);
-      capsule(k, x + sd * 39, 126, x + sd * 38, 165, 6.6, 5, P.white);
-      ellipse(k, x + sd * 38, 173, 5.2, 6.6, P.white);
+      capsule(k, x + sd * 35, 86, x + sd * 38, 120, 8.5, 7, P.white);
+      capsule(k, x + sd * 38, 120, x + sd * 37, 152, 6.6, 5, P.white);
+      ellipse(k, x + sd * 37, 160, 5.2, 6.6, P.white);
     });
   }
   partMask(c, ids, 5, (k) => {
-    pt(x - 8, 54);
-    pt(x + 8, 54);
-    pt(x + 10, 68);
-    pt(x - 10, 68);
+    pt(x - 7, 54);
+    pt(x + 7, 54);
+    pt(x + 8.5, 68);
+    pt(x - 8.5, 68);
     fillPts(k, P.white);
   });
   partMask(c, ids, 6, (k) => {
@@ -1232,8 +1227,15 @@ const revealArt = (lit) => bake(lit ? 'hg-reveal-lit' : 'hg-reveal-dark', W, H, 
   const x1 = RX + 60;
   distanceLight(ids, x0, RT - 2, x1, H, KEY_DIRS, 30, (x, y, id, d) => {
     if (!lit) return 6;
-    const cloth = id === 2;
-    let b = cloth ? (d <= 1 ? 3 : d <= 4 ? 4 : d <= 10 ? 5 : 6) : d <= 1 ? 1 : d <= 3 ? 2 : d <= 7 ? 3 : d <= 12 ? 4 : d <= 20 ? 5 : 6;
+    // the vest: dark cloth that turns from the key across the chest (its own
+    // edges hide behind the arms); the pecs catch a little more of it
+    if (id === 2) {
+      let v = 4 + floor((x - RX + 22) / 13);
+      if (y < 100 && hypot((x - (RX - 12)) / 12, (y - 92) / 8) < 1) v -= 1;
+      if (y > 100 && y < 104 && x < RX) v += 1;
+      return max(4, min(6, v));
+    }
+    let b = d <= 1 ? 1 : d <= 3 ? 2 : d <= 7 ? 3 : d <= 12 ? 4 : d <= 20 ? 5 : 6;
     // split light: his right side (screen right) falls into shadow
     b += max(0, floor((x - RX + 2) / 11));
     if (id === 6) {
@@ -1301,21 +1303,21 @@ const revealArt = (lit) => bake(lit ? 'hg-reveal-lit' : 'hg-reveal-dark', W, H, 
   line(c, x + 3, 66, x + 16, 68, P.ink);
   line(c, x - 6, 78, x, 83, P.ink);
   line(c, x + 6, 78, x, 83, P.black);
-  line(c, x - 16, 64, x - 26, 94, P.ink);
-  line(c, x - 21, 97, x - 10, 104, P.slate);
-  line(c, x - 24, 120, x - 13, 150, P.ink);
+  line(c, x - 16, 64, x - 26, 94, P.slate);
+  line(c, x - 24, 118, x - 15, 150, P.ink);
+  line(c, x - 20, 124, x - 12, 160, P.ink);
   line(c, x + 13, 112, x + 20, 160, P.black);
   // deltoids, biceps, forearms: the separations, one vein on the lit forearm
   line(c, x - 41, 92, x - 32, 98, P.ink);
   line(c, x + 41, 92, x + 32, 98, P.black);
   line(c, x - 43, 104, x - 42, 122, P.steel);
-  line(c, x - 41, 134, x - 40, 150, P.slate);
-  line(c, x - 40, 150, x - 41, 160, P.slate);
+  line(c, x - 41, 128, x - 40, 140, P.slate);
+  line(c, x - 40, 140, x - 41, 148, P.slate);
   // hands wrapped in tape, knuckles lit
   for (let sd = -1; sd <= 1; sd += 2) {
-    const hx = x + sd * 38;
-    for (let k = 0; k < 4; k++) R(c, hx - 4, 168 + k * 3, 9, 1, sd < 0 ? P.steel : P.slate);
-    R(c, hx - 4, 179, 9, 1, sd < 0 ? P.fog : P.steel);
+    const hx = x + sd * 37;
+    for (let k = 0; k < 4; k++) R(c, hx - 4, 155 + k * 3, 9, 1, sd < 0 ? P.steel : P.slate);
+    R(c, hx - 4, 166, 9, 1, sd < 0 ? P.fog : P.steel);
   }
   // the red square: the brand's pixel, on the lit side of his chest
   R(c, x - 19, 88, 6, 6, P.red);

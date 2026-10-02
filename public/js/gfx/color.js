@@ -34,3 +34,34 @@ export function rgba(hex, a) {
   }
   return s;
 }
+
+// One palette step darker for every channel colour (same hue family), so a picture can fade in
+// or out by whole palette steps instead of alpha (no off-palette colours, no muddy blends).
+import { P } from '../palette.js';
+const DOWN = {
+  black: 'black', ink: 'black', slate: 'ink', steel: 'slate', fog: 'steel', silver: 'fog', white: 'silver',
+  red: 'darkRed', darkRed: 'maroon', maroon: 'black', rust: 'brown', orange: 'rust', yellow: 'orange', cream: 'tan',
+  skin: 'skinShade', skinShade: 'tanShade', tan: 'tanShade', tanShade: 'brown', brown: 'maroon', green: 'darkGreen',
+  darkGreen: 'black', cyan: 'blue', blue: 'navy', navy: 'ink', pink: 'red', magenta: 'purple', purple: 'maroon',
+};
+let STEP_DOWN = null;
+/** Map from a packed opaque palette colour to the one a step darker (built on first use). */
+export function stepDownTable() {
+  if (!STEP_DOWN) STEP_DOWN = new Map(Object.entries(DOWN).filter(([a, b]) => P[a] && P[b]).map(([a, b]) => [u32(P[a]), u32(P[b])]));
+  return STEP_DOWN;
+}
+/** Darkens the opaque palette pixels of a Uint32Array by `steps` palette steps, in place. */
+export function stepDown(d, steps = 1) {
+  const T = stepDownTable();
+  for (let i = 0; i < d.length; i++) {
+    let c = d[i];
+    if (!(c >>> 24)) continue;
+    for (let k = 0; k < steps; k++) {
+      const m = T.get((c | 0xff000000) >>> 0);
+      if (m === undefined) break;
+      c = m;
+    }
+    d[i] = c;
+  }
+  return d;
+}

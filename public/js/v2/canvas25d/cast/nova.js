@@ -135,7 +135,7 @@ function drawCoils(buf, L, m, head, s, sk) {
   });
   if (tr === 0) return;
   // ---- clusters on a jittered hexagonal lattice, top rows first so lower curls overlap
-  const d = tr === 1 ? 2.7 : s >= 3 ? 1.95 : 2.1; // spacing (units)
+  const d = tr === 1 ? 2.7 : s >= 3 ? 2.15 : 2.2; // spacing (units): clusters ~4-5 px across at close-up
   const r = d * (tr === 1 ? 0.62 : 0.66);
   const sph = (cx, cy, out) => {
     local(head, cx, cy, LC);
