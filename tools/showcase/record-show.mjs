@@ -51,7 +51,10 @@
 //   --voice-workers N         Kokoro processes (default 2; idle ones prefetch the sentences already on air)
 //   --preset veryfast         x264 preset of the final 5x encode (veryfast: 2x faster than fast, same size here)
 //   --measure-duck            also render the beds without speech to measure the duck (default for <= 900 s)
-//   --no-raf-throttle         render on every fake 16 ms rAF tick instead of once per video frame
+//   --raf frame|throttle|native   how the page renders: frame (default) = the recorder runs the page's
+//                             requestAnimationFrame callbacks at each video frame's exact page time, right before
+//                             grabbing it; throttle = first fake 16 ms tick of each frame slot (the picture can lag
+//                             the sound by up to a frame); native = every fake 16 ms tick (--no-raf-throttle)
 //   --keep                    keep the raw float renders and the lossless native-size video in <out>.work/
 
 import fs from 'node:fs';
@@ -241,7 +244,10 @@ async function step(ms) {
   if (st.reqs.length) await serviceSpeech(st.reqs);
   if (st.inflight > 0) await settle(st.inflight);
   await page.clock.runFor(ms);
-  st = await page.evaluate(() => ({ reqs: window.__sc.takeRequests(), inflight: window.__sc.inflight }));
+  st = await page.evaluate(() => {
+    window.__sc.pump(); // frame-exact mode: render at this instant (no-op otherwise)
+    return { reqs: window.__sc.takeRequests(), inflight: window.__sc.inflight };
+  });
   if (st.reqs.length) await serviceSpeech(st.reqs);
 }
 
@@ -255,7 +261,10 @@ for (let i = 0; i < 400; i++) {
 }
 const instrumented = await page.evaluate(() => window.__sc.instrument());
 const predictors = await page.evaluate(() => window.__sc.loadPredictors());
-if (!opts['no-raf-throttle']) await page.evaluate((fps) => window.__sc.throttleRaf(fps), FPS);
+const rafMode = opts['no-raf-throttle'] ? 'native' : String(opts.raf || 'frame');
+if (!['frame', 'throttle', 'native'].includes(rafMode)) throw new Error(`bad --raf ${rafMode} (frame | throttle | native)`);
+if (rafMode === 'frame') await page.evaluate(() => window.__sc.manualRaf());
+else if (rafMode === 'throttle') await page.evaluate((fps) => window.__sc.throttleRaf(fps), FPS);
 say(`page ready${instrumented ? '' : ' (director not instrumented: timeline from shots only)'}${predictors ? '' : ' (no sentence predictor: no prefetch)'} · ${elapsed()}`);
 
 // ------------------------------------------------------------- skip/start
@@ -646,7 +655,7 @@ await browser.close();
 
 const timeline = {
   meta: {
-    url, out: OUT, fps: FPS, seconds, frames, sampleRate: SR, start: opts.start, until: opts.until, music: opts.music, stories: opts.stories,
+    url, out: OUT, fps: FPS, seconds, frames, sampleRate: SR, start: opts.start, until: opts.until, count: opts.count, raf: rafMode, music: opts.music, stories: opts.stories,
     recordedAt: new Date().toISOString(), wallClockStart: new Date(T0 + (R ?? 0)).toISOString(), voiceCache: CACHE,
     voicePresets: presets.file, realSeconds: (Date.now() - t0Real) / 1000,
   },

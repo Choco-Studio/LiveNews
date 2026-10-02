@@ -31,11 +31,14 @@ import { planSegment } from '../direction/index.js';
 // the Stage's module graph loads with this one: once the director's v2 side is ready, so is the
 // Renderer's (studio.js imports host.js itself; this only removes the start-up race)
 import './host.js';
+import { paceFor, gapAfter as paceGap, CHANNEL } from '../../../pace.js';
 
 const now = () => performance.now() / 1000;
-const MIN_SHOT = 3; // s, as the director's own rule
-const STINGER = 0.8; // s (cards.js STINGER_DURATION)
-const GAP_AFTER = 0.3; // s the director waits after a segment
+// PACE (public/js/pace.js, owner 23:10): the cut cooldown, the stinger and the pause after each
+// segment come from the programme's pace profile, the same table the director reads
+const minShot = (scene) => paceFor(scene.program?.id).shots.cooldown;
+const STINGER = CHANNEL.stinger; // s (cards.js STINGER_DURATION)
+const GAP_AFTER = 0.3; // s: the plan's pause when no episode profile is known
 export const LEGACY_SHOTS = new Set(['wide', 'close', 'full', 'map', 'fact', 'montage']);
 const STUDIO = new Set(['wide', 'close']);
 const WIDE_FRAMINGS = new Set(['wide', 'two', 'solo-wide']);
@@ -120,6 +123,9 @@ export class LiveDirection {
     this.scene.presenters = this.channel?.presenters || null; // the Stage's looks for ids without a design
     this.scene.segPlan = null;
     this.story = null;
+    // the pause after each segment, as the director will hold it (one function per episode: contextAt memo)
+    const ep2 = this.ep;
+    this.gapFn = ep2 ? (i) => paceGap(ep2, i).gap : GAP_AFTER;
     this.warm(this.ep, 0);
   }
 
@@ -139,7 +145,7 @@ export class LiveDirection {
     let p = this.plans.get(seg);
     if (p) return p;
     const t0 = performance.now();
-    const res = planSegment(this.ep, i, { presenters: this.channel?.presenters || {}, gapAfter: GAP_AFTER });
+    const res = planSegment(this.ep, i, { presenters: this.channel?.presenters || {}, gapAfter: this.gapFn ?? GAP_AFTER });
     p = { id: `${this.ep.id}:${i}`, index: i, ctx: res.ctx, events: res.events, errors: res.errors, voice: null, speechStart: null, speechEnd: null, ms: performance.now() - t0 };
     this.plans.set(seg, p);
     return p;
@@ -154,7 +160,7 @@ export class LiveDirection {
     const segments = this.ep.segments.slice();
     segments[i] = { ...seg, audio: recorded || undefined };
     const t0 = performance.now();
-    const res = planSegment({ ...this.ep, segments }, i, { presenters: this.channel?.presenters || {}, gapAfter: GAP_AFTER });
+    const res = planSegment({ ...this.ep, segments }, i, { presenters: this.channel?.presenters || {}, gapAfter: this.gapFn ?? GAP_AFTER });
     const plan = { id: `${this.ep.id}:${i}`, index: i, ctx: res.ctx, events: res.events, errors: res.errors, voice: null, speechStart: null, speechEnd: null, ms: performance.now() - t0 };
     this.replans.set(seg, { key, plan });
     return plan;
@@ -196,7 +202,9 @@ export class LiveDirection {
     };
     this.story = { seg, cues, handler: apply };
     apply(cues[0]);
-    return this.director.say(seg).then(() => {
+    // the first line comes a breath after the cut from the open (pace open.firstWord; world-now.md 0.5 s)
+    const breath = paceFor(this.scene.program?.id).open.firstWord;
+    return new Promise((r) => setTimeout(r, breath * 1000)).then(() => this.director.say(seg)).then(() => {
       const need = Math.min(2, (last?.minLen || 0) - (now() - (this.scene.shotSince || 0)));
       return need > 0 ? new Promise((r) => setTimeout(r, need * 1000)) : undefined;
     });
@@ -248,7 +256,7 @@ export class LiveDirection {
   studioCut(cue, held = false) {
     const s = this.scene;
     if (!STUDIO.has(s.shot) || !STUDIO.has(cue.shot)) return;
-    const wait = cue.k > 0 && !held ? MIN_SHOT - (now() - (s.shotSince || 0)) : 0;
+    const wait = cue.k > 0 && !held ? minShot(s) - (now() - (s.shotSince || 0)) : 0;
     if (wait > 0) {
       const p = s.segPlan;
       setTimeout(() => s.segPlan === p && p.speechEnd == null && this.studioCut(cue, true), wait * 1000);

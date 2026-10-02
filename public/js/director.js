@@ -9,6 +9,7 @@ import { splitSentences } from './audio/sentences.js';
 import { ACTIONS } from './cues.js';
 import { openFor } from './scenes/opens.js';
 import { VoicePlayer } from './voice/player.js';
+import { paceFor, gapAfter, CHANNEL, paceTrace } from './pace.js';
 
 const now = () => performance.now() / 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -16,8 +17,9 @@ const frame = () => new Promise((r) => setTimeout(r, 0));
 
 const SMALL = { w: 104, h: 62 }; // studio video wall / over-the-shoulder box
 const FULL = { w: 416, h: 234 }; // full screen with room for a slow pan
-const MONTAGE_FRAME = 2.6; // seconds per headline in the cold open
-const MIN_SHOT = 3; // no camera shot shorter than this (seconds)
+// Every on-air timing (shot holds, pauses between segments, card holds) comes from the
+// programme's pace profile (pace.js: one table for the whole channel, owner 23:10).
+const pace = (scene) => paceFor(scene.program?.id);
 
 export class Director {
   constructor({ audio, channel, v2 = false }) {
@@ -136,7 +138,7 @@ export class Director {
     if (!item.filler) {
       // Cues are scheduled at the stinger's start to be heard on the shot change they belong to.
       await this.stinger(() => this.setShot('ident', { card: null }), (cut) => this.audio.sfx('jingle', { startAt: cut }));
-      await sleep(3200);
+      await sleep(CHANNEL.breaks.ident * 1000 - STINGER_DURATION * 500);
     }
     const ads = pickAds(item.ads || 1, this.recentAds);
     for (const ad of ads) {
@@ -161,7 +163,7 @@ export class Director {
           },
         });
       }, (cut) => this.audio.sfx('promo', { programId: item.next.id, startAt: cut })); // the signature left hanging in the next programme's key
-      await sleep(4200);
+      await sleep(CHANNEL.breaks.promo * 1000 - STINGER_DURATION * 500);
     }
   }
 
@@ -301,6 +303,7 @@ export class Director {
     s.programTagUntil = now() + 15;
 
     for (const seg of episode.segments) {
+      const index = episode.segments.indexOf(seg);
       switch (seg.type) {
         case 'intro':
           await this.playIntro(seg);
@@ -317,17 +320,21 @@ export class Director {
           s.lowerThird = null;
           this.setShot(s.cast.B ? 'wide' : 'close', { focus: seg.anchor, wall: { mode: 'logo' }, storyId: null, card: null });
           await this.say(seg);
-          await sleep(300);
+          await sleep(pace(s).holds.signoff * 1000); // the sign-off's hold on the wide (world-now.md 1.5 s)
           await this.stinger(() => {
             this.setShot('endcard', { card: { line1: 'STAY WITH US', line2: `${this.channel.name} · LIVE 24 HOURS` } });
             this.audio.sfx('outro', { programId: s.program?.id, startAt: performance.now() });
           });
-          await sleep(3000);
-          break;
+          await sleep(pace(s).holds.endcard * 1000);
+          continue;
         default:
           break;
       }
-      await sleep(300);
+      // Air between segments (owner 18:52): the pace profile's pause for this pair (story, hand-over,
+      // chat turn, block, before And finally...), minus the silence the playout adds by itself.
+      const { kind, gap } = gapAfter(episode, index);
+      if (gap >= pace(s).strap.outAtBlock && kind !== 'signoff') s.lowerThird = null; // a block pause clears the strap
+      await sleep(Math.max(60, (gap - CHANNEL.voiceLatency) * 1000));
     }
   }
 
@@ -343,8 +350,9 @@ export class Director {
     }
     this.setShot('montage', { focus: seg.anchor, storyId: null, card: { index: 0 } });
     const started = now();
+    const MONTAGE_FRAME = pace(s).holds.montage; // a headline frame holds long enough to read twice
     let done = false;
-    const speech = this.say(seg).then(() => (done = true));
+    const speech = sleep(pace(s).open.firstWord * 1000).then(() => this.say(seg)).then(() => (done = true)); // the first line after a breath
     for (let i = 1; i < frames || !done; i++) {
       await sleep(MONTAGE_FRAME * 1000);
       if (i < frames) this.setShot('montage', { card: { index: i } });
@@ -385,7 +393,7 @@ export class Director {
         this.setShot('breakingCard', { storyId: seg.storyId, card: { headline: seg.headline, source: seg.source } });
         this.audio.sfx('breaking', { programId: s.program?.id, startAt: performance.now() });
       });
-      await sleep(2600); // the card is on air for at most 3 s (stinger tail + hold): a calm colour change, not a show
+      await sleep(pace(s).holds.breakingCard * 1000); // the card is on air for at most 3 s (stinger tail + hold): a calm colour change, not a show
     }
     let pending = null;
     // v2: shots come from the plan's cues (cue.k > 0 arrive through shotFor at their sentence or word)
@@ -399,9 +407,10 @@ export class Director {
             ? { fact: seg.fact, label: /\d/.test(seg.fact) ? 'BY THE NUMBERS' : 'KEY FACT', source: seg.source }
             : null;
       const apply = () => this.setShot(beat, { focus: cue?.focus || seg.anchor, storyId: seg.storyId, wall, card, ...(cue && { framing: cue.framing, cameraMove: cue.move }) });
-      // Hold every shot for at least MIN_SHOT seconds before cutting away.
+      // Hold every shot for at least the profile's minimum before cutting away (cut cooldown).
       clearTimeout(pending);
       const held = now() - s.shotSince;
+      const MIN_SHOT = pace(s).shots.cooldown;
       if (i === 0 || held >= MIN_SHOT) apply();
       else pending = setTimeout(apply, (MIN_SHOT - held) * 1000);
     };
@@ -418,8 +427,9 @@ export class Director {
       breaking: seg.breaking,
       kicker: seg.kicker, // editorial's topic label for the strap tag (graphics request)
       category: seg.category,
-      since: now() + 1,
+      since: now() + pace(s).strap.inAfterCut, // ART_DIRECTION §5: the strap enters about 1 s after the cut
     };
+    paceTrace({ k: 'strap', at: s.lowerThird.since * 1000 }); // analyser: when the strap really wipes in
     await this.say(seg, (i) => i > 0 && !v2cues && shotFor(i));
     clearTimeout(pending);
   }

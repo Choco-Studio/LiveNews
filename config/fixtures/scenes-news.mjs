@@ -660,6 +660,40 @@ export const NEWS_SCENES = {
 };
 
 // Hard-news pictures keep their colour a little less than daylight scenes.
+// The generic "share card" one fictional outlet (Circuit Weekly) puts on many unrelated items, the way real
+// outlets fall back to a branded card: the picture desk must recognise it as a placeholder and never air it.
+NEWS_SCENES['cw-card'] = function card(c, r) {
+  c.gradient(0, H, [[0, '#14203a'], [1, '#0c1424']]);
+  // faint circuit traces
+  for (let i = 0; i < 46; i++) {
+    let x = r() * W;
+    let y = r() * H;
+    for (let k = 0; k < 4; k++) {
+      const horizontal = (i + k) % 2 === 0;
+      const len = 40 + r() * 160;
+      const nx = horizontal ? x + len * (r() < 0.5 ? -1 : 1) : x;
+      const ny = horizontal ? y : y + len * (r() < 0.5 ? -1 : 1);
+      c.line(x, y, nx, ny, 3, '#2c4468', 0.55);
+      x = nx;
+      y = ny;
+    }
+    c.circle(x, y, 7, '#3a5a86', 0.7);
+  }
+  // the monogram: a heavy C and W on a plate, centred
+  c.rect(W * 0.3, H * 0.28, W * 0.4, H * 0.44, '#e8ecf2');
+  const ink = '#14203a';
+  const x0 = W * 0.34;
+  const y0 = H * 0.36;
+  const u = H * 0.28;
+  c.rect(x0, y0, u * 0.18, u, ink);
+  c.rect(x0, y0, u * 0.62, u * 0.18, ink);
+  c.rect(x0, y0 + u * 0.82, u * 0.62, u * 0.18, ink);
+  const wx = x0 + u * 0.8;
+  for (const k of [0, 0.42, 0.84]) c.rect(wx + k * u, y0, u * 0.18, u, ink);
+  c.rect(wx, y0 + u * 0.82, u * 1.02, u * 0.18, ink);
+  c.rect(W * 0.3, H * 0.66, W * 0.4, H * 0.06, '#3a7bd5');
+};
+
 export const NEWS_GRADES = {
   canal: { saturation: 0.7, tint: 0.12, vignette: 0.32 },
   flood: { saturation: 0.62, tint: 0.16 },
@@ -669,4 +703,5 @@ export const NEWS_GRADES = {
   exchange: { saturation: 0.78, tint: 0.12 },
   hospital: { saturation: 0.7, tint: 0.12 },
   factory: { saturation: 0.72, tint: 0.14 },
+  'cw-card': { saturation: 1, tint: 0, contrast: 0, vignette: 0 },
 };

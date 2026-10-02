@@ -52,23 +52,33 @@
 // else a prediction from the episode summary (ctx.episode). Same answer from
 // every call: pure functions of the episode.
 import { rng } from './context.js';
+import { PACE, paceFor } from '../../../pace.js';
 
-export const MIN_SHOT = 4.0; // owner 18:52: no cut faster than ~4 s
+// PACE (public/js/pace.js): the channel's minimum shot and every per-programme shot window come from
+// the one pacing table; the numbers below that stay are this planner's own fallbacks for contexts
+// without a director (tests, labs): on air ctx.gapAfter carries the director's real pause.
+export const MIN_SHOT = PACE.default.shots.min; // owner 18:52: no cut faster than ~4 s
 const TOL = 0.5; // bible beats may go this far under MIN_SHOT (THE CATCH close)
 const DEFAULT_GAP = 0.3; // the director's pause after a segment when ctx.gapAfter is unknown
 const DRY_HOLD = 1.2; // tech-bytes: never cut on a dry line, hold 1.2 s after it
 const CPS = 14.5; // chars per second to estimate a neighbour's length from the summary
 // headline beats are paced by the voice (world-now.md: line + 1.0 s gap, held ≥ 3.8 s);
-// the planner marks them with minLen so the director can hold the gap
-const HEADLINE_MIN = 3.8;
+// the planner marks them with minLen (pace holds.montage) so the director can hold the gap
+const headlineMin = (ctx) => paceFor(ctx?.programId).holds.montage;
 
-/** Per-programme numbers (bibles; the owner's MIN_SHOT on top). */
+/** Shot windows of a programme from the pace table (studio maxima, picture / map windows). */
+const fromPace = (id) => {
+  const S = PACE[id].shots;
+  return { studioMax: S.studioMax, singleSoft: S.singleSoft, pictureMin: S.picture[0], pictureMax: S.picture[1], mapMin: S.map[0], mapMax: S.map[1], signoffHold: PACE[id].holds.signoff };
+};
+
+/** Per-programme numbers (bibles; the owner's MIN_SHOT on top); timings from pace.js, grammar flags here. */
 export const SHOT_STYLES = {
-  'world-now': { studioMax: 15, singleSoft: 11, pictureMax: 8, mapMax: 7.5, signoffHold: 1.5, moves: true },
-  'tech-bytes': { studioMax: 12, singleSoft: 10, pictureMin: 4, pictureMax: 8, catch: true },
-  cosmos: { studioMax: 15, singleSoft: 11, pictureMin: 6, pictureMax: 10, mapMin: 4, mapMax: 6, placeWindow: 0.3 },
-  'money-minute': { studioMax: 12, shotMax: 12, numberGap: 1.2, pauseCuts: true },
-  'news-60': { studioMax: 12, fullMax: 8, fullHoldMax: 10.5, mapMax: 8 },
+  'world-now': { ...fromPace('world-now'), moves: true },
+  'tech-bytes': { ...fromPace('tech-bytes'), catch: true },
+  cosmos: { ...fromPace('cosmos'), placeWindow: 0.3 },
+  'money-minute': { ...fromPace('money-minute'), shotMax: PACE['money-minute'].shots.studioMax, numberGap: 1.2, pauseCuts: true },
+  'news-60': { ...fromPace('news-60'), fullMax: PACE['news-60'].shots.picture[1], fullHoldMax: 10.5 },
 };
 
 const styleOf = (id) => (SHOT_STYLES[id] ? id : 'world-now');
@@ -331,7 +341,7 @@ function introWithHeadlines(ctx, tl, maxHeadlines, { floor = 0, minFrames = 2, b
     if (b && b.t >= MIN_SHOT && tl.end - b.t >= MIN_SHOT) return [ev(ctx, 0, 0, 'close', singleFraming(ctx), ctx.speaker, 'teaser'), ev(ctx, b.t, b.char, 'wide', ctx.duo ? wideFraming : 'wide', ctx.speaker, 'greeting')];
   }
   out.push(ev(ctx, first ? first.t0 : 0, first ? first.start : 0, 'wide', ctx.duo ? wideFraming : 'wide', ctx.speaker, 'greeting'));
-  for (const e of out) if (e.shot === 'montage') e.minLen = HEADLINE_MIN;
+  for (const e of out) if (e.shot === 'montage') e.minLen = headlineMin(ctx);
   return out;
 }
 
@@ -439,6 +449,7 @@ function worldNow(ctx, tl) {
     fact: seg.fact || seg.numbers?.[0]?.value ? factHold(seg) : 0,
     pictureFirst: seg.shot === 'full' && ctx.hasImage,
     pictureMax: S.pictureMax,
+    mapMin: S.mapMin, // PACE: a map holds ≥ 5 s (pace.js world-now shots.map)
     mapMax: S.mapMax,
     mapOnSecond: true,
   });
@@ -597,6 +608,7 @@ function techBytes(ctx, tl) {
     fact: 0,
     pictureMin: S.pictureMin,
     pictureMax: S.pictureMax,
+    mapMin: S.mapMin, // PACE: a map holds ≥ 5 s
   });
   capStudio(ctx, tl, out, S.studioMax, (e) => altSingle(ctx, e));
   splitLongSingles(ctx, tl, out, S.singleSoft);

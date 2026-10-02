@@ -633,9 +633,10 @@ function drawDial(b, cx, cy, r, phase, ts) {
 // ---------------------------------------------------------------------------
 // Pictures: indexed once per image, palette-mapped and dimmed per programme
 
-// Palette colours a wall picture may use: nothing above fog (no white, cream or silver), no skin (faces stay the
-// warmest thing in frame), no programme accents or brand red (they keep their meaning on set).
-const PICTURE_NAMES = new Set(['black', 'ink', 'slate', 'steel', 'fog', 'darkRed', 'maroon', 'rust', 'orange', 'skinShade', 'tan', 'tanShade', 'brown', 'darkGreen', 'blue', 'navy', 'purple']);
+// Palette colours a wall picture may use: nothing above fog (no white, cream or silver), no bright skin or orange
+// (faces stay the warmest thing in frame: a fire maps to rust / tan / darkRed), no programme accents or brand red
+// (they keep their meaning on set).
+const PICTURE_NAMES = new Set(['black', 'ink', 'slate', 'steel', 'fog', 'darkRed', 'maroon', 'rust', 'skinShade', 'tan', 'tanShade', 'brown', 'darkGreen', 'blue', 'navy', 'purple']);
 const SRC = new WeakMap();
 
 function pixelsOf(img) {
@@ -694,9 +695,11 @@ const unlin = (v) => Math.round(255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * Math
 
 /**
  * Colour table (source colour → palette u32), dimmed in linear light until the picture's mean L*
- * is at most maxL and at most 6 % of it is brighter than L* 60 (ART_DIRECTION: wall average ≤ 45,
- * highlights on at most 10 % of the wall).
+ * is at most maxL and at most 6 % of it is brighter than L* 55 (ART_DIRECTION: wall average ≤ 45,
+ * highlights on at most 10 % of the wall; 55, below the faces' 55-73, so a fire or a sunlit sky on
+ * the wall never competes with the presenter's face beside it).
  */
+const BRIGHT_L = 55;
 function pictureMap(src, maxL) {
   let m = src.maps.get(maxL);
   if (m) return m;
@@ -710,7 +713,7 @@ function pictureMap(src, maxL) {
       const name = nearestName(r, g, b2, PICTURE_NAMES);
       tab[j] = C[name];
       sum += LSTAR[name] * src.hist[j];
-      if (LSTAR[name] > 60) bright += src.hist[j];
+      if (LSTAR[name] > BRIGHT_L) bright += src.hist[j];
     }
     return sum / total <= maxL && bright / total <= 0.06;
   };

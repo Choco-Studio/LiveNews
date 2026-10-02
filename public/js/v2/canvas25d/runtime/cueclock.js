@@ -18,7 +18,9 @@
 //   - speech start is the first frame that is really speaking (onSentence can
 //     run a caption lead ahead of the voice), else speechStart + 0.6 s;
 //   - a recorded segment whose voice fell back to TTS (sentence starts drift
-//     > 0.75 s from the word times) switches to the char rule;
+//     > 0.75 s from the word times) switches to the char rule; a sentence start
+//     first seen after a stalled frame (> 0.1 s since the previous tick: a busy
+//     machine, a capture tool) is not judged, the stall would read as drift;
 //   - CUT GUARD against ACTUAL cuts (cut(T), the Stage reports every real cut):
 //     a gesture due in [T, T + cutGuard) is shifted to T + cutGuard if that
 //     moves it by <= 0.3 s, otherwise dropped; nods, looks and emotions are exempt;
@@ -36,6 +38,7 @@ export const SHIFT_MAX = 0.3; // largest cut-guard shift (s)
 const STALE = 30; // s a plan may wait for its speech before it is dropped
 const START_WAIT = 0.6; // s after onSentence(0) without a speaking frame: start anyway
 const DRIFT = 0.75; // s of sentence-start drift that turns a recorded plan to the char rule
+const STALL = 0.1; // s between two ticks beyond which a sentence start's timing is not trusted
 const EXEMPT = new Set(['nod']);
 const KINDS = new Set(['gesture', 'look', 'emotion']);
 
@@ -51,6 +54,7 @@ export class CueClock {
     this.entries = [];
     this.stats = { fired: 0, shifted: 0, dropped: 0, cleared: 0 };
     this.lastCut = -Infinity;
+    this.lastTick = -Infinity; // renderer time of the previous tick (stall detection)
     this.reset();
   }
 
@@ -108,6 +112,8 @@ export class CueClock {
    * (or null when unknown). Fires due events into this.perfs.
    */
   tick(t, fr = null) {
+    const gap = t - this.lastTick;
+    this.lastTick = t;
     const plan = this.plan;
     if (!plan || !plan.ctx) return;
     const ctx = plan.ctx;
@@ -121,7 +127,7 @@ export class CueClock {
       else if (t >= plan.speechStart + START_WAIT || plan.speechEnd != null) this.started = plan.speechStart;
       else return;
     }
-    this.track(t, fr, ctx);
+    this.track(t, fr, ctx, gap);
     if (this.ended === null && plan.speechEnd != null) this.end(plan.speechEnd, ctx);
     const entries = this.entries;
     const guard = Number.isFinite(ctx.cutGuard) ? ctx.cutGuard : 0.5;
@@ -154,8 +160,8 @@ export class CueClock {
 
   // --- internals -------------------------------------------------------------
 
-  /** Where the voice is: absolute char, learned rate, recorded-voice sanity. */
-  track(t, fr, ctx) {
+  /** Where the voice is: absolute char, learned rate, recorded-voice sanity (gap: s since the previous tick). */
+  track(t, fr, ctx, gap = 0) {
     if (!fr || !(fr.sentenceIndex >= 0)) return;
     const si = fr.sentenceIndex;
     const s = ctx.sentences?.[si];
@@ -167,7 +173,7 @@ export class CueClock {
     if (si !== this.lastSentence) {
       this.lastSentence = si;
       // a recorded plan whose voice is not the recording (TTS fallback): use chars
-      if (this.mode === 'at' && si > 0 && Math.abs(el - s.t0) > DRIFT) {
+      if (this.mode === 'at' && si > 0 && gap <= STALL && Math.abs(el - s.t0) > DRIFT) {
         this.mode = 'char';
         this.log?.(`recorded timing drifted ${(el - s.t0).toFixed(2)} s at sentence ${si}: firing by char`);
       }

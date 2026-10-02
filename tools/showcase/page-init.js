@@ -1094,8 +1094,50 @@
     });
     return true;
   };
+  // Frame-exact rendering (the default). The fake clock ticks rAF every 16 ms,
+  // which never lines up with 30 fps frames: a throttled render runs on the
+  // first tick of a frame slot, usually AFTER that frame is grabbed, so the
+  // picture would show the scene up to a frame late while the sound is exact.
+  // Instead the recorder owns rAF: callbacks are queued and SC.pump() runs them
+  // at the page time of each frame, right before the canvas is read, so frame k
+  // shows exactly the state at its own timestamp (what a 30 fps camera sees).
+  SC.manualRaf = () => {
+    if (SC.rafManual) return false;
+    SC.rafManual = true;
+    const pending = new Map();
+    let nextId = 1;
+    window.requestAnimationFrame = (cb) => {
+      const id = nextId++;
+      if (typeof cb === 'function') pending.set(id, cb);
+      return id;
+    };
+    window.cancelAnimationFrame = (id) => {
+      pending.delete(id);
+    };
+    SC.pump = () => {
+      if (!pending.size) return 0;
+      const list = [...pending.values()];
+      pending.clear();
+      const ts = now();
+      for (const cb of list) {
+        try {
+          cb(ts);
+        } catch (err) {
+          // Surface it like an uncaught rAF error would (the recorder logs page errors).
+          if (typeof window.reportError === 'function') window.reportError(err);
+          else if (SC.errors.length < 40) SC.errors.push(`raf: ${err?.message}`);
+        }
+      }
+      return list.length;
+    };
+    return true;
+  };
+  SC.pump = () => 0;
   SC.frame = (sel = '#screen') => document.querySelector(sel)?.toDataURL('image/png') ?? null;
-  /** One recorder round trip per frame: picture, pending syntheses, network state. */
-  SC.step = (sel) => ({ png: SC.frame(sel), reqs: SC.takeRequests(), inflight: SC.inflight });
+  /** One recorder round trip per frame: render at this instant, picture, pending syntheses, network state. */
+  SC.step = (sel) => {
+    SC.pump();
+    return { png: SC.frame(sel), reqs: SC.takeRequests(), inflight: SC.inflight };
+  };
   SC.takeLog = () => SC.log.splice(0);
 })();

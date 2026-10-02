@@ -386,8 +386,11 @@ function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0
       if (d2 > r2) continue;
       const i = row + x;
       mat[i] = m;
-      const l = (ex * LGX + ey * LGY + Math.sqrt(r2 - d2) * LGZ) / r;
-      let tt = (l > th0 ? 0 : l > th1 ? 1 : l > th2 ? 2 : 3) + toneBias;
+      // Lambert term l = (a + sqrt(r² − d²)·Lz) / r against the thresholds, without the square root
+      // or the division: l > th  ⇔  sqrt(r² − d²)·Lz > th·r − a  (squared when the right side is ≥ 0)
+      const a = ex * LGX + ey * LGY, s2 = (r2 - d2) * LGZ2;
+      const q0 = th0 * r - a, q1 = th1 * r - a, q2 = th2 * r - a;
+      let tt = (q0 < 0 || s2 > q0 * q0 ? 0 : q1 < 0 || s2 > q1 * q1 ? 1 : q2 < 0 || s2 > q2 * q2 ? 2 : 3) + toneBias;
       // the start of an upper arm under the shoulder stays flat-lit: no dome highlight on the cap
       if (flatK && u < flatStart && tt < 1) tt = 1;
       tone[i] = tt < 0 ? 0 : tt > 3 ? 3 : tt;
@@ -398,7 +401,7 @@ function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0
     }
   }
 }
-const LGX = LIGHT[0], LGY = LIGHT[1], LGZ = LIGHT[2];
+const LGX = LIGHT[0], LGY = LIGHT[1], LGZ2 = LIGHT[2] * LIGHT[2];
 
 /** Flat-ended tapered quad (the shirt cuff): a ring of fabric, flat at the wrist end. */
 const QUAD = new Float64Array(12);
@@ -681,11 +684,11 @@ const UU = new Float32Array(LW * LH); // position along the bone 0..1
 const VV = new Float32Array(LW * LH); // signed offset across the bone, -1..1
 const LV = new Float32Array(LW * LH); // light value before it becomes a tone (form + silhouette passes)
 const P2 = new Float64Array(20 * 3); // projected joints: x, y, depth
-const HULL_IN = new Float64Array(PALM_N * 4 + 4);
-const HULL = new Float64Array(PALM_N * 4 + 8);
-const ORDER = new Int32Array(PALM_N * 2 + 2);
+const HULL_IN = new Float64Array(PALM_N * 4 + 4 + 16);
+const HULL = new Float64Array(PALM_N * 4 + 8 + 16);
+const ORDER = new Int32Array(PALM_N * 2 + 2 + 8);
 const SEGSHADE = new Float64Array(20);
-const EDGE = new Float64Array((PALM_N * 2 + 4) * 4);
+const EDGE = new Float64Array((PALM_N * 2 + 4 + 8) * 4);
 
 let bx0 = 0, by0 = 0, bw = 0, bh = 0;
 
@@ -732,6 +735,19 @@ function rasterHand(buf, L, hm, g, B, s, gh, z) {
       HULL_IN[hullN * 2] = px(B, x + n[0] * sg, y + n[1] * sg, zz + n[2] * sg);
       HULL_IN[hullN * 2 + 1] = py(B, x + n[0] * sg, y + n[1] * sg, zz + n[2] * sg);
       hullN++;
+    }
+  }
+  // seen from the palm side, fingers curled into the palm close over it: the plate reaches their middle
+  // joints, so a pointing or counting hand never shows a hole of background inside the curl
+  if (!g.back) {
+    for (let fi = 0; fi < 4; fi++) {
+      if (g.curl[fi + 1] < 0.55) continue;
+      for (let q = 1; q <= 2; q++) {
+        const o = (fi * 4 + q) * 3;
+        HULL_IN[hullN * 2] = px(B, J[o], J[o + 1], J[o + 2]);
+        HULL_IN[hullN * 2 + 1] = py(B, J[o], J[o + 1], J[o + 2]);
+        hullN++;
+      }
     }
   }
   bx0 = Math.max(1, Math.floor(minX) - 1);
@@ -980,7 +996,7 @@ function rasterBone(a, b, ra, rb, own, seg, bias, s) {
 /** Convex hull (monotone chain) of n 2D points in `inp` into `out`; returns the vertex count (CCW in screen space). */
 function hullOf(inp, n, out) {
   for (let i = 0; i < n; i++) ORDER[i] = i;
-  // insertion sort by x then y (n ≤ 26)
+  // insertion sort by x then y (n ≤ 36)
   for (let i = 1; i < n; i++) {
     const v = ORDER[i];
     const vx = inp[v * 2], vy = inp[v * 2 + 1];

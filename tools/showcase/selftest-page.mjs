@@ -179,6 +179,43 @@ try {
     const cut = await page.evaluate(() => window.__sc.takeLog().filter((e) => e.ev === 'speech').pop());
     assert.ok(cut.cut != null && cut.cut < cut.end, 'the timeline marks the cut');
   });
+
+  await test('frame-exact rendering: rAF callbacks run at the frame time, before the grab', async () => {
+    const r = await page.evaluate(() => {
+      window.__sc.manualRaf();
+      window.renders = [];
+      // A page-style render loop that draws the state of a timer-driven change.
+      window.stateAt = null;
+      const c = document.querySelector('#screen').getContext('2d');
+      const loop = (ts) => {
+        window.renders.push(ts);
+        c.fillStyle = window.stateAt != null && performance.now() >= window.stateAt ? '#ff0000' : '#000000';
+        c.fillRect(0, 0, 8, 8);
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+      const id = requestAnimationFrame(() => window.renders.push('cancelled'));
+      cancelAnimationFrame(id);
+      window.stateAt = performance.now() + 50; // a cut 50 ms from now
+      return performance.now();
+    });
+    // Nothing renders on the fake 16 ms ticks any more: only when the recorder pumps.
+    await page.clock.runFor(48);
+    assert.equal((await page.evaluate(() => window.renders.length)), 0, 'no render without a pump');
+    const f1 = await page.evaluate(() => {
+      const s = window.__sc.step();
+      return { px: document.querySelector('#screen').getContext('2d').getImageData(0, 0, 1, 1).data[0], png: Boolean(s.png) };
+    });
+    assert.equal(f1.png, true, 'step() grabs the picture');
+    assert.equal(f1.px, 0, 'frame at +48 ms: before the cut');
+    await page.clock.runFor(2); // exactly the cut time
+    const f2 = await page.evaluate(() => {
+      window.__sc.step();
+      return { px: document.querySelector('#screen').getContext('2d').getImageData(0, 0, 1, 1).data[0], renders: window.renders.slice() };
+    });
+    assert.equal(f2.px, 255, 'the frame grabbed at the cut time already shows it');
+    assert.deepEqual(f2.renders, [r + 48, r + 50], 'one render per grab, at the grab time; the cancelled callback never ran');
+  });
 } finally {
   await browser.close();
 }

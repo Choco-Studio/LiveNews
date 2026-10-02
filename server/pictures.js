@@ -17,8 +17,9 @@
 // name, nothing known to be under 200 px wide or of an extreme shape; pictures
 // of 640 px and more are preferred. Placeholders that only show up as "the same
 // picture on many unrelated stories of one outlet" are caught by the desk.
+import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const MIN_WIDTH = 200; // known narrower: an icon or thumbnail, never aired
 export const GOOD_WIDTH = 640; // preferred: survives the full-screen shot
@@ -26,7 +27,9 @@ const MAX_RANK_WIDTH = 1600; // wider is not better for a 416x234 shot
 const MAX_CANDIDATES = 5; // kept per story (best first, then fallbacks)
 
 // What a candidate of each kind is usually worth when it does not say its size.
-const DEFAULT_WIDTH = { media: 600, enclosure: 600, image: 560, inline: 320, thumbnail: 300, og: 1000, jsonld: 900, twitter: 900, image_src: 640, itemprop: 640, meta: 600 };
+// og:image and JSON-LD images are usually large (1200 px share cards, rich-result pictures); a twitter:image
+// with no size is often the same picture or a smaller card, so it never outranks a declared 640+ picture.
+const DEFAULT_WIDTH = { media: 600, enclosure: 600, image: 560, inline: 320, thumbnail: 300, og: 1000, jsonld: 900, twitter: 600, image_src: 600, itemprop: 600, meta: 600 };
 
 const asArray = (v) => (v === undefined || v === null ? [] : Array.isArray(v) ? v : [v]);
 
@@ -288,7 +291,8 @@ function jsonLdImages(doc, push) {
   const add = (img, depth = 0) => {
     for (const v of asArray(img).slice(0, 6)) {
       if (typeof v === 'string') {
-        if (/^(?:https?:)?\/\/|^\//.test(v) && !/#[\w-]*$/.test(v)) push(v, { via: 'jsonld' });
+        // an absolute or root-relative URL, or a relative path to a picture file (never an "#id" reference)
+        if ((/^(?:https?:)?\/\/|^\//.test(v) || /\.(?:png|jpe?g|webp|avif)(?:[?#]|$)/i.test(v)) && !/^#|#[\w-]*$/.test(v)) push(v, { via: 'jsonld' });
       } else if (v && typeof v === 'object') {
         const ref = !v.url && !v.contentUrl && typeof v['@id'] === 'string' ? byId.get(v['@id']) : null;
         if (ref && depth < 2) add(ref, depth + 1);
@@ -365,11 +369,31 @@ export function pageCandidates(html, pageUrl, { baseDir = null, from = null } = 
  * inserted ahead of their originals, duplicates removed, pictures of 640 px and
  * more ahead of smaller ones. Returns [{ url, w, via, local }].
  */
+/** Width and height of a local picture (file: URL), read from its first bytes; null when unknown. Cached. */
+const localSizes = new Map();
+export function localSize(url) {
+  if (localSizes.has(url)) return localSizes.get(url);
+  let size = null;
+  try {
+    const fd = fs.openSync(fileURLToPath(url), 'r');
+    try {
+      const buf = Buffer.alloc(65536);
+      size = imageSize(buf.subarray(0, fs.readSync(fd, buf, 0, buf.length, 0)));
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {}
+  if (localSizes.size > 500) localSizes.clear();
+  localSizes.set(url, size);
+  return size;
+}
+
 export function rankPictures(candidates) {
   const seen = new Set();
   const list = [];
   for (const c of candidates) {
-    const known = sizeFromUrl(c.url);
+    // A local picture (offline fixtures) says its real size; a remote one only what its tags and URL declare.
+    const known = (c.local && localSize(c.url)) || sizeFromUrl(c.url);
     const w = c.w || known?.w || 0;
     const h = c.h || known?.h || 0;
     const reason = rejectReason(c.url, { w, h, local: c.local });

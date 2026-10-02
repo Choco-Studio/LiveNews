@@ -34,6 +34,7 @@ import { u32 } from '../pixbuf.js';
 import { P } from '../../../palette.js';
 import { THEME_ACCENT } from '../../../cast.js';
 import { CueClock, prunePerf, shiftPerf } from './cueclock.js';
+import { paceTrace } from '../../../pace.js';
 
 /** Legacy shot names the Stage draws (framings travel in scene.framing). */
 export const STUDIO_SHOTS = new Set(['wide', 'close']);
@@ -170,7 +171,8 @@ export class Stage {
     this.seen = new Set();
     this.onError = null; // (t) => void, set by the host
     this.lod = 0; // detail level from the watchdog (0..2)
-    this.clock = new CueClock({ log: (m) => this.log(m) });
+    // PACE trace (no-op outside the showcase recorder): every gesture / look / emotion the rig performs
+    this.clock = new CueClock({ log: (m) => this.log(m), onFire: (ev, slot) => paceTrace({ k: 'perf', kind: ev.kind, slot, name: ev.name || ev.target || null, why: ev.why || null }) });
     this.key = null;
     this.actors = [];
     this.frames = {};
@@ -379,6 +381,7 @@ export class Stage {
     const invisible = !!prevBase && STUDIO_SHOTS.has(prevShot) && STUDIO_SHOTS.has(scene.shot) && !spec.move && sameCamera(prevBase, this.base);
     if (!invisible) {
       this.clock.cut(t);
+      paceTrace({ k: 'cut', shot: scene.shot, framing: spec.framing, focus: spec.focus, move: spec.move?.type || null, amount: spec.move?.amount ?? null }); // PACE trace
       this.visibleSince = scene.shotSince ?? t;
       this.bgOpts.cut = true;
       if (t - this.epoch > CLOCK_REBASE) {

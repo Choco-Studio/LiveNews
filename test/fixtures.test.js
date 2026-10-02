@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ROOT } from '../server/config.js';
 import { NewsDesk, isBreaking, localFeedPath, parseFeed } from '../server/news.js';
 import { Producer } from '../server/producer.js';
@@ -80,23 +80,45 @@ describe('offline fixture feeds', () => {
 });
 
 describe('offline fixture pictures', () => {
-  const referenced = all.filter((s) => s.image).map((s) => fileURLToPath(s.image));
+  // Every way a picture reaches a story offline: the feed item (media, media:group, media:thumbnail, enclosure,
+  // inline srcset), the item's local article page (og:image, twitter:image, JSON-LD), and the same-event cluster.
+  const PAGES_DIR = path.join(ROOT, 'config', 'fixtures', 'pages');
+  const pageRefs = fs
+    .readdirSync(PAGES_DIR)
+    .flatMap((f) => [...fs.readFileSync(path.join(PAGES_DIR, f), 'utf8').matchAll(/(?:content="|"url":"|\[")(\.\.\/img\/[^"]+\.png)"/g)].map((m) => path.resolve(PAGES_DIR, m[1])));
+  const feedRefs = all.flatMap((s) => s.images || (s.image ? [s.image] : [])).map((u) => fileURLToPath(u));
+  const PLACEHOLDER = path.join(IMG_DIR, 'cw-card.png'); // an outlet's generic share card: never aired
 
-  test('every picture a story refers to exists inside config/fixtures/img and is a 640x360 PNG of reasonable size', () => {
-    assert.ok(referenced.length >= 12, `${referenced.length} stories with a picture`);
-    for (const file of referenced) {
+  test('every picture a feed item or an article page refers to exists inside config/fixtures/img: 640x360 PNGs, 320x180 thumbnails', () => {
+    assert.ok(feedRefs.length >= 15 && pageRefs.length >= 5, `${feedRefs.length} feed and ${pageRefs.length} page references`);
+    for (const file of [...feedRefs, ...pageRefs]) {
       assert.ok(file.startsWith(IMG_DIR + path.sep), file);
       const buf = fs.readFileSync(file);
       const { w, h } = readPng(buf);
-      assert.deepEqual([w, h], [640, 360], file);
+      assert.deepEqual([w, h], path.dirname(file).endsWith('thumbs') ? [320, 180] : [640, 360], file);
       assert.ok(buf.length < 450_000, `${path.basename(file)} is ${buf.length} bytes`);
     }
   });
 
-  test('no picture is left unused, and none is used twice', () => {
-    const files = fs.readdirSync(IMG_DIR).filter((f) => f.endsWith('.png'));
-    assert.deepEqual(files.sort(), [...new Set(referenced.map((f) => path.basename(f)))].sort());
-    assert.equal(new Set(referenced).size, referenced.length);
+  test('every painted picture is found by the desk, airs only on one event, and the share card never airs', async () => {
+    const desk = new NewsDesk({ log: silentLogger, fetchImpl: async (url) => assert.fail(`network access to ${url}`) });
+    desk.loadFeeds = () => FEEDS;
+    await desk.refresh();
+    const stories = [...desk.stories.values()];
+    await desk.findPictures(stories, { budgetMs: 20_000 });
+    const files = fs.readdirSync(IMG_DIR).filter((f) => f.endsWith('.png') && f !== 'cw-card.png');
+    const used = new Map();
+    for (const s of stories.filter((x) => x.image)) {
+      const f = fileURLToPath(s.image);
+      assert.notEqual(f, PLACEHOLDER, `the share card airs on "${s.title}"`);
+      used.set(path.basename(f), [...(used.get(path.basename(f)) || []), s]);
+    }
+    assert.deepEqual(files.filter((f) => !used.has(f)), [], 'pictures no story ends up with');
+    for (const [f, list] of used) for (const s of list.slice(1)) assert.ok(desk.samePictureEvent(list[0], s), `${f} on two events: "${list[0].title}" / "${s.title}"`);
+    assert.ok(desk.placeholders.has(pathToFileURL(PLACEHOLDER).href), 'the share card is recognised as a placeholder');
+    const via = new Set(stories.filter((x) => x.image).map((x) => x.imageVia));
+    for (const v of ['feed:media', 'feed:enclosure', 'feed:inline', 'page:og', 'page:twitter', 'page:jsonld', 'cluster']) assert.ok(via.has(v), `no picture found via ${v}`);
+    assert.ok(stories.filter((x) => x.image).length / stories.length >= 0.5, `${stories.filter((x) => x.image).length} of ${stories.length} stories with a picture`);
   });
 
   test('pictures are painted by the procedural generator: the committed file matches a fresh paint', () => {
@@ -185,7 +207,10 @@ describe('the offline demo, end to end (fixture feeds -> desk -> mock writer -> 
         const prev = e.segments.slice(0, i).filter((y) => y.type === 'story').at(-1);
         assert.ok(!['serious', 'sad'].includes(prev.emotion), 'no chat after grave news');
         if (e.program.id === 'world-now') assert.equal(prev.feature, 'lighter', 'WORLD NOW chats only after And finally');
-        assert.ok(!/\d/.test(x.text) || e.program.id === 'cosmos', `a chat states a figure: ${x.text}`);
+        // A chat adds no figure of its own; THE CATCH (TECH BYTES) answers with a sentence of the story itself.
+        const told = `${desk.get(prev.storyId).title}. ${desk.get(prev.storyId).summary}`;
+        const own = x.text.split(/(?<=[.!?])\s+/).filter((t) => /\d/.test(t)).every((t) => told.includes(t));
+        assert.ok(!/\d/.test(x.text) || e.program.id === 'cosmos' || own, `a chat states a figure: ${x.text}`);
       });
       if (e.program.id === 'world-now') {
         assert.ok(!e.segments.some((x) => x.type !== 'chat' && /\?/.test(x.text)), 'WORLD NOW: no question marks outside chats');

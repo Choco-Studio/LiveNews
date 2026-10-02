@@ -156,9 +156,15 @@ function contextAt(episode, j, presenters, gapAfter) {
  * @param episode   the episode JSON from /api/next ({ id, program, cast, segments, ... })
  * @param index     segment index
  * @param opts      { presenters: channel.presenters (voice lang/rate per id),
- *                    gapAfter: s the director waits after this segment (optional) }
+ *                    gapAfter: s the director waits after this segment (optional), or a function
+ *                    (index) → s giving each segment its own pause (pace.js gapAfter, one per episode) }
  */
 const NO_PRESENTERS = Object.freeze({}); // one object, so contextAt's memo holds across default calls
+// PACE: the pause after segment `index` (a number for every segment, or pace.js' per-segment function)
+const gapOf = (g, index) => {
+  const v = typeof g === 'function' ? g(index) : g;
+  return Number.isFinite(v) ? v : null;
+};
 
 export function segmentContext(episode, index, { presenters = NO_PRESENTERS, gapAfter = null } = {}) {
   const ep = episodeSummary(episode);
@@ -215,7 +221,7 @@ export function segmentContext(episode, index, { presenters = NO_PRESENTERS, gap
     figures: figuresOf(seg, words),
     dryLine: dryLineOf(seg, sentences, span),
     question: questionOf(seg, sentences, span),
-    gapAfter: Number.isFinite(gapAfter) ? gapAfter : null,
+    gapAfter: gapOf(gapAfter, index),
     cutGuard: cutGuard(programId),
     shots: [],
     contextAt: (j) => contextAt(episode, j, presenters, gapAfter),

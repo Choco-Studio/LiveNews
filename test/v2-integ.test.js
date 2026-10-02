@@ -253,6 +253,37 @@ test('cue clock: recorded timing fires by `at` from the speech start, within one
   assert.ok(Math.abs(perfs.B.emotions[0].t0 - (fire('happy') - 100)) < 1e-9);
 });
 
+test('cue clock: a recorded plan turns to the char rule on real drift, never on a stalled frame', () => {
+  const plan0 = planOf(EP, 2, []);
+  const ss = plan0.ctx.sentences;
+  assert.equal(plan0.ctx.timing, 'recorded');
+  assert.ok(ss.length >= 2, 'the fixture segment has two sentences');
+  /** The voice's frame at renderer time t when sentence 1 starts `late` s after its recorded time. */
+  const voiceAt = (late) => (t) => {
+    const el = t - 10;
+    if (el < 0) return null;
+    const si = el >= ss[1].t0 + late ? 1 : 0;
+    return { speaking: true, sentenceIndex: si, charIndex: 0 };
+  };
+  const play = (late, stall) => {
+    const clock = new CueClock();
+    const plan = planOf(EP, 2, []);
+    plan.voice = 'tts';
+    for (let k = 0; k < 8 * FPS; k++) {
+      const t = 9 + k * DT;
+      // a stalled page: no tick at all from just before sentence 1 until `stall` s later
+      if (stall && t > 10 + ss[1].t0 - 0.05 && t < 10 + ss[1].t0 - 0.05 + stall) continue;
+      if (t >= 10 && plan.speechStart == null) plan.speechStart = 10;
+      clock.load(plan, t);
+      clock.tick(t, voiceAt(late)(t));
+    }
+    return clock.mode;
+  };
+  assert.equal(play(0, 0), 'at', 'on time');
+  assert.equal(play(1.2, 0), 'char', 'the browser voice is playing instead of the recording');
+  assert.equal(play(0, 0.9), 'at', 'a 0.9 s stall at the sentence start is not drift');
+});
+
 test('cue clock: TTS / blips / mute fire by the voice char, anticipation converted with the learned rate', () => {
   const ep = clone(EP);
   const ctx = segmentContext(ep, 1, {});
