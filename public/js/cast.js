@@ -25,8 +25,8 @@ export function lookOf(id) {
   return LOOKS[fallbackBase(id)];
 }
 
-/** Id understood by portraits.js drawCloseup for this presenter. */
-export function portraitOf(id, supported = ['A', 'B']) {
+/** Id understood by portraits.js drawCloseup for this presenter (every cast member has a portrait). */
+export function portraitOf(id, supported = ['paco', 'lola', 'max', 'ada', 'nova', 'unit8', 'penny', 'sam']) {
   if (supported.includes(id)) return id;
   if (id === 'paco') return 'A';
   if (id === 'lola') return 'B';
