@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canvas 2.5D Foundation Lab</title>
+<style>
+  :root { --bg: #181425; --fg: #c0cbdc; --ui: #262b44; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 monospace; }
+  #screen { display: block; width: 1152px; height: 648px; image-rendering: pixelated; background: #000; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--ui); align-items: center; }
+  button, select { background: #3a4466; color: #fff; border: 0; padding: 4px 8px; font: inherit; }
+  #t { width: 360px; }
+</style>
+</head>
+<body>
+<canvas id="screen" width="384" height="216"></canvas>
+<div class="bar">
+  <select id="demo"></select>
+  <select id="presenter"><option>paco</option><option>lola</option></select>
+  <select id="gesture"></select>
+  <button id="play">pause</button>
+  <input id="t" type="range" min="0" max="20" step="0.01" value="0">
+  <span id="info"></span>
+</div>
+<script type="module">
+import { createLab, DEMO_NAMES, GESTURE_NAMES } from '../js/v2/canvas25d/lab.js';
+
+const canvas = document.getElementById('screen');
+const lab = createLab(canvas);
+window.__lab = lab;
+
+const $ = (id) => document.getElementById(id);
+for (const n of DEMO_NAMES || ['static']) $('demo').add(new Option(n, n));
+for (const n of ['sequence', ...(GESTURE_NAMES || [])]) $('gesture').add(new Option(n, n));
+$('demo').value = lab.state.demo;
+$('demo').onchange = () => { lab.set({ demo: $('demo').value }); t0 = performance.now(); };
+$('presenter').onchange = () => lab.set({ presenter: $('presenter').value });
+$('gesture').onchange = () => { lab.set({ gesture: $('gesture').value }); t0 = performance.now(); };
+
+// Interactive playback only when not driven by a capture tool (?still=1 disables it).
+const still = new URLSearchParams(location.search).has('still');
+let playing = !still;
+let t0 = performance.now();
+$('play').onclick = () => { playing = !playing; $('play').textContent = playing ? 'pause' : 'play'; t0 = performance.now() - Number($('t').value) * 1000; };
+$('t').oninput = () => { playing = false; $('play').textContent = 'play'; lab.render(Number($('t').value)); };
+function loop() {
+  if (playing) {
+    const t = (performance.now() - t0) / 1000;
+    $('t').value = t % 20;
+    lab.render(t);
+  }
+  requestAnimationFrame(loop);
+}
+lab.render(0);
+if (!still) loop();
+</script>
+</body>
+</html>

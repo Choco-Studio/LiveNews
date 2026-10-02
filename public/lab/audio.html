@@ -59,7 +59,7 @@
         { id: 'promo', label: 'UP NEXT PROMO', tune: PROMO, accent: P.yellow },
         ...ADS.map((ad) => ({ id: `ad-${ad.id}`, label: `AD ${String(ad.brand || ad.id).toUpperCase()}`, tune: ad.tune, accent: P.orange, seconds: 12, loop: true })),
       ];
-      const VIEWS = ['signature', ...TUNES.map((t) => t.id), 'loudness', 'ducking', 'visemes', 'resync', 'blips', 'voices', 'recorded'];
+      const VIEWS = ['signature', ...TUNES.map((t) => t.id), 'loudness', 'ducking', 'visemes', 'resync', 'blips', 'voices', 'recorded', 'engine'];
 
       // --------------------------------------------------------- drawing kit
       const rect = (x, y, w, h, c) => {
@@ -725,6 +725,74 @@
         stats.recorded = { meanErr, words: n, subs: subs.map((x) => x.t), delay };
       }
 
+      // The live engine: an ad's looping tune keeps playing through a mute and
+      // is back after it (the old engine stopped it for good), and the mouth
+      // keeps moving in mute mode. Sampled in real time from audio.musicBus.
+      async function drawEngine() {
+        engine ??= new AudioEngine({ lang: 'en' });
+        await engine.unlock();
+        engine.setMode('blips');
+        const ctxA = engine.context;
+        const an = ctxA.createAnalyser();
+        an.fftSize = 2048;
+        engine.musicBus.connect(an);
+        const data = new Float32Array(an.fftSize);
+        const ad = ADS[0];
+        const handle = engine.playTune(ad.tune, { loop: true, volume: 0.45 });
+        const rows = [];
+        const t0 = performance.now();
+        const total = 6000;
+        let said = false;
+        await new Promise((resolve) => {
+          const tick = () => {
+            const ms = performance.now() - t0;
+            if (ms > 1500 && engine.mode !== 'mute' && ms < 3500) engine.setMode('mute');
+            if (ms > 2000 && !said) {
+              said = true;
+              engine.speak('Muted, but the lips still move with every word.', 'A');
+            }
+            if (ms >= 3500 && engine.mode === 'mute') engine.setMode('blips');
+            an.getFloatTimeDomainData(data);
+            let e = 0;
+            for (const v of data) e += v * v;
+            const f = engine.speechFrame(performance.now(), 'A');
+            rows.push({ ms, db: 10 * Math.log10(e / data.length + 1e-10), mode: engine.mode, level: f.level, speaking: f.speaking, duck: engine.speaking });
+            if (ms < total) requestAnimationFrame(tick);
+            else resolve();
+          };
+          requestAnimationFrame(tick);
+        });
+        handle.stop();
+        engine.stop();
+        engine.musicBus.disconnect(an);
+        frame('LIVE ENGINE: MUTE + MOUTH', 'REAL TIME: AUDIO.MUSICBUS AND SPEECHFRAME', P.cyan);
+        const x0 = 6;
+        const w = 372;
+        const xs = (ms) => x0 + (ms / total) * w;
+        panel(x0, 18, w, 70, '');
+        for (const r of rows) if (r.mode === 'mute') rect(xs(r.ms), 18, 2, 70, '#3a1f2e');
+        micro(`AD TUNE (${String(ad.brand || ad.id).toUpperCase()}) LEVEL ON THE MUSIC BUS  (RED = MUTED, DARK = DUCKED)`, x0 + 2, 19, P.steel);
+        for (const r of rows) {
+          const y = 87 - Math.max(0, Math.min(62, ((r.db + 70) / 60) * 62));
+          rect(xs(r.ms), y, 1, 1, r.duck ? P.steel : P.orange);
+        }
+        panel(x0, 92, w, 50, 'MOUTH LEVEL OF PACO (WHITE)');
+        for (const r of rows) {
+          if (r.mode === 'mute') rect(xs(r.ms), 92, 2, 50, '#3a1f2e');
+        }
+        for (const r of rows) rect(xs(r.ms), 141 - Math.round(r.level * 46), 1, 1, P.white);
+        timeAxis(x0, 143, w, total / 1000);
+        const before = rows.filter((r) => r.ms > 500 && r.ms < 1400).map((r) => r.db);
+        const during = rows.filter((r) => r.mode === 'mute' && r.ms < 1950).map((r) => r.db);
+        const after = rows.filter((r) => r.ms > 4500).map((r) => r.db);
+        const mean = (a) => 10 * Math.log10(a.reduce((s2, x) => s2 + 10 ** (x / 10), 0) / Math.max(1, a.length));
+        const lipsInMute = rows.filter((r) => r.mode === 'mute' && r.level > 0.2).length;
+        micro(`MUSIC BUS BEFORE ${mean(before).toFixed(1)} DB   WHILE MUTED ${mean(during).toFixed(1)} DB   AFTER UNMUTE ${mean(after).toFixed(1)} DB`, 6, 156, Math.abs(mean(after) - mean(before)) < 6 ? P.green : P.red);
+        micro(`FRAMES WITH OPEN LIPS WHILE MUTED: ${lipsInMute}`, 6, 166, lipsInMute > 5 ? P.green : P.red);
+        micro(`V KEY CYCLES: ${engine.modes.join(' > ').toUpperCase()}  (NO TTS VOICES IN THIS BROWSER: ${engine.ttsAvailable ? 'NO' : 'YES'})`, 6, 176, P.fog);
+        stats.engine = { before: mean(before), muted: mean(during), after: mean(after), lipsInMute, modes: engine.modes };
+      }
+
       // ------------------------------------------------------------- driver
       const stats = {};
       async function render(t = 0) {
@@ -740,6 +808,7 @@
         else if (name === 'blips') await drawBlips();
         else if (name === 'voices') drawVoices();
         else if (name === 'recorded') await drawRecorded();
+        else if (name === 'engine') await drawEngine();
         else {
           const item = TUNES.find((x) => x.id === name);
           await drawTune(item);

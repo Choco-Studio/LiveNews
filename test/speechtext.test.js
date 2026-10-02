@@ -179,6 +179,59 @@ table('Spanish', es, [
   ['La OTAN y la ONU.', 'La Otan y la Onu.'],
 ]);
 
+table('messy wire copy', gb, [
+  ['Shares of $AAPL rose to $227.50 (+$7.05).', 'Shares of A-eigh-P-L rose to two hundred and twenty-seven dollars fifty, plus seven dollars five.'],
+  ['Call 0800 123 4567 now.', 'Call oh eight oh oh, one two three, four five six seven now.'],
+  ['The ¥/$ rate hit 150.2.', 'The yen dollar rate hit one hundred and fifty point two.'],
+  ['Up 0.9% y/y; density 61/km².', 'Up nought point nine percent year on year; density sixty-one per square kilometre.'],
+  ['Ratings: 4.5/5 stars ★★★★☆', 'Ratings: four point five out of five stars.'],
+  ['H5N1 and the Pixel 9a.', 'H five N one and the Pixel nine eigh.'],
+  ['Flight BA2490 departs Gate B12.', 'Flight B-eigh twenty-four ninety departs Gate B twelve.'],
+  ['The 1,000th visitor won.', 'The one thousandth visitor won.'],
+  ['Score: Real Madrid 2–1 Barcelona.', 'Score: Real Madrid two one Barcelona.'],
+  ['Population 8.2 billion (2025 est.).', 'Population eight point two billion, twenty twenty-five estimated.'],
+]);
+
+describe('robustness', () => {
+  const MESSY = [
+    'Shares of $AAPL rose 3.2% to $227.50 (+$7.05) after Q2 results; EPS was $1.40 vs. $1.35 est.',
+    'Temps: 38°C/100°F in Phoenix, -40° in Yakutsk; 3 ft of snow & 50mph gusts.',
+    "Score: Real Madrid 2–1 Barcelona (Vinícius 34', 78'; Lewandowski 90+2').",
+    'COVID-19, H5N1 and mpox: WHO says 1 in 3 cases are mild; R0 ~ 1.4.',
+    'Visit www.globit24.tv/live, email news@globit24.tv or call 0800 123 4567.',
+    'The ¥/$ rate hit 150.2; €/£ at 0.84; BTC topped $100k, ETH $4k.',
+    'Section 3(a)(ii) of the Act; Art. 5 § 2; Rule #7.',
+    'iPhone 16 Pro Max (256 GB) costs $1,199; Pixel 9a is $499.',
+    'Ratings: 4.5/5 stars ★★★★☆, 10/10 would recommend 👍',
+    'The 3rd, 22nd and 1,000th visitors won 2× prizes & a 50% discount.',
+    'Population: 8.2 billion (2025 est.), up 0.9% y/y; density 61/km².',
+    'Flight BA2490 departs Gate B12 at 06:45, arrives 09:10 (+1).',
+  ];
+
+  test('no digits, symbols or brackets survive for the voice to stumble on', () => {
+    for (const lang of ['en-US', 'en-GB']) {
+      for (const text of MESSY) {
+        const spoken = speakable(text, { lang });
+        assert.doesNotMatch(spoken, /[^\p{L}\s,.;:!?…'’-]/u, `${lang}: ${spoken}`);
+      }
+    }
+  });
+
+  test('normalising twice changes nothing (safe if a second normaliser runs after)', () => {
+    for (const text of [...MESSY, 'The IMF lent $2bn on 2 October.', 'BREAKING: HUGE STORM HITS THE UK COAST']) {
+      const once = gb(text);
+      assert.equal(gb(once), once);
+    }
+  });
+
+  test('a long bulletin normalises quickly enough for the browser', () => {
+    const text = MESSY.join(' ');
+    const t0 = performance.now();
+    for (let i = 0; i < 20; i++) normalizeForSpeech(text, { lang: 'en-GB' });
+    assert.ok((performance.now() - t0) / 20 < 50);
+  });
+});
+
 describe('lexicon hooks', () => {
   test('a call can pass its own respellings, which win over the defaults', () => {
     assert.equal(speakable('Kyiv and Paco.', { lexicon: { Kyiv: 'Kee-iv', Paco: 'Pahco' } }), 'Kee-iv and Pahco.');

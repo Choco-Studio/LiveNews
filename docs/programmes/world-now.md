@@ -22,7 +22,7 @@ The whole programme should feel like the open the owner liked: a navy field, one
 **ITV News at Ten** (added: the best headline device and closer)
 - **Headlines:** Big Ben's "bongs" separate the opening headlines, so each one gets a sonic full stop ([Wikipedia](https://en.wikipedia.org/wiki/ITV_News_at_Ten)).
 - **And Finally:** a crisply written item that "made one or both of them smile". It must end upbeat but never on a discordant note, and it is harder to script than hard news ([Broadcast](https://www.broadcastnow.co.uk/behind-the-scenes/the-importance-of-an-and-finally/5153349.article)).
-- **Shot length:** in ITV bulletins the median shot is 6.3 s, ranging from 2.7 to 40.8 s ([study](https://www.researchgate.net/figure/Shot-types-in-the-opening-headline-sequence-of-an-ITV-news-bulletin_fig1_263129239)).
+- **Shot length:** a study of ITV bulletins found a median shot of 6.3 s, ranging from 2.7 to 40.8 s ([study](https://www.researchgate.net/figure/Shot-types-in-the-opening-headline-sequence-of-an-ITV-news-bulletin_fig1_263129239)).
 
 **Sky News (Studio 21)**
 - **Light:** tuned to keep the architecture "as white as possible whilst retaining warmth in the skin tones" ([NCS Q&A](https://www.newscaststudio.com/2016/12/06/sky-news-glass-box-studio-21-design/)).
@@ -55,17 +55,8 @@ The whole programme should feel like the open the owner liked: a navy field, one
 - At most 20 words per sentence, averaging 11–14, with one idea and one figure per sentence ([UF/IFAS](https://ask.ifas.ufl.edu/publication/WC193)).
 
 **Speech rate and prosody**
-- Paco reads at 165–175 wpm and Lola at 172–185 wpm. Round-up items go up to 190 wpm, and grave stories run 6% slower. All of this sits inside the 170–190 wpm "normal" band ([Journalist's Resource](https://journalistsresource.org/media/radio-news-pace-words/)).
-- Sentences end on a falling pitch, with no upspeak.
-- Pauses:
-
-  | Where | Pause |
-  | --- | --- |
-  | Comma | 0.15 s |
-  | Full stop | 0.35 s |
-  | Between stories | 0.6 s |
-  | Before "And finally" | 0.8 s |
-
+- Paco reads at 165–175 wpm and Lola at 172–185 wpm. Round-up items go up to 190 wpm, and grave stories are 6% slower. Listeners rate 170–190 wpm as "normal" ([Journalist's Resource](https://journalistsresource.org/media/radio-news-pace-words/)); Paco sits slightly below it for authority (our rule).
+- Sentences end on a falling pitch, with no upspeak. Pauses are 0.15 s at a comma, 0.35 s at a full stop, 0.6 s between stories and 0.8 s before "And finally".
 - Grave stories narrow the pitch range by 20% and add 0.1 s to every pause.
 
 **Humour and banter**
@@ -115,10 +106,8 @@ The whole bulletin runs 3–4.5 minutes. After a grave story there is no chat. "
 **Shot length:** median 6–7 s, minimum 3 s, studio maximum 15 s.
 
 **When to cut**
-- Cut only at sentence ends, using the word timings.
-- Cut to the map on the spoken place name.
-- Cut to B on B's first word.
-- In the round-up, cut map to map on each item's first word.
+- Cut at sentence ends, using the word timings. The one exception is the map, which cuts in on the spoken place name.
+- Cut to B on B's first word, and in the round-up, cut map to map on each item's first word.
 
 **Camera moves**
 - Only the 2.5D camera moves, re-rendering each frame. Never scroll a baked bitmap.
@@ -166,10 +155,10 @@ The whole bulletin runs 3–4.5 minutes. After a grave story there is no chat. "
 
 Key of D. The WORLD NOW colour note is the 3rd (see `audio/themes.js`).
 
-| Moment | Music (BPM) |
+| Moment (tempo, BPM) | Music |
 | --- | --- |
 | Headlines (104–112) | `pulse12` pips, `tri` bass in quarter notes, a `pad` moving from minor to major across the three lines (Lowe's arc), `timpani` on each downbeat |
-| After each headline | Pip sting: two `bell` notes, 5 then 1 |
+| After each headline | Pip sting: two `bell` notes, low 5 then 1 (the motif's first two notes) |
 | Main stories | Silence (our rule) |
 | Round-up (100–108) | A muted `pluck` ostinato plus bass, with no melody |
 | And finally (84–92) | Sparse `softtri` and `pluck`, entering after the words "And finally" |
@@ -194,32 +183,30 @@ Key of D. The WORLD NOW colour note is the 3rd (see `audio/themes.js`).
 
 ### Do / Don't
 
-**Do:** keep it still, dark and cool, with warm faces. Use one red accent and one rule device. Keep silence under the news. Name the place, then show the map. Save the wit for the end.
+**Do:** keep the room still and cool and the faces warm. Use one red accent and one red rule. Keep silence under the news. Name the place, then show the map. Save the wit for the end.
 
 **Don't:**
-- bouncy graphics or a pulsing marker;
-- music under main or grave stories;
-- exclamation marks in captions, sound effects or puns;
-- wave, thumbs_up, fist_pump or laugh outside the greeting, the sign-off and "And finally";
+- bounce, overshoot or a pulsing marker;
+- sound effects, puns or exclamation marks in captions;
+- celebratory gestures outside the greeting, the sign-off and "And finally";
 - banter after a tragedy;
-- saturated colour on set or red glows;
+- saturated colour on set, or red glows;
 - camera drift;
-- cuts under 3 s;
-- melodic "game level" loops, which read as a children's show.
+- melodic "game level" loops, which read as a kids' show.
 
 ## 4. Acceptance checklist
 
-1. The headlines last 10–14 s, with exactly one pip after each of the 3 lines.
-2. The open hard-cuts to the wide shot, and there is no stinger between stories.
-3. No shot is under 3 s, the median is 5–8 s, and no studio shot runs over 15 s.
-4. Each map beat starts within ±0.3 s of the spoken place name.
-5. No bed plays under main stories, or within one segment after a grave story.
-6. Beds measure 18 dB or more under speech.
-7. Measured speech rate is 165–175 wpm for Paco and 172–185 wpm for Lola, and no sentence is longer than 20 words.
-8. Main stories have no jokes or exclamation marks, and there are at most 2 chats, only around "And finally" or the sign-off.
+1. The headlines run 10–14 s, with one pip after each of the 3 lines.
+2. The open hard-cuts to the wide shot, and no stinger plays between stories.
+3. Every shot is at least 3 s and the median is 5–8 s. No studio shot runs over 15 s.
+4. Each map cuts in within ±0.3 s of the spoken place name.
+5. No bed plays under main stories, or in the segment right after a grave story.
+6. Beds sit at least 18 dB below speech.
+7. Paco reads at 165–175 wpm and Lola at 172–185 wpm. No sentence is over 20 words.
+8. Main stories contain no jokes and no "!". There are at most 2 chats, and only around "And finally" or the sign-off.
 9. Red appears only on the bug, strap tag, desk plate, rule, markers and BREAKING, and never as a gradient.
-10. Faces are the brightest warm area in the frame, and the wall's average L\* is 45 or below.
-11. Each shot has at most 1 camera move, at least 4 s long and eased. There are none in grave stories and no visible jitter.
-12. Graphics enter in 0.35 s and exit in 0.25 s with no overshoot, and the fact card stays within y 26–136.
-13. "And finally" never follows a grave story, and the bulletin ends on the wide shot with the 3→1 resolution.
-14. At 1x and 5x it reads as "a serious news programme in pixel art", never "a kids' show".
+10. Faces are the brightest warm area, and the wall's average L\* is 45 or lower.
+11. A shot has at most one camera move, eased and at least 4 s long. Grave stories have none, and nothing jitters.
+12. Graphics enter in 0.35 s and leave in 0.25 s with no overshoot. The fact card stays within y 26–136.
+13. "And finally" never follows a grave story. The bulletin ends on the wide shot with the 3→1 resolution.
+14. At 1x and 5x it reads as "serious news in pixel art", never as a kids' show.

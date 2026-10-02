@@ -309,7 +309,15 @@ def _say_core(core, prev_word, next_core, lang, shouting):
         end_of_clause = next_core is None
         if prev in _YEAR_CONTEXT or end_of_clause or (next_core or '').lower() in _YEAR_CONTEXT:
             return say_year(core, lang), None
-        return core, None
+        return say_decimal(core, lang), None
+
+    # Plain numbers and percentages: the same words espeak would say, but
+    # written out so the spoken word count is known for timing
+    if re.fullmatch(_NUM, core) and len(core.replace(',', '').split('.')[0]) <= 15:
+        return say_decimal(core, lang), None
+    m = re.fullmatch(rf'({_NUM})%', core)
+    if m:
+        return say_decimal(m.group(1), lang) + ' percent', None
 
     m = _RE_NUM_SCALE.match(core)
     if m:
@@ -402,9 +410,15 @@ def normalize_tokens(text, base=0, lang='en-us'):
 
 # ---------------------------------------------------------------- phrases
 
-# Planned silence after a phrase that ends with this mark, in seconds at speed 1.
-PAUSES = {'.': 0.36, '!': 0.38, '?': 0.42, '…': 0.48, ';': 0.24, ':': 0.24, '—': 0.18,
-          '–': 0.18, ',': 0.12, '\n': 0.55}
+# Planned silence after a phrase, by its final mark, in seconds at speed 1.
+# Defaults follow the programme style bibles (docs/programmes/*.md): comma
+# 0.15 s, full stop 0.35 s; requests can override them per programme/story.
+PAUSE_KEYS = {'.': 'sentence', '!': 'exclaim', '?': 'question', '…': 'ellipsis', ';': 'semicolon',
+              ':': 'colon', '—': 'dash', '–': 'dash', ',': 'comma', '\n': 'paragraph'}
+DEFAULT_PAUSES = {'sentence': 0.35, 'exclaim': 0.35, 'question': 0.40, 'ellipsis': 0.45,
+                  'semicolon': 0.25, 'colon': 0.25, 'dash': 0.20, 'comma': 0.15, 'paragraph': 0.60}
+# The trimmed phrase edges keep ~40 ms of decay/pre-roll, which is heard as pause
+EDGE_ALLOWANCE = 0.035
 _MAX_PHRASE = 220   # chars of original text; longer sentences are split at clauses
 _MIN_SPLIT = 55
 
@@ -458,14 +472,32 @@ def _trailing_mark(chunk):
     return stripped[-1:] if stripped else ''
 
 
-def plan_phrases(text, lang='en-us', phrases=None, speed=1.0):
+def pause_table(pauses=None, pause_add=0.0):
+    """Pause per mark (seconds of planned silence) from defaults + overrides."""
+    table = dict(DEFAULT_PAUSES)
+    for key, value in (pauses or {}).items():
+        if key in table and isinstance(value, (int, float)) and 0 <= value <= 3:
+            table[key] = float(value)
+    return {k: v + float(pause_add or 0.0) for k, v in table.items()}
+
+
+def plan_phrases(text, lang='en-us', phrases=None, speed=1.0, pauses=None, pause_add=0.0):
     """Cut text into phrases with planned pauses, each with normalised tokens.
 
     `phrases` (optional) is the caller's own list of {text, pauseAfter}; each
     phrase text is located in `text` so word offsets still point at the
     original. Without it, text is cut at sentences (and long sentences at
-    clauses), and pauses follow the punctuation.
+    clauses), and pauses follow the punctuation (`pauses` overrides
+    DEFAULT_PAUSES by name, `pause_add` lengthens every pause, e.g. +0.1 s for
+    grave stories).
     """
+    table = pause_table(pauses, pause_add)
+
+    def pause_for(chunk, fallback):
+        key = PAUSE_KEYS.get(_trailing_mark(chunk))
+        value = table[key] if key else fallback
+        return max(0.03, value / max(0.5, speed) ** 0.5 - EDGE_ALLOWANCE)
+
     out = []
     if phrases:
         cursor = 0
@@ -481,7 +513,7 @@ def plan_phrases(text, lang='en-us', phrases=None, speed=1.0):
                 at = cursor  # caller text differs; offsets become approximate
             pause = p.get('pauseAfter') if isinstance(p, dict) else None
             if pause is None:
-                pause = PAUSES.get(_trailing_mark(ptext), 0.1) / max(0.5, speed)
+                pause = pause_for(ptext, 0.1)
             ph = Phrase(at, at + len(ptext), ptext, float(max(0.0, min(3.0, pause))))
             ph.tokens = normalize_tokens(ptext, at, lang)
             out.append(ph)
@@ -494,7 +526,7 @@ def plan_phrases(text, lang='en-us', phrases=None, speed=1.0):
                 body = chunk.strip()
                 if not body:
                     continue
-                pause = PAUSES.get(_trailing_mark(chunk), 0.12) / max(0.5, speed) ** 0.5
+                pause = pause_for(chunk, 0.12)
                 ph = Phrase(ss + lead, ss + lead + len(body), body, pause)
                 ph.tokens = normalize_tokens(body, ss + lead, lang)
                 out.append(ph)

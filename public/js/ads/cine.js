@@ -316,6 +316,7 @@ function collect() {
 /**
  * Paint the collected spans. `sh` (optional, build it once at module level):
  *   { d: dark colour, f: fraction of the span width (0..1), m: min px,
+ *     dd, df, dm: an optional darker core band at the very edge (soft two-step shadow),
  *     side: 1 dark on the right (key light from the left) | -1,
  *     l: lit edge colour, lf, lm (same on the lit side), r: rim colour (1 px on the dark edge) }
  */
@@ -328,6 +329,16 @@ function paint(ctx, c, sh) {
     ctx.fillStyle = sh.d;
     const f = sh.f ?? 0.3;
     const m = sh.m ?? 1;
+    for (let i = 0; i < SN; i++) {
+      const w = SR[i] - SL[i];
+      const k = min(w, max(m, round(w * f)));
+      ctx.fillRect(side > 0 ? SR[i] - k : SL[i], SY[i], k, 1);
+    }
+  }
+  if (sh.dd) {
+    ctx.fillStyle = sh.dd;
+    const f = sh.df ?? 0.12;
+    const m = sh.dm ?? 1;
     for (let i = 0; i < SN; i++) {
       const w = SR[i] - SL[i];
       const k = min(w, max(m, round(w * f)));
@@ -581,7 +592,9 @@ const THIN_SRC = {
 const THIN_H = 9;
 const SPACE_W = 4;
 
-function didone(rows) {
+// Didot-like letters whose verticals stay hairlines (only the diagonal is heavy).
+const HAIR_STEMS = new Set(['N', 'M', 'W', 'Z']);
+function didone(rows, ch = '') {
   const h = rows.length;
   const w = rows[0].length;
   const g = [];
@@ -597,7 +610,7 @@ function didone(rows) {
       }
       let e = y;
       while (on(x, e + 1)) e++;
-      if (e - y + 1 >= 4) for (let k = y; k <= e; k++) out[k][x + 1] = true;
+      if (e - y + 1 >= 4 && !HAIR_STEMS.has(ch)) for (let k = y; k <= e; k++) out[k][x + 1] = true;
       y = e + 1;
     }
   }
@@ -639,7 +652,7 @@ function glyphRows(ch, style) {
   let rows = set.get(ch);
   if (rows === undefined) {
     const src = THIN_SRC[ch];
-    rows = src ? (style === 'didone' ? didone(src) : src) : null;
+    rows = src ? (style === 'didone' ? didone(src, ch) : src) : null;
     set.set(ch, rows);
   }
   return rows;
@@ -845,13 +858,17 @@ const SH = new WeakMap(); // pal -> prebuilt shading recipes
 function recipes(pal) {
   let r = SH.get(pal);
   if (!r) {
+    const rim = pal.rim ? { r: pal.rim } : {};
+    const skinM = pal.skinM || mix(pal.skin, pal.skinD, 0.5);
+    const topM = pal.topM || mix(pal.top, pal.topD, 0.5);
+    const hairM = pal.hairM || mix(pal.hair, pal.hairD, 0.5);
     r = {
-      skin: { d: pal.skinD, f: 0.26, m: 1, side: 1, ...(pal.rim ? { r: pal.rim } : {}) },
-      skinSoft: { d: pal.skinD, f: 0.22, m: 1, side: 1 },
-      hair: { d: pal.hairD, f: 0.3, m: 1, side: 1, l: pal.hairL, lf: 0.18, lm: 1, ...(pal.rim ? { r: pal.rim } : {}) },
-      top: { d: pal.topD, f: 0.3, m: 1, side: 1, l: pal.topL, lf: 0.12, lm: 1, ...(pal.rim ? { r: pal.rim } : {}) },
-      limb: { d: pal.topD, f: 0.4, m: 1, side: 1, ...(pal.rim ? { r: pal.rim } : {}) },
-      hand: { d: pal.skinD, f: 0.35, m: 1, side: 1 },
+      skin: { d: skinM, f: 0.3, m: 1, dd: pal.skinD, df: 0.13, side: 1, ...rim },
+      skinSoft: { d: skinM, f: 0.25, m: 1, side: 1 },
+      hair: { d: hairM, f: 0.34, m: 1, dd: pal.hairD, df: 0.14, side: 1, l: pal.hairL, lf: 0.12, lm: 1, ...rim },
+      top: { d: topM, f: 0.32, m: 1, dd: pal.topD, df: 0.12, side: 1, l: pal.topL, lf: 0.04, lm: 1, ...rim },
+      limb: { d: topM, f: 0.4, m: 1, dd: pal.topD, df: 0.18, side: 1, ...rim },
+      hand: { d: skinM, f: 0.35, m: 1, dd: pal.skinD, df: 0.12, side: 1 },
       shirt: { d: pal.shirtD, f: 0.3, m: 1, side: 1 },
     };
     SH.set(pal, r);
@@ -867,8 +884,8 @@ function geom(o) {
   G.hx = o.x + o.tiltX;
   G.top = o.y + o.nod;
   G.chin = o.y + hh;
-  G.neckB = G.chin + hh * 0.3;
-  G.shY = G.neckB + hh * 0.08;
+  G.neckB = G.chin + hh * 0.22;
+  G.shY = G.neckB + hh * 0.06;
   G.shL = o.x - hh * o.shoulders;
   G.shR = o.x + hh * o.shoulders;
 }
@@ -880,6 +897,7 @@ export function bust(ctx, o, bottom = H + 2) {
   const rc = recipes(pal);
   const hh = o.hh;
   const cx = o.x;
+  hairBack(ctx, o);
   // torso: rounded shoulders falling to a slightly narrower waist
   const sw = hh * o.shoulders;
   const shY = G.shY;
@@ -974,15 +992,6 @@ export function head(ctx, o) {
   const cx = o.x + o.tiltX;
   const top = o.y + o.nod;
   const turn = o.turn;
-  // hair behind the head (long styles fall onto the shoulders)
-  if (o.hair === 'long' || o.hair === 'bob') {
-    const len = o.hair === 'long' ? 1.45 : 0.98;
-    begin();
-    arc(cx + turn * hw * 0.1, top + hh * 0.42, hw * 1.2, hh * 0.5, PI, PI * 2, 10);
-    pt(cx + hw * 1.22, top + hh * len);
-    pt(cx - hw * 1.22, top + hh * len);
-    fill(ctx, pal.hairD, { d: pal.hairD, f: 0.2, m: 1, side: 1, ...(pal.rim ? { r: pal.rim } : {}) });
-  }
   // ears
   const eY = top + hh * 0.5;
   ellipse(ctx, cx - hw - 0.5 + turn * hw * 0.25, eY, max(1, hh * 0.06), hh * 0.1, pal.skin);
@@ -1001,6 +1010,25 @@ export function head(ctx, o) {
   }
   face(ctx, o, cx, top, hh, hw);
   hair(ctx, o, cx, top, hh, hw, rc);
+}
+
+/** Long hair / bob mass behind the head and neck (drawn before the torso). */
+function hairBack(ctx, o) {
+  if (o.hair !== 'long' && o.hair !== 'bob') return;
+  const { pal } = o;
+  const hh = o.hh;
+  const hw = hh * 0.37;
+  const cx = o.x + o.tiltX;
+  const top = o.y + o.nod;
+  const len = o.hair === 'long' ? 1.55 : 0.96;
+  const wide = o.hair === 'long' ? 1.12 : 1.2;
+  begin();
+  arc(cx + o.turn * hw * 0.1, top + hh * 0.42, hw * wide, hh * 0.5, PI, PI * 2, 10);
+  pt(cx + hw * wide, top + hh * len - hh * 0.1);
+  pt(cx + hw * (wide - 0.25), top + hh * len);
+  pt(cx - hw * (wide - 0.25), top + hh * len);
+  pt(cx - hw * wide, top + hh * len - hh * 0.1);
+  fill(ctx, pal.hair, { d: pal.hairD, f: 0.4, m: 1, side: 1, ...(pal.rim ? { r: pal.rim } : {}) });
 }
 
 function face(ctx, o, cx, top, hh, hw) {
@@ -1164,8 +1192,8 @@ function armGeom(o, side) {
   geom(o);
   const a = side < 0 ? o.armL : o.armR;
   const hh = o.hh;
-  ARM.sx = (side < 0 ? G.shL : G.shR) - side * hh * 0.1;
-  ARM.sy = G.shY + hh * 0.2;
+  ARM.sx = (side < 0 ? G.shL : G.shR) - side * hh * 0.3;
+  ARM.sy = G.shY + hh * 0.24;
   const up = hh * 1.3 * (a.len ?? 1);
   const fo = hh * 1.15 * (a.fore ?? 1);
   // a: upper arm angle from hanging straight down, positive = out to the side

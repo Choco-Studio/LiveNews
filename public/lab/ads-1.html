@@ -22,7 +22,12 @@
       <canvas id="screen" width="384" height="216"></canvas>
       <div class="bar">
         <select id="ad"></select>
-        <select id="mode"><option value="single">single ad</option><option value="break">break (2 ads)</option></select>
+        <select id="mode">
+          <option value="single">single ad</option>
+          <option value="break">break (2 ads)</option>
+          <option value="specimen">type specimen</option>
+          <option value="kit">kit demo</option>
+        </select>
         <button id="play">play</button>
         <label><input type="checkbox" id="subs" /> VO line overlay</label>
         <span id="clock">0.00</span>
@@ -36,11 +41,15 @@
       // Ads lab: renders any registered ad at any instant t (deterministic),
       // or a break of two ads back to back the way director.js plays them
       // (stinger, the shot changes at its midpoint, every ad starts at dt = 0).
-      //   window.__lab.set({ ad: 'bitfizz-cola', mode: 'single'|'break', second: 'cloudbrella', subs: true })
+      // 'specimen' shows the kit's display faces, 'kit' the premium helpers.
+      //   window.__lab.set({ ad: 'bitfizz-cola', mode: 'single'|'break'|'specimen'|'kit', second: 'cloudbrella', subs: true })
       //   window.__lab.render(t)     window.__lab.duration()     window.__lab.perf()
+      //   window.__audio.render({ ad, seconds })  -> the ad's tune rendered offline (tools/render-audio.mjs)
       import { ADS } from '../js/ads/index.js';
+      import * as K from '../js/ads/kit.js';
       import { drawStinger, STINGER_DURATION } from '../js/scenes/cards.js';
       import { drawText } from '../js/font.js';
+      import { renderTune } from '../js/audio/synth.js';
 
       const cv = document.getElementById('screen');
       const ctx = cv.getContext('2d');
@@ -88,6 +97,59 @@
         return { on, sting, total: b1 + STINGER_DURATION };
       }
 
+      // --- type specimen ---------------------------------------------------
+      const ABC = 'ABCDEFGHIJKLM';
+      const NOP = 'NOPQRSTUVWXYZ';
+      const NUM = '0123456789 .,:-/&?!%+()"º·';
+      function specimen(t) {
+        K.R(ctx, 0, 0, 384, 216, K.P.black);
+        const gold = [K.P.cream, K.P.yellow, K.P.yellow, K.P.orange];
+        let y = 6;
+        K.type(ctx, ABC, 8, y, { face: 'serif', color: K.P.white, track: 2 });
+        y += 16;
+        K.type(ctx, NOP, 8, y, { face: 'serif', color: K.P.white, track: 2 });
+        y += 16;
+        K.type(ctx, NUM, 8, y, { face: 'serif', color: K.P.white, track: 2 });
+        y += 18;
+        K.type(ctx, 'BITFIZZ RESERVE', 8, y, { face: 'serif', color: gold, track: 3 });
+        K.type(ctx, 'AGED 12 YEARS', 220, y, { face: 'serif', color: K.P.cream, track: 1 });
+        y += 20;
+        K.type(ctx, ABC + NOP, 8, y, { face: 'thin', color: K.P.white, track: 1 });
+        y += 14;
+        K.type(ctx, NUM, 8, y, { face: 'thin', color: K.P.white, track: 1 });
+        y += 14;
+        K.type(ctx, 'CLOUDBRELLA', 8, y, { face: 'thin', color: K.P.white, track: 4 });
+        K.type(ctx, 'ZERO-SYNC CANOPY', 180, y, { face: 'thin', color: K.P.silver, track: 2 });
+        y += 16;
+        K.type(ctx, 'BODY 5X7 TRACKED +2  THE QUICK BROWN FOX', 8, y, { face: 'body', color: K.P.silver, track: 2 });
+        y += 12;
+        K.type(ctx, 'MICRO 3X5 TRACKED +1  SMALL PRINT, LEGAL LINES', 8, y, { face: 'micro', color: K.P.fog, track: 1 });
+        y += 12;
+        K.type(ctx, 'SERIF X2', 8, y, { face: 'serif', color: gold, track: 2, scale: 2 });
+        K.trackIn(ctx, 'TRACKING IN', 290, y + 4, t % 3, { face: 'serif', color: K.P.cream, track: 2, from: 10, dur: 1.6 });
+        K.rule(ctx, 290, y + 20, 120, (t % 3) / 1.2, K.P.yellow);
+      }
+
+      // --- kit demo: backdrop, lathe, bubbles, motes, rim light -------------
+      const BOTTLE = K.profile(120, [[0, 7], [0.18, 7], [0.26, 9, 'inOut'], [0.36, 24, 'inOut'], [0.42, 26, 'out'], [0.96, 26], [1, 24, 'in']]);
+      const AMBER = [K.P.black, K.P.maroon, K.P.brown, K.P.rust, K.P.orange, K.P.yellow];
+      const STRIPES = [[-0.52, 0.07, K.P.cream], [0.66, 0.035, K.P.yellow]];
+      const LAYERS = [[K.P.yellow, 0, 0], [K.P.black, -1, 0]];
+      const head = (c, col, ox, oy) => K.poly(c, [[300 + ox, 60 + oy], [330 + ox, 62 + oy], [338 + ox, 90 + oy], [346 + ox, 100 + oy], [336 + ox, 104 + oy], [334 + ox, 130 + oy], [300 + ox, 150 + oy], [290 + ox, 100 + oy]], col);
+      function kitDemo(t) {
+        ctx.drawImage(K.gradient('lab-amber', 384, 216, { cx: 160, cy: 110, rx: 240, ry: 170, ramp: [K.P.black, K.P.maroon, K.P.brown], gamma: 1.4 }), 0, 0);
+        K.beam(ctx, 60, 0, 150, 216, 30, 120, { color: K.P.cream, alpha: 0.05 });
+        K.motes(ctx, t, { x: 40, y: 0, w: 160, h: 216, n: 40, color: K.P.cream });
+        K.contact(ctx, 160, 178, 40, 0.6);
+        K.lathe(ctx, 160, 58, BOTTLE, { ramp: AMBER, stripes: STRIPES, glass: { top: 46, edge: 1.5 }, ambient: 0.12 });
+        K.bubbles(ctx, t, { x: 140, y: 110, w: 40, h: 64, n: 22, color: K.P.yellow, hi: K.P.cream, size: 2, rise: 12 });
+        K.turntable(ctx, 160, 180, 50, 8, t * 0.1);
+        K.litShape(ctx, head, LAYERS);
+        K.vignette(ctx, 0.7);
+        K.letterbox(ctx, 1, 22);
+        K.trackIn(ctx, 'RESERVE', 270, 170, t, { face: 'serif', color: [K.P.cream, K.P.yellow, K.P.yellow, K.P.orange], track: 3, from: 12, dur: 2 });
+      }
+
       let lastVo = '';
       function render(t, opts = {}) {
         if (opts && Object.keys(opts).length) set(opts, false);
@@ -95,6 +157,14 @@
         ctx.globalAlpha = 1;
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, 384, 216);
+        if (state.mode === 'specimen') {
+          specimen(t);
+          return { mode: 'specimen' };
+        }
+        if (state.mode === 'kit') {
+          kitDemo(t);
+          return { mode: 'kit' };
+        }
         let ad = null;
         let dt = t;
         let sting = -1;
@@ -123,13 +193,14 @@
       }
 
       function duration() {
+        if (state.mode === 'specimen' || state.mode === 'kit') return 6;
         return state.mode === 'break' ? breakAt(0).total : byId(state.ad).duration;
       }
 
       function drawLines() {
         const el = $('lines');
         el.innerHTML = '';
-        if (state.mode === 'break') return;
+        if (state.mode !== 'single') return;
         const ad = byId(state.ad);
         const k = 760 / ad.duration;
         for (const l of ad.script) {
@@ -193,7 +264,17 @@
         requestAnimationFrame(tick);
       };
 
+      /** Offline render of an ad's tune (for tools/render-audio.mjs): { sampleRate, channels }. */
+      async function renderAudio({ ad = state.ad, seconds = null } = {}) {
+        const a = byId(ad);
+        const out = await renderTune(a.tune, { seconds: seconds ?? a.duration + 1, loop: true, volume: 0.45 });
+        if (!out) throw new Error('no OfflineAudioContext');
+        const b = out.buffer;
+        return { sampleRate: b.sampleRate, channels: [b.getChannelData(0), b.getChannelData(1)] };
+      }
+
       window.__lab = { render, set, duration, perf, ads: ADS.map((a) => a.id) };
+      window.__audio = { render: renderAudio };
       set({}, true);
     </script>
   </body>

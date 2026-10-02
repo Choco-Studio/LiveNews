@@ -34,6 +34,7 @@
       // deterministically (window.__lab.render(t)) for tools/shoot.mjs, or play
       // it in real time with its jingle and voice-over to check the sync.
       import { ADS } from '../js/ads/index.js';
+      import * as C from '../js/ads/cine.js';
 
       const params = new URLSearchParams(location.search);
       const canvas = document.getElementById('screen');
@@ -48,7 +49,7 @@
       ctx.imageSmoothingEnabled = false;
       let zoom = params.get('zoom') ? params.get('zoom').split(',').map(Number) : null;
       const $ = (id) => document.getElementById(id);
-      const MINE = ['safesector', 'screechnet', 'corners', 'kartesia'];
+      const MINE = ['safesector', 'screechnet', 'corners', 'serene'];
       let ad = ADS.find((a) => a.id === (params.get('ad') || MINE[0])) || ADS[0];
       let t = Number(params.get('t')) || 0;
       let playing = false;
@@ -71,7 +72,76 @@
         return { line, speaking, duration: ad.duration };
       }
 
+      // Toolkit specimens (?spec=type|faces|figures): boards for checking
+      // cine.js type and figures in isolation; t animates them.
+      const SPEC = {
+        type(c, t) {
+          C.rect(c, 0, 0, 384, 216, C.P.black);
+          C.thin(c, 'SAFESECTOR SCREECHNET', 12, 10, { color: C.P.silver, track: 2 });
+          C.thin(c, 'CORNERS SERENE 0123456789', 12, 24, { color: C.P.cream, track: 2 });
+          C.thin(c, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ &.,-:/', 12, 38, { color: C.P.white, track: 1 });
+          C.thin(c, 'SERENE', 12, 56, { color: C.P.cream, style: 'didone', track: 4 });
+          C.thin(c, 'CORNERS', 120, 56, { color: C.P.yellow, style: 'didone', track: 3 });
+          C.thin(c, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 12, 72, { color: C.P.white, style: 'didone', track: 1 });
+          C.thin(c, 'SERENE', 12, 92, { color: C.P.cream, style: 'didone', track: 3, scale: 2 });
+          C.thin(c, 'SAFESECTOR', 160, 92, { color: C.P.silver, track: 2, scale: 2 });
+          C.tracked(c, 'LUNAR RETREATS · MARE SERENITATIS', 12, 128, { color: C.P.fog, font: 'micro', track: 2 });
+          C.tracked(c, 'BECAUSE EVERY KILOBYTE COUNTS.', 12, 140, { color: C.P.white, track: 1 });
+          C.superTitle(c, 'MARGARET HALE', 12, 160, t, { color: C.P.white, font: 'body', track: 1 });
+          C.smallPrint(c, 'COVER EXCLUDES DISKS USED AS COASTERS, DRINKS MATS OR SAVE ICONS. CLAIMS LIMITED TO 1.44 MB. SAFESECTOR IS NOT A REAL INSURER, WHICH IS THE FIRST THING WE WOULD WANT YOU TO KNOW.', 190, { color: C.P.fog });
+        },
+        faces(c, t) {
+          C.rect(c, 0, 0, 384, 216, C.P.ink);
+          const fs = SPEC._faces ||= [
+            C.figure({ hh: 30, hair: 'bob', garment: 'cardigan', glasses: C.P.tanShade, pal: { hair: C.P.silver, hairD: C.P.fog, hairL: C.P.white, top: C.P.navy, topD: C.P.ink, topL: C.P.steel } }),
+            C.figure({ hh: 30, hair: 'short', garment: 'jacket', tie: C.P.darkRed, shoulders: 1.0, pal: { skin: C.P.tan, skinD: C.P.tanShade, hair: C.P.black, hairD: C.P.black, hairL: C.P.ink, top: C.P.slate, topD: C.P.ink, topL: C.P.steel } }),
+            C.figure({ hh: 30, hair: 'messy', garment: 'hoodie', pal: { hair: C.P.maroon, hairD: C.P.black, hairL: C.P.brown, top: C.P.darkGreen, topD: C.P.black, topL: C.P.darkGreen } }),
+            C.figure({ hh: 30, hair: 'long', garment: 'dress', pal: { skin: C.P.tanShade, skinD: C.P.brown, hair: C.P.black, hairD: C.P.black, hairL: C.P.maroon, top: C.P.black, topD: C.P.black, topL: C.P.ink } }),
+          ];
+          fs.forEach((f, i) => {
+            f.x = 52 + i * 94;
+            f.y = 40;
+            f.blink = C.blinkAt(t, i + 1);
+            f.mouth = C.talkAt(t, i === 0);
+            f.turn = i === 1 ? 0.3 * Math.sin(t) : 0;
+            f.armL.a = 0.1; f.armL.e = 1.2; f.armR.a = 0.1; f.armR.e = i === 0 ? 0.3 + Math.sin(t) * 0.8 : 1.2;
+            f.armR.hand = i === 0 && Math.sin(t) > 0 ? 'open' : 'rest';
+            C.bust(c, f, 216);
+            C.arm(c, f, -1);
+            C.arm(c, f, 1);
+          });
+        },
+        figures(c, t) {
+          C.rect(c, 0, 0, 384, 216, C.P.slate);
+          C.rect(c, 0, 190, 384, 26, C.P.ink);
+          const ps = SPEC._figs ||= [
+            { hh: 26, pal: { ...C.DEFAULT_PAL, top: C.P.black, topD: C.P.black, topL: C.P.ink }, dress: true, hair: 'long', armL: { a: 0.1, e: 0.1 }, armR: { a: 0.2, e: 1.9 } },
+            { hh: 26, pal: { ...C.DEFAULT_PAL, top: C.P.navy, topD: C.P.ink, topL: C.P.steel, hair: C.P.black, hairD: C.P.black }, hair: 'short', armL: { a: 0.08, e: 0.05 }, armR: { a: 0.08, e: 0.05 } },
+            { hh: 16, pal: { ...C.DEFAULT_PAL, top: C.P.black, topD: C.P.black, hair: C.P.black, hairD: C.P.black, skin: C.P.ink, skinD: C.P.black }, silhouette: C.P.cyan, dress: true, hair: 'bob', armL: { a: 0.1, e: 0.1 }, armR: { a: 0.3, e: 2.2 } },
+          ];
+          ps.forEach((p, i) => {
+            p.x = 70 + i * 110;
+            p.gy = 200;
+            p.armR.e = i === 0 ? 1.6 + Math.sin(t) * 0.5 : p.armR.e;
+            C.standing(c, p);
+          });
+        },
+      };
+      let spec = params.get('spec');
+
       function render(time, opts = {}) {
+        if (opts.spec !== undefined) spec = opts.spec;
+        if (spec && SPEC[spec]) {
+          t = Math.max(0, Number(time) || 0);
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          SPEC[spec](ctx, t);
+          out.clearRect(0, 0, 384, 216);
+          if (zoom) {
+            const [zx, zy, zf] = zoom;
+            out.drawImage(frame, zx, zy, 384 / zf, 216 / zf, 0, 0, 384, 216);
+          } else out.drawImage(frame, 0, 0);
+          return { spec };
+        }
         if (opts.ad) set(opts.ad);
         if (opts.zoom !== undefined) zoom = opts.zoom;
         t = Math.max(0, Number(time) || 0);

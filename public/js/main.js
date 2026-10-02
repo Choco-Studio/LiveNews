@@ -108,7 +108,9 @@ window.addEventListener('keydown', (e) => {
   if (!started || e.ctrlKey || e.metaKey || e.altKey) return; // leave browser shortcuts alone
   switch (e.key.toLowerCase()) {
     case 'v': {
-      const next = MODES[(MODES.indexOf(audio.mode) + 1) % MODES.length];
+      // Only modes that can play (no 'tts' without voices, so 'blips' never shows twice).
+      const modes = audio.modes ?? MODES;
+      const next = modes[(modes.indexOf(audio.mode) + 1) % modes.length];
       audio.setMode(next);
       notify(`Voice: ${audio.mode}`);
       break;

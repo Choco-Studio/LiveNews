@@ -169,11 +169,12 @@ export function groundQuote(quote, source) {
 // ---------------------------------------------------------------- figures for the offline writer
 
 const LABEL_STOP = new Set(
-  'and or but to by in on at for from with than that which who whom is are was were will would has have had said says say over past since during into after before while as its their his her this these those the about around nearly almost some when where if because until unless so yet once then there here now again also only even just still can could may might should must across through between against'.split(
+  'and or but of to by in on at for from with than that which who whom is are was were will would has have had said says say over past since during into after before while as its their his her this these those the about around nearly almost some when where if because until unless so yet once then there here now again also only even just still can could may might should must across through between against'.split(
     ' '
   )
 );
 const MONTHS = /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i;
+const IRREGULAR_PAST = new Set('shook rose fell grew took made hit struck began won lost left came went gave saw found kept became brought built sold paid spent set put ran drew flew'.split(' '));
 
 /**
  * Figures stated in a text, best first, for a fact card: each is
@@ -205,13 +206,18 @@ export function extractFigures(text, max = 3) {
         break;
       }
       if (LABEL_STOP.has(lw)) break;
-      if (label.length && /[a-z]ed$/.test(lw)) break; // "160 million passengers used the network": stop at the verb
+      if (label.length && (/[a-z]ed$/.test(lw) || IRREGULAR_PAST.has(lw))) break; // "160 million passengers used the network": stop at the verb
       label.push(word);
       if (label.length >= 3 || /[,]$/.test(w)) break;
     }
-    if (!label.length && !n.percent && !n.currency && !n.unit) continue; // a bare number says nothing
     const value = n.raw.replace(/\s?per ?cent$/i, '%').replace(/\s+/g, ' ').toUpperCase();
     const before = s.slice(Math.max(0, n.index - 24), n.index).toLowerCase();
+    // "a magnitude 5.8 earthquake": the scale is named before the figure
+    if (/\bmagnitude\s*$/i.test(before)) {
+      figures.push({ value, label: 'MAGNITUDE', fact: `MAGNITUDE ${value}`, said: `magnitude ${n.raw}`, score: 4, index: n.index });
+      continue;
+    }
+    if (!label.length && !n.percent && !n.currency && !n.unit) continue; // a bare number says nothing
     const direction = /\b(?:fell|dropped|down|cut|decreased|declined|fall of|drop of)\s+(?:by\s+)?$/.test(before)
       ? 'DOWN'
       : /\b(?:rose|risen|up|grew|jumped|increased|rise of|increase of)\s+(?:by\s+)?$/.test(before)

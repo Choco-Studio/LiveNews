@@ -29,7 +29,7 @@ import time
 import numpy as np
 
 import dsp
-from textnorm import plan_phrases
+from textnorm import pause_table, plan_phrases
 
 try:  # espeak-ng is process-global; share kokoro-onnx's lock when it has one
     from kokoro_onnx.tokenizer import _espeak_lock
@@ -382,9 +382,19 @@ class VoiceEngine:
         speed = float(req.get('speed') or 1.0)
         if not (0.5 <= speed <= 2.0):
             raise ValueError('speed must be between 0.5 and 2.0')
-        phrases = plan_phrases(text, lang, req.get('phrases'), speed)
+        pauses = req.get('pauses') if isinstance(req.get('pauses'), dict) else None
+        pause_add = float(req.get('pauseAdd') or 0.0)
+        if not (-0.2 <= pause_add <= 2.0):
+            raise ValueError('pauseAdd must be between -0.2 and 2.0 seconds')
+        phrases = plan_phrases(text, lang, req.get('phrases'), speed, pauses, pause_add)
         if not phrases:
             raise ValueError('nothing to say')
+        # Silences Kokoro leaves inside a phrase (0.3-0.4 s at commas) are cut
+        # down to the comma pause of the programme's style; false disables it
+        gap_max = req.get('gapMax')
+        if gap_max is None:
+            gap_max = pause_table(pauses, pause_add)['comma'] / max(0.5, speed) ** 0.5
+        gap_max = float(gap_max) if gap_max else 0.0
         sr = SAMPLE_RATE
         lead, tail = int(0.012 * sr), int(0.025 * sr)
 
@@ -400,6 +410,9 @@ class VoiceEngine:
             seg = dsp.fade(raw[max(0, s - lead):min(len(raw), e + tail)], sr, 0.004, 0.012)
             onset = (s - max(0, s - lead)) / sr
             dur = (e - s) / sr
+            if gap_max > 0:
+                seg, cut = tighten_gaps(seg, sr, self._gaps(seg, sr), gap_max)
+                dur -= cut
             gaps = [(a - onset, b - onset) for a, b in self._gaps(seg, sr)]
             starts, timeline = self.align_phrase(token_ph, dur, gaps)
             clips.append({'phrase': ph, 'audio': seg, 'onset': onset, 'dur': dur,
@@ -460,6 +473,37 @@ class VoiceEngine:
         if req.get('levels'):
             reply['levels'] = envelope(audio, sr, int(req.get('levelsRate') or 50))
         return audio, sr, reply
+
+
+def tighten_gaps(seg, sr, gaps, target, keep=0.03, xfade=0.006):
+    """Shorten silent runs longer than `target` seconds by cutting their quiet core.
+
+    Only the middle of a run already 30 dB below the phrase peak is removed,
+    with a short crossfade, so the decay of the word before and the onset of
+    the word after stay intact. Returns (audio, seconds removed).
+    """
+    pieces, cursor, removed = [], 0, 0
+    nx = int(xfade * sr)
+    for g0, g1 in gaps:
+        length = g1 - g0
+        if length <= target + 0.03 or length - 2 * keep <= 0:
+            continue
+        cut = min(length - max(target, 2 * keep), length - 2 * keep)
+        if cut * sr < 2 * nx:
+            continue
+        a = int((g0 + (length - cut) / 2) * sr)
+        b = a + int(cut * sr)
+        head = seg[cursor:a + nx].copy()
+        tail_start = b
+        ramp = np.linspace(1.0, 0.0, nx)
+        head[-nx:] = head[-nx:] * ramp + seg[tail_start:tail_start + nx] * (1 - ramp)
+        pieces.append(head)
+        cursor = tail_start + nx
+        removed += b - a
+    if not pieces:
+        return seg, 0.0
+    pieces.append(seg[cursor:])
+    return np.concatenate(pieces), removed / sr
 
 
 def envelope(audio, sr, rate=50):

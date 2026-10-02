@@ -21,42 +21,42 @@ export const DUCK_GROUP = {
 // (orders transitions: going up waits for the bar line, going down only for the beat).
 export const MOMENTS = {
   openTail: {
-    energy: 0.8, gain: -3, lp: 5200, pocket: -3, dwellBars: 1, entry: 'instant',
+    energy: 0.8, gain: -4.5, lp: 5200, pocket: -3, bright: 1.3, dwellBars: 1, entry: 'instant',
     layers: { pad: 1, keys: 0.85, bass: 1, kick: 0.7, snare: 0.5, hat: 0.6, perc: 0.5, arp: 0.35, lead: 1, tex: 0.8 },
     lead: 'signature',
   },
   headlines: {
-    energy: 0.7, gain: -8, lp: 3000, pocket: -5,
+    energy: 0.7, gain: -8, lp: 3000, pocket: -5, bright: 0.95,
     layers: { pad: 0.55, keys: 1, bass: 1, kick: 0.85, snare: 0.55, hat: 0.65, perc: 0.7, arp: 0.45, lead: 0, tex: 0.45 },
   },
   story: {
-    energy: 0.3, gain: -14, lp: 1700, pocket: -6, bass: 'long', comp: 'long',
+    energy: 0.3, gain: -14, lp: 1700, pocket: -6, bright: 0.8, bass: 'long', comp: 'long',
     layers: { pad: 0.9, keys: 0.55, bass: 0.7, kick: 0, snare: 0, hat: 0.2, perc: 0.25, arp: 0, lead: 0, tex: 0.3 },
   },
   storyNeutral: {
-    energy: 0.2, gain: -18, lp: 1300, pocket: -7, bass: 'long', comp: 'long',
+    energy: 0.2, gain: -18, lp: 1300, pocket: -7, bright: 0.7, bass: 'long', comp: 'long',
     layers: { pad: 0.9, keys: 0.35, bass: 0.6, kick: 0, snare: 0, hat: 0, perc: 0.12, arp: 0, lead: 0, tex: 0.2 },
   },
   // Default for grave stories is real silence; this is only used with { gravePad: true }.
   gravePad: {
-    energy: 0.05, gain: -30, lp: 420, pocket: -8, bass: 'long', comp: 'long', fadeOutSec: 9,
+    energy: 0.05, gain: -30, lp: 420, pocket: -8, bright: 0.6, bass: 'long', comp: 'long', fadeOutSec: 9,
     layers: { pad: 1, keys: 0, bass: 0.5, kick: 0, snare: 0, hat: 0, perc: 0, arp: 0, lead: 0, tex: 0 },
   },
   chat: {
-    energy: 0.55, gain: -11, lp: 2600, pocket: -5, bass: 'walk', comp: 'bouncy',
+    energy: 0.55, gain: -11, lp: 2600, pocket: -5, bright: 1, bass: 'walk', comp: 'bouncy',
     layers: { pad: 0.45, keys: 1, bass: 1, kick: 0.55, snare: 0.4, hat: 0.55, perc: 0.6, arp: 0.15, lead: 0, tex: 0.4 },
   },
   map: {
-    energy: 0.6, gain: -10, lp: 3000, pocket: -5,
+    energy: 0.6, gain: -10, lp: 3000, pocket: -5, bright: 1,
     layers: { pad: 0.5, keys: 0.4, bass: 0.9, kick: 0.6, snare: 0.25, hat: 0.55, perc: 0.85, arp: 1, lead: 0, tex: 0.35 },
   },
   outro: {
-    energy: 0.75, gain: -6, lp: 4200, pocket: -4,
+    energy: 0.75, gain: -6, lp: 4200, pocket: -4, bright: 1.2,
     layers: { pad: 0.9, keys: 1, bass: 1, kick: 0.7, snare: 0.5, hat: 0.6, perc: 0.5, arp: 0.3, lead: 0.8, tex: 0.7 },
     lead: 'answer',
   },
   standby: {
-    energy: 0.6, gain: -2, lp: 5200, pocket: 0,
+    energy: 0.6, gain: -2, lp: 5200, pocket: 0, bright: 1.35,
     layers: { pad: 0.8, keys: 1, bass: 1, kick: 0.7, snare: 0.5, hat: 0.55, perc: 0.45, arp: 0.25, lead: 0.9, tex: 1 },
     lead: 'generative',
   },

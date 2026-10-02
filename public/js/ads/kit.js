@@ -2623,3 +2623,830 @@ export function faceCU(ctx, cx, cy, s, o = {}) {
 export const rep = (s, n) => Array.from({ length: n }, () => s).join(' ');
 /** Join phrases into one tune string. */
 export const tune = (...parts) => parts.filter(Boolean).join(' ');
+
+// ===========================================================================
+// PREMIUM (V2): the toolkit for grown-up commercials — refined type faces and
+// type animation, baked light (dithered backdrops, vignette, rim light on any
+// silhouette), a per-pixel "lathe" renderer for lit products (bottles, glasses,
+// handles) with softbox reflections and wrapped labels, slow-motion particles
+// (bubbles, dust in beams) and cinema framing. Everything is cached or pooled:
+// no canvases, gradients or ImageData are created per frame.
+
+/** Deterministic 0..1 hash of an integer (and a seed): random without allocation. */
+export function hash01(i, seed = 0) {
+  let h = (Math.imul(i | 0, 374761393) + Math.imul(seed | 0, 668265263)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+const BAYER4 = new Float32Array(BAYER.map((b) => (b + 0.5) / 16));
+/** Ordered-dither threshold (0..1) of pixel (x, y), Bayer 4x4. */
+export const bayer = (x, y) => BAYER4[(y & 3) * 4 + (x & 3)];
+
+// --- colour maths -------------------------------------------------------------
+
+const RGB = new Map();
+/** [r, g, b] of a '#rrggbb' colour (cached). */
+export function rgb(hex) {
+  let v = RGB.get(hex);
+  if (!v) {
+    const n = parseInt(hex.slice(1), 16);
+    v = [n >> 16, (n >> 8) & 255, n & 255];
+    RGB.set(hex, v);
+  }
+  return v;
+}
+const PAL_LIST = Object.values(P);
+const SHADE = new Map();
+/**
+ * The palette colour nearest to `hex` darkened by `k` (0..1): how a surface of
+ * that colour looks in shadow while staying inside the channel palette.
+ */
+export function shadeOf(hex, k = 0.6) {
+  const key = `${hex}|${k}`;
+  let v = SHADE.get(key);
+  if (!v) {
+    const [r, g, b] = rgb(hex);
+    const tr = r * k;
+    const tg = g * k;
+    const tb = b * k;
+    let best = Infinity;
+    for (const c of PAL_LIST) {
+      if (c === hex) continue;
+      const [cr, cg, cb] = rgb(c);
+      const d = (cr - tr) ** 2 * 0.3 + (cg - tg) ** 2 * 0.59 + (cb - tb) ** 2 * 0.11;
+      if (d < best) {
+        best = d;
+        v = c;
+      }
+    }
+    SHADE.set(key, v);
+  }
+  return v;
+}
+const U32P = new Map();
+function pack(hex) {
+  let v = U32P.get(hex);
+  if (v === undefined) {
+    const [r, g, b] = rgb(hex);
+    v = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+    U32P.set(hex, v);
+  }
+  return v;
+}
+const RAMPS = new WeakMap();
+function packRamp(ramp) {
+  let v = RAMPS.get(ramp);
+  if (!v) {
+    v = Uint32Array.from(ramp.map(pack));
+    RAMPS.set(ramp, v);
+  }
+  return v;
+}
+
+// --- display faces ---------------------------------------------------------------
+// Two hand-drawn capital faces for commercials (font.js stays the news face):
+//  'serif' — 11 px high-contrast Didone: 2 px stems, 1 px hairlines, hairline
+//            serifs. Luxury lock-ups, perfume/whisky captions (gild it with a
+//            colour ramp: color: [P.cream, P.yellow, P.yellow, P.orange]).
+//  'thin'  — 9 px geometric sans with 1 px strokes: keynote titles and specs.
+// Plus 'body' (5x7) and 'micro' (3x5) from font.js, so every face can be tracked.
+// Rows are listed top (cap line) to bottom; extra rows hang below the baseline.
+
+const SERIF_SRC = `
+A ....#...... ....##..... ...#.##.... ...#.##.... ..#...##... ..#...##... .#######... .#.....##.. #......##.. #.......##. ##.....####
+B #######.. .##....#. .##....## .##....## .##....#. .######.. .##....#. .##....## .##....## .##....#. #######..
+C ..#####.# .##....## ##......# ##....... ##....... ##....... ##....... ##....... ##......# .##....#. ..#####..
+D ######... .##...##. .##....## .##....## .##....## .##....## .##....## .##....## .##....## .##...##. ######...
+E ######### .##.....# .##...... .##...#.. .##...#.. .######.. .##...#.. .##...#.. .##...... .##.....# #########
+F ######### .##.....# .##...... .##...#.. .##...#.. .######.. .##...#.. .##...#.. .##...... .##...... ####.....
+G ..#####.# .##....## ##......# ##....... ##....... ##...#### ##.....## ##.....## ##.....## .##....## ..#####..
+H ####...#### .##.....##. .##.....##. .##.....##. .##.....##. .#########. .##.....##. .##.....##. .##.....##. .##.....##. ####...####
+I #### .##. .##. .##. .##. .##. .##. .##. .##. .##. ####
+J ..#### ...##. ...##. ...##. ...##. ...##. ...##. ...##. #..##. ##.##. .###..
+K ####..### .##....#. .##...#.. .##..#... .##.#.... .####.... .##.##... .##..##.. .##...##. .##....## ####..###
+L ####..... .##...... .##...... .##...... .##...... .##...... .##...... .##...... .##...... .##.....# #########
+M ##.......#### .##......###. .###.....###. .#.##...#.##. .#.##...#.##. .#..##.#..##. .#..##.#..##. .#...###..##. .#...##...##. .#....#...##. ###......####
+N ###.....### .##......#. .###.....#. .#.##....#. .#.##....#. .#..##...#. .#...##..#. .#....##.#. .#.....###. .#......##. ###......#.
+O ...####... .##....##. ##......## ##......## ##......## ##......## ##......## ##......## ##......## .##....##. ...####...
+P #######.. .##....#. .##....## .##....## .##....#. .######.. .##...... .##...... .##...... .##...... ####.....
+Q ...####... .##....##. ##......## ##......## ##......## ##......## ##......## ##......## ##......## .##....##. ...######. .......###
+R #######.. .##....#. .##....## .##....## .##....#. .######.. .##..##.. .##...##. .##...##. .##....## ####...###
+S ..####.# .#....## ##.....# ###..... .####... ...####. .....### #.....## #.....## ##...##. #.####..
+T ########## #...##...# ....##.... ....##.... ....##.... ....##.... ....##.... ....##.... ....##.... ....##.... ...####...
+U ####...### .##.....#. .##.....#. .##.....#. .##.....#. .##.....#. .##.....#. .##.....#. .##.....#. ..##...#.. ...####...
+V ####...### .##.....#. .##.....#. ..##...#.. ..##...#.. ...##.#... ...##.#... ....###... ....##.... .....#.... .....#....
+W ####..####..### .##....##....#. .##....##....#. ..##..#.##..#.. ..##..#.##..#.. ...##.#..##.#.. ...##.#..##.#.. ....###...###.. ....##....##... .....#.....#... .....#.....#...
+X ####..### .##....#. ..##..#.. ..##..#.. ...###... ....##... ...#.##.. ..#..##.. ..#...##. .#....##. ###..####
+Y ####..### .##....#. ..##..#.. ..##..#.. ...###... ....##... ....##... ....##... ....##... ....##... ...####..
+Z ######### #.....##. .....##.. ....##... ....##... ...##.... ..##..... ..##..... .##...... ##......# #########
+0 ..####.. .##..##. ##....## ##....## ##....## ##....## ##....## ##....## ##....## .##..##. ..####..
+1 ...##.. .#.##.. ...##.. ...##.. ...##.. ...##.. ...##.. ...##.. ...##.. ...##.. .######
+2 .#####. ##...## ##...## .....## ....##. ...##.. ..##... .##.... ##..... ##....# #######
+3 .#####. ##...## .....## .....## ....##. ..####. .....## .....## .....## ##...## .#####.
+4 .....##. ....###. ...#.##. ..#..##. .#...##. #....##. ######## .....##. .....##. .....##. ....####
+5 ####### ##..... ##..... ##..... ######. .....## .....## .....## .....## ##...## .#####.
+6 ..####. .##...# ##..... ##..... ######. ##...## ##...## ##...## ##...## .##.##. ..###..
+7 ####### #....## ....##. ....##. ...##.. ...##.. ..##... ..##... ..##... ..##... ..##...
+8 .#####. ##...## ##...## .##.##. ..###.. .##.##. ##...## ##...## ##...## ##...## .#####.
+9 ..###.. .##.##. ##...## ##...## ##...## ##...## .###### .....## .....## #...##. .####..
+. .. .. .. .. .. .. .. .. .. ## ##
+, .. .. .. .. .. .. .. .. .. ## ## .# #.
+' ## ## #.
+" ##.## ##.## #..#.
+- ..... ..... ..... ..... ..... #####
+: .. .. .. ## ## .. .. .. .. ## ##
+/ .....## ....##. ....##. ...##.. ...##.. ..##... ..##... .##.... .##.... ##..... ##.....
+? .####. ##..## ....## ....## ...##. ..##.. ..##.. ..##.. ...... ..##.. ..##..
+! ## ## ## ## ## ## ## .# .. ## ##
+& ..###.... .##.##... .##.##... .##.#.... ..##..... .###...## ##.##..#. ##..##.#. ##...##.. .##..###. ..###..##
+· .. .. .. .. .. ## ##
+º .##. #..# #..# .##. .... ####
+% .##....#. #..#..#.. #..#..#.. .##..#... ....#.... ...#..... ..#..##.. .#..#..#. .#..#..#. #....##..
++ ....... ....... ...#... ...#... ...#... ####### ...#... ...#... ...#...
+( .## ##. ##. ##. ##. ##. ##. ##. ##. ##. .##
+) ##. .## .## .## .## .## .## .## .## .## ##.
+`;
+
+const THIN_SRC = `
+A ...#... ..#.#.. ..#.#.. .#...#. .#...#. .#####. #.....# #.....# #.....#
+B #####. #....# #....# #....# #####. #....# #....# #....# #####.
+C ..####. .#....# #...... #...... #...... #...... #...... .#....# ..####.
+D #####.. #....#. #.....# #.....# #.....# #.....# #.....# #....#. #####..
+E ###### #..... #..... #..... #####. #..... #..... #..... ######
+F ###### #..... #..... #..... #####. #..... #..... #..... #.....
+G ..####. .#....# #...... #...... #..#### #.....# #.....# .#....# ..####.
+H #.....# #.....# #.....# #.....# ####### #.....# #.....# #.....# #.....#
+I # # # # # # # # #
+J ....# ....# ....# ....# ....# ....# #...# #...# .###.
+K #....# #...#. #..#.. #.#... ##.... #.#... #..#.. #...#. #....#
+L #..... #..... #..... #..... #..... #..... #..... #..... ######
+M #.......# ##.....## #.#...#.# #..#.#..# #...#...# #.......# #.......# #.......# #.......#
+N #.....# ##....# #.#...# #.#...# #..#..# #...#.# #...#.# #....## #.....#
+O ..####.. .#....#. #......# #......# #......# #......# #......# .#....#. ..####..
+P #####. #....# #....# #....# #####. #..... #..... #..... #.....
+Q ..####.. .#....#. #......# #......# #......# #......# #....#.# .#....#. ..####.#
+R #####. #....# #....# #....# #####. #..#.. #...#. #....# #....#
+S .####. #....# #..... #..... .####. .....# .....# #....# .####.
+T ####### ...#... ...#... ...#... ...#... ...#... ...#... ...#... ...#...
+U #.....# #.....# #.....# #.....# #.....# #.....# #.....# .#...#. ..###..
+V #.....# #.....# .#...#. .#...#. .#...#. ..#.#.. ..#.#.. ..#.#.. ...#...
+W #.......# #.......# #.......# #...#...# #...#...# .#.#.#.#. .#.#.#.#. .#.#.#.#. ..#...#..
+X #.....# .#...#. .#...#. ..#.#.. ...#... ..#.#.. .#...#. .#...#. #.....#
+Y #.....# .#...#. ..#.#.. ...#... ...#... ...#... ...#... ...#... ...#...
+Z ####### .....#. ....#.. ....#.. ...#... ..#.... ..#.... .#..... #######
+0 .####. #....# #....# #....# #....# #....# #....# #....# .####.
+1 .# ## .# .# .# .# .# .# .#
+2 .####. #....# .....# .....# ....#. ...#.. ..#... .#.... ######
+3 .####. #....# .....# .....# ..###. .....# .....# #....# .####.
+4 ....#. ...##. ..#.#. .#..#. #...#. ###### ....#. ....#. ....#.
+5 ###### #..... #..... #####. .....# .....# .....# #....# .####.
+6 .####. #..... #..... #####. #....# #....# #....# #....# .####.
+7 ###### .....# ....#. ....#. ...#.. ...#.. ..#... ..#... ..#...
+8 .####. #....# #....# #....# .####. #....# #....# #....# .####.
+9 .####. #....# #....# #....# .##### .....# .....# .....# .####.
+. . . . . . . . . #
+, .. .. .. .. .. .. .. .. .# #.
+' # # #
+" #.# #.# #.#
+- .... .... .... .... ####
+: . . # . . . . . #
+/ ....# ....# ...#. ...#. ..#.. .#... .#... #.... #....
+? .###. #...# ....# ...#. ..#.. ..#.. ..#.. ..... ..#..
+! # # # # # # # . #
+& .##... #..#.. #..#.. .##... .#.... #.#..# #..##. #...#. .###.#
+· . . . . #
+º .#. #.# .#. ... ###
+% ##...# ##..#. ....#. ...#.. ..#... .#.... .#..## #...## ......
++ ..... ..... ..#.. ..#.. ##### ..#.. ..#.. ..... .....
+( .# #. #. #. #. #. #. #. .#
+) #. .# .# .# .# .# .# .# #.
+`;
+
+/** Parse a face: glyph -> { w, runs: [x, y, len, ...] } with empty side columns trimmed. */
+function parseFace(src) {
+  const out = new Map();
+  for (const ln of src.split('\n')) {
+    const parts = ln.trim().split(/\s+/);
+    if (parts.length < 2) continue;
+    const ch = parts[0];
+    const rows = parts.slice(1);
+    let lo = Infinity;
+    let hi = -1;
+    for (const r of rows) {
+      const a = r.indexOf('#');
+      if (a >= 0) {
+        lo = min(lo, a);
+        hi = max(hi, r.lastIndexOf('#'));
+      }
+    }
+    if (hi < 0) continue;
+    const runs = [];
+    rows.forEach((r, y) => {
+      let x = 0;
+      while (x < r.length) {
+        if (r[x] !== '#') {
+          x++;
+          continue;
+        }
+        let e = x;
+        while (e < r.length && r[e] === '#') e++;
+        runs.push(x - lo, y, e - x);
+        x = e;
+      }
+    });
+    out.set(ch, { w: hi - lo + 1, runs });
+  }
+  return out;
+}
+
+const FACES = {
+  serif: { cap: 11, gap: 1, space: 5, src: SERIF_SRC },
+  thin: { cap: 9, gap: 1, space: 4, src: THIN_SRC },
+  body: { cap: 7, gap: 1, space: 3, font: 'body' },
+  micro: { cap: 5, gap: 1, space: 2, font: 'micro' },
+};
+function faceOf(name) {
+  const f = FACES[name] || FACES.serif;
+  if (f.src && !f.glyphs) f.glyphs = parseFace(f.src);
+  return f;
+}
+/** Cap height in pixels of a face at scale 1. */
+export const faceCap = (name) => faceOf(name).cap;
+
+const plain = (c) => c.normalize('NFD').replace(/[̀-ͯ]/g, '');
+function glyphW(f, ch) {
+  if (f.font) return measureText(ch, 1, f.font);
+  const g = f.glyphs.get(ch) || f.glyphs.get(plain(ch));
+  return g ? g.w : f.space;
+}
+
+// Layout of a string: letter x offsets at scale 1 (cached per face/track/text).
+const LAYOUT = new Map();
+function layoutOf(s, faceName, track) {
+  const key = `${faceName}|${track}|${s}`;
+  let L = LAYOUT.get(key);
+  if (!L) {
+    const f = faceOf(faceName);
+    const S = String(s).toUpperCase();
+    const xs = new Float32Array(S.length);
+    let x = 0;
+    for (let i = 0; i < S.length; i++) {
+      xs[i] = x;
+      const ch = S[i];
+      x += (ch === ' ' ? f.space : glyphW(f, ch)) + f.gap + track;
+    }
+    L = { S, xs, w: S.length ? x - f.gap - track : 0, f };
+    if (LAYOUT.size > 600) LAYOUT.delete(LAYOUT.keys().next().value);
+    LAYOUT.set(key, L);
+  }
+  return L;
+}
+
+/** Width of a string in a face with extra `track` px between letters, at `scale`. */
+export function typeWidth(s, { face = 'serif', track = 0, scale = 1 } = {}) {
+  return round(layoutOf(s, face, track).w * scale);
+}
+
+const colorKey = (c) => (Array.isArray(c) ? c.join(',') : c);
+/** Paint one glyph at (x, y) on a cache canvas; `color` may be a vertical ramp. */
+function paintGlyph(c, f, ch, x, y, color, scale) {
+  if (ch === ' ') return;
+  if (f.font) {
+    // body/micro: font.js draws it (its own cache), one colour per band via clip
+    const cols = Array.isArray(color) ? color : [color];
+    for (let b = 0; b < cols.length; b++) {
+      c.save();
+      const y0 = y + round((b * f.cap * scale) / cols.length);
+      const y1 = b === cols.length - 1 ? y + 99 * scale : y + round(((b + 1) * f.cap * scale) / cols.length);
+      c.beginPath();
+      c.rect(x - 2, y0, 40 * scale, y1 - y0);
+      c.clip();
+      drawText(c, ch, x, y, { color: cols[b], scale, font: f.font });
+      c.restore();
+    }
+    return;
+  }
+  const g = f.glyphs.get(ch) || f.glyphs.get(plain(ch));
+  if (!g) return;
+  const cols = Array.isArray(color) ? color : null;
+  if (!cols) c.fillStyle = color;
+  const r = g.runs;
+  for (let i = 0; i < r.length; i += 3) {
+    if (cols) c.fillStyle = cols[min(cols.length - 1, floor((r[i + 1] * cols.length) / f.cap))];
+    c.fillRect(x + r[i] * scale, y + r[i + 1] * scale, r[i + 2] * scale, scale);
+  }
+}
+
+// Rendered strings and single letters (LRU-ish caches of small canvases).
+const TYPE_CV = new Map();
+function typeCanvas(s, faceName, track, color, scale) {
+  const key = `${faceName}|${track}|${scale}|${colorKey(color)}|${s}`;
+  let cv = TYPE_CV.get(key);
+  if (!cv) {
+    const L = layoutOf(s, faceName, track);
+    const f = L.f;
+    cv = document.createElement('canvas');
+    cv.width = max(1, ceil(L.w * scale) + 2 * scale);
+    cv.height = (f.cap + 5) * scale;
+    const c = cv.getContext('2d');
+    for (let i = 0; i < L.S.length; i++) paintGlyph(c, f, L.S[i], round(L.xs[i] * scale), 0, color, scale);
+    if (TYPE_CV.size > 400) TYPE_CV.delete(TYPE_CV.keys().next().value);
+    TYPE_CV.set(key, cv);
+  }
+  return cv;
+}
+
+/**
+ * Draw a line of display type with its cap line at y. o: { face ('serif' |
+ * 'thin' | 'body' | 'micro'), color (or a top->bottom colour ramp), track (extra
+ * px between letters), align, scale, alpha }. Returns the width.
+ */
+export function type(ctx, s, x, y, { face = 'serif', color = P.white, track = 0, align = 'left', scale = 1, alpha = 1 } = {}) {
+  if (!s || alpha <= 0) return 0;
+  const w = typeWidth(s, { face, track, scale });
+  const cv = typeCanvas(s, face, track, color, scale);
+  const dx = round(align === 'center' ? x - w / 2 : align === 'right' ? x - w : x);
+  if (alpha < 1) {
+    const a = ctx.globalAlpha;
+    ctx.globalAlpha = a * alpha;
+    ctx.drawImage(cv, dx, round(y));
+    ctx.globalAlpha = a;
+  } else ctx.drawImage(cv, dx, round(y));
+  return w;
+}
+
+/**
+ * Tracking-in: the letters drift together from wide tracking (`from` extra px)
+ * to `track` while fading up — the classic luxury title move. Holds after `dur`.
+ * Each letter is a cached canvas; positions are whole pixels.
+ */
+export function trackIn(ctx, s, x, y, lt, { face = 'serif', color = P.white, track = 0, from = 8, dur = 1.6, align = 'center', scale = 1, alpha = 1, fade = 0.6 } = {}) {
+  if (lt <= 0 || alpha <= 0) return 0;
+  const p = clamp(lt / dur, 0, 1);
+  if (p >= 1) return type(ctx, s, x, y, { face, color, track, align, scale, alpha });
+  const e = 1 - (1 - p) ** 3;
+  const tr = from + (track - from) * e;
+  const L = layoutOf(s, face, 0);
+  const n = L.S.length;
+  const w = (L.w + tr * (n - 1)) * scale;
+  const x0 = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
+  const a0 = ctx.globalAlpha;
+  ctx.globalAlpha = a0 * alpha * clamp(lt / (dur * fade), 0, 1);
+  for (let i = 0; i < n; i++) {
+    const ch = L.S[i];
+    if (ch === ' ') continue;
+    const cv = typeCanvas(ch, face, 0, color, scale);
+    ctx.drawImage(cv, round(x0 + (L.xs[i] + tr * i) * scale), round(y));
+  }
+  ctx.globalAlpha = a0;
+  return round(w);
+}
+
+/** A line that fades up from `rise` px below over `dur` s (then holds). */
+export function fadeUp(ctx, s, x, y, lt, { dur = 0.8, rise = 3, ...o } = {}) {
+  if (lt <= 0) return 0;
+  const p = smooth(lt / dur);
+  return type(ctx, s, x, y + round((1 - p) * rise), { ...o, alpha: (o.alpha ?? 1) * p });
+}
+
+/** Hairline rule that draws outward from its centre (align 'center') or from the left. */
+export function rule(ctx, x, y, w, p, color = P.white, { align = 'center', alpha = 1 } = {}) {
+  const k = smooth(p);
+  if (k <= 0 || alpha <= 0) return;
+  const ww = round(w * k);
+  const x0 = align === 'center' ? round(x - ww / 2) : align === 'right' ? round(x - ww) : round(x);
+  if (alpha < 1) R(ctx, x0, y, ww, 1, A(color, alpha));
+  else R(ctx, x0, y, ww, 1, color);
+}
+
+/** Wrapped micro-font small print, fading up after `lt` > 0. Returns its height. */
+export function smallPrint(ctx, s, x, y, maxW, { color = P.steel, align = 'center', lt = 9, dur = 0.8, lh = 7, maxLines = 4 } = {}) {
+  const lines = wrapL(s, maxW, 1, 'micro');
+  const n = min(lines.length, maxLines);
+  const a = smooth(lt / dur);
+  if (a <= 0) return n * lh;
+  const a0 = ctx.globalAlpha;
+  ctx.globalAlpha = a0 * a;
+  for (let i = 0; i < n; i++) micro(ctx, lines[i], x, y + i * lh, { color, align });
+  ctx.globalAlpha = a0;
+  return n * lh;
+}
+
+// --- baked light ----------------------------------------------------------------
+
+/**
+ * A baked, dithered gradient (cached by key): kind 'radial' (cx, cy, rx, ry) or
+ * 'vertical' / 'horizontal' (from, to as 0..1 of the size). `ramp` runs from the
+ * outside/start (dark) to the centre/end (light); `gamma` > 1 tightens the glow.
+ * Steps between ramp colours are flat bands joined by Bayer 4x4 dithered seams;
+ * `seam` (0..1, default 0.5) is the share of each step that is dithered.
+ */
+export function gradient(key, w, h, { kind = 'radial', cx = w / 2, cy = h / 2, rx = w / 2, ry = h / 2, ramp = [P.black, P.ink], gamma = 1, from = 0, to = 1, seam = 0.5 } = {}) {
+  return cached(`grad|${key}`, w, h, (c) => {
+    const img = c.createImageData(w, h);
+    const buf = new Uint32Array(img.data.buffer);
+    const cols = Uint32Array.from(ramp.map(pack));
+    const n = cols.length - 1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let v;
+        if (kind === 'radial') {
+          const dx = (x + 0.5 - cx) / rx;
+          const dy = (y + 0.5 - cy) / ry;
+          v = 1 - sqrt(dx * dx + dy * dy);
+        } else {
+          const u = kind === 'vertical' ? (y + 0.5) / h : (x + 0.5) / w;
+          v = (u - from) / (to - from || 1);
+        }
+        v = clamp(v, 0, 1) ** gamma * n;
+        const i = floor(v);
+        const f = clamp((v - i - 0.5) / seam + 0.5, 0, 1);
+        buf[y * w + x] = cols[min(n, f > bayer(x, y) ? i + 1 : i)];
+      }
+    }
+    c.putImageData(img, 0, 0);
+  });
+}
+
+/** Darkened corners (cached dithered overlay). amount 0..1. */
+export function vignette(ctx, amount = 0.5, { color = P.black, inner = 0.55 } = {}) {
+  const k = round(amount * 20);
+  if (k <= 0) return;
+  const cv = cached(`vig|${k}|${color}|${inner}`, W, H, (c) => {
+    const img = c.createImageData(W, H);
+    const d = img.data;
+    const [r, g, b] = rgb(color);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const dx = (x + 0.5 - W / 2) / (W / 2);
+        const dy = (y + 0.5 - H / 2) / (H / 2);
+        const e = clamp((sqrt(dx * dx * 0.8 + dy * dy * 1.1) - inner) / (1.25 - inner), 0, 1);
+        // three alpha steps, ordered-dithered between them
+        const v = e * e * (k / 20) * 3;
+        const i = floor(v);
+        const a = (i + (v - i > bayer(x, y) ? 1 : 0)) / 3;
+        const o = (y * W + x) * 4;
+        d[o] = r;
+        d[o + 1] = g;
+        d[o + 2] = b;
+        d[o + 3] = round(min(1, a) * 0.85 * 255);
+      }
+    }
+    c.putImageData(img, 0, 0);
+  });
+  ctx.drawImage(cv, 0, 0);
+}
+
+/** Cinema bars top and bottom (bar px tall at p = 1, eased). */
+export function letterbox(ctx, p = 1, bar = 24, color = P.black) {
+  const h = round(bar * smooth(p));
+  if (h <= 0) return;
+  R(ctx, 0, 0, W, h, color);
+  R(ctx, 0, H - h, W, h, color);
+}
+
+/**
+ * Rim/key lighting on a procedural silhouette. `paint(c, color, ox, oy)` must
+ * fill the silhouette in `color` offset by (ox, oy), in canvas coordinates.
+ * layers = [[color, ox, oy], ...]: the first is painted normally, each next one
+ * only over pixels already covered (source-atop). E.g. a rim from the right:
+ * [[P.cream, 0, 0], [P.black, -1, 0]] leaves a 1 px cream edge on the right.
+ * Pass a constant array (no allocation per frame).
+ */
+export function litShape(ctx, paint, layers, slot = 3) {
+  const s = scratch(slot);
+  for (let i = 0; i < layers.length; i++) {
+    const [col, ox, oy] = layers[i];
+    s.c.globalCompositeOperation = i === 0 ? 'source-over' : 'source-atop';
+    paint(s.c, col, ox, oy);
+  }
+  s.c.globalCompositeOperation = 'source-over';
+  ctx.drawImage(s.cv, 0, 0);
+}
+
+const RIMS = new WeakMap();
+/**
+ * 1 px rim light on cached art: the pixels whose neighbour toward the light
+ * (dx, dy) is empty, in `color` (cached per art/direction/colour).
+ */
+export function rimArt(ctx, art, x, y, { dx = 1, dy = 0, color = P.white, alpha = 1 } = {}) {
+  let m = RIMS.get(art);
+  if (!m) RIMS.set(art, (m = new Map()));
+  const key = `${dx}|${dy}|${color}`;
+  let cv = m.get(key);
+  if (!cv) {
+    cv = document.createElement('canvas');
+    cv.width = art.width;
+    cv.height = art.height;
+    const c = cv.getContext('2d');
+    c.drawImage(silhouette(art, color), 0, 0);
+    c.globalCompositeOperation = 'destination-out';
+    c.drawImage(art, -dx, -dy);
+    m.set(key, cv);
+  }
+  if (alpha < 1) {
+    const a = ctx.globalAlpha;
+    ctx.globalAlpha = a * alpha;
+    ctx.drawImage(cv, round(x), round(y));
+    ctx.globalAlpha = a;
+  } else ctx.drawImage(cv, round(x), round(y));
+}
+
+/** Soft contact shadow: stacked translucent ovals. */
+export function contact(ctx, cx, y, rx, a = 0.5, color = P.black) {
+  for (let i = 3; i >= 1; i--) oval(ctx, cx, y, round((rx * (2 + i)) / 5), max(1, round((rx * i) / 14)), A(color, a / 3));
+}
+
+/** Light shaft from (x0, y0) to (x1, y1), w0 -> w1 wide, soft edges (layered). */
+export function beam(ctx, x0, y0, x1, y1, w0, w1, { color = P.cream, alpha = 0.06, layers = 3 } = {}) {
+  for (let i = 0; i < layers; i++) {
+    const k = 1 - i / layers;
+    poly(ctx, [[x0 - (w0 * k) / 2, y0], [x0 + (w0 * k) / 2, y0], [x1 + (w1 * k) / 2, y1], [x1 - (w1 * k) / 2, y1]], A(color, alpha));
+  }
+}
+
+/**
+ * Small specular glint (use sparingly): p 0..1 grows then fades a 4-arm star
+ * with alpha falloff.
+ */
+export function glintStar(ctx, x, y, p, color = P.white) {
+  if (p <= 0 || p >= 1) return;
+  const k = sin(p * PI);
+  const n = round(k * 3);
+  x = round(x);
+  y = round(y);
+  R(ctx, x, y, 1, 1, A(color, min(1, k * 1.4)));
+  for (let i = 1; i <= n; i++) {
+    const a = A(color, k * (1 - i / (n + 1)) * 0.9);
+    R(ctx, x - i, y, 1, 1, a);
+    R(ctx, x + i, y, 1, 1, a);
+    R(ctx, x, y - i, 1, 1, a);
+    R(ctx, x, y + i, 1, 1, a);
+  }
+}
+
+/**
+ * Broad soft light sweep over cached art (a wide diagonal band with feathered
+ * alpha, clipped to the art). p 0..1. Subtler than glint().
+ */
+export function sheen(ctx, art, x, y, p, { width = 18, color = P.white, alpha = 0.35, slope = 0.5 } = {}) {
+  if (p <= 0 || p >= 1) return;
+  const sil = silhouette(art, color);
+  const hh = art.height;
+  const span = art.width + hh * slope + width * 2;
+  const bx = -hh * slope - width + p * span;
+  x = round(x);
+  y = round(y);
+  for (let band = 0; band < 3; band++) {
+    const ww = width * (1 - band * 0.3);
+    ctx.save();
+    ctx.beginPath();
+    for (let yy = 0; yy < hh; yy += 2) ctx.rect(x + round(bx + (hh - yy) * slope + (width - ww) / 2), y + yy, round(ww), 2);
+    ctx.clip();
+    ctx.globalAlpha = alpha / 3;
+    ctx.drawImage(sil, x, y);
+    ctx.restore();
+  }
+}
+
+// --- the lathe: lit solids of revolution ------------------------------------------
+
+let LATHE = null; // pooled buffer
+function latheBuf() {
+  if (!LATHE) {
+    const S = 512;
+    const cv = document.createElement('canvas');
+    cv.width = S;
+    cv.height = S;
+    const c = cv.getContext('2d');
+    const img = c.createImageData(S, S);
+    LATHE = { cv, c, img, u32: new Uint32Array(img.data.buffer), S };
+  }
+  return LATHE;
+}
+const TEX = new WeakMap();
+function texOf(cv) {
+  let t = TEX.get(cv);
+  if (!t) {
+    const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height);
+    t = { w: cv.width, h: cv.height, u32: new Uint32Array(d.data.buffer) };
+    TEX.set(cv, t);
+  }
+  return t;
+}
+const DARK = new Map(); // packed colour -> packed shade colours [k 0.72, k 0.45]
+function darkOf(u) {
+  let v = DARK.get(u);
+  if (!v) {
+    const hex = `#${[u & 255, (u >> 8) & 255, (u >> 16) & 255].map((n) => n.toString(16).padStart(2, '0')).join('')}`;
+    v = [pack(shadeOf(hex, 0.72)), pack(shadeOf(hex, 0.45))];
+    DARK.set(u, v);
+  }
+  return v;
+}
+const L_KEY = [-0.55, -0.45, 0.7];
+const L_RIM = [0.85, -0.25, -0.45];
+
+/**
+ * Render a lit solid of revolution, per pixel, with its axis at x = cx and its
+ * top at y. prof: radii per row (numbers, may be fractional; index = row).
+ * o: {
+ *   ramp: colours dark -> light (the material), ambient (0.15), light: [x, y, z]
+ *     unit vector toward the key light (default upper-left-front),
+ *   rim: { dir, k (0.9), color? } back light (default from the right),
+ *   stripes: [[xn, halfWidth, colour], ...] vertical softbox reflections at
+ *     normalised x (-1..1) — the commercial look on glass and metal,
+ *   label: { cv, top, h, turn } a texture (one full turn wide) wrapped on rows
+ *     top..top+h, shaded with palette shadow colours; transparent texels show the material,
+ *   glass: { top, edge } rows above `top` are empty glass: transparent except the
+ *     outer `edge` px (darkest ramp colour) and the stripes,
+ *   tilt (0): the front of every ring bulges down by tilt * r (seen from above),
+ *   seam (0.6): share of each ramp step that is dithered (1 = full Bayer blend),
+ *   alpha (1)
+ * }
+ * Cost is one pass over the bounding box into a pooled buffer, then one drawImage.
+ */
+export function lathe(ctx, cx, y, prof, o = {}) {
+  const n = prof.length;
+  if (!n) return;
+  const B = latheBuf();
+  let rmax = 0;
+  for (let j = 0; j < n; j++) rmax = max(rmax, prof[j]);
+  const tilt = o.tilt || 0;
+  const bw = min(B.S, ceil(rmax) * 2 + 2);
+  const bh = min(B.S, n + ceil(tilt * rmax) + 1);
+  const buf = B.u32;
+  const S = B.S;
+  for (let yy = 0; yy < bh; yy++) buf.fill(0, yy * S, yy * S + bw);
+  const ramp = packRamp(o.ramp || [P.black, P.ink, P.slate, P.steel, P.fog, P.silver]);
+  const nr = ramp.length - 1;
+  const amb = o.ambient ?? 0.15;
+  const L = o.light || L_KEY;
+  const rim = o.rim === false ? null : o.rim || {};
+  const RD = rim?.dir || L_RIM;
+  const rk = rim ? rim.k ?? 0.9 : 0;
+  const rimC = rim?.color ? pack(rim.color) : 0;
+  const stripes = o.stripes || null;
+  const lab = o.label || null;
+  const tex = lab ? texOf(lab.cv) : null;
+  const glass = o.glass || null;
+  const seam = o.seam ?? 0.6;
+  const edgeC = ramp[0];
+  const half = bw / 2;
+  const ox = cx - half; // buffer x -> canvas x
+  for (let j = 0; j < n; j++) {
+    const r = prof[j];
+    if (r < 0.5) continue;
+    const dr = ((prof[min(n - 1, j + 1)] || 0) - (prof[max(0, j - 1)] || 0)) / 2;
+    const inv = 1 / sqrt(1 + dr * dr);
+    const x0 = max(0, floor(half - r));
+    const x1 = min(bw, ceil(half + r));
+    const empty = glass && j < glass.top;
+    const inLabel = tex && j >= lab.top && j < lab.top + lab.h;
+    const ty = inLabel ? min(tex.h - 1, floor(((j - lab.top) / lab.h) * tex.h)) : 0;
+    for (let bx = x0; bx < x1; bx++) {
+      const xn = (bx + 0.5 - half) / r;
+      if (xn <= -1 || xn >= 1) continue;
+      const nz = sqrt(1 - xn * xn);
+      const nx = xn * inv;
+      const ny = -dr * inv;
+      const nzz = nz * inv;
+      const by = j + (tilt ? floor(tilt * r * nz) : 0);
+      if (by >= bh) continue;
+      const di = by * S + bx;
+      // softbox reflections win over everything
+      let col = 0;
+      if (stripes) {
+        for (let k = 0; k < stripes.length; k++) {
+          const st = stripes[k];
+          if (abs(xn - st[0]) < st[1]) col = pack(st[2]);
+        }
+      }
+      if (col) {
+        buf[di] = col;
+        continue;
+      }
+      const edge = (1 - abs(xn)) * r; // px to the silhouette edge
+      if (empty) {
+        if (edge < (glass.edge ?? 1.2)) buf[di] = glass.edgeColor ? pack(glass.edgeColor) : edgeC;
+        continue;
+      }
+      let diff = nx * L[0] + ny * L[1] + nzz * L[2];
+      if (diff < 0) diff = 0;
+      let v = amb + (1 - amb) * diff;
+      let rv = 0;
+      if (rk) {
+        rv = nx * RD[0] + ny * RD[1] + nzz * RD[2];
+        if (rv > 0) {
+          rv = rv * rv * rv * rk;
+          if (!rimC) v += rv;
+        } else rv = 0;
+      }
+      const th = bayer(bx, by);
+      if (inLabel) {
+        let u = Math.asin(xn) / (2 * PI) + (lab.turn || 0);
+        u -= floor(u);
+        const t = tex.u32[ty * tex.w + min(tex.w - 1, floor(u * tex.w))];
+        if (t >>> 24 > 127) {
+          const d = darkOf(t | 0xff000000);
+          const shadeV = v * 1.6; // labels hold their colour further into the shade
+          col = shadeV > 0.72 + th * 0.2 ? t | 0xff000000 : shadeV > 0.35 + th * 0.2 ? d[0] : d[1];
+          if (rimC && rv > 0.35 + th * 0.3) col = rimC;
+          buf[di] = col;
+          continue;
+        }
+      }
+      if (rimC && rv > 0.35 + th * 0.3) {
+        buf[di] = rimC;
+        continue;
+      }
+      const q = clamp(v, 0, 1) * nr;
+      const i = floor(q);
+      const f = seam >= 1 ? q - i : clamp((q - i - 0.5) / seam + 0.5, 0, 1);
+      buf[di] = ramp[min(nr, f > th ? i + 1 : i)];
+    }
+  }
+  B.c.putImageData(B.img, 0, 0, 0, 0, bw, bh);
+  const a0 = ctx.globalAlpha;
+  if (o.alpha != null) ctx.globalAlpha = a0 * o.alpha;
+  ctx.drawImage(B.cv, 0, 0, bw, bh, round(ox), round(y), bw, bh);
+  ctx.globalAlpha = a0;
+}
+
+/** Fill `out` (or a new Float32Array) with radii from [[t, r], ...] keys over h rows (smooth). */
+export function profile(h, keys, out = null) {
+  const a = out && out.length === h ? out : new Float32Array(h);
+  for (let j = 0; j < h; j++) a[j] = key(j / max(1, h - 1), keys);
+  return a;
+}
+
+/**
+ * A display turntable seen from slightly above: top ellipse (rx, ry) at y, a
+ * side band `h` tall, a rotating seam so the turn reads, a thin front highlight.
+ */
+export function turntable(ctx, cx, y, rx, ry, turn, { top = P.ink, side = P.black, edge = P.slate, hi = P.steel, h = 4, mark = P.slate } = {}) {
+  oval(ctx, cx, y + h, rx, ry, side);
+  R(ctx, cx - rx, y, rx * 2 + 1, h, side);
+  oval(ctx, cx, y, rx, ry, top);
+  // the rim catches the key light along the front edge
+  for (let i = -rx + 2; i <= rx - 2; i++) {
+    const k = i / rx;
+    const yy = y + round(ry * sqrt(max(0, 1 - k * k)));
+    R(ctx, cx + i, yy, 1, 1, abs(k + 0.3) < 0.35 ? hi : edge);
+  }
+  // seam marks orbit with the turn (only the visible top surface)
+  for (let k = 0; k < 6; k++) {
+    const a = (turn + k / 6) * 2 * PI;
+    const mx = cx + Math.cos(a) * rx * 0.82;
+    const my = y + sin(a) * ry * 0.82;
+    R(ctx, mx, my, 1, 1, mark);
+  }
+}
+
+// --- slow motion particles -----------------------------------------------------------
+
+/**
+ * Carbonation: bubbles rising through a liquid region (x, y, w, h), growing as
+ * they rise, with a gentle wobble. Deterministic from t; no allocation.
+ * o: { n, seed, rise (px/s), size (max radius), wobble (px), color, hi, inside(x, y) }
+ */
+export function bubbles(ctx, t, { x = 0, y = 0, w = W, h = H, n = 24, seed = 1, rise = 16, size = 2, wobble = 1.2, color = P.cream, hi = P.white, inside = null } = {}) {
+  for (let i = 0; i < n; i++) {
+    const sp = rise * (0.55 + 0.9 * hash01(i, seed + 1));
+    const travel = (t * sp + hash01(i, seed + 2) * h) % h;
+    const k = travel / h;
+    const bx = round(x + hash01(i, seed) * w + sin(t * (1.3 + hash01(i, seed + 4)) + i * 2.1) * wobble * (0.3 + k));
+    const by = round(y + h - travel);
+    if (inside && !inside(bx, by)) continue;
+    const rr = round(hash01(i, seed + 3) * size * (0.45 + k * 0.7));
+    if (rr <= 0) R(ctx, bx, by, 1, 1, hi);
+    else if (rr === 1) {
+      R(ctx, bx, by, 2, 2, color);
+      R(ctx, bx, by, 1, 1, hi);
+    } else {
+      ring(ctx, bx, by, rr, color);
+      R(ctx, bx - rr + 1, by - rr + 1, 1, 1, hi);
+    }
+  }
+}
+
+/**
+ * Dust motes drifting slowly in a light beam: 1 px specks whose brightness
+ * breathes as they turn. o: { x, y, w, h, n, seed, drift (px), color, alpha, inside(x, y) }
+ */
+export function motes(ctx, t, { x = 0, y = 0, w = W, h = H, n = 30, seed = 3, drift = 6, fall = 1.5, color = P.cream, alpha = 0.7, inside = null } = {}) {
+  for (let i = 0; i < n; i++) {
+    const fx = hash01(i, seed);
+    const fy = hash01(i, seed + 1);
+    const ph = hash01(i, seed + 2) * 6.283;
+    const mx = x + ((fx * w + sin(t * 0.37 + ph) * drift + t * 0.8 * (hash01(i, seed + 5) - 0.5)) % w + w) % w;
+    const my = y + ((fy * h + t * fall * (0.5 + hash01(i, seed + 3)) + Math.cos(t * 0.29 + ph) * drift * 0.6) % h + h) % h;
+    const px = round(mx);
+    const py = round(my);
+    if (inside && !inside(px, py)) continue;
+    const b = 0.35 + 0.65 * (0.5 + 0.5 * sin(t * (0.6 + hash01(i, seed + 4)) + ph));
+    R(ctx, px, py, 1, 1, A(color, alpha * b));
+  }
+}

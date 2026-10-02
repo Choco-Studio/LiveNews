@@ -10,6 +10,10 @@ import { GRAVE, LIGHT, extractFigures, quotesIn, wordsGrounded } from '../facts.
 import { locate, placesIn } from '../gazetteer.js';
 
 const DEATHS = /\b(?:dead|deaths?|die[sd]|killed|killings?|victims?|mourn\w*|funeral)\b/i;
+// Not grave, but not something to smile about either.
+const SOBER = /\b(?:volcan\w*|erupt\w*|storms?|strikes?|protests?|elections?|courts?|police|cancel\w*|closures?|bans?|shortages?|prices|inflation|recession|stocks?|shares|markets?|rates?)\b/i;
+// The best "and finally" material: curiosities, animals, culture, the sky.
+const LIGHTER = /\b(?:zoo|pandas?|leopards?|tortoises?|penguins?|whales?|dolphins?|bees|parrots?|birds?|festival|museum|tomatoes|chocolate|coffee|trees|gardens?|reef|coral|footprints|dinosaurs?|fossils?|comet|eclipse|drones|telescope|stars|moon|music|art|mushroom)\b/i;
 const SURPRISE = /\b(?:first|largest|biggest|record|discover\w*|uncover\w*|rare|unexpected|surpris\w*)\b/i;
 // A summary sentence that says what follows from the news (a purpose or a consequence).
 const WHY =
@@ -24,7 +28,8 @@ const KICKERS = [
   [/archaeolog|temple|ancient|ruins|fossil|dinosaur|tomb/i, 'HISTORY'],
   [/\bschools?\b|education|students?|universit/i, 'EDUCATION'],
   [/clean water|drinking water|water projects|reservoir/i, 'WATER'],
-  [/\btrees?\b|parks?\b|gardens?\b|green spaces?/i, 'GREEN CITIES'],
+  [/wildlife|zoo|panda|penguins?|elephants?|tortoises?|leopards?|turtles?|mangroves?|birds?\b|species|bees?\b/i, 'WILDLIFE'],
+  [/\btrees\b|city parks?|gardens?\b|green spaces?/i, 'GREEN CITIES'],
   [/\bstocks?\b|shares|index|markets?\b|investors/i, 'MARKETS'],
   [/inflation|prices|interest rates?|economy|growth|recession/i, 'ECONOMY'],
   [/\btrade\b|exports?|imports?|tariffs?|shipping|port\b/i, 'TRADE'],
@@ -35,12 +40,11 @@ const KICKERS = [
   [/smartphone|\bphones?\b|gadget|headset|wearable/i, 'GADGETS'],
   [/\bapps?\b|software|update|browser/i, 'SOFTWARE'],
   [/video games?|gaming|console/i, 'GAMING'],
-  [/rocket|launch|orbit|satellite|astronaut|space station|spacecraft|probe/i, 'SPACE'],
+  [/rocket|\borbit|satellite|astronaut|space station|spacecraft|\bprobe\b/i, 'SPACE'],
   [/telescope|galaxy|galaxies|planet|comet|asteroid|eclipse|\bstars?\b|\bmoon\b|nebula/i, 'ASTRONOMY'],
   [/solar (?:farm|panels?|plant|power|park)|wind farm|turbines?|tidal power|power grid|energy|electricity|batter(?:y|ies)/i, 'ENERGY'],
   [/vaccine|hospital|health|medicine|disease|patients/i, 'HEALTH'],
   [/ocean|whales?|reef|coral|dolphins?|sea turtles?/i, 'OCEANS'],
-  [/wildlife|zoo|panda|penguins?|elephants?|birds?\b|species|bees?\b/i, 'WILDLIFE'],
 ];
 
 const OPENERS = [
@@ -70,7 +74,7 @@ const SIGNOFFS_SOLO = [
 // Reactions in a chat: personality first, dry and grown-up, no facts, never next to grave news.
 const CHATS = {
   paco: ['[nod] Well. Not a sentence I expected to read tonight. [papers]', '[chin] Remarkable. [papers] Moving on.', '[nod] File that under good news. We do have some. [look_partner]'],
-  lola: ['[laugh] I will admit, that one made my evening. [look_partner]', '[chin] I would love to know how that conversation started. [papers]', '[nod] Some good news, for once. [papers]'],
+  lola: ['[laugh] I will admit, that one made my evening. [look_partner]', '[chin] Not what I expected when I came in this morning. [papers]', '[nod] Some good news, for once. [papers]'],
   max: ['[raise_hand] For the record, I would like one. Purely for research. [look_partner]', '[nod] Clever. Quietly, properly clever. [papers]', '[laugh] My bank manager will want a word before I go near that. [papers]'],
   ada: ['[chin] Promising. I will believe it when it survives its first software update. [look_partner]', '[shrug] We will see how it holds up outside the press release. [papers]', '[nod] Fair enough. That one I like. [papers]'],
   nova: ['[chin] Every answer comes with a new question attached. That is the job. [look_partner]', '[nod] Worth looking up tonight, if the clouds allow. [papers]', '[steeple] Science at its best: patient, careful and slightly stubborn. [papers]'],
@@ -145,7 +149,7 @@ function study(story) {
     s,
     grave,
     sad: grave && DEATHS.test(text),
-    light: !grave && LIGHT.test(text),
+    light: !grave && LIGHT.test(s.title) && !SOBER.test(text),
     surprising: SURPRISE.test(s.title),
     loc: precise,
     places: placesIn(text),
@@ -173,7 +177,8 @@ function runningOrder(infos, n, features) {
   let picked = pool.slice(0, n);
   let lighter = null;
   if (features.includes('lighter')) {
-    lighter = [...picked].reverse().find((i) => i.light && i !== picked[0]) || pool.slice(n).find((i) => i.light) || null;
+    const lighterOf = (test) => [...picked].reverse().find((i) => test(i) && i !== picked[0]) || pool.slice(n).find(test) || null;
+    lighter = lighterOf((i) => i.light && LIGHTER.test(i.s.title)) || lighterOf((i) => i.light);
     if (lighter && !picked.includes(lighter)) picked = [...picked.slice(0, n - 1), lighter];
     if (lighter) picked = [...picked.filter((i) => i !== lighter), lighter];
   }
@@ -271,13 +276,18 @@ function writeEpisode({ stories, channelName, program, presenters, count }) {
       // Lead with the place, or with its country when the sentence names the region itself ("the Reykjanes peninsula").
       const { entry } = info.loc;
       const country = entry.kind !== 'country' && entry.country ? placesIn(entry.country)[0]?.entry : null;
-      const place = entry.kind === 'region' && country && line.includes(entry.name) ? spokenPlace(country) : spokenPlace(entry);
-      const lead = idx === 0 ? `[point_screen] Now, around the world in 30 seconds. First, ${place}.` : idx === roundup.length - 1 ? `And lastly, ${place}.` : choose([`To ${place} next.`, `Now ${place}.`, `Over to ${place}.`], key);
+      const place = entry.kind === 'region' && country && entry.label.includes(',') && line.includes(entry.name) ? spokenPlace(country) : spokenPlace(entry);
+      const lead = idx === 0 ? `[point_screen] Now, around the world in 30 seconds. First, ${place}.` : idx === roundup.length - 1 ? `And to finish the round-up, ${place}.` : choose([`To ${place} next.`, `Now ${place}.`, `Over to ${place}.`], key);
       parts.push(lead, `${line}, ${s.source} reports.`);
     } else {
       const opener = info.grave ? OPENERS[GRAVE_OPENERS[hash(key) % GRAVE_OPENERS.length]] : choose(OPENERS, key);
       const cue = isNumber ? '[count] ' : info.grave ? '[lean_in] ' : s.image ? '[point_screen] ' : choose(['[raise_hand] ', '[point_camera] ', ''], key);
-      if (isNumber) parts.push(`${cue}Our number of the day: ${unstop(info.figures[0].said)}.`);
+      // When the headline already says it in full, the figure alone works as a teaser.
+      if (isNumber) {
+        const { said } = info.figures[0];
+        const short = said.split(/\s+/).slice(0, /\d\s+(?:thousand|million|billion|trillion)\b/i.test(said) ? 2 : 1).join(' ');
+        parts.push(`${cue}Our number of the day: ${unstop(s.title.toLowerCase().includes(said.toLowerCase()) ? short : said)}.`);
+      }
       if (isLighter) parts.push(`${isNumber ? '' : cue}And finally: ${unstop(s.title)}, ${s.source} reports.`);
       else parts.push(`${isNumber ? '' : cue}${opener(unstop(s.title), s.source)}`);
       const lines = body(info, quick ? 1 : 2);

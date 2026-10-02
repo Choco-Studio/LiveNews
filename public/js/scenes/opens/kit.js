@@ -16,9 +16,10 @@
 import { P } from '../../palette.js';
 import { drawText, measureText } from '../../font.js';
 import { drawLogo, measureLogo } from '../../logo.js';
+import * as topRow from '../../graphics/bug.js';
 import {
   mk, memo, u32, clamp, lerp, seg, easeOut, easeOutQuint, easeInOut, bayer,
-  ellipsis, nameList, discSpans, clipRect,
+  ellipsis, nameList, discSpans, clipRect, clockIn,
 } from '../../gfx/index.js';
 
 export const W = 384;
@@ -268,17 +269,30 @@ export function drawHopBit(ctx, dt, ex, ey, L, shoulder = 30, popAt = TL.pop) {
   drawBit(ctx, x, y, 4);
 }
 
+// The on-air top row (bug, LIVE, London clock) from the graphics package, so the lock-up ends on
+// exactly the pixels the programme continues with. It comes on at 1.7 s so its single glint is
+// over by TL.still. Falls back to the logo's bug if the graphics module is unavailable.
+const TOP_V = { onAt: 1.7, replay: false, program: null, programIn: null, programOut: null, clock: '' };
 let BUG_W = 0;
-/** The channel bug at its on-air spot (13, 8): wipes in, glints once, then still. */
 export function drawBug(ctx, dt) {
+  if (typeof topRow.drawTopRow === 'function') {
+    if (dt < TOP_V.onAt) return;
+    TOP_V.clock = clockIn().time;
+    try {
+      topRow.drawTopRow(ctx, dt, TOP_V);
+      return;
+    } catch {
+      /* fall back to the logo bug below */
+    }
+  }
   const p = easeOutQuint(seg(dt, TL.bug, 0.34));
   if (p <= 0) return;
   if (!BUG_W) BUG_W = measureLogo({ variant: 'bug' }).w || 48;
   const vis = Math.round((BUG_W + 1) * p);
   ctx.save();
   clipRect(ctx, 13, 8, vis, 14);
-  // logo.js plays its glint during the first 0.9 s of a cycle: start it with
-  // the wipe so it is over by TL.still, and stop animating after that
+  // logo.js plays its glint during the first 0.9 s of a cycle: start it with the wipe so it
+  // is over by TL.still, and stop animating after that
   const lt = dt - TL.bug;
   drawLogo(ctx, 13, 8, { variant: 'bug', t: lt < 0.9 ? lt : null });
   ctx.restore();

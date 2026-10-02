@@ -71,13 +71,13 @@ export const STINGS = {
     lead.connect(dest);
     lead.connect(echo);
     eng.rig.kick(t, 0.7, dest);
-    eng.rig.bass(t, bassOf(5), spb * 2, 0.75, dest, { lp: 600 });
+    eng.rig.bass(t, bassOf(5), spb * 2, 0.49, dest, { lp: 600, release: 0.15 });
     chord(eng, dest, t, spb * 2, 'Fmaj9', { lo: 53, vel: 0.7 });
     chord(eng, dest, t, spb * 2.2, 'Fmaj9', { inst: 'pad', lo: 48, vel: 0.7, roll: 0, p: { attack: 0.25, lpTo: 1200, release: 0.8 } });
     motif(eng, lead, pal, t, spb, 'statement', { inst: 'bell', vel: 0.85 });
     const t2 = t + spb * 2;
     eng.rig.snare(t2, 0.35, dest, { brush: true });
-    eng.rig.bass(t2, bassOf(0), spb * 3, 0.7, dest, { lp: 600 });
+    eng.rig.bass(t2, bassOf(0), spb * 3, 0.45, dest, { lp: 600, release: 0.45 });
     chord(eng, dest, t2, spb * 3, 'C9sus', { lo: 53, vel: 0.62 });
     chord(eng, dest, t2, spb * 3, 'C9sus', { inst: 'pad', lo: 48, vel: 0.6, roll: 0, p: { attack: 0.2, lpTo: 1000, release: 1.2 } });
     return t2 + spb * 3 + 1.5;
@@ -97,7 +97,7 @@ export const STINGS = {
     chord(eng, dest, t, land - t, tonicChord(pal), { inst: 'pad', lo: pal.pad.lo, vel: 0.85, roll: 0, p: { attack: land - t, release: 0.06, lpFrom: 300, lpTo: 1800 } });
     eng.rig.riser(t + 0.3, land - t - 0.3, 0.5, dest);
     eng.rig.kick(land, 0.75, dest);
-    eng.rig.bass(land, bassOf(tonic.bass), spb * 3, 0.75, dest, { wave: pal.bass.wave, lp: pal.bass.lp });
+    eng.rig.bass(land, bassOf(tonic.bass), spb * 3, 0.49, dest, { wave: pal.bass.wave, lp: pal.bass.lp, release: 0.45 });
     chord(eng, dest, land, spb * 3, tonicChord(pal), { lo: pal.keys.lo, vel: 0.7 });
     const inst = pal.lead.inst === 'chip' || pal.lead.inst === 'pluck' ? pal.lead.inst : 'bell';
     motif(eng, lead, pal, land, spb, 'answer', { inst, vel: 0.8 });
@@ -116,7 +116,7 @@ export const STINGS = {
     const [I, , IV, V] = pal.sections.A;
     chord(eng, dest, t, spb * 2, IV, { inst: 'pad', lo: pal.pad.lo, vel: 0.75, roll: 0, p: { attack: 0.35, lpTo: 1200, release: 0.5 } });
     chord(eng, dest, t, spb * 2, IV, { lo: pal.keys.lo, vel: 0.6 });
-    eng.rig.bass(t, bassOf(parseChord(IV).bass), spb * 2, 0.65, dest, { wave: pal.bass.wave, lp: pal.bass.lp });
+    eng.rig.bass(t, bassOf(parseChord(IV).bass), spb * 2, 0.42, dest, { wave: pal.bass.wave, lp: pal.bass.lp, release: 0.15 });
     // A rising arpeggio on the IV: the "coming up" lift.
     const arpV = voiceChord(parseChord(IV), null, pal.keys.lo + 7);
     const arpInst = pal.arp.inst;
@@ -125,13 +125,13 @@ export const STINGS = {
     const t2 = t + spb * 2;
     chord(eng, dest, t2, spb * 2, V, { lo: pal.keys.lo, vel: 0.62 });
     chord(eng, dest, t2, spb * 2, V, { inst: 'pad', lo: pal.pad.lo, vel: 0.7, roll: 0, p: { attack: 0.3, lpTo: 1300, release: 0.4 } });
-    eng.rig.bass(t2, bassOf(parseChord(V).bass), spb * 2, 0.65, dest, { wave: pal.bass.wave, lp: pal.bass.lp });
+    eng.rig.bass(t2, bassOf(parseChord(V).bass), spb * 2, 0.42, dest, { wave: pal.bass.wave, lp: pal.bass.lp, release: 0.15 });
     const inst = pal.lead.inst === 'chip' || pal.lead.inst === 'pluck' ? pal.lead.inst : 'bell';
     motif(eng, lead, pal, t2, spb, 'statement', { inst, vel: 0.8 });
     eng.rig.swell(t2 + spb, spb, 0.5, dest, 0.4);
     const land = t + spb * 4;
     eng.rig.kick(land, 0.7, dest);
-    eng.rig.bass(land, bassOf(parseChord(I).bass), 1.2, 0.7, dest, { wave: pal.bass.wave, lp: pal.bass.lp });
+    eng.rig.bass(land, bassOf(parseChord(I).bass), 1.2, 0.45, dest, { wave: pal.bass.wave, lp: pal.bass.lp, release: 0.45 });
     chord(eng, dest, land, 1.2, I, { lo: pal.keys.lo, vel: 0.65 });
     chord(eng, dest, land, 1.0, I, { inst: 'pad', lo: pal.pad.lo, vel: 0.6, roll: 0, p: { attack: 0.08, lpTo: 1100, release: 0.5 } });
     return land + 1.6;
@@ -139,7 +139,7 @@ export const STINGS = {
 
   replay(eng, t, { palette } = {}) {
     const pal = PALETTES[palette] || PALETTES.channel;
-    const dest = bus(eng, 0.8);
+    const dest = bus(eng, 2.4);
     eng.rig.rewind(t, 0.55, 0.7, dest);
     const t2 = t + 0.5;
     const spb = 0.2;
@@ -166,15 +166,15 @@ export const STINGS = {
 
   breaking(eng, t, { palette } = {}) {
     const pal = PALETTES[palette] || PALETTES.channel;
-    const dest = bus(eng, 0.9);
+    const dest = bus(eng, 0.75);
     const root = pal.tonic - 24;
-    eng.rig.timpani(t, root, 0.9, dest);
-    eng.rig.timpani(t + 0.45, root, 0.55, dest);
+    eng.rig.timpani(t, root, 0.6, dest);
+    eng.rig.timpani(t + 0.45, root, 0.38, dest);
     const minorPc = pal.tonic % 12;
     const names = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
     const sym = `${names[minorPc]}m9`;
     chord(eng, dest, t, 2.1, sym, { inst: 'pad', lo: 48, vel: 0.85, roll: 0, p: { attack: 0.3, lpTo: 800, release: 1.2 } });
-    eng.rig.bass(t, 36 + mod(minorPc, 12), 2.2, 0.6, dest, { wave: 'sine', lp: 300 });
+    eng.rig.bass(t, 36 + mod(minorPc, 12), 2.2, 0.39, dest, { wave: 'sine', lp: 300, release: 0.45 });
     // The motif in the minor mode, in the middle register, on a dark Rhodes.
     const dark = { ...pal, lead: { ...pal.lead, oct: 0 } };
     motif(eng, dest, dark, t + 0.45, 0.3, 'statement', { inst: 'ep', scale: 'minor', vel: 0.75, oct: 0, p: { index: 0.35, attack: 0.02, decay: 1.2, release: 0.6 } });
@@ -192,7 +192,7 @@ export const STINGS = {
     const I = tonicChord(pal);
     const c = parseChord(I);
     eng.rig.kick(t, 0.7, dest);
-    eng.rig.bass(t, bassOf(c.bass), spb * 4, 0.75, dest, { wave: pal.bass.wave, lp: pal.bass.lp });
+    eng.rig.bass(t, bassOf(c.bass), spb * 4, 0.49, dest, { wave: pal.bass.wave, lp: pal.bass.lp, release: 0.45 });
     chord(eng, dest, t, spb * 4.5, I, { lo: pal.keys.lo, vel: 0.72, roll: 0.03 });
     chord(eng, dest, t, spb * 4.5, I, { inst: 'pad', lo: pal.pad.lo, vel: 0.7, roll: 0, p: { attack: 0.3, lpTo: 1200, release: 1.6 } });
     eng.rig.swell(t, spb * 0.5, 0.35, dest, 0.6);
@@ -201,7 +201,7 @@ export const STINGS = {
     // ...and the full stop the motif always withholds: back home to "do".
     const home = t + spb * 4.5;
     eng.rig.bell(home, pal.tonic + pal.lead.oct, spb * 2, 0.55, lead, { decay: 0.9 });
-    eng.rig.bass(home, bassOf(c.root), spb * 2, 0.55, dest, { wave: pal.bass.wave, lp: pal.bass.lp });
+    eng.rig.bass(home, bassOf(c.root), spb * 2, 0.36, dest, { wave: pal.bass.wave, lp: pal.bass.lp, release: 0.45 });
     const tex = eng.rig.texture(t, pal.tex * 0.8, dest);
     tex.stop(home + 1.2);
     return home + 3;

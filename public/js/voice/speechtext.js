@@ -333,6 +333,7 @@ const UNITS = {
   kmh: [['kilometre per hour', 'kilometres per hour'], ['kilómetro por hora', 'kilómetros por hora']],
   mph: [['mile per hour', 'miles per hour'], ['milla por hora', 'millas por hora']],
   'm/s': [['metre per second', 'metres per second'], ['metro por segundo', 'metros por segundo']],
+  'km/s': [['kilometre per second', 'kilometres per second'], ['kilómetro por segundo', 'kilómetros por segundo']],
   'km²': [['square kilometre', 'square kilometres'], ['kilómetro cuadrado', 'kilómetros cuadrados']],
   km2: [['square kilometre', 'square kilometres'], ['kilómetro cuadrado', 'kilómetros cuadrados']],
   'sq km': [['square kilometre', 'square kilometres'], ['kilómetro cuadrado', 'kilómetros cuadrados']],
@@ -477,11 +478,25 @@ export const LEXICON = {
 
 const lexiconCache = new WeakMap();
 const userLexicon = {};
+let baseLexicon = null; // LEXICON + addPronunciations, rebuilt when that changes
+const mergedCache = new WeakMap(); // per-call lexicon object -> merged table
 
 /** Add or override respellings for every later call (e.g. from config). */
 export function addPronunciations(entries) {
   for (const [k, v] of Object.entries(entries || {})) if (k && typeof v === 'string') userLexicon[k] = v;
-  lexiconCache.delete(userLexicon);
+  baseLexicon = null;
+}
+
+// The merged table for a call; compiled matchers are cached per table object.
+function lexiconFor(extra) {
+  if (!baseLexicon) baseLexicon = { ...LEXICON, ...userLexicon };
+  if (!extra) return baseLexicon;
+  let hit = mergedCache.get(extra);
+  if (!hit || hit.base !== baseLexicon) {
+    hit = { base: baseLexicon, table: { ...baseLexicon, ...extra } };
+    mergedCache.set(extra, hit);
+  }
+  return hit.table;
 }
 
 function lexiconMatcher(lex) {
@@ -577,7 +592,7 @@ const TITLES_ES = { Sr: 'señor', Sra: 'señora', Srta: 'señorita', Dr: 'doctor
 const ABBR_EN = [
   [/\be\.g\.(?=[\s,]|$)/g, 'for example'], [/\bi\.e\.(?=[\s,]|$)/g, 'that is'], [/\ba\.k\.a\.?(?=[\s,]|$)/gi, 'also known as'],
   [/\baka\b/g, 'also known as'], [/\betc\.?(?=[\s,;:)!?]|$)/g, 'et cetera'], [/\bvs\.?(?=\s)/gi, 'versus'],
-  [/(?<=[A-Z][\p{L}]*\s)v\.?(?=\s+[A-Z])/gu, 'versus'], [/\bapprox\.(?=\s)/g, 'approximately'], [/\best\.(?=\s)/g, 'estimated'],
+  [/(?<=[A-Z][\p{L}]*\s)v\.?(?=\s+[A-Z])/gu, 'versus'], [/\bapprox\.(?=\s)/g, 'approximately'], [/\best\.(?=[\s,;:)]|$)/g, 'estimated'],
   [/\bincl\.(?=\s)/g, 'including'], [/\bexcl\.(?=\s)/g, 'excluding'], [/\b(?:Jr\.?|Jnr)(?![\p{L}])/gu, 'Junior'],
   [/\b(?:Sr\.|Snr)(?![\p{L}])/gu, 'Senior'], [/\bInc\./g, 'Inc'], [/\bLtd\.?(?![\p{L}])/gu, 'Limited'], [/\bCorp\./g, 'Corporation'],
   [/\bCo\.(?=\s|$)/g, 'Company'], [/\bBros\.(?=\s|$)/g, 'Brothers'], [/\bDept\.?(?=\s)/g, 'Department'],
@@ -585,7 +600,9 @@ const ABBR_EN = [
   [/\b(?:Mt|Mt\.)(?=\s+[A-Z])/g, 'Mount'], [/\bFt\.(?=\s+[A-Z])/g, 'Fort'], [/\bgov(?:'|’)?t\b/gi, 'government'],
   [/\bint(?:'|’)l\b/gi, 'international'], [/\bw\/o(?=\s)/g, 'without'], [/(?<=\s|^)w\/(?=\s)/g, 'with'],
   [/\bNos\.\s?(?=\d)/g, 'numbers '], [/\bNo\.\s?(?=\d)/g, 'number '], [/\bno\.\s?(?=\d)/g, 'number '],
-  [/\bpl\.(?=\s)/g, 'please'],
+  [/\bpl\.(?=\s)/g, 'please'], [/\bArt\.\s?(?=\d)/g, 'Article '], [/\bSec\.\s?(?=\d)/g, 'Section '],
+  [/\b[yY]\/[yY]\b|\bYoY\b/g, 'year on year'], [/\b[mM]\/[mM]\b|\bMoM\b/g, 'month on month'],
+  [/\b[qQ]\/[qQ]\b|\bQoQ\b/g, 'quarter on quarter'],
 ];
 const ABBR_ES = [
   [/\bEE\.\s?UU\.?/g, 'Estados Unidos'], [/\bEEUU\b/g, 'Estados Unidos'], [/\bp\.\s?ej\./g, 'por ejemplo'],
@@ -769,9 +786,12 @@ function moneyWords(curKey, a, b, scale1, scale2, L) {
 function money(st, L) {
   const NUM = L.es ? NUM_ES : NUM_EN;
   const range = `(?:\\s?(?:-|–|to|a)\\s?(?:${CUR_SYM})?(${NUM})(${SCALE_RE})?)?`;
-  // Prefix: "$2bn", "US$5", "€1.5-2m", "£3.50", "CHF 5".
-  st = sub(st, new RegExp(`(?<![\\p{L}\\p{N}$])(${CUR_SYM}|(?:${CUR_CODE})\\s?)(${NUM})(${SCALE_RE})?${range}`, 'gu'), (mt) =>
-    moneyWords(mt[1].trim(), mt[2], mt[4] ?? null, mt[3], mt[5], L));
+  const w = W[L.es ? 'es' : 'en'];
+  // Stock tickers: "$AAPL" -> the letters.
+  st = sub(st, /(?<![\p{L}\p{N}])\$([A-Z]{1,5})(?![\p{L}\p{N}])/gu, (mt) => mt[1]);
+  // Prefix: "$2bn", "US$5", "€1.5-2m", "£3.50", "CHF 5", "+$7.05".
+  st = sub(st, new RegExp(`(?<![\\p{L}\\p{N}$])([-+]?)(${CUR_SYM}|(?:${CUR_CODE})\\s?)(${NUM})(${SCALE_RE})?${range}`, 'gu'), (mt) =>
+    (mt[1] === '-' ? `${w.minus} ` : mt[1] === '+' ? `${w.plus} ` : '') + moneyWords(mt[2].trim(), mt[3], mt[5] ?? null, mt[4], mt[6], L));
   // Postfix: "5 USD", "20bn euros" is already words; "5 €" (Spanish style).
   st = sub(st, new RegExp(`(?<![\\p{L}\\p{N}.,])(${NUM})(${SCALE_RE})?\\s?(${CUR_CODE}|€|\\$|£)(?![\\p{L}\\p{N}])`, 'gu'), (mt) =>
     moneyWords(mt[3], mt[1], null, mt[2], null, L));
@@ -782,6 +802,10 @@ function money(st, L) {
       return `${cardinalEn(n, L.gb)} ${mt[2] === 'p' ? (n === 1 ? 'penny' : 'pence') : n === 1 ? 'cent' : 'cents'}`;
     });
   }
+  // Currency pairs and lone signs: "the ¥/$ rate", "the $ fell".
+  const curName = (c) => (CURRENCIES[c] || CURRENCIES.$)[L.es ? 'es' : 'en'][0];
+  st = sub(st, new RegExp(`(${CUR_SYM})\\s?\\/\\s?(${CUR_SYM})`, 'gu'), (mt) => `${curName(mt[1])} ${curName(mt[2])}`);
+  st = sub(st, /(?<![\p{L}\p{N}])[€£¥₹₩₽₺₦$](?![\p{N}])/gu, (mt) => curName(mt[0]));
   // Scale words after plain numbers: "1.5bn", "2.5 million" -> number words.
   st = sub(st, new RegExp(`(?<![\\p{L}\\p{N}.,])(${NUM})\\s?(bn|tn|trn|mn|mln)(?![\\p{L}\\p{N}])`, 'gu'), (mt) =>
     `${numberWords(mt[1], L)} ${scaleWord(mt[2], L)}`);
@@ -798,7 +822,7 @@ function percentAndUnits(st, L) {
   st = sub(st, new RegExp(`(?<![\\p{L}\\p{N}.,%])([-+]?)(${NUM})(?:%?\\s?(?:-|–|to)\\s?(${NUM}))?(?:\\s?%|pc\\b|pct\\b)`, 'gu'), (mt) =>
     `${sign(mt[1])}${numberWords(mt[2], L)}${mt[3] ? ` ${w.to} ${numberWords(mt[3], L)}` : ''} ${w.percent}`);
   // Units: "100 km/h", "30°C", "a 10-km race", "128GB".
-  st = sub(st, new RegExp(`(?<![\\p{L}\\p{N}.,])([-+]?)(${NUM})(?:\\s?(?:-|–|to)\\s?(${NUM}))?(-|\\s?)(${UNIT_RE})(?![\\p{L}\\p{N}])`, 'gu'), (mt, s) => {
+  st = sub(st, new RegExp(`(?<![\\p{L}\\p{N}.,])([-+]?)(${NUM})(?:\\s?(?:-|–|to)\\s?(${NUM}))?(-|\\s?)(${UNIT_RE})(?![\\p{L}\\p{N}])`, 'gu'), (mt) => {
     const unit = mt[5];
     // "5 h" or "6 g" alone are too ambiguous ("Plan B"-style labels); need a tight join.
     if ((unit === 'h' || unit === 'g' || unit === 'W') && mt[4] === ' ') return null;
@@ -807,10 +831,10 @@ function percentAndUnits(st, L) {
     const plural = !adjectival && (mt[3] != null || !isOne(mt[2], L));
     const nums = `${sign(mt[1])}${numberWords(mt[2], L)}${mt[3] ? ` ${w.to} ${numberWords(mt[3], L)}` : ''}`;
     if (adjectival) return `${nums}-${unitWord(unit, false, L).replace(/ /g, '-')}`;
-    const after = s.slice(mt.index + mt[0].length);
-    // A lone "°" followed by C/F was handled by the longer keys; "5° east" stays degrees.
-    return `${nums} ${unitWord(unit, plural, L)}${/^\s?[CF]\b/.test(after) && unit === '°' ? '' : ''}`;
+    return `${nums} ${unitWord(unit, plural, L)}`;
   });
+  // "61/km²", "people per sq km": a slash before a unit means per.
+  st = sub(st, new RegExp(`\\s?\\/\\s?(${UNIT_RE})(?![\\p{L}\\p{N}])`, 'gu'), (mt) => ` ${w.per} ${unitWord(mt[1], false, L)}`);
   // Metres vs million for a bare "m": "100m sprint" vs "5m people".
   st = sub(st, new RegExp(`(?<![\\p{L}\\p{N}.,$€£¥])(${NUM})(\\s?)m(?![\\p{L}\\p{N}²])(-?)`, 'gu'), (mt, s) => {
     const after = s.slice(mt.index + mt[0].length);
@@ -849,7 +873,11 @@ function toRoman(n) {
   for (const [v, r] of T) while (n >= v) { out += r; n -= v; }
   return out;
 }
-const ROMAN_CARDINAL = new Set('War Bowl Chapter Part Volume Vol Act Phase Title Type Grade Level Stage Class Category Apollo Vatican Gemini Episode Book Article Section Schedule Tier Mark Mk'.split(' '));
+// Numbered things read as cardinals ("World War Two", "Artemis Three"); names
+// of people take "the" + ordinal ("Charles the Third").
+const ROMAN_CARDINAL = new Set(('War Bowl Chapter Part Volume Vol Act Phase Title Type Grade Level Stage Class Category Apollo ' +
+  'Artemis Gemini Voyager Pioneer Mariner Soyuz Saturn Vatican Episode Book Article Section Schedule Tier Mark Mk Mission ' +
+  'Rocky Halo Fantasy Wars Season Series').split(' '));
 const MONARCH = /^(?:King|Queen|Pope|Emperor|Empress|Tsar|Czar|Pharaoh|Sultan|Prince|Princess|Duke|Duchess|Rey|Reina|Papa)$/;
 
 function otherNumbers(st, L) {
@@ -872,13 +900,14 @@ function otherNumbers(st, L) {
     return pluralWords(yearEn(n, L.gb));
   });
   // Ordinals: "21st", "3rd" (Spanish "1º" is read before the units).
-  if (!L.es) st = sub(st, /\b(\d+)(st|nd|rd|th)\b/gi, (mt) => ordinalWords(+mt[1], L));
+  if (!L.es) st = sub(st, /\b(\d{1,3}(?:,\d{3})+|\d+)(st|nd|rd|th)\b/gi, (mt) => ordinalWords(+mt[1].replace(/,/g, ''), L));
   // Scores: "won 3-1", "a 2-0 win", "drew 1-1".
   st = sub(st, /(?<![\w.,])(\d{1,2})\s?[-–]\s?(\d{1,2})\b(?![,.]?\d|\s?%)/g, (mt, s) => {
     const before = s.slice(Math.max(0, mt.index - 40), mt.index);
     const after = s.slice(mt.index + mt[0].length, mt.index + mt[0].length + 24);
     const scoreCtx = /\b(?:won|win|wins|beat|beats|beating|lost|lose|loses|losing|drew|draw|draws|drawn|victory|defeat|defeated|thrashed|edged|trail|trailed|trailing|led|lead|leads|leading|score|scored)\b(?:\s+[\p{L}']+){0,3}\s*$/iu.test(before) ||
-      /^\s+(?:win|victory|defeat|loss|draw|lead|thrashing|scoreline|result|home win|away win)\b/i.test(after);
+      /^\s+(?:win|victory|defeat|loss|draw|lead|thrashing|scoreline|result|home win|away win)\b/i.test(after) ||
+      (/\b[A-Z][\p{L}]+\s$/u.test(before) && /^\s[A-Z]/.test(after)) || /\bscore[s]?:?\s*(?:[A-Z][\p{L}]+\s+){0,3}$/iu.test(before);
     if (!scoreCtx || L.es) return null;
     const say = (n) => (n === 0 ? (L.gb ? 'nil' : 'nothing') : cardinalEn(n, L.gb));
     const a = +mt[1];
@@ -904,6 +933,7 @@ function otherNumbers(st, L) {
     if (!d || n >= d) return null;
     return `${numberWords(mt[1], L)} ${w.and} ${n === 1 && !L.es ? `a ${fraction(1, d).split(' ')[1]}` : fraction(n, d)}`;
   });
+  st = sub(st, /(?<![\w.,/])(\d{1,2}\.\d)\/(\d{1,3})\b(?!\/)/g, (mt) => `${numberWords(mt[1], L)} ${L.es ? 'de' : 'out of'} ${numberWords(mt[2], L)}`);
   st = sub(st, /(?<![\w.,/])(\d{1,3})\/(\d{1,3})\b(?!\/)/g, (mt) => {
     const n = +mt[1];
     const d = +mt[2];
@@ -916,7 +946,7 @@ function otherNumbers(st, L) {
   // Ratios: "3:1" (times with two-digit minutes were read already).
   st = sub(st, /(?<![\w.,:])(\d{1,2}):(\d)(?![\d:])/g, (mt) => `${numberWords(mt[1], L)} ${w.to} ${numberWords(mt[2], L)}`);
   // Codes: "G7", "COP29", "F-35", "A320", "Covid-19", "MH370"; "5G", "4K", "1080p".
-  st = sub(st, /\b([A-Z][A-Za-z]{0,7})-?(\d{1,4})\b(?![.,]\d)/g, (mt, s) => {
+  st = sub(st, /\b([A-Z][A-Za-z]{0,7})-?(\d{1,4})\b(?![.,]\d)/g, (mt) => {
     const n = mt[2];
     const letters = mt[1];
     if (letters in MONTH_ABBR || /^(?:No|Nos|Vol|Ch|Pt)$/.test(letters)) return null;
@@ -924,9 +954,24 @@ function otherNumbers(st, L) {
     let words;
     if (n.length <= 2 || n.startsWith('0')) words = n.startsWith('0') && n.length > 1 ? digitsEn(n, true) : cardinalEn(+n, L.gb);
     else if (n.length === 3) words = n[1] === '0' && n[2] === '0' ? cardinalEn(+n, L.gb) : n[1] === '0' ? `${ONES[+n[0]]} oh ${ONES[+n[2]]}` : `${ONES[+n[0]]} ${tensEn(+n.slice(1))}`;
-    else words = yearEn(+n, L.gb);
-    void s;
+    else words = n.slice(2) === '00' ? `${tensEn(+n.slice(0, 2))} hundred` : `${tensEn(+n.slice(0, 2))} ${+n[2] ? tensEn(+n.slice(2)) : `oh ${ONES[+n[3]]}`}`;
     return [[letters, 0], [` ${words}`, letters.length]];
+  });
+  // Phone numbers: digit by digit, a short pause between groups.
+  st = sub(st, /(?<![\w.,])(?:\+\d{1,3}[ -]?)?0\d{2,4}(?:[ -]\d{3,4}){1,3}\b/g, (mt) =>
+    mt[0].replace(/^\+/, '').split(/[ -]+/).map((g) => (L.es ? [...g].map((d) => ES_ONES[+d]).join(' ') : digitsEn(g, L.gb))).join(', '));
+  // Anything else mixing letters and digits: "H5N1", "Pixel 9a", "R0".
+  st = sub(st, /\b(?=[A-Za-z]*\d)(?=\d*[A-Za-z])[A-Za-z\d]{2,10}\b/g, (mt) => {
+    if (/^\d+(?:st|nd|rd|th|s|k|m|bn|tn|p|c|x|h|G|K|D|GB|MB|TB)$/i.test(mt[0])) return null;
+    const out = [];
+    for (const run of mt[0].matchAll(/\d+|[A-Za-z]+/g)) {
+      const t = run[0];
+      let say = t;
+      if (/\d/.test(t)) say = L.es ? cardinalEs(+t) : t.length > 1 && t.startsWith('0') ? digitsEn(t, L.gb) : cardinalEn(+t, L.gb);
+      else if (t.length === 1) say = t.toLowerCase() === 'a' ? 'eigh' : t.toUpperCase();
+      out.push([(out.length ? ' ' : '') + say, run.index]);
+    }
+    return out;
   });
   st = sub(st, /\b(\d{1,2})([GKD])\b/g, (mt) => `${numberWords(mt[1], L)} ${mt[2]}`);
   st = sub(st, /\b(\d{3,4})p\b/g, (mt) => `${mt[1].length === 4 ? yearEn(+mt[1], false) : `${ONES[+mt[1][0]]} ${tensEn(+mt[1].slice(1))}`} P`);
@@ -981,7 +1026,7 @@ function plainNumbers(st, L) {
     return [[first, 0], [` ${w.to} `, mt[1].length + mt[2].length], [second, at2]];
   });
   // Plus after a number or name: "50+", "Disney+".
-  st = sub(st, /(?<=[\p{L}\p{N}])\+(?![\p{N}])/gu, () => ` ${w.plus}`);
+  st = sub(st, /(?<=[\p{L}\p{N}])\+/gu, () => ` ${w.plus} `);
   return st;
 }
 
@@ -1026,7 +1071,7 @@ function acronyms(st, L) {
   // CamelCase with a capital tail: "ChatGPT" -> "Chat G-P-T", "OpenAI" -> "Open A-I".
   st = sub(st, /\b([A-Z]?[a-z]{2,})([A-Z]{2,})\b/g, (mt) => [[mt[1], 0], [` ${spellLetters(mt[2])}`, mt[1].length]]);
   // Leftover roman numerals ("Phase II/III" handled above; "trial II" here).
-  st = sub(st, /\b(II|III)\b/g, (mt, s) => (inShouty(mt.index) ? null : cardinalEn(mt[1].length, L.gb)));
+  st = sub(st, /\b(II|III)\b/g, (mt) => (inShouty(mt.index) ? null : cardinalEn(mt[1].length, L.gb)));
   st = sub(st, /(?<![\p{L}\p{N}'’])([A-Z][A-Z]*[A-Z])(s(?![\p{L}])|['’]s)?(?![\p{L}\p{N}]|['’][a-rt-z])/gu, (mt, s) => {
     const tok = mt[1];
     const suffix = mt[2] ? (mt[2] === 's' ? 's' : "'s") : '';
@@ -1069,22 +1114,23 @@ function pauses(st) {
   // Quotes: drop the marks; a quoted sentence after a word gets a lead-in pause.
   st = sub(st, /(?<=\p{L}) "(?=[A-Z][^"]*\s[^"]*\s[^"]*")/gu, () => ', ');
   st = sub(st, /"/g, () => ' ');
-  st = sub(st, /(?<=^|[\s,;:—–(])'(?=\S)|(?<=[\p{L}\p{N}.,!?])'(?=[\s.,;:!?)—–]|$)/gu, (mt, s) => {
-    // Keep possessive "workers'" readable either way; just remove the mark.
-    void s;
-    return '';
-  });
+  // Single quotes at word edges are quote marks (a plural possessive like
+  // "workers'" sounds the same without its apostrophe).
+  st = sub(st, /(?<=^|[\s,;:—–(])'(?=\S)|(?<=[\p{L}\p{N}.,!?])'(?=[\s.,;:!?)—–]|$)/gu, () => '');
   st = sub(st, /([!?])[!?]+/g, (mt) => (mt[0].includes('?') ? '?' : '!'));
   st = sub(st, /[|^\\_<>~]+/g, () => ' ');
   return st;
 }
 
 function tidy(st, srcText, { terminal = true } = {}) {
+  // Symbols no voice should try to read (stars, arrows, leftover maths).
+  st = sub(st, /[\p{So}\p{Sk}\p{Sm}\p{Sc}\p{Co}]+/gu, () => ' ');
   st = sub(st, /\s*\n[\s\n]*/g, (mt, s) => (/[\p{L}\p{N}]/u.test(s[mt.index - 1] || '') ? '. ' : ' '));
   st = sub(st, / {2,}/g, () => ' ');
   st = sub(st, / +(?=[,.;:!?…])/g, () => '');
   st = sub(st, /([,;:])(?:\s*[,;:])+/g, (mt) => mt[1]);
   st = sub(st, /[,;:]+(?=\s*[.!?…])/g, () => '');
+  st = sub(st, /(?<=[.!?…])\s*[,;:]+/g, () => '');
   st = sub(st, /([,;:.!?…])(?=[\p{L}\p{N}])/gu, (mt, s) => {
     // "3.5" never survives to here, but keep "U.S."-like leftovers glued.
     if (mt[1] === '.' && /\p{L}\.$/u.test(s.slice(mt.index - 1, mt.index + 1)) && /^\p{Ll}/u.test(s[mt.index + 1])) return null;
@@ -1112,7 +1158,7 @@ export function normalizeForSpeech(text, { lang = 'en-US', lexicon = null, termi
   let st = mapped(String(text ?? ''));
   st = cleanup(st);
   st = webJunk(st);
-  st = applyLexicon(st, { ...LEXICON, ...userLexicon, ...(lexicon || {}) });
+  st = applyLexicon(st, lexiconFor(lexicon));
   st = abbreviations(st, L);
   st = datesAndTimes(st, L);
   st = money(st, L);
@@ -1136,24 +1182,24 @@ export function speakable(text, opts) {
 // Presenter pacing. `speed` multiplies the voice's natural rate, `pause` scales
 // every planned silence, `variation` scales the seeded humanising jitter.
 export const PERSONAS = {
-  paco: { id: 'paco', speed: 0.96, pause: 1.12, variation: 0.55, desc: 'measured veteran, weighty full stops' },
-  lola: { id: 'lola', speed: 1.04, pause: 0.95, variation: 1.15, desc: 'energetic and warm' },
-  max: { id: 'max', speed: 1.07, pause: 0.86, variation: 1.3, desc: 'excitable, quick on the exclamations' },
-  ada: { id: 'ada', speed: 1.02, pause: 1.0, variation: 0.8, desc: 'crisp and clear' },
-  nova: { id: 'nova', speed: 0.98, pause: 1.1, variation: 0.9, wonder: true, desc: 'warm, with a breath of wonder before big reveals' },
+  paco: { id: 'paco', speed: 0.98, pause: 1.12, variation: 0.55, desc: 'measured veteran, weighty full stops' },
+  lola: { id: 'lola', speed: 1.05, pause: 0.95, variation: 1.15, desc: 'energetic and warm' },
+  max: { id: 'max', speed: 1.08, pause: 0.86, variation: 1.3, desc: 'excitable, quick on the exclamations' },
+  ada: { id: 'ada', speed: 1.03, pause: 1.0, variation: 0.8, desc: 'crisp and clear' },
+  nova: { id: 'nova', speed: 1.0, pause: 1.1, variation: 0.9, wonder: true, desc: 'warm, with a breath of wonder before big reveals' },
   unit8: { id: 'unit8', speed: 1.0, pause: 1.0, variation: 0, even: true, quantize: 0.1, desc: 'even and precise' },
-  penny: { id: 'penny', speed: 1.02, pause: 1.0, variation: 0.7, numbers: 0.93, desc: 'numbers first, figures read with care' },
-  sam: { id: 'sam', speed: 1.08, pause: 0.84, variation: 1.0, desc: 'fast and friendly rolling news' },
+  penny: { id: 'penny', speed: 1.03, pause: 1.0, variation: 0.7, numbers: 0.95, desc: 'numbers first, figures read with care' },
+  sam: { id: 'sam', speed: 1.1, pause: 0.84, variation: 1.0, desc: 'fast and friendly rolling news' },
   default: { id: 'default', speed: 1, pause: 1, variation: 0.8 },
 };
 
 const EMOTION_PROSODY = {
   neutral: { speed: 1, pause: 1, variation: 1 },
-  happy: { speed: 1.035, pause: 0.92, variation: 1.2 },
-  serious: { speed: 0.945, pause: 1.15, variation: 0.6 },
-  sad: { speed: 0.92, pause: 1.22, variation: 0.5 },
+  happy: { speed: 1.03, pause: 0.92, variation: 1.2 },
+  serious: { speed: 0.955, pause: 1.15, variation: 0.6 },
+  sad: { speed: 0.935, pause: 1.22, variation: 0.5 },
   surprised: { speed: 1.04, pause: 0.9, variation: 1.2 },
-  thinking: { speed: 0.96, pause: 1.2, variation: 1 },
+  thinking: { speed: 0.965, pause: 1.2, variation: 1 },
 };
 
 const SEGMENT_PROSODY = {
@@ -1177,7 +1223,7 @@ export const PAUSES = {
 };
 const CLAUSE_KINDS = new Set(['comma', 'list', 'intro', 'semicolon', 'colon', 'dash', 'paren', 'quote', 'breath', 'wonder']);
 
-const DISCOURSE = /^(?:however|meanwhile|today|tonight|yesterday|now|still|instead|indeed|finally|and finally|first|second|so|well|but|also|in fact|of course|for now|elsewhere|overall|in short|sadly|happily|thanks|good evening|good morning|hello)$/i;
+const DISCOURSE = /^(?:yes|no|well|okay|oh|look|however|meanwhile|today|tonight|yesterday|now|still|instead|indeed|finally|and finally|first|second|so|well|but|also|in fact|of course|for now|elsewhere|overall|in short|sadly|happily|thanks|good evening|good morning|hello)$/i;
 const EMPHASIS_WORDS = /^(?:record|highest|lowest|biggest|largest|smallest|first|last|worst|best|most|least|never|ever|only|all-time|historic|unprecedented|twice|double|half|triple|every|none|nobody|nothing|no|not|cannot|can't|won't|isn't|didn't|doesn't|huge|massive|tiny|extremely|very)$/i;
 const BREATH_WORDS = /^(?:and|but|which|who|because|while|after|before|as|when|where|with|following|amid|despite|including|although|since|until|so)$/i;
 const WONDER_RE = /\b(?:light[- ]years?|billion|million|galaxy|galaxies|universe|twice|times (?:bigger|larger|more|the size)|largest|oldest|farthest|furthest|first ever|ever seen|never seen|deepest|hottest|coldest|brightest)\b/i;
@@ -1294,7 +1340,8 @@ export function planSpeech(text, opts = {}) {
       const p = pieces[k];
       const chunk = spoken.slice(p.ss, p.se);
       const m = WONDER_RE.exec(chunk);
-      if (!m || wondered.has(sentenceOf(k))) continue;
+      // At most one wonder pause every other sentence, or it turns into a mannerism.
+      if (!m || wondered.has(sentenceOf(k)) || wondered.has(sentenceOf(k) - 1)) continue;
       // Step back to the start of the noun phrase: "about twice the size", "a planet one hundred light years".
       const before = chunk.slice(0, m.index);
       const lead = /(?:\b(?:about|nearly|almost|some|more than|roughly|over|around|just|the|a|an)\s+)?(?:[\p{L}-]+\s+){0,4}$/u.exec(before);
@@ -1336,7 +1383,11 @@ export function planSpeech(text, opts = {}) {
     if (kind === 'comma') {
       const firstOfSentence = !phrases.length || /^(?:stop|exclaim|question|ellipsis|paragraph)$/.test(phrases[phrases.length - 1].boundary);
       if (firstOfSentence && DISCOURSE.test(spokenText.replace(/[,;:]$/, ''))) kind = 'intro';
-      else if (words <= 3 && next && wordCount(spoken.slice(next.ss, next.se)) <= 4) kind = 'list';
+      else if (words <= 3 && next && !/^(?:and|or|but|in|on|at|for|so|then|with|from)\b/i.test(spokenText)) {
+        // "apples, pears, plums and figs": short items followed by another item.
+        const nextText = spoken.slice(next.ss, next.se).trim();
+        if ((wordCount(nextText) <= 3 && /,$/.test(nextText)) || /^(?:[\p{L}'-]+\s+){0,2}(?:and|or)\s/iu.test(nextText)) kind = 'list';
+      }
     }
     const emotion = emotionAt(os);
     const E = EMOTION_PROSODY[emotion];

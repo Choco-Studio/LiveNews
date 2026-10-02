@@ -113,11 +113,11 @@ function bassLine(style, r, chord, next) {
   const ev = (at, dur, midi, vel) => ({ inst: 'bass', layer: 'bass', at, dur, midi, vel });
   switch (style) {
     case 'long': {
-      if (chord.bass === chord.root && r.chance(0.3)) return [ev(0, 2.4, root, 0.8), ev(2.5, 1.4, fifth, 0.6)];
-      return [ev(0, 3.9, root, 0.8)];
+      if (chord.bass === chord.root && r.chance(0.3)) return [ev(0, 2.45, root, 0.8), ev(2.5, 1.48, fifth, 0.6)];
+      return [ev(0, 3.97, root, 0.8)]; // legato into the next bar: no gap, no re-attack bump
     }
     case 'sub':
-      return r.chance(0.35) ? [ev(0, 2.4, root, 0.85), ev(2.5, 1.4, fifth, 0.55)] : [ev(0, 3.9, root, 0.85)];
+      return r.chance(0.35) ? [ev(0, 2.45, root, 0.85), ev(2.5, 1.48, fifth, 0.55)] : [ev(0, 3.97, root, 0.85)];
     case 'walk':
       return [
         ev(0, 0.92, root, 0.85),
@@ -231,6 +231,8 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
   const next = chordAt(pal, n + 1, id);
   const out = [];
   const human = () => 0.92 + r() * 0.14;
+  // Timbral ducking: instruments play darker under speech, brighter when the music is alone.
+  const bright = arr.bright ?? 1;
 
   // Pad: the chord as a slow swell, voiced low and close.
   if (isOn(arr, prev, 'pad')) {
@@ -238,7 +240,7 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
     state.padVoicing = v;
     v.forEach((midi, i) => out.push({
       inst: 'pad', layer: 'pad', at: 0, dur: 4, midi, vel: 0.8 * human(),
-      p: { wave: pal.pad.wave, lpTo: pal.pad.lpTo, attack: pal.pad.attack, pan: (i - (v.length - 1) / 2) * 0.22 },
+      p: { wave: pal.pad.wave, lpTo: pal.pad.lpTo * bright, attack: pal.pad.attack, pan: (i - (v.length - 1) / 2) * 0.22 },
     }));
   }
 
@@ -255,7 +257,7 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
       const accent = at % 1 === 0 ? 1 : 0.85;
       v.forEach((midi, i) => out.push({
         inst, layer: 'keys', at, dur, midi, vel: 0.75 * accent * human(), strum: i * roll * r.range(0.6, 1.2),
-        p: { index: pal.keys.index, attack: pal.keys.attack, wave: pal.keys.wave, bright: pal.keys.bright, decay: pal.keys.decay, pan: (i - 1.5) * 0.12 },
+        p: { index: (pal.keys.index ?? 0.8) * bright, tine: Math.max(0, bright - 1), attack: pal.keys.attack, wave: pal.keys.wave, bright: (pal.keys.bright ?? 2000) * bright, decay: pal.keys.decay, pan: (i - 1.5) * 0.12 },
       }));
     }
   }
@@ -320,7 +322,7 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
       const accent = (i * a.rate) % 1 === 0 ? 1 : 0.7;
       out.push({
         inst: a.inst, layer: 'arp', at: i * a.rate, dur: a.rate * 0.9, midi, vel: 0.8 * accent * human(),
-        p: { wave: a.wave, decay: a.inst === 'bell' ? 0.35 : 0.12, bright: 1600, pan: ((i % 4) - 1.5) * 0.25 },
+        p: { wave: a.wave, decay: a.inst === 'bell' ? 0.35 : 0.12, bright: 1600 * bright, pan: ((i % 4) - 1.5) * 0.25 },
       });
     }
   }

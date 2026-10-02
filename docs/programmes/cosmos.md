@@ -18,9 +18,9 @@ A late-evening observatory: dark, quiet, exact. For adults who read the science 
 **BBC The Sky at Night**
 - A monthly 30-minute show. Aderin-Pocock and Lintott present, Pete Lawrence's observing section has run since 2004, and there are viewer "Question Time" specials ([memorabletv](https://www.memorabletv.com/news/sky-night-question-time/), [Wikipedia](https://en.wikipedia.org/wiki/The_Sky_at_Night)).
 - Theme: Sibelius's "At the Castle Gate" since 1957, which is grave and unhurried ([SecondHandSongs](https://secondhandsongs.com/performance/1303749)).
-- Patrick Moore's "rapid diction" never stumbled ([Royal Society](https://royalsocietypublishing.org/doi/10.1098/rsbm.2019.0029)). His authority came from fluency.
+- Patrick Moore's authority came from fluent "rapid diction" ([Royal Society](https://royalsocietypublishing.org/doi/10.1098/rsbm.2019.0029)).
 - The 2013 "flashy new graphics" put off some viewers ([BAA forum](https://britastro.org/forums/topic/bbc-sky-at-night)).
-- **Lesson:** fixed segments, plain-speaking experts and a serious theme.
+- **Lesson:** fixed segments, plain experts, a serious theme.
 
 **BBC Stargazing Live and The Infinite Monkey Cage**
 - A scientist (Brian Cox) plus a comedian and amateur astronomer (Dara Ó Briain), live from the Jodrell Bank control room, with telescope links abroad ([Wikipedia](https://en.wikipedia.org/wiki/Stargazing_Live), [Manchester](https://www.manchester.ac.uk/about/news/brian-cox-to-host-live-astronomy-show-from-jodrell-bank/)).
@@ -231,16 +231,13 @@ A late-evening observatory: dark, quiet, exact. For adults who read the science 
 - **NUMBER OF THE DAY:** the strap tag flips in 0.3 s and the sting plays.
 - **Into a break:** wide shot, Nova's toss, a 1 s hold, the stinger.
 - **Out of a break:** stinger, wide shot, bug glint.
-- **End:** a 0.5 s dip to black before the end card, the only one in the show.
+- **End:** a 0.5 s dip to black before the end card (the only one).
 
 ### Do / Don't
 
 **Do**
-- Make one white figure the hero.
-- Let silence carry reveals.
-- Use slow pans inside pictures and keep the studio still.
+- Make one white figure the hero, and let silence carry the reveal.
 - Pair a deadpan robot with a straight-faced partner.
-- Keep the wall muted, two steps darker than the faces.
 
 **Don't (childish or cheap)**
 - Wavy candy stripes on planets (the current open's magenta wave), saturated nebula gradients, twinkling or shooting stars.

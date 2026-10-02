@@ -268,6 +268,19 @@ export class Rig {
     mg.connect(car.frequency);
     mg.connect(car2.frequency);
     const twin = this.gain(0.55);
+    const srcs = [car, car2, mod];
+    const extra = [];
+    // Tine: a quick high partial on the attack, only when the music plays alone (p.tine > 0).
+    if (p.tine > 0) {
+      const tine = this.osc('sine', f * 7.02, t, false);
+      const tg = this.gain(0);
+      tg.gain.setValueAtTime(0, t);
+      tg.gain.linearRampToValueAtTime(0.03 * vel * Math.min(1, p.tine * 2.5), t + 0.002);
+      tg.gain.setTargetAtTime(0, t + 0.002, 0.04);
+      tine.connect(tg);
+      srcs.push(tine);
+      extra.push(tg);
+    }
     const amp = this.gain(0);
     const peak = 0.1 * vel;
     const atk = p.attack ?? 0.012;
@@ -279,8 +292,9 @@ export class Rig {
     pan.pan.value = p.pan ?? 0;
     car.connect(amp);
     car2.connect(twin).connect(amp);
+    for (const tg of extra) tg.connect(amp);
     amp.connect(pan).connect(dest);
-    this.play([car, car2, mod], [mg, twin, amp, pan], t, t + dur + (p.release ?? 0.16) * 6);
+    this.play(srcs, [mg, twin, amp, pan, ...extra], t, t + dur + (p.release ?? 0.16) * 6);
   }
 
   /** Slow pulse pad: two detuned band-limited pulses, low-pass that opens with the swell. */
@@ -319,18 +333,19 @@ export class Rig {
     const f = hz(midi);
     const o = this.osc(p.wave || 'triangle', f, t);
     const body = this.osc('sine', f, t);
-    const bg = this.gain(0.55);
+    const bg = this.gain(0.4);
     const lp = this.filter('lowpass', p.lp ?? 650, 0.6);
     const amp = this.gain(0);
     const peak = 0.1 * vel;
     amp.gain.setValueAtTime(0, t);
     amp.gain.linearRampToValueAtTime(peak, t + 0.014);
     amp.gain.setTargetAtTime(peak * 0.72, t + 0.014, 0.3);
-    amp.gain.setTargetAtTime(0, t + dur, 0.045);
+    const rel = p.release ?? 0.06;
+    amp.gain.setTargetAtTime(0, t + dur, rel);
     o.connect(lp);
     body.connect(bg).connect(lp);
     lp.connect(amp).connect(dest);
-    this.play([o, body], [bg, lp, amp], t, t + dur + 0.35);
+    this.play([o, body], [bg, lp, amp], t, t + dur + rel * 7);
   }
 
   /** Celesta-like bell (the motif's voice): FM ratio 2 with a fast-decaying index. */
@@ -412,13 +427,13 @@ export class Rig {
   }
 
   kick(t, vel, dest) {
-    const o = this.osc('sine', 112, t, false);
-    o.frequency.setValueAtTime(112, t);
-    o.frequency.exponentialRampToValueAtTime(46, t + 0.1);
+    const o = this.osc('sine', 118, t, false);
+    o.frequency.setValueAtTime(118, t);
+    o.frequency.exponentialRampToValueAtTime(54, t + 0.09);
     const amp = this.gain(0);
     amp.gain.setValueAtTime(0, t);
     amp.gain.linearRampToValueAtTime(0.24 * vel, t + 0.004);
-    amp.gain.setTargetAtTime(0, t + 0.004, 0.11);
+    amp.gain.setTargetAtTime(0, t + 0.004, 0.085);
     o.connect(amp).connect(dest);
     // A felt "knock" so the kick reads on small speakers, kept below 1 kHz.
     const n = this.noise(t);

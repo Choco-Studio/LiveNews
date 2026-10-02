@@ -136,6 +136,7 @@ export class Director {
           },
         })
       );
+      this.audio.sfx('promo'); // the signature left hanging: "stay with us"
       await sleep(4200);
     }
   }

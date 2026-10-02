@@ -34,30 +34,40 @@ CALIBRATION_TEXT = (
     'full study next month.'
 )
 
-# One line per presenter, written in character (see config/channel.json).
+# One line per presenter, in character and in the channel's adult, dry register
+# (see the owner's tone correction and docs/programmes/*.md).
 LINES = {
-    'paco': "Good evening. Leaders from forty nations met in Geneva today and agreed, at last, "
-            "on a plan to protect the world's oceans. It took nine years. Nobody said diplomacy was quick.",
-    'lola': "Thanks, Paco! Now, here's a story that made the whole newsroom smile: a retired teacher "
-            "in Lisbon has knitted more than two thousand hats for newborn babies, and she says she's "
-            "only getting started.",
-    'max': "Okay, this one is wild. A start-up in Seoul has built a phone battery that charges in "
-           "ninety seconds. Ninety! I've had toast that took longer. Ada, tell me you're not impressed.",
-    'ada': "I'm impressed, Max, but cautiously. The company hasn't published independent tests yet, "
-           "and fast charging usually means more heat. So the question is simple: how long does the "
-           "battery actually last?",
-    'nova': "Tonight, the James Webb telescope has spotted water vapour around a planet 120 light "
-            "years away. Think of it like seeing the steam from a cup of tea, from the other side "
-            "of the country.",
-    'unit8': "Correction. The planet is 120 light years away. At current rocket speeds, the trip "
-             "would take two million years. I have added it to my calendar.",
-    'penny': "Markets closed higher today. The FTSE 100 rose 1.2%, and the pound gained against the "
-             "dollar. For households, the headline is simpler: mortgage rates are expected to fall "
-             "slightly from next month.",
-    'sam': "Here are the headlines at nine o'clock. Heavy rain has closed schools across northern "
-           "Italy, Japan's new bullet train has set a speed record, and in sport, Brazil are through "
-           "to the final.",
+    'paco': "Good evening. Leaders from forty nations have agreed, after nine years of talks, on a "
+            "treaty to protect the high seas. It covers almost half the planet's surface. Nobody ever "
+            "said diplomacy was quick.",
+    'lola': "Thanks, Paco. In Lisbon, a retired teacher has knitted more than two thousand hats for "
+            "newborn babies in the city's hospitals. She says the secret is simple: one row every "
+            "evening, and never on a Sunday.",
+    'max': "A start-up in Seoul says its new phone battery charges fully in ninety seconds. It has "
+           "shown the demo, but not the independent tests. If it works, the slowest part of your "
+           "morning will be the kettle.",
+    'ada': "Ninety seconds is the headline. The small print says the battery was tested in a lab, at "
+           "room temperature, for two weeks. So the question is the one nobody has answered yet: how "
+           "long does it actually last?",
+    'nova': "The James Webb Space Telescope has found water vapour around a planet 120 light years "
+            "away. Think of it as seeing the steam from a cup of tea on the other side of the country. "
+            "It does not mean life. It means we know where to look.",
+    'unit8': "Number of the day: 120. That is the distance to the planet, in light years. At current "
+             "rocket speeds, the journey would take two million years. I have cleared my calendar.",
+    'penny': "Markets closed higher today. The FTSE 100 rose 1.2%, and the pound gained half a cent "
+             "against the dollar. For households, the headline is simpler: mortgage rates are expected "
+             "to fall slightly from next month.",
+    'sam': "The headlines at nine o'clock. Heavy rain has closed schools across northern Italy. Japan's "
+           "new bullet train has set a speed record of 443 kilometres an hour. And in football, Brazil "
+           "are through to the final.",
 }
+
+# Overall reading pace (words per minute, pauses included) from the style
+# bibles: world-now (Paco 165-175, Lola 172-185), tech-bytes (stories 165-175,
+# Max ~10 above Ada), cosmos (Nova 140-150, UNIT-8 125-135); money and
+# news-60 have no bible yet: crisp 172 and rapid-fire 185.
+TARGET_WPM = {'paco': 170, 'lola': 178, 'max': 175, 'ada': 166, 'nova': 145, 'unit8': 130,
+              'penny': 172, 'sam': 185}
 
 TONE_BANDS = [1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 11200]
 LTAS_BANDS = [100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000] + TONE_BANDS[:-1]
@@ -137,12 +147,25 @@ def cmd_calibrate(args):
     print('wrote tone.json')
 
 
+def overall_wpm(reply):
+    return 60 * len(reply['words']) / reply['duration'] if reply['duration'] else 0.0
+
+
 def cmd_rates(args):
+    """Measured pace per preset on the calibration text and on its own line, and
+    the speed that would hit the bible's target (pace scales ~linearly with speed)."""
     eng = make_engine()
     for pid in sorted(eng.presets):
-        _, _, reply = eng.speak({'text': CALIBRATION_TEXT, 'voice': pid, 'raw': True})
-        print(f'{pid:6s} {eng.presets[pid]["voice"]:32s} speed {reply["speed"]:.2f} '
-              f'{metrics.speech_rate(reply["words"], reply["phrases"]):5.0f} wpm (speaking time)')
+        speed = float(eng.presets[pid].get('speed') or 1.0)
+        rates = []
+        for text in (CALIBRATION_TEXT, LINES.get(pid, CALIBRATION_TEXT)):
+            _, _, reply = eng.speak({'text': text, 'voice': pid, 'raw': True})
+            rates.append(overall_wpm(reply))
+        wpm = sum(rates) / len(rates)
+        target = TARGET_WPM.get(pid, 175)
+        print(f'{pid:6s} {eng.presets[pid]["voice"]:30s} speed {speed:.2f} -> '
+              f'{rates[0]:5.0f} / {rates[1]:5.0f} wpm (calib / line), target {target}, '
+              f'suggest speed {speed * target / wpm:.2f}', flush=True)
 
 
 def cmd_samples(args):
@@ -175,7 +198,8 @@ def cmd_samples(args):
             'm4a': ebur128(os.path.join(out, pid + '.m4a')),
             'ogg': ebur128(os.path.join(out, pid + '.ogg')),
             'raw': ebur128(os.path.join(out, 'raw', pid + '.wav')),
-            'wpm': round(metrics.speech_rate(reply['words'], reply['phrases'])),
+            'wpm': round(overall_wpm(reply)),
+            'targetWpm': TARGET_WPM.get(pid),
             'f0': round(metrics.f0_median(audio, sr)),
             'sibilanceDb': round(metrics.sibilance_db(audio, sr), 1),
             'rawSibilanceDb': round(metrics.sibilance_db(raw, sr), 1),

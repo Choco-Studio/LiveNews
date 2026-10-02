@@ -92,6 +92,11 @@ describe('extractFigures', () => {
     assert.equal(extractFigures('More than 160 million passengers used the network.')[0].fact, '160 MILLION PASSENGERS');
   });
 
+  test('a magnitude is named before its figure, and labels stop at the verb', () => {
+    assert.equal(extractFigures('A magnitude 5.8 earthquake shook northern Chile.')[0].fact, 'MAGNITUDE 5.8');
+    assert.equal(extractFigures('Some 300 workers took part.')[0].fact, '300 WORKERS');
+  });
+
   test('skips bare years, dates, clock times, ordinals and bare small numbers', () => {
     assert.deepEqual(extractFigures('By 2030, on 12 March at 10:30, for the 3rd time, 4 said.'), []);
   });

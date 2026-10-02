@@ -257,14 +257,21 @@ def loudness_normalise(x, sr, target, ceiling_db):
     lufs = integrated_loudness(x, sr)
     if not math.isfinite(lufs):
         return x
-    gain = 10 ** ((target - lufs) / 20)
+    g_db = target - lufs
     y = x
+    prev = None  # (gain dB, loudness) of the previous pass
     for _ in range(8):
-        y = _limit_to(x * gain, sr, ceiling_db)
+        y = _limit_to(x * 10 ** (g_db / 20), sr, ceiling_db)
         got = integrated_loudness(y, sr)
         if abs(got - target) < 0.08:
             break
-        gain *= 10 ** ((target - got) / 20)
+        # Secant step: when the limiter absorbs part of each dB, loudness
+        # rises less than the gain, and the measured slope says by how much
+        slope = 1.0
+        if prev and abs(got - prev[1]) > 1e-3 and abs(g_db - prev[0]) > 1e-3:
+            slope = min(1.0, max(0.15, (got - prev[1]) / (g_db - prev[0])))
+        prev = (g_db, got)
+        g_db += min(6.0, (target - got) / slope)
     return y
 
 
@@ -413,31 +420,45 @@ def vocode(x, sr, f0=104.0, n_fft=512, hop=128, lifter_ms=1.4, seed=8):
     return y * 10 ** (np.interp(np.arange(n), centres, corr) / 20)
 
 
-def robot(x, sr, mix=0.42, f0=104.0, comb_ms=3.1, comb_g=0.32, wobble_hz=33.0,
-          wobble=0.22, crush_mix=0.10, crush_bits=7, crush_hz=8000):
-    """UNIT-8: friendly robot, never at the cost of the words.
+ROBOT = {
+    'f0': 100.0,         # monotone pitch of the machine layer (Hz)
+    'split': 2400.0,     # below: pitch lives here -> mostly machine; above: consonants -> mostly dry
+    'low_machine': 0.85,
+    'high_machine': 0.30,
+    'comb_ms': 2.7, 'comb_g': 0.22,   # short metallic body
+    'crush_mix': 0.06, 'crush_bits': 8, 'crush_hz': 9000,
+}
 
-    Dry voice (keeps prosody and consonants) + monotone vocoder layer (the
-    'machine' timbre) -> short metallic comb (tin-can body) -> light amplitude
-    wobble (servo buzz) -> a touch of bit-crushed grit in the mid band only.
+
+def robot(x, sr, **params):
+    """UNIT-8: an instrument that speaks. Robotic by monotone, not by gimmick.
+
+    The style bible (docs/programmes/cosmos.md) asks for an even, clipped
+    delivery with a narrow pitch range, "not a cartoon pitch shift". So the
+    band where pitch is heard (< 2.4 kHz) comes mostly from a fixed-pitch
+    vocoder carrying the voice's formants, while the consonant band stays
+    mostly dry for intelligibility (checked with STOI in measure.py). A short,
+    faint comb gives a metal body and a trace of bit-crush a digital edge.
     """
-    voc = vocode(x, sr, f0=f0)
-    y = (1 - mix) * x + mix * voc
-    d = max(1, int(comb_ms / 1000 * sr))
-    y = fft_filter(y, lambda f: 1 / (1 - comb_g * np.exp(-2j * np.pi * f * d / sr)), sr, pad=0.05)
-    y *= 1 - comb_g * 0.5  # comb adds ~+3 dB at its peaks
-    t = np.arange(len(y)) / sr
-    y = y * ((1 - wobble) + wobble * (0.5 + 0.5 * np.sin(2 * np.pi * wobble_hz * t)))
-    if crush_mix > 0:
-        hold = max(1, int(round(sr / crush_hz)))
+    p = {**ROBOT, **params}
+    voc = vocode(x, sr, f0=p['f0'])
+    xl, xh = band_split(x, sr, p['split'] - 300, p['split'] + 300)
+    vl, vh = band_split(voc, sr, p['split'] - 300, p['split'] + 300)
+    y = ((1 - p['low_machine']) * xl + p['low_machine'] * vl
+         + (1 - p['high_machine']) * xh + p['high_machine'] * vh)
+    d = max(1, int(p['comb_ms'] / 1000 * sr))
+    g = p['comb_g']
+    y = fft_filter(y, lambda f: (1 - g) / (1 - g * np.exp(-2j * np.pi * f * d / sr)), sr, pad=0.05)
+    if p['crush_mix'] > 0:
+        hold = max(1, int(round(sr / p['crush_hz'])))
         held = np.repeat(y[::hold], hold)[:len(y)]
         peak = np.max(np.abs(held)) or 1.0
-        q = 2 ** (crush_bits - 1)
+        q = 2 ** (p['crush_bits'] - 1)
         crushed = np.round(held / peak * q) / q * peak
         crushed = fft_filter(crushed, lambda f: biquad_response(
-            [biquad('highpass', 1200, sr), biquad('lowpass', 5500, sr)], f, sr), sr, pad=0.02)
-        y = y + crush_mix * crushed
-    return fft_filter(y, lambda f: biquad_response([biquad('highpass', 120, sr, q=0.6)], f, sr), sr, pad=0.05)
+            [biquad('highpass', 1500, sr), biquad('lowpass', 6000, sr)], f, sr), sr, pad=0.02)
+        y = y + p['crush_mix'] * crushed
+    return fft_filter(y, lambda f: biquad_response([biquad('highpass', 110, sr, q=0.6)], f, sr), sr, pad=0.05)
 
 
 # ---------------------------------------------------------------- chain
