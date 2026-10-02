@@ -12,8 +12,9 @@ import { estimateLoudness } from './loudness.js';
 export const DUCK_LEVEL = 0.32; // music under speech: -10 dB
 export const CEILING = 0.87; // master peak limit, -1.2 dBFS
 const COMP = { threshold: -7, knee: 3, ratio: 12 };
-// WebAudio's DynamicsCompressor make-up gain: (1 / gain at 0 dBFS) ^ 0.6.
-export const COMP_MAKEUP = 10 ** ((0.6 * (-COMP.threshold - -COMP.threshold / COMP.ratio)) / 20);
+// WebAudio's DynamicsCompressor adds make-up gain, (1 / gain at 0 dBFS) ^ 0.6;
+// with its soft knee that is 3.3 dB for these settings (measured in the lab).
+export const COMP_MAKEUP = 10 ** (3.3 / 20);
 const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
 
 // ------------------------------------------------------------------ bank
@@ -48,8 +49,10 @@ function lfsrBuffer(ctx, short, seconds = 1) {
   return buf;
 }
 
-// A small, dark room: a few early reflections and an exponential tail of
-// filtered noise, unit energy per channel so the send level is the wet level.
+// A small room: a few early reflections and an exponential tail of white
+// noise with unit energy per channel, so a send of x adds x^2 of the dry
+// energy (the loudness model relies on it); the darkness comes from a
+// low-pass after the convolver, which leaves the low and mid range at unity.
 function roomImpulse(ctx, seconds = 1.1) {
   const sr = ctx.sampleRate;
   const n = Math.floor(sr * seconds);
@@ -57,11 +60,9 @@ function roomImpulse(ctx, seconds = 1.1) {
   for (let c = 0; c < 2; c++) {
     const d = buf.getChannelData(c);
     const rnd = mulberry(7 + c * 31);
-    let lp = 0;
     for (let i = 0; i < n; i++) {
       const t = i / sr;
-      lp += 0.35 * (rnd() * 2 - 1 - lp);
-      d[i] = lp * Math.exp((-6.9 * t) / seconds) * Math.min(1, t / 0.012);
+      d[i] = (rnd() * 2 - 1) * Math.exp((-6.9 * t) / seconds) * Math.min(1, t / 0.012);
     }
     for (const [ms, g] of [[11, 0.5], [17, 0.35], [23, 0.28], [31, 0.2]]) d[Math.floor(((ms + c * 2) / 1000) * sr)] += g;
     let e = 0;
@@ -145,7 +146,11 @@ export function buildBuses(ctx, { volume = 0.8, raw = false } = {}) {
   const reverb = ctx.createConvolver();
   reverb.normalize = false;
   reverb.buffer = b.ir;
-  reverb.connect(duck);
+  const dark = ctx.createBiquadFilter();
+  dark.type = 'lowpass';
+  dark.frequency.value = 3200;
+  dark.Q.value = 0.5;
+  reverb.connect(dark).connect(duck);
   const speech = ctx.createGain();
   speech.connect(master);
   return { ctx, master, duck, music, reverb, speech, out, mute, comp, raw };

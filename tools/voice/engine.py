@@ -120,7 +120,17 @@ class VoiceEngine:
             fm, fv = find_models()
             model, voices = model or fm, voices or fv
         self.model_path, self.voices_path = model, voices
-        self.kokoro = Kokoro(model, voices)
+        threads = int(os.environ.get('KOKORO_THREADS') or 0)
+        if threads > 0 and hasattr(Kokoro, 'from_session'):
+            # Cap CPU use so a live channel (browser/OBS) keeps its cores
+            import onnxruntime as rt
+            opts = rt.SessionOptions()
+            opts.intra_op_num_threads = threads
+            opts.inter_op_num_threads = 1
+            sess = rt.InferenceSession(model, sess_options=opts, providers=['CPUExecutionProvider'])
+            self.kokoro = Kokoro.from_session(sess, voices)
+        else:
+            self.kokoro = Kokoro(model, voices)
         self.vocab = getattr(self.kokoro.tokenizer, 'vocab', None) or _default_vocab()
         self._backends = {}
         self._styles = {}

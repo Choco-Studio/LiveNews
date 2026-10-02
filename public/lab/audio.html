@@ -293,6 +293,7 @@
         rect(xv(TARGET_LUFS - 3), 18, xv(TARGET_LUFS + 3) - xv(TARGET_LUFS - 3), rows.length * 10 + 2, '#24304a');
         rect(xv(TARGET_LUFS), 18, 1, rows.length * 10 + 2, P.steel);
         rows.forEach((r, i) => {
+          stats[r.item.id] = { lufs: r.L.integrated, model: r.est.integrated + r.est.gainDb, peak: r.L.peakDb, worstStep: r.probe.worst, clicks: r.probe.clicks.length, trim: r.song.trim };
           const y = 19 + i * 10;
           const target = TARGET_LUFS + (r.song.trim || 0);
           const ok = Math.abs(r.L.integrated - target) <= 3;
