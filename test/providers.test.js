@@ -369,6 +369,34 @@ describe('ProviderChain', () => {
     await chain.generate(review, parseJson);
     assert.deepEqual(a.requests, [write, review]);
   });
+
+  test('the review stage is never handed to a provider that cannot review (reviews: false), which is not paused for it', async () => {
+    const writer = makeProvider('writer');
+    writer.reviews = false;
+    const editor = makeProvider('editor');
+    const { chain } = makeChain([writer, editor]);
+    const out = await chain.generate({ stage: 'review', prompt: 'p' }, parseJson);
+    assert.equal(out.provider, 'editor');
+    assert.equal(writer.calls, 0);
+    assert.equal(chain.status()[0].cooldownUntil, null);
+    assert.equal((await chain.generate({ stage: 'write', prompt: 'p' }, parseJson)).provider, 'writer', 'it still writes');
+  });
+
+  test('with no provider able to review, the review fails with code NO_REVIEWER and a clear message', async () => {
+    const writer = makeProvider('writer');
+    writer.reviews = false;
+    const { chain } = makeChain([writer]);
+    await assert.rejects(chain.generate({ stage: 'review', prompt: 'p' }, parseJson), (err) => err.code === 'NO_REVIEWER' && /cannot review/.test(err.message));
+  });
+
+  test('a reviewer that is merely paused is "no provider available", not NO_REVIEWER', async () => {
+    const writer = makeProvider('writer');
+    writer.reviews = false;
+    const editor = makeProvider('editor', { generate: throwing('boom') });
+    const { chain } = makeChain([writer, editor]);
+    await assert.rejects(chain.generate({ stage: 'review', prompt: 'p' }, parseJson), /editor: boom/);
+    await assert.rejects(chain.generate({ stage: 'review', prompt: 'p' }, parseJson), (err) => err.code !== 'NO_REVIEWER' && /all paused/.test(err.message));
+  });
 });
 
 describe('ProviderChain usage tracking', () => {

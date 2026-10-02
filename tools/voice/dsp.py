@@ -6,7 +6,8 @@ some male voices rumble below 100 Hz, and clips end with a few hundred ms of
 low-level junk. A presenter on a real channel goes through a processing chain
 before air; this module is that chain, run once per clip:
 
-  1. high-pass 70 Hz (4th order), per-voice tonal match, mud cut, presence, air
+  1. high-pass 70 Hz (4th order), notches on the vocoder whistles, per-voice
+     tonal match, mud cut, presence, air
   2. optional character effect (UNIT-8's robot)
   3. de-esser (split-band, only the 5 kHz+ band is turned down, only on 's')
   4. gentle compressor (RMS, soft knee, ~2-4 dB on vowels)
@@ -30,6 +31,7 @@ from loudness import (biquad_response, fft_filter, integrated_loudness, next_fas
 # index, spectral tilt and STOI for the robot. Change with care.
 DEFAULTS = {
     'hp_hz': 70.0,
+    'notch_hz': (4800.0, 9600.0), 'notch_db': -20.0, 'notch_sigma': 9.0,
     'mud_hz': 290.0, 'mud_db': -1.5, 'mud_q': 1.0,
     'presence_hz': 3300.0, 'presence_db': 1.5, 'presence_q': 0.9,
     'air_hz': 9000.0, 'air_db': 1.5,
@@ -85,8 +87,25 @@ def tone_curve(points):
     return magnitude
 
 
+def notch_curve(centres, depth_db, sigma):
+    """Zero-phase Gaussian dips (dB) at the given frequencies.
+
+    Kokoro's iSTFT vocoder works at a 5-sample hop (4800 frames/s at 24 kHz),
+    which leaves steady whistles at 4800 and 9600 Hz, 7-17 dB above the voice
+    around them. They are a few Hz wide, so notches this narrow (applied on the
+    whole-clip spectrum) take them out without touching the voice.
+    """
+    def magnitude(freqs):
+        db = np.zeros_like(freqs, dtype=np.float64)
+        for c in centres:
+            db += depth_db * np.exp(-0.5 * ((freqs - c) / sigma) ** 2)
+            db += 0.3 * depth_db * np.exp(-0.5 * ((freqs - c) / (3 * sigma)) ** 2)
+        return 10 ** (np.maximum(db, depth_db) / 20)
+    return magnitude
+
+
 def equalise(x, sr, o, tone=None):
-    """High-pass + broadcast EQ (+ per-voice tonal match) in a single FFT pass."""
+    """High-pass, whistle notches, broadcast EQ and tonal match in one FFT pass."""
     coeffs = [
         biquad('highpass', o['hp_hz'], sr, q=0.5412),
         biquad('highpass', o['hp_hz'], sr, q=1.3066),
@@ -95,10 +114,16 @@ def equalise(x, sr, o, tone=None):
         biquad('highshelf', min(o['air_hz'], sr * 0.42), sr, gain_db=o['air_db'], slope=0.8),
     ]
     curve = tone_curve(tone)
+    notches = [f for f in o['notch_hz'] if f < sr / 2 - 100]
+    notch = notch_curve(notches, o['notch_db'], o['notch_sigma']) if notches and o['notch_db'] < 0 else None
 
     def response(freqs):
         h = biquad_response(coeffs, freqs, sr)
-        return h * curve(freqs) if curve else h
+        if curve:
+            h = h * curve(freqs)
+        if notch:
+            h = h * notch(freqs)
+        return h
     return fft_filter(x, response, sr, pad=0.3)
 
 

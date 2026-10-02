@@ -514,6 +514,26 @@ describe('Producer review stage', () => {
     }
   );
 
+  test('the normaliser gets the programme features and our own names (so "NEWS IN 60" or "UNIT-8" never look like invented numbers)', async () => {
+    const { producer, chain } = makeProducer();
+    const open = makeChannel();
+    open.programs.duo.title = 'DUO 24';
+    open.programs.duo.features = ['lighter'];
+    open.presenters.bob.name = 'BOB-9';
+    chain.write = async () =>
+      scriptText([
+        { type: 'intro', anchor: 'A', emotion: 'happy', text: 'Welcome to DUO 24. With me, BOB-9.' },
+        storySeg('s1'),
+        storySeg('s2', { feature: 'lighter', emotion: 'happy' }),
+      ]);
+    const episode = await producer.produce(open, 'duo');
+    assert.equal(episode.segments[0].text, 'Welcome to DUO 24. With me, BOB-9.');
+    assert.equal(episode.segments.find((s) => s.storyId === 's2').feature, 'lighter');
+    chain.write = async () => scriptText([storySeg('s3', { feature: 'number', fact: null }), storySeg('s4', { feature: 'roundup' })]);
+    const other = await producer.produce(open, 'duo');
+    assert.ok(other.segments.every((s) => !s.feature), 'features the programme does not list are dropped');
+  });
+
   test('is skipped when config.reviewPass is off', async () => {
     const { producer, chain } = makeProducer({ config: { ...CONFIG, reviewPass: false } });
     const episode = await producer.produce(channel, 'duo');
@@ -719,6 +739,19 @@ describe('Producer with the real NewsDesk, ProviderChain and mock provider', () 
       assert.equal(episode.title, `${program.title} (demo)`);
     });
   }
+
+  test('with only the offline mock the review stage reports reviewed: false (nothing was checked) and keeps the script', async () => {
+    const desk = makeRealDesk();
+    const logs = [];
+    const chain = new ProviderChain([createMockProvider()], { record() {} }, { log: silentLogger });
+    const producer = new Producer({ config: { ...CONFIG, reviewPass: true }, newsDesk: desk, chain, log: { info: (m) => logs.push(m), warn: (m) => logs.push(`WARN ${m}`), error() {} } });
+    const episode = await producer.produce(realChannel, 'world-now');
+    const review = episode.pipeline.find((p) => p.stage === 'review');
+    assert.equal(review.reviewed, false);
+    assert.match(review.error, /cannot review/);
+    assert.ok(!logs.some((l) => l.startsWith('WARN')), 'not a warning: there is simply no editor configured');
+    assert.ok(episode.segments.length > 2);
+  });
 
   test('covers what it airs, offers what it passed over, and does not air the same story twice', async () => {
     const desk = makeRealDesk();

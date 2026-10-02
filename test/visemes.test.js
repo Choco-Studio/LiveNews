@@ -1,9 +1,16 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { VISEMES, buildTimeline, sampleTimeline, speechTokens, wordAtChar, blipPlan, SpeechClock } from '../public/js/audio/visemes.js';
+import { parseTune, flatten, songSeconds, noteToMidi, resolveInstrument } from '../public/js/audio/tune.js';
+import { themeFor, THEME_IDS, MOTIF, COLOURS, CUES, IDENT, STINGER, BREAKING, OUTRO, PROMO } from '../public/js/audio/themes.js';
+import { measureLoudness, estimateLoudness, envelopeEnergy, TARGET_LUFS } from '../public/js/audio/loudness.js';
+import { resolveVoices, normProfile, voiceQuality } from '../public/js/audio/voices.js';
+import { ADS } from '../public/js/ads/index.js';
 
-// public/js/audio/visemes.js is the speech timeline behind the presenters'
-// mouths (AudioEngine.speechFrame). It is pure, so it is tested here directly.
+// The audio stream's pure modules (public/js/audio/): the speech timeline
+// behind the presenters' mouths (AudioEngine.speechFrame), the tune format,
+// the channel's sonic identity, the loudness model and the TTS voice choice.
+// The WebAudio side is measured in public/lab/audio.html.
 
 const shapes = (text, opts) => buildTimeline(text, opts).segs.map((s) => s.v);
 const sample = (tl, step = 5) => {
@@ -277,5 +284,175 @@ describe('SpeechClock', () => {
       assert.ok(t >= last);
       last = t;
     }
+  });
+});
+
+describe('tune format', () => {
+  test('the classic format still parses: lead, bass and drums with their waves', () => {
+    const song = parseTune({ bpm: 140, wave: 'square', notes: 'C5:1 E5:1 G5:2 R:1', bass: 'C3:2 G2:2', bassWave: 'triangle', drums: 'K:1 H:0.5 S:1' });
+    assert.equal(song.bpm, 140);
+    assert.deepEqual(song.tracks.map((t) => t.kind), ['lead', 'bass', 'drums']);
+    assert.equal(song.tracks[0].inst.wave, 'pulse50');
+    assert.equal(song.tracks[1].inst.wave, 'tri');
+    assert.equal(song.beats, 5);
+    assert.deepEqual(song.tracks[0].events[0].midis, [72]);
+  });
+
+  test('a plain string is a melody; chords, flats and velocities parse', () => {
+    const song = parseTune('C4+E4+G4:2 Bb3:1@0.5');
+    assert.deepEqual(song.tracks[0].events[0].midis, [60, 64, 67]);
+    assert.equal(song.tracks[0].events[1].midis[0], noteToMidi('A#3'));
+    assert.equal(song.tracks[0].events[1].vel, 0.5);
+  });
+
+  test('bad input never throws: junk tokens become rests, empty tunes are null', () => {
+    assert.equal(parseTune(null), null);
+    assert.equal(parseTune({ notes: '' }), null);
+    const song = parseTune({ notes: 'X9:1 C4:abc ?? D4:1', bpm: 'fast' });
+    assert.equal(song.bpm, 120);
+    assert.equal(song.tracks[0].events.length, 2);
+  });
+
+  test('rich tracks: instruments, kinds, octave and transpose', () => {
+    const song = parseTune({ bpm: 100, transpose: 2, tracks: [
+      { inst: 'brass', notes: 'C4:1' },
+      { kind: 'bass', inst: { wave: 'pulse25', s: 0.5 }, notes: 'C2:1', octave: 1 },
+      { drums: 'K:1 W:2' },
+    ] });
+    assert.equal(song.tracks[0].inst.scoop > 0, true);
+    assert.equal(song.tracks[0].events[0].midis[0], 62);
+    assert.equal(song.tracks[1].events[0].midis[0], 50);
+    assert.equal(song.tracks[1].inst.s, 0.5);
+    assert.deepEqual(song.tracks[2].events.map((e) => e.drum), ['k', 'w']);
+  });
+
+  test('flatten tiles short tracks and swings off-beat eighths', () => {
+    const song = parseTune({ bpm: 120, swing: 0.3, notes: 'C4:0.5 D4:0.5 E4:0.5 F4:0.5', drums: 'H:1' });
+    const ev = flatten(song);
+    assert.equal(ev.filter((e) => song.tracks[e.track].kind === 'drums').length, 2);
+    const d4 = ev.find((e) => e.e.midis?.[0] === 62);
+    assert.ok(Math.abs(d4.at - 0.65) < 1e-9);
+  });
+
+  test('instrument names resolve, unknown ones fall back', () => {
+    assert.equal(resolveInstrument('nonsense').wave, 'pulse50');
+    assert.equal(resolveInstrument('sawtooth', 'bass').wave, 'saw');
+  });
+});
+
+describe('sonic identity', () => {
+  const leadNotes = (tune) => parseTune(tune).tracks[0].events.map((e) => e.midis[0]);
+
+  test('every programme open states the signature, then its own colour note', () => {
+    const colour = { 'world-now': COLOURS.home, 'tech-bytes': COLOURS.tech, cosmos: COLOURS.cosmos, 'money-minute': COLOURS.money, 'news-60': COLOURS.sixty };
+    const keys = new Set();
+    for (const id of THEME_IDS) {
+      const notes = leadNotes(themeFor(id));
+      const tonic = notes[1];
+      assert.deepEqual(notes.slice(0, 4).map((m) => m - tonic), MOTIF.map(([semi]) => semi), id);
+      assert.equal(notes[4] - tonic, colour[id], id);
+      keys.add(tonic % 12);
+    }
+    assert.equal(keys.size, THEME_IDS.length, 'each programme in its own key');
+  });
+
+  test('the final chord lands on the title lock-up and the button on the cut', () => {
+    for (const duration of [3.5, 4, 4.5]) {
+      for (const id of [...THEME_IDS, 'unknown']) {
+        const tune = themeFor(id, { duration });
+        const song = parseTune(tune);
+        const spb = 60 / song.bpm;
+        assert.ok(Math.abs(tune.meta.hitAt - (duration - 0.8)) < 1e-9);
+        const starts = new Set(flatten(song).map((e) => Math.round(e.at * spb * 1000)));
+        assert.ok(starts.has(Math.round(tune.meta.hitAt * 1000)), `${id} hit at ${tune.meta.hitAt}`);
+        assert.ok(starts.has(Math.round(duration * 1000)), `${id} button at ${duration}`);
+        assert.ok(tune.fadeOut >= 0.5, 'the chord rings into the studio shot');
+      }
+    }
+  });
+
+  test('unknown programmes get the generic theme', () => {
+    assert.equal(themeFor('nope').meta.programId, 'generic');
+  });
+
+  test('channel cues: ident, stinger, breaking, sign-off and promo all use the signature', () => {
+    for (const cue of [IDENT, STINGER, BREAKING, OUTRO, PROMO]) {
+      const lead = cue.tracks.find((t) => t.notes && t.kind === 'lead');
+      const notes = parseTune({ bpm: cue.bpm, notes: lead.notes }).tracks[0].events.map((e) => e.midis[0]);
+      const tonic = notes[1];
+      assert.deepEqual(notes.slice(0, 4).map((m) => m - tonic), MOTIF.map(([semi]) => semi));
+    }
+    for (const name of ['jingle', 'whoosh', 'breaking', 'outro', 'promo']) assert.ok(CUES[name], name);
+    assert.ok(songSeconds(parseTune(STINGER)) <= 1.01, 'stinger fits the 0.8 s wipe');
+    assert.ok(songSeconds(parseTune(BREAKING)) <= 3, 'breaking sting at most 3 s');
+  });
+});
+
+describe('loudness', () => {
+  test('the meter reads a full-scale 1 kHz sine in both channels as 0 LUFS', () => {
+    const fs = 48000;
+    const x = new Float32Array(fs * 2);
+    for (let i = 0; i < x.length; i++) x[i] = Math.sin((2 * Math.PI * 1000 * i) / fs);
+    const L = measureLoudness([x, x], fs);
+    assert.ok(Math.abs(L.integrated) < 0.1, `${L.integrated}`);
+    assert.ok(Math.abs(L.peakDb) < 0.01);
+    assert.ok(Math.abs(measureLoudness([x], fs).integrated + 3.01) < 0.1);
+  });
+
+  test('silence is gated out', () => {
+    assert.equal(measureLoudness([new Float32Array(48000)], 48000).integrated, -Infinity);
+  });
+
+  test('the envelope energy of a held note grows with its length', () => {
+    const inst = resolveInstrument('pulse50');
+    assert.ok(envelopeEnergy(inst, 1) > envelopeEnergy(inst, 0.5) * 1.6);
+    assert.ok(envelopeEnergy(inst, 0.001) > 0);
+  });
+
+  test('the model levels every theme, cue and ad tune to the channel target', () => {
+    const tunes = [...THEME_IDS.map((id) => themeFor(id)), IDENT, BREAKING, OUTRO, ...ADS.map((ad) => ad.tune)];
+    for (const tune of tunes) {
+      const est = estimateLoudness(parseTune(tune));
+      assert.ok(Number.isFinite(est.integrated));
+      assert.ok(Math.abs(est.integrated + est.gainDb - TARGET_LUFS) < 0.01, 'within the ±12 dB correction range');
+    }
+  });
+});
+
+describe('TTS voice choice', () => {
+  const v = (name, lang, localService = true) => ({ name, lang, localService });
+  const EDGE = [
+    v('Microsoft David - English (United States)', 'en-US'), v('Microsoft Zira - English (United States)', 'en-US'),
+    v('Microsoft Ryan Online (Natural) - English (United Kingdom)', 'en-GB', false), v('Microsoft Sonia Online (Natural) - English (United Kingdom)', 'en-GB', false),
+    v('Microsoft Guy Online (Natural) - English (United States)', 'en-US', false), v('Microsoft Jenny Online (Natural) - English (United States)', 'en-US', false),
+    v('Microsoft Ana Online (Natural) - English (United States)', 'en-US', false),
+  ];
+  const profiles = (obj) => new Map(Object.entries(obj).map(([k, p]) => [k, normProfile(p)]));
+
+  test('natural voices beat the old desktop ones, in the asked region', () => {
+    const res = resolveVoices({ all: EDGE, voices: EDGE, profiles: profiles({ A: { gender: 'male', lang: 'en-GB' }, B: { gender: 'female', lang: 'en-US' } }) });
+    assert.match(res.get('A').voice.name, /Ryan/);
+    assert.match(res.get('B').voice.name, /Jenny/);
+  });
+
+  test('two presenters of the same gender get two different voices; never the child voice', () => {
+    const res = resolveVoices({ all: EDGE, voices: EDGE, profiles: profiles({ A: { gender: 'female', lang: 'en-US' }, B: { gender: 'female', lang: 'en-US' }, C: { gender: 'female', lang: 'en-US' } }) });
+    const names = ['A', 'B', 'C'].map((k) => res.get(k).voice.name);
+    assert.equal(new Set(names.slice(0, 2)).size, 2);
+    assert.ok(!names.slice(0, 2).some((n) => /Ana/.test(n)), names.join(' | '));
+  });
+
+  test('quality ranks neural > premium > Google > plain > eSpeak', () => {
+    const q = (name, local = true) => voiceQuality({ name, localService: local });
+    assert.ok(q('Microsoft Libby Online (Natural)', false) > q('Ava (Premium)'));
+    assert.ok(q('Ava (Premium)') > q('Google UK English Female', false));
+    assert.ok(q('Google UK English Female', false) > q('Samantha'));
+    assert.ok(q('Samantha') > q('espeak-ng English'));
+  });
+
+  test('a robot presenter gets a robotic voice when there is one', () => {
+    const list = [v('Samantha', 'en-US'), v('Fred', 'en-US'), v('Daniel', 'en-GB')];
+    const res = resolveVoices({ all: list, voices: list, profiles: profiles({ unit8: { gender: 'robot', lang: 'en-US' } }) });
+    assert.equal(res.get('unit8').voice.name, 'Fred');
   });
 });
