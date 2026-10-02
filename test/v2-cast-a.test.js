@@ -110,6 +110,9 @@ test('Penny follows money-minute.md S2: no glasses, persona energy 0.6, a restin
 test('wardrobe stays neutral where the programme accent lives: Sam has no yellow, Penny no green, Lola no candy blue', () => {
   const has = (L, c) => [L.jacket.ramp, L.shirt.ramp, L.tie ? L.tie.ramp : []].some((r) => r.includes(c));
   assert.ok(!has(sam, P.yellow) && !has(sam, P.orange), 'NEWS IN 60 yellow belongs to the graphics');
+  // news-60.md §4 item 8: saturated colour ≤ 6 % of the studio layer, presenter included: Sam's wardrobe is neutral
+  const saturated = [P.red, P.darkRed, P.rust, P.orange, P.yellow, P.green, P.darkGreen, P.cyan, P.blue, P.navy, P.pink, P.magenta, P.purple];
+  for (const c of saturated) assert.ok(!has(sam, c), `Sam's wardrobe has no saturated ${c}`);
   assert.ok(!has(penny, P.green) && !has(penny, P.darkGreen), 'MONEY MINUTE green is market data');
   assert.ok(!lola.jacket.ramp.includes(P.blue), 'Lola keeps the deep blue blazer without the saturated highlight');
   assert.ok(paco.tie.ramp.includes(P.red) && paco.pocket, 'Paco keeps the red tie and the pocket square');

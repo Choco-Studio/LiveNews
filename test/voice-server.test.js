@@ -65,6 +65,7 @@ function fakeWorkerFactory({ delayMs = 0, failStart = null, failText = null, die
         w.alive = false;
       },
       kill() {
+        w.closed = true;
         w.alive = false;
       },
     };

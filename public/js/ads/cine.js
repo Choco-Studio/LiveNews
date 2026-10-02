@@ -348,6 +348,99 @@ export function pool(key, rx, ry, color, steps = 5, peak = 0.5) {
   });
 }
 
+// ---------------------------------------------------------------- soft focus
+
+/**
+ * Palette-pure "out of focus" (bake time only): box-blurs the canvas in place
+ * (`passes` x separable box of radius r ~ a gaussian), then maps every pixel
+ * back onto the colours that were in it before (plus `extra`), ordered-
+ * dithering between the two nearest, and thresholds alpha with the Bayer
+ * matrix. Background figures and practicals read as soft, never as smudged
+ * anti-aliased mush. Generator: yields per few rows so prewarm can slice it.
+ */
+export function* soften(c, w, h, r = 2, { passes = 2, extra = null, maxColours = 24 } = {}) {
+  const img = c.getImageData(0, 0, w, h);
+  const d = img.data;
+  // the source palette (most used colours first)
+  const count = new Map();
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 128) continue;
+    const k = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
+    count.set(k, (count.get(k) || 0) + 1);
+  }
+  let pal = [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, maxColours).map(([k]) => [(k >> 16) & 255, (k >> 8) & 255, k & 255]);
+  if (extra) pal = pal.concat(extra.map(rgb));
+  if (!pal.length) return;
+  // premultiplied float channels, blurred with separable box passes
+  const n = w * h;
+  const ch = [new Float32Array(n), new Float32Array(n), new Float32Array(n), new Float32Array(n)];
+  for (let i = 0; i < n; i++) {
+    const a = d[i * 4 + 3] / 255;
+    ch[0][i] = d[i * 4] * a;
+    ch[1][i] = d[i * 4 + 1] * a;
+    ch[2][i] = d[i * 4 + 2] * a;
+    ch[3][i] = a;
+  }
+  const tmp = new Float32Array(max(w, h));
+  const box = (arr, len, stride, off) => {
+    let acc = 0;
+    const k = 2 * r + 1;
+    for (let i = -r; i <= r; i++) acc += arr[off + clamp(i, 0, len - 1) * stride];
+    for (let i = 0; i < len; i++) {
+      tmp[i] = acc / k;
+      acc += arr[off + min(len - 1, i + r + 1) * stride] - arr[off + max(0, i - r) * stride];
+    }
+    for (let i = 0; i < len; i++) arr[off + i * stride] = tmp[i];
+  };
+  for (let p = 0; p < passes; p++) {
+    for (const arr of ch) {
+      for (let y = 0; y < h; y++) box(arr, w, 1, y * w);
+      for (let x = 0; x < w; x++) box(arr, h, w, x);
+    }
+    yield;
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const a = ch[3][i];
+      const o = i * 4;
+      if (a <= bayer(x, y) * 0.98 + 0.01) {
+        d[o + 3] = 0;
+        continue;
+      }
+      const R = ch[0][i] / a;
+      const G = ch[1][i] / a;
+      const B = ch[2][i] / a;
+      let b1 = 0;
+      let b2 = 0;
+      let d1 = Infinity;
+      let d2 = Infinity;
+      for (let k = 0; k < pal.length; k++) {
+        const q = pal[k];
+        const dist = (q[0] - R) ** 2 * 0.3 + (q[1] - G) ** 2 * 0.59 + (q[2] - B) ** 2 * 0.11;
+        if (dist < d1) {
+          d2 = d1;
+          b2 = b1;
+          d1 = dist;
+          b1 = k;
+        } else if (dist < d2) {
+          d2 = dist;
+          b2 = k;
+        }
+      }
+      const s1 = sqrt(d1);
+      const s2 = sqrt(d2);
+      const q = s1 / (s1 + s2 || 1) > bayer(x, y) * 0.5 + 0.25 ? pal[b2] : pal[b1];
+      d[o] = q[0];
+      d[o + 1] = q[1];
+      d[o + 2] = q[2];
+      d[o + 3] = 255;
+    }
+    if ((y & 7) === 7) yield;
+  }
+  c.putImageData(img, 0, 0);
+}
+
 // ---------------------------------------------------------------- raster
 
 export function rect(ctx, x, y, w, h, c) {

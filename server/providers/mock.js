@@ -219,12 +219,19 @@ function study(story) {
 // ---------------------------------------------------------------- running order
 
 /**
- * The running order, by the programme's rules: a breaking story leads; then
- * the main stories (the number of the day among them, never first), a round-up
- * of located stories in different countries, and an "and finally" last.
+ * The running order, by news value (the desk's ranking, which already counts
+ * outlets, freshness and pictures): a breaking story leads, then the main
+ * stories (a picture or a second outlet lifts a story a little, because it
+ * makes better television), the number of the day among them (never first),
+ * then a round-up built from the remaining located stories (stories without a
+ * picture first: a round-up item is shown on the map only, so a picture is
+ * better spent on a main story another time), and an "and finally" last. The
+ * number of the day and the "and finally" come from the programme's own beat
+ * whenever one qualifies (COSMOS: science, not a games console).
  */
 function runningOrder(infos, n, program) {
   const features = program?.features || [];
+  const primary = program?.categories?.length > 1 ? program.categories[0] : null;
   const pool = [...infos];
   const take = (pred) => {
     const i = pool.findIndex(pred);
@@ -235,33 +242,40 @@ function runningOrder(infos, n, program) {
   let slots = n - 1;
   let lighter = null;
   if (features.includes('lighter') && slots >= 1) {
-    lighter = take((i) => i.curious && !i.breaking) || take((i) => i.light && !i.breaking);
+    const ok = (i) => !i.breaking && !i.grave && !i.live;
+    const own = (i) => !primary || i.s.category === primary;
+    lighter = take((i) => ok(i) && own(i) && i.curious) || take((i) => ok(i) && own(i) && i.light) || (primary ? null : take((i) => ok(i) && i.curious)) || take((i) => ok(i) && i.curious && !BEAT_OF_OTHERS.test(i.s.category)) || take((i) => ok(i) && i.light);
     if (lighter) slots--;
   }
-  // The number of the day first (it is one of the main stories), then the round-up from what is left.
   let number = null;
   if (features.includes('number')) {
     const ok = (i) => !i.grave && !i.breaking && !i.live && i.figures.some((f) => f.score >= 3 && !f.age);
     const best = (list) => list.filter(ok).sort((a, b) => bestFigure(b).score - bestFigure(a).score)[0] || null;
     // From the programme's own beat when it has one (COSMOS: a science figure before a gadget's sales).
-    const primary = program?.categories?.length > 1 ? program.categories[0] : null;
     number = (primary && best(pool.slice(0, slots + 8).filter((i) => i.s.category === primary))) || best(pool.slice(0, slots + 3));
     if (number) {
       pool.splice(pool.indexOf(number), 1);
       slots--;
     }
   }
-  let roundup = [];
   const r = program?.roundup || {};
-  if (features.includes('roundup') && slots >= 2) {
-    const min = r.min || 2;
-    // Room for the main stories first (WORLD NOW keeps two, the number of the day counting as one).
-    const mainsNeeded = Math.max(0, (program?.id === 'world-now' ? 2 : 1) - (number ? 1 : 0));
-    const want = Math.min(r.max || (n >= 6 ? 3 : 4), slots - mainsNeeded);
+  const min = r.min || 2;
+  let want = 0;
+  if (features.includes('roundup')) {
+    // WORLD NOW keeps two main stories (the number of the day counting as one), the others one.
+    const mainsMin = Math.max(0, (program?.id === 'world-now' ? 2 : 1) - (number ? 1 : 0));
+    want = Math.min(r.max || (n >= 6 ? 3 : 4), slots - mainsMin);
+    if (want < min) want = 0;
+  }
+  const mains = [];
+  while (mains.length < slots - want && pool.length) mains.push(bestMain(pool));
+  let roundup = [];
+  if (want) {
     const countries = new Set([lead.country]);
-    for (const i of [...pool]) {
+    const located = pool.filter((i) => i.loc && !i.breaking && !i.live);
+    for (const i of [...located].sort((a, b) => Number(!!a.s.image) - Number(!!b.s.image))) {
       if (roundup.length >= want) break;
-      if (!i.loc || i.breaking || i.live || countries.has(i.country)) continue;
+      if (countries.has(i.country)) continue;
       countries.add(i.country);
       roundup.push(i);
       pool.splice(pool.indexOf(i), 1);
@@ -272,13 +286,9 @@ function runningOrder(infos, n, program) {
     }
     // A grave item never sits right before "and finally": it opens the round-up instead.
     roundup.sort((a, b) => Number(b.grave) - Number(a.grave));
-    slots -= roundup.length;
   }
-  const mains = [];
-  while (slots > 0 && pool.length) {
-    mains.push(take((i) => !i.live) || pool.shift());
-    slots--;
-  }
+  // Round-up places nobody filled become main stories.
+  while (mains.length + roundup.length < slots && pool.length) mains.push(bestMain(pool));
   // Where the number of the day goes: second, last, or among the main stories (never the lead).
   let middle = [...mains];
   if (number) {
@@ -293,6 +303,28 @@ function runningOrder(infos, n, program) {
   if (number && program?.numberSlot === 'last') order.push(number);
   if (lighter) order.push(lighter);
   return { order, roundup, lighter, number };
+}
+
+// Categories that are another programme's own beat: a light story from them is the last resort for "and finally".
+const BEAT_OF_OTHERS = /^(?:science)$/;
+
+/**
+ * The next main story: the strongest of the first three left (the desk's
+ * order), where a picture or a second outlet counts for about one place, and
+ * live pages come last.
+ */
+function bestMain(pool) {
+  let best = 0;
+  let bestScore = Infinity;
+  for (let k = 0; k < Math.min(3, pool.length); k++) {
+    const i = pool[k];
+    const score = k - (i.s.image ? 1.2 : 0) - ((i.s.outlets || 1) > 1 ? 1 : 0) + (i.live ? 9 : 0);
+    if (score < bestScore) {
+      bestScore = score;
+      best = k;
+    }
+  }
+  return pool.splice(best, 1)[0];
 }
 
 const bestFigure = (info) => info.figures.filter((f) => !f.age).sort((a, b) => b.score - a.score)[0] || info.figures[0];

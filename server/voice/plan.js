@@ -20,9 +20,11 @@ export const ID_RE = /^v[0-9a-f]{20}$/;
 const ROBOT_MIN_SPEED = 0.82;
 // How far a phrase may stray from the presenter's calibrated pace. The casting
 // speeds already hit each programme's words-per-minute; the planner only adds
-// mood, segment type and figures on top.
+// mood, segment type and figures on top. Slower is allowed (grave stories,
+// figures); faster only a touch: Kokoro already reads ~200 wpm inside a
+// sentence and the channel runs 24/7 at a calm pace (owner, 18:52).
 const REL_MIN = 0.88;
-const REL_MAX = 1.12;
+const REL_MAX = 1.04;
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const round3 = (v) => Math.round(v * 1000) / 1000;

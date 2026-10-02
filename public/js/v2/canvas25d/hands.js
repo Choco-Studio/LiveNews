@@ -40,6 +40,7 @@
 import { P } from '../../palette.js';
 import { TILT, clamp } from './space.js';
 import { material, toneN } from './pixbuf.js';
+import { GROUPS, GROUPS_PER_ACTOR } from './character.js'; // read at draw time only (character.js imports this module)
 
 export { drawProps } from './props.js';
 
@@ -290,15 +291,18 @@ function handMats(L, m) {
   let h = MATS.get(L);
   if (h) return h;
   const robot = L.handStyle === 'robot';
-  const metal = L.mats?.metal ? m.metal : material('hands:robot', { ramp: [P.silver, P.fog, P.steel, P.slate], line: P.ink, th: [0.85, 0.1, -0.45] });
+  // UNIT-8 (CONTRACTS w2-cast-b): plates in the look's `casing` material, gaps and pins in its `joint` colour
+  const casing = L.mats?.casing ? m.casing : material('hands:robot', { ramp: [P.silver, P.fog, P.steel, P.slate], line: P.ink, th: [0.85, 0.1, -0.45] });
+  const casingRamp = L.mats?.casing?.ramp || [P.silver, P.fog, P.steel, P.slate];
+  const jointColour = L.mats?.joint?.ramp?.[1] || P.ink;
   h = {
     robot,
-    skin: robot ? metal : m.hand,
+    skin: robot ? casing : m.hand,
     // exact colours for painted details (no clean-up pass, no inner lines)
-    detail: robot ? material(`hands:robotD`, { ramp: [P.silver, P.fog, P.steel, P.slate], decal: true }) : material(`${L.id}:handD`, { ramp: L.skin, decal: true }),
-    line: robot ? material('hands:robotLine', { ramp: [P.ink], decal: true }) : material(`${L.id}:handLine`, { ramp: [L.skinLine], decal: true }),
+    detail: robot ? material(`${L.id}:handD`, { ramp: casingRamp, decal: true }) : material(`${L.id}:handD`, { ramp: L.skin, decal: true }),
+    line: robot ? material(`${L.id}:handLine`, { ramp: [jointColour], decal: true }) : material(`${L.id}:handLine`, { ramp: [L.skinLine], decal: true }),
     sleeveD: material(`${L.id}:sleeveD`, { ramp: L.jacket.ramp, decal: true }),
-    cuffD: material(`${L.id}:cuffD`, { ramp: [L.cuff, L.cuff, L.shirt.ramp[2], L.shirt.ramp[3]], decal: true }),
+    rim: material('hands:rim', { ramp: [P.silver], decal: true }),
   };
   MATS.set(L, h);
   return h;
@@ -310,7 +314,7 @@ function handMats(L, m) {
 // capsule's oriented bounding box (a diagonal close-up arm costs ~1/3).
 
 const SPAN = new Float64Array(8);
-function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0) {
+function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0) {
   const dx = bx - ax, dy = by - ay;
   const len = Math.hypot(dx, dy);
   const R = Math.max(ra, rb);
@@ -369,7 +373,9 @@ function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0) {
       if (d2 > r * r) continue;
       const i = y * W + x;
       mat[i] = m;
-      const tt = toneN(m, ex / r, ey / r) + toneBias;
+      let tt = toneN(m, ex / r, ey / r) + toneBias;
+      // the start of an upper arm under the shoulder stays flat-lit: no dome highlight on the cap
+      if (flatStart && u < flatStart && tt < 1) tt = 1;
       tone[i] = tt < 0 ? 0 : tt > 3 ? 3 : tt;
       grp[i] = g;
       z[i] = cz;
@@ -426,15 +432,24 @@ export function drawArm(buf, L, m, arm, side, toS, s, ga, gc, gh, z) {
   const exp = px(B, arm.elbow[0], arm.elbow[1], arm.elbow[2]), eyp = py(B, arm.elbow[0], arm.elbow[1], arm.elbow[2]);
   const wxp = px(B, arm.wrist[0], arm.wrist[1], arm.wrist[2]), wyp = py(B, arm.wrist[0], arm.wrist[1], arm.wrist[2]);
 
-  // ---- sleeve: upper arm and forearm (one group, so the elbow is one continuous tube)
+  // ---- sleeve: the shoulder cap belongs to the jacket (no ball where the arm meets the torso), then
+  // upper arm and forearm in one group from just below the shoulder point: the round start of the
+  // upper arm against the jacket draws the armhole seam (an arc from the shoulder top to the armpit)
+  const ux = exp - sxp, uy = eyp - syp;
+  const ul = Math.hypot(ux, uy) || 1;
+  const capK = Math.min(0.32, (A.rUpper * 1.1 * s) / ul);
+  const cx0 = sxp + ux * capK, cy0 = syp + uy * capK;
+  const jacketG = ga - (ga % GROUPS_PER_ACTOR) + GROUPS.jacket;
+  shoulderCap(buf, sxp, syp, cx0, cy0, A.rUpper * s, m.sleeve, jacketG);
   buf.part(ga, z, false);
-  capsuleFast(buf, sxp, syp, exp, eyp, A.rUpper * s, A.rElbow * s, m.sleeve);
+  capsuleFast(buf, cx0, cy0, exp, eyp, A.rUpper * 0.99 * s, A.rElbow * s, m.sleeve, 0, 0.22);
   const fx = wxp - exp, fy = wyp - eyp;
   const fl = Math.hypot(fx, fy) || 1;
   const cuffLen = Math.min(fl * 0.4, 1.3 * s); // shirt cuff showing past the jacket sleeve
   const hemX = wxp - (fx / fl) * cuffLen, hemY = wyp - (fy / fl) * cuffLen;
   capsuleFast(buf, exp, eyp, hemX, hemY, A.rElbow * s, A.rWrist * 1.12 * s, m.sleeve);
   if (s >= 1.6) sleeveFolds(buf, L, hm, arm, sxp, syp, exp, eyp, hemX, hemY, s, ga);
+  if (s >= 1.6) sleeveRim(buf, ga, m.sleeve, hm.rim, Math.min(sxp, exp, hemX) - A.rUpper * s - 1, Math.max(sxp, exp, hemX) + A.rUpper * s + 1, Math.min(syp, eyp, hemY) - A.rUpper * s - 1, Math.max(syp, eyp, hemY) + A.rUpper * s + 1);
 
   // ---- wrist skin, under the cuff (same group as the hand: no line between them)
   buf.part(gh, z + 1, false);
@@ -502,6 +517,67 @@ function sleeveFolds(buf, L, hm, arm, sx, sy, ex, ey, hx, hy, s, ga) {
     const nx = -vy / vl, ny = vx / vl;
     const rr = L.arm.rWrist * 1.05 * s;
     paintLine(buf, cx + nx * rr * 0.75, cy + ny * rr * 0.75, cx + nx * rr * 0.05 + (vx / vl) * 1.5, cy + ny * rr * 0.05 + (vy / vl) * 1.5, hm.sleeveD, 2, ga);
+  }
+}
+
+/**
+ * The top of the sleeve where it leaves the shoulder, painted in the JACKET's group so it merges with
+ * the torso: only pixels the torso does not already cover, kept flat-lit (never the highlight tone).
+ */
+function shoulderCap(buf, ax, ay, bx, by, r, m, g) {
+  const W = buf.w;
+  const x0 = Math.max(1, Math.floor(Math.min(ax, bx) - r)), x1 = Math.min(W - 1, Math.ceil(Math.max(ax, bx) + r) + 1);
+  const y0 = Math.max(1, Math.floor(Math.min(ay, by) - r)), y1 = Math.min(buf.h - 1, Math.ceil(Math.max(ay, by) + r) + 1);
+  if (x1 <= x0 || y1 <= y0) return;
+  const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy || 1e-6;
+  const { mat, tone, grp, z } = buf;
+  let zj = 8;
+  for (let y = y0; y < y1; y++) {
+    const cy = y + 0.5;
+    for (let x = x0; x < x1; x++) {
+      const i = y * W + x;
+      if (mat[i] && grp[i] === g) {
+        zj = z[i];
+        continue;
+      }
+      const cx = x + 0.5;
+      let u = ((cx - ax) * dx + (cy - ay) * dy) / len2;
+      u = u < 0 ? 0 : u > 1 ? 1 : u;
+      const ex = cx - (ax + dx * u), ey = cy - (ay + dy * u);
+      if (ex * ex + ey * ey > r * r) continue;
+      if (mat[i] && grp[i] !== g && z[i] > zj) continue; // something already in front (hair, chin)
+      mat[i] = m;
+      const tt = toneN(m, ex / r, ey / r);
+      tone[i] = tt < 1 ? 1 : tt;
+      grp[i] = g;
+      z[i] = zj;
+    }
+  }
+  buf._touch(x0, y0, x1, y1);
+}
+
+/**
+ * A continuous rim on the sleeve: pixel art reads a lit edge as a line, so where the silhouette steps
+ * up to the right (no pixel above or to the upper right) the silver continues instead of breaking into
+ * the dots the per-pixel rim leaves on a curved edge. Only against the background (empty pixels).
+ */
+function sleeveRim(buf, g, mSleeve, mRim, x0, x1, y0, y1) {
+  const W = buf.w;
+  x0 = Math.max(1, Math.floor(x0));
+  x1 = Math.min(W - 2, Math.ceil(x1));
+  y0 = Math.max(1, Math.floor(y0));
+  y1 = Math.min(buf.h - 2, Math.ceil(y1));
+  const { mat, grp } = buf;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const i = y * W + x;
+      if (mat[i] !== mSleeve || grp[i] !== g) continue;
+      if (!mat[i + 1]) continue; // the resolve rim lights this one already
+      if (!mat[i - W] && !mat[i - W + 1] && mat[i - 1]) {
+        mat[i] = mRim;
+        buf.tone[i] = 0;
+      }
+    }
   }
 }
 
@@ -605,6 +681,7 @@ function rasterHand(buf, L, hm, g, B, s, gh, z) {
 
   const lod = s < 1.35 ? 0 : s < 2.7 ? 1 : s < 3.4 ? 2 : 3;
   HI_T = lod >= 3 ? 1.12 : lod === 2 ? 1.2 : 9;
+  ROBOT_JOINTS = hm.robot && s >= 2.2;
   const robot = hm.robot;
   const back = g.back;
   // per-bone shading bias: how much each phalanx's visible face turns toward or away from the key
@@ -620,12 +697,13 @@ function rasterHand(buf, L, hm, g, B, s, gh, z) {
     const a = 16 + k, b = 17 + k;
     rasterBone(a, b, Math.max(minR, R[a] * s), Math.max(minR, R[b] * s), 1, k, SEGSHADE[b], s);
   }
+  const tipK = robot ? 1.18 : 1; // UNIT-8's fingertips are squared-off segments, not tapered
   for (let fi = 0; fi < 4; fi++) {
     for (let k = 0; k < 3; k++) {
       const a = fi * 4 + k, b = a + 1;
       // in the wide the extended index of a point must survive as a clean 1 px line
       const mr = lod === 0 && fi === 0 && g.curl[1] < 0.4 ? 0.72 : minR;
-      rasterBone(a, b, Math.max(mr, R[a] * s), Math.max(mr, R[b] * s), 2 + fi, k, SEGSHADE[b], s);
+      rasterBone(a, b, Math.max(mr, R[a] * s), Math.max(mr, R[b] * s * (k === 2 ? tipK : 1)), 2 + fi, k, SEGSHADE[b], s);
     }
   }
 
@@ -706,6 +784,7 @@ function boneShades(g) {
 }
 
 /** Tone from a light value: hi / base / shade / deep (hand-tuned thresholds, kept clean). */
+let ROBOT_JOINTS = false; // UNIT-8: 1 px joint gaps from s 2.2 (CONTRACTS w2-cast-b)
 let HI_T = 9; // highlight threshold for the current hand (by LOD: highlights only where there is room)
 function toneOfL(l) {
   return l > HI_T ? 0 : l > 0.08 ? 1 : l > -0.5 ? 2 : 3;
@@ -885,8 +964,8 @@ function separations(g, robot, lod) {
         const b = OWN[kk];
         if (b < 0) continue;
         if (a === b) {
-          // robot: every bone is its own segment
-          if (robot && a > 0 && SEG[k] !== SEG[kk]) TN[SEG[k] > SEG[kk] ? k : kk] = 4;
+          // robot (UNIT-8): two segments per finger, a 1 px joint between proximal and middle bones
+          if (ROBOT_JOINTS && a > 1 && SEG[k] !== SEG[kk] && SEG[k] + SEG[kk] === 1) TN[SEG[k] > SEG[kk] ? k : kk] = 4;
           continue;
         }
         if (!needsLine(a, b, k, kk, curl, lod)) continue;
@@ -908,6 +987,7 @@ function needsLine(a, b, k, kk, curl, lod) {
     kk = tk;
   }
   // a < b here; 0 palm, 1 thumb, 2..5 fingers
+  if (a === 0 && ROBOT_JOINTS && b >= 2) return true; // the robot's knuckle joint between plate and finger
   if (a === 0) {
     if (b === 1) return SEG[kk] >= 1; // the thumb's metacarpal melts into the palm (thenar)
     return curl[b - 1] >= 0.45 && SEG[kk] >= 1; // a curled finger over the palm

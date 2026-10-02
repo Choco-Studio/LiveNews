@@ -5,8 +5,9 @@
 //   - short textured dark-brown hair with a flatter, squarer top that sits a
 //     little higher than Paco's combed volume, tapered sides and a short fringe
 //     pushed up, its tips breaking the hairline;
-//   - a navy suit with an open-collared pale shirt (no tie): neutral wardrobe,
-//     because the programme's yellow belongs to the graphics.
+//   - a charcoal-slate suit with an open-collared pale shirt (no tie): neutral
+//     wardrobe, because the programme's yellow belongs to the graphics and the
+//     studio layer (presenter included) keeps saturated colour under 6 %.
 // Skin stays on the untinted P.skin / P.skinShade ramp (news-60.md "Set and
 // light": face mean L* ≥ 60).
 import { P } from '../../../palette.js';
@@ -33,7 +34,8 @@ export const sam = defineLook({
   torso: { neckHW: 3.4, shoulderTop: 2.4, shoulderHW: 20.3, sideHW: 18.9, bottom: 46, vDepth: 23.5, shoulderJoint: [17.5, 6.8] },
   outfit: 'suit',
   collar: 'open',
-  jacket: { ramp: [P.steel, P.navy, P.ink, P.black], line: P.black }, // navy: the silver rim keeps it off the dark set
+  // charcoal-slate, not navy: news-60.md caps saturated colour at 6 % of the studio layer (presenter included)
+  jacket: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black },
   shirt: { ramp: [P.white, P.silver, P.fog, P.steel], line: P.steel }, // pale shirt, quieter than white next to the face
   tie: null,
   pocket: false,

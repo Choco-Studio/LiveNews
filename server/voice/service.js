@@ -496,10 +496,12 @@ export class VoiceService {
     return true;
   }
 
+  // Stop the workers now: the server is going away, so a clip still rendering
+  // would only be orphaned (its metadata is written here).
   close() {
     for (const L of this.lanes) {
       try {
-        L.worker?.close();
+        L.worker?.kill();
       } catch { /* ignore */ }
       L.worker = null;
     }

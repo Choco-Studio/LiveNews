@@ -961,6 +961,11 @@ function renderSpec(b, spec, style, env) {
     case 'map': {
       const dt = Math.max(0, env.t - spec.since);
       const m = mediaRect(L, b, ts);
+      if (!m.framed && m.y < L.full.y0 && L.full.y0 < m.y + m.h - 24) {
+        // the locator's place tab rides on its top edge: keep that edge under the graphics top row
+        m.h -= L.full.y0 - m.y;
+        m.y = L.full.y0;
+      }
       // the map renders at the size it had at the cut (worldmap.js keeps buffers per size), and a
       // slow camera move resamples it instead of asking for a new size every frame
       if (!spec._mapWH) spec._mapWH = [Math.max(8, m.w), Math.max(8, m.h)];

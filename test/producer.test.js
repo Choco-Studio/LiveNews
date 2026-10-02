@@ -685,7 +685,7 @@ describe('Producer with the real NewsDesk, ProviderChain and mock provider', () 
 
   /** A desk with `perCategory` unrelated stories in each category. */
   function makeRealDesk(perCategory = 10) {
-    const desk = new NewsDesk({ log: silentLogger, fetchImpl: noNetwork });
+    const desk = new NewsDesk({ log: silentLogger, fetchImpl: noNetwork, lookup: async () => [] });
     let n = 0;
     for (const category of CATEGORIES) {
       for (let i = 0; i < perCategory; i++, n++) {
@@ -723,7 +723,7 @@ describe('Producer with the real NewsDesk, ProviderChain and mock provider', () 
       assert.ok(episode, 'enough stories were available');
       assert.equal(episode.program.id, programId);
       assert.equal(episode.provider, 'mock');
-      assert.deepEqual(stageNames(episode), program.timing ? ['write', 'review', 'fit', 'assets'] : ['write', 'review', 'assets']);
+      assert.deepEqual(stageNames(episode), program.timing ? ['pictures', 'write', 'review', 'fit', 'assets'] : ['pictures', 'write', 'review', 'assets']);
 
       const solo = program.presenters.length === 1;
       assert.deepEqual(Object.keys(episode.cast), solo ? ['A'] : ['A', 'B']);
@@ -791,7 +791,7 @@ describe('Producer with the real NewsDesk, ProviderChain and mock provider', () 
   });
 
   test('a story reported by two outlets is aired once and the other report is covered with it', async () => {
-    const desk = new NewsDesk({ log: silentLogger, fetchImpl: noNetwork });
+    const desk = new NewsDesk({ log: silentLogger, fetchImpl: noNetwork, lookup: async () => [] });
     const add = (id, source, title, minutesAgo) =>
       desk.stories.set(id, { id, title, summary: 'x'.repeat(100), link: `https://e.test/${id}`, source, category: 'world', weight: 1, published: NOW - minutesAgo * MINUTE, image: null });
     add('q1', 'BBC', 'Earthquake strikes northern Japan', 5);

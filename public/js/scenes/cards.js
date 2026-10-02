@@ -250,18 +250,25 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
 // FIGURES: parsing a stated value exactly as written (never rounded or recounted)
 
 const MAGNITUDES = { THOUSAND: 1e3, K: 1e3, MILLION: 1e6, M: 1e6, MN: 1e6, BILLION: 1e9, BN: 1e9, B: 1e9, TRILLION: 1e12, TN: 1e12 };
+// A leading qualifier is part of the stated figure ("ABOUT 1,500", "MORE THAN 62%"): it is kept and
+// drawn with the figure (micro type above it), never dropped, so the card never overstates.
+const QUALIFIER = /^(AN ESTIMATED|MORE THAN|LESS THAN|FEWER THAN|AT LEAST|AT MOST|UP TO|JUST OVER|JUST UNDER|CLOSE TO|APPROXIMATELY|ALMOST|NEARLY|ABOUT|AROUND|ROUGHLY|SOME|OVER|UNDER|ESTIMATED)\s+(?=[$€£]?\d)/;
 const FIG_CACHE = new Map();
 /**
- * { text, rest, value, pct, year, range } for a fact string or a numbers[] value: `text` is the
- * figure as written ("2,400", "$2.5BN", "3.5%", "1.2 MILLION"), `value` its scale (2.5e9).
+ * { text, rest, value, pct, year, range, qual } for a fact string or a numbers[] value: `text` is the
+ * figure as written ("2,400", "$2.5BN", "3.5%", "1.2 MILLION"), `value` its scale (2.5e9), `qual`
+ * a leading qualifier ("ABOUT", "MORE THAN") or ''.
  */
 export function parseFigure(raw) {
   const key = String(raw ?? '');
   let f = FIG_CACHE.get(key);
   if (f) return f;
-  const s = key.toUpperCase().replace(/\s+/g, ' ').trim();
+  let s = key.toUpperCase().replace(/\s+/g, ' ').trim();
+  const q = s.match(QUALIFIER);
+  const qual = q ? q[1] : '';
+  if (q) s = s.slice(q[0].length);
   const m = s.match(/^([$€£]?)(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?\s?(%|PER ?CENT\b|[KMB]\b|MN\b|BN\b|TN\b)?(\s?(?:-|TO)\s?\d[\d,.]*)?\s*(.*)$/);
-  if (!m) f = { text: null, rest: s, value: NaN, pct: false, year: false, range: false };
+  if (!m) f = { text: null, rest: key.toUpperCase().replace(/\s+/g, ' ').trim(), value: NaN, pct: false, year: false, range: false, qual: '' };
   else {
     const [, pre, int, dec = '', suf = '', range = '', tail0] = m;
     let tail = tail0;
@@ -276,18 +283,18 @@ export function parseFigure(raw) {
     const value = Number(`${int.replace(/,/g, '')}${dec}`) * mult;
     const pct = suf.startsWith('%') || suf.startsWith('PER');
     const year = !pre && !suf && !dec && !int.includes(',') && /^(1[89]|20|21)\d\d$/.test(int);
-    f = { text, rest: tail, value, pct, year, range: !!range };
+    f = { text, rest: tail, value, pct, year, range: !!range, qual };
   }
   if (FIG_CACHE.size > 300) FIG_CACHE.delete(FIG_CACHE.keys().next().value);
   FIG_CACHE.set(key, f);
   return f;
 }
 
-/** Rows to show: numbers[] (value + label) when given, else the fact split into figure + words. */
+/** Rows to show: numbers[] (value + label + qualifier) when given, else the fact split into figure + words. */
 const ROWS = new WeakMap();
 const FACT_ROWS = textCacheFn(120, (fact) => {
   const f = parseFigure(fact);
-  return f.text ? [{ figure: f.text, label: f.rest, f }] : [];
+  return f.text ? [{ figure: f.text, label: f.rest, f, qual: f.qual }] : [];
 });
 function rowsFor(fact, numbers) {
   if (Array.isArray(numbers) && numbers.length) {
@@ -298,7 +305,8 @@ function rowsFor(fact, numbers) {
         const v = String(numbers[i]?.value ?? '').trim();
         if (!v) continue;
         const f = parseFigure(v);
-        r.push({ figure: (f.text && !f.rest ? f.text : v).toUpperCase(), label: String(numbers[i]?.label ?? '').toUpperCase().trim(), f });
+        const qual = String(numbers[i]?.qualifier ?? '').toUpperCase().replace(/\s+/g, ' ').trim() || f.qual;
+        r.push({ figure: (f.text ? (f.rest ? `${f.text} ${f.rest}` : f.text) : v).toUpperCase(), label: String(numbers[i]?.label ?? '').toUpperCase().trim(), f, qual });
       }
       ROWS.set(numbers, r);
     }

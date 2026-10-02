@@ -978,7 +978,7 @@ describe('Station with the real Producer, NewsDesk and mock provider', () => {
   const WORDS = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel', 'india', 'juliet', 'kilo', 'lima', 'mike', 'november', 'oscar', 'papa', 'quebec', 'romeo', 'sierra', 'tango'];
 
   function makeNewsroom({ perCategory = 14, queueSize = 2, channel = loadChannel() } = {}) {
-    const desk = new NewsDesk({ log: silentLogger, fetchImpl: noNetwork });
+    const desk = new NewsDesk({ log: silentLogger, fetchImpl: noNetwork, lookup: async () => [] });
     let n = 0;
     for (const category of ['world', 'business', 'tech', 'science']) {
       for (let i = 0; i < perCategory; i++, n++) {

@@ -2728,10 +2728,13 @@ export function shadeOf(hex, k = 0.6) {
     const tr = r * k;
     const tg = g * k;
     const tb = b * k;
+    const luma = r * 0.3 + g * 0.59 + b * 0.11;
     let best = Infinity;
+    v = hex; // nothing darker in the palette (black): the shadow is the colour itself
     for (const c of PAL_LIST) {
       if (c === hex) continue;
       const [cr, cg, cb] = rgb(c);
+      if (cr * 0.3 + cg * 0.59 + cb * 0.11 > luma) continue; // a shadow is never lighter
       const d = (cr - tr) ** 2 * 0.3 + (cg - tg) ** 2 * 0.59 + (cb - tb) ** 2 * 0.11;
       if (d < best) {
         best = d;

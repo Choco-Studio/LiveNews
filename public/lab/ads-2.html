@@ -38,7 +38,7 @@
       // deterministically for tools/shoot.mjs. "play + sound" runs it in real
       // time with the jingle and the voice-over to check the sync by ear.
       import grandbuffer from '../js/ads/grandbuffer.js';
-      import hiresgym from '../js/ads/hiresgym.js';
+      import hiresgym, { LAB as HG_LAB } from '../js/ads/hiresgym.js';
       import { drawText, measureText } from '../js/font.js';
       import { P } from '../js/palette.js';
       import { renderTune } from '../js/audio/synth.js';
@@ -52,6 +52,8 @@
       let ad = ADS.find((a) => a.id === params.get('ad')) || ADS[0];
       let t = Number(params.get('t')) || 0;
       let overlay = params.get('overlay') !== '0';
+      // ?full=1 shows Hi-Res Gym's footage without its mosaic, to inspect the art
+      HG_LAB.fullRes = params.get('full') === '1';
       let playing = false;
       let audio = null;
       let tuneHandle = null;

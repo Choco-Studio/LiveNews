@@ -213,6 +213,7 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
  * Timings (ms per frame) for the current programme and framing:
  *   bgUncached  cache off, the camera pushing 4 % and the wall animating (map fly-in or the idle clock)
  *   bgCached    cache on, still camera, settled wall
+ *   bgPatch     cache on, still camera, the wall animating (patched into the cached frame)
  *   desk        cache off (the desk is cached with the background on a hit)
  */
 export function profile(n = 120) {
@@ -250,6 +251,15 @@ export function profile(n = 120) {
     OPTS.style = style;
     OPTS.wall = still;
     drawBackground(frame, cam, 50, OPTS);
+  });
+  // cache on, still camera, the wall animating (the globe / planet clock, a map flying in): the
+  // wall is patched into the cached frame
+  const anim2 = wallReq();
+  out.bgPatch = run((i) => {
+    OPTS.style = style;
+    OPTS.wall = anim2;
+    if (anim2.mode === 'map') anim2.since = 200;
+    drawBackground(frame, cam, 200 + i / 60, OPTS);
   });
   out.deskCached = run(() => {
     OPTS.wall = still;
