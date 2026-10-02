@@ -63,7 +63,7 @@ function drawSleekAndPearls(buf, L, m, head, s, sk) {
 // flat light patch: the face stays the brightest warm area), the hair beside
 // the face in shade.
 const LXY = new LocalXY();
-const CO = { cw: 1.7, s: 1, seed: 41, sep: true, hiLo: 0.6, hiHi: 8.0, hiW: 0.28, gap: 5.0 };
+const CO = { cw: 1.55, s: 1, seed: 41, sep: true, hiLo: 1.4, hiHi: 6.2, hiW: 0.26, gap: 5.0 };
 export function drawSleek(buf, L, m, head, s) {
   const H = L.head;
   const cyc = H.craniumY - 0.2;
@@ -122,6 +122,8 @@ export function drawSleek(buf, L, m, head, s) {
       v = -dPart * 0.85 - ry * 0.55 + 60;
       u = -dPart * 0.55 + ry * 0.85 + 1.5;
     }
+    // uneven clump widths: a gentle warp so the combed lines never read as parallel stripes
+    v += 0.4 * CO.cw * Math.sin(v * 1.7 / CO.cw + 0.8);
     return clumpTone(t, v, u, CO);
   });
 }

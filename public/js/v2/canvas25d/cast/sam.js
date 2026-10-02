@@ -18,7 +18,7 @@ import { LocalXY, localBox, clumpTone } from './kit-a.js';
 export const sam = defineLook({
   id: 'sam',
   name: 'Sam Night',
-  head: { top: -10.5, craniumY: -3.0, R: 6.85, cheekY: 2.2, cheekHW: 6.5, chinY: 9.7, chinHW: 3.25, jawPow: 2.6 },
+  head: { top: -10.5, craniumY: -3.0, R: 6.85, cheekY: 2.0, cheekHW: 6.5, chinY: 9.55, chinHW: 2.95, jawPow: 2.35 },
   headAt: [0, -14.3],
   neck: { hw: 3.05 },
   eyes: { y: -0.5, x: 2.7, w: 2.55, h: 1.38, iris: [P.tanShade, P.brown], lash: P.maroon, lashes: false, bags: false },

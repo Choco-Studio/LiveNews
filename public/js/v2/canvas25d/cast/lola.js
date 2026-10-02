@@ -49,7 +49,7 @@ function drawBobAndStuds(buf, L, m, head, s, sk) {
 // clumps fall from the crown with broken separations. LOD: wides keep the
 // silhouette and two tones, mediums a narrow sheen band, close-ups the clumps.
 const LXY = new LocalXY();
-const CO = { cw: 1.55, s: 1, seed: 11, sep: true, hiLo: 0.8, hiHi: 8.6, hiW: 0.42, gap: 4.2, keepLit: true };
+const CO = { cw: 1.55, s: 1, seed: 11, sep: true, hiLo: 2.4, hiHi: 8.6, hiW: 0.42, gap: 4.2, keepLit: true };
 export function drawBob(buf, L, m, head, s, lag) {
   const H = L.head;
   const cyc = H.craniumY - 0.3;

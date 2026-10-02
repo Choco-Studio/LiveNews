@@ -112,7 +112,7 @@ function closeup(t, kind, yaw = state.yaw, pitch = state.pitch) {
   background(state.bg === 'set' ? singleCam('A', s * 1.0) : null, t);
   const head = drawOne(actorFor(state.presenter, kind), t, 192, neckRow(s), s, yaw, pitch);
   // zoom: the head and shoulders enlarged (head a third down the frame)
-  if (state.zoom > 1) zoomFrame(head.cx, head.cy + 4 * s, state.zoom);
+  if (state.zoom > 1) zoomFrame(head.cx, head.cy + 2.5 * s, state.zoom);
 }
 
 function turnaround(t) {

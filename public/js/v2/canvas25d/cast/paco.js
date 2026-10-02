@@ -92,9 +92,12 @@ export function drawShortHair(buf, L, m, head, s) {
     }
     const nx = dx / RV, ny = dy / RV;
     let t = toneN(m.hair, nx * 0.95, ny * 0.95);
-    const partX = part + (y - hairline) * -0.1;
+    // the parting runs back from the hairline with a slight curve and fades toward the crown
+    const ry0 = hairline - y;
+    const partX = part + ry0 * 0.1 + ry0 * ry0 * 0.03;
     const dPart = fx - partX;
-    const onPart = y < hairline + 0.1 && y > hairline - 2.4 && Math.abs(dPart) < 0.28 + (s < 1.6 ? 0.25 : 0);
+    const partLen = tier === 2 ? 1.9 : 2.4;
+    const onPart = y < hairline + 0.1 && ry0 < partLen && Math.abs(dPart) < (tier === 2 ? 0.55 / s + 0.05 : 0.28 + (s < 1.6 ? 0.25 : 0));
     // short sides: lit side stays mid-grey, the far side drops one step
     if (y > H.craniumY - 1) {
       t = x > 0 ? Math.max(t, 2) : Math.min(Math.max(t, 1), 1);
