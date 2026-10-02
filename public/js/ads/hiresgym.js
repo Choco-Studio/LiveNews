@@ -857,10 +857,11 @@ function paintFace(c, col, ox, oy) {
   fillPts(c, col);
 }
 const FACE_LAYERS = [[P.white, 0, 0], [P.silver, -1, 0], [P.fog, -2, 0], [P.steel, -3, 0], [P.slate, -6, 0], [P.ink, -12, 0], [P.black, -24, 1]];
+// A separation light on the wall behind the head; dark in front of the face,
+// where the key light comes from out of frame.
 const faceBg = () => bake('hg-face-bg', W, H, (c) => {
-  R(c, 0, 0, W, H, P.black);
-  glowBake(c, 330, 96, 150, 140, P.ink, 0.9);
-  glowBake(c, 360, 90, 60, 90, P.slate, 0.4);
+  ditherField(c, 0, 0, W, H, [P.black, P.ink, P.slate], (x, y) => 0.95 - hypot((x - 40) / 260, (y - 90) / 200) * 1.1);
+  glowBake(c, 340, 100, 90, 110, P.ink, 0.6);
 });
 // The drop's path down the face (local units), then it falls free.
 const DROP = [64, 34, 67, 46, 70, 60, 72, 74, 74, 86, 76, 96, 79, 102];
@@ -872,10 +873,10 @@ function shotFace(c, lt) {
   facePts(HAIR_S, 0, 0);
   fillPts(c, P.black);
   for (let k = 0; k < 14; k++) R(c, round(FX + (12 + hash(k) * 24) * FK), round(FY + FO + (12 + hash(k + 30) * 34) * FK), 1, 1, P.ink);
-  // ear
+  // ear: a dark shape with a lit front rim
   ellipse(c, FX + 42 * FK, FY + FO + 56 * FK, 5 * FK, 9 * FK, P.ink);
-  ellipse(c, FX + 43 * FK, FY + FO + 56 * FK, 3 * FK, 6.5 * FK, P.black);
-  R(c, round(FX + 46 * FK), round(FY + FO + 50 * FK), 1, round(10 * FK), P.slate);
+  ellipse(c, FX + 41.4 * FK, FY + FO + 56.5 * FK, 3.6 * FK, 7.4 * FK, P.black);
+  ellipse(c, FX + 42.6 * FK, FY + FO + 58 * FK, 1.6 * FK, 3 * FK, P.ink);
   // brow ridge, eye socket, eye (the lid closes once, slowly)
   const blink = max(0, 1 - abs(lt - 0.95) / 0.12);
   pt(FX + 70 * FK, FY + FO + 44.5 * FK);
@@ -940,12 +941,14 @@ function paintBust(c, col) {
   const x = 192;
   const top = RY;
   for (let sd = -1; sd <= 1; sd += 2) {
-    capsule(c, x + sd * 1.04 * u, top + 1.7 * u, x + sd * 1.16 * u, top + 3.3 * u, 0.35 * u, 0.28 * u, col);
-    capsule(c, x + sd * 1.16 * u, top + 3.3 * u, x + sd * 1.12 * u, top + 4.8 * u, 0.28 * u, 0.24 * u, col);
+    capsule(c, x + sd * 1.04 * u, top + 1.7 * u, x + sd * 1.22 * u, top + 3.2 * u, 0.36 * u, 0.27 * u, col);
+    ellipse(c, x + sd * 1.15 * u, top + 2.45 * u, 0.33 * u, 0.42 * u, col);
+    capsule(c, x + sd * 1.22 * u, top + 3.2 * u, x + sd * 1.1 * u, top + 4.8 * u, 0.28 * u, 0.24 * u, col);
     ellipse(c, x + sd * 0.99 * u, top + 1.62 * u, 0.37 * u, 0.38 * u, col);
     ellipse(c, x + sd * 0.37 * u, top + 0.53 * u - RC, 0.07 * u, 0.13 * u, col);
   }
   pt(x - 0.24 * u, top + 1.0 * u);
+  pt(x - 0.58 * u, top + 1.12 * u);
   pt(x - 0.92 * u, top + 1.36 * u);
   pt(x - 1.0 * u, top + 2.0 * u);
   pt(x - 0.82 * u, top + 3.4 * u);
@@ -954,6 +957,7 @@ function paintBust(c, col) {
   pt(x + 0.82 * u, top + 3.4 * u);
   pt(x + 1.0 * u, top + 2.0 * u);
   pt(x + 0.92 * u, top + 1.36 * u);
+  pt(x + 0.58 * u, top + 1.12 * u);
   pt(x + 0.24 * u, top + 1.0 * u);
   fillPts(c, col);
   capsule(c, x, top + 0.82 * u - RC, x, top + 1.3 * u, 0.26 * u, 0.31 * u, col);
