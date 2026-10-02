@@ -793,7 +793,7 @@ function bakeHand(c) {
     }
   }
   // tendons fanning from the knuckles toward the wrist
-  for (let i = 0; i < 3; i++) for (let y = -12; y < 4; y += 3) put(17 + i * 2.4 + (y + 12) * 0.28, y, P.tanShade);
+  for (let i = 0; i < 2; i++) for (let y = -13; y < 3; y++) if (y % 5 !== 0) put(18.6 + i * 3.4 + (y + 13) * 0.3, y, i ? P.brown : P.tanShade);
   // the fingers, bottom one first so each overlaps the one below like a real grip
   for (let f = FINGERS.length - 1; f >= 0; f--) {
     const [y0, fh, tip, kn] = FINGERS[f];

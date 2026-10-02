@@ -21,6 +21,7 @@ import { speechFrame, mouthParams } from './visemes.js';
 import { smooth } from './space.js';
 
 const FAR = -1e9;
+const MIN_HOLD = 0.042; // s a dominant mouth shape is held at least
 
 /** Smooth non-repeating drift in -1..1 (same recipe as idle.js wobble; kept here to avoid an import cycle). */
 function wobble(t, seed) {
@@ -72,11 +73,14 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
   const fr = blankFrame(slot);
   let lastT = null;
   let wasPause = false, wasSpeaking = false, lastSentence = -1;
+  let shown = 'rest', shownAt = -1e9;
   const reset = () => {
     Object.assign(fr, blankFrame(slot));
     wasPause = false;
     wasSpeaking = false;
     lastSentence = -1;
+    shown = 'rest';
+    shownAt = -1e9;
   };
   const step = (t, dt) => {
     audio.speechFrame(toNow(t), slot, raw);
@@ -90,6 +94,20 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
     fr.sentenceIndex = raw.sentenceIndex ?? -1;
     fr.wordIndex = raw.wordIndex ?? -1;
     fr.charIndex = raw.charIndex ?? -1;
+    // the dominant shape never changes again within MIN_HOLD of its last change
+    // (lip closures excepted): fast phones blend, they do not flicker
+    const dom = fr.mix > 0.5 ? fr.next : fr.viseme;
+    if (dom !== shown) {
+      if (t - shownAt >= MIN_HOLD || dom === 'MBP' || !fr.speaking) {
+        shown = dom;
+        shownAt = t;
+      } else if (fr.viseme === shown) fr.mix = Math.min(fr.mix, 0.49);
+      else if (fr.next === shown) fr.mix = Math.max(fr.mix, 0.51);
+      else {
+        fr.next = fr.viseme = shown;
+        fr.mix = 0;
+      }
+    }
     fr.env = ease(fr.env, fr.level, 0.03, 0.12, dt);
     fr.emph = ease(fr.emph, fr.accent, 0.09, 0.42, dt);
     fr.act = ease(fr.act, fr.speaking ? 1 : 0, 0.25, 0.6, dt);

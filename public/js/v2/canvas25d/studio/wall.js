@@ -87,7 +87,7 @@ const plot = (b, x, y, c) => {
 const HEADS = [];
 for (let i = 0; i < 3; i++) HEADS.push({ x0: 0, y0: 0, x1: 0, y1: 0, on: false });
 const box4 = () => ({ x0: 0, y0: 0, x1: 0, y1: 0 });
-const LAYOUT = { heads: 0, top: box4(), left: box4(), right: box4(), full: box4(), band: 0, sx0: 0, sy0: 0, k: 1 };
+const LAYOUT = { heads: 0, top: box4(), left: box4(), right: box4(), full: box4(), vis: box4(), band: 0, sx0: 0, sy0: 0, k: 1 };
 // the screen area wall text and emblems may use: clear of the graphics top row (y 8-21) and above
 // the caption band (y 136), so nothing on the wall sits under the graphics
 const USABLE = { x0: 8, y0: 22, x1: 376, y1: 136 };
@@ -122,6 +122,8 @@ function computeLayout(L, cam, solo, wx0, wy0, w, h, k) {
     }
   }
   L.heads = n;
+  // the part of the wall on screen at all (pictures and maps fill it when no head is in front)
+  set4(L.vis, clampN(-wx0, 0, w), clampN(-wy0, 0, h), clampN(384 - wx0, 0, w), clampN(216 - wy0, 0, h));
   set4(L.full, vx0, vy0, vx1, yb);
   let topY = yb, lx = vx1, rx = vx0;
   for (let i = 0; i < n; i++) {
@@ -147,7 +149,7 @@ function layoutOf(spec, env, w, h) {
     computeLayout(L, env.cam, spec.solo, env.wx0, env.wy0, w, h, env.k);
     const u = 1 / env.k;
     const cp = (b) => ({ x0: b.x0 * u, y0: b.y0 * u, x1: b.x1 * u, y1: b.y1 * u });
-    F = spec._lay = { heads: L.heads, band: L.band * u, top: cp(L.top), left: cp(L.left), right: cp(L.right), full: cp(L.full), sx0: L.sx0, sy0: L.sy0 };
+    F = spec._lay = { heads: L.heads, band: L.band * u, top: cp(L.top), left: cp(L.left), right: cp(L.right), full: cp(L.full), vis: cp(L.vis), sx0: L.sx0, sy0: L.sy0 };
   }
   const k = env.k;
   const sc = (src, dst) => set4(dst, Math.round(src.x0 * k), Math.round(src.y0 * k), Math.round(src.x1 * k), Math.round(src.y1 * k));
@@ -157,6 +159,7 @@ function layoutOf(spec, env, w, h) {
   sc(F.left, L.left);
   sc(F.right, L.right);
   sc(F.full, L.full);
+  sc(F.vis, L.vis);
   L.sx0 = env.wx0;
   L.sy0 = env.wy0;
   L.k = k;
@@ -530,8 +533,10 @@ function drawDial(b, cx, cy, r, phase, ts) {
       }
     }
   }
-  // "60" in the lower half of the dial
-  stampText(b.px, b.w, b.h, '60', ccx + 1, ccy + Math.round(r * 0.3), C.yellow, 'body', ts, 'center');
+  // "60" in the lower half of the dial (centred in a small one, clear of the ticks)
+  const ns = r >= 30 ? Math.max(1, ts) : 1;
+  const ny = r >= 14 ? ccy + Math.round(r * 0.28) : ccy - Math.floor(capHeight('body', ns) / 2);
+  stampText(b.px, b.w, b.h, '60', ccx + 1, ny, C.yellow, 'body', ns, 'center');
 }
 
 // ---------------------------------------------------------------------------
@@ -783,6 +788,13 @@ function fitLine(text, maxW, font, scale) {
   return '';
 }
 
+/** Does a w x h block fit in one of the layout's free boxes? */
+function fitsSomewhere(L, w, h) {
+  if (!L.heads) return bw(L.full) >= w && bh(L.full) >= h;
+  for (const bx of [L.top, L.left, L.right]) if (bw(bx) >= w && bh(bx) >= h) return true;
+  return false;
+}
+
 function drawFigureBlock(b, L, fig, style, ts, money) {
   // the figure is Display 2x (money-minute.md MCU-R panel), the label micro
   const vs = 2;
@@ -809,7 +821,9 @@ function clampScreen(box, L, sx0, sx1, sy1) {
   return bw(CLAMP) > 8 && bh(CLAMP) > 8 ? CLAMP : box;
 }
 
-function drawPlate(b, L, spec, style, ts) {
+function drawPlate(b, L, spec, style, ts0) {
+  // the text scale drops to 1x when the free area is too small for 2x
+  const ts = ts0 > 1 && !fitsSomewhere(L, textWidth(spec.label || '', 'body', ts0) + 4, 16 * ts0) ? 1 : ts0;
   const kicker = fitLine(spec.label || '', b.w - 6 * ts, 'body', ts);
   const sub = spec.sub ? fitLine(spec.sub, b.w - 6 * ts, 'micro', ts) : '';
   if (!kicker && !sub) return;
@@ -824,6 +838,69 @@ function drawPlate(b, L, spec, style, ts) {
   rect(b, x0, top, x0 + Math.min(needW, 12 * ts), top + ts, accent);
   if (kicker) stampText(b.px, b.w, b.h, kicker, x0, top + 4 * ts, C.silver, 'body', ts, 'left');
   if (sub) stampText(b.px, b.w, b.h, sub, x0, top + 4 * ts + kh + 3 * ts, C.fog, 'micro', ts, 'left');
+}
+
+// ---------------------------------------------------------------------------
+// Pictures and maps: where they go on the wall
+
+const MEDIA = { x: 0, y: 0, w: 0, h: 0, framed: false };
+/**
+ * The rectangle a picture or a map takes: the visible wall when no head is in front of it (the
+ * wide, the two-shot, a single that sees the wall beside the head); otherwise a picture box in
+ * the larger free area beside or above the head (news-60.md: the MCU-L picture box).
+ */
+function mediaRect(L, b, ts) {
+  const m = MEDIA;
+  if (L.heads) {
+    let best = null, area = 0;
+    for (const bx of [L.left, L.right, L.top]) {
+      const a = bw(bx) * bh(bx);
+      if (a > area) {
+        area = a;
+        best = bx;
+      }
+    }
+    const pad = 4 * ts;
+    const aw = bw(best) - 2 * pad, ah = bh(best) - 2 * pad;
+    const w = Math.floor(Math.min(aw, ah * 1.6)), h = Math.floor(w / 1.6);
+    if (w >= 36 && h >= 22) {
+      m.x = Math.round(best.x0 + (bw(best) - w) / 2);
+      m.y = best.y0 + pad;
+      m.w = w;
+      m.h = h;
+      m.framed = true;
+      return m;
+    }
+  }
+  const v = L.vis;
+  m.x = v.x0;
+  m.y = v.y0;
+  m.w = bw(v);
+  m.h = Math.max(0, Math.min(v.y1, b.h - L.band) - v.y0);
+  m.framed = false;
+  return m;
+}
+
+/** The frame of a picture box: news-60 a 1 px steel line, TECH BYTES its black mat, others 1 px black. */
+function frameBox(b, m, style, env) {
+  const t = style.id === 'tech-bytes' ? Math.max(2, Math.round((style.pictureMat || 2.8) * env.k)) : 1;
+  const c = style.id === 'news-60' ? C.steel : C.black;
+  rect(b, m.x - t, m.y - t, m.x + m.w + t, m.y, c);
+  rect(b, m.x - t, m.y + m.h, m.x + m.w + t, m.y + m.h + t, c);
+  rect(b, m.x - t, m.y, m.x, m.y + m.h, c);
+  rect(b, m.x + m.w, m.y, m.x + m.w + t, m.y + m.h, c);
+}
+
+const SUB = new Buf();
+function blitSub(b, sub, x0, y0) {
+  for (let y = 0; y < sub.h; y++) {
+    const yy = y0 + y;
+    if (yy < 0 || yy >= b.h) continue;
+    for (let x = 0; x < sub.w; x++) {
+      const xx = x0 + x;
+      if (xx >= 0 && xx < b.w) b.px[yy * b.w + xx] = sub.px[y * sub.w + x];
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -843,17 +920,28 @@ function renderSpec(b, spec, style, env) {
   switch (spec.mode) {
     case 'picture': {
       const src = sourceOf(spec.image);
-      const mat = style.pictureMat ? Math.max(2, Math.round(style.pictureMat * env.k)) : 0;
       const maxL = (style.wallMaxL || 45) - (soft ? 6 : 2);
-      b.px.fill(C.black);
-      drawPicture(b, src, mat, mat, b.w - 2 * mat, b.h - 2 * mat - L.band, maxL);
-      darkBand(b, L.band, style, true);
+      const m = mediaRect(L, b, ts);
+      if (m.framed) {
+        frameBox(b, m, style, env);
+        drawPicture(b, src, m.x, m.y, m.w, m.h, maxL);
+      } else {
+        // the whole wall: TECH BYTES keeps its 2 px black mat inside the bezel
+        const mat = style.pictureMat ? Math.max(2, Math.round(style.pictureMat * env.k)) : 0;
+        b.px.fill(C.black);
+        drawPicture(b, src, m.x + mat, m.y + mat, m.w - 2 * mat, m.h - 2 * mat, maxL);
+        darkBand(b, L.band, style, true);
+      }
       break;
     }
     case 'map': {
       const dt = Math.max(0, env.t - spec.since);
-      if (!drawMiniMap(b, spec, style, env.t, Math.min(dt, MAP_ANIM[style.id] || MAP_ANIM.default))) drawStaticLocator(b, spec, style, ts);
-      darkBand(b, L.band, style, soft);
+      const m = mediaRect(L, b, ts);
+      SUB.size(Math.max(8, m.w), Math.max(8, m.h));
+      if (!drawMiniMap(SUB, spec, style, env.t, Math.min(dt, MAP_ANIM[style.id] || MAP_ANIM.default))) drawStaticLocator(SUB, spec, style, ts);
+      if (m.framed) frameBox(b, m, style, env);
+      blitSub(b, SUB, m.x, m.y);
+      if (!m.framed) darkBand(b, L.band, style, soft);
       sig = 1;
       break;
     }
@@ -902,12 +990,13 @@ function drawIdle(b, L, spec, style, env) {
     case 'wordmark': {
       topFalloff(b, C.slate, Math.round(12 * cs));
       const text = 'MONEY MINUTE';
-      const tw = textWidth(text, 'body', ts), th = capHeight('body', ts);
-      const box = pickBox(L, tw + 4, th + 8 * ts, false);
+      const ws = ts > 1 && !fitsSomewhere(L, textWidth(text, 'body', ts) + 4, 14 * ts) ? 1 : ts;
+      const tw = textWidth(text, 'body', ws), th = capHeight('body', ws);
+      const box = pickBox(L, tw + 4, th + 8 * ws, false);
       const cx = Math.round((box.x0 + box.x1) / 2);
-      const top = Math.round(box.y0 + Math.max(3 * ts, (bh(box) - th - 6 * ts) * 0.4));
-      stampText(b.px, b.w, b.h, text, cx, top, C.fog, 'body', ts, 'center');
-      rect(b, cx - 8 * ts, top + th + 4 * ts, cx + 8 * ts, top + th + 5 * ts, C.darkGreen);
+      const top = Math.round(box.y0 + Math.max(3 * ws, (bh(box) - th - 6 * ws) * 0.4));
+      stampText(b.px, b.w, b.h, text, cx, top, C.fog, 'body', ws, 'center');
+      rect(b, cx - 8 * ws, top + th + 4 * ws, cx + 8 * ws, top + th + 5 * ws, C.darkGreen);
       return 0;
     }
     case 'dial': {

@@ -258,7 +258,7 @@ export function mouthParams(fr, face, gain = 1) {
   const level = Number.isFinite(fr.level) ? fr.level : shape;
   face.open = Math.max(0, Math.min(1, level * gain));
   // a pressed m/b/p wins over the blend while the lips meet (also on the way into one)
-  if ((fr.viseme === 'MBP' && k < 0.6) || (fr.next === 'MBP' && k > 0.55)) {
+  if ((fr.viseme === 'MBP' && k < 0.65) || (fr.next === 'MBP' && k > 0.45)) {
     face.press = 1;
     face.open = 0;
   }
