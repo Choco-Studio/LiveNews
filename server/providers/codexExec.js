@@ -99,6 +99,7 @@ function run(bin, args, input, cwd, timeoutMs) {
       clearTimeout(timer);
       resolve({ stdout, stderr, code });
     });
+    child.stdin.on('error', () => {}); // the CLI may exit before reading all input (EPIPE)
     child.stdin.end(input);
   });
 }

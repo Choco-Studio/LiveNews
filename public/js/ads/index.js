@@ -2,8 +2,11 @@
 // products. Each ad draws the full 384x216 frame from (t, dt, info) alone.
 import bitfizz from './bitfizz.js';
 import screechnet from './screechnet.js';
+import safesector from './safesector.js';
+import grandbuffer from './grandbuffer.js';
+import cloudbrella from './cloudbrella.js';
 
-export const ADS = [bitfizz, screechnet];
+export const ADS = [bitfizz, screechnet, safesector, grandbuffer, cloudbrella];
 
 /** `count` distinct ads in random order, avoiding `recentIds` when possible. */
 export function pickAds(count, recentIds = []) {

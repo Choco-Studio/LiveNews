@@ -171,6 +171,9 @@ describe('Producer.canProduce', () => {
     const tech = (n) => makeStories(n, { category: 'tech' });
     assert.equal(makeProducer({ stories: tech(1) }).producer.canProduce(channel, 'solo'), false);
     assert.equal(makeProducer({ stories: tech(2) }).producer.canProduce(channel, 'solo'), true);
+    // a programme that airs 4 stories already goes on air with minNewStories = 3 fresh ones
+    assert.equal(makeProducer({ stories: makeStories(3) }).producer.canProduce(channel, 'anything'), true);
+    assert.equal(makeProducer({ stories: makeStories(2) }).producer.canProduce(channel, 'anything'), false);
     // a bigger minNewStories than the programme size never asks for more than the programme can use
     assert.equal(makeProducer({ stories: tech(2), config: { ...CONFIG, minNewStories: 10 } }).producer.canProduce(channel, 'solo'), true);
   });
@@ -465,7 +468,9 @@ describe('Producer review stage', () => {
       for (const key of ['source', 'category', 'hasImage']) assert.ok(!(key in seg), `${seg.type} segment has ${key}`);
     }
     const story = script.segments.find((s) => s.type === 'story');
-    for (const key of ['storyId', 'anchor', 'emotion', 'headline', 'text', 'cues', 'shot', 'breaking', 'location', 'fact']) assert.ok(key in story, key);
+    for (const key of ['storyId', 'anchor', 'emotion', 'headline', 'text', 'shot', 'breaking', 'location', 'fact']) assert.ok(key in story, key);
+    // Stage directions travel inside the text, where the editor can see and keep them.
+    assert.ok(!('cues' in story), 'cues are embedded in the text, not sent as a separate array');
   });
 
   test('stage directions written into the text reach the episode as cues when there is no review pass', async () => {

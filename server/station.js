@@ -1,6 +1,5 @@
 import { loadChannel, publicChannel } from './channel.js';
-
-const BREAKING_RE = /\bbreaking\b|[-–—]\s*live\b|\blive updates?\b|última hora/i;
+import { isBreaking } from './news.js';
 
 /**
  * Master control: keeps finished episodes ready ahead of air, follows the
@@ -48,7 +47,7 @@ export class Station {
       await this.news.refresh();
       this.emit('ticker', this.ticker());
       for (const s of this.news.uncovered()) {
-        if (BREAKING_RE.test(s.title) && !this.announcedBreaking.has(s.id) && Date.now() - s.published < 3 * 3600_000) {
+        if (isBreaking(s.title) && !this.announcedBreaking.has(s.id) && Date.now() - s.published < 3 * 3600_000) {
           this.announcedBreaking.add(s.id);
           this.emit('breaking', { source: s.source, text: s.title });
           break;

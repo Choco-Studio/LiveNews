@@ -1,14 +1,23 @@
-// The studio set: lighting rig, back wall, London / world-city windows, side
-// monitors, world clocks, the big video wall and the anchor desk. Presenters
-// are drawn by anchors.js between drawSet() and drawDesk().
+// The GLOBIT 24 studio set, drawn behind and around the presenters
+// (anchors.js draws them between drawSet() and drawDesk()).
 //
-// Everything is integer pixels in the channel palette (plus a few deliberate
-// alpha washes for light, glow and reflections). Static scenery is rendered
-// once into lazily created offscreen layers; each frame only redraws what
-// moves: LEDs, beams, screens, clocks and the life in the city windows.
+// Design concept, "the globe": a calm, dark back wall with one huge circular
+// recess behind the presenters - the channel's pixel globe at set scale -
+// edged by a ring of accent light and crossed, like the logo, by an equator
+// seam and a meridian lens. The video wall sits at its heart as the single
+// hero element, with the logo's yellow "bit" on its corner; the curved desk
+// carries the logo. Programme themes only change the accent colour, the
+// lighting tint and what the video wall shows when idle.
+//
+// Everything is integer pixels in the channel palette, plus a few deliberate
+// alpha washes for light, glow and reflections. Static scenery is baked once
+// per theme into offscreen layers; each frame only adds the slow motion: the
+// video wall, breathing practical lights, an occasional pulse along the ring
+// and the desk LED, a light sweep across the globe and soft reflections.
 import { P } from './palette.js';
-import { drawText, measureText, wrapText } from './font.js';
-import { mulberry32, zoneTime, clamp, easeOut, easeInOut } from './util.js';
+import { drawText, measureText, wrapText, normalizeText } from './font.js';
+import { mulberry32, clamp, easeOut, easeInOut } from './util.js';
+import { drawLogo, measureLogo, CHANNEL_NAME } from './logo.js';
 
 export const W = 384;
 export const H = 216;
@@ -100,33 +109,6 @@ function linePts(x0, y0, x1, y1, fn) {
   }
 }
 
-/** Integer points of a 1-px circle outline (midpoint algorithm). */
-function circlePts(R) {
-  const seen = new Set();
-  const pts = [];
-  let x = R;
-  let y = 0;
-  let err = 1 - R;
-  const add = (a, b) => {
-    const k = `${a},${b}`;
-    if (!seen.has(k)) {
-      seen.add(k);
-      pts.push([a, b]);
-    }
-  };
-  while (x >= y) {
-    add(x, y); add(y, x); add(-y, x); add(-x, y);
-    add(-x, -y); add(-y, -x); add(y, -x); add(x, -y);
-    y++;
-    if (err < 0) err += 2 * y + 1;
-    else {
-      x--;
-      err += 2 * (y - x) + 1;
-    }
-  }
-  return pts;
-}
-
 /** A tiny RGBA pixel buffer used to bake static layers with ordered dithering. */
 class Pix {
   constructor(w, h) {
@@ -207,10 +189,6 @@ class Pix {
     this.shade(x0, y0, w, h, stops, (x, y) => (h > 1 ? ((y - y0) / (h - 1)) * n : 0), sharp);
   }
 
-  line(x0, y0, x1, y1, hex, every = 1) {
-    linePts(x0, y0, x1, y1, (x, y, i) => i % every === 0 && this.px(x, y, hex));
-  }
-
   canvas() {
     const c = makeCanvas(this.w, this.h);
     c.getContext('2d').putImageData(this.img, 0, 0);
@@ -219,7 +197,7 @@ class Pix {
 }
 
 // ---------------------------------------------------------------------------
-// 3x5 micro font for small labels on monitors and clocks
+// 3x5 micro font for small labels on the video wall
 
 const TINY_SRC = {
   A: '.#.|#.#|###|#.#|#.#', B: '##.|#.#|##.|#.#|##.', C: '.##|#..|#..|#..|.##', D: '##.|#.#|#.#|#.#|##.',
@@ -232,7 +210,7 @@ const TINY_SRC = {
   0: '###|#.#|#.#|#.#|###', 1: '.#|##|.#|.#|.#', 2: '##.|..#|.#.|#..|###', 3: '##.|..#|.#.|..#|##.',
   4: '#.#|#.#|###|..#|..#', 5: '###|#..|##.|..#|##.', 6: '.##|#..|###|#.#|###', 7: '###|..#|.#.|.#.|.#.',
   8: '###|#.#|###|#.#|###', 9: '###|#.#|###|..#|##.', ':': '.|#|.|#|.', '.': '.|.|.|.|#', '-': '..|..|##|..|..',
-  '+': '...|.#.|###|.#.|...', '/': '..#|..#|.#.|#..|#..', '%': '#.#|..#|.#.|#..|#.#',
+  '&': '.#.|#.#|.#.|#.#|.##', ',': '.|.|.|#|#', "'": '#|#|.|.|.',
 };
 const TINY = new Map(
   Object.entries(TINY_SRC).map(([ch, src]) => {
@@ -255,8 +233,7 @@ function tiny(ctx, text, x, y, color, align = 'left') {
   const key = `${color}|${text}`;
   let c = tinyCache.get(key);
   if (!c) {
-    const w = Math.max(1, tinyWidth(text));
-    c = makeCanvas(w, 5);
+    c = makeCanvas(Math.max(1, tinyWidth(text)), 5);
     const cx = c.getContext('2d');
     cx.fillStyle = color;
     let pen = 0;
@@ -272,493 +249,306 @@ function tiny(ctx, text, x, y, color, align = 'left') {
     if (tinyCache.size > 200) tinyCache.delete(tinyCache.keys().next().value);
     tinyCache.set(key, c);
   }
-  const w = c.width;
-  const dx = Math.round(align === 'center' ? x - w / 2 : align === 'right' ? x - w : x);
+  const dx = Math.round(align === 'center' ? x - c.width / 2 : align === 'right' ? x - c.width : x);
   ctx.drawImage(c, dx, Math.round(y));
-  return w;
+  return c.width;
 }
 
 // ---------------------------------------------------------------------------
-// Real-world time (Intl formatting is cached once per second)
+// Programme themes: one accent + neutrals. led = [dim, lit, peak] for the ring
+// and desk LEDs, text = accent that stays legible as type, tint = colour of
+// the light on the set, glow = what the idle video wall throws on the set.
 
-const ZONES = [
-  ['LONDON', undefined], // studio time zone (util.STUDIO_TZ)
-  ['NEW YORK', 'America/New_York'],
-  ['TOKYO', 'Asia/Tokyo'],
-];
-let timeCache = { key: NaN };
-function times() {
-  const now = Date.now();
-  const key = Math.floor(now / 1000);
-  if (key !== timeCache.key) {
-    timeCache = { key, sec: ((key % 60) + 60) % 60, utc: (now / 3600000) % 24, zones: ZONES.map(([, tz]) => zoneTime(tz)) };
-  }
-  return timeCache;
-}
-
-function phaseOf(hour) {
-  if (hour >= 8 && hour < 18) return 'day';
-  if (hour >= 18 && hour < 21) return 'dusk';
-  if (hour >= 6 && hour < 8) return 'dawn';
-  return 'night';
-}
-
-// Colour scripts for the city windows by London time of day.
 const THEMES = {
-  day: {
-    sky: [P.blue, P.blue, P.cyan, P.silver], sharp: 2.4,
-    far: P.fog, mid: P.steel, near: P.slate, hi: P.fog, lo: P.ink,
-    lit: 0.08, litA: P.silver, litB: P.cyan,
-    water: [P.navy, P.blue], glint: P.white,
-    tower: [P.tan, P.cream, P.tanShade], face: P.white, hands: P.black,
-    eye: P.white, spoke: P.silver, pod: P.silver, shard: [P.silver, P.fog],
-    cloud: [P.white, P.silver], lamps: null, road: P.slate,
-  },
-  dusk: {
-    sky: [P.purple, P.magenta, P.pink, P.orange, P.yellow], sharp: 2.2,
-    far: P.magenta, mid: P.purple, near: P.maroon, hi: P.rust, lo: P.black,
-    lit: 0.22, litA: P.yellow, litB: P.orange,
-    water: [P.purple, P.maroon], glint: P.orange,
-    tower: [P.maroon, P.rust, P.black], face: P.cream, hands: P.maroon,
-    eye: P.cream, spoke: P.pink, pod: P.yellow, shard: [P.pink, P.purple],
-    cloud: [P.pink, P.magenta], sun: [P.yellow, P.cream], lamps: P.yellow, road: P.maroon,
-  },
-  dawn: {
-    sky: [P.ink, P.purple, P.pink, P.cream], sharp: 2.2,
-    far: P.purple, mid: P.maroon, near: P.ink, hi: P.pink, lo: P.black,
-    lit: 0.16, litA: P.yellow, litB: P.cream,
-    water: [P.ink, P.purple], glint: P.pink,
-    tower: [P.brown, P.tan, P.maroon], face: P.cream, hands: P.maroon,
-    eye: P.silver, spoke: P.fog, pod: P.cream, shard: [P.pink, P.purple],
-    cloud: [P.cream, P.pink], sunR: [P.yellow, P.cream], lamps: P.yellow, road: P.ink,
-  },
-  night: {
-    sky: [P.black, P.black, P.ink, P.navy], sharp: 1.6,
-    far: P.slate, mid: P.ink, near: P.black, hi: P.slate, lo: P.black,
-    lit: 0.34, litA: P.yellow, litB: P.cream,
-    water: [P.black, P.ink], glint: P.yellow,
-    tower: [P.tanShade, P.tan, P.brown], face: P.cream, hands: P.black,
-    eye: P.magenta, spoke: P.purple, pod: P.cyan, shard: [P.ink, P.black],
-    cloud: null, stars: true, bokeh: true, moon: true, lamps: P.yellow, road: P.ink,
-  },
+  world: { id: 'world', ring: [P.darkRed, P.red], led: [P.darkRed, P.red, P.pink], text: P.red, tint: P.blue, glow: P.blue, idle: 'globe', screen: [P.navy, P.ink, P.black] },
+  tech: { id: 'tech', ring: [P.purple, P.magenta], led: [P.purple, P.magenta, P.pink], text: P.magenta, tint: P.magenta, glow: P.magenta, idle: 'chip', screen: [P.purple, P.black, P.black] },
+  space: { id: 'space', ring: [P.purple, P.purple], led: [P.ink, P.purple, P.magenta], text: P.pink, tint: P.purple, glow: P.purple, idle: 'planet', screen: [P.black, P.black, P.ink], dark: true },
+  money: { id: 'money', ring: [P.darkGreen, P.green], led: [P.darkGreen, P.green, P.yellow], text: P.green, tint: P.cream, glow: P.green, idle: 'chart', screen: [P.ink, P.black, P.black], solo: true },
+  flash: { id: 'flash', ring: [P.yellow, P.yellow], led: [P.orange, P.yellow, P.white], text: P.yellow, tint: P.cream, glow: P.yellow, idle: 'countdown', screen: [P.black, P.black, P.ink], solo: true },
 };
+const themeOf = (scene) => THEMES[scene?.program?.theme] || THEMES.world;
 
 // ---------------------------------------------------------------------------
-// City windows (left: London, right: a generic world city)
+// Geometry of the set
 
-const WIN = { w: 84, h: 54, L: { x: 12, y: 20 }, R: { x: 288, y: 20 } };
-const EYE = { cx: 57, cy: 25, R: 15 };
+const FLOOR_Y = 134;
+const DISC = { cx: 191.5, cy: 49, R: 118 }; // the globe recess, centred on the video wall
+const MERIDIAN = 46; // half-width of the meridian lens at the equator
+const FIXTURES = [54, 118, 266, 330];
+const UPLIGHTS = [13, 38, 370, 345];
+const SEAMS = [25, 50, 333, 358];
+const BIT = { x: 246, y: 9 }; // the logo's yellow bit, on the video wall's corner
+// front edge of the round riser the desk stands on (y per column; H = none)
+const RISER = Array.from({ length: W }, (_, x) => {
+  const u = (x + 0.5 - 192) / 190;
+  return Math.abs(u) >= 1 ? H : Math.round(FLOOR_Y + 48 * Math.sqrt(1 - u * u));
+});
+const discDist = (x, y) => Math.hypot(x + 0.5 - DISC.cx, y + 0.5 - DISC.cy);
 
-function buildSky(side, th) {
-  const p = new Pix(WIN.w, WIN.h);
-  p.vgrad(0, 0, WIN.w, WIN.h - 4, th.sky, th.sharp);
-  p.rect(0, WIN.h - 4, WIN.w, 4, th.sky[th.sky.length - 1]);
-  const disc = (cx, cy, R, [outer, inner]) => {
-    for (let y = -R; y <= R; y++) {
-      for (let x = -R; x <= R; x++) {
-        const d = x * x + y * y;
-        if (d <= R * R + R * 0.6) p.px(cx + x, cy + y, d <= (R - 2) * (R - 2) ? inner : outer);
-        else if (d <= (R + 2) * (R + 2)) p.over(cx + x, cy + y, outer, 0.3);
-      }
+// ---------------------------------------------------------------------------
+// Static back layer, baked once per theme
+
+/** Floor, ceiling and anything that does not change between programmes. */
+let basePix = null;
+function base() {
+  if (basePix) return basePix;
+  const p = new Pix(W, H);
+  // ceiling: a slim lighting grid in the dark
+  p.rect(0, 0, W, 10, P.black);
+  p.rect(0, 3, W, 1, P.slate);
+  p.rect(0, 4, W, 1, P.ink);
+  p.rect(0, 7, W, 1, P.ink);
+  for (let x = 0; x < W; x++) if (x % 8 === 0) p.rect(x, 5, 1, 2, P.ink);
+  // baseboard where wall meets floor (seen at the sides of the desk)
+  p.rect(0, FLOOR_Y - 4, W, 1, P.black);
+  p.rect(0, FLOOR_Y - 3, W, 2, P.slate);
+  p.rect(0, FLOOR_Y - 1, W, 1, P.ink);
+  // glossy floor with a round riser under the desk
+  p.vgrad(0, FLOOR_Y, W, H - FLOOR_Y, [P.ink, P.ink, P.black], 3);
+  for (let k = -14; k <= 14; k++) {
+    linePts(192, 56, 192 + k * 30, 260, (x, y) => y > FLOOR_Y && p.over(x, y, P.slate, y < RISER[x] ? 0.3 : 0.12));
+  }
+  for (let x = 0; x < W; x++) {
+    const ry = RISER[x];
+    for (let y = Math.max(FLOOR_Y, ry); y < H; y++) p.over(x, y, P.black, 0.4);
+    if (ry >= H) continue;
+    const y0 = Math.max(FLOOR_Y, Math.min(ry, (RISER[x - 1] ?? H) + 1, (RISER[x + 1] ?? H) + 1));
+    p.over(x, y0 - 1, P.white, 0.08);
+    for (let y = y0; y <= ry; y++) {
+      p.px(x, y, P.steel); // lip catching the light
+      p.px(x, y + 1, P.slate);
+      p.px(x, y + 2, P.black);
+      p.px(x, y + 3, P.black);
     }
+  }
+  basePix = p;
+  return p;
+}
+
+const bgLayers = new Map();
+function background(th) {
+  let cv = bgLayers.get(th.id);
+  if (cv) return cv;
+  const p = new Pix(W, H);
+  p.buf.set(base().buf);
+  const { cx, cy, R } = DISC;
+  const [ringOuter, ringInner] = th.ring;
+  const [sDark, sMid] = th.dark ? [P.black, P.black] : [P.black, P.ink];
+  const discStops = th.dark ? [P.ink, P.slate, P.steel] : [P.slate, P.steel, P.fog];
+  // Light pools ("scallops") thrown on the globe by the two key fixtures:
+  // flat bands with narrow dithered seams that end well above head height,
+  // so faces sit on one flat, calm tone.
+  const scallop = (x, y) => {
+    let f = 0;
+    for (const fx of [ANCHOR_X.A, ANCHOR_X.B]) {
+      const dy = y - 13;
+      if (dy < 0) continue;
+      const u = Math.abs(x + 0.5 - fx) / (3 + Math.sqrt(dy) * 3.2);
+      const v = dy / 46;
+      f = Math.max(f, 1 - Math.max(u, v ** 0.8 + 0.3 * u * u));
+    }
+    return clamp(f, 0, 1) * 2.3;
   };
-  if (th.sun && side === 'L') disc(16, 37, 7, th.sun); // sinking behind Westminster
-  if (th.sunR && side === 'R') disc(58, 44, 5, th.sunR);
-  if (th.moon && side === 'R') {
-    disc(60, 9, 4, [P.cream, P.cream]);
-    for (let y = -5; y <= 5; y++) for (let x = -5; x <= 5; x++) if (x * x + y * y <= 17) p.px(62 + x, 8 + y, th.sky[0]);
-  }
-  return p.canvas();
-}
-
-/** Grid of lit windows on a building face; returns unlit slots for flicker. */
-function litWindows(p, rand, x, top, w, bottom, th, slots) {
-  for (let y = top + 2; y < bottom - 1; y += 3) {
-    for (let xx = x + 1; xx < x + w - 1; xx += 2) {
-      const v = rand();
-      if (v < th.lit) p.px(xx, y, v < th.lit * 0.35 ? th.litB : th.litA);
-      else if (v > 0.93 && slots.length < 24) slots.push([xx, y]);
-    }
-  }
-}
-
-function block(p, x, top, w, bottom, th, color = th.near) {
-  p.rect(x, top, w, bottom - top, color);
-  p.rect(x, top, 1, bottom - top, th.hi);
-  p.rect(x + w - 1, top, 1, bottom - top, th.lo);
-}
-
-function buildLondon(th) {
-  const p = new Pix(WIN.w, WIN.h);
-  const rand = mulberry32(1851);
-  const G = 47;
-  const slots = [];
-  // distant haze city
-  for (let x = -2; x < WIN.w;) {
-    const bw = 3 + Math.floor(rand() * 6);
-    const bh = 5 + Math.floor(rand() * 11);
-    p.rect(x, G - bh, bw, bh, th.far);
-    x += bw;
-  }
-  // middle distance blocks
-  for (const [x, w, h] of [[36, 6, 14], [41, 5, 9], [64, 7, 16], [70, 4, 11], [12, 6, 13], [24, 7, 15]]) {
-    p.rect(x, G - h, w, h, th.mid);
-    litWindows(p, rand, x, G - h, w, G, th, slots);
-  }
-  // Westminster is sandstone by day and floodlit gold at night
-  const [tw, thi, tlo] = th.tower;
-  // Victoria Tower
-  block(p, 1, 20, 7, G, { hi: thi, lo: tlo }, tw);
-  p.rect(1, 17, 1, 3, tw);
-  p.rect(7, 17, 1, 3, tw);
-  p.rect(4, 18, 1, 2, tw);
-  p.rect(4, 12, 1, 6, th.lo);
-  p.rect(5, 12, 2, 2, P.red);
-  for (let y = 23; y < 44; y += 5) {
-    p.rect(3, y, 1, 3, tlo);
-    p.rect(5, y, 1, 3, tlo);
-  }
-  // Palace of Westminster
-  p.rect(8, 37, 21, G - 37, tw);
-  p.rect(8, 37, 21, 1, thi);
-  for (let x = 9; x < 29; x += 2) p.rect(x, 40, 1, G - 42, tlo);
-  for (let x = 8; x < 29; x += 3) p.rect(x, 35, 1, 2, tw);
-  for (let x = 10; x < 28; x += 4) if (th.lamps) p.px(x, 42, th.litA);
-  p.rect(17, 30, 3, 7, tw); // central lantern
-  p.px(17, 30, thi);
-  p.rect(18, 25, 1, 5, tw);
-  // Elizabeth Tower (Big Ben)
-  p.rect(30, 21, 5, G - 21, tw);
-  p.rect(30, 21, 1, G - 21, thi);
-  p.rect(34, 21, 1, G - 21, tlo);
-  p.rect(32, 23, 1, G - 25, tlo);
-  for (let y = 24; y < G; y += 6) p.rect(31, y, 3, 1, thi);
-  p.rect(29, 14, 7, 7, tw); // clock stage
-  p.rect(29, 14, 1, 7, thi);
-  p.rect(35, 14, 1, 7, tlo);
-  p.rect(30, 15, 5, 5, th.face);
-  for (const [x, y] of [[30, 15], [34, 15], [30, 19], [34, 19]]) p.px(x, y, tw);
-  p.rect(30, 10, 5, 4, tw); // belfry
-  p.px(31, 11, tlo);
-  p.px(33, 11, tlo);
-  p.px(31, 12, tlo);
-  p.px(33, 12, tlo);
-  p.rect(29, 12, 1, 2, tw);
-  p.rect(35, 12, 1, 2, tw);
-  p.rect(31, 7, 3, 3, tw); // roof + spire
-  p.px(31, 8, thi);
-  p.rect(32, 4, 1, 3, tw);
-  p.rect(32, 2, 1, 2, thi);
-  // London Eye: legs, spokes, rim, hub
-  p.line(EYE.cx, EYE.cy, EYE.cx - 6, G - 1, th.near);
-  p.line(EYE.cx, EYE.cy, EYE.cx + 5, G - 1, th.near);
-  for (let k = 0; k < 12; k++) {
-    const a = (k / 12) * Math.PI * 2;
-    p.line(EYE.cx, EYE.cy, EYE.cx + Math.cos(a) * (EYE.R - 1), EYE.cy + Math.sin(a) * (EYE.R - 1), th.spoke, 2);
-  }
-  for (const [x, y] of circlePts(EYE.R)) p.px(EYE.cx + x, EYE.cy + y, th.eye);
-  p.rect(EYE.cx - 1, EYE.cy - 1, 3, 3, th.eye);
-  p.rect(EYE.cx - 7, G - 2, 15, 2, th.near); // pier
-  // The Shard
-  const [sa, sb] = th.shard;
-  for (let y = 4; y < G; y++) {
-    const hw = Math.round(((y - 3) * 5) / 43);
-    p.rect(78 - hw, y, hw + 1, 1, sa);
-    p.rect(79, y, hw, 1, sb);
-    if (th.lamps && y > 6 && y < 13) p.px(78, y, y < 10 ? P.white : P.fog); // lit spire
-  }
-  p.px(78, 5, th.sky[0]);
-  p.px(78, 6, th.sky[0]);
-  p.px(78, 3, sa);
-  if (th.lamps) {
-    p.px(77, 4, P.fog);
-    p.px(79, 4, P.fog);
-  }
-  for (let y = 14; y < G - 2; y += 4) for (let x = 76; x < 82; x += 2) if (rand() < th.lit) p.px(x, y, th.litB);
-  // embankment + river
-  p.rect(0, G, WIN.w, 1, th.near);
-  p.vgrad(0, G + 1, WIN.w, WIN.h - G - 1, th.water, 1.6);
-  if (th.lamps) for (let x = 2; x < WIN.w; x += 6) p.px(x, G - 1, th.lamps);
-  return { city: p.canvas(), slots };
-}
-
-function buildCity(th) {
-  const p = new Pix(WIN.w, WIN.h);
-  const rand = mulberry32(2026);
-  const G = 46;
-  const slots = [];
-  for (let x = -2; x < WIN.w;) {
-    const bw = 3 + Math.floor(rand() * 6);
-    const bh = 8 + Math.floor(rand() * 16);
-    p.rect(x, G - bh, bw, bh, th.far);
-    if (rand() < 0.25) p.rect(x + 1, G - bh - 3, 1, 3, th.far);
-    x += bw;
-  }
-  for (let x = 0; x < WIN.w;) {
-    const bw = 5 + Math.floor(rand() * 5);
-    const bh = 10 + Math.floor(rand() * 16);
-    p.rect(x, G - bh, bw, bh, th.mid);
-    litWindows(p, rand, x, G - bh, bw, G, th, slots);
-    x += bw + 2 + Math.floor(rand() * 5);
-  }
-  // antenna block
-  block(p, 2, 18, 8, G, th);
-  p.rect(5, 12, 1, 6, th.near);
-  litWindows(p, rand, 2, 18, 8, G, th, slots);
-  // art-deco spire
-  block(p, 12, 24, 11, G, th);
-  block(p, 14, 16, 7, 24, th);
-  block(p, 16, 11, 3, 16, th);
-  p.rect(17, 4, 1, 7, th.hi);
-  litWindows(p, rand, 12, 24, 11, G, th, slots);
-  // slanted glass slab
-  for (let x = 24; x < 32; x++) {
-    const top = 14 + Math.floor((x - 24) / 2);
-    p.rect(x, top, 1, G - top, x === 24 ? th.hi : x === 31 ? th.lo : th.near);
-  }
-  litWindows(p, rand, 24, 19, 8, G, th, slots);
-  // TV tower
-  p.rect(35, 12, 2, G - 12, th.near);
-  p.px(35, 20, th.hi);
-  p.rect(33, 15, 6, 1, th.near);
-  p.rect(32, 16, 8, 2, th.near);
-  p.rect(33, 18, 6, 1, th.near);
-  p.rect(32, 16, 1, 2, th.hi);
-  p.rect(34, 11, 4, 2, th.near);
-  p.rect(35, 2, 1, 9, th.near);
-  p.rect(33, 17, 6, 1, th.litA);
-  // twisting tower
-  for (let y = 8; y < G; y++) {
-    const off = Math.round(Math.sin(y / 7) * 1.2);
-    const x0 = 42 + off;
-    p.rect(x0, y, 10, 1, th.near);
-    p.px(x0 + (((y >> 1) + 0) % 8) + 1, y, th.hi);
-    p.px(x0 + 9, y, th.lo);
-  }
-  litWindows(p, rand, 42, 10, 10, G, th, slots);
-  // crowned block
-  block(p, 53, 22, 8, G, th);
-  p.rect(55, 19, 4, 3, th.near);
-  p.px(56, 17, th.near);
-  p.px(56, 18, th.near);
-  litWindows(p, rand, 53, 22, 8, G, th, slots);
-  // tower with a construction crane
-  block(p, 63, 16, 13, G, th);
-  litWindows(p, rand, 63, 16, 13, G, th, slots);
-  for (let y = 3; y < 16; y++) p.px(72 + (y & 1), y, th.near);
-  p.rect(60, 2, 24, 1, th.near);
-  p.rect(74, 3, 3, 2, th.near);
-  p.rect(62, 3, 1, 6, th.lo);
-  block(p, 77, 28, 7, G, th);
-  litWindows(p, rand, 77, 28, 7, G, th, slots);
-  // elevated highway + harbour
-  p.rect(0, G + 1, WIN.w, 1, th.hi);
-  p.rect(0, G + 2, WIN.w, 1, th.near);
-  p.vgrad(0, G + 3, WIN.w, WIN.h - G - 3, th.water, 1.6);
-  for (let x = 6; x < WIN.w; x += 14) p.rect(x, G + 3, 2, WIN.h - G - 3, th.near);
-  return { city: p.canvas(), slots };
-}
-
-const CLOUDS = [
-  { blobs: [[5, 5, 3], [10, 4, 4], [15, 5, 3], [19, 6, 2]], speed: 0.45, y: 4, off: 10 },
-  { blobs: [[3, 4, 2], [7, 3, 3], [11, 4, 2]], speed: 0.7, y: 15, off: 60 },
-  { blobs: [[4, 5, 3], [9, 3, 3], [13, 5, 3], [17, 6, 1]], speed: 0.32, y: 9, off: 95 },
-];
-const cloudSprites = new Map();
-function cloudSprite(i, colors) {
-  const key = `${i}|${colors[0]}`;
-  let c = cloudSprites.get(key);
-  if (!c) {
-    const p = new Pix(24, 10);
-    const { blobs } = CLOUDS[i];
-    const flat = Math.max(...blobs.map(([, y]) => y)) + 1;
-    for (let y = 0; y <= flat; y++) {
-      for (let x = 0; x < 24; x++) {
-        if (blobs.some(([bx, by, br]) => (x - bx) ** 2 + (y - by) ** 2 <= br * br + br * 0.5)) {
-          p.px(x, y, y >= flat - 1 ? colors[1] : colors[0]);
-        }
+  for (let y = 10; y < FLOOR_Y - 4; y++) {
+    for (let x = 0; x < W; x++) {
+      const d = discDist(x, y);
+      let c;
+      if (d >= R + 1) {
+        // surround: perforated acoustic panels, in shadow under the ceiling
+        if (y < 14 || (y < 16 && (x + y) % 2 === 0)) c = sDark;
+        else c = (y % 3 === 0 && (x + (y % 6 === 0 ? 0 : 2)) % 4 === 0) ? sDark : sMid;
+        if (SEAMS.includes(x)) c = P.black;
+      } else if (d >= R) c = P.black;
+      else if (d >= R - 1) c = ringOuter;
+      else if (d >= R - 2) c = ringInner;
+      else if (d >= R - 3) c = P.black;
+      else {
+        const n = Math.min(scallop(x, y), 2);
+        const k = Math.min(1, Math.floor(n));
+        const f = clamp((n - k - 0.5) * 3.2 + 0.5, 0, 1);
+        c = f > bayer(x, y) ? discStops[k + 1] : discStops[k];
       }
+      p.px(x, y, c);
     }
-    c = p.canvas();
-    cloudSprites.set(key, c);
   }
+  // the light in the pools takes the programme's tint
+  for (let y = 13; y < 62; y++) {
+    for (let x = 60; x < 324; x++) {
+      if (discDist(x, y) < R - 3 && scallop(x, y) > 0.5) p.over(x, y, th.tint, 0.16);
+    }
+  }
+  // equator seam and meridian lens, as on the logo's globe
+  for (let x = 0; x < W; x++) {
+    if (discDist(x, cy) < R - 4) {
+      p.px(x, cy, P.silver);
+      p.over(x, cy + 1, P.black, 0.35);
+    }
+  }
+  for (let y = 10; y < FLOOR_Y - 4; y++) {
+    const v = (y + 0.5 - cy) / (R - 3);
+    if (Math.abs(v) >= 1) continue;
+    const m = MERIDIAN * Math.sqrt(1 - v * v);
+    for (const x of [Math.round(cx - m - 0.5), Math.round(cx + m - 0.5)]) {
+      p.px(x, y, P.fog);
+      p.over(x + (x < cx ? 1 : -1), y, P.black, 0.25);
+    }
+  }
+  // video wall bezel
+  {
+    const { x, y, w, h } = WALL;
+    p.rect(x - 4, y - 4, w + 8, h + 8, P.black);
+    p.rect(x - 3, y - 3, w + 6, h + 6, P.slate);
+    p.rect(x - 3, y - 3, w + 6, 1, P.fog);
+    p.rect(x - 3, y - 3, 1, h + 6, P.steel);
+    p.rect(x + w + 2, y - 3, 1, h + 6, P.ink);
+    p.rect(x - 3, y + h + 2, w + 6, 1, P.ink);
+    p.rect(x - 1, y - 1, w + 2, h + 2, P.black);
+  }
+  // the bit: a yellow square popping off the screen's corner, as in the logo
+  p.rect(BIT.x, BIT.y, 6, 6, P.black);
+  p.rect(BIT.x + 1, BIT.y + 1, 4, 4, P.yellow);
+  p.px(BIT.x + 1, BIT.y + 1, P.cream);
+  p.rect(BIT.x + 1, BIT.y + 4, 4, 1, P.orange);
+  p.rect(BIT.x + 4, BIT.y + 1, 1, 4, P.orange);
+  p.px(BIT.x + 4, BIT.y + 1, P.yellow);
+  // floor-standing uplights at the foot of the surround panels
+  for (const ux of UPLIGHTS) {
+    p.rect(ux - 2, FLOOR_Y - 6, 5, 2, P.black);
+    p.rect(ux - 1, FLOOR_Y - 7, 3, 1, th.ring[1]);
+    for (let i = 0; i < 22; i++) {
+      p.over(ux, FLOOR_Y + i, th.tint, 0.22 * (1 - i / 22));
+      p.over(ux - 1, FLOOR_Y + i, th.tint, 0.1 * (1 - i / 22));
+      p.over(ux + 1, FLOOR_Y + i, th.tint, 0.1 * (1 - i / 22));
+    }
+  }
+  cv = p.canvas();
+  bgLayers.set(th.id, cv);
+  return cv;
+}
+
+// ---------------------------------------------------------------------------
+// Slow set motion: practical lights, ring pulse, light sweep, reflections
+
+let fixtureSprite = null;
+function fixture() {
+  if (fixtureSprite) return fixtureSprite;
+  const p = new Pix(7, 7);
+  p.px(3, 0, P.slate);
+  p.rect(2, 1, 3, 1, P.slate);
+  p.rect(1, 2, 5, 2, P.slate);
+  p.rect(1, 2, 1, 2, P.steel);
+  p.rect(5, 2, 1, 2, P.ink);
+  p.rect(2, 4, 3, 1, P.black);
+  fixtureSprite = p.canvas();
+  return fixtureSprite;
+}
+
+const uplightSprites = new Map();
+/** Scallop an uplight throws up a surround panel: two flat bands of tinted light. */
+function uplightSprite(tint) {
+  let c = uplightSprites.get(tint);
+  if (c) return c;
+  const Hh = 46;
+  const p = new Pix(23, Hh);
+  for (let k = 0; k < Hh; k++) {
+    const y = Hh - 1 - k;
+    for (let x = 0; x < 23; x++) {
+      const u = Math.abs(x + 0.5 - 11.5) / (2 + Math.sqrt(k) * 1.45);
+      const f = 1 - Math.max(u, k / Hh + 0.3 * u * u);
+      if (f <= 0) continue;
+      const band = f > 0.55 ? 0.2 : f > 0.12 || (f > 0.04 && (x + y) % 2 === 0) ? 0.1 : 0;
+      if (band) p.over(x, y, tint, band);
+      if (k < 3 && u < 0.5) p.over(x, y, P.cream, 0.3);
+    }
+  }
+  c = p.canvas();
+  uplightSprites.set(tint, c);
   return c;
 }
 
-const STARS = (() => {
-  const rand = mulberry32(7);
-  return Array.from({ length: 30 }, () => [Math.floor(rand() * WIN.w), Math.floor(rand() * 28), rand()]);
+// pixels of the lit ring, per side, ordered from the ceiling down to the desk
+const RING = (() => {
+  const sides = [[], []];
+  for (let y = 10; y < DESK_Y; y++) {
+    for (let x = 0; x < W; x++) {
+      const d = discDist(x, y);
+      if (d >= DISC.R - 2 && d < DISC.R - 1) sides[x < DISC.cx ? 0 : 1].push([x, y]);
+    }
+  }
+  for (const s of sides) s.sort((a, b) => a[1] - b[1] || (a[0] < DISC.cx ? b[0] - a[0] : a[0] - b[0]));
+  return sides;
 })();
 
-const BOKEH = (() => {
-  const rand = mulberry32(99);
-  const cols = [P.yellow, P.orange, P.cyan, P.yellow, P.pink];
-  return Array.from({ length: 5 }, (_, i) => ({
-    x: 4 + Math.floor(rand() * (WIN.w - 8)),
-    y: 16 + Math.floor(rand() * 32),
-    big: rand() < 0.45,
-    color: cols[i % cols.length],
-    rate: 0.4 + rand() * 0.9,
-    ph: rand() * 6.28,
-  }));
-})();
-
-let glassLayer = null;
-function glass() {
-  if (glassLayer) return glassLayer;
-  const p = new Pix(WIN.w, WIN.h);
-  for (let y = 0; y < WIN.h; y++) {
-    for (let x = 0; x < WIN.w; x++) {
-      p.over(x, y, P.ink, 0.16); // tinted studio glass keeps the view behind the presenters
-      const d = (x + y * 0.8) % 46;
-      if (d >= 10 && d < 13) p.over(x, y, P.white, 0.07);
-      if (d >= 15 && d < 16) p.over(x, y, P.white, 0.09);
-    }
-  }
-  p.rect(40, 0, 1, WIN.h, P.slate);
-  p.rect(41, 0, 1, WIN.h, P.black);
-  for (let x = 0; x < WIN.w; x++) {
-    p.over(x, 0, P.black, 0.45);
-    p.over(x, 1, P.black, 0.2);
-  }
-  glassLayer = p.canvas();
-  return glassLayer;
-}
-
-const winState = { cache: { L: {}, R: {} }, cv: {}, ctx: {} };
-function windowLayers(side, phase) {
-  const c = winState.cache[side];
-  if (!c[phase]) {
-    const th = THEMES[phase];
-    c[phase] = { sky: buildSky(side, th), ...(side === 'L' ? buildLondon(th) : buildCity(th)) };
-  }
-  return c[phase];
-}
-
-function drawWindow(ctx, side, t, tm, phase) {
-  const th = THEMES[phase];
-  const lay = windowLayers(side, phase);
-  if (!winState.cv[side]) {
-    winState.cv[side] = makeCanvas(WIN.w, WIN.h);
-    winState.ctx[side] = winState.cv[side].getContext('2d');
-  }
-  const c = winState.ctx[side];
-  const seed = side === 'L' ? 0 : 500;
-  c.drawImage(lay.sky, 0, 0);
-  if (th.stars) {
-    for (let i = 0; i < STARS.length; i++) {
-      const [sx, sy, ph] = STARS[i];
-      const x = (sx + (side === 'L' ? 0 : 37)) % WIN.w;
-      const v = Math.sin(t * (0.8 + ph) + ph * 40);
-      if (v > -0.4) fill(c, x, sy, 1, 1, v > 0.85 ? P.white : ph > 0.5 ? P.fog : P.steel);
-    }
-  }
-  if (th.cloud) {
-    CLOUDS.forEach((cl, i) => {
-      if (side === 'R' && i === 2) return;
-      const span = WIN.w + 26;
-      const x = Math.floor((t * cl.speed + cl.off + seed) % span) - 24;
-      c.drawImage(cloudSprite(i, th.cloud), x, cl.y + (side === 'R' ? 3 : 0));
-    });
-  }
-  if (side === 'R' && phase !== 'day') {
-    // an airliner crossing high above the city every couple of minutes
-    const px = Math.floor((t * 3) % 260) - 20;
-    if (px > -2 && px < WIN.w + 2) {
-      fill(c, px, 6, 1, 1, Math.floor(t * 2) % 2 ? P.red : P.white);
-      if (Math.floor(t * 1.3) % 3 === 0) fill(c, px - 2, 6, 1, 1, P.white);
-    }
-  }
-  c.drawImage(lay.city, 0, 0);
-  if (side === 'L') londonLife(c, t, tm, th);
-  else cityLife(c, t, th);
-  // window lights switching on and off
-  for (let i = 0; i < lay.slots.length; i++) {
-    if (hash(i * 31 + seed + Math.floor((t + i * 3.7) / (7 + (i % 5)))) < (phase === 'day' ? 0.15 : 0.45)) {
-      const [x, y] = lay.slots[i];
-      fill(c, x, y, 1, 1, i % 3 ? th.litA : th.litB);
-    }
-  }
-  // water shimmer
-  const G = side === 'L' ? 48 : 49;
-  for (let i = 0; i < 9; i++) {
-    const n = Math.floor(t * 2.2 + i * 0.37);
-    const x = Math.floor(hash(n * 97 + i * 13 + seed) * WIN.w);
-    const y = G + 1 + Math.floor(hash(n * 53 + i + seed) * (WIN.h - G - 2));
-    fill(c, x, y, 2, 1, i % 3 ? th.glint : rgba(th.glint, 0.5));
-  }
-  if (th.bokeh) {
-    // out-of-focus city lights drifting in and out
-    for (const b of BOKEH) {
-      const a = 0.5 + 0.5 * Math.sin(t * b.rate + b.ph + (side === 'L' ? 0 : 2));
-      if (a < 0.2) continue;
-      const x = side === 'L' ? b.x : WIN.w - b.x;
-      if (b.big) {
-        c.fillStyle = rgba(b.color, 0.18 * a);
-        c.fillRect(x - 2, b.y - 1, 5, 3);
-        c.fillRect(x - 1, b.y - 2, 3, 1);
-        c.fillRect(x - 1, b.y + 2, 3, 1);
+function drawSetLife(ctx, t, th) {
+  // uplights breathing on the surround panels
+  const up = uplightSprite(th.tint);
+  UPLIGHTS.forEach((ux, i) => {
+    ctx.globalAlpha = 0.8 + 0.2 * Math.sin(t * 0.55 + i * 1.7);
+    ctx.drawImage(up, ux - 11, FLOOR_Y - 7 - up.height);
+  });
+  ctx.globalAlpha = 1;
+  // a soft band of light sweeping across the globe now and then
+  const st = t % 19;
+  if (st < 3) {
+    const bx = DISC.cx - DISC.R + easeInOut(st / 3) * DISC.R * 2;
+    for (let y = 10; y < 66; y++) {
+      const half = Math.sqrt(Math.max(0, (DISC.R - 3) ** 2 - (y + 0.5 - DISC.cy) ** 2));
+      const a = 0.07 * (1 - (y - 10) / 56);
+      for (const [w, k] of [[16, 1], [6, 1.4]]) {
+        const x0 = Math.max(Math.round(bx - w / 2), Math.ceil(DISC.cx - half));
+        const x1 = Math.min(Math.round(bx + w / 2), Math.floor(DISC.cx + half));
+        if (x1 > x0) fill(ctx, x0, y, x1 - x0, 1, rgba(P.white, a * k));
       }
-      c.fillStyle = rgba(b.color, 0.45 * a);
-      c.fillRect(x - 1, b.y, 3, 1);
-      c.fillRect(x, b.y - 1, 1, 3);
-      fill(c, x, b.y, 1, 1, a > 0.6 ? b.color : rgba(b.color, a));
     }
   }
-  c.drawImage(glass(), 0, 0);
-  ctx.drawImage(winState.cv[side], WIN[side].x, WIN[side].y);
-}
-
-function londonLife(c, t, tm, th) {
-  // Elizabeth Tower clock shows real London time
-  const { h, m } = tm.zones[0];
-  const ma = (m / 60) * Math.PI * 2;
-  const ha = (((h % 12) + m / 60) / 12) * Math.PI * 2;
-  c.fillStyle = th.hands;
-  c.fillRect(32, 17, 1, 1);
-  c.fillRect(32 + Math.round(Math.sin(ha)), 17 - Math.round(Math.cos(ha)), 1, 1);
-  for (let s = 1; s <= 2; s++) c.fillRect(32 + Math.round(Math.sin(ma) * s), 17 - Math.round(Math.cos(ma) * s), 1, 1);
-  // London Eye pods turning slowly
-  const rot = (t / 240) * Math.PI * 2;
-  c.fillStyle = th.pod;
-  for (let k = 0; k < 16; k++) {
-    const a = rot + (k / 16) * Math.PI * 2;
-    c.fillRect(Math.round(EYE.cx + Math.cos(a) * (EYE.R + 1) - 0.5), Math.round(EYE.cy + Math.sin(a) * (EYE.R + 1) - 0.5), 2, 2);
-  }
-  // aviation light on the Shard
-  if (th.lamps && t % 1.6 < 0.5) fill(c, 78, 2, 1, 1, P.red);
-  // reflections of the lit landmarks dancing on the Thames
-  if (th.lamps) {
-    for (let y = 49; y < WIN.h; y += 2) {
-      const j = Math.floor(t * 3 + y) % 3 === 0 ? 1 : 0;
-      fill(c, 31 + j, y, 2, 1, rgba(th.face, 0.55));
-      fill(c, EYE.cx - 2 + j * 2, y, 3, 1, rgba(th.eye, 0.45));
+  // an occasional pulse running down the ring of light
+  const rp = t % 9;
+  if (rp < 1.6) {
+    const p = easeInOut(rp / 1.6);
+    for (const side of RING) {
+      const head = Math.floor(p * (side.length + 14));
+      for (let j = 0; j < 14; j++) {
+        const pt = side[head - j];
+        if (!pt) continue;
+        fill(ctx, pt[0], pt[1], 1, 1, j < 2 ? P.white : j < 6 ? th.led[2] : rgba(th.led[2], 0.5));
+      }
     }
   }
 }
 
-function cityLife(c, t, th) {
-  if (th.lamps) {
-    if (t % 1.4 < 0.45) fill(c, 35, 1, 1, 1, P.red);
-    if ((t + 0.7) % 1.4 < 0.45) fill(c, 83, 2, 1, 1, P.red);
-    if (t % 2 < 0.3) fill(c, 17, 3, 1, 1, P.red);
-  }
-  // traffic on the elevated highway
-  for (let i = 0; i < 9; i++) {
-    const right = i % 2 === 0;
-    const speed = 7 + (i % 4) * 2.5;
-    const span = WIN.w + 12;
-    let x = Math.floor((t * speed + i * 23) % span) - 6;
-    if (!right) x = WIN.w - x;
-    fill(c, x, 46, right ? 2 : 1, 1, right ? P.red : th.lamps ? P.cream : P.white);
+function drawPracticals(ctx, t) {
+  // rig fixtures with gently breathing lenses
+  FIXTURES.forEach((fx, i) => {
+    ctx.drawImage(fixture(), fx - 3, 9);
+    const b = 0.5 + 0.5 * Math.sin(t * 0.8 + i * 1.3);
+    fill(ctx, fx - 1, 13, 3, 1, P.cream);
+    fill(ctx, fx, 13, 1, 1, P.white);
+    fill(ctx, fx - 2, 14, 5, 1, rgba(P.cream, 0.18 + 0.12 * b));
+    fill(ctx, fx - 1, 15, 3, 1, rgba(P.cream, 0.08 + 0.06 * b));
+  });
+  // the bit glows and beats like the one in the logo
+  const g = 0.5 + 0.5 * Math.sin(t * 1.1);
+  ctx.fillStyle = rgba(P.yellow, 0.12 + 0.12 * g);
+  ctx.fillRect(BIT.x - 1, BIT.y, 1, 6);
+  ctx.fillRect(BIT.x + 6, BIT.y, 1, 6);
+  ctx.fillRect(BIT.x, BIT.y - 1, 6, 1);
+  ctx.fillRect(BIT.x, BIT.y + 6, 6, 1);
+  const beat = t % 3;
+  if (beat > 1.1 && beat < 1.46) fill(ctx, BIT.x + 1, BIT.y + 1, 4, 4, Math.floor((beat - 1.1) / 0.12) === 1 ? P.white : P.cream);
+}
+
+/** Soft, slowly drifting reflection of the video wall's light on the glossy floor. */
+function drawFloorSheen(ctx, t, color) {
+  const cx = 192 + Math.round(Math.sin(t * 0.11) * 70);
+  const breathe = 0.85 + 0.15 * Math.sin(t * 0.7);
+  for (const [w, y, h, a] of [[150, 166, 5, 0.04], [96, 167, 3, 0.05], [48, 168, 1, 0.06]]) {
+    ctx.fillStyle = rgba(color, a * breathe);
+    ctx.fillRect(cx - w / 2, y, w, h);
   }
 }
 
 // ---------------------------------------------------------------------------
-// Side monitors: markets chart (left) and a dot-matrix world map (right)
-
-const MON_L = { x: 14, y: 84, w: 80, h: 30 };
-const MON_R = { x: 290, y: 84, w: 80, h: 30 };
+// Spinning globe (real continents, lit from the upper left, tilted axis)
 
 // 40x14 equirectangular land mask (9° x 10° cells, 75°N .. 55°S).
 const WORLD = [
@@ -777,141 +567,6 @@ const WORLD = [
   '...........##.......................#.#.',
   '............#...........................',
 ];
-const CITIES = [
-  [51.5, -0.1], [40.7, -74], [35.7, 139.7], [-23.5, -46.6], [-1.3, 36.8], [19, 72.8],
-  [-33.9, 151.2], [39.9, 116.4], [34, -118.2], [30, 31.2], [6.5, 3.4], [55.7, 37.6],
-].map(([lat, lon]) => [Math.floor((lon + 180) / 9), clamp(Math.round((75 - lat) / 10), 0, 13)]);
-
-function chartValue(n) {
-  return clamp(
-    0.52 + 0.2 * Math.sin(n * 0.11) + 0.11 * Math.sin(n * 0.29 + 1.3) + 0.06 * Math.sin(n * 0.73 + 2.1) + (hash(n) - 0.5) * 0.08,
-    0.02,
-    0.98,
-  );
-}
-
-function drawMarkets(ctx, t) {
-  const { x, y, w } = MON_L;
-  const top = y + 10;
-  const bottom = y + 27;
-  const shift = Math.floor(t * 4);
-  const n = w - 4;
-  let prev = null;
-  let last = 0;
-  for (let i = 0; i < n; i++) {
-    const v = chartValue(i + shift);
-    const yy = bottom - Math.round(v * (bottom - top));
-    const xx = x + 2 + i;
-    fill(ctx, xx, yy + 1, 1, bottom - yy, rgba(P.green, 0.16));
-    const y0 = prev === null ? yy : Math.min(prev, yy);
-    const y1 = prev === null ? yy : Math.max(prev, yy);
-    fill(ctx, xx, y0, 1, y1 - y0 + 1, P.green);
-    prev = yy;
-    last = yy;
-  }
-  if (Math.floor(t * 2) % 2) fill(ctx, x + w - 3, last - 1, 2, 2, P.white);
-  const up = chartValue(n - 1 + shift) >= chartValue(shift + n - 25);
-  const ax = x + w - 7;
-  ctx.fillStyle = up ? P.green : P.red;
-  if (up) {
-    ctx.fillRect(ax + 2, y + 2, 1, 1);
-    ctx.fillRect(ax + 1, y + 3, 3, 1);
-    ctx.fillRect(ax, y + 4, 5, 1);
-  } else {
-    ctx.fillRect(ax, y + 2, 5, 1);
-    ctx.fillRect(ax + 1, y + 3, 3, 1);
-    ctx.fillRect(ax + 2, y + 4, 1, 1);
-  }
-}
-
-function drawWorldMap(ctx, t, tm) {
-  const { x, y } = MON_R;
-  // night side of the planet, from the real UTC time
-  const sunLon = (12 - tm.utc) * 15;
-  let run = -1;
-  ctx.fillStyle = rgba(P.black, 0.55);
-  for (let c = 0; c <= 40; c++) {
-    const lon = -180 + c * 9 + 4.5;
-    const d = Math.abs((((lon - sunLon) % 360) + 540) % 360 - 180);
-    const night = c < 40 && d > 90;
-    if (night && run < 0) run = c;
-    if (!night && run >= 0) {
-      ctx.fillRect(x + run * 2, y + 1, (c - run) * 2, 28);
-      run = -1;
-    }
-  }
-  // news pings popping up around the world
-  for (let k = 0; k < 3; k++) {
-    const period = 2.6;
-    const tt = t + k * (period / 3);
-    const cycle = Math.floor(tt / period);
-    const p = (tt % period) / period;
-    const [cc, rr] = CITIES[Math.floor(hash(cycle * 7 + k * 101) * CITIES.length)];
-    const px = x + cc * 2;
-    const py = y + 1 + rr * 2;
-    const rad = 1 + Math.floor(p * 4);
-    const a = 0.85 * (1 - p);
-    ctx.fillStyle = rgba(k === 1 ? P.yellow : P.cyan, a);
-    ctx.fillRect(px - rad, py, 1, 1);
-    ctx.fillRect(px + rad, py, 1, 1);
-    ctx.fillRect(px, py - rad, 1, 1);
-    ctx.fillRect(px, py + rad, 1, 1);
-    if (rad > 2) {
-      const d = rad - 1;
-      ctx.fillRect(px - d, py - d + 1, 1, 1);
-      ctx.fillRect(px + d, py - d + 1, 1, 1);
-      ctx.fillRect(px - d, py + d - 1, 1, 1);
-      ctx.fillRect(px + d, py + d - 1, 1, 1);
-    }
-    fill(ctx, px, py, 1, 1, p < 0.5 ? P.white : k === 1 ? P.yellow : P.cyan);
-  }
-  // the studio: London
-  const [lc, lr] = CITIES[0];
-  fill(ctx, x + lc * 2, y + 1 + lr * 2, 1, 1, Math.floor(t * 2) % 2 ? P.red : P.white);
-}
-
-// ---------------------------------------------------------------------------
-// World clocks under the video wall
-
-const CLOCK = { y: 98, R: 7, xs: [160, 192, 224] };
-const clockFaces = {};
-function clockFace(day) {
-  const key = day ? 'day' : 'night';
-  if (clockFaces[key]) return clockFaces[key];
-  const R = CLOCK.R;
-  const p = new Pix(2 * R + 1, 2 * R + 1);
-  for (let yy = -R; yy <= R; yy++) {
-    for (let xx = -R; xx <= R; xx++) {
-      if (xx * xx + yy * yy <= R * R) p.px(R + xx, R + yy, day ? P.slate : P.ink);
-    }
-  }
-  for (const [xx, yy] of circlePts(R)) p.px(R + xx, R + yy, day ? P.fog : P.steel);
-  for (const [xx, yy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) p.px(R + xx * (R - 2), R + yy * (R - 2), day ? P.white : P.fog);
-  clockFaces[key] = p.canvas();
-  return clockFaces[key];
-}
-
-function drawClocks(ctx, tm) {
-  const R = CLOCK.R;
-  const hand = (cx, cy, ang, len, color) => {
-    ctx.fillStyle = color;
-    const dx = Math.sin(ang);
-    const dy = -Math.cos(ang);
-    for (let s = 1; s <= len; s++) ctx.fillRect(cx + Math.round(dx * s), cy + Math.round(dy * s), 1, 1);
-  };
-  CLOCK.xs.forEach((cx, i) => {
-    const { h, m } = tm.zones[i];
-    const cy = CLOCK.y;
-    ctx.drawImage(clockFace(h >= 7 && h < 19), cx - R, cy - R);
-    hand(cx, cy, (((h % 12) + m / 60) / 12) * Math.PI * 2, 3, P.silver);
-    hand(cx, cy, ((m + tm.sec / 60) / 60) * Math.PI * 2, 5, P.white);
-    hand(cx, cy, (tm.sec / 60) * Math.PI * 2, 5, P.red);
-    fill(ctx, cx, cy, 1, 1, P.red);
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Spinning globe (real continents, lit from the upper left, tilted axis)
 
 let LAND = null;
 function landTexture() {
@@ -947,8 +602,8 @@ const GLOBE_COLORS = [
   [P.steel, P.fog, P.silver, P.white, P.white],
 ].map((row) => row.map(u32));
 
-const globes = new Map();
-function buildGlobe(R) {
+/** Per-pixel latitude / longitude / light level of a lit, tilted sphere. */
+function buildSphere(R, tilt) {
   const S = 2 * R + 5;
   const cv = makeCanvas(S, S);
   const gctx = cv.getContext('2d');
@@ -958,9 +613,9 @@ function buildGlobe(R) {
   const lat = [];
   const lon = [];
   const lvl = [];
-  const tilt = 0.32;
   const L = [-0.5, -0.55, 0.67];
   const RR = R + 0.5;
+  const rim = [];
   for (let dy = -R - 2; dy <= R + 2; dy++) {
     for (let dx = -R - 2; dx <= R + 2; dx++) {
       const d2 = dx * dx + dy * dy;
@@ -971,45 +626,91 @@ function buildGlobe(R) {
         const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
         const qx = nx * Math.cos(tilt) - ny * Math.sin(tilt);
         const qy = nx * Math.sin(tilt) + ny * Math.cos(tilt);
-        const la = (-Math.asin(clamp(qy, -1, 1)) * 180) / Math.PI;
-        const lo = (Math.atan2(qx, nz) * 180) / Math.PI;
         const dif = nx * L[0] + ny * L[1] + nz * L[2];
         let v = clamp((dif + 0.08) * 3.3, 0, 3);
         const k = Math.floor(v);
         v = Math.min(3, k + (v - k > bayer(dx + 64, dy + 64) ? 1 : 0));
         if (dif > 0.965) v = 4;
         idx.push(i);
-        lat.push(clamp(Math.floor(90 - la), 0, 179) * 360);
-        lon.push(lo + 360 * 4);
+        lat.push((-Math.asin(clamp(qy, -1, 1)) * 180) / Math.PI);
+        lon.push((Math.atan2(qx, nz) * 180) / Math.PI + 360 * 4);
         lvl.push(v);
       } else if (d2 <= (RR + 1.2) * (RR + 1.2)) {
-        const lit = -dx - dy > 0;
-        const [cr, cg, cb] = rgbOf(lit ? P.cyan : P.blue);
-        const a = lit ? 150 : 70;
-        buf[i] = ((a << 24) | (cb << 16) | (cg << 8) | cr) >>> 0;
+        rim.push([i, -dx - dy > 0]);
       }
     }
   }
-  return { cv, gctx, img, buf, idx, lat, lon, lvl, S };
+  return { cv, gctx, img, buf, idx, lat, lon, lvl, rim, S };
 }
 
+const globes = new Map();
 /** Spinning pixel globe centred on (cx, cy) with radius R. */
 export function drawGlobe(ctx, cx, cy, R, t) {
   R = Math.max(3, Math.round(R));
   let g = globes.get(R);
   if (!g) {
-    g = buildGlobe(R);
+    g = buildSphere(R, 0.32);
+    g.latIdx = g.lat.map((la) => clamp(Math.floor(90 - la), 0, 179) * 360);
+    for (const [i, lit] of g.rim) {
+      const [cr, cg, cb] = rgbOf(lit ? P.cyan : P.blue);
+      g.buf[i] = (((lit ? 150 : 70) << 24) | (cb << 16) | (cg << 8) | cr) >>> 0;
+    }
     globes.set(R, g);
   }
   const tex = landTexture();
   const rot = (t * 0.4 * 180) / Math.PI;
   for (let k = 0; k < g.idx.length; k++) {
-    const lo = Math.floor(g.lon[k] + rot) % 360;
-    const type = tex[g.lat[k] + lo];
+    const type = tex[g.latIdx[k] + (Math.floor(g.lon[k] + rot) % 360)];
     g.buf[g.idx[k]] = GLOBE_COLORS[type][type === 1 && g.lvl[k] === 4 ? 3 : g.lvl[k]];
   }
   g.gctx.putImageData(g.img, 0, 0);
   ctx.drawImage(g.cv, Math.round(cx) - R - 2, Math.round(cy) - R - 2);
+}
+
+// A banded gas giant with a storm, for the space programme.
+const PLANET_BANDS = [
+  [P.tanShade, P.tan, P.cream],
+  [P.purple, P.magenta, P.pink],
+  [P.brown, P.tanShade, P.tan],
+  [P.ink, P.purple, P.magenta],
+  [P.tanShade, P.tan, P.cream],
+  [P.purple, P.magenta, P.pink],
+].map((row) => row.map(u32));
+const STORM = [P.darkRed, P.rust, P.orange].map(u32);
+const planets = new Map();
+function drawPlanet(ctx, cx, cy, R, t) {
+  let g = planets.get(R);
+  if (!g) {
+    g = buildSphere(R, -0.38);
+    for (const [i, lit] of g.rim) {
+      const [cr, cg, cb] = rgbOf(lit ? P.pink : P.purple);
+      g.buf[i] = (((lit ? 120 : 60) << 24) | (cb << 16) | (cg << 8) | cr) >>> 0;
+    }
+    planets.set(R, g);
+  }
+  const rot = t * 9;
+  for (let k = 0; k < g.idx.length; k++) {
+    const la = g.lat[k];
+    const lo = (g.lon[k] + rot) % 360;
+    const shade = Math.min(2, Math.max(0, g.lvl[k] - 1));
+    const band = Math.floor(((la + 90) / 180) * 6 + 0.35 * Math.sin((lo * Math.PI) / 45 + la * 0.2));
+    const stormD = ((lo - 200) / 26) ** 2 + ((la + 24) / 7) ** 2;
+    g.buf[g.idx[k]] = stormD < 1 ? STORM[shade] : PLANET_BANDS[clamp(band, 0, 5)][shade];
+  }
+  g.gctx.putImageData(g.img, 0, 0);
+  // ring: the far half behind the planet, the near half across it
+  const ring = (front) => {
+    for (let i = 0; i < 72; i++) {
+      const a = (i / 72) * Math.PI * 2;
+      if (Math.sin(a) > 0 !== front) continue;
+      const x = Math.round(cx + Math.cos(a) * (R + 9));
+      const y = Math.round(cy + Math.sin(a) * 4 - Math.cos(a) * 3);
+      fill(ctx, x, y, 1, 1, Math.cos(a) < -0.3 ? P.cream : P.fog);
+    }
+  };
+  ring(false);
+  ctx.drawImage(g.cv, Math.round(cx) - R - 2, Math.round(cy) - R - 2);
+  ring(true);
 }
 
 // ---------------------------------------------------------------------------
@@ -1045,24 +746,29 @@ const CATEGORY = {
   general: { dark: P.ink, mid: P.slate, hi: P.silver, label: 'NEWS' },
 };
 
-const wallState = { cv: null, ctx: null, bg: {}, scan: null, glow: new WeakMap() };
+const wallState = { cv: null, ctx: null, prev: null, key: null, since: -Infinity, bg: new Map(), scan: null, glow: new WeakMap() };
 
-function wallBg(kind) {
-  if (wallState.bg[kind]) return wallState.bg[kind];
+function screenBg(th, kind) {
+  const key = `${th.id}|${kind}`;
+  let c = wallState.bg.get(key);
+  if (c) return c;
   const { w, h } = WALL;
   const p = new Pix(w, h);
-  if (kind === 'logo') {
-    p.vgrad(0, 0, w, h, [P.navy, P.ink, P.black], 1.4);
-    for (let y = 3; y < h; y += 6) for (let x = 3; x < w; x += 6) p.over(x, y, P.blue, 0.35);
-  } else {
-    p.vgrad(0, 0, w, h, [P.ink, P.ink, P.black], 1.4);
-    p.rect(0, 0, w, 13, P.navy);
-    p.rect(0, 13, w, 1, P.cyan);
-    p.rect(0, 14, w, 1, P.black);
-    for (let x = 0; x < w; x++) if (((x >> 2) & 1) === 0) p.over(x, 12, P.blue, 0.5);
+  p.vgrad(0, 0, w, h, th.screen, 1.4);
+  if (kind === 'rundown') {
+    p.rect(0, 0, w, 14, P.black);
+    p.rect(0, 14, w, 1, th.led[1]);
+  } else if (th.idle === 'chart') {
+    for (let y = 30; y < h; y += 7) for (let x = 1; x < w; x += 3) p.px(x, y, P.ink);
+  } else if (th.idle === 'planet') {
+    const rand = mulberry32(5);
+    for (let i = 0; i < 40; i++) p.px(Math.floor(rand() * w), Math.floor(rand() * h), rand() < 0.3 ? P.fog : P.slate);
+  } else if (th.idle === 'globe') {
+    for (let y = 4; y < h; y += 6) for (let x = 4; x < w; x += 6) p.over(x, y, P.blue, 0.3);
   }
-  wallState.bg[kind] = p.canvas();
-  return wallState.bg[kind];
+  c = p.canvas();
+  wallState.bg.set(key, c);
+  return c;
 }
 
 function scanlines() {
@@ -1092,13 +798,10 @@ function imageGlow(img) {
       B += d[i + 2];
       n++;
     }
-    R /= n;
-    G /= n;
-    B /= n;
     let best = Infinity;
     for (const hex of GLOW_CHOICES) {
       const [r2, g2, b2] = rgbOf(hex);
-      const dist = (r2 - R) ** 2 + (g2 - G) ** 2 + (b2 - B) ** 2;
+      const dist = (r2 - R / n) ** 2 + (g2 - G / n) ** 2 + (b2 - B / n) ** 2;
       if (dist < best) {
         best = dist;
         c = hex;
@@ -1111,54 +814,136 @@ function imageGlow(img) {
   return c;
 }
 
-const ORBIT = (() => {
+/** The two title lines for the idle screen: programme title, or a generic one. */
+function idleTitle(scene) {
+  const title = String(scene.program?.title || '').trim().toUpperCase();
+  if (!title) return ['24 HOUR', 'NEWS'];
+  const words = title.split(/\s+/);
+  if (words.length === 1) return [title, ''];
+  return [words.slice(0, -1).join(' '), words[words.length - 1]];
+}
+
+function titleLine(c, text, x, y, color) {
+  if (!text) return;
+  if (measureText(text) <= WALL.w - x - 3) drawText(c, text, x, y, { color, shadow: P.black });
+  else tiny(c, text, x, y + 1, color);
+}
+
+function livePill(c, x, y, t) {
+  const lw = measureText('LIVE') + 13;
+  fill(c, x, y, lw, 11, P.red);
+  fill(c, x, y + 10, lw, 1, P.darkRed);
+  fill(c, x + 3, y + 4, 3, 3, Math.floor(t * 1.5) % 2 ? P.white : P.pink);
+  drawText(c, 'LIVE', x + 9, y + 2, { color: P.white });
+}
+
+const BINARY = (() => {
+  const rand = mulberry32(1010);
+  return Array.from({ length: 13 }, (_, i) => ({
+    x: 2 + i * 8,
+    speed: 2 + rand() * 4,
+    off: rand() * 62,
+    bits: Array.from({ length: 9 }, () => (rand() < 0.45 ? '' : rand() < 0.5 ? '0' : '1')),
+  }));
+})();
+
+const COUNTDOWN = (() => {
   const pts = [];
-  for (let i = 0; i < 64; i++) {
-    const a = (i / 64) * Math.PI * 2;
-    pts.push([Math.round(Math.cos(a) * 24), Math.round(Math.sin(a) * 5 - Math.cos(a) * 3), Math.sin(a) > 0]);
+  for (let i = 0; i < 60; i++) {
+    const a = (i / 60) * Math.PI * 2 - Math.PI / 2;
+    pts.push([Math.round(Math.cos(a) * 16), Math.round(Math.sin(a) * 16)]);
   }
   return pts;
 })();
 
-function wallLogo(c, scene, t) {
-  c.drawImage(wallBg('logo'), 0, 0);
-  const gx = 25;
-  const gy = 31;
-  const sat = Math.floor((t * 9) % 64);
-  for (let i = 0; i < 64; i += 2) if (!ORBIT[i][2]) fill(c, gx + ORBIT[i][0], gy + ORBIT[i][1], 1, 1, P.slate);
-  drawGlobe(c, gx, gy, 17, t);
-  for (let i = 0; i < 64; i += 2) if (ORBIT[i][2]) fill(c, gx + ORBIT[i][0], gy + ORBIT[i][1], 1, 1, P.cyan);
-  const [ox, oy, front] = ORBIT[sat];
-  if (front || ox * ox + (oy * 4) ** 2 > 18 * 18) {
-    fill(c, gx + ox - 1, gy + oy, 3, 1, P.white);
-    fill(c, gx + ox, gy + oy - 1, 1, 3, P.white);
-  }
-  const ch = scene.channel || '';
-  const tx = 52;
-  tiny(c, 'WORLD NEWS', tx, 13, P.cyan);
-  if (measureText(ch) <= 50) drawText(c, ch, tx, 22, { color: P.white, shadow: P.black });
-  else tiny(c, ch, tx, 23, P.white);
-  // LIVE pill with a pulsing dot
-  const lw = measureText('LIVE') + 13;
-  fill(c, tx, 35, lw, 11, P.red);
-  fill(c, tx, 45, lw, 1, P.darkRed);
-  fill(c, tx + 3, 39, 3, 3, Math.floor(t * 1.5) % 2 ? P.white : P.pink);
-  drawText(c, 'LIVE', tx + 9, 37, { color: P.white });
-  tiny(c, '24 HOURS', tx, 50, P.fog);
+function chartValue(n) {
+  return clamp(0.28 + n * 0.0052 + 0.07 * Math.sin(n * 0.21) + 0.04 * Math.sin(n * 0.63 + 1) + (hash(n) - 0.5) * 0.05, 0.05, 0.95);
 }
 
-function wallRundown(c, scene, t) {
-  const { w } = WALL;
-  c.drawImage(wallBg('rundown'), 0, 0);
-  const ch = scene.channel || '';
-  const head = 'TODAY ON';
-  if (measureText(`${head} ${ch}`) <= w - 10) {
-    const hw = drawText(c, head, 5, 3, { color: P.yellow });
-    drawText(c, ch, 5 + hw + 3, 3, { color: P.white, shadow: P.black });
-  } else {
-    const hw = tiny(c, head, 5, 4, P.yellow);
-    drawText(c, ch, 5 + hw + 3, 3, { color: P.white, shadow: P.black });
+/** Idle screen: the programme's hero visual with its title and a LIVE tag. */
+function wallIdle(c, scene, t, th) {
+  const [l1, l2] = idleTitle(scene);
+  const hasProgram = !!scene.program?.title;
+  c.drawImage(screenBg(th, 'idle'), 0, 0);
+  const hx = 24;
+  const hy = 32;
+  let tx = 50;
+  let ty = 15;
+  if (!hasProgram) {
+    drawLogo(c, hx, hy - 14, { variant: 'mark', t, align: 'center' });
+  } else if (th.idle === 'globe') {
+    drawGlobe(c, hx, hy, 17, t);
+  } else if (th.idle === 'chip') {
+    for (const col of BINARY) {
+      const shift = Math.floor((t * col.speed + col.off) % 63);
+      col.bits.forEach((b, i) => b && tiny(c, b, col.x, ((i * 7 + shift) % 63) - 5, P.purple));
+    }
+    fill(c, hx - 10, hy - 10, 21, 21, P.black);
+    fill(c, hx - 9, hy - 9, 19, 19, P.slate);
+    fill(c, hx - 8, hy - 8, 17, 17, P.black);
+    fill(c, hx - 4, hy - 4, 9, 9, th.led[0]);
+    c.fillStyle = P.fog;
+    for (let i = -7; i <= 7; i += 3) {
+      c.fillRect(hx + i, hy - 13, 1, 3);
+      c.fillRect(hx + i, hy + 11, 1, 3);
+      c.fillRect(hx - 13, hy + i, 3, 1);
+      c.fillRect(hx + 11, hy + i, 3, 1);
+    }
+    const pulse = 0.5 + 0.5 * Math.sin(t * 2.2);
+    fill(c, hx - 2, hy - 2, 5, 5, pulse > 0.5 ? th.led[1] : th.led[0]);
+    fill(c, hx - 1, hy - 1, 3, 3, pulse > 0.8 ? P.pink : th.led[1]);
+    const run = Math.floor(t * 12) % 32;
+    const s = (run % 8) - 4;
+    const pos = [[hx + s, hy - 5], [hx + 5, hy + s], [hx - s, hy + 5], [hx - 5, hy - s]][Math.floor(run / 8)];
+    fill(c, pos[0], pos[1], 1, 1, P.cyan);
+  } else if (th.idle === 'planet') {
+    for (let i = 0; i < 6; i++) {
+      if (Math.sin(t * (0.7 + i * 0.3) + i * 2) > 0.6) fill(c, Math.floor(hash(i * 7) * 104), Math.floor(hash(i * 13) * 62), 1, 1, P.white);
+    }
+    drawPlanet(c, hx, hy, 12, t);
+  } else if (th.idle === 'chart') {
+    // a big rising chart that draws itself, holds, and starts again
+    const n = Math.floor(clamp((t % 10) / 6, 0, 1) * WALL.w);
+    let prev = null;
+    let last = null;
+    for (let x = 0; x < n; x++) {
+      const y = 59 - Math.round(chartValue(x) * 28);
+      fill(c, x, y + 1, 1, WALL.h - y - 1, P.darkGreen);
+      const y0 = prev === null ? y : Math.min(prev, y);
+      fill(c, x, y0, 1, Math.abs((prev ?? y) - y) + 1, P.green);
+      prev = y;
+      last = [x, y];
+    }
+    if (last && Math.floor(t * 3) % 2) fill(c, last[0] - 1, last[1] - 1, 3, 3, P.yellow);
+    tx = 5;
+    ty = 6;
+  } else if (th.idle === 'countdown') {
+    const left = 60 - (Math.floor(t) % 60);
+    COUNTDOWN.forEach(([dx, dy], i) => fill(c, hx + dx, hy + dy, 1, 1, i < left ? (i % 5 === 0 ? P.yellow : P.orange) : P.ink));
+    drawText(c, String(left).padStart(2, '0'), hx, hy - 4, { color: P.yellow, align: 'center' });
+    tiny(c, 'SEC', hx, hy + 6, P.fog, 'center');
   }
+  // title: a glitch now and then for the tech show
+  const glitch = th.idle === 'chip' && hasProgram && t % 3.7 < 0.25;
+  if (glitch) {
+    titleLine(c, l1, tx - 1, ty, P.magenta);
+    titleLine(c, l1, tx + 1, ty, P.cyan);
+  }
+  titleLine(c, l1, tx, ty, P.white);
+  titleLine(c, l2, tx, ty + 10, hasProgram ? th.text : P.red);
+  if (glitch) c.drawImage(wallState.cv, tx, ty + 2, 50, 2, tx + 2, ty + 2, 50, 2);
+  if (th.idle === 'chart' && hasProgram) livePill(c, WALL.w - measureText('LIVE') - 18, 6, t);
+  else livePill(c, tx, ty + 22, t);
+}
+
+function wallRundown(c, scene, t, th, solo) {
+  const { w } = WALL;
+  c.drawImage(screenBg(th, 'rundown'), 0, 0);
+  tiny(c, 'TODAY', 4, 2, th.text);
+  tiny(c, 'ON', 4, 8, th.text);
+  const title = scene.program?.title;
+  if (title) titleLine(c, title, 25, 4, P.white);
+  else drawLogo(c, 25, 1, { variant: 'bug', t });
   const items = scene.rundown;
   const n = items.length;
   const per = 3.2;
@@ -1167,10 +952,9 @@ function wallRundown(c, scene, t) {
   const slide = Math.round((1 - easeOut(dt / 0.35)) * w);
   const out = dt > per - 0.25 ? Math.round(easeInOut((dt - (per - 0.25)) / 0.25) * -w) : 0;
   const ox = slide + out;
-  // number badge
-  fill(c, 5 + ox, 19, 10, 10, P.yellow);
-  fill(c, 5 + ox, 28, 10, 1, P.orange);
-  drawText(c, String(idx + 1), 10 + ox, 21, { color: P.black, align: 'center' });
+  fill(c, 5 + ox, 20, 10, 10, th.led[1]);
+  fill(c, 5 + ox, 29, 10, 1, th.led[0]);
+  drawText(c, String(idx + 1), 10 + ox, 22, { color: th.led[1] === P.yellow || th.led[1] === P.green ? P.black : P.white, align: 'center' });
   let lines = wrapText(items[idx]?.headline || '', w - 24);
   if (lines.length > 3) {
     lines = lines.slice(0, 3);
@@ -1178,12 +962,12 @@ function wallRundown(c, scene, t) {
     while (last.length > 1 && measureText(`${last}...`) > w - 24) last = last.slice(0, -1).trimEnd();
     lines[2] = `${last}...`;
   }
-  lines.forEach((line, i) => drawText(c, line, 19 + ox, 20 + i * 10, { color: P.white, shadow: P.black }));
-  // item dots + progress bar
+  lines.forEach((line, i) => drawText(c, line, 19 + ox, 21 + i * 10, { color: P.white, shadow: P.black }));
+  if (solo) return; // keep the bottom of the screen calm behind a solo presenter's head
   const shown = Math.min(n, 12);
-  for (let i = 0; i < shown; i++) fill(c, 5 + i * 6, 52, 4, 2, i === idx % shown ? P.yellow : P.slate);
-  fill(c, 5, 57, w - 10, 2, P.ink);
-  fill(c, 5, 57, Math.round((w - 10) * (dt / per)), 2, P.cyan);
+  for (let i = 0; i < shown; i++) fill(c, 5 + i * 6, 53, 4, 2, i === idx % shown ? th.led[1] : P.slate);
+  fill(c, 5, 57, w - 10, 1, P.ink);
+  fill(c, 5, 57, Math.round((w - 10) * (dt / per)), 1, th.led[1]);
 }
 
 /** Small animated icon for each news category, centred on (cx, cy). */
@@ -1204,11 +988,6 @@ function categoryIcon(c, cat, key, cx, cy, t) {
       c.fillRect(cx - 9, cy + i, 3, 1);
       c.fillRect(cx + 7, cy + i, 3, 1);
     }
-    const run = Math.floor(t * 14) % 40;
-    const side = Math.floor(run / 10);
-    const s = (run % 10) - 5;
-    const pos = [[cx + s, cy - 6], [cx + 6, cy + s], [cx - s, cy + 6], [cx - 6, cy - s]][side];
-    fill(c, pos[0], pos[1], 1, 1, P.white);
     return;
   }
   if (key === 'science') {
@@ -1239,7 +1018,8 @@ function categoryIcon(c, cat, key, cx, cy, t) {
       fill(c, cx - 8 + i * 4, cy + 8 - bh, 3, bh, cat.mid);
       fill(c, cx - 8 + i * 4, cy + 8 - bh, 3, 1, cat.hi);
     }
-    linePtsFill(c, cx - 9, cy + 1, cx + 6, cy - 8, P.white);
+    c.fillStyle = P.white;
+    linePts(cx - 9, cy + 1, cx + 6, cy - 8, (x, y) => c.fillRect(x, y, 1, 1));
     fill(c, cx + 3, cy - 8, 4, 1, P.white);
     fill(c, cx + 6, cy - 8, 1, 4, P.white);
     return;
@@ -1255,20 +1035,13 @@ function categoryIcon(c, cat, key, cx, cy, t) {
   fill(c, cx + 8, cy - 6, 1, 14, P.steel);
 }
 
-function linePtsFill(c, x0, y0, x1, y1, color) {
-  c.fillStyle = color;
-  linePts(x0, y0, x1, y1, (x, y) => c.fillRect(x, y, 1, 1));
-}
-
-const BADGE = circlePts(13);
-function wallSource(c, wall, t) {
+function wallSource(c, wall, t, solo) {
   const { w, h } = WALL;
   const key = CATEGORY[wall.category] ? wall.category : 'general';
   const cat = CATEGORY[key];
   drawStripes(c, 0, 0, w, h, t * 0.5, P.black, cat.dark);
   c.fillStyle = rgba(P.black, 0.45);
   c.fillRect(0, 0, w, h);
-  // badge
   const cx = 19;
   const cy = 29;
   c.fillStyle = cat.dark;
@@ -1277,9 +1050,13 @@ function wallSource(c, wall, t) {
     c.fillRect(cx - half, cy + yy, half * 2 + 1, 1);
   }
   c.fillStyle = cat.mid;
-  for (const [bx, by] of BADGE) c.fillRect(cx + bx, cy + by, 1, 1);
+  for (let yy = -13; yy <= 13; yy++) {
+    const half = Math.floor(Math.sqrt(169 - yy * yy));
+    const prev = Math.floor(Math.sqrt(Math.max(0, 169 - (Math.abs(yy) + 1) ** 2)));
+    c.fillRect(cx - half, cy + yy, Math.max(1, half - prev), 1);
+    c.fillRect(cx + half - Math.max(1, half - prev) + 1, cy + yy, Math.max(1, half - prev), 1);
+  }
   categoryIcon(c, cat, key, cx, cy, t);
-  // outlet + category
   const tx = 38;
   tiny(c, 'SOURCE', tx, 7, P.fog);
   const lines = wrapText(wall.source || '', w - tx - 3).slice(0, 2);
@@ -1291,38 +1068,60 @@ function wallSource(c, wall, t) {
   fill(c, tx, ly, 2, 11, cat.hi);
   fill(c, tx, ly + 10, lw, 1, cat.dark);
   drawText(c, label, tx + 5, ly + 2, { color: P.white, shadow: cat.dark });
-  // sweeping accent bar
+  if (solo) return;
   fill(c, 0, h - 5, w, 1, cat.dark);
   const sx = Math.floor((t * 40) % (w + 30)) - 30;
   fill(c, sx, h - 5, 30, 1, cat.mid);
   fill(c, sx + 22, h - 5, 8, 1, cat.hi);
 }
 
-function wallGlowColor(wall, scene) {
+function wallGlowColor(wall, scene, th) {
   const img = wall.storyId && scene.images?.get(wall.storyId);
   if (wall.mode === 'image' && img?.small) return imageGlow(img.small);
   if (wall.mode === 'source') return (CATEGORY[wall.category] || CATEGORY.general).mid;
-  return P.blue;
+  return th.glow;
 }
 
-function drawWallContent(ctx, wall, scene, t) {
+function drawWallContent(ctx, wall, scene, t, th, solo) {
   if (!wallState.cv) {
     wallState.cv = makeCanvas(WALL.w, WALL.h);
     wallState.ctx = wallState.cv.getContext('2d');
+    wallState.prev = makeCanvas(WALL.w, WALL.h);
   }
   const c = wallState.ctx;
+  // when the content changes, keep the old frame for a quick pixel wipe
+  const key = `${wall.mode}|${wall.storyId ?? ''}|${wall.source ?? ''}|${wall.category ?? ''}|${th.id}|${scene.program?.title ?? ''}`;
+  if (wallState.key !== null && key !== wallState.key) {
+    const pc = wallState.prev.getContext('2d');
+    pc.clearRect(0, 0, WALL.w, WALL.h);
+    pc.drawImage(wallState.cv, 0, 0);
+    wallState.since = t;
+  }
+  wallState.key = key;
   const img = wall.storyId && scene.images?.get(wall.storyId);
   if (wall.mode === 'image' && img?.small) {
     fill(c, 0, 0, WALL.w, WALL.h, P.black);
     c.drawImage(img.small, 0, 0);
   } else if (wall.mode === 'rundown' && scene.rundown?.length) {
-    wallRundown(c, scene, t);
+    wallRundown(c, scene, t, th, solo);
   } else if (wall.mode === 'source') {
-    wallSource(c, wall, t);
+    wallSource(c, wall, t, solo);
   } else {
-    wallLogo(c, scene, t);
+    wallIdle(c, scene, t, th);
+  }
+  const wipe = (t - wallState.since) / 0.4;
+  if (wipe >= 0 && wipe < 1) {
+    for (let by = 0; by < WALL.h; by += 4) {
+      for (let bx = 0; bx < WALL.w; bx += 4) {
+        if ((bx / WALL.w) * 0.65 + hash(bx * 31 + by * 7) * 0.35 > wipe) c.drawImage(wallState.prev, bx, by, 4, 4, bx, by, 4, 4);
+      }
+    }
   }
   c.drawImage(scanlines(), 0, 0);
+  if (solo) {
+    // darken the strip of screen behind a solo presenter's head
+    for (const [y, h, a] of [[48, 4, 0.12], [52, 4, 0.25], [56, 6, 0.42]]) fill(c, 0, y, WALL.w, h, rgba(P.black, a));
+  }
   // a glint of studio light sliding across the glass now and then
   const g = t % 13;
   if (g < 0.7) {
@@ -1337,7 +1136,7 @@ function drawWallContent(ctx, wall, scene, t) {
   ctx.drawImage(wallState.cv, WALL.x, WALL.y);
 }
 
-/** Coloured light the video wall spills onto the back wall around its bezel. */
+/** Coloured light the video wall spills onto the globe around its bezel. */
 function drawWallHalo(ctx, color, t) {
   const x0 = WALL.x - 4;
   const y0 = WALL.y - 4;
@@ -1345,7 +1144,7 @@ function drawWallHalo(ctx, color, t) {
   const y1 = WALL.y + WALL.h + 4;
   const breathe = 1 + 0.12 * Math.sin(t * 1.3);
   let d = 0;
-  for (const [th, a] of [[2, 0.2], [3, 0.11], [4, 0.05]]) {
+  for (const [th, a] of [[2, 0.18], [3, 0.1], [5, 0.045]]) {
     ctx.fillStyle = rgba(color, a * breathe);
     const top = Math.max(10, y0 - d - th);
     ctx.fillRect(x0 - d, top, x1 - x0 + 2 * d, y0 - d - top);
@@ -1357,266 +1156,22 @@ function drawWallHalo(ctx, color, t) {
 }
 
 // ---------------------------------------------------------------------------
-// Static back layer: rig, wall architecture, frames, floor
 
-const FIXTURES = [22, 60, 118, 160, 192, 224, 266, 324, 362];
-const PILLARS = [3, 379];
-const FLOOR_Y = 134;
-// front edge of the round riser the desk stands on (y per column; H = none)
-const RISER = Array.from({ length: W }, (_, x) => {
-  const u = (x + 0.5 - 192) / 190;
-  return Math.abs(u) >= 1 ? H : Math.round(FLOOR_Y + 48 * Math.sqrt(1 - u * u));
-});
-
-let bgLayer = null;
-function background() {
-  if (bgLayer) return bgLayer;
-  const p = new Pix(W, H);
-  // ceiling + truss
-  p.rect(0, 0, W, 10, P.black);
-  p.rect(0, 2, W, 1, P.steel);
-  p.rect(0, 3, W, 1, P.slate);
-  p.rect(0, 7, W, 1, P.slate);
-  p.rect(0, 8, W, 1, P.ink);
-  for (let x = 0; x < W; x++) {
-    const z = x % 6;
-    const a = z < 3 ? z : 5 - z;
-    p.px(x, 4 + a, P.slate);
-    p.px(x, 6 - a, P.ink);
-  }
-  // fascia with LED line
-  p.rect(0, 10, W, 1, P.black);
-  p.rect(0, 11, W, 1, P.ink);
-  p.rect(0, 12, W, 1, P.navy);
-  p.rect(0, 13, W, 1, P.black);
-  // back wall: dark at the top, flat ink below
-  p.vgrad(0, 14, W, 20, [P.black, P.ink], 1.5);
-  p.rect(0, 34, W, FLOOR_Y - 34, P.ink);
-  // light washes behind the presenters from the key fixtures
-  for (const ax of [ANCHOR_X.A, ANCHOR_X.B]) {
-    const x0 = ax - 19;
-    p.shade(x0, 14, 38, FLOOR_Y - 14, [P.ink, P.slate, P.steel], (x, y) => {
-      const dy = y - 14;
-      const half = 6 + dy * 0.3;
-      const dx = Math.abs(x + 0.5 - ax);
-      if (dx > half) return -1;
-      return (1 - dx / half) ** 0.7 * Math.max(0, 1 - dy / 125) ** 1.15 * 2.3;
-    }, 2.6);
-  }
-  // panel seams framing the presenter bays
-  for (const sx of [98, 136, 247, 285]) {
-    p.rect(sx, 14, 1, FLOOR_Y - 14, P.black);
-    p.rect(sx + 1, 14, 1, FLOOR_Y - 14, P.slate);
-  }
-  // LED pillars at both edges
-  for (const lx of PILLARS) {
-    const x0 = lx - 3;
-    p.rect(x0, 10, 8, FLOOR_Y - 10, P.ink);
-    p.rect(x0, 10, 1, FLOOR_Y - 10, P.black);
-    p.rect(x0 + 7, 10, 1, FLOOR_Y - 10, P.black);
-    p.rect(x0 + 2, 14, 1, FLOOR_Y - 18, P.slate);
-    p.rect(x0 + 5, 14, 1, FLOOR_Y - 18, P.slate);
-    p.rect(lx, 14, 2, FLOOR_Y - 18, P.navy);
-  }
-  // windows: frames and sills
-  for (const side of ['L', 'R']) {
-    const { x, y } = WIN[side];
-    const { w, h } = WIN;
-    p.rect(x - 2, y - 2, w + 4, h + 4, P.slate);
-    p.rect(x - 2, y - 2, w + 4, 1, P.steel);
-    p.rect(x - 2, y - 2, 1, h + 4, P.steel);
-    p.rect(x - 1, y - 1, w + 2, h + 2, P.black);
-    p.rect(x - 4, y + h + 2, w + 8, 1, P.fog);
-    p.rect(x - 4, y + h + 3, w + 8, 1, P.slate);
-    p.rect(x - 4, y + h + 4, w + 8, 1, P.black);
-  }
-  // monitors
-  for (const m of [MON_L, MON_R]) {
-    p.rect(m.x - 2, m.y - 2, m.w + 4, m.h + 4, P.black);
-    p.rect(m.x - 2, m.y - 2, m.w + 4, 1, P.slate);
-    p.rect(m.x - 2, m.y + m.h + 1, m.w + 4, 1, P.slate);
-    p.vgrad(m.x, m.y, m.w, m.h, [P.ink, P.black], 1.2);
-    p.px(m.x + m.w, m.y + m.h + 1, P.green);
-  }
-  // markets monitor: header rule + grid
-  for (let x = MON_L.x + 1; x < MON_L.x + MON_L.w - 1; x += 2) {
-    p.px(x, MON_L.y + 8, P.slate);
-    p.px(x, MON_L.y + 15, P.ink);
-    p.px(x, MON_L.y + 21, P.ink);
-  }
-  for (let y = MON_L.y + 10; y < MON_L.y + MON_L.h - 1; y += 2) {
-    p.px(MON_L.x + 27, y, P.ink);
-    p.px(MON_L.x + 54, y, P.ink);
-  }
-  // world map dots
-  WORLD.forEach((row, rr) => {
-    [...row].forEach((ch, cc) => p.px(MON_R.x + cc * 2, MON_R.y + 1 + rr * 2, ch === '#' ? P.blue : P.ink));
-  });
-  // video wall bezel
-  {
-    const { x, y, w, h } = WALL;
-    p.rect(x - 4, y - 4, w + 8, h + 8, P.black);
-    p.rect(x - 3, y - 3, w + 6, h + 6, P.slate);
-    p.rect(x - 3, y - 3, w + 6, 1, P.fog);
-    p.rect(x - 3, y - 3, 1, h + 6, P.steel);
-    p.rect(x + w + 2, y - 3, 1, h + 6, P.ink);
-    p.rect(x - 3, y + h + 2, w + 6, 1, P.ink);
-    p.rect(x - 1, y - 1, w + 2, h + 2, P.black);
-  }
-  // world clock panel
-  {
-    const x0 = CLOCK.xs[0] - 16;
-    const x1 = CLOCK.xs[2] + 16;
-    p.rect(x0, 88, x1 - x0, FLOOR_Y - 88, P.black);
-    p.rect(x0, 88, x1 - x0, 1, P.slate);
-    p.rect(x0 + 1, 89, x1 - x0 - 2, 1, P.ink);
-  }
-  // baseboard with cove LED
-  p.rect(0, FLOOR_Y - 4, W, 1, P.black);
-  p.rect(0, FLOOR_Y - 3, W, 2, P.slate);
-  p.rect(0, FLOOR_Y - 1, W, 1, P.navy);
-  // glossy floor: a round riser under the desk with radial seams and an LED
-  // edge, on a darker studio floor
-  p.vgrad(0, FLOOR_Y, W, H - FLOOR_Y, [P.ink, P.ink, P.black], 1.3);
-  for (let k = -14; k <= 14; k++) {
-    linePts(192, 56, 192 + k * 30, 260, (x, y) => y > FLOOR_Y && p.over(x, y, P.slate, y < RISER[x] ? 0.4 : 0.18));
-  }
-  for (let x = 0; x < W; x++) {
-    const ry = RISER[x];
-    for (let y = Math.max(FLOOR_Y, ry); y < H; y++) p.over(x, y, P.black, 0.35);
-    if (ry >= H) continue;
-    const y0 = Math.max(FLOOR_Y, Math.min(ry, (RISER[x - 1] ?? H) + 1, (RISER[x + 1] ?? H) + 1));
-    p.over(x, y0 - 1, P.white, 0.1);
-    for (let y = y0; y <= ry; y++) {
-      p.px(x, y, P.steel); // lip
-      p.px(x, y + 1, P.black);
-      p.px(x, y + 2, P.navy); // LED strip on the riser face
-      p.px(x, y + 3, P.black);
-    }
-    p.over(x, ry + 4, P.blue, 0.22);
-    p.over(x, ry + 5, P.blue, 0.1);
-  }
-  // pillar reflections + cove light on the floor
-  for (const lx of PILLARS) {
-    for (let i = 0; i < 26; i++) {
-      p.over(lx, FLOOR_Y + i, P.blue, 0.3 * (1 - i / 26));
-      p.over(lx + 1, FLOOR_Y + i, P.blue, 0.3 * (1 - i / 26));
-    }
-  }
-  for (let x = 0; x < W; x++) {
-    p.over(x, FLOOR_Y, P.blue, 0.22);
-    p.over(x, FLOOR_Y + 1, P.blue, 0.1);
-  }
-  const cv = p.canvas();
-  // labels
-  const c = cv.getContext('2d');
-  tiny(c, 'MARKETS', MON_L.x + 2, MON_L.y + 2, P.cyan);
-  ZONES.forEach(([name], i) => tiny(c, name, CLOCK.xs[i], 108, i === 0 ? P.cyan : P.fog, 'center'));
-  bgLayer = cv;
-  return bgLayer;
-}
-
-let fixtureSprite = null;
-function fixture() {
-  if (fixtureSprite) return fixtureSprite;
-  const p = new Pix(7, 8);
-  p.px(3, 0, P.slate);
-  p.rect(2, 1, 3, 1, P.slate);
-  p.rect(1, 2, 5, 2, P.slate);
-  p.rect(1, 2, 1, 2, P.steel);
-  p.rect(5, 2, 1, 2, P.ink);
-  p.rect(2, 4, 3, 1, P.black);
-  for (let x = 0; x < 7; x++) {
-    p.over(x, 5, P.cream, x > 0 && x < 6 ? 0.28 : 0.12);
-    p.over(x, 6, P.cream, x > 1 && x < 5 ? 0.12 : 0.05);
-  }
-  fixtureSprite = p.canvas();
-  return fixtureSprite;
-}
-
-/** LED strips, rig fixtures and the occasional flicker. */
-function drawRig(ctx, t) {
-  // fascia LED: pulses running out from the centre
-  for (let k = 0; k < 2; k++) {
-    const d = Math.floor((t * 70 + k * 110) % 220);
-    for (const dir of [-1, 1]) {
-      const hx = dir > 0 ? 192 + d : 191 - d;
-      fill(ctx, dir > 0 ? hx - 12 : hx + 1, 12, 12, 1, P.blue);
-      fill(ctx, dir > 0 ? hx - 4 : hx + 1, 12, 4, 1, P.cyan);
-      fill(ctx, hx, 12, 1, 1, P.white);
-    }
-  }
-  const flickIdx = Math.floor(t / 23) % FIXTURES.length;
-  const flicking = t % 23 < 0.5;
-  FIXTURES.forEach((fx, i) => {
-    ctx.drawImage(fixture(), fx - 3, 9);
-    const off = flicking && i === flickIdx && Math.floor(t * 24) % 3 === 0;
-    fill(ctx, fx - 1, 13, 3, 1, off ? P.slate : P.cream);
-    if (!off) fill(ctx, fx, 13, 1, 1, P.white);
-  });
-  // LED pillars: pulses rising, mirrored in the glossy floor
-  for (const lx of PILLARS) {
-    for (let k = 0; k < 2; k++) {
-      const y = 126 - Math.floor((t * 34 + k * 57 + lx) % 112);
-      fill(ctx, lx, y + 3, 2, 8, P.blue);
-      fill(ctx, lx, y, 2, 3, P.cyan);
-      fill(ctx, lx, y, 2, 1, P.white);
-      const ry = 2 * FLOOR_Y - y;
-      if (ry < FLOOR_Y + 26) fill(ctx, lx, ry - 3, 2, 4, rgba(P.cyan, 0.3 * (1 - (ry - FLOOR_Y) / 26)));
-    }
-  }
-  // cove light breathing
-  fill(ctx, 0, FLOOR_Y - 1, W, 1, rgba(P.cyan, 0.25 + 0.15 * Math.sin(t * 0.9)));
-  // riser LED: comets running round the platform edge
-  for (let k = 0; k < 2; k++) {
-    const d = Math.floor((t * 52 + k * 96) % 192);
-    for (const dir of [-1, 1]) {
-      for (let j = 0; j < 14; j++) {
-        const x = dir > 0 ? 192 + d - j : 191 - d + j;
-        if (x < 0 || x >= W || RISER[x] >= H - 2) continue;
-        fill(ctx, x, RISER[x] + 2, 1, 1, j === 0 ? P.white : j < 5 ? P.cyan : P.blue);
-      }
-    }
-  }
-}
-
-/** Moving-head beams sweeping through the haze on both sides of the set. */
-function drawBeams(ctx, t) {
-  for (const [sx, dir, ph] of [[22, 1, 0], [362, -1, 2.2]]) {
-    const ang = dir * (0.32 + 0.22 * Math.sin(t * 0.23 + ph));
-    const tan = Math.tan(ang);
-    for (let i = 0; i < 118; i += 2) {
-      const y = 14 + i;
-      const cx = sx + tan * i;
-      const hw = 1 + i * 0.09;
-      const a = 0.1 * (1 - i / 135);
-      ctx.fillStyle = rgba(P.cream, a);
-      ctx.fillRect(Math.round(cx - hw), y, Math.round(hw * 2) + 1, 2);
-      ctx.fillStyle = rgba(P.white, a * 0.6);
-      ctx.fillRect(Math.round(cx - hw * 0.3), y, Math.round(hw * 0.6) + 1, 2);
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-
-let lastGlow = P.blue;
+const current = { th: THEMES.world, glow: P.blue };
 
 export function drawSet(ctx, t, scene) {
   const wall = scene.wall || { mode: 'logo' };
-  const tm = times();
-  const phase = phaseOf(tm.zones[0].h);
-  ctx.drawImage(background(), 0, 0);
-  drawWindow(ctx, 'L', t, tm, phase);
-  drawWindow(ctx, 'R', t, tm, phase);
-  drawMarkets(ctx, t);
-  drawWorldMap(ctx, t, tm);
-  drawClocks(ctx, tm);
-  lastGlow = wallGlowColor(wall, scene);
-  drawWallHalo(ctx, lastGlow, t);
-  drawWallContent(ctx, wall, scene, t);
-  drawRig(ctx, t);
-  drawBeams(ctx, t);
+  const th = themeOf(scene);
+  const solo = scene.cast ? !scene.cast.B : !!th.solo;
+  ctx.drawImage(background(th), 0, 0);
+  drawSetLife(ctx, t, th);
+  const glow = wallGlowColor(wall, scene, th);
+  drawWallHalo(ctx, glow, t);
+  drawWallContent(ctx, wall, scene, t, th, solo);
+  drawPracticals(ctx, t);
+  drawFloorSheen(ctx, t, glow);
+  current.th = th;
+  current.glow = glow;
 }
 
 // ---------------------------------------------------------------------------
@@ -1624,12 +1179,24 @@ export function drawSet(ctx, t, scene) {
 // is an arc that sits exactly on DESK_Y under both presenters (where their
 // hands rest) and rises as the ends curve away; the floor line curves more.
 
-const DESK = { x0: 36, x1: 347, cx: 191.5, half: 156 };
+const DESK = { x0: 36, x1: 347, half: 156 };
 const deskDx = (x) => x + 0.5 - 192;
 const ANCHOR_D2 = (ANCHOR_X.B - ANCHOR_X.A) ** 2 / 4;
 const deskTop = (x) => DESK_Y + Math.round((ANCHOR_D2 - deskDx(x) ** 2) / ANCHOR_D2);
 const deskBot = (x) => 155 + Math.round(((ANCHOR_D2 - deskDx(x) ** 2) * 8) / (DESK.half ** 2 - ANCHOR_D2));
 const DESK_BOT = deskBot(192);
+// runs of equal desk-top height, for per-frame strokes along the arc
+const DESK_RUNS = (() => {
+  const runs = [];
+  for (let x = DESK.x0; x <= DESK.x1;) {
+    const top = deskTop(x);
+    let x2 = x + 1;
+    while (x2 <= DESK.x1 && deskTop(x2) === top) x2++;
+    runs.push([x, x2 - x, top]);
+    x = x2;
+  }
+  return runs;
+})();
 
 let deskLayer = null;
 function desk() {
@@ -1646,29 +1213,29 @@ function desk() {
     p.px(x, top + 3, e > 0.93 ? P.steel : P.fog);
     p.px(x, top + 4, e > 0.93 ? P.fog : P.silver);
     p.px(x, top + 5, P.black);
-    // LED channel
+    // LED channel (the light itself is drawn per frame in the theme accent)
     p.px(x, top + 6, P.black);
-    p.px(x, top + 7, P.navy);
+    p.px(x, top + 7, P.ink);
     p.px(x, top + 8, P.black);
-    // front face: lit navy facing the camera, turning darker as it curves away
+    // front face: lacquered dark panel catching a soft band of light
     const f0 = top + 9;
     const f1 = bot - 5;
-    const sheen = Math.exp(-(((e - 0.66) / 0.07) ** 2)) * 0.7;
-    p.shade(x, f0, 1, f1 - f0 + 1, [P.blue, P.navy, P.ink, P.black], (xx, y) => {
+    const sheen = Math.exp(-(((e - 0.62) / 0.08) ** 2)) * 0.8;
+    p.shade(x, f0, 1, f1 - f0 + 1, [P.steel, P.slate, P.ink, P.black], (xx, y) => {
       const v = (y - f0) / Math.max(1, f1 - f0);
-      return 0.75 + v * 1.2 + e ** 2.2 * 1.3 - sheen * (1 - v);
-    }, 1.7);
+      return 1.15 + v * 1.1 + e ** 2.2 * 0.9 - sheen * (1 - v * 0.7);
+    }, 3);
     p.px(x, bot - 4, e > 0.8 ? P.ink : P.slate);
     p.rect(x, bot - 3, 1, 4, P.black);
   }
-  // panel seams spaced as on a curved surface, with a lit edge facing centre
-  for (const deg of [36, 54, 72]) {
+  // two seams per side, spaced as on a curved surface
+  for (const deg of [45, 68]) {
     const d = Math.round(DESK.half * Math.sin((deg * Math.PI) / 180));
     for (const [x, hi] of [[192 - d, 1], [191 + d, -1]]) {
       const top = deskTop(x) + 9;
       const len = deskBot(x) - 5 - top;
       p.rect(x, top, 1, len, P.black);
-      p.rect(x + hi, top, 1, len, deg === 72 ? P.navy : P.blue);
+      p.rect(x + hi, top, 1, len, P.slate);
     }
   }
   // rounded desk ends
@@ -1682,10 +1249,7 @@ function desk() {
     const inside = x >= DESK.x0 && x <= DESK.x1;
     const bot = deskBot(clamp(x, DESK.x0, DESK.x1));
     if (inside) {
-      for (let i = 0; i < 20; i++) {
-        const src = p.get(x, bot - 4 - i);
-        p.over(x, bot + 1 + i, src, 0.3 * (1 - i / 20) ** 1.3);
-      }
+      for (let i = 0; i < 20; i++) p.over(x, bot + 1 + i, p.get(x, bot - 4 - i), 0.3 * (1 - i / 20) ** 1.3);
     }
     const edge = inside ? 1 : 0.4;
     p.over(x, bot + 1, P.black, 0.6 * edge);
@@ -1697,8 +1261,7 @@ function desk() {
     for (let x = 0; x < W; x++) {
       const nx = (x + 0.5 - W / 2) / (W / 2);
       const ny = (y + 0.5 - H / 2) / (H / 2);
-      const d = nx * nx * 0.55 + ny * ny * 0.45;
-      const a = Math.floor(clamp((d - 0.62) / 0.38, 0, 1) ** 1.3 * 5) * 0.08;
+      const a = Math.floor(clamp((nx * nx * 0.55 + ny * ny * 0.45 - 0.62) / 0.38, 0, 1) ** 1.3 * 5) * 0.08;
       if (a > 0) p.over(x, y, P.black, a);
     }
   }
@@ -1706,66 +1269,72 @@ function desk() {
   return deskLayer;
 }
 
-const plates = new Map();
-function plate(channel) {
-  let pl = plates.get(channel);
+const panels = new Map();
+/** Black-glass plate on the desk front carrying the channel logo (or name). */
+function logoPanel(channel) {
+  let pl = panels.get(channel);
   if (pl) return pl;
-  let scale = 2;
-  let tw = measureText(channel, 2);
-  if (tw > 140) {
-    scale = 1;
-    tw = measureText(channel, 1);
-  }
-  const pw = tw + 24;
-  const ph = 22;
+  const useLogo = !channel || normalizeText(channel) === normalizeText(CHANNEL_NAME);
+  const size = useLogo ? measureLogo({ variant: 'full', scale: 1 }) : { w: measureText(channel, 2), h: 15 };
+  const pw = size.w + 12;
+  const ph = size.h + 4;
+  const x = Math.floor((W - pw) / 2);
+  const y = deskTop(192) + 6;
   const p = new Pix(pw, ph);
-  p.rect(0, 0, pw, ph, P.maroon);
-  p.vgrad(1, 1, pw - 2, ph - 4, [P.pink, P.red, P.red, P.red, P.darkRed], 2.4);
-  p.rect(1, ph - 3, pw - 2, 1, P.darkRed);
-  p.rect(0, ph - 1, pw, 1, P.black);
-  p.rect(1, 1, 1, ph - 4, P.pink);
-  p.rect(pw - 2, 1, 1, ph - 4, P.darkRed);
-  for (const x of [5, pw - 6]) {
-    p.px(x, 9, P.white);
-    p.rect(x - 1, 10, 3, 1, P.white);
-    p.px(x, 11, P.white);
-  }
-  const cv = p.canvas();
-  const c = cv.getContext('2d');
-  const ty = scale === 2 ? 4 : 8;
-  drawText(c, channel, pw / 2, ty, { color: P.white, scale, align: 'center', shadow: P.darkRed });
+  p.rect(0, 0, pw, ph, P.black);
+  p.rect(1, 0, pw - 2, 1, P.steel);
+  p.rect(0, 1, 1, ph - 2, P.slate);
+  p.rect(pw - 1, 1, 1, ph - 2, P.ink);
+  p.rect(1, 1, pw - 2, 1, P.ink);
+  const bg = p.canvas();
   // its reflection on the floor, built from the finished plate
-  const src = new Uint32Array(c.getImageData(0, 0, pw, ph).data.buffer);
-  const x0 = Math.floor((W - pw) / 2);
-  const y0 = deskTop(192) + 10;
-  const ry0 = 2 * DESK_BOT + 1 - (y0 + ph - 1);
+  const full = makeCanvas(pw, ph);
+  const fc = full.getContext('2d');
+  fc.drawImage(bg, 0, 0);
+  const lx = Math.floor((pw - size.w) / 2);
+  const ly = 2;
+  if (useLogo) drawLogo(fc, lx, ly, { variant: 'full' });
+  else drawText(fc, channel, pw / 2, ly + 4, { color: P.white, scale: 2, align: 'center', shadow: P.darkRed });
+  const src = new Uint32Array(fc.getImageData(0, 0, pw, ph).data.buffer);
+  const ry = 2 * DESK_BOT + 1 - (y + ph - 1);
   const rp = new Pix(pw, ph);
   for (let j = 0; j < ph; j++) {
-    const dy = ry0 + j;
-    const a = 0.26 * clamp(1 - (dy - DESK_BOT) / 30, 0, 1);
+    const a = 0.24 * clamp(1 - (ry + j - DESK_BOT) / 30, 0, 1);
     for (let i = 0; i < pw; i++) rp.over(i, j, src[(ph - 1 - j) * pw + i], a);
   }
-  pl = { cv, refl: rp.canvas(), x: x0, y: y0, w: pw, h: ph, ry: ry0 };
-  plates.set(channel, pl);
+  pl = { bg, full, refl: rp.canvas(), useLogo, x, y, w: pw, h: ph, lx: x + lx, ly: y + ly, ry };
+  panels.set(channel, pl);
   return pl;
 }
 
 export function drawDesk(ctx, t, channel, withLogo = true) {
+  const { th, glow } = current;
   ctx.drawImage(desk(), 0, 0);
   // light from the video wall pooling on the desk top
-  const g = lastGlow;
   for (const [x0, x1, a] of [[118, 266, 0.1], [136, 248, 0.12], [156, 228, 0.12]]) {
-    ctx.fillStyle = rgba(g, a);
-    for (let x = x0; x < x1;) {
-      const top = deskTop(x);
-      let x2 = x + 1;
-      while (x2 < x1 && deskTop(x2) === top) x2++;
-      ctx.fillRect(x, top, x2 - x, 5);
-      x = x2;
+    ctx.fillStyle = rgba(glow, a);
+    for (const [x, w, top] of DESK_RUNS) {
+      const s = Math.max(x, x0);
+      const e = Math.min(x + w, x1);
+      if (e > s) ctx.fillRect(s, top, e - s, 5);
+    }
+  }
+  // accent LED line under the desk top, with an occasional pulse outwards
+  ctx.fillStyle = th.led[0];
+  for (const [x, w, top] of DESK_RUNS) ctx.fillRect(x, top + 7, w, 1);
+  const lp = t % 7;
+  if (lp < 1.8) {
+    const d = Math.floor(easeOut(lp / 1.8) * 170);
+    for (let j = 0; j < 16; j++) {
+      const a = 1 - j / 16;
+      for (const x of [192 + d - j, 191 - d + j]) {
+        if (x < DESK.x0 || x > DESK.x1) continue;
+        fill(ctx, x, deskTop(x) + 7, 1, 1, j < 2 ? P.white : rgba(th.led[2], a));
+      }
     }
   }
   // a specular highlight gliding along the desk edge
-  const st = t % 10;
+  const st = t % 11;
   if (st < 1.6) {
     const sx = Math.round(DESK.x0 + easeInOut(st / 1.6) * (DESK.x1 - DESK.x0));
     for (let dx = -6; dx <= 6; dx++) {
@@ -1776,48 +1345,38 @@ export function drawDesk(ctx, t, channel, withLogo = true) {
       fill(ctx, x, deskTop(x) + 1, 1, 3, rgba(P.white, 0.22 * a));
     }
   }
-  // LED strip: comets running out from the centre
-  for (let k = 0; k < 4; k++) {
-    const d = Math.floor((t * 46 + k * 40) % 160);
-    for (const dir of [-1, 1]) {
-      for (let j = 0; j < 12; j++) {
-        const x = dir > 0 ? 192 + d - j : 191 - d + j;
-        if (x < DESK.x0 || x > DESK.x1) continue;
-        fill(ctx, x, deskTop(x) + 7, 1, 1, j === 0 ? P.white : j < 4 ? P.cyan : P.blue);
-      }
-    }
-  }
-  // chase lights on the front panel
-  const pl = withLogo && channel ? plate(channel) : null;
-  const inner = pl ? pl.x - 6 : 192;
-  const n = Math.floor(t * 9);
-  for (let i = 0; ; i++) {
-    const dx = (pl ? 192 - inner : 2) + i * 7;
-    const xl = 192 - dx - 2;
-    if (xl < 62) break;
-    const ph = (((i - n) % 9) + 9) % 9;
-    const col = ph === 0 ? P.cyan : ph === 1 ? P.blue : P.ink;
-    const y = deskTop(xl) + 21;
-    fill(ctx, xl, y, 2, 2, col);
-    fill(ctx, 192 + dx, y, 2, 2, col);
-    if (ph === 0) {
-      fill(ctx, xl, y, 1, 1, P.white);
-      fill(ctx, 192 + dx + 1, y, 1, 1, P.white);
-    }
-  }
-  if (!pl) return;
+  if (!withLogo) return;
+  const pl = logoPanel(channel);
   ctx.drawImage(pl.refl, pl.x, pl.ry);
-  ctx.drawImage(pl.cv, pl.x, pl.y);
-  // shine sweeping across the logo plate
-  const s = t % 8;
-  if (s < 0.8) {
-    const p = easeOut(s / 0.8);
-    const bx = Math.round(-14 + p * (pl.w + 28));
-    for (let j = 1; j < pl.h - 3; j++) {
-      const x = bx + Math.floor((pl.h - j) / 2);
-      const x0 = Math.max(1, x);
-      const x1 = Math.min(pl.w - 1, x + 4);
-      if (x1 > x0) fill(ctx, pl.x + x0, pl.y + j, x1 - x0, 1, rgba(P.white, 0.35));
-    }
+  if (pl.useLogo) {
+    ctx.drawImage(pl.bg, pl.x, pl.y);
+    drawLogo(ctx, pl.lx, pl.ly, { variant: 'full', t });
+  } else {
+    ctx.drawImage(pl.full, pl.x, pl.y);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Bake the static layers in idle time, one slice per idle callback, so neither
+// the first studio frame nor a change of programme stutters.
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  const jobs = [
+    () => base(),
+    () => desk(),
+    () => landTexture(),
+    () => logoPanel(CHANNEL_NAME),
+    ...Object.values(THEMES).map((th) => () => background(th)),
+  ];
+  const idle = window.requestIdleCallback || ((fn) => setTimeout(() => fn({ timeRemaining: () => 0 }), 120));
+  const next = () => {
+    const job = jobs.shift();
+    if (!job) return;
+    try {
+      job();
+    } catch {
+      /* a failed warm-up is retried lazily on first use */
+    }
+    idle(next, { timeout: 1500 });
+  };
+  idle(next, { timeout: 1500 });
 }

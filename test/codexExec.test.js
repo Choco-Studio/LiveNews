@@ -30,7 +30,7 @@ const log = (entry) => fs.appendFileSync(callsFile, JSON.stringify({ ...entry, t
 const behaviors = JSON.parse(fs.readFileSync(path.join(dir, 'behaviors.json'), 'utf8'));
 const n = fs.existsSync(callsFile) ? fs.readFileSync(callsFile, 'utf8').split('\n').filter((l) => l.includes('"event":"start"')).length : 0;
 const b = behaviors[Math.min(n, behaviors.length - 1)];
-log({ event: 'start', n, args, cwd: process.cwd(), entries: fs.readdirSync(process.cwd()) });
+log({ event: 'start', n, pid: process.pid, args, cwd: process.cwd(), entries: fs.readdirSync(process.cwd()) });
 if (b.exitImmediately) process.exit(b.exit === undefined ? 1 : b.exit);
 let input = '';
 process.stdin.setEncoding('utf8');
@@ -295,8 +295,18 @@ describe('codex exec provider (fake CLI)', () => {
     await assert.rejects(makeProvider(fake.bin, { timeoutMs: 400 }).generate({ prompt: 'p' }), /codex exec timed out after 400 ms/);
 
     assert.ok(Date.now() - started < 5000, 'rejected at the timeout, not when the process finished');
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    assert.equal(fake.log().some((e) => e.event === 'end'), false, 'the fake was terminated before it finished');
+    const [{ pid }] = fake.starts();
+    const alive = () => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    for (let i = 0; i < 40 && alive(); i++) await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(alive(), false, 'the CLI process was terminated, not left running');
+    assert.equal(fake.log().some((e) => e.event === 'end'), false, 'and it never finished');
   });
 
   test('scratch directories are removed after successes and after every kind of failure', async (t) => {

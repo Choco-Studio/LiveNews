@@ -124,6 +124,19 @@ describe('validateChannel', () => {
     assert.throws(() => validateChannel(withProgram('solo', { presenters: 'cyd' })), /programme "solo" needs 1 or 2 presenters/);
   });
 
+  test(
+    'rejects a programme that does not say how many stories it airs (a typo must not silently take it off air)',
+    {
+      todo:
+        'VALIDATION GAP server/channel.js:31-38 - a programme without a numeric "stories" (e.g. a typo: "storys": 4) passes validateChannel(), but Producer.canProduce() then computes Math.min(undefined, n) = NaN, so it can never be produced and Station.fill() skips its slot forever with no error (a missing "style"/"storyLength"/"tagline" likewise puts the text "undefined" into the writer prompt)',
+    },
+    () => {
+      for (const stories of [undefined, 0, -3, 'five', NaN]) {
+        assert.throws(() => validateChannel(withProgram('duo', { stories })), /stories/, String(stories));
+      }
+    }
+  );
+
   test('checks the rotation before the programmes', () => {
     const channel = withProgram('duo', { presenters: [] });
     channel.rotation = ['ghost'];

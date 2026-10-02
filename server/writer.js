@@ -1,6 +1,6 @@
 // Builds the prompt for the news writer and turns the model's JSON reply into
 // a safe, validated bulletin for the renderer.
-import { parseCues, describeActions } from '../public/js/cues.js';
+import { parseCues, embedCues, describeActions } from '../public/js/cues.js';
 
 export const EMOTIONS = ['neutral', 'happy', 'serious', 'surprised', 'sad', 'thinking'];
 export const SHOTS = ['wide', 'close', 'full', 'map'];
@@ -107,6 +107,7 @@ Check every story segment against its SOURCE (matched by storyId):
 - Make sure the "fact" field (if any) appears in the source, otherwise set it to null.
 - Make sure "location" matches a place named in the source, otherwise set it to null.
 - Fix tone problems (no jokes near grave stories) and anything hard to read aloud.
+- Keep the bracketed stage directions such as [wave] or [B:nod] (they are not read aloud); remove only ones that are inappropriate for the tone.
 - Keep the same JSON structure, segment order, presenters and storyIds. Do not add new stories.
 
 ${ACCURACY}
@@ -145,7 +146,8 @@ export function extractJson(raw) {
 
 const clean = (v, max) =>
   String(v ?? '')
-    .replace(/[*_#`]/g, '')
+    .replace(/[*#`]/g, '')
+    .replace(/(^|\s)_+|_+(?=\s|$)/g, '$1') // markdown underscores, not snake_case words
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, max);
@@ -155,7 +157,9 @@ function clip(textValue, max) {
   if (t.length <= max) return t;
   const cut = t.slice(0, max);
   const lastStop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
-  return lastStop > max * 0.5 ? cut.slice(0, lastStop + 1) : cut.replace(/\s+\S*$/, '') + '…';
+  if (lastStop > max * 0.5) return cut.slice(0, lastStop + 1);
+  const words = cut.slice(0, max - 1);
+  return (/\s/.test(words) ? words.replace(/\s+\S*$/, '') : words) + '…';
 }
 
 // Shorten at a word boundary, without ellipsis (for on-screen captions).
@@ -171,8 +175,9 @@ const pick = (v, list, fallback) => (list.includes(v) ? v : fallback);
 
 function normalizeLocation(loc) {
   if (!loc || typeof loc !== 'object') return null;
-  const lat = Number(loc.lat);
-  const lon = Number(loc.lon);
+  const num = (v) => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '') ? Number(v) : NaN);
+  const lat = num(loc.lat);
+  const lon = num(loc.lon);
   const place = clipWords(loc.place, LIMITS.place);
   if (!place || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
   return { place, lat: Math.round(lat * 100) / 100, lon: Math.round(lon * 100) / 100 };
@@ -192,7 +197,8 @@ export function normalizeBulletin(raw, stories, { channelName = 'LIVENEWS', maxS
     if (!type) continue;
     const emotion = pick(seg.emotion, EMOTIONS, 'neutral');
     const grave = emotion === 'serious' || emotion === 'sad';
-    const parsed = parseCues(clean(seg.text, 2000), { grave });
+    const raw = Array.isArray(seg.cues) && seg.cues.length ? embedCues(String(seg.text ?? ''), seg.cues) : seg.text;
+    const parsed = parseCues(clean(raw, 2000), { grave });
     const text = clip(parsed.text, LIMITS.text);
     if (!text) continue;
     const cues = parsed.cues

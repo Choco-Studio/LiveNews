@@ -295,12 +295,13 @@ describe('Station.fill', () => {
     const first = station.fill();
     assert.equal(station.producing, 'alpha');
     assert.equal(station.status().producing, 'ALPHA NEWS');
-    await station.fill(); // returns at once: a production is already running
-    assert.deepEqual(producer.produceCalls, ['alpha']);
+    const second = station.fill(); // returns at once: a production is already running
+    await tick();
+    assert.deepEqual(producer.produceCalls, ['alpha'], 'the second call did not start another production');
 
     producer.gate = null;
     gate.resolve();
-    await first;
+    await Promise.all([first, second]);
 
     assert.deepEqual(producer.produceCalls, ['alpha', 'bravo']);
     assert.equal(station.queue.length, 2);

@@ -182,6 +182,18 @@ describe('ProviderChain', () => {
     assert.ok(rateLimited > generic);
   });
 
+  test('an HTTP 429 status is a rate limit even when the message does not say so', async () => {
+    const a = makeProvider('a', { generate: throwing('upstream said no', { status: 429 }) });
+    const { chain, clock } = makeChain([a]);
+    await assert.rejects(chain.generate({}, parseJson));
+    assert.equal(cooldownOf(chain, clock), 30 * MINUTE);
+
+    const other = makeProvider('b', { generate: throwing('upstream said no', { status: 503 }) });
+    const second = makeChain([other]);
+    await assert.rejects(second.chain.generate({}, parseJson));
+    assert.equal(cooldownOf(second.chain, second.clock), 30 * SECOND, 'other statuses are ordinary errors');
+  });
+
   test('quota-style error messages are also treated as rate limits (30 min)', async () => {
     const messages = [
       'You exceeded your current quota',

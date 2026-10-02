@@ -1,7 +1,9 @@
 // Offline provider: builds an episode straight from the feed text, with no AI.
 // Lets the whole channel run (and be demoed) without any account or API key.
 
-const GRAVE = /dead|death|die[sd]?|killed|kill|war\b|attack|victim|murder|shooting|earthquake|fire|crash|violen|injur|bomb|strike[sd]? on|crisis|flood|hostage|famine/i;
+import { isBreaking } from '../news.js';
+
+const GRAVE = /\b(?:dead|deaths?|die[sd]?|dying|killed|killings?|war|wars|attacks?|victims?|murder\w*|shootings?|earthquakes?|fires?|wildfires?|crash\w*|violen\w*|injur\w*|bomb\w*|strikes? on|crisis|floods?|flooding|hostages?|famine)\b/i;
 const LIGHT = /\bAI\b|robot|chip|phone|app\b|software|space|nasa|planet|science|scientist|discover|study finds|telescope|game/i;
 
 function firstSentences(s, max = 2) {
@@ -40,7 +42,7 @@ export function createMockProvider() {
           headline: s.title,
           text: `${grave ? '[lean_in] ' : s.image ? '[point_screen] ' : '[raise_hand] '}${s.source} reports: ${s.title}. ${body === s.title ? '' : `${grave ? '' : solo ? '' : '[B:nod] '}${body}`}`.trim(),
           shot: s.image ? (i % 3 === 1 ? 'full' : 'close') : 'wide',
-          breaking: /\bbreaking\b/i.test(s.title),
+          breaking: isBreaking(s.title),
           location: null,
           fact: null,
         });

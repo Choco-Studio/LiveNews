@@ -33,7 +33,12 @@ function sendJson(res, status, body) {
 }
 
 function serveStatic(req, res, pathname) {
-  const rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
+  let rel;
+  try {
+    rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
+  } catch {
+    return sendJson(res, 400, { error: 'bad request' });
+  }
   const file = path.resolve(PUBLIC, rel);
   if (!file.startsWith(PUBLIC + path.sep)) return sendJson(res, 403, { error: 'forbidden' });
   fs.readFile(file, (err, body) => {
@@ -63,7 +68,7 @@ function serveEvents(req, res) {
 
 async function serveImage(res, id) {
   const story = newsDesk.get(id);
-  if (!story?.image) return sendJson(res, 404, { error: 'sin imagen' });
+  if (!story?.image) return sendJson(res, 404, { error: 'no image' });
   const entry = await images.get(id, story.image);
   if (entry.error) return sendJson(res, 502, { error: entry.error });
   res.writeHead(200, {

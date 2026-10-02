@@ -24,33 +24,41 @@ function text(v) {
 
 const NAMED_ENTITIES = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", hellip: '…', laquo: '«', raquo: '»', ldquo: '“', rdquo: '”', lsquo: '‘', rsquo: '’', ndash: '–', mdash: '—' };
 
+const codePoint = (n, fallback) => (Number.isInteger(n) && n >= 0 && n <= 0x10ffff ? String.fromCodePoint(n) : fallback);
+
 const ACCENTS = { acute: '\u0301', grave: '\u0300', circ: '\u0302', uml: '\u0308', tilde: '\u0303', cedil: '\u0327', ring: '\u030a' };
 
 export function decodeEntities(s) {
   return s
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (m, h) => codePoint(parseInt(h, 16), m))
+    .replace(/&#(\d+);/g, (m, d) => codePoint(Number(d), m))
     .replace(/&([a-z])(acute|grave|circ|uml|tilde|cedil|ring);/gi, (_, l, a) => (l + ACCENTS[a.toLowerCase()]).normalize('NFC'))
     .replace(/&([a-z]+);/gi, (m, name) => NAMED_ENTITIES[name.toLowerCase()] ?? m);
 }
+
+const BLOCK = '\u0001'; // marks HTML block ends while tags are stripped
 
 export function cleanHtml(html) {
   return decodeEntities(
     String(html)
       .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
       .replace(/<!--[\s\S]*?-->/g, ' ')
-      .replace(/<br\s*\/?>|<\/p>|<\/li>|<\/h\d>/gi, '\n')
+      .replace(/<br\s*\/?>|<\/p>|<\/li>|<\/h\d>/gi, BLOCK)
       .replace(/<[^>]+>/g, ' ')
   )
     // block breaks become sentence breaks unless a sentence already ended
-    .replace(/([.!?…:;])?[ \t]*\n\s*/g, (_, p) => (p ? `${p} ` : '. '))
+    .replace(/([.!?…:;])?\s*\u0001[\s\u0001]*/g, (_, p) => (p ? `${p} ` : '. '))
     .replace(/\s+/g, ' ')
     .replace(/^[.\s]+/, '')
     .trim();
 }
 
 // Feed boilerplate that is not part of the story
-const BOILERPLATE_RE = /Leer la noticia completa\.?|Continue reading\.*|Read more\.*|The post .{0,200}? appeared first on .{0,80}?\.|Comments?\.?$/gi;
+const BOILERPLATE_RE = /\s*(?:Leer la noticia completa|Continue reading|Read more)\s*(?:\.{1,3}|…|»|→)?\s*$|(?<=[.!?])\s*Comments?\s*$|The post .{0,200}? appeared first on .{0,80}?\./gi;
+
+// Explicit breaking-news markers only ("Record-breaking heatwave" is not breaking news).
+const BREAKING_RES = [/^\s*breaking(?: news)?\s*[:|–—-]/i, /[,|–—-]\s*breaking\s*$/i, /\bBREAKING\b/, /[-–—]\s*live\b/i, /\blive updates?\b/i, /última hora/i];
+export const isBreaking = (title) => BREAKING_RES.some((re) => re.test(title));
 
 const TRACKER_RE = /imrworldwide|doubleclick|feedburner|pixel|1x1|tracking|gravatar|\/stats?\b|\.gif(\?|$)/i;
 

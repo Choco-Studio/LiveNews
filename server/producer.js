@@ -1,5 +1,6 @@
 import { buildPrompt, buildReviewPrompt, extractJson, normalizeBulletin } from './writer.js';
 import { castOf } from './channel.js';
+import { embedCues } from '../public/js/cues.js';
 
 /**
  * Makes one episode of a programme through a pipeline of stages. Each stage
@@ -98,7 +99,7 @@ export class Producer {
     const stories = ctx.episode.storyIds.map((id) => this.news.get(id)).filter(Boolean);
     const script = {
       title: ctx.episode.title,
-      segments: ctx.episode.segments.map(({ source, category, hasImage, ...seg }) => seg),
+      segments: ctx.episode.segments.map(({ source, category, hasImage, cues, ...seg }) => ({ ...seg, text: embedCues(seg.text, cues) })),
     };
     const prompt = buildReviewPrompt({ channelName: ctx.channelName, program: ctx.program, script, stories });
     try {

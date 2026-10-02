@@ -288,6 +288,15 @@ describe('normalizeBulletin: field validation', () => {
     assert.ok(text.startsWith(s.text));
   });
 
+  test('text of exactly 520 characters is kept whole; one more is clipped', () => {
+    const text520 = 'abcdefghi '.repeat(51) + 'abcdefghij';
+    assert.equal(text520.length, 520);
+    assert.equal(storyOf({ text: text520 }).text, text520);
+    const clipped = storyOf({ text: `${text520}y` }).text;
+    assert.ok(clipped.length <= 520, `length ${clipped.length}`);
+    assert.notEqual(clipped, `${text520}y`);
+  });
+
   test('clips long text without sentence stops at a word boundary and adds an ellipsis', () => {
     const s = storyOf({ text: 'word '.repeat(200) });
     assert.ok(s.text.length <= 520, `length ${s.text.length}`);
@@ -394,7 +403,7 @@ describe('normalizeBulletin: location', () => {
     'null, empty or boolean coordinates are not valid and must not be read as 0',
     {
       todo:
-        'BUG server/writer.js:165-166 - Number(null), Number("") and Number(false) are 0 and Number(true) is 1, so {place:"PARIS, FRANCE", lat:null, lon:null} is accepted as {lat:0, lon:0} (the Gulf of Guinea) instead of being rejected',
+        'BUG server/writer.js:174-175 - Number(null), Number("") and Number(false) are 0 and Number(true) is 1, so {place:"PARIS, FRANCE", lat:null, lon:null} is accepted as {lat:0, lon:0} (the Gulf of Guinea) instead of being rejected',
     },
     () => {
       assert.equal(storyOf({ location: { place: 'PARIS, FRANCE', lat: null, lon: null } }).location, null);

@@ -1900,7 +1900,9 @@ export function faceCU(ctx, cx, cy, s, o = {}) {
       bigHeart(ctx, x, ey, U(8), P.red);
       R(ctx, x - U(6), ey - U(4), U(2), U(2), P.pink);
     } else if (eyes === 'stars') {
+      poly(ctx, starPts(x, ey, 5, U(10) + 2, U(4) + 2, 0), K);
       poly(ctx, starPts(x, ey, 5, U(10), U(4), 0), P.yellow);
+      R(ctx, x - U(2), ey - U(3), U(2), U(2), P.white);
     } else if (eyes === 'x') {
       sq(ctx, [[x - U(6), ey - U(6)], [x + U(6), ey + U(6)]], K, U(3));
       sq(ctx, [[x + U(6), ey - U(6)], [x - U(6), ey + U(6)]], K, U(3));

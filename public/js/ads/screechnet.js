@@ -2,8 +2,8 @@
 // "Fast as a fax." Grandma picks up the phone at 99%.
 import {
   P, W, H, R, A, rrect, panel, disc, oval, ring, poly, line, dither, bands, sparkle, twinkle, particles, shadow,
-  ripples, spr, draw, stroke, cached, text, bigText, para, bubble, logo, finePrint, slogan, play, hero, prog, lerp, easeOut,
-  easeOutBack, wave, frame, shake, clipRect, starPts, mulberry32,
+  ripples, spr, draw, stroke, cached, text, bigText, para, bubble, finePrint, slogan, play, hero, faceCU, prog, lerp, easeOut,
+  easeOutBack, wave, frame, shake, clipRect, starPts, mulberry32, wordmark, drawMark, glint, glow, urlPill, rep, tune,
 } from './kit.js';
 
 const DAD = { H: P.brown, h: P.tan, E: P.maroon, T: P.green, t: P.darkGreen, C: P.cream, X: P.green, P: P.slate, p: P.ink };
@@ -53,22 +53,36 @@ function cat(ctx, x, gy, mood, lt) {
   draw(ctx, sp, x, gy - 20, CAT_PAL);
 }
 
+// Modem body art (cached, 136 x 48); origin = centre-top of the front face.
+const MX = 61;
+const MY = 15;
+const modemArt = () =>
+  cached('sn-modem', 136, 48, (c) => {
+    const cx = MX;
+    const cy = MY;
+    poly(c, [[cx - 61, cy - 1], [cx - 49, cy - 15], [cx + 73, cy - 15], [cx + 73, cy + 14], [cx + 60, cy + 29], [cx - 61, cy + 29]], P.black);
+    poly(c, [[cx - 60, cy], [cx - 48, cy - 14], [cx + 72, cy - 14], [cx + 60, cy]], P.white);
+    poly(c, [[cx + 60, cy], [cx + 72, cy - 14], [cx + 72, cy + 14], [cx + 60, cy + 28]], P.tan);
+    R(c, cx - 60, cy, 120, 28, P.cream);
+    R(c, cx - 60, cy, 120, 1, P.fog);
+    R(c, cx - 60, cy + 27, 120, 1, P.tan);
+    R(c, cx - 32, cy - 11, 68, 8, P.navy);
+    text(c, 'SCREECHNET', cx + 2, cy - 10, { color: P.yellow, align: 'center' });
+    R(c, cx - 55, cy + 5, 74, 8, P.ink);
+    text(c, 'DATA/FAX MODEM', cx - 55, cy + 17, { color: P.steel });
+    text(c, '56K', cx + 32, cy + 6, { color: P.red });
+    for (let x = cx + 46; x < cx + 57; x += 2) R(c, x, cy + 5, 1, 18, P.tan);
+    R(c, cx - 56, cy + 29, 8, 2, P.black);
+    R(c, cx + 48, cy + 29, 8, 2, P.black);
+  });
+
 /** Beige box modem; (cx, cy) = centre-top of the front face. */
-function modem(ctx, cx, cy, lt, screech = false) {
+function modem(ctx, cx, cy, lt, screech = false, shine = -1) {
   const [sx, sy] = screech ? shake(lt, 2, 7) : [0, 0];
   cx += sx;
   cy += sy;
-  poly(ctx, [[cx - 61, cy - 1], [cx - 49, cy - 15], [cx + 73, cy - 15], [cx + 73, cy + 14], [cx + 60, cy + 29], [cx - 61, cy + 29]], P.black);
-  poly(ctx, [[cx - 60, cy], [cx - 48, cy - 14], [cx + 72, cy - 14], [cx + 60, cy]], P.white);
-  poly(ctx, [[cx + 60, cy], [cx + 72, cy - 14], [cx + 72, cy + 14], [cx + 60, cy + 28]], P.tan);
-  R(ctx, cx - 60, cy, 120, 28, P.cream);
-  R(ctx, cx - 60, cy, 120, 1, P.fog);
-  R(ctx, cx - 60, cy + 27, 120, 1, P.tan);
-  // label plate on top
-  R(ctx, cx - 30, cy - 10, 66, 7, P.navy);
-  text(ctx, 'SCREECHNET', cx + 3, cy - 10, { color: P.yellow, align: 'center' });
-  // LEDs
-  R(ctx, cx - 55, cy + 5, 74, 8, P.ink);
+  ctx.drawImage(modemArt(), cx - MX, cy - MY);
+  if (shine >= 0) glint(ctx, modemArt(), cx - MX, cy - MY, shine, { width: 9, alpha: 0.6 });
   const rand = mulberry32(Math.floor(lt * (screech ? 14 : 5)) + 3);
   for (let i = 0; i < 6; i++) {
     const lit = i === 0 || rand() < (screech ? 0.7 : 0.45);
@@ -76,11 +90,6 @@ function modem(ctx, cx, cy, lt, screech = false) {
     R(ctx, cx - 52 + i * 12, cy + 7, 6, 3, col);
     if (lit) R(ctx, cx - 52 + i * 12, cy + 7, 2, 1, P.white);
   }
-  text(ctx, 'DATA/FAX MODEM', cx - 55, cy + 17, { color: P.steel });
-  text(ctx, '56K', cx + 32, cy + 6, { color: P.red, scale: 1 });
-  for (let x = cx + 46; x < cx + 57; x += 2) R(ctx, x, cy + 5, 1, 18, P.tan);
-  R(ctx, cx - 56, cy + 29, 8, 2, P.black);
-  R(ctx, cx + 48, cy + 29, 8, 2, P.black);
 }
 
 /** Curly phone cord between two points. */
@@ -129,74 +138,110 @@ const catPhoto = () =>
     }
   });
 
-// --- scenes ------------------------------------------------------------------
+// --- brand -------------------------------------------------------------------
 
-function livingRoom(ctx) {
-  R(ctx, 0, 0, W, 150, P.slate);
-  dither(ctx, 0, 0, W, 150, P.steel, 'dots');
-  // picture
-  R(ctx, 36, 36, 44, 34, P.black);
-  R(ctx, 37, 37, 42, 32, P.tan);
-  R(ctx, 40, 40, 36, 26, P.navy);
-  poly(ctx, [[48, 60], [58, 44], [60, 60]], P.white);
-  R(ctx, 44, 60, 28, 3, P.brown);
-  R(ctx, 40, 63, 36, 3, P.blue);
-  // lamp
-  R(ctx, 338, 64, 2, 86, P.black);
-  poly(ctx, [[326, 64], [352, 64], [346, 44], [332, 44]], P.yellow);
-  R(ctx, 326, 64, 26, 1, P.orange);
-  disc(ctx, 339, 70, 22, A(P.yellow, 0.12));
-  // sofa
-  rrect(ctx, 96, 104, 210, 56, P.black, 3);
-  rrect(ctx, 97, 105, 208, 54, P.rust, 3);
-  R(ctx, 99, 107, 204, 2, P.orange);
-  R(ctx, 166, 108, 1, 40, P.darkRed);
-  R(ctx, 236, 108, 1, 40, P.darkRed);
+const MARK = () => wordmark('SCREECHNET', {
+  h: 26, pen: 2, square: true, slant: 0.32, wide: 0.85, gap: 2,
+  fill: [P.white, P.yellow, P.yellow, P.orange, P.orange, P.rust],
+  outline: [[P.black, 2]], depth: 3, depthColor: P.navy,
+});
+
+function soundWave(ctx, cx, y, w, lt, col) {
+  for (let i = 0; i < w; i++) {
+    const x = cx - w / 2 + i;
+    const amp = Math.sin((i / w) * Math.PI) * 4;
+    const v = Math.round(Math.sin(i * 0.9 - lt * 12) * amp * (0.6 + 0.4 * Math.sin(i * 0.23 + lt * 3)));
+    R(ctx, x, y + Math.min(0, v), 1, Math.abs(v) + 1, col);
+  }
 }
 
-function desktopFront(ctx, lt) {
-  R(ctx, 0, 146, W, 70, P.brown);
-  R(ctx, 0, 146, W, 2, P.tan);
-  R(ctx, 0, 148, W, 1, P.tanShade);
-  // keyboard (seen from behind the screen)
-  R(ctx, 140, 152, 100, 14, P.black);
-  R(ctx, 141, 153, 98, 12, P.silver);
-  for (let y = 155; y < 164; y += 3) for (let x = 143; x < 237; x += 4) R(ctx, x, y, 3, 2, P.white);
-  // mouse + mug + notes
-  rrect(ctx, 262, 152, 12, 16, P.black, 2);
-  rrect(ctx, 263, 153, 10, 14, P.silver, 2);
-  R(ctx, 74, 140, 16, 18, P.black);
-  R(ctx, 75, 141, 14, 16, P.red);
-  R(ctx, 75, 141, 14, 2, P.pink);
-  R(ctx, 302, 150, 22, 20, P.yellow);
-  for (let y = 154; y < 168; y += 4) R(ctx, 305, y, 16, 1, P.orange);
+// --- shots -------------------------------------------------------------------
+
+function livingRoom(ctx, cam) {
+  R(ctx, 0, 0, W, 146, P.slate);
+  dither(ctx, 0, 0, W, 146, P.steel, 'dots');
+  const b = Math.round(cam * 0.5);
+  R(ctx, 36 + b, 30, 44, 34, P.black);
+  R(ctx, 37 + b, 31, 42, 32, P.tan);
+  R(ctx, 40 + b, 34, 36, 26, P.navy);
+  poly(ctx, [[48 + b, 54], [58 + b, 38], [60 + b, 54]], P.white);
+  R(ctx, 44 + b, 54, 28, 3, P.brown);
+  R(ctx, 40 + b, 57, 36, 3, P.blue);
+  R(ctx, 338 + b, 58, 2, 88, P.black);
+  poly(ctx, [[326 + b, 58], [352 + b, 58], [346 + b, 38], [332 + b, 38]], P.yellow);
+  R(ctx, 326 + b, 58, 26, 1, P.orange);
+  disc(ctx, 339 + b, 64, 22, A(P.yellow, 0.12));
+  const s = Math.round(cam * 0.8);
+  rrect(ctx, 96 + s, 96, 210, 56, P.black, 3);
+  rrect(ctx, 97 + s, 97, 208, 54, P.rust, 3);
+  R(ctx, 99 + s, 99, 204, 2, P.orange);
+  R(ctx, 166 + s, 100, 1, 40, P.darkRed);
+  R(ctx, 236 + s, 100, 1, 40, P.darkRed);
 }
 
-function sceneTooFast(ctx, lt) {
-  livingRoom(ctx);
+function desktopFront(ctx, cam) {
+  const x = Math.round(cam);
+  R(ctx, 0, 140, W, 76, P.brown);
+  R(ctx, 0, 140, W, 2, P.tan);
+  R(ctx, 0, 142, W, 1, P.tanShade);
+  R(ctx, 140 + x, 146, 100, 14, P.black);
+  R(ctx, 141 + x, 147, 98, 12, P.silver);
+  for (let y = 149; y < 158; y += 3) for (let xx = 143; xx < 237; xx += 4) R(ctx, xx + x, y, 3, 2, P.white);
+  rrect(ctx, 262 + x, 146, 12, 16, P.black, 2);
+  rrect(ctx, 263 + x, 147, 10, 14, P.silver, 2);
+  R(ctx, 74 + x, 134, 16, 18, P.black);
+  R(ctx, 75 + x, 135, 14, 16, P.red);
+  R(ctx, 75 + x, 135, 14, 2, P.pink);
+  R(ctx, 302 + x, 144, 22, 20, P.yellow);
+  for (let y = 148; y < 162; y += 4) R(ctx, 305 + x, y, 16, 1, P.orange);
+}
+
+// 1. Establishing: the family, bored by instant pages.
+function shotTooFast(ctx, lt) {
+  const cam = -lt * 1.2;
+  livingRoom(ctx, cam);
   const yawn = lt > 1.4 && lt < 2.8;
-  hero(ctx, 150, 146, { pal: DAD, glasses: true, eyes: 'sleepy', mouth: lt > 3.4 ? 'o' : 'flat', legs: 'none', look: 0 });
-  hero(ctx, 200, 146, { pal: MUM, hair: 'bob', eyes: 'sleepy', mouth: 'flat', armL: 'mouth', legs: 'none' });
-  hero(ctx, 246, 146, { pal: KID, hair: 'spiky', small: true, eyes: yawn ? 'closed' : 'sleepy', mouth: yawn ? 'O' : 'flat', armL: yawn ? 'up' : 'down', armR: yawn ? 'up' : 'down', legs: 'none' });
-  // flicker of pages loading instantly
-  const cols = [P.cyan, P.white, P.yellow, P.pink, P.green];
-  R(ctx, 100, 70, 190, 76, A(cols[frame(lt, 14, cols.length)], 0.16));
-  desktopFront(ctx, lt);
-  if (lt > 3.4) bubble(ctx, 104, 66, 56, 'BORING.', { tail: 'down', tx: 140 });
-  panel(ctx, 96, 174, 192, 32, P.black, P.steel, 2);
-  text(ctx, 'PAGE LOADED IN 0.00001 S', 192, 179, { color: P.green, align: 'center' });
+  const ox = Math.round(cam * 0.8);
+  hero(ctx, 150 + ox, 140, { pal: DAD, glasses: true, eyes: 'sleepy', mouth: lt > 3.4 ? 'o' : 'flat', legs: 'none' });
+  hero(ctx, 200 + ox, 140, { pal: MUM, hair: 'bob', eyes: 'sleepy', mouth: 'flat', armL: 'mouth', legs: 'none' });
+  hero(ctx, 246 + ox, 140, { pal: KID, hair: 'spiky', small: true, eyes: yawn ? 'closed' : 'sleepy', mouth: yawn ? 'O' : 'flat', armL: yawn ? 'up' : 'down', armR: yawn ? 'up' : 'down', legs: 'none' });
+  desktopFront(ctx, cam);
+  panel(ctx, 96, 172, 192, 32, P.black, P.steel, 2);
+  text(ctx, 'PAGE LOADED IN 0.00001 S', 192, 177, { color: P.green, align: 'center' });
   const n = Math.floor(lt * 7919) + 1024;
-  text(ctx, `PAGES VIEWED: ${n.toLocaleString('en-GB')}`, 192, 191, { color: P.white, align: 'center' });
+  text(ctx, `PAGES VIEWED: ${n.toLocaleString('en-GB')}`, 192, 189, { color: P.white, align: 'center' });
 }
 
-function sceneModem(ctx, lt) {
-  const screech = lt > 2.2 && lt < 5.2;
+// 2. Close-up: Dad, pages flickering in his glasses.
+function shotDad(ctx, lt) {
+  R(ctx, 0, 0, W, H, P.slate);
+  dither(ctx, 0, 0, W, H, P.steel, 'dots');
+  rrect(ctx, -10, 150, 404, 80, P.black, 3);
+  rrect(ctx, -10, 151, 404, 80, P.rust, 3);
+  R(ctx, 0, 153, W, 2, P.orange);
+  const asleep = lt > 1.5;
+  faceCU(ctx, 192, 112, 44, { pal: DAD, glasses: true, eyes: asleep ? 'closed' : 'sleepy', mouth: asleep ? 'o' : 'flat' });
+  const cols = [P.cyan, P.yellow, P.pink, P.green, P.white, P.orange];
+  const col = cols[Math.floor(lt * 15) % cols.length];
+  for (const sd of [-1, 1]) {
+    const x = 192 + sd * 17;
+    R(ctx, x - 9, 105, 17, 11, A(P.white, 0.35));
+    R(ctx, x - 9, 105, 17, 3, A(col, 0.75));
+    for (let k = 0; k < 3; k++) R(ctx, x - 7, 110 + k * 2, 8 + ((k * 5 + Math.floor(lt * 15)) % 6), 1, A(P.black, 0.35));
+  }
+  if (lt > 0.5) bubble(ctx, 262, 40, 76, 'BORING.', { tail: 'down', tx: 270, scale: 1 });
+  if (asleep) text(ctx, 'Z Z Z', 268, 96 - (Math.floor(lt * 3) % 3) * 2, { color: P.white });
+}
+
+// 3. Product hero: the modem rises, gleams... and screams.
+function shotModem(ctx, lt) {
+  const screech = lt > 2.0 && lt < 4.8;
   const flash = screech && Math.floor(lt * 12) % 2;
   bands(ctx, 0, 0, W, 150, flash ? [P.purple, P.magenta] : [P.ink, P.navy, P.blue]);
+  if (!screech) glow(ctx, 198, 110, 90, P.cyan, 0.05, 5);
   R(ctx, 0, 150, W, 66, P.brown);
   R(ctx, 0, 150, W, 2, P.tan);
   dither(ctx, 0, 152, W, 64, P.tanShade, 'hlines');
-  // wall socket + cord
   R(ctx, 30, 120, 16, 20, P.black);
   R(ctx, 31, 121, 14, 18, P.cream);
   R(ctx, 35, 126, 6, 6, P.steel);
@@ -204,46 +249,49 @@ function sceneModem(ctx, lt) {
   const my = Math.round(lerp(240, 118, rise));
   cord(ctx, 38, 132, 132, my + 16);
   if (screech) {
+    clipRect(ctx, 0, 24, W, 126);
     for (let k = 0; k < 4; k++) {
       const rr = Math.round(((lt * 70 + k * 30) % 120) + 30);
-      clipRect(ctx, 0, 0, W, 150);
       ring(ctx, 198, my + 10, rr, k % 2 ? P.yellow : P.cyan);
       ring(ctx, 198, my + 10, rr + 1, k % 2 ? P.yellow : P.cyan);
-      ctx.restore();
     }
+    ctx.restore();
   }
   shadow(ctx, 198, my + 30, 70, 0.4);
-  modem(ctx, 192, my, lt, screech);
-  // the cat
-  const jump = screech ? -Math.round(Math.abs(Math.sin((lt - 2.2) * 5)) * 18) : 0;
-  cat(ctx, 318, 150 + jump, screech ? 'scared' : lt > 5.2 ? 'sleep' : 'calm', lt);
-  if (screech && lt < 3.6) bigText(ctx, 'MROW!', 340, 112 + jump, { scale: 1, color: P.white, outline: P.black });
-  if (!screech && lt > 5.2) text(ctx, 'ZZZ', 334, 118 - (Math.floor(lt * 2) % 3) * 2, { color: P.white });
-  // screech lettering
+  modem(ctx, 192, my, lt, screech, prog(lt, 0.75, 1.35));
+  if (!screech && lt > 0.8 && lt < 2.0) {
+    sparkle(ctx, 142, my - 12, [0, 1, 2, 3, 2, 1][Math.floor(lt * 10) % 6]);
+    sparkle(ctx, 258, my + 4, [0, 1, 2, 3, 2, 1][Math.floor(lt * 10 + 3) % 6]);
+    text(ctx, 'INTRODUCING...', 192, 50, { color: P.cyan, align: 'center' });
+  }
+  const jump = screech ? -Math.round(Math.abs(Math.sin((lt - 2.0) * 5)) * 18) : 0;
+  cat(ctx, 318, 150 + jump, screech ? 'scared' : lt > 4.8 ? 'sleep' : 'calm', lt);
+  if (screech && lt < 3.4) bigText(ctx, 'MROW!', 340, 112 + jump, { scale: 1, color: P.white, outline: P.black });
   const words = [
-    [2.2, 'SKREEEE!', 96, 46, 3, P.yellow],
-    [2.7, 'KSSHHHH!', 290, 64, 2, P.cyan],
-    [3.2, 'BWONG-BWONG', 112, 84, 2, P.pink],
-    [3.7, 'DEE-DOO-DEE-DOO', 280, 34, 1, P.green],
-    [4.1, 'KRRRRRK', 214, 98, 2, P.orange],
+    [2.0, 'SKREEEE!', 96, 46, 3, P.yellow],
+    [2.5, 'KSSHHHH!', 290, 64, 2, P.cyan],
+    [3.0, 'BWONG-BWONG', 112, 84, 2, P.pink],
+    [3.5, 'DEE-DOO-DEE-DOO', 280, 34, 1, P.green],
+    [3.9, 'KRRRRRK', 214, 98, 2, P.orange],
   ];
   if (screech) {
-    for (const [at, s, x, y, sc, col] of words) {
+    for (const [at, str, x, y, sc, col] of words) {
       if (lt < at) continue;
       const [jx, jy] = shake(lt, 1, x);
-      bigText(ctx, s, x + jx, y + jy, { scale: sc, color: col, outline: P.black, ow: sc > 1 ? 2 : 1, align: 'center' });
+      bigText(ctx, str, x + jx, y + jy, { scale: sc, color: col, outline: P.black, ow: sc > 1 ? 2 : 1, align: 'center' });
     }
   }
+  if (lt > 4.8) text(ctx, 'CONNECTED AT 56,000 BPS', 192, 186, { color: P.green, align: 'center' });
 }
 
-function sceneLoading(ctx, lt) {
+// 4. Split screen: the photo loads, the family waits. And waits.
+function shotLoading(ctx, lt) {
   R(ctx, 0, 0, W, H, P.ink);
-  // left: the monitor
   rrect(ctx, 4, 24, 184, 160, P.black, 3);
   rrect(ctx, 5, 25, 182, 158, P.cream, 3);
   R(ctx, 13, 33, 166, 128, P.black);
   R(ctx, 14, 34, 164, 126, P.navy);
-  const p = 0.99 * easeOut(prog(lt, 0.3, 4.6));
+  const p = 0.99 * easeOut(prog(lt, 0.3, 4.4));
   const rows = Math.floor(p * 92);
   if (rows > 0) ctx.drawImage(catPhoto(), 0, 0, 136, rows, 28, 38, 136, rows);
   if (rows < 92) R(ctx, 28, 38 + rows, 136, 1, P.white);
@@ -254,21 +302,21 @@ function sceneLoading(ctx, lt) {
   text(ctx, `${Math.floor(p * 100)}%`, 164, 150, { color: P.yellow, align: 'right' });
   const left = ['2 MINUTES', '4 HOURS', '3 DAYS', '1 WEEK', '6 MINUTES', '2 YEARS'][frame(lt, 1.6, 6)];
   text(ctx, `TIME LEFT: ${left}`, 96, 168, { color: P.slate, align: 'center' });
-  rrect(ctx, 80, 183, 32, 8, P.black, 1);
-  R(ctx, 81, 183, 30, 7, P.tan);
-  // divider
   R(ctx, 192, 0, 4, H, P.black);
-  // right: the family, waiting
   R(ctx, 196, 0, 188, 150, P.slate);
   dither(ctx, 196, 0, 188, 150, P.steel, 'dots');
-  // calendar
+  // calendar + clock
   R(ctx, 336, 28, 34, 36, P.black);
   R(ctx, 337, 29, 32, 34, P.white);
   R(ctx, 337, 29, 32, 9, P.red);
   text(ctx, 'DAY', 353, 30, { color: P.white, align: 'center' });
   bigText(ctx, String(1 + Math.floor(lt * 2.6)), 353, 43, { scale: 2, color: P.black, outline: null, align: 'center' });
   if (Math.floor(lt * 2.6 * 2) % 2) poly(ctx, [[337, 63], [369, 63], [369, 50]], P.silver);
-  // cobweb grows in the corner
+  disc(ctx, 232, 44, 13, P.black);
+  disc(ctx, 232, 44, 11, P.white);
+  const a = lt * 14;
+  for (let i = 1; i <= 9; i++) R(ctx, 232 + Math.round(Math.sin(a) * i), 44 - Math.round(Math.cos(a) * i), 1, 1, P.black);
+  for (let i = 1; i <= 6; i++) R(ctx, 232 + Math.round(Math.sin(a / 12) * i), 44 - Math.round(Math.cos(a / 12) * i), 1, 1, P.red);
   const web = prog(lt, 1.5, 4.5);
   if (web > 0) {
     const n = Math.round(web * 22);
@@ -277,23 +325,22 @@ function sceneLoading(ctx, lt) {
     line(ctx, 383, 0, 383 - n, n, P.silver);
     for (let k = 6; k < n; k += 6) line(ctx, 383 - k, 0, 383, k, P.fog);
   }
-  const beard = Math.min(3, Math.floor(lt / 1.3));
-  hero(ctx, 232, 160, { pal: DAD, glasses: true, eyes: 'wide', mouth: 'wavy', legs: 'none', beard, look: -1 });
-  hero(ctx, 282, 160, { pal: MUM, hair: 'bob', eyes: 'wide', mouth: 'flat', armL: 'mouth', armR: 'mouth', legs: 'none', look: -1 });
-  hero(ctx, 330, 160, { pal: KID, hair: 'spiky', small: true, eyes: 'wide', mouth: 'o', legs: 'none', sweat: lt, look: -1 });
-  R(ctx, 196, 150, 188, 66, P.brown);
-  R(ctx, 196, 150, 188, 2, P.tan);
-  text(ctx, 'WAITING...', 290, 186, { color: P.cream, align: 'center' });
-  if (Math.floor(lt * 2) % 2) text(ctx, '...STILL WAITING', 290, 198, { color: P.tan, align: 'center' });
+  const beard = Math.min(3, Math.floor(lt / 1.2));
+  hero(ctx, 232, 154, { pal: DAD, glasses: true, eyes: 'wide', mouth: 'wavy', legs: 'none', beard, look: -1 });
+  hero(ctx, 282, 154, { pal: MUM, hair: 'bob', eyes: 'wide', mouth: 'flat', armL: 'mouth', armR: 'mouth', legs: 'none', look: -1 });
+  hero(ctx, 330, 154, { pal: KID, hair: 'spiky', small: true, eyes: 'wide', mouth: 'o', legs: 'none', sweat: lt, look: -1 });
+  R(ctx, 196, 146, 188, 70, P.brown);
+  R(ctx, 196, 146, 188, 2, P.tan);
+  text(ctx, 'WAITING...', 290, 172, { color: P.cream, align: 'center' });
+  if (Math.floor(lt * 2) % 2) text(ctx, '...STILL WAITING', 290, 186, { color: P.tan, align: 'center' });
 }
 
-function sceneGranny(ctx, lt) {
-  // left: the hallway
+// 5. Grandma picks up the phone at 99%.
+function shotGranny(ctx, lt) {
   R(ctx, 0, 0, 192, H, P.maroon);
   for (let x = 6; x < 192; x += 16) R(ctx, x, 0, 6, 150, P.purple);
   R(ctx, 0, 150, 192, 66, P.brown);
   R(ctx, 0, 150, 192, 2, P.tan);
-  // phone table + phone base
   R(ctx, 118, 128, 50, 4, P.black);
   R(ctx, 119, 129, 48, 2, P.tanShade);
   R(ctx, 124, 132, 4, 22, P.black);
@@ -302,7 +349,7 @@ function sceneGranny(ctx, lt) {
   rrect(ctx, 129, 117, 28, 11, P.cream, 2);
   disc(ctx, 143, 122, 4, P.tan);
   const reach = prog(lt, 0, 0.35);
-  const g = hero(ctx, 80, 182, { pal: GRAN, hair: 'bun', glasses: true, legs: 'skirt', eyes: 'open', mouth: lt > 0.5 ? 'open' : 'smile', armR: reach < 1 ? 'down' : 'ear', armL: 'hips' });
+  const g = hero(ctx, 80, 182, { pal: GRAN, hair: 'bun', glasses: true, legs: 'skirt', eyes: 'open', mouth: lt > 0.5 ? 'open' : 'smile', armR: reach < 1 ? 'down' : 'ear', armL: 'hips', bob: reach < 1 ? 1 : 0 });
   if (reach >= 1) {
     const [hx, hy] = g.handR;
     cord(ctx, hx + 2, hy + 6, 130, 124, P.ink);
@@ -313,9 +360,7 @@ function sceneGranny(ctx, lt) {
   }
   if (lt > 0.25 && lt < 0.9) bigText(ctx, 'CLICK', 150, 100, { scale: 1, color: P.yellow, outline: P.black });
   if (lt > 0.6) bubble(ctx, 14, 30, 120, 'HELLO? WHO KEEPS SCREAMING ON MY PHONE LINE?', { tail: 'down', tx: 70 });
-  // divider
   R(ctx, 192, 0, 4, H, P.black);
-  // right: the family
   R(ctx, 196, 0, 188, H, P.slate);
   rrect(ctx, 214, 22, 150, 76, P.black, 3);
   rrect(ctx, 215, 23, 148, 74, P.cream, 3);
@@ -338,49 +383,71 @@ function sceneGranny(ctx, lt) {
   if (lost) bigText(ctx, 'NOOOOO!', 290, 184, { scale: 3, color: P.white, outline: P.black, ow: 2, depth: 2, depthColor: P.red, align: 'center' });
 }
 
-function scenePack(ctx, lt) {
-  ripples(ctx, 192, 128, lt * 1.2, 12, [P.navy, P.ink]);
-  R(ctx, 0, 146, W, 70, P.brown);
-  R(ctx, 0, 146, W, 2, P.tan);
-  dither(ctx, 0, 148, W, 68, P.tanShade, 'hlines');
-  shadow(ctx, 198, 146, 74, 0.45);
-  modem(ctx, 192, 116, lt, false);
-  // cat asleep on the warm modem
-  cat(ctx, 236, 103, 'sleep', lt);
-  text(ctx, 'Z', 252, 76 - (Math.floor(lt * 2) % 3) * 3, { color: P.white });
-  cord(ctx, 132, 132, 40, 150);
-  logo(ctx, 'SCREECHNET', 192, 30, lt - 0.1, { scale: 4, color: P.yellow, depth: 3, depthColor: P.rust });
-  if (lt > 1.0) text(ctx, 'DIAL-UP INTERNET  •  NOW 56K!', 192, 72, { color: P.white, align: 'center', shadow: P.black });
-  if (lt > 1.4) slogan(ctx, 'FAST AS A FAX.', 192, 160, lt - 1.4, { scale: 2, bg: P.red, edge: P.darkRed });
-  finePrint(ctx, 'SPEEDS UP TO 56K ON A GOOD TUESDAY. PLEASE ASK GRANDMA TO STAY OFF THE PHONE.', { lt: lt - 1.8 });
+// 6. End slate.
+function shotSlate(ctx, lt) {
+  ripples(ctx, 192, 124, lt * 1.2, 12, [P.navy, P.ink]);
+  R(ctx, 0, 140, W, 76, P.brown);
+  R(ctx, 0, 140, W, 2, P.tan);
+  dither(ctx, 0, 142, W, 74, P.tanShade, 'hlines');
+  shadow(ctx, 198, 140, 74, 0.45);
+  cord(ctx, 132, 124, 40, 144);
+  modem(ctx, 192, 110, lt, false, ((lt + 0.4) % 3.2) / 0.8);
+  cat(ctx, 156, 97, 'sleep', lt);
+  text(ctx, 'Z', 172, 86 - (Math.floor(lt * 2) % 3) * 2, { color: P.white });
+  const mk = MARK();
+  const x0 = drawMark(ctx, mk, 192, 26, { reveal: prog(lt, 0.1, 0.9), drop: 36 });
+  if (lt > 1.0) glint(ctx, mk.cv, x0 - mk.ox, 26 - mk.oy, ((lt - 1.0) % 3.4) / 0.7, { width: 6 });
+  if (lt > 0.9) soundWave(ctx, 192, 62, 200, lt, P.cyan);
+  if (lt > 1.1) text(ctx, 'DIAL-UP INTERNET  •  NOW 56K!', 192, 70, { color: P.white, align: 'center', shadow: P.black });
+  if (lt > 1.4) slogan(ctx, 'FAST AS A FAX.', 192, 150, lt - 1.4, { scale: 2, bg: P.red, edge: P.darkRed });
+  if (lt > 2.0) urlPill(ctx, 'SCREECHNET.BAUD', 192, 178, { bg: P.navy, border: P.yellow, color: P.yellow });
+  finePrint(ctx, 'SPEEDS UP TO 56K ON A GOOD TUESDAY. PLEASE ASK GRANDMA TO STAY OFF THE PHONE.', { lt: lt - 2.2 });
 }
 
 const SCENES = [
-  { at: 0, draw: sceneTooFast },
-  { at: 5.4, draw: sceneModem, wipe: 'bars', wd: 0.45 },
-  { at: 10.9, draw: sceneLoading, wipe: 'push', wd: 0.5 },
-  { at: 15.6, draw: sceneGranny, wipe: 'cut' },
-  { at: 19.2, draw: scenePack, wipe: 'dissolve', wd: 0.5 },
+  { at: 0, draw: shotTooFast },
+  { at: 5.0, draw: shotDad, wipe: 'iris', wd: 0.4, cx: 150, cy: 120 },
+  { at: 7.4, draw: shotModem, wipe: 'bars', wd: 0.45 },
+  { at: 12.4, draw: shotLoading, wipe: 'push', wd: 0.5 },
+  { at: 17.0, draw: shotGranny, wipe: 'cut' },
+  { at: 20.0, draw: shotSlate, wipe: 'dissolve', wd: 0.5 },
 ];
 
 export default {
   id: 'screechnet',
   brand: 'SCREECHNET',
-  duration: 24,
+  duration: 26,
   voice: { gender: 'female', lang: 'en-GB', pitch: 1.0, rate: 1.0 },
   script: [
     { at: 0.6, text: 'Is your internet just too fast? Do you miss the... suspense?' },
-    { at: 5.8, text: 'Introducing ScreechNet. Dial-up, the way nature intended!' },
-    { at: 11.0, text: 'Watch every photo arrive... one... line... at a time.' },
-    { at: 19.6, text: 'ScreechNet. Fast as a fax.' },
+    { at: 7.6, text: 'Introducing ScreechNet. Dial-up, the way nature intended.' },
+    { at: 12.6, text: 'Enjoy every photo... one... line... at a time.' },
+    { at: 20.6, text: 'ScreechNet. Fast as a fax.' },
   ],
+  // 120 bpm: lazy intro, modem chaos, ticking wait, then the brand sting
+  // resolves on C with the end slate at beat 40 (20 s).
   tune: {
-    bpm: 116,
+    bpm: 120,
     wave: 'triangle',
-    notes: 'E5:0.5 G5:0.5 B5:1 A5:0.5 G5:0.5 E5:1 D5:0.5 E5:0.5 G5:1 E5:2 C5:0.5 E5:0.5 G5:1 F#5:0.5 E5:0.5 D5:1 B4:0.5 D5:0.5 E5:2 R:1',
-    bass: 'E3:2 B2:2 C3:2 G2:2 A2:2 D3:2 B2:2 E3:2',
+    notes: tune(
+      'E4:2 G4:2 A4:4 G4:2 E4:2 D4:4',
+      rep('A5:0.25 E5:0.25', 8), 'C6:0.5 A5:0.5 F5:0.5 D5:0.5 B4:2',
+      'E4:1 R:1 E4:1 R:1 F4:1 R:1 F4:1 R:1 F#4:1 R:1 F#4:1 R:1 G4:1 G#4:1 A4:1 B4:1',
+      'E5:0.5 E5:0.5 G5:1 C6:2 R:0.5 G5:0.5 A5:0.5 G5:0.5 E5:0.5 D5:0.5 C5:3 R:2',
+    ),
+    bass: tune(
+      'A2:4 E2:4 F2:4 E2:4',
+      rep('A2:0.5', 8), 'D3:2 E3:2',
+      'E2:2 E2:2 F2:2 F2:2 F#2:2 F#2:2 G2:2 B2:2',
+      'C3:2 G2:2 F2:2 G2:2 C3:2 R:2',
+    ),
     bassWave: 'square',
-    drums: 'K:1 S:1 K:0.5 K:0.5 S:1',
+    drums: tune(
+      rep('K:2 H:2', 4),
+      rep('S:0.25', 16), 'K:1 K:1 S:2',
+      rep('H:1', 16),
+      'K:1 S:1 K:1 S:1 K:1 S:1 K:1 S:1 K:2 R:2',
+    ),
   },
   draw(ctx, t, dt, info) {
     play(ctx, dt, info, SCENES);

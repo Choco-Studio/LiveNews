@@ -14,11 +14,21 @@ let mtime = 0;
 export function loadChannel(file = FILE) {
   const stat = fs.statSync(file);
   if (cache && stat.mtimeMs === mtime && cache.file === file) return cache.data;
-  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-  validateChannel(data);
-  cache = { file, data };
-  mtime = stat.mtimeMs;
-  return data;
+  try {
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    validateChannel(data);
+    cache = { file, data };
+    return data;
+  } catch (err) {
+    // A broken edit keeps the channel on air with the last good line-up.
+    if (cache?.file === file) {
+      console.error(`[channel] ${path.basename(file)} is invalid, keeping the previous version: ${err.message}`);
+      return cache.data;
+    }
+    throw err;
+  } finally {
+    mtime = stat.mtimeMs;
+  }
 }
 
 export function validateChannel(ch) {
@@ -29,6 +39,11 @@ export function validateChannel(ch) {
     if (!ch.programs[id]) throw new Error(`rotation references unknown programme "${id}"`);
   }
   for (const [id, p] of Object.entries(ch.programs)) {
+    for (const key of ['title', 'tagline', 'style', 'storyLength']) {
+      if (typeof p[key] !== 'string' || !p[key].trim()) throw new Error(`programme "${id}" needs a "${key}" text`);
+    }
+    if (!Number.isInteger(p.stories) || p.stories < 1) throw new Error(`programme "${id}" needs "stories" (a whole number ≥ 1)`);
+    if (!Array.isArray(p.categories) || !p.categories.length) throw new Error(`programme "${id}" needs a list of "categories"`);
     if (!Array.isArray(p.presenters) || p.presenters.length < 1 || p.presenters.length > 2) {
       throw new Error(`programme "${id}" needs 1 or 2 presenters`);
     }

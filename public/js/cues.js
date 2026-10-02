@@ -67,6 +67,18 @@ export function parseCues(text, { grave = false, maxCues = 4 } = {}) {
   return { text: final, cues: out.map((c) => ({ ...c, char: Math.min(c.char, final.length) })) };
 }
 
+/** Inverse of parseCues: put cues back into the text as bracket tags. */
+export function embedCues(text, cues = []) {
+  const sorted = [...cues].filter((c) => c && (c.action || c.emotion)).sort((a, b) => b.char - a.char);
+  let out = String(text);
+  for (const c of sorted) {
+    const at = Math.max(0, Math.min(out.length, Number(c.char) || 0));
+    const tag = `[${c.slot ? `${c.slot}:` : ''}${c.action || c.emotion}]`;
+    out = `${out.slice(0, at)} ${tag} ${out.slice(at)}`;
+  }
+  return out.replace(/\s+/g, ' ').trim();
+}
+
 /** Names and descriptions for the writer prompt. */
 export function describeActions() {
   return Object.entries(ACTIONS)
