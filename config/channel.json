@@ -1,0 +1,185 @@
+{
+  "name": "GLOBIT 24",
+  "slogan": "THE WORLD, PIXEL BY PIXEL",
+  "presenters": {
+    "paco": {
+      "name": "Paco Pixel",
+      "personality": "veteran anchor, calm and authoritative, dry wit, short punchy sentences",
+      "voice": {
+        "gender": "male",
+        "lang": "en-GB",
+        "pitch": 0.95,
+        "rate": 1.0
+      }
+    },
+    "lola": {
+      "name": "Lola Byte",
+      "personality": "co-anchor, energetic and curious, warm, loves a good human story",
+      "voice": {
+        "gender": "female",
+        "lang": "en-US",
+        "pitch": 1.08,
+        "rate": 1.06
+      }
+    },
+    "max": {
+      "name": "Max Circuit",
+      "personality": "excitable gadget geek, quick jokes and the odd pun, always first to try new tech",
+      "voice": {
+        "gender": "male",
+        "lang": "en-US",
+        "pitch": 1.05,
+        "rate": 1.1
+      }
+    },
+    "ada": {
+      "name": "Ada Volt",
+      "personality": "sharp, sceptical tech analyst who explains things clearly and asks the hard questions",
+      "voice": {
+        "gender": "female",
+        "lang": "en-GB",
+        "pitch": 1.0,
+        "rate": 1.04
+      }
+    },
+    "nova": {
+      "name": "Dr Nova Reyes",
+      "personality": "astrophysicist and science presenter, warm, full of wonder, great at simple analogies",
+      "voice": {
+        "gender": "female",
+        "lang": "en-US",
+        "pitch": 1.02,
+        "rate": 1.0
+      }
+    },
+    "unit8": {
+      "name": "UNIT-8",
+      "personality": "the channel's robot co-host: literal-minded, deadpan, adores data, occasionally misunderstands human idioms",
+      "voice": {
+        "gender": "robot",
+        "lang": "en-US",
+        "pitch": 0.6,
+        "rate": 1.05
+      }
+    },
+    "penny": {
+      "name": "Penny Sterling",
+      "personality": "crisp markets correspondent, numbers first, calm, explains what news means for people's wallets",
+      "voice": {
+        "gender": "female",
+        "lang": "en-GB",
+        "pitch": 0.98,
+        "rate": 1.05
+      }
+    },
+    "sam": {
+      "name": "Sam Night",
+      "personality": "relaxed rolling-news anchor, concise, friendly, gets straight to the point",
+      "voice": {
+        "gender": "male",
+        "lang": "en-US",
+        "pitch": 0.92,
+        "rate": 1.08
+      }
+    }
+  },
+  "programs": {
+    "world-now": {
+      "title": "WORLD NOW",
+      "tagline": "THE STORIES SHAPING OUR WORLD",
+      "theme": "world",
+      "presenters": [
+        "paco",
+        "lola"
+      ],
+      "categories": [
+        "world",
+        "business"
+      ],
+      "stories": 5,
+      "maxChats": 3,
+      "style": "Flagship world news bulletin. Lead with the biggest global story. Serious but warm; brief exchanges between presenters only on lighter stories.",
+      "storyLength": "2 to 4 sentences, max 450 characters"
+    },
+    "tech-bytes": {
+      "title": "TECH BYTES",
+      "tagline": "THE FUTURE, ONE BYTE AT A TIME",
+      "theme": "tech",
+      "presenters": [
+        "max",
+        "ada"
+      ],
+      "categories": [
+        "tech",
+        "science"
+      ],
+      "stories": 4,
+      "maxChats": 4,
+      "style": "Fun technology magazine show. Explain why each story matters to normal people. Max brings the enthusiasm, Ada the healthy scepticism; short back-and-forth exchanges are welcome.",
+      "storyLength": "2 to 4 sentences, max 450 characters"
+    },
+    "cosmos": {
+      "title": "COSMOS DESK",
+      "tagline": "SCIENCE, SPACE & OUR PLANET",
+      "theme": "space",
+      "presenters": [
+        "nova",
+        "unit8"
+      ],
+      "categories": [
+        "science",
+        "tech"
+      ],
+      "stories": 3,
+      "maxChats": 3,
+      "style": "Science and space show full of wonder. Nova explains with simple analogies; UNIT-8 adds deadpan robot remarks about the data (never invent data).",
+      "storyLength": "2 to 4 sentences, max 450 characters"
+    },
+    "money-minute": {
+      "title": "MONEY MINUTE",
+      "tagline": "MARKETS & YOUR MONEY",
+      "theme": "money",
+      "presenters": [
+        "penny"
+      ],
+      "categories": [
+        "business"
+      ],
+      "stories": 3,
+      "maxChats": 0,
+      "style": "Short business and economy round-up by a single presenter. Focus on what each story means for ordinary people. Crisp and clear.",
+      "storyLength": "2 to 3 sentences, max 360 characters"
+    },
+    "news-60": {
+      "title": "NEWS IN 60",
+      "tagline": "THE HEADLINES IN A MINUTE",
+      "theme": "flash",
+      "presenters": [
+        "sam"
+      ],
+      "categories": [
+        "world",
+        "business",
+        "tech",
+        "science"
+      ],
+      "stories": 4,
+      "maxChats": 0,
+      "style": "Rapid-fire headline round-up by a single presenter. One or two short sentences per story. No banter.",
+      "storyLength": "1 or 2 short sentences, max 200 characters"
+    }
+  },
+  "rotation": [
+    "world-now",
+    "tech-bytes",
+    "news-60",
+    "cosmos",
+    "world-now",
+    "money-minute",
+    "news-60"
+  ],
+  "breaks": {
+    "adsPerBreak": 2,
+    "maxExtraAds": 6
+  }
+}

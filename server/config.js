@@ -1,0 +1,63 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+// Minimal .env loader: real environment variables take precedence.
+function loadDotEnv() {
+  const file = path.join(ROOT, '.env');
+  if (!fs.existsSync(file)) return;
+  for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+    if (!m || line.trim().startsWith('#')) continue;
+    const value = m[2].replace(/^(['"])(.*)\1$/, '$2');
+    if (process.env[m[1]] === undefined) process.env[m[1]] = value;
+  }
+}
+loadDotEnv();
+
+const env = (key, fallback) => {
+  const v = process.env[key];
+  return v === undefined || v === '' ? fallback : v;
+};
+const num = (key, fallback) => {
+  const n = Number(env(key, fallback));
+  return Number.isFinite(n) ? n : fallback;
+};
+
+export const config = {
+  host: env('HOST', '127.0.0.1'),
+  port: num('PORT', 8080),
+  providers: env('PROVIDERS', 'codex,openai,deepseek,mock')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
+  codex: {
+    bin: env('CODEX_BIN', 'codex'),
+    model: env('CODEX_MODEL', 'gpt-6-luna'),
+    extraArgs: env('CODEX_EXTRA_ARGS', '').split(/\s+/).filter(Boolean),
+    timeoutMs: num('CODEX_TIMEOUT_MS', 240000),
+  },
+  openai: {
+    apiKey: env('OPENAI_API_KEY', ''),
+    model: env('OPENAI_MODEL', 'gpt-6-luna'),
+    baseUrl: env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+  },
+  deepseek: {
+    apiKey: env('DEEPSEEK_API_KEY', ''),
+    model: env('DEEPSEEK_MODEL', 'deepseek-chat'),
+    baseUrl: env('DEEPSEEK_BASE_URL', 'https://api.deepseek.com/v1'),
+  },
+  // Episodes produced ahead of air
+  queueSize: num('QUEUE_SIZE', 2),
+  // Stories offered to the writer, who picks the best for each programme
+  candidatePool: num('CANDIDATE_POOL', 12),
+  // Second AI pass: a standards editor checks each script against its sources
+  reviewPass: !/^(0|false|no|off)$/i.test(env('REVIEW_PASS', '1')),
+  minNewStories: num('MIN_NEW_STORIES', 3),
+  maxStoryAgeHours: num('MAX_STORY_AGE_HOURS', 36),
+  feedRefreshMinutes: num('FEED_REFRESH_MINUTES', 10),
+  feedsFile: path.join(ROOT, 'config', 'feeds.json'),
+  dataDir: path.join(ROOT, 'data'),
+};

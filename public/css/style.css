@@ -1,0 +1,109 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b0a12;
+  --panel: rgba(24, 20, 37, 0.92);
+  --text: #ead4aa;
+  --accent: #feae34;
+  --bad: #e43b44;
+  --ok: #63c74d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  font: 13px/1.4 ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  color: var(--text);
+}
+
+#screen {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  cursor: pointer;
+}
+
+body.on-air #screen {
+  cursor: default;
+}
+
+#toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  background: var(--panel);
+  border: 2px solid var(--accent);
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+#toast.show {
+  opacity: 1;
+}
+
+#debug {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: min(360px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 2px solid #3a4466;
+}
+
+#debug h2,
+#debug h3 {
+  margin: 0.6em 0 0.3em;
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+#debug h2 {
+  margin-top: 0;
+}
+
+#debug ul {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+#debug table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#debug td,
+#debug th {
+  text-align: left;
+  padding: 1px 4px;
+}
+
+#debug .bad {
+  color: var(--bad);
+}
+
+#debug .ok {
+  color: var(--ok);
+}
+
+#debug .keys {
+  margin-top: 10px;
+  color: #8b9bb4;
+}

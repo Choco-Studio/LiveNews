@@ -1,0 +1,20 @@
+{
+  "name": "livenews",
+  "version": "0.1.0",
+  "description": "GLOBIT 24: a 24/7 AI-produced pixel-art TV news channel",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "demo": "PROVIDERS=mock node server/index.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "fast-xml-parser": "^5.11.2"
+  }
+}
