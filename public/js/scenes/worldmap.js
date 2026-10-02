@@ -40,7 +40,7 @@ const TONES = [
   C('steel'), // 2 dim star
   mix(C('navy'), C('ink'), 0.55), // 3 deep ocean
   C('navy'), // 4 ocean
-  mix(C('navy'), C('blue'), 0.3), // 5 ocean glint
+  mix(C('navy'), C('blue'), 0.3), // 5 continental shelf
   mix(C('navy'), C('blue'), 0.62), // 6 shallow halo next to land
   C('darkGreen'), // 7 forest
   C('green'), // 8 grass
@@ -64,7 +64,7 @@ for (let t = 0; t < 16; t++) {
     PAL[128 | (v << 4) | t] = pack(t < 3 ? c : mix(c, NIGHT, 0.54));
   }
 }
-const RGB = { red: col('red'), darkRed: col('darkRed'), pink: col('pink'), white: col('white'), black: col('black'), yellow: col('yellow'), orange: col('orange'), cream: col('cream'), silver: col('silver') };
+const RGB = { red: col('red'), darkRed: col('darkRed'), pink: col('pink'), white: col('white'), black: col('black'), yellow: col('yellow'), orange: col('orange'), cream: col('cream') };
 
 // ---------------------------------------------------------------------------------------------
 // Ordered-dither matrices
@@ -85,7 +85,7 @@ const B8 = bayer(3);
 const B4_255 = Uint8Array.from(B4, (v) => Math.floor(v * 255));
 
 // ---------------------------------------------------------------------------------------------
-// Noise helpers (used offline-at-load for terrain tones and for the ocean shimmer tiles)
+// Noise helpers (used once at load time for terrain tones, ocean depth and the shimmer tiles)
 // ---------------------------------------------------------------------------------------------
 function hash2(ix, iy) {
   let h = (Math.imul(ix | 0, 374761393) + Math.imul(iy | 0, 668265263)) | 0;
@@ -109,7 +109,7 @@ function fbm(x, y, oct = 4) {
 // Geometry data (lazy, staged so that the one-off cost does not land in a single frame)
 // ---------------------------------------------------------------------------------------------
 const TW = 720, TH = 360; // terrain-tone field: 0.5 deg cells
-const GEO = { ready: false, mips: null, texel0: 360 / LAND.w, terrain: null, lines: null, lights: null, dash: null, smooth: null };
+const GEO = { mips: null, texel0: 360 / LAND.w, terrain: null, lines: null, lights: null, dash: null, smooth: null };
 
 function b64(s) {
   const bin = atob(s);

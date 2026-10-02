@@ -632,29 +632,33 @@ function buildPresenter(id, acc) {
 // ---------------------------------------------------------------------------
 
 // Eye opening for the screen-left eye; outer corner at column 0.
-const EYE_W = 10;
-const EYE_TOP = [3, 2, 1, 0, 0, 0, 0, 1, 1, 2];
-const EYE_BOT = [4, 5, 5, 5, 5, 5, 5, 5, 4, 4];
+const EYE_W = 11;
+const EYE_TOP = [3, 2, 1, 0, 0, 0, 0, 0, 1, 2, 3];
+const EYE_BOT = [4, 5, 5, 6, 6, 6, 6, 6, 5, 5, 4];
+// 5x5 iris, rounded; P = pupil, H = catch light, i = iris, d = dark iris
+const IRIS = ['.ddd.', 'dHPPi', 'iPPPi', 'iiPii', '.iii.'];
+const IRIS_SMALL = ['.ddd.', 'diiii', 'iHPii', 'iiiii', '.iii.'];
 
 function eyeShape(emotion, blinkPhase) {
   let top = EYE_TOP.slice();
   let bot = EYE_BOT.slice();
-  const mid = (i) => i > 0 && i < 9;
+  const mid = (i) => i > 0 && i < EYE_W - 1;
   switch (emotion) {
     case 'surprised':
       top = top.map((v, i) => (mid(i) ? v - 1 : v));
       break;
     case 'happy':
-      bot = bot.map((v, i) => (i > 1 && i < 8 ? v - 1 : v));
+      bot = bot.map((v, i) => (i > 1 && i < EYE_W - 2 ? v - 1 : v));
       break;
     case 'serious':
       top = top.map((v, i) => (mid(i) ? v + 1 : v));
       break;
     case 'sad':
-      top = top.map((v, i) => (i < 5 ? v + 1 : v));
+      top = top.map((v, i) => (i < 6 ? v + 1 : v));
       break;
     case 'thinking':
       top = top.map((v, i) => (mid(i) ? v + 1 : v));
+      bot = bot.map((v, i) => (i > 2 && i < EYE_W - 2 ? v - 1 : v));
       break;
     default:
   }
@@ -666,13 +670,16 @@ function drawEye(ctx, x0, y0, flip, D, st, look, lookY) {
   const { top, bot } = eyeShape(st.emotion, st.blinkPhase);
   const X = (c) => (flip ? x0 + EYE_W - 1 - c : x0 + c);
   const lash = D.lash;
+  const out = flip ? 1 : -1; // direction of the outer corner
   if (st.blinkPhase === 2) {
+    // closed lid: skin over the eye, lash line curving down
     for (let c = 0; c < EYE_W; c++) {
       const y = y0 + Math.max(top[c], bot[c] - 1);
       if (y > y0 + top[c]) rect(ctx, X(c), y0 + top[c], 1, y - (y0 + top[c]), D.skin[2]);
+      rect(ctx, X(c), y0 + top[c] - 1, 1, 1, D.skin[3]);
       rect(ctx, X(c), y, 1, 1, c === 0 || c === EYE_W - 1 ? D.skin[3] : lash);
     }
-    if (D.lashes) rect(ctx, X(0) + (flip ? 1 : -1), y0 + bot[0] - 1, 1, 1, lash);
+    if (D.lashes) rect(ctx, X(0) + out, y0 + bot[0] - 1, 1, 1, lash);
     return;
   }
   for (let c = 0; c < EYE_W; c++) {
@@ -682,33 +689,31 @@ function drawEye(ctx, x0, y0, flip, D, st, look, lookY) {
       rect(ctx, X(c), y0 + top[c] + 1, 1, 1, P.silver);
     }
   }
-  // iris + pupil (never mirrored so the catch lights agree)
-  const ic = x0 + 3 + look;
+  // iris + pupil (not mirrored, so both catch lights agree)
+  const iris = st.emotion === 'surprised' ? IRIS_SMALL : IRIS;
+  const ix = x0 + 3 + look;
   const iy = y0 + 1 + lookY;
-  const small = st.emotion === 'surprised';
-  for (let c = 0; c < 4; c++) {
-    const col = ic + c;
-    const cc = flip ? EYE_W - 1 - (col - x0) : col - x0;
-    if (cc < 0 || cc >= EYE_W) continue;
-    for (let rr = 0; rr < 4; rr++) {
+  const key = { P: P.black, H: P.white, i: D.iris[0], d: D.iris[1] };
+  for (let rr = 0; rr < 5; rr++) {
+    for (let c = 0; c < 5; c++) {
+      const ch = iris[rr][c];
+      if (ch === '.') continue;
+      const col = ix + c;
+      const cc = flip ? EYE_W - 1 - (col - x0) : col - x0;
+      if (cc < 0 || cc >= EYE_W) continue;
       const yy = iy + rr;
       if (yy <= y0 + top[cc] || yy >= y0 + bot[cc]) continue;
-      if ((c === 0 || c === 3) && (rr === 0 || rr === 3)) continue;
-      let colr = yy === y0 + top[cc] + 1 ? D.iris[1] : D.iris[0];
-      const pupil = small ? (c === 1 || c === 2) && rr === 2 : (c === 1 || c === 2) && (rr === 1 || rr === 2);
-      if (pupil) colr = P.black;
-      if (c === 1 && rr === 1) colr = P.white;
-      rect(ctx, col, yy, 1, 1, colr);
+      rect(ctx, col, yy, 1, 1, yy === y0 + top[cc] + 1 && ch !== 'H' ? D.iris[1] : key[ch]);
     }
   }
+  // upper lid line (+ lashes), lower lid
   for (let c = 0; c < EYE_W; c++) rect(ctx, X(c), y0 + top[c], 1, 1, lash);
-  rect(ctx, X(0) + (flip ? 1 : -1), y0 + top[0], 1, 1, lash);
+  rect(ctx, X(0) + out, y0 + top[0], 1, 1, lash);
   if (D.lashes) {
-    rect(ctx, X(0) + (flip ? 2 : -2), y0 + top[0] - 1, 1, 1, lash);
-    rect(ctx, X(1) + (flip ? 1 : -1), y0 + top[1] - 1, 1, 1, lash);
+    rect(ctx, X(0) + out * 2, y0 + top[0] - 1, 1, 1, lash);
+    for (let c = 0; c < 5; c++) rect(ctx, X(c), y0 + top[c] - 1, 1, 1, lash);
   } else {
-    // lid crease for the veteran
-    for (let c = 2; c < EYE_W - 1; c++) rect(ctx, X(c), y0 + top[c] - 2, 1, 1, D.skin[3]);
+    for (let c = 2; c < EYE_W - 1; c++) rect(ctx, X(c), y0 + top[c] - 2, 1, 1, D.skin[3]); // lid crease
   }
   for (let c = 1; c < EYE_W - 1; c++) rect(ctx, X(c), y0 + bot[c], 1, 1, D.skin[3]);
   if (st.emotion === 'happy') for (let c = 2; c < EYE_W - 2; c++) rect(ctx, X(c), y0 + bot[c] + 1, 1, 1, D.skin[1]);

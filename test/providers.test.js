@@ -62,8 +62,8 @@ const throwing = (message, extra = {}) => async () => {
   throw Object.assign(new Error(message), extra);
 };
 
-function makeChain(providers, { usage = makeUsage(), clock = makeClock() } = {}) {
-  const chain = new ProviderChain(providers, usage, { log: silentLogger, now: clock });
+function makeChain(providers, { usage = makeUsage(), clock = makeClock(), log = silentLogger } = {}) {
+  const chain = new ProviderChain(providers, usage, { log, now: clock });
   return { chain, usage, clock };
 }
 
@@ -181,8 +181,19 @@ describe('ProviderChain', () => {
     assert.ok(rateLimited > generic);
   });
 
-  test('quota-style error messages are also treated as rate limits', async () => {
-    for (const message of ['You exceeded your current quota', 'Rate limit reached', 'cuota agotada']) {
+  test('quota-style error messages are also treated as rate limits (30 min)', async () => {
+    const messages = [
+      'You exceeded your current quota',
+      'Rate limit reached',
+      'rate-limit exceeded',
+      'ratelimit hit',
+      'rate_limit_exceeded',
+      'You have hit your usage limit',
+      'Too Many Requests',
+      'HTTP 429 from upstream',
+      'error 429',
+    ];
+    for (const message of messages) {
       const a = makeProvider('a', { generate: throwing(message) });
       const { chain, clock } = makeChain([a]);
       await assert.rejects(chain.generate({}, parseJson));
@@ -190,16 +201,36 @@ describe('ProviderChain', () => {
     }
   });
 
-  test(
-    'a plain error that merely contains the letters "rate" (e.g. "generate") is not a rate limit',
-    { todo: 'BUG server/providers/index.js:45 - /quota|limit|cuota|rate/i matches "gene-rate", "sepa-rate", "integ-rate"... so ordinary failures get a 30 min cooldown instead of 30 s' },
-    async () => {
-      const a = makeProvider('a', { generate: throwing('failed to generate a response') });
+  test('a plain error that merely contains the letters "rate" (e.g. "generate") is not a rate limit', async () => {
+    for (const message of ['failed to generate a response', 'could not separate the segments', 'integrate step failed']) {
+      const a = makeProvider('a', { generate: throwing(message) });
       const { chain, clock } = makeChain([a]);
       await assert.rejects(chain.generate({}, parseJson));
-      assert.equal(cooldownOf(chain, clock), 30 * SECOND);
+      assert.equal(cooldownOf(chain, clock), 30 * SECOND, message);
     }
-  );
+  });
+
+  test('other messages that mention "limit" or a number close to 429 are not rate limits either', async () => {
+    for (const message of ['request body size limit exceeded', 'unlimited', 'error 4290', 'port 1429 refused', 'HTTP 500']) {
+      const a = makeProvider('a', { generate: throwing(message) });
+      const { chain, clock } = makeChain([a]);
+      await assert.rejects(chain.generate({}, parseJson));
+      assert.equal(cooldownOf(chain, clock), 30 * SECOND, message);
+    }
+  });
+
+  test('a rate-limited provider is retried only after its 30 minutes are over', async () => {
+    const a = makeProvider('a', { generate: (_req, n) => (n === 1 ? Promise.reject(new Error('usage limit reached')) : goodResult('a')) });
+    const b = makeProvider('b');
+    const { chain, clock } = makeChain([a, b]);
+
+    assert.equal((await chain.generate({}, parseJson)).provider, 'b');
+    clock.advance(30 * MINUTE - 1);
+    assert.equal((await chain.generate({}, parseJson)).provider, 'b');
+    assert.equal(a.calls, 1);
+    clock.advance(1);
+    assert.equal((await chain.generate({}, parseJson)).provider, 'a');
+  });
 
   test('providers whose available() is false are skipped, and may come back later', async () => {
     const a = makeProvider('a', { available: false });
@@ -216,7 +247,7 @@ describe('ProviderChain', () => {
 
   test('throws when every provider is unavailable', async () => {
     const { chain } = makeChain([makeProvider('a', { available: false }), makeProvider('b', { available: false })]);
-    await assert.rejects(chain.generate({}, parseJson), /ningún proveedor disponible/);
+    await assert.rejects(chain.generate({}, parseJson), /no AI provider available \(all paused\)/);
   });
 
   test('throws an Error mentioning each provider when all of them fail', async () => {
@@ -226,9 +257,7 @@ describe('ProviderChain', () => {
 
     await assert.rejects(chain.generate({}, parseJson), (err) => {
       assert.ok(err instanceof Error);
-      assert.match(err.message, /ningún proveedor disponible/);
-      assert.match(err.message, /alpha: boom A/);
-      assert.match(err.message, /beta: boom B/);
+      assert.match(err.message, /^no AI provider available \(alpha: boom A \| beta: boom B\)$/);
       return true;
     });
   });
@@ -239,7 +268,7 @@ describe('ProviderChain', () => {
     await assert.rejects(chain.generate({}, parseJson), /a: boom A/);
 
     await assert.rejects(chain.generate({}, parseJson), (err) => {
-      assert.match(err.message, /todos en pausa/);
+      assert.match(err.message, /^no AI provider available \(all paused\)$/);
       assert.ok(!/boom A/.test(err.message));
       return true;
     });
@@ -298,6 +327,34 @@ describe('ProviderChain', () => {
 
     await assert.rejects(chain.generate({}, parseJson));
     assert.deepEqual(chain.status()[0], { name: 'a', configured: true, cooldownUntil: clock() + 30 * SECOND, failures: 1 });
+  });
+
+  test('logs a warning in English when a provider fails, with the length of its pause', async () => {
+    const warnings = [];
+    const log = { info() {}, error() {}, warn: (message) => warnings.push(message) };
+    const a = makeProvider('a', { generate: throwing('boom A') });
+    const limited = makeProvider('limited', { generate: throwing('Too Many Requests', { status: 429 }) });
+    const { chain } = makeChain([a, limited], { log });
+
+    await assert.rejects(chain.generate({}, parseJson));
+
+    assert.deepEqual(warnings, ['[ai] a failed (boom A); pausing it for 30 s', '[ai] limited failed (Too Many Requests); pausing it for 1800 s']);
+  });
+
+  test('works with a logger that has no warn()', async () => {
+    const a = makeProvider('a', { generate: throwing('boom') });
+    const { chain } = makeChain([a], { log: {} });
+    await assert.rejects(chain.generate({}, parseJson), /no AI provider available \(a: boom\)/);
+  });
+
+  test('the request, including its stage, reaches the provider untouched, for write and review alike', async () => {
+    const a = makeProvider('a');
+    const { chain } = makeChain([a]);
+    const write = { stage: 'write', prompt: 'p', stories: [], channelName: 'TEST', program: { id: 'x' }, presenters: { A: { name: 'Ann' } }, count: 3 };
+    const review = { stage: 'review', prompt: 'p', script: { title: 'T', segments: [] }, stories: [], channelName: 'TEST' };
+    await chain.generate(write, parseJson);
+    await chain.generate(review, parseJson);
+    assert.deepEqual(a.requests, [write, review]);
   });
 });
 
@@ -383,11 +440,26 @@ describe('createProviders', () => {
 
 describe('mock provider', () => {
   const stories = [
-    { id: 's1', title: 'Un incendio deja tres heridos en Valencia', summary: 'Los bomberos sofocaron el fuego. Hubo evacuados. Tercera frase.', source: 'Fuente A', category: 'general', image: null },
-    { id: 's2', title: 'Apple presenta un nuevo chip para el móvil', summary: 'El chip es más rápido. Llegará en otoño.', source: 'Fuente B', category: 'tecnologia', image: 'https://img.test/chip.jpg' },
-    { id: 's3', title: 'El Ayuntamiento abre la piscina municipal', summary: '', source: 'Fuente C', category: 'general', image: null },
-    { id: 's4', title: 'ÚLTIMA HORA: cambia el horario del tren', summary: 'Nuevo horario desde mañana.', source: 'Fuente D', category: 'general', image: 'https://img.test/tren.jpg' },
+    { id: 's1', title: 'Fire leaves three injured in Valencia', summary: 'Firefighters put out the blaze. Several people were evacuated. Third sentence.', source: 'BBC News', category: 'world', image: null },
+    { id: 's2', title: 'Apple unveils new chip for the phone', summary: 'The chip is faster. It arrives in autumn.', source: 'The Verge', category: 'tech', image: 'https://img.test/chip.jpg' },
+    { id: 's3', title: 'City council opens the municipal pool', summary: '', source: 'NPR', category: 'world', image: null },
+    { id: 's4', title: 'BREAKING: train timetable changes', summary: 'New timetable from tomorrow.', source: 'Sky News', category: 'world', image: 'https://img.test/train.jpg' },
   ];
+  const lightStories = [
+    { id: 'l1', title: 'New robot learns to cook', summary: 'The robot can make omelettes. It is slow.', source: 'Wired', category: 'tech', image: null },
+    { id: 'l2', title: 'NASA telescope spots a new planet', summary: 'Astronomers are thrilled. More data is due.', source: 'NASA', category: 'science', image: null },
+    { id: 'l3', title: 'Scientists discover a talking parrot', summary: 'The bird knows 50 words. It is very polite.', source: 'ScienceDaily', category: 'science', image: null },
+    { id: 'l4', title: 'Software update fixes the app', summary: 'Users are relieved. It took a week.', source: 'TechCrunch', category: 'tech', image: null },
+  ];
+  const MAX = { name: 'Max Circuit', personality: 'excitable gadget geek' };
+  const ADA = { name: 'Ada Volt', personality: 'sharp analyst' };
+  const DUO = { A: MAX, B: ADA };
+  const SOLO = { A: { name: 'Penny Sterling', personality: 'markets correspondent' } };
+  const PROGRAM = { id: 'tech-bytes', title: 'TECH BYTES', stories: 4, maxChats: 2 };
+
+  const raw = async (request) => extractJson((await createMockProvider().generate({ channelName: 'TEST', presenters: DUO, program: PROGRAM, ...request })).text);
+  const kinds = (script) => script.segments.map((s) => s.type);
+  const storySegs = (script) => script.segments.filter((s) => s.type === 'story');
 
   test('is always available and named "mock"', () => {
     const mock = createMockProvider();
@@ -401,64 +473,158 @@ describe('mock provider', () => {
     assert.equal(typeof extractJson(result.text), 'object');
   });
 
-  test('end-to-end: generate -> extractJson -> normalizeBulletin gives a valid bulletin', async () => {
-    const { text } = await createMockProvider().generate({ stories, channelName: 'TEST' });
-    const bulletin = normalizeBulletin(extractJson(text), stories, { channelName: 'TEST' });
+  test('the review stage returns the script it was given, unchanged', async () => {
+    const script = { title: 'Reviewed', segments: [{ type: 'story', storyId: 's1', anchor: 'A', emotion: 'neutral', text: 'Text.', location: null, fact: '7.1 MAGNITUDE' }] };
+    const result = await createMockProvider().generate({ stage: 'review', script, stories, channelName: 'TEST', program: PROGRAM, presenters: DUO });
+    assert.deepEqual(JSON.parse(result.text), script);
+    assert.deepEqual(result.usage, { input: 0, output: 0, cached: 0 });
+  });
 
-    const storySegs = bulletin.segments.filter((s) => s.type === 'story');
-    assert.equal(storySegs.length, stories.length, 'one story segment per input story');
-    assert.deepEqual(storySegs.map((s) => s.storyId), stories.map((s) => s.id));
+  test('the write stage is the default', async () => {
+    const script = await raw({ stories });
+    assert.equal(script.title, 'TECH BYTES (demo)');
+    assert.equal(kinds(script)[0], 'intro');
+  });
+
+  test('is programme-aware: the intro, outro and title use the programme, the channel and the presenter', async () => {
+    const script = await raw({ stage: 'write', stories });
+    assert.equal(script.title, 'TECH BYTES (demo)');
+    assert.equal(script.segments[0].text, "Hello and welcome to TECH BYTES on TEST. I'm Max Circuit. Here's what's making news.");
+    assert.equal(script.segments.at(-1).text, "That's TECH BYTES for now. Stay with us here on TEST.");
+  });
+
+  test('without a programme it falls back to the channel name, and without presenters to a generic presenter', async () => {
+    const script = extractJson((await createMockProvider().generate({ stories, channelName: 'TEST' })).text);
+    assert.equal(script.title, 'TEST (demo)');
+    assert.match(script.segments[0].text, /Hello and welcome to TEST on TEST\. I'm the presenter\./);
+  });
+
+  test('covers as many stories as asked for, up to what it has: count, then program.stories, then 5', async () => {
+    assert.equal(storySegs(await raw({ stories, count: 2 })).length, 2);
+    assert.equal(storySegs(await raw({ stories, count: 10 })).length, 4);
+    assert.equal(storySegs(await raw({ stories, count: undefined, program: { ...PROGRAM, stories: 3 } })).length, 3);
+    const many = Array.from({ length: 8 }, (_, i) => ({ ...stories[0], id: `m${i}` }));
+    assert.equal(storySegs(await raw({ stories: many, count: undefined, program: undefined })).length, 5);
+  });
+
+  test('end-to-end: generate -> extractJson -> normalizeBulletin gives a valid bulletin', async () => {
+    const { text } = await createMockProvider().generate({ stories, channelName: 'TEST', program: PROGRAM, presenters: DUO, count: 4 });
+    const bulletin = normalizeBulletin(extractJson(text), stories, { channelName: 'TEST', maxStories: 4, maxChats: 2 });
+
+    const segs = bulletin.segments.filter((s) => s.type === 'story');
+    assert.equal(segs.length, stories.length, 'one story segment per input story');
+    assert.deepEqual(segs.map((s) => s.storyId), stories.map((s) => s.id));
     assert.deepEqual(bulletin.storyIds, stories.map((s) => s.id));
     assert.deepEqual(bulletin.rundown.map((r) => r.storyId), stories.map((s) => s.id));
 
     assert.equal(bulletin.segments[0].type, 'intro');
-    assert.match(bulletin.segments[0].text, /TEST/);
-    assert.match(bulletin.segments[0].text, /4 noticias/);
+    assert.match(bulletin.segments[0].text, /TECH BYTES/);
     assert.equal(bulletin.segments.at(-1).type, 'outro');
     assert.match(bulletin.segments.at(-1).text, /TEST/);
-    assert.equal(bulletin.title, 'Boletín de prueba');
+    assert.equal(bulletin.title, 'TECH BYTES (demo)');
 
-    for (const seg of storySegs) {
+    for (const seg of segs) {
       const story = stories.find((s) => s.id === seg.storyId);
       assert.ok(seg.headline.length > 0 && seg.headline.length <= 56);
       assert.ok(seg.text.includes(story.source), `text mentions ${story.source}`);
       assert.equal(seg.hasImage, !!story.image);
       assert.equal(seg.source, story.source);
+      assert.equal(seg.category, story.category);
+      assert.equal(seg.location, null);
+      assert.equal(seg.fact, null);
     }
   });
 
-  test('picks the tone from the content and alternates anchors', async () => {
-    const { text } = await createMockProvider().generate({ stories, channelName: 'TEST' });
-    const raw = extractJson(text);
-    const storySegs = raw.segments.filter((s) => s.type === 'story');
-    assert.equal(storySegs[0].emotion, 'serious'); // fire / injured
-    assert.equal(storySegs[1].emotion, 'happy'); // tech
-    assert.equal(storySegs[2].emotion, 'neutral');
-    assert.deepEqual(storySegs.map((s) => s.anchor), ['A', 'B', 'A', 'B']);
-    assert.deepEqual(storySegs.map((s) => s.shot), ['wide', 'full', 'wide', 'close']);
-    assert.deepEqual(storySegs.map((s) => s.breaking), [false, false, false, true]);
+  test('picks the tone from the content, alternates the anchors and varies the shots', async () => {
+    const segs = storySegs(await raw({ stories }));
+    assert.equal(segs[0].emotion, 'serious'); // fire / injured
+    assert.equal(segs[1].emotion, 'happy'); // tech
+    assert.equal(segs[2].emotion, 'neutral');
+    assert.deepEqual(segs.map((s) => s.anchor), ['A', 'B', 'A', 'B']);
+    assert.deepEqual(segs.map((s) => s.shot), ['wide', 'full', 'wide', 'close']);
+    assert.deepEqual(segs.map((s) => s.breaking), [false, false, false, true]);
   });
 
-  test('adds a chat after light tech stories, but never after the last story or a grave one', async () => {
-    const { text } = await createMockProvider().generate({ stories, channelName: 'TEST' });
-    const kinds = extractJson(text).segments.map((s) => s.type);
-    assert.deepEqual(kinds, ['intro', 'story', 'story', 'chat', 'story', 'story', 'outro']);
+  test('adds a chat after light stories, but never after the last story or a grave one', async () => {
+    assert.deepEqual(kinds(await raw({ stories })), ['intro', 'story', 'story', 'chat', 'story', 'story', 'outro']);
+    // l1..l4 are all light: a chat after each except the last
+    assert.deepEqual(kinds(await raw({ stories: lightStories, program: { ...PROGRAM, maxChats: 9 } })), ['intro', 'story', 'chat', 'story', 'chat', 'story', 'chat', 'story', 'outro']);
+  });
+
+  test('the chat is spoken by the other presenter', async () => {
+    const script = await raw({ stories: lightStories, program: { ...PROGRAM, maxChats: 1 } });
+    const idx = script.segments.findIndex((s) => s.type === 'chat');
+    assert.notEqual(script.segments[idx].anchor, script.segments[idx - 1].anchor);
+  });
+
+  test('never writes more chats than program.maxChats', async () => {
+    for (const maxChats of [0, 1, 2, 3]) {
+      const script = await raw({ stories: lightStories, program: { ...PROGRAM, maxChats } });
+      assert.equal(script.segments.filter((s) => s.type === 'chat').length, Math.min(maxChats, 3), `maxChats=${maxChats}`);
+    }
+  });
+
+  test('solo programmes: only anchor "A", no chats (even with light stories), outro by "A"', async () => {
+    const script = await raw({ stories: lightStories, presenters: SOLO, program: { id: 'money-minute', title: 'MONEY MINUTE', stories: 4, maxChats: 3 } });
+    assert.ok(!kinds(script).includes('chat'));
+    assert.ok(script.segments.every((s) => s.anchor === 'A'), JSON.stringify(script.segments.map((s) => s.anchor)));
+    assert.match(script.segments[0].text, /I'm Penny Sterling/);
+    assert.equal(script.segments.at(-1).type, 'outro');
+  });
+
+  test('"news-60" gets one sentence per story, other programmes two', async () => {
+    const quick = storySegs(await raw({ stories, program: { id: 'news-60', title: 'NEWS IN 60', stories: 4, maxChats: 0 }, presenters: SOLO }));
+    const full = storySegs(await raw({ stories }));
+    assert.equal(quick[0].text, 'BBC News reports: Fire leaves three injured in Valencia. Firefighters put out the blaze.');
+    assert.equal(full[0].text, 'BBC News reports: Fire leaves three injured in Valencia. Firefighters put out the blaze. Several people were evacuated.');
   });
 
   test('works with a single story whose summary is empty', async () => {
     const one = [stories[2]];
-    const { text } = await createMockProvider().generate({ stories: one, channelName: 'TEST' });
+    const { text } = await createMockProvider().generate({ stories: one, channelName: 'TEST', program: PROGRAM, presenters: DUO });
     const bulletin = normalizeBulletin(extractJson(text), one, { channelName: 'TEST' });
     assert.equal(bulletin.segments.filter((s) => s.type === 'story').length, 1);
-    assert.match(bulletin.segments[1].text, /Según Fuente C/);
+    assert.equal(bulletin.segments[1].text, 'NPR reports: City council opens the municipal pool.');
   });
 
-  test('plugs into a ProviderChain with the same validate step the station uses', async () => {
+  test('plugs into a ProviderChain with the same validate step the producer uses, for both stages', async () => {
     const { chain } = makeChain([createMockProvider()]);
-    const out = await chain.generate({ stories, channelName: 'TEST' }, (text) => normalizeBulletin(extractJson(text), stories, { channelName: 'TEST' }));
-    assert.equal(out.provider, 'mock');
-    assert.equal(out.value.storyIds.length, stories.length);
+    const validate = (text) => normalizeBulletin(extractJson(text), stories, { channelName: 'TEST', maxStories: 4, maxChats: 2 });
+
+    const written = await chain.generate({ stage: 'write', stories, channelName: 'TEST', program: PROGRAM, presenters: DUO, count: 4 }, validate);
+    assert.equal(written.provider, 'mock');
+    assert.equal(written.value.storyIds.length, stories.length);
+
+    const script = { title: written.value.title, segments: written.value.segments.map(({ source, category, hasImage, ...seg }) => seg) };
+    const reviewed = await chain.generate({ stage: 'review', script, stories, channelName: 'TEST', program: PROGRAM, presenters: DUO }, validate);
+    assert.deepEqual(reviewed.value, written.value, 'the mock editor changes nothing');
   });
+
+  test(
+    'does not read harmless words that merely contain "die", such as "studies" or "audience", as grave news',
+    {
+      todo:
+        'BUG server/providers/mock.js:4 - GRAVE has no word boundaries: /die[sd]?/ matches inside "studies", "audience", "soldiers" and /fire/ inside "fireworks", so "Studies show coffee helps memory" gets emotion "serious" (and no chat)',
+    },
+    async () => {
+      const harmless = [{ id: 'h1', title: 'Studies show coffee helps memory', summary: 'A large audience of readers agreed.', source: 'BBC News', category: 'science', image: null }];
+      const [seg] = storySegs(await raw({ stories: harmless }));
+      assert.notEqual(seg.emotion, 'serious');
+    }
+  );
+
+  test(
+    'only flags a story as breaking when it is breaking news, not for "record-breaking" or "breaking into"',
+    {
+      todo:
+        'BUG server/providers/mock.js:43 (same regex as server/station.js:3) - /\\bbreaking\\b/i matches "Record-breaking heatwave" and "Man charged with breaking into home", so they are marked breaking: true',
+    },
+    async () => {
+      const normal = [{ id: 'b1', title: 'Record-breaking heatwave hits southern Europe', summary: 'Temperatures soared.', source: 'BBC News', category: 'world', image: null }];
+      const [seg] = storySegs(await raw({ stories: normal }));
+      assert.equal(seg.breaking, false);
+    }
+  );
 });
 
 // ---------------------------------------------------------------- OpenAI-compatible provider
@@ -506,6 +672,13 @@ describe('createOpenAICompatProvider', () => {
     assert.deepEqual(body.messages.map((m) => m.role), ['system', 'user']);
     assert.equal(body.messages[1].content, 'escribe el boletín');
     assert.ok(init.signal instanceof AbortSignal, 'requests must have a timeout');
+  });
+
+  test('the system message is in English and asks for a single JSON object', async () => {
+    const f = fakeFetch();
+    await createOpenAICompatProvider('openai', CFG, f).generate({ prompt: 'write the bulletin' });
+    const [system] = f.calls[0].body.messages;
+    assert.equal(system.content, 'You write scripts for a TV news channel. Always reply with a single valid JSON object.');
   });
 
   test('returns the message content and maps usage (prompt/completion/cached tokens)', async () => {
@@ -673,18 +846,35 @@ describe('UsageTracker', () => {
     assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'usage.json'), 'utf8')).days[dayKey()].a.calls, 1);
   });
 
-  test(
-    'starts fresh when the file is valid JSON but not a usage document',
-    { todo: 'BUG server/usage.js:11 - parsed JSON is trusted blindly: a usage.json containing {} or null makes every later record() throw TypeError (and ProviderChain then counts the provider as failed)' },
-    (t) => {
-      for (const content of ['{}', 'null', '[]']) {
-        const dir = tempDir(t);
-        fs.writeFileSync(path.join(dir, 'usage.json'), content);
-        const tracker = new UsageTracker(dir);
-        assert.doesNotThrow(() => tracker.record('a', { ok: true }), content);
-      }
+  test('starts fresh when the file is valid JSON but not a usage document', (t) => {
+    for (const content of ['{}', 'null', '[]', '{"days":null}', '{"days":[]}', '{"days":"x"}', '{"days":42}', '"text"', '42']) {
+      const dir = tempDir(t);
+      fs.writeFileSync(path.join(dir, 'usage.json'), content);
+      const tracker = new UsageTracker(dir);
+      assert.deepEqual(tracker.data, { days: {}, lastError: {} }, content);
+      assert.doesNotThrow(() => tracker.record('a', { ok: true }), content);
+      assert.equal(tracker.data.days[dayKey()].a.calls, 1, content);
+      assert.deepEqual(Object.keys(tracker.summary()), ['today', 'month', 'lastError'], content);
     }
-  );
+  });
+
+  test('a usage document without a valid lastError keeps its days and starts an empty lastError', (t) => {
+    const day = { a: { calls: 7, errors: 1, input: 1, output: 2, cached: 0, ms: 5 } };
+    for (const lastError of [undefined, null, 'oops', 5]) {
+      const dir = tempDir(t);
+      fs.writeFileSync(path.join(dir, 'usage.json'), JSON.stringify({ days: { '2026-01-01': day }, lastError }));
+      const tracker = new UsageTracker(dir);
+      assert.deepEqual(tracker.data, { days: { '2026-01-01': day }, lastError: {} }, String(lastError));
+    }
+  });
+
+  test('a wrong-shaped file does not stop the chain from recording usage', async (t) => {
+    const dir = tempDir(t);
+    fs.writeFileSync(path.join(dir, 'usage.json'), '{}');
+    const { chain } = makeChain([makeProvider('a')], { usage: new UsageTracker(dir) });
+    assert.equal((await chain.generate({}, parseJson)).provider, 'a');
+    assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'usage.json'), 'utf8')).days[dayKey()].a.calls, 1);
+  });
 
   test('an unwritable data dir is non-fatal', (t) => {
     const dir = tempDir(t);
