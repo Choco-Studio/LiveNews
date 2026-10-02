@@ -90,6 +90,11 @@ def write_audio(path, y, sr):
                                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=120)
             if proc.returncode != 0:
                 raise RuntimeError('ffmpeg failed: ' + proc.stderr.decode('utf-8', 'replace')[-400:])
+        # mkstemp files are private (0600); give the clip normal permissions so
+        # a web server running as another user can serve it
+        umask = os.umask(0)
+        os.umask(umask)
+        os.chmod(tmp, 0o666 & ~umask)
         os.replace(tmp, path)
     finally:
         if os.path.exists(tmp):

@@ -85,16 +85,6 @@ function bakeWall(style) {
     lo[i] = C[RAMP[i]];
     hi[i] = C[RAMP[i + 1]];
   }
-  // tint pairs: ramp step i → its tint colour (palette swap, never a blend)
-  const tintPair = new Int8Array(8).fill(-1);
-  let np = RAMP.length - 1;
-  if (style.tints) {
-    for (const [step, name] of Object.entries(style.tints)) {
-      lo[np] = C[RAMP[+step]];
-      hi[np] = C[name];
-      tintPair[+step] = np++;
-    }
-  }
   const tex = new Uint8Array(TW * TH);
   const S = SET.screen;
   const cove = style.cove;
@@ -122,17 +112,8 @@ function bakeWall(style) {
       if (ax > sd.x0) pos *= 1 - smooth((ax - sd.x0) / (sd.x1 - sd.x0));
       if (pos < 0) pos = 0;
       if (pos > RAMP.length - 1.01) pos = RAMP.length - 1.01;
-      let tint = 0;
-      for (const p of style.tintPools) tint += poolLight(p, X, Y);
-      let q = Math.round(pos * 16);
-      let step = q >> 4, frac = q & 15;
-      let v;
-      const tp2 = tint > 0 ? tintPair[Math.round(pos)] : -1;
-      if (tp2 >= 0 && Math.round(tint * 16) >= 1) {
-        step = Math.round(pos);
-        v = (tp2 << 4) | Math.min(15, Math.round(tint * 16));
-      } else v = (step << 4) | frac;
-      tex[ty * TW + tx] = v;
+      const q = Math.round(pos * 16);
+      tex[ty * TW + tx] = ((q >> 4) << 4) | (q & 15);
     }
   }
   b = { tex, lo, hi };
@@ -199,6 +180,8 @@ const CACHE = {
   lastMs: 0,
   // the last background drawn (for drawDesk's default style and its cache key)
   style: null,
+  frame: null,
+  deskReady: false,
   serial: 0,
 };
 const STYLE_SERIAL = new WeakMap();
@@ -258,9 +241,11 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   const r = wallRect(cam, RECT);
   const wall = updateWall(opts.wall, style, r.x1 - r.x0, r.y1 - r.y0, r.k, t, cam, opts, lod);
   fillKey(cam, sSerial, wall.version, lod);
+  CACHE.frame = fr;
   if (CACHE.on && sameKey(KEY, CACHE.bgKey, 10)) {
     fr.px.set(CACHE.bg);
     CACHE.hits++;
+    CACHE.deskReady = true;
     return;
   }
   CACHE.misses++;
@@ -269,6 +254,7 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   const kw = r.k;
   const b = Math.max(1, Math.round(2 * kw));
   renderWall(fr, cam, baked, r.x0 - b - 1, r.y0 - b - 1, r.x1 + b + 1, r.y1 + b + 1);
+  if (style.tints) tintPools(fr, cam, style);
   if (!soft) drawWallDetails(fr, cam, style);
   drawScreen(fr, r, b, style, soft, wall);
   drawFlats(fr, cam, style, soft);
@@ -276,6 +262,48 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   if (CACHE.on) {
     CACHE.bg.set(fr.px);
     CACHE.bgKey.set(KEY);
+  }
+  CACHE.deskReady = CACHE.on;
+}
+
+/**
+ * Scenery tint inside the style's tint pools: a palette swap (ink → maroon, slate → brown...)
+ * with Bayer coverage following the pool's falloff, in screen space with the wall's dither
+ * anchor, so the warmth rises with the light instead of drawing hard edges.
+ */
+const TINT_FROM = new Uint32Array(4), TINT_TO = new Uint32Array(4);
+function tintPools(fr, cam, style) {
+  let n = 0;
+  for (const [from, to] of Object.entries(style.tints)) {
+    if (n >= 4) break;
+    TINT_FROM[n] = C[from];
+    TINT_TO[n++] = C[to];
+  }
+  const k = kAt(cam, SET.wallZ);
+  const ox = Math.round(sxOf(cam, k, 0)), oy = Math.round(syOf(cam, k, 0));
+  const px = fr.px;
+  for (const p of style.tintPools) {
+    const cx = sxOf(cam, k, p.X), cy = syOf(cam, k, p.Y), rx = p.rx * k, ry = p.ry * k;
+    const x0 = Math.max(0, Math.floor(cx - rx)), x1 = Math.min(W, Math.ceil(cx + rx));
+    const y0 = Math.max(0, Math.floor(cy - ry)), y1 = Math.min(H, Math.ceil(cy + ry));
+    for (let y = y0; y < y1; y++) {
+      const dy = (y + 0.5 - cy) / ry;
+      const br = ((y - oy) & 3) << 2;
+      for (let x = x0; x < x1; x++) {
+        const dx = (x + 0.5 - cx) / rx;
+        const d = dx * dx + dy * dy;
+        if (d >= 1) continue;
+        const q = Math.round(p.amount * (1 - d) * (1 - d * 0.35) * 16);
+        if (q <= B16[br + ((x - ox) & 3)]) continue;
+        const i = y * W + x, c = px[i];
+        for (let j = 0; j < n; j++) {
+          if (c === TINT_FROM[j]) {
+            px[i] = TINT_TO[j];
+            break;
+          }
+        }
+      }
+    }
   }
 }
 
@@ -464,6 +492,7 @@ function interpCol(xs, ys, n, x) {
 // Front panel layout in world units below the desk top (Y = 0 .. deskH)
 const LED_Y = 4; // the accent line, right under the fascia
 const PLATE_Y0 = 9, PLATE_Y1 = 25, PLATE_HW = 26;
+const PANEL_SPLIT = 34; // the front panel's upper colour down to here, its lower colour below (a shadow line)
 const REFLECT = { red: 'maroon', cyan: 'navy', magenta: 'purple', yellow: 'brown', darkGreen: null };
 
 /** Draw the desk; fills clipRows (Int16Array W) with the desk top's back edge per column. */
@@ -476,7 +505,9 @@ export function drawDesk(fr, cam, clipRows, accent) {
     if (accent) style = resolveStyle(accent);
     led = style.deskLine;
   }
-  const deskKeyOk = CACHE.on && sameKey(KEY, CACHE.bgKey, 10);
+  // the composite cache is only valid right after drawBackground on the same frame
+  const deskKeyOk = CACHE.on && CACHE.deskReady && CACHE.frame === fr && sameKey(KEY, CACHE.bgKey, 10);
+  CACHE.deskReady = false;
   if (deskKeyOk) {
     // the background under the desk is the cached one: reuse the composite when nothing changed
     let same = true;
@@ -517,6 +548,7 @@ function rasterDesk(fr, cam, clipRows, led, style) {
   const kc = kAt(cam, D.deskFrontZ);
   const topC = C[style.deskTop] || C.slate;
   const tech = style.deskTop === 'steel';
+  // the front panel: ink over a darker lower band (TECH BYTES' plinth: slate over ink)
   const panelHi = tech ? C.slate : C.ink, panelLo = tech ? C.ink : C.black;
   const refName = REFLECT[nameOfLed(led)];
   const refC = refName ? C[refName] : 0;
@@ -548,13 +580,11 @@ function rasterDesk(fr, cam, clipRows, led, style) {
       else if (y === top1) c = fall > 0.6 ? C.steel : C.silver; // 1 px silver highlight on the front edge
       else if (y === ledRow) c = led;
       else {
+        // matte panels are flat colour with seams (ART_DIRECTION): fascia, front panel, kick plate
         const Yp = (y + 0.5 - yt) / kz; // world Y of this row on the panel
         if (Yp < LED_Y) c = C.slate; // a slim fascia under the edge
-        else if (Yp > D.deskH - 7) c = C.black; // kick plate
-        else {
-          const g = (Yp - 24) / (D.deskH - 31); // the panel falls toward its lower colour
-          c = Math.round(g * 16) > bq ? panelLo : panelHi;
-        }
+        else if (Yp > D.deskH - 8) c = C.black; // kick plate
+        else c = Yp < PANEL_SPLIT ? panelHi : panelLo;
       }
       if (fallQ > bq && c !== led && c !== C.silver) c = c === topC || c === C.slate ? C.ink : C.black;
       px[y * fr.w + x] = c;

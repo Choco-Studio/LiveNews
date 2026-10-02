@@ -6,72 +6,103 @@
 // real speech intervals for the engine's own ducking. Pure rules + one page
 // function; nothing here touches product code.
 
-/** Moments understood by both proposals' cue sheets (lofi names; broadcast maps 'map' -> 'roundup'). */
-export const MOMENTS = ['openTail', 'headlines', 'story', 'map', 'chat', 'outro', 'standby', 'silence'];
-
-const SHOTS_WITHOUT_BEDS = new Set(['ident', 'ad', 'promo', 'breakingCard', 'start']);
+// Director moments, in the vocabulary of the lofi proposal's cue sheet (v2,
+// docs/programmes/*.md): segment moments (headlines, coldOpen, greeting, story,
+// roundup, number, finally, chat, outro) carry { segment, emotion, grave,
+// breaking }; accents (pip, item, shot, featureEnd, introEnd, signoffEnd) are
+// sent only to the programmes whose bible uses them, because a programme
+// policy answers an unknown moment with silence.
+const ACCENTS = {
+  pip: new Set(['world-now']),
+  item: new Set(['news-60']),
+  shot: new Set(['cosmos']),
+  featureEnd: new Set(['tech-bytes']),
+  introEnd: new Set(['money-minute']),
+};
+const GREETING_RE = /^\s*(good (morning|afternoon|evening|night)|hello|hi\b|welcome|this is|i'm|i am|tonight on|you're watching)/i;
+const SHOT_KIND = { map: 'map', full: 'picture', fact: 'presenter', close: 'presenter', wide: 'presenter' };
+const byTime = (a, b) => (a.at ?? a.t) - (b.at ?? b.t);
 
 /**
  * Timeline (page log, times in ms of the page clock) -> music cues
- * [{ t, moment, opts: { programId, emotion?, fade? }, why }], sorted.
- * Rules (owner: soft beds per programme and moment, never on grave news,
- * never under ads, smooth changes):
- *  - programme open: the open has its own theme -> beds out under the stinger;
- *  - the cut out of the open -> 'openTail' (the bed enters on the open's chord);
- *  - intro (headline montage) -> 'headlines', at least `tailMs` after the cut so
- *    the open-tail phrase completes;
- *  - story -> 'story' with the segment emotion (grave = silence, by the cue
- *    sheet), round-up items -> 'map', breaking -> silence (the channel plays
- *    its own breaking cue);
- *  - chat -> 'chat', outro -> 'outro';
- *  - end card, ident, ads, promo -> silence (each has its own jingle/cue);
- *  - standby -> the channel's standby bed.
+ * [{ t, moment, opts: { programId, ... }, why }], sorted. The calls the director
+ * will make once the music stream integrates: 'open' on the episode stinger
+ * (the open plays its own theme), headline lines and pips on the headline
+ * sentences, 'greeting' on the first greeting sentence, one segment moment per
+ * segment (features: roundup -> 'roundup', lighter -> 'finally', number ->
+ * 'number'), 'signoffEnd' after the last word of the outro, 'endcard', silence
+ * at the break, 'ad' at every spot, 'upNext' on the promo, 'standby'.
+ * Grave stories are 'story' with { emotion, grave: true }: the cue sheet keeps
+ * them (and the segment after them) dry.
  */
-export function deriveCues(log, { tailMs = 2400 } = {}) {
-  const events = [...log].sort((a, b) => (a.at ?? a.t) - (b.at ?? b.t));
+export function deriveCues(log, { headlineLead = 0.3 } = {}) {
+  const events = [...log].sort(byTime);
+  const speech = events
+    .filter((e) => e.ev === 'speech' && typeof e.text === 'string' && e.text.trim() && e.volume > 0)
+    .map((e) => ({ start: e.t, end: e.cut != null ? Math.min(e.cut, e.end) : e.end, text: e.text }));
+  const ends = new Map(events.filter((e) => e.ev === 'say' && e.phase === 'end').map((e) => [e.ref, e.t]));
   const cues = [];
   let program = null;
-  let inOpen = false;
-  let openEnd = -Infinity;
-  const add = (t, moment, opts = {}, why = '') => cues.push({ t, moment, opts: { programId: program, ...opts }, why });
+  let segment = 0;
+  let inStory = false;
+  const add = (t, moment, opts = {}, why = '') => {
+    if (ACCENTS[moment] && !ACCENTS[moment].has(opts.programId ?? program)) return;
+    cues.push({ t, moment, opts: { programId: program, ...opts }, why });
+  };
+  const ms = (s) => s * 1000;
   for (const e of events) {
     const t = e.at ?? e.t;
     if (e.ev === 'playEpisode' && e.phase === 'start') {
       program = e.programId ?? program;
-      add(e.t, 'silence', { fade: 0.5 }, 'episode stinger: the open plays its own theme');
+      segment = 0;
+      add(e.t, 'open', {}, 'episode stinger: the open plays its own theme');
     } else if (e.ev === 'playBreak' && e.phase === 'start') {
-      add(e.t, 'silence', { fade: 0.6 }, 'break: ident, ads and promo carry their own music');
+      inStory = false;
+      add(e.t, 'silence', { programId: 'channel' }, 'break: the ident jingle and the ads carry their own music');
+    } else if (e.ev === 'playAd' && e.phase === 'start') {
+      add(e.t, 'ad', { programId: 'channel' }, `ad ${e.adId}`);
     } else if (e.ev === 'shot') {
       if (e.programId) program = e.programId;
-      if (e.shot === 'open') {
-        inOpen = true;
-        continue;
-      }
-      if (inOpen) {
-        inOpen = false;
-        openEnd = t;
-        add(t, 'openTail', {}, 'cut out of the open');
-      }
-      if (e.shot === 'endcard') add(t, 'silence', { fade: 0.8 }, 'end card: the channel sign-off cue');
+      if (e.shot === 'endcard') add(t, 'endcard', {}, 'end card');
       else if (e.shot === 'standby') add(t, 'standby', { programId: 'channel' }, 'standby');
-      else if (SHOTS_WITHOUT_BEDS.has(e.shot)) add(t, 'silence', { fade: 0.6 }, `${e.shot}: no bed`);
+      else if (e.shot === 'promo') add(t, 'upNext', { programId: 'channel', next: e.card?.next ?? null, seconds: 4.2 }, 'promo: the channel plays its up-next cue');
+      else if (inStory && SHOT_KIND[e.shot]) add(t, 'shot', { kind: SHOT_KIND[e.shot] }, `shot ${e.shot}`);
     } else if (e.ev === 'say' && e.phase === 'start') {
+      segment++;
+      const end = ends.get(e.t) ?? Infinity;
+      const words = speech.filter((u) => u.start >= e.t - 5 && u.start < end);
+      const last = words[words.length - 1];
       const emotion = e.emotion || 'neutral';
-      if (e.type === 'intro') add(Math.max(e.t, openEnd + tailMs), 'headlines', { emotion }, 'intro / headlines');
-      else if (e.type === 'story') {
-        if (e.breaking) add(e.t, 'silence', { fade: 0.15 }, 'breaking story');
-        else if (e.feature === 'roundup') add(e.t, 'map', { emotion }, 'round-up item');
-        else add(e.t, 'story', { emotion }, `story (${emotion})`);
-      } else if (e.type === 'chat') add(e.t, 'chat', { emotion }, `chat (${emotion})`);
-      else if (e.type === 'outro') add(e.t, 'outro', { emotion }, 'outro');
+      const grave = emotion === 'serious' || emotion === 'sad';
+      inStory = e.type === 'story';
+      if (e.type === 'intro') {
+        if (program === 'cosmos') add(e.t, 'coldOpen', { segment }, 'intro (cosmos cold open)');
+        else {
+          let n = 0;
+          while (n < Math.min(3, words.length) && !GREETING_RE.test(words[n].text)) n++;
+          if (!n) add(e.t, 'headlines', { segment }, 'intro');
+          for (let i = 0; i < n; i++) {
+            add(Math.max(e.t, words[i].start - ms(headlineLead)), 'headlines', { line: i, lines: n, segment }, `headline ${i + 1}/${n}`);
+            add(words[i].end + 100, 'pip', { line: i, lines: n }, `pip after headline ${i + 1}`);
+          }
+          const greet = words[n];
+          if (n && greet) add(greet.start - 200, 'greeting', { segment: ++segment }, 'greeting');
+        }
+        if (last) add(last.end + 100, 'introEnd', {}, 'end of the intro');
+      } else if (e.type === 'story') {
+        add(e.t - 20, 'item', {}, 'item cut');
+        const moment = e.breaking ? 'story' : e.feature === 'roundup' ? 'roundup' : e.feature === 'lighter' ? 'finally' : e.feature === 'number' ? 'number' : 'story';
+        add(e.t, moment, { emotion, grave, breaking: Boolean(e.breaking), segment }, `${moment} (${emotion}${e.breaking ? ', breaking' : ''})`);
+        if (e.feature === 'lighter' && last) add(last.end + 150, 'featureEnd', {}, 'end of the feature');
+      } else if (e.type === 'chat') {
+        add(e.t, 'chat', { emotion, grave, segment }, `chat (${emotion})`);
+      } else if (e.type === 'outro') {
+        add(e.t, 'outro', { emotion, segment }, 'outro');
+        if (last) add(last.end + 120, 'signoffEnd', {}, 'after the last word of the sign-off');
+      }
     }
   }
-  cues.sort((a, b) => a.t - b.t);
-  // Drop consecutive duplicates (same moment, programme and emotion).
-  return cues.filter((c, i) => {
-    const p = cues[i - 1];
-    return !p || p.moment !== c.moment || p.opts.programId !== c.opts.programId || p.opts.emotion !== c.opts.emotion;
-  });
+  return cues.sort((a, b) => a.t - b.t);
 }
 
 /** Speech clips [{ start, end }] (any unit) -> merged regions; gaps under `gap` bridge (no pumping). */
@@ -118,6 +149,7 @@ export function quietIntervals(log, origin) {
 export async function renderBedsInPage({ engine, cues, speech, seconds, sampleRate, dry }) {
   const sr = sampleRate;
   const len = Math.max(1, Math.ceil(seconds * sr));
+  let version = engine;
   const run = async (withSpeech) => {
     const ctx = new OfflineAudioContext(2, len, sr);
     const out = ctx.createGain();
@@ -136,11 +168,25 @@ export async function renderBedsInPage({ engine, cues, speech, seconds, sampleRa
       };
     } else {
       const mod = await import('/js/music/proposals/lofi/engine.js');
+      const sheet = await import('/js/music/proposals/lofi/cuesheet.js');
       LOOK = mod.LOOKAHEAD ?? 0.6;
-      const m = new mod.LofiEngine(ctx, out, { sharedStings: true, gravePad: false, seed: 24 });
+      const v2 = Boolean(sheet.SEGMENT_MOMENTS);
+      version = v2 ? 'lofi v2 (programme bibles)' : 'lofi v1';
+      const m = new mod.LofiEngine(ctx, out, { sharedStings: true, gravePad: false });
+      // The first cue sheet knew fewer moments: map the director's calls down to it.
+      const V1 = { pip: null, item: null, shot: null, featureEnd: null, introEnd: null, signoffEnd: null, open: 'silence', greeting: null, ad: 'silence', finally: 'story', coldOpen: 'headlines', upNext: 'silence', roundup: 'map', number: 'story' };
       music = {
         pump: (t) => m.pump(t),
-        cue: (moment, opts, t) => (moment === 'silence' ? m.toSilence(t, opts.fade ?? 0.8) : m.cue(moment, opts, t)),
+        cue: (moment, opts, t) => {
+          let mm = moment;
+          let o = opts;
+          if (!v2 && mm in V1) {
+            mm = V1[mm];
+            if (!mm) return;
+            if (moment === 'finally' || moment === 'number') o = { ...opts, emotion: 'happy' };
+          }
+          m.cue(mm, o, t);
+        },
         speak: (on, t) => m.setSpeaking(on, t),
         log: () => m.log,
       };
@@ -162,7 +208,6 @@ export async function renderBedsInPage({ engine, cues, speech, seconds, sampleRa
     const buf = await ctx.startRendering();
     return { L: buf.getChannelData(0), R: buf.getChannelData(1), log: music.log() };
   };
-  const t0 = Date.now();
   const wet = await run(true);
   window.__beds = [wet.L, wet.R];
   if (dry) {
@@ -171,7 +216,7 @@ export async function renderBedsInPage({ engine, cues, speech, seconds, sampleRa
   }
   let peak = 0;
   for (const ch of window.__beds) for (let i = 0; i < ch.length; i += 7) peak = Math.max(peak, Math.abs(ch[i]));
-  return { ms: Date.now() - t0, samples: len, peak, log: (wet.log || []).slice(-60) };
+  return { version, samples: len, peak, log: (wet.log || []).slice(-80) };
 }
 
 /** Runs in the browser: base64 of a slice of window.__beds / __bedsDry channel `ch`. */

@@ -226,6 +226,11 @@ export class AudioEngine {
     return this.#buses?.music ?? null;
   }
 
+  /** Gain node every playTune() tune and cue plays into (each ducks itself); for taps and recorders. */
+  get tunesBus() {
+    return this.#buses?.tunes ?? null;
+  }
+
   /** Gain node for voice audio played through WebAudio (not ducked, limited). */
   get speechBus() {
     return this.#buses?.speech ?? null;

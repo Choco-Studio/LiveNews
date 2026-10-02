@@ -91,6 +91,7 @@ export class PerfWatchdog {
     this.ms = new Float32Array(N);
     this.n = 0; // samples written (ring index = n % N)
     this.levelSince = -Infinity; // samples older than this belong to another level
+    this.goodSince = -Infinity; // since when the frames have stayed under OK_P95
     this.level = 0;
     this.nextEval = 0;
     this.nextReport = 0;
@@ -132,11 +133,13 @@ export class PerfWatchdog {
         }
       }
     }
-    if (this.level > 0 && t - this.levelSince >= OK_WINDOW) {
-      const r = this.percentiles(t, OK_WINDOW);
-      if (r.count >= MIN_SAMPLES && r.p95 < OK_P95) {
+    // recovery: every evaluation for OK_WINDOW s found the last 10 s under OK_P95
+    if (this.level > 0) {
+      const r = this.percentiles(t, 10);
+      if (r.count && r.p95 >= OK_P95) this.goodSince = t;
+      if (t - this.goodSince >= OK_WINDOW && t - this.levelSince >= OK_WINDOW) {
         this.setLevel(this.level - 1, t);
-        this.log?.(`v2 perf p95 ${r.p95.toFixed(1)} ms over ${OK_WINDOW} s: detail level ${this.level}`);
+        this.log?.(`v2 perf p95 under ${OK_P95} ms for ${OK_WINDOW} s: detail level ${this.level}`);
       }
     }
     return null;
@@ -145,6 +148,7 @@ export class PerfWatchdog {
   setLevel(level, t) {
     this.level = level;
     this.levelSince = t; // the next decision only looks at frames of this level
+    this.goodSince = t;
   }
 
   /** p50 / p95 (ms) of the samples in the last `win` s (only those at the current level). */

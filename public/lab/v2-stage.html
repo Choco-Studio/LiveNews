@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab · v2 stage (integration)</title>
+<style>
+  :root { --bg: #181425; --fg: #c0cbdc; --ui: #262b44; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 12px/1.5 monospace; }
+  #screen { display: block; width: 1152px; height: 648px; image-rendering: pixelated; background: #000; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px; background: var(--ui); align-items: center; }
+  select, button, input { font: inherit; }
+  #t { width: 480px; }
+  #note { padding: 6px 8px; color: #8b9bb4; max-width: 1136px; }
+</style>
+</head>
+<body>
+<!-- The v2 runtime of the real channel (plans → cue clock → rig → studio), driven by a saved
+     episode per programme and a simulated voice. Deterministic: window.__lab.render(T). -->
+<canvas id="screen" width="384" height="216"></canvas>
+<div class="bar">
+  <select id="programme"></select>
+  <select id="voice"><option value="mute">voice: mute / blips / tts (by char)</option><option value="recorded">voice: recorded (by at)</option></select>
+  <label><input id="guides" type="checkbox"> graphics safe areas</label>
+  <label><input id="hud" type="checkbox"> hud</label>
+  <button id="play">play</button>
+  <input id="t" type="range" min="0" max="300" step="0.05" value="0">
+  <span id="tv">0.00 s</span>
+</div>
+<div id="note">window.__lab.set({ programme, voice, guides, hud }), __lab.render(T), __lab.timeline(), __lab.perf({ frames, runs }), __lab.state().
+  Query: ?programme=cosmos&amp;voice=recorded&amp;t=42 (&amp;still=1 for captures).</div>
+<script type="module">
+  import { createIntegLab } from '../js/v2/canvas25d/labs/integ.js';
+  const $ = (id) => document.getElementById(id);
+  const q = new URLSearchParams(location.search);
+  const lab = createIntegLab($('screen'));
+  window.__lab = lab;
+  for (const id of ['world-now', 'tech-bytes', 'cosmos', 'money-minute', 'news-60']) $('programme').add(new Option(id, id));
+  lab.set({ programme: q.get('programme') || 'world-now', voice: q.get('voice') || 'mute' });
+  $('programme').value = lab.opts.programme;
+  $('voice').value = lab.opts.voice;
+  const sync = () => {
+    $('t').max = Math.ceil(lab.timeline().duration);
+  };
+  sync();
+  let t = Number(q.get('t') || 0);
+  const show = () => {
+    $('t').value = t;
+    $('tv').textContent = `${t.toFixed(2)} s`;
+    lab.render(t);
+  };
+  $('programme').onchange = () => { lab.set({ programme: $('programme').value }); sync(); t = 0; show(); };
+  $('voice').onchange = () => { lab.set({ voice: $('voice').value }); show(); };
+  $('guides').onchange = () => { lab.set({ guides: $('guides').checked }); show(); };
+  $('hud').onchange = () => { lab.set({ hud: $('hud').checked }); show(); };
+  $('t').oninput = () => { playing = false; $('play').textContent = 'play'; t = Number($('t').value); show(); };
+  let playing = false;
+  let last = 0;
+  $('play').onclick = () => { playing = !playing; $('play').textContent = playing ? 'pause' : 'play'; last = performance.now(); };
+  function loop(now) {
+    if (playing) {
+      t += (now - last) / 1000;
+      show();
+    }
+    last = now;
+    requestAnimationFrame(loop);
+  }
+  show();
+  if (!q.has('still')) requestAnimationFrame(loop);
+</script>
+</body>
+</html>

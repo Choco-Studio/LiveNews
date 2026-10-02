@@ -467,14 +467,14 @@ function chassis(o) {
   buf.poly(ring, m.joint, (x) => (x + 0.5 < c0[0] - nk * 0.4 * s ? 1 : 2));
   // ---- the chest plate: plain, inset, one 1 px silver seam along its lit top edge
   buf.part(gb + LOOK + 4, 9, clip);
-  const top = 4.2, bot = 23.5, hwT = 9.6, hwB = 7.4;
+  const top = 5.0, bot = 19.5, hwT = 7.8, hwB = 4.6;
   const plate = bodyPoly(o, lift, [
     [-hwT + 1.4, top], [hwT - 1.4, top], [hwT, top + 1.6], [hwB, bot - 1.6], [hwB - 1.6, bot], [-hwB + 1.6, bot], [-hwB, bot - 1.6], [-hwT, top + 1.6],
   ]);
   const pc = o.toS(0, (top + bot) / 2);
-  buf.poly(plate, m.plate, (x) => {
+  buf.poly(plate, m.plate, (x, y) => {
     const nx = (x + 0.5 - pc[0]) / (hwT * s);
-    return nx < -0.8 ? 0 : nx < 0.72 ? 1 : 2;
+    return nx < -0.78 ? 0 : nx < 0.7 ? 1 : 2;
   });
   if (t >= 1) {
     const seam = decal(P.silver);

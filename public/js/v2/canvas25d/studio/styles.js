@@ -44,7 +44,7 @@ const BASE = {
   pools: duoPools(1.05),
   glow: 0.35, // cool spill of the wall onto the wall around it (ramp steps at the bezel)
   tintPools: [],
-  tints: null, // { 1: 'maroon', 2: 'brown' }: palette swap per ramp step inside tint pools
+  tints: null, // { slate: 'brown', ink: 'maroon' }: palette swap inside the tint pools (set.js tintPools)
   tintNames: [],
   tintMax: 0,
   seams: true, // matte panel seams outside the head zones
@@ -99,10 +99,10 @@ const DEFS = {
     base: 0.55,
     pools: duoPools(0.75, 96, 74),
     tintPools: [
-      { X: -104, Y: -92, rx: 64, ry: 70, amount: 0.62 },
-      { X: 104, Y: -92, rx: 64, ry: 70, amount: 0.62 },
+      { X: -104, Y: -96, rx: 84, ry: 92, amount: 0.42 },
+      { X: 104, Y: -96, rx: 84, ry: 92, amount: 0.42 },
     ],
-    tints: { 1: 'purple' },
+    tints: { slate: 'purple' },
     tintNames: ['purple'],
     tintMax: 0.12,
     glow: 0.2,
@@ -130,7 +130,7 @@ const DEFS = {
       { X: -196, Y: -64, rx: 30, ry: 62, amount: 0.62 },
       { X: 196, Y: -64, rx: 30, ry: 62, amount: 0.62 },
     ],
-    tints: { 1: 'maroon', 2: 'brown' },
+    tints: { slate: 'brown', ink: 'maroon' },
     tintNames: ['maroon', 'brown', 'cream', 'tanShade'],
     tintMax: 0.08,
     practical: 'warm',
@@ -153,11 +153,8 @@ const DEFS = {
       { X: 128, Y: -70, rx: 52, ry: 70, amount: 0.55 },
     ],
     poolMax: 2.0, // never brighter than slate around the head
-    tintPools: [
-      { X: -150, Y: -40, rx: 40, ry: 40, amount: 0.5 },
-      { X: 150, Y: -40, rx: 40, ry: 40, amount: 0.5 },
-    ],
-    tints: { 1: 'maroon' },
+    tintPools: [],
+    tints: null, // the cream tint (≤ 4 %) is left out: orange or cream next to yellow reads as candy
     tintNames: ['maroon', 'cream'],
     tintMax: 0.04,
     glow: 0.15,

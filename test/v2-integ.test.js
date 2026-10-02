@@ -60,7 +60,8 @@ test('context: the time origin is the first word in recorded and estimated mode'
   assert.ok(Math.abs(rec.sentences[1].t0 - (w2.t - 0.18)) < 1e-9);
   // estimated times grow with the text and include the newsreader's pause after a full stop
   assert.ok(est.sentences[1].t0 > est.sentences[0].t1 - 1e-9);
-  assert.ok(est.sentences[1].t0 - est.timeAt(est.sentences[0].end - 1) > 0.3, 'pause after the first sentence');
+  const lastWord = est.words.filter((w) => w.char < est.sentences[0].end).at(-1);
+  assert.ok(est.sentences[1].t0 - lastWord.t > 0.75, 'the last word plus the pause after a full stop');
   assert.ok(est.duration > 4 && est.duration < 12, `duration ${est.duration}`);
 });
 
@@ -207,7 +208,7 @@ function run(clock, plan, t0, t1, voice = () => null, hook = null) {
     const t = t0 + k * DT;
     if (t > t1 + 1e-9) break;
     hook?.(t);
-    clock.load(plan, t);
+    clock.load(typeof plan === 'function' ? plan() : plan, t);
     clock.tick(t, voice(t));
   }
   return log;
@@ -257,8 +258,8 @@ test('cue clock: TTS / blips / mute fire by the voice char, anticipation convert
   const C = TEXT.indexOf('Brazil');
   const tc = ctx.timeAt(C);
   const plan = planOf(ep, 1, [
-    { kind: 'gesture', slot: 'B', name: 'steeple', char: C, at: tc }, // on the word
-    { kind: 'gesture', slot: 'B', name: 'lean_in', char: TEXT.indexOf('water'), at: ctx.timeAt(TEXT.indexOf('water')) - 0.25 }, // 0.25 s early
+    { kind: 'gesture', slot: 'B', name: 'point_screen', char: C, at: tc }, // on the word
+    { kind: 'gesture', slot: 'B', name: 'count', char: TEXT.indexOf('water'), at: ctx.timeAt(TEXT.indexOf('water')) - 0.25 }, // 0.25 s early
   ]);
   const clock = new CueClock();
   clock.perfs = { A: newPerf(), B: newPerf() };
@@ -268,17 +269,17 @@ test('cue clock: TTS / blips / mute fire by the voice char, anticipation convert
     if (t >= 20 && plan.speechStart == null) plan.speechStart = 20;
   });
   const reach = (c) => 20 + c / cps;
-  const steeple = log.find((l) => l.name === 'steeple').t;
-  assert.ok(steeple >= reach(C) - 1e-9 && steeple - reach(C) <= DT + 1 / cps + 1e-6, `steeple ${steeple} vs ${reach(C)}`);
-  const lean = log.find((l) => l.name === 'lean_in').t;
+  const point = log.find((l) => l.name === 'point_screen').t;
+  assert.ok(point >= reach(C) - 1e-9 && point - reach(C) <= DT + 1 / cps + 1e-6, `point_screen ${point} vs ${reach(C)}`);
+  const lean = log.find((l) => l.name === 'count').t;
   const target = reach(TEXT.indexOf('water')) - 0.25;
-  assert.ok(Math.abs(lean - target) < 0.12, `lean_in ${lean.toFixed(3)} vs ${target.toFixed(3)}`);
+  assert.ok(Math.abs(lean - target) < 0.12, `count ${lean.toFixed(3)} vs ${target.toFixed(3)}`);
 });
 
 test('cue clock: the cut guard shifts gestures by <= 0.3 s, drops the rest, never touches nods and looks', () => {
   const plan = planOf(EP, 2, [
     { kind: 'gesture', slot: 'B', name: 'raise_hand', char: 0, at: 1.1 }, // 0.1 s after the cut: shift 0.4 → dropped
-    { kind: 'gesture', slot: 'B', name: 'steeple', char: 0, at: 1.3 }, // 0.3 s after: shift 0.2 → fires at cut + 0.5
+    { kind: 'gesture', slot: 'B', name: 'point_screen', char: 0, at: 1.3 }, // 0.3 s after: shift 0.2 → fires at cut + 0.5
     { kind: 'gesture', slot: 'A', name: 'nod', char: 0, at: 1.05 }, // nods are exempt
     { kind: 'look', slot: 'A', target: 'partner', char: 0, at: 1.1, dur: 1 }, // looks are exempt
     { kind: 'gesture', slot: 'B', name: 'shrug', char: 0, at: 1.7 }, // after the guard: on time
@@ -296,7 +297,7 @@ test('cue clock: the cut guard shifts gestures by <= 0.3 s, drops the rest, neve
   });
   const f = (n) => log.find((l) => l.name === n)?.t;
   assert.equal(f('raise_hand'), undefined, 'dropped');
-  assert.ok(Math.abs(f('steeple') - 11.5) <= DT + 1e-6, `steeple ${f('steeple')}`);
+  assert.ok(Math.abs(f('point_screen') - 11.5) <= DT + 1e-6, `point_screen ${f('point_screen')}`);
   assert.ok(Math.abs(f('nod') - 11.05) <= DT + 1e-6, `nod ${f('nod')}`);
   assert.ok(Math.abs(f('partner') - 11.1) <= DT + 1e-6, `look ${f('partner')}`);
   assert.ok(Math.abs(f('shrug') - 11.7) <= DT + 1e-6, `shrug ${f('shrug')}`);
@@ -310,24 +311,23 @@ test('cue clock: no event leaks across segments, past the tail, or after interru
   const speaking = { speaking: true, sentenceIndex: 0, charIndex: 0 };
   // segment 1 is replaced by segment 2 before its late event is due
   const p1 = planOf(EP, 2, [{ kind: 'gesture', slot: 'B', name: 'raise_hand', char: 50, at: 5 }]);
-  const p2 = planOf(EP, 2, [{ kind: 'gesture', slot: 'A', name: 'steeple', char: 0, at: 0.5 }]);
+  const p2 = planOf(EP, 2, [{ kind: 'gesture', slot: 'A', name: 'point_screen', char: 0, at: 0.5 }]);
   p1.speechStart = 0;
   let cur = p1;
-  const log = run(clock, null, 0, 6, () => speaking, (t) => {
+  const log = run(clock, () => cur, 0, 6, () => speaking, (t) => {
     if (t >= 2 && cur === p1) {
       p1.speechEnd = 2; // the director moves on
       cur = p2;
       p2.speechStart = 2.2;
     }
-    clock.load(cur, t);
   });
-  assert.deepEqual(log.map((l) => l.name), ['steeple']);
+  assert.deepEqual(log.map((l) => l.name), ['point_screen']);
   // the tail: 1 s after the end fires, 3 s after the end is dropped
   const ctx = segmentContext(EP, 2, {});
   const d = ctx.duration;
   const p3 = planOf(EP, 2, [
-    { kind: 'gesture', slot: 'A', name: 'papers', char: TEXT.length, at: d + 1 },
-    { kind: 'gesture', slot: 'A', name: 'shrug', char: TEXT.length, at: d + TAIL + 0.5 },
+    { kind: 'gesture', slot: 'A', name: 'shrug', char: TEXT.length, at: d + 1 },
+    { kind: 'gesture', slot: 'A', name: 'count', char: TEXT.length, at: d + TAIL + 0.5 },
   ]);
   p3.speechStart = 0;
   const clock3 = new CueClock();
@@ -335,7 +335,7 @@ test('cue clock: no event leaks across segments, past the tail, or after interru
   const log3 = run(clock3, p3, 0, d + 6, () => speaking, (t) => {
     if (t >= d && p3.speechEnd == null) p3.speechEnd = d;
   });
-  assert.deepEqual(log3.map((l) => l.name), ['papers']);
+  assert.deepEqual(log3.map((l) => l.name), ['shrug']);
   assert.ok(Math.abs(log3[0].t - (d + 1)) <= DT + 1e-6);
   // interrupted (N key): the speech stops at 1 s of a ~7 s segment; nothing pending fires afterwards
   const p4 = planOf(EP, 2, [{ kind: 'gesture', slot: 'B', name: 'raise_hand', char: 60, at: 3 }]);
@@ -526,8 +526,9 @@ test('fallback: 3 Stage errors in 10 s drop the Stage; retries back off 1, 2, 4,
   assert.equal(host.frame(null, 4, scene), false);
   assert.ok(host.stage, 'two errors: still on');
   assert.equal(host.frame(null, 15, scene), false); // the first error is now older than 10 s
+  host.frame(null, 16, scene); // 4, 15, 16: only two within 10 s
   assert.ok(host.stage, 'errors spread over more than 10 s');
-  host.frame(null, 16, scene);
+  host.frame(null, 17, scene);
   assert.equal(host.stage, null, '3 errors within 10 s');
   assert.equal(made.length, 1);
   let ep = 0;
@@ -570,32 +571,32 @@ test('fallback: 3 Stage errors in 10 s drop the Stage; retries back off 1, 2, 4,
 test('watchdog: p95 > 12 ms steps the detail level down, > 16 ms at the lowest level falls back, 120 s under 8 ms recovers', () => {
   const w = new PerfWatchdog();
   let t = 0;
-  const feed = (ms, secs) => {
-    let verdict = null;
+  /** Feed `ms` frames until `until()` or `secs` have passed; returns { verdict, secs }. */
+  const feed = (ms, secs, until = () => false) => {
+    const from = t;
     for (let k = 0; k < secs * FPS; k++) {
       t += DT;
-      verdict = w.sample(t, ms) || verdict;
-      if (verdict) return verdict;
+      const verdict = w.sample(t, ms);
+      if (verdict || until()) return { verdict, secs: t - from };
     }
-    return verdict;
+    return { verdict: null, secs: t - from };
   };
-  assert.equal(feed(10, 40), null);
+  feed(10, 40);
   assert.equal(w.level, 0, '10 ms is within budget');
-  feed(13, 31);
+  feed(13, 40, () => w.level === 1);
   assert.equal(w.level, 1);
-  feed(13, 31);
+  const r2 = feed(13, 40, () => w.level === 2);
   assert.equal(w.level, 2);
-  assert.equal(feed(14, 60), null, 'at the lowest level only > 16 ms falls back');
+  assert.ok(r2.secs >= 30 && r2.secs < 32, `a full 30 s window at level 1 (${r2.secs.toFixed(1)} s)`);
+  assert.equal(feed(14, 60).verdict, null, 'at the lowest level only > 16 ms falls back');
   assert.equal(w.level, 2);
-  assert.equal(feed(5, 119), null);
-  assert.equal(w.level, 2, 'not yet: 120 s needed');
-  feed(5, 2);
+  const rec = feed(5, 200, () => w.level === 1);
   assert.equal(w.level, 1, 'recovered one level');
-  feed(13, 31);
-  feed(13, 31);
+  assert.ok(rec.secs >= 120 && rec.secs < 133, `after 120 s under 8 ms (${rec.secs.toFixed(1)} s)`);
+  feed(13, 70, () => w.level === 2);
   assert.equal(w.level, 2);
-  assert.equal(feed(17, 31), 'fallback');
-  // a spike or two never moves the level: p95, not max
+  assert.equal(feed(17, 40).verdict, 'fallback');
+  // a spike now and then never moves the level: p95, not max
   const w2 = new PerfWatchdog();
   t = 0;
   for (let k = 0; k < 40 * FPS; k++) {

@@ -310,7 +310,7 @@ export class TunePlayer {
     this.events = flatten(song, 1);
     this.spb = 60 / song.bpm;
     this.passSec = songSeconds(song);
-    this.loudness = normalise ? estimateLoudness(song) : { gain: 1, gainDb: 0, integrated: NaN };
+    this.loudness = normalise ? songLoudness(song) : { gain: 1, gainDb: 0, integrated: NaN };
     this.live = new Set();
     this.cursor = 0;
     this.pass = 0;
@@ -747,7 +747,28 @@ export function scheduleMurmur(ctx, dest, voice, tl, t0) {
 
 // ---------------------------------------------------------------- offline
 
-export const asSong = (tune) => (tune && Array.isArray(tune.tracks) && tune.tracks[0]?.events ? tune : parseTune(tune));
+// Parsed songs and their loudness, cached per tune object (ads, opens and
+// cues are module constants, so each is parsed and levelled once).
+const songs = new WeakMap();
+const loudnessOf = new WeakMap();
+export function asSong(tune) {
+  if (tune && Array.isArray(tune.tracks) && tune.tracks[0]?.events) return tune;
+  if (!tune || typeof tune !== 'object') return parseTune(tune);
+  let song = songs.get(tune);
+  if (song === undefined) {
+    song = parseTune(tune);
+    songs.set(tune, song);
+  }
+  return song;
+}
+function songLoudness(song) {
+  let l = loudnessOf.get(song);
+  if (!l) {
+    l = estimateLoudness(song);
+    loudnessOf.set(song, l);
+  }
+  return l;
+}
 
 /**
  * Render a tune offline with the channel's own mixer.

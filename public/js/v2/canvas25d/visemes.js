@@ -238,16 +238,30 @@ export function speechFrame(sp, t, slot = null, out = FRAME) {
   return out;
 }
 
-const KEYS = ['open', 'wide', 'round', 'teeth', 'tongue', 'press', 'tuck'];
+const SHAPE_KEYS = ['round', 'teeth', 'tongue', 'press', 'tuck'];
 
-/** Blend the frame's visemes into face mouth parameters (written into `face`). */
+/**
+ * Blend the frame's visemes into face mouth parameters (written into `face`).
+ * The viseme pair gives the SHAPE (width, rounding, teeth, tongue, lip press or
+ * tuck); the opening follows the frame's `level` (the speechFrame jaw: one
+ * smooth opening per syllable, real loudness with recorded voices), so the
+ * mouth never flaps faster than the voice. Width goes to `mwide`, never to the
+ * eyes' `wide` channel.
+ */
 export function mouthParams(fr, face, gain = 1) {
   const a = VISEMES[fr.viseme] || VISEMES.rest;
   const b = VISEMES[fr.next] || VISEMES.rest;
-  const k = fr.mix;
-  for (const key of KEYS) face[key] = (a[key] + (b[key] - a[key]) * k) * (key === 'open' ? gain : 1);
-  // a pressed MBP must win over the blend for its whole duration, so the lips visibly meet
-  if (fr.viseme === 'MBP' && k < 0.6) face.press = 1;
-  face.jaw = face.open * 0.55;
+  const k = fr.mix || 0;
+  for (const key of SHAPE_KEYS) face[key] = a[key] + (b[key] - a[key]) * k;
+  face.mwide = a.wide + (b.wide - a.wide) * k;
+  const shape = a.open + (b.open - a.open) * k;
+  const level = Number.isFinite(fr.level) ? fr.level : shape;
+  face.open = Math.max(0, Math.min(1, level * gain));
+  // a pressed m/b/p wins over the blend while the lips meet (also on the way into one)
+  if ((fr.viseme === 'MBP' && k < 0.6) || (fr.next === 'MBP' && k > 0.55)) {
+    face.press = 1;
+    face.open = 0;
+  }
+  face.jaw = face.open * 0.45; // units; head.js caps the drop at 2 px
   return face;
 }

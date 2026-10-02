@@ -104,9 +104,11 @@ export function drawBob(buf, L, m, head, s, lag) {
       return t;
     }
     if (tier === 1) {
-      // a narrow sheen band across the crown on the lit side
-      const band = (x + 1.5) * (x + 1.5) * 0.07 + (y - (H.top + 2.6));
-      if (t === 0 && Math.abs(band) > 0.55) t = 1;
+      // mediums keep the approved auburn sheen; a few strands break it in two-shots and wider mediums
+      if (t <= 1 && s >= 1.8) {
+        const sv = y < fringe + 0.5 && fx > part ? (y - (H.top + 3.5) - (fx - part) * 0.62) : fx - Math.max(0, y - cyc) * 0.1;
+        if ((((sv * 1.1) % 2.6) + 2.6) % 2.6 < 0.3) t = t + 1;
+      }
       if (nearFace) t = Math.max(t, x > 0 ? 3 : 2);
       else if (underside) t = Math.max(t, 2);
       return t;

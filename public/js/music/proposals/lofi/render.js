@@ -12,11 +12,11 @@ export const CLIPS = {
   'wn-hl1': 4.19, 'wn-hl2': 4.332, 'wn-hl3': 3.579, 'wn-greet': 3.882, 'wn-lead': 9.443, 'wn-round': 14.962,
   'wn-grave': 7.672, 'wn-chat1': 2.849, 'wn-chat2': 1.997, 'wn-finally': 8.57, 'wn-signoff': 3.166,
   'tb-cold': 7.962, 'tb-lead': 8.372, 'tb-catch1': 2.339, 'tb-catch2': 2.144, 'tb-number': 6.241,
-  'tb-finally': 7.185, 'tb-button': 2.079, 'tb-signoff': 2.066,
-  'co-cold': 3.715, 'co-greet': 4.2, 'co-story': 13.5, 'co-reading': 6, 'co-finally': 8, 'co-close': 2.6,
-  'mm-intro': 10, 'mm-lead': 7, 'mm-story2': 6, 'mm-number': 7, 'mm-signoff': 2.2,
-  'n6-intro': 1.8, 'n6-item1': 5.5, 'n6-item2': 4, 'n6-item3': 6, 'n6-grave': 6, 'n6-item4': 5, 'n6-signoff': 2.4,
-  'ct-next-wn': 3.2, 'ct-next-tb': 2.2, 'ct-sombre': 2.2,
+  'tb-finally': 7.185, 'tb-button': 2.079, 'tb-signoff': 2.066, 'co-cold': 3.715, 'co-greet': 4.01,
+  'co-story': 11.365, 'co-reading': 4.407, 'co-finally': 6.235, 'co-close': 2.424, 'mm-intro': 8.281,
+  'mm-lead': 6.591, 'mm-story2': 5.436, 'mm-number': 5.871, 'mm-signoff': 1.934, 'n6-intro': 1.57,
+  'n6-item1': 5.338, 'n6-item2': 3.749, 'n6-item3': 6.556, 'n6-grave': 5.609, 'n6-item4': 4.637,
+  'n6-signoff': 2.008, 'ct-next-wn': 3.418, 'ct-next-tb': 2.543, 'ct-sombre': 2.451,
 };
 
 /** Replace planning durations with the real ones (the lab page loads the clips' manifest). */
@@ -82,7 +82,7 @@ export const TIMELINES = {
   }),
   // WORLD NOW, the light ending: lead (dry), round-up, And finally, the chat on its bed, brass sign-off.
   'world-now': () => ({
-    programme: 'world-now', seconds: 80,
+    programme: 'world-now', seconds: 71,
     ...script([
       ...headlines(),
       ['wait', 0.3], ['cue', 'greeting', P('world-now', { segment: 2 })], ['wait', 0.3], ['say', 'wn-greet'], ['wait', 0.6],
@@ -95,7 +95,7 @@ export const TIMELINES = {
     ]),
   }),
   'tech-bytes': () => ({
-    programme: 'tech-bytes', seconds: 62,
+    programme: 'tech-bytes', seconds: 54,
     ...script([
       ['cue', 'coldOpen', P('tech-bytes', { segment: 1 })], ['wait', 0.5], ['say', 'tb-cold'], ['wait', 0.6],
       ['cue', 'story', P('tech-bytes', { emotion: 'neutral', segment: 2 })], ['wait', 0.3], ['say', 'tb-lead'], ['wait', 0.6],
@@ -109,7 +109,7 @@ export const TIMELINES = {
     ]),
   }),
   cosmos: () => ({
-    programme: 'cosmos', seconds: 66,
+    programme: 'cosmos', seconds: 48,
     ...script([
       ['cue', 'coldOpen', P('cosmos', { segment: 1 })], ['wait', 1.2], ['say', 'co-cold'], ['wait', 0.6],
       ['cue', 'open', P('cosmos')], ['wait', 4.0],
@@ -124,7 +124,7 @@ export const TIMELINES = {
     ]),
   }),
   'money-minute': () => ({
-    programme: 'money-minute', seconds: 52,
+    programme: 'money-minute', seconds: 41,
     ...script([
       ['cue', 'headlines', P('money-minute', { segment: 1 })], ['wait', 1.2], ['say', 'mm-intro'], ['wait', 0.1],
       ['cue', 'introEnd', P('money-minute')], ['wait', 0.8],
@@ -137,7 +137,7 @@ export const TIMELINES = {
     ]),
   }),
   'news-60': () => ({
-    programme: 'news-60', seconds: 50,
+    programme: 'news-60', seconds: 41,
     ...script([
       ['cue', 'headlines', P('news-60', { segment: 1 })], ['wait', 0.3], ['say', 'n6-intro'], ['wait', 0.7],
       ['cue', 'item', P('news-60')], ['cue', 'story', P('news-60', { segment: 2 })], ['wait', 0.05], ['say', 'n6-item1'], ['wait', 0.7],
@@ -152,7 +152,7 @@ export const TIMELINES = {
   // A main break and the next lead-in: bumper cards, 0.3 s silences, an ad (silent stand-in),
   // a holding slide, then the WORLD NOW countdown with the continuity voice and the hard cut.
   break: () => ({
-    programme: 'channel', seconds: 36,
+    programme: 'channel', seconds: 31,
     ...script([
       ['cue', 'bumper', P('channel', { kind: 'cards' })], ['wait', 8.0],
       ['cue', 'silence', P('channel')], ['wait', 0.3], ['cue', 'ad', P('channel')], ['wait', 6.0], ['cue', 'silence', P('channel')], ['wait', 0.3],
@@ -167,7 +167,7 @@ export const TIMELINES = {
     const align = spb * 12;
     const hold = Math.ceil(Math.max(2.0, 0.6 + CLIPS['ct-next-tb'] + 0.6) / spb) * spb;
     return {
-      programme: 'channel', seconds: 15,
+      programme: 'channel', seconds: 13.5,
       ...script([
         ['cue', 'leadin', P('channel', { programId: 'tech-bytes', hour: 14 })], ['at', align + 0.6], ['say', 'ct-next-tb'],
         ['at', align + Math.min(5, hold)], ['cue', 'cut', P('channel')],
@@ -176,7 +176,7 @@ export const TIMELINES = {
   },
   // Grave mode: the sombre short ident as the bumper, then a sombre countdown (no ticks).
   sombre: () => ({
-    programme: 'channel', seconds: 20,
+    programme: 'channel', seconds: 18,
     ...script([
       ['cue', 'bumper', P('channel', { grave: true })], ['wait', 6.0], ['cue', 'silence', P('channel')], ['wait', 0.3],
       ['cue', 'leadin', P('channel', { programId: 'world-now', sombre: true })], ['wait', 0.5], ['say', 'ct-sombre'], ['at', 6.3 + 10.5],

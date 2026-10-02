@@ -484,17 +484,29 @@ function shotSpeaker(cv, t) {
 
 const MODES = { sheet: drawSheet, lipsync: drawLipsync, strip: drawStrip, conversation: drawConversation };
 
+/** Nearest-neighbour zoom of the region at (zx, zy) by `k` into the whole frame (inspection at 2-4x). */
+function zoomFrame(k, zx, zy) {
+  sheet.set(frame.px);
+  const w = W / k, h = H / k;
+  for (let y = 0; y < H; y++) {
+    const sy = Math.min(H - 1, Math.floor(zy + y / k));
+    for (let x = 0; x < W; x++) frame.px[y * W + x] = sheet[sy * W + Math.min(W - 1, Math.floor(zx + x / k))];
+  }
+  return w + h;
+}
+
 export function createFaceLab(canvas, { drawText = null } = {}) {
   const ctx = canvas && canvas.getContext ? canvas.getContext('2d') : null;
   const state = {
     mode: 'sheet', tier: 'close', presenter: 'paco', presenters: null, emotion: null, seat: 1,
     text: 'Good evening. Markets moved sharply today, as the bank promised more support.', sample: null,
-    episode: 'world-now', cam: 'auto', k: 4.0, hud: true, tileT: 0.3,
+    episode: 'world-now', cam: 'auto', k: 4.0, hud: true, tileT: 0.3, zoom: 1, zx: 0, zy: 0,
   };
   const lab = {
     state,
     render(t = 0) {
       (MODES[state.mode] || drawSheet)(t, state);
+      if (state.zoom > 1) zoomFrame(state.zoom, state.zx || 0, state.zy || 0);
       if (!ctx) return;
       frame.present(ctx);
       if (state.mode === 'strip' && drawText) for (const l of stripLabels) drawText(ctx, l.text, l.x, l.y, { color: P.fog, font: 'micro' });

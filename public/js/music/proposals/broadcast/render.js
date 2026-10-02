@@ -1,118 +1,192 @@
 // Offline renders of the "broadcast" proposal for tools/render-audio.mjs and
-// the lab page: any (programme, moment, seconds), optionally with Kokoro test
-// voice lines mixed in at realistic times, plus the 60 s demo timeline
-// (open tail -> headlines -> light story -> grave story -> chat -> outro ->
-// end card -> break bumper). Stems: 'mix' (default), 'music' (as broadcast,
-// ducked under the voice), 'voice'.
+// the lab page: any (programme, moment, seconds), optionally with test voice
+// lines (the house Kokoro chain, tools/voice/say.py, -16 LUFS) mixed in at
+// realistic times, plus two 60 s demo timelines (WORLD NOW and TECH BYTES).
+// Stems: 'mix' (default), 'music' (as broadcast, ducked), 'voice'.
 
 import { BroadcastMusic } from './conductor.js';
 
 const VOICE_DIR = new URL('./lab/voice/', import.meta.url);
 
-// Kokoro lines (tools: scratchpad gen.py), trimmed, normalised to -18 LUFS.
+// House-voice lines (scratchpad audio/music/broadcast/voice2/gen2.py), seconds.
 export const LINES = {
-  'wn-intro': 11.44, 'wn-light': 10.16, 'wn-grave': 11.72, 'wn-chat1': 2.05, 'wn-chat2': 3.4, 'wn-chat3': 1.61,
-  'wn-outro': 4.22, 'wn-roundup': 12.09, 'tb-story': 7.26, 'tb-chat': 4.91, 'co-story': 6.71, 'co-chat': 5.12,
-  'mm-story': 6.46, 'n6-story': 8.72, brk: 6.53,
-};
-
-// What the presenters say over each moment in single-bed renders.
-const SAY = {
-  'world-now': { headlines: ['wn-intro'], story: ['wn-light', 'wn-grave'], chat: ['wn-chat1', 'wn-chat2', 'wn-chat3', 'wn-chat1', 'wn-chat2'], roundup: ['wn-roundup'], outro: ['wn-outro'] },
-  'tech-bytes': { headlines: ['tb-story'], story: ['tb-story', 'tb-chat'], chat: ['tb-story', 'tb-chat'], outro: ['tb-chat'] },
-  cosmos: { headlines: ['co-story'], story: ['co-story', 'co-chat'], chat: ['co-story', 'co-chat'], outro: ['co-chat'] },
-  'money-minute': { headlines: ['mm-story'], story: ['mm-story', 'mm-story'], chat: ['mm-story'], outro: ['mm-story'] },
-  'news-60': { headlines: ['n6-story'], story: ['n6-story', 'n6-story'], roundup: ['wn-roundup'], outro: ['n6-story'] },
+  'wn-h1': 2.885, 'wn-h2': 2.64, 'wn-h3': 2.415, 'wn-intro': 9.77, 'wn-light': 9.215, 'wn-grave': 9.893, 'wn-finally': 6.372,
+  'wn-chat1': 1.3, 'wn-chat2': 3.64, 'wn-chat3': 2.147, 'wn-outro': 4.777, 'wn-roundup': 11.155,
+  'tb-story': 7.62, 'tb-chat': 5.78, 'tb-number': 6.725, 'co-story': 8.477, 'co-chat': 6.718,
+  'mm-story': 6.665, 'mm-number': 6.478, 'mm-teaser': 5.31, 'n6-story': 7.33, 'n6-item2': 4.718, 'n6-signoff': 2.348, brk: 5.57,
 };
 
 export const NEXT = { 'world-now': 'tech-bytes', 'tech-bytes': 'news-60', 'news-60': 'cosmos', cosmos: 'world-now', 'money-minute': 'news-60' };
 
-/** Cue/speech plan for a render: [{ at, cue, opts } | { at, say }]. */
-export function timeline({ programme = 'world-now', moment = 'headlines', seconds = 20, withVoice = false, emotion }) {
+/**
+ * Cue/speech plan for a render: [{ at, cue, opts } | { at, say }], built by a
+ * small script per (programme, moment) that mirrors the director's pacing.
+ */
+export function timeline({ programme = 'world-now', moment = 'headlines', seconds = 20, withVoice = false, emotion, tape }) {
   const P = programme;
   const ev = [];
   const cue = (at, m, o = {}) => ev.push({ at, cue: m, opts: { programId: P, ...o } });
-  const say = (at, line) => ev.push({ at, say: line });
-  const talk = (from, lines, gap = 0.8) => {
-    let t = from;
-    for (const l of lines) {
-      if (t + LINES[l] > seconds - 0.5) break;
-      say(t, l);
-      t += LINES[l] + gap;
-    }
+  const say = (at, line) => {
+    if (withVoice && at + LINES[line] < seconds - 0.2) ev.push({ at, say: line });
+    return at + LINES[line];
   };
-  const lines = (m) => SAY[P]?.[m] || SAY['world-now'][m] || ['wn-light'];
+  const S = (line) => ({ 'world-now': { story: 'wn-light', chat: ['wn-chat1', 'wn-chat2', 'wn-chat3'], h: ['wn-h1', 'wn-h2', 'wn-h3'], out: 'wn-outro' },
+    'tech-bytes': { story: 'tb-story', chat: ['tb-chat', 'tb-story'], h: ['tb-story'], out: 'tb-chat' },
+    cosmos: { story: 'co-story', chat: ['co-chat'], h: ['co-story'], out: 'co-chat' },
+    'money-minute': { story: 'mm-story', chat: ['mm-story'], h: ['mm-teaser'], out: 'mm-story' },
+    'news-60': { story: 'n6-story', chat: ['n6-item2'], h: ['n6-story'], out: 'n6-signoff' } }[P] || {})[line];
 
-  if (moment === 'demo') return demo(P);
+  if (moment === 'demo') return P === 'tech-bytes' ? demoTech() : demoWorld();
   switch (moment) {
     case 'openTail':
+    case 'headlines': {
+      // The cold-open montage after the open: lines with the frame cue in each gap.
       cue(0, 'openTail');
-      if (withVoice) talk(1.2, lines('headlines'));
-      for (let k = 0; k < 4; k++) cue(1.2 + k * 2.6, 'frame');
+      let t = 1.2;
+      const lines = S('h') || ['wn-h1'];
+      for (const l of lines) {
+        t = say(t, l) + 0.25;
+        cue(t, 'frame');
+        t += 0.9;
+      }
+      cue(t + 0.6, 'greeting');
       break;
-    case 'grave':
-      // Grave on its own is silence: show the light bed tailing out into it.
-      cue(0, 'story', { emotion: 'happy' });
-      if (withVoice) say(0.8, 'wn-light');
-      cue(withVoice ? 11.4 : 6, 'story', { emotion: 'serious' });
-      if (withVoice) say(12.0, 'wn-grave');
+    }
+    case 'story': // main story copy: dry in most programmes (the bed only where the bible allows)
+      cue(0, 'story', { emotion: emotion || 'neutral' });
+      say(0.6, S('story') || 'wn-light');
       break;
-    case 'breaking':
-      // A story is interrupted between items: the sting, then the presenter.
+    case 'grave': {
+      // From a bed into a grave story, and the segment after it (no bed either).
+      const into = P === 'world-now' ? 'roundup' : P === 'tech-bytes' ? 'chat' : P === 'money-minute' ? 'headlines' : 'story';
+      cue(0, into, into === 'roundup' ? {} : { emotion: 'happy' });
+      const t1 = say(0.6, P === 'world-now' ? 'wn-roundup' : S('story'));
+      cue(withVoice ? t1 + 0.5 : 6, 'story', { emotion: 'serious' });
+      const t2 = say((withVoice ? t1 + 0.5 : 6) + 0.6, P === 'world-now' ? 'wn-grave' : S('story'));
+      cue(withVoice ? t2 + 0.5 : 12, P === 'tech-bytes' ? 'chat' : 'story', { emotion: 'neutral' });
+      break;
+    }
+    case 'roundup':
+      cue(0, 'story', { feature: 'roundup' });
+      say(1.0, 'wn-roundup');
+      for (const t of [4.2, 7.3, 9.9]) cue(t, 'item');
+      break;
+    case 'lighter': {
+      // AND FINALLY: the bed enters after the words "And finally", runs through the chat.
+      const t0 = 0.5;
+      cue(t0 + 1.0, 'story', { feature: 'lighter' });
+      let t = say(t0, P === 'world-now' ? 'wn-finally' : S('story')) + 0.4;
+      cue(t, 'chat');
+      for (const l of S('chat') || []) t = say(t + 0.2, l) + 0.35;
+      cue(t + 0.3, 'outro');
+      break;
+    }
+    case 'chat': {
+      cue(0, 'chat');
+      let t = 0.8;
+      for (const l of S('chat') || []) t = say(t, l) + 0.4;
+      break;
+    }
+    case 'number': {
+      cue(0.3, 'story', { feature: 'number', tape: tape || 'up' });
+      say(1.4, P === 'money-minute' ? 'mm-number' : 'tb-number');
+      if (P === 'tech-bytes') cue(9.2, 'featureEnd');
+      break;
+    }
+    case 'picture': {
+      // COSMOS: the bed runs through the story, heard only on the picture shot.
       cue(0, 'story', { emotion: 'neutral' });
-      if (withVoice) {
-        const first = lines('story')[0];
-        const at = 0.8 + LINES[first] + 0.4;
-        say(0.8, first);
-        cue(at, 'breaking');
-        say(at + 3.1, 'brk');
-      } else cue(4, 'breaking');
+      say(0.5, 'co-story');
+      cue(2.0, 'picture', { seconds: 8 });
+      cue(9.6, 'single');
+      cue(10.2, 'chat');
+      say(10.6, 'co-chat');
       break;
-    case 'endcard':
+    }
+    case 'itemTick': {
+      // NEWS IN 60: the story bed, the item tick on the cut, a grave item (pad only), the sign-off bell.
+      cue(0, 'story', { emotion: 'neutral' });
+      let t = say(0.6, 'n6-story') + 0.4;
+      cue(t, 'item');
+      t = say(t + 0.3, 'n6-item2') + 0.4;
+      cue(t, 'story', { emotion: 'serious' });
+      t = say(t + 0.3, 'n6-item2') + 0.4;
+      cue(t, 'story', { emotion: 'neutral' });
+      t = say(t + 0.3, 'n6-signoff');
+      cue(t - 0.25, 'signoff');
+      break;
+    }
+    case 'outro':
+    case 'endcard': {
       cue(0, 'outro');
-      if (withVoice) say(0.6, 'wn-outro');
-      cue(Math.max(5.5, (withVoice ? 0.6 + LINES['wn-outro'] + 0.5 : 5.5)), 'endcard');
+      const t = say(0.5, S('out') || 'wn-outro');
+      if (P === 'money-minute') cue(withVoice ? t + 0.15 : 3, 'signoff');
+      cue(Math.max(withVoice ? t + 0.5 : 5.5, 4), 'endcard');
       break;
+    }
+    case 'breaking': {
+      cue(0, 'story', { feature: 'roundup' });
+      const t = withVoice ? say(0.8, 'wn-roundup') + 0.4 : 4;
+      cue(t, 'breaking');
+      say(t + 3.1, 'brk');
+      break;
+    }
     case 'upNext':
       cue(0.3, 'upNext', { next: P });
+      break;
+    case 'countdown':
+      cue(0.3, 'countdown', { seconds: 5 });
       break;
     case 'bumperIn':
     case 'bumperOut':
     case 'replay':
       cue(0.3, moment);
       break;
-    case 'roundup':
-      cue(0, 'roundup');
-      if (withVoice) talk(1.0, lines('roundup'));
-      // One chime per place ("In Tokyo...", "In Nairobi...", "And in Lima...").
-      for (const t of [3.9, 7.0, 9.6]) cue(t, 'item');
-      break;
-    default:
-      cue(0, moment, { emotion: emotion || (moment === 'story' ? 'happy' : undefined) });
-      if (withVoice) talk(moment === 'headlines' ? 1.2 : 1.5, lines(moment));
+    default: // channel beds (standby, bumper)
+      cue(0, moment);
   }
   return ev;
 }
 
-// The 60 s demo, WORLD NOW, at the director's real pace (300 ms between
-// segments, montage frames every 2.6 s, speech starting just after each cut).
-function demo(P) {
-  const o = { programId: P };
+// WORLD NOW, 60 s at the director's pace: open tail, the three headline lines
+// with pips and the Bm -> G -> D brass, the greeting (bed released), a grave
+// lead story (silence), the next story (no bed: grave cooldown), AND FINALLY
+// (the bed enters after "And finally") and its chat, the sign-off, the end
+// card's brass sign-off.
+function demoWorld() {
+  const o = { programId: 'world-now' };
+  const c = (at, cue, x = {}) => ({ at, cue, opts: { ...o, ...x } });
   return [
-    { at: 0, cue: 'openTail', opts: o },
-    { at: 1.2, say: 'wn-intro' },
-    { at: 1.2, cue: 'frame', opts: o }, { at: 3.8, cue: 'frame', opts: o }, { at: 6.4, cue: 'frame', opts: o }, { at: 9.0, cue: 'frame', opts: o },
-    { at: 1.2, cue: 'headlines', opts: o },
-    { at: 13.2, cue: 'story', opts: { ...o, emotion: 'happy' } },
-    { at: 13.6, say: 'wn-light' },
-    { at: 24.2, cue: 'story', opts: { ...o, emotion: 'serious' } },
-    { at: 24.9, say: 'wn-grave' },
-    { at: 37.2, cue: 'chat', opts: o },
-    { at: 38.0, say: 'wn-chat1' }, { at: 40.4, say: 'wn-chat2' }, { at: 44.1, say: 'wn-chat3' },
-    { at: 46.2, cue: 'outro', opts: o },
-    { at: 46.6, say: 'wn-outro' },
-    { at: 51.3, cue: 'endcard', opts: o },
-    { at: 56.0, cue: 'bumperIn', opts: o },
+    c(0, 'openTail'),
+    { at: 1.2, say: 'wn-h1' }, c(4.3, 'frame'),
+    { at: 5.3, say: 'wn-h2' }, c(8.2, 'frame'),
+    { at: 9.2, say: 'wn-h3' }, c(11.85, 'frame'),
+    c(13.4, 'greeting'),
+    c(13.8, 'story', { emotion: 'serious' }), { at: 14.3, say: 'wn-grave' },
+    c(24.7, 'story', { emotion: 'happy' }), { at: 25.1, say: 'wn-light' },
+    { at: 34.8, say: 'wn-finally' }, c(35.9, 'story', { feature: 'lighter' }),
+    c(41.6, 'chat'), { at: 41.8, say: 'wn-chat1' }, { at: 43.4, say: 'wn-chat2' }, { at: 47.4, say: 'wn-chat3' },
+    c(50.0, 'outro'), { at: 50.3, say: 'wn-outro' },
+    c(55.5, 'endcard'),
+  ];
+}
+
+// TECH BYTES, 60 s: open tail and montage bed, a dry story, a chat on the
+// light bed (closed hat), the number of the day (head sting, then the bed),
+// the feature button, a dry story, the sign-off bed, the end card, the ident.
+function demoTech() {
+  const o = { programId: 'tech-bytes' };
+  const c = (at, cue, x = {}) => ({ at, cue, opts: { ...o, ...x } });
+  return [
+    c(0, 'openTail'), { at: 1.0, say: 'tb-story' },
+    c(9.1, 'story', { emotion: 'neutral' }), { at: 9.5, say: 'tb-chat' },
+    c(15.8, 'chat'), { at: 16.3, say: 'tb-story' },
+    c(24.4, 'story', { feature: 'number' }), { at: 25.4, say: 'tb-number' },
+    c(32.5, 'featureEnd'),
+    c(33.4, 'story', { emotion: 'neutral' }), { at: 33.8, say: 'tb-chat' },
+    c(40.0, 'outro'), { at: 40.5, say: 'tb-story' },
+    c(48.6, 'endcard'),
+    c(53.4, 'bumperIn'),
   ];
 }
 
@@ -128,10 +202,10 @@ async function loadLine(ctx, name) {
 }
 
 /**
- * Renders to { sampleRate, channels: [L, R] }.
+ * Renders to { sampleRate, channels: [L, R], plan }.
  * opts: { programme, moment ('demo' for the timeline), seconds, withVoice,
  *         stem: 'mix'|'music'|'voice', duck (default true when voices are
- *         planned), grave: 'silence'|'pad', solo, mute, seed, sampleRate }
+ *         planned), grave: 'silence'|'pad', tape, solo, mute, seed, sampleRate }
  */
 export async function renderBroadcast(opts = {}) {
   const sampleRate = opts.sampleRate || 44100;
@@ -144,15 +218,15 @@ export async function renderBroadcast(opts = {}) {
   if (stem !== 'voice') musicOut.connect(ctx.destination);
   if (stem !== 'music') voiceOut.connect(ctx.destination);
   const music = new BroadcastMusic({ context: ctx, destination: musicOut, grave: opts.grave || 'silence', seed: opts.seed ?? 7, solo: opts.solo || null, mute: opts.mute || null, ...(opts.trim ? { trim: opts.trim } : {}) });
+  // Voices are planned (for ducking) whenever the render has them or asks for the duck.
   const plan = timeline({ ...opts, seconds, withVoice: withVoice || opts.duck === true });
-  const speechOn = withVoice || opts.duck === true || (opts.moment === 'demo' && opts.duck !== false);
   const events = [...plan].sort((a, b) => a.at - b.at);
   for (const ev of events) {
     music.pump(ev.at);
     if (ev.cue) music.cue(ev.cue, { ...ev.opts, at: ev.at });
     else if (ev.say) {
       const dur = LINES[ev.say];
-      if (speechOn && opts.duck !== false) {
+      if (opts.duck !== false) {
         music.speech(true, ev.at);
         music.speech(false, ev.at + dur);
       }

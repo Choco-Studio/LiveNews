@@ -234,7 +234,7 @@ function jacketTone(o, F, tier) {
   const fsx = 1.7, fsy = vY + 0.9;
   const fex = T.sideHW * 0.6, fey = Math.min(vY - 3, T.shoulderJoint[1] + 6.5);
   const sag = 2.0;
-  const foldTh = Math.max(0.42, 1.25 / s); // ≥ ~1.3 px at the thickest point
+  const foldTh = Math.max(0.3, 1.15 / s); // ~1-2 px at the thickest point
   const sideBase = 2.9, sideBulge = 1.8;
   return (px, py) => {
     const dl = (px + 0.5 - ROW_L[py]) / s;
@@ -267,8 +267,9 @@ function jacketTone(o, F, tier) {
       const fy = fsy + (fey - fsy) * u + sag * 4 * u * (1 - u);
       const th = foldTh * Math.pow(Math.sin(Math.PI * u), 0.7);
       const d = y - fy;
-      if (d >= 0 && d < th) t = x < 0 ? Math.max(t, 2) : Math.min(3, Math.max(t, 2) + (t >= 2 ? 1 : 0));
-      else if (x < 0 && d < 0 && d > -th * 0.75 && t === 1 && u > 0.18 && u < 0.8) t = 0;
+      // a soft shadow crescent; on the lit side a short ridge above it only in close-ups
+      if (d >= 0 && d < th && u > 0.08 && u < 0.92) t = x < 0 ? Math.max(t, 2) : Math.min(3, Math.max(t, 2) + (t >= 2 ? 1 : 0));
+      else if (s >= 3 && x < 0 && d < 0 && d > -th * 0.6 && t === 1 && u > 0.3 && u < 0.7) t = 0;
     }
     return t;
   };
@@ -428,7 +429,8 @@ function drawOpenThroat(o, F, tier) {
   const T = F.T;
   const np = pts(1);
   const ly = (x, y) => F.lift(x < 0 ? -1 : 1, y);
-  for (const [x, y] of [[-T.neckHW + 0.4, -2.2], [T.neckHW - 0.4, -2.2], [1.3, 1.8], [0, 4.6], [-1.3, 1.8]]) pt(o, np, x, ly(x, y));
+  // starts above the shirt's top edge so no strip of shirt (and its line) crosses the throat
+  for (const [x, y] of [[-T.neckHW + 0.3, -3.0], [T.neckHW - 0.3, -3.0], [1.3, 1.8], [0, 4.6], [-1.3, 1.8]]) pt(o, np, x, ly(x, y));
   buf.part(gb + G.neck, 6, o.clip);
   buf.poly(np, m.skin, tier === 0 || !o.inv ? 1 : neckSkinTone(o, F, 'v'));
   buf.part(gb + G.shirt, 6, o.clip);

@@ -609,13 +609,14 @@ export function draw(ctx, s, x, y, pal, flip = false) {
 
 /** Static art drawn once to an offscreen canvas. */
 const ART = new Map();
-export function cached(key, w, h, paint) {
+export function cached(key, w, h, paint, opts = null) {
   let cv = ART.get(key);
   if (!cv) {
     cv = document.createElement('canvas');
     cv.width = w;
     cv.height = h;
-    const c = cv.getContext('2d');
+    // cpu: textures read back once by lathe() stay CPU-backed (no GPU readback)
+    const c = opts && opts.cpu ? cv.getContext('2d', { willReadFrequently: true }) : cv.getContext('2d');
     c.imageSmoothingEnabled = false;
     paint(c);
     ART.set(key, cv);
@@ -972,7 +973,23 @@ function wrapDraw(ctx, cv, x) {
   else if (x < 0) ctx.drawImage(cv, x + W, 0);
 }
 
-const WD = { whip: 0.36, match: 0.4, slide: 0.4, irisInOut: 0.8, flash: 0.3, fade: 0.8, black: 1.0, soft: 0.9 };
+/** Cached 4x4 Bayer mask patterns: step n (1..16) keeps n of every 16 pixels. */
+const DMASK = [];
+function ditherMask(c, n) {
+  let pat = DMASK[n];
+  if (!pat) {
+    const cv = document.createElement('canvas');
+    cv.width = 4;
+    cv.height = 4;
+    const m = cv.getContext('2d');
+    m.fillStyle = '#000';
+    for (let i = 0; i < 16; i++) if (BAYER[i] < n) m.fillRect(i % 4, floor(i / 4), 1, 1);
+    DMASK[n] = pat = c.createPattern(cv, 'repeat');
+  }
+  return pat;
+}
+
+const WD = { whip: 0.36, match: 0.4, slide: 0.4, irisInOut: 0.8, flash: 0.3, fade: 0.8, black: 1.0, soft: 0.9, dither: 0.8 };
 
 /**
  * Run a list of shots [{ at, draw(ctx, lt, info, dt), wipe, wd, cx, cy, fx, fy, dir }].
@@ -1062,26 +1079,42 @@ export function play(ctx, dt, info, list) {
     else s.draw(ctx, lt, info, dt);
     R(ctx, 0, 0, W, H, A(P.black, a));
   } else if (kind === 'soft') {
-    // slow wipe with a 24 px feathered edge (o.dir 1 = left to right)
+    // slow wipe with a 24 px feathered edge, 1 px columns (o.dir 1 = left to right)
     prev.draw(ctx, plt, info, dt);
     const b = scratch(0);
     s.draw(b.c, lt, info, dt);
     const F = 24;
-    const edge = round(-F + smooth(p) * (W + 2 * F));
+    const edge = round(-F + smooth(p) * (W + 2 * F)); // leading column of the reveal
     ctx.save();
-    for (let k = 0; k < F; k += 2) {
-      // column band k px behind the edge is k/F opaque
-      const a = (k + 1) / F;
-      const x = dir > 0 ? edge - k : W - edge + k - 2;
-      if (x < 0 || x >= W) continue;
-      ctx.globalAlpha = a;
-      ctx.drawImage(b.cv, x, 0, 2, H, x, 0, 2, H);
+    for (let k = 0; k < F; k++) {
+      // the column k px behind the leading edge is (k + 1) / F opaque
+      const xl = edge - k;
+      if (xl < 0 || xl >= W) continue;
+      const x = dir > 0 ? xl : W - 1 - xl;
+      ctx.globalAlpha = smooth((k + 1) / F);
+      ctx.drawImage(b.cv, x, 0, 1, H, x, 0, 1, H);
     }
     ctx.globalAlpha = 1;
-    const solid = dir > 0 ? edge - F : W - edge + F;
-    if (dir > 0 && solid > 0) ctx.drawImage(b.cv, 0, 0, min(W, solid), H, 0, 0, min(W, solid), H);
-    else if (dir < 0 && solid < W) ctx.drawImage(b.cv, max(0, solid), 0, W - max(0, solid), H, max(0, solid), 0, W - max(0, solid), H);
+    const solid = min(W, edge - F + 1); // columns [0, solid) are fully revealed
+    if (solid > 0) {
+      const x = dir > 0 ? 0 : W - solid;
+      ctx.drawImage(b.cv, x, 0, solid, H, x, 0, solid, H);
+    }
     ctx.restore();
+  } else if (kind === 'dither') {
+    // palette-pure ordered dissolve: 16 Bayer 4x4 steps (50 ms each at 0.8 s);
+    // only for shots with no text, logo or face close-up on screen
+    prev.draw(ctx, plt, info, dt);
+    const b = scratch(0);
+    s.draw(b.c, lt, info, dt);
+    const step = min(16, floor(p * 17));
+    if (step > 0) {
+      b.c.globalCompositeOperation = 'destination-in';
+      b.c.fillStyle = ditherMask(b.c, step);
+      b.c.fillRect(0, 0, W, H);
+      b.c.globalCompositeOperation = 'source-over';
+      ctx.drawImage(b.cv, 0, 0);
+    }
   } else {
     prev.draw(ctx, plt, info, dt);
     wipeClip(ctx, kind, p, s);
@@ -3583,21 +3616,33 @@ export function motes(ctx, t, { x = 0, y = 0, w = W, h = H, n = 30, seed = 3, dr
   }
 }
 
-const WARM = new WeakSet();
+const WARM = new WeakMap(); // shot -> draws done (0..2)
+const WARMED = new WeakSet(); // shot lists fully baked
 /**
  * Pre-bake a spot's static art without a visible hitch: call it from draw()
- * with the spot's shot list; while dt < 2 s it renders one not-yet-seen shot
- * per frame (at lt = 1 and 3) into a hidden scratch canvas, so every cached
- * canvas, gradient and type line exists before its shot comes on air.
+ * with the spot's shot list. Each frame it renders ONE pass of one
+ * not-yet-baked shot (at lt = 1, then on a later frame at lt = 3) into a
+ * hidden scratch canvas, until every shot is baked; this does not depend on
+ * the frame rate (a slow page simply takes more of the spot's first shot to
+ * finish). Every cached canvas, gradient and type line then exists before its
+ * shot comes on air. After that it is one WeakSet lookup per frame.
  */
 export function warmUp(shots, dt, info = null, slot = 5) {
-  if (dt > 2) return;
-  for (const s of shots) {
-    if (WARM.has(s)) continue;
-    WARM.add(s);
+  if (WARMED.has(shots)) return;
+  for (let i = 0; i < shots.length; i++) {
+    const s = shots[i];
+    const done = WARM.get(s) || 0;
+    if (done >= 2) continue;
+    // the shot on air is warmed by being drawn; skip ahead to the next one
+    if (dt >= s.at && (i + 1 === shots.length || dt < shots[i + 1].at)) {
+      WARM.set(s, 2);
+      continue;
+    }
+    WARM.set(s, done + 1);
     const b = scratch(slot);
-    s.draw(b.c, 1, info, s.at + 1);
-    s.draw(b.c, 3, info, s.at + 3);
+    const lt = done === 0 ? 1 : 3;
+    s.draw(b.c, lt, info, s.at + lt);
     return;
   }
+  WARMED.add(shots);
 }

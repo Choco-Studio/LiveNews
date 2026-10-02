@@ -57,7 +57,7 @@ const PH = [
   [0.18, 0.106, 0.082],
 ];
 const FR = [0.062, 0.065, 0.06, 0.052]; // finger radius at the knuckle
-const TAPER = [1, 0.93, 0.86, 0.78]; // radius at knuckle, PIP, DIP, tip
+const TAPER = [1, 0.93, 0.86, 0.72]; // radius at knuckle, PIP, DIP, tip
 const SPREAD = [0.17, 0.05, -0.07, -0.2]; // rad per unit of spread (positive: toward the thumb)
 // palm outline in palm-plane coordinates [lateral, along]: radial wrist → thenar → index side →
 // knuckle arc → pinky side → hypothenar → ulnar wrist
@@ -144,13 +144,11 @@ export function handGeometry(L, arm, side, g) {
   REF[2] = 1 - f[2] * f[2];
   const rl = Math.hypot(REF[0], REF[1], REF[2]);
   if (rl < 0.35) {
+    // "up" (0, -1, 0) made perpendicular to f, mixed in as f turns toward the lens
     const k = (0.35 - rl) / 0.35;
-    // up, made perpendicular to f
-    const fu = -f[1];
-    REF[0] += (0 - f[0] * fu * -1 * -1) * 0 + (f[0] * fu) * k;
-    REF[1] += (-1 + f[1] * fu * -1 * -1 + 0) * k + 0;
-    REF[1] += (f[1] * fu) * k;
-    REF[2] += (f[2] * fu) * k;
+    REF[0] += f[0] * f[1] * k;
+    REF[1] += (f[1] * f[1] - 1) * k;
+    REF[2] += f[2] * f[1] * k;
   }
   norm3(REF);
   // WV: where the palm goes when it turns away from the camera (natural pronation: down and a little outward)
@@ -534,9 +532,9 @@ const TN = new Int8Array(LW * LH); // tone 0..3; 4 = line; 8+ = detail (decal to
 const UU = new Float32Array(LW * LH); // position along the bone 0..1
 const VV = new Float32Array(LW * LH); // signed offset across the bone, -1..1
 const P2 = new Float64Array(20 * 3); // projected joints: x, y, depth
-const HULL_IN = new Float64Array(PALM_N * 4);
-const HULL = new Float64Array(PALM_N * 4 + 4);
-const ORDER = new Int32Array(PALM_N * 2);
+const HULL_IN = new Float64Array(PALM_N * 4 + 4);
+const HULL = new Float64Array(PALM_N * 4 + 8);
+const ORDER = new Int32Array(PALM_N * 2 + 2);
 const SEGSHADE = new Float64Array(20);
 
 let bx0 = 0, by0 = 0, bw = 0, bh = 0;
@@ -574,6 +572,18 @@ function rasterHand(buf, L, hm, g, B, s, gh, z) {
       if (Y > maxY) maxY = Y;
     }
   }
+  // the web between thumb and index joins the palm while the thumb is out (not when it crosses the palm)
+  let hullN = PALM_N * 2;
+  if (g.curl[0] < 0.55) {
+    const wk = 0.78;
+    const x = J[48] + (J[51] - J[48]) * wk, y = J[49] + (J[52] - J[49]) * wk, zz = J[50] + (J[53] - J[50]) * wk;
+    for (let f = 0; f < 2; f++) {
+      const sg = f === 0 ? th * 0.8 : -th * 0.8;
+      HULL_IN[hullN * 2] = px(B, x + n[0] * sg, y + n[1] * sg, zz + n[2] * sg);
+      HULL_IN[hullN * 2 + 1] = py(B, x + n[0] * sg, y + n[1] * sg, zz + n[2] * sg);
+      hullN++;
+    }
+  }
   bx0 = Math.max(1, Math.floor(minX) - 1);
   by0 = Math.max(1, Math.floor(minY) - 1);
   const bx1 = Math.min(buf.w - 1, Math.ceil(maxX) + 2), by1 = Math.min(buf.h - 1, Math.ceil(maxY) + 2);
@@ -587,13 +597,14 @@ function rasterHand(buf, L, hm, g, B, s, gh, z) {
   }
 
   const lod = s < 1.35 ? 0 : s < 2.7 ? 1 : s < 3.4 ? 2 : 3;
+  HI_T = lod >= 3 ? 1.12 : lod === 2 ? 1.2 : 9;
   const robot = hm.robot;
   const back = g.back;
   // per-bone shading bias: how much each phalanx's visible face turns toward or away from the key
   boneShades(g);
 
   // ---- palm
-  const hn = hullOf(HULL_IN, PALM_N * 2, HULL);
+  const hn = hullOf(HULL_IN, hullN, HULL);
   rasterPalm(g, B, s, hn, lod);
   // ---- thumb and fingers, as tapered tubes
   const minR = lod === 0 ? 0.56 : 0.5;
@@ -688,8 +699,9 @@ function boneShades(g) {
 }
 
 /** Tone from a light value: hi / base / shade / deep (hand-tuned thresholds, kept clean). */
+let HI_T = 9; // highlight threshold for the current hand (by LOD: highlights only where there is room)
 function toneOfL(l) {
-  return l > 1.02 ? 0 : l > 0.08 ? 1 : l > -0.5 ? 2 : 3;
+  return l > HI_T ? 0 : l > 0.08 ? 1 : l > -0.5 ? 2 : 3;
 }
 
 function rasterBone(a, b, ra, rb, own, seg, bias, s) {
@@ -838,7 +850,12 @@ function rasterPalm(g, B, s, hn, lod) {
       UU[k] = 0;
       VV[k] = 0;
       let l = 0.32 + lFace * 0.55;
-      if (md < ew) l += 0.85 * (mnx * L2X + mny * L2Y);
+      if (md < ew) {
+        // form shading at the rim of the plate: shade where the edge turns from the key,
+        // a lit edge only where it faces the key squarely
+        const el = mnx * L2X + mny * L2Y;
+        l += el < 0 ? 0.95 * el : el > 0.72 ? 0.9 * el : 0;
+      }
       TN[k] = toneOfL(l);
     }
   }

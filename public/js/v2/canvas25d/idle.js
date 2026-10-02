@@ -1,8 +1,16 @@
 // Idle layer of the canvas25d rig (owner: FACES stream): the life a presenter
-// has when nothing is scripted. Always on, pure function of t:
-// breathing, weight shift, head micro-motion, seeded blinks 2-6 s apart
-// (some doubles) and saccades between fixations near the lens.
+// has when nothing is scripted. Always on, a function of t (and of the speech
+// frame, which speech.js samples once per instant):
+//   breathing, weight shift, head micro-motion;
+//   blinks: a seeded timetable 2-6 s apart (some doubles), plus the blinks
+//     people make with big gaze shifts (most look starts, some returns), at
+//     sentence ends and in some comma pauses; an event blink replaces a
+//     scheduled one close to it, so the eyes never flutter;
+//   saccades: quick (45 ms) jumps between fixations. Talking to the lens the
+//     fixations stay close to it (reading the autocue); listening they wander
+//     a little more; a look or a gesture that drives the eyes damps them.
 import { smooth } from './space.js';
+import { sampleSpeech } from './speech.js';
 
 export function mulberry(seed) {
   let a = seed >>> 0;
@@ -60,6 +68,34 @@ export function upperBound(arr, t, stride = 1) {
   return lo;
 }
 
+/** Deterministic 0..1 from an event time and a seed (which events get a blink). */
+export function eventHash(x, seed) {
+  const v = Math.sin(x * 12.9898 + seed * 78.233) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+const FAR = -1e9;
+
+/** Start time of the latest event blink at t (look shifts, sentence ends, comma pauses), or FAR. */
+function eventBlink(perf, fr, t, seed) {
+  let tb = FAR;
+  const looks = perf.look;
+  if (looks) {
+    for (let i = 0; i < looks.length; i++) {
+      const lk = looks[i];
+      if (lk.target === 'camera' || lk.style === 'mech') continue;
+      // most big gaze shifts carry a blink as the eyes start to move; some returns too
+      if (t >= lk.t0 && t - lk.t0 < 0.3 && eventHash(lk.t0, seed) < 0.7 && lk.t0 + 0.03 > tb) tb = lk.t0 + 0.03;
+      if (t >= lk.t1 && t - lk.t1 < 0.3 && eventHash(lk.t1, seed + 1) < 0.35 && lk.t1 > tb) tb = lk.t1;
+    }
+  }
+  if (fr) {
+    if (t - fr.endAt < 0.3 && t >= fr.endAt && eventHash(fr.endAt, seed + 2) < 0.6 && fr.endAt + 0.05 > tb) tb = fr.endAt + 0.05;
+    if (t - fr.pauseAt < 0.3 && t >= fr.pauseAt && eventHash(fr.pauseAt, seed + 3) < 0.45 && fr.pauseAt + 0.03 > tb) tb = fr.pauseAt + 0.03;
+  }
+  return tb;
+}
+
 /** Eyelid closure 0..1 for a blink that started dt seconds ago: fast close, short hold, slower open. */
 export function blinkCurve(dt) {
   if (dt < 0) return 0;
@@ -85,20 +121,28 @@ export function applyIdle(c, persona, perf, t, seed, gestLook) {
   c.roll += hm * 0.018 * wobble(t * 0.27, seed + 9);
   c.hy += br * 0.35;
   const sch = schedule(seed, p);
-  // blinks (also triggered on big head turns in real life; the schedule covers it well enough)
+  const fr = perf.speech ? sampleSpeech(perf.speech, t) : null;
+  const act = fr ? fr.act || 0 : 0;
+  // blinks: the timetable, unless an event blink sits within 0.6 s of it
+  const tb = eventBlink(perf, fr, t, seed);
   const bi = upperBound(sch.blinks, t);
-  let blink = 0;
-  for (let q = Math.max(0, bi - 1); q <= bi && q >= 0; q++) blink = Math.max(blink, blinkCurve(t - sch.blinks[q]));
+  let blink = tb > FAR ? blinkCurve(t - tb) : 0;
+  for (let q = Math.max(0, bi - 1); q <= bi && q >= 0; q++) {
+    const b = sch.blinks[q];
+    if (tb > FAR && Math.abs(b - tb) < 0.6) continue;
+    blink = Math.max(blink, blinkCurve(t - b));
+  }
   c.blink = blink;
-  // saccades: 45 ms eased jumps between fixations, damped while a gesture drives the eyes
+  // saccades: 45 ms eased jumps between fixations, closer to the lens while talking,
+  // damped while a look or a gesture drives the eyes
   const si = upperBound(sch.sacc, t, 3);
   if (si >= 0) {
     const t0 = sch.sacc[si * 3];
     const px = si > 0 ? sch.sacc[si * 3 - 2] : 0, py = si > 0 ? sch.sacc[si * 3 - 1] : 0;
     const u = smooth((t - t0) / 0.045);
     const sx = px + (sch.sacc[si * 3 + 1] - px) * u, sy = py + (sch.sacc[si * 3 + 2] - py) * u;
-    const damp = perf.speech ? 0.45 : 1;
-    c.lookX += sx * damp * (1 - gestLook * 0.8);
-    c.lookY += sy * damp * (1 - gestLook * 0.8);
+    const damp = (1 - 0.55 * act) * (1 - gestLook * 0.85);
+    c.lookX += sx * damp;
+    c.lookY += sy * damp;
   }
 }
