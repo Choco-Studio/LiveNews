@@ -71,7 +71,7 @@ const DRUMS = {
   },
   four: {
     brush: false,
-    kick: [[0, 0.9], [1, 0.75], [2, 0.9], [3, 0.75]],
+    kick: [[0, 0.72], [1, 0.55], [2, 0.7], [3, 0.55]], // a soft heartbeat, not a club kick
     snare: [[1, 0.45], [3, 0.45]],
     ghosts: [],
     hats: { step: 0.5, vel: [0, 0.75, 0, 0.7, 0, 0.75, 0, 0.7], open: 0.1 },
@@ -134,7 +134,7 @@ function bassLine(style, r, chord, next) {
       const out = [];
       for (let i = 0; i < 8; i++) {
         const oct = i % 2 === 1 && r.chance(0.18) ? 12 : 0;
-        out.push(ev(i * 0.5, 0.4, i === 7 ? approach(r, root, next) : root + oct, i % 2 ? 0.55 : 0.75));
+        out.push(ev(i * 0.5, 0.4, i === 7 ? approach(r, root, next) : root + oct, i % 2 ? 0.45 : 0.62));
       }
       return out;
     }

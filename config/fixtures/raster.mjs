@@ -36,6 +36,82 @@ export function noise1(seed) {
   };
 }
 
+/** Smooth 2D value noise in [-1, 1], with `fbm(x, y, octaves)` (fractal sum) and `ridged(...)`. */
+export function noise2(seed) {
+  const r = rng(seed);
+  const perm = Uint8Array.from({ length: 256 }, (_, i) => i);
+  for (let i = 255; i > 0; i--) {
+    const j = Math.floor(r() * (i + 1));
+    [perm[i], perm[j]] = [perm[j], perm[i]];
+  }
+  const vals = Float32Array.from({ length: 256 }, () => r() * 2 - 1);
+  const at = (ix, iy) => vals[perm[(perm[ix & 255] + iy) & 255]];
+  const n = (x, y) => {
+    const ix = Math.floor(x);
+    const iy = Math.floor(y);
+    const fx = x - ix;
+    const fy = y - iy;
+    const ux = fx * fx * (3 - 2 * fx);
+    const uy = fy * fy * (3 - 2 * fy);
+    const a = at(ix, iy) + (at(ix + 1, iy) - at(ix, iy)) * ux;
+    const b = at(ix, iy + 1) + (at(ix + 1, iy + 1) - at(ix, iy + 1)) * ux;
+    return a + (b - a) * uy;
+  };
+  n.fbm = (x, y, octaves = 4, lacunarity = 2.03, gain = 0.5) => {
+    let v = 0;
+    let amp = 1;
+    let norm = 0;
+    for (let o = 0; o < octaves; o++) {
+      v += n(x + o * 17.3, y - o * 9.1) * amp;
+      norm += amp;
+      x *= lacunarity;
+      y *= lacunarity;
+      amp *= gain;
+    }
+    return v / norm;
+  };
+  n.ridged = (x, y, octaves = 4) => {
+    let v = 0;
+    let amp = 0.5;
+    for (let o = 0; o < octaves; o++) {
+      v += (1 - Math.abs(n(x + o * 13.7, y + o * 7.9))) ** 2 * amp;
+      x *= 2.07;
+      y *= 2.07;
+      amp *= 0.5;
+    }
+    return v;
+  };
+  return n;
+}
+
+/**
+ * A colour ramp through stops [[t, colour], ...] (t 0..1): build 3-4 tone
+ * hue-shifted ramps (cool, desaturated shadows; warm, light highlights).
+ */
+export function ramp(stops) {
+  const s = stops.map(([t, c]) => [t, typeof c === 'string' ? hex(c) : c]);
+  return (t) => {
+    t = Math.min(1, Math.max(0, t));
+    let k = 0;
+    while (k < s.length - 2 && t > s[k + 1][0]) k++;
+    const [ta, ca] = s[k];
+    const [tb, cb] = s[k + 1];
+    return mix(ca, cb, Math.min(1, Math.max(0, (t - ta) / Math.max(1e-6, tb - ta))));
+  };
+}
+
+/** An organic outline around (cx, cy): an ellipse whose radius wanders with noise (bushes, rocks, clouds, crowns). */
+export function blob(cx, cy, rx, ry, seed, rough = 0.25, n = 56) {
+  const nz = noise1(seed);
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const k = 1 + rough * (nz(i * 0.55) * 0.7 + nz(i * 1.9 + 40) * 0.3);
+    pts.push([cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k]);
+  }
+  return pts;
+}
+
 export class Canvas {
   constructor(w, h) {
     this.w = w;
@@ -127,6 +203,37 @@ export class Canvas {
 
   circle(cx, cy, r, c, a = 1, shade = null) {
     this.ellipse(cx, cy, r, r, c, a, shade);
+  }
+
+  /** Run `fn(x, y)` -> [colour, alpha] | null over a box: clouds, smoke, water, textures. */
+  paintBox(x0, y0, x1, y1, fn) {
+    for (let y = Math.max(0, Math.floor(y0)); y < Math.min(this.h, Math.ceil(y1)); y++) {
+      for (let x = Math.max(0, Math.floor(x0)); x < Math.min(this.w, Math.ceil(x1)); x++) {
+        const out = fn(x, y);
+        if (out) this.blend(x, y, out[0], out[1] ?? 1);
+      }
+    }
+  }
+
+  /**
+   * A lit volume: the polygon is shaded as a rounded form inside the ellipse
+   * (cx, cy, rx, ry) by a light from direction (lx, ly) (screen space, z up),
+   * through `tone(t)` (0 = core shadow .. 1 = highlight). `jitter(x, y)` adds
+   * texture (leaves, rock) to the light value.
+   */
+  litPoly(pts, cx, cy, rx, ry, tone, { lx = -0.6, ly = -0.6, lz = 0.5, ambient = 0.18, jitter = null, a = 1 } = {}) {
+    const len = Math.hypot(lx, ly, lz);
+    const L = [lx / len, ly / len, lz / len];
+    this.poly(pts, '#000000', a, (x, y) => {
+      const nx = (x + 0.5 - cx) / rx;
+      const ny = (y + 0.5 - cy) / ry;
+      const d = Math.min(1, nx * nx + ny * ny);
+      const nz = Math.sqrt(1 - d);
+      let lit = Math.max(0, nx * L[0] + ny * L[1] + nz * L[2]);
+      lit = ambient + (1 - ambient) * lit;
+      if (jitter) lit += jitter(x, y);
+      return tone(lit);
+    });
   }
 
   /** A thick line as a quad. */

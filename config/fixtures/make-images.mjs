@@ -5,579 +5,885 @@
 //
 //   node config/fixtures/make-images.mjs [scene ...]
 //
-// Scenes are composed like news photographs (one clear subject, a horizon,
-// light from one side) with flat, bold shapes, so they read well after the
+// Scenes are composed like news photographs: one clear subject, a horizon, one
+// motivated key light. Forms are hand-shaped rather than geometric: noisy
+// silhouettes, rounded volumes lit from one side through 3-4 tone hue-shifted
+// ramps, textured surfaces, varied repeats (no two houses, trees or windows
+// alike) and atmospheric perspective, so they still read as pictures after the
 // channel pixelates them to 104x62 (video wall) and 416x234 (full screen).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Canvas, encodePng, hex, mix, noise1, rng } from './raster.mjs';
+import { Canvas, blob, encodePng, hex, mix, noise1, noise2, ramp, rng } from './raster.mjs';
 
 const W = 1280;
 const H = 720;
 const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'img');
 
-const shadeV = (y0, y1, top, bottom) => {
-  const a = hex(top);
-  const b = hex(bottom);
-  return (x, y) => mix(a, b, Math.min(1, Math.max(0, (y - y0) / (y1 - y0))));
+const clamp01 = (v) => Math.min(1, Math.max(0, v));
+const smooth = (a, b, v) => {
+  const t = clamp01((v - a) / (b - a));
+  return t * t * (3 - 2 * t);
 };
+const pickOf = (r, list) => list[Math.floor(r() * list.length)];
 
-function stars(c, r, n, maxY, bright = 1) {
-  for (let i = 0; i < n; i++) {
-    const x = r() * W;
-    const y = r() * maxY;
-    const s = r();
-    c.circle(x, y, s < 0.92 ? 1.6 : 3, '#ffffff', (0.35 + s * 0.65) * bright);
+// ---------------------------------------------------------------- shared painting tools
+
+/** Soft cloud field from fractal noise, lit from one side (tops warm, bellies cool). */
+function clouds(c, seed, { y0 = 0, y1 = H * 0.5, scale = 0.003, cover = 0.1, soft = 0.25, lit = '#f2e2cc', shade = '#5a6278', alpha = 0.9, stretch = 2.6, lightUp = true } = {}) {
+  const n = noise2(seed);
+  const toneOf = ramp([[0, shade], [1, lit]]);
+  c.paintBox(0, y0, W, y1, (x, y) => {
+    const v = n.fbm(x * scale, y * scale * stretch, 5);
+    const d = smooth(cover, cover + soft, v);
+    if (d <= 0) return null;
+    const above = n.fbm(x * scale, (y - (lightUp ? 14 : -14)) * scale * stretch, 5);
+    const light = clamp01(0.55 + (v - above) * 6);
+    const fade = smooth(y1, y1 - (y1 - y0) * 0.25, y);
+    return [toneOf(light), d * alpha * fade];
+  });
+}
+
+/** Pull a band of the picture toward the haze colour, more at the bottom of the band (distance). */
+function haze(c, y0, y1, colour, k0, k1) {
+  const h = hex(colour);
+  c.paintBox(0, y0, W, y1, (x, y) => [h, k0 + (k1 - k0) * clamp01((y - y0) / (y1 - y0))]);
+}
+
+/**
+ * A broadleaf tree: a tapered, slightly bent trunk with a fork, under a crown
+ * of irregular lobes. Lobes at the back are drawn first and darker; each lobe
+ * is a rounded volume lit from the key light, with leaf texture from noise.
+ */
+function tree(c, r, x, groundY, height, { tone, bark = ramp([[0, '#2a221e'], [1, '#6a5a4c']]), light = { lx: -0.7, ly: -0.5, lz: 0.5 }, crownW = 0.75, lobes = 11, mottled = false } = {}) {
+  const leaf = noise2(Math.floor(r() * 1e9));
+  const trunkTop = groundY - height * 0.5;
+  const lean = (r() - 0.5) * height * 0.12;
+  const tw = height * 0.045;
+  const trunk = [
+    [x - tw, groundY],
+    [x - tw * 0.55 + lean * 0.6, trunkTop + height * 0.1],
+    [x - tw * 0.3 + lean, trunkTop],
+    [x + tw * 0.3 + lean, trunkTop],
+    [x + tw * 0.55 + lean * 0.6, trunkTop + height * 0.1],
+    [x + tw, groundY],
+  ];
+  c.litPoly(trunk, x + lean * 0.5, (groundY + trunkTop) / 2, tw * 1.2, height * 0.6, bark, { ...light, ambient: 0.25, jitter: mottled ? (px, py) => (leaf(px * 0.08, py * 0.03) > 0.25 ? 0.35 : 0) : null });
+  // two forks into the crown
+  for (const side of [-1, 1]) c.line(x + lean, trunkTop + height * 0.04, x + lean + side * height * (0.12 + r() * 0.08), trunkTop - height * 0.12, tw * 0.7, bark(0.25));
+  const cx = x + lean;
+  const cy = trunkTop - height * 0.22;
+  const rx = height * crownW * 0.5;
+  const ry = height * 0.36;
+  const parts = [];
+  for (let i = 0; i < lobes; i++) {
+    const a = r() * Math.PI * 2;
+    const d = Math.sqrt(r());
+    const s = 0.35 + r() * 0.3;
+    parts.push({ x: cx + Math.cos(a) * rx * d * 0.7, y: cy + Math.sin(a) * ry * d * 0.6 - ry * 0.05, s, back: Math.sin(a) < -0.2 });
+  }
+  parts.sort((p, q) => Number(q.back) - Number(p.back) || p.y - q.y);
+  // the crown's mass first (dark), so gaps between lobes read as depth, not holes
+  c.litPoly(blob(cx, cy, rx * 0.95, ry * 0.85, Math.floor(r() * 1e9), 0.22), cx, cy, rx, ry, tone, { ...light, ambient: 0.05, jitter: () => -0.25 });
+  for (const p of parts) {
+    const lrx = rx * p.s;
+    const lry = ry * p.s * 0.9;
+    c.litPoly(blob(p.x, p.y, lrx, lry, Math.floor(r() * 1e9), 0.3), p.x, p.y, lrx, lry, tone, {
+      ...light,
+      ambient: p.back ? 0.08 : 0.15,
+      jitter: (px, py) => leaf(px * 0.11, py * 0.11) * 0.22 + (p.back ? -0.12 : 0),
+    });
   }
 }
 
-function cloud(c, x, y, s, color, a = 1) {
-  const blobs = [
-    [0, 0, 1],
-    [-0.9, 0.25, 0.7],
-    [0.9, 0.2, 0.75],
-    [-0.4, -0.35, 0.75],
-    [0.45, -0.3, 0.7],
-  ];
-  for (const [dx, dy, k] of blobs) c.ellipse(x + dx * s, y + dy * s * 0.6, s * k, s * k * 0.62, color, a);
+/** Shadow of something on the ground: a soft, flattened, darkening blob. */
+function groundShadow(c, cx, cy, rx, ry, k = 0.45, colour = '#10141e') {
+  const h = hex(colour);
+  c.paintBox(cx - rx, cy - ry, cx + rx, cy + ry, (x, y) => {
+    const d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2;
+    return d < 1 ? [h, k * (1 - d) ** 1.5] : null;
+  });
+}
+
+/**
+ * Water: reflect what is above the waterline (y0) into the rows below, broken
+ * up by ripples and darkened toward `colour`; `k` is how much of the water colour shows.
+ */
+function reflect(c, y0, y1, colour, k, seed, { ripple = 6, stretch = 0.08 } = {}) {
+  const n = noise2(seed);
+  const wc = hex(colour);
+  const src = c.d.slice();
+  c.paintBox(0, y0, c.w, y1, (x, y) => {
+    const dy = y - y0;
+    const sx = Math.round(x + n(x * 0.004, y * stretch) * ripple * (1 + dy * 0.02));
+    const sy = Math.round(y0 - dy * 1.05 - 1 + n(x * 0.02, y * 0.3) * 2);
+    if (sy < 0 || sx < 0 || sx >= c.w) return [wc, 1];
+    const i = (sy * c.w + sx) * 3;
+    const m = clamp01(k + dy / (y1 - y0) * 0.35);
+    return [mix([src[i], src[i + 1], src[i + 2]], wc, m), 1];
+  });
+}
+
+/** Additive dust of tiny highlights (water glitter, embers, stars). */
+function sparkle(c, r, n, x0, y0, x1, y1, colour, strength, sizes = [1, 1, 2]) {
+  for (let i = 0; i < n; i++) {
+    const x = x0 + r() * (x1 - x0);
+    const y = y0 + r() * (y1 - y0);
+    c.glow(x, y, pickOf(r, sizes) * 2.2, colour, strength * (0.4 + r() * 0.6), 1);
+  }
 }
 
 // ---------------------------------------------------------------- scenes
 
 export const SCENES = {
-  /** A tram on a riverside street at dusk, lit windows on the hill behind (Lisbon). */
+  /** A yellow tram climbs a riverside street at dusk; houses of every colour stacked up the hill behind (Lisbon). */
   tram(c, r) {
-    c.gradient(0, H * 0.62, [
-      [0, '#141c34'],
-      [0.5, '#34405e'],
-      [0.85, '#a8705a'],
-      [1, '#d89a6a'],
-    ]);
-    c.glow(W * 0.8, H * 0.6, 520, '#e09060', 0.35);
-    // the hill: layered, darker houses with warm lit windows
-    const hill = c.ridge(H * 0.4, 60, 0.0022, '#2e2a38', 11, { bottom: H * 0.66, octaves: 2 });
-    const yAt = (x) => (hill.find(([px]) => px >= x) || hill.at(-2))[1];
-    const walls = ['#8a7a6a', '#9a8670', '#6e6a70', '#a08c72', '#7a6a62', '#8e8a84'];
-    for (let row = 0; row < 3; row++) {
-      for (let x = -30 + row * 40; x < W; x += 80 + r() * 30) {
-        const top = yAt(Math.max(0, x)) + row * 60 + r() * 10;
-        if (top > H * 0.6) continue;
-        const w = 72 + r() * 40;
-        const h = 60 + r() * 30;
-        const dim = 0.55 + row * 0.15;
-        const wall = walls[Math.floor(r() * walls.length)];
-        c.rect(x, top, w, h, wall);
-        c.rect(x, top, w, h, '#141828', 1 - dim);
-        c.rect(x + w - 14, top, 14, h, '#000000', 0.25);
-        c.poly([[x - 5, top], [x + w / 2, top - 18 - r() * 6], [x + w + 5, top]], '#6a3a30');
-        for (let wx = x + 12; wx < x + w - 16; wx += 26) {
-          const lit = r() < 0.45;
-          c.rect(wx, top + 18, 11, 16, lit ? '#f0b866' : '#232434', lit ? 0.95 : 0.8);
+    c.gradient(0, H * 0.6, [[0, '#1a2240'], [0.5, '#46496a'], [0.8, '#a8706a'], [1, '#e6a46e']]);
+    clouds(c, 11, { y0: 0, y1: H * 0.3, scale: 0.0024, cover: 0.12, lit: '#eaa888', shade: '#3a3c5a', alpha: 0.75, stretch: 3 });
+    c.glow(W * 0.85, H * 0.5, 600, '#f0a060', 0.28);
+    // the hill, four rows of houses from the top down; far rows bluer and dimmer
+    const hill = noise1(4);
+    const rowY = (x, row) => H * (0.16 + row * 0.1) + (x / W) * H * 0.06 + hill(x * 0.004 + row * 9) * 20;
+    const walls = ['#d8b070', '#ecd2a8', '#cc8670', '#a8b8c8', '#f2e8d8', '#dca06c', '#c4ae90', '#dcc26e', '#a4b49c', '#e0b4a4'];
+    const roofTone = ramp([[0, '#2e1814'], [0.45, '#7a3c28'], [0.8, '#b8603e'], [1, '#d8865a']]);
+    const tiles = noise2(12);
+    for (let row = 0; row < 4; row++) {
+      const dim = [0.5, 0.34, 0.18, 0.05][row];
+      const air = hex('#3a3e60');
+      let x = -60 - r() * 60;
+      while (x < W + 60) {
+        const w = 64 + r() * 96;
+        const floors = 2 + Math.floor(r() * 3);
+        const h = floors * 34 + 16;
+        const top = rowY(x + w / 2, row) - r() * 18;
+        const wall = hex(pickOf(r, walls));
+        const shade = (k) => mix(mix(wall, hex('#1a1c34'), k), air, dim);
+        // wall: lit from the low sun on the right, a soft band of shadow under the eaves
+        c.paintBox(x, top, x + w, top + h + 140, (px, py) => [shade(0.12 + (px - x) / w * -0.08 + smooth(top, top + 14, py) * -0.1 + 0.1 + tiles(px * 0.08, py * 0.08) * 0.03), 1]);
+        c.rect(x, top + h, w, 140, '#000000', 0.18);
+        // hipped tile roof: two planes, the sunward one warm
+        const eave = 7 + r() * 4;
+        const ridge = top - 18 - r() * 10;
+        const peak = x + w * (0.35 + r() * 0.3);
+        c.poly([[x - eave, top + 3], [peak - w * 0.18, ridge], [peak + w * 0.18, ridge], [x + w + eave, top + 3]], '#000', 1, (px, py) => mix(roofTone(0.3 + (px > peak ? 0.45 : 0.1) + tiles(px * 0.05, py * 0.35) * 0.12), air, dim));
+        c.rect(x - eave, top + 1, w + eave * 2, 4, mix(hex('#1a1014'), air, dim));
+        if (r() < 0.4) c.rect(peak + w * 0.12, ridge - 16, 9, 16, mix(hex('#8a6a5a'), air, dim));
+        // tall windows with shutters, some lit; a small iron balcony on the first floor now and then
+        const cols = Math.max(1, Math.round(w / 40));
+        const shutter = hex(pickOf(r, ['#3a5a3a', '#5a3a2a', '#2a3a5a', '#6a6a6a']));
+        for (let f = 0; f < floors; f++) {
+          for (let i = 0; i < cols; i++) {
+            const wx = x + ((i + 0.5) / cols) * w - 6;
+            const wy = top + 14 + f * 34;
+            const on = r() < 0.32;
+            c.rect(wx - 5, wy - 1, 4, 22, mix(shutter, air, dim));
+            c.rect(wx + 13, wy - 1, 4, 22, mix(shutter, air, dim));
+            c.rect(wx, wy, 12, 20, on ? '#f7c472' : mix(hex('#141828'), air, dim * 0.6));
+            if (on) c.glow(wx + 6, wy + 10, 26, '#f0a050', 0.14 * (1 - dim));
+            if (f === 0 && r() < 0.3) c.rect(wx - 6, wy + 18, 24, 2, '#14141c');
+          }
         }
+        x += w - 6 + r() * 8;
       }
     }
-    c.gradient(H * 0.6, H * 0.64, [[0, '#262230'], [1, '#1a1822']]);
-    // street, then the river with long reflections
-    c.rect(0, H * 0.64, W, H * 0.12, '#3c3a42');
-    c.rect(0, H * 0.64, W, 4, '#6a6670');
-    c.gradient(H * 0.76, H, [[0, '#6a5a64'], [0.25, '#2e3450'], [1, '#121628']]);
-    for (let i = 0; i < 80; i++) c.rect(W * 0.55 + r() * W * 0.45, H * 0.78 + r() * H * 0.22, 30 + r() * 90, 3, '#e8a868', 0.15 + r() * 0.25);
-    for (let i = 0; i < 40; i++) c.rect(r() * W, H * 0.78 + r() * H * 0.22, 20 + r() * 50, 2, '#f0b866', 0.12);
-    // overhead wire and the tram, lit from inside
-    c.line(0, H * 0.4, W, H * 0.38, 3, '#0e0e14');
-    const tx = W * 0.18;
-    const ty = H * 0.47;
-    const tw = 540;
-    const th = 150;
-    c.line(tx + 230, ty, tx + 300, H * 0.39, 5, '#0e0e14');
-    c.line(tx + 300, H * 0.39, tx + 350, ty, 5, '#0e0e14');
-    c.rect(tx + 10, ty + th - 6, tw - 20, 22, '#141218');
-    c.poly([[tx, ty + 14], [tx + 14, ty], [tx + tw - 14, ty], [tx + tw, ty + 14], [tx + tw, ty + th], [tx, ty + th]], '#d8a42a', 1, shadeV(ty, ty + th, '#e8b43a', '#9a7020'));
-    c.rect(tx, ty + th - 40, tw, 24, '#8a2e2a');
-    c.rect(tx, ty + 6, tw, 6, '#f2d070', 0.8);
-    for (let k = 0; k < 6; k++) c.rect(tx + 24 + k * 84, ty + 30, 64, 56, '#f6d8a0');
-    for (let k = 0; k < 6; k++) c.rect(tx + 24 + k * 84, ty + 66, 64, 20, '#c89a60', 0.7);
-    c.rect(tx + tw - 40, ty + 26, 26, 92, '#3a3440');
-    c.circle(tx + 90, ty + th + 12, 16, '#0e0c10');
-    c.circle(tx + tw - 90, ty + th + 12, 16, '#0e0c10');
-    c.glow(tx + tw - 4, ty + th - 50, 90, '#fff0c0', 0.9);
-    c.glow(tx + tw / 2, ty + 60, 300, '#f0b060', 0.12);
-  },
-
-  /** Solar panels on the savanna in late-afternoon light, an acacia against the sky (Kenya). */
-  solar(c, r) {
-    c.gradient(0, H * 0.56, [[0, '#2a4a78'], [0.6, '#8aa6c0'], [1, '#e8c89a']]);
-    c.glow(W * 0.86, H * 0.42, 460, '#ffd8a0', 0.45);
-    c.circle(W * 0.86, H * 0.42, 34, '#fff2d8');
-    cloud(c, W * 0.3, H * 0.14, 70, '#c8ccd8', 0.6);
-    c.ridge(H * 0.53, 22, 0.003, '#5a6878', 3, { octaves: 2 });
-    c.ridge(H * 0.565, 10, 0.006, '#6a6a50', 4, { octaves: 2 });
-    c.gradient(H * 0.56, H, [[0, '#b08a4a'], [1, '#5a4224']]);
-    for (let i = 0; i < 500; i++) {
-      const x = r() * W;
-      const y = H * 0.58 + r() * H * 0.42;
-      c.line(x, y, x + (r() - 0.5) * 6, y - 8 - r() * 10, 2, r() < 0.5 ? '#c8a060' : '#6a5028', 0.5);
+    // the church on the hilltop: a bell tower with a cupola, catching the last light
+    const bx = W * 0.62;
+    const by = rowY(bx, 0) - 150;
+    const towerTone = ramp([[0, '#4a4252'], [0.6, '#b8a894'], [1, '#f0d8b8']]);
+    c.litPoly([[bx, by + 200], [bx, by], [bx + 54, by], [bx + 54, by + 200]], bx + 27, by + 100, 40, 160, towerTone, { lx: 0.8, ly: -0.3, lz: 0.4, ambient: 0.25 });
+    c.litPoly(blob(bx + 27, by, 32, 30, 7, 0.04).filter(([, py]) => py <= by + 1), bx + 27, by, 32, 30, towerTone, { lx: 0.8, ly: -0.5, lz: 0.4 });
+    c.rect(bx + 17, by + 26, 20, 32, '#1a1820');
+    c.rect(bx - 4, by + 64, 62, 5, '#e0ccb0');
+    // the street: cobbles, two rails, the overhead wire
+    const st = noise2(31);
+    c.paintBox(0, H * 0.66, W, H * 0.86, (x, y) => [mix(hex('#2c2830'), hex('#5a5258'), clamp01(0.3 + st(x * 0.06, y * 0.14) * 0.4 + (y - H * 0.66) / H)), 1]);
+    for (const ry of [H * 0.76, H * 0.8]) c.line(0, ry + 6, W, ry - 6, 3, '#a89c94');
+    c.line(0, H * 0.33, W, H * 0.3, 2, '#0e0e16');
+    // the river below the quay wall, mirroring the sky and the lights
+    c.rect(0, H * 0.86, W, 8, '#7a7068');
+    c.gradient(H * 0.87, H, [[0, '#6a5060'], [1, '#14182c']]);
+    reflect(c, H * 0.87, H, '#1a1e34', 0.55, 13, { ripple: 10 });
+    // the tram: a yellow body with a cream roof band, warm-lit windows, trolley pole on the wire
+    const tx = W * 0.14;
+    const ty = H * 0.5;
+    const tw = 560;
+    const th = 170;
+    const yellow = ramp([[0, '#5a3a0e'], [0.45, '#c08a1c'], [0.8, '#eebc3a'], [1, '#fff0a0']]);
+    const shape = [[tx + 30, ty], [tx + tw - 30, ty], [tx + tw - 4, ty + 14], [tx + tw + 8, ty + 46], [tx + tw + 10, ty + th - 14], [tx + tw - 4, ty + th], [tx + 4, ty + th], [tx - 10, ty + th - 14], [tx - 8, ty + 46], [tx + 4, ty + 14]];
+    groundShadow(c, tx + tw / 2, ty + th + 10, tw * 0.6, 14, 0.7);
+    c.litPoly(shape, tx + tw * 0.4, ty + th * 0.35, tw * 0.65, th, yellow, { lx: 0.75, ly: -0.25, lz: 0.6, ambient: 0.32 });
+    c.poly([[tx + 30, ty], [tx + tw - 30, ty], [tx + tw - 4, ty + 14], [tx + 4, ty + 14]], '#efe6cc');
+    c.rect(tx - 6, ty + 108, tw + 14, 5, '#7a4a14', 0.7);
+    c.rect(tx - 8, ty + th - 22, tw + 16, 9, '#2a1c10', 0.6);
+    const pane = (wx, wy, ww, wh) => [[wx + 4, wy], [wx + ww - 4, wy], [wx + ww, wy + 4], [wx + ww, wy + wh], [wx, wy + wh], [wx, wy + 4]];
+    for (let k = 0; k < 7; k++) {
+      const wx = tx + 22 + k * 74;
+      c.poly(pane(wx - 3, ty + 31, 62, 64), '#3a2810');
+      c.poly(pane(wx, ty + 34, 56, 58), '#000', 1, (px, py) => mix(hex('#ffe4a8'), hex('#c8884a'), (py - ty - 34) / 58));
+      c.rect(wx, ty + 62, 56, 2, '#5a3a1a', 0.6);
+      if (r() < 0.6) c.litPoly(blob(wx + 14 + r() * 26, ty + 80, 9, 13, k, 0.1), wx + 28, ty + 80, 10, 14, ramp([[0, '#3a2414'], [1, '#7a4a2a']]), { ambient: 0.4 });
     }
+    c.rect(tx + tw - 50, ty + 34, 30, 120, '#2a2028', 0.85);
+    c.rect(tx + 220, ty + 4, 70, 18, '#1e1a1e');
+    c.rect(tx + 226, ty + 7, 58, 12, '#f0d890', 0.9);
+    c.line(tx + 300, ty, tx + 380, H * 0.315, 4, '#141218');
+    for (const wx of [tx + 80, tx + tw - 90]) {
+      c.ellipse(wx, ty + th + 6, 34, 13, '#120e12');
+      c.ellipse(wx - 8, ty + th + 3, 12, 5, '#6a5a58');
+    }
+    c.glow(tx + tw + 8, ty + th - 50, 120, '#fff2c8', 0.9);
+    c.glow(tx + tw * 0.5, ty + 60, 340, '#f0b060', 0.1);
+    // its warm light on the wet cobbles
+    c.paintBox(tx - 30, ty + th + 12, tx + tw + 140, H * 0.86, (x, y) => [hex('#f0b858'), 0.3 * (1 - (y - ty - th - 12) / (H * 0.86 - ty - th - 12)) * clamp01(0.5 + st(x * 0.05, y * 0.35))]);
+  },
+  /** A fissure eruption at night: a low curtain of lava along the crack, spatter arcs, a lit plume of gas (Iceland). */
+  volcano(c, r) {
+    c.gradient(0, H * 0.6, [[0, '#07080f'], [0.55, '#151220'], [1, '#2e1a1e']]);
+    sparkle(c, r, 220, 0, 0, W, H * 0.3, '#c8c8e0', 0.5, [1, 1, 2]);
+    // the plume: a heavy column leaning downwind, lit orange underneath and dark violet at the top
+    const sm = noise2(41);
+    const smokeTone = ramp([[0, '#120e16'], [0.35, '#3a2228'], [0.7, '#a0441e'], [1, '#f49040']]);
+    c.paintBox(0, 0, W, H * 0.64, (x, y) => {
+      const lift = (H * 0.62 - y) / (H * 0.62);
+      const cx = W * 0.48 + lift * lift * 330 + sm(y * 0.003, 3) * 90;
+      const spread = 170 + lift * 330;
+      const d = Math.abs(x - cx) / spread;
+      const v = sm.fbm(x * 0.0035, y * 0.005, 5) * 0.7 + (1 - d) * 0.9 - lift * 0.15;
+      if (v < 0.45) return null;
+      const above = sm.fbm(x * 0.0035, (y - 18) * 0.005, 5);
+      const rim = clamp01(0.5 + (sm.fbm(x * 0.0035, y * 0.005, 5) - above) * 5);
+      const heat = clamp01(1 - lift * 1.6) * clamp01(1.2 - d);
+      return [smokeTone(clamp01(heat * 0.85 + rim * 0.25 - 0.05)), smooth(0.45, 0.8, v) * 0.95];
+    });
+    // the far ridge, rimmed by the glow
+    const ridgeTop = c.ridge(H * 0.585, 46, 0.0022, '#120c10', 6, { octaves: 4, shade: (x, y) => mix(hex('#160e12'), hex('#4a2018'), smooth(H * 0.6, H * 0.52, y) * (1 - Math.abs(x - W * 0.5) / W)) });
+    for (let k = 1; k < ridgeTop.length - 2; k++) c.line(ridgeTop[k][0], ridgeTop[k][1], ridgeTop[k + 1][0], ridgeTop[k + 1][1], 2, '#8a3a1e', 0.5 * (1 - Math.abs(ridgeTop[k][0] - W * 0.5) / (W * 0.6)));
+    // the lava field: dark crust with a network of glowing cracks near the fissure
+    const rock = noise2(42);
+    const crust = ramp([[0, '#0a080c'], [0.5, '#1e1618'], [1, '#3a2420']]);
+    const lavaTone = ramp([[0, '#4a0c06'], [0.35, '#b02a10'], [0.7, '#f07a1e'], [0.9, '#ffc860'], [1, '#fff6d0']]);
+    const fy = (x) => H * 0.62 + Math.sin(x * 0.006) * 8 + (x / W) * 14;
+    c.paintBox(0, H * 0.6, W, H, (x, y) => {
+      const near = Math.max(0, 1 - Math.abs(y - fy(x)) / (H * 0.2)) * (1 - Math.abs(x - W * 0.5) / (W * 0.62));
+      const cracks = rock.ridged(x * 0.01, y * 0.028, 4);
+      const flow = smooth(0.15, 0.6, rock.fbm(x * 0.003, y * 0.012, 3) + near * 0.8 - 0.35);
+      const glow = smooth(0.5, 0.62, cracks) * flow;
+      const base = crust(clamp01(0.35 + rock.fbm(x * 0.02, y * 0.05, 3) * 0.4 + near * 0.3));
+      return [glow > 0.02 ? mix(base, lavaTone(0.45 + glow * 0.5), glow) : base, 1];
+    });
+    // the curtain of fire: a ragged, low wall of lava along the crack with taller fountains in places
+    const lv = noise2(43);
+    const fountains = [0.24, 0.38, 0.47, 0.6, 0.73].map((t) => ({ x: W * t + (r() - 0.5) * 40, h: 50 + r() * 110, w: 30 + r() * 40 }));
+    const heightAt = (x) => {
+      let h = 14 + lv.fbm(x * 0.02, 1, 4) * 16;
+      for (const f of fountains) h += f.h * Math.exp(-(((x - f.x) / f.w) ** 2));
+      return h * smooth(W * 0.12, W * 0.2, x) * smooth(W * 0.88, W * 0.8, x);
+    };
+    c.paintBox(W * 0.1, H * 0.3, W * 0.9, H * 0.66, (x, y) => {
+      const base = fy(x);
+      const top = base - heightAt(x) * (0.85 + lv(x * 0.05, y * 0.03) * 0.3);
+      if (y > base + 3 || y < top - 6) return null;
+      const u = clamp01((base - y) / Math.max(8, base - top));
+      const ragged = lv.fbm(x * 0.03, y * 0.04, 3);
+      const a = smooth(1.02, 0.8, u + ragged * 0.25);
+      return a > 0 ? [lavaTone(clamp01(1 - u * 0.75 + ragged * 0.15)), a] : null;
+    });
+    for (const f of fountains) c.glow(f.x, fy(f.x) - f.h * 0.35, f.h * 2.2 + 120, '#ff6a20', 0.32);
+    // spatter: clots thrown in arcs from the fountains, cooling as they fall
+    for (const f of fountains) {
+      for (let i = 0; i < 70; i++) {
+        const vx = (r() - 0.5) * 9;
+        const vy = -(4 + r() * f.h * 0.07);
+        const t = r() * 26;
+        const x = f.x + vx * t;
+        const y = fy(f.x) - f.h * 0.3 + vy * t + 0.32 * t * t;
+        if (y > fy(x) + 4) continue;
+        c.glow(x, y, 3 + r() * 3, lavaTone(0.95 - t / 40), 0.9, 1);
+      }
+    }
+    c.glow(W * 0.5, H * 0.62, 760, '#ff4a1a', 0.2);
+    // foreground boulders, rim-lit from the fissure behind them
+    for (let i = 0; i < 6; i++) {
+      const bx = r() * W;
+      const by = H * (0.86 + r() * 0.14);
+      const bw = 80 + r() * 160;
+      c.litPoly(blob(bx, by, bw, bw * 0.45, Math.floor(r() * 1e6), 0.3), bx, by, bw, bw * 0.45, ramp([[0, '#050406'], [0.7, '#1a1214'], [1, '#c8582a']]), { lx: (W * 0.5 - bx) / W, ly: -1, lz: -0.2, ambient: 0, jitter: (x, y) => rock(x * 0.05, y * 0.05) * 0.1 });
+    }
+  },
+  /** Rows of solar panels on the savanna in late light; a flat-topped acacia against the sky (Kenya). */
+  solar(c, r) {
+    c.gradient(0, H * 0.58, [[0, '#2a4670'], [0.55, '#86a2bc'], [1, '#f0cc9a']]);
+    clouds(c, 51, { y0: 0, y1: H * 0.36, scale: 0.0026, cover: 0.2, lit: '#fff0dc', shade: '#8a96ae', alpha: 0.8, stretch: 3.4 });
+    c.glow(W * 0.88, H * 0.46, 520, '#ffd8a0', 0.45);
+    c.glow(W * 0.88, H * 0.46, 40, '#fff6e0', 1.2, 1);
+    // far blue hills, then a nearer brown ridge (atmospheric perspective)
+    c.ridge(H * 0.535, 36, 0.0025, '#6c7e98', 3, { octaves: 4 });
+    c.ridge(H * 0.565, 18, 0.005, '#7a6e58', 4, { octaves: 3 });
+    const grass = noise2(52);
+    const grassTone = ramp([[0, '#4a3418'], [0.4, '#8a6a34'], [0.75, '#c8a058'], [1, '#e8cc88']]);
+    c.paintBox(0, H * 0.57, W, H, (x, y) => [grassTone(0.35 + grass.fbm(x * 0.02, y * 0.08, 4) * 0.5 + (1 - (y - H * 0.57) / (H * 0.43)) * 0.25), 1]);
+    for (let i = 0; i < 900; i++) {
+      const x = r() * W;
+      const y = H * 0.6 + r() ** 0.7 * H * 0.4;
+      const len = 4 + (y - H * 0.6) * 0.06 * (0.5 + r());
+      c.line(x, y, x + (r() - 0.5) * len * 0.6, y - len, 1 + (y - H * 0.6) / 200, grassTone(0.55 + r() * 0.45), 0.55);
+    }
+    // panel rows in perspective, each reflecting the sky
+    const panelTone = ramp([[0, '#0e1a30'], [0.5, '#2c4a72'], [0.85, '#7e98b8'], [1, '#f0d0a8']]);
     for (let row = 0; row < 7; row++) {
       const t = row / 6;
-      const y = H * 0.6 + t * t * H * 0.36;
-      const ph = 16 + t * 70;
-      const x0 = W * (0.36 - t * 0.36);
-      const x1 = W * (1.0 + t * 0.1);
-      const tilt = ph * 0.9;
-      c.poly([[x0, y + tilt], [x1, y + tilt], [x1 - ph * 0.4, y], [x0 + ph * 0.4, y]], '#1d3050', 1, shadeV(y, y + tilt, '#5a78a0', '#141e34'));
-      for (let k = 1; k < 3; k++) c.line(x0 + ph * 0.4 * (1 - k / 3), y + (tilt * k) / 3, x1 - ph * 0.4 * (1 - k / 3), y + (tilt * k) / 3, 1 + t, '#7a90b0', 0.45);
-      for (let x = x0 + 60; x < x1; x += 40 + t * 80) c.line(x, y + tilt, x + ph * 0.25, y, 1 + t, '#7a90b0', 0.4);
-      c.rect(x0, y + tilt, x1 - x0, 3 + t * 8, '#2a2016', 0.85);
-      c.rect(x1 - W * 0.3, y + tilt * 0.2, W * 0.3, 2, '#ffe0b0', 0.25 * t);
+      const y = H * 0.6 + t * t * H * 0.33;
+      const ph = 14 + t * 74;
+      const x0 = W * (0.42 - t * 0.44);
+      const x1 = W * (1.02 + t * 0.06);
+      const tilt = ph * 0.85;
+      groundShadow(c, (x0 + x1) / 2 + ph, y + tilt + 4 + t * 10, (x1 - x0) / 2, 6 + t * 14, 0.5);
+      c.poly([[x0, y + tilt], [x1, y + tilt], [x1 - ph * 0.4, y], [x0 + ph * 0.4, y]], '#000', 1, (px, py) => panelTone(0.25 + (1 - (py - y) / tilt) * 0.55 + smooth(W * 0.5, W, px) * 0.3 * (1 - (py - y) / tilt)));
+      for (let k = 1; k < 3; k++) c.line(x0 + ph * 0.4 * (1 - k / 3), y + (tilt * k) / 3, x1 - ph * 0.4 * (1 - k / 3), y + (tilt * k) / 3, 1 + t, '#9ab0c8', 0.35);
+      for (let x = x0 + 50; x < x1; x += 34 + t * 70) c.line(x, y + tilt, x + ph * 0.32, y, 1 + t * 1.5, '#9ab0c8', 0.35);
+      c.rect(x0, y + tilt, x1 - x0, 2 + t * 6, '#1a140e', 0.9);
+      for (let x = x0 + 20; x < x1; x += 90 + t * 120) c.rect(x, y + tilt, 3 + t * 4, 6 + t * 16, '#2a2018');
     }
-    c.line(W * 0.14, H * 0.62, W * 0.15, H * 0.38, 16, '#1e1610');
-    c.line(W * 0.145, H * 0.45, W * 0.1, H * 0.34, 9, '#1e1610');
-    c.line(W * 0.15, H * 0.44, W * 0.2, H * 0.33, 9, '#1e1610');
-    c.ellipse(W * 0.15, H * 0.32, 190, 34, '#262a18');
-    c.ellipse(W * 0.13, H * 0.3, 120, 22, '#343a20');
+    // the acacia: a fork of dark branches under a wide, flat, layered crown lit from the right
+    const ax = W * 0.15;
+    const ag = H * 0.63;
+    const bark = ramp([[0, '#1a120c'], [1, '#5a4430']]);
+    const branches = [
+      [ax, ag, ax + 6, H * 0.48, 15],
+      [ax + 6, H * 0.48, ax - 80, H * 0.33, 9],
+      [ax + 6, H * 0.48, ax + 96, H * 0.32, 9],
+      [ax + 4, H * 0.5, ax + 20, H * 0.31, 7],
+      [ax - 40, H * 0.4, ax - 130, H * 0.335, 5],
+      [ax + 50, H * 0.4, ax + 150, H * 0.33, 5],
+    ];
+    for (const [x0, y0, x1, y1, w0] of branches) c.line(x0, y0, x1, y1, w0, bark(0.3));
+    const crown = ramp([[0, '#14180c'], [0.45, '#2e3618'], [0.8, '#5a6428'], [1, '#9aa04a']]);
+    const foliage = noise2(53);
+    for (const [dx, dy, rw, rh] of [[-60, -6, 170, 22], [70, -10, 150, 20], [-10, -20, 190, 22], [-120, 4, 90, 14], [140, 2, 80, 13], [10, -32, 120, 15]]) {
+      const cx = ax + dx;
+      const cy = H * 0.32 + dy;
+      c.litPoly(blob(cx, cy, rw, rh, Math.floor(r() * 1e6), 0.35, 80), cx, cy, rw, rh * 1.6, crown, { lx: 0.6, ly: -0.8, lz: 0.4, ambient: 0.1, jitter: (x, y) => foliage(x * 0.06, y * 0.12) * 0.3 });
+    }
+    groundShadow(c, ax + 60, ag + 6, 200, 14, 0.4);
   },
 
-  /** A fissure eruption at night: a curtain of lava along the crack, lit smoke above (Iceland). */
-  volcano(c, r) {
-    c.gradient(0, H * 0.6, [[0, '#080a18'], [0.6, '#1c1428'], [1, '#4a2228']]);
-    stars(c, r, 160, H * 0.4, 0.6);
-    for (let i = 0; i < 30; i++) {
-      const t = i / 29;
-      const x = W * (0.48 + (r() - 0.5) * 0.14) + t * 200;
-      const y = H * 0.52 - t * H * 0.46;
-      c.circle(x, y, 60 + t * 120, mix(hex('#b0502e'), hex('#2a2430'), Math.min(1, t * 1.3)), 0.3);
+  /** A white high-speed train along the rice fields below a snow-capped volcano in morning light (Japan). */
+  train(c, r) {
+    c.gradient(0, H * 0.6, [[0, '#3e6290'], [0.6, '#9ab4c8'], [1, '#ecdcc4']]);
+    clouds(c, 61, { y0: 0, y1: H * 0.28, scale: 0.0022, cover: 0.25, lit: '#fbf4ea', shade: '#9aaabe', alpha: 0.75, stretch: 4 });
+    // the mountain: concave flanks; gullies run downslope, lit on their sunward (left) side; snow fills the upper gullies
+    const peakX = W * 0.6;
+    const peakY = H * 0.12;
+    const baseY = H * 0.6;
+    const half = W * 0.47;
+    const m = noise2(62);
+    const profile = new Float32Array(W);
+    for (let x = 0; x < W; x++) {
+      const u = Math.min(1, Math.abs(x - peakX) / half);
+      profile[x] = peakY + 6 * Math.min(1, Math.abs(x - peakX) / 30) + (baseY - peakY) * u ** 0.64 + m.fbm(x * 0.012, 0.5, 3) * 7 * u;
     }
-    c.ridge(H * 0.55, 60, 0.0016, '#140f18', 21, { octaves: 3, sharp: true });
-    c.glow(W * 0.5, H * 0.64, 640, '#e8661e', 0.6, 1.6);
-    c.ridge(H * 0.66, 16, 0.004, '#100c12', 22, { octaves: 2 });
-    const n = noise1(5);
-    const crack = [];
-    for (let x = W * 0.1; x <= W * 0.9; x += 6) crack.push([x, H * 0.665 + n(x * 0.01) * 12 - (x - W * 0.5) * 0.03]);
-    // the lava curtain: overlapping soft spurts of varying height along the crack
-    const hN = noise1(9);
-    for (const [x, y] of crack) {
-      const h = Math.max(6, (hN(x * 0.012) * 0.5 + 0.5) ** 2 * 170 * (1 - Math.abs(x / W - 0.5) * 1.2));
-      c.ellipse(x, y - h * 0.5, 8, h * 0.5, '#e8541c', 0.35);
-      c.ellipse(x, y - h * 0.35, 4, h * 0.35, '#ffb040', 0.45);
+    const rockTone = ramp([[0, '#2e3448'], [0.45, '#55607a'], [0.8, '#8a8a98'], [1, '#c8b8a8']]);
+    const snowTone = ramp([[0, '#7a8cac'], [0.5, '#c4cede'], [0.85, '#f4f2ee'], [1, '#fff8ee']]);
+    c.paintBox(0, peakY - 10, W, baseY + 4, (x, y) => {
+      if (y < profile[x]) return null;
+      const alt = (baseY - y) / (baseY - peakY);
+      const dx = (x - peakX) / half;
+      // gullies: ridged noise stretched downslope (along the fall line)
+      const along = (x - peakX) * 0.9 / (1 + alt);
+      const g = m.ridged(along * 0.03, y * 0.004, 4);
+      const gl = m.ridged((along - 3) * 0.03, y * 0.004, 4);
+      const facing = clamp01(0.55 - dx * 1.2 + (g - gl) * 6);
+      const snowLine = 0.55 + (0.42 - g) * 0.9 + m(x * 0.008, 3) * 0.08;
+      const isSnow = alt > snowLine;
+      const colour = isSnow ? snowTone(clamp01(facing * 0.85 + 0.15)) : rockTone(clamp01(facing * 0.75 + alt * 0.2));
+      return [mix(colour, hex('#aebdd0'), 0.22 + (1 - alt) * 0.25), 1];
+    });
+    // forested foothills, two layers, nearer = darker and greener
+    const hillTone = ramp([[0, '#1a2a22'], [0.6, '#34503a'], [1, '#6a845a']]);
+    for (const [base, amp, seed, air] of [[H * 0.6, 26, 63, 0.42], [H * 0.665, 34, 64, 0.12]]) {
+      const hn = noise2(seed);
+      const top = new Float32Array(W);
+      for (let x = 0; x < W; x++) top[x] = base - (hn.fbm(x * 0.004, seed, 4) * 0.5 + 0.5) * amp - Math.abs(hn(x * 0.07, 1)) * 9;
+      c.paintBox(0, base - amp - 12, W, H * 0.74, (x, y) => (y < top[x] ? null : [mix(hillTone(0.3 + hn.fbm(x * 0.035, y * 0.06, 3) * 0.6 + (x < W * 0.5 ? 0.1 : -0.05)), hex('#a8b8c4'), air), 1]));
     }
-    for (let k = 0; k + 1 < crack.length; k++) c.line(crack[k][0], crack[k][1], crack[k + 1][0], crack[k + 1][1], 8, '#ffcf5a');
-    for (let k = 0; k + 1 < crack.length; k++) c.line(crack[k][0], crack[k][1] - 1, crack[k + 1][0], crack[k + 1][1] - 1, 3, '#fff0c0');
-    for (let i = 0; i < 120; i++) {
-      const [x, y] = crack[Math.floor(r() * crack.length)];
-      c.circle(x + (r() - 0.5) * 60, y - r() * 150, 2 + r() * 3, '#ffc050', 0.6);
+    // rice fields: green rows running into the distance, water between them catching the sky
+    const field = noise2(65);
+    c.paintBox(0, H * 0.78, W, H, (x, y) => {
+      const k = (y - H * 0.78) / (H * 0.22);
+      const vx = (x - W * 0.5) / (0.25 + k);
+      const row = Math.sin(vx * 0.05) * 0.5 + 0.5;
+      const water = smooth(0.82, 0.92, row);
+      const green = mix(hex('#3a5a26'), hex('#8aa048'), clamp01(0.35 + field.fbm(x * 0.01, y * 0.05, 3) * 0.6 + k * 0.2));
+      return [mix(green, mix(hex('#b8c8d4'), hex('#5a7a8a'), k), water), 1];
+    });
+    // the embankment and the train: a long nose, a blue stripe, the sky on its roof
+    c.gradient(H * 0.715, H * 0.78, [[0, '#5a5448'], [1, '#2a2622']]);
+    c.rect(0, H * 0.712, W, 6, '#8a8478');
+    const ty = H * 0.6;
+    const nose = [];
+    for (let i = 0; i <= 30; i++) {
+      const t = i / 30;
+      nose.push([W * 0.05 + t * 240, ty + 64 - Math.sqrt(t) * 52]);
     }
-    c.gradient(H * 0.7, H, [[0, '#24161a'], [1, '#0a080c']]);
-    for (let i = 0; i < 160; i++) {
-      const x = r() * W;
-      const y = H * 0.72 + r() * H * 0.28;
-      c.ellipse(x, y, 20 + r() * 50, 6 + r() * 10, '#b4501e', 0.1 + 0.22 * (1 - (y - H * 0.7) / (H * 0.3)));
+    const shape = [...nose, [W * 1.02, ty + 12], [W * 1.02, H * 0.712], [W * 0.05 - 12, H * 0.712]];
+    const white = ramp([[0, '#6a7486'], [0.5, '#c4cad4'], [0.85, '#eef0f2'], [1, '#ffffff']]);
+    c.poly(shape, '#000', 1, (x, y) => white(0.5 + (1 - (y - ty) / (H * 0.712 - ty)) * 0.5 - smooth(ty + 50, H * 0.712, y) * 0.35));
+    c.rect(W * 0.11, ty + 50, W, 9, '#1e4a8e');
+    c.rect(W * 0.11, ty + 60, W, 3, '#c8a050', 0.8);
+    for (let x = W * 0.24; x < W; x += 34) {
+      c.rect(x, ty + 25, 22, 14, '#283246', 0.92);
+      c.rect(x + 2, ty + 26, 8, 3, '#d8e4f0', 0.55);
+    }
+    c.poly([[W * 0.1, ty + 42], [W * 0.165, ty + 22], [W * 0.205, ty + 22], [W * 0.195, ty + 42]], '#18202e');
+    for (let x = W * 0.3; x < W; x += 300) c.rect(x, ty + 14, 3, 54, '#9aa2ae', 0.6);
+    c.line(0, ty - 18, W, ty - 22, 2, '#3a3e48', 0.8);
+    for (let x = 60; x < W; x += 260) {
+      c.line(x, ty - 34, x, H * 0.712, 5, '#4a4c54');
+      c.line(x - 14, ty - 26, x + 14, ty - 26, 3, '#4a4c54');
     }
   },
-
-  /** A flooded street of concrete houses under monsoon rain (Kerala). */
-  flood(c, r) {
-    c.gradient(0, H * 0.55, [[0, '#3a4048'], [1, '#7a8288']]);
-    for (let i = 0; i < 9; i++) cloud(c, r() * W, H * (0.05 + r() * 0.2), 80 + r() * 60, '#4a5058', 0.55);
-    c.ridge(H * 0.48, 16, 0.004, '#3a4a40', 41, { octaves: 2 });
-    // palms behind the houses
-    for (const px of [W * 0.06, W * 0.47, W * 0.93]) {
-      const top = H * (0.16 + r() * 0.06);
-      for (let k = 0; k < 24; k++) {
-        const t = k / 24;
-        c.circle(px + Math.sin(t * 1.6) * 24, H * 0.6 - t * (H * 0.6 - top), 7, '#2e261e');
-      }
-      const cx = px + Math.sin(1.6) * 24;
-      for (let f = 0; f < 11; f++) {
-        const a = Math.PI + (f / 10) * Math.PI + (r() - 0.5) * 0.2;
-        const len = 150 + r() * 40;
-        const ex = cx + Math.cos(a) * len;
-        const ey = top + len * 0.5 * (1 - Math.abs(Math.sin(a))) + 20;
-        const mx = cx + Math.cos(a) * len * 0.5;
-        const my = top - 26 * Math.abs(Math.sin(a));
-        c.poly([[cx, top - 4], [mx, my - 10], [ex, ey], [mx, my + 10], [cx, top + 6]], f % 2 ? '#24382a' : '#2e4632');
-      }
-    }
-    // flat-roofed concrete houses, shutters and a balcony, windows off-centre
-    const walls = ['#a8a090', '#8e9a94', '#b09a80', '#9a948c', '#a4987e'];
+  /** A Paris boulevard in low evening sun: stone facades with iron balconies and slate roofs, plane trees along the pavement. */
+  trees(c, r) {
+    c.gradient(0, H * 0.3, [[0, '#6a8aac'], [1, '#d8c8b0']]);
+    const stone = ramp([[0, '#5a5048'], [0.4, '#a08a70'], [0.75, '#d8c4a2'], [1, '#f2e2c4']]);
+    const slate = ramp([[0, '#2a3040'], [0.6, '#4a5468'], [1, '#7a8698']]);
+    const dapple = noise2(71);
     let x = -30;
     while (x < W) {
-      const w = 180 + r() * 120;
-      const h = 150 + r() * 90;
-      const base = H * 0.7;
-      const wall = walls[Math.floor(r() * walls.length)];
-      c.rect(x, base - h, w, h, wall);
-      c.rect(x, base - h, w, 10, '#000000', 0.25);
-      c.rect(x + w - 16, base - h, 16, h, '#000000', 0.2);
-      c.rect(x + 18, base - h * 0.78, w * 0.26, h * 0.22, '#2a3036');
-      c.rect(x + 18, base - h * 0.78, w * 0.26, 6, '#5a6a60');
-      c.rect(x + w * 0.5, base - h * 0.78, w * 0.32, h * 0.22, '#2a3036');
-      c.rect(x + w * 0.46, base - h * 0.52, w * 0.42, 5, '#3a3a3a');
-      for (let bx = x + w * 0.46; bx < x + w * 0.88; bx += 12) c.rect(bx, base - h * 0.52, 2, 22, '#3a3a3a');
-      c.rect(x + w * 0.12, base - h * 0.4, w * 0.18, h * 0.4, '#3a2a22');
-      x += w + 16 + r() * 30;
-    }
-    // brown water with reflections and ripples
-    c.gradient(H * 0.62, H, [[0, '#6a6450'], [1, '#2e2e28']]);
-    for (let i = 0; i < 140; i++) c.rect(r() * W, H * 0.64 + r() * H * 0.36, 40 + r() * 120, 3, '#a8a690', 0.22);
-    for (let i = 0; i < 30; i++) c.ellipse(r() * W, H * 0.7 + r() * H * 0.3, 30 + r() * 30, 5, '#c0bea8', 0.22);
-    for (let i = 0; i < 900; i++) {
-      const rx = r() * W;
-      const ry = r() * H;
-      c.line(rx, ry, rx - 10, ry + 34, 1.6, '#c8d0d4', 0.3);
-    }
-  },
-
-  /** Dry-stone walls and a trapezoidal doorway of a ruined temple, peaks in the mist (Peru). */
-  temple(c, r) {
-    c.gradient(0, H * 0.5, [[0, '#566a84'], [1, '#c4ccd0']]);
-    const peaks = c.ridge(H * 0.32, 130, 0.0016, '#6a7488', 61, { octaves: 3, sharp: true });
-    for (const [px, py] of peaks) if (py < H * 0.2) c.rect(px, py, 5, H * 0.2 - py, '#e4e8ec', 0.9);
-    for (let i = 0; i < 8; i++) c.ellipse(r() * W, H * (0.3 + r() * 0.1), 260, 30, '#d8dce0', 0.35);
-    c.ridge(H * 0.44, 90, 0.002, '#3e4c44', 62, { octaves: 3, sharp: true });
-    for (let k = 0; k < 5; k++) {
-      const y = H * 0.48 + k * 24;
-      c.ridge(y, 8, 0.004, k % 2 ? '#4e5a36' : '#5a6640', 70 + k, { octaves: 1 });
-      c.ridge(y + 3, 8, 0.004, '#2e3424', 70 + k, { octaves: 1, bottom: y + 8 });
-    }
-    // the wall: big irregular granite blocks, fitted
-    const top = H * 0.42;
-    const bottom = H * 0.88;
-    const stone = ['#8a8478', '#9a9486', '#7c776c', '#a49e90', '#888274'];
-    for (let y = top; y < bottom; ) {
-      const bh = 34 + r() * 26;
-      for (let x = 0; x < W; ) {
-        const bw = 60 + r() * 90;
-        c.rect(x + 2, y + 2, bw - 4, bh - 4, stone[Math.floor(r() * stone.length)]);
-        c.rect(x + 2, y + 2, bw - 4, 4, '#c4beb0', 0.5);
-        c.rect(x + 2, y + bh - 8, bw - 4, 6, '#000000', 0.18);
-        x += bw;
+      const w = 190 + r() * 110;
+      const roofY = H * (0.17 + r() * 0.06);
+      const top = roofY + 46;
+      const tint = (r() - 0.5) * 0.12;
+      // mansard roof with dormers and chimneys
+      c.poly([[x, top], [x + 18, roofY], [x + w - 18, roofY], [x + w, top]], '#000', 1, (px, py) => slate(0.35 + (top - py) / 60 * 0.5));
+      for (let dx = x + 26; dx < x + w - 40; dx += 44 + r() * 10) {
+        c.poly(blob(dx + 10, roofY + 20, 11, 14, Math.floor(r() * 1e6), 0.02).map(([px, py]) => [px, Math.max(py, roofY + 8)]), '#c8b496');
+        c.rect(dx + 4, roofY + 18, 12, 16, '#2a2c38');
       }
-      y += bh;
-    }
-    c.rect(0, top - 4, W, 6, '#4a463e');
-    // trapezoidal doorway with the light beyond, and a niche either side
-    const door = (cx, w, h, depth) => {
-      c.poly([[cx - w / 2, bottom], [cx - w * 0.36, bottom - h], [cx + w * 0.36, bottom - h], [cx + w / 2, bottom]], '#5c574e');
-      c.poly([[cx - w / 2 + depth, bottom], [cx - w * 0.36 + depth * 0.8, bottom - h + depth], [cx + w * 0.36 - depth * 0.8, bottom - h + depth], [cx + w / 2 - depth, bottom]], '#1a1a1c');
-    };
-    door(W * 0.5, 200, 270, 18);
-    c.poly([[W * 0.5 - 70, bottom], [W * 0.5 - 52, bottom - 240], [W * 0.5 + 52, bottom - 240], [W * 0.5 + 70, bottom]], '#b8c4c0', 0.5);
-    for (const nx of [W * 0.2, W * 0.8]) {
-      c.poly([[nx - 40, H * 0.72], [nx - 30, H * 0.56], [nx + 30, H * 0.56], [nx + 40, H * 0.72]], '#2a2826');
-    }
-    c.gradient(bottom, H, [[0, '#4e5636'], [1, '#2a301e']]);
-    for (let i = 0; i < 300; i++) {
-      const gx = r() * W;
-      const gy = bottom + r() * (H - bottom);
-      c.line(gx, gy, gx + (r() - 0.5) * 8, gy - 10 - r() * 12, 2, r() < 0.5 ? '#6e7444' : '#3a4026', 0.7);
-    }
-  },
-
-  /** A white high-speed train crossing a viaduct below a snowy peak (Japan). */
-  train(c, r) {
-    c.gradient(0, H * 0.6, [[0, '#2e4468'], [0.7, '#a89aa0'], [1, '#e0b890']]);
-    c.poly([[W * 0.42, H * 0.6], [W * 0.62, H * 0.16], [W * 0.66, H * 0.15], [W * 0.88, H * 0.6]], '#4e5670');
-    c.poly([[W * 0.565, H * 0.28], [W * 0.62, H * 0.16], [W * 0.66, H * 0.15], [W * 0.72, H * 0.29], [W * 0.68, H * 0.27], [W * 0.65, H * 0.31], [W * 0.61, H * 0.27]], '#f4f8fc');
-    c.ridge(H * 0.6, 26, 0.003, '#2e3e34', 81, { octaves: 2 });
-    c.gradient(H * 0.62, H, [[0, '#4a5a3a'], [1, '#222a1c']]);
-    for (let i = 0; i < 40; i++) c.circle(r() * W, H * 0.66 + r() * H * 0.3, 20 + r() * 30, r() < 0.5 ? '#2e3a26' : '#3a4830', 0.8);
-    // viaduct
-    const dy = H * 0.58;
-    c.rect(0, dy, W, 24, '#8a8c92');
-    c.rect(0, dy + 24, W, 8, '#4a4e56');
-    for (let x = 40; x < W; x += 160) c.rect(x, dy + 30, 30, H - dy, '#5e626a');
-    // the train: a long nose to the right
-    const ty = dy - 64;
-    c.poly([[-10, ty], [W * 0.7, ty], [W * 0.84, ty + 30], [W * 0.88, ty + 60], [-10, ty + 60]], '#e8e6e4', 1, shadeV(ty, ty + 60, '#f4e8dc', '#9aa0aa'));
-    c.rect(-10, ty + 36, W * 0.84, 10, '#1f5fb4');
-    c.poly([[W * 0.7, ty + 4], [W * 0.8, ty + 24], [W * 0.7, ty + 24]], '#24304a');
-    for (let x = 20; x < W * 0.66; x += 44) c.rect(x, ty + 12, 26, 14, '#f0d8a8');
-    for (let x = 180; x < W * 0.7; x += 210) c.rect(x, ty + 4, 4, 52, '#b8c0c8');
-    // speed lines
-    for (let i = 0; i < 18; i++) c.rect(-20 + r() * W * 0.5, ty + r() * 60, 80 + r() * 160, 2, '#ffffff', 0.5);
-  },
-
-  /** A boulevard of stone facades in low evening sun, young plane trees casting long shadows (Paris). */
-  trees(c, r) {
-    c.gradient(0, H * 0.4, [[0, '#3e5a80'], [1, '#c8b49a']]);
-    const fy = H * 0.12;
-    for (let x = -40; x < W; x += 230) {
-      // sunlit stone on the left of each block, shade on the right
-      c.rect(x, fy + 40, 226, H * 0.6, '#d8c4a0', 1, null);
-      c.rect(x + 150, fy + 40, 76, H * 0.6, '#8a7a66');
-      c.poly([[x - 4, fy + 44], [x + 20, fy], [x + 206, fy], [x + 230, fy + 44]], '#5a6270');
-      for (let k = 0; k < 3; k++) c.rect(x + 40 + k * 60, fy + 8, 22, 26, '#2e3440');
-      for (let row = 0; row < 5; row++) {
-        for (let k = 0; k < 4; k++) {
-          const wx = x + 18 + k * 52;
-          const wy = fy + 64 + row * 70;
-          c.rect(wx, wy, 26, 44, '#2a303c');
-          c.rect(wx, wy, 26, 8, '#e8c890', k < 2 && r() < 0.5 ? 0.7 : 0.15);
+      for (let k = 0; k < 2 + Math.floor(r() * 3); k++) {
+        const cx = x + 20 + r() * (w - 50);
+        c.rect(cx, roofY - 26 - r() * 12, 18 + r() * 14, 34, '#8a6e5a');
+        c.rect(cx, roofY - 30, 22, 5, '#5a4a40');
+      }
+      // the facade: sun from the left, so stone is warm at the top and cooler low down
+      c.paintBox(x, top, x + w, H * 0.78, (px, py) => {
+        const t = 0.62 + tint - (py - top) / (H * 0.78 - top) * 0.3 + dapple.fbm(px * 0.004, py * 0.01, 3) * 0.08;
+        return [stone(t), 1];
+      });
+      c.rect(x + w - 10, top, 10, H * 0.78 - top, '#000000', 0.2);
+      // floors: tall French windows, balconies on the 2nd and 5th floor, carved cornices
+      const floors = 5;
+      const fh = (H * 0.66 - top) / floors;
+      const cols = Math.max(3, Math.round(w / 52));
+      for (let f = 0; f < floors; f++) {
+        const fy = top + 10 + f * fh;
+        c.rect(x, fy - 4, w, 4, stone(0.95), 0.8);
+        c.rect(x, fy, w, 3, stone(0.3), 0.5);
+        for (let i = 0; i < cols; i++) {
+          const wx = x + ((i + 0.5) / cols) * w - 11;
+          const ww = 22;
+          const wh = fh * 0.62;
+          const glass = r() < 0.15 ? '#e8b878' : r() < 0.5 ? '#3a4458' : '#4a5468';
+          c.rect(wx - 3, fy + 8, ww + 6, wh + 6, stone(0.85));
+          c.rect(wx, fy + 11, ww, wh, glass);
+          c.rect(wx + ww / 2 - 1, fy + 11, 2, wh, stone(0.7), 0.7);
+          c.rect(wx, fy + 11, ww, 4, '#000000', 0.25);
+          if (f === 1 || f === 4) {
+            c.rect(x + 4, fy + 11 + wh - 10, w - 8, 3, '#1e1e24');
+            for (let bx = x + 6; bx < x + w - 6; bx += 6) c.rect(bx, fy + 11 + wh - 10, 1.5, 12, '#1e1e24', 0.9);
+            c.rect(x + 4, fy + 11 + wh + 2, w - 8, 5, '#000000', 0.25);
+          } else {
+            c.rect(wx - 2, fy + 11 + wh - 9, ww + 4, 2, '#1e1e24');
+            for (let bx = wx; bx < wx + ww; bx += 4) c.rect(bx, fy + 11 + wh - 9, 1, 9, '#1e1e24', 0.8);
+          }
         }
-        c.rect(x + 8, fy + 110 + row * 70, 210, 4, '#1e1e24', 0.85);
       }
-      c.rect(x + 222, fy + 40, 4, H * 0.6, '#6a5e50');
+      // shopfronts at street level, each with its own awning colour
+      const sy = H * 0.66;
+      c.rect(x, sy, w, H * 0.78 - sy, stone(0.4));
+      for (let sx = x + 8; sx < x + w - 30; sx += 70 + r() * 20) {
+        c.rect(sx, sy + 22, 54, H * 0.78 - sy - 22, r() < 0.5 ? '#2a2e3a' : '#3a2e28');
+        c.rect(sx + 4, sy + 26, 46, 30, '#e8c890', 0.35);
+        c.poly([[sx - 4, sy + 6], [sx + 58, sy + 6], [sx + 64, sy + 24], [sx - 10, sy + 24]], pickOf(r, ['#6a2a2a', '#2a4a3a', '#2a3a5a', '#7a5a2a']));
+      }
+      x += w;
     }
-    c.glow(-60, H * 0.3, 700, '#ffc890', 0.25);
-    c.rect(0, H * 0.74, W, H * 0.06, '#8a8278');
-    c.gradient(H * 0.8, H, [[0, '#3e3e44'], [1, '#26262c']]);
-    for (let x = 30; x < W; x += 160) c.rect(x, H * 0.9, 80, 8, '#bdbab0');
-    // long shadows to the right, then the trees: dark irregular crowns, warm rim on the sunny side
-    for (let x = 60; x < W; x += 200) c.poly([[x - 10, H * 0.76], [x + 10, H * 0.76], [x + 230, H * 0.8], [x + 160, H * 0.8]], '#000000', 0.3);
-    for (let x = 60; x < W; x += 200) {
-      c.rect(x - 7, H * 0.5, 14, H * 0.26, '#2e2620');
-      for (let k = 0; k < 9; k++) c.circle(x + (r() - 0.5) * 120, H * (0.3 + r() * 0.18), 30 + r() * 30, k % 2 ? '#2e4228' : '#38502e');
-      for (let k = 0; k < 5; k++) c.circle(x - 40 + (r() - 0.5) * 40, H * (0.3 + r() * 0.14), 16 + r() * 12, '#7a8a48', 0.6);
-    }
+    // pavement and road with long tree shadows reaching right
+    c.gradient(H * 0.78, H * 0.86, [[0, '#a89880'], [1, '#8a7a66']]);
+    c.gradient(H * 0.86, H, [[0, '#4a4644'], [1, '#2a2826']]);
+    c.rect(0, H * 0.858, W, 4, '#c8bca8');
+    const trunks = [];
+    for (let k = 0; k < 5; k++) trunks.push(W * (0.06 + k * 0.23) + (r() - 0.5) * 40);
+    for (const tx of trunks) groundShadow(c, tx + 140, H * 0.84, 210, 18, 0.45);
+    // plane trees: pale mottled bark, irregular canopies, sun from the upper left
+    const leaves = ramp([[0, '#121a10'], [0.4, '#2a3a1e'], [0.75, '#5a7030'], [1, '#a8b65a']]);
+    const barkTone = ramp([[0, '#3a3428'], [0.6, '#8a8268'], [1, '#c8c0a0']]);
+    for (const tx of trunks) tree(c, r, tx, H * 0.83, 260 + r() * 70, { tone: leaves, bark: barkTone, crownW: 0.9, lobes: 13, mottled: true });
+    // low sun: warm wash from the left, deeper blue in the shade at the right
+    c.glow(-100, H * 0.3, 900, '#ffb060', 0.18);
   },
 
-  /** A ferry pitching in a storm, dark clouds and white crests (Greek islands). */
+  /** A ferry pitching through a grey sea under storm cloud; a white village and a lighthouse on the headland (Greek islands). */
   ferry(c, r) {
-    c.gradient(0, H * 0.55, [[0, '#2a3038'], [1, '#6a747c']]);
-    for (let i = 0; i < 14; i++) cloud(c, r() * W, H * (0.04 + r() * 0.3), 70 + r() * 80, r() < 0.5 ? '#3a4048' : '#4a525a', 0.75);
-    c.ridge(H * 0.5, 24, 0.003, '#323a36', 91, { octaves: 2, bottom: H * 0.56 });
-    // a lighthouse on the headland, its lamp lit
-    c.poly([[W * 0.12, H * 0.48], [W * 0.13, H * 0.36], [W * 0.14, H * 0.36], [W * 0.15, H * 0.48]], '#c8c4bc');
-    c.rect(W * 0.125, H * 0.4, W * 0.02, 8, '#8a3a32');
-    c.rect(W * 0.128, H * 0.33, W * 0.014, H * 0.03, '#ffe8b0');
-    c.glow(W * 0.135, H * 0.345, 90, '#ffe0a0', 0.5);
-    c.gradient(H * 0.54, H, [[0, '#3a5a64'], [1, '#14262e']]);
-    // the ferry, slightly tilted
-    const fx = W * 0.32;
-    const fy = H * 0.5;
-    const tilt = 0.06;
-    const P = (x, y) => [fx + x, fy + y + x * tilt];
-    c.poly([P(0, 40), P(520, 40), P(560, 0), P(-30, 0)].map(([x, y]) => [x, y]), '#c8d2dc');
-    c.poly([P(-30, 0), P(560, 0), P(520, 40), P(0, 40)], '#c8ccd0');
-    c.poly([P(-20, 40), P(530, 40), P(500, 86), P(10, 86)], '#1f3f7a');
-    c.poly([P(60, 0), P(420, 0), P(400, -50), P(90, -50)], '#d4d6d8');
-    c.poly([P(120, -50), P(360, -50), P(340, -88), P(150, -88)], '#c4c8cc');
-    for (let k = 0; k < 9; k++) c.poly([P(100 + k * 34, -38), P(122 + k * 34, -38), P(122 + k * 34, -24), P(100 + k * 34, -24)], '#3a4a5e');
-    c.poly([P(240, -88), P(272, -88), P(276, -130), P(244, -130)], '#c8463a');
-    // waves in front
-    for (let row = 0; row < 7; row++) {
-      const y = H * 0.62 + row * 46;
-      c.ridge(y, 18 + row * 4, 0.006, row % 2 ? '#24424c' : '#2c4c56', 100 + row, { octaves: 2, sharp: true, bottom: y + 60 });
-      const n = noise1(100 + row);
-      for (let x = 0; x < W; x += 8) if (n(x * 0.006) > 0.25) c.rect(x, y - n(x * 0.006) * (18 + row * 4) - 4, 10, 4, '#e8f0f2', 0.8);
+    c.gradient(0, H * 0.55, [[0, '#1e2430'], [0.6, '#4a5260'], [1, '#7a8088']]);
+    clouds(c, 81, { y0: 0, y1: H * 0.5, scale: 0.0022, cover: -0.1, soft: 0.5, lit: '#8a8e98', shade: '#1a1e28', alpha: 0.95, stretch: 2.2 });
+    // the headland with a village of white cubes and a lighthouse
+    const head = noise2(82);
+    const top = new Float32Array(W);
+    for (let x = 0; x < W; x++) top[x] = H * 0.53 - Math.max(0, (W * 0.42 - x) / (W * 0.42)) * 110 - head.fbm(x * 0.006, 2, 4) * 18;
+    const landTone = ramp([[0, '#1e2420'], [0.6, '#3a443a'], [1, '#5a6252']]);
+    c.paintBox(0, H * 0.3, W * 0.5, H * 0.56, (x, y) => (y < top[x] || x > W * 0.46 ? null : [mix(landTone(0.4 + head.fbm(x * 0.02, y * 0.03, 3) * 0.5), hex('#6a7078'), 0.35), 1]));
+    for (let i = 0; i < 26; i++) {
+      const hx = 20 + r() * W * 0.36;
+      const hy = top[Math.floor(hx)] + 6 + r() * 30;
+      const hw = 12 + r() * 16;
+      const hh = 10 + r() * 12;
+      c.rect(hx, hy, hw, hh, mix(hex('#e8e8e2'), hex('#6a7078'), 0.3));
+      c.rect(hx + hw * 0.65, hy, hw * 0.35, hh, '#8a9098', 0.8);
+      if (r() < 0.4) c.rect(hx + 3, hy + 3, 3, 4, '#2a3a5a');
     }
-    for (let i = 0; i < 400; i++) {
-      const rx = r() * W;
-      const ry = r() * H;
-      c.line(rx, ry, rx - 18, ry + 30, 1.4, '#c8d0d6', 0.3);
+    const lx = W * 0.05;
+    const ly = top[Math.floor(lx)] - 44;
+    c.rect(lx, ly, 12, 50, '#e8e4dc');
+    c.rect(lx + 7, ly, 5, 50, '#8a8a90');
+    c.rect(lx - 2, ly - 8, 16, 8, '#2a2a30');
+    c.glow(lx + 6, ly - 4, 90, '#fff2c0', 0.7);
+    // the sea: fractal swell, whitecaps where the waves break
+    const sea = noise2(83);
+    const seaTone = ramp([[0, '#0e1a24'], [0.5, '#2a3e4a'], [0.85, '#5a6e78'], [1, '#c8d4d8']]);
+    c.paintBox(0, H * 0.52, W, H, (x, y) => {
+      const k = (y - H * 0.52) / (H * 0.48);
+      const v = sea.fbm(x * 0.006 / (0.3 + k), y * 0.03 / (0.3 + k), 5);
+      const crest = smooth(0.32, 0.45, v + sea(x * 0.05, y * 0.2) * 0.08);
+      return [mix(seaTone(0.35 + v * 0.5 - k * 0.15), hex('#e4ecee'), crest * 0.85), 1];
+    });
+    // the ferry, heeling slightly: dark hull, white decks, a funnel, spray at the bow
+    const fx = W * 0.5;
+    const fy = H * 0.6;
+    const tilt = -0.05;
+    const P = (dx, dy) => [fx + dx, fy + dy + dx * tilt];
+    const hullTone = ramp([[0, '#0e1420'], [1, '#3a4a66']]);
+    c.poly([P(-260, 0), P(250, 0), P(300, -36), P(-240, -40)], '#000', 1, (x, y) => hullTone(0.3 + (fy - y) / 80));
+    c.poly([P(-240, -40), P(300, -36), P(296, -50), P(-238, -54)], '#d8dcdc');
+    const white = ramp([[0, '#7a828c'], [0.6, '#d8dce0'], [1, '#f8f8f6']]);
+    for (const [x0, x1, h0, h1] of [[-200, 230, 54, 92], [-150, 170, 92, 124], [-90, 90, 124, 150]]) {
+      c.poly([P(x0, -h0), P(x1, -h0), P(x1 - 10, -h1), P(x0 + 6, -h1)], '#000', 1, (x, y) => white(0.5 + (x - fx) / 900 + 0.3));
+      for (let wx = x0 + 14; wx < x1 - 20; wx += 22) c.poly([P(wx, -h0 - 12), P(wx + 12, -h0 - 12), P(wx + 12, -h0 - 22), P(wx, -h0 - 22)], '#2a3446');
     }
-  },
-
-  /** A river winding through dense rainforest canopy, seen from above (Amazon). */
-  forest(c, r) {
-    c.fill('#18301c');
-    for (let i = 0; i < 1400; i++) {
-      const x = r() * W;
+    c.poly([P(10, -150), P(56, -150), P(52, -196), P(18, -196)], '#2a5a8a');
+    c.poly([P(14, -190), P(52, -190), P(52, -198), P(16, -198)], '#1a1e26');
+    const spray = noise2(84);
+    c.paintBox(fx + 230, fy - 120, fx + 380, fy + 30, (x, y) => {
+      const v = spray.fbm(x * 0.03, y * 0.03, 4) + 0.6 - Math.hypot(x - fx - 300, (y - fy + 30) * 1.4) / 90;
+      return v > 0.3 ? [hex('#eef2f2'), smooth(0.3, 0.7, v) * 0.85] : null;
+    });
+    // rain, slanting in the wind
+    for (let i = 0; i < 900; i++) {
+      const x = r() * W * 1.2;
       const y = r() * H;
-      const s = 18 + r() * 34;
-      const g = ['#1c3a20', '#244626', '#2c522c', '#355c30', '#22401f'][Math.floor(r() * 5)];
-      c.circle(x, y, s, g);
-      c.circle(x - s * 0.25, y - s * 0.25, s * 0.5, '#5a7a3e', 0.45);
+      c.line(x, y, x - 10, y + 26, 1.2, '#c8d0d8', 0.12 + r() * 0.12);
     }
-    // the river
-    const pts = [];
-    for (let y = -20; y <= H + 20; y += 10) pts.push([W * 0.5 + Math.sin(y * 0.008) * 260 + Math.sin(y * 0.021) * 60, y]);
-    const left = pts.map(([x, y]) => [x - 46, y]);
-    const right = pts.map(([x, y]) => [x + 46, y]).reverse();
-    c.poly([...left, ...right], '#5a4a34');
-    c.poly([...pts.map(([x, y]) => [x - 30, y]), ...pts.map(([x, y]) => [x + 30, y]).reverse()], '#7a6444');
-    for (const [x, y] of pts) if (r() < 0.3) c.rect(x - 20, y, 30, 3, '#d0b080', 0.5);
-    // morning mist
-    for (let i = 0; i < 12; i++) c.ellipse(r() * W, r() * H, 200 + r() * 200, 40 + r() * 40, '#e8f0e8', 0.12);
   },
 
-  /** A processor die on a circuit board with golden traces (technology). */
+  /** The Amazon from the air: a brown river winding through a dense canopy, morning mist in the hollows (Brazil). */
+  forest(c, r) {
+    c.fill('#0e1a10');
+    const river = (y) => W * 0.55 + Math.sin(y * 0.008) * 170 + Math.sin(y * 0.021 + 1) * 60;
+    // crowns: hundreds of irregular lit volumes in several greens, a few flowering trees
+    const species = [
+      ramp([[0, '#0a160c'], [0.5, '#1e3a1c'], [0.85, '#3e6a2a'], [1, '#7a9a44']]),
+      ramp([[0, '#0e180a'], [0.5, '#2a4218'], [0.85, '#5a7a28'], [1, '#a8b450']]),
+      ramp([[0, '#08140e'], [0.5, '#163424'], [0.85, '#2e5a3a'], [1, '#5a8a5a']]),
+      ramp([[0, '#14160a'], [0.5, '#3a4018'], [0.85, '#6a6a28'], [1, '#b0a850']]),
+    ];
+    const flower = ramp([[0, '#2a1a10'], [0.5, '#8a5a1e'], [0.85, '#d8a030'], [1, '#f8e070']]);
+    const leaf = noise2(91);
+    const crowns = [];
+    for (let i = 0; i < 1400; i++) {
+      const x = r() * (W + 80) - 40;
+      const y = r() * (H + 80) - 40;
+      if (Math.abs(x - river(y)) < 70) continue;
+      crowns.push({ x, y, s: 18 + r() * 34, tone: r() < 0.03 ? flower : pickOf(r, species), seed: Math.floor(r() * 1e6) });
+    }
+    crowns.sort((a, b) => a.s - b.s);
+    for (const k of crowns) {
+      c.litPoly(blob(k.x, k.y, k.s, k.s * 0.92, k.seed, 0.3, 28), k.x, k.y, k.s, k.s, k.tone, { lx: -0.6, ly: -0.7, lz: 0.5, ambient: 0.12, jitter: (x, y) => leaf(x * 0.12, y * 0.12) * 0.2 });
+    }
+    // the river: muddy water with the sky's light along it, darker under the banks
+    const water = noise2(92);
+    const waterTone = ramp([[0, '#3a2a1a'], [0.5, '#7a5a34'], [0.85, '#a8885a'], [1, '#e0d0a8']]);
+    c.paintBox(0, 0, W, H, (x, y) => {
+      const d = Math.abs(x - river(y));
+      const half = 46 + Math.sin(y * 0.013) * 10;
+      if (d > half) return null;
+      const edge = smooth(half, half - 10, d);
+      return [waterTone(0.45 + water.fbm(x * 0.01, y * 0.04, 3) * 0.3 + (1 - d / half) * 0.2), edge];
+    });
+    // mist lying in bands
+    const mist = noise2(93);
+    c.paintBox(0, 0, W, H, (x, y) => {
+      const v = mist.fbm(x * 0.003, y * 0.008, 4);
+      return v > 0.15 ? [hex('#e0e8e0'), smooth(0.15, 0.55, v) * 0.55] : null;
+    });
+  },
+
+  /** A processor on a circuit board, seen at an angle with a shallow depth of field (technology). */
   chip(c, r) {
-    c.gradient(0, H, [[0, '#0e2a24'], [1, '#081814']]);
-    // traces
-    for (let i = 0; i < 90; i++) {
-      let x = r() < 0.5 ? (r() < 0.5 ? 0 : W) : r() * W;
-      let y = r() < 0.5 ? r() * H : r() < 0.5 ? 0 : H;
-      const tx = W / 2 + (r() - 0.5) * 360;
-      const ty = H / 2 + (r() - 0.5) * 360;
-      const midX = r() < 0.5 ? tx : x;
-      c.line(x, y, midX, y, 4, '#b08a3a', 0.8);
-      c.line(midX, y, midX, ty, 4, '#b08a3a', 0.8);
-      c.circle(x, y, 7, '#d8b060');
-      x = midX;
-      y = ty;
-    }
-    for (let i = 0; i < 40; i++) c.circle(r() * W, r() * H, 6, '#d8b060', 0.9);
-    // the chip with its pins
-    const s = 300;
-    const cx = W / 2 - s / 2;
-    const cy = H / 2 - s / 2;
-    for (let k = 0; k < 14; k++) {
-      const o = 22 + k * 19;
-      c.rect(cx + o, cy - 26, 8, 26, '#e0c070');
-      c.rect(cx + o, cy + s, 8, 26, '#e0c070');
-      c.rect(cx - 26, cy + o, 26, 8, '#e0c070');
-      c.rect(cx + s, cy + o, 26, 8, '#e0c070');
-    }
-    c.rect(cx, cy, s, s, '#1a1c22', 1);
-    c.poly([[cx, cy], [cx + s, cy], [cx + s - 20, cy + 20], [cx + 20, cy + 20]], '#2e323c');
-    c.rect(cx + 70, cy + 70, s - 140, s - 140, '#3a8fb0', 1, null);
-    c.rect(cx + 80, cy + 80, s - 160, s - 160, '#2c6e8a');
-    for (let k = 0; k < 6; k++) c.rect(cx + 90 + k * 20, cy + 90, 10, s - 180, '#4ab0d0', 0.5);
-    c.glow(W / 2, H / 2, 260, '#2ce8f5', 0.25);
-  },
-
-  /** A rocket climbing from its launch pad at dawn on a column of fire (spaceflight). */
-  rocket(c, r) {
-    c.gradient(0, H, [[0, '#1a2250'], [0.55, '#c86a6a'], [0.8, '#f4b26a'], [1, '#f8d8a0']]);
-    stars(c, r, 80, H * 0.3, 0.6);
-    c.ridge(H * 0.8, 10, 0.004, '#3a2a3a', 111, { octaves: 2 });
-    c.rect(0, H * 0.82, W, H * 0.18, '#2a2030');
-    // launch tower
-    const tx = W * 0.38;
-    c.rect(tx, H * 0.32, 26, H * 0.5, '#5a4a5a');
-    for (let y = H * 0.34; y < H * 0.8; y += 30) c.line(tx, y, tx + 26, y + 30, 3, '#7a6a7a');
-    // exhaust cloud at the base
-    for (let i = 0; i < 40; i++) c.circle(W * 0.5 + (r() - 0.5) * 520, H * 0.82 - r() * 70, 40 + r() * 50, mix(hex('#f8e8d8'), hex('#c8a8a0'), r()), 0.85);
-    // flame and rocket
-    const rx = W * 0.5;
-    const ry = H * 0.3;
-    c.glow(rx, ry + 230, 300, '#ffb050', 0.7);
-    c.poly([[rx - 26, ry + 150], [rx + 26, ry + 150], [rx + 8, ry + 380], [rx - 8, ry + 380]], '#ffd27a');
-    c.poly([[rx - 14, ry + 150], [rx + 14, ry + 150], [rx, ry + 300]], '#fff6d8');
-    c.rect(rx - 30, ry - 60, 60, 210, '#f2f2f4');
-    c.rect(rx + 6, ry - 60, 24, 210, '#c8c8d0');
-    c.poly([[rx - 30, ry - 60], [rx, ry - 140], [rx + 30, ry - 60]], '#e8e8ec');
-    c.poly([[rx - 30, ry + 110], [rx - 60, ry + 160], [rx - 30, ry + 150]], '#c8463a');
-    c.poly([[rx + 30, ry + 110], [rx + 60, ry + 160], [rx + 30, ry + 150]], '#a83a30');
-    c.rect(rx - 30, ry + 20, 60, 10, '#2a2a3a');
-  },
-
-  /** An observatory dome on a mountain under the Milky Way (astronomy). */
-  observatory(c, r) {
-    c.gradient(0, H, [[0, '#070a1c'], [0.7, '#1a1e40'], [1, '#2a2648']]);
-    // the Milky Way: a diagonal band of soft light and dense stars
-    const n = noise1(121);
-    for (let k = 0; k < 40; k++) {
-      const t = k / 39;
-      c.glow(t * W, H * 0.85 - t * H * 0.8, 260, '#6a5ab0', 0.1);
-      c.glow(t * W, H * 0.85 - t * H * 0.8 + n(t * 6) * 40, 140, '#d8c8f0', 0.08);
-    }
-    for (let i = 0; i < 2200; i++) {
-      const t = r();
-      const spread = (r() + r() + r() - 1.5) * 260;
-      c.circle(t * W + spread * 0.4, H * 0.85 - t * H * 0.8 + spread, r() < 0.97 ? 1.4 : 2.8, '#ffffff', 0.2 + r() * 0.5);
-    }
-
-    stars(c, r, 300, H * 0.8, 0.9);
-    // mountain and dome
-    c.ridge(H * 0.74, 90, 0.0018, '#0e0e18', 131, { octaves: 3 });
-    const dx = W * 0.64;
-    const dy = H * 0.58;
-    c.ellipse(dx, dy, 150, 140, '#e2e6ee', 1, (x) => (x > dx + 40 ? hex('#a8aec0') : x > dx - 20 ? hex('#c8cede') : hex('#e6eaf2')));
-    c.rect(dx - 160, dy, 320, 110, '#c8ccd8');
-    c.rect(dx + 60, dy, 100, 110, '#9aa0b0');
-    c.poly([[dx - 18, dy - 138], [dx + 18, dy - 138], [dx + 22, dy], [dx - 22, dy]], '#1a1e30');
-    c.rect(dx - 160, dy, 320, 8, '#8a90a0');
-    c.rect(dx - 70, dy + 50, 30, 60, '#3a3e50');
-    c.glow(dx - 55, dy + 80, 50, '#ffd890', 0.7);
-  },
-
-  /** A trading screen with rising candles and a glowing line (markets). */
-  markets(c, r) {
-    c.gradient(0, H, [[0, '#0c1424'], [1, '#141e34']]);
-    for (let x = 0; x < W; x += 80) c.rect(x, 0, 2, H, '#24324c', 0.8);
-    for (let y = 40; y < H; y += 80) c.rect(0, y, W, 2, '#24324c', 0.8);
-    let v = H * 0.68;
-    const line = [];
-    for (let k = 0; k < 34; k++) {
-      const x = 40 + k * 36;
-      const open = v;
-      v += (r() - 0.62) * 60;
-      v = Math.max(H * 0.15, Math.min(H * 0.85, v));
-      const up = v < open;
-      const top = Math.min(open, v);
-      const h = Math.max(6, Math.abs(open - v));
-      c.rect(x + 9, top - 14 - r() * 20, 4, h + 28 + r() * 20, up ? '#63c74d' : '#e43b44', 0.9);
-      c.rect(x, top, 22, h, up ? '#63c74d' : '#e43b44');
-      line.push([x + 11, v]);
-    }
-    for (let k = 0; k + 1 < line.length; k++) c.line(line[k][0], line[k][1] - 40, line[k + 1][0], line[k + 1][1] - 40, 4, '#feae34');
-    for (const [x, y] of line) c.glow(x, y - 40, 40, '#feae34', 0.12);
-    c.rect(0, H - 60, W, 60, '#0a101c');
-    for (let x = 30; x < W; x += 140) c.rect(x, H - 38, 90, 14, x % 280 < 140 ? '#63c74d' : '#e43b44', 0.7);
-  },
-
-  /** Offshore wind turbines on a calm sea at sunrise (energy). */
-  wind(c, r) {
-    c.gradient(0, H * 0.62, [[0, '#4a6aa8'], [0.6, '#e8a8a0'], [1, '#f8d8a8']]);
-    c.glow(W * 0.3, H * 0.6, 360, '#ffd8a0', 0.6);
-    c.circle(W * 0.3, H * 0.6, 50, '#fff0d0');
-    c.gradient(H * 0.62, H, [[0, '#9a8ca0'], [1, '#2a3a5a']]);
-    for (let i = 0; i < 90; i++) c.rect(W * 0.3 - 200 + r() * 400, H * 0.63 + r() * H * 0.37, 30 + r() * 80, 3, '#ffe0b0', 0.35);
-    const turbine = (x, base, s, angle) => {
-      c.poly([[x - 4 * s, base], [x + 4 * s, base], [x + 2 * s, base - 200 * s], [x - 2 * s, base - 200 * s]], '#f2f2f4');
-      c.rect(x - 8 * s, base - 206 * s, 22 * s, 10 * s, '#e0e0e6');
-      for (let b = 0; b < 3; b++) {
-        const a = angle + (b * Math.PI * 2) / 3;
-        const ex = x + Math.cos(a) * 110 * s;
-        const ey = base - 200 * s + Math.sin(a) * 110 * s;
-        const px = Math.cos(a + Math.PI / 2) * 6 * s;
-        const py = Math.sin(a + Math.PI / 2) * 6 * s;
-        c.poly([[x + px, base - 200 * s + py], [ex, ey], [x - px, base - 200 * s - py]], '#fafafc');
-      }
-      c.circle(x, base - 200 * s, 6 * s, '#d0d0d8');
-      c.rect(x - 10 * s, base - 4 * s, 20 * s, 8 * s, '#e8c040');
+    // the board recedes: sharp in the middle, softer and darker at the edges
+    const board = ramp([[0, '#050c0a'], [0.5, '#0e2a22'], [1, '#1e4a3a']]);
+    c.paintBox(0, 0, W, H, (x, y) => [board(0.35 + (y / H) * 0.4 - Math.abs(x - W * 0.55) / W * 0.3), 1]);
+    // traces routed at 45 degrees, in perspective (they converge toward the top)
+    const P = (u, v) => {
+      const s = 0.55 + v * 0.65;
+      return [W * 0.55 + (u - 0.5) * W * 1.4 * s, H * (0.04 + v * 0.98)];
     };
-    turbine(W * 0.86, H * 0.66, 0.5, 0.2);
-    turbine(W * 0.72, H * 0.67, 0.75, 1.1);
-    turbine(W * 0.55, H * 0.7, 1.05, 2.0);
-    turbine(W * 0.36, H * 0.77, 1.5, 0.6);
+    const gold = ramp([[0, '#4a3410'], [0.6, '#a8822e'], [1, '#f2d27a']]);
+    for (let i = 0; i < 70; i++) {
+      let u = r();
+      let v = r();
+      const pts = [P(u, v)];
+      for (let s = 0; s < 4; s++) {
+        const dir = Math.floor(r() * 3) - 1;
+        const len = 0.04 + r() * 0.12;
+        u += dir * len * 0.7;
+        v += len;
+        pts.push(P(u, v));
+      }
+      for (let s = 1; s < pts.length; s++) c.line(pts[s - 1][0], pts[s - 1][1], pts[s][0], pts[s][1], 2 + v * 3, gold(0.35 + r() * 0.4), 0.85);
+      c.circle(pts.at(-1)[0], pts.at(-1)[1], 4 + v * 4, gold(0.7));
+    }
+    // small components scattered on the board, each with a shadow and a lit edge
+    for (let i = 0; i < 60; i++) {
+      const [x, y] = P(r(), r());
+      const w = 10 + r() * 20;
+      const h = 6 + r() * 10;
+      groundShadow(c, x + 6, y + h, w * 0.8, 6, 0.6, '#000000');
+      c.rect(x, y, w, h, pickOf(r, ['#1a1a1e', '#3a2a1e', '#c8c0b0']));
+      c.rect(x, y, w, 2, '#f0e8d8', 0.4);
+    }
+    // the package, off-centre and in perspective, with the die catching a cool reflection
+    const q = [P(0.36, 0.3), P(0.7, 0.3), P(0.74, 0.7), P(0.32, 0.7)];
+    groundShadow(c, W * 0.6, H * 0.76, 300, 30, 0.7, '#000000');
+    const pkg = ramp([[0, '#0a0a0e'], [0.7, '#24262e'], [1, '#4a4e5a']]);
+    c.poly(q, '#000', 1, (x, y) => pkg(0.3 + (1 - (y - q[0][1]) / (q[2][1] - q[0][1])) * 0.5));
+    // gold pins along the edges
+    for (let k = 0; k <= 30; k++) {
+      const t = k / 30;
+      const a = [q[0][0] + (q[1][0] - q[0][0]) * t, q[0][1]];
+      const b = [q[3][0] + (q[2][0] - q[3][0]) * t, q[3][1]];
+      c.line(a[0], a[1] - 2, a[0], a[1] - 12, 3, gold(0.8));
+      c.line(b[0], b[1] + 2, b[0], b[1] + 16, 4, gold(0.75));
+    }
+    const die = [P(0.46, 0.4), P(0.6, 0.4), P(0.615, 0.6), P(0.445, 0.6)];
+    const dieTone = ramp([[0, '#1a2a4a'], [0.5, '#3a6aa0'], [0.85, '#8ac0e0'], [1, '#e8f4ff']]);
+    const ir = noise2(101);
+    c.poly(die, '#000', 1, (x, y) => dieTone(0.3 + ((x - die[0][0]) / 300 + (die[2][1] - y) / 260) * 0.5 + ir(x * 0.02, y * 0.02) * 0.1));
+    c.glow(die[1][0] - 40, die[1][1] + 30, 160, '#c8e8ff', 0.25);
+    // depth of field: the near and far board dissolve into soft highlights
+    for (let i = 0; i < 26; i++) {
+      const x = r() * W;
+      const y = r() < 0.5 ? r() * H * 0.18 : H * (0.86 + r() * 0.14);
+      c.glow(x, y, 20 + r() * 40, pickOf(r, ['#f2c86a', '#4ab0a0']), 0.15);
+    }
+    c.paintBox(0, 0, W, H, (x, y) => [hex('#000000'), 0.55 * (smooth(H * 0.25, 0, y) + smooth(H * 0.82, H, y))]);
   },
 
-  /** Container stacks and gantry cranes at a busy port (trade). */
+  /** A rocket climbing from its pad at dawn on a column of fire, billowing exhaust lit from below (spaceflight). */
+  rocket(c, r) {
+    c.gradient(0, H * 0.8, [[0, '#141a34'], [0.5, '#4a3a5a'], [0.82, '#c8705a'], [1, '#f0a868']]);
+    c.glow(W * 0.5, H * 0.9, 700, '#ff9040', 0.3);
+    // the launch tower: a lattice, lit on one side by the fire
+    const tx = W * 0.3;
+    for (const x of [tx, tx + 48]) c.rect(x, H * 0.22, 6, H * 0.62, '#1a1418');
+    for (let y = H * 0.22; y < H * 0.84; y += 36) {
+      c.line(tx, y, tx + 54, y + 36, 3, '#2a2024');
+      c.line(tx + 54, y, tx, y + 36, 3, '#2a2024');
+      c.rect(tx, y, 54, 3, '#3a2a26');
+    }
+    c.rect(tx + 54, H * 0.3, 120, 6, '#1a1418');
+    // the rocket: a cylinder lit by dawn from the left and fire from below
+    const rx = W * 0.52;
+    const body = ramp([[0, '#4a4650'], [0.5, '#b8b2b4'], [0.85, '#ece6e0'], [1, '#ffffff']]);
+    const shape = [[rx - 26, H * 0.62], [rx - 26, H * 0.22], [rx - 20, H * 0.16], [rx, H * 0.1], [rx + 20, H * 0.16], [rx + 26, H * 0.22], [rx + 26, H * 0.62]];
+    c.litPoly(shape, rx, H * 0.4, 30, H * 0.6, body, { lx: -0.8, ly: 0, lz: 0.5, ambient: 0.2 });
+    c.rect(rx - 26, H * 0.3, 52, 8, '#1a1a22');
+    c.rect(rx - 26, H * 0.52, 52, 5, '#3a3a44');
+    for (const s of [-1, 1]) c.poly([[rx + s * 26, H * 0.56], [rx + s * 50, H * 0.64], [rx + s * 26, H * 0.62]], '#2a2a32');
+    // the flame: white core, gold, orange edges
+    const flame = noise2(111);
+    const fireTone = ramp([[0, '#a02a10'], [0.5, '#f07a20'], [0.8, '#ffd070'], [1, '#fffbe8']]);
+    c.paintBox(rx - 80, H * 0.62, rx + 80, H * 0.88, (x, y) => {
+      const u = (y - H * 0.62) / (H * 0.26);
+      const half = 18 + u * 50;
+      const d = Math.abs(x - rx + flame(y * 0.03, 1) * 6) / half;
+      const v = 1 - d + flame.fbm(x * 0.05, y * 0.04, 3) * 0.3 - u * 0.3;
+      return v > 0 ? [fireTone(clamp01(v * 1.3)), clamp01(v * 2.5)] : null;
+    });
+    c.glow(rx, H * 0.66, 160, '#fff0c0', 0.9);
+    // exhaust billows: lit warm from below, cool from the sky
+    const smoke = ramp([[0, '#3a2a30'], [0.5, '#8a6a68'], [0.8, '#e0a880'], [1, '#fff0d8']]);
+    for (let i = 0; i < 46; i++) {
+      const side = r() < 0.5 ? -1 : 1;
+      const d = r() ** 0.7;
+      const x = rx + side * d * W * 0.48;
+      const y = H * (0.84 - d * 0.06) + r() * 50;
+      const s = 50 + r() * 90 - d * 20;
+      c.litPoly(blob(x, y, s, s * 0.8, Math.floor(r() * 1e6), 0.28), x, y, s, s, smoke, { lx: -side * 0.4, ly: 0.7, lz: 0.5, ambient: 0.15, jitter: (px, py) => flame(px * 0.02, py * 0.02) * 0.15 - d * 0.25 });
+    }
+    c.gradient(H * 0.92, H, [[0, '#1a1214'], [1, '#0a0808']]);
+  },
+
+  /** Observatory domes on a desert ridge under the Milky Way (astronomy, Chile). */
+  observatory(c, r) {
+    c.gradient(0, H, [[0, '#04060e'], [0.6, '#0e1426'], [1, '#1a1e30']]);
+    // the Milky Way: a diagonal band of fractal light with dark dust lanes
+    const mw = noise2(121);
+    const band = ramp([[0, '#1a1e3a'], [0.5, '#5a5a7a'], [0.85, '#b8aac0'], [1, '#f2e8f0']]);
+    c.paintBox(0, 0, W, H * 0.8, (x, y) => {
+      const d = Math.abs((y - H * 0.95) + (x - W * 0.1) * 0.62) / 160;
+      const v = 1 - d + mw.fbm(x * 0.004, y * 0.004, 5) * 0.6;
+      const dust = smooth(0.15, 0.35, mw.ridged(x * 0.006, y * 0.01, 3) - 0.35) * smooth(0, 1, 1 - d);
+      return v > 0.2 ? [band(clamp01(v - dust * 0.6)), smooth(0.2, 1, v) * 0.85] : null;
+    });
+    sparkle(c, r, 1600, 0, 0, W, H * 0.72, '#ffffff', 0.9, [1, 1, 1, 2]);
+    sparkle(c, r, 40, 0, 0, W, H * 0.6, '#ffe8c8', 1.2, [2, 3]);
+    // the ridge, faintly rimmed by starlight
+    const ridgeTop = c.ridge(H * 0.72, 60, 0.0018, '#080a10', 122, { octaves: 4 });
+    for (let k = 1; k < ridgeTop.length - 2; k++) c.line(ridgeTop[k][0], ridgeTop[k][1], ridgeTop[k + 1][0], ridgeTop[k + 1][1], 2, '#3a4058', 0.6);
+    const ground = (x) => (ridgeTop.find(([px]) => px >= x) || ridgeTop.at(-2))[1];
+    // two domes: spherical volumes lit by the sky from the upper left, a slit open with red light inside
+    const domeTone = ramp([[0, '#1a1e2a'], [0.5, '#5a6276'], [0.85, '#a8b0c0'], [1, '#e0e6f0']]);
+    for (const [dx, s] of [[W * 0.58, 1], [W * 0.78, 0.55]]) {
+      const gy = ground(dx) + 6;
+      const R = 90 * s;
+      c.rect(dx - R * 0.95, gy - R * 0.55, R * 1.9, R * 0.6, '#2a2e3a');
+      c.rect(dx + R * 0.5, gy - R * 0.55, R * 0.45, R * 0.6, '#14161e');
+      const dome = [];
+      for (let i = 0; i <= 40; i++) {
+        const a = Math.PI + (i / 40) * Math.PI;
+        dome.push([dx + Math.cos(a) * R, gy - R * 0.55 + Math.sin(a) * R * 0.95]);
+      }
+      c.litPoly(dome, dx, gy - R * 0.55, R, R * 0.95, domeTone, { lx: -0.6, ly: -0.6, lz: 0.6, ambient: 0.1 });
+      c.poly([[dx - 8 * s, gy - R * 1.48], [dx + 10 * s, gy - R * 1.48], [dx + 14 * s, gy - R * 0.6], [dx - 12 * s, gy - R * 0.6]], '#2a0a0e');
+      c.glow(dx, gy - R, 40 * s, '#c02a20', 0.4);
+    }
+  },
+
+  /** Offshore wind turbines receding into a warm haze over a calm sea at sunset (energy). */
+  wind(c, r) {
+    c.gradient(0, H * 0.62, [[0, '#2a3a5a'], [0.55, '#a07a7a'], [0.85, '#f0b07a'], [1, '#ffd8a0']]);
+    clouds(c, 131, { y0: H * 0.05, y1: H * 0.45, scale: 0.0022, cover: 0.2, lit: '#ffd0a0', shade: '#6a5a72', alpha: 0.8, stretch: 5, lightUp: false });
+    c.glow(W * 0.4, H * 0.6, 600, '#ffc080', 0.45);
+    c.glow(W * 0.4, H * 0.6, 50, '#fff4dc', 1.2, 1);
+    // the sea: long swell with a glitter path under the sun
+    const sea = noise2(132);
+    const seaTone = ramp([[0, '#1a2234'], [0.5, '#3a4a64'], [0.85, '#8a7a84'], [1, '#f0c890']]);
+    c.paintBox(0, H * 0.62, W, H, (x, y) => {
+      const k = (y - H * 0.62) / (H * 0.38);
+      const v = sea.fbm(x * 0.004 / (0.2 + k), y * 0.05 / (0.2 + k), 4);
+      const path = Math.exp(-(((x - W * 0.4) / (80 + k * 300)) ** 2));
+      return [seaTone(clamp01(0.35 + v * 0.3 + path * (0.4 + v * 0.8) - k * 0.1)), 1];
+    });
+    sparkle(c, r, 500, W * 0.3, H * 0.62, W * 0.5, H, '#fff0c8', 0.6);
+    // turbines: near ones large and crisp, far ones small and lost in the haze
+    const turbines = [
+      [W * 0.78, 1, 0.3],
+      [W * 0.6, 0.62, 1.4],
+      [W * 0.18, 0.45, 0.7],
+      [W * 0.32, 0.33, 2.1],
+      [W * 0.9, 0.28, 2.8],
+      [W * 0.05, 0.22, 1.9],
+      [W * 0.5, 0.18, 0.4],
+    ];
+    for (const [x, s, rot] of turbines.sort((a, b) => a[1] - b[1])) {
+      const base = H * 0.62 + s * 30;
+      const hub = base - 380 * s;
+      const air = 0.75 - s * 0.7;
+      const tone = ramp([[0, mix(hex('#3a3c4a'), hex('#c8a090'), air)], [1, mix(hex('#f0ece8'), hex('#f0c8a0'), air)]]);
+      c.poly([[x - 7 * s, base], [x + 7 * s, base], [x + 3 * s, hub], [x - 3 * s, hub]], '#000', 1, (px) => tone(0.3 + (px < x ? 0.1 : 0.55)));
+      c.rect(x - 9 * s, base - 14 * s, 18 * s, 14 * s, mix(hex('#e8c040'), hex('#c8a090'), air));
+      for (let k = 0; k < 3; k++) {
+        const a = rot + (k * Math.PI * 2) / 3;
+        const L = 220 * s;
+        const ex = x + Math.cos(a) * L;
+        const ey = hub + Math.sin(a) * L;
+        const nx = -Math.sin(a) * 7 * s;
+        const ny = Math.cos(a) * 7 * s;
+        c.poly([[x + nx, hub + ny], [ex, ey], [x - nx * 0.4, hub - ny * 0.4]], tone(0.6 + Math.sin(a) * 0.3));
+      }
+      c.ellipse(x, hub, 14 * s, 10 * s, tone(0.8));
+      c.poly([[x, hub - 8 * s], [x + 36 * s, hub - 6 * s], [x + 36 * s, hub + 6 * s], [x, hub + 8 * s]], tone(0.5));
+    }
+  },
+
+  /** Gantry cranes over container stacks and a ship at the quay in morning haze (trade). */
   port(c, r) {
-    c.gradient(0, H * 0.6, [[0, '#3a5272'], [1, '#c8c4bc']]);
-    cloud(c, W * 0.2, H * 0.14, 60, '#d0d4d8', 0.6);
-    c.gradient(H * 0.66, H, [[0, '#3a6a8a'], [1, '#1a3a5a']]);
-    // ship hull
-    c.poly([[W * 0.05, H * 0.6], [W * 0.95, H * 0.6], [W * 0.9, H * 0.74], [W * 0.1, H * 0.74]], '#2a3a4a');
-    c.rect(W * 0.05, H * 0.6, W * 0.9, 10, '#c8463a');
-    // containers
-    const colors = ['#8a3a32', '#2a4a70', '#a8823a', '#3a5a46', '#5a4a5e', '#9a9a96', '#9a5a32'];
-    for (let row = 0; row < 5; row++) {
-      for (let x = W * 0.08; x < W * 0.86; x += 70) {
-        if (r() < 0.12 * row) continue;
-        const y = H * 0.6 - (row + 1) * 34;
-        const col = colors[Math.floor(r() * colors.length)];
-        c.rect(x, y, 66, 32, col);
-        for (let k = 6; k < 66; k += 8) c.rect(x + k, y + 3, 2, 26, '#000000', 0.15);
+    c.gradient(0, H * 0.6, [[0, '#7a8aa0'], [0.7, '#c8c4bc'], [1, '#e8d8c0']]);
+    c.glow(W * 0.15, H * 0.35, 500, '#fff0d8', 0.35);
+    // the far quay: hazy stacks
+    for (let x = 0; x < W; x += 30 + r() * 30) {
+      const h = 20 + r() * 50;
+      c.rect(x, H * 0.58 - h, 28 + r() * 30, h, mix(hex(pickOf(r, ['#8a5a4a', '#4a6a8a', '#7a7a6a', '#9a8a5a'])), hex('#c8c4bc'), 0.65));
+    }
+    // the ship: a long dark hull; containers stacked on deck, every box its own colour with ribs and a lit top
+    const hull = ramp([[0, '#14181e'], [1, '#3a3e48']]);
+    c.poly([[W * 0.06, H * 0.62], [W * 0.98, H * 0.62], [W * 0.95, H * 0.8], [W * 0.1, H * 0.8]], '#000', 1, (x, y) => hull(0.6 - (y - H * 0.62) / (H * 0.18) * 0.5));
+    c.rect(W * 0.1, H * 0.77, W * 0.85, 8, '#7a2a24');
+    const colours = ['#9a3a2a', '#2a5a7a', '#c88a2a', '#4a6a4a', '#7a7a7a', '#2a3a6a', '#a85a3a', '#5a4a6a', '#d8d0c0'];
+    for (let bay = 0; bay < 22; bay++) {
+      const bx = W * 0.12 + bay * 46;
+      const tiers = 2 + Math.floor(r() * 5);
+      for (let t = 0; t < tiers; t++) {
+        const by = H * 0.62 - (t + 1) * 30;
+        const base = hex(pickOf(r, colours));
+        c.rect(bx, by, 44, 29, mix(base, hex('#000000'), 0.2));
+        for (let k = 3; k < 44; k += 5) c.rect(bx + k, by + 2, 1.5, 25, mix(base, hex('#000000'), 0.4), 0.7);
+        c.rect(bx, by, 44, 3, mix(base, hex('#ffffff'), 0.35));
+        c.rect(bx + 34, by, 10, 29, '#000000', 0.15);
       }
     }
-    // gantry cranes
-    for (const gx of [W * 0.2, W * 0.58]) {
-      c.rect(gx, H * 0.12, 18, H * 0.6, '#e06a2a');
-      c.rect(gx + 200, H * 0.12, 18, H * 0.6, '#e06a2a');
-      c.rect(gx - 120, H * 0.12, 460, 22, '#e06a2a');
-      c.line(gx, H * 0.4, gx + 218, H * 0.13, 6, '#c85a20');
-      c.rect(gx + 90, H * 0.14, 50, 30, '#f2f2f2');
-      c.line(gx + 115, H * 0.17, gx + 115, H * 0.3, 2, '#2a2a2a');
-      c.rect(gx + 85, H * 0.3, 60, 30, colors[Math.floor(r() * colors.length)]);
+    c.rect(W * 0.86, H * 0.42, 70, 90, '#d8d4cc');
+    c.rect(W * 0.86 + 50, H * 0.42, 20, 90, '#8a8a90');
+    for (let k = 0; k < 4; k++) c.rect(W * 0.86 + 6, H * 0.44 + k * 20, 58, 6, '#2a3446');
+    // two gantry cranes: braced legs, a long boom, cables, lit on their sunward side
+    const steel = ramp([[0, '#5a2a14'], [0.6, '#c8622a'], [1, '#f0a060']]);
+    for (const gx of [W * 0.3, W * 0.62]) {
+      for (const lx of [gx, gx + 150]) {
+        c.poly([[lx, H * 0.8], [lx + 14, H * 0.8], [lx + 12, H * 0.16], [lx + 2, H * 0.16]], '#000', 1, (px) => steel(px < lx + 6 ? 0.85 : 0.45));
+      }
+      for (let y = H * 0.2; y < H * 0.76; y += 70) {
+        c.line(gx + 7, y, gx + 157, y + 70, 4, steel(0.5));
+        c.line(gx + 157, y, gx + 7, y + 70, 4, steel(0.4));
+      }
+      c.poly([[gx - 160, H * 0.15], [gx + 330, H * 0.15], [gx + 330, H * 0.18], [gx - 160, H * 0.18]], steel(0.7));
+      for (let k = gx - 150; k < gx + 320; k += 22) c.line(k, H * 0.15, k + 11, H * 0.18, 2, steel(0.4));
+      c.line(gx + 7, H * 0.16, gx + 80, H * 0.06, 4, steel(0.6));
+      c.line(gx + 80, H * 0.06, gx + 320, H * 0.15, 2, '#3a2a24');
+      c.line(gx + 80, H * 0.06, gx - 150, H * 0.15, 2, '#3a2a24');
+      const sx = gx + 40 + r() * 140;
+      c.rect(sx, H * 0.18, 40, 18, '#e8e4dc');
+      c.line(sx + 20, H * 0.21, sx + 20, H * 0.36, 2, '#1e1e22');
+      c.rect(sx - 2, H * 0.36, 44, 26, mix(hex(pickOf(r, colours)), hex('#000000'), 0.1));
     }
-    for (let i = 0; i < 60; i++) c.rect(r() * W, H * 0.76 + r() * H * 0.24, 40 + r() * 80, 3, '#a8c8e0', 0.3);
+    haze(c, 0, H * 0.8, '#e0d8cc', 0.18, 0.02);
+    // the water: soft, broken reflections of the hull and the cranes
+    const wv = noise2(141);
+    c.paintBox(0, H * 0.8, W, H, (x, y) => {
+      const v = wv.fbm(x * 0.004, y * 0.06, 4);
+      return [mix(hex('#2a3446'), hex('#a8b0b8'), clamp01(0.3 + v * 0.8 + (y - H * 0.8) / H)), 1];
+    });
   },
 };
 
-// Per-scene grades: night and storm scenes keep their own mood, daylight scenes are calmed down most.
+// Per-scene grades: night and fire scenes keep their colour, daylight scenes are calmed down most.
 const GRADES = {
-  volcano: { saturation: 0.85, tint: 0.12 },
+  volcano: { saturation: 0.9, tint: 0.1 },
   observatory: { saturation: 0.8, tint: 0.1 },
-  markets: { saturation: 0.8, tint: 0.1, vignette: 0.3 },
-  chip: { saturation: 0.75, tint: 0.12 },
+  chip: { saturation: 0.8, tint: 0.12 },
   ferry: { saturation: 0.7, tint: 0.18 },
-  rocket: { saturation: 0.75 },
+  rocket: { saturation: 0.8 },
+  forest: { saturation: 0.75, tint: 0.14 },
+  tram: { saturation: 0.8, tint: 0.14 },
 };
 
 /** Paint one scene at full size, graded, before downsampling. */

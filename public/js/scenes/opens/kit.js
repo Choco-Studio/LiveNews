@@ -221,14 +221,18 @@ export function lockupLayout(info, style) {
   return v;
 }
 
-/** Text that rises `rise` px into place inside a mask at its own rows (state always restored). */
-function riseText(ctx, p, x, y, h, rise, draw) {
+/**
+ * One or two runs of text (a label and what follows it) rising `rise` px into place inside a
+ * mask at their own rows; the state is always restored.
+ */
+function riseText(ctx, p, x, y, h, rise, text, style, text2 = null, style2 = null) {
   if (p <= 0) return;
   const off = Math.round((1 - easeOutQuint(p)) * rise);
   ctx.save();
   try {
     clipRect(ctx, x - 2, y - 1, W, h + 2);
-    draw(off);
+    const w = drawText(ctx, text, x, y + off, style);
+    if (text2) drawText(ctx, text2, x + w + 4, y + off, style2);
   } finally {
     ctx.restore();
   }
@@ -272,15 +276,8 @@ export function drawLockup(ctx, dt, info, style) {
     }
   }
   // tagline and credits
-  if (L.tagline) {
-    riseText(ctx, seg(dt, TL.tag, 0.3), L.titleX, L.tagY, 7, 7, (off) => drawText(ctx, L.tagline, L.titleX, L.tagY + off, TAG_STYLE));
-  }
-  if (L.credits) {
-    riseText(ctx, seg(dt, TL.credits, 0.3), L.titleX, L.credY, 7, 7, (off) => {
-      const lw = drawText(ctx, L.credits.label, L.titleX, L.credY + off, LABEL_STYLE);
-      drawText(ctx, L.credits.names, L.titleX + lw + 4, L.credY + off, NAMES_STYLE);
-    });
-  }
+  if (L.tagline) riseText(ctx, seg(dt, TL.tag, 0.3), L.titleX, L.tagY, 7, 7, L.tagline, TAG_STYLE);
+  if (L.credits) riseText(ctx, seg(dt, TL.credits, 0.3), L.titleX, L.credY, 7, 7, L.credits.label, LABEL_STYLE, L.credits.names, NAMES_STYLE);
   return L;
 }
 const TAG_STYLE = { color: P.silver };

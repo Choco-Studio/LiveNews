@@ -188,6 +188,41 @@ class ChainTest(unittest.TestCase):
         np.testing.assert_allclose(20 * np.log10(mags), [0.0, 3.0, 6.0], atol=1e-6)
 
 
+class TimingTest(unittest.TestCase):
+    """Gap tightening and word alignment, on synthetic phrases (no model)."""
+
+    def test_tighten_gaps_cuts_only_the_quiet_core(self):
+        from engine import VoiceEngine, tighten_gaps
+        tone = 0.3 * np.sin(2 * np.pi * 220 * np.arange(int(0.3 * SR)) / SR)
+        seg = np.concatenate([tone, np.zeros(int(0.45 * SR)), tone])
+        gaps = VoiceEngine._gaps(seg, SR)
+        self.assertEqual(len(gaps), 1)
+        out, removed = tighten_gaps(seg, SR, gaps, 0.15)
+        self.assertAlmostEqual(len(out) / SR, len(seg) / SR - removed, places=3)
+        new_gap = VoiceEngine._gaps(out, SR)[0]
+        self.assertAlmostEqual(new_gap[1] - new_gap[0], 0.15, delta=0.03)
+        np.testing.assert_allclose(out[:len(tone)], tone)  # the word before is untouched
+        np.testing.assert_allclose(out[-len(tone):], tone)  # and the word after
+
+    def test_alignment_skips_silence_and_pins_commas(self):
+        from engine import VoiceEngine
+        from textnorm import Token
+        toks = [(Token(0, 5, 'Hello', 'Hello,'), 'həlˈoʊ,'), (Token(7, 12, 'world', 'world'), 'wˈɜːld'),
+                (Token(13, 16, 'and', 'and'), 'ænd'), (Token(17, 21, 'more', 'more.'), 'mˈɔːɹ.')]
+        hop = 0.005
+        ft = np.arange(0, 2.0, hop) + hop / 2
+        active = np.ones(len(ft), bool)
+        active[(ft > 0.5) & (ft < 0.7)] = False   # comma pause
+        active[(ft > 1.2) & (ft < 1.5)] = False   # a silence inside the second clause
+        starts, phones = VoiceEngine.align_phrase(None, toks, 2.0, [(0.5, 0.7)], (ft, active))
+        self.assertEqual(starts[0], 0.0)
+        self.assertAlmostEqual(starts[1], 0.7, delta=0.011)  # pinned to the end of the comma pause
+        self.assertEqual(starts, sorted(starts))
+        for t in starts[2:]:
+            self.assertFalse(1.205 < t < 1.495, f'word starts inside a silence at {t}')
+        self.assertEqual([t for t, _ in phones], sorted(t for t, _ in phones))
+
+
 class MetricsTest(unittest.TestCase):
     def test_stoi_identity_and_noise(self):
         x = speechlike(3.0)

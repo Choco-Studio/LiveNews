@@ -162,23 +162,23 @@ export const STINGS = {
     // D minor, the channel's breaking key: serious, low, never an alarm.
     const pal = { ...PALETTES.channel, scale: 'minor', lead: { ...PALETTES.channel.lead, oct: 0 } };
     const dest = bus(eng, 0.75);
-    eng.rig.timpani(t, 38, 0.6, dest);
-    eng.rig.timpani(t + 0.45, 38, 0.38, dest);
+    eng.rig.timpani(t, 38, 0.48, dest);
+    eng.rig.timpani(t + 0.45, 38, 0.3, dest);
     chord(eng, dest, t, 2.1, 'Dm9', { inst: 'pad', lo: 48, vel: 0.85, roll: 0, p: { attack: 0.3, lpTo: 800, release: 1.2 } });
-    eng.rig.bass(t, 38, 2.2, 0.39, dest, { wave: 'sine', lp: 300, release: 0.45 });
-    motif(eng, dest, pal, t + 0.45, 0.3, 'statement', { inst: 'ep', vel: 0.75, colour: COLOUR.breaking, p: { index: 0.35, attack: 0.02, decay: 1.2, release: 0.6 } });
+    eng.rig.bass(t, 38, 2.2, 0.22, dest, { wave: 'sine', lp: 300, release: 0.45 });
+    motif(eng, dest, pal, t + 0.45, 0.3, 'statement', { inst: 'ep', vel: 0.9, colour: COLOUR.breaking, p: { index: 0.5, attack: 0.02, decay: 1.2, release: 0.6 } });
     return t + 3.2;
   },
 
   endcard(eng, t, { palette } = {}) {
     const pal = PALETTES[palette] || PALETTES.channel;
     const spb = 60 / pal.bpm;
-    const dest = bus(eng, 0.9);
+    const dest = bus(eng, 0.78);
     const lead = leadBus(eng, dest, spb);
     const { I } = pal.cadence;
     const c = parseChord(I);
     eng.rig.kick(t, 0.7, dest);
-    eng.rig.bass(t, bassOf(c.bass), spb * 4.5, 0.49, dest, bassP(pal, 0.6));
+    eng.rig.bass(t, bassOf(c.bass), spb * 3.5, 0.38, dest, bassP(pal, 0.7));
     chord(eng, dest, t, spb * 5, I, { lo: pal.keys.lo, vel: 0.72, roll: 0.03 });
     chord(eng, dest, t, spb * 5, I, { inst: 'pad', lo: pal.pad.lo, vel: 0.7, roll: 0, p: { attack: 0.3, lpTo: 1200, release: 1.6 } });
     eng.rig.swell(t, spb * 0.5, 0.35, dest, 0.6);

@@ -355,12 +355,16 @@ function buildIdent(night) {
   };
 }
 
-/** Stinger (0.8 s): a soft air swell into a low felt thump on the cut, with a quiet low D. */
+/**
+ * Stinger (0.8 s): a soft air swell into a low felt thump on the cut, with a
+ * quiet low D. 6 LU under the voice; the trim is set from the lab meter (the
+ * note model under-reads such a short, low sound by ~3 LU).
+ */
 function buildStinger() {
   return {
     bpm: 150,
     room: 0.25,
-    loudness: -6,
+    loudness: -9,
     fadeOut: 0.3,
     tracks: [
       { drums: drums([[0, 'A', 0.7], [1, 'F', 0.9]], 2) },

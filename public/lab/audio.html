@@ -51,6 +51,10 @@
       const ACCENT = { 'world-now': P.red, 'tech-bytes': P.cyan, cosmos: P.magenta, 'money-minute': P.green, 'news-60': P.yellow, generic: P.silver };
 
       // ------------------------------------------------------------ catalogue
+      const songLen = (tune) => {
+        const song = parseTune(tune);
+        return song ? (song.beats * 60) / song.bpm : 12;
+      };
       const PROG_NAME = { 'world-now': 'WORLD NOW', 'tech-bytes': 'TECH BYTES', cosmos: 'COSMOS', 'money-minute': 'MONEY MINUTE', 'news-60': 'NEWS 60' };
       const TUNES = [
         ...THEME_IDS.map((id) => ({ id, label: `OPEN ${PROG_NAME[id]}`, tune: themeFor(id, { duration: 4 }), accent: ACCENT[id], cut: 4 })),
@@ -63,7 +67,8 @@
         ...['channel', ...THEME_IDS].map((id) => ({ id: `outro-${id}`, label: `SIGN-OFF ${PROG_NAME[id] ?? 'CHANNEL'}`, tune: cueFor('outro', id), accent: ACCENT[id] ?? P.red, card: 3.4 })),
         { id: 'promo', label: 'UP NEXT PROMO (WORLD NOW)', tune: cueFor('promo', 'world-now'), accent: P.yellow, card: 4.2 },
         { id: 'promo-cosmos', label: 'UP NEXT PROMO (COSMOS)', tune: cueFor('promo', 'cosmos'), accent: P.magenta, card: 4.2 },
-        ...ADS.map((ad) => ({ id: `ad-${ad.id}`, label: `AD ${String(ad.brand || ad.id).toUpperCase()}`, tune: ad.tune, accent: P.orange, seconds: 12, loop: true, volume: 0.45 })),
+        // Ads: one full pass of their music bed (25-31 s), at the director's volume.
+        ...ADS.map((ad) => ({ id: `ad-${ad.id}`, label: `AD ${String(ad.brand || ad.id).toUpperCase()}`, tune: ad.tune, accent: P.orange, seconds: Math.min(34, songLen(ad.tune) + 1), loop: true, volume: 0.45 })),
       ];
       const VIEWS = ['signature', ...TUNES.map((t) => t.id), 'loudness', 'ducking', 'visemes', 'resync', 'blips', 'voices', 'sync', 'recorded', 'engine'];
 

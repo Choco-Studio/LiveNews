@@ -9,6 +9,8 @@
 //     for wordmarks, tracked body type, the end slate and the small print;
 //   - a pose-able adult figure (bust and full body, ~6.5 heads tall) with a
 //     calm face: small eyes, brows, a quiet mouth that opens 1-2 px at most.
+//   - jank-free baking: resumable (generator) bakes prewarmed in idle-time
+//     slices, so a cut never waits for its set to be painted.
 // Owner: ads-3. Importable in Node (no DOM touched at import time). Nothing
 // here allocates canvases, gradients or ImageData per frame: static art is
 // baked once into cached canvases and polygons use fixed scratch buffers.

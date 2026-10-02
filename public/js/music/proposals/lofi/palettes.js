@@ -24,7 +24,7 @@ export const DUCK_GROUP = {
 // (orders transitions: going up waits for the bar line, going down only for the beat).
 export const MOMENTS = {
   openTail: {
-    energy: 0.8, gain: -4.5, lp: 5200, pocket: -3, bright: 1.3, dwellBars: 1, entry: 'instant',
+    energy: 0.8, gain: -4.5, lp: 6200, pocket: -2, bright: 1.45, dwellBars: 1, entry: 'instant',
     layers: { pad: 1, keys: 0.85, bass: 1, kick: 0.7, snare: 0.5, hat: 0.6, perc: 0.5, arp: 0.35, lead: 1, tex: 0.8 },
     lead: 'signature',
   },
@@ -54,12 +54,12 @@ export const MOMENTS = {
     layers: { pad: 0.5, keys: 0.4, bass: 0.9, kick: 0.6, snare: 0.25, hat: 0.55, perc: 0.85, arp: 1, lead: 0, tex: 0.35 },
   },
   outro: {
-    energy: 0.75, gain: -6, lp: 4200, pocket: -4, bright: 1.2,
+    energy: 0.75, gain: -6, lp: 5000, pocket: -3, bright: 1.3,
     layers: { pad: 0.9, keys: 1, bass: 1, kick: 0.7, snare: 0.5, hat: 0.6, perc: 0.5, arp: 0.3, lead: 0.8, tex: 0.7 },
     lead: 'answer',
   },
   standby: {
-    energy: 0.6, gain: -2, lp: 5200, pocket: 0, bright: 1.35,
+    energy: 0.6, gain: -2, lp: 6500, pocket: 0, bright: 1.5,
     layers: { pad: 0.8, keys: 1, bass: 1, kick: 0.7, snare: 0.5, hat: 0.55, perc: 0.45, arp: 0.25, lead: 0.9, tex: 1 },
     lead: 'generative',
   },

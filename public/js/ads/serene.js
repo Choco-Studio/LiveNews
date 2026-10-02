@@ -235,7 +235,8 @@ function bareBack(ctx, f) {
   pt(x + sw * 0.95, shY + hh * 0.14);
   pt(x + sw * 0.72, shY);
   pt(x + hh * 0.2, neckB - hh * 0.06);
-  fill(ctx, f.pal.skin, { d: f.pal.skinD, f: 0.3, m: 1, side: 1, ...(f.pal.rim ? { r: f.pal.rim } : {}) });
+  f._backSh ||= { d: f.pal.skinD, f: 0.3, m: 1, side: 1, ...(f.pal.rim ? { r: f.pal.rim } : {}) };
+  fill(ctx, f.pal.skin, f._backSh);
   // shoulder blades and spine, softly
   ctx.fillStyle = mix(f.pal.skin, f.pal.skinD, 0.5);
   ctx.fillRect(round(x), round(shY + hh * 0.12), 1, round(hh * 0.55));
@@ -537,7 +538,7 @@ export default {
   id: 'serene',
   brand: 'SERENE',
   duration: DURATION,
-  voice: { gender: 'female', lang: 'en-GB', pitch: 1.0, rate: 0.86 },
+  voice: { gender: 'male', lang: 'en-GB', pitch: 0.85, rate: 0.86 },
   script: [
     { at: 0.6, text: 'Some people dream of getting away from it all.' },
     { at: 5.3, text: 'We took it literally.' },

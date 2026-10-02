@@ -51,6 +51,10 @@ const C = {
   brand: P.silver,
 };
 const SH_MUG = { d: C.mugD, f: 0.34, m: 1, dd: C.mugDD, df: 0.12, l: C.mugL, lf: 0.18, lm: 1, side: 1 };
+const SH_DISK = { d: C.diskE, f: 0.04, m: 1, side: 1 };
+const SH_MAGNET = { d: P.black, f: 0.2, m: 1, l: P.ink, lf: 0.3, side: 1 };
+const SH_GLOVE = { d: P.fog, f: 0.35, m: 1, dd: P.steel, df: 0.12, side: 1 };
+const SH_CUFF = { d: P.ink, f: 0.3, m: 1, dd: P.black, df: 0.1, side: 1 };
 const SH_KNIT = { d: C.knitM, f: 0.34, m: 1, dd: C.knitD, df: 0.12, l: C.knitL, lf: 0.14, lm: 1, side: 1 };
 
 // --- the floppy disk prop --------------------------------------------------------------
@@ -71,7 +75,7 @@ function disk(ctx, x, y, w, h, { lines = null, font = 'micro', lit = 0, curl = 0
   pt(x + w, y + cut * (h / w));
   pt(x + w, y + h - curl);
   pt(x, y + h);
-  fill(ctx, lit ? C.diskL : C.disk, { d: C.diskE, f: 0.04, m: 1, side: 1 });
+  fill(ctx, lit ? C.diskL : C.disk, SH_DISK);
   rect(ctx, x + 1, y, w - cut - 1, 1, lit ? P.steel : C.diskL); // top edge catches the light
   rect(ctx, x, y + 1, 1, h - 2, C.diskL);
   // shutter
@@ -463,7 +467,7 @@ function shotFridge(ctx, lt) {
   ctx.globalAlpha = 0.35;
   ellipse(ctx, mx + 3, my + 4, 9, 8, P.black);
   ctx.globalAlpha = 1;
-  ellipse(ctx, mx, my, 9, 9, P.black, { d: P.black, f: 0.2, m: 1, l: P.ink, lf: 0.3, side: 1 });
+  ellipse(ctx, mx, my, 9, 9, P.black, SH_MAGNET);
   ellipse(ctx, mx - 1, my - 1, 6, 6, mix(P.black, P.ink, 0.5));
   rect(ctx, mx - 5, my - 6, 4, 1, P.steel);
   rect(ctx, mx - 6, my - 5, 1, 2, P.slate);
@@ -719,8 +723,8 @@ const caseSet = lazy(() =>
 /** A white cotton glove holding an edge (fingers up and to the left), with a dark cuff. */
 function glove(ctx, x, y) {
   const g = mix(P.silver, P.white, 0.35);
-  const sh = { d: P.fog, f: 0.35, m: 1, dd: P.steel, df: 0.12, side: 1 };
-  capsule(ctx, x + 26, y + 30, x + 80, y + 80, 15, 17, mix(P.navy, P.ink, 0.5), { d: P.ink, f: 0.3, m: 1, dd: P.black, df: 0.1, side: 1 });
+  const sh = SH_GLOVE;
+  capsule(ctx, x + 26, y + 30, x + 80, y + 80, 15, 17, mix(P.navy, P.ink, 0.5), SH_CUFF);
   rect(ctx, x + 14, y + 22, 22, 3, P.silver);
   begin();
   pt(x - 2, y + 2);

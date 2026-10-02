@@ -53,13 +53,20 @@ export function timeline({ programme = 'world-now', moment = 'headlines', second
     case 'grave':
       // Grave on its own is silence: show the light bed tailing out into it.
       cue(0, 'story', { emotion: 'happy' });
-      cue(6, 'story', { emotion: 'serious' });
-      if (withVoice) { say(0.8, 'wn-light'); say(6.6, 'wn-grave'); }
+      if (withVoice) say(0.8, 'wn-light');
+      cue(withVoice ? 11.4 : 6, 'story', { emotion: 'serious' });
+      if (withVoice) say(12.0, 'wn-grave');
       break;
     case 'breaking':
+      // A story is interrupted between items: the sting, then the presenter.
       cue(0, 'story', { emotion: 'neutral' });
-      cue(4, 'breaking');
-      if (withVoice) { say(0.8, lines('story')[0]); say(7.3, 'brk'); }
+      if (withVoice) {
+        const first = lines('story')[0];
+        const at = 0.8 + LINES[first] + 0.4;
+        say(0.8, first);
+        cue(at, 'breaking');
+        say(at + 3.1, 'brk');
+      } else cue(4, 'breaking');
       break;
     case 'endcard':
       cue(0, 'outro');

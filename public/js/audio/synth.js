@@ -13,7 +13,9 @@ import { parseTune, flatten, songSeconds, KIND_GAIN, noteCutoff } from './tune.j
 import { estimateLoudness } from './loudness.js';
 
 export const CEILING = 0.87; // master peak limit, -1.2 dBFS
-const COMP = { threshold: -7, knee: 3, ratio: 12 };
+// Peak control only: voices and tunes sit at -16 LUFS with their peaks around
+// -5..-3 dBFS, so the compressor (a limiter here) leaves normal material alone.
+const COMP = { threshold: -5, knee: 3, ratio: 12 };
 // WebAudio's DynamicsCompressor adds make-up gain, (1 / gain at 0 dBFS) ^ 0.6;
 // with its soft knee that is 3.3 dB for these settings (measured in the lab).
 export const COMP_MAKEUP = 10 ** (3.3 / 20);
@@ -110,10 +112,10 @@ export function bank(ctx) {
 
 // ------------------------------------------------------------------ buses
 
-// Linear up to 0.6, then a smooth knee that can never pass CEILING.
+// Linear up to 0.7 (-3.1 dBFS), then a smooth knee that can never pass CEILING.
 function clipCurve(n = 2048) {
   const c = new Float32Array(n);
-  const knee = 0.6;
+  const knee = 0.7;
   for (let i = 0; i < n; i++) {
     const x = (i / (n - 1)) * 2 - 1;
     const a = Math.abs(x);
@@ -686,10 +688,10 @@ export function scheduleMurmur(ctx, dest, voice, tl, t0) {
   osc.setPeriodicWave(bank(ctx).wave(voice.wave ?? 'pulse25'));
   const f1 = ctx.createBiquadFilter();
   f1.type = 'bandpass';
-  f1.Q.value = 5;
+  f1.Q.value = 3.2;
   const f2 = ctx.createBiquadFilter();
   f2.type = 'bandpass';
-  f2.Q.value = 7;
+  f2.Q.value = 4.5;
   const g2 = ctx.createGain();
   g2.gain.value = 0.5;
   const amp = ctx.createGain();
@@ -751,7 +753,8 @@ export const asSong = (tune) => (tune && Array.isArray(tune.tracks) && tune.trac
  * opts: seconds, sampleRate (48000), volume (0.5), loop, duck: [[from, to], ...]
  * (speech intervals in seconds, with the live hold and time constants),
  * duckDb, startAt (s; may be negative = synced to a picture that started
- * earlier), probe (envelopes only, no dynamics), normalise, stopAt.
+ * earlier), probe (envelopes only, no dynamics), raw (no dynamics),
+ * normalise, stopAt.
  * Resolves to { buffer, song, loudness } or null without OfflineAudioContext.
  */
 export async function renderTune(tune, opts = {}) {
@@ -763,7 +766,7 @@ export async function renderTune(tune, opts = {}) {
   const seconds = opts.seconds ?? Math.min(60, songSeconds(song) + 1.6);
   const ctx = new Offline(2, Math.ceil(seconds * sampleRate), sampleRate);
   const ducker = opts.probe ? null : new Ducker();
-  const buses = buildBuses(ctx, { volume: 1, raw: Boolean(opts.probe), ducker });
+  const buses = buildBuses(ctx, { volume: 1, raw: Boolean(opts.probe || opts.raw), ducker });
   const player = new TunePlayer(ctx, buses, song, { volume: opts.volume ?? 0.5, loop, probe: opts.probe, normalise: opts.normalise !== false, duckDb: opts.duckDb });
   player.start(opts.startAt ?? 0.05);
   player.scheduleUntil(seconds);

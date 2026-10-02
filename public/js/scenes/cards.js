@@ -35,26 +35,19 @@ const SAFE_BOTTOM = 134; // last row a card under 'news' graphics may use (capti
 // ---------------------------------------------------------------------------
 // Shared pieces
 
-/** Runs draw() between save() and restore(), whatever happens inside. */
-function guarded(ctx, draw) {
-  ctx.save();
-  try {
-    draw();
-  } finally {
-    ctx.restore();
-  }
-}
-
 /** Text that rises `dist` px into place inside a mask at its own rows (p: 0..1). */
 function rise(ctx, text, x, y, p, style, dist = null) {
   if (p <= 0 || !text) return;
   const scale = style.scale || 1;
   const h = (style.font === 'micro' ? 5 : 7) * scale;
   const off = Math.round((1 - easeOutQuint(p)) * (dist ?? h + 3));
-  guarded(ctx, () => {
+  ctx.save();
+  try {
     clipRect(ctx, 0, y - 3 * scale, W, h + 3 * scale + (style.shadow ? scale : 0) + 1);
     drawText(ctx, text, x, y + off, style);
-  });
+  } finally {
+    ctx.restore();
+  }
 }
 
 /** Horizontal wipe of a flat plate from the left (p: 0..1, eased by the caller). */
@@ -197,7 +190,8 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
   const tagW = textW('TOP STORIES') + 10;
   const n = clamp(Math.floor(total) || 1, 1, 12);
   const pipsW = n * 11 + 4;
-  guarded(ctx, () => {
+  ctx.save();
+  try {
     clipRect(ctx, 13, 25, Math.round((tagW + pipsW) * tagP), 12);
     plate(ctx, 13, 25, tagW, 11, P.red);
     drawText(ctx, 'TOP STORIES', 18, 27, S.white);
@@ -206,7 +200,9 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
       ctx.fillStyle = i === index ? P.white : i < index ? P.fog : P.slate;
       ctx.fillRect(13 + tagW + 4 + i * 11, 29, 9, 3);
     }
-  });
+  } finally {
+    ctx.restore();
+  }
 
   // headline block anchored above the ticker (captions sit at the top in this shot)
   const maxW = W - 2 * X0;
@@ -221,7 +217,8 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
   const sw = src ? textW(src) + 10 : 0;
   const cp = easeOutQuint(seg(dt, 0.12, 0.32));
   if (cp > 0) {
-    guarded(ctx, () => {
+    ctx.save();
+    try {
       clipRect(ctx, X0, chipY, Math.round((cw + sw) * cp), 11);
       plate(ctx, X0, chipY, cw, 11, P.ink);
       plate(ctx, X0, chipY, 2, 11, acc);
@@ -230,7 +227,9 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
         plate(ctx, X0 + cw, chipY, sw, 11, P.black);
         drawText(ctx, src, X0 + cw + 5, chipY + 2, S.silver);
       }
-    });
+    } finally {
+      ctx.restore();
+    }
   }
   // accent rule grows down beside the headline
   const bar = Math.round((blockH + 4) * easeOutQuint(seg(dt, 0.18, 0.4)));
@@ -357,7 +356,8 @@ function drawRuleCard(ctx, dt, o, rows, acc, wipeDur) {
   const vis = Math.round(L.PW * wipe);
   if (vis <= 0) return;
   const tx = L.PX + 12;
-  guarded(ctx, () => {
+  ctx.save();
+  try {
     clipRect(ctx, L.PX, L.PY, vis, L.PH);
     ctx.fillStyle = P.black;
     ctx.fillRect(L.PX, L.PY, L.PW, L.PH);
@@ -391,7 +391,9 @@ function drawRuleCard(ctx, dt, o, rows, acc, wipeDur) {
       y += 1;
     }
     if (L.src) drawText(ctx, L.src, tx, y + 10, S.microFog);
-  });
+  } finally {
+    ctx.restore();
+  }
 }
 
 // TECH BYTES ledger
@@ -422,7 +424,8 @@ function drawLedger(ctx, dt, o, rows, acc) {
   const RW = W - 2 * X0;
   // the kicker and labels come in with a short eased reveal; each row then gets its rule, and its
   // figure cuts in 0.1 s after the rule has finished (TECH BYTES: no count-up, ever)
-  guarded(ctx, () => {
+  ctx.save();
+  try {
     clipRect(ctx, X0, L.top - 2, Math.round(RW * enter), SAFE_BOTTOM - L.top + 2);
     drawText(ctx, L.kicker, X0, L.top, S.microFog);
     for (let i = 0; i < n; i++) {
@@ -443,7 +446,9 @@ function drawLedger(ctx, dt, o, rows, acc) {
       if (dt >= at + 0.4) drawText(ctx, it.fig, W - X0, it.y, S.white2Right);
     }
     if (L.src) drawText(ctx, L.src, X0, L.items[n - 1].y + 22, S.microFog);
-  });
+  } finally {
+    ctx.restore();
+  }
 }
 
 // COSMOS DESK: the Reading
@@ -453,7 +458,8 @@ function drawReading(ctx, dt, o, rows) {
   const enter = easeOutQuint(seg(dt, 0, 0.4));
   if (enter <= 0) return;
   const x0 = 64;
-  guarded(ctx, () => {
+  ctx.save();
+  try {
     clipRect(ctx, 0, 26, Math.round(x0 + (W - x0) * enter), SAFE_BOTTOM - 26 + 1);
     if (!r) {
       // no figure: the fact itself at 2x, left-aligned on the Reading's column
@@ -469,10 +475,13 @@ function drawReading(ctx, dt, o, rows) {
     if (fp > 0) {
       const fig = ellipsis(r.figure, W - x0 - 30, 2);
       const fw = textW(fig, 2);
-      guarded(ctx, () => {
+      ctx.save();
+      try {
         clipRect(ctx, x0, 52, Math.round((fw + 2) * fp), 20);
         drawText(ctx, fig, x0, 56, S.white2);
-      });
+      } finally {
+        ctx.restore();
+      }
     }
     if (r.label) drawText(ctx, ellipsis(r.label, W - x0 - 30, 1), x0, 80, S.silver);
     if (ruler) {
@@ -504,7 +513,9 @@ function drawReading(ctx, dt, o, rows) {
       }
     }
     if (o.source) drawText(ctx, ellipsis(`SOURCE: ${String(o.source).toUpperCase()}`, 260, 1), x0, ruler ? 124 : 104, S.microFog);
-  });
+  } finally {
+    ctx.restore();
+  }
 }
 const MICRO_FOG_C = { color: P.fog, font: 'micro', align: 'center' };
 
@@ -543,7 +554,8 @@ function drawPaper(ctx, dt, o, rows) {
   if (vis <= 0) return;
   const L = paperLayout(o.headline || (rows[0] ? '' : o.fact), rows, o.source);
   const { x, y, w, h } = PAPER;
-  guarded(ctx, () => {
+  ctx.save();
+  try {
     clipRect(ctx, x, y, vis + 1, h + 1);
     ctx.fillStyle = P.cream;
     ctx.fillRect(x, y, w, h);
@@ -578,7 +590,9 @@ function drawPaper(ctx, dt, o, rows) {
       for (let i = 0; i < T.length; i++) drawText(ctx, T[i], tx, ty + i * 11, S.ink);
     }
     if (L.src) drawText(ctx, L.src, tx, y + h - 11, S.microSlate);
-  });
+  } finally {
+    ctx.restore();
+  }
 }
 
 const FACT_STYLES = {
@@ -665,7 +679,8 @@ export function drawQuoteCard(ctx, t, dt, { text = '', by = null, image = null, 
   const wipe = easeOutQuint(seg(dt, 0, 0.35));
   const vis = Math.round(L.w * wipe);
   if (vis <= 0) return;
-  guarded(ctx, () => {
+  ctx.save();
+  try {
     clipRect(ctx, L.x, L.y, vis, L.h);
     ctx.fillStyle = P.ink;
     ctx.fillRect(L.x, L.y, L.w, L.h);
@@ -688,7 +703,9 @@ export function drawQuoteCard(ctx, t, dt, { text = '', by = null, image = null, 
       }
     }
     if (L.attr) drawText(ctx, L.attr, tx, y + 8, S.microFog);
-  });
+  } finally {
+    ctx.restore();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -706,10 +723,13 @@ export function drawBreakingCard(ctx, t, dt, { headline = '', source = '' } = {}
   const bp = easeOutQuint(seg(dt, 0, 0.36));
   plate(ctx, 0, BY, W, BH, P.red, bp);
   plate(ctx, 0, BY + BH, W, 2, P.darkRed, bp);
-  guarded(ctx, () => {
+  ctx.save();
+  try {
     clipRect(ctx, 0, BY, Math.round(W * bp), BH);
     rise(ctx, 'BREAKING NEWS', X0, BY + 7, seg(dt, 0.2, 0.32), S.white2, 16);
-  });
+  } finally {
+    ctx.restore();
+  }
   // headline on the calm field below, balanced lines, all left-aligned on x 19
   const lay = layout(headline, W - 2 * X0, 3, 4);
   const top = BY + BH + 14;
@@ -736,10 +756,13 @@ export function drawEndCard(ctx, t, dt, { channel = 'GLOBIT 24', line1 = 'STAY W
   const lp = seg(dt, 0.1, 0.45);
   if (lp > 0) {
     const off = Math.round((1 - easeOutQuint(lp)) * 8);
-    guarded(ctx, () => {
+    ctx.save();
+    try {
       clipRect(ctx, 0, ly - 2, W, ls.h + 4);
       drawLogo(ctx, W / 2, ly + off, { variant: 'full', scale: LS, align: 'center', t: dt - 0.1 < 0.9 ? Math.max(0, dt - 0.1) : null });
-    });
+    } finally {
+      ctx.restore();
+    }
   }
   // programme plate: title at 2x on black with the accent bar
   const title = ellipsis(String(channel || ''), W - 80, 2);
@@ -754,10 +777,13 @@ export function drawEndCard(ctx, t, dt, { channel = 'GLOBIT 24', line1 = 'STAY W
     ctx.fillRect(px, py, vis, 1);
     ctx.fillStyle = ACCENTS.has(accent) ? accent : P.red;
     ctx.fillRect(px, py + 26, Math.round(pw * easeOutQuint(seg(dt, 0.5, 0.36))), 2);
-    guarded(ctx, () => {
+    ctx.save();
+    try {
       clipRect(ctx, px, py + 1, vis, 25);
       rise(ctx, title, px + 12, py + 6, seg(dt, 0.48, 0.3), S.white2);
-    });
+    } finally {
+      ctx.restore();
+    }
   }
   // sign-off lines
   const l1 = ellipsis(String(line1 || ''), W - 60);
@@ -1080,7 +1106,8 @@ export function drawStinger(ctx, t, p) {
   if (lp <= 0 || lp >= 1) return;
   const size = STING_LOGO || (STING_LOGO = measureLogo({ variant: 'full', scale: 2 }));
   const drift = Math.round(lerp(14, -14, easeInOut(lp)));
-  guarded(ctx, () => {
+  ctx.save();
+  try {
     // clip to the front slab (minus its red edge) so the logo never spills onto the picture
     ctx.beginPath();
     for (let y = 0; y < H; y += 2) {
@@ -1089,7 +1116,9 @@ export function drawStinger(ctx, t, p) {
     }
     ctx.clip();
     drawLogo(ctx, W / 2 + drift, Math.round(H / 2 - size.h / 2), { variant: 'full', scale: 2, align: 'center' });
-  });
+  } finally {
+    ctx.restore();
+  }
 }
 
 // ---------------------------------------------------------------------------

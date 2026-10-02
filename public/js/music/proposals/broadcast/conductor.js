@@ -74,6 +74,7 @@ export class BroadcastMusic {
     this.frames = 0;
     this.releaseAt = -1;
     this.talking = false;
+    this.lastSting = null;
     this.timer = 0;
 
     this.mix = c.createGain();
@@ -234,7 +235,21 @@ export class BroadcastMusic {
     bed.stopAt = t;
     bed.endAt = t + len + 4.5;
     this.beds.push(bed);
-    if (exclusive) this.current = null;
+    if (exclusive) {
+      // A new sting takes over from a previous one still ringing (end card tail into the break bumper).
+      const prev = this.lastSting;
+      if (prev && prev.endAt > t && prev !== bed) {
+        const at = Math.max(this.now, t - 0.05);
+        prev.fade(at, 0.4, 0);
+        const eg = prev.echoOut.gain;
+        eg.cancelScheduledValues(at);
+        eg.setValueAtTime(eg.value, at);
+        eg.linearRampToValueAtTime(0, at + 0.4);
+        prev.endAt = Math.min(prev.endAt, t + 1);
+      }
+      this.lastSting = bed;
+      this.current = null;
+    }
     return { bed, def, len };
   }
 

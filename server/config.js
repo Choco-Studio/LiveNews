@@ -49,6 +49,11 @@ export const config = {
     model: env('DEEPSEEK_MODEL', 'deepseek-chat'),
     baseUrl: env('DEEPSEEK_BASE_URL', 'https://api.deepseek.com/v1'),
   },
+  // "inbox" provider: an external agent (or a person) answers the AI prompts through files in this folder
+  inbox: {
+    dir: path.resolve(ROOT, env('AI_INBOX_DIR', path.join('data', 'ai-inbox'))),
+    timeoutMs: num('AI_INBOX_TIMEOUT_MS', 1800000),
+  },
   // Episodes produced ahead of air
   queueSize: num('QUEUE_SIZE', 2),
   // Stories offered to the writer, who picks the best for each programme

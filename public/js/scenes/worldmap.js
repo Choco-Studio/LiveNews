@@ -597,10 +597,14 @@ function goalFor(rt, mini, lat, lon, pins) {
     zoom = clamp(Math.min(zoom, availX / Math.max(spanX, 1e-3), availY / Math.max(spanY, 1e-3)), 1, zoom);
     fy = mini ? (h >> 1) + 4 : 84;
   }
-  G.flat = clamp(flat, -80, 80);
+  G.flat = clamp(flat, -89.5, 89.5);
   G.flon = flon;
   G.zoom = zoom;
-  G.fy = fy;
+  // near a pole, move the focus row so the frame never looks past the pole (no empty band)
+  const sEnd = s0 * zoom;
+  fy = Math.min(fy, Math.floor((90 - G.flat) * sEnd) - 1);
+  fy = Math.max(fy, Math.ceil(h - (G.flat + 90) * sEnd) + 1);
+  G.fy = clamp(fy, mini ? 12 : 30, h - (mini ? 12 : 30));
   G.kx = clamp(Math.cos(G.flat * DEG), 0.5, 1);
   return G;
 }
@@ -788,11 +792,12 @@ function renderBase(rt, view) {
     tx0[x] = a0; tx1[x] = a0 + 1 >= TW ? 0 : a0 + 1;
   }
   for (let y = 0; y < h; y++) {
-    // beyond a pole the polar row repeats (Arctic sea / Antarctic ice) instead of a black band
+    // beyond the north pole the polar row (Arctic sea) repeats; beyond the south pole the deep-sea
+    // tone (only the whole-world view at the start of a fly-in ever shows these rows)
     const raw = view.clat - (y + 0.5 - halfH) / sy;
     const lat = raw > 89.99 ? 89.99 : raw < -89.99 ? -89.99 : raw;
     rowLat[y] = lat;
-    rowSpace[y] = 0;
+    rowSpace[y] = raw < -90 ? 1 : 0;
     let b = ((90 - lat) / 180) * Hl - 0.5, b0 = Math.floor(b);
     rfy[y] = b - b0;
     ry0[y] = (b0 < 0 ? 0 : b0 > Hl - 1 ? Hl - 1 : b0) * rowStride;
@@ -852,7 +857,7 @@ function renderBase(rt, view) {
   for (let y = 0; y < h; y++) {
     const row = y * w;
     if (rowSpace[y]) {
-      base.fill(T_SPACE, row, row + w); // beyond the poles: plain black
+      base.fill(T_DEEP, row, row + w); // beyond the south pole: the deep sea, flat
       continue;
     }
     const ye = y & ~1;
@@ -1383,6 +1388,7 @@ function drawLabel(rt, ctx, ox, oy, cx, cy, place, lat, lon, tl, acc) {
       ctx.fillRect(ox + (right ? cx : near), oy + ly, hl, 1);
     }
   }
+  // the plate wipes out from the marker side; its words are revealed by the wipe itself (no empty box)
   const vis = Math.round(L.bw * e);
   if (vis > 0) {
     ctx.save();
@@ -1394,22 +1400,22 @@ function drawLabel(rt, ctx, ox, oy, cx, cy, place, lat, lon, tl, acc) {
       ctx.fillRect(ox + bx, oy + by, L.bw, L.bh);
       ctx.fillStyle = P.slate;
       ctx.fillRect(ox + bx, oy + by, L.bw, 1);
+      const tx = ox + bx + 7;
+      let ty = oy + by + 6;
+      const st = L.scale === 2 ? BODY2_WHITE : BODY1_WHITE;
+      for (let i = 0; i < L.lines.length; i++) {
+        drawText(ctx, L.lines[i], tx, ty, st);
+        ty += L.lineH + L.gap;
+      }
       // the accent rule under the name (WORLD NOW's signature device, in each programme's accent)
       const ry = oy + by + 6 + L.nameH + 3;
       ctx.fillStyle = acc;
-      ctx.fillRect(ox + bx + 7, ry, Math.round(L.nameW * clamp((tl - 0.12) / 0.3, 0, 1)), 1);
+      ctx.fillRect(tx, ry, Math.round(L.nameW * easeOutQuint(clamp((tl - 0.2) / 0.3, 0, 1))), 1);
+      drawText(ctx, L.coords, tx, ry + 4, MICRO_FOG);
     } finally {
       ctx.restore();
     }
   }
-  // text rises in once the plate is out
-  const tx = ox + bx + 7;
-  let ty = oy + by + 6;
-  for (let i = 0; i < L.lines.length; i++) {
-    riseIn(ctx, L.lines[i], tx, ty, seg(tl, 0.16 + i * 0.06, 0.3), L.scale, 'body', P.white, ox + bx, L.bw);
-    ty += L.lineH + L.gap;
-  }
-  riseIn(ctx, L.coords, tx, oy + by + 6 + L.nameH + 7, seg(tl, 0.3, 0.3), 1, 'micro', P.fog, ox + bx, L.bw);
   const box = L.box;
   box.x = bx;
   box.y = by;
@@ -1418,20 +1424,6 @@ function drawLabel(rt, ctx, ox, oy, cx, cy, place, lat, lon, tl, acc) {
   return box;
 }
 
-function riseIn(ctx, text, x, y, p, scale, font, color, clipX, clipW) {
-  if (p <= 0) return;
-  const cap = font === 'micro' ? 5 : 7 * scale;
-  const off = Math.round((1 - easeOutQuint(p)) * (cap + 2));
-  ctx.save();
-  try {
-    ctx.beginPath();
-    ctx.rect(clipX, y - 2 * scale, clipW, cap + 2 * scale + 1);
-    ctx.clip();
-    drawText(ctx, text, x, y + off, font === 'micro' ? (color === P.fog ? MICRO_FOG : { color, font }) : scale === 2 ? BODY2_WHITE : BODY1_WHITE);
-  } finally {
-    ctx.restore();
-  }
-}
 const MICRO_FOG = { color: P.fog, font: 'micro' };
 const BODY2_WHITE = { color: P.white, scale: 2 };
 const BODY1_WHITE = { color: P.white, scale: 1 };

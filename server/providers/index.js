@@ -1,12 +1,14 @@
 import { createCodexProvider } from './codexExec.js';
 import { createOpenAICompatProvider } from './openaiCompat.js';
 import { createMockProvider } from './mock.js';
+import { createInboxProvider } from './inbox.js';
 
 export function createProviders(config) {
   const factories = {
     codex: () => createCodexProvider(config.codex),
     openai: () => createOpenAICompatProvider('openai', config.openai),
     deepseek: () => createOpenAICompatProvider('deepseek', config.deepseek),
+    inbox: () => createInboxProvider(config.inbox),
     mock: () => createMockProvider(),
   };
   return config.providers.filter((n) => factories[n]).map((n) => factories[n]());

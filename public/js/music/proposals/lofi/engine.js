@@ -218,7 +218,7 @@ class Bed {
   /** Stop at t: no new notes, close the filter, fade; tail=true lets the echo/reverb ring on. */
   fadeOut(t, dur, { tail = true, sweep = true } = {}) {
     this.endAt = Math.min(this.endAt, t);
-    targetTo(this.out.gain, 0, t, dur / 4);
+    targetTo(this.out.gain, 0, t, dur / 5); // -43 dB after `dur`: notes ending mid-fade are already inaudible
     this.out.gain.setValueAtTime(0, t + dur * 1.8);
     if (sweep) targetTo(this.lp.frequency, 320, t, dur / 3);
     if (!tail) {

@@ -26,6 +26,9 @@ const T_LOST = 19.6;
 const T_SLATE = 20.4;
 const DURATION = 25.0;
 const LB = 24; // letterbox bars (2.39:1)
+// shading recipes used every frame (built once)
+const SH_BEIGE = { d: mix(P.tan, P.fog, 0.5), f: 0.4, m: 1, side: 1 };
+const SH_HOOD = { d: P.black, f: 0.6, m: 1, side: -1 };
 
 // --- palette -----------------------------------------------------------------------------
 const C = {
@@ -329,6 +332,10 @@ const DANIEL = figure({
   },
 });
 
+const SH_SLEEVE = { d: P.black, f: 0.4, m: 1, side: -1, r: DANIEL.pal.rim };
+const SH_DHAND = { d: DANIEL.pal.skinD, f: 0.4, m: 1, side: 1, r: DANIEL.pal.rim };
+const SH_HOODIE = { d: P.black, f: 0.55, m: 1, side: -1, l: mix(P.darkGreen, P.silver, 0.25), lf: 0, lm: 1 };
+
 function shotRoom(ctx, lt) {
   const camX = track(lt, [[0, 0], [3.2, 12, 'smooth']]);
   ctx.drawImage(roomSet(), round(camX * 0.5), 0, W, 150, 0, 0, W, 150);
@@ -366,9 +373,9 @@ function shotRoom(ctx, lt) {
   const click = lt > 1.45 && lt < 1.65 ? 1 : 0;
   const hx = d.x + 92;
   const hy = 166;
-  capsule(ctx, d.x + 40, 190, hx - 4, hy + 2, 9, 6, d.pal.top, { d: P.black, f: 0.4, m: 1, side: -1, r: d.pal.rim });
-  ellipse(ctx, hx + 3, hy + 2, 7, 4, C.beige, { d: C.beigeD, f: 0.4, m: 1, side: 1 });
-  ellipse(ctx, hx + 1, hy - click, 5, 3.5, d.pal.skin, { d: d.pal.skinD, f: 0.4, m: 1, side: 1, r: d.pal.rim });
+  capsule(ctx, d.x + 40, 190, hx - 4, hy + 2, 9, 6, d.pal.top, SH_SLEEVE);
+  ellipse(ctx, hx + 3, hy + 2, 7, 4, C.beige, SH_BEIGE);
+  ellipse(ctx, hx + 1, hy - click, 5, 3.5, d.pal.skin, SH_DHAND);
   ctx.restore();
   vignette(ctx, 0.62);
   letterbox(ctx, LB);
@@ -503,7 +510,7 @@ function shotFace(ctx, lt) {
   const hx = f.x;
   const hy = f.y + f.hh * 1.12;
   const hood = mix(P.darkGreen, P.black, 0.72);
-  ellipse(ctx, hx - f.hh * 0.32, hy - f.hh * 0.08, f.hh * 0.34, f.hh * 0.24, hood, { d: P.black, f: 0.6, m: 1, side: -1 });
+  ellipse(ctx, hx - f.hh * 0.32, hy - f.hh * 0.08, f.hh * 0.34, f.hh * 0.24, hood, SH_HOOD);
   begin();
   pt(hx - f.hh * 1.1, 216);
   pt(hx - f.hh * 0.7, hy + f.hh * 0.05);
@@ -511,7 +518,7 @@ function shotFace(ctx, lt) {
   pt(hx + f.hh * 0.3, hy + f.hh * 0.06);
   pt(hx + f.hh * 0.62, hy + f.hh * 0.28);
   pt(hx + f.hh * 0.8, 216);
-  fill(ctx, hood, { d: P.black, f: 0.55, m: 1, side: -1, l: mix(P.darkGreen, P.silver, 0.25), lf: 0, lm: 1 });
+  fill(ctx, hood, SH_HOODIE);
   line(ctx, hx + f.hh * 0.06, hy + f.hh * 0.06, hx + f.hh * 0.1, hy + f.hh * 0.42, mix(P.fog, P.ink, 0.5));
   // the screen's light flickers faintly across the face
   ctx.globalAlpha = 0.06 + 0.04 * sin(lt * 17);
@@ -666,7 +673,7 @@ function shotHall(ctx, lt) {
   const hx = w.wx;
   const hy = w.wy;
   // the receiver (beige), then her hand over it; the curly cord back to the base
-  capsule(ctx, hx - 5, hy - 8, hx + 1, hy + 9, 3, 3, C.beige, { d: C.beigeD, f: 0.4, m: 1, side: 1 });
+  capsule(ctx, hx - 5, hy - 8, hx + 1, hy + 9, 3, 3, C.beige, SH_BEIGE);
   arm(ctx, m, -1);
   ctx.fillStyle = mix(C.beigeD, P.black, 0.15);
   for (let i = 0; i <= 26; i++) {

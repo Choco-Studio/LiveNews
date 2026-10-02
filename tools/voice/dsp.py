@@ -10,11 +10,11 @@ before air; this module is that chain, run once per clip:
      tonal match, mud cut, presence, air; adaptive boom/chest control; top
      octave restored (SBR-style) on voices trained without one
   2. optional character effect (UNIT-8's robot)
-  3. de-esser (split-band, only the 5 kHz+ band is turned down, only on 's')
-  4. gentle compressor (RMS, soft knee, ~2-4 dB on vowels)
+  3. gentle compressor (RMS, soft knee, ~2-4 dB on vowels)
+  4. de-esser (split-band, only the 5 kHz+ band is turned down, only on 's')
   5. very short, low-level studio room (synthetic IR, -22 dB wet)
-  6. loudness to -16 LUFS integrated, true-peak limiter at -2 dBTP so lossy
-     encoding stays under -1.5 dBTP
+  6. loudness to -16 LUFS integrated, true-peak limiter at -2.5 dBTP so lossy
+     encoding stays under -1.5 dBTP (Opus overshot by up to 0.7 dB in tests)
   7. tail trim and raised-cosine fades at both edges (no clicks)
 
 Every filter runs through an FFT (exact IIR responses on zero-padded spectra),
@@ -38,12 +38,12 @@ DEFAULTS = {
     'boom_max_db': 4.0, 'boom_ref_db': -10.0, 'chest_max_db': 3.0, 'chest_ref_db': 1.5,
     'air_restore': True, 'air_gap_db': 10.0, 'air_fill_db': -8.0,
     'air_hz': 9000.0, 'air_db': 1.5,
-    'deess_from': 4800.0, 'deess_to': 6200.0, 'deess_rel_db': -9.0, 'deess_ratio': 3.0,
-    'deess_max_db': 8.0,
+    'deess_from': 4800.0, 'deess_to': 6200.0, 'deess_rel_db': -10.0, 'deess_ratio': 3.0,
+    'deess_max_db': 10.0,
     'comp_threshold': -21.0, 'comp_ratio': 2.2, 'comp_knee': 8.0,
     'comp_attack': 0.004, 'comp_release': 0.09,
     'room_db': -22.0, 'room_rt60': 0.26,
-    'target_lufs': -16.0, 'ceiling_dbtp': -2.0,
+    'target_lufs': -16.0, 'ceiling_dbtp': -2.5,
     'fade_in': 0.006, 'fade_out': 0.045, 'tail_max': 0.30,
 }
 
@@ -590,8 +590,10 @@ def broadcast(x, sr, tone=None, effect=None, overrides=None):
     lufs = integrated_loudness(y, sr)
     if math.isfinite(lufs):
         y = y * 10 ** ((-20.0 - lufs) / 20)
-    y, deess_max = deess(y, sr, o, active_level_db(y, sr))
+    # De-ess after compression: the compressor turns vowels down more than the
+    # quieter fricatives, which would bring the 's' sounds back up
     y, comp_max, comp_mean = compress(y, sr, o)
+    y, deess_max = deess(y, sr, o, active_level_db(y, sr))
     y = np.concatenate([y, np.zeros(int((o['tail_max'] + 0.05) * sr))])
     y = add_room(y, sr, o['room_db'], o['room_rt60'])
     y = trim_tail(y, sr, speech_end, o['tail_max'])

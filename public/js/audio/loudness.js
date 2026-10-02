@@ -158,6 +158,8 @@ export function measureLoudness(channels, fs = 48000) {
 
 // K-weighted energy of one drum hit at unit gain (measured offline in
 // public/lab/audio.html with the synth's own drum voices).
+// How long each hit is audible (s), for spreading its energy like the meter sees it.
+const DRUM_LEN = { k: 0.25, s: 0.2, h: 0.06, o: 0.3, c: 1, t: 0.3, p: 0.2, x: 0.03, f: 0.45 };
 export const DRUM_ENERGY = { k: 0.0086, s: 0.0026, h: 0.0001, o: 0.0007, c: 0.0277, t: 0.0092, p: 0.0008, x: 0.00002, w: 0.0166, f: 0.0141, a: 0.0097 };
 
 // Integral of the squared ADSR envelope over a note gated for `gate` seconds.
@@ -213,8 +215,10 @@ export function estimateLoudness(song) {
     const level = KIND_GAIN[track.kind] * track.gain * ev.e.vel;
     const extra = 1 + echoGain(track.echo * song.echo.send) + room;
     if (track.kind === 'drums') {
-      const len = ev.e.drum === 'w' ? ev.dur * spb : 0.15;
-      deposit(t0, len, level * level * (DRUM_ENERGY[ev.e.drum] ?? 0.01) * (ev.e.drum === 'w' ? len : 1) * extra);
+      const d = ev.e.drum;
+      const swell = d === 'w' || d === 'a'; // lasts its length; energy per second
+      const len = swell ? ev.dur * spb : DRUM_LEN[d] ?? 0.15;
+      deposit(t0, len, level * level * (DRUM_ENERGY[d] ?? 0.01) * (swell ? len : 1) * extra);
       continue;
     }
     const inst = track.inst;

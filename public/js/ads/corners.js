@@ -31,6 +31,14 @@ const GOLD_D = mix(P.yellow, P.tanShade, 0.5);
 const CRISP = ramp([mix(P.brown, P.black, 0.3), P.tanShade, mix(P.orange, P.tanShade, 0.45), mix(P.yellow, P.orange, 0.25), P.yellow, mix(P.yellow, P.cream, 0.55)], 8);
 const EDGE = mix(P.brown, P.tanShade, 0.4);
 const FLECK = mix(P.rust, P.brown, 0.5);
+// crisp() options used every frame (built once)
+const RIM = mix(P.cream, P.yellow, 0.35);
+const CR_HERO = { warm: 0.06, curl: 0.16, rim: mix(P.cream, P.yellow, 0.3) };
+const CR_FALL = { curl: 0.12, warm: 0.1, rim: RIM };
+const CR_BED = { curl: 0.1, warm: 0.12, rim: RIM };
+const CR_IAN = { flecks: false, curl: 0.08, warm: 0.08 };
+const CR_SLATE = { rim: RIM };
+const SH_BRASS = { d: mix(mix(P.yellow, P.tanShade, 0.35), P.brown, 0.5), f: 0.2, m: 1, side: 1 };
 
 // --- the crisp: a curled, ridged square in 3D ------------------------------------------------
 const NS = 12; // ridge strips
@@ -169,7 +177,7 @@ function shotHero(ctx, lt) {
   ctx.drawImage(keyPool(), 112, 30);
   ctx.globalCompositeOperation = 'source-over';
   const s = track(lt, [[0, 38], [4.0, 44, 'smooth']]);
-  crisp(ctx, 192, 104 + sin(lt * 0.9) * 2, s, -0.42 + sin(lt * 0.5) * 0.18, sin(lt * 0.42 - 0.4) * 0.75, 0.18 + lt * 0.04, { warm: 0.06, curl: 0.16, rim: mix(P.cream, P.yellow, 0.3) });
+  crisp(ctx, 192, 104 + sin(lt * 0.9) * 2, s, -0.42 + sin(lt * 0.5) * 0.18, sin(lt * 0.42 - 0.4) * 0.75, 0.18 + lt * 0.04, CR_HERO);
   saltFall(ctx, lt, 100, 290, 20, 196, 0.35, 0.6);
   vignette(ctx, 0.7);
 }
@@ -227,7 +235,7 @@ function shotTumble(ctx, lt) {
     ctx.globalAlpha = 0.5 * near;
     ellipse(ctx, f.x + 4, f.y + f.s * 0.32, f.s * 0.9, f.s * 0.18, P.black);
     ctx.globalAlpha = 1;
-    crisp(ctx, f.x, y, f.s, rx, ry, f.rz, { curl: 0.12, warm: 0.1, rim: mix(P.cream, P.yellow, 0.4) });
+    crisp(ctx, f.x, y, f.s, rx, ry, f.rz, CR_FALL);
   }
   ctx.restore();
   vignette(ctx, 0.65);
@@ -302,7 +310,7 @@ function setSquare(ctx, x, y, s) {
   pt(x + s - k * 2.4, y - k);
   pt(x + k, y - s + k * 2.4);
   pt(x + k, y - k);
-  fill(ctx, brass, { d: mix(brass, P.brown, 0.5), f: 0.2, m: 1, side: 1 });
+  fill(ctx, brass, SH_BRASS);
   line(ctx, x, y - s, x, y, mix(P.cream, P.yellow, 0.4));
   for (let i = 1; i < 6; i++) rect(ctx, x + 1, y - (s * i) / 6, 2, 1, mix(brass, P.brown, 0.6));
 }
@@ -348,7 +356,7 @@ function shotIan(ctx, lt, info) {
   ctx.drawImage(workshopSet(), round(camX), 176, W, H - 176, 0, 176, W, H - 176);
   arm(ctx, m, 1);
   const a = wrist(m, 1);
-  crisp(ctx, a.wx - 4, a.wy - 13, 12, -0.12, 0.2, 0.0, { flecks: false, curl: 0.08, warm: 0.08 });
+  crisp(ctx, a.wx - 4, a.wy - 13, 12, -0.12, 0.2, 0.0, CR_IAN);
   const b = wrist(m, -1);
   setSquare(ctx, b.wx + 2, b.wy + 7, 26);
   arm(ctx, m, -1);
@@ -400,7 +408,7 @@ function shotSalt(ctx, lt) {
   ctx.drawImage(slateSet(), -20, -round(camY * 0.4));
   ctx.save();
   ctx.translate(0, -round(camY));
-  for (const [x, y, s, rz] of BED) crisp(ctx, x, y, s, -0.95 - abs(rz) * 0.15, 0.08 * sin(rz * 9), rz, { curl: 0.1, warm: 0.12, rim: mix(P.cream, P.yellow, 0.35) });
+  for (const [x, y, s, rz] of BED) crisp(ctx, x, y, s, -0.95 - abs(rz) * 0.15, 0.08 * sin(rz * 9), rz, CR_BED);
   ctx.globalCompositeOperation = 'lighter';
   ctx.drawImage(shaftArt(), 124, 0);
   ctx.globalCompositeOperation = 'source-over';
@@ -488,7 +496,7 @@ function shotSlate(ctx, lt) {
   ctx.drawImage(slateBg(), 0, 0);
   // a single crisp, resting, catches the light above the name
   ctx.globalAlpha = smooth(lt / 0.8);
-  crisp(ctx, 192, 52, 14, -1.0, 0.1 + lt * 0.05, 0.1, { rim: mix(P.cream, P.yellow, 0.4) });
+  crisp(ctx, 192, 52, 14, -1.0, 0.1 + lt * 0.05, 0.1, CR_SLATE);
   ctx.globalAlpha = smooth((lt - 0.3) / 0.8);
   thin(ctx, 'CORNERS', 192, 76, { color: GOLD, style: 'didone', track: 4, scale: 2, align: 'center' });
   ctx.globalAlpha = 1;
