@@ -11,9 +11,12 @@ stories, photos, ads and the change to the next programme is just a longer recor
 PORT=8602 VOICE_ENGINE=kokoro timeout 1800 npm run demo:offline &   # or the real channel with your providers
 node tools/showcase/record-show.mjs --port 8602 --start open --seconds 90 --out /tmp/show.mp4
 # a whole programme, its break (ident, ads, promo) and the start of the next programme:
-node tools/showcase/record-show.mjs --port 8602 --start open --until next-open+20 --seconds 1200 --out /tmp/long.mp4
+node tools/showcase/record-show.mjs --port 8602 --start open --until next-open+20 --seconds 900 --out /tmp/long.mp4
+# two programmes, both breaks and the open of the third (see "A long show" below):
+node tools/showcase/record-show.mjs --port 8602 --start open --until next-open+20 --count 2 --seconds 900 --out /tmp/two.mp4
+python3 tools/showcase/check-av.py /tmp/show.mp4   # A/V sync measured on the finished file
 node tools/showcase/selftest.mjs        # pure checks (cue rules, casting, onset detector)
-node tools/showcase/selftest-page.mjs   # browser checks of the page instrumentation (clock, ended, value, speech)
+node tools/showcase/selftest-page.mjs   # browser checks of the page instrumentation (clock, ended, value, speech, windowed render)
 ```
 
 Outputs next to `--out`:
@@ -24,6 +27,7 @@ Outputs next to `--out`:
 | `show-sheet.png` | contact sheet: a frame every N s with time, shot, programme / ad, who speaks and what |
 | `show-audio.png` | audio picture: voice / server voice / WebAudio / beds / mix levels on the recording clock, shots, music cues, grave and ad zones |
 | `show-timeline.json` | every director event, shot, caption, utterance (voice, text, clip, start/end/cut), recorded clip the channel played, music cue, plus the reports (loudness, bed duck, sync, synthesis, page stats) |
+| `show-avcheck.json` | written by `check-av.py`: audio offset of the MP4 vs the pre-encode mix, every stinger (wipe frame, whoosh, cut frame, thump) and every caption (frame vs voice onset) |
 | `show.work/` | stems (`voice.wav`, `speechbus.wav`, `webaudio.wav`, `beds.wav`, `mix.wav`, `mix.m4a`), `mix.json` (kept; `--keep` also keeps the raw float renders and the lossless native-size video) |
 
 ## Voices: two paths, both recorded
@@ -40,6 +44,28 @@ Outputs next to `--out`:
   (voice blend, speed, lang, pauses, UNIT-8's robot effect), advert voice-overs from
   `server/voice/adcast.json` (per ad, else a default per gender and accent); `tools/voice/presets.json`
   and the default cast are fallbacks.
+
+## A long show (many stories, photos, ads, the change to the next programme)
+
+The harness never writes a programme: it records what the server produces live. For a long
+showcase, let the server work a few episodes ahead, then record several programmes in one go:
+
+```sh
+# 1. the channel: offline (mock writer, fixture feeds and photos) or with the inbox provider, where an
+#    agent answers the server's real prompts (PROVIDERS=inbox,mock: the mock takes over on a timeout)
+QUEUE_SIZE=3 VOICE_ENGINE=kokoro PORT=8602 timeout 5400 npm run demo:offline &
+# 2. wait until the queued episodes carry their server voices (every spoken segment has `audio`):
+curl -s http://127.0.0.1:8602/api/queue | python3 -c "import json,sys; print([(e['program']['id'], all(s.get('audio') for s in e['segments'] if s.get('text'))) for e in json.load(sys.stdin)])"
+# 3. record from the next open through N programmes and their breaks, 20 s into the next programme
+node tools/showcase/record-show.mjs --port 8602 --v2 --start open --until next-open+20 --count 2 \
+  --seconds 900 --max-wait 120 --out show.mp4
+python3 tools/showcase/check-av.py show.mp4
+```
+
+The page clock runs faster than real time when nothing needs synthesis (a 209 s show records in
+~70 s), so the recording can overtake production: `QUEUE_SIZE` should cover every episode the
+recording will reach (`--count` + 1), and step 2 makes sure their voices are rendered (otherwise the
+harness voices those lines itself, with the same casting, and the clock waits for Kokoro).
 
 ## How it works
 
@@ -97,7 +123,8 @@ Outputs next to `--out`:
 5. **Mix** (`mix.py`). Harness voices (24 kHz, polyphase-upsampled) placed sample-exactly + WebAudio
    (with the server voices in it) + beds. On top of the bed engine's own duck an extra duck makes every
    voice sit **>= 16 dB** over the bed (lead 0.12 s, hold 0.35 s, release 0.7 s; deeper where the engine
-   ducked less), and the bed is levelled to sit ~24 dB under the voice. Then gain to **-16 LUFS** and a
+   ducked less). The bed keeps the composer's calibration against -16 LUFS voices (`--bed-under-voice N`
+   re-levels it to sit N dB under the voice instead). Then gain to **-16 LUFS** and a
    look-ahead true-peak limiter (4x oversampled), verified on the decoded AAC (**TP <= -1.5 dBTP**),
    re-run until both hold. The report includes the bed duck measured against the same cues rendered
    without speech, and the bed level inside grave stories and ads.
@@ -105,18 +132,32 @@ Outputs next to `--out`:
    WebAudio stem vs. the picture's wipe start and its thump vs. the cut; each caption vs. the first
    word of its harness voice (`captionLeadMs`) or vs. the onset of the server voice on the speech bus
    (`recordedCaptionToVoiceMs`); each harness clip's audible onset vs. its start event.
+7. **File check** (`check-av.py`, run on the finished MP4, independent of the recorder's own report).
+   Decodes the picture back to native 384x216 (the 5x encode is nearest-neighbour) and the AAC
+   through ffmpeg (edit list applied, so encoder priming counts) and measures: the audio offset of
+   the MP4 against `mix.wav` by cross-correlation; for every stinger the first frame the wipe
+   changes, the whoosh onset (on the WebAudio stem; reported as masked when other channel sounds are
+   already loud, e.g. over the end-card theme), the frame of the cut (the timeline's next shot,
+   confirmed by the changed pixels) and the thump (steepest rise in the mix); for every caption the
+   frame its block rolls in (white glyphs counted in the caption column) and the voice onset after it
+   (on the voice stems, which `mix.py` sums at the same sample indices). `--frames DIR` writes the
+   frames around the first stinger and the first two captions for a look.
 
 ## Options
 
 `--start now|open|break|endcard` (begin at the next programme open / break / end card),
 `--skip N` (channel seconds to run first), `--until next-open+S|break-end+S|episode-end+S`
-(stop S s after that event; `--seconds` is then the cap), `--max-wait N` (seconds of channel time
+(stop S s after that event; `--seconds` is then the cap), `--count N` (stop at the Nth such event:
+N programmes), `--max-wait N` (seconds of channel time
 allowed to reach `--start`, default 240), `--fps 30 --scale 5`, `--voices auto|harness`, `--v2`
 (adds `v2=1`: the wave-2 presenters/studio), `--music lofi|broadcast|none`, `--bed-db` (bed trim,
-default 0), `--bed-under-voice` (default -24), `--duck-db` (minimum extra bed duck, default -6),
+default 0), `--bed-under-voice N` (re-level the bed N dB under the voice; default off: the composer's level),
+`--duck-db` (minimum extra bed duck on top of the >= 16 dB rule, default 0), `--stories soft|off|drone` (lofi's
+bed under light/neutral story copy, default soft),
 `--lufs -16`, `--tp -1.5`, `--voice-workers 2`, `--voice-engine auto|fallback`, `--cache DIR`,
 `--time ISO` (the wall-clock time the channel shows), `--sheet-every S`, `--url URL`,
-`--preset veryfast` (x264 preset of the final encode), `--measure-duck`, `--no-raf-throttle`, `--keep`.
+`--preset veryfast` (x264 preset of the final encode), `--measure-duck` (render the beds a second time
+without speech to measure the duck; on by default up to 900 s), `--no-raf-throttle`, `--keep`.
 
 ## Notes and limits
 
@@ -125,7 +166,14 @@ default 0), `--bed-under-voice` (default -24), `--duck-db` (minimum extra bed du
   sentence in progress at the start stays silent.
 - The OfflineAudioContext length is fixed when the page unlocks audio:
   `max-wait + skip + seconds + 30` s at 48 kHz (~23 MB per minute of stereo float). Long shows: set
-  `--seconds` to the cap you need (with `--until` it is only a cap).
+  `--seconds` to the cap you need (with `--until` it is only a cap). The render tap posts only the
+  frames inside the recorded window (in 4096-frame batches), so minutes of waiting before `--start`
+  cost render time but no main-thread traffic.
+- What the beds do is the proposal's per-programme cue sheet, which follows the style bibles: WORLD
+  NOW speaks its lead stories, the number and the sign-off dry (bed under the headlines, the round-ups,
+  And Finally and the chat after it); TECH BYTES, MONEY MINUTE and NEWS IN 60 keep a bed under the
+  outro; grave stories and the segment after a grave or breaking one are always dry; breaks, idents,
+  ads and promos carry their own music. `--stories off` drops the soft bed under light story copy.
 - `AnalyserNode` reads return silence offline; the engine drives the jaw of a recorded voice from the
   clip's own `levels` envelope (voice service), so mouths still follow the real loudness.
 - Synthesis speed depends on machine load: Kokoro runs about real time on an idle 4-core box, and

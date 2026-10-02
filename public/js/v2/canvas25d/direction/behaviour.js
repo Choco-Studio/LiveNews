@@ -290,7 +290,8 @@ function planDuo(ctx, style, r, plan) {
       if (dur > 0.5) glance = plan.add(slot, at, dur, 'partner', { why: 'turn', amt });
     }
     // TECH BYTES: the dry line gets a glance as it starts, back before it ends
-    if (style.dry && ctx.dryLine && !robot && !speakerRobot) {
+    // (not in an intro or outro: their last line is the greeting or the sign-off, said to the lens)
+    if (style.dry && ctx.dryLine && !robot && !speakerRobot && ctx.type !== 'outro' && ctx.type !== 'intro') {
       const d0 = ctx.dryLine.t0 + 0.06 + r() * 0.08;
       const d1 = Math.min(ctx.dryLine.t1 - 0.15 - EYES_BACK, d0 + 2.6);
       if (d1 - d0 >= 0.7) {

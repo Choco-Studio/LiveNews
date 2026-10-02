@@ -1250,7 +1250,9 @@ function clockOf(spec, style, env) {
     const dt = env.t - spec.since;
     const end = MAP_ANIM[style.id] || MAP_ANIM.default;
     if (!(dt < end)) return -1; // settled: one last frame, then still
-    const rate = env.lod >= 1 ? 30 : 60;
+    // the locator re-renders at 30 fps (15 at lod 1): drawWorldMap costs ~0.6 ms a frame, and on a
+    // dimmed 104 px wall the fly-in's zoom steps stay far below a pixel's worth of motion per frame
+    const rate = env.lod >= 1 ? 15 : 30;
     return Math.max(0, Math.floor(dt * rate));
   }
   if (spec.mode !== 'idle') return 0;

@@ -52,8 +52,11 @@ export function drawProps(buf, L, m, sk, toS, s, g, z) {
   if (!(pr && pr.papers) && !pen) return;
   projBasis(toS, B);
   const M = mats();
+  // a lifted stack stands in front of a pen lying on the desk; a flat one lies under it
+  const lifted = pr && pr.papers && pr.hold > 0.5;
+  if (pen && lifted) drawPen(buf, L, sk, s, g + 1, z, M);
   if (pr && pr.papers) drawPapers(buf, sk, s, g, z, M, pr);
-  if (pen) drawPen(buf, L, sk, s, g + 1, z, M);
+  if (pen && !lifted) drawPen(buf, L, sk, s, g + 1, z, M);
 }
 
 // ---------------------------------------------------------------------------

@@ -373,7 +373,7 @@ describe('round 3: wall plates inside their free area, clean tint clusters', () 
     const p = plateRectFor(lab.cameraFor('single-a', 'news-60'), 'WILDLIFE', 'BITPORT HERALD', 'news-60');
     assert.ok(p.x0 >= 8 && p.kicker === 'WILDLIFE' && p.sub === 'BITPORT HERALD');
   });
-  test('solo programmes: the wall's bottom 16 px (wide scale) stay dark in every framing and wall mode', () => {
+  test('solo programmes: the wall\'s bottom 16 px (wide scale) stay dark in every framing and wall mode', () => {
     const modes = [{ wall: 'idle' }, { wall: 'picture', image: 'port' }, { wall: 'plate' }, { wall: 'figure' }, { wall: 'map' }];
     for (const programme of ['news-60', 'money-minute']) {
       for (const framing of ['wide', 'single-a', 'mcu-l', 'mcu-r']) {
