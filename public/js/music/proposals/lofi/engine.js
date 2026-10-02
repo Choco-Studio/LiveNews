@@ -401,18 +401,16 @@ export class LofiEngine {
   }
 
   pickup(bed, t0) {
+    // On the sting bus: the new bed's own output only opens on its downbeat.
     const pal = bed.pal;
     const scale = SCALES[pal.scale];
     const inst = pal.lead.inst === 'chip' ? 'chip' : pal.lead.inst === 'pluck' ? 'pluck' : 'bell';
     const tonic = pal.tonic + pal.lead.oct;
-    this.rig[inst](t0 - bed.spb, degreeToMidi(tonic, scale, -3), bed.spb * 0.45, 0.55, bed.layer.lead, {});
-    this.rig[inst](t0 - bed.spb * 0.5, degreeToMidi(tonic, scale, 0), bed.spb * 0.45, 0.6, bed.layer.lead, {});
-    // The lead layer may be silent in this arrangement: open it just for the pickup.
-    const lg = bed.layer.lead.gain;
-    const level = bed.current.layers.lead || 0;
-    lg.setValueAtTime(0.7, t0 - bed.spb - 0.01);
-    lg.setValueAtTime(0.7, t0 + bed.spb * 0.5);
-    lg.linearRampToValueAtTime(level, t0 + bed.spb * 1.5);
+    const g = this.ctx.createGain();
+    g.gain.value = this.speaking ? 0.12 : 0.5;
+    g.connect(this.stingBus);
+    this.rig[inst](t0 - bed.spb, degreeToMidi(tonic, scale, -3), bed.spb * 0.45, 0.6, g, {});
+    this.rig[inst](t0 - bed.spb * 0.5, degreeToMidi(tonic, scale, 0), bed.spb * 0.45, 0.65, g, {});
   }
 
   toSilence(at, fade) {

@@ -619,7 +619,8 @@
       // ------------------------------------------------------------- driver
       const stats = {};
       async function render(t = 0) {
-        const i = Math.max(0, Math.min(VIEWS.length - 1, Math.floor(Number(t) || 0)));
+        // A view index (deterministic shoot) or a view name.
+        const i = typeof t === 'string' && VIEWS.includes(t) ? VIEWS.indexOf(t) : Math.max(0, Math.min(VIEWS.length - 1, Math.floor(Number(t) || 0)));
         const name = VIEWS[i];
         sel.value = String(i);
         if (name === 'signature') drawSignature();
