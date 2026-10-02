@@ -683,19 +683,23 @@ function readingSingle(ctx, tl) {
   if (!s2) return null;
   if (s2.t0 >= MIN_SHOT - 1e-6) return boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
   const text = ctx.seg.text;
-  let best = null;
-  for (const w of ctx.words) {
+  const W = ctx.words;
+  let best = null, bestRank = 9;
+  for (let k = 1; k < W.length; k++) {
+    const w = W[k], prev = W[k - 1];
     if (w.char <= s2.start || w.char >= s2.end || w.t < MIN_SHOT - 1e-6 || tl.end - w.t < MIN_SHOT - 1e-6) continue;
+    if (w.t - MIN_SHOT > 2.0) break;
     if (insideDry(ctx, w.t)) continue;
-    const phrase = /[,:;]\s*$/.test(text.slice(Math.max(0, w.char - 3), w.char));
-    if (!best) best = w;
-    if (phrase && w.t - MIN_SHOT <= 1.5) {
+    // a phrase boundary: punctuation, else right after the phrase's accent (its nuclear word), else after a
+    // content word (never between an article or preposition and its noun)
+    const rank = /[,:;]\s*$/.test(text.slice(Math.max(0, w.char - 3), w.char)) ? 0 : prev.stressed ? 1 : prev.content ? 2 : 3;
+    if (rank < bestRank) {
       best = w;
-      break;
+      bestRank = rank;
+      if (rank === 0) break;
     }
-    if (w.t - MIN_SHOT > 1.5) break;
   }
-  if (best) return { t: best.t, char: best.char, word: true };
+  if (best && bestRank < 3) return { t: best.t, char: best.char, word: true };
   return boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
 }
 

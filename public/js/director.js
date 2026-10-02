@@ -5,7 +5,7 @@ import { pixelate, loadImage } from './pixelate.js';
 import { presenterName, setPresenters } from './cast.js';
 import { STINGER_DURATION } from './scenes/cards.js';
 import { pickAds } from './ads/index.js';
-import { splitSentences } from './audio.js';
+import { splitSentences } from './audio/sentences.js';
 import { ACTIONS } from './cues.js';
 import { openFor } from './scenes/opens.js';
 import { VoicePlayer } from './voice/player.js';
@@ -72,10 +72,19 @@ export class Director {
     }
   }
 
-  /** Transition with the channel stinger; the shot changes under it. */
-  async stinger(change) {
+  /**
+   * Transition with the channel stinger; the shot changes under it. `cue(cutMs)`
+   * starts the new shot's music now, scheduled to be heard on the cut
+   * (performance.now() ms), so its first beat is not lost to output latency.
+   */
+  async stinger(change, cue = null) {
     this.scene.stinger = { start: now() };
     this.audio.sfx('whoosh', { startAt: this.scene.stinger.start * 1000 }); // its felt thump lands on the cut
+    try {
+      cue?.((this.scene.stinger.start + STINGER_DURATION / 2) * 1000);
+    } catch (err) {
+      console.warn('[director] cue', err);
+    }
     await sleep(STINGER_DURATION * 500);
     change();
     await sleep(STINGER_DURATION * 500);
@@ -125,19 +134,22 @@ export class Director {
     s.lowerThird = null;
     s.subtitle = null;
     if (!item.filler) {
-      // Cues start on the shot change they belong to (startAt), not 0.4 s later.
-      await this.stinger(() => {
-        this.setShot('ident', { card: null });
-        this.audio.sfx('jingle', { startAt: performance.now() });
-      });
+      // Cues are scheduled at the stinger's start to be heard on the shot change they belong to.
+      await this.stinger(() => this.setShot('ident', { card: null }), (cut) => this.audio.sfx('jingle', { startAt: cut }));
       await sleep(3200);
     }
     const ads = pickAds(item.ads || 1, this.recentAds);
     for (const ad of ads) {
       // Play history; pickAds() prefers unseen ads, then the least recently played.
       this.recentAds = [...this.recentAds, ad.id].slice(-24);
-      await this.stinger(() => this.setShot('ad', { card: { ad, line: -1 } }));
-      await this.playAd(ad);
+      // The music bed starts on the cut with the picture (its first chord included).
+      let bed = null;
+      try {
+        await this.stinger(() => this.setShot('ad', { card: { ad, line: -1 } }), (cut) => (bed = this.audio.playTune?.(ad.tune, { loop: true, volume: 0.45, startAt: cut })));
+        await this.playAd(ad, bed);
+      } finally {
+        bed?.stop?.();
+      }
     }
     if (item.next) {
       await this.stinger(() => {
@@ -148,21 +160,19 @@ export class Director {
             footer: item.next.ready ? 'AFTER THE BREAK' : 'STAY WITH US',
           },
         });
-        // The signature left hanging in the next programme's key: "stay with us".
-        this.audio.sfx('promo', { programId: item.next.id, startAt: performance.now() });
-      });
+      }, (cut) => this.audio.sfx('promo', { programId: item.next.id, startAt: cut })); // the signature left hanging in the next programme's key
       await sleep(4200);
     }
   }
 
-  async playAd(ad) {
+  async playAd(ad, bed = null) {
     const s = this.scene;
     // The ad's picture clock started at the stinger's cut (setShot), 0.4 s before
     // this runs: voice-over lines and the bed follow that clock, not this call.
     const started = s.shot === 'ad' && Number.isFinite(s.shotSince) ? s.shotSince : now();
     this.audio.setVoices?.({ ad: ad.voice });
     this.voices.prepareAd(ad);
-    const tune = this.audio.playTune?.(ad.tune, { loop: true, volume: 0.45, startAt: started * 1000 });
+    const tune = bed ?? this.audio.playTune?.(ad.tune, { loop: true, volume: 0.45, startAt: started * 1000 });
     try {
       for (let i = 0; i < ad.script.length; i++) {
         const line = ad.script[i];

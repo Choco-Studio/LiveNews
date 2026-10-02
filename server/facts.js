@@ -163,7 +163,7 @@ const stemMatch = (a, b) => {
   const k = Math.max(4, Math.min(a.length, b.length) - 3);
   return a.slice(0, k) === b.slice(0, k);
 };
-const sameWord = (a, b) => a === b || stemMatch(a.replace(/-.*$/, ''), b.replace(/-.*$/, '')) || stemMatch(a, b);
+export const sameWord = (a, b) => a === b || stemMatch(a.replace(/-.*$/, ''), b.replace(/-.*$/, '')) || stemMatch(a, b);
 
 const ORDINAL_WORDS = {
   first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10, eleventh: 11, twelfth: 12,
@@ -256,6 +256,70 @@ const DIRECTIONS = {
   down: /\b(?:fell|fallen|falls?|falling|dropped|drops?|declined?|declining|decreased?|slid|slides?|sank|slipped|eased|shrank|shrunk|shrinks?|slumped|plunged|lost|lower)\b|\bdown (?:by )?\d|\bcut (?:by )?\d/,
   up: /\b(?:rose|rises?|rising|risen|grew|grown|grows?|jumped|increased?|higher|climbed|soared|gained|surged|added)\b|\bup (?:by )?\d/,
 };
+
+// Irregular past forms, so "rose" in a headline is grounded by "rises" in the copy.
+const IRREGULAR = {
+  rose: 'rise', risen: 'rise', fell: 'fall', fallen: 'fall', grew: 'grow', grown: 'grow', won: 'win', lost: 'lose', sold: 'sell', bought: 'buy',
+  took: 'take', taken: 'take', made: 'make', struck: 'strike', shook: 'shake', built: 'build', began: 'begin', begun: 'begin', ran: 'run',
+  flew: 'fly', flown: 'fly', drew: 'draw', drawn: 'draw', saw: 'see', seen: 'see', gave: 'give', given: 'give', went: 'go', gone: 'go', came: 'come',
+  kept: 'keep', left: 'leave', brought: 'bring', paid: 'pay', spent: 'spend', told: 'tell', found: 'find', held: 'hold', met: 'meet',
+  led: 'lead', sent: 'send', sank: 'sink', sunk: 'sink', froze: 'freeze', broke: 'break', broken: 'break', chose: 'choose', wrote: 'write',
+  written: 'write', fought: 'fight', caught: 'catch', taught: 'teach', thought: 'think', sought: 'seek', swept: 'sweep', slid: 'slide', burnt: 'burn',
+};
+const base = (w) => IRREGULAR[w] || w;
+
+/**
+ * Is every content word of a short claim (a headline) in the source, allowing
+ * inflections ("reopens"/"reopened") and irregular verbs ("rose"/"rises")? A
+ * headline may rephrase the order, never add a cause, an actor or a qualifier.
+ */
+export function allWordsGrounded(text, source, { ignore = [] } = {}) {
+  const skip = new Set(ignore.flatMap((n) => contentWords(n)));
+  const words = contentWords(text).filter((w) => !skip.has(w) && !DIRECTIONS[w]);
+  const pool = contentWords(source).map(base);
+  return words.every((w) => pool.some((p) => sameWord(base(w), p)));
+}
+
+const QUALIFIER_WORDS = /\b(about|around|roughly|approximately|some|nearly|almost|more than|over|at least|up to|less than|fewer than|under)\s+$/i;
+const QUALIFIER_CLASS = { about: 'approx', around: 'approx', roughly: 'approx', approximately: 'approx', some: 'approx', nearly: 'below', almost: 'below', 'up to': 'below', 'less than': 'below', 'fewer than': 'below', under: 'below', 'more than': 'above', over: 'above', 'at least': 'above' };
+const qualifierAt = (s, index) => s.slice(Math.max(0, index - 24), index).match(QUALIFIER_WORDS)?.[1]?.toLowerCase() || null;
+
+/**
+ * Does `text` put a figure in a different bracket than its source ("more than
+ * 30 ships" for "about 30 ships", or "more than" where the source gives an
+ * exact count)? Softening an exact figure to "about" is allowed.
+ */
+export function qualifierConflict(text, source) {
+  const t = String(text ?? '');
+  const src = String(source ?? '');
+  const nums = numbersIn(src);
+  for (const n of numbersIn(t)) {
+    const q = qualifierAt(t, n.index);
+    if (!q) continue;
+    const same = nums.filter((s) => close(s.scaled, n.scaled) || close(s.value, n.value));
+    if (!same.length) continue;
+    const want = QUALIFIER_CLASS[q];
+    const ok = same.some((s) => {
+      const sq = qualifierAt(src, s.index);
+      return sq ? QUALIFIER_CLASS[sq] === want : want === 'approx';
+    });
+    if (!ok) return true;
+  }
+  return false;
+}
+
+/** The qualifier the source gives a figure ("ABOUT" for "about 1.2 million"), as a card label, or null. */
+export function sourceQualifier(value, source) {
+  const want = numbersIn(value)[0];
+  if (!want) return null;
+  const src = String(source ?? '');
+  for (const s of numbersIn(src)) {
+    if (!(close(s.scaled, want.scaled) || close(s.value, want.value))) continue;
+    const q = qualifierAt(src, s.index);
+    if (q) return QUALIFIER_LABEL[q] || q.toUpperCase();
+  }
+  return null;
+}
 
 /** Share (0..1) of the content words of `text` that also appear in `source`. */
 export function wordsGrounded(text, source) {

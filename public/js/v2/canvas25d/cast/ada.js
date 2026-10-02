@@ -22,7 +22,7 @@ import { headHW } from '../head.js';
 import { drawGlasses } from '../glasses.js';
 import { clamp } from '../space.js';
 import { defineLook, SKIN_LIGHT } from './base.js';
-import { local, screen, tier, hwAt, fastAtan2, strandTone, rimRuns } from './wardrobe-b.js';
+import { local, screen, tier, hwAt, fastAtan2, strandTone, hashInt, rimRuns } from './wardrobe-b.js';
 
 export const ada = defineLook({
   id: 'ada',
