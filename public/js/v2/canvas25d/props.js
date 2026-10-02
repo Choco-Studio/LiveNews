@@ -19,6 +19,7 @@ import { P } from '../../palette.js';
 import { clamp } from './space.js';
 import { material } from './pixbuf.js';
 import { handGeometry, newHandGeometry, projBasis } from './hands.js';
+import { REST } from './gestures/index.js';
 
 export const DESK_Y = 29.6; // body-space height of the desk top (neck base 30 u above it, SET.neckY)
 // the stack: half width (x), half depth (z), thickness, where it lies
@@ -156,23 +157,72 @@ function paintSpan(buf, ax, ay, bx, by, m, tone, g) {
 }
 
 // ---------------------------------------------------------------------------
-// Pen: rests in the web between thumb and index of the screen-left hand
+// Pen: rests in the web between thumb and index of the screen-left hand. When that hand leaves the
+// desk for a gesture (a steeple, the papers, an open palm) the pen stays behind, lying on the desk where
+// the resting hand holds it, and the hand picks it up again when it comes back: never a pen sticking
+// through a steeple. The blend follows the wrist's distance from its rest pose, so it is a pure function
+// of the pose (the idle shifts of a resting hand, up to ~2.5 u, keep the pen in the hand).
+
+const PEN_HAND = new Float64Array(6), PEN_DESK = new Float64Array(6);
+const REST_ARM = { shoulder: [0, 0, 0], elbow: [0, 0, 0], wrist: [0, 0, 0], handDir: [0, 0, 1], hand: { curl: [0, 0, 0, 0, 0], spread: 0, facing: -1, sup: 0 } };
+let HG_REST = null;
+
+/** The screen-left arm in the rig's rest pose (REST is mirror-symmetric, so either seat gives the same arm). */
+function restArmL(L) {
+  const T = L.torso, A = L.arm;
+  const k = (A.upper + A.fore) / 37;
+  const w = REST.wristF, d = REST.dirF; // the screen-left arm is the far arm of a seat-A presenter
+  REST_ARM.wrist[0] = -T.shoulderJoint[0] + w[0] * k;
+  REST_ARM.wrist[1] = T.shoulderJoint[1] + w[1] * k;
+  REST_ARM.wrist[2] = w[2] * k;
+  const dl = Math.hypot(d[0], d[1], d[2]) || 1;
+  REST_ARM.handDir[0] = d[0] / dl;
+  REST_ARM.handDir[1] = d[1] / dl;
+  REST_ARM.handDir[2] = d[2] / dl;
+  for (let q = 0; q < 5; q++) REST_ARM.hand.curl[q] = REST.curlF[q];
+  REST_ARM.hand.spread = REST.spreadF;
+  REST_ARM.hand.facing = REST.facingF;
+  return REST_ARM;
+}
+
+/** Pen centre and unit direction in body space for a hand geometry: [cx, cy, cz, dx, dy, dz]. */
+function penFrame(g, out) {
+  const { W, f, t, n, H } = g;
+  // it crosses the hand through the thumb-index web, lying along the index and tilted out:
+  // a loose hand covers its middle, the nib shows past the knuckles and the cap behind the thumb
+  out[0] = W[0] + f[0] * H * 0.42 + t[0] * H * 0.16 + n[0] * H * 0.12;
+  out[1] = W[1] + f[1] * H * 0.42 + t[1] * H * 0.16 + n[1] * H * 0.12;
+  out[2] = W[2] + f[2] * H * 0.42 + t[2] * H * 0.16 + n[2] * H * 0.12;
+  const dx = f[0] * 0.8 + t[0] * 0.52 - n[0] * 0.25, dy = f[1] * 0.8 + t[1] * 0.52 - n[1] * 0.25, dz = f[2] * 0.8 + t[2] * 0.52 - n[2] * 0.25;
+  const dl = Math.hypot(dx, dy, dz) || 1;
+  out[3] = dx / dl;
+  out[4] = dy / dl;
+  out[5] = dz / dl;
+  return out;
+}
 
 function drawPen(buf, L, sk, s, g, z, M) {
   const arm = sk.arms.L;
   HG ||= newHandGeometry();
+  HG_REST ||= newHandGeometry();
   handGeometry(L, arm, -1, HG);
-  const { W, f, t, n, H } = HG;
-  // the pen crosses the hand through the thumb-index web, lying along the index and tilted out:
-  // a loose hand covers its middle, the nib shows past the knuckles and the cap behind the thumb
-  const cxp = W[0] + f[0] * H * 0.42 + t[0] * H * 0.16 + n[0] * H * 0.12;
-  const cyp = W[1] + f[1] * H * 0.42 + t[1] * H * 0.16 + n[1] * H * 0.12;
-  const czp = W[2] + f[2] * H * 0.42 + t[2] * H * 0.16 + n[2] * H * 0.12;
-  let dx = f[0] * 0.8 + t[0] * 0.52 - n[0] * 0.25, dy = f[1] * 0.8 + t[1] * 0.52 - n[1] * 0.25, dz = f[2] * 0.8 + t[2] * 0.52 - n[2] * 0.25;
+  penFrame(HG, PEN_HAND);
+  const rest = restArmL(L);
+  handGeometry(L, rest, -1, HG_REST);
+  penFrame(HG_REST, PEN_DESK);
+  // 0 while the hand rests (idle shifts included), 1 once it is well clear of the desk
+  const dw = Math.hypot(arm.wrist[0] - rest.wrist[0], arm.wrist[1] - rest.wrist[1], arm.wrist[2] - rest.wrist[2]);
+  let u = clamp((dw - 3) / 2.5, 0, 1);
+  u = u * u * (3 - 2 * u);
+  const cxp = PEN_HAND[0] + (PEN_DESK[0] - PEN_HAND[0]) * u;
+  const cyp = Math.min(PEN_HAND[1] + (PEN_DESK[1] - PEN_HAND[1]) * u, DESK_Y);
+  const czp = PEN_HAND[2] + (PEN_DESK[2] - PEN_HAND[2]) * u;
+  let dx = PEN_HAND[3] + (PEN_DESK[3] - PEN_HAND[3]) * u, dy = PEN_HAND[4] + (PEN_DESK[4] - PEN_HAND[4]) * u, dz = PEN_HAND[5] + (PEN_DESK[5] - PEN_HAND[5]) * u;
   const dl = Math.hypot(dx, dy, dz) || 1;
   dx /= dl;
   dy /= dl;
   dz /= dl;
+  const H = HG.H;
   const half = H * 0.78; // a pen is longer than the hand: both ends show
   const tipX = px(cxp + dx * half, cyp + dy * half, czp + dz * half), tipY = py(cxp + dx * half, cyp + dy * half, czp + dz * half);
   const endX = px(cxp - dx * half * 0.8, cyp - dy * half * 0.8, czp - dz * half * 0.8), endY = py(cxp - dx * half * 0.8, cyp - dy * half * 0.8, czp - dz * half * 0.8);

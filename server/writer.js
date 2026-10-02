@@ -628,13 +628,13 @@ const ATTRIBUTION_WORDS = new Set(['reports', 'reported', 'report', 'says', 'sai
  * Does `a` merely repeat `b`? Most of its content words are in `b` and it adds
  * at most two of its own (attribution and the outlet's name do not count).
  */
-function repeats(a, b, ignore) {
+function repeats(a, b, ignore, threshold = 0.85) {
   const wa = new Set(contentWords(a).filter((w) => !ATTRIBUTION_WORDS.has(w) && !ignore.has(w)));
   const wb = new Set(contentWords(b));
   if (wa.size < 3 || wb.size < 3) return false;
   let shared = 0;
-  for (const w of wa) if (wb.has(w)) shared++;
-  return shared / Math.min(wa.size, wb.size) >= 0.85 && wa.size - shared <= 2;
+  for (const w of wa) if (wb.has(w) || [...wb].some((x) => sameWord(w, x))) shared++;
+  return shared / Math.min(wa.size, wb.size) >= threshold && wa.size - shared <= 2;
 }
 
 // A pick-up such as "Thanks, Paco." / "Thank you, Lola."
@@ -983,7 +983,9 @@ export function normalizeBulletin(
       // No sentence twice: within a segment, nor the lead repeating the intro's line about it.
       const againstIntro = d === storyList[0] ? introSentences : [];
       const outlet = new Set(contentWords(d.story?.source || ''));
-      if ([...out.map(stripTags), ...againstIntro].some((o) => repeats(plain, o, outlet))) continue;
+      // Against the intro's cold-open line the bar is lower: "A chipmaker has unveiled a new laptop processor"
+      // after "Chipmaker unveils laptop processor" is the same news said twice.
+      if (out.map(stripTags).some((o) => repeats(plain, o, outlet)) || againstIntro.some((o) => repeats(plain, o, outlet, 0.7))) continue;
       out.push(s);
       spoken++;
     }

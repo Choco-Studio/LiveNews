@@ -1013,12 +1013,10 @@ function mediaRect(L, b, ts) {
         best = bx;
       }
     }
-    const pad = 4 * ts;
-    // a box BESIDE the head may run below the solo dark band (that band only keeps the wall dark
-    // behind the head and shoulders), down to the caption line: the picture gets the room it needs
-    let bot = best.y1;
-    if (best !== L.top) bot = Math.max(bot, Math.min(USABLE.y1 - L.sy0, b.h - 2 * ts));
-    const aw = bw(best) - 2 * pad, ah = bot - best.y0 - 2 * pad;
+    // a tight 2 px (wide) pad: the free box already keeps 6 px from the head, and the picture gets
+    // the room it needs (the solo dark band at the wall's foot stays dark, money-minute.md / ART_DIRECTION)
+    const pad = 2 * ts;
+    const aw = bw(best) - 2 * pad, ah = bh(best) - 2 * pad;
     const w = Math.floor(Math.min(aw, ah * 1.6)), h = Math.floor(w / 1.6);
     if (w >= 36 && h >= 22) {
       m.x = Math.round(best.x0 + (bw(best) - w) / 2);

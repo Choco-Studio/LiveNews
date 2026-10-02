@@ -373,6 +373,24 @@ describe('round 3: wall plates inside their free area, clean tint clusters', () 
     const p = plateRectFor(lab.cameraFor('single-a', 'news-60'), 'WILDLIFE', 'BITPORT HERALD', 'news-60');
     assert.ok(p.x0 >= 8 && p.kicker === 'WILDLIFE' && p.sub === 'BITPORT HERALD');
   });
+  test('solo programmes: the wall's bottom 16 px (wide scale) stay dark in every framing and wall mode', () => {
+    const modes = [{ wall: 'idle' }, { wall: 'picture', image: 'port' }, { wall: 'plate' }, { wall: 'figure' }, { wall: 'map' }];
+    for (const programme of ['news-60', 'money-minute']) {
+      for (const framing of ['wide', 'single-a', 'mcu-l', 'mcu-r']) {
+        const r = wallRect(lab.cameraFor(framing, programme));
+        const band = Math.round((16 / (1000 / SET.wallZ)) * r.k);
+        for (const m of modes) {
+          const px = shot({ programme, framing, ...m });
+          for (let y = Math.max(0, r.y1 - band); y < Math.min(H, r.y1); y++) {
+            for (let x = Math.max(0, r.x0); x < Math.min(W, r.x1); x++) {
+              const c = px[y * W + x];
+              assert.ok(c === C.ink || c === C.black, `${programme} ${framing} ${m.wall}: ${nameOf(c)} at ${x},${y} (band ${band})`);
+            }
+          }
+        }
+      }
+    }
+  });
   const blockOf = (px, name, size = 3) => {
     const c = C[name];
     for (let y = 0; y + size <= 150; y++) for (let x = 0; x + size <= W; x++) {

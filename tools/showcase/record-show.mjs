@@ -32,6 +32,8 @@
 //   --start now|open|break|endcard   begin at the next programme open / break / end card (default now)
 //   --skip N                  run N s of channel time (no recording) before looking for --start
 //   --until next-open+S|break-end+S|episode-end+S   stop S s after that event (else after --seconds)
+//   --count N                 stop at the Nth occurrence of the --until event (default 1): with --start open,
+//                             --until next-open+20 --count 2 records two programmes, their breaks and the third open
 //   --max-wait N              seconds of channel time allowed to reach --start (default 240)
 //   --fps 30 --scale 5        video
 //   --music lofi|broadcast|none   bed engine (default lofi)
@@ -48,7 +50,7 @@
 //   --voice-engine auto|fallback   use the voice stream's engine when it loads (auto) or the built-in one
 //   --voice-workers N         Kokoro processes (default 2; idle ones prefetch the sentences already on air)
 //   --preset veryfast         x264 preset of the final 5x encode (veryfast: 2x faster than fast, same size here)
-//   --measure-duck            also render the beds without speech to measure the duck (default for <= 150 s)
+//   --measure-duck            also render the beds without speech to measure the duck (default for <= 900 s)
 //   --no-raf-throttle         render on every fake 16 ms rAF tick instead of once per video frame
 //   --keep                    keep the raw float renders and the lossless native-size video in <out>.work/
 
@@ -75,7 +77,7 @@ async function loadPlaywright() {
 
 // ------------------------------------------------------------------ options
 const opts = {
-  seconds: 90, skip: 0, fps: 30, scale: 5, start: 'now', until: null, 'max-wait': 240, music: 'lofi', stories: 'soft',
+  seconds: 90, skip: 0, fps: 30, scale: 5, start: 'now', until: null, count: 1, 'max-wait': 240, music: 'lofi', stories: 'soft',
   'bed-db': 0, 'duck-db': 0, lufs: -16, tp: -1.5, sr: 48000, port: 8602, 'voice-engine': 'auto', 'voice-workers': 2,
 };
 const argv = process.argv.slice(2);
@@ -89,7 +91,8 @@ for (let i = 0; i < argv.length; i++) {
     i++;
   }
 }
-for (const k of ['seconds', 'skip', 'fps', 'scale', 'max-wait', 'bed-db', 'duck-db', 'lufs', 'tp', 'sr', 'port', 'voice-workers']) opts[k] = Number(opts[k]);
+for (const k of ['seconds', 'skip', 'fps', 'scale', 'max-wait', 'bed-db', 'duck-db', 'lufs', 'tp', 'sr', 'port', 'voice-workers', 'count']) opts[k] = Number(opts[k]);
+opts.count = Math.max(1, Math.round(opts.count) || 1);
 if (!opts.out) {
   console.error('usage: node tools/showcase/record-show.mjs --out show.mp4 [--port 8602 | --url URL] [--seconds 90] [--start now|open|break|endcard] [--until next-open+20] [--music lofi|broadcast|none]');
   process.exit(1);
@@ -306,6 +309,7 @@ const sheetTiles = [];
 const sheetEvery = Number(opts['sheet-every']) || (untilMatch ? 15 : Math.max(2, opts.seconds / 20));
 let R = null; // page time (ms) of frame 0
 let stopAt = untilMatch ? Infinity : null;
+let untilHits = 0;
 let frames = 0;
 let lastReport = Date.now();
 const timing = { frame: 0, encode: 0, speech: 0, clock: 0, other: 0 };
@@ -345,11 +349,12 @@ for (let i = 0; i < maxFrames; i++) {
         const hit = (kind === 'next-open' && e.ev === 'shot' && e.shot === 'open')
           || (kind === 'break-end' && e.ev === 'playBreak' && e.phase === 'end')
           || (kind === 'episode-end' && e.ev === 'playEpisode' && e.phase === 'end');
-        if (hit) {
+        if (hit && ++untilHits >= opts.count) {
           stopAt = (e.at ?? e.t) + Number(plus || 0) * 1000;
-          say(`stop condition ${opts.until} at ${(((e.at ?? e.t) - R) / 1000).toFixed(1)} s`);
+          say(`stop condition ${opts.until}${opts.count > 1 ? ` (#${untilHits})` : ''} at ${(((e.at ?? e.t) - R) / 1000).toFixed(1)} s`);
           break;
         }
+        if (hit) say(`${kind} #${untilHits} of ${opts.count} at ${(((e.at ?? e.t) - R) / 1000).toFixed(1)} s`);
       }
     }
     if (stopAt && stopAt !== Infinity && st.t >= stopAt) break;
@@ -475,7 +480,7 @@ if (stemSpeechBus && clipsPlayed.length) {
 // ------------------------------------------------------------------- beds
 let cues = [];
 let bedsInfo = null;
-const measureDuck = Boolean(opts['measure-duck']) || seconds <= 150;
+const measureDuck = Boolean(opts['measure-duck']) || seconds <= 900;
 const PREROLL = 8;
 if (opts.music !== 'none') {
   cues = deriveCues([...allLog, ...recordedSentences]);
@@ -660,6 +665,6 @@ say(`done in ${elapsed()}: ${OUT}`);
 say(`sheet ${sheetPath}`);
 say(`audio picture ${audioPath}`);
 say(`timeline ${timelinePath}`);
-say(`loudness ${mixReport.final?.I} LUFS, TP ${mixReport.final?.TP} dBTP, LRA ${mixReport.final?.LRA} LU; bed duck ${JSON.stringify(mixReport.bedDuckDb)}`);
+say(`loudness ${mixReport.final?.I} LUFS, TP ${mixReport.final?.TP} dBTP, LRA ${mixReport.final?.LRA} LU; bed duck ${mixReport.bedDuckDb ? JSON.stringify(mixReport.bedDuckDb) : '(not measured: --measure-duck)'}; quiet zones ${JSON.stringify((mixReport.quiet || []).map((q) => `${q.kind} ${q.bedRmsDb} dB`))}`);
 say(`sync ${JSON.stringify(sync.summary)}`);
 if (pageErrors.length) say(`${pageErrors.length} page errors, first: ${pageErrors.slice(0, 3).join(' | ')}`);

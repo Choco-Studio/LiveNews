@@ -671,22 +671,26 @@ function neck(ctx, mx, my, k) {
   neckBand(ctx, mx, my, hw, len, 0, 2, 0, 1, P.tanShade);
 }
 
-const POUR_FX = 196;
-const POUR_FY = 132;
+// A locked-off camera: nothing in the frame changes size (owner 22:50: the glass
+// must not grow while it fills). The motion is the pour itself, the rising
+// liquid, the rings, the bubbles and the slow-motion crown at the impact.
+const GLASS_CX = 196; // tumbler axis
+const GLASS_BOTTOM = 176; // its foot on the bar
+const BAR_Y = 150; // the bar's front edge
+const NECK_X = 150; // the bottle's lip, top left
+const NECK_Y = 50;
 function shotPour(ctx, lt) {
   ctx.drawImage(backBar(), 0, 0);
-  const k = tween(lt, 0, 5, 1, 1.12, 'inOut');
-  const fx = POUR_FX;
-  const fy = POUR_FY;
+  const k = 1; // scale of the props (fixed for the whole shot)
   // bar top
-  const by = round(fy + (150 - fy) * k);
+  const by = BAR_Y;
   ctx.drawImage(barTop(), 0, by);
   R(ctx, 0, by, W, 1, P.tanShade);
-  const cx = round(fx + (196 - fx) * k);
-  const th = round(66 * k);
-  const bottom = round(fy + (176 - fy) * k);
+  const cx = GLASS_CX;
+  const th = 66;
+  const bottom = GLASS_BOTTOM;
   const top = bottom - th;
-  const baseH = round(11 * k);
+  const baseH = 11;
   const tubeH = th - baseH;
   // liquid rises as it pours
   const fillP = tween(lt, 0, 5, 0.18, 0.55, 'linear');
@@ -739,8 +743,8 @@ function shotPour(ctx, lt) {
   // the rim of the glass
   ovalRing(ctx, cx, top + round(r0 * 0.2), round(r0), max(2, round(r0 * 0.2)), A(P.cream, 0.6));
   // the stream: leaves the neck with some forward speed, falls, thins
-  const mx = round(fx + (150 - fx) * k);
-  const my = round(fy + (50 - fy) * k);
+  const mx = NECK_X;
+  const my = NECK_Y;
   neck(ctx, mx, my, k);
   const ix1 = cx + round(6 * k);
   for (let y = my + 2; y < ly; y++) {
@@ -1328,11 +1332,11 @@ function shotHero(ctx, lt) {
   ctx.restore();
   beam(ctx, 192, 0, 192, 172, 40, 110, { color: P.cream, alpha: 0.035 * up });
   haze(ctx, lt, 58, 5, 0.25 + 0.6 * up);
-  const k = tween(lt, 0, HERO_LEN + 0.5, 1, 1.06, 'inOut');
-  const fy = 120;
-  const base = round(fy + (172 - fy) * k);
-  const prx = round(66 * k);
-  const pry = round(9 * k);
+  // locked off: the bottle and its plinth keep one size (no push-in on baked art)
+  const k = 1;
+  const base = 172;
+  const prx = 66;
+  const pry = 9;
   plinth(ctx, 192, base, prx, pry);
   BO.turn = 0.5; // label square to the lens the whole shot
   BO.keyK = 0.22 + 0.78 * up;

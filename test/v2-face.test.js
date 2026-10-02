@@ -688,3 +688,104 @@ test('wide shots: a smile never bends the mouth into a U; glasses never make a d
   assert.ok(frame >= 2, `glasses visible (${frame} px)`);
   assert.ok(worst <= 3, `a dark run of ${worst} px across the eyes`);
 });
+
+// ---------------------------------------------------------------------------
+// Round 3 (retry): real recorded clips, the greeting nod, the forehead sheen
+
+const VOICED = JSON.parse(fs.readFileSync(new URL('./fixtures/v2-face-voiced.json', import.meta.url), 'utf8')).segments;
+
+test('lip sync on 16 real Kokoro clips: openings after pauses within ±40 ms of the recorded word, m/b/p closures ≥ 40 ms, no shape held < 40 ms', () => {
+  let onsets = 0, closures = 0;
+  for (const seg of VOICED) {
+    const T0 = 0.5, lead = seg.words[0][0];
+    const audio = timelineAudio([{ slot: 'A', text: seg.text, t0: T0, words: seg.words, levels: seg.levels }]);
+    const src = liveSpeech(audio, 'A');
+    const f = {}, out = [];
+    for (let t = 0; t < T0 + seg.duration + 0.3; t += 0.001) {
+      const fr = sampleSpeech(src, t);
+      mouthParams(fr, f, 1);
+      out.push({ t, open: f.open, press: f.press > 0.5 && fr.speaking, shown: fr.mix > 0.5 ? fr.next : fr.viseme });
+    }
+    for (let k = 0; k < seg.words.length; k++) {
+      const [wt, ch] = seg.words[k];
+      const prevText = k ? seg.text.slice(seg.words[k - 1][1], ch) : '.';
+      const word = seg.text.slice(ch).toLowerCase();
+      if (!/[,.;:?!]\s*$/.test(prevText) || /^[mbpfvw]/.test(word)) continue; // after a pause, open-lip start
+      const ts = T0 + (wt - lead);
+      const i0 = out.findIndex((o) => o.t >= ts - 0.2);
+      let onset = null;
+      for (let i = Math.max(1, i0); i < out.length && out[i].t < ts + 0.2; i++) {
+        if (out[i].open >= 0.08 && out[i - 1].open < 0.08) {
+          onset = out[i].t;
+          break;
+        }
+      }
+      assert.ok(onset !== null && Math.abs(onset - ts) <= 0.04 + 1e-6, `${seg.programme} "${word.slice(0, 12)}": onset ${onset === null ? 'none' : ((onset - ts) * 1000).toFixed(0) + ' ms'}`);
+      onsets++;
+    }
+    let start = null;
+    for (const o of out) {
+      if (o.press && start === null) start = o.t;
+      else if (!o.press && start !== null) {
+        assert.ok(o.t - start >= 0.04 - 1e-6, `closure ${((o.t - start) * 1000).toFixed(0)} ms`);
+        closures++;
+        start = null;
+      }
+    }
+    let last = null, lastT = -1;
+    for (const o of out) {
+      if (o.shown === last) continue;
+      if (lastT >= 0 && last !== null) assert.ok(o.t - lastT >= 0.04 - 0.0015, `${last}→${o.shown} after ${((o.t - lastT) * 1000).toFixed(0)} ms`);
+      last = o.shown;
+      lastT = o.t;
+    }
+  }
+  assert.ok(onsets >= 30 && closures >= 40, `${onsets} onsets, ${closures} closures`);
+});
+
+test('greeting nod (world-now.md: once per presenter): the co-presenter named in the intro nods on its own name', () => {
+  for (const id of DUOS) {
+    const ep = clone(EPISODES[id]);
+    for (const s of ep.segments) s.cues = (s.cues || []).filter((c) => c.action !== 'nod' || !c.slot); // no writer hint
+    const ctx = segmentContext(ep, 0, { gapAfter: 0.9 });
+    const name = { lola: 'lola', ada: 'ada', unit8: 'unit-8' }[ep.cast.B];
+    const at = ctx.seg.text.toLowerCase().lastIndexOf(name);
+    const nods = planBehaviour(ctx).filter((e) => e.kind === 'gesture' && e.slot === 'B');
+    assert.equal(nods.length, 1, `${id}: one greeting nod`);
+    assert.equal(nods[0].why, 'nod-greeting');
+    assert.ok(nods[0].char >= at && nods[0].char < at + name.length + 1, `${id}: on "${name}" (char ${nods[0].char}, name at ${at})`);
+    // grave intros keep a straight face
+    ep.segments[0].emotion = 'serious';
+    assert.equal(planBehaviour(segmentContext(ep, 0, { gapAfter: 0.9 })).filter((e) => e.kind === 'gesture').length, 0);
+  }
+});
+
+test('skin: the forehead highlight is a short sheen above the key-side brow in close-ups (never a patch under the hairline), none in mediums', async () => {
+  const { PartBuffer } = await import('../public/js/v2/canvas25d/pixbuf.js');
+  const { actor } = await import('../public/js/v2/canvas25d/scene.js');
+  const { poseAt } = await import('../public/js/v2/canvas25d/rig.js');
+  const { drawCharacter, GROUPS } = await import('../public/js/v2/canvas25d/character.js');
+  for (const id of ['paco', 'lola', 'max', 'ada', 'penny', 'sam']) {
+    for (const s of [1.75, 3.4, 4]) {
+      const buf = new PartBuffer();
+      const a = actor(id, { side: 1, seed: 11 });
+      const head = drawCharacter(buf, a.look, poseAt(a, 0.3), { x: 192, y: 150, s, gb: 0 });
+      const skin = a.look._mats.skin, B = a.look.brows;
+      let hi = 0, forehead = 0, high = 0, n = 0;
+      for (let i = 0; i < buf.grp.length; i++) {
+        if (buf.grp[i] !== GROUPS.head || buf.mat[i] !== skin) continue;
+        n++;
+        if (buf.tone[i] !== 0) continue;
+        hi++;
+        const y = (Math.floor(i / buf.w) + 0.5 - head.cy) / s;
+        if (y < a.look.eyes.y - 1) forehead++;
+        if (y < B.y - 2.2) high++;
+      }
+      if (s < 2.2) assert.equal(forehead, 0, `${id} s ${s}: no forehead highlight in a medium`);
+      else {
+        assert.ok(hi / n <= 0.04, `${id} s ${s}: highlight ${(100 * hi / n).toFixed(1)} % of the skin`);
+        assert.equal(high, 0, `${id} s ${s}: ${high} highlight px high on the forehead (a bald patch)`);
+      }
+    }
+  }
+});
