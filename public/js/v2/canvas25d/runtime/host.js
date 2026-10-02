@@ -32,6 +32,9 @@ export class StageHost {
     this.makeStage = makeStage || ((o) => new Stage(o));
     this.policy = new FallbackPolicy({ log: this.log });
     this.watch = new PerfWatchdog({ log: this.log, info: this.info, report: !!perf });
+    // `?watchdog=0` (QA only: captures and soak runs on an overloaded machine): the watchdog
+    // still measures and logs, but never lowers the detail or falls back; errors still do
+    this.watchdog = !/[?&]watchdog=0(&|$)/.test(globalThis.location?.search || '');
     this.key = null;
     this.stage = null;
     this.t = 0;
@@ -81,6 +84,10 @@ export class StageHost {
     if (!ok || this.stage !== stage) return false;
     if (!draw) return false;
     const verdict = this.watch.sample(t, this.now() - a);
+    if (!this.watchdog) {
+      this.watch.level = 0;
+      return true;
+    }
     if (verdict === 'fallback') {
       this.drop('p95 over 16 ms at the lowest detail level');
       return true; // this frame was drawn

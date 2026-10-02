@@ -36,7 +36,7 @@ export class Producer {
   select(program, { upcoming = [] } = {}) {
     const avoid = {};
     for (const next of upcoming) {
-      const beat = next?.categories?.length > 1 || next?.categories?.length === 1 ? next.categories[0] : null;
+      const beat = next?.categories?.[0] || null;
       if (beat && beat !== program.categories?.[0] && program.categories?.includes(beat)) avoid[beat] = 0.5;
     }
     return this.news.candidates(this.config.candidatePool, { categories: program.categories, ...(Object.keys(avoid).length ? { avoid } : {}) });

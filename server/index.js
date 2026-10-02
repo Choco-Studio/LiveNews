@@ -28,7 +28,8 @@ const images = new ImageCache({ localRoots: () => newsDesk.localImageRoots });
 const chain = new ProviderChain(createProviders(config), usage);
 // Neural presenter voices (VOICE_ENGINE=kokoro), synthesised ahead of air; browser voices otherwise.
 const voice = createVoiceService(config, { root: ROOT });
-const producer = new Producer({ config, newsDesk, chain, voice });
+// The ImageCache is shared: the producer verifies (and warms) each picture before air, the client reads it.
+const producer = new Producer({ config, newsDesk, chain, voice, images });
 const station = new Station({ config, newsDesk, producer, chain });
 
 function sendJson(res, status, body) {
@@ -73,7 +74,7 @@ function serveEvents(req, res) {
 async function serveImage(res, id) {
   const story = newsDesk.get(id);
   if (!story?.image) return sendJson(res, 404, { error: 'no image' });
-  const entry = await images.get(id, story.image);
+  const entry = await images.get(id, story.images || [story.image]);
   // The detail (paths, upstream errors) stays in the server log; the client only learns it failed.
   if (entry.error) return sendJson(res, 502, { error: 'image unavailable' });
   res.writeHead(200, {
@@ -85,7 +86,14 @@ async function serveImage(res, id) {
 }
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
-const devAllowed = (req) => /^(1|true|yes|on)$/i.test(process.env.DEV_ENDPOINTS || '') || LOOPBACK.has(req.socket.remoteAddress);
+// Dev views answer on loopback only (or with DEV_ENDPOINTS=1). Behind a same-host reverse proxy every request
+// arrives from loopback, so a forwarded request is never trusted as local.
+const devAllowed = (req) =>
+  /^(1|true|yes|on)$/i.test(process.env.DEV_ENDPOINTS || '') ||
+  (LOOPBACK.has(req.socket.remoteAddress) && !req.headers['x-forwarded-for'] && !req.headers.forwarded && !req.headers['x-real-ip']);
+// A manual refresh re-reads every feed: at most one every 30 s, and only from where the dev views are allowed.
+const REFRESH_MIN_MS = 30_000;
+let lastManualRefresh = 0;
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -111,6 +119,9 @@ const server = http.createServer(async (req, res) => {
     const img = url.pathname.match(/^\/api\/img\/(s[0-9a-f]{10})$/);
     if (req.method === 'GET' && img) return await serveImage(res, img[1]);
     if (req.method === 'POST' && url.pathname === '/api/refresh') {
+      if (!devAllowed(req)) return sendJson(res, 404, { error: 'not found' });
+      if (Date.now() - lastManualRefresh < REFRESH_MIN_MS) return sendJson(res, 429, { error: 'refreshed recently', status: station.status() });
+      lastManualRefresh = Date.now();
       await station.refreshNews();
       station.fill().catch(() => {});
       return sendJson(res, 200, station.status());
