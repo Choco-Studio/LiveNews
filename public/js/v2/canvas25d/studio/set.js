@@ -24,11 +24,11 @@
 // are drawn as integer spans on top. The finished background (and the desk
 // over it) is cached and reused while the camera, the style and the wall
 // state stay the same.
-import { C } from '../pixbuf.js';
+import { C, Frame } from '../pixbuf.js';
 import { drawLogo, measureLogo } from '../../../logo.js';
 import { F, SET, kAt, sxOf, syOf } from './geometry.js';
-import { resolveStyle, styleFor, setStyle, currentStyle } from './styles.js';
-import { updateWall, drawWallContent, wallFromScene, wallVersionOf } from './wall.js';
+import { resolveStyle, styleFor, setStyle, currentStyle, STYLE_IDS } from './styles.js';
+import { updateWall, drawWallContent, wallFromScene, wallVersionOf, warmWall } from './wall.js';
 
 export { SET, setStyle, styleFor, wallFromScene, drawWallContent };
 
@@ -94,9 +94,9 @@ function bakeWall(style) {
   let b = BAKED.get(style.bakeKey);
   if (b) return b;
   const lo = new Uint32Array(16), hi = new Uint32Array(16), tlo = new Uint32Array(16), thi = new Uint32Array(16);
+  const tints = style.tints ? Object.entries(style.tints).map(([f, to]) => [C[f], C[to]]) : null;
   const tint = (c) => {
-    if (!style.tints) return c;
-    for (const [from, to] of Object.entries(style.tints)) if (C[from] === c) return C[to];
+    if (tints) for (const [f, to] of tints) if (f === c) return to;
     return c;
   };
   for (let i = 0; i < RAMP.length - 1; i++) {
@@ -106,55 +106,180 @@ function bakeWall(style) {
     thi[i] = tint(hi[i]);
   }
   const tex = new Uint16Array(TW * TH);
-  const S = SET.screen;
-  const cove = style.cove;
-  for (let ty = 0; ty < TH; ty++) {
-    const Y = TY0 + ty + 0.5;
-    for (let tx = 0; tx < TW; tx++) {
-      const X = TX0 + tx + 0.5;
-      let pos = style.base;
-      if (cove) pos += (cove.slate - style.base) * smooth((Y - cove.y0) / (cove.y1 - cove.y0));
-      let pool = 0;
-      for (const p of style.pools) pool += poolLight(p, X, Y);
-      pos += pool;
-      // the wall's own cool spill around the bezel
-      if (style.glow > 0) {
-        const ex = Math.max(S.x0 - X, X - S.x1, 0), ey = Math.max(S.y0 - Y, Y - S.y1, 0);
-        const d = Math.hypot(ex, ey);
-        if (d < 26) pos += style.glow * (1 - d / 26) * (1 - d / 26);
+  const S = SET.screen, cove = style.cove, tp = style.top, sd = style.sides;
+  // The live window: beyond the side falloff and above the ceiling line the light is exactly 0
+  // (black), so only this window is computed (about a third of the texture). Pools and tints are
+  // accumulated over their own bounding boxes, then one pass applies the shaping in the same order
+  // as the light model: base + cove + pools + bezel spill, pool ceiling, lower-wall fall, ceiling,
+  // sides. ~3 ms per style instead of ~100 ms, so a programme change never stalls a frame.
+  const clampI = (v, a, z) => (v < a ? a : v > z ? z : v);
+  const txa = clampI(Math.floor(-sd.x1 - TX0 - 1), 0, TW), txb = clampI(Math.ceil(sd.x1 - TX0 + 1), 0, TW);
+  const tya = tp.to === 0 ? clampI(Math.floor(tp.y0 - TY0 - 1), 0, TH) : 0;
+  const lw = txb - txa, lh = TH - tya, n = lw * lh;
+  if (!SCRATCH || SCRATCH.length < 2 * n) SCRATCH = new Float64Array(2 * n);
+  const acc = SCRATCH.subarray(0, n), tv = SCRATCH.subarray(n, 2 * n);
+  acc.fill(0);
+  const addPools = (arr, pools) => {
+    for (const p of pools) {
+      const xa = clampI(Math.floor(p.X - p.rx - TX0 - 1), txa, txb), xb = clampI(Math.ceil(p.X + p.rx - TX0 + 1), txa, txb);
+      const ya = clampI(Math.floor(p.Y - p.ry - TY0 - 1), tya, TH), yb = clampI(Math.ceil(p.Y + p.ry - TY0 + 1), tya, TH);
+      for (let ty = ya; ty < yb; ty++) {
+        const dy = (TY0 + ty + 0.5 - p.Y) / p.ry;
+        const dy2 = dy * dy;
+        if (dy2 >= 1) continue;
+        let i = (ty - tya) * lw + (xa - txa);
+        for (let tx = xa; tx < xb; tx++, i++) {
+          const dx = (TX0 + tx + 0.5 - p.X) / p.rx;
+          const d = dx * dx + dy2;
+          if (d < 1) arr[i] += p.amount * (1 - d) * (1 - d * 0.35);
+        }
       }
-      if (style.poolMax !== undefined && pos > style.poolMax) pos = style.poolMax;
+    }
+  };
+  addPools(acc, style.pools);
+  if (tints) {
+    tv.fill(0);
+    addPools(tv, style.tintPools);
+  }
+  // scallops: the up/down wash of a wall sconce, narrow at the fixture and fanning out with distance,
+  // brightest next to it; they add light, and warmth when the style has tints
+  for (const sc of style.scallops || []) {
+    const reach = Math.max(sc.up, sc.down), hwMax = sc.w0 + sc.spread * reach;
+    const xa = clampI(Math.floor(sc.X - hwMax - TX0 - 1), txa, txb), xb = clampI(Math.ceil(sc.X + hwMax - TX0 + 1), txa, txb);
+    const ya = clampI(Math.floor(sc.Y - sc.up - TY0 - 1), tya, TH), yb = clampI(Math.ceil(sc.Y + sc.down - TY0 + 1), tya, TH);
+    for (let ty = ya; ty < yb; ty++) {
+      const dy = TY0 + ty + 0.5 - sc.Y;
+      const d = Math.abs(dy) / (dy < 0 ? sc.up : sc.down);
+      if (d >= 1) continue;
+      const fall = (1 - d) * (1 - 0.5 * d);
+      const hw = sc.w0 + sc.spread * Math.abs(dy);
+      let i = (ty - tya) * lw + (xa - txa);
+      for (let tx = xa; tx < xb; tx++, i++) {
+        const dx = (TX0 + tx + 0.5 - sc.X) / hw;
+        if (dx <= -1 || dx >= 1) continue;
+        const v = fall * (1 - dx * dx);
+        acc[i] += sc.amount * v;
+        if (tints) tv[i] += sc.tint * v;
+      }
+    }
+  }
+  // per-column side falloff
+  if (!SIDE || SIDE.length < TW) SIDE = new Float64Array(TW);
+  for (let tx = txa; tx < txb; tx++) {
+    const ax = Math.abs(TX0 + tx + 0.5);
+    SIDE[tx] = ax > sd.x0 ? 1 - smooth((ax - sd.x0) / (sd.x1 - sd.x0)) : 1;
+  }
+  const glow = style.glow, pm = style.poolMax, hasPm = pm !== undefined, top = RAMP.length - 1.01;
+  for (let ty = tya; ty < TH; ty++) {
+    const Y = TY0 + ty + 0.5;
+    let rowBase = style.base;
+    if (cove) rowBase += (cove.slate - style.base) * smooth((Y - cove.y0) / (cove.y1 - cove.y0));
+    const low = Y > 4 ? smooth((Y - 4) / 36) : 0;
+    const ceil = Y < tp.y1 ? smooth((tp.y1 - Y) / (tp.y1 - tp.y0)) : 0;
+    const ey = Math.max(S.y0 - Y, Y - S.y1, 0);
+    const glowRow = glow > 0 && ey < 26;
+    let i = (ty - tya) * lw;
+    const row = ty * TW;
+    for (let tx = txa; tx < txb; tx++, i++) {
+      const X = TX0 + tx + 0.5;
+      let pos = rowBase;
+      pos += acc[i];
+      // the wall's own cool spill around the bezel
+      if (glowRow) {
+        const ex = Math.max(S.x0 - X, X - S.x1, 0);
+        const d = Math.hypot(ex, ey);
+        if (d < 26) pos += glow * (1 - d / 26) * (1 - d / 26);
+      }
+      if (hasPm && pos > pm) pos = pm;
       // below head height the wall falls back toward ink (the pools are lit from above), so the
       // lower frame of a single, behind the strap and captions, stays dark and quiet
-      if (Y > 4 && pos > 0.6) pos += (0.6 - pos) * smooth((Y - 4) / 36);
+      if (Y > 4 && pos > 0.6) pos += (0.6 - pos) * low;
       // ceiling: black above y ~10 in the wide
-      const tp = style.top;
-      if (Y < tp.y1) pos += (tp.to - pos) * smooth((tp.y1 - Y) / (tp.y1 - tp.y0));
+      if (Y < tp.y1) pos += (tp.to - pos) * ceil;
       // sides fall off to black
-      const ax = Math.abs(X), sd = style.sides;
-      if (ax > sd.x0) pos *= 1 - smooth((ax - sd.x0) / (sd.x1 - sd.x0));
+      pos *= SIDE[tx];
       if (pos < 0) pos = 0;
-      if (pos > RAMP.length - 1.01) pos = RAMP.length - 1.01;
+      if (pos > top) pos = top;
       // clean clusters: flat ramp steps with the Bayer only in the band between them (a pixel
       // artist's posterised gradient), instead of dither over the whole pool
       const q = Math.round(posterise(pos) * 16);
-      let tq = 0;
-      if (style.tints) {
-        let tv = 0;
-        for (const p of style.tintPools) tv += poolLight(p, X, Y);
-        tq = Math.min(15, Math.round(band(tv) * 16));
-      }
-      tex[ty * TW + tx] = (tq << 8) | ((q >> 4) << 4) | (q & 15);
+      const tq = tints ? Math.min(15, Math.round(band(tv[i]) * 16)) : 0;
+      tex[row + tx] = (tq << 8) | ((q >> 4) << 4) | (q & 15);
     }
   }
   b = { tex, lo, hi, tlo, thi };
   BAKED.set(style.bakeKey, b);
   return b;
 }
+let SCRATCH = null, SIDE = null;
 
 /** Bake a programme's set ahead of its first frame (call it when an episode arrives). */
 export function warmSet(id) {
   bakeWall(resolveStyle(id));
+}
+
+/**
+ * Pre-bake every programme's set NOW, synchronously: the baked wall light of each style, the wall's
+ * land mask and globe / planet tables, and the desk logo plate (DOM only). Idempotent and cheap
+ * after the first call (~10-20 ms in all on a laptop). The browser also runs it by itself in
+ * small idle slices right after this module loads, and drawBackground still bakes synchronously
+ * on first use, so a frame is never presented without its set (owner, 21:05). Returns
+ * { ms, baked: [bakeKey...] }.
+ */
+export function warmSets(ids = STYLE_IDS) {
+  const a = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  for (const id of ids) bakeWall(resolveStyle(id));
+  warmWall();
+  for (let s = 1; s <= 3; s++) logoPixels(s);
+  warmDraw(ids);
+  const b = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  return { ms: b - a, baked: [...BAKED.keys()] };
+}
+/**
+ * Run the set's raster loops once per style into a scratch frame (wide camera, nothing cached, no
+ * wall state touched), so the first frame on air runs optimised code instead of paying the JIT.
+ */
+let warmed = false;
+function warmDraw(ids) {
+  if (warmed) return;
+  warmed = true;
+  const fr = new Frame();
+  const cam = { x: 0, y: -60, z: 0, zoom: 1, hy: 52, soft: 0 };
+  const clip = new Int16Array(W);
+  for (let pass = 0; pass < 2; pass++) {
+    for (const id of ids) {
+      const style = resolveStyle(id);
+      cam.soft = pass;
+      const r = wallRect(cam, RECT2);
+      renderWall(fr, cam, bakeWall(style), r.x0 - 3, r.y0 - 3, r.x1 + 3, r.y1 + 3, H);
+      drawWallDetails(fr, cam, style);
+      drawFlats(fr, cam, style, !!pass);
+      drawFloor(fr, cam, style);
+      rasterDesk(fr, cam, clip, style.deskLine, style);
+    }
+  }
+}
+
+/** Is a programme's set baked (labs, tests, the integrator's warm-up check)? */
+export const setReady = (id) => BAKED.has(resolveStyle(id).bakeKey);
+
+// The home look is baked as the module loads (every first frame of a lab or of the channel needs it);
+// the other programmes follow in idle slices in the browser, one per slice.
+bakeWall(styleFor('world-now'));
+if (typeof document !== 'undefined' && typeof setTimeout === 'function') {
+  const queue = [...STYLE_IDS];
+  const step = () => {
+    const id = queue.shift();
+    if (!id) return;
+    try {
+      if (id === 'world-now') warmWall();
+      bakeWall(styleFor(id));
+    } catch {
+      /* first use bakes it */
+    }
+    setTimeout(step, 30);
+  };
+  setTimeout(step, 30);
 }
 
 const COL = new Int32Array(W);
@@ -165,13 +290,12 @@ const THR = new Uint8Array(4);
  * rectangle [sx0, sx1) x [sy0, sy1) (the wall content covers it). One texture read and one or two
  * Bayer compares per pixel; the dither is anchored to the screen.
  */
-function renderWall(fr, cam, baked, sx0, sy0, sx1, sy1, yEnd) {
+function renderWall(fr, cam, baked, sx0, sy0, sx1, sy1, yEnd, xl = 0, xr = W) {
   const k = kAt(cam, SET.wallZ);
   const inv = 1 / k;
   // the Bayer index is anchored to the SCREEN: the camera only dollies (CAMERA), so each pixel's
   // light level changes monotonically during a move and flips at most once (a layer anchor would
   // re-step and re-dither whole pools)
-  const ox = 0, oy = 0;
   for (let x = 0; x < W; x++) {
     let tx = Math.floor(cam.x + (x + 0.5 - 192) * inv - TX0);
     COL[x] = tx < 0 ? 0 : tx >= TW ? TW - 1 : tx;
@@ -179,24 +303,31 @@ function renderWall(fr, cam, baked, sx0, sy0, sx1, sy1, yEnd) {
   const { tex, lo, hi, tlo, thi } = baked;
   const px = fr.px;
   const ye = Math.min(H, yEnd);
+  xl = Math.max(0, xl);
+  xr = Math.min(W, xr);
   for (let y = 0; y < ye; y++) {
     let ty = Math.floor(cam.y + (y + 0.5 - cam.hy) * inv - TY0);
     ty = ty < 0 ? 0 : ty >= TH ? TH - 1 : ty;
     const rb = ty * TW;
-    const br = ((y - oy) & 3) << 2;
+    const br = (y & 3) << 2;
     THR[0] = B16[br];
     THR[1] = B16[br + 1];
     THR[2] = B16[br + 2];
     THR[3] = B16[br + 3];
     const skip = y >= sy0 && y < sy1;
-    const xa = skip ? Math.max(0, Math.min(W, sx0)) : W;
-    const xb = skip ? Math.max(0, Math.min(W, sx1)) : W;
+    const xa = skip ? Math.max(xl, Math.min(xr, sx0)) : xr;
+    const xb = skip ? Math.max(xl, Math.min(xr, sx1)) : xr;
     for (let pass = 0; pass < 2; pass++) {
-      const x0 = pass ? xb : 0, x1 = pass ? W : xa;
+      const x0 = pass ? xb : xl, x1 = pass ? xr : xa;
       let i = y * W + x0;
       for (let x = x0; x < x1; x++, i++) {
         const v = tex[rb + COL[x]];
-        const T = THR[(x - ox) & 3];
+        // a flat ramp step (no Bayer share, no tint): the lower colour whatever the threshold
+        if ((v & 0xf0f) === 0) {
+          px[i] = lo[v >> 4];
+          continue;
+        }
+        const T = THR[x & 3];
         const p = (v >> 4) & 15;
         if (v >> 8 > T) px[i] = (v & 15) > T ? thi[p] : tlo[p];
         else px[i] = (v & 15) > T ? hi[p] : lo[p];
@@ -285,7 +416,10 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   const sSerial = serialOf(style);
   // the wall content first: its version says whether its pixels changed this frame
   const r = wallRect(cam, RECT);
+  const pOn = PROF.on;
+  let p0 = pOn ? now() : 0;
   const wall = updateWall(opts.wall, style, r.x1 - r.x0, r.y1 - r.y0, r.k, t, cam, opts, lod);
+  if (pOn) p0 = lap(PROF, 'wall', p0);
   fillKey(cam, sSerial, wall.version, lod);
   CACHE.frame = fr;
   if (CACHE.on && sameKey(KEY, CACHE.bgKey, 10)) {
@@ -315,16 +449,42 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   const b = Math.max(1, Math.round(2 * kw));
   // rows below the back wall's foot belong to the floor (drawn after)
   const yFloor = Math.max(0, Math.round(syOf(cam, kw, SET.floorY)));
-  renderWall(fr, cam, baked, r.x0 - b - 1, r.y0 - b - 1, r.x1 + b + 1, r.y1 + b + 1, yFloor);
+  // the set flats hide the wall beyond |X| 196 (drawn black over it): no light to render there
+  let xl = 0, xr = W;
+  if (style.flats) {
+    const kf = kAt(cam, SET.flatsZ);
+    xl = Math.round(sxOf(cam, kf, -FLAT_X));
+    xr = Math.round(sxOf(cam, kf, FLAT_X));
+  }
+  renderWall(fr, cam, baked, r.x0 - b - 1, r.y0 - b - 1, r.x1 + b + 1, r.y1 + b + 1, yFloor, xl, xr);
+  if (pOn) p0 = lap(PROF, 'light', p0);
   if (!soft) drawWallDetails(fr, cam, style);
   drawScreen(fr, r, b, style, soft, wall);
+  if (pOn) p0 = lap(PROF, 'screen', p0);
   drawFlats(fr, cam, style, soft);
   drawFloor(fr, cam, style);
+  if (pOn) p0 = lap(PROF, 'floor', p0);
   if (CACHE.on) {
     CACHE.bg.set(fr.px);
     CACHE.bgKey.set(KEY);
   }
   CACHE.deskReady = CACHE.on;
+}
+
+// Optional part timings (labs: __lab.profile); off on air, where the check costs nothing.
+const PROF = { on: false, wall: 0, light: 0, screen: 0, floor: 0, desk: 0, n: 0 };
+const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+function lap(P, k, t0) {
+  const t = now();
+  P[k] += t - t0;
+  return t;
+}
+/** Start (reset) or stop the part timings; returns the accumulated ms per part. */
+export function setProfile(on) {
+  const out = { wall: PROF.wall, light: PROF.light, screen: PROF.screen, floor: PROF.floor, desk: PROF.desk };
+  PROF.on = !!on;
+  PROF.wall = PROF.light = PROF.screen = PROF.floor = PROF.desk = 0;
+  return out;
 }
 
 /** Seams and the one static ceiling line (in focus only). */
@@ -346,12 +506,17 @@ function drawWallDetails(fr, cam, style) {
       layerVLine(fr, cam, Zw, X, -104, 21, C.steel, 2.8);
     }
   } else if (style.practical === 'warm') {
-    // the warm pair: small sconces with a cream lit face, pools baked as the tint
+    // the warm pair: slim bronze sconces (a darker back plate, the housing lit from camera-left, a
+    // 1 px cream diffuser slot and the lit lips where the light leaves up and down); their washes
+    // are baked into the wall light (styles.js scallops)
     for (const sx of [-1, 1]) {
       const X = sx * 196;
-      layerRect(fr, cam, Zw, X - 4.2, -78, X + 4.2, -50, C.brown);
-      layerRect(fr, cam, Zw, X - 2.8, -76.6, X + 2.8, -51.4, C.tanShade);
-      layerRect(fr, cam, Zw, X - 1.4, -75.2, X + 1.4, -54.2, C.cream);
+      layerRect(fr, cam, Zw, X - 3.6, -76, X + 3.6, -56, C.maroon);
+      layerRect(fr, cam, Zw, X - 2.2, -78, X + 2.2, -54, C.brown);
+      layerRect(fr, cam, Zw, X - 2.2, -78, X - 0.8, -54, C.tanShade);
+      layerRect(fr, cam, Zw, X - 0.7, -74, X + 0.7, -58, C.cream);
+      layerHLine(fr, cam, Zw, X - 2.2, X + 2.2, -78.4, C.tan);
+      layerHLine(fr, cam, Zw, X - 2.2, X + 2.2, -53.6, C.tanShade);
     }
   }
 }
@@ -371,7 +536,7 @@ function drawScreen(fr, r, b, style, soft, wall) {
   blitWall(fr, wall, x0, y0, x1, y1);
 }
 
-/** Copy the wall buffer into its rectangle of a frame (or of a cached Uint32 frame). */
+/** Copy the wall buffer into its rectangle of a frame (or of a cached Uint32 frame): one row copy per row. */
 function blitWall(fr, wall, x0, y0, x1, y1) {
   const w = x1 - x0;
   const buf = wall.buf;
@@ -379,19 +544,20 @@ function blitWall(fr, wall, x0, y0, x1, y1) {
   const xa = Math.max(0, x0), xb = Math.min(W, x1);
   if (xb <= xa) return;
   const px = fr.px || fr;
+  const n = xb - xa;
   for (let y = Math.max(0, y0); y < Math.min(H, y1); y++) {
-    let src = (y - y0) * w + (xa - x0);
-    const end = y * W + xb;
-    for (let i = y * W + xa; i < end; i++) px[i] = buf[src++];
+    const src = (y - y0) * w + (xa - x0);
+    px.set(buf.subarray(src, src + n), y * W + xa);
   }
 }
 
+const FLAT_X = 196; // inner edge of the set flats (world X at SET.flatsZ)
 /** Set flats at mid depth with the programme's practicals (static, never blinking). */
 function drawFlats(fr, cam, style, soft) {
   if (!style.flats) return;
   const Zf = SET.flatsZ;
   for (const sx of [-1, 1]) {
-    const inner = sx * 196, outer = sx * 2000;
+    const inner = sx * FLAT_X, outer = sx * 2000;
     layerRect(fr, cam, Zf, Math.min(inner, outer), -2000, Math.max(inner, outer), SET.floorY, C.black);
     layerVLine(fr, cam, Zf, inner + sx * 2, -400, SET.floorY, C.ink, 2);
     const lx = sx * 214;
@@ -408,6 +574,7 @@ function drawFlats(fr, cam, style, soft) {
   }
 }
 
+const PAT = new Uint32Array(4);
 /** Floor plane (Y = floorY): glossy black, a touch of ink toward the back wall (≤ L* 18). */
 function drawFloor(fr, cam, style) {
   const Yf = SET.floorY;
@@ -429,8 +596,15 @@ function drawFloor(fr, cam, style) {
       px.fill(black, row, row + W);
       continue;
     }
+    // the row's Bayer pattern repeats every 4 px
     const br = (y & 3) << 2;
-    for (let x = 0; x < W; x++) px[row + x] = q > B16[br + ((x - ox) & 3)] ? ink : black;
+    for (let j = 0; j < 4; j++) PAT[j] = q > B16[br + ((j - ox) & 3)] ? ink : black;
+    for (let x = 0; x < W; x += 4) {
+      px[row + x] = PAT[0];
+      px[row + x + 1] = PAT[1];
+      px[row + x + 2] = PAT[2];
+      px[row + x + 3] = PAT[3];
+    }
   }
 }
 
@@ -502,6 +676,8 @@ function blitLogo(fr, cx, cy, scale) {
 // Desk: curved in plan, tessellated in perspective, logo plate and one LED line
 
 const DESK_N = 96;
+const DESK_JOINTS = [-178, -104, 104, 178]; // world X of the front's module seams (symmetric, clear of the plate)
+const JCOL = new Uint8Array(W);
 const DFX = new Float32Array(DESK_N + 1), DFT = new Float32Array(DESK_N + 1), DFB = new Float32Array(DESK_N + 1);
 const DBX = new Float32Array(DESK_N + 1), DBT = new Float32Array(DESK_N + 1);
 const DNX = new Float32Array(DESK_N + 1);
@@ -537,8 +713,12 @@ export function drawDesk(fr, cam, clipRows, accent) {
   // 4th argument: a u32 LED colour (legacy), a style or programme id, or nothing (the background's style)
   let style = CACHE.style || currentStyle();
   let led;
-  if (typeof accent === 'number') led = accent >>> 0;
-  else {
+  if (typeof accent === 'number') {
+    // a programme's accent colour asks for its desk line (MONEY MINUTE: green → the steady darkGreen
+    // line), so a caller still passing the theme accent never draws a different LED than the style
+    led = accent >>> 0;
+    if (led === style.accent >>> 0) led = style.deskLine;
+  } else {
     if (accent) style = resolveStyle(accent);
     led = style.deskLine;
   }
@@ -555,7 +735,9 @@ export function drawDesk(fr, cam, clipRows, accent) {
       return;
     }
   }
+  const d0 = PROF.on ? now() : 0;
   rasterDesk(fr, cam, clipRows, led, style);
+  if (PROF.on) lap(PROF, 'desk', d0);
   // is every desk column under the wall's bottom bezel? (then wall patches may go into the composite)
   const r = wallRect(cam, RECT2);
   let safe = true;
@@ -594,8 +776,18 @@ function rasterDesk(fr, cam, clipRows, led, style) {
   const panelHi = tech ? C.slate : C.ink, panelLo = tech ? C.ink : C.black;
   const refName = REFLECT[nameOfLed(led)];
   const refC = refName ? C[refName] : 0;
+  // the front's module joints: 1 px recessed seams at fixed world X, found on the front curve
+  JCOL.fill(0);
+  for (const X of DESK_JOINTS) {
+    const u = X / D.deskHW;
+    const kj = kAt(cam, D.deskFrontZ + D.deskCurve * u * u);
+    const jw = Math.max(1, Math.floor(0.9 * kj));
+    const x0 = Math.floor(sxOf(cam, kj, X) - (X < 0 ? jw - 0.5 : 0.5));
+    for (let x = x0; x < x0 + jw; x++) if (x >= 0 && x < W) JCOL[x] = 1;
+  }
   // marching indices over the tessellation (both edges are monotonic in x), then each column is a
-  // handful of flat segments: top surface, the silver edge, fascia, LED, panel, lower panel, kick
+  // handful of flat segments: top surface, the silver edge, fascia, LED, panel, a recessed reveal
+  // (shadow line + lit lip), the lower panel, kick
   let jf = 0, jb = 0;
   const W0 = fr.w;
   for (let x = 0; x < W0; x++) {
@@ -627,13 +819,21 @@ function rasterDesk(fr, cam, clipRows, led, style) {
     const cTop = facetDim(topC, facet, topC), cFascia = facetDim(C.slate, facet, topC);
     const cHi = facetDim(panelHi, facet, topC), cLo = facetDim(panelLo, facet, topC), cKick = C.black;
     const cEdge = facet ? C.steel : C.silver;
+    // the reveal between the upper and lower panel: a shadow row, then a 1 px lip catching the key
+    // (only when the panel is tall enough on screen to hold it, and never a light lip in y ≥ 150)
+    const reveal = kz >= 0.6;
+    const cGroove = C.black, cLip = rSplit + 1 < 150 || cHi === C.ink ? cHi : cLo;
+    const cJoint = cHi === C.ink ? C.black : facetDim(C.ink, facet, topC);
+    const joint = JCOL[x] === 1;
     for (let y = Math.max(0, top0); y < bot; y++) {
       let c;
       if (y < top1) c = cTop;
       else if (y === top1) c = cEdge;
       else if (y === ledRow) c = led;
       else if (y < ledRow) c = cFascia;
-      else if (y < rSplit) c = cHi;
+      else if (y < rSplit) c = joint && y > ledRow + 1 ? cJoint : cHi;
+      else if (reveal && y === rSplit) c = cGroove;
+      else if (reveal && y === rSplit + 1) c = cLip;
       else if (y < rKick) c = cLo;
       else c = cKick;
       px[y * W0 + x] = c;

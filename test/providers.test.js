@@ -553,7 +553,7 @@ describe('mock provider', () => {
     const said = spoken(intro.text);
     assert.equal(
       said,
-      "New robot learns to cook. Also coming up: NASA telescope spots a new planet. Later in the programme: Scientists discover a talking parrot. This is TECH BYTES. I'm Max Circuit, with Ada Volt."
+      "New robot learns to cook. Also coming up: NASA telescope spots a new planet. Later in the programme: scientists discover a talking parrot. This is TECH BYTES. I'm Max Circuit, with Ada Volt."
     );
     assert.deepEqual(intro.teases, ['l1', 'l2', 'l3'], 'which story each sentence is about');
     assert.ok(!intro.text.includes('[wave]'), 'a news channel nods, it does not wave');
@@ -636,7 +636,8 @@ describe('mock provider', () => {
     assert.equal(by.s4.emotion, 'neutral');
     assert.deepEqual(segs.map((s) => s.anchor), ['A', 'B', 'A', 'B']);
     assert.deepEqual(segs.map((s) => s.storyId), ['s4', 's1', 's2', 's3'], 'breaking news leads');
-    assert.deepEqual(segs.map((s) => s.shot), ['close', 'map', 'close', 'wide']);
+    // a place opens on the map (its picture follows); a picture with no place is shown full screen
+    assert.deepEqual(segs.map((s) => s.shot), ['full', 'map', 'full', 'wide']);
     assert.deepEqual(segs.map((s) => s.breaking), [true, false, false, false]);
     assert.match(spoken(segs[0].text), /^Breaking news\. /);
   });
@@ -748,7 +749,12 @@ describe('mock provider', () => {
   });
 
   test('flagship features: lead, a main story, the number of the day (never first), a round-up in different countries and an "and finally"', async () => {
-    const bulletin = await bulletinOf({ stories: placed, program: FLAGSHIP });
+    // The writer is offered more candidates than it airs (CANDIDATE_POOL): the round-up is built from what is left.
+    const extra = [
+      { id: 'p7', title: 'Seoul tests self-driving buses on night routes', summary: 'Seoul has started testing self-driving buses on two night routes. Each bus carries a safety driver.', source: 'Harbour Herald', category: 'world', image: null },
+      { id: 'p8', title: 'Wellington schools trial a four-day week', summary: 'Ten schools in Wellington, New Zealand, will trial a four-day week for one term.', source: 'Pixelburg Post', category: 'world', image: null },
+    ];
+    const bulletin = await bulletinOf({ stories: [...placed, ...extra], program: FLAGSHIP });
     const segs = bulletin.segments.filter((s) => s.type === 'story');
     const roundup = segs.filter((s) => s.feature === 'roundup');
     assert.ok(roundup.length >= 2 && roundup.length <= 3, `round-up of ${roundup.length}`);

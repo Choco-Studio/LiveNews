@@ -4,15 +4,18 @@
 JSON lines on stdin/stdout (stdout carries replies only; library chatter goes
 to stderr). One request per utterance the channel page speaks:
 
-  {"id": 7, "text": "Good evening.", "voice": "paco", "speed": null,
-   "lang": null, "effect": null, "cache": "/abs/cache/dir"}
+  {"id": 7, "text": "Good evening.", "voice": "bm_george:0.6+bm_lewis:0.4",
+   "speed": 1.15, "lang": "en-gb", "effect": null, "pauses": {"comma": 0.18},
+   "cache": "/abs/cache/dir"}
 
   -> {"id": 7, "ok": true, "out": "/abs/cache/dir/<hash>.wav", "duration": 1.02,
       "words": [{"t": 0.012, "char": 0, "len": 4}, ...], "voice": "...",
       "engine": "tools/voice" | "fallback", "cached": false, "elapsed": 3.1}
 
-`voice` is a presenter preset of tools/voice/presets.json ("paco"), a Kokoro
-voice ("bm_lewis") or a blend ("bm_george:0.7+bm_fable:0.3"). `char`/`len`
+`voice` is a Kokoro voice ("bm_lewis"), a blend ("bm_george:0.7+bm_fable:0.3",
+as server/voice/casting.json casts the presenters) or a preset of
+tools/voice/presets.json ("paco"); `pauses` and `effect` ("robot") are passed
+to the voice stream's engine as the server's voice service passes them. `char`/`len`
 index the request text, so the page's boundary events point at the words it
 gave the engine.
 
@@ -254,7 +257,7 @@ def main():
             cache = req.get('cache') or os.path.join(REPO, 'data', 'showcase-voice-cache')
             os.makedirs(cache, exist_ok=True)
             key_src = json.dumps([VERSION, engine_name, preset_tag, text, req.get('voice'), req.get('speed'),
-                                  req.get('lang'), req.get('effect')], ensure_ascii=False)
+                                  req.get('lang'), req.get('effect'), req.get('pauses')], ensure_ascii=False, sort_keys=True)
             key = hashlib.sha1(key_src.encode('utf-8')).hexdigest()[:20]
             out = os.path.join(cache, f'{key}.wav')
             meta_path = os.path.join(cache, f'{key}.json')
@@ -264,7 +267,7 @@ def main():
                 send({'id': rid, 'ok': True, 'out': out, 'cached': True, 'elapsed': round(time.time() - t0, 3), **meta})
                 continue
             sreq = {'text': text, 'voice': req.get('voice') or 'bm_george'}
-            for k in ('speed', 'lang', 'effect'):
+            for k in ('speed', 'lang', 'effect', 'pauses'):
                 if req.get(k) is not None:
                     sreq[k] = req[k]
             used = engine_name

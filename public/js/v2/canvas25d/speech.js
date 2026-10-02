@@ -11,6 +11,8 @@
 // Either way sampleSpeech() returns the contract frame plus smoothed signals:
 //   env      the voice envelope (30 ms attack, 120 ms release): f.level for
 //            UNIT-8's speech indicator (PRESENTERS B)
+//   jawEnv   a slower envelope (70 ms attack, 220 ms release) for the jaw drop, so
+//            the chin moves with the phrase while the lips follow every syllable
 //   emph     a slow envelope of the stressed syllables (90 ms in, 420 ms out):
 //            brows and head move with the phrase, never twitch per syllable
 //   act      a slow "is talking" envelope (0.25 s in, 0.6 s out): head arcs and
@@ -36,7 +38,7 @@ function ease(v, target, up, down, dt) {
 function blankFrame(slot) {
   return {
     slot, speaking: false, level: 0, viseme: 'rest', next: 'rest', mix: 0, accent: 0, pause: false,
-    sentenceIndex: -1, wordIndex: -1, charIndex: -1, emph: 0, env: 0, act: 0, pauseAt: FAR, sentAt: FAR, endAt: FAR, startAt: FAR,
+    sentenceIndex: -1, wordIndex: -1, charIndex: -1, emph: 0, env: 0, jawEnv: 0, act: 0, pauseAt: FAR, sentAt: FAR, endAt: FAR, startAt: FAR,
   };
 }
 
@@ -46,6 +48,7 @@ export function sampleSpeech(sp, t) {
     const fr = sp.frame(t);
     if (fr.emph === undefined) fr.emph = fr.accent || 0;
     if (fr.env === undefined) fr.env = fr.level || 0;
+    if (fr.jawEnv === undefined) fr.jawEnv = fr.env;
     if (fr.act === undefined) fr.act = fr.speaking ? 1 : 0;
     return fr;
   }
@@ -109,6 +112,9 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
       }
     }
     fr.env = ease(fr.env, fr.level, 0.03, 0.12, dt);
+    // the jaw (chin outline) moves with the phrase, not with every syllable: a chin
+    // that bobs a pixel per syllable reads as chattering at this resolution
+    fr.jawEnv = ease(fr.jawEnv, fr.speaking ? fr.level : 0, 0.07, 0.22, dt);
     fr.emph = ease(fr.emph, fr.accent, 0.09, 0.42, dt);
     fr.act = ease(fr.act, fr.speaking ? 1 : 0, 0.25, 0.6, dt);
     if (fr.pause && !wasPause) fr.pauseAt = t;
@@ -141,7 +147,9 @@ export function applySpeech(c, persona, perf, t) {
   const p = persona;
   const fr = sampleSpeech(perf.speech, t);
   c.speaking = fr.speaking;
-  mouthParams(fr, c, perf.gain ?? 1);
+  const gain = perf.gain ?? 1;
+  mouthParams(fr, c, gain);
+  if (fr.jawEnv !== undefined) c.jaw = Math.min(1, fr.jawEnv * gain) * 0.45; // units; head.js caps it at 2 px
   c.level = fr.env || 0;
   c.t = t;
   c.speech = perf.speech || null;

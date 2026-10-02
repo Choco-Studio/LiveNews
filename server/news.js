@@ -211,8 +211,9 @@ export function extractLocalImage(item, baseDir) {
 }
 
 /** The pictures of a feed item, best first (file: URLs only for local feeds, inside their folder). */
-export function itemPictures(item, { baseDir = null } = {}) {
-  const list = rankPictures(feedCandidates(item, { baseDir }));
+export function itemPictures(item, { baseDir = null, link = null } = {}) {
+  // Relative references of a remote feed resolve against the item's own web page.
+  const list = rankPictures(feedCandidates(item, { baseDir, link: !baseDir && /^https?:\/\//i.test(link || '') ? link : null }));
   return baseDir ? list : list.filter((c) => !c.local);
 }
 
@@ -254,7 +255,7 @@ export function parseFeed(xml, feed, { baseDir = null, now = Date.now() } = {}) 
     // Undated items: "now", one second older per position (feeds list the newest first),
     // so the desk ranks them the same way on every run.
     const published = Date.parse(dateStr) || now - index * 1000;
-    const pictures = itemPictures(item, { baseDir });
+    const pictures = itemPictures(item, { baseDir, link });
     // A local feed's item may link to a local article page (offline fixtures), inside the feed's folder.
     const page = baseDir ? localPage(link, baseDir) : null;
     stories.push({
@@ -487,10 +488,17 @@ export class NewsDesk {
   dropPlaceholders(stories) {
     const uses = new Map();
     for (const s of stories) for (const url of new Set(s.images || (s.image ? [s.image] : []))) uses.set(url, [...(uses.get(url) || []), s]);
+    const marked = [];
     for (const [url, list] of uses) {
-      if (list.length >= 3 || (list.length === 2 && !this.samePictureEvent(list[0], list[1]))) this.markPlaceholder(url);
+      if (this.placeholders.has(url)) continue;
+      if (list.length >= 3 || (list.length === 2 && !this.samePictureEvent(list[0], list[1]))) {
+        this.markPlaceholder(url);
+        marked.push(url);
+      }
     }
     for (const s of stories) this.withoutPlaceholders(s);
+    // A card that only now shows up on several items was also on stories already on the desk.
+    if (marked.length) for (const s of this.stories.values()) if (this.withoutPlaceholders(s)) this.borrowPictures([s]);
   }
 
   markPlaceholder(url) {
@@ -664,6 +672,9 @@ export class NewsDesk {
         source: s.source,
         category: s.category,
         hasImage: !!s.image,
+        // where the picture was found (feed:media, page:og, cluster...) and whose it is when borrowed
+        imageVia: s.image ? s.imageVia || 'feed' : null,
+        imageCredit: s.image ? s.imageCredit || null : null,
         outlets: s.outlets || 1,
         covered: this.covered.has(s.id),
         breaking: isBreaking(s.title),

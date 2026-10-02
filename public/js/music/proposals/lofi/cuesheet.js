@@ -8,11 +8,14 @@
 //   moment: open, openTail, headlines, pip, coldOpen, greeting, story, shot,
 //           item, roundup (map), number, numberSting, finally, chat, featureEnd,
 //           outro, signoffEnd, endcard, breaking, grave, introEnd,
-//           bumper, holding, leadin, upNext, standby, silence, ad, cut
+//           bumper, holding, leadin, upNext, replay, standby, silence, ad, cut
 //   opts:   { programId, emotion, breaking, grave, segment, line, lines, kind,
 //             expected, tape, next, sombre, replay, hour, seconds }
 //   ctx:    { afterGrave, current (song id playing or null), gravePad,
-//             sharedStings, bedUnderStories }
+//             sharedStings, bedUnderStories: 'off' (bibles) | 'soft' | 'drone' }
+// bedUnderStories 'soft' (owner switch) gives light / neutral stories a very soft bed
+// (pad + triangle, < 1.3 kHz, >= 24 LU under the voice); grave stories and the segment
+// after them stay silent whatever the switch says.
 // action kinds: bed, silence, sting, headline, pip, shot, accent, cut, keep, gravePad
 
 import { PALETTES } from './palettes.js';
@@ -25,6 +28,7 @@ const sting = (name, extra = {}) => ({ kind: 'sting', name, ...extra });
 const KEEP = { kind: 'keep' };
 
 export const isGrave = (opts = {}) => Boolean(opts.grave || opts.emotion === 'serious' || opts.emotion === 'sad');
+const softStory = (o, c) => c.bedUnderStories === 'soft' && !isGrave(o) && !o.breaking && !c.afterGrave;
 
 // ------------------------------------------------------------------ programmes
 
@@ -34,7 +38,9 @@ const WORLD = (m, o, c) => {
     case 'headlines': return { kind: 'headline', line: o.line ?? 0, lines: o.lines ?? 3 };
     case 'pip': return { kind: 'pip', line: o.line ?? 0, lines: o.lines ?? 3 };
     case 'greeting': return silence(0.3); // the bed releases in 0.3 s on the cut to the greeting
-    case 'story': return o.breaking ? sting('breaking', { stopBed: true, hard: true }) : silence(0.8);
+    case 'story':
+      if (o.breaking) return sting('breaking', { stopBed: true, hard: true });
+      return softStory(o, c) ? bed('world-now/story', 'story') : silence(0.8);
     case 'roundup':
     case 'map': return c.afterGrave ? silence() : bed('world-now/roundup', 'roundup');
     case 'finally': return c.afterGrave ? silence() : bed('world-now/finally', 'finally');
@@ -55,7 +61,7 @@ const TECH = (m, o, c) => {
     case 'headlines':
     case 'coldOpen':
     case 'greeting': return bed(song, 'headlines');
-    case 'story': return silence(0.8); // story links have no bed
+    case 'story': return softStory(o, c) ? bed(song, 'story') : silence(0.8); // story links have no bed (bible)
     case 'chat': return bed(song, 'chat');
     case 'number': return bed(song, 'number');
     case 'numberSting': return sting('techNumber', { stopBed: false });
@@ -72,7 +78,9 @@ const COSMOS = (m, o, c) => {
   if (c.afterGrave && SEGMENT_MOMENTS.has(m)) return silence();
   switch (m) {
     case 'coldOpen': return bed('cosmos', 'coldOpen');
-    case 'story': return isGrave(o) ? silence(1.5) : bed('cosmos', 'story'); // hidden until a picture shot
+    case 'story':
+      if (isGrave(o)) return silence(1.5);
+      return bed('cosmos', softStory(o, c) ? 'storySoft' : 'story'); // bible: hidden until a picture shot
     case 'finally': return bed('cosmos/finally', 'story');
     case 'shot': return { kind: 'shot', show: o.kind === 'picture' || o.kind === 'map' || o.kind === 'full', expected: o.expected };
     case 'number': return silence(1.5); // the Reading: silence, its 1.5 s pause included
@@ -87,7 +95,7 @@ const MONEY = (m, o, c) => {
     case 'openTail':
     case 'headlines': return bed('money-minute/intro', 'intro');
     case 'introEnd': return silence(0.5, { atBar: true }); // tails out on the bar line, gone before story 1
-    case 'story': return c.bedUnderStories === 'drone' && !isGrave(o) ? bed('money-minute/drone', 'story') : silence(0.6);
+    case 'story': return (c.bedUnderStories === 'drone' || softStory(o, c)) && !isGrave(o) ? bed('money-minute/drone', 'story') : silence(0.6);
     case 'numberSting': return sting('moneyNumber', { stopBed: true });
     case 'number': {
       const tape = ['up', 'down', 'mixed', 'neutral'].includes(o.tape) ? o.tape : 'neutral';
@@ -138,6 +146,7 @@ function channel(m, o, c) {
     }
     case 'upNext': return c.sharedStings ? silence(0.15) : sting('upNext', { stopBed: true, programme: o.next, seconds: o.seconds });
     case 'standby': return bed('channel/standby', 'standby');
+    case 'replay': return sting('replay', { stopBed: true, programme: POLICY[o.programId] ? o.programId : 'channel' });
     case 'cut': return { kind: 'cut' };
     case 'ad':
     case 'silence': return silence(0.15); // 0.3 s of true silence at every ad boundary
@@ -184,7 +193,7 @@ export const CUE_SHEET = [
   ['COSMOS DESK', 'and finally pictures', 'the light colour of the bed, 4 dB quieter'],
   ['COSMOS DESK', 'greeting, singles, chats, the Reading, close', 'silence; end card = the network outro cue'],
   ['MONEY MINUTE', 'intro', 'vamp Fmaj9 | Dm9 | Bbmaj9 | C6sus at 114 BPM: pad, then bass, then Rhodes on the "and" of 2 and 4; out on the bar line at the teaser\'s last word'],
-  ['MONEY MINUTE', 'stories', 'silence (owner switch: a sustained pad low-passed at 800 Hz, 28 LU under the voice)'],
+  ['MONEY MINUTE', 'stories', 'silence (owner switch soft/drone: a sustained pad low-passed at 800 Hz, 28 LU under the voice)'],
   ['MONEY MINUTE', 'into the number', 'the signature at double speed + the 6th (0.8 s), inside the 1.2 s gap'],
   ['MONEY MINUTE', 'number of the day', 'tape bed: up F Ionian | down D Aeolian | mixed G Dorian | neutral F-C-D drone'],
   ['MONEY MINUTE', 'sign-off + end card', 'crossfade on a bar line to the vamp, a signature fragment after the last word, a button on the end card\'s first downbeat'],
@@ -192,11 +201,13 @@ export const CUE_SHEET = [
   ['NEWS IN 60', 'each item cut', 'the bed\'s own tick, once, 4 dB up: the only sound between items'],
   ['NEWS IN 60', 'grave / breaking item', 'tick, tock and bass drop out on the cut; the pad stays alone'],
   ['NEWS IN 60', 'sign-off', 'one Gadd9 bell chord on the last word, then the bed bows out'],
+  ['ALL (owner switch soft)', 'light / neutral stories', 'WORLD NOW 76 BPM pad + triangle + slow Rhodes (D); TECH pad + half-time triangle on Am9/D9; COSMOS pad + sub on every shot; MONEY the 800 Hz drone; all below 1.3 kHz, >= 24 LU under the voice'],
   ['ALL', 'grave story', 'silence (opt-in: a near-inaudible low pad), and no bed in the segment after it'],
   ['CHANNEL', 'lead-in WORLD NOW / NEWS IN 60', 'countdown 10.5 s: a quiet bell tick every second, triangle eighths at 120 BPM, a pad minor -> major at 0:00 (sombre: pad only)'],
   ['CHANNEL', 'lead-in TECH / COSMOS / MONEY', 'ident film: the signature once on pulse-12 with echo over pad + triangle pedal, last note on the alignment (bar 4); hold loops pad + pluck; 84-92 BPM night, 96-104 day'],
   ['CHANNEL', 'bumper cards', '84 BPM loop of triangle bass and swung pluck (grave mode: the sombre ident, pad only)'],
   ['CHANNEL', 'ad boundaries', '0.3 s of true silence; ads bring their own music'],
+  ['CHANNEL', 'replay plate', 'the signature backwards (high 5 - 2 - 1 - low 5, then the 2 left open) on a soft Rhodes through a long tape echo, over IV(add9); 2.6 s, before the open'],
   ['CHANNEL', 'holding slide', 'a held Dmaj9 over a triangle pedal'],
   ['CHANNEL', 'standby', 'the cosy lo-fi home bed, endless and evolving'],
 ];

@@ -39,8 +39,8 @@
       // time with the jingle and the voice-over to check the sync by ear.
       import grandbuffer from '../js/ads/grandbuffer.js';
       import hiresgym, { LAB as HG_LAB } from '../js/ads/hiresgym.js';
-      import { drawText, measureText } from '../js/font.js';
-      import { P } from '../js/palette.js';
+      import { drawAdTag } from '../js/graphics/bug.js';
+      import { buildTimeline } from '../js/audio/visemes.js';
       import { renderTune } from '../js/audio/synth.js';
 
       const ADS = [grandbuffer, hiresgym];
@@ -59,10 +59,16 @@
       let tuneHandle = null;
       let last = 0;
 
-      // Rough speech length (en voices speak ~14 characters per second, each
-      // "..." adds a pause) so the ad knows which line is being spoken, like
-      // the director's isSpeaking('ad').
-      const lineSpan = (line) => (line.text.length / 14 + (line.text.split('...').length - 1) * 0.35) / (ad.voice?.rate || 1);
+      // Speech length of a line from the channel's own speech timeline (the
+      // one the mute/blips voice follows), at the ad's voice rate, so the lab
+      // knows which line is being spoken like the director's isSpeaking('ad').
+      const SPANS = new Map();
+      function spanOf(a, line) {
+        const key = `${a.id}|${line.text}`;
+        if (!SPANS.has(key)) SPANS.set(key, buildTimeline(line.text, { lang: 'en', rate: a.voice?.rate || 1 }).total / 1000);
+        return SPANS.get(key);
+      }
+      const lineSpan = (line) => spanOf(ad, line);
       function infoAt(time) {
         let line = -1;
         let speaking = false;
@@ -76,11 +82,10 @@
         return { line, speaking, duration: ad.duration };
       }
 
-      // Same tag studio.js drawOverlays() puts over every ad.
+      // The same tag the graphics package puts over every ad (micro font,
+      // 9 px, top left), shown fully drawn.
       function onAirTag() {
-        ctx.fillStyle = P.black;
-        ctx.fillRect(13, 8, measureText('ADVERTISEMENT') + 8, 11);
-        drawText(ctx, 'ADVERTISEMENT', 17, 10, { color: P.fog });
+        drawAdTag(ctx, 10, 0);
       }
 
       function render(time, opts = {}) {
@@ -201,7 +206,7 @@
        */
       async function renderAudio({ ad: id = ad.id, seconds = null, duck = true } = {}) {
         const a = ADS.find((x) => x.id === id) || ad;
-        const spans = duck ? a.script.map((l) => [l.at, l.at + (l.text.length / 14 + (l.text.split('...').length - 1) * 0.35) / (a.voice?.rate || 1)]) : [];
+        const spans = duck ? a.script.map((l) => [l.at, l.at + spanOf(a, l)]) : [];
         const out = await renderTune(a.tune, { seconds: seconds ?? a.duration + 1, loop: true, volume: 0.45, duck: spans });
         if (!out) throw new Error('no OfflineAudioContext');
         const b = out.buffer;

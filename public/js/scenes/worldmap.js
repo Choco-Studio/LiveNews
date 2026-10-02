@@ -32,7 +32,7 @@
 // view holds still the finished frame is reused as is.
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
-import { clamp, seg, easeOutQuint, easeInOut, easeInOutSine, ringPts, memo, nowMs, ellipsis, wrapLines, textW } from '../gfx/index.js';
+import { clamp, seg, easeOutQuint, easeInOut, easeInOutSine, ringPts, memo, nowMs, ellipsis, wrapLines, textW, asciiText } from '../gfx/index.js';
 import { mulberry32 } from '../util.js';
 import { LAND, BORDERS } from './worlddata.js';
 
@@ -49,7 +49,7 @@ const TIMINGS = {
 };
 const TIMING_CACHE = new Map(); // programme -> [q] -> frozen timeline (no key strings per frame)
 function timingFor(programId, duration) {
-  const id = programId in TIMINGS ? programId : 'default';
+  const id = typeof programId === 'string' && Object.hasOwn(TIMINGS, programId) ? programId : 'default';
   const base = TIMINGS[id];
   // a short shot compresses everything so the label is up for at least ~0.9 s
   const q = Number.isFinite(duration) && duration > 0 ? clamp(Math.round(duration * 10), 15, 30) : 30;
@@ -102,7 +102,10 @@ for (let t = 0; t < 16; t++) {
     PAL[128 | (v << 4) | t] = pack(P[night]);
   }
 }
-const RGB = Object.fromEntries(['red', 'darkRed', 'maroon', 'pink', 'white', 'black', 'yellow', 'orange', 'cream', 'silver'].map((k) => [k, pack(P[k])]));
+// Every colour the composer plots by name. Frozen and complete: a missing entry would plot
+// `undefined` (a transparent pixel) into the composed frame, and the caller never clears under
+// it. test/worldmap.test.js checks that every RGB.<name> used in this file exists.
+const RGB = Object.freeze(Object.fromEntries(['red', 'darkRed', 'maroon', 'pink', 'white', 'black', 'yellow', 'orange', 'cream', 'silver', 'fog', 'steel', 'slate', 'ink'].map((k) => [k, pack(P[k])])));
 
 // Bayer 4x4 thresholds (0..1 and 0..255)
 const B4 = Float32Array.from([0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5], (v) => (v + 0.5) / 16);
@@ -295,7 +298,10 @@ function terrainValue(lon, lat) {
   }
   v += (fbm(lon * 0.22, lat * 0.22, 4) - 0.47) * 0.4;
   v = v < 0 ? 0 : v > 0.79 ? 0.79 : v;
-  return Math.max(v, ice > 1 ? 1 : ice);
+  const out = Math.max(v, ice > 1 ? 1 : ice);
+  // Antarctica is shaded one step down (fog, not silver ice): at world scale it is a full-width
+  // strip and must never be the brightest thing in the frame
+  return lat < -62 ? Math.min(out, 0.8) : out;
 }
 
 
@@ -515,6 +521,26 @@ export function landMip(level) {
 function ensureInit() {
   while (stepInit());
 }
+const clockMs = typeof performance !== 'undefined' && performance.now ? () => performance.now() : () => Date.now();
+/**
+ * Runs the init stages for at most ~`budget` ms (whole slices) and says whether the data is ready.
+ * A map drawn in the first second after load therefore never blocks a frame for the whole init:
+ * it shows the plain sea until the background slices are done.
+ */
+function initWithin(budget) {
+  if (taskIdx >= TASKS.length) return true;
+  const end = clockMs() + budget;
+  while (stepInit()) if (clockMs() > end) break;
+  return taskIdx >= TASKS.length;
+}
+/** The static night-light clusters { lon, lat, kind, n } once the map data has loaded (else null). */
+export function cityLights() {
+  return GEO.lights;
+}
+/** Finishes the map's data now (tests, tools); the channel lets it load in background slices. */
+export function warmMapData() {
+  ensureInit();
+}
 // After the data is ready, run a few throw-away frames (also in background slices) so the render
 // loops are JIT-optimised and the full-screen / mini buffers exist before the first real map shot.
 let warmN = 0;
@@ -649,7 +675,9 @@ function islandZoom(lat, lon) {
     }
   }
   const area = count * (360 / m.w) * (180 / m.h) * Math.cos(lat * DEG); // square degrees (ground)
-  return area < 0.4 ? 2.8 : area < 1.5 ? 2 : area < 4 ? 1.5 : 1;
+  // a speck (Oahu, Viti Levu's coast) stops at 2.2x so the island chain or the nearest land and
+  // the ocean's name stay in frame; larger islands get closer than the regional view
+  return area < 0.4 ? 2.2 : area < 1.5 ? 2 : area < 4 ? 1.5 : 1;
 }
 
 function computeView(out, rt, mini, t, dt, lat, lon, G, T, from) {
@@ -687,13 +715,20 @@ function computeView(out, rt, mini, t, dt, lat, lon, G, T, from) {
     const f = clamp(dt / T.fly, 0, 1);
     const ez = easeInOut(clamp((f - 0.1) / 0.9, 0, 1)); // zoom starts a beat after the pan
     const ep = easeInOutSine(clamp(f / 0.92, 0, 1));
-    s = s0 * Math.pow(G.zoom, ez);
+    // the fly starts on the whole world scaled to fill the frame's height (never a band beyond
+    // the poles: the first frames used to show slate letterbox rows and a bright Antarctic strip)
+    const sStart = Math.max(s0, (h + 2) / 180);
+    const sEnd = s0 * G.zoom;
+    s = sStart * Math.pow(Math.max(1, sEnd / sStart), ez);
     kx = 1 + (G.kx - 1) * ez;
-    const ax0 = w / 2 + START_LON_OFFSET * s0, ay0 = h / 2 - G.flat * s0;
+    const ax0 = w / 2 + START_LON_OFFSET * sStart, ay0 = h / 2 - G.flat * sStart;
     const arc = (mini ? 6 : 16) * Math.sin(Math.PI * ep);
     const ax = ax0 + (pinX - ax0) * ep, ay = ay0 + (pinY - ay0) * ep - arc;
     clon = G.flon - (ax - w / 2) / (s * kx);
     clat = G.flat + (ay - h / 2) / s;
+    // keep the frame inside the poles all the way in (the goal's own row already is)
+    const lim = 90 - (h / 2 + 1) / s;
+    clat = lim > 0 ? clamp(clat, -lim, lim) : 0;
   }
   const sx = s * kx;
   clon = Math.round(clon * sx) / sx;
@@ -737,19 +772,30 @@ function makeState(w, h) {
     ty0: new Int32Array(h), ty1: new Int32Array(h), tfy: new Float32Array(h),
     rowLat: new Float64Array(h), rowSpace: new Uint8Array(h), grow: new Uint8Array(h), rowA: new Float32Array(h), rowB: new Float32Array(h),
     near: null, queue: null, // flood-fill scratch for the label keep-out (allocated on first label)
+    pinXY: new Int16Array(16), pinN: 0, // the extra pins on screen (label placement avoids them)
     lastClon: NaN, lastClat: NaN, lastS: NaN, lastKx: NaN, phase: NaN, minute: NaN, acc: null, labelFor: null, context: null,
     view: { clon: 0, clat: 0, s: 1, kx: 1, ax: -1, ay: -1, fx: -1, fy: -1, idle: true },
     goal: { sig: NaN, n: -1, flat: 0, flon: 0, zoom: 1, fy: 0, kx: 1 },
-    trace: { lat: NaN, lon: NaN, t: -1e9 }, // the last target drawn (follow mode)
+    trace: { lat: NaN, lon: NaN, t: -1e9, dt: 0 }, // the last target drawn and its shot clock (follow mode)
     follow: { lat: NaN, lon: NaN, has: false, from: { lat: 0, lon: 0 } },
     fromBuf: { lat: 0, lon: 0 },
   };
 }
 
+const MAX_SIZE = 1024;
+const MAX_INSTANCES = 6; // full screen, the wall's sizes, a lab or two; the oldest size is dropped
+const finite = (v, d) => {
+  const n = Number(v);
+  return Number.isFinite(n) && v !== null && v !== '' ? n : d;
+};
+
 function getInstance(w, h) {
   const key = w * 4096 + h;
   let rt = INSTANCES.get(key);
-  if (!rt) INSTANCES.set(key, (rt = makeState(w, h)));
+  if (!rt) {
+    if (INSTANCES.size >= MAX_INSTANCES) INSTANCES.delete(INSTANCES.keys().next().value);
+    INSTANCES.set(key, (rt = makeState(w, h)));
+  }
   if (!rt.canvas) {
     rt.canvas = document.createElement('canvas');
     rt.canvas.width = w;
@@ -893,11 +939,16 @@ function renderBase(rt, view) {
     }
   }
 
-  // country borders (vector polylines -> 1 px lines), only once zoomed in
-  if (view.s > 1.7 && GEO.lines) drawBorders(rt, view, clamp((view.s - 1.7) / 1.1, 0, 1));
+  // country borders (vector polylines -> 1 px lines), only once zoomed in. They fade in over a
+  // wide band of zoom in three Bayer steps (a third, two thirds, all of the pixels), so the fly-in
+  // never snaps from dotted to solid in one frame.
+  const bf = fadeSteps((view.s - 1.6) / 1.8);
+  if (bf > 0 && GEO.lines) drawBorders(rt, view, bf);
 
-  // graticule, on the ocean only (minor lines dotted)
-  const step = view.s >= 2.2 ? 10 : 30;
+  // one graticule on the ocean: the 30-degree lines always, the 10-degree lines (dotted) fading in
+  // with the zoom by the same three Bayer steps (never two grids on top of each other)
+  const minor = fadeSteps((view.s - 2.0) / 1.4);
+  const step = minor > 0 ? 10 : 30;
   for (let x = 0; x < w; x++) {
     const half = 0.5 / sx;
     const a = Math.floor((colLon[x] - half) / step), b = Math.floor((colLon[x] + half) / step);
@@ -908,16 +959,22 @@ function renderBase(rt, view) {
     const a = Math.floor((rowLat[y] - half) / step), b = Math.floor((rowLat[y] + half) / step);
     grow[y] = a === b ? 0 : (b * step) % 30 === 0 ? 2 : 1;
   }
+  const minorThr = minor * 16;
   for (let y = 0; y < h; y++) {
     const gy = grow[y], row = y * w;
     for (let x = 0; x < w; x++) {
       const g = gcol[x] > gy ? gcol[x] : gy;
       if (!g) continue;
-      if (g === 1 && (x + y) & 1) continue;
+      if (g === 1 && ((x + y) & 1 || (minor < 1 && B4[((y & 3) << 2) | (x & 3)] * 16 >= minorThr))) continue;
       const i = row + x, b = base[i];
       if (b === T_DEEP || b === T_OCEAN) base[i] = b | (g << 4);
     }
   }
+}
+
+/** A 0..1 ramp quantised to three steps (1/3, 2/3, 1) for Bayer fades of thin line work. */
+function fadeSteps(v) {
+  return v <= 0 ? 0 : v >= 1 ? 1 : Math.ceil(v * 3 - 1e-6) / 3;
 }
 
 function drawBorders(rt, view, fade) {
@@ -1061,16 +1118,41 @@ const COUNTRIES = [
   ['URUGUAY', -32.6, -55.8],
 ];
 
+// Oceans and seas [name, lat, lon]: an island or coastal locator also names the water around it
+// (fog micro type on the sea), so a speck in the Pacific is still located. Big oceans have
+// several label points; the nearest one that sits on open water is used.
+const SEAS = [
+  ['PACIFIC OCEAN', 25, -150], ['PACIFIC OCEAN', 12, -165], ['PACIFIC OCEAN', -12, -150], ['PACIFIC OCEAN', -25, -170],
+  ['PACIFIC OCEAN', 30, 165], ['PACIFIC OCEAN', -10, 170], ['PACIFIC OCEAN', 40, -135], ['PACIFIC OCEAN', -30, -95], ['PACIFIC OCEAN', 5, -105],
+  ['ATLANTIC OCEAN', 35, -45], ['ATLANTIC OCEAN', 15, -38], ['ATLANTIC OCEAN', -15, -20], ['ATLANTIC OCEAN', -35, -25], ['ATLANTIC OCEAN', 50, -30],
+  ['ATLANTIC OCEAN', 42, -15], ['ATLANTIC OCEAN', 28, -65],
+  ['INDIAN OCEAN', -15, 75], ['INDIAN OCEAN', -30, 95], ['INDIAN OCEAN', -5, 60], ['INDIAN OCEAN', -25, 60], ['INDIAN OCEAN', -6, 46],
+  ['INDIAN OCEAN', 3, 53], ['INDIAN OCEAN', -10, 100], ['GULF OF ADEN', 12.6, 48.5],
+  ['ARCTIC OCEAN', 82, 0], ['SOUTHERN OCEAN', -62, 60], ['SOUTHERN OCEAN', -62, -120], ['SOUTHERN OCEAN', -60, 170],
+  ['MEDITERRANEAN SEA', 34.5, 18], ['MEDITERRANEAN SEA', 39, 5], ['AEGEAN SEA', 39, 25], ['BLACK SEA', 43.3, 34], ['RED SEA', 20, 38.5],
+  ['NORTH SEA', 56, 3], ['BALTIC SEA', 57, 19.5], ['NORWEGIAN SEA', 68, 3], ['BAY OF BISCAY', 45, -5], ['CARIBBEAN SEA', 15, -75],
+  ['GULF OF MEXICO', 25, -90], ['ARABIAN SEA', 15, 64], ['BAY OF BENGAL', 15, 88], ['SOUTH CHINA SEA', 13, 114],
+  ['EAST CHINA SEA', 29, 125], ['SEA OF JAPAN', 40, 135], ['PHILIPPINE SEA', 18, 132], ['CORAL SEA', -16, 155], ['TASMAN SEA', -38, 160],
+  ['BERING SEA', 58, -178], ['GULF OF ALASKA', 57, -145], ['HUDSON BAY', 60, -85], ['LABRADOR SEA', 58, -55], ['GULF OF GUINEA', 2, 3],
+  ['PERSIAN GULF', 27, 51.5], ['CASPIAN SEA', 42, 50.5], ['IONIAN SEA', 38, 18.5], ['TYRRHENIAN SEA', 40, 12], ['CELTIC SEA', 50, -8],
+  ['MOZAMBIQUE CHANNEL', -18, 41], ['JAVA SEA', -5, 111], ['ARAFURA SEA', -10, 135], ['SEA OF OKHOTSK', 53, 148], ['BARENTS SEA', 74, 40],
+  ['GREENLAND SEA', 76, -5], ['DAVIS STRAIT', 66, -57],
+];
+
 // ---------------------------------------------------------------------------------------------
 // Frame
 // ---------------------------------------------------------------------------------------------
 const ACCENTS = new Set([P.red, P.cyan, P.magenta, P.green, P.yellow]);
 
-/** Follow mode: a new target that starts right after another map frame pans from the old pin. */
+/**
+ * Follow mode: a new target that starts right after another map frame pans from the old pin. The
+ * decision is taken once per SHOT (a new target, or the shot clock restarting), so a place shown
+ * again after a gap flies in from the world instead of reusing an old pan.
+ */
 function followFrom(rt, t, dt, lat, lon) {
   const F = rt.follow;
-  if (F.lat !== lat || F.lon !== lon) {
-    const tr = rt.trace;
+  const tr = rt.trace;
+  if (F.lat !== lat || F.lon !== lon || dt < tr.dt - 1e-6 || t < tr.t) {
     F.lat = lat;
     F.lon = lon;
     F.has = dt < 0.3 && t - tr.t < 0.6 && t >= tr.t && (tr.lat !== lat || tr.lon !== lon) && Number.isFinite(tr.lat);
@@ -1084,12 +1166,17 @@ function followFrom(rt, t, dt, lat, lon) {
 
 export function drawWorldMap(ctx, t, dt, opts = {}) {
   const o = opts || {};
-  const place = o.place ? String(o.place) : '';
+  const place = o.place ? asciiText(o.place) : ''; // the bitmap font has no accents: CÔTE -> COTE
   const mini = !!o.mini;
   const label = o.label !== false;
-  ensureInit();
-  const w = Math.max(8, Math.round(Number(o.w) || 384)), h = Math.max(8, Math.round(Number(o.h) || 216));
-  const x = Math.round(Number(o.x) || 0), y = Math.round(Number(o.y) || 0);
+  // sizes are validated (a derived Infinity or a huge size must never allocate per frame)
+  const w = clamp(Math.round(finite(o.w, 384) || 384), 8, MAX_SIZE), h = clamp(Math.round(finite(o.h, 216) || 216), 8, MAX_SIZE);
+  const x = Math.round(finite(o.x, 0)), y = Math.round(finite(o.y, 0));
+  if (!initWithin(6)) {
+    ctx.fillStyle = P.navy; // the map's own sea, until the data is ready (only right after load)
+    ctx.fillRect(x, y, w, h);
+    return;
+  }
   t = Number.isFinite(t) ? t : 0;
   dt = Number.isFinite(dt) ? Math.max(0, dt) : 0;
   let lat = o.lat === null || o.lat === undefined || o.lat === '' ? NaN : Number(o.lat);
@@ -1113,6 +1200,7 @@ export function drawWorldMap(ctx, t, dt, opts = {}) {
     rt.trace.lat = lat;
     rt.trace.lon = lon;
     rt.trace.t = t;
+    rt.trace.dt = dt;
   }
   const G = hasTarget ? goalFor(rt, mini, lat, lon, pins) : null;
   const view = computeView(rt.view, rt, mini, t, dt, hasTarget ? lat : null, hasTarget ? lon : null, G, T, from);
@@ -1130,6 +1218,19 @@ export function drawWorldMap(ctx, t, dt, opts = {}) {
   const minute = view.idle ? Math.floor(ms / 60000) : -1;
   const cx = Math.round(view.ax), cy = Math.round(view.ay);
   const sig = G ? G.sig : 0;
+  rt.pinN = 0;
+  if (pins) {
+    const psx = view.s * view.kx;
+    for (let i = 0; i < pins.length && rt.pinN < 8; i++) {
+      const pl = Number(pins[i]?.lat), pn = Number(pins[i]?.lon);
+      if (!Number.isFinite(pl) || !Number.isFinite(pn)) continue;
+      let dl = pn - view.clon;
+      dl -= Math.round(dl / 360) * 360;
+      rt.pinXY[2 * rt.pinN] = Math.round(w / 2 + dl * psx);
+      rt.pinXY[2 * rt.pinN + 1] = Math.round(h / 2 + (view.clat - pl) * view.s);
+      rt.pinN++;
+    }
+  }
   if (viewChanged || phase !== rt.phase || minute !== rt.minute || rt.acc !== acc || rt.sig !== sig) {
     rt.phase = phase;
     rt.minute = minute;
@@ -1159,7 +1260,7 @@ export function drawWorldMap(ctx, t, dt, opts = {}) {
   }
   if (!label) return;
   const box = drawLabel(rt, ctx, x, y, cx, cy, place, lat, lon, tm - T.label, acc);
-  if (box && tm >= T.context) drawContext(rt, ctx, x, y, view, cx, cy, box, place, tm - T.context, pins);
+  if (box && tm >= T.context) drawContext(rt, ctx, x, y, view, cx, cy, box, place, tm - T.context, pins, lat, lon);
 }
 
 /** Palette lookup of the base layer; the idle view adds the day/night terminator (Bayer 4x4) and city lights. */
@@ -1318,42 +1419,87 @@ function coverage(rt, bx, by, bw, bh, out) {
 const COV = { near: 0, land: 0 };
 
 /**
- * Best plate position for a marker at (cx, cy): right or left of it, level with it or raised /
- * lowered, kept in y 26..134 (the top row and the captions own the rest). Returns { x, y, right, near }.
+ * Best plate position for a marker at (cx, cy): beside it (right or left, level with it or raised /
+ * lowered) or straight above / below it, kept in y 26..134 (the top row and the captions own the
+ * rest). Cost: the target's own land under the plate (far above anything), any other land (per
+ * pixel, so a plate over open sea wins on a continent too), other pins near the plate or its leader
+ * (a label must never read as another marker's), then distance. `others` = flat [x, y, ...] of
+ * the other markers on screen. Returns { x, y, right, vert, near }.
  */
-export function placeLabel(rt, cx, cy, bw, bh, out = { x: 0, y: 0, right: true, near: 0 }) {
+export function placeLabel(rt, cx, cy, bw, bh, out = { x: 0, y: 0, right: true, vert: 0, near: 0 }, others = null, nOthers = 0) {
   const { w } = rt;
   nearLand(rt, cx, cy);
   let bestCost = Infinity;
   const lift = (bh >> 1) + 10;
-  const offsets = [0, -lift, lift, -2 * lift, 2 * lift];
-  for (let side = 0; side < 2; side++) {
-    const right = side === 0;
-    for (let k = 0; k < offsets.length; k++) {
-      let bx = right ? cx + 10 : cx - 10 - bw;
-      if (bx < 13 || bx + bw > w - 13) continue;
-      const by = clamp(Math.round(cy - bh / 2 + offsets[k]), 26, 134 - bh);
-      // never over the marker or its ring
-      if (bx < cx + 8 && bx + bw > cx - 8 && by < cy + 8 && by + bh > cy - 8) continue;
-      coverage(rt, bx, by, bw, bh, COV);
-      const cost = COV.near * 40 + COV.land * 30 + Math.abs(by - (cy - bh / 2)) * 0.12 + (right ? 0 : 1.5);
-      if (cost < bestCost) {
-        bestCost = cost;
-        out.x = bx;
-        out.y = by;
-        out.right = right;
-        out.near = COV.near;
-      }
+  const area = bw * bh;
+  for (let c = 0; c < CANDIDATES; c++) {
+    let bx, by, right = true, vert = 0;
+    if (c < 10) {
+      // beside the marker: 5 heights x 2 sides
+      right = c < 5;
+      const k = c % 5;
+      bx = right ? cx + 10 : cx - 10 - bw;
+      by = Math.round(cy - bh / 2 + (k === 0 ? 0 : k === 1 ? -lift : k === 2 ? lift : k === 3 ? -2 * lift : 2 * lift));
+    } else {
+      // straight below / above, the marker over the plate's left or right end
+      const k = c - 10;
+      vert = k < 2 ? 1 : -1;
+      right = (k & 1) === 0;
+      bx = right ? cx - 12 : cx + 12 - bw;
+      by = vert > 0 ? cy + 12 : cy - 12 - bh;
+    }
+    if (bx < 13 || bx + bw > w - 13) continue;
+    const byc = clamp(by, 26, 134 - bh);
+    if (vert && byc !== by) continue; // a stacked plate that had to move would sit on the marker
+    by = byc;
+    // never over the marker or its ring
+    if (bx < cx + 8 && bx + bw > cx - 8 && by < cy + 8 && by + bh > cy - 8) continue;
+    coverage(rt, bx, by, bw, bh, COV);
+    let cost = COV.near * 400 + COV.land * area * 0.6 + Math.abs(by - (cy - bh / 2)) * 0.12 + (right ? 0 : 1.5) + (vert ? 6 : 0);
+    if (nOthers) cost += pinConflict(others, nOthers, cx, cy, bx, by, bw, bh, right, vert) * 1e7; // decisive: a label must name its own marker
+    if (cost < bestCost) {
+      bestCost = cost;
+      out.x = bx;
+      out.y = by;
+      out.right = right;
+      out.vert = vert;
+      out.near = COV.near;
     }
   }
   if (bestCost === Infinity) {
     // nothing fits beside the marker: the side with more room, level with it
     out.right = cx < w / 2;
+    out.vert = 0;
     out.x = clamp(out.right ? cx + 10 : cx - 10 - bw, 13, w - 13 - bw);
     out.y = clamp(Math.round(cy - bh / 2), 26, 134 - bh);
     out.near = 0;
   }
   return out;
+}
+const CANDIDATES = 14;
+
+/** How many other markers sit within 6 px of a plate or of the leader that would join it to its marker. */
+function pinConflict(others, n, cx, cy, bx, by, bw, bh, right, vert) {
+  let hits = 0;
+  const ly = vert ? cy : clamp(cy, by + 3, by + bh - 4);
+  const lx = right ? bx : bx + bw;
+  for (let i = 0; i < n; i++) {
+    const px = others[2 * i], py = others[2 * i + 1];
+    // the pin and its micro tag (drawn to its right)
+    if (px + 70 > bx && px - 6 < bx + bw && py > by - 6 && py < by + bh + 6) { hits++; continue; }
+    if (vert) {
+      // the vertical leader from the marker to the plate's edge
+      const y0 = Math.min(cy, vert > 0 ? by : by + bh), y1 = Math.max(cy, vert > 0 ? by : by + bh);
+      if (Math.abs(px - cx) < 6 && py > y0 - 6 && py < y1 + 6) hits++;
+    } else {
+      // the elbow: down/up from the marker to the plate's row, then across to the plate
+      const y0 = Math.min(cy, ly), y1 = Math.max(cy, ly);
+      if (Math.abs(px - cx) < 6 && py > y0 - 6 && py < y1 + 6) { hits++; continue; }
+      const x0 = Math.min(cx, lx), x1 = Math.max(cx, lx);
+      if (Math.abs(py - ly) < 6 && px > x0 - 6 && px < x1 + 6) hits++;
+    }
+  }
+  return hits;
 }
 
 /**
@@ -1364,20 +1510,25 @@ export function placeLabel(rt, cx, cy, bw, bh, out = { x: 0, y: 0, right: true, 
 function drawLabel(rt, ctx, ox, oy, cx, cy, place, lat, lon, tl, acc) {
   if (tl < 0) return null;
   let L = rt.labelFor;
-  if (!L || L.place !== place || L.lat !== lat || L.lon !== lon || L.cx !== cx || L.cy !== cy) {
-    L = { ...labelLayout(place, lat, lon), place, lat, lon, cx, cy, box: { x: 0, y: 0, w: 0, h: 0 }, pos: null };
-    L.pos = placeLabel(rt, cx, cy, L.bw, L.bh);
+  if (!L || L.place !== place || L.lat !== lat || L.lon !== lon || L.cx !== cx || L.cy !== cy || L.sig !== rt.sig) {
+    L = { ...labelLayout(place, lat, lon), place, lat, lon, cx, cy, sig: rt.sig, box: { x: 0, y: 0, w: 0, h: 0 }, pos: null };
+    L.pos = placeLabel(rt, cx, cy, L.bw, L.bh, undefined, rt.pinXY, rt.pinN);
     rt.labelFor = L;
   }
-  const { x: bx, y: by, right } = L.pos;
+  const { x: bx, y: by, right, vert } = L.pos;
   const e = easeOutQuint(clamp(tl / 0.36, 0, 1));
-  // leader: level with the marker when the plate is beside it, else an elbow up or down to it
+  // leader: level with the marker when the plate is beside it, else an elbow up or down to it;
+  // a plate straight above or below gets a vertical leader to its edge
   const ly = clamp(cy, by + 3, by + L.bh - 4);
   const near = right ? bx : bx + L.bw;
   const start = right ? cx + 4 : cx - 4;
   const lead = Math.min(1, e * 3);
   ctx.fillStyle = P.silver;
-  if (ly === cy) {
+  if (vert) {
+    const y0 = vert > 0 ? cy + 4 : by + L.bh;
+    const len = Math.round((vert > 0 ? by - cy - 4 : cy - 4 - (by + L.bh)) * lead);
+    if (len > 0) ctx.fillRect(ox + cx, oy + (vert > 0 ? y0 : cy - 3 - len), 1, len);
+  } else if (ly === cy) {
     const len = Math.round(Math.abs(near - start) * lead);
     if (len > 0) ctx.fillRect(ox + (right ? start : start - len + 1), oy + cy, len, 1);
   } else {
@@ -1436,7 +1587,7 @@ function drawPinTags(ctx, ox, oy, rt, view, pins, tm) {
     const tp = tm - 0.2 - i * 0.1;
     if (tp < 0) continue;
     const pl = Number(pins[i]?.lat), pn = Number(pins[i]?.lon);
-    const name = pins[i]?.place ? String(pins[i].place) : '';
+    const name = pins[i]?.place ? asciiText(pins[i].place) : '';
     if (!name || !Number.isFinite(pl) || !Number.isFinite(pn)) continue;
     let dl = pn - view.clon;
     dl -= Math.round(dl / 360) * 360;
@@ -1463,10 +1614,57 @@ function drawPinTags(ctx, ox, oy, rt, view, pins, tm) {
  * Up to five neighbouring country names in micro type, placed where they do not collide with
  * the marker, the label, the extra pins or each other; computed once the camera has settled.
  */
-function contextLabels(rtU32, w, h, view, cx, cy, box, place, pins) {
+/**
+ * The water around the target named once (fog micro type): the nearest ocean or sea label point to
+ * the TARGET (within ~30 degrees), placed on open water as close as possible to where that point
+ * falls on screen, clear of the marker and the place label. Null when nothing fits.
+ */
+const SEA_GRID = new Int32Array(2048);
+function seaLabel(rt, view, cx, cy, box, lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const w = rt.w, sx = view.s * view.kx, sy = view.s;
+  let pick = null, bd = 30;
+  for (const S of SEAS) {
+    let dl = S[2] - lon;
+    dl -= Math.round(dl / 360) * 360;
+    const d = Math.hypot(dl * Math.cos(((lat + S[1]) / 2) * DEG), S[1] - lat);
+    if (d < bd) { bd = d; pick = S; }
+  }
+  if (!pick) return null;
+  let dl = pick[2] - view.clon;
+  dl -= Math.round(dl / 360) * 360;
+  const tx = dl * sx + w / 2, ty = (view.clat - pick[1]) * sy + rt.h / 2;
+  const tw = measureText(pick[0], 1, 'micro') + 3;
+  // candidate spots on a coarse grid, nearest to the sea's own point first
+  let n = 0;
+  for (let y = 30; y + 8 <= 132 && n < 1024; y += 6) {
+    for (let x = 16; x + tw <= w - 16 && n < 1024; x += 8) {
+      SEA_GRID[2 * n] = x;
+      SEA_GRID[2 * n + 1] = y;
+      n++;
+    }
+  }
+  const order = Array.from({ length: n }, (_, i) => i);
+  const cost = (i) => Math.hypot(SEA_GRID[2 * i] + tw / 2 - tx, SEA_GRID[2 * i + 1] + 4 - ty);
+  order.sort((a, b) => cost(a) - cost(b));
+  for (const i of order) {
+    if (cost(i) > 150) break; // too far from that water to name it
+    const r = { x: SEA_GRID[2 * i], y: SEA_GRID[2 * i + 1], w: tw, h: 8, name: pick[0], d: 0, dark: false, sea: true };
+    if (Math.hypot(r.x + tw / 2 - cx, r.y + 4 - cy) < 28) continue;
+    if (box && r.x < box.x + box.w + 6 && box.x < r.x + r.w + 6 && r.y < box.y + box.h + 6 && box.y < r.y + r.h + 6) continue;
+    coverage(rt, r.x - 4, r.y - 4, r.w + 8, r.h + 8, COV);
+    if (COV.land > 0) continue;
+    return r;
+  }
+  return null;
+}
+
+function contextLabels(rt, view, cx, cy, box, place, pins, lat, lon) {
+  const rtU32 = rt.u32, w = rt.w, h = rt.h;
   const sx = view.s * view.kx, sy = view.s;
   const up = String(place || '').toUpperCase();
   const cand = [];
+  const sea = seaLabel(rt, view, cx, cy, box, lat, lon);
   for (const [name, la, lo] of COUNTRIES) {
     if (up.includes(name)) continue;
     let dl = lo - view.clon;
@@ -1490,6 +1688,7 @@ function contextLabels(rtU32, w, h, view, cx, cy, box, place, pins) {
       if (Number.isFinite(px) && Number.isFinite(py)) keepOut.push({ x: px - 6, y: py - 5, w: 100, h: 11 });
     }
   }
+  if (sea && !keepOut.some((k) => hit(sea, k, 4))) placed.push(sea);
   for (const r of cand) {
     if (placed.length >= 5) break;
     if (keepOut.some((k) => hit(r, k, 4)) || placed.some((p) => hit(r, p))) continue;
@@ -1497,6 +1696,7 @@ function contextLabels(rtU32, w, h, view, cx, cy, box, place, pins) {
   }
   // on light land (dry land, ice) the names are black; elsewhere silver with a black shadow
   for (const r of placed) {
+    if (r.sea) continue;
     let lum = 0, n = 0;
     for (let yy = r.y; yy < r.y + r.h; yy += 2) {
       for (let xx = r.x; xx < r.x + r.w; xx += 2) {
@@ -1511,12 +1711,12 @@ function contextLabels(rtU32, w, h, view, cx, cy, box, place, pins) {
   return placed;
 }
 
-function drawContext(rt, ctx, ox, oy, view, cx, cy, box, place, tc, pins) {
+function drawContext(rt, ctx, ox, oy, view, cx, cy, box, place, tc, pins, lat, lon) {
   if (tc < 0) return;
   // computed once per place when the camera has settled
   let C = rt.context;
   if (!C || C.place !== place || C.clon !== view.clon || C.clat !== view.clat || C.s !== view.s) {
-    C = { place, clon: view.clon, clat: view.clat, s: view.s, list: contextLabels(rt.u32, rt.w, rt.h, view, cx, cy, box, place, pins) };
+    C = { place, clon: view.clon, clat: view.clat, s: view.s, list: contextLabels(rt, view, cx, cy, box, place, pins, lat, lon) };
     rt.context = C;
   }
   const list = C.list;
@@ -1530,13 +1730,14 @@ function drawContext(rt, ctx, ox, oy, view, cx, cy, box, place, tc, pins) {
       ctx.beginPath();
       ctx.rect(ox + r.x - 1, oy + r.y - 1, r.w + 2, r.h + 1);
       ctx.clip();
-      drawText(ctx, r.name, ox + r.x + 1, oy + r.y + 1 + off, r.dark ? NAME_DARK : NAME_LIGHT);
+      drawText(ctx, r.name, ox + r.x + 1, oy + r.y + 1 + off, r.sea ? NAME_SEA : r.dark ? NAME_DARK : NAME_LIGHT);
     } finally {
       ctx.restore();
     }
   }
 }
 const NAME_DARK = { color: P.black, font: 'micro' };
+const NAME_SEA = { color: P.fog, font: 'micro' };
 const NAME_LIGHT = { color: P.silver, font: 'micro', shadow: P.black };
 
 /**
@@ -1586,4 +1787,12 @@ export const __test = {
     return { box: { x: pos.x, y: pos.y, w: L.bw, h: L.bh }, near: pos.near, nearTotal, cx, cy, landAt: (x, y) => rt.land[y * rt.w + x] };
   },
   timingFor,
+  /** Latitude of the frame's top and bottom rows during a full-screen fly-in to (lat, lon) at dt. */
+  viewAt(lat, lon, dt, programId = 'world-now') {
+    ensureInit();
+    const rt = makeState(384, 216);
+    const G = goalFor(rt, false, lat, lon, null);
+    const v = computeView(rt.view, rt, false, 0, dt, lat, lon, G, timingFor(programId), null);
+    return { top: v.clat + 108 / v.s, bottom: v.clat - 108 / v.s, s: v.s };
+  },
 };

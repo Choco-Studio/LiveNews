@@ -27,6 +27,7 @@ import { clamp } from '../space.js';
 import { headHW } from '../head.js';
 import { GROUPS } from '../character.js';
 import { registerOutfit, torsoFrame } from './outfit.js';
+import { rimMat, rimTopRight } from './kit-a.js';
 
 export const LOOK = GROUPS.look ?? 40; // first look-owned group id
 export const tier = (s) => (s < 1.35 ? 0 : s < 2.2 ? 1 : 2);
@@ -80,6 +81,55 @@ export function fastAtan2(y, x) {
   if (ay > ax) r = 1.57079637 - r;
   if (x < 0) r = 3.14159274 - r;
   return y < 0 ? -r : r;
+}
+
+/** Deterministic 0..1 hash of an integer and a seed (per-strand variation; no state, no allocation). */
+export function hashInt(n, seed = 0) {
+  let h = Math.imul((n | 0) ^ Math.imul(seed | 0, 0x27d4eb2d) ^ 0x9e3779b9, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+/**
+ * Strand shading for straight or combed hair (pixel-art rules, not texture). `form` is the tone of
+ * the hair mass from the light (0 lit .. 3 deep), `v` the across-strand coordinate and `u` the
+ * along-strand coordinate (units). Options `o` (one reused object):
+ *   sw     clump width (units)        s     px per unit           seed  per-look variation
+ *   lo, hi along-strand window of the sheen (units): one highlight stroke per clump inside it,
+ *          staggered and tapered, lifting the clump one step (two at its core when `spec`)
+ *   sep    1 px separations at each clump's far edge, broken along the strand (close-ups)
+ *   gap    along-strand period of those breaks (units)
+ * Lit areas never become a flat light patch: they carry the strokes; the deep tone stays inside
+ * shaded areas, so the clusters stay clean.
+ */
+export function strandTone(form, v, u, o) {
+  const sw = o.sw;
+  const k = Math.floor(v / sw);
+  const w = v / sw - k; // 0..1 across the clump
+  const h = hashInt(k, o.seed);
+  if (o.sep && form >= 1 && h < (o.sepShare ?? 1)) {
+    const sepW = Math.min(0.45, 1.05 / (sw * o.s));
+    if (w > 1 - sepW) {
+      const per = o.gap;
+      if (((u + h * per) % per + per) % per < per * (o.sepOn ?? 0.72)) return form >= 2 ? 3 : 2;
+    }
+  }
+  if (form <= 2 && h > (o.skip || 0)) {
+    const lo = o.lo + (h - 0.5) * o.stagger, hi = o.hi + (hashInt(k, o.seed + 7) - 0.5) * o.stagger;
+    if (u > lo && u < hi) {
+      const e = (u - lo) / (hi - lo);
+      const taper = Math.sqrt(Math.sin(Math.PI * e));
+      const a = 0.18 + h * 0.2;
+      const width = o.hiW * taper;
+      if (w > a && w < a + width) {
+        if (o.spec && h > 0.62 && e > 0.38 && e < 0.62 && w > a + width * 0.3 && w < a + width * 0.7) return form - 2 < 0 ? 0 : form - 2;
+        return form - 1 < 0 ? 0 : form - 1;
+      }
+    }
+  }
+  return form;
 }
 
 // ---------------------------------------------------------------------------
@@ -235,6 +285,43 @@ export function blob(buf, m, cx, cy, r, wob, ph, bias = 0, sph = null, hi = true
 }
 
 // ---------------------------------------------------------------------------
+// A rim light that never sparkles: only continuous runs of column tops get it
+
+const TOPS = new Int16Array(400);
+/**
+ * Paint `rim` (a decal material) on the topmost pixel of every column x0..x1 (scanning rows y0..y1)
+ * whose top belongs to groups g0..g1, but only along runs of at least `minRun` columns whose tops
+ * step by ≤ 1 px, and only where keep(x, y) allows (e.g. the upper part of a head of hair). A
+ * scalloped or clumpy outline then gets short continuous arcs instead of isolated bright pixels.
+ */
+export function rimRuns(buf, g0, g1, x0, x1, y0, y1, rim, minRun = 3, keep = null) {
+  x0 = Math.max(1, Math.round(x0));
+  x1 = Math.min(buf.w - 2, Math.round(x1), x0 + TOPS.length - 1);
+  y0 = Math.max(1, Math.round(y0));
+  y1 = Math.min(buf.h - 2, Math.round(y1));
+  const w = buf.w, M = buf.mat, Gr = buf.grp;
+  for (let x = x0; x <= x1; x++) {
+    let top = -1;
+    for (let y = y0; y <= y1; y++) {
+      const i = y * w + x;
+      if (!M[i]) continue;
+      if (Gr[i] >= g0 && Gr[i] <= g1 && (!keep || keep(x, y))) top = y;
+      break;
+    }
+    TOPS[x - x0] = top;
+  }
+  let start = x0;
+  for (let x = x0; x <= x1 + 1; x++) {
+    const t = x <= x1 ? TOPS[x - x0] : -1;
+    const prev = x > start ? TOPS[x - 1 - x0] : -1;
+    const cont = x <= x1 && t >= 0 && (x === start || (prev >= 0 && Math.abs(t - prev) <= 1));
+    if (cont) continue;
+    if (x - start >= minRun) for (let q = start; q < x; q++) buf.paint(q, TOPS[q - x0], rim, 0);
+    start = t >= 0 ? x : x + 1;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Body-space helpers for outfits (o = { buf, L, m, sk, toS, s, gb, G, clip })
 
 /** Paint a 1 px polyline (body-space points [[x, y], ...]) in `mat` / `tone`, only over `group`. */
@@ -246,6 +333,23 @@ export function bodyPaint(o, pts, mat, tone, group, dx = 0) {
     if (prev) line(prev[0] + dx, prev[1], q[0] + dx, q[1], (x, y) => buf.paint(x, y, mat, tone, group));
     prev = q;
   }
+}
+
+/** Catmull-Rom through control points (any units), `sub` samples per span: organic outlines. */
+export function smoothPts(ctrl, sub) {
+  const out = [];
+  for (let i = 0; i < ctrl.length - 1; i++) {
+    const p0 = ctrl[Math.max(0, i - 1)], p1 = ctrl[i], p2 = ctrl[i + 1], p3 = ctrl[Math.min(ctrl.length - 1, i + 2)];
+    for (let k = 0; k < sub; k++) {
+      const t = k / sub, t2 = t * t, t3 = t2 * t;
+      out.push([
+        0.5 * (2 * p1[0] + (-p0[0] + p2[0]) * t + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
+        0.5 * (2 * p1[1] + (-p0[1] + p2[1]) * t + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3),
+      ]);
+    }
+  }
+  out.push(ctrl[ctrl.length - 1]);
+  return out;
 }
 
 /** Polygon from body-space points, with the breathing / shrug lift of torsoFrame. */
@@ -414,28 +518,42 @@ function turtleneck(o) {
     // set-in shoulder seams of a fitted knit
     for (const side of [-1, 1]) bodyPaint(o, [[side * (nk + 3.6), 1.0], [side * (T.shoulderHW * 0.86), T.shoulderTop + 1.4]], m.jacket, side < 0 ? 1 : 3, gJ);
   }
-  // ---- the roll collar: a soft tube up the neck, folded over once, with vertical ribs
+  // ---- the roll collar: a soft knit tube up the neck, folded over once: the roll bulges a little at the
+  // fold and casts a crease shadow on the band below, which flares into the shoulders; vertical ribs
   buf.part(gb + LOOK + 1, 9, clip);
   const neckHW = L.neck.hw;
-  const topY = -5.4, foldY = -2.6, baseY = 1.0;
-  const pts = bodyPoly(o, lift, [
-    [-(neckHW + 1.2), topY + 0.2], [-(neckHW + 0.7), topY - 0.6], [0, topY - 0.9], [neckHW + 0.7, topY - 0.6], [neckHW + 1.2, topY + 0.2],
-    [neckHW + 1.9, foldY - 0.2], [neckHW + 2.0, foldY + 0.5], [nk + 1.9, baseY - 0.7], [nk + 0.8, baseY + 0.4], [0, baseY + 1.2],
-    [-(nk + 0.8), baseY + 0.4], [-(nk + 1.9), baseY - 0.7], [-(neckHW + 2.0), foldY + 0.5], [-(neckHW + 1.9), foldY - 0.2],
-  ]);
+  const topY = -5.0, foldY = -2.4, baseY = 1.0;
+  const right = smoothPts([
+    [0, topY - 0.75], [neckHW + 0.5, topY - 0.5], [neckHW + 1.25, topY + 0.3], [neckHW + 1.75, foldY - 0.7],
+    [neckHW + 1.9, foldY + 0.25], [neckHW + 1.55, foldY + 1.15], [nk + 1.5, baseY - 0.9], [nk + 2.5, baseY + 0.15],
+    [nk + 0.9, baseY + 1.0], [0, baseY + 1.45],
+  ], 3);
+  const ring = [];
+  for (const [x, y] of right) ring.push([x, y]);
+  for (let i = right.length - 2; i > 0; i--) ring.push([-right[i][0], right[i][1]]);
+  const pts = bodyPoly(o, lift, ring);
   const c = o.toS(0, 0);
-  const fy = o.toS(0, foldY)[1];
-  const ribStep = Math.max(2, Math.round(0.8 * s));
+  const fy = o.toS(0, foldY + 0.3)[1];
+  const ty = o.toS(0, topY - 0.75)[1];
+  const ribStep = Math.max(2, Math.round(0.85 * s));
   const hw = (neckHW + 1.9) * s;
   buf.poly(pts, m.collar, (x, y) => {
     const nx = (x + 0.5 - c[0]) / hw;
-    // the fold line: a dark crease with the lit lip of the roll above it
-    if (t >= 1 && Math.abs(y + 0.5 - fy) < 0.5 + (t === 2 ? 0.25 : 0)) return 3;
-    if (t >= 1 && y + 0.5 < fy && y + 0.5 > fy - s * 1.2) return nx < 0.3 ? 0 : 1;
-    let tt = nx < -0.55 ? 0 : nx < 0.45 ? 1 : 2;
-    if (t === 2) {
+    const yy = y + 0.5;
+    let tt;
+    if (t >= 1 && yy > fy - 0.5 && yy < fy + 0.5 + (t === 2 ? 0.6 : 0)) return 3; // the crease under the roll
+    if (yy < fy) {
+      // the roll: a soft cylinder lit from the left, its rounded top edge catching the key
+      tt = nx < -0.5 ? 0 : nx < 0.42 ? 1 : nx < 0.82 ? 2 : 3;
+      if (t === 2 && yy < ty + 1.6 && nx < 0.1) tt = 0;
+    } else {
+      // the band below sits in the roll's shadow at first, then opens toward the shoulders
+      tt = nx < -0.7 ? 0 : nx < 0.5 ? 1 : nx < 0.85 ? 2 : 3;
+      if (t >= 1 && yy < fy + 0.5 + s * 0.9 && tt < 2) tt = 2; // just under the crease: the roll's shadow
+    }
+    if (t === 2 && tt <= 1) {
       const k = ((x - Math.round(c[0])) % ribStep + ribStep) % ribStep;
-      if (k === 0 && tt < 2) tt += 1;
+      if (k === 0) tt += 1; // ribs: one step darker, only in the lit and mid tones
     }
     return tt;
   });
@@ -520,61 +638,114 @@ function drawChain(o, [hi, lo], t) {
 }
 
 // ---------------------------------------------------------------------------
-// UNIT-8: neck column, casing shell, shoulder caps and the plain chest plate
+// UNIT-8: neck column, graphite shell, articulated shoulder caps, the plain chest plate
+
+/** Rounded rectangle (body units) as a polygon with the torso's shoulder lift: corners rt (top) / rb (bottom). */
+function roundedPlate(o, lift, x0, x1t, x1b, y0, y1, rt, rb) {
+  const out = [];
+  const arc = (cx, cy, r, a0, a1) => {
+    for (let k = 0; k <= 4; k++) {
+      const a = a0 + ((a1 - a0) * k) / 4;
+      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      out.push(...o.toS(x, lift(x < 0 ? -1 : 1, y)));
+    }
+  };
+  const P2 = Math.PI / 2;
+  arc(-x1t + rt, y0 + rt, rt, Math.PI, Math.PI + P2); // top left
+  arc(x1t - rt, y0 + rt, rt, -P2, 0); // top right
+  arc(x1b - rb, y1 - rb, rb, 0, P2); // bottom right
+  arc(-x1b + rb, y1 - rb, rb, P2, Math.PI); // bottom left
+  return out;
+}
 
 function chassis(o) {
   const { buf, L, m, s, gb, G, clip } = o;
-  const { T, lift, outline } = torsoFrame(o);
+  const F = torsoFrame(o);
+  const { T, lift, outline } = F;
   const t = tier(s);
   const nk = T.neckHW;
-  // ---- neck column: two machined grooves over the neck capsule
+  const c0 = o.toS(0, 0);
+  // ---- neck column: a machined cylinder with two grooves (rings), lit on the key side
   buf.part(gb + LOOK + 5, 5, clip);
   const neckHW = L.neck.hw;
-  const col = bodyPoly(o, lift, [[-neckHW, -5.2], [neckHW, -5.2], [neckHW + 0.3, 0.5], [-neckHW - 0.3, 0.5]]);
-  const c0 = o.toS(0, 0);
-  const g1 = o.toS(0, -3.6)[1], g2 = o.toS(0, -1.6)[1];
+  const col = bodyPoly(o, lift, [[-neckHW, -6.2], [neckHW, -6.2], [neckHW + 0.3, 0.5], [-neckHW - 0.3, 0.5]]);
+  const g1 = o.toS(0, -4.2)[1], g2 = o.toS(0, -2.0)[1];
   buf.poly(col, m.joint, (x, y) => {
     const yy = y + 0.5;
     if (t >= 1 && (Math.abs(yy - g1) < 0.5 || Math.abs(yy - g2) < 0.5)) return 3;
+    if (t === 2 && (Math.abs(yy - g1 - 1) < 0.5 || Math.abs(yy - g2 - 1) < 0.5) && x + 0.5 < c0[0]) return 0; // the ring's lit lower lip
     const nx = (x + 0.5 - c0[0]) / (neckHW * s);
-    return nx < -0.45 ? 0 : nx < 0.4 ? 1 : 2;
+    return nx < -0.5 ? 0 : nx < 0.35 ? 1 : 2;
   });
-  // ---- shell
+  // ---- shell: graphite, lit strip on the key side, the far third in shade
   buf.part(gb + G.jacket, 8, clip);
   const body = [];
   for (const [x, y] of outline) body.push(x, y);
   buf.poly(body, m.jacket, clothTone(o, { litEdge: -0.78, shadeEdge: 0.5, deepEdge: 0.86 }));
-  // collar ring where the neck meets the shell
+  const gJ = gb + G.jacket;
+  if (t === 2) {
+    // abdomen (close-ups): two flexible segments under the chest, a dark seam with its lower lip lit
+    // on the key side, stopping short of the flanks so they never read as stripes
+    for (const y of [24.5, 29.5]) {
+      bodyPaint(o, [[-T.sideHW * 0.72, y], [T.sideHW * 0.72, y]], m.jacket, 3, gJ);
+      bodyPaint(o, [[-T.sideHW * 0.72, y + 1 / s], [-T.sideHW * 0.25, y + 1 / s]], m.jacket, 0, gJ);
+    }
+  }
+  // collar ring where the neck meets the shell: a flat steel ring, lit on its upper-left
   buf.part(gb + LOOK + 6, 9, clip);
-  const ring = bodyPoly(o, lift, [[-(nk + 1.2), -1.4], [nk + 1.2, -1.4], [nk + 1.6, 0.6], [nk * 0.6, 1.6], [-nk * 0.6, 1.6], [-(nk + 1.6), 0.6]]);
-  buf.poly(ring, m.joint, (x) => (x + 0.5 < c0[0] - nk * 0.4 * s ? 1 : 2));
-  // ---- the chest plate: plain, inset, one 1 px silver seam along its lit top edge
+  const ring = bodyPoly(o, lift, [[-(nk + 1.3), -1.5], [nk + 1.3, -1.5], [nk + 1.8, 0.4], [nk * 0.7, 1.7], [-nk * 0.7, 1.7], [-(nk + 1.8), 0.4]]);
+  const ry = o.toS(0, -1.5)[1];
+  buf.poly(ring, m.plate, (x, y) => {
+    if (t >= 1 && y + 0.5 - ry < 1 && x + 0.5 < c0[0] + nk * 0.3 * s) return 0;
+    return x + 0.5 < c0[0] - nk * 0.5 * s ? 1 : x + 0.5 < c0[0] + nk * 0.6 * s ? 2 : 3;
+  });
+  // ---- the chest plate: plain, raised, a 1 px silver seam along its top (cosmos.md: no lights, no meter)
   buf.part(gb + LOOK + 4, 9, clip);
-  const top = 5.0, bot = 19.5, hwT = 7.8, hwB = 4.6;
-  const plate = bodyPoly(o, lift, [
-    [-hwT + 1.4, top], [hwT - 1.4, top], [hwT, top + 1.6], [hwB, bot - 1.6], [hwB - 1.6, bot], [-hwB + 1.6, bot], [-hwB, bot - 1.6], [-hwT, top + 1.6],
-  ]);
+  const top = 5.4, bot = 19.6, hwT = 8.6, hwB = 7.2;
+  const plate = roundedPlate(o, lift, 0, hwT, hwB, top, bot, 1.6, 2.6);
   const pc = o.toS(0, (top + bot) / 2);
-  buf.poly(plate, m.plate, (x, y) => {
+  buf.poly(plate, m.plate, (x) => {
     const nx = (x + 0.5 - pc[0]) / (hwT * s);
-    return nx < -0.78 ? 0 : nx < 0.7 ? 1 : 2;
+    return nx < -0.84 ? 0 : nx < 0.62 ? 1 : 2;
   });
   if (t >= 1) {
     const seam = decal(P.silver);
-    const a = o.toS(-hwT + 1.6, top + 0.15), b = o.toS(hwT - 1.6, top + 0.15);
-    const y = Math.round(a[1]) + (t === 2 ? 1 : 0);
-    for (let x = Math.round(a[0]) + 1; x < Math.round(b[0]); x++) buf.paint(x, y, seam, 1, gb + LOOK + 4);
+    const gP = gb + LOOK + 4;
+    const a = o.toS(-hwT + 1.6, lift(-1, top)), b = o.toS(hwT - 1.6, lift(1, top));
+    const y = Math.round(a[1]) + 1;
+    for (let x = Math.round(a[0]) + 1; x < Math.round(b[0]); x++) buf.paint(x, y, seam, 1, gP);
   }
-  // ---- shoulder caps: separate plates over each shoulder joint (a 1 px edge on the shell)
+  // ---- shoulder caps: articulated plates over each shoulder joint (a 1 px edge on the shell),
+  // lit along the top on the key side, a pivot fastener at close-up
   if (t >= 1) {
     buf.part(gb + LOOK + 7, 9, clip);
+    const gC = gb + LOOK + 7;
     for (const side of [-1, 1]) {
       const cap = bodyPoly(o, lift, [
-        [side * (T.shoulderHW * 0.6), T.shoulderTop * 0.55], [side * (T.shoulderHW * 0.9), T.shoulderTop + 0.1], [side * (T.shoulderHW * 1.0), T.shoulderTop + 3.6],
-        [side * (T.shoulderHW * 0.98), T.shoulderTop + 6.6], [side * (T.shoulderHW * 0.8), T.shoulderTop + 5.2], [side * (T.shoulderHW * 0.62), T.shoulderTop + 2.6],
+        [side * (T.shoulderHW * 0.58), T.shoulderTop * 0.5], [side * (T.shoulderHW * 0.84), T.shoulderTop - 0.1], [side * (T.shoulderHW * 0.97), T.shoulderTop + 1.6],
+        [side * (T.shoulderHW * 1.01), T.shoulderTop + 4.4], [side * (T.shoulderHW * 0.97), T.shoulderTop + 7.0], [side * (T.shoulderHW * 0.8), T.shoulderTop + 6.0],
+        [side * (T.shoulderHW * 0.62), T.shoulderTop + 3.0],
       ]);
-      buf.poly(cap, m.jacket, side < 0 ? 0 : 2);
+      const ct = o.toS(0, T.shoulderTop)[1];
+      buf.poly(cap, m.jacket, (x, y) => {
+        const dy = (y + 0.5 - ct) / s;
+        if (side < 0) return dy < 1.2 ? 0 : 1;
+        return dy < 1.0 ? 1 : 2;
+      });
+      if (t === 2) {
+        const [px, py] = o.toS(side * T.shoulderHW * 0.86, T.shoulderTop + 3.6);
+        buf.paint(Math.round(px), Math.round(py), decal(P.black), 1, gC);
+        if (s >= 3.2 && side < 0) buf.paint(Math.round(px) - 1, Math.round(py) - 1, decal(P.fog), 1, gC);
+      }
     }
+  }
+  // ---- a continuous silver rim along the screen-right shoulder (the resolve rim alone is dotted there)
+  if (s >= 1.35) {
+    const [ax] = o.toS(nk + 1.5, 0);
+    const [bx] = o.toS(T.shoulderHW + 1, 0);
+    const [, ty] = o.toS(0, -3);
+    const [, by] = o.toS(0, T.shoulderTop + 8);
+    rimTopRight(buf, gJ, ax, bx, ty, by, rimMat(P.silver), Math.max(2, Math.round(s * 1.6)));
   }
 }
 

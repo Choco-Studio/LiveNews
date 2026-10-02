@@ -12,13 +12,17 @@
 //   LocalXY                           head-local coordinates of a screen pixel, no allocation:
 //                                       const q = localXY(head); q.at(px, py); q.x, q.y
 //   localBox(head, x0, y0, x1, y1)    screen box of a head-local rectangle (roll aware), shared array
+//   HeadWidthLUT                      headHW as a table: const w = new HeadWidthLUT(); w.set(H, jaw).at(y)
 //   clumpTone(t, v, u, o)             strand/clump shading of a base tone (see below)
 //   rimMat(hex)                       decal material for painted rims (black outline next to it)
 //   rimTopRight(buf, g, x0, x1, y0, y1, mat, maxDrop)  continuous top rim on a group's right half
+//   selOutEdge(buf, x0, y0, x1, y1, g, gNext, from, to) darker local line where group g meets gNext
+//   hairLight(buf, head, g, mat, fromX, toX, topY, botY, maxDrop)  partial top rim (upper right)
 //   paintLine(buf, ax, ay, bx, by, mat, tone, g)       1 px Bresenham line painted over group g
 //   dashLine(buf, ax, ay, bx, by, mat, tone, g, on, off) the same, dashed (stitching)
 import { P } from '../../../palette.js';
 import { material, line } from '../pixbuf.js';
+import { headHW } from '../head.js';
 
 /** Deterministic hash of an integer to 0..1 (no state, no allocation). */
 export function hash01(n) {
@@ -57,6 +61,40 @@ export class LocalXY {
     const dx = px - this.cx, dy = py - this.cy;
     this.x = (dx * this.c + dy * this.s) * this.k;
     this.y = (-dx * this.s + dy * this.c) * this.k;
+  }
+}
+
+/**
+ * head.js headHW as a lookup table (per look and jaw opening, rebuilt only when either changes):
+ * hair drawers ask for the skull's half-width at every pixel, and headHW's two Math.pow per call
+ * were the hot spot of the bob at close-ups. Linear interpolation at 1/20 u.
+ */
+export class HeadWidthLUT {
+  constructor() {
+    this.H = null;
+    this.jaw = NaN;
+    this.y0 = 0;
+    this.n = 0;
+    this.v = new Float32Array(1024);
+  }
+
+  set(H, jaw = 0) {
+    if (this.H === H && this.jaw === jaw) return this;
+    this.H = H;
+    this.jaw = jaw;
+    this.y0 = H.top - 4;
+    this.n = Math.min(1022, Math.ceil((H.chinY + jaw + 4 - this.y0) * 20));
+    for (let i = 0; i <= this.n; i++) this.v[i] = headHW(H, this.y0 + i / 20, jaw);
+    return this;
+  }
+
+  at(y) {
+    let f = (y - this.y0) * 20;
+    if (f <= 0) return this.v[0];
+    if (f >= this.n) return this.v[this.n];
+    const i = f | 0;
+    f -= i;
+    return this.v[i] + (this.v[i + 1] - this.v[i]) * f;
   }
 }
 
@@ -166,6 +204,37 @@ export function rimTopRight(buf, g, x0, x1, y0, y1, mat, maxDrop = 99) {
       break;
     }
   }
+}
+
+/**
+ * Selective outline at a boundary inside the figure (sel-out): pixels of `matFrom` in group `g`
+ * that touch a pixel of group `gNext` (e.g. the hairline against the forehead) switch to `matTo`,
+ * the same ramp with a darker LOCAL line colour, so resolve's inner line there is maroon or brown
+ * instead of the black outline. Box in screen pixels; no allocation.
+ */
+export function selOutEdge(buf, x0, y0, x1, y1, g, gNext, matFrom, matTo) {
+  const w = buf.w, mat = buf.mat, grp = buf.grp;
+  x0 = Math.max(1, Math.floor(x0));
+  y0 = Math.max(1, Math.floor(y0));
+  x1 = Math.min(w - 2, Math.ceil(x1));
+  y1 = Math.min(buf.h - 2, Math.ceil(y1));
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const i = y * w + x;
+      if (mat[i] !== matFrom || grp[i] !== g) continue;
+      if ((mat[i + w] && grp[i + w] === gNext) || (mat[i - 1] && grp[i - 1] === gNext) || (mat[i + 1] && grp[i + 1] === gNext)) mat[i] = matTo;
+    }
+  }
+}
+
+/**
+ * Hair light: a continuous 1 px rim along the top of group g, only from head-local x `fromX`
+ * rightwards (the key is camera-left, the hair light upper right), stopping where the edge turns
+ * down. Use with `hair.rimTop: false` so the far-left of the crown keeps its own tone.
+ */
+export function hairLight(buf, head, g, mat, fromX, toX, topY, botY, maxDrop) {
+  const { cx, cy, s } = head;
+  rimTopRight(buf, g, cx + fromX * s, cx + toX * s, cy + topY * s, cy + botY * s, mat, maxDrop);
 }
 
 /** 1 px line painted over pixels of group g (0 = any). */

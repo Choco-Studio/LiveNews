@@ -1,109 +1,41 @@
 // Fallback open for programmes without their own (new ids from the editorial
-// desk): the GLOBIT 24 mark as an object. A dark globe (ink to steel in clean
-// clusters, lit from the upper left like the WORLD NOW earth, a 1 px silver rim
-// on the key side and a slate limb in shade) carries the logo's equator and
-// meridian-lens seams as 1 px red lines (dark red on the night side): red stays
-// a thin line, never a big saturated disc. It opens like an iris and spins
-// down; the logo's yellow bit sits on its shoulder and, like in every open,
-// hops onto the title plate. Same package and clock as the others.
+// desk): the GLOBIT 24 mark as an object. The WORLD NOW earth renderer in a
+// darker ink/slate ramp (no navy, no graticule) carries the logo's seams, the
+// equator and the two lens meridians, as 1 px red lines projected with the
+// globe's tilt (dark red on the night side): red stays a thin line, never a
+// big saturated disc. It opens like an iris and spins down; the logo's yellow
+// bit sits on its shoulder and, like in every open, hops onto the title plate.
+// Same package and clock as the others.
 import { P } from '../../palette.js';
-import { u32, seg, easeOutQuint, ring } from '../../gfx/index.js';
-import { lazyBackdrop, clipDisc, frameBuffer, playOpen, CENTRE, ZOOM } from './kit.js';
+import { seg, easeOutQuint } from '../../gfx/index.js';
+import { lazyBackdrop, playOpen, CENTRE, ZOOM } from './kit.js';
+import { drawIrisGlobe, GLOBE_STYLES, LAM_END, globeWarmJobs } from './world.js';
 
 const R0 = 30;
-const DEG = Math.PI / 180;
-const MERID = 50; // the lens seams sit at +-50 degrees when settled
-const C = Object.fromEntries(['black', 'ink', 'slate', 'steel', 'fog', 'red', 'darkRed', 'white', 'silver', 'maroon'].map((k) => [k, u32(P[k])]));
-const BODY = [C.black, C.ink, C.slate, C.steel]; // night .. full key light
-const L = (() => {
-  const v = [-0.5, 0.55, 0.67];
-  const n = Math.hypot(...v);
-  return v.map((a) => a / n);
-})();
 
+/** Centre longitude at dt: a turn that settles with the seams either side of the centre. */
 function spin(dt) {
-  return 200 * (1 - easeOutQuint(seg(dt, 0.2, 1.3)));
-}
-
-function renderGlobe(fb, R, rot) {
-  const d = fb.d;
-  const S = fb.w;
-  const c = S >> 1;
-  const RR = R + 0.5;
-  for (let y = 0; y < S; y++) {
-    for (let x = 0; x < S; x++) {
-      const i = y * S + x;
-      const dx = x - c;
-      const dy = y - c;
-      if (dx * dx + dy * dy > RR * RR) {
-        d[i] = 0;
-        continue;
-      }
-      const nx = dx / RR;
-      const ny = -dy / RR;
-      const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
-      const dif = nx * L[0] + ny * L[1] + nz * L[2];
-      const lit = dif > 0.05;
-      // clean clusters: hard steps on the neutral ramp
-      let col = BODY[Math.min(3, Math.floor(Math.max(0, dif + 0.15) * 3.6))];
-      const rim = dx * dx + dy * dy > (RR - 1.1) * (RR - 1.1);
-      // seams: the equator row and two meridians either side of the centre, 1 px wide
-      let seam = dy === 0;
-      if (!seam) {
-        // screen-x distance from each meridian's projected curve, so seams stay 1 px wide
-        const cl = Math.sqrt(Math.max(0, 1 - ny * ny));
-        for (let m = -MERID; m <= MERID; m += 2 * MERID) {
-          const a = (m - rot) * DEG;
-          if (Math.cos(a) <= 0.05) continue;
-          if (Math.abs(nx - Math.sin(a) * cl) * RR < 0.55) seam = true;
-        }
-      }
-      if (seam) col = lit ? C.red : C.darkRed;
-      // the limb: a 1 px silver rim where the key light grazes it, slate on the night side
-      if (rim) col = dif > 0.2 ? C.silver : dif > -0.1 ? (seam ? C.darkRed : C.steel) : C.slate;
-      d[i] = col;
-    }
-  }
-  fb.cx.putImageData(fb.img, 0, 0);
+  return LAM_END + 200 * (1 - easeOutQuint(seg(dt, 0.2, 1.3)));
 }
 
 function emblem(ctx, dt, x, y, k = 1) {
   if (dt < 0.2) return;
-  const R = Math.round(R0 * k);
-  const S = 2 * R + 3;
-  const fb = frameBuffer('generic-globe', S, S);
-  const rot = spin(dt);
-  const key = Math.round(rot * 4);
-  if (fb.key !== key) {
-    fb.key = key;
-    renderGlobe(fb, R, rot);
-  }
-  const iris = Math.round((R + 3) * easeOutQuint(seg(dt, 0.2, 0.6)));
-  if (iris < R + 3) {
-    ctx.save();
-    try {
-      clipDisc(ctx, x, y, iris);
-      ctx.drawImage(fb.cv, x - (S >> 1), y - (S >> 1));
-    } finally {
-      ctx.restore();
-    }
-    if (iris > 1) ring(ctx, x, y, iris, P.silver);
-  } else ctx.drawImage(fb.cv, x - (S >> 1), y - (S >> 1));
+  drawIrisGlobe(ctx, dt, x, y, Math.round(R0 * k), spin(dt), GLOBE_STYLES.generic);
 }
 
 const background = lazyBackdrop({ key: 'generic', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230 });
 
 export const GENERIC = {
   accent: P.red,
-  style: { accent: P.red, plate: P.black, ink: 'light', bar: P.red },
+  style: { accent: P.red, plate: P.black, ink: 'light', bar: P.red, front: true },
   background,
   emblem,
   extent: R0, // an opaque globe, like WORLD NOW's: it may overlap the plate's left end
   front: true,
   absorb: 0.26,
-  shoulder: 30,
+  shoulder: 28,
   popAt: 0.8, // the logo's bit sits on the globe's shoulder from the start, as in the mark
-  warmJobs: () => Array.from({ length: Math.round(R0 * ZOOM) - R0 + 1 }, (_, i) => () => frameBuffer('generic-globe', 2 * (R0 + i) + 3, 2 * (R0 + i) + 3)),
+  warmJobs: () => globeWarmJobs(R0, Math.round(R0 * ZOOM), 'generic'),
 };
 
 export function drawGeneric(ctx, dt, info) {

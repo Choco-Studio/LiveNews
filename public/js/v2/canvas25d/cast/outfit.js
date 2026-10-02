@@ -35,7 +35,7 @@
 import { P } from '../../../palette.js';
 import { decal, line } from '../pixbuf.js';
 import { clamp, HIP } from '../space.js';
-import { rimMat, rimTopRight, paintLine, dashLine } from './kit-a.js';
+import { rimMat, rimTopRight, paintLine } from './kit-a.js';
 
 export const OUTFITS = {};
 
@@ -235,20 +235,16 @@ function shadeJacket(o, F, tier, g, mat) {
   const buf = o.buf, W = buf.w, mats = buf.mat, grps = buf.grp, tones = buf.tone;
   const lift = F.liftK, liftL = F.liftL, liftR = F.liftR, shTop = T.shoulderTop;
   const is = 1 / s;
-  // fold geometry (body units): from just outside the closure to under the arm
-  const fsx = 1.7, fsy = vY + 0.9;
-  const fex = T.sideHW * 0.6, fey = Math.min(vY - 3, T.shoulderJoint[1] + 6.5);
-  const fdx = 1 / (fex - fsx);
-  const sag = 2.0;
-  const foldTh = Math.max(0.3, 1.15 / s); // ~1-2 px at the thickest point
-  const fyLo = fey - 3, fyHi = fsy + 0.5;
-  // the approved prototype's broad shade on the far third, following the ribcage
+  // the approved prototype's broad shade on the far third, following the ribcage; above the armpit
+  // it narrows to a thin terminator so the far shoulder reads as a rounded, lit form (the sleeve
+  // starts below the shoulder point, HANDS) instead of a dark hump
   const sideBase = T.sideHW * 0.34, sideBulge = T.sideHW * 0.06;
-  const band = tier === 0 ? 1.4 : 1.9;
+  const capTop = shTop + 0.6, armpit = T.shoulderJoint[1] + 3.2;
+  const capK = 1 / Math.max(1, armpit - capTop);
+  const band = tier === 0 ? 1.4 : tier === 1 ? 1.7 : 1.25; // the shoulder tops' key band: narrower at close-ups (a lit seam line, never a grey slab)
   const keyW = tier === 0 ? 1.1 : 1.0;
   const nhw = T.neckHW + 1.2;
   const detail = tier === 2;
-  const ridge = s >= 3;
   const y0 = Math.max(1, R.y0), y1 = Math.min(buf.h - 2, R.y1);
   for (let py = y0; py <= y1; py++) {
     const l = ROW_L[py], r = ROW_R[py];
@@ -262,7 +258,9 @@ function shadeJacket(o, F, tier, g, mat) {
     // the side plane's bump depends on height only: once per row (the lean is small)
     const dyr = y0b - 7;
     const bump = 1 / (1 + (dyr * dyr) / 40);
-    const sideW = sideBase + sideBulge * bump, deepW = 1.5 + 0.4 * bump;
+    let fc = (y0b - capTop) * capK;
+    fc = fc < 0 ? 0 : fc > 1 ? 1 : fc * fc * (3 - 2 * fc);
+    const sideW = (sideBase + sideBulge * bump) * fc, deepW = (1.5 + 0.4 * bump) * fc;
     for (let px = xa; px <= xb; px++, x += A.xa, y0b += A.ya, dl += is, dr -= is) {
       const i = py * W + px;
       if (mats[i] !== mat || grps[i] !== g) continue;
@@ -282,16 +280,48 @@ function shadeJacket(o, F, tier, g, mat) {
       }
       // the key-light edge on the left
       if (dl < keyW) t = 0;
-      if (detail && ax > fsx && ax < fex && y < fyHi && y > fyLo) {
-        // drag folds: a soft shadow crescent; on the lit side a short ridge above it in close-ups
-        const u = (ax - fsx) * fdx;
-        const sn = 4 * u * (1 - u); // ~ sin(pi u), cheaper
-        const d = y - (fsy + (fey - fsy) * u + sag * sn);
-        const th = foldTh * Math.sqrt(sn);
-        if (d >= 0 && d < th && u > 0.08 && u < 0.92) t = x < 0 ? (t > 2 ? t : 2) : Math.min(3, Math.max(t, 2) + (t >= 2 ? 1 : 0));
-        else if (ridge && x < 0 && d < 0 && d > -th * 0.6 && t === 1 && u > 0.3 && u < 0.7) t = 0;
-      }
       tones[i] = t;
+    }
+  }
+  if (detail) drawFolds(o, F, g, mat);
+}
+
+/**
+ * Drag folds from just outside the closure toward each armpit, drawn as deliberate 1 px strokes
+ * (a per-pixel crescent test broke into orphan dots at mediums): a shade line that sags in the
+ * middle, one tone down from what it crosses, thicker in its middle third at close-ups, with a
+ * short lit ridge above it on the key side from s 3.
+ */
+function drawFolds(o, F, g, mat) {
+  const s = o.s, T = F.T, vY = F.vY, buf = o.buf, W = buf.w;
+  const fsx = 1.9, fsy = vY + 0.9;
+  const fex = T.sideHW * 0.6, fey = Math.min(vY - 3, T.shoulderJoint[1] + 6.5);
+  const sag = 2.0;
+  const n = Math.max(6, Math.ceil(Math.hypot(fex - fsx, fey - fsy) * s * 1.5));
+  const thick = s >= 3.2, ridge = s >= 3;
+  const mats = buf.mat, grps = buf.grp, tones = buf.tone;
+  for (let side = -1; side <= 1; side += 2) {
+    let lx = -9999, ly = -9999;
+    for (let k = 0; k <= n; k++) {
+      const u = 0.14 + 0.72 * (k / n);
+      const bx = side * (fsx + (fex - fsx) * u);
+      const by = fsy + (fey - fsy) * u + sag * 4 * u * (1 - u);
+      fwd(o, bx, F.lift(side, by));
+      const px = Math.floor(FX), py = Math.floor(FY);
+      if (px === lx && py === ly) continue;
+      lx = px;
+      ly = py;
+      const mid = u > 0.36 && u < 0.64;
+      for (let j = 0; j < (thick && mid ? 2 : 1); j++) {
+        const i = (py + j) * W + px;
+        if (mats[i] !== mat || grps[i] !== g) continue;
+        const t = tones[i];
+        tones[i] = side < 0 ? (t < 2 ? 2 : t) : t >= 2 ? 3 : 2;
+      }
+      if (ridge && side < 0 && u > 0.3 && u < 0.7) {
+        const i = (py - 1) * W + px;
+        if (mats[i] === mat && grps[i] === g && tones[i] === 1) tones[i] = 0;
+      }
     }
   }
 }
@@ -365,7 +395,9 @@ function drawJacketOutfit(o) {
   drawLapels(buf, L, m, o.toS, s, vY, gb + G.jacket, o, F);
 
   // ---- shirt collar points over the jacket edge
-  if (collar === 'tie' || collar === 'band' || collar === 'open') drawShirtCollar(o, F, tier, collar);
+  // (wides: the collar points' inner lines turn into a black-and-white knot of noise at 1x; the shirt's V
+  // and the knot read cleaner on their own)
+  if (tier > 0 && (collar === 'tie' || collar === 'band' || collar === 'open')) drawShirtCollar(o, F, tier, collar);
   if (L.necklace) drawNecklace(buf, L, o.toS, s);
   if (L.pocket) drawPocket(o, F, tier);
   if (L.pin) drawPin(o, F, tier);
@@ -491,38 +523,57 @@ function drawOpenThroat(o, F, tier) {
   buf.paint(Math.round(bt[0]), Math.round(bt[1]), m.shirt, 2, g);
 }
 
-/** Tie: a shaded knot with a dimple, a keel down the blade, a shadow where it leaves the knot. */
+/**
+ * Tie: a shaded knot with a dimple, a keel down the blade, a shadow where it leaves the knot.
+ * `tie.style: 'knit'` (Sam): a slim matte knit with a small four-in-hand knot and a straight-cut
+ * end; no sheen, a fine horizontal rib at close-ups instead of the silk's keel highlight.
+ */
 function drawTie(o, F, tier) {
-  const { buf, m, s, gb, G, clip } = o;
+  const { buf, L, m, s, gb, G, clip } = o;
   const vY = F.vY;
+  const knit = L.tie.style === 'knit';
   buf.part(gb + G.tie, 7, clip);
   const blade = pts(1);
-  for (const [x, y] of [[-0.95, 2.4], [0.95, 2.4], [1.8, vY - 3], [0, vY + 0.5], [-1.8, vY - 3]]) pt(o, blade, x, y);
+  if (knit) {
+    for (const [x, y] of [[-0.72, 2.0], [0.72, 2.0], [1.1, vY - 2.2], [1.1, vY + 0.6], [-1.1, vY + 0.6], [-1.1, vY - 2.2]]) pt(o, blade, x, y);
+  } else {
+    for (const [x, y] of [[-0.95, 2.4], [0.95, 2.4], [1.8, vY - 3], [0, vY + 0.5], [-1.8, vY - 3]]) pt(o, blade, x, y);
+  }
   const v = o.inv;
   const bladeTone = tier === 0 || !v
     ? 1
-    : (px, py) => {
-      v.at(px + 0.5, py + 0.5);
-      const x = v.x, y = v.y;
-      const hw = 0.95 + (0.85 * (y - 2.4)) / (vY - 5.4);
-      if (y < 3.3 && tier === 2) return 2; // shadow under the knot
-      if (x > hw * 0.3) return 2; // the far half of the keel turns away
-      if (tier === 2 && x < -hw * 0.55 && y > 4) return 0;
-      return 1;
-    };
+    : knit
+      ? (px, py) => {
+        v.at(px + 0.5, py + 0.5);
+        if (v.y < 2.9 && tier === 2) return 2; // shadow under the knot
+        return v.x > 0.38 ? 2 : 1; // matte: only the far edge turns away
+      }
+      : (px, py) => {
+        v.at(px + 0.5, py + 0.5);
+        const x = v.x, y = v.y;
+        const hw = 0.95 + (0.85 * (y - 2.4)) / (vY - 5.4);
+        if (y < 3.3 && tier === 2) return 2; // shadow under the knot
+        if (x > hw * 0.3) return 2; // the far half of the keel turns away
+        if (tier === 2 && x < -hw * 0.55 && y > 4) return 0;
+        return 1;
+      };
   buf.poly(blade, m.tie, bladeTone);
   const knot = pts(2);
-  for (const [x, y] of [[-1.25, 0.1], [1.25, 0.1], [1.05, 1.6], [0.85, 2.7], [-0.85, 2.7], [-1.05, 1.6]]) pt(o, knot, x, y);
+  if (knit) {
+    for (const [x, y] of [[-0.95, 0.0], [0.95, 0.0], [0.8, 1.3], [0.6, 2.25], [-0.6, 2.25], [-0.8, 1.3]]) pt(o, knot, x, y);
+  } else {
+    for (const [x, y] of [[-1.25, 0.1], [1.25, 0.1], [1.05, 1.6], [0.85, 2.7], [-0.85, 2.7], [-1.05, 1.6]]) pt(o, knot, x, y);
+  }
   const knotTone = tier === 0 || !v
-    ? 0
+    ? knit ? 1 : 0
     : (px, py) => {
       v.at(px + 0.5, py + 0.5);
-      if (v.x > 0.45) return 2;
-      if (v.x < -0.2 && v.y < 1.6) return 0;
+      if (v.x > (knit ? 0.3 : 0.45)) return 2;
+      if (v.x < -0.2 && v.y < (knit ? 1.1 : 1.6)) return 0;
       return 1;
     };
   buf.poly(knot, m.tie, knotTone);
-  if (tier === 2) {
+  if (tier === 2 && !knit) {
     // the dimple: a short dark crease under the knot, a lit pixel beside it
     const d0 = o.toS(0.1, 2.75), d1 = o.toS(0.25, 2.75 + Math.max(1.1, 2.2 / s));
     paintLine(buf, d0[0], d0[1], d1[0], d1[1], m.tie, 3, gb + G.tie);
@@ -621,6 +672,7 @@ export function drawLapels(buf, L, m, toS, s, vY, g, o = null, F = null) {
     const el = Math.hypot(ex, ey) || 1;
     const nx = -ey / el * side, ny = ex / el * side; // normal of the edge pointing into the lapel
     const bandW = tier === 2 ? Math.max(0.55, 1.05 / s) : 0.9;
+    const farW = tier === 2 ? 1.1 / s : 0.9;
     const toneAt = !v
       ? side < 0 ? 1 : 2
       : (px, py) => {
@@ -630,40 +682,26 @@ export function drawLapels(buf, L, m, toS, s, vY, g, o = null, F = null) {
         const d = (x - Lp[0]) * nx + (y - Lp[1]) * ny;
         if (y < N[1] - 0.2) return 1; // the collar above the notch
         if (side < 0) return d < bandW ? 0 : 1;
-        return d < bandW ? 2 : 1;
+        return d < farW ? 2 : 1; // the far lapel turns away: a 1 px shade inside its edge
       };
     buf.poly(poly, mat, toneAt);
-    // edges in the deep tone, as in the approved prototype (the lit lapel's band softens its edge)
-    const eTone = deep;
-    const seg = (a, b, t, gg = g) => {
-      const p0 = o.toS(a[0], ly(a[1])), p1 = o.toS(b[0], ly(b[1]));
-      paintLine(buf, p0[0], p0[1], p1[0], p1[1], mat, t, gg);
-    };
-    seg(G0, C, eTone);
-    seg(C, N, deep);
-    seg(N, Lp, eTone);
-    seg(Lp, [Qx, Qy], eTone);
-    seg([Qx, Qy], B, eTone);
+    // edges in the deep tone, as in the approved prototype, taken from the polygon's own boundary
+    // pixels (a Bresenham edge beside the polygon left a ladder of gaps against it); the far
+    // lapel's cast shadow is a clean band on the chest just outside it (the key is upper
+    // camera-left: the near lapel's shadow lies under the lapel itself)
+    lapelEdges(buf, poly, mat, m.jacket, g, side > 0 && tier === 2 ? 1 : 0);
     if (tier < 2) continue;
-    // the lapel's soft cast shadow on the chest, 1 px outside its edge
-    const off = 1.05 / s;
-    const sh = (a, b) => {
-      const p0 = o.toS(a[0] + side * off * 1.2, ly(a[1] + off)), p1 = o.toS(b[0] + side * off * 1.2, ly(b[1] + off));
-      line(p0[0], p0[1], p1[0], p1[1], (x, y) => {
-        const i = y * buf.w + x;
-        if (buf.mat[i] === m.jacket && buf.grp[i] === g) buf.tone[i] = Math.min(3, Math.max(buf.tone[i], side < 0 ? 2 : 3));
-      });
-    };
-    sh(Lp, [Qx, Qy]);
-    sh([Qx, Qy], [B[0] + side * 0.6, B[1] + 0.4]);
     if (s >= 3) {
-      // pick stitching ~0.6 u inside the edge, and the buttonhole on the wearer's left lapel
-      const inset = 0.65;
-      const a = [Lp[0] - side * inset * 0.6, Lp[1] + inset * 0.9], b = [Qx - side * inset, Qy], c = [B[0] - side * 0.1, B[1] - 1.6];
-      const st = side < 0 ? 0 : 2;
-      for (const [p, q] of [[a, b], [b, c]]) {
-        const p0 = o.toS(p[0], ly(p[1])), p1 = o.toS(q[0], ly(q[1]));
-        dashLine(buf, p0[0], p0[1], p1[0], p1[1], mat, st, g, 2, 2);
+      // pick stitching ~0.6 u inside the edge (singles only, s ≥ 3.6): tiny dimples one tone below
+      // the cloth they sit in, never lighter, so they read as stitches and not as dust; and the
+      // buttonhole on the wearer's left lapel
+      if (s >= 3.6) {
+        const inset = 0.65;
+        STITCH.mat = mat;
+        STITCH.g = g;
+        STITCH.buf = buf;
+        stitch(o, Lp[0] - side * inset * 0.6, ly(Lp[1] + inset * 0.9), Qx - side * inset, ly(Qy));
+        stitch(o, Qx - side * inset, ly(Qy), B[0] - side * 0.1, ly(B[1] - 1.6));
       }
       if (side > 0) {
         const h0 = o.toS(nhw + Ls.w * 0.55, ly(Ls.notchY + 2.6)), h1 = o.toS(nhw + Ls.w * 0.55 + 1.0, ly(Ls.notchY + 2.2));
@@ -671,6 +709,61 @@ export function drawLapels(buf, L, m, toS, s, vY, g, o = null, F = null) {
       }
     }
   }
+}
+
+/**
+ * Lapel outline from its boundary pixels: lapel pixels touching the jacket body take the deep tone;
+ * with `shadow` > 0, jacket pixels right of or below the lapel (up to `shadow` px) take tone 2+.
+ */
+function lapelEdges(buf, poly, lapel, body, g, shadow) {
+  const n = poly.length >> 1, W = buf.w;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let k = 0; k < n; k++) {
+    const x = poly[k * 2], y = poly[k * 2 + 1];
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+  }
+  x0 = Math.max(2, Math.floor(x0) - 1);
+  y0 = Math.max(2, Math.floor(y0) - 1);
+  x1 = Math.min(W - 3, Math.ceil(x1) + 2);
+  y1 = Math.min(buf.h - 3, Math.ceil(y1) + 2);
+  const mat = buf.mat, grp = buf.grp, tone = buf.tone;
+  const isBody = (j) => mat[j] === body && grp[j] === g;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const i = y * W + x;
+      if (mat[i] !== lapel || grp[i] !== g) continue;
+      if (isBody(i - 1) || isBody(i + 1) || isBody(i - W) || isBody(i + W)) tone[i] = 3;
+    }
+  }
+  if (!shadow) return;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const i = y * W + x;
+      if (!isBody(i)) continue;
+      const near = mat[i - 1] === lapel || mat[i - W] === lapel;
+      const near2 = shadow > 1 && (mat[i - 2] === lapel || mat[i - 2 * W] === lapel || mat[i - W - 1] === lapel);
+      if ((near || near2) && tone[i] < 2) tone[i] = 2;
+    }
+  }
+}
+
+// stitching: 2 px on, 2 px off, one tone darker than the cloth under it (module scratch, no closure per call)
+const STITCH = { buf: null, mat: 0, g: 0, n: 0 };
+function stitchPx(x, y) {
+  const S = STITCH, b = S.buf;
+  if (S.n++ % 4 >= 2) return;
+  const i = y * b.w + x;
+  if (b.mat[i] === S.mat && b.grp[i] === S.g) b.tone[i] = Math.min(3, b.tone[i] + 1);
+}
+function stitch(o, ax, ay, bx, by) {
+  fwd(o, ax, ay);
+  const x0 = FX, y0 = FY;
+  fwd(o, bx, by);
+  STITCH.n = 0;
+  line(x0, y0, FX, FY, stitchPx);
 }
 
 /** Breast-pocket welt with a two-peak pocket square (wearer's left breast). */

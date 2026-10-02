@@ -49,7 +49,7 @@ export const PALETTES = {
     fx: { reverb: 0.16, echo: 0.06, tremolo: 0 },
     duckDb: -9,
     moments: {
-      roundup: { energy: 0.6, gain: -7, lp: 2400, pocket: 0, bright: 0.9, layers: { arp: 1, bass: 0.85 } },
+      roundup: { energy: 0.6, gain: -7, lp: 2400, pocket: 0, bright: 0.9, layers: { arp: 1.5, bass: 0.7 } }, // the ostinato carries it, even on small speakers
     },
   },
   'world-now/finally': {
@@ -67,9 +67,33 @@ export const PALETTES = {
     perc: 'none', tex: 0,
     fx: { reverb: 0.22, echo: 0.12, tremolo: 0 },
     duckDb: -9,
+    duck: { melody: 0.2 }, // the triangle melody sits nearest the voice: -14 dB under speech
     moments: {
-      finally: { energy: 0.45, gain: -1, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.8 }, lead: 'sparse' },
-      chat: { energy: 0.45, gain: -1, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.6 }, lead: 'sparse' },
+      // A soft triangle root under the pluck keeps it warm and grown-up (never a music box).
+      finally: { energy: 0.45, gain: -1, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.8, bass: 0.6 }, lead: 'sparse' },
+      chat: { energy: 0.45, gain: -1, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.6, bass: 0.6 }, lead: 'sparse' },
+    },
+  },
+
+  // Owner switch bedUnderStories: 'soft' (default 'off' = the bible's silence under story copy): a very
+  // soft bed for light / neutral stories: pad, triangle and long Rhodes chords below 1.3 kHz, no melody.
+  'world-now/story': {
+    programme: 'world-now', title: 'WORLD NOW · soft story bed', key: 'D major', tonic: 62, scale: 'major', bpm: 76, swing: 0.5, trim: 0,
+    mood: 'barely there: a warm pad, long triangle roots and slow Rhodes chords; it never moves under a sentence',
+    sections: { A: ['Dmaj9', 'Gmaj9/D', 'Bm9', 'Gmaj9'], A2: ['Em9', 'Dadd9/F#', 'Gmaj9', 'A9sus'] },
+    form: ['A', 'A2'],
+    colour: COLOUR.home,
+    keys: { inst: 'ep', lo: 52, vel: 0.5, index: 0.6 },
+    pad: { wave: 'pulse25', lo: 50, lpTo: 800, attack: 1.4 },
+    bass: { style: 'long', wave: 'triangle', lp: 460 },
+    drums: 'none',
+    arp: { inst: 'pluck', rate: 0.5, pattern: 'up', oct: 12 },
+    lead: { inst: 'softtri', oct: 12 },
+    perc: 'none', tex: 0,
+    fx: { reverb: 0.26, echo: 0.05, tremolo: 0.2 },
+    duckDb: -6,
+    moments: {
+      story: { energy: 0.25, gain: -9, lp: 1300, pocket: 0, bright: 0.8, comp: 'float', layers: { pad: 0.75, bass: 0.6, keys: 0.4 } },
     },
   },
 
@@ -84,17 +108,19 @@ export const PALETTES = {
     pad: { wave: 'pulse25', lo: 52, lpTo: 1000, attack: 0.9 },
     bass: { style: 'halftime', wave: 'triangle', lp: 520 },
     drums: 'hats',
-    arp: { inst: 'pluck', rate: 0.5, pattern: 'updown', oct: 12, wave: 'pulse125', decay: 0.14, bright: 1500, vel: 0.45 },
+    arp: { inst: 'pluck', rate: 0.5, pattern: 'updown', oct: 12, wave: 'pulse125', decay: 0.14, bright: 1500, vel: 0.4 }, // bible: velocity <= 0.4
     lead: { inst: 'pluck', oct: 12, variants: ['statement'] },
     perc: 'none', tex: 0,
     fx: { reverb: 0.16, echo: 0.32, tremolo: 0 },
     duckDb: -9,
     moments: {
-      headlines: { energy: 0.6, gain: -8, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.9, arp: 1, hat: 0.6 } },
-      chat: { energy: 0.5, gain: -9, lp: 2000, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.9, arp: 0.8 } },
-      number: { energy: 0.45, gain: -10, lp: 1900, pocket: 0, bright: 0.9, layers: { pad: 0.8, bass: 0.8, arp: 0.6 } },
-      finally: { energy: 0.6, gain: -8, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.9, arp: 1, hat: 0.6 } },
-      signoff: { energy: 0.55, gain: -8, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.9, bass: 0.9, arp: 0.8 } },
+      // The pulse-12 arpeggio is the programme's identity: it sits above a lighter triangle (audible on small speakers too).
+      headlines: { energy: 0.6, gain: -8, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.65, arp: 1.4, hat: 0.6 } },
+      chat: { energy: 0.5, gain: -9, lp: 2000, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.65, arp: 1.15 } },
+      number: { energy: 0.45, gain: -10, lp: 1900, pocket: 0, bright: 0.9, layers: { pad: 0.8, bass: 0.6, arp: 0.9 } },
+      finally: { energy: 0.6, gain: -8, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.65, arp: 1.4, hat: 0.6 } },
+      signoff: { energy: 0.55, gain: -8, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.9, bass: 0.65, arp: 1.15 } },
+      story: { energy: 0.25, gain: -12, lp: 1300, pocket: 0, bright: 0.8, layers: { pad: 0.8, bass: 0.7 } }, // owner switch 'soft' only
     },
   },
 
@@ -118,6 +144,8 @@ export const PALETTES = {
     moments: {
       coldOpen: { energy: 0.4, gain: -12, lp: 1200, pocket: 0, bright: 0.9, layers: { pad: 0.9, bass: 0.8, lead: 1 }, lead: 'sparse', entry: 'xfade' },
       story: { energy: 0.35, gain: -12, lp: 1200, pocket: 0, bright: 0.9, layers: { pad: 0.9, bass: 0.8, lead: 0.8 }, lead: 'sparse', hidden: true },
+      // Owner switch 'soft': the pad and sub stay up on presenter shots too (bells still only in gaps).
+      storySoft: { energy: 0.3, gain: -14, lp: 1100, pocket: 0, bright: 0.85, layers: { pad: 0.9, bass: 0.8, lead: 0.7 }, lead: 'sparse' },
     },
   },
   'cosmos/finally': {

@@ -6,18 +6,20 @@
 //   - honey hair pulled back sleek from a side part into a low chignon that
 //     sits behind the nape on the far side: a tight, groomed silhouette with
 //     the bun peeking out below the ear (nothing like Lola's bob);
-//   - a mid-grey tailored jacket with notch lapels and a high one-button
-//     closure over a crisp white blouse with a soft collar, a small silver bar pin,
-//     pearl studs. No green anywhere in the wardrobe: green is market data on
-//     screen and the desk line.
+//   - a near-black ink tailored jacket (deeper than Paco's charcoal and Sam's
+//     mid-grey, so the three never share a suit at 1x) with narrow notch lapels
+//     and a high one-button closure over a crisp white blouse with a soft
+//     collar, a small silver bar pin, pearl studs. No green anywhere in the
+//     wardrobe: green is market data on screen and the desk line.
 // She rests a pen in her hand (props: ['pen'], drawn by HANDS' drawProps; it is
 // never a gesture cue) and moves least of the cast (persona.energy 0.6).
 import { P } from '../../../palette.js';
 import { toneN, decal } from '../pixbuf.js';
 import { headHW } from '../head.js';
 import { clamp } from '../space.js';
+import { GROUPS } from '../character.js';
 import { defineLook, SKIN_LIGHT } from './base.js';
-import { LocalXY, localBox, clumpTone } from './kit-a.js';
+import { LocalXY, localBox, clumpTone, selOutEdge, hairLight, rimMat, HeadWidthLUT } from './kit-a.js';
 
 export const penny = defineLook({
   id: 'penny',
@@ -32,7 +34,8 @@ export const penny = defineLook({
   ears: { y: -0.15, h: 2.7, w: 0.95 },
   skin: SKIN_LIGHT,
   skinLine: P.brown,
-  hair: { style: 'chignon', ramp: [P.cream, P.tan, P.tanShade, P.brown], line: P.brown },
+  // the hairline gets a tanShade (local) line; the hair light sits on the upper right only
+  hair: { style: 'chignon', ramp: [P.cream, P.tan, P.tanShade, P.brown], line: P.brown, edge: P.tanShade, rimTop: false },
   mustache: null,
   glasses: null, // money-minute.md S2: no glasses
   props: ['pen'], // the resting pen (HANDS draws it); never a gesture cue
@@ -41,7 +44,7 @@ export const penny = defineLook({
   outfit: 'tailored',
   neckline: 'blouse',
   lapel: { notchY: 6.4, w: 4.0, collarW: 3.1 },
-  jacket: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black }, // charcoal, tailored: the blouse and face carry the light
+  jacket: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black }, // ink, tailored: the blouse and face carry the light
   shirt: { ramp: [P.white, P.white, P.silver, P.fog], line: P.steel }, // crisp white blouse (cool shade: the face stays the warmest)
   pin: { at: [5.6, 9.6], ramp: [P.white, P.silver, P.steel] },
   buttons: 1,
@@ -63,6 +66,7 @@ function drawSleekAndPearls(buf, L, m, head, s, sk) {
 // flat light patch: the face stays the brightest warm area), the hair beside
 // the face in shade.
 const LXY = new LocalXY();
+const HWL = new HeadWidthLUT();
 const CO = { cw: 1.55, s: 1, seed: 41, sep: true, hiLo: 2.0, hiHi: 6.6, hiW: 0.22, gap: 5.0 };
 export function drawSleek(buf, L, m, head, s) {
   const H = L.head;
@@ -75,6 +79,7 @@ export function drawSleek(buf, L, m, head, s) {
   const earTop = L.ears.y - L.ears.h * 0.5;
   const [x0, y0, x1, y1] = localBox(head, -RV - 0.6, H.top - 1.2, RV + 0.6, earTop + 0.6);
   const q = LXY.set(head);
+  const HW = HWL.set(H, 0);
   CO.s = s;
   CO.cw = s >= 3 ? 1.6 : 2.0;
   CO.sep = tier === 2;
@@ -82,7 +87,7 @@ export function drawSleek(buf, L, m, head, s) {
     q.at(px, py);
     const x = q.x, y = q.y;
     if (y > earTop + 0.3) return -1;
-    const hw = headHW(H, y, 0);
+    const hw = HW.at(y);
     if (y < cyc) {
       if (x * x + (y - cyc) * (y - cyc) > RV * RV) return -1;
     } else if (Math.abs(x) > hw + 0.3) return -1;
@@ -90,7 +95,9 @@ export function drawSleek(buf, L, m, head, s) {
     const dPart = fx - part;
     // hairline: clean and high on the small side; on the big side the sweep dips across the temple
     const sweep = dPart > 0 ? 1.45 * Math.sin(clamp(dPart / 9.0, 0, 1) * Math.PI * 0.8) : 0;
-    const hairline = H.top + 4.25 + pitchShift + sweep - (dPart < 0 ? 0.15 : 0);
+    // close-ups: the sweep's edge is fine strand ends, not a ruled line across the forehead
+    const tips = tier === 2 && dPart > 0.9 ? 0.26 * Math.abs(((dPart * 1.25) % 2) - 1) : 0;
+    const hairline = H.top + 4.25 + pitchShift + sweep + tips - (dPart < 0 ? 0.15 : 0);
     if (y > hairline) {
       // beside the face only a thin band of hair runs back over the ear
       if (Math.abs(x) <= hw - 0.25) return -1;
@@ -104,10 +111,12 @@ export function drawSleek(buf, L, m, head, s) {
     if (onPart) return 2;
     if (nearFace) return t;
     if (tier < 2) {
-      // blonde catches the key in a narrow band only, so the face stays the brightest warm area
+      // blonde catches the key in a narrow band only (mediums), none in wides: a 1 px cream line
+      // across a 15 px head reads as noise, and the face stays the brightest warm area
       if (t === 0) {
+        if (tier === 0) return 1;
         const band = (x + 1.2) * (x + 1.2) * 0.08 + (y - (H.top + 2.2));
-        return Math.abs(band) < (tier === 0 ? 0.9 : 0.6) ? 0 : 1;
+        return Math.abs(band) < 0.6 ? 0 : 1;
       }
       return t;
     }
@@ -126,6 +135,9 @@ export function drawSleek(buf, L, m, head, s) {
     v += 0.2 * CO.cw * Math.sin(v * 1.7 / CO.cw + 0.8);
     return clumpTone(t, v, u, CO);
   });
+  const g = head.gb + GROUPS.hair;
+  selOutEdge(buf, x0, y0, x1, y1, g, head.gb + GROUPS.head, m.hair, m.hairEdge);
+  if (s >= 1.35) hairLight(buf, head, g, rimMat(P.silver), H.R * 0.15, RV + 1, H.top - 1.5, cyc + 1, Math.max(2, Math.round(s * 1.2)));
 }
 
 // The low chignon behind the nape on the far side, with the band of hair that
@@ -136,25 +148,29 @@ const CHIG = { cw: 1.1, s: 1, seed: 47, sep: true, hiLo: 0.2, hiHi: 3.4, hiW: 0.
 export function drawChignon(buf, L, m, head, s, sk) {
   const H = L.head;
   const lag = sk ? sk.hairLag || 0 : 0;
-  const bx = H.R * 0.74 + 0.15 * lag, by = 4.6, rx = 3.6, ry = 3.0;
+  // low at the nape, behind the jaw's corner on the far side: it peeks out under the ear as a neat bun
+  const bx = H.R * 0.62 + 0.15 * lag, by = 5.5, rx = 3.3, ry = 2.8;
   const tier = s < 1.35 ? 0 : s < 2.2 ? 1 : 2;
   const [x0, y0, x1, y1] = localBox(head, -H.R - 0.6, -2.5, bx + rx + 0.8, by + ry + 0.8);
   const q = LXY.set(head);
+  const HW = HWL.set(H, 0);
   CHIG.s = s;
   CHIG.sep = tier === 2;
-  buf.shape(x0, y0, x1, y1, m.hair, (px, py) => {
+  // behind the head it sits in the head's shadow: the back-hair material (no rim, one step darker),
+  // so it reads as hair behind the jaw and never as a lit lump on the cheek
+  buf.shape(x0, y0, x1, y1, m.hairBack, (px, py) => {
     q.at(px, py);
     const x = q.x, y = q.y;
     const ex = (x - bx) / rx, ey = (y - by) / ry;
     const d2 = ex * ex + ey * ey;
     // the band behind the ear (head silhouette + 0.6 u on the far side, down to the bun)
-    const hw = headHW(H, Math.min(y, H.cheekY), 0);
+    const hw = HW.at(Math.min(y, H.cheekY));
     const band = x > 0 && y > -2.2 && y < by && Math.abs(x) < hw + 0.6 && Math.abs(x) > hw - 1.5;
     if (d2 > 1 && !band) return -1;
-    if (d2 > 1) return x > 0 ? 2 : 1;
-    // the bun: lit upper left, a wrapping strand pattern, deep underside
-    let t = toneN(m.hair, ex * 0.85, ey * 0.85);
-    if (ey > 0.55) t = Math.max(t, 2);
+    if (d2 > 1) return 2;
+    // the bun: lit upper left, a wrapping strand pattern, deep underside (never the cream highlight)
+    let t = Math.max(1, toneN(m.hair, ex * 0.85, ey * 0.85));
+    if (ey > 0.45 || ex > 0.6) t = Math.max(t, 2);
     if (tier < 2) return t;
     const ang = Math.atan2(ey, ex);
     const r = Math.sqrt(d2);
@@ -174,6 +190,7 @@ function drawPearls(buf, L, head, s) {
     const ex = side * (hw + 0.25 - Math.max(0, turn) * 2.4 + Math.min(0, turn) * 0.4);
     const [px, py] = head.toScreen(ex, E.y + E.h * 0.42);
     const cx = Math.round(px), cy = Math.round(py);
+    if (s < 1.6) continue; // a lone pixel at the ear reads as noise in wides and two-shots
     if (s < 2.2) {
       buf.plot(cx, cy, base, 1);
       continue;

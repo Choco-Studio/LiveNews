@@ -107,6 +107,7 @@ export const BIBLE = {
     handover: true,
     signoffPapers: true,
     storyCount: [1, 2],
+    beats: { density: { story: 0.62, chat: 0.4, intro: 0.3 }, variants: ['raise_hand:beat', 'raise_hand:offer', 'raise_hand:beat2', 'steeple:press'] },
   },
   'tech-bytes': {
     speaker: {
@@ -120,6 +121,10 @@ export const BIBLE = {
     lead: [0.2, 0.3],
     variants: { ada: { shake_head: 'slow' } },
     storyCount: [1, 2],
+    beats: {
+      max: { density: { story: 0.68, chat: 0.45, intro: 0.3 }, variants: ['raise_hand:beat', 'raise_hand:offer', 'raise_hand:beat2'] },
+      ada: { density: { story: 0.4, chat: 0.3 }, variants: ['steeple:press', 'shrug:small'] },
+    },
   },
   cosmos: {
     speaker: {
@@ -134,6 +139,8 @@ export const BIBLE = {
     variants: { unit8: { nod: 'crisp' } },
     amp: { unit8: 0.85 },
     storyCount: [1, 1],
+    // Nova only; armSpacing (6 s per presenter) still holds for every arm movement
+    beats: { nova: { density: { story: 0.5, chat: 0.3 }, variants: ['raise_hand:beat', 'steeple:press'] } },
   },
   'money-minute': {
     speaker: ['nod', 'steeple', 'lean_in', 'papers'],
@@ -166,6 +173,27 @@ export const BIBLE = {
 };
 
 const SETTLE = 0.35; // s two gestures may overlap while the first one settles
+const BEAT_AIR = 0.2; // s of stillness a beat keeps from the gestures around it
+/**
+ * Identity of a gesture for the no-repeat rule: its family (variants that read alike on screen share
+ * one: a steeple and a steeple press, a one- and a two-handed beat, every nod).
+ */
+const FAMILY = {
+  'steeple:press': 'steeple',
+  'raise_hand:beat2': 'raise_hand:beat',
+  'raise_hand:two': 'raise_hand',
+  'nod:single': 'nod',
+  'nod:crisp': 'nod',
+  'shrug:small': 'shrug',
+  'shake_head:slow': 'shake_head',
+  'point_screen:open': 'point_screen',
+  'point_partner:after_you': 'point_partner',
+};
+export const familyOf = (e) => {
+  const k = e.variant ? `${e.name}:${e.variant}` : e.name;
+  return FAMILY[k] || k;
+};
+const keyOf = familyOf;
 /** Legacy shots in which the presenter is not in vision: a gesture's apex never lands there. */
 const HIDDEN = new Set(['full', 'map', 'fact', 'montage', 'card', 'numbers', 'quote', 'number', 'headlines']);
 const GRAVE_AMP = [0.6, 0.7];
@@ -368,6 +396,8 @@ class SegmentPlan {
     let amp = opts.amp ?? R.amp;
     if (ctx.grave) amp = GRAVE_AMP[0] + (GRAVE_AMP[1] - GRAVE_AMP[0]) * this.r();
     if (amp < 1) ev.amp = Math.round(amp * 100) / 100;
+    if (opts.speed && opts.speed !== 1) ev.speed = opts.speed;
+    if (opts.beat) ev.beat = true;
     const d = defOf(ev);
     const rate = rateOf(ev);
     const apex = d.apex / rate, stroke = d.stroke / rate, dur = d.dur / rate;
@@ -395,8 +425,9 @@ class SegmentPlan {
     if (ctx.shots && ctx.shots.length && HIDDEN.has(shotAt(ctx, ev.apexAt))) return false;
     // a gesture may run a little into the pause after the segment, not into the next one
     if (ev.at + ev.dur > ctx.duration + (ctx.gapAfter ?? 0.8) + 0.4) return false;
-    // never two gestures at once (a settle overlap is fine)
-    for (const p of this.events) if (ev.at < p.at + p.dur - SETTLE && p.at < ev.at + ev.dur - SETTLE) return false;
+    // never two gestures at once (a settle overlap is fine); a beat also leaves a little air around it
+    const air = ev.beat ? -BEAT_AIR : SETTLE;
+    for (const p of this.events) if (ev.at < p.at + p.dur - air && p.at < ev.at + ev.dur - air) return false;
     const si = sentenceOf(ctx, ev.word);
     if (arm && (this.sentArm.get(si) || 0) >= 1) return false;
     if (R.B.perSentence && (this.sentAny.get(si) || 0) >= R.B.perSentence) return false;
@@ -408,6 +439,16 @@ class SegmentPlan {
       if (ev.at < (this.ep.armMinAt[ctx.index] || 0)) return false;
     }
     if (!opts.free && this.count >= R.cap) return false;
+    // never the same gesture twice in a row (name and variant), whatever planned it
+    const key = keyOf(ev);
+    let before = null, after = null;
+    for (const p of this.events) {
+      if (p.at <= ev.at && (!before || p.at > before.at)) before = p;
+      if (p.at > ev.at && (!after || p.at < after.at)) after = p;
+    }
+    if ((before && keyOf(before) === key) || (after && keyOf(after) === key)) return false;
+    // ...nor as the first arm gesture of a turn when the presenter's previous turn ended on it
+    if (arm && this.avoidFirst === key && !this.events.some((p) => p.arm && p.at < ev.at)) return false;
     if (ev.name === 'steeple' && R.B.steeplePerStory && this.steeples >= R.B.steeplePerStory) return false;
     return true;
   }
@@ -419,8 +460,11 @@ class SegmentPlan {
     const si = sentenceOf(this.ctx, ev.word);
     if (d.arm) this.sentArm.set(si, (this.sentArm.get(si) || 0) + 1);
     this.sentAny.set(si, (this.sentAny.get(si) || 0) + 1);
-    this.count++;
-    if (ev.name === 'steeple') this.steeples++;
+    // beats are delivery (owner 20:40), not the bible's cue-level gestures: they do not use its caps
+    if (!ev.beat) {
+      this.count++;
+      if (ev.name === 'steeple') this.steeples++;
+    }
     return ev;
   }
 
@@ -456,6 +500,31 @@ class SegmentPlan {
 
 // ---------------------------------------------------------------------------
 
+// The family of the last arm gesture each turn ends on, from a plan of that turn made without the
+// camera's cuts (a pure function of the episode, memoised per neighbour context object): the next
+// turn of the same presenter does not open on it (owner 20:40: never the same gesture twice in a row).
+const TURN_END = new WeakMap();
+function previousTurnEnd(ctx) {
+  if (typeof ctx.contextAt !== 'function') return null;
+  const segs = ctx.episode.segments || [];
+  let j = ctx.index - 1;
+  while (j >= 0 && segs[j]?.anchor !== ctx.seg.anchor) j--;
+  if (j < 0) return null;
+  const c = ctx.contextAt(j);
+  if (!c || !c.valid) return null;
+  if (TURN_END.has(c)) return TURN_END.get(c);
+  TURN_END.set(c, null); // guard: a turn never depends on itself
+  let fam = null;
+  try {
+    const evs = planGestures(c).filter((e) => e.kind === 'gesture' && defOf(e)?.arm);
+    if (evs.length) fam = familyOf(evs[evs.length - 1]);
+  } catch {
+    fam = null;
+  }
+  TURN_END.set(c, fam);
+  return fam;
+}
+
 /** @returns planned gesture and emotion events for the speaker (emotions for any slot) */
 export function planGestures(ctx) {
   const out = [];
@@ -471,6 +540,7 @@ export function planGestures(ctx) {
   const R = rulesFor(ctx);
   const P = new SegmentPlan(ctx, R);
   P.ep = episodePlan(ctx);
+  P.avoidFirst = previousTurnEnd(ctx);
   const B = R.B;
   const text = ctx.seg.text;
   const where = whereOf(ctx);
@@ -545,7 +615,113 @@ export function planGestures(ctx) {
   // ---- MONEY MINUTE / tech / cosmos: a chat or intro may carry one listed gesture too
   if ((ctx.type === 'chat' || ctx.type === 'intro') && R.pid !== 'world-now' && P.count < R.cap && P.r() < 0.4) fillStory(P, ctx, R, 1);
 
+  // ---- owner 20:40: small motivated beats on most other sentences of light and neutral segments
+  addBeats(P, ctx, R);
+
   return out.concat(finish(P));
+}
+
+// ---------------------------------------------------------------------------
+// Beats (owner 20:40: "few gestures, repetitive" → motivated gestures on most sentences of light and
+// neutral stories, rotated, never twice in a row, adult and restrained; grave: none)
+
+const CONTRAST = /\b(but|however|yet|although|though|still|instead|despite|except)\b/i;
+const SCALE = /\b(all|every|whole|entire|across|nationwide|worldwide|record|biggest|largest|most|millions?|billions?|thousands?|everyone|everywhere)\b/i;
+
+/** The speaker's beat settings in this programme ({ density, variants }) or null. */
+export function beatConfig(R, id) {
+  const b = R.B.beats;
+  if (!b) return null;
+  if (b.variants) return b;
+  return (id && b[id]) || null;
+}
+
+/**
+ * The rotation of beat variants for one presenter across the episode: position p (the speaker's
+ * running sentence count) → variant, a seeded shuffle per lap whose first item never repeats the
+ * previous lap's last, so consecutive positions never hold the same variant.
+ */
+export function beatAt(ctx, pool, p) {
+  const n = pool.length;
+  if (n === 1) return pool[0];
+  const lapOf = (L) => {
+    const r = rng((hashSeed(`${ctx.episodeId}|${ctx.speaker}|beats|${L}`) ^ ctx.episodeSeed) >>> 0);
+    const a = pool.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(r() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+  const L = Math.floor(p / n), k = p - L * n;
+  const lap = lapOf(L);
+  if (L > 0 && n >= 2) {
+    const prevLast = lapOf(L - 1)[n - 1];
+    if (lap[0] === prevLast) [lap[0], lap[1]] = [lap[1], lap[0]];
+  }
+  return lap[k];
+}
+
+/** The speaker's running sentence position at the start of this segment (an upper bound: ~18 chars a sentence at least). */
+function sentenceOffset(ctx) {
+  const segs = ctx.episode.segments || [];
+  const me = ctx.seg.anchor;
+  let n = 0;
+  for (let i = 0; i < ctx.index && i < segs.length; i++) if (segs[i].anchor === me) n += Math.ceil((segs[i].chars || 0) / 18) + 1;
+  return n;
+}
+
+function addBeats(P, ctx, R) {
+  const cfg = beatConfig(R, ctx.speakerId);
+  if (!cfg || ctx.grave) return;
+  const kind = ctx.type === 'story' ? (ctx.feature === 'roundup' ? null : 'story') : ctx.type;
+  const density = (kind && cfg.density[kind]) || 0;
+  if (density <= 0) return;
+  const pool = cfg.variants.filter((v) => {
+    const [name, variant] = v.split(':');
+    return P.admit(name) === name && GESTURES[name].variants?.[variant];
+  });
+  if (!pool.length) return;
+  const r = rng((ctx.seed ^ 0x51ed270b) >>> 0); // its own stream: beats never shift the other choices
+  const S = ctx.sentences, W = ctx.words;
+  const base = sentenceOffset(ctx);
+  for (let si = 0; si < S.length; si++) {
+    const sent = S[si];
+    const roll = r(), pickAmp = r(), pickSpeed = r();
+    if ((P.sentArm.get(si) || 0) >= 1) continue;
+    if (sent.t1 - sent.t0 < 1.3 || roll > density) continue;
+    // anchor candidates: the sentence's stressed words, the most emphatic first
+    const cands = [];
+    for (let i = 0; i < W.length; i++) if (W[i].char >= sent.start && W[i].char < sent.end && W[i].stressed) cands.push(i);
+    if (!cands.length) continue;
+    cands.sort((a, b) => (W[b].emph || 0) - (W[a].emph || 0) || a - b);
+    // motivated choices first (a contrast opens the palm, scale frames it with both hands), then the rotation
+    const prefs = [];
+    const text = sent.text || ctx.seg.text.slice(sent.start, sent.end);
+    const mC = CONTRAST.exec(text), mS = SCALE.exec(text);
+    if (mC && pool.includes('raise_hand:offer')) prefs.push(['raise_hand:offer', sent.start + mC.index]);
+    if (mS && pool.includes('raise_hand:beat2')) prefs.push(['raise_hand:beat2', sent.start + mS.index]);
+    if (/\?\s*$/.test(text) && pool.includes('shrug:small')) prefs.push(['shrug:small', sent.start]);
+    const rot = beatAt(ctx, pool, base + si);
+    prefs.push([rot, -1]);
+    for (const v of pool) if (v !== rot) prefs.push([v, -1]);
+    const amp = Math.round((0.82 + 0.18 * pickAmp) * (R.amp < 1 ? R.amp : 1) * 100) / 100;
+    const speed = [0.92, 1, 1.08][Math.floor(pickSpeed * 3)];
+    let done = false;
+    for (const [v, from] of prefs) {
+      const [name, variant] = v.split(':');
+      const order = from < 0 ? cands : cands.filter((i) => W[i].char >= from).concat(cands.filter((i) => W[i].char < from));
+      for (const wi of order) {
+        const ev = P.tryAt(name, wi, { variant, amp, speed, free: true, beat: true });
+        if (ev) {
+          P.commit(ev);
+          done = true;
+          break;
+        }
+      }
+      if (done) break;
+    }
+  }
 }
 
 /** Seeded fillers for a story (or `max` of them elsewhere), never repeating the previous turn's first choice. */
@@ -653,6 +829,7 @@ function finish(P) {
     if (e.n != null) o.n = e.n;
     if (e.amp != null) o.amp = e.amp;
     if (e.speed != null) o.speed = e.speed;
+    if (e.beat) o.beat = true;
     return o;
   });
 }

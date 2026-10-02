@@ -1,0 +1,338 @@
+{
+ "kind": "episode",
+ "id": "emurd7reh7",
+ "createdAt": "2026-10-02T19:37:44.057Z",
+ "program": {
+  "id": "world-now",
+  "title": "WORLD NOW",
+  "tagline": "THE STORIES SHAPING OUR WORLD",
+  "theme": "world"
+ },
+ "cast": {
+  "A": "paco",
+  "B": "lola"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "pictures",
+   "ms": 1,
+   "pictures": 0,
+   "of": 6,
+   "found": 0,
+   "borrowed": 0
+  },
+  {
+   "stage": "write",
+   "ms": 581,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 0,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 1,
+   "images": 0,
+   "verified": 0
+  }
+ ],
+ "title": "WORLD NOW (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Cairo museum opens a new wing for ancient wooden boats. Oil prices slide as global demand cools. Airline orders 100 new fuel-efficient jets. Good evening, and welcome to WORLD NOW. I'm Paco Pixel, with Lola Byte.",
+   "cues": [
+    {
+     "char": 180,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 212,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s2af6b5c7ea",
+    "sd05fe60c95",
+    "s020019c4ed"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "In Cairo, curators say the larger boat is 43 metres long and was rebuilt from 1,200 pieces. A museum in Cairo has opened a new wing to show two ancient wooden boats, Pixelburg Post reports.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "raise_hand"
+    },
+    {
+     "char": 189,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s2af6b5c7ea",
+   "headline": "Cairo museum opens new wing for ancient wooden boats",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "CAIRO, EGYPT",
+    "lat": 30.04,
+    "lon": 31.24
+   },
+   "fact": "1,200 PIECES",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "HISTORY",
+   "numbers": [
+    {
+     "value": "1,200",
+     "label": "PIECES"
+    },
+    {
+     "value": "43",
+     "label": "METRES LONG"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Thanks, Paco. Oil prices fell for a third day as traders expect weaker demand this winter. Brent crude dropped 2 percent to 71 dollars a barrel, according to Ledger Line.",
+   "cues": [
+    {
+     "char": 13,
+     "slot": null,
+     "action": "lean_in"
+    },
+    {
+     "char": 170,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "sd05fe60c95",
+   "headline": "Oil prices slide as global demand cools",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": "BRENT CRUDE DOWN 2%",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ECONOMY",
+   "numbers": [
+    {
+     "value": "2%",
+     "label": "BRENT CRUDE DOWN"
+    },
+    {
+     "value": "71",
+     "label": "DOLLARS A BARREL"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Our number of the day: about 12 billion dollars. A European airline has ordered 100 new short-haul jets in a deal worth about 12 billion dollars. Deliveries will start in 2028, Ledger Line reports.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "steeple"
+    },
+    {
+     "char": 197,
+     "slot": "B",
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "s020019c4ed",
+   "headline": "Airline orders 100 new fuel-efficient jets",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": "ABOUT 12 BILLION DOLLARS",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "12 BILLION",
+     "label": "DOLLARS",
+     "qualifier": "ABOUT"
+    },
+    {
+     "value": "100",
+     "label": "NEW SHORT-HAUL JETS"
+    }
+   ],
+   "feature": "number"
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "The central bank has kept interest rates unchanged at 3.5 percent. Policymakers said inflation is easing but they want more evidence before cutting.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "lean_in"
+    },
+    {
+     "char": 148,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "scfc96feaa9",
+   "headline": "Central bank holds interest rates steady at 3.5 percent",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ECONOMY"
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "And finally: A festival in Seoul lit up the sky over the Han river with a show of 1,000 drones. Organisers said about 200,000 people watched from the riverbanks.",
+   "cues": [
+    {
+     "char": 161,
+     "slot": "A",
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "s6cffbcca9e",
+   "headline": "Seoul festival lights up Han river with 1,000 drones",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "SEOUL, SOUTH KOREA",
+    "lat": 37.57,
+    "lon": 126.98
+   },
+   "fact": "1,000 DRONES",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AND FINALLY",
+   "numbers": [
+    {
+     "value": "1,000",
+     "label": "DRONES"
+    },
+    {
+     "value": "200,000",
+     "label": "PEOPLE",
+     "qualifier": "ABOUT"
+    }
+   ],
+   "feature": "lighter"
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "That one I will be repeating at dinner.",
+   "cues": []
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "Your guests have my sympathy.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "shrug"
+    }
+   ]
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's WORLD NOW. From Lola Byte and from me, thank you for watching. Stay with us on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 17,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s2af6b5c7ea",
+   "headline": "Cairo museum opens new wing for ancient wooden boats",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "HISTORY"
+  },
+  {
+   "storyId": "sd05fe60c95",
+   "headline": "Oil prices slide as global demand cools",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ECONOMY"
+  },
+  {
+   "storyId": "s020019c4ed",
+   "headline": "Airline orders 100 new fuel-efficient jets",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY"
+  },
+  {
+   "storyId": "scfc96feaa9",
+   "headline": "Central bank holds interest rates steady at 3.5 percent",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ECONOMY"
+  },
+  {
+   "storyId": "s6cffbcca9e",
+   "headline": "Seoul festival lights up Han river with 1,000 drones",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AND FINALLY"
+  }
+ ],
+ "storyIds": [
+  "s2af6b5c7ea",
+  "sd05fe60c95",
+  "s020019c4ed",
+  "scfc96feaa9",
+  "s6cffbcca9e"
+ ]
+}

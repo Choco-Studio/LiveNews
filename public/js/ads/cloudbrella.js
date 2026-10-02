@@ -19,10 +19,10 @@
 import {
   P, W, H, R, A, oval, disc, ring, line, rrect, cached, lazy, play, tween, prog, smooth, lerp, clamp,
   trackIn, fadeUp, rule, smallPrint, gradient, vignette, beam, contact, glintStar, lathe, turntable, sheen,
-  motes, hash01, rgb, bayer, warmUp, tune,
+  motes, hash01, rgb, bayer, warmUp, tune, clipRect,
 } from './kit.js';
 
-const { round, sin, cos, PI, max, min, abs, sqrt, floor, atan2, pow } = Math;
+const { round, sin, cos, PI, max, min, abs, sqrt, floor, ceil, atan2, pow } = Math;
 
 const FABRIC = [P.black, P.ink, P.slate, P.steel, P.fog, P.silver, P.white]; // Cloud White
 const GRAPHITE = [P.black, P.ink, P.slate, P.steel, P.fog];
@@ -58,6 +58,220 @@ function stage(ctx, lt, light, turn) {
 function inCone(x, y) {
   const s = (y + 6) / (TT_Y + 6);
   return abs(x - 192) < (17 + 58 * s) * 0.85;
+}
+
+// --- the auditorium ------------------------------------------------------------------
+// A keynote hall: an LED wall behind the stage, dark until it has something to
+// say (its module seams show faintly), a glossy black stage, and the audience
+// in the foreground in silhouette, rim-lit by the stage. Several of them are
+// filming it on their phones, which is rather the problem the product solves.
+
+/** An LED wall of w x h with modules of `cell` px: dark, a faint top glow, a lit bottom edge. */
+function ledWall(key, w, h, cell) {
+  return cached(key, w, h, (c) => {
+    c.drawImage(gradient(`${key}-glow`, w, h, { cx: w / 2, cy: -h * 0.15, rx: w * 0.62, ry: h * 1.25, ramp: [P.black, P.ink, P.ink], gamma: 1.1, seam: 0.5 }), 0, 0);
+    for (let x = cell; x < w; x += cell) {
+      R(c, x, 0, 1, h, A(P.black, 0.7));
+      R(c, x + 1, 0, 1, h, A(P.slate, 0.08));
+    }
+    for (let y = cell; y < h; y += cell) {
+      R(c, 0, y, w, 1, A(P.black, 0.7));
+      R(c, 0, y + 1, w, 1, A(P.slate, 0.08));
+    }
+    R(c, 0, 0, w, 1, P.black);
+    R(c, 0, 0, 1, h, P.black);
+    R(c, w - 1, 0, 1, h, P.black);
+    R(c, 0, h - 2, w, 1, P.ink);
+    R(c, 0, h - 1, w, 1, P.slate); // the frame's lower edge catches the spotlight
+  });
+}
+
+// Audience rows: [centre y of the heads, scale, spacing, seed]; a scale of 1 is a head 12 px wide.
+const AUD_Y = 164; // top of the audience canvas
+const AUD_H = H - AUD_Y;
+const ROWS_WIDE = [[16, 0.6, 15, 3], [25, 0.85, 21, 5], [36, 1.2, 30, 7]];
+const ROWS_NEAR = [[46, 1.75, 44, 9]];
+/**
+ * Heads, necks and shoulders seen from behind, rasterised into an id buffer
+ * (front rows overwrite back rows), styles seeded: 0 short, 1 long, 2 bun,
+ * 3 curly, 4 bald, 5 bob. Returns { id, part, heads } where heads holds
+ * [cx, cy, s, style, row] for the phones and glows.
+ */
+const AUD_CACHE = new Map();
+function audienceLayout(rows) {
+  let out = AUD_CACHE.get(rows);
+  if (out) return out;
+  const id = new Uint16Array(W * AUD_H);
+  const part = new Uint8Array(W * AUD_H);
+  const heads = [];
+  for (let row = 0; row < rows.length; row++) {
+    const [cy0, s0, gap, seed] = rows[row];
+    let x = -gap * 0.4 + hash01(seed, 1) * gap * 0.5;
+    let i = 0;
+    while (x < W + gap * 0.5) {
+      const s = s0 * (0.92 + hash01(i, seed + 2) * 0.16);
+      const cx = round(x + (hash01(i, seed + 3) - 0.5) * gap * 0.25);
+      const cy = round(cy0 + (hash01(i, seed + 4) - 0.5) * 3 * s0);
+      const style = floor(hash01(i, seed + 5) * 6);
+      heads.push([cx, cy, s, style, row]);
+      const n = heads.length;
+      const x0 = max(0, floor(cx - 18 * s));
+      const x1 = min(W - 1, ceil(cx + 18 * s));
+      const y0 = max(0, floor(cy - 10 * s));
+      for (let y = y0; y < AUD_H; y++) {
+        for (let px = x0; px <= x1; px++) {
+          const p = headPart(px + 0.5 - cx, y + 0.5 - cy, s, style);
+          if (p) {
+            id[y * W + px] = n;
+            part[y * W + px] = p;
+          }
+        }
+      }
+      x += gap * (0.85 + hash01(i, seed + 6) * 0.3);
+      i++;
+    }
+  }
+  out = { id, part, heads };
+  AUD_CACHE.set(rows, out);
+  return out;
+}
+/** Which part of a seated figure (from behind) the offset (dx, dy) from the head centre falls in: 1 hair, 2 skin, 3 clothes, 0 none. */
+function headPart(dx, dy, s, style) {
+  const rx = 6 * s;
+  const ry = 7 * s;
+  let rr = (dx / rx) ** 2 + (dy / ry) ** 2;
+  if (style === 3) rr /= (1 + 0.09 * sin(atan2(dy, dx) * 9)) ** 2; // curls break the outline
+  if (rr <= 1) return style === 4 ? 2 : 1;
+  if (style === 2 && (dx - s) ** 2 + (dy + 6.6 * s) ** 2 <= (2.6 * s) ** 2) return 1; // bun
+  if (style === 1 && dy > 0 && dy < 11 * s && abs(dx) <= 6 * s + dy * 0.18) return 1; // long hair to the shoulders
+  if (style === 5 && dy > 0 && dy < 5 * s && abs(dx) <= 6.7 * s) return 1; // a bob
+  if ((style === 0 || style === 4) && ((abs(dx) - 6 * s) / (1.3 * s)) ** 2 + ((dy - 0.6 * s) / (1.9 * s)) ** 2 <= 1) return 2; // ears
+  if (dy > 4 * s && dy < 11 * s && abs(dx) <= 2.7 * s) return 2; // neck
+  if (dy >= 8.5 * s && (dx / (17 * s)) ** 2 + ((dy - 20 * s) / (11.5 * s)) ** 2 <= 1) return 3; // shoulders
+  return 0;
+}
+/**
+ * The audience canvas in one light: lit = rim light from the stage (on the top
+ * edges and the side facing the stage centre), else only the faintest edge.
+ */
+function audienceArt(key, rows, lit, screenX = -1) {
+  return cached(key, W, AUD_H, (c) => {
+    const { id, part } = audienceLayout(rows);
+    for (let y = 0; y < AUD_H; y++) {
+      for (let x = 0; x < W; x++) {
+        const n = id[y * W + x];
+        if (!n) continue;
+        const p = part[y * W + x];
+        // the rim shows only where the edge is against the lit stage (nothing behind it),
+        // not where one head overlaps another
+        const up = y > 0 ? id[(y - 1) * W + x] : 0;
+        const side = x < 192 ? (x + 1 < W ? id[y * W + x + 1] : 0) : x > 0 ? id[y * W + x - 1] : 0;
+        let col = P.black;
+        if (screenX >= 0) {
+          // lit only by the big phone on stage: a cool top edge that falls off with distance
+          const d = abs(x - screenX);
+          if (!up && d < 150) col = d < 70 && p !== 3 ? P.slate : P.ink;
+        } else if (lit && !up) col = p === 2 ? P.steel : p === 1 ? P.slate : P.ink;
+        else if (lit && !side && p !== 3) col = P.ink;
+        else if (lit && p === 2 && y > 1 && !id[(y - 2) * W + x]) col = P.slate; // a bald crown's sheen
+        R(c, x, y, 1, 1, col);
+      }
+    }
+  });
+}
+const audWideLit = lazy(() => audienceArt('cb-aud-wide-lit', ROWS_WIDE, true));
+const audWideDark = lazy(() => audienceArt('cb-aud-wide-dark', ROWS_WIDE, false));
+const audWideScreen = lazy(() => audienceArt('cb-aud-wide-screen', ROWS_WIDE, false, PH_X));
+const audNearLit = lazy(() => audienceArt('cb-aud-near-lit', ROWS_NEAR, true));
+
+/** The audience at stage light `light`; the lit version blends in over the dark one. */
+function audience(ctx, rows, light) {
+  const dark = rows === ROWS_WIDE ? audWideDark() : null;
+  if (dark && light < 1) ctx.drawImage(dark, 0, AUD_Y);
+  if (light > 0) {
+    ctx.save();
+    ctx.globalAlpha = dark ? light : 1;
+    ctx.drawImage(rows === ROWS_WIDE ? audWideLit() : audNearLit(), 0, AUD_Y);
+    ctx.restore();
+  }
+}
+
+/**
+ * A phone held up by audience member `h` (index into the layout), raised by
+ * p (0..1, eased): the forearm rises from the shoulder, the screen lights as it
+ * clears the heads. The screen faces us: a tiny picture of the stage.
+ */
+function phoneUp(ctx, rows, h, p, lightOn) {
+  if (p <= 0) return;
+  const hd = audienceLayout(rows).heads[h]; // (indexed, not destructured: no iterator per frame)
+  const cx = hd[0];
+  const s = hd[2];
+  const cy = hd[1] + AUD_Y;
+  const side = cx < 192 ? 1 : -1; // the hand nearer the aisle
+  const e = smooth(p);
+  const sx = cx + side * 7 * s;
+  const sy = cy + 12 * s;
+  const px = round(cx + side * lerp(9, 5, e) * s);
+  const py = round(lerp(cy + 10 * s, cy - 10 * s, e));
+  const pw = max(5, round(5 * s));
+  const ph = max(8, round(9 * s));
+  line(ctx, round(sx), round(sy), px, py + ph, P.black, max(2, round(2.2 * s)));
+  disc(ctx, px, py + ph - 1, max(1, round(1.6 * s)), P.black);
+  ctx.save();
+  ctx.globalAlpha = clamp((e - 0.35) / 0.4, 0, 1);
+  R(ctx, px - (pw >> 1) - 2, py - 2, pw + 4, ph + 4, A(P.steel, 0.1)); // its glow
+  R(ctx, px - (pw >> 1) - 1, py - 1, pw + 2, ph + 2, A(P.fog, 0.12));
+  R(ctx, px - (pw >> 1), py, pw, ph, P.black);
+  R(ctx, px - (pw >> 1) + 1, py + 1, pw - 2, ph - 2, lightOn ? P.slate : P.steel);
+  if (lightOn) {
+    // the stage on the screen: the beam, the product in it, the turntable
+    R(ctx, px - (pw >> 1) + round(pw / 2) - 1, py + 1, 1, ph - 3, P.fog);
+    R(ctx, px - (pw >> 1) + round(pw / 2) - 1, py + 2, 1, max(1, round(ph / 3)), P.white);
+    R(ctx, px - (pw >> 1) + 1, py + ph - 2, pw - 2, 1, P.ink);
+  }
+  ctx.restore();
+}
+
+/** Index of the head in `row` nearest to x (resolved once per list; lists are module constants). */
+const PICKS = new Map();
+function picks(rows, list) {
+  let out = PICKS.get(list);
+  if (out) return out;
+  const heads = audienceLayout(rows).heads;
+  out = list.map(([row, x, t0]) => {
+    let best = 0;
+    let bd = Infinity;
+    heads.forEach((h, i) => {
+      const d = h[4] === row ? abs(h[0] - x) : Infinity;
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    });
+    return [best, t0];
+  });
+  PICKS.set(list, out);
+  return out;
+}
+
+/** Phones on laps light the people from below and behind: soft cool glows round their heads. */
+function lapGlows(ctx, rows, lt, times) {
+  const heads = audienceLayout(rows).heads;
+  for (let k = 0; k < times.length; k++) {
+    const t0 = times[k][1];
+    const a = smooth(prog(lt, t0, t0 + 0.5));
+    if (a <= 0) continue;
+    const hd = heads[times[k][0]];
+    const cx = hd[0];
+    const s = hd[2];
+    const cy = hd[1] + AUD_Y;
+    // the light rises past them from the phone in front of them: a halo round the head,
+    // the edges of the hair catching it, the screen itself glimpsed past the shoulder
+    oval(ctx, cx, round(cy - 1 * s), round(9 * s), round(6 * s), A(P.slate, 0.16 * a));
+    oval(ctx, cx, round(cy + 1 * s), round(6 * s), round(4 * s), A(P.steel, 0.1 * a));
+    R(ctx, round(cx + 6 * s), round(cy + 6 * s), 2, 1, A(P.silver, 0.7 * a));
+    R(ctx, round(cx + 6 * s), round(cy + 7 * s), 2, 1, A(P.fog, 0.4 * a));
+  }
 }
 
 // --- 1. PROBLEM: a phone, lit by its own screen --------------------------------------
@@ -192,6 +406,8 @@ function notifications(ctx, lt) {
 
 const glowBack = lazy(() => gradient('cb-phone-glow', W, H, { cx: PH_X, cy: 96, rx: 120, ry: 110, ramp: [P.black, P.ink], gamma: 1.6, seam: 0.5 }));
 
+// [row, x near, when its phone lights]: slowly, then everyone
+const LAP_GLOWS = [[2, 300, 1.6], [1, 52, 2.6], [0, 236, 3.5], [2, 170, 4.5], [1, 352, 5.2], [0, 120, 5.9], [2, 30, 6.3], [1, 210, 6.6], [0, 330, 6.85], [1, 260, 7.05]];
 function shotProblem(ctx, lt) {
   const wake = smooth(prog(lt, 0.15, 0.7)); // the screen wakes
   R(ctx, 0, 0, W, H, P.black);
@@ -230,6 +446,14 @@ function shotProblem(ctx, lt) {
   R(ctx, PH_X + 5, PH_T + 8, 1, 1, P.slate);
   // each arrival brightens the room a touch (motivated light, no flashing)
   if (pulse > 0) oval(ctx, PH_X, TT_Y + 3, 52, 6, A(P.steel, 0.12 * pulse));
+  // the audience in the dark, edged by the big screen's light, and one by one lit
+  // from their laps by their own phones
+  ctx.drawImage(audWideDark(), 0, AUD_Y);
+  ctx.save();
+  ctx.globalAlpha = wake;
+  ctx.drawImage(audWideScreen(), 0, AUD_Y);
+  ctx.restore();
+  lapGlows(ctx, ROWS_WIDE, lt, picks(ROWS_WIDE, LAP_GLOWS));
   vignette(ctx, 0.5);
   // keynote section header and the three words, on the voice
   fadeUp(ctx, '01', 200, 44, lt - 1.0, { face: 'thin', color: P.fog, dur: 0.8 });
@@ -294,7 +518,10 @@ const RIB_X = new Float32Array(33);
 const RIB_Y = new Float32Array(33);
 const CLAB = { cv: null, top: 0, h: 0, turn: 0 };
 const C_STRIPES = [[-0.58, 0.05, P.white, 0.05, 0.95]];
-const CANOPY_O = { rows: 0, ramp: FABRIC, ambient: 0.22, label: CLAB, stripes: C_STRIPES, rim: { k: 0.8 }, tilt: 0, seam: 0.55 };
+const MATTE = [P.black, P.ink, P.slate, P.steel, P.fog, P.silver];
+const RIM_OPEN = { k: 0.8 };
+const RIM_SOFT = { k: 0.45 };
+const CANOPY_O = { rows: 0, ramp: FABRIC, ambient: 0.22, label: CLAB, stripes: C_STRIPES, rim: RIM_OPEN, tilt: 0, seam: 0.55 };
 const SHAFT_O = { rows: 0, ramp: GRAPHITE, ambient: 0.2, stripes: [[-0.4, 0.3, P.steel]], rim: { k: 0.7 }, seam: 0.5 };
 const TIP_O = { rows: 0, ramp: METAL, ambient: 0.3, rim: { k: 0.6 }, seam: 0.5 };
 const COLLAR_O = { rows: 0, ramp: METAL, ambient: 0.25, stripes: [[-0.45, 0.14, P.white]], rim: { k: 0.8 }, seam: 0.4 };
@@ -471,6 +698,12 @@ function umbrella(ctx, cx, top, k, open, turn) {
   CLAB.top = 0;
   CLAB.h = hc;
   CLAB.turn = turn;
+  // furled, the cloth is matte (no white, no softbox stripe); open, the taut panels take the light
+  const furled = open <= 0.1;
+  CANOPY_O.ramp = furled ? MATTE : FABRIC;
+  CANOPY_O.stripes = furled ? null : C_STRIPES;
+  CANOPY_O.ambient = furled ? 0.26 : 0.22;
+  CANOPY_O.rim = furled ? RIM_SOFT : RIM_OPEN;
   CANOPY_O.rows = hc;
   CANOPY_O.tilt = 0.22 * e;
   lathe(ctx, cx, top + tipH, CANOPY, CANOPY_O);
@@ -496,23 +729,71 @@ function umbrella(ctx, cx, top, k, open, turn) {
   GEO.bottom = hy + round(HOOK_DROP * k);
   return rimY;
 }
-/** Ferrule y that keeps the handle `gap` px above the turntable at scale k. */
-const topFor = (k, gap = 5) => TT_Y - gap - round((SHAFT_L + HOOK_DROP + 2) * k);
+/** Ferrule y that keeps the handle `gap` px above a turntable top at tt, at scale k. */
+const topAt = (tt, k, gap = 5) => tt - gap - round((SHAFT_L + HOOK_DROP + 2) * k);
+const topFor = (k, gap = 5) => topAt(TT_Y, k, gap);
 
 // --- 2. REVEAL --------------------------------------------------------------------
 
-const REVEAL_K = 1.04;
+// The wide shot of the hall: the LED wall (x 26..357, y 6..109), the stage
+// to its lip at y 184, the turntable, and three rows of audience below.
+const WIDE_TT = 158;
+const WIDE_K = 0.8;
+const WALL_X = 26;
+const WALL_Y = 6;
+const wallWide = lazy(() => ledWall('cb-led-wide', 332, 104, 24));
+const floorWide = lazy(() =>
+  cached('cb-floor-wide', W, 80, (c) => {
+    c.drawImage(gradient('cb-floor-wide-g', W, 80, { cx: 192, cy: WIDE_TT - 108, rx: 220, ry: 54, ramp: [P.black, P.ink, P.slate], gamma: 1.8, seam: 0.4 }), 0, 0);
+    // the polished stage reflects the wall's lit edge, broken up by the floor joints
+    for (let x = WALL_X; x < WALL_X + 332; x++) if (x % 24 > 1) R(c, x, 3, 1, 1, A(P.slate, 0.35));
+    R(c, WALL_X, 6, 332, 1, A(P.ink, 0.5));
+  }),
+);
+function inConeWide(x, y) {
+  const s = (y + 6) / (WIDE_TT + 6);
+  return abs(x - 192) < (13 + 46 * s) * 0.85;
+}
+function hall(ctx, lt, light, turn) {
+  R(ctx, 0, 0, W, H, P.black);
+  // the wall shows faintly with the house lights down, fully once the stage is lit
+  ctx.save();
+  ctx.globalAlpha = 0.3 + 0.7 * light;
+  ctx.drawImage(wallWide(), WALL_X, WALL_Y);
+  ctx.restore();
+  if (light > 0) {
+    ctx.save();
+    ctx.globalAlpha = light;
+    ctx.drawImage(floorWide(), 0, 108);
+    ctx.restore();
+    beam(ctx, 192, -6, 192, WIDE_TT, 26, 116, { color: P.silver, alpha: 0.035 * light });
+    motes(ctx, lt, { x: 130, y: 0, w: 124, h: WIDE_TT, n: 28, seed: 5, drift: 4, fall: 1, color: P.silver, alpha: 0.6 * light, inside: inConeWide });
+  }
+  // the stage lip: a thin light strip along its edge (the heads cut into it), the dark face under it
+  R(ctx, 0, 179, W, 1, light > 0.5 ? P.steel : P.ink);
+  R(ctx, 0, 180, W, 1, light > 0.5 ? P.slate : P.black);
+  R(ctx, 0, 181, W, H - 181, P.black);
+  turntable(ctx, 192, WIDE_TT, 58, 9, turn, light > 0.62 ? TT_LIT : light > 0.3 ? TT_MID : TT_DARK);
+  if (light > 0) oval(ctx, 187, WIDE_TT - 1, 36, 5, A(P.steel, 0.22 * light));
+}
+
+// phones raised to film the reveal: [row, x near, start]
+const REVEAL_PHONES = [[1, 132, 1.05], [2, 262, 1.4], [0, 220, 1.9], [2, 96, 2.5], [1, 318, 2.9]];
 function shotReveal(ctx, lt) {
   const light = smooth(prog(lt, 0.15, 1.0));
-  stage(ctx, lt, light, 0.42 + lt * 0.05);
+  hall(ctx, lt, light, 0.42 + lt * 0.05);
   const d = easeOutQ(prog(lt, 0.45, 2.6));
-  const top = round(lerp(-180, topFor(REVEAL_K), d));
-  contact(ctx, 192, TT_Y - 1, round(22 * d), 0.35 * d * light);
-  umbrella(ctx, 192, top, REVEAL_K, 0, 0.1 + lt * 0.05);
-  vignette(ctx, 0.5);
-  // the name, under the turntable, off the product's axis; gone before the cut
+  const top = round(lerp(-150, topAt(WIDE_TT, WIDE_K), d));
+  contact(ctx, 192, WIDE_TT - 1, round(18 * d), 0.35 * d * light);
+  umbrella(ctx, 192, top, WIDE_K, 0, 0.1 + lt * 0.05);
+  // the name comes up on the wall, above the product; gone before the cut
   const out = 1 - smooth(prog(lt, 3.3, 3.65));
-  trackIn(ctx, 'CLOUDBRELLA', 192, 194, lt - 1.7, { face: 'thin', color: P.white, track: 4, from: 12, dur: 1.4, alpha: out });
+  trackIn(ctx, 'CLOUDBRELLA', 192, 20, lt - 1.7, { face: 'thin', color: P.white, track: 4, from: 12, dur: 1.4, alpha: out });
+  // the audience; phones go up as the light comes on
+  audience(ctx, ROWS_WIDE, light);
+  const ph = picks(ROWS_WIDE, REVEAL_PHONES);
+  for (let i = 0; i < ph.length; i++) phoneUp(ctx, ROWS_WIDE, ph[i][0], prog(lt, ph[i][1], ph[i][1] + 0.9), true);
+  vignette(ctx, 0.45);
 }
 
 // --- 3/4. DETAILS -----------------------------------------------------------------
@@ -588,8 +869,9 @@ const fabric = lazy(() =>
 );
 const CANOPY_LEN = 3.125;
 function shotCanopy(ctx, lt) {
-  R(ctx, 0, 0, W, H, P.black);
   const x = -round(tween(lt, 0, CANOPY_LEN + 0.8, 18, 64, 'inOut'));
+  // the hall below the hem, far away, slides slower than the cloth
+  ctx.drawImage(hemBg(), round(x * 0.35) - 10, 0);
   const art = fabric();
   ctx.drawImage(art, x, 0);
   sheen(ctx, art, x, 0, prog(lt, 0.2, 2.6), { width: 70, alpha: 0.22, slope: 0.6 });
@@ -597,10 +879,50 @@ function shotCanopy(ctx, lt) {
   callout(ctx, lt - 0.3, 112, 118, 96, 184, 176, 'ZERO-SYNC CANOPY', 'WOVEN FROM NON-NETWORKED FIBRE', 1 - smooth(prog(lt, CANOPY_LEN - 0.4, CANOPY_LEN - 0.1)));
 }
 
+// Behind the macro shots, far out of focus: the hall. The LED wall's modules
+// as soft glowing tiles, its lit lower edge, and below it the audience's phone
+// screens as discs of light over a blur of heads.
+function hallBokeh(c, w, wallBottom, seed) {
+  for (let x = 4; x < w; x += 50) {
+    for (let y = -20; y < wallBottom - 10; y += 50) {
+      R(c, x, y, 44, 44, A(P.slate, 0.07));
+      R(c, x + 2, y + 2, 40, 40, A(P.slate, 0.06));
+    }
+  }
+  R(c, 0, wallBottom - 2, w, 5, A(P.steel, 0.07));
+  R(c, 0, wallBottom, w, 1, A(P.fog, 0.12));
+  for (let k = 0; k < 14; k++) {
+    const bx = round(hash01(k, seed) * w);
+    const by = wallBottom + 26 + round(hash01(k, seed + 1) * (H - wallBottom - 30));
+    oval(c, bx, by + 14, 16 + round(hash01(k, seed + 2) * 10), 11, A(P.black, 0.35)); // a head, blurred
+  }
+  for (let k = 0; k < 9; k++) {
+    const bx = round(hash01(k, seed + 3) * w);
+    const by = wallBottom + 16 + round(hash01(k, seed + 4) * (H - wallBottom - 36));
+    const r = 3 + round(hash01(k, seed + 5) * 4);
+    disc(c, bx, by, r, A(P.silver, 0.08));
+    ring(c, bx, by, r, A(P.silver, 0.14));
+  }
+}
+const handleBg = lazy(() =>
+  cached('cb-handle-bg', W, H, (c) => {
+    c.drawImage(macroBg(), 0, 0);
+    hallBokeh(c, W, 132, 31);
+  }),
+);
+const HB_W = W + 80;
+const hemBg = lazy(() =>
+  cached('cb-hem-bg', HB_W, H, (c) => {
+    R(c, 0, 0, HB_W, H, P.black);
+    c.drawImage(gradient('cb-hem-glow', HB_W, H, { cx: HB_W / 2, cy: 150, rx: 300, ry: 90, ramp: [P.black, P.ink], gamma: 1.4, seam: 0.5 }), 0, 0);
+    hallBokeh(c, HB_W, 168, 41);
+  }),
+);
+
 const HANDLE_LEN = 3.125;
 const HK = 4.6;
 function shotHandle(ctx, lt) {
-  ctx.drawImage(macroBg(), 0, 0);
+  ctx.drawImage(handleBg(), round(tween(lt, 0, HANDLE_LEN + 0.7, 0, -3, 'inOut')), 0);
   // the walnut handle, close: the shaft comes down into frame through the collar
   const x = round(tween(lt, 0, HANDLE_LEN + 0.7, 156, 148, 'inOut'));
   const y = 28;
@@ -657,8 +979,15 @@ function slideOff(ctx, lt, cx, a) {
 }
 
 const OPEN_LEN = 3.75;
+const wallNear = lazy(() => ledWall('cb-led-near', 420, 126, 34));
+const OPEN_PHONES = [[0, 120, -1], [0, 300, 1.1]];
 function shotOpen(ctx, lt) {
   stage(ctx, lt, 1, 0.9 + lt * 0.05);
+  // the LED wall behind, closer now: the statistics come up on it
+  clipRect(ctx, 0, 0, W, 122);
+  ctx.drawImage(wallNear(), -18, -4);
+  ctx.restore();
+  beam(ctx, 192, -6, 192, TT_Y, 34, 150, { color: P.silver, alpha: 0.03 });
   const open = prog(lt, 0.25, 2.0);
   const top = topFor(1);
   contact(ctx, 192, TT_Y - 1, round(lerp(22, 46, smooth(open))), 0.35);
@@ -666,6 +995,10 @@ function shotOpen(ctx, lt) {
   // everything but the product leaves before the cut to the slate
   const out = 1 - smooth(prog(lt, OPEN_LEN - 0.45, OPEN_LEN - 0.1));
   if (lt > 1.2) slideOff(ctx, lt - 1.2, 192, out);
+  // the front row, one already filming, another joining as it opens
+  audience(ctx, ROWS_NEAR, 1);
+  const ph = picks(ROWS_NEAR, OPEN_PHONES);
+  for (let i = 0; i < ph.length; i++) phoneUp(ctx, ROWS_NEAR, ph[i][0], ph[i][1] < 0 ? 1 : prog(lt, ph[i][1], ph[i][1] + 1.0), true);
   vignette(ctx, 0.5);
   // keynote statistics either side
   fadeUp(ctx, '99%', 330, 74, lt - 1.0, { face: 'thin', color: P.white, track: 2, align: 'center', scale: 2, dur: 0.8, alpha: out });

@@ -754,10 +754,22 @@ function bust(ctx, F, S, bottom) {
   pt(cx - sw * 0.7, shY);
   pt(cx - sw * 0.93, shY + hh * 0.13);
   pt(cx - sw * 1.0, shY + hh * 0.42);
-  pt(cx - sw * 0.95, shY + hh * 1.3);
-  pt(cx - sw * waist, bottom);
-  pt(cx + sw * waist, bottom);
-  pt(cx + sw * 0.95, shY + hh * 1.3);
+  if (S.kind === 'dress') {
+    // a fitted dress: ribcage, a nipped waist, the hips, a skirt that flares
+    pt(cx - sw * 0.9, shY + hh * 0.95);
+    pt(cx - sw * 0.68, shY + hh * 1.45);
+    pt(cx - sw * 0.8, shY + hh * 2.0);
+    pt(cx - sw * 0.96, bottom);
+    pt(cx + sw * 0.96, bottom);
+    pt(cx + sw * 0.8, shY + hh * 2.0);
+    pt(cx + sw * 0.68, shY + hh * 1.45);
+    pt(cx + sw * 0.9, shY + hh * 0.95);
+  } else {
+    pt(cx - sw * 0.95, shY + hh * 1.3);
+    pt(cx - sw * waist, bottom);
+    pt(cx + sw * waist, bottom);
+    pt(cx + sw * 0.95, shY + hh * 1.3);
+  }
   pt(cx + sw * 1.0, shY + hh * 0.42);
   pt(cx + sw * 0.93, shY + hh * 0.13);
   pt(cx + sw * 0.7, shY);
@@ -826,22 +838,33 @@ function garment(ctx, F, S, cx, hh, neckB, shY, sw, bottom) {
     return;
   }
   if (k === 'dress') {
-    // housekeeper: black dress, a round white collar, the apron's bib and straps
-    const ay = shY + hh * 0.42;
-    pt(cx - hh * 0.3, ay);
-    pt(cx + hh * 0.28, ay);
-    pt(cx + hh * 0.36, bottom);
-    pt(cx - hh * 0.38, bottom);
+    // housekeeper: black dress, a round white collar; the apron is a bib on
+    // straps to a tied waistband, then a wider skirt to below the knee
+    const ay = shY + hh * 0.46;
+    const wy = shY + hh * 1.45;
+    const hem = min(bottom, shY + hh * 3.75);
+    pt(cx - hh * 0.27, ay);
+    pt(cx + hh * 0.25, ay);
+    pt(cx + hh * 0.3, wy);
+    pt(cx - hh * 0.32, wy);
     fillPts(ctx, S.apron, S.apronSh);
-    line(ctx, cx - hh * 0.3, ay, cx - sw * 0.6, shY + hh * 0.02, S.apron);
-    line(ctx, cx + hh * 0.28, ay, cx + sw * 0.58, shY + hh * 0.02, S.collarSh.d);
-    const fy0 = shY + hh * 1.7;
-    if (fy0 < bottom) {
-      line(ctx, cx - hh * 0.1, fy0, cx - hh * 0.16, bottom, S.apronSh.d);
-      line(ctx, cx + hh * 0.12, fy0 + hh * 0.2, cx + hh * 0.16, bottom, S.apronSh.dd);
+    line(ctx, cx - hh * 0.27, ay, cx - sw * 0.62, shY + hh * 0.02, S.apron);
+    line(ctx, cx + hh * 0.25, ay, cx + sw * 0.6, shY + hh * 0.02, S.collarSh.d);
+    if (wy < bottom) {
+      pt(cx - hh * 0.46, wy);
+      pt(cx + hh * 0.44, wy);
+      pt(cx + hh * 0.66, hem);
+      pt(cx - hh * 0.7, hem);
+      fillPts(ctx, S.apron, S.apronSh);
+      // two soft folds from the waistband, the hem catching the lamp
+      line(ctx, cx - hh * 0.14, wy + 2, cx - hh * 0.26, hem - 1, S.apronSh.d);
+      line(ctx, cx + hh * 0.16, wy + 3, cx + hh * 0.3, hem - 1, S.apronSh.dd);
+      if (hem < bottom) R(ctx, cx - hh * 0.7, hem - 1, hh * 1.36, 1, S.apronSh.l);
+      // the waistband round the nipped waist, a tie knot at the side
+      R(ctx, cx - sw * 0.68, wy - 1, sw * 1.36, 2, S.apron);
+      R(ctx, cx - sw * 0.68, wy, sw * 1.36, 1, S.apronSh.d);
+      R(ctx, cx + sw * 0.6, wy - 1, 2, 4, S.apronSh.d);
     }
-    const wy = round(shY + hh * 1.55);
-    if (wy < bottom) R(ctx, cx - sw * 0.8, wy, sw * 1.6, 2, S.apronSh.dd);
     ellipse(ctx, cx - hh * 0.14, nY + hh * 0.04, hh * 0.17, hh * 0.1, S.collar, S.collarSh);
     ellipse(ctx, cx + hh * 0.14, nY + hh * 0.04, hh * 0.17, hh * 0.1, S.collar, S.collarSh);
     R(ctx, cx, nY - hh * 0.02, 1, hh * 0.16, S.collarSh.d);
@@ -1533,11 +1556,14 @@ function shotLobby(ctx, lt) {
   QG.sw = 0.86;
   QG.back = true;
   QG.tilt = round(ramp(lt, TAP + 1.6, TAP + 2.3) * 2);
+  // her right arm reaches forward, away from the lens, so it is painted before
+  // her back: it is hidden until the forearm comes out past her side and goes
+  // forward and down onto the bell, the elbow bent and dropped
+  const reach = keys(lt, L_REACH);
+  armTo(QG, 1, bez(118, 130, 170, reach), bez(176, 138, 111, reach) + tap * 2, 1.1, lerp(1, 0.86, reach));
+  armDraw(ctx, QG, GUEST, 'back');
   bust(ctx, QG, GUEST, H + 2);
   armTo(QG, -1, 72, 182, 0.4);
-  armDraw(ctx, QG, GUEST, 'back');
-  const reach = keys(lt, L_REACH);
-  armTo(QG, 1, bez(121, 150, 170, reach), bez(182, 156, 111, reach) + tap * 2, 1);
   armDraw(ctx, QG, GUEST, 'back');
   // the foreground falls off into shadow toward the bottom of the frame
   ctx.drawImage(fgShade(), 0, 150);
@@ -2274,17 +2300,18 @@ export default {
   duration: DURATION,
   voice: { gender: 'male', lang: 'en-GB', pitch: 0.9, rate: 0.9 },
   script: [
-    { at: 0.5, text: 'In a world that refreshes every second...' },
-    { at: 4.2, text: 'one hotel has never once been in a hurry.' },
-    { at: 9.0, text: 'Every spinner is still turned by hand.' },
+    { at: 0.4, text: 'In a world that refreshes every second...' },
+    { at: 4.4, text: 'one hotel has never once been in a hurry.' },
+    { at: 8.8, text: 'Every spinner is still turned by hand.' },
     { at: 12.5, text: 'Every suite... almost ready.' },
     { at: 15.9, text: 'Dinner will be served... shortly.' },
     { at: 20.2, text: "The Grand Buffer. You're almost there." },
   ],
   // A string quartet and harp in D major at 78 bpm: eight bars, 32 beats =
-  // 24.6 s = the spot. The desk bell rings on beat 7.5 (5.77 s, the guest's
-  // tap); the last bar sits on A7 and the melody stops on its leading note,
-  // C#, never resolving to D: almost there. Every track is 32 beats.
+  // 24.6 s = the spot, then a two-beat rest so the looping bed never
+  // restarts over the slate. The desk bell rings on beat 7.5 (5.77 s, the
+  // guest's tap); the last bar sits on A7 and the melody stops on its leading
+  // note, C#, never resolving to D: almost there. Every track is 34 beats.
   tune: {
     bpm: 78,
     room: 0.42,
@@ -2292,11 +2319,11 @@ export default {
     tracks: [
       {
         kind: 'bass', inst: { wave: 'tri', a: 0.09, d: 0.7, s: 0.8, r: 0.45 }, gain: 0.9,
-        notes: 'D2:4 B1:4 G1:4 A1:4 F#2:4 G2:4 E2:4 A1:4',
+        notes: 'D2:4 B1:4 G1:4 A1:4 F#2:4 G2:4 E2:4 A1:4 R:2',
       },
       {
         kind: 'harmony', inst: { wave: 'sine', a: 0.4, d: 1.2, s: 0.75, r: 0.9 }, gain: 0.85,
-        notes: 'D4+F#4+A4:4 D4+F#4+B4:4 D4+G4+B4:4 C#4+E4+A4:4 D4+F#4+A4:4 D4+G4+B4:4 D4+G4+B4:4 C#4+G4+A4:4',
+        notes: 'D4+F#4+A4:4 D4+F#4+B4:4 D4+G4+B4:4 C#4+E4+A4:4 D4+F#4+A4:4 D4+G4+B4:4 D4+G4+B4:4 C#4+G4+A4:4 R:2',
       },
       {
         kind: 'harmony', inst: { wave: 'tri', a: 0.003, d: 0.55, s: 0, r: 0.35, legato: 1 }, gain: 0.55, pan: 0.25,
@@ -2309,13 +2336,14 @@ export default {
           'G2:0.5 D3:0.5 G3:0.5 B3:0.5 D4:0.5 B3:0.5 G3:0.5 D3:0.5',
           'E3:0.5 G3:0.5 B3:0.5 D4:0.5 G4:0.5 D4:0.5 B3:0.5 G3:0.5',
           'A2:0.5 E3:0.5 G3:0.5 C#4:0.5 E4:0.5 G4:0.5 A4:1',
+          'R:2',
         ].join(' '),
       },
       {
         kind: 'lead', inst: { wave: 'tri', a: 0.16, d: 0.6, s: 0.85, r: 0.45, vib: [16, 5.2, 0.3], legato: 1 }, gain: 0.65,
-        notes: 'R:6 A4:2 F#4:1 A4:1 D5:3 B4:1 A4:3 R:1 F#4:2 A4:1 D5:1 B4:3 G4:1 B4:1 A4:1 G4:1 E4:1 C#5:2',
+        notes: 'R:6 A4:2 F#4:1 A4:1 D5:3 B4:1 A4:3 R:1 F#4:2 A4:1 D5:1 B4:3 G4:1 B4:1 A4:1 G4:1 E4:1 C#5:2 R:2',
       },
-      { kind: 'harmony', inst: 'bell', gain: 0.45, notes: 'R:7.5 A6:1 R:23.5' },
+      { kind: 'harmony', inst: 'bell', gain: 0.45, notes: 'R:7.5 A6:1 R:25.5' },
     ],
   },
   draw(ctx, t, dt) {

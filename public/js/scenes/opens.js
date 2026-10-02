@@ -15,7 +15,7 @@
 import { P } from '../palette.js';
 import { drawText } from '../font.js';
 import { HAS_DOM } from '../gfx/index.js';
-import { DURATION, normInfo, lockupLayout, W, H } from './opens/kit.js';
+import { DURATION, normInfo, lockupLayout, drawLockupStill, W, H } from './opens/kit.js';
 import { WORLD, drawWorldNow } from './opens/world.js';
 import { TECH, drawTechBytes } from './opens/tech.js';
 import { COSMOS, drawCosmos } from './opens/cosmos.js';
@@ -35,6 +35,8 @@ export const OPENS = {
   'news-60': open(drawNews60, FLASH, TUNES['news-60']),
 };
 const FALLBACK = open(drawGeneric, GENERIC, TUNES.generic);
+/** The open for a programme id (own keys only: 'constructor' or '__proto__' get the generic open). */
+const openOf = (id) => (typeof id === 'string' && Object.hasOwn(OPENS, id) ? OPENS[id] : FALLBACK);
 
 // The audio stream's shared sonic signature (themeFor) re-orchestrated per
 // programme; loaded lazily so the opens keep working (and drawing) if the audio
@@ -47,7 +49,7 @@ import('../audio.js').then((m) => (AUDIO = m)).catch(() => {});
 let warned = false;
 /** Draw the opening titles of a programme (full frame). */
 export function drawOpen(ctx, t, dt, programId, info) {
-  const op = OPENS[programId] || FALLBACK;
+  const op = openOf(programId);
   const d = Number.isFinite(dt) ? Math.max(0, dt) : 0;
   const ni = normInfo(info);
   ctx.save();
@@ -78,7 +80,7 @@ export function drawOpen(ctx, t, dt, programId, info) {
  * a shared signature (themeFor), its re-orchestration for this programme wins.
  */
 export function openFor(programId) {
-  const op = OPENS[programId] || FALLBACK;
+  const op = openOf(programId);
   let tune = op.tune;
   try {
     const fn = typeof THEMES?.themeFor === 'function' ? THEMES.themeFor : typeof AUDIO?.themeFor === 'function' ? AUDIO.themeFor : null;
@@ -92,8 +94,24 @@ export function openFor(programId) {
 
 /** Lock-up geometry of a programme's open for this info (cached): where the plate, title and credits sit. */
 export function lockupFor(programId, info) {
-  const op = OPENS[programId] || FALLBACK;
+  const op = openOf(programId);
   return lockupLayout(normInfo(info), op.prog.style);
+}
+
+/**
+ * The programme's settled lock-up alone (emblem, plate, title, tagline, credits, bit), with no
+ * backdrop and no top row: the frame the open ends on, for cards that announce a programme.
+ */
+export function drawProgrammeLockup(ctx, programId, info) {
+  const op = openOf(programId);
+  const ni = normInfo({ ...info, bug: false });
+  ctx.save();
+  try {
+    ctx.imageSmoothingEnabled = false;
+    return drawLockupStill(ctx, ni, op.prog);
+  } finally {
+    ctx.restore();
+  }
 }
 
 // Warm the heavy caches in the background so the first open never stutters: one small job per

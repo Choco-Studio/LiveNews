@@ -6,6 +6,8 @@
 // rendered on its own, deterministically):
 //   1. rest pose                       gestures/index.js REST
 //   2. emotion                         expression.js (face presets, crossfaded 0.45 s)
+//   2b. idle hands                     gestures/fidget.js: the hands settle into new rest
+//                                      poses every few seconds, finger taps (yield to gestures)
 //   3. gestures                        here: keyframe tracks; override channels (arms,
 //                                      hands, props) blend toward each gesture, body/
 //                                      head/face channels add
@@ -42,6 +44,7 @@
 // { t0, t1, target, amt? }, gestures[] entries { name, t0, speed?, n?, variant?, amp? }).
 // FACES adds channels through expression.js FACE_REST (reset here every frame).
 import { REST, GESTURES, ARM_CHANNELS, defOf, rateOf } from './gestures/index.js';
+import { applyArmIdle } from './gestures/fidget.js';
 import { evalTrack, copy } from './tracks.js';
 import { applyEmotion, solveFace, FACE_REST } from './expression.js';
 import { applyLook, applyListen } from './behaviour.js';
@@ -255,6 +258,7 @@ export function evaluate(L, perf, t, c = newChannels()) {
   const persona = L.persona;
   const seed = perf.seed ?? (L.id.length * 31 + 7);
   applyEmotion(c, perf, t, persona); // 2
+  applyArmIdle(c, L, perf, t); // 2b: the hands' idle life on the desk (gestures/fidget.js), under the gestures
   let gestLook = applyGestures(c, perf.gestures || [], t); // 3
   gestLook = applyLook(c, perf, t, gestLook); // 4
   applyIdle(c, persona, perf, t, seed, gestLook); // 5

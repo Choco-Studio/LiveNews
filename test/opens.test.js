@@ -79,8 +79,12 @@ test('every open is 4 s and the title column is the same for every programme', (
   for (const id of Object.keys(INFO)) {
     assert.equal(opens.openFor(id).duration, 4);
     lay[id] = opens.lockupFor(id, INFO[id]);
-    assert.equal(lay[id].plateX, 130);
+    const front = (opens.OPENS[id] || { prog: { front: true } }).prog.front;
+    // globes overlap the plate's left end (plate at 130); every other plate has the same 12 px
+    // inset either side of the title
+    assert.equal(lay[id].plateX, front ? 130 : 140, id);
     assert.equal(lay[id].titleX, 152);
+    if (!front) assert.equal(lay[id].plateX + lay[id].plateW - (lay[id].titleX + lay[id].titleW), lay[id].titleX - lay[id].plateX, `${id} plate padding`);
     assert.ok(lay[id].bottom < 200, 'the credits stay above the ticker band');
   }
   // cached: the same info gives the same layout object
@@ -89,8 +93,9 @@ test('every open is 4 s and the title column is the same for every programme', (
 
 test('only opaque globes may overlap the title plate: every other emblem ends 4 px before it', () => {
   for (const [id, o] of Object.entries(opens.OPENS)) {
-    const slot = 130 - 4 - o.prog.extent + (o.prog.front ? 8 : 0);
-    if (!o.prog.front) assert.ok(slot + o.prog.extent <= 126, `${id} emblem right edge ${slot + o.prog.extent}`);
+    const plateX = o.prog.front ? 130 : 140;
+    const slot = plateX - 4 - o.prog.extent + (o.prog.front ? 8 : 0);
+    if (!o.prog.front) assert.ok(slot + o.prog.extent <= plateX - 4, `${id} emblem right edge ${slot + o.prog.extent}`);
   }
 });
 
@@ -106,6 +111,10 @@ test('long programme titles wrap to balanced lines at 2x without breaking the lo
   const L = opens.lockupFor('weekend-review', { title: 'THE WEEKEND FOREIGN CORRESPONDENTS REVIEW', tagline: 'X', presenters: [] });
   assert.ok(L.titles.length >= 2 && L.titles.length <= 3);
   assert.ok(L.plateY >= 26);
+  // a name too long for 2x drops to 1x before any word is lost
+  const L2 = opens.lockupFor('weekend-review', { title: 'THE WEEKEND FOREIGN CORRESPONDENTS AND INTERNATIONAL AFFAIRS REVIEW', tagline: 'X', presenters: [] });
+  assert.equal(L2.scale, 1);
+  assert.ok(L2.titles.length <= 3 && L2.plateY >= 26);
 });
 
 test('cards draw for hostile input without throwing or leaving state behind', () => {

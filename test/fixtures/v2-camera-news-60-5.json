@@ -1,0 +1,269 @@
+{
+ "kind": "episode",
+ "id": "emurd7vod9",
+ "createdAt": "2026-10-02T19:37:49.597Z",
+ "program": {
+  "id": "news-60",
+  "title": "NEWS IN 60",
+  "tagline": "THE HEADLINES IN A MINUTE",
+  "theme": "flash"
+ },
+ "cast": {
+  "A": "sam"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "pictures",
+   "ms": 1,
+   "pictures": 1,
+   "of": 10,
+   "found": 0,
+   "borrowed": 0
+  },
+  {
+   "stage": "write",
+   "ms": 46,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 0,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "fit",
+   "ms": 0,
+   "estimate": 65.9,
+   "dropped": 0
+  },
+  {
+   "stage": "assets",
+   "ms": 5,
+   "images": 1,
+   "verified": 1
+  }
+ ],
+ "title": "NEWS IN 60 (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "This is NEWS IN 60. I'm Sam Night.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Smartphone battery breakthrough promises a week of use. Researchers at a battery firm say a new silicon design could let phones last a week between charges. The company hopes to start production in 2027, Circuit Weekly reports.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "storyId": "sc6cf8e10ae",
+   "headline": "Smartphone battery breakthrough promises a week of use",
+   "shot": "close",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "GADGETS"
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Seoul has started testing self-driving buses on two night routes, according to Circuit Weekly. The city says the buses will help night workers get home when other transport has stopped.",
+   "cues": [],
+   "storyId": "sf42c951849",
+   "headline": "Seoul tests self-driving buses on night routes",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "SEOUL, SOUTH KOREA",
+    "lat": 37.57,
+    "lon": 126.98
+   },
+   "fact": null,
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "TRANSPORT"
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Around the world. First, Wales. Ancient footprints found on a beach in Wales, Starfield Journal reports.",
+   "cues": [],
+   "storyId": "sce8918c6db",
+   "headline": "Ancient footprints found on a beach in Wales",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "WALES",
+    "lat": 52.3,
+    "lon": -3.7
+   },
+   "fact": null,
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 0,
+    "count": 2
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Telescope in Chile spots water vapour on a distant planet, according to Starfield Journal.",
+   "cues": [],
+   "storyId": "s1c5a3cb80a",
+   "headline": "Telescope in Chile spots water vapour on a distant planet",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "CHILE",
+    "lat": -35.7,
+    "lon": -71.5
+   },
+   "fact": null,
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 1,
+    "count": 2
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "A new pair of earbuds can translate conversations in 40 languages in real time, its maker says. “Travel should not stop at the language barrier,” the company said.",
+   "cues": [],
+   "storyId": "sc98b4416b6",
+   "headline": "Translation earbuds now handle 40 languages",
+   "shot": "close",
+   "breaking": false,
+   "location": null,
+   "fact": "40 LANGUAGES",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "GADGETS",
+   "numbers": [
+    {
+     "value": "40",
+     "label": "LANGUAGES"
+    }
+   ],
+   "quote": {
+    "text": "Travel should not stop at the language barrier",
+    "by": "the company"
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "A Mars rover has photographed layered rocks in what scientists believe was an ancient lake bed. The layers could hold clues about past water on the planet, Starfield Journal reports.",
+   "cues": [],
+   "storyId": "s6c9709e0d6",
+   "headline": "Rover finds layered rocks in an ancient lake bed on Mars",
+   "shot": "close",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "SPACE"
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's the minute. Stay with us on GLOBIT 24.",
+   "cues": []
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "sc6cf8e10ae",
+   "headline": "Smartphone battery breakthrough promises a week of use",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "GADGETS"
+  },
+  {
+   "storyId": "sf42c951849",
+   "headline": "Seoul tests self-driving buses on night routes",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "TRANSPORT"
+  },
+  {
+   "storyId": "sce8918c6db",
+   "headline": "Ancient footprints found on a beach in Wales",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s1c5a3cb80a",
+   "headline": "Telescope in Chile spots water vapour on a distant planet",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "sc98b4416b6",
+   "headline": "Translation earbuds now handle 40 languages",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "GADGETS"
+  },
+  {
+   "storyId": "s6c9709e0d6",
+   "headline": "Rover finds layered rocks in an ancient lake bed on Mars",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "SPACE"
+  }
+ ],
+ "storyIds": [
+  "sc6cf8e10ae",
+  "sf42c951849",
+  "sce8918c6db",
+  "s1c5a3cb80a",
+  "sc98b4416b6",
+  "s6c9709e0d6"
+ ]
+}

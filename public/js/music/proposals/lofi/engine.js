@@ -43,6 +43,9 @@ const SENDS = {
   tex: { verb: 0, echo: 0 },
 };
 const AIR = new Set(['air', 'tex']); // bypass the bed low-pass
+// Stings audio.js already has as network cues (themes.js cueFor: breaking, promo, the per-programme
+// sign-offs on the end card, the ident): with `sharedStings` the engine leaves them to audio.js.
+export const SHARED_BY_AUDIO = new Set(['breaking', 'upNext', 'signoffBrass', 'moneyButton', 'sixtyBell', 'shortIdent']);
 const GROUPS = Object.keys(SENDS);
 
 /** Duck depth (linear) of a group for an arrangement of a song. */
@@ -543,6 +546,9 @@ export class LofiEngine {
   }
 
   sting(action, at) {
+    // With sharedStings the audio stream plays these network cues itself (audio.sfx('breaking' |
+    // 'promo' | 'outro' | 'jingle')): the beds still step aside, but the sting is not doubled.
+    if (this.sharedStings && SHARED_BY_AUDIO.has(action.name)) action = { ...action, name: null };
     const cur = this.bed;
     let t = at + 0.05;
     if (action.stopBed && cur && cur.endAt === Infinity) {

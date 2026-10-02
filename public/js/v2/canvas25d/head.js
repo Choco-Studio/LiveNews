@@ -134,7 +134,8 @@ function bumpsOf(L) {
   const pair = (x, y, sx, sy, a) => out.push([-x, y, sx, sy, a], [x, y, sx, sy, a]);
   pair(ex, B.y + 0.6, 1.9, 0.75, 0.42); // brow ridge over each eye
   pair(ex - 0.2, ey - 0.1, 1.55, 1.0, -0.55); // eye socket, deepest toward the nose
-  pair(ex + 1.0, ey + 2.5, 1.8, 1.1, 0.3); // cheekbone (broad and low: never a lit island on the shade side)
+  pair(ex + 1.0, ey + 2.5, 1.8, 1.1, 0.42); // cheekbone (broad and low: never a lit island on the shade side)
+  pair(H.cheekHW - 1.7, M.y - 0.7, 1.3, 1.5, -0.3); // the hollow under the cheekbone, toward the jaw
   pair(H.cheekHW - 0.9, ey - 1.8, 1.0, 1.5, -0.32); // temple
   pair(nw * 0.55, N.y1 - 0.1, 0.48, 0.42, 0.3); // nose wings
   out.push([0, N.y1 - 0.45, 0.72 * nw, 0.7, N.big ? 0.5 : 0.4]); // nose tip
@@ -152,9 +153,13 @@ function occlusionOf(L) {
   const out = [];
   const pair = (x, y, sx, sy, a) => out.push([-x, y, sx, sy, a], [x, y, sx, sy, a]);
   pair(E.x - E.w * 0.6, E.y + 0.05, 0.55, 0.55, 0.22); // inner eye corner
+  pair(E.x - E.w * 0.45, E.y - 0.9, 0.6, 0.42, 0.4); // the socket under the brow's head, beside the bridge
   pair(N.w * 0.42, N.y1 + 0.15, 0.42, 0.32, 0.22); // nostril
   pair(M.w * 0.56, M.y + 0.05, 0.45, 0.45, 0.2); // mouth corner
   out.push([0, N.y1 + 0.55, 0.85, 0.35, 0.1]); // under the septum
+  // the nose's cast shadow: the key is up and camera-left, so it falls down and to the right
+  out.push([N.w * 0.5, N.y1 + 0.55, 0.62, 0.36, 0.5]);
+  out.push([0, M.y + 1.3, M.w * 0.28, 0.3, 0.36]); // the shadow under the lower lip
   return out;
 }
 
@@ -233,8 +238,11 @@ function faceMap(L) {
       ny[c] = ay / n;
       nz[c] = az / n;
       const forehead = y < E.y - 1.5 && Math.abs(x) < hw * 0.75;
-      const ridge = Math.abs(x) < N.w * 0.5 && y > E.y - 0.4 && y < N.y1 - 0.2;
-      hl[c] = forehead || ridge ? 1 : 0;
+      // the nose ridge's highlight runs from mid-bridge to just above the tip (a full-length stripe reads as paint)
+      const ridge = Math.abs(x) < N.w * 0.4 && y > (E.y + N.y1) * 0.5 - 0.2 && y < N.y1 - 0.3;
+      // the chin's ball catches a small highlight too (a cheekbone highlight reads as a freckle or a tear here)
+      const chin = Math.abs(x) < 1.3 && y > H.chinY - 2.9 && y < H.chinY - 1.3;
+      hl[c] = forehead || ridge || chin ? 1 : 0;
     }
   }
   fm = { x0, y0, nw, nh, nx, ny, nz, ao: aoArr, hl };
@@ -248,8 +256,8 @@ function faceMap(L) {
 // Light-term thresholds per level of detail: [highlight, base, shade] (below: deep).
 const TONES = [
   [9, 0.3, -0.42], // wide: lit / shade, no highlight, deep only under the jaw
-  [0.985, 0.26, -0.2], // medium
-  [0.95, 0.28, -0.1], // close-up
+  [0.95, 0.29, -0.2], // medium
+  [0.9, 0.33, -0.1], // close-up
 ];
 const HW_LUT = new Float32Array(1024);
 // Per-frame state of the head being drawn (module scratch: no closure, no allocation).
@@ -290,14 +298,17 @@ function skinTone(x, y) {
   const nx1 = nx0 * S.cyw + nz0 * S.syw, nz1 = -nx0 * S.syw + nz0 * S.cyw;
   const ny2 = ny0 * S.cp + nz1 * S.sp, nz2 = -ny0 * S.sp + nz1 * S.cp;
   const nx3 = nx1 * S.cr - ny2 * S.sr, ny3 = nx1 * S.sr + ny2 * S.cr;
-  const l = nx3 * S.lx + ny3 * S.ly + nz2 * S.lz - fm.ao[c] * (S.tier ? 1 : 0.4);
+  const ao = fm.ao[c];
+  const l = nx3 * S.lx + ny3 * S.ly + nz2 * S.lz - ao * (S.tier ? 1 : 0.4);
   const th = S.th;
   if (S.tier === 0) {
     // wide: one clean terminator, the far edge and the chin's underside in shade
     if (y > H.chinY + S.jaw - 0.75) return 2;
     return l > th[1] ? 1 : 2;
   }
-  if (l > th[0]) return fm.hl[c] && nx3 < 0.05 ? 0 : 1;
+  // the highlight is judged on the yaw-turned normal only: the small pitch and roll
+  // of speech would make a 1-2 px highlight blink on and off (shimmer)
+  if (fm.hl[c] && nx1 < 0.05 && nx1 * S.lx + ny0 * S.ly + nz1 * S.lz - ao > th[0]) return 0;
   if (l > th[1]) return 1;
   if (l > th[2]) return 2;
   return 3;
@@ -314,12 +325,12 @@ export function drawHead(buf, L, m, head, s) {
   S.inv = 1 / s;
   S.yaw = Math.abs(head.yaw || 0) < 1e-4 ? 0 : head.yaw;
   S.yawShift = Math.sin(S.yaw);
+  const p = head.pitch || 0;
+  S.pitchShift = Math.sin(p) * 2.0;
   S.cyw = Math.cos(S.yaw);
   S.syw = Math.sin(S.yaw);
-  const p = head.pitch || 0;
   S.cp = Math.cos(p);
   S.sp = Math.sin(p);
-  S.pitchShift = Math.sin(p) * 2.0;
   S.jaw = head.jaw || 0;
   S.jawY0 = L.mouth.y - 0.4;
   S.jawK = 1 / Math.max(0.5, H.chinY - S.jawY0);

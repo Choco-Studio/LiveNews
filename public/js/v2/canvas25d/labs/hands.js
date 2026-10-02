@@ -33,7 +33,19 @@ const state = {
 };
 
 let setMod = null; // studio/set.js, loaded lazily (another stream edits it: a broken import must not break this lab)
-import('../studio/set.js').then((m) => (setMod = m)).catch(() => (setMod = null));
+// The page exposes window.__lab only after this resolves and the set is baked, so no frame is ever
+// presented without the set and the desk (owner 21:05: an async bake showed an empty background).
+const setReady = import('../studio/set.js')
+  .then((m) => {
+    setMod = m;
+    try {
+      // only the home look is drawn here (warmSets would bake every programme: seconds under SwiftShader)
+      if (typeof m.warmSet === 'function') m.warmSet('world-now');
+    } catch {
+      /* the first drawBackground bakes synchronously anyway */
+    }
+  })
+  .catch(() => (setMod = null));
 
 const clipRows = new Int16Array(384);
 
@@ -290,6 +302,8 @@ export function createHandsLab(canvas) {
     },
     shapes: () => Object.keys(SHAPES),
     presenters: () => PRESENTER_IDS.slice(),
+    /** Resolves when the planner preview can draw (await it before capturing mode 'planner'). */
+    plannerReady: () => plannerReady.then(() => !!planMod),
   };
   return lab;
 }
@@ -320,9 +334,13 @@ const SAMPLES = Object.fromEntries(Object.entries(SAMPLE_CAST).map(([pid, ids]) 
 }));
 let LIVE = null;
 let planMod = null;
-import('../direction/index.js').then((m) => (planMod = m)).catch(() => (planMod = null));
+const planReady = import('../direction/index.js').then((m) => (planMod = m)).catch(() => (planMod = null));
 let fontMod = null;
-import('../../../font.js').then((m) => (fontMod = m)).catch(() => (fontMod = null));
+const fontReady = import('../../../font.js').then((m) => (fontMod = m)).catch(() => (fontMod = null));
+/** Resolves when the set and the font are in (or have failed for good): the page exposes __lab then. */
+export const labReady = Promise.allSettled([setReady, fontReady]);
+/** The planner preview also needs direction/index.js (its text model is slow to load cold). */
+export const plannerReady = Promise.allSettled([setReady, fontReady, planReady]);
 
 const PLAN_COL = { gesture: '#e43b44', emotion: '#feae34', look: '#2ce8f5', shot: '#8b9bb4' };
 setPlannerView((t, ctx2d) => {
@@ -391,7 +409,9 @@ function durOfEv(e) {
 // ---------------------------------------------------------------------------
 // page wiring (only in a browser page with #screen)
 
-if (typeof document !== 'undefined' && document.getElementById('screen')) {
+if (typeof document !== 'undefined' && document.getElementById('screen')) labReady.then(wirePage);
+
+function wirePage() {
   const canvas = document.getElementById('screen');
   const lab = createHandsLab(canvas);
   window.__lab = lab;

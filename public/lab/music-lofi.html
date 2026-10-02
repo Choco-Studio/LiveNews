@@ -24,7 +24,8 @@
     <div class="row">
       <label>programme <select id="prog"></select></label>
       <label><input id="grave" type="checkbox" /> grave pad (default: silence)</label>
-      <label><input id="shared" type="checkbox" /> shared stings (audio.js plays breaking / promo)</label>
+      <label><input id="shared" type="checkbox" /> shared stings (audio.js plays breaking / promo / sign-off cues)</label>
+      <label>stories <select id="stories"><option value="off">silent (bibles)</option><option value="soft">soft bed (owner switch)</option><option value="drone">drone (Money)</option></select></label>
       <button id="speak">hold to speak</button>
       <button id="stop">stop</button>
     </div>
@@ -34,8 +35,10 @@
       Composer "lofi" proposal for GLOBIT 24 background music, following docs/programmes/*.md. Live: click a moment (first
       click unlocks audio); "hold to speak" plays a Kokoro test line and ducks the bed. Offline:
       <code>window.__audio.render({ programme, moment, seconds, stem, timeline })</code> for tools/render-audio.mjs
-      (timelines: demo, world-now, tech-bytes, cosmos, money-minute, news-60, break, ident, sombre, standby). Test voices are
-      served from /__voice/ by the composer's own static server; elsewhere a speech-shaped stand-in is used.
+      (timelines: demo, demo-soft, world-now, tech-bytes, cosmos, money-minute, news-60, break, ident, sombre, standby; options
+      bedUnderStories, sharedStings, gravePad, open: false). Programme timelines start with the audio stream's real open theme.
+      Test voices (Kokoro through the channel's broadcast chain) are served from /__voice/ by the composer's own static server;
+      elsewhere a speech-shaped stand-in is used.
     </div>
     <table id="sheet"></table>
     <div id="log"></div>
@@ -57,15 +60,15 @@
       // Moments the director would cue, per programme (the cue sheet decides what each one does).
       const MOMENTS = {
         'world-now': [['headlines', { line: 0, lines: 3 }, 'headline 1 (Bm)'], ['pip', { line: 0, lines: 3 }, 'pip'], ['headlines', { line: 1, lines: 3 }, 'headline 2 (G)'],
-          ['headlines', { line: 2, lines: 3 }, 'headline 3 (D)'], ['greeting'], ['story', { emotion: 'serious' }, 'story (grave)'], ['roundup'], ['finally'], ['chat'], ['outro'], ['signoffEnd', {}, 'sign-off brass'], ['breaking']],
-        'tech-bytes': [['coldOpen'], ['story'], ['chat'], ['number'], ['numberSting'], ['finally'], ['featureEnd'], ['outro'], ['signoffEnd']],
+          ['headlines', { line: 2, lines: 3 }, 'headline 3 (D)'], ['greeting'], ['story', { emotion: 'neutral' }, 'story (light)'], ['story', { emotion: 'serious' }, 'story (grave)'], ['roundup'], ['finally'], ['chat'], ['outro'], ['signoffEnd', {}, 'sign-off brass'], ['breaking']],
+        'tech-bytes': [['coldOpen'], ['story'], ['story', { emotion: 'serious' }, 'story (grave)'], ['chat'], ['number'], ['numberSting'], ['finally'], ['featureEnd'], ['outro'], ['signoffEnd']],
         cosmos: [['coldOpen'], ['story'], ['shot', { kind: 'picture' }, 'shot: picture'], ['shot', { kind: 'presenter' }, 'shot: presenter'], ['finally'], ['number', {}, 'the Reading'], ['greeting']],
         'money-minute': [['headlines', {}, 'intro vamp'], ['introEnd'], ['story'], ['numberSting'], ['number', { tape: 'up' }, 'tape up'], ['number', { tape: 'down' }, 'tape down'],
           ['number', { tape: 'mixed' }, 'tape mixed'], ['number', { tape: 'neutral' }, 'tape neutral'], ['outro'], ['signoffEnd'], ['endcard']],
         'news-60': [['headlines', {}, 'bed'], ['item'], ['story', { grave: true }, 'grave item'], ['story', {}, 'item story'], ['signoffEnd', {}, 'sign-off bell']],
         channel: [['bumper', { kind: 'cards' }, 'bumper cards'], ['bumper', { kind: 'ident' }, 'short ident'], ['bumper', { grave: true }, 'sombre ident'], ['holding'],
           ['leadin', { programId: 'world-now' }, 'countdown'], ['leadin', { programId: 'news-60', sombre: true }, 'countdown sombre'], ['leadin', { programId: 'tech-bytes', hour: 14 }, 'ident film day'],
-          ['leadin', { programId: 'cosmos', hour: 23 }, 'ident film night'], ['upNext', { next: 'cosmos' }, 'up next'], ['standby'], ['cut'], ['silence']],
+          ['leadin', { programId: 'cosmos', hour: 23 }, 'ident film night'], ['upNext', { next: 'cosmos' }, 'up next'], ['replay'], ['standby'], ['cut'], ['silence']],
       };
       const LINES = { 'world-now': 'wn-hl1', 'tech-bytes': 'tb-lead', cosmos: 'co-story', 'money-minute': 'mm-lead', 'news-60': 'n6-item1', channel: 'ct-next-wn' };
       for (const id of Object.keys(MOMENTS)) $('prog').append(new Option(id, id));
@@ -86,6 +89,7 @@
         }
         engine.gravePad = $('grave').checked;
         engine.sharedStings = $('shared').checked;
+        engine.bedUnderStories = $('stories').value;
         if (ctx.state !== 'running') ctx.resume();
         return engine;
       }
@@ -153,6 +157,7 @@
           timers.forEach(clearTimeout);
           timers = [];
           const tl = planOf({ timeline: name });
+          if (tl.bedUnderStories) e.bedUnderStories = tl.bedUnderStories;
           const lead = 0.3;
           const t0 = ctx.currentTime + lead;
           for (const [t, m, o] of tl.cues) timers.push(setTimeout(() => { e.cue(m, { programId: tl.programme, ...(o || {}) }); log(`cue ${m}`); }, (t + lead) * 1000));

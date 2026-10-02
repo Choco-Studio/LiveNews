@@ -226,7 +226,8 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
       if (dx * dx + dy * dy <= ir * ir) {
         const pr = heavy ? 1.15 : 0.62;
         if (Math.abs(dx) <= pr && Math.abs(dy) <= pr + 0.3) m = mt.pupil;
-        else if ((heavy && (y === yA + 1 || dy < -ir * 0.45)) || (heavy && Math.abs(dx) > ir - 0.9)) m = mt.irisDark;
+        // the upper lid shades the top of the iris (a relaxed eye, never a lit disc that stares)
+        else if (y === yA + 1 || (heavy && (dy < -ir * 0.45 || Math.abs(dx) > ir - 0.9))) m = mt.irisDark;
         else m = mt.iris;
       } else {
         // sclera: lit toward the key (left of the iris), cooler on the far side, under the lid and in the corners
@@ -369,12 +370,14 @@ function drawMouth(buf, L, mt, sk, head, f, s, tier) {
   const xl = mx(-hw, M.y), xr = mx(hw, M.y); // corners, xr exclusive
 
   if (tier === 0) {
-    // wide: a short deep line; a maroon middle while the jaw is open
+    // wide: a short deep line; a maroon middle while the jaw is open. A smile never
+    // bends the line into a U (at 1 px per unit that reads as an emoticon): its
+    // corners soften to the shade tone instead.
     const isOpen = open > 0.35 && !press;
     const a = round > 0.5 ? xl + 1 : xl, b = round > 0.5 ? xr - 1 : xr;
     for (let x = a; x < Math.max(a + 1, b); x++) {
       const edge = x === a || x === b - 1;
-      buf.plot(x, y0 - (edge && lift > 0 && b - a > 3 ? 1 : 0), isOpen && !edge ? mt.inner : sk, 3);
+      buf.plot(x, y0, isOpen && !edge ? mt.inner : sk, edge && lift > 0 ? 2 : 3);
     }
     return;
   }
@@ -413,7 +416,7 @@ function drawMouth(buf, L, mt, sk, head, f, s, tier) {
     // lower lip: lit from above; pressed lips roll in and darken
     row(buf, -loW * (press ? 0.8 : 1), loW * (press ? 0.8 : 1), M.y, y0 + 1, press ? mt.upper : mt.lipHi);
     const a2 = mx(-loW * 0.7, M.y), b2 = mx(loW * 0.7, M.y);
-    for (let x = a2; x < b2; x++) deepen(buf, x, y0 + 2, sk);
+    if (b2 - a2 >= 2) for (let x = a2; x < b2; x++) deepen(buf, x, y0 + 2, sk); // never a lone dot under the lip
     smileLines(buf, L, sk, smile, s);
     return;
   }
@@ -444,31 +447,38 @@ function drawMouth(buf, L, mt, sk, head, f, s, tier) {
   const yl = y0 + rows + 1;
   row(buf, -loW * (tuck ? 0.8 : 1), loW * (tuck ? 0.8 : 1), M.y, yl, tuck ? mt.upper : mt.lipHi);
   const a3 = mx(-loW * 0.7, M.y), b3 = mx(loW * 0.7, M.y);
-  for (let x = a3; x < b3; x++) deepen(buf, x, yl + 1, sk);
+  if (b3 - a3 >= 2) for (let x = a3; x < b3; x++) deepen(buf, x, yl + 1, sk);
   smileLines(buf, L, sk, smile, s);
 }
 
 /**
- * Close-ups: the folds from the nose wings toward the mouth corners in a real
- * smile, as one connected 1 px line on lit skin (never loose dots on the shade side).
+ * Close-ups (s ≥ 3) in a real smile: the folds from the nose wings toward the
+ * mouth corners, on BOTH sides (one tone darker than the skin under them, so the
+ * shade side gets a deep fold and the lit side a soft one). Each fold is a short
+ * curve (out, then down) that stops before the corner: a straight full-length
+ * line on one cheek reads as a scar.
  */
 function smileLines(buf, L, sk, smile, s) {
   if (smile < 0.45 || s < 3) return;
   const N = L.nose, M = L.mouth;
+  const skin = L._mats.skin;
   for (let side = -1; side <= 1; side += 2) {
-    mapF(side * (N.w * 0.62 + 0.35), N.y1 + 0.6, 0.4);
-    const ax = Math.round(F.x), ay = Math.round(F.y);
-    mapF(side * (M.w * 0.56 + 0.4), M.y - 0.4, 0.3);
-    const bx = Math.round(F.x), by = Math.round(F.y);
-    const n = Math.max(Math.abs(bx - ax), Math.abs(by - ay));
-    if (n < 2) continue;
-    let ok = true;
-    for (let k = 0; k <= n && ok; k++) {
-      const x = Math.round(ax + ((bx - ax) * k) / n), y = Math.round(ay + ((by - ay) * k) / n);
+    // quadratic curve: the nose wing → bowing outward → beside the mouth corner
+    const ax = side * (N.w * 0.62 + 0.4), ay = N.y1 + 0.55;
+    const bx = side * (M.w * 0.5 + 0.75), by = N.y1 + 0.85;
+    const cx = side * (M.w * 0.5 + 0.55), cy = M.y - 0.55;
+    let px = -9999, py = -9999;
+    for (let k = 1; k <= 6; k++) {
+      const u = 0.45 + (k / 6) * 0.4; // the lower part of the fold only, by the mouth corner
+      const v = 1 - u;
+      mapF(v * v * ax + 2 * v * u * bx + u * u * cx, v * v * ay + 2 * v * u * by + u * u * cy, 0.4);
+      const x = Math.round(F.x), y = Math.round(F.y);
+      if (x === px && y === py) continue;
+      px = x;
+      py = y;
       const i = y * buf.w + x;
-      if (buf.mat[i] !== L._mats.skin || buf.tone[i] !== 1) ok = false;
+      if (buf.mat[i] !== skin) continue; // only on bare skin (never over the mustache or the lips)
+      deepen(buf, x, y, sk);
     }
-    if (!ok) continue;
-    for (let k = 1; k < n; k++) buf.plot(Math.round(ax + ((bx - ax) * k) / n), Math.round(ay + ((by - ay) * k) / n), sk, 2);
   }
 }

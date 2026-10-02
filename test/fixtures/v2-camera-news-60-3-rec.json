@@ -1,0 +1,1164 @@
+{
+ "kind": "episode",
+ "id": "emurd7fqf2-rec",
+ "createdAt": "2026-10-02T19:37:28.935Z",
+ "program": {
+  "id": "news-60",
+  "title": "NEWS IN 60",
+  "tagline": "THE HEADLINES IN A MINUTE",
+  "theme": "flash"
+ },
+ "cast": {
+  "A": "sam"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "pictures",
+   "ms": 3,
+   "pictures": 3,
+   "of": 12,
+   "found": 0,
+   "borrowed": 0
+  },
+  {
+   "stage": "write",
+   "ms": 590,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "fit",
+   "ms": 1,
+   "estimate": 63.1,
+   "dropped": 0
+  },
+  {
+   "stage": "assets",
+   "ms": 21,
+   "images": 3,
+   "verified": 3
+  }
+ ],
+ "title": "NEWS IN 60 (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "This is NEWS IN 60. I'm Sam Night.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 4
+     },
+     {
+      "t": 0.644,
+      "char": 5,
+      "len": 2
+     },
+     {
+      "t": 0.923,
+      "char": 8,
+      "len": 4
+     },
+     {
+      "t": 1.387,
+      "char": 13,
+      "len": 2
+     },
+     {
+      "t": 1.666,
+      "char": 16,
+      "len": 2
+     },
+     {
+      "t": 2.395,
+      "char": 20,
+      "len": 3
+     },
+     {
+      "t": 2.697,
+      "char": 24,
+      "len": 3
+     },
+     {
+      "t": 3,
+      "char": 28,
+      "len": 5
+     }
+    ],
+    "duration": 3.754
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "In Kenya, a solar farm north of Nairobi has started supplying power to the national grid. Officials say it can light around 300,000 homes and is the biggest in East Africa so far.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "storyId": "sfe6d14dab8",
+   "headline": "Kenya switches on its largest solar farm near Nairobi",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "NAIROBI, KENYA",
+    "lat": -1.29,
+    "lon": 36.82
+   },
+   "fact": "ABOUT 300,000 HOMES",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "ENERGY",
+   "numbers": [
+    {
+     "value": "300,000",
+     "label": "HOMES",
+     "qualifier": "ABOUT"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 2
+     },
+     {
+      "t": 0.373,
+      "char": 3,
+      "len": 5
+     },
+     {
+      "t": 0.758,
+      "char": 10,
+      "len": 1
+     },
+     {
+      "t": 0.886,
+      "char": 12,
+      "len": 5
+     },
+     {
+      "t": 1.271,
+      "char": 18,
+      "len": 4
+     },
+     {
+      "t": 1.592,
+      "char": 23,
+      "len": 5
+     },
+     {
+      "t": 1.977,
+      "char": 29,
+      "len": 2
+     },
+     {
+      "t": 2.169,
+      "char": 32,
+      "len": 7
+     },
+     {
+      "t": 2.683,
+      "char": 40,
+      "len": 3
+     },
+     {
+      "t": 2.939,
+      "char": 44,
+      "len": 7
+     },
+     {
+      "t": 3.453,
+      "char": 52,
+      "len": 9
+     },
+     {
+      "t": 4.094,
+      "char": 62,
+      "len": 5
+     },
+     {
+      "t": 4.479,
+      "char": 68,
+      "len": 2
+     },
+     {
+      "t": 4.672,
+      "char": 71,
+      "len": 3
+     },
+     {
+      "t": 4.929,
+      "char": 75,
+      "len": 8
+     },
+     {
+      "t": 5.506,
+      "char": 84,
+      "len": 4
+     },
+     {
+      "t": 6.277,
+      "char": 90,
+      "len": 9
+     },
+     {
+      "t": 6.951,
+      "char": 100,
+      "len": 3
+     },
+     {
+      "t": 7.221,
+      "char": 104,
+      "len": 2
+     },
+     {
+      "t": 7.423,
+      "char": 107,
+      "len": 3
+     },
+     {
+      "t": 7.693,
+      "char": 111,
+      "len": 5
+     },
+     {
+      "t": 8.097,
+      "char": 117,
+      "len": 6
+     },
+     {
+      "t": 8.569,
+      "char": 124,
+      "len": 7
+     },
+     {
+      "t": 9.109,
+      "char": 132,
+      "len": 5
+     },
+     {
+      "t": 9.513,
+      "char": 138,
+      "len": 3
+     },
+     {
+      "t": 9.783,
+      "char": 142,
+      "len": 2
+     },
+     {
+      "t": 9.985,
+      "char": 145,
+      "len": 3
+     },
+     {
+      "t": 10.255,
+      "char": 149,
+      "len": 7
+     },
+     {
+      "t": 10.794,
+      "char": 157,
+      "len": 2
+     },
+     {
+      "t": 10.996,
+      "char": 160,
+      "len": 4
+     },
+     {
+      "t": 11.333,
+      "char": 165,
+      "len": 6
+     },
+     {
+      "t": 11.805,
+      "char": 172,
+      "len": 2
+     },
+     {
+      "t": 12.007,
+      "char": 175,
+      "len": 3
+     }
+    ],
+    "duration": 12.577
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Rail operators in Japan say their bullet trains ran with an average delay of under one minute last year, a record. More than 160 million passengers used the network, Pixelburg Post reports.",
+   "cues": [],
+   "storyId": "s945f1dfc87",
+   "headline": "Japan's bullet trains mark record year for punctuality",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "JAPAN",
+    "lat": 36.2,
+    "lon": 138.3
+   },
+   "fact": "MORE THAN 160 MILLION PASSENGERS",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "TRANSPORT",
+   "numbers": [
+    {
+     "value": "160 MILLION",
+     "label": "PASSENGERS",
+     "qualifier": "MORE THAN"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 4
+     },
+     {
+      "t": 0.508,
+      "char": 5,
+      "len": 9
+     },
+     {
+      "t": 1.164,
+      "char": 15,
+      "len": 2
+     },
+     {
+      "t": 1.361,
+      "char": 18,
+      "len": 5
+     },
+     {
+      "t": 1.754,
+      "char": 24,
+      "len": 3
+     },
+     {
+      "t": 2.017,
+      "char": 28,
+      "len": 5
+     },
+     {
+      "t": 2.41,
+      "char": 34,
+      "len": 6
+     },
+     {
+      "t": 2.869,
+      "char": 41,
+      "len": 6
+     },
+     {
+      "t": 3.328,
+      "char": 48,
+      "len": 3
+     },
+     {
+      "t": 3.591,
+      "char": 52,
+      "len": 4
+     },
+     {
+      "t": 3.919,
+      "char": 57,
+      "len": 2
+     },
+     {
+      "t": 4.115,
+      "char": 60,
+      "len": 7
+     },
+     {
+      "t": 4.64,
+      "char": 68,
+      "len": 5
+     },
+     {
+      "t": 5.034,
+      "char": 74,
+      "len": 2
+     },
+     {
+      "t": 5.23,
+      "char": 77,
+      "len": 5
+     },
+     {
+      "t": 5.624,
+      "char": 83,
+      "len": 3
+     },
+     {
+      "t": 5.886,
+      "char": 87,
+      "len": 6
+     },
+     {
+      "t": 6.346,
+      "char": 94,
+      "len": 4
+     },
+     {
+      "t": 6.673,
+      "char": 99,
+      "len": 4
+     },
+     {
+      "t": 7.001,
+      "char": 105,
+      "len": 1
+     },
+     {
+      "t": 7.133,
+      "char": 107,
+      "len": 6
+     },
+     {
+      "t": 8.042,
+      "char": 115,
+      "len": 4
+     },
+     {
+      "t": 8.308,
+      "char": 120,
+      "len": 4
+     },
+     {
+      "t": 8.574,
+      "char": 125,
+      "len": 3
+     },
+     {
+      "t": 8.786,
+      "char": 129,
+      "len": 7
+     },
+     {
+      "t": 9.212,
+      "char": 137,
+      "len": 10
+     },
+     {
+      "t": 9.797,
+      "char": 148,
+      "len": 4
+     },
+     {
+      "t": 10.063,
+      "char": 153,
+      "len": 3
+     },
+     {
+      "t": 10.275,
+      "char": 157,
+      "len": 7
+     },
+     {
+      "t": 10.701,
+      "char": 166,
+      "len": 9
+     },
+     {
+      "t": 11.233,
+      "char": 176,
+      "len": 4
+     },
+     {
+      "t": 11.499,
+      "char": 181,
+      "len": 7
+     }
+    ],
+    "duration": 12.224
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Around the world. Mexico City will close the streets of its historic centre to cars every Sunday from next month.",
+   "cues": [],
+   "storyId": "se3b2083eb0",
+   "headline": "Mexico City closes its historic centre to cars on Sundays",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "MEXICO CITY, MEXICO",
+    "lat": 19.43,
+    "lon": -99.13
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 0,
+    "count": 3
+   },
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 6
+     },
+     {
+      "t": 0.616,
+      "char": 7,
+      "len": 3
+     },
+     {
+      "t": 0.865,
+      "char": 11,
+      "len": 5
+     },
+     {
+      "t": 1.689,
+      "char": 18,
+      "len": 6
+     },
+     {
+      "t": 2.131,
+      "char": 25,
+      "len": 4
+     },
+     {
+      "t": 2.447,
+      "char": 30,
+      "len": 4
+     },
+     {
+      "t": 2.763,
+      "char": 35,
+      "len": 5
+     },
+     {
+      "t": 3.141,
+      "char": 41,
+      "len": 3
+     },
+     {
+      "t": 3.394,
+      "char": 45,
+      "len": 7
+     },
+     {
+      "t": 3.899,
+      "char": 53,
+      "len": 2
+     },
+     {
+      "t": 4.089,
+      "char": 56,
+      "len": 3
+     },
+     {
+      "t": 4.341,
+      "char": 60,
+      "len": 8
+     },
+     {
+      "t": 4.91,
+      "char": 69,
+      "len": 6
+     },
+     {
+      "t": 5.352,
+      "char": 76,
+      "len": 2
+     },
+     {
+      "t": 5.541,
+      "char": 79,
+      "len": 4
+     },
+     {
+      "t": 5.857,
+      "char": 84,
+      "len": 5
+     },
+     {
+      "t": 6.236,
+      "char": 90,
+      "len": 6
+     },
+     {
+      "t": 6.678,
+      "char": 97,
+      "len": 4
+     },
+     {
+      "t": 6.994,
+      "char": 102,
+      "len": 4
+     },
+     {
+      "t": 7.31,
+      "char": 107,
+      "len": 5
+     }
+    ],
+    "duration": 7.989
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Norway has opened a 27 kilometre road tunnel under a fjord on its west coast.",
+   "cues": [],
+   "storyId": "sbecc7e92fa",
+   "headline": "Norway opens 27 kilometre road tunnel under a fjord",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "NORWAY",
+    "lat": 61,
+    "lon": 8.5
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 1,
+    "count": 3
+   },
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 6
+     },
+     {
+      "t": 0.661,
+      "char": 7,
+      "len": 3
+     },
+     {
+      "t": 0.936,
+      "char": 11,
+      "len": 6
+     },
+     {
+      "t": 1.418,
+      "char": 18,
+      "len": 1
+     },
+     {
+      "t": 1.555,
+      "char": 20,
+      "len": 2
+     },
+     {
+      "t": 1.761,
+      "char": 23,
+      "len": 9
+     },
+     {
+      "t": 2.449,
+      "char": 33,
+      "len": 4
+     },
+     {
+      "t": 2.793,
+      "char": 38,
+      "len": 6
+     },
+     {
+      "t": 3.274,
+      "char": 45,
+      "len": 5
+     },
+     {
+      "t": 3.686,
+      "char": 51,
+      "len": 1
+     },
+     {
+      "t": 3.824,
+      "char": 53,
+      "len": 5
+     },
+     {
+      "t": 4.237,
+      "char": 59,
+      "len": 2
+     },
+     {
+      "t": 4.443,
+      "char": 62,
+      "len": 3
+     },
+     {
+      "t": 4.718,
+      "char": 66,
+      "len": 4
+     },
+     {
+      "t": 5.062,
+      "char": 71,
+      "len": 5
+     }
+    ],
+    "duration": 5.774
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Volunteers in Ghana have planted one million mangrove seedlings along the coast near Accra.",
+   "cues": [],
+   "storyId": "sc2b2054024",
+   "headline": "Ghana volunteers plant one million mangrove trees",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "ACCRA, GHANA",
+    "lat": 5.6,
+    "lon": -0.19
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 2,
+    "count": 3
+   },
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 10
+     },
+     {
+      "t": 0.777,
+      "char": 11,
+      "len": 2
+     },
+     {
+      "t": 0.94,
+      "char": 14,
+      "len": 5
+     },
+     {
+      "t": 1.266,
+      "char": 20,
+      "len": 4
+     },
+     {
+      "t": 1.537,
+      "char": 25,
+      "len": 7
+     },
+     {
+      "t": 1.972,
+      "char": 33,
+      "len": 3
+     },
+     {
+      "t": 2.189,
+      "char": 37,
+      "len": 7
+     },
+     {
+      "t": 2.623,
+      "char": 45,
+      "len": 8
+     },
+     {
+      "t": 3.112,
+      "char": 54,
+      "len": 9
+     },
+     {
+      "t": 3.655,
+      "char": 64,
+      "len": 5
+     },
+     {
+      "t": 3.981,
+      "char": 70,
+      "len": 3
+     },
+     {
+      "t": 4.198,
+      "char": 74,
+      "len": 5
+     },
+     {
+      "t": 4.524,
+      "char": 80,
+      "len": 4
+     },
+     {
+      "t": 4.795,
+      "char": 85,
+      "len": 5
+     }
+    ],
+    "duration": 5.421
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "The city of Paris has announced plans to plant 170,000 trees by 2030 to cool the city in summer. Squares near the Seine will be the first to change, according to Pixelburg Post.",
+   "cues": [],
+   "storyId": "s7cf5417e48",
+   "headline": "Paris unveils plans to plant 170,000 trees by 2030",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "PARIS, FRANCE",
+    "lat": 48.86,
+    "lon": 2.35
+   },
+   "fact": "170,000 TREES",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "GREEN CITIES",
+   "numbers": [
+    {
+     "value": "170,000",
+     "label": "TREES"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 3
+     },
+     {
+      "t": 0.459,
+      "char": 4,
+      "len": 4
+     },
+     {
+      "t": 0.809,
+      "char": 9,
+      "len": 2
+     },
+     {
+      "t": 1.018,
+      "char": 12,
+      "len": 5
+     },
+     {
+      "t": 1.437,
+      "char": 18,
+      "len": 3
+     },
+     {
+      "t": 1.717,
+      "char": 22,
+      "len": 9
+     },
+     {
+      "t": 2.415,
+      "char": 32,
+      "len": 5
+     },
+     {
+      "t": 2.834,
+      "char": 38,
+      "len": 2
+     },
+     {
+      "t": 3.044,
+      "char": 41,
+      "len": 5
+     },
+     {
+      "t": 3.463,
+      "char": 47,
+      "len": 7
+     },
+     {
+      "t": 4.022,
+      "char": 55,
+      "len": 5
+     },
+     {
+      "t": 4.441,
+      "char": 61,
+      "len": 2
+     },
+     {
+      "t": 4.651,
+      "char": 64,
+      "len": 4
+     },
+     {
+      "t": 5,
+      "char": 69,
+      "len": 2
+     },
+     {
+      "t": 5.209,
+      "char": 72,
+      "len": 4
+     },
+     {
+      "t": 5.559,
+      "char": 77,
+      "len": 3
+     },
+     {
+      "t": 5.838,
+      "char": 81,
+      "len": 4
+     },
+     {
+      "t": 6.187,
+      "char": 86,
+      "len": 2
+     },
+     {
+      "t": 6.397,
+      "char": 89,
+      "len": 6
+     },
+     {
+      "t": 7.336,
+      "char": 97,
+      "len": 7
+     },
+     {
+      "t": 7.836,
+      "char": 105,
+      "len": 4
+     },
+     {
+      "t": 8.149,
+      "char": 110,
+      "len": 3
+     },
+     {
+      "t": 8.399,
+      "char": 114,
+      "len": 5
+     },
+     {
+      "t": 8.774,
+      "char": 120,
+      "len": 4
+     },
+     {
+      "t": 9.087,
+      "char": 125,
+      "len": 2
+     },
+     {
+      "t": 9.275,
+      "char": 128,
+      "len": 3
+     },
+     {
+      "t": 9.525,
+      "char": 132,
+      "len": 5
+     },
+     {
+      "t": 9.9,
+      "char": 138,
+      "len": 2
+     },
+     {
+      "t": 10.088,
+      "char": 141,
+      "len": 6
+     },
+     {
+      "t": 10.526,
+      "char": 149,
+      "len": 9
+     },
+     {
+      "t": 11.151,
+      "char": 159,
+      "len": 2
+     },
+     {
+      "t": 11.339,
+      "char": 162,
+      "len": 9
+     },
+     {
+      "t": 11.964,
+      "char": 172,
+      "len": 4
+     }
+    ],
+    "duration": 12.577
+   }
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's the minute. Stay with us on GLOBIT 24.",
+   "cues": [],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 6
+     },
+     {
+      "t": 0.592,
+      "char": 7,
+      "len": 3
+     },
+     {
+      "t": 0.827,
+      "char": 11,
+      "len": 6
+     },
+     {
+      "t": 1.689,
+      "char": 19,
+      "len": 4
+     },
+     {
+      "t": 2.096,
+      "char": 24,
+      "len": 4
+     },
+     {
+      "t": 2.503,
+      "char": 29,
+      "len": 2
+     },
+     {
+      "t": 2.748,
+      "char": 32,
+      "len": 2
+     },
+     {
+      "t": 2.992,
+      "char": 35,
+      "len": 6
+     },
+     {
+      "t": 3.562,
+      "char": 42,
+      "len": 2
+     }
+    ],
+    "duration": 4.106
+   }
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "sfe6d14dab8",
+   "headline": "Kenya switches on its largest solar farm near Nairobi",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "ENERGY"
+  },
+  {
+   "storyId": "s945f1dfc87",
+   "headline": "Japan's bullet trains mark record year for punctuality",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "TRANSPORT"
+  },
+  {
+   "storyId": "se3b2083eb0",
+   "headline": "Mexico City closes its historic centre to cars on Sundays",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "sbecc7e92fa",
+   "headline": "Norway opens 27 kilometre road tunnel under a fjord",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "sc2b2054024",
+   "headline": "Ghana volunteers plant one million mangrove trees",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s7cf5417e48",
+   "headline": "Paris unveils plans to plant 170,000 trees by 2030",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "GREEN CITIES"
+  }
+ ],
+ "storyIds": [
+  "sfe6d14dab8",
+  "s945f1dfc87",
+  "se3b2083eb0",
+  "sbecc7e92fa",
+  "sc2b2054024",
+  "s7cf5417e48"
+ ]
+}

@@ -4,7 +4,8 @@
 // Files: gestures/index.js (this file: rest pose, channel list, the registry),
 // gestures/shapes.js (hand shapes), gestures/library.js (the 7 owner-approved
 // gestures), gestures/arms.js (the other arm gestures), gestures/heads.js
-// (head and body gestures). New gestures go in new files under gestures/
+// (head and body gestures), gestures/beats.js (speech beats and delivery
+// variants, registered with registerVariants()). New gestures go in new files under gestures/
 // registered with registerGestures(); names match public/js/cues.js ACTIONS
 // (all 20 exist).
 //
@@ -43,6 +44,7 @@
 import { LIBRARY } from './library.js';
 import { ARMS } from './arms.js';
 import { HEADS } from './heads.js';
+import { BEATS } from './beats.js';
 
 export const REST = {
   wrist: [-5.6, 19.3, 13.5],
@@ -95,6 +97,9 @@ export function prepareDef(g) {
     start: Array.isArray(keys[0][1]) ? keys[0][1].slice() : keys[0][1],
   }));
   g.arm = g._ch.some((c) => c.override);
+  // which arm each definition drives (the rig's arm idle layer yields only on those)
+  g.armN = g._ch.some((c) => c.override && !c.ch.endsWith('F') && c.ch !== 'hold' && c.ch !== 'tilt');
+  g.armF = g._ch.some((c) => c.override && c.ch.endsWith('F'));
   g.stroke ??= Math.min(0.3, g.dur * 0.15);
   g.apex ??= Math.min(g.dur * 0.4, g.stroke + 0.35);
   g.hold ??= Math.max(g.apex, g.dur - 0.5);
@@ -135,6 +140,26 @@ export function registerGestures(defs) {
 }
 
 /**
+ * Add named variants to gestures that are already registered ({ name: { variant: def } }); a variant
+ * inherits desc and focus from its gesture. Names stay cues.js ACTIONS (PLAN §3.3: variants, not new names).
+ */
+export function registerVariants(defs) {
+  for (const [name, vars] of Object.entries(defs)) {
+    const g = GESTURES[name];
+    if (!g) throw new Error(`registerVariants: unknown gesture ${name}`);
+    g.variants ||= {};
+    for (const [vn, v] of Object.entries(vars)) {
+      v.name = name;
+      v.variant = vn;
+      v.desc ??= g.desc;
+      v.focus ??= g.focus;
+      prepareDef(v);
+      g.variants[vn] = v;
+    }
+  }
+}
+
+/**
  * The definition an event plays: its variant when the gesture has one by that name, the
  * count-specific definition when `n` is given, else the base definition (null for unknown names).
  */
@@ -164,6 +189,7 @@ export function durOf(ev) {
 registerGestures(LIBRARY);
 registerGestures(ARMS);
 registerGestures(HEADS);
+registerVariants(BEATS);
 
 /** The 7 gestures in the order the rig demo performs them. */
 export const DEMO_SEQUENCE = ['raise_hand', 'wave', 'point_screen', 'nod', 'look_partner', 'shrug', 'count'];

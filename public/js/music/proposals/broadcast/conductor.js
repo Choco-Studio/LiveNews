@@ -36,7 +36,7 @@ const MAX_WAIT = 1.25; // never wait longer than this for a boundary (seconds)
 // Loudness targets (integrated LUFS of a bed alone, unducked; the house voice
 // is -16 LUFS, so -9 dB of duck puts a -26 bed 19 LU under it).
 export const TARGET = {
-  headlines: -26, intro: -27, roundup: -27, lighter: -28, chat: -27, number: -28, outro: -27, story: -28, standby: -27,
+  headlines: -26, intro: -27, roundup: -27, lighter: -28, chat: -27, number: -28, outro: -27, story: -28, standby: -27, underscore: -31,
   'news-60:story': -36, 'news-60:grave': -38, 'cosmos:lighter': -32, bumper: -16,
 };
 
@@ -45,6 +45,7 @@ export const TARGET = {
 export const TRIM = {
   'world-now:headlines': -6.2, 'world-now:roundup': -4.4, 'world-now:lighter': -5.3,
   'tech-bytes:headlines': -6.7, 'tech-bytes:chat': -6.6, 'tech-bytes:number': -7.8, 'tech-bytes:lighter': -7.6, 'tech-bytes:outro': -6.7,
+  'world-now:underscore': 0, 'tech-bytes:underscore': 0,
   'cosmos:headlines': -7.7, 'cosmos:story': -8.7, 'cosmos:lighter': -12.5,
   'money-minute:intro': -1.6, 'money-minute:outro': 0.9, 'money-minute:number': -0.7, 'money-minute:drone': -12.4,
   'news-60:story': -13.4, 'news-60:grave': -14.2,
@@ -67,14 +68,16 @@ export class BroadcastMusic {
    * @param {number} [o.duckDb]          override the programmes' duck depth (0 when the host bus ducks)
    * @param {number} [o.pocketDb=-8]     extra cut at 2.5 kHz while someone speaks
    * @param {'silence'|'pad'} [o.grave]  what plays under grave stories
+   * @param {'bible'|'soft'} [o.storyBeds] 'soft' gives neutral stories a felt-not-heard underscore
    */
-  constructor({ context, destination, duckDb = null, pocketDb = -8, grave = 'silence', seed = 7, lookahead = 1.6, solo = null, mute = null, trim = TRIM } = {}) {
+  constructor({ context, destination, duckDb = null, pocketDb = -8, grave = 'silence', storyBeds = 'bible', seed = 7, lookahead = 1.6, solo = null, mute = null, trim = TRIM } = {}) {
     const c = context;
     this.ctx = c;
     this.synth = new Synth(c);
     this.duckDb = duckDb;
     this.pocketDb = pocketDb;
     this.graveMode = grave;
+    this.storyBeds = storyBeds;
     this.seed = seed;
     this.lookahead = lookahead;
     this.solo = solo;
@@ -90,6 +93,7 @@ export class BroadcastMusic {
     this.talking = false;
     this.speechLog = []; // [time, on] of gate moves, so gates made later start in the right state
     this.lastSting = null;
+    this.lastShot = null;
     this.timer = 0;
 
     this.mix = c.createGain();
@@ -123,9 +127,17 @@ export class BroadcastMusic {
     this.glue.ratio.value = 2.5;
     this.glue.attack.value = 0.02;
     this.glue.release.value = 0.25;
+    // Peak safety for the loud channel cues (bumper cards, ident at -16 LUFS);
+    // beds at -26 LUFS never reach it.
+    this.limit = c.createDynamicsCompressor();
+    this.limit.threshold.value = -6;
+    this.limit.knee.value = 3;
+    this.limit.ratio.value = 20;
+    this.limit.attack.value = 0.002;
+    this.limit.release.value = 0.12;
     this.out = c.createGain();
     this.revIn.connect(reverb).connect(revOut).connect(this.pocket);
-    this.mix.connect(this.pocket).connect(this.duck).connect(this.shelf).connect(this.low).connect(this.hp).connect(this.glue).connect(this.out);
+    this.mix.connect(this.pocket).connect(this.duck).connect(this.shelf).connect(this.low).connect(this.hp).connect(this.glue).connect(this.limit).connect(this.out);
     this.out.connect(destination || c.destination);
   }
 
@@ -164,7 +176,7 @@ export class BroadcastMusic {
       this.cooldown = 1;
       return this.toSilence(at, { grave: true });
     }
-    return this.apply(ruleFor(this.programme, m), m, at, opts);
+    return this.apply(ruleFor(this.programme, m, { storyBeds: this.storyBeds }), m, at, opts);
   }
 
   apply(rule, m, at, opts) {
@@ -181,10 +193,15 @@ export class BroadcastMusic {
       return this.playBed(bedDef(this.programme, rule, opts), m, at);
     }
     if (rule.accent) {
-      // A montage frame also moves the headline harmony on (Bm -> G -> D).
+      // An accent (headline pip, item tick) is cued by the director in a gap
+      // between voices: the duck lifts at once instead of waiting out its
+      // hold, so the gap breathes (the bed rises about 9 dB, to -10 LU under
+      // the voice, as world-now.md allows) and the pip is heard. A montage
+      // frame also moves the headline harmony on (Bm -> G -> D).
       const cur = this.current;
+      this.gap(at);
       if (cur?.def.frames) cur.bed.frame(cur.bed.frameIdx + 1, at + 0.02);
-      return this.oneShot(rule.accent, this.quantize(at, 0.5), PROGRAMMES[this.programme], { exclusive: false, gate: true });
+      return this.oneShot(rule.accent, this.quantize(at, 0.5), PROGRAMMES[this.programme], { exclusive: false });
     }
     if (rule.presence) return this.presence(rule.presence, at, opts);
     if (rule.external) {
@@ -193,7 +210,7 @@ export class BroadcastMusic {
     }
     if (rule.sting) {
       const shot = this.sting(rule.sting, at, opts, { overlay: rule.overlay || (m === 'signoff' && this.current) });
-      if (rule.then) {
+      if (rule.then && shot) {
         if (this.cooldown > 0) this.cooldown--;
         else this.startBed(bedDef(this.programme, rule.then, opts), shot.t + shot.len * 0.8, 'soft', 1.2, { cued: rule.then });
       }
@@ -210,7 +227,7 @@ export class BroadcastMusic {
     if (!def) return this.toSilence(at, {});
     const cur = this.current;
     if (cur && cur.def.id === def.id) {
-      if (cued === 'story') cur.bed.jumpAt = this.boundary(cur.bed, at); // new story: turn the page
+      if (cued === 'story' || cued === 'light') cur.bed.jumpAt = this.boundary(cur.bed, at); // new story: turn the page
       return cur;
     }
     if (cued === 'openTail') {
@@ -331,6 +348,13 @@ export class BroadcastMusic {
   }
 
   oneShot(kind, t, pkg, { exclusive = true, gate = false, opts = {} } = {}) {
+    // The same one-shot twice within 3 s (NEWS IN 60's sign-off bell, then the
+    // end card asking for it again) plays once.
+    const key = `${pkg.id}:${kind}`;
+    if (exclusive || gate) {
+      if (this.lastShot && this.lastShot.key === key && t - this.lastShot.t < 3) return null;
+      this.lastShot = { key, t };
+    }
     const def = { id: `${pkg.id}:${kind}`, programme: pkg.id, moment: null, pkg, bpm: pkg.bpm, tonic: pkg.tonic, mode: pkg.mode, hr: 1, swing: 0, progs: { A: [pkg.home] }, form: 'A', layers: [], delay: 0.75 };
     const trim = (this.trim[`sting:${pkg.id}:${kind}`] ?? this.trim[`sting:${kind}`] ?? this.trim.sting ?? 0);
     const bed = new Bed(this, def, { origin: t, entry: 'cut', seed: this.seed, trim });
@@ -410,6 +434,27 @@ export class BroadcastMusic {
       this.logSpeech(t, false);
       this.releaseAt = t;
     }
+  }
+
+  /**
+   * A known gap between voices (the director cues an accent there): if nobody
+   * is talking, release the duck and open the gates now (0.15 s time constant)
+   * instead of after the 0.9 s hold. The next speech(true) ducks again with
+   * its usual look-ahead.
+   */
+  gap(at = this.now) {
+    if (this.talking) return;
+    const t = Math.max(this.now, at);
+    if (this.releaseAt <= t) return; // already released
+    for (const p of [this.duck.gain, this.pocket.gain]) p.cancelScheduledValues(t);
+    this.duck.gain.setTargetAtTime(1, t, 0.15);
+    this.pocket.gain.setTargetAtTime(0, t, 0.15);
+    for (const bed of this.beds) bed.setGate(false, t);
+    // Rewrite the pending release in the log so gates made later agree.
+    for (let k = this.speechLog.length - 1; k >= 0; k--) {
+      if (!this.speechLog[k][1] && this.speechLog[k][0] > t) this.speechLog[k][0] = t;
+    }
+    this.releaseAt = t;
   }
 
   logSpeech(t, on) {

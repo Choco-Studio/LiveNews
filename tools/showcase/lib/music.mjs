@@ -91,13 +91,13 @@ export function deriveCues(log, { headlineLead = 0.3 } = {}) {
         if (last) add(last.end + 100, 'introEnd', {}, 'end of the intro');
       } else if (e.type === 'story') {
         add(e.t - 20, 'item', {}, 'item cut');
-        // Grave items stay 'story' whatever their feature, so the cue sheet keeps
-        // them and the next segment dry. A breaking story is treated as grave:
-        // the channel has just played its own breaking cue on the card, so the
-        // bed engine must not add a second sting.
+        // Grave and breaking items stay 'story' whatever their feature, so the
+        // cue sheet keeps them (and the next segment) dry. The breaking sting is
+        // the channel's own (audio.sfx('breaking') on the card): the engine runs
+        // with sharedStings, so it only stops the bed.
         const heavy = grave || Boolean(e.breaking);
         const moment = heavy ? 'story' : e.feature === 'roundup' ? 'roundup' : e.feature === 'lighter' ? 'finally' : e.feature === 'number' ? 'number' : 'story';
-        add(e.t, moment, { emotion, grave: heavy, breaking: false, segment }, `${moment} (${emotion}${e.breaking ? ', breaking' : ''}${e.feature ? `, ${e.feature}` : ''})`);
+        add(e.t, moment, { emotion, grave, breaking: Boolean(e.breaking), segment }, `${moment} (${emotion}${e.breaking ? ', breaking' : ''}${e.feature ? `, ${e.feature}` : ''})`);
         if (e.feature === 'lighter' && last) add(last.end + 150, 'featureEnd', {}, 'end of the feature');
       } else if (e.type === 'chat') {
         add(e.t, 'chat', { emotion, grave, segment }, `chat (${emotion})`);
@@ -151,7 +151,7 @@ export function quietIntervals(log, origin) {
  * stereo result in window.__beds (and window.__bedsDry: the same cues with no
  * speech, for measuring the duck). Returns a small summary.
  */
-export async function renderBedsInPage({ engine, cues, speech, seconds, sampleRate, dry }) {
+export async function renderBedsInPage({ engine, cues, speech, seconds, sampleRate, dry, stories = 'soft' }) {
   const sr = sampleRate;
   const len = Math.max(1, Math.ceil(seconds * sr));
   let version = engine;
@@ -177,7 +177,10 @@ export async function renderBedsInPage({ engine, cues, speech, seconds, sampleRa
       LOOK = mod.LOOKAHEAD ?? 0.6;
       const v2 = Boolean(sheet.SEGMENT_MOMENTS);
       version = v2 ? 'lofi v2 (programme bibles)' : 'lofi v1';
-      const m = new mod.LofiEngine(ctx, out, { sharedStings: true, gravePad: false });
+      // bedUnderStories: 'soft' = the owner's switch (a very soft bed under light
+      // and neutral story copy, >= 24 LU under the voice), 'off' = the bibles'
+      // dry story copy. Grave stories and the segment after them stay silent.
+      const m = new mod.LofiEngine(ctx, out, { sharedStings: true, gravePad: false, bedUnderStories: stories });
       // The first cue sheet knew fewer moments: map the director's calls down to it.
       const V1 = { pip: null, item: null, shot: null, featureEnd: null, introEnd: null, signoffEnd: null, open: 'silence', greeting: null, ad: 'silence', finally: 'story', coldOpen: 'headlines', upNext: 'silence', roundup: 'map', number: 'story' };
       music = {

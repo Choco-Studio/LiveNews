@@ -721,9 +721,13 @@ export class AudioEngine {
         const next = i + 1 < plan.length ? perf0 + plan[i + 1].begin : perf0 + durMs + 40;
         while (!run.cancelled && !ended && performance.now() < next - 1) await run.sleep(next - performance.now());
       }
-      while (!run.cancelled && !ended) await run.sleep(Math.max(20, perf0 + durMs + 300 - performance.now()));
+      // Wait for the clip's `ended`, but never much past its length: a context
+      // that stops processing (suspended by the host, an offline recording)
+      // never fires it, and the show must go on.
+      const deadline = perf0 + durMs + 1500;
+      while (!run.cancelled && !ended && performance.now() < deadline) await run.sleep(Math.max(20, Math.min(perf0 + durMs + 300, deadline) - performance.now()));
     } finally {
-      if (run.cancelled) stopSource();
+      if (run.cancelled || !ended) stopSource();
       run.clearTimeline();
       run.loud = null;
       setTimeout(() => {

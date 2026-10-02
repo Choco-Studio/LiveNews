@@ -1,0 +1,225 @@
+{
+ "kind": "episode",
+ "id": "emurd7y1ia",
+ "createdAt": "2026-10-02T19:37:52.662Z",
+ "program": {
+  "id": "cosmos",
+  "title": "COSMOS DESK",
+  "tagline": "SCIENCE, SPACE & OUR PLANET",
+  "theme": "space"
+ },
+ "cast": {
+  "A": "nova",
+  "B": "unit8"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "pictures",
+   "ms": 0,
+   "pictures": 0,
+   "of": 6,
+   "found": 0,
+   "borrowed": 0
+  },
+  {
+   "stage": "write",
+   "ms": 104,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 0,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 1,
+   "images": 0,
+   "verified": 0
+  }
+ ],
+ "title": "COSMOS DESK (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "New species of glowing mushroom found in Brazilian forest. Also coming up: Bees use sun as compass even on cloudy days. And later: Astronauts grow tomatoes on the space station. This is COSMOS DESK. I'm Dr Nova Reyes, with UNIT-8.",
+   "cues": [
+    {
+     "char": 198,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 230,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s5fc50077e6",
+    "s3aa751ad7f",
+    "s10c25a368f"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "It emits a soft green light at night, Starfield Journal reports. Biologists have described a new species of glowing mushroom found in the Atlantic forest of Brazil.",
+   "cues": [
+    {
+     "char": 164,
+     "slot": "B",
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "s5fc50077e6",
+   "headline": "New species of glowing mushroom found in Brazilian forest",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "BRAZIL",
+    "lat": -14.2,
+    "lon": -51.9
+   },
+   "fact": null,
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "WILDLIFE"
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Brazil. Noted.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Precise as ever, UNIT-8.",
+   "cues": []
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "A new study shows honeybees can find the position of the sun through clouds using polarised light. The finding explains how they navigate in poor weather, according to Starfield Journal. Over to you, Nova.",
+   "cues": [
+    {
+     "char": 186,
+     "slot": "A",
+     "action": "look_partner"
+    },
+    {
+     "char": 186,
+     "slot": null,
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "s3aa751ad7f",
+   "headline": "Bees use sun as compass even on cloudy days",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "WILDLIFE"
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "And finally: Astronauts on the International Space Station have harvested tomatoes grown in a small greenhouse. Scientists want to learn how to feed crews on long missions.",
+   "cues": [
+    {
+     "char": 172,
+     "slot": "B",
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "s10c25a368f",
+   "headline": "Astronauts grow tomatoes on the space station",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "AND FINALLY",
+   "feature": "lighter"
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Logged. I find the distances reassuring.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's COSMOS DESK. From UNIT-8 and from me, thank you for watching. Stay with us on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 19,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s5fc50077e6",
+   "headline": "New species of glowing mushroom found in Brazilian forest",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "WILDLIFE"
+  },
+  {
+   "storyId": "s3aa751ad7f",
+   "headline": "Bees use sun as compass even on cloudy days",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "WILDLIFE"
+  },
+  {
+   "storyId": "s10c25a368f",
+   "headline": "Astronauts grow tomatoes on the space station",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "AND FINALLY"
+  }
+ ],
+ "storyIds": [
+  "s5fc50077e6",
+  "s3aa751ad7f",
+  "s10c25a368f"
+ ]
+}

@@ -25,7 +25,8 @@ export const FAKE_VOICES = [
   { name: 'Kokoro Nova (female)', lang: 'en-US', kokoro: 'af_nova' },
 ];
 
-// Commercial voice-overs: deadpan announcers nobody on the desk uses.
+// Commercial voice-overs when server/voice/adcast.json is missing: deadpan
+// announcers nobody on the desk uses.
 const ANNOUNCERS = {
   'male:gb': { voice: 'bm_lewis:0.7+bm_daniel:0.3', lang: 'en-gb' },
   'male:us': { voice: 'am_adam:0.7+am_eric:0.3', lang: 'en-us' },
@@ -33,37 +34,80 @@ const ANNOUNCERS = {
   'female:us': { voice: 'af_sarah:0.7+af_nicole:0.3', lang: 'en-us' },
 };
 
-// Without presets.json: the orchestrator's default casting.
+// Without any casting file: the orchestrator's default casting.
 const DEFAULT_CAST = {
   paco: 'bm_george', lola: 'af_heart', max: 'am_puck', ada: 'bf_emma', nova: 'af_nova', unit8: 'am_echo', penny: 'bf_isabella', sam: 'am_michael',
 };
 
-export function loadPresets() {
-  for (const file of [path.join(REPO, 'server', 'voice', 'casting.json'), path.join(REPO, 'tools', 'voice', 'presets.json')]) {
-    try {
-      const j = JSON.parse(fs.readFileSync(file, 'utf8'));
-      const presets = j.presets ?? j.cast ?? j;
-      if (presets && typeof presets === 'object' && Object.keys(presets).length) return { file, ids: new Set(Object.keys(presets)) };
-    } catch { /* not there yet */ }
+const readJson = (file) => {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return null;
   }
-  return { file: null, ids: new Set() };
+};
+
+/**
+ * The channel's own casting, as the server's voice service reads it:
+ * presenters from server/voice/casting.json (voice blend, Kokoro speed, lang,
+ * pauses, robot effect), advert voice-overs from server/voice/adcast.json (per
+ * ad id, else a default per gender and accent). tools/voice/presets.json (the
+ * voice stream's presets) and the default cast are the fallbacks.
+ */
+export function loadPresets() {
+  const files = {
+    casting: path.join(REPO, 'server', 'voice', 'casting.json'),
+    adcast: path.join(REPO, 'server', 'voice', 'adcast.json'),
+    presets: path.join(REPO, 'tools', 'voice', 'presets.json'),
+  };
+  const casting = readJson(files.casting) || {};
+  const presenters = Object.fromEntries(Object.entries(casting).filter(([, v]) => v && typeof v === 'object' && typeof v.voice === 'string'));
+  const adcast = readJson(files.adcast) || {};
+  const presets = readJson(files.presets)?.presets || {};
+  return {
+    file: Object.keys(presenters).length ? files.casting : Object.keys(presets).length ? files.presets : null,
+    files: { casting: Object.keys(presenters).length ? files.casting : null, adcast: Object.keys(adcast).length ? files.adcast : null, presets: Object.keys(presets).length ? files.presets : null },
+    presenters,
+    adcast,
+    ids: new Set(Object.keys(presets)),
+  };
 }
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-/** Page speech request -> worker request ({ voice, speed?, lang?, effect? }) + a label for the timeline. */
+/** The advert's voice-over cast, the way server/voice/service.js adCast() picks it. */
+function adCast(ad, req, adcast) {
+  const own = ad?.id ? adcast?.[ad.id] : null;
+  if (own?.voice) return { cast: own, label: `VO ${ad.id} (adcast.json)` };
+  const v = ad?.voice || {};
+  const female = v.gender === 'female' || /^f/i.test(String(v.gender ?? ''));
+  const us = /us/i.test(String(v.lang ?? req.lang ?? ''));
+  const def = adcast?.default?.[`${female ? 'female' : 'male'}-${us ? 'us' : 'gb'}`];
+  if (def?.voice) return { cast: def, label: `VO ${ad?.id ?? '?'} (adcast.json default)` };
+  const a = ANNOUNCERS[`${female ? 'female' : 'male'}:${us ? 'us' : 'gb'}`];
+  // Ads ask for 0.85-0.95 browser rates: a slow, deadpan read, kept natural.
+  return { cast: { ...a, speed: +clamp((Number(v.rate) || 0.92) * 1.02, 0.86, 1.0).toFixed(3) }, label: `announcer ${female ? 'female' : 'male'} ${us ? 'US' : 'GB'}` };
+}
+
+/** Page speech request -> worker request fields ({ voice, speed?, lang?, effect?, pauses? }) + a label for the timeline. */
 export function voiceFor(req, presets) {
   const ad = req.ad;
   if (ad || req.slot === 'ad' || (req.slot && /^ad/.test(req.slot))) {
-    const v = ad?.voice || {};
-    const g = /^f/i.test(String(v.gender ?? '')) ? 'female' : 'male';
-    const accent = /gb|uk/i.test(String(v.lang ?? req.lang ?? '')) ? 'gb' : 'us';
-    const a = ANNOUNCERS[`${g}:${accent}`];
-    // Ads ask for 0.85-0.95 browser rates: a slow, deadpan read, kept natural.
-    const speed = clamp((Number(v.rate) || 0.92) * 1.02, 0.86, 1.0);
-    return { voice: a.voice, lang: a.lang, speed: +speed.toFixed(3), label: `announcer ${g} ${accent.toUpperCase()}` };
+    const { cast, label } = adCast(ad, req, presets.adcast);
+    return { voice: cast.voice, lang: cast.lang ?? null, speed: Number(cast.speed) || null, label };
   }
   if (req.presenter) {
+    const c = presets.presenters?.[req.presenter];
+    if (c) {
+      return {
+        voice: c.voice,
+        speed: Number(c.speed) || null,
+        lang: c.lang ?? null,
+        effect: c.effect === 'robot' ? 'robot' : null,
+        pauses: c.pauses && typeof c.pauses === 'object' ? c.pauses : null,
+        label: `${req.presenter} (casting.json)`,
+      };
+    }
     if (presets.ids.has(req.presenter)) return { voice: req.presenter, label: `${req.presenter} (preset)` };
     if (DEFAULT_CAST[req.presenter]) return { voice: DEFAULT_CAST[req.presenter], label: `${req.presenter} (default cast)` };
   }
@@ -71,6 +115,11 @@ export function voiceFor(req, presets) {
   const kokoro = req.voiceKokoro || fake?.kokoro || (/gb/i.test(req.lang || '') ? 'bm_george' : 'am_eric');
   const lang = /gb/i.test(req.lang || fake?.lang || '') ? 'en-gb' : 'en-us';
   return { voice: kokoro, lang, speed: +clamp(Number(req.rate) || 1, 0.8, 1.2).toFixed(3), label: `${kokoro} (browser voice ${req.voiceName ?? '?'})` };
+}
+
+/** Worker request for one utterance with the voice voiceFor() chose. */
+export function workerRequest(text, v) {
+  return { text, voice: v.voice, speed: v.speed ?? null, lang: v.lang ?? null, effect: v.effect ?? null, pauses: v.pauses ?? null };
 }
 
 /** One persistent worker; requests are served in order. */
@@ -152,7 +201,7 @@ export class VoicePool {
   }
 
   static key(req) {
-    return JSON.stringify([req.text, req.voice, req.speed ?? null, req.lang ?? null, req.effect ?? null]);
+    return JSON.stringify([req.text, req.voice, req.speed ?? null, req.lang ?? null, req.effect ?? null, req.pauses ?? null]);
   }
 
   /** req: { text, voice, speed?, lang?, effect? } -> worker reply. */

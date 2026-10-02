@@ -34,7 +34,10 @@ export function matsOf(L) {
   const m = {
     skin: material(`${id}:skin`, { ramp: L.skin, line: L.skinLine, th: skinTh }),
     hand: material(`${id}:hand`, { ramp: L.skin, line: L.skinLine, th: [0.96, -0.02, -0.5] }),
-    hair: material(`${id}:hair`, { ramp: L.hair.ramp, line: L.hair.line, rim: P.silver, rimTop: true, th: [0.62, 0.08, -0.42] }),
+    // hair light: by default a silver rim on the top and the right edge (the approved prototype);
+    // `hair.rimTop: false` keeps only the right edge (the look paints a partial top light itself, so
+    // dark hair does not read as a cap outlined in silver), `hair.rim` picks another palette colour
+    hair: material(`${id}:hair`, { ramp: L.hair.ramp, line: L.hair.line, rim: L.hair.rim || P.silver, rimTop: L.hair.rimTop !== false, th: [0.62, 0.08, -0.42] }),
     hairBack: material(`${id}:hairBack`, { ramp: L.hair.ramp, line: L.hair.line, th: [2, 0.55, -0.1] }),
     jacket: material(`${id}:jacket`, { ramp: L.jacket.ramp, line: L.jacket.line, rim: P.silver, th: [0.8, -0.02, -0.5] }),
     // lapels: the jacket's ramp with a softer inner line (its shade tone) where they meet the shirt
@@ -46,6 +49,9 @@ export function matsOf(L) {
   // exact skin colours for painted features (lids, nose, folds) so no clean-up pass touches them
   m.skinD = material(`${id}:skinD`, { ramp: L.skin, decal: true });
   if (L.tie) m.tie = material(`${id}:tie`, { ramp: L.tie.ramp, line: L.tie.line, th: [0.9, 0.0, -0.5] });
+  // the hairline against the skin: the hair's ramp with a darker LOCAL line (sel-out) instead of the
+  // outline colour, used by kit-a selOutEdge; `hair.edge` (palette colour) opts in
+  if (L.hair.edge) m.hairEdge = material(`${id}:hairEdge`, { ramp: L.hair.ramp, line: L.hair.edge, th: [0.62, 0.08, -0.42] });
   if (L.mustache) m.mustache = material(`${id}:mustache`, { ramp: L.mustache.ramp, line: L.mustache.ramp[3], noLine: true, th: [0.7, 0.15, -0.3] });
   for (const [name, spec] of Object.entries(L.mats || {})) m[name] = material(`${id}:${name}`, spec);
   L._mats = m;

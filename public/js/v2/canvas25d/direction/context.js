@@ -30,6 +30,11 @@
 //   ctx.shots      [] here; planSegment fills it with planShots' cuts
 //                  [{ at, char, shot, focus }] before running the other planners
 //   ctx.cutGuard   s after a cut in which no gesture may start (bibles: 0.5, MONEY 0.6)
+//   ctx.contextAt(j)  the context of segment j of the same episode (memoised per
+//                  episode object, presenters and gapAfter; READ-ONLY, shared by every
+//                  caller): planners that depend on a neighbour (CAMERA's one MAP per
+//                  MONEY MINUTE, NEWS IN 60's "never open an item on the previous
+//                  item's last framing") read it exactly instead of predicting it
 //
 // Event anchors: every planned event carries `char` (offset into seg.text) and
 // `at` (seconds from the first word, from ctx.timeAt). The runtime fires recorded
@@ -127,13 +132,35 @@ function episodeSummary(episode) {
   return sum;
 }
 
+const NEIGHBOURS = new WeakMap(); // episode -> { presenters, gapAfter, ctxs: Map(index -> ctx) }
+
+/** Memoised context of segment j (neighbour access for the planners). */
+function contextAt(episode, j, presenters, gapAfter) {
+  if (!episode || typeof episode !== 'object' || !Number.isInteger(j)) return null;
+  const segs = Array.isArray(episode.segments) ? episode.segments : [];
+  if (j < 0 || j >= segs.length) return null;
+  let memo = NEIGHBOURS.get(episode);
+  if (!memo || memo.presenters !== presenters || memo.gapAfter !== gapAfter) {
+    memo = { presenters, gapAfter, ctxs: new Map() };
+    NEIGHBOURS.set(episode, memo);
+  }
+  let c = memo.ctxs.get(j);
+  if (!c) {
+    c = segmentContext(episode, j, { presenters, gapAfter });
+    memo.ctxs.set(j, c);
+  }
+  return c;
+}
+
 /**
  * @param episode   the episode JSON from /api/next ({ id, program, cast, segments, ... })
  * @param index     segment index
  * @param opts      { presenters: channel.presenters (voice lang/rate per id),
  *                    gapAfter: s the director waits after this segment (optional) }
  */
-export function segmentContext(episode, index, { presenters = {}, gapAfter = null } = {}) {
+const NO_PRESENTERS = Object.freeze({}); // one object, so contextAt's memo holds across default calls
+
+export function segmentContext(episode, index, { presenters = NO_PRESENTERS, gapAfter = null } = {}) {
   const ep = episodeSummary(episode);
   const segs = Array.isArray(episode?.segments) ? episode.segments : [];
   const valid = Number.isInteger(index) && index >= 0 && index < segs.length && !!segs[index];
@@ -191,6 +218,7 @@ export function segmentContext(episode, index, { presenters = {}, gapAfter = nul
     gapAfter: Number.isFinite(gapAfter) ? gapAfter : null,
     cutGuard: cutGuard(programId),
     shots: [],
+    contextAt: (j) => contextAt(episode, j, presenters, gapAfter),
   };
 }
 

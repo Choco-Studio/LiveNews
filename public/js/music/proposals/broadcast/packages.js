@@ -56,7 +56,7 @@ const WORLD = {
   timbre: { lead: 'horn', harm: [-12], sparkle: null, noise: false },
   policy: {
     openTail: 'headlines', headlines: 'headlines', frame: { accent: 'pip' }, greeting: null,
-    story: null, number: null, roundup: 'roundup', item: null, lighter: 'lighter', chat: 'keep',
+    story: null, light: 'lighter', number: null, roundup: 'roundup', item: null, lighter: 'lighter', chat: 'keep',
     outro: null, signoff: null, endcard: { sting: 'signoff' }, picture: 'keep', single: 'keep',
   },
   beds: {
@@ -105,6 +105,19 @@ const WORLD = {
         bass({ pattern: [[0, 3.8, 'r', 0.7]], a: 0.05, r: 0.4, level: -13 }),
       ],
     },
+    // Only with storyBeds: 'soft' (the owner's "more music" switch): a felt,
+    // not heard, underscore for neutral stories. Warm triangle pad and a long
+    // root every other bar, no rhythm, nothing above 1.1 kHz.
+    underscore: {
+      bpm: 84,
+      hr: 2,
+      progs: { A: ['Dadd9', 'Gmaj7', 'Bm7', 'Asus4'], B: ['Gmaj7', 'Dadd9', 'Em7', 'Asus4'], C: ['Bm7', 'Gmaj7', 'Dadd9', 'A6sus'] },
+      form: 'ABAC',
+      layers: [
+        pad({ wave: 'tri', n: 3, lo: 50, hi: 66, a: 1.8, r: 2.6, cut: 800, cutTo: 1050, detune: 5, level: -13, no7: true, enter: 0, tail: 0 }),
+        bass({ pattern: [[0, 7.6, 'r', 0.6]], only: 'even', a: 0.35, r: 1.2, level: -14, enter: 1 }),
+      ],
+    },
   },
 };
 
@@ -141,11 +154,14 @@ const TECH = {
   timbre: { lead: 'pluck', harm: [], sparkle: null, noise: false },
   policy: {
     openTail: 'headlines', headlines: 'headlines', frame: null, greeting: null,
-    story: null, number: { sting: 'number', then: 'number' }, roundup: null, item: null,
+    story: null, light: 'lighter', number: { sting: 'number', then: 'number' }, roundup: null, item: null,
     lighter: 'lighter', chat: 'chat', featureEnd: { sting: 'featureEnd' },
     outro: 'outro', signoff: null, endcard: { sting: 'endcard' }, picture: 'keep', single: 'keep',
   },
-  beds: { headlines: techBed(false), chat: techBed(true), number: techBed(false), lighter: techBed(true), outro: techBed(false) },
+  beds: {
+    headlines: techBed(false), chat: techBed(true), number: techBed(false), lighter: techBed(true), outro: techBed(false),
+    underscore: { ...techBed(false), layers: techBed(false).layers.filter((L) => L.type === 'pad' || L.type === 'bass') },
+  },
 };
 
 // COSMOS DESK (docs/programmes/cosmos.md). E lydian, 80 BPM. Music only on
@@ -180,7 +196,7 @@ const COSMOS = {
   timbre: { lead: 'glass', harm: [], sparkle: 'bell', noise: false },
   policy: {
     openTail: 'headlines', headlines: 'headlines', frame: null, greeting: null,
-    story: 'story', picture: { presence: 'in' }, single: { presence: 'out' }, lighter: 'lighter',
+    story: 'story', light: 'lighter', picture: { presence: 'in' }, single: { presence: 'out' }, lighter: 'lighter',
     number: 'story', roundup: 'story', item: null, chat: null, reading: null,
     outro: null, signoff: null, endcard: { external: 'outro' },
   },
@@ -216,7 +232,7 @@ const MONEY = {
   timbre: { lead: 'keys', harm: [], sparkle: null, noise: false },
   policy: {
     openTail: 'intro', headlines: 'intro', greeting: 'keep', frame: null,
-    story: null, number: { sting: 'number', then: 'number' }, roundup: null, item: null, lighter: null, chat: null,
+    story: null, light: null, number: { sting: 'number', then: 'number' }, roundup: null, item: null, lighter: null, chat: null,
     outro: 'outro', signoff: { sting: 'signoff' }, endcard: { sting: 'endcard' }, picture: 'keep', single: 'keep',
   },
   options: { bedUnderStories: 'off' }, // 'drone': one sustained pad under stories, 28 LU under the voice
@@ -268,7 +284,7 @@ const FLASH = {
   timbre: { lead: 'pulse', harm: [], sparkle: null, noise: false },
   policy: {
     openTail: 'story', headlines: 'story', greeting: 'keep', frame: null,
-    story: 'story', number: 'story', roundup: 'story', item: { accent: 'tick' }, lighter: 'story', chat: 'story',
+    story: 'story', light: 'story', number: 'story', roundup: 'story', item: { accent: 'tick' }, lighter: 'story', chat: 'story',
     outro: 'keep', signoff: { sting: 'bellchord' }, endcard: { sting: 'bellchord' }, picture: 'keep', single: 'keep',
   },
   beds: {
@@ -339,11 +355,16 @@ export const CHANNEL_PKG = CHANNEL;
 export const STING_MOMENTS = ['endcard', 'bumperIn', 'bumperOut', 'upNext', 'breaking', 'countdown'];
 export const CHANNEL_BEDS = ['standby', 'bumper'];
 
-/** What the story cue really is: its feature (round-up, AND FINALLY, number) or its gravity. */
+/**
+ * What the story cue really is: grave (serious / sad, whatever the feature),
+ * its feature (round-up, AND FINALLY, number), a light story (happy) or a
+ * plain neutral story.
+ */
 export function storyMoment(moment, { emotion, feature } = {}) {
   if (moment !== 'story') return moment;
   if (emotion === 'serious' || emotion === 'sad') return 'grave';
   if (feature === 'roundup' || feature === 'lighter' || feature === 'number') return feature;
+  if (emotion === 'happy') return 'light';
   return 'story';
 }
 
@@ -356,9 +377,17 @@ export function storyColour(emotion) {
  * 'keep', { sting, then? }, { accent }, { presence: 'in' | 'out' } or
  * { external }. Unknown moments are silence.
  */
-export function ruleFor(programId, moment) {
+export function ruleFor(programId, moment, { storyBeds } = {}) {
   const pkg = PROGRAMMES[programId] || PROGRAMMES['world-now'];
-  if (moment === 'story' && pkg.options?.bedUnderStories === 'drone') return 'drone';
+  if (moment === 'story') {
+    // storyBeds 'soft' (conductor option or package option): neutral stories
+    // get the programme's underscore (felt, not heard) instead of silence.
+    const mode = storyBeds ?? pkg.options?.storyBeds;
+    if (mode === 'soft' && pkg.policy.story == null) return pkg.beds.underscore ? 'underscore' : pkg.beds.drone ? 'drone' : null;
+    if (pkg.options?.bedUnderStories === 'drone') return 'drone';
+  }
+  // A light story gets its own rule where the bible gives it one, else whatever a neutral story gets.
+  if (moment === 'light' && pkg.policy.light == null) return ruleFor(programId, 'story', { storyBeds });
   return moment in pkg.policy ? pkg.policy[moment] : null;
 }
 

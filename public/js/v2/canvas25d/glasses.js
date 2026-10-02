@@ -17,8 +17,8 @@
 //                                     'templeL' / 'templeR' (the hinge at the outer rim).
 //                                     Returns `out` ([x, y], caller-owned; no allocation).
 //
-// Levels of detail: wide shots (s < 1.35) show the frame on the eye line (a pixel
-// either side of each eye and the bridge), medium shots full 1 px rims, close-ups
+// Levels of detail: wide shots (s < 1.35) show the frame on the eye line (the outer
+// hinge of each rim and the bridge, lit colour, never a dark bar), medium shots full 1 px rims, close-ups
 // a heavier top bar from s 3.2 (rect / half), a lit point on the upper-left of each rim
 // (specular, key from camera-left) and a 1 px P.fog glint top-left on each lens.
 // A look wears glasses when L.glasses is truthy; the planners substitute the
@@ -101,15 +101,16 @@ export function drawGlasses(buf, L, head, f, s) {
   const E = L.eyes;
   buf.part(gb + G_GLASSES, 14, false);
   if (tier === 0) {
-    // wide: the frame on the eye line either side of each eye, and the bridge
+    // wide: the outer hinge of each rim and the bridge, in the frame's lit colour and
+    // with skin between them and the eyes: a dark pixel on both sides of each 2 px
+    // eye joined by a dark bridge reads as a blindfold at 1 px per unit
     for (let side = -1; side <= 1; side += 2) {
       mapG(head, side * E.x, E.y, PROTRUDE, PT);
       const x = Math.round(PT[0] - 1), y = Math.round(PT[1] - 0.5);
-      buf.plot(x - 1, y, m.base, 1);
-      buf.plot(x + 2, y, m.base, 1);
+      buf.plot(side < 0 ? x - 1 : x + 2, y, m.hi, 1);
     }
     mapG(head, 0, E.y - 0.2, PROTRUDE + 0.4, PT);
-    buf.plot(Math.round(PT[0]), Math.round(PT[1] - 0.5), m.base, 1);
+    buf.plot(Math.round(PT[0]), Math.round(PT[1] - 0.5), m.hi, 1);
     buf.part(g0, z0, c0);
     return;
   }

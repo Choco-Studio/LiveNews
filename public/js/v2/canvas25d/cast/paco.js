@@ -9,8 +9,8 @@
 // upper arm ≈ 1.15 head, desk at elbow height.
 import { P } from '../../../palette.js';
 import { toneN } from '../pixbuf.js';
-import { LocalXY, localBox, clumpTone } from './kit-a.js';
-import { headHW, faceInverse } from '../head.js';
+import { LocalXY, localBox, clumpTone, HeadWidthLUT } from './kit-a.js';
+import { faceInverse } from '../head.js';
 import { defineLook, SKIN_LIGHT } from './base.js';
 
 export const paco = defineLook({
@@ -53,6 +53,7 @@ export const paco = defineLook({
 // the silhouette, the parting and two tones; mediums add broad clumps and the
 // sheen; close-ups add separations.
 const LXY = new LocalXY();
+const HWL = new HeadWidthLUT();
 const CO = { cw: 1.8, s: 1, seed: 3, sep: true, hiLo: 0.4, hiHi: 7.5, hiW: 0.4, gap: 3.4 };
 export function drawShortHair(buf, L, m, head, s) {
   const H = L.head;
@@ -64,6 +65,7 @@ export function drawShortHair(buf, L, m, head, s) {
   const part = -2.5;
   const tier = s < 1.35 ? 0 : s < 2.2 ? 1 : 2;
   const q = LXY.set(head);
+  const HW = HWL.set(H, 0);
   CO.s = s;
   CO.cw = s >= 3 ? 1.75 : 2.1;
   CO.sep = tier === 2;
@@ -74,7 +76,7 @@ export function drawShortHair(buf, L, m, head, s) {
     const dx = x, dy = y - cyc;
     const r2 = dx * dx + dy * dy;
     if (y > 0.9) return -1;
-    const hw = headHW(H, y, 0);
+    const hw = HW.at(y);
     // above the ears the sides are clipped short: no volume past the skull below the temples
     const vol = y < sideTop ? RV : y < H.craniumY ? H.R + 0.45 : hw + 0.35;
     if (r2 > vol * vol && Math.abs(x) > vol) return -1;

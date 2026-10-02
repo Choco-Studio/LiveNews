@@ -35,7 +35,7 @@
     waiting: new Map(),
     nextId: 1,
     inflight: 0,
-    stats: { disconnects: 0, valueSets: 0, utterances: 0, cancels: 0 },
+    stats: { disconnects: 0, valueSets: 0, utterances: 0, cancels: 0, ended: 0, bindings: 0 },
     errors: [],
   };
   window.__sc = SC;
@@ -114,7 +114,16 @@
       this.__closed = true;
       return Promise.resolve();
     }
+    // Decodes run in real time: the recorder holds the clock until they land
+    // (a recorded voice starts at the same fake time on every run), and the
+    // decoded buffers are remembered so their playback is logged as a clip.
+    decodeAudioData(...a) {
+      const p = Offline.prototype.decodeAudioData.apply(this, a);
+      p.then((b) => b && decoded.add(b), () => {});
+      return track(p);
+    }
   }
+  const decoded = new WeakSet(); // AudioBuffers from decodeAudioData (recorded voices)
   // Every factory registers the new node's AudioParams with its context.
   for (const name of Object.getOwnPropertyNames(BaseAudioContext.prototype)) {
     if (!name.startsWith('create')) continue;
@@ -131,9 +140,140 @@
       },
     });
   }
+  const ABSN = window.AudioBufferSourceNode; // the native class (wrapped just below)
+  // Nodes built with constructors (new GainNode(ctx)) are registered too.
+  for (const C of ['GainNode', 'OscillatorNode', 'BiquadFilterNode', 'AudioBufferSourceNode', 'ConstantSourceNode', 'DelayNode', 'StereoPannerNode', 'DynamicsCompressorNode', 'WaveShaperNode', 'ConvolverNode', 'AnalyserNode', 'ChannelMergerNode', 'ChannelSplitterNode', 'IIRFilterNode', 'PannerNode', 'AudioWorkletNode']) {
+    const Orig = window[C];
+    if (typeof Orig !== 'function') continue;
+    const Wrapped = class extends Orig {
+      constructor(ctx, ...rest) {
+        super(ctx, ...rest);
+        if (ctx?.__captured) registerNode(this, ctx);
+      }
+      // Nodes from the factories (ctx.createGain()) are still instances.
+      static [Symbol.hasInstance](x) {
+        return x instanceof Orig;
+      }
+    };
+    Object.defineProperty(Wrapped, 'name', { value: C });
+    window[C] = Wrapped;
+  }
   window.AudioContext = CapturedAudioContext;
   window.webkitAudioContext = CapturedAudioContext;
   SC.CapturedAudioContext = CapturedAudioContext;
+
+  // 'ended' on the fake clock. A live context fires it when a source stops; an
+  // OfflineAudioContext only while rendering, i.e. after the recording, and the
+  // engine waits for it (a recorded voice holds the segment until src.onended).
+  // Captured sources get it at the fake time a live context would: start time
+  // + buffer length / playback rate, or the stop() time, whichever is first.
+  // The offline render's own 'ended' never reaches the page (handlers and
+  // listeners of captured sources are kept here, not on the node).
+  const ASN = AudioScheduledSourceNode.prototype;
+  const ends = new WeakMap(); // source -> { start, stopAt, natural, timer, handler, listeners, fired }
+  const endOf = (node) => {
+    let s = ends.get(node);
+    if (!s) {
+      s = { start: null, stopAt: Infinity, natural: Infinity, timer: 0, handler: null, listeners: [], fired: false };
+      ends.set(node, s);
+    }
+    return s;
+  };
+  function fireEnded(node) {
+    const s = endOf(node);
+    if (s.fired) return;
+    s.fired = true;
+    SC.stats.ended++;
+    const ev = new Event('ended');
+    try {
+      s.handler?.call(node, ev);
+    } catch (err) {
+      if (SC.errors.length < 40) SC.errors.push(`onended: ${err?.message}`);
+    }
+    for (const l of s.listeners.slice()) {
+      try {
+        if (typeof l === 'function') l.call(node, ev);
+        else l?.handleEvent?.(ev);
+      } catch { /* a listener's own problem */ }
+    }
+  }
+  function armEnded(node) {
+    const s = endOf(node);
+    if (s.fired || s.start == null) return;
+    clearTimeout(s.timer);
+    const end = Math.min(s.natural, Math.max(s.stopAt, s.start));
+    if (!Number.isFinite(end)) return;
+    s.timer = setTimeout(() => fireEnded(node), Math.max(0, node.context.__origin + end * 1000 - now()));
+  }
+  for (const proto of [ABSN.prototype, ASN]) {
+    const desc = Object.getOwnPropertyDescriptor(proto, 'start');
+    if (!desc || typeof desc.value !== 'function') continue;
+    const orig = desc.value;
+    proto.start = function (...args) {
+      const r = orig.apply(this, args);
+      const ctx = this.context;
+      if (ctx?.__captured) {
+        const s = endOf(this);
+        s.start = Math.max(Number(args[0]) || 0, ctx.currentTime);
+        if (this instanceof ABSN && this.buffer) {
+          const buf = this.buffer;
+          const off = Math.max(0, Number(args[1]) || 0);
+          const len = Math.max(0, args[2] != null ? Math.min(Number(args[2]), buf.duration - off) : buf.duration - off);
+          if (!this.loop) {
+            const rate = Math.abs((Number(this.playbackRate.value) || 1) * 2 ** ((Number(this.detune.value) || 0) / 1200)) || 1;
+            s.natural = s.start + len / rate;
+          }
+          if (decoded.has(buf)) log({ ev: 'clip', at: ctx.__origin + s.start * 1000, duration: len, offset: off });
+        }
+        armEnded(this);
+      }
+      return r;
+    };
+  }
+  {
+    const orig = ASN.stop;
+    ASN.stop = function (...args) {
+      const r = orig.apply(this, args);
+      const ctx = this.context;
+      if (ctx?.__captured) {
+        const s = endOf(this);
+        s.stopAt = Math.max(Number(args[0]) || 0, ctx.currentTime);
+        armEnded(this);
+      }
+      return r;
+    };
+    const onended = Object.getOwnPropertyDescriptor(ASN, 'onended');
+    Object.defineProperty(ASN, 'onended', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        return this.context?.__captured ? endOf(this).handler : onended.get.call(this);
+      },
+      set(fn) {
+        if (this.context?.__captured) endOf(this).handler = typeof fn === 'function' ? fn : null;
+        else onended.set.call(this, fn);
+      },
+    });
+    const add = EventTarget.prototype.addEventListener;
+    const remove = EventTarget.prototype.removeEventListener;
+    ASN.addEventListener = function (type, l, o) {
+      if (type === 'ended' && this.context?.__captured) {
+        const s = endOf(this);
+        if (l && !s.listeners.includes(l)) s.listeners.push(l);
+        return undefined;
+      }
+      return add.call(this, type, l, o);
+    };
+    ASN.removeEventListener = function (type, l, o) {
+      if (type === 'ended' && this.context?.__captured) {
+        const s = endOf(this);
+        const i = s.listeners.indexOf(l);
+        if (i >= 0) s.listeners.splice(i, 1);
+        return undefined;
+      }
+      return remove.call(this, type, l, o);
+    };
+  }
 
   // Automation events of captured params, so `param.value` reads what a live
   // context would report (TunePlayer.stop() ramps from g.value).
@@ -272,69 +412,120 @@
     ch.port1.onmessage = () => r();
     ch.port2.postMessage(0);
   });
-  /** Render a context up to `untilSec` (its own clock) through the tap; falls back to a full render. */
-  async function renderUntil(ctx, untilSec) {
+  /**
+   * Render a context up to `untilSec` (its own clock) through the tap; falls
+   * back to a full render. `extra` nodes of that context (the engine's speech
+   * bus) get their own tap on a fan-out connection, so their signal comes back
+   * as a separate stem (the voices the channel played itself, for the duck
+   * reference and the caption sync check) without changing the main mix.
+   */
+  async function renderUntil(ctx, fromSec, untilSec, extra = []) {
     const sr = ctx.sampleRate;
     const need = Math.min(ctx.length, Math.ceil(untilSec * sr / 128) * 128 + 128);
+    // Only the recorded window is kept (a long show waits minutes for its start).
+    const keep = Math.max(0, Math.min(need, Math.floor(fromSec * sr)));
+    const makeTap = () => {
+      const node = new AudioWorkletNode(ctx, 'sc-tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' });
+      const t = { node, L: new Float32Array(need - keep), R: new Float32Array(need - keep), got: 0 };
+      node.port.onmessage = (e) => {
+        const [frame, l, r] = e.data;
+        const end = frame + l.length;
+        t.got = Math.max(t.got, Math.min(need, end));
+        if (end <= keep || frame >= need) return;
+        const a = Math.max(frame, keep);
+        const b = Math.min(end, need);
+        t.L.set(l.subarray(a - frame, b - frame), a - keep);
+        t.R.set(r.subarray(a - frame, b - frame), a - keep);
+      };
+      return t;
+    };
     try {
       const url = URL.createObjectURL(new Blob([TAP], { type: 'application/javascript' }));
       await ctx.audioWorklet.addModule(url);
-      const tap = new AudioWorkletNode(ctx, 'sc-tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' });
-      const L = new Float32Array(need);
-      const R = new Float32Array(need);
-      let got = 0;
-      tap.port.onmessage = (e) => {
-        const [frame, l, r] = e.data;
-        if (frame >= need) return;
-        const m = Math.min(l.length, need - frame);
-        L.set(m === l.length ? l : l.subarray(0, m), frame);
-        R.set(m === r.length ? r : r.subarray(0, m), frame);
-        got = Math.max(got, frame + m);
-      };
-      ctx.__vdest.connect(tap);
-      tap.connect(ctx.__dest);
+      const main = makeTap();
+      ctx.__vdest.connect(main.node);
+      main.node.connect(ctx.__dest);
+      const taps = [];
+      for (const src of extra) {
+        try {
+          const t = makeTap();
+          const sink = Offline.prototype.createGain.call(ctx);
+          sink.gain.setValueAtTime(0, 0); // silent from t = 0 (a .value set would apply from now)
+          src.connect(t.node);
+          t.node.connect(sink);
+          sink.connect(ctx.__dest);
+          taps.push(t);
+        } catch (err) {
+          SC.errors.push(`extra tap failed: ${err?.message}`);
+          taps.push(null);
+        }
+      }
       if (need < ctx.length) {
         const stop = Offline.prototype.suspend.call(ctx, need / sr);
         Offline.prototype.startRendering.call(ctx).catch(() => {});
         await stop;
       } else await Offline.prototype.startRendering.call(ctx);
-      for (let k = 0; got < need && k < 20000; k++) await yieldTask();
-      return { L, R, sampleRate: sr, tapped: true, frames: got };
+      const done = () => main.got >= need && taps.every((t) => !t || t.got >= need);
+      for (let k = 0; !done() && k < 20000; k++) await yieldTask();
+      return { L: main.L, R: main.R, start: keep, sampleRate: sr, tapped: true, frames: main.got, extra: taps.map((t) => (t ? { L: t.L, R: t.R } : null)) };
     } catch (err) {
       SC.errors.push(`tap render failed (${err?.message}); full render`);
       ctx.__vdest.connect(ctx.__dest);
       const buf = await Offline.prototype.startRendering.call(ctx);
-      return { L: buf.getChannelData(0), R: buf.numberOfChannels > 1 ? buf.getChannelData(1) : buf.getChannelData(0), sampleRate: buf.sampleRate, tapped: false, frames: buf.length };
+      return { L: buf.getChannelData(0), R: buf.numberOfChannels > 1 ? buf.getChannelData(1) : buf.getChannelData(0), start: 0, sampleRate: buf.sampleRate, tapped: false, frames: buf.length, extra: [] };
     }
   }
 
-  /** Render every captured context and keep [fromPerf, toPerf) (ms, fake clock) as stereo float. */
+  /**
+   * Render every captured context and keep [fromPerf, toPerf) (ms, fake clock)
+   * as stereo float (SC.audioOut), plus the engine's speech bus alone
+   * (SC.speechOut: recorded voices the channel played through WebAudio).
+   */
   SC.renderAudio = async (fromPerf, toPerf) => {
     const n = Math.max(1, Math.round(((toPerf - fromPerf) / 1000) * SR));
     const out = [new Float32Array(n), new Float32Array(n)];
+    const speechOut = [new Float32Array(n), new Float32Array(n)];
     const info = [];
-    for (const ctx of SC.contexts) {
-      const t0 = Date.now();
-      const buf = await renderUntil(ctx, (toPerf - ctx.__origin) / 1000 + 0.05);
-      const off = Math.round(((fromPerf - ctx.__origin) / 1000) * buf.sampleRate);
-      const L = buf.L;
-      const R = buf.R;
+    let speechTapped = false;
+    const bus = (() => {
+      try {
+        return window.__showcase?.audio?.speechBus ?? null;
+      } catch {
+        return null;
+      }
+    })();
+    const add = (dst, L, R, off) => {
       let covered = 0;
       for (let i = 0; i < n; i++) {
         const j = off + i;
         if (j < 0 || j >= L.length) continue;
-        out[0][i] += L[j];
-        out[1][i] += R[j];
+        dst[0][i] += L[j];
+        dst[1][i] += R[j];
         covered++;
       }
-      info.push({ origin: ctx.__origin, renderMs: Date.now() - t0, covered, frames: buf.frames, tapped: buf.tapped });
+      return covered;
+    };
+    for (const ctx of SC.contexts) {
+      const t0 = Date.now();
+      const extra = bus && bus.context === ctx ? [bus] : [];
+      const buf = await renderUntil(ctx, (fromPerf - ctx.__origin) / 1000 - 0.05, (toPerf - ctx.__origin) / 1000 + 0.05, extra);
+      const off = Math.round(((fromPerf - ctx.__origin) / 1000) * buf.sampleRate) - buf.start;
+      const covered = add(out, buf.L, buf.R, off);
+      if (buf.extra?.[0]) {
+        add(speechOut, buf.extra[0].L, buf.extra[0].R, off);
+        speechTapped = true;
+      }
+      info.push({ origin: ctx.__origin, renderMs: Date.now() - t0, covered, frames: buf.frames, tapped: buf.tapped, speechTap: Boolean(buf.extra?.[0]) });
     }
     let peak = 0;
     for (const ch of out) for (let i = 0; i < ch.length; i++) peak = Math.max(peak, Math.abs(ch[i]));
+    let speechPeak = 0;
+    for (const ch of speechOut) for (let i = 0; i < ch.length; i++) speechPeak = Math.max(speechPeak, Math.abs(ch[i]));
     SC.audioOut = out;
-    return { n, sampleRate: SR, contexts: info, peak, stats: SC.stats };
+    SC.speechOut = speechOut;
+    return { n, sampleRate: SR, contexts: info, peak, speechTapped, speechPeak, stats: SC.stats };
   };
-  SC.audioChunk = (ch, from, count) => b64(new Uint8Array(SC.audioOut[ch].buffer, from * 4, count * 4));
+  SC.audioChunk = (ch, from, count, which = 'mix') => b64(new Uint8Array((which === 'speech' ? SC.speechOut : SC.audioOut)[ch].buffer, from * 4, count * 4));
 
   // ------------------------------------------------------- network tracking
   // The recorder holds the fake clock while a fetch or an image is in flight,
@@ -539,7 +730,7 @@
       return;
     }
     SC.waiting.set(cur.id, cur);
-    SC.requests.push({
+    const req = {
       id: cur.id,
       text,
       lang: u.lang || u.voice?.lang || '',
@@ -550,7 +741,17 @@
       voiceKokoro: u.voice?.__kokoro ?? null,
       tCall: cur.tCall,
       ...cur.info,
-    });
+    };
+    SC.requests.push(req);
+    // The recorder's binding starts the synthesis at once (the fake clock is
+    // held until the result is delivered: it never advances past a pending
+    // voice, see record-show.mjs step()).
+    try {
+      if (typeof window.__scSpeak === 'function') {
+        SC.stats.bindings++;
+        window.__scSpeak(req).catch(() => {});
+      }
+    } catch { /* no binding: the recorder still picks the request up between frames */ }
   }
 
   /** Called by the recorder with the synthesis result (or { error }). */
@@ -722,6 +923,8 @@
     kicker: sg?.kicker ?? null,
     headline: sg?.headline ?? null,
     location: sg?.location?.place ?? null,
+    // The server's recorded voice for the segment (voice service), if any.
+    audio: sg?.audio && typeof sg.audio === 'object' ? { duration: Number(sg.audio.duration) || null, words: Array.isArray(sg.audio.words) ? sg.audio.words.length : 0 } : null,
     text: sg?.text ?? '',
   });
   // Prefetch: the sentences the engine will speak, predicted with its own
@@ -759,6 +962,16 @@
       }
     });
   }
+  // The channel plays the server's recorded voices itself unless the page was
+  // told to use browser voices: those lines need no synthesis here.
+  const browserVoices = (() => {
+    try {
+      return new URLSearchParams(location.search).get('voices') === 'browser';
+    } catch {
+      return false;
+    }
+  })();
+  const recorded = (a) => !browserVoices && Boolean(a && typeof a === 'object' && (typeof a.url === 'string' || a.buffer));
   const presenterLang = (id) => window.__showcase?.player?.channel?.presenters?.[id]?.voice?.lang || 'en-GB';
   SC.takePrefetch = () => SC.prefetch.splice(0);
 
@@ -788,6 +1001,7 @@
     let n = 0;
     try {
       for (const sg of ep.segments || []) {
+        if (recorded(sg.audio)) continue;
         const presenter = ep.cast?.[sg.anchor] ?? null;
         const lang = presenterLang(presenter);
         for (const text of predict(sg.text, lang)) {
@@ -812,7 +1026,9 @@
       playAd: wrap(p, 'playAd', (ad) => {
         try {
           const lang = ad?.voice?.lang || 'en-GB';
+          const lines = p.voices?.ads?.[ad?.id] || {};
           for (const line of ad?.script || []) {
+            if (recorded(lines[line.text])) continue;
             for (const text of predict(line.text, lang)) SC.prefetch.push({ text, slot: 'ad', lang, ad: { id: ad.id, brand: ad.brand ?? null, voice: ad.voice ?? null } });
           }
         } catch { /* best effort */ }

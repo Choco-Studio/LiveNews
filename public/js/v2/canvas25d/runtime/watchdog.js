@@ -88,6 +88,7 @@ export class PerfWatchdog {
     this.log = log;
     this.info = info;
     this.report = report; // ?perf=1: p50/p95 every 10 s
+    this.decide = true; // false (?watchdog=0, QA captures on an overloaded machine): measure and report only
     this.ts = new Float64Array(N);
     this.ms = new Float32Array(N);
     this.n = 0; // samples written (ring index = n % N)
@@ -117,7 +118,7 @@ export class PerfWatchdog {
       }
       this.nextReport = t + 10;
     }
-    if (t < this.nextEval) return null;
+    if (t < this.nextEval || !this.decide) return null;
     this.nextEval = t + 1;
     if (t - this.levelSince >= STEP_WINDOW) {
       const r = this.percentiles(t, STEP_WINDOW);

@@ -106,6 +106,30 @@ export function textW(text, scale = 1) {
   return MW(text, scale);
 }
 
+// Letters with no base form under NFD, spelled the way an English caption would
+const ASCII_MAP = {
+  Ł: 'L', ł: 'l', Ø: 'O', ø: 'o', Æ: 'AE', æ: 'ae', Œ: 'OE', œ: 'oe', ß: 'SS', Đ: 'D', đ: 'd', Þ: 'TH', þ: 'th', Ð: 'D', ð: 'd',
+  ı: 'i', '’': "'", '‘': "'", '´': "'", '`': "'", '“': '"', '”': '"', '«': '"', '»': '"', '–': '-', '—': '-', '…': '...',
+};
+const ASCII = new Map();
+/**
+ * Plain ASCII for the bitmap font (place names, headlines from feeds): accents stripped
+ * ("CÔTE D'IVOIRE" -> "COTE D'IVOIRE", "SÃO PAULO" -> "SAO PAULO"), special letters spelled out
+ * ("ŁÓDŹ" -> "LODZ"), curly quotes straightened. Cached per string (a hit allocates nothing).
+ */
+export function asciiText(text) {
+  const s = typeof text === 'string' ? text : String(text ?? '');
+  let v = ASCII.get(s);
+  if (v !== undefined) return v;
+  v = '';
+  // eslint-disable-next-line no-control-regex
+  if (/^[\x00-\x7f]*$/.test(s)) v = s;
+  else for (const c of s.normalize('NFD')) v += ASCII_MAP[c] ?? (c >= '̀' && c <= 'ͯ' ? '' : c);
+  if (ASCII.size >= 600) ASCII.delete(ASCII.keys().next().value);
+  ASCII.set(s, v);
+  return v;
+}
+
 /** "NAME, NAME & NAME" from a list of names. */
 export function nameList(list) {
   const a = (Array.isArray(list) ? list : []).map((n) => String(n ?? '').trim().toUpperCase()).filter(Boolean);

@@ -54,7 +54,7 @@ export class Director {
     // cues; v2/canvas25d/runtime/direction.js). Loaded only when asked: with this.v2 null
     // every method below behaves exactly as before.
     this.v2 = null;
-    if (v2) import('./v2/canvas25d/runtime/direction.js').then((m) => (this.v2 = new m.LiveDirection({ director: this, channel, audio })), (err) => console.warn('[director] v2 direction unavailable', err));
+    if (v2) this.v2ready = import('./v2/canvas25d/runtime/direction.js').then((m) => (this.v2 = new m.LiveDirection({ director: this, channel, audio })), (err) => console.warn('[director] v2 direction unavailable', err));
   }
 
   setShot(shot, extra = {}) {
@@ -91,6 +91,7 @@ export class Director {
   }
 
   async run() {
+    if (this.v2ready) await this.v2ready; // v2: the first episode is planned too (no race with the import)
     let lastId = null;
     for (;;) {
       let item = null;
@@ -318,6 +319,8 @@ export class Director {
 
   /** Cold open: the headlines play as a montage under the presenter's intro. */
   async playIntro(seg) {
+    const v2intro = this.v2?.intro?.(seg); // v2: montage cut on the spoken teaser, greeting on its planned shot
+    if (v2intro) return v2intro;
     const s = this.scene;
     const frames = Math.min(3, s.rundown.length);
     if (frames < 2) {

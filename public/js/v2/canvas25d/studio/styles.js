@@ -98,9 +98,10 @@ const DEFS = {
     wallIdle: 'planet',
     base: 0.55,
     pools: duoPools(0.75, 96, 74),
+    // a purple wash from above over each seat (palette swap, flat in its core, Bayer only at its edge)
     tintPools: [
-      { X: -104, Y: -100, rx: 72, ry: 78, amount: 0.46 },
-      { X: 104, Y: -100, rx: 72, ry: 78, amount: 0.46 },
+      { X: -112, Y: -116, rx: 56, ry: 54, amount: 0.95 },
+      { X: 112, Y: -116, rx: 56, ry: 54, amount: 0.95 },
     ],
     tints: { slate: 'purple', ink: 'purple' },
     tintNames: ['purple'],
@@ -122,15 +123,18 @@ const DEFS = {
     solo: true,
     base: 1.0,
     pools: [
-      { X: -150, Y: -70, rx: 70, ry: 96, amount: 0.95 },
-      { X: 150, Y: -70, rx: 70, ry: 96, amount: 0.95 },
+      { X: -132, Y: -72, rx: 74, ry: 96, amount: 0.8 },
+      { X: 132, Y: -72, rx: 74, ry: 96, amount: 0.8 },
       { X: 0, Y: -6, rx: 150, ry: 46, amount: 0.55 },
     ],
-    tintPools: [
-      { X: -196, Y: -62, rx: 20, ry: 50, amount: 1.05 },
-      { X: 196, Y: -62, rx: 20, ry: 50, amount: 1.05 },
+    // the pair of sconces at X ±196 washes the panels up and down in cream (palette swap: slate →
+    // brown, ink → maroon), narrow at the fixture and fanning out, never reaching the head zones
+    scallops: [
+      { X: -196, Y: -66, up: 88, down: 62, w0: 3, spread: 0.4, amount: 0.7, tint: 1.15 },
+      { X: 196, Y: -66, up: 88, down: 62, w0: 3, spread: 0.4, amount: 0.7, tint: 1.15 },
     ],
-    tints: { slate: 'brown', ink: 'maroon' },
+    tintPools: [],
+    tints: { steel: 'tanShade', slate: 'brown', ink: 'maroon' },
     tintNames: ['maroon', 'brown', 'cream', 'tanShade'],
     tintMax: 0.08,
     practical: 'warm',
@@ -174,7 +178,7 @@ function build(id) {
   s.deskLine = C[s.deskLineName];
   s.bezel = { ...BASE.bezel, ...(def.bezel || {}) };
   s.values = Object.freeze({ ...s.values });
-  for (const k of ['pools', 'tintPools']) s[k] = Object.freeze((s[k] || []).map((p) => Object.freeze({ ...p })));
+  for (const k of ['pools', 'tintPools', 'scallops']) s[k] = Object.freeze((s[k] || []).map((p) => Object.freeze({ ...p })));
   // the bake key: styles with identical light share one baked texture
   s.bakeKey = DEFS[id] ? id : 'world-now';
   return Object.freeze(s);

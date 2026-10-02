@@ -18,7 +18,10 @@
 // `param.value = v` would apply from t = 0, so it becomes setValueAtTime(v, now)
 // (and reading `param.value` evaluates the automation at now), and
 // `node.disconnect()` would remove a node for the whole render, so it is a
-// no-op (the channel only disconnects nodes that already stopped). While a
+// no-op (the channel only disconnects nodes that already stopped), and a
+// source's 'ended' event (offline it only fires during the final render) is
+// fired by a fake-clock timer when its sound stops, so code that waits for a
+// voice clip to end carries on at the right moment. While a
 // fetch, an image or an audio decode is in flight the clock is held, so replies
 // land at the fake time they were asked for (network looks instant, runs
 // repeat). Math.random is seeded (--seed) so the director's choices repeat too.
@@ -360,6 +363,109 @@ function pageInit(CFG) {
     }
     return origStart.call(this, when, ...rest);
   };
+
+  // 'ended' on the fake clock. An offline context only fires `ended` while it
+  // renders (after the last frame), so code that waits for a clip to finish
+  // (the speech path awaits its voice's `onended`) would wait for the whole
+  // recording. Sources of recorded contexts keep their 'ended' listeners here
+  // and get the event from a (fake) timer at the time their sound stops: the
+  // buffer's end (offset, duration, playbackRate, no loop) or stop(when).
+  const ASN = window.AudioScheduledSourceNode?.prototype;
+  if (ASN) {
+    const ends = new WeakMap(); // source -> { start, offset, dur, stop, prop, handlers, timer, fired }
+    const endOf = (node) => {
+      let e = ends.get(node);
+      if (!e) {
+        e = { start: null, offset: 0, dur: null, stop: Infinity, prop: null, handlers: new Set(), timer: 0, fired: false };
+        ends.set(node, e);
+      }
+      return e;
+    };
+    const fire = (node) => {
+      const e = endOf(node);
+      if (e.fired) return;
+      e.fired = true;
+      const evt = new Event('ended');
+      for (const h of [e.prop, ...e.handlers]) {
+        if (!h) continue;
+        try {
+          if (typeof h === 'function') h.call(node, evt);
+          else h.handleEvent?.(evt);
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    };
+    const arm = (node) => {
+      const e = endOf(node);
+      if (e.start === null || e.fired) return;
+      let end = e.stop;
+      if (node instanceof AudioBufferSourceNode && node.buffer && !node.loop) {
+        const rate = Math.max(1e-3, Math.abs(Number(node.playbackRate?.value) || 1));
+        const len = e.dur !== null ? e.dur : Math.max(0, node.buffer.duration - e.offset);
+        end = Math.min(end, e.start + len / rate);
+      }
+      clearTimeout(e.timer);
+      if (!Number.isFinite(end)) return; // an oscillator with no stop() never ends
+      e.timer = setTimeout(() => fire(node), Math.max(0, (end - node.context.currentTime) * 1000));
+    };
+    const recorded = (node) => Boolean(node?.context?.__recorded);
+    // AudioBufferSourceNode has its own start(when, offset, duration); oscillators
+    // and constant sources use the shared one. Arming twice is harmless.
+    const wrapStart = (proto, orig) => {
+      proto.start = function (when = 0, offset = 0, duration) {
+        const r = orig.apply(this, arguments);
+        if (recorded(this)) {
+          const e = endOf(this);
+          e.start = Math.max(Number(when) || 0, this.context.currentTime);
+          e.offset = Math.max(0, Number(offset) || 0);
+          e.dur = Number.isFinite(Number(duration)) && duration !== undefined ? Math.max(0, Number(duration)) : null;
+          arm(this);
+        }
+        return r;
+      };
+    };
+    wrapStart(AudioBufferSourceNode.prototype, AudioBufferSourceNode.prototype.start);
+    wrapStart(ASN, ASN.start);
+    const origStop = ASN.stop;
+    ASN.stop = function (when = 0) {
+      const r = origStop.apply(this, arguments);
+      if (recorded(this)) {
+        const e = endOf(this);
+        e.stop = Math.min(e.stop, Math.max(Number(when) || 0, this.context.currentTime));
+        arm(this);
+      }
+      return r;
+    };
+    const onDesc = Object.getOwnPropertyDescriptor(ASN, 'onended');
+    Object.defineProperty(ASN, 'onended', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        return recorded(this) ? endOf(this).prop : onDesc?.get?.call(this);
+      },
+      set(fn) {
+        if (recorded(this)) endOf(this).prop = typeof fn === 'function' ? fn : null;
+        else onDesc?.set?.call(this, fn);
+      },
+    });
+    const origAdd = ASN.addEventListener || EventTarget.prototype.addEventListener;
+    const origRemove = ASN.removeEventListener || EventTarget.prototype.removeEventListener;
+    ASN.addEventListener = function (type, h, ...rest) {
+      if (type === 'ended' && recorded(this)) {
+        if (h) endOf(this).handlers.add(h);
+        return undefined;
+      }
+      return origAdd.call(this, type, h, ...rest);
+    };
+    ASN.removeEventListener = function (type, h, ...rest) {
+      if (type === 'ended' && recorded(this)) {
+        endOf(this).handlers.delete(h);
+        return undefined;
+      }
+      return origRemove.call(this, type, h, ...rest);
+    };
+  }
 
   function b64(u8) {
     let s = '';

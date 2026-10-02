@@ -1,10 +1,14 @@
 // UNIT-8 (owner: PRESENTERS B stream). The robot co-host of COSMOS DESK:
 // "an instrument, not a toy" (docs/programmes/cosmos.md, UNIT-8 table).
-//   head    a brushed-steel casing, wider than tall, lit from camera-left with a
-//           1 px silver rim; a recessed P.black visor with a static 2 px P.slate
-//           sheen; a chin seam (close-ups). No mouth shape, no lights, no cyan.
+//   head    a machined steel housing, wider than tall (a sensor head, not a
+//           helmet): flat front plate, bevelled edges lit from camera-left
+//           (a 1 px specular on the upper-left bevel, the lower-right bevels
+//           in shade) and a 1 px silver rim; a crown seam and a chin seam with
+//           four flush fasteners at close-up; flush side sensor modules with
+//           vent slots instead of "ears"; a recessed P.black visor with a static
+//           2 px P.slate sheen. No mouth shape, no lights, no cyan.
 //   eyes    two P.silver slits (a P.white top row at close-up), each ~12 % of the
-//           head's width, 2 px tall at close-up, 1 px in the wide, no pupils;
+//           housing's width, 2 px tall at close-up, 1 px in the wide, no pupils;
 //           'processing' = 1 px; a look shifts the slits (and the head) 1 px.
 //           Instead of blinking: a dim to P.fog for ~80 ms (persona blink 7-12 s).
 //   speech  ONE centred horizontal line: odd width 1-13 px (1-5 in the wide),
@@ -12,51 +16,55 @@
 //           redrawn at most 12 times per second (8 in the wide) and changing
 //           by at most 4 px per update; P.fog end pixels once ≥ 5 px; rests at
 //           1 px in P.steel after 200 ms of silence.
-//   body    a static steel antenna rod with no light; a casing shell with a plain
+//   body    a static steel antenna rod with no light; a graphite shell with a plain
 //           chest plate and its 1 px silver seam (cast/wardrobe-b.js 'chassis');
 //           robot hands (handStyle 'robot', drawn by HANDS).
-// Motion: low sway, eased, no overshoot. The casing never rolls (a gimbal keeps
+// Motion: low sway, eased, no overshoot. The housing never rolls (a gimbal keeps
 // it level): yaw and pitch move the head as whole 1 px steps, so a rigid object
 // never "boils" on the pixel grid.
 //
 // The indicator is a pure function of time. With f.t and f.speech (the speech
-// source, requested from FACES in CONTRACTS) it re-samples the speech timeline
-// and quantises updates exactly; with only f.t and f.level it holds each
-// update per tick; with neither it follows the mouth opening (f.open).
+// source FACES puts on the face params) it re-samples the speech timeline and
+// quantises updates exactly; with only f.t and f.level it holds each update per
+// tick; with neither it follows the mouth opening (f.open).
 import { P } from '../../../palette.js';
-import { decal } from '../pixbuf.js';
+import { decal, material } from '../pixbuf.js';
 import { clamp } from '../space.js';
 import { sampleSpeech } from '../speech.js';
 import { GROUPS } from '../character.js';
 import { defineLook } from './base.js';
 import { LOOK, tier } from './wardrobe-b.js';
 
-// Head-local design (units; 1 u = 1 px in the wide). Wide: head 18 x 16, visor 13 x 8.
-// Wider than a human head (a helmet-like casing) but never a big-headed mascot: ~1.2x a human head.
-export const CASE = { hw: 9.0, top: -8.1, bot: 7.7, taper: 0.2 }; // superellipse: power 4 on the crown, 3 on the jaw
-export const VISOR = { hw: 6.4, top: -4.0, bot: 4.3, rc: 1.7, taper: 0.1 };
-export const POD = { y: 0.2, h: 3.0, w: 0.8 }; // flush side plates (they make it a head, not a box)
-export const EYE = { x: 3.6, y: -1.05, share: 0.12 };
-export const IND_Y = 2.35;
+// Head-local design (units; 1 u = 1 px in the wide). Wide: housing 18 x 15, visor 13 x 8.
+// About a human head's area but wider than tall: it reads as a sensor housing, never a big-headed mascot.
+// The outline is a superellipse (power 5 on the crown, 4 below: flat faces, tight machined corners).
+export const CASE = { hw: 9.0, top: -7.6, bot: 7.2, taper: 0.12, pTop: 5, pBot: 4 };
+export const VISOR = { hw: 6.1, top: -3.35, bot: 3.65, rc: 1.2, taper: 0.07 };
+export const MODULE = { y0: -2.9, y1: 2.6, out: 1.05, inset: 0.8, r: 0.55 }; // flush side sensor modules
+export const SEAM = { crown: -5.35, chin: 5.45 };
+export const EYE = { x: 3.4, y: -0.85, share: 0.12 };
+export const IND_Y = 2.05;
 
 export const unit8 = defineLook({
   id: 'unit8',
   name: 'UNIT-8',
-  head: { top: CASE.top, craniumY: -2, R: CASE.hw, cheekY: 2, cheekHW: CASE.hw, chinY: CASE.bot, chinHW: 8.6, jawPow: 4 },
-  headAt: [0, -12.9],
-  neck: { hw: 2.7 },
+  head: { top: CASE.top, craniumY: -2, R: CASE.hw, cheekY: 2, cheekHW: CASE.hw, chinY: CASE.bot, chinHW: 8.4, jawPow: 4 },
+  headAt: [0, -12.5],
+  neck: { hw: 2.6 },
   // face proportions other modules may read (glassesAnchor, framing); the face itself is drawn here
-  eyes: { y: EYE.y, x: EYE.x, w: 2.5, h: 0.6, iris: [P.silver, P.silver], lash: P.silver, lashes: false, bags: false },
+  eyes: { y: EYE.y, x: EYE.x, w: 2.2, h: 0.6, iris: [P.silver, P.silver], lash: P.silver, lashes: false, bags: false },
   brows: { y: -3.5, len: 2, thick: 0.3, color: P.steel, arch: 0 },
   nose: { y0: 0, y1: 1, w: 1, big: false },
   mouth: { y: IND_Y, w: 3, lip: P.steel, lipHi: P.steel, upper: P.steel, inner: P.black, teeth: P.steel, tongue: P.steel },
   ears: { y: 0, h: 2, w: 1 },
-  skin: [P.fog, P.steel, P.slate, P.ink], // neck column (and hands until HANDS' robot hands land)
+  skin: [P.fog, P.steel, P.slate, P.ink], // neck column (and hands where robot hands are not drawn)
   skinLine: P.black,
   hair: { style: 'none', ramp: [P.silver, P.steel, P.slate, P.ink], line: P.ink },
   torso: { neckHW: 3.4, shoulderTop: 2.4, shoulderHW: 20.2, sideHW: 18.8, bottom: 46, vDepth: 20, shoulderJoint: [17.4, 6.8] },
   outfit: 'chassis',
-  jacket: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black }, // graphite shell, darker than the head
+  // graphite shell: darker than the aluminium head (the head reads as the instrument, the body as its
+  // stand) and a step darker than Nova's grey knit, so the pair never reads as one grey mass
+  jacket: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black },
   shirt: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black },
   cuff: P.slate,
   arm: { upper: 22.4, fore: 20.6, rUpper: 3.3, rElbow: 2.9, rWrist: 2.3, hand: 10.8 },
@@ -64,9 +72,12 @@ export const unit8 = defineLook({
   // low sway, small head motion, rare "blinks" (drawn as a dim); breath / doubleBlink are hints for idle.js
   persona: { sway: 0.25, headMotion: 0.35, blinkMin: 7, blinkMax: 12, energy: 0.35, smile: 0, breath: 0.15, doubleBlink: 0 },
   mats: {
-    // brushed steel lit from camera-left: light enough that the head (visor included) clears the
-    // COSMOS head zone by 20 L* (cosmos.md §5 item 8); the body stays a step darker (graphite)
-    casing: { ramp: [P.silver, P.fog, P.steel, P.slate], line: P.ink, rim: P.silver, rimTop: true },
+    // brushed aluminium lit from camera-left: the front plate sits in fog, the specular bevel in silver,
+    // the turned-away bevels in steel / slate; light enough that the head (visor included) clears the
+    // COSMOS head zone by 20 L* (cosmos.md §5 item 8), while the body stays a step darker (graphite)
+    // (its 1 px silver rim is painted by drawCasing: continuous along the crown and the upper right side only)
+    casing: { ramp: [P.silver, P.fog, P.steel, P.slate], line: P.ink },
+    module: { ramp: [P.fog, P.steel, P.slate, P.ink], line: P.ink },
     joint: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black },
     plate: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black, rim: P.silver },
     rod: { ramp: [P.silver, P.steel, P.slate, P.ink], line: P.ink, noLine: true },
@@ -85,56 +96,139 @@ function headOffset(head, out) {
   return out;
 }
 
-/** Half-width of the casing at head-local y (units): straight sides that draw in toward the chin. */
-function caseHW(y) {
+/** Half-width of the housing at head-local y (units): straight sides that draw in a little toward the chin. */
+export function caseHW(y) {
   const k = Math.max(0, y) / CASE.bot;
   return CASE.hw * (1 - CASE.taper * k * k);
 }
 
 // ---------------------------------------------------------------------------
-// Head: the casing
+// Head: side modules, then the housing
+
+function drawModules(buf, m, cx, cy, s, tr) {
+  const vents = tr === 2 ? 3 : tr === 1 ? 2 : 0;
+  for (const side of [-1, 1]) {
+    const yc = (MODULE.y0 + MODULE.y1) / 2, hh = (MODULE.y1 - MODULE.y0) / 2;
+    const xa = caseHW(yc) - MODULE.inset, xb = caseHW(yc) + MODULE.out;
+    const xc = side * (xa + xb) / 2, hw = (xb - xa) / 2;
+    const r = MODULE.r;
+    const lit = side < 0;
+    buf.shape(cx + (xc - hw) * s - 1, cy + MODULE.y0 * s - 1, cx + (xc + hw) * s + 1, cy + MODULE.y1 * s + 1, m.module, (px, py) => {
+      const x = (px - cx) / s - xc, y = (py - cy) / s - yc;
+      const dx = Math.max(0, Math.abs(x) - (hw - r)), dy = Math.max(0, Math.abs(y) - (hh - r));
+      if (dx * dx + dy * dy > r * r) return -1;
+      // the outer face turns away; the top edge catches the key
+      const outer = x * side > hw - 0.45;
+      let t = lit ? 1 : 2;
+      if (y < -hh + 0.5 / s + 0.35) t = lit ? 0 : 1;
+      if (outer) t = lit ? 2 : 3;
+      if (y > hh - 0.6) t = Math.max(t, lit ? 2 : 3);
+      // vent slots (1 px, dark), evenly over the module's middle
+      if (vents && !outer) {
+        for (let k = 0; k < vents; k++) {
+          const vy = -hh * 0.5 + (k * hh) / Math.max(1, vents - 1);
+          if (Math.abs(y - vy) < 0.5 / s) return 3;
+        }
+      }
+      return t;
+    });
+  }
+}
 
 function drawCasing(buf, L, m, head, s) {
   headOffset(head, OFF);
   const cx = head.cx + OFF[0], cy = head.cy + OFF[1];
   const tr = tier(s);
-  // side pods first, one group behind the casing (the casing edge draws a 1 px line over them)
   buf.part(head.gb + LOOK + 8, 9, false);
-  for (const side of [-1, 1]) {
-    const px = cx + side * (caseHW(POD.y) - 0.15) * s, py = cy + POD.y * s;
-    buf.shape(px - POD.w * s - 1, py - POD.h * s - 1, px + POD.w * s + 1, py + POD.h * s + 1, m.joint, (qx, qy) => {
-      const u = (qx - px) / (POD.w * s), v = (qy - py) / (POD.h * s);
-      const u2 = u * u, v2 = v * v;
-      if (u2 * u2 + v2 * v2 > 1) return -1;
-      return side < 0 ? (v < -0.5 ? 0 : 1) : v < -0.5 ? 1 : 2;
-    });
-  }
+  drawModules(buf, m, cx, cy, s, tr);
   buf.part(head.gb + GROUPS.head, 10, false);
   const x0 = Math.floor(cx - (CASE.hw + 1) * s), x1 = Math.ceil(cx + (CASE.hw + 1) * s);
   const y0 = Math.floor(cy + (CASE.top - 1) * s), y1 = Math.ceil(cy + (CASE.bot + 1) * s);
-  const seamY = 5.6;
   const px1 = 1 / s;
+  const bev = Math.max(1, Math.round(0.95 * s)) * px1; // bevel width (units): 1 px wide, ~3 px at close-up
+  const seams = tr >= 1;
+  const screws = tr === 2 && s >= 2.6;
+  const scY = SEAM.crown - 1.15, scY2 = SEAM.chin + 1.05;
   buf.shape(x0, y0, x1, y1, m.casing, (px, py) => {
     const x = (px - cx) / s, y = (py - cy) / s;
-    const a = caseHW(y);
-    const b = y < 0 ? -CASE.top : CASE.bot;
+    const top = y < 0;
+    const a = caseHW(y), b = top ? -CASE.top : CASE.bot;
     const u = x / a, v = y / b;
     const au = u < 0 ? -u : u, av = v < 0 ? -v : v;
     const u2 = au * au, v2 = av * av;
-    if (y < 0 ? u2 * u2 + v2 * v2 > 1 : u2 * au + v2 * av > 1) return -1;
-    // a gently domed face plate: lit along the left and the crown, shaded right and underneath
-    const l = -0.62 * u - 0.55 * v;
-    let t = l > 0.5 ? 0 : l > -0.42 ? 1 : l > -0.7 ? 2 : 3;
-    if (v < -0.84 && u < 0.5) t = 0;
-    if (v > 0.84) t = Math.max(t, 2);
-    if (tr === 2) {
-      // the chin seam: a lower plate under the visor, its lit lip just below
-      if (Math.abs(y - seamY) < px1 * 0.5 && au < 0.8) t = 3;
-      else if (y > seamY && y - seamY < px1 * 1.5 && au < 0.76 && u < 0.3) t = Math.min(t, 0);
+    // superellipse |u|^p + |v|^p ≤ 1 (p 5 on the crown, 4 below), and its gradient for the bevel normal
+    let F, gx, gy;
+    if (top) {
+      const u4 = u2 * u2, v4 = v2 * v2;
+      F = u4 * au + v4 * av;
+      gx = (5 * u4) / a;
+      gy = (5 * v4) / b;
+    } else {
+      const u3 = u2 * au, v3 = v2 * av;
+      F = u3 * au + v3 * av;
+      gx = (4 * u3) / a;
+      gy = (4 * v3) / b;
+    }
+    if (F > 1) return -1;
+    if (u < 0) gx = -gx;
+    if (v < 0) gy = -gy;
+    const g = Math.sqrt(gx * gx + gy * gy) || 1e-6;
+    const d = (1 - F) / g; // first-order distance to the outline (units)
+    let t;
+    if (d < bev) {
+      // the bevel: a plane tilted toward its edge, lit by the key from the upper left
+      const nx = gx / g, ny = gy / g;
+      const l = -0.6 * nx - 0.8 * ny;
+      // the specular sits on the upper-left: the left bevel and the crown bevel's left third
+      t = l > 0.5 && (nx < -0.35 || u < -0.35) ? 0 : l > -0.12 ? 1 : l > -0.6 ? 2 : 3;
+    } else {
+      // the front plate: flat, turning a step darker toward the lower right
+      t = -0.42 * u - 0.3 * v > -0.3 ? 1 : 2;
+    }
+    if (seams) {
+      // seams: a dark groove; at close-up the groove's lower wall catches the key as a 1 px lit lip
+      const dc = y - SEAM.crown, dn = y - SEAM.chin;
+      if ((dc > -0.5 * px1 && dc <= 0.5 * px1) || (dn > -0.5 * px1 && dn <= 0.5 * px1 && au < 0.86)) return tr === 2 ? 3 : 2;
+      if (tr === 2 && t === 1 && u < -0.25 && ((dc > 0.5 * px1 && dc <= 1.5 * px1) || (dn > 0.5 * px1 && dn <= 1.5 * px1 && au < 0.8))) return 0;
     }
     return t;
   });
+  // the 1 px silver rim: every column's top pixel across the crown, then the right side down to the
+  // widest point (the resolve rim would leave a dotted stair on the rounded corners)
+  const g = head.gb + GROUPS.head;
+  const rim = rimDecal();
+  const yMid = Math.round(cy + 0.4 * s);
+  for (let x = x0; x <= x1; x++) {
+    for (let y = y0; y < yMid; y++) {
+      const i = y * buf.w + x;
+      if (!buf.mat[i]) continue;
+      if (buf.grp[i] === g && buf.mat[i] === m.casing) buf.paint(x, y, rim, 0, g);
+      break;
+    }
+  }
+  for (let y = y0; y <= yMid; y++) {
+    for (let x = x1; x > cx; x--) {
+      const i = y * buf.w + x;
+      if (!buf.mat[i]) continue;
+      if (buf.grp[i] === g && buf.mat[i] === m.casing) buf.paint(x, y, rim, 0, g);
+      break;
+    }
+  }
+  if (screws) {
+    // four flush fasteners (decals: the speckle clean-up would erase a 1 px tone): a dark centre and,
+    // from s 3.2, a lit edge toward the key
+    const dk = decal(P.slate), hi = decal(P.silver);
+    for (let k = 0; k < 4; k++) {
+      const sy = k < 2 ? scY : scY2;
+      const sx = (k & 1 ? 1 : -1) * (k < 2 ? caseHW(sy) - 2.7 : caseHW(sy) * 0.6);
+      const qx = Math.round(cx + sx * s - 0.5), qy = Math.round(cy + sy * s - 0.5);
+      buf.paint(qx, qy, dk, 1, g);
+      if (s >= 3.2) buf.paint(qx - 1, qy - 1, hi, 1, g);
+    }
+  }
 }
+
+const rimDecal = () => material('cast-b:rim', { ramp: [P.silver], line: P.ink, decal: true });
 
 // ---------------------------------------------------------------------------
 // Face: visor, slits, speech indicator
@@ -147,7 +241,7 @@ function drawVisor(buf, L, head, f, s) {
   const cx = head.cx + OFF[0], cy = head.cy + OFF[1];
   const tr = tier(s);
   const black = decal(P.black), sheen = decal(P.slate), dark = decal(P.ink), lip = decal(P.fog);
-  // ---- visor mask (rounded rectangle) in its pixel box
+  // ---- visor mask (rounded rectangle, drawn in a touch toward the chin) in its pixel box
   const vx0 = Math.round(cx - VISOR.hw * s), vx1 = Math.round(cx + VISOR.hw * s);
   const vy0 = Math.round(cy + VISOR.top * s), vy1 = Math.round(cy + VISOR.bot * s);
   const W = Math.min(VW - 2, vx1 - vx0), H = Math.min(VH - 2, vy1 - vy0);
@@ -169,7 +263,7 @@ function drawVisor(buf, L, head, f, s) {
     }
   }
   const inV = (i, j) => i >= 0 && j >= 0 && i < W && j < H && VMASK[(j + 1) * VW + i + 1] === 1;
-  // ---- glass, the static sheen, and at close-up the recess (shadowed top/left wall, lit lower lip)
+  // ---- glass, the static sheen, and the recess: a shadowed top/left wall; at close-up a lit lower lip
   const sw = tr === 2 ? 2 : 1;
   const sc = Math.round(W * 0.16);
   for (let j = -1; j <= H; j++) {
@@ -208,14 +302,14 @@ function drawVisor(buf, L, head, f, s) {
   for (let i = 0; i < w; i++) buf.plot(ix + i, iy, w >= 5 && (i === 0 || i === w - 1) ? end : silver, 1);
 }
 
-/** Slit width in px: ~12 % of the casing's width, at least 2. */
+/** Slit width in px: ~12 % of the housing's width; 3 px in the wide (the bible's 3 x 1 slit). */
 export function eyeWidth(s) {
-  return Math.max(2, Math.round(EYE.share * 2 * CASE.hw * s));
+  return Math.max(3, Math.round(EYE.share * 2 * CASE.hw * s));
 }
 
 /** Slit height in px: 2 at close-up (s ≥ 2.2) and in larger mediums, 1 in the wide. */
 export function eyeHeight(s) {
-  return s >= 2.2 ? 2 : s >= 1.8 ? 2 : 1;
+  return s >= 1.8 ? 2 : 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -380,21 +474,23 @@ export function indicatorWidth(f, s, L = null) {
 }
 
 // ---------------------------------------------------------------------------
-// The antenna: a static steel rod on the lit side, no light
+// ---------------------------------------------------------------------------
+// The antenna: a static steel rod on the lit side of the crown, no light, no ball
 
 function drawAntenna(buf, L, m, head, s) {
   headOffset(head, OFF);
   const cx = head.cx + OFF[0], cy = head.cy + OFF[1];
-  const ax = -5.1;
-  const topY = CASE.top + 1.5; // the base hides behind the crown (drawn behind the head)
-  const rw = Math.max(1, Math.round(0.55 * s));
+  const ax = -5.4;
+  const baseY = CASE.top + 1.4; // the root hides behind the crown (drawn behind the head)
+  const rw = Math.max(1, Math.round(0.5 * s));
   const rx = Math.round(cx + ax * s - rw / 2);
-  const yTop = Math.round(cy + (topY - 6.0) * s), yBase = Math.round(cy + topY * s);
-  for (let y = yTop; y < yBase; y++) for (let i = 0; i < rw; i++) buf.plot(rx + i, y, m.rod, rw >= 2 && i === 0 ? 0 : 1);
-  // base collar and a flat cap (no light, no ball)
-  const cw = Math.max(rw + 2, Math.round(1.7 * s)), ch = Math.max(1, Math.round(0.9 * s));
+  const yTop = Math.round(cy + (CASE.top - 3.8) * s), yBase = Math.round(cy + baseY * s);
+  for (let y = yTop; y < yBase; y++) for (let i = 0; i < rw; i++) buf.plot(rx + i, y, m.rod, rw >= 2 && i === 0 ? 0 : rw >= 3 && i === rw - 1 ? 2 : 1);
+  // a machined collar where the rod leaves the housing, and a flat end cap at close-up
+  const cw = Math.max(rw + 2, Math.round(1.6 * s)), ch = Math.max(1, Math.round(0.7 * s));
   const cx0 = Math.round(cx + ax * s - cw / 2);
-  for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++) buf.plot(cx0 + i, yBase - ch + j + 1, m.rod, j === 0 && i < cw - 1 ? 0 : i === cw - 1 ? 2 : 1);
+  const cy0 = Math.round(cy + CASE.top * s) - ch;
+  for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++) buf.plot(cx0 + i, cy0 + j, m.rod, j === 0 && i < cw - 1 ? 0 : i === cw - 1 ? 2 : 1);
   if (s >= 1.8) {
     const tw = rw + 2;
     const tx = Math.round(cx + ax * s - tw / 2);

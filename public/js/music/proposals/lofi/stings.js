@@ -13,7 +13,8 @@
 //               the end card's first downbeat.
 //   NEWS IN 60  sixtyBell(): one Gadd9 bell chord on the sign-off's last word.
 //   CHANNEL     countdown() (10.5 s), identFilm() (3 bars + hold), shortIdent(),
-//               sombreIdent(), upNext().
+//               sombreIdent(), upNext(), replay() (the signature backwards on the
+//               REPLAY plate: "we have heard this before").
 // Each takes (engine, t, opts) and returns the time it has finished ringing.
 
 import { PROGRAMMES } from './palettes.js';
@@ -111,8 +112,9 @@ export const STINGS = {
   signoffBrass(eng, t) {
     const dest = bus(eng, 0.6, { echo: 0.2, time: 0.49 });
     const spb = 60 / 92;
-    const end = motif(eng, dest, t, spb, 'answer', { inst: 'brass', base: 50, colour: COLOUR.home, vel: 0.85, p: { bright: 950, attack: 0.07, release: 0.5 } });
-    eng.rig.bass(t + spb * 1.5, 38, spb * 4.5, 0.6, dest, { wave: 'triangle', lp: 420, release: 0.6 });
+    // Nobody speaks over it (the 1.5 s hold): the brass may open up a little; the triangle stays under it.
+    const end = motif(eng, dest, t, spb, 'answer', { inst: 'brass', base: 50, colour: COLOUR.home, vel: 0.85, p: { bright: 1300, attack: 0.07, release: 0.5 } });
+    eng.rig.bass(t + spb * 1.5, 38, spb * 4.5, 0.42, dest, { wave: 'triangle', lp: 420, release: 0.6 });
     return end + 1.5;
   },
 
@@ -121,8 +123,8 @@ export const STINGS = {
     const dest = bus(eng, 0.6, { echo: 0.15, time: 0.45 });
     const spb = 60 / 96;
     eng.rig.timpani(t, 38, 0.55, dest);
-    const end = motif(eng, dest, t, spb, 'statement', { inst: 'brass', base: 50, scale: 'minor', colour: COLOUR.breaking, vel: 0.85, p: { bright: 850, attack: 0.06, release: 0.45 } });
-    eng.rig.bass(t, 38, (end - t) + 0.5, 0.55, dest, { wave: 'triangle', lp: 380, release: 0.5 });
+    const end = motif(eng, dest, t, spb, 'statement', { inst: 'brass', base: 50, scale: 'minor', colour: COLOUR.breaking, vel: 0.85, p: { bright: 1150, attack: 0.06, release: 0.45 } });
+    eng.rig.bass(t, 38, (end - t) + 0.5, 0.4, dest, { wave: 'triangle', lp: 380, release: 0.5 });
     return end + 1.2;
   },
 
@@ -248,6 +250,24 @@ export const STINGS = {
     chord(eng, dest, t, 5.2, 'Bm9', { inst: 'pad', lo: 47, vel: 0.85, roll: 0, p: { attack: 1.4, lpTo: 800, release: 1 } });
     eng.rig.bass(t, 35, 5.2, 0.5, dest, { wave: 'sine', lp: 300, release: 1 });
     return t + 6.5;
+  },
+
+  /**
+   * REPLAY marker (a replayed episode's plate, before its open): the signature in retrograde
+   * (high 5 - 2 - 1 - low 5, then the 2 left open) on a soft Rhodes through a long tape echo, over
+   * a held IV(add9) pad; the tape slows a few cents at the end. 2.6 s, no voice over it.
+   */
+  replay(eng, t, { programme = 'channel' } = {}) {
+    const prog = PROGRAMMES[programme] || PROGRAMMES.channel;
+    const spb = 60 / 84;
+    const dest = bus(eng, 0.8);
+    const lead = bus(eng, 0.75, { echo: 0.5, time: spb * 0.75 });
+    const IV = degreeToMidi(prog.tonic, SCALES[prog.scale], 3) % 12;
+    chord(eng, dest, t, 2.4, `${NAMES[IV]}add9`, { inst: 'pad', lo: 50, vel: 0.7, roll: 0, p: { attack: 0.5, lpTo: 1000, release: 0.9 } });
+    eng.rig.bass(t, bassOf(IV), 2.4, 0.45, dest, { wave: 'triangle', lp: 480, release: 0.8 });
+    const notes = motifVariant('retrograde', 0, COLOUR.next);
+    notes.forEach((n, i) => eng.rig.ep(t + n.at * spb * 0.8, degreeToMidi(prog.tonic, SCALES[prog.scale], n.d), n.len * spb * 0.75, 0.6 - i * 0.04, lead, { index: 0.7, attack: 0.012, release: 0.35, bend: i === notes.length - 1 ? -22 : 0 }));
+    return t + 4;
   },
 
   /** UP NEXT (only without sharedStings: audio.js has its own promo cue): IV -> V9sus, the signature hanging on the 2nd. */

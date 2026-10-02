@@ -110,9 +110,13 @@ function renderPlanet(fb, G, light, ringP, power, rimP) {
     }
     if (k === 1) {
       const dif = G.nx[i] * lx + G.ny[i] * ly + G.nz[i] * lz;
-      // hard steps (clusters): 0 night .. 4 full light, scaled by the light's power as it rises
-      let lv = Math.floor(clamp((dif + 0.1) * 3.4 * power, 0, 4.2));
-      if (G.shadow[i] && G.ang[i] <= ringP && lv > 0) lv = Math.max(lv - 2, 1);
+      // hard steps (clusters): 0 night .. 4 full light, scaled by the light's power as it rises,
+      // with limb darkening (a gas giant's edge is dimmer), which also curves the terminator and
+      // every band like a lit sphere even while the sun crosses the image plane (never a chord)
+      const limbK = 0.58 + 0.42 * G.nz[i];
+      let lv = Math.floor(clamp((dif + 0.1) * 3.9 * power * limbK, 0, 4.2));
+      // the rings' shadow: one continuous band of the darkest lit tone, drawn round with the ring
+      if (G.shadow[i] && G.ang[i] <= ringP && lv > 0) lv = 1;
       if (lv > 4) lv = 4;
       // the night side keeps a 1 px slate limb so the silhouette never dissolves into the field
       if (lv === 0) d[i] = G.limb[i] && rimP > 0 ? rimC : C.black;

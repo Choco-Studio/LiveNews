@@ -1360,7 +1360,8 @@ describe('local feed pictures (offline fixtures only)', () => {
   test('parseFeed uses it only when told the feed is local, and marks those stories local', () => {
     const xml = rssFeed('<item><title>Local</title><link>https://fixtures.test/1</link><description>Text.</description><media:content url="img/x.png" medium="image"/></item>');
     const remote = parseFeed(xml, FEED)[0];
-    assert.equal(remote.image, null);
+    // A remote feed resolves a relative picture against the item's web page, never on the local disk.
+    assert.equal(remote.image, 'https://fixtures.test/img/x.png');
     assert.ok(!('local' in remote));
     const dir = path.join(os.tmpdir(), 'feeds');
     const local = parseFeed(xml, FEED, { baseDir: dir })[0];
@@ -1413,7 +1414,7 @@ describe('NewsDesk.deskView', () => {
     desk.covered.set('a', now);
     const view = desk.deskView(80, now);
     assert.deepEqual(view.map((v) => v.id), ['b', 'a']);
-    assert.deepEqual(Object.keys(view[0]).sort(), ['breaking', 'category', 'covered', 'hasImage', 'id', 'live', 'outlets', 'score', 'source', 'title']);
+    assert.deepEqual(Object.keys(view[0]).sort(), ['breaking', 'category', 'covered', 'hasImage', 'id', 'imageCredit', 'imageVia', 'live', 'outlets', 'score', 'source', 'title']);
     assert.equal(view[0].breaking, true);
     assert.equal(view[0].hasImage, true);
     assert.equal(view[1].covered, true);

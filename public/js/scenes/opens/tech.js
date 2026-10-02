@@ -221,15 +221,20 @@ function emblem(ctx, dt, x, y, k = 1) {
   } finally {
     ctx.restore();
   }
-  // pins catch the signal as each trace arrives (one short white flash each)
-  if (dt < 1.3) {
-    ctx.fillStyle = P.white;
+  // each pin's solder tip catches the signal as its trace arrives: the one pixel where trace and
+  // pin meet steps cyan, then silver, then back to the sprite (never a whole pin lit)
+  if (dt < 1.3 && open >= 1) {
     for (const tr of traces()) {
-      const arrive = tr.s + 0.5;
-      if (dt < arrive || dt > arrive + 0.1) continue;
-      const pin = tr.pin;
-      if (pin.v) ctx.fillRect(x + pin.x - (D.pinW >> 1), y + pin.y, D.pinW, D.pin);
-      else ctx.fillRect(x + pin.x, y + pin.y - (D.pinW >> 1), D.pin, D.pinW);
+      const a = dt - (tr.s + 0.5);
+      if (a < 0 || a >= 0.12) continue;
+      const n = tr.n;
+      const lx = tr.pts[(n - 1) * 2];
+      const ly = tr.pts[(n - 1) * 2 + 1];
+      // one step past the trace's last pixel, along its last segment: the pin's outer end
+      const px = lx + Math.sign(lx - tr.pts[(n - 2) * 2]);
+      const py = ly + Math.sign(ly - tr.pts[(n - 2) * 2 + 1]);
+      ctx.fillStyle = a < 0.06 ? P.cyan : P.silver;
+      ctx.fillRect(px, py, 1, 1);
     }
   }
 }

@@ -200,7 +200,23 @@ function pickBox(L, needW, needH, preferSide = true) {
 
 /** The wall's idle field, filled only where the wall is on screen (CLIP, from the current camera). */
 const CLIP = { x0: 0, y0: 0, x1: 0, y1: 0 };
+// The last field drawn, kept so a wall re-rendered for its content alone (the globe turning, the
+// planet's light, a map flying in) copies its field instead of dithering it again.
+const FIELD = { cap: null, buf: null, w: 0, h: 0, style: '', soft: false, ax: -1, ay: -1, fy: NaN, hf: NaN, x0: 0, y0: 0, x1: 0, y1: 0 };
 function fillField(b, style, soft) {
+  const f = FIELD;
+  if (f.buf && f.w === b.w && f.h === b.h && f.style === style.id && f.soft === soft && f.ax === ENV.ax && f.ay === ENV.ay && f.fy === ENV.fy && f.hf === ENV.hf && f.x0 === CLIP.x0 && f.y0 === CLIP.y0 && f.x1 === CLIP.x1 && f.y1 === CLIP.y1) {
+    b.px.set(f.buf);
+    return;
+  }
+  fieldPixels(b, style, soft);
+  const n = b.w * b.h;
+  if (!f.cap || f.cap.length < n) f.cap = new Uint32Array(Math.ceil(n * 1.25));
+  f.buf = f.cap.subarray(0, n);
+  f.buf.set(b.px);
+  Object.assign(f, { w: b.w, h: b.h, style: style.id, soft, ax: ENV.ax, ay: ENV.ay, fy: ENV.fy, hf: ENV.hf, x0: CLIP.x0, y0: CLIP.y0, x1: CLIP.x1, y1: CLIP.y1 });
+}
+function fieldPixels(b, style, soft) {
   const [a, z] = style.wallField;
   const ca = C[a], cz = C[z];
   const { w, h, px } = b;
@@ -212,15 +228,27 @@ function fillField(b, style, soft) {
     for (let y = y0; y < y1; y++) px.fill(c, y * w + x0, y * w + x1);
     return;
   }
-  // top colour easing into the bottom colour (keeps the area behind heads dark); the level uses the
-  // wall's unrounded span and the Bayer index the screen position, so a dolly never re-dithers it
+  // the top colour, one Bayer band, the bottom colour (keeps the area behind heads dark): a
+  // posterised falloff, flat fields with the dither only in the band between them, like the set's
+  // light. The level uses the wall's unrounded span and the Bayer index the screen position, so a
+  // dolly never re-dithers it.
   const ax = ENV.ax, ay = ENV.ay, fy = ENV.fy, hf = Math.max(1, ENV.hf);
+  const [u0, u1] = style.wallBand || FIELD_BAND;
+  const iu = 1 / (u1 - u0);
   for (let y = y0; y < y1; y++) {
-    const q = Math.round(Math.max(0, Math.min(1, ((y + 0.5 + fy) / hf) * 1.25 - 0.15)) * 16);
+    const q = Math.round(Math.max(0, Math.min(1, ((y + 0.5 + fy) / hf - u0) * iu)) * 16);
     const row = y * w, br = ((y + ay) & 3) << 2;
-    for (let x = x0; x < x1; x++) px[row + x] = q > B16[br + ((x + ax) & 3)] ? cz : ca;
+    if (q <= 0 || q >= 16) {
+      px.fill(q <= 0 ? ca : cz, row + x0, row + x1);
+      continue;
+    }
+    // the row's pattern repeats every 4 px
+    for (let j = 0; j < 4; j++) FPAT[(x0 + j) & 3] = q > B16[br + ((x0 + j + ax) & 3)] ? cz : ca;
+    for (let x = x0; x < x1; x++) px[row + x] = FPAT[x & 3];
   }
 }
+const FPAT = new Uint32Array(4);
+const FIELD_BAND = [0.62, 0.82]; // where the wall field's top colour falls to its bottom colour (share of the height)
 
 /** A Bayer falloff from `c` at the top edge into the field over `rows` px (MONEY MINUTE's top 12 px). */
 function topFalloff(b, c, rows) {
@@ -299,7 +327,7 @@ const GLOBE_TABLES = new Map();
 function globeTable(R) {
   let T = GLOBE_TABLES.get(R);
   if (T) return T;
-  const S = 2 * R + 3, c = R + 1;
+  const S = 2 * R + 5, c = R + 2;
   const disc = new Uint32Array(S * S);
   const cls = new Uint8Array(S * S); // light class for dots: 0 lit .. 3 dark, 255 outside
   cls.fill(255);
@@ -308,17 +336,26 @@ function globeTable(R) {
     for (let x = 0; x < S; x++) {
       const dx = x - c, dy = y - c;
       const d2 = dx * dx + dy * dy;
-      if (d2 > RR * RR) continue;
-      const nx = dx / RR, ny = dy / RR;
+      const d = Math.sqrt(d2);
+      if (d > RR + 1) continue;
+      const nx = dx / Math.max(d, RR), ny = dy / Math.max(d, RR);
       const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
       const l = nx * GLIGHT[0] + ny * GLIGHT[1] + nz * GLIGHT[2];
+      if (d > RR) {
+        // a 1 px outline outside the limb (ink on the lit side, black in shadow) separates the
+        // navy sphere from the navy field without a glow
+        disc[y * S + x] = l > 0.05 ? C.ink : C.black;
+        continue;
+      }
       const k = l > 0.62 ? 0 : l > 0.22 ? 1 : l > -0.12 ? 2 : 3;
       cls[y * S + x] = k;
-      let col = k <= 1 ? C.navy : k === 2 ? C.ink : C.black;
-      // ocean: navy with a Bayer step into ink where the light turns (falloff only)
-      if (k === 1 && l < 0.34 && (((y & 3) << 2) | (x & 3)) % 2 === 0) col = C.ink;
+      // ocean: flat navy / ink / black steps, Bayer 4x4 only in a narrow band at each turn
+      const b16 = B16[((y & 3) << 2) | (x & 3)];
+      let col = C.navy;
+      if (l < 0.3) col = l < 0.22 || (0.3 - l) * 200 > b16 ? C.ink : C.navy;
+      if (l < -0.04) col = l < -0.12 || (-0.04 - l) * 200 > b16 ? C.black : C.ink;
       // the limb: 1 px lit rim on the key side, dark elsewhere
-      if (Math.sqrt(d2) > RR - 1.05) col = l > 0.05 ? C.steel : C.ink;
+      if (d > RR - 1.05) col = l > 0.05 ? C.steel : C.ink;
       disc[y * S + x] = col;
     }
   }
@@ -526,20 +563,43 @@ function drawPlanet(b, cx, cy, R, az) {
 // NEWS IN 60 idle: the dial, two static states
 
 function drawDial(b, cx, cy, r, phase, ts) {
-  // 60 ticks placed for one quadrant and mirrored, so the ring is exactly symmetric
   const all = phase === 'outro';
   const ccx = Math.round(cx), ccy = Math.round(cy);
-  for (let i = 0; i <= 15; i++) {
-    const a = i * 6 * DEG;
-    const five = i % 5 === 0;
-    const len = five ? Math.max(2, Math.round(r * 0.14)) : 1;
-    for (let q = 0; q < len; q++) {
-      const rr = r - q;
-      const dx = Math.round(rr * Math.sin(a)), dy = Math.round(rr * Math.cos(a));
-      for (const [sx, sy, idx] of [[1, -1, i], [-1, -1, 60 - i], [1, 1, 30 - i], [-1, 1, 30 + i]]) {
-        const tick = ((idx % 60) + 60) % 60;
-        const col = all || tick === 0 ? C.yellow : C.slate;
-        plot(b, ccx + sx * dx, ccy + sy * dy, col);
+  if (r < 19) {
+    // Below r 19 the 60 ticks would fall closer than 2 px and merge: draw what they merge into, a
+    // clean 1 px ring (one octant mirrored eight ways, so it is exactly symmetric), with the four
+    // quarter ticks 2 px inward; the 12 o'clock tick is yellow in both states, the ring lights in
+    // the outro. A ring, never spokes: at this size spokes read as a sunburst.
+    const ring = all ? C.yellow : C.slate;
+    for (let a = 0; a <= 45; a += 0.5) {
+      const dx = Math.round(r * Math.sin(a * DEG)), dy = Math.round(r * Math.cos(a * DEG));
+      for (const [px, py] of [[dx, dy], [dy, dx]]) {
+        plot(b, ccx + px, ccy - py, ring);
+        plot(b, ccx - px, ccy - py, ring);
+        plot(b, ccx + px, ccy + py, ring);
+        plot(b, ccx - px, ccy + py, ring);
+      }
+    }
+    for (let q = 0; q < 3; q++) {
+      plot(b, ccx, ccy - r + q, C.yellow);
+      plot(b, ccx, ccy + r - q, ring);
+      plot(b, ccx - r + q, ccy, ring);
+      plot(b, ccx + r - q, ccy, ring);
+    }
+  } else {
+    // 60 ticks placed for one quadrant and mirrored, so the dial is exactly symmetric
+    for (let i = 0; i <= 15; i++) {
+      const a = i * 6 * DEG;
+      const five = i % 5 === 0;
+      const len = five ? Math.max(2, Math.round(r * 0.14)) : 1;
+      for (let q = 0; q < len; q++) {
+        const rr = r - q;
+        const dx = Math.round(rr * Math.sin(a)), dy = Math.round(rr * Math.cos(a));
+        for (const [sx, sy, idx] of [[1, -1, i], [-1, -1, 60 - i], [1, 1, 30 - i], [-1, 1, 30 + i]]) {
+          const tick = ((idx % 60) + 60) % 60;
+          const col = all || tick === 0 ? C.yellow : C.slate;
+          plot(b, ccx + sx * dx, ccy + sy * dy, col);
+        }
       }
     }
   }
@@ -691,9 +751,10 @@ if (typeof document !== 'undefined') {
     });
 }
 const MAP_ANIM = { default: 3.0, 'news-60': 2.5 };
+const MAP_MAX_AREA = 104 * 64; // the locator's designed size (worldmap.js mini): its cost is per pixel
 const MAPCV = { cv: null, ctx: null, w: 0, h: 0, u32: null };
-// the locator's bright land is dimmed one step on the wall (mean L* ≤ 45)
-const MAP_DIM = new Map([[C.fog, C.steel], [C.silver, C.fog], [C.white, C.silver], [C.cream, C.tan]]);
+// the locator's bright land is dimmed one step on the wall (mean L* ≤ 45): fog → steel, silver → fog,
+// white → silver, cream → tan (drawMiniMap)
 
 /** Draw the mini locator at w x h into `b` (exact palette, dimmed); false when unavailable. */
 function drawMiniMap(b, spec, style, t, dt) {
@@ -718,9 +779,11 @@ function drawMiniMap(b, spec, style, t, dt) {
     MAPFN(ctx, t, dt, { lat: loc.lat, lon: loc.lon, place: loc.place || '', x: 0, y: 0, w, h, mini: true, label: !!loc.place, accent: P[style.accentName], programId: style.id });
     const d = ctx.getImageData(0, 0, w, h).data;
     const u32 = new Uint32Array(d.buffer, d.byteOffset, w * h);
+    const fog = C.fog, silver = C.silver, white = C.white, cream = C.cream;
+    const steel = C.steel, tan = C.tan, out = b.px;
     for (let i = 0; i < w * h; i++) {
-      const c = u32[i] | 0xff000000;
-      b.px[i] = MAP_DIM.get(c >>> 0) ?? c >>> 0;
+      const c = (u32[i] | 0xff000000) >>> 0;
+      out[i] = c === fog ? steel : c === silver ? fog : c === white ? silver : c === cream ? tan : c;
     }
     return true;
   } catch (err) {
@@ -913,6 +976,19 @@ function blitSub(b, sub, x0, y0) {
   }
 }
 
+/** Exact 2x copy of `sub` into a w x h box (cropped to it). */
+function blit2x(b, sub, x0, y0, w, h) {
+  for (let y = 0; y < h; y++) {
+    const yy = y0 + y;
+    if (yy < 0 || yy >= b.h) continue;
+    const srow = (y >> 1) * sub.w, row = yy * b.w;
+    for (let x = 0; x < w; x++) {
+      const xx = x0 + x;
+      if (xx >= 0 && xx < b.w) b.px[row + xx] = sub.px[srow + (x >> 1)];
+    }
+  }
+}
+
 function resampleSub(b, sub, x0, y0, w, h) {
   for (let y = 0; y < h; y++) {
     const yy = y0 + y;
@@ -967,10 +1043,26 @@ function renderSpec(b, spec, style, env) {
         m.y = L.full.y0;
       }
       // the map renders at the size it had at the cut (worldmap.js keeps buffers per size), and a
-      // slow camera move resamples it instead of asking for a new size every frame
-      // out of focus (singles) the locator renders at half size and is shown pixel-doubled: lower
-      // detail where the eye does not look, half the cost while it flies in
-      if (!spec._mapWH) spec._mapWH = soft && m.w > 160 ? [Math.max(104, Math.round(m.w / 2)), Math.max(62, Math.round(m.h / 2))] : [Math.max(8, m.w), Math.max(8, m.h)];
+      // slow camera move resamples it instead of asking for a new size every frame.
+      // In singles (wall text at 2x) it renders at half size and is shown at exactly 2x, like the
+      // rest of the wall's content there. Elsewhere a wall bigger than the locator's own size
+      // (two-shot, over-the-shoulder) gets the locator as a framed inset of about that size, centred:
+      // drawWorldMap's cost is per pixel (about 0.7 ms per frame at 104x63 while it flies in).
+      if (!spec._mapWH) {
+        const sc = env.ts > 1 && m.w >= 120 ? 2 : 1;
+        const area = (m.w / sc) * (m.h / sc);
+        spec._mapFit = sc === 1 && area > MAP_MAX_AREA ? Math.sqrt(MAP_MAX_AREA / area) : 1;
+        spec._mapSc = sc;
+        spec._mapWH = [Math.max(8, Math.ceil((m.w * spec._mapFit) / sc)), Math.max(8, Math.ceil((m.h * spec._mapFit) / sc))];
+      }
+      if (spec._mapFit < 1) {
+        const nw = Math.round(m.w * spec._mapFit), nh = Math.round(m.h * spec._mapFit);
+        m.x += (m.w - nw) >> 1;
+        m.y += Math.min(m.h - nh, Math.max(3 * ts, (m.h - nh) >> 1));
+        m.w = nw;
+        m.h = nh;
+        m.framed = true;
+      }
       const end = MAP_ANIM[style.id] || MAP_ANIM.default;
       // once the locator has settled its last frame is kept: a camera move only resamples it
       if (!(spec._mapDone && SUB.w === spec._mapWH[0] && SUB.h === spec._mapWH[1] && SUB.owner === spec)) {
@@ -978,12 +1070,13 @@ function renderSpec(b, spec, style, env) {
         SUB.owner = spec;
         if (drawMiniMap(SUB, spec, style, env.t, Math.min(dt, end))) spec._mapDone = dt >= end;
         else {
-          drawStaticLocator(SUB, spec, style, ts);
+          drawStaticLocator(SUB, spec, style, Math.max(1, ts / (spec._mapSc || 1)));
           spec._mapDone = true;
         }
       }
       if (m.framed) frameBox(b, m, style, env);
       if (SUB.w === m.w && SUB.h === m.h) blitSub(b, SUB, m.x, m.y);
+      else if (Math.ceil(m.w / 2) === SUB.w && Math.ceil(m.h / 2) === SUB.h) blit2x(b, SUB, m.x, m.y, m.w, m.h);
       else resampleSub(b, SUB, m.x, m.y, m.w, m.h);
       if (!m.framed) darkBand(b, L.band, style, soft);
       sig = 1;
@@ -1014,7 +1107,8 @@ function drawIdle(b, L, spec, style, env) {
       const need = 27 * ts;
       const box = pickBox(L, need, need, false);
       const cx = Math.round((box.x0 + box.x1) / 2);
-      const cy = Math.round(box.y0 + Math.max(14 * ts, Math.min(bh(box) * 0.45, bh(box) - 14 * ts)));
+      // in the wall's upper half (tech-bytes.md §3.4), clear of the top edge
+      const cy = Math.round(box.y0 + Math.max(15 * ts, Math.min(bh(box) * 0.36, bh(box) - 14 * ts)));
       drawChip(b, cx, cy, ts);
       return 0;
     }
@@ -1349,6 +1443,22 @@ export function resetWall() {
   S.last.style = null;
   S.version++;
 }
+
+// ---------------------------------------------------------------------------
+// Warm-up: the costly tables, built before the first frame that needs them (set.js warmSets)
+
+/** Decode the land mask and build the globe / planet tables of the wide and two-shot sizes, and the idle text. */
+export function warmWall() {
+  landMask();
+  for (const R of [23, 24, 30]) globeTable(R);
+  for (const R of [12, 13, 16]) planetTable(R);
+  for (const s of [1, 2]) {
+    textWidth('MONEY MINUTE', 'body', s);
+    stampText(WARM_PX, 1, 1, 'MONEY MINUTE', 0, 0, 0, 'body', s);
+    stampText(WARM_PX, 1, 1, '60', 0, 0, 0, 'body', s);
+  }
+}
+const WARM_PX = new Uint32Array(1);
 
 // ---------------------------------------------------------------------------
 // Legacy entry points

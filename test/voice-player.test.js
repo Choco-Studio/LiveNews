@@ -247,4 +247,18 @@ describe('AudioEngine with a recorded voice', () => {
     assert.ok(silent.mean < loud.mean * 0.5, `a silent envelope keeps the jaw nearly shut (${silent.mean.toFixed(3)} vs ${loud.mean.toFixed(3)})`);
     assert.ok(Math.abs(analyser.mean - loud.mean) < loud.mean * 0.5, 'without an envelope the live analyser still drives it');
   });
+
+  test("a clip whose 'ended' never comes (suspended host, offline render) still lets the show go on", async () => {
+    globalThis.AudioContext = FakeContext; // its sources never fire onended
+    const { AudioEngine } = await import('../public/js/audio.js');
+    const e = new AudioEngine();
+    await e.unlock();
+    const text = 'Short line.';
+    const buffer = e.context.createBuffer(1, 24000, 48000); // 0.5 s
+    const t0 = performance.now();
+    await e.speak(text, 'A', { audio: { buffer, words: [{ t: 0.02, char: 0 }, { t: 0.25, char: 6 }] } });
+    const took = (performance.now() - t0) / 1000;
+    assert.ok(took >= 0.5 && took < 3.5, `speech resolved ${took.toFixed(2)} s after it started (clip 0.5 s)`);
+    assert.equal(e.speechFrame(performance.now(), 'A').speaking, false);
+  });
 });

@@ -768,3 +768,155 @@ test('direction: plans go on air as scene.segPlan with speech start/end; chats c
   live.begin(EP.segments[0]).end();
   assert.equal(shots.length, 0);
 });
+
+// ---------------------------------------------------------------------------
+// round 2: the intro on its plan, the set on frame 0, camera moves without a cut
+
+test('direction: the intro follows its plan: montage frames on the teased stories at sentence starts, the greeting on its shot, no cut back', async () => {
+  const ep = clone(episodeOf('world-now'));
+  const intro = ep.segments[0];
+  // editorial's teases say which story each headline sentence is about (here out of running order)
+  intro.teases = [ep.rundown[2].storyId, ep.rundown[0].storyId, ep.rundown[1].storyId];
+  const shots = [];
+  const director = {
+    scene: { shot: 'open', focus: 'A', shotSince: 0, stinger: null, framing: null, rundown: ep.rundown },
+    setShot(shot, extra) {
+      shots.push({ shot, card: extra.card?.index ?? null, framing: extra.framing ?? null });
+      Object.assign(this.scene, extra, { shot, shotSince: performance.now() / 1000 });
+    },
+    say(seg) {
+      const h = live.begin(seg);
+      for (let si = 0; si < h.plan.ctx.sentences.length; si++) h.sentence(si);
+      h.end();
+      return Promise.resolve();
+    },
+  };
+  const live = new LiveDirection({ director, channel: { presenters: {} }, audio: { mode: 'mute' } });
+  live.episode(ep);
+  const p = live.planAt(0);
+  const cues = cuesFromPlan(p, { rundown: ep.rundown });
+  const montage = cues.filter((c) => c.shot === 'montage');
+  assert.ok(montage.length >= 2, 'a headline montage');
+  // each frame cuts in on its own sentence's first word and shows the story that sentence teases
+  for (const c of montage) {
+    assert.equal(c.mid, false);
+    assert.equal(c.char, p.ctx.sentences[c.sentence].start);
+    assert.equal(ep.rundown[c.card].storyId, intro.teases[c.sentence]);
+  }
+  assert.deepEqual(montage.map((c) => c.card), [2, 0, 1].slice(0, montage.length));
+  const done = live.intro(intro);
+  assert.ok(done && typeof done.then === 'function');
+  assert.equal(shots[0].shot, 'montage', 'the montage opens at once');
+  await done;
+  assert.deepEqual(shots.map((s) => s.shot), cues.map((c) => c.shot), 'every cue on air, in order');
+  assert.equal(shots.at(-1).shot, 'wide', 'the greeting on the wide');
+  assert.notEqual(shots.at(-1).framing, null);
+  // without teases the planner's card order is the rundown order; a montage outside an intro is dropped
+  delete intro.teases;
+  const plain = cuesFromPlan(planSegment(ep, 0, {}), { rundown: ep.rundown }).filter((c) => c.shot === 'montage');
+  assert.deepEqual(plain.map((c) => c.card), plain.map((_, k) => k));
+  const story = { ctx: { ...p.ctx, seg: { ...p.ctx.seg, type: 'story' } }, events: p.events };
+  assert.ok(!(cuesFromPlan(story) || []).some((c) => c.shot === 'montage'));
+  // no plan: the director keeps its own montage
+  assert.equal(live.intro({ type: 'intro', text: 'x' }), null);
+});
+
+test('direction: MONEY MINUTE and NEWS IN 60 intros stay on the studio shot their bible asks for (no montage)', () => {
+  for (const id of ['money-minute', 'news-60']) {
+    const ep = episodeOf(id);
+    const cues = cuesFromPlan(planSegment(ep, 0, {}), { rundown: ep.rundown });
+    assert.ok(cues && cues.every((c) => c.shot === 'wide' || c.shot === 'close'), id);
+  }
+});
+
+/** A 2D context stand-in: present() only needs putImageData; the inset box draws rects. */
+const fakeCtx = () => ({ putImageData() {}, drawImage() {}, fillRect() {}, fillStyle: '' });
+
+test('Stage: frame 0 after load and after a programme switch has the set and the desk (owner 21:05)', async () => {
+  const { frame } = await import('../public/js/v2/canvas25d/scene.js');
+  const SENTINEL = 0x12345678;
+  const shots = {};
+  for (const id of ['world-now', 'cosmos', 'news-60', 'tech-bytes', 'money-minute']) {
+    const st = id === 'world-now' || id === 'news-60' ? new Stage({ audio: fakeAudio(), channel: { presenters: {} }, idle: null }) : shots.stage;
+    shots.stage = st;
+    const ep = episodeOf(id);
+    frame.px.fill(SENTINEL); // whatever a missing layer would leave on screen
+    const scene = sceneOf(ep, { shot: 'wide', framing: null, shotSince: 50 });
+    assert.equal(st.frame(fakeCtx(), 50, scene, true), true, `${id} frame 0 drawn`);
+    let left = 0;
+    for (let i = 0; i < frame.px.length; i++) if (frame.px[i] === SENTINEL || frame.px[i] === 0) left++;
+    assert.equal(left, 0, `${id}: every pixel of frame 0 comes from this frame's set, desk and actors`);
+    assert.equal(st.style?.id, id, `${id}: its own set style from frame 0`);
+    shots[id] = Uint32Array.from(frame.px);
+  }
+  // the programmes' sets differ on their very first frame (not the previous programme's variant)
+  let diff = 0;
+  for (let i = 0; i < shots['world-now'].length; i++) if (shots['world-now'][i] !== shots.cosmos[i]) diff++;
+  assert.ok(diff > 2000, `world-now vs cosmos frame 0 differ (${diff} px)`);
+});
+
+test('Stage: the warm-up bakes the set and measures the cast in idle time, never presenting', () => {
+  const queue = [];
+  const st = new Stage({ audio: fakeAudio(), channel: { presenters: {} }, idle: (fn) => queue.push(fn) });
+  const ep = episodeOf('cosmos');
+  const scene = sceneOf(ep, { shot: 'open', shotSince: 1 });
+  st.update(1, scene);
+  assert.equal(queue.length, 1, 'one warm-up per episode');
+  queue.shift()();
+  assert.equal(st.warmed, true);
+  st.update(2, sceneOf(episodeOf('tech-bytes'), { shot: 'open', shotSince: 2 }));
+  assert.equal(queue.length, 1);
+  st.update(3, sceneOf(episodeOf('money-minute'), { shot: 'open', shotSince: 3 }));
+  queue.shift()(); // a stale warm-up (the episode moved on) does nothing
+  assert.equal(st.warmed, false);
+});
+
+test('Stage: a camera move applied without a cut runs from when it was applied (CAMERA rule 4)', () => {
+  const ep = episodeOf('world-now');
+  const st = new Stage({ audio: fakeAudio(), channel: { presenters: {} }, idle: null });
+  const scene = sceneOf(ep, { shot: 'close', framing: 'mcu-l', focus: 'A', shotSince: 10, cameraMove: null });
+  st.update(10, scene);
+  assert.equal(st.spec.move, null);
+  const move = { type: 'push', amount: 0.03, delay: 0.5, dur: 4 };
+  scene.cameraMove = move; // same shot, framing and focus: no cut
+  st.update(13, scene);
+  assert.equal(st.spec.move, move);
+  assert.equal(st.moveSince, 13);
+  assert.equal(st.clock.lastCut, 10, 'not a cut');
+  scene.cameraMoveSince = 12.5; // the director's own clock wins when it sends one
+  scene.cameraMove = { ...move };
+  st.update(13.1, scene);
+  assert.equal(st.moveSince, 12.5);
+  // a cut with a move: the move runs from the cut
+  Object.assign(scene, { shot: 'wide', framing: 'wide', shotSince: 20, cameraMove: { ...move }, cameraMoveSince: undefined });
+  st.update(20.02, scene);
+  assert.equal(st.moveSince, 20);
+});
+
+test('cue clock: look events keep FACES style and amt on the rig entry', () => {
+  const ctx = { timing: 'estimated', duration: 3, seg: { text: 'Hello there, Nova.' }, sentences: [{ start: 0, t0: 0 }], timeAt: () => 0, cutGuard: 0.5, speaker: 'A' };
+  const perf = { gestures: [], emotions: [], look: [] };
+  const clock = new CueClock();
+  clock.perfs = { B: perf };
+  const plan = { ctx, events: [{ kind: 'look', slot: 'B', target: 'partner', char: 0, at: 0.2, dur: 1.5, amt: 0.45, style: 'mech' }], speechStart: 1, speechEnd: null, voice: 'mute' };
+  clock.load(plan, 1);
+  for (let t = 1; t < 2; t += DT) clock.tick(t, { speaking: true, sentenceIndex: 0, charIndex: 0 });
+  assert.equal(perf.look.length, 1);
+  assert.equal(perf.look[0].style, 'mech');
+  assert.equal(perf.look[0].amt, 0.45);
+});
+
+test('context: contextAt gives the neighbour segments of the same episode (memoised, read-only)', () => {
+  const ep = episodeOf('money-minute');
+  const presenters = {};
+  const c = segmentContext(ep, 1, { presenters });
+  const n = c.contextAt(2);
+  assert.equal(n.index, 2);
+  assert.equal(n.seg, ep.segments[2]);
+  assert.equal(c.contextAt(2), n, 'memoised');
+  assert.equal(segmentContext(ep, 3, { presenters }).contextAt(2), n, 'shared by every caller of the episode');
+  assert.equal(segmentContext(ep, 0).contextAt(1), segmentContext(ep, 2).contextAt(1), 'also without presenters');
+  assert.equal(c.contextAt(-1), null);
+  assert.equal(c.contextAt(ep.segments.length), null);
+  assert.equal(segmentContext(null, 0).contextAt(0), null, 'malformed episode: no neighbour, no throw');
+});

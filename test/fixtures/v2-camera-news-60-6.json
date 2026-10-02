@@ -1,0 +1,223 @@
+{
+ "kind": "episode",
+ "id": "emurd82odc",
+ "createdAt": "2026-10-02T19:37:58.669Z",
+ "program": {
+  "id": "news-60",
+  "title": "NEWS IN 60",
+  "tagline": "THE HEADLINES IN A MINUTE",
+  "theme": "flash"
+ },
+ "cast": {
+  "A": "sam"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "pictures",
+   "ms": 1,
+   "pictures": 0,
+   "of": 4,
+   "found": 0,
+   "borrowed": 0
+  },
+  {
+   "stage": "write",
+   "ms": 92,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 0,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "fit",
+   "ms": 0,
+   "estimate": 34.5,
+   "dropped": 0,
+   "short": true
+  },
+  {
+   "stage": "assets",
+   "ms": 0,
+   "images": 0,
+   "verified": 0
+  }
+ ],
+ "title": "NEWS IN 60 (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "This is NEWS IN 60. I'm Sam Night.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Rangers have released 50 young giant tortoises on an island in the Galápagos where the species vanished about 100 years ago. “It is a homecoming,” a park ranger said.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "storyId": "sff99368150",
+   "headline": "Giant tortoises return to a Galápagos island",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "GALÁPAGOS, ECUADOR",
+    "lat": -0.8,
+    "lon": -91
+   },
+   "fact": "50 YOUNG GIANT TORTOISES",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "WILDLIFE",
+   "numbers": [
+    {
+     "value": "50",
+     "label": "YOUNG GIANT TORTOISES"
+    },
+    {
+     "value": "100",
+     "label": "YEARS AGO",
+     "qualifier": "ABOUT"
+    }
+   ],
+   "quote": {
+    "text": "It is a homecoming",
+    "by": "a park ranger"
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "The tax office has launched a free online tool to help small businesses file their returns.",
+   "cues": [],
+   "storyId": "sd21eec75f9",
+   "headline": "Small businesses get new online tool to file taxes",
+   "shot": "close",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "BUSINESS"
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Around the world. Barcelona trials a fleet of delivery robots, Circuit Weekly reports.",
+   "cues": [],
+   "storyId": "s77ad18849a",
+   "headline": "Barcelona trials fleet of delivery robots",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "BARCELONA, SPAIN",
+    "lat": 41.39,
+    "lon": 2.17
+   },
+   "fact": null,
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 0,
+    "count": 2
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "Now to Rwanda. Medicine-carrying drones expand across Rwanda, according to Circuit Weekly.",
+   "cues": [],
+   "storyId": "sb04f719620",
+   "headline": "Medicine-carrying drones expand across Rwanda",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "RWANDA",
+    "lat": -1.9,
+    "lon": 29.9
+   },
+   "fact": null,
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 1,
+    "count": 2
+   }
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's the minute. Stay with us on GLOBIT 24.",
+   "cues": []
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "sff99368150",
+   "headline": "Giant tortoises return to a Galápagos island",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "WILDLIFE"
+  },
+  {
+   "storyId": "sd21eec75f9",
+   "headline": "Small businesses get new online tool to file taxes",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "BUSINESS"
+  },
+  {
+   "storyId": "s77ad18849a",
+   "headline": "Barcelona trials fleet of delivery robots",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "sb04f719620",
+   "headline": "Medicine-carrying drones expand across Rwanda",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  }
+ ],
+ "storyIds": [
+  "sff99368150",
+  "sd21eec75f9",
+  "s77ad18849a",
+  "sb04f719620"
+ ]
+}

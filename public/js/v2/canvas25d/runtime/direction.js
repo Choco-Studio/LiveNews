@@ -11,6 +11,12 @@
 //   playStory(seg)           → shots(seg, hasImg, handler): the plan's shot cues, or
 //                              null (the old storyBeats then); the opening cue is the
 //                              caller's, later cues come back through `handler`
+//   playIntro(seg)           → intro(seg): the intro follows its plan: headline frames
+//                              cut on the spoken teaser (each at its sentence's first
+//                              word, showing the story that sentence teases, held to the
+//                              next), the greeting on its planned studio shot; no cut back
+//                              to the studio at the end (the next segment cuts, or a
+//                              breaking story's stinger covers the montage)
 //   say(seg)                 → begin(seg): scene.segPlan = { id, ctx, events, voice,
 //                              speechStart, speechEnd }; the handle gives speak()
 //                              marks for cuts inside a sentence, sentence(i) at each
@@ -22,12 +28,15 @@
 // (wide/close/full/map/fact) the graphics, music hooks and old renderer know;
 // the framing travels in scene.framing (CONTRACTS "framings never reach graphics").
 import { planSegment } from '../direction/index.js';
+// the Stage's module graph loads with this one: once the director's v2 side is ready, so is the
+// Renderer's (studio.js imports host.js itself; this only removes the start-up race)
+import './host.js';
 
 const now = () => performance.now() / 1000;
 const MIN_SHOT = 3; // s, as the director's own rule
 const STINGER = 0.8; // s (cards.js STINGER_DURATION)
 const GAP_AFTER = 0.3; // s the director waits after a segment
-export const LEGACY_SHOTS = new Set(['wide', 'close', 'full', 'map', 'fact']);
+export const LEGACY_SHOTS = new Set(['wide', 'close', 'full', 'map', 'fact', 'montage']);
 const STUDIO = new Set(['wide', 'close']);
 const WIDE_FRAMINGS = new Set(['wide', 'two', 'solo-wide']);
 
@@ -38,36 +47,50 @@ export function legacyShot(shot, framing) {
 }
 
 /**
- * Shot cues of a plan, in order: [{ k, char, at, sentence, mid, shot, framing, focus, move }].
+ * Shot cues of a plan, in order: [{ k, char, at, sentence, mid, shot, framing, focus, move, card }].
  * k 0 is the opening shot; `mid` cues fall inside a sentence (fired by speech marks).
  * Beats the story cannot show (no picture / location / figure), non-studio beats
- * outside stories and repeats of the shot on air are dropped. Null when nothing is left.
+ * outside stories (montage frames only in an intro) and repeats of the shot on air
+ * are dropped. A montage cue's `card` is the rundown index of the story its sentence
+ * teases (seg.teases, editorial), else the planner's card index. Null when nothing is left.
  */
-export function cuesFromPlan(plan, { hasImg = true } = {}) {
+export function cuesFromPlan(plan, { hasImg = true, rundown = null } = {}) {
   const ctx = plan?.ctx;
   if (!ctx || !Array.isArray(plan.events)) return null;
   const seg = ctx.seg || {};
   const story = seg.type === 'story';
+  const intro = seg.type === 'intro';
   const out = [];
   for (const e of plan.events) {
     if (e.kind !== 'shot') continue;
     const shot = legacyShot(e.shot, e.framing);
-    if (!story && !STUDIO.has(shot)) continue;
+    if (shot === 'montage' ? !intro : !story && !STUDIO.has(shot)) continue;
     if (shot === 'full' && !hasImg) continue;
     if (shot === 'map' && !(seg.location && Number.isFinite(seg.location.lat))) continue;
     if (shot === 'fact' && !seg.fact) continue; // the director's fact card needs seg.fact
     const focus = e.focus && e.focus in ctx.cast ? e.focus : ctx.speaker;
-    const framing = e.framing ?? null;
-    const prev = out[out.length - 1];
-    if (prev && prev.shot === shot && prev.framing === framing && prev.focus === focus && !e.move) continue;
+    const framing = shot === 'montage' ? null : (e.framing ?? null);
     const char = Number.isFinite(e.char) ? Math.max(0, e.char) : 0;
     const ss = ctx.sentences || [];
     let si = 0;
     while (si + 1 < ss.length && ss[si + 1].start <= char + 2) si++;
+    const card = shot === 'montage' ? montageCard(e, seg, si, rundown, out) : null;
+    const prev = out[out.length - 1];
+    if (prev && prev.shot === shot && prev.framing === framing && prev.focus === focus && prev.card === card && !e.move) continue;
     const mid = out.length > 0 && Math.abs(char - (ss[si]?.start ?? 0)) > 2;
-    out.push({ k: out.length, char, at: e.at, sentence: si, mid, shot, framing, focus, move: e.move ?? null });
+    out.push({ k: out.length, char, at: e.at, sentence: si, mid, shot, framing, focus, move: e.move ?? null, card, minLen: Number.isFinite(e.minLen) ? e.minLen : null });
   }
   return out.length ? out : null;
+}
+
+/** Rundown index of the story a headline sentence teases (event storyId, seg.teases, else the planner's card). */
+function montageCard(e, seg, si, rundown, out) {
+  const list = Array.isArray(rundown) ? rundown : [];
+  const sid = e.storyId || (Array.isArray(seg.teases) ? seg.teases[si] : null);
+  const at = sid ? list.findIndex((r) => r && r.storyId === sid) : -1;
+  if (at >= 0) return at;
+  const k = Number.isInteger(e.card) ? e.card : out.filter((c) => c.shot === 'montage').length;
+  return list.length ? Math.min(Math.max(0, k), list.length - 1) : Math.max(0, k);
 }
 
 const NONE = {}; // replan key: no recording
@@ -151,6 +174,32 @@ export class LiveDirection {
     const cues = p ? cuesFromPlan(p, { hasImg }) : null;
     this.story = cues ? { seg, cues, handler } : null;
     return cues;
+  }
+
+  /**
+   * playIntro: the intro on its plan (montage frames on the spoken teaser, the greeting's
+   * studio shot). Applies the opening cue now, registers the rest for begin()/onSentence and
+   * speaks the intro; the promise resolves when the last shot has held its `minLen` (a
+   * templated NEWS IN 60 intro: 4 s; at most 2 s past the voice). Null when there is no plan
+   * (the director's own montage then).
+   */
+  intro(seg) {
+    const i = this.indexOf(seg);
+    const p = i >= 0 ? this.planAt(i) : null;
+    const cues = p ? cuesFromPlan(p, { rundown: this.scene.rundown }) : null;
+    if (!cues) return null;
+    let last = null;
+    const apply = (cue) => {
+      last = cue;
+      if (cue.shot === 'montage') this.director.setShot('montage', { focus: seg.anchor, storyId: null, card: { index: cue.card } });
+      else this.director.setShot(cue.shot, { focus: cue.focus, storyId: null, wall: { mode: 'logo' }, card: null, framing: cue.framing, cameraMove: cue.move });
+    };
+    this.story = { seg, cues, handler: apply };
+    apply(cues[0]);
+    return this.director.say(seg).then(() => {
+      const need = Math.min(2, (last?.minLen || 0) - (now() - (this.scene.shotSince || 0)));
+      return need > 0 ? new Promise((r) => setTimeout(r, need * 1000)) : undefined;
+    });
   }
 
   /**

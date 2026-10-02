@@ -64,9 +64,9 @@ const HEADLINE_MIN = 3.8;
 
 /** Per-programme numbers (bibles; the owner's MIN_SHOT on top). */
 export const SHOT_STYLES = {
-  'world-now': { studioMax: 15, pictureMax: 8, mapMax: 7.5, signoffHold: 1.5, moves: true },
-  'tech-bytes': { studioMax: 12, pictureMin: 4, pictureMax: 8, catch: true },
-  cosmos: { studioMax: 15, pictureMin: 6, pictureMax: 10, mapMin: 4, mapMax: 6, placeWindow: 0.3 },
+  'world-now': { studioMax: 15, singleSoft: 11, pictureMax: 8, mapMax: 7.5, signoffHold: 1.5, moves: true },
+  'tech-bytes': { studioMax: 12, singleSoft: 10, pictureMin: 4, pictureMax: 8, catch: true },
+  cosmos: { studioMax: 15, singleSoft: 11, pictureMin: 6, pictureMax: 10, mapMin: 4, mapMax: 6, placeWindow: 0.3 },
   'money-minute': { studioMax: 12, shotMax: 12, numberGap: 1.2, pauseCuts: true },
   'news-60': { studioMax: 12, fullMax: 8, fullHoldMax: 10.5, mapMax: 8 },
 };
@@ -211,8 +211,41 @@ function chatRunAfter(ctx, gap) {
   let j = ctx.index + 1;
   if (segs[j]?.type !== 'chat') return 0;
   for (; j < segs.length && segs[j].type === 'chat'; j++) t += segLength(ctx, j) + gap;
-  if (segs[j]?.type === 'outro' && ctx.duo) t += segLength(ctx, j) + gap;
+  // the sign-off shares the chats' two-shot unless the closing run splits (closingRun)
+  if (segs[j]?.type === 'outro' && ctx.duo && !closingRun(ctx)?.two) t += segLength(ctx, j) + gap;
   return t;
+}
+
+const CLOSING_CAP = 11; // s: a closing exchange + sign-off on one two-shot no longer than this
+
+/**
+ * The closing run of a duo: the chats straight before the sign-off. They share
+ * one two-shot with the sign-off, unless together they pass CLOSING_CAP and
+ * each part holds MIN_SHOT: then the exchange plays on the tighter two-shot
+ * ('two', both presenters in frame, as the bibles' chats need) and the sign-off
+ * cuts back to the wide on its first word (a change of size of ~1.7x, never a
+ * jump). Pure: every segment of the episode gets the same answer.
+ * → { first, outro, two } | null
+ */
+function closingRun(ctx) {
+  if (!ctx.duo) return null;
+  const segs = ctx.episode?.segments || [];
+  let o = segs.length - 1;
+  while (o >= 0 && segs[o].type !== 'outro') o--;
+  if (o < 1) return null;
+  let first = o;
+  while (first > 0 && segs[first - 1].type === 'chat') first--;
+  if (first === o) return null;
+  let chats = 0;
+  for (let j = first; j < o; j++) chats += segLength(ctx, j) + DEFAULT_GAP;
+  const outro = segLength(ctx, o) + (SIGNOFF_HOLD[styleOf(ctx.programId)] ?? DEFAULT_GAP);
+  return { first, outro: o, two: chats >= MIN_SHOT && outro >= MIN_SHOT && chats + outro > CLOSING_CAP };
+}
+
+/** The two-shot a chat (or the lead-in to a closing chat run) plays on. */
+function chatFraming(ctx, index = ctx.index) {
+  const c = closingRun(ctx);
+  return c && c.two && index >= c.first - 1 && index < c.outro ? 'two' : 'wide';
 }
 
 /** Previous segment's type from the summary. */
@@ -221,16 +254,21 @@ const prevType = (ctx) => ctx.episode?.segments?.[ctx.index - 1]?.type || null;
 /** Words in a string. */
 const words = (s) => String(s || '').trim().split(/\s+/).filter(Boolean).length;
 
+const GREETING_RE = /^(good (morning|afternoon|evening)|hello|welcome|this is|i'm|i am|and i'm)\b|\bwelcome to\b/;
+
 /**
  * Intro: headline sentences (before the greeting) as montage beats cut on each
  * line's first word, then the greeting. Returns { headlines: [sentence idx], greet }.
+ * With seg.teases (editorial: the rundown story each intro sentence is about) the
+ * teased sentences are the headlines; without it, the sentences before the greeting.
  */
 function splitIntro(ctx, maxHeadlines) {
   const n = ctx.sentences.length;
+  const teases = Array.isArray(ctx.seg.teases) ? ctx.seg.teases : null;
   let greet = n;
   for (let i = 0; i < n; i++) {
     const t = ctx.sentences[i].text.trim().toLowerCase();
-    if (/^(good (morning|afternoon|evening)|hello|welcome|this is|i'm|i am|and i'm)\b/.test(t) || /\bwelcome to\b/.test(t)) {
+    if (GREETING_RE.test(t) || (teases && !teases[i])) {
       greet = i;
       break;
     }
@@ -241,26 +279,59 @@ function splitIntro(ctx, maxHeadlines) {
   return { headlines, greet };
 }
 
-/** Montage beats for the intro (shot 'montage', card index), then the wide for the greeting. */
-function introWithHeadlines(ctx, tl, maxHeadlines, wideFraming = 'wide') {
+/**
+ * The rundown card a teased sentence shows: the rundown index (= story order) of
+ * the story seg.teases names for it (owner 20:40: the montage follows the spoken
+ * teaser, every teased story gets its frame), else the k-th story.
+ */
+function teaseCard(ctx, si, k) {
+  const id = Array.isArray(ctx.seg.teases) ? ctx.seg.teases[si] : null;
+  if (id) {
+    const segs = ctx.episode?.segments || [];
+    for (let j = 0; j < segs.length; j++) {
+      if (segs[j].type !== 'story') continue;
+      const c = neighbour(ctx, j);
+      if (c && c.seg?.storyId === id) return { card: segs[j].storyIndex, storyId: id };
+    }
+    return { card: k, storyId: id };
+  }
+  return { card: k, storyId: null };
+}
+
+/**
+ * Montage beats for the intro (shot 'montage', card = rundown index, storyId),
+ * one per teased sentence and cut on its first word, then the wide for the greeting.
+ * `floor` (s): a frame must hold at least this long; the frames from the first one
+ * that cannot are read on the greeting's wide instead (the presenter teases in
+ * vision). Without a floor the beats are voice-paced (WORLD NOW headlines: the
+ * director holds minLen with the line's gap). A lone frame must hold MIN_SHOT.
+ */
+function introWithHeadlines(ctx, tl, maxHeadlines, { floor = 0, minFrames = 2, beat = 'headline', wideFraming = 'wide', maxWide = Infinity } = {}) {
   const out = [];
   const rundown = ctx.episode?.storyCount ?? 0;
   const frames = Math.min(maxHeadlines, rundown);
-  const { headlines, greet } = frames >= 2 ? splitIntro(ctx, frames) : { headlines: [], greet: 0 };
-  headlines.forEach((si, k) => {
-    const s = ctx.sentences[si];
-    out.push(ev(ctx, s.t0, s.start, 'montage', null, ctx.speaker, 'headline', { card: k }));
-  });
-  // the greeting's wide must hold MIN_SHOT: earlier headline lines join it when it would not
-  let first = greet;
-  while (out.length && tl.end - (ctx.sentences[first]?.t0 ?? 0) < MIN_SHOT) {
-    out.pop();
-    first = headlines[out.length] ?? 0;
+  const { headlines, greet } = frames >= 1 ? splitIntro(ctx, frames) : { headlines: [], greet: 0 };
+  const startOf = (k) => (k < headlines.length ? ctx.sentences[headlines[k]].t0 : ctx.sentences[greet]?.t0 ?? tl.end);
+  let keep = headlines.length;
+  if (floor > 0) for (let k = 0; k < headlines.length; k++) if (startOf(k + 1) - startOf(k) < floor - 1e-6) { keep = k; break; }
+  // the greeting's wide must hold MIN_SHOT: the last kept lines join it when it would not
+  while (keep > 0 && tl.end - startOf(keep) < MIN_SHOT) keep--;
+  if (keep < minFrames) keep = 0; // WORLD NOW: one headline alone is not a montage (the open cuts to the greeting)
+  if (keep === 1 && startOf(1) - startOf(0) < MIN_SHOT - 1e-6) keep = 0; // a lone card is a cold line: MIN_SHOT
+  for (let k = 0; k < keep; k++) {
+    const s = ctx.sentences[headlines[k]];
+    out.push(ev(ctx, s.t0, s.start, 'montage', null, ctx.speaker, k === 0 ? beat : 'headline', teaseCard(ctx, headlines[k], k)));
   }
-  if (out.length === 1) out.length = 0; // one card alone is not a montage
-  const g = out.length ? ctx.sentences[first] : null;
-  out.push(ev(ctx, g ? g.t0 : 0, g ? g.start : 0, 'wide', ctx.duo ? wideFraming : 'wide', ctx.speaker, 'greeting'));
-  for (const e of out) if (e.beat === 'headline') e.minLen = HEADLINE_MIN;
+  const g = keep < headlines.length ? ctx.sentences[headlines[keep]] : ctx.sentences[greet];
+  const first = out.length ? g : null;
+  if (!out.length && tl.end > maxWide) {
+    // no frame and a wide over the studio maximum: the teasers on the reader's single, the greeting (naming
+    // both) on the wide, when the greeting's sentence start leaves both ≥ MIN_SHOT
+    const b = tl.bounds.find((x) => x.i === greet && !x.blocked);
+    if (b && b.t >= MIN_SHOT && tl.end - b.t >= MIN_SHOT) return [ev(ctx, 0, 0, 'close', singleFraming(ctx), ctx.speaker, 'teaser'), ev(ctx, b.t, b.char, 'wide', ctx.duo ? wideFraming : 'wide', ctx.speaker, 'greeting')];
+  }
+  out.push(ev(ctx, first ? first.t0 : 0, first ? first.start : 0, 'wide', ctx.duo ? wideFraming : 'wide', ctx.speaker, 'greeting'));
+  for (const e of out) if (e.shot === 'montage') e.minLen = HEADLINE_MIN;
   return out;
 }
 
@@ -300,6 +371,40 @@ function capStudio(ctx, tl, out, max, altOf) {
   return out;
 }
 
+/** The other single of the same presenter: the over-the-shoulder wall framing ⇄ the programme's single. */
+function altSingle(ctx, e) {
+  if (!e.framing || e.framing === 'wide' || e.framing === 'two') return null;
+  return { shot: 'close', framing: e.framing === 'ots' ? singleFraming(ctx, e.focus) : 'ots', focus: e.focus };
+}
+
+const SPLIT_MIN = 4.5; // s: both halves of a split single
+
+/**
+ * Split a long single (over `soft` s) at the open sentence start nearest its
+ * middle, both parts ≥ SPLIT_MIN, onto the presenter's other single (ots ⇄
+ * single): a calm change of size and of the wall's share instead of one locked
+ * 14 s single (owner 18:52: median 5-7 s, variety against fatigue on a 24/7
+ * channel). Wides, full-screen beats and moving shots are left alone.
+ */
+function splitLongSingles(ctx, tl, out, soft) {
+  for (let k = 0; k < out.length; k++) {
+    const e = out[k];
+    if (e.shot !== 'close' || e.move || !altSingle(ctx, e)) continue;
+    const t1 = k + 1 < out.length ? out[k + 1].at : tl.end;
+    if (t1 - e.at <= soft) continue;
+    const mid = (e.at + t1) / 2;
+    let best = null;
+    for (const b of tl.bounds) {
+      if (b.blocked || b.t - e.at < SPLIT_MIN - 1e-6 || t1 - b.t < SPLIT_MIN - 1e-6) continue;
+      if (!best || Math.abs(b.t - mid) < Math.abs(best.t - mid)) best = b;
+    }
+    if (!best) continue;
+    const alt = altSingle(ctx, e);
+    out.splice(k + 1, 0, ev(ctx, best.t, best.char, alt.shot, alt.framing, alt.focus, 'alt'));
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // WORLD NOW
 
@@ -313,13 +418,14 @@ function worldNow(ctx, tl) {
     if (ctx.duo && !ctx.grave) w.move = moveIn('push', Math.min(0.04, 0.008 * (tl.end - w.at - 1)), 0.5, tl.end - w.at - 0.5);
     return out;
   }
-  if (ctx.type === 'chat') return [ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? 'wide' : singleFraming(ctx), me, 'chat')];
+  if (ctx.type === 'chat') return [ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? chatFraming(ctx) : singleFraming(ctx), me, 'chat')];
   if (ctx.type === 'outro') {
-    const e = ev(ctx, 0, 0, ctx.duo ? 'wide' : 'wide', 'wide', me, 'signoff');
-    // pull-out ≤ 4 %: from 0.5 s after the cut (at once when the wide carries on
-    // from the chats), ending 0.5 s before the end card inside the 1.5 s hold
+    const e = ev(ctx, 0, 0, 'wide', 'wide', me, 'signoff');
+    // pull-out ≤ 4 %: from 0.5 s after the sign-off's first word (a cut from the closing
+    // two-shot, or the wide carrying on from the chats), ending 0.5 s before the end card
+    // inside the hold
     const hold = Number.isFinite(ctx.gapAfter) ? ctx.gapAfter : S.signoffHold;
-    const start = prevType(ctx) === 'chat' && ctx.duo ? 0 : 0.5;
+    const start = 0.5;
     const end = ctx.duration + hold - 0.5;
     if (!ctx.grave) e.move = moveIn('pull', Math.min(0.04, 0.008 * (end - start)), start, end);
     return [e];
@@ -336,7 +442,8 @@ function worldNow(ctx, tl) {
     mapMax: S.mapMax,
     mapOnSecond: true,
   });
-  capStudio(ctx, tl, out, S.studioMax, () => (ctx.duo ? { shot: 'wide', framing: 'wide', focus: me } : { shot: 'wide', framing: 'wide', focus: me }));
+  capStudio(ctx, tl, out, S.studioMax, (e) => altSingle(ctx, e));
+  splitLongSingles(ctx, tl, out, S.singleSoft);
   chatLeadIn(ctx, tl, out);
   // the 3-4 % push on the lead's opening single (never on grave stories)
   if (ctx.isLead && !ctx.grave && out[0].framing) {
@@ -413,7 +520,7 @@ function chatLeadIn(ctx, tl, out, always = false) {
   if (run >= MIN_SHOT && tl.end - last.t + run > (SHOT_STYLES[styleOf(ctx.programId)].studioMax || 15)) return;
   // drop planned cuts after it and put the wide on the last sentence
   for (let k = out.length - 1; k >= 0; k--) if (out[k].at > last.t - 1e-6) out.splice(k, 1);
-  out.push(ev(ctx, last.t, last.char, 'wide', 'wide', ctx.speaker, 'wide'));
+  out.push(ev(ctx, last.t, last.char, 'wide', chatFraming(ctx), ctx.speaker, 'wide'));
 }
 
 /** Round-up items on the map: title over the world view, map to map on each item's first word. */
@@ -424,11 +531,11 @@ function roundupMap(ctx, tl, programme) {
   const out = [];
   if (index === 0) {
     out.push(ev(ctx, 0, 0, 'map', null, me, 'roundup', { card: 'world' }));
-    // the title line plays over the world view; item 1's place zooms in on its first word
-    if (ctx.sentences.length > 1 && /around the world|world in/i.test(ctx.sentences[0].text)) {
-      const s = ctx.sentences[1];
-      out.push(ev(ctx, s.t0, s.start, 'map', null, me, 'pin', { zoom: true }));
-    }
+    // the title line (after a pickup such as "Thanks, Paco.") plays over the world view; item 1's place
+    // zooms in on the first word after it
+    const title = ctx.sentences.findIndex((s, k) => k < 3 && /around the world|world in/i.test(s.text));
+    const s = title >= 0 ? ctx.sentences[title + 1] : null;
+    if (s) out.push(ev(ctx, s.t0, s.start, 'map', null, me, 'pin', { zoom: true }));
   } else out.push(ev(ctx, 0, 0, 'map', null, me, 'pin', { pan: programme === 'news-60' ? 0.7 : 0 }));
   if (Array.isArray(ctx.seg.map) && ctx.seg.map.length > 1) out[out.length - 1].pins = true;
   return out;
@@ -448,7 +555,8 @@ function techBytes(ctx, tl) {
   const S = SHOT_STYLES['tech-bytes'];
   const me = ctx.speaker;
   const seg = ctx.seg;
-  if (ctx.type === 'intro') return introWithHeadlines(ctx, tl, 3);
+  // the cold open over the montage (tech-bytes §3.5): frames only while each teased line holds the floor
+  if (ctx.type === 'intro') return introWithHeadlines(ctx, tl, 3, { floor: 3.0, minFrames: 1, maxWide: S.studioMax });
   if (ctx.type === 'outro') return [ev(ctx, 0, 0, 'wide', 'wide', me, 'signoff')];
   if (ctx.type === 'chat') {
     if (isCatch(ctx)) {
@@ -462,7 +570,7 @@ function techBytes(ctx, tl) {
         return [e];
       }
     }
-    return [ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? 'wide' : 'mcu', me, 'chat')];
+    return [ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? chatFraming(ctx) : 'mcu', me, 'chat')];
   }
   // stories: the number of the day opens on its card, then the close
   if (ctx.feature === 'number' && !ctx.isLead) {
@@ -477,7 +585,8 @@ function techBytes(ctx, tl) {
         if (back) out.push(ev(ctx, back.t, back.char, 'close', singleFraming(ctx), me, 'single'));
       }
     }
-    capStudio(ctx, tl, out, S.studioMax, (e) => ({ shot: 'wide', framing: 'wide', focus: e.focus }));
+    capStudio(ctx, tl, out, S.studioMax, (e) => altSingle(ctx, e));
+    splitLongSingles(ctx, tl, out, S.singleSoft);
     chatLeadIn(ctx, tl, out);
     return out;
   }
@@ -489,7 +598,8 @@ function techBytes(ctx, tl) {
     pictureMin: S.pictureMin,
     pictureMax: S.pictureMax,
   });
-  capStudio(ctx, tl, out, S.studioMax, (e) => ({ shot: 'wide', framing: ctx.duo ? 'wide' : 'wide', focus: e.focus }));
+  capStudio(ctx, tl, out, S.studioMax, (e) => altSingle(ctx, e));
+  splitLongSingles(ctx, tl, out, S.singleSoft);
   chatLeadIn(ctx, tl, out);
   return out;
 }
@@ -519,29 +629,11 @@ function cosmos(ctx, tl) {
   const me = ctx.speaker;
   const seg = ctx.seg;
   if (ctx.type === 'intro') {
-    // the cold line over the lead's picture (montage card 0), then the greeting on the wide
-    const out = [];
-    const { greet } = splitIntro(ctx, 1);
-    if (greet >= 1 && ctx.sentences.length > 1 && (ctx.episode?.storyCount ?? 0) >= 1) {
-      out.push(ev(ctx, 0, 0, 'montage', null, me, 'cold', { card: 0 }));
-      const g = ctx.sentences[1];
-      const b = tl.bounds.find((x) => x.i === 1);
-      // every COSMOS shot holds 4 s: a cold line shorter than that plays on the wide
-      if (b && b.t >= MIN_SHOT && tl.end - b.t >= MIN_SHOT) out.push(ev(ctx, g.t0, g.start, 'wide', 'wide', me, 'greeting'));
-      else out.length = 0;
-    }
-    if (!out.length) {
-      // a wide over 15 s: the teasers on Nova's single, the greeting (naming both) on the wide
-      const g = splitIntro(ctx, 3).greet;
-      const b = tl.bounds.find((x) => x.i === g && !x.blocked);
-      if (tl.end > S.studioMax && b && b.t >= MIN_SHOT && tl.end - b.t >= MIN_SHOT) {
-        out.push(ev(ctx, 0, 0, 'close', singleFraming(ctx), me, 'teaser'));
-        out.push(ev(ctx, b.t, b.char, 'wide', 'wide', me, 'greeting'));
-      } else out.push(ev(ctx, 0, 0, 'wide', 'wide', me, 'greeting'));
-    }
-    return out;
+    // the cold line over the lead's picture (montage card of the teased lead), then each teased story
+    // on its frame while every frame holds 4 s; the rest (greeting, short teasers) on the wide
+    return introWithHeadlines(ctx, tl, 3, { floor: MIN_SHOT, minFrames: 1, beat: 'cold', maxWide: S.studioMax });
   }
-  if (ctx.type === 'chat') return [ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? 'wide' : 'mcu', me, 'chat')];
+  if (ctx.type === 'chat') return [ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? chatFraming(ctx) : 'mcu', me, 'chat')];
   if (ctx.type === 'outro') return [ev(ctx, 0, 0, 'wide', 'wide', me, 'signoff')];
   const single = storySingle(ctx);
   let out;
@@ -571,7 +663,8 @@ function cosmos(ctx, tl) {
       } else if (ctx.hasImage) addPicture(ctx, tl, out, 0, single, S);
     } else if (ctx.hasImage) addPicture(ctx, tl, out, 0, single, S);
   }
-  capStudio(ctx, tl, out, S.studioMax, (e) => ({ shot: 'wide', framing: 'wide', focus: e.focus }));
+  capStudio(ctx, tl, out, S.studioMax, (e) => altSingle(ctx, e));
+  splitLongSingles(ctx, tl, out, S.singleSoft);
   // cosmos.md: the wide carries the last AND FINALLY line and the idiom reply
   chatLeadIn(ctx, tl, out, ctx.feature === 'lighter');
   return out;

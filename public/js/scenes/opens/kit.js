@@ -86,9 +86,18 @@ export function emblemPos(dt, out = { x: 0, y: 0 }, slotX = SLOT.x) {
 export function slotFor(prog) {
   if (prog._slotX === undefined) {
     const ext = prog.extent ?? 30;
-    prog._slotX = PLATE_X - PLATE_GAP - ext + (prog.front ? 8 : 0);
+    prog._slotX = plateXFor(prog.style) - PLATE_GAP - ext + (prog.front ? 8 : 0);
   }
   return prog._slotX;
+}
+
+/**
+ * Where a programme's plate starts. The title column is the same for every show (x 152); an
+ * opaque globe overlaps the plate's left end (as in the mark), so its plate starts at x 130 with
+ * room for it; every other plate has the same 12 px inset on both sides of the title.
+ */
+export function plateXFor(style) {
+  return style && style.front ? PLATE_X : TITLE_X - 12;
 }
 
 // ---------------------------------------------------------------------------
@@ -171,13 +180,13 @@ export function drawSeed(ctx, dt, x, y, absorb) {
 // Title lettering: 5x7 caps at 2x (display level), solid faces only. Light
 // titles carry the logo's chrome split (white over silver), never dithered.
 
-function titleCanvas(text, ink) {
-  return cached(`title|${ink}|${text}`, () => {
-    const w = measureText(text, 2) + 2;
+function titleCanvas(text, ink, scale = 2) {
+  return cached(`title|${ink}|${scale}|${text}`, () => {
+    const w = measureText(text, scale) + 2;
     const c = mk(w, 20);
     const cx = c.getContext('2d');
-    drawText(cx, text, 0, 4, { color: ink === 'dark' ? P.black : P.white, scale: 2 });
-    if (ink !== 'dark') {
+    drawText(cx, text, 0, 4, { color: ink === 'dark' ? P.black : P.white, scale });
+    if (ink !== 'dark' && scale === 2) {
       cx.globalCompositeOperation = 'source-atop';
       cx.fillStyle = P.silver;
       cx.fillRect(0, 4 + 8, w, 6);
@@ -188,21 +197,33 @@ function titleCanvas(text, ink) {
 
 /** Lock-up geometry for a title/tagline/credits set (cached). The column is the same for every show. */
 export function lockupLayout(info, style) {
-  const hit = info.layouts?.get(style.ink);
+  const lk = style.front ? `${style.ink}F` : style.ink;
+  const hit = info.layouts?.get(lk);
   if (hit) return hit;
-  const key = `lay|${style.ink}|${info.key || `${info.title}|${info.tagline}|${info.presenters.join(',')}`}`;
+  const key = `lay|${lk}|${info.key || `${info.title}|${info.tagline}|${info.presenters.join(',')}`}`;
   const v = cached(key, () => {
     const titleX = TITLE_X;
     const maxTitle = W - 19 - 12 - titleX;
-    let lines = [String(info.title || '').toUpperCase().trim() || 'GLOBIT 24'];
-    // long names: balanced lines at 2x (up to three; only a fourth line's worth is ellipsised)
-    if (measureText(lines[0], 2) > maxTitle) lines = balanceLines(lines[0], maxTitle, 2, 3).slice();
-    const titles = lines.map((l) => titleCanvas(l, style.ink));
+    const name = String(info.title || '').toUpperCase().trim() || 'GLOBIT 24';
+    let lines = [name];
+    let scale = 2;
+    // long names: balanced lines at 2x (up to three); a name that still does not fit drops to
+    // 1x in up to three lines before a word is ever lost
+    if (measureText(name, 2) > maxTitle) {
+      lines = balanceLines(name, maxTitle, 2, 3).slice();
+      if (lines[lines.length - 1].endsWith('...')) {
+        scale = 1;
+        lines = balanceLines(name, maxTitle, 1, 3).slice();
+      }
+    }
+    const lineH = 7 * scale;
+    const pitch = lineH + 4;
+    const titles = lines.map((l) => titleCanvas(l, style.ink, scale));
     let titleW = 0;
     for (let i = 0; i < titles.length; i++) titleW = Math.max(titleW, titles[i].w);
-    const plateH = 12 + titles.length * 14 + (titles.length - 1) * 4;
-    const plateY = SLOT.y - 13 - (titles.length - 1) * 9;
-    const plateX = PLATE_X;
+    const plateH = 12 + titles.length * lineH + (titles.length - 1) * 4;
+    const plateY = SLOT.y - (plateH >> 1);
+    const plateX = plateXFor(style);
     const plateW = titleX - plateX + titleW + 12;
     const textW = W - 19 - titleX;
     const tagline = info.tagline ? ellipsis(info.tagline, textW) : '';
@@ -210,14 +231,14 @@ export function lockupLayout(info, style) {
     const credits = names ? { label: 'WITH', names: ellipsis(names, textW - measureText('WITH ') - 2) } : null;
     const tagY = plateY + plateH + 9;
     const out = {
-      titles, titleX, titleW, plateX, plateY, plateW, plateH,
+      titles, titleX, titleW, plateX, plateY, plateW, plateH, scale, pitch,
       tagline, tagY, credits, credY: tagY + (tagline ? 12 : 0),
       bitX: plateX + plateW - 2, bitY: plateY - 2,
     };
     out.bottom = credits ? out.credY + 7 : tagline ? tagY + 7 : plateY + plateH + 2; // last text row
     return out;
   });
-  info.layouts?.set(style.ink, v);
+  info.layouts?.set(lk, v);
   return v;
 }
 
@@ -267,8 +288,8 @@ export function drawLockup(ctx, dt, info, style) {
       clipRect(ctx, L.plateX, L.plateY + 1, vis, L.plateH - 1);
       for (let i = 0; i < L.titles.length; i++) {
         const T = L.titles[i];
-        const y = L.plateY + 6 + i * 18;
-        const off = Math.round((1 - easeOutQuint(seg(dt, TL.title + i * 0.06, 0.32))) * 9);
+        const y = L.plateY + 6 + i * L.pitch;
+        const off = Math.round((1 - easeOutQuint(seg(dt, TL.title + i * 0.06, 0.32))) * (L.scale === 2 ? 9 : 6));
         ctx.drawImage(T.cv, L.titleX, y - 4 + off);
       }
     } finally {
@@ -427,3 +448,22 @@ export function playOpen(ctx, dt, info, prog) {
   drawBug(ctx, dt, info);
 }
 const POS = { x: 0, y: 0 };
+
+/**
+ * The settled lock-up on its own (no backdrop, no top row): the emblem still at its slot, the
+ * plate, title, tagline, credits and the bit on the plate's corner, exactly as the open ends.
+ * The UP NEXT promo shows it on the network field instead of replaying the open's build.
+ */
+export function drawLockupStill(ctx, info, prog) {
+  const dt = TL.still + 0.6;
+  const L = drawLockup(ctx, dt, info, prog.style);
+  const x = slotFor(prog);
+  ctx.save();
+  try {
+    prog.emblem(ctx, dt, x, SLOT.y, 1);
+  } finally {
+    ctx.restore();
+  }
+  if (prog.bit !== false) drawHopBit(ctx, dt, x, SLOT.y, L, prog.shoulder ?? 30, prog.popAt);
+  return L;
+}

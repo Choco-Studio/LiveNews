@@ -131,6 +131,8 @@ export function buildPrompt({ channelName, program, presenters, stories, count, 
     summary: s.summary.slice(0, 700),
     ...(isBreaking(s.title) ? { breaking: true } : {}),
     ...(s.live ? { liveBlog: true } : {}),
+    // The picture desk ran before the writer: a story with a picture can be shown, not only told.
+    ...(s.image ? { picture: true } : {}),
   }));
   const cast = Object.entries(presenters)
     .map(([slot, p]) => `- ${slot}: ${p.name}${p.role ? ` (${p.role})` : ''}, ${p.personality}.`)
@@ -205,7 +207,8 @@ ${SEGMENT_SCHEMA(solo ? '"A"' : '"A" | "B"', headlineMax)}
 - Exactly one "story" segment per selected story, using the candidate ids exactly; do not include unselected candidates.
 ${solo ? '- There is a single presenter: always use "anchor": "A".' : '- Alternate presenters between stories (a round-up counts as one block).'}
 - "headline": a complete phrase of at most ${headlineMax} characters (drop "a", "an", "the" rather than cut a word); never end on a preposition or cut a figure from its unit.
-- "shot": "map" when the story happens in a specific place, "full" when it is very visual, "close" for important stories, "wide" otherwise.
+- Pictures: a candidate with "picture": true has a photograph the channel can show. Prefer such stories for the headlines and the main stories (a round-up item is shown on the map only), and give each of them at least three sentences: the director shows one shot per sentence (presenter, then the map, then the photograph), so a shorter story never reaches its picture.
+- "shot": "map" when the story happens in a specific place (the photograph, if any, follows the map), "full" when it has a picture and no place, "close" for important stories, "wide" otherwise.
 - "location": only when the story clearly happens in a specific city, region or country named in the candidate; give approximate coordinates of that place. Otherwise null.
 - "fact": only when the summary states a concrete figure that the story text also says (e.g. "40,000 EVACUATED", "$2BN DEAL", "7.1 MAGNITUDE"); copy it faithfully, with its scale and currency. Otherwise null.
 - "breaking": true only if the candidate's headline explicitly says it is breaking news.

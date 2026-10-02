@@ -42,12 +42,28 @@ const CLOCK_REBASE = 840; // s of rig time before the rig clock moves back (at t
 const PRUNE_EVERY = 2; // s
 const W = 384;
 
-// SET's per-programme styles land in studio/styles.js; until then the home look.
-let STYLES = null;
-import('../studio/styles.js').then(
-  (m) => (STYLES = m),
-  () => {}
-);
+// Every programme's set variant, baked ahead of air (warmSets): the owner's 21:05 blocker, never a
+// frame without the set. set.js bakes synchronously on first use anyway; warming moves that cost
+// (10-30 ms per programme) off the frame path.
+const STYLE_IDS = ['world-now', 'tech-bytes', 'cosmos', 'money-minute', 'news-60'];
+
+/**
+ * Bake every programme's set ahead of air (StageHost calls it once at boot, in idle time): SET's
+ * warmSets() (wall light, wall tables, logo plate, raster loops; idempotent), else one warmSet per id.
+ */
+export function warmSets(idle = (fn) => fn()) {
+  const ids = typeof SETM.warmSets === 'function' ? [null] : STYLE_IDS;
+  for (const id of ids) {
+    idle(() => {
+      try {
+        if (id === null) SETM.warmSets();
+        else SETM.warmSet?.(id);
+      } catch {
+        /* the first frame of that programme bakes it instead (set.js bakes synchronously on first use) */
+      }
+    });
+  }
+}
 
 /** Seats for a cast: A left (+1: partner on screen-right), B right (-1), or one centred solo seat (0). */
 export function castSeats(cast) {
@@ -92,6 +108,13 @@ function sameCamera(a, b) {
   return a === b || (a.x === b.x && a.y === b.y && a.z === b.z && a.zoom === b.zoom && a.hy === b.hy && a.soft === b.soft);
 }
 
+/** When the camera move on air started: the director's cameraMoveSince, else the cut, else now. */
+function moveStart(scene, t, noCut = false) {
+  const since = scene.cameraMoveSince;
+  if (Number.isFinite(since) && since <= t && (noCut || !(since < scene.shotSince))) return since;
+  return noCut ? t : (scene.shotSince ?? t);
+}
+
 function lap(prof, key, since) {
   const now = performance.now();
   prof[key] = (prof[key] || 0) + now - since;
@@ -134,9 +157,14 @@ function wallOf(scene, plan, out) {
 }
 
 export class Stage {
-  /** @param opts { audio (speechFrame), channel ({ presenters }), log(msg) } */
-  constructor({ audio = null, channel = null, log = null } = {}) {
+  /**
+   * @param opts { audio (speechFrame), channel ({ presenters }), log(msg),
+   *               idle: (fn) => void for the per-episode warm-up (default requestIdleCallback in
+   *               a browser; null = no warm-up, e.g. deterministic labs and tests) }
+   */
+  constructor({ audio = null, channel = null, log = null, idle } = {}) {
     this.audio = audio;
+    this.idle = idle !== undefined ? idle : typeof requestIdleCallback === 'function' ? (fn) => requestIdleCallback(fn, { timeout: 1000 }) : null;
     this.presenters = channel?.presenters || {};
     this.log = log || ((m) => console.warn(`[v2 stage] ${m}`));
     this.seen = new Set();
@@ -160,6 +188,8 @@ export class Stage {
     this.cutFocus = null;
     this.cutFraming = null;
     this.cutAt = -Infinity;
+    this.moveSince = 0; // renderer time the camera move on air started (CAMERA rule 4)
+    this.warmed = false;
     this.visibleSince = 0; // shotSince of the last cut the viewer could see
     this.spec = { framing: 'wide', cast: null, focus: 'A', solo: false, side: undefined, programId: 'world-now', move: null };
     this.base = null; // camera of the current framing
@@ -219,6 +249,11 @@ export class Stage {
     const own = plan && (!plan.ctx || !scene.episode?.id || plan.ctx.episodeId === scene.episode.id);
     this.clock.load(own ? plan : null, t);
     if (scene.shotSince !== this.cutSince || scene.shot !== this.cutShot || scene.focus !== this.cutFocus || (scene.framing ?? null) !== this.cutFraming) this.onCut(t, scene);
+    else if ((scene.cameraMove || null) !== this.spec.move) {
+      // a move on the shot already on air (CAMERA rule 4): it runs from when it was applied
+      this.spec.move = scene.cameraMove || null;
+      this.moveSince = moveStart(scene, t, true);
+    }
     // who speaks: the voice, else the plan's speaker while its speech runs
     let speaker = null;
     for (let i = 0; i < this.actors.length; i++) if (this.frames[this.actors[i].slot]?.speaking) speaker = this.actors[i].slot;
@@ -264,10 +299,48 @@ export class Stage {
     const program = scene.episode?.program || scene.program || {};
     this.programId = program.id || 'world-now';
     this.accent = u32(THEME_ACCENT[program.theme] || P.red);
+    // the programme's set style, now (studio/styles.js is a static import of set.js): the first
+    // frame of a new programme already has its own set and desk, never a stale or default one
     this.style = null;
-    this.styled = false;
+    try {
+      this.style = SETM.styleFor?.(this.programId) || null;
+    } catch (err) {
+      this.log(`style ${this.programId}: ${err?.message || err}`);
+    }
     this.cutSince = undefined; // re-frame on the next update
     this.base = null;
+    this.warmed = false;
+    if (this.idle) this.idle(() => this.key === key && this.warm());
+  }
+
+  /**
+   * Warm-up for a new episode, in idle time while its open plays: bake the programme's set,
+   * measure the cast's framings (CAMERA) and draw one frame offscreen, so the first studio frame
+   * pays no first-use cost (skin maps, look metrics, the wall bake). Never presents anything.
+   */
+  warm() {
+    if (this.warmed) return;
+    this.warmed = true;
+    try {
+      SETM.warmSet?.(this.programId);
+      CAM.warmFraming?.(this.cast);
+      if (STUDIO_SHOTS.has(this.cutShot) || !this.list.length) return; // on air already: the real frame does it
+      // the actors once, at the scale of a single (the costliest LOD): skin maps, look caches and the
+      // rig's code paths are ready; the set's wall state is not touched (SET's warmSets covers the set)
+      const W2 = W / 2;
+      for (let i = 0; i < this.list.length; i++) {
+        const it = this.list[i];
+        it.x = W2;
+        it.y = 120;
+        it.s = 3;
+        this.vis.length = 0;
+        this.vis.push(it);
+        drawActors(1, this.vis, null);
+      }
+      this.vis.length = 0;
+    } catch (err) {
+      this.log(`warm-up: ${err?.message || err}`);
+    }
   }
 
   /** A real cut: cue clock guard, camera framing, wall latch, rig clock rebase. */
@@ -297,6 +370,7 @@ export class Stage {
     spec.side = this.solo && this.inset ? 1 : undefined;
     spec.programId = this.programId;
     spec.move = scene.cameraMove || null;
+    this.moveSince = moveStart(scene, t);
     this.base = this.frameCamera(spec, scene);
     // SET shows the picture on the wall itself: the inset box only when this framing hides the wall
     if (this.inset && typeof SETM.wallFromScene === 'function' && wallVisible(this.base) >= INSET_AREA) this.inset = null;
@@ -333,31 +407,32 @@ export class Stage {
 
   // --- picture ---------------------------------------------------------------
 
-  /** The programme's set style (SET's styles.js loads asynchronously: picked up as soon as it is there). */
-  styleNow() {
-    if (this.styled || !STYLES) return;
-    this.styled = true;
-    try {
-      this.style = (STYLES.styleFor || STYLES.setStyle)?.(this.programId) || null;
-    } catch (err) {
-      this.log(`style ${this.programId}: ${err?.message || err}`);
+  render(ctx, t, scene) {
+    const spec = this.spec;
+    let cam = this.base || CAM.makeCamera();
+    if (spec.move && typeof CAM.cameraAt === 'function') cam = CAM.cameraAt(spec, t - this.moveSince, this.camOut) || cam;
+    QUALITY.lag = this.lod < 1;
+    const o = this.bgOpts;
+    o.shotSince = this.visibleSince; // SET: a change = a cut (instant wall switch)
+    o.lod = this.lod;
+    const heads = this.drawStudio(cam, t, o);
+    o.cut = false;
+    const prof = this.prof;
+    let p0 = prof ? performance.now() : 0;
+    frame.present(ctx);
+    if (this.inset) this.drawInset(ctx, heads);
+    if (prof) {
+      lap(prof, 'present', p0);
+      prof.n++;
     }
   }
 
-  render(ctx, t, scene) {
-    this.styleNow();
-    const spec = this.spec;
-    let cam = this.base || CAM.makeCamera();
-    if (spec.move && typeof CAM.cameraAt === 'function') cam = CAM.cameraAt(spec, t - (scene.shotSince ?? this.cutAt), this.camOut) || cam;
-    QUALITY.lag = this.lod < 1;
+  /** Set, desk and actors into the shared frame (no present): the picture and the warm-up. */
+  drawStudio(cam, t, o) {
     const prof = this.prof; // labs: { bg, desk, actors, present, n } ms accumulators, null on air
     let p0 = prof ? performance.now() : 0;
-    const o = this.bgOpts;
     o.style = this.style || this.programId;
-    o.shotSince = this.visibleSince; // SET: a change = a cut (instant wall switch)
-    o.lod = this.lod;
     SETM.drawBackground(frame, cam, t, o);
-    o.cut = false;
     if (prof) p0 = lap(prof, 'bg', p0);
     SETM.drawDesk(frame, cam, this.clipRows, this.style ? undefined : this.accent);
     if (prof) p0 = lap(prof, 'desk', p0);
@@ -375,13 +450,8 @@ export class Stage {
       if (it.x + 48 * s >= 0 && it.x - 48 * s <= W) vis.push(it);
     }
     const heads = drawActors(t - this.epoch, vis, this.clipRows);
-    if (prof) p0 = lap(prof, 'actors', p0);
-    frame.present(ctx);
-    if (this.inset) this.drawInset(ctx, heads);
-    if (prof) {
-      lap(prof, 'present', p0);
-      prof.n++;
-    }
+    if (prof) lap(prof, 'actors', p0);
+    return heads;
   }
 
   /** The story picture beside a single (old renderer's inset box, calmer frame). */

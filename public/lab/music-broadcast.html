@@ -29,7 +29,7 @@
 <body>
 <main>
   <h1><b>GLOBIT 24</b> · broadcast music lab</h1>
-  <p class="sub">Classic news-package music in pixel form, written to the programme style bibles: one motif (low 5, 1, 2, high 5), five programme colours, bar-synced transitions, music only where it helps, beds that duck and carve a pocket for the presenter.</p>
+  <p class="sub">Classic news-package music in pixel form, written to the programme style bibles: one motif (low 5, 1, 2, high 5), five programme colours, bar-synced transitions, music only where it helps, beds that duck and carve a pocket for the presenter. <b>demo</b> = the programme's open, open tail, headlines, a light story, a grave story, the chat, the sign-off and the end card (60 s); <b>bulletin</b> = a realistic WORLD NOW / TECH BYTES running order.</p>
 
   <section>
     <h2>Offline render</h2>
@@ -39,7 +39,7 @@
         <option value="money-minute">MONEY MINUTE</option><option value="news-60">NEWS IN 60</option>
       </select></label>
       <label>moment <select id="moment">
-        <option>demo</option><option>headlines</option><option>story</option><option>grave</option><option>lighter</option>
+        <option>demo</option><option>bulletin</option><option>openTail</option><option>headlines</option><option>light</option><option>story</option><option>underscore</option><option>grave</option><option>lighter</option>
         <option>chat</option><option>roundup</option><option>number</option><option>picture</option><option>itemTick</option>
         <option>endcard</option><option>breaking</option><option>standby</option><option>bumper</option><option>bumperIn</option>
         <option>countdown</option><option>bumperOut</option><option>upNext</option><option>replay</option>
@@ -48,6 +48,8 @@
       <label>seconds <input id="secs" type="number" value="20" min="2" max="240" style="width:70px"></label>
       <label><input id="voice" type="checkbox" checked> voice</label>
       <label>stem <select id="stem"><option>mix</option><option>music</option><option>voice</option></select></label>
+      <label>stories <select id="storyBeds"><option value="bible">bible (dry)</option><option value="soft">soft underscore</option></select></label>
+      <label>grave <select id="grave"><option value="silence">silence</option><option value="pad">near-silent pad</option></select></label>
       <button class="primary" id="render">Render &amp; play</button>
       <button id="stopbuf">Stop</button>
     </div>
@@ -120,9 +122,10 @@ function draw(ch, sr, plan) {
 
 $('render').onclick = async () => {
   const c = ensureCtx();
-  const opts = { programme: $('prog').value, moment: $('moment').value, seconds: Number($('secs').value), withVoice: $('voice').checked, stem: $('stem').value };
+  const opts = { programme: $('prog').value, moment: $('moment').value, seconds: Number($('secs').value), withVoice: $('voice').checked, stem: $('stem').value, storyBeds: $('storyBeds').value, grave: $('grave').value };
   if ($('emotion').value) opts.emotion = $('emotion').value;
-  if (opts.moment === 'demo') opts.seconds = 60;
+  if (opts.moment === 'underscore') opts.storyBeds = 'soft';
+  if (opts.moment === 'demo' || opts.moment === 'bulletin') opts.seconds = 60;
   log(`rendering ${JSON.stringify(opts)}...`);
   const t0 = performance.now();
   const r = await renderBroadcast(opts);
@@ -141,7 +144,7 @@ $('stopbuf').onclick = () => { src?.stop(); src = null; };
 
 // Live: the conductor on the real clock, cued by hand like the director would.
 let music = null;
-const CUES = ['openTail', 'frame', 'greeting', 'story:neutral', 'story:serious', 'roundup', 'item', 'lighter', 'chat', 'number', 'featureEnd', 'picture', 'single', 'outro', 'signoff', 'endcard', 'standby', 'bumper', 'bumperIn', 'countdown', 'upNext', 'bumperOut', 'replay', 'breaking', 'off'];
+const CUES = ['openTail', 'frame', 'greeting', 'story:happy', 'story:neutral', 'story:serious', 'roundup', 'item', 'lighter', 'chat', 'number', 'featureEnd', 'picture', 'single', 'outro', 'signoff', 'endcard', 'standby', 'bumper', 'bumperIn', 'countdown', 'upNext', 'bumperOut', 'replay', 'breaking', 'off'];
 for (const c of CUES) {
   const b = document.createElement('button');
   b.textContent = c;
@@ -163,7 +166,7 @@ $('live').onclick = () => {
     $('state').textContent = 'stopped';
     return;
   }
-  music = new BroadcastMusic({ context: c });
+  music = new BroadcastMusic({ context: c, storyBeds: $('storyBeds').value, grave: $('grave').value });
   music.start();
   music.cue('openTail', { programId: $('prog').value });
   $('live').textContent = 'Stop live';

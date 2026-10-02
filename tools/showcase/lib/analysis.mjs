@@ -85,8 +85,8 @@ export function steepestRise(e, from, to) {
 
 const median = (a) => (a.length ? [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] : null);
 
-export function syncReport({ events, speech, webaudio, voice, sr }) {
-  const out = { stingers: [], captions: [], voiceOnsets: [] };
+export function syncReport({ events, speech, webaudio, voice, speechBus = null, clips = [], sr }) {
+  const out = { stingers: [], captions: [], recordedCaptions: [], voiceOnsets: [] };
   if (webaudio) {
     const e = envelope(webaudio, sr);
     // The stinger is an air swell from the wipe's first frame into a felt thump
@@ -112,6 +112,16 @@ export function syncReport({ events, speech, webaudio, voice, sr }) {
     const firstWord = sp.start + (sp.firstWord ?? 0);
     out.captions.push({ at: +sub.t.toFixed(3), voiceStart: +sp.start.toFixed(3), firstWord: +firstWord.toFixed(3), leadMs: Math.round((firstWord - sub.t) * 1000), text: sub.text.slice(0, 60) });
   }
+  // Recorded voices played by the channel (speech bus stem): the caption must
+  // appear as its sentence's first word is heard (onSentence fires then).
+  if (speechBus && clips.length) {
+    const e = envelope(speechBus, sr);
+    for (const sub of subs) {
+      if (!clips.some((c) => sub.t >= c.start - 0.2 && sub.t <= c.end)) continue;
+      const o = onsetAfter(e, sub.t - 0.12, sub.t + 0.6, { rise: 15, floor: -50 });
+      out.recordedCaptions.push({ at: +sub.t.toFixed(3), onsetMs: o ? Math.round((o.t - sub.t) * 1000) : null, text: sub.text.slice(0, 60) });
+    }
+  }
   if (voice) {
     const e = envelope(voice, sr);
     for (const sp of speech.filter((s) => s.clip && s.start > 0.3 && (s.cut == null || s.cut - s.start > 0.3))) {
@@ -122,11 +132,13 @@ export function syncReport({ events, speech, webaudio, voice, sr }) {
   const st = out.stingers.map((x) => x.thumpVsCutMs).filter((x) => x != null);
   const ss = out.stingers.map((x) => x.soundStartMs).filter((x) => x != null);
   const cap = out.captions.map((x) => x.leadMs);
+  const rc = out.recordedCaptions.map((x) => x.onsetMs).filter((x) => x != null);
   const vo = out.voiceOnsets.map((x) => x.onsetMs).filter((x) => x != null);
   out.summary = {
     stingerSoundStartMs: { n: ss.length, median: median(ss), min: ss.length ? Math.min(...ss) : null, max: ss.length ? Math.max(...ss) : null },
     stingerThumpVsCutMs: { n: st.length, median: median(st), min: st.length ? Math.min(...st) : null, max: st.length ? Math.max(...st) : null },
     captionLeadMs: { n: cap.length, median: median(cap), min: cap.length ? Math.min(...cap) : null, max: cap.length ? Math.max(...cap) : null },
+    recordedCaptionToVoiceMs: { n: rc.length, of: out.recordedCaptions.length, median: median(rc), min: rc.length ? Math.min(...rc) : null, max: rc.length ? Math.max(...rc) : null },
     voiceOnsetMs: { n: vo.length, median: median(vo), min: vo.length ? Math.min(...vo) : null, max: vo.length ? Math.max(...vo) : null },
   };
   return out;

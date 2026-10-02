@@ -6,7 +6,7 @@
 
 import assert from 'node:assert/strict';
 import { deriveCues, speechRegions, quietIntervals } from './lib/music.mjs';
-import { voiceFor } from './lib/voices.mjs';
+import { voiceFor, workerRequest, loadPresets } from './lib/voices.mjs';
 import { envelope, onsetAfter } from './lib/analysis.mjs';
 
 let passed = 0;
@@ -92,15 +92,31 @@ test('quiet intervals: grave stories (after the fade) and ads', () => {
   assert.equal(q[1].to, 67);
 });
 
-test('voice casting: presenter presets, announcers for ads, browser voice fallback', () => {
-  const presets = { ids: new Set(['paco', 'lola']) };
-  assert.equal(voiceFor({ presenter: 'paco', slot: 'A' }, presets).voice, 'paco');
+test('voice casting: the channel casting, adcast for ads, presets, browser voice fallback', () => {
+  const presets = {
+    ids: new Set(['paco', 'lola', 'unit8']),
+    presenters: { unit8: { voice: 'am_echo:0.7+am_fenrir:0.3', speed: 0.82, lang: 'en-us', effect: 'robot', pauses: { comma: 0.18 } } },
+    adcast: { corners: { voice: 'af_nicole:0.5+bf_emma:0.5', speed: 0.88, lang: 'en-gb' }, default: { 'male-us': { voice: 'am_eric:0.6+am_onyx:0.4', speed: 0.92, lang: 'en-us' } } },
+  };
+  const u8 = voiceFor({ presenter: 'unit8', slot: 'B' }, presets);
+  assert.equal(u8.voice, 'am_echo:0.7+am_fenrir:0.3', 'casting.json blend');
+  assert.equal(u8.effect, 'robot');
+  assert.deepEqual(workerRequest('Hello.', u8), { text: 'Hello.', voice: 'am_echo:0.7+am_fenrir:0.3', speed: 0.82, lang: 'en-us', effect: 'robot', pauses: { comma: 0.18 } });
+  assert.equal(voiceFor({ presenter: 'paco', slot: 'A' }, presets).voice, 'paco', 'tools/voice preset when not cast');
   assert.equal(voiceFor({ presenter: 'nova', slot: 'A' }, presets).voice, 'af_nova', 'default cast without a preset');
-  const ad = voiceFor({ slot: 'ad', ad: { id: 'x', voice: { gender: 'female', lang: 'en-GB', rate: 0.86 } } }, presets);
-  assert.match(ad.voice, /^bf_alice/);
+  assert.equal(voiceFor({ slot: 'ad', ad: { id: 'corners' } }, presets).voice, 'af_nicole:0.5+bf_emma:0.5', 'adcast.json per ad');
+  assert.equal(voiceFor({ slot: 'ad', ad: { id: 'new-ad', voice: { gender: 'male', lang: 'en-US' } } }, presets).voice, 'am_eric:0.6+am_onyx:0.4', 'adcast default by gender/accent');
+  const ad = voiceFor({ slot: 'ad', ad: { id: 'x', voice: { gender: 'female', lang: 'en-GB', rate: 0.86 } } }, { ids: new Set() });
+  assert.match(ad.voice, /^bf_alice/, 'announcer without adcast.json');
   assert.ok(ad.speed >= 0.86 && ad.speed <= 1);
   const fb = voiceFor({ slot: 'B', voiceName: 'Kokoro Bella (female)', lang: 'en-US', rate: 1.06 }, presets);
   assert.equal(fb.voice, 'af_bella');
+});
+
+test('the real casting files load', () => {
+  const p = loadPresets();
+  assert.ok(p.presenters.paco?.voice, 'server/voice/casting.json has paco');
+  assert.ok(p.adcast.default, 'server/voice/adcast.json has defaults');
 });
 
 test('onset detector finds a click 120 ms into a quiet signal', () => {

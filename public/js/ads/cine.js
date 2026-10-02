@@ -685,12 +685,13 @@ const TD = { dissolve: 0.6, dip: 0.8, fade: 0.5, black: 0.5 };
  * 'dissolve' (4x4 ordered-dither cross-fade, palette-pure) | 'dip' (through
  * black) | 'black' (in from black). The last shot holds while the VO overruns.
  */
+export const FILM = { fill: '#000000' }; // the lab sets a loud colour here to find unpainted pixels
 export function film(ctx, t, info, shots) {
   // the studio never clears before an ad draws: start every frame opaque so
   // no stray pixel of the previous frame (or programme) can ever show through
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = '#000000';
+  ctx.fillStyle = FILM.fill;
   ctx.fillRect(0, 0, W, H);
   let i = 0;
   while (i + 1 < shots.length && t >= shots[i + 1].at) i++;
@@ -1911,5 +1912,91 @@ export function standing(ctx, o) {
     ctx.fillRect(round(fx + hw * 0.05), round(ht + hh * 0.66), 1, 1);
     ctx.fillStyle = pal.lip;
     ctx.fillRect(round(fx - hw * 0.25), round(ht + hh * 0.8), max(2, round(hw * 0.5)), 1);
+  }
+}
+
+// ---------------------------------------------------------------- channel presenter rig
+
+// The people who carry a shot (an adviser talking to camera, a mother on the
+// phone) are drawn with the channel's own presenter rig, public/js/v2/canvas25d
+// (the owner-approved prototype A: articulated hands, faces with planes, hair
+// clumps, natural motion). That code belongs to other streams and may be
+// mid-edit, so it is loaded lazily and every use is guarded: if it fails to
+// load or throws, castDraw() returns null and the spot draws its own figure.
+let RIG = null;
+let RIG_FAILED = false;
+const RIG_HOOKS = [];
+if (typeof document !== 'undefined') {
+  Promise.all([
+    import('../v2/canvas25d/pixbuf.js'),
+    import('../v2/canvas25d/character.js'),
+    import('../v2/canvas25d/rig.js'),
+    import('../v2/canvas25d/cast/base.js'),
+    import('../v2/canvas25d/cast/index.js'),
+    import('../v2/canvas25d/visemes.js'),
+    import('../v2/canvas25d/glasses.js'),
+  ])
+    .then(([pix, chr, rig, base, cast, vis, glasses]) => {
+      RIG = { pix, chr, rig, base, cast, vis, glasses, frame: new pix.Frame(), parts: new pix.PartBuffer(), cv: canvas(W, H), clip: new Int16Array(W) };
+      RIG.c = RIG.cv.getContext('2d');
+      RIG.frame.clear(0);
+      for (const fn of RIG_HOOKS) {
+        try {
+          fn(RIG);
+        } catch {
+          /* a look that fails to build leaves its spot on the fallback figure */
+        }
+      }
+    })
+    .catch(() => {
+      RIG_FAILED = true;
+    });
+}
+/** True once the presenter rig is loaded (false in Node or when it failed). */
+export const castReady = () => !!RIG && !RIG_FAILED;
+/** Run fn(rig) once the rig is loaded (looks and speech timelines are built there). */
+export function castInit(fn) {
+  if (RIG) {
+    try {
+      fn(RIG);
+    } catch {
+      /* fallback figure */
+    }
+  } else RIG_HOOKS.push(fn);
+}
+
+/**
+ * Draw one rig actor ({ look, perf }, see canvas25d/scene.js actor()) at ad
+ * time t onto ctx: neck base at (x, y), s px per rig unit; `clipRow` (a screen
+ * row) hides the torso below a desk edge. The pose comes from rig.poseAt, so
+ * gestures, speech, blinks and idle are the presenters' own. Returns the head
+ * frame (canvas25d head.js: x, y, yaw...) or null when the rig is not usable.
+ */
+export function castDraw(ctx, actor, t, x, y, s, clipRow = -1) {
+  if (!RIG || RIG_FAILED || !actor || !actor.look) return null;
+  const R = RIG;
+  try {
+    const parts = R.parts;
+    parts.clear();
+    if (clipRow >= 0) {
+      R.clip.fill(clipRow);
+      parts.clipY.set(R.clip);
+    }
+    const sk = R.rig.poseAt(actor, t);
+    const head = R.chr.drawCharacter(parts, actor.look, sk, { x, y, s, gb: 0, clip: clipRow >= 0 });
+    if (parts.bx1 <= parts.bx0) return head;
+    const x0 = max(0, parts.bx0 - 2);
+    const y0 = max(0, parts.by0 - 2);
+    const x1 = min(W, parts.bx1 + 2);
+    const y1 = min(H, parts.by1 + 2);
+    const px = R.frame.px;
+    for (let yy = y0; yy < y1; yy++) px.fill(0, yy * W + x0, yy * W + x1);
+    parts.resolve(R.frame);
+    R.c.putImageData(R.frame.image, 0, 0, x0, y0, x1 - x0, y1 - y0);
+    ctx.drawImage(R.cv, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0);
+    return head;
+  } catch {
+    RIG_FAILED = true; // never retry a rig that threw: the spot falls back for good
+    return null;
   }
 }

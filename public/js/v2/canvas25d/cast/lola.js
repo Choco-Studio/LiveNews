@@ -4,8 +4,9 @@
 import { P } from '../../../palette.js';
 import { toneN, decal } from '../pixbuf.js';
 import { headHW } from '../head.js';
-import { LocalXY, localBox, clumpTone } from './kit-a.js';
+import { LocalXY, localBox, clumpTone, selOutEdge, hairLight, rimMat, HeadWidthLUT } from './kit-a.js';
 import { clamp } from '../space.js';
+import { GROUPS } from '../character.js';
 import { defineLook } from './base.js';
 
 export const lola = defineLook({
@@ -14,14 +15,16 @@ export const lola = defineLook({
   head: { top: -10.0, craniumY: -2.6, R: 7.3, cheekY: 1.8, cheekHW: 6.95, chinY: 9.0, chinHW: 2.4, jawPow: 2.05 },
   headAt: [0, -13.0],
   neck: { hw: 2.55 },
-  eyes: { y: -0.6, x: 2.85, w: 2.75, h: 1.45, iris: [P.green, P.darkGreen], lash: P.black, lashes: true },
+  // deep green eyes (the lime P.green read glassy and uncanny at close-ups)
+  eyes: { y: -0.6, x: 2.85, w: 2.75, h: 1.45, iris: [P.darkGreen, P.black], lash: P.black, lashes: true },
   brows: { y: -2.15, len: 3.15, thick: 0.45, color: P.brown, arch: 0.55 },
   nose: { y0: -0.2, y1: 3.25, w: 1.25, big: false },
   mouth: { y: 5.8, w: 3.5, lip: P.darkRed, lipHi: P.skinShade, upper: P.tanShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   ears: { y: -0.1, h: 2.8, w: 1.0 },
   skin: [P.skin, P.tan, P.skinShade, P.tanShade], // tan skin, warm softer shadows (world-now.md §5 item 10: face L* 55-73)
   skinLine: P.brown,
-  hair: { style: 'bob', ramp: [P.rust, P.brown, P.maroon, P.black], line: P.black }, // auburn, not candy orange
+  // auburn, not candy orange; a maroon (local) line at the fringe, the hair light on the upper right only
+  hair: { style: 'bob', ramp: [P.rust, P.brown, P.maroon, P.black], line: P.black, edge: P.maroon, rimTop: false },
   mustache: null,
   torso: { neckHW: 3.0, shoulderTop: 3.0, shoulderHW: 18.4, sideHW: 17.2, bottom: 46, vDepth: 16, shoulderJoint: [15.8, 7.0] },
   outfit: 'blazer',
@@ -49,6 +52,7 @@ function drawBobAndStuds(buf, L, m, head, s, sk) {
 // clumps fall from the crown with broken separations. LOD: wides keep the
 // silhouette and two tones, mediums a narrow sheen band, close-ups the clumps.
 const LXY = new LocalXY();
+const HWL = new HeadWidthLUT();
 const CO = { cw: 1.55, s: 1, seed: 11, sep: true, hiLo: 3.6, hiHi: 9.2, hiW: 0.42, gap: 4.2, keepLit: true };
 export function drawBob(buf, L, m, head, s, lag) {
   const H = L.head;
@@ -61,6 +65,7 @@ export function drawBob(buf, L, m, head, s, lag) {
   const tier = s < 1.35 ? 0 : s < 2.2 ? 1 : 2;
   const [x0, y0, x1, y1] = localBox(head, -RV - 2.2, H.top - 1.8, RV + 2.2, bottom + 1);
   const q = LXY.set(head);
+  const HW = HWL.set(H, head.jaw || 0);
   CO.s = s;
   CO.cw = s >= 3 ? 1.9 : 2.2;
   const crownX = part + 0.6, crownY = H.top + 0.6;
@@ -86,7 +91,7 @@ export function drawBob(buf, L, m, head, s, lag) {
     }
     if (!inMass) return -1;
     const fx = x - yawX;
-    const hw = headHW(H, y, head.jaw);
+    const hw = HW.at(y);
     // face window: forehead open under the part, a soft S sweep across to the far temple
     const sw = Math.max(0, fx - part);
     let sweepY = Math.min(-3.3, H.top + 3.5 + sw * 0.62 + Math.sin(fx * 1.7) * 0.15 - 0.35 * Math.sin(Math.min(1, sw / 7) * Math.PI));
@@ -97,6 +102,9 @@ export function drawBob(buf, L, m, head, s, lag) {
     if (y > H.chinY - 1.5 && Math.abs(x) < hw + 0.5) return -1;
     const ddx = x / RV, ddy = clamp((y - cyc) / (RV * 1.2), -1, 1);
     let t = toneN(m.hair, ddx * 0.9, ddy * 0.9);
+    // the far curtain below the crown stays maroon with only its outer edge in the deep tone: a
+    // black slab there read as a hole beside the face
+    if (t === 3 && tier > 0 && y > cyc - 1 && Math.abs(x) < RV + fuller - 1.1) t = 2;
     const nearFace = y > fringe - 0.2 && Math.abs(x) < hw + 1.0;
     const underside = y > bottom - 0.55 - (Math.abs(x) > hw + 1.6 ? 0.25 : 0);
     if (tier === 0) {
@@ -104,12 +112,17 @@ export function drawBob(buf, L, m, head, s, lag) {
       return t;
     }
     if (tier === 1) {
-      // mediums keep the approved auburn sheen; a few strands break it in two-shots and wider mediums
+      // mediums: the auburn sheen is a band round the dome (glossy hair catches the key in a halo),
+      // not a lit quadrant; a few strands break it in two-shots and wider mediums
+      if (t === 0) {
+        const d = Math.sqrt(x * x + (y - cyc) * (y - cyc));
+        if (d < RV * 0.42 || d > RV * 0.93) t = 1;
+      }
       if (t <= 1 && s >= 1.8) {
         const sv = y < fringe + 0.5 && fx > part ? (y - (H.top + 3.5) - (fx - part) * 0.62) : fx - Math.max(0, y - cyc) * 0.1;
         if ((((sv * 1.1) % 2.6) + 2.6) % 2.6 < 0.3) t = t + 1;
       }
-      if (nearFace) t = Math.max(t, x > 0 ? 3 : 2);
+      if (nearFace) t = Math.max(t, 2);
       else if (underside) t = Math.max(t, 2);
       return t;
     }
@@ -118,13 +131,18 @@ export function drawBob(buf, L, m, head, s, lag) {
     const u = Math.sqrt(dxc * dxc + dyc * dyc);
     // clumps fan out from the crown: radial near it, splitting further out so none gets thinner than cw
     const v = Math.atan2(dxc, Math.max(0.2, dyc)) * Math.max(5.2, u) + 30;
-    if (nearFace) return Math.max(t, x > 0 ? 3 : 2);
-    if (underside) return Math.max(t, x > 0 ? 3 : 2);
+    // beside the face and under the ends: in shade (maroon), the deep tone only on the far side's
+    // outer half, so the far side never reads as a black curtain
+    if (nearFace) return Math.max(t, 2);
+    if (underside) return Math.max(t, x > 0 && Math.abs(x) > hw + 1.2 ? 3 : 2);
     const d2 = x * x + (y - cyc) * (y - cyc);
     if (d2 > (RV - 0.5) * (RV - 0.5) && y < cyc && t >= 2) return t; // clean outer edge for the rim
     // the sheen is a band at a fixed "latitude" of the dome (distance from the dome's centre), not round the crown
     return clumpTone(t, v, Math.sqrt(d2), CO);
   });
+  const g = head.gb + GROUPS.hair;
+  selOutEdge(buf, x0, y0, x1, y1, g, head.gb + GROUPS.head, m.hair, m.hairEdge);
+  if (s >= 1.35) hairLight(buf, head, g, rimMat(P.silver), H.R * 0.1, RV + 2.2, H.top - 1.8, cyc + 1, Math.max(2, Math.round(s * 1.2)));
 }
 
 // The back of the bob, behind the head and neck (its ends tuck under like the front).

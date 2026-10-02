@@ -31,7 +31,7 @@
       // function of t (the graphics clock is frozen) so contact sheets are exact.
       import { drawOpen, openFor } from '../js/scenes/opens.js';
       import * as cards from '../js/scenes/cards.js';
-      import { drawWorldMap } from '../js/scenes/worldmap.js';
+      import { drawWorldMap, warmMapData } from '../js/scenes/worldmap.js';
       import { pixelate } from '../js/pixelate.js';
       import { setNow } from '../js/gfx/clock.js';
       import { P as PAL } from '../js/palette.js';
@@ -66,6 +66,10 @@
         suva: { place: 'SUVA, FIJI', lat: -18.14, lon: 178.44 },
         longyearbyen: { place: 'LONGYEARBYEN, SVALBARD', lat: 78.22, lon: 15.65 },
         mcmurdo: { place: 'MCMURDO STATION, ANTARCTICA', lat: -77.85, lon: 166.67 },
+        anchorage: { place: 'ANCHORAGE, ALASKA', lat: 61.22, lon: -149.9 },
+        singapore: { place: 'SINGAPORE', lat: 1.35, lon: 103.82 },
+        abidjan: { place: "ABIDJAN, CÔTE D'IVOIRE", lat: 5.36, lon: -4.01 },
+        'sao-paulo': { place: 'SÃO PAULO, BRAZIL', lat: -23.55, lon: -46.63 },
       };
 
       // A procedural "news photo" (street at dusk) run through the real pixelate pipeline.
@@ -119,7 +123,9 @@
       const PROMO = { label: 'UP NEXT', footer: 'AFTER THE BREAK', next: { id: 'tech-bytes', title: 'TECH BYTES', tagline: 'THE FUTURE, ONE BYTE AT A TIME', theme: 'tech', presenters: ['max', 'ada'] } };
       const PROMO_60 = { label: 'UP NEXT', footer: 'AFTER THE BREAK', next: { id: 'news-60', title: 'NEWS IN 60', tagline: 'THE HEADLINES IN A MINUTE', theme: 'flash', presenters: ['sam'] } };
       const PROMO_LONG = { label: 'UP NEXT', footer: 'AFTER THE BREAK', next: { id: 'weekend-review', title: 'THE WEEKEND FOREIGN CORRESPONDENTS REVIEW', tagline: 'THE WEEK THAT WAS', theme: 'world', presenters: ['paco', 'lola'] } };
-      const NAMES = { max: 'MAX CIRCUIT', ada: 'ADA VOLT', sam: 'SAM NIGHT', paco: 'PACO PIXEL', lola: 'LOLA BYTE' };
+      const PROMO_MONEY = { label: 'UP NEXT', footer: 'AFTER THE BREAK', next: { id: 'money-minute', title: 'MONEY MINUTE', tagline: 'MARKETS & YOUR MONEY', theme: 'money', presenters: ['penny'] } };
+      const PROMO_COMING = { label: 'COMING UP', footer: 'STAY WITH US', next: { id: 'cosmos', title: 'COSMOS DESK', tagline: 'SCIENCE, SPACE & OUR PLANET', theme: 'space', presenters: 'nova' } };
+      const NAMES = { max: 'MAX CIRCUIT', ada: 'ADA VOLT', sam: 'SAM NIGHT', paco: 'PACO PIXEL', lola: 'LOLA BYTE', penny: 'PENNY STERLING', nova: 'DR NOVA REYES' };
       const N3 = [{ value: '40,000', label: 'PASSENGERS A DAY' }, { value: '$2.5BN', label: 'COST OF THE LINE' }, { value: '12 KM', label: 'OF NEW TUNNEL' }];
       const N_BARS = [{ value: '3.1%', label: 'INFLATION' }, { value: '2.4%', label: 'INFLATION' }];
       const N_ONE = [{ value: '1.2 MILLION', label: 'HOMES WITHOUT POWER' }];
@@ -154,6 +160,10 @@
         'promo-60': (t) => cards.drawPromoCard(ctx, 1000 + t, t, PROMO_60, (id) => NAMES[id] || id),
         'promo-long': (t) => cards.drawPromoCard(ctx, 1000 + t, t, PROMO_LONG, (id) => NAMES[id] || id),
         ident: (t) => cards.drawIdentCard(ctx, 1000 + t, t),
+        'ident-dusk': (t) => cards.drawIdentCard(ctx, 1000 + t, t, { variant: 'dusk' }),
+        'ident-dawn': (t) => cards.drawIdentCard(ctx, 1000 + t, t, { variant: 'dawn' }),
+        'promo-money': (t) => cards.drawPromoCard(ctx, 1000 + t, t, PROMO_MONEY, (id) => NAMES[id] || id),
+        'promo-coming': (t) => cards.drawPromoCard(ctx, 1000 + t, t, PROMO_COMING, (id) => NAMES[id] || id),
         stinger: (t) => {
           cards.drawHeadlineFrame(ctx, 1000, 3, { index: 0, total: 3, headline: 'Storm closes ports across the north', source: 'BBC News', category: 'world', image: photo().card });
           cards.drawStinger(ctx, 1000 + t, t / cards.STINGER_DURATION, { channel: 'GLOBIT 24' });
@@ -272,7 +282,9 @@
         last = ms;
         requestAnimationFrame(tick);
       }
-      requestAnimationFrame(tick);
+      // ?still=1 (captures with --step): no real-time loop at all, only explicit renders
+      if (!params.has('still')) requestAnimationFrame(tick);
+      warmMapData(); // the map's data now, so the first captured frame is never the loading sea
       fillItems();
       render(state.t);
       /** FNV-1a hash of the frame at t (to prove a lock-up holds still). */

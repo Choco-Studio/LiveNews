@@ -17,7 +17,7 @@
 import {
   P, W, H, R, A, oval, poly, ring, disc, line, cached, lazy, play, key, tween, prog, smooth, lerp, clamp,
   type, trackIn, fadeUp, rule, smallPrint, gradient, vignette, letterbox, beam, contact, glintStar,
-  lathe, ovalRing, bubbles, motes, hash01, clipRect, warmUp, tune,
+  lathe, ovalRing, bubbles, motes, hash01, clipRect, warmUp, tune, bayer,
 } from './kit.js';
 
 const { round, sin, cos, PI, max, abs, floor, ceil, sqrt } = Math;
@@ -445,8 +445,84 @@ function shotCellar(ctx, lt) {
 
 // --- 3. POUR -----------------------------------------------------------------------
 
-const pourBg = lazy(() => gradient('bf-pour', W, H, { cx: 200, cy: 92, rx: 230, ry: 150, ramp: [P.black, P.maroon, P.brown], gamma: 1.6, seam: 0.45 }));
 const barTop = lazy(() => gradient('bf-bartop', W, 48, { kind: 'vertical', ramp: [P.brown, P.maroon, P.black], seam: 0.5 }));
+
+// The back bar behind the pour, well out of focus: a dark mirrored wall, two
+// glass shelves lit from behind by a warm strip, rows of bottles glowing
+// amber where the strip shines through them, and a few soft discs where it
+// catches a shoulder. Values stay under the tumbler's so the glass leads.
+// Bottle shapes: [body w, body h, shoulder h, neck w, neck h, liquid level 0..1]
+const BACK_BOTTLES = [[9, 21, 4, 3, 8, 0.55], [13, 13, 3, 4, 5, 0.7], [10, 18, 2, 3, 6, 0.45], [7, 25, 5, 2, 9, 0.6], [11, 16, 4, 3, 7, 0.35], [8, 15, 3, 3, 5, 0.8], [12, 22, 6, 3, 6, 0.5]];
+const SHAPE = [0, 0, 0, 0, 0, 0];
+/** One defocused bottle standing on y: dark glass, backlit liquid, soft (half-tone) edges. */
+function backBottle(c, x, y, shape, pale) {
+  const [bw, bh, sh, nw, nh, lvl] = shape;
+  const top = y - bh;
+  const liq = top + round(bh * (1 - lvl));
+  for (let j = top; j < y; j++) {
+    const u = (j - liq) / max(1, y - liq); // 0 at the surface, 1 at the shelf
+    let col;
+    if (j < liq) col = A(P.black, 0.55);
+    else if (pale) col = A(u < 0.5 ? P.steel : P.fog, 0.16 + 0.16 * u);
+    else col = u < 0.45 ? A(P.maroon, 0.85) : y - j > 2 ? A(P.brown, 0.85) : A(P.tanShade, 0.8);
+    R(c, x + 1, j, bw - 2, 1, col);
+    R(c, x, j, 1, 1, A(P.black, 0.35)); // soft edges: half-tone, no outline
+    R(c, x + bw - 1, j, 1, 1, A(P.black, 0.35));
+  }
+  // the surface of the liquid catches the strip
+  if (!pale) R(c, x + 2, liq, bw - 4, 1, A(P.tanShade, 0.5));
+  // a faint label band, darker than the glass
+  R(c, x + 1, top + round(bh * 0.45), bw - 2, round(bh * 0.25), A(P.black, 0.3));
+  // shoulder rounding into the neck
+  for (let j = 0; j < sh; j++) {
+    const w = round(lerp(bw - 2, nw, smooth((j + 1) / sh)));
+    R(c, x + round((bw - w) / 2), top - 1 - j, w, 1, A(P.black, 0.62));
+  }
+  R(c, x + round((bw - nw) / 2), top - sh - nh, nw, nh, A(P.black, 0.6));
+  R(c, x + round((bw - nw) / 2), top - sh - nh, nw, 2, A(P.tanShade, 0.4)); // foil cap
+}
+const backBar = lazy(() =>
+  cached('bf-backbar', W, H, (c) => {
+    c.drawImage(gradient('bf-pour2', W, H, { cx: 214, cy: 92, rx: 260, ry: 150, ramp: [P.black, P.maroon, P.brown], gamma: 1.9, seam: 0.45 }), 0, 0);
+    // mirror panels with dark seams
+    for (let x = 18; x < W; x += 92) {
+      R(c, x, 0, 2, 150, A(P.black, 0.45));
+      R(c, x + 2, 0, 1, 150, A(P.tanShade, 0.07));
+    }
+    for (const [sy, seed] of [[70, 3], [116, 8]]) {
+      // the strip behind the bottles: a warm band fading up the mirror
+      for (let k = 0; k < 14; k++) R(c, 0, sy - 1 - k, W, 1, A(P.orange, 0.07 * (1 - k / 14) ** 1.5));
+      let x = 2 + round(hash01(seed, 1) * 6);
+      let i = 0;
+      while (x < W - 6) {
+        const base = BACK_BOTTLES[floor(hash01(i, seed) * BACK_BOTTLES.length)];
+        // no two bottles quite alike: height and fill vary
+        SHAPE[0] = base[0];
+        SHAPE[1] = round(base[1] * (0.82 + hash01(i, seed + 4) * 0.36));
+        SHAPE[2] = base[2];
+        SHAPE[3] = base[3];
+        SHAPE[4] = base[4];
+        SHAPE[5] = clamp(base[5] + (hash01(i, seed + 8) - 0.5) * 0.3, 0.2, 0.9);
+        const shape = SHAPE;
+        if (hash01(i, seed + 1) > 0.12) backBottle(c, x, sy, shape, hash01(i, seed + 2) < 0.14);
+        x += shape[0] + 2 + round(hash01(i, seed + 3) * 5);
+        i++;
+      }
+      // the glass shelf: a lit front edge, its shadow underneath
+      R(c, 0, sy, W, 2, A(P.black, 0.7));
+      R(c, 0, sy, W, 1, A(P.tanShade, 0.55));
+      R(c, 0, sy + 2, W, 5, A(P.black, 0.3));
+      // where the strip catches a shoulder: soft discs of light, rimmed like a lens sees them
+      for (let k = 0; k < 4; k++) {
+        const bx = 20 + round(hash01(k, seed + 5) * (W - 40));
+        const r = 3 + round(hash01(k, seed + 6) * 4);
+        const by = sy - 14 - round(hash01(k, seed + 7) * 10);
+        disc(c, bx, by, r, A(P.cream, 0.05));
+        ring(c, bx, by, r, A(P.cream, 0.09));
+      }
+    }
+  }),
+);
 
 // A heavy cut-crystal tumbler: wider than tall, a thick base, diamond cuts
 // round the lower half (a label texture of facet lines, so they wrap and turn).
@@ -565,7 +641,7 @@ function neck(ctx, mx, my, k) {
 const POUR_FX = 196;
 const POUR_FY = 132;
 function shotPour(ctx, lt) {
-  ctx.drawImage(pourBg(), 0, 0);
+  ctx.drawImage(backBar(), 0, 0);
   const k = tween(lt, 0, 5, 1, 1.12, 'inOut');
   const fx = POUR_FX;
   const fy = POUR_FY;
@@ -669,7 +745,123 @@ function shotPour(ctx, lt) {
 // hair clumps, shirt collar, lapel. Sprite space: x = 0 at the nose tip, y = 0
 // at the crown; the head is 79 px from crown to chin (about 1/7 of his height).
 
-const noseBg = lazy(() => gradient('bf-nose', W, H, { cx: 300, cy: 78, rx: 210, ry: 160, ramp: [P.black, P.maroon, P.brown], gamma: 1.5, seam: 0.45 }));
+// The room behind him, out of focus: walnut panelling warmed by a table lamp
+// at the left (the lamp that keys his face), a heavy curtain, and a tall
+// window onto a wet night city; rain beads on the glass and a few drops run.
+const WIN_X = 232; // window: left edge of the glass (it runs off the right of frame)
+const WIN_Y0 = 20;
+const WIN_Y1 = 166;
+const MULL_X = 308; // the vertical mullion
+const MULL_Y = 94; // the transom
+const LAMP_X = 36;
+const LAMP_Y = 132; // top of the shade
+const lounge = lazy(() =>
+  cached('bf-lounge', W, H, (c) => {
+    c.drawImage(gradient('bf-lounge-wall', W, H, { cx: LAMP_X + 4, cy: LAMP_Y - 10, rx: 260, ry: 190, ramp: [P.black, P.maroon, P.brown], gamma: 2.0, seam: 0.45 }), 0, 0);
+    // panelling: raised fields with a bevel lit from the lamp side, dark stiles between
+    for (let px = 6; px < WIN_X - 30; px += 62) {
+      const pw = 50;
+      for (const [py, ph] of [[30, 58], [96, 48]]) {
+        R(c, px, py, pw, ph, A(P.black, 0.18));
+        R(c, px, py, pw, 1, A(P.black, 0.45)); // top bevel in shade
+        R(c, px, py, 1, ph, A(P.tanShade, 0.16)); // the bevel facing the lamp
+        R(c, px + pw - 1, py, 1, ph, A(P.black, 0.4));
+        R(c, px, py + ph - 1, pw, 1, A(P.tanShade, 0.12));
+      }
+    }
+    // the dado rail
+    R(c, 0, 152, WIN_X, 3, A(P.black, 0.5));
+    R(c, 0, 152, WIN_X, 1, A(P.tanShade, 0.3));
+    // the night beyond the glass: a city glow low down
+    const gw = W - WIN_X;
+    c.drawImage(gradient('bf-night', gw, WIN_Y1 - WIN_Y0, { kind: 'vertical', ramp: [P.black, P.ink, P.slate], from: 0.05, to: 1.15, seam: 0.5 }), WIN_X, WIN_Y0);
+    // distant towers, soft dark blocks, a few lit windows in them
+    for (let k = 0; k < 9; k++) {
+      const bx = WIN_X + round(hash01(k, 61) * gw);
+      const bw = 10 + round(hash01(k, 62) * 18);
+      const bt = 104 + round(hash01(k, 63) * 40);
+      R(c, bx, bt, bw, WIN_Y1 - bt, A(P.black, 0.45));
+      for (let q = 0; q < 6; q++) {
+        if (hash01(q + k * 7, 64) < 0.5) continue;
+        R(c, bx + 2 + floor(hash01(q, k + 65) * (bw - 4)), bt + 3 + floor(hash01(q, k + 66) * 20), 1, 1, A(hash01(q, k) < 0.7 ? P.cream : P.fog, 0.55));
+      }
+    }
+    // city lights out of focus: soft discs, warm and cool, thicker toward the street
+    for (let k = 0; k < 26; k++) {
+      const bx = WIN_X + 4 + round(hash01(k, 71) * (gw - 4));
+      const by = WIN_Y0 + 50 + round(hash01(k, 72) ** 0.6 * (WIN_Y1 - WIN_Y0 - 54));
+      const r = 1 + round(hash01(k, 73) * hash01(k, 74) * 5);
+      const col = hash01(k, 75) < 0.65 ? P.yellow : hash01(k, 76) < 0.5 ? P.cream : P.fog;
+      disc(c, bx, by, r, A(col, r > 2 ? 0.08 : 0.22));
+      if (r > 2) ring(c, bx, by, r, A(col, 0.14));
+    }
+    // rain beads on the glass: a lit pixel, its refracted shadow under it
+    for (let k = 0; k < 90; k++) {
+      const bx = WIN_X + 2 + floor(hash01(k, 81) * (gw - 2));
+      const by = WIN_Y0 + 2 + floor(hash01(k, 82) * (WIN_Y1 - WIN_Y0 - 4));
+      R(c, bx, by, 1, 1, A(P.fog, 0.45));
+      R(c, bx, by + 1, 1, 1, A(P.black, 0.35));
+    }
+    // the frame, mullion and transom: dark painted wood, the inside edges lit from the room
+    R(c, WIN_X - 5, WIN_Y0 - 5, gw + 5, 5, P.black);
+    R(c, WIN_X - 5, WIN_Y0 - 5, 5, WIN_Y1 - WIN_Y0 + 10, P.black);
+    R(c, WIN_X - 5, WIN_Y1, gw + 5, 6, P.black);
+    R(c, WIN_X - 5, WIN_Y1, gw + 5, 1, A(P.tanShade, 0.45)); // the sill catches the lamp
+    R(c, WIN_X - 1, WIN_Y0, 1, WIN_Y1 - WIN_Y0, A(P.brown, 0.6));
+    R(c, MULL_X - 1, WIN_Y0, 3, WIN_Y1 - WIN_Y0, P.black);
+    R(c, MULL_X - 2, WIN_Y0, 1, WIN_Y1 - WIN_Y0, A(P.brown, 0.45));
+    R(c, WIN_X, MULL_Y - 1, gw, 3, P.black);
+    R(c, WIN_X, MULL_Y - 2, gw, 1, A(P.brown, 0.4));
+    // the curtain, drawn back to the left of the window: heavy cloth in deep folds
+    const CX0 = WIN_X - 40;
+    const CW2 = 46;
+    for (let x = CX0; x < CX0 + CW2; x++) {
+      const u = (x - CX0) / CW2;
+      // three deep folds; the faces turned to the lamp (left) take its light, falling off away from it
+      const v = 0.5 + 0.5 * sin(u * PI * 6 + 1.2);
+      const lit = v * (1 - u * 0.55);
+      // kept two steps under his face so the profile reads against it
+      const crest = v > 0.97; // the ridge of each fold
+      const col = crest && lit > 0.4 ? A(P.brown, 0.8) : lit > 0.55 ? A(P.maroon, 0.95) : lit > 0.25 ? A(P.maroon, 0.6) : lit > 0.1 ? A(P.maroon, 0.3) : P.black;
+      R(c, x, 0, 1, 178, P.black);
+      R(c, x, 0, 1, 178, col);
+    }
+    // its edge against the glass hangs in a soft wave
+    for (let y = 0; y < 178; y++) R(c, CX0 + CW2 + round(sin(y * 0.05) * 1.2), y, 1, 1, A(P.black, 0.6));
+    // the table lamp, out of focus: a pleated shade glowing, light escaping top and bottom
+    for (let j = 0; j < 17; j++) {
+      const hw = round(lerp(10, 15, j / 16));
+      const v = j / 16;
+      R(c, LAMP_X - hw, LAMP_Y + j, hw * 2, 1, v < 0.15 || v > 0.88 ? P.cream : v < 0.5 ? P.tanShade : P.yellow);
+      R(c, LAMP_X - hw, LAMP_Y + j, 1, 1, A(P.brown, 0.8));
+      R(c, LAMP_X + hw - 1, LAMP_Y + j, 1, 1, A(P.tanShade, 0.8));
+    }
+    for (let x = -12; x <= 12; x += 4) R(c, LAMP_X + x, LAMP_Y + 2, 1, 14, A(P.tanShade, 0.35)); // pleats
+    // the pools it throws on the wall above and below the shade
+    for (let k = 1; k <= 5; k++) {
+      oval(c, LAMP_X, LAMP_Y - 4 - k * 3, 12 + k * 7, 3 + k * 2, A(P.cream, 0.022));
+      oval(c, LAMP_X, LAMP_Y + 21 + k * 2, 14 + k * 6, 2 + k, A(P.cream, 0.02));
+    }
+    R(c, LAMP_X - 1, LAMP_Y + 17, 2, 22, P.tanShade); // the brass stem
+    R(c, LAMP_X - 1, LAMP_Y + 17, 1, 22, P.cream);
+  }),
+);
+// a few drops run down the glass, stick-slip, each in its own pane
+const DRIPS = [[252, 26, 9], [286, 40, 6], [334, 30, 11], [362, 104, 7], [320, 112, 8]];
+function drips(ctx, lt) {
+  for (let i = 0; i < DRIPS.length; i++) {
+    const x = DRIPS[i][0];
+    const y0 = DRIPS[i][1];
+    const sp = DRIPS[i][2];
+    const span = (y0 < MULL_Y ? MULL_Y - 3 : WIN_Y1 - 2) - y0;
+    // stick-slip: speed rises and falls but never reverses (0.7 x 1.3 < 1)
+    const d = (sp * (lt + 0.7 * sin(lt * 1.3 + i * 2.1) / 1.3) + i * 23) % span;
+    const y = round(y0 + d);
+    for (let k = 1; k <= 5 && y - k >= y0; k++) R(ctx, x, y - k, 1, 1, A(P.fog, 0.22 - k * 0.035));
+    R(ctx, x, y, 1, 1, P.fog);
+    R(ctx, x, y + 1, 1, 1, A(P.black, 0.4));
+  }
+}
 
 const HEAD_PTS = [
   [0, 51], [0.4, 49.5], [2, 47.6], [4, 45.4], [6, 43], [7.8, 40.4], [9.4, 37.6], [8.6, 35.2], [7.2, 33], [7.4, 30], [8, 26],
@@ -968,7 +1160,8 @@ const BUST_Y = 34; // screen y of the crown
 const NOSE_LEN = 4.4;
 
 function shotNose(ctx, lt) {
-  ctx.drawImage(noseBg(), 0, 0);
+  ctx.drawImage(lounge(), 0, 0);
+  drips(ctx, lt);
   // a warm haze behind him; the background is the light, he is the shadow
   const breath = round(key(lt, INHALE));
   const lean = round(key(lt, LEAN));
@@ -1014,6 +1207,78 @@ function shotNose(ctx, lt) {
 // --- 5. HERO -----------------------------------------------------------------------
 
 const heroBg = lazy(() => gradient('bf-hero', W, H, { cx: 192, cy: 96, rx: 200, ry: 150, ramp: [P.black, P.maroon, P.brown], gamma: 1.8, seam: 0.45 }));
+
+// Behind the plinth, deep in the dark, the cellar it came from: the racks of
+// the server hall, far out of focus, a warm glint on the odd bottle end, and a
+// brick vault overhead. Kept two steps under the bottle so it still leads.
+const VAULT_DX = -130; // racks then stand at x 20, 78, 136, 194, 252, 310, 368
+const vault = lazy(() =>
+  cached('bf-vault', W, H, (c) => {
+    c.drawImage(heroBg(), 0, 0);
+    // the brick vault: a shallow arch of courses, only its lower curve catching light
+    for (let x = 0; x < W; x++) {
+      const u = (x - 192) / 230;
+      const ay = round(30 + 26 * u * u);
+      R(c, x, 0, 1, ay, A(P.black, 0.55));
+      R(c, x, ay, 1, 1, A(P.tanShade, 0.12 * (1 - abs(u))));
+      for (let k = 1; k < 4; k++) if ((x + k * 7) % 14 === 0) R(c, x, ay - k * 6, 1, 5, A(P.black, 0.3));
+    }
+    // the racks of the server hall, far behind and dim (the same racks as the cellar shot)
+    c.save();
+    c.globalAlpha = 0.42;
+    c.drawImage(hallRacks(), VAULT_DX, 0);
+    c.restore();
+    // the floor in front of the racks, dark polished stone
+    R(c, 0, 170, W, 46, A(P.black, 0.5));
+  }),
+);
+
+// A slow drift of haze through the light (wraps horizontally): soft value
+// noise, quantised to three faint levels of warm light and ordered-dithered.
+const SMOKE_W = 256;
+const SMOKE_H = 120;
+const smokeTex = lazy(() =>
+  cached('bf-smoke', SMOKE_W, SMOKE_H, (c) => {
+    const img = c.createImageData(SMOKE_W, SMOKE_H);
+    const buf = new Uint32Array(img.data.buffer);
+    const lattice = (ix, iy, cell, seed) => hash01(((ix % (SMOKE_W / cell)) + (SMOKE_W / cell)) % (SMOKE_W / cell) + iy * 131, seed);
+    const noise = (x, y, cell, seed) => {
+      const fx = x / cell;
+      const fy = y / cell;
+      const ix = floor(fx);
+      const iy = floor(fy);
+      const sx = smooth(fx - ix);
+      const sy = smooth(fy - iy);
+      const a = lerp(lattice(ix, iy, cell, seed), lattice(ix + 1, iy, cell, seed), sx);
+      const b = lerp(lattice(ix, iy + 1, cell, seed), lattice(ix + 1, iy + 1, cell, seed), sx);
+      return lerp(a, b, sy);
+    };
+    const [cr, cg, cb] = [234, 212, 170]; // P.cream
+    for (let y = 0; y < SMOKE_H; y++) {
+      // thinner toward the top and bottom of the band
+      const env = sin((y / SMOKE_H) * PI);
+      for (let x = 0; x < SMOKE_W; x++) {
+        // stretched horizontally: haze lies in layers
+        const n = noise(x, y * 2.2, 64, 5) * 0.55 + noise(x, y * 2.2, 32, 6) * 0.3 + noise(x, y * 2.2, 16, 7) * 0.15;
+        const v = clamp((n - 0.52) / 0.22, 0, 1) * env;
+        const lv = v * 3 + bayer(x, y) - 0.5; // ordered dither between levels
+        const q = clamp(round(lv), 0, 3);
+        if (q > 0) buf[y * SMOKE_W + x] = (round(q * 15) << 24) | (cb << 16) | (cg << 8) | cr;
+      }
+    }
+    c.putImageData(img, 0, 0);
+  }),
+);
+/** The haze band at y, drifting right at `speed` px/s; alpha scales it. */
+function haze(ctx, lt, y, speed, alpha) {
+  if (alpha <= 0) return;
+  const tex = smokeTex();
+  const off = round(lt * speed) % SMOKE_W;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  for (let x = off - SMOKE_W; x < W; x += SMOKE_W) ctx.drawImage(tex, x, y);
+  ctx.restore();
+}
 const texHero = lazy(() => labelTex(37));
 const texSlate = lazy(() => labelTex(30));
 
@@ -1023,7 +1288,13 @@ const HERO_LEN = 3.33;
 function shotHero(ctx, lt) {
   ctx.drawImage(heroBg(), 0, 0);
   const up = smooth(prog(lt, 0.8, 2.0));
+  // the vault comes out of the dark with the lights
+  ctx.save();
+  ctx.globalAlpha = 0.3 + 0.7 * up;
+  ctx.drawImage(vault(), 0, 0);
+  ctx.restore();
   beam(ctx, 192, 0, 192, 172, 40, 110, { color: P.cream, alpha: 0.035 * up });
+  haze(ctx, lt, 58, 5, 0.25 + 0.6 * up);
   const k = tween(lt, 0, HERO_LEN + 0.5, 1, 1.06, 'inOut');
   const fy = 120;
   const base = round(fy + (172 - fy) * k);
@@ -1061,6 +1332,12 @@ const LEGAL = 'NO ALCOHOL. NO DATA. THE SERVER FARM CLOSED FOR UNRELATED REASONS
 
 function shotSlate(ctx, lt) {
   ctx.drawImage(slateBg(), 0, 0);
+  // the cellar racks behind the bottle only (the lock-up keeps clean ground);
+  // the clip falls in the gap between two racks
+  clipRect(ctx, 0, 0, 188, H);
+  ctx.globalAlpha = 0.3;
+  ctx.drawImage(hallRacks(), VAULT_DX, 0);
+  ctx.restore();
   beam(ctx, 112, 0, 112, 170, 30, 90, { color: P.cream, alpha: 0.03 });
   plinth(ctx, 112, 170, 54, 8);
   contact(ctx, 112, 171, 30, 0.6);

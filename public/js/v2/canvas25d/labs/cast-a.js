@@ -16,6 +16,9 @@
 //     'talk'        closeup speaking LINE (visemes.js buildSpeech)
 //     'gesture'     closeup performing `gesture` (any GESTURES name) from t = 0.3, looping every 4 s
 //     'studio'      the approved close single (camera.js singleCam, k) in the set, speaking
+//     'stage'       the presenter on their own programme's set (`programme`, default: paco/lola
+//                   WORLD NOW as a duo, sam NEWS IN 60, penny MONEY MINUTE) in camera.js
+//                   framing `framing` ('wide', 'mcu', 'mcu-r', 'close', 'single'...), speaking
 //   `bg`: 'ink' (default) or 'set' (studio background behind closeups when the set module loads)
 //   `zoom`: integer nearest-neighbour enlargement around the head for close-up modes (1 = off)
 import { C } from '../pixbuf.js';
@@ -24,7 +27,7 @@ import { drawCharacter, CHAR_PROFILE, GROUPS_PER_ACTOR } from '../character.js';
 import { poseAt } from '../rig.js';
 import { GESTURES } from '../gestures/index.js';
 import { buildSpeech } from '../visemes.js';
-import { singleCam, placeActor } from '../camera.js';
+import { singleCam, placeActor, framing as camFraming } from '../camera.js';
 import { SET } from '../studio/geometry.js';
 
 export const CAST_A = ['paco', 'lola', 'sam', 'penny'];
@@ -39,13 +42,14 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
 let SETMOD = null;
 import('../studio/set.js').then((m) => { SETMOD = m; }).catch(() => { SETMOD = null; });
 
-const state = { mode: 'lineup', presenter: 'paco', seat: 1, scale: 2.15, emotion: null, gesture: 'raise_hand', yaw: 0, pitch: 0, bg: 'ink', k: 4, zoom: 1 };
+const state = { mode: 'lineup', presenter: 'paco', seat: 1, scale: 2.15, emotion: null, gesture: 'raise_hand', yaw: 0, pitch: 0, bg: 'ink', k: 4, zoom: 1, programme: null, framing: 'mcu' };
+export const HOME = { paco: 'world-now', lola: 'world-now', sam: 'news-60', penny: 'money-minute' };
 const actors = new Map();
-function actorFor(id, kind) {
-  const key = `${id}|${kind}|${state.seat}|${state.emotion}|${state.gesture}`;
+function actorFor(id, kind, side = state.seat) {
+  const key = `${id}|${kind}|${side}|${state.emotion}|${state.gesture}`;
   let a = actors.get(key);
   if (!a) {
-    const perf = { side: state.seat, seed: 11, emotions: state.emotion ? [{ t0: 0, name: state.emotion }] : [] };
+    const perf = { side, seed: 11, emotions: state.emotion ? [{ t0: 0, name: state.emotion }] : [] };
     if (kind === 'talk') perf.speech = buildSpeech(LINE, { t0: 0.4 });
     a = actor(id, perf);
     actors.set(key, a);
@@ -138,6 +142,48 @@ function studio(t) {
   drawActors(t, [{ actor: a, x: pl.x, y: pl.y, s: pl.s }], clipRows);
 }
 
+// The presenter on their programme's set in a named framing (duo for WORLD NOW: Paco seat A, Lola seat B).
+const stageRows = new Int16Array(W);
+const STAGE_DUO = [{ actor: null, x: 0, y: 0, s: 1 }, { actor: null, x: 0, y: 0, s: 1 }];
+const STAGE_SOLO = [STAGE_DUO[0]];
+function stage(t) {
+  const id = state.presenter;
+  const prog = state.programme || HOME[id] || 'world-now';
+  const duo = prog === 'world-now' || prog === 'tech-bytes' || prog === 'cosmos';
+  const pair = duo ? (id === 'lola' || id === 'paco' ? ['paco', 'lola'] : [id, id === 'sam' ? 'penny' : 'sam']) : [id];
+  const focus = duo && pair[1] === id ? 'B' : 'A';
+  let cam;
+  try {
+    cam = camFraming(state.framing || 'mcu', { cast: duo ? { A: pair[0], B: pair[1] } : { A: id }, focus, solo: !duo, programId: prog });
+  } catch {
+    cam = singleCam(focus, state.k);
+  }
+  stageRows.fill(H);
+  let ok = false;
+  if (SETMOD) {
+    try {
+      SETMOD.drawBackground(frame, cam, t, { style: prog });
+      SETMOD.drawDesk(frame, cam, stageRows, prog);
+      ok = true;
+    } catch {
+      stageRows.fill(H);
+    }
+  }
+  if (!ok) frame.clear(C.ink);
+  const list = duo ? STAGE_DUO : STAGE_SOLO;
+  for (let i = 0; i < list.length; i++) {
+    const slot = i === 0 ? 'A' : 'B';
+    const X = duo ? SET.seatX[slot] : SET.seatX.solo ?? 0;
+    const pl = placeActor(cam, X);
+    const it = list[i];
+    it.actor = actorFor(pair[i], pair[i] === id ? 'talk' : 'idle', slot === 'B' ? -1 : 1);
+    it.x = pl.x;
+    it.y = pl.y;
+    it.s = pl.s;
+  }
+  drawActors(t, list, stageRows);
+}
+
 const MODES = {
   lineup,
   closeup: (t) => closeup(t, 'idle'),
@@ -146,6 +192,7 @@ const MODES = {
   talk: (t) => closeup(t, 'talk'),
   gesture: (t) => closeup(((t % 4) + 4) % 4, 'gesture'),
   studio,
+  stage,
 };
 
 // ---------------------------------------------------------------------------

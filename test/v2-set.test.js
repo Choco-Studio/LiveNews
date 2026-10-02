@@ -8,6 +8,7 @@ import { resetWall, wallShown, planetAzimuth } from '../public/js/v2/canvas25d/s
 import { LSTAR, lstarRGB, nameOf, isPalette, census, share, SATURATED } from '../public/js/v2/canvas25d/studio/color.js';
 import { SET } from '../public/js/v2/canvas25d/studio/geometry.js';
 import * as lab from '../public/js/v2/canvas25d/labs/set.js';
+import * as setMod from '../public/js/v2/canvas25d/studio/set.js';
 import { readPNG, writePNG, measure as measureZones, ZONES } from '../tools/measure-frame.mjs';
 
 // STUDIO SET stream (public/js/v2/canvas25d/studio/**): per-programme dressing and light, the live
@@ -345,6 +346,99 @@ describe('video wall', () => {
     assert.deepEqual([outro.mode, outro.phase], ['idle', 'outro']);
     const sc = { ...base, program: { id: 'world-now' }, wall: { mode: 'logo' } };
     assert.ok(wallFromScene(sc) === wallFromScene(sc), 'memoised for a static scene');
+  });
+});
+
+describe('frame 0: never a frame without the set (owner, 21:05)', () => {
+  // A fresh instance of set.js (a new module URL) has baked only the home look at import, exactly
+  // like a page that has just loaded. Its first frame of every programme must already be the whole
+  // set (bake synchronously on first use), identical to the frame of a warmed instance.
+  const cam = { x: 0, y: -60, z: 0, zoom: 1, hy: 52, soft: 0 };
+  const check = (px, style, label) => {
+    let line = 0, bezel = 0, plate = 0;
+    const r = wallRect(cam);
+    const cols = new Set();
+    for (let i = 0; i < px.length; i++) {
+      if (px[i] === style.deskLine) cols.add(i % W);
+      if (px[i] === C.red) plate++;
+    }
+    for (let x = r.x0 - 1; x < r.x1 + 1; x++) if (px[(r.y0 - 1) * W + x] !== px[(r.y0 - 3) * W + x]) bezel++;
+    line = cols.size;
+    assert.ok(line > 250, `${label}: desk line in ${line} columns`);
+    assert.ok(plate > 150, `${label}: desk plate (${plate} px)`);
+    assert.ok(bezel > 60, `${label}: wall bezel`);
+    const counts = new Map();
+    for (const c of px) counts.set(c, (counts.get(c) || 0) + 1);
+    assert.ok(Math.max(...counts.values()) < px.length * 0.6, `${label}: not an empty frame`);
+  };
+  test('a fresh page: the first frame of every programme has wall, desk, plate and line', async () => {
+    const fresh = await import(`../public/js/v2/canvas25d/studio/set.js?frame0=${process.pid}`);
+    const warm = await import('../public/js/v2/canvas25d/studio/set.js');
+    warm.warmSets();
+    const a = new Frame(), b = new Frame();
+    const ca = new Int16Array(W), cb = new Int16Array(W);
+    for (const id of [...PROGRAMS, 'weekend-review']) {
+      const style = styleFor(id);
+      assert.equal(fresh.setReady(id), style.bakeKey === 'world-now', `${id}: only the home look is baked at import`);
+      fresh.setCacheEnabled(false);
+      resetWall();
+      fresh.drawBackground(a, cam, 7, { style: id, wall: { mode: 'idle' }, cut: true });
+      fresh.drawDesk(a, cam, ca);
+      assert.ok(fresh.setReady(id));
+      check(a.px, style, id);
+      warm.setCacheEnabled(false);
+      resetWall();
+      warm.drawBackground(b, cam, 7, { style: id, wall: { mode: 'idle' }, cut: true });
+      warm.drawDesk(b, cam, cb);
+      assert.deepEqual(a.px, b.px, `${id}: first-use frame = warmed frame`);
+      assert.deepEqual(ca, cb);
+    }
+    fresh.setCacheEnabled(true);
+    warm.setCacheEnabled(true);
+  });
+  test('warmSets() bakes every programme of config/channel.json; a second call is free', () => {
+    const r1 = setMod.warmSets();
+    for (const id of PROGRAMS) assert.ok(setMod.setReady(id), id);
+    assert.deepEqual([...r1.baked].sort(), [...PROGRAMS].sort());
+    const r2 = setMod.warmSets();
+    assert.ok(r2.ms < 5, `second warm ${r2.ms} ms`);
+  });
+  test('a programme change mid-stream: the first frame of the new programme is its full set (cache on)', () => {
+    const fr = new Frame(), ref = new Frame();
+    const clip = new Int16Array(W), rclip = new Int16Array(W);
+    setCacheEnabled(true);
+    resetWall();
+    let t = 100;
+    for (let i = 0; i < 5; i++) {
+      drawBackground(fr, cam, (t += 1 / 60), { style: 'world-now', wall: { mode: 'idle' }, shotSince: 4 });
+      drawDesk(fr, cam, clip);
+    }
+    // the next programme comes in under the open, with no cut flag: the style change is a cut by itself
+    drawBackground(fr, cam, (t += 1 / 60), { style: 'cosmos', wall: { mode: 'idle' }, shotSince: 4 });
+    drawDesk(fr, cam, clip);
+    setCacheEnabled(false);
+    resetWall();
+    drawBackground(ref, cam, t, { style: 'cosmos', wall: { mode: 'idle' }, cut: true });
+    drawDesk(ref, cam, rclip);
+    setCacheEnabled(true);
+    assert.deepEqual(fr.px, ref.px);
+    check(fr.px, styleFor('cosmos'), 'cosmos after world-now');
+  });
+  test('a caller passing the theme accent as a u32 gets the programme\'s desk line (MONEY MINUTE darkGreen)', () => {
+    const fr = new Frame();
+    const clip = new Int16Array(W);
+    setCacheEnabled(false);
+    resetWall();
+    drawBackground(fr, cam, 3, { style: 'money-minute', wall: { mode: 'idle' }, cut: true });
+    drawDesk(fr, cam, clip, C.green);
+    let green = 0, dark = 0;
+    for (const c of fr.px) {
+      if (c === C.green) green++;
+      if (c === C.darkGreen) dark++;
+    }
+    setCacheEnabled(true);
+    assert.equal(green, 0);
+    assert.ok(dark > 250);
   });
 });
 

@@ -22,6 +22,11 @@
 //
 // Options:
 //   --url URL | --port N      channel page (default http://127.0.0.1:<port>/?autostart=1&voice=tts)
+//   --voices auto|harness     auto (default): the server's recorded voices when the episode has them (played
+//                             by the channel through WebAudio and captured with it), Kokoro here for anything
+//                             spoken through speechSynthesis; harness: adds voices=browser, so every line is
+//                             spoken through the fake speechSynthesis and synthesised here with the channel's casting
+//   --v2                      adds v2=1 (the wave-2 presenters/studio, opt-in during the wave)
 //   --out file.mp4            output (work files go to <out>.work/, kept with --keep)
 //   --seconds N               recording length (with --until: the maximum)
 //   --start now|open|break|endcard   begin at the next programme open / break / end card (default now)
@@ -30,9 +35,11 @@
 //   --max-wait N              seconds of channel time allowed to reach --start (default 240)
 //   --fps 30 --scale 5        video
 //   --music lofi|broadcast|none   bed engine (default lofi)
-//   --bed-under-voice N       where the bed sits under the voice while someone speaks, dB (default -24; the bed
-//                             gain is set from the recording, -6..+9 dB)
-//   --bed-db N                extra bed trim in dB (default 0); --duck-db N minimum extra bed duck under speech (default -6;
+//   --stories soft|off|drone  lofi's bedUnderStories switch: soft (default, the owner's soft bed under light and
+//                             neutral story copy), off (the bibles' dry story copy), drone
+//   --bed-under-voice N       level the bed so it sits N dB under the voice while someone speaks (default: off, the
+//                             music engine's own calibration against -16 LUFS voices is kept)
+//   --bed-db N                extra bed trim in dB (default 0); --duck-db N minimum extra bed duck under speech (default 0;
 //                             deeper where the engine's own duck is shallow, so the total is >= 16 dB)
 //   --lufs -16 --tp -1.5      loudness targets
 //   --cache DIR               voice clip cache (default ~/.cache/globit-showcase/voices)
@@ -50,7 +57,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { VoicePool, voiceFor, loadPresets, FAKE_VOICES } from './lib/voices.mjs';
+import { VoicePool, voiceFor, workerRequest, loadPresets, FAKE_VOICES } from './lib/voices.mjs';
 import { deriveCues, speechRegions, quietIntervals, renderBedsInPage, bedChunkInPage } from './lib/music.mjs';
 import { syncReport, loadMono, levels } from './lib/analysis.mjs';
 import { composeSheetInPage, composeAudioSheetInPage } from './lib/sheet.mjs';
@@ -68,8 +75,8 @@ async function loadPlaywright() {
 
 // ------------------------------------------------------------------ options
 const opts = {
-  seconds: 90, skip: 0, fps: 30, scale: 5, start: 'now', until: null, 'max-wait': 240, music: 'lofi',
-  'bed-db': 0, 'duck-db': -6, lufs: -16, tp: -1.5, sr: 48000, port: 8602, 'voice-engine': 'auto', 'voice-workers': 2,
+  seconds: 90, skip: 0, fps: 30, scale: 5, start: 'now', until: null, 'max-wait': 240, music: 'lofi', stories: 'soft',
+  'bed-db': 0, 'duck-db': 0, lufs: -16, tp: -1.5, sr: 48000, port: 8602, 'voice-engine': 'auto', 'voice-workers': 2,
 };
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
@@ -87,7 +94,16 @@ if (!opts.out) {
   console.error('usage: node tools/showcase/record-show.mjs --out show.mp4 [--port 8602 | --url URL] [--seconds 90] [--start now|open|break|endcard] [--until next-open+20] [--music lofi|broadcast|none]');
   process.exit(1);
 }
-const url = opts.url || `http://127.0.0.1:${opts.port}/?autostart=1&voice=tts`;
+const url = (() => {
+  const u = new URL(opts.url || `http://127.0.0.1:${opts.port}/?autostart=1&voice=tts`);
+  if (opts.voices === 'harness') u.searchParams.set('voices', 'browser');
+  if (opts.v2) u.searchParams.set('v2', '1');
+  return u.toString();
+})();
+if (opts.voices && !['auto', 'harness'].includes(opts.voices)) {
+  console.error(`bad --voices ${opts.voices} (auto | harness)`);
+  process.exit(1);
+}
 const origin = new URL(url).origin;
 const OUT = path.resolve(opts.out);
 const WORK = `${OUT.replace(/\.mp4$/i, '')}.work`;
@@ -146,6 +162,16 @@ const presets = loadPresets();
 const voices = new VoicePool({ size: opts['voice-workers'], cache: CACHE, env: { SHOWCASE_VOICE_ENGINE: opts['voice-engine'] } });
 const voiceReady = voices.ready.then((r) => (say(`voice workers ready (${r.engine}, ${opts['voice-workers']} processes)`), r));
 
+// speechSynthesis.speak() calls this binding: the synthesis starts at once
+// (urgent, ahead of the prefetch queue). The page still waits for the result,
+// which step() delivers before the clock moves again.
+await page.exposeBinding('__scSpeak', (_source, r) => {
+  try {
+    voiceReady.then(() => voices.request(workerRequest(r.text, voiceFor(r, presets)), { urgent: true }));
+  } catch { /* the between-frames pickup still serves it */ }
+  return true;
+});
+
 await page.goto(url, { waitUntil: 'domcontentloaded' });
 
 // Wait (real time) for fetches and images in flight, so replies land at the
@@ -168,7 +194,7 @@ async function serviceSpeech(reqs) {
     const v = voiceFor(r, presets);
     await voiceReady;
     const tw = Date.now();
-    const res = await voices.request({ text: r.text, voice: v.voice, speed: v.speed ?? null, lang: v.lang ?? null, effect: null }, { urgent: true });
+    const res = await voices.request(workerRequest(r.text, v), { urgent: true });
     if (!res.ok) {
       synthStats.errors++;
       say(`voice error for #${r.id}: ${res.error}`);
@@ -190,7 +216,7 @@ async function serviceSpeech(reqs) {
 function prefetch(list) {
   for (const r of list || []) {
     const v = voiceFor(r, presets);
-    voices.request({ text: r.text, voice: v.voice, speed: v.speed ?? null, lang: v.lang ?? null, effect: null }, { urgent: false });
+    voices.request(workerRequest(r.text, v), { urgent: false });
   }
 }
 // After a break starts, predict the next ready episode from the server's queue.
@@ -339,12 +365,15 @@ say(`recorded ${frames} frames (${seconds.toFixed(1)} s) · ${elapsed()}; real t
 
 // --------------------------------------------------------- WebAudio render
 const rendered = await page.evaluate(([a, b]) => window.__sc.renderAudio(a, b), [R, Rend]);
-{
-  const fd = fs.openSync(path.join(WORK, 'webaudio.f32'), 'w');
+// webaudio.f32: everything the channel played; speechbus.f32: its speech bus
+// alone (the server's recorded voices, when the channel played them itself).
+fs.rmSync(path.join(WORK, 'speechbus.f32'), { force: true });
+for (const [which, file] of [['mix', 'webaudio.f32'], ...(rendered.speechTapped && rendered.speechPeak > 1e-4 ? [['speech', 'speechbus.f32']] : [])]) {
+  const fd = fs.openSync(path.join(WORK, file), 'w');
   const CH = SR * 5;
   for (let from = 0; from < rendered.n; from += CH) {
     const count = Math.min(CH, rendered.n - from);
-    const [l, r] = await Promise.all([0, 1].map((ch) => page.evaluate(([c, f, n]) => window.__sc.audioChunk(c, f, n), [ch, from, count])));
+    const [l, r] = await Promise.all([0, 1].map((ch) => page.evaluate(([c, f, n, w]) => window.__sc.audioChunk(c, f, n, w), [ch, from, count, which])));
     const L = new Float32Array(Buffer.from(l, 'base64').buffer.slice(0));
     const Rr = new Float32Array(Buffer.from(r, 'base64').buffer.slice(0));
     const inter = new Float32Array(count * 2);
@@ -356,6 +385,8 @@ const rendered = await page.evaluate(([a, b]) => window.__sc.renderAudio(a, b), 
   }
   fs.closeSync(fd);
 }
+const speechInWebaudio = fs.existsSync(path.join(WORK, 'speechbus.f32'));
+const stemSpeechBus = speechInWebaudio ? loadMono(path.join(WORK, 'speechbus.f32')) : null;
 say(`WebAudio: ${rendered.contexts.length} context(s), peak ${(20 * Math.log10(rendered.peak || 1e-9)).toFixed(1)} dBFS, ${JSON.stringify(rendered.stats)} · ${elapsed()}`);
 await page.close();
 await ffDone;
@@ -390,8 +421,13 @@ const voiced = [];
   }
   if (on !== null) voiced.push({ start: rel(on), end: seconds + 1 });
 }
-const voiceSpans = [...heard.map((s) => ({ start: s.start, end: s.end })), ...voiced.filter((v) => v.end > 0 && v.start < seconds)];
-const recordedVoices = allLog.filter((e) => e.ev === 'say' && e.phase === 'start').length > 0 && heard.length === 0 && voiced.length > 0;
+// Recorded voices the channel played itself (decoded clips started on the speech bus).
+const clipsPlayed = allLog.filter((e) => e.ev === 'clip').map((e) => ({ start: rel(e.at), end: rel(e.at) + e.duration, duration: e.duration }));
+const voiceSpans = [
+  ...heard.map((s) => ({ start: s.start, end: s.end })),
+  ...voiced.filter((v) => v.end > 0 && v.start < seconds),
+  ...clipsPlayed.filter((c) => c.end > 0 && c.start < seconds),
+];
 const events = allLog
   .filter((e) => e.ev !== 'speech')
   .map((e) => {
@@ -401,13 +437,41 @@ const events = allLog
     return o;
   });
 
+// Sentences of the recorded voices the channel played: each starts when its
+// caption appears (onSentence fires as its first recorded word is heard) and
+// ends at the last sound on the speech bus before the next caption. The music
+// cue rules read them like the utterances synthesised here (headline lines,
+// pips, the greeting, the last word of the sign-off).
+const recordedSentences = [];
+if (stemSpeechBus && clipsPlayed.length) {
+  const HOPS = Math.round(SR * 0.01);
+  const env = new Float32Array(Math.floor(stemSpeechBus.length / HOPS));
+  for (let k = 0; k < env.length; k++) {
+    let sum = 0;
+    for (let i = k * HOPS; i < (k + 1) * HOPS; i++) sum += stemSpeechBus[i] * stemSpeechBus[i];
+    env[k] = 10 * Math.log10(sum / HOPS + 1e-12);
+  }
+  const subs = allLog.filter((e) => e.ev === 'subtitle').sort((a, b) => a.t - b.t);
+  subs.forEach((e, i) => {
+    if (!e.text) return;
+    const start = rel(e.t);
+    const clip = clipsPlayed.find((c) => start >= c.start - 0.2 && start <= c.end);
+    if (!clip) return;
+    const limit = Math.min(clip.end, i + 1 < subs.length ? rel(subs[i + 1].t) : clip.end, seconds);
+    let end = start;
+    for (let k = Math.max(0, Math.floor(start * 100)); k < Math.min(env.length, Math.floor(limit * 100)); k++) if (env[k] > -45) end = (k + 1) / 100;
+    if (start < 0 || start >= seconds) return; // outside the recording: no stem to measure
+    recordedSentences.push({ ev: 'speech', t: e.t, end: R + Math.max(end, start + 0.2) * 1000, text: e.text, volume: 1, recorded: true });
+  });
+}
+
 // ------------------------------------------------------------------- beds
 let cues = [];
 let bedsInfo = null;
 const measureDuck = Boolean(opts['measure-duck']) || seconds <= 150;
 const PREROLL = 8;
 if (opts.music !== 'none') {
-  cues = deriveCues(allLog);
+  cues = deriveCues([...allLog, ...recordedSentences]);
   const B = R - PREROLL * 1000; // the bed render starts before the window, so a bed is already playing
   const before = cues.filter((c) => c.t < B);
   const engineCues = [...(before.length ? [{ ...before[before.length - 1], t: B }] : []), ...cues.filter((c) => c.t >= B && c.t < Rend)]
@@ -419,7 +483,7 @@ if (opts.music !== 'none') {
   const total = PREROLL + seconds + 1;
   try {
     const tb = Date.now();
-    bedsInfo = await bedPage.evaluate(renderBedsInPage, { engine: opts.music, cues: engineCues, speech: regionsB, seconds: total, sampleRate: SR, dry: measureDuck });
+    bedsInfo = await bedPage.evaluate(renderBedsInPage, { engine: opts.music, cues: engineCues, speech: regionsB, seconds: total, sampleRate: SR, dry: measureDuck, stories: opts.stories });
     bedsInfo.ms = Date.now() - tb; // the page clock is the context's paused fake clock
     for (const which of measureDuck ? ['wet', 'dry'] : ['wet']) {
       const fd = fs.openSync(path.join(WORK, which === 'wet' ? 'beds.f32' : 'beds-dry.f32'), 'w');
@@ -461,8 +525,8 @@ const manifest = {
   speech: regions,
   quiet: quietIntervals(allLog, R),
   bedGainDb: opts['bed-db'],
-  bedUnderVoiceDb: Number(opts['bed-under-voice'] ?? -24),
-  voiceInWebaudio: recordedVoices,
+  bedUnderVoiceDb: opts['bed-under-voice'] != null ? Number(opts['bed-under-voice']) : null, // null: keep the composer's level
+  webSpeech: speechInWebaudio ? path.join(WORK, 'speechbus.f32') : null, // voices inside the WebAudio stem (duck reference)
   extraDuckDb: opts['duck-db'],
   lufs: opts.lufs,
   tp: opts.tp,
@@ -493,21 +557,44 @@ say(`encoded ${opts.scale}x H.264 + AAC in ${((Date.now() - tEnc) / 1000).toFixe
 const stem = (name) => loadMono(path.join(WORK, `${name}.wav`));
 const stemWeb = stem('webaudio');
 const stemVoice = stem('voice');
-const sync = syncReport({ events, speech: heard, webaudio: stemWeb, voice: stemVoice, sr: SR });
+const sync = syncReport({ events, speech: heard, webaudio: stemWeb, voice: stemVoice, speechBus: stemSpeechBus, clips: clipsPlayed, sr: SR });
 const shotAt = (t) => {
   let shot = null;
   for (const e of events) if (e.ev === 'shot' && (e.at ?? e.t) <= t + 1e-3) shot = e;
   return shot;
 };
+// Who speaks when: utterances synthesised here, else the segment on air (its
+// anchor, cast from the episode) while the channel plays a recorded voice.
+const sayStarts = events.filter((e) => e.ev === 'say' && e.phase === 'start');
+const sayEnds = new Map(events.filter((e) => e.ev === 'say' && e.phase === 'end').map((e) => [e.ref, e.t]));
+const castAt = (t) => {
+  let cast = null;
+  for (const e of events) if (e.ev === 'playEpisode' && e.phase === 'start' && e.t <= t) cast = e.cast;
+  return cast;
+};
+const segmentAt = (t) => sayStarts.filter((e) => e.t <= t && (sayEnds.get(e.t) ?? Infinity) >= t).pop() ?? null;
+const captionAt = (t) => {
+  let c = null;
+  for (const e of events) if (e.ev === 'subtitle' && e.t <= t + 1e-3) c = e.text;
+  return c;
+};
+const speakerAt = (t) => {
+  const sp = heard.find((x) => x.start <= t && x.end >= t);
+  if (sp) return { who: sp.presenter || (sp.ad ? `VO ${sp.ad}` : sp.slot), text: sp.text };
+  const clip = clipsPlayed.find((c) => c.start <= t && c.end >= t);
+  if (!clip) return null;
+  const seg = segmentAt(t);
+  const who = seg ? castAt(t)?.[seg.anchor] ?? seg.anchor : 'VO';
+  return { who: `${who} (server voice)`, text: captionAt(t) ?? '' };
+};
 const tiles = sheetTiles.map((tile) => {
   const s = shotAt(tile.t);
-  const sp = heard.find((x) => x.start <= tile.t && x.end >= tile.t);
+  const sp = speakerAt(tile.t);
   const mm = `${Math.floor(tile.t / 60)}:${(tile.t % 60).toFixed(1).padStart(4, '0')}`;
-  const who = sp ? (sp.presenter || (sp.ad ? `VO ${sp.ad}` : sp.slot)) : '';
   return {
     png: tile.png,
     label: `${mm}  ${s?.shot ?? '?'}${s?.programId ? ` · ${s.programId}` : ''}${s?.card?.ad ? ` · ${s.card.ad}` : ''}`,
-    sub: sp ? `${who}: "${sp.text}"` : '(no voice)',
+    sub: sp ? `${sp.who}: "${sp.text}"` : '(no voice)',
   };
 });
 const sheetPage = await context.newPage();
@@ -524,12 +611,19 @@ const audioUrl = await sheetPage.evaluate(composeAudioSheetInPage, {
   seconds,
   lanes: [
     { name: 'voice', color: '#4fb8e8', values: levels(stemVoice, SR, HOP) },
+    ...(stemSpeechBus ? [{ name: 'srv voice', color: '#4fe8c8', values: levels(stemSpeechBus, SR, HOP) }] : []),
     { name: 'webaudio', color: '#e8b04f', values: levels(stemWeb, SR, HOP) },
     { name: 'beds', color: '#a77fe8', values: levels(stem('beds'), SR, HOP) },
     { name: 'mix', color: '#9ad47a', values: levels(loadMono(manifest.out), SR, HOP) },
   ],
   shots: shotMarks,
-  speech: heard.map((x) => ({ start: x.start, end: x.end, who: x.presenter || (x.ad ? 'VO' : x.slot || '?') })),
+  speech: [
+    ...heard.map((x) => ({ start: x.start, end: x.end, who: x.presenter || (x.ad ? 'VO' : x.slot || '?') })),
+    ...clipsPlayed.map((c) => {
+      const seg = segmentAt(c.start + 0.2);
+      return { start: c.start, end: c.end, who: seg ? castAt(c.start)?.[seg.anchor] ?? seg.anchor : 'VO' };
+    }),
+  ],
   cues: cues.map((c) => ({ t: rel(c.t), label: `${c.moment}${c.opts.emotion && c.opts.emotion !== 'neutral' ? `(${c.opts.emotion})` : ''}` })).filter((c) => c.t >= 0 && c.t <= seconds),
   quiet: manifest.quiet,
 });
@@ -540,11 +634,12 @@ await browser.close();
 
 const timeline = {
   meta: {
-    url, out: OUT, fps: FPS, seconds, frames, sampleRate: SR, start: opts.start, until: opts.until, music: opts.music,
+    url, out: OUT, fps: FPS, seconds, frames, sampleRate: SR, start: opts.start, until: opts.until, music: opts.music, stories: opts.stories,
     recordedAt: new Date().toISOString(), wallClockStart: new Date(T0 + (R ?? 0)).toISOString(), voiceCache: CACHE,
     voicePresets: presets.file, realSeconds: (Date.now() - t0Real) / 1000,
   },
   speech: speech.map(({ clip, ...s }) => ({ ...s, clip: clip ? path.basename(clip) : null })),
+  recordedClips: clipsPlayed,
   music: cues.map((c) => ({ t: rel(c.t), moment: c.moment, opts: c.opts, why: c.why })),
   events,
   reports: { mix: mixReport, sync, timingMs: timing, synth: { ...synthStats, pool: voices.stats }, page: pageStats, webaudio: rendered, beds: bedsInfo, pageErrors: pageErrors.slice(0, 50) },
@@ -552,7 +647,7 @@ const timeline = {
 const timelinePath = OUT.replace(/\.mp4$/i, '') + '-timeline.json';
 fs.writeFileSync(timelinePath, JSON.stringify(timeline, null, 1));
 if (!opts.keep) {
-  for (const f of ['webaudio.f32', 'beds.f32', 'beds-dry.f32', 'mix-raw.wav', 'video-native.mkv']) fs.rmSync(path.join(WORK, f), { force: true });
+  for (const f of ['webaudio.f32', 'speechbus.f32', 'beds.f32', 'beds-dry.f32', 'mix-raw.wav', 'video-native.mkv']) fs.rmSync(path.join(WORK, f), { force: true });
 }
 say(`done in ${elapsed()}: ${OUT}`);
 say(`sheet ${sheetPath}`);

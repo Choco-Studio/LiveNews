@@ -19,11 +19,12 @@ import { drawText, measureText } from '../font.js';
 import { drawLogo, measureLogo } from '../logo.js';
 import {
   mk, rgba, u32, clamp, lerp, seg, easeOutQuint, easeInOut, slab, clipRect, disc,
-  ellipsis, wrapLines, balanceLines, textW, clockIn, textCacheFn,
+  ellipsis, wrapLines, balanceLines, textW, clockIn, textCacheFn, stepDown,
 } from '../gfx/index.js';
 import { backdrop, lazyBackdrop } from './opens/kit.js';
 import { drawEarth, globeTexture } from './opens/world.js';
-import { drawOpen, lockupFor } from './opens.js';
+import { drawProgrammeLockup } from './opens.js';
+import { drawIdentScene, IDENT_WARM } from './opens/ident.js';
 
 export const STINGER_DURATION = 0.8; // seconds
 
@@ -1153,95 +1154,85 @@ export function drawStartScreen(ctx, t, { channel = 'GLOBIT 24', prompt = 'CLICK
 }
 
 // ---------------------------------------------------------------------------
-// UP NEXT promo (end of a break): the next programme's open replayed from its
-// glide to its lock-up (without the on-air top row: we are in a break), a micro
-// UP NEXT label above the title plate and an optional micro footer under the
-// credits, both placed from the open's own lock-up geometry. No clock text.
+// UP NEXT promo (the last card of a break): a NETWORK card, not a replay of the
+// open (the open itself follows a stinger later). The next programme's settled
+// lock-up (its emblem still, plate, title, tagline and credits, exactly the
+// frame its open will end on) sits on the channel's ident field. It arrives by
+// a two-step palette fade (one step darker, then itself) while rising 6 px, a
+// micro UP NEXT appears above the plate, and then nothing moves
+// (channel-and-breaks.md 5.4: the next open's lock-up frame, card motion <= 8 px,
+// no clock text). The footer is shown only when it adds something: the promo
+// closes the break, so "AFTER THE BREAK" is never drawn.
 
-const PROMO_INFO = new WeakMap();
+const PROMO_FIELD = lazyBackdrop({ key: 'promo', colors: [P.black, P.ink], cx: 192, cy: 150, reach: 260 });
+const PROMO_ART = new WeakMap();
+const PROMO_NONE = { title: 'GLOBIT 24', tagline: '', presenters: [] };
+/** The lock-up baked twice (itself and one palette step darker) per announced programme. */
+function promoArt(next, nameOf) {
+  let a = next ? PROMO_ART.get(next) : null;
+  if (a) return a;
+  const n = next || PROMO_NONE;
+  const pres = Array.isArray(n.presenters) ? n.presenters : [];
+  const info = {
+    title: String(n.title || 'GLOBIT 24'),
+    tagline: String(n.tagline || ''),
+    presenters: pres.map((p) => {
+      try {
+        return String(nameOf(p) ?? '');
+      } catch {
+        return String(p ?? '').toUpperCase();
+      }
+    }),
+    channel: 'GLOBIT 24',
+    bug: false,
+  };
+  const id = typeof n.id === 'string' ? n.id : '';
+  const full = mk(W, H);
+  const L = drawProgrammeLockup(full.getContext('2d'), id, info);
+  const dim = mk(W, H);
+  const dx = dim.getContext('2d');
+  dx.drawImage(full, 0, 0);
+  try {
+    const img = dx.getImageData(0, 0, W, H);
+    stepDown(new Uint32Array(img.data.buffer), 1);
+    dx.putImageData(img, 0, 0);
+  } catch {
+    /* no pixel access: the fade starts on the full colours */
+  }
+  a = { full, dim, L, id };
+  if (next) PROMO_ART.set(next, a);
+  return a;
+}
+
 /**
- * card = { next: { id, title, tagline, presenters }, label, footer }; nameOf maps
- * a presenter id to the on-air name (the info is built once per card).
+ * card = { next: { id, title, tagline, presenters }, label, footer }; nameOf maps a presenter id
+ * to the on-air name (the art is built once per card).
  */
 export function drawPromoCard(ctx, t, dt, card = {}, nameOf = (id) => String(id || '').toUpperCase()) {
-  const { next = null, label = 'UP NEXT', footer = 'AFTER THE BREAK' } = card || {};
-  let info = next ? PROMO_INFO.get(next) : null;
-  if (!info) {
-    info = {
-      title: next?.title || 'GLOBIT 24',
-      tagline: next?.tagline || '',
-      presenters: (next?.presenters || []).map((p) => nameOf(p)),
-      channel: 'GLOBIT 24',
-      bug: false,
-    };
-    if (next) PROMO_INFO.set(next, info);
-  }
-  const id = next?.id || '';
-  drawOpen(ctx, t, 1.6 + Math.max(0, dt), id, info);
-  const L = lockupFor(id, info);
-  const tag = ellipsis(label || 'UP NEXT', 160, 1);
-  rise(ctx, tag, L.titleX, L.plateY - 10, seg(dt, 0.9, 0.3), S.microFog, 4);
-  if (footer) rise(ctx, ellipsis(footer, W - 19 - L.titleX, 1), L.titleX, L.bottom + 8, seg(dt, 1.5, 0.3), S.microFog, 4);
+  const c = card || {};
+  const next = c.next && typeof c.next === 'object' ? c.next : null;
+  const d = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+  ctx.drawImage(PROMO_FIELD(), 0, 0);
+  const A = promoArt(next, typeof nameOf === 'function' ? nameOf : (id) => String(id || '').toUpperCase());
+  if (d < 0.1) return;
+  // two palette steps in 0.15 s while the group rises 6 px (eased out), then still
+  const off = Math.round((1 - easeOutQuint(seg(d, 0.1, 0.45))) * 6);
+  ctx.drawImage(d < 0.25 ? A.dim : A.full, 0, off);
+  const L = A.L;
+  const tag = ellipsis(c.label || 'UP NEXT', 160, 1);
+  if (d >= 0.4) drawText(ctx, tag, L.titleX, L.plateY - 10, S.microFog);
+  const footer = c.footer && String(c.footer).toUpperCase() !== 'AFTER THE BREAK' ? ellipsis(c.footer, W - 19 - L.titleX, 1) : '';
+  if (footer && d >= 0.55) drawText(ctx, footer, L.titleX, L.bottom + 8, S.microFog);
 }
 
 // ---------------------------------------------------------------------------
-// IDENT (between programmes and breaks): the GLOBIT 24 wordmark arrives by a
-// two-step palette fade (steel, then the logo itself), no slide and no scale;
-// behind it the earth's horizon turns slowly (once every 120 s), the one
-// motivated movement of the hold.
+// IDENT (between programmes and breaks): Europe from orbit with one slow motion,
+// the terminator crossing it (cities coming on at dusk, going out at dawn), the
+// wordmark arriving by a two-step palette fade over the horizon (opens/ident.js).
 
-const IDENT_FIELD = lazyBackdrop({ key: 'ident', colors: [P.black, P.ink], cx: 192, cy: 216, reach: 230 });
-// one palette step down for every colour of the logo (white -> steel is the "steel" step)
-const STEP_DOWN = new Map([
-  [P.white, P.steel], [P.silver, P.slate], [P.fog, P.slate], [P.cream, P.tanShade], [P.yellow, P.tanShade], [P.orange, P.brown],
-  [P.red, P.darkRed], [P.darkRed, P.maroon], [P.pink, P.darkRed], [P.steel, P.ink], [P.slate, P.ink],
-].map(([a, b]) => [u32(a), u32(b)]));
-const DIMMED = new Map();
-/** The logo with every colour one palette step darker (baked once per scale). */
-function dimmedLogo(sc) {
-  let v = DIMMED.get(sc);
-  if (v) return v;
-  const size = measureLogo({ variant: 'full', scale: sc, slogan: true });
-  const c = mk(size.w + 8, size.h + 8);
-  const cx = c.getContext('2d');
-  drawLogo(cx, (size.w + 8) / 2, 4, { variant: 'full', scale: sc, slogan: true, align: 'center' });
-  const img = cx.getImageData(0, 0, c.width, c.height);
-  const d = new Uint32Array(img.data.buffer);
-  for (let i = 0; i < d.length; i++) {
-    if (!(d[i] >>> 24)) continue;
-    const m = STEP_DOWN.get((d[i] | 0xff000000) >>> 0);
-    if (m !== undefined) d[i] = m;
-  }
-  cx.putImageData(img, 0, 0);
-  v = { cv: c, w: size.w, h: size.h };
-  DIMMED.set(sc, v);
-  return v;
-}
-
-export function drawIdentCard(ctx, t, dt) {
-  ctx.drawImage(IDENT_FIELD(), 0, 0);
-  // the earth's horizon: a big globe below the frame turning once every 120 s
-  drawEarth(ctx, 192, 300, 132, -20 + ((Math.max(0, dt) * 3) % 360));
-  const sc = measureLogo({ variant: 'full', scale: 3, slogan: true }).w <= W - 40 ? 3 : 2;
-  const size = measureLogo({ variant: 'full', scale: sc, slogan: true });
-  const y = 54;
-  const g = dt - 0.4;
-  if (g < 0) return;
-  if (g < 0.15) {
-    const s = dimmedLogo(sc);
-    ctx.drawImage(s.cv, Math.round(W / 2 - (size.w + 8) / 2), y - 4);
-    return;
-  }
-  // the logo, its glint once (logo.js plays it during the first 0.9 s of t)
-  const gl = dt - 0.9;
-  drawLogo(ctx, W / 2, y, { variant: 'full', scale: sc, slogan: true, align: 'center', t: gl >= 0 && gl < 0.9 ? gl : null });
-  // a red rule draws out under it
-  const rp = easeOutQuint(seg(dt, 0.75, 0.45));
-  const rw = Math.round(size.w * 0.5 * rp);
-  if (rw > 0) {
-    ctx.fillStyle = P.red;
-    ctx.fillRect(Math.round(W / 2 - rw / 2), y + size.h + 8, rw, 1);
-  }
+/** The channel ident at dt (opts.variant 'dusk' | 'dawn' forces the daypart; default from the London clock). */
+export function drawIdentCard(ctx, t, dt, opts = null) {
+  drawIdentScene(ctx, dt, opts);
 }
 
 // ---------------------------------------------------------------------------
@@ -1311,11 +1302,12 @@ export function drawStinger(ctx, t, p) {
 // Warm the card backdrops in the background (one per timer slice) so the first
 // card of the day never stutters.
 if (typeof document !== 'undefined' && typeof setTimeout === 'function') {
-  const jobs = [MONTAGE_FIELD, factField, inkField, breakingField, END_FIELD, START_FIELD, IDENT_FIELD, () => testCardLayer('GLOBIT 24'), () => {
-    const c = document.createElement('canvas').getContext('2d');
-    drawIdentCard(c, 0, 2);
-    drawStartScreen(c, 0, {});
-  }];
+  // one small job per timer slice (no slice over a few ms): fields, the test card, the ident's
+  // pieces, then one ident frame and one start frame on their own
+  let scratch = null;
+  const sc = () => scratch || (scratch = document.createElement('canvas').getContext('2d'));
+  const jobs = [MONTAGE_FIELD, factField, inkField, breakingField, END_FIELD, START_FIELD, PROMO_FIELD, () => testCardLayer('GLOBIT 24'), ...IDENT_WARM,
+    () => drawIdentCard(sc(), 0, 2), () => drawStartScreen(sc(), 0, {})];
   let j = 0;
   const step = () => {
     if (j >= jobs.length) return;

@@ -7,9 +7,11 @@
 // director's rules (runtime/direction.js), the Stage with its cue clock
 // (runtime/stage.js, cueclock.js), CAMERA's framings, SET's studio, the rig and
 // the looks. Only the director's timers and the AudioEngine are simulated:
-//   - the director: open 4 s, montage under the intro, one segment after the
-//     other with the director's gaps, shot cues at sentence starts (or the
-//     char's time inside a sentence) with MIN_SHOT, the end card after the outro;
+//   - the director: open 4 s, the intro on its plan as LiveDirection.intro plays
+//     it (headline frames at each teaser sentence, the greeting's studio shot, the
+//     last shot's minLen), one segment after the other with the director's gaps,
+//     shot cues at sentence starts (or the char's time inside a sentence) with
+//     MIN_SHOT, the end card after the outro;
 //   - the voice: audio/visemes.js buildTimeline per sentence (what the engine
 //     plays in mute and blips) with the engine's pauses; `voice: 'recorded'`
 //     also gives every segment seg.audio.words from the same timeline (lead 0.18 s),
@@ -22,6 +24,7 @@
 //   window.__lab.render(T)          draw instant T (s from the start of the episode)
 //   window.__lab.timeline()         { duration, segments: [...], shots: [...] } (capture planning)
 //   window.__lab.perf({ frames, runs })   v2 shot ms p50/p95 (min over runs) on this programme
+//   window.__lab.baseline({ runs })       ms of a fixed reference workload (same-session ratio)
 //   window.__lab.state()            the scene, the plan and the clock stats at the last render
 import { Stage, STUDIO_SHOTS } from '../runtime/stage.js';
 import { planSegment } from '../direction/index.js';
@@ -181,6 +184,22 @@ function buildShow(epIn, presenters, voice) {
       return sentAt[k] + (w ? w.t0 / 1000 : 0);
     };
     const studio = (s) => STUDIO_SHOTS.has(s);
+    // the v2 intro (LiveDirection.intro): every cue of the plan at its sentence's first word, montage
+    // frames on the story each sentence teases, no MIN_SHOT hold (voice-paced), no cut back at the end
+    const introCues = seg.type === 'intro' ? cuesFromPlan(plan, { rundown: ep.rundown }) : null;
+    if (introCues) {
+      let hold = 0;
+      for (const c of introCues) {
+        const at = c.k === 0 ? segStart : c.mid ? timeOfChar(c.char) : sentAt[c.sentence] ?? segStart;
+        if (c.k > 0 && at > speechEnd) continue;
+        if (c.shot === 'montage') cut(at, 'montage', { ...base, card: c.card, storyId: null });
+        else cut(at, c.shot, { ...base, focus: c.focus, framing: c.framing, move: c.move, cue: c.k });
+        hold = Math.min(2, (c.minLen || 0) - (speechEnd - at));
+      }
+      segs.push({ i, seg, plan, segStart, speechStart, speechEnd, sentAt, tls });
+      t = speechEnd + Math.max(0, hold) + GAP_AFTER;
+      continue;
+    }
     if (seg.type === 'intro' && (ep.rundown || []).length >= 2) {
       const frames = Math.min(3, ep.rundown.length);
       for (let f = 0; f < frames; f++) cut(segStart + f * MONTAGE_FRAME, 'montage', { ...base, card: f });
@@ -263,10 +282,12 @@ function slate(ctx, shot, show, s) {
     shot.shot === 'map' ? `MAP  ${seg?.location?.place || ''}` :
     shot.shot === 'fact' ? `FACT  ${seg?.numbers?.[0]?.value || seg?.fact || ''}` :
     shot.shot === 'full' ? `PICTURE  ${seg?.kicker || ''}` :
-    shot.shot === 'montage' ? `HEADLINES ${shot.card + 1}` :
+    shot.shot === 'montage' ? `HEADLINE ${shot.card + 1}: ${show.ep.rundown?.[shot.card]?.headline || ''}` :
     shot.shot === 'open' ? `OPEN  ${show.ep.program?.title || ''}` :
     shot.shot.toUpperCase();
-  drawText(ctx, what.slice(0, 46), 192, 104, { color: P.fog, align: 'center' });
+  const cut = what.length > 46 ? what.lastIndexOf(' ', 46) : -1;
+  drawText(ctx, (cut > 0 ? what.slice(0, cut) : what).slice(0, 46), 192, cut > 0 ? 98 : 104, { color: P.fog, align: 'center' });
+  if (cut > 0) drawText(ctx, what.slice(cut + 1, cut + 47), 192, 110, { color: P.fog, align: 'center' });
 }
 
 // zoom: { x, y, w, h } of the frame blown up to fill the screen (nearest neighbour), to judge
@@ -447,6 +468,25 @@ export function createIntegLab(canvas, { episodes = EPISODES, presenters = PRESE
         mean: total / Math.max(1, count),
         sections: { bg: prof.bg * k, desk: prof.desk * k, actors: prof.actors * k, present: prof.present * k },
       };
+    },
+    /**
+     * A fixed reference workload (a 384x216 raster pass with a per-pixel branch, 8 times): its ms,
+     * minimum over runs, so perf numbers can be reported as a ratio to the machine's speed in the
+     * same session (the shared machine's load swings ±50 %).
+     */
+    baseline({ runs = 5 } = {}) {
+      const px = new Uint32Array(384 * 216);
+      let best = Infinity;
+      for (let r = 0; r < runs; r++) {
+        const a = performance.now();
+        for (let k = 0; k < 8; k++) {
+          for (let y = 0, i = 0; y < 216; y++) {
+            for (let x = 0; x < 384; x++, i++) px[i] = ((x ^ y) + k) & 4 ? 0xff203040 + y : px[i] ^ (x << 8);
+          }
+        }
+        best = Math.min(best, performance.now() - a);
+      }
+      return { ms: best, check: px[1234] };
     },
     state() {
       return { scene: { shot: scene?.shot, framing: scene?.framing, focus: scene?.focus, seg: scene?.segPlan?.index }, clock: stage?.clock.stats, perf: stage?.actors.map((a) => ({ slot: a.slot, gestures: a.perf.gestures.map((g) => g.name), looks: a.perf.look.length, emotions: a.perf.emotions.map((e) => e.name) })) };

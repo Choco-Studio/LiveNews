@@ -18,7 +18,7 @@
 //   framing     one framing (set framing / focus) at time t (idle presenters)
 import { C } from '../pixbuf.js';
 import { frame, actor, drawActors } from '../scene.js';
-import { drawBackground, drawDesk } from '../studio/set.js';
+import * as SETMOD from '../studio/set.js';
 import { SET } from '../studio/geometry.js';
 import { framing, cameraAt, framingInfo, placeActor, moveScale } from '../camera.js';
 import { planSegment } from '../direction/index.js';
@@ -63,21 +63,36 @@ function drawStudio(cam, t, cast, programId, wall = null, focus = 'A') {
   const solo = !cast.B;
   const w = wall ? { ...wall, focus: solo ? 'solo' : focus, solo } : { mode: 'idle', focus: solo ? 'solo' : focus, solo };
   try {
-    drawBackground(frame, cam, t, { style: programId, wall: w, cut: true });
-    drawDesk(frame, cam, clipRows);
+    SETMOD.drawBackground(frame, cam, t, { style: programId, wall: w, cut: true });
+    SETMOD.drawDesk(frame, cam, clipRows);
   } catch {
-    drawBackground(frame, cam, t);
-    drawDesk(frame, cam, clipRows, C.red);
+    SETMOD.drawBackground(frame, cam, t);
+    SETMOD.drawDesk(frame, cam, clipRows, C.red);
   }
   const list = actorsFor(cast).map(({ a, X }) => ({ actor: a, ...placeActor(cam, X) }));
   drawActors(t, list, clipRows);
 }
 
-/** Wall content for a storyboard shot from the segment's data (SET draws it). */
-function wallFor(seg) {
-  if (!seg || seg.type !== 'story') return null;
-  if (seg.location?.lat !== undefined) return { mode: 'map', location: seg.location, since: 0 };
-  return { mode: 'plate', label: seg.kicker || seg.source || seg.category || '' };
+/**
+ * Wall content for a storyboard shot: SET's own live decision (wallFromScene) from the segment's plan,
+ * the framing and the cast, as the Stage asks it on air (no pictures in the lab); a plain fallback when
+ * the export is missing.
+ */
+function wallFor(s) {
+  const plan = board.plans[s.seg];
+  const seg = plan?.ctx?.seg;
+  if (!seg) return null;
+  if (typeof SETMOD.wallFromScene === 'function') {
+    try {
+      const scene = { program: { id: board.programId }, segPlan: { ctx: { seg, shots: plan.events } }, framing: s.framing, focus: s.focus, cast: board.cast, storyId: seg.storyId ?? null, images: new Map() };
+      return { ...SETMOD.wallFromScene(scene, board.programId), since: s.t0 };
+    } catch {
+      /* fall through */
+    }
+  }
+  if (seg.type !== 'story') return null;
+  if (seg.location?.lat !== undefined) return { mode: 'map', location: seg.location, since: s.t0 };
+  return { mode: 'plate', label: seg.kicker || seg.source || seg.category || '', since: s.t0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -114,9 +129,11 @@ function galleryCases(programme) {
 // Moves
 
 const MOVES = {
-  greeting: { programId: 'world-now', framing: 'wide', move: { type: 'push', amount: 0.04, delay: 0.5, dur: 4.4 } },
-  lead: { programId: 'world-now', framing: 'mcu-l', focus: 'A', move: { type: 'push', amount: 0.035, delay: 0.5, dur: 5.0 } },
-  signoff: { programId: 'world-now', framing: 'wide', move: { type: 'pull', amount: 0.04, delay: 0.5, dur: 5.0 } },
+  // the numbers planShots gives on saved offline episodes (test/fixtures/v2-camera-world-now-3/-5/-6) and the
+  // tech-bytes bible's example (a 4 s question: 0.3 s in, 0.5 %/s, stopping 0.5 s before the cut)
+  greeting: { programId: 'world-now', framing: 'wide', move: { type: 'push', amount: 0.034, delay: 0.5, dur: 4.258 } },
+  lead: { programId: 'world-now', framing: 'mcu-l', focus: 'A', move: { type: 'push', amount: 0.04, delay: 0.5, dur: 6.497 } },
+  signoff: { programId: 'world-now', framing: 'wide', move: { type: 'pull', amount: 0.04, delay: 0.5, dur: 7.263 } },
   catch: { programId: 'tech-bytes', framing: 'close', focus: 'B', move: { type: 'push', amount: 0.016, delay: 0.3, dur: 3.2 } },
 };
 
@@ -184,10 +201,54 @@ function buildBoard(ep) {
     T += ctx.duration + (Number.isFinite(ctx.gapAfter) ? ctx.gapAfter : ctx.type === 'outro' ? HOLD[ctx.programId] ?? GAP : GAP);
   });
   if (shots.length) shots[shots.length - 1].t1 = T;
-  return { ep, cast, programId: ep.program?.id || 'world-now', shots, total: T, errors: plans.flatMap((p) => p.errors) };
+  return { ep, cast, programId: ep.program?.id || 'world-now', shots, plans, total: T, errors: plans.flatMap((p) => p.errors) };
 }
 
 const STUDIO = new Set(['wide', 'close', 'two', 'single']);
+
+// The storyboard's full-screen beats are drawn by the channel's own scenes (cards.js headline / fact
+// cards, worldmap.js), imported read-only and lazily so a mid-edit in those files only costs the slates.
+let SCENES = null;
+const scenesReady = Promise.all([import('../../../scenes/cards.js'), import('../../../scenes/worldmap.js')])
+  .then(([cards, map]) => {
+    try {
+      map.warmMapData?.();
+    } catch {
+      /* the map finishes in background slices */
+    }
+    SCENES = { cards, map };
+  })
+  .catch(() => {});
+
+/** A full-screen beat as the channel draws it (true), or false for the slate. */
+function drawFull(s, seg, ctx2d) {
+  if (!SCENES) return false;
+  const { cards, map } = SCENES;
+  const programId = board.programId;
+  const len = s.t1 - s.t0;
+  try {
+    if (s.shot === 'montage') {
+      const rd = board.ep.rundown || [];
+      const item = rd[s.card] || {};
+      cards.drawHeadlineFrame(ctx2d, s.t0 + 1.2, 1.2, { index: s.card ?? 0, total: rd.length, headline: item.headline || '', source: item.source || '', category: item.category || 'general', image: null, programId });
+      return true;
+    }
+    if (s.shot === 'fact' && seg.fact) {
+      cards.drawFactCard(ctx2d, s.t0 + 2.5, 2.5, { fact: seg.fact, label: /\d/.test(seg.fact) ? 'BY THE NUMBERS' : 'KEY FACT', source: seg.source, headline: seg.headline, programId });
+      return true;
+    }
+    if (s.shot === 'map' && seg.location && Number.isFinite(seg.location.lat)) {
+      const pins = Array.isArray(seg.map) && seg.map.length > 1 ? seg.map : undefined;
+      // the round-up's world view: early in the fly-in; a pin: settled
+      const dt = s.card === 'world' ? 0.15 : Math.min(len - 0.2, 4.5);
+      map.drawWorldMap(ctx2d, s.t0 + dt, dt, { lat: seg.location.lat, lon: seg.location.lon, place: seg.location.place, programId, pins, follow: true });
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
 
 function slate(lines) {
   frame.clear(C.black);
@@ -206,23 +267,28 @@ function drawBoard(i, ctx2d) {
   const len = s.t1 - s.t0;
   const studio = STUDIO.has(s.shot) && s.framing;
   let label = [];
+  const seg = board.ep.segments[s.seg] || {};
+  let full = false;
   if (studio) {
     // show the end of the move when there is one, else the middle of the shot
     const dt = s.move ? s.move.delay + s.move.dur + 0.05 : len / 2;
     const cam = cameraAt({ framing: s.framing, focus: s.focus, cast: board.cast, solo: !board.cast.B, programId: board.programId, move: s.move }, dt);
-    drawStudio(cam, (s.move ? s.moveAt : s.t0) + dt, board.cast, board.programId, wallFor(board.ep.segments[s.seg]), s.focus);
+    drawStudio(cam, (s.move ? s.moveAt : s.t0) + dt, board.cast, board.programId, wallFor(s), s.focus);
+    frame.present(ctx2d);
   } else {
-    label = slate([]);
+    full = drawFull(s, seg, ctx2d);
+    if (!full) {
+      label = slate([]);
+      frame.present(ctx2d);
+    }
   }
-  frame.present(ctx2d);
-  const seg = board.ep.segments[s.seg] || {};
   const tag = `${s.t0.toFixed(1)}S  ${len.toFixed(1)}S  ${s.shot.toUpperCase()}${s.framing ? ' ' + s.framing.toUpperCase() : ''} ${s.focus || ''}`;
   ctx2d.fillStyle = 'rgba(0,0,0,0.75)';
   ctx2d.fillRect(0, 0, 384, 12);
   drawText(ctx2d, tag, 3, 3, { color: P.white, font: 'micro' });
   const mv = s.move ? `${s.move.type.toUpperCase()} ${(s.move.amount * 100).toFixed(1)}% ${s.move.dur.toFixed(1)}S` : '';
   drawText(ctx2d, `${seg.type || ''} ${s.seg} ${s.beat || ''} ${mv}`.toUpperCase(), 3, 206, { color: P.yellow, font: 'micro' });
-  if (!studio) {
+  if (!studio && !full) {
     const what = s.shot === 'map' ? `MAP  ${seg.location?.place || ''}` : s.shot === 'fact' ? `FACT  ${seg.fact || seg.numbers?.[0]?.value || ''}` : s.shot === 'full' ? 'PICTURE' : s.shot === 'montage' ? `MONTAGE ${s.card ?? ''}` : s.shot.toUpperCase();
     drawText(ctx2d, String(what).toUpperCase().slice(0, 40), 20, 96, { color: P.fog, scale: 1 });
     drawText(ctx2d, String(seg.headline || '').toUpperCase().slice(0, 56), 20, 112, { color: P.steel, font: 'micro' });
@@ -261,6 +327,14 @@ function overlay(ctx2d, cam, cast) {
   ctx2d.restore();
 }
 
+/** A small caption in the bottom-left corner (contact sheets: which case is which). */
+function tag(ctx2d, text) {
+  const t = String(text).toUpperCase();
+  ctx2d.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx2d.fillRect(0, 206, Math.min(384, 6 + t.length * 4), 10);
+  drawText(ctx2d, t, 3, 208, { color: P.yellow, font: 'micro' });
+}
+
 // ---------------------------------------------------------------------------
 
 export function createCameraLab(canvas) {
@@ -279,6 +353,7 @@ export function createCameraLab(canvas) {
         drawStudio(cam, t, cast, spec.programId, null, spec.focus || 'A');
         frame.present(ctx2d);
         if (state.overlay) overlay(ctx2d, cam, cast);
+        if (state.labels) tag(ctx2d, `${spec.programId} ${spec.framing} ${spec.move?.type || ''} ${((moveScale(spec.move, t) - 1) * 100).toFixed(2)}%`);
         return { scale: moveScale(spec.move, t) };
       }
       cast = CASTS[programme] || CASTS['world-now'];
@@ -294,6 +369,7 @@ export function createCameraLab(canvas) {
       drawStudio(cam, tt, cast, programme, state.wall ? { mode: state.wall, location: { place: 'LISBON', lat: 38.7, lon: -9.1 }, label: 'TRANSPORT', figure: { value: '40,000', label: 'PASSENGERS A DAY' }, since: 0 } : null, focus);
       frame.present(ctx2d);
       if (state.overlay) overlay(ctx2d, cam, cast);
+      if (state.labels) tag(ctx2d, `${programme} ${name}${cast.B ? ' ' + focus : ''}`);
       return { name, focus };
     },
     set(opts = {}) {
@@ -311,6 +387,10 @@ export function createCameraLab(canvas) {
     },
     shots() {
       return board ? board.shots.map(({ text, ...s }) => s) : [];
+    },
+    /** Resolves when the storyboard's scenes (cards, world map data) are loaded. */
+    ready() {
+      return scenesReady.then(() => !!SCENES);
     },
     cases() {
       return galleryCases(state.programme).map((c) => c.label);

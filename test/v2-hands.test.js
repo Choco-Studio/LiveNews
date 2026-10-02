@@ -16,7 +16,7 @@ import { drawArm } from '../public/js/v2/canvas25d/hands.js';
 import { matsOf } from '../public/js/v2/canvas25d/cast/base.js';
 import { LOOKS, PRESENTER_IDS } from '../public/js/v2/canvas25d/cast/index.js';
 import { planSegment } from '../public/js/v2/canvas25d/direction/index.js';
-import { planGestures, CONFIG_POLICY, BIBLE, countFromText, episodePlan } from '../public/js/v2/canvas25d/direction/gestures.js';
+import { planGestures, CONFIG_POLICY, BIBLE, countFromText, episodePlan, familyOf } from '../public/js/v2/canvas25d/direction/gestures.js';
 import { segmentContext } from '../public/js/v2/canvas25d/direction/context.js';
 
 const BASE = JSON.parse(fs.readFileSync(new URL('./fixtures/v2-motion-baseline.json', import.meta.url), 'utf8'));
@@ -336,6 +336,9 @@ function planEpisode(ep) {
 }
 
 const gesturesOf = (res) => res.events.filter((e) => e.kind === 'gesture' && e.planner === 'gestures');
+/** The bibles' cue-level gestures (their caps); beats are the owner's 20:40 delivery layer on top. */
+const featuredOf = (res) => gesturesOf(res).filter((e) => !e.beat);
+const beatsOf = (res) => gesturesOf(res).filter((e) => e.beat);
 
 test('config parity: the client mirror equals config/channel.json programs.<id>.gestures', () => {
   for (const pid of PROGRAMMES) assert.deepEqual(CONFIG_POLICY[pid], CHANNEL.programs[pid].gestures, pid);
@@ -401,7 +404,7 @@ test('WORLD NOW §5 item 13: only allowlisted cues, grave = nod/steeple (small),
         }
         for (const c of res.ctx.shots) assert.ok(!(e.at >= c.at && e.at < c.at + 0.5));
       }
-      if (res.ctx.type === 'story') assert.ok(g.length <= 2, `story with ${g.length}`);
+      if (res.ctx.type === 'story') assert.ok(featuredOf(res).length <= 2, `story with ${featuredOf(res).length} cue-level gestures`);
     }
   }
 });
@@ -414,7 +417,7 @@ test('TECH BYTES §4 item 6: Max ≤ 2 from his list, Ada ≤ 1 from hers, every
       const id = res.ctx.speakerId;
       const list = new Set([...B.speaker[id], ...(res.ctx.type === 'intro' || res.ctx.type === 'outro' ? ['nod'] : [])]);
       for (const e of g) assert.ok(list.has(e.name), `${id}: ${e.name} in ${res.ctx.type}`);
-      assert.ok(g.length <= B.cap[id], `${id}: ${g.length} gestures`);
+      assert.ok(featuredOf(res).length <= B.cap[id], `${id}: ${featuredOf(res).length} gestures`);
       for (const e of g) if (e.name === 'shake_head' && id === 'ada') assert.equal(e.variant, 'slow');
     }
   }
@@ -427,7 +430,7 @@ test('COSMOS §5 item 12: no banned gesture, ≤ 1 per segment, ≤ 1 arm gestur
     const lastArm = {};
     for (const res of planEpisode(ep)) {
       const g = gesturesOf(res);
-      assert.ok(g.length <= 1, 'perSegment 1');
+      assert.ok(featuredOf(res).length <= 1, 'perSegment 1');
       for (const e of g) {
         assert.ok(!banned.has(e.name), e.name);
         assert.ok(BIBLE.cosmos.speaker[res.ctx.speakerId].includes(e.name), `${res.ctx.speakerId}: ${e.name}`);
@@ -551,4 +554,124 @@ test('malformed input never throws: empty segments, missing text, unknown progra
   }
   const g = gesturesOf(planSegment(ep, 0, {}));
   for (const e of g) assert.ok(BIBLE['world-now'].speaker.includes(e.name), `unknown programme uses WORLD NOW: ${e.name}`);
+});
+
+// ---------------------------------------------------------------------------
+// beats and variety (owner 20:40: more gestures, more variety, never twice in a row, adult)
+
+const ALL_SEGS = (pid, n) => episodes(pid, n).flatMap((ep) => planEpisode(ep));
+
+test('beats: motivated gestures on most sentences of light/neutral stories (WORLD NOW, TECH BYTES), none on grave ones', () => {
+  for (const pid of ['world-now', 'tech-bytes']) {
+    let sentences = 0, moved = 0;
+    for (const res of ALL_SEGS(pid, 10)) {
+      const { ctx } = res;
+      const g = gesturesOf(res);
+      if (ctx.grave) {
+        assert.equal(beatsOf(res).length, 0, `${pid}: beat on a grave segment`);
+        continue;
+      }
+      if (ctx.type !== 'story' || ctx.feature === 'roundup') continue;
+      const shotAt = (t) => {
+        let sh = null;
+        for (const c of ctx.shots) if (c.at <= t) sh = c.shot;
+        return sh;
+      };
+      for (const s of ctx.sentences) {
+        // sentences long enough to carry a gesture, spoken while the presenter is in vision
+        if (s.t1 - s.t0 < 1.3) continue;
+        const sh = shotAt((s.t0 + s.t1) / 2);
+        if (sh && sh !== 'wide' && sh !== 'close') continue;
+        sentences++;
+        if (g.some((e) => e.word >= s.start && e.word < s.end)) moved++;
+      }
+    }
+    const share = moved / sentences;
+    if (process.env.V2_HANDS_TABLE) console.log(`${pid}: ${moved}/${sentences} story sentences in vision carry a gesture (${(share * 100).toFixed(0)} %)`);
+    assert.ok(share >= 0.5, `${pid}: only ${(share * 100).toFixed(0)} % of story sentences carry a gesture`);
+    assert.ok(share <= 0.9, `${pid}: ${(share * 100).toFixed(0)} % is too busy for 24/7 (adult, restrained)`);
+  }
+});
+
+test('beats: allowed variants of the speaker\'s own list, small, ≤ 1 arm gesture per sentence, air around them', () => {
+  for (const pid of PROGRAMMES) {
+    for (const res of ALL_SEGS(pid, 6)) {
+      const { ctx } = res;
+      const g = gesturesOf(res).sort((a, b) => a.at - b.at);
+      for (const e of beatsOf(res)) {
+        assert.ok(e.variant && GESTURES[e.name].variants[e.variant], `${pid}: beat ${e.name}:${e.variant}`);
+        assert.ok(e.amp == null || (e.amp >= 0.5 && e.amp <= 1), 'amp 0.5-1');
+        assert.ok(!['money-minute', 'news-60'].includes(pid), `${pid} keeps its bible's strict count: no beats`);
+        assert.ok(!(pid === 'cosmos' && ctx.speakerId === 'unit8'), 'UNIT-8 does not beat');
+      }
+      for (let i = 1; i < g.length; i++) {
+        const a = g[i - 1], b = g[i];
+        if (!a.beat && !b.beat) continue;
+        assert.ok(b.at >= a.at + durOf(a) + 0.2 - 1e-6, `${pid}: ${a.name} and ${b.name} too close (${a.at} → ${b.at})`);
+      }
+    }
+  }
+});
+
+test('variety: never the same gesture (family) twice in a row within a turn; rotation across the episode', () => {
+  for (const pid of PROGRAMMES) {
+    let pairs = 0, repeats = 0;
+    for (const ep of episodes(pid, 8)) {
+      const last = {};
+      for (const res of planEpisode(ep)) {
+        const g = gesturesOf(res).sort((a, b) => a.at - b.at);
+        const key = familyOf; // variants that read alike (steeple / steeple press, every nod) count as one
+        for (let i = 1; i < g.length; i++) assert.notEqual(key(g[i]), key(g[i - 1]), `${pid}: ${key(g[i])} twice in a row`);
+        const slot = res.ctx.speaker;
+        // across turns: the visible arm gestures (a sign-off nod after a story nod is not "the same gesture again")
+        for (const e of g.filter((x) => defOf(x).arm)) {
+          if (last[slot] !== undefined) {
+            pairs++;
+            if (last[slot] === key(e)) repeats++;
+          }
+          last[slot] = key(e);
+        }
+      }
+    }
+    // across turns the episode rotation keeps immediate repeats rare (a presenter's nod at the end of one turn
+    // and the greeting nod of the next can coincide in solo programmes)
+    if (pairs > 20) assert.ok(repeats / pairs <= 0.2, `${pid}: ${repeats}/${pairs} consecutive repeats across turns`);
+  }
+});
+
+test('the idle hands settle into new poses (pure, seeded, calm) and yield to gestures', async () => {
+  const { applyArmIdle } = await import('../public/js/v2/canvas25d/gestures/fidget.js');
+  assert.equal(typeof applyArmIdle, 'function');
+  const a = actor('paco', { side: 1, seed: 11 });
+  const b = actor('paco', { side: 1, seed: 11 });
+  const at = (x, t) => JSON.stringify(poseAt(x, t).arms.R.wrist);
+  // pure: the same instant gives the same pose whatever was evaluated before
+  for (const t of [40, 3, 77.7, 12]) poseAt(b, t);
+  assert.equal(at(b, 31.3), at(a, 31.3));
+  // the first seconds are the reference rest (the approved motion baseline is untouched)
+  const off = actor('paco', { side: 1, seed: 11, armIdle: false });
+  assert.equal(at(a, 4), at(off, 4));
+  // over two minutes the hands move several times, gently (≤ 1 px per 0.04 s at s = 2.15)
+  let moves = 0, moving = false, prev = null, maxStep = 0;
+  for (let t = 0; t < 120; t += DT) {
+    const sk = poseAt(a, t);
+    const w = [scr(sk.arms.R.wrist), scr(sk.arms.L.wrist)];
+    if (prev) {
+      const st = Math.max(...w.map((p, i) => Math.hypot(p[0] - prev[i][0], p[1] - prev[i][1])));
+      maxStep = Math.max(maxStep, st);
+      if (st > 0.05 && !moving) {
+        moves++;
+        moving = true;
+      }
+      if (st < 0.01) moving = false;
+    }
+    prev = w;
+  }
+  assert.ok(moves >= 6 && moves <= 20, `${moves} hand moves in 120 s`);
+  assert.ok(maxStep <= 1, `idle step ${maxStep.toFixed(2)} px`);
+  // a gesture owns the arm: mid-gesture the idle offset is gone (pose equals the idle-free pose)
+  const g = [{ name: 'raise_hand', t0: 50 }];
+  const withIdle = actor('paco', { side: 1, seed: 11, gestures: g });
+  const noIdle = actor('paco', { side: 1, seed: 11, gestures: g, armIdle: false });
+  assert.equal(at(withIdle, 50.8), at(noIdle, 50.8));
 });

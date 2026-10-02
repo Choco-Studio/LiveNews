@@ -224,6 +224,9 @@ def main():
     report = {'seconds': n / sr, 'sampleRate': sr}
 
     web = read_f32(man.get('webaudio'), n)
+    # The channel's speech bus alone (recorded voices it played itself; they are
+    # already inside `web`): only a reference for the bed level and the duck.
+    web_speech = read_f32(man.get('webSpeech'), n).mean(axis=1) if man.get('webSpeech') else None
     beds = read_f32(man.get('beds'), n)
     dry = read_f32(man.get('bedsDry'), n) if man.get('bedsDry') else None
     bed_gain = 10 ** (float(man.get('bedGainDb', 0)) / 20)
@@ -262,22 +265,22 @@ def main():
     # 2. Extra bed duck under speech: at least `extraDuckDb`, and deeper where the
     # engine's own duck is shallow, so the total is >= `minDuckDb` everywhere.
     regions = man.get('speech', [])
-    extra = float(man.get('extraDuckDb', -6))
+    extra = float(man.get('extraDuckDb', 0))
     min_duck = float(man.get('minDuckDb', 16))
     depths = []
     for a, b in regions:
         e = engine_duck(beds, dry, sr, a, b)
-        need = -(min_duck + (e if e is not None else -10.0))  # e is negative (dB the engine already ducked)
-        depths.append(max(-18.0, min(extra, need)))
+        need = -(min_duck + (e if e is not None else 0.0))  # e is negative (dB the engine already ducked)
+        depths.append(max(-24.0, min(extra, need)))
     g = duck_curve(n, sr, regions, depths, float(man.get('duckAttack', 0.12)),
                    float(man.get('duckHold', 0.35)), float(man.get('duckRelease', 0.7)))
     beds *= g[:, None]
 
     # Bed level: the bed under speech sits `bedUnderVoiceDb` below the voice
     # (median over speech regions where a bed plays), so between sentences and
-    # in pauses it comes up by the duck depth. Voices come from the voice stem,
-    # or from the WebAudio stem when the channel played recorded clips itself.
-    ref = web.max(axis=1) if man.get('voiceInWebaudio') else voice
+    # in pauses it comes up by the duck depth. Voices: the clips placed here plus
+    # the recorded voices the channel played through its own speech bus.
+    ref = voice + web_speech if web_speech is not None else voice
     rels = []
     for a, b in regions:
         s0, s1 = int((a + 0.35) * sr), int(min(b, n / sr) * sr)
@@ -295,6 +298,23 @@ def main():
         if dry is not None:
             dry *= 10 ** (auto / 20)
         level.update({'autoGainDb': round(auto, 1), 'underVoiceDb': round(float(np.median(rels)) + auto, 1)})
+    # Where the bed sits against the voice in the clear (outside speech, where a
+    # bed plays): the composer's calibration, reported for the record.
+    if rels:
+        mask = np.ones(n, dtype=bool)
+        for a, b in regions:
+            mask[int(max(0, a - 0.2) * sr):int(min(n / sr, b + 1.2) * sr)] = False
+        bed_mono = beds.mean(axis=1)
+        clear = []
+        for k in range(0, n - sr // 2, sr // 2):
+            if mask[k:k + sr // 2].all():
+                lv = rms_db(bed_mono[k:k + sr // 2])
+                if lv > -70:
+                    clear.append(lv)
+        voice_lv = float(np.median([rms_db(ref[int((a + 0.35) * sr):int(min(b, n / sr) * sr)]) for a, b in regions if b - a > 1.2]))
+        if clear:
+            level['clearVsVoiceDb'] = round(float(np.median(clear)) - voice_lv, 1)
+        level['underVoiceDb'] = level.get('underVoiceDb', round(float(np.median(rels)), 1))
     report['bedLevel'] = level
 
     # Bed duck measurement: final bed vs the same cues rendered without speech.
@@ -320,6 +340,8 @@ def main():
     mix = web + beds + voice[:, None]
     write_wav_f32(os.path.join(stems_dir, 'voice.wav'), voice, sr)
     write_wav_f32(os.path.join(stems_dir, 'webaudio.wav'), web, sr)
+    if web_speech is not None:
+        write_wav_f32(os.path.join(stems_dir, 'speechbus.wav'), web_speech, sr)
     write_wav_f32(os.path.join(stems_dir, 'beds.wav'), beds, sr)
     raw_path = os.path.join(stems_dir, 'mix-raw.wav')
     write_wav_f32(raw_path, mix, sr)

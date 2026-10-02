@@ -17,7 +17,7 @@ const LIGHT = (() => {
   const n = Math.hypot(...v);
   return v.map((a) => a / n);
 })();
-const LAM_END = -12; // centre longitude when settled: Europe and Africa face us
+export const LAM_END = -12; // centre longitude when settled: Europe and Africa face us
 const LONDON = [51.5, -0.13];
 const ROUTES = [[40.7, -74.0], [-1.3, 36.8], [28.6, 77.2]]; // New York, Nairobi, New Delhi
 
@@ -48,22 +48,55 @@ export function globeTexture() {
   return tex;
 }
 
+// The generic open's globe (programmes without their own open): the same earth in a darker
+// ink/slate ramp (no navy), no graticule, and the GLOBIT 24 mark's seams (the equator and the two
+// lens meridians, +-50 degrees from the settled centre) as red lines, projected with the tilt.
+let GTEX = null;
+function genericTexture() {
+  if (GTEX) return GTEX;
+  const base = globeTexture();
+  const tex = new Uint8Array(TW * TH);
+  for (let i = 0; i < TW * TH; i++) tex[i] = base[i] & 1;
+  for (let i = 0; i < TW; i++) tex[127 * TW + i] |= 4;
+  for (const lon of [LAM_END - 50, LAM_END + 50]) {
+    const i = ((Math.round(((lon + 180) / 360) * TW) % TW) + TW) % TW;
+    for (let j = 6; j < TH - 6; j++) tex[j * TW + i] |= 4;
+  }
+  GTEX = tex;
+  return tex;
+}
+
 // colour per texel type (land / graticule / equator / ocean) x light level 0..4,
 // plus the limb: 5 = lit rim, 6 = dark rim. Palette colours only.
-const LUT = (() => {
+function makeLut(ocean, land, grid, equ, litRim, litRimLand) {
   const L = new Uint32Array(8 * 8);
-  const ocean = [P.black, P.ink, P.ink, P.navy, P.navy];
-  const land = [P.ink, P.slate, P.steel, P.fog, P.silver];
-  const grid = [P.ink, P.slate, P.slate, P.steel, P.steel];
-  const equ = [P.maroon, P.darkRed, P.darkRed, P.red, P.red];
   for (let tv = 0; tv < 8; tv++) {
     const set = tv & 4 ? equ : tv & 1 ? land : tv & 2 ? grid : ocean;
     for (let lvl = 0; lvl < 5; lvl++) L[(tv << 3) | lvl] = u32(set[lvl]);
-    L[(tv << 3) | 5] = u32(tv & 1 ? P.white : P.silver);
+    L[(tv << 3) | 5] = u32(tv & 1 ? litRimLand : litRim);
     L[(tv << 3) | 6] = u32(P.slate);
   }
   return L;
-})();
+}
+const LUT = makeLut(
+  [P.black, P.ink, P.ink, P.navy, P.navy],
+  [P.ink, P.slate, P.steel, P.fog, P.silver],
+  [P.ink, P.slate, P.slate, P.steel, P.steel],
+  [P.maroon, P.darkRed, P.darkRed, P.red, P.red],
+  P.silver, P.white,
+);
+const GLUT = makeLut(
+  [P.black, P.black, P.ink, P.ink, P.ink],
+  [P.ink, P.ink, P.slate, P.slate, P.steel],
+  [P.black, P.black, P.ink, P.ink, P.ink],
+  [P.maroon, P.darkRed, P.darkRed, P.red, P.red],
+  P.steel, P.silver,
+);
+/** Globe looks: the WORLD NOW earth and the generic open's dark, seamed globe. */
+export const GLOBE_STYLES = {
+  world: { id: 'wn-globe', tex: globeTexture, lut: LUT },
+  generic: { id: 'gen-globe', tex: genericTexture, lut: GLUT },
+};
 
 const TABLES = new Map();
 function globeTable(R) {
@@ -103,29 +136,56 @@ function globeTable(R) {
       cls.push(k);
     }
   }
-  const fb = frameBuffer('wn-globe', S, S);
-  TABLE = { fb, c, S, idx: Int32Array.from(idx), row: Int32Array.from(row), lon: Float32Array.from(lon), cls: Uint8Array.from(cls) };
+  TABLE = { c, S, idx: Int32Array.from(idx), row: Int32Array.from(row), lon: Float32Array.from(lon), cls: Uint8Array.from(cls) };
   TABLES.set(R, TABLE);
   return TABLE;
 }
 
-function drawGlobe(ctx, x, y, R, lam0) {
+function drawGlobe(ctx, x, y, R, lam0, look = GLOBE_STYLES.world) {
   const T = globeTable(R);
-  const fb = T.fb;
+  const fb = frameBuffer(look.id, T.S, T.S);
   const key = Math.round(lam0 * 8);
   if (fb.key !== key) {
     fb.key = key;
-    const tex = globeTexture();
+    const tex = look.tex();
+    const lut = look.lut;
     const sh = (((lam0 / 360) * TW) % TW) + TW * 16;
     const { idx, row, lon, cls } = T;
     const d = fb.d;
     for (let k = 0; k < idx.length; k++) {
       const i = ((lon[k] + sh) | 0) & (TW - 1);
-      d[idx[k]] = LUT[(tex[row[k] + i] << 3) | cls[k]];
+      d[idx[k]] = lut[(tex[row[k] + i] << 3) | cls[k]];
     }
     fb.cx.putImageData(fb.img, 0, 0);
   }
   ctx.drawImage(fb.cv, x - T.c, y - T.c);
+}
+
+/**
+ * The tilted globe at radius R with centre longitude lam, opened like an iris from dt 0.2 s: a
+ * thin silver ring leads the reveal and converges onto the globe's own rim (steel for its last
+ * frames), handing over to it without a pop. look = GLOBE_STYLES.world | .generic.
+ */
+export function drawIrisGlobe(ctx, dt, x, y, R, lam, look) {
+  const iris = Math.round((R + 1) * easeOutQuint(seg(dt, 0.2, 0.6)));
+  if (iris <= 0) return;
+  if (iris <= R) {
+    ctx.save();
+    try {
+      clipDisc(ctx, x, y, iris);
+      drawGlobe(ctx, x, y, R, lam, look);
+    } finally {
+      ctx.restore();
+    }
+    if (iris > 1) ring(ctx, x, y, iris, iris < R - 2 ? P.silver : P.steel);
+  } else drawGlobe(ctx, x, y, R, lam, look);
+}
+
+/** Background jobs that build the globe tables for radii r0..r1 (and the look's texture). */
+export function globeWarmJobs(r0, r1, look = 'world') {
+  const jobs = [GLOBE_STYLES[look].tex];
+  for (let r = r0; r <= r1; r++) jobs.push(() => globeTable(r));
+  return jobs;
 }
 
 /** The shaded earth at radius R centred on (x, y), centre longitude lam (also used by the cards). */
@@ -176,15 +236,7 @@ function emblem(ctx, dt, x, y, k = 1) {
   if (dt < 0.2) return;
   const R = Math.round(R0 * k);
   const lam = lambda(dt);
-  const iris = Math.round((R + 3) * easeOutQuint(seg(dt, 0.2, 0.6)));
-  if (iris < R + 3) {
-    ctx.save();
-    clipDisc(ctx, x, y, iris);
-    drawGlobe(ctx, x, y, R, lam);
-    ctx.restore();
-    // the iris edge: a thin silver ring that leads the reveal
-    if (iris > 1) ring(ctx, x, y, iris, P.silver);
-  } else drawGlobe(ctx, x, y, R, lam);
+  drawIrisGlobe(ctx, dt, x, y, R, lam, GLOBE_STYLES.world);
 
   // routes draw out of London once the turn slows
   for (let r = 0; r < ROUTE_PTS.length; r++) {
@@ -226,7 +278,7 @@ const background = lazyBackdrop({ key: 'world', colors: [P.black, P.ink], cx: CE
 
 export const WORLD = {
   accent: P.red,
-  style: { accent: P.red, plate: P.black, ink: 'light' },
+  style: { accent: P.red, plate: P.black, ink: 'light', front: true },
   background,
   emblem,
   extent: R0, // an opaque globe: it may sit in front of the plate's left end, as in the mark

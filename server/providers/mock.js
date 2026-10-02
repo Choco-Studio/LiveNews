@@ -244,6 +244,12 @@ function lowerFirstWord(text, info) {
   const lower = new RegExp(`(?<![\\p{L}])${word.toLowerCase()}(?![\\p{L}])`, 'u').test(story);
   return lower || COMMON_START.test(text) ? word.toLowerCase() + text.slice(word.length) : text;
 }
+const PRONOUN_START = /^(?:It|Its|They|Their|This|These|Those|He|She|His|Her)\b/;
+/** Content words of `sentence` that `title` does not have (what a restating sentence adds). */
+function newWords(sentence, title) {
+  const t = contentWords(title);
+  return contentWords(sentence).filter((w) => !t.some((x) => x === w || (w.length > 4 && x.slice(0, 5) === w.slice(0, 5)))).length;
+}
 // Content-word overlap relative to the headline: does this sentence just restate it?
 function restates(sentence, title) {
   const t = new Set(contentWords(title));
@@ -417,15 +423,15 @@ const BEAT_OF_OTHERS = /^(?:science)$/;
 
 /**
  * The next main story: the strongest of the first three left (the desk's
- * order), where a picture or a second outlet counts for about one place, and
- * live pages come last.
+ * order), where a picture, a second outlet or hard news (people harmed or at
+ * risk) counts for about one place, and live pages come last.
  */
 function bestMain(pool) {
   let best = 0;
   let bestScore = Infinity;
   for (let k = 0; k < Math.min(3, pool.length); k++) {
     const i = pool[k];
-    const score = k - (i.s.image ? 1.2 : 0) - ((i.s.outlets || 1) > 1 ? 1 : 0) + (i.live ? 9 : 0);
+    const score = k - (i.s.image ? 1.2 : 0) - ((i.s.outlets || 1) > 1 ? 1 : 0) - (i.grave ? 1.3 : 0) + (i.live ? 9 : 0);
     if (score < bestScore) {
       bestScore = score;
       best = k;
@@ -696,8 +702,28 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // intro's line about it (it goes on with the next fact).
       const first = info.sentences[0];
       const leadAfterIntro = k === 0 && introSaidHeadline;
+      // TECH BYTES: the lead keeps one summary sentence back for THE CATCH (chosen first, so the opener cannot take it).
+      const catchFor = pid === 'tech-bytes' && k === 0 && !info.grave ? CATCH.find((c) => info.sentences.some((t) => c.test.test(t))) : null;
+      let reserved = catchFor ? info.sentences.find((t) => catchFor.test.test(t)) : null;
+      if (reserved) used.add(reserved);
+      // After the intro has read its headline, the lead goes on with the next fact: a sentence that only
+      // restates the headline (fewer than three words of its own) is never its opener, nor read later.
+      // A sentence the next one leans on ("It runs along the river.") stays: it holds the antecedent.
+      const leansOn = (t) => PRONOUN_START.test(info.sentences[info.sentences.indexOf(t) + 1] || '');
+      const echoes = (t) => leadAfterIntro && restates(t, s.title) && newWords(t, s.title) < 3 && !leansOn(t);
       const skipHeadline = first && (leadAfterIntro || restates(first, s.title));
-      let opener = skipHeadline ? (leadAfterIntro && pickSentence((t) => !restates(t, s.title))) || pickSentence(() => true) : s.title;
+      let opener = s.title;
+      if (skipHeadline) {
+        // Never a pronoun as the first word of a story: the opener must say who or what.
+        opener = (leadAfterIntro && (pickSentence((t) => !echoes(t) && !PRONOUN_START.test(t)))) || null;
+        if (!opener && reserved) {
+          // Nothing else to open with: the catch's sentence opens the story, and there is no catch.
+          used.delete(reserved);
+          reserved = null;
+          opener = pickSentence((t) => !echoes(t));
+        }
+        opener ||= pickSentence(() => true) || s.title;
+      }
       const cue = isNumber ? '[count] ' : info.grave ? '[lean_in] ' : s.image ? '[point_screen] ' : choose(['[raise_hand] ', '[lean_in] ', ''], key);
       let figureLine = null;
       if (isNumber) {
@@ -722,14 +748,12 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // lead keeps one sentence back for THE CATCH.
       const visuals = (info.loc ? 1 : 0) + (s.image ? 1 : 0) + (info.figures.length ? 1 : 0);
       const cap = pid === 'money-minute' ? 2 : 3;
-      const budget = quick ? (k === 0 ? 41 : 31) : Infinity;
+      // NEWS IN 60 counts the credit ("..., Ledger Line reports.") inside its word budget.
+      const budget = quick ? (k === 0 ? 41 : 31) - (wordCount(s.source) + 1) : Infinity;
       const maxDetails = quick ? 2 : isNumber ? (figureLine ? 0 : 1) : Math.min(cap, Math.max(k === 0 ? 2 : 1, visuals));
-      const catchFor = pid === 'tech-bytes' && k === 0 && !info.grave ? CATCH.find((c) => info.sentences.some((t) => !used.has(t) && c.test.test(t))) : null;
-      const reserved = catchFor ? info.sentences.find((t) => !used.has(t) && catchFor.test.test(t)) : null;
-      if (reserved) used.add(reserved);
       let details = 0;
       for (const t of info.sentences) {
-        if (details >= maxDetails || used.has(t)) continue;
+        if (details >= maxDetails || used.has(t) || echoes(t)) continue;
         if (/^(?:It|They|This|These)\b/.test(t) && WHY.test(t)) continue; // "It says..." with no subject reads as a label
         if (wordCount([...parts, ...body].join(' ')) + wordCount(t) > budget) continue;
         body.push(t);

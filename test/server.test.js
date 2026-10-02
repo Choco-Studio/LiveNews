@@ -90,8 +90,8 @@ async function startApp(env = {}) {
       fs.rmSync(dir, { recursive: true, force: true });
     },
     /** GET/POST a path and return { status, headers, text, json }. */
-    async request(urlPath, { method = 'GET' } = {}) {
-      const res = await fetch(app.base + urlPath, { method });
+    async request(urlPath, { method = 'GET', headers = {}, base = app.base } = {}) {
+      const res = await fetch(base + urlPath, { method, headers });
       const text = await res.text();
       let json;
       try {
@@ -176,7 +176,7 @@ describe('server/index.js: HTTP API of a running channel', () => {
     const { status, json } = await app.request('/api/desk');
     assert.equal(status, 200);
     assert.ok(Array.isArray(json) && json.length > 10 && json.length <= 80);
-    assert.deepEqual(Object.keys(json[0]).sort(), ['breaking', 'category', 'covered', 'hasImage', 'id', 'live', 'outlets', 'score', 'source', 'title']);
+    assert.deepEqual(Object.keys(json[0]).sort(), ['breaking', 'category', 'covered', 'hasImage', 'id', 'imageCredit', 'imageVia', 'live', 'outlets', 'score', 'source', 'title']);
     assert.ok(json.every((s, i) => i === 0 || json[i - 1].score >= s.score));
     assert.equal((await app.request('/api/status')).json.aired, 0);
   });
@@ -244,6 +244,22 @@ describe('server/index.js: HTTP API of a running channel', () => {
     assert.equal(res.status, 200);
     assert.ok(res.json.stories >= 100);
     assert.equal(res.json.queue.length, 2);
+  });
+
+  test('a second manual refresh within 30 s is refused: each one re-reads every feed', async () => {
+    const res = await app.request('/api/refresh', { method: 'POST' });
+    assert.equal(res.status, 429);
+    assert.match(res.json.error, /recently/);
+  });
+
+  test('a forwarded request (a same-host reverse proxy) is never trusted as local: dev views and refresh answer 404', async () => {
+    for (const headers of [{ 'x-forwarded-for': '203.0.113.9' }, { forwarded: 'for=203.0.113.9' }, { 'x-real-ip': '203.0.113.9' }]) {
+      for (const [urlPath, method] of [['/api/desk', 'GET'], ['/api/queue', 'GET'], ['/api/refresh', 'POST']]) {
+        const res = await app.request(urlPath, { method, headers });
+        assert.equal(res.status, 404, `${method} ${urlPath} ${JSON.stringify(headers)}`);
+      }
+    }
+    assert.equal((await app.request('/api/channel', { headers: { 'x-forwarded-for': '203.0.113.9' } })).status, 200, 'the public API is unaffected');
   });
 
   describe('playout over HTTP', () => {
@@ -395,6 +411,31 @@ describe('server/index.js: HTTP API of a running channel', () => {
       assert.ok(res.status >= 400 && res.status < 600, String(res.status));
       assert.equal((await app.request('/api/channel')).status, 200);
     });
+  });
+});
+
+// ---------------------------------------------------------------- bound to every interface
+
+/** The machine's first non-loopback IPv4 address, if it has one. */
+const outsideAddress = () =>
+  Object.values(os.networkInterfaces())
+    .flat()
+    .find((i) => i && i.family === 'IPv4' && !i.internal)?.address || null;
+
+describe('server/index.js: bound to 0.0.0.0, reached from a non-loopback address', { skip: !outsideAddress() && 'no non-loopback IPv4 interface here' }, () => {
+  let app;
+  before(async () => {
+    app = await startApp({ HOST: '0.0.0.0' });
+  });
+  after(() => app?.stop());
+
+  test('the dev views and the manual refresh are not reachable from outside the machine; the public API is', async () => {
+    const base = `http://${outsideAddress()}:${app.port}`;
+    assert.equal((await app.request('/api/channel', { base })).status, 200);
+    assert.equal((await app.request('/api/desk', { base })).status, 404);
+    assert.equal((await app.request('/api/queue', { base })).status, 404);
+    assert.equal((await app.request('/api/refresh', { base, method: 'POST' })).status, 404);
+    assert.equal((await app.request('/api/desk')).status, 200, 'loopback still sees them');
   });
 });
 

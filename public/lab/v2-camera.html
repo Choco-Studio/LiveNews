@@ -35,6 +35,7 @@
   const params = new URLSearchParams(location.search);
   for (const k of ['mode', 'programme', 'move', 'framing', 'focus']) if (params.has(k)) lab.set({ [k]: params.get(k) });
   if (params.has('overlay')) lab.set({ overlay: true });
+  if (params.has('labels')) lab.set({ labels: true });
   $('mode').value = lab.state.mode;
   $('programme').value = lab.state.programme;
   const redraw = () => lab.render(Number($('t').value));

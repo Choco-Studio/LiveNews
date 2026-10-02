@@ -244,6 +244,7 @@ export class CueClock {
     } else if (ev.kind === 'look') {
       const lk = { t0, t1: t0 + (ev.dur > 0 ? ev.dur : 1.5), target: ev.target || 'partner' };
       if (ev.amt > 0) lk.amt = ev.amt;
+      if (ev.style) lk.style = ev.style; // FACES: 'mech' (UNIT-8 moves eyes and head together)
       perf.look.push(lk);
     } else if (ev.kind === 'emotion') {
       perf.emotions.push({ t0, name: ev.name });

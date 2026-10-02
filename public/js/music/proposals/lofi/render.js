@@ -1,8 +1,11 @@
 // Lo-fi newsroom proposal: offline renders for the lab page and
 // tools/render-audio.mjs. Drives LofiEngine on an OfflineAudioContext through
 // the same pump()/cue()/setSpeaking() calls the live channel would make, with
-// Kokoro test voices (-16 LUFS, the house voice target) placed where the
-// programme bibles put them. Without the clips a speech-shaped stand-in is used.
+// Kokoro test voices placed where the programme bibles put them (spoken through
+// the channel's own broadcast chain, tools/voice presets, -16 LUFS). A timeline
+// can start with the programme's real open theme (audio stream, themeFor) so the
+// open -> bed hand-over is heard as on air. Without the clips a speech-shaped
+// stand-in is used.
 
 import { LofiEngine, LOOKAHEAD } from './engine.js';
 import { rng } from './theory.js';
@@ -30,15 +33,22 @@ export function setClipDurations(map) {
  *   ['say', clip]                  voice from now; the clock moves to its end
  *   ['rel', offset, moment, opts]  cue at (start of the last 'say' + offset), clock unchanged
  *   ['wait', s] / ['at', t]        move / set the clock
- * Returns { cues: [[t, moment, opts]], voice: [[t, clip]], end }.
+ *   ['open', programId]            the programme's open theme (audio stream), 4 s
+ * Returns { cues: [[t, moment, opts]], voice: [[t, clip]], opens: [[t, programId]], end }.
  */
+export const OPEN_SECONDS = 4;
 function script(steps) {
   let t = 0;
   let lastSay = 0;
   const cues = [];
   const voice = [];
+  const opens = [];
   for (const [op, a, b, c] of steps) {
-    if (op === 'cue') cues.push([t, a, b || {}]);
+    if (op === 'open') {
+      cues.push([t, 'open', { programId: a }]);
+      opens.push([t, a]);
+      t += OPEN_SECONDS;
+    } else if (op === 'cue') cues.push([t, a, b || {}]);
     else if (op === 'say') {
       voice.push([t, a]);
       lastSay = t;
@@ -47,7 +57,7 @@ function script(steps) {
     else if (op === 'wait') t += a;
     else if (op === 'at') t = a;
   }
-  return { cues, voice, end: t };
+  return { cues, voice, opens, end: t };
 }
 
 const P = (programId, extra = {}) => ({ programId, ...extra });
@@ -66,24 +76,43 @@ function headlines(lines = ['wn-hl1', 'wn-hl2', 'wn-hl3']) {
 
 export const TIMELINES = {
   // The required 60 s demo, in the task's order (open tail -> headlines -> light story -> grave
-  // story -> chat -> outro), with the WORLD NOW bible's rules: the round-up is the light segment
-  // with a bed, the grave story and the segment after it (the chat) are dry, the sign-off ends on brass.
+  // story -> chat -> outro), with the WORLD NOW bible's rules: the open's own theme (audio stream)
+  // hands over to the headline arc; the round-up is the light segment with a bed; the grave story
+  // and the segment after it (the chat) are dry; the sign-off ends on brass.
   demo: () => ({
     programme: 'world-now', seconds: 60,
     ...script([
+      ['open', 'world-now'],
       ...headlines(),
       ['wait', 0.3], ['cue', 'greeting', P('world-now', { segment: 2 })], ['wait', 0.3], ['say', 'wn-greet'], ['wait', 0.6],
-      ['cue', 'roundup', P('world-now', { segment: 3 })], ['wait', 0.2], ['say', 'wn-round'], ['wait', 0.7],
-      ['cue', 'story', P('world-now', { emotion: 'serious', segment: 4 })], ['wait', 0.3], ['say', 'wn-grave'], ['wait', 0.6],
-      ['cue', 'chat', P('world-now', { segment: 5 })], ['wait', 0.2], ['say', 'wn-chat1'], ['wait', 0.25], ['say', 'wn-chat2'], ['wait', 0.6],
+      ['cue', 'roundup', P('world-now', { segment: 3 })], ['wait', 0.2], ['say', 'wn-round'], ['wait', 0.8],
+      ['cue', 'story', P('world-now', { emotion: 'serious', segment: 4 })], ['wait', 0.3], ['say', 'wn-grave'], ['wait', 0.7],
+      ['cue', 'chat', P('world-now', { segment: 5 })], ['wait', 0.2], ['say', 'wn-chat1'], ['wait', 0.3], ['say', 'wn-chat2'], ['wait', 0.7],
       ['cue', 'outro', P('world-now', { segment: 6 })], ['wait', 0.2], ['say', 'wn-signoff'], ['wait', 0.12],
+      ['cue', 'signoffEnd', P('world-now')], ['wait', 1.5], ['cue', 'endcard', P('world-now')],
+    ]),
+  }),
+  // The same running order with the owner switch bedUnderStories: 'soft': a light story gets the
+  // very soft story bed, which hands over to the round-up on a bar line; grave and after stay dry.
+  'demo-soft': () => ({
+    programme: 'world-now', seconds: 70, bedUnderStories: 'soft',
+    ...script([
+      ['open', 'world-now'],
+      ...headlines(),
+      ['wait', 0.3], ['cue', 'greeting', P('world-now', { segment: 2 })], ['wait', 0.3], ['say', 'wn-greet'], ['wait', 0.6],
+      ['cue', 'story', P('world-now', { emotion: 'neutral', segment: 3 })], ['wait', 0.3], ['say', 'wn-light'], ['wait', 0.7],
+      ['cue', 'roundup', P('world-now', { segment: 4 })], ['wait', 0.2], ['say', 'wn-round'], ['wait', 0.8],
+      ['cue', 'story', P('world-now', { emotion: 'serious', segment: 5 })], ['wait', 0.3], ['say', 'wn-grave'], ['wait', 0.7],
+      ['cue', 'chat', P('world-now', { segment: 6 })], ['wait', 0.2], ['say', 'wn-chat1'], ['wait', 0.3], ['say', 'wn-chat2'], ['wait', 0.7],
+      ['cue', 'outro', P('world-now', { segment: 7 })], ['wait', 0.2], ['say', 'wn-signoff'], ['wait', 0.12],
       ['cue', 'signoffEnd', P('world-now')], ['wait', 1.5], ['cue', 'endcard', P('world-now')],
     ]),
   }),
   // WORLD NOW, the light ending: lead (dry), round-up, And finally, the chat on its bed, brass sign-off.
   'world-now': () => ({
-    programme: 'world-now', seconds: 71,
+    programme: 'world-now', seconds: 75,
     ...script([
+      ['open', 'world-now'],
       ...headlines(),
       ['wait', 0.3], ['cue', 'greeting', P('world-now', { segment: 2 })], ['wait', 0.3], ['say', 'wn-greet'], ['wait', 0.6],
       ['cue', 'story', P('world-now', { emotion: 'neutral', segment: 3 })], ['wait', 0.3], ['say', 'wn-lead'], ['wait', 0.6],
@@ -95,8 +124,9 @@ export const TIMELINES = {
     ]),
   }),
   'tech-bytes': () => ({
-    programme: 'tech-bytes', seconds: 54,
+    programme: 'tech-bytes', seconds: 58,
     ...script([
+      ['open', 'tech-bytes'],
       ['cue', 'coldOpen', P('tech-bytes', { segment: 1 })], ['wait', 0.5], ['say', 'tb-cold'], ['wait', 0.6],
       ['cue', 'story', P('tech-bytes', { emotion: 'neutral', segment: 2 })], ['wait', 0.3], ['say', 'tb-lead'], ['wait', 0.6],
       ['cue', 'chat', P('tech-bytes', { segment: 3 })], ['wait', 0.4], ['say', 'tb-catch1'], ['wait', 0.3], ['say', 'tb-catch2'], ['wait', 0.6],
@@ -112,7 +142,7 @@ export const TIMELINES = {
     programme: 'cosmos', seconds: 48,
     ...script([
       ['cue', 'coldOpen', P('cosmos', { segment: 1 })], ['wait', 1.2], ['say', 'co-cold'], ['wait', 0.6],
-      ['cue', 'open', P('cosmos')], ['wait', 4.0],
+      ['open', 'cosmos'],
       ['cue', 'greeting', P('cosmos', { segment: 2 })], ['wait', 0.3], ['say', 'co-greet'], ['wait', 0.6],
       ['cue', 'story', P('cosmos', { emotion: 'happy', segment: 3 })], ['cue', 'shot', P('cosmos', { kind: 'presenter' })], ['wait', 0.3],
       ['say', 'co-story'], ['rel', 3.2, 'shot', P('cosmos', { kind: 'picture', expected: 8 })], ['rel', 11.0, 'shot', P('cosmos', { kind: 'presenter' })], ['wait', 0.6],
@@ -124,8 +154,9 @@ export const TIMELINES = {
     ]),
   }),
   'money-minute': () => ({
-    programme: 'money-minute', seconds: 41,
+    programme: 'money-minute', seconds: 45,
     ...script([
+      ['open', 'money-minute'],
       ['cue', 'headlines', P('money-minute', { segment: 1 })], ['wait', 1.2], ['say', 'mm-intro'], ['wait', 0.1],
       ['cue', 'introEnd', P('money-minute')], ['wait', 0.8],
       ['cue', 'story', P('money-minute', { emotion: 'neutral', segment: 2 })], ['wait', 0.2], ['say', 'mm-lead'], ['wait', 0.8],
@@ -137,8 +168,9 @@ export const TIMELINES = {
     ]),
   }),
   'news-60': () => ({
-    programme: 'news-60', seconds: 41,
+    programme: 'news-60', seconds: 45,
     ...script([
+      ['open', 'news-60'],
       ['cue', 'headlines', P('news-60', { segment: 1 })], ['wait', 0.3], ['say', 'n6-intro'], ['wait', 0.7],
       ['cue', 'item', P('news-60')], ['cue', 'story', P('news-60', { segment: 2 })], ['wait', 0.05], ['say', 'n6-item1'], ['wait', 0.7],
       ['cue', 'item', P('news-60')], ['cue', 'story', P('news-60', { segment: 3 })], ['wait', 0.05], ['say', 'n6-item2'], ['wait', 0.7],
@@ -199,6 +231,13 @@ export function planFor({ programme = 'world-now', moment = 'roundup', seconds =
     case 'world-now:finally': return { programme, seconds, cues: c([0, 'finally', p({ segment: 5 })], [seconds * 0.55, 'chat', p({ segment: 6 })]), voice: [] };
     case 'world-now:signoff': return { programme, seconds, cues: c([0.3, 'signoffEnd']), voice: [] };
     case 'world-now:breaking': return { programme, seconds, cues: c([0.3, 'breaking']), voice: [] };
+    case 'world-now:story-soft':
+    case 'tech-bytes:story-soft':
+    case 'cosmos:story-soft':
+    case 'money-minute:story-soft':
+      // Owner switch bedUnderStories 'soft': two light stories back to back (the bed carries on).
+      return { programme, seconds, bedUnderStories: 'soft', cues: c([0, 'story', p({ emotion: 'neutral', segment: 3 })], [seconds * 0.5, 'story', p({ emotion: 'happy', segment: 4 })]), voice: [] };
+    case 'tech-bytes:signoff': return { programme, seconds, cues: c([0, 'outro', p({ segment: 7 })], [seconds - 3.5, 'signoffEnd'], [seconds - 1.2, 'endcard']), voice: [] };
     case 'tech-bytes:number': return { programme, seconds, cues: c([0, 'number', p({ segment: 4 })], [0.4, 'numberSting'], [seconds - 2, 'featureEnd']), voice: [] };
     case 'cosmos:story':
     case 'cosmos:finally': return { programme, seconds, cues: c([0, moment, p({ emotion: 'happy', segment: 3 })], [0.2, 'shot', p({ kind: 'picture', expected: 12 })]), voice: [] };
@@ -222,6 +261,7 @@ export function planFor({ programme = 'world-now', moment = 'roundup', seconds =
           bumper: [[0, 'bumper', { kind: 'cards' }], [seconds - 0.3, 'silence', {}]],
           holding: [[0, 'holding', {}], [seconds - 0.3, 'silence', {}]],
           'up-next': [[0.2, 'upNext', { next: 'cosmos', seconds: 4.2 }]],
+          replay: [[0.2, 'replay', { programId: 'world-now' }]],
           standby: [[0, 'standby', {}]],
         }[moment] || [[0, moment, {}]];
         return { programme, seconds, cues: ch.map(([t, m, o]) => [t, m, { programId: 'channel', ...o }]), voice: [] };
@@ -298,12 +338,29 @@ async function loadClip(ctx, key, voiceBase) {
   }
 }
 
+/** The audio stream's open theme for a programme, rendered offline (null if unavailable). */
+async function openTheme(programId, sampleRate) {
+  try {
+    const [{ renderTune }, { themeFor }] = await Promise.all([import('../../../audio/synth.js'), import('../../../audio/themes.js')]);
+    const out = await renderTune(themeFor(programId, { duration: OPEN_SECONDS }), {
+      sampleRate, volume: 0.6, startAt: 0, stopAt: OPEN_SECONDS, seconds: OPEN_SECONDS + 2.5,
+    });
+    return out?.buffer || null;
+  } catch (err) {
+    console.warn('[lofi] open theme unavailable', err);
+    return null;
+  }
+}
+
 /** The plan for a render: a named timeline or a (programme, moment) bed. */
 export function planOf(opts = {}) {
   if (opts.timeline) {
     const make = TIMELINES[opts.timeline];
     if (!make) throw new Error(`unknown timeline ${opts.timeline}`);
-    return make();
+    const plan = make();
+    // Real clip lengths (manifest) can differ from the planning ones: keep 3 s after the last event.
+    plan.seconds = Math.max(plan.seconds, Math.ceil(plan.end + 3));
+    return plan;
   }
   return planFor(opts);
 }
@@ -326,6 +383,7 @@ export async function render(opts = {}) {
   musicOut.connect(ctx.destination);
   const engine = new LofiEngine(ctx, musicOut, {
     gravePad: Boolean(opts.gravePad), sharedStings: Boolean(opts.sharedStings), seed: opts.seed || 'demo', noteLog: true,
+    bedUnderStories: opts.bedUnderStories || plan.bedUnderStories || 'off',
   });
   if (opts.solo) engine.solo = new Set(String(opts.solo).split(','));
   if (opts.noReverb) engine.rig.reverbIn.gain.value = 0; // diagnostics
@@ -344,6 +402,19 @@ export async function render(opts = {}) {
     else engine.setSpeaking(e.speak, e.t);
   }
   engine.pump(seconds + 2);
+
+  // The programme's open theme from the audio stream, played as director.js does (volume 0.6,
+  // stopped on the cut so its last chord rings over it), rendered with the channel's own mixer.
+  if (plan.opens?.length && opts.stem !== 'voice' && opts.open !== false) {
+    for (const [t, pid] of plan.opens) {
+      const buf = await openTheme(pid, sr);
+      if (!buf) continue;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(t);
+    }
+  }
 
   let realVoice = null;
   if (voice.length && opts.stem !== 'music') {
@@ -375,5 +446,6 @@ export async function render(opts = {}) {
     melodyNotesUnderVoice: underVoice.length,
     voice: plan.voice,
     cues: plan.cues,
+    seconds,
   };
 }

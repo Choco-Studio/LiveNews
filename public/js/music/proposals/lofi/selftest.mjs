@@ -8,6 +8,7 @@ import { SIGNATURE, SIGNATURE_SEMITONES, COLOUR, SCALES, degreeToMidi, motifVari
 import { PALETTES, PROGRAMMES, LAYERS, DUCK_GROUP, arrangementFor } from './palettes.js';
 import { barEvents, formBars } from './arranger.js';
 import { resolveCue, CUE_SHEET } from './cuesheet.js';
+import { SHARED_BY_AUDIO } from './engine.js';
 
 let n = 0;
 const test = (name, fn) => {
@@ -89,7 +90,8 @@ test('WORLD NOW: round-up 96-104 BPM, muted pluck ostinato + triangle, no melody
   assert.ok(ev.filter((e) => e.layer === 'arp').every((e) => e.inst === 'pluck'));
   const f = PALETTES['world-now/finally'];
   assert.ok(f.bpm >= 84 && f.bpm <= 92);
-  assert.ok(notesOf('world-now/finally', 'finally').every((e) => (e.layer === 'lead' && e.inst === 'softtri') || (e.layer === 'arp' && e.inst === 'pluck')));
+  // Sparse softtri + pluck, over a soft triangle root (the bible's tri family) so it never sounds like a music box.
+  assert.ok(notesOf('world-now/finally', 'finally').every((e) => (e.layer === 'lead' && e.inst === 'softtri') || (e.layer === 'arp' && e.inst === 'pluck') || (e.layer === 'bass' && e.p.wave === 'triangle')));
 });
 
 test('TECH BYTES: 100-108 BPM, no swing, triangle roots, pad, pulse-12 arp (vel <= 0.45, LP <= 1.8 kHz), no kick/snare, hats only on light beds', () => {
@@ -164,6 +166,40 @@ test('grave: silence in the segment and the next one; lead-ins and bumpers per t
   const b = PALETTES['channel/bumper'];
   assert.ok(b.bpm >= 80 && b.bpm <= 88 && b.swing > 0.5);
   assert.ok(CUE_SHEET.length >= 25);
+});
+
+test('owner switch bedUnderStories soft: light stories get a dark, melody-free bed; grave and after stay silent', () => {
+  const soft = { bedUnderStories: 'soft' };
+  const want = { 'world-now': 'world-now/story', 'tech-bytes': 'tech-bytes', cosmos: 'cosmos', 'money-minute': 'money-minute/drone' };
+  for (const [pid, song] of Object.entries(want)) {
+    const a = resolveCue('story', { programId: pid, emotion: 'neutral' }, soft);
+    assert.equal(a.kind, 'bed', pid);
+    assert.equal(a.song, song, pid);
+    const arr = arrangementFor(a.song, a.moment);
+    assert.ok(arr.lp <= 1300, `${pid} low-passed`);
+    assert.ok(!arr.hidden, `${pid} audible on presenter shots`);
+    for (const l of ['kick', 'snare', 'hat', 'perc', 'arp']) assert.equal(arr.layers[l], 0, `${pid} ${l}`);
+    assert.equal(resolveCue('story', { programId: pid, emotion: 'serious' }, soft).kind, 'silence', `${pid} grave`);
+    assert.equal(resolveCue('story', { programId: pid, emotion: 'neutral' }, { ...soft, afterGrave: true }).kind, 'silence', `${pid} after grave`);
+  }
+  // Default: the bibles' silence under story copy (COSMOS: a hidden bed shown only on pictures).
+  assert.equal(resolveCue('story', { programId: 'world-now', emotion: 'neutral' }).kind, 'silence');
+  assert.equal(resolveCue('story', { programId: 'tech-bytes', emotion: 'neutral' }).kind, 'silence');
+  assert.ok(arrangementFor('cosmos', resolveCue('story', { programId: 'cosmos', emotion: 'happy' }).moment).hidden);
+  // The soft story beds play no melody: no lead events in 16 bars.
+  for (const [song, moment] of [['world-now/story', 'story'], ['tech-bytes', 'story']]) {
+    const pal = PALETTES[song];
+    const arr = arrangementFor(song, moment);
+    const state = {};
+    for (let bar = 0; bar < 16; bar++) assert.ok(!barEvents(pal, song, arr, arr, bar, state).events.some((e) => e.layer === 'lead' || e.layer === 'arp'), song);
+  }
+});
+
+test('replay marker and shared stings', () => {
+  assert.equal(resolveCue('replay', { programId: 'world-now' }).name, 'replay');
+  for (const k of ['breaking', 'upNext', 'signoffBrass', 'moneyButton', 'sixtyBell']) assert.ok(SHARED_BY_AUDIO.has(k), k);
+  const rt = motifVariant('retrograde', 0, COLOUR.next);
+  assert.deepEqual(rt.slice(0, 4).map((x) => x.d), [4, 1, 0, -3]);
 });
 
 console.log(`# ${n} passed`);

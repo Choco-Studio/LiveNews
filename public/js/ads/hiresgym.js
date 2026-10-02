@@ -31,7 +31,7 @@
 // is done during the first shot.
 import { P, W, H, A, R, drawText, measureText, litShape, motes, prog, lerp } from './kit.js';
 
-const { sin, cos, PI, round, floor, ceil, min, max, abs, sqrt, hypot } = Math;
+const { sin, cos, PI, round, floor, ceil, min, max, abs, sqrt, hypot, exp } = Math;
 const TAU = PI * 2;
 
 // --- timing ------------------------------------------------------------------------
@@ -284,34 +284,6 @@ function buf(name, w = W, h = H) {
   b.c.globalCompositeOperation = 'source-over';
   b.c.clearRect(0, 0, b.cv.width, b.cv.height);
   return b;
-}
-/**
- * Per-pixel light at bake time. `ids` holds a part number per pixel (0 =
- * empty); for each lit pixel the distance to its part's edge is measured along
- * a few directions towards the light (the shortest wins, so light wraps round
- * curves), and fn(x, y, part, distance) returns a ramp index or -1.
- */
-function distanceLight(ids, x0, y0, x1, y1, dirs, maxD, fn, out) {
-  for (let y = y0; y < y1; y++) {
-    for (let x = x0; x < x1; x++) {
-      const id = ids[y * W + x];
-      if (!id) continue;
-      let best = maxD;
-      for (let k = 0; k < dirs.length; k += 2) {
-        const dx = dirs[k];
-        const dy = dirs[k + 1];
-        for (let s = 1; s < best; s++) {
-          const sx = round(x + dx * s);
-          const sy = round(y + dy * s);
-          if (sx < 0 || sy < 0 || sx >= W || sy >= H || ids[sy * W + sx] !== id) {
-            best = s;
-            break;
-          }
-        }
-      }
-      out[y * W + x] = fn(x, y, id, best);
-    }
-  }
 }
 /** Paint a ramp-index buffer (or -1 = transparent) into the canvas. */
 function paintIndex(c, idx, ramp) {
@@ -581,7 +553,7 @@ function nearLimbs(ctx, rim, core, dx, dy) {
 const LOCK_W = W + 32;
 const locker = () => bake('hg-locker', LOCK_W, H, (c) => {
   R(c, 0, 0, LOCK_W, H, P.black);
-  for (let k = 0; k < 12; k++) {
+  for (let k = 0; k < 13; k++) {
     const x = 8 + k * 32;
     R(c, x, 24, 31, 150, P.steel);
     R(c, x, 24, 31, 1, P.fog);
@@ -984,108 +956,199 @@ const fy = (v) => FY + v * FK;
 function localPts(arr) {
   for (let i = 0; i < arr.length; i += 2) pt(fx(arr[i]), fy(arr[i + 1]));
 }
-// Light from the front (screen right), wrapping a little over and under: it
-// gives the rim. The form comes from planes painted like a hand-shaded portrait:
-// each a cluster of one tone, the ones that face the light lighter.
-const FACE_DIRS = [1, 0, 1, -0.45, 1, 0.45];
-const FACE_BACK = [1, 0];
-const rimBand = (d) => (d <= 1 ? 0 : d <= 2 ? 1 : d <= 3 ? 2 : 9);
-const FACE_PLANES = [
-  // [ramp index, polygon in face units]
-  [6, [44, 70, 79, 102, 70, 105, 60, 104, 50, 96, 40, 84]], // the neck under the jaw
-  [4, [52, 72, 63, 69, 76, 71, 80, 82, 76, 92, 66, 97, 54, 90]], // jaw and lower cheek
-  [3, [66, 10, 76, 14, 81, 24, 84, 34, 86, 40, 77, 41, 69, 34, 64, 22]], // forehead
-  [2, [73, 39, 86, 40, 85, 44, 76, 43.5]], // brow ridge
-  [5, [70, 45, 83, 46, 83, 54, 72, 54]], // the socket under the brow
-  [4, [61, 58, 72, 55, 81, 59, 83, 66, 76, 70, 63, 68]], // cheek
-  [3, [70, 57, 80, 59, 82, 64, 74, 65]], // cheekbone
-  [3, [79, 55, 84, 63, 89, 71, 84, 72, 79, 64, 76, 57]], // side of the nose
-  [2, [80, 49, 86, 54, 90, 62, 94, 71, 89, 71, 84, 63, 79, 55]], // ridge of the nose
-  [6, [83, 73, 92, 74, 88, 75, 85, 76, 82, 75]], // under the nose
-  [3, [79, 76, 85, 76, 87, 81, 86, 83, 79, 82]], // upper lip
-  [3, [80, 85, 86, 86, 85, 88, 80, 88]], // lower lip
-  [6, [78, 88, 85, 88, 82, 91, 78, 90.5]], // under the lower lip
-  [3, [73, 92, 82, 91, 84, 95, 83, 99, 79, 101.5, 72, 98]], // chin
-];
 const EAR = [42, 47, 46, 48, 47.5, 52, 47, 58, 45.5, 62, 44, 66, 41, 66.5, 39.5, 63, 39, 58, 38.5, 52, 40, 48];
-const EAR_BOWL = [42, 51, 44.6, 52, 45, 57, 44, 61, 42, 61, 41, 56];
-/** Fill a polygon (face units) into a ramp-index buffer, only inside the mask. */
-function polyIndex(idx, ids, arr, val) {
-  NP = 0;
-  localPts(arr);
-  let y0 = Infinity;
-  let y1 = -Infinity;
-  for (let i = 1; i < NP * 2; i += 2) {
-    if (PT[i] < y0) y0 = PT[i];
-    if (PT[i] > y1) y1 = PT[i];
-  }
-  for (let y = max(0, floor(y0)); y <= min(H - 1, ceil(y1)); y++) {
-    const sy = y + 0.5;
-    let k = 0;
-    for (let i = 0, j = NP - 1; i < NP; j = i++) {
-      const ay = PT[j * 2 + 1];
-      const by = PT[i * 2 + 1];
-      if ((ay <= sy && by > sy) || (by <= sy && ay > sy)) XS[k++] = PT[j * 2] + ((sy - ay) / (by - ay)) * (PT[i * 2] - PT[j * 2]);
-    }
-    if (k < 2) continue;
-    const a = max(0, round(min(XS[0], XS[1])));
-    const b = min(W, round(max(XS[0], XS[1])));
-    for (let x = a; x < b; x++) if (ids[y * W + x]) idx[y * W + x] = val;
-  }
-  NP = 0;
-}
 const faceBg = () => bake('hg-face-bg', W, H, (c) => {
   ditherField(c, 0, 0, W, H, [P.black, P.ink, P.slate], (x, y) => 0.95 - hypot((x - 40) / 260, (y - 90) / 200) * 1.1);
   glowBake(c, 340, 100, 90, 110, P.ink, 0.6);
 });
+// The close-up is lit as a height field inside the drawn profile: the face's
+// depth grows with the distance from its outline (a rounded solid), plus sculpted
+// bumps and hollows (brow ridge, eye socket, cheekbone, the hollow under it, jaw,
+// nose wing, lips, chin, the neck's long muscle). Normals come from that height;
+// the key from the front (screen right, a little above) casts shadows across it,
+// so the brow shades the eye, the nose the cheek and the jaw the neck.
+const FACE_KEY = (() => {
+  const l = hypot(0.8, -0.42, 0.42);
+  return [0.8 / l, -0.42 / l, 0.42 / l];
+})();
+const FACE_HALF = (() => {
+  const l = hypot(FACE_KEY[0], FACE_KEY[1], FACE_KEY[2] + 1);
+  return [FACE_KEY[0] / l, FACE_KEY[1] / l, (FACE_KEY[2] + 1) / l];
+})();
+// [x, y (face units), radius x, radius y, height in px (+ bump, - hollow)]
+const FACE_BUMPS = [
+  [77, 41.5, 9, 3.2, 7], // brow ridge
+  [77, 49.5, 6, 3.6, -8], // eye socket
+  [79, 49.5, 2.6, 1.8, 3], // the eyeball under the lid
+  [70, 59, 8, 5, 7], // cheekbone
+  [63, 71, 9, 8, -4], // the hollow under it
+  [86, 64, 5, 8, 9], // the nose
+  [82, 70, 3.2, 3, 5], // the nose's wing
+  [82, 79, 4, 2.6, 4], // upper lip
+  [81, 86, 3.6, 2.2, 4], // lower lip
+  [79, 96, 6, 4.5, 5], // chin
+  [53, 90, 9, 11, 5], // the angle of the jaw
+  [44, 38, 14, 13, -3], // temple
+  [56, 112, 4, 18, 3], // the neck's long muscle, top
+  [61, 128, 4, 14, 3], // and towards the collarbone
+];
+/** Chamfer distance (in px) from the edge of part `id`, inside the box. */
+function chamfer(ids, id, d, x0, y0, x1, y1) {
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const o = y * W + x;
+      if (ids[o] !== id) {
+        d[o] = 0;
+        continue;
+      }
+      const edge = x === 0 || y === 0 || x === W - 1 || y === H - 1 || ids[o - 1] !== id || ids[o + 1] !== id || ids[o - W] !== id || ids[o + W] !== id;
+      d[o] = edge ? 3 : 1e6;
+    }
+  }
+  for (let y = max(1, y0); y < y1; y++) {
+    for (let x = max(1, x0); x < min(W - 1, x1); x++) {
+      const o = y * W + x;
+      if (ids[o] !== id) continue;
+      d[o] = min(d[o], d[o - 1] + 3, d[o - W] + 3, d[o - W - 1] + 4, d[o - W + 1] + 4);
+    }
+  }
+  for (let y = min(H - 2, y1 - 1); y >= y0; y--) {
+    for (let x = min(W - 2, x1 - 1); x >= max(1, x0); x--) {
+      const o = y * W + x;
+      if (ids[o] !== id) continue;
+      d[o] = min(d[o], d[o + 1] + 3, d[o + W] + 3, d[o + W + 1] + 4, d[o + W - 1] + 4);
+    }
+  }
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (ids[y * W + x] === id) d[y * W + x] /= 3;
+}
+// Skin, close up: one more step of light than the reveal (the key is nearer).
+const FACE_STEPS = [0.1, 6, 0.22, 5, 0.4, 4, 0.6, 3, 0.82, 2, 9, 1];
 const faceArt = () => bake('hg-face', W, H, (c) => {
+  // parts: 1 head and neck, 2 shoulder, 3 ear
   const ids = new Uint8Array(W * H);
-  partMask(c, ids, 1, (k) => {
-    localPts(FACE_S);
-    fillPts(k, P.white);
+  partMask(c, ids, 2, (k) => {
     localPts(SHOULDER);
     fillPts(k, P.white);
   });
-  // the skin in shadow: ink near the lit side, black further back (the line
-  // between them follows the profile, at a fixed depth from the lit edge)
+  partMask(c, ids, 1, (k) => {
+    localPts(FACE_S);
+    fillPts(k, P.white);
+  });
+  partMask(c, ids, 3, (k) => {
+    localPts(EAR);
+    fillPts(k, P.white);
+  });
+  // height: a rounded solid from the outline, then the sculpted forms
+  const d = new Float32Array(W * H);
+  const h = new Float32Array(W * H);
+  for (const [id, r] of [[1, 34], [2, 30], [3, 5]]) {
+    chamfer(ids, id, d, 0, 0, W, H);
+    for (let o = 0; o < W * H; o++) {
+      if (ids[o] !== id) continue;
+      const q = min(1, d[o] / r);
+      h[o] = r * sqrt(1 - (1 - q) * (1 - q)) + (id === 3 ? 26 : 0);
+    }
+  }
+  for (const [bx, by, rx, ry, a] of FACE_BUMPS) {
+    const cx = fx(bx);
+    const cy = fy(by);
+    const sx = rx * FK;
+    const sy = ry * FK;
+    for (let y = max(0, floor(cy - sy * 3)); y < min(H, ceil(cy + sy * 3)); y++) {
+      for (let x = max(0, floor(cx - sx * 3)); x < min(W, ceil(cx + sx * 3)); x++) {
+        const o = y * W + x;
+        if (ids[o] !== 1) continue;
+        h[o] += a * exp(-(((x - cx) / sx) ** 2 + ((y - cy) / sy) ** 2));
+      }
+    }
+  }
+  // the ear's bowl is a hollow
+  {
+    const cx = fx(43);
+    const cy = fy(56);
+    for (let y = floor(cy - 14); y < cy + 14; y++) {
+      for (let x = floor(cx - 8); x < cx + 8; x++) {
+        const o = y * W + x;
+        if (ids[o] === 3) h[o] -= 4 * exp(-(((x - cx) / 4) ** 2 + ((y - cy) / 8) ** 2));
+      }
+    }
+  }
+  // light every pixel: normal from the height, the key traced for shadows
   const idx = new Int8Array(W * H).fill(-1);
-  distanceLight(ids, 0, 0, W, H, FACE_BACK, 48, (x, y, id, d) => (d > 40 ? 6 : 5), idx);
-  for (const [v, poly] of FACE_PLANES) polyIndex(idx, ids, poly, v);
-  // the rim along every edge that faces the light, wrapping the nose and chin
-  const rim = new Int8Array(W * H).fill(9);
-  distanceLight(ids, 0, 0, W, H, FACE_DIRS, 5, (x, y, id, d) => rimBand(d), rim);
-  for (let i = 0; i < W * H; i++) if (idx[i] >= 0 && rim[i] < idx[i]) idx[i] = rim[i];
+  const hAt = (x, y, id) => {
+    const o = y * W + x;
+    return ids[o] === id ? h[o] : null;
+  };
+  const steps = hypot(FACE_KEY[0], FACE_KEY[1]);
+  const rise = FACE_KEY[2] / steps;
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      const o = y * W + x;
+      const id = ids[o];
+      if (!id) continue;
+      const hl = hAt(x - 1, y, id) ?? h[o];
+      const hr = hAt(x + 1, y, id) ?? h[o];
+      const hu = hAt(x, y - 1, id) ?? h[o];
+      const hd = hAt(x, y + 1, id) ?? h[o];
+      let nx = -(hr - hl) / 2;
+      let ny = -(hd - hu) / 2;
+      let nz = 1;
+      const nl = hypot(nx, ny, nz);
+      nx /= nl;
+      ny /= nl;
+      nz /= nl;
+      let v = max(0, nx * FACE_KEY[0] + ny * FACE_KEY[1] + nz * FACE_KEY[2]);
+      if (v > 0) {
+        // march towards the light over the height field
+        const sx = FACE_KEY[0] / steps;
+        const sy = FACE_KEY[1] / steps;
+        for (let s = 2; s < 60; s++) {
+          const qx = round(x + sx * s);
+          const qy = round(y + sy * s);
+          if (qx < 0 || qy < 0 || qx >= W || qy >= H) break;
+          const q = qy * W + qx;
+          if (ids[q] && h[q] > h[o] + rise * s + 0.6) {
+            v *= 0.18;
+            break;
+          }
+        }
+      }
+      const spec = v > 0.5 ? max(0, nx * FACE_HALF[0] + ny * FACE_HALF[1] + nz * FACE_HALF[2]) ** 50 : 0;
+      v = 0.05 + 0.95 * v;
+      let g = 1;
+      for (let i = 0; i < FACE_STEPS.length; i += 2) {
+        if (v < FACE_STEPS[i]) {
+          g = FACE_STEPS[i + 1];
+          break;
+        }
+      }
+      if (spec > 0.7) g = 0;
+      idx[o] = g;
+    }
+  }
   paintIndex(c, idx, GREYS);
-  // close-cropped hair: black with a little texture, a lit edge at the hairline
+  // close-cropped hair: black with a grain, the lit edge of the hairline
   localPts(HAIR_S);
   fillPts(c, P.black);
-  for (let k = 0; k < 40; k++) R(c, round(fx(12 + hash(k) * 44)), round(fy(4 + hash(k + 30) * 50)), 1, 1, P.ink);
+  for (let k = 0; k < 70; k++) R(c, round(fx(12 + hash(k) * 46)), round(fy(4 + hash(k + 30) * 54)), 1, 1, k & 1 ? P.ink : P.slate);
   for (let i = 6; i < HAIR.length - 18; i += 2) R(c, round(fx(HAIR[i])) + 1, round(fy(HAIR[i + 1])), 1, 1, P.slate);
-  // the ear: helix, the bowl in shadow, a lit rim on its upper edge, the lobe
-  localPts(EAR);
-  fillPts(c, P.slate);
-  localPts(EAR_BOWL);
-  fillPts(c, P.black);
+  // the ear's rim and lobe
   for (let i = 0; i < 12; i += 2) R(c, round(fx(EAR[i])), round(fy(EAR[i + 1])) + 1, 1, 1, P.steel);
-  R(c, round(fx(46.6)), round(fy(55)), 2, 3, P.steel);
   line(c, fx(41.5), fy(64), fx(43.5), fy(65.5), P.ink);
   // the brow: short hairs over the lit ridge
-  for (let k = 0; k < 9; k++) R(c, round(fx(72 + k * 1.3)), round(fy(44.6 + k * 0.1)), 1, 2, k & 1 ? P.ink : P.black);
-  // the eye, half-closed in the effort: lid, lashes, the iris and a soft catchlight
-  line(c, fx(74), fy(49.4), fx(80), fy(49.8), P.black);
+  for (let k = 0; k < 9; k++) R(c, round(fx(72 + k * 1.3)), round(fy(44.4 + k * 0.08)), 1, 2, k & 1 ? P.ink : P.black);
+  // the eye, half-closed in the effort: lid and lashes, iris, a soft catchlight
+  line(c, fx(74.5), fy(49.4), fx(80), fy(49.8), P.black);
   line(c, fx(80), fy(49.8), fx(81.5), fy(49.3), P.black);
   R(c, round(fx(77.6)), round(fy(50.2)), 3, 2, P.black);
-  R(c, round(fx(76)), round(fy(50.6)), 2, 1, P.ink);
-  R(c, round(fx(79)), round(fy(50.2)), 1, 1, P.fog);
-  line(c, fx(75), fy(52.2), fx(79.5), fy(52), P.ink);
-  // the nose: the crease of the wing and the nostril inside it
-  line(c, fx(81), fy(69), fx(83.5), fy(73.2), P.ink);
-  R(c, round(fx(86)), round(fy(73.6)), 2, 1, P.black);
-  // the lips: the line between them
-  line(c, fx(78.5), fy(84.4), fx(84.5), fy(84), P.black);
-  // the neck: the long muscle from behind the ear, the strap of the vest
-  line(c, fx(48), fy(74), fx(61), fy(117), P.black);
-  line(c, fx(49), fy(74), fx(62), fy(117), P.ink);
+  R(c, round(fx(79.2)), round(fy(50.2)), 1, 1, P.fog);
+  line(c, fx(75.5), fy(52.2), fx(79.5), fy(52), P.slate);
+  // the nostril, inside the wing, and the crease above it
+  line(c, fx(80.5), fy(67.5), fx(82.5), fy(72.5), P.slate);
+  R(c, round(fx(84.6)), round(fy(73.4)), 2, 1, P.ink);
+  // the line between the lips
+  line(c, fx(79.5), fy(84.3), fx(85), fy(84), P.ink);
+  // the vest's strap over the shoulder
   pt(fx(8), fy(121));
   pt(fx(16), fy(119));
   pt(fx(10), fy(160));
@@ -1134,211 +1197,454 @@ function shotFace(c, lt) {
   }
 }
 
-// --- 5. the reveal: front, split-lit against concrete --------------------------------------
-// Baked twice with per-pixel light: in the dark (only the back light's rim on
-// his right side) and lit (a soft key from the upper left). The key comes up,
-// he breathes; the red square on his chest is the brand's one colour.
-const RX = 192;
-const RT = 30; // top of the head
-const RH = 30; // head height
+// --- sculpt: ellipsoids lit per pixel at bake time -------------------------------------------
+// A figure is a list of ellipsoid parts placed in frames (the body, the head) that
+// turn in 3D; the view is orthographic. For every pixel the front-most surface wins,
+// normals blend where two parts meet (no creases at the joins), the key light is
+// traced for shadows (the brow shades the eyes, the jaw the neck), and the result is
+// quantised to the grey ramp by material. Nothing here runs per frame: the art is
+// baked once per lighting and drawn as a canvas.
+const rotY = (t) => Float64Array.of(cos(t), 0, -sin(t), 0, 1, 0, sin(t), 0, cos(t));
+const rotX = (t) => Float64Array.of(1, 0, 0, 0, cos(t), sin(t), 0, -sin(t), cos(t));
+const rotZ = (t) => Float64Array.of(cos(t), -sin(t), 0, sin(t), cos(t), 0, 0, 0, 1);
+const ID3 = Float64Array.of(1, 0, 0, 0, 1, 0, 0, 0, 1);
+function mul3(a, b) {
+  const o = new Float64Array(9);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) o[i * 3 + j] = a[i * 3] * b[j] + a[i * 3 + 1] * b[3 + j] + a[i * 3 + 2] * b[6 + j];
+  return o;
+}
+const V3 = new Float64Array(3);
+// A frame: rotation R, origin o (world) and uniform scale k, so a figure is
+// designed in its own units (about 34 to a head) and placed at any size.
+/** Frame-local point to world (screen x, y; z towards the lens) into V3. */
+function toWorld(f, x, y, z) {
+  const R = f.R;
+  const k = f.k;
+  V3[0] = f.o[0] + (R[0] * x + R[1] * y + R[2] * z) * k;
+  V3[1] = f.o[1] + (R[3] * x + R[4] * y + R[5] * z) * k;
+  V3[2] = f.o[2] + (R[6] * x + R[7] * y + R[8] * z) * k;
+  return V3;
+}
+/** World point to frame-local into V3. */
+function toLocal(f, x, y, z) {
+  const R = f.R;
+  const dx = (x - f.o[0]) / f.k;
+  const dy = (y - f.o[1]) / f.k;
+  const dz = (z - f.o[2]) / f.k;
+  V3[0] = R[0] * dx + R[3] * dy + R[6] * dz;
+  V3[1] = R[1] * dx + R[4] * dy + R[7] * dz;
+  V3[2] = R[2] * dx + R[5] * dy + R[8] * dz;
+  return V3;
+}
+/** An ellipsoid part: centre and semi-axes in frame f, extra local rotation E, material (id or fn). */
+function part(list, f, cx, cy, cz, ax, ay, az, E, mat) {
+  const Q = mul3(f.R, E || ID3);
+  toWorld(f, cx, cy, cz);
+  const m = new Float64Array(9);
+  ax *= f.k;
+  ay *= f.k;
+  az *= f.k;
+  const ax3 = [ax, ay, az];
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) m[i * 3 + j] = Q[j * 3 + i] / ax3[i];
+  const hx = hypot(Q[0] * ax, Q[1] * ay, Q[2] * az);
+  const hy = hypot(Q[3] * ax, Q[4] * ay, Q[5] * az);
+  list.push({ m, c0: V3[0], c1: V3[1], c2: V3[2], x0: V3[0] - hx - 1, x1: V3[0] + hx + 1, y0: V3[1] - hy - 1, y1: V3[1] + hy + 1, mat, f });
+}
+/** An ellipsoid along a bone a -> b (frame-local), side radius r1, front-back radius r2. */
+function bone(list, f, a, b, r1, r2, ext, mat, at = 0.5, ox = 0, oy = 0, oz = 0) {
+  let dx = b[0] - a[0];
+  let dy = b[1] - a[1];
+  let dz = b[2] - a[2];
+  const len = hypot(dx, dy, dz) || 1;
+  dx /= len;
+  dy /= len;
+  dz /= len;
+  // x across the bone (side to side), z front to back
+  let xx = dy;
+  let xy = -dx;
+  const xl = hypot(xx, xy) || 1;
+  xx /= xl;
+  xy /= xl;
+  const zx = xy * dz;
+  const zy = -xx * dz;
+  const zz = xx * dy - xy * dx;
+  const E = Float64Array.of(xx, dx, zx, xy, dy, zy, 0, dz, zz);
+  part(list, f, a[0] + (b[0] - a[0]) * at + ox, a[1] + (b[1] - a[1]) * at + oy, a[2] + (b[2] - a[2]) * at + oz, r1, len / 2 + ext, r2, E, mat);
+}
+// Materials and how each turns light into a grey (GREYS index, 0 white .. 6 black).
+const M_SKIN = 0;
+const M_CLOTH = 1;
+const M_HAIR = 2;
+const M_TAPE = 3;
+const M_EYE = 4;
+const M_RED = 5;
+const M_DEEP = 6; // skin in a hollow (eye sockets): half the light
+const STEPS = [
+  [0.16, 6, 0.32, 5, 0.54, 4, 0.8, 3, 9, 2], // skin
+  [0.5, 6, 9, 5], // cloth
+  [0.45, 6, 0.85, 5, 9, 4], // hair
+  [0.15, 5, 0.35, 4, 0.6, 3, 0.86, 2, 9, 1], // tape
+  [0.4, 6, 0.75, 5, 9, 4], // eye
+  [0.4, 8, 9, 7], // red: darkRed, red
+];
+const RIM_MIN = [1, 4, 3, 1, 4, 7]; // brightest the back light may push each material
+const BLEND = 5; // px of depth over which two meeting parts blend their normals
+const lightStep = (mat, v) => {
+  const s = STEPS[mat];
+  for (let i = 0; i < s.length; i += 2) if (v < s[i]) return s[i + 1];
+  return s[s.length - 1];
+};
+// Key from the upper left in front, back light from the right behind, the lens on +z.
+const KEY = (() => {
+  const l = hypot(-0.8, -0.55, 0.28);
+  return [-0.8 / l, -0.55 / l, 0.28 / l];
+})();
+const BACK = (() => {
+  const l = hypot(0.86, -0.22, -0.46);
+  return [0.86 / l, -0.22 / l, -0.46 / l];
+})();
+const HALF = (() => {
+  const l = hypot(KEY[0], KEY[1], KEY[2] + 1);
+  return [KEY[0] / l, KEY[1] / l, (KEY[2] + 1) / l];
+})();
+/**
+ * Render a sculpt into an index buffer (-1 = empty) and a depth buffer over the box
+ * x0..x1, y0..y1. `lit` false keeps only the back light (a silhouette with a rim).
+ */
+function sculpt(prims, x0, y0, x1, y1, lit, idx, zb, mt = null) {
+  const n = prims.length;
+  for (let y = y0; y < y1; y++) {
+    const py = y + 0.5;
+    for (let x = x0; x < x1; x++) {
+      const px = x + 0.5;
+      let z1 = -1e9;
+      let z2 = -1e9;
+      let i1 = -1;
+      let i2 = -1;
+      for (let k = 0; k < n; k++) {
+        const p = prims[k];
+        if (px < p.x0 || px > p.x1 || py < p.y0 || py > p.y1) continue;
+        const m = p.m;
+        const dx = px - p.c0;
+        const dy = py - p.c1;
+        const dz = -p.c2;
+        const ux = m[0] * dx + m[1] * dy + m[2] * dz;
+        const uy = m[3] * dx + m[4] * dy + m[5] * dz;
+        const uz = m[6] * dx + m[7] * dy + m[8] * dz;
+        const a = m[2] * m[2] + m[5] * m[5] + m[8] * m[8];
+        const b = 2 * (ux * m[2] + uy * m[5] + uz * m[8]);
+        const c = ux * ux + uy * uy + uz * uz - 1;
+        const disc = b * b - 4 * a * c;
+        if (disc < 0) continue;
+        const z = (-b + sqrt(disc)) / (2 * a);
+        if (z > z1) {
+          z2 = z1;
+          i2 = i1;
+          z1 = z;
+          i1 = k;
+        } else if (z > z2) {
+          z2 = z;
+          i2 = k;
+        }
+      }
+      const o = y * W + x;
+      if (i1 < 0) {
+        idx[o] = -1;
+        continue;
+      }
+      zb[o] = z1;
+      // normal of the winning part, blended with the part just behind it near a join
+      let nx = 0;
+      let ny = 0;
+      let nz = 0;
+      for (let pass = 0; pass < 2; pass++) {
+        const k = pass ? i2 : i1;
+        if (pass && (k < 0 || z1 - z2 > BLEND)) break;
+        const p = prims[k];
+        const m = p.m;
+        const zz = pass ? z2 : z1;
+        const dx = px - p.c0;
+        const dy = py - p.c1;
+        const dz = zz - p.c2;
+        const ux = m[0] * dx + m[1] * dy + m[2] * dz;
+        const uy = m[3] * dx + m[4] * dy + m[5] * dz;
+        const uz = m[6] * dx + m[7] * dy + m[8] * dz;
+        let gx = m[0] * ux + m[3] * uy + m[6] * uz;
+        let gy = m[1] * ux + m[4] * uy + m[7] * uz;
+        let gz = m[2] * ux + m[5] * uy + m[8] * uz;
+        const gl = hypot(gx, gy, gz) || 1;
+        const w = pass ? 0.5 - 0.5 * ((z1 - z2) / BLEND) : 1;
+        gx /= gl;
+        gy /= gl;
+        gz /= gl;
+        nx += gx * w;
+        ny += gy * w;
+        nz += gz * w;
+      }
+      const nl = hypot(nx, ny, nz) || 1;
+      nx /= nl;
+      ny /= nl;
+      nz /= nl;
+      // material of the hit, from the part's own frame
+      const hit = prims[i1];
+      let mat = hit.mat;
+      if (typeof mat === 'function') {
+        toLocal(hit.f, px, py, z1);
+        mat = mat(V3[0], V3[1], V3[2]);
+        if (mat === M_CLOTH && hit.f.fold) {
+          // drape: the cloth's folds tilt the normal across the body
+          const fo = hit.f.fold(V3[0], V3[1], V3[2]);
+          const R = hit.f.R;
+          nx += R[0] * fo;
+          ny += R[3] * fo;
+          nz += R[6] * fo;
+          const fl = hypot(nx, ny, nz) || 1;
+          nx /= fl;
+          ny /= fl;
+          nz /= fl;
+        }
+      }
+      let v = 0.03;
+      let spec = 0;
+      if (lit) {
+        let d = nx * KEY[0] + ny * KEY[1] + nz * KEY[2];
+        if (d > 0) {
+          // shadow: is any part between this point and the key light?
+          const sx = px + nx * 1.5;
+          const sy = py + ny * 1.5;
+          const sz = z1 + nz * 1.5;
+          for (let k = 0; k < n; k++) {
+            const m = prims[k].m;
+            const dx = sx - prims[k].c0;
+            const dy = sy - prims[k].c1;
+            const dz = sz - prims[k].c2;
+            const ux = m[0] * dx + m[1] * dy + m[2] * dz;
+            const uy = m[3] * dx + m[4] * dy + m[5] * dz;
+            const uz = m[6] * dx + m[7] * dy + m[8] * dz;
+            const c = ux * ux + uy * uy + uz * uz - 1;
+            if (c < 0) continue;
+            const mx = m[0] * KEY[0] + m[1] * KEY[1] + m[2] * KEY[2];
+            const my = m[3] * KEY[0] + m[4] * KEY[1] + m[5] * KEY[2];
+            const mz = m[6] * KEY[0] + m[7] * KEY[1] + m[8] * KEY[2];
+            const a = mx * mx + my * my + mz * mz;
+            const b = 2 * (ux * mx + uy * my + uz * mz);
+            const disc = b * b - 4 * a * c;
+            if (disc >= 0 && (-b - sqrt(disc)) / (2 * a) > 0) {
+              d *= 0.22;
+              break;
+            }
+          }
+          spec = d > 0.55 ? max(0, nx * HALF[0] + ny * HALF[1] + nz * HALF[2]) ** 40 : 0;
+        }
+        v = 0.07 + 0.93 * max(0, d);
+        if (mat === M_DEEP) v *= 0.62;
+      }
+      const base = mat === M_DEEP ? M_SKIN : mat;
+      let g = lightStep(base, v);
+      // the back light: a bright edge where the surface turns towards it
+      const r = nx * BACK[0] + ny * BACK[1] + nz * BACK[2];
+      if (r > 0.3) {
+        const lim = RIM_MIN[base];
+        const rimG = base === M_RED ? 7 : r > 0.52 ? lim : min(6, lim + 2);
+        if (base === M_RED ? true : rimG < g) g = rimG;
+      }
+      if (spec > 0.72 && (base === M_SKIN || base === M_TAPE)) g = base === M_SKIN ? 1 : 0;
+      idx[o] = g;
+      if (mt) mt[o] = base;
+    }
+  }
+}
+
+// --- 5. the reveal: three-quarter, split-lit against concrete -----------------------------------
+// The hero frame at full resolution: a sculpted athlete turned three-quarters
+// towards the key light, looking off past the lens into the light, sweat
+// catching it. Baked twice: in the dark (only the back light's rim) and lit; the
+// key comes up over the dark one. He breathes: three baked chest positions,
+// stepped a pixel at a time.
+const RX = 214; // the figure's centre line
+const RYAW = 0.62; // body turned three-quarters to screen left
 const concrete = () => bake('hg-concrete', W, H, (c) => {
-  ditherField(c, 0, 0, W, H, [P.black, P.ink, P.slate], (x, y) => 0.92 - hypot((x - 96) / 250, (y - 60) / 180) * 1.1);
+  ditherField(c, 0, 0, W, H, [P.black, P.ink, P.slate], (x, y) => 0.92 - hypot((x - 120) / 250, (y - 70) / 180) * 1.1);
   // formwork seams and tie holes, kept away from his head
-  for (const x of [52, 332]) R(c, x, 0, 1, H, A(P.black, 0.6));
+  for (const x of [52, 150, 352]) R(c, x, 0, 1, H, A(P.black, 0.6));
   R(c, 0, 150, W, 1, A(P.black, 0.5));
   for (let gx = 22; gx < W; gx += 58) {
     for (let gy = 40; gy < 200; gy += 56) {
-      if (abs(gx - RX) < 70 && gy < 120) continue;
+      if (abs(gx - RX) < 60 && gy < 140) continue;
       R(c, gx, gy, 2, 2, A(P.black, 0.7));
       R(c, gx + 1, gy + 2, 2, 1, A(P.steel, 0.35));
     }
   }
 });
-// Parts back to front: 1 chest (skin), 2 vest, 3 left arm, 4 right arm, 5 neck, 6 head.
-function revealParts(c, ids) {
-  const x = RX;
-  partMask(c, ids, 1, (k) => {
-    pt(x - 9, 62);
-    pt(x - 24, 67);
-    pt(x - 35, 73);
-    pt(x - 39, 84);
-    pt(x - 34, 104);
-    pt(x - 26, 132);
-    pt(x - 28, 200);
-    pt(x + 28, 200);
-    pt(x + 26, 132);
-    pt(x + 34, 104);
-    pt(x + 39, 84);
-    pt(x + 35, 73);
-    pt(x + 24, 67);
-    pt(x + 9, 62);
-    fillPts(k, P.white);
-  });
-  partMask(c, ids, 2, (k) => {
-    pt(x - 10, 63);
-    pt(x - 16, 63);
-    pt(x - 26, 94);
-    pt(x - 27, 132);
-    pt(x - 29, 200);
-    pt(x + 29, 200);
-    pt(x + 27, 132);
-    pt(x + 26, 94);
-    pt(x + 16, 63);
-    pt(x + 10, 63);
-    pt(x + 6, 78);
-    pt(x, 83);
-    pt(x - 6, 78);
-    fillPts(k, P.white);
-  });
-  for (let sd = -1; sd <= 1; sd += 2) {
-    partMask(c, ids, sd < 0 ? 3 : 4, (k) => {
-      ellipse(k, x + sd * 34, 83, 9, 11, P.white);
-      capsule(k, x + sd * 35, 86, x + sd * 38, 120, 8.5, 7, P.white);
-      capsule(k, x + sd * 38, 120, x + sd * 37, 152, 6.6, 5, P.white);
-      ellipse(k, x + sd * 37, 160, 5.2, 6.6, P.white);
-    });
-  }
-  partMask(c, ids, 5, (k) => {
-    pt(x - 7, 54);
-    pt(x + 7, 54);
-    pt(x + 8.5, 68);
-    pt(x - 8.5, 68);
-    fillPts(k, P.white);
-  });
-  partMask(c, ids, 6, (k) => {
-    const hw = RH * 0.38;
-    for (let y = 0; y < RH; y++) {
-      const u = (y + 0.5) / RH;
-      const half = (u < 0.5 ? sqrt(max(0, 1 - ((0.5 - u) / 0.5) ** 2 * 0.92)) : u < 0.78 ? 1 - (u - 0.5) * 0.42 : (1 - 0.28 * 0.42) * (1 - ((u - 0.78) / 0.22) * 0.58)) * hw;
-      k.fillStyle = P.white;
-      k.fillRect(round(x - half), RT + y, round(half * 2), 1);
-    }
-    ellipse(k, x - hw - 0.5, RT + RH * 0.52, 2, 3.6, P.white);
-    ellipse(k, x + hw + 0.5, RT + RH * 0.52, 2, 3.6, P.white);
-  });
+// The tank top: a scoop neck, straps over the trapezius, deep armholes; the red
+// square printed on the near side of the chest. Body-local x is his left.
+function topMat(x, y, z) {
+  const ax = abs(x);
+  if (x > 7.5 && x < 13.5 && y > 89 && y < 95 && z > 3) return M_RED;
+  let neck = ax < 8.5 ? 94 - (ax / 8.5) ** 2 * 14 : ax < 15 ? 68 : 200;
+  if (z < -5) neck = min(neck, 79);
+  if (y < neck) return M_SKIN;
+  const arm = y < 86 ? 15 : 15 + min(1, (y - 86) / 26) * 9;
+  return ax > arm ? M_SKIN : M_CLOTH;
 }
-// Light from the upper left, wrapping a little.
-const KEY_DIRS = [-1, -0.55, -1, -0.1, -0.6, -1];
-const revealArt = (lit) => bake(lit ? 'hg-reveal-lit' : 'hg-reveal-dark', W, H, (c) => {
-  const ids = new Uint8Array(W * H);
-  revealParts(c, ids);
+// Head-local: close-cropped hair above a hairline that sits high on the forehead,
+// drops at the temples and runs to the nape; the eye sockets are hollows.
+function headMat(x, y, z) {
+  // the hairline: high and slightly receding at the temples in front, down to the
+  // sideburns in front of the ears, low at the nape
+  const ax = abs(x);
+  const front = -8 + ax * 0.08 - max(0, ax - 5.5) * 0.3;
+  const hair = z > 4 ? front : z > -5 ? front + ((4 - z) / 9) * (2.5 - front) : 2.5 + min(1, (-5 - z) / 6) * 7;
+  if (y < hair) return M_HAIR;
+  if (z > 5 && ((abs(x) - 4.4) / 3.7) ** 2 + ((y - 1.2) / 2.8) ** 2 < 1) return M_DEEP;
+  return M_SKIN;
+}
+const RV = { body: null, head: null };
+/** Cloth folds (body-local): soft vertical drape below the chest, diagonal pulls from the armpits. */
+function topFold(x, y) {
+  let f = 0;
+  if (y > 100) f += 0.32 * sin(x * 0.62 + sin(y * 0.07) * 1.6) * min(1, (y - 100) / 14);
+  if (y > 92 && y < 130 && abs(x) > 9) f += 0.28 * sin((abs(x) * 0.8 - y * 0.42) * 0.9) * (x > 0 ? 1 : -1);
+  return f;
+}
+const REVEAL_K = 1.12; // design units to pixels: a 38 px head
+/** The athlete for a breath phase b (0 out .. 1 in): parts in the body and head frames. */
+function revealFigure(b) {
+  const list = [];
+  const K = REVEAL_K;
+  const Y0 = 32; // the crown stays put when the figure is scaled
+  const body = { R: rotY(RYAW), o: [RX, Y0 - Y0 * K, 0], k: K, fold: topFold };
+  const rise = b * 1.1; // shoulders and head rise on the in-breath
+  const head = { R: mul3(rotY(RYAW + 0.2), rotX(0.08)), o: [0, 0, 0], k: K };
+  toWorld(body, -1, 49 - rise, 3);
+  head.o = [V3[0], V3[1], V3[2]];
+  RV.body = body;
+  RV.head = head;
+  // torso: rib cage, the pecs, the collarbone ridge, traps, lats, abdomen, obliques
+  part(list, body, 0, 103 - rise * 0.5, 0, 23, 28, 13 + b * 0.8, null, topMat);
+  for (let s = -1; s <= 1; s += 2) {
+    part(list, body, s * 10.5, 92 - rise, 8.5 + b * 0.6, 11.5, 8, 5.8, rotZ(s * 0.16), topMat);
+    part(list, body, s * 11, 77 - rise, -3, 12, 5.5, 7.5, rotZ(s * 0.42), topMat);
+    part(list, body, s * 17, 113 - rise * 0.5, -3, 8.5, 21, 9, rotZ(s * 0.12), topMat);
+    part(list, body, s * 12.5, 152, -1, 7.5, 32, 8.5, null, topMat);
+  }
+  part(list, body, 0, 82.5 - rise, 3.5, 15, 5, 7, null, topMat);
+  part(list, body, 0, 166, 1, 17.5, 50, 10.5, null, topMat);
+  // neck, leaning forward
+  part(list, body, 0, 68 - rise, 0.5, 7.4, 11, 7.6, rotX(0.3), M_SKIN);
+  // arms, the elbows a little bent so the taped fists hang forward of the hips:
+  // deltoid caps, upper arm with biceps and triceps, forearm, wrist wrap and fist
+  for (let s = -1; s <= 1; s += 2) {
+    const near = s > 0;
+    const sh = [s * 24, 83 - rise, -1];
+    const el = [s * 28.5, 127, near ? 3 : 1];
+    const wr = [s * 25, 160, near ? 22 : 18];
+    const tip = [s * 23, 175, near ? 29 : 25];
+    part(list, body, s * 24, 89 - rise, 0, 7.4, 10.5, 8, rotZ(s * 0.22), M_SKIN);
+    part(list, body, s * 22, 87 - rise, 6, 6, 8, 5, null, M_SKIN);
+    bone(list, body, sh, el, 7.4, 7.8, 3, M_SKIN);
+    bone(list, body, sh, el, 5.8, 5.4, -10, M_SKIN, 0.55, 0, 0, 3.2);
+    bone(list, body, sh, el, 5.8, 5.4, -9, M_SKIN, 0.45, 0, 0, -3.4);
+    bone(list, body, el, wr, 6.8, 6.4, -5, M_SKIN, 0.3);
+    bone(list, body, el, wr, 5, 4.5, -7, M_SKIN, 0.72);
+    part(list, body, wr[0], wr[1], wr[2], 5.2, 4.2, 5, null, M_TAPE);
+    bone(list, body, wr, tip, 4.8, 3.9, -2, M_TAPE, 0.55);
+  }
+  // the head: skull, face mass, brow, cheekbones, jaw, ears, eyes, nose, lips, chin
+  part(list, head, 0, -3, -1.5, 11.5, 14, 13, null, headMat);
+  part(list, head, 0, 6, 2.5, 9.8, 10.5, 9.5, null, headMat);
+  part(list, head, 0, -2.4, 9.6, 8.6, 2.2, 2.5, null, M_SKIN);
+  for (let s = -1; s <= 1; s += 2) {
+    part(list, head, s * 6.4, 3.6, 7.6, 3.6, 2.6, 3, null, M_SKIN);
+    part(list, head, s * 8.3, 9.5, -0.5, 3.4, 5.2, 6, null, M_SKIN);
+    part(list, head, s * 11.6, 1, -3, 2, 4.6, 3.2, null, M_SKIN);
+    part(list, head, s * 4.4, 1.4, 8.1, 2.4, 2.2, 2.4, null, M_EYE);
+  }
+  part(list, head, 0, 3, 13, 2.1, 5, 3, rotX(-0.35), M_SKIN);
+  part(list, head, 0, 6.4, 14.3, 2.3, 2, 2.2, null, M_SKIN);
+  part(list, head, 0, 10.4, 10.6, 4.4, 1.6, 2.2, null, M_SKIN);
+  part(list, head, 0, 12.6, 10.1, 3.9, 1.6, 2.2, null, M_SKIN);
+  part(list, head, 0, 14.4, 8, 4.3, 3.3, 3.4, null, M_SKIN);
+  return list;
+}
+/** Draw a 1 px feature at a head-local point if nothing is in front of it. */
+function feature(c, zb, f, x, y, z, w, col) {
+  toWorld(f, x, y, z);
+  const px = floor(V3[0]);
+  const py = floor(V3[1]);
+  if (px < 0 || py < 0 || px >= W || py >= H) return;
+  if (zb[py * W + px] - V3[2] > 1.6) return;
+  c.fillStyle = col;
+  c.fillRect(px, py, w, 1);
+}
+const BREATHS = 3;
+const revealArt = (lit, b) => bake(`hg-reveal-${lit ? 'lit' : 'dark'}-${b}`, W, H, (c) => {
+  const prims = revealFigure(b / (BREATHS - 1));
   const idx = new Int8Array(W * H).fill(-1);
-  const x0 = RX - 60;
-  const x1 = RX + 60;
-  distanceLight(ids, x0, RT - 2, x1, H, KEY_DIRS, 30, (x, y, id, d) => {
-    if (!lit) return 6;
-    // the vest: dark cloth that turns from the key across the chest (its own
-    // edges hide behind the arms); the pecs catch a little more of it
-    if (id === 2) {
-      // a dithered turn (Bayer 4x4, light falloff on cloth only)
-      let v = 4 + (x - RX + 26) / 16;
-      if (y < 100 && hypot((x - (RX - 12)) / 12, (y - 92) / 8) < 1) v -= 0.6;
-      const i = floor(v);
-      const k = (v - i) * 16 > BAYER[(y & 3) * 4 + (x & 3)] + 0.5 ? i + 1 : i;
-      return max(4, min(6, k));
-    }
-    let b = d <= 1 ? 1 : d <= 3 ? 2 : d <= 7 ? 3 : d <= 12 ? 4 : d <= 20 ? 5 : 6;
-    // split light: his right side (screen right) falls into shadow
-    b += max(0, floor((x - RX + 2) / 11));
-    if (id === 6) {
-      // eye sockets, the nose's shadow cast to the right, the lit cheekbone
-      if (hypot((x - (RX - 6)) / 4.2, (y - (RT + 15)) / 2.6) < 1) b += 2;
-      if (hypot((x - (RX + 6)) / 4.2, (y - (RT + 15)) / 2.6) < 1) b += 2;
-      if (x > RX && x < RX + 5 && y > RT + 16 && y < RT + 21 && x - RX < (y - RT - 15)) b += 2;
-      if (hypot((x - (RX - 7)) / 3, (y - (RT + 19)) / 2) < 1) b -= 1;
-      if (y > RT + RH * 0.86) b += 1;
-    }
-    if (id === 5 && y < RT + RH + 4) b += 2; // under the jaw
-    if (id === 3 || id === 4) b += 1; // the arms sit a step under the face
-    return max(0, min(6, b));
-  }, idx);
-  // the back light: a rim on every edge that faces screen right
-  for (let y = RT - 2; y < H; y++) {
-    for (let x = x0; x < x1; x++) {
-      const i = y * W + x;
-      if (!ids[i]) continue;
-      if (!ids[i + 1]) idx[i] = min(idx[i], 1);
-      else if (!ids[i + 2]) idx[i] = min(idx[i], 3);
+  const zb = new Float32Array(W * H);
+  const mt = new Int8Array(W * H).fill(-1);
+  sculpt(prims, RX - 70, 22, RX + 60, H, lit, idx, zb, mt);
+  if (lit) {
+    // a buzz cut: the lit hair broken into a fine grain, a ragged hairline
+    for (let y = 22; y < 90; y++) {
+      for (let x = RX - 70; x < RX + 60; x++) {
+        const o = y * W + x;
+        if (mt[o] !== M_HAIR) continue;
+        const edge = mt[o + 1] === M_SKIN || mt[o - 1] === M_SKIN || mt[o + W] === M_SKIN;
+        if (idx[o] <= 4 && BAYER[(y & 3) * 4 + (x & 3)] > (edge ? 4 : 10)) idx[o] = min(6, idx[o] + 1);
+        else if (edge && idx[o] >= 5 && hash(x * 7 + y * 13) > 0.6) idx[o] = 5;
+      }
     }
   }
-  paintIndex(c, idx, GREYS);
+  paintIndex(c, idx, REVEAL_RAMP);
   if (!lit) return;
-  const x = RX;
-  const t = RT;
-  // close-cropped hair
-  for (let y = t - 1; y < t + 8; y++) {
-    const u = (y + 0.5 - t) / RH;
-    const half = sqrt(max(0, 1 - ((0.5 - u) / 0.5) ** 2 * 0.92)) * RH * 0.38 + 0.5;
-    R(c, x - half, y, half * 2, 1, y < t + 2 ? P.ink : P.black);
+  const f = RV.head;
+  // brows: short strokes along the ridge with a gap over the nose (the far one foreshortened)
+  for (let k = 0; k <= 5; k++) feature(c, zb, f, 2.2 + k, -3.3 + k * 0.1, 11.4 - k * 0.32, 1, k < 3 ? P.black : P.ink);
+  for (let k = 0; k <= 3; k++) feature(c, zb, f, -2.2 - k, -3.3 + k * 0.1, 11.4 - k * 0.32, 1, P.ink);
+  // the eyes look off past the lens into the light: upper lid, iris, a catchlight
+  for (let s = -1; s <= 1; s += 2) {
+    for (let k = -2; k <= 2; k++) feature(c, zb, f, s * 4.4 + k * 0.9, 0.2, 10.4, 1, P.black);
+    feature(c, zb, f, s * 4.4 - 1, 1.3, 10.6, 1, P.black);
+    if (s > 0) feature(c, zb, f, s * 4.4 - 1.9, 1.2, 10.6, 1, P.slate);
   }
-  R(c, x - 9, t + 1, 6, 1, P.slate);
-  R(c, x + 4, t, 5, 1, P.fog);
-  for (let k = 0; k < 10; k++) R(c, x - 9 + floor(hash(k + 3) * 18), t + 2 + floor(hash(k + 8) * 5), 1, 1, P.ink);
-  // brows (the far one in shadow), the eyes: lid, iris, a soft catchlight, lower lid
-  R(c, x - 10, t + 12, 7, 1, P.black);
-  R(c, x - 9, t + 11, 5, 1, P.ink);
-  R(c, x + 3, t + 12, 7, 1, P.black);
-  for (let sd = -1; sd <= 1; sd += 2) {
-    const ex = x + sd * 6;
-    R(c, ex - 3, t + 14, 6, 1, P.black);
-    R(c, ex - 2, t + 15, 4, 1, sd < 0 ? P.steel : P.slate);
-    R(c, ex - 1, t + 15, 2, 1, P.black);
-    R(c, ex - (sd < 0 ? 1 : 0), t + 15, 1, 1, sd < 0 ? P.fog : P.steel);
-    R(c, ex - 2, t + 16, 4, 1, P.ink);
+  // nostril, the line of the lips, the corner of the mouth
+  feature(c, zb, f, 1.4, 7.6, 13.4, 1, P.black);
+  feature(c, zb, f, -1.2, 7.6, 13.4, 1, P.ink);
+  for (let k = -3; k <= 3; k++) feature(c, zb, f, k, 11.5, 11.4 - abs(k) * 0.35, 1, k > 1 ? P.black : P.ink);
+  // the ear's bowl
+  feature(c, zb, f, 12.6, 0, -2.4, 1, P.ink);
+  feature(c, zb, f, 12.6, 2, -2.4, 1, P.ink);
+  // the tape wraps: a few turns across each fist (darker lines where visible)
+  const bd = RV.body;
+  for (let s = -1; s <= 1; s += 2) {
+    const z0 = s > 0 ? 22 : 18;
+    for (let k = 0; k < 4; k++) {
+      const u = k / 4;
+      for (let j = -4; j <= 4; j++) {
+        toWorld(bd, s * (25 - u * 2) + j * 0.9, 160 + u * 14 + j * 0.3, z0 + u * 7 + 4.2);
+        const px = floor(V3[0]);
+        const py = floor(V3[1]);
+        const o = py * W + px;
+        if (idx[o] >= 0 && idx[o] <= 3 && abs(zb[o] - V3[2]) < 3) {
+          c.fillStyle = idx[o] <= 1 ? P.fog : P.slate;
+          c.fillRect(px, py, 1, 1);
+        }
+      }
+    }
   }
-  // nose: the lit bridge, the tip, nostrils; the mouth; the chin
-  R(c, x - 2, t + 15, 1, 5, P.fog);
-  R(c, x - 1, t + 20, 1, 1, P.silver);
-  R(c, x - 3, t + 21, 2, 1, P.black);
-  R(c, x + 2, t + 21, 2, 1, P.black);
-  R(c, x - 2, t + 22, 4, 1, P.ink);
-  R(c, x - 4, t + 23, 8, 1, P.ink);
-  R(c, x - 4, t + 24, 8, 1, P.black);
-  R(c, x - 3, t + 25, 3, 1, P.fog);
-  R(c, x - 2, t + 27, 4, 1, P.ink);
-  R(c, x - 6, t + 28, 1, 1, P.steel);
-  // the ears
-  R(c, x - 13, t + 14, 1, 4, P.fog);
-  R(c, x + 12, t + 14, 1, 4, P.ink);
-  // collarbones, the vest's neckline and straps, creases of the vest over the chest
-  line(c, x - 3, 66, x - 16, 68, P.steel);
-  line(c, x + 3, 66, x + 16, 68, P.ink);
-  line(c, x - 6, 78, x, 83, P.ink);
-  line(c, x + 6, 78, x, 83, P.black);
-  line(c, x - 16, 64, x - 26, 94, P.slate);
-  line(c, x - 24, 101, x - 6, 102, P.ink);
-  line(c, x - 24, 118, x - 15, 150, P.ink);
-  line(c, x - 20, 124, x - 12, 160, P.ink);
-  line(c, x + 13, 112, x + 20, 160, P.black);
-  // deltoids, biceps, forearms: the separations, one vein on the lit forearm
-  line(c, x - 41, 92, x - 32, 98, P.ink);
-  line(c, x + 41, 92, x + 32, 98, P.black);
-  line(c, x - 43, 104, x - 42, 122, P.steel);
-  line(c, x - 41, 128, x - 40, 140, P.slate);
-  line(c, x - 40, 140, x - 41, 148, P.slate);
-  // hands wrapped in tape, knuckles lit
-  for (let sd = -1; sd <= 1; sd += 2) {
-    const hx = x + sd * 37;
-    for (let k = 0; k < 4; k++) R(c, hx - 4, 155 + k * 3, 9, 1, sd < 0 ? P.steel : P.slate);
-    R(c, hx - 4, 166, 9, 1, sd < 0 ? P.fog : P.steel);
-  }
-  // the red square: the brand's pixel, on the lit side of his chest
-  R(c, x - 19, 88, 6, 6, P.red);
-  R(c, x - 14, 88, 1, 6, P.darkRed);
-  R(c, x - 19, 93, 6, 1, P.darkRed);
-  // sweat: specular points on the lit forehead and shoulder
-  R(c, x - 6, t + 6, 1, 1, P.white);
-  R(c, x - 31, 74, 2, 1, P.white);
-  R(c, x - 42, 88, 1, 1, P.white);
 });
+const REVEAL_RAMP = [...GREYS, P.red, P.darkRed];
 function shotReveal(c, lt) {
   c.drawImage(concrete(), 0, 0);
-  const breath = -round(((1 - cos(lt * 1.5)) / 2) * 1.2);
-  c.drawImage(revealArt(false), 0, breath);
+  // the breath: out, in, out over 3.4 s, stepped through the baked phases
+  const br = (1 - cos(((lt + 0.4) / 3.4) * TAU)) / 2;
+  const ph = min(BREATHS - 1, floor(br * BREATHS));
   const key = smooth(prog(lt, 0.5, 1.8));
+  if (key < 1) c.drawImage(revealArt(false, 0), 0, 0);
   if (key > 0) {
     c.globalAlpha = key;
-    c.drawImage(revealArt(true), 0, breath);
+    c.drawImage(revealArt(true, key < 1 ? 0 : ph), 0, 0);
     c.globalAlpha = 1;
   }
 }
@@ -1409,14 +1715,15 @@ function footage(c, dt) {
 function readout(ctx, dt, r) {
   const la = ramp(dt, 0.8, 1.4);
   if (la <= 0.01) return;
-  const y = H - BAR + 1;
+  // rows 201-207: centred in the bar and inside the 8 px action-safe margin
+  const y = H - BAR;
   const p = r.at > 0 ? sine((dt - r.at) / 0.3) : 1;
   const cur = label(RES_KEY[r.b], RES_LABEL[r.b], 1, r.b === 1 ? P.red : P.fog, 'body');
   if (p < 1) {
     const old = label(RES_KEY[r.prev], RES_LABEL[r.prev], 1, P.fog, 'body');
-    art(ctx, old, 24, y - round(3 * p), la * (1 - p), 'left');
+    art(ctx, old, 24, y - round(2 * p), la * (1 - p), 'left');
   }
-  art(ctx, cur, 24, y + round(3 * (1 - p)), la * p, 'left');
+  art(ctx, cur, 24, y + round(2 * (1 - p)), la * p, 'left');
 }
 function run(ctx, dt) {
   let i = 0;
@@ -1455,14 +1762,14 @@ function run(ctx, dt) {
 // resolution canvas, the readout labels and the slate's lettering.
 let warmed = 0;
 function warm(dt) {
-  if (warmed > 16) return;
+  if (warmed > 15 + BREATHS) return;
   const k = warmed++;
   const w = buf('hg-warm').c;
   if (k < 10) {
     const s = SHOTS[1 + (k >> 1)];
     if (dt < s.at) s.draw(w, k & 1 ? 3 : 1);
-  } else if (k === 10) revealArt(false);
-  else if (k === 11) revealArt(true);
+  } else if (k === 10) revealArt(false, 0);
+  else if (k === 11) revealArt(true, 0);
   else if (k === 12) for (const b of [12, 8, 6, 4, 3, 2]) mos(b);
   else if (k === 13) {
     for (const b of [8, 6, 4, 3, 1]) {
@@ -1472,7 +1779,8 @@ function warm(dt) {
     buf('hg-tb');
     buf('hg-slate');
   } else if (k === 15) gymMark(2);
-  else faceArt();
+  else if (k === 16) faceArt();
+  else revealArt(true, k - 16);
 }
 
 export default {
@@ -1480,47 +1788,50 @@ export default {
   brand: 'HI-RES GYM',
   duration: DURATION,
   voice: { gender: 'male', lang: 'en-US', pitch: 0.72, rate: 0.85 },
-  // Sixteen words, the genre's long silences between them.
+  // Fifteen words, the genre's long silences between them.
   script: [
     { at: 0.8, text: 'Low resolution.' },
     { at: 4.6, text: 'Blurry.' },
     { at: 8.4, text: 'So you trained.' },
-    { at: 10.0, text: 'Every rep, another pixel.' },
+    { at: 10.4, text: 'Every rep, another pixel.' },
     { at: 20.0, text: 'Hi-Res Gym. Train your resolution.' },
   ],
-  // 60 bpm, 24 beats = the spot, so beats are seconds; every track is 24 beats.
+  // 75 bpm, so one beat is 0.8 s and every cue of the picture falls on an
+  // exact sixteenth (the cuts at 3.6/7.8/11.8/15.6/19.4 s are beats 4.5, 9.75,
+  // 14.75, 19.5, 24.25): 30 beats = the spot, then a 2.5-beat rest so the
+  // looping bed never restarts over the slate; every track is 32.5 beats.
   // A low A-minor pad changing chord on each cut, a felt-timpani heartbeat, toms
   // on the lockouts (9.05, 11.05 s), a quiet tick on each resolution step; then
   // the held breath: silence over the face until the drop falls (14.25 s), a low
   // thump, and the melody climbs through the reveal to land A5 on the slate.
   tune: {
-    bpm: 60,
+    bpm: 75,
     room: 0.5,
-    echo: { amount: 0.5, beats: 0.75, feedback: 0.3 },
+    echo: { amount: 0.5, beats: 0.9375, feedback: 0.3 },
     tracks: [
       {
         kind: 'harmony', inst: { wave: 'sine', a: 1.6, d: 2, s: 0.8, r: 1.6 }, gain: 0.9,
-        notes: 'A2+E3+A3:7.8 F2+C3+A3:4 C3+G3+C4:3.8 G2+D3+B3:3.8 A2+E3+C4:4.6',
+        notes: 'A2+E3+A3:9.75 F2+C3+A3:5 C3+G3+C4:4.75 G2+D3+B3:4.75 A2+E3+C4:5.75 R:2.5',
       },
       {
         kind: 'bass', inst: { wave: 'sine', a: 0.3, d: 1.5, s: 0.85, r: 1 }, gain: 0.85,
-        notes: 'R:7.8 F1:4 C2:3.8 G1:3.8 A1:4.6',
+        notes: 'R:9.75 F1:5 C2:4.75 G1:4.75 A1:5.75 R:2.5',
       },
       {
         kind: 'lead', inst: { wave: 'sine', a: 0.005, d: 1.1, s: 0, r: 0.7, legato: 1 }, gain: 0.5,
-        notes: 'R:1.6 E5:1 C5:1 A4:2 R:2.2 E5:1 D5:1 B4:2 R:3.8 G4:1 B4:1 C5:0.8 E5:1 A5:3 R:1.6',
+        notes: 'R:2 E5:1.25 C5:1.25 A4:2.5 R:2.75 E5:1.25 D5:1.25 B4:2.5 R:4.75 G4:1.25 B4:1.25 C5:1 E5:1.25 A5:3.75 R:4.5',
       },
       {
         drums: [
-          'R:0.8',
-          'F:0.28@0.5 F:0.72@0.3 '.repeat(7),
-          'F:1.25@0.5 T:1@0.6 F:1@0.5 T:0.75@0.6',
-          'R:2.45 F:0.6@0.8 R:0.75',
-          'F:0.28@0.35 F:0.72@0.22 '.repeat(3),
-          'R:0.8 F:1@0.8 R:3.6',
+          'R:1',
+          'F:0.375@0.5 F:0.875@0.3 '.repeat(7),
+          'F:1.5625@0.5 T:1.25@0.6 F:1.25@0.5 T:0.9375@0.6',
+          'R:3.0625 F:0.75@0.8 R:0.9375',
+          'F:0.375@0.35 F:0.875@0.22 '.repeat(3),
+          'R:1 F:1.25@0.8 R:7',
         ].join(' '),
       },
-      { drums: 'R:4 X:5.05@0.35 X:2@0.35 X:3.2@0.4 X:9.75@0.4' },
+      { drums: 'R:5 X:6.3125@0.35 X:2.5@0.35 X:4@0.4 X:14.6875@0.4' },
     ],
   },
   draw(ctx, t, dt) {

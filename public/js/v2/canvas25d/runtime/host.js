@@ -10,7 +10,7 @@
 //     boundary after 1, 2, 4, then 8 episodes;
 //   - the perf watchdog lowers the detail level and finally falls back too.
 // `?perf=1` logs p50/p95 of the v2 shot every 10 s.
-import { Stage, STUDIO_SHOTS, episodeKey } from './stage.js';
+import { Stage, STUDIO_SHOTS, episodeKey, warmSets } from './stage.js';
 import { FallbackPolicy, PerfWatchdog } from './watchdog.js';
 
 export { STUDIO_SHOTS };
@@ -35,10 +35,13 @@ export class StageHost {
     // `?watchdog=0` (QA only: captures and soak runs on an overloaded machine): the watchdog
     // still measures and logs, but never lowers the detail or falls back; errors still do
     this.watchdog = !/[?&]watchdog=0(&|$)/.test(globalThis.location?.search || '');
+    this.watch.decide = this.watchdog;
     this.key = null;
     this.stage = null;
     this.t = 0;
     this.start(0);
+    // every programme's set baked ahead of air, one per idle slot (owner 21:05: never a frame without the set)
+    if (!makeStage) warmSets(typeof requestIdleCallback === 'function' ? (fn) => requestIdleCallback(fn, { timeout: 2000 }) : (fn) => setTimeout(fn, 0));
     // dev handle for captures and sync checks (tools in $SP, the browser console): window.__v2.stats()
     if (typeof window !== 'undefined' && !makeStage) window.__v2 = this;
   }

@@ -1,5 +1,6 @@
 // NEWS IN 60 open: one minute on a stopwatch. A steel bezel draws round an ink
-// face, a silver hand sweeps the sixty ticks yellow in one smooth turn (1.3 s,
+// face, a silver hand sweeps the dial in one smooth turn, lighting the twelve
+// five-minute ticks yellow and the minute ticks steel (1.3 s,
 // sine in/out: never more than ~8 degrees a frame) and comes to rest at twelve,
 // then "60" lights segment by segment in the lower half of the dial, below the
 // hub, so the hand never crosses it. Accent: yellow, with black text on the
@@ -213,18 +214,20 @@ function emblem(ctx, dt, x, y, k = 1) {
     const lit = sp >= 1 ? 60 : Math.floor(60 * sp + 1e-6);
     for (let i = 0; i < D.tx.length; i++) {
       const tk = D.tk[i];
-      ctx.fillStyle = tk < lit || (tk === 0 && sp >= 1) ? P.yellow : tk % 5 === 0 ? P.steel : P.slate;
+      // only the twelve five-minute ticks light yellow; the minute ticks step slate -> steel
+      const on = tk < lit || (tk === 0 && sp >= 1);
+      ctx.fillStyle = tk % 5 === 0 ? (on ? P.yellow : P.steel) : on ? P.steel : P.slate;
       ctx.fillRect(x + D.tx[i], y + D.ty[i], 1, 1);
     }
   }
-  // "60" lights in the lower half once the minute is complete: a two-step palette fade
-  // (slate, then yellow), like an LCD coming on; no glyph is ever half drawn
+  // "60" lights in the lower half once the minute is complete: a three-step palette fade
+  // (slate, orange, yellow, a frame or two each), like an LCD coming on; never half drawn
   const dp = dt - (SWEEP_T + SWEEP_DUR - 0.06);
   if (dp > 0) {
     const S = segs(k);
     const gap = Math.max(2, Math.round(2 * k));
     const dy = y + Math.round(5 * k);
-    const col = dp < 0.14 ? P.slate : P.yellow;
+    const col = dp < 0.06 ? P.slate : dp < 0.12 ? P.orange : P.yellow;
     digit(ctx, '6', x - S.dw - (gap >> 1) - 1, dy, col, S);
     digit(ctx, '0', x + (gap >> 1) + 1, dy, col, S);
   }

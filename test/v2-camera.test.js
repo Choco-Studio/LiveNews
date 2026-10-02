@@ -17,7 +17,16 @@ import { planShots, MIN_SHOT, SHOT_STYLES, pauseCut, isCatch } from '../public/j
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const load = (name) => JSON.parse(fs.readFileSync(path.join(ROOT, `v2-camera-${name}.json`), 'utf8'));
-const FIXTURES = ['world-now-1', 'world-now-2', 'tech-bytes-1', 'tech-bytes-2', 'cosmos-1', 'cosmos-2', 'money-minute-1', 'news-60-1', 'news-60-2', 'world-now-1-rec', 'tech-bytes-1-rec', 'money-minute-1-rec'];
+// saved /api/queue episodes of the offline channel: -1/-2 from the first round, -3+ re-captured after editorial
+// round 2 (intro teases, round-up index/count, map[] multi-pin, breaking leads); -rec = synthetic recorded word timings
+const FIXTURES = [
+  'world-now-1', 'world-now-2', 'world-now-3', 'world-now-4', 'world-now-5', 'world-now-6',
+  'tech-bytes-1', 'tech-bytes-2', 'tech-bytes-3', 'tech-bytes-4',
+  'cosmos-1', 'cosmos-2', 'cosmos-3', 'cosmos-4',
+  'money-minute-1', 'money-minute-2',
+  'news-60-1', 'news-60-2', 'news-60-3', 'news-60-4', 'news-60-5', 'news-60-6',
+  'world-now-1-rec', 'world-now-3-rec', 'tech-bytes-1-rec', 'tech-bytes-3-rec', 'cosmos-3-rec', 'money-minute-1-rec', 'money-minute-2-rec', 'news-60-3-rec',
+];
 
 const CASTS = {
   'world-now': { A: 'paco', B: 'lola' },
@@ -128,12 +137,16 @@ test('framings: wides keep both heads in frame and clear of the bezel; the two-s
       }
     }
   }
-  // the two-shot (a lab / variety framing, never planned live): the desk plate starts at or below the ticker band
-  // when SET publishes the desk heights (SET.desk); the plate sits too close under the heads to leave the frame
-  const plateY0 = SET.desk?.plateY0;
-  if (Number.isFinite(plateY0)) {
-    const cam = framing('two', { cast: CASTS['world-now'] });
-    assert.ok(syOf(cam, kAt(cam, SET.deskFrontZ), plateY0) >= 202, 'plate behind the ticker band');
+  // the closing two-shot: eye lines on the upper half, the desk's front edge (and the red plate under it) below the
+  // caption band, behind the ticker; ~1.86x the wide so the cut from or to the wide is a clear change of size
+  for (const cast of [CASTS['world-now'], CASTS['tech-bytes'], CASTS.cosmos]) {
+    const cam = framing('two', { cast });
+    const info = framingInfo(cam, actorsOf(cast));
+    for (const h of info.heads) assert.ok(h.eye >= 70 && h.eye <= 92 && h.y0 >= 40, `two: eye ${h.eye} crown ${h.y0}`);
+    assert.ok(syOf(cam, kAt(cam, SET.deskFrontZ), 0) >= 196, 'two: desk front edge below the captions');
+    const wide = framing('wide', { cast });
+    const ratio = kAt(cam, SET.presenterZ) / kAt(wide, SET.presenterZ);
+    assert.ok(ratio >= 1.6, `two vs wide size ${ratio.toFixed(2)}`);
   }
 });
 
@@ -367,14 +380,14 @@ function episodeLog(ep, opts = {}) {
       const prev = shots[shots.length - 1];
       const studio = !!e.framing;
       const same =
-        (prev && e.zoom) ||
-        (prev && prev.shot === e.shot && prev.framing === e.framing && (TWO_SHOTS.has(e.framing) || prev.focus === e.focus) && (studio || prev.seg === i) && (prev.card ?? null) === (e.card ?? null));
+        prev && !e.zoom && prev.shot === e.shot && prev.framing === e.framing && (TWO_SHOTS.has(e.framing) || prev.focus === e.focus) && (studio || prev.seg === i) && (prev.card ?? null) === (e.card ?? null);
       if (same) {
         if (e.move) prev.moves.push({ ...e.move, at: T + e.at });
         continue;
       }
       if (prev) prev.t1 = T + e.at;
-      shots.push({ t0: T + e.at, t1: null, seg: i, ctx, e, shot: e.shot, framing: e.framing, focus: e.focus, beat: e.beat, card: e.card, moves: e.move ? [{ ...e.move, at: T + e.at }] : [] });
+      // a round-up zoom (world view → item 1's place) is not a cut, but each part is timed as its own map beat
+      shots.push({ t0: T + e.at, t1: null, seg: i, ctx, e, shot: e.shot, framing: e.framing, focus: e.focus, beat: e.beat, card: e.card, zoom: !!e.zoom, moves: e.move ? [{ ...e.move, at: T + e.at }] : [] });
     }
     T += ctx.duration + (ctx.type === 'outro' ? HOLD[ctx.programId] ?? 0.3 : 0.3);
   });
@@ -438,7 +451,10 @@ test('grammar: shot lengths per bible with the owner minimum (≥ 4 s, median 5-
         continue;
       }
       const shortTemplate = s.e.minLen >= MIN_SHOT; // the director is asked to hold it
-      if (!shortTemplate) assert.ok(s.len >= MIN_SHOT - 0.02, `${label}: under ${MIN_SHOT} s`);
+      // the round-up's world view zooms into item 1 (no cut): the minimum applies to the whole map shot
+      const next = log.shots[log.shots.indexOf(s) + 1];
+      const uncut = next?.zoom ? s.len + next.len : s.len;
+      if (!shortTemplate) assert.ok(uncut >= MIN_SHOT - 0.02, `${label}: under ${MIN_SHOT} s`);
       const max = s.framing ? S.studioMax : s.shot === 'full' ? S.pictureMax ?? S.fullMax ?? 8 : s.shot === 'map' ? S.mapMax ?? 8 : 12;
       // over the maximum only when nothing can split it: no sentence start leaves both parts ≥ MIN_SHOT, or the
       // bible keeps the whole run on the wide (chats, then the sign-off)
@@ -700,7 +716,7 @@ test('grammar: hand-over cut on B\'s first word; chats and sign-off on the wide;
         assert.equal(events[0].focus, ctx.speaker, 'the speaker in vision');
         if (ctx.programId === 'world-now' && events[0].framing !== 'ots') assert.equal(events[0].framing, ctx.speaker === 'B' ? 'mcu-r' : 'mcu-l');
       }
-      if (ctx.type === 'chat' && !isCatch(ctx)) assert.equal(events[0].framing, 'wide');
+      if (ctx.type === 'chat' && !isCatch(ctx)) assert.ok(TWO_SHOTS.has(events[0].framing), `chat on a two-shot (${events[0].framing})`);
       if (ctx.type === 'outro') assert.equal(events[0].framing, 'wide');
     }
   }
@@ -716,4 +732,78 @@ test('grammar: a presenter reading two stories in a row opens the second on the 
   const third = structuredClone(ep);
   third.segments[3].anchor = 'A';
   assert.equal(episodeLog(third).plans[3].events[0].framing, 'mcu-l', 'alternates back on the third');
+});
+
+test('grammar: the intro montage follows the spoken teasers (owner 20:40): card = the teased story, cut on its line', () => {
+  for (const name of ['world-now-3', 'world-now-4', 'world-now-5', 'world-now-6', 'tech-bytes-3', 'tech-bytes-4', 'cosmos-3', 'cosmos-4', 'world-now-3-rec', 'cosmos-3-rec']) {
+    const ep = load(name);
+    const ctx = contexts(ep)[0];
+    assert.equal(ctx.type, 'intro');
+    const events = planShots(ctx);
+    const frames = events.filter((e) => e.shot === 'montage');
+    const stories = ep.segments.filter((s) => s.type === 'story');
+    const teases = ep.segments[0].teases;
+    assert.ok(Array.isArray(teases), `${name}: fixture has teases`);
+    frames.forEach((f, k) => {
+      const si = ctx.sentences.findIndex((s) => s.start === f.char);
+      assert.ok(si >= 0 && Math.abs(ctx.sentences[si].t0 - f.at) < 0.002, `${name}: frame ${k} cut on a teased line's first word`);
+      assert.equal(f.storyId, teases[si], `${name}: frame ${k} is the story its line teases`);
+      assert.equal(stories[f.card].storyId, f.storyId, `${name}: card ${f.card} is that story's rundown index`);
+      assert.equal(f.minLen, 3.8);
+      const next = events[events.indexOf(f) + 1];
+      const len = next.at - f.at;
+      if (ep.program.id === 'cosmos') assert.ok(len >= MIN_SHOT - 1e-6, `${name}: COSMOS frame ${len.toFixed(2)} s ≥ 4`);
+      if (ep.program.id === 'tech-bytes') assert.ok(len >= 3.0 - 1e-6, `${name}: TECH BYTES frame ${len.toFixed(2)} s ≥ 3`);
+    });
+    if (ep.program.id === 'world-now') assert.equal(frames.length, Math.min(3, stories.length), `${name}: WORLD NOW reads three headlines`);
+    const wide = events[events.length - 1];
+    assert.equal(wide.framing, 'wide');
+    assert.equal(wide.beat, 'greeting');
+    assert.ok(ctx.duration + 0.3 - wide.at >= MIN_SHOT - 1e-6, `${name}: the greeting wide holds MIN_SHOT`);
+  }
+});
+
+test('grammar: a long closing exchange plays on the tighter two-shot, the sign-off cuts back to the wide', () => {
+  let seen = 0;
+  for (const name of FIXTURES) {
+    const ep = load(name);
+    if (!ep.cast.B) continue;
+    const log = episodeLog(ep);
+    const outro = log.plans[log.plans.length - 1];
+    assert.equal(outro.ctx.type, 'outro');
+    assert.equal(outro.events[0].framing, 'wide', `${name}: sign-off on the wide`);
+    const before = log.shots.filter((s) => s.t1 <= outro.T + 1e-6).pop();
+    const closing = log.shots.find((s) => s.seg === outro.ctx.index) ?? null;
+    if (before && before.framing === 'two') {
+      seen++;
+      assert.ok(before.len >= MIN_SHOT - 0.02 && closing.len >= MIN_SHOT - 0.02, `${name}: both parts ≥ ${MIN_SHOT} s`);
+      assert.ok(before.len + closing.len > 11, `${name}: split only when the closing run passes 11 s`);
+      assert.equal(before.shot, 'wide', 'two maps to the legacy wide');
+    }
+    // nothing but closing chats (and their lead-in) ever plays on 'two'
+    for (const s of log.shots) if (s.framing === 'two') assert.ok(log.plans.slice(s.seg + 1).every((p) => ['chat', 'outro'].includes(p.ctx.type)), `${name}: two outside the closing run`);
+  }
+  assert.ok(seen >= 3, `closing two-shots seen: ${seen}`);
+});
+
+test('grammar: long singles change size on a sentence start (single ⇄ over-the-shoulder), both parts ≥ 4.5 s', () => {
+  for (const name of FIXTURES) {
+    const ep = load(name);
+    const id = ep.program.id;
+    const soft = SHOT_STYLES[id].singleSoft;
+    if (!soft) continue;
+    const log = episodeLog(ep);
+    for (const s of log.shots) {
+      if (s.shot !== 'close' || s.moves.length || s.beat === 'catch') continue;
+      if (s.len <= soft + 0.05) continue;
+      // over the soft cap only when no open sentence start leaves both parts ≥ 4.5 s inside its segment
+      const p = log.plans[s.seg];
+      const ok = p.ctx.sentences.slice(1).some((b) => p.T + b.t0 - s.t0 >= 4.5 && s.t1 - (p.T + b.t0) >= 4.5 && !(p.ctx.dryLine && b.start >= p.ctx.dryLine.char));
+      assert.ok(!ok, `${name} ${s.t0.toFixed(2)} ${s.framing} ${s.len.toFixed(2)} s over ${soft} s although it could split`);
+    }
+    for (let k = 1; k < log.shots.length; k++) {
+      const a = log.shots[k - 1], b = log.shots[k];
+      if (b.beat === 'alt' && a.seg === b.seg && a.shot === 'close') assert.notEqual(a.framing, b.framing, `${name}: a split is a visible change of framing`);
+    }
+  }
 });

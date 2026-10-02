@@ -262,6 +262,13 @@ export class Rig {
     const car = this.osc('sine', f, t);
     const car2 = this.osc('sine', f, t);
     car2.detune.setValueAtTime(6, t);
+    if (p.bend) {
+      // Tape slowing down under the note (cents over its length): the replay marker's last note.
+      car.detune.setValueAtTime(0, t + dur * 0.3);
+      car.detune.linearRampToValueAtTime(p.bend, t + dur);
+      car2.detune.setValueAtTime(6, t + dur * 0.3);
+      car2.detune.linearRampToValueAtTime(6 + p.bend, t + dur);
+    }
     const mod = this.osc('sine', f, t, false);
     const mg = this.gain(0);
     mg.gain.setValueAtTime(f * idx, t);
