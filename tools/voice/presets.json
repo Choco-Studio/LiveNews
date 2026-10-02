@@ -3,7 +3,8 @@
  "presets": {
   "paco": {"voice": "bm_george:0.7+bm_fable:0.3", "lang": "en-gb", "speed": 1.15, "effect": null},
   "lola": {"voice": "af_heart:0.75+af_bella:0.25", "lang": "en-us", "speed": 1.04, "effect": null},
-  "max": {"voice": "am_puck:0.75+am_fenrir:0.25", "lang": "en-us", "speed": 1.00, "effect": null},
+  "max": {"voice": "am_puck:0.75+am_fenrir:0.25", "lang": "en-us", "speed": 1.00, "effect": null,
+          "chain": {"deess_rel_db": -12.0, "deess_ratio": 5.0}},
   "ada": {"voice": "bf_emma:0.75+bf_lily:0.25", "lang": "en-gb", "speed": 0.88, "effect": null},
   "nova": {"voice": "af_nova:0.6+af_bella:0.4", "lang": "en-us", "speed": 0.80, "effect": null,
            "pauses": {"comma": 0.18, "sentence": 0.38}},

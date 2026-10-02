@@ -339,32 +339,41 @@ export const SCENES = {
       const tilt = ph * 0.85;
       groundShadow(c, (x0 + x1) / 2 + ph, y + tilt + 4 + t * 10, (x1 - x0) / 2, 6 + t * 14, 0.5);
       c.poly([[x0, y + tilt], [x1, y + tilt], [x1 - ph * 0.4, y], [x0 + ph * 0.4, y]], '#000', 1, (px, py) => panelTone(0.25 + (1 - (py - y) / tilt) * 0.55 + smooth(W * 0.5, W, px) * 0.3 * (1 - (py - y) / tilt)));
-      for (let k = 1; k < 3; k++) c.line(x0 + ph * 0.4 * (1 - k / 3), y + (tilt * k) / 3, x1 - ph * 0.4 * (1 - k / 3), y + (tilt * k) / 3, 1 + t, '#9ab0c8', 0.35);
-      for (let x = x0 + 50; x < x1; x += 34 + t * 70) c.line(x, y + tilt, x + ph * 0.32, y, 1 + t * 1.5, '#9ab0c8', 0.35);
+      for (let k = 1; k < 3; k++) c.line(x0 + ph * 0.4 * (1 - k / 3), y + (tilt * k) / 3, x1 - ph * 0.4 * (1 - k / 3), y + (tilt * k) / 3, 1 + t, '#0a1220', 0.5);
+      for (let x = x0 + 30; x < x1; x += 22 + t * 46) c.line(x, y + tilt, x + ph * 0.32, y, 1 + t * 1.5, '#0a1220', 0.5);
+      c.line(x0 + ph * 0.4, y, x1 - ph * 0.4, y, 1.5 + t * 2, '#c8d4e0', 0.7);
       c.rect(x0, y + tilt, x1 - x0, 2 + t * 6, '#1a140e', 0.9);
       for (let x = x0 + 20; x < x1; x += 90 + t * 120) c.rect(x, y + tilt, 3 + t * 4, 6 + t * 16, '#2a2018');
     }
-    // the acacia: a fork of dark branches under a wide, flat, layered crown lit from the right
-    const ax = W * 0.15;
-    const ag = H * 0.63;
-    const bark = ramp([[0, '#1a120c'], [1, '#5a4430']]);
-    const branches = [
-      [ax, ag, ax + 6, H * 0.48, 15],
-      [ax + 6, H * 0.48, ax - 80, H * 0.33, 9],
-      [ax + 6, H * 0.48, ax + 96, H * 0.32, 9],
-      [ax + 4, H * 0.5, ax + 20, H * 0.31, 7],
-      [ax - 40, H * 0.4, ax - 130, H * 0.335, 5],
-      [ax + 50, H * 0.4, ax + 150, H * 0.33, 5],
-    ];
-    for (const [x0, y0, x1, y1, w0] of branches) c.line(x0, y0, x1, y1, w0, bark(0.3));
-    const crown = ramp([[0, '#14180c'], [0.45, '#2e3618'], [0.8, '#5a6428'], [1, '#9aa04a']]);
+    // the acacia: a trunk that forks low into spreading limbs, under a wide, flat, layered crown lit from the right
+    const ax = W * 0.17;
+    const ag = H * 0.66;
+    const crownY = H * 0.27;
+    const bark = ramp([[0, '#140e0a'], [0.6, '#3a2c20'], [1, '#6a5038']]);
+    const limb = (x0, y0, x1, y1, w0, w1) => {
+      const nx = -(y1 - y0);
+      const ny = x1 - x0;
+      const len = Math.hypot(nx, ny);
+      const ox = (nx / len) * 0.5;
+      const oy = (ny / len) * 0.5;
+      const pts = [[x0 + ox * w0, y0 + oy * w0], [x1 + ox * w1, y1 + oy * w1], [x1 - ox * w1, y1 - oy * w1], [x0 - ox * w0, y0 - oy * w0]];
+      c.litPoly(pts, (x0 + x1) / 2, (y0 + y1) / 2, Math.abs(x1 - x0) / 2 + w0, Math.abs(y1 - y0) / 2 + w0, bark, { lx: 0.8, ly: -0.2, lz: 0.4, ambient: 0.15 });
+    };
+    groundShadow(c, ax + 90, ag + 8, 260, 18, 0.45);
+    limb(ax, ag, ax + 8, H * 0.5, 26, 18);
+    limb(ax + 8, H * 0.5, ax - 110, H * 0.31, 14, 6);
+    limb(ax + 8, H * 0.5, ax + 140, H * 0.3, 14, 6);
+    limb(ax + 4, H * 0.52, ax + 24, H * 0.29, 10, 5);
+    limb(ax - 50, H * 0.4, ax - 190, H * 0.31, 7, 3);
+    limb(ax + 70, H * 0.4, ax + 210, H * 0.3, 7, 3);
+    const crown = ramp([[0, '#10140a'], [0.4, '#262e14'], [0.75, '#4e5824'], [0.92, '#8a9440'], [1, '#c8c070']]);
     const foliage = noise2(53);
-    for (const [dx, dy, rw, rh] of [[-60, -6, 170, 22], [70, -10, 150, 20], [-10, -20, 190, 22], [-120, 4, 90, 14], [140, 2, 80, 13], [10, -32, 120, 15]]) {
+    const layers = [[-90, 6, 150, 30], [110, 4, 140, 28], [10, -8, 230, 34], [-200, 14, 80, 18], [230, 12, 70, 16], [-40, -26, 150, 22], [70, -30, 110, 18]];
+    for (const [dx, dy, rw, rh] of layers) {
       const cx = ax + dx;
-      const cy = H * 0.32 + dy;
-      c.litPoly(blob(cx, cy, rw, rh, Math.floor(r() * 1e6), 0.35, 80), cx, cy, rw, rh * 1.6, crown, { lx: 0.6, ly: -0.8, lz: 0.4, ambient: 0.1, jitter: (x, y) => foliage(x * 0.06, y * 0.12) * 0.3 });
+      const cy = crownY + dy;
+      c.litPoly(blob(cx, cy, rw, rh, Math.floor(r() * 1e6), 0.3, 90), cx, cy, rw, rh * 1.4, crown, { lx: 0.5, ly: -0.85, lz: 0.35, ambient: 0.06, jitter: (x, y) => foliage(x * 0.05, y * 0.14) * 0.28 });
     }
-    groundShadow(c, ax + 60, ag + 6, 200, 14, 0.4);
   },
 
   /** A white high-speed train along the rice fields below a snow-capped volcano in morning light (Japan). */
@@ -554,8 +563,11 @@ export const SCENES = {
     c.paintBox(0, H * 0.52, W, H, (x, y) => {
       const k = (y - H * 0.52) / (H * 0.48);
       const v = sea.fbm(x * 0.006 / (0.3 + k), y * 0.03 / (0.3 + k), 5);
-      const crest = smooth(0.32, 0.45, v + sea(x * 0.05, y * 0.2) * 0.08);
-      return [mix(seaTone(0.35 + v * 0.5 - k * 0.15), hex('#e4ecee'), crest * 0.85), 1];
+      // crests are thin streaks along the swell, foam trails behind them
+      const streak = sea.ridged(x * 0.004 / (0.3 + k), y * 0.09 / (0.3 + k), 3);
+      const crest = smooth(0.62, 0.72, streak) * smooth(0.0, 0.25, v);
+      const foam = smooth(0.5, 0.62, streak) * 0.25 * smooth(0.05, 0.3, v);
+      return [mix(seaTone(0.35 + v * 0.5 - k * 0.15), hex('#e4ecee'), clamp01(crest * 0.9 + foam)), 1];
     });
     // the ferry, heeling slightly: dark hull, white decks, a funnel, spray at the bow
     const fx = W * 0.5;
@@ -611,13 +623,16 @@ export const SCENES = {
     }
     // the river: muddy water with the sky's light along it, darker under the banks
     const water = noise2(92);
-    const waterTone = ramp([[0, '#3a2a1a'], [0.5, '#7a5a34'], [0.85, '#a8885a'], [1, '#e0d0a8']]);
+    const waterTone = ramp([[0, '#24180e'], [0.45, '#5a3e22'], [0.8, '#8a6a44'], [1, '#c8c0a8']]);
     c.paintBox(0, 0, W, H, (x, y) => {
-      const d = Math.abs(x - river(y));
-      const half = 46 + Math.sin(y * 0.013) * 10;
-      if (d > half) return null;
-      const edge = smooth(half, half - 10, d);
-      return [waterTone(0.45 + water.fbm(x * 0.01, y * 0.04, 3) * 0.3 + (1 - d / half) * 0.2), edge];
+      const d = x - river(y);
+      const half = 62 + Math.sin(y * 0.013) * 12;
+      if (Math.abs(d) > half + 8) return null;
+      if (Math.abs(d) > half) return [hex('#06100a'), 0.6]; // the banks' shadow on the water's edge
+      const edge = smooth(half, half - 6, Math.abs(d));
+      // the sky's light lies along the far side of the bends, broken by ripples
+      const sheen = smooth(0.2, 0.9, d / half) * (0.5 + water.fbm(x * 0.02, y * 0.08, 3));
+      return [waterTone(clamp01(0.35 + water.fbm(x * 0.01, y * 0.03, 3) * 0.2 + sheen * 0.5)), edge];
     });
     // mist lying in bands
     const mist = noise2(93);
@@ -721,15 +736,17 @@ export const SCENES = {
     });
     c.glow(rx, H * 0.66, 160, '#fff0c0', 0.9);
     // exhaust billows: lit warm from below, cool from the sky
-    const smoke = ramp([[0, '#3a2a30'], [0.5, '#8a6a68'], [0.8, '#e0a880'], [1, '#fff0d8']]);
+    const smoke = ramp([[0, '#4a3a48'], [0.45, '#9a8088'], [0.75, '#e8b896'], [1, '#fff4e4']]);
     for (let i = 0; i < 46; i++) {
       const side = r() < 0.5 ? -1 : 1;
       const d = r() ** 0.7;
       const x = rx + side * d * W * 0.48;
       const y = H * (0.84 - d * 0.06) + r() * 50;
       const s = 50 + r() * 90 - d * 20;
-      c.litPoly(blob(x, y, s, s * 0.8, Math.floor(r() * 1e6), 0.28), x, y, s, s, smoke, { lx: -side * 0.4, ly: 0.7, lz: 0.5, ambient: 0.15, jitter: (px, py) => flame(px * 0.02, py * 0.02) * 0.15 - d * 0.25 });
+      c.litPoly(blob(x, y, s, s * 0.8, Math.floor(r() * 1e6), 0.28), x, y, s, s, smoke, { lx: -side * 0.8, ly: 0.4, lz: 0.5, ambient: 0.3, jitter: (px, py) => flame(px * 0.02, py * 0.02) * 0.15 - d * 0.35 });
     }
+    // their tops catch the cool dawn sky
+    c.glow(rx, H * 0.86, 320, '#ffb070', 0.35);
     c.gradient(H * 0.92, H, [[0, '#1a1214'], [1, '#0a0808']]);
   },
 
@@ -867,11 +884,7 @@ export const SCENES = {
     }
     haze(c, 0, H * 0.8, '#e0d8cc', 0.18, 0.02);
     // the water: soft, broken reflections of the hull and the cranes
-    const wv = noise2(141);
-    c.paintBox(0, H * 0.8, W, H, (x, y) => {
-      const v = wv.fbm(x * 0.004, y * 0.06, 4);
-      return [mix(hex('#2a3446'), hex('#a8b0b8'), clamp01(0.3 + v * 0.8 + (y - H * 0.8) / H)), 1];
-    });
+    reflect(c, H * 0.8, H, '#3a4656', 0.45, 141, { ripple: 8 });
   },
 };
 
