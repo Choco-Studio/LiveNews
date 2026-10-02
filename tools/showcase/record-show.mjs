@@ -269,12 +269,19 @@ if (startEvent === undefined) throw new Error(`bad --start ${opts.start}`);
   const skipUntil = (await pageNow()) + opts.skip * 1000;
   while ((await pageNow()) < skipUntil) await step(100);
   if (startEvent) {
-    const limit = (await pageNow()) + opts['max-wait'] * 1000;
+    const t0 = await pageNow();
+    const limit = t0 + opts['max-wait'] * 1000;
     let found = false;
+    let told = Date.now();
     while (!found) {
       await step(50);
       found = (await pullLog()).some(startEvent);
-      if (!found && (await pageNow()) > limit) throw new Error(`--start ${opts.start} not reached within ${opts['max-wait']} s of channel time`);
+      const t = await pageNow();
+      if (!found && t > limit) throw new Error(`--start ${opts.start} not reached within ${opts['max-wait']} s of channel time`);
+      if (Date.now() - told > 15000) {
+        told = Date.now();
+        say(`waiting for --start ${opts.start}: ${((t - t0) / 1000).toFixed(0)} s of channel time · ${elapsed()}`);
+      }
     }
   }
 }

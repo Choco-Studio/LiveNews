@@ -441,6 +441,59 @@ export function* soften(c, w, h, r = 2, { passes = 2, extra = null, maxColours =
   c.putImageData(img, 0, 0);
 }
 
+// ---------------------------------------------------------------- rim-lit silhouettes
+
+/**
+ * Bake a backlit silhouette: paint(c) draws the shape (any colours; the
+ * painted interior is kept unless `body` is given); then every opaque pixel
+ * whose neighbour towards the light is empty becomes `rim`, and (optionally)
+ * the pixel behind it `rim2`. The light therefore sits exactly on the
+ * silhouette's edge, never a pixel off it. dirs: unit steps towards the light,
+ * e.g. [[1, 0], [0, -1]] for a source up and to the right. Alpha is made crisp.
+ */
+export function rimArt(key, w, h, paint, { body = null, rim, rim2 = null, dirs = [[1, 0], [0, -1]] } = {}) {
+  return bake(key, w, h, function* (c) {
+    const r = paint(c);
+    if (r && typeof r.next === 'function') yield* r;
+    const img = c.getImageData(0, 0, w, h);
+    const d = img.data;
+    const on = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) on[i] = d[i * 4 + 3] > 127 ? 1 : 0;
+    const B = body ? rgb(body) : null;
+    const R1 = rgb(rim);
+    const R2 = rim2 ? rgb(rim2) : null;
+    const empty = (x, y) => x < 0 || y < 0 || x >= w || y >= h || !on[y * w + x];
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        const o = i * 4;
+        if (!on[i]) {
+          d[o + 3] = 0;
+          continue;
+        }
+        let col = B;
+        let e1 = false;
+        let e2 = false;
+        for (let k = 0; k < dirs.length; k++) {
+          const [dx, dy] = dirs[k];
+          if (empty(x + dx, y + dy)) e1 = true;
+          else if (R2 && empty(x + dx * 2, y + dy * 2)) e2 = true;
+        }
+        if (e1) col = R1;
+        else if (e2) col = R2;
+        if (col) {
+          d[o] = col[0];
+          d[o + 1] = col[1];
+          d[o + 2] = col[2];
+        }
+        d[o + 3] = 255;
+      }
+      if ((y & 15) === 15) yield;
+    }
+    c.putImageData(img, 0, 0);
+  });
+}
+
 // ---------------------------------------------------------------- raster
 
 export function rect(ctx, x, y, w, h, c) {

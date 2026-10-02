@@ -9,9 +9,9 @@
 // narrower and squarer-jawed than Paco's, with no eye bags. No cyan anywhere:
 // TECH BYTES' accent belongs to the graphics.
 import { P } from '../../../palette.js';
-import { toneN } from '../pixbuf.js';
+import { material } from '../pixbuf.js';
 import { defineLook, SKIN_TAN } from './base.js';
-import { stroke, local, screen, tier, hwAt } from './wardrobe-b.js';
+import { stroke, local, screen, tier, hwAt, rimRuns } from './wardrobe-b.js';
 
 export const max = defineLook({
   id: 'max',
@@ -37,6 +37,9 @@ export const max = defineLook({
   mats: {
     lapel: { ramp: [P.tanShade, P.brown, P.maroon, P.black], line: P.maroon, rim: P.silver },
     rib: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black },
+    // the hair without the resolve rim (it would dot every clump tip); drawTextured paints the rim
+    // as continuous arcs along the top of the quiff
+    tex: { ramp: [P.brown, P.maroon, P.black, P.black], line: P.black, th: [0.62, 0.08, -0.42] },
   },
   parts: { hair: drawTextured },
 });
@@ -48,17 +51,17 @@ export const max = defineLook({
 const CLUMPS = [
   // crown and sides (behind), one step darker
   [-6.0, -6.2, -6.1, -9.3, -3.0, -11.3, 1.4, 0.5],
-  [5.7, -6.4, 7.7, -9.5, 8.1, -11.9, 1.3, 0.5],
+  [5.7, -6.4, 7.5, -9.4, 7.8, -11.4, 1.3, 0.5],
   [-3.4, -8.6, -2.2, -11.3, 1.0, -12.1, 1.5, 0.7],
   [0.6, -8.8, 2.6, -11.9, 6.0, -13.0, 1.7, 0.8],
-  [3.4, -8.0, 5.8, -10.8, 8.5, -12.1, 1.3, 0.7],
+  [3.4, -8.0, 5.6, -10.7, 8.0, -11.8, 1.3, 0.7],
   // front: brushed up and to the right; uneven widths and lengths, a few lying lower
   [-5.4, -6.8, -5.0, -9.4, -2.0, -11.4, 1.25, 0.8],
   [-3.6, -7.2, -2.4, -10.2, 0.7, -11.9, 1.6, 0.9],
   [-1.5, -7.6, 0.0, -10.5, 3.4, -12.2, 1.45, 1.0],
   [0.6, -7.5, 2.4, -10.7, 5.7, -12.5, 1.7, 1.0],
-  [2.9, -7.2, 5.0, -10.1, 7.8, -11.8, 1.35, 0.9],
-  [4.9, -6.5, 7.2, -8.2, 8.9, -9.2, 1.0, 0.7],
+  [2.9, -7.2, 4.9, -10.0, 7.4, -11.5, 1.35, 0.9],
+  [4.9, -6.5, 7.0, -8.0, 8.3, -9.0, 1.05, 0.7],
   [-2.6, -6.9, -2.1, -8.6, 0.2, -9.4, 0.8, 0.6],
 ];
 const P0 = [0, 0], P1 = [0, 0], P2 = [0, 0], LC = [0, 0];
@@ -77,13 +80,14 @@ function drawTextured(buf, L, m, head, s, sk) {
   const x0 = head.cx - (H.R + 1.4) * s, x1 = head.cx + (H.R + 1.4) * s;
   const y0 = head.cy + (H.top - 1.6) * s, y1 = head.cy + 1.2 * s;
   // ---- the cap under the clumps: skull-tight faded sides, sideburns, a darker top
-  buf.shape(x0, y0, x1, y1, m.hair, (px, py) => {
+  buf.shape(x0, y0, x1, y1, m.tex, (px, py) => {
     local(head, px, py, LC);
     const x = LC[0], y = LC[1];
     if (y > 0.6) return -1;
     const dy = y - cyc;
     const top = y < H.craniumY - 2.2;
-    const vol = top ? RV : hwAt(L, Math.max(y, H.top + 0.5)) + (y < H.craniumY - 1 ? 0.75 : 0.4);
+    // below the quiff the sides are clipped close: a sliver over the skull, no volume
+    const vol = top ? RV : hwAt(L, Math.max(y, H.top + 0.5)) + 0.3;
     if (top ? x * x + dy * dy > vol * vol : Math.abs(x) > vol) return -1;
     const fx = x - yawX;
     const hw = hwAt(L, y);
@@ -95,7 +99,15 @@ function drawTextured(buf, L, m, head, s, sk) {
     let t = l > 0.62 ? 0 : l > -0.1 ? 1 : l > -0.55 ? 2 : 3;
     // faded sides read darker and flatter than the top; the top sits under the clumps
     // faded sides: short and flat, one step down from the top; only the far edge goes dark
-    if (y > H.craniumY - 2.0) t = x > hw - 0.1 ? 2 : 1;
+    if (!top && y > hairline(fx)) {
+      // the clipped sides at the temples: a close sliver, lighter toward the ear where skin shows through
+      // (brown is also the skin ramp's deep tone, so the side melts into the temple instead of ending in a band)
+      if (!sideburn && y > H.craniumY + 0.2) return -1; // skin below the fade
+      t = x > 0 ? (y > H.craniumY - 1.4 ? 1 : 2) : y > H.craniumY - 1.4 ? 0 : 1;
+      if (tr === 0) t = x > 0 ? 2 : 1;
+    } else if (y > H.craniumY - 2.0) {
+      t = x > hw - 0.1 ? 2 : 1;
+    }
     else if (tr > 0) t = y > hairline(fx) - 1.4 ? (x > 2.5 ? 2 : 1) : Math.min(3, t + 1); // short front hairs stay lit
     return t;
   });
@@ -108,8 +120,12 @@ function drawTextured(buf, L, m, head, s, sk) {
     screen(head, fx + yawX, -7.0, P0);
     screen(head, fx - 0.6 + yawX + lag * 0.2, -6.0, P1);
     screen(head, fx - 0.1 + yawX + lag * 0.45, -5.0, P2);
-    stroke(buf, m.hair, P0[0], P0[1], P1[0], P1[1], P2[0], P2[1], 0.55 * s, 0.25 * s, (nx, ny, u) => (u > 0.75 ? 1 : nx < -0.2 ? 0 : 1), 5, 0.15 * s);
+    stroke(buf, m.tex, P0[0], P0[1], P1[0], P1[1], P2[0], P2[1], 0.55 * s, 0.25 * s, (nx, ny, u) => (u > 0.75 ? 1 : nx < -0.2 ? 0 : 1), 5, 0.15 * s);
   }
+  // ---- rim: continuous silver arcs along the top of the quiff only (a rim on every tip would sparkle)
+  const g = buf.g;
+  const yLimit = head.cy + (H.craniumY - 4.2) * s;
+  rimRuns(buf, g, g, x0, x1, y0 - 4 * s, y1, rimDecal(), tr === 2 ? 3 : 2, (x, y) => y < yLimit);
 }
 
 // One clump: a leaf-shaped stroke from the root to its tip, lit as a tube on a round head
@@ -142,5 +158,7 @@ function clump(buf, L, m, head, s, c, yawX, lag, back, tr, streak = true) {
       if (back) t += 1;
       return t > 3 ? 3 : t;
     };
-  stroke(buf, m.hair, P0[0], P0[1], P1[0], P1[1], P2[0], P2[1], 0.85 * s, 0.58 * s, tone, tr === 2 ? 7 : 5, belly * s * 0.68); // soft, rounded tips: textured, never spiky
+  stroke(buf, m.tex, P0[0], P0[1], P1[0], P1[1], P2[0], P2[1], 0.85 * s, 0.66 * s, tone, tr === 2 ? 7 : 5, belly * s * 0.68); // soft, rounded tips: textured, never spiky
 }
+
+const rimDecal = () => material('cast-b:rim', { ramp: [P.silver], line: P.ink, decal: true });

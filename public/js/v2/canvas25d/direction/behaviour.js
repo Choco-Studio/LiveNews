@@ -37,7 +37,15 @@
 //     (starts ≤ 0.3 s after the last word, back on the lens ≥ 0.15 s before the
 //     next first word, ctx.gapAfter); NEWS IN 60 only in gaps ≥ 0.6 s.
 //   WALL  only within 1.5 s after the wall content changes (a new story with a
-//     picture or a place), at most once per change, by a listener with no other look.
+//     picture or a place), at most once per change, by a listener with no other look;
+//     otherwise, at a story boundary after a long story, the listener may glance down
+//     at its notes instead (between stories), never on every roundup item.
+//   VARIETY (owner 20:40: "few gestures, it gets repetitive")  no two glances are the
+//     same move: the turn-start glance's amplitude is seeded (0.82-1.0 of the approved
+//     glance); the dry-line glance is a sidelong look (style 'side': the eyes go, the
+//     head turns less); a listener on the wide may show INTEREST (a small brow lift and
+//     tilt, target 'interest', face only, no eye move) as the speaker lands the story's
+//     figure, at most once per turn, never on grave lines, never during another look.
 //   RESTRAINT  per listener and turn: one glance at the speaker (plus the dry-line
 //     glance and the toss exchange), gaze at the speaker ≤ 45 % of turns of 8 s or
 //     more and ≤ 4.0 s in shorter ones; ≥ 2.0 s between two looks of one slot.
@@ -45,9 +53,9 @@ import { rng } from './context.js';
 
 const GAP = { 'money-minute': 1.2, 'news-60': 0.7 }; // the director's usual gap when ctx.gapAfter is unknown
 const STYLE = {
-  'world-now': { nodP: 0.35, hintNodP: 0.8, replyP: 0.5, prepP: 0.4, wallP: 0.35, dry: false },
-  'tech-bytes': { nodP: 0.45, hintNodP: 0.85, replyP: 0.65, prepP: 0.35, wallP: 0.3, dry: true },
-  cosmos: { nodP: 0.3, hintNodP: 0.75, replyP: 0.4, prepP: 0.3, wallP: 0.4, dry: false },
+  'world-now': { nodP: 0.35, hintNodP: 0.8, replyP: 0.5, prepP: 0.55, wallP: 0.35, notesP: 0.3, interestP: 0.4, dry: false },
+  'tech-bytes': { nodP: 0.45, hintNodP: 0.85, replyP: 0.65, prepP: 0.5, wallP: 0.3, notesP: 0.3, interestP: 0.5, dry: true },
+  cosmos: { nodP: 0.3, hintNodP: 0.75, replyP: 0.4, prepP: 0.45, wallP: 0.4, notesP: 0.25, interestP: 0.4, dry: false },
   'money-minute': { solo: 'money' },
   'news-60': { solo: 'news60' },
 };
@@ -67,7 +75,15 @@ export const RULES = Object.freeze({
   gazeShare: 0.45,
   gazeShort: 4.0,
   nodAfterLook: 1.0,
+  glanceAmt: [0.82, 1.0],
+  interest: [1.0, 1.5],
+  reactClear: 0.3,
+  boundaryAfter: 8,
 });
+
+/** Face-only reactions: carried as perf.look entries (the cue clock passes the target through), they never move the eyes. */
+export const REACTIONS = new Set(['interest']);
+const isReaction = (l) => REACTIONS.has(l.target);
 
 const EYES_BACK = 0.1; // s the eyes need to reach the lens after a look ends
 
@@ -95,11 +111,21 @@ class Plan {
     return (this.looks[slot] ||= []);
   }
 
-  /** Room for a look of `slot` over [at, at + dur]: no overlap and ≥ 2 s from its other looks. */
+  /** Room for an eyeline look of `slot` over [at, at + dur]: ≥ 2 s from its other eyeline looks, clear of its reactions. */
   fits(slot, at, dur, gap = RULES.lookGap) {
     for (const l of this.list(slot)) {
-      if (at < l.at + l.dur + gap && l.at < at + dur + gap) return false;
+      const g = isReaction(l) ? RULES.reactClear : gap;
+      if (at < l.at + l.dur + g && l.at < at + dur + g) return false;
     }
+    return true;
+  }
+
+  /** Room for a reaction: clear of every look of the slot (arbitrate drops a look that starts inside another). */
+  clear(slot, at, dur) {
+    for (const l of this.list(slot)) {
+      if (at < l.at + l.dur + RULES.reactClear && l.at < at + dur + RULES.reactClear) return false;
+    }
+    for (const n of this.nods) if (n.slot === slot && n.at > at - RULES.nodAfterLook && n.at < at + dur + RULES.reactClear) return false;
     return true;
   }
 
@@ -120,6 +146,9 @@ class Plan {
         if (robot) {
           e.amt = 0.45;
           e.style = 'mech';
+        } else {
+          if (l.amt !== undefined && l.amt < 0.999) e.amt = round3(l.amt);
+          if (l.style) e.style = l.style;
         }
         out.push(e);
       }
@@ -245,7 +274,9 @@ function planDuo(ctx, style, r, plan) {
       }
       // back on the lens by 4.5 s, or by the end of a shorter turn
       dur = Math.min(dur, RULES.backBy - EYES_BACK - at, D - EYES_BACK - at);
-      if (dur > 0.5) glance = plan.add(slot, at, dur, 'partner', { why: 'turn' });
+      // never the same move twice: half the glances are the full approved turn, the others a little smaller
+      const amt = r() < 0.5 ? 1 : between(r, RULES.glanceAmt);
+      if (dur > 0.5) glance = plan.add(slot, at, dur, 'partner', { why: 'turn', amt });
     }
     // TECH BYTES: the dry line gets a glance as it starts, back before it ends
     if (style.dry && ctx.dryLine && !robot && !speakerRobot) {
@@ -257,10 +288,12 @@ function planDuo(ctx, style, r, plan) {
           const end = Math.min(Math.max(glance.at + glance.dur, d0 + 0.7), d1, glance.at + cap);
           glance.dur = end - glance.at;
           glance.why = 'turn+dry';
-        } else if (plan.fits(slot, d0, d1 - d0)) plan.add(slot, d0, d1 - d0, 'partner', { why: 'dry' });
+        } else if (plan.fits(slot, d0, d1 - d0)) plan.add(slot, d0, d1 - d0, 'partner', { why: 'dry', style: 'side' }); // a sidelong look: the deadpan holds
       }
     }
-    // a toss: the partner meets the look, and keeps it into its own reply
+    // a toss: the partner meets the look, and keeps it into its own reply; asked a question,
+    // its brows lift a little as it meets the look (style 'interest', no extra event)
+    const meetStyle = tossLook && !robot && !ctx.grave && ctx.question && ctx.question.t1 >= D - 0.3 ? { style: 'interest' } : {};
     if (tossLook) {
       const m0 = Math.max(tossLook.at, D - 1.4) + 0.12 + r() * 0.13;
       const mEnd = D + gap + 0.6;
@@ -271,12 +304,13 @@ function planDuo(ctx, style, r, plan) {
         if (merged <= cap) {
           prev.dur = mEnd - prev.at;
           prev.why += '+toss';
+          if (meetStyle.style && D <= 3.5 && !prev.style) prev.style = meetStyle.style; // a short question: the brows go up as the look meets it
         } else {
           // keep both apart: shorten the earlier glance (≥ 1.2 s) and meet the toss later
           const room = Math.min(m0 - RULES.lookGap - prev.at, cap - (D - m0) - 0.05);
           if (room >= 1.2) {
             prev.dur = room;
-            plan.add(slot, m0, mEnd - m0, 'partner', { why: 'toss-meet' });
+            plan.add(slot, m0, mEnd - m0, 'partner', { why: 'toss-meet', ...meetStyle });
           } else {
             // one look again, starting late enough to respect the cap
             prev.at = Math.max(prev.at, D - cap + 0.05);
@@ -285,23 +319,33 @@ function planDuo(ctx, style, r, plan) {
           }
         }
       } else if (plan.fits(slot, m0, 0.1, RULES.lookGap)) {
-        plan.add(slot, m0, mEnd - m0, 'partner', { why: 'toss-meet' });
+        plan.add(slot, m0, mEnd - m0, 'partner', { why: 'toss-meet', ...meetStyle });
       }
     }
     trimGaze(plan, slot, D, cap);
     // the next speaker glances at its notes just before its own turn (no toss)
-    if (ctx.handover && ctx.nextSpeaker === slot && !tossLook && D >= 7 && r() < style.prepP) {
+    if (ctx.handover && ctx.nextSpeaker === slot && !tossLook && D >= 6 && r() < style.prepP) {
       const dur = between(r, [0.7, 1.1]);
       const at = D - 0.55 - dur - r() * 0.5;
       if (at > 1.5 && plan.fits(slot, at, dur)) plan.add(slot, at, dur, 'notes', { why: 'prep' });
     }
-    // the wall changed (a new story with a picture or a place) and this listener has no other look
-    if (!ctx.turnStart && ctx.type === 'story' && (ctx.hasImage || ctx.seg.location) && !plan.list(slot).length && r() < style.wallP && !robot) {
-      const at = 0.3 + r() * (RULES.wallWithin - 0.9);
-      const dur = between(r, [1.0, 1.4]);
-      if (plan.fits(slot, at, dur)) plan.add(slot, at, dur, 'wall', { why: 'wall' });
+    // a story boundary (the same speaker goes on with a new story): the wall changed (a picture
+    // or a place) → maybe a glance at it; otherwise, after a long story, maybe the notes. Never on
+    // every roundup item (only the first), never right after a short item (one per ~8 s at most).
+    if (!ctx.turnStart && ctx.type === 'story' && !robot && !plan.list(slot).length && boundaryOk(ctx, prevSeg)) {
+      const k = r();
+      if ((ctx.hasImage || ctx.seg.location) && k < style.wallP) {
+        const at = 0.3 + r() * (RULES.wallWithin - 0.9);
+        const dur = between(r, [1.0, 1.4]);
+        if (plan.fits(slot, at, dur)) plan.add(slot, at, dur, 'wall', { why: 'wall' });
+      } else if (k > 1 - style.notesP && D >= 5) {
+        const at = 0.35 + r() * 0.6;
+        const dur = between(r, [0.7, 1.1]);
+        if (plan.fits(slot, at, dur)) plan.add(slot, at, dur, 'notes', { why: 'between' });
+      }
     }
     planNod(ctx, style, r, plan, slot, robot);
+    planInterest(ctx, style, r, plan, slot, robot);
   }
 
   // ---- between stories: the speaker who carries on glances at the notes in the gap
@@ -329,6 +373,38 @@ function trimGaze(plan, slot, D, cap) {
       l.dur -= cut;
     } else l.dur -= cut;
     total -= cut;
+  }
+}
+
+/** A boundary look is allowed: not a later roundup item, and the previous segment was long enough. */
+function boundaryOk(ctx, prevSeg) {
+  const ru = ctx.seg.roundup || ctx.episode?.segments?.[ctx.index]?.roundup;
+  if (ru && ru.index > 0) return false;
+  const prevChars = ctx.episode?.segments?.[ctx.index - 1]?.chars ?? (prevSeg?.text ? prevSeg.text.length : 0);
+  return prevChars / 15 >= RULES.boundaryAfter; // ~15 chars/s of speech
+}
+
+/**
+ * INTEREST: as the speaker lands the story's figure (ctx.figures), a listener on the wide
+ * lifts its brows a little and tilts its head (face only), at most once per turn; never on
+ * grave lines, never by UNIT-8, never inside another look of that listener.
+ */
+function planInterest(ctx, style, r, plan, slot, robot) {
+  if (robot || ctx.grave || !style.interestP || !Array.isArray(ctx.figures) || !ctx.figures.length) return;
+  if (ROBOT.has(ctx.speakerId) && ctx.type === 'chat') return; // the straight face for UNIT-8's literal lines
+  if (r() >= style.interestP) return;
+  const D = ctx.duration;
+  const dry = ctx.dryLine;
+  for (const f of ctx.figures) {
+    const at = f.t - 0.08;
+    const dur = between(r, RULES.interest);
+    if (at < 0.6 || at + dur > D + 0.4) continue;
+    if (dry && at + dur > dry.t0 - 0.2) continue;
+    const shot = shotAt(ctx, at);
+    if (shot !== null && shot !== 'wide') continue;
+    if (!plan.clear(slot, at, dur)) continue;
+    plan.add(slot, at, dur, 'interest', { why: 'interest' });
+    return;
   }
 }
 

@@ -30,6 +30,13 @@ function wobble(t, seed) {
   return 0.5 * Math.sin(t * 1.13 + seed * 1.7) + 0.3 * Math.sin(t * 2.31 + seed * 2.9) + 0.2 * Math.sin(t * 3.77 + seed * 4.3);
 }
 
+/** Seeded head attitude of sentence `si` on axis `k`, in -1..1 (0 before the first sentence). */
+function att(seed, si, k) {
+  if (si < 0) return 0;
+  const v = Math.sin((si + 1) * 12.9898 + seed * 78.233 + k * 37.719) * 43758.5453;
+  return 2 * (v - Math.floor(v)) - 1;
+}
+
 /** One step of a one-pole envelope with separate rise / fall time constants (s). */
 function ease(v, target, up, down, dt) {
   return v + (target - v) * (1 - Math.exp(-dt / (target > v ? up : down)));
@@ -165,12 +172,24 @@ export function applySpeech(c, persona, perf, t) {
     // phrase-level head arcs: a slow drift while talking, faded in and out with the turn
     c.yaw += 0.05 * p.headMotion * act * wobble(t * 0.55, seed + 3.1);
     c.roll += 0.012 * p.headMotion * act * wobble(t * 0.45, seed + 7.7);
+    // a new head attitude per sentence (live voices only, so the frozen demos keep their
+    // approved motion): presenters settle into a slightly different angle for each
+    // sentence instead of holding one pose; eased over 0.7 s from the sentence's first word
+    if (perf.speech && perf.speech.live && fr.sentenceIndex >= 0) {
+      const si = fr.sentenceIndex;
+      const k = fr.sentAt > FAR ? smooth((t - fr.sentAt) / 0.7) : 1;
+      const hm = p.headMotion * act;
+      c.yaw += hm * 0.035 * (att(seed, si, 1) * k + att(seed, si - 1, 1) * (1 - k));
+      c.roll += hm * 0.016 * (att(seed, si, 2) * k + att(seed, si - 1, 2) * (1 - k));
+      c.pitch += hm * 0.01 * (att(seed, si, 3) * k + att(seed, si - 1, 3) * (1 - k));
+    }
   }
   if (perf.listen && act < 0.999) {
     // listening: the head settles a touch lower and tilts a little, slowly and
     // never on a cycle (applyListen's old 5.2 s nod was ruled mechanical)
     const w = 1 - act;
     c.roll += 0.016 * w * wobble(t * 0.19, seed + 11.3);
+    c.roll += 0.012 * w; // the attentive tilt, a touch toward the partner (partner space)
     c.pitch += 0.01 * w;
   }
   return fr;

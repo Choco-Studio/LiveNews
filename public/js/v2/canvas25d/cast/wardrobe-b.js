@@ -410,6 +410,16 @@ function drape(o, mat, group, t, soft = 0) {
   }
 }
 
+/** A continuous 1 px silver rim along the screen-right shoulder of group gJ (the resolve rim is dotted there). */
+function shoulderRim(o, T, gJ) {
+  if (o.s < 1.35) return;
+  const [ax] = o.toS(T.neckHW + 1.5, 0);
+  const [bx] = o.toS(T.shoulderHW + 1, 0);
+  const [, ty] = o.toS(0, -3);
+  const [, by] = o.toS(0, T.shoulderTop + 8);
+  rimTopRight(o.buf, gJ, ax, bx, ty, by, rimMat(P.silver), Math.max(2, Math.round(o.s * 1.6)));
+}
+
 // ---------------------------------------------------------------------------
 // MAX: unstructured blazer, open, over a dark crew-neck knit
 
@@ -449,8 +459,11 @@ function knitBlazer(o) {
   const ribStep = Math.max(2, Math.round(0.85 * s));
   buf.poly(rib, m.rib, (x, y) => {
     if (t < 2) return x + 0.5 < kc[0] ? 1 : 2;
+    // a soft knit band: lit on the key side with fine ribs there, plain ink where it turns away
+    const lit = x + 0.5 < kc[0] - 0.8 * s;
+    if (!lit) return x + 0.5 > kc[0] + nk * 0.7 * s ? 2 : 1;
     const k = ((x - Math.round(kc[0])) % ribStep + ribStep) % ribStep;
-    return k === 0 ? 2 : x + 0.5 < kc[0] - 1.5 * s ? 0 : 1;
+    return k === 0 ? 1 : 0;
   });
 
   // ---- lapels: soft notch lapels in their own group (1 px darker-local edge where they lie on the body)
@@ -498,6 +511,7 @@ function knitBlazer(o) {
     bodyPaint(o, [[px0 + pw, py0 + 0.6], [px0 + pw - 0.1, py0 + ph]], m.jacket, 3, gJ);
     bodyPaint(o, [[px0 + 0.4, py0 + ph], [px0 + pw - 0.2, py0 + ph]], m.jacket, 2, gJ);
   }
+  shoulderRim(o, T, gJ);
 }
 
 // ---------------------------------------------------------------------------
@@ -518,6 +532,7 @@ function turtleneck(o) {
     // set-in shoulder seams of a fitted knit
     for (const side of [-1, 1]) bodyPaint(o, [[side * (nk + 3.6), 1.0], [side * (T.shoulderHW * 0.86), T.shoulderTop + 1.4]], m.jacket, side < 0 ? 1 : 3, gJ);
   }
+  shoulderRim(o, T, gJ);
   // ---- the roll collar: a soft knit tube up the neck, folded over once: the roll bulges a little at the
   // fold and casts a crease shadow on the band below, which flares into the shoulders; vertical ribs
   buf.part(gb + LOOK + 1, 9, clip);
@@ -596,6 +611,13 @@ function cardigan(o) {
   }
   const front = bodyPoly(o, lift, [[-2.2, vY - 0.2], [1.0, vY + 0.6], [1.2, T.bottom + 2], [-2.0, T.bottom + 2]]);
   buf.poly(front, m.band, 1);
+  if (t === 2) {
+    // the bands are ribbed along their length: one rib line down the middle of each band
+    const gBand = gb + LOOK + 0;
+    bodyPaint(o, [[-(nk + 2.65), -1.4], [-(nk + 2.3), 6.2], [-1.75, vY + 0.75]], m.band, 1, gBand);
+    bodyPaint(o, [[nk + 2.65, -1.4], [nk + 2.3, 6.2], [1.75, vY + 0.75]], m.band, 3, gBand);
+    bodyPaint(o, [[0.15, vY + 1.0], [0.25, T.bottom + 2]], m.band, 2, gBand);
+  }
   if (t >= 1) {
     // buttons down the closed front, a darker centre and a lit lip
     const gBand = gb + LOOK + 0;
@@ -614,6 +636,7 @@ function cardigan(o) {
   if (t === 2) {
     for (const side of [-1, 1]) bodyPaint(o, [[side * (T.shoulderHW * 0.7), T.shoulderTop * 0.6], [side * (T.shoulderHW * 0.93), T.shoulderTop + 3.0]], m.jacket, side < 0 ? 1 : 3, gJ);
   }
+  shoulderRim(o, T, gJ);
   if (L.necklace) drawChain(o, L.necklace, t);
 }
 
@@ -739,14 +762,8 @@ function chassis(o) {
       }
     }
   }
-  // ---- a continuous silver rim along the screen-right shoulder (the resolve rim alone is dotted there)
-  if (s >= 1.35) {
-    const [ax] = o.toS(nk + 1.5, 0);
-    const [bx] = o.toS(T.shoulderHW + 1, 0);
-    const [, ty] = o.toS(0, -3);
-    const [, by] = o.toS(0, T.shoulderTop + 8);
-    rimTopRight(buf, gJ, ax, bx, ty, by, rimMat(P.silver), Math.max(2, Math.round(s * 1.6)));
-  }
+  // ---- a continuous silver rim along the screen-right shoulder
+  shoulderRim(o, T, gJ);
 }
 
 registerOutfit('knitBlazer', knitBlazer);

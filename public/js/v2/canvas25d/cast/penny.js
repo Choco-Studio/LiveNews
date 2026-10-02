@@ -19,7 +19,7 @@ import { headHW } from '../head.js';
 import { clamp } from '../space.js';
 import { GROUPS } from '../character.js';
 import { defineLook, SKIN_LIGHT } from './base.js';
-import { LocalXY, localBox, clumpTone, selOutEdge, hairLight, rimMat, HeadWidthLUT } from './kit-a.js';
+import { LocalXY, localBox, clumpTone, strokeTone, selOutEdge, hairLight, rimMat, HeadWidthLUT } from './kit-a.js';
 
 export const penny = defineLook({
   id: 'penny',
@@ -44,13 +44,14 @@ export const penny = defineLook({
   outfit: 'tailored',
   neckline: 'blouse',
   lapel: { notchY: 6.4, w: 4.0, collarW: 3.1 },
-  jacket: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black }, // ink, tailored: the blouse and face carry the light
+  jacket: { ramp: [P.steel, P.ink, P.black, P.black], line: P.black }, // ink, tailored: the blouse and face carry the light
   shirt: { ramp: [P.white, P.white, P.silver, P.fog], line: P.steel }, // crisp white blouse (cool shade: the face stays the warmest)
   pin: { at: [5.6, 9.6], ramp: [P.white, P.silver, P.steel] },
   buttons: 1,
   arm: { upper: 21, fore: 19.5, rUpper: 3.0, rElbow: 2.6, rWrist: 2.05, hand: 10.2 },
   cuff: P.white,
   persona: { sway: 0.5, headMotion: 0.7, blinkMin: 2.6, blinkMax: 5.8, energy: 0.6, smile: 0.16 },
+  mats: { hairD: { ramp: [P.cream, P.tan, P.tanShade, P.brown], decal: true } }, // hair strokes (kit-a strokeTone)
   parts: { hairBack: drawChignon, hair: drawSleekAndPearls },
 });
 
@@ -116,7 +117,7 @@ export function drawSleek(buf, L, m, head, s) {
       if (t === 0) {
         if (tier === 0) return 1;
         const band = (x + 1.2) * (x + 1.2) * 0.08 + (y - (H.top + 2.2));
-        return Math.abs(band) < 0.6 ? 0 : 1;
+        return Math.abs(band) < 0.8 ? 0 : 1;
       }
       return t;
     }
@@ -133,7 +134,7 @@ export function drawSleek(buf, L, m, head, s) {
     }
     // uneven clump widths: a gentle warp so the combed lines never read as parallel stripes
     v += 0.2 * CO.cw * Math.sin(v * 1.7 / CO.cw + 0.8);
-    return clumpTone(t, v, u, CO);
+    return strokeTone(t, clumpTone(t, v, u, CO), m.hairD);
   });
   const g = head.gb + GROUPS.hair;
   selOutEdge(buf, x0, y0, x1, y1, g, head.gb + GROUPS.head, m.hair, m.hairEdge);

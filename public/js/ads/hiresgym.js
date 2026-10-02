@@ -920,7 +920,12 @@ const FACE = [
   79, 102, 70, 104, 60, 103, 58, 108, 60, 118, 63, 130, 66, 150, 20, 150, 22, 118, 18, 100, 16, 88, 12, 76, 8, 62,
   6, 50,
 ];
-const HAIR = [40, 0, 56, 1, 66, 5, 58, 9, 46, 13, 34, 22, 24, 34, 18, 48, 14, 62, 8, 62, 6, 50, 8, 40, 6, 28, 12, 14, 24, 5];
+// Close-cropped hair over the whole side of the skull: the hairline at the
+// temple, a short sideburn, round the top of the ear and down behind it to the nape.
+const HAIR = [
+  40, 0, 56, 1, 66, 5, 64, 10, 60, 17, 57, 28, 55, 38, 53, 46, 48, 46.5, 42, 46.5, 38.5, 49, 37.5, 56, 37.5, 63, 35, 70,
+  30, 78, 24, 86, 17, 89, 13, 78, 9, 64, 6.5, 52, 6, 40, 6, 28, 12, 14, 24, 5,
+];
 const SHOULDER = [22, 116, 2, 124, -40, 134, -40, 160, 24, 160];
 /** Catmull-Rom subdivision of a closed polygon (flat x, y list), built once at load. */
 function smoothPath(src, steps) {
@@ -981,13 +986,13 @@ const FACE_BUMPS = [
   [77, 49.5, 6, 3.6, -8], // eye socket
   [79, 49.5, 2.6, 1.8, 3], // the eyeball under the lid
   [70, 59, 8, 5, 7], // cheekbone
-  [63, 71, 9, 8, -4], // the hollow under it
+  [64, 72, 11, 9, -2.5], // the hollow under it
   [86, 64, 5, 8, 9], // the nose
   [82, 70, 3.2, 3, 5], // the nose's wing
   [82, 79, 4, 2.6, 4], // upper lip
   [81, 86, 3.6, 2.2, 4], // lower lip
   [79, 96, 6, 4.5, 5], // chin
-  [53, 90, 9, 11, 5], // the angle of the jaw
+  [54, 92, 11, 9, 3], // the angle of the jaw
   [44, 38, 14, 13, -3], // temple
   [56, 112, 4, 18, 3], // the neck's long muscle, top
   [61, 128, 4, 14, 3], // and towards the collarbone
@@ -1036,6 +1041,11 @@ const faceArt = () => bake('hg-face', W, H, (c) => {
   });
   partMask(c, ids, 3, (k) => {
     localPts(EAR);
+    fillPts(k, P.white);
+  });
+  const hair = new Uint8Array(W * H);
+  partMask(c, hair, 1, (k) => {
+    localPts(HAIR_S);
     fillPts(k, P.white);
   });
   // height: a rounded solid from the outline, then the sculpted forms
@@ -1113,8 +1123,15 @@ const faceArt = () => bake('hg-face', W, H, (c) => {
           }
         }
       }
-      const spec = v > 0.5 ? max(0, nx * FACE_HALF[0] + ny * FACE_HALF[1] + nz * FACE_HALF[2]) ** 50 : 0;
       v = 0.05 + 0.95 * v;
+      if (hair[o] && id === 1) {
+        // the crop: dark, its grain catching the light, a lit edge where it turns to the key
+        const grain = BAYER[(y & 3) * 4 + (x & 3)] > 8 ? 0.12 : 0;
+        idx[o] = v + grain < 0.38 ? 6 : v + grain < 0.62 ? 5 : 4;
+        continue;
+      }
+      // sweat: specular points on the face only (not the neck or shoulder)
+      const spec = v > 0.5 && id === 1 && y < fy(100) ? max(0, nx * FACE_HALF[0] + ny * FACE_HALF[1] + nz * FACE_HALF[2]) ** 50 : 0;
       let g = 1;
       for (let i = 0; i < FACE_STEPS.length; i += 2) {
         if (v < FACE_STEPS[i]) {
@@ -1127,11 +1144,13 @@ const faceArt = () => bake('hg-face', W, H, (c) => {
     }
   }
   paintIndex(c, idx, GREYS);
-  // close-cropped hair: black with a grain, the lit edge of the hairline
-  localPts(HAIR_S);
-  fillPts(c, P.black);
-  for (let k = 0; k < 70; k++) R(c, round(fx(12 + hash(k) * 46)), round(fy(4 + hash(k + 30) * 54)), 1, 1, k & 1 ? P.ink : P.slate);
-  for (let i = 6; i < HAIR.length - 18; i += 2) R(c, round(fx(HAIR[i])) + 1, round(fy(HAIR[i + 1])), 1, 1, P.slate);
+  // the hairline breaks up into single hairs at the temple and sideburn
+  for (let i = 4; i < 16; i += 2) {
+    const x = round(fx(HAIR[i]));
+    const y = round(fy(HAIR[i + 1]));
+    R(c, x + 1, y, 1, 1, P.ink);
+    if (i & 2) R(c, x + 2, y + 1, 1, 1, P.ink);
+  }
   // the ear's rim and lobe
   for (let i = 0; i < 12; i += 2) R(c, round(fx(EAR[i])), round(fy(EAR[i + 1])) + 1, 1, 1, P.steel);
   line(c, fx(41.5), fy(64), fx(43.5), fy(65.5), P.ink);

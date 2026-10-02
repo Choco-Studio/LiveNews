@@ -6,18 +6,25 @@
 // specifications. The product is "Cloud White" with a walnut handle; nothing
 // else has colour.
 //
+// It is staged in a keynote hall: an LED wall behind the stage, a glossy black
+// stage, and the audience in silhouette in the foreground, lit at first by
+// their own phones (the problem) and then filming the reveal on them.
+//
 // Shot list (25.5 s, 96 bpm: a beat is 0.625 s, a bar 2.5 s; cuts on the beat grid):
 //  1  0.00 PROBLEM  a phone on the turntable, screen-lit; notification cards
-//                   stack up, then flood; keynote labels on the voice.      VO "For years, the cloud has followed you everywhere." / "Updates. Pop-ups. Terms and conditions."
-//  2  7.50 REVEAL   (from black) the spotlight comes on; the furled umbrella
-//                   descends into it and turns; the name tracks in below.    VO "So we built something simpler."
-//  3 11.25 CANOPY   macro on the hem, spec callout.                          VO "A zero-sync canopy."
-//  4 14.375 HANDLE  macro on the walnut handle, spec callout.                VO "No Bluetooth. Anywhere."
-//  5 17.50 OPEN     the ribs swing out in slow motion; notifications fall on
-//                   the canopy and slide off; keynote statistics.            VO "It blocks ninety-nine percent of notifications."
+//                   stack up, then flood; keynote labels on the voice; in the
+//                   dark hall the audience's own phones light up one by one.  VO "For years, the cloud has followed you everywhere." / "Updates. Pop-ups. Terms and conditions."
+//  2  7.50 REVEAL   (from black) wide of the hall: the spotlight comes on; the
+//                   furled umbrella descends into it and turns; the name comes
+//                   up on the LED wall; phones go up to film it.             VO "So we built something simpler."
+//  3 11.25 CANOPY   macro on the hem, the hall out of focus below; callout.  VO "A zero-sync canopy."
+//  4 14.375 HANDLE  macro on the walnut handle against the blurred hall.     VO "No Bluetooth. Anywhere."
+//  5 17.50 OPEN     the presenter holds it up for the demo (a hand in a black
+//                   sleeve); it opens in slow motion with a small lift of the
+//                   hand; notifications slide off; statistics on the wall.   VO "It blocks ninety-nine percent of notifications."
 //  6 21.25 SLATE    still product, wordmark in thin type, tagline, legal.    VO "Cloudbrella. Stay offline."
 import {
-  P, W, H, R, A, oval, disc, ring, line, rrect, cached, lazy, play, tween, prog, smooth, lerp, clamp,
+  P, W, H, R, A, oval, disc, ring, line, rrect, cached, lazy, play, key, tween, prog, smooth, lerp, clamp,
   trackIn, fadeUp, rule, smallPrint, gradient, vignette, beam, contact, glintStar, lathe, turntable, sheen,
   motes, hash01, rgb, bayer, warmUp, tune, clipRect,
 } from './kit.js';
@@ -41,7 +48,7 @@ const TT_MID = { top: P.black, side: P.black, edge: P.slate, hi: P.steel, h: 5, 
 const TT_DARK = { top: P.black, side: P.black, edge: P.ink, hi: P.slate, h: 5, mark: P.ink };
 
 /** The keynote stage at spotlight level `light` (0..1), turntable turned to `turn`. */
-function stage(ctx, lt, light, turn) {
+function stage(ctx, lt, light, turn, table = true) {
   R(ctx, 0, 0, W, H, P.black);
   if (light > 0) {
     ctx.save();
@@ -52,7 +59,7 @@ function stage(ctx, lt, light, turn) {
     beam(ctx, 192, -6, 192, TT_Y, 34, 150, { color: P.silver, alpha: 0.035 * light });
     motes(ctx, lt, { x: 120, y: 0, w: 144, h: TT_Y, n: 34, seed: 5, drift: 4, fall: 1, color: P.silver, alpha: 0.6 * light, inside: inCone });
   }
-  turntable(ctx, 192, TT_Y, 74, 11, turn, light > 0.62 ? TT_LIT : light > 0.3 ? TT_MID : TT_DARK);
+  if (table) turntable(ctx, 192, TT_Y, 74, 11, turn, light > 0.62 ? TT_LIT : light > 0.3 ? TT_MID : TT_DARK);
   if (light > 0) oval(ctx, 186, TT_Y - 1, 46, 6, A(P.steel, 0.22 * light));
 }
 function inCone(x, y) {
@@ -90,7 +97,6 @@ function ledWall(key, w, h, cell) {
 const AUD_Y = 164; // top of the audience canvas
 const AUD_H = H - AUD_Y;
 const ROWS_WIDE = [[16, 0.6, 15, 3], [25, 0.85, 21, 5], [36, 1.2, 30, 7]];
-const ROWS_NEAR = [[46, 1.75, 44, 9]];
 /**
  * Heads, necks and shoulders seen from behind, rasterised into an id buffer
  * (front rows overwrite back rows), styles seeded: 0 short, 1 long, 2 bun,
@@ -182,16 +188,14 @@ function audienceArt(key, rows, lit, screenX = -1) {
 const audWideLit = lazy(() => audienceArt('cb-aud-wide-lit', ROWS_WIDE, true));
 const audWideDark = lazy(() => audienceArt('cb-aud-wide-dark', ROWS_WIDE, false));
 const audWideScreen = lazy(() => audienceArt('cb-aud-wide-screen', ROWS_WIDE, false, PH_X));
-const audNearLit = lazy(() => audienceArt('cb-aud-near-lit', ROWS_NEAR, true));
 
 /** The audience at stage light `light`; the lit version blends in over the dark one. */
-function audience(ctx, rows, light) {
-  const dark = rows === ROWS_WIDE ? audWideDark() : null;
-  if (dark && light < 1) ctx.drawImage(dark, 0, AUD_Y);
+function audience(ctx, light) {
+  if (light < 1) ctx.drawImage(audWideDark(), 0, AUD_Y);
   if (light > 0) {
     ctx.save();
-    ctx.globalAlpha = dark ? light : 1;
-    ctx.drawImage(rows === ROWS_WIDE ? audWideLit() : audNearLit(), 0, AUD_Y);
+    ctx.globalAlpha = light;
+    ctx.drawImage(audWideLit(), 0, AUD_Y);
     ctx.restore();
   }
 }
@@ -790,7 +794,7 @@ function shotReveal(ctx, lt) {
   const out = 1 - smooth(prog(lt, 3.3, 3.65));
   trackIn(ctx, 'CLOUDBRELLA', 192, 20, lt - 1.7, { face: 'thin', color: P.white, track: 4, from: 12, dur: 1.4, alpha: out });
   // the audience; phones go up as the light comes on
-  audience(ctx, ROWS_WIDE, light);
+  audience(ctx, light);
   const ph = picks(ROWS_WIDE, REVEAL_PHONES);
   for (let i = 0; i < ph.length; i++) phoneUp(ctx, ROWS_WIDE, ph[i][0], prog(lt, ph[i][1], ph[i][1] + 0.9), true);
   vignette(ctx, 0.45);
@@ -978,27 +982,95 @@ function slideOff(ctx, lt, cx, a) {
   ctx.globalAlpha = 1;
 }
 
+// --- the presenter's hand ------------------------------------------------------------
+// For the demo the presenter has lifted it off the turntable: a right hand in
+// a black knit sleeve comes in from the right of frame and holds the walnut
+// crook just under the collar. Hand-placed pixels (lit from the upper left like
+// everything on stage): the thumb over the top, four fingers wrapping the crook
+// (their tips curling away out of sight on the left), knuckles catching the key
+// light in an arc, the back of the hand turning into shadow, the wrist into the cuff.
+// Keys: S skin, t tan, d tan shade, b brown, m maroon, k black. x = -7 at the
+// first column; the crook's axis is x = 0, the top of the grip y = 0.
+const FIST = [
+  '......tSSSStdb......',
+  '.....bddtttdddtb....',
+  '...dtttttttSStdb....',
+  '..bddddddddtttddb...',
+  '..mbbbdddddddtddb...',
+  '...dttttttttSStddb..',
+  '..bdddddddddttdddb..',
+  '..mbbbddddddddtddb..',
+  '...dtttttttSStdddb..',
+  '..bdddddddddtddddb..',
+  '...mbbdddddddddddb..',
+  '....dttttttStddddbk.',
+  '....bdddddddddddbkk.',
+  '.....mbbbbbdddddkkkk',
+  '..........bbddkkkkkk',
+  '............kkkkkkkk',
+];
+// skin a step lighter and warmer than the walnut it holds, so the two never merge
+const FIST_KEYS = { S: P.skin, t: P.tan, d: P.skinShade, b: P.tanShade, m: P.brown, k: P.black };
+const HAND_OX = 7; // crook axis in the hand canvas
+const HAND_OY = 2; // top of the grip in the hand canvas
+const HAND_CW = 124;
+const HAND_CH = 96;
+const handArt = lazy(() =>
+  cached('cb-hand', HAND_CW, HAND_CH, (c) => {
+    // the sleeve first: a black knit forearm running down to the right out of
+    // frame (the presenter stands below and right of the shot), widening toward
+    // the elbow; its upper edge takes the spotlight, the knit bunches in soft folds
+    const wx = 9.5;
+    const wy = 9;
+    const dx = 0.58;
+    const dy = 0.815;
+    for (let y = 0; y < HAND_CH; y++) {
+      for (let x = 0; x < HAND_CW; x++) {
+        const px = x + 0.5 - wx;
+        const py = y + 0.5 - wy;
+        const a = px * dx + py * dy; // along the forearm
+        const q = px * dy - py * dx; // across it: + toward the upper right
+        const hw = 5.2 + a * 0.06;
+        if (a < 0 || a > 110 || abs(q) > hw) continue;
+        const u = (hw - q) / (2 * hw); // 0 at the lit edge, 1 at the far edge
+        let col = u < 0.09 ? P.steel : u < 0.22 ? P.slate : u < 0.5 ? P.ink : P.black;
+        const f = (a + q * 0.7 + 40) % 14; // folds across the sleeve, near the cuff
+        if (a < 44 && u > 0.15 && u < 0.85) {
+          if (f < 1) col = P.black;
+          else if (f < 2 && u < 0.6) col = P.slate;
+        }
+        if (a < 2.6) col = u < 0.3 ? P.slate : (y & 1) ? P.ink : P.black; // the ribbed cuff
+        R(c, x, y, 1, 1, col);
+      }
+    }
+    for (let j = 0; j < FIST.length; j++) {
+      const row = FIST[j];
+      for (let i = 0; i < row.length; i++) if (row[i] !== '.') R(c, i, HAND_OY + j, 1, 1, FIST_KEYS[row[i]]);
+    }
+  }),
+);
+
 const OPEN_LEN = 3.75;
 const wallNear = lazy(() => ledWall('cb-led-near', 420, 126, 34));
-const OPEN_PHONES = [[0, 120, -1], [0, 300, 1.1]];
+// the presenter's gesture as it opens: a small dip (anticipation), up as the ribs
+// swing out, then settle; one arc, integer pixels, eased
+const LIFT = [[0, 0], [0.2, 1, 'inOut'], [1.3, -4, 'inOut'], [2.1, -3, 'inOut']];
 function shotOpen(ctx, lt) {
-  stage(ctx, lt, 1, 0.9 + lt * 0.05);
+  stage(ctx, lt, 1, 0, false);
   // the LED wall behind, closer now: the statistics come up on it
   clipRect(ctx, 0, 0, W, 122);
   ctx.drawImage(wallNear(), -18, -4);
   ctx.restore();
   beam(ctx, 192, -6, 192, TT_Y, 34, 150, { color: P.silver, alpha: 0.03 });
   const open = prog(lt, 0.25, 2.0);
-  const top = topFor(1);
-  contact(ctx, 192, TT_Y - 1, round(lerp(22, 46, smooth(open))), 0.35);
-  umbrella(ctx, 192, top, 1, open, 0.3 + lt * 0.04);
+  const top = topFor(1) + 20 + round(key(lt, LIFT));
+  // held, it no longer turns; the spot pool is on the empty floor below
+  umbrella(ctx, 192, top, 1, open, 0.3);
+  const gy = top + round(SHAFT_L) + 2; // the top of the grip, just under the collar
+  ctx.drawImage(handArt(), 192 - HAND_OX, gy - HAND_OY);
   // everything but the product leaves before the cut to the slate
   const out = 1 - smooth(prog(lt, OPEN_LEN - 0.45, OPEN_LEN - 0.1));
   if (lt > 1.2) slideOff(ctx, lt - 1.2, 192, out);
-  // the front row, one already filming, another joining as it opens
-  audience(ctx, ROWS_NEAR, 1);
-  const ph = picks(ROWS_NEAR, OPEN_PHONES);
-  for (let i = 0; i < ph.length; i++) phoneUp(ctx, ROWS_NEAR, ph[i][0], ph[i][1] < 0 ? 1 : prog(lt, ph[i][1], ph[i][1] + 1.0), true);
   vignette(ctx, 0.5);
   // keynote statistics either side
   fadeUp(ctx, '99%', 330, 74, lt - 1.0, { face: 'thin', color: P.white, track: 2, align: 'center', scale: 2, dur: 0.8, alpha: out });

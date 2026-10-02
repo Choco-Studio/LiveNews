@@ -32,6 +32,7 @@ import { bedDef, ruleFor, storyMoment, PROGRAMMES, CHANNEL_PKG, STING_MOMENTS, C
 import { STINGS, graveDrone } from './stings.js';
 
 const MAX_WAIT = 1.25; // never wait longer than this for a boundary (seconds)
+const ANNOTATIONS = ['frame', 'item', 'picture', 'single', 'featureEnd', 'signoff'];
 
 // Loudness targets (integrated LUFS of a bed alone, unducked; the house voice
 // is -16 LUFS, so -9 dB of duck puts a -26 bed 19 LU under it).
@@ -181,6 +182,10 @@ export class BroadcastMusic {
 
   apply(rule, m, at, opts) {
     if (rule === 'keep') return this.current;
+    // Annotations (a montage frame, a round-up item, a shot change, the end of
+    // a feature, the gap after the last word) never stop a bed: where the
+    // programme has nothing for them they are simply ignored.
+    if (rule == null && ANNOTATIONS.includes(m)) return this.current;
     if (rule == null) {
       this.cooldown = Math.max(0, this.cooldown - 1);
       return this.toSilence(at, {});

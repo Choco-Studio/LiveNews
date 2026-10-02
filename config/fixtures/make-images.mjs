@@ -789,6 +789,13 @@ const GRADES = {
   tram: { saturation: 0.8, tint: 0.14 },
 };
 
+Object.assign(SCENES, NEWS_SCENES);
+Object.assign(GRADES, NEWS_GRADES);
+
+// Smaller renditions some fixture feeds offer next to (or instead of) the full picture, the way real feeds
+// list a thumbnail in media:group or media:thumbnail: the picture desk must find and prefer the large one.
+export const THUMBS = ['wildfire', 'factory', 'temple'];
+
 /** Paint one scene at full size, graded, before downsampling. */
 export function paintCanvas(name, seed = 1) {
   const scene = SCENES[name];
@@ -806,9 +813,12 @@ export function paint(name, seed = 1) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const names = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(SCENES);
   fs.mkdirSync(OUT, { recursive: true });
+  fs.mkdirSync(path.join(OUT, 'thumbs'), { recursive: true });
   for (const name of names) {
-    const png = paint(name);
+    const canvas = paintCanvas(name);
+    const png = encodePng(canvas.downsample(2));
     fs.writeFileSync(path.join(OUT, `${name}.png`), png);
     console.log(`${name}.png  ${(png.length / 1024).toFixed(0)} KB`);
+    if (THUMBS.includes(name)) fs.writeFileSync(path.join(OUT, 'thumbs', `${name}-320.png`), encodePng(canvas.downsample(4)));
   }
 }

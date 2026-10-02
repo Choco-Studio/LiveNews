@@ -14,6 +14,7 @@
 //   localBox(head, x0, y0, x1, y1)    screen box of a head-local rectangle (roll aware), shared array
 //   HeadWidthLUT                      headHW as a table: const w = new HeadWidthLUT(); w.set(H, jaw).at(y)
 //   clumpTone(t, v, u, o)             strand/clump shading of a base tone (see below)
+//   strokeTone(form, t, decalMat)     keep a clump's 1 px strokes through resolve's clean-up (decal hair)
 //   rimMat(hex)                       decal material for painted rims (black outline next to it)
 //   rimTopRight(buf, g, x0, x1, y0, y1, mat, maxDrop)  continuous top rim on a group's right half
 //   selOutEdge(buf, x0, y0, x1, y1, g, gNext, from, to) darker local line where group g meets gNext
@@ -169,6 +170,17 @@ export function clumpTone(t, v, u, o) {
     }
   }
   return t === 0 ? 1 : t;
+}
+
+/**
+ * Hair strokes that survive resolve's speckle clean-up: resolve replaces a pixel whose tone differs
+ * from its 4 neighbours, which erases 1 px DIAGONAL strokes inside a material and leaves the clump
+ * separations and highlight strokes as broken dots. A stroke pixel (clumpTone changed the form's
+ * tone) is returned in the look's decal hair material (`mats.hairD`, same ramp, decal: true), which
+ * the clean-up and the inner lines skip. Returns the value for PartBuffer.shape.
+ */
+export function strokeTone(form, t, decalMat) {
+  return t === form || !decalMat ? t : (decalMat << 4) | t;
 }
 
 /** A decal material that paints a rim colour; its outer outline stays black. */

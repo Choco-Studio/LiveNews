@@ -4,16 +4,18 @@
 // decommissioned server farm, tasting notes of oak, caramel and dial-up,
 // "Uncompressed." Letterboxed 2.2:1; the legal line sits on the bottom bar.
 //
-// Shot list (24 s, 72 bpm, a bar is 3.33 s; the brand chord lands at 20.0 s):
+// Shot list (24.6 s, 72 bpm, a bar is 3.33 s; the brand chord lands at 18.33 s):
 //  1  0.0 MACRO    inside the liquid: slow bubbles in backlit amber.        VO "Some things cannot be rushed."
-//  2  4.0 CELLAR   a dark server hall; bottles rest in the racks; a window
-//                  beam full of dust; slow truck right; documentary caption. VO "Aged twelve years, in a decommissioned server farm."
-//  3  8.6 POUR     slow-motion pour into a crystal tumbler over one ice cube. VO "Poured over ice, hand-chipped by a retired sysadmin."
-//  4 13.4 NOSE     a man in profile, rim-lit, raises the glass; tasting
-//                  notes set in serif in the empty half of the frame.       VO "Notes of oak, caramel... and dial-up."
-//  5 17.8 HERO     the bottle on a stone plinth; the lights come up and a
-//                  softbox sweep travels round the glass.                    VO "BitFizz Reserve."
-//  6 20.4 SLATE    bottle left, gold lock-up right, legal on the bar.        VO "Uncompressed."
+//  2  4.2 CELLAR   a dark server hall; bottles rest in the racks; a window
+//                  beam full of dust; slow truck right; documentary caption. VO "Aged twelve years in a decommissioned server farm."
+//  3  8.3 POUR     slow-motion pour into a crystal tumbler over one ice cube,
+//                  on a bar, the back bar glowing out of focus behind.       VO "Over ice, hand-chipped by a retired sysadmin."
+//  4 13.3 NOSE     a man in profile, rim-lit, raises the glass in a panelled
+//                  lounge (a lamp, a rainy night window); tasting notes set
+//                  in serif in the empty half of the frame.                 VO "Oak. Caramel... Dial-up."
+//  5 17.5 HERO     the bottle on a stone plinth in the cellar vault, haze
+//                  drifting; the lights come up, a softbox sweep travels round. VO "BitFizz Reserve."
+//  6 20.8 SLATE    bottle left (the racks behind it), gold lock-up right, legal on the bar.
 import {
   P, W, H, R, A, oval, poly, ring, disc, line, cached, lazy, play, key, tween, prog, smooth, lerp, clamp,
   type, trackIn, fadeUp, rule, smallPrint, gradient, vignette, letterbox, beam, contact, glintStar,

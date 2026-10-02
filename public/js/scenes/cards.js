@@ -450,10 +450,13 @@ function stackLayout(label, source, rows) {
     }));
     const kicker = ellipsis(label || 'BY THE NUMBERS', PW - 24, 1);
     const src = srcText(source, PW - 24);
+    // a qualifier sits in micro type above its figure: rows get 4 px more room so it never
+    // touches the accent underline of the row above
+    const pitch = items.some((it) => it.qual) ? STACK_PITCH + 4 : STACK_PITCH;
     const top = 10 + 5 + 9; // kicker, then room for a qualifier above the first figure
-    const h = top + items.length * STACK_PITCH - 6 + (src ? 13 : 0) + 9;
+    const h = top + items.length * pitch - 6 + (src ? 13 : 0) + 9;
     const PY = clamp(Math.round(80 - h / 2), 28, SAFE_BOTTOM - h);
-    return { PX, PW, PH: h, PY, lx, items, kicker, src, y0: PY + top };
+    return { PX, PW, PH: h, PY, lx, items, kicker, src, y0: PY + top, pitch };
   });
 }
 
@@ -472,7 +475,7 @@ function drawStack(ctx, dt, o, rows, acc) {
     drawText(ctx, L.kicker, tx, L.PY + 10, S.microFog);
     for (let i = 0; i < L.items.length; i++) {
       const it = L.items[i];
-      const y = L.y0 + i * STACK_PITCH;
+      const y = L.y0 + i * L.pitch;
       if (it.qual) drawText(ctx, it.qual, tx, y - 7, S.microFog);
       // the words beside the figure's slot, centred on it
       const ly = it.lines.length > 1 ? y - 2 : y + 4;
@@ -486,7 +489,7 @@ function drawStack(ctx, dt, o, rows, acc) {
       }
       if (dt >= at + 0.35) drawText(ctx, it.fig, tx, y, S.white2);
     }
-    if (L.src) drawText(ctx, L.src, tx, L.y0 + L.items.length * STACK_PITCH - 6 + 6, S.microFog);
+    if (L.src) drawText(ctx, L.src, tx, L.y0 + L.items.length * L.pitch - 6 + 6, S.microFog);
   } finally {
     ctx.restore();
   }

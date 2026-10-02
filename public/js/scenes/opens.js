@@ -53,26 +53,29 @@ export function drawOpen(ctx, t, dt, programId, info) {
   const d = Number.isFinite(dt) ? Math.max(0, dt) : 0;
   const ni = normInfo(info);
   ctx.save();
-  ctx.imageSmoothingEnabled = false;
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'source-over';
   try {
-    // every save() inside the opens is paired with a restore() in a finally, so a throw
-    // leaves no clip or transform behind
-    op.draw(ctx, t, d, ni);
-  } catch (err) {
-    // never leave the screen broken: a plain branded card instead
-    ctx.fillStyle = P.black;
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = P.red;
-    ctx.fillRect(0, 90, W, 30);
-    drawText(ctx, ni.title, W / 2, 98, { color: P.white, scale: 2, align: 'center' });
-    if (!warned) {
-      warned = true;
-      console.warn('[opens] draw failed', err);
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    try {
+      // every save() inside the opens is paired with a restore() in a finally, so a throw
+      // leaves no clip or transform behind
+      op.draw(ctx, t, d, ni);
+    } catch (err) {
+      // never leave the screen broken: a plain branded card instead
+      ctx.fillStyle = P.black;
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = P.red;
+      ctx.fillRect(0, 90, W, 30);
+      drawText(ctx, ni.title, W / 2, 98, { color: P.white, scale: 2, align: 'center' });
+      if (!warned) {
+        warned = true;
+        console.warn('[opens] draw failed', err);
+      }
     }
+  } finally {
+    ctx.restore();
   }
-  ctx.restore();
 }
 
 /**

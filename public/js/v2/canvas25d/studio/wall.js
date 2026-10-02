@@ -740,11 +740,13 @@ function drawPicture(b, src, x0, y0, pw, ph, maxL) {
 // Map: the opens' mini locator when available, our static locator otherwise
 
 let MAPFN = null;
+let MAPREADY = null; // worldmap.js cityLights(): null until its data has loaded (it loads in slices after boot)
 let MAP_FAILED = false;
 if (typeof document !== 'undefined') {
   import('../../../scenes/worldmap.js')
     .then((m) => {
       MAPFN = typeof m.drawWorldMap === 'function' ? m.drawWorldMap : null;
+      MAPREADY = typeof m.cityLights === 'function' ? m.cityLights : null;
     })
     .catch(() => {
       MAP_FAILED = true;
@@ -759,6 +761,13 @@ const MAPCV = { cv: null, ctx: null, w: 0, h: 0, u32: null };
 /** Draw the mini locator at w x h into `b` (exact palette, dimmed); false when unavailable. */
 function drawMiniMap(b, spec, style, t, dt) {
   if (!MAPFN || MAP_FAILED) return false;
+  // right after boot the locator draws a plain sea until its data is in: our own static locator
+  // stands in for that whole shot instead of an empty blue box
+  try {
+    if (MAPREADY && MAPREADY() === null) return false;
+  } catch {
+    return false;
+  }
   const w = b.w, h = b.h;
   try {
     if (!MAPCV.cv) {

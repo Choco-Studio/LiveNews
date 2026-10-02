@@ -149,3 +149,68 @@ test('figures are parsed exactly as written, never recounted', () => {
   assert.equal(cards.parseFigure('1997').year, true);
   assert.equal(cards.parseFigure('no figure here').text, null);
 });
+
+const draws = (fn) => {
+  const ctx = fakeCanvas().getContext('2d');
+  fn(ctx);
+  assert.equal(ctx.depth, 0, 'every save() is restored');
+  return ctx.log;
+};
+
+test('MONEY MINUTE paper card draws the fact when it has no leading figure (with a headline)', () => {
+  for (const fact of ['RICE PRICES DOWN 8%', 'RECORD HIGH FOR COCOA', 'UP TO 12 TONNES', 'NEARLY 3 MILLION VISITORS']) {
+    const base = { headline: 'Rice prices fall for a third month', source: 'Ledger Line', programId: 'money-minute' };
+    const empty = draws((ctx) => cards.drawFactCard(ctx, 0, 2, { ...base, fact: '' }));
+    const full = draws((ctx) => cards.drawFactCard(ctx, 0, 2, { ...base, fact }));
+    const images = (log) => log.filter((l) => l.startsWith('D')).length; // a line of text is one image
+    assert.ok(images(full) > images(empty), `${fact}: the fact is on the paper (${images(full)} vs ${images(empty)} text images)`);
+  }
+});
+
+test('a stated qualifier stays with its figure (parsed from the fact, or numbers[].qualifier) in every look', () => {
+  const f = cards.parseFigure('ABOUT 1,500 DOLLARS');
+  assert.equal(f.text, '1,500');
+  assert.equal(f.qual, 'ABOUT');
+  assert.equal(f.rest, 'DOLLARS');
+  assert.equal(cards.parseFigure('more than 62% of traders').qual, 'MORE THAN');
+  assert.equal(cards.parseFigure('up to 12 tonnes').text, '12');
+  for (const programId of ['world-now', 'news-60', 'tech-bytes', 'cosmos', 'money-minute', 'weekend-review']) {
+    const plain = draws((ctx) => cards.drawFactCard(ctx, 0, 2, { numbers: [{ value: '62%', label: 'OF TRADERS' }], programId }));
+    const qual = draws((ctx) => cards.drawFactCard(ctx, 0, 2, { numbers: [{ value: '62%', qualifier: 'MORE THAN', label: 'OF TRADERS' }], programId }));
+    const images = (log) => log.filter((l) => l.startsWith('D')).length;
+    assert.ok(images(qual) > images(plain), `${programId}: the qualifier is drawn`);
+    // a fact that opens with a qualifier gets the programme's figure look, not the plain text card
+    const viaFact = draws((ctx) => cards.drawFactCard(ctx, 0, 2, { fact: 'ABOUT 1,500 DOLLARS', programId }));
+    const text = draws((ctx) => cards.drawFactCard(ctx, 0, 2, { fact: 'THE BRIDGE REOPENED ON FRIDAY', programId }));
+    assert.notDeepEqual(viaFact, text);
+  }
+});
+
+test('the first montage frame shows its accent bar on the very first frame after the cut', () => {
+  const log = draws((ctx) => cards.drawHeadlineFrame(ctx, 0, 1 / 60, { index: 0, total: 3, headline: 'Storm closes ports', source: 'BBC', category: 'world', programId: 'world-now' }));
+  assert.ok(log.some((l) => l.startsWith('F#e43b44')), 'the red accent is drawn at dt = 1/60');
+});
+
+test('the UP NEXT promo is a still card: the lock-up holds, and odd presenter data never throws', () => {
+  const card = { label: 'UP NEXT', footer: 'AFTER THE BREAK', next: { id: 'news-60', title: 'NEWS IN 60', tagline: 'THE HEADLINES IN A MINUTE', presenters: ['sam'] } };
+  const a = draws((ctx) => cards.drawPromoCard(ctx, 0, 1.0, card)).join('\n');
+  assert.equal(draws((ctx) => cards.drawPromoCard(ctx, 0, 3.0, card)).join('\n'), a, 'nothing moves after the entrance');
+  assert.ok(!a.includes('AFTER'), 'no footer text replays');
+  for (const presenters of ['sam', 42, { a: 1 }, null, [null, 'x', 3]]) {
+    assert.doesNotThrow(() => draws((ctx) => cards.drawPromoCard(ctx, 0, 1, { next: { id: 'cosmos', title: 'COSMOS DESK', presenters } }, () => { throw new Error('no name'); })));
+  }
+});
+
+test('the ident draws both dayparts at any instant without leaving state behind', () => {
+  for (const variant of ['dusk', 'dawn', undefined]) {
+    for (const dt of [0, 0.55, 0.7, 2, 3.2, 5.5, 60, NaN]) draws((ctx) => cards.drawIdentCard(ctx, 0, dt, { variant }));
+  }
+});
+
+test('programme ids that are Object.prototype keys get the generic open and accent', () => {
+  for (const id of ['constructor', '__proto__', 'toString']) {
+    assert.equal(opens.openFor(id).duration, 4);
+    assert.doesNotThrow(() => frame(id, 2, INFO['weekend-review']));
+    draws((ctx) => cards.drawFactCard(ctx, 0, 1, { fact: '2,400 flights', programId: id }));
+  }
+});

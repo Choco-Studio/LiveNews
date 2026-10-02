@@ -48,12 +48,15 @@
     img.onerror = no;
     img.src = src;
   });
-  const ready = Promise.all(NAMES.map(async (n) => {
+  // the wall's mini map (scenes/worldmap.js) loads its data in background slices after boot; a lab
+  // capture wants it now
+  const mapData = import('../js/scenes/worldmap.js').then((m) => m.warmMapData?.()).catch(() => {});
+  const ready = Promise.all([mapData, ...NAMES.map(async (n) => {
     try {
       const img = await load(params.get('imgbase') ? `${params.get('imgbase')}/${n}.png` : `../../config/fixtures/img/${n}.png`);
       lab.setImage(n, { small: pixelate(img, 104, 62, { colors: 16 }), full: pixelate(img, 416, 234, { colors: 24 }) });
     } catch { /* no fixture pictures on this server: picture mode falls back to the plate */ }
-  }));
+  })]);
 
   const present = () => lab.frame.present(ctx);
   window.__lab = {

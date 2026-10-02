@@ -150,6 +150,9 @@ function pageInit(CFG) {
 
   // ---- WebAudio on the fake clock
   const Offline = window.OfflineAudioContext;
+  // The native source class: window.AudioBufferSourceNode is replaced by a
+  // registering subclass below, but factory-made nodes keep the native prototype.
+  const NativeBufferSource = window.AudioBufferSourceNode;
   const SR = CFG.sampleRate;
   const LENGTH = Math.ceil(CFG.maxSeconds * SR);
   const paramCtx = new WeakMap(); // AudioParam -> its recorded context
@@ -355,8 +358,8 @@ function pageInit(CFG) {
     return origDisconnect.apply(this, a);
   };
   // Recorded voices (decoded buffers) starting: logged for the sync report.
-  const origStart = AudioBufferSourceNode.prototype.start;
-  AudioBufferSourceNode.prototype.start = function (when = 0, ...rest) {
+  const origStart = NativeBufferSource.prototype.start;
+  NativeBufferSource.prototype.start = function (when = 0, ...rest) {
     REC.stats.starts++;
     if (this.context?.__recorded && this.buffer && REC.decoded.has(this.buffer)) {
       ev({ type: 'clip', at: this.context.__origin + Math.max(Number(when) || 0, this.context.currentTime) * 1000, duration: this.buffer.duration });
@@ -400,7 +403,7 @@ function pageInit(CFG) {
       const e = endOf(node);
       if (e.start === null || e.fired) return;
       let end = e.stop;
-      if (node instanceof AudioBufferSourceNode && node.buffer && !node.loop) {
+      if (node instanceof NativeBufferSource && node.buffer && !node.loop) {
         const rate = Math.max(1e-3, Math.abs(Number(node.playbackRate?.value) || 1));
         const len = e.dur !== null ? e.dur : Math.max(0, node.buffer.duration - e.offset);
         end = Math.min(end, e.start + len / rate);
@@ -425,7 +428,7 @@ function pageInit(CFG) {
         return r;
       };
     };
-    wrapStart(AudioBufferSourceNode.prototype, AudioBufferSourceNode.prototype.start);
+    wrapStart(NativeBufferSource.prototype, NativeBufferSource.prototype.start);
     wrapStart(ASN, ASN.start);
     const origStop = ASN.stop;
     ASN.stop = function (when = 0) {
@@ -575,6 +578,7 @@ await page.goto(opts.url, { waitUntil: 'load' });
 if (opts.eval) await page.evaluate(opts.eval); // e.g. pick a demo in a lab page
 
 const frameMs = 1000 / opts.fps;
+let stepped = 0; // fake ms advanced since the first frame was asked for
 let held = 0;
 let stuck = 0; // work in flight that never finished (a hung request): not waited for again
 // Wait (real time) for fetches, images and decodes in flight, so they land at
@@ -613,7 +617,15 @@ const scenes = []; // what the director had on screen at each frame (caption, sh
 const t0 = Date.now();
 for (let i = 0; i < total; i++) {
   if (opts.step) await page.evaluate(String(opts.step).replace(/\bT\b/g, String(i / opts.fps)));
-  else await advance(frameMs);
+  else {
+    // Whole milliseconds: Playwright's clock rounds a fractional runFor() UP
+    // (30 x runFor(33.3) = 1020 ms), which would run the page 2 % faster than
+    // the video and the sound. Stepping to round((i + 1) * frameMs) keeps every
+    // frame within 0.5 ms of its true time.
+    const want = Math.round((i + 1) * frameMs);
+    await advance(want - stepped);
+    stepped = want;
+  }
   const shot = await page.evaluate((sel) => {
     const c = document.querySelector(sel);
     if (!c) return null;

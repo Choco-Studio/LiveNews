@@ -322,7 +322,17 @@ function lookOf(cast, slot) {
   return lookFor(id);
 }
 
+// Cache: nested maps name → programme → variant (focus, solo, side) → cast A → cast B, so a hit
+// allocates nothing (INTEGRATION request: the Stage may call framing() on any frame).
 const CACHE = new Map();
+let CACHED = 0;
+const DEFAULT_CAST = Object.freeze({ A: 'paco', B: 'lola' });
+
+function level(map, key) {
+  let m = map.get(key);
+  if (!m) map.set(key, (m = new Map()));
+  return m;
+}
 
 /**
  * A named framing as a camera (cached; treat the result as read-only).
@@ -330,16 +340,21 @@ const CACHE = new Map();
  * @param opts  { cast: { A: id, B?: id }, focus: 'A'|'B', solo?: bool, side?: +1|-1, programId }
  */
 export function framing(name, opts = {}) {
-  const cast = opts.cast || { A: 'paco', B: 'lola' };
+  const cast = opts.cast || DEFAULT_CAST;
   const solo = opts.solo ?? !cast.B;
   const focus = opts.focus === 'B' && !solo ? 'B' : 'A';
   const programId = opts.programId || 'world-now';
-  const key = `${name}|${programId}|${focus}|${solo ? 1 : 0}|${opts.side ?? ''}|${cast.A}|${cast.B ?? ''}`;
-  const hit = CACHE.get(key);
+  const variant = (focus === 'B' ? 1 : 0) + (solo ? 2 : 0) + (opts.side === -1 ? 4 : opts.side === 1 ? 8 : 0);
+  const byB = CACHE.get(name)?.get(programId)?.get(variant)?.get(cast.A);
+  const hit = byB?.get(cast.B ?? '');
   if (hit) return hit;
   const cam = build(name, { cast, solo, focus, programId, side: opts.side });
-  if (CACHE.size > 256) CACHE.clear();
-  CACHE.set(key, cam);
+  if (CACHED > 512) {
+    CACHE.clear();
+    CACHED = 0;
+  }
+  level(level(level(level(CACHE, name), programId), variant), cast.A).set(cast.B ?? '', cam);
+  CACHED++;
   return cam;
 }
 

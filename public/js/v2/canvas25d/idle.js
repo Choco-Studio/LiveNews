@@ -87,7 +87,7 @@ function eventBlink(perf, fr, t, seed) {
   if (looks) {
     for (let i = 0; i < looks.length; i++) {
       const lk = looks[i];
-      if (lk.target === 'camera' || lk.style === 'mech') continue;
+      if (lk.target === 'camera' || lk.target === 'interest' || lk.style === 'mech') continue; // eyeline shifts only
       // most big gaze shifts carry a blink as the eyes start to move; some returns too
       if (t >= lk.t0 && t - lk.t0 < 0.3 && eventHash(lk.t0, seed) < 0.7 && lk.t0 + 0.03 > tb) tb = lk.t0 + 0.03;
       if (t >= lk.t1 && t - lk.t1 < 0.3 && eventHash(lk.t1, seed + 1) < 0.35 && lk.t1 > tb) tb = lk.t1;

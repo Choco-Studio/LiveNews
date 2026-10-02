@@ -282,7 +282,11 @@ export class Director {
       tune = this.audio.playTune?.(open.tune, { volume: 0.6, startAt: performance.now() });
     });
     this.introduced = new Set();
-    await Promise.all([sleep(open.duration * 1000 - STINGER_DURATION * 500), imagesReady]);
+    // The open never waits for pictures: its length is the theme's (the lock-up is still from 3.2 s
+    // and the cut lands on the last hit). Pictures keep loading in the background; a story whose
+    // picture is not ready yet falls back to its source wall / the montage's neutral field.
+    imagesReady.catch(() => {});
+    await sleep(open.duration * 1000 - STINGER_DURATION * 500);
     tune?.stop?.();
     s.programTagUntil = now() + 15;
 

@@ -11,8 +11,14 @@
 //                     wall     up and toward +x in partner space (the video wall
 //                              behind the desk); a solo seat (perf.side 0) looks up
 //                              to a side picked by its seed
+//                     interest a face-only REACTION (no eye move, outside the eye
+//                              budget): the brows lift a little and the head tilts a
+//                              touch toward the partner, in over 0.35 s, out over 0.6 s
 //                   amt scales the move (UNIT-8: ~0.4, a 1 px shift); style 'mech'
-//                   moves eyes and head together on an ease-in-out, no lead
+//                   moves eyes and head together on an ease-in-out, no lead; style
+//                   'side' is a sidelong glance (the eyes go, the head turns 40 %);
+//                   style 'interest' adds the interest brow lift for the first ~1.5 s
+//                   of the look (meeting the partner's question)
 //                   Overlapping looks never add up: each target takes the
 //                   strongest of its looks and several targets share one budget,
 //                   so a look planned across a segment boundary merges cleanly.
@@ -32,6 +38,8 @@ const POSE = {
   wall: [0.85, -0.6, 0.45, -0.07, 0.006, 0.3, 0, 0, 0],
 };
 const NAMES = ['partner', 'camera', 'notes', 'wall'];
+// face-only reactions: brow, browIn, smile, roll (toward the partner), pitch
+const REACT = { interest: [0.24, -0.04, 0.03, 0.03, -0.012] };
 const WE = new Float64Array(4), WH = new Float64Array(4), SG = new Float64Array(4);
 
 /** Eye and head weights of one look at t (eyes lead, the head follows; or together for 'mech'). */
@@ -60,14 +68,34 @@ export function applyLook(c, perf, t, gestLook) {
   let any = false;
   for (let i = 0; i < list.length; i++) {
     const lk = list[i];
-    if (t < lk.t0 || t > lk.t1 + 0.5) continue;
+    if (t < lk.t0 || t > lk.t1 + 0.6) continue;
+    const re = REACT[lk.target];
+    if (re) {
+      // a reaction: the face only, never the eyes (no budget, no eye drive)
+      const w = smooth((t - lk.t0) / 0.35) * (1 - smooth((t - lk.t1) / 0.6)) * (lk.amt ?? 1);
+      if (w <= 0) continue;
+      const sg = perf.side === 0 ? ((perf.seed ?? 0) & 1 ? 1 : -1) : 1;
+      c.brow += re[0] * w;
+      c.browIn += re[1] * w;
+      c.smile += re[2] * w;
+      c.roll += re[3] * w * sg;
+      c.pitch += re[4] * w;
+      continue;
+    }
     let k = NAMES.indexOf(lk.target || 'partner');
     if (k < 0) k = 0;
     if (k === 0 && perf.side === 0) k = 1; // a solo presenter has no partner: the lens
     weights(lk, t, W2);
     const amt = lk.amt ?? 1;
+    if (lk.style === 'interest') {
+      const w = smooth((t - lk.t0) / 0.35) * (1 - smooth((t - lk.t0 - 1.3) / 0.6)) * (1 - smooth((t - lk.t1) / 0.4));
+      const re = REACT.interest;
+      c.brow += re[0] * w;
+      c.browIn += re[1] * w;
+    }
+    const head = lk.style === 'side' ? 0.4 : 1; // a sidelong glance: the eyes go, the head barely follows
     if (W2[0] * amt > WE[k]) WE[k] = W2[0] * amt;
-    if (W2[1] * amt > WH[k]) WH[k] = W2[1] * amt;
+    if (W2[1] * amt * head > WH[k]) WH[k] = W2[1] * amt * head;
     if (k === 3 && perf.side === 0) SG[3] = (perf.seed ?? 0) & 1 ? 1 : -1;
     any = true;
   }

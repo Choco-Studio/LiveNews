@@ -98,7 +98,7 @@ const L0 = [0.95, 0.05, -0.32]; // sun behind and to the right: a thin crescent
 const L1 = [-0.56, 0.5, 0.66]; // the channel key light: upper left, in front
 const LV = [0, 0, 0];
 
-function renderPlanet(fb, G, light, ringP, power, rimP) {
+function renderPlanet(fb, G, light, ringP, power, rimP, shadowP) {
   const d = fb.d;
   const [lx, ly, lz] = light;
   const rimC = rimP >= 1 ? C.slate : C.ink;
@@ -113,10 +113,11 @@ function renderPlanet(fb, G, light, ringP, power, rimP) {
       // hard steps (clusters): 0 night .. 4 full light, scaled by the light's power as it rises,
       // with limb darkening (a gas giant's edge is dimmer), which also curves the terminator and
       // every band like a lit sphere even while the sun crosses the image plane (never a chord)
-      const limbK = 0.58 + 0.42 * G.nz[i];
-      let lv = Math.floor(clamp((dif + 0.1) * 3.9 * power * limbK, 0, 4.2));
-      // the rings' shadow: one continuous band of the darkest lit tone, drawn round with the ring
-      if (G.shadow[i] && G.ang[i] <= ringP && lv > 0) lv = 1;
+      const limbK = 0.7 + 0.3 * G.nz[i];
+      let lv = Math.floor(clamp((dif + 0.1) * 3.7 * power * limbK, 0, 4.2));
+      // the rings' shadow: one continuous band across the lit face once the ring has closed,
+      // stepping in by palette steps (one darker, then two); never a partial streak
+      if (G.shadow[i] && shadowP > 0 && lv > 1) lv = shadowP < 0.5 ? lv - 1 : Math.max(lv - 2, 1);
       if (lv > 4) lv = 4;
       // the night side keeps a 1 px slate limb so the silhouette never dissolves into the field
       if (lv === 0) d[i] = G.limb[i] && rimP > 0 ? rimC : C.black;
@@ -211,7 +212,7 @@ function emblem(ctx, dt, x, y, k = 1) {
     // the limb fades up through ink to slate, then the light rises on the far side and swings round
     const rimP = seg(dt, 0.2, 0.16);
     const power = easeOut(seg(dt, 0.3, 0.5));
-    renderPlanet(fb, G, lightAt(dt), easeInOut(seg(dt, 0.55, 0.8)), power, rimP);
+    renderPlanet(fb, G, lightAt(dt), easeInOut(seg(dt, 0.55, 0.8)), power, rimP, seg(dt, 1.36, 0.14));
   }
   ctx.drawImage(fb.cv, x - BCX, y - BCY);
   moonAndTrail(ctx, dt, x, y, k, PR, true);

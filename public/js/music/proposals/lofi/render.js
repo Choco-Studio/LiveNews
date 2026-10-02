@@ -10,16 +10,16 @@
 import { LofiEngine, LOOKAHEAD } from './engine.js';
 import { rng } from './theory.js';
 
-// Durations of the Kokoro test clips ($SP/audio/music/lofi/voice2), for planning and the stand-in.
+// Durations of the Kokoro test clips ($SP/audio/music/lofi/voice3: house broadcast chain), for planning and the stand-in.
 export const CLIPS = {
-  'wn-hl1': 4.19, 'wn-hl2': 4.332, 'wn-hl3': 3.579, 'wn-greet': 3.882, 'wn-lead': 9.443, 'wn-round': 14.962,
-  'wn-grave': 7.672, 'wn-chat1': 2.849, 'wn-chat2': 1.997, 'wn-finally': 8.57, 'wn-signoff': 3.166,
-  'tb-cold': 7.962, 'tb-lead': 8.372, 'tb-catch1': 2.339, 'tb-catch2': 2.144, 'tb-number': 6.241,
-  'tb-finally': 7.185, 'tb-button': 2.079, 'tb-signoff': 2.066, 'co-cold': 3.715, 'co-greet': 4.01,
-  'co-story': 11.365, 'co-reading': 4.407, 'co-finally': 6.235, 'co-close': 2.424, 'mm-intro': 8.281,
-  'mm-lead': 6.591, 'mm-story2': 5.436, 'mm-number': 5.871, 'mm-signoff': 1.934, 'n6-intro': 1.57,
-  'n6-item1': 5.338, 'n6-item2': 3.749, 'n6-item3': 6.556, 'n6-grave': 5.609, 'n6-item4': 4.637,
-  'n6-signoff': 2.008, 'ct-next-wn': 3.418, 'ct-next-tb': 2.543, 'ct-sombre': 2.451,
+  'wn-hl1': 3.5, 'wn-hl2': 3.67, 'wn-hl3': 3.127, 'wn-greet': 3.9, 'wn-lead': 8.065, 'wn-round': 13.262,
+  'wn-grave': 6.723, 'wn-chat1': 2.74, 'wn-chat2': 1.85, 'wn-finally': 7.93, 'wn-signoff': 3.985, 'tb-cold': 7.44,
+  'tb-lead': 8.29, 'tb-catch1': 3.678, 'tb-catch2': 2.072, 'tb-number': 7.11, 'tb-finally': 7.615,
+  'tb-button': 2.402, 'tb-signoff': 2.377, 'co-cold': 4.402, 'co-greet': 5.39, 'co-story': 13.943,
+  'co-reading': 5.865, 'co-finally': 8.11, 'co-close': 3.277, 'mm-intro': 8.373, 'mm-lead': 6.487,
+  'mm-story2': 5.195, 'mm-number': 6.072, 'mm-signoff': 2.545, 'n6-intro': 1.5, 'n6-item1': 4.39, 'n6-item2': 3.132,
+  'n6-item3': 6.175, 'n6-grave': 4.935, 'n6-item4': 4.01, 'n6-signoff': 1.845, 'ct-next-wn': 3.203,
+  'ct-next-tb': 2.402, 'ct-sombre': 2.248, 'wn-light': 8.355,
 };
 
 /** Replace planning durations with the real ones (the lab page loads the clips' manifest). */

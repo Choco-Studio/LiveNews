@@ -22,13 +22,13 @@ const VOICE_DIR = new URL('./lab/voice/', import.meta.url);
 export const LINES = {
   'wn-h1': 2.885, 'wn-h2': 2.64, 'wn-h3': 2.415, 'wn-intro': 9.77, 'wn-light': 9.215, 'wn-grave': 9.893, 'wn-finally': 6.372,
   'wn-chat1': 1.3, 'wn-chat2': 3.64, 'wn-chat3': 2.147, 'wn-outro': 4.777, 'wn-roundup': 11.155,
-  'wn-greet': 3.3, 'wn-sober1': 2.4, 'wn-sober2': 3.6,
-  'tb-story': 7.62, 'tb-chat': 5.78, 'tb-number': 6.725, 'tb-h1': 2.6, 'tb-h2': 3.2, 'tb-h3': 2.6, 'tb-greet': 2.4,
-  'tb-grave': 10, 'tb-sober1': 3.9, 'tb-sober2': 1.7, 'tb-outro': 5,
-  'co-story': 8.477, 'co-chat': 6.718, 'co-h1': 2.2, 'co-h2': 2.2, 'co-h3': 2.4, 'co-greet': 3, 'co-grave': 9.5,
-  'co-sober1': 3.4, 'co-sober2': 1.9, 'co-outro': 3.6,
-  'mm-story': 6.665, 'mm-number': 6.478, 'mm-teaser': 5.31, 'mm-light': 6.5, 'mm-grave': 9, 'mm-outro': 3.3,
-  'n6-story': 7.33, 'n6-item2': 4.718, 'n6-signoff': 2.348, 'n6-grave': 5.4, 'n6-item3': 3,
+  'wn-greet': 3.9, 'wn-sober1': 2.232, 'wn-sober2': 3.735,
+  'tb-story': 7.62, 'tb-chat': 5.78, 'tb-number': 6.725, 'tb-h1': 2.542, 'tb-h2': 3.342, 'tb-h3': 1.972, 'tb-greet': 2.63,
+  'tb-grave': 9.94, 'tb-sober1': 3.697, 'tb-sober2': 1.817, 'tb-outro': 4.492,
+  'co-story': 8.477, 'co-chat': 6.718, 'co-h1': 2.348, 'co-h2': 2.45, 'co-h3': 2.555, 'co-greet': 4.435, 'co-grave': 10.102,
+  'co-sober1': 3.845, 'co-sober2': 2.12, 'co-outro': 3.868,
+  'mm-story': 6.665, 'mm-number': 6.478, 'mm-teaser': 5.31, 'mm-light': 5.902, 'mm-grave': 8.297, 'mm-outro': 3.49,
+  'n6-story': 7.33, 'n6-item2': 4.718, 'n6-signoff': 2.348, 'n6-grave': 4.607, 'n6-item3': 2.705,
   brk: 5.57,
 };
 
