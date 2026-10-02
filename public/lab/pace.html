@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab · pace</title>
+<style>
+  :root { --bg: #181425; --fg: #c0cbdc; --ui: #262b44; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 12px/1.5 monospace; }
+  #screen { display: block; width: 1152px; height: 648px; image-rendering: pixelated; background: #000; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px; background: var(--ui); align-items: center; }
+  select, button, input { font: inherit; }
+  #t { width: 480px; }
+  #note { padding: 6px 8px; color: #8b9bb4; max-width: 1136px; }
+</style>
+</head>
+<body>
+<!-- PACE lab: the rhythm of a real episode as the director plays it, BEFORE (the old fixed 0.3 s
+     pause after every segment, the old ticker) and AFTER (public/js/pace.js), on one time scale:
+     shots by type, who speaks, the air between segments, marked gestures / nods / looks, ticker
+     items. Plans come from the v2 planners (direction/index.js planSegment) for the episode, so
+     nothing here is authored per story. Deterministic: window.__lab.render(T) draws instant T. -->
+<canvas id="screen" width="384" height="216"></canvas>
+<div class="bar">
+  <select id="programme"></select>
+  <select id="view"><option value="rhythm">rhythm: before / after</option><option value="profile">pace profiles</option></select>
+  <button id="play">play</button>
+  <input id="t" type="range" min="0" max="300" step="0.05" value="0">
+  <span id="tv">0.00 s</span>
+</div>
+<div id="note">window.__lab.set({ programme, view }), __lab.render(T), __lab.load(episodeJsonOrUrl), __lab.report().
+  Episodes: the v2 fixtures (one per programme, same JSON as test/fixtures/v2-episodes) or ?source=queue for the live
+  server's upcoming episodes. Query: ?programme=cosmos&amp;view=profile&amp;t=42 (&amp;still=1 for captures).</div>
+<script type="module">
+  import { planSegment } from '../js/v2/canvas25d/direction/index.js';
+  import { paceFor, gapAfter, CHANNEL, PROGRAMME_IDS, wordCount } from '../js/pace.js';
+  import { drawText, measureText } from '../js/font.js';
+  import { P } from '../js/palette.js';
+
+  const $ = (id) => document.getElementById(id);
+  const q = new URLSearchParams(location.search);
+  const canvas = $('screen');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const W = 384;
+  const TITLES = { 'world-now': 'WORLD NOW', 'tech-bytes': 'TECH BYTES', cosmos: 'COSMOS DESK', 'money-minute': 'MONEY MINUTE', 'news-60': 'NEWS IN 60' };
+  // presenters' voice rates (config/channel.json) for the estimated speech timing
+  const PRESENTERS = {
+    paco: { voice: { lang: 'en-GB', rate: 1.0 } }, lola: { voice: { lang: 'en-GB', rate: 1.05 } },
+    max: { voice: { lang: 'en-US', rate: 1.1 } }, ada: { voice: { lang: 'en-GB', rate: 1.04 } },
+    nova: { voice: { lang: 'en-US', rate: 1.0 } }, unit8: { voice: { lang: 'en-US', rate: 1.05 } },
+    penny: { voice: { lang: 'en-GB', rate: 1.05 } }, sam: { voice: { lang: 'en-US', rate: 1.08 } },
+  };
+  // the BEFORE rhythm: the director's fixed pause and the old ticker formula
+  const LEGACY = { gap: 0.3, ticker: (w) => 0.3 + 1.5 + 0.4 * w };
+
+  let episodes = {};
+  const opts = { programme: q.get('programme') || 'world-now', view: q.get('view') || 'rhythm' };
+  let model = null;
+
+  /** Episodes: the integration lab's saved fixtures (the same JSON as the tests), or the live queue. */
+  async function loadDefault() {
+    if (q.get('source') === 'queue') {
+      try {
+        const list = await (await fetch('/api/queue')).json();
+        for (const ep of list) if (ep?.program?.id && !episodes[ep.program.id]) episodes[ep.program.id] = ep;
+        if (Object.keys(episodes).length) return;
+      } catch { /* no dev endpoint: fixtures */ }
+    }
+    const src = await (await fetch('../js/v2/canvas25d/labs/integ.js')).text();
+    const m = src.match(/const EPISODES = (\{.*\});\s*$/m);
+    episodes = m ? JSON.parse(m[1]) : {};
+  }
+
+  /** Every plan of the episode on one clock, with the pause after each segment. */
+  function layout(ep, gapFn) {
+    const shots = [];
+    const segs = [];
+    const events = [];
+    let T = 0;
+    (ep.segments || []).forEach((seg, i) => {
+      const { ctx: c, events: evs } = planSegment(ep, i, { presenters: PRESENTERS, gapAfter: gapFn });
+      if (!c) return;
+      const g = gapFn(i);
+      const first = shots.length;
+      const kind = gapAfter(ep, i).kind;
+      segs.push({ i, type: c.type, speaker: c.speaker, t0: T, dur: c.duration, gap: g, kind, target: kind === 'signoff' ? paceFor(ep.program.id).holds.signoff : paceFor(ep.program.id).gaps[kind] });
+      for (const e of evs) {
+        if (e.kind === 'shot') {
+          const prev = shots[shots.length - 1];
+          if (prev && e.zoom && prev.shot === e.shot) continue;
+          const same = prev && prev.shot === e.shot && prev.framing === e.framing && (e.framing === 'wide' || e.framing === 'two' || prev.focus === e.focus) && (!!e.framing || prev.seg === i) && (prev.card ?? null) === (e.card ?? null);
+          if (!same) shots.push({ t: T + e.at, shot: e.shot, framing: e.framing, focus: e.focus, seg: i, minLen: e.minLen ?? null, move: !!e.move, card: e.card ?? null });
+        } else events.push({ t: T + e.at, kind: e.kind, slot: e.slot, name: e.name, speaker: c.speaker });
+      }
+      const last = shots.length > first ? shots[shots.length - 1] : null;
+      const hold = last?.minLen ? Math.min(2, Math.max(0, last.t + last.minLen - (T + c.duration + g))) : 0;
+      T += c.duration + g + hold;
+    });
+    for (let k = 0; k < shots.length; k++) shots[k].len = (k + 1 < shots.length ? shots[k + 1].t : T) - shots[k].t;
+    // ticker: the rundown's headlines in rotation for the length of the programme
+    const items = (ep.rundown || []).map((r) => wordCount(r.headline));
+    const ticks = [];
+    return { shots, segs, events, total: T, items, ticks };
+  }
+  const legacyGap = () => LEGACY.gap;
+
+  function tickerTimes(items, total, holdOf) {
+    const out = [];
+    let t = 0;
+    for (let k = 0; items.length && t < total; k++) {
+      out.push(t);
+      t += holdOf(items[k % items.length]);
+    }
+    return out;
+  }
+
+  function stats(lay, P) {
+    const body = lay.shots.filter((s) => s.shot !== 'montage');
+    const lens = body.map((s) => s.len).sort((a, b) => a - b);
+    const med = lens.length ? lens[Math.floor((lens.length - 1) / 2)] * 0.5 + lens[Math.ceil((lens.length - 1) / 2)] * 0.5 : 0;
+    const montage = lay.shots.filter((s) => s.shot === 'montage').reduce((a, s) => a + s.len, 0);
+    const gaps = lay.segs.slice(0, -1).map((s) => s.gap);
+    return {
+      total: lay.total,
+      n: body.length,
+      min: lens[0] || 0,
+      median: med,
+      cuts: (Math.max(0, body.length - 1) * 60) / Math.max(1, lay.total - montage),
+      under: body.filter((s) => s.len < P.shots.min - 0.05).length,
+      gapMin: gaps.length ? Math.min(...gaps) : 0,
+      gapMed: gaps.length ? [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)] : 0,
+    };
+  }
+
+  function rebuild() {
+    const ep = episodes[opts.programme] || episodes['world-now'];
+    if (!ep) return;
+    const P = paceFor(ep.program.id);
+    const before = layout(ep, legacyGap);
+    const after = layout(ep, (i) => gapAfter(ep, i).gap);
+    before.ticks = tickerTimes(before.items, before.total, LEGACY.ticker);
+    after.ticks = tickerTimes(after.items, after.total, (w) => CHANNEL.ticker.push + CHANNEL.ticker.base + CHANNEL.ticker.perWord * w);
+    model = { ep, P, before, after, sb: stats(before, P), sa: stats(after, P), span: Math.max(before.total, after.total) };
+    $('t').max = String(Math.ceil(model.span));
+  }
+
+  // ------------------------------------------------------------------ drawing
+  const SHOT_COLOR = { wide: P.steel, close: P.slate, full: P.tan, map: P.navy, fact: P.darkRed, montage: P.purple };
+  const rect = (x, y, w, h, c) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(x | 0, y | 0, Math.max(1, w | 0), Math.max(1, h | 0));
+  };
+  const text = (s, x, y, color = P.silver, font = 'body') => drawText(ctx, s, x, y, { color, font });
+  const X0 = 22;
+  const XW = 354;
+
+  function lane(lay, y, label, t, scale) {
+    const px = (s) => X0 + s * scale;
+    text(label, 4, y, P.fog, 'micro');
+    // shots
+    for (const s of lay.shots) {
+      const x0 = Math.round(px(s.t));
+      const x1 = Math.round(px(s.t + s.len));
+      const short = s.shot !== 'montage' && s.len < model.P.shots.min - 0.05;
+      rect(x0, y + 8, x1 - x0, 11, SHOT_COLOR[s.shot] || P.slate);
+      if (s.framing === 'ots') rect(x0, y + 8, x1 - x0, 2, P.fog); // the over-the-shoulder single: a lit top edge
+      if (s.move) rect(x0 + 1, y + 17, Math.max(1, x1 - x0 - 2), 1, P.silver); // a slow push / pull
+      rect(x0, y + 8, 1, 11, P.black);
+      if (short) {
+        rect(x0, y + 7, x1 - x0, 1, P.red);
+        rect(x0, y + 19, x1 - x0, 1, P.red);
+      }
+    }
+    // who speaks, and the air between (the gaps are the bare track)
+    const rows = { A: y + 23, B: y + 28 };
+    rect(X0, rows.A, XW, 3, P.black);
+    if (model.ep.cast.B) rect(X0, rows.B, XW, 3, P.black);
+    for (const g of lay.segs) {
+      const r = rows[g.speaker] ?? rows.A;
+      rect(px(g.t0), r, Math.max(1, g.dur * scale), 3, g.speaker === 'B' ? P.cream : P.silver);
+    }
+    // marked gestures (yellow), nods (fog), looks (steel) above each row
+    for (const e of lay.events) {
+      const r = rows[e.slot] ?? rows.A;
+      if (e.kind === 'gesture') rect(px(e.t), r - 2, 1, 2, e.name === 'nod' ? P.fog : P.yellow);
+      else if (e.kind === 'look') rect(px(e.t), r - 1, 1, 1, P.steel);
+    }
+    // the air after each segment: green when it is the profile's pause (within 25 %), red when it is rushed
+    for (const g of lay.segs) rect(px(g.t0 + g.dur), y + 33, Math.max(1, g.gap * scale), 2, g.gap >= (g.target || 0) * 0.75 ? P.green : P.red);
+    // ticker pushes
+    const ty = y + 37;
+    rect(X0, ty, XW, 2, P.ink);
+    for (const tk of lay.ticks) rect(px(tk), ty - 1, 1, 4, P.yellow);
+    // playhead
+    rect(Math.round(px(Math.min(t, lay.total))), y + 6, 1, 35, t <= lay.total ? P.white : P.steel);
+    if (t > lay.total) text('OFF AIR', Math.min(W - 40, Math.round(px(lay.total)) + 3), y + 9, P.steel, 'micro');
+  }
+
+  function nowAt(lay, t) {
+    const s = [...lay.shots].reverse().find((x) => x.t <= t);
+    const g = lay.segs.find((x) => t >= x.t0 && t < x.t0 + x.dur + x.gap);
+    const inGap = g && t >= g.t0 + g.dur;
+    return { s, g, inGap };
+  }
+
+  const f1 = (v) => (Number.isFinite(v) ? v.toFixed(1) : '-');
+  function readout(lay, st, y, t, label) {
+    const { s, g, inGap } = nowAt(lay, t);
+    const shot = s ? `${(s.framing || s.shot).toUpperCase()} ${f1(s.len)}S` : '-';
+    const what = !g ? 'OFF AIR' : inGap ? `PAUSE ${g.kind.toUpperCase()} ${g.gap.toFixed(2)}S` : `${g.type.toUpperCase()} ${g.speaker}`;
+    text(label, 4, y, P.fog, 'micro');
+    text(`${shot}  ${what}`, 46, y - 1, inGap ? P.yellow : P.silver);
+    const flag = (ok) => (ok ? P.green : P.red);
+    const P0 = model.P;
+    text(`LEN ${Math.round(st.total)}S`, 46, y + 10, P.fog, 'micro');
+    text(`MED ${f1(st.median)}`, 92, y + 10, flag(st.median >= P0.shots.median[0] - 0.5), 'micro');
+    text(`MIN ${f1(st.min)}`, 136, y + 10, flag(st.under === 0), 'micro');
+    text(`CUTS ${f1(st.cuts)}/MIN`, 180, y + 10, flag(st.cuts <= P0.shots.cutsPerMinMax), 'micro');
+    text(`PAUSES MIN ${st.gapMin.toFixed(2)} MED ${st.gapMed.toFixed(2)}S`, 250, y + 10, flag(st.gapMed >= P0.gaps.handover * 0.75), 'micro');
+  }
+
+  function drawRhythm(t) {
+    rect(0, 0, W, 216, P.black);
+    const m = model;
+    const P0 = m.P;
+    text('PACE', 4, 4, P.white);
+    rect(4, 13, measureText('PACE'), 1, P.red); // the channel's 1 px red rule under a title
+    text(TITLES[m.ep.program.id] || m.ep.program.id.toUpperCase(), 40, 4, P.silver);
+    text(P0.label.toUpperCase(), 42 + measureText(TITLES[m.ep.program.id] || '') + 6, 6, P.fog, 'micro');
+    text(`T ${t.toFixed(1)}S`, W - 4 - measureText(`T ${t.toFixed(1)}S`, 1, 'micro'), 6, P.fog, 'micro');
+    rect(4, 17, W - 8, 1, P.ink);
+    const scale = XW / Math.max(1, m.span);
+    lane(m.before, 24, 'BEFORE', t, scale);
+    lane(m.after, 69, 'AFTER', t, scale);
+    // seconds scale
+    for (let s = 0; s <= m.span; s += 10) rect(X0 + s * scale, 112, 1, s % 60 === 0 ? 3 : 1, P.steel);
+    text('10 S', X0, 117, P.steel, 'micro');
+    // legend
+    let lx = 44;
+    for (const [k, c] of [['WIDE', P.steel], ['SINGLE', P.slate], ['PICTURE', P.tan], ['MAP', P.navy], ['CARD', P.darkRed], ['HEADLINES', P.purple], ['AIR OK', P.green], ['RUSHED', P.red]]) {
+      rect(lx, 118, 5, 4, c);
+      text(k, lx + 7, 117, P.fog, 'micro');
+      lx += measureText(k, 1, 'micro') + 12;
+    }
+    rect(4, 126, W - 8, 1, P.ink);
+    readout(m.before, m.sb, 132, t, 'BEFORE');
+    readout(m.after, m.sa, 156, t, 'AFTER');
+    rect(4, 178, W - 8, 1, P.ink);
+    const tgt = `TARGET  SHOT >= ${P0.shots.min}S  MEDIAN ${P0.shots.median.join('-')}S  <= ${P0.shots.cutsPerMinMax} CUTS/MIN  HAND-OVER ${P0.gaps.handover}S  STORY ${P0.gaps.story}S  ${P0.length.target.map((s) => Math.round(s / 6) / 10).join('-')} MIN`;
+    text(tgt, 4, 184, P.fog, 'micro');
+    text('ROWS: SHOTS, A SPEAKING (SILVER), B SPEAKING (CREAM), THE AIR AFTER EACH SEGMENT, TICKER PUSHES', 4, 194, P.steel, 'micro');
+    text('TICKS ABOVE A ROW: YELLOW = MARKED GESTURE, GREY = NOD, DOT = LOOK. WHITE LINE = NOW', 4, 203, P.steel, 'micro');
+  }
+
+  function drawProfiles() {
+    rect(0, 0, W, 216, P.black);
+    text('PACE', 4, 4, P.white);
+    rect(4, 13, measureText('PACE'), 1, P.red);
+    text('ONE TABLE FOR THE CHANNEL', 40, 6, P.fog, 'micro');
+    rect(4, 17, W - 8, 1, P.ink);
+    const cols = PROGRAMME_IDS;
+    const cx = (k) => 98 + k * 57;
+    const SHORT = { 'world-now': 'WORLD NOW', 'tech-bytes': 'TECH BYTES', cosmos: 'COSMOS', 'money-minute': 'MONEY MIN.', 'news-60': 'NEWS IN 60' };
+    cols.forEach((id, k) => text(SHORT[id] || id.toUpperCase().slice(0, 10), cx(k), 22, id === opts.programme ? P.white : P.silver, 'micro'));
+    const rows = [
+      ['LENGTH MIN', (p) => p.length.target.map((s) => Math.round(s / 6) / 10).join('-')],
+      ['SHOT MIN S', (p) => p.shots.min],
+      ['SHOT MEDIAN', (p) => p.shots.median.join('-')],
+      ['CUTS/MIN MAX', (p) => p.shots.cutsPerMinMax],
+      ['MAP S', (p) => p.shots.map.join('-')],
+      ['PICTURE S', (p) => p.shots.picture.join('-')],
+      ['STORY PAUSE', (p) => p.gaps.story],
+      ['HAND-OVER', (p) => p.gaps.handover],
+      ['CHAT TURN', (p) => p.gaps.chatTurn],
+      ['BLOCK', (p) => p.gaps.block],
+      ['AND FINALLY', (p) => p.gaps.beforeFinally],
+      ['SIGN-OFF HOLD', (p) => p.holds.signoff],
+      ['FIRST WORD', (p) => p.open.firstWord],
+      ['MOVES MAX', (p) => p.moves.max],
+      ['GESTURES/MIN', (p) => p.gestures.perMin],
+      ['GESTURE GAP', (p) => p.gestures.minGap],
+      ['HANDS AT REST', (p) => `${Math.round(p.gestures.rest * 100)}%`],
+      ['REACTION GAP', (p) => p.listener.reactionGap],
+      ['BED MIN S', (p) => p.music.minBed],
+    ];
+    rows.forEach(([label, fn], r) => {
+      const y = 31 + r * 9;
+      if (r % 2 === 0) rect(4, y - 1, W - 8, 8, P.ink);
+      text(label, 6, y, P.fog, 'micro');
+      cols.forEach((id, k) => text(String(fn(paceFor(id))), cx(k), y, id === opts.programme ? P.white : P.silver, 'micro'));
+    });
+    text(`TICKER >= ${CHANNEL.ticker.minHold}S A ITEM · STRAP PAGE ${CHANNEL.strap.page}S · CAPTION PAGE >= ${CHANNEL.captions.minPage}S · STINGER ${CHANNEL.stinger}S`, 6, 205, P.steel, 'micro');
+  }
+
+  function render(t = 0) {
+    if (!model) return;
+    if (opts.view === 'profile') drawProfiles();
+    else drawRhythm(Math.max(0, t));
+    $('tv').textContent = `${t.toFixed(2)} s`;
+  }
+
+  const lab = {
+    opts,
+    async ready() { return booted; },
+    set(o = {}) {
+      Object.assign(opts, o);
+      rebuild();
+      render(Number($('t').value) || 0);
+    },
+    render,
+    async load(src) {
+      const ep = typeof src === 'string' ? await (await fetch(src)).json() : src;
+      const list = Array.isArray(ep) ? ep : [ep];
+      for (const e of list) if (e?.program?.id) episodes[e.program.id] = e;
+      if (list[0]?.program?.id) opts.programme = list[0].program.id;
+      rebuild();
+    },
+    report() {
+      return model && { programme: model.ep.program.id, before: model.sb, after: model.sa };
+    },
+  };
+  window.__lab = lab;
+  const booted = (async () => {
+    await loadDefault();
+    for (const id of PROGRAMME_IDS) $('programme').add(new Option(TITLES[id] || id, id));
+    $('programme').value = opts.programme;
+    $('view').value = opts.view;
+    rebuild();
+    render(Number(q.get('t')) || 0);
+  })();
+  $('programme').onchange = (e) => lab.set({ programme: e.target.value });
+  $('view').onchange = (e) => lab.set({ view: e.target.value });
+  $('t').oninput = (e) => render(Number(e.target.value));
+  let playing = false;
+  let last = 0;
+  $('play').onclick = () => {
+    playing = !playing;
+    last = performance.now();
+  };
+  if (!q.has('still')) {
+    const loop = (now) => {
+      if (playing) {
+        const v = (Number($('t').value) + (now - last) / 1000) % Math.max(1, Number($('t').max));
+        $('t').value = String(v);
+        render(v);
+      }
+      last = now;
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+</script>
+</body>
+</html>

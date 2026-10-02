@@ -212,6 +212,14 @@ describe('Producer.select', () => {
       { count: 7, categories: null },
     ]);
   });
+
+  test('a long programme gets a pool of at least 1.5 x its stories', () => {
+    const { producer, desk } = makeProducer({ config: { ...CONFIG, candidatePool: 12 } });
+    const channel = makeChannel();
+    producer.select({ ...channel.programs.duo, stories: 16 });
+    producer.select({ ...channel.programs.duo, stories: 4 });
+    assert.deepEqual(desk.candidateCalls.map((c) => c.count), [24, 12]);
+  });
 });
 
 // ---------------------------------------------------------------- produce: the episode

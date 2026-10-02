@@ -104,14 +104,15 @@
         "world",
         "business"
       ],
-      "stories": 8,
-      "maxChats": 2,
+      "stories": 10,
+      "maxChats": 6,
+      "targetSeconds": [480, 600],
       "features": [
         "roundup",
         "number",
         "lighter"
       ],
-      "style": "Flagship world news bulletin. Lead with the biggest global story, told with authority; a breaking story always leads. Two main stories, one of which may be the number of the day, then 'Around the world' for quick items with a clear place, read by Lola, and 'And finally' a lighter story to close. Plain public-broadcaster English, declarative sentences, at most 20 words each. No humour in the headlines, the lead, the main stories or the round-up: the wit lives only in 'And finally', the chat straight after it and the sign-off.",
+      "style": "Flagship world news bulletin. Lead with the biggest global story, told with authority; a breaking story always leads. Three to five main stories, one of which may be the number of the day (after the lead and a main story Lola may add one more detail from the same summary in a short, sober exchange), then 'Around the world' for quick items with a clear place, read by Lola, and 'And finally' a lighter story to close. Plain public-broadcaster English, declarative sentences, at most 20 words each. No humour in the headlines, the lead, the main stories or the round-up: the wit lives only in 'And finally', the chat straight after it and the sign-off.",
       "storyLength": "lead 3 to 5 sentences, max 520 characters; other stories 2 to 4 sentences, max 450 characters; round-up items exactly 1 sentence of 12 to 20 words; at most 20 words per sentence",
       "chemistry": "Paco is the steady veteran with a bone-dry one-liner; Lola brings warmth, curiosity and the human angle, reads the story with the clearest human angle, the round-up and And finally, and now and then deflates Paco's dryness with a plain fact or a wry understatement. Paco tosses with her name and a full stop (\"Lola.\"); she says \"Thanks, Paco\" at most once. Never banter around grave stories.",
       "headlineMax": 45,
@@ -126,10 +127,14 @@
       "numberSlot": "main",
       "chats": {
         "after": [
-          "lighter"
+          "lighter",
+          "lead",
+          "story"
         ],
         "max": {
-          "lighter": 2
+          "lighter": 2,
+          "lead": 2,
+          "story": 1
         }
       },
       "happyOnly": [
@@ -187,8 +192,9 @@
         "tech",
         "science"
       ],
-      "stories": 4,
-      "maxChats": 4,
+      "stories": 8,
+      "maxChats": 7,
+      "targetSeconds": [360, 480],
       "features": [
         "number",
         "lighter"
@@ -208,7 +214,7 @@
         "max": {
           "lead": 2,
           "lighter": 1,
-          "story": 1
+          "story": 2
         }
       },
       "thanksMax": 1,
@@ -267,8 +273,9 @@
         "science",
         "tech"
       ],
-      "stories": 3,
-      "maxChats": 3,
+      "stories": 7,
+      "maxChats": 6,
+      "targetSeconds": [360, 480],
       "features": [
         "number",
         "lighter"
@@ -282,11 +289,13 @@
       "chats": {
         "after": [
           "lead",
-          "lighter"
+          "lighter",
+          "story"
         ],
         "max": {
           "lead": 2,
-          "lighter": 1
+          "lighter": 1,
+          "story": 2
         }
       },
       "happyOnly": [
@@ -331,8 +340,9 @@
       "categories": [
         "business"
       ],
-      "stories": 3,
+      "stories": 6,
       "maxChats": 0,
+      "targetSeconds": [240, 360],
       "features": [
         "number"
       ],
@@ -387,6 +397,7 @@
       ],
       "stories": 6,
       "maxChats": 0,
+      "targetSeconds": [60, 120],
       "features": [
         "roundup"
       ],

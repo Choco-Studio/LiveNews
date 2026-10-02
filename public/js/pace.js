@@ -41,8 +41,9 @@ export const CHANNEL = Object.freeze({
   strap: Object.freeze({ in: 0.35, textDelay: 0.1, textRise: 0.3, flip: 0.3, out: 0.25, red: 0.45, name: 5, page: 5.5, breakingPage: 4.5 }),
   // captions follow the voice; a page is never shorter than minPage, lingers `hold` after speech
   captions: Object.freeze({ cps: 15, lead: 4, minPage: 1.4, grace: 0.5, roll: 0.22, hold: 0.6, out: 0.22 }),
-  // programme name beside the bug after the open (ART_DIRECTION §4: about 8 s)
-  programTag: Object.freeze({ delay: 0.5, hold: 8 }),
+  // programme name beside the bug after the open (ART_DIRECTION §4: about 8 s); `window` = the director's
+  // cap after the open (the tag never comes back later in the programme)
+  programTag: Object.freeze({ delay: 0.5, hold: 8, window: 15 }),
   // silence the playout itself adds between the director's call and a heard word (engine start + clip edges,
   // measured 0.16-0.2 s on recorded voices): the director waits gap - voiceLatency
   voiceLatency: 0.18,
@@ -181,7 +182,7 @@ const PROGRAMMES = {
     open: { firstWord: 0.7 },
     gaps: { story: 1.3, handover: 1.05, chatTurn: 0.6, intoChat: 0.8, outOfChat: 1.0, beforeFinally: 1.3, afterIntro: 0.9, beforeOutro: 1.15, block: 1.6 },
     holds: { signoff: 1.5, endcard: 3.5 }, // contemplative: the wide lingers after the last word, then the dip
-    shots: { min: 4.0, cooldown: 4.5, median: [6, 9], studioMax: 15, singleSoft: 11, picture: [6, 10], map: [4, 6], cutsPerMinMax: 6, staticMax: 14 }, // cosmos.md: 4 s everywhere, maps 4-6 s, pictures 6-10 s
+    shots: { min: 4.0, cooldown: 4.5, median: [6, 9], studioMax: 15, singleSoft: 11, picture: [6, 10], map: [4, 6], cutsPerMinMax: 7, staticMax: 14 }, // cosmos.md: 4 s everywhere, maps 4-6 s, pictures 6-10 s
     moves: { max: 0, minGap: Infinity }, // cosmos.md: the set camera never moves; only pictures pan
     gestures: { perMin: 3.5, minGap: 6, beatsPerMin: 5, rest: 0.72, grave: 1.5 }, // cosmos.md: <= 1 per 6 s
     listener: { reactionGap: 10, nodGap: 8 },
@@ -267,13 +268,14 @@ export function gapKind(prev, next) {
   if (!prev || !next) return 'story';
   if (next.type === 'outro') return 'beforeOutro';
   if (prev.type === 'intro') return 'afterIntro';
+  if (STILL_TO_COME.test(String(prev.text || ''))) return 'block'; // a signpost closes a block
   if (next.type === 'chat' && prev.type === 'chat') return 'chatTurn';
   if (next.type === 'chat') return 'intoChat';
   if (prev.type === 'chat') return isFinally(next) ? 'beforeFinally' : 'outOfChat';
   if (isFinally(next)) return 'beforeFinally';
   if (inRoundup(prev) && inRoundup(next)) return 'roundupItem';
   if (inRoundup(prev) !== inRoundup(next)) return 'block';
-  if (STILL_TO_COME.test(String(prev.text || '')) || next.block) return 'block';
+  if (next.block) return 'block';
   return prev.anchor && next.anchor && prev.anchor !== next.anchor ? 'handover' : 'story';
 }
 

@@ -119,8 +119,9 @@ export const MORE_SCENES = {
       c.poly([[cx + hw, top], [cx + hw + th * 0.5, top + th * 0.25], [cx + hw + th * 0.5, y + th * 0.2], [cx + hw, y]], stone(0.18));
       y = top + 6;
     }
-    // a dark doorway on the top platform
-    c.poly([[cx + 70, y - 2], [cx + 70, y - 34], [cx + 96, y - 34], [cx + 96, y - 2]], '#1c1612');
+    // a dark doorway in the face of the top platform, its lintel catching the light
+    c.poly([[cx + 80, y + 46], [cx + 80, y + 12], [cx + 104, y + 12], [cx + 104, y + 46]], '#1c1612');
+    c.rect(cx + 76, y + 8, 32, 4, '#d8caa4');
     // stairway up the middle
     c.paintBox(cx - 34, y, cx + 34, gy, (px, py) => [stone(((py - y) % 9 < 3 ? 0.85 : 0.5) - (px - cx) / 300), 1]);
     // the painted wall: faded red and ochre bands with a stepped motif on the lowest tier

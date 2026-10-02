@@ -781,6 +781,63 @@ describe('mock provider', () => {
     assert.equal(number.kicker, 'NUMBER OF THE DAY');
   });
 
+  test('running order by news value: a picture, a second outlet or people at risk keep a story out of the one-line round-up', async () => {
+    const program = { ...FLAGSHIP, stories: 6 };
+    const big = { id: 'g1', title: 'Wildfire near Marseille forces thousands to evacuate', summary: 'Firefighters are battling a wildfire north of Marseille. About 3,000 residents have been moved from three villages. A motorway has been closed.', source: 'Harbour Herald', category: 'world', image: 'https://img.test/fire.jpg', outlets: 2 };
+    const small = [
+      { id: 'q1', title: 'Seoul tests self-driving buses on night routes', summary: 'Seoul has started testing self-driving buses on two night routes. Each bus carries a safety driver.', source: 'Harbour Herald', category: 'world', image: null },
+      { id: 'q2', title: 'Wellington schools trial a four-day week', summary: 'Ten schools in Wellington, New Zealand, will trial a four-day week for one term.', source: 'Pixelburg Post', category: 'world', image: null },
+    ];
+    // candidates arrive in the desk's order (its score counts outlets and pictures): the big story ranks high
+    const segs = storySegs(await raw({ stories: [placed[0], big, ...placed.slice(1), ...small], program }));
+    const g = segs.find((x) => x.storyId === 'g1');
+    assert.ok(g, 'the big story airs');
+    assert.notEqual(g.feature, 'roundup', 'a two-outlet grave story with a picture is a main story');
+    assert.equal(g.emotion, 'serious');
+    const all = [...placed, big, ...small];
+    const roundup = segs.filter((x) => x.feature === 'roundup').map((x) => all.find((y) => y.id === x.storyId));
+    assert.ok(roundup.length >= 2, 'there is a round-up');
+    for (const x of roundup) assert.ok(!x.image && !(x.outlets > 1), `the round-up takes the smaller stories, not ${x.title}`);
+  });
+
+  test('a story with a place and a picture gets enough sentences for both beats (presenter, map, picture)', async () => {
+    const pic = placed.map((x) => (x.id === 'p1' ? { ...x, image: 'https://img.test/tram.jpg' } : x));
+    const segs = storySegs(await raw({ stories: pic, program: { ...PROGRAM, id: 'tech-bytes', stories: 4 } }));
+    const tram = segs.find((x) => x.storyId === 'p1');
+    assert.equal(tram.shot, 'map', 'the map opens, the picture follows (the map is never dropped for the picture)');
+    assert.ok(spoken(tram.text).split(/(?<=[.!?])\s+/).length >= 3, tram.text);
+  });
+
+  test('COSMOS keeps to its beat: the number of the day and the "and finally" come from science when science qualifies', async () => {
+    const COSMOS = { id: 'cosmos', title: 'COSMOS DESK', stories: 3, maxChats: 3, categories: ['science', 'tech'], features: ['number', 'lighter'], numberSlot: 'second', chats: { after: ['lead', 'lighter'] } };
+    const cands = [
+      { id: 'c1', title: 'Handheld games console sells 2 million units in its first week', summary: 'A new handheld games console sold 2 million units in its first week, its maker says.', source: 'Circuit Weekly', category: 'tech', image: null },
+      { id: 'c2', title: 'Scientists map the ocean floor near Antarctica in new detail', summary: 'A research ship has mapped 50,000 square kilometres of sea floor near Antarctica.', source: 'Starfield Journal', category: 'science', image: null },
+      { id: 'c3', title: 'Comet will pass close enough to see with binoculars this week', summary: 'A comet discovered last year will pass close to Earth this week.', source: 'Starfield Journal', category: 'science', image: null },
+      { id: 'c4', title: 'Rocket launches a probe to study the Sun\'s poles', summary: 'A rocket has launched a probe that will study the Sun\'s poles. The journey will take 3 years.', source: 'Starfield Journal', category: 'science', image: null },
+    ];
+    const segs = storySegs(await raw({ stories: cands, program: COSMOS, presenters: { A: { id: 'nova', name: 'Dr Nova Reyes' }, B: { id: 'unit8', name: 'UNIT-8' } } }));
+    for (const f of ['number', 'lighter']) {
+      const x = segs.find((y) => y.feature === f);
+      if (x) assert.notEqual(x.storyId, 'c1', `${f}: a games console is not COSMOS material`);
+    }
+  });
+
+  test('presenter lines aired lately are not chosen again (24/7: the station remembers them)', async () => {
+    const COSMOS = { id: 'cosmos', title: 'COSMOS DESK', stories: 3, maxChats: 3, categories: ['science', 'tech'], features: ['number', 'lighter'], numberSlot: 'second', chats: { after: ['lead', 'lighter'] } };
+    const presenters = { A: { id: 'nova', name: 'Dr Nova Reyes' }, B: { id: 'unit8', name: 'UNIT-8' } };
+    const cands = [
+      { id: 'c3', title: 'Comet will pass close enough to see with binoculars this week', summary: 'A comet discovered last year will pass close to Earth this week.', source: 'Starfield Journal', category: 'science', image: null },
+      { id: 'c4', title: 'Rocket launches a probe to study the Sun\'s poles', summary: 'A rocket has launched a probe that will study the Sun\'s poles. The journey will take 3 years.', source: 'Starfield Journal', category: 'science', image: null },
+      { id: 'c5', title: 'Astronauts grow tomatoes on the space station', summary: 'Astronauts have harvested tomatoes grown in a small greenhouse.', source: 'Starfield Journal', category: 'science', image: null },
+    ];
+    const chatsOf = (script) => script.segments.filter((x) => x.type === 'chat').map((x) => spoken(x.text));
+    const first = chatsOf(await raw({ stories: cands, program: COSMOS, presenters }));
+    const second = chatsOf(await raw({ stories: cands, program: COSMOS, presenters, recent: first.flatMap((t) => t.split(/(?<=[.!?])\s+/)) }));
+    const pooled = second.filter((t) => !/^(?:Thank you|Precise|Noted, UNIT-8)/.test(t) && !/\. (?:Noted|Logged|Recorded)\.$/.test(t));
+    for (const line of pooled) assert.ok(!first.includes(line), `repeated: ${line}`);
+  });
+
   test('the number of the day is never the lead, never an age, and goes where the programme puts it', async () => {
     for (const program of [FLAGSHIP, { ...PROGRAM, features: ['number'] }, { ...PROGRAM, features: ['number'], numberSlot: 'second' }]) {
       const segs = storySegs(await raw({ stories: placed, program }));

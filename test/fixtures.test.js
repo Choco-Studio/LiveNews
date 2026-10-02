@@ -206,7 +206,10 @@ describe('the offline demo, end to end (fixture feeds -> desk -> mock writer -> 
         if (x.type !== 'chat') return;
         const prev = e.segments.slice(0, i).filter((y) => y.type === 'story').at(-1);
         assert.ok(!['serious', 'sad'].includes(prev.emotion), 'no chat after grave news');
-        if (e.program.id === 'world-now') assert.equal(prev.feature, 'lighter', 'WORLD NOW chats only after And finally');
+        // Chats only where the programme's config wants them (chats.after: lead / story / lighter = And finally).
+        const after = channel.programs[e.program.id]?.chats?.after;
+        const slot = prev === stories[0] ? 'lead' : prev.feature === 'lighter' ? 'lighter' : 'story';
+        if (after) assert.ok(after.includes(slot), `${e.program.title}: a chat after a ${slot} (allowed: ${after.join(', ')})`);
         // A chat adds no figure of its own; THE CATCH (TECH BYTES) answers with a sentence of the story itself.
         const told = `${desk.get(prev.storyId).title}. ${desk.get(prev.storyId).summary}`;
         const own = x.text.split(/(?<=[.!?])\s+/).filter((t) => /\d/.test(t)).every((t) => told.includes(t));

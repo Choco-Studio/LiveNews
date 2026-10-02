@@ -57,6 +57,17 @@ function introRule(program, solo, names) {
   return `- Cold open: the intro starts with one gripping line built from the lead story's headline, then a teaser naming the second and then the third story in running order ("Also coming up: ..."), then the greeting with ${greeting}. The lines play over pictures of those stories, so keep that order.`;
 }
 
+/**
+ * Running time (pace.js length.target, mirrored as config `targetSeconds`): how long the programme airs
+ * and how to get there (stories and depth, never padding). Empty when the programme has no target.
+ */
+function lengthRule(program, n) {
+  const t = program.targetSeconds;
+  if (!Array.isArray(t) || t.length !== 2) return '';
+  const span = (s) => (s % 60 ? `${(s / 60).toFixed(1).replace(/\.0$/, '')}` : String(s / 60));
+  return `\n- On air this programme runs about ${span(t[0])} to ${span(t[1])} minutes. Reach it with the ${n} stories and their depth (each main story with its key fact, its context and its figure or quote where the summary has them${program.maxChats ? ', and a short exchange between the presenters where allowed' : ''}), never by padding, repeating or slowing down. A thin summary makes a short story.`;
+}
+
 function chatRule(program, solo) {
   if (solo || !program.maxChats) return '- No "chat" segments.';
   const after = program.chats?.after;
@@ -168,14 +179,14 @@ TONE
 
 MAKE IT WORTH WATCHING
 ${introRule(program, solo, names)}
-- The lead story must not repeat the intro's line about it: continue from it with the next fact.
+- The lead story must not repeat the intro's line about it: continue from it with the next fact.${lengthRule(program, n)}
 - Each story opens with its most striking fact, then attribution, then one or two details. Vary the openings and the attribution; never start two stories the same way. Never say the same sentence or the same figure twice in a row.
 - Rhythm for the voice: one idea per sentence; mix short and medium sentences, with the odd three-to-five-word sentence for punch. No parentheses, no strings of numbers, no stacked clauses. Write figures as digits with their unit ("40,000 passengers") and say "percent".${
     solo
       ? ''
       : `
 - Hand-overs: when the next story is read by the other presenter, sometimes end with a natural toss using their first name ("${toss}"), or let them pick it up ("Thanks, ${a}."). Vary it, say "Thanks" at most once per episode, and never toss after a grave story.
-- Chat segments are short exchanges that sound like these two people: react to what was just said, add no new facts or figures, and lead into what comes next.`
+- Chat segments are short exchanges that sound like these two people: react to what was just said, add no new facts or figures, and lead into what comes next. An analysis exchange after a story (a question and its answer, or one more detail added by the other presenter) may use a detail from that same story's summary, never anything else.`
   }
 ${
   features.length

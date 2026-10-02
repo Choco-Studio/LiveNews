@@ -300,7 +300,7 @@ export class Director {
     imagesReady.catch(() => {});
     await sleep(open.duration * 1000 - STINGER_DURATION * 500);
     tune?.stop?.();
-    s.programTagUntil = now() + 15;
+    s.programTagUntil = now() + CHANNEL.programTag.window;
 
     for (const seg of episode.segments) {
       const index = episode.segments.indexOf(seg);

@@ -31,7 +31,9 @@ const LIVE_BOILERPLATE = /^(?:follow|read|watch|see) (?:the |our |all the )?(?:l
 const KICKERS = [
   [/volcan|eruption|lava/i, 'VOLCANO'],
   [/earthquake|quake|tremor/i, 'EARTHQUAKE'],
-  [/flood|monsoon|heavy rain|storm|hurricane|typhoon|cyclone|strong winds|heatwave/i, 'WEATHER'],
+  [/wildfire|bushfire|forest fire/i, 'WILDFIRE'],
+  [/flood|monsoon|heavy rain|storm|hurricane|typhoon|cyclone|strong winds|heatwave|heat alert|degrees celsius/i, 'WEATHER'],
+  [/festival|concert|exhibition|museum|gallery|opera|theatre/i, 'CULTURE'],
   [/\binternet\b|broadband|\b5G\b/i, 'CONNECTIVITY'],
   [/telescope|galaxy|galaxies|planet|comet|asteroid|eclipse|\bstars?\b|\bmoon\b|nebula/i, 'ASTRONOMY'],
   [/rocket|\borbit|astronaut|space station|spacecraft|\bprobe\b|\brover\b|\bmars\b/i, 'SPACE'],
@@ -112,6 +114,19 @@ const WORLD_PAIRS = {
   ],
 };
 WORLD_PAIRS.SPACE = WORLD_PAIRS.ASTRONOMY;
+
+// WORLD NOW (long programmes): the partner adds one detail the story kept back, soberly (no question marks).
+const WORLD_ADD = ['[nod] And one detail worth adding:', '[nod] Worth adding:', '[look_partner] And the context here:', '[nod] One more line from the report:', '[nod] And this matters too:'];
+
+/** PACE: the story the mid-programme "Still to come" rides on: a main story near the middle of the running order. */
+function midStory(order, roundup, lighter, number) {
+  // the signpost airs as the reader's own short line after the story (a chat segment: the validator keeps
+  // chats, which may name any story of the episode, only away from grave news)
+  const ok = (i) => order[i] && !roundup.includes(order[i]) && order[i] !== lighter && order[i] !== number && !order[i].live && !order[i].grave && !order[i + 1]?.grave;
+  const mid = Math.floor(order.length / 2) - 1;
+  for (let d = 0; d < order.length; d++) for (const i of [mid - d, mid + d]) if (i >= 1 && i < order.length - 2 && ok(i)) return i;
+  return -1;
+}
 
 // TECH BYTES, THE CATCH: Ada asks what a remaining summary sentence answers; Max answers with it.
 const CATCH = [
@@ -228,7 +243,7 @@ const wordCount = (t) => String(t).replace(/\[[^\]]*\]/g, ' ').split(/\s+/).filt
 const firstName = (p) => String(p?.name || 'my colleague').replace(/^(?:Dr|Mr|Ms|Mrs|Prof)\.?\s+/i, '').split(/\s+/)[0];
 const lowerArticle = (by) => by.replace(/^(The|A|An) /, (m) => m.toLowerCase());
 // A sentence can follow "According to X," only if its first word is not a name.
-const COMMON_START = /^(?:A|An|The|This|These|Those|Its|Their|Some|More|Most|Many|Several|Scientists|Researchers|Officials|Astronomers|Archaeologists|Rangers|Volunteers|Engineers|Doctors|Nurses|Experts|Shops|Traders|Policymakers|Curators|Investors|Workers|Students|Residents|Visitors|Users|Strong|Heavy|Rail|Oil|Coffee|Rice|Prices|Sales|Shares|Stocks|Emergency|Local|Firefighters|Organisers|Unions?|Hospitals?|Thousands|Hundreds|Dozens|Ten|Two|Three|Four|Five|Farmers|Fishermen|Families|Passengers|Drivers|Teachers|Judges|Lava|Flights|Ferries|Trains|Schools|Tourists|Police)\b/;
+const COMMON_START = /^(?:A|An|The|This|These|Those|Its|Their|Some|More|Most|Many|Several|Scientists|Researchers|Officials|Astronomers|Archaeologists|Rangers|Volunteers|Engineers|Doctors|Nurses|Experts|Shops|Traders|Policymakers|Curators|Investors|Workers|Students|Residents|Visitors|Users|Strong|Heavy|Rail|Oil|Coffee|Rice|Prices|Sales|Shares|Stocks|Emergency|Local|Firefighters|Organisers|Unions?|Hospitals?|Thousands|Hundreds|Dozens|Ten|Two|Three|Four|Five|Farmers|Fishermen|Families|Passengers|Drivers|Teachers|Judges|Lava|Flights|Ferries|Trains|Schools|Tourists|Police|Temperatures|Firefighters|Rescuers|Hospitals|Airports|Storms|Unions|Commuters|Shoppers|Engineers|Bees|Drones|Rangers|Volunteers|Hotels|Repair|Roads)\b/;
 const lcFirst = (s) => (COMMON_START.test(s) ? s[0].toLowerCase() + s.slice(1) : null);
 
 /**
@@ -238,13 +253,15 @@ const lcFirst = (s) => (COMMON_START.test(s) ? s[0].toLowerCase() + s.slice(1) :
  * story), never a name or a place.
  */
 function lowerFirstWord(text, info) {
-  const m = String(text).match(/^([A-Z][a-z'’-]+)(\s|$)/);
-  if (!m) return text;
+  const m = String(text).match(/^([A-Z][a-z'’-]*)(\s|$)/);
+  if (!m || m[1] === 'I') return text;
   const word = m[1];
   if (lookupPlace(word) || /^[A-Z][a-z]+[A-Z]/.test(word)) return text;
   const story = `${info.s.title} ${info.s.summary || ''}`;
   const lower = new RegExp(`(?<![\\p{L}])${word.toLowerCase()}(?![\\p{L}])`, 'u').test(story);
-  return lower || COMMON_START.test(text) ? word.toLowerCase() + text.slice(word.length) : text;
+  // A name is written with its capital in the middle of a sentence somewhere in the story; a common word is not.
+  const midSentence = new RegExp(`[\\p{Ll},;:]\\s+${word}(?![\\p{L}])`, 'u').test(story);
+  return lower || COMMON_START.test(text) || !midSentence ? word.toLowerCase() + text.slice(word.length) : text;
 }
 const PRONOUN_START = /^(?:It|Its|They|Their|This|These|Those|He|She|His|Her)\b/;
 /** Content words of `sentence` that `title` does not have (what a restating sentence adds). */
@@ -378,7 +395,8 @@ function runningOrder(infos, n, program) {
   let want = 0;
   if (features.includes('roundup')) {
     // WORLD NOW keeps two main stories (the number of the day counting as one), the others one.
-    const mainsMin = Math.max(0, (program?.id === 'world-now' ? 2 : 1) - (number ? 1 : 0));
+    // WORLD NOW keeps three main stories besides the number of the day (its flagship telling); the others one.
+    const mainsMin = program?.id === 'world-now' ? (n >= 8 ? 3 : 1) : Math.max(0, 1 - (number ? 1 : 0));
     want = Math.min(r.max || (n >= 6 ? 3 : 4), slots - mainsMin);
     if (want < min) want = 0;
   }
@@ -559,6 +577,13 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
   // ---- stories
   let chats = 0;
   const maxChats = solo ? 0 : program?.maxChats ?? 3;
+  // PACE: long programmes (config targetSeconds = pace.js length.target, 4 minutes or more) get analysis
+  // exchanges after the lead and main stories (only where a summary has a sentence to spare) and one
+  // mid-programme "Still to come" signpost
+  const longForm = Array.isArray(program?.targetSeconds) && program.targetSeconds[0] >= 240;
+  let exchanges = 0;
+  const asked = new Set();
+  const midIndex = longForm && order.length >= 6 ? midStory(order, roundup, lighter, number) : -1;
   let thanked = 0;
   let tossed = false;
   let tosses = 0;
@@ -603,7 +628,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       if (!country || placeAt(sentence, { loc: { entry: country } }) >= 0) return sentence;
       where = spokenPlace(country);
     }
-    return `In ${where}, ${lc}`;
+    // "On the Reykjanes peninsula", "On Crete": islands and peninsulas take "on"
+    const on = /\b(?:peninsula|island|isle)\b/i.test(where) || (e.kind === 'region' && /^(?:Crete|Sicily|Sardinia|Corsica|Cyprus|Bali|Java|Borneo|Tasmania|Hokkaido|Greenland)$/.test(e.name));
+    return `${on ? 'On' : 'In'} ${where}, ${lc}`;
   };
 
   /**
@@ -683,17 +710,20 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // only if the credit fits. The summary's words are preferred to the headline, which is already on the strap.
       const idx = roundup.indexOf(info);
       const [minW, maxW] = quick ? [14, 18] : [12, 20];
-      const sized = (t) => wordCount(t) >= minW - 2 && wordCount(t) <= maxW;
       const early = (t) => {
         const at = placeAt(t, info);
         return at >= 0 && at < 3;
       };
-      let line = pickSentence((t) => early(t) && sized(t));
-      if (!line) {
-        const t = info.sentences.find((x) => !used.has(x) && wordCount(placeFirst(x, info, 3)) <= maxW && early(placeFirst(x, info, 3)) && wordCount(x) >= minW - 4);
-        if (t) {
+      // In the summary's order, so the item says the news (its first sentence) rather than a later detail: a
+      // sentence whose place comes early as written, or once moved to the front ("In Spain, temperatures...").
+      let line = null;
+      for (const t of info.sentences) {
+        if (used.has(t)) continue;
+        const form = early(t) ? t : placeFirst(t, info, 3);
+        if (early(form) && wordCount(form) <= maxW && wordCount(t) >= minW - 4) {
           used.add(t);
-          line = placeFirst(t, info, 3);
+          line = form;
+          break;
         }
       }
       if (!line) line = early(s.title) ? s.title : placeFirst(s.title, info, 3);
@@ -708,8 +738,12 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       const first = info.sentences[0];
       const leadAfterIntro = k === 0 && introSaidHeadline;
       // TECH BYTES: the lead keeps one summary sentence back for THE CATCH (chosen first, so the opener cannot take it).
-      const catchFor = pid === 'tech-bytes' && k === 0 && !info.grave ? CATCH.find((c) => info.sentences.some((t) => c.test.test(t))) : null;
+      // PACE (long programmes): main stories may keep one back too, for a short analysis exchange after them
+      // (TECH BYTES: another CATCH question, never the same one twice; WORLD NOW: the partner adds it).
+      const deep = longForm && !isNumber && !isLighter && !info.grave && !info.breaking && !info.live && exchanges < 3 && info.sentences.length >= (k === 0 ? 4 : 3);
+      const catchFor = pid === 'tech-bytes' && (k === 0 || deep) && !info.grave ? CATCH.find((c) => !asked.has(c) && info.sentences.some((t) => c.test.test(t))) : null;
       let reserved = catchFor ? info.sentences.find((t) => catchFor.test.test(t)) : null;
+      if (!reserved && pid === 'world-now' && deep) reserved = [...info.sentences].reverse().find((t, j) => j < info.sentences.length - 1 && !PRONOUN_START.test(t) && !/[“”"]/.test(t) && wordCount(t) >= 6) || null;
       if (reserved) used.add(reserved);
       // After the intro has read its headline, the lead goes on with the next fact: a sentence that only
       // restates the headline (fewer than three words of its own) is never its opener, nor read later.
@@ -744,7 +778,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       let line = asSentence(isNumber || isLighter ? opener : placeFirst(opener, info));
       if (info.breaking) line = `Breaking news. ${line}`;
       else if (info.live) line = `A developing story: ${line}`;
-      if (isLighter) line = `And finally: ${line}`;
+      if (isLighter) line = `And finally: ${lowerFirstWord(line, info)}`;
       body.push(`${isNumber || isLighter ? '' : cue}${line}`);
       if (figureLine) body.push(figureLine);
       // Details. Enough sentences for the story's pictures: the director gives each sentence one shot
@@ -755,7 +789,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       const cap = pid === 'money-minute' ? 2 : 3;
       // NEWS IN 60 counts the credit ("..., Ledger Line reports.") inside its word budget.
       const budget = quick ? (k === 0 ? 41 : 31) - (wordCount(s.source) + 1) : Infinity;
-      const maxDetails = quick ? 2 : isNumber ? (figureLine ? 0 : 1) : Math.min(cap, Math.max(k === 0 ? 2 : 1, visuals));
+      const maxDetails = quick ? 2 : isNumber ? (figureLine ? 0 : 1) : Math.min(cap, Math.max(k === 0 ? 2 : 1, visuals, longForm ? 2 : 0));
       let details = 0;
       for (const t of info.sentences) {
         if (details >= maxDetails || used.has(t) || echoes(t)) continue;
@@ -774,7 +808,19 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         body[at] += ` [${partner}:${choose(['nod', 'nod', 'look_partner'], key)}]`;
       }
       parts.push(...body);
-      if (reserved) info.catchAnswer = { line: reserved, q: catchFor.q };
+      // PACE: a mid-programme signpost on the story at the middle of a long programme (a later story by its
+      // short headline, never one with figures in it: those belong to their own story)
+      if (k === midIndex) {
+        const later = order.slice(k + 1).filter((x) => !roundup.includes(x) && !x.grave && !/\d/.test(said(x)));
+        const pickL = later.find((x) => x === lighter) || later[0];
+        const tail = number && order.indexOf(number) > k && pickL !== number ? ', and our number of the day' : '';
+        if (pickL) info.signpost = `Still to come: ${lowerFirstWord(pickL === number ? 'our number of the day' : said(pickL), pickL)}${tail}.`;
+      }
+      if (reserved && catchFor) {
+        info.catchAnswer = { line: reserved, q: catchFor.q };
+        asked.add(catchFor);
+      } else if (reserved) info.addLine = reserved;
+      if (reserved) exchanges++;
     }
 
     // ---- chats that follow this story
@@ -792,18 +838,21 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
             const pair = pairs.find((p) => p[0] === firstLine) || pairs[0];
             for (const x of lineSentences(pair[1])) aired.add(x);
             planned.push({ anchor: 'A', text: pair[0] }, { anchor: 'B', text: pair[1] });
-          } else if (pid === 'tech-bytes' && slot === 'lead' && info.catchAnswer) {
+          } else if (pid === 'world-now' && slot !== 'lighter' && info.addLine) {
+            // PACE: the analysis exchange of a long WORLD NOW: the partner adds the detail the story kept back
+            planned.push({ anchor: partner, text: `${pickLine(WORLD_ADD, `${key}~add`, info)} ${lowerFirstWord(info.addLine, info)}` });
+          } else if (pid === 'tech-bytes' && (slot === 'lead' || slot === 'story') && info.catchAnswer) {
             const askB = idOf('B') === 'ada' || idOf('A') !== 'ada' ? 'B' : 'A';
             planned.push({ anchor: askB, text: info.catchAnswer.q(nameOf(other(askB))) }, { anchor: other(askB), text: `[lean_in] ${info.catchAnswer.line}` });
           } else if (pid === 'tech-bytes' && slot === 'lighter') {
             const sp = partner;
             const kind = PRODUCT_KICKERS.has(info.kicker) ? 'product' : 'science';
             planned.push({ anchor: sp, text: pickLine(TECH_BUTTONS[kind][idOf(sp)] || GENERIC_CHATS, `${key}~btn`, info) });
-          } else if (pid === 'cosmos' && slot === 'lead') {
+          } else if (pid === 'cosmos' && (slot === 'lead' || (slot === 'story' && longForm && !isNumber && (info.figures.length || info.loc)))) {
             const unit = idOf('B') === 'unit8' ? 'B' : partner;
             const f = info.figures.find((x) => parts.join(' ').includes(numbersIn(x.said)[0]?.raw || x.value) && !x.age);
             // UNIT-8 repeats the exact figure, else the place: only what was just said.
-            const restated = f ? f.said.replace(/^(?:about|around|nearly|almost|some|more than|over|up to|at least) /i, '').replace(/^\w/, (c) => c.toUpperCase()) : info.loc ? spokenPlace(info.loc.entry).replace(/^the /, 'The ') : null;
+            const restated = f ? f.said.replace(/^(?:about|around|nearly|almost|some|more than|over|up to|at least) /i, '').replace(/^\w/, (c) => c.toUpperCase()) : info.loc ? spokenPlace(info.loc.entry).replace(/^\w/, (ch) => ch.toUpperCase()) : null;
             planned.push({ anchor: unit, text: restated ? `[nod] ${restated}. ${choose(['Noted.', 'Logged.', 'Recorded.'], `${key}~u8n`)}` : pickLine(UNIT8_NOTED, `${key}~u8`, info) });
             planned.push({ anchor: other(unit), text: next === number ? `[look_partner] Thank you, UNIT-8. Our number of the day is yours.` : pickLine(NOVA_THANKS, `${key}~nt`, info) });
           } else if (pid === 'cosmos' && slot === 'lighter') {
@@ -815,6 +864,8 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         planned.push({ anchor: partner, text: pickLine(CHATS[idOf(partner)] || GENERIC_CHATS, `${key}~chat`, info) });
       }
     }
+    // PACE: the mid-programme signpost, read by the story's own presenter to camera (a block boundary follows)
+    if (info.signpost && chatOk && policy?.after?.includes(slot)) planned.unshift({ anchor, text: `[nod] ${info.signpost}` });
     const chatsHere = planned.slice(0, maxChats - chats);
 
     // ---- hand-over: a toss to the partner who reads next, sometimes (never next to grave news).

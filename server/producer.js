@@ -62,7 +62,9 @@ export class Producer {
       const beat = next?.categories?.[0] || null;
       if (beat && beat !== program.categories?.[0] && program.categories?.includes(beat)) avoid[beat] = 0.5;
     }
-    return this.news.candidates(this.config.candidatePool, { categories: program.categories, ...(Object.keys(avoid).length ? { avoid } : {}) });
+    // Long programmes (pace: up to ~10 min) need a deeper pool than the default 12: at least 1.5 x their stories.
+    const pool = Math.max(this.config.candidatePool, Math.ceil((program.stories || 0) * 1.5));
+    return this.news.candidates(pool, { categories: program.categories, ...(Object.keys(avoid).length ? { avoid } : {}) });
   }
 
   canProduce(channel, programId) {

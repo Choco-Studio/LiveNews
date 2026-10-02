@@ -100,21 +100,32 @@ function ship(c, r, x, waterY, len, { fog = 0, fogColour = '#c8c4bc', bow = 1 } 
   const hull = [[sx, waterY - hh], [ex - b * len * 0.04, waterY - hh], [ex + b * len * 0.02, waterY - hh * 1.25], [ex - b * len * 0.06, waterY + hh * 0.35], [sx + b * len * 0.02, waterY + hh * 0.35]];
   c.poly(hull, '#000', 1, (px, py) => (py < waterY - hh * 0.45 ? tone('#3a2a2c', 0) : tone('#5a2622', 0.05 * (py - waterY + hh) / hh)));
   c.rect(Math.min(sx, ex), waterY - hh * 0.5, len, 3, tone('#8a7a70'));
-  // containers: stacks of 3-6, colours of a working ship, top faces catching the light
-  const colours = ['#7a3a2c', '#2c4a6a', '#8a6a2a', '#3a5a4a', '#6a6a6e', '#9a4a2a', '#2a3a5a', '#7a2a34', '#b0a080'];
-  const cw = len * 0.045;
-  const ch = hh * 0.55;
+  // containers: bays of 40-foot boxes seen side-on, stack heights rising and falling smoothly along the deck,
+  // weathered colours grouped by shipping line (runs of a colour, not confetti), corrugated, top edges lit,
+  // a dark lashing gap every second bay
+  const colours = ['#6e3a30', '#2e4660', '#7a6234', '#3a5246', '#5e5e62', '#844a30', '#283650', '#6a3036', '#9a9080'];
+  const cw = len * 0.034;
+  const ch = hh * 0.5;
   const from = b > 0 ? x + len * 0.2 : x + len * 0.12;
   const to = b > 0 ? x + len * 0.86 : x + len * 0.78;
-  for (let cx = from; cx < to - cw; cx += cw * 1.02) {
-    const n = 3 + Math.floor(r() * 4);
+  const profile = noise1(Math.floor(len * 7));
+  const rust = noise2(Math.floor(len * 13));
+  let run = pickOf(r, colours);
+  let bay = 0;
+  for (let cx = from; cx < to - cw; cx += cw) {
+    const n = Math.max(2, Math.round(4.2 + profile(bay * 0.35) * 2.2));
     for (let k = 0; k < n; k++) {
+      if (r() < 0.32) run = pickOf(r, colours);
       const top = waterY - hh - (k + 1) * ch;
-      const colour = pickOf(r, colours);
-      c.rect(cx, top, cw * 0.98, ch * 0.96, tone(colour, 0.08));
-      c.rect(cx, top, cw * 0.98, 2, tone(colour, -0.4));
-      for (let rib = 1; rib < 4; rib++) c.rect(cx + (cw * rib) / 4, top + 2, 1, ch * 0.9, tone(colour, 0.3));
+      const base = run;
+      c.paintBox(cx, top, cx + cw - 1, top + ch - 1, (px, py) => {
+        const corr = ((px - cx) % 4) < 1.2 ? 0.16 : 0;
+        const streak = rust.fbm(px * 0.08, py * 0.02, 2) > 0.35 ? 0.12 : 0;
+        return [tone(base, 0.06 + corr + streak - (py - top < 2 ? 0.35 : 0)), 1];
+      });
     }
+    bay++;
+    if (bay % 2 === 0) c.rect(cx + cw - 1, waterY - hh - n * ch, 1, n * ch, tone('#141414', 0));
   }
   // the bridge and the funnel at the stern
   const bx = b > 0 ? x + len * 0.04 : x + len * 0.84;

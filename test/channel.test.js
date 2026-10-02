@@ -145,6 +145,10 @@ describe('validateChannel', () => {
 
   test('accepts any whole number of stories from 1 up', () => {
     for (const stories of [1, 2, 10, 25]) assert.doesNotThrow(() => validateChannel(withProgram('duo', { stories })), String(stories));
+    for (const targetSeconds of [[480, 600], [60, 60]]) assert.doesNotThrow(() => validateChannel(withProgram('duo', { targetSeconds })), String(targetSeconds));
+    for (const targetSeconds of [600, [600], [600, 480], [0, 60], ['1', '2']]) {
+      assert.throws(() => validateChannel(withProgram('duo', { targetSeconds })), /targetSeconds/, JSON.stringify(targetSeconds));
+    }
   });
 
   test('rejects a programme without a non-empty list of "categories"', () => {
@@ -549,7 +553,7 @@ describe('config/channel.json', () => {
       for (const key of ['title', 'tagline', 'theme', 'style', 'storyLength']) {
         assert.ok(typeof p[key] === 'string' && p[key].trim(), `${id}.${key}`);
       }
-      assert.ok(Number.isInteger(p.stories) && p.stories >= 1 && p.stories <= 10, `${id}.stories = ${p.stories}`);
+      assert.ok(Number.isInteger(p.stories) && p.stories >= 1 && p.stories <= 18, `${id}.stories = ${p.stories}`);
       assert.ok(Number.isInteger(p.maxChats) && p.maxChats >= 0, `${id}.maxChats = ${p.maxChats}`);
       assert.ok(Array.isArray(p.categories) && p.categories.length >= 1, `${id}.categories`);
     }

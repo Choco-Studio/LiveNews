@@ -46,6 +46,13 @@ export function validateChannel(ch) {
     }
     if (!Number.isInteger(p.stories) || p.stories < 1) throw new Error(`programme "${id}" needs "stories" (a whole number ≥ 1)`);
     if (!Array.isArray(p.categories) || !p.categories.length) throw new Error(`programme "${id}" needs a list of "categories"`);
+    // Optional: running time [min, max] seconds (pace.js length.target, mirrored for the writer's prompt and the mock).
+    if (p.targetSeconds !== undefined) {
+      const t = p.targetSeconds;
+      if (!Array.isArray(t) || t.length !== 2 || !t.every((n) => Number.isFinite(n) && n > 0) || t[0] > t[1]) {
+        throw new Error(`programme "${id}" has a "targetSeconds" that is not [min, max] seconds with min ≤ max`);
+      }
+    }
     if (!Array.isArray(p.presenters) || p.presenters.length < 1 || p.presenters.length > 2) {
       throw new Error(`programme "${id}" needs 1 or 2 presenters`);
     }

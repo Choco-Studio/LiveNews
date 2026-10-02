@@ -22,7 +22,7 @@ import {
   lathe, ovalRing, bubbles, motes, hash01, clipRect, warmUp, tune, bayer,
 } from './kit.js';
 
-const { round, sin, cos, PI, max, abs, floor, ceil, sqrt } = Math;
+const { round, sin, cos, PI, max, abs, floor, sqrt } = Math;
 
 const BAR = 24; // letterbox bar height (2.2:1)
 const GOLD = [P.cream, P.yellow, P.yellow];
@@ -773,14 +773,12 @@ function shotPour(ctx, lt) {
 }
 
 // --- 4. NOSE -----------------------------------------------------------------------
-// A man in his forties in profile, facing left into a low warm key, raises the
-// glass to just under his nose, breathes in and closes his eyes. The bust is a
-// baked sprite: organic region outlines, banded key-light shading computed per
-// pixel at bake time (the distance light travels through the figure, so the
-// bands follow the forms), then hand-placed features: brow, lidded eye with
-// lashes, nostril wing, two-tone lips, nasolabial fold, ear with its concha,
-// hair clumps, shirt collar, lapel. Sprite space: x = 0 at the nose tip, y = 0
-// at the crown; the head is 79 px from crown to chin (about 1/7 of his height).
+// A man in his forties in profile, facing left into the lamp's warm key, lifts
+// the glass from his chest to just under his nose, closes his eyes as it
+// arrives and breathes in. Head and hand are hand-pixelled sprites (ASCII rows
+// below, baked once); the jacket is painted at bake time; the arm is two sleeves
+// solved each frame so the elbow swings forward as the glass comes up. The head
+// is 70 px from crown to chin (a medium close-up of an adult, about 1/7 of his height).
 
 // The room behind him, out of focus: walnut panelling warmed by a table lamp
 // at the left (the lamp that keys his face), a heavy curtain, and a tall
@@ -924,82 +922,82 @@ function paintRows(c, rows, ox, oy) {
 // chin y 70, nose tip x 3). Key light warm from the front-left, a cool rim from
 // the window behind him; hair combed back in clumps, a touch of grey at the temple.
 const HEAD = [
-  '.................................bbbtbbbbt............................',
-  '...........................bbbbbbbbbtbtmbbtttttt......................',
-  '........................bbbbbbbbbbbbbbtmbbbbbbbbttt...................',
-  '.....................ttbbbbbbbbbbtttbbbtmbbbbbbbbbtttt................',
-  '....................tbbbbbbbtttttbbbbbbbttmmmmmbbbbbbtt...............',
-  '..................tttbbbmmttbbbbbbbbbbbbbbtttttmmmbbbbtEE.............',
-  '.................ttbbbmmttbbbbbbbbmmmtmbbbbbbbbtttmmbbbbtE............',
-  '...............tttbbbbmtbbbbbbmmmmtttttmmbbbbbbbbbttmbbbbtEE..........',
-  '..............ttbbbbmmtbbbbbtttttbbbbbbttmmmmmbbbbbttmmbbbbbE.........',
-  '.............ttbbbbbttbbbbbbbbbbbbbbbbbbbttttttbbbbbbttmbbbbbE........',
-  '.............tbbbmmttbbbbbbbbbbbbbmmmbbbbbbbbbbttbbbbbtttbbbbbE.......',
-  '............tbbbmttbbbbbttbbbbmmmmtttttbbbbbbbbbbbbbbbbbbbbbbbbE......',
-  '............tbbbmtbbbbbttbbbmmttttbbbbbttbbbbbbbbbbbbbbbbbbttbbE......',
-  '...........kbbbmtbbbbbttbbbmttbbbbbbbbbbbtttttbbbbbbbbbbbbbbtbbbE.....',
-  '..........kknsmtbbbbttbbbbmtbbbbbbbbbbbbbbbbbbttmbmmmbbbbbbbbbbbE.....',
-  '..........kkknnnsbbmtbbbbmtbbbbbbbbbbbbbbbbbbbbbtKmmmmmbbbbbbbbbbE....',
-  '..........kkknnnnnstbbbbmttbbbbbbbmmmmmbmmbbbbbbtbKKmmmmmbbbbbbbbE....',
-  '.........kkkknnnnnnnsbbttbbbbbbbmmmmmmmmmmmmmmmbbbbbKKmmmmbbbbbtmmE...',
-  '.........kckknnnnnnnssbtbbbbmmmmmmmKKKmmmmmbbbmmmmmbbKKmmmbbbbbbKmE...',
-  '.........kckkknnnnnnnnssbbmmmmmmmKKbbbbKmmmmmmbbKmmmmbbKmmmbbbbbKmE...',
-  '.........kckkknnnnnnnnnssmbbmmmmmbbmmmmbKKmmmmmbmmmmmmmbKmmmbbmmKmmE..',
-  '.........kkkkknnnnnnnnnnssbmmmmbbmmmmmmmbbKKmmmmmmmmmmmbbKmmbKmmbmmE..',
-  '.........kkkknnnnnnnnssssstmmmmmmmmmKKmmmmbbbmmKKmmmmmmmbmmmmKmmbmmE..',
-  '.........kkkknnnnnnnnssssstmmmmmmmKbbbmmmmmmmmmKKKmmmmmmbmmmmKmmKmmE..',
-  '.........kkkknnnnnnnnsssssstmmmmmKbmmmmmmmmmmmbKKKKmmmmmbmKKmmmbKmmE..',
-  '.........kkkknnnnnnnnnssssstmmmmmbmmmmmmmmmmmmmKKKKmmmmmbKKKmmmmKmmmE.',
-  '........kkkkknnnnnnnnnnssssstmmmmbmmmmmmmmmmmmmmKKKKmmmmKKKKmmmmbKmmE.',
-  '........kkkkknnnnnnnnnnnssssstbmmbmmbbmmmmmbKmmmKKKKKmmKKKKKmmmmbKmmE.',
-  '........kkkkkknnnnnnnnnnssssstbmmKmmmbmbKmmbKKKmKKKKKmKKKKKKmmmmbKmmE.',
-  '.........kknnnbbbbbbnnnnsssssstbmmmmmbmbKmmbKKsnnsKKKmKKKKKKmmmmbKmmE.',
-  '.........kktmmmmmmmbbnnnnsssssstmmmmmbbmKmmbsnkkknsKKmKKKKKKmmmmbKmmE.',
-  '..........knmmmbssssnnnnnnsssssstmKbmmbmKmmsnktttknsKKKKKKKKmmmmbKmmE.',
-  '..........knstttsnnnnnnnnnnssssssstbmmbmKmsnktnnttnnsKKKKKKKmmmmbKmmE.',
-  '..........knsnnnsnnnnnnnnnnnssssssstmmbbKmsnkttnntnstKKKKKKmmmmmbKmmE.',
-  '..........kbKKmmbsnnnnnnnnnnssssssstmmbbmmsnnsttntnstKKKKKKmmmmmmmmmE.',
-  '.........kknbcsbnnnnnnnnnnnnnssssssstmmbmmsnnsbtnntnsKKKKKKmmmmmmKLE..',
-  '........kkknsnnnnnnnnnnnnnnnnnssssssstmbmmtnsbbtnntnsKKKKKKmmmmmKKLE..',
-  '.......kkkkknnnnnnnnnnnnnnnnnnssssssstmbmmtnnsbbtntnsKKKKKKmKKKmKKLE..',
-  '.......kcknnnkkkkkknnnnnnnnnnnssssssstbbmmtnsbmbtntnstKKKKKmKKKmKKLE..',
-  '......kcknnnnkkkkkkkknnnnnnnnnnssssssstmmmtknbmmbntnstKKKKKmKKKmKKLE..',
-  '.....kcknnnnkkkkkkkkkknnnnnnnnnssssssstmmstknbmmbntnstmKKKKmKKKmKKLE..',
-  '.....kcknnnnkkkkkkkkkknnnnnnnnnssssssstbbstknbmbtntnstmKKKKmKKKmKKLE..',
-  '....kkknnnnnkkkkkkkkknnnnnnnnnnnsssssstmmstnsbbtnntnstmKKKKmKKKmKLE...',
-  '....kkknnnssnkkkkkkknnnnnnnnnnnnsssssstmKstssbtnntnsttKKKKKmKKKmKLE...',
-  '...kckknnnnsnkkkkkknnnnnnnnnnnnnsssssstKsstbtnntnstttKKKKKKmKKKmKLE...',
-  '...kkknnnnnsskkkkknnnnnnnnnnnnnnssssssssstttsnnsnnsttKKKKKKmKKKmKLE...',
-  '...knnnnnnnsnnnnnnnnnnnnnnnnnnnnsssssssssttssnknnsttbmKKKKKKKKKKLE....',
-  '....tsmbsssnsnnnnnnnnnnnnnsssssssssssssssttssnnnsttbbKKKKKKKKKKKLE....',
-  '.....tttsnnnsnnnnnnnnnnssssssssssssssssssttstsnsttbbbKKmmKKKKKKKLE....',
-  '........snnnnsnnnnnnnnnssssssssssssssssssttstssttbbbbKKmKKKKKKKLE.....',
-  '........nnnnnsnnnnnnnnnssssssssssssssssstttttttbbbbbKKKKKKKKKKKLE.....',
+  '.................................tbbbmbbbb............................',
+  '...........................bbbbtttbbbmbbbbbbbbbb......................',
+  '........................tbbtttttbbbbbbbbbbbbbbbbbbb...................',
+  '.....................ttttttbbbbbbbbbbbbbbbbbbbbbbbbbbb................',
+  '....................ttbbbbbbbbbbbbbmmbbbbbbbbbbbbbbbbbb...............',
+  '..................tttbbbbbbbbbbbbmmbbbbtttbbttbbbbbbbbbEE.............',
+  '.................bbbbbbbbbbmmmmmmbbbbbbbbbttttttttbbbbbbbE............',
+  '...............bbbbbbbbmmmmttttbbbbbbbbbbbbbbbbbbbttbbbbbbEE..........',
+  '..............bbbbbbbmmmtttbbbbbbbbbbbbbbbbbbbbbbbbtttbbbbbbE.........',
+  '.............bbbbbbbttttbbbbbbbbbbbbbttbbbbbbbbbbbbbbbbbbbbbbE........',
+  '.............bbbbbbttbbbbbbbbbbbbbbtttttttbbbbbmmbbbbbbbbbbbbbE.......',
+  '............bbbbbttbbbbbbbbmmbbbbbbbbbbbbtttttttmmmbbbbbbbbbbbbE......',
+  '............bbbbttbbbbbbmmmtbbbbbbbbbbbbbbbbbbbbttmmbbbbbbbmmbbE......',
+  '...........kbbbbtbbbbbmmttttbbbbbbbbbbbbbbbbbbbbbbmmmmbbbbbbmbbbE.....',
+  '..........kknsbttbbbmmtttbbbbbbbbbbbmmmmmbbbbbbbbbmmmmmmmmmmKKKbE.....',
+  '..........kkknnnsbbmmttbbbbbbbbbbbbbtttttmmmmmmbbmmmmmmmmmmmmKKKbE....',
+  '..........kkknnnnnsmtbbbbbbbbbbbbbttbbbbbttttbbbmmmmmmmmmmmmmKKKbE....',
+  '.........kkkknnnnnnnsbbbbbbbbbbbttbbbbbbbbbbbbbbbKmmmmmmmmmmmmKKKmE...',
+  '.........kckknnnnnnnssbbbbbbbbbbbbbbbbbbbbbbbbbbmmmmmmmmmmmmmtKKKmE...',
+  '.........kckkknnnnnnnnssttbbbbbbbbbbmmmmbbbbbbbbmmbbmmmmmmmmmtKKKmE...',
+  '.........kckkknnnnnnnnnssbbbbbbbbbbbbbbbbbbbbbbbmmmbmmmmmmmmmtKKKKbE..',
+  '.........kkkkknnnnnnnnnnssbbbmmmmmmbbmmmbmmmmbbbmmmmmmmmmmmmmmKKKKbE..',
+  '.........kkkknnnnnnnnssssstbbmbbbbbmmmmmmmmmmbbmmmmmmmmmmmmmmmmKKKbE..',
+  '.........kkkknnnnnnnnssssstbbmbmmmmmmmmmmmmmmmbmmmmmmmmmmmmmmmKKKKbE..',
+  '.........kkkknnnnnnnnsssssstbmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmKKKKbE..',
+  '.........kkkknnnnnnnnnssssstbmmmmmmmmmmmmmmmmmKKmmmmmmmmmmmmmmmKKKKbE.',
+  '........kkkkknnnnnnnnnnssssstmmmmmmbbmmmmmmmmmKKmmmmmmmmmmmmmmmKKKKmE.',
+  '........kkkkknnnnnnnnnnnssssstmmmmmbmmmmmmbbmmKKKmmmmmmmmmmmmmmKKKKmE.',
+  '........kkkkkknnnnnnnnnnssssstmmmmmbmmmmmmmbKKKKKmmmmmmmmmmmmmmKKKKmE.',
+  '.........kknnnbbbbbbnnnnsssssstmmmmmmmmmmmmbKKsnnsmmmmmmmmmmmmmmKKKmE.',
+  '.........kktmmmmmmmbbnnnnsssssstmmmmbmmmmmmbsnkkknsmmmmmmmmmmmmmKKKmE.',
+  '..........knmmmbssssnnnnnnsssssstmmmmmmmmmmsnktttknsmmmmmmmmmmmmKKKmE.',
+  '..........knstttsnnnnnnnnnnssssssstmmmmmmmsnktnnttnnsmmmmmmmmmmmKKKmE.',
+  '..........knsnnnsnnnnnnnnnnnssssssstbbmmmmsnkttnntnstmmmmmmmmmmmKKKmE.',
+  '..........kbKKmmbsnnnnnnnnnnssssssstbbmmmmsnnsttntnstmmmmmmmmmmmKKKmE.',
+  '.........kknbcsbnnnnnnnnnnnnnssssssstmmmmmsnnsbtnntnsmmmmmmmmmmKKKLE..',
+  '........kkknsnnnnnnnnnnnnnnnnnssssssstmmmmtnsbbtnntnsmmmmmmmmmKKKKLE..',
+  '.......kkkkknnnnnnnnnnnnnnnnnnssssssstmmmmtnnsbbtntnsmmmmmmmmKKKKKLE..',
+  '.......kcknnnkkkkkknnnnnnnnnnnssssssstmmmmtnsbmbtntnstmmmmmmmKKKKKLE..',
+  '......kcknnnnkkkkkkkknnnnnnnnnnssssssstbmmtknbmmbntnstmmmmmmmKKKKKLE..',
+  '.....kcknnnnkkkkkkkkkknnnnnnnnnssssssstmmstknbmmbntnstmmmmmmmKKKKKLE..',
+  '.....kcknnnnkkkkkkkkkknnnnnnnnnssssssstmmstknbmbtntnstmmmmmmmKKKKKLE..',
+  '....kkknnnnnkkkkkkkkknnnnnnnnnnnsssssstmmstnsbbtnntnstmmmmmmKKKKKLE...',
+  '....kkknnnssnkkkkkkknnnnnnnnnnnnsssssstmmstssbtnntnsttmmmmmmKKKKKLE...',
+  '...kckknnnnsnkkkkkknnnnnnnnnnnnnsssssstmsstbtnntnstttmmmmmmmKKKKKLE...',
+  '...kkknnnnnsskkkkknnnnnnnnnnnnnnssssssssstttsnnsnnsttmmmmmmmKKKKKLE...',
+  '...knnnnnnnsnnnnnnnnnnnnnnnnnnnnsssssssssttssnknnsttbmmmmmmKKKKKLE....',
+  '....tsmbsssnsnnnnnnnnnnnnnsssssssssssssssttssnnnsttbbmmmmmmKKKKKLE....',
+  '.....tttsnnnsnnnnnnnnnnssssssssssssssssssttstsnsttbbbmmmmmmKKKKKLE....',
+  '........snnnnsnnnnnnnnnssssssssssssssssssttstssttbbbbmmmmmKKKKKLE.....',
+  '........nnnnnsnnnnnnnnnssssssssssssssssstttttttbbbbbmKKKKKKKKKKLE.....',
   '........knnnnsnnnnnnnnnsssssssssssssssssstttttttbbbbKKKKKKKKKKLE......',
   '........knnnnsnnnnnnnnnsssssssssssssssssstttttttbbbbKKKKKKKKKKmE......',
   '........ssnnnsnnnnnnnnnsssssssssssssssssstttttttbbbbbKKKKKKKKLE.......',
-  '........sssnntnnnnnnnnnsssssssssssssssssstttttttbbbbbKKKKKKKKmE.......',
-  '.........bbbttnnnnnnnnnnssssssssssssssssstttttttbbbbbKKKKKKKLE........',
-  '.........kknsnnnnnnnnnnnnssssssssssssssssttttttttbbbbbmmKKKKLE........',
-  '........kcknnnnnnnnnnnnnnnsssssssssssssssttttttttbbbbbKKKKKLE.........',
-  '.........nsnnnnnnnnnnnnnnnsssssssssssssssttttttttbbbbbbKLLLE..........',
-  '..........ssnnnnnnnnnnnnnnssssssssssssttttttmmmtbbbbbbbLEEE...........',
+  '........sssnntnnnnnnnnnsssssssssssssssssstttttttbbbbbKmmKKKKKLE.......',
+  '.........bbbttnnnnnnnnnnssssssssssssssssstttttttbbbbbmKKKKKKLE........',
+  '.........kknsnnnnnnnnnnnnssssssssssssssssttttttttbbbbbKKKKKKLE........',
+  '........kcknnnnnnnnnnnnnnnsssssssssssssssttttttttbbbbbKKKKKmE.........',
+  '.........nsnnnnnnnnnnnnnnnsssssssssssssssttttttttbbbbbbKLLmE..........',
+  '..........ssnnnnnnnnnnnnnnssssssssssssttttttmmmtbbbbbbbmEEE...........',
   '...........snnnnnnnnnnnnnssssssssssssttttttmmbbbbbbbbbmE..............',
   '...........kknnnnnnnnnnnssssssssssstttttbbmmbbbbbbbbbbmE..............',
   '...........kknnnnnnnnnnssssssssssssttttbbbmmbbbbbbbbbbmE..............',
   '..........kkknnnnnnnnnsssssssssssstttbbbmmbbbbbbbbbbbbmE..............',
   '..........kcknnnnnnnnsssssssssssstttbbbmmbbbbbbbbbbbbbmE..............',
   '..........kkknnnnnnnssssssssssstttbbbmmbbbbbbbbbbbbbbbmE..............',
-  '..........kkknnnnnnsssssssssstttbbbmmbbbbtbbbbbbbbbbbbmE..............',
-  '..........kkknnnnnssssssssstttbbbmmbbbbbtbbbbbbbbbbbbbmE..............',
-  '...........knnnnnsssssssstttbbbmmbbbbbbtbbbbbbbbbbbbbbmE..............',
-  '............nssssstttttbbbbbmmbbbbbbbbtbbbbbbbbbbbbbbbmE..............',
-  '..............tttttbbbbbmmmbbbbbbbbbbtbbbbbbbbbbbbbbbbmE..............',
-  '....................bmmmmmmmmmmbbbbbtbbbbbbbbbbbbbbbbbmE..............',
-  '....................bmmmmmmbbbbbbbbbtbbbbbbbbbbbbbbbbbmE..............',
-  '.....................tbmbbbbbbbbbbbtbbbbbbbbbbbbbbbbbbmE..............',
-  '.....................stbbbbbbbbbbbtbbbbbbbbbbbbbbbbbbbmE..............',
-  '....................sstbbbbbbbbbbtbbbbbbbbbbbbbbbbbbbbmE..............',
+  '..........kkknnnnnnsssssssssstttbbbmmbbbbbbbbbbbbbbbbbmE..............',
+  '..........kkknnnnnssssssssstttbbbmmbbbbbbbbbbbbbbbbbbbmE..............',
+  '...........knnnnnsssssssstttbbbmmbbbbbbbbbbbbbbbbbbbbbmE..............',
+  '............nssssstttttbbbbbmmbbbbbbbbbbbbbbbbbbbbbbbbmE..............',
+  '..............tttttbbbbbmmmbbbbbbbbbbbbbbbbbbbbbbbbbbbmE..............',
+  '....................bmmmmmmmmmmbbbbbbbbbbbbbbbbbbbbbbbmE..............',
+  '....................bmmmmmmbbbbbbbbbbbbbbbbbbbbbbbbbbbmE..............',
+  '.....................tbmbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbmE..............',
+  '.....................stbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbmE..............',
+  '....................sstbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbmE..............',
   '....................nstbbbbbbbbbtbbbbbbbbbbbbbbbbbbbbbmE..............',
   '...................nnstbbbbbbbbbtbbbbbbbbbbbbbbbbbbbbbbmE.............',
   '...................snstbbbbbbbbtbbbbbbbbbbbbbbbbbbbbbbbmE.............',
@@ -1107,30 +1105,30 @@ const HAND = [
   '.......................kccns..............',
   '.......................kkcnst.............',
   '........................knnnst............',
-  '...nkkkkkkkkkk..........stttsst...........',
+  '....nkkkkkkkkk..........stttsst...........',
   '..skkkkkkkkkkckkkkkknnnnnknnnsst..........',
-  '..snnnnnnnnnnkkkkknnnnnnnnnnnnsst.........',
-  '..sssssssssssskkknnnnnnnnnnnnnsst.........',
-  '..tbbbbbbbtttskknnnnnnnnnnnnnnsst.........',
+  '..snnnnsnnnnnkkkkknnnnnnnnnnnnsst.........',
+  '...sssstsssssskkknnnnnnnnnnnnnsst.........',
+  '...tbbbbbbtttskknnnnnnnnnnnnnnsst.........',
   '.nkkkkkkkkkkkknnnnnnnnnnnnnnnnsst.........',
   'skkkkkkkkkkkkcnnnnnnnnnnnnnnnnssst........',
-  'snnnnnnnnnnnnknnnnnnnnnnnnnnnsssst........',
-  'snnnnnnnnnnnnnnnnnnnnnnnnnnnssssst........',
-  'ssssssssssssssnnnnnnnnnnnnnssssssst.......',
-  '.tbbbbbbbbtttsnnnnnnnnnnnnsssssssst.......',
-  '.nkkkkkkkkkkkknnnnnnnnnnnssssssssstt......',
+  'snnnnnsnnnnnnknnnnnnnnnnnnnnnsssst........',
+  'snnnnnsnnnnnnnnnnnnnnnnnnnnnssssst........',
+  '.sssssssssssssnnnnnnnnnnnnnssssssst.......',
+  '..bbbbbbbbtttsnnnnnnnnnnnnsssssssst.......',
+  '..nkkkkkkkkkkknnnnnnnnnnnssssssssstt......',
   '.skkkkkkkkkkcknnnnnnnnnnsssssssssttt......',
-  '.snnnnnnnnnnknnnnnnnnnnssssssssstttt......',
-  '.ssssssssssssnnnnnnnnnssssssssstttttt.....',
-  '..tbbbbbbbttsnnnnnnnnsssssssssttttttt.....',
-  '...nkkkkkkkkknnnnnnnssssssssstttttttt.....',
+  '.snnnnsnnnnnknnnnnnnnnnssssssssstttt......',
+  '.ssssstssssssnnnnnnnnnssssssssstttttt.....',
+  '...tbbbbbbttsnnnnnnnnsssssssssttttttt.....',
+  '....nkkkkkkkknnnnnnnssssssssstttttttt.....',
   '...sknnnnnnnknnnnnnssssssssstttttttttt....',
-  '...sssssssssstsnnnsssssssssstttttttttt....',
-  '....tttttttttttttssssssssttttttttttttt....',
+  '....sssstsssstsnnnsssssssssstttttttttt....',
+  '.....ttttttttttttssssssssttttttttttttt....',
   '..................ttttttsssssttttttttttt..',
   '......................ttttsssssssstttttt..',
-  '.......................VccccccccccVVVFEE..',
-  '.......................FVVVVVVVVVVFFFEEL..',
+  '..........................................',
+  '..........................................',
 ];
 const HAND_GX = 14; // glass axis in the hand sprite
 const HAND_RIM = 1; // rim row (the hand holds the lower glass; his little finger tucks under the base)
@@ -1163,24 +1161,40 @@ function elbow(sx, sy, wx, wy) {
   return ARM;
 }
 const SLEEVE = [[0, 0], [0, 0], [0, 0], [0, 0]];
+const SL = { ax: 0, ay: 0, bx: 0, by: 0, nx: 0, ny: 0, w0: 0, w1: 0 }; // pooled sleeve frame
+/** One band along the sleeve, between offsets o0..o1 (start) and i0..i1 (end) across its width. */
+function sleeveBand(ctx, o0, o1, i0, i1, col) {
+  const { ax, ay, bx, by, nx, ny, w0, w1 } = SL;
+  SLEEVE[0][0] = ax + nx * w0 * o0; SLEEVE[0][1] = ay + ny * w0 * o0;
+  SLEEVE[1][0] = ax + nx * w0 * o1; SLEEVE[1][1] = ay + ny * w0 * o1;
+  SLEEVE[2][0] = bx + nx * w1 * i1; SLEEVE[2][1] = by + ny * w1 * i1;
+  SLEEVE[3][0] = bx + nx * w1 * i0; SLEEVE[3][1] = by + ny * w1 * i0;
+  poly(ctx, SLEEVE, col);
+}
 /** A tapered sleeve from (ax, ay) w0 wide to (bx, by) w1 wide, lit on the side facing up-left. */
 function sleeve(ctx, ax, ay, bx, by, w0, w1) {
   const len = Math.hypot(bx - ax, by - ay) || 1;
-  const nx = (by - ay) / len; // normal (pointing to the right of the a->b direction)
-  const ny = -(bx - ax) / len;
-  const quad = (o0, o1, i0, i1, col) => {
-    SLEEVE[0][0] = ax + nx * w0 * o0; SLEEVE[0][1] = ay + ny * w0 * o0;
-    SLEEVE[1][0] = ax + nx * w0 * o1; SLEEVE[1][1] = ay + ny * w0 * o1;
-    SLEEVE[2][0] = bx + nx * w1 * i1; SLEEVE[2][1] = by + ny * w1 * i1;
-    SLEEVE[3][0] = bx + nx * w1 * i0; SLEEVE[3][1] = by + ny * w1 * i0;
-    poly(ctx, SLEEVE, col);
-  };
-  quad(-0.5, 0.5, -0.5, 0.5, P.black);
-  // which side faces the lamp (up-left): the side whose normal points that way
-  const lit = nx * -0.8 + ny * -0.6 > 0 ? 1 : -1;
-  quad(0.5 * lit, 0.3 * lit, 0.5 * lit, 0.3 * lit, P.ink);
-  quad(0.5 * lit, 0.42 * lit, 0.5 * lit, 0.42 * lit, P.slate);
-  quad(-0.5 * lit, -0.44 * lit, -0.5 * lit, -0.44 * lit, P.slate);
+  SL.ax = ax; SL.ay = ay; SL.bx = bx; SL.by = by; SL.w0 = w0; SL.w1 = w1;
+  SL.nx = (by - ay) / len; // normal (to the right of the a->b direction)
+  SL.ny = -(bx - ax) / len;
+  sleeveBand(ctx, -0.5, 0.5, -0.5, 0.5, P.black);
+  // the side whose normal points up-left faces the lamp
+  const lit = SL.nx * -0.8 + SL.ny * -0.6 > 0 ? 1 : -1;
+  sleeveBand(ctx, 0.5 * lit, 0.3 * lit, 0.5 * lit, 0.3 * lit, P.ink);
+  sleeveBand(ctx, 0.5 * lit, 0.42 * lit, 0.5 * lit, 0.42 * lit, P.slate);
+  sleeveBand(ctx, -0.5 * lit, -0.44 * lit, -0.5 * lit, -0.44 * lit, P.slate); // the window's cool rim
+}
+
+/** The shirt cuff showing past the sleeve: a short white band across the forearm. */
+function cuff(ctx, ax, ay, bx, by, w) {
+  const len = Math.hypot(bx - ax, by - ay) || 1;
+  SL.ax = ax; SL.ay = ay; SL.bx = bx; SL.by = by; SL.w0 = w; SL.w1 = w;
+  SL.nx = (by - ay) / len;
+  SL.ny = -(bx - ax) / len;
+  const lit = SL.nx * -0.8 + SL.ny * -0.6 > 0 ? 1 : -1;
+  sleeveBand(ctx, -0.5, 0.5, -0.5, 0.5, P.silver);
+  sleeveBand(ctx, 0.5 * lit, 0.05 * lit, 0.5 * lit, 0.05 * lit, P.cream);
+  sleeveBand(ctx, -0.5 * lit, -0.3 * lit, -0.5 * lit, -0.3 * lit, P.fog);
 }
 
 // Timing (shot length 4.2 s; it opens through a dip to black): the glass comes up
@@ -1210,13 +1224,13 @@ function shotNose(ctx, lt) {
   const gy = round(lerp(REST_Y, UP_Y, gp)) + breath;
   const hx = gx - HAND_GX;
   const hy = gy - HAND_RIM;
-  // the wrist (centre of the cuff's lower edge) and the arm solved to it
-  const wx = hx + 31;
-  const wy = hy + 32;
+  // the wrist: at his chest the forearm comes in from the side of the hand, under
+  // his nose from below it (the wrist bends as the glass comes up)
+  const wx = hx + lerp(37, 31, gp);
+  const wy = hy + lerp(27, 30, gp);
   const e = elbow(SHOULDER_X, SHOULDER_Y + breath, wx, wy);
   sleeve(ctx, SHOULDER_X, SHOULDER_Y + breath, e.ex, e.ey, 24, 22);
-  sleeve(ctx, e.ex, e.ey, wx, wy, 22, 18);
-  // the glass, then the hand round it
+  // the glass, then the hand round it, then the forearm and the shirt cuff over the wrist
   SMALL_GLASS.top = 4; // a generous pour over ice: the amber shows above his fingers
   SMALL_O.rows = GLASS_H;
   SMALL_CUTS.cv = cutsTex();
@@ -1225,6 +1239,11 @@ function shotNose(ctx, lt) {
   lathe(ctx, gx, gy, fill(SPROF, GLASS_H, SMALL_KEYS, 1), SMALL_O);
   ovalRing(ctx, gx, gy + 2, 13, 3, A(P.cream, 0.55));
   ctx.drawImage(handArt(), hx, hy);
+  const fl = Math.hypot(wx - e.ex, wy - e.ey) || 1;
+  const ux = (wx - e.ex) / fl;
+  const uy = (wy - e.ey) / fl;
+  sleeve(ctx, e.ex, e.ey, wx - ux * 3, wy - uy * 3, 22, 18);
+  cuff(ctx, wx - ux * 3.5, wy - uy * 3.5, wx + ux * 0.5, wy + uy * 0.5, 15);
   vignette(ctx, 0.55);
   // tasting notes in the space he faces, on the voice
   const tx = 104;
