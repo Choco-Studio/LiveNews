@@ -754,20 +754,35 @@ function skyKey() {
   return 'night';
 }
 const SKY = {
-  day: { far: P.navy, near: P.blue, b: [P.slate, P.steel], lights: [P.silver, P.cyan] },
-  dusk: { far: P.purple, near: P.magenta, b: [P.ink, P.maroon], lights: [P.orange, P.yellow] },
-  night: { far: P.ink, near: P.navy, b: [P.black, P.ink], lights: [P.yellow, P.orange] },
+  day: { far: P.navy, mid: P.blue, near: P.cyan, b: [P.slate, P.steel], lights: [P.white, P.silver] },
+  dusk: { far: P.purple, mid: P.magenta, near: P.orange, b: [P.ink, P.maroon], lights: [P.yellow, P.cream] },
+  night: { far: P.black, mid: P.ink, near: P.navy, b: [P.black, P.ink], lights: [P.yellow, P.orange] },
 };
 
-// Rounded rectangle; `cols` are concentric steps from the outside in.
-function softRect(ctx, x, y, w, h, cols, step = 3) {
-  cols.forEach((c, i) => {
-    const k = i * step;
-    if (w - k * 2 <= 4 || h - k * 2 <= 4) return;
-    rect(ctx, x + k + 2, y + k, w - k * 2 - 4, h - k * 2, c);
-    rect(ctx, x + k + 1, y + k + 1, w - k * 2 - 2, h - k * 2 - 2, c);
-    rect(ctx, x + k, y + k + 2, w - k * 2, h - k * 2 - 4, c);
-  });
+// Rounded rectangle (2px corner cut).
+function rrect(ctx, x, y, w, h, c) {
+  if (w <= 4 || h <= 4) return rect(ctx, x, y, w, h, c);
+  rect(ctx, x + 2, y, w - 4, h, c);
+  rect(ctx, x + 1, y + 1, w - 2, h - 2, c);
+  rect(ctx, x, y + 2, w, h - 4, c);
+}
+
+// Out-of-focus shape: a solid core with stepped translucent rings around it.
+function blurRect(ctx, x, y, w, h, c, rings = 2, step = 2, alpha = 0.35) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  for (let k = rings; k > 0; k--) rrect(ctx, x - k * step, y - k * step, w + k * step * 2, h + k * step * 2, c);
+  ctx.restore();
+  rrect(ctx, x, y, w, h, c);
+}
+
+function blurDisc(ctx, x, y, rad, c, alpha = 1) {
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.35;
+  disc(ctx, x, y, rad + 1, c);
+  ctx.globalAlpha = alpha;
+  disc(ctx, x, y, rad, c);
+  ctx.restore();
 }
 
 function viewOf(id, side) {
@@ -776,81 +791,143 @@ function viewOf(id, side) {
   return { mir, X: (x, w = 0) => (mir ? W - x - w : x) + shift };
 }
 
+const WALL_SCREEN = { x: 214, y: 14, w: 220, h: 122 };
+const WINDOW = { x: -40, y: 22, w: 172, h: 118 };
+
 function buildBackdrop(id, side, acc, sky) {
   const [c, ctx] = makeCanvas(W, H);
-  const { X } = viewOf(id, side);
+  const { X, mir } = viewOf(id, side);
   const S = SKY[sky];
-  const [dk, md] = acc.ramp;
+  const [dk, md, base] = acc.ramp;
   rect(ctx, 0, 0, W, H, P.ink);
-  // big soft wall panels
-  softRect(ctx, X(-60, 50), 14, 50, 160, [P.slate], 3);
-  softRect(ctx, X(158, 30), 14, 30, 160, [P.slate], 3);
-  // the city window, far out of focus
-  const wx = X(-34, 168);
-  softRect(ctx, wx, 22, 168, 120, [P.slate, S.far, S.near], 4);
-  for (let i = 0; i < 6; i++) {
-    const bw = 22 + Math.floor(hash(i, 3) * 14);
-    const bx = wx + 4 + i * 27 + Math.floor(hash(i, 4) * 6);
-    const bh = 26 + Math.floor(hash(i, 5) * 34);
-    softRect(ctx, bx, 138 - bh, bw, bh + 8, [S.b[i % 2]], 3);
+  // soft wall panels between window and screen
+  blurRect(ctx, X(150, 34), 18, 34, 140, P.slate, 2, 2, 0.4);
+  blurRect(ctx, X(-80, 30), 18, 30, 140, P.slate, 2, 2, 0.4);
+  // --- the city window ---
+  const wx = X(WINDOW.x, WINDOW.w);
+  const wy = WINDOW.y;
+  blurRect(ctx, wx - 3, wy - 3, WINDOW.w + 6, WINDOW.h + 6, P.slate, 2, 2, 0.45);
+  const bands = [S.far, S.mid, S.near];
+  rrect(ctx, wx, wy, WINDOW.w, WINDOW.h, S.far);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(wx + 1, wy + 1, WINDOW.w - 2, WINDOW.h - 2);
+  ctx.clip();
+  for (let k = 1; k < bands.length; k++) {
+    const by = wy + 18 + k * 22;
+    ctx.globalAlpha = 0.5;
+    rect(ctx, wx, by - 4, WINDOW.w, WINDOW.h, bands[k]);
+    ctx.globalAlpha = 1;
+    rect(ctx, wx, by, WINDOW.w, WINDOW.h, bands[k]);
   }
-  softRect(ctx, X(70, 10), 18, 10, 128, [P.slate, P.steel], 3); // mullion
-  // video wall glow
-  const vx = X(206, 240);
-  softRect(ctx, vx, 12, 240, 128, [P.black, dk, md], 4);
-  // horizontal wall seam, truss and floor shadow
+  // blurred skyline
+  for (let i = 0; i < 7; i++) {
+    const bw = 18 + Math.floor(hash(i, 3) * 14);
+    const bx = wx - 6 + i * 26 + Math.floor(hash(i, 4) * 8);
+    const bh = 30 + Math.floor(hash(i, 5) * 40);
+    blurRect(ctx, bx, wy + WINDOW.h - bh, bw, bh + 6, S.b[i % 2], 2, 2, 0.45);
+  }
+  ctx.restore();
+  blurRect(ctx, X(68, 8), wy - 4, 8, WINDOW.h + 8, P.slate, 2, 2, 0.5); // mullion
+  // --- the video wall ---
+  const v = WALL_SCREEN;
+  const vx = X(v.x, v.w);
+  ctx.save();
+  ctx.globalAlpha = 0.16;
+  for (let k = 4; k > 0; k--) rrect(ctx, vx - k * 3, v.y - k * 3, v.w + k * 6, v.h + k * 6, base);
+  ctx.restore();
+  blurRect(ctx, vx - 3, v.y - 3, v.w + 6, v.h + 6, P.black, 1, 2, 0.5);
+  rrect(ctx, vx, v.y, v.w, v.h, md);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(vx, v.y, v.w, v.h);
+  ctx.clip();
+  // defocused diagonal stripes from the wall graphics
+  for (let k = -6; k < 12; k++) {
+    for (let e = 0; e < 3; e++) {
+      ctx.globalAlpha = e === 1 ? 0.5 : 0.25;
+      const off = e === 0 ? -2 : e === 2 ? 2 : 0;
+      for (let yy = 0; yy < v.h; yy += 2) rect(ctx, vx + k * 30 + (mir ? v.h - yy : yy) + off, v.y + yy, 12, 2, dk);
+    }
+  }
+  ctx.restore();
+  // truss + floor shadow
   rect(ctx, 0, 0, W, 9, P.black);
-  rect(ctx, 0, 9, W, 1, P.ink);
+  ctx.globalAlpha = 0.5;
+  rect(ctx, 0, 9, W, 2, P.black);
+  rect(ctx, 0, 146, W, 4, P.black);
+  ctx.globalAlpha = 1;
   rect(ctx, 0, 150, W, H - 150, P.black);
   return c;
 }
 
-const BOKEH = Array.from({ length: 22 }, (_, i) => ({
+const BOKEH = Array.from({ length: 24 }, (_, i) => ({
   u: hash(i, 11),
   v: hash(i, 12),
   r: 2 + Math.floor(hash(i, 13) * 4),
   ph: hash(i, 14) * 6.283,
   sp: 0.25 + hash(i, 15) * 0.4,
-  hot: hash(i, 16) > 0.65,
+  hot: hash(i, 16) > 0.6,
 }));
 
 function drawLights(ctx, t, id, side, acc, sky, calm, headX) {
   const { X } = viewOf(id, side);
   const S = SKY[sky];
   const [, md, base, hi] = acc.ramp;
-  const avoid = (x, y, r) => calm && x + r > calm.x - 4 && x - r < calm.x + calm.w + 4 && y + r > calm.y - 4 && y - r < calm.y + calm.h + 4;
+  const inCalm = (x, y, r) => calm && x + r > calm.x - 6 && x - r < calm.x + calm.w + 6 && y + r > calm.y - 6 && y - r < calm.y + calm.h + 6;
+  const nearHead = (x, y, r) => Math.abs(x - headX) < 40 + r && y < 140;
   // warm truss lamps
   for (let i = -1; i < 8; i++) {
     const x = X(i * 56 + 24);
     const flick = Math.sin(t * 0.6 + i * 2.1) > 0.85;
-    disc(ctx, x, 2, 5, P.maroon);
-    disc(ctx, x, 2, 4, P.rust);
-    disc(ctx, x, 2, 2, flick ? P.cream : P.yellow);
+    blurDisc(ctx, x, 2, 5, P.rust, 0.8);
+    disc(ctx, x, 2, 3, P.orange);
+    disc(ctx, x, 2, 1, flick ? P.white : P.yellow);
   }
-  // video wall: a slow sweep of light + floating bokeh
-  const vx = X(206, 240);
-  const sweep = Math.round(vx + 10 + ((t * 9) % 260) - 20);
-  for (let k = 0; k < 3; k++) {
-    const x0 = Math.max(vx + 12, sweep + k * 6);
-    const x1 = Math.min(vx + 228, sweep + 24 - k * 6);
-    if (x1 > x0 && !avoid((x0 + x1) / 2, 76, 40)) rect(ctx, x0, 24 + k * 2, x1 - x0, 104 - k * 4, k === 2 ? base : md);
+  // video wall: rotating globe + slow light sweep
+  const v = WALL_SCREEN;
+  const vx = X(v.x, v.w);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(vx, v.y, v.w, v.h);
+  ctx.clip();
+  const gx = X(v.x + 92);
+  const gy = v.y + 58;
+  if (!inCalm(gx, gy, 24) && !nearHead(gx, gy, 24)) {
+    blurDisc(ctx, gx, gy, 22, base, 0.55);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(gx + 0.5, gy + 0.5, 22, 0, Math.PI * 2);
+    ctx.clip();
+    for (let i = 0; i < 4; i++) {
+      const lx = gx - 34 + Math.round((t * 4 + i * 23) % 70);
+      const ly = gy - 12 + Math.round(hash(i, 21) * 22);
+      blurDisc(ctx, lx, ly, 5 + (i % 3) * 2, P.green, 0.45);
+    }
+    ctx.restore();
+    disc(ctx, gx - 8, gy - 10, 3, hi);
   }
+  const sweep = vx - 40 + Math.round((t * 10) % (v.w + 80));
+  if (!inCalm(sweep + 12, 70, 30)) {
+    ctx.globalAlpha = 0.12;
+    rect(ctx, sweep, v.y, 26, v.h, hi);
+    rect(ctx, sweep + 6, v.y, 14, v.h, hi);
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+  // bokeh: accent lights on the wall side, city lights in the window
   for (let i = 0; i < BOKEH.length; i++) {
     const b = BOKEH[i];
     const wall = i % 2 === 0;
-    const cx = wall ? 214 + b.u * 170 : -20 + b.u * 150;
-    const cy = wall ? 26 + b.v * 100 : 30 + b.v * 90;
+    const cx = wall ? v.x + 8 + b.u * (v.w - 16) : WINDOW.x + 10 + b.u * (WINDOW.w - 20);
+    const cy = wall ? v.y + 8 + b.v * (v.h - 16) : WINDOW.y + 30 + b.v * (WINDOW.h - 40);
     const x = X(Math.round(cx + Math.sin(t * b.sp + b.ph) * 3));
     const y = Math.round(cy + Math.cos(t * b.sp * 0.8 + b.ph) * 2);
-    const rr = b.r + (Math.sin(t * b.sp * 3 + b.ph) > 0.7 ? 1 : 0);
-    if (avoid(x, y, rr) || (Math.abs(x - headX) < 44 + rr && y < 140)) continue;
-    if (wall) {
-      disc(ctx, x, y, rr, b.hot ? base : md);
-      if (b.hot) disc(ctx, x, y, rr - 2, hi);
-    } else {
-      disc(ctx, x, y, rr, S.near === P.navy ? P.slate : S.b[1]);
-      disc(ctx, x, y, rr - 1, b.hot ? S.lights[0] : S.lights[1]);
-    }
+    const rr = b.r + (Math.sin(t * b.sp * 3 + b.ph) > 0.75 ? 1 : 0);
+    if (inCalm(x, y, rr) || nearHead(x, y, rr)) continue;
+    const col = wall ? (b.hot ? hi : base) : b.hot ? S.lights[0] : S.lights[1];
+    blurDisc(ctx, x, y, rr, col, b.hot ? 0.75 : 0.5);
+    if (b.hot && rr > 2) disc(ctx, x, y, rr - 2, wall ? P.white : col);
   }
 }
 
