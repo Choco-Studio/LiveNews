@@ -38,12 +38,12 @@ describe('ImageCache', () => {
     assert.equal(entry.error, undefined);
   });
 
-  test('requests the URL following redirects, with a bot user agent, an image Accept header and a timeout', async () => {
+  test('requests the URL with a bot user agent, an image Accept header and a timeout; redirects are followed by hand', async () => {
     const fetchImpl = makeFetch();
     await new ImageCache({ fetchImpl }).get('s1', URL_A);
     const [{ url, init }] = fetchImpl.calls;
     assert.equal(url, URL_A);
-    assert.equal(init.redirect, 'follow');
+    assert.equal(init.redirect, 'manual', 'each hop is checked against private addresses');
     assert.match(init.headers['user-agent'], /LiveNewsBot/);
     assert.equal(init.headers.accept, 'image/*');
     assert.ok(init.signal instanceof AbortSignal);

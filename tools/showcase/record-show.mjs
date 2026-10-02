@@ -30,7 +30,9 @@
 //   --max-wait N              seconds of channel time allowed to reach --start (default 240)
 //   --fps 30 --scale 5        video
 //   --music lofi|broadcast|none   bed engine (default lofi)
-//   --bed-db N                bed trim in dB (default 0); --duck-db N minimum extra bed duck under speech (default -6;
+//   --bed-under-voice N       where the bed sits under the voice while someone speaks, dB (default -24; the bed
+//                             gain is set from the recording, -6..+9 dB)
+//   --bed-db N                extra bed trim in dB (default 0); --duck-db N minimum extra bed duck under speech (default -6;
 //                             deeper where the engine's own duck is shallow, so the total is >= 16 dB)
 //   --lufs -16 --tp -1.5      loudness targets
 //   --cache DIR               voice clip cache (default ~/.cache/globit-showcase/voices)
@@ -38,7 +40,8 @@
 //   --sheet-every S           contact-sheet sampling (default: 20 tiles over the recording)
 //   --voice-engine auto|fallback   use the voice stream's engine when it loads (auto) or the built-in one
 //   --voice-workers N         Kokoro processes (default 2; idle ones prefetch the sentences already on air)
-//   --preset fast             x264 preset of the final 5x encode
+//   --preset veryfast         x264 preset of the final 5x encode (veryfast: 2x faster than fast, same size here)
+//   --measure-duck            also render the beds without speech to measure the duck (default for <= 150 s)
 //   --no-raf-throttle         render on every fake 16 ms rAF tick instead of once per video frame
 //   --keep                    keep the raw float renders and the lossless native-size video in <out>.work/
 
@@ -373,6 +376,22 @@ const speech = allLog
     };
   });
 const heard = speech.filter((s) => s.clip && s.end > 0 && s.start < seconds && s.volume > 0);
+// Intervals where the engine says a voice is heard (browser TTS, recorded clips
+// from the server's voice service, blips): the duck reference in every mode.
+const voiced = [];
+{
+  let on = null;
+  for (const e of allLog.filter((x) => x.ev === 'voiced').sort((a, b) => a.t - b.t)) {
+    if (e.on && on === null) on = e.t;
+    else if (!e.on && on !== null) {
+      voiced.push({ start: rel(on), end: rel(e.t) });
+      on = null;
+    }
+  }
+  if (on !== null) voiced.push({ start: rel(on), end: seconds + 1 });
+}
+const voiceSpans = [...heard.map((s) => ({ start: s.start, end: s.end })), ...voiced.filter((v) => v.end > 0 && v.start < seconds)];
+const recordedVoices = allLog.filter((e) => e.ev === 'say' && e.phase === 'start').length > 0 && heard.length === 0 && voiced.length > 0;
 const events = allLog
   .filter((e) => e.ev !== 'speech')
   .map((e) => {
@@ -385,23 +404,24 @@ const events = allLog
 // ------------------------------------------------------------------- beds
 let cues = [];
 let bedsInfo = null;
-const PREROLL = 20;
+const measureDuck = Boolean(opts['measure-duck']) || seconds <= 150;
+const PREROLL = 8;
 if (opts.music !== 'none') {
   cues = deriveCues(allLog);
   const B = R - PREROLL * 1000; // the bed render starts before the window, so a bed is already playing
   const before = cues.filter((c) => c.t < B);
   const engineCues = [...(before.length ? [{ ...before[before.length - 1], t: B }] : []), ...cues.filter((c) => c.t >= B && c.t < Rend)]
     .map((c) => ({ t: (c.t - B) / 1000, moment: c.moment, opts: c.opts }));
-  const regionsB = speechRegions(heard.map((s) => ({ start: s.start + PREROLL, end: s.end + PREROLL })));
+  const regionsB = speechRegions(voiceSpans.map((s) => ({ start: s.start + PREROLL, end: s.end + PREROLL })));
   const bedPage = await context.newPage();
   await bedPage.route(`${origin}/__showcase/blank`, (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><meta charset="utf-8"><title>beds</title>' }));
   await bedPage.goto(`${origin}/__showcase/blank`);
   const total = PREROLL + seconds + 1;
   try {
     const tb = Date.now();
-    bedsInfo = await bedPage.evaluate(renderBedsInPage, { engine: opts.music, cues: engineCues, speech: regionsB, seconds: total, sampleRate: SR, dry: true });
+    bedsInfo = await bedPage.evaluate(renderBedsInPage, { engine: opts.music, cues: engineCues, speech: regionsB, seconds: total, sampleRate: SR, dry: measureDuck });
     bedsInfo.ms = Date.now() - tb; // the page clock is the context's paused fake clock
-    for (const which of ['wet', 'dry']) {
+    for (const which of measureDuck ? ['wet', 'dry'] : ['wet']) {
       const fd = fs.openSync(path.join(WORK, which === 'wet' ? 'beds.f32' : 'beds-dry.f32'), 'w');
       const from0 = Math.round(PREROLL * SR);
       const n = Math.round(seconds * SR);
@@ -429,18 +449,20 @@ if (opts.music !== 'none') {
 }
 
 // -------------------------------------------------------------------- mix
-const regions = speechRegions(heard.map((s) => ({ start: s.start, end: s.end })));
+const regions = speechRegions(voiceSpans);
 const manifest = {
   sr: SR,
   seconds,
   webaudio: path.join(WORK, 'webaudio.f32'),
   beds: bedsInfo && !bedsInfo.error ? path.join(WORK, 'beds.f32') : null,
-  bedsDry: bedsInfo && !bedsInfo.error ? path.join(WORK, 'beds-dry.f32') : null,
+  bedsDry: bedsInfo && !bedsInfo.error && measureDuck ? path.join(WORK, 'beds-dry.f32') : null,
   voices: heard.map((s) => ({ path: s.clip, start: s.start, cut: s.cut, gain: s.volume })),
   voiceGain: 1, // each clip already carries utterance.volume (= the engine's master volume, like WebAudio's)
   speech: regions,
   quiet: quietIntervals(allLog, R),
   bedGainDb: opts['bed-db'],
+  bedUnderVoiceDb: Number(opts['bed-under-voice'] ?? -24),
+  voiceInWebaudio: recordedVoices,
   extraDuckDb: opts['duck-db'],
   lufs: opts.lufs,
   tp: opts.tp,
@@ -461,7 +483,7 @@ const tEnc = Date.now();
 const mux = spawnSync('ffmpeg', [
   '-v', 'error', '-y', '-i', videoPath, '-i', manifest.aac, '-map', '0:v', '-map', '1:a',
   '-vf', `scale=iw*${opts.scale}:ih*${opts.scale}:flags=neighbor`,
-  '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', String(opts.preset || 'fast'), '-tune', 'animation',
+  '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', String(opts.preset || 'veryfast'),
   '-c:a', 'copy', '-shortest', '-movflags', '+faststart', OUT,
 ], { encoding: 'utf8', maxBuffer: 16 << 20 });
 if (mux.status !== 0) throw new Error(`encode/mux failed: ${mux.stderr}`);

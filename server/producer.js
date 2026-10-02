@@ -8,14 +8,17 @@ import { embedCues } from '../public/js/cues.js';
  * (extra fact checks, better images, server-side voices...) slot in here.
  */
 export class Producer {
-  constructor({ config, newsDesk, chain, voice = null, log = console }) {
+  constructor({ config, newsDesk, chain, voice = null, images = null, log = console }) {
     this.config = config;
     this.news = newsDesk;
     this.chain = chain;
     this.voice = voice; // server/voice VoiceService (neural voices), optional
+    this.images = images; // server/images ImageCache: pictures are verified (and warmed) before air, optional
     this.log = log;
     this.seq = 0;
     this.stages = [
+      // The picture desk works before the writer, so the writer knows which candidates have a picture.
+      { name: 'pictures', run: (ctx) => this.pictures(ctx), enabled: () => typeof this.news.findPictures === 'function' },
       { name: 'write', run: (ctx) => this.write(ctx) },
       { name: 'review', run: (ctx) => this.review(ctx), enabled: () => this.config.reviewPass },
       { name: 'fit', run: (ctx) => this.fit(ctx), enabled: (ctx) => !!ctx.program.timing },
@@ -25,9 +28,18 @@ export class Producer {
     ];
   }
 
-  /** Stories this programme could cover right now. */
-  select(program) {
-    return this.news.candidates(this.config.candidatePool, { categories: program.categories });
+  /**
+   * Stories this programme could cover right now. With `upcoming` (the next
+   * programmes in the rotation), stories on another programme's own beat are
+   * left for it: TECH BYTES does not use up the science COSMOS airs next.
+   */
+  select(program, { upcoming = [] } = {}) {
+    const avoid = {};
+    for (const next of upcoming) {
+      const beat = next?.categories?.length > 1 || next?.categories?.length === 1 ? next.categories[0] : null;
+      if (beat && beat !== program.categories?.[0] && program.categories?.includes(beat)) avoid[beat] = 0.5;
+    }
+    return this.news.candidates(this.config.candidatePool, { categories: program.categories, ...(Object.keys(avoid).length ? { avoid } : {}) });
   }
 
   canProduce(channel, programId) {
@@ -35,11 +47,11 @@ export class Producer {
     return this.select(program).length >= Math.min(program.stories, this.config.minNewStories);
   }
 
-  async produce(channel, programId) {
+  async produce(channel, programId, { upcoming = [] } = {}) {
     const program = { id: programId, ...channel.programs[programId] };
     const cast = castOf(channel, programId);
     const presenters = Object.fromEntries(Object.entries(cast).map(([slot, id]) => [slot, { id, ...channel.presenters[id] }]));
-    const candidates = this.select(program);
+    const candidates = this.select(program, { upcoming: upcoming.map((id) => channel.programs[id]).filter(Boolean) });
     if (candidates.length < Math.min(program.stories, this.config.minNewStories)) return null;
 
     const ctx = { channelName: channel.name, program, presenters, cast, candidates, episode: null, provider: null, pipeline: [] };
@@ -166,12 +178,53 @@ export class Producer {
     return { estimate: Math.round(best.t * 10) / 10, dropped, ...(best.t < accept[0] ? { short: true } : {}) };
   }
 
+  /** Pictures for the candidates: article pages, then other outlets' reports of the same event (within a budget). */
+  async pictures(ctx) {
+    return this.news.findPictures(ctx.candidates, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
+  }
+
   async assets(ctx) {
     const stories = ctx.episode.storyIds.map((id) => this.news.get(id)).filter(Boolean);
-    await Promise.all(stories.map((s) => this.news.resolveImage(s)));
-    const hasImage = (id) => !!this.news.get(id)?.image;
-    for (const seg of ctx.episode.segments) if (seg.storyId) seg.hasImage = hasImage(seg.storyId);
-    for (const item of ctx.episode.rundown) item.hasImage = hasImage(item.storyId);
-    return { images: stories.filter((s) => s.image).length };
+    if (typeof this.news.findPictures === 'function') await this.news.findPictures(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
+    else await Promise.all(stories.map((s) => this.news.resolveImage(s)));
+    const verified = this.images ? await this.verifyPictures(stories) : null;
+    const story = (id) => this.news.get(id);
+    const apply = (item) => {
+      const s = story(item.storyId);
+      item.hasImage = !!s?.image;
+      if (s?.image && s.imageCredit) item.imageCredit = s.imageCredit;
+      else delete item.imageCredit;
+    };
+    for (const seg of ctx.episode.segments) if (seg.storyId) apply(seg);
+    for (const item of ctx.episode.rundown) apply(item);
+    const borrowed = stories.filter((s) => s.image && s.imageCredit).length;
+    return { images: stories.filter((s) => s.image).length, ...(borrowed ? { borrowed } : {}), ...(verified || {}) };
+  }
+
+  /**
+   * Download each picture once before air (warming the cache the client will
+   * read): one that fails or is too small is dropped, and another outlet's
+   * picture of the same event may stand in. Within a budget: a picture still
+   * downloading then keeps its place (the client copes if it fails later).
+   */
+  async verifyPictures(stories) {
+    let dropped = 0;
+    const check = async (s) => {
+      for (let attempt = 0; attempt < 3 && s.image; attempt++) {
+        const entry = await this.images.get(s.id, s.images || [s.image]);
+        if (!entry.error) return;
+        dropped++;
+        if (typeof this.news.pictureFailed !== 'function') {
+          s.image = null;
+          return;
+        }
+        this.news.pictureFailed(s);
+      }
+    };
+    const budget = this.config.pictureVerifyMs ?? 12000;
+    let timer;
+    await Promise.race([Promise.all(stories.filter((s) => s.image).map(check)), new Promise((resolve) => (timer = setTimeout(resolve, budget)))]);
+    clearTimeout(timer);
+    return { verified: stories.filter((s) => s.image).length, ...(dropped ? { dropped } : {}) };
   }
 }

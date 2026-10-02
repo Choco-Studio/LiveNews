@@ -236,7 +236,42 @@
       set(ad.id);
       render(t);
       requestAnimationFrame(loop);
-      window.__lab = { render, set, infoAt, get ad() { return ad; } };
+      // Opacity check: every pixel of every frame must be painted (the studio
+      // never clears before an ad draws). The lab clears to transparent before
+      // each render, so any alpha < 255 is a hole. -> [{ t, n }] (empty = pass)
+      function opaque(id = ad.id, step = 0.25) {
+        set(id);
+        const holes = [];
+        for (let k = 0; k * step <= ad.duration + 1e-6; k++) {
+          const tt = k * step;
+          render(tt);
+          const d = ctx.getImageData(0, 0, 384, 216).data;
+          let n = 0;
+          for (let i = 3; i < d.length; i += 4) if (d[i] < 255) n++;
+          if (n) holes.push({ t: +tt.toFixed(2), n });
+        }
+        return holes;
+      }
+      // Frame cost of ad.draw over the spot (after one warm-up pass): { avg, p95, max, worstT } ms.
+      function perf(id = ad.id, step = 1 / 30) {
+        set(id);
+        for (let tt = 0; tt <= ad.duration; tt += 0.5) render(tt);
+        const ms = [];
+        let worstT = 0;
+        let worst = 0;
+        for (let tt = 0; tt <= ad.duration; tt += step) {
+          const info = infoAt(tt);
+          const t0 = performance.now();
+          ad.draw(ctx, tt, tt, info);
+          const d = performance.now() - t0;
+          ms.push(d);
+          if (d > worst) { worst = d; worstT = tt; }
+        }
+        ms.sort((a, b) => a - b);
+        const avg = ms.reduce((a, b) => a + b, 0) / ms.length;
+        return { avg: +avg.toFixed(2), p95: +ms[Math.floor(ms.length * 0.95)].toFixed(2), max: +worst.toFixed(2), worstT: +worstT.toFixed(2) };
+      }
+      window.__lab = { render, set, infoAt, opaque, perf, get ad() { return ad; } };
       // Offline render of an ad's music bed for tools/render-audio.mjs:
       //   --opts '{"ad":"serene"}' -> { sampleRate, channels } (looped like the director plays it)
       window.__audio = {

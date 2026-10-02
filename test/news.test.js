@@ -402,23 +402,24 @@ describe('extractImage', () => {
     const item = {
       'media:content': [
         { '@_url': 'https://img.test/logo.svg', '@_width': '2000' },
-        { '@_url': 'https://img.test/logo.svg?v=2', '@_width': '1500' },
-        { '@_url': 'https://img.test/photo.jpg', '@_width': '100' },
+        { '@_url': 'https://img.test/chart.svg?v=2', '@_width': '1500' },
+        { '@_url': 'https://img.test/photo.jpg', '@_width': '800' },
       ],
     };
     assert.equal(extractImage(item), 'https://img.test/photo.jpg');
   });
 
-  test('ignores URLs that are not http(s)', () => {
+  test('ignores URLs that are not http(s); a protocol-relative URL is read as https', () => {
     const item = {
       'media:content': [
         { '@_url': 'data:image/png;base64,AAAA', '@_width': '900' },
-        { '@_url': '//img.test/protocol-relative.jpg', '@_width': '800' },
         { '@_url': 'ftp://img.test/old.jpg', '@_width': '700' },
         { '@_url': '/relative/path.jpg', '@_width': '600' },
+        { '@_url': 'file:///etc/hosts.jpg', '@_width': '600' },
       ],
     };
     assert.equal(extractImage(item), null);
+    assert.equal(extractImage({ 'media:content': { '@_url': '//img.test/protocol-relative.jpg', '@_width': '800' } }), 'https://img.test/protocol-relative.jpg');
   });
 
   test('ignores tracking pixels and gifs', () => {
@@ -426,7 +427,7 @@ describe('extractImage', () => {
       'media:thumbnail': [
         { '@_url': 'http://secure-uk.imrworldwide.com/cgi-bin/m?ci=x', '@_width': '1' },
         { '@_url': 'https://img.test/spacer.gif', '@_width': '1' },
-        { '@_url': 'https://img.test/ok.jpg', '@_width': '10' },
+        { '@_url': 'https://img.test/ok.jpg', '@_width': '800' },
       ],
     };
     assert.equal(extractImage(item), 'https://img.test/ok.jpg');
@@ -443,8 +444,8 @@ describe('extractImage', () => {
   });
 
   test('falls back to <img> tags in content/description and decodes entities in the src', () => {
-    const item = { 'content:encoded': '<p><img class="x" src="https://img.test/a.jpg?w=1&amp;h=2"></p>' };
-    assert.equal(extractImage(item), 'https://img.test/a.jpg?w=1&h=2');
+    const item = { 'content:encoded': '<p><img class="x" src="https://img.test/a.jpg?a=1&amp;b=2"></p>' };
+    assert.equal(extractImage(item), 'https://img.test/a.jpg?a=1&b=2');
     assert.equal(extractImage({ summary: "<img src='https://img.test/single-quoted.jpg'>" }), 'https://img.test/single-quoted.jpg');
   });
 

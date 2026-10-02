@@ -47,7 +47,9 @@ export class ImageCache {
     this.now = now;
     this.lookup = lookup; // DNS for the private-address guard (tests inject one)
     this.localRoots = typeof localRoots === 'function' ? localRoots : () => localRoots;
-    this.cache = new Map(); // id -> { type, body, url, key } | { error, key }
+    this.cache = new Map(); // id -> { type, body } | { error }
+    this.keys = new Map(); // id -> the candidate list the entry was made from
+    this.sources = new Map(); // id -> the URL that was served
     this.failedAt = new Map(); // id -> when its fetch failed
     this.inflight = new Map();
   }
@@ -61,13 +63,14 @@ export class ImageCache {
     const key = list.join('\n');
     if (this.cache.has(id)) {
       const hit = this.cache.get(id);
-      const stale = hit.key !== key || (hit.error && this.now() - (this.failedAt.get(id) ?? 0) > ERROR_TTL_MS);
+      const stale = this.keys.get(id) !== key || (hit.error && this.now() - (this.failedAt.get(id) ?? 0) > ERROR_TTL_MS);
       if (!stale) {
         this.cache.delete(id); // refresh LRU position
         this.cache.set(id, hit);
         return hit;
       }
       this.cache.delete(id);
+      this.keys.delete(id);
     }
     const flight = this.inflight.get(id);
     if (flight && flight.key === key) return flight.p;
@@ -79,14 +82,19 @@ export class ImageCache {
       })
       .then((entry) => {
         if (this.inflight.get(id)?.p === p) this.inflight.delete(id);
-        entry.key = key;
-        this.cache.set(id, entry);
+        const { url, ...clean } = entry;
+        this.cache.set(id, clean);
+        this.keys.set(id, key);
+        if (url) this.sources.set(id, url);
+        else this.sources.delete(id);
         while (this.cache.size > MAX_ENTRIES) {
           const oldest = this.cache.keys().next().value;
           this.cache.delete(oldest);
+          this.keys.delete(oldest);
+          this.sources.delete(oldest);
           this.failedAt.delete(oldest);
         }
-        return entry;
+        return clean;
       });
     this.inflight.set(id, { key, p });
     return p;

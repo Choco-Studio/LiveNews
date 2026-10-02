@@ -158,6 +158,7 @@ function fromPose(list, i) {
   const f = g._from || newChannels();
   armPoseAt(list, i, g.t0, f);
   g._from = f;
+  g._fromT = 0; // the blend time depends on this pose
   g._fromPrev = prev;
   g._fromPrevT0 = prev.t0;
   return f;

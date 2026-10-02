@@ -269,6 +269,13 @@ export function createHandsLab(canvas) {
       return { rig, arms, armsScale: state.scale >= 3 ? state.scale : 4 };
     },
     gestures: () => Object.keys(GESTURES),
+    /** Use the live episodes of the node server (/api/queue) in the planner view. */
+    async loadQueue() {
+      const r = await fetch('/api/queue');
+      const q = await r.json();
+      LIVE = (Array.isArray(q) ? q : q.queue || q.episodes || []).filter((e) => e && e.kind === 'episode');
+      return LIVE.map((e) => e.program?.id);
+    },
     /** Key instants of a gesture played at t0 = 0.3: [stroke, apex, hold, release mid] (s). */
     keyTimes(name, variant = null, n = null) {
       const d = defOf({ name, variant, n });
@@ -285,6 +292,100 @@ export function createHandsLab(canvas) {
     presenters: () => PRESENTER_IDS.slice(),
   };
   return lab;
+}
+
+// ---------------------------------------------------------------------------
+// planner preview: an episode segment through planSegment, drawn as a timeline
+
+// Small built-in episodes (one per programme) so the view works on the static lab server;
+// under the node server `__lab.loadQueue()` swaps in the live /api/queue episodes.
+const SAMPLE_TEXT = [
+  ['intro', 'A', 'neutral', 'Rail fares rise in March. A new bridge opens in Lisbon. Good evening, this is the programme. I am here with my colleague.'],
+  ['story', 'A', 'neutral', 'The city of Lisbon has opened a new bridge across the Tagus river, the Pixelburg Post reports. It carries 40,000 cars a day, and three new tram lines will follow by spring.'],
+  ['story', 'B', 'serious', 'Floods have closed roads across the north of the country. Officials say 3 towns are cut off and rescue teams are on their way.'],
+  ['chat', 'A', 'neutral', 'Three tram lines in one spring. Ambitious, then.'],
+  ['chat', 'B', 'happy', 'Let us see if they arrive on time.'],
+  ['outro', 'B', 'neutral', 'That is all from us tonight. Thank you for watching, and good night.'],
+];
+const SAMPLE_CAST = { 'world-now': ['paco', 'lola'], 'tech-bytes': ['max', 'ada'], cosmos: ['nova', 'unit8'], 'money-minute': ['penny'], 'news-60': ['sam'] };
+const SAMPLES = Object.fromEntries(Object.entries(SAMPLE_CAST).map(([pid, ids]) => {
+  const solo = ids.length === 1;
+  return [pid, {
+    id: `lab-${pid}`, program: { id: pid }, cast: solo ? { A: ids[0] } : { A: ids[0], B: ids[1] },
+    segments: SAMPLE_TEXT.filter((x) => !solo || x[0] !== 'chat').map(([type, anchor, emotion, text], i) => ({
+      type, anchor: solo ? 'A' : anchor, emotion, text, hasImage: i === 1, location: i === 1 ? { place: 'Lisbon', lat: 38.7, lon: -9.1 } : null,
+      shot: i === 1 ? 'close' : undefined, cues: i === 1 ? [{ char: 70, slot: null, action: 'count' }] : [],
+    })),
+  }];
+}));
+let LIVE = null;
+let planMod = null;
+import('../direction/index.js').then((m) => (planMod = m)).catch(() => (planMod = null));
+let fontMod = null;
+import('../../../font.js').then((m) => (fontMod = m)).catch(() => (fontMod = null));
+
+const PLAN_COL = { gesture: '#e43b44', emotion: '#feae34', look: '#2ce8f5', shot: '#8b9bb4' };
+setPlannerView((t, ctx2d) => {
+  frame.clear(C.black);
+  if (ctx2d) frame.present(ctx2d);
+  if (!ctx2d || !planMod || !fontMod) return;
+  const ep = (LIVE && LIVE.find((e) => e.program?.id === state.programme)) || SAMPLES[state.programme] || SAMPLES['world-now'];
+  const i = Math.max(0, Math.min(ep.segments.length - 1, state.segment | 0));
+  const { ctx, events } = planMod.planSegment(ep, i, {});
+  const T = (x) => 8 + (x / Math.max(1, ctx.duration + 2.5)) * 368;
+  const txt = (s, x, y, c = '#c0cbdc', font = 'micro') => fontMod.drawText(ctx2d, s, x, y, { color: c, font });
+  txt(`${ep.program?.id || '?'}  seg ${i}/${ep.segments.length - 1}  ${ctx.type}  ${ctx.speaker}:${ctx.speakerId}${ctx.grave ? '  GRAVE' : ''}  ${ctx.duration.toFixed(1)} s`, 8, 10, '#ffffff');
+  // words: a tick each, stressed words tall and named
+  ctx2d.fillStyle = '#3a4466';
+  ctx2d.fillRect(8, 60, 368, 1);
+  let lastLabel = -99;
+  for (const w of ctx.words) {
+    const x = Math.round(T(w.t));
+    ctx2d.fillStyle = w.stressed ? '#feae34' : w.figure ? '#63c74d' : '#5a6988';
+    ctx2d.fillRect(x, w.stressed ? 52 : 57, 1, w.stressed ? 9 : 4);
+    if (w.stressed && x - lastLabel > 26) {
+      txt(ctx.seg.text.slice(w.char, w.end).toUpperCase().slice(0, 8), x, 48, '#feae34');
+      lastLabel = x;
+    }
+  }
+  // cuts
+  for (const c of ctx.shots) {
+    const x = Math.round(T(c.at));
+    ctx2d.fillStyle = '#8b9bb4';
+    ctx2d.fillRect(x, 22, 1, 40);
+    ctx2d.fillStyle = '#262b44';
+    ctx2d.fillRect(x + 1, 22, Math.max(1, Math.round(T(c.at + ctx.cutGuard) - x)), 3);
+    txt(String(c.shot).toUpperCase(), x + 2, 30, '#8b9bb4');
+  }
+  // events: bars from start to end, apex tick
+  let row = 0;
+  for (const e of events) {
+    if (e.kind === 'shot') continue;
+    const y = 70 + row * 12;
+    row = (row + 1) % 10;
+    const x0 = Math.round(T(e.at));
+    let x1 = x0 + 3;
+    if (e.kind === 'gesture') x1 = Math.round(T(e.at + durOfEv(e)));
+    if (e.kind === 'look') x1 = Math.round(T(e.at + (e.dur || 1)));
+    ctx2d.fillStyle = PLAN_COL[e.kind] || '#ffffff';
+    ctx2d.fillRect(x0, y, Math.max(2, x1 - x0), 3);
+    if (e.apexAt != null) {
+      ctx2d.fillStyle = '#ffffff';
+      ctx2d.fillRect(Math.round(T(e.apexAt)), y - 2, 1, 7);
+    }
+    txt(`${e.slot} ${e.kind === 'gesture' ? e.name + (e.variant ? ':' + e.variant : '') + (e.n ? ' ' + e.n : '') + (e.amp ? ' a' + e.amp : '') : e.kind === 'look' ? 'look ' + (e.target || '') : e.name}  ${e.planner || ''}`, Math.min(300, x0), y + 9, PLAN_COL[e.kind] || '#ffffff');
+  }
+  // the text, wrapped
+  const lines = fontMod.wrapText(ctx.seg.text, 368, 1, 'micro');
+  lines.slice(0, 4).forEach((l, k) => txt(l, 8, 186 + k * 8, '#8b9bb4'));
+});
+
+function durOfEv(e) {
+  const g = GESTURES[e.name];
+  if (!g) return 1;
+  const d = defOf(e);
+  const sp = (e.speed || 1) * (e.amp != null && e.amp < 1 ? 1 - (1 - Math.max(0.5, e.amp)) * 0.4 : 1);
+  return d.dur / sp;
 }
 
 // ---------------------------------------------------------------------------

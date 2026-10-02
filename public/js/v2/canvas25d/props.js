@@ -61,6 +61,14 @@ export function drawProps(buf, L, m, sk, toS, s, g, z) {
 // Attachment of the stack's front-bottom edge to the hands (midpoint of the wrists), flat and upright
 const OFF0 = [0, 2.6, 5.2], OFF1 = [0, 4.1, 1.5];
 const BAND = new Float64Array(8);
+const TOP = new Float64Array(8);
+
+/** Corner k of the stack: local (lx, ly, lz) from the front-bottom edge, rotated about x by the tilt. */
+function corner(k, ax, ay, az, ca, sa, lx, ly, lz) {
+  C3[k * 3] = ax + lx;
+  C3[k * 3 + 1] = ay + ly * ca + lz * sa;
+  C3[k * 3 + 2] = az - ly * sa + lz * ca;
+}
 
 function drawPapers(buf, sk, s, g, z, M, pr) {
   const hold = clamp(pr.hold || 0, 0, 1);
@@ -77,21 +85,15 @@ function drawPapers(buf, sk, s, g, z, M, pr) {
   const al = tilt * 1.35;
   const ca = Math.cos(al), sa = Math.sin(al);
   // corners: top face (ly = -PT) 0..3 = back-left, back-right, front-right, front-left; 4, 5 = bottom front edge
-  let q = 0;
-  const put = (lx, ly, lz) => {
-    C3[q++] = ax + lx;
-    C3[q++] = ay + ly * ca + lz * sa;
-    C3[q++] = az - ly * sa + lz * ca;
-  };
-  put(-PW, -PT, -2 * PD);
-  put(PW, -PT, -2 * PD);
-  put(PW, -PT, 0);
-  put(-PW, -PT, 0);
-  put(PW, 0, 0);
-  put(-PW, 0, 0);
+  corner(0, ax, ay, az, ca, sa, -PW, -PT, -2 * PD);
+  corner(1, ax, ay, az, ca, sa, PW, -PT, -2 * PD);
+  corner(2, ax, ay, az, ca, sa, PW, -PT, 0);
+  corner(3, ax, ay, az, ca, sa, -PW, -PT, 0);
+  corner(4, ax, ay, az, ca, sa, PW, 0, 0);
+  corner(5, ax, ay, az, ca, sa, -PW, 0, 0);
   for (let i = 0; i < 4; i++) {
-    PTS[i * 2] = px(C3[i * 3], C3[i * 3 + 1], C3[i * 3 + 2]);
-    PTS[i * 2 + 1] = py(C3[i * 3], C3[i * 3 + 1], C3[i * 3 + 2]);
+    PTS[i * 2] = TOP[i * 2] = px(C3[i * 3], C3[i * 3 + 1], C3[i * 3 + 2]);
+    PTS[i * 2 + 1] = TOP[i * 2 + 1] = py(C3[i * 3], C3[i * 3 + 1], C3[i * 3 + 2]);
   }
   BAND[0] = PTS[6];
   BAND[1] = PTS[7];
@@ -104,7 +106,7 @@ function drawPapers(buf, sk, s, g, z, M, pr) {
   buf.part(g, z, false);
   // the edge band (sheet edges) under the top sheet; the top sheet catches the key light
   buf.poly(BAND, M.paper, 2);
-  buf.poly(PTS.subarray(0, 8), M.paper, 1);
+  buf.poly(TOP, M.paper, 1);
   if (s >= 1.6) {
     // sheet edges along the band: alternate light rows read as a stack
     const bandH = Math.abs(BAND[5] - BAND[3]);

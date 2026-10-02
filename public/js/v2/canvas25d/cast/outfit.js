@@ -544,7 +544,8 @@ function drawShirtCollar(o, F, tier, collar) {
     const c = pts(2);
     const shape = open
       ? [[nhw + 0.15, -2.9], [nhw + 0.9, -1.6], [nhw + 2.4, 3.6], [nhw + 1.7, 4.2], [1.5, 1.2], [nhw - 0.6, -1.6]]
-      : [[nhw + 0.35, -2.9], [nhw + 0.85, -0.8], [nhw + 1.15, 1.6], [nhw + 1.0, 3.3], [0.75, 0.9], [0.45, 0.1], [nhw - 0.9, -1.8]];
+      // the points frame the knot: their inner edges run down its sides instead of covering it
+      : [[nhw + 0.35, -2.9], [nhw + 0.85, -0.8], [nhw + 1.15, 1.6], [nhw + 1.0, 3.4], [1.25, 2.5], [1.45, 0.4], [nhw - 0.9, -1.8]];
     for (const [x, y] of shape) pt(o, c, side * x, ly(y));
     let tone = side < 0 ? 0 : 1;
     if (tier === 2 && v) {

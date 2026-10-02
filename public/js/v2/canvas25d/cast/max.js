@@ -16,8 +16,8 @@ import { stroke, local, screen, tier, hwAt } from './wardrobe-b.js';
 export const max = defineLook({
   id: 'max',
   name: 'Max Circuit',
-  head: { top: -10.0, craniumY: -2.5, R: 7.0, cheekY: 1.4, cheekHW: 6.65, chinY: 9.3, chinHW: 2.8, jawPow: 2.55 },
-  headAt: [0, -13.0],
+  head: { top: -10.0, craniumY: -2.5, R: 7.0, cheekY: 1.4, cheekHW: 6.7, chinY: 9.3, chinHW: 3.3, jawPow: 2.9 },
+  headAt: [0, -12.55], // a shorter neck and a lower seat than the anchors: he leans in
   neck: { hw: 2.85 },
   eyes: { y: -0.6, x: 2.8, w: 2.65, h: 1.5, iris: [P.brown, P.maroon], lash: P.black, lashes: false, bags: false },
   brows: { y: -2.5, len: 3.35, thick: 0.62, color: P.maroon, arch: 0.28 },
@@ -47,19 +47,19 @@ export const max = defineLook({
 // open; the back layer is drawn first and one step darker.
 const CLUMPS = [
   // crown and sides (behind), one step darker
-  [-6.0, -6.2, -6.9, -9.7, -4.6, -12.1, 1.4, 0.5],
-  [5.7, -6.4, 6.9, -9.5, 6.5, -11.6, 1.3, 0.5],
-  [-3.4, -8.6, -3.0, -11.7, -0.6, -12.9, 1.5, 0.7],
-  [0.6, -8.8, 1.8, -11.9, 4.4, -13.0, 1.7, 0.8],
-  [3.4, -8.0, 5.0, -10.8, 6.9, -11.8, 1.3, 0.7],
+  [-6.0, -6.2, -6.1, -9.3, -3.0, -11.3, 1.4, 0.5],
+  [5.7, -6.4, 7.7, -9.5, 8.1, -11.9, 1.3, 0.5],
+  [-3.4, -8.6, -2.2, -11.3, 1.0, -12.1, 1.5, 0.7],
+  [0.6, -8.8, 2.6, -11.9, 6.0, -13.0, 1.7, 0.8],
+  [3.4, -8.0, 5.8, -10.8, 8.5, -12.1, 1.3, 0.7],
   // front: brushed up and to the right; uneven widths and lengths, a few lying lower
-  [-5.4, -6.8, -5.8, -9.8, -3.6, -12.2, 1.25, 0.8],
-  [-3.6, -7.2, -3.2, -10.6, -0.9, -12.7, 1.6, 0.9],
-  [-1.5, -7.6, -0.8, -10.9, 1.8, -13.0, 1.45, 1.0],
-  [0.6, -7.5, 1.6, -10.7, 4.1, -12.5, 1.7, 1.0],
-  [2.9, -7.2, 4.2, -10.1, 6.2, -11.5, 1.35, 0.9],
-  [4.9, -6.5, 6.4, -8.2, 7.3, -8.9, 1.0, 0.7],
-  [-2.6, -6.9, -2.9, -9.0, -1.4, -10.2, 0.8, 0.6],
+  [-5.4, -6.8, -5.0, -9.4, -2.0, -11.4, 1.25, 0.8],
+  [-3.6, -7.2, -2.4, -10.2, 0.7, -11.9, 1.6, 0.9],
+  [-1.5, -7.6, 0.0, -10.5, 3.4, -12.2, 1.45, 1.0],
+  [0.6, -7.5, 2.4, -10.7, 5.7, -12.5, 1.7, 1.0],
+  [2.9, -7.2, 5.0, -10.1, 7.8, -11.8, 1.35, 0.9],
+  [4.9, -6.5, 7.2, -8.2, 8.9, -9.2, 1.0, 0.7],
+  [-2.6, -6.9, -2.1, -8.6, 0.2, -9.4, 0.8, 0.6],
 ];
 const P0 = [0, 0], P1 = [0, 0], P2 = [0, 0], LC = [0, 0];
 
@@ -142,5 +142,5 @@ function clump(buf, L, m, head, s, c, yawX, lag, back, tr, streak = true) {
       if (back) t += 1;
       return t > 3 ? 3 : t;
     };
-  stroke(buf, m.hair, P0[0], P0[1], P1[0], P1[1], P2[0], P2[1], 0.85 * s, 0.45 * s, tone, tr === 2 ? 7 : 5, belly * s * 0.7);
+  stroke(buf, m.hair, P0[0], P0[1], P1[0], P1[1], P2[0], P2[1], 0.85 * s, 0.58 * s, tone, tr === 2 ? 7 : 5, belly * s * 0.68); // soft, rounded tips: textured, never spiky
 }

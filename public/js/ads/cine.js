@@ -1578,8 +1578,10 @@ export function profile(ctx, o) {
   const { pal } = o;
   const hh = o.hh;
   const f = o.flip ? -1 : 1;
-  const X = (u) => o.x + u * hh * f;
-  const Y = (v) => o.y + v * hh;
+  // plain arithmetic instead of (ox + () * hf)/(oy + () * hh) closures (no per-frame allocation)
+  const ox = o.x;
+  const oy = o.y;
+  const hf = hh * f;
   const side = -f; // the dark side is the back of the head
   // rim from the face side: a fixed 2 px edge, a half-lit band, then shadow
   if (!o._rc || o._rc.flip !== f) {
@@ -1595,22 +1597,22 @@ export function profile(ctx, o) {
   }
   const { lit, half } = o._rc;
   begin();
-  for (let i = 0; i < NECK.length; i += 2) pt(X(NECK[i]), Y(NECK[i + 1]));
+  for (let i = 0; i < NECK.length; i += 2) pt((ox + (NECK[i]) * hf), (oy + (NECK[i + 1]) * hh));
   fill(ctx, pal.skin, lit);
   // jaw shadow on the neck
   begin();
-  pt(X(0.18), Y(0.95));
-  pt(X(0.3), Y(1.0));
-  pt(X(0.2), Y(1.12));
-  pt(X(-0.1), Y(0.9));
+  pt((ox + (0.18) * hf), (oy + (0.95) * hh));
+  pt((ox + (0.3) * hf), (oy + (1.0) * hh));
+  pt((ox + (0.2) * hf), (oy + (1.12) * hh));
+  pt((ox + (-0.1) * hf), (oy + (0.9) * hh));
   fill(ctx, pal.skinD);
   begin();
-  for (let i = 0; i < PROFILE.length; i += 2) pt(X(PROFILE[i]), Y(PROFILE[i + 1]));
+  for (let i = 0; i < PROFILE.length; i += 2) pt((ox + (PROFILE[i]) * hf), (oy + (PROFILE[i + 1]) * hh));
   fill(ctx, pal.skin, lit);
   if (half) {
     // a softer second band just inside the rim (light wrapping round the cheek)
     begin();
-    for (let i = 0; i < PROFILE.length; i += 2) pt(X(PROFILE[i]) - f * 2, Y(PROFILE[i + 1]));
+    for (let i = 0; i < PROFILE.length; i += 2) pt((ox + (PROFILE[i]) * hf) - f * 2, (oy + (PROFILE[i + 1]) * hh));
     collect();
     ctx.fillStyle = half.l;
     for (let i = 0; i < SN; i++) {
@@ -1620,40 +1622,40 @@ export function profile(ctx, o) {
     }
   }
   // ear: skin with a darker inner fold
-  ellipse(ctx, X(-0.06), Y(0.53), hh * 0.06, hh * 0.1, pal.skin, o._rc.ear);
-  ellipse(ctx, X(-0.055), Y(0.54), hh * 0.025, hh * 0.055, pal.skinD);
+  ellipse(ctx, (ox + (-0.06) * hf), (oy + (0.53) * hh), hh * 0.06, hh * 0.1, pal.skin, o._rc.ear);
+  ellipse(ctx, (ox + (-0.055) * hf), (oy + (0.54) * hh), hh * 0.025, hh * 0.055, pal.skinD);
   // eye, brow, nostril, mouth line
-  const eyeY = Y(0.47);
+  const eyeY = (oy + (0.47) * hh);
   ctx.fillStyle = pal.hairD;
-  ctx.fillRect(round(min(X(0.29), X(0.4))), round(Y(0.4)), round(hh * 0.11), max(1, round(hh * 0.02)));
+  ctx.fillRect(round(min((ox + (0.29) * hf), (ox + (0.4) * hf))), round((oy + (0.4) * hh)), round(hh * 0.11), max(1, round(hh * 0.02)));
   const closed = (o.eye ?? 0) > 0.5;
   ctx.fillStyle = closed ? mix(pal.skinD, P.black, 0.3) : pal.eye || P.black;
   const ew = max(2, round(hh * 0.07));
-  const ex = round(f > 0 ? X(0.315) : X(0.315) - ew);
+  const ex = round(f > 0 ? (ox + (0.315) * hf) : (ox + (0.315) * hf) - ew);
   ctx.fillRect(ex, round(eyeY), ew, 1);
   if (!closed) {
-    ctx.fillRect(round(f > 0 ? X(0.335) : X(0.335) - 1), round(eyeY + 1), max(1, round(hh * 0.025)), max(1, round(hh * 0.025)));
+    ctx.fillRect(round(f > 0 ? (ox + (0.335) * hf) : (ox + (0.335) * hf) - 1), round(eyeY + 1), max(1, round(hh * 0.025)), max(1, round(hh * 0.025)));
     if (o.light) {
       ctx.fillStyle = o.light;
-      ctx.fillRect(round(f > 0 ? X(0.36) : X(0.36) - 1), round(eyeY + 1), 1, 1);
+      ctx.fillRect(round(f > 0 ? (ox + (0.36) * hf) : (ox + (0.36) * hf) - 1), round(eyeY + 1), 1, 1);
     }
   }
   ctx.fillStyle = mix(pal.skinD, P.black, 0.35);
-  ctx.fillRect(round(f > 0 ? X(0.43) : X(0.43) - 2), round(Y(0.645)), 2, 1);
+  ctx.fillRect(round(f > 0 ? (ox + (0.43) * hf) : (ox + (0.43) * hf) - 2), round((oy + (0.645) * hh)), 2, 1);
   ctx.fillStyle = pal.lip || pal.skinD;
   const open = (o.mouth ?? 0) > 0.5 ? 1 : 0;
-  ctx.fillRect(round(f > 0 ? X(0.37) : X(0.37) - round(hh * 0.07)), round(Y(0.775)) + (o.smile > 0.5 ? -1 : 0), round(hh * 0.07), 1 + open);
+  ctx.fillRect(round(f > 0 ? (ox + (0.37) * hf) : (ox + (0.37) * hf) - round(hh * 0.07)), round((oy + (0.775) * hh)) + (o.smile > 0.5 ? -1 : 0), round(hh * 0.07), 1 + open);
   // hair
   const hp = PROFILE_HAIR[o.hair] || PROFILE_HAIR.short;
   begin();
-  for (let i = 0; i < hp.length; i += 2) pt(X(hp[i]), Y(hp[i + 1]));
+  for (let i = 0; i < hp.length; i += 2) pt((ox + (hp[i]) * hf), (oy + (hp[i + 1]) * hh));
   fill(ctx, pal.hair, o._rc.hair);
   // a few strands catching the light
   if (o.light) {
     ctx.fillStyle = mix(pal.hair, o.light, 0.25);
     for (let i = 0; i < 5; i++) {
       const u = 0.06 + i * 0.07;
-      ctx.fillRect(round(X(u)), round(Y(0.02 + i * 0.035 + (i & 1) * 0.02)), max(2, round(hh * 0.05)), 1);
+      ctx.fillRect(round((ox + (u) * hf)), round((oy + (0.02 + i * 0.035 + (i & 1) * 0.02) * hh)), max(2, round(hh * 0.05)), 1);
     }
   }
 }

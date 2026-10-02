@@ -273,6 +273,30 @@ def main():
                    float(man.get('duckHold', 0.35)), float(man.get('duckRelease', 0.7)))
     beds *= g[:, None]
 
+    # Bed level: the bed under speech sits `bedUnderVoiceDb` below the voice
+    # (median over speech regions where a bed plays), so between sentences and
+    # in pauses it comes up by the duck depth. Voices come from the voice stem,
+    # or from the WebAudio stem when the channel played recorded clips itself.
+    ref = web.max(axis=1) if man.get('voiceInWebaudio') else voice
+    rels = []
+    for a, b in regions:
+        s0, s1 = int((a + 0.35) * sr), int(min(b, n / sr) * sr)
+        if s1 - s0 < int(0.8 * sr):
+            continue
+        v = rms_db(ref[s0:s1])
+        bd = rms_db(beds[s0:s1])
+        if v > -45 and bd > -75:
+            rels.append(bd - v)
+    target_rel = man.get('bedUnderVoiceDb')
+    level = {'regions': len(rels)}
+    if rels and target_rel is not None:
+        auto = max(-6.0, min(9.0, float(target_rel) - float(np.median(rels))))
+        beds *= 10 ** (auto / 20)
+        if dry is not None:
+            dry *= 10 ** (auto / 20)
+        level.update({'autoGainDb': round(auto, 1), 'underVoiceDb': round(float(np.median(rels)) + auto, 1)})
+    report['bedLevel'] = level
+
     # Bed duck measurement: final bed vs the same cues rendered without speech.
     if dry is not None:
         ducks = []

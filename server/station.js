@@ -75,7 +75,9 @@ export class Station {
       this.producing = programId;
       this.emit('status', this.status());
       try {
-        const episode = await this.producer.produce(channel, programId);
+        // The next programmes in the rotation keep their own beat (COSMOS keeps the science).
+        const upcoming = [1, 2, 3].map((k) => rotation[(this.rotationIndex + k) % rotation.length]).filter((id) => id !== programId);
+        const episode = await this.producer.produce(channel, programId, { upcoming });
         this.rotationIndex++;
         if (!episode) {
           misses++;

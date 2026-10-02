@@ -507,7 +507,7 @@ function iceCube(ctx, x, y, s, a, strong) {
   const dark = lit === ICE_L ? ICE_R : ICE_L;
   poly(ctx, dark, A(P.orange, 0.3 * k)); // refracting the amber
   poly(ctx, lit, A(P.cream, 0.34 * k));
-  poly(ctx, ICE, A(P.white, 0.22 * k));
+  poly(ctx, ICE, A(P.cream, 0.3 * k)); // the top face takes the warm light
   poly(ctx, ICE_CHIP, A(P.white, 0.4 * k));
   // edges: lit where they face the key, quiet elsewhere
   const hi = A(P.white, 0.85 * k);

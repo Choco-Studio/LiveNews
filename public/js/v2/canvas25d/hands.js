@@ -398,12 +398,18 @@ function cuffQuad(buf, ax, ay, bx, by, ra, rb, m) {
   QUAD[10] = ax - ux * ra * 0.6 - nx * ra * 0.7;
   QUAD[11] = ay - uy * ra * 0.6 - ny * ra * 0.7;
   // tube shading across the cuff: lit on the light side, shade on the other
-  buf.poly(QUAD, m, (x, y) => {
-    const ex = x + 0.5 - ax, ey = y + 0.5 - ay;
-    const v = (ex * nx + ey * ny) / Math.max(0.5, ra); // -1..1 across
-    const l = 0.45 + 0.85 * v * (nx * L2X + ny * L2Y);
-    return l > 1.05 ? 0 : l > 0.0 ? 1 : 2;
-  });
+  CQ.ax = ax;
+  CQ.ay = ay;
+  CQ.nx = nx;
+  CQ.ny = ny;
+  CQ.r = Math.max(0.5, ra);
+  buf.poly(QUAD, m, cuffTone);
+}
+const CQ = { ax: 0, ay: 0, nx: 0, ny: 0, r: 1 };
+function cuffTone(x, y) {
+  const v = ((x + 0.5 - CQ.ax) * CQ.nx + (y + 0.5 - CQ.ay) * CQ.ny) / CQ.r; // -1..1 across
+  const l = 0.45 + 0.85 * v * (CQ.nx * L2X + CQ.ny * L2Y);
+  return l > 1.05 ? 0 : l > 0.0 ? 1 : 2;
 }
 
 // ---------------------------------------------------------------------------

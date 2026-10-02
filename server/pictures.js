@@ -26,7 +26,7 @@ const MAX_RANK_WIDTH = 1600; // wider is not better for a 416x234 shot
 const MAX_CANDIDATES = 5; // kept per story (best first, then fallbacks)
 
 // What a candidate of each kind is usually worth when it does not say its size.
-const DEFAULT_WIDTH = { media: 600, enclosure: 600, image: 560, inline: 420, thumbnail: 300, og: 1000, jsonld: 900, twitter: 900, image_src: 640, itemprop: 640, meta: 600 };
+const DEFAULT_WIDTH = { media: 600, enclosure: 600, image: 560, inline: 320, thumbnail: 300, og: 1000, jsonld: 900, twitter: 900, image_src: 640, itemprop: 640, meta: 600 };
 
 const asArray = (v) => (v === undefined || v === null ? [] : Array.isArray(v) ? v : [v]);
 
@@ -343,17 +343,17 @@ export function pageCandidates(html, pageUrl, { baseDir = null, from = null } = 
     if (rel === 'amphtml' && a.href && !amp && !baseDir) amp = resolveRef(a.href, { base: pageUrl })?.url || null;
   }
   // JSON-LD blocks: found with indexOf (linear), parsed defensively.
-  let from = 0;
+  let at = 0;
   for (let n = 0; n < 12; n++) {
-    const open = s.slice(from).search(/<script\b[^>]{0,300}application\/ld\+json[^>]{0,300}>/i);
+    const open = s.slice(at).search(/<script\b[^>]{0,300}application\/ld\+json[^>]{0,300}>/i);
     if (open < 0) break;
-    const start = s.indexOf('>', from + open) + 1;
+    const start = s.indexOf('>', at + open) + 1;
     const end = s.indexOf('</script>', start);
     if (start <= 0 || end < 0) break;
     try {
       jsonLdImages(JSON.parse(s.slice(start, Math.min(end, start + 200_000))), push);
     } catch {}
-    from = end + 9;
+    at = end + 9;
   }
   return { candidates: out, amp: amp && /^https?:\/\//i.test(amp) ? amp : null };
 }

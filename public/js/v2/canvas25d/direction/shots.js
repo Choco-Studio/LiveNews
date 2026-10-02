@@ -100,6 +100,8 @@ export function planShots(ctx) {
   if (!out.length) out.push(ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? 'wide' : 'mcu', ctx.speaker, 'fallback'));
   out.sort((a, b) => a.at - b.at);
   for (let i = 0; i < out.length; i++) out[i].len = round3((i + 1 < out.length ? out[i + 1].at : tl.end) - out[i].at);
+  // the sign-off's hold before the end card that this plan assumed (the bible's, unless ctx.gapAfter says otherwise)
+  if (ctx.type === 'outro') out[out.length - 1].hold = round3(tl.gap);
   return out;
 }
 

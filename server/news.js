@@ -382,6 +382,7 @@ export class NewsDesk {
     this.localImageRoots = new Set(); // folders of local feeds, whose pictures may be served
     this.placeholders = new Set(); // picture URLs an outlet puts on many unrelated stories (logos, share cards)
     this.pageImageUse = new Map(); // page picture URL -> ids of the stories that use it
+    this.failedPictures = new Set(); // picture URLs that would not download or were too small
   }
 
   loadFeeds() {
@@ -553,15 +554,15 @@ export class NewsDesk {
    */
   borrowPictures(targets = null) {
     const all = [...this.stories.values()];
-    const donors = all.filter((o) => o.image && !o.imageFrom && o.imageVia !== 'duplicate' && !o.imageFailed);
+    const donors = all.filter((o) => o.image && !o.imageFrom && o.imageVia !== 'duplicate' && !this.failedPictures.has(o.image));
     let lent = 0;
     for (const s of targets || all) {
       if (s.imageFrom) {
         const d = this.stories.get(s.imageFrom);
-        if (d && d.image === s.image && !d.imageFailed && !s.imageFailed) continue;
+        if (d && d.image === s.image && !this.failedPictures.has(s.image)) continue;
         forgetPicture(s);
       }
-      if (s.image || s.imageFailed) continue;
+      if (s.image) continue;
       let best = null;
       for (const o of donors) {
         if (o === s || o.source === s.source || !this.samePictureEvent(s, o)) continue;
@@ -573,6 +574,21 @@ export class NewsDesk {
       }
     }
     return lent;
+  }
+
+  /**
+   * A picture that would not download, or was too small: it is forgotten
+   * (with its fallbacks) here and on the stories that borrowed it, and another
+   * outlet's picture of the same event may stand in. True if one did.
+   */
+  pictureFailed(story) {
+    for (const url of story.images || (story.image ? [story.image] : [])) {
+      this.failedPictures.add(url);
+      if (this.failedPictures.size > 2000) this.failedPictures.delete(this.failedPictures.values().next().value);
+    }
+    forgetPicture(story);
+    this.borrowPictures([story]);
+    return !!story.image;
   }
 
   uncovered() {

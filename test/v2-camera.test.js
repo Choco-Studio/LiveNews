@@ -705,3 +705,15 @@ test('grammar: hand-over cut on B\'s first word; chats and sign-off on the wide;
     }
   }
 });
+
+test('grammar: a presenter reading two stories in a row opens the second on the over-the-shoulder framing (a visible cut)', () => {
+  const ep = structuredClone(load('world-now-1'));
+  ep.segments[2].anchor = 'A'; // Paco reads the lead and the next story
+  ep.segments[2].text = ep.segments[2].text.replace('Thanks, Paco. ', '');
+  const log = episodeLog(ep);
+  assert.equal(log.plans[1].events[0].framing, 'mcu-l');
+  assert.equal(log.plans[2].events[0].framing, 'ots');
+  const third = structuredClone(ep);
+  third.segments[3].anchor = 'A';
+  assert.equal(episodeLog(third).plans[3].events[0].framing, 'mcu-l', 'alternates back on the third');
+});
