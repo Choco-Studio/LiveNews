@@ -890,7 +890,7 @@ export function drawEndCard(ctx, t, dt, { channel = 'LIVENEWS', line1 = 'STAY WI
   const Y0 = clamp(round((180 - blockH) / 2) + 6, 16, 60);
 
   // lockup slides in
-  const lp = easeOut(seg(dt, 0.3, 0.5));
+  const lp = easeOut(seg(dt, 0.18, 0.5));
   const lk = lockup(ctx, round(X0 - 190 * (1 - lp)), Y0, channel, 2, t);
   const glk = every(dt, 1.4, 3.8, 0.5);
   if (glk >= 0) sweep(ctx, X0, Y0, lk.w, lk.h, glk, 10, 0.25);
@@ -900,31 +900,31 @@ export function drawEndCard(ctx, t, dt, { channel = 'LIVENEWS', line1 = 'STAY WI
   let maxW = 0;
   l1.forEach((ln, i) => {
     maxW = Math.max(maxW, measureText(ln, s1));
-    const p = seg(dt, 0.55 + i * 0.1, 0.45);
+    const p = seg(dt, 0.42 + i * 0.1, 0.45);
     riseText(ctx, ln, X0, y1 + i * lh1, p, { color: P.white, scale: s1, shadow: P.black });
   });
   const ulY = y1 + (l1.length - 1) * lh1 + 7 * s1 + 5;
-  const ul = round(maxW * easeOut(seg(dt, 0.8, 0.45)));
+  const ul = round(maxW * easeOut(seg(dt, 0.68, 0.45)));
   if (ul > 0) {
     r(ctx, X0, ulY, ul, 3, P.red);
     r(ctx, X0, ulY, Math.min(ul, 12), 3, P.yellow);
   }
 
   // line 2: chevrons + typed text on a dark tab
-  const p2 = seg(dt, 1.0, 0.5);
+  const p2 = seg(dt, 0.88, 0.5);
   if (p2 > 0 && t2) {
     const pad = 2 + 3 * s2;
     const w2 = measureText(t2, s2) + 12 * s2 + pad * 2 + 4;
     const th = 7 * s2 + pad * 2;
     const ty = ulY + 9;
-    const cw = round(w2 * easeOut(seg(dt, 1.0, 0.3)));
+    const cw = round(w2 * easeOut(seg(dt, 0.88, 0.3)));
     r(ctx, X0, ty, cw, th, P.black);
     r(ctx, X0, ty + th - 1, cw, 1, P.steel);
     ctx.save();
     clipRect(ctx, X0, ty, cw, th);
     const ph = Math.floor(t * 6) % 4;
     for (let i = 0; i < 3; i++) drawText(ctx, '▸', X0 + pad + i * 4 * s2, ty + pad, { color: i === ph ? P.yellow : P.darkRed, scale: s2 });
-    drawText(ctx, typed(t2, seg(dt, 1.1, 0.6)), X0 + pad + 12 * s2 + 4, ty + pad, { color: P.yellow, scale: s2 });
+    drawText(ctx, typed(t2, seg(dt, 0.98, 0.6)), X0 + pad + 12 * s2 + 4, ty + pad, { color: P.yellow, scale: s2 });
     ctx.restore();
   }
 
@@ -1603,7 +1603,8 @@ export function drawFactCard(ctx, t, dt, { fact = '', label = 'KEY FACT', source
     const ny = y;
     const settle = dt - 1.9;
     const col = settle > 0 && settle < 0.1 ? P.white : P.yellow;
-    extruded(ctx, shown, nx, ny, fs, col, P.rust, 2);
+    // right-aligned like a counter: the unit/suffix stays put, digits grow leftward
+    extruded(ctx, shown, nx + bw - measureText(shown, fs), ny, fs, col, P.rust, 2);
     const g = every(dt, 2.2, 2.6, 0.55);
     if (g >= 0) textGlint(ctx, f.big, nx, ny, fs, lerp(nx - 30, nx + bw + 30, g), 7, P.cream);
     y += 7 * fs + 2 + 9;

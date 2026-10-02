@@ -1545,3 +1545,487 @@ export function hero(ctx, x, gy, o = {}) {
   }
   return { top, handL, handR };
 }
+
+// ---------------------------------------------------------------------------
+// Display lettering for brand wordmarks. Glyphs are pen-stroke skeletons on a
+// 4 x 6 grid, rendered once (cached) at native resolution with a round or
+// square pen, banded fills, highlight crescents, outlines and extrusion —
+// custom lettering per brand, never the body font.
+
+const SK = {
+  A: [4, [[0, 6], [0, 1.8], [0.6, 0.5], [1.4, 0], [2.6, 0], [3.4, 0.5], [4, 1.8], [4, 6]], [[0, 3.6], [4, 3.6]]],
+  B: [4, [[0, 6], [0, 0], [2.6, 0], [3.5, 0.4], [3.8, 1.4], [3.5, 2.4], [2.6, 2.9], [0, 2.9]], [[2.6, 2.9], [3.6, 3.3], [4, 4.4], [3.6, 5.6], [2.6, 6], [0, 6]]],
+  C: [4, [[4, 1.2], [3.4, 0.3], [2.2, 0], [1, 0.2], [0.2, 1], [0, 2.4], [0, 3.6], [0.2, 5], [1, 5.8], [2.2, 6], [3.4, 5.7], [4, 4.8]]],
+  D: [4, [[0, 0], [0, 6], [2.2, 6], [3.4, 5.5], [4, 4.2], [4, 1.8], [3.4, 0.5], [2.2, 0], [0, 0]]],
+  E: [3.6, [[3.6, 0], [0, 0], [0, 6], [3.6, 6]], [[0, 2.9], [3, 2.9]]],
+  F: [3.6, [[3.6, 0], [0, 0], [0, 6]], [[0, 2.9], [3, 2.9]]],
+  G: [4, [[4, 1.2], [3.4, 0.3], [2.2, 0], [1, 0.2], [0.2, 1], [0, 2.4], [0, 3.6], [0.2, 5], [1, 5.8], [2.2, 6], [3.4, 5.7], [4, 4.8], [4, 3.4], [2.4, 3.4]]],
+  H: [4, [[0, 0], [0, 6]], [[4, 0], [4, 6]], [[0, 3], [4, 3]]],
+  I: [0, [[0, 0], [0, 6]]],
+  J: [3.6, [[3.6, 0], [3.6, 4.4], [3.1, 5.6], [1.8, 6], [0.5, 5.6], [0, 4.6]]],
+  K: [4, [[0, 0], [0, 6]], [[4, 0], [0.4, 3.3]], [[1.6, 2.3], [4, 6]]],
+  L: [3.4, [[0, 0], [0, 6], [3.4, 6]]],
+  M: [5, [[0, 6], [0, 0], [2.5, 3.6], [5, 0], [5, 6]]],
+  N: [4, [[0, 6], [0, 0], [4, 6], [4, 0]]],
+  O: [4.2, [[2.1, 0], [0.8, 0.3], [0.1, 1.4], [0, 3], [0.1, 4.6], [0.8, 5.7], [2.1, 6], [3.4, 5.7], [4.1, 4.6], [4.2, 3], [4.1, 1.4], [3.4, 0.3], [2.1, 0]]],
+  P: [4, [[0, 6], [0, 0], [2.6, 0], [3.6, 0.4], [4, 1.6], [3.6, 2.8], [2.6, 3.2], [0, 3.2]]],
+  Q: [4.2, [[2.1, 0], [0.8, 0.3], [0.1, 1.4], [0, 3], [0.1, 4.6], [0.8, 5.7], [2.1, 6], [3.4, 5.7], [4.1, 4.6], [4.2, 3], [4.1, 1.4], [3.4, 0.3], [2.1, 0]], [[2.6, 4.4], [4.4, 6.4]]],
+  R: [4, [[0, 6], [0, 0], [2.6, 0], [3.6, 0.4], [4, 1.6], [3.6, 2.8], [2.6, 3.2], [0, 3.2]], [[2.2, 3.2], [4, 6]]],
+  S: [4, [[3.9, 0.9], [3.1, 0.1], [1.2, 0], [0.3, 0.5], [0, 1.5], [0.3, 2.4], [1.2, 2.9], [2.8, 3.1], [3.7, 3.6], [4, 4.6], [3.7, 5.5], [2.8, 6], [0.9, 6], [0, 5.2]]],
+  T: [4, [[0, 0], [4, 0]], [[2, 0], [2, 6]]],
+  U: [4, [[0, 0], [0, 4.4], [0.6, 5.6], [2, 6], [3.4, 5.6], [4, 4.4], [4, 0]]],
+  V: [4, [[0, 0], [2, 6], [4, 0]]],
+  W: [5.6, [[0, 0], [1.3, 6], [2.8, 2], [4.3, 6], [5.6, 0]]],
+  X: [4, [[0, 0], [4, 6]], [[4, 0], [0, 6]]],
+  Y: [4, [[0, 0], [2, 3.2], [4, 0]], [[2, 3.2], [2, 6]]],
+  Z: [4, [[0, 0], [4, 0], [0, 6], [4, 6]]],
+  0: [3.6, [[1.8, 0], [0.6, 0.4], [0, 1.6], [0, 4.4], [0.6, 5.6], [1.8, 6], [3, 5.6], [3.6, 4.4], [3.6, 1.6], [3, 0.4], [1.8, 0]]],
+  1: [1.6, [[0, 1.2], [1.6, 0], [1.6, 6]]],
+  2: [4, [[0.1, 1.3], [0.8, 0.3], [2, 0], [3.2, 0.3], [3.9, 1.3], [3.7, 2.5], [0, 6], [4, 6]]],
+  3: [4, [[0, 0.8], [1, 0], [2.8, 0], [3.7, 0.6], [3.8, 1.7], [3, 2.8], [1.6, 2.9], [3, 3], [3.9, 3.9], [4, 4.8], [3.4, 5.7], [2.2, 6], [0.8, 5.9], [0, 5.2]]],
+  4: [4, [[3, 6], [3, 0], [0, 4.2], [4, 4.2]]],
+  5: [4, [[3.8, 0], [0.4, 0], [0.2, 2.6], [1.4, 2.2], [2.8, 2.3], [3.7, 3], [4, 4.2], [3.6, 5.5], [2.4, 6], [0.9, 5.9], [0, 5.2]]],
+  6: [4, [[3.6, 0.4], [2.4, 0], [1.2, 0.3], [0.3, 1.3], [0, 3], [0, 4.4], [0.6, 5.6], [2, 6], [3.4, 5.6], [4, 4.4], [3.6, 3.2], [2.4, 2.7], [1.2, 2.9], [0.1, 3.6]]],
+  7: [4, [[0, 0], [4, 0], [1.4, 6]]],
+  8: [4, [[2, 2.8], [0.7, 2.4], [0.3, 1.4], [0.8, 0.3], [2, 0], [3.2, 0.3], [3.7, 1.4], [3.3, 2.4], [2, 2.8], [0.6, 3.4], [0, 4.5], [0.6, 5.6], [2, 6], [3.4, 5.6], [4, 4.5], [3.4, 3.4], [2, 2.8]]],
+  9: [4, [[3.9, 2.4], [2.8, 3.1], [1.4, 3.1], [0.4, 2.5], [0, 1.5], [0.5, 0.4], [2, 0], [3.4, 0.4], [4, 1.6], [4, 3.6], [3.5, 5.2], [2.4, 6], [0.6, 5.8]]],
+  '-': [3, [[0, 3.2], [3, 3.2]]],
+  '.': [0, [[0, 6], [0, 6]]],
+  '!': [0, [[0, 0], [0, 3.8]], [[0, 6], [0, 6]]],
+  "'": [0, [[0, 0], [0, 1.4]]],
+  '?': [3.6, [[0, 1], [0.8, 0.1], [2, 0], [3.2, 0.3], [3.6, 1.3], [3, 2.4], [1.8, 3.1], [1.8, 4]], [[1.8, 6], [1.8, 6]]],
+  '+': [4, [[2, 1.4], [2, 4.8]], [[0.3, 3.1], [3.7, 3.1]]],
+  '/': [3, [[3, 0], [0, 6]]],
+  ':': [0, [[0, 2], [0, 2]], [[0, 5.6], [0, 5.6]]],
+  ' ': [2.2],
+};
+
+function penSpans(r, square) {
+  const out = [];
+  if (square) {
+    for (let dy = -r; dy <= r; dy++) out.push([dy, -r, 2 * r + 1]);
+  } else {
+    const rr = (r + 0.5) ** 2;
+    for (let dy = -r; dy <= r; dy++) {
+      const hw = floor(sqrt(rr - dy * dy));
+      out.push([dy, -hw, hw * 2 + 1]);
+    }
+  }
+  return out;
+}
+
+/** Stamp pen centres (deduplicated integer points) with radius r. */
+function stampAll(c, pts, r, square, color, dx = 0, dy = 0) {
+  if (r < 0) return;
+  c.fillStyle = color;
+  const spans = penSpans(r, square);
+  for (const [x, y] of pts) for (const [sy, sx, w] of spans) c.fillRect(x + sx + dx, y + sy + dy, w, 1);
+}
+
+/** Lay out a word: returns pen-centre points per letter plus metrics. */
+function layoutWord(str, st) {
+  const h = st.h ?? 24;
+  const r = st.pen ?? 3;
+  const uy = (h - 2 * r - 1) / 6;
+  const ux = uy * (st.wide ?? 0.9);
+  const gap = st.gap ?? 2;
+  const slant = st.slant ?? 0;
+  const letters = [];
+  let cur = 0;
+  const S = String(str).toUpperCase();
+  for (let i = 0; i < S.length; i++) {
+    const g = SK[S[i]] || SK[' '];
+    const [gw, ...strokes] = g;
+    const bob = typeof st.wave === 'function' ? st.wave(i) : Array.isArray(st.wave) ? st.wave[i % st.wave.length] || 0 : 0;
+    const set = new Set();
+    const pts = [];
+    for (const pl of strokes) {
+      for (let k = 0; k < pl.length; k++) {
+        const a = pl[k];
+        const b = pl[min(k + 1, pl.length - 1)];
+        const ax = cur + r + a[0] * ux;
+        const ay = r + a[1] * uy + bob;
+        const bx = cur + r + b[0] * ux;
+        const by = r + b[1] * uy + bob;
+        const n = max(1, ceil(Math.hypot(bx - ax, by - ay) * 2));
+        for (let s = 0; s <= n; s++) {
+          const yy = ay + ((by - ay) * s) / n;
+          const xx = ax + ((bx - ax) * s) / n + (h - yy) * slant;
+          const px = round(xx);
+          const py = round(yy);
+          const key = px * 4096 + py;
+          if (!set.has(key)) {
+            set.add(key);
+            pts.push([px, py]);
+          }
+        }
+      }
+    }
+    const lw = round(gw * ux) + 2 * r + 1;
+    letters.push({ ch: S[i], x: cur, w: lw, pts, bob });
+    cur += lw + gap;
+  }
+  return { letters, width: cur - gap + ceil(h * slant), h, r };
+}
+
+const WORDMARKS = new Map();
+/**
+ * Render (once) a brand wordmark. Style:
+ *  h, pen, square, wide, gap, slant, wave(i) | [..]
+ *  fill: [colours top→bottom] or per-letter via colors: [[..], [..]]
+ *  hi: highlight crescent colour, outline: [[colour, width], ...] inner→outer,
+ *  depth, depthColor, deco(c, info)
+ * Returns { cv, w, h, ox, oy, letters } — draw with drawMark().
+ */
+export function wordmark(str, st = {}) {
+  const key = `${str}|${JSON.stringify(st, (k, v) => (typeof v === 'function' ? v.toString() : v))}`;
+  let wm = WORDMARKS.get(key);
+  if (wm) return wm;
+  const L = layoutWord(str, st);
+  const outlines = st.outline ?? [[P.black, 2]];
+  const ow = outlines.reduce((s, o) => s + o[1], 0);
+  const depth = st.depth ?? 0;
+  const pad = ow + 2;
+  const cw = L.width + pad * 2 + 2;
+  const ch = L.h + pad * 2 + depth + 4;
+  const cv = document.createElement('canvas');
+  cv.width = cw;
+  cv.height = ch;
+  const c = cv.getContext('2d');
+  const sq = !!st.square;
+  const r = L.r;
+  const all = [];
+  for (const l of L.letters) for (const [x, y] of l.pts) all.push([x + pad, y + pad]);
+  // outer outline + extrusion
+  const outer = outlines[outlines.length - 1][0];
+  for (let d = depth; d >= 0; d--) stampAll(c, all, r + ow, sq, outer, 0, d);
+  if (depth > 0) for (let d = depth; d >= 1; d--) stampAll(c, all, r + ow - outlines[outlines.length - 1][1], sq, st.depthColor ?? P.black, 0, d);
+  // inner outlines
+  let rad = r + ow;
+  for (let i = outlines.length - 1; i >= 0; i--) {
+    stampAll(c, all, rad, sq, outlines[i][0]);
+    rad -= outlines[i][1];
+  }
+  // banded fill (per letter colours optional)
+  const fillLetter = (l, cols, rr, dx = 0, dy = 0) => {
+    const pts = l.pts.map(([x, y]) => [x + pad, y + pad]);
+    const n = cols.length;
+    for (let b = 0; b < n; b++) {
+      const y0 = pad + l.bob + round((b * L.h) / n) - (b === 0 ? 4 : 0);
+      const y1 = pad + l.bob + round(((b + 1) * L.h) / n) + (b === n - 1 ? 4 : 0);
+      c.save();
+      c.beginPath();
+      c.rect(0, y0, cw, y1 - y0);
+      c.clip();
+      stampAll(c, pts, rr, sq, cols[b], dx, dy);
+      c.restore();
+    }
+  };
+  L.letters.forEach((l, i) => {
+    const cols = st.colors ? st.colors[i % st.colors.length] : st.fill ?? [P.white];
+    fillLetter(l, cols, r);
+    if (st.hi && r >= 2) {
+      stampAll(c, l.pts.map(([x, y]) => [x + pad, y + pad]), r - 1, sq, st.hi, -1, -1);
+      fillLetter(l, cols, r - 1, 0, 0);
+    }
+  });
+  const info = { pad, letters: L.letters, r, h: L.h, w: L.width };
+  if (st.deco) st.deco(c, info);
+  wm = { cv, w: L.width, h: L.h, ox: pad, oy: pad, letters: L.letters, depth };
+  WORDMARKS.set(key, wm);
+  return wm;
+}
+
+/** Draw a wordmark with its glyph box top centred at (cx, y). Returns left x. */
+export function drawMark(ctx, wm, cx, y, { reveal = 1, drop = 0 } = {}) {
+  const x0 = round(cx - wm.w / 2) - wm.ox;
+  const y0 = round(y) - wm.oy;
+  if (reveal >= 1 && !drop) {
+    ctx.drawImage(wm.cv, x0, y0);
+    return x0 + wm.ox;
+  }
+  // per-letter entrance: letters pop up from below in sequence
+  const n = wm.letters.length;
+  wm.letters.forEach((l, i) => {
+    const p = clamp(reveal * (n + 3) - i * 1, 0, 1);
+    if (p <= 0) return;
+    const dy = round((1 - easeOutBack(p, 2.4)) * (drop || 30));
+    const sx = l.x + (i === 0 ? 0 : wm.ox - 1);
+    const sw = l.w + (i === 0 ? wm.ox : 2) + (i === n - 1 ? wm.ox + 8 : 0);
+    ctx.drawImage(wm.cv, sx, 0, sw, wm.cv.height, x0 + sx, y0 + dy, sw, wm.cv.height);
+  });
+  return x0 + wm.ox;
+}
+
+const SILS = new WeakMap();
+function silhouette(cv, color) {
+  let m = SILS.get(cv);
+  if (!m) SILS.set(cv, (m = new Map()));
+  let s = m.get(color);
+  if (!s) {
+    s = document.createElement('canvas');
+    s.width = cv.width;
+    s.height = cv.height;
+    const c = s.getContext('2d');
+    c.drawImage(cv, 0, 0);
+    c.globalCompositeOperation = 'source-in';
+    c.fillStyle = color;
+    c.fillRect(0, 0, s.width, s.height);
+    m.set(color, s);
+  }
+  return s;
+}
+
+/**
+ * Light sweep across a piece of cached art drawn at (x, y): a stair-stepped
+ * diagonal band of light clipped to the art's own silhouette. p: 0..1.
+ */
+export function glint(ctx, art, x, y, p, { width = 8, color = P.white, alpha = 0.7, slope = 0.6 } = {}) {
+  if (p <= 0 || p >= 1) return;
+  const sil = silhouette(art, color);
+  const hh = art.height;
+  const span = art.width + hh * slope + width * 2;
+  const bx = round(-hh * slope - width + p * span);
+  x = round(x);
+  y = round(y);
+  ctx.save();
+  ctx.beginPath();
+  for (let yy = 0; yy < hh; yy += 2) {
+    const sx = bx + round((hh - yy) * slope);
+    ctx.rect(x + sx, y + yy, width, 2);
+    ctx.rect(x + sx + width + 3, y + yy, 2, 2);
+  }
+  ctx.clip();
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(sil, x, y);
+  ctx.restore();
+}
+
+/** Soft dithered glow: concentric translucent discs. */
+export function glow(ctx, cx, cy, rad, color, a = 0.12, steps = 4) {
+  for (let i = steps; i >= 1; i--) disc(ctx, cx, cy, round((rad * i) / steps), A(color, a));
+}
+
+/** Small rounded "web address" pill for end slates. */
+export function urlPill(ctx, s, cx, y, { bg = P.black, color = P.white, border = P.white } = {}) {
+  const w = measureText(s) + 14;
+  panel(ctx, round(cx - w / 2), y, w, 13, bg, border, 2);
+  return text(ctx, s, cx, y + 3, { color, align: 'center' });
+}
+
+// ---------------------------------------------------------------------------
+// Close-up faces (push-ins): the same chibi characters drawn natively large.
+
+function arc(cx, cy, rx, ry, a0, a1, n = 12) {
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + ((a1 - a0) * i) / n;
+    pts.push([cx + Math.cos(a) * rx, cy + sin(a) * ry]);
+  }
+  return pts;
+}
+function sq(ctx, pts, col, w = 2) {
+  for (let i = 0; i + 1 < pts.length; i++) line(ctx, pts[i][0] - floor(w / 2), pts[i][1] - floor(w / 2), pts[i + 1][0] - floor(w / 2), pts[i + 1][1] - floor(w / 2), col, w);
+}
+
+/**
+ * Big face for close-ups. (cx, cy) = face centre, s = head half-width (≈40).
+ * o: { pal, hair: 'short'|'bob'|'spiky'|'bun'|'bald'|'towel'|'puff', eyes, brows,
+ *      mouth, look, blush, glasses, beard, tears, sweat, shoulders }
+ */
+export function faceCU(ctx, cx, cy, s, o = {}) {
+  const pal = mergePal(o.pal);
+  cx = round(cx);
+  cy = round(cy);
+  const K = pal.K;
+  const rx = s;
+  const ry = round(s * 0.92);
+  const u = s / 40;
+  const U = (v) => round(v * u);
+  // shoulders / body
+  if (o.shoulders !== false) {
+    const by = cy + ry - U(4);
+    rrect(ctx, cx - U(56) - 2, by - 2, U(112) + 4, H, K, 3);
+    rrect(ctx, cx - U(56), by, U(112), H, pal.T, 3);
+    R(ctx, cx - U(56), by, U(10), H, pal.t);
+    poly(ctx, [[cx - U(14), by], [cx + U(14), by], [cx, by + U(18)]], pal.C);
+    if (pal.X !== pal.T) poly(ctx, [[cx - U(4), by + U(4)], [cx + U(4), by + U(4)], [cx + U(6), by + U(40)], [cx - U(6), by + U(40)]], pal.X);
+    R(ctx, cx - U(8), by - U(8), U(16), U(10), pal.s);
+  }
+  if (o.hair === 'bob' || o.hair === 'long') {
+    const bottom = cy + (o.hair === 'long' ? U(52) : U(26));
+    const hw = rx + U(8);
+    oval(ctx, cx, cy - U(4), hw + 2, ry + U(4) + 2, K);
+    R(ctx, cx - hw - 2, cy - U(4), hw * 2 + 5, bottom - cy + U(4) + 2, K);
+    oval(ctx, cx, cy - U(4), hw, ry + U(4), pal.H);
+    R(ctx, cx - hw, cy - U(4), hw * 2 + 1, bottom - cy + U(4), pal.H);
+    R(ctx, cx - hw + U(3), cy, U(3), bottom - cy - U(2), pal.h);
+  }
+  // ears
+  for (const sd of [-1, 1]) {
+    disc(ctx, cx + sd * (rx - U(1)), cy + U(4), U(8) + 2, K);
+    disc(ctx, cx + sd * (rx - U(1)), cy + U(4), U(8), pal.s);
+  }
+  // head with lower-right shade
+  oval(ctx, cx, cy, rx + 2, ry + 2, K);
+  oval(ctx, cx, cy, rx, ry, pal.s);
+  oval(ctx, cx - U(3), cy - U(3), rx - U(3), ry - U(3), pal.S);
+  // eyes
+  const ex = U(15);
+  const ey = cy + U(2);
+  const lx = round((o.look || 0) * U(3));
+  const eyes = o.eyes || 'open';
+  for (const sd of [-1, 1]) {
+    const x = cx + sd * ex;
+    if (eyes === 'open' || eyes === 'wide' || eyes === 'sad' || eyes === 'angry') {
+      const er = eyes === 'wide' ? U(10) : U(8);
+      oval(ctx, x, ey, er - U(1) + 2, er + U(2) + 2, K);
+      oval(ctx, x, ey, er - U(1), er + U(2), pal.W);
+      const ir = eyes === 'wide' ? U(4) : U(6);
+      disc(ctx, x + lx, ey + U(1), ir, o.iris || P.navy);
+      disc(ctx, x + lx, ey + U(1), max(1, ir - U(3)), K);
+      R(ctx, x + lx - U(3), ey - U(3), U(3), U(3), pal.W);
+      R(ctx, x + lx + U(2), ey + U(3), U(1) || 1, U(1) || 1, pal.W);
+    } else if (eyes === 'happy') {
+      sq(ctx, arc(x, ey + U(4), U(8), U(7), PI * 1.1, PI * 1.9), K, U(3));
+    } else if (eyes === 'closed') {
+      sq(ctx, arc(x, ey - U(2), U(8), U(5), PI * 0.15, PI * 0.85), K, U(3));
+    } else if (eyes === 'sleepy') {
+      oval(ctx, x, ey + U(2), U(8), U(5), K);
+      oval(ctx, x, ey + U(2), U(6), U(3), pal.W);
+      disc(ctx, x + lx, ey + U(3), U(3), K);
+      R(ctx, x - U(9), ey - U(3), U(18), U(5), pal.S);
+      R(ctx, x - U(9), ey + U(1), U(18), U(2), K);
+    } else if (eyes === 'hearts') {
+      bigHeart(ctx, x, ey, U(8), P.red);
+      R(ctx, x - U(6), ey - U(4), U(2), U(2), P.pink);
+    } else if (eyes === 'stars') {
+      poly(ctx, starPts(x, ey, 5, U(10), U(4), 0), P.yellow);
+    } else if (eyes === 'x') {
+      sq(ctx, [[x - U(6), ey - U(6)], [x + U(6), ey + U(6)]], K, U(3));
+      sq(ctx, [[x + U(6), ey - U(6)], [x - U(6), ey + U(6)]], K, U(3));
+    } else if (eyes === 'cucumber') {
+      disc(ctx, x, ey, U(10) + 1, P.darkGreen);
+      disc(ctx, x, ey, U(9), P.green);
+      disc(ctx, x, ey, U(7), P.cream);
+      for (let k = 0; k < 6; k++) R(ctx, x + round(Math.cos(k) * U(4)), ey + round(sin(k) * U(4)), 1, 1, P.green);
+    }
+    // brows
+    const br = o.brows || (eyes === 'sad' ? 'sad' : eyes === 'angry' ? 'angry' : eyes === 'wide' ? 'up' : 'flat');
+    if (eyes !== 'cucumber' && br !== 'none') {
+      const by = ey - U(14) - (br === 'up' ? U(4) : 0);
+      const tilt = br === 'sad' ? -U(4) : br === 'angry' ? U(4) : 0;
+      const inner = [x - sd * U(7), by + tilt];
+      const outer = [x + sd * U(7), by - (br === 'flat' ? U(1) : 0)];
+      sq(ctx, [outer, [x, by - U(2)], inner], pal.E || K, U(3));
+    }
+  }
+  if (o.glasses) {
+    for (const sd of [-1, 1]) {
+      const x = cx + sd * ex;
+      R(ctx, x - U(11), ey - U(10), U(22), 2, K);
+      R(ctx, x - U(11), ey + U(10), U(22), 2, K);
+      R(ctx, x - U(11), ey - U(10), 2, U(22), K);
+      R(ctx, x + U(11) - 2, ey - U(10), 2, U(22), K);
+      R(ctx, x - U(8), ey - U(7), U(4), 1, P.white);
+    }
+    R(ctx, cx - U(4), ey - U(4), U(8), 2, K);
+  }
+  // nose + cheeks
+  R(ctx, cx - U(2), cy + U(12), U(4), U(2), pal.s);
+  if (o.blush) {
+    oval(ctx, cx - U(25), cy + U(16), U(6), U(3), P.pink);
+    oval(ctx, cx + U(25), cy + U(16), U(6), U(3), P.pink);
+  }
+  if (o.beard) {
+    const b = o.beard;
+    poly(ctx, [[cx - rx + U(2), cy + U(6)], [cx + rx - U(2), cy + U(6)], [cx + U(26), cy + ry + U(b * 6)], [cx, cy + ry + U(8 + b * 9)], [cx - U(26), cy + ry + U(b * 6)]], pal.H);
+    oval(ctx, cx, cy + U(24), U(10), U(5), pal.S);
+  }
+  if (o.mustache) poly(ctx, [[cx - U(14), cy + U(22)], [cx, cy + U(16)], [cx + U(14), cy + U(22)], [cx, cy + U(20)]], pal.H);
+  // mouth
+  const my = cy + U(24);
+  const m = o.mouth || 'smile';
+  if (m === 'smile') sq(ctx, arc(cx, my - U(6), U(10), U(7), PI * 0.2, PI * 0.8), K, U(3));
+  else if (m === 'frown') sq(ctx, arc(cx, my + U(6), U(9), U(6), PI * 1.2, PI * 1.8), K, U(3));
+  else if (m === 'flat') R(ctx, cx - U(7), my, U(14), U(3), K);
+  else if (m === 'grin' || m === 'open' || m === 'O') {
+    const pts = m === 'O' ? arc(cx, my + U(2), U(7), U(9), 0, PI * 2, 16) : [[cx - U(13), my - U(4)], [cx + U(13), my - U(4)], ...arc(cx, my - U(4), U(13), U(12), 0, PI, 10)];
+    const big = pts.map(([x, y]) => [x + Math.sign(x - cx) * 2, y + (y > my ? 2 : -2)]);
+    poly(ctx, big, K);
+    poly(ctx, pts, pal.M);
+    if (m === 'grin') R(ctx, cx - U(11), my - U(4), U(22), U(4), pal.W);
+    disc(ctx, cx, my + U(m === 'O' ? 6 : 5), U(5), pal.N);
+  } else if (m === 'wavy') {
+    const pts = [];
+    for (let i = 0; i <= 8; i++) pts.push([cx - U(12) + i * U(3), my + (i % 2 ? -U(2) : U(2))]);
+    sq(ctx, pts, K, U(3));
+  } else if (m === 'teeth') {
+    R(ctx, cx - U(14), my - U(5), U(28), U(11), K);
+    R(ctx, cx - U(12), my - U(3), U(24), U(7), pal.W);
+    for (let i = -2; i <= 2; i++) R(ctx, cx + i * U(5), my - U(3), 1, U(7), P.silver);
+  }
+  if (o.tears) {
+    const ty = (floor(o.tears * 10) % 8) * U(2);
+    for (const sd of [-1, 1]) {
+      R(ctx, cx + sd * ex - U(2), ey + U(10) + ty, U(4), U(6), P.cyan);
+      R(ctx, cx + sd * ex - U(1), ey + U(10) + ty, U(1) || 1, U(2), P.white);
+    }
+  }
+  // hair on top
+  const hh = o.hair || 'short';
+  if (hh === 'short' || hh === 'bob' || hh === 'long' || hh === 'spiky') {
+    const top = [];
+    for (let i = 0; i <= 14; i++) {
+      const a = PI + (i / 14) * PI;
+      top.push([cx + Math.cos(a) * (rx + U(3)), cy - U(2) + sin(a) * (ry + U(5))]);
+    }
+    const fringe = hh === 'spiky'
+      ? [[cx + rx + U(3), cy - U(4)], [cx + U(26), cy - U(14)], [cx + U(18), cy - U(8)], [cx + U(10), cy - U(18)], [cx, cy - U(10)], [cx - U(10), cy - U(18)], [cx - U(18), cy - U(8)], [cx - U(26), cy - U(14)], [cx - rx - U(3), cy - U(4)]]
+      : [[cx + rx + U(3), cy + U(2)], [cx + U(30), cy - U(14)], [cx + U(10), cy - U(18)], [cx - U(6), cy - U(13)], [cx - U(22), cy - U(20)], [cx - rx - U(3), cy + U(2)]];
+    const shape = [...top, ...fringe];
+    poly(ctx, shape.map(([x, y]) => [x + Math.sign(x - cx) * 2, y - 2]), K);
+    poly(ctx, shape, pal.H);
+    sq(ctx, arc(cx - U(6), cy - U(28), U(16), U(10), PI * 1.15, PI * 1.55), pal.h, U(3));
+    if (hh === 'spiky') {
+      for (let i = -2; i <= 2; i++) {
+        const sx = cx + i * U(14);
+        poly(ctx, [[sx - U(8), cy - ry + U(4)], [sx + U(2), cy - ry - U(14)], [sx + U(8), cy - ry + U(4)]], K);
+        poly(ctx, [[sx - U(6), cy - ry + U(4)], [sx + U(2), cy - ry - U(11)], [sx + U(6), cy - ry + U(4)]], pal.H);
+      }
+    }
+  } else if (hh === 'bun') {
+    disc(ctx, cx, cy - ry - U(6), U(12) + 2, K);
+    disc(ctx, cx, cy - ry - U(6), U(12), pal.H);
+    const cap = arc(cx, cy - U(4), rx + U(3), ry + U(2), PI, PI * 2, 14);
+    poly(ctx, [...cap, [cx + rx, cy - U(6)], [cx, cy - U(20)], [cx - rx, cy - U(6)]], pal.H);
+  } else if (hh === 'towel') {
+    const cap = arc(cx, cy - U(6), rx + U(6), ry + U(10), PI, PI * 2, 14);
+    poly(ctx, [...cap.map(([x, y]) => [x, y - 2]), [cx + rx + U(6), cy - U(8)], [cx - rx - U(6), cy - U(8)]], K);
+    poly(ctx, [...cap, [cx + rx + U(5), cy - U(10)], [cx - rx - U(5), cy - U(10)]], P.white);
+    for (let i = 0; i < 4; i++) sq(ctx, arc(cx, cy - U(6), rx - U(4) - i * U(6), ry - i * U(5), PI * 1.15, PI * 1.6), P.silver, 2);
+  } else if (hh === 'puff') {
+    for (const [dx, dy, rr] of [[-26, -18, 18], [26, -18, 18], [-12, -34, 20], [12, -34, 20], [0, -40, 18], [-36, 0, 12], [36, 0, 12]]) disc(ctx, cx + U(dx), cy + U(dy), U(rr) + 2, K);
+    for (const [dx, dy, rr] of [[-26, -18, 18], [26, -18, 18], [-12, -34, 20], [12, -34, 20], [0, -40, 18], [-36, 0, 12], [36, 0, 12]]) disc(ctx, cx + U(dx), cy + U(dy), U(rr), pal.H);
+  } else if (hh === 'bald') {
+    for (const sd of [-1, 1]) {
+      oval(ctx, cx + sd * (rx - U(4)), cy - U(6), U(6), U(12), pal.H);
+    }
+    R(ctx, cx - U(14), cy - ry + U(8), U(8), U(4), A(P.white, 0.5));
+  }
+  if (o.sweat) {
+    const sy = (floor(o.sweat * 8) % 6) * U(2);
+    disc(ctx, cx + rx - U(4), cy - U(16) + sy, U(4), P.blue);
+    R(ctx, cx + rx - U(5), cy - U(24) + sy, U(2), U(6), P.blue);
+    R(ctx, cx + rx - U(6), cy - U(18) + sy, U(2), U(2), P.white);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Jingles: helpers to write full-length tunes so the brand sting lands on the
+// end slate (the strings stay in the documented note format).
+
+/** Repeat a phrase n times. */
+export const rep = (s, n) => Array.from({ length: n }, () => s).join(' ');
+/** Join phrases into one tune string. */
+export const tune = (...parts) => parts.filter(Boolean).join(' ');

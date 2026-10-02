@@ -149,9 +149,9 @@ const NOVA = {
 const UNIT8 = {
   name: 'UNIT-8',
   robot: true,
-  suit: P.steel,
-  suitShade: P.slate,
-  suitHi: P.fog,
+  suit: P.silver,
+  suitShade: P.fog,
+  suitHi: P.white,
   suitDeep: P.ink,
   led: P.cyan,
   gesture: 'claw',
@@ -445,14 +445,14 @@ const HAIR_SHORT = spr(
 // messy spikes with a dyed streak
 const HAIR_SPIKY = spr(
   [
-    '....H....H...H......',
-    '...HH...HH..HHe..H..',
-    '..HhHH.HhHHHHee.HH..',
-    '..HhHHHhHHHHeHHHHH..',
-    '.HHhHHHHHHHHeHHHHHH.',
-    '.HHHHHHHHHHHHHHHHHj.',
-    '..jHHjHHHjHHHHjHHHj.',
-    '..j..H...H..H...Hj..',
+    '....H....H...e......',
+    '...HH...HH..eeH..H..',
+    '..HhHH.HhHH.eeHHHH..',
+    '..HhHHHhHHHeeHHHHH..',
+    '.HHhHHHHHHHeeHHHHHH.',
+    '.HHHHHHHHHHeHHHHHHj.',
+    '..jHHjHHHjHeHHjHHHj.',
+    '..j..HH..HH...HH.j..',
     '..j..............j..',
   ],
   -10,
@@ -484,7 +484,7 @@ const BEARD = spr(
     '..Z..............Z..',
     '..ZZ............ZZ..',
     '..ZZ............ZZ..',
-    '..ZZZ.zZZZZZZz.ZZZ..',
+    '..ZZZ.ZZZZZZZZ.ZZZ..',
     '..ZZZZ........ZZZZ..',
     '...ZZZ........ZZZ...',
     '....ZZZZZZZZZZZZ....',
@@ -541,23 +541,23 @@ const BACK_BOB = sym(
 // big natural curls with a headband (24-wide grid)
 const HAIR_CURLY = spr(
   [
-    '......hHh..hHHh..hHh....',
-    '....hHHHHHHHHHHHHHHHh...',
-    '...hHHjHHHHHjHHHHHjHHh..',
-    '..hHHHHHHjHHHHHHjHHHHHh.',
-    '.hHHjHPPPPPPPPPPPPPHjHHh',
-    '.HHjHH.............HHjHH',
-    'hHHHj...............jHHh',
-    'HHjHj...............jHjH',
-    '.HHHj...............jHHh',
-    'hHjHj...............jHjH',
-    'HHHHj...............jHHH',
-    '.hHHj...............jHh.',
-    'HHjHj...............jHjH',
-    '.HHHHj.............jHHH.',
-    '..hHHHj...........jHHh..',
-    '...jHHHj.........jHHj...',
-    '.....jjj.........jjj....',
+    '.....HHH...HHHH...HHH...',
+    '...HHHhHHjHHhhHHjHHhHH..',
+    '..HHhHHjHHhHHHjHHhHHHHH.',
+    '.HHhHHHHhHHHjHHHhHHjHHHH',
+    '.HjHHPPPPPPPPPPPPPPHHhHH',
+    'HHhHj..............jHhHH',
+    'HhHHj..............jHHhH',
+    '.HHjj..............jjHH.',
+    'HHhHj..............jHhHH',
+    'HhHHj..............jHHhH',
+    '.HHjj..............jjHH.',
+    'HHhHj..............jHhHH',
+    'HhHHj..............jHHhH',
+    '.HHjHj............jHjHH.',
+    '..HhHHj..........jHHhH..',
+    '...jHHH..........HHHj...',
+    '.....jj..........jj.....',
   ],
   -12,
   -4,
@@ -591,13 +591,13 @@ const HAIR_PONY = spr(
     '....HhhHHHHHHHHH....',
     '...HhHHHHHHHHHHHj...',
     '..HhHHHHHjHHHHHHHj..',
-    '..Hh............Hj..',
-    '..hH............jH..',
-    '..Hh............Hj..',
-    '..hH............jH..',
-    '..Hh............Hj..',
-    '..h..............j..',
-    '.h................j.',
+    '..hH............Hj..',
+    '..hH............Hj..',
+    '..hH............Hj..',
+    '..hH............Hj..',
+    '..hH............Hj..',
+    '..H..............j..',
+    '.H................j.',
   ],
   -10,
   -4,
@@ -872,7 +872,7 @@ const HOODIE = sym(
   -2,
 );
 const DRAWSTRINGS = sym(['.................8..', '.................8..', '.................8..', '.................8..', '.................9..'], 2);
-const HEADPHONES = sym(['..............a.....', '............AAa.....', '...........AAAa.....', '...........AaAa.....', '............aa......'], -3);
+const HEADPHONES = sym(['.............aa.....', '............AAa.....', '...........AA0a.....', '...........AA0a.....', '............aa......'], -3);
 
 // open bomber jacket over a crew-neck tee
 const FLIGHT = sym([
@@ -920,10 +920,10 @@ const HAND_REST = spr(
 const GESTURES = {
   palm: spr(['.SsSs.', '.SSSS.', '.SSSSS', '.SSSS.', '..sS..', '.wEw..', 'DUUUD.', 'UUUUU.', 'uUUUUu', '.uuuu.'], -16, -8),
   thumb: spr(['...S..', '...S..', '.SSSs.', '.SSSSs', '.sSSs.', '.wEw..', 'DUUUD.', 'UUUUU.', 'uUUUUu', '.uuuu.'], -16, -8),
-  claw: spr(['.9.9.9', '.99999', '..888.', '..+++.', '.DUUUD', '.UUUUU', '.UUUUU', '.uUUUu', '..uuu.'], -16, -7),
+  claw: spr(['+.+.+.', '+++++.', '.999..', '=UUU=.', '=UUu=.', '=UUu=.', '=UUu=.', '=uuu=.', '.===..'], -16, -7),
 };
 const ROBOT_REST = spr(
-  ['.DDD............', 'DUUUDDD.........', 'UUUUUUUDD8+9.9..', 'uUUUUUUUU8+999..', '.uuuuuuuu8+9.9..'],
+  ['.===............', '=UUU===.........', 'UUUUUUU==9+.+...', 'uUUUUUUUu9+++...', '.======u=9+.+...'],
   -17,
   -3,
 );
@@ -943,43 +943,46 @@ const PROPS = {
 
 const ROBOT_HEAD = spr(
   [
-    '..VVVVVVVVVVVVVVVV..',
-    '.VUUUUUUUUUUUUUUUUu.',
-    '.VU8UUUUUUUUUUUU8Uu.',
-    '.VUDDDDDDDDDDDDDDUu.',
-    '9VUDKKKKKKKKKKKKDUu9',
-    '8VUDKKKKKKKKKKKKDUu8',
-    '8VUDKKKKKKKKKKKKDUu8',
-    '8VUDKKKKKKKKKKKKDUu8',
-    '9VUDKKKKKKKKKKKKDUu9',
-    '.VUDKKKKKKKKKKKKDUu.',
-    '.VUDKKKKKKKKKKKKDUu.',
-    '.VUDKKKKKKKKKKKKDUu.',
-    '.VUDKKKKKKKKKKKKDUu.',
-    '.VUDDDDDDDDDDDDDDUu.',
-    '.VU8UUUUUUUUUUUU8Uu.',
-    '..uuuuuuuuuuuuuuuu..',
+    '..==================..',
+    '.=VVVVVVVVVVVVVVVVVV=.',
+    '.=VU9UUUUUUUUUUUU9Uu=.',
+    '.=VU++++++++++++++Uu=.',
+    '.=VU+KKKKKKKKKKKK+Uu=.',
+    '+=VU+KKKKKKKKKKKK+Uu=+',
+    '9=VU+KKKKKKKKKKKK+Uu=9',
+    '9=VU+KKKKKKKKKKKK+Uu=9',
+    '+=VU+KKKKKKKKKKKK+Uu=+',
+    '.=VU+KKKKKKKKKKKK+Uu=.',
+    '.=VU+KKKKKKKKKKKK+Uu=.',
+    '.=VU+KKKKKKKKKKKK+Uu=.',
+    '.=VU+KKKKKKKKKKKK+Uu=.',
+    '.=VU++++++++++++++Uu=.',
+    '.=VU9UUUUUUUUUUUU9Uu=.',
+    '.=uuuuuuuuuuuuuuuuuu=.',
+    '..==================..',
   ],
-  -10,
+  -11,
   -1,
 );
-const ROBOT_NECK = spr(['..=**=..', '..====..', '..=**=..', '..====..'], -4, 15);
+const ROBOT_NECK = spr(['=9999=', '======', '=9999='], -3, 16);
 const ROBOT_BODY = sym([
-  '..VVVVV.............',
-  '.VUUUUUVVVVVVVVVVVVV',
-  'VUU8UUUUVUUUUUUUUUUU',
-  'VUUUUUUUuUUUUUUUUUUU',
-  'uUUUUUUuuUUUU*******',
-  '.uuuuuuuUUUUU*======',
-  '...UUUUuUUUUU*======',
-  '...UUUUuUUUUU*======',
-  '...UUUUuUUUUU*======',
-  '...UUUUuUUUUU*======',
-  '...UUUUuUUUUU*******',
-  '...UUUUuUUUUUUUUUUUU',
-  '...UUUUuUU8UUUUUUUUU',
-  ...FILL('...UUUUuUUUUUUUUUUUU', 17),
-]);
+  '...=====............',
+  '..=VVVVU=...........',
+  '.=VUUUUUu=.=========',
+  '.=VUUUUUu==VVVVVVVVV',
+  '.=uUUUUuu=VUUUUUUUUU',
+  '..=uuuuu=.VUU+++++++',
+  '...=UUu=..VUU+======',
+  '...=UUu=..VUU+======',
+  '...=UUu=..VUU+======',
+  '...=UUu=..VUU+======',
+  '...=UUu=..VUU+======',
+  '...=UUu=..VUU+++++++',
+  '...=UUu=..VUUUUUUUUU',
+  '..=UUUUu=.VUUUUUUUUU',
+  '..=U9UUu=.VUUUUUUUuU',
+  ...FILL('..=UUUUu=.VUUUUUUUUU', 17),
+], -2);
 
 // LED eyes (left eye; mirrored unless a right one is given), rows from hy + 4
 const LED_EYES = {
@@ -1017,8 +1020,8 @@ function drawRobot(ctx, x, y, L, st) {
   const by = y + 18;
 
   // antenna with a blinking tip
-  ctx.fillStyle = P.slate;
-  ctx.fillRect(hx + 4, hy - 2, 1, 2);
+  ctx.fillStyle = P.steel;
+  ctx.fillRect(hx + 4, hy - 2, 1, 1);
   ctx.fillStyle = phase % 1.2 < 0.6 ? P.red : P.darkRed;
   ctx.fillRect(hx + 4, hy - 4, 2, 2);
 
@@ -1029,14 +1032,14 @@ function drawRobot(ctx, x, y, L, st) {
   for (let i = 0; i < 4; i++) {
     const on = Math.floor(phase * 3 + i * 1.7) % 3 !== 0;
     ctx.fillStyle = on ? lights[i] : P.slate;
-    ctx.fillRect(x - 5 + i * 3, by + 6 + (i % 2) * 2, 2, 1);
+    ctx.fillRect(x - 5 + i * 3, by + 5 + (i % 2) * 2, 2, 1);
   }
 
   draw(ctx, ROBOT_HEAD, hx, hy, pal);
   // a little screen sheen
   ctx.fillStyle = P.slate;
-  ctx.fillRect(hx + 4, hy + 3, 2, 1);
-  ctx.fillRect(hx + 5, hy + 4, 1, 1);
+  ctx.fillRect(hx + 3, hy + 3, 2, 1);
+  ctx.fillRect(hx + 4, hy + 4, 1, 1);
 
   if (!blink) {
     const e = speaking && emotion === 'thinking' ? LED_EYES.neutral : LED_EYES[emotion];

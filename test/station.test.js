@@ -87,7 +87,7 @@ const makeEpisode = (channel, programId) => {
 };
 
 /** Fake Producer: records what the station asks for and can be told what to do. */
-function makeFakeProducer(channelRef) {
+function makeFakeProducer() {
   const producer = {
     unavailable: new Set(), // programmes canProduce() refuses
     emptyHanded: new Set(), // programmes produce() returns null for
@@ -134,7 +134,7 @@ const fakeChain = { status: () => [{ name: 'fake', configured: true, cooldownUnt
 function makeStation({ channel = makeChannel(), config = CONFIG, stories = [], log = silentLogger } = {}) {
   const state = { channel };
   const desk = makeFakeDesk(stories);
-  const producer = makeFakeProducer(() => state.channel);
+  const producer = makeFakeProducer();
   const station = new Station({ config, newsDesk: desk, producer, chain: fakeChain, channel: () => state.channel, log });
   return { station, producer, desk, state, channel };
 }
