@@ -523,9 +523,8 @@ const RIB_Y = new Float32Array(33);
 const CLAB = { cv: null, top: 0, h: 0, turn: 0 };
 const C_STRIPES = [[-0.58, 0.05, P.white, 0.05, 0.95]];
 const MATTE = [P.black, P.ink, P.slate, P.steel, P.fog, P.silver];
-const RIM_OPEN = { k: 0.8 };
-const RIM_SOFT = { k: 0.45 };
-const CANOPY_O = { rows: 0, ramp: FABRIC, ambient: 0.22, label: CLAB, stripes: C_STRIPES, rim: RIM_OPEN, tilt: 0, seam: 0.55 };
+const RIM_DYN = { k: 0.8 };
+const CANOPY_O = { rows: 0, ramp: FABRIC, ambient: 0.22, label: CLAB, stripes: C_STRIPES, rim: RIM_DYN, tilt: 0, seam: 0.55 };
 const SHAFT_O = { rows: 0, ramp: GRAPHITE, ambient: 0.2, stripes: [[-0.4, 0.3, P.steel]], rim: { k: 0.7 }, seam: 0.5 };
 const TIP_O = { rows: 0, ramp: METAL, ambient: 0.3, rim: { k: 0.6 }, seam: 0.5 };
 const COLLAR_O = { rows: 0, ramp: METAL, ambient: 0.25, stripes: [[-0.45, 0.14, P.white]], rim: { k: 0.8 }, seam: 0.4 };
@@ -703,11 +702,14 @@ function umbrella(ctx, cx, top, k, open, turn) {
   CLAB.h = hc;
   CLAB.turn = turn;
   // furled, the cloth is matte (no white, no softbox stripe); open, the taut panels take the light
-  const furled = open <= 0.1;
-  CANOPY_O.ramp = furled ? MATTE : FABRIC;
-  CANOPY_O.stripes = furled ? null : C_STRIPES;
-  CANOPY_O.ambient = furled ? 0.26 : 0.22;
-  CANOPY_O.rim = furled ? RIM_SOFT : RIM_OPEN;
+  // (eased across the opening: the softbox stripe widens in, no pop when the texture changes)
+  const taut = smooth(prog(open, 0.1, 0.7));
+  CANOPY_O.ramp = taut < 0.5 ? MATTE : FABRIC;
+  C_STRIPES[0][1] = 0.05 * taut;
+  CANOPY_O.stripes = taut > 0.05 ? C_STRIPES : null;
+  CANOPY_O.ambient = lerp(0.26, 0.22, taut);
+  RIM_DYN.k = lerp(0.45, 0.8, taut);
+  CANOPY_O.rim = RIM_DYN;
   CANOPY_O.rows = hc;
   CANOPY_O.tilt = 0.22 * e;
   lathe(ctx, cx, top + tipH, CANOPY, CANOPY_O);

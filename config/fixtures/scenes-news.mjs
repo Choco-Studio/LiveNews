@@ -246,7 +246,7 @@ export const NEWS_SCENES = {
     // left side: big near houses down to the vanishing point
     let x = -40;
     let scale = 1;
-    while (x < vx - 40) {
+    while (x < vx - 40 && scale > 0.12) {
       const w = (190 + r() * 80) * scale;
       const h = (300 + r() * 90) * scale;
       const bottom = vy + (H * 0.72 - vy) * scale;
@@ -257,7 +257,7 @@ export const NEWS_SCENES = {
     // right side: a shorter row
     x = W + 30;
     scale = 0.9;
-    while (x > vx + 60) {
+    while (x > vx + 60 && scale > 0.12) {
       const w = (200 + r() * 60) * scale;
       const h = (260 + r() * 80) * scale;
       const bottom = vy + (H * 0.7 - vy) * scale;

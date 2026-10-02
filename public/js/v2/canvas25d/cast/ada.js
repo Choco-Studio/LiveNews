@@ -189,6 +189,10 @@ function drawStraight(buf, L, m, head, s, sk) {
     // sheen windows: on the crown where it turns to the key; on the long side its outer face, above the jaw
     ST.sw = zone === 2 ? swPanel : swCrown;
     ST.skip = zone === 2 ? 0 : 0.25; // every clump of the long side carries its sheen stroke
+    // separations: long strokes broken rarely (short dashes on the crown would read as stitching)
+    ST.gap = zone === 2 ? 3.2 : 7.5;
+    ST.sepOn = zone === 2 ? 0.55 : 0.82;
+    ST.sepShare = zone === 2 ? 0.65 : 0.45;
     ST.hiW = zone === 2 ? 0.62 : tr === 2 ? 0.55 : 0.45;
     if (zone === 1) {
       ST.lo = 0.8 * RV;

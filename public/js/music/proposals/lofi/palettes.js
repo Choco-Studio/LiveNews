@@ -47,9 +47,9 @@ export const PALETTES = {
     lead: { inst: 'bell', oct: 12, variants: ['statement'] },
     perc: 'none', tex: 0,
     fx: { reverb: 0.16, echo: 0.06, tremolo: 0 },
-    duckDb: -9,
+    duckDb: -6,
     moments: {
-      roundup: { energy: 0.6, gain: -7, lp: 2400, pocket: 0, bright: 0.9, layers: { arp: 1.5, bass: 0.7 } }, // the ostinato carries it, even on small speakers
+      roundup: { energy: 0.6, gain: -4, lp: 2400, pocket: 0, bright: 0.9, layers: { arp: 1.5, bass: 0.7 } }, // the ostinato carries it, even on small speakers
     },
   },
   'world-now/finally': {
@@ -66,12 +66,12 @@ export const PALETTES = {
     lead: { inst: 'softtri', oct: 12, mode: 'sparse', maxNotes: 2 },
     perc: 'none', tex: 0,
     fx: { reverb: 0.22, echo: 0.12, tremolo: 0 },
-    duckDb: -9,
-    duck: { melody: 0.2 }, // the triangle melody sits nearest the voice: -14 dB under speech
+    duckDb: -6,
+    duck: { melody: 0.28 }, // the triangle melody sits nearest the voice: -11 dB under speech
     moments: {
       // A soft triangle root under the pluck keeps it warm and grown-up (never a music box).
-      finally: { energy: 0.45, gain: -1, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.8, bass: 0.6 }, lead: 'sparse' },
-      chat: { energy: 0.45, gain: -1, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.6, bass: 0.6 }, lead: 'sparse' },
+      finally: { energy: 0.45, gain: 2, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.8, bass: 0.6 }, lead: 'sparse' },
+      chat: { energy: 0.45, gain: 2, lp: 2600, pocket: 0, bright: 1, layers: { arp: 0.9, lead: 0.6, bass: 0.6 }, lead: 'sparse' },
     },
   },
 
@@ -93,7 +93,7 @@ export const PALETTES = {
     fx: { reverb: 0.26, echo: 0.05, tremolo: 0.2 },
     duckDb: -6,
     moments: {
-      story: { energy: 0.25, gain: -9, lp: 1300, pocket: 0, bright: 0.8, comp: 'float', layers: { pad: 0.75, bass: 0.6, keys: 0.4 } },
+      story: { energy: 0.25, gain: -10, lp: 1300, pocket: 0, bright: 0.8, comp: 'float', layers: { pad: 0.75, bass: 0.6, keys: 0.4 } },
     },
   },
 
@@ -112,14 +112,14 @@ export const PALETTES = {
     lead: { inst: 'pluck', oct: 12, variants: ['statement'] },
     perc: 'none', tex: 0,
     fx: { reverb: 0.16, echo: 0.32, tremolo: 0 },
-    duckDb: -9,
+    duckDb: -6,
     moments: {
       // The pulse-12 arpeggio is the programme's identity: it sits above a lighter triangle (audible on small speakers too).
-      headlines: { energy: 0.6, gain: -8, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.65, arp: 1.4, hat: 0.6 } },
-      chat: { energy: 0.5, gain: -9, lp: 2000, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.65, arp: 1.15 } },
-      number: { energy: 0.45, gain: -10, lp: 1900, pocket: 0, bright: 0.9, layers: { pad: 0.8, bass: 0.6, arp: 0.9 } },
-      finally: { energy: 0.6, gain: -8, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.65, arp: 1.4, hat: 0.6 } },
-      signoff: { energy: 0.55, gain: -8, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.9, bass: 0.65, arp: 1.15 } },
+      headlines: { energy: 0.6, gain: -7, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.65, arp: 1.4, hat: 0.6 } },
+      chat: { energy: 0.5, gain: -8, lp: 2000, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.65, arp: 1.15 } },
+      number: { energy: 0.45, gain: -9, lp: 1900, pocket: 0, bright: 0.9, layers: { pad: 0.8, bass: 0.6, arp: 0.9 } },
+      finally: { energy: 0.6, gain: -7, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.8, bass: 0.65, arp: 1.4, hat: 0.6 } },
+      signoff: { energy: 0.55, gain: -7, lp: 2200, pocket: 0, bright: 1, layers: { pad: 0.9, bass: 0.65, arp: 1.15 } },
       story: { energy: 0.25, gain: -12, lp: 1300, pocket: 0, bright: 0.8, layers: { pad: 0.8, bass: 0.7 } }, // owner switch 'soft' only
     },
   },
@@ -142,10 +142,10 @@ export const PALETTES = {
     duckDb: -6,
     duck: { melody: 0 }, // bells never sound under a voice
     moments: {
-      coldOpen: { energy: 0.4, gain: -12, lp: 1200, pocket: 0, bright: 0.9, layers: { pad: 0.9, bass: 0.8, lead: 1 }, lead: 'sparse', entry: 'xfade' },
-      story: { energy: 0.35, gain: -12, lp: 1200, pocket: 0, bright: 0.9, layers: { pad: 0.9, bass: 0.8, lead: 0.8 }, lead: 'sparse', hidden: true },
+      coldOpen: { energy: 0.4, gain: -10, lp: 1200, pocket: 0, bright: 0.9, layers: { pad: 0.9, bass: 0.8, lead: 1 }, lead: 'sparse', entry: 'xfade' },
+      story: { energy: 0.35, gain: -10, lp: 1200, pocket: 0, bright: 0.9, layers: { pad: 0.9, bass: 0.8, lead: 0.8 }, lead: 'sparse', hidden: true },
       // Owner switch 'soft': the pad and sub stay up on presenter shots too (bells still only in gaps).
-      storySoft: { energy: 0.3, gain: -14, lp: 1100, pocket: 0, bright: 0.85, layers: { pad: 0.9, bass: 0.8, lead: 0.7 }, lead: 'sparse' },
+      storySoft: { energy: 0.3, gain: -12, lp: 1100, pocket: 0, bright: 0.85, layers: { pad: 0.9, bass: 0.8, lead: 0.7 }, lead: 'sparse' },
     },
   },
   'cosmos/finally': {
@@ -165,7 +165,7 @@ export const PALETTES = {
     duckDb: -6,
     duck: { melody: 0 },
     moments: {
-      story: { energy: 0.35, gain: -12, lp: 1200, pocket: 0, bright: 1, layers: { pad: 0.9, bass: 0.7, lead: 0.8 }, lead: 'sparse', hidden: true },
+      story: { energy: 0.35, gain: -10, lp: 1200, pocket: 0, bright: 1, layers: { pad: 0.9, bass: 0.7, lead: 0.8 }, lead: 'sparse', hidden: true },
     },
   },
 
@@ -186,8 +186,8 @@ export const PALETTES = {
     fx: { reverb: 0.15, echo: 0.06, tremolo: 0.15 },
     duckDb: -4, // Money bible: beds 20 LU under the voice (target), 18 LU floor
     moments: {
-      intro: { energy: 0.5, gain: -11, lp: 2400, pocket: 0, bright: 1, comp: 'andTwoFour', layers: { pad: 0.8, bass: 0.9, keys: 0.9 }, stagger: { pad: 0, bass: 1, keys: 2 } },
-      signoff: { energy: 0.5, gain: -11, lp: 2400, pocket: 0, bright: 1, comp: 'andTwoFour', layers: { bass: 0.9, keys: 0.9 } },
+      intro: { energy: 0.5, gain: -10, lp: 2400, pocket: 0, bright: 1, comp: 'andTwoFour', layers: { pad: 0.8, bass: 0.9, keys: 0.9 }, stagger: { pad: 0, bass: 1, keys: 2 } },
+      signoff: { energy: 0.5, gain: -10, lp: 2400, pocket: 0, bright: 1, comp: 'andTwoFour', layers: { bass: 0.9, keys: 0.9 } },
     },
   },
   'money-minute/tape-up': tape('up', ['Fmaj9', 'Bbmaj9'], 'F Ionian'),
@@ -195,7 +195,7 @@ export const PALETTES = {
   'money-minute/tape-mixed': tape('mixed', ['Gm9', 'C9sus'], 'G Dorian, unresolved'),
   'money-minute/tape-neutral': {
     ...tape('neutral', ['F5add6'], 'F, no third: an F-C-D drone over an F pedal'),
-    moments: { number: { energy: 0.3, gain: -12, lp: 1400, pocket: 0, bright: 0.9, layers: { pad: 0.9, bass: 0.7 }, bass: 'pedal' } },
+    moments: { number: { energy: 0.3, gain: -8.5, lp: 1400, pocket: 0, bright: 0.9, layers: { pad: 0.9, bass: 0.7 }, bass: 'pedal' } },
   },
   // Owner switch bedUnderStories: 'drone' (default 'off' = silence under stories).
   'money-minute/drone': {
@@ -242,7 +242,7 @@ export const PALETTES = {
     fx: { reverb: 0.22, echo: 0.14, tremolo: 0 },
     duckDb: -9,
     moments: {
-      bumper: { energy: 0.6, gain: 3, lp: 5000, pocket: 0, bright: 1.2, layers: { arp: 1, bass: 1, tex: 0.5 }, entry: 'instant' },
+      bumper: { energy: 0.6, gain: 5, lp: 5000, pocket: 0, bright: 1.2, layers: { arp: 1.3, bass: 0.8, tex: 0.5 }, entry: 'instant' }, // the swung pluck leads
     },
   },
   'channel/holding': {
@@ -260,7 +260,7 @@ export const PALETTES = {
     perc: 'none', tex: 0,
     fx: { reverb: 0.3, echo: 0, tremolo: 0 },
     duckDb: -9,
-    moments: { holding: { energy: 0.2, gain: -6, lp: 3000, pocket: 0, bright: 1, layers: { pad: 0.9, bass: 0.6 }, entry: 'instant' } },
+    moments: { holding: { energy: 0.2, gain: -3, lp: 3000, pocket: 0, bright: 1, layers: { pad: 0.9, bass: 0.6 }, entry: 'instant' } },
   },
   // Standby (server unreachable): the cosy lo-fi home bed, endless and evolving.
   'channel/standby': {
@@ -307,7 +307,7 @@ function tape(kind, chords, mood) {
     fx: { reverb: 0.15, echo: 0.06, tremolo: 0.15 },
     duckDb: -4, // Money bible: beds 20 LU under the voice (target), 18 LU floor
     moments: {
-      number: { energy: 0.45, gain: -12, lp: 2200, pocket: 0, bright: 0.95, comp: 'andTwoFour', layers: { keys: 0.9, bass: 0.9 } },
+      number: { energy: 0.45, gain: -8.5, lp: 2200, pocket: 0, bright: 0.95, comp: 'andTwoFour', layers: { keys: 0.9, bass: 0.9 } },
     },
   };
 }

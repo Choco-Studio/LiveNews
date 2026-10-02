@@ -14,12 +14,12 @@
 // She rests a pen in her hand (props: ['pen'], drawn by HANDS' drawProps; it is
 // never a gesture cue) and moves least of the cast (persona.energy 0.6).
 import { P } from '../../../palette.js';
-import { toneN, decal } from '../pixbuf.js';
+import { toneN } from '../pixbuf.js';
 import { headHW } from '../head.js';
 import { clamp } from '../space.js';
 import { GROUPS } from '../character.js';
 import { defineLook, SKIN_LIGHT } from './base.js';
-import { LocalXY, localBox, clumpTone, strokeTone, selOutEdge, hairLight, rimMat, HeadWidthLUT } from './kit-a.js';
+import { LocalXY, localBox, clumpTone, strokeTone, selOutEdge, hairLight, rimMat, HeadWidthLUT, dec } from './kit-a.js';
 
 export const penny = defineLook({
   id: 'penny',
@@ -183,8 +183,8 @@ export function drawChignon(buf, L, m, head, s, sk) {
 function drawPearls(buf, L, head, s) {
   if (!L.pearls) return;
   const H = L.head, E = L.ears;
-  const [hi, base, sh] = L.pearls.map(decal);
-  for (const side of [-1, 1]) {
+  const hi = dec(L.pearls[0]), base = dec(L.pearls[1]), sh = dec(L.pearls[2]);
+  for (let side = -1; side <= 1; side += 2) {
     const hw = headHW(H, E.y, 0);
     const turn = Math.sin(head.yaw) * side;
     if (turn > 0.35) continue; // hidden behind the head

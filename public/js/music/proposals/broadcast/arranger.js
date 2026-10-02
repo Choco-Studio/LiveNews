@@ -293,19 +293,19 @@ export class Bed {
     return true;
   }
 
-  // The programme open's last chord, caught on the downbeat after the cut: a
-  // soft timpani "do", the home chord and a cymbal wash, then the groove enters.
+  // The programme open's last chord, caught on the cut: the open itself ends
+  // on a timpani button (audio/themes.js), so the bed adds no hit of its own;
+  // the home chord (the open's final chord) blooms under the open's ringing
+  // fade and the root holds it, then the groove enters bar by bar.
   catchOpen(t) {
     const s = this.s;
     const d = this.def;
     const lay = this.layers.find((l) => l.L.type === 'pad') || this.layers[0];
     const home = chord(d.pkg.home);
-    // Short and soft: the presenter's first word comes about a second after the cut.
+    // Short and soft: the presenter's first word comes about half a second after the cut.
     const wave = d.pkg.timbre.lead === 'horn' ? 'horn' : 'soft';
-    s.pad(lay.in, t, this.barSec * 0.6, voice(home, null, { n: 4, lo: wave === 'horn' ? 38 : 50, hi: wave === 'horn' ? 55 : 70 }), 0.7, { wave, a: 0.04, r: 1.2, cut: 1300, cutTo: 700 });
-    s.timp(this.fx, t, timpDo(d.tonic), 0.45);
-    if (d.pkg.timbre.noise !== false) s.cymbal(this.fx, t, 0.4, { decay: 2 });
-    s.tone(this.fx, t, this.barSec * 0.6, bassNote(home, null), 0.6, { wave: 'tri', a: 0.01, d: 0.6, s: 0.6, r: 0.5, gain: 0.5 });
+    s.pad(lay.in, t, this.barSec * 0.6, voice(home, null, { n: 4, lo: wave === 'horn' ? 38 : 50, hi: wave === 'horn' ? 55 : 70 }), 0.7, { wave, a: 0.18, r: 1.2, cut: 1100, cutTo: 700 });
+    s.tone(this.fx, t, this.barSec * 0.6, bassNote(home, null), 0.6, { wave: 'tri', a: 0.06, d: 0.6, s: 0.6, r: 0.5, gain: 0.5 });
   }
 
   // ------------------------------------------------------------ fades

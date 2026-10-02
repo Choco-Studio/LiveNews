@@ -16,7 +16,16 @@
 // the same text) says, so durations match; char and word indexes are mapped
 // back to the original sentence for captions and cues.
 
-import { normalizeForSpeech, toOriginal } from '../voice/speechtext.js';
+// The normaliser belongs to the voice stream: loaded so that a broken or
+// missing speechtext.js leaves timelines on the raw text instead of taking
+// the whole module graph (picture and sound) down with it.
+let normalizeForSpeech = null;
+let toOriginal = null;
+try {
+  ({ normalizeForSpeech, toOriginal } = await import('../voice/speechtext.js'));
+} catch (err) {
+  globalThis.console?.warn?.('[visemes] speech normaliser unavailable; mouths follow the raw text', err?.message ?? err);
+}
 
 export const VISEMES = Object.freeze(['rest', 'MBP', 'FV', 'TH', 'L', 'EE', 'AH', 'OH', 'OO', 'WQ', 'S']);
 
@@ -74,6 +83,15 @@ const EN_WORDS = {
   once: [C('WQ', D.W), V('AH', 0.6), C('L', D.N), C('S', D.S)],
   two: [C('L', D.T), V('OO', 0.34, true)],
   i: [V('AH', 0.66), G('EE', 0.36)],
+  wye: [C('WQ', D.W), V('AH', 0.66), G('EE', 0.36)],
+  four: [C('FV', D.FV), V('OH', 0.6, true)],
+  put: [C('MBP', D.MBP), V('OO', 0.4), C('L', D.T)],
+  output: [V('AH', 0.62), G('OO', 0.34), C('L', D.T), C('MBP', D.MBP), V('OO', 0.4), C('L', D.T)],
+  input: [V('EE', 0.38), C('L', D.N), C('MBP', D.MBP), V('OO', 0.4), C('L', D.T)],
+  full: [C('FV', D.FV), V('OO', 0.4), C('L', D.L)],
+  pull: [C('MBP', D.MBP), V('OO', 0.4), C('L', D.L)],
+  push: [C('MBP', D.MBP), V('OO', 0.4), C('S', D.SH)],
+  bush: [C('MBP', D.MBP), V('OO', 0.4), C('S', D.SH)],
   "i'm": [V('AH', 0.66), G('EE', 0.36), C('MBP', D.MBP)],
   said: [C('S', D.S), V('EE', 0.5), C('L', D.T)],
   says: [C('S', D.S), V('EE', 0.5), C('S', D.S)],
@@ -99,11 +117,21 @@ const EN_WORDS = {
   should: [C('S', D.SH), V('OO', 0.4), C('L', D.T)],
 };
 
+// 'ow' as in "cow" (AH gliding to OO) rather than "show" (OH): these stems.
+const OW_AW = /(?:^|[^sk])[hn]ow|^(?:w|c|v|pl|ch|br|all)ow|^bow(?!l)|(?:d|t|g|br|cr|fr|dr|cl)own|crowd|(?:p|t|fl|sh|c)ower|(?:^|h|f|r|g|sc)owl|powder|[tvb]owel|rowd|brows|drows/g;
+// 'our' keeps "hour"'s glide only in these; elsewhere it is "four", "course".
+const OUR_GLIDE = /^(?:h?ours?|flours?|sours?|scours?|devours?)$/;
+
 // English letters -> phones. Longest patterns first, with a little context.
 function englishPhones(s) {
   if (EN_WORDS[s]) return EN_WORDS[s].map((p) => ({ ...p, i: 0 }));
   const out = [];
   const n = s.length;
+  let aw = null;
+  if (s.includes('ow')) {
+    aw = new Set();
+    for (const m of s.matchAll(OW_AW)) aw.add(m.index + m[0].indexOf('ow'));
+  }
   const vowelBefore = (i) => /[aeiouy]/.test(s.slice(0, i));
   // "make", "time", "home", "use" (+ "s"/"d"): the silent e makes the vowel long.
   const magicE = (i) => isCons(s[i + 1]) && s[i + 1] !== 'w' && s[i + 1] !== 'x' && s[i + 2] === 'e' && (i + 3 === n || (i + 4 === n && /[sd]/.test(s[i + 3])));
@@ -142,8 +170,14 @@ function englishPhones(s) {
     if (two === 'ei' || two === 'ey') { push(i, V('EE', 0.46, true)); i += 2; continue; }
     if (two === 'ai' || two === 'ay') { push(i, V('EE', 0.54, true)); i += 2; continue; }
     if (two === 'oo') { push(i, V('OO', 0.34, true)); i += 2; continue; }
+    if (three === 'our' && !isV(s[i + 3]) && !OUR_GLIDE.test(s)) {
+      // "four", "your", "course", "court"; "journal", "adjourn" are an er.
+      push(i, s[i - 1] === 'j' ? V('WQ', 0.34) : V('OH', 0.6, true));
+      i += 3;
+      continue;
+    }
     if (two === 'ou') { push(i, V('AH', 0.62), G('OO', 0.34)); i += 2; continue; }
-    if (two === 'ow') { push(i, V('OH', 0.6), G('OO', 0.34)); i += 2; continue; }
+    if (two === 'ow') { push(i, aw?.has(i) ? V('AH', 0.68) : V('OH', 0.6), G('OO', 0.34)); i += 2; continue; }
     if (two === 'oi' || two === 'oy') { push(i, V('OH', 0.6), G('EE', 0.38)); i += 2; continue; }
     if (two === 'au' || two === 'aw') { push(i, V('OH', 0.64, true)); i += 2; continue; }
     if (two === 'oa' || (two === 'oe' && i + 2 === n)) { push(i, V('OH', 0.58, true)); i += 2; continue; }
@@ -169,7 +203,8 @@ function englishPhones(s) {
         else push(i, V('EE', 0.5));
         break;
       case 'i':
-        if (magicE(i) || /^(?:nd|ld)$/.test(s.slice(i + 1, i + 3))) push(i, V('AH', 0.68), G('EE', 0.36));
+        // "find", "mild", "kinds", "behind" (but not "window", "children").
+        if (magicE(i) || /^(?:nd|ld)(?:s|er|ers|ing|ly)?$/.test(s.slice(i + 1))) push(i, V('AH', 0.68), G('EE', 0.36));
         else push(i, V('EE', 0.38));
         break;
       case 'o':
@@ -178,6 +213,8 @@ function englishPhones(s) {
         break;
       case 'u':
         if (magicE(i)) push(i, V('OO', 0.34, true));
+        // "full", "pull", "bulletin", "push", "bush": a rounded short u.
+        else if (/[pbf]/.test(s[i - 1] ?? '') && (s.startsWith('ll', i + 1) || s.startsWith('sh', i + 1))) push(i, V('OO', 0.4));
         else push(i, V('AH', 0.52));
         break;
       case 'y':
@@ -252,7 +289,7 @@ const DIGITS = {
   en: ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'],
   es: ['cero', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'],
 };
-const EN_LETTERS = { a: 'ay', b: 'bee', c: 'see', d: 'dee', e: 'ee', f: 'ef', g: 'jee', h: 'aych', i: 'eye', j: 'jay', k: 'kay',
+const EN_LETTERS = { a: 'ay', b: 'bee', c: 'see', d: 'dee', e: 'ee', f: 'ef', g: 'jee', h: 'aych', i: 'i', j: 'jay', k: 'kay',
   l: 'el', m: 'em', n: 'en', o: 'oh', p: 'pee', q: 'kyoo', r: 'ar', s: 'es', t: 'tee', u: 'yoo', v: 'vee', w: 'dubbelyoo',
   x: 'eks', y: 'wye', z: 'zed' };
 const ES_LETTERS = { a: 'a', b: 'be', c: 'ce', d: 'de', e: 'e', f: 'efe', g: 'ge', h: 'ache', i: 'i', j: 'jota', k: 'ka', l: 'ele',
@@ -345,7 +382,7 @@ export function buildTimeline(text, { lang = 'en', rate = 1, normalise = true } 
   const src = String(text ?? '');
   let spoken = src;
   let map = null;
-  if (normalise && src.trim()) {
+  if (normalise && normalizeForSpeech && src.trim()) {
     try {
       const n = normalizeForSpeech(src, { lang: speechLang(lang), terminal: false });
       if (n && typeof n.spoken === 'string' && Array.isArray(n.map) && n.map.length === n.spoken.length + 1) {
@@ -354,7 +391,7 @@ export function buildTimeline(text, { lang = 'en', rate = 1, normalise = true } 
       }
     } catch { /* speak the raw text */ }
   }
-  const toOrig = (i) => (map ? toOriginal(map, i) : Math.min(i, src.length));
+  const toOrig = (i) => (map && toOriginal ? toOriginal(map, i) : Math.min(i, src.length));
   // Original whitespace tokens: the contract's word indexes.
   const oStarts = [];
   const oEnds = [];
@@ -582,6 +619,75 @@ export function sampleTimeline(tl, t, out = {}) {
     out.speaking = true;
     if (s.stress) out.accent = Math.sin(Math.PI * Math.min(1, Math.max(0, (t - s.t0) / Math.max(1, s.t1 - s.t0))));
   }
+  return out;
+}
+
+// ------------------------------------------------------------------- calm
+
+// The coarse stream for small faces (speechFrame(..., { calm: true })): on a
+// 384x216 face a new mouth shape ten times a second reads as chatter.
+const CALM_HOLD = 80; // ms every shape is held at least (lip closures excepted)
+const FOLD = new Set(['TH', 'L', 'S']); // tongue shapes: the lips barely move
+const JAW_TAPS = 7; // jaw = mean of the fine level over JAW_TAPS x JAW_STEP ms
+const JAW_STEP = 16;
+const calmCache = new WeakMap();
+const jawScratch = {};
+
+/** Coarse segments of a timeline: { segs, centers, total } (cached per timeline). */
+export function calmTimeline(tl) {
+  let c = calmCache.get(tl);
+  if (c) return c;
+  const segs = (tl?.segs ?? []).map((g) => ({ t0: g.t0, t1: g.t1, v: g.v, o: g.o, k: g.k }));
+  const shape = (x) => (x && x.k !== 'pause' && !FOLD.has(x.v) ? x.v : null);
+  // Tongue shapes take the lips of the sound they lead into (or follow).
+  for (let i = 0; i < segs.length; i++) {
+    const g = segs[i];
+    if (g.k !== 'pause' && FOLD.has(g.v)) g.v = shape(segs[i + 1]) ?? shape(segs[i - 1]) ?? 'rest';
+  }
+  const merge = (list) => {
+    const out = [];
+    for (const g of list) {
+      const last = out[out.length - 1];
+      if (last && last.v === g.v && last.k !== 'pause' && g.k !== 'pause') last.t1 = g.t1;
+      else out.push(g);
+    }
+    return out;
+  };
+  let list = merge(segs);
+  // Shapes shorter than the hold join a neighbour (the previous one, so the
+  // mouth lingers rather than anticipates), until none is left or only lip
+  // closures and pauses are short.
+  for (let guard = 0; guard < 400; guard++) {
+    const i = list.findIndex((g) => g.t1 - g.t0 < CALM_HOLD && g.v !== 'MBP' && g.k !== 'pause');
+    if (i < 0) break;
+    const g = list[i];
+    const prev = list[i - 1];
+    const next = list[i + 1];
+    const ok = (x) => x && x.k !== 'pause' && x.v !== 'MBP';
+    if (ok(prev)) prev.t1 = g.t1;
+    else if (ok(next)) next.t0 = g.t0;
+    else if (prev && prev.k !== 'pause') prev.t1 = g.t1;
+    else if (next && next.k !== 'pause') next.t0 = g.t0;
+    else { g.k = 'pause'; continue; } // alone between pauses: leave it
+    list.splice(i, 1);
+    list = merge(list);
+  }
+  c = { segs: list, centers: list.map((g) => (g.t0 + g.t1) / 2), total: tl?.total ?? 0 };
+  calmCache.set(tl, c);
+  return c;
+}
+
+/**
+ * The calm mouth at `t`: viseme/next/mix from calmTimeline(), the jaw (level)
+ * averaged over ~100 ms of the fine one (one opening per syllable is kept,
+ * but it moves at most ~0.12 per 60 fps frame). Other fields as sampleTimeline.
+ */
+export function sampleCalm(tl, t, out = {}) {
+  sampleTimeline(calmTimeline(tl), t, out);
+  let sum = 0;
+  const half = (JAW_TAPS - 1) / 2;
+  for (let k = -half; k <= half; k++) sum += sampleTimeline(tl, t + k * JAW_STEP, jawScratch).level;
+  out.level = sum / JAW_TAPS;
   return out;
 }
 

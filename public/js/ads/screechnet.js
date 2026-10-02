@@ -23,8 +23,8 @@ const T_ROOM = 4.0;
 const T_MODEM = 8.0;
 const T_FACE = 11.6;
 const T_HALL = 15.2;
-const T_END = 19.4;
-const LOST_HOLD = 2.2; // NO CARRIER, in silence, before the dialog slate
+const T_END = 19.0;
+const LOST_HOLD = 2.0; // NO CARRIER, in silence, before the dialog slate
 const DURATION = 25.0;
 const LB = 24; // letterbox bars (2.39:1)
 const SH_BEIGE = { d: mix(P.tan, P.fog, 0.5), f: 0.4, m: 1, side: 1 };
@@ -298,44 +298,44 @@ const teenArt = lazy(() =>
     TEEN_H,
     (c) => {
       const hx = 70;
-      const hy = 26;
+      const hy = 30;
       // shoulders and back of the hoodie, the hood bunched behind the neck
       begin();
-      pt(0, TEEN_H);
-      pt(4, 86);
-      pt(18, 66);
-      pt(44, 56);
-      pt(60, 54);
-      pt(84, 54);
-      pt(104, 58);
-      pt(126, 70);
-      pt(140, 84);
-      pt(150, TEEN_H);
+      pt(8, TEEN_H);
+      pt(12, 92);
+      pt(24, 72);
+      pt(46, 62);
+      pt(62, 60);
+      pt(82, 60);
+      pt(100, 63);
+      pt(118, 72);
+      pt(130, 86);
+      pt(138, TEEN_H);
       fill(c, TEEN_BODY);
-      ellipse(c, hx + 2, 58, 30, 12, mix(TEEN_BODY, P.ink, 0.25));
+      ellipse(c, hx + 2, 64, 28, 11, mix(TEEN_BODY, P.ink, 0.25));
       // neck
-      rect(c, hx - 9, 44, 20, 14, P.black);
+      rect(c, hx - 10, 46, 22, 16, P.black);
       // head: a skull outline with irregular tufts (many small ones, never two big "ears")
       begin();
-      for (let i = 0; i <= 28; i++) {
-        const a = PI + (i / 28) * PI;
-        const tuft = 1.6 * sin(i * 2.7) + 1.2 * sin(i * 5.3 + 1) + (hash(i * 3.7) > 0.7 ? 1.4 : 0);
-        const r = 21 + max(0, tuft) * (a > PI * 1.15 && a < PI * 1.85 ? 1 : 0.4);
-        pt(hx + cos(a) * r * 0.92, hy + 4 + sin(a) * r);
+      for (let i = 0; i <= 36; i++) {
+        const a = PI + (i / 36) * PI;
+        const tuft = 1.8 * sin(i * 2.9) + 1.3 * sin(i * 6.1 + 1) + (hash(i * 3.7) > 0.6 ? 1.6 : 0);
+        const r = 25 + max(0, tuft) * (a > PI * 1.1 && a < PI * 1.9 ? 1 : 0.4);
+        pt(hx + cos(a) * r * 0.9, hy + 2 + sin(a) * r);
       }
-      pt(hx + 19, hy + 18);
-      pt(hx + 15, hy + 30);
-      pt(hx - 15, hy + 30);
-      pt(hx - 19, hy + 18);
+      pt(hx + 22, hy + 18);
+      pt(hx + 17, hy + 32);
+      pt(hx - 17, hy + 32);
+      pt(hx - 22, hy + 18);
       fill(c, P.black);
       // the right ear, a little lighter (it lets the screen through)
-      ellipse(c, hx + 19, hy + 17, 3, 5, mix(P.black, P.maroon, 0.4));
+      ellipse(c, hx + 22, hy + 16, 3, 6, mix(P.black, P.maroon, 0.45));
       // the right arm: upper arm down from the shoulder, forearm out to the mouse
-      capsule(c, 124, 74, 156, 112, 12, 10, TEEN_BODY);
+      capsule(c, 116, 78, 156, 112, 12, 10, TEEN_BODY);
       capsule(c, 156, 112, 210, 124, 10, 7, TEEN_BODY);
       // hoodie seams and the hood's fold, faintly
-      line(c, 46, 70, 64, 92, mix(TEEN_BODY, P.slate, 0.25));
-      line(c, 96, 70, 82, 96, mix(TEEN_BODY, P.slate, 0.2));
+      line(c, 48, 76, 62, 100, mix(TEEN_BODY, P.slate, 0.25));
+      line(c, 96, 76, 84, 102, mix(TEEN_BODY, P.slate, 0.2));
     },
     { rim: mix(C.crt, C.crtL, 0.35), rim2: mix(C.crtD, P.ink, 0.35), dirs: [[1, 0], [0, -1], [1, -1]] },
   ));
@@ -574,11 +574,14 @@ const hallSet = lazy(() =>
     rect(c, 43, 53, 24, 32, mix(P.tan, P.maroon, 0.45));
     rect(c, 312, 40, 3, 6, P.black);
     begin();
-    pt(300, 46);
-    pt(326, 46);
-    pt(334, 140);
-    pt(292, 140);
-    fill(c, mix(P.darkGreen, P.black, 0.5));
+    pt(306, 46);
+    pt(320, 46);
+    pt(330, 70);
+    pt(336, 140);
+    pt(314, 136);
+    pt(290, 140);
+    pt(296, 70);
+    fill(c, mix(P.maroon, P.black, 0.55), { d: mix(P.maroon, P.black, 0.8), f: 0.4, m: 1, side: 1 });
     rect(c, 0, 130, W, 2, mix(P.brown, P.black, 0.3));
     rect(c, 0, 130, W, 1, mix(P.tanShade, P.brown, 0.5));
     yield* shadeSteps(c, 0, 176, W, H - 176, [P.black, mix(P.black, P.maroon, 0.6), P.maroon], (x, y) => clamp(1 - sqrt(((x - 150) / 200) ** 2 + ((y - 180) / 40) ** 2)) * 0.8);
@@ -617,7 +620,7 @@ castInit((R) => {
     brows: { ...base.brows, color: P.brown },
     outfit: 'cardigan',
     jacket: { ramp: [mix(P.purple, P.fog, 0.45), mix(P.purple, P.slate, 0.4), mix(P.purple, P.black, 0.45), P.black], line: P.black },
-    shirt: { ramp: [P.cream, P.tan, P.tanShade, P.brown], line: P.brown },
+    shirt: { ramp: [P.silver, P.fog, P.steel, P.slate], line: P.slate },
     pin: null,
     pearls: null,
     cuff: mix(P.purple, P.slate, 0.4),
@@ -632,7 +635,7 @@ castInit((R) => {
       side: 0,
       seed: 3,
       gestures: [],
-      emotions: [{ t0: 0, name: 'neutral' }, { t0: 1.5, name: 'surprised' }, { t0: 2.3, name: 'serious' }],
+      emotions: [{ t0: 0, name: 'neutral' }, { t0: 1.4, name: 'surprised' }, { t0: 2.5, name: 'serious' }],
       look: [],
       speech: null,
     },
@@ -690,6 +693,10 @@ function handset(ctx, ox, oy, a, k) {
   pt(wx + 26 * k, 240);
   pt(wx - 22 * k, 240);
   fill(ctx, mix(P.purple, P.slate, 0.4), SH_SLEEVE);
+  // the knitted cuff turned back at the wrist, and two folds where the sleeve bunches
+  capsule(ctx, wx - 11 * k, wy + 7 * k, wx + 7 * k, wy + 3 * k, 2.6 * k, 2.6 * k, mix(P.purple, P.fog, 0.3), { d: mix(P.purple, P.slate, 0.5), f: 0.3, m: 1, side: 1 });
+  line(ctx, wx - 6 * k, wy + 18 * k, wx + 8 * k, wy + 34 * k, mix(P.purple, P.black, 0.5));
+  line(ctx, wx - 14 * k, wy + 26 * k, wx - 4 * k, wy + 44 * k, mix(P.purple, P.black, 0.5));
   // the handset: earpiece cup, a slim neck, the mouthpiece cup
   begin();
   for (const [lx, ly] of [[-6, -5], [6, -5], [8, 4], [4, 10], [4, 34], [8, 40], [6, 48], [-6, 48], [-8, 40], [-4, 34], [-4, 10], [-8, 4]]) {
@@ -775,9 +782,12 @@ const glassArt = lazy(() =>
     c.fillStyle = P.black;
     c.globalAlpha = 0.08;
     for (let y = 1; y < 152; y += 2) c.fillRect(0, y, 304, 1);
-    c.globalAlpha = 0.07;
-    c.fillStyle = P.white;
-    for (let y = 6; y < 40; y++) c.fillRect(20 + (40 - y), y, 120 - (40 - y) * 2, 1);
+    // the glass bulges: its edges a touch darker than its middle
+    c.globalAlpha = 0.12;
+    c.fillRect(0, 0, 304, 3);
+    c.fillRect(0, 149, 304, 3);
+    c.fillRect(0, 0, 3, 152);
+    c.fillRect(301, 0, 3, 152);
     c.globalAlpha = 1;
   }));
 
@@ -874,7 +884,7 @@ export default {
     { at: 2.6, text: 'Somewhere in the suburbs, a young man waits for the only voice that ever understood him.' },
     { at: 10.0, text: 'Some call it noise. He calls it connection.' },
     { at: 13.8, text: 'Fifty-six kilobits of pure feeling.' },
-    { at: 21.7, text: 'ScreechNet. Some connections are worth the wait.' },
+    { at: 21.15, text: 'ScreechNet. Some connections are worth the wait.' },
   ],
   // every track is 33 beats at 75 bpm (26.4 s, longer than the spot) and ends in rest
   tune: {
@@ -887,21 +897,21 @@ export default {
         kind: 'lead',
         inst: LEAD,
         gain: 0.95,
-        notes: 'R:1 A4:1@0.45 F#4:0.5@0.4 E4:0.5@0.4 D4:1@0.45 R:0.5 B4:1@0.45 A4:0.5@0.4 F#4:1@0.4 D4:1@0.4 R:0.5 E4:0.5@0.4 F#4:0.5@0.4 G4:0.5@0.45 A4:1.5@0.5 R:0.5 A6:1@0.35 F#5:0.5@0.6 D5:0.5@0.55 D6:0.125@0.3 A5:0.125@0.3 F#5:0.125@0.3 A5:0.125@0.3 D6:0.125@0.3 A5:0.125@0.3 F#5:0.125@0.3 A5:0.125@0.3 F#5:1.5@0.7 E5:0.5@0.6 D5:1@0.65 A4:1@0.55 G4:0.5@0.55 B4:0.5@0.55 D5:1@0.6 A4:3@0.3 R:0.25 R:2.75 A4:0.5@0.4 F#5:1@0.5 E5:0.5@0.45 D5:2@0.45 R:2',
+        notes: 'R:1 A4:1@0.45 F#4:0.5@0.4 E4:0.5@0.4 D4:1@0.45 R:0.5 B4:1@0.45 A4:0.5@0.4 F#4:1@0.4 D4:1@0.4 R:0.5 E4:0.5@0.4 F#4:0.5@0.4 G4:0.5@0.45 A4:1.5@0.5 R:0.5 A6:1@0.35 F#5:0.5@0.6 D5:0.5@0.55 D6:0.125@0.3 A5:0.125@0.3 F#5:0.125@0.3 A5:0.125@0.3 D6:0.125@0.3 A5:0.125@0.3 F#5:0.125@0.3 A5:0.125@0.3 F#5:1.5@0.7 E5:0.5@0.6 D5:1@0.65 A4:1@0.55 G4:0.5@0.55 B4:0.5@0.55 D5:1@0.6 A4:2.75@0.3 R:2.75 A4:0.5@0.4 F#5:1@0.5 E5:0.5@0.45 D5:2@0.45 R:2.5',
       },
       {
         kind: 'harmony',
         inst: KEYS,
         gain: 0.78,
-        notes: 'D3:0.5@0.5 A3:0.5@0.4 C#4:0.5@0.4 F#4:0.5@0.4 D3:0.5@0.45 A3:0.5@0.4 C#4:0.5@0.4 F#4:0.5@0.4 B2:0.5@0.45 F#3:0.5@0.4 A3:0.5@0.4 D4:0.5@0.4 G2:0.5@0.45 D3:0.5@0.4 F#3:0.5@0.4 B3:0.5@0.4 E3:0.5@0.45 B3:0.5@0.4 D4:0.5@0.4 G4:0.5@0.4 A2:0.5@0.45 E3:0.5@0.4 G3:0.5@0.4 D4:0.5@0.4 A2+E3+A3:3@0.35 D3:0.5@0.5 A3:0.5@0.45 D4:0.5@0.45 F#4:0.5@0.45 F#2:0.5@0.5 C#3:0.5@0.45 F#3:0.5@0.45 A3:0.5@0.45 G2:0.5@0.5 D3:0.5@0.45 G3:0.5@0.45 B3:0.5@0.45 A2+E3+A3:3@0.3 R:0.25 R:2.75 G2:0.5@0.45 D3:0.5@0.4 F#3:0.5@0.4 B3:0.5@0.4 D3+F#3+A3+D4:2@0.45 R:2',
+        notes: 'D3:0.5@0.5 A3:0.5@0.4 C#4:0.5@0.4 F#4:0.5@0.4 D3:0.5@0.45 A3:0.5@0.4 C#4:0.5@0.4 F#4:0.5@0.4 B2:0.5@0.45 F#3:0.5@0.4 A3:0.5@0.4 D4:0.5@0.4 G2:0.5@0.45 D3:0.5@0.4 F#3:0.5@0.4 B3:0.5@0.4 E3:0.5@0.45 B3:0.5@0.4 D4:0.5@0.4 G4:0.5@0.4 A2:0.5@0.45 E3:0.5@0.4 G3:0.5@0.4 D4:0.5@0.4 A2+E3+A3:3@0.35 D3:0.5@0.5 A3:0.5@0.45 D4:0.5@0.45 F#4:0.5@0.45 F#2:0.5@0.5 C#3:0.5@0.45 F#3:0.5@0.45 A3:0.5@0.45 G2:0.5@0.5 D3:0.5@0.45 G3:0.5@0.45 B3:0.5@0.45 A2+E3+A3:2.75@0.3 R:2.75 G2:0.5@0.45 D3:0.5@0.4 F#3:0.5@0.4 B3:0.5@0.4 D3+F#3+A3+D4:2@0.45 R:2.5',
       },
       {
         kind: 'harmony',
         inst: PAD,
         gain: 0.34,
-        notes: 'D3+F#3+A3+C#4:4@0.4 B2+D3+F#3+A3:2@0.4 G2+B2+D3+F#3:2@0.4 E3+G3+B3+D4:2@0.4 A2+D3+E3+G3:2@0.4 A2+E3+A3:3@0.45 D3+F#3+A3:2@0.55 F#2+A2+C#3:2@0.55 G2+B2+D3:2@0.55 A2+C#3+E3:3@0.4 R:0.25 R:2.75 G2+B2+D3+F#3:1@0.4 D3+F#3+A3:3@0.45 R:2',
+        notes: 'D3+F#3+A3+C#4:4@0.4 B2+D3+F#3+A3:2@0.4 G2+B2+D3+F#3:2@0.4 E3+G3+B3+D4:2@0.4 A2+D3+E3+G3:2@0.4 A2+E3+A3:3@0.45 D3+F#3+A3:2@0.55 F#2+A2+C#3:2@0.55 G2+B2+D3:2@0.55 A2+C#3+E3:2.75@0.4 R:2.75 G2+B2+D3+F#3:1@0.4 D3+F#3+A3:3@0.45 R:2.5',
       },
-      { kind: 'bass', inst: 'tri', gain: 0.68, notes: 'D2:4 B1:2 G1:2 E2:2 A1:2 A1:3 D2:2 F#1:2 G1:2 A1:3 R:0.25 R:2.75 G1:1 D2:3 R:2' },
+      { kind: 'bass', inst: 'tri', gain: 0.68, notes: 'D2:4 B1:2 G1:2 E2:2 A1:2 A1:3 D2:2 F#1:2 G1:2 A1:2.75 R:2.75 G1:1 D2:3 R:2.5' },
       { drums: 'R:12 W:1@0.3 W:1@0.4 X:0.25@0.25 X:0.25@0.25 X:0.25@0.25 X:0.25@0.25 K:1@0.3 H:1@0.18 K:1@0.3 H:1@0.18 K:1@0.3 H:1@0.18 W:1@0.32 R:2.25 R:2.75 R:6' },
     ],
   },

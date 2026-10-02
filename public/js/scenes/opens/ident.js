@@ -19,6 +19,7 @@ import { P } from '../../palette.js';
 import { drawLogo, measureLogo } from '../../logo.js';
 import { landMip, cityLights } from '../worldmap.js';
 import { u32, clamp, easeInOutSine, bayer, mk, clockIn, stepDown, HAS_DOM } from '../../gfx/index.js';
+// (bayer(x, y) is precomputed per pixel in the sphere table: no per-frame divisions)
 import { mulberry32 } from '../../util.js';
 
 const W = 384;
@@ -40,6 +41,8 @@ const SURF = [
   [u32(P.black), u32(P.ink), u32(P.navy)],
   [u32(P.ink), u32(P.slate), u32(P.steel)],
 ];
+const SURF0 = SURF[0];
+const SURF1 = SURF[1];
 const LIMB = [u32(P.ink), u32(P.slate), u32(P.steel)]; // the 1 px air at the horizon, by light
 const LIGHTS = [u32(P.brown), u32(P.orange), u32(P.yellow), u32(P.cream)];
 
@@ -64,6 +67,7 @@ function table() {
   const idx = [];
   const nxs = [];
   const kind = [];
+  const bth = [];
   const RR = R + 0.5;
   for (let y = Y0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -77,6 +81,7 @@ function table() {
         idx.push(i);
         nxs.push(dx / RR);
         kind.push(2);
+        bth.push(bayer(x, y) - 0.5);
         continue;
       }
       const nx = dx / RR;
@@ -97,6 +102,7 @@ function table() {
       idx.push(i);
       nxs.push(nx);
       kind.push(land);
+      bth.push(bayer(x, y) - 0.5);
     }
   }
   // the city lights that fall on the visible cap: screen position and their own nx
@@ -135,7 +141,7 @@ function table() {
   const cx = cv.getContext('2d');
   const img = cx.createImageData(W, BH);
   TABLE = {
-    idx: Int32Array.from(idx), nx: Float32Array.from(nxs), kind: Uint8Array.from(kind),
+    idx: Int32Array.from(idx), nx: Float32Array.from(nxs), kind: Uint8Array.from(kind), bth: Float32Array.from(bth),
     lx: Int16Array.from(lx), ly: Int16Array.from(ly), lk: Uint8Array.from(lk), ln: Float32Array.from(ln), lt: Float32Array.from(lt),
     cv, cx, img, d: new Uint32Array(img.data.buffer), key: NaN, lights: !!L,
   };
@@ -152,19 +158,18 @@ function terminator(dt, variant) {
 
 function renderCap(T, u, variant) {
   const d = T.d;
-  const { idx, nx, kind } = T;
+  const { idx, nx, kind, bth } = T;
   const nightRight = variant !== 'dawn';
-  d.fill(0);
+  const sgn = nightRight ? -1 : 1;
+  const off = nightRight ? u : -u;
   for (let k = 0; k < idx.length; k++) {
-    const i = idx[k];
-    // signed distance into the day side (in normal units); the falloff is 0.12 wide
-    const s = nightRight ? u - nx[k] : nx[k] - u;
-    const v = clamp((s + 0.05) / 0.1, 0, 1) * 2;
-    const x = i % W;
-    const y = (i / W) | 0;
-    let lvl = Math.floor(v + bayer(x, y) - 0.5);
+    // signed distance into the day side (in normal units); the dithered falloff is 0.1 wide
+    const s = sgn * nx[k] + off;
+    const v = s <= -0.05 ? 0 : s >= 0.05 ? 2 : (s + 0.05) * 20;
+    let lvl = Math.floor(v + bth[k]);
     lvl = lvl < 0 ? 0 : lvl > 2 ? 2 : lvl;
-    d[i] = kind[k] === 2 ? LIMB[lvl] : SURF[kind[k]][lvl];
+    const kd = kind[k];
+    d[idx[k]] = kd === 2 ? LIMB[lvl] : kd ? SURF1[lvl] : SURF0[lvl];
   }
   // city lights on the night side, each coming on (or going out) in palette steps
   const { lx, ly, lk, ln, lt } = T;

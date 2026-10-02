@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { segmentContext } from '../public/js/v2/canvas25d/direction/context.js';
-import { planBehaviour, RULES, isToss } from '../public/js/v2/canvas25d/direction/behaviour.js';
+import { planBehaviour, RULES, REACTIONS, isToss } from '../public/js/v2/canvas25d/direction/behaviour.js';
 import { EPISODES, SAMPLES, timelineAudio } from '../public/js/v2/canvas25d/labs/face.js';
 import { liveSpeech, sampleSpeech } from '../public/js/v2/canvas25d/speech.js';
 import { mouthParams, buildSpeech } from '../public/js/v2/canvas25d/visemes.js';
@@ -31,7 +31,8 @@ function planAll(ep) {
     return { ctx, events: planBehaviour(ctx) };
   });
 }
-const looksOf = (events, slot) => events.filter((e) => e.kind === 'look' && e.slot === slot);
+const looksOf = (events, slot) => events.filter((e) => e.kind === 'look' && e.slot === slot && !REACTIONS.has(e.target));
+const reactionsOf = (events, slot) => events.filter((e) => e.kind === 'look' && e.slot === slot && REACTIONS.has(e.target));
 const inTurn = (l, D) => Math.max(0, Math.min(D, l.at + l.dur) - l.at);
 
 // ---------------------------------------------------------------------------
@@ -126,6 +127,9 @@ test('restraint caps: one glance per listener per turn (+ dry line / toss exchan
           const gap = looks[i].at - (looks[i - 1].at + looks[i - 1].dur);
           assert.ok(gap >= RULES.lookGap - 1e-6, `${id} #${ctx.index} ${slot}: ${gap.toFixed(2)} s between looks`);
         }
+        // face-only reactions never overlap an eyeline look (arbitrate would drop one of them)
+        const all = events.filter((e) => e.kind === 'look' && e.slot === slot).sort((a, b) => a.at - b.at);
+        for (let i = 1; i < all.length; i++) assert.ok(all[i].at >= all[i - 1].at + all[i - 1].dur, `${id} #${ctx.index} ${slot}: looks overlap`);
         if (slot === ctx.speaker) continue;
         const glances = looks.filter((l) => l.target === 'partner');
         const generic = glances.filter((l) => !/^(dry|toss-meet)$/.test(l.why));
@@ -507,4 +511,179 @@ test('emotions stay restrained (adult register): no preset beyond small brows an
     if (f.open > 0.2) open++;
   }
   assert.ok(open > 10);
+});
+
+// ---------------------------------------------------------------------------
+// Round 2: variety without repetition (owner 20:40), calmer jaw, wide-shot fixes
+
+test('variety: turn glances vary in amplitude (0.82-1.0 of the approved glance), the dry-line glance is sidelong, plans stay deterministic', () => {
+  const amps = [];
+  for (const id of DUOS) {
+    for (const { ctx, events } of planAll(EPISODES[id])) {
+      for (const e of events) {
+        if (e.kind !== 'look' || !/^turn/.test(e.why) || ctx.cast[e.slot] === 'unit8') continue;
+        const a = e.amt ?? 1;
+        assert.ok(a >= RULES.glanceAmt[0] - 1e-9 && a <= 1, `${id} #${ctx.index} amt ${a}`);
+        amps.push(a);
+      }
+    }
+  }
+  assert.ok(new Set(amps.map((a) => a.toFixed(2))).size >= 3, 'not one mechanical glance');
+  assert.ok(amps.some((a) => a === 1), 'the full approved glance stays in the mix');
+  const dry = planAll(EPISODES['tech-bytes']).flatMap((p) => p.events).filter((e) => e.why === 'dry');
+  assert.ok(dry.length >= 1 && dry.every((e) => e.style === 'side'), 'the deadpan glance is sidelong');
+});
+
+test('interest reactions: face only, at a spoken figure, at most one per listener per turn, never grave, never UNIT-8, never inside another look', () => {
+  let seen = 0;
+  const eps = [...DUOS.map((id) => EPISODES[id])];
+  // more chances: the same episodes under other ids (other seeds)
+  for (let k = 0; k < 6; k++) for (const id of DUOS) eps.push({ ...clone(EPISODES[id]), id: `${EPISODES[id].id}-v${k}` });
+  for (const ep of eps) {
+    for (const { ctx, events } of planAll(ep)) {
+      for (const slot of Object.keys(ctx.cast)) {
+        const rs = reactionsOf(events, slot);
+        assert.ok(rs.length <= 1, 'one reaction per turn at most');
+        for (const r of rs) {
+          assert.notEqual(slot, ctx.speaker, 'listeners only');
+          assert.ok(!ctx.grave, 'never on grave lines');
+          assert.notEqual(ctx.cast[slot], 'unit8');
+          assert.ok(ctx.figures.some((f) => Math.abs(f.t - 0.08 - r.at) < 1e-3), 'lands on a spoken figure');
+          for (const n of events.filter((e) => e.kind === 'gesture' && e.slot === slot)) assert.ok(n.at <= r.at - RULES.nodAfterLook || n.at >= r.at + r.dur, 'not on a nod');
+          seen++;
+        }
+      }
+    }
+  }
+  assert.ok(seen >= 2, `${seen} reactions in the fixtures and their reseeded copies`);
+  // grave copy: none
+  const ep = clone(EPISODES['tech-bytes']);
+  for (const sg of ep.segments) sg.emotion = 'serious';
+  for (const { events } of planAll(ep)) assert.equal(events.filter((e) => REACTIONS.has(e.target)).length, 0);
+});
+
+test('story-boundary looks: never on a later roundup item, never after a short item', () => {
+  for (let k = 0; k < 8; k++) {
+    const ep = { ...clone(EPISODES['world-now']), id: `wn-b${k}` };
+    for (const { ctx, events } of planAll(ep)) {
+      const b = events.filter((e) => e.why === 'wall' || e.why === 'between');
+      if (!b.length) continue;
+      assert.ok(!(ctx.seg.roundup && ctx.seg.roundup.index > 0), `#${ctx.index}: a boundary look on roundup item ${ctx.seg.roundup?.index}`);
+      assert.ok(ep.segments[ctx.index - 1].text.length / 15 >= RULES.boundaryAfter, `#${ctx.index}: after a short item`);
+      for (const e of b) assert.ok(e.at <= RULES.wallWithin + 1e-6 && e.dur <= RULES.notes[1] + 1e-6);
+    }
+  }
+});
+
+test('applyLook: an interest reaction lifts the brows without moving the eyes; a sidelong glance turns the head 40 %', () => {
+  const ch = () => ({ lookX: 0, lookY: 0, yaw: 0, pitch: 0, lean: 0, hx: 0, hy: 0, lid: 0, smile: 0, brow: 0, browIn: 0, roll: 0 });
+  const r = ch();
+  const g = applyLook(r, { side: 1, look: [{ t0: 0, t1: 2, target: 'interest' }] }, 1, 0);
+  assert.ok(r.brow > 0.2 && r.lookX === 0 && r.lookY === 0 && r.yaw === 0 && g === 0, 'brows only, no eye drive');
+  const full = ch(), side = ch();
+  applyLook(full, { side: 1, look: [{ t0: 0, t1: 5 }] }, 2, 0);
+  applyLook(side, { side: 1, look: [{ t0: 0, t1: 5, style: 'side' }] }, 2, 0);
+  assert.ok(Math.abs(side.lookX - full.lookX) < 1e-9, 'the eyes go all the way');
+  assert.ok(Math.abs(side.yaw - 0.4 * full.yaw) < 1e-9, 'the head follows 40 %');
+  const meet = ch();
+  applyLook(meet, { side: 1, look: [{ t0: 0, t1: 5, style: 'interest' }] }, 0.8, 0);
+  assert.ok(meet.brow > 0.15 && meet.lookX > 0.5, 'meeting a question: eyes on the partner, brows up');
+  const later = ch();
+  applyLook(later, { side: 1, look: [{ t0: 0, t1: 5, style: 'interest' }] }, 3.5, 0);
+  assert.ok(Math.abs(later.brow) < 1e-6, 'the lift is brief, the look goes on');
+});
+
+test('the jaw moves with the phrase, not every syllable: few chin steps per second on recorded voices', async () => {
+  const { actor } = await import('../public/js/v2/canvas25d/scene.js');
+  const { poseAt } = await import('../public/js/v2/canvas25d/rig.js');
+  for (const name of Object.keys(SAMPLES)) {
+    const smp = SAMPLES[name];
+    const audio = timelineAudio([{ slot: 'A', text: smp.text, t0: 0.5, words: smp.words, levels: { rate: 50, values: smp.levels } }]);
+    const a = actor(smp.presenter, { side: 1, seed: 5, speech: liveSpeech(audio, 'A') });
+    const s = 4;
+    let last = null, steps = 0, open = 0, n = 0;
+    for (let t = 0.5; t < 0.5 + smp.duration; t += 1 / 60) {
+      const sk = poseAt(a, t);
+      const px = Math.round(Math.min(sk.face.jaw, JAW_MAX_PX / s) * s);
+      if (last !== null && px !== last) steps++;
+      last = px;
+      if (sk.face.open > 0.15) open++;
+      n++;
+    }
+    const perSec = steps / smp.duration;
+    assert.ok(perSec <= 4.5, `${name}: ${perSec.toFixed(1)} chin steps/s`);
+    assert.ok(open / n > 0.2, `${name}: the lips still open on the syllables`);
+  }
+});
+
+test('per-sentence head attitude: live voices only (the frozen demos keep their motion), deterministic', async () => {
+  const { applySpeech } = await import('../public/js/v2/canvas25d/speech.js');
+  const persona = { energy: 0.7, headMotion: 0.7 };
+  const audio = timelineAudio([{ slot: 'A', text: 'Good evening. Markets moved sharply today. Bakers are pleased.', t0: 0.3 }]);
+  const run = (sp) => {
+    const out = [];
+    for (let t = 0.3; t < 4; t += 0.25) {
+      const c = { brow: 0, pitch: 0, hy: 0, yaw: 0, roll: 0 };
+      applySpeech(c, persona, { seed: 9, speech: sp }, t);
+      out.push(c.yaw);
+    }
+    return out;
+  };
+  const a = run(liveSpeech(audio, 'A')), b = run(liveSpeech(audio, 'A'));
+  assert.deepEqual(a, b);
+  // built timelines: no attitude term (the demo motion is unchanged)
+  const sp = buildSpeech('Good evening. Markets moved sharply today.', { t0: 0.3 });
+  const c1 = { brow: 0, pitch: 0, hy: 0, yaw: 0, roll: 0 };
+  applySpeech(c1, persona, { seed: 9, speech: sp }, 1.5);
+  const fr = sampleSpeech(sp, 1.5);
+  const wob = (t, seed) => 0.5 * Math.sin(t * 1.13 + seed * 1.7) + 0.3 * Math.sin(t * 2.31 + seed * 2.9) + 0.2 * Math.sin(t * 3.77 + seed * 4.3);
+  assert.ok(Math.abs(c1.yaw - 0.05 * persona.headMotion * fr.act * wob(1.5 * 0.55, 9 + 3.1)) < 1e-9);
+});
+
+test('wide shots: a smile never bends the mouth into a U; glasses never make a dark bar across the eyes', async () => {
+  const { PartBuffer } = await import('../public/js/v2/canvas25d/pixbuf.js');
+  const { actor } = await import('../public/js/v2/canvas25d/scene.js');
+  const { poseAt } = await import('../public/js/v2/canvas25d/rig.js');
+  const { drawCharacter } = await import('../public/js/v2/canvas25d/character.js');
+  for (const id of ['paco', 'lola', 'max', 'penny', 'sam']) {
+    const a = actor(id, { side: 1, seed: 5, emotions: [{ t0: -5, name: 'happy' }] });
+    const buf = new PartBuffer();
+    const head = drawCharacter(buf, a.look, poseAt(a, 0.3), { x: 192, y: 150, s: 1, gb: 0 });
+    // the lip line is one row: no mouth pixel on the row above the line within the mouth's width
+    const M = a.look.mouth;
+    const y0 = Math.round(head.cy + M.y);
+    let rows = 0;
+    for (let y = y0 - 2; y <= y0 + 2; y++) {
+      let any = false;
+      for (let x = head.cx - 4; x <= head.cx + 4; x++) {
+        const i = y * buf.w + x;
+        if (buf.mat[i] === a.look._mats.skinD && buf.tone[i] >= 2 && buf.grp[i] === 7) any = true;
+      }
+      if (any) rows++;
+    }
+    assert.ok(rows <= 2, `${id}: ${rows} rows of mouth at s 1`);
+  }
+  // Ada's glasses at s 1: the eye row never carries a run of more than 3 non-skin pixels
+  // (frame + eye + eye), so the two eyes, the rims and the bridge never join into a bar
+  const ada = actor('ada', { side: 1, seed: 5 });
+  const buf = new PartBuffer();
+  const head = drawCharacter(buf, ada.look, poseAt(ada, 0.3), { x: 192, y: 150, s: 1, gb: 0 });
+  const skin = ada.look._mats.skin;
+  let frame = 0, worst = 0;
+  for (let y = head.cy - 6; y <= head.cy + 4; y++) {
+    let onRow = false; // only the rows that carry the frame (the eye line), not the brows
+    for (let x = head.cx - 8; x <= head.cx + 8; x++) if (buf.grp[y * buf.w + x] === 56 || buf.grp[y * buf.w + x] === 57) onRow = true;
+    if (!onRow) continue;
+    let run = 0;
+    for (let x = head.cx - 8; x <= head.cx + 8; x++) {
+      const i = y * buf.w + x;
+      if (buf.grp[i] === 56 || buf.grp[i] === 57) frame++;
+      const g = buf.grp[i];
+      const feature = (g === 56 || g === 57 || (g === 7 && buf.mat[i] && buf.mat[i] !== skin && buf.mat[i] !== ada.look._mats.skinD));
+      run = feature ? run + 1 : 0;
+      if (run > worst) worst = run;
+    }
+  }
+  assert.ok(frame >= 2, `glasses visible (${frame} px)`);
+  assert.ok(worst <= 3, `a dark run of ${worst} px across the eyes`);
 });

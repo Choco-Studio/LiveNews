@@ -29,7 +29,7 @@
 // a breathing offset. The low resolution is a real downsample of the finished
 // frame through pooled canvases. Nothing is allocated per frame, and every bake
 // is done during the first shot.
-import { P, W, H, A, R, drawText, measureText, litShape, motes, prog, lerp } from './kit.js';
+import { P, W, H, A, R, drawText, measureText, motes, prog, lerp } from './kit.js';
 
 const { sin, cos, PI, round, floor, ceil, min, max, abs, sqrt, hypot, exp } = Math;
 const TAU = PI * 2;
@@ -187,8 +187,11 @@ function line(ctx, x0, y0, x1, y1, c) {
 }
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 const rgbOf = (hex) => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+// The bake helpers are generators: they yield every 16 rows so a long bake can
+// run in slices across frames (pump) instead of stalling one frame.
+const SLICE = 16;
 /** Bake-time ordered-dither field: f(x, y) -> 0..1 picks along a colour ramp. */
-function ditherField(c, x0, y0, w, h, ramp, f) {
+function* ditherField(c, x0, y0, w, h, ramp, f) {
   const img = c.getImageData(x0, y0, w, h);
   const d = img.data;
   const rgb = ramp.map(rgbOf);
@@ -204,11 +207,12 @@ function ditherField(c, x0, y0, w, h, ramp, f) {
       d[o + 2] = rgb[k][2];
       d[o + 3] = 255;
     }
+    if (y % SLICE === SLICE - 1) yield;
   }
   c.putImageData(img, x0, y0);
 }
 /** Bake-time light pool in four Bayer-dithered steps (no visible rings). */
-function glowBake(c, cx, cy, rx, ry, hex, a) {
+function* glowBake(c, cx, cy, rx, ry, hex, a) {
   const x0 = max(0, floor(cx - rx));
   const y0 = max(0, floor(cy - ry));
   const w = min(c.canvas.width, ceil(cx + rx)) - x0;
@@ -229,11 +233,12 @@ function glowBake(c, cx, cy, rx, ry, hex, a) {
       d[o + 1] += (g - d[o + 1]) * t;
       d[o + 2] += (b - d[o + 2]) * t;
     }
+    if (y % SLICE === SLICE - 1) yield;
   }
   c.putImageData(img, x0, y0);
 }
 /** Bake-time falloff: darken by factor k where f(x, y) beats the Bayer threshold. */
-function shadeBake(c, x0, y0, w, h, k, f) {
+function* shadeBake(c, x0, y0, w, h, k, f) {
   const img = c.getImageData(x0, y0, w, h);
   const d = img.data;
   for (let y = 0; y < h; y++) {
@@ -245,37 +250,87 @@ function shadeBake(c, x0, y0, w, h, k, f) {
         d[o + 2] *= k;
       }
     }
+    if (y % SLICE === SLICE - 1) yield;
   }
   c.putImageData(img, x0, y0);
 }
-/** Static art painted once (read-friendly canvas for the bake, copied to a plain one). */
+// Every canvas of this spot is CPU-backed (willReadFrequently): a frame is
+// thousands of 1 px spans, cheap for the CPU rasteriser but one draw call each
+// on a GPU canvas (a software GPU, as in OBS on a modest laptop, chokes on them).
+// Bakes, scratch buffers and the mosaic all live on the CPU, so drawImage
+// between them is a copy, and the finished frame goes to the screen in ONE
+// drawImage at the end of draw().
+const cpuCanvas = (w, h) => {
+  const cv = document.createElement('canvas');
+  cv.width = w;
+  cv.height = h;
+  const c = cv.getContext('2d', { willReadFrequently: true });
+  c.imageSmoothingEnabled = false;
+  return { cv, c };
+};
+// Static art is painted once. A paint may be a generator (it yields between
+// slices): bake() runs it to the end at once (a shot that needs it now, or the
+// lab jumping to any instant), while queue() + pump() spread it over frames
+// ahead of its shot. LAB.bakeMs keeps what each synchronous bake cost.
 const BAKED = new Map();
+const JOBS = [];
+const isIter = (r) => !!r && typeof r.next === 'function';
 function bake(key, w, h, paint) {
   let cv = BAKED.get(key);
   if (cv) return cv;
-  const tmp = document.createElement('canvas');
-  tmp.width = w;
-  tmp.height = h;
-  const c = tmp.getContext('2d', { willReadFrequently: true });
-  c.imageSmoothingEnabled = false;
-  paint(c);
-  cv = document.createElement('canvas');
-  cv.width = w;
-  cv.height = h;
-  const out = cv.getContext('2d');
-  out.imageSmoothingEnabled = false;
-  out.drawImage(tmp, 0, 0);
+  const t0 = performance.now();
+  let j = null;
+  for (let i = 0; i < JOBS.length; i++) {
+    if (JOBS[i].key === key) {
+      j = JOBS[i];
+      JOBS.splice(i, 1);
+      break;
+    }
+  }
+  if (j && j.b) {
+    // a sliced bake already under way: finish it now
+    if (j.it) while (!j.it.next().done);
+    cv = j.b.cv;
+  } else {
+    const b = cpuCanvas(w, h);
+    const r = paint(b.c);
+    if (isIter(r)) while (!r.next().done);
+    cv = b.cv;
+  }
   BAKED.set(key, cv);
+  LAB.bakeMs[key] = +(performance.now() - t0).toFixed(1);
   return cv;
+}
+/** A bake job descriptor [key, w, h, paint], baked now (or fetched). */
+const bakeJob = (j) => bake(j[0], j[1], j[2], j[3]);
+/** Queue a job to be baked in slices before its shot airs. */
+function queue(j) {
+  if (BAKED.has(j[0]) || JOBS.some((x) => x.key === j[0])) return;
+  JOBS.push({ key: j[0], w: j[1], h: j[2], paint: j[3], b: null, it: null });
+}
+/** Advance the queued bakes for about `ms` milliseconds. */
+function pump(ms) {
+  const t0 = performance.now();
+  while (JOBS.length && performance.now() - t0 < ms) {
+    const j = JOBS[0];
+    let done;
+    if (!j.b) {
+      j.b = cpuCanvas(j.w, j.h);
+      const r = j.paint(j.b.c);
+      j.it = isIter(r) ? r : null;
+      done = !j.it;
+    } else done = j.it.next().done;
+    if (done) {
+      BAKED.set(j.key, j.b.cv);
+      JOBS.shift();
+    }
+  }
 }
 const BUF = {};
 function buf(name, w = W, h = H) {
   let b = BUF[name];
   if (!b) {
-    const cv = document.createElement('canvas');
-    cv.width = w;
-    cv.height = h;
-    const c = cv.getContext('2d');
+    const { cv, c } = cpuCanvas(w, h);
     c.imageSmoothingEnabled = false;
     b = BUF[name] = { cv, c };
   }
@@ -321,12 +376,9 @@ const MOS = {};
 function mos(b) {
   let m = MOS[b];
   if (!m) {
-    const cv = document.createElement('canvas');
-    cv.width = W / b;
-    cv.height = H / b;
-    const c = cv.getContext('2d');
+    const { cv, c } = cpuCanvas(W / b, H / b);
     c.imageSmoothingEnabled = true;
-    c.imageSmoothingQuality = 'high';
+    c.imageSmoothingQuality = 'low';
     m = MOS[b] = { cv, c };
   }
   return m;
@@ -353,7 +405,7 @@ const RES_LABEL = { 8: 'RES 48 X 27', 6: 'RES 64 X 36', 4: 'RES 96 X 54', 3: 'RE
 const RES_KEY = { 8: 'hg-res-8', 6: 'hg-res-6', 4: 'hg-res-4', 3: 'hg-res-3', 1: 'hg-res-1' };
 const RS = { b: 8, prev: 8, mix: 1, at: 0 };
 /** Lab only: `fullRes` shows the footage without the mosaic (for inspecting the art). */
-export const LAB = { fullRes: false };
+export const LAB = { fullRes: false, bakeMs: {} };
 function resAt(dt) {
   let i = 0;
   while (i + 3 < RES.length && dt >= RES[i + 3]) i += 3;
@@ -551,7 +603,7 @@ function nearLimbs(ctx, rim, core, dx, dy) {
 // Close enough that at 48 x 27 the shape still reads: a man under a lamp. The
 // camera creeps sideways and in, so the coarse cells visibly crawl: live footage.
 const LOCK_W = W + 32;
-const locker = () => bake('hg-locker', LOCK_W, H, (c) => {
+const LOCKER_JOB = ['hg-locker', LOCK_W, H, function* (c) {
   R(c, 0, 0, LOCK_W, H, P.black);
   for (let k = 0; k < 13; k++) {
     const x = 8 + k * 32;
@@ -564,10 +616,10 @@ const locker = () => bake('hg-locker', LOCK_W, H, (c) => {
   }
   R(c, 0, 174, LOCK_W, 2, P.ink);
   const cx = LOCK_W / 2;
-  shadeBake(c, 0, 0, LOCK_W, H, 0.6, (x, y) => hypot((x - cx) / 130, (y - 70) / 120) - 0.25);
-  shadeBake(c, 0, 0, LOCK_W, H, 0.55, (x, y) => hypot((x - cx) / 170, (y - 70) / 150) - 0.4);
-  shadeBake(c, 0, 0, LOCK_W, H, 0.5, (x, y) => hypot((x - cx) / 220, (y - 70) / 190) - 0.55);
-  glowBake(c, cx, 192, 150, 22, P.slate, 0.9);
+  yield* shadeBake(c, 0, 0, LOCK_W, H, 0.6, (x, y) => hypot((x - cx) / 130, (y - 70) / 120) - 0.25);
+  yield* shadeBake(c, 0, 0, LOCK_W, H, 0.55, (x, y) => hypot((x - cx) / 170, (y - 70) / 150) - 0.4);
+  yield* shadeBake(c, 0, 0, LOCK_W, H, 0.5, (x, y) => hypot((x - cx) / 220, (y - 70) / 190) - 0.55);
+  yield* glowBake(c, cx, 192, 150, 22, P.slate, 0.9);
   R(c, cx - 122, 160, 244, 2, P.steel);
   R(c, cx - 122, 162, 244, 5, P.slate);
   R(c, cx - 122, 167, 244, 1, P.black);
@@ -589,7 +641,8 @@ const locker = () => bake('hg-locker', LOCK_W, H, (c) => {
     fillPts(c, P.silver);
   }
   c.globalAlpha = 1;
-});
+}];
+const locker = () => bakeJob(LOCKER_JOB);
 /** Seated, seen from the front, lit from straight above: every part gets a rim on top. */
 function rimCap(c, ax, ay, bx, by, ra, rb, base, rim) {
   capsule(c, ax, ay - 1, bx, by - 1, ra, rb, rim);
@@ -657,13 +710,14 @@ function shotLocker(c, lt) {
 // --- 2. the run: dawn, backlit, slow motion ---------------------------------------------
 const SUN_X = 92;
 const SUN_Y = 128;
-const sky = () => bake('hg-sky', W, H, (c) => {
-  ditherField(c, 0, 0, W, 152, [P.slate, P.steel, P.fog, P.silver], (x, y) => y / 150);
-  glowBake(c, SUN_X, SUN_Y, 130, 90, P.white, 0.55);
+const SKY_JOB = ['hg-sky', W, H, function* (c) {
+  yield* ditherField(c, 0, 0, W, 152, [P.slate, P.steel, P.fog, P.silver], (x, y) => y / 150);
+  yield* glowBake(c, SUN_X, SUN_Y, 130, 90, P.white, 0.55);
   ellipse(c, SUN_X, SUN_Y, 15, 15, P.white);
   R(c, 0, 146, W, 6, P.fog);
   R(c, 0, 146, W, 1, P.white);
-});
+}];
+const sky = () => bakeJob(SKY_JOB);
 const CITY_W = 512;
 const city = () => bake('hg-city', CITY_W, 60, (c) => {
   for (let k = 0; k < 40; k++) {
@@ -746,13 +800,13 @@ function shotRun(c, lt) {
 const LX = 192; // the lifter's centre line
 const LFY = 186; // the platform
 const LU = 18; // head height
-const gym = () => bake('hg-gym', W, H, (c) => {
+const GYM_JOB = ['hg-gym', W, H, function* (c) {
   R(c, 0, 0, W, H, P.black);
-  glowBake(c, LX, 84, 160, 104, P.ink, 0.95);
+  yield* glowBake(c, LX, 84, 160, 104, P.ink, 0.95);
   // a mirror wall's edge, far right, catching a sliver of the light
   R(c, 330, 30, 1, 150, P.slate);
   R(c, 331, 30, 40, 150, P.ink);
-  shadeBake(c, 331, 30, 40, 150, 0.6, (x) => (x - 333) / 30);
+  yield* shadeBake(c, 331, 30, 40, 150, 0.6, (x) => (x - 333) / 30);
   // plate tree at the left: a post with three plates seen edge-on, top-lit
   R(c, 66, 92, 4, 86, P.ink);
   R(c, 66, 92, 4, 1, P.slate);
@@ -774,7 +828,7 @@ const gym = () => bake('hg-gym', W, H, (c) => {
   R(c, 64, LFY - 8, 256, 10, P.ink);
   R(c, 64, LFY - 8, 256, 1, P.slate);
   for (let x = 96; x < 320; x += 32) R(c, x, LFY - 7, 1, 9, P.black);
-  glowBake(c, LX, LFY - 2, 116, 12, P.steel, 0.6);
+  yield* glowBake(c, LX, LFY - 2, 116, 12, P.steel, 0.6);
   for (const [x, w] of [[150, 9], [222, 7], [188, 4]]) R(c, x, LFY - 4, w, 1, P.fog);
   // the light above and its cone
   ellipse(c, LX, 14, 16, 2, P.white);
@@ -788,7 +842,8 @@ const gym = () => bake('hg-gym', W, H, (c) => {
     fillPts(c, P.silver);
   }
   c.globalAlpha = 1;
-});
+}];
+const gym = () => bakeJob(GYM_JOB);
 const LJ = { hipY: 0, shY: 0, headY: 0, barY: 0, kneeY: 0, kneeX: 0 };
 /** The lifter's joints (front view) for a lift phase q (0 bar on the floor .. 1 lockout). */
 function solveLifter(q) {
@@ -962,10 +1017,11 @@ function localPts(arr) {
   for (let i = 0; i < arr.length; i += 2) pt(fx(arr[i]), fy(arr[i + 1]));
 }
 const EAR = [42, 47, 46, 48, 47.5, 52, 47, 58, 45.5, 62, 44, 66, 41, 66.5, 39.5, 63, 39, 58, 38.5, 52, 40, 48];
-const faceBg = () => bake('hg-face-bg', W, H, (c) => {
-  ditherField(c, 0, 0, W, H, [P.black, P.ink, P.slate], (x, y) => 0.95 - hypot((x - 40) / 260, (y - 90) / 200) * 1.1);
-  glowBake(c, 340, 100, 90, 110, P.ink, 0.6);
-});
+const FACE_BG_JOB = ['hg-face-bg', W, H, function* (c) {
+  yield* ditherField(c, 0, 0, W, H, [P.black, P.ink, P.slate], (x, y) => 0.95 - hypot((x - 40) / 260, (y - 90) / 200) * 1.1);
+  yield* glowBake(c, 340, 100, 90, 110, P.ink, 0.6);
+}];
+const faceBg = () => bakeJob(FACE_BG_JOB);
 // The close-up is lit as a height field inside the drawn profile: the face's
 // depth grows with the distance from its outline (a rounded solid), plus sculpted
 // bumps and hollows (brow ridge, eye socket, cheekbone, the hollow under it, jaw,
@@ -998,7 +1054,7 @@ const FACE_BUMPS = [
   [61, 128, 4, 14, 3], // and towards the collarbone
 ];
 /** Chamfer distance (in px) from the edge of part `id`, inside the box. */
-function chamfer(ids, id, d, x0, y0, x1, y1) {
+function* chamfer(ids, id, d, x0, y0, x1, y1) {
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
       const o = y * W + x;
@@ -1009,6 +1065,7 @@ function chamfer(ids, id, d, x0, y0, x1, y1) {
       const edge = x === 0 || y === 0 || x === W - 1 || y === H - 1 || ids[o - 1] !== id || ids[o + 1] !== id || ids[o - W] !== id || ids[o + W] !== id;
       d[o] = edge ? 3 : 1e6;
     }
+    if (y % 32 === 31) yield;
   }
   for (let y = max(1, y0); y < y1; y++) {
     for (let x = max(1, x0); x < min(W - 1, x1); x++) {
@@ -1016,6 +1073,7 @@ function chamfer(ids, id, d, x0, y0, x1, y1) {
       if (ids[o] !== id) continue;
       d[o] = min(d[o], d[o - 1] + 3, d[o - W] + 3, d[o - W - 1] + 4, d[o - W + 1] + 4);
     }
+    if (y % 32 === 31) yield;
   }
   for (let y = min(H - 2, y1 - 1); y >= y0; y--) {
     for (let x = min(W - 2, x1 - 1); x >= max(1, x0); x--) {
@@ -1023,41 +1081,47 @@ function chamfer(ids, id, d, x0, y0, x1, y1) {
       if (ids[o] !== id) continue;
       d[o] = min(d[o], d[o + 1] + 3, d[o + W] + 3, d[o + W + 1] + 4, d[o + W - 1] + 4);
     }
+    if (y % 32 === 0) yield;
   }
   for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (ids[y * W + x] === id) d[y * W + x] /= 3;
 }
 // Skin, close up: one more step of light than the reveal (the key is nearer).
 const FACE_STEPS = [0.1, 6, 0.22, 5, 0.4, 4, 0.6, 3, 0.82, 2, 9, 1];
-const faceArt = () => bake('hg-face', W, H, (c) => {
+const FACE_JOB = ['hg-face', W, H, function* (c) {
   // parts: 1 head and neck, 2 shoulder, 3 ear
   const ids = new Uint8Array(W * H);
   partMask(c, ids, 2, (k) => {
     localPts(SHOULDER);
     fillPts(k, P.white);
   });
+  yield;
   partMask(c, ids, 1, (k) => {
     localPts(FACE_S);
     fillPts(k, P.white);
   });
+  yield;
   partMask(c, ids, 3, (k) => {
     localPts(EAR);
     fillPts(k, P.white);
   });
+  yield;
   const hair = new Uint8Array(W * H);
   partMask(c, hair, 1, (k) => {
     localPts(HAIR_S);
     fillPts(k, P.white);
   });
+  yield;
   // height: a rounded solid from the outline, then the sculpted forms
   const d = new Float32Array(W * H);
   const h = new Float32Array(W * H);
   for (const [id, r] of [[1, 34], [2, 30], [3, 5]]) {
-    chamfer(ids, id, d, 0, 0, W, H);
+    yield* chamfer(ids, id, d, 0, 0, W, H);
     for (let o = 0; o < W * H; o++) {
       if (ids[o] !== id) continue;
       const q = min(1, d[o] / r);
       h[o] = r * sqrt(1 - (1 - q) * (1 - q)) + (id === 3 ? 26 : 0);
     }
+    yield;
   }
   for (const [bx, by, rx, ry, a] of FACE_BUMPS) {
     const cx = fx(bx);
@@ -1071,6 +1135,7 @@ const faceArt = () => bake('hg-face', W, H, (c) => {
         h[o] += a * exp(-(((x - cx) / sx) ** 2 + ((y - cy) / sy) ** 2));
       }
     }
+    yield;
   }
   // the ear's bowl is a hollow
   {
@@ -1092,6 +1157,7 @@ const faceArt = () => bake('hg-face', W, H, (c) => {
   const steps = hypot(FACE_KEY[0], FACE_KEY[1]);
   const rise = FACE_KEY[2] / steps;
   for (let y = 1; y < H - 1; y++) {
+    if (y % 6 === 0) yield;
     for (let x = 1; x < W - 1; x++) {
       const o = y * W + x;
       const id = ids[o];
@@ -1143,7 +1209,9 @@ const faceArt = () => bake('hg-face', W, H, (c) => {
       idx[o] = g;
     }
   }
+  yield;
   paintIndex(c, idx, GREYS);
+  yield;
   // the hairline breaks up into single hairs at the temple and sideburn
   for (let i = 4; i < 16; i += 2) {
     const x = round(fx(HAIR[i]));
@@ -1177,7 +1245,8 @@ const faceArt = () => bake('hg-face', W, H, (c) => {
   // two beads of sweat on the lit brow
   R(c, round(fx(82)), round(fy(30)), 1, 2, P.white);
   R(c, round(fx(84.5)), round(fy(37)), 1, 1, P.white);
-});
+}];
+const faceArt = () => bakeJob(FACE_JOB);
 // The drop's path down the face (local), then it hangs at the chin and falls.
 const DROP = [66, 36, 69, 48, 71.5, 62, 73.5, 76, 75.5, 88, 77.5, 97, 79.5, 102];
 function drop(c, x, y, stretch) {
@@ -1330,9 +1399,10 @@ const HALF = (() => {
  * Render a sculpt into an index buffer (-1 = empty) and a depth buffer over the box
  * x0..x1, y0..y1. `lit` false keeps only the back light (a silhouette with a rim).
  */
-function sculpt(prims, x0, y0, x1, y1, lit, idx, zb, mt = null) {
+function* sculpt(prims, x0, y0, x1, y1, idx, zb, mt, dark) {
   const n = prims.length;
   for (let y = y0; y < y1; y++) {
+    if ((y & 1) === 1) yield;
     const py = y + 0.5;
     for (let x = x0; x < x1; x++) {
       const px = x + 0.5;
@@ -1369,6 +1439,7 @@ function sculpt(prims, x0, y0, x1, y1, lit, idx, zb, mt = null) {
       const o = y * W + x;
       if (i1 < 0) {
         idx[o] = -1;
+        if (dark) dark[o] = -1;
         continue;
       }
       zb[o] = z1;
@@ -1423,53 +1494,57 @@ function sculpt(prims, x0, y0, x1, y1, lit, idx, zb, mt = null) {
           nz /= fl;
         }
       }
-      let v = 0.03;
       let spec = 0;
-      if (lit) {
-        let d = nx * KEY[0] + ny * KEY[1] + nz * KEY[2];
-        if (d > 0) {
-          // shadow: is any part between this point and the key light?
-          const sx = px + nx * 1.5;
-          const sy = py + ny * 1.5;
-          const sz = z1 + nz * 1.5;
-          for (let k = 0; k < n; k++) {
-            const m = prims[k].m;
-            const dx = sx - prims[k].c0;
-            const dy = sy - prims[k].c1;
-            const dz = sz - prims[k].c2;
-            const ux = m[0] * dx + m[1] * dy + m[2] * dz;
-            const uy = m[3] * dx + m[4] * dy + m[5] * dz;
-            const uz = m[6] * dx + m[7] * dy + m[8] * dz;
-            const c = ux * ux + uy * uy + uz * uz - 1;
-            if (c < 0) continue;
-            const mx = m[0] * KEY[0] + m[1] * KEY[1] + m[2] * KEY[2];
-            const my = m[3] * KEY[0] + m[4] * KEY[1] + m[5] * KEY[2];
-            const mz = m[6] * KEY[0] + m[7] * KEY[1] + m[8] * KEY[2];
-            const a = mx * mx + my * my + mz * mz;
-            const b = 2 * (ux * mx + uy * my + uz * mz);
-            const disc = b * b - 4 * a * c;
-            if (disc >= 0 && (-b - sqrt(disc)) / (2 * a) > 0) {
-              d *= 0.22;
-              break;
-            }
+      let d = nx * KEY[0] + ny * KEY[1] + nz * KEY[2];
+      if (d > 0) {
+        // shadow: is any part between this point and the key light? The key is
+        // up and to the left, so parts wholly below or right of here cannot be.
+        const sx = px + nx * 1.5;
+        const sy = py + ny * 1.5;
+        const sz = z1 + nz * 1.5;
+        for (let k = 0; k < n; k++) {
+          const q = prims[k];
+          if (q.y0 > sy || q.x0 > sx) continue;
+          const m = q.m;
+          const dx = sx - q.c0;
+          const dy = sy - q.c1;
+          const dz = sz - q.c2;
+          const ux = m[0] * dx + m[1] * dy + m[2] * dz;
+          const uy = m[3] * dx + m[4] * dy + m[5] * dz;
+          const uz = m[6] * dx + m[7] * dy + m[8] * dz;
+          const c = ux * ux + uy * uy + uz * uz - 1;
+          if (c < 0) continue;
+          const mx = m[0] * KEY[0] + m[1] * KEY[1] + m[2] * KEY[2];
+          const my = m[3] * KEY[0] + m[4] * KEY[1] + m[5] * KEY[2];
+          const mz = m[6] * KEY[0] + m[7] * KEY[1] + m[8] * KEY[2];
+          const a = mx * mx + my * my + mz * mz;
+          const b = 2 * (ux * mx + uy * my + uz * mz);
+          const disc = b * b - 4 * a * c;
+          if (disc >= 0 && (-b - sqrt(disc)) / (2 * a) > 0) {
+            d *= 0.22;
+            break;
           }
-          spec = d > 0.55 ? max(0, nx * HALF[0] + ny * HALF[1] + nz * HALF[2]) ** 40 : 0;
         }
-        v = 0.07 + 0.93 * max(0, d);
-        if (mat === M_DEEP) v *= 0.62;
+        spec = d > 0.55 ? max(0, nx * HALF[0] + ny * HALF[1] + nz * HALF[2]) ** 40 : 0;
       }
+      let v = 0.07 + 0.93 * max(0, d);
+      if (mat === M_DEEP) v *= 0.62;
       const base = mat === M_DEEP ? M_SKIN : mat;
-      let g = lightStep(base, v);
       // the back light: a bright edge where the surface turns towards it
       const r = nx * BACK[0] + ny * BACK[1] + nz * BACK[2];
-      if (r > 0.3) {
-        const lim = RIM_MIN[base];
-        const rimG = base === M_RED ? 7 : r > 0.52 ? lim : min(6, lim + 2);
-        if (base === M_RED ? true : rimG < g) g = rimG;
-      }
+      const lim = RIM_MIN[base];
+      const rimG = r <= 0.3 ? 9 : base === M_RED ? 7 : r > 0.52 ? lim : min(6, lim + 2);
+      let g = lightStep(base, v);
+      if (rimG < 9 && (base === M_RED || rimG < g)) g = rimG;
       if (spec > 0.72 && (base === M_SKIN || base === M_TAPE)) g = base === M_SKIN ? 1 : 0;
       idx[o] = g;
-      if (mt) mt[o] = base;
+      mt[o] = base;
+      if (dark) {
+        // the same figure before the key comes up: only the back light's rim
+        let gd = lightStep(base, 0.03);
+        if (rimG < 9 && (base === M_RED || rimG < gd)) gd = rimG;
+        dark[o] = gd;
+      }
     }
   }
 }
@@ -1482,8 +1557,8 @@ function sculpt(prims, x0, y0, x1, y1, lit, idx, zb, mt = null) {
 // stepped a pixel at a time.
 const RX = 214; // the figure's centre line
 const RYAW = 0.62; // body turned three-quarters to screen left
-const concrete = () => bake('hg-concrete', W, H, (c) => {
-  ditherField(c, 0, 0, W, H, [P.black, P.ink, P.slate], (x, y) => 0.92 - hypot((x - 120) / 250, (y - 70) / 180) * 1.1);
+const CONCRETE_JOB = ['hg-concrete', W, H, function* (c) {
+  yield* ditherField(c, 0, 0, W, H, [P.black, P.ink, P.slate], (x, y) => 0.92 - hypot((x - 120) / 250, (y - 70) / 180) * 1.1);
   // formwork seams and tie holes, kept away from his head
   for (const x of [52, 150, 352]) R(c, x, 0, 1, H, A(P.black, 0.6));
   R(c, 0, 150, W, 1, A(P.black, 0.5));
@@ -1494,7 +1569,8 @@ const concrete = () => bake('hg-concrete', W, H, (c) => {
       R(c, gx + 1, gy + 2, 2, 1, A(P.steel, 0.35));
     }
   }
-});
+}];
+const concrete = () => bakeJob(CONCRETE_JOB);
 // The tank top: a scoop neck, straps over the trapezius, deep armholes; the red
 // square printed on the near side of the chest. Body-local x is his left.
 function topMat(x, y, z) {
@@ -1596,27 +1672,35 @@ function feature(c, zb, f, x, y, z, w, col) {
   c.fillStyle = col;
   c.fillRect(px, py, w, 1);
 }
-const BREATHS = 3;
-const revealArt = (lit, b) => bake(`hg-reveal-${lit ? 'lit' : 'dark'}-${b}`, W, H, (c) => {
+// Two breath positions (a 1 px rise needs no more); the first bake also keeps
+// the dark version (before the key comes up) from the same pass.
+const BREATHS = 2;
+function* revealPaint(c, b) {
   const prims = revealFigure(b / (BREATHS - 1));
   const idx = new Int8Array(W * H).fill(-1);
   const zb = new Float32Array(W * H);
   const mt = new Int8Array(W * H).fill(-1);
-  sculpt(prims, RX - 70, 22, RX + 60, H, lit, idx, zb, mt);
-  if (lit) {
-    // a buzz cut: the lit hair broken into a fine grain, a ragged hairline
-    for (let y = 22; y < 90; y++) {
-      for (let x = RX - 70; x < RX + 60; x++) {
-        const o = y * W + x;
-        if (mt[o] !== M_HAIR) continue;
-        const edge = mt[o + 1] === M_SKIN || mt[o - 1] === M_SKIN || mt[o + W] === M_SKIN;
-        if (idx[o] <= 4 && BAYER[(y & 3) * 4 + (x & 3)] > (edge ? 4 : 10)) idx[o] = min(6, idx[o] + 1);
-        else if (edge && idx[o] >= 5 && hash(x * 7 + y * 13) > 0.6) idx[o] = 5;
-      }
+  const dark = b === 0 ? new Int8Array(W * H).fill(-1) : null;
+  yield* sculpt(prims, RX - 70, 22, RX + 60, H, idx, zb, mt, dark);
+  if (dark) {
+    const d = cpuCanvas(W, H);
+    paintIndex(d.c, dark, REVEAL_RAMP);
+    BAKED.set('hg-reveal-dark', d.cv);
+    yield;
+  }
+  // a buzz cut: the lit hair broken into a fine grain, a ragged hairline
+  for (let y = 22; y < 90; y++) {
+    for (let x = RX - 70; x < RX + 60; x++) {
+      const o = y * W + x;
+      if (mt[o] !== M_HAIR) continue;
+      const edge = mt[o + 1] === M_SKIN || mt[o - 1] === M_SKIN || mt[o + W] === M_SKIN;
+      if (idx[o] <= 4 && BAYER[(y & 3) * 4 + (x & 3)] > (edge ? 4 : 10)) idx[o] = min(6, idx[o] + 1);
+      else if (edge && idx[o] >= 5 && hash(x * 7 + y * 13) > 0.6) idx[o] = 5;
     }
   }
+  yield;
   paintIndex(c, idx, REVEAL_RAMP);
-  if (!lit) return;
+  yield;
   const f = RV.head;
   // brows: short strokes along the ridge with a gap over the nose (the far one foreshortened)
   for (let k = 0; k <= 5; k++) feature(c, zb, f, 2.2 + k, -3.3 + k * 0.1, 11.4 - k * 0.32, 1, k < 3 ? P.black : P.ink);
@@ -1652,18 +1736,21 @@ const revealArt = (lit, b) => bake(`hg-reveal-${lit ? 'lit' : 'dark'}-${b}`, W, 
       }
     }
   }
-});
+}
+const REVEAL_JOBS = [0, 1].map((b) => [`hg-reveal-${b}`, W, H, (c) => revealPaint(c, b)]);
+const revealLit = (b) => bakeJob(REVEAL_JOBS[b]);
+const revealDark = () => BAKED.get('hg-reveal-dark') || (revealLit(0), BAKED.get('hg-reveal-dark'));
 const REVEAL_RAMP = [...GREYS, P.red, P.darkRed];
 function shotReveal(c, lt) {
   c.drawImage(concrete(), 0, 0);
-  // the breath: out, in, out over 3.4 s, stepped through the baked phases
-  const br = (1 - cos(((lt + 0.4) / 3.4) * TAU)) / 2;
-  const ph = min(BREATHS - 1, floor(br * BREATHS));
+  // the breath: in and out over 3.4 s, a pixel's rise of the chest and shoulders
+  const br = (1 - cos(((lt - 1.8) / 3.4) * TAU)) / 2;
+  const ph = lt > 1.8 && br > 0.5 ? 1 : 0;
   const key = smooth(prog(lt, 0.5, 1.8));
-  if (key < 1) c.drawImage(revealArt(false, 0), 0, 0);
+  if (key < 1) c.drawImage(revealDark(), 0, 0);
   if (key > 0) {
     c.globalAlpha = key;
-    c.drawImage(revealArt(true, key < 1 ? 0 : ph), 0, 0);
+    c.drawImage(revealLit(ph), 0, 0);
     c.globalAlpha = 1;
   }
 }
@@ -1744,7 +1831,24 @@ function readout(ctx, dt, r) {
   }
   art(ctx, cur, 24, y + round(2 * (1 - p)), la * p, 'left');
 }
+/** litShape (kit) on this spot's own CPU scratch: stacked layers of one silhouette. */
+function litShape(ctx, paint, layers) {
+  const s = buf('hg-lit');
+  for (let i = 0; i < layers.length; i++) {
+    const L = layers[i];
+    s.c.globalCompositeOperation = i === 0 ? 'source-over' : 'source-atop';
+    paint(s.c, L[0], L[1], L[2]);
+  }
+  s.c.globalCompositeOperation = 'source-over';
+  ctx.drawImage(s.cv, 0, 0);
+}
 function run(ctx, dt) {
+  // the spot fades up from black: while the first shot's art is still baking
+  // (a few frames) black is what would show anyway
+  if (dt < 0.6 && !BAKED.has(LOCKER_JOB[0])) {
+    R(ctx, 0, 0, W, H, P.black);
+    return;
+  }
   let i = 0;
   while (i + 1 < SHOTS.length && dt >= SHOTS[i + 1].at) i++;
   const s = SHOTS[i];
@@ -1776,30 +1880,33 @@ function run(ctx, dt) {
     ctx.globalAlpha = 1;
   }
 }
-// Pre-bake during the opening shot, one job per frame, so no cut ever waits for
-// a bake: every shot at two instants, the reveal's two lightings, every
-// resolution canvas, the readout labels and the slate's lettering.
+// Pre-bake without a hitch: on the first frame every heavy bake is queued in the
+// order the spot needs it and pump() advances them a few milliseconds per frame
+// (the face is needed at 11.8 s, the reveal at 15.6 s); then each shot is drawn
+// once off screen (lt 1 and 3) so the small caches (lettering, cells) exist too.
+// A shot that comes on air before its bake is done finishes it at once.
+const WARM_MS = 4;
+const WARM_JOBS = [LOCKER_JOB, SKY_JOB, GYM_JOB, FACE_BG_JOB, FACE_JOB, CONCRETE_JOB, REVEAL_JOBS[0], REVEAL_JOBS[1]];
 let warmed = 0;
 function warm(dt) {
-  if (warmed > 15 + BREATHS) return;
-  const k = warmed++;
+  if (warmed === 0) {
+    for (const j of WARM_JOBS) queue(j);
+    warmed = 1;
+  }
+  if (JOBS.length) {
+    pump(WARM_MS);
+    return;
+  }
+  if (warmed > 14) return;
+  const k = warmed++ - 1;
   const w = buf('hg-warm').c;
   if (k < 10) {
     const s = SHOTS[1 + (k >> 1)];
     if (dt < s.at) s.draw(w, k & 1 ? 3 : 1);
-  } else if (k === 10) revealArt(false, 0);
-  else if (k === 11) revealArt(true, 0);
-  else if (k === 12) for (const b of [12, 8, 6, 4, 3, 2]) mos(b);
-  else if (k === 13) {
-    for (const b of [8, 6, 4, 3, 1]) {
-      label(RES_KEY[b], RES_LABEL[b], 1, b === 1 ? P.red : P.fog, 'body');
-    }
-  } else if (k === 14) {
-    buf('hg-tb');
-    buf('hg-slate');
-  } else if (k === 15) gymMark(2);
-  else if (k === 16) faceArt();
-  else revealArt(true, k - 16);
+  } else if (k === 10) for (const b of [12, 8, 6, 4, 3, 2]) mos(b);
+  else if (k === 11) {
+    for (const b of [8, 6, 4, 3, 1]) label(RES_KEY[b], RES_LABEL[b], 1, b === 1 ? P.red : P.fog, 'body');
+  } else if (k === 12) gymMark(2);
 }
 
 export default {
@@ -1855,6 +1962,8 @@ export default {
   },
   draw(ctx, t, dt) {
     warm(dt);
-    run(ctx, dt);
+    const O = buf('hg-out');
+    run(O.c, dt);
+    ctx.drawImage(O.cv, 0, 0);
   },
 };

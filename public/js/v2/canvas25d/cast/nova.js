@@ -146,7 +146,8 @@ function drawWarmHead(buf, L, m, head, s) {
       if (l < 0.6 || ly > chinY) continue;
       // hand-placed planes, not a lit disc: the forehead above the brows, the cheekbone under the lit
       // eye (outside the nose), the front of the chin
-      const forehead = ly < browY;
+      // (the forehead plane narrows toward the far side: its lower edge rises there, and it needs more light)
+      const forehead = ly < browY - Math.max(0, lx) * 0.16 && (lx < 0 || l > 0.72);
       // the lit side of the cheek: a soft band along the face's contour where it turns to the key
       const band = 1.9 - 0.9 * Math.abs((ly - (cheekY0 + cheekY1) * 0.5) / ((cheekY1 - cheekY0) * 0.5));
       const cheek = ly > cheekY0 && ly < cheekY1 && lx < -hw + band;
@@ -210,7 +211,7 @@ function drawCoils(buf, L, m, head, s, sk) {
       return l > -0.2 ? 1 : l > -0.75 ? 2 : 3;
     }
     // the interior between clusters: maroon toward the key, black on the far side
-    return l > 0.05 ? 1 : l > -0.7 ? 2 : 3;
+    return l > -0.25 ? 1 : l > -0.8 ? 2 : 3;
   });
   if (tr > 0) {
     // ---- clusters on a jittered hexagonal lattice, top rows first so lower curls overlap
@@ -231,18 +232,23 @@ function drawCoils(buf, L, m, head, s, sk) {
         const jy = y + (hash(x, j) - 0.5) * d * 0.36;
         const v = halo(jx, jy, lag);
         if (v < 0.03) continue;
-        if (inFace(jx, jy) || below(jx, jy)) continue;
-        // clusters at the edge of the face window and of the outline are smaller (soft hairline, clean scallop)
-        const nearFace = inFace(jx, jy + 0.9) || inFace(jx + Math.sign(jx) * -0.9, jy);
+        // where the cluster is really drawn: it rides the turn (and the follow-through) with the head
+        const k = jy > HALO.cy ? (jy - HALO.cy) / HALO.down : 0;
+        const dx = jx + yawX * 0.6 + lag * k * 0.6;
+        if (inFace(dx, jy) || below(dx, jy)) continue;
+        // clusters at the edge of the face window and of the outline are smaller (soft hairline, clean
+        // scallop), and none may reach into the face (a curl on the cheek reads as a dark blot)
+        const toward = dx > 0 ? -1 : 1;
+        const nearFace = inFace(dx, jy + 0.9) || inFace(dx + toward * 0.9, jy);
         const edge = v < 0.1;
         const rr = (nearFace ? r * 0.7 : edge ? r * 0.82 : r) * (0.82 + hash(jx, jy) * 0.36);
-        const k = jy > HALO.cy ? (jy - HALO.cy) / HALO.down : 0;
-        screen(head, jx + yawX * 0.6 + lag * k * 0.6, jy, SC);
+        if (inFace(dx + toward * rr * 1.05, jy) || inFace(dx, jy + rr * 1.05) || below(dx + toward * rr, jy + rr * 0.5)) continue;
+        screen(head, dx, jy, SC);
         const nx = jx / HALO.rx, ny = (jy - HALO.cy) / HALO.up;
         const facing = -0.55 * nx - 0.7 * ny;
         const crown = jy < HALO.cy - HALO.up * 0.55;
         // the far side's clusters sit one step down (body black, crescent maroon): structure without glare
-        const bias = facing < -0.4 ? 1 : 0;
+        const bias = facing < -0.62 ? 1 : 0;
         blob(buf, mc, SC[0], SC[1], rr * s * (crown ? 1.08 : 1), crown ? 0.07 : 0.14, hash(j * 3.1, jx) * 6.28, bias, sph, facing > 0.38 && hash(jy, j) > 0.35);
       }
     }

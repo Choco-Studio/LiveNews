@@ -51,20 +51,21 @@ export const max = defineLook({
 const CLUMPS = [
   // crown and sides (behind), one step darker
   [-6.0, -6.2, -6.1, -9.3, -3.0, -11.3, 1.4, 0.5],
-  [5.7, -6.4, 7.5, -9.4, 7.8, -11.4, 1.3, 0.5],
+  [5.7, -6.4, 7.7, -9.5, 8.1, -11.9, 1.3, 0.5],
   [-3.4, -8.6, -2.2, -11.3, 1.0, -12.1, 1.5, 0.7],
   [0.6, -8.8, 2.6, -11.9, 6.0, -13.0, 1.7, 0.8],
-  [3.4, -8.0, 5.6, -10.7, 8.0, -11.8, 1.3, 0.7],
+  [3.4, -8.0, 5.8, -10.8, 8.5, -12.1, 1.3, 0.7],
   // front: brushed up and to the right; uneven widths and lengths, a few lying lower
   [-5.4, -6.8, -5.0, -9.4, -2.0, -11.4, 1.25, 0.8],
   [-3.6, -7.2, -2.4, -10.2, 0.7, -11.9, 1.6, 0.9],
   [-1.5, -7.6, 0.0, -10.5, 3.4, -12.2, 1.45, 1.0],
   [0.6, -7.5, 2.4, -10.7, 5.7, -12.5, 1.7, 1.0],
-  [2.9, -7.2, 4.9, -10.0, 7.4, -11.5, 1.35, 0.9],
-  [4.9, -6.5, 7.0, -8.0, 8.3, -9.0, 1.05, 0.7],
+  [2.9, -7.2, 5.0, -10.1, 7.8, -11.8, 1.35, 0.9],
+  [4.9, -6.5, 7.2, -8.2, 8.9, -9.2, 1.05, 0.7],
   [-2.6, -6.9, -2.1, -8.6, 0.2, -9.4, 0.8, 0.6],
 ];
 const P0 = [0, 0], P1 = [0, 0], P2 = [0, 0], LC = [0, 0];
+export const QUIFF = { lift: 1.1 }; // how far the high tips stand up off the crown (units): keeps Max's silhouette apart from Paco's
 
 // Short textured crop: tight faded sides with a sideburn, volume on top as clumps.
 function drawTextured(buf, L, m, head, s, sk) {
@@ -76,7 +77,9 @@ function drawTextured(buf, L, m, head, s, sk) {
   const pitchShift = Math.sin(head.pitch) * 2.0;
   const cyc = H.craniumY - 0.4;
   const RV = H.R + 0.55;
-  const hairline = (fx) => H.top + 4.05 + pitchShift + fx * fx * 0.018 - Math.exp(-((Math.abs(fx) - 5.2) ** 2) / 1.6) * 0.7;
+  // the front hairline: a soft M (slightly receded temples) broken into short tips, never a ruled edge
+  const hairline = (fx) => H.top + 4.05 + pitchShift + fx * fx * 0.018 - Math.exp(-((Math.abs(fx) - 5.2) ** 2) / 1.6) * 0.7 +
+    (tr === 2 ? 0.28 * Math.sin(fx * 2.3 + 0.4) + 0.12 * Math.sin(fx * 5.1) : 0.15 * Math.sin(fx * 1.7));
   const x0 = head.cx - (H.R + 1.4) * s, x1 = head.cx + (H.R + 1.4) * s;
   const y0 = head.cy + (H.top - 1.6) * s, y1 = head.cy + 1.2 * s;
   // ---- the cap under the clumps: skull-tight faded sides, sideburns, a darker top
@@ -108,7 +111,7 @@ function drawTextured(buf, L, m, head, s, sk) {
     } else if (y > H.craniumY - 2.0) {
       t = x > hw - 0.1 ? 2 : 1;
     }
-    else if (tr > 0) t = y > hairline(fx) - 1.4 ? (x > 2.5 ? 2 : 1) : Math.min(3, t + 1); // short front hairs stay lit
+    else if (tr > 0) t = y > hairline(fx) - 1.4 ? (x > 3.2 ? 2 : x < -1.5 ? 0 : 1) : Math.min(3, t + 1); // short front hairs stay lit
     return t;
   });
   // ---- clumps, back to front (in the wide they only shape the silhouette)
@@ -135,8 +138,10 @@ function clump(buf, L, m, head, s, c, yawX, lag, back, tr, streak = true) {
   const [rx, ry, cx, cy, tx, ty, belly, follow] = c;
   const sx = yawX * (back ? 0.7 : 0.9);
   screen(head, rx + sx, ry, P0);
-  screen(head, cx + sx * 0.95, cy, P1);
-  screen(head, tx + sx * 0.9 + lag * follow * 0.55, ty + Math.abs(lag) * 0.1, P2);
+  // the quiff stands up off the crown: tips (and their control points) lift by QUIFF.lift where they sit high
+  const up = ty < -10.5 ? QUIFF.lift : ty < -9.5 ? QUIFF.lift * 0.5 : 0;
+  screen(head, cx + sx * 0.95, cy - up * 0.55, P1);
+  screen(head, tx + sx * 0.9 + lag * follow * 0.55, ty - up + Math.abs(lag) * 0.1, P2);
   const RV = H.R + 1.6;
   const sxn = ((rx + tx) * 0.5) / RV, syn = ((ry + ty) * 0.5 - H.craniumY) / RV;
   // how much this clump faces the key (upper left), from its place on the head
@@ -158,7 +163,7 @@ function clump(buf, L, m, head, s, c, yawX, lag, back, tr, streak = true) {
       if (back) t += 1;
       return t > 3 ? 3 : t;
     };
-  stroke(buf, m.tex, P0[0], P0[1], P1[0], P1[1], P2[0], P2[1], 0.85 * s, 0.66 * s, tone, tr === 2 ? 7 : 5, belly * s * 0.68); // soft, rounded tips: textured, never spiky
+  stroke(buf, m.tex, P0[0], P0[1], P1[0], P1[1], P2[0], P2[1], 0.85 * s, 0.66 * s, tone, tr === 2 ? 5 : 4, belly * s * 0.68); // soft, rounded tips: textured, never spiky
 }
 
 const rimDecal = () => material('cast-b:rim', { ramp: [P.silver], line: P.ink, decal: true });

@@ -82,27 +82,31 @@ const WORLD = {
       form: 'AABA',
       layers: [
         // The muted pluck ostinato in eighths (no pulse-12 lead, no melody, no drum).
+        // Three variants against a four-phrase form and two bass patterns: the
+        // round-up only repeats itself exactly after 12 phrases (about 4 min).
         osti({ base: 50, variants: [
           { notes: [0, 7, 12, 7, 0, 7, 12, 14], acc: '64535453' },
           { notes: [0, 12, 7, 12, 0, 12, 14, 12], acc: '64535453' },
+          { notes: [0, 7, 14, 7, 12, 7, 0, 7], acc: '64435443' },
         ], decay: 0.14, cut: 1000, cutEnd: 320, level: -14, pan: 0.2, dly: 0.15 }),
-        bass({ pattern: [[0, 1.9, 'r', 0.8], [2, 1.9, '5', 0.6]], level: -12 }),
+        bass({ patterns: [[[0, 1.9, 'r', 0.8], [2, 1.9, '5', 0.6]], [[0, 2.9, 'r', 0.8], [3, 0.9, '5', 0.55]]], level: -12 }),
         pad({ level: -21, n: 3, lo: 43, hi: 62, power: true, cut: 600, cutTo: 750 }),
       ],
     },
     lighter: {
       bpm: 88,
       hr: 2,
-      progs: { A: ['Dadd9', 'Gmaj7', 'Bm7', 'Asus4'], B: ['Gmaj7', 'Dadd9', 'Em7', 'Asus4'] },
-      form: 'AB',
+      progs: { A: ['Dadd9', 'Gmaj7', 'Bm7', 'Asus4'], B: ['Gmaj7', 'Dadd9', 'Em7', 'Asus4'], C: ['Bm7', 'Gmaj7', 'Dadd9', 'A6sus'] },
+      form: 'ABAC',
       layers: [
         // Sparse pluck on 1, the "and" of 2 and 3; a soft triangle dyad; the root.
         osti({ base: 55, variants: [
           { notes: [0, 0, 0, 7, 0, 12, 0, 0], acc: '6..4.4..' },
           { notes: [0, 0, 7, 0, 12, 0, 14, 0], acc: '5.4.4.3.' },
+          { notes: [0, 0, 0, 7, 0, 0, 12, 0], acc: '5..4..3.' },
         ], decay: 0.5, cut: 1200, cutEnd: 350, level: -16, pan: 0.15, dly: 0.25, enter: 1 }),
         pad({ wave: 'tri', n: 2, lo: 57, hi: 69, a: 0.8, r: 1.6, cut: 1400, cutTo: 1400, detune: 4, level: -19, no7: true, enter: 0 }),
-        bass({ pattern: [[0, 3.8, 'r', 0.7]], a: 0.05, r: 0.4, level: -13 }),
+        bass({ patterns: [[[0, 3.8, 'r', 0.7]], [[0, 2.8, 'r', 0.7], [3, 0.9, '5', 0.5]]], a: 0.05, r: 0.4, level: -13 }),
       ],
     },
     // Only with storyBeds: 'soft' (the owner's "more music" switch): a felt,
@@ -136,9 +140,9 @@ const techBed = (light) => ({
     pad({ n: 4, lo: 52, hi: 71, a: 1, r: 2, cut: 700, cutTo: 1000, level: -13, no7: true }),
     bass({ pattern: [[0, 1.7, 'r', 0.8], [2.5, 1.2, 'r', 0.55]], level: -12 }),
     // The arpeggio carries the 9th (motif cell: 1, 2, 5) above the triad pad.
-    arp({ wave: 'pulse12', rate: 2, shape: 'cell', variants: ['cell', 'cell', 'up', 'updown'], lo: 69, span: 1, decay: 0.16, cut: 1700, cutEnd: 450, level: -18, vel: 0.5, dly: 0.35 }),
-    ...(light ? [kit({ shaker: '..3...3...3...3.', level: -15 })] : []),
-    motif({ inst: 'pluck', gate: true, at: 4, oct: 69, level: -17 }), // on Am9: its b7 colour is a chord tone
+    arp({ wave: 'pulse12', rate: 2, shape: 'cell', variants: ['cell', 'up', 'cell', 'cell', 'updown'], lo: 69, span: 1, decay: 0.16, cut: 1700, cutEnd: 450, level: -18, vel: 0.5, dly: 0.35 }),
+    ...(light ? [kit({ shaker: '..3...3...3...3.', on: 'xx.', level: -15 })] : []),
+    motif({ inst: 'pluck', gate: true, at: 4, oct: 69, on: 'xxx.x', level: -17 }), // on Am9: its b7 colour is a chord tone
   ],
 });
 const TECH = {
@@ -292,12 +296,15 @@ const FLASH = {
       bpm: 120,
       hr: 2,
       colours: {
-        light: { progs: { A: ['G', 'D/F#', 'Em7', 'Cadd9'] }, form: 'A' },
-        neutral: { progs: { A: ['Em7', 'Cadd9', 'G', 'Dsus4'] }, form: 'A' },
+        light: { progs: { A: ['G', 'D/F#', 'Em7', 'Cadd9'], B: ['G', 'Cadd9', 'Em7', 'Dsus4'] }, form: 'AB' },
+        neutral: { progs: { A: ['Em7', 'Cadd9', 'G', 'Dsus4'], B: ['Em7', 'Cadd9', 'Am7', 'Dsus4'] }, form: 'AB' },
       },
       layers: [
         pad({ n: 3, lo: 52, hi: 69, a: 1, r: 2, cut: 600, cutTo: 800, level: -14, no7: true, enter: 0, tail: 0 }),
-        bass({ pattern: [[0, 0.3, 'r', 0.7], [1, 0.3, 'r', 0.55], [2, 0.3, 'r', 0.65], [3, 0.3, 'r', 0.55]], a: 0.006, r: 0.08, level: -12 }),
+        bass({ patterns: [
+          [[0, 0.3, 'r', 0.7], [1, 0.3, 'r', 0.55], [2, 0.3, 'r', 0.65], [3, 0.3, 'r', 0.55]],
+          [[0, 0.3, 'r', 0.7], [1, 0.3, 'r', 0.55], [2, 0.3, '8', 0.6], [3, 0.3, '5', 0.5]],
+        ], a: 0.006, r: 0.08, level: -12 }),
         kit({ tock: '4.......4.......', tick: '....3.......3...', level: -13 }),
       ],
     },

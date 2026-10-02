@@ -11,7 +11,7 @@
 // voices.js the TTS voice choice and loudness.js the level plan and the model
 // that levels tunes from different authors.
 
-import { buildTimeline, sampleTimeline, SpeechClock, wordAtChar } from './audio/visemes.js';
+import { buildTimeline, sampleTimeline, sampleCalm, SpeechClock, wordAtChar } from './audio/visemes.js';
 import { splitSentences } from './audio/sentences.js';
 import { buildBuses, Ducker, TunePlayer, asSong, scheduleMurmur, bank } from './audio/synth.js';
 import { CUES, cueFor, themeFor, THEME_IDS } from './audio/themes.js';
@@ -155,6 +155,8 @@ class Run {
 
 const RELEASE_MS = 130; // an interrupted mouth closes over this long
 const LOOKAHEAD = 1.6; // seconds of music scheduled ahead (timers may be throttled)
+const PENDING_MAX = 8; // tunes kept waiting for a locked context (newest win)
+const DUCK_LEAD = 120; // ms between ducking the music and the first sound of a voice
 const SPEED_KEY = 'globit24.ttsSpeed'; // learned TTS pace per voice, kept across sessions
 const clamp01 = (x) => (x > 0 ? (x < 1 ? x : 1) : 0);
 
@@ -194,6 +196,7 @@ export class AudioEngine {
   #speed = loadSpeeds(); // voice name (or slot) -> learned TTS speed (timeline ms per wall ms)
   #last = new Map(); // slot -> { at, viseme, level } last sampled mouth, for releases
   #scratch = {};
+  #calmScratch = {};
   #markScratch = {};
   #levelFrame = {};
   #voiceCache = new Map(); // url -> Promise<AudioBuffer> (decoded recorded voices)
@@ -424,8 +427,12 @@ export class AudioEngine {
    *   sentenceIndex, accent 0..1 (stressed syllable), pause (comma pause) }.
    * Visemes: rest MBP FV TH L EE AH OH OO WQ S. Works in tts, blips and mute.
    * Pass `out` (any object) to have it filled instead of a new one allocated.
+   * `opts.calm`: the coarse stream for small faces - tongue shapes (TH, L, S)
+   * folded into their neighbours, every shape held >= 80 ms (lip closures
+   * excepted) and the jaw smoothed over ~100 ms (<= ~0.12 per 60 fps frame).
    */
-  speechFrame(now = performance.now(), slot, out) {
+  speechFrame(now = performance.now(), slot, out, opts) {
+    const calm = opts?.calm === true;
     const run = this.#run;
     const key = slot ?? (run && !run.cancelled ? run.key : null);
     const f = out && typeof out === 'object' ? out : {};
@@ -445,19 +452,20 @@ export class AudioEngine {
     const t = live ? live.timeAt(now) : null;
     if (live && t !== null && Number.isFinite(t)) {
       const s = sampleTimeline(live.tl, t, this.#scratch);
+      const c = calm ? sampleCalm(live.tl, t, this.#calmScratch) : s;
       f.speaking = s.speaking;
       // A recorded voice: the jaw also follows what is actually heard.
-      const level = live.loud ? s.level * Math.min(1, 0.25 + live.loudness(now) * 0.9) : s.level;
+      const level = live.loud ? c.level * Math.min(1, 0.25 + live.loudness(now) * 0.9) : c.level;
       f.level = clamp01(level);
-      f.viseme = s.viseme;
-      f.next = s.next;
-      f.mix = clamp01(s.mix);
+      f.viseme = c.viseme;
+      f.next = c.next;
+      f.mix = clamp01(c.mix);
       f.wordIndex = s.wordIndex;
       f.charIndex = s.charIndex;
       f.accent = clamp01(s.accent);
       f.pause = s.pause;
       f.sentenceIndex = live.sentence;
-      const shown = s.mix > 0.5 ? s.next : s.viseme;
+      const shown = f.mix > 0.5 ? f.next : f.viseme;
       const last = this.#last.get(key);
       if (last) {
         if (now >= last.at) {
@@ -678,9 +686,9 @@ export class AudioEngine {
     analyser.fftSize = 1024;
     src.connect(analyser);
     analyser.connect(this.#buses.speech);
-    // 120 ms lead: the music's duck is settled when the first word arrives.
+    // The music's duck is settled when the first word arrives.
     this.#voiceOn();
-    const t0 = ctx.currentTime + 0.12;
+    const t0 = ctx.currentTime + DUCK_LEAD / 1000;
     const perf0 = this.#heardAt(t0);
     const lv = audio.levels;
     const env = lv && Array.isArray(lv.values) && lv.values.length && Number(lv.rate) > 0 ? { rate: Number(lv.rate), values: lv.values, perf0 } : null;
@@ -776,7 +784,9 @@ export class AudioEngine {
     if (!synth || !Utter || !this.ttsAvailable) return this.#saySilent(run, sentence);
     if (!run.reset) {
       // Fresh start for every speak(); the short wait avoids Chrome swallowing
-      // an utterance queued right after cancel().
+      // an utterance queued right after cancel(). The music starts ducking now,
+      // so it has settled when the engine's first word arrives.
+      this.#voiceOn();
       run.reset = true;
       try {
         synth.cancel();
@@ -872,7 +882,9 @@ export class AudioEngine {
 
   // The "blips" mode: a soft murmur from the same timeline as the lips.
   async #sayBlips(run, sentence) {
-    const lead = 40;
+    // The first sentence waits for the music's duck to settle; later ones
+    // follow straight on (the duck is held between sentences).
+    const lead = this.#ducker?.speaking ? 40 : DUCK_LEAD;
     const cfg = this.#config(run.key);
     const tl = this.#timeline(run.key, sentence, { paced: true });
     const ctx = this.#ctx;
@@ -892,6 +904,13 @@ export class AudioEngine {
     } finally {
       silence?.();
     }
+  }
+
+  // Output + base latency (s): how late a sound asked for "now" is heard.
+  #latency() {
+    const ctx = this.#ctx;
+    const l = (Number(ctx?.outputLatency) || 0) + (Number(ctx?.baseLatency) || 0);
+    return Number.isFinite(l) ? Math.min(0.4, Math.max(0, l)) : 0;
   }
 
   // performance.now() at which context time `t` reaches the listener's ears:
@@ -1129,7 +1148,9 @@ export class AudioEngine {
           if (startAt === null && now - asked > 400) return;
           if (startAt !== null && now - startAt > Math.max(400, (60 / song.bpm) * song.beats * 1000 - 600)) return;
         }
-        player = new TunePlayer(ctx, this.#buses, song, { volume, loop, duckDb: opts?.duckDb });
+        // A beat due inside the output latency cannot be heard on time: it plays
+        // at once, whole (grace), and everything after it lands on the clock.
+        player = new TunePlayer(ctx, this.#buses, song, { volume, loop, duckDb: opts?.duckDb, grace: this.#latency() + 0.03 });
         const t0 = startAt !== null ? this.#contextTimeHeardAt(startAt) : ctx.currentTime + 0.05;
         player.start(t0);
         player.scheduleUntil(ctx.currentTime + LOOKAHEAD);
@@ -1151,7 +1172,14 @@ export class AudioEngine {
       };
       if (ctx.state === 'running') begin();
       else {
+        // While locked, keep only what could still start in time (a one-shot
+        // that has lost its moment is dropped) and at most the newest few.
+        const len = (60 / song.bpm) * song.beats * 1000;
+        begin.expires = loop ? Infinity : startAt === null ? asked + 400 : startAt + Math.max(400, len - 600);
+        const nowMs = performance.now();
+        for (const b of this.#pending) if (!(b.expires > nowMs)) this.#pending.delete(b);
         this.#pending.add(begin);
+        while (this.#pending.size > PENDING_MAX) this.#pending.delete(this.#pending.values().next().value);
         // Ask to resume inside a user gesture (anything else is refused with a
         // console warning; the armed gesture listener resumes later), or at
         // most every 10 s - an OBS source has no gestures but may autoplay.

@@ -366,6 +366,31 @@ const hallRacks = lazy(() => cached('bf-hall-racks2', CW, H, (c) => { for (let k
 const hallRacksLit = lazy(() => cached('bf-hall-racks2-lit', CW, H, (c) => { for (let k = 0; k < 9; k++) paintRack(c, 150 + k * 58, 74, 46, 96, false, k + 1, true); }));
 const hallNear = lazy(() => cached('bf-hall-near2', 150, H, (c) => { paintRack(c, 4, 26, 142, 170, true, 77, false); for (let y = 40; y < 180; y += 9) R(c, 8, y, 1, 2, P.black); }));
 const hallNearLit = lazy(() => cached('bf-hall-near2-lit', 150, H, (c) => paintRack(c, 4, 26, 142, 170, true, 77, true)));
+// Set dressing on the hall floor, between the racks and the camera: a pallet with
+// two shipping crates (unlit, and lit for the part that stands in the beam).
+function paintCrate(c, x, y, w, h, lit) {
+  R(c, x, y, w, h, lit ? P.brown : P.maroon);
+  for (let py = y + 5; py < y + h - 1; py += 5) R(c, x + 1, py, w - 2, 1, P.black); // plank joints
+  R(c, x, y, w, 1, lit ? P.cream : P.tanShade); // the top edge catches the window
+  R(c, x, y, 1, h, lit ? P.tanShade : P.brown); // the face toward the window
+  R(c, x + 1, y + 1, 2, h - 1, lit ? P.tanShade : P.brown); // corner post
+  R(c, x + w - 3, y + 1, 2, h - 1, P.black); // far corner post in shade
+  R(c, x + 6, y + 6, 8, 3, lit ? P.maroon : P.black); // a stencilled mark, half worn
+  R(c, x + 7, y + 7, 2, 1, lit ? P.brown : P.maroon);
+}
+const CRATES_W = 40;
+const CRATES_H = 38;
+function paintCrates(c, lit) {
+  paintCrate(c, 4, 6, 26, 14, lit);
+  paintCrate(c, 1, 20, 34, 15, lit);
+  for (let x = 0; x < 38; x += 6) R(c, x, 35, 4, 3, lit ? P.brown : P.maroon); // pallet blocks
+  R(c, 0, 35, 38, 1, lit ? P.tanShade : P.brown);
+}
+const hallCrates = lazy(() => cached('bf-crates', CRATES_W, CRATES_H, (c) => paintCrates(c, false)));
+const hallCratesLit = lazy(() => cached('bf-crates-lit', CRATES_W, CRATES_H, (c) => paintCrates(c, true)));
+const CRATES_X = 232; // mid-layer x
+const CRATES_Y = 172 - CRATES_H; // standing on the floor
+
 // the haze between the rows of racks, thicker near the floor
 const hallHaze = lazy(() => gradient('bf-hall-haze', CW, H, { kind: 'vertical', ramp: [P.black, P.ink], from: 0.3, to: 1, seam: 0.6 }));
 
@@ -412,6 +437,12 @@ function shotCellar(ctx, lt) {
   ctx.save();
   ctx.globalAlpha = 0.35;
   ctx.drawImage(hallHaze(), mid, 0);
+  ctx.restore();
+  // crates on the floor, in front of the racks; the part inside the beam lit
+  contact(ctx, CRATES_X + mid + 19, 172, 24, 0.5);
+  ctx.drawImage(hallCrates(), CRATES_X + mid, CRATES_Y);
+  clipBeam(ctx, back, 0.8);
+  ctx.drawImage(hallCratesLit(), CRATES_X + mid, CRATES_Y);
   ctx.restore();
   // the shaft itself and its dust, riding with the back wall
   ctx.save();

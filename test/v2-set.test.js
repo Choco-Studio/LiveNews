@@ -367,9 +367,11 @@ describe('frame 0: never a frame without the set (owner, 21:05)', () => {
     assert.ok(line > 250, `${label}: desk line in ${line} columns`);
     assert.ok(plate > 150, `${label}: desk plate (${plate} px)`);
     assert.ok(bezel > 60, `${label}: wall bezel`);
+    // a set, not a flat fill: the light, the bezel, the desk and the wall bring many palette colours
     const counts = new Map();
     for (const c of px) counts.set(c, (counts.get(c) || 0) + 1);
-    assert.ok(Math.max(...counts.values()) < px.length * 0.6, `${label}: not an empty frame`);
+    const used = [...counts.values()].filter((n) => n >= 20).length;
+    assert.ok(used >= 7, `${label}: only ${used} colours, an empty frame`);
   };
   test('a fresh page: the first frame of every programme has wall, desk, plate and line', async () => {
     const fresh = await import(`../public/js/v2/canvas25d/studio/set.js?frame0=${process.pid}`);

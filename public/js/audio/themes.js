@@ -78,13 +78,19 @@ export function motif(tonic, colour, beat = 0, { scale = 1, colourBeats = 1.5, o
   return out;
 }
 
-// Soft lead voices used across the package.
+// Lead voices: each programme carries the motif on its own instrument.
 const LEAD = {
-  softPulse: { wave: 'pulse25', preset: 'pulse25', a: 0.022, vib: [10, 5.2, 0.35], cutoff: 3000 },
-  darkPulse: { wave: 'pulse25', preset: 'pulse25', a: 0.015, cutoff: 2000 },
-  glass: { wave: 'pulse12', preset: 'pulse12', a: 0.006, d: 0.3, s: 0.45, r: 0.2, cutoff: 3200 },
+  softPulse: { wave: 'pulse25', preset: 'pulse25', a: 0.022, vib: [10, 5.2, 0.35], cutoff: 6000 }, // the channel, generic
+  darkPulse: { wave: 'pulse25', preset: 'pulse25', a: 0.015, cutoff: 4000 }, // NEWS IN 60
+  glass: { wave: 'pulse12', preset: 'pulse12', a: 0.006, d: 0.3, s: 0.45, r: 0.2, cutoff: 4500, fenv: [2, 0.12] }, // ident, promo
+  techPluck: { wave: 'pulse12', preset: 'pluck', a: 0.003, d: 0.32, s: 0.32, r: 0.14, cutoff: 3200, fenv: [2.4, 0.09] }, // TECH BYTES
+  epiano: { wave: 'pulse50', preset: 'keys', a: 0.005, d: 0.6, s: 0.3, r: 0.22, cutoff: 3000, fenv: [1.8, 0.18] }, // MONEY MINUTE
   tick: { wave: 'pulse25', preset: 'pluck', a: 0.003, d: 0.08, s: 0, r: 0.05, cutoff: 1800, fenv: false },
 };
+
+// The button on the cut: a short low-mid stab over the felt thump, so the
+// cut is heard as a downbeat and not only felt.
+const stab = (inst, chord, C, total, vel = 0.65, gain = 0.9) => ({ kind: 'harmony', inst, notes: part([[C, chord, 0.5, vel]], total), gain });
 
 // ------------------------------------------------------------------ opens
 
@@ -111,8 +117,10 @@ const OPENS = {
         echo: { amount: 0.7, beats: 0.75, feedback: 0.26 },
         fadeOut: 0.9,
         tracks: [
-          { kind: 'lead', inst: 'brass', notes: part(lead, total), gain: 1.1 },
-          { kind: 'lead', inst: 'brass', notes: part([...motif(k, COLOURS.home, m0, { vel: 0.55 }), [H, [k - 3, k + 2, k + 4], total - H, 0.5]], total), gain: 0.5, pan: 0.18, echo: 0.3 },
+          // Low brass for weight, the octave above carries the melody (it is
+          // what laptop and phone speakers reproduce).
+          { kind: 'lead', inst: 'brass', notes: part(lead, total), gain: 0.85 },
+          { kind: 'lead', inst: 'brass', notes: part([...motif(k, COLOURS.home, m0, { vel: 0.85 }), [H, [k - 3, k + 2, k + 4], total - H, 0.62]], total), gain: 0.85, pan: 0.18, echo: 0.3 },
           { kind: 'harmony', inst: 'pad', notes: part([
             [0, [k - 3, k, k + 4, k + 7], m0 + 1, 0.55], // Bm7 over the D pedal
             [m0 + 1, [k - 7, k - 3, k, k + 4], 1.5, 0.62], // Gmaj9
@@ -121,14 +129,17 @@ const OPENS = {
           ], total), pan: -0.2 },
           { kind: 'bass', inst: 'timpani', notes: part([...roll, [m0, k - 24, 2.5, 0.65], [m0 + 2.5, k - 24, 1.5, 0.75], [H, k - 24, C - H], [C, k - 24, 1.5, 0.7]], total) },
           { kind: 'bass', inst: 'tri', notes: part([[m0, k - 24, 2.4, 0.75], [m0 + 2.5, k - 24, 1.4, 0.8], [H, k - 24, total - H, 0.85]], total), gain: 0.6 },
-          { drums: drums([[H, 'F', 0.7], [C, 'F', 0.55]], total) },
+          stab('brass', [k - 12, k - 5], C, total, 0.6, 0.8),
+          { drums: drums([[H, 'F', 0.7], [C, 'F', 0.6]], total) },
+          { drums: drums([[C, 'T', 0.4]], total) },
         ],
       };
     },
   },
-  // Technological, classy, half-time (100-108 BPM): A dorian. A quiet pulse12
-  // arpeggio in eighths with a dotted echo over Am9 -> D9 (the dorian IV);
-  // the b7 sounds over the A pedal; the hit is Am6/9 (F# against C).
+  // Technological, classy, half-time (100-108 BPM): A dorian. The motif on a
+  // glassy pulse12 pluck with a dotted echo, a quiet pulse25 arpeggio in
+  // eighths over Am9 -> D9 (the dorian IV); the b7 sounds over the A pedal;
+  // the hit is Am6/9 (F# against C).
   'tech-bytes': {
     bpm: 104,
     key: 69,
@@ -145,8 +156,8 @@ const OPENS = {
         echo: { amount: 1, beats: 0.75, feedback: 0.34 },
         fadeOut: 0.8,
         tracks: [
-          { kind: 'lead', inst: LEAD.softPulse, notes: part(motif(k - 12, COLOURS.tech, m0), total), gain: 1 },
-          { kind: 'harmony', inst: { wave: 'pulse12', preset: 'pulse12', a: 0.004, d: 0.2, s: 0.35, r: 0.12, cutoff: 1800, vib: false }, notes: part(arp, total), gain: 0.5, pan: 0.3, echo: 0.55 },
+          { kind: 'lead', inst: LEAD.techPluck, notes: part(motif(k - 12, COLOURS.tech, m0), total), gain: 1.1, echo: 0.45 },
+          { kind: 'harmony', inst: { wave: 'pulse25', preset: 'pulse25', a: 0.004, d: 0.2, s: 0.35, r: 0.12, cutoff: 2600, vib: false }, notes: part(arp, total), gain: 0.45, pan: 0.3, echo: 0.55 },
           { kind: 'harmony', inst: 'pad', notes: part([
             [0, [k - 12, k - 9, k - 5, k - 2, k + 2], m0 + 1, 0.55], // Am9
             [m0 + 1, [k - 7, k - 5, k - 3, k + 3], 1.5, 0.6], // D9 (dorian IV)
@@ -154,7 +165,9 @@ const OPENS = {
             [H, [k - 12, k - 9, k - 3, k + 2, k - 5], total - H, 0.75], // Am6/9
           ], total), pan: -0.2 },
           { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, m0 + 1], [m0 + 1, k - 31, 1.5, 0.9], [m0 + 2.5, k - 24, 1.5], [H, k - 24, total - H]], total) },
+          stab('pluck', [k - 12, k - 5, k], C, total, 0.7),
           { drums: drums([[0, 'K', 0.5], [2, 'S', 0.3], [4, 'K', 0.45], [H, 'K', 0.65], [C, 'F', 0.55]], total) },
+          { drums: drums([[C, 'T', 0.45]], total) },
           { drums: drums(range(0, H, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.16 : 0.24]), total) },
         ],
       };
@@ -185,15 +198,17 @@ const OPENS = {
             [H, [k - 12, k - 5, k - 1, k + 2, k + 6], total - H, 0.75], // Emaj9#11
           ], total), pan: 0.15 },
           { kind: 'bass', inst: 'sine', notes: part([[0, k - 24, H, 0.75], [H, k - 24, total - H, 0.85]], total) },
-          { drums: drums([[H, 'F', 0.5], [C, 'F', 0.4]], total) },
+          stab('pluck', [k - 12, k - 5, k - 1], C, total, 0.6, 0.8),
+          { drums: drums([[H, 'F', 0.5], [C, 'F', 0.45]], total) },
+          { drums: drums([[C, 'T', 0.4]], total) },
         ],
       };
     },
   },
-  // After the close, 112-116 BPM, straight (money-minute.md): F major. A soft
-  // pulse25 lead, short electric-piano chords on the "and" of 2 and 4, a tri
-  // bass in half notes, a filtered pad; Fmaj9 | Dm9 | Bbmaj9 | C6sus, the 6th
-  // over the F pedal and an F6/9 button. No brass, no swing, no bells.
+  // After the close, 112-116 BPM, straight (money-minute.md): F major. The
+  // motif on an electric piano, short keys chords on the "and" of 2 and 4, a
+  // tri bass in half notes, a filtered pad; Fmaj9 | Dm9 | Bbmaj9 | C6sus, the
+  // 6th over the F pedal and an F6/9 button. No brass, no swing, no bells.
   'money-minute': {
     bpm: 114,
     key: 65,
@@ -215,7 +230,7 @@ const OPENS = {
         echo: { amount: 0.5, beats: 0.75, feedback: 0.22 },
         fadeOut: 0.8,
         tracks: [
-          { kind: 'lead', inst: LEAD.softPulse, notes: part(motif(k, COLOURS.money, m0), total), gain: 0.95 },
+          { kind: 'lead', inst: LEAD.epiano, notes: part(motif(k, COLOURS.money, m0), total), gain: 1.05 },
           { kind: 'harmony', inst: 'pad', notes: part([
             [0, ch.fmaj9, 2, 0.5], [2, ch.dm9, 1.5, 0.52], [3.5, ch.bbmaj9, 1, 0.55], [m0 + 2.5, ch.c6sus, 1.5, 0.56], [H, ch.f69, total - H, 0.66],
           ], total), pan: -0.22 },
@@ -223,7 +238,9 @@ const OPENS = {
             [1.5, ch.fmaj9.slice(1), 0.4, 0.45], [3.5, ch.bbmaj9.slice(1), 0.4, 0.45], [5.5, ch.c6sus.slice(1), 0.4, 0.42], [H, ch.f69, 1.5, 0.5],
           ], total), pan: 0.25, echo: 0.2 },
           { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, 2], [2, k - 27, 1.5], [3.5, k - 31, 1], [m0 + 2.5, k - 24, 1.5], [H, k - 24, total - H]], total) },
-          { drums: drums([...range(0, H, 0.5).map((b) => [b, 'H', 0.14]), [H, 'F', 0.7], [C, 'F', 0.5]], total) },
+          stab('keys', [k - 12, ...ch.f69.slice(0, 3)], C, total, 0.7, 1),
+          { drums: drums([...range(0, H, 0.5).map((b) => [b, 'H', 0.14]), [H, 'F', 0.7], [C, 'F', 0.55]], total) },
+          { drums: drums([[C, 'T', 0.42]], total) },
         ],
       };
     },
@@ -256,14 +273,18 @@ const OPENS = {
           ], total), pan: -0.18 },
           { kind: 'lead', inst: 'bell', notes: part([[H, [k, k + 4, k + 7, k + 14], total - H, 0.6]], total), gain: 0.5, echo: 0.3, pan: 0.15 },
           { kind: 'bass', inst: { wave: 'tri', preset: 'tri', s: 0.4, d: 0.12 }, notes: part([...range(0, H, 1).map((b) => [b, k - 24, 0.4, 0.75]), [H, k - 24, total - H, 0.85]], total) },
-          { drums: drums([[H, 'K', 0.6], [C, 'F', 0.5]], total) },
+          stab(LEAD.tick, [k - 12, k - 5], C, total, 0.75, 0.9),
+          { drums: drums([[H, 'K', 0.6], [C, 'F', 0.55]], total) },
+          { drums: drums([[C, 'T', 0.4]], total) },
         ],
       };
     },
   },
 };
 
-// Unknown programmes: the channel signature in C major, sober.
+// Unknown programmes: the channel signature in C major, sober, all major:
+// Cadd9 -> Dm9/C -> Fmaj7/C over the C pedal, a C6/9 hit (no minor start,
+// unlike WORLD NOW's arc).
 const GENERIC = {
   bpm: 100,
   key: 60,
@@ -279,10 +300,15 @@ const GENERIC = {
       tracks: [
         { kind: 'lead', inst: LEAD.softPulse, notes: part([...motif(k, COLOURS.home, m0), [H, k, total - H, 0.85]], total) },
         { kind: 'harmony', inst: 'pad', notes: part([
-          [0, [k - 3, k, k + 4, k + 7], m0 + 1, 0.55], [m0 + 1, [k - 7, k - 3, k, k + 4], 1.5, 0.6], [m0 + 2.5, [k - 5, k, k + 7], 1.5, 0.62], [H, [k - 12, k - 5, k + 2, k + 4], total - H, 0.75],
+          [0, [k - 8, k - 5, k + 2, k + 4], m0 + 1, 0.55], // Cadd9
+          [m0 + 1, [k - 10, k - 7, k - 3, k + 4], 1.5, 0.6], // Dm9 over C
+          [m0 + 2.5, [k - 7, k - 3, k, k + 4], 1.5, 0.62], // Fmaj7 over C
+          [H, [k - 12, k - 3, k + 2, k + 4, k + 7], total - H, 0.75], // C6/9
         ], total) },
         { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, H], [H, k - 24, total - H]], total) },
-        { drums: drums([[H, 'F', 0.65], [C, 'F', 0.5]], total) },
+        stab('pluck', [k - 12, k - 5, k], C, total, 0.65),
+        { drums: drums([[H, 'F', 0.65], [C, 'F', 0.55]], total) },
+        { drums: drums([[C, 'T', 0.4]], total) },
       ],
     };
   },
@@ -306,6 +332,8 @@ export function themeFor(programId, { duration = 4 } = {}) {
   const tune = def.build.call({ tempo }, H, C);
   return {
     ...tune,
+    // Opens play at director volume 0.6 (+1 dB): the trim puts them level with the voice.
+    loudness: (tune.loudness ?? 0) - 1,
     meta: { programId: OPENS[programId] ? programId : 'generic', motif: MOTIF, colour: COLOUR_OF[programId] ?? 'home', key: midiToName(def.key), bpm: tempo, hitAt: lockAt, cutAt: dur },
   };
 }
@@ -317,9 +345,9 @@ export const THEME_IDS = Object.keys(OPENS);
 // Key and lead voice of each programme's cues (breaking, sign-off, promo).
 const VOICE = {
   'world-now': { key: D4, lead: 'brass', pad: 'pad' },
-  'tech-bytes': { key: 69, lead: LEAD.softPulse, pad: 'pad' },
+  'tech-bytes': { key: 69, lead: LEAD.techPluck, pad: 'pad' },
   cosmos: { key: 64, lead: 'softtri', pad: 'pad' },
-  'money-minute': { key: 65, lead: LEAD.softPulse, pad: 'pad' },
+  'money-minute': { key: 65, lead: LEAD.epiano, pad: 'pad' },
   'news-60': { key: 67, lead: LEAD.darkPulse, pad: 'pad' },
   channel: { key: D4, lead: LEAD.softPulse, pad: 'pad' },
 };
@@ -383,7 +411,7 @@ function buildBreaking(programId) {
     bpm: 116,
     room: 0.2,
     echo: { amount: 0.5, beats: 0.75, feedback: 0.24 },
-    loudness: -1,
+    loudness: -3,
     fadeOut: 0.6,
     tracks: [
       { kind: 'lead', inst: 'brass', notes: part([...motif(k, COLOURS.breaking, 0)], total), gain: 1.1 },
@@ -492,6 +520,18 @@ function buildPromo(programId) {
   };
 }
 
+// The channel's clock and dayparts run on London time (util.js zoneTime), not
+// the viewer's: the night ident follows it. One formatter, made on first use.
+let londonFmt;
+function londonHour(date = new Date()) {
+  try {
+    londonFmt ??= new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: 'numeric', hourCycle: 'h23' });
+    const h = Number(londonFmt.format(date));
+    if (Number.isFinite(h)) return h % 24;
+  } catch { /* no Intl time zones */ }
+  return date.getUTCHours();
+}
+
 const CUE_NAMES = { jingle: 'ident', ident: 'ident', bumper: 'ident', whoosh: 'stinger', stinger: 'stinger', breaking: 'breaking', outro: 'outro', signoff: 'outro', promo: 'promo', upnext: 'promo' };
 const cueCache = new Map();
 
@@ -499,13 +539,13 @@ const cueCache = new Map();
  * A channel cue by name, voiced for a programme where that matters:
  * 'breaking', 'outro'/'signoff' and 'promo'/'upnext' take the programme's key
  * and lead (unknown ids: the channel's D major); 'ident'/'jingle'/'bumper'
- * follows the local hour (opts.hour, 7-20 is day); 'stinger'/'whoosh' is one
+ * follows the hour (opts.hour, default London's; 7-20 is day); 'stinger'/'whoosh' is one
  * sound for everything. Returns a tune, or null for an unknown name.
  */
 export function cueFor(cue, programId, { hour } = {}) {
   const kind = CUE_NAMES[cue];
   if (!kind) return null;
-  const h = Number.isFinite(Number(hour)) && hour !== null ? Number(hour) : new Date().getHours();
+  const h = Number.isFinite(Number(hour)) && hour !== null ? Number(hour) : londonHour();
   const night = h < 7 || h >= 21;
   const key = kind === 'ident' ? `ident:${night}` : kind === 'stinger' ? 'stinger' : `${kind}:${keyOf(programId)}`;
   let tune = cueCache.get(key);

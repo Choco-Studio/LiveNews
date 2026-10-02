@@ -33,9 +33,9 @@
 //   collar 'tie' | 'open' | 'band' | 'none'    neckline 'scoop' | 'v' | 'blouse' (blazer/tailored)
 //   lapel { notchY, w, collarW }               buttons 1 | 2              necklace? pin?
 import { P } from '../../../palette.js';
-import { decal, line } from '../pixbuf.js';
+import { line } from '../pixbuf.js';
 import { clamp, HIP } from '../space.js';
-import { rimMat, rimTopRight, paintLine } from './kit-a.js';
+import { rimMat, rimTopRight, paintLine, dec } from './kit-a.js';
 
 export const OUTFITS = {};
 
@@ -772,7 +772,7 @@ function drawPocket(o, F, tier) {
   const T = F.T;
   const g = gb + G.jacket;
   const x0 = T.shoulderHW * 0.5 - 1.2, y0 = 13.2;
-  const white = decal(P.white), silver = decal(P.silver);
+  const white = dec(P.white), silver = dec(P.silver);
   if (tier < 2 || s < 2.9) {
     // wides and mediums: a small folded square, the far facet in silver, a peak at close-ups
     const p = o.toS(x0 + 0.8, y0);
@@ -836,7 +836,7 @@ function drawPin(o, F, tier) {
   const x = Math.round(p[0]), y = Math.round(p[1]);
   const g = gb + G.jacket;
   const n = tier === 2 ? Math.max(2, Math.round(o.s * 0.9)) : 2;
-  for (let i = 0; i < n; i++) buf.paint(x + i, y - (i >> 1), decal(i === 0 ? hx : i < n - 1 ? hi : lo), 1, g);
+  for (let i = 0; i < n; i++) buf.paint(x + i, y - (i >> 1), dec(i === 0 ? hx : i < n - 1 ? hi : lo), 1, g);
 }
 
 /** The closure button(s) below the V. */
@@ -858,21 +858,27 @@ function drawButtons(o, F, tier) {
   }
 }
 
+const NECK = { buf: null, mat: 0 };
+const neckPx = (x, y) => NECK.buf.paint(x, y, NECK.mat, 1);
+
 /** Thin chain with a small pendant: lit links on the key side, a glint on the pendant. */
 export function drawNecklace(buf, L, toS, s) {
   if (s < 1.2) return;
-  const [gold, shade] = L.necklace.map(decal);
-  const glint = decal(P.white);
-  let prev = null;
+  const gold = dec(L.necklace[0]), shade = dec(L.necklace[1]);
+  const glint = dec(P.white);
+  let px0 = 0, py0 = 0;
   const n = s >= 2.2 ? 20 : 14;
   const drop = s >= 2.2 ? 4.6 : 4.4;
+  NECK.buf = buf;
   for (let i = 0; i <= n; i++) {
     const a = Math.PI * (i / n);
     const x = -Math.cos(a) * (L.torso.neckHW + 0.25);
-    const [sx, sy] = toS(x, 0.6 + Math.pow(Math.sin(a), 1.15) * drop);
-    const p = [Math.round(sx), Math.round(sy)];
-    if (prev) line(prev[0], prev[1], p[0], p[1], (px, py) => buf.paint(px, py, i < n * 0.55 ? gold : shade, 1));
-    prev = p;
+    const q = toS(x, 0.6 + Math.pow(Math.sin(a), 1.15) * drop);
+    const p0 = Math.round(q[0]), p1 = Math.round(q[1]);
+    NECK.mat = i < n * 0.55 ? gold : shade;
+    if (i > 0) line(px0, py0, p0, p1, neckPx);
+    px0 = p0;
+    py0 = p1;
   }
   const [px, py] = toS(0, 0.6 + drop + 0.9);
   const r = Math.max(0, Math.round(s * 0.35));

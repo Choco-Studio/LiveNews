@@ -6,8 +6,9 @@
 // the source never said.
 
 // Grave news: no jokes, no light gestures, no "and finally" slot.
+// Natural disasters and accidents count as much as violence: a hurricane landfall is never the number of the day.
 export const GRAVE =
-  /\b(?:dead|deaths?|die[sd]?|dying|killed|killings?|kills?|war|wars|attacks?|victims?|murder\w*|shootings?|earthquakes?|fires?|wildfires?|blaze|crash\w*|violen\w*|injur\w*|bomb\w*|strikes? on|crisis|floods?|flooded|flooding|hostages?|famine|casualt\w*|missing|evacuat\w*|disaster\w*|tragedy|mourn\w*|funeral|cancer|outbreak|epidemic|pandemic)\b/i;
+  /\b(?:dead|deaths?|die[sd]?|dying|killed|killings?|kills?|war|wars|attacks?|victims?|murder\w*|shootings?|earthquakes?|fires?|wildfires?|blaze|crash\w*|violen\w*|injur\w*|bomb\w*|strikes? on|crisis|floods?|flooded|flooding|hostages?|famine|casualt\w*|missing|evacuat\w*|disaster\w*|tragedy|mourn\w*|funeral|cancer|outbreak|epidemic|pandemic|hurricanes?|typhoons?|cyclones?|tornado(?:es|s)?|tsunamis?|landslides?|mudslides?|avalanches?|droughts?|heatwaves?|heat waves?|collaps\w*|derail\w*|capsiz\w*|sinks|sank|sunk|sinking|drown\w*|cholera|landfall|life-threatening|storm surge|explosions?|blasts?|refugees?|displaced|shipwreck\w*|starvation|massacre\w*|genocide|ceasefire|airstrikes?|shelling|rescuers?)\b/i;
 // Lighter material: technology, science, curiosities.
 export const LIGHT =
   /\bAI\b|robot|\bchips?\b|phone|\bapps?\b|software|\bspace\b|nasa|planet|science|scientist|discover|study finds|telescope|\bgames?\b|record|festival|zoo|panda|penguin|dinosaur|fossil|museum|trees?\b|garden|bicycle|bike|tram|train|music|chocolate|coffee|parrot|whale|dolphin|stars?\b|comet|moon|reef|coral|tortoises?|leopards?|mangroves?|tomatoes|drones/i;
@@ -63,11 +64,13 @@ export function numbersIn(text) {
   for (const m of s.matchAll(NUMBER_RE)) {
     const value = Number((m[2] + (m[3] || '')).replace(/,/g, ''));
     if (!Number.isFinite(value)) continue;
-    const unit = (m[5] || m[6] || '').toLowerCase();
+    // "£3m" is three million; "a depth of 2m" is two metres: a glued one-letter scale needs a currency symbol.
+    const unit = (m[5] || (m[1] ? m[6] : '') || '').toLowerCase();
     const end = m.index + m[0].length;
     const after = s.slice(end, end + 40).match(CURRENCY_WORD_RE);
     const currency = m[1] ? SYMBOL_CURRENCY[m[1].trim()] : after ? currencyFamily(after[1]) : null;
-    out.push({ raw: m[0].trim(), value, scaled: SCALE[unit] ? value * SCALE[unit] : value, index: m.index, end, percent: !!m[4], currency, unit });
+    const ordinal = /^(?:st|nd|rd|th)\b/i.test(s.slice(end, end + 3));
+    out.push({ raw: m[0].trim(), value, scaled: SCALE[unit] ? value * SCALE[unit] : value, index: m.index, end, percent: !!m[4], currency, unit, ...(ordinal ? { ordinal: true } : {}) });
   }
   return out;
 }
@@ -95,7 +98,7 @@ export function numberWordsIn(text, { skipOne = true } = {}) {
       value = 0.5;
       scale = WORD_SCALE[toks[j + 2].w];
       j += 3;
-    } else if ((t === 'a' || t === 'an') && (toks[j + 1]?.w === 'dozen' || WORD_SCALE[toks[j + 1]?.w])) {
+    } else if ((t === 'a' || t === 'an') && (toks[j + 1]?.w === 'dozen' || WORD_SCALE[toks[j + 1]?.w]) && !/\d/.test(s.slice(toks[j].end, toks[j + 1].index))) {
       value = toks[j + 1].w === 'dozen' ? 12 : 1;
       scale = toks[j + 1].w === 'dozen' ? 1 : WORD_SCALE[toks[j + 1].w];
       j += 2;
@@ -144,7 +147,7 @@ const wordsAround = (s, index, end, before, after) => {
 };
 /** The thing a figure counts ("120 people" -> "people"), from the next few words of the same phrase. */
 function countedNoun(s, n) {
-  const phrase = s.slice(n.end, n.end + 80).split(/[,;:.!?()“”"]/)[0];
+  const phrase = s.slice(n.end, n.end + 80).replace(/^(?:st|nd|rd|th)\b/i, '').split(/[,;:.!?()“”"]/)[0];
   const after = (fold(phrase).match(/[a-z][a-z'-]*/g) || []).slice(0, 4);
   for (const w of after) {
     const word = w.replace(/^-+/, '');
@@ -162,10 +165,17 @@ const stemMatch = (a, b) => {
 };
 const sameWord = (a, b) => a === b || stemMatch(a.replace(/-.*$/, ''), b.replace(/-.*$/, '')) || stemMatch(a, b);
 
-/** Numbers a source states: digits and number words, each with its position. */
+const ORDINAL_WORDS = {
+  first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10, eleventh: 11, twelfth: 12,
+  thirteenth: 13, fourteenth: 14, fifteenth: 15, sixteenth: 16, seventeenth: 17, eighteenth: 18, nineteenth: 19, twentieth: 20, thirtieth: 30, fiftieth: 50, hundredth: 100,
+};
+const ORDINAL_RE = new RegExp(`\\b(?:${Object.keys(ORDINAL_WORDS).join('|')})\\b`, 'g');
+
+/** Numbers a source states: digits, number words and ordinal words ("third" for a "3rd"), each with its position. */
 function sourceNumbers(source) {
   const s = String(source ?? '');
-  return [...numbersIn(s), ...numberWordsIn(s, { skipOne: false })];
+  const ordinals = [...fold(s).matchAll(ORDINAL_RE)].map((m) => ({ raw: m[0], value: ORDINAL_WORDS[m[0]], scaled: ORDINAL_WORDS[m[0]], index: m.index, end: m.index + m[0].length, percent: false, currency: null, unit: '', ordinal: true, words: true }));
+  return [...numbersIn(s), ...numberWordsIn(s, { skipOne: false }), ...ordinals];
 }
 
 const close = (a, b) => Math.abs(a - b) <= Math.abs(b) * 1e-9;
@@ -179,6 +189,8 @@ const close = (a, b) => Math.abs(a - b) <= Math.abs(b) * 1e-9;
  */
 function supports(c, s, claimText, sourceText) {
   if (c.percent !== s.percent) return false;
+  // "3rd" is grounded by "third" or "3rd", never by a plain 3 (and a plain 3 never by "third").
+  if (!!c.ordinal !== !!s.ordinal) return false;
   if (c.currency && (!s.currency || !sameCurrency(c.currency, s.currency))) return false;
   if (c.unit) {
     if (!close(c.scaled, s.scaled)) return false;
@@ -189,8 +201,23 @@ function supports(c, s, claimText, sourceText) {
   // "three people were injured", "120 relief camps" does not support "120 people".
   const counted = countedNoun(sourceText, s);
   if (!counted || /(?:ed|ing)$/.test(counted)) return true;
-  const { before, after } = wordsAround(sourceText, s.index, s.end, 3, 5);
+  if (sameWord(noun, counted)) return true;
+  // Otherwise the noun must sit in the figure's own clause ("120 relief camps for 3,000 people": no; "120 villages
+  // and 5 people died": the people belong to the 5, not to the 120).
+  const { before, after } = clauseAround(sourceText, s.index, s.end, 3, 5);
   return [...before, ...after].some((w) => sameWord(noun, w));
+}
+
+const CLAUSE_BREAK = /[,;:.!?()]|\b(?:and|but|while|whereas|as|or|after|before|when|with)\b/;
+/** Words around a figure that belong to its clause: cut at punctuation and conjunctions on both sides. */
+function clauseAround(s, index, end, before, after) {
+  const headText = fold(s.slice(Math.max(0, index - 60), index));
+  const breakAt = Math.max(...[...headText.matchAll(new RegExp(CLAUSE_BREAK.source, 'g'))].map((m) => m.index + m[0].length), 0);
+  const head = headText.slice(breakAt).match(/[a-z][a-z'-]*/g) || [];
+  const tailText = fold(s.slice(end, end + 80));
+  const stop = tailText.search(CLAUSE_BREAK);
+  const tail = (stop >= 0 ? tailText.slice(0, stop) : tailText).match(/[a-z][a-z'-]*/g) || [];
+  return { before: head.slice(-before), after: tail.slice(0, after) };
 }
 
 /**
@@ -314,6 +341,9 @@ export function groundQuote(quote, source) {
 export function quotationsGrounded(text, source) {
   const s = String(text ?? '');
   const spans = [...s.matchAll(/“([^”]+)”|"([^"]+)"|‘([^’]+)’(?![a-z])/g)].map((m) => m[1] || m[2] || m[3]);
+  // Straight single quotes too: 'a complete disaster' (opened after a space or bracket, closed before a
+  // space or punctuation, so a contraction such as "it's" or "the workers' union" is never a quotation).
+  for (const m of s.matchAll(/(?:^|[\s([{“"—–-])'([^'\n]{6,300}?)'(?=[\s.,;:!?)\]}”"—–-]|$)/g)) spans.push(m[1]);
   const src = squash(source);
   return spans.every((q) => squash(q).split(' ').length < 3 || src.includes(squash(q)));
 }
@@ -321,7 +351,7 @@ export function quotationsGrounded(text, source) {
 // ---------------------------------------------------------------- figures for the offline writer
 
 const LABEL_STOP = new Set(
-  'and or but of to by in on at for from with than that which who whom is are was were will would has have had said says say over past since during into after before while as its their his her this these those the about around nearly almost some when where if because until unless so yet once then there here now again also only even just still can could may might should must across through between against last next every each'.split(
+  'and or but of to by in on at for from with than that which who whom is are was were will would has have had said says say over past since during into after before while as its their his her this these those the about around nearly almost some when where if because until unless so yet once then there here now again also only even just still can could may might should must across through between against last next every each off away below above beneath'.split(
     ' '
   )
 );
@@ -360,6 +390,21 @@ function subjectBefore(s, index) {
   }
   // "Tokyo's main stock index" -> keep the head noun, not the owner
   return out.length ? out.join(' ').toUpperCase() : null;
+}
+
+// Labels that are only a unit of measure or of time.
+const UNIT_ONLY = /^(?:KM|KMS|KILOMETRES?|KILOMETERS?|MILES?|MPH|KPH|KM\/H|KMH|METRES?|METERS?|M|CM|MM|FEET|FOOT|FT|INCH(?:ES)?|C|F|°C|°F|DEGREES?(?: CELSIUS| FAHRENHEIT)?|CELSIUS|KG|KILOGRAMS?|TONNES?|TONS?|LITRES?|DAYS?|HOURS?|MINUTES?|SECONDS?|WEEKS?|MONTHS?|YEARS?|DECADES?|KNOTS?|HECTARES?|ACRES?)$/;
+const MEASURE_SKIP = new Set('a an the of at to up by about around nearly almost some over under reached reaching hit hitting topped topping rose fell rising falling with was were is are has had have more than less just only its their his her this that which'.split(' '));
+/** The noun a measurement belongs to, from the few words before the figure ("winds of" -> WINDS), or null. */
+function measuredBefore(s, index) {
+  const words = s.slice(Math.max(0, index - 50), index).split(/[,;:.!?()]/).pop().trim().split(/\s+/).filter(Boolean);
+  for (let i = words.length - 1; i >= Math.max(0, words.length - 4); i--) {
+    const w = words[i].replace(/[^A-Za-z-]/g, '').toLowerCase();
+    if (!w || MEASURE_SKIP.has(w)) continue;
+    if (w.length < 4 || /(?:ed|ly)$/.test(w)) return null;
+    return w.toUpperCase();
+  }
+  return null;
 }
 
 /**
@@ -430,6 +475,14 @@ export function extractFigures(text, max = 3) {
       if (!labelText && !n.percent && !n.currency && !n.unit) continue; // a bare number says nothing
       core = [direction, `${value}${labelText ? (glued ? '-' : ' ') + labelText : ''}`].filter(Boolean).join(' ');
       labelText = [direction, labelText].filter(Boolean).join(' ');
+    }
+    // A unit is not a subject: "30 KM" or "130 MPH" says nothing on a card. Name what is measured from the words
+    // just before the figure ("a depth of 30 km" -> DEPTH 30 KM, "winds of 130 mph" -> WINDS 130 MPH), or skip it.
+    if (!n.percent && !n.currency && UNIT_ONLY.test(labelText)) {
+      const subject = measuredBefore(s, n.index);
+      if (!subject) continue;
+      figures.push({ value: `${value} ${labelText}`.slice(0, 12), label: subject, fact: [qualifier, subject, value, labelText].filter(Boolean).join(' '), said: `${q ? `${q} ` : ''}${n.raw}${label.length ? ` ${label.join(' ')}` : ''}`, score: 2, index: n.index, ...(qualifier ? { qualifier } : {}) });
+      continue;
     }
     const fact = [qualifier, core].filter(Boolean).join(' ');
     let score = 1;

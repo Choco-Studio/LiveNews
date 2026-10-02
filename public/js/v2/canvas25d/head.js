@@ -158,7 +158,7 @@ function occlusionOf(L) {
   pair(M.w * 0.56, M.y + 0.05, 0.45, 0.45, 0.2); // mouth corner
   out.push([0, N.y1 + 0.55, 0.85, 0.35, 0.1]); // under the septum
   // the nose's cast shadow: the key is up and camera-left, so it falls down and to the right
-  out.push([N.w * 0.5, N.y1 + 0.55, 0.62, 0.36, 0.5]);
+  out.push([N.w * 0.62, N.y1 + 0.75, 0.6, 0.34, 0.42]);
   out.push([0, M.y + 1.3, M.w * 0.28, 0.3, 0.36]); // the shadow under the lower lip
   return out;
 }
@@ -237,7 +237,7 @@ function faceMap(L) {
       nx[c] = ax / n;
       ny[c] = ay / n;
       nz[c] = az / n;
-      const forehead = y < E.y - 1.5 && Math.abs(x) < hw * 0.75;
+      const forehead = y < E.y - 2.3 && Math.abs(x) < hw * 0.75; // above the brows: a lit brow ridge reads as a stray patch
       // the nose ridge's highlight runs from mid-bridge to just above the tip (a full-length stripe reads as paint)
       const ridge = Math.abs(x) < N.w * 0.4 && y > (E.y + N.y1) * 0.5 - 0.2 && y < N.y1 - 0.3;
       // the chin's ball catches a small highlight too (a cheekbone highlight reads as a freckle or a tear here)
@@ -260,6 +260,7 @@ const TONES = [
   [0.9, 0.33, -0.1], // close-up
 ];
 const HW_LUT = new Float32Array(1024);
+const TH = new Float64Array(3); // this frame's thresholds (TONES of the tier, shifted by L.skinLift)
 // Per-frame state of the head being drawn (module scratch: no closure, no allocation).
 const S = {
   H: null, fm: null, cx: 0, cy: 0, cr: 1, sr: 0, inv: 1, yawShift: 0, yaw: 0, cyw: 1, syw: 0, cp: 1, sp: 0,
@@ -337,7 +338,14 @@ export function drawHead(buf, L, m, head, s) {
   S.jyK = 1 / (H.chinY - H.cheekY);
   S.top = H.top - 0.2;
   S.tier = s < 1.35 ? 0 : s < 2.2 ? 1 : 2;
-  S.th = TONES[S.tier];
+  // L.skinLift (0..1, PRESENTERS B request for darker ramps such as Nova's): the lit planes
+  // reach further round the face, so a deep skin keeps a readable lit cheek and forehead
+  const lift = L.skinLift > 0 ? Math.min(1, L.skinLift) : 0;
+  const T = TONES[S.tier];
+  TH[0] = T[0] - 0.06 * lift;
+  TH[1] = T[1] - 0.22 * lift;
+  TH[2] = T[2] - 0.12 * lift;
+  S.th = TH;
   S.lx = LIGHT[0];
   S.ly = LIGHT[1];
   S.lz = LIGHT[2];

@@ -289,3 +289,65 @@ test('distinct silhouettes: Max-Ada and Nova-UNIT-8 ≤ 0.80, any pair with Paco
     }
   }
 });
+
+// ---------------------------------------------------------------------------
+// round 2: finish checks (rims that never sparkle, Nova's lit planes, UNIT-8 as an instrument)
+
+test('hair rims are continuous arcs: no isolated silver pixel on the hair of max, nova and ada (s 2.15 / 3.4)', () => {
+  for (const L of [max, nova, ada]) {
+    for (const s of [2.15, 3.4]) {
+      const { px, head } = render(L, s, 0.5);
+      const y1 = Math.round(head.cy - 2 * s);
+      let isolated = 0, rim = 0;
+      for (let y = 1; y < y1; y++) for (let x = 1; x < W - 1; x++) {
+        if (px[y * W + x] !== C.silver) continue;
+        rim++;
+        let nb = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && px[(y + dy) * W + x + dx] === C.silver) nb++;
+        if (!nb) isolated++;
+      }
+      assert.ok(rim > 2, `${L.id} s=${s}: the hair has a rim (${rim} px)`);
+      assert.ok(isolated <= 1, `${L.id} s=${s}: ${isolated} isolated rim pixels`);
+    }
+  }
+});
+
+test("Nova's face carries lit planes in tan and stays the warmest, brightest area of her head", () => {
+  const lstar = (c) => {
+    const f = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    const r = f(c & 255), g = f((c >>> 8) & 255), b = f((c >>> 16) & 255);
+    const Y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return Y > 0.008856 ? 116 * Math.cbrt(Y) - 16 : 903.3 * Y;
+  };
+  const skinRamp = new Set([C.tan, C.tanShade, C.brown, C.maroon]);
+  for (const s of [1, 2.7]) {
+    const { px, head } = render(nova, s, 0.5);
+    let n = 0, sum = 0, lit = 0;
+    for (let y = Math.round(head.cy - 6 * s); y <= Math.round(head.cy + 7 * s); y++) for (let x = Math.round(head.cx - 5 * s); x <= Math.round(head.cx + 5 * s); x++) {
+      const c = px[y * W + x];
+      if (!skinRamp.has(c)) continue;
+      n++;
+      sum += lstar(c);
+      if (c === C.tan) lit++;
+    }
+    assert.ok(lit / n > 0.15, `s=${s}: ${(100 * lit / n).toFixed(0)} % of the inner face is lit (tan)`);
+    // above the planet's lit side on the COSMOS wall (tan / tanShade bands, mean ≈ 51; cosmos.md §5 item 8)
+    assert.ok(sum / n > 51, `s=${s}: inner face mean L* ${(sum / n).toFixed(1)}`);
+  }
+});
+
+test('UNIT-8 reads as an instrument: a housing wider than tall, about a human head in area, no mouth shape', () => {
+  const w = 2 * CASE.hw, h = CASE.bot - CASE.top;
+  assert.ok(w / h > 1.1, `housing ${w} x ${h}`);
+  const human = (max.head.chinY - max.head.top) * 2 * max.head.cheekHW;
+  assert.ok((w * h) / human < 1.15, `area ratio ${((w * h) / human).toFixed(2)}`);
+  // silent: the only lit pixel row under the slits is the 1 px steel rest line, centred
+  const { px, head } = render(unit8, 3.4, 0.3);
+  const s = 3.4;
+  let lit = 0;
+  for (let y = Math.round(head.cy + 0.5 * s); y < Math.round(head.cy + VISOR.bot * s) - 1; y++) for (let x = Math.round(head.cx - VISOR.hw * s) + 2; x < Math.round(head.cx + VISOR.hw * s) - 2; x++) {
+    const c = px[y * W + x];
+    if (c === C.silver || c === C.white || c === C.fog || c === C.steel) lit++;
+  }
+  assert.ok(lit <= 1, `${lit} lit pixels below the slits at rest`);
+});

@@ -451,7 +451,7 @@ export function* soften(c, w, h, r = 2, { passes = 2, extra = null, maxColours =
  * silhouette's edge, never a pixel off it. dirs: unit steps towards the light,
  * e.g. [[1, 0], [0, -1]] for a source up and to the right. Alpha is made crisp.
  */
-export function rimArt(key, w, h, paint, { body = null, rim, rim2 = null, dirs = [[1, 0], [0, -1]] } = {}) {
+export function rimArt(key, w, h, paint, { body = null, rim, rim2 = null, dirs = [[1, 0], [0, -1]], rimB = null, dirsB = null } = {}) {
   return bake(key, w, h, function* (c) {
     const r = paint(c);
     if (r && typeof r.next === 'function') yield* r;
@@ -462,6 +462,7 @@ export function rimArt(key, w, h, paint, { body = null, rim, rim2 = null, dirs =
     const B = body ? rgb(body) : null;
     const R1 = rgb(rim);
     const R2 = rim2 ? rgb(rim2) : null;
+    const RB = rimB ? rgb(rimB) : null;
     const empty = (x, y) => x < 0 || y < 0 || x >= w || y >= h || !on[y * w + x];
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
@@ -481,6 +482,13 @@ export function rimArt(key, w, h, paint, { body = null, rim, rim2 = null, dirs =
         }
         if (e1) col = R1;
         else if (e2) col = R2;
+        else if (RB) {
+          // a second, weaker light from the other side (e.g. a warm practical)
+          for (let k = 0; k < dirsB.length; k++) {
+            const [dx, dy] = dirsB[k];
+            if (empty(x + dx, y + dy)) col = RB;
+          }
+        }
         if (col) {
           d[o] = col[0];
           d[o + 1] = col[1];

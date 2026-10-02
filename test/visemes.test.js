@@ -1,9 +1,9 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { VISEMES, buildTimeline, sampleTimeline, speechTokens, wordAtChar, wordAtSpoken, blipPlan, SpeechClock } from '../public/js/audio/visemes.js';
+import { VISEMES, buildTimeline, sampleTimeline, sampleCalm, calmTimeline, speechTokens, wordAtChar, wordAtSpoken, blipPlan, SpeechClock } from '../public/js/audio/visemes.js';
 import { parseTune, flatten, songSeconds, noteToMidi, resolveInstrument, noteCutoff } from '../public/js/audio/tune.js';
 import { themeFor, THEME_IDS, MOTIF, COLOURS, CUES, IDENT, IDENT_NIGHT, STINGER, BREAKING, OUTRO, PROMO, cueFor, CUE_PROGRAMMES } from '../public/js/audio/themes.js';
-import { measureLoudness, estimateLoudness, envelopeEnergy, lowpassPower, TARGET_LUFS, VOICE_LUFS } from '../public/js/audio/loudness.js';
+import { measureLoudness, estimateLoudness, envelopeEnergy, lowpassPower, highshelfPower, TARGET_LUFS, VOICE_LUFS } from '../public/js/audio/loudness.js';
 import { resolveVoices, normProfile, voiceQuality } from '../public/js/audio/voices.js';
 import { waveTable, WAVE_KINDS } from '../public/js/audio/waves.js';
 // The ad registry belongs to the ads stream; its tunes are checked when it loads.
@@ -41,6 +41,17 @@ describe('buildTimeline: shapes', () => {
     assert.ok(shapes('we want').includes('WQ'));
     assert.ok(shapes('see').includes('EE'));
     assert.ok(shapes('bat').includes('AH'));
+  });
+
+  test('common words that spelling gets wrong: four, put, full, I, now, show', () => {
+    const vowels = (w) => shapes(w, { normalise: false }).filter((v) => !['MBP', 'FV', 'TH', 'L', 'S', 'WQ', 'rest'].includes(v) || v === 'WQ');
+    for (const w of ['four', 'fourth', 'your', 'course', 'court', 'source']) assert.ok(shapes(w, { normalise: false }).includes('OH') && !shapes(w, { normalise: false }).includes('AH'), `${w}: OH, not a wide AH`);
+    assert.deepEqual(shapes('hour', { normalise: false }).slice(-3), ['AH', 'OO', 'WQ'], 'hour keeps its glide');
+    for (const w of ['put', 'full', 'pull', 'push', 'bush', 'bulletin']) assert.ok(shapes(w, { normalise: false }).includes('OO') && !shapes(w, { normalise: false }).includes('AH'), `${w}: rounded`);
+    for (const w of ['now', 'how', 'wow', 'down', 'power', 'crowd']) assert.ok(vowels(w).join(' ').includes('AH OO'), `${w}: AH gliding to OO`);
+    for (const w of ['show', 'known', 'bowl', 'below', 'window']) assert.ok(!vowels(w).includes('AH'), `${w}: OH`);
+    assert.ok(shapes('journal', { normalise: false }).includes('WQ') && !shapes('journal', { normalise: false }).slice(0, 2).includes('OH'), 'journal is an er');
+    assert.deepEqual(shapes('find', { normalise: false }).slice(1, 3), ['AH', 'EE']);
   });
 
   test('silent letters make no shape: final e, kn-, -mb', () => {
@@ -121,7 +132,8 @@ describe('buildTimeline: timing', () => {
     assert.deepEqual(speechTokens('BBC')[0].words, ['bee', 'bee', 'see']);
     assert.deepEqual(speechTokens('the U.S. said')[1].words, ['yoo', 'es']);
     assert.deepEqual(speechTokens('NASA')[0].words, ['nasa']);
-    assert.deepEqual(speechTokens('I-M-F')[0].words, ['eye', 'em', 'ef']);
+    assert.deepEqual(speechTokens('I-M-F')[0].words, ['i', 'em', 'ef']);
+    assert.deepEqual(shapes('I-M-F', { normalise: false }).slice(0, 2), ['AH', 'EE'], 'the letter I glides AH -> EE');
     assert.deepEqual(speechTokens('GLOBIT')[0].words, ['globit'], 'never "jee el oh bee eye tee"');
     assert.deepEqual(speechTokens('STOP')[0].words, ['stop']);
     // The channel name takes about as long as "Globit twenty-four" (5 syllables).
@@ -222,6 +234,36 @@ describe('sampleTimeline', () => {
     let changes = 0;
     for (let i = 1; i < talking.length; i++) if (state(talking[i]) !== state(talking[i - 1])) changes++;
     assert.ok(changes / (tl.total / 1000) < 12, `${changes / (tl.total / 1000)} changes/s`);
+  });
+
+  test('the calm stream: no tongue shapes, every shape held >= 80 ms, a slow jaw', () => {
+    const tl = buildTimeline('Good evening, I am Paco Pixel, and this is World Now on GLOBIT 24. The talks resume on Thursday.');
+    const c = calmTimeline(tl);
+    assert.equal(calmTimeline(tl), c, 'cached per timeline');
+    assert.ok(c.segs.length < tl.segs.length * 0.6, `${c.segs.length} of ${tl.segs.length} shapes`);
+    for (const g of c.segs) {
+      assert.ok(!['TH', 'L', 'S'].includes(g.v), g.v);
+      if (g.v !== 'MBP' && g.k !== 'pause') assert.ok(g.t1 - g.t0 >= 80, `${g.v} held ${g.t1 - g.t0} ms`);
+    }
+    assert.equal(c.segs.at(-1).t1, tl.total);
+    // Sampled at 60 fps: the jaw moves at most ~0.12 per frame and still opens per syllable.
+    let prev = null;
+    let maxStep = 0;
+    let changes = 0;
+    let shown = 'rest';
+    const out = {};
+    for (let t = -80; t < tl.total + 80; t += 1000 / 60) {
+      const f = sampleCalm(tl, t, out);
+      if (prev !== null) maxStep = Math.max(maxStep, Math.abs(f.level - prev));
+      prev = f.level;
+      const s = f.mix > 0.5 ? f.next : f.viseme;
+      if (s !== shown) { changes++; shown = s; }
+    }
+    assert.ok(maxStep <= 0.13, `jaw step ${maxStep.toFixed(3)} per frame`);
+    assert.ok(changes / (tl.total / 1000) < 7, `${(changes / (tl.total / 1000)).toFixed(1)} shape changes a second`);
+    const levels = [];
+    for (let t = 0; t < tl.total; t += 10) levels.push(sampleCalm(tl, t, out).level);
+    assert.ok(Math.max(...levels) > 0.35, 'it still opens');
   });
 
   test('stressed syllables raise an accent that head motion can follow', () => {
@@ -366,10 +408,15 @@ describe('tune format', () => {
 
 describe('instruments and wave tables', () => {
   test('presets are filtered; tunes may set cutoff, resonance and a filter envelope', () => {
+    // Broadcast tilt: leads open to ~6 kHz, pads and keys lower, bass darker.
     for (const name of ['pulse12', 'pulse25', 'pulse50', 'brass', 'bell', 'pluck', 'pad', 'keys', 'square', 'saw']) {
-      assert.ok(resolveInstrument(name).cutoff <= 4000, `${name} is low-passed`);
+      const c = resolveInstrument(name).cutoff;
+      assert.ok(c >= 2000 && c <= 6500, `${name} is low-passed, not muffled (${c} Hz)`);
     }
-    assert.ok(resolveInstrument('square', 'bass').cutoff <= 1000, 'bass voices are dark');
+    assert.ok(resolveInstrument('pad').cutoff <= 3000 && resolveInstrument('pulse25').cutoff >= 5000);
+    assert.ok(resolveInstrument('square', 'bass').cutoff <= 1500, 'bass voices are dark');
+    // The tunes bus's -3 dB shelf at 8 kHz, in the loudness model too.
+    assert.ok(Math.abs(10 * Math.log10(highshelfPower(16000)) + 3) < 0.3 && Math.abs(10 * Math.log10(highshelfPower(500))) < 0.1);
     const inst = resolveInstrument({ wave: 'pulse12', cutoff: 1800, q: 3, fenv: [2, 0.2] });
     assert.deepEqual([inst.cutoff, inst.q, inst.fenv], [1800, 3, [2, 0.2]]);
     assert.equal(resolveInstrument({ preset: 'brass', fenv: false }).fenv, null);

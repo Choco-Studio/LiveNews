@@ -875,27 +875,45 @@ const workshop = lazy(() =>
     // pendant lamp bokeh
     ellipse(c, 214, 8, 26, 10, mix(P.darkGreen, P.black, 0.5));
     ellipse(c, 214, 16, 14, 5, mix(P.cream, P.yellow, 0.4));
-    // Ian behind the bench: white coat, cap, a loupe; leaning in, quietly concentrating
-    const ix = 236;
+    // Ian behind the bench, out of focus: broad shoulders in a pale work coat
+    // (in the pendant's shade, so it stays darker than the crisp), a dark apron,
+    // his head bowed over the work under a paper cap, a loupe at one eye
+    const ix = 262;
+    const coat = mix(P.fog, P.steel, 0.45);
     begin();
-    pt(ix - 44, H);
-    pt(ix - 40, 120);
-    pt(ix - 26, 100);
-    pt(ix - 10, 96);
-    pt(ix + 10, 96);
-    pt(ix + 26, 100);
-    pt(ix + 40, 120);
-    pt(ix + 44, H);
-    fill(c, mix(P.silver, P.fog, 0.4), { d: P.fog, f: 0.35, m: 1, dd: P.steel, df: 0.1, side: 1 });
-    rect(c, ix - 1, 100, 2, 116, P.fog);
-    rect(c, ix - 8, 96, 16, 8, mix(P.skin, P.tan, 0.4));
-    ellipse(c, ix, 78, 13, 17, mix(P.skin, P.tan, 0.35), { d: mix(P.skinShade, P.tan, 0.4), f: 0.3, m: 1, side: 1 });
-    ellipse(c, ix, 64, 14, 7, mix(P.silver, P.white, 0.3));
-    rect(c, ix - 15, 66, 30, 3, mix(P.fog, P.silver, 0.5));
-    rect(c, ix - 7, 76, 5, 2, mix(P.brown, P.black, 0.4));
-    rect(c, ix + 3, 76, 5, 2, mix(P.brown, P.black, 0.4));
-    ellipse(c, ix + 6, 77, 4, 4, P.black);
-    rect(c, ix - 4, 88, 8, 1, mix(P.skinShade, P.brown, 0.4));
+    pt(ix - 70, H);
+    pt(ix - 66, 136);
+    pt(ix - 54, 112);
+    pt(ix - 30, 102);
+    pt(ix - 12, 100);
+    pt(ix + 12, 100);
+    pt(ix + 30, 102);
+    pt(ix + 54, 112);
+    pt(ix + 66, 136);
+    pt(ix + 70, H);
+    fill(c, coat, { d: mix(coat, P.ink, 0.4), f: 0.35, m: 1, l: mix(P.silver, P.fog, 0.5), lf: 0.12, lm: 1, side: 1 });
+    begin();
+    pt(ix - 26, H);
+    pt(ix - 22, 128);
+    pt(ix + 22, 128);
+    pt(ix + 26, H);
+    fill(c, mix(P.slate, P.ink, 0.4));
+    line(c, ix - 22, 128, ix - 12, 102, mix(P.slate, P.ink, 0.4));
+    line(c, ix + 22, 128, ix + 12, 102, mix(P.slate, P.ink, 0.4));
+    // neck, bowed head, ear, the cap, the loupe
+    rect(c, ix - 8, 92, 16, 10, mix(P.skinShade, P.tan, 0.45));
+    ellipse(c, ix + 2, 80, 14, 15, mix(P.skin, P.tan, 0.35), { d: mix(P.skinShade, P.tan, 0.4), f: 0.3, m: 1, side: 1 });
+    ellipse(c, ix - 12, 82, 3, 5, mix(P.skinShade, P.tan, 0.4));
+    begin();
+    pt(ix - 14, 72);
+    pt(ix - 10, 60);
+    pt(ix + 14, 60);
+    pt(ix + 17, 72);
+    fill(c, mix(P.silver, P.fog, 0.3));
+    rect(c, ix - 14, 70, 31, 2, mix(P.fog, P.steel, 0.4));
+    rect(c, ix - 3, 80, 4, 2, mix(P.brown, P.black, 0.4));
+    ellipse(c, ix + 9, 81, 4, 4, P.black);
+    rect(c, ix + 2, 90, 7, 1, mix(P.skinShade, P.brown, 0.4));
     // the bench edge
     rect(c, 0, 176, KW, 40, mix(P.steel, P.ink, 0.45));
     rect(c, 0, 176, KW, 2, P.fog);
@@ -1090,7 +1108,7 @@ const packArt = lazy(() =>
     tracked(c, 'HAND-SQUARED', w / 2, 98, { color: GOLD_D, font: 'micro', track: 1, align: 'center' });
     tracked(c, '150 G', w / 2, 108, { color: mix(P.fog, P.ink, 0.3), font: 'micro', track: 1, align: 'center' });
   }));
-const CAM_P = camera(96, 186, 0.8, 0.5);
+const CAM_P = camera(96, 178, 0.8, 0.5);
 const slateSet = lazy(() =>
   bake('cn-slate-set', W, H, function* paint(c) {
     // a dark, warm void with the counter receding into it; a soft key from the left
@@ -1117,7 +1135,7 @@ const slateSet = lazy(() =>
     c.drawImage(T.cv, 0, 0);
   }));
 const packGlow = lazy(() => pool('cn-packglow', 90, 80, P.yellow, 6, 0.1));
-const LEGAL = 'EVERY CRISP IS CHECKED TO NINETY DEGREES, GIVE OR TAKE. IAN IS NOT AVAILABLE FOR PRIVATE SQUARING.';
+const LEGAL = 'Checked to ninety degrees, give or take. Ian is not available for private squaring.';
 
 function shotSlate(ctx, lt) {
   ctx.drawImage(slateSet(), 0, 0);
@@ -1157,7 +1175,7 @@ function shotSlate(ctx, lt) {
   ctx.globalAlpha = smooth((lt - 1.3) / 0.7);
   tracked(ctx, 'LIFE HAS ENOUGH CURVES.', cx, 118, { color: P.cream, track: 1, align: 'center' });
   ctx.globalAlpha = 1;
-  smallPrint(ctx, LEGAL, 196, { color: P.fog, a: smooth((lt - 0.5) / 0.4), maxW: 330 });
+  smallPrint(ctx, LEGAL, 202, { color: P.fog, a: smooth((lt - 0.5) / 0.4), maxW: 340 });
 }
 
 const SHOTS = [
@@ -1191,10 +1209,10 @@ export default {
     { at: 5.0, text: 'This is a slow-cooked, hand-squared crisp.' },
     { at: 10.3, text: 'Each one checked to ninety degrees. By Ian.' },
     { at: 14.7, text: "Seasoned with salt, from a sea we're not allowed to name." },
-    { at: 20.2, text: 'Corners. Because life has enough curves.' },
+    { at: 20.4, text: 'Corners. Because life has enough curves.' },
   ],
   // Dm9 | G13 | Cmaj9 | A7 (b9) twice, resolving on Dm9 under the slate; every
-  // track is 29.5 beats at 70 bpm (25.3 s, longer than the spot) and ends in rest.
+  // track is 30.5 beats at 70 bpm (26.1 s, longer than the spot) and ends in rest.
   tune: {
     bpm: 70,
     swing: 0.12,
@@ -1205,17 +1223,17 @@ export default {
       {
         kind: 'harmony',
         inst: EP,
-        gain: 0.95,
-        notes: 'D3+F3+A3+C4+E4:2@0.45 R:1 D3+F3+A3+C4+E4:1@0.3 G2+F3+B3+E4:2@0.45 R:1 G2+F3+B3+E4:1@0.3 C3+E3+B3+D4:2@0.45 R:1 C3+E3+B3+D4:1@0.3 A2+G3+C#4+Bb3:3@0.4 R:1 D3+F3+A3+C4+E4:2@0.45 R:1 D3+F3+A3+C4+E4:1@0.3 G2+F3+B3+E4:2@0.45 R:1 D3+F3+A3+E4:4@0.4 R:2.5',
+        gain: 1.13,
+        notes: 'D3+F3+A3+C4+E4:2@0.45 R:1 D3+F3+A3+C4+E4:1@0.3 G2+F3+B3+E4:2@0.45 R:1 G2+F3+B3+E4:1@0.3 C3+E3+B3+D4:2@0.45 R:1 C3+E3+B3+D4:1@0.3 A2+G3+C#4+Bb3:3@0.4 R:1 D3+F3+A3+C4+E4:2@0.45 R:1 D3+F3+A3+C4+E4:1@0.3 G2+F3+B3+E4:2@0.45 R:1 D3+F3+A3+E4:4@0.4 R:3.5',
       },
       {
         kind: 'lead',
         inst: LEADV,
-        gain: 0.62,
-        notes: 'R:2 A4:1@0.35 C5:1@0.35 B4:2@0.4 G4:2@0.35 E4:1.5@0.35 D4:0.5@0.3 E4:2@0.35 C#4:3@0.3 R:1 A4:1@0.35 C5:1@0.35 D5:2@0.4 E5:2@0.4 R:1 A4:4@0.35 R:2.5',
+        gain: 0.74,
+        notes: 'R:2 A4:1@0.35 C5:1@0.35 B4:2@0.4 G4:2@0.35 E4:1.5@0.35 D4:0.5@0.3 E4:2@0.35 C#4:3@0.3 R:1 A4:1@0.35 C5:1@0.35 D5:2@0.4 E5:2@0.4 R:1 A4:4@0.35 R:3.5',
       },
-      { kind: 'bass', inst: 'sine', gain: 0.8, notes: 'D2:2 A1:1 C2:1 G1:2 D2:1 F2:1 C2:2 G1:1 B1:1 A1:2 E2:1 C#2:1 D2:2 A1:1 C2:1 G1:2 B1:1 D2:4 R:2.5' },
-      { drums: 'H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 R:6.5' },
+      { kind: 'bass', inst: 'sine', gain: 0.95, notes: 'D2:2 A1:1 C2:1 G1:2 D2:1 F2:1 C2:2 G1:1 B1:1 A1:2 E2:1 C#2:1 D2:2 A1:1 C2:1 G1:2 B1:1 D2:4 R:3.5' },
+      { drums: 'H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 R:7.5' },
     ],
   },
   draw(ctx, t, dt, info) {

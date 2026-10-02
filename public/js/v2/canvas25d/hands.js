@@ -614,6 +614,7 @@ const ZB = new Float32Array(LW * LH);
 const TN = new Int8Array(LW * LH); // tone 0..3; 4 = line; 8+ = detail (decal tone = v - 8)
 const UU = new Float32Array(LW * LH); // position along the bone 0..1
 const VV = new Float32Array(LW * LH); // signed offset across the bone, -1..1
+const LV = new Float32Array(LW * LH); // light value before it becomes a tone (form + silhouette passes)
 const P2 = new Float64Array(20 * 3); // projected joints: x, y, depth
 const HULL_IN = new Float64Array(PALM_N * 4 + 4);
 const HULL = new Float64Array(PALM_N * 4 + 8);
@@ -682,6 +683,9 @@ function rasterHand(buf, L, hm, g, B, s, gh, z) {
 
   const lod = s < 1.35 ? 0 : s < 2.7 ? 1 : s < 3.4 ? 2 : 3;
   HI_T = lod >= 3 ? 1.12 : lod === 2 ? 1.2 : 9;
+  // per-finger tube shading only where a finger is wide enough to carry it
+  BONE_GAIN = lod <= 1 ? 0.3 : lod === 2 ? 0.55 : 0.75;
+  BIAS_GAIN = lod <= 1 ? 0.5 : 1;
   ROBOT_JOINTS = hm.robot && s >= 2.2;
   const robot = hm.robot;
   const back = g.back;
@@ -708,6 +712,11 @@ function rasterHand(buf, L, hm, g, B, s, gh, z) {
     }
   }
 
+  // ---- round the fingertips: a square corner on a tip at least 4 px across loses its pixel (manual AA)
+  if (lod >= 2 && !robot) roundTips();
+  // ---- tones: the bones' own tube shading, then the hand shaded as ONE form from its silhouette
+  // (lit upper-left edge, shaded lower-right edge), so small hands read as a mass, not as stripes
+  formTones(lod);
   // ---- finish
   if (lod >= 1) separations(g, robot, lod);
   if (lod >= 1 && !robot) contactShadow();
@@ -784,6 +793,56 @@ function boneShades(g) {
   SEGSHADE[19] = ts;
 }
 
+let BONE_GAIN = 0.82, BIAS_GAIN = 1;
+
+/** Drop the outer corner pixel of fingertips that are ≥ 4 px wide in both directions (rounded tips). */
+function roundTips() {
+  for (let j = 1; j < bh - 1; j++) {
+    const o = j * LW;
+    for (let i = 1; i < bw - 1; i++) {
+      const k = o + i;
+      const a = OWN[k];
+      if (a < 2 || SEG[k] !== 2 || UU[k] < 0.6) continue;
+      for (let q = 0; q < 4; q++) {
+        const dx = q & 1 ? 1 : -1, dy = q & 2 ? 1 : -1;
+        // the two outside neighbours are empty, the inside runs on for two pixels each way
+        if (OWN[k + dx] >= 0 || OWN[k + dy * LW] >= 0) continue;
+        const i3 = i - 3 * dx, j3 = j - 3 * dy;
+        if (i3 < 0 || i3 >= bw || j3 < 0 || j3 >= bh) continue;
+        // 4 px across and 3 px along: narrower tips keep their corners (else they would turn into points)
+        if (OWN[k - dx] !== a || OWN[k - 2 * dx] !== a || OWN[k - 3 * dx] !== a) continue;
+        if (OWN[k - dy * LW] !== a || OWN[k - 2 * dy * LW] !== a || OWN[k - 3 * dy * LW] !== a) continue;
+        OWN[k] = -1;
+        break;
+      }
+    }
+  }
+}
+const SIL_DARK = [0.62, 0.55, 0.38, 0.28]; // shade added on the silhouette edge away from the key, by LOD
+const SIL_LIT = [0.22, 0.22, 0.18, 0.12];
+
+/** Light values → tones, with the whole-hand silhouette term (empty neighbours toward / away from the key). */
+function formTones(lod) {
+  const dark = SIL_DARK[lod], lit = SIL_LIT[lod];
+  for (let j = 0; j < bh; j++) {
+    const o = j * LW;
+    for (let i = 0; i < bw; i++) {
+      const k = o + i;
+      if (OWN[k] < 0) continue;
+      let l = LV[k];
+      // away from the key light (right, below): the form turns into shadow
+      const r = i + 1 < bw ? OWN[k + 1] : -1, d = j + 1 < bh ? OWN[k + LW] : -1;
+      const rd = i + 1 < bw && j + 1 < bh ? OWN[k + LW + 1] : -1;
+      if (r < 0 || d < 0) l -= dark;
+      else if (rd < 0) l -= dark * 0.5;
+      // toward the key (left, above): a lit edge
+      const lf = i > 0 ? OWN[k - 1] : -1, u = j > 0 ? OWN[k - LW] : -1;
+      if (lf < 0 || u < 0) l += lit;
+      TN[k] = toneOfL(l);
+    }
+  }
+}
+
 /** Tone from a light value: hi / base / shade / deep (hand-tuned thresholds, kept clean). */
 let ROBOT_JOINTS = false; // UNIT-8: 1 px joint gaps from s 2.2 (CONTRACTS w2-cast-b)
 let HI_T = 9; // highlight threshold for the current hand (by LOD: highlights only where there is room)
@@ -796,6 +855,11 @@ function rasterBone(a, b, ra, rb, own, seg, bias, s) {
   const bxx = P2[b * 3], byy = P2[b * 3 + 1], bz = P2[b * 3 + 2];
   const dx = bxx - ax, dy = byy - ay;
   const len2 = dx * dx + dy * dy;
+  // a fingertip is blunt, not a dome: past the tip joint the cap is a superellipse 0.7 r deep (only
+  // where the finger is wide enough to show it), so a 3-4 px finger ends in a 2-3 px top, never a point
+  const blunt = seg === 2 && own >= 1 && rb >= 1.2 && len2 > 1e-9;
+  const len = blunt ? Math.sqrt(len2) : 0;
+  const capK = 1 / (0.7 * 0.7);
   const R = Math.max(ra, rb);
   const x0 = Math.max(0, Math.floor(Math.min(ax, bxx) - R) - bx0), x1 = Math.min(bw, Math.ceil(Math.max(ax, bxx) + R) + 1 - bx0);
   const y0 = Math.max(0, Math.floor(Math.min(ay, byy) - R) - by0), y1 = Math.min(bh, Math.ceil(Math.max(ay, byy) + R) + 1 - by0);
@@ -806,12 +870,23 @@ function rasterBone(a, b, ra, rb, own, seg, bias, s) {
     const o = j * LW;
     for (let i = x0; i < x1; i++) {
       const cx = bx0 + i + 0.5;
-      let u = ((cx - ax) * dx + (cy - ay) * dy) * inv;
-      u = u < 0 ? 0 : u > 1 ? 1 : u;
+      const uRaw = ((cx - ax) * dx + (cy - ay) * dy) * inv;
+      const u = uRaw < 0 ? 0 : uRaw > 1 ? 1 : uRaw;
       const r = ra + (rb - ra) * u;
-      const ex = cx - (ax + dx * u), ey = cy - (ay + dy * u);
-      const d2 = ex * ex + ey * ey;
-      if (d2 > r * r) continue;
+      let ex = cx - (ax + dx * u), ey = cy - (ay + dy * u);
+      let d2 = ex * ex + ey * ey;
+      if (blunt && uRaw > 1) {
+        const along = (uRaw - 1) * len;
+        const ux = dx / len, uy = dy / len;
+        const ax2 = ex - ux * along, ay2 = ey - uy * along; // across-axis remainder
+        // superellipse (power 4): a squarer cap with rounded corners
+        const ca = (along * along * capK) / (r * r), cb = (ax2 * ax2 + ay2 * ay2) / (r * r);
+        const q = ca * ca + cb * cb;
+        if (q > 1) continue;
+        ex = ax2 + ux * along * 0.7;
+        ey = ay2 + uy * along * 0.7;
+        d2 = Math.sqrt(q) * r * r;
+      } else if (d2 > r * r) continue;
       const depth = az + (bz - az) * u + Math.sqrt(r * r - d2) * invS * 0.6;
       const k = o + i;
       if (depth <= ZB[k]) continue;
@@ -822,8 +897,7 @@ function rasterBone(a, b, ra, rb, own, seg, bias, s) {
       // signed offset across the bone (for nails and creases)
       const side = (ex * dy - ey * dx) >= 0 ? 1 : -1;
       VV[k] = (side * Math.sqrt(d2)) / r;
-      const l = 0.5 + 0.82 * ((ex * L2X + ey * L2Y) / r) + bias;
-      TN[k] = toneOfL(l);
+      LV[k] = 0.5 + BONE_GAIN * ((ex * L2X + ey * L2Y) / r) + bias * BIAS_GAIN;
     }
   }
 }
@@ -940,7 +1014,7 @@ function rasterPalm(g, B, s, hn, lod) {
       // form shading at the rim of the plate: shade where the edge turns from the key,
       // a lit edge only where it faces the key squarely
       if (md < ew) l += mel < 0 ? 0.95 * mel : mel > 0.72 ? 0.9 * mel : 0;
-      TN[k] = toneOfL(l);
+      LV[k] = l;
     }
   }
 }
@@ -972,10 +1046,27 @@ function separations(g, robot, lod) {
         if (!needsLine(a, b, k, kk, curl, lod)) continue;
         const za = ZB[k], zb = ZB[kk];
         const behind = Math.abs(za - zb) < 0.35 ? kk : za < zb ? k : kk;
-        TN[behind] = 4;
+        TN[behind] = robot ? 4 : lineCode(a, b, k, kk, lod);
       }
     }
   }
+}
+
+/**
+ * How hard a separation reads: the dark line (4) where two fingers really part (toward the tips, the
+ * thumb against the palm), the shade tone (8 + 2) where they still touch near the knuckles and on the
+ * small hands of the medium shots, so a hand reads as one mass with fingers, never as a comb.
+ */
+function lineCode(a, b, k, kk, lod) {
+  if (a > 1 && b > 1) {
+    const u = Math.min(UU[k], UU[kk]);
+    const seg = Math.min(SEG[k], SEG[kk]);
+    if (lod <= 1) return seg >= 2 && u > 0.35 ? 4 : 8 + 2;
+    return seg === 0 && u < 0.55 ? 8 + 2 : 4;
+  }
+  // a curled finger folded over the palm: a fold, not a gap, on the small hands
+  if ((a === 0 || b === 0) && lod <= 1 && a + b > 1) return 8 + 2;
+  return 4;
 }
 
 function needsLine(a, b, k, kk, curl, lod) {
@@ -1029,7 +1120,8 @@ function details(g, B, s, lod, robot, back) {
         // nails: on the back view, the end of an extended finger
         if (back && sg === 2 && c < 0.6 && u > 0.42 && Math.abs(v) < 0.62) TN[k] = 8 + (u > 0.9 && lod < 3 ? 1 : 0);
         // PIP crease across an extended finger (both sides of the hand)
-        else if (lod >= 3 && sg === 1 && u < 0.14 && c < 0.5 && Math.abs(v) < 0.75 && TN[k] < 2) TN[k] = 8 + 2;
+        // (a short tick in the middle of the finger, never a rung across it)
+        else if (lod >= 3 && sg === 1 && u < 0.12 && c < 0.5 && Math.abs(v) < 0.38 && TN[k] < 2) TN[k] = 8 + 2;
       } else if (a === 1) {
         if (back && sg === 2 && u > 0.45 && Math.abs(v) < 0.6 && curl[0] < 0.6) TN[k] = 8;
       }

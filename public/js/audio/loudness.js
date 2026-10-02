@@ -6,6 +6,11 @@
 import { waveEnergy } from './waves.js';
 import { flatten, songSeconds, KIND_GAIN, noteCutoff } from './tune.js';
 
+// The tunes bus's high shelf (synth.js SHELF; kept here so this module stays
+// free of WebAudio code).
+const SHELF_HZ = 8000;
+const SHELF_DB = -3;
+
 // The channel's level plan is set against the voice, as broadcasters do:
 // the house voice target (tools/voice/dsp.py, blips calibrated to it) is
 // -16 LUFS; a programme open plays level with it, cues 1-3 LU under it
@@ -36,6 +41,32 @@ export function lowpassPower(f, cutoff, qDb = 0, fs = 48000) {
   const s2 = Math.sin(2 * w);
   const nr = b0 + b1 * c1 + b0 * c2;
   const ni = -(b1 * s1 + b0 * s2);
+  const dr = a0 + a1 * c1 + a2 * c2;
+  const di = -(a1 * s1 + a2 * s2);
+  return (nr * nr + ni * ni) / (dr * dr + di * di);
+}
+
+/** Power gain of WebAudio's highshelf BiquadFilter (shelf slope 1) at f. */
+export function highshelfPower(f, f0 = SHELF_HZ, gainDb = SHELF_DB, fs = 48000) {
+  if (!gainDb || !(f0 < fs / 2 - 1)) return 1;
+  const A = 10 ** (gainDb / 40);
+  const w0 = (2 * Math.PI * f0) / fs;
+  const cw = Math.cos(w0);
+  const alpha = (Math.sin(w0) / 2) * Math.SQRT2;
+  const sa = 2 * Math.sqrt(A) * alpha;
+  const b0 = A * (A + 1 + (A - 1) * cw + sa);
+  const b1 = -2 * A * (A - 1 + (A + 1) * cw);
+  const b2 = A * (A + 1 + (A - 1) * cw - sa);
+  const a0 = A + 1 - (A - 1) * cw + sa;
+  const a1 = 2 * (A - 1 - (A + 1) * cw);
+  const a2 = A + 1 - (A - 1) * cw - sa;
+  const w = (2 * Math.PI * f) / fs;
+  const c1 = Math.cos(w);
+  const s1 = Math.sin(w);
+  const c2 = Math.cos(2 * w);
+  const s2 = Math.sin(2 * w);
+  const nr = b0 + b1 * c1 + b2 * c2;
+  const ni = -(b1 * s1 + b2 * s2);
   const dr = a0 + a1 * c1 + a2 * c2;
   const di = -(a1 * s1 + a2 * s2);
   return (nr * nr + ni * ni) / (dr * dr + di * di);
@@ -177,14 +208,15 @@ export function envelopeEnergy(inst, gate) {
 }
 
 const energyCache = new Map();
-// K-weighted energy of one note of an instrument through its low-pass.
+// K-weighted energy of one note of an instrument through its low-pass and
+// the tunes bus's high shelf.
 function noteEnergy(inst, midi) {
   const cut = Math.round(noteCutoff(inst, midi));
   const q = inst.q ?? 0;
   const key = `${inst.wave}:${midi}:${cut}:${q}`;
   let e = energyCache.get(key);
   if (e === undefined) {
-    e = waveEnergy(inst.wave, hz(midi), (f) => kWeight(f) * lowpassPower(f, cut, q));
+    e = waveEnergy(inst.wave, hz(midi), (f) => kWeight(f) * lowpassPower(f, cut, q) * highshelfPower(f));
     if (energyCache.size > 4000) energyCache.clear();
     energyCache.set(key, e);
   }

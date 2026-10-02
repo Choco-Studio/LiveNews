@@ -16,6 +16,7 @@
 //   clumpTone(t, v, u, o)             strand/clump shading of a base tone (see below)
 //   strokeTone(form, t, decalMat)     keep a clump's 1 px strokes through resolve's clean-up (decal hair)
 //   rimMat(hex)                       decal material for painted rims (black outline next to it)
+//   dec(hex)                          pixbuf decal(hex), cached by colour (no key string per call)
 //   rimTopRight(buf, g, x0, x1, y0, y1, mat, maxDrop)  continuous top rim on a group's right half
 //   selOutEdge(buf, x0, y0, x1, y1, g, gNext, from, to) darker local line where group g meets gNext
 //   hairLight(buf, head, g, mat, fromX, toX, topY, botY, maxDrop)  partial top rim (upper right)
@@ -183,9 +184,27 @@ export function strokeTone(form, t, decalMat) {
   return t === form || !decalMat ? t : (decalMat << 4) | t;
 }
 
+// decal materials by colour, cached: pixbuf decal() builds its registry key string on every call
+const DECALS = new Map();
+/** pixbuf.js decal(hex) without the per-call key string (safe to call every frame). */
+export function dec(hex) {
+  let id = DECALS.get(hex);
+  if (id === undefined) {
+    id = material(`decal:${hex}`, { ramp: [hex], decal: true });
+    DECALS.set(hex, id);
+  }
+  return id;
+}
+
 /** A decal material that paints a rim colour; its outer outline stays black. */
+const RIMS = new Map();
 export function rimMat(hex = P.silver) {
-  return material(`cast-a:rim:${hex}`, { ramp: [hex], line: P.black, decal: true });
+  let id = RIMS.get(hex);
+  if (id === undefined) {
+    id = material(`cast-a:rim:${hex}`, { ramp: [hex], line: P.black, decal: true });
+    RIMS.set(hex, id);
+  }
+  return id;
 }
 
 /**

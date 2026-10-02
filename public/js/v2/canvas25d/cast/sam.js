@@ -60,7 +60,7 @@ export const sam = defineLook({
 // the fringe's tips breaking the hairline; the sides are darker and finer.
 const LXY = new LocalXY();
 const HWL = new HeadWidthLUT();
-const CO = { cw: 1.3, s: 1, seed: 21, sep: true, hiLo: 0.3, hiHi: 3.6, hiW: 0.46, gap: 1.35 };
+const CO = { cw: 1.3, s: 1, seed: 21, sep: true, hiLo: 0.3, hiHi: 3.6, hiW: 0.46, gap: 2.5 }; // separations in short dashes, never specks
 export function drawCrop(buf, L, m, head, s) {
   const H = L.head;
   const cyc = H.craniumY - 0.2;

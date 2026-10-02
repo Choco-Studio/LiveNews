@@ -30,9 +30,9 @@ export const MIX = {
   duckHold: 0.35, // s of speech-off before releasing (bridges sentence gaps)
   pocketHz: 2500,
   pocketSpeech: -6, // dB dip at 2.5 kHz while anyone speaks
-  headline: { level: -12, duckDb: -6 }, // WORLD NOW headline bus (dB): -10 LU in the gaps, ~24 LU under speech
+  headline: { level: -12, duckDb: -4 }, // WORLD NOW headline bus (dB): brass ~21 LU under speech, gaps <= -10 LU
   graveFade: 2.5,
-  output: 0.7, // calibrated against Kokoro voices at -16 LUFS (the house voice target)
+  output: 1.0, // calibrated against the house voice chain (-16 LUFS per clip, upmixed to stereo as on air)
 };
 const SENDS = {
   melody: { verb: 1.2, echo: 1 },

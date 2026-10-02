@@ -1065,7 +1065,10 @@ function renderSpec(b, spec, style, env) {
         spec._mapWH = [Math.max(8, Math.ceil((m.w * spec._mapFit) / sc)), Math.max(8, Math.ceil((m.h * spec._mapFit) / sc))];
       }
       if (spec._mapFit < 1) {
-        const nw = Math.round(m.w * spec._mapFit), nh = Math.round(m.h * spec._mapFit);
+        // snapped to the rendered size when within a pixel (an exact copy, no dropped column)
+        let nw = Math.round(m.w * spec._mapFit), nh = Math.round(m.h * spec._mapFit);
+        if (Math.abs(nw - spec._mapWH[0]) <= 1) nw = spec._mapWH[0];
+        if (Math.abs(nh - spec._mapWH[1]) <= 1) nh = spec._mapWH[1];
         m.x += (m.w - nw) >> 1;
         m.y += Math.min(m.h - nh, Math.max(3 * ts, (m.h - nh) >> 1));
         m.w = nw;

@@ -27,12 +27,17 @@ const dbToGain = (db) => 10 ** (db / 20);
  * Ducking under speech. Depths are in dB below the music's own level:
  * programme beds on audio.musicBus -20, tunes -18 (opens, cues), a looping
  * tune (a commercial's music bed under its voice-over) -14; a tune may set
- * its own `duck`. Attack/release are time constants (about 120 ms / 500 ms to
- * settle); the duck is held 0.7 s after the last word so the 300 ms gaps
- * between sentences and segments never let the music swell back. While
- * anyone speaks a -6 dB dip around 2.8 kHz clears the consonants.
+ * its own `duck`. A stopped tune's fading tail stays ducked, at -12 (the
+ * open's last chord rings over the cut, under the first words). Attack and
+ * release are time constants (about 75 ms / 500 ms to settle); the duck is
+ * held 0.7 s after the last word so the 300 ms gaps between sentences and
+ * segments never let the music swell back. While anyone speaks a -6 dB dip
+ * around 2.8 kHz clears the consonants.
  */
-export const DUCK = Object.freeze({ attack: 0.04, release: 0.17, hold: 0.7, dipDb: -6, dipHz: 2800, bedsDb: -20, tunesDb: -18, loopDb: -14 });
+export const DUCK = Object.freeze({ attack: 0.025, release: 0.17, hold: 0.7, dipDb: -6, dipHz: 2800, bedsDb: -20, tunesDb: -18, loopDb: -14, tailDb: -12 });
+// Broadcast tilt: one gentle high shelf on every tune (instead of steep
+// per-note filters) keeps the top end airy but never fizzy.
+export const SHELF = Object.freeze({ hz: 8000, db: -3 });
 export const DUCK_LEVEL = dbToGain(DUCK.tunesDb); // kept for old imports
 
 // ------------------------------------------------------------------ bank
@@ -137,7 +142,7 @@ function presenceDip(ctx) {
 
 /**
  * The channel's mixer:
- *   tunes (each player ducks itself) -> tunesDip -> master;  room returns -> tunes
+ *   tunes (each player ducks itself) -> high shelf -> tunesDip -> master;  room returns -> tunes
  *   music (programme beds, audio.musicBus) -> duck -> bedsDip -> master
  *   speech (blips/murmur, recorded voices) -> master
  *   master -> compressor -> soft clipper -> volume (out) -> mute -> speakers
@@ -172,8 +177,13 @@ export function buildBuses(ctx, { volume = 0.8, raw = false, ducker = null, beds
   }
   const tunesDip = presenceDip(ctx);
   tunesDip.connect(master);
+  const shelf = ctx.createBiquadFilter();
+  shelf.type = 'highshelf';
+  shelf.frequency.value = SHELF.hz;
+  shelf.gain.value = SHELF.db;
+  shelf.connect(tunesDip);
   const tunes = ctx.createGain();
-  tunes.connect(tunesDip);
+  tunes.connect(shelf);
   const bedsDip = presenceDip(ctx);
   bedsDip.connect(master);
   const duck = ctx.createGain();
@@ -185,12 +195,12 @@ export function buildBuses(ctx, { volume = 0.8, raw = false, ducker = null, beds
   reverb.buffer = b.ir;
   const dark = ctx.createBiquadFilter();
   dark.type = 'lowpass';
-  dark.frequency.value = 3200;
+  dark.frequency.value = 5500;
   dark.Q.value = 0.5;
   reverb.connect(dark).connect(tunes);
   const speech = ctx.createGain();
   speech.connect(master);
-  const buses = { ctx, master, tunes, tunesDip, music, duck, bedsDip, reverb, speech, out, mute, comp, raw, ducker, bedTarget: null };
+  const buses = { ctx, master, tunes, shelf, tunesDip, music, duck, bedsDip, reverb, speech, out, mute, comp, raw, ducker, bedTarget: null };
   if (ducker) {
     const t = ctx.currentTime;
     buses.bedTarget = ducker.add({ param: duck.gain, on: dbToGain(bedsDb), off: 1 }, t);
@@ -235,6 +245,23 @@ export class Ducker {
   retarget(target, on, t) {
     target.on = on;
     if (this.targets.has(target)) this.add(target, t);
+  }
+
+  // Change a target's ducked value with a glide (no step on a sounding note).
+  soften(target, on, t) {
+    if (!this.targets.has(target)) return;
+    target.on = on;
+    const p = target.param;
+    try {
+      if (this.speaking) {
+        p.cancelScheduledValues(t);
+        p.setTargetAtTime(on, t, 0.05);
+      } else if (t < this.releaseAt) {
+        p.cancelScheduledValues(t);
+        p.setTargetAtTime(on, t, 0.05);
+        p.setTargetAtTime(target.off, this.releaseAt, DUCK.release);
+      }
+    } catch { /* ignore */ }
   }
 
   start(t) {
@@ -292,20 +319,27 @@ export function duckDbFor(song, { loop = false, duckDb } = {}) {
 /** Linear gain for a playTune volume: 0.5 is the reference, at most +1 dB above it. */
 export const volumeGain = (volume) => Math.max(0, Math.min(dbToGain(1), (Number.isFinite(Number(volume)) ? Number(volume) : 0.5) / 0.5));
 
-const LATE_OK = 0.35; // a note up to this late (s) still plays from now, shortened
+// Envelope level (0..1 of the peak) `t` seconds into a note.
+function envAt(inst, t) {
+  if (t <= 0) return 0;
+  if (t < inst.a) return t / inst.a;
+  return inst.s + (1 - inst.s) * Math.exp(-(t - inst.a) / Math.max(0.002, inst.d / 3));
+}
 
 /**
  * Plays parsed songs on a context. One instance per playTune() call; the
  * owner calls scheduleUntil() regularly (or once, offline). `start(when)`
  * may be in the past (a tune synced to a picture that already started):
- * notes already due play at once, shortened, and older ones are skipped.
+ * events late by no more than `grace` (the output latency of a cue asked
+ * for "now") play at once, whole; later ones skip in (see schedule()).
  */
 export class TunePlayer {
-  constructor(ctx, buses, song, { volume = 0.5, loop = false, probe = false, normalise = true, duckDb } = {}) {
+  constructor(ctx, buses, song, { volume = 0.5, loop = false, probe = false, normalise = true, duckDb, grace = 0.03 } = {}) {
     this.ctx = ctx;
     this.song = song;
     this.loop = loop;
     this.probe = probe;
+    this.grace = Math.max(0.03, Math.min(0.5, Number(grace) || 0.03));
     this.bank = bank(ctx);
     this.events = flatten(song, 1);
     this.spb = 60 / song.bpm;
@@ -344,7 +378,7 @@ export class TunePlayer {
       delay.delayTime.value = Math.min(1.5, song.echo.beats * this.spb);
       const lp = ctx.createBiquadFilter();
       lp.type = 'lowpass';
-      lp.frequency.value = 2400;
+      lp.frequency.value = 4500;
       const fb = ctx.createGain();
       fb.gain.value = song.echo.feedback;
       input.connect(delay).connect(lp).connect(fb).connect(delay);
@@ -396,38 +430,57 @@ export class TunePlayer {
     }
   }
 
-  // On time, or late: a few ms late plays as is; a held note further behind
-  // plays its remainder with a soft 30 ms fade-in; a late drum is dropped.
+  // When an event sounds. On time: as written. Late by no more than `grace`
+  // (a cue asked for "now" reaches the ears one output latency later: it
+  // cannot be aligned, only guaranteed to sound) it plays at once and whole:
+  // full attack, drums kept, a held note cut to end where it would have.
+  // Later than that the tune is skipping in to stay on the picture's clock:
+  // a note still sounding carries on from where its envelope would be, with
+  // a 30 ms fade-in, however late; short notes and drum hits are dropped.
   schedule(ev, when, now) {
     const soon = now + 0.006;
     const late = soon - when;
     if (late <= 0) return this.play(ev, when);
-    if (late < 0.03) return this.play(ev, soon);
-    const isDrum = this.tracks[ev.track].track.kind === 'drums';
-    const rest = ev.dur * this.spb - late;
-    if (isDrum || late > LATE_OK || rest < 0.12) return undefined;
-    return this.play(ev, soon, rest / this.spb, 0.03);
+    const len = ev.dur * this.spb;
+    const drum = this.tracks[ev.track].track.kind === 'drums';
+    const swell = drum && (ev.e.drum === 'a' || ev.e.drum === 'w');
+    if (late <= this.grace) {
+      if (drum && !swell) return this.play(ev, soon);
+      return this.play(ev, soon, Math.max(len - late, Math.min(len, 0.1)) / this.spb);
+    }
+    const rest = len - late;
+    if (rest < 0.12 || (drum && !swell)) return undefined;
+    return this.play(ev, soon, rest / this.spb, 0.03, late);
   }
 
   stop(when = this.ctx.currentTime, fade = this.song.fadeOut) {
     if (this.stopped) return;
     this.stopped = true;
-    // A fading tail is no longer ducked: the open's last chord rings over the
-    // first words of the studio shot as it fades.
-    if (this.duckTarget) this.buses.ducker?.remove(this.duckTarget);
+    // The fading tail stays under the duck, a little gentler (DUCK.tailDb):
+    // the open's last chord rings over the cut but never sits level with the
+    // presenter's first words.
+    const ducker = this.buses.ducker;
+    const target = this.duckTarget;
+    if (target && ducker) ducker.soften(target, Math.max(target.on, dbToGain(DUCK.tailDb)), when);
+    // An exponential fade (it sounds even, where a linear one hangs and then
+    // drops), forced to zero at the end so nothing is cut while audible.
     const g = this.out.gain;
     try {
+      const v = g.value;
       g.cancelScheduledValues(when);
-      g.setValueAtTime(g.value, when);
-      g.linearRampToValueAtTime(0, when + fade);
+      g.setValueAtTime(v, when);
+      g.setTargetAtTime(0, when, fade / 4);
+      g.setValueAtTime(v * Math.exp(-4), when + fade);
+      g.linearRampToValueAtTime(0, when + fade + 0.03);
     } catch { /* ignore */ }
     for (const src of this.live) {
       try {
-        src.stop(when + fade + 0.02);
+        src.stop(when + fade + 0.05);
       } catch { /* not started yet or already stopped */ }
     }
     const nodes = this.nodes;
     setTimeout(() => {
+      if (target) ducker?.remove(target);
       for (const n of nodes) {
         try {
           n.disconnect();
@@ -447,20 +500,25 @@ export class TunePlayer {
     };
   }
 
-  play(ev, when, beats = ev.dur, fadeIn = 0) {
+  // `offset`: seconds of the note already gone (skipping in).
+  play(ev, when, beats = ev.dur, fadeIn = 0, offset = 0) {
     const { track, dest } = this.tracks[ev.track];
     const dur = beats * this.spb;
     if (track.kind === 'drums') this.drum(ev.e.drum, KIND_GAIN.drums * track.gain * ev.e.vel, when, dur, dest);
-    else this.note(track, ev.e, when, dur, dest, fadeIn);
+    else this.note(track, ev.e, when, dur, dest, fadeIn, offset);
   }
 
-  note(track, e, when, dur, dest, fadeIn = 0) {
+  note(track, e, when, dur, dest, fadeIn = 0, offset = 0) {
     const ctx = this.ctx;
     const inst = track.inst;
     const gate = Math.max(0.03, dur * inst.legato);
+    // Skipping in, the envelope carries on from where the note would be by
+    // now (a timpani that has died away is not struck again).
+    const from = offset > 0 ? envAt(inst, offset) : 1;
+    if (from < 0.08) return;
     const voices = track.arp > 0 && e.midis.length > 1 ? [e.midis] : e.midis.map((m) => [m]);
     const peak = (KIND_GAIN[track.kind] * track.gain * inst.gain * e.vel) / Math.sqrt(voices.length);
-    const attack = Math.max(inst.a, fadeIn);
+    const attack = offset > 0 ? Math.max(0.005, fadeIn) : Math.max(inst.a, fadeIn);
     for (const notes of voices) {
       const g = ctx.createGain();
       let src;
@@ -476,19 +534,20 @@ export class TunePlayer {
           let k = 0;
           for (let t = when; t < when + gate + inst.r; t += track.arp) src.frequency.setValueAtTime(hz(notes[k++ % notes.length]), t);
         } else src.frequency.setValueAtTime(hz(notes[0]), when);
-        if (inst.scoop) {
+        if (inst.scoop && offset < 0.07) {
           src.detune.setValueAtTime(-inst.scoop, when);
           src.detune.linearRampToValueAtTime(0, when + 0.07);
         }
         const vib = inst.vib;
-        if (vib && gate > vib[2] + 0.1) {
+        const vibAt = vib ? Math.max(0, vib[2] - offset) : 0;
+        if (vib && gate > vibAt + 0.1) {
           const lfo = ctx.createOscillator();
           const depth = ctx.createGain();
           lfo.frequency.value = vib[1];
           depth.gain.value = 0;
           depth.gain.setValueAtTime(0, when);
-          depth.gain.setValueAtTime(0, when + vib[2]);
-          depth.gain.linearRampToValueAtTime(vib[0], when + vib[2] + 0.25);
+          depth.gain.setValueAtTime(0, when + vibAt);
+          depth.gain.linearRampToValueAtTime(vib[0], when + vibAt + 0.25);
           lfo.connect(depth).connect(src.detune);
           lfo.start(when);
           lfo.stop(when + gate + inst.r + 0.02);
@@ -506,7 +565,7 @@ export class TunePlayer {
           const f = ctx.createBiquadFilter();
           f.type = 'lowpass';
           f.Q.value = inst.q ?? 0;
-          if (inst.fenv) {
+          if (inst.fenv && offset < inst.fenv[1]) {
             f.frequency.setValueAtTime(Math.min(18000, cut * inst.fenv[0]), when);
             f.frequency.setTargetAtTime(cut, when + attack, inst.fenv[1] / 3);
           } else f.frequency.value = cut;
@@ -520,14 +579,16 @@ export class TunePlayer {
       p.value = 0;
       p.setValueAtTime(0, when);
       let level;
+      const top = peak * from;
       if (gate <= attack) {
-        level = peak * (gate / attack);
+        level = top * (gate / attack);
         p.linearRampToValueAtTime(level, when + gate);
       } else {
-        p.linearRampToValueAtTime(peak, when + attack);
+        p.linearRampToValueAtTime(top, when + attack);
         const tau = Math.max(0.002, inst.d / 3);
-        p.setTargetAtTime(peak * inst.s, when + attack, tau);
-        level = peak * (inst.s + (1 - inst.s) * Math.exp(-(gate - attack) / tau));
+        const sus = peak * inst.s;
+        p.setTargetAtTime(sus, when + attack, tau);
+        level = sus + (top - sus) * Math.exp(-(gate - attack) / tau);
         p.setValueAtTime(level, when + gate);
       }
       p.linearRampToValueAtTime(0, when + gate + inst.r);
@@ -775,7 +836,8 @@ function songLoudness(song) {
  * opts: seconds, sampleRate (48000), volume (0.5), loop, duck: [[from, to], ...]
  * (speech intervals in seconds, with the live hold and time constants),
  * duckDb, startAt (s; may be negative = synced to a picture that started
- * earlier), probe (envelopes only, no dynamics), raw (no dynamics),
+ * earlier), grace (s of lateness played whole, as the live engine's output
+ * latency), probe (envelopes only, no dynamics), raw (no dynamics),
  * normalise, stopAt.
  * Resolves to { buffer, song, loudness } or null without OfflineAudioContext.
  */
@@ -789,7 +851,7 @@ export async function renderTune(tune, opts = {}) {
   const ctx = new Offline(2, Math.ceil(seconds * sampleRate), sampleRate);
   const ducker = opts.probe ? null : new Ducker();
   const buses = buildBuses(ctx, { volume: 1, raw: Boolean(opts.probe || opts.raw), ducker });
-  const player = new TunePlayer(ctx, buses, song, { volume: opts.volume ?? 0.5, loop, probe: opts.probe, normalise: opts.normalise !== false, duckDb: opts.duckDb });
+  const player = new TunePlayer(ctx, buses, song, { volume: opts.volume ?? 0.5, loop, probe: opts.probe, normalise: opts.normalise !== false, duckDb: opts.duckDb, grace: opts.grace });
   player.start(opts.startAt ?? 0.05);
   player.scheduleUntil(seconds);
   if (ducker && opts.duck) ducker.apply(opts.duck);

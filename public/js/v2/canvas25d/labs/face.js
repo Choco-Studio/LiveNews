@@ -32,7 +32,7 @@ import { deriveLook } from '../cast/base.js';
 import { planSegment } from '../direction/index.js';
 import { hashSeed } from '../direction/context.js';
 import { buildTimeline, sampleTimeline, wordAtChar } from '../../../audio/visemes.js';
-import { splitSentences } from '../../../audio.js';
+import { splitSentences } from '../../../audio/sentences.js';
 
 const W = 384, H = 216;
 const clipRows = new Int16Array(W);
@@ -484,7 +484,7 @@ function zoomHeads() {
   }
 }
 
-const HUD_COL = { partner: P.yellow, notes: P.green, wall: P.cyan, camera: P.white };
+const HUD_COL = { partner: P.yellow, notes: P.green, wall: P.cyan, camera: P.white, interest: P.pink };
 
 function drawHud(ctx, t, st) {
   const cv = conv.data;

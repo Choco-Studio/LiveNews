@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Deterministic video recorder WITH SOUND. Freezes the page clock (Date,
 // timers, performance.now, requestAnimationFrame) with Playwright's fake
-// clock, then advances it exactly 1/fps per frame and grabs the #screen
-// canvas. The video is perfectly smooth however loaded the machine is (live
+// clock, then advances it 1/fps per frame (in whole milliseconds, never
+// drifting: the clock rounds fractions up) and grabs the #screen canvas. The video is perfectly smooth however loaded the machine is (live
 // screen recording drops frames). Frames are upscaled with nearest neighbour
 // so pixels stay crisp and encoded to H.264; the sound is muxed as AAC.
 //
@@ -728,6 +728,9 @@ say(`${total} frames @ ${opts.fps} fps${withAudio ? ' + sound' : ''} -> ${opts.o
 if (report) {
   const l = report.loudness;
   say(`  sound: ${l ? `${l.lufs} LUFS integrated, true peak ${l.truePeak} dBTP, ` : ''}${report.speech.recorded} recorded-voice sentences, ${report.speech.browser} browser/silent`);
+  const clips = report.speech.clips;
+  const mute = clips.filter((c) => !c.audible);
+  if (clips.length) say(`  voice clips: ${clips.length} started, ${clips.length - mute.length} audible${mute.length ? ` — SILENT at ${mute.map((c) => `${c.at.toFixed(2)}s`).join(', ')}` : ''}`);
   for (const s of report.sync.slice(0, 8)) say(`  sync ${s.kind.padEnd(8)} @${s.at.toFixed(2)}s  audio ${fmt(s.audioMs)}  picture ${fmt(s.pictureMs)}  ${s.label}`);
 }
 
@@ -799,13 +802,26 @@ function buildReport() {
   }
   sync.sort((a, b) => a.at - b.at);
   const sentences = events.filter((e) => e.type === 'sentence');
+  // Every recorded voice clip that started inside the recording, and whether it
+  // is actually HEARD in the mix (mean level over its length): a clip handed to
+  // the engine is not proof that it sounded.
+  const clips = events
+    .filter((e) => e.type === 'clip' && e.va < opts.seconds && e.va + e.duration > 0)
+    .map((e) => {
+      const a = Math.max(0, Math.round(e.va * 100));
+      const b = Math.min(rms.length, Math.round((e.va + e.duration) * 100));
+      let sum = 0;
+      for (let f = a; f < b; f++) sum += 10 ** (rms[f] / 10);
+      const db = b > a ? Math.round(10 * Math.log10(sum / (b - a) + 1e-12) * 10) / 10 : null;
+      return { at: Math.round(e.va * 1000) / 1000, duration: e.duration, db, audible: db !== null && db > -40 };
+    });
   return {
     out: opts.out,
     seconds: opts.seconds,
     fps: opts.fps,
     loudness: loud,
     audio: audioInfo,
-    speech: { recorded: sentences.filter((e) => e.recorded).length, browser: sentences.filter((e) => !e.recorded).length },
+    speech: { recorded: sentences.filter((e) => e.recorded).length, browser: sentences.filter((e) => !e.recorded).length, clips },
     events: events.map(({ t, ...e }) => e),
     sync,
   };

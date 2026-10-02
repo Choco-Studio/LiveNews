@@ -2,9 +2,9 @@
 // blazer over a soft white scoop top, a thin gold necklace and studs, a sleek
 // auburn bob with a deep side part ("the girl in blue").
 import { P } from '../../../palette.js';
-import { toneN, decal } from '../pixbuf.js';
+import { toneN } from '../pixbuf.js';
 import { headHW } from '../head.js';
-import { LocalXY, localBox, clumpTone, strokeTone, selOutEdge, hairLight, rimMat, HeadWidthLUT } from './kit-a.js';
+import { LocalXY, localBox, clumpTone, strokeTone, selOutEdge, hairLight, rimMat, HeadWidthLUT, dec } from './kit-a.js';
 import { clamp } from '../space.js';
 import { GROUPS } from '../character.js';
 import { defineLook } from './base.js';
@@ -14,7 +14,7 @@ export const lola = defineLook({
   name: 'Lola Byte',
   head: { top: -10.0, craniumY: -2.6, R: 7.3, cheekY: 1.8, cheekHW: 6.95, chinY: 9.0, chinHW: 2.4, jawPow: 2.05 },
   headAt: [0, -13.0],
-  neck: { hw: 2.55 },
+  neck: { hw: 2.4 },
   // deep green eyes (the lime P.green read glassy and uncanny at close-ups)
   eyes: { y: -0.6, x: 2.85, w: 2.75, h: 1.45, iris: [P.darkGreen, P.black], lash: P.black, lashes: true },
   brows: { y: -2.15, len: 3.15, thick: 0.45, color: P.brown, arch: 0.55 },
@@ -54,7 +54,9 @@ function drawBobAndStuds(buf, L, m, head, s, sk) {
 // silhouette and two tones, mediums a narrow sheen band, close-ups the clumps.
 const LXY = new LocalXY();
 const HWL = new HeadWidthLUT();
-const CO = { cw: 1.55, s: 1, seed: 11, sep: true, hiLo: 3.6, hiHi: 9.2, hiW: 0.42, gap: 4.2, keepLit: true };
+// the sheen window is a ring near the dome's rim (a halo of short strokes), never reaching the crown: strokes
+// converging on the crown read as a starburst
+const CO = { cw: 1.55, s: 1, seed: 11, sep: true, hiLo: 5.4, hiHi: 8.9, hiW: 0.42, gap: 4.2, keepLit: true };
 export function drawBob(buf, L, m, head, s, lag) {
   const H = L.head;
   const cyc = H.craniumY - 0.3;
@@ -76,11 +78,15 @@ export function drawBob(buf, L, m, head, s, lag) {
     // the ends of the bob swing a moment after the head (follow-through)
     const swing = y > 0 ? lag * Math.min(1, y / bottom) ** 2 : 0;
     const x = x0l - swing;
-    if (y > bottom + 0.5) return -1;
+    // close-ups: the blunt ends still break into strand tips (never a ruled edge)
+    if (y > bottom + 0.5 - (tier === 2 ? 0.26 * Math.abs((((x * 1.45) % 2) + 2) % 2 - 1) : 0)) return -1;
     const fuller = x > 0 ? 0.3 : 0; // the big side of the parting
     let inMass;
     if (y < cyc) {
-      const r = RV + fuller * Math.max(0, 1 - (cyc - y) / RV);
+      // the dome is not a circle: the hair lies flatter along the parting and lifts on the big side
+      const up = Math.max(0, (cyc - y) / RV);
+      const dpx = x - part;
+      const r = RV + fuller * Math.max(0, 1 - up) - 0.42 * up * Math.exp(-(dpx * dpx) / 7);
       inMass = x * x + (y - cyc) * (y - cyc) <= r * r;
     } else {
       const k = (y - cyc) / (bottom - cyc);
@@ -135,7 +141,8 @@ export function drawBob(buf, L, m, head, s, lag) {
     // beside the face and under the ends: in shade (maroon), the deep tone only on the far side's
     // outer half, so the far side never reads as a black curtain
     if (nearFace) return Math.max(t, 2);
-    if (underside) return Math.max(t, x > 0 && Math.abs(x) > hw + 1.2 ? 3 : 2);
+    // (the tips along the ends are decal: resolve's side rim would light the serration's steps on the left)
+    if (underside) return (m.hairD << 4) | Math.max(t, x > 0 && Math.abs(x) > hw + 1.2 ? 3 : 2);
     const d2 = x * x + (y - cyc) * (y - cyc);
     if (d2 > (RV - 0.5) * (RV - 0.5) && y < cyc && t >= 2) return t; // clean outer edge for the rim
     // the sheen is a band at a fixed "latitude" of the dome (distance from the dome's centre), not round the crown
@@ -166,8 +173,8 @@ export function drawBobBack(buf, L, m, head) {
 
 export function drawEarrings(buf, L, head, s, lag) {
   const H = L.head;
-  const gold = decal(L.earrings), dark = decal(P.orange), glint = decal(P.white);
-  for (const side of [-1, 1]) {
+  const gold = dec(L.earrings), dark = dec(P.orange), glint = dec(P.white);
+  for (let side = -1; side <= 1; side += 2) {
     const hw = headHW(H, H.chinY - 2.6, 0);
     const [ex, ey] = head.toScreen(side * (hw + 0.1) + lag * 0.6, H.chinY - 1.1);
     // a small gold stud: 1 px in wide shots, 2x2 with a shaded corner in close-ups

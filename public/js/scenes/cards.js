@@ -226,7 +226,7 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
   const sw = src ? textW(src) + 10 : 0;
   // the first frame comes straight out of the open's lock-up on the theme's last hit: its chip and
   // bar start at once (the cut never lands on an empty field), the words 0.1 s after the bar
-  const t0 = index === 0 ? 0 : 0.12;
+  const t0 = index === 0 ? -0.02 : 0.12; // the first frame after the cut already shows the wipe's leading edge
   const cp = easeOutQuint(seg(dt, t0, 0.32));
   if (cp > 0) {
     ctx.save();
@@ -244,7 +244,7 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
     }
   }
   // accent rule grows down beside the headline
-  const bar = Math.round((blockH + 4) * easeOutQuint(seg(dt, index === 0 ? 0 : 0.18, 0.4)));
+  const bar = Math.round((blockH + 4) * easeOutQuint(seg(dt, index === 0 ? -0.02 : 0.18, 0.4)));
   if (bar > 0) {
     ctx.fillStyle = acc;
     ctx.fillRect(13, top - 2, 2, bar);

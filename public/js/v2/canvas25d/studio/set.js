@@ -283,6 +283,7 @@ if (typeof document !== 'undefined' && typeof setTimeout === 'function') {
 }
 
 const COL = new Int32Array(W);
+const RUN = new Int32Array(W + 1); // per column: where its run of identical texels ends
 const THR = new Uint8Array(4);
 
 /**
@@ -299,6 +300,13 @@ function renderWall(fr, cam, baked, sx0, sy0, sx1, sy1, yEnd, xl = 0, xr = W) {
   for (let x = 0; x < W; x++) {
     let tx = Math.floor(cam.x + (x + 0.5 - 192) * inv - TX0);
     COL[x] = tx < 0 ? 0 : tx >= TW ? TW - 1 : tx;
+  }
+  // magnified (singles: one texel covers 2-3 px), walk the row texel by texel: a flat texel is one
+  // read for its whole run of pixels
+  const runs = k > 1.3;
+  if (runs) {
+    RUN[W] = W;
+    for (let x = W - 1; x >= 0; x--) RUN[x] = x + 1 < W && COL[x + 1] === COL[x] ? RUN[x + 1] : x + 1;
   }
   const { tex, lo, hi, tlo, thi } = baked;
   const px = fr.px;
@@ -319,7 +327,26 @@ function renderWall(fr, cam, baked, sx0, sy0, sx1, sy1, yEnd, xl = 0, xr = W) {
     const xb = skip ? Math.max(xl, Math.min(xr, sx1)) : xr;
     for (let pass = 0; pass < 2; pass++) {
       const x0 = pass ? xb : xl, x1 = pass ? xr : xa;
-      let i = y * W + x0;
+      const row = y * W;
+      if (runs) {
+        let x = x0;
+        while (x < x1) {
+          const v = tex[rb + COL[x]];
+          const xe = RUN[x] < x1 ? RUN[x] : x1;
+          if ((v & 0xf0f) === 0) {
+            const c = lo[v >> 4];
+            for (; x < xe; x++) px[row + x] = c;
+            continue;
+          }
+          const p = (v >> 4) & 15, sh = v & 15, tq = v >> 8;
+          for (; x < xe; x++) {
+            const T = THR[x & 3];
+            px[row + x] = tq > T ? (sh > T ? thi[p] : tlo[p]) : sh > T ? hi[p] : lo[p];
+          }
+        }
+        continue;
+      }
+      let i = row + x0;
       for (let x = x0; x < x1; x++, i++) {
         const v = tex[rb + COL[x]];
         // a flat ramp step (no Bayer share, no tint): the lower colour whatever the threshold

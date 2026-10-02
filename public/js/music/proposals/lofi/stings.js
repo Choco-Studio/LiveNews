@@ -89,7 +89,7 @@ export const STINGS = {
 
   /** In each headline gap: one soft timpani hit, then the pip (bell low 5 -> 1). */
   pip(eng, t, { line = 0, lines = 3 } = {}) {
-    const dest = bus(eng, 0.5, { echo: 0.25, time: 0.33 });
+    const dest = bus(eng, 0.42, { echo: 0.25, time: 0.33 });
     const name = eng.headlineVoice?.name || 'D';
     eng.rig.timpani(t, BRASS[name].root + 12, 0.42, dest);
     const spb = 60 / 92;
@@ -185,7 +185,7 @@ export const STINGS = {
   countdown(eng, t, { programme = 'world-now', sombre = false } = {}) {
     const prog = PROGRAMMES[programme] || PROGRAMMES['world-now'];
     const root = NAMES[prog.tonic % 12];
-    const dest = bus(eng, 0.5);
+    const dest = bus(eng, 0.35); // >= 18 LU under the continuity voice
     const cut = t + 10.5;
     chord(eng, dest, t, 10, `${root}m9`, { inst: 'pad', lo: 50, vel: 0.85, roll: 0, p: { attack: 1.5, lpTo: 900, release: 0.25 } });
     chord(eng, dest, t + 10, 0.5, `${root}add9`, { inst: 'pad', lo: 50, vel: 0.95, roll: 0, p: { attack: 0.05, lpTo: 1300, release: 0.03 } });
@@ -213,8 +213,8 @@ export const STINGS = {
     const prog = PROGRAMMES[programme] || PROGRAMMES['tech-bytes'];
     const day = hour >= 7 && hour < 19;
     const spb = 60 / (day ? 100 : 88);
-    const dest = bus(eng, 0.5);
-    const lead = bus(eng, 0.5, { echo: 0.45, time: spb * 0.75 });
+    const dest = bus(eng, 0.35); // >= 18 LU under the continuity voice
+    const lead = bus(eng, 0.35, { echo: 0.45, time: spb * 0.75 });
     const I = { 'tech-bytes': 'Am9', cosmos: 'Emaj9', 'money-minute': 'Fmaj9' }[programme] || 'Dmaj9';
     const align = t + spb * 12;
     const holdEnd = align + 5.2;
@@ -235,8 +235,8 @@ export const STINGS = {
   shortIdent(eng, t) {
     const prog = PROGRAMMES.channel;
     const spb = 60 / 96;
-    const dest = bus(eng, 1.1);
-    const lead = bus(eng, 1.1, { echo: 0.45, time: spb * 0.75 });
+    const dest = bus(eng, 1.35); // no voice: about -16 LUFS like the bumper cards
+    const lead = bus(eng, 1.35, { echo: 0.45, time: spb * 0.75 });
     const align = t + 2.6;
     chord(eng, dest, t, 5.3, 'Dmaj9', { inst: 'pad', lo: 50, vel: 0.85, roll: 0, p: { attack: 1.2, lpTo: 1200, release: 0.8 } });
     eng.rig.bass(t, 38, 5.3, 0.6, dest, { wave: 'triangle', lp: 420, release: 0.8 });
@@ -246,7 +246,7 @@ export const STINGS = {
 
   /** Sombre short ident (grave mode): locked off, a pad only, no signature. */
   sombreIdent(eng, t) {
-    const dest = bus(eng, 1.3);
+    const dest = bus(eng, 1.6);
     chord(eng, dest, t, 5.2, 'Bm9', { inst: 'pad', lo: 47, vel: 0.85, roll: 0, p: { attack: 1.4, lpTo: 800, release: 1 } });
     eng.rig.bass(t, 35, 5.2, 0.5, dest, { wave: 'sine', lp: 300, release: 1 });
     return t + 6.5;

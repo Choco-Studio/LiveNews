@@ -44,32 +44,35 @@ const num = (v, fallback, lo, hi) => (v == null || v === '' || !Number.isFinite(
 // cutoff: low-pass corner in Hz (never below 3x the note's pitch), q: its
 // resonance in dB (WebAudio's lowpass Q), fenv: [amount, s] the filter opens
 // to cutoff x amount at the attack and settles back (brass bite, pluck).
-// Every preset is filtered: raw NES pulses read as an 8-bit game, a pulse
-// with its top octaves rolled off reads as a warm analogue synth.
+// Every preset is filtered with a broadcast tilt: the top octaves of a raw NES
+// pulse read as an 8-bit game, so each voice is rolled off above its own
+// register (leads ~5.5-6 kHz, pads ~2.8 kHz, bass ~1.5 kHz), attacks open the
+// filter further (brass to ~4.6 kHz, bells to ~9.5 kHz), and the tunes bus adds
+// one gentle -3 dB shelf at 8 kHz (synth.js) instead of steep per-note cuts.
 export const INSTRUMENTS = {
-  pulse50: { wave: 'pulse50', a: 0.006, d: 0.12, s: 0.7, r: 0.06, vib: [12, 5.4, 0.25], gain: 0.62, cutoff: 3400 },
-  pulse25: { wave: 'pulse25', a: 0.006, d: 0.14, s: 0.68, r: 0.07, vib: [11, 5.4, 0.25], gain: 0.78, cutoff: 3400 },
-  pulse12: { wave: 'pulse12', a: 0.005, d: 0.12, s: 0.6, r: 0.07, vib: [10, 5.6, 0.22], gain: 0.95, cutoff: 3000 },
-  brass: { wave: 'pulse25', a: 0.03, d: 0.22, s: 0.78, r: 0.12, vib: [12, 5.2, 0.3], scoop: 35, gain: 0.78, cutoff: 1500, q: 1, fenv: [1.9, 0.22] },
-  bell: { wave: 'pulse12', a: 0.003, d: 0.5, s: 0, r: 0.16, legato: 1, gain: 0.95, cutoff: 3600, fenv: [1.5, 0.25] },
-  pluck: { wave: 'pulse25', a: 0.003, d: 0.18, s: 0.2, r: 0.07, gain: 0.8, cutoff: 1800, fenv: [2.2, 0.1] },
-  keys: { wave: 'pulse50', a: 0.004, d: 0.35, s: 0.25, r: 0.12, gain: 0.7, cutoff: 1700, fenv: [1.8, 0.15] },
-  pad: { wave: 'pulse50', a: 0.14, d: 0.5, s: 0.82, r: 0.4, vib: [7, 4.6, 0.2], legato: 1, gain: 0.55, cutoff: 1300 },
+  pulse50: { wave: 'pulse50', a: 0.006, d: 0.12, s: 0.7, r: 0.06, vib: [12, 5.4, 0.25], gain: 0.62, cutoff: 6000 },
+  pulse25: { wave: 'pulse25', a: 0.006, d: 0.14, s: 0.68, r: 0.07, vib: [11, 5.4, 0.25], gain: 0.78, cutoff: 6000 },
+  pulse12: { wave: 'pulse12', a: 0.005, d: 0.12, s: 0.6, r: 0.07, vib: [10, 5.6, 0.22], gain: 0.95, cutoff: 5500 },
+  brass: { wave: 'pulse25', a: 0.03, d: 0.22, s: 0.78, r: 0.12, vib: [12, 5.2, 0.3], scoop: 35, gain: 0.78, cutoff: 2000, q: 1, fenv: [2.3, 0.25] },
+  bell: { wave: 'pulse12', a: 0.003, d: 0.5, s: 0, r: 0.16, legato: 1, gain: 0.95, cutoff: 5000, fenv: [1.9, 0.12] },
+  pluck: { wave: 'pulse25', a: 0.003, d: 0.18, s: 0.2, r: 0.07, gain: 0.8, cutoff: 2600, fenv: [2.3, 0.1] },
+  keys: { wave: 'pulse50', a: 0.004, d: 0.35, s: 0.25, r: 0.12, gain: 0.7, cutoff: 2600, fenv: [2, 0.15] },
+  pad: { wave: 'pulse50', a: 0.14, d: 0.5, s: 0.82, r: 0.4, vib: [7, 4.6, 0.2], legato: 1, gain: 0.55, cutoff: 2800 },
   tri: { wave: 'tri', a: 0.004, d: 0.08, s: 0.92, r: 0.05, gain: 1, cutoff: 5000 },
   triangle: { wave: 'tri', a: 0.004, d: 0.08, s: 0.92, r: 0.05, gain: 1, cutoff: 5000 },
-  softtri: { wave: 'triangle', a: 0.014, d: 0.2, s: 0.85, r: 0.14, vib: [9, 5, 0.22], gain: 1, cutoff: 3600 },
-  timpani: { wave: 'tri', a: 0.003, d: 0.55, s: 0, r: 0.1, legato: 1, gain: 1.1, cutoff: 1400 },
-  saw: { wave: 'saw', a: 0.006, d: 0.12, s: 0.7, r: 0.06, vib: [11, 5.4, 0.25], gain: 0.62, cutoff: 2800 },
-  sawtooth: { wave: 'saw', a: 0.006, d: 0.12, s: 0.7, r: 0.06, vib: [11, 5.4, 0.25], gain: 0.62, cutoff: 2800 },
+  softtri: { wave: 'triangle', a: 0.014, d: 0.2, s: 0.85, r: 0.14, vib: [9, 5, 0.22], gain: 1, cutoff: 6000 },
+  timpani: { wave: 'tri', a: 0.003, d: 0.55, s: 0, r: 0.1, legato: 1, gain: 1.1, cutoff: 2000 },
+  saw: { wave: 'saw', a: 0.006, d: 0.12, s: 0.7, r: 0.06, vib: [11, 5.4, 0.25], gain: 0.62, cutoff: 5000 },
+  sawtooth: { wave: 'saw', a: 0.006, d: 0.12, s: 0.7, r: 0.06, vib: [11, 5.4, 0.25], gain: 0.62, cutoff: 5000 },
   sine: { wave: 'sine', a: 0.008, d: 0.18, s: 0.82, r: 0.09, vib: [8, 5.2, 0.22], gain: 1 },
-  square: { wave: 'pulse50', a: 0.006, d: 0.12, s: 0.7, r: 0.06, vib: [12, 5.4, 0.25], gain: 0.62, cutoff: 3400 },
+  square: { wave: 'pulse50', a: 0.006, d: 0.12, s: 0.7, r: 0.06, vib: [12, 5.4, 0.25], gain: 0.62, cutoff: 6000 },
 };
 // Bass versions: no vibrato, firmer sustain, shorter release, darker.
 const BASS = {
-  pulse50: { wave: 'pulse50', a: 0.004, d: 0.1, s: 0.8, r: 0.05, gain: 0.55, cutoff: 900 },
-  pulse25: { wave: 'pulse25', a: 0.004, d: 0.1, s: 0.8, r: 0.05, gain: 0.68, cutoff: 1000 },
-  tri: { wave: 'tri', a: 0.004, d: 0.1, s: 0.9, r: 0.05, gain: 1, cutoff: 1000 },
-  saw: { wave: 'saw', a: 0.004, d: 0.1, s: 0.78, r: 0.05, gain: 0.55, cutoff: 900 },
+  pulse50: { wave: 'pulse50', a: 0.004, d: 0.1, s: 0.8, r: 0.05, gain: 0.55, cutoff: 1300 },
+  pulse25: { wave: 'pulse25', a: 0.004, d: 0.1, s: 0.8, r: 0.05, gain: 0.68, cutoff: 1400 },
+  tri: { wave: 'tri', a: 0.004, d: 0.1, s: 0.9, r: 0.05, gain: 1, cutoff: 1500 },
+  saw: { wave: 'saw', a: 0.004, d: 0.1, s: 0.78, r: 0.05, gain: 0.55, cutoff: 1300 },
   sine: { wave: 'sine', a: 0.005, d: 0.12, s: 0.9, r: 0.06, gain: 1 },
 };
 const CLASSIC_WAVE = { square: 'pulse50', triangle: 'tri', sawtooth: 'saw', sine: 'sine' };

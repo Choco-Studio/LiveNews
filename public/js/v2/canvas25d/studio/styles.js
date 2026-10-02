@@ -96,8 +96,9 @@ const DEFS = {
     accentName: 'magenta',
     deskLineName: 'magenta',
     wallIdle: 'planet',
-    base: 0.55,
-    pools: duoPools(0.75, 96, 74),
+    // a flat black wall (no dithered "dark grey"), ink pools behind the seats with a Bayer edge
+    base: 0.1,
+    pools: duoPools(1.08, 96, 74),
     // a purple wash from above over each seat (palette swap, flat in its core, Bayer only at its edge)
     tintPools: [
       { X: -112, Y: -116, rx: 56, ry: 54, amount: 0.95 },
@@ -150,12 +151,10 @@ const DEFS = {
     deskLineName: 'yellow',
     wallIdle: 'dial',
     solo: true,
-    base: 0.5,
-    pools: [
-      { X: 0, Y: -20, rx: 170, ry: 64, amount: 1.2 },
-      { X: -128, Y: -70, rx: 52, ry: 70, amount: 0.55 },
-      { X: 128, Y: -70, rx: 52, ry: 70, amount: 0.55 },
-    ],
+    // a flat black wall and one pool from above around the seat: ink falling off through a Bayer
+    // band to black, slate at its heart behind the head (the presenter alone in the light)
+    base: 0.1,
+    pools: [{ X: 0, Y: -56, rx: 168, ry: 104, amount: 1.5 }],
     poolMax: 2.0, // never brighter than slate around the head
     tintPools: [],
     tints: null, // the cream tint (≤ 4 %) is left out: orange or cream next to yellow reads as candy

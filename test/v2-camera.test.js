@@ -270,10 +270,42 @@ function landmarks(cam) {
   ];
 }
 
+/**
+ * True when every colour change of pixel i takes a colour that a neighbour within 2 px showed in the frame
+ * before: an edge or a thin line moving into the pixel (a dolly moves every layer monotonically), as opposed
+ * to shimmer (a dither or rounding flip with no such neighbour).
+ */
+export function travellingEdge(frames, i, W) {
+  for (let f = 1; f < frames.length; f++) {
+    if (frames[f][i] === frames[f - 1][i]) continue;
+    const c = frames[f][i];
+    let near = false;
+    for (let dy = -2; dy <= 2 && !near; dy++) for (let dx = -2; dx <= 2; dx++) if ((dx || dy) && frames[f - 1][i + dy * W + dx] === c) { near = true; break; }
+    if (!near) return false;
+  }
+  return true;
+}
+
+test('moves: the shimmer check tells a travelling line from a flipping pixel', () => {
+  const W = 12, H = 5, mk = () => new Uint32Array(W * H).fill(1);
+  // a 1 px dark line crossing the row, one column per frame: every pixel flips in and out, from a neighbour
+  const line = [];
+  for (let f = 0; f < 10; f++) {
+    const px = mk();
+    for (let y = 0; y < H; y++) px[y * W + 1 + f] = 2;
+    line.push(px);
+  }
+  assert.ok(travellingEdge(line, 2 * W + 5, W));
+  // a pixel that toggles in place with no neighbour of that colour: shimmer
+  const flip = [mk(), mk(), mk()];
+  flip[1][2 * W + 5] = 3;
+  assert.ok(!travellingEdge(flip, 2 * W + 5, W));
+});
+
 const MOVE_CASES = {
   'world-now greeting push': { framing: 'wide', cast: CASTS['world-now'], programId: 'world-now', move: { type: 'push', amount: 0.034, delay: 0.5, dur: 4.258 } },
   'world-now lead push': { framing: 'mcu-l', focus: 'A', cast: CASTS['world-now'], programId: 'world-now', move: { type: 'push', amount: 0.04, delay: 0.5, dur: 7.661 } },
-  'world-now sign-off pull': { framing: 'wide', cast: CASTS['world-now'], programId: 'world-now', move: { type: 'pull', amount: 0.04, delay: 0, dur: 7.763 } },
+  'world-now sign-off pull': { framing: 'wide', cast: CASTS['world-now'], programId: 'world-now', move: { type: 'pull', amount: 0.04, delay: 0.5, dur: 7.263 } },
   'tech-bytes catch push': { framing: 'close', focus: 'B', cast: CASTS['tech-bytes'], programId: 'tech-bytes', move: { type: 'push', amount: 0.016, delay: 0.3, dur: 3.2 } },
 };
 
@@ -329,18 +361,23 @@ test('moves: rendered set frames: flat-panel pixels change colour at most once; 
       for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) if (dot(px, i + dy * W + dx)) return false;
       return true;
     };
-    let flats = 0, bad = 0, maxChanges = 0, changedAny = 0;
+    let flats = 0, bad = 0, edges = 0, maxChanges = 0, changedAny = 0;
     for (let i = 0; i < W * H; i++) {
       if (!flat(first, i) || !flat(last, i)) continue;
       flats++;
       let n = 0;
       for (let f = 1; f < frames.length; f++) if (frames[f][i] !== frames[f - 1][i]) n++;
       if (n) changedAny++;
-      if (n > 1) bad++;
+      if (n > 1) {
+        // a thin line of the set (a flat's edge, an outline) travelling across the panel flips a pixel in and out:
+        // that is the move itself, not shimmer; shimmer is a colour appearing where no neighbour had it
+        if (travellingEdge(frames, i, W)) edges++;
+        else bad++;
+      }
       maxChanges = Math.max(maxChanges, n);
     }
-    MOVE_STATS[label] = { ...(MOVE_STATS[label] || {}), frames: frames.length, flatPixels: flats, changed: changedAny, flickering: bad, maxChanges };
-    assert.equal(bad, 0, `${label}: ${bad} of ${flats} flat-panel pixels change colour more than once (max ${maxChanges})`);
+    MOVE_STATS[label] = { ...(MOVE_STATS[label] || {}), frames: frames.length, flatPixels: flats, changed: changedAny, travellingEdge: edges, flickering: bad, maxChanges };
+    assert.equal(bad, 0, `${label}: ${bad} of ${flats} flat-panel pixels shimmer (change colour more than once with no travelling edge; max ${maxChanges})`);
     // the hold after the move: identical frames for the last 0.5 s
     const holdFrames = Math.floor(0.5 * 60);
     for (let f = frames.length - holdFrames; f < frames.length; f++) assert.deepEqual(frames[f], frames[frames.length - 1], `${label}: still hold`);

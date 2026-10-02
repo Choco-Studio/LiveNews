@@ -8,7 +8,7 @@
 import { parseCues, embedCues, describeActions, ACTIONS } from '../public/js/cues.js';
 import { isBreaking, plainTitle } from './news.js';
 import { claimGrounded, contentWords, groundQuote, isGrave, numbersGrounded, numbersIn, numberWordsIn, quotationsGrounded } from './facts.js';
-import { lookupPlace, placeSupported, snapLocation } from './gazetteer.js';
+import { findPlaces, lookupPlace, placeSupported, snapLocation } from './gazetteer.js';
 
 export const EMOTIONS = ['neutral', 'happy', 'serious', 'surprised', 'sad', 'thinking'];
 export const SHOTS = ['wide', 'close', 'full', 'map'];
@@ -312,45 +312,126 @@ export const danglingHeadline = (h) => {
   return STOP_END.test(t) || (/\b(?:by|of|to|up|down|at|in|from) \d[\d,.]*$/.test(t) && !/\b(?:19|20)\d\d$/.test(t));
 };
 
+// A trailing phrase that can go once a complete clause remains: "... in the Andes", "... for the first time",
+// "... before the autumn tides", "... next August". Not "of" or "to" (they complete a noun or a verb).
+const TRAIL_PREP = /^(?:in|on|at|for|by|before|after|during|across|near|from|over|under|into|through|since|until|with|without|amid|despite|around|along|off|outside|inside|beyond|toward|towards|ahead)$/i;
+const TIME_START = /^(?:next|this|last|every)$/i;
+// Nouns that are empty without what follows them: "a sharp fall [in deforestation]", "a new wing [for boats]".
+const NEEDS_COMPLEMENT = /\b(?:fall|rise|drop|increase|decrease|decline|cut|cuts|growth|surge|jump|slump|fleet|wing|parts?|signs?|number|share|rest|half|lack|loss|end|start|return|plans?|series|range|role|wave|chain|agreement|deal|bid|warning|ban|limit|call|push|move|shift|switch|access|support)$/i;
+// A head ending on an intransitive verb whose phrase was the point ("AI model runs [on a laptop]").
+const BARE_VERB_END = /\b(?:runs|works|lives|sits|stands|lands|goes|comes|moves|depends|relies|focuses|close|closes|closed|end|ends|ended|trades|ranks|finishes|settles|expand|expands|spreads|grows|stays|remains|turns|looks)$/i;
+
+// Headline style drops articles; `hard` also drops them after a preposition ("on parts of Great Barrier Reef"),
+// except in fixed phrases ("in a month", "a week of use").
+const compactOf = (text, hard = false) => {
+  const words = text.split(' ');
+  return words
+    .filter((w, i) => {
+      if (!/^(?:a|an|the)$/i.test(w)) return true;
+      if (i === 0) return false;
+      if (KEEP_ARTICLE_BEFORE.test(words[i + 1] || '')) return true;
+      return !hard && PREPOSITIONS.includes(words[i - 1].toLowerCase());
+    })
+    .join(' ')
+    .replace(/^\p{Ll}/u, (c) => c.toUpperCase());
+};
+
+/** Clean shorter forms of a headline: clause cuts and dropped trailing phrases, with the share of content words each keeps. */
+// Words that carry a headline's meaning (prepositions and adverbs do not count toward what a cut keeps).
+const ADVERB_END = /\b(?:even|only|just|still|also|almost|nearly|already|yet|ever|too|very|so)$/i;
+const headWords = (text) => contentWords(text).filter((w) => !PREPOSITIONS.includes(w) && !ADVERB_END.test(w));
+
+function headlineCuts(t) {
+  const all = headWords(t).length || 1;
+  const out = new Map();
+  const places = findPlaces(t).map((p) => p.text);
+  const consider = (head, cutWord = '') => {
+    head = head.trim().replace(/[\s,;:–—-]+$/, '');
+    if (!head || head === t || out.has(head)) return;
+    const kept = headWords(head).length;
+    if (kept < 3 || head.split(' ').length < 3 || danglingHeadline(head) || ADVERB_END.test(head)) return;
+    if (cutWord && (NEEDS_COMPLEMENT.test(head) || BARE_VERB_END.test(head))) return;
+    // Dropping a trailing phrase must leave a full clause: three words only if they are most of the headline.
+    if (cutWord && kept < 4 && kept / all < 0.6) return;
+    if (/^by$/i.test(cutWord) && /(?:ed|en)$/i.test(head)) return; // "... record high led [by chipmakers]"
+    out.set(head, { share: kept / all, place: !places.length || places.some((p) => head.includes(p)) });
+  };
+  const heads = [];
+  for (const m of t.matchAll(CLAUSE_CUTS)) {
+    // "as" starts a clause ("as demand cools"), not a comparison or a role ("use the sun as a compass")
+    if (/^\s*as\s/i.test(m[0]) && /^(?:a|an|the|its|their|his|her|one|part|well|much|many|long|soon|usual)\b/i.test(t.slice(m.index + m[0].length))) continue;
+    heads.push(t.slice(0, m.index));
+  }
+  for (const head of [t, ...heads]) {
+    if (head !== t) consider(head);
+    const words = head.split(' ');
+    for (let i = words.length - 1; i >= 2 && words.length - i <= 7; i--) {
+      if (TRAIL_PREP.test(words[i]) || (TIME_START.test(words[i]) && words.length - i <= 3)) consider(words.slice(0, i).join(' '), words[i]);
+    }
+  }
+  return [...out.entries()].map(([text, v]) => ({ text, ...v }));
+}
+
+function shortenOnce(t, max, spoken) {
+  if (t.length <= max) return t;
+  const cuts = headlineCuts(t);
+  const fits = (list) => list.filter((c) => c.text.length <= max).sort((a, b) => b.text.length - a.text.length)[0]?.text;
+  const compacted = (list) => list.flatMap((c) => [{ ...c, text: compactOf(c.text) }, { ...c, text: compactOf(c.text, true) }]);
+  const compact = compactOf(t);
+  const hard = compactOf(t, true);
+  // Best first: a natural cut that keeps nearly everything; the whole headline without its articles; a cut
+  // that keeps most of it and its place; the same without articles; then a cut that loses the place.
+  // Spoken headlines never lose their articles.
+  const tiers = [
+    () => fits(cuts.filter((c) => c.share >= 0.75 && c.place)),
+    () => (!spoken && compact.length <= max ? compact : null),
+    () => (!spoken && hard.length <= max ? hard : null),
+    () => fits(cuts.filter((c) => c.share >= 0.5 && c.place)),
+    () => (spoken ? null : fits(compacted(cuts.filter((c) => c.share >= 0.5 && c.place)))),
+    () => fits(cuts.filter((c) => c.share >= 0.7)),
+    () => (spoken ? null : fits(compacted(cuts.filter((c) => c.share >= 0.7)))),
+    // Nothing fits: a clean form a few characters over, keeping most of the story and its place (the graphics
+    // fit it), and only one that a second pass would leave as it is.
+    () => {
+      const near = [...cuts.filter((c) => c.share >= 0.6 && c.place), ...(spoken ? [] : compacted(cuts.filter((c) => c.share >= 0.6 && c.place)))]
+        .map((c) => c.text)
+        .concat(spoken ? [] : [compact, hard])
+        .filter((x) => x !== t && x.length <= max + 4)
+        .sort((a, b) => a.length - b.length);
+      return near.find((x) => shortenOnce(x, max, spoken) === x);
+    },
+    // Over the hard limit: the shortest clean, stable form under it, rather than a strap of 60 characters.
+    () => {
+      if (t.length <= LIMITS.headline) return null;
+      const forms = [...cuts.filter((c) => c.share >= 0.6 && c.place), ...(spoken ? [] : compacted(cuts.filter((c) => c.share >= 0.6 && c.place)))]
+        .map((c) => c.text)
+        .concat(spoken ? [] : [compact, hard])
+        .filter((x) => x !== t && x.length <= LIMITS.headline)
+        .sort((a, b) => a.length - b.length);
+      return forms.find((x) => shortenOnce(x, max, spoken) === x);
+    },
+  ];
+  for (const tier of tiers) {
+    const out = tier();
+    if (out) return out;
+  }
+  // ...else the headline as written: never a telegraphic half-headline.
+  return t;
+}
+
 /**
  * One phrase-aware shortener for on-screen headlines (validator and offline
  * writer alike): strips the outlet's BREAKING / live markers, then, only if
- * the headline is too long, drops articles ("a", "an", "the" — not in fixed
- * phrases such as "in a month") and cuts at a clause boundary (a comma, a dash,
- * "as", "after", "amid"...). It never cuts after a preposition or between a
- * figure and its unit: when no clean cut exists the full headline is kept and
- * the graphics wrap or page it.
+ * the headline is too long, finds a clean shorter form: a cut at a clause
+ * boundary (a comma, a dash, "as", "after", "amid"...) or without a trailing
+ * phrase ("in the Andes", "for the first time"), keeping the clause whole and
+ * most of its content words; articles go only when that is what makes it fit
+ * (never in `spoken` form). It never cuts after a preposition or between a
+ * figure and its unit. The result is stable: shortening it again changes nothing.
  */
-export function shortHeadline(title, max = HEADLINE_MAX) {
+export function shortHeadline(title, max = HEADLINE_MAX, { spoken = false } = {}) {
   const t = clean(plainTitle(title), 200).replace(/[\s.!?;:,]+$/, '');
-  if (t.length <= max) return t;
-  const compactOf = (text) => {
-    const words = text.split(' ');
-    return words
-      .filter((w, i) => {
-        if (!/^(?:a|an|the)$/i.test(w)) return true;
-        if (i === 0) return false;
-        return PREPOSITIONS.includes(words[i - 1].toLowerCase()) || KEEP_ARTICLE_BEFORE.test(words[i + 1] || '');
-      })
-      .join(' ')
-      .replace(/^\p{Ll}/u, (c) => c.toUpperCase());
-  };
-  const compact = compactOf(t);
-  if (compact.length <= max) return compact;
-  // Cut points are found in the full headline: "as" starts a clause ("as demand cools"), not a
-  // comparison ("use the sun as a compass"); and what is kept must still carry the story.
-  const all = contentWords(t).length;
-  const cuts = [];
-  for (const m of t.matchAll(CLAUSE_CUTS)) {
-    if (/^\s*as\s/i.test(m[0]) && /^(?:a|an|the|its|their|his|her|one|part|well|much|many|long|soon|usual)\b/i.test(t.slice(m.index + m[0].length))) continue;
-    const head = compactOf(t.slice(0, m.index).trim());
-    const kept = contentWords(head).length;
-    if (kept >= 3 && kept / all >= 0.4 && !danglingHeadline(head)) cuts.push(head);
-  }
-  const fit = cuts.filter((c) => c.length <= max).pop();
-  if (fit) return fit;
-  // No clean cut that fits: the shortest clean cut under the hard limit, else the whole (compacted) headline.
-  return cuts.filter((c) => c.length <= LIMITS.headline).sort((a, b) => a.length - b.length)[0] || compact;
+  return shortenOnce(t, max || HEADLINE_MAX, spoken);
 }
 
 const pick = (v, list, fallback) => (list.includes(v) ? v : fallback);

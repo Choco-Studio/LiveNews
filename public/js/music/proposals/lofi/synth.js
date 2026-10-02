@@ -135,8 +135,8 @@ export class Rig {
     this.pink = pinkBuffer(ctx, 5, seed + 1);
     this.crackle = crackleBuffer(ctx, 7, seed + 2);
 
-    // Music sum -> speech pocket (dynamic EQ dip where speech lives) -> gentle
-    // top shelf -> glue compressor -> output.
+    // Music sum -> speech pocket (dynamic EQ dip where speech lives) -> low shelf
+    // -> gentle top shelf -> glue compressor -> output.
     this.sum = ctx.createGain();
     this.pocket = ctx.createBiquadFilter();
     this.pocket.type = 'peaking';
@@ -147,6 +147,12 @@ export class Rig {
     this.shelf.type = 'highshelf';
     this.shelf.frequency.value = 5500;
     this.shelf.gain.value = -2;
+    // Low shelf: the triangle / sine basses carried most of the energy below 120 Hz (8-17 dB over the
+    // parts); -4 dB there lets laptops and phones hear the ostinatos and chords, and eases the glue.
+    this.lowShelf = ctx.createBiquadFilter();
+    this.lowShelf.type = 'lowshelf';
+    this.lowShelf.frequency.value = 110;
+    this.lowShelf.gain.value = -4;
     this.glue = ctx.createDynamicsCompressor();
     this.glue.threshold.value = -22;
     this.glue.knee.value = 12;
@@ -155,7 +161,7 @@ export class Rig {
     this.glue.release.value = 0.3;
     this.out = ctx.createGain();
     this.out.gain.value = 1;
-    this.sum.connect(this.pocket).connect(this.shelf).connect(this.glue).connect(this.out);
+    this.sum.connect(this.pocket).connect(this.lowShelf).connect(this.shelf).connect(this.glue).connect(this.out);
 
     this.reverb = ctx.createConvolver();
     this.reverb.buffer = roomIR(ctx, 2.6, 0.27, seed + 3);
@@ -370,8 +376,8 @@ export class Rig {
     const peak = 0.1 * vel;
     const ring = p.decay ?? 0.55;
     amp.gain.setValueAtTime(0, t);
-    amp.gain.linearRampToValueAtTime(peak, t + 0.005);
-    amp.gain.setTargetAtTime(0, t + 0.005, ring);
+    amp.gain.linearRampToValueAtTime(peak, t + 0.008); // 8 ms: a soft mallet, no tick at the onset
+    amp.gain.setTargetAtTime(0, t + 0.008, ring);
     const pan = this.ctx.createStereoPanner();
     pan.pan.value = p.pan ?? 0;
     car.connect(amp).connect(pan).connect(dest);
@@ -641,8 +647,8 @@ export class Rig {
     const nodes = [];
     const amp = this.gain(0);
     amp.gain.setValueAtTime(0, t);
-    amp.gain.linearRampToValueAtTime(0.3 * vel, t + 0.01);
-    amp.gain.setTargetAtTime(0, t + 0.01, 0.55);
+    amp.gain.linearRampToValueAtTime(0.3 * vel, t + 0.014); // a felt mallet: firm, but no click
+    amp.gain.setTargetAtTime(0, t + 0.014, 0.55);
     for (const [ratio, g] of [[1, 1], [1.5, 0.35], [1.98, 0.18]]) {
       const o = this.osc('sine', f * ratio * 1.04, t, false);
       o.frequency.setTargetAtTime(f * ratio, t, 0.04);
