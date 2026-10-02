@@ -6,13 +6,14 @@
 // shapes the resting face around it.
 //
 // Presets are deliberately small (owner: adult, never cartoon expressions):
-// happy is a closed-mouth smile with a touch of squint, surprised a raised
+// happy is a closed-mouth smile whose cheeks lift the lower lids (face.js), only
+// a touch of squint (a squint that closes the upper lid reads sleepy), surprised a raised
 // brow and slightly wider eyes, serious a gathered brow and heavier lids.
 import { clamp, smooth } from './space.js';
 
 export const EMOTIONS = {
   neutral: { brow: 0, browIn: 0, smile: 0, squint: 0, lid: 0, wide: 0 },
-  happy: { brow: 0.15, browIn: 0, smile: 0.55, squint: 0.3, lid: 0, wide: 0 },
+  happy: { brow: 0.15, browIn: 0, smile: 0.55, squint: 0.12, lid: 0, wide: 0 },
   serious: { brow: -0.08, browIn: 0.42, smile: -0.1, squint: 0, lid: 0.18, wide: 0 },
   surprised: { brow: 0.62, browIn: -0.1, smile: 0, squint: 0, lid: 0, wide: 0.45 },
   sad: { brow: 0.05, browIn: -0.5, smile: -0.28, squint: 0, lid: 0.26, wide: 0 },

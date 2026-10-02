@@ -103,6 +103,8 @@ export function drawFace(buf, L, head, f, s) {
   const mt = matsFor(L);
   const sk = L._mats.skinD;
   const E = L.eyes;
+  // a mustache hides the smile, so the eyes alone carry it: half the squint there
+  SQ.v = clamp(f.squint || 0, 0, 1) * (L.mustache ? 0.5 : 1);
   const open = eyeOpen(f);
   for (let side = -1; side <= 1; side += 2) {
     mapF(side * E.x, E.y);
@@ -116,9 +118,11 @@ export function drawFace(buf, L, head, f, s) {
   drawMouth(buf, L, mt, sk, head, f, s, tier);
 }
 
+const SQ = { v: 0 }; // this face's effective squint (drawFace)
+
 function eyeOpen(f) {
   const blink = clamp(f.blink || 0, 0, 1);
-  const base = 1 - (f.lid || 0) * 0.42 - (f.squint || 0) * 0.3 + (f.wide || 0) * 0.16;
+  const base = 1 - (f.lid || 0) * 0.42 - SQ.v * 0.18 + (f.wide || 0) * 0.16;
   return clamp(base * (1 - blink), 0, 1.12);
 }
 
@@ -201,7 +205,7 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
   // the iris sits a little low: the upper lid rests over its top (relaxed, never a stare)
   const icy = cy + Hh * 0.05 + ly * Hh * 0.16;
   const blink = 1 - clamp(open, 0, 1);
-  const squint = clamp(f.squint || 0, 0, 1);
+  const squint = SQ.v;
   // a warm smile lifts the lower lid's middle (the cheek pushes up): the eye smiles
   // without the upper lid coming down, which at this size reads as sleepy or smug
   const cheek = clamp(((f.smile || 0) - 0.25) / 0.4, 0, 1);

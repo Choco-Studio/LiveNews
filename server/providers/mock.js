@@ -296,6 +296,8 @@ function study(story) {
     breaking: isBreaking(story.title),
     live: !!story.live,
     grave,
+    // hard news that is not grave: money, strikes, courts, rates, closures (it leads before a curiosity)
+    hard: !grave && SOBER.test(text),
     sad: grave && DEATHS.test(text),
     light,
     curious: light && (LIGHTER.test(title) || CURIOUS.test(title)),
@@ -330,7 +332,7 @@ function runningOrder(infos, n, program) {
     const i = pool.findIndex(pred);
     return i < 0 ? null : pool.splice(i, 1)[0];
   };
-  const lead = take((i) => i.breaking) || take((i) => !i.live) || take(() => true);
+  const lead = take((i) => i.breaking) || takeLead(pool) || take(() => true);
   if (!lead) return { order: [], roundup: [], lighter: null, number: null };
   let slots = n - 1;
   let lighter = null;
@@ -402,6 +404,29 @@ function runningOrder(infos, n, program) {
   return { order, roundup, lighter, number };
 }
 
+/**
+ * News value of a story at desk rank `k` (lower is bigger news): the desk's order, where hard news (people
+ * harmed or at risk, money, strikes, courts, rates) moves a story up and a curiosity moves it down, a second
+ * outlet and a picture breaking ties. A record year for punctual trains never leads over a heat alert.
+ */
+const newsValue = (i, k) => k - (i.grave ? 1.6 : 0) - (i.hard ? 1 : 0) + (i.curious ? 1.6 : i.light ? 1 : 0) - ((i.s.outlets || 1) > 1 ? 0.8 : 0) - (i.s.image ? 0.3 : 0);
+
+/** The lead: the biggest news among the first five stories of the desk (never a live page when there is news). */
+function takeLead(pool) {
+  let best = -1;
+  let bestValue = Infinity;
+  for (let k = 0, seen = 0; k < pool.length && seen < 5; k++) {
+    if (pool[k].live) continue;
+    seen++;
+    const v = newsValue(pool[k], k);
+    if (v < bestValue) {
+      bestValue = v;
+      best = k;
+    }
+  }
+  return best < 0 ? null : pool.splice(best, 1)[0];
+}
+
 // Categories that are another programme's own beat: a light story from them is the last resort for "and finally".
 const BEAT_OF_OTHERS = /^(?:science)$/;
 
@@ -415,7 +440,7 @@ function bestMain(pool) {
   let bestScore = Infinity;
   for (let k = 0; k < Math.min(3, pool.length); k++) {
     const i = pool[k];
-    const score = k - (i.s.image ? 1.2 : 0) - ((i.s.outlets || 1) > 1 ? 1 : 0) - (i.grave ? 1.3 : 0) + (i.live ? 9 : 0);
+    const score = k - (i.s.image ? 1.2 : 0) - ((i.s.outlets || 1) > 1 ? 1 : 0) - (i.grave ? 1.3 : 0) - (i.hard ? 0.5 : 0) + (i.curious ? 0.5 : 0) + (i.live ? 9 : 0);
     if (score < bestScore) {
       bestScore = score;
       best = k;
