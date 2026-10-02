@@ -53,6 +53,10 @@ export class Bed {
     this.scale = SCALES[def.mode] || SCALES.major;
     this.prev = {}; // voice-leading memory per layer
     this.lastActive = new Map();
+    this.gates = []; // gain nodes of layers that play only while nobody speaks
+    this.frameIdx = -1; // montage frame driving the frame layers (WORLD NOW headlines)
+    this.lastFrameAt = -Infinity;
+    this.held = []; // release handles of frame-driven voices
     this.faderLevel = { t: origin, dur: 0, from: 1, to: 1 };
 
     const c = this.ctx;
@@ -89,7 +93,9 @@ export class Bed {
       const pump = c.createGain();
       const pan = c.createStereoPanner();
       pan.pan.value = L.pan || 0;
-      g.connect(pump).connect(pan).connect(this.pre);
+      if (L.gate) g.connect(pump).connect(this.gateNode()).connect(pan);
+      else g.connect(pump).connect(pan);
+      pan.connect(this.pre);
       if (L.rev) {
         const r = c.createGain();
         r.gain.value = L.rev;
@@ -109,7 +115,7 @@ export class Bed {
   }
 
   /** Named extra bus (stings, accents): level in dB, optional pan and sends. */
-  bus(name, level = -10, { pan = 0, rev = 0, dly = 0 } = {}) {
+  bus(name, level = -10, { pan = 0, rev = 0, dly = 0, gate = false } = {}) {
     let b = this.buses.get(name);
     if (b) return b;
     const c = this.ctx;
@@ -117,7 +123,10 @@ export class Bed {
     b.gain.value = this.cond.solo && this.cond.solo !== name ? 0 : db(level);
     const p = c.createStereoPanner();
     p.pan.value = pan;
-    b.connect(p).connect(this.pre);
+    const gated = gate || this.gated; // a gated one-shot gates every bus it makes
+    b.connect(gated ? this.gateNode() : p);
+    if (gated) this.gates[this.gates.length - 1].connect(p);
+    p.connect(this.pre);
     this.nodes.push(b, p);
     if (rev) {
       const r = c.createGain();
@@ -133,6 +142,56 @@ export class Bed {
     }
     this.buses.set(name, b);
     return b;
+  }
+
+  // A gate closes while anyone speaks (same look-ahead as the duck) and opens
+  // again after the hold: bells, pips and motif peeks live only in the gaps.
+  gateNode() {
+    const g = this.ctx.createGain();
+    g.gain.value = this.cond.talking ? 0 : 1;
+    this.gates.push(g);
+    this.nodes.push(g);
+    return g;
+  }
+
+  setGate(on, t) {
+    for (const g of this.gates) {
+      g.gain.cancelScheduledValues(t);
+      g.gain.setTargetAtTime(on ? 0 : 1, t, on ? 0.03 : 0.25);
+    }
+  }
+
+  // Frame-driven harmony: each montage frame moves the held chord on (WORLD NOW
+  // headlines: Bm -> G -> D across the three lines). The previous chord
+  // releases as the new one swells in.
+  frame(k, t) {
+    const d = this.def;
+    if (!d.frames) return;
+    this.frameIdx = k;
+    this.lastFrameAt = t;
+    const ch = chord(d.frames[k % d.frames.length]);
+    for (const h of this.held) h.release?.(t);
+    this.held = [];
+    for (const lay of this.layers) {
+      const L = lay.L;
+      if (!L.frame || !this.active(L, { i: 99, pos: 0, phrase: 0 })) continue;
+      const handle = {};
+      if (L.type === 'pad') {
+        const notes = voice(L.no7 ? no7(ch) : ch, this.prev.pad, { n: L.n, lo: L.lo, hi: L.hi });
+        this.prev.pad = notes;
+        this.s.pad(lay.in, t, 30, notes, L.vel, { wave: L.wave, a: L.a, r: L.r, cut: L.cut, cutTo: L.cutTo, detune: L.detune, handle });
+      } else if (L.type === 'bass') {
+        const root = bassNote(ch, this.prev.bass, L.lo, L.hi);
+        this.prev.bass = root;
+        this.s.tone(lay.in, t, 30, root, 0.75, { wave: L.wave, a: L.a, d: 0.4, s: L.s, r: L.r, gain: 0.36, handle });
+      }
+      this.held.push(handle);
+    }
+  }
+
+  releaseHeld(t) {
+    for (const h of this.held) h.release?.(t);
+    this.held = [];
   }
 
   get logicalBar() {
@@ -180,7 +239,10 @@ export class Bed {
     };
     b.time = (beat) => this.time(t0, beat, b.r);
     b.motifBusy = this.motifBusy(b);
+    // Without montage frames from the director, the frame chords move every two bars.
+    if (this.def.frames && t0 - this.lastFrameAt >= this.barSec * 2 - 1e-3) this.frame(this.frameIdx + 1, t0);
     for (const lay of this.layers) {
+      if (this.def.frames && lay.L.frame) continue;
       if (!this.active(lay.L, b)) continue;
       if (lay.L.yieldTo === 'motif' && b.motifBusy) continue; // call and response
       const fn = LAYERS[lay.L.type];
@@ -326,6 +388,7 @@ const INST = {
   pulse: (s, out, t, dur, m, v, L = {}) => s.tone(out, t, dur, m, v, { wave: 'pulse25', a: 0.006, d: 0.2, s: 0.5, r: 0.18, cut: L.cut || 1400, gain: 0.45 }),
   glass: (s, out, t, dur, m, v, L = {}) => s.tone(out, t, dur, m, v, { wave: 'glass', a: 0.015, d: 1.2, s: 0.25, r: 1.2, cut: L.cut || 2400, gain: 0.55 }),
   pluck: (s, out, t, dur, m, v, L = {}) => s.pluck(out, t, m, v, { wave: 'warmsq', decay: Math.min(0.9, dur + 0.2), cut: L.cut || 1500, cutEnd: 380 }),
+  keys: (s, out, t, dur, m, v, L = {}) => s.tone(out, t, dur, m, v, { wave: 'epiano', a: 0.006, d: 0.5, s: 0.35, r: 0.4, cut: L.cut || 1600, gain: 0.5 }),
   bell: (s, out, t, dur, m, v) => s.bell(out, t, Math.max(0.8, dur + 0.6), m, v, { ratio: 3.5, index: 1.1 }),
   glock: (s, out, t, dur, m, v) => s.bell(out, t, Math.max(0.6, dur + 0.4), m, v, { ratio: 2, index: 0.9, gain: 0.22 }),
   musicbox: (s, out, t, dur, m, v) => s.bell(out, t, 1.3, m, v, { ratio: 4, index: 0.55, gain: 0.3, cut: 3200 }),
@@ -423,7 +486,7 @@ const LAYERS = {
         idx = (k % 3) + (Math.floor(k / L.rate) % 2 ? Math.min(3, n - 3) : 0);
       } else idx = k % n;
       const m = tones[Math.max(0, Math.min(n - 1, idx))];
-      const vel = (k % L.rate === 0 ? 0.8 : 0.55) * jit(b.r, 0.15);
+      const vel = (k % L.rate === 0 ? 0.8 : 0.55) * (L.vel ?? 1) * jit(b.r, 0.15);
       bed.s.pluck(lay.in, b.time(k / L.rate), m, vel, { wave: L.wave, decay: L.decay, cut: L.cut, cutEnd: L.cutEnd });
     }
   },
@@ -503,8 +566,10 @@ const LAYERS = {
     const { L } = lay;
     const play = INST[L.inst] || INST.glock;
     const cell = SHAPES.cell;
+    let count = 0;
     for (let k = 0; k < 8; k++) {
-      if (!b.r.chance(L.chance)) continue;
+      if (!b.r.chance(L.chance) || count >= (L.max ?? 8)) continue;
+      count++;
       const m = fit(atOrAbove((bed.def.tonic + b.r.pick(cell)) % 12, L.lo) + (b.r.chance(0.3) ? 12 : 0), b.chord);
       play(bed.s, lay.in, b.time(k * 0.5), 0.2, m, 0.35 + b.r() * 0.3, L);
     }

@@ -19,13 +19,27 @@ const SUBS = {
   add9: ['6/9', 'maj9'],
 };
 
+/** Bars in one pass of the form (sections may be 1, 2 or 4 bars long). */
+export function formBars(pal) {
+  return pal.form.reduce((sum, sec) => sum + pal.sections[sec].length, 0);
+}
+
 /** Chord for bar n (with variety from the second pass of the form on). */
 export function chordAt(pal, n, id) {
-  const sec = pal.form[Math.floor(n / 4) % pal.form.length];
-  const sym = pal.sections[sec][mod(n, 4)];
+  const total = formBars(pal);
+  let k = mod(n, total);
+  let sym = null;
+  for (const sec of pal.form) {
+    const chords = pal.sections[sec];
+    if (k < chords.length) {
+      sym = chords[k];
+      break;
+    }
+    k -= chords.length;
+  }
   const chord = parseChord(sym);
-  const pass = Math.floor(n / (4 * pal.form.length));
-  if (pass > 0 && n % 4 !== 0) {
+  const pass = Math.floor(n / total);
+  if (pass > 0 && n % 4 !== 0 && total >= 8) {
     const r = rng(hash(id, 'sub', n));
     const opts = SUBS[chord.quality];
     if (opts && r.chance(0.35)) {
@@ -44,6 +58,7 @@ const COMP = {
   tidy: [[[0, 0.9], [1.5, 0.4], [2, 0.9], [3.5, 0.45]], [[0, 1.9], [2.5, 1.4]], [[0, 0.9], [1, 0.9], [2.5, 1.4]]],
   float: [[[0, 3.9]], [[0, 1.9], [2, 1.9]]],
   stabs: [[[0.5, 0.3], [1.5, 0.3], [2.5, 0.3], [3.5, 0.3]], [[0, 0.3], [0.5, 0.3], [1.5, 0.3], [2.5, 0.3], [3, 0.3], [3.5, 0.3]]],
+  andTwoFour: [[[1.5, 0.4], [3.5, 0.4]]], // Money Minute: short chords on the "and" of 2 and 4
 };
 const PALETTE_COMP = { ep: 'lofi', pluck: 'bouncy', pulse: 'stabs' };
 
@@ -76,6 +91,11 @@ const DRUMS = {
     ghosts: [],
     hats: { step: 0.5, vel: [0, 0.75, 0, 0.7, 0, 0.75, 0, 0.7], open: 0.1 },
   },
+  hats: { // closed hats only (Tech Bytes light beds): no kick, no snare
+    brush: false, kick: [], snare: [], ghosts: [],
+    hats: { step: 0.5, vel: [0.55, 0.35, 0.45, 0.35, 0.55, 0.35, 0.45, 0.4], open: 0 },
+  },
+  none: { brush: false, kick: [], snare: [], ghosts: [], hats: { step: 1, vel: [0], open: 0 } },
   bounce: {
     brush: false,
     kick: [[0, 1], [0.75, 0.5, 0.4], [2, 0.8], [2.5, 0.6, 0.5]],
@@ -106,7 +126,7 @@ function approach(r, cur, nextChord) {
   return r.weighted([[t - 1, 5], [t + 1, 2], [t - 5 < 33 ? t + 7 : t - 5, 2]]);
 }
 
-function bassLine(style, r, chord, next) {
+function bassLine(style, r, chord, next, pal) {
   const root = bassNote(chord.bass);
   const fifth = fifthOf(root);
   const third = root + (chord.tones.includes(3) ? 3 : chord.tones.includes(5) ? 5 : 4);
@@ -138,6 +158,14 @@ function bassLine(style, r, chord, next) {
       }
       return out;
     }
+    case 'half': // half notes, root then fifth
+      return [ev(0, 1.95, root, 0.8), ev(2, 1.95, chord.bass === chord.root ? fifth : root, 0.68)];
+    case 'halftime': // a root that breathes: long on 1, a short push into 3
+      return r.chance(0.5) ? [ev(0, 2.9, root, 0.85), ev(3, 0.9, root, 0.55)] : [ev(0, 3.95, root, 0.85)];
+    case 'staccato': // NEWS IN 60: a short note on every beat
+      return [0, 1, 2, 3].map((b) => ev(b, 0.3, b === 2 && chord.bass === chord.root && r.chance(0.4) ? fifth : root, b % 2 ? 0.6 : 0.78));
+    case 'pedal': // the programme's tonic held under everything
+      return [ev(0, 3.98, bassNote(pal ? pal.tonic % 12 : chord.root), 0.75)];
     case 'tidy':
       return [ev(0, 1.9, root, 0.82), ev(2, 1.4, r.chance(0.5) ? fifth : third, 0.66), ev(3.5, 0.45, approach(r, root, next), 0.6)];
     default: { // 'lofi'
@@ -194,9 +222,35 @@ const LEAD_PLANS = [
   [null, 'v1', null, 'head'],
 ];
 
+// Sparse lead: a few long chord tones a bar (COSMOS bells: at most 4; WORLD NOW soft triangle: 2).
+function sparseLead(pal, chord, r, n) {
+  const max = pal.lead.maxNotes ?? 2;
+  const count = Math.max(1, Math.min(max, 1 + Math.floor(r() * max)));
+  const slots = [0, 1, 1.5, 2, 2.5, 3];
+  const picks = [];
+  while (picks.length < count && slots.length) picks.push(slots.splice(Math.floor(r() * slots.length), 1)[0]);
+  picks.sort((x, y) => x - y);
+  const tones = voiceChord(chord, null, pal.tonic + pal.lead.oct - 5);
+  const out = [];
+  let prev = null;
+  for (let i = 0; i < picks.length; i++) {
+    let midi = r.pick(tones);
+    if (midi === prev && tones.length > 1) midi = tones[(tones.indexOf(midi) + 1) % tones.length];
+    prev = midi;
+    const end = i + 1 < picks.length ? picks[i + 1] : 4;
+    out.push({
+      inst: pal.lead.inst, layer: 'lead', at: picks[i], dur: Math.max(0.5, (end - picks[i]) * 0.95), midi, vel: 0.6 * (0.9 + r() * 0.2),
+      p: pal.lead.inst === 'bell' ? { decay: pal.lead.decay ?? 0.7, pan: r.range(-0.4, 0.4) } : { pan: r.range(-0.2, 0.2) },
+    });
+  }
+  // Breathe: every fourth bar has no melody at all.
+  return n % 4 === 3 ? [] : out;
+}
+
 function leadFor(pal, id, arr, n, chord, r) {
   const inst = pal.lead.inst;
   const mode = arr.lead;
+  if (mode === 'sparse') return sparseLead(pal, chord, r, n);
   if (mode === 'signature') {
     if (n === 0) return motifNotes(pal, chord, 'statement', 0, r, inst, 0.9);
     if (n === 2) return motifNotes(pal, chord, 'echo', 0, r, inst, 0.6);
@@ -263,7 +317,7 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
       const roll = pal.keys.roll ?? 0.022;
       const accent = at % 1 === 0 ? 1 : 0.85;
       v.forEach((midi, i) => out.push({
-        inst, layer: 'keys', at, dur, midi, vel: 0.75 * accent * human(), strum: i * roll * r.range(0.6, 1.2),
+        inst, layer: 'keys', at, dur, midi, vel: (pal.keys.vel ?? 0.75) * accent * human(), strum: i * roll * r.range(0.6, 1.2),
         p: { index: (pal.keys.index ?? 0.8) * bright, tine: Math.max(0, bright - 1), attack: pal.keys.attack, wave: pal.keys.wave, bright: (pal.keys.bright ?? 2000) * bright, decay: pal.keys.decay, pan: (i - 1.5) * 0.12 },
       }));
     }
@@ -271,7 +325,7 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
 
   if (isOn(arr, prev, 'bass')) {
     const style = arr.bass && !(pal.bass.style === 'pulse8' && arr.bass === 'walk') ? arr.bass : pal.bass.style;
-    for (const e of bassLine(style, r, chord, next)) out.push({ ...e, vel: e.vel * human(), p: { wave: pal.bass.wave, lp: pal.bass.lp } });
+    for (const e of bassLine(style, r, chord, next, pal)) out.push({ ...e, vel: e.vel * human(), p: { wave: pal.bass.wave, lp: pal.bass.lp, release: style === 'staccato' ? 0.04 : undefined } });
   }
 
   // Drums, with a fill every 8 bars and a breather bar every 16.
@@ -300,7 +354,12 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
       }
     }
     if (isOn(arr, prev, 'perc')) {
-      if (pal.perc === 'tick') {
+      if (pal.perc === 'clock') {
+        // tock on 1 and 3, tick on 2 and 4: a clock rather than a race
+        for (let b = 0; b < 4; b++) out.push({ inst: 'clock', layer: 'perc', at: b, vel: (b % 2 ? 0.6 : 0.8) * human(), tok: b % 2 === 0 });
+      } else if (pal.perc === 'none') {
+        // nothing
+      } else if (pal.perc === 'tick') {
         for (let i = 0; i < 8; i++) out.push({ inst: 'tick', layer: 'perc', at: i * 0.5, vel: (i % 2 ? 0.55 : 0.8) * human(), tok: i % 2 === 1 });
       } else if (pal.perc === 'rim') {
         for (const at of [0.75, 2.75]) if (r.chance(0.8)) out.push({ inst: 'rim', layer: 'perc', at, vel: 0.6 * human() });
@@ -328,8 +387,8 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
       const midi = seq[i % seq.length] + (a.oct - 12);
       const accent = (i * a.rate) % 1 === 0 ? 1 : 0.7;
       out.push({
-        inst: a.inst, layer: 'arp', at: i * a.rate, dur: a.rate * 0.9, midi, vel: 0.8 * accent * human(),
-        p: { wave: a.wave, decay: a.inst === 'bell' ? 0.35 : 0.12, bright: 1600 * bright, pan: ((i % 4) - 1.5) * 0.25 },
+        inst: a.inst, layer: 'arp', at: i * a.rate, dur: a.rate * 0.9, midi, vel: (a.vel ?? 0.8) * accent * human(),
+        p: { wave: a.wave, decay: a.decay ?? (a.inst === 'bell' ? 0.35 : 0.12), bright: (a.bright ?? 1600) * bright, pan: ((i % 4) - 1.5) * 0.25 },
       });
     }
   }

@@ -1,0 +1,263 @@
+{
+ "kind": "episode",
+ "id": "emur81bpd6",
+ "createdAt": "2026-10-02T17:12:45.697Z",
+ "program": {
+  "id": "news-60",
+  "title": "NEWS IN 60",
+  "tagline": "THE HEADLINES IN A MINUTE",
+  "theme": "flash"
+ },
+ "cast": {
+  "A": "sam"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "write",
+   "ms": 55,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "fit",
+   "ms": 0,
+   "estimate": 56,
+   "dropped": 0
+  },
+  {
+   "stage": "assets",
+   "ms": 0,
+   "images": 0
+  }
+ ],
+ "title": "NEWS IN 60 (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "This is NEWS IN 60. I'm Sam Night.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "From Pixelburg Post: Ten schools in Wellington, New Zealand, will trial a four-day week for one term. Education officials say they want to measure the effect on attendance and wellbeing.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "lean_in"
+    }
+   ],
+   "storyId": "sebb4587a88",
+   "headline": "Wellington schools trial four-day week",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "WELLINGTON, NEW ZEALAND",
+    "lat": -41.29,
+    "lon": 174.78
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "EDUCATION"
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Twenty delivery robots have started carrying parcels through two districts of Barcelona, Circuit Weekly reports. The trial will run for six months.",
+   "cues": [],
+   "storyId": "s77ad18849a",
+   "headline": "Barcelona trials fleet of delivery robots",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "BARCELONA, SPAIN",
+    "lat": 41.39,
+    "lon": 2.17
+   },
+   "fact": null,
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "ROBOTICS"
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "serious",
+   "text": "Around the world. A magnitude 5.8 earthquake shook northern Chile on Tuesday morning, Pixelburg Post reports.",
+   "cues": [],
+   "storyId": "s1f89c80c5b",
+   "headline": "Moderate earthquake shakes northern Chile",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "CHILE",
+    "lat": -35.7,
+    "lon": -71.5
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 0,
+    "count": 3
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Canada and Mexico have signed an agreement to fund clean water projects in rural communities.",
+   "cues": [],
+   "storyId": "s0c01830e41",
+   "headline": "Canada and Mexico sign agreement on clean water projects",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "CANADA",
+    "lat": 56.1,
+    "lon": -106.3
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 1,
+    "count": 3
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "A total solar eclipse will be visible across northern Spain next August, Starfield Journal reports.",
+   "cues": [],
+   "storyId": "s654d06e121",
+   "headline": "Solar eclipse to be visible across northern Spain next August",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "VALENCIA, SPAIN",
+    "lat": 39.47,
+    "lon": -0.38
+   },
+   "fact": null,
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 2,
+    "count": 3
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "From Starfield Journal: A new study shows honeybees can find the position of the sun through clouds using polarised light. The finding explains how they navigate in poor weather.",
+   "cues": [],
+   "storyId": "s3aa751ad7f",
+   "headline": "Bees use sun",
+   "shot": "close",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "WILDLIFE"
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's the minute. Stay with us on GLOBIT 24.",
+   "cues": []
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "sebb4587a88",
+   "headline": "Wellington schools trial four-day week",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "EDUCATION"
+  },
+  {
+   "storyId": "s77ad18849a",
+   "headline": "Barcelona trials fleet of delivery robots",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "ROBOTICS"
+  },
+  {
+   "storyId": "s1f89c80c5b",
+   "headline": "Moderate earthquake shakes northern Chile",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s0c01830e41",
+   "headline": "Canada and Mexico sign agreement on clean water projects",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s654d06e121",
+   "headline": "Solar eclipse to be visible across northern Spain next August",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s3aa751ad7f",
+   "headline": "Bees use sun",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "WILDLIFE"
+  }
+ ],
+ "storyIds": [
+  "sebb4587a88",
+  "s77ad18849a",
+  "s1f89c80c5b",
+  "s0c01830e41",
+  "s654d06e121",
+  "s3aa751ad7f"
+ ]
+}

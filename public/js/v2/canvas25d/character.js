@@ -17,7 +17,11 @@
 // last.
 // Rigid parts snap their origin to whole pixels so they never "boil" while
 // they translate; only parts that rotate or scale are re-sampled.
-import { HIP, TILT } from './space.js';
+// Wave 2 (PRESENTERS A): the neck is shaded (the jaw casts a soft shadow on
+// it, the far side turns away), outfit drawers get the head frame and the
+// inverse body transform (o.head, o.inv) so wardrobe details can be authored
+// in body units, and CHAR_PROFILE times each section for the labs.
+import { HIP, TILT, clamp } from './space.js';
 import { matsOf } from './cast/base.js';
 import { drawOutfit } from './cast/outfit.js';
 import { headFrame, drawHead, drawEars } from './head.js';
@@ -49,6 +53,14 @@ const G = {
 export const GROUPS_PER_ACTOR = 64;
 
 /**
+ * Optional section timings (ms, accumulated while `on`), read by the labs'
+ * profile(): hair = hairBack + hair, look = over hook, face = head + face
+ * (FACES' 1.5 ms), arms = props + arms (HANDS), body = neck + outfit + ears.
+ */
+export const CHAR_PROFILE = { on: false, body: 0, face: 0, hair: 0, look: 0, arms: 0, n: 0 };
+const now = () => performance.now();
+
+/**
  * Draw a solved presenter.
  * @param buf  PartBuffer
  * @param L    look (cast/<id>.js)
@@ -72,6 +84,8 @@ export function drawCharacter(buf, L, sk, xf) {
     return [ox + (rx + bx) * s, oy + (ry + by + z * TILT) * s];
   };
   const clip = !!xf.clip;
+  const P = CHAR_PROFILE.on;
+  let t0 = P ? now() : 0;
 
   // ---- back hair (e.g. a bob) behind the head and neck
   const head = headFrame(L, sk, toS, s);
@@ -80,30 +94,43 @@ export function drawCharacter(buf, L, sk, xf) {
     buf.part(gb + G.hairBack, 2, false);
     parts.hairBack(buf, L, m, head, s, sk);
   }
+  if (P) t0 = lap('hair', t0);
 
   // ---- neck (in the chin's shadow)
   buf.part(gb + G.neck, 4, clip);
   const [n0x, n0y] = toS(0, 1.5);
   const nt = head.toScreen(0, 6);
   buf.capsule(nt[0], nt[1], n0x, n0y, L.neck.hw * s, L.neck.hw * 1.05 * s, m.skin, 1);
+  if (s >= 1.35) shadeNeck(buf, L, head, gb + G.neck, nt, n0x, n0y, s);
 
-  // ---- clothes
-  drawOutfit({ buf, L, m, sk, toS, s, gb, G, clip });
+  // ---- clothes (inv: screen → body space, for wardrobe details authored in body units)
+  INV.ox = ox;
+  INV.oy = oy;
+  INV.cl = cl;
+  INV.sl = sl;
+  INV.bx = bx;
+  INV.by = by;
+  INV.s = s;
+  drawOutfit({ buf, L, m, sk, toS, s, gb, G, clip, head, inv: INV });
 
   // ---- ears, head, face, hair, then whatever sits over the face
   if (!parts.coversEars) {
     buf.part(gb + G.ears, 9, false);
     drawEars(buf, L, m, head, s);
   }
+  if (P) t0 = lap('body', t0);
   buf.part(gb + G.head, 10, false);
   (parts.head || drawHead)(buf, L, m, head, s);
   (parts.face || drawFace)(buf, L, head, sk.face, s);
+  if (P) t0 = lap('face', t0);
   buf.part(gb + G.hair, 12, false);
   parts.hair(buf, L, m, head, s, sk);
+  if (P) t0 = lap('hair', t0);
   if (parts.over) {
     buf.part(gb + G.over, 13, false);
     parts.over(buf, L, m, head, s, sk);
   }
+  if (P) t0 = lap('look', t0);
 
   // ---- desk props (hands.js), then the arms: the one nearer the camera last
   drawProps(buf, L, m, sk, toS, s, gb + G.extra, 16);
@@ -117,7 +144,64 @@ export function drawCharacter(buf, L, sk, xf) {
     drawArm(buf, L, m, arm, side === 'L' ? -1 : 1, toS, s, ga, gc, gh, z);
     z += 4;
   }
+  if (P) {
+    lap('arms', t0);
+    CHAR_PROFILE.n++;
+  }
   return head;
+}
+
+function lap(key, t0) {
+  const t1 = now();
+  CHAR_PROFILE[key] += t1 - t0;
+  return t1;
+}
+
+// Screen → body space for outfit drawers (one shared object; drawers read it
+// synchronously). Body x = ((px - ox)/s - bx), y = ((py - oy)/s - by), then the
+// lean rotation is undone around HIP (z = 0 plane).
+const INV = {
+  ox: 0, oy: 0, cl: 1, sl: 0, bx: 0, by: 0, s: 1, x: 0, y: 0,
+  at(px, py) {
+    const X = (px - this.ox) / this.s - this.bx;
+    const Y = (py - this.oy) / this.s - this.by - HIP;
+    this.x = X * this.cl + Y * this.sl;
+    this.y = -X * this.sl + Y * this.cl + HIP;
+  },
+};
+
+/**
+ * Shade the neck: the jaw casts a soft crescent shadow under the chin (deeper
+ * on the far side of the key light), the far side of the neck turns away.
+ * Repaints only pixels of the neck group, in head-local units.
+ */
+function shadeNeck(buf, L, head, g, nt, n0x, n0y, s) {
+  const H = L.head;
+  const hw = L.neck.hw;
+  const x0 = Math.max(1, Math.floor(Math.min(nt[0], n0x) - hw * s * 1.2)), x1 = Math.min(buf.w - 1, Math.ceil(Math.max(nt[0], n0x) + hw * s * 1.2));
+  const y0 = Math.max(1, Math.floor(nt[1] - hw * s)), y1 = Math.min(buf.h - 1, Math.ceil(n0y + hw * s));
+  const { cx, cy, cr, sr } = head;
+  const k = 1 / s;
+  const jaw = head.jaw || 0;
+  const w = buf.w, grp = buf.grp, mat = buf.mat, tone = buf.tone;
+  const close = s >= 2.2;
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const i = y * w + x;
+      if (!mat[i] || grp[i] !== g) continue;
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+      const lx = (dx * cr + dy * sr) * k, ly = (-dx * sr + dy * cr) * k;
+      const nx = clamp(lx / hw, -1.2, 1.2);
+      // under the jaw: a crescent that follows the jaw line, ~1.4 u deep at the centre, deeper on the right
+      const shadowY = H.chinY + jaw + (close ? 1.1 : 0.8) - 0.22 * lx * lx / hw + Math.max(0, nx) * 0.9;
+      let t = tone[i];
+      if (ly < shadowY) t = Math.max(t, 2);
+      if (nx > 0.55) t = Math.max(t, 2);
+      if (close && nx > 0.82 && ly < shadowY + 1.2) t = 3;
+      if (nx < -0.7 && ly >= shadowY) t = Math.min(t, 1);
+      tone[i] = t;
+    }
+  }
 }
 
 export { G as GROUPS };

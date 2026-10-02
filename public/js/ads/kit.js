@@ -294,26 +294,39 @@ export function ring(ctx, cx, cy, rad, c) {
 }
 
 /** Scanline polygon fill (any simple polygon), pixel-exact spans. */
-const POLY_XS = []; // reused crossing list (no array per call)
+const POLY_XS = new Float64Array(256); // reused crossing list (no array per call or per scanline)
 export function poly(ctx, pts, c) {
   ctx.fillStyle = c;
+  const n = pts.length;
   let y0 = Infinity;
   let y1 = -Infinity;
-  for (const p of pts) {
-    y0 = min(y0, p[1]);
-    y1 = max(y1, p[1]);
+  for (let i = 0; i < n; i++) {
+    const y = pts[i][1];
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
   }
   const xs = POLY_XS;
   for (let y = floor(y0); y <= ceil(y1); y++) {
     const sy = y + 0.5;
-    xs.length = 0;
-    for (let i = 0; i < pts.length; i++) {
-      const [ax, ay] = pts[i];
-      const [bx, by] = pts[(i + 1) % pts.length];
-      if ((ay <= sy && by > sy) || (by <= sy && ay > sy)) xs.push(ax + ((sy - ay) / (by - ay)) * (bx - ax));
+    let m = 0;
+    for (let i = 0; i < n; i++) {
+      const a = pts[i];
+      const b = pts[i + 1 === n ? 0 : i + 1];
+      const ay = a[1];
+      const by = b[1];
+      if ((ay <= sy && by > sy) || (by <= sy && ay > sy)) {
+        const x = a[0] + ((sy - ay) / (by - ay)) * (b[0] - a[0]);
+        // insertion sort into the pooled list (a handful of crossings per row)
+        let k = m++;
+        while (k > 0 && xs[k - 1] > x) {
+          xs[k] = xs[k - 1];
+          k--;
+        }
+        xs[k] = x;
+        if (m === xs.length) break;
+      }
     }
-    xs.sort((a, b) => a - b);
-    for (let k = 0; k + 1 < xs.length; k += 2) {
+    for (let k = 0; k + 1 < m; k += 2) {
       const a = round(xs[k]);
       const b = round(xs[k + 1]);
       if (b > a) ctx.fillRect(a, y, b - a, 1);
@@ -3211,10 +3224,21 @@ export function profileInto(out, h, keys) {
 }
 
 /** Light shaft from (x0, y0) to (x1, y1), w0 -> w1 wide, soft edges (layered). */
+const BEAM_Q = [[0, 0], [0, 0], [0, 0], [0, 0]]; // pooled quad: no literal per layer
 export function beam(ctx, x0, y0, x1, y1, w0, w1, { color = P.cream, alpha = 0.06, layers = 3 } = {}) {
+  const q = BEAM_Q;
+  const c = A(color, alpha);
   for (let i = 0; i < layers; i++) {
     const k = 1 - i / layers;
-    poly(ctx, [[x0 - (w0 * k) / 2, y0], [x0 + (w0 * k) / 2, y0], [x1 + (w1 * k) / 2, y1], [x1 - (w1 * k) / 2, y1]], A(color, alpha));
+    q[0][0] = x0 - (w0 * k) / 2;
+    q[0][1] = y0;
+    q[1][0] = x0 + (w0 * k) / 2;
+    q[1][1] = y0;
+    q[2][0] = x1 + (w1 * k) / 2;
+    q[2][1] = y1;
+    q[3][0] = x1 - (w1 * k) / 2;
+    q[3][1] = y1;
+    poly(ctx, q, c);
   }
 }
 

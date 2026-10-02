@@ -177,8 +177,9 @@ export class Baker {
   noise(kind, variant = 0) {
     const spec = {
       shaker: { len: 0.05, a: 0.004, filters: [['highpass', 7500, 0.6]] },
-      tick: { len: 0.016, a: 0.001, filters: [['bandpass', 9200, 4]] },
-      tock: { len: 0.016, a: 0.001, filters: [['bandpass', 6800, 4]] },
+      // NEWS IN 60's clock: soft, woody, low-passed under 2 kHz (never a click).
+      tick: { len: 0.03, a: 0.002, filters: [['bandpass', 1700, 2.5], ['lowpass', 2000, 0.6]] },
+      tock: { len: 0.035, a: 0.002, filters: [['bandpass', 1150, 2.5], ['lowpass', 1600, 0.6]] },
       brush: { len: 0.16, a: 0.006, filters: [['bandpass', 1300, 0.6], ['lowpass', 2400, 0.5]] },
     }[kind];
     return this.buffer(`n:${kind}:${variant}`, spec.len + 0.01, (d, sr) => {

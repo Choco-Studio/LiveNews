@@ -19,7 +19,7 @@ import { drawText, measureText } from '../font.js';
 import { drawLogo, measureLogo } from '../logo.js';
 import {
   mk, rgba, u32, clamp, lerp, seg, easeOutQuint, easeInOut, slab, clipRect, disc,
-  ellipsis, wrapLines, balanceLines, textW, clockIn, textCache,
+  ellipsis, wrapLines, balanceLines, textW, clockIn, textCacheFn,
 } from '../gfx/index.js';
 import { backdrop, lazyBackdrop } from './opens/kit.js';
 import { drawEarth, globeTexture } from './opens/world.js';
@@ -79,15 +79,19 @@ const S = {
   black: { color: P.black },
 };
 
-const LAYOUTS = textCache(200);
+const LAYOUTS = textCacheFn(200, (text, num, maxW, big, small) => {
+  const two = balanceLines(text, maxW, 2, 99);
+  if (two.length <= big && two.every((l) => !l.endsWith('...'))) return { scale: 2, lines: two, lh: 18 };
+  return { scale: 1, lines: balanceLines(text, maxW, 1, small), lh: 11 };
+});
 /** Best headline layout: 2x in up to `big` lines, else 1x in up to `small` lines; balanced (cached). */
 function layout(text, maxW, big = 3, small = 4) {
-  return LAYOUTS(String(text ?? ''), maxW * 100 + big * 10 + small, () => {
-    const two = balanceLines(text, maxW, 2, 99);
-    if (two.length <= big && two.every((l) => !l.endsWith('...'))) return { scale: 2, lines: two, lh: 18 };
-    return { scale: 1, lines: balanceLines(text, maxW, 1, small), lh: 11 };
-  });
+  return LAYOUTS(typeof text === 'string' ? text : String(text ?? ''), maxW * 100 + big * 10 + small, maxW, big, small);
 }
+
+const SOURCES = textCacheFn(200, (source, maxW) => ellipsis(`SOURCE: ${source.toUpperCase()}`, maxW, 1));
+/** "SOURCE: OUTLET" in caps, shortened to maxW (cached: no string is built per frame). */
+const sourceLine = (source, maxW) => (source ? SOURCES(typeof source === 'string' ? source : String(source), maxW, maxW) : '');
 
 /** A stepped bottom shade so text reads over photos (palette black, quantised alpha). */
 const SHADES = new Map();
@@ -281,7 +285,10 @@ export function parseFigure(raw) {
 
 /** Rows to show: numbers[] (value + label) when given, else the fact split into figure + words. */
 const ROWS = new WeakMap();
-const FACT_ROWS = textCache(120);
+const FACT_ROWS = textCacheFn(120, (fact) => {
+  const f = parseFigure(fact);
+  return f.text ? [{ figure: f.text, label: f.rest, f }] : [];
+});
 function rowsFor(fact, numbers) {
   if (Array.isArray(numbers) && numbers.length) {
     let r = ROWS.get(numbers);
@@ -297,10 +304,7 @@ function rowsFor(fact, numbers) {
     }
     if (r.length) return r;
   }
-  return FACT_ROWS(String(fact ?? ''), 0, () => {
-    const f = parseFigure(fact);
-    return f.text ? [{ figure: f.text, label: f.rest, f }] : [];
-  });
+  return FACT_ROWS(typeof fact === 'string' ? fact : String(fact ?? ''), 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -465,7 +469,7 @@ function drawReading(ctx, dt, o, rows) {
       // no figure: the fact itself at 2x, left-aligned on the Reading's column
       const T = layout(o.fact, W - x0 - 40, 3, 4);
       for (let i = 0; i < T.lines.length; i++) drawText(ctx, T.lines[i], x0, 56 + i * T.lh, T.scale === 2 ? S.white2 : S.white);
-      if (o.source) drawText(ctx, ellipsis(`SOURCE: ${String(o.source).toUpperCase()}`, 260, 1), x0, 128, S.microFog);
+      if (o.source) drawText(ctx, sourceLine(o.source, 260), x0, 128, S.microFog);
       return;
     }
     const f = r.f;
@@ -512,7 +516,7 @@ function drawReading(ctx, dt, o, rows) {
         ctx.fillRect(x0 + len, 100, 1, 1);
       }
     }
-    if (o.source) drawText(ctx, ellipsis(`SOURCE: ${String(o.source).toUpperCase()}`, 260, 1), x0, ruler ? 124 : 104, S.microFog);
+    if (o.source) drawText(ctx, sourceLine(o.source, 260), x0, ruler ? 124 : 104, S.microFog);
   } finally {
     ctx.restore();
   }
@@ -737,7 +741,7 @@ export function drawBreakingCard(ctx, t, dt, { headline = '', source = '' } = {}
   if (source) {
     // the breaking card runs under the 'bug' graphics (no captions or strap): room down to the ticker
     const sy = Math.min(186, top + lay.lines.length * lay.lh + 4);
-    rise(ctx, ellipsis(`SOURCE: ${String(source).toUpperCase()}`, W - 2 * X0, 1), X0, sy, seg(dt, 0.75, 0.3), S.microFog);
+    rise(ctx, sourceLine(source, W - 2 * X0), X0, sy, seg(dt, 0.75, 0.3), S.microFog);
   }
 }
 

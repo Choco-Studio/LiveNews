@@ -81,6 +81,7 @@
       const STORY1 = { headline: 'Oil prices slide as global demand cools', source: 'Fixture Business Wire', category: 'business', kicker: 'OIL MARKETS' };
       const STORY2 = { headline: 'Coffee futures reach a ten-year high after poor harvests', source: 'Fixture Business Wire', category: 'business', kicker: 'COMMODITIES' };
       const BREAK = { source: 'Fixture World Wire', text: 'Earthquake of magnitude 6.1 strikes off northern Japan' };
+      const PERU = { headline: 'Peru archaeologists uncover 3,000-year-old temple in the Andes', source: 'Pixelburg Post', category: 'world', kicker: 'ARCHAEOLOGY' };
 
       const state = { scenario: 'channel', bg: 'wide', theme: 'world', replay: false, kicker: false, breaking: false, caption: 'short' };
       const params = new URLSearchParams(location.search);
@@ -169,6 +170,11 @@
           return (t) => ({ shot: 'wide', lowerThird: a, subtitle: SHORT[1], subtitleSince: -1 });
         },
         'caption-montage': () => (t) => ({ shot: 'montage', programTagUntil: 10, subtitle: SHORT[0], subtitleSince: -0.5 }),
+        // the presenter reads the montage card's own headline: no caption repeats it
+        'montage-dup': () => {
+          const rundown = [{ storyId: 'c1', headline: 'Central bank holds interest rates steady' }];
+          return (t) => ({ shot: 'montage', rundown, card: { index: 0 }, programTagUntil: 10, subtitle: t < 3 ? 'Central bank holds interest rates steady.' : 'Markets had expected a cut before the winter.', subtitleSince: t < 3 ? 0 : 3 });
+        },
         ticker: () => (t) => ({ shot: 'wide' }),
         ad: () => (t) => ({ shot: t < 0.2 ? 'ident' : 'ad' }),
         // a raw RSS breaking title (~150 chars): strap pages, held until the last page is read,
@@ -191,6 +197,57 @@
         // the cut from a programme open: the open ends on the top row (opens/kit.js drawBug),
         // so the wide shot must not wipe it in again or replay the glint
         'open-cut': () => (t) => ({ shot: t < 0.2 ? 'open' : 'wide', programTagUntil: 0.2 + 8.5 }),
+        // a story headline wider than the bar: the bar grows to two lines (and back) on the flip
+        'headline-two': () => {
+          const a = lt(STORY1, -3);
+          const b = lt(PERU, 0.2);
+          const c = lt(STORY2, 6.2);
+          return (t) => ({ shot: 'wide', lowerThird: t < 0.2 ? a : t < 6.2 ? b : c, ...(t >= 1 && t < 5 ? { subtitle: SHORT[2], subtitleSince: 1 } : { subtitle: null }) });
+        },
+        // a breaking item that arrives during an ad: it takes the strap when the news comes back
+        'breaking-ad': () => {
+          const a = lt(STORY1, 9);
+          const br = { ...BREAK, since: 1 };
+          return (t) => ({ shot: t < 8 ? 'ad' : 'wide', lowerThird: t < 8 ? null : a, breaking: t >= 1 ? br : null });
+        },
+        // the full-screen breaking card holds the ticker (no pushes under it)
+        'breaking-card': () => (t) => ({ shot: t >= 1 && t < 4 ? 'breakingCard' : 'wide', ticker: REAL_TICKER }),
+        // the ticker never repeats the story on the strap
+        'ticker-dedupe': () => {
+          const a = lt({ headline: 'Telescope in Chile spots water vapour on a distant planet', source: 'Starfield Journal', category: 'science', kicker: 'ASTRONOMY' }, -3);
+          return (t) => ({ shot: 'wide', ticker: REAL_TICKER, lowerThird: a });
+        },
+        // NEWS IN 60: programme tag for the whole minute, strap top line = progress rule, static UP NEXT
+        news60: () => {
+          const a = lt(STORY1, 1.2);
+          const b = lt({ headline: 'Lisbon opens a riverside tram line', source: 'Pixelburg Post', category: 'world', kicker: 'TRANSPORT' }, 12);
+          const br = { ...BREAK, since: 24 };
+          return (t) => ({
+            shot: 'wide', program: PROGRAMS.flash, programTagUntil: 15, progress: Math.max(0, (t - 1) / 36),
+            schedule: { upcoming: [{ title: 'COSMOS DESK', tagline: 'SCIENCE, SPACE & OUR PLANET' }] },
+            lowerThird: t < 1.2 ? null : t < 12 ? a : b, breaking: t >= 24 ? br : null,
+          });
+        },
+        // MONEY MINUTE: the ticker flips the figures of stories already aired, with silver glyphs
+        'money-figures': () => {
+          const rundown = [
+            { storyId: 'm1', headline: 'Oil prices slide as demand cools', kicker: 'OIL', numbers: [{ value: '$82', label: 'BRENT CRUDE', dir: 'down', market: true }] },
+            { storyId: 'm2', headline: 'Pound edges up against the dollar', kicker: 'THE POUND', numbers: [{ value: '$1.27', label: 'STERLING', dir: 'up', market: true }, { value: '4.5%', label: 'INFLATION', dir: 'up', market: false }] },
+            { storyId: 'm3', headline: 'Coffee futures hold at a ten-year high', kicker: 'COMMODITIES', numbers: [{ value: '$3.10', label: 'ARABICA', dir: 'flat', market: true }] },
+            { storyId: 'm4', headline: 'Retailers report a quiet September', kicker: 'RETAIL', numbers: [{ value: '40,000', label: 'JOBS', dir: null, market: false }] },
+          ];
+          const lts = rundown.map((r, i) => ({ ...lt({ headline: r.headline, source: 'Ledger Line', category: 'business', kicker: r.kicker }, i * 10 + 0.2), kicker: r.kicker }));
+          return (t) => {
+            const i = Math.max(0, Math.min(3, Math.floor(t / 10)));
+            return { shot: 'wide', program: PROGRAMS.money, rundown, storyId: rundown[i].storyId, lowerThird: lts[i] };
+          };
+        },
+        // captions under a strap: one line at a time; the strap's arrival mid-sentence re-pages forward
+        'caption-lines': () => {
+          const sp = speech(LONG, 0.2);
+          const a = lt(STORY1, 4);
+          return (t) => ({ shot: 'wide', lowerThird: t < 4 ? null : a, ...subtitleAt(sp, t) });
+        },
         'caption-dup': () => {
           const a = lt({ headline: 'Iceland volcano erupts again', source: 'Fixture World Wire', category: 'world' }, -3);
           return (t) => ({ shot: 'wide', lowerThird: a, ...(t < 3 ? { subtitle: "Iceland's volcano erupts again.", subtitleSince: 0 } : { subtitle: 'Lava has reached the edge of the evacuated town of Grindavik.', subtitleSince: 3 }) });

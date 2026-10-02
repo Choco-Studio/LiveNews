@@ -47,19 +47,20 @@ const TIMINGS = {
   default: { fly: 1.2, pan: 0.9 },
   'news-60': { fly: 0.9, pan: 0.7 },
 };
-const TIMING_CACHE = new Map();
+const TIMING_CACHE = new Map(); // programme -> [q] -> frozen timeline (no key strings per frame)
 function timingFor(programId, duration) {
-  const base = TIMINGS[programId] || TIMINGS.default;
+  const id = programId in TIMINGS ? programId : 'default';
+  const base = TIMINGS[id];
   // a short shot compresses everything so the label is up for at least ~0.9 s
   const q = Number.isFinite(duration) && duration > 0 ? clamp(Math.round(duration * 10), 15, 30) : 30;
-  const key = `${programId in TIMINGS ? programId : 'default'}|${q}`;
-  let T = TIMING_CACHE.get(key);
+  let row = TIMING_CACHE.get(id);
+  if (!row) TIMING_CACHE.set(id, (row = []));
+  let T = row[q];
   if (!T) {
     const k = q / 30;
     const fly = base.fly * Math.max(0.65, k);
     const pan = base.pan * Math.max(0.7, k);
-    T = Object.freeze({ fly, pan, mark: -0.08, label: 0.22 * Math.max(0.6, k), context: 0.6 * Math.max(0.6, k) });
-    TIMING_CACHE.set(key, T);
+    T = row[q] = Object.freeze({ fly, pan, mark: -0.08, label: 0.22 * Math.max(0.6, k), context: 0.6 * Math.max(0.6, k) });
   }
   return T;
 }

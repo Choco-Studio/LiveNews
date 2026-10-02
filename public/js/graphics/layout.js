@@ -61,6 +61,19 @@ export function rect(ctx, x, y, w, h, color) {
 }
 
 /**
+ * Clip drawing to a rectangle until the matching clipEnd(). Allocation-free
+ * form of clipped() for per-frame code: always pair it in try/finally, so a
+ * throw can never leave the clip on the shared context.
+ */
+export function clipStart(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(Math.round(x), Math.round(y), Math.max(0, Math.round(w)), Math.max(0, Math.round(h)));
+  ctx.clip();
+}
+export const clipEnd = (ctx) => ctx.restore();
+
+/**
  * Run `fn` with drawing clipped to a rectangle (skipped when empty). The
  * restore sits in a finally: a throw inside `fn` must never leave the clip on
  * the shared context, or every later frame would be clipped to this rectangle.

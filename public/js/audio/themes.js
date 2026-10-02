@@ -80,9 +80,9 @@ export function motif(tonic, colour, beat = 0, { scale = 1, colourBeats = 1.5, o
 
 // Soft lead voices used across the package.
 const LEAD = {
-  softPulse: { wave: 'pulse25', preset: 'pulse25', a: 0.022, vib: [10, 5.2, 0.35], cutoff: 2600 },
+  softPulse: { wave: 'pulse25', preset: 'pulse25', a: 0.022, vib: [10, 5.2, 0.35], cutoff: 3000 },
   darkPulse: { wave: 'pulse25', preset: 'pulse25', a: 0.015, cutoff: 2000 },
-  glass: { wave: 'pulse12', preset: 'pulse12', a: 0.006, d: 0.3, s: 0.45, r: 0.2, cutoff: 2600 },
+  glass: { wave: 'pulse12', preset: 'pulse12', a: 0.006, d: 0.3, s: 0.45, r: 0.2, cutoff: 3200 },
   tick: { wave: 'pulse25', preset: 'pluck', a: 0.003, d: 0.08, s: 0, r: 0.05, cutoff: 1800, fenv: false },
 };
 
@@ -138,7 +138,7 @@ const OPENS = {
       const total = C + 2;
       const am9 = [k - 12, k - 9, k - 5, k - 2, k + 2, k - 2, k - 5, k - 9];
       const d9 = [k - 7, k - 3, k, k + 3, k + 7, k + 3, k, k - 3];
-      const arp = range(0, H, 0.5).map((b, i) => [b, (b >= m0 + 1.5 && b < m0 + 3 ? d9 : am9)[i % 8], 0.5, 0.32 + 0.06 * (i % 2 ? 0 : 1)]);
+      const arp = range(0, H, 0.5).map((b, i) => [b, (b >= m0 + 1 && b < m0 + 2.5 ? d9 : am9)[i % 8], 0.5, 0.32 + 0.06 * (i % 2 ? 0 : 1)]);
       return {
         bpm: this.tempo,
         room: 0.16,
@@ -148,12 +148,12 @@ const OPENS = {
           { kind: 'lead', inst: LEAD.softPulse, notes: part(motif(k - 12, COLOURS.tech, m0), total), gain: 1 },
           { kind: 'harmony', inst: { wave: 'pulse12', preset: 'pulse12', a: 0.004, d: 0.2, s: 0.35, r: 0.12, cutoff: 1800, vib: false }, notes: part(arp, total), gain: 0.5, pan: 0.3, echo: 0.55 },
           { kind: 'harmony', inst: 'pad', notes: part([
-            [0, [k - 12, k - 9, k - 5, k - 2, k + 2], m0 + 1.5, 0.55], // Am9
-            [m0 + 1.5, [k - 7, k - 5, k - 3, k + 3], 1.5, 0.6], // D9 (dorian IV)
-            [m0 + 3, [k - 12, k - 5], 1, 0.6], // open fifth under the b7
+            [0, [k - 12, k - 9, k - 5, k - 2, k + 2], m0 + 1, 0.55], // Am9
+            [m0 + 1, [k - 7, k - 5, k - 3, k + 3], 1.5, 0.6], // D9 (dorian IV)
+            [m0 + 2.5, [k - 12, k - 5], 1.5, 0.6], // open fifth under the b7
             [H, [k - 12, k - 9, k - 3, k + 2, k - 5], total - H, 0.75], // Am6/9
           ], total), pan: -0.2 },
-          { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, m0 + 1.5], [m0 + 1.5, k - 31, 1.5, 0.9], [m0 + 3, k - 24, 1], [H, k - 24, total - H]], total) },
+          { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, m0 + 1], [m0 + 1, k - 31, 1.5, 0.9], [m0 + 2.5, k - 24, 1.5], [H, k - 24, total - H]], total) },
           { drums: drums([[0, 'K', 0.5], [2, 'S', 0.3], [4, 'K', 0.45], [H, 'K', 0.65], [C, 'F', 0.55]], total) },
           { drums: drums(range(0, H, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.16 : 0.24]), total) },
         ],
@@ -440,20 +440,21 @@ function buildOutro(programId) {
   }
   // The motif with the programme's colour, then home to 1 (the channel and
   // WORLD NOW: 3 -> 1 on brass; COSMOS #4 -> 5 -> 1; TECH b7 -> 1 on a pluck button).
+  // 5.5 beats: the last note releases as the 3.4 s end card cuts to the break.
   const colour = COLOURS[meta.colour] ?? COLOURS.home;
-  const total = 6;
+  const total = 5.5;
   const pedal = k - 24;
   const tonic = id === 'world-now' ? k - 12 : k; // WORLD NOW: low brass
-  const home = id === 'cosmos' ? [[3.5, k + 7, 0.5, 0.8], [4, k, 2, 0.85]] : [[3.5, tonic, 2.5, 0.85]]; // #4 rises to 5 first
+  const home = id === 'cosmos' ? [[3.5, k + 7, 0.5, 0.8], [4, k, 1.5, 0.85]] : [[3.5, tonic, 2, 0.85]]; // #4 rises to 5 first
   const lead = [...motif(tonic, colour, 0, { colourBeats: 1 }), ...home];
   const padHome = id === 'tech-bytes' ? [k - 12, k - 9, k - 3, k + 2] : id === 'cosmos' ? [k - 12, k - 5, k - 1, k + 2, k + 6] : [k - 12, k - 5, k + 2, k + 4];
   const tracks = [
     { kind: 'lead', inst: v.lead, notes: part(lead, total), gain: id === 'world-now' ? 1.05 : 1 },
-    { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 7, k - 3, k, k + 4], 1.5, 0.5], [1.5, [k - 5, k, k + 2], 2, 0.55], [3.5, padHome, 2.5, 0.62]], total), pan: -0.2 },
-    { kind: 'bass', inst: id === 'world-now' ? 'timpani' : 'tri', notes: part(id === 'world-now' ? [[0, pedal, 3.5, 0.55], [3.5, pedal, 2.5, 0.7]] : [[0, pedal, total, 0.7]], total), gain: id === 'world-now' ? 1 : 0.7 },
+    { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 7, k - 3, k, k + 4], 1.5, 0.5], [1.5, [k - 5, k, k + 2], 2, 0.55], [3.5, padHome, 2, 0.62]], total), pan: -0.2 },
+    { kind: 'bass', inst: id === 'world-now' ? 'timpani' : 'tri', notes: part(id === 'world-now' ? [[0, pedal, 3.5, 0.55], [3.5, pedal, 2, 0.7]] : [[0, pedal, total, 0.7]], total), gain: id === 'world-now' ? 1 : 0.7 },
   ];
   if (id === 'tech-bytes') tracks.push({ kind: 'harmony', inst: 'pluck', notes: part([[3.5, k - 5, 0.5, 0.5], [4, k, 1.5, 0.55]], total), gain: 0.8, pan: 0.25 });
-  if (id === 'cosmos') tracks.push({ kind: 'harmony', inst: 'bell', notes: part([[4, k + 19, 2, 0.28]], total), gain: 0.45, echo: 0.6, pan: 0.3 });
+  if (id === 'cosmos') tracks.push({ kind: 'harmony', inst: 'bell', notes: part([[4, k + 19, 1.5, 0.28]], total), gain: 0.45, echo: 0.6, pan: 0.3 });
   return {
     bpm: id === 'cosmos' ? 84 : id === 'tech-bytes' ? 104 : 96,
     room: id === 'cosmos' ? 0.4 : 0.3,

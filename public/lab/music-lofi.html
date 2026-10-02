@@ -15,7 +15,8 @@
       #log { white-space: pre; max-height: 160px; overflow: auto; border-top: 1px solid #262b44; margin-top: 8px; padding-top: 4px; }
       table { border-collapse: collapse; margin-top: 8px; }
       td { border-bottom: 1px solid #262b44; padding: 2px 10px 2px 0; vertical-align: top; }
-      td:first-child { color: #feae34; }
+      td:first-child { color: #feae34; white-space: nowrap; }
+      td:nth-child(2) { color: #e4e8f0; }
     </style>
   </head>
   <body>
@@ -23,35 +24,52 @@
     <div class="row">
       <label>programme <select id="prog"></select></label>
       <label><input id="grave" type="checkbox" /> grave pad (default: silence)</label>
+      <label><input id="shared" type="checkbox" /> shared stings (audio.js plays breaking / promo)</label>
       <button id="speak">hold to speak</button>
       <button id="stop">stop</button>
     </div>
     <div class="row" id="moments"></div>
-    <div class="row" id="stings"></div>
     <div class="row" id="demos"></div>
     <div id="note">
-      Composer "lofi" proposal for GLOBIT 24 background music. Live: click a moment (first click unlocks audio); "hold to
-      speak" plays a Kokoro test line and ducks the bed. Offline: <code>window.__audio.render({ programme, moment, seconds,
-      withVoice, stem, timeline: 'demo' })</code> (used by tools/render-audio.mjs). Test voices are served from /__voice/
-      by the composer's own static server; elsewhere a speech-shaped stand-in is used.
+      Composer "lofi" proposal for GLOBIT 24 background music, following docs/programmes/*.md. Live: click a moment (first
+      click unlocks audio); "hold to speak" plays a Kokoro test line and ducks the bed. Offline:
+      <code>window.__audio.render({ programme, moment, seconds, stem, timeline })</code> for tools/render-audio.mjs
+      (timelines: demo, world-now, tech-bytes, cosmos, money-minute, news-60, break, ident, sombre, standby). Test voices are
+      served from /__voice/ by the composer's own static server; elsewhere a speech-shaped stand-in is used.
     </div>
     <table id="sheet"></table>
     <div id="log"></div>
     <script type="module">
       // Lab for public/js/music/proposals/lofi: plays beds live and renders them offline.
       import { LofiEngine } from '../js/music/proposals/lofi/engine.js';
-      import { PALETTES, LAYERS } from '../js/music/proposals/lofi/palettes.js';
+      import { LAYERS } from '../js/music/proposals/lofi/palettes.js';
       import { CUE_SHEET } from '../js/music/proposals/lofi/cuesheet.js';
-      import { render, TIMELINES, CLIPS, speechRegions } from '../js/music/proposals/lofi/render.js';
+      import { render, TIMELINES, CLIPS, speechRegions, setClipDurations, planOf } from '../js/music/proposals/lofi/render.js';
       import { SIGNATURE, SIGNATURE_SEMITONES } from '../js/music/proposals/lofi/theory.js';
 
       const $ = (id) => document.getElementById(id);
       const params = new URLSearchParams(location.search);
       const VOICE_BASE = params.get('voiceBase') || '/__voice/';
-      const LINES = { 'world-now': 'wn-light', 'tech-bytes': 'tb-line', cosmos: 'co-line', 'money-minute': 'mm-line', 'news-60': 'n6-line', channel: 'wn-headlines' };
+      const manifest = fetch(`${VOICE_BASE}manifest.json`).then((r) => (r.ok ? r.json() : {})).then((m) => {
+        setClipDurations(Object.fromEntries(Object.entries(m).map(([k, v]) => [k, v.seconds])));
+      }).catch(() => {});
 
-      for (const id of Object.keys(PALETTES)) $('prog').append(new Option(`${PALETTES[id].title} · ${PALETTES[id].key} · ${PALETTES[id].bpm} bpm`, id));
-      for (const [ev, cue] of CUE_SHEET) $('sheet').insertAdjacentHTML('beforeend', `<tr><td>${ev}</td><td>${cue}</td></tr>`);
+      // Moments the director would cue, per programme (the cue sheet decides what each one does).
+      const MOMENTS = {
+        'world-now': [['headlines', { line: 0, lines: 3 }, 'headline 1 (Bm)'], ['pip', { line: 0, lines: 3 }, 'pip'], ['headlines', { line: 1, lines: 3 }, 'headline 2 (G)'],
+          ['headlines', { line: 2, lines: 3 }, 'headline 3 (D)'], ['greeting'], ['story', { emotion: 'serious' }, 'story (grave)'], ['roundup'], ['finally'], ['chat'], ['outro'], ['signoffEnd', {}, 'sign-off brass'], ['breaking']],
+        'tech-bytes': [['coldOpen'], ['story'], ['chat'], ['number'], ['numberSting'], ['finally'], ['featureEnd'], ['outro'], ['signoffEnd']],
+        cosmos: [['coldOpen'], ['story'], ['shot', { kind: 'picture' }, 'shot: picture'], ['shot', { kind: 'presenter' }, 'shot: presenter'], ['finally'], ['number', {}, 'the Reading'], ['greeting']],
+        'money-minute': [['headlines', {}, 'intro vamp'], ['introEnd'], ['story'], ['numberSting'], ['number', { tape: 'up' }, 'tape up'], ['number', { tape: 'down' }, 'tape down'],
+          ['number', { tape: 'mixed' }, 'tape mixed'], ['number', { tape: 'neutral' }, 'tape neutral'], ['outro'], ['signoffEnd'], ['endcard']],
+        'news-60': [['headlines', {}, 'bed'], ['item'], ['story', { grave: true }, 'grave item'], ['story', {}, 'item story'], ['signoffEnd', {}, 'sign-off bell']],
+        channel: [['bumper', { kind: 'cards' }, 'bumper cards'], ['bumper', { kind: 'ident' }, 'short ident'], ['bumper', { grave: true }, 'sombre ident'], ['holding'],
+          ['leadin', { programId: 'world-now' }, 'countdown'], ['leadin', { programId: 'news-60', sombre: true }, 'countdown sombre'], ['leadin', { programId: 'tech-bytes', hour: 14 }, 'ident film day'],
+          ['leadin', { programId: 'cosmos', hour: 23 }, 'ident film night'], ['upNext', { next: 'cosmos' }, 'up next'], ['standby'], ['cut'], ['silence']],
+      };
+      const LINES = { 'world-now': 'wn-hl1', 'tech-bytes': 'tb-lead', cosmos: 'co-story', 'money-minute': 'mm-lead', 'news-60': 'n6-item1', channel: 'ct-next-wn' };
+      for (const id of Object.keys(MOMENTS)) $('prog').append(new Option(id, id));
+      for (const [prog, moment, music] of CUE_SHEET) $('sheet').insertAdjacentHTML('beforeend', `<tr><td>${prog}</td><td>${moment}</td><td>${music}</td></tr>`);
 
       let ctx = null;
       let engine = null;
@@ -63,37 +81,30 @@
       function ensure() {
         if (!ctx) {
           ctx = new AudioContext();
-          engine = new LofiEngine(ctx, ctx.destination, { gravePad: $('grave').checked });
+          engine = new LofiEngine(ctx, ctx.destination, { gravePad: $('grave').checked, sharedStings: $('shared').checked, seed: 'lab' });
           engine.start();
         }
         engine.gravePad = $('grave').checked;
+        engine.sharedStings = $('shared').checked;
         if (ctx.state !== 'running') ctx.resume();
         return engine;
       }
 
-      function cue(moment, extra = {}) {
-        const e = ensure();
-        const programId = $('prog').value;
-        e.cue(moment, { programId, next: programId, ...extra });
-        log(`cue ${moment} ${JSON.stringify(extra)}`);
+      function drawMoments() {
+        $('moments').textContent = '';
+        for (const [m, extra, label] of MOMENTS[$('prog').value]) {
+          const b = document.createElement('button');
+          b.textContent = label || m;
+          b.onclick = () => {
+            const e = ensure();
+            e.cue(m, { programId: $('prog').value, ...(extra || {}) });
+            log(`cue ${m} ${JSON.stringify(extra || {})} -> ${e.log.at(-1)?.action} ${e.log.at(-1)?.detail}`);
+          };
+          $('moments').append(b);
+        }
       }
-
-      const MOMENTS = [
-        ['openTail'], ['headlines'], ['story', { emotion: 'happy' }, 'story · light'], ['story', { emotion: 'neutral' }, 'story · neutral'],
-        ['story', { emotion: 'serious' }, 'story · grave'], ['map'], ['chat'], ['outro'], ['endcard'], ['standby'],
-      ];
-      for (const [m, extra, label] of MOMENTS) {
-        const b = document.createElement('button');
-        b.textContent = label || m;
-        b.onclick = () => cue(m, extra);
-        $('moments').append(b);
-      }
-      for (const m of ['bumperIn', 'bumperOut', 'upNext', 'replay', 'breaking']) {
-        const b = document.createElement('button');
-        b.textContent = `sting · ${m}`;
-        b.onclick = () => cue(m);
-        $('stings').append(b);
-      }
+      $('prog').onchange = drawMoments;
+      drawMoments();
 
       // Live voice: a Kokoro line through the context, ducking the bed while it plays.
       const clipCache = new Map();
@@ -132,20 +143,22 @@
         log('stop');
       };
 
-      // Demo timelines played live, in real time.
+      // Demo timelines played live, in real time, with their voices.
       for (const name of Object.keys(TIMELINES)) {
         const b = document.createElement('button');
         b.textContent = `play ${name}`;
         b.onclick = async () => {
+          await manifest;
           const e = ensure();
           timers.forEach(clearTimeout);
           timers = [];
-          const tl = TIMELINES[name];
-          const t0 = ctx.currentTime + 0.3;
-          for (const [t, m, o] of tl.cues) timers.push(setTimeout(() => { e.cue(m, { programId: tl.programme, ...(o || {}) }); log(`cue ${m}`); }, (t + 0.3) * 1000));
+          const tl = planOf({ timeline: name });
+          const lead = 0.3;
+          const t0 = ctx.currentTime + lead;
+          for (const [t, m, o] of tl.cues) timers.push(setTimeout(() => { e.cue(m, { programId: tl.programme, ...(o || {}) }); log(`cue ${m}`); }, (t + lead) * 1000));
           for (const [a, z] of speechRegions(tl.voice)) {
-            timers.push(setTimeout(() => e.setSpeaking(true), (a + 0.22) * 1000));
-            timers.push(setTimeout(() => e.setSpeaking(false), (z + 0.3) * 1000));
+            timers.push(setTimeout(() => e.setSpeaking(true), (a + lead - 0.12) * 1000));
+            timers.push(setTimeout(() => e.setSpeaking(false), (z + lead) * 1000));
           }
           for (const [t, key] of tl.voice) {
             const buf = await clip(key);
@@ -171,7 +184,8 @@
         g.fillStyle = '#feae34';
         g.font = '8px monospace';
         const bed = engine?.bed;
-        g.fillText(bed ? `${bed.pal.title}  ${bed.pal.key}  ${bed.pal.bpm} BPM  · ${bed.current.name}` : 'SILENCE', 6, 12);
+        const head = engine?.headlineVoice;
+        g.fillText(bed ? `${bed.pal.title}  ${bed.pal.key}  ${bed.pal.bpm} BPM  · ${bed.current.name}` : head ? `WORLD NOW headlines · brass ${head.name}` : 'SILENCE', 6, 12);
         if (bed && ctx) {
           const beat = Math.floor((ctx.currentTime - bed.t0) / bed.spb);
           for (let i = 0; i < 4; i++) {
@@ -179,7 +193,7 @@
             g.fillRect(300 + i * 18, 26, 14, 8);
           }
           g.fillStyle = '#8b9bb4';
-          g.fillText(`bar ${Math.max(0, Math.floor(beat / 4))}`, 300, 46);
+          g.fillText(`bar ${Math.max(0, Math.floor(beat / 4))}  bus ${bed.shot.gain.value.toFixed(2)}`, 300, 46);
           LAYERS.forEach((name, i) => {
             const v = bed.layer[name].gain.value;
             const x = 12 + i * 27;
@@ -209,7 +223,10 @@
       }).catch(() => {});
 
       window.__audio = {
-        render: (opts = {}) => render({ voiceBase: VOICE_BASE, ...opts }),
+        render: async (opts = {}) => {
+          await manifest;
+          return render({ voiceBase: VOICE_BASE, ...opts });
+        },
         timelines: Object.keys(TIMELINES),
         clips: CLIPS,
       };

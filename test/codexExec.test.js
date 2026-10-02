@@ -359,7 +359,7 @@ describe('codex exec provider (fake CLI)', () => {
 
   test('a timed-out call does not block the next one either', async (t) => {
     const fake = makeFake(t, [{ sleepMs: 10_000 }, success('{"call":2}')]);
-    const provider = makeProvider(fake.bin, { timeoutMs: 400 });
+    const provider = makeProvider(fake.bin, { timeoutMs: 2000 });
 
     const [a, b] = await Promise.allSettled([provider.generate({ prompt: 'one' }), provider.generate({ prompt: 'two' })]);
 
@@ -370,12 +370,15 @@ describe('codex exec provider (fake CLI)', () => {
   });
 
   test('separate providers do not share a queue', async (t) => {
-    const fakeA = makeFake(t, { ...success('{"who":"a"}'), sleepMs: 300 });
-    const fakeB = makeFake(t, { ...success('{"who":"b"}'), sleepMs: 300 });
-    const started = Date.now();
+    // Judged from the fakes' own start/end records (not the wall clock), so a loaded machine cannot fail it.
+    const fakeA = makeFake(t, { ...success('{"who":"a"}'), sleepMs: 1500 });
+    const fakeB = makeFake(t, { ...success('{"who":"b"}'), sleepMs: 1500 });
     const results = await Promise.all([makeProvider(fakeA.bin).generate({ prompt: 'p' }), makeProvider(fakeB.bin).generate({ prompt: 'p' })]);
     assert.deepEqual(results.map((r) => r.text), ['{"who":"a"}', '{"who":"b"}']);
-    assert.ok(Date.now() - started < 1200, 'they ran in parallel');
+    const span = (fake) => [fake.log().find((e) => e.event === 'start').t, fake.log().find((e) => e.event === 'end').t];
+    const [a0, a1] = span(fakeA);
+    const [b0, b1] = span(fakeB);
+    assert.ok(a0 < b1 && b0 < a1, 'they ran in parallel (their runs overlap)');
   });
 
   // -------------------------------------------------------------- inside the provider chain

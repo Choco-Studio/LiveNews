@@ -37,6 +37,8 @@ export function matsOf(L) {
     hair: material(`${id}:hair`, { ramp: L.hair.ramp, line: L.hair.line, rim: P.silver, rimTop: true, th: [0.62, 0.08, -0.42] }),
     hairBack: material(`${id}:hairBack`, { ramp: L.hair.ramp, line: L.hair.line, th: [2, 0.55, -0.1] }),
     jacket: material(`${id}:jacket`, { ramp: L.jacket.ramp, line: L.jacket.line, rim: P.silver, th: [0.8, -0.02, -0.5] }),
+    // lapels: the jacket's ramp with a softer inner line (its shade tone) where they meet the shirt
+    lapel: material(`${id}:lapel`, { ramp: L.jacket.ramp, line: L.jacket.ramp[2], th: [0.8, -0.02, -0.5] }),
     sleeve: material(`${id}:sleeve`, { ramp: L.jacket.ramp, line: L.jacket.line, rim: P.silver, th: [0.94, 0.12, -0.4] }),
     shirt: material(`${id}:shirt`, { ramp: L.shirt.ramp, line: L.shirt.line, th: [0.85, 0.05, -0.4] }),
     cuff: material(`${id}:cuff`, { ramp: [L.cuff, L.cuff, L.shirt.ramp[2], L.shirt.ramp[3]], line: L.shirt.line, th: [0.9, -0.1, -0.6] }),

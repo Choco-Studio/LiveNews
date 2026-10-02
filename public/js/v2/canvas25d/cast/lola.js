@@ -3,7 +3,8 @@
 // auburn bob with a deep side part ("the girl in blue").
 import { P } from '../../../palette.js';
 import { toneN, decal } from '../pixbuf.js';
-import { headHW, headBox } from '../head.js';
+import { headHW } from '../head.js';
+import { LocalXY, localBox, clumpTone } from './kit-a.js';
 import { clamp } from '../space.js';
 import { defineLook, SKIN_TAN } from './base.js';
 
@@ -41,6 +42,14 @@ function drawBobAndStuds(buf, L, m, head, s, sk) {
 }
 
 // Sleek bob with a deep side part and a sweep across the forehead.
+// Finish (owner, 17:50): the ends tuck under with a rounded corner and a
+// shaded underside; the big side of the parting carries a little more volume;
+// the fringe sweeps in a soft S with fine strand tips at its edge; the sheen is
+// a halo of short rust strokes on brown, one per clump, not a flat patch;
+// clumps fall from the crown with broken separations. LOD: wides keep the
+// silhouette and two tones, mediums a narrow sheen band, close-ups the clumps.
+const LXY = new LocalXY();
+const CO = { cw: 1.55, s: 1, seed: 11, sep: true, hiLo: 0.8, hiHi: 8.6, hiW: 0.42, gap: 4.2, keepLit: true };
 export function drawBob(buf, L, m, head, s, lag) {
   const H = L.head;
   const cyc = H.craniumY - 0.3;
@@ -49,63 +58,92 @@ export function drawBob(buf, L, m, head, s, lag) {
   const pitchShift = Math.sin(head.pitch) * 2.0;
   const bottom = H.chinY - 1.6;
   const part = -2.4;
-  const [x0, y0, x1, y1] = headBox(head, 3.0);
+  const tier = s < 1.35 ? 0 : s < 2.2 ? 1 : 2;
+  const [x0, y0, x1, y1] = localBox(head, -RV - 2.2, H.top - 1.8, RV + 2.2, bottom + 1);
+  const q = LXY.set(head);
+  CO.s = s;
+  CO.cw = s >= 3 ? 1.9 : 2.2;
+  const crownX = part + 0.6, crownY = H.top + 0.6;
   buf.shape(x0, y0, x1, y1, m.hair, (px, py) => {
-    const [x0l, y] = head.toLocal(px, py);
+    q.at(px, py);
+    const x0l = q.x, y = q.y;
     // the ends of the bob swing a moment after the head (follow-through)
     const swing = y > 0 ? lag * Math.min(1, y / bottom) ** 2 : 0;
     const x = x0l - swing;
     if (y > bottom + 0.5) return -1;
+    const fuller = x > 0 ? 0.3 : 0; // the big side of the parting
     let inMass;
-    if (y < cyc) inMass = x * x + (y - cyc) * (y - cyc) <= RV * RV;
-    else {
+    if (y < cyc) {
+      const r = RV + fuller * Math.max(0, 1 - (cyc - y) / RV);
+      inMass = x * x + (y - cyc) * (y - cyc) <= r * r;
+    } else {
       const k = (y - cyc) / (bottom - cyc);
-      const hwHair = RV + 0.35 * k - (k > 0.85 ? (k - 0.85) * 3.5 : 0);
+      let hwHair = RV + fuller + 0.35 * k;
+      // the ends curl under: the outer corner rounds off over the last ~1.1 u
+      const e = (y - (bottom - 1.1)) / 1.1;
+      if (e > 0) hwHair -= 1.25 * (1 - Math.sqrt(Math.max(0, 1 - e * e)));
       inMass = Math.abs(x) <= hwHair;
-      if (y > bottom - 0.8) inMass = inMass && Math.abs(x) <= hwHair - (y - (bottom - 0.8)) * 1.8;
     }
     if (!inMass) return -1;
     const fx = x - yawX;
     const hw = headHW(H, y, head.jaw);
-    // face window: forehead open under the part, a diagonal sweep across to the far temple
-    const sweepY = Math.min(-3.3, H.top + 3.5 + Math.max(0, fx - part) * 0.62 + Math.sin(fx * 1.7) * 0.15);
+    // face window: forehead open under the part, a soft S sweep across to the far temple
+    const sw = Math.max(0, fx - part);
+    let sweepY = Math.min(-3.3, H.top + 3.5 + sw * 0.62 + Math.sin(fx * 1.7) * 0.15 - 0.35 * Math.sin(Math.min(1, sw / 7) * Math.PI));
+    if (tier === 2 && fx > part + 0.8) sweepY += 0.28 * Math.abs(((sw * 1.35) % 2) - 1); // fine strand tips along the sweep's edge
     const fringe = (fx < part ? H.top + 4.1 : sweepY) + pitchShift;
     const inset = 0.85 - Math.max(0, y) * 0.02;
     if (y > fringe && Math.abs(x) < hw - inset && y < H.chinY + 2) return -1;
     if (y > H.chinY - 1.5 && Math.abs(x) < hw + 0.5) return -1;
     const ddx = x / RV, ddy = clamp((y - cyc) / (RV * 1.2), -1, 1);
     let t = toneN(m.hair, ddx * 0.9, ddy * 0.9);
-    // a soft sheen across the crown on the lit side
-    const band = (x + 1.5) * (x + 1.5) * 0.07 + (y - (H.top + 2.6));
-    if (Math.abs(band) < 0.7 && x < 2.5 && t <= 1) t = 0;
-    // strands follow the sweep on top and fall straight on the sides
-    if (s >= 1.8 && t === 1) {
-      const v = y < fringe + 0.5 && fx > part ? (y - (H.top + 3.5) - (fx - part) * 0.62) : fx * 1.0 - Math.max(0, y - cyc) * 0.1;
-      if ((((v * 1.1) % 2.4) + 2.4) % 2.4 < 0.26) t = 2;
+    const nearFace = y > fringe - 0.2 && Math.abs(x) < hw + 1.0;
+    const underside = y > bottom - 0.55 - (Math.abs(x) > hw + 1.6 ? 0.25 : 0);
+    if (tier === 0) {
+      if (nearFace) t = Math.max(t, x > 0 ? 3 : 2);
+      return t;
     }
-    // next to the face the hair is in shadow; the far side deeper
-    if (y > fringe - 0.2 && Math.abs(x) < hw + 1.0) t = Math.max(t, x > 0 ? 3 : 2);
-    return t;
+    if (tier === 1) {
+      // a narrow sheen band across the crown on the lit side
+      const band = (x + 1.5) * (x + 1.5) * 0.07 + (y - (H.top + 2.6));
+      if (t === 0 && Math.abs(band) > 0.55) t = 1;
+      if (nearFace) t = Math.max(t, x > 0 ? 3 : 2);
+      else if (underside) t = Math.max(t, 2);
+      return t;
+    }
+    // close-up: clumps radiate from the crown; the sheen is a halo of strokes
+    const dxc = fx - crownX, dyc = y - crownY;
+    const u = Math.sqrt(dxc * dxc + dyc * dyc);
+    // clumps fan out from the crown: radial near it, splitting further out so none gets thinner than cw
+    const v = Math.atan2(dxc, Math.max(0.2, dyc)) * Math.max(5.2, u) + 30;
+    if (nearFace) return Math.max(t, x > 0 ? 3 : 2);
+    if (underside) return Math.max(t, x > 0 ? 3 : 2);
+    if (x * x + (y - cyc) * (y - cyc) > (RV - 0.5) * (RV - 0.5) && y < cyc && t >= 2) return t; // clean outer edge for the rim
+    return clumpTone(t, v, u, CO);
   });
 }
 
-// The back of the bob, behind the head and neck.
+// The back of the bob, behind the head and neck (its ends tuck under like the front).
 export function drawBobBack(buf, L, m, head) {
   const H = L.head;
-  const [x0, y0, x1, y1] = headBox(head, 3.2);
+  const bottom = H.chinY - 1.2;
+  const hw = H.R + 1.4;
+  const [x0, y0, x1, y1] = localBox(head, -hw - 0.5, -0.5, hw + 0.5, bottom + 0.5);
+  const q = LXY.set(head);
   buf.shape(x0, y0, x1, y1, m.hairBack, (px, py) => {
-    const [x, y] = head.toLocal(px, py);
-    const bottom = H.chinY - 1.2;
+    q.at(px, py);
+    const x = q.x, y = q.y;
     if (y < 0 || y > bottom) return -1;
-    const hw = H.R + 1.4;
-    if (Math.abs(x) > hw - (y > bottom - 1.2 ? (y - bottom + 1.2) * 1.4 : 0)) return -1;
+    const e = (y - (bottom - 1.2)) / 1.2;
+    const lim = hw - (e > 0 ? 1.3 * (1 - Math.sqrt(Math.max(0, 1 - e * e))) : 0);
+    if (Math.abs(x) > lim) return -1;
     return Math.abs(x) > hw - 1.5 ? 2 : 3;
   });
 }
 
 export function drawEarrings(buf, L, head, s, lag) {
   const H = L.head;
-  const gold = decal(L.earrings), dark = decal(P.orange);
+  const gold = decal(L.earrings), dark = decal(P.orange), glint = decal(P.white);
   for (const side of [-1, 1]) {
     const hw = headHW(H, H.chinY - 2.6, 0);
     const [ex, ey] = head.toScreen(side * (hw + 0.1) + lag * 0.6, H.chinY - 1.1);
@@ -116,6 +154,7 @@ export function drawEarrings(buf, L, head, s, lag) {
       buf.plot(cx + 1, cy, gold, 1);
       buf.plot(cx, cy + 1, gold, 1);
       buf.plot(cx + 1, cy + 1, dark, 1);
+      if (s >= 3) buf.plot(cx, cy, glint, 1); // the key light's specular on the stud
     }
   }
 }

@@ -5,7 +5,7 @@
 // graphics come on and the bug's glint plays only then.
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
-import { W, TOP, inkOn, easeOut, easeIn, clamp01, rect, clipped } from './layout.js';
+import { W, TOP, inkOn, easeOut, easeIn, clamp01, rect, clipStart, clipEnd } from './layout.js';
 
 // The 11x11 brand globe (logo.js GLOBE_S) redrawn for 1x on air: at this size
 // two straight white seams read as crosshairs, so the seams are one meridian
@@ -102,9 +102,22 @@ function drawGlint(ctx, x0, y0, p) {
   }
 }
 
-const LIVE_W = 4 + 3 + 3 + measureText('LIVE') + 4;
-const REPLAY_W = 4 + 3 + 3 + measureText('REPLAY') + 4;
+// LIVE / REPLAY sit in the micro face on the wordmark's 5 px cap line (y + 4), so
+// the brand reads first; the static 3x3 square shares their centre line.
+const TAG_TEXT_X = 10;
+const LIVE_W = TAG_TEXT_X + measureText('LIVE', 1, 'micro') + 4;
+const REPLAY_W = TAG_TEXT_X + measureText('REPLAY', 1, 'micro') + 4;
 const CLOCK_LABEL = 'LONDON';
+const LIVE_STYLE = Object.freeze({ color: P.white, font: 'micro' });
+const REPLAY_STYLE = Object.freeze({ color: P.yellow, font: 'micro' });
+const CLOCK_LABEL_STYLE = Object.freeze({ color: P.fog, font: 'micro' });
+const CLOCK_STYLE = Object.freeze({ color: P.white });
+const inkStyles = new Map();
+const inkStyle = (color) => {
+  let st = inkStyles.get(color);
+  if (!st) inkStyles.set(color, (st = Object.freeze({ color: inkOn(color) })));
+  return st;
+};
 
 /**
  * Draw the top row. `v` = { onAt, replay, program: {title, color} | null,
@@ -122,7 +135,14 @@ export function drawTopRow(ctx, t, v) {
   if (bugW > 0) {
     ctx.drawImage(bugSprite(), 0, 0, bugW, h, TOP.x, y, bugW, h);
     const g = (since - 0.6) / 0.9;
-    if (g > 0 && g < 1) clipped(ctx, TOP.x, y, bugW, h, () => drawGlint(ctx, TOP.x, y, easeOut(g)));
+    if (g > 0 && g < 1) {
+      clipStart(ctx, TOP.x, y, bugW, h);
+      try {
+        drawGlint(ctx, TOP.x, y, easeOut(g));
+      } finally {
+        clipEnd(ctx);
+      }
+    }
   }
 
   // LIVE (black plate, static red square) or REPLAY (black plate, yellow text and
@@ -132,31 +152,31 @@ export function drawTopRow(ctx, t, v) {
   const tagP = easeOut((since - 0.08) / 0.3);
   const shown = Math.round(tagW * tagP);
   if (shown > 0) {
-    clipped(ctx, x, y, shown, h, () => {
-      if (v.replay) {
-        rect(ctx, x, y, tagW, h, P.black);
-        rect(ctx, x + 4, y + 5, 3, 3, P.yellow);
-        drawText(ctx, 'REPLAY', x + 10, y + 3, { color: P.yellow });
-      } else {
-        rect(ctx, x, y, tagW, h, P.black);
-        rect(ctx, x + 4, y + 5, 3, 3, P.red);
-        drawText(ctx, 'LIVE', x + 10, y + 3, { color: P.white });
-      }
-    });
+    clipStart(ctx, x, y, shown, h);
+    try {
+      rect(ctx, x, y, tagW, h, P.black);
+      rect(ctx, x + 4, y + 5, 3, 3, v.replay ? P.yellow : P.red);
+      drawText(ctx, v.replay ? 'REPLAY' : 'LIVE', x + TAG_TEXT_X, y + 4, v.replay ? REPLAY_STYLE : LIVE_STYLE);
+    } finally {
+      clipEnd(ctx);
+    }
   }
   x += tagW + 1;
 
-  // programme name in its accent, for a few seconds after the open
+  // programme name in its accent, for a few seconds after the open (NEWS IN 60: the whole episode)
   if (v.program && v.programIn !== null) {
     const pw = measureText(v.program.title) + 8;
     const pin = easeOut((t - v.programIn) / 0.35);
     const pout = v.programOut === null ? 0 : easeIn((t - v.programOut) / 0.25);
     const vis = Math.round(pw * pin * (1 - pout));
     if (vis > 0) {
-      clipped(ctx, x, y, vis, h, () => {
+      clipStart(ctx, x, y, vis, h);
+      try {
         rect(ctx, x, y, pw, h, v.program.color);
-        drawText(ctx, v.program.title, x + 4, y + 3, { color: inkOn(v.program.color) });
-      });
+        drawText(ctx, v.program.title, x + 4, y + 3, inkStyle(v.program.color));
+      } finally {
+        clipEnd(ctx);
+      }
     }
   }
 
@@ -168,24 +188,31 @@ export function drawTopRow(ctx, t, v) {
   const cp = easeOut((since - 0.05) / 0.3);
   const cvis = Math.round(cw * cp);
   if (cvis > 0) {
-    clipped(ctx, W - TOP.x - cvis, y, cvis, h, () => {
+    clipStart(ctx, W - TOP.x - cvis, y, cvis, h);
+    try {
       rect(ctx, cx, y, cw, h, P.black);
-      drawText(ctx, CLOCK_LABEL, cx + 4, y + 4, { color: P.fog, font: 'micro' });
-      drawText(ctx, v.clock, cx + 4 + labelW + 4, y + 3, { color: P.white });
-    });
+      drawText(ctx, CLOCK_LABEL, cx + 4, y + 4, CLOCK_LABEL_STYLE);
+      drawText(ctx, v.clock, cx + 4 + labelW + 4, y + 3, CLOCK_STYLE);
+    } finally {
+      clipEnd(ctx);
+    }
   }
 }
 
 const AD_LABEL = 'ADVERTISEMENT';
 const AD_W = measureText(AD_LABEL, 1, 'micro') + 8;
+const AD_STYLE = Object.freeze({ color: P.silver, font: 'micro' });
 
-/** Small, quiet "ADVERTISEMENT" tag over commercials (fades in with the ad). */
+/** Small, quiet "ADVERTISEMENT" tag over commercials (wipes in with the ad). */
 export function drawAdTag(ctx, t, onAt) {
   const p = clamp01((t - onAt - 0.2) / 0.3);
   const vis = Math.round(AD_W * easeOut(p));
   if (vis <= 0) return;
-  clipped(ctx, TOP.x, TOP.y, vis, 9, () => {
+  clipStart(ctx, TOP.x, TOP.y, vis, 9);
+  try {
     rect(ctx, TOP.x, TOP.y, AD_W, 9, P.black);
-    drawText(ctx, AD_LABEL, TOP.x + 4, TOP.y + 2, { color: P.silver, font: 'micro' });
-  });
+    drawText(ctx, AD_LABEL, TOP.x + 4, TOP.y + 2, AD_STYLE);
+  } finally {
+    clipEnd(ctx);
+  }
 }

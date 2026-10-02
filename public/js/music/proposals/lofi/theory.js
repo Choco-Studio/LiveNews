@@ -77,6 +77,8 @@ export const QUALITIES = Object.freeze({
   6: [4, 7, 9],
   m6: [3, 7, 9],
   m7b5: [3, 6, 10],
+  '6sus': [5, 9, 14], // 4th, 6th, 9th over the root: Money Minute's C6sus
+  '5add6': [0, 7, 9], // root, 5th, 6th, no third: a drone that belongs to no mode
 });
 
 /**

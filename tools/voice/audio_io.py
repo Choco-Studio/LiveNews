@@ -7,7 +7,8 @@ with decodeAudioData at the exact clip duration, but refuses AAC/.m4a
 builds ship without proprietary codecs. Opus is also the better speech codec.
 64 kbit/s mono (~8 KB per second): at 48 kbit/s the decoded loudness of the
 robot voice dropped 0.5 LU (dense harmonic spectrum), at 64 it holds -16.1.
-.m4a (AAC, 48 kHz) is kept for humans listening on phones/QuickTime, .wav
+.m4a (AAC 192 kbit/s, 48 kHz) is kept for humans listening on phones/QuickTime
+(at 128 kbit/s ffmpeg's AAC coder overshot true peak by up to 1.8 dB), .wav
 (16-bit PCM with TPDF dither) for tests and offline tools.
 
 Every file is written to a temporary name next to the target and renamed into
@@ -31,7 +32,7 @@ _ENCODERS = {
     '.opus': ['-c:a', 'libopus', '-b:a', '64k', '-vbr', 'on', '-application', 'audio',
               '-frame_duration', '20', '-f', 'ogg'],
     '.webm': ['-c:a', 'libopus', '-b:a', '64k', '-vbr', 'on', '-application', 'audio', '-f', 'webm'],
-    '.m4a': ['-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-movflags', '+faststart', '-f', 'ipod'],
+    '.m4a': ['-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-movflags', '+faststart', '-f', 'ipod'],
     '.mp3': ['-c:a', 'libmp3lame', '-q:a', '3', '-ar', '44100', '-f', 'mp3'],
     '.flac': ['-c:a', 'flac', '-f', 'flac'],
 }

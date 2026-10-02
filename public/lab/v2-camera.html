@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camera Lab (v2)</title>
+<style>
+  :root { --bg: #181425; --fg: #c0cbdc; --ui: #262b44; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 monospace; }
+  #screen { display: block; width: 1152px; height: 648px; image-rendering: pixelated; background: #000; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--ui); align-items: center; }
+  button, select { background: #3a4466; color: #fff; border: 0; padding: 4px 8px; font: inherit; }
+  #t { width: 360px; }
+</style>
+</head>
+<body>
+<!-- CAMERA stream lab: framing gallery, move player, storyboard of a real
+     episode through planSegment. window.__lab: see js/v2/canvas25d/labs/camera.js -->
+<canvas id="screen" width="384" height="216"></canvas>
+<div class="bar">
+  <select id="mode"><option>gallery</option><option>move</option><option>storyboard</option><option>framing</option></select>
+  <select id="programme"><option>world-now</option><option>tech-bytes</option><option>cosmos</option><option>money-minute</option><option>news-60</option></select>
+  <select id="move"><option>greeting</option><option>lead</option><option>signoff</option><option>catch</option></select>
+  <label><input type="checkbox" id="overlay"> overlay</label>
+  <button id="play">play</button>
+  <input id="t" type="range" min="0" max="20" step="0.01" value="0">
+  <span id="info"></span>
+</div>
+<script type="module">
+  import { createCameraLab } from '../js/v2/canvas25d/labs/camera.js';
+  const canvas = document.getElementById('screen');
+  const lab = createCameraLab(canvas);
+  window.__lab = lab;
+  const $ = (id) => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+  for (const k of ['mode', 'programme', 'move', 'framing', 'focus']) if (params.has(k)) lab.set({ [k]: params.get(k) });
+  if (params.has('overlay')) lab.set({ overlay: true });
+  $('mode').value = lab.state.mode;
+  $('programme').value = lab.state.programme;
+  const redraw = () => lab.render(Number($('t').value));
+  $('mode').onchange = () => { lab.set({ mode: $('mode').value }); redraw(); };
+  $('programme').onchange = () => { lab.set({ programme: $('programme').value }); redraw(); };
+  $('move').onchange = () => { lab.set({ move: $('move').value }); redraw(); };
+  $('overlay').onchange = () => { lab.set({ overlay: $('overlay').checked }); redraw(); };
+  $('t').oninput = redraw;
+  let playing = false, t0 = 0;
+  $('play').onclick = () => { playing = !playing; t0 = performance.now() - Number($('t').value) * 1000; };
+  function loop() {
+    if (playing) {
+      const t = (performance.now() - t0) / 1000;
+      $('t').value = t % 20;
+      lab.render(t % 20);
+    }
+    requestAnimationFrame(loop);
+  }
+  lab.render(0);
+  if (!params.has('still')) loop();
+</script>
+</body>
+</html>

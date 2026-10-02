@@ -1,0 +1,189 @@
+{
+ "kind": "episode",
+ "id": "emur8298l5",
+ "createdAt": "2026-10-02T17:13:29.157Z",
+ "program": {
+  "id": "money-minute",
+  "title": "MONEY MINUTE",
+  "tagline": "MARKETS & YOUR MONEY",
+  "theme": "money"
+ },
+ "cast": {
+  "A": "penny"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "write",
+   "ms": 39,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 0,
+   "images": 0
+  }
+ ],
+ "title": "MONEY MINUTE (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Chocolate makers warn of higher prices as cocoa stays expensive. Also coming up: Rice prices ease in Asia after strong harvests. And later, our number of the day. This is MONEY MINUTE. I'm Penny Sterling.",
+   "cues": [
+    {
+     "char": 64,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 184,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s13ed823f35",
+    "s5db1cb2e8a",
+    "s62cbd69778"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "From Ledger Line: Several chocolate makers say they will raise prices again because cocoa remains near record levels. Cocoa has more than doubled in price in two years.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "lean_in"
+    }
+   ],
+   "storyId": "s13ed823f35",
+   "headline": "Chocolate makers warn of higher prices",
+   "shot": "close",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ECONOMY"
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Ledger Line reports that rice prices in Asia have fallen 8 percent since July after strong harvests in Thailand and Vietnam. Traders say supplies look healthy for the rest of the year.",
+   "cues": [],
+   "storyId": "s5db1cb2e8a",
+   "headline": "Rice prices ease in Asia",
+   "shot": "close",
+   "breaking": false,
+   "location": null,
+   "fact": "RICE PRICES DOWN 8%",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ECONOMY",
+   "map": [
+    {
+     "place": "THAILAND",
+     "lat": 15.9,
+     "lon": 100.9
+    },
+    {
+     "place": "VIETNAM",
+     "lat": 14.1,
+     "lon": 108.3
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Our number of the day: 62 percent. Thousands of small shops in Lagos have switched to solar panels to cut fuel costs. A survey found 62 percent of traders now use solar for some of their power.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "steeple"
+    }
+   ],
+   "storyId": "s62cbd69778",
+   "headline": "Lagos shops switch to solar power to cut fuel costs",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "LAGOS, NIGERIA",
+    "lat": 6.52,
+    "lon": 3.38
+   },
+   "fact": "62% OF TRADERS",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "62%",
+     "label": "OF TRADERS"
+    }
+   ],
+   "feature": "number"
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's your MONEY MINUTE. I'm Penny Sterling. Stay with us on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 72,
+     "slot": null,
+     "action": "papers"
+    }
+   ]
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s13ed823f35",
+   "headline": "Chocolate makers warn of higher prices",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ECONOMY"
+  },
+  {
+   "storyId": "s5db1cb2e8a",
+   "headline": "Rice prices ease in Asia",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ECONOMY"
+  },
+  {
+   "storyId": "s62cbd69778",
+   "headline": "Lagos shops switch to solar power to cut fuel costs",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY"
+  }
+ ],
+ "storyIds": [
+  "s13ed823f35",
+  "s5db1cb2e8a",
+  "s62cbd69778"
+ ]
+}

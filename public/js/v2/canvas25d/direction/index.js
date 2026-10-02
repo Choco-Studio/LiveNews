@@ -102,9 +102,13 @@ export function arbitrate(events, ctx) {
   return out;
 }
 
+const PLANNERS = { shots: planShots, gestures: planGestures, behaviour: planBehaviour };
+
 /**
  * Plan one segment. Never throws: a malformed episode or a planner bug gives
  * fewer events, and the Stage still animates idle, blinks and mouths.
+ * opts: { presenters, gapAfter } for segmentContext, and `planners` ({ shots,
+ * gestures, behaviour } overrides, for tests and labs).
  */
 export function planSegment(episode, index, opts = {}) {
   const errors = [];
@@ -115,10 +119,11 @@ export function planSegment(episode, index, opts = {}) {
     logOnce('segmentContext', err);
     return { ctx: null, events: [], errors: ['context'] };
   }
-  const shots = run('planShots', planShots, ctx, errors).map((e) => ({ ...e, planner: 'shots' }));
+  const P = opts.planners || PLANNERS;
+  const shots = run('planShots', P.shots || planShots, ctx, errors).map((e) => ({ ...e, planner: 'shots' }));
   ctx.shots = shots.filter((e) => e.kind === 'shot').map((e) => ({ at: e.at, char: e.char, shot: e.shot, focus: e.focus }));
-  const gestures = run('planGestures', planGestures, ctx, errors).map((e) => ({ ...e, planner: 'gestures' }));
-  let behaviour = run('planBehaviour', planBehaviour, ctx, errors).map((e) => ({ ...e, planner: 'behaviour' }));
+  const gestures = run('planGestures', P.gestures || planGestures, ctx, errors).map((e) => ({ ...e, planner: 'gestures' }));
+  let behaviour = run('planBehaviour', P.behaviour || planBehaviour, ctx, errors).map((e) => ({ ...e, planner: 'behaviour' }));
   if (errors.includes('planBehaviour')) behaviour = defaultGlance(ctx).map((e) => ({ ...e, planner: 'behaviour' }));
   const events = arbitrate([...shots, ...gestures, ...behaviour], ctx);
   return { ctx, events, errors };

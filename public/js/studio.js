@@ -14,6 +14,7 @@ import { drawOpen } from './scenes/opens.js';
 import { drawLogo, measureLogo } from './logo.js';
 import { ACTIONS } from './cues.js';
 import { Graphics } from './graphics/index.js';
+import { FrameGuard } from './graphics/guard.js';
 
 export { W, H };
 
@@ -54,6 +55,7 @@ export class Renderer {
     this.sctx.imageSmoothingEnabled = false;
     this.anim = {};
     this.graphics = new Graphics({ audio });
+    this.guard = new FrameGuard(); // a throwing shot shows a held frame / slate, never black
   }
 
   anchorState(slot, t, scene) {
@@ -262,7 +264,7 @@ export class Renderer {
   }
 
   render(t, scene) {
-    this.drawShot(t, scene);
+    this.guard.shot(this, t, scene); // drawShot, isolated: overlays and stinger always draw
     this.drawOverlays(t, scene);
     if (scene.stinger) {
       const p = (t - scene.stinger.start) / cards.STINGER_DURATION;

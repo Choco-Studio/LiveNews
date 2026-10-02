@@ -311,6 +311,9 @@ class WorkerTest(unittest.TestCase):
             finally:
                 if proc.poll() is None:
                     proc.kill()
+                    proc.wait(timeout=10)
+                proc.stdin.close()
+                proc.stdout.close()
 
 
 if __name__ == '__main__':

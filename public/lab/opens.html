@@ -24,7 +24,7 @@
     </div>
     <div id="note">
       Dev tool for the opens / cards / map area. Deterministic: window.__lab.render(t) draws instant t;
-      window.__lab.set({ kind, id, ... }) picks what to draw. URL: ?kind=open&amp;id=world-now&amp;t=3.5
+      window.__lab.set({ kind, id, ... }) picks what to draw (kind = open | card | map | cut; cut = the open's last instants and the cut into the programme with the real graphics package). URL: ?kind=open&amp;id=world-now&amp;t=3.5
     </div>
     <script type="module">
       // Lab for public/js/scenes/{opens,cards,worldmap}.js: every frame is a pure
@@ -35,6 +35,7 @@
       import { pixelate } from '../js/pixelate.js';
       import { setNow } from '../js/gfx/clock.js';
       import { P as PAL } from '../js/palette.js';
+      import { Graphics } from '../js/graphics/index.js';
 
       // Friday 2 October 2026, 18:42:07 in London (17:42 UTC): a fixed clock for every frame.
       const FIXED_NOW = Date.UTC(2026, 9, 2, 17, 42, 7);
@@ -195,7 +196,32 @@
         },
         card: CARDS,
         map: MAPS,
+        cut: { 'world-now-montage': cut('world-now', 'montage'), 'news-60-wide': cut('news-60', 'wide'), 'cosmos-montage': cut('cosmos', 'montage') },
       };
+
+      // The cut from an open into the programme, with the real on-screen graphics package: the open ends
+      // on the graphics' own top row, so nothing may wipe in again at 4.0 s (t is seconds from the open).
+      const CUT_RUNDOWN = [
+        { storyId: 'a', headline: 'Storm closes ports across the north as ferries cancel', source: 'BBC News', category: 'world' },
+        { storyId: 'b', headline: 'New chip promises week-long phone battery', source: 'The Verge', category: 'tech' },
+      ];
+      function cut(id, after) {
+        const program = { id, title: PROGRAMS[id].title, tagline: PROGRAMS[id].tagline, theme: { 'world-now': 'world', 'tech-bytes': 'tech', cosmos: 'space', 'money-minute': 'money', 'news-60': 'flash' }[id] || 'world' };
+        const sceneAt = (t) => ({ shot: t < 4 ? 'open' : after, program, rundown: CUT_RUNDOWN, storyId: null, programTagUntil: 4 + 15, ticker: [], lowerThird: null, subtitle: null, replay: false });
+        return (t) => {
+          const g = new Graphics({ now: () => FIXED_NOW });
+          for (let k = 0; k < t; k += 1 / 30) g.update(k, sceneAt(k));
+          const scene = sceneAt(t);
+          g.update(t, scene);
+          if (t < 4) drawOpen(ctx, t, t, id, OPEN_INFO[id]);
+          else if (after === 'montage') cards.drawHeadlineFrame(ctx, t, t - 4, { index: 0, total: 2, ...CUT_RUNDOWN[0], programId: id });
+          else {
+            ctx.fillStyle = PAL.ink;
+            ctx.fillRect(0, 0, 384, 216);
+          }
+          g.render(ctx, t, scene);
+        };
+      }
 
       const params = new URLSearchParams(location.search);
       const state = { kind: params.get('kind') || 'open', id: params.get('id') || 'world-now', t: Number(params.get('t') || 0) };

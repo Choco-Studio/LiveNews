@@ -81,6 +81,16 @@ export class Synth {
     return t + buf.duration;
   }
 
+  // Early release of a held voice (frame-driven chords): from wherever its
+  // envelope is at `at`, fade out over the voice's release and stop.
+  release(param, oscs, at, r) {
+    try {
+      param.cancelScheduledValues(at);
+      param.setTargetAtTime(0, at, Math.max(0.02, r / 4));
+      for (const o of oscs) o.stop(at + r * 1.6 + 0.05);
+    } catch { /* already ended */ }
+  }
+
   // Frees a live voice's nodes once its source has ended (long sessions on air).
   free(src, ...nodes) {
     src.onended = () => {
@@ -172,7 +182,7 @@ export class Synth {
   }
 
   /** Sustained tone with optional delayed vibrato and glide (horn, lead, bass). */
-  tone(dest, t, dur, m, vel, { wave = 'tri', a = 0.01, d = 0.2, s = 0.7, r = 0.15, cut = 0, cutEnv = 0, q = 0.7, vib = 0, vibRate = 5.2, vibDelay = 0.25, glide = 0, detune = 0, gain = 0.5 } = {}) {
+  tone(dest, t, dur, m, vel, { wave = 'tri', a = 0.01, d = 0.2, s = 0.7, r = 0.15, cut = 0, cutEnv = 0, q = 0.7, vib = 0, vibRate = 5.2, vibDelay = 0.25, glide = 0, detune = 0, gain = 0.5, handle = null } = {}) {
     const c = this.ctx;
     this.note('tone', dest, t, dur, m);
     const o = this.osc(wave, hz(m), t);
@@ -209,6 +219,7 @@ export class Synth {
     o.start(t);
     o.stop(end);
     this.free(o, g, node === o ? null : node);
+    if (handle) handle.release = (at) => this.release(g.gain, [o], at, r);
     return end;
   }
 
@@ -216,7 +227,7 @@ export class Synth {
    * Chord pad: two detuned oscillators per note spread left/right through one
    * low-pass that can open over the note ("rising pad").
    */
-  pad(dest, t, dur, notes, vel, { wave = 'soft', a = 0.8, r = 1.4, cut = 900, cutTo = 0, q = 0.5, detune = 7, spread = 0.7, gain = 0.32, s = 1, d = 0.5 } = {}) {
+  pad(dest, t, dur, notes, vel, { wave = 'soft', a = 0.8, r = 1.4, cut = 900, cutTo = 0, q = 0.5, detune = 7, spread = 0.7, gain = 0.32, s = 1, d = 0.5, handle = null } = {}) {
     const c = this.ctx;
     for (const m of notes) this.note('pad', dest, t, dur, m);
     const f = this.filter('lowpass', cut, q);
@@ -232,6 +243,7 @@ export class Synth {
     pr.connect(f);
     f.connect(g).connect(dest);
     let last = null;
+    const oscs = [];
     for (const m of notes) {
       for (const side of [-1, 1]) {
         const o = this.osc(wave, hz(m), t);
@@ -240,6 +252,7 @@ export class Synth {
         o.start(t);
         o.stop(end);
         this.free(o);
+        oscs.push(o);
         last = o;
       }
     }
@@ -250,6 +263,7 @@ export class Synth {
         for (const n of [pl, pr, f, g]) n.disconnect();
       };
     }
+    if (handle) handle.release = (at) => this.release(g.gain, oscs, at, r);
     return end;
   }
 

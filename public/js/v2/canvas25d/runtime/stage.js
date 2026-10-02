@@ -1,0 +1,346 @@
+// The v2 Stage (owner: INTEGRATION stream): the live studio picture of the
+// real channel, built by studio.js's Renderer when v2 is on (runtime/host.js
+// wraps it with the fallback rules). Nothing here is planned per story: the
+// actors come from the episode's cast, the events from the director's segment
+// plan (scene.segPlan), the camera from the director's shot (scene.shot /
+// framing / focus / cameraMove / shotSince), the set from the programme.
+//
+// Every frame, update() (all shots, cheap bookkeeping):
+//   - a new episode (scene.episode.id, else programme + cast) rebuilds the actors:
+//     lookFor(cast[slot], channel.presenters[id]); seats A/B (side +1 / -1) or
+//     solo (side 0); seed = hashSeed(episode.id + slot); perf.speech =
+//     liveSpeech() over a per-frame cache, so audio.speechFrame() is sampled once
+//     per slot per frame (the lag pose and FACES' adapter read the cached frame);
+//   - real cuts (shotSince / shot / focus / framing change) go to the cue clock
+//     (cut guard), re-frame the camera and latch the wall state (the wall only
+//     changes under a cut);
+//   - the cue clock fires the plan's events into the actors; emotions follow
+//     scene.anchors (the director's per-segment moods); listeners get perf.listen.
+// draw() (studio shots only): camera (CAMERA framing() / cameraAt(), presets
+// if they are missing), background + desk (SET, programme style, live wall,
+// detail level), actors clipped by the desk, present, then the inset picture
+// box on singles (until the over-the-shoulder framing carries the picture).
+// studio.js then draws graphics and stingers on top, exactly as before.
+// The rig runs on its own clock (renderer t - epoch, reset per episode and
+// moved back under a cut after 14 min) because the idle tables cover 15 min.
+// No per-frame allocation in this file.
+import { frame, drawActors, actor as makeActor, QUALITY } from '../scene.js';
+import * as SETM from '../studio/set.js';
+import { SET, kAt, sxOf, syOf } from '../studio/geometry.js';
+import * as CAM from '../camera.js';
+import { liveSpeech } from '../speech.js';
+import { hashSeed } from '../direction/context.js';
+import { u32 } from '../pixbuf.js';
+import { P } from '../../../palette.js';
+import { THEME_ACCENT } from '../../../cast.js';
+import { CueClock, prunePerf, shiftPerf } from './cueclock.js';
+
+/** Legacy shot names the Stage draws (framings travel in scene.framing). */
+export const STUDIO_SHOTS = new Set(['wide', 'close']);
+
+const CLOCK_REBASE = 840; // s of rig time before the rig clock moves back (at the next cut)
+const PRUNE_EVERY = 2; // s
+const W = 384;
+
+// SET's per-programme styles land in studio/styles.js; until then the home look.
+let STYLES = null;
+import('../studio/styles.js').then(
+  (m) => (STYLES = m),
+  () => {}
+);
+
+/** Seats for a cast: A left (+1: partner on screen-right), B right (-1), or one centred solo seat (0). */
+export function castSeats(cast) {
+  const c = cast && typeof cast === 'object' ? cast : {};
+  if (c.A && c.B) {
+    return [
+      { slot: 'A', X: SET.seatX.A, side: 1 },
+      { slot: 'B', X: SET.seatX.B, side: -1 },
+    ];
+  }
+  const slot = c.A ? 'A' : Object.keys(c).find((k) => c[k]);
+  return slot ? [{ slot, X: SET.seatX.solo ?? 0, side: 0 }] : [];
+}
+
+/** Identity of what is on air: the episode id, else programme + cast. */
+export function episodeKey(scene) {
+  if (scene?.episode?.id) return String(scene.episode.id);
+  const c = scene?.cast || {};
+  return `${scene?.program?.id || ''}|${c.A || ''}|${c.B || ''}`;
+}
+
+/** Framing for a legacy shot when the director sent none. */
+export function defaultFraming(shot, solo, inset) {
+  if (shot === 'close') return solo ? (inset ? 'mcu-l' : 'mcu') : 'single';
+  return solo ? 'solo-wide' : 'wide';
+}
+
+const REST_FRAME = Object.freeze({ slot: null, speaking: false, level: 0, viseme: 'rest', next: 'rest', mix: 0, wordIndex: -1, charIndex: -1, sentenceIndex: -1, accent: 0, pause: false });
+
+/** The wall a scene asks for (until SET's wallFromScene() lands). */
+function wallOf(scene, plan, out) {
+  const w = scene.wall || {};
+  const seg = plan?.ctx?.seg?.type === 'story' && plan.ctx.seg.storyId === scene.storyId ? plan.ctx.seg : null;
+  out.image = null;
+  out.location = null;
+  out.figure = null;
+  out.label = null;
+  const img = w.mode === 'image' ? scene.images?.get?.(w.storyId || scene.storyId) : null;
+  if (img) {
+    out.mode = 'picture';
+    out.image = img;
+    out.label = seg?.kicker || null;
+  } else if (seg?.location && Number.isFinite(seg.location.lat)) {
+    out.mode = 'map';
+    out.location = seg.location;
+    out.label = seg.location.place || null;
+  } else if (seg && (seg.numbers?.length || seg.fact)) {
+    out.mode = 'figure';
+    out.figure = seg.numbers?.[0] || seg.fact;
+    out.label = seg.kicker || null;
+  } else if (w.mode === 'source' && (seg?.kicker || w.source)) {
+    out.mode = 'plate';
+    out.label = seg?.kicker || w.source;
+  } else out.mode = 'idle';
+  return out;
+}
+
+export class Stage {
+  /** @param opts { audio (speechFrame), channel ({ presenters }), log(msg) } */
+  constructor({ audio = null, channel = null, log = null } = {}) {
+    this.audio = audio;
+    this.presenters = channel?.presenters || {};
+    this.log = log || ((m) => console.warn(`[v2 stage] ${m}`));
+    this.seen = new Set();
+    this.onError = null; // (t) => void, set by the host
+    this.lod = 0; // detail level from the watchdog (0..2)
+    this.clock = new CueClock({ log: (m) => this.log(m) });
+    this.key = null;
+    this.actors = [];
+    this.frames = {};
+    // liveSpeech() reads this proxy: one real speechFrame() per slot per frame (sampled in update)
+    this.proxy = { speechFrame: (ms, slot) => this.frames[slot] || REST_FRAME };
+    this.epoch = 0;
+    this.cast = {};
+    this.solo = false;
+    this.programId = 'world-now';
+    this.accent = u32(P.red);
+    this.style = null;
+    this.cutSince = null;
+    this.cutShot = null;
+    this.cutFocus = null;
+    this.cutFraming = null;
+    this.cutAt = -Infinity;
+    this.spec = { framing: 'wide', cast: null, focus: 'A', solo: false, side: undefined, programId: 'world-now', move: null };
+    this.base = null; // camera of the current framing
+    this.camOut = CAM.makeCamera();
+    this.wall = { mode: 'idle', image: null, location: null, figure: null, label: null, since: 0, focus: 'A', solo: false };
+    this.bgOpts = { style: null, wall: this.wall, shotSince: 0, lod: 0, cut: false };
+    this.clipRows = new Int16Array(W);
+    this.list = [];
+    this.vis = [];
+    this.inset = null;
+    this.nextPrune = 0;
+    this.speaker = null;
+  }
+
+  setChannel(channel) {
+    this.presenters = channel?.presenters || {};
+  }
+
+  /**
+   * One renderer frame. Bookkeeping always; the studio picture when `draw`.
+   * Returns false on an error (logged once per distinct message): the old path draws that frame.
+   */
+  frame(ctx, t, scene, draw = true) {
+    try {
+      this.update(t, scene);
+      if (draw) this.render(ctx, t, scene);
+      return true;
+    } catch (err) {
+      const msg = `${err?.name || 'Error'}: ${err?.message || err}`;
+      if (!this.seen.has(msg) && this.seen.size < 50) {
+        this.seen.add(msg);
+        try {
+          console.error('[v2 stage]', err);
+        } catch {
+          /* no console */
+        }
+      }
+      this.onError?.(t);
+      return false;
+    }
+  }
+
+  // --- bookkeeping -----------------------------------------------------------
+
+  update(t, scene) {
+    const key = episodeKey(scene);
+    if (key !== this.key) this.build(scene, t, key);
+    const audio = this.audio;
+    if (audio && typeof audio.speechFrame === 'function') {
+      for (let i = 0; i < this.actors.length; i++) {
+        const slot = this.actors[i].slot;
+        this.frames[slot] = audio.speechFrame(t * 1000, slot, this.frames[slot] || {}) || REST_FRAME;
+      }
+    }
+    const plan = scene.segPlan ?? null;
+    const own = plan && (!plan.ctx || !scene.episode?.id || plan.ctx.episodeId === scene.episode.id);
+    this.clock.load(own ? plan : null, t);
+    if (scene.shotSince !== this.cutSince || scene.shot !== this.cutShot || scene.focus !== this.cutFocus || (scene.framing ?? null) !== this.cutFraming) this.onCut(t, scene);
+    // who speaks: the voice, else the plan's speaker while its speech runs
+    let speaker = null;
+    for (let i = 0; i < this.actors.length; i++) if (this.frames[this.actors[i].slot]?.speaking) speaker = this.actors[i].slot;
+    if (!speaker && plan?.ctx && plan.speechStart != null && plan.speechEnd == null) speaker = plan.ctx.speaker;
+    this.speaker = speaker;
+    const rt = t - this.epoch;
+    for (let i = 0; i < this.actors.length; i++) {
+      const a = this.actors[i];
+      const emo = scene.anchors?.[a.slot]?.emotion || 'neutral';
+      if (emo !== a.emotion) {
+        a.emotion = emo;
+        a.perf.emotions.push({ t0: rt, name: emo });
+      }
+      a.perf.listen = this.actors.length > 1 && speaker !== null && a.slot !== speaker;
+    }
+    this.clock.tick(t, own && plan.ctx ? this.frames[plan.ctx.speaker] || null : null);
+    if (t >= this.nextPrune) {
+      this.nextPrune = t + PRUNE_EVERY;
+      for (let i = 0; i < this.actors.length; i++) prunePerf(this.actors[i].perf, rt);
+    }
+  }
+
+  build(scene, t, key) {
+    this.key = key;
+    const cast = scene.episode?.cast || scene.cast || {};
+    this.cast = cast;
+    const seats = castSeats(cast);
+    this.solo = seats.length === 1;
+    this.epoch = t;
+    this.clock.reset();
+    this.clock.epoch = t;
+    this.clock.perfs = {};
+    const epId = scene.episode?.id ?? key;
+    this.actors = seats.map(({ slot, X, side }) => {
+      const id = cast[slot];
+      const perf = { side, seed: hashSeed(`${epId}${slot}`), gestures: [], emotions: [], look: [], speech: liveSpeech(this.proxy, slot), listen: false, gain: 1 };
+      this.clock.perfs[slot] = perf;
+      return { slot, id, X, side, emotion: null, actor: makeActor(id, perf, this.presenters?.[id]), perf };
+    });
+    this.list = this.actors.map((a) => ({ actor: a.actor, X: a.X, x: 0, y: 0, s: 1, clip: true, slot: a.slot }));
+    for (const a of this.actors) this.frames[a.slot] ||= {};
+    const program = scene.episode?.program || scene.program || {};
+    this.programId = program.id || 'world-now';
+    this.accent = u32(THEME_ACCENT[program.theme] || P.red);
+    this.style = null;
+    if (STYLES) {
+      try {
+        this.style = (STYLES.styleFor || STYLES.setStyle)?.(this.programId) || null;
+      } catch (err) {
+        this.log(`style ${this.programId}: ${err?.message || err}`);
+      }
+    }
+    this.cutSince = undefined; // re-frame on the next update
+  }
+
+  /** A real cut: cue clock guard, camera framing, wall latch, rig clock rebase. */
+  onCut(t, scene) {
+    this.cutSince = scene.shotSince;
+    this.cutShot = scene.shot;
+    this.cutFocus = scene.focus;
+    this.cutFraming = scene.framing ?? null;
+    this.cutAt = t;
+    this.clock.cut(t);
+    if (t - this.epoch > CLOCK_REBASE) {
+      const d = t - this.epoch;
+      for (const a of this.actors) shiftPerf(a.perf, d);
+      this.epoch = t;
+      this.clock.epoch = t;
+    }
+    const plan = scene.segPlan ?? null;
+    const wall = this.wall;
+    if (typeof SETM.wallFromScene === 'function') {
+      const w = SETM.wallFromScene(scene, this.style || this.programId);
+      Object.assign(wall, w);
+    } else wallOf(scene, plan, wall);
+    wall.since = scene.shotSince ?? t;
+    wall.focus = this.solo ? 'solo' : scene.focus === 'B' ? 'B' : 'A';
+    wall.solo = this.solo;
+    this.inset = STUDIO_SHOTS.has(scene.shot) && scene.shot === 'close' && wall.mode === 'picture' && scene.framing !== 'ots' ? wall.image?.small || null : null;
+    // camera framing for this shot
+    const spec = this.spec;
+    spec.framing = scene.framing || defaultFraming(scene.shot, this.solo, !!this.inset);
+    spec.cast = this.cast;
+    spec.focus = scene.focus in this.cast ? scene.focus : this.actors[0]?.slot || 'A';
+    spec.solo = this.solo;
+    spec.side = this.solo && this.inset ? 1 : undefined;
+    spec.programId = this.programId;
+    spec.move = scene.cameraMove || null;
+    this.base = this.frameCamera(spec, scene);
+    this.bgOpts.cut = true;
+  }
+
+  frameCamera(spec, scene) {
+    if (typeof CAM.framing === 'function') {
+      try {
+        const cam = CAM.framing(spec.framing, spec);
+        if (cam) return cam;
+      } catch (err) {
+        this.log(`framing ${spec.framing}: ${err?.message || err}`);
+      }
+    }
+    // presets (the approved demo cameras) until CAMERA's framing() exists
+    if (scene.shot === 'close') return CAM.singleCam(this.solo ? 'A' : spec.focus, 3.4);
+    return CAM.makeCamera({ x: 0, y: -60, z: this.solo ? 120 : 0, zoom: 1, hy: this.solo ? 50 : 52 });
+  }
+
+  // --- picture ---------------------------------------------------------------
+
+  render(ctx, t, scene) {
+    const spec = this.spec;
+    let cam = this.base || CAM.makeCamera();
+    if (spec.move && typeof CAM.cameraAt === 'function') cam = CAM.cameraAt(spec, t - (scene.shotSince ?? this.cutAt), this.camOut) || cam;
+    QUALITY.lag = this.lod < 1;
+    const o = this.bgOpts;
+    o.style = this.style || this.programId;
+    o.shotSince = scene.shotSince ?? this.cutAt;
+    o.lod = this.lod;
+    SETM.drawBackground(frame, cam, t, o);
+    o.cut = false;
+    SETM.drawDesk(frame, cam, this.clipRows, this.style ? undefined : this.accent);
+    // place the actors (inline placeActor: no allocation), skip anyone off screen
+    const k = kAt(cam, SET.presenterZ);
+    const s = Math.max(0.5, Math.round(22 * k) / 22);
+    const y = syOf(cam, k, SET.neckY);
+    const vis = this.vis;
+    vis.length = 0;
+    for (let i = 0; i < this.list.length; i++) {
+      const it = this.list[i];
+      it.x = sxOf(cam, k, it.X);
+      it.y = y;
+      it.s = s;
+      if (it.x + 48 * s >= 0 && it.x - 48 * s <= W) vis.push(it);
+    }
+    const heads = drawActors(t - this.epoch, vis, this.clipRows);
+    frame.present(ctx);
+    if (this.inset) this.drawInset(ctx, heads);
+  }
+
+  /** The story picture beside a single (old renderer's inset box, calmer frame). */
+  drawInset(ctx, heads) {
+    const img = this.inset;
+    let hx = 120;
+    for (let i = 0; i < this.vis.length; i++) if (this.vis[i].slot === this.spec.focus && heads[i]) hx = heads[i].cx;
+    const bw = img.width, bh = img.height;
+    const bx = hx < W / 2 ? W - 32 - bw : 32;
+    const by = 30;
+    ctx.fillStyle = P.black;
+    ctx.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
+    ctx.fillStyle = P.steel;
+    ctx.fillRect(bx - 3, by - 3, bw + 6, 1);
+    ctx.fillRect(bx - 3, by + bh + 2, bw + 6, 1);
+    ctx.fillRect(bx - 3, by - 2, 1, bh + 4);
+    ctx.fillRect(bx + bw + 2, by - 2, 1, bh + 4);
+    ctx.drawImage(img, bx, by);
+  }
+}

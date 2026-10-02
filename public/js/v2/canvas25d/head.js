@@ -7,10 +7,23 @@
 // and chin with it. headFrame() maps head-local units to screen pixels (with
 // roll), snapping the origin so a still head is a still picture.
 //
+// Skin (wave 2): the face is lit like a sculpted head, not a two-tone disc.
+// Each look gets a small normal map in feature space (built once): the
+// skull's curve plus the facial planes a portrait painter blocks in first
+// (brow ridge, eye sockets, cheekbones, nose bridge, tip and wings, the
+// muzzle round the mouth, lips, the groove under the lower lip, chin,
+// temples) and a little occlusion in the creases. Every pixel turns its normal
+// by the head's yaw, pitch and roll and is lit by the key light (upper front,
+// camera-left), so the shadow side bites into the socket, is pushed out by
+// the cheekbone, comes back along the jaw and falls under the nose and lip
+// as the head turns. Four tones of the look's own skin ramp, clean clusters,
+// no dithering; the wide shot keeps a simple lit/shade read.
+//
 // Presenter files (cast/<id>.js) only provide parameters (L.head, L.ears,
 // skin ramps); a presenter that is not human (UNIT-8) replaces drawHead /
 // drawFace through its look's `parts.head` / `parts.face` hooks.
 import { clamp } from './space.js';
+import { LIGHT } from './pixbuf.js';
 
 /** Head half-width at head-local y (units). Returns ≤ 0 outside. */
 export function headHW(H, y, jaw = 0) {
@@ -52,6 +65,9 @@ export function faceInverse(H, x, y, yaw) {
 // ---------------------------------------------------------------------------
 // Head frame: head-local units → screen, with roll; yaw/pitch handled by faceX
 
+/** The jaw never drops more than this many screen pixels (calm speech at every scale). */
+export const JAW_MAX_PX = 2;
+
 export function headFrame(L, sk, toS, s) {
   const h = sk.head;
   const [hx, hy] = toS(L.headAt[0] + h.x, L.headAt[1] + h.y);
@@ -69,7 +85,8 @@ export function headFrame(L, sk, toS, s) {
     sr,
     yaw: h.yaw,
     pitch: h.pitch,
-    jaw: sk.face.jaw || 0,
+    // units; capped so the chin travels at most JAW_MAX_PX on screen
+    jaw: Math.max(0, Math.min(sk.face.jaw || 0, JAW_MAX_PX / s)),
     toScreen(x, y) {
       return [cx + s * (x * cr - y * sr), cy + s * (x * sr + y * cr)];
     },
@@ -104,56 +121,237 @@ export function headBox(head, pad) {
 }
 
 // ---------------------------------------------------------------------------
+// The facial-plane normal map (feature space, yaw 0), one per look
+
+const STEP = 0.125; // units per cell (≤ 0.5 px at s = 4)
+const MAPS = new WeakMap();
+
+/** Gaussian bump list for a look: [cx, cy, sx, sy, amp] (height, units). */
+function bumpsOf(L) {
+  const H = L.head, E = L.eyes, B = L.brows, N = L.nose, M = L.mouth;
+  const ex = E.x, ey = E.y, nw = N.w;
+  const out = [];
+  const pair = (x, y, sx, sy, a) => out.push([-x, y, sx, sy, a], [x, y, sx, sy, a]);
+  pair(ex, B.y + 0.6, 1.9, 0.75, 0.42); // brow ridge over each eye
+  pair(ex - 0.2, ey - 0.1, 1.55, 1.0, -0.72); // eye socket, deepest toward the nose
+  pair(ex + 0.95, ey + 2.35, 1.45, 0.95, 0.5); // cheekbone
+  pair(H.cheekHW - 0.9, ey - 1.8, 1.0, 1.5, -0.32); // temple
+  pair(nw * 0.55, N.y1 - 0.1, 0.48, 0.42, 0.3); // nose wings
+  out.push([0, N.y1 - 0.45, 0.72 * nw, 0.7, N.big ? 0.5 : 0.4]); // nose tip
+  out.push([0, M.y - 0.25, 2.9, 2.0, 0.5]); // the muzzle round the mouth
+  out.push([0, M.y - 0.6, M.w * 0.42, 0.42, 0.16]); // upper lip
+  out.push([0, M.y + 0.7, M.w * 0.36, 0.42, 0.26]); // lower lip
+  out.push([0, M.y + 1.6, 1.5, 0.5, -0.3]); // the groove under the lower lip
+  out.push([0, H.chinY - 1.9, 1.75, 1.2, 0.5]); // chin
+  return out;
+}
+
+/** Occlusion blobs (darken the crease, independent of the light): [cx, cy, sx, sy, amount]. */
+function occlusionOf(L) {
+  const E = L.eyes, N = L.nose, M = L.mouth;
+  const out = [];
+  const pair = (x, y, sx, sy, a) => out.push([-x, y, sx, sy, a], [x, y, sx, sy, a]);
+  pair(E.x - E.w * 0.6, E.y + 0.05, 0.55, 0.55, 0.22); // inner eye corner
+  pair(N.w * 0.42, N.y1 + 0.15, 0.42, 0.32, 0.4); // nostril
+  pair(M.w * 0.56, M.y + 0.05, 0.45, 0.45, 0.2); // mouth corner
+  out.push([0, N.y1 + 0.55, 0.85, 0.35, 0.16]); // under the septum
+  return out;
+}
+
+/** Height of the nose ridge (bridge to tip) at (x, y). */
+function noseRidge(L, x, y) {
+  const E = L.eyes, N = L.nose;
+  const ya = E.y - 1.1, yb = N.y1 - 0.2;
+  if (y < ya - 1) return 0;
+  const k = clamp((y - ya) / (yb - ya), 0, 1);
+  let a = 0.3 + 0.85 * Math.pow(k, 1.25);
+  if (y > yb) a *= Math.exp(-((y - yb) * (y - yb)) / 0.18);
+  if (y < ya) a *= Math.exp(-((ya - y) * (ya - y)) / 0.3);
+  const w = N.w * (0.5 + 0.25 * k);
+  return a * Math.exp(-(x * x) / (w * w));
+}
+
+function faceMap(L) {
+  let fm = MAPS.get(L);
+  if (fm) return fm;
+  const H = L.head;
+  const xr = Math.max(H.R, H.cheekHW) + 1.5;
+  const x0 = -xr, y0 = H.top - 1.5, y1 = H.chinY + 3;
+  const nw = Math.ceil((2 * xr) / STEP) + 1, nh = Math.ceil((y1 - y0) / STEP) + 1;
+  const bumps = bumpsOf(L), occ = occlusionOf(L);
+  const height = new Float32Array(nw * nh);
+  const aoArr = new Float32Array(nw * nh);
+  for (let j = 0; j < nh; j++) {
+    const y = y0 + j * STEP;
+    for (let i = 0; i < nw; i++) {
+      const x = x0 + i * STEP;
+      let h = noseRidge(L, x, y);
+      for (const b of bumps) {
+        const dx = (x - b[0]) / b[2], dy = (y - b[1]) / b[3];
+        const q = dx * dx + dy * dy;
+        if (q < 9) h += b[4] * Math.exp(-q);
+      }
+      let ao = 0;
+      for (const b of occ) {
+        const dx = (x - b[0]) / b[2], dy = (y - b[1]) / b[3];
+        const q = dx * dx + dy * dy;
+        if (q < 9) ao += b[4] * Math.exp(-q);
+      }
+      height[j * nw + i] = h;
+      aoArr[j * nw + i] = ao;
+    }
+  }
+  const nx = new Float32Array(nw * nh), ny = new Float32Array(nw * nh), nz = new Float32Array(nw * nh);
+  for (let j = 0; j < nh; j++) {
+    const y = y0 + j * STEP;
+    const yc = clamp(y, H.top + 0.05, H.chinY - 0.05);
+    const hw = Math.max(1, headHW(H, yc, 0));
+    const dhw = (Math.max(0.5, headHW(H, clamp(yc + 0.25, H.top + 0.05, H.chinY - 0.02), 0)) - Math.max(0.5, headHW(H, clamp(yc - 0.25, H.top + 0.05, H.chinY - 0.05), 0))) / 0.5;
+    // the skull's vertical curve: dome on top, a forehead that slopes back,
+    // a lower face that turns down toward the chin, the chin's underside
+    let vy = 0;
+    if (y < H.craniumY) vy = (y - H.craniumY) / H.R;
+    else if (y < L.eyes.y - 1) vy = -0.22 * (1 - (y - H.craniumY) / Math.max(0.5, L.eyes.y - 1 - H.craniumY));
+    else if (y > H.cheekY) vy = 0.1 + 0.22 * ((y - H.cheekY) / (H.chinY - H.cheekY));
+    if (y > H.chinY - 1.1) vy += (y - (H.chinY - 1.1)) * 1.5;
+    for (let i = 0; i < nw; i++) {
+      const x = x0 + i * STEP;
+      const u = clamp(x / hw, -0.995, 0.995);
+      const bz = Math.sqrt(1 - u * u);
+      const c = j * nw + i;
+      const gx = (height[j * nw + Math.min(nw - 1, i + 1)] - height[j * nw + Math.max(0, i - 1)]) / (2 * STEP);
+      const gy = (height[Math.min(nh - 1, j + 1) * nw + i] - height[Math.max(0, j - 1) * nw + i]) / (2 * STEP);
+      // the jaw's sides face down where the outline narrows
+      const side = -dhw * u * u * 0.8;
+      let ax = u - gx * bz, ay = (vy + side) * bz - gy * bz, az = bz;
+      const n = Math.hypot(ax, ay, az) || 1;
+      nx[c] = ax / n;
+      ny[c] = ay / n;
+      nz[c] = az / n;
+    }
+  }
+  fm = { x0, y0, nw, nh, nx, ny, nz, ao: aoArr };
+  MAPS.set(L, fm);
+  return fm;
+}
+
+// ---------------------------------------------------------------------------
 // Skin
+
+// Light-term thresholds per level of detail: [highlight, base, shade] (below: deep).
+const TONES = [
+  [9, 0.3, -0.42], // wide: lit / shade, no highlight, deep only under the jaw
+  [0.985, 0.32, -0.16], // medium
+  [0.93, 0.36, -0.07], // close-up
+];
+const HW_LUT = new Float32Array(1024);
+// Per-frame state of the head being drawn (module scratch: no closure, no allocation).
+const S = {
+  H: null, fm: null, cx: 0, cy: 0, cr: 1, sr: 0, inv: 1, yawShift: 0, yaw: 0, cyw: 1, syw: 0, cp: 1, sp: 0,
+  pitchShift: 0, jaw: 0, jawY0: 0, jawK: 0, top: 0, lutY0: 0, lutN: 0, th: TONES[2], tier: 2, eyeY: 0, lx: 0, ly: 0, lz: 0,
+};
+
+function skinAt(px, py) {
+  const dx = px - S.cx, dy = py - S.cy;
+  const x = (dx * S.cr + dy * S.sr) * S.inv, y = (-dx * S.sr + dy * S.cr) * S.inv;
+  const H = S.H;
+  if (y < S.top) return -1;
+  const li = Math.round((y - S.lutY0) * 20);
+  if (li < 0 || li >= S.lutN) return -1;
+  const hw = HW_LUT[li];
+  if (hw <= 0) return -1;
+  // the jaw follows the turn a little (3/4 view), as faceX moves the features
+  const jy = clamp((y - H.cheekY) / (H.chinY - H.cheekY), 0, 1);
+  const xs = x - S.yawShift * 1.3 * jy;
+  if (xs > hw || xs < -hw) return -1;
+  // back to feature space: undo pitch, the open jaw and the yaw
+  let fy = y - S.pitchShift;
+  if (S.jaw && fy > S.jawY0) fy -= S.jaw * Math.min(1, (fy - S.jawY0) * S.jawK);
+  let fx = xs;
+  if (S.yaw) {
+    let a = Math.asin(clamp(xs / hw, -1, 1)) - S.yaw;
+    if (a < -1.5707) a = -1.5707;
+    else if (a > 1.5707) a = 1.5707;
+    fx = hw * Math.sin(a);
+  }
+  const fm = S.fm;
+  const ci = Math.round((fx - fm.x0) * 8), cj = Math.round((fy - fm.y0) * 8);
+  if (ci < 0 || cj < 0 || ci >= fm.nw || cj >= fm.nh) return 1;
+  const c = cj * fm.nw + ci;
+  // turn the normal with the head: yaw, then pitch, then roll
+  const nx0 = fm.nx[c], ny0 = fm.ny[c], nz0 = fm.nz[c];
+  const nx1 = nx0 * S.cyw + nz0 * S.syw, nz1 = -nx0 * S.syw + nz0 * S.cyw;
+  const ny2 = ny0 * S.cp + nz1 * S.sp, nz2 = -ny0 * S.sp + nz1 * S.cp;
+  const nx3 = nx1 * S.cr - ny2 * S.sr, ny3 = nx1 * S.sr + ny2 * S.cr;
+  let l = nx3 * S.lx + ny3 * S.ly + nz2 * S.lz - fm.ao[c] * (S.tier ? 1 : 0.4);
+  const th = S.th;
+  if (S.tier === 0) {
+    // wide: one clean terminator, the far edge and the chin's underside in shade
+    if (y > H.chinY + S.jaw - 0.75) return 2;
+    return l > th[1] ? 1 : 2;
+  }
+  if (l > th[0]) return nx3 < 0.05 ? 0 : 1;
+  if (l > th[1]) return 1;
+  if (l > th[2]) return 2;
+  return 3;
+}
 
 export function drawHead(buf, L, m, head, s) {
   const H = L.head;
-  const yawShift = Math.sin(head.yaw);
-  const detail = s >= 2.2;
-  const eyeY = L.eyes.y;
+  S.H = H;
+  S.fm = faceMap(L);
+  S.cx = head.cx;
+  S.cy = head.cy;
+  S.cr = head.cr;
+  S.sr = head.sr;
+  S.inv = 1 / s;
+  S.yaw = head.yaw || 0;
+  S.yawShift = Math.sin(S.yaw);
+  S.cyw = Math.cos(S.yaw);
+  S.syw = Math.sin(S.yaw);
+  const p = head.pitch || 0;
+  S.cp = Math.cos(p);
+  S.sp = Math.sin(p);
+  S.pitchShift = Math.sin(p) * 2.0;
+  S.jaw = head.jaw || 0;
+  S.jawY0 = L.mouth.y - 0.4;
+  S.jawK = 1 / Math.max(0.5, H.chinY - S.jawY0);
+  S.top = H.top - 0.2;
+  S.tier = s < 1.35 ? 0 : s < 2.2 ? 1 : 2;
+  S.th = TONES[S.tier];
+  S.lx = LIGHT[0];
+  S.ly = LIGHT[1];
+  S.lz = LIGHT[2];
+  // half-width per 0.05 u of head-local y (with the jaw), so the pixel loop never calls pow
+  S.lutY0 = H.top - 0.5;
+  const n = Math.min(HW_LUT.length, Math.ceil((H.chinY + S.jaw + 0.5 - S.lutY0) * 20) + 1);
+  for (let i = 0; i < n; i++) HW_LUT[i] = headHW(H, S.lutY0 + i / 20, S.jaw);
+  S.lutN = n;
   const [x0, y0, x1, y1] = headBox(head, 0.5);
-  buf.shape(x0, y0, x1, y1, m.skin, (px, py) => {
-    const [x, y] = head.toLocal(px, py);
-    if (y < H.top - 0.2) return -1;
-    const hw = headHW(H, y, head.jaw);
-    if (hw <= 0) return -1;
-    // the jaw follows the turn a little (3/4 view)
-    const jy = clamp((y - H.cheekY) / (H.chinY - H.cheekY), 0, 1);
-    const xs = x - yawShift * 1.3 * jy;
-    if (Math.abs(xs) > hw) return -1;
-    const nx = xs / hw;
-    // key light from camera-left: a sculpted terminator that cuts into the eye socket,
-    // is pushed out by the cheekbone and comes back in along the jaw
-    let term = 0.5;
-    term -= 0.16 * Math.exp(-((y - eyeY) * (y - eyeY)) / 1.8);
-    term += 0.1 * Math.exp(-((y - eyeY - 2.8) * (y - eyeY - 2.8)) / 2.2);
-    term -= 0.2 * jy * jy;
-    if (y < H.craniumY - 3) term += 0.08;
-    if (nx > term) return nx > term + 0.38 && detail ? 3 : 2;
-    // the underside of the chin
-    if (y > H.chinY + head.jaw - 0.75) return 2;
-    if (detail) {
-      // the forehead dome catches the key: a small soft-edged patch, never a sticker
-      const fy = (y - (H.top + 3.0)) / 1.6, fxx = (nx + 0.45) / 0.3;
-      if (fy * fy + fxx * fxx < 1) return 0;
-    }
-    return 1;
-  });
+  buf.shape(x0, y0, x1, y1, m.skin, skinAt);
 }
+
+const EP = [0, 0];
 
 export function drawEars(buf, L, m, head, s) {
   const H = L.head, E = L.ears;
-  for (const side of [-1, 1]) {
+  const hw = headHW(H, E.y, 0);
+  for (let side = -1; side <= 1; side += 2) {
     // the ear on the side we turn away from slips behind the skull
-    const hw = headHW(H, E.y, 0);
     const turn = Math.sin(head.yaw) * side;
     const ex = side * (hw + 0.25 - Math.max(0, turn) * 2.4 + Math.min(0, turn) * 0.4);
-    const [sx, sy] = head.toScreen(ex, E.y);
+    head.toScreenInto(ex, E.y, EP);
+    const sx = EP[0], sy = EP[1];
+    // lit from camera-left: the near (left) ear one tone lighter than the far one
     buf.ellipse(sx, sy, E.w * s, E.h * 0.5 * s, m.skin, head.roll + side * 0.12, side > 0 ? 1 : 0);
     if (s >= 2) {
-      // inner ear shadow
-      const [ix, iy] = head.toScreen(ex - side * 0.15, E.y + 0.2);
-      for (let j = -1; j <= 1; j++) buf.paint(Math.round(ix), Math.round(iy) + j, m.skin, 2);
+      // the inner fold: a short curve of shade inside the rim, open toward the face
+      const r = E.h * 0.5 * s;
+      const ix = Math.round(sx - side * 0.2 * s);
+      const iy = Math.round(sy);
+      const len = Math.max(1, Math.round(r * 0.55));
+      for (let j = -len; j <= len; j++) buf.paint(ix + (Math.abs(j) === len ? -side : 0), iy + j, m.skin, 2);
+      if (s >= 3) buf.paint(ix - side, iy + len, m.skin, 3);
     }
   }
 }

@@ -198,7 +198,7 @@ test('captions: state rolls pages, keeps the caption briefly after speech, then 
   assert.ok(s.prevLines.length >= 1);
   s.update(second + 1, null);
   assert.ok(s.active, 'lingers after speech');
-  s.update(second + 1 + CAPTION_TIMING.hold + CAPTION_TIMING.fade + 0.01, null);
+  s.update(second + 1 + CAPTION_TIMING.hold + CAPTION_TIMING.out + 0.01, null);
   assert.ok(!s.active);
   function pages2Time() {
     return paginate(LONG)[1].start / CAPTION_TIMING.cps + 0.2;
@@ -210,8 +210,9 @@ test('strap: content picks kicker, category, source and breaking', () => {
   assert.equal(strapContent({ ...base, category: 'business' }).tag, 'BUSINESS');
   assert.equal(strapContent({ ...base, category: 'business', kicker: 'Oil markets' }).tag, 'Oil markets');
   const plain = strapContent(base);
-  assert.equal(plain.tag, 'Fixture Business Wire');
-  assert.equal(plain.plate, '', 'source is not repeated when it is the tag');
+  assert.equal(plain.tag, 'NEWS', 'no kicker, category or place: a neutral tag, never the outlet');
+  assert.equal(plain.plate, 'Fixture Business Wire', 'the outlet always sits in the micro plate');
+  assert.equal(strapContent({ ...base, place: 'ITALY' }).tag, 'ITALY');
   const br = strapContent({ ...base, breaking: true, category: 'world' }, { accent: P.cyan });
   assert.equal(br.tag, 'BREAKING');
   assert.equal(br.tagColor, P.red);
@@ -280,8 +281,9 @@ test('ticker: a headline wider than the band becomes whole-word pages that fit (
     assert.ok(e.dur >= TICKER_TIMING.push + TICKER_TIMING.base);
   }
   for (const e of pages.slice(0, -1)) assert.match(e.text, /\.\.\.$/);
+  for (const e of pages.slice(1)) assert.match(e.text, /^\.\.\./, 'a continuation page reads as one');
   assert.equal(pages.slice(1).every((e) => !e.source), true, 'source only on the first page');
-  assert.equal(pages.map((e) => e.text.replace(/\.\.\.$/, '')).join(' '), text);
+  assert.equal(pages.map((e) => e.text.replace(/\.\.\.$/, '').replace(/^\.\.\./, '')).join(' '), text);
   // a short item keeps its source; one that only fits alone drops it rather than paging
   assert.equal(makeEntry({ source: 'Wire', text: 'Short' }).source, 'Wire');
   const alone = makeEntries({ source: 'Fixture Business Wire', text: 'Smartphone battery breakthrough promises a week' });
@@ -397,12 +399,16 @@ test('graphics: out of a programme open the top row is already settled (no secon
   assert.equal(h.topAt, 1, 'back from a break: wipe in and glint');
 });
 
-test('graphics: no kicker and a category that repeats the programme beat -> the tag shows the source', () => {
+test('graphics: no kicker and a category that repeats the programme beat -> place, else NEWS; outlet stays in the plate', () => {
   const g = new Graphics({ now: () => 0 });
   const lt = { headline: 'Volcano erupts', source: 'Pixelburg Post', since: 0 };
   const scene = { shot: 'wide', ticker: [], program: { title: 'WORLD NOW', theme: 'world' }, storyId: 's1', rundown: [{ storyId: 's1', category: 'world' }], lowerThird: lt };
   g.update(0, scene);
-  assert.equal(g.strap.cur.tag, 'Pixelburg Post');
+  assert.equal(g.strap.cur.tag, 'NEWS');
+  assert.equal(g.strap.cur.plate, 'Pixelburg Post');
+  scene.lowerThird = { ...lt, location: { place: 'Grindavik, Iceland' } };
+  g.update(0.05, scene);
+  assert.equal(g.strap.cur.tag, 'ICELAND');
   scene.lowerThird = { ...lt, kicker: 'VOLCANO' };
   g.update(0.1, scene);
   assert.equal(g.strap.cur.tag, 'VOLCANO');

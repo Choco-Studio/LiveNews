@@ -35,10 +35,22 @@
 // `at` (seconds from the first word, from ctx.timeAt). The runtime fires recorded
 // segments by `at` and live TTS by `char` (the speech clock's current char), so
 // both voice paths stay in sync.
-import { splitSentences } from '../../../audio.js';
+import { splitSentences } from '../../../audio/sentences.js';
 import { buildTimeline } from '../../../audio/visemes.js';
 
-const GAP = 0.06; // s of closed mouth between TTS sentences (audio.js GAP.tts)
+/**
+ * Silence after a sentence (s), by how it ends: the newsreader's pause the audio
+ * engine leaves in mute and blips (audio.js gapAfter); browser TTS leaves about
+ * the same (a shorter scheduled gap plus the engine's own tail).
+ */
+function pauseAfter(sentence) {
+  const end = /([.!?…:;])["'’”»)\]]*\s*$/.exec(sentence)?.[1] ?? '';
+  if (end === '?') return 0.48;
+  if (end === '…') return 0.56;
+  if (end === '.' || end === '!') return 0.43;
+  if (end === ':' || end === ';') return 0.3;
+  return 0.16; // a long sentence cut at a comma
+}
 
 /** FNV-1a hash of a string → uint32 (seeds). */
 export function hashSeed(str) {
@@ -238,9 +250,13 @@ function timeline(seg, voice) {
       }
       est.push({ char, end: tokenEnd(text, char), t: t + w.t0 / 1000, emph: 0, stressed: false, content: stressDur.has(w.wi), figure: false, sd: stressDur.get(w.wi) || 0 });
     }
-    t += tl.total / 1000 + GAP;
+    t += tl.total / 1000;
     s.t1 = t;
+    t += pauseAfter(s.text);
   }
+  // the next sentence starts after the pause; the last one ends with its last sound
+  for (let i = 0; i + 1 < sentences.length; i++) sentences[i].t1 = sentences[i + 1].t0;
+  const spokenEnd = sentences.length ? sentences[sentences.length - 1].t1 : 0;
   rankEmphasis(text, est);
   const rec = seg.audio?.words;
   if (Array.isArray(rec) && rec.length) {
@@ -279,7 +295,7 @@ function timeline(seg, voice) {
     s.t0 = Math.max(0, s.t0 - lead);
     s.t1 = Math.max(0, s.t1 - lead);
   }
-  return { sentences, words, timing: 'estimated', duration: Math.max(0, t - lead), lead: 0 };
+  return { sentences, words, timing: 'estimated', duration: Math.max(0, spokenEnd - lead), lead: 0 };
 }
 
 function nextSpace(text, i) {

@@ -359,28 +359,31 @@ function writeEpisode({ stories, channelName, program, presenters, count, now })
   const grave0 = top?.grave;
   const shape = program?.intro || 'teaser';
   const featureTease = (info) => (info === number ? 'our number of the day' : null);
+  // Spoken intro lines run over a montage that changes picture every couple of seconds: keep them to the
+  // clean short headline (articles dropped, cut at a clause), as broadcasters read headlines.
+  const said = (info) => shortHeadline(info.s.title, program?.headlineMax);
   const introParts = [];
   if (shape === 'frame') {
     introParts.push(`[nod] This is ${title}. I'm ${names}.`);
   } else if (shape === 'headlines') {
     order.slice(0, 3).forEach((info, k) => {
-      introParts.push(`${k === 0 && info.grave ? '[serious] ' : ''}${asSentence(info.s.title)}`);
+      introParts.push(`${k === 0 && info.grave ? '[serious] ' : ''}${asSentence(said(info))}`);
       tease.push(info.s.id);
     });
     introParts.push(`${timeGreeting(now)}, and welcome to ${title}. [nod] I'm ${names}.${solo ? '' : ' [B:nod]'}`);
   } else {
     if (top) {
-      introParts.push(`${grave0 ? '[serious] ' : ''}${top.breaking ? 'Breaking news: ' : ''}${asSentence(top.s.title)}`);
+      introParts.push(`${grave0 ? '[serious] ' : ''}${top.breaking ? 'Breaking news: ' : ''}${asSentence(said(top))}`);
       tease.push(top.s.id);
     }
     const second = order[1];
     const third = order[2];
     if (second) {
-      introParts.push(`[point_camera] Also coming up: ${featureTease(second) || unstop(second.s.title)}.`);
+      introParts.push(`[point_camera] Also coming up: ${featureTease(second) || unstop(said(second))}.`);
       tease.push(second.s.id);
     }
     if (third) {
-      introParts.push(third === number ? 'And later, our number of the day.' : third === lighter ? `And later: ${asSentence(third.s.title)}` : `Later in the programme: ${asSentence(third.s.title)}`);
+      introParts.push(third === number ? 'And later, our number of the day.' : third === lighter ? `And later: ${asSentence(said(third))}` : `Later in the programme: ${asSentence(said(third))}`);
       tease.push(third.s.id);
     }
     const greet = solo ? `This is ${title}. [nod] I'm ${names}.` : `This is ${title}. [nod] I'm ${names}. [B:nod]`;

@@ -31,24 +31,24 @@ fit();
 // --- render loop ------------------------------------------------------------
 // One bad frame must never freeze the picture: keep looping and log each
 // distinct error once (a broken scene would otherwise flood the console).
+// Renderer.render() already isolates the shot (graphics/guard.js); anything
+// that still throws (the stinger, a renderer bug) is recovered the same way: the
+// canvases are reset (a throw between save() and restore() would leave its clip
+// on every later frame), the last clean picture is repainted and the graphics
+// go back on top, so the bug, clock and ticker stay on air.
 const seenErrors = new Set();
-// A throw between save() and restore() leaves its clip, transform or alpha on
-// the context, and every later frame would be drawn through it (a frozen
-// picture). Resizing a canvas resets all of its state; re-apply pixel art.
-function resetContexts() {
-  for (const c of [canvas, renderer.stage]) {
-    if (!(c instanceof HTMLCanvasElement)) continue;
-    c.width = c.width; // eslint-disable-line no-self-assign
-    const x = c.getContext('2d');
-    if (x) x.imageSmoothingEnabled = false;
-  }
-}
 function loop() {
   requestAnimationFrame(loop);
+  const t = performance.now() / 1000;
   try {
-    renderer.render(performance.now() / 1000, scene);
+    renderer.render(t, scene);
   } catch (err) {
-    resetContexts();
+    try {
+      renderer.guard.recover(renderer, t);
+      renderer.graphics.draw(renderer.ctx, t, scene); // never throws
+    } catch {
+      /* the reset frame stays */
+    }
     const key = `${err?.name}: ${err?.message}`;
     if (!seenErrors.has(key) && seenErrors.size < 50) {
       seenErrors.add(key);
@@ -80,19 +80,33 @@ function connectEvents() {
 connectEvents();
 
 // --- start (browsers only allow audio after a user gesture) ----------------
+// The director must start whatever audio does: unlocking (and loading voices)
+// is raced against a short timeout, and a failing audio call never strands
+// the channel on the start card with every key dead.
+const autostart = params.get('autostart') === '1';
 let started = false;
 async function start() {
   if (started) return;
   started = true;
-  await audio.unlock();
-  audio.setMode(params.get('voice') || 'tts');
-  if (params.has('volume')) audio.volume = Math.max(0, Math.min(1, Number(params.get('volume'))));
+  try {
+    await Promise.race([audio.unlock(), new Promise((r) => setTimeout(r, 1500))]);
+  } catch (err) {
+    console.warn('[audio] unlock failed', err);
+  }
+  try {
+    audio.setMode(params.get('voice') || 'tts');
+    if (params.has('volume')) audio.volume = Math.max(0, Math.min(1, Number(params.get('volume'))));
+  } catch (err) {
+    console.warn('[audio] setup failed', err);
+  }
   document.body.classList.add('on-air');
   player.run();
 }
-if (params.get('autostart') === '1') {
-  // Autoplay may still be blocked: AudioEngine.unlock() then arms itself on the
-  // first click / key / touch (capture phase) and retries until audio runs.
+if (autostart) {
+  // No click is needed, so the start card must not ask for one. Autoplay may
+  // still be blocked: AudioEngine.unlock() then arms itself on the first
+  // click / key / touch (capture phase) and retries until audio runs.
+  if (scene.shot === 'start') scene.card = { ...(scene.card || {}), prompt: 'TUNING IN' };
   start();
 } else {
   canvas.addEventListener('click', start);

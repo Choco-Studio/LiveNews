@@ -67,7 +67,7 @@ export class Director {
   /** Transition with the channel stinger; the shot changes under it. */
   async stinger(change) {
     this.scene.stinger = { start: now() };
-    this.audio.sfx('whoosh');
+    this.audio.sfx('whoosh', { startAt: this.scene.stinger.start * 1000 }); // its felt thump lands on the cut
     await sleep(STINGER_DURATION * 500);
     change();
     await sleep(STINGER_DURATION * 500);

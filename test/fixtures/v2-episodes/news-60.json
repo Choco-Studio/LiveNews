@@ -1,0 +1,284 @@
+{
+ "kind": "episode",
+ "id": "emur8291q2",
+ "createdAt": "2026-10-02T17:13:28.910Z",
+ "program": {
+  "id": "news-60",
+  "title": "NEWS IN 60",
+  "tagline": "THE HEADLINES IN A MINUTE",
+  "theme": "flash"
+ },
+ "cast": {
+  "A": "sam"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "write",
+   "ms": 124,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 0,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "fit",
+   "ms": 1,
+   "estimate": 55.7,
+   "dropped": 0
+  },
+  {
+   "stage": "assets",
+   "ms": 0,
+   "images": 3
+  }
+ ],
+ "title": "NEWS IN 60 (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "This is NEWS IN 60. I'm Sam Night.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "From Pixelburg Post: A solar farm north of Nairobi has started supplying power to the national grid. Officials say it can light around 300,000 homes and is the biggest in East Africa so far.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "storyId": "sfe6d14dab8",
+   "headline": "Kenya switches on its largest solar farm near Nairobi",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "NAIROBI, KENYA",
+    "lat": -1.29,
+    "lon": 36.82
+   },
+   "fact": "ABOUT 300,000 HOMES",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "ENERGY",
+   "numbers": [
+    {
+     "value": "300,000",
+     "label": "HOMES",
+     "qualifier": "ABOUT"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Norway has opened a 27 kilometre road tunnel under a fjord on its west coast, Bitport Herald reports. The government says it cuts the journey between two cities by 40 minutes.",
+   "cues": [],
+   "storyId": "sbecc7e92fa",
+   "headline": "Norway opens 27 kilometre road tunnel under a fjord",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "NORWAY",
+    "lat": 61,
+    "lon": 8.5
+   },
+   "fact": "27 KILOMETRE ROAD TUNNEL",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "TRANSPORT",
+   "numbers": [
+    {
+     "value": "27",
+     "label": "KILOMETRE ROAD TUNNEL"
+    },
+    {
+     "value": "40",
+     "label": "MINUTES"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Around the world. Japan's bullet trains mark a record year for punctuality, Pixelburg Post reports.",
+   "cues": [],
+   "storyId": "s945f1dfc87",
+   "headline": "Japan's bullet trains mark record year for punctuality",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "JAPAN",
+    "lat": 36.2,
+    "lon": 138.3
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 0,
+    "count": 3
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Paris unveils plans to plant 170,000 trees by 2030.",
+   "cues": [],
+   "storyId": "s7cf5417e48",
+   "headline": "Paris unveils plans to plant 170,000 trees by 2030",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "PARIS, FRANCE",
+    "lat": 48.86,
+    "lon": 2.35
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 1,
+    "count": 3
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Mexico City closes its historic centre to cars on Sundays, Bitport Herald reports.",
+   "cues": [],
+   "storyId": "se3b2083eb0",
+   "headline": "Mexico City closes its historic centre to cars on Sundays",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "MEXICO CITY, MEXICO",
+    "lat": 19.43,
+    "lon": -99.13
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 2,
+    "count": 3
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "Volunteers in Ghana have planted one million mangrove seedlings along the coast near Accra. The project aims to protect fishing villages from coastal erosion.",
+   "cues": [],
+   "storyId": "sc2b2054024",
+   "headline": "Ghana volunteers plant one million mangrove trees",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "ACCRA, GHANA",
+    "lat": 5.6,
+    "lon": -0.19
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "WILDLIFE"
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's the minute. Stay with us on GLOBIT 24.",
+   "cues": []
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "sfe6d14dab8",
+   "headline": "Kenya switches on its largest solar farm near Nairobi",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "ENERGY"
+  },
+  {
+   "storyId": "sbecc7e92fa",
+   "headline": "Norway opens 27 kilometre road tunnel under a fjord",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "TRANSPORT"
+  },
+  {
+   "storyId": "s945f1dfc87",
+   "headline": "Japan's bullet trains mark record year for punctuality",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s7cf5417e48",
+   "headline": "Paris unveils plans to plant 170,000 trees by 2030",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "se3b2083eb0",
+   "headline": "Mexico City closes its historic centre to cars on Sundays",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "sc2b2054024",
+   "headline": "Ghana volunteers plant one million mangrove trees",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "WILDLIFE"
+  }
+ ],
+ "storyIds": [
+  "sfe6d14dab8",
+  "sbecc7e92fa",
+  "s945f1dfc87",
+  "s7cf5417e48",
+  "se3b2083eb0",
+  "sc2b2054024"
+ ]
+}

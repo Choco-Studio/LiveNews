@@ -128,6 +128,8 @@ export class Rig {
       pulse125: pulseWave(ctx, 0.125, 16),
       square: pulseWave(ctx, 0.5, 13, 0.35),
       glass: additiveWave(ctx, [1, 0.32, 0.16, 0.05, 0.035, 0.012]),
+      // Brass: a saw-like series (1/n) but band-limited and tapered: warm, never buzzy.
+      brass: additiveWave(ctx, Array.from({ length: 14 }, (_, i) => (1 / (i + 1)) * Math.cos((Math.PI * i) / 30))),
     };
     this.white = noiseBuffer(ctx, 2, seed);
     this.pink = pinkBuffer(ctx, 5, seed + 1);
@@ -424,6 +426,107 @@ export class Rig {
     amp.gain.setTargetAtTime(0, t + dur, 0.07);
     o.connect(lp).connect(amp).connect(dest);
     this.play([o, vib], [vg, lp, amp], t, t + dur + 0.5);
+  }
+
+  /**
+   * Low brass section (WORLD NOW): two detuned brass waves through a low-pass
+   * that "speaks" open in 90 ms and settles, a slow swell and a late, small vibrato.
+   */
+  brass(t, midi, dur, vel, dest, p = {}) {
+    const f = hz(midi);
+    const o1 = this.osc('brass', f, t);
+    const o2 = this.osc('brass', f, t);
+    o1.detune.setValueAtTime(-5, t);
+    o2.detune.setValueAtTime(5, t);
+    const vib = this.ctx.createOscillator();
+    vib.frequency.value = 4.8;
+    const vg = this.gain(0);
+    vg.gain.setValueAtTime(0, t);
+    vg.gain.setValueAtTime(0, t + 0.4);
+    vg.gain.linearRampToValueAtTime(6, t + 0.9);
+    vib.connect(vg);
+    vg.connect(o1.detune);
+    vg.connect(o2.detune);
+    const peakHz = p.bright ?? 900;
+    const lp = this.filter('lowpass', 220, 0.9);
+    lp.frequency.setValueAtTime(220, t);
+    lp.frequency.linearRampToValueAtTime(peakHz, t + 0.09);
+    lp.frequency.setTargetAtTime(peakHz * 0.7, t + 0.09, 0.25);
+    const amp = this.gain(0);
+    const peak = 0.07 * vel;
+    const atk = p.attack ?? 0.08;
+    amp.gain.setValueAtTime(0, t);
+    amp.gain.linearRampToValueAtTime(peak, t + atk);
+    amp.gain.setTargetAtTime(peak * 0.85, t + atk, 0.4);
+    const rel = p.release ?? 0.35;
+    amp.gain.setTargetAtTime(0, t + dur, rel / 3);
+    const pan = this.ctx.createStereoPanner();
+    pan.pan.value = p.pan ?? 0;
+    o1.connect(lp);
+    o2.connect(lp);
+    lp.connect(amp).connect(pan).connect(dest);
+    this.play([o1, o2, vib], [vg, lp, amp, pan], t, t + dur + rel * 2.5);
+  }
+
+  /** Soft triangle lead: rounded, a breath of attack and a gentle late vibrato. */
+  softtri(t, midi, dur, vel, dest, p = {}) {
+    const f = hz(midi);
+    const o = this.osc('triangle', f, t);
+    const o2 = this.osc('sine', f * 2, t);
+    const g2 = this.gain(0.12);
+    const vib = this.ctx.createOscillator();
+    vib.frequency.value = 5;
+    const vg = this.gain(0);
+    vg.gain.setValueAtTime(0, t + 0.3);
+    vg.gain.linearRampToValueAtTime(5, t + 0.7);
+    vib.connect(vg).connect(o.detune);
+    const lp = this.filter('lowpass', p.lp ?? 1800, 0.5);
+    const amp = this.gain(0);
+    const peak = 0.075 * vel;
+    amp.gain.setValueAtTime(0, t);
+    amp.gain.linearRampToValueAtTime(peak, t + 0.03);
+    amp.gain.setTargetAtTime(peak * 0.7, t + 0.03, 0.6);
+    amp.gain.setTargetAtTime(0, t + dur, 0.1);
+    const pan = this.ctx.createStereoPanner();
+    pan.pan.value = p.pan ?? 0;
+    o.connect(lp);
+    o2.connect(g2).connect(lp);
+    lp.connect(amp).connect(pan).connect(dest);
+    this.play([o, o2, vib], [g2, vg, lp, amp, pan], t, t + dur + 0.7);
+  }
+
+  /** Sustained pulse-12 lead (the ident's signature), low-passed and echoed by its bus. */
+  pulse12(t, midi, dur, vel, dest, p = {}) {
+    const f = hz(midi);
+    const o = this.osc('pulse125', f, t);
+    const lp = this.filter('lowpass', p.lp ?? 1600, 0.7);
+    const amp = this.gain(0);
+    const peak = 0.07 * vel;
+    amp.gain.setValueAtTime(0, t);
+    amp.gain.linearRampToValueAtTime(peak, t + 0.012);
+    amp.gain.setTargetAtTime(peak * 0.6, t + 0.012, 0.35);
+    amp.gain.setTargetAtTime(0, t + dur, 0.08);
+    const pan = this.ctx.createStereoPanner();
+    pan.pan.value = p.pan ?? 0;
+    o.connect(lp).connect(amp).connect(pan).connect(dest);
+    this.play([o], [lp, amp, pan], t, t + dur + 0.6);
+  }
+
+  /** Soft clock (NEWS IN 60): a woodblock "tock" (beats 1, 3) or "tick" (2, 4), low-passed under 2 kHz. */
+  clock(t, vel, dest, tock = false) {
+    const f = tock ? 640 : 960;
+    const o = this.osc('sine', f, t, false);
+    const o2 = this.osc('sine', f * 2.71, t, false);
+    const g2 = this.gain(0.18);
+    const lp = this.filter('lowpass', 1900, 0.6);
+    const amp = this.gain(0);
+    amp.gain.setValueAtTime(0, t);
+    amp.gain.linearRampToValueAtTime(0.08 * vel, t + 0.0015);
+    amp.gain.setTargetAtTime(0, t + 0.0015, tock ? 0.03 : 0.022);
+    o.connect(amp);
+    o2.connect(g2).connect(amp);
+    amp.connect(lp).connect(dest);
+    this.play([o, o2], [g2, lp, amp], t, t + 0.3);
   }
 
   kick(t, vel, dest) {

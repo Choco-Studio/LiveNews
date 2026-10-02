@@ -175,6 +175,9 @@ def cmd_samples(args):
     eng = make_engine()
     only = args.only.split(',') if args.only else list(LINES)
     report = {}
+    if args.only and os.path.exists(os.path.join(out, 'report.json')):
+        with open(os.path.join(out, 'report.json'), encoding='utf-8') as f:
+            report = json.load(f)  # --only re-renders some presenters, keeps the rest
     for pid in only:
         text = LINES[pid]
         audio, sr, reply = eng.speak({'text': text, 'voice': pid, 'phones': True})
@@ -226,7 +229,7 @@ def cmd_samples(args):
               flush=True)
     with open(os.path.join(out, 'report.json'), 'w', encoding='utf-8') as f:
         json.dump(report, f, indent=1)
-    pngs = [os.path.join(out, p + '.png') for p in only if os.path.exists(os.path.join(out, p + '.png'))]
+    pngs = [os.path.join(out, p + '.png') for p in LINES if os.path.exists(os.path.join(out, p + '.png'))]
     if len(pngs) > 1:
         cmd = ['ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'error', '-y']
         for p in pngs:
