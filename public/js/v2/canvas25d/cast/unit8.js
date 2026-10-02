@@ -55,7 +55,7 @@ export const unit8 = defineLook({
   hair: { style: 'none', ramp: [P.silver, P.steel, P.slate, P.ink], line: P.ink },
   torso: { neckHW: 3.4, shoulderTop: 2.4, shoulderHW: 20.2, sideHW: 18.8, bottom: 46, vDepth: 20, shoulderJoint: [17.4, 6.8] },
   outfit: 'chassis',
-  jacket: { ramp: [P.fog, P.steel, P.slate, P.ink], line: P.black }, // graphite shell, darker than the head
+  jacket: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black }, // graphite shell, darker than the head
   shirt: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black },
   cuff: P.slate,
   arm: { upper: 22.4, fore: 20.6, rUpper: 3.3, rElbow: 2.9, rWrist: 2.3, hand: 10.8 },
@@ -64,8 +64,8 @@ export const unit8 = defineLook({
   persona: { sway: 0.25, headMotion: 0.35, blinkMin: 7, blinkMax: 12, energy: 0.35, smile: 0, breath: 0.15, doubleBlink: 0 },
   mats: {
     casing: { ramp: [P.fog, P.steel, P.slate, P.ink], line: P.ink, rim: P.silver, rimTop: true },
-    joint: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black },
-    plate: { ramp: [P.fog, P.steel, P.slate, P.ink], line: P.ink, rim: P.silver },
+    joint: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black },
+    plate: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black, rim: P.silver },
     rod: { ramp: [P.silver, P.steel, P.slate, P.ink], line: P.ink, noLine: true },
   },
   parts: { hairBack: drawAntenna, head: drawCasing, face: drawVisor, hair: () => {}, coversEars: true },

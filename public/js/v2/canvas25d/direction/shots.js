@@ -641,16 +641,21 @@ function moneyStoryPlan(ctx, tl) {
   }
   const open = ctx.isLead ? MCU_R : WIDE_M;
   plan.push({ ...open, at: 0 });
-  const c = boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
+  let c = boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
   if (!c) return plan;
   const cut = cutaway(ctx, tl, c, hasCard, open);
   if (!cut) return plan;
+  if (cut.after) {
+    c = boundaryAfter(tl, cut.after, MIN_SHOT);
+    if (!c) return plan;
+  }
   const back = boundaryAfter(tl, c.t + MIN_SHOT, MIN_SHOT);
   const returns = !!back && back.t - c.t <= S.shotMax;
   if (cut.framing === 'wide' && !returns) {
     // rule 5 for the lead: alternate only when the WIDE can hand back to MCU-R
     return plan;
   }
+  delete cut.after;
   plan.push({ ...cut, boundary: c });
   if (returns && cut.framing !== 'mcu-r') plan.push({ ...MCU_R, boundary: back });
   return plan;
@@ -667,13 +672,8 @@ function cutaway(ctx, tl, c, hasCard, open) {
   }
   if (ctx.hasImage) return { shot: 'full', framing: null, beat: 'picture' };
   if (ctx.seg.location && moneyMapStory(ctx) === ctx.index) return { shot: 'map', framing: null, beat: 'map' };
-  // otherwise the other studio shot (rule 5 waits until the opening has run 7 s)
-  if (tl.end - c.t >= MIN_SHOT) {
-    const alt = boundaryAfter(tl, Math.max(c.t, 7), MIN_SHOT);
-    if (alt && alt !== c) return null;
-    return { ...otherStudio(open), beat: 'alt' };
-  }
-  return null;
+  // otherwise the other studio shot (rule 5: once the opening has run 7 s)
+  return { ...otherStudio(open), beat: 'alt', after: 7 };
 }
 
 function cardKind(ctx, c) {

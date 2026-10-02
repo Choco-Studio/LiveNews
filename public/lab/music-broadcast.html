@@ -29,7 +29,7 @@
 <body>
 <main>
   <h1><b>GLOBIT 24</b> · broadcast music lab</h1>
-  <p class="sub">Classic news-package music in pixel form: one motif (sol-do-re-sol), five programme colours, bar-synced transitions, beds that duck and carve a pocket for the presenter.</p>
+  <p class="sub">Classic news-package music in pixel form, written to the programme style bibles: one motif (low 5, 1, 2, high 5), five programme colours, bar-synced transitions, music only where it helps, beds that duck and carve a pocket for the presenter.</p>
 
   <section>
     <h2>Offline render</h2>
@@ -39,9 +39,10 @@
         <option value="money-minute">MONEY MINUTE</option><option value="news-60">NEWS IN 60</option>
       </select></label>
       <label>moment <select id="moment">
-        <option>demo</option><option>openTail</option><option>headlines</option><option>story</option><option>grave</option><option>chat</option>
-        <option>roundup</option><option>outro</option><option>endcard</option><option>standby</option><option>bumperIn</option><option>bumperOut</option>
-        <option>upNext</option><option>replay</option><option>breaking</option>
+        <option>demo</option><option>headlines</option><option>story</option><option>grave</option><option>lighter</option>
+        <option>chat</option><option>roundup</option><option>number</option><option>picture</option><option>itemTick</option>
+        <option>endcard</option><option>breaking</option><option>standby</option><option>bumper</option><option>bumperIn</option>
+        <option>countdown</option><option>bumperOut</option><option>upNext</option><option>replay</option>
       </select></label>
       <label>emotion <select id="emotion"><option value="">auto</option><option>happy</option><option>neutral</option><option>serious</option></select></label>
       <label>seconds <input id="secs" type="number" value="20" min="2" max="240" style="width:70px"></label>
@@ -140,14 +141,15 @@ $('stopbuf').onclick = () => { src?.stop(); src = null; };
 
 // Live: the conductor on the real clock, cued by hand like the director would.
 let music = null;
-const CUES = ['openTail', 'headlines', 'story:happy', 'story:neutral', 'grave', 'chat', 'roundup', 'item', 'frame', 'outro', 'endcard', 'standby', 'bumperIn', 'bumperOut', 'upNext', 'replay', 'breaking', 'off'];
+const CUES = ['openTail', 'frame', 'greeting', 'story:neutral', 'story:serious', 'roundup', 'item', 'lighter', 'chat', 'number', 'featureEnd', 'picture', 'single', 'outro', 'signoff', 'endcard', 'standby', 'bumper', 'bumperIn', 'countdown', 'upNext', 'bumperOut', 'replay', 'breaking', 'off'];
 for (const c of CUES) {
   const b = document.createElement('button');
   b.textContent = c;
   b.onclick = () => {
     if (!music) return;
     const [m, emotion] = c.split(':');
-    music.cue(m, { programId: $('prog').value, emotion, next: $('prog').value });
+    const feature = ['roundup', 'lighter', 'number'].includes(m) ? m : undefined;
+    music.cue(feature ? 'story' : m, { programId: $('prog').value, emotion, feature, next: $('prog').value, seconds: 8 });
     $('state').textContent = `on air: ${music.moment ?? 'silence / sting'}`;
   };
   $('cues').append(b);

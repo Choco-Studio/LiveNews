@@ -565,17 +565,16 @@ function rasterDesk(fr, cam, clipRows, led, style) {
     const top1 = Math.round(yt);
     const bot = Math.round(ybot);
     clipRows[x] = Math.max(0, top0);
-    // the curved ends fall off toward black (2D Bayer, like the wall's sides)
+    // the curved ends turn away from the key: two flat facets, one and two steps darker
     const turn = Math.abs(interpCol(DFX, DNX, DESK_N, cx));
-    const fall = Math.max(0, Math.min(1, (turn - 0.18) / 0.45));
-    const fallQ = Math.round(fall * 16);
+    const facet = turn > 0.78 ? 2 : turn > 0.46 ? 1 : 0;
+    const fall = facet / 2;
     const kz = (ybot - yt) / D.deskH;
     // the LED line and the silver edge are exactly 1 px per column, wherever the curve puts them
     const ledRow = Math.round(yt + LED_Y * kz);
     const ya = Math.max(0, top0), yz = Math.min(fr.h, bot);
     for (let y = ya; y < yz; y++) {
       let c;
-      const bq = B16[((y & 3) << 2) | (x & 3)];
       if (y < top1) c = topC; // desk top surface
       else if (y === top1) c = fall > 0.6 ? C.steel : C.silver; // 1 px silver highlight on the front edge
       else if (y === ledRow) c = led;
@@ -586,7 +585,7 @@ function rasterDesk(fr, cam, clipRows, led, style) {
         else if (Yp > D.deskH - 8) c = C.black; // kick plate
         else c = Yp < PANEL_SPLIT ? panelHi : panelLo;
       }
-      if (fallQ > bq && c !== led && c !== C.silver) c = c === topC || c === C.slate ? C.ink : C.black;
+      if (facet && c !== led && c !== C.silver) c = facet === 2 ? C.black : c === topC || c === C.slate ? C.ink : C.black;
       px[y * fr.w + x] = c;
     }
     // floor reflection of the LED line (a darker palette step, ≤ 30 %)

@@ -53,6 +53,7 @@ export function screen(head, x, y, out) {
 
 const MAXSEG = 12;
 const SX = new Float64Array(MAXSEG + 1), SY = new Float64Array(MAXSEG + 1), SR = new Float64Array(MAXSEG + 1);
+let ONLY = 0; // when set, stroke() only repaints pixels already in this group (folds inside a garment)
 
 /**
  * Rasterise a tapered stroke (screen px) from A via control B to C, radius r0 → r1, into the
@@ -88,6 +89,7 @@ export function stroke(buf, m, ax, ay, bx, by, cx, cy, r0, r1, tone = null, n = 
     const py = y + 0.5;
     for (let x = x0; x < x1; x++) {
       if (clip && y >= clipY[x]) continue;
+      if (ONLY && (grp[y * w + x] !== ONLY || !mat[y * w + x])) continue;
       const px = x + 0.5;
       let best = 2, bu = 0, bex = 0, bey = 0, br = 1, bside = 0;
       for (let j = 0; j < n; j++) {
@@ -116,10 +118,31 @@ export function stroke(buf, m, ax, ay, bx, by, cx, cy, r0, r1, tone = null, n = 
       const i = y * w + x;
       mat[i] = m;
       tn[i] = tt;
-      grp[i] = g;
-      z[i] = cz;
+      if (!ONLY) {
+        grp[i] = g;
+        z[i] = cz;
+      }
     }
   }
+}
+
+/**
+ * A soft fabric fold inside a garment (body-space points a → b via c, half-width `hw` units at its
+ * middle, tapering at both ends): a shaded core with a lit lip on the side toward the key. Only
+ * repaints pixels of `group`, so a fold never changes the silhouette.
+ */
+export function fabricFold(o, mat, group, a, c, b, hw, lit = 0, core = 2) {
+  const { buf, toS, s } = o;
+  const [ax, ay] = toS(a[0], a[1]);
+  const [cx, cy] = toS(c[0], c[1]);
+  const [bx, by] = toS(b[0], b[1]);
+  ONLY = group;
+  stroke(buf, mat, ax, ay, cx, cy, bx, by, 0.35, 0.3, (nx, ny, u, aa) => {
+    const litSide = -0.6 * nx - 0.8 * ny > 0.2;
+    if (Math.abs(aa) > 0.55 && litSide) return lit;
+    return core;
+  }, 6, hw * s);
+  ONLY = 0;
 }
 
 /**
@@ -319,7 +342,7 @@ function turtleneck(o) {
   buf.part(gb + G.jacket, 8, clip);
   const body = [];
   for (const [x, y] of outline) body.push(x, y);
-  buf.poly(body, m.jacket, clothTone(o, { litEdge: -0.8, shadeEdge: 0.55, under: 4.5 }));
+  buf.poly(body, m.jacket, clothTone(o, { litEdge: -0.8, shadeEdge: 0.55 }));
   const gJ = gb + G.jacket;
   if (t >= 1) {
     // set-in shoulder seams and the drape of a fitted knit: armpit folds, a soft centre crease
@@ -375,7 +398,7 @@ function cardigan(o) {
   // ---- the top inside the opening: a round neckline showing a little skin
   buf.part(gb + G.shirt, 6, clip);
   const topPts = bodyPoly(o, lift, [
-    [-nk - 2.0, -1.4], [nk + 2.0, -1.4], [nk + 1.6, 6.0], [3.4, vY], [3.0, T.bottom + 2], [-3.0, T.bottom + 2], [-3.4, vY], [-nk - 1.6, 6.0],
+    [-nk - 2.0, -1.4], [nk + 2.0, -1.4], [nk + 1.6, 6.0], [1.2, vY + 0.6], [-1.2, vY + 0.6], [-nk - 1.6, 6.0],
   ]);
   const c = o.toS(0, 0);
   buf.poly(topPts, m.shirt, (x) => (x + 0.5 < c[0] - 1.5 * s ? 1 : x + 0.5 > c[0] + 2.0 * s ? 2 : 1));
@@ -385,22 +408,26 @@ function cardigan(o) {
     neck.push(...o.toS(-Math.cos(a) * (nk + 0.1), -1.9 + Math.sin(a) * 3.4));
   }
   buf.poly(neck, m.skin, (x) => (x + 0.5 > c[0] + nk * 0.4 * s ? 2 : 1));
-  // ---- button bands down both front edges (their own group: a 1 px edge on the body)
+  // ---- button bands: up both edges of the V, then one band down the closed front (own group: a 1 px edge)
   buf.part(gb + LOOK + 0, 9, clip);
   for (const side of [-1, 1]) {
     const band = bodyPoly(o, lift, [
-      [side * (nk + 2.0), -1.6], [side * (nk + 3.4), -1.4], [side * (nk + 3.0), 6.4], [side * 4.9, vY], [side * 4.5, T.bottom + 2],
-      [side * 3.0, T.bottom + 2], [side * 3.4, vY], [side * (nk + 1.6), 6.0],
+      [side * (nk + 2.0), -1.6], [side * (nk + 3.4), -1.4], [side * (nk + 3.0), 6.4], [side * 2.6, vY + 0.4], [side * 1.0, vY + 1.2], [side * 0.9, vY - 0.6], [side * (nk + 1.6), 6.0],
     ]);
     buf.poly(band, m.band, side < 0 ? 0 : 2);
   }
-  if (t === 2) {
-    // buttons on the wearer's right band (screen left), below the neckline
+  const front = bodyPoly(o, lift, [[-2.2, vY - 0.2], [1.0, vY + 0.6], [1.2, T.bottom + 2], [-2.0, T.bottom + 2]]);
+  buf.poly(front, m.band, 1);
+  if (t >= 1) {
+    // buttons down the closed front, a darker centre and a lit lip
     const gBand = gb + LOOK + 0;
-    for (const by of [vY + 1.5, vY + 8.5]) {
-      const [bx, byy] = o.toS(-4.0, by);
+    for (let by = vY + 2.2; by < T.bottom; by += 6.5) {
+      const [bx, byy] = o.toS(-0.5, by);
       buf.paint(Math.round(bx), Math.round(byy), m.band, 3, gBand);
-      buf.paint(Math.round(bx) + 1, Math.round(byy), m.band, 2, gBand);
+      if (t === 2) {
+        buf.paint(Math.round(bx) + 1, Math.round(byy), m.band, 2, gBand);
+        buf.paint(Math.round(bx), Math.round(byy) - 1, m.band, 0, gBand);
+      }
     }
   }
   // ---- drape: soft knit folds under the arms and a shoulder seam dropped off the shoulder

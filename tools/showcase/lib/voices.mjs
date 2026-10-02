@@ -128,3 +128,81 @@ export class VoiceWorker {
     this.proc.kill();
   }
 }
+
+/**
+ * A few workers sharing one job queue. Urgent jobs (the page is waiting, the
+ * clock is held) jump the queue; prefetch jobs (sentences of the episode or ad
+ * already on air, predicted with the page's own sentence splitter and speech
+ * normaliser) fill idle time, so most utterances are ready when spoken.
+ * Identical requests are synthesised once.
+ */
+export class VoicePool {
+  constructor({ size = 2, cache, env = {} } = {}) {
+    this.workers = Array.from({ length: Math.max(1, size) }, () => new VoiceWorker({ cache, env }));
+    this.ready = Promise.any(this.workers.map((w) => w.ready));
+    this.queue = [];
+    this.jobs = new Map(); // key -> { promise, started, urgent }
+    this.idle = [];
+    this.stats = { prefetched: 0, prefetchHits: 0, urgent: 0 };
+    for (const w of this.workers) w.ready.then(() => this.#free(w), () => {});
+  }
+
+  static key(req) {
+    return JSON.stringify([req.text, req.voice, req.speed ?? null, req.lang ?? null, req.effect ?? null]);
+  }
+
+  /** req: { text, voice, speed?, lang?, effect? } -> worker reply. */
+  request(req, { urgent = true } = {}) {
+    const key = VoicePool.key(req);
+    let job = this.jobs.get(key);
+    if (job) {
+      if (urgent && !job.started && !job.urgent) {
+        job.urgent = true;
+        this.queue.splice(this.queue.indexOf(job), 1);
+        this.queue.unshift(job);
+      }
+      if (urgent && job.prefetch) this.stats.prefetchHits++;
+      return job.promise;
+    }
+    job = { key, req, urgent, prefetch: !urgent, started: false };
+    job.promise = new Promise((resolve) => {
+      job.resolve = resolve;
+    });
+    this.jobs.set(key, job);
+    if (urgent) {
+      this.stats.urgent++;
+      this.queue.unshift(job);
+    } else {
+      this.stats.prefetched++;
+      this.queue.push(job);
+    }
+    this.#pump();
+    return job.promise;
+  }
+
+  #free(w) {
+    this.idle.push(w);
+    this.#pump();
+  }
+
+  #pump() {
+    while (this.idle.length && this.queue.length) {
+      const w = this.idle.shift();
+      const job = this.queue.shift();
+      job.started = true;
+      w.request({ id: job.key.slice(0, 40), ...job.req }).then((res) => {
+        if (!res.ok) this.jobs.delete(job.key); // let a later request retry
+        job.resolve(res);
+        this.#free(w);
+      });
+    }
+  }
+
+  get pending() {
+    return this.queue.length;
+  }
+
+  async close() {
+    await Promise.all(this.workers.map((w) => w.close()));
+  }
+}

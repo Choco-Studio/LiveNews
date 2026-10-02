@@ -75,6 +75,7 @@ export class BroadcastMusic {
     this.lastPresenceIn = -Infinity;
     this.releaseAt = -1;
     this.talking = false;
+    this.speechLog = []; // [time, on] of gate moves, so gates made later start in the right state
     this.lastSting = null;
     this.timer = 0;
 
@@ -383,14 +384,31 @@ export class BroadcastMusic {
       g.setTargetAtTime(db(this.duckDepth()), t, 0.045);
       p.setTargetAtTime(this.pocketDb, t, 0.06);
       for (const bed of this.beds) bed.setGate(true, t);
+      this.logSpeech(t, true);
       this.releaseAt = -1;
     } else {
       const t = Math.max(this.now, at + 0.3); // hold through the breath between sentences
       g.setTargetAtTime(1, t, 0.4);
       p.setTargetAtTime(0, t, 0.4);
       for (const bed of this.beds) bed.setGate(false, t);
+      this.logSpeech(t, false);
       this.releaseAt = t;
     }
+  }
+
+  logSpeech(t, on) {
+    this.speechLog.push([t, on]);
+    if (this.speechLog.length > 64) this.speechLog.splice(0, this.speechLog.length - 64);
+  }
+
+  /** Puts a new gate in the state speech dictates at `from`, plus every later move. */
+  primeGate(param, from) {
+    let open = 1;
+    for (const [t, on] of this.speechLog) {
+      if (t <= from) open = on ? 0 : 1;
+      else param.setTargetAtTime(on ? 0 : 1, t, on ? 0.03 : 0.25);
+    }
+    param.setValueAtTime(open, Math.max(0, from - 0.001));
   }
 
   // ------------------------------------------------------------- scheduling

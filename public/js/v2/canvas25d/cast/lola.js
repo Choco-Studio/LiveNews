@@ -25,7 +25,7 @@ export const lola = defineLook({
   mustache: null,
   torso: { neckHW: 3.0, shoulderTop: 3.0, shoulderHW: 18.4, sideHW: 17.2, bottom: 46, vDepth: 16, shoulderJoint: [15.8, 7.0] },
   outfit: 'blazer',
-  jacket: { ramp: [P.blue, P.navy, P.ink, P.black], line: P.black }, // deep blue: darker than her face
+  jacket: { ramp: [P.steel, P.navy, P.ink, P.black], line: P.black }, // deep blue, darker than her face; cool steel sheen (no candy-bright blue)
   shirt: { ramp: [P.white, P.cream, P.skin, P.tan], line: P.tanShade },
   necklace: [P.yellow, P.orange],
   earrings: P.yellow,

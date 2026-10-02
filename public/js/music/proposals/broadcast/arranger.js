@@ -148,7 +148,8 @@ export class Bed {
   // again after the hold: bells, pips and motif peeks live only in the gaps.
   gateNode() {
     const g = this.ctx.createGain();
-    g.gain.value = this.cond.talking ? 0 : 1;
+    if (this.cond.primeGate) this.cond.primeGate(g.gain, this.origin);
+    else g.gain.value = this.cond.talking ? 0 : 1;
     this.gates.push(g);
     this.nodes.push(g);
     return g;
