@@ -1193,7 +1193,8 @@ export default {
     { at: 14.7, text: "Seasoned with salt, from a sea we're not allowed to name." },
     { at: 20.2, text: 'Corners. Because life has enough curves.' },
   ],
-  // Dm9 | G13 | Cmaj9 | A7 (b9) twice, ending on Dm9 (28.6 beats at 70 bpm = 24.5 s).
+  // Dm9 | G13 | Cmaj9 | A7 (b9) twice, resolving on Dm9 under the slate; every
+  // track is 29.5 beats at 70 bpm (25.3 s, longer than the spot) and ends in rest.
   tune: {
     bpm: 70,
     swing: 0.12,
@@ -1205,16 +1206,16 @@ export default {
         kind: 'harmony',
         inst: EP,
         gain: 0.95,
-        notes: 'D3+F3+A3+C4+E4:2@0.45 R:1 D3+F3+A3+C4+E4:1@0.3 G2+F3+B3+E4:2@0.45 R:1 G2+F3+B3+E4:1@0.3 C3+E3+B3+D4:2@0.45 R:1 C3+E3+B3+D4:1@0.3 A2+G3+C#4+Bb3:3@0.4 R:1 D3+F3+A3+C4+E4:2@0.45 R:1 D3+F3+A3+C4+E4:1@0.3 G2+F3+B3+E4:2@0.45 R:1 D3+F3+A3+E4:3.6@0.4 R:1',
+        notes: 'D3+F3+A3+C4+E4:2@0.45 R:1 D3+F3+A3+C4+E4:1@0.3 G2+F3+B3+E4:2@0.45 R:1 G2+F3+B3+E4:1@0.3 C3+E3+B3+D4:2@0.45 R:1 C3+E3+B3+D4:1@0.3 A2+G3+C#4+Bb3:3@0.4 R:1 D3+F3+A3+C4+E4:2@0.45 R:1 D3+F3+A3+C4+E4:1@0.3 G2+F3+B3+E4:2@0.45 R:1 D3+F3+A3+E4:4@0.4 R:2.5',
       },
       {
         kind: 'lead',
         inst: LEADV,
         gain: 0.62,
-        notes: 'R:2 A4:1@0.35 C5:1@0.35 B4:2@0.4 G4:2@0.35 E4:1.5@0.35 D4:0.5@0.3 E4:2@0.35 C#4:3@0.3 R:1 A4:1@0.35 C5:1@0.35 D5:2@0.4 E5:2@0.4 R:1 A4:3.6@0.35 R:2',
+        notes: 'R:2 A4:1@0.35 C5:1@0.35 B4:2@0.4 G4:2@0.35 E4:1.5@0.35 D4:0.5@0.3 E4:2@0.35 C#4:3@0.3 R:1 A4:1@0.35 C5:1@0.35 D5:2@0.4 E5:2@0.4 R:1 A4:4@0.35 R:2.5',
       },
-      { kind: 'bass', inst: 'sine', gain: 0.8, notes: 'D2:2 A1:1 C2:1 G1:2 D2:1 F2:1 C2:2 G1:1 B1:1 A1:2 E2:1 C#2:1 D2:2 A1:1 C2:1 G1:2 B1:1 D2:3.6 R:1' },
-      { drums: 'H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 R:3.6 R:1' },
+      { kind: 'bass', inst: 'sine', gain: 0.8, notes: 'D2:2 A1:1 C2:1 G1:2 D2:1 F2:1 C2:2 G1:1 B1:1 A1:2 E2:1 C#2:1 D2:2 A1:1 C2:1 G1:2 B1:1 D2:4 R:2.5' },
+      { drums: 'H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 X:1@0.15 H:1@0.12 H:1@0.18 H:1@0.12 R:6.5' },
     ],
   },
   draw(ctx, t, dt, info) {

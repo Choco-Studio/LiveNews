@@ -444,28 +444,37 @@ export function createMockProvider() {
     // It copies the feed text, so it has nothing to check: it never stands in for the editor.
     reviews: false,
     available: () => true,
-    async generate({ stage = 'write', script, stories, channelName, program, presenters = { A: { name: 'the presenter' } }, count, now }) {
+    async generate({ stage = 'write', script, stories, channelName, program, presenters = { A: { name: 'the presenter' } }, count, now, recent }) {
       const usage = { input: 0, output: 0, cached: 0 };
       // Asked to review anyway (outside a ProviderChain): return the script untouched and say so.
       if (stage === 'review') return { text: JSON.stringify(script), usage, reviewed: false };
-      return { text: JSON.stringify(writeEpisode({ stories, channelName, program, presenters, count, now: now ?? new Date() })), usage };
+      return { text: JSON.stringify(writeEpisode({ stories, channelName, program, presenters, count, now: now ?? new Date(), recent })), usage };
     },
   };
 }
 
-// Attribution templates; each takes the sentence and the outlet. Rotated, never twice in a row.
-const ATTRIBUTIONS = [
-  { id: 'tail', fn: (t, src) => `${unstop(t)}, ${src} reports.` },
-  { id: 'according', fn: (t, src) => (lcFirst(t) ? `According to ${src}, ${unstop(lcFirst(t))}.` : null) },
-  { id: 'that', fn: (t, src) => (lcFirst(t) ? `${src} reports that ${unstop(lcFirst(t))}.` : null) },
-  { id: 'colon', fn: (t, src) => `From ${src}: ${asSentence(t)}` },
+// Attribution is a tail clause ("..., Ledger Line reports."): the striking fact comes first.
+const TAILS = [
+  { id: 'tail', words: 2, fn: (t, src) => `${unstop(t)}, ${src} reports.` },
+  { id: 'according-tail', words: 3, fn: (t, src) => `${unstop(t)}, according to ${src}.` },
 ];
+// Opening forms, now and then, for variety in the magazine programmes (never WORLD NOW or NEWS IN 60).
+const OPENERS = [
+  { id: 'according', words: 3, fn: (t, src) => (lcFirst(t) ? `According to ${src}, ${unstop(lcFirst(t))}.` : null) },
+  { id: 'that', words: 3, fn: (t, src) => (lcFirst(t) ? `${src} reports that ${unstop(lcFirst(t))}.` : null) },
+];
+// The longest sentence a programme's bible allows (config `sentenceWords`), and where the place must come.
+const SENTENCE_WORDS = { 'world-now': 20, 'news-60': 18, 'tech-bytes': 22, cosmos: 22, 'money-minute': 22 };
+const PLACE_WITHIN = { 'world-now': 6, 'news-60': 3, 'money-minute': 4 };
 
-function writeEpisode({ stories, channelName, program, presenters, count, now }) {
+function writeEpisode({ stories, channelName, program, presenters, count, now, recent }) {
   const title = program?.title || channelName;
   const solo = !presenters.B;
   const pid = program?.id || '';
   const quick = pid === 'news-60';
+  const maxWords = program?.sentenceWords || SENTENCE_WORDS[pid] || 24;
+  const placeWithin = PLACE_WITHIN[pid] ?? Infinity;
+  const aired = new Set((recent || []).map(plainLine));
   // A live page whose only lines point at the outlet's own coverage has nothing to read out.
   const all = stories.map(study).filter((i) => !i.live || i.sentences.length);
   // Live pages only when there is nothing else.
@@ -477,6 +486,11 @@ function writeEpisode({ stories, channelName, program, presenters, count, now })
   const nameOf = (slot) => firstName(presenters[slot]);
   const idOf = (slot) => presenters[slot]?.id;
   const other = (slot) => (slot === 'A' ? 'B' : 'A');
+  const pickLine = (list, key, info) => {
+    const line = chooseFresh(list, key, { recent: aired, text: info ? `${info.s.title} ${info.s.summary || ''}` : '' });
+    if (line) aired.add(plainLine(line));
+    return line;
+  };
 
   // Anchors: blocks alternate (the round-up is one block). WORLD NOW: Lola reads the round-up and And finally.
   const reader = program?.roundup?.reader;
@@ -498,9 +512,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now })
   const grave0 = top?.grave;
   const shape = program?.intro || 'teaser';
   const featureTease = (info) => (info === number ? 'our number of the day' : null);
-  // Spoken intro lines run over a montage that changes picture every couple of seconds: keep them to the
-  // clean short headline (articles dropped, cut at a clause), as broadcasters read headlines.
-  const said = (info) => shortHeadline(info.s.title, program?.headlineMax);
+  // Spoken headlines run over a montage: the outlet's own headline, articles and all, when it is short
+  // enough to say in one breath (about a dozen words); otherwise its clean short form.
+  const said = (info) => (wordCount(info.s.title) <= 12 ? unstop(info.s.title) : unstop(shortHeadline(info.s.title, program?.headlineMax, { spoken: true })));
   const introParts = [];
   if (shape === 'frame') {
     introParts.push(`[nod] This is ${title}. I'm ${names}.`);
@@ -518,11 +532,11 @@ function writeEpisode({ stories, channelName, program, presenters, count, now })
     const second = order[1];
     const third = order[2];
     if (second) {
-      introParts.push(`[point_camera] Also coming up: ${featureTease(second) || unstop(said(second))}.`);
+      introParts.push(`[point_camera] Also coming up: ${featureTease(second) || lowerFirstWord(said(second), second)}.`);
       tease.push(second.s.id);
     }
     if (third) {
-      introParts.push(third === number ? 'And later, our number of the day.' : third === lighter ? `And later: ${asSentence(said(third))}` : `Later in the programme: ${asSentence(said(third))}`);
+      introParts.push(third === number ? 'And later, our number of the day.' : third === lighter ? `And later: ${asSentence(lowerFirstWord(said(third), third))}` : `Later in the programme: ${asSentence(lowerFirstWord(said(third), third))}`);
       tease.push(third.s.id);
     }
     const greet = solo ? `This is ${title}. [nod] I'm ${names}.` : `This is ${title}. [nod] I'm ${names}. [B:nod]`;
@@ -537,31 +551,95 @@ function writeEpisode({ stories, channelName, program, presenters, count, now })
   let thanked = 0;
   let tossed = false;
   let tosses = 0;
-  let lastTemplate = null;
+  let lastTail = null;
+  let lastOpener = -9;
   const named = new Map(); // outlet -> times attributed
   const policy = program?.chats || null;
 
-  const attribute = (sentence, info, key, only = null) => {
-    const src = info.s.source;
-    const times = named.get(src) || 0;
-    named.set(src, times + 1);
-    // A sentence that names its own source ("officials said") gets no second "X reports" on top:
-    // the outlet is named up front the first time ("From Bitport Herald: ..."), then not at all.
-    if (OWN_ATTRIBUTION.test(sentence) && (times > 0 || (only && !only.includes('colon')))) return asSentence(sentence);
-    if (times > 1 && hash(key) % 2 === 0) return asSentence(sentence);
-    const offset = hash(seed) % ATTRIBUTIONS.length;
-    for (let j = 0; j < ATTRIBUTIONS.length; j++) {
-      const t = ATTRIBUTIONS[(offset + segments.length + j) % ATTRIBUTIONS.length];
-      if (t.id === lastTemplate || (only && !only.includes(t.id))) continue;
-      if (OWN_ATTRIBUTION.test(sentence) && t.id !== 'colon') continue;
-      const out = t.fn(sentence, src);
-      if (out) {
-        lastTemplate = t.id;
-        return out;
+  /** Where a sentence first names the story's place (word index), or -1. */
+  const placeAt = (sentence, info) => {
+    if (!info.loc) return -1;
+    const e = info.loc.entry;
+    const country = e.country ? lookupPlace(e.country) : null;
+    const names = [e.name, ...e.aliases, ...(country ? [country.name, ...country.aliases, ...country.demonyms] : e.demonyms || [])].map((x) => x.replace(/^the /i, '')).filter((x) => x.length > 2);
+    let at = -1;
+    for (const name of names) {
+      const m = new RegExp(`(?<![\\p{L}])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u').exec(sentence);
+      if (m) {
+        const idx = sentence.slice(0, m.index).split(/\s+/).filter(Boolean).length;
+        if (at < 0 || idx < at) at = idx;
       }
     }
-    // Nothing fits without repeating the last opening: a sentence with its own source stands as it is.
-    return OWN_ATTRIBUTION.test(sentence) ? asSentence(sentence) : `${unstop(sentence)}, ${src} reports.`;
+    return at;
+  };
+
+  /**
+   * The place within the programme's first words ("In Kenya, a solar farm..."):
+   * the place the story is pinned at, or its country when the sentence already
+   * names the city further on. Only when the sentence can take "In X," cleanly.
+   */
+  const placeFirst = (sentence, info, limit = placeWithin) => {
+    if (!info.loc || !Number.isFinite(limit)) return sentence;
+    const at = placeAt(sentence, info);
+    if (at >= 0 && at < limit) return sentence;
+    const lc = lcFirst(sentence);
+    if (!lc || wordCount(sentence) + 2 > maxWords) return sentence;
+    const e = info.loc.entry;
+    let where = spokenPlace(e);
+    if (at >= 0) {
+      if (e.kind === 'country' || !e.country) return sentence;
+      const country = lookupPlace(e.country);
+      if (!country || placeAt(sentence, { loc: { entry: country } }) >= 0) return sentence;
+      where = spokenPlace(country);
+    }
+    return `In ${where}, ${lc}`;
+  };
+
+  /**
+   * Credit the outlet once, as a tail clause on the story's shortest sentence
+   * that can take it without going over the programme's sentence length (NEWS
+   * IN 60: on the second sentence, as its bible asks). A sentence that names
+   * its own source ("officials say") takes none. An outlet already named twice
+   * in the episode is sometimes left implicit. No sentence fits: no credit.
+   */
+  const attribute = (parts, info, key, { allowOpener = false, from = 0, prefer = null } = {}) => {
+    const src = info.s.source;
+    const times = named.get(src) || 0;
+    if (times > 1 && hash(key) % 2 === 0) return;
+    const fits = (t, extra) => wordCount(t) + extra + wordCount(src) <= maxWords;
+    const eligible = [];
+    parts.forEach((p, i) => {
+      if (i < from) return;
+      const plain = p.replace(/\[[^\]]*\]/g, ' ').trim();
+      if (!plain || OWN_ATTRIBUTION.test(plain) || /[“”"]/.test(plain) || /:\s*$/.test(plain) || PICKUP_LINE.test(plain)) return;
+      eligible.push({ i, plain, words: wordCount(plain) });
+    });
+    if (!eligible.length) return;
+    const offset = hash(seed + key);
+    // Now and then (magazine programmes only, never twice running) the credit opens the first sentence instead.
+    if (allowOpener && offset % 3 === 0 && segments.length - lastOpener > 2 && eligible[0].i === from) {
+      const o = OPENERS[offset % OPENERS.length];
+      const out = fits(eligible[0].plain, o.words) ? o.fn(parts[eligible[0].i], src) : null;
+      if (out) {
+        parts[eligible[0].i] = out;
+        lastOpener = segments.length;
+        named.set(src, times + 1);
+        return;
+      }
+    }
+    const order = prefer === 'last' ? [...eligible].reverse() : [...eligible].sort((a, b) => a.words - b.words || a.i - b.i);
+    for (let j = 0; j < TAILS.length; j++) {
+      const t = TAILS[(offset + segments.length + j) % TAILS.length];
+      if (t.id === lastTail && TAILS.length > 1 && j === 0) continue;
+      const target = order.find((e) => fits(e.plain, t.words));
+      if (!target) continue;
+      // Cues ride at the end of a sentence: keep them after the credit.
+      const cues = (parts[target.i].match(/(?:\s*\[[^\]]*\])+\s*$/) || [''])[0];
+      parts[target.i] = `${t.fn(parts[target.i].slice(0, parts[target.i].length - cues.length), src)}${cues}`;
+      lastTail = t.id;
+      named.set(src, times + 1);
+      return;
+    }
   };
 
   order.forEach((info, k) => {
@@ -590,21 +668,36 @@ function writeEpisode({ stories, channelName, program, presenters, count, now })
     };
 
     if (inRoundup) {
-      // One sentence per item, its place named early, attributed.
+      // One sentence per item (12 to 20 words; NEWS IN 60 14 to 18), the place in its first words, credited
+      // only if the credit fits. The summary's words are preferred to the headline, which is already on the strap.
       const idx = roundup.indexOf(info);
-      const max = quick ? 18 : 20;
-      const placeWords = [info.loc.entry.name, ...info.loc.entry.aliases, info.country].filter(Boolean);
-      const namesPlace = (t) => placeWords.some((p) => t.includes(p.replace(/^the /, '')));
-      // A sentence that names the place and fits, else the headline (it says what happened), never a stray detail.
-      const line = pickSentence((t) => namesPlace(t) && wordCount(t) + 2 <= max) || (wordCount(s.title) + 2 <= max ? s.title : null) || pickSentence((t) => namesPlace(t)) || s.title;
+      const [minW, maxW] = quick ? [14, 18] : [12, 20];
+      const sized = (t) => wordCount(t) >= minW - 2 && wordCount(t) <= maxW;
+      const early = (t) => {
+        const at = placeAt(t, info);
+        return at >= 0 && at < 3;
+      };
+      let line = pickSentence((t) => early(t) && sized(t));
+      if (!line) {
+        const t = info.sentences.find((x) => !used.has(x) && wordCount(placeFirst(x, info, 3)) <= maxW && early(placeFirst(x, info, 3)) && wordCount(x) >= minW - 4);
+        if (t) {
+          used.add(t);
+          line = placeFirst(t, info, 3);
+        }
+      }
+      if (!line) line = early(s.title) ? s.title : placeFirst(s.title, info, 3);
       const lead = idx === 0 ? program?.roundup?.opener || 'Now, around the world in 30 seconds.' : '';
-      const where = namesPlace(line) ? '' : `${idx === 0 ? 'First, ' : 'Now to '}${spokenPlace(info.loc.entry)}.`;
-      parts.push(...[`${idx === 0 ? '[point_screen] ' : ''}${lead}`.trim(), where].filter(Boolean), attribute(line, info, key, ['tail']));
+      const where = early(line) ? '' : `${idx === 0 ? 'First, ' : 'Now to '}${spokenPlace(info.loc.entry)}.`;
+      const item = [asSentence(line)];
+      if (wordCount(line) + 2 + wordCount(s.source) <= maxW) attribute(item, info, key);
+      parts.push(...[`${idx === 0 ? '[point_screen] ' : ''}${lead}`.trim(), where].filter(Boolean), ...item);
     } else {
-      // Openers: the summary's first sentence when it says the headline better (or the intro already read the headline).
+      // Openers: the summary's first sentence when it says the headline better; the lead never re-reads the
+      // intro's line about it (it goes on with the next fact).
       const first = info.sentences[0];
-      const skipHeadline = first && ((k === 0 && introSaidHeadline) || restates(first, s.title));
-      let opener = skipHeadline ? pickSentence(() => true) : s.title;
+      const leadAfterIntro = k === 0 && introSaidHeadline;
+      const skipHeadline = first && (leadAfterIntro || restates(first, s.title));
+      let opener = skipHeadline ? (leadAfterIntro && pickSentence((t) => !restates(t, s.title))) || pickSentence(() => true) : s.title;
       const cue = isNumber ? '[count] ' : info.grave ? '[lean_in] ' : s.image ? '[point_screen] ' : choose(['[raise_hand] ', '[lean_in] ', ''], key);
       let figureLine = null;
       if (isNumber) {
@@ -616,16 +709,21 @@ function writeEpisode({ stories, channelName, program, presenters, count, now })
         if (!opener.includes(raw)) figureLine = pickSentence((t) => t.includes(raw));
         parts.push(`${cue}Our number of the day: ${spokenValue(f)}.`);
       }
-      let line = attribute(opener, info, key, isLighter ? ['tail', 'according', 'that'] : null);
+      const body = [];
+      let line = asSentence(isNumber || isLighter ? opener : placeFirst(opener, info));
       if (info.breaking) line = `Breaking news. ${line}`;
       else if (info.live) line = `A developing story: ${line}`;
       if (isLighter) line = `And finally: ${line}`;
-      parts.push(`${isNumber || isLighter ? '' : cue}${line}`);
-      if (figureLine) parts.push(figureLine);
-      // Details: news-60 keeps to its word budget; the TECH BYTES lead keeps one sentence back for THE CATCH.
-      // NEWS IN 60's bible: lead 32-38 words, other items 25-28 (the mock reuses whole sentences, so +-3).
+      body.push(`${isNumber || isLighter ? '' : cue}${line}`);
+      if (figureLine) body.push(figureLine);
+      // Details. Enough sentences for the story's pictures: the director gives each sentence one shot
+      // (presenter, then map, then picture, then fact card), so a story with a place AND a picture needs
+      // three sentences for both to reach the screen. NEWS IN 60 keeps to its word budget; the TECH BYTES
+      // lead keeps one sentence back for THE CATCH.
+      const visuals = (info.loc ? 1 : 0) + (s.image ? 1 : 0) + (info.figures.length ? 1 : 0);
+      const cap = pid === 'money-minute' ? 2 : 3;
       const budget = quick ? (k === 0 ? 41 : 31) : Infinity;
-      const maxDetails = quick ? 2 : isNumber ? (figureLine ? 0 : 1) : k === 0 ? 2 : 1;
+      const maxDetails = quick ? 2 : isNumber ? (figureLine ? 0 : 1) : Math.min(cap, Math.max(k === 0 ? 2 : 1, visuals));
       const catchFor = pid === 'tech-bytes' && k === 0 && !info.grave ? CATCH.find((c) => info.sentences.some((t) => !used.has(t) && c.test.test(t))) : null;
       const reserved = catchFor ? info.sentences.find((t) => !used.has(t) && catchFor.test.test(t)) : null;
       if (reserved) used.add(reserved);
@@ -633,16 +731,20 @@ function writeEpisode({ stories, channelName, program, presenters, count, now })
       for (const t of info.sentences) {
         if (details >= maxDetails || used.has(t)) continue;
         if (/^(?:It|They|This|These)\b/.test(t) && WHY.test(t)) continue; // "It says..." with no subject reads as a label
-        if (wordCount(parts.join(' ')) + wordCount(t) > budget) continue;
-        let text = t;
-        if (details === 0 && !solo && !info.grave) text += ` [${partner}:${choose(['nod', 'nod', 'look_partner'], key)}]`;
-        parts.push(text);
+        if (wordCount([...parts, ...body].join(' ')) + wordCount(t) > budget) continue;
+        body.push(t);
         used.add(t);
         details++;
       }
-      if (!details && !solo && !info.grave) parts[parts.length - 1] += ` [${partner}:nod]`;
-      const quoteFits = info.quote?.by && !quick && !inRoundup && ![...used].some((l) => l.includes(info.quote.text.slice(0, 20)));
-      if (quoteFits && parts.join(' ').length + info.quote.text.length < 420) parts.push(`As ${lowerArticle(info.quote.by)} put it: “${unstop(info.quote.text)}.”`);
+      const quoteFits = info.quote?.by && !quick && ![...used].some((l) => l.includes(info.quote.text.slice(0, 20)));
+      if (quoteFits && [...parts, ...body].join(' ').length + info.quote.text.length < 420) body.push(`As ${lowerArticle(info.quote.by)} put it: “${unstop(info.quote.text)}.”`);
+      attribute(body, info, key, { allowOpener: !isNumber && !isLighter && !info.breaking && !info.live && ['tech-bytes', 'cosmos', 'money-minute'].includes(pid) && !(pickup && k === 0), prefer: quick ? 'last' : null });
+      // The co-presenter reacts on the first detail (or on the opener when there is none).
+      if (!solo && !info.grave) {
+        const at = body.length > 1 ? 1 : 0;
+        body[at] += ` [${partner}:${choose(['nod', 'nod', 'look_partner'], key)}]`;
+      }
+      parts.push(...body);
       if (reserved) info.catchAnswer = { line: reserved, q: catchFor.q };
     }
 
@@ -655,7 +757,11 @@ function writeEpisode({ stories, channelName, program, presenters, count, now })
       if (policy) {
         if (policy.after?.includes(slot)) {
           if (pid === 'world-now' && slot === 'lighter') {
-            const pair = choose(WORLD_PAIRS[info.kicker] || WORLD_PAIRS.any, `${key}~pair`);
+            const pairs = WORLD_PAIRS[info.kicker] || WORLD_PAIRS.any;
+            const keyed = pairs.map((p) => ({ text: p[0], pair: p }));
+            const firstLine = pickLine(keyed, `${key}~pair`, info);
+            const pair = pairs.find((p) => p[0] === firstLine) || pairs[0];
+            aired.add(plainLine(pair[1]));
             planned.push({ anchor: 'A', text: pair[0] }, { anchor: 'B', text: pair[1] });
           } else if (pid === 'tech-bytes' && slot === 'lead' && info.catchAnswer) {
             const askB = idOf('B') === 'ada' || idOf('A') !== 'ada' ? 'B' : 'A';
@@ -663,19 +769,21 @@ function writeEpisode({ stories, channelName, program, presenters, count, now })
           } else if (pid === 'tech-bytes' && slot === 'lighter') {
             const sp = partner;
             const kind = PRODUCT_KICKERS.has(info.kicker) ? 'product' : 'science';
-            planned.push({ anchor: sp, text: choose(TECH_BUTTONS[kind][idOf(sp)] || GENERIC_CHATS, `${key}~btn`) });
+            planned.push({ anchor: sp, text: pickLine(TECH_BUTTONS[kind][idOf(sp)] || GENERIC_CHATS, `${key}~btn`, info) });
           } else if (pid === 'cosmos' && slot === 'lead') {
             const unit = idOf('B') === 'unit8' ? 'B' : partner;
             const f = info.figures.find((x) => parts.join(' ').includes(numbersIn(x.said)[0]?.raw || x.value) && !x.age);
-            planned.push({ anchor: unit, text: f ? `[nod] ${f.said.replace(/^(?:about|around|nearly|almost|some|more than|over|up to|at least) /i, '').replace(/^\w/, (c) => c.toUpperCase())}. Noted.` : '[nod] Logged, Dr Reyes.' });
-            planned.push({ anchor: other(unit), text: next === number ? `[look_partner] Thank you, UNIT-8. Our number of the day is yours.` : 'Thank you, UNIT-8.' });
+            // UNIT-8 repeats the exact figure, else the place: only what was just said.
+            const restated = f ? f.said.replace(/^(?:about|around|nearly|almost|some|more than|over|up to|at least) /i, '').replace(/^\w/, (c) => c.toUpperCase()) : info.loc ? spokenPlace(info.loc.entry).replace(/^the /, 'The ') : null;
+            planned.push({ anchor: unit, text: restated ? `[nod] ${restated}. ${choose(['Noted.', 'Logged.', 'Recorded.'], `${key}~u8n`)}` : pickLine(UNIT8_NOTED, `${key}~u8`, info) });
+            planned.push({ anchor: other(unit), text: next === number ? `[look_partner] Thank you, UNIT-8. Our number of the day is yours.` : pickLine(NOVA_THANKS, `${key}~nt`, info) });
           } else if (pid === 'cosmos' && slot === 'lighter') {
             const unit = idOf('B') === 'unit8' ? 'B' : partner;
-            planned.push({ anchor: unit, text: choose(UNIT8_LINES[info.kicker] || UNIT8_LINES.any, `${key}~u8`) });
+            planned.push({ anchor: unit, text: pickLine(UNIT8_LINES[info.kicker] || UNIT8_LINES.any, `${key}~u8`, info) });
           }
         }
       } else if (info.light && next && !inRoundup) {
-        planned.push({ anchor: partner, text: choose(CHATS[idOf(partner)] || GENERIC_CHATS, `${key}~chat`) });
+        planned.push({ anchor: partner, text: pickLine(CHATS[idOf(partner)] || GENERIC_CHATS, `${key}~chat`, info) });
       }
     }
     const chatsHere = planned.slice(0, maxChats - chats);
@@ -697,7 +805,8 @@ function writeEpisode({ stories, channelName, program, presenters, count, now })
       emotion: info.sad ? 'sad' : info.grave ? 'serious' : isLighter ? (info.curious && CURIOUS.test(s.title) ? 'surprised' : 'happy') : info.light ? 'happy' : 'neutral',
       headline: shortHeadline(s.title, program?.headlineMax),
       text: parts.join(' '),
-      shot: info.loc ? 'map' : s.image ? (k % 3 === 1 ? 'full' : 'close') : solo ? 'close' : 'wide',
+      // A place opens on the map, and the picture follows it; a picture alone is shown full screen.
+      shot: info.loc ? 'map' : s.image ? 'full' : solo ? 'close' : 'wide',
       breaking: info.breaking,
       location: info.loc ? { place: info.loc.place, lat: info.loc.lat, lon: info.loc.lon } : null,
       fact: inRoundup ? null : info.figures[0]?.fact || null,
@@ -744,3 +853,5 @@ function writeEpisode({ stories, channelName, program, presenters, count, now })
   });
   return { title: `${title} (demo)`, segments };
 }
+
+const PICKUP_LINE = /^(?:thanks|thank you)(?: very much)?,? [A-Z][\w'’-]*(?: [A-Z][\w'’-]*)?\.$/i;

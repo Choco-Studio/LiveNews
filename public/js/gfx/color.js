@@ -1,6 +1,7 @@
 // Palette colour helpers. Graphics use palette colours only; alpha versions
 // exist for shades and glass, with the alpha quantised to 1/32 steps so the
 // string cache stays small (one entry per colour and step, never per frame).
+import { P } from '../palette.js';
 
 const RGB = new Map();
 /** [r, g, b] of a #rrggbb colour (cached). */
@@ -37,7 +38,6 @@ export function rgba(hex, a) {
 
 // One palette step darker for every channel colour (same hue family), so a picture can fade in
 // or out by whole palette steps instead of alpha (no off-palette colours, no muddy blends).
-import { P } from '../palette.js';
 const DOWN = {
   black: 'black', ink: 'black', slate: 'ink', steel: 'slate', fog: 'steel', silver: 'fog', white: 'silver',
   red: 'darkRed', darkRed: 'maroon', maroon: 'black', rust: 'brown', orange: 'rust', yellow: 'orange', cream: 'tan',
