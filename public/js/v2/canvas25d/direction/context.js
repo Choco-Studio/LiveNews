@@ -227,7 +227,16 @@ function timeline(seg, voice) {
     const stressDur = new Map();
     for (const x of tl.segs) if (x.stress) stressDur.set(x.wi, (stressDur.get(x.wi) || 0) + (x.t1 - x.t0));
     for (const w of tl.words) {
-      est.push({ char: s.start + w.ci, end: s.start + w.end, t: t + w.t0 / 1000, emph: 0, stressed: false, content: stressDur.has(w.wi), figure: false, sd: stressDur.get(w.wi) || 0 });
+      const char = s.start + w.ci;
+      const prev = est[est.length - 1];
+      // a normalised expansion ("40,000" → "forty thousand") gives several spoken
+      // words on one source token: they are one word here (the token's start)
+      if (prev && prev.char === char) {
+        prev.sd += stressDur.get(w.wi) || 0;
+        prev.content = prev.content || stressDur.has(w.wi);
+        continue;
+      }
+      est.push({ char, end: tokenEnd(text, char), t: t + w.t0 / 1000, emph: 0, stressed: false, content: stressDur.has(w.wi), figure: false, sd: stressDur.get(w.wi) || 0 });
     }
     t += tl.total / 1000 + GAP;
     s.t1 = t;
@@ -278,6 +287,13 @@ function nextSpace(text, i) {
   return j < 0 ? text.length : j;
 }
 
+/** End of the source token at `i` without its trailing punctuation ("Brazil." → after the "l"). */
+function tokenEnd(text, i) {
+  const tok = text.slice(i, nextSpace(text, i));
+  const core = tok.replace(/[^\p{L}\p{N}%$€£'’]+$/u, '');
+  return i + Math.max(1, core.length);
+}
+
 /**
  * Emphasis per word, then the accent words. English news reading puts the
  * nuclear accent on the last content word of an intonation phrase; figures and
@@ -290,7 +306,7 @@ function rankEmphasis(text, words) {
   let cur = [];
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
-    const token = text.slice(w.char, w.end);
+    const token = text.slice(w.char, nextSpace(text, w.char));
     const bare = token.toLowerCase().replace(/[^a-z0-9']/g, '');
     w.figure = /\d/.test(token) || NUMBER_WORDS.has(bare);
     const cap = /^[A-Z]/.test(token) && i > 0 && !/[.!?…]["'’”)]*\s*$/.test(text.slice(words[i - 1].char, w.char));
@@ -302,8 +318,10 @@ function rankEmphasis(text, words) {
     }
     w.emph = e;
     cur.push(w);
-    const after = text.slice(w.end, (words[i + 1]?.char ?? text.length));
-    if (/[,;:.!?…—–-]/.test(after) || i === words.length - 1) {
+    // phrase end: trailing punctuation on the token, or a dash before the next word
+    const trail = token.slice(Math.max(0, w.end - w.char));
+    const gap = text.slice(w.char + token.length, words[i + 1]?.char ?? text.length);
+    if (/[,;:.!?…—–]/.test(trail) || /[—–-]/.test(gap) || i === words.length - 1) {
       phrases.push(cur);
       cur = [];
     }

@@ -221,3 +221,36 @@ describe('ImageCache: local pictures', () => {
     assert.deepEqual(await new ImageCache().get('d', url(dir, 'ok.png')), { error: 'invalid URL' });
   });
 });
+
+describe('ImageCache: hardening (round 1)', () => {
+  const quiet = { warn() {} };
+  test('a failure is remembered for a minute, then the picture is tried again', async () => {
+    let clock = 0;
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls++;
+      return calls === 1 ? new Response('no', { status: 503 }) : new Response(PNG, { headers: { 'content-type': 'image/png' } });
+    };
+    const cache = new ImageCache({ fetchImpl, log: quiet, now: () => clock });
+    assert.deepEqual(await cache.get('s1', 'https://img.test/a.png'), { error: 'HTTP 503' });
+    clock = 30_000;
+    assert.deepEqual(await cache.get('s1', 'https://img.test/a.png'), { error: 'HTTP 503' });
+    assert.equal(calls, 1);
+    clock = 61_000;
+    assert.equal((await cache.get('s1', 'https://img.test/a.png')).type, 'image/png');
+    assert.equal(calls, 2);
+  });
+
+  test('a symlink inside a picture folder that points outside it is refused', async (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'livenews-img-'));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'livenews-out-'));
+    t.after(() => {
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    });
+    fs.writeFileSync(path.join(outside, 'secret.png'), PNG);
+    fs.symlinkSync(path.join(outside, 'secret.png'), path.join(dir, 'link.png'));
+    const cache = new ImageCache({ localRoots: () => [dir], log: quiet });
+    assert.deepEqual(await cache.get('l1', pathToFileURL(path.join(dir, 'link.png')).href), { error: 'invalid URL' });
+  });
+});

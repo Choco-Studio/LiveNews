@@ -421,8 +421,9 @@ export function extractFigures(text, max = 3) {
     let core;
     if (n.percent && !labelText) {
       // A bare percentage says nothing: name what moved ("INDEX UP 21%"), or drop it.
-      const subject = subjectBefore(s, n.index);
-      if (!direction && !subject) continue;
+      // Without a direction the subject may not be what the figure measures ("the central bank ... at 3.5 percent").
+      const subject = direction ? subjectBefore(s, n.index) : null;
+      if (!direction) continue;
       labelText = [subject && subject.length <= 16 ? subject : '', direction].filter(Boolean).join(' ');
       core = `${labelText} ${value}`;
     } else {

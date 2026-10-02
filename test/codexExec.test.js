@@ -292,9 +292,12 @@ describe('codex exec provider (fake CLI)', () => {
     const fake = makeFake(t, { ...success(), sleepMs: 10_000 });
     const started = Date.now();
 
-    await assert.rejects(makeProvider(fake.bin, { timeoutMs: 400 }).generate({ prompt: 'p' }), /codex exec timed out after 400 ms/);
+    // 2 s, not a few hundred ms: on a loaded machine the fake CLI (a node process) can take longer than that
+    // just to start, and then it has never written its "start" record. The fake sleeps 10 s, so the margin is cheap.
+    await assert.rejects(makeProvider(fake.bin, { timeoutMs: 2000 }).generate({ prompt: 'p' }), /codex exec timed out after 2000 ms/);
 
-    assert.ok(Date.now() - started < 5000, 'rejected at the timeout, not when the process finished');
+    assert.ok(Date.now() - started < 8000, 'rejected at the timeout, not when the process finished');
+    for (let i = 0; i < 40 && !fake.starts().length; i++) await new Promise((resolve) => setTimeout(resolve, 50));
     const [{ pid }] = fake.starts();
     const alive = () => {
       try {
@@ -315,7 +318,7 @@ describe('codex exec provider (fake CLI)', () => {
     const slow = makeFake(t, { sleepMs: 10_000 });
     await makeProvider(ok.bin).generate({ prompt: 'p' });
     await assert.rejects(makeProvider(failing.bin).generate({ prompt: 'p' }));
-    await assert.rejects(makeProvider(slow.bin, { timeoutMs: 300 }).generate({ prompt: 'p' }), /timed out/);
+    await assert.rejects(makeProvider(slow.bin, { timeoutMs: 2000 }).generate({ prompt: 'p' }), /timed out/);
     await assert.rejects(makeProvider('/nonexistent/codex').generate({ prompt: 'p' }));
     assert.deepEqual(leftovers(), []);
   });

@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 
 const MAX_BYTES = 6_000_000;
 const MAX_ENTRIES = 120;
+// A failed fetch is remembered only briefly: a passing network error must not hide the picture for good.
+const ERROR_TTL_MS = 60_000;
 const ALLOWED = /^image\/(jpeg|png|webp|gif|avif)$/i;
 
 // Magic numbers: a local file is served only if its bytes say it is a picture.
@@ -21,27 +23,41 @@ function sniff(buf) {
 }
 
 export class ImageCache {
-  constructor({ fetchImpl = fetch, localRoots = () => [] } = {}) {
+  constructor({ fetchImpl = fetch, localRoots = () => [], log = console, now = () => Date.now() } = {}) {
     this.fetch = fetchImpl;
+    this.log = log;
+    this.now = now;
     this.localRoots = typeof localRoots === 'function' ? localRoots : () => localRoots;
     this.cache = new Map(); // id -> { type, body } | { error }
+    this.failedAt = new Map(); // id -> when its fetch failed
     this.inflight = new Map();
   }
 
   async get(id, url) {
     if (this.cache.has(id)) {
       const hit = this.cache.get(id);
-      this.cache.delete(id); // refresh LRU position
-      this.cache.set(id, hit);
-      return hit;
+      if (!(hit.error && this.now() - (this.failedAt.get(id) ?? 0) > ERROR_TTL_MS)) {
+        this.cache.delete(id); // refresh LRU position
+        this.cache.set(id, hit);
+        return hit;
+      }
+      this.cache.delete(id);
     }
     if (this.inflight.has(id)) return this.inflight.get(id);
     const p = this.download(url)
-      .catch((err) => ({ error: err.message }))
+      .catch((err) => {
+        this.log.warn?.(`[images] ${id}: ${err.message}`);
+        this.failedAt.set(id, this.now());
+        return { error: err.message };
+      })
       .then((entry) => {
         this.inflight.delete(id);
         this.cache.set(id, entry);
-        while (this.cache.size > MAX_ENTRIES) this.cache.delete(this.cache.keys().next().value);
+        while (this.cache.size > MAX_ENTRIES) {
+          const oldest = this.cache.keys().next().value;
+          this.cache.delete(oldest);
+          this.failedAt.delete(oldest);
+        }
         return entry;
       });
     this.inflight.set(id, p);
@@ -55,11 +71,16 @@ export class ImageCache {
     } catch {
       throw new Error('invalid URL');
     }
-    const allowed = [...this.localRoots()].some((root) => file.startsWith(path.resolve(root) + path.sep));
-    if (!allowed || !/\.(?:png|jpe?g|webp|gif)$/i.test(file)) throw new Error('invalid URL');
-    const stat = await fs.promises.stat(file);
+    const inside = (f, roots) => roots.some((root) => f.startsWith(root + path.sep));
+    const roots = [...this.localRoots()].map((r) => path.resolve(r));
+    if (!inside(file, roots) || !/\.(?:png|jpe?g|webp|gif)$/i.test(file)) throw new Error('invalid URL');
+    // A symlink inside a picture folder must not lead outside it.
+    const real = await fs.promises.realpath(file);
+    const realRoots = await Promise.all(roots.map((r) => fs.promises.realpath(r).catch(() => r)));
+    if (!inside(real, realRoots)) throw new Error('invalid URL');
+    const stat = await fs.promises.stat(real);
     if (stat.size > MAX_BYTES) throw new Error('image too large');
-    const body = await fs.promises.readFile(file);
+    const body = await fs.promises.readFile(real);
     const type = sniff(body);
     if (!type) throw new Error('content type not allowed: not an image');
     return { type, body };

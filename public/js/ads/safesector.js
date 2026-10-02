@@ -11,7 +11,7 @@
 // rasteriser so motion stays smooth without anti-aliased mush.
 import {
   P, W, H, clamp, lerp, prog, smooth, glide, easeIn, easeOut, easeInOut, track, window01, hash, blinkAt, talkAt,
-  mix, bake, prewarm, shadeSteps, ditherSteps, pool, rect, line, begin, pt, fill, ellipse, capsule, film, vignette, vignetteArt, thin, thinWidth,
+  mix, bake, prewarm, lazy, shadeSteps, ditherSteps, pool, rect, line, begin, pt, fill, ellipse, capsule, film, vignette, vignetteArt, thin, thinWidth,
   tracked, text, smallPrint, figure, bust, arm, wrist,
 } from './cine.js';
 
@@ -168,7 +168,7 @@ function mug(ctx, px, py, w, h, a, { lt = 0 } = {}) {
 const S1W = 430;
 const DESK1 = 124; // back edge of the desk
 const LAMP = [-30, 30];
-const deskSet = () =>
+const deskSet = lazy(() =>
   bake('ss-desk-set', S1W, H, function* paint(c) {
     // wall warmed by a desk lamp off-frame left
     const wallRamp = [P.black, mix(P.black, P.maroon, 0.55), P.maroon, mix(P.maroon, P.brown, 0.5), P.brown];
@@ -226,7 +226,7 @@ const deskSet = () =>
     yield* ditherSteps(c, 286, DESK1 + 1, 132, H - DESK1 - 1, [mix(P.navy, P.maroon, 0.55), mix(P.navy, P.brown, 0.45)], (x, y) => 0.55 * sin(clamp((x - 286) / 132) * PI) * clamp(1 - (y - DESK1) / 70), (x, y) => (y & 1 ? 0 : 1));
     rect(c, 0, DESK1, S1W, 1, mix(P.tanShade, P.tan, 0.6));
     rect(c, 0, DESK1 + 1, S1W, 1, mix(P.maroon, P.black, 0.4));
-  });
+  }));
 
 function steam(ctx, x, y, lt, a = 1) {
   ctx.fillStyle = P.silver;
@@ -310,7 +310,7 @@ function shotDesk(ctx, lt) {
 }
 
 // --- S2: slow motion — the coffee leaves the mug -----------------------------------------
-const spillSet = () =>
+const spillSet = lazy(() =>
   bake('ss-spill', W, H, function* paint(c) {
     yield* shadeSteps(c, 0, 0, W, 170, [P.black, mix(P.black, P.maroon, 0.6), P.maroon, mix(P.maroon, P.brown, 0.45)], (x, y) => {
       const d = sqrt(((x - 90) / 260) ** 2 + ((y - 60) / 170) ** 2);
@@ -323,7 +323,7 @@ const spillSet = () =>
       return 0.25 + clamp(1 - d) * 0.7 + 0.05 * sin(y * 2.3 + sin(x * 0.03) * 2);
     });
     rect(c, 0, 170, W, 1, mix(P.tanShade, P.tan, 0.5));
-  });
+  }));
 
 const DROPS = Array.from({ length: 8 }, (_, i) => ({
   t0: 0.25 + hash(i * 3.1) * 1.3,
@@ -392,7 +392,7 @@ function shotSpill(ctx, lt) {
 
 // --- S3: a fridge at night; a magnet slides down the door ---------------------------------
 const FRIDGE_H = 250;
-const fridgeSet = () =>
+const fridgeSet = lazy(() =>
   bake('ss-fridge', W, FRIDGE_H, function* paint(c) {
     // enamel door under cool night light from the upper left, with a soft sheen band
     yield* shadeSteps(c, 0, 0, 352, FRIDGE_H, [P.ink, P.slate, mix(P.slate, P.steel, 0.5), P.steel, mix(P.steel, P.fog, 0.55), P.fog], (x, y) => {
@@ -452,7 +452,7 @@ const fridgeSet = () =>
       rect(c, x, y, tw, 9, mix(P.silver, P.fog, 0.2));
       text(c, s, x + 3, y + 2, { color: P.black, font: 'micro' });
     }
-  });
+  }));
 
 function shotFridge(ctx, lt) {
   const camY = track(lt, [[0, 0], [2.25, 30, 'smooth']]);
@@ -472,7 +472,7 @@ function shotFridge(ctx, lt) {
 
 // --- S4: a sunny windowsill --------------------------------------------------------------
 const SILL = 104; // top of the sill surface
-const sillSet = () =>
+const sillSet = lazy(() =>
   bake('ss-sill', 420, H, function* paint(c) {
     // over-exposed garden through the glass
     yield* shadeSteps(c, 0, 0, 420, SILL + 2, [mix(P.tan, P.cream, 0.3), mix(P.cream, P.tan, 0.2), P.cream, mix(P.cream, P.white, 0.5)], (x, y) => {
@@ -513,7 +513,7 @@ const sillSet = () =>
     c.globalAlpha = 0.25;
     ellipse(c, 372, 138, 40, 4, P.brown);
     c.globalAlpha = 1;
-  });
+  }));
 
 const MOTES = Array.from({ length: 11 }, (_, i) => ({ x: hash(i * 1.7) * 220 + 20, y: hash(i * 4.1) * 100, s: 0.6 + hash(i * 9.2) }));
 
@@ -549,7 +549,7 @@ function shotSill(ctx, lt) {
 }
 
 // --- S5: the adviser ---------------------------------------------------------------------
-const officeSet = () =>
+const officeSet = lazy(() =>
   bake('ss-office', 400, H, function* paint(c) {
     // panelled wall, cool navy-ink, warmed near the banker's lamp
     yield* shadeSteps(c, 0, 0, 400, 152, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.slate, 0.5), P.slate], (x, y) => {
@@ -591,9 +591,9 @@ const officeSet = () =>
     rect(c, 0, 152, 400, 1, mix(P.tanShade, P.maroon, 0.3));
     rect(c, 0, 178, 400, 1, mix(P.tanShade, P.maroon, 0.5));
     yield* shadeSteps(c, 0, 179, 400, H - 179, [P.black, mix(P.black, P.maroon, 0.6), P.maroon], (x, y) => 0.6 - (y - 179) * 0.012 + clamp(1 - abs(x - 96) / 120) * 0.3);
-  });
+  }));
 // desk props (transparent layer, moves with the desk)
-const officeProps = () =>
+const officeProps = lazy(() =>
   bake('ss-office-props', 400, H, function* paint(c) {
     // banker's lamp: brass stem, green glass shade
     const bl = mix(P.darkGreen, P.green, 0.25);
@@ -613,8 +613,8 @@ const officeProps = () =>
     rect(c, 246, 170, 40, 1, mix(P.brown, P.tanShade, 0.5));
     line(c, 150, 172, 172, 168, P.black);
     line(c, 150, 171, 160, 169, mix(P.yellow, P.tanShade, 0.4));
-  });
-const lampPool = () => pool('ss-lamp-pool', 90, 64, P.yellow, 5, 0.22);
+  }));
+const lampPool = lazy(() => pool('ss-lamp-pool', 90, 64, P.yellow, 5, 0.22));
 
 const MARGARET = figure({
   hh: 36,
@@ -688,7 +688,7 @@ function shotAdviser(ctx, lt, info) {
 
 // --- S6: the restored disk, presented like jewellery -------------------------------------
 const CASE_H = 250;
-const caseSet = () =>
+const caseSet = lazy(() =>
   bake('ss-case', W, CASE_H, function* paint(c) {
     // dark wood under a soft top light
     yield* shadeSteps(c, 0, 0, W, CASE_H, [P.black, mix(P.black, P.maroon, 0.6), P.maroon, mix(P.maroon, P.brown, 0.4)], (x, y) => {
@@ -714,7 +714,7 @@ const caseSet = () =>
     rect(c, 132, 96, 124, 128, mix(P.black, P.maroon, 0.55));
     rect(c, 132, 223, 124, 1, mix(P.maroon, P.darkRed, 0.5));
     rect(c, 255, 96, 1, 128, mix(P.maroon, P.darkRed, 0.5));
-  });
+  }));
 
 /** A white cotton glove holding an edge (fingers up and to the left), with a dark cuff. */
 function glove(ctx, x, y) {
@@ -757,13 +757,13 @@ function shotCase(ctx, lt) {
 }
 
 // --- S7: end slate -----------------------------------------------------------------------
-const slateBg = () =>
+const slateBg = lazy(() =>
   bake('ss-slate', W, H, function* paint(c) {
     yield* shadeSteps(c, 0, 0, W, H, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.45)], (x, y) => {
       const d = sqrt(((x - 192) / 260) ** 2 + ((y - 70) / 170) ** 2);
       return clamp(1 - d) * 0.95;
     });
-  });
+  }));
 
 function shield(ctx, cx, y, a) {
   ctx.globalAlpha = a;

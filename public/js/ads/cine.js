@@ -180,6 +180,33 @@ export function bake(key, w, h, paint) {
   return job.cv;
 }
 
+/**
+ * Memoise an art getter: `const SET = lazy(() => bake(...))` returns the same
+ * finished canvas on every call without re-creating the paint closure (never
+ * caches an unfinished canvas handed out while prewarming).
+ */
+export function lazy(fn) {
+  let v = null;
+  return () => {
+    if (v) return v;
+    const r = fn();
+    if (!deferring) v = r;
+    return r;
+  };
+}
+
+/** lazy() for parameterised getters: `const art = lazyBy((size) => bake(...))`. */
+export function lazyBy(fn) {
+  const memo = new Map();
+  return (k) => {
+    const v = memo.get(k);
+    if (v) return v;
+    const r = fn(k);
+    if (!deferring) memo.set(k, r);
+    return r;
+  };
+}
+
 const WARM = new WeakSet();
 /**
  * Bakes everything in `list` (thunks that call bake getters) in idle time, in
@@ -626,7 +653,7 @@ export function letterbox(ctx, h = 24, c = '#000000') {
 
 const VIG_KEYS = new Map(); // amount -> bake key (built once, not per frame)
 /** The vignette art for `amount` (baked once, resumable). */
-export function vignetteArt(amount = 0.55) {
+export const vignetteArt = lazyBy((amount = 0.55) => {
   let key = VIG_KEYS.get(amount);
   if (!key) VIG_KEYS.set(amount, (key = `vig${amount}`));
   return bake(key, W, H, function* paint(c) {
@@ -647,7 +674,7 @@ export function vignetteArt(amount = 0.55) {
     }
     c.putImageData(img, 0, 0);
   });
-}
+});
 /** Vignette (baked once per amount, dithered): darkens the corners by up to `amount`. */
 export function vignette(ctx, amount = 0.55) {
   ctx.drawImage(vignetteArt(amount), 0, 0);

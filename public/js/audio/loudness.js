@@ -158,7 +158,7 @@ export function measureLoudness(channels, fs = 48000) {
 
 // K-weighted energy of one drum hit at unit gain (measured offline in
 // public/lab/audio.html with the synth's own drum voices).
-export const DRUM_ENERGY = { k: 0.03, s: 0.012, h: 0.0009, o: 0.004, c: 0.03, t: 0.025, p: 0.01, x: 0.0004, w: 0.02, f: 0.02, a: 0.008 };
+export const DRUM_ENERGY = { k: 0.0086, s: 0.0026, h: 0.0001, o: 0.0007, c: 0.0277, t: 0.0092, p: 0.0008, x: 0.00002, w: 0.0166, f: 0.0141, a: 0.0097 };
 
 // Integral of the squared ADSR envelope over a note gated for `gate` seconds.
 export function envelopeEnergy(inst, gate) {

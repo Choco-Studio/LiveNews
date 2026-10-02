@@ -10,7 +10,7 @@
 // facets, rotated and projected each frame and lit per facet, so they turn and
 // settle smoothly. Sets are baked once (cine.js).
 import {
-  P, W, H, clamp, lerp, prog, smooth, easeOut, track, window01, hash, blinkAt, mix, ramp, bake, prewarm, shader, shadeSteps,
+  P, W, H, clamp, lerp, prog, smooth, easeOut, track, window01, hash, blinkAt, mix, ramp, bake, prewarm, lazy, lazyBy, shader, shadeSteps,
   pool, rect, line, begin, pt, fill, ellipse, capsule, film, vignette, vignetteArt, thin, tracked, text, smallPrint, figure, bust,
   arm, wrist,
 } from './cine.js';
@@ -147,9 +147,9 @@ function crisp(ctx, cx, cy, s, rx, ry, rz, { curl = 0.22, warm = 0, rim = null, 
 }
 
 // --- S1: one crisp, turning in the dark ------------------------------------------------------
-const voidBg = () =>
-  shader('cn-void', W, H, [P.black, mix(P.black, P.maroon, 0.45), mix(P.maroon, P.black, 0.25), mix(P.maroon, P.brown, 0.35)], (x, y) => clamp(1 - sqrt(((x - 192) / 190) ** 2 + ((y - 100) / 120) ** 2)) * 0.85);
-const keyPool = () => pool('cn-key', 80, 70, P.yellow, 6, 0.12);
+const voidBg = lazy(() =>
+  shader('cn-void', W, H, [P.black, mix(P.black, P.maroon, 0.45), mix(P.maroon, P.black, 0.25), mix(P.maroon, P.brown, 0.35)], (x, y) => clamp(1 - sqrt(((x - 192) / 190) ** 2 + ((y - 100) / 120) ** 2)) * 0.85));
+const keyPool = lazy(() => pool('cn-key', 80, 70, P.yellow, 6, 0.12));
 const SALT = Array.from({ length: 22 }, (_, i) => ({ x: hash(i * 2.3) * 300 + 42, y: hash(i * 5.9) * 200, v: 4 + hash(i * 8.1) * 6, k: i }));
 
 function saltFall(ctx, lt, x0, x1, y0, y1, speed = 1, a = 1) {
@@ -176,7 +176,7 @@ function shotHero(ctx, lt) {
 
 // --- S2: slow motion, crisps settle on slate --------------------------------------------------
 const SLATE_Y = 150;
-const slateSet = () =>
+const slateSet = lazy(() =>
   bake('cn-slate', 420, H, function* paint(c) {
     yield* shadeSteps(c, 0, 0, 420, SLATE_Y, [P.black, mix(P.black, P.maroon, 0.4), mix(P.maroon, P.black, 0.2)], (x, y) => clamp(1 - sqrt(((x - 240) / 260) ** 2 + ((y - 40) / 160) ** 2)) * 0.8);
     // slate board: dark, slightly blue grey, with a warm backlit edge
@@ -185,7 +185,7 @@ const slateSet = () =>
       return clamp(1 - d) * 0.8 + 0.05 * sin(x * 0.07 + y * 0.9);
     });
     rect(c, 0, SLATE_Y, 420, 1, mix(P.slate, P.ink, 0.5));
-  });
+  }));
 
 // each falling crisp: x, landing y, start delay, spin, final pose
 // (negative starts: the first crisps are already falling when the shot opens)
@@ -234,7 +234,7 @@ function shotTumble(ctx, lt) {
 }
 
 // --- S3: Ian, master squarer ------------------------------------------------------------------
-const workshopSet = () =>
+const workshopSet = lazy(() =>
   bake('cn-workshop', 400, H, function* paint(c) {
     yield* shadeSteps(c, 0, 0, 400, H, [P.black, mix(P.black, P.maroon, 0.5), P.maroon, mix(P.maroon, P.brown, 0.5), P.brown], (x, y) => {
       const d = sqrt(((x - 210) / 200) ** 2 + ((y - 30) / 170) ** 2);
@@ -261,8 +261,8 @@ const workshopSet = () =>
     pt(184, 14);
     fill(c, mix(P.darkGreen, P.black, 0.45), { d: P.black, f: 0.3, m: 1, side: 1 });
     rect(c, 186, 14, 52, 1, mix(P.yellow, P.cream, 0.5));
-  });
-const lampCone = () => pool('cn-cone', 110, 90, P.yellow, 6, 0.16);
+  }));
+const lampCone = lazy(() => pool('cn-cone', 110, 90, P.yellow, 6, 0.16));
 
 const IAN = figure({
   hh: 40,
@@ -366,7 +366,7 @@ function shotIan(ctx, lt, info) {
 }
 
 // --- S4: salt through a shaft of light ------------------------------------------------------
-const shaftArt = () =>
+const shaftArt = lazy(() =>
   bake('cn-shaft', 150, H, function* paint(c) {
     const img = c.createImageData(150, H);
     const d = img.data;
@@ -388,7 +388,7 @@ const shaftArt = () =>
       if ((y & 3) === 3) yield;
     }
     c.putImageData(img, 0, 0);
-  });
+  }));
 const bayerish = (x, y) => ([0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5][((y & 3) << 2) | (x & 3)] + 0.5) / 16;
 
 const BED = [
@@ -419,7 +419,7 @@ const FLAVOURS = [
 const PACK_W = 80;
 const PACK_H = 116;
 const PACK_KEYS = ['cn-pack-0', 'cn-pack-1', 'cn-pack-2'];
-function packArt(i) {
+const packArt = lazyBy((i) => {
   return bake(PACK_KEYS[i], PACK_W, PACK_H, function* paint(c) {
     const f = FLAVOURS[i];
     const w = PACK_W;
@@ -446,16 +446,16 @@ function packArt(i) {
     text(c, f.name[1], w / 2, 87, { color: mix(P.cream, GOLD, 0.4), font: 'micro', align: 'center' });
     rect(c, 2, h - 18, w - 4, 8, f.band);
   });
-}
+});
 
-const plinthSet = () =>
+const plinthSet = lazy(() =>
   bake('cn-plinth', 420, H, function* paint(c) {
     yield* shadeSteps(c, 0, 0, 420, H, [P.black, mix(P.black, P.ink, 0.5), P.ink, mix(P.ink, P.slate, 0.3)], (x, y) => clamp(1 - sqrt(((x - 210) / 230) ** 2 + ((y - 70) / 150) ** 2)) * 0.85);
     // plinth top and front face
     yield* shadeSteps(c, 30, 160, 360, 8, [mix(P.slate, P.ink, 0.3), P.slate, mix(P.slate, P.steel, 0.5)], (x) => clamp(1 - abs(x - 210) / 190));
     yield* shadeSteps(c, 30, 168, 360, 48, [P.black, mix(P.black, P.ink, 0.6), P.ink], (x, y) => clamp(1 - abs(x - 210) / 200) * (1 - (y - 168) / 60));
     rect(c, 30, 160, 360, 1, mix(P.steel, P.fog, 0.4));
-  });
+  }));
 
 function shotPacks(ctx, lt) {
   const camX = track(lt, [[0, 0], [2.6, 14, 'smooth']]);
@@ -481,8 +481,8 @@ function shotPacks(ctx, lt) {
 }
 
 // --- S6: end slate --------------------------------------------------------------------------------
-const slateBg = () =>
-  shader('cn-slatebg', W, H, [P.black, mix(P.black, P.maroon, 0.35), mix(P.maroon, P.black, 0.35)], (x, y) => clamp(1 - sqrt(((x - 192) / 240) ** 2 + ((y - 90) / 140) ** 2)) * 0.8);
+const slateBg = lazy(() =>
+  shader('cn-slatebg', W, H, [P.black, mix(P.black, P.maroon, 0.35), mix(P.maroon, P.black, 0.35)], (x, y) => clamp(1 - sqrt(((x - 192) / 240) ** 2 + ((y - 90) / 140) ** 2)) * 0.8));
 
 function shotSlate(ctx, lt) {
   ctx.drawImage(slateBg(), 0, 0);

@@ -8,7 +8,7 @@
 // Pure function of the ad clock. Moon, Earth and sets are baked once with
 // dithered light (cine.js); the figures use the crisp rasteriser.
 import {
-  P, W, H, clamp, lerp, prog, smooth, track, window01, hash, blinkAt, mix, bake, prewarm, shader, shadeSteps, pool, rect, line,
+  P, W, H, clamp, lerp, prog, smooth, track, window01, hash, blinkAt, mix, bake, prewarm, lazy, lazyBy, shader, shadeSteps, pool, rect, line,
   begin, pt, fill, ellipse, capsule, film, vignette, vignetteArt, thin, tracked, text, smallPrint, figure, bust, arm, wrist,
   standing, superTitle, bayer, rgb,
 } from './cine.js';
@@ -48,7 +48,7 @@ const fbm = (x, y, seed) => vnoise(x, y, seed) * 0.55 + vnoise(x * 2.1, y * 2.1,
 const EARTH_KEYS = new Map();
 const MOON_KEYS = new Map();
 const keyOf = (m, prefix, r) => m.get(r) || (m.set(r, `${prefix}${r}`), m.get(r));
-function earthArt(r) {
+const earthArt = lazyBy((r) => {
   return bake(keyOf(EARTH_KEYS, 'se-earth-', r), r * 2 + 4, r * 2 + 4, function* paint(c) {
     const w = r * 2 + 4;
     const img = c.createImageData(w, w);
@@ -93,10 +93,10 @@ function earthArt(r) {
     }
     c.putImageData(img, 0, 0);
   });
-}
+});
 
 /** The full moon seen from Earth: silver with darker maria and a soft limb. */
-function moonArt(r) {
+const moonArt = lazyBy((r) => {
   return bake(keyOf(MOON_KEYS, 'se-moon-', r), r * 2 + 2, r * 2 + 2, function* paint(c) {
     const w = r * 2 + 2;
     const img = c.createImageData(w, w);
@@ -124,7 +124,7 @@ function moonArt(r) {
     }
     c.putImageData(img, 0, 0);
   });
-}
+});
 
 const STARS = Array.from({ length: 40 }, (_, i) => [floor(hash(i * 3.7) * W), floor(hash(i * 9.1) * 150), hash(i * 5.3)]);
 function stars(ctx, ox = 0, oy = 0, a = 1, maxY = 216) {
@@ -139,7 +139,7 @@ function stars(ctx, ox = 0, oy = 0, a = 1, maxY = 216) {
 }
 
 // --- S1: a city balcony, the full moon -------------------------------------------------------
-const citySet = () =>
+const citySet = lazy(() =>
   bake('se-city', 420, 260, function* paint(c) {
     yield* shadeSteps(c, 0, 0, 420, 260, [P.black, mix(P.black, P.navy, 0.45), mix(P.navy, P.ink, 0.5), mix(P.navy, P.slate, 0.4)], (x, y) => clamp((y - 20) / 230) * 0.9 + clamp(1 - sqrt(((x - 330) / 160) ** 2 + ((y - 60) / 120) ** 2)) * 0.25);
     // towers, far to near; sparse warm windows (static)
@@ -165,8 +165,8 @@ const citySet = () =>
         k += 3;
       }
     });
-  });
-const moonGlow = () => pool('se-moonglow', 64, 64, P.silver, 6, 0.16);
+  }));
+const moonGlow = lazy(() => pool('se-moonglow', 64, 64, P.silver, 6, 0.16));
 
 const LADY_FAR = figure({
   hh: 40,
@@ -247,7 +247,7 @@ function bareBack(ctx, f) {
 }
 
 // --- S2: the lunar horizon, the Earth rising ---------------------------------------------------
-const horizonSet = () =>
+const horizonSet = lazy(() =>
   bake('se-horizon', W, H, function* paint(c) {
     yield* shadeSteps(c, 0, 140, W, H - 140, REG, (x, y) => {
       const hill = 140 + 6 * sin(x * 0.012 + 1) + 3 * sin(x * 0.05);
@@ -255,7 +255,7 @@ const horizonSet = () =>
       const crater = clamp(1 - sqrt(((x - 110) / 60) ** 2 + ((y - 196) / 12) ** 2));
       return clamp(0.75 - (y - hill) * 0.006 - crater * 0.3 + (crater > 0 && crater < 0.25 ? 0.25 : 0) + 0.05 * fbm(x * 0.08, y * 0.2, 3));
     });
-  });
+  }));
 
 function shotLuna(ctx, lt) {
   rect(ctx, 0, 0, W, H, P.black);
@@ -267,7 +267,7 @@ function shotLuna(ctx, lt) {
 }
 
 // --- S3: the residence on the Sea of Serenity ----------------------------------------------
-const plainSet = () =>
+const plainSet = lazy(() =>
   bake('se-plain', 430, H, function* paint(c) {
     rect(c, 0, 0, 430, H, P.black);
     yield* shadeSteps(c, 0, 120, 430, H - 120, REG, (x, y) => {
@@ -293,9 +293,9 @@ const plainSet = () =>
     ellipse(c, 76, 174, 3, 3, P.slate);
     line(c, 74, 168, 82, 152, P.steel);
     ellipse(c, 83, 151, 3, 2, P.fog);
-  });
-const housePool = () => pool('se-housepool', 110, 22, P.yellow, 6, 0.22);
-const residenceArt = () =>
+  }));
+const housePool = lazy(() => pool('se-housepool', 110, 22, P.yellow, 6, 0.22));
+const residenceArt = lazy(() =>
   bake('se-residence', 190, 60, function* paint(c) {
     // flat roof slab, glass front glowing warm, slender columns
     rect(c, 0, 4, 190, 6, P.fog);
@@ -317,7 +317,7 @@ const residenceArt = () =>
     rect(c, 0, 50, 190, 4, P.steel);
     rect(c, 0, 50, 190, 1, P.fog);
     rect(c, 0, 54, 190, 3, P.slate);
-  });
+  }));
 
 function shotHouse(ctx, lt) {
   const camX = track(lt, [[0, 0], [4.5, 30, 'smooth']]);
@@ -336,7 +336,7 @@ function shotHouse(ctx, lt) {
 }
 
 // --- S4: inside: an evening dress, a glass, the Earth in the window --------------------------
-const loungeSet = () =>
+const loungeSet = lazy(() =>
   bake('se-lounge', 410, H, function* paint(c) {
     // warm wall at the left, the great window on the right two thirds
     yield* shadeSteps(c, 0, 0, 410, 170, [P.black, mix(P.black, P.maroon, 0.5), P.maroon, mix(P.maroon, P.brown, 0.5), P.brown], (x, y) => clamp(1 - sqrt(((x - 40) / 180) ** 2 + ((y - 100) / 140) ** 2)) * 0.9);
@@ -366,8 +366,8 @@ const loungeSet = () =>
     fill(c, mix(P.cream, P.yellow, 0.25), { d: mix(P.tan, P.yellow, 0.2), f: 0.3, m: 1, side: 1 });
     yield* shadeSteps(c, 60, 146, 56, 24, [mix(P.tan, P.brown, 0.4), P.tan, mix(P.cream, P.tan, 0.4)], (x, y) => clamp(0.9 - (x - 60) / 70 - (y - 146) * 0.01));
     rect(c, 60, 146, 56, 1, mix(P.cream, P.tan, 0.3));
-  });
-const lampPool = () => pool('se-lamppool', 90, 80, P.yellow, 6, 0.16);
+  }));
+const lampPool = lazy(() => pool('se-lamppool', 90, 80, P.yellow, 6, 0.16));
 
 const LADY = {
   x: 238,
@@ -445,7 +445,7 @@ const LADY_OTS = figure({
   },
 });
 
-const toastSet = () =>
+const toastSet = lazy(() =>
   bake('se-toast', W, H, function* paint(c) {
     rect(c, 0, 0, W, H, P.black);
     yield* shadeSteps(c, 0, 150, W, 66, REG, (x, y) => {
@@ -453,7 +453,7 @@ const toastSet = () =>
       return y < hill ? -1 : clamp(0.55 - (y - hill) * 0.008 + 0.05 * fbm(x * 0.07, y * 0.3, 8));
     });
     rect(c, W - 3, 0, 3, H, mix(P.black, P.slate, 0.4));
-  });
+  }));
 
 function shotToast(ctx, lt) {
   ctx.drawImage(toastSet(), 0, 0);
@@ -480,7 +480,7 @@ function shotToast(ctx, lt) {
 }
 
 // --- S6: end slate ------------------------------------------------------------------------------
-const slateBg = () => shader('se-slatebg', W, H, [P.black, mix(P.black, P.navy, 0.35), mix(P.black, P.navy, 0.6)], (x, y) => clamp(1 - sqrt(((x - 192) / 240) ** 2 + ((y - 80) / 150) ** 2)) * 0.8);
+const slateBg = lazy(() => shader('se-slatebg', W, H, [P.black, mix(P.black, P.navy, 0.35), mix(P.black, P.navy, 0.6)], (x, y) => clamp(1 - sqrt(((x - 192) / 240) ** 2 + ((y - 80) / 150) ** 2)) * 0.8));
 
 function crescent(ctx, cx, cy, r, a) {
   ctx.globalAlpha = a;

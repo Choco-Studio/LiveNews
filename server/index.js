@@ -71,7 +71,8 @@ async function serveImage(res, id) {
   const story = newsDesk.get(id);
   if (!story?.image) return sendJson(res, 404, { error: 'no image' });
   const entry = await images.get(id, story.image);
-  if (entry.error) return sendJson(res, 502, { error: entry.error });
+  // The detail (paths, upstream errors) stays in the server log; the client only learns it failed.
+  if (entry.error) return sendJson(res, 502, { error: 'image unavailable' });
   res.writeHead(200, {
     'content-type': entry.type,
     'cache-control': 'public, max-age=86400',
@@ -79,6 +80,9 @@ async function serveImage(res, id) {
   });
   res.end(entry.body);
 }
+
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+const devAllowed = (req) => /^(1|true|yes|on)$/i.test(process.env.DEV_ENDPOINTS || '') || LOOPBACK.has(req.socket.remoteAddress);
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -93,9 +97,12 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/channel') return sendJson(res, 200, station.publicChannel());
     if (req.method === 'GET' && url.pathname === '/api/schedule') return sendJson(res, 200, station.schedule());
-    // Editorial dev views (lab pages, debugging): what the desk holds and what is queued, without advancing the channel.
-    if (req.method === 'GET' && url.pathname === '/api/desk') return sendJson(res, 200, newsDesk.deskView());
-    if (req.method === 'GET' && url.pathname === '/api/queue') return sendJson(res, 200, station.queue);
+    // Editorial dev views (lab pages, debugging): what the desk holds and what is queued, without advancing
+    // the channel. Upcoming scripts are not for the public: loopback only, unless DEV_ENDPOINTS=1.
+    if (req.method === 'GET' && (url.pathname === '/api/desk' || url.pathname === '/api/queue')) {
+      if (!devAllowed(req)) return sendJson(res, 404, { error: 'not found' });
+      return sendJson(res, 200, url.pathname === '/api/desk' ? newsDesk.deskView() : station.queue);
+    }
     const img = url.pathname.match(/^\/api\/img\/(s[0-9a-f]{10})$/);
     if (req.method === 'GET' && img) return await serveImage(res, img[1]);
     if (req.method === 'POST' && url.pathname === '/api/refresh') {
@@ -119,7 +126,10 @@ async function loop() {
 
 server.listen(config.port, config.host, () => {
   console.log(`📺 ${station.publicChannel().name} on air at http://${config.host}:${config.port}`);
-  console.log(`   AI providers: ${config.providers.join(' → ')}${config.reviewPass ? ' (with editorial review pass)' : ''}`);
+  // The mock writes but never reviews: say so rather than promise an editor that is not there.
+  const editor = chain.providers.some((p) => p.reviews !== false);
+  const review = !config.reviewPass ? '' : editor ? ' (with editorial review pass)' : ' (review pass: no AI editor configured)';
+  console.log(`   AI providers: ${config.providers.join(' → ')}${review}`);
   loop();
   setInterval(() => loop().catch((e) => console.error(e)), 60_000);
 });

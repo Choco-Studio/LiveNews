@@ -321,20 +321,28 @@ export const danglingHeadline = (h) => {
 export function shortHeadline(title, max = HEADLINE_MAX) {
   const t = clean(plainTitle(title), 200).replace(/[\s.!?;:,]+$/, '');
   if (t.length <= max) return t;
-  const words = t.split(' ');
-  const compact = words
-    .filter((w, i) => {
-      if (!/^(?:a|an|the)$/i.test(w)) return true;
-      if (i === 0) return false;
-      return PREPOSITIONS.includes(words[i - 1].toLowerCase()) || KEEP_ARTICLE_BEFORE.test(words[i + 1] || '');
-    })
-    .join(' ')
-    .replace(/^\p{Ll}/u, (c) => c.toUpperCase());
+  const compactOf = (text) => {
+    const words = text.split(' ');
+    return words
+      .filter((w, i) => {
+        if (!/^(?:a|an|the)$/i.test(w)) return true;
+        if (i === 0) return false;
+        return PREPOSITIONS.includes(words[i - 1].toLowerCase()) || KEEP_ARTICLE_BEFORE.test(words[i + 1] || '');
+      })
+      .join(' ')
+      .replace(/^\p{Ll}/u, (c) => c.toUpperCase());
+  };
+  const compact = compactOf(t);
   if (compact.length <= max) return compact;
+  // Cut points are found in the full headline: "as" starts a clause ("as demand cools"), not a
+  // comparison ("use the sun as a compass"); and what is kept must still carry the story.
+  const all = contentWords(t).length;
   const cuts = [];
-  for (const m of compact.matchAll(CLAUSE_CUTS)) {
-    const head = compact.slice(0, m.index).trim();
-    if (contentWords(head).length >= 3 && !danglingHeadline(head)) cuts.push(head);
+  for (const m of t.matchAll(CLAUSE_CUTS)) {
+    if (/^\s*as\s/i.test(m[0]) && /^(?:a|an|the|its|their|his|her|one|part|well|much|many|long|soon|usual)\b/i.test(t.slice(m.index + m[0].length))) continue;
+    const head = compactOf(t.slice(0, m.index).trim());
+    const kept = contentWords(head).length;
+    if (kept >= 3 && kept / all >= 0.4 && !danglingHeadline(head)) cuts.push(head);
   }
   const fit = cuts.filter((c) => c.length <= max).pop();
   if (fit) return fit;

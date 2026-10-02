@@ -8,7 +8,7 @@
 // Every frame is a pure function of the ad clock: sets are baked once with
 // dithered light (cine.js), people and props use the crisp rasteriser.
 import {
-  P, W, H, clamp, lerp, prog, smooth, easeInOut, track, window01, hash, blinkAt, mix, bake, prewarm, shader, shadeSteps,
+  P, W, H, clamp, lerp, prog, smooth, easeInOut, track, window01, hash, blinkAt, mix, bake, prewarm, lazy, shader, shadeSteps,
   pool, rect, line, begin, pt, fill, ellipse, capsule, film, vignette, vignetteArt, letterbox, thin, tracked, text, smallPrint,
   figure, bust, arm, wrist, profile, standing,
 } from './cine.js';
@@ -53,7 +53,7 @@ const C = {
 // --- S1a: the street at dusk ---------------------------------------------------------------
 const S1W = 440;
 const HORIZON = 146;
-const streetSky = () =>
+const streetSky = lazy(() =>
   bake('sn-sky', S1W, H, function* paint(c) {
     yield* shadeSteps(c, 0, 0, S1W, HORIZON + 4, [C.sky0, C.sky1, C.sky2, C.sky3, C.sky4], (x, y) => clamp((y - 18) / (HORIZON - 18)) ** 1.25 + 0.04 * sin(x * 0.012));
     // a thin crescent moon
@@ -66,7 +66,7 @@ const streetSky = () =>
     for (let x = 0; x <= S1W; x += 8) pt(x, HORIZON - 6 - 6 * hash(x * 0.37) - (hash(x * 0.11) > 0.8 ? 8 : 0));
     pt(S1W, HORIZON + 4);
     fill(c, mix(C.house, C.sky2, 0.3));
-  });
+  }));
 
 /** One house silhouette: walls, gabled roof, chimney, aerial, windows. */
 function house(c, x, w, roof, wins, aerial = true) {
@@ -93,7 +93,7 @@ function house(c, x, w, roof, wins, aerial = true) {
   }
 }
 
-const streetSet = () =>
+const streetSet = lazy(() =>
   bake('sn-street', S1W, H, function* paint(c) {
     house(c, 10, 84, 30, [[14, 128, 'warm'], [58, 128, 'dark'], [14, 150, 'dark'], [58, 150, 'warm']]);
     house(c, 118, 76, 26, [[12, 128, 'dark'], [50, 128, 'dark'], [30, 150, 'warm']], false);
@@ -114,7 +114,7 @@ const streetSet = () =>
       rect(c, lx - 6, 102, 8, 2, P.black);
       rect(c, lx - 8, 104, 5, 2, mix(C.sodium, P.black, 0.6));
     }
-  });
+  }));
 
 /** Wires: catenary curves from the pole to the houses (the phone line). */
 function wire(ctx, x0, y0, x1, y1, sag) {
@@ -126,8 +126,8 @@ function wire(ctx, x0, y0, x1, y1, sag) {
   }
 }
 
-const lampPool = () => pool('sn-sodium', 40, 12, C.sodium, 5, 0.42);
-const lampHalo = () => pool('sn-sodium-halo', 10, 10, C.sodium, 4, 0.55);
+const lampPool = lazy(() => pool('sn-sodium', 40, 12, C.sodium, 5, 0.42));
+const lampHalo = lazy(() => pool('sn-sodium-halo', 10, 10, C.sodium, 4, 0.55));
 
 function shotStreet(ctx, lt) {
   const camX = track(lt, [[0, 0], [3.2 + 0.6, 30, 'smooth']]);
@@ -159,7 +159,7 @@ function shotStreet(ctx, lt) {
 }
 
 // --- S1b: the house, closer: one window glows blue -------------------------------------------
-const houseSet = () =>
+const houseSet = lazy(() =>
   bake('sn-house', 400, H, function* paint(c) {
     yield* shadeSteps(c, 0, 0, 400, H, [C.sky0, C.sky1, C.sky2], (x, y) => clamp((y - 10) / 160) + 0.1 * (x / 400));
     // gable wall, siding boards
@@ -180,8 +180,8 @@ const houseSet = () =>
     // porch light below
     rect(c, 180, 186, 40, 30, mix(C.house, P.black, 0.4));
     ellipse(c, 228, 182, 3, 4, C.warm);
-  });
-const porchGlow = () => pool('sn-porch', 30, 24, C.warm, 5, 0.35);
+  }));
+const porchGlow = lazy(() => pool('sn-porch', 30, 24, C.warm, 5, 0.35));
 
 function shotHouse(ctx, lt) {
   const camY = track(lt, [[0, 0], [3.2 + 0.6, 12, 'smooth']]);
@@ -220,14 +220,14 @@ function shotHouse(ctx, lt) {
   vignette(ctx, 0.6);
   letterbox(ctx, LB);
 }
-const windowGlow = () =>
+const windowGlow = lazy(() =>
   shader('sn-winglow', 100, 68, [mix(C.crtD, P.black, 0.35), C.crtD, mix(C.crtD, C.crt, 0.5), C.crt], (x, y) => {
     const d = sqrt(((x - 62) / 70) ** 2 + ((y - 50) / 50) ** 2);
     return clamp(1 - d) * 0.95 + (y < 10 ? 0.2 : 0);
-  });
+  }));
 
 // --- S2: the bedroom, a CRT, CONNECT -------------------------------------------------------
-const roomSet = () =>
+const roomSet = lazy(() =>
   bake('sn-room', 400, H, function* paint(c) {
     // dark wall lit by the screen (right of centre)
     yield* shadeSteps(c, 0, 0, 400, 150, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.45), mix(P.navy, P.blue, 0.25)], (x, y) => {
@@ -253,10 +253,10 @@ const roomSet = () =>
       return clamp(1 - d) * 0.9 + 0.08;
     });
     rect(c, 0, 150, 400, 1, mix(P.navy, P.steel, 0.4));
-  });
+  }));
 
 /** The beige CRT monitor (screen drawn by the caller). */
-const monitorArt = () =>
+const monitorArt = lazy(() =>
   bake('sn-monitor', 96, 84, function* paint(c) {
     // body seen slightly from the left: front bezel + side depth
     begin();
@@ -275,7 +275,7 @@ const monitorArt = () =>
     // stand
     rect(c, 30, 76, 32, 4, C.beigeD);
     rect(c, 24, 80, 44, 4, C.beigeDD);
-  });
+  }));
 
 /** Screen content: desktop, the dial-up dialog, its CONNECT button. */
 function screenUI(ctx, x, y, w, h, lt) {
@@ -306,8 +306,8 @@ function screenUI(ctx, x, y, w, h, lt) {
 function shadeInto0(ctx, x, y, w, h) {
   ctx.drawImage(desktopArt(), x, y);
 }
-const desktopArt = () => shader('sn-desktop', 58, 50, [P.navy, mix(P.navy, P.blue, 0.5), mix(P.blue, P.cyan, 0.25)], (x, y) => clamp(1 - sqrt(((x - 29) / 40) ** 2 + ((y - 24) / 34) ** 2)));
-const screenSpill = () => pool('sn-spill', 120, 70, C.crt, 6, 0.3);
+const desktopArt = lazy(() => shader('sn-desktop', 58, 50, [P.navy, mix(P.navy, P.blue, 0.5), mix(P.blue, P.cyan, 0.25)], (x, y) => clamp(1 - sqrt(((x - 29) / 40) ** 2 + ((y - 24) / 34) ** 2))));
+const screenSpill = lazy(() => pool('sn-spill', 120, 70, C.crt, 6, 0.3));
 
 const DANIEL = figure({
   hh: 50,
@@ -382,7 +382,7 @@ const pnlTop = (x) => lerp(PNL.t0, PNL.t1, clamp((x - PNL.x0) / (PNL.x1 - PNL.x0
 const pnlBot = (x) => lerp(PNL.b0, PNL.b1, clamp((x - PNL.x0) / (PNL.x1 - PNL.x0)) ** 0.85);
 const ledX = (i) => lerp(150, 392, (i / 7) ** 0.82);
 const ledY = (i) => lerp(pnlTop(ledX(i)), pnlBot(ledX(i)), 0.5);
-const modemSet = () =>
+const modemSet = lazy(() =>
   bake('sn-modem', 430, H, function* paint(c) {
     // darkness, a cool wash from the screen above-right
     yield* shadeSteps(c, 0, 0, 430, H, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.5)], (x, y) => clamp(1 - sqrt(((x - 300) / 300) ** 2 + ((y + 30) / 190) ** 2)) * 0.85);
@@ -426,8 +426,8 @@ const modemSet = () =>
     text(c, 'DATA / FAX / VOICE', 26, 140, { color: mix(P.ink, C.beigeDD, 0.35), font: 'micro' });
     // the desk: dark, glossy enough to hold the LEDs' reflections
     yield* shadeSteps(c, 0, 0, 430, H, [P.black, mix(P.black, P.ink, 0.6), P.ink], (x, y) => (y < pnlBot(x) ? -1 : clamp(0.55 - (y - pnlBot(x)) * 0.015 + (x / 430) * 0.2)));
-  });
-const ledGlow = () => pool('sn-ledglow', 10, 8, C.led, 4, 0.55);
+  }));
+const ledGlow = lazy(() => pool('sn-ledglow', 10, 8, C.led, 4, 0.55));
 
 /** Which LEDs are lit at time lt of the handshake (deterministic). */
 function ledOn(i, lt) {
@@ -466,8 +466,8 @@ function shotModem(ctx, lt) {
 }
 
 // --- S4: he closes his eyes and listens -----------------------------------------------------
-const faceBg = () =>
-  shader('sn-facebg', W, H, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.5), mix(P.navy, C.crt, 0.3)], (x, y) => clamp(1 - sqrt(((x - 420) / 300) ** 2 + ((y - 90) / 150) ** 2)) * 0.95);
+const faceBg = lazy(() =>
+  shader('sn-facebg', W, H, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.5), mix(P.navy, C.crt, 0.3)], (x, y) => clamp(1 - sqrt(((x - 420) / 300) ** 2 + ((y - 90) / 150) ** 2)) * 0.95));
 
 const FACE = {
   x: 160,
@@ -522,7 +522,7 @@ function shotFace(ctx, lt) {
 }
 
 // --- S5: a sunset arrives, one line at a time ----------------------------------------------
-const photoArt = () =>
+const photoArt = lazy(() =>
   shader('sn-photo', 150, 92, [mix(P.purple, P.ink, 0.4), P.purple, mix(P.maroon, P.purple, 0.4), P.rust, P.orange, P.yellow], (x, y) => {
     const sun = clamp(1 - sqrt(((x - 96) / 18) ** 2 + ((y - 52) / 18) ** 2)) * 1.2;
     if (y > 58) {
@@ -531,8 +531,8 @@ const photoArt = () =>
       return clamp(0.18 + (92 - y) * 0.004 + ref);
     }
     return clamp((y / 58) * 0.62 + sun);
-  });
-const crtFrame = () =>
+  }));
+const crtFrame = lazy(() =>
   bake('sn-crtframe', W, H, function* paint(c) {
     // bezel around a slightly curved screen
     rect(c, 0, 0, W, H, C.beigeD);
@@ -540,7 +540,7 @@ const crtFrame = () =>
     c.clearRect(40, 32, 304, 152);
     rect(c, 38, 30, 308, 2, P.black);
     rect(c, 38, 184, 308, 2, mix(C.beige, P.white, 0.3));
-  });
+  }));
 
 // status-bar strings built once (no template strings per frame)
 const PCT_LABEL = Array.from({ length: 101 }, (_, i) => `RECEIVING  ${i}%`);
@@ -583,7 +583,7 @@ function shotPhoto(ctx, lt) {
 }
 
 // --- S6: downstairs, mum picks up the phone; then NO CARRIER ----------------------------------
-const hallSet = () =>
+const hallSet = lazy(() =>
   bake('sn-hall', W, H, function* paint(c) {
     yield* shadeSteps(c, 0, 0, W, 180, [P.black, mix(P.black, P.maroon, 0.55), P.maroon, mix(P.maroon, P.brown, 0.55), mix(P.brown, P.tanShade, 0.5)], (x, y) => {
       const d = sqrt(((x - 150) / 190) ** 2 + ((y - 110) / 120) ** 2);
@@ -611,8 +611,8 @@ const hallSet = () =>
     fill(c, mix(P.cream, P.yellow, 0.3), { d: mix(P.tan, P.yellow, 0.2), f: 0.3, m: 1, side: 1 });
     rect(c, 140, 140, 18, 6, C.beigeD);
     rect(c, 142, 138, 14, 2, C.beige);
-  });
-const hallGlow = () => pool('sn-hallglow', 70, 60, P.yellow, 5, 0.2);
+  }));
+const hallGlow = lazy(() => pool('sn-hallglow', 70, 60, P.yellow, 5, 0.2));
 
 const MUM = figure({
   hh: 32,
@@ -691,8 +691,8 @@ function shotLost(ctx, lt) {
 }
 
 // --- S7: end slate -------------------------------------------------------------------------------
-const slateBg = () =>
-  shader('sn-slate', W, H, [P.black, mix(P.black, P.ink, 0.5), P.ink, mix(P.ink, P.navy, 0.35)], (x, y) => clamp(1 - sqrt(((x - 192) / 250) ** 2 + ((y - 96) / 140) ** 2)) * 0.9);
+const slateBg = lazy(() =>
+  shader('sn-slate', W, H, [P.black, mix(P.black, P.ink, 0.5), P.ink, mix(P.ink, P.navy, 0.35)], (x, y) => clamp(1 - sqrt(((x - 192) / 250) ** 2 + ((y - 96) / 140) ** 2)) * 0.9));
 
 /** The handshake as a hairline: a quiet carrier, a burst, a carrier again. */
 function waveform(ctx, cx, y, w, p) {

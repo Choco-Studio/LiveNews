@@ -2,7 +2,7 @@
 // reference decode of the real data, and safe on truncated or corrupt input.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { decodeLandBits } from '../public/js/scenes/worldmap.js';
+import { decodeLandBits, __test } from '../public/js/scenes/worldmap.js';
 import { LAND } from '../public/js/scenes/worlddata.js';
 
 /** Straightforward byte-per-pixel decode used as the reference. */
@@ -58,4 +58,44 @@ test('decodeLandBits never writes past a row or the buffer on corrupt input', ()
   for (let x = 0; x < W; x++) assert.equal(bit(m, x, 2), 0);
   assert.doesNotThrow(() => decodeLandBits(new Uint8Array(0), W, H));
   assert.doesNotThrow(() => decodeLandBits(Uint8Array.from([0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), W, H));
+});
+
+test('decodeLandBits keeps rows apart when the width is not a multiple of 8', () => {
+  // row 0: 8 ocean, then a land run of 2 (to the end of the 10 px row); row 1: 10 ocean
+  const m = decodeLandBits(Uint8Array.from([8, 2, 10, 0]), 10, 2);
+  assert.equal(m.stride, 2);
+  assert.equal(bit(m, 8, 0), 1);
+  assert.equal(bit(m, 9, 0), 1);
+  for (let x = 0; x < 10; x++) assert.equal(bit(m, x, 1), 0, `row 1 pixel ${x}`);
+});
+
+// The place label must never hide the place it names: the land connected to the marker (the
+// target's own coastline) is a keep-out area for the label plate.
+for (const [place, lat, lon] of [
+  ['REYKJAVIK, ICELAND', 64.15, -21.94],
+  ['REYKJANES PENINSULA, ICELAND', 63.9, -22.4],
+  ['HERAKLION, CRETE', 35.34, 25.13],
+  ['PALERMO, SICILY', 38.12, 13.36],
+  ['HONOLULU, HAWAII', 21.31, -157.86],
+  ['SUVA, FIJI', -18.14, 178.44],
+]) {
+  test(`the label for ${place} leaves the target landmass uncovered and stays in y 26..134`, () => {
+    const r = __test.labelFor(place, lat, lon);
+    assert.ok(r.nearTotal > 0, 'the target has land around its marker');
+    assert.equal(r.near, 0, `the plate covers ${r.near} px of the target's own land`);
+    assert.ok(r.box.y >= 26 && r.box.y + r.box.h <= 134, `plate rows ${r.box.y}..${r.box.y + r.box.h}`);
+    assert.ok(r.box.x >= 13 && r.box.x + r.box.w <= 371, 'plate inside the action-safe area');
+    const overMarker = r.box.x < r.cx + 8 && r.box.x + r.box.w > r.cx - 8 && r.box.y < r.cy + 8 && r.box.y + r.box.h > r.cy - 8;
+    assert.ok(!overMarker, 'the plate never sits on the marker');
+  });
+}
+
+test('map timelines follow the programme bibles and compress for short shots', () => {
+  const wn = __test.timingFor('world-now');
+  const n60 = __test.timingFor('news-60');
+  assert.equal(wn.fly, 1.2);
+  assert.equal(n60.pan, 0.7);
+  assert.ok(n60.fly < wn.fly);
+  const short = __test.timingFor('world-now', 2.1);
+  assert.ok(short.fly + short.mark + short.label + 0.5 <= 2.1, 'the label is readable inside a 2.1 s beat');
 });

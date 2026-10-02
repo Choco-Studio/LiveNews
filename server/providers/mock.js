@@ -245,8 +245,7 @@ function runningOrder(infos, n, program) {
     const best = (list) => list.filter(ok).sort((a, b) => bestFigure(b).score - bestFigure(a).score)[0] || null;
     // From the programme's own beat when it has one (COSMOS: a science figure before a gadget's sales).
     const primary = program?.categories?.length > 1 ? program.categories[0] : null;
-    const near = pool.slice(0, slots + 3);
-    number = (primary && best(near.filter((i) => i.s.category === primary))) || best(near);
+    number = (primary && best(pool.slice(0, slots + 8).filter((i) => i.s.category === primary))) || best(pool.slice(0, slots + 3));
     if (number) {
       pool.splice(pool.indexOf(number), 1);
       slots--;
@@ -482,7 +481,8 @@ function writeEpisode({ stories, channelName, program, presenters, count, now })
       parts.push(`${isNumber || isLighter ? '' : cue}${line}`);
       if (figureLine) parts.push(figureLine);
       // Details: news-60 keeps to its word budget; the TECH BYTES lead keeps one sentence back for THE CATCH.
-      const budget = quick ? (k === 0 ? 38 : 28) : Infinity;
+      // NEWS IN 60's bible: lead 32-38 words, other items 25-28 (the mock reuses whole sentences, so +-3).
+      const budget = quick ? (k === 0 ? 41 : 31) : Infinity;
       const maxDetails = quick ? 2 : isNumber ? (figureLine ? 0 : 1) : k === 0 ? 2 : 1;
       const catchFor = pid === 'tech-bytes' && k === 0 && !info.grave ? CATCH.find((c) => info.sentences.some((t) => !used.has(t) && c.test.test(t))) : null;
       const reserved = catchFor ? info.sentences.find((t) => !used.has(t) && catchFor.test.test(t)) : null;

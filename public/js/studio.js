@@ -153,6 +153,7 @@ export class Renderer {
           presenters: Object.values(scene.cast || {}).map(presenterName),
           date: longDate().toUpperCase(),
           channel: scene.channel.name,
+          replay: !!scene.replay,
         });
       case 'title':
         return cards.drawTitleCard(ctx, t, dt, { channel: program?.title || scene.channel.name, subtitle: program?.tagline || scene.channel.slogan, date: longDate().toUpperCase() });
@@ -165,14 +166,14 @@ export class Renderer {
       case 'montage': {
         const item = scene.rundown[card.index] || {};
         const pic = scene.images.get(item.storyId);
-        return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, image: pic?.card || null });
+        return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, image: pic?.card || null, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
       }
       case 'breakingCard':
         return cards.drawBreakingCard(ctx, t, dt, { headline: card.headline, source: card.source });
       case 'fact':
-        return cards.drawFactCard(ctx, t, dt, { fact: card.fact, label: card.label, source: card.source, image: img?.card || null });
+        return cards.drawFactCard(ctx, t, dt, { fact: card.fact, label: card.label, source: card.source, image: img?.card || null, numbers: card.numbers, quote: card.quote, headline: card.headline || scene.lowerThird?.headline, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
       case 'map':
-        return drawWorldMap(ctx, t, dt, { lat: card.lat, lon: card.lon, place: card.place });
+        return drawWorldMap(ctx, t, dt, { lat: card.lat, lon: card.lon, place: card.place, accent: THEME_ACCENT[program?.theme], programId: program?.id, from: card.from, pins: card.pins, duration: card.duration, follow: true });
       case 'ad':
         return card.ad?.draw(ctx, t, dt, { line: card.line ?? -1, speaking: this.audio.isSpeaking('ad'), duration: card.ad.duration });
       case 'full':

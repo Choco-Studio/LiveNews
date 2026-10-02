@@ -143,7 +143,7 @@ describe('server/index.js: HTTP API of a running channel', () => {
 
   test('announces itself on the console', () => {
     assert.match(app.output.stdout, /GLOBIT 24 on air at http:\/\/127\.0\.0\.1:\d+/);
-    assert.match(app.output.stdout, /AI providers: mock \(with editorial review pass\)/);
+    assert.match(app.output.stdout, /AI providers: mock \(review pass: no AI editor configured\)/, 'the mock writes but never reviews');
   });
 
   test('GET /api/channel is the public view of config/channel.json, as uncacheable JSON', async () => {

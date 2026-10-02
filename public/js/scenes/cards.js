@@ -418,29 +418,31 @@ function drawLedger(ctx, dt, o, rows, acc) {
   const L = ledgerLayout(rows, o.label, o.source);
   const enter = easeOutQuint(seg(dt, 0, 0.3));
   if (enter <= 0) return;
-  // the kicker and labels come in with a short eased reveal; each row then gets its rule and figure
+  const n = L.items.length;
+  const RW = W - 2 * X0;
+  // the kicker and labels come in with a short eased reveal; each row then gets its rule, and its
+  // figure cuts in 0.1 s after the rule has finished (TECH BYTES: no count-up, ever)
   guarded(ctx, () => {
-    clipRect(ctx, X0, L.top - 2, Math.round((W - 2 * X0) * enter), SAFE_BOTTOM - L.top + 2);
+    clipRect(ctx, X0, L.top - 2, Math.round(RW * enter), SAFE_BOTTOM - L.top + 2);
     drawText(ctx, L.kicker, X0, L.top, S.microFog);
-    for (let i = 0; i < L.items.length; i++) {
+    for (let i = 0; i < n; i++) {
       const it = L.items[i];
       const at = 0.15 + i * 0.3;
-      // label in micro at the row's baseline, a slate leader to the figure
-      drawText(ctx, it.lab, X0, it.y + 7, S.microFog);
+      // label in micro on the figure's baseline, then a dotted slate leader to the figure
+      drawText(ctx, it.lab, X0, it.y + 9, S.microFog);
       ctx.fillStyle = P.slate;
       const lx = X0 + it.labW + 4;
       const rx = W - X0 - it.fw - 4;
-      if (rx > lx) ctx.fillRect(lx, it.y + 11, rx - lx, 1);
-      if (i > 0) ctx.fillRect(X0, it.y - 3, W - 2 * X0, 1);
-      // the accent rule under the whole row draws left to right in 0.3 s; the figure cuts in 0.1 s after
-      const rw = Math.round((W - 2 * X0) * easeOutQuint(seg(dt, at, 0.3)));
+      for (let x = lx + ((lx & 1) ^ 1); x < rx; x += 2) ctx.fillRect(x, it.y + 13, 1, 1);
+      // the rule under the row: slate between rows, the accent under the last one
+      const rw = Math.round(RW * easeOutQuint(seg(dt, at, 0.3)));
       if (rw > 0) {
-        ctx.fillStyle = acc;
-        ctx.fillRect(X0, it.y + 15, rw, 1);
+        ctx.fillStyle = i === n - 1 ? acc : P.slate;
+        ctx.fillRect(X0, it.y + 16, rw, 1);
       }
       if (dt >= at + 0.4) drawText(ctx, it.fig, W - X0, it.y, S.white2Right);
     }
-    if (L.src) drawText(ctx, L.src, X0, L.items[L.items.length - 1].y + 22, S.microFog);
+    if (L.src) drawText(ctx, L.src, X0, L.items[n - 1].y + 22, S.microFog);
   });
 }
 
@@ -713,7 +715,8 @@ export function drawBreakingCard(ctx, t, dt, { headline = '', source = '' } = {}
   const top = BY + BH + 14;
   for (let i = 0; i < lay.lines.length; i++) rise(ctx, lay.lines[i], X0, top + i * lay.lh, seg(dt, 0.42 + i * 0.08, 0.34), lay.scale === 2 ? S.white2 : S.white);
   if (source) {
-    const sy = Math.min(SAFE_BOTTOM - 5, top + lay.lines.length * lay.lh + 4);
+    // the breaking card runs under the 'bug' graphics (no captions or strap): room down to the ticker
+    const sy = Math.min(186, top + lay.lines.length * lay.lh + 4);
     rise(ctx, ellipsis(`SOURCE: ${String(source).toUpperCase()}`, W - 2 * X0, 1), X0, sy, seg(dt, 0.75, 0.3), S.microFog);
   }
 }
@@ -976,21 +979,30 @@ export function drawPromoCard(ctx, t, dt, card = {}, nameOf = (id) => String(id 
 // motivated movement of the hold.
 
 const IDENT_FIELD = lazyBackdrop({ key: 'ident', colors: [P.black, P.ink], cx: 192, cy: 216, reach: 230 });
-const SILHOUETTES = new Map();
-/** The logo as a one-colour silhouette (baked once per colour and scale). */
-function logoSilhouette(color, sc) {
-  const key = `${color}|${sc}`;
-  let v = SILHOUETTES.get(key);
+// one palette step down for every colour of the logo (white -> steel is the "steel" step)
+const STEP_DOWN = new Map([
+  [P.white, P.steel], [P.silver, P.slate], [P.fog, P.slate], [P.cream, P.tanShade], [P.yellow, P.tanShade], [P.orange, P.brown],
+  [P.red, P.darkRed], [P.darkRed, P.maroon], [P.pink, P.darkRed], [P.steel, P.ink], [P.slate, P.ink],
+].map(([a, b]) => [u32(a), u32(b)]));
+const DIMMED = new Map();
+/** The logo with every colour one palette step darker (baked once per scale). */
+function dimmedLogo(sc) {
+  let v = DIMMED.get(sc);
   if (v) return v;
   const size = measureLogo({ variant: 'full', scale: sc, slogan: true });
   const c = mk(size.w + 8, size.h + 8);
   const cx = c.getContext('2d');
   drawLogo(cx, (size.w + 8) / 2, 4, { variant: 'full', scale: sc, slogan: true, align: 'center' });
-  cx.globalCompositeOperation = 'source-in';
-  cx.fillStyle = color;
-  cx.fillRect(0, 0, c.width, c.height);
+  const img = cx.getImageData(0, 0, c.width, c.height);
+  const d = new Uint32Array(img.data.buffer);
+  for (let i = 0; i < d.length; i++) {
+    if (!(d[i] >>> 24)) continue;
+    const m = STEP_DOWN.get((d[i] | 0xff000000) >>> 0);
+    if (m !== undefined) d[i] = m;
+  }
+  cx.putImageData(img, 0, 0);
   v = { cv: c, w: size.w, h: size.h };
-  SILHOUETTES.set(key, v);
+  DIMMED.set(sc, v);
   return v;
 }
 
@@ -1004,7 +1016,7 @@ export function drawIdentCard(ctx, t, dt) {
   const g = dt - 0.4;
   if (g < 0) return;
   if (g < 0.15) {
-    const s = logoSilhouette(P.steel, sc);
+    const s = dimmedLogo(sc);
     ctx.drawImage(s.cv, Math.round(W / 2 - (size.w + 8) / 2), y - 4);
     return;
   }

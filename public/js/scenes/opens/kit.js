@@ -26,7 +26,7 @@ import { drawLogo, measureLogo } from '../../logo.js';
 import * as topRow from '../../graphics/bug.js';
 import {
   mk, memo, u32, clamp, lerp, seg, easeOut, easeOutQuint, easeInOut, bayer,
-  ellipsis, nameList, discSpans, clipRect, clockIn,
+  ellipsis, balanceLines, nameList, discSpans, clipRect, clockIn,
 } from '../../gfx/index.js';
 
 export const W = 384;
@@ -195,18 +195,8 @@ export function lockupLayout(info, style) {
     const titleX = TITLE_X;
     const maxTitle = W - 19 - 12 - titleX;
     let lines = [String(info.title || '').toUpperCase().trim() || 'GLOBIT 24'];
-    if (measureText(lines[0], 2) > maxTitle) {
-      // long names: two lines at 2x, the second ellipsised if it still does not fit
-      const words = lines[0].split(/\s+/);
-      let best = null;
-      for (let k = 1; k < words.length; k++) {
-        const a = words.slice(0, k).join(' ');
-        const b = words.slice(k).join(' ');
-        const wmax = Math.max(measureText(a, 2), measureText(b, 2));
-        if (!best || wmax < best.w) best = { a, b, w: wmax };
-      }
-      lines = best ? [ellipsis(best.a, maxTitle, 2), ellipsis(best.b, maxTitle, 2)] : [ellipsis(lines[0], maxTitle, 2)];
-    }
+    // long names: balanced lines at 2x (up to three; only a fourth line's worth is ellipsised)
+    if (measureText(lines[0], 2) > maxTitle) lines = balanceLines(lines[0], maxTitle, 2, 3).slice();
     const titles = lines.map((l) => titleCanvas(l, style.ink));
     let titleW = 0;
     for (let i = 0; i < titles.length; i++) titleW = Math.max(titleW, titles[i].w);

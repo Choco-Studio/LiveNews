@@ -84,16 +84,24 @@ def lang_for(voice_name):
             'p': 'pt-br', 'j': 'ja', 'z': 'cmn'}.get(voice_name[:1], 'en-us')
 
 
+_REDUCED = set('əɐᵻɚɪ')  # vowels Kokoro says short when unstressed
+
+
 def phone_weights(ph):
-    """Relative duration weight of each phoneme symbol in an espeak IPA string."""
+    """Relative duration weight of each phoneme symbol in an espeak IPA string.
+
+    Stressed vowels are longest, unstressed reduced vowels (schwa) shortest,
+    so function words ("on a", "of the") take the little time they really
+    take in connected speech.
+    """
     out = []
     stress = 0.0
     prev_vowel = False
     for c in ph:
         if c == 'ˈ':
-            stress, w = 0.3, 0.0
+            stress, w = 0.35, 0.0
         elif c == 'ˌ':
-            stress, w = 0.12, 0.0
+            stress, w = 0.15, 0.0
         elif c == 'ː':
             w = 0.0
             if out:
@@ -101,7 +109,12 @@ def phone_weights(ph):
             out.append((c, w))
             continue
         elif c in _VOWELS:
-            w = (0.5 if prev_vowel else 1.0) + stress
+            if prev_vowel:
+                w = 0.45  # second half of a diphthong
+            elif stress == 0.0 and c in _REDUCED:
+                w = 0.5
+            else:
+                w = 0.95 + stress
             stress = 0.0
         elif c in _PUNCT or c.isspace() or c == '-':
             w = 0.0
@@ -134,6 +147,7 @@ class VoiceEngine:
         self.vocab = getattr(self.kokoro.tokenizer, 'vocab', None) or _default_vocab()
         self._backends = {}
         self._styles = {}
+        self._cache = {}
         self.presets = self._load_json('presets.json').get('presets', {})
         tone = self._load_json('tone.json')
         self.tone_bands = tone.get('bands', [])
@@ -256,8 +270,17 @@ class VoiceEngine:
     # ------------------------------------------------------------ synthesis
 
     def _infer(self, phonemes, style, speed):
-        audio, _ = self.kokoro.create(phonemes, voice=style, speed=speed, is_phonemes=True, trim=False)
-        return np.asarray(audio, dtype=np.float64)
+        # Kokoro is deterministic: identical passes (retries, the raw/processed
+        # pair in measure.py, a re-requested segment) come from a small cache
+        key = (phonemes, style.tobytes().__hash__(), round(float(speed), 4))
+        hit = self._cache.pop(key, None)
+        if hit is None:
+            audio, _ = self.kokoro.create(phonemes, voice=style, speed=speed, is_phonemes=True, trim=False)
+            hit = np.asarray(audio, dtype=np.float64)
+        self._cache[key] = hit
+        while len(self._cache) > 48:
+            self._cache.pop(next(iter(self._cache)))
+        return hit.copy()
 
     def synth_phrase(self, phonemes, style, speed):
         """Synthesise one phrase; split at a word gap if it exceeds the model context."""
@@ -313,7 +336,7 @@ class VoiceEngine:
             w = sum(x for _, x in pw)
             if w <= 0:
                 w = 0.25 * max(1, len(re.sub(r'[^A-Za-z0-9]', '', tok.spoken)))
-            weights.append(w + 0.15)
+            weights.append(w + 0.08)
             phones.append(pw)
         if weights:
             weights[-1] *= 1.2  # phrase-final lengthening
