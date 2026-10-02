@@ -77,8 +77,8 @@ function geometry(PR) {
       }
       band[i] = k;
       // the rings' shadow falls across the planet just above the front arc
-      const ue = (u + 4) / PR;
-      const ve = (v - 2.5) / PR;
+      const ue = (u + (4 * PR) / PR0) / PR;
+      const ve = (v - (2.5 * PR) / PR0) / PR;
       const es = Math.sqrt(ue * ue + (ve / RK) * (ve / RK));
       shadow[i] = v < 0 && es > RING_IN && es < 1.85 ? 1 : 0;
     }

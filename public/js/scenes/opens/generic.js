@@ -1,44 +1,83 @@
 // Fallback open for programmes without their own (new ids from the editorial
-// desk): the GLOBIT 24 globe mark opens like an iris, with a thin red orbit
-// line drawing round it. Same package and clock as every other open.
+// desk): the GLOBIT 24 mark comes alive. Its red globe, cel-shaded like the
+// logo with the white equator and meridian-lens seams, opens like an iris and
+// spins down; the logo's yellow bit pops out of its shoulder and, like in every
+// open, hops onto the title plate. Same package and clock as the others.
 import { P } from '../../palette.js';
-import { drawLogo, measureLogo } from '../../logo.js';
-import { seg, easeOutQuint, easeInOut, ring, ringPts } from '../../gfx/index.js';
-import { backdrop, clipDisc, playOpen, CENTRE } from './kit.js';
+import { u32, seg, easeOutQuint, ring } from '../../gfx/index.js';
+import { backdrop, clipDisc, frameBuffer, playOpen, CENTRE, ZOOM } from './kit.js';
 
-const SCALE = 3;
-const TAU = Math.PI * 2;
-// logo.js 'mark': a 23 px globe at (0, 4) plus the bit at the top right (27 x 27 at 1x)
-const GLOBE_C = { x: 11.5 * SCALE, y: (4 + 11.5) * SCALE };
-const ORBIT = (() => {
-  const pts = ringPts(40);
-  const list = [];
-  for (let i = 0; i < pts.length; i += 2) list.push([pts[i], pts[i + 1], (Math.atan2(pts[i], -pts[i + 1]) / TAU + 1) % 1]);
-  list.sort((a, b) => a[2] - b[2]);
-  return list;
+const R0 = 30;
+const DEG = Math.PI / 180;
+const MERID = 50; // the lens seams sit at +-50 degrees when settled
+const C = Object.fromEntries(['red', 'darkRed', 'pink', 'white', 'silver', 'maroon'].map((k) => [k, u32(P[k])]));
+const L = (() => {
+  const v = [-0.5, 0.55, 0.67];
+  const n = Math.hypot(...v);
+  return v.map((a) => a / n);
 })();
 
-function emblem(ctx, dt, x, y) {
-  if (dt < 0.2) return;
-  const size = measureLogo({ variant: 'mark', scale: SCALE });
-  const lx = Math.round(x - GLOBE_C.x);
-  const ly = Math.round(y - GLOBE_C.y);
-  const iris = Math.round(46 * easeOutQuint(seg(dt, 0.22, 0.65)));
-  // a thin red orbit draws round the mark, then retracts before the glide
-  const head = easeInOut(seg(dt, 0.3, 0.7));
-  const tail = easeInOut(seg(dt, 1.05, 0.45));
-  if (head > tail) {
-    ctx.fillStyle = P.red;
-    for (const [ox, oy, a] of ORBIT) if (a <= head && a >= tail) ctx.fillRect(x + ox, y + oy, 1, 1);
+function spin(dt) {
+  return 200 * (1 - easeOutQuint(seg(dt, 0.2, 1.3)));
+}
+
+function renderGlobe(fb, R, rot) {
+  const d = fb.d;
+  const S = fb.w;
+  const c = S >> 1;
+  const RR = R + 0.5;
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      const i = y * S + x;
+      const dx = x - c;
+      const dy = y - c;
+      if (dx * dx + dy * dy > RR * RR) {
+        d[i] = 0;
+        continue;
+      }
+      const nx = dx / RR;
+      const ny = -dy / RR;
+      const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+      const dif = nx * L[0] + ny * L[1] + nz * L[2];
+      // flat cel bands like the logo: pink highlight, red body, dark red crescent
+      let col = dif > 0.9 ? C.pink : dif > 0.12 ? C.red : C.darkRed;
+      const lit = dif > 0.12;
+      // seams of light: the equator row and two meridians either side of the centre
+      if (dy === 0) col = lit ? C.white : C.silver;
+      else {
+        const lon = Math.atan2(nx, nz) / DEG;
+        const cl = Math.sqrt(Math.max(0, 1 - ny * ny));
+        for (const m of [-MERID, MERID]) {
+          const a = (lon - m + rot) * DEG;
+          if (Math.cos(a) <= 0) continue;
+          if (Math.abs(Math.sin(a)) * cl * RR < 0.62) col = lit ? C.white : C.silver;
+        }
+      }
+      d[i] = col;
+    }
   }
-  if (iris < 46) {
+  fb.cx.putImageData(fb.img, 0, 0);
+}
+
+function emblem(ctx, dt, x, y, k = 1) {
+  if (dt < 0.2) return;
+  const R = Math.round(R0 * k);
+  const S = 2 * R + 3;
+  const fb = frameBuffer('generic-globe', S, S);
+  const rot = spin(dt);
+  const key = Math.round(rot * 4);
+  if (fb.key !== key) {
+    fb.key = key;
+    renderGlobe(fb, R, rot);
+  }
+  const iris = Math.round((R + 3) * easeOutQuint(seg(dt, 0.2, 0.6)));
+  if (iris < R + 3) {
     ctx.save();
     clipDisc(ctx, x, y, iris);
-    drawLogo(ctx, lx, ly, { variant: 'mark', scale: SCALE });
+    ctx.drawImage(fb.cv, x - (S >> 1), y - (S >> 1));
     ctx.restore();
     if (iris > 1) ring(ctx, x, y, iris, P.silver);
-  } else drawLogo(ctx, lx, ly, { variant: 'mark', scale: SCALE });
-  return size;
+  } else ctx.drawImage(fb.cv, x - (S >> 1), y - (S >> 1));
 }
 
 const background = () => backdrop({ key: 'generic', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230 });
@@ -50,7 +89,10 @@ export const GENERIC = {
   emblem,
   absorb: 0.26,
   shoulder: 30,
-  bit: false, // the mark already carries the channel's bit
+  popAt: 0.8, // the logo's bit sits on the globe's shoulder from the start, as in the mark
+  warm: () => {
+    for (let r = R0; r <= Math.round(R0 * ZOOM); r++) frameBuffer('generic-globe', 2 * r + 3, 2 * r + 3);
+  },
 };
 
 export function drawGeneric(ctx, dt, info) {

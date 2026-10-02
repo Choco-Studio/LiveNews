@@ -1,68 +1,72 @@
 // MONEY MINUTE open: a market chart builds itself. The baseline and grid draw
 // out, five green bars rise one after another (ease-out, no bounce) and a
-// trend line climbs across them to an arrow head. Accent: green.
+// white trend line climbs across them to an arrow head. Accent: green.
 import { P } from '../../palette.js';
-import { u32, seg, easeOutQuint, easeInOut, linePts } from '../../gfx/index.js';
+import { u32, seg, easeOutQuint, easeInOut, linePts, memo } from '../../gfx/index.js';
 import { backdrop, playOpen, CENTRE, W, H } from './kit.js';
 
+const cached = memo(48);
 const BARS = [13, 21, 17, 29, 40];
-const BW = 8;
-const GAP = 4;
-const SPAN = BARS.length * BW + (BARS.length - 1) * GAP; // 56
-const BASE = 22; // baseline below the emblem centre
 
-// trend line through points above the bar tops, ending in the arrow tip
-const LINE = (() => {
-  const pts = BARS.map((h, i) => [-SPAN / 2 + i * (BW + GAP) + BW / 2, BASE - h - 6]);
-  pts[pts.length - 1][1] -= 2;
-  const out = [];
-  for (let k = 1; k < pts.length; k++) {
-    linePts(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1], (x, y, i) => {
-      if (k > 1 && i === 0) return;
-      out.push(x, y);
-    });
-  }
-  return { px: Int16Array.from(out), tip: pts[pts.length - 1] };
-})();
+/** Chart geometry at size factor k, cached per integer layout. */
+function layout(k) {
+  const bw = Math.round(8 * k);
+  const gap = Math.round(4 * k);
+  const base = Math.round(22 * k);
+  const hs = BARS.map((h) => Math.round(h * k));
+  return cached(`mm|${bw}|${gap}|${base}|${hs.join(',')}`, () => {
+    const span = BARS.length * bw + (BARS.length - 1) * gap;
+    const pts = hs.map((h, i) => [Math.round(-span / 2 + i * (bw + gap) + bw / 2), base - h - Math.round(6 * k)]);
+    pts[pts.length - 1][1] -= Math.round(2 * k);
+    const px = [];
+    for (let j = 1; j < pts.length; j++) {
+      linePts(pts[j - 1][0], pts[j - 1][1], pts[j][0], pts[j][1], (x, y, i) => {
+        if (j > 1 && i === 0) return;
+        px.push(x, y);
+      });
+    }
+    return { bw, gap, base, hs, span, line: Int16Array.from(px), tip: pts[pts.length - 1], grid: [12, 24, 36].map((g) => Math.round(g * k)) };
+  });
+}
 
-function emblem(ctx, dt, x, y) {
-  const x0 = x - SPAN / 2;
-  const by = y + BASE;
+function emblem(ctx, dt, x, y, k = 1) {
+  const L = layout(k);
+  const x0 = x - (L.span >> 1);
+  const by = y + L.base;
   // baseline and grid draw out from the centre
   const g = easeOutQuint(seg(dt, 0.12, 0.4));
   if (g > 0) {
-    const half = Math.round((SPAN / 2 + 6) * g);
+    const half = Math.round(((L.span >> 1) + 6) * g);
     ctx.fillStyle = P.slate;
-    for (const gy of [12, 24, 36]) {
-      const hw = Math.round(half * (1 - gy / 120));
+    L.grid.forEach((gy, i) => {
+      const hw = Math.round(half * (1 - (i + 1) * 0.1));
       ctx.fillRect(x - hw, by - gy, hw * 2, 1);
-    }
+    });
     ctx.fillStyle = P.fog;
     ctx.fillRect(x - half, by, half * 2, 1);
   }
   // the bars rise one after another
-  BARS.forEach((h, i) => {
-    const p = easeOutQuint(seg(dt, 0.34 + i * 0.1, 0.42));
-    const hh = Math.round(h * p);
+  const shade = Math.max(2, Math.round(2 * k));
+  L.hs.forEach((h, i) => {
+    const hh = Math.round(h * easeOutQuint(seg(dt, 0.34 + i * 0.1, 0.42)));
     if (hh <= 0) return;
-    const bx = x0 + i * (BW + GAP);
+    const bx = x0 + i * (L.bw + L.gap);
     const top = by - hh;
     ctx.fillStyle = P.green;
-    ctx.fillRect(bx, top, BW, hh);
+    ctx.fillRect(bx, top, L.bw, hh);
     ctx.fillStyle = P.darkGreen;
-    ctx.fillRect(bx + BW - 2, top, 2, hh);
+    ctx.fillRect(bx + L.bw - shade, top, shade, hh);
     if (hh > 1) {
       ctx.fillStyle = P.cream;
-      ctx.fillRect(bx, top, BW - 2, 1);
+      ctx.fillRect(bx, top, L.bw - shade, 1);
     }
   });
-  // trend line climbs across them, then the arrow head lands
-  const lp = easeInOut(seg(dt, 0.9, 0.5));
-  const n = LINE.px.length / 2;
-  const upto = Math.round(n * lp);
+  // trend line climbs across them (1 px white with a 1 px black underline)
+  const n = L.line.length / 2;
+  const upto = Math.round(n * easeInOut(seg(dt, 0.9, 0.5)));
   for (let i = 0; i < upto; i++) {
-    const lx = x + LINE.px[i * 2];
-    const ly = y + LINE.px[i * 2 + 1];
+    const lx = x + L.line[i * 2];
+    const ly = y + L.line[i * 2 + 1];
     ctx.fillStyle = P.black;
     ctx.fillRect(lx, ly + 1, 1, 1);
     ctx.fillStyle = P.white;
@@ -70,21 +74,20 @@ function emblem(ctx, dt, x, y) {
   }
   if (upto > 0 && upto < n) {
     ctx.fillStyle = P.white;
-    ctx.fillRect(x + LINE.px[(upto - 1) * 2] - 1, y + LINE.px[(upto - 1) * 2 + 1] - 1, 3, 3);
+    ctx.fillRect(x + L.line[(upto - 1) * 2] - 1, y + L.line[(upto - 1) * 2 + 1] - 1, 3, 3);
   }
+  // the arrow head grows out of the tip once the line arrives
   const ap = easeOutQuint(seg(dt, 1.36, 0.22));
   if (ap > 0) {
-    // arrow head pointing up and to the right, growing from the tip
-    const tx = x + LINE.tip[0];
-    const ty = y + LINE.tip[1];
-    const s = Math.max(1, Math.round(5 * ap));
+    const tx = x + L.tip[0];
+    const ty = y + L.tip[1];
+    // corner of the head sits just beyond the tip, arms run left and down
+    const s = Math.max(1, Math.round(Math.round(6 * k) * ap));
+    const cx = tx + 1;
+    const cy = ty - 1;
     ctx.fillStyle = P.white;
-    for (let k = 0; k < s; k++) {
-      ctx.fillRect(tx - k, ty - 1 + k - s + 1 + 1, 1, 1);
-      ctx.fillRect(tx + 1 - k + (s - 1), ty, 1, 1);
-    }
-    ctx.fillRect(tx - s + 1, ty - s + 1, s, 1);
-    ctx.fillRect(tx, ty - s + 1, 1, s);
+    ctx.fillRect(cx - s + 1, cy, s, 1);
+    ctx.fillRect(cx, cy, 1, s);
   }
 }
 

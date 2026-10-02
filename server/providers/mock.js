@@ -12,7 +12,8 @@ import { locate, placesIn } from '../gazetteer.js';
 const DEATHS = /\b(?:dead|deaths?|die[sd]|killed|killings?|victims?|mourn\w*|funeral)\b/i;
 const SURPRISE = /\b(?:first|largest|biggest|record|discover\w*|uncover\w*|rare|unexpected|surpris\w*)\b/i;
 // A summary sentence that says what follows from the news (a purpose or a consequence).
-const WHY = /\b(?:will|would|aims? to|so that|to help|in order to|means|expected to|could|should)\b/i;
+const WHY =
+  /\b(?:aims? to|so that|to help|in order to|which means|means that|(?:will|would|could|can|should) (?:help|cut|save|reduce|let|allow|make|carry|light|power|create|protect|improve|speed|bring|give|lower|ease|keep|feed|connect|double|halve)|to (?:cut|reduce|protect|improve|cool|save|ease|lower))\b/i;
 
 const KICKERS = [
   [/volcan|eruption|lava/i, 'VOLCANO'],
@@ -100,11 +101,12 @@ const unstop = (t) => String(t).trim().replace(/[\s.!?:;,]+$/, '');
 const firstName = (p) => String(p?.name || 'my colleague').replace(/^(?:Dr|Mr|Ms|Mrs|Prof)\.?\s+/i, '').split(/\s+/)[0];
 const lowerArticle = (by) => by.replace(/^(The|A|An) /, (m) => m.toLowerCase());
 
-/** How a place is said aloud: "the Andes", "the United States", "Nairobi". */
+/** How a place is said aloud: "the Andes", "the United States", "the Reykjanes peninsula", "Nairobi". */
 function spokenPlace(entry) {
   const the = entry.aliases.find((a) => /^the /.test(a));
   if (the) return the;
   if (/^(?:United |Netherlands|Philippines|Czech Republic|Democratic Republic|Dominican Republic|Gambia)/.test(entry.name)) return `the ${entry.name}`;
+  if (entry.kind === 'region' && / [a-z]/.test(entry.name)) return `the ${entry.name}`; // "Greek islands", "Reykjanes peninsula"
   return entry.name;
 }
 
@@ -144,10 +146,10 @@ function study(s) {
   };
 }
 
-/** Body sentences of the summary: skips a first sentence that just repeats the headline. */
-function body(info, max) {
+/** Body sentences of the summary: skips a first sentence that just repeats the headline (unless asked to keep it). */
+function body(info, max, { keepFirst = false } = {}) {
   const all = sentencesOf(info.s.summary);
-  if (all.length > 1 && wordsGrounded(all[0], info.s.title) >= 0.7) all.shift();
+  if (!keepFirst && all.length > 1 && wordsGrounded(all[0], info.s.title) >= 0.7) all.shift();
   if (!all.length) return [];
   return all.slice(0, max).filter((x) => unstop(x).toLowerCase() !== unstop(info.s.title).toLowerCase());
 }
@@ -205,9 +207,11 @@ function writeEpisode({ stories, channelName, program, presenters, count }) {
   const { order, roundup, lighter } = runningOrder(infos, n, features);
   const seed = order.map((i) => i.s.id).join('|') + (program?.id || '');
 
-  // Number of the day: the best stated figure of a story that is not grave, a round-up item or the closer.
+  // Number of the day: the most striking stated figure of a story that is not grave, a round-up item or the closer.
   const numberStory = features.includes('number')
-    ? order.filter((i) => !i.grave && !roundup.includes(i) && i !== lighter && i.figures.length && /\d{2,}|%|\$|£|€/.test(i.figures[0].value))[0] || null
+    ? order
+        .filter((i) => !i.grave && !roundup.includes(i) && i !== lighter && i.figures[0]?.score >= 3)
+        .sort((a, b) => b.figures[0].score - a.figures[0].score)[0] || null
     : null;
 
   // Anchors: each lead story, the whole round-up and the closer are one "block" each.
@@ -245,22 +249,26 @@ function writeEpisode({ stories, channelName, program, presenters, count }) {
     const isNumber = info === numberStory;
     const isLighter = info === lighter;
     const parts = [];
-    const pickedUp = !solo && k > 0 && anchors[k - 1] !== anchor && !tossed && !order[k - 1].grave && !info.grave && hash(key) % 2 === 0;
+    const afterChat = segments.at(-1)?.type === 'chat';
+    const pickedUp = !solo && k > 0 && anchors[k - 1] !== anchor && !tossed && !afterChat && !order[k - 1].grave && !info.grave && hash(key) % 2 === 0;
     if (pickedUp) parts.push(choose(PICKUPS(nameOf(anchors[k - 1])), key));
     tossed = false;
 
     if (inRoundup) {
       // One sentence per item, place first, attributed.
       const idx = roundup.indexOf(info);
-      const place = spokenPlace(info.loc.entry);
-      const line = unstop(body(info, 1)[0] || s.title);
+      const line = unstop(body(info, 1, { keepFirst: true })[0] || s.title);
+      // Lead with the place, or with its country when the sentence names the place itself.
+      const { entry } = info.loc;
+      const country = entry.kind !== 'country' && entry.country ? placesIn(entry.country)[0]?.entry : null;
+      const place = country && line.includes(entry.name) ? spokenPlace(country) : spokenPlace(entry);
       const lead = idx === 0 ? `[point_screen] Now, around the world in 30 seconds. First, ${place}.` : idx === roundup.length - 1 ? `And lastly, ${place}.` : choose([`To ${place} next.`, `Now ${place}.`, `Over to ${place}.`], key);
       parts.push(lead, `${line}, ${s.source} reports.`);
     } else {
       const opener = info.grave ? OPENERS[GRAVE_OPENERS[hash(key) % GRAVE_OPENERS.length]] : choose(OPENERS, key);
       const cue = isNumber ? '[count] ' : info.grave ? '[lean_in] ' : s.image ? '[point_screen] ' : choose(['[raise_hand] ', '[point_camera] ', ''], key);
-      if (isNumber) parts.push(`${cue}Our number of the day: ${info.figures[0].value}.`);
-      if (isLighter) parts.push(`${isNumber ? '' : cue}And finally, ${unstop(s.title)}, ${s.source} reports.`);
+      if (isNumber) parts.push(`${cue}Our number of the day: ${unstop(info.figures[0].said)}.`);
+      if (isLighter) parts.push(`${isNumber ? '' : cue}And finally: ${unstop(s.title)}, ${s.source} reports.`);
       else parts.push(`${isNumber ? '' : cue}${opener(unstop(s.title), s.source)}`);
       const lines = body(info, quick ? 1 : 2);
       lines.forEach((line, j) => {

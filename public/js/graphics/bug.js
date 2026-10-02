@@ -92,8 +92,8 @@ const CLOCK_LABEL = 'LONDON';
 
 /**
  * Draw the top row. `v` = { onAt, replay, program: {title, color} | null,
- * programIn, programOut, clock: 'HH:MM', glint: boolean } where onAt is when the
- * graphics came on, programIn/Out are the programme tag's wipe times.
+ * programIn, programOut, clock: 'HH:MM' } where onAt is when the graphics came
+ * on (the glint plays once, just after) and programIn/Out are the programme tag's wipe times.
  */
 export function drawTopRow(ctx, t, v) {
   const y = TOP.y;
@@ -106,7 +106,7 @@ export function drawTopRow(ctx, t, v) {
   if (bugW > 0) {
     ctx.drawImage(bugSprite(), 0, 0, bugW, h, TOP.x, y, bugW, h);
     const g = (since - 0.6) / 0.9;
-    if (v.glint && g > 0 && g < 1) clipped(ctx, TOP.x, y, bugW, h, () => drawGlint(ctx, TOP.x, y, easeOut(g)));
+    if (g > 0 && g < 1) clipped(ctx, TOP.x, y, bugW, h, () => drawGlint(ctx, TOP.x, y, easeOut(g)));
   }
 
   // LIVE (black plate, static red square) or REPLAY (black on yellow)

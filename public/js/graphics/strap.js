@@ -7,14 +7,14 @@
 // news turns the strap red with one calm wipe; no flashing.
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
-import { STRAP, inkOn, easeOut, easeIn, easeInOut, clamp01, lerp, rect, clipped } from './layout.js';
+import { STRAP, inkOn, easeOut, easeIn, easeInOut, lerp, rect, clipped } from './layout.js';
 
 export const STRAP_TIMING = { in: 0.35, textDelay: 0.1, textRise: 0.2, flip: 0.3, out: 0.25, red: 0.45, name: 5 };
 const T = STRAP_TIMING;
 
 const BAR_W = STRAP.right - STRAP.x;
-const TEXT_X = STRAP.x + 8;
-const TEXT_ROOM = STRAP.right - 8 - TEXT_X;
+const TEXT_X = STRAP.x + 5; // aligned with the tag text above
+const TEXT_ROOM = STRAP.right - 5 - TEXT_X;
 const BAR = P.ink;
 const BAR_RED = P.darkRed;
 
@@ -76,7 +76,8 @@ export class StrapState {
     return rin * (1 - rout);
   }
 
-  update(t, want) {
+  /** `lead`: seconds to hold back a fresh entry (lets captions move out of the way first). */
+  update(t, want, lead = 0) {
     if (!want) {
       if (this.cur && this.outAt === null) this.outAt = t;
       if (this.cur && this.outAt !== null && t - this.outAt >= T.out) this.reset();
@@ -85,7 +86,7 @@ export class StrapState {
     if (!this.cur) {
       this.cur = want;
       this.prev = null;
-      this.inAt = Math.max(t, want.since);
+      this.inAt = Math.max(t + lead, want.since);
       this.outAt = null;
       this.flipAt = -Infinity;
       this.redAt = -Infinity;
@@ -247,9 +248,4 @@ export function drawStrap(ctx, t, s) {
       }
     }
   });
-}
-
-/** 0..1: how much room the strap takes right now (captions move above it). */
-export function strapPresence(s, t) {
-  return clamp01(s.reveal(t));
 }

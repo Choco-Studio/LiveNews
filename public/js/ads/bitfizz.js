@@ -313,20 +313,68 @@ function heat(ctx, x0, w, lt) {
   }
 }
 
-// Pigeon: 2 frames (head up / pecking), 13 x 10. G body, g wing, Y beak, E eye.
+// Pigeon (faces right): stand / step / peck. G body, g wing, n neck sheen, Y
+// feet and beak, E eye, t tail. Outlined by spr().
 const PIGEON = [
-  spr(['...GG......', '..GGEG.....', '..GGGGY....', '..gGG......', '.gggGGGGG..', 'ggggggGGGGG', '.ggggggGGG.', '...GGGGG...', '....Y..Y...'], -5, -9),
-  spr(['...........', '...........', '...........', '..GGEG.....', '.GGGGGGY...', 'ggggggGGGG.', '.ggggggGGG.', '...GGGGG...', '....Y..Y...'], -5, -9),
+  spr([
+    '.........GGG...',
+    '........GGEGG..',
+    '........GGGGGY.',
+    '........nnGG...',
+    '.......nnnn....',
+    '...GGGGGnnGG...',
+    '.tGgggGGGGGGG..',
+    'ttggggggGGGGGG.',
+    '.tgggggggGGGGG.',
+    '...gggggGGGGG..',
+    '.....GGGGGG....',
+    '......Y..Y.....',
+    '.....YY.YY.....',
+  ], -7, -13),
+  spr([
+    '..........GGG..',
+    '.........GGEGG.',
+    '.........GGGGGY',
+    '........nnGG...',
+    '.......nnnn....',
+    '...GGGGGnnGG...',
+    '.tGgggGGGGGGG..',
+    'ttggggggGGGGGG.',
+    '.tgggggggGGGGG.',
+    '...gggggGGGGG..',
+    '.....GGGGGG....',
+    '.....Y....Y....',
+    '....YY...YY....',
+  ], -7, -13),
+  spr([
+    '...............',
+    '...............',
+    '...............',
+    '...............',
+    '...GGGGG.......',
+    '.tGgggGGGGG....',
+    'ttggggggGGnnGG.',
+    '.tgggggggGnnGEG',
+    '...gggggGGGGGGG',
+    '.....GGGGGG..GY',
+    '...............',
+    '......Y..Y.....',
+    '.....YY.YY.....',
+  ], -7, -13),
 ];
-function pigeon(ctx, x, gy, lt, d, { shades = false, flip = false, peck = true } = {}) {
-  const k = mapper(d);
-  const f = peck ? frame(lt + (x % 7) * 0.13, 3, 4) === 1 : false;
-  const pal = { K: P.black, G: k(P.fog), g: k(P.steel), Y: k(P.orange), E: P.black };
-  draw(ctx, PIGEON[f ? 1 : 0], x, gy, pal, flip);
-  if (shades && !f) {
-    const ex = flip ? x - 2 : x + 1;
-    R(ctx, ex - 3, gy - 8, 6, 2, P.black);
-    R(ctx, ex - 2, gy - 8, 1, 1, P.white);
+const pigeonPal = (d) =>
+  palAt('pigeon', { K: P.black, G: P.fog, g: P.steel, n: P.green, Y: P.orange, E: P.black, t: P.slate }, d);
+/** mode: 'peck' (idle pecking), 'walk', 'bob' (dancing), or 'stand'. */
+function pigeon(ctx, x, gy, lt, d, { shades = false, flip = false, mode = 'peck' } = {}) {
+  let f = 0;
+  if (mode === 'peck') f = frame(lt + (x % 7) * 0.13, 3, 5) === 2 ? 2 : 0;
+  else if (mode === 'walk') f = frame(lt, 8, 2);
+  const bob = mode === 'bob' ? -(Math.floor(lt * 5) % 2) : 0;
+  draw(ctx, PIGEON[f], x, gy + bob, pigeonPal(d), flip);
+  if (shades && f !== 2) {
+    const ex = flip ? x - 4 : x + 4;
+    R(ctx, ex - 3, gy - 12 + bob, 7, 2, P.black);
+    R(ctx, ex - 2, gy - 12 + bob, 1, 1, P.white);
   }
 }
 
@@ -440,7 +488,7 @@ function shotLowRes(ctx, lt) {
     c.drawImage(park(1), 0, 0);
     sun(c, 130, 34, lt, 1);
     heat(c, 130, 200, lt);
-    pigeon(c, 286, GROUND - 2, lt, 1);
+    pigeon(c, 268, GROUND - 1, lt, 1);
     const sigh = prog(lt, 2.5, 2.9) - prog(lt, 3.3, 3.6);
     const bob = breath(lt, 2.2, 1) + Math.round(sigh * 2);
     const fan = poseAt(lt, [[0, 'down'], [0.3, [[-8, -2], [-2, -12]], 'outBack'], [2.5, [[-8, -2], [-2, -12]]], [2.9, [[-3, 7], [6, 12]], 'inOut']], Math.sin(lt * 14) * 0.45 * (1 - prog(lt, 2.4, 2.8)));
@@ -513,7 +561,7 @@ function shotMachine(ctx, lt) {
   const [sx, sy] = kick(lt, clunk, 0.25, 3, 5);
   withCam(ctx, cam + sx, sy, (c) => {
     c.drawImage(park(1), 0, 0);
-    pigeon(c, 268, GROUND - 2, lt, 1);
+    pigeon(c, 268, GROUND - 1, lt, 1);
     const squash = Math.max(0, wobble(lt, clunk, 0.07, 4, 7));
     machine(c, MACHINE_X, GROUND + 2, lt, { squash });
     // he walks, stops with a little lean, reaches with anticipation, presses
@@ -694,7 +742,7 @@ function shotParty(ctx, lt) {
       disc(c, fx, fy - Math.round(9 * s), Math.max(1, Math.round(3 * s)), BIT_COLS[i % 8]);
       R(c, fx, fy - Math.round(9 * s), 1, 1, P.white);
     }
-    pigeon(c, 286, GROUND - 2 - (Math.floor(beat) % 2), lt, 8, { shades: true, peck: false });
+    pigeon(c, 268, GROUND - 1, lt, 8, { shades: true, mode: 'bob' });
     // dancing on the bench, can held high, hops on the beat
     const ph = beat % 2;
     const hop = -Math.round(Math.abs(Math.sin(beat * Math.PI)) * 5);

@@ -81,6 +81,8 @@ export class Producer {
         maxChats: ctx.program.maxChats ?? 3,
         solo: !ctx.presenters.B,
         features: ctx.program.features || [],
+        // names that may legitimately contain numbers ("NEWS IN 60", "UNIT-8")
+        ownNames: [ctx.program.title, ...Object.values(ctx.presenters).map((p) => p.name)],
       });
   }
 

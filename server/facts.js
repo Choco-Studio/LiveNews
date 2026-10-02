@@ -85,13 +85,23 @@ const stemMatch = (a, b) => {
   return a.slice(0, k) === b.slice(0, k);
 };
 
+// "DOWN 2%" on a card is grounded by "dropped 2 percent" in the copy.
+const DIRECTIONS = {
+  down: /\b(?:down|fell|falls?|falling|dropped|drops?|declined?|declining|decreased?|cut|lower|slid|slides?|sank)\b/,
+  up: /\b(?:up|rose|rises?|rising|risen|grew|grows?|jumped|increased?|higher|climbed|soared)\b/,
+};
+
 /** Share (0..1) of the content words of `text` that also appear in `source`. */
 export function wordsGrounded(text, source) {
-  const words = contentWords(text);
-  if (!words.length) return 1;
+  const folded = fold(text);
+  const words = contentWords(folded).filter((w) => !DIRECTIONS[w]);
+  const directions = Object.keys(DIRECTIONS).filter((d) => new RegExp(`\\b${d}\\b`).test(folded));
+  if (!words.length && !directions.length) return 1;
   const pool = contentWords(source);
+  const foldedSource = fold(source);
   const hits = words.filter((w) => pool.some((p) => p === w || stemMatch(w, p)));
-  return hits.length / words.length;
+  const dirHits = directions.filter((d) => DIRECTIONS[d].test(foldedSource));
+  return (hits.length + dirHits.length) / (words.length + directions.length);
 }
 
 /**
@@ -159,7 +169,7 @@ export function groundQuote(quote, source) {
 // ---------------------------------------------------------------- figures for the offline writer
 
 const LABEL_STOP = new Set(
-  'and or but to by in on at for from with than that which who whom is are was were will would has have had said says say over past since during into after before while as its their his her this these those the about around nearly almost some'.split(
+  'and or but to by in on at for from with than that which who whom is are was were will would has have had said says say over past since during into after before while as its their his her this these those the about around nearly almost some when where if because until unless so yet once then there here now again also only even just still can could may might should must across through between against'.split(
     ' '
   )
 );
@@ -167,7 +177,8 @@ const MONTHS = /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i;
 
 /**
  * Figures stated in a text, best first, for a fact card: each is
- * { value: "40,000", label: "PASSENGERS A DAY", fact: "40,000 PASSENGERS A DAY" }.
+ * { value: "40,000", label: "PASSENGERS A DAY", fact: "40,000 PASSENGERS A DAY",
+ *   said: "40,000 passengers a day" (as written, for speech), score }.
  * The label is the words that follow the figure in the source, so nothing is
  * paraphrased. Bare years, dates, times and ordinals are skipped.
  */
@@ -213,12 +224,13 @@ export function extractFigures(text, max = 3) {
     if (n.percent || n.currency) score += 1.5;
     if (label.length) score += 1;
     if (n.value < 10 && !n.percent && !n.currency && !n.unit) score -= 1;
-    figures.push({ value, label: [direction, labelText].filter(Boolean).join(' '), fact, score, index: n.index });
+    const said = `${n.raw}${label.length ? (glued ? '-' : ' ') + label.join(' ') : ''}`;
+    figures.push({ value, label: [direction, labelText].filter(Boolean).join(' '), fact, said, score, index: n.index });
   }
   const seen = new Set();
   return figures
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .filter((f) => (seen.has(f.value) ? false : seen.add(f.value)))
     .slice(0, max)
-    .map(({ value, label, fact }) => ({ value, label, fact }));
+    .map(({ value, label, fact, said, score }) => ({ value, label, fact, said, score }));
 }

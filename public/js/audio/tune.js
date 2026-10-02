@@ -14,7 +14,7 @@
 //     tracks: [
 //       { inst: 'brass' | { wave: 'pulse25', a, d, s, r, vib, scoop, legato }, notes: 'A3:0.5 D4:0.5@0.8',
 //         kind: 'lead' | 'bass' | 'harmony', gain: 1, pan: -1..1, echo: 0..1, octave: 0, arp: 0.05 },
-//       { drums: 'K:1 S:1 H:0.5 O:0.5 C:2 T:1 P:1 X:0.25' },
+//       { drums: 'K:1 S:1 H:0.5 O:0.5 C:2 T:1 P:1 X:0.25 W:2' },  (W: a noise sweep lasting its length)
 //     ],
 //   }
 //   A token may end in @velocity (0..1): 'C5:1@0.6'.
@@ -26,6 +26,7 @@ const REST_RE = /^(r|rest|-|_|\.)$/i;
 export const DRUM_KEYS = {
   k: 'k', kick: 'k', bd: 'k', s: 's', snare: 's', sd: 's', h: 'h', hat: 'h', hh: 'h', o: 'o', open: 'o', oh: 'o',
   c: 'c', crash: 'c', cy: 'c', t: 't', tom: 't', p: 'p', clap: 'p', cp: 'p', x: 'x', tick: 'x', rim: 'x',
+  w: 'w', whoosh: 'w', sweep: 'w',
 };
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));

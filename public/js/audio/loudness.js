@@ -126,7 +126,7 @@ export function measureLoudness(channels, fs = 48000) {
 
 // K-weighted energy of one drum hit at unit gain (measured offline in
 // public/lab/audio.html with the synth's own drum voices).
-export const DRUM_ENERGY = { k: 0.03, s: 0.012, h: 0.0009, o: 0.004, c: 0.03, t: 0.025, p: 0.01, x: 0.0004 };
+export const DRUM_ENERGY = { k: 0.03, s: 0.012, h: 0.0009, o: 0.004, c: 0.03, t: 0.025, p: 0.01, x: 0.0004, w: 0.02 };
 
 // Integral of the squared ADSR envelope over a note gated for `gate` seconds.
 export function envelopeEnergy(inst, gate) {
@@ -177,7 +177,8 @@ export function estimateLoudness(song) {
     const level = KIND_GAIN[track.kind] * track.gain * ev.e.vel;
     const extra = 1 + echoGain(track.echo * song.echo.send) + room;
     if (track.kind === 'drums') {
-      deposit(t0, 0.15, level * level * (DRUM_ENERGY[ev.e.drum] ?? 0.01) * extra);
+      const len = ev.e.drum === 'w' ? ev.dur * spb : 0.15;
+      deposit(t0, len, level * level * (DRUM_ENERGY[ev.e.drum] ?? 0.01) * (ev.e.drum === 'w' ? len : 1) * extra);
       continue;
     }
     const inst = track.inst;

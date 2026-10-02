@@ -11,9 +11,9 @@
 import { P } from '../palette.js';
 import { THEME_ACCENT } from '../cast.js';
 import { zoneTime, STUDIO_TZ } from '../util.js';
-import { CAPTION, lerp } from './layout.js';
+import { CAPTION, lerp, easeInOut } from './layout.js';
 import { drawTopRow, drawAdTag } from './bug.js';
-import { StrapState, strapContent, drawStrap, strapPresence } from './strap.js';
+import { StrapState, STRAP_TIMING, strapContent, drawStrap } from './strap.js';
 import { CaptionState, drawCaptions } from './captions.js';
 import { TickerState, makeEntry, drawTicker } from './ticker.js';
 
@@ -35,6 +35,7 @@ export const CAPTIONS_TOP = new Set(['montage']);
 export const PROGRAM_TAG = { delay: 0.5, hold: 8 }; // programme name beside the bug after the open
 export const BREAKING_STRAP = 12; // seconds a live breaking item takes over the strap
 export const BREAKING_TICKER = 90; // seconds it stays in the ticker rotation
+const LIFT = 0.3; // captions rise above a strap before it wipes in, and settle after it has gone
 
 const ON = new Set(['news', 'bug']);
 
@@ -49,7 +50,7 @@ export class Graphics {
     this.mode = null;
     this.onAt = 0;
     this.adAt = 0;
-    this.glint = false;
+    this.lift = { from: 0, to: 0, at: 0 };
     this.tagUntil = null;
     this.tagIn = null;
     this.tagOut = null;
@@ -76,7 +77,6 @@ export class Graphics {
     if (mode !== this.mode) {
       if (ON.has(mode) && !ON.has(this.mode)) {
         this.onAt = t;
-        this.glint = true;
       }
       if (mode === 'ad' && this.mode !== 'ad') this.adAt = t;
       if (!ON.has(mode)) {
@@ -96,7 +96,9 @@ export class Graphics {
     }
     if (this.tagIn !== null && this.tagOut === null && (t >= this.tagIn + PROGRAM_TAG.hold || t >= this.tagUntil || mode !== 'news')) this.tagOut = t;
 
-    this.strap.update(t, mode === 'news' ? this.wantStrap(t, scene) : null);
+    const capsBelow = this.captions.active && !this.captionsOnTop(scene);
+    this.strap.update(t, mode === 'news' ? this.wantStrap(t, scene) : null, capsBelow ? LIFT : 0);
+    this.updateLift(t);
 
     const text = mode === 'news' && scene.subtitles !== false && scene.subtitle ? scene.subtitle : null;
     const frame = text && this.audio?.speechFrame ? safeFrame(this.audio) : null;
@@ -145,11 +147,30 @@ export class Graphics {
     return { list: this.tickerList, key: this.tickerKey };
   }
 
+  captionsOnTop(scene) {
+    return CAPTIONS_TOP.has(scene.shot) || scene.captionZone === 'top';
+  }
+
+  /** How far captions are lifted above the strap zone (0..1), tweened ahead of the strap's wipes. */
+  liftAt(t) {
+    const l = this.lift;
+    return lerp(l.from, l.to, easeInOut((t - l.at) / LIFT));
+  }
+
+  updateLift(t) {
+    const s = this.strap;
+    const occupied = s.cur && s.outAt === null ? 1 : 0;
+    if (occupied === this.lift.to) return;
+    const from = this.liftAt(t);
+    // rise so the move ends as the bar starts; settle only once the bar has fully left
+    const at = occupied ? Math.max(t, s.inAt - LIFT) : s.outAt !== null ? Math.max(t, s.outAt + STRAP_TIMING.out) : t;
+    this.lift = { from, to: occupied, at };
+  }
+
   /** Caption placement: above the strap/ticker, or at the top over full-screen graphics. */
   captionPlace(t, scene) {
-    if (CAPTIONS_TOP.has(scene.shot) || scene.captionZone === 'top') return { top: CAPTION.top };
-    const k = strapPresence(this.strap, t);
-    return { bottom: Math.round(lerp(CAPTION.bottomFree, CAPTION.bottomStrap, k)) };
+    if (this.captionsOnTop(scene)) return { top: CAPTION.top };
+    return { bottom: Math.round(lerp(CAPTION.bottomFree, CAPTION.bottomStrap, this.liftAt(t))) };
   }
 
   /** Update and draw every overlay for this frame. */
@@ -171,7 +192,6 @@ export class Graphics {
       programIn: this.tagIn,
       programOut: this.tagOut,
       clock: zoneTime(STUDIO_TZ, this.now()).label,
-      glint: this.glint,
     });
     if (mode === 'news') {
       drawStrap(ctx, t, this.strap);

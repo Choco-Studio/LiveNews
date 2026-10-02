@@ -2336,13 +2336,13 @@ export function badge(ctx, cx, cy, r, s, { n = 14, fill = P.yellow, outline = P.
 /**
  * o: { bg(ctx, lt), product(ctx, lt), mark: wordmark | () => wordmark, markX, markY,
  *      sub: wordmark | fn (second lettering under the mark), subY, line: text under the mark,
- *      lineColor, lineY, tagline, tag: { bg, edge, color }, tagY, url, pill: { bg, border, color },
- *      urlY, legal, legalColor, legalBg }
+ *      lineColor, lineY, tagline, tag: { bg, edge, color }, tagX, tagY, url, pill: { bg, border, color },
+ *      urlX, urlY, legal, legalColor, legalBg }
  * Timing: mark letters 0.15-0.85 s, sub 0.7 s, line 0.95 s, tagline 1.0 s, url 1.5 s,
  * legal 1.7 s, light sweep across the mark every 3.5 s.
  */
 export function endSlate(ctx, lt, o = {}) {
-  const { markX = 262, markY = 30, subY = null, lineY = null, tagY = 146, urlY = 172 } = o;
+  const { markX = 262, markY = 30, subY = null, lineY = null, tagX = W / 2, tagY = 146, urlX = tagX, urlY = 172 } = o;
   o.bg?.(ctx, lt);
   o.product?.(ctx, lt);
   let below = markY;
@@ -2359,10 +2359,10 @@ export function endSlate(ctx, lt, o = {}) {
     below = sy + sb.h + sb.depth + 6;
   }
   if (o.line && lt > 0.95) micro(ctx, o.line, markX, lineY ?? below + 2, { color: o.lineColor || P.white, align: 'center' });
-  if (o.tagline && lt > 1.0) slogan(ctx, o.tagline, W / 2, tagY, lt - 1.0, { scale: 2, ...(o.tag || {}) });
+  if (o.tagline && lt > 1.0) slogan(ctx, o.tagline, tagX, tagY, lt - 1.0, { scale: 2, ...(o.tag || {}) });
   if (o.url && lt > 1.5) {
     const p = easeOutBack(prog(lt, 1.5, 1.75), 2.5);
-    urlPill(ctx, o.url, W / 2, urlY + round((1 - p) * 8), o.pill || {});
+    urlPill(ctx, o.url, urlX, urlY + round((1 - p) * 8), o.pill || {});
   }
   if (o.legal) finePrint(ctx, o.legal, { lt: lt - 1.7, color: o.legalColor || P.fog, bg: o.legalBg === undefined ? P.black : o.legalBg });
 }

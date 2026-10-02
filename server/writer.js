@@ -298,10 +298,22 @@ function normalizeKicker(value, source) {
 // "7.1" do not split: a sentence ends at punctuation followed by a space.
 const sentencesOf = (text) => String(text).split(/(?<=[.!?…])\s+(?=[\["“'A-Z0-9])/);
 const stripTags = (s) => s.replace(/\[[^\]]*\]/g, ' ');
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Numbers that belong to the format, not to the news: "around the world in 30 seconds", "24 hours".
+const FORMAT_NUMBERS = [/\b(?:in|under|for) (?:30|60|90) seconds\b/gi, /\b24 hours\b/gi, /\b24\/7\b/g];
 
-/** Drop every sentence that states a number the sources do not. */
-function groundedText(text, source) {
-  const kept = sentencesOf(text).filter((s) => numbersGrounded(stripTags(s), source));
+/**
+ * Drop every sentence that states a number the sources do not. Numbers inside
+ * our own names (the channel "GLOBIT 24", "NEWS IN 60", "UNIT-8") and format
+ * phrases do not count.
+ */
+function groundedText(text, source, ownNames) {
+  const own = ownNames.filter(Boolean).map((n) => new RegExp(escapeRe(String(n)), 'gi'));
+  const kept = sentencesOf(text).filter((sentence) => {
+    let t = stripTags(sentence);
+    for (const re of [...own, ...FORMAT_NUMBERS]) t = t.replace(re, ' ');
+    return numbersGrounded(t, source);
+  });
   return kept.join(' ');
 }
 
@@ -314,8 +326,9 @@ function groundedText(text, source) {
 export function normalizeBulletin(
   raw,
   stories,
-  { channelName = 'LIVENEWS', maxStories = Infinity, maxChats = 3, solo = false, features = FEATURES } = {}
+  { channelName = 'LIVENEWS', maxStories = Infinity, maxChats = 3, solo = false, features = FEATURES, ownNames = [] } = {}
 ) {
+  const names = [channelName, ...ownNames];
   const byId = new Map(stories.map((s) => [s.id, s]));
   const allowed = FEATURES.filter((f) => features.includes(f));
   const sourceOf = (story) => `${story.title}. ${story.summary || ''}`;
@@ -333,7 +346,7 @@ export function normalizeBulletin(
     const emotion = pick(seg.emotion, EMOTIONS, 'neutral');
     const grave = emotion === 'serious' || emotion === 'sad';
     const withCues = Array.isArray(seg.cues) && seg.cues.length ? embedCues(String(seg.text ?? ''), seg.cues) : seg.text;
-    const parsed = parseCues(groundedText(clean(withCues, 2000), source), { grave });
+    const parsed = parseCues(groundedText(clean(withCues, 2000), source, names), { grave });
     const text = clip(parsed.text, LIMITS.text);
     if (!text) continue;
     const anchor = seg.anchor === 'B' && !solo ? 'B' : 'A';
@@ -424,7 +437,7 @@ export function normalizeBulletin(
  * Episode-level rules for the recurring features: one number of the day, an
  * "and finally" only as the last story, and one round-up of 2-4 consecutive
  * stories (each marked with its position). A story whose feature is dropped
- * becomes an ordinary story. Features that survive get their kicker.
+ * becomes an ordinary story. Features that survive are branded with their kicker.
  */
 function applyFeatures(body) {
   const storiesOnly = body.filter((s) => s.type === 'story');
@@ -456,5 +469,6 @@ function applyFeatures(body) {
     else close();
   }
   close();
-  for (const s of storiesOnly) if (s.feature && !s.kicker) s.kicker = FEATURE_KICKERS[s.feature];
+  // A recurring feature is branded on the strap with its own name.
+  for (const s of storiesOnly) if (s.feature) s.kicker = FEATURE_KICKERS[s.feature];
 }
