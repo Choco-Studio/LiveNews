@@ -52,7 +52,10 @@ export class Director {
 
   setShot(shot, extra = {}) {
     const s = this.scene;
-    const changed = s.shot !== shot || (extra.focus && extra.focus !== s.focus) || ('storyId' in extra && extra.storyId !== s.storyId);
+    // Every ad and every montage frame is a new clip even when the shot name
+    // repeats, so its clock must restart (or it opens mid-way, at its end slate).
+    const restart = shot === 'ad' || shot === 'montage';
+    const changed = restart || s.shot !== shot || (extra.focus && extra.focus !== s.focus) || ('storyId' in extra && extra.storyId !== s.storyId);
     Object.assign(s, extra);
     if (changed) {
       s.shot = shot;
@@ -118,7 +121,8 @@ export class Director {
     }
     const ads = pickAds(item.ads || 1, this.recentAds);
     for (const ad of ads) {
-      this.recentAds = [...this.recentAds, ad.id].slice(-6);
+      // Play history; pickAds() prefers unseen ads, then the least recently played.
+      this.recentAds = [...this.recentAds, ad.id].slice(-24);
       await this.stinger(() => this.setShot('ad', { card: { ad, line: -1 } }));
       await this.playAd(ad);
     }

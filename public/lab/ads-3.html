@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ads lab · ads-3</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; background: #12101c; color: #c0cbdc; font: 13px/1.4 ui-monospace, monospace; }
+      main { max-width: 1180px; margin: 0 auto; padding: 12px 16px; }
+      #screen { display: block; width: 1152px; max-width: 100%; aspect-ratio: 16 / 9; image-rendering: pixelated; background: #000; }
+      .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+      input[type='range'] { flex: 1; min-width: 200px; }
+      button, select { font: inherit; background: #262b44; color: #fff; border: 1px solid #5a6988; padding: 3px 9px; }
+      #vo { min-height: 2.8em; color: #feae34; }
+      #script { white-space: pre-wrap; color: #8b9bb4; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <canvas id="screen" width="384" height="216"></canvas>
+      <div class="row">
+        <select id="pick"></select>
+        <button id="play">play</button>
+        <button id="sound" title="Real-time playback with the jingle and the voice-over">play + sound</button>
+        <input id="scrub" type="range" min="0" max="25" step="0.02" value="0" />
+        <span id="clock">0.00 s</span>
+      </div>
+      <div id="vo"></div>
+      <div id="script"></div>
+    </main>
+    <script type="module">
+      // Lab for the ads-3 commercials: pick an ad and render any instant
+      // deterministically (window.__lab.render(t)) for tools/shoot.mjs, or play
+      // it in real time with its jingle and voice-over to check the sync.
+      import { ADS } from '../js/ads/index.js';
+
+      const canvas = document.getElementById('screen');
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      const $ = (id) => document.getElementById(id);
+      const params = new URLSearchParams(location.search);
+      const MINE = ['safesector', 'screechnet', 'corners', 'kartesia'];
+      let ad = ADS.find((a) => a.id === (params.get('ad') || MINE[0])) || ADS[0];
+      let t = Number(params.get('t')) || 0;
+      let playing = false;
+      let audio = null;
+      let tuneHandle = null;
+      let last = 0;
+
+      // Rough speech length (en voices speak ~14 characters per second) so the
+      // lab can tell the ad which line is being spoken, like the director does.
+      const lineSpan = (line) => line.text.length / (14 * (ad.voice?.rate || 1));
+      function infoAt(time) {
+        let line = -1;
+        let speaking = false;
+        ad.script.forEach((ln, i) => {
+          if (time >= ln.at) {
+            line = time < ln.at + lineSpan(ln) ? i : -1;
+            speaking = line === i;
+          }
+        });
+        return { line, speaking, duration: ad.duration };
+      }
+
+      function render(time, opts = {}) {
+        if (opts.ad) set(opts.ad);
+        t = Math.max(0, Number(time) || 0);
+        const info = infoAt(t);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 1;
+        ctx.clearRect(0, 0, 384, 216);
+        ad.draw(ctx, t, t, info);
+        $('clock').textContent = `${t.toFixed(2)} s / ${ad.duration} s`;
+        $('scrub').value = String(t);
+        $('vo').textContent = info.line >= 0 ? `VO ${info.line + 1}: ${ad.script[info.line].text}` : '';
+        return info;
+      }
+
+      function set(id) {
+        const next = ADS.find((a) => a.id === id);
+        if (!next) throw new Error(`unknown ad ${id}`);
+        ad = next;
+        $('pick').value = ad.id;
+        $('scrub').max = String(ad.duration);
+        $('script').textContent = ad.script.map((l) => `${l.at.toFixed(1).padStart(5)}  ${l.text}`).join('\n');
+      }
+
+      function stopSound() {
+        try {
+          tuneHandle?.stop();
+          audio?.stop();
+        } catch { /* lab only */ }
+        tuneHandle = null;
+      }
+
+      function loop(now) {
+        if (playing) {
+          t += Math.min(0.1, (now - last) / 1000);
+          if (t >= ad.duration) {
+            t = ad.duration;
+            playing = false;
+            stopSound();
+          }
+          render(t);
+        }
+        last = now;
+        requestAnimationFrame(loop);
+      }
+
+      async function playWithSound() {
+        const { AudioEngine } = await import('../js/audio.js');
+        audio ||= new AudioEngine({ lang: 'en' });
+        await audio.unlock();
+        stopSound();
+        audio.setVoices?.({ ad: ad.voice });
+        tuneHandle = audio.playTune?.(ad.tune, { loop: false, volume: 0.45 });
+        t = 0;
+        playing = true;
+        const started = performance.now();
+        const id = ad.id;
+        for (const line of ad.script) {
+          const wait = line.at * 1000 - (performance.now() - started);
+          if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+          if (!playing || ad.id !== id) return;
+          await audio.speak(line.text, 'ad');
+        }
+      }
+
+      for (const a of ADS) $('pick').append(new Option(`${MINE.includes(a.id) ? '★ ' : ''}${a.brand || a.id} (${a.duration}s)`, a.id));
+      $('pick').onchange = () => {
+        set($('pick').value);
+        render(0);
+      };
+      $('scrub').oninput = () => {
+        playing = false;
+        render(Number($('scrub').value));
+      };
+      $('play').onclick = () => {
+        playing = !playing;
+        if (t >= ad.duration) t = 0;
+      };
+      $('sound').onclick = () => playWithSound().catch((e) => console.warn(e));
+      addEventListener('keydown', (e) => {
+        if (e.key === ' ') {
+          playing = !playing;
+          e.preventDefault();
+        } else if (e.key === 'ArrowRight') render(t + (e.shiftKey ? 1 : 1 / 25));
+        else if (e.key === 'ArrowLeft') render(t - (e.shiftKey ? 1 : 1 / 25));
+      });
+
+      set(ad.id);
+      render(t);
+      requestAnimationFrame(loop);
+      window.__lab = { render, set, infoAt, get ad() { return ad; } };
+    </script>
+  </body>
+</html>
