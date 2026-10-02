@@ -149,10 +149,11 @@ export function fabricFold(o, mat, group, a, c, b, hw, lit = 0, core = 2) {
  * An irregular rounded clump centred at screen (cx, cy), radius r px: a disc whose edge is
  * pushed in and out by `wob` (0..0.3) with phase `ph`, shaded with a lit crescent toward the key,
  * a deep crease on the far side and `bias` added to every tone. `sph(nx, ny)` optionally mixes in
- * the larger form's normal (a curl on a round head of hair is lit like the head).
+ * the larger form's normal (a curl on a round head of hair is lit like the head). `hi` false keeps
+ * the crescent one step down (only clusters that face the key get the highlight colour).
  */
 const BLOB = { sx: 0, sy: 0, mix: 0 };
-export function blob(buf, m, cx, cy, r, wob, ph, bias = 0, sph = null) {
+export function blob(buf, m, cx, cy, r, wob, ph, bias = 0, sph = null, hi = true) {
   const R = r * (1 + wob);
   const x0 = Math.max(1, Math.floor(cx - R)), y0 = Math.max(1, Math.floor(cy - R));
   const x1 = Math.min(buf.w - 1, Math.ceil(cx + R) + 1), y1 = Math.min(buf.h - 1, Math.ceil(cy + R) + 1);
@@ -176,7 +177,7 @@ export function blob(buf, m, cx, cy, r, wob, ph, bias = 0, sph = null) {
       }
       // explicit cluster tones: a lit crescent toward the key, the body, a shaded far side
       const lit = -0.6 * nx - 0.8 * ny;
-      let t = (lit > 0.5 && d2 > 0.2 ? 0 : lit < -0.35 ? 2 : 1) + bias;
+      let t = (lit > 0.55 && d2 > 0.25 ? (hi ? 0 : 1) : lit < -0.35 ? 2 : 1) + bias;
       // the crease where this clump tucks under its neighbour (far side, outer ring)
       if (d2 > 0.6 && dx + dy * 0.8 > rr * 0.3) t = 3;
       const i = y * w + x;
@@ -235,10 +236,25 @@ function clothTone(o, opts = {}) {
   };
 }
 
-/** Short soft fold strokes in body space (tone lines with a lit edge beside them). */
-function fold(o, mat, group, pts, shade = 2, lit = 0, litSide = -1) {
-  bodyPaint(o, pts, mat, shade, group);
-  if (lit >= 0 && o.s >= 2.6) bodyPaint(o, pts, mat, lit, group, litSide);
+/**
+ * Seated drape inside a garment group: with the hands on the desk the cloth pulls from under the
+ * arms toward the front, so two diagonal tension folds per side (one in the medium), softer and
+ * shorter for knits (`soft`). Medium shots get a single 1 px line; the wide gets none.
+ */
+function drape(o, mat, group, t, soft = 0) {
+  if (t === 0) return;
+  const T = o.L.torso;
+  const k = 1 - soft * 0.35;
+  const xa = T.sideHW - 4.6, xb = xa - 5.0 * k;
+  for (const side of [-1, 1]) {
+    if (t === 1) {
+      bodyPaint(o, [[side * xa, 13.6], [side * xb, 17.4 - soft]], mat, side < 0 ? 1 : 2, group);
+      continue;
+    }
+    const lit = side < 0 ? 0 : 1;
+    fabricFold(o, mat, group, [side * xa, 13.2], [side * (xa - 2.2 * k), 14.6], [side * xb, 17.8 - soft * 1.5], 0.45 * k, lit, 2);
+    fabricFold(o, mat, group, [side * (xa + 0.6), 19.6], [side * (xa - 1.2), 20.8], [side * (xb + 1.4), 22.6 - soft], 0.34 * k, lit, 2);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -309,13 +325,8 @@ function knitBlazer(o) {
 
   // ---- seams and folds (tone lines inside the jacket group)
   const gJ = gb + G.jacket;
+  drape(o, m.jacket, gJ, t, 0);
   if (t >= 1) {
-    // armpit drape: two soft folds from under each arm toward the chest
-    for (const side of [-1, 1]) {
-      const sh = side < 0 ? 1 : 2;
-      fold(o, m.jacket, gJ, [[side * (T.sideHW - 0.6), 15.5], [side * (T.sideHW - 3.2), 13.0], [side * (T.sideHW - 5.4), 12.4]], sh + 0, side < 0 ? 0 : -1);
-      if (t === 2) fold(o, m.jacket, gJ, [[side * (T.sideHW - 0.8), 21.5], [side * (T.sideHW - 3.6), 19.4]], sh, -1);
-    }
     // the open fronts: a slight roll where each front edge turns back, and the button
     for (const side of [-1, 1]) bodyPaint(o, [[side * 3.4, vY - 1.0], [side * 3.0, T.bottom]], m.jacket, side < 0 ? 0 : 2, gJ, side < 0 ? -1 : 1);
     const [bx, by] = o.toS(-4.4, vY + 3.4);
@@ -325,9 +336,11 @@ function knitBlazer(o) {
   if (t === 2) {
     // shoulder seams (soft shoulders, no padding) and a patch pocket on the far chest
     for (const side of [-1, 1]) bodyPaint(o, [[side * (nk + 5.4), 0.6], [side * (T.shoulderHW * 0.84), T.shoulderTop + 0.9]], m.jacket, side < 0 ? 1 : 3, gJ);
-    const px0 = T.shoulderHW * 0.38, py0 = 12.6, pw = 5.0, ph = 4.4;
-    bodyPaint(o, [[px0, py0], [px0, py0 + ph], [px0 + pw, py0 + ph], [px0 + pw, py0]], m.jacket, 3, gJ);
-    bodyPaint(o, [[px0 + 0.3, py0 + 0.6], [px0 + pw - 0.3, py0 + 0.6]], m.jacket, 2, gJ);
+    const px0 = T.shoulderHW * 0.36, py0 = 11.8, pw = 4.8, ph = 4.2;
+    bodyPaint(o, [[px0, py0], [px0 + pw, py0]], m.jacket, 0, gJ); // the pocket's top edge catches the key
+    bodyPaint(o, [[px0, py0 + 0.4], [px0 + pw, py0 + 0.4]], m.jacket, 3, gJ, 0);
+    bodyPaint(o, [[px0 + pw, py0 + 0.6], [px0 + pw - 0.1, py0 + ph]], m.jacket, 3, gJ);
+    bodyPaint(o, [[px0 + 0.4, py0 + ph], [px0 + pw - 0.2, py0 + ph]], m.jacket, 2, gJ);
   }
 }
 
@@ -344,29 +357,24 @@ function turtleneck(o) {
   for (const [x, y] of outline) body.push(x, y);
   buf.poly(body, m.jacket, clothTone(o, { litEdge: -0.8, shadeEdge: 0.55 }));
   const gJ = gb + G.jacket;
-  if (t >= 1) {
-    // set-in shoulder seams and the drape of a fitted knit: armpit folds, a soft centre crease
-    for (const side of [-1, 1]) {
-      fold(o, m.jacket, gJ, [[side * (T.sideHW - 0.5), 14.8], [side * (T.sideHW - 3.0), 12.8], [side * (T.sideHW - 5.6), 12.6]], side < 0 ? 1 : 2, side < 0 ? 0 : -1);
-      if (t === 2) {
-        bodyPaint(o, [[side * (nk + 3.6), 1.0], [side * (T.shoulderHW * 0.86), T.shoulderTop + 1.4]], m.jacket, side < 0 ? 1 : 3, gJ);
-        fold(o, m.jacket, gJ, [[side * (T.sideHW - 1.0), 22.0], [side * (T.sideHW - 4.0), 20.0]], 2, -1);
-      }
-    }
-    if (t === 2) bodyPaint(o, [[0.6, 8.5], [0.9, 13.5]], m.jacket, 2, gJ);
+  drape(o, m.jacket, gJ, t, 1);
+  if (t === 2) {
+    // set-in shoulder seams of a fitted knit
+    for (const side of [-1, 1]) bodyPaint(o, [[side * (nk + 3.6), 1.0], [side * (T.shoulderHW * 0.86), T.shoulderTop + 1.4]], m.jacket, side < 0 ? 1 : 3, gJ);
   }
   // ---- the roll collar: a soft tube up the neck, folded over once, with vertical ribs
   buf.part(gb + LOOK + 1, 9, clip);
   const neckHW = L.neck.hw;
-  const topY = -5.6, foldY = -2.9, baseY = 1.0;
+  const topY = -5.4, foldY = -2.6, baseY = 1.0;
   const pts = bodyPoly(o, lift, [
-    [-(neckHW + 0.9), topY], [-(neckHW + 0.5), topY - 0.7], [0, topY - 0.95], [neckHW + 0.5, topY - 0.7], [neckHW + 0.9, topY],
-    [neckHW + 1.5, foldY], [nk + 1.6, baseY - 0.6], [nk + 0.6, baseY + 0.4], [0, baseY + 1.1], [-(nk + 0.6), baseY + 0.4], [-(nk + 1.6), baseY - 0.6], [-(neckHW + 1.5), foldY],
+    [-(neckHW + 1.2), topY + 0.2], [-(neckHW + 0.7), topY - 0.6], [0, topY - 0.9], [neckHW + 0.7, topY - 0.6], [neckHW + 1.2, topY + 0.2],
+    [neckHW + 1.9, foldY - 0.2], [neckHW + 2.0, foldY + 0.5], [nk + 1.9, baseY - 0.7], [nk + 0.8, baseY + 0.4], [0, baseY + 1.2],
+    [-(nk + 0.8), baseY + 0.4], [-(nk + 1.9), baseY - 0.7], [-(neckHW + 2.0), foldY + 0.5], [-(neckHW + 1.9), foldY - 0.2],
   ]);
   const c = o.toS(0, 0);
   const fy = o.toS(0, foldY)[1];
   const ribStep = Math.max(2, Math.round(0.8 * s));
-  const hw = (neckHW + 1.5) * s;
+  const hw = (neckHW + 1.9) * s;
   buf.poly(pts, m.collar, (x, y) => {
     const nx = (x + 0.5 - c[0]) / hw;
     // the fold line: a dark crease with the lit lip of the roll above it
@@ -432,14 +440,9 @@ function cardigan(o) {
   }
   // ---- drape: soft knit folds under the arms and a shoulder seam dropped off the shoulder
   const gJ = gb + G.jacket;
-  if (t >= 1) {
-    for (const side of [-1, 1]) {
-      fold(o, m.jacket, gJ, [[side * (T.sideHW - 0.6), 14.0], [side * (T.sideHW - 3.4), 12.4], [side * (T.sideHW - 6.0), 12.8]], side < 0 ? 1 : 2, side < 0 ? 0 : -1);
-      if (t === 2) {
-        bodyPaint(o, [[side * (T.shoulderHW * 0.7), T.shoulderTop * 0.6], [side * (T.shoulderHW * 0.93), T.shoulderTop + 3.0]], m.jacket, side < 0 ? 1 : 3, gJ);
-        fold(o, m.jacket, gJ, [[side * (T.sideHW - 1.0), 21.0], [side * (T.sideHW - 4.4), 19.6]], 2, -1);
-      }
-    }
+  drape(o, m.jacket, gJ, t, 1);
+  if (t === 2) {
+    for (const side of [-1, 1]) bodyPaint(o, [[side * (T.shoulderHW * 0.7), T.shoulderTop * 0.6], [side * (T.shoulderHW * 0.93), T.shoulderTop + 3.0]], m.jacket, side < 0 ? 1 : 3, gJ);
   }
   if (L.necklace) drawChain(o, L.necklace, t);
 }
@@ -448,7 +451,8 @@ function cardigan(o) {
 function drawChain(o, [hi, lo], t) {
   if (t === 0) return;
   const { buf, L, toS, s } = o;
-  const a = decal(hi), b = decal(lo);
+  // medium shots: one quiet tone (a bright chain at 1-2 px per link would read as noise)
+  const a = decal(t === 2 ? hi : lo), b = decal(lo);
   const nk = L.torso.neckHW;
   let prev = null;
   for (let i = 0; i <= 16; i++) {

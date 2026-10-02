@@ -1,12 +1,12 @@
 // Lola Byte (owner: PRESENTERS A stream). Co-anchor of WORLD NOW: deep blue
-// blazer over a cream scoop top, a thin gold necklace and studs, a sleek
+// blazer over a soft white scoop top, a thin gold necklace and studs, a sleek
 // auburn bob with a deep side part ("the girl in blue").
 import { P } from '../../../palette.js';
 import { toneN, decal } from '../pixbuf.js';
 import { headHW } from '../head.js';
 import { LocalXY, localBox, clumpTone } from './kit-a.js';
 import { clamp } from '../space.js';
-import { defineLook, SKIN_TAN } from './base.js';
+import { defineLook } from './base.js';
 
 export const lola = defineLook({
   id: 'lola',
@@ -19,14 +19,14 @@ export const lola = defineLook({
   nose: { y0: -0.2, y1: 3.25, w: 1.25, big: false },
   mouth: { y: 5.8, w: 3.5, lip: P.darkRed, lipHi: P.skinShade, upper: P.tanShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   ears: { y: -0.1, h: 2.8, w: 1.0 },
-  skin: SKIN_TAN,
+  skin: [P.skin, P.tan, P.skinShade, P.tanShade], // tan skin, warm softer shadows (world-now.md §5 item 10: face L* 55-73)
   skinLine: P.brown,
   hair: { style: 'bob', ramp: [P.rust, P.brown, P.maroon, P.black], line: P.black }, // auburn, not candy orange
   mustache: null,
   torso: { neckHW: 3.0, shoulderTop: 3.0, shoulderHW: 18.4, sideHW: 17.2, bottom: 46, vDepth: 16, shoulderJoint: [15.8, 7.0] },
   outfit: 'blazer',
   jacket: { ramp: [P.steel, P.navy, P.ink, P.black], line: P.black }, // deep blue, darker than her face; cool steel sheen (no candy-bright blue)
-  shirt: { ramp: [P.white, P.cream, P.skin, P.tan], line: P.tanShade },
+  shirt: { ramp: [P.white, P.silver, P.fog, P.steel], line: P.steel }, // a soft white top: the face stays the brightest warm area
   necklace: [P.yellow, P.orange],
   earrings: P.yellow,
   arm: { upper: 21, fore: 19.5, rUpper: 3.0, rElbow: 2.6, rWrist: 2.05, hand: 10.2 },

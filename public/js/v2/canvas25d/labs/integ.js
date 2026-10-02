@@ -78,7 +78,7 @@ function picture(id, w, h) {
   c.height = h;
   const x = c.getContext('2d');
   const r = hash(id);
-  const skies = [[P.navy, P.blue], [P.ink, P.slate], [P.darkPurple || P.ink, P.purple || P.slate], [P.ink, P.navy]];
+  const skies = [[P.navy, P.blue], [P.ink, P.slate], [P.ink, P.steel], [P.ink, P.navy]];
   const [a, b] = skies[r % skies.length];
   const horizon = Math.round(h * (0.52 + ((r >> 4) % 20) / 100));
   for (let y = 0; y < horizon; y++) {
@@ -393,7 +393,7 @@ export function createIntegLab(canvas, { episodes = EPISODES, presenters = PRESE
       };
     },
     /** ms per v2 studio frame on this programme: p50 / p95 per run, and the minimum over runs. */
-    perf({ frames = 600, runs = 5, from = null } = {}) {
+    perf({ frames = 600, runs = 5, from = null, draw = true } = {}) {
       if (!show) rebuild();
       const studioShots = show.shots.filter((s) => STUDIO_SHOTS.has(s.shot));
       const t0 = from ?? (studioShots[1] || studioShots[0]).t;
@@ -406,10 +406,12 @@ export function createIntegLab(canvas, { episodes = EPISODES, presenters = PRESE
           t = simFrom + k / FPS;
           direct(t);
           const studio = STUDIO_SHOTS.has(scene.shot);
+          // draw: the v2 shot as the channel draws it; draw false: the runtime's bookkeeping alone
+          // (speech sampling, cue clock, cuts, emotions) on every frame
           const a = performance.now();
-          stage.frame(ctx, t, scene, studio);
+          stage.frame(ctx, t, scene, draw && studio);
           const d = performance.now() - a;
-          if (studio && t >= t0) ms.push(d);
+          if ((studio || !draw) && t >= t0) ms.push(d);
         }
         ms.sort((x, y) => x - y);
         out.push({ p50: ms[Math.floor(ms.length * 0.5)], p95: ms[Math.floor(ms.length * 0.95)], n: ms.length });

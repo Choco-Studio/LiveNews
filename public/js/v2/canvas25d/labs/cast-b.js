@@ -12,7 +12,7 @@
 //                          or 'cosmos' (Nova + UNIT-8); A speaks, then B, with turn-start glances
 //               'single'   the programme single (k = state.k) of `presenter` in its set
 //     scale     px per rig unit for lineup-free modes (default 3.4); seat +1 (left, A) | -1 (right, B)
-//     zoom      integer magnification of a crop around `focus` ([x, y] frame px or 'head')
+//     zoom      integer magnification of a crop around `focus` ([x, y] frame px, 'head', or a head index)
 //   window.__lab.bench(n)      { [id]: { total, noFace, face, baseline } } ms per frame at k = 4, min of 5 runs
 //   window.__lab.profile(n)    { pose, draw, resolve } ms per frame for the current presenter (k = 4)
 // The lab sets f.t and f.speech on the face params each frame (what FACES is
@@ -212,10 +212,11 @@ function applyZoom() {
   const z = state.zoom | 0;
   if (z <= 1) return;
   let fx = 192, fy = 108;
+  const hi = typeof state.focus === 'number' ? state.focus : 0;
   if (Array.isArray(state.focus)) [fx, fy] = state.focus;
-  else if (heads[0]) {
-    fx = heads[0].cx;
-    fy = heads[0].cy + 4;
+  else if (heads[hi]) {
+    fx = heads[hi].cx;
+    fy = heads[hi].cy + 4 * heads[hi].s;
   }
   const w = 384 / z, h = 216 / z;
   const x0 = Math.round(Math.max(0, Math.min(384 - w, fx - w / 2))), y0 = Math.round(Math.max(0, Math.min(216 - h, fy - h / 2)));

@@ -15,19 +15,18 @@
 //                  softbox sweep travels round the glass.                    VO "BitFizz Reserve."
 //  6 20.4 SLATE    bottle left, gold lock-up right, legal on the bar.        VO "Uncompressed."
 import {
-  P, W, H, R, A, oval, poly, ring, disc, cached, lazy, play, key, tween, prog, smooth,
+  P, W, H, R, A, oval, poly, ring, disc, line, cached, lazy, play, key, tween, prog, smooth, lerp, clamp,
   type, trackIn, fadeUp, rule, smallPrint, gradient, vignette, letterbox, beam, contact, glintStar,
-  litShape, lathe, ovalRing, bubbles, motes, hash01, clipRect, warmUp, tune,
+  lathe, ovalRing, bubbles, motes, hash01, clipRect, warmUp, tune,
 } from './kit.js';
 
-const { round, sin, cos, PI, max, min, abs } = Math;
+const { round, sin, cos, PI, max, abs, floor, ceil, sqrt } = Math;
 
 const BAR = 24; // letterbox bar height (2.2:1)
 const GOLD = [P.cream, P.yellow, P.yellow];
 // Backlit whisky-amber, dark to light; orange only where the light passes through.
 const AMBER = [P.black, P.maroon, P.brown, P.tanShade, P.orange, P.yellow];
 const GILT = [P.black, P.brown, P.tanShade, P.yellow, P.cream];
-const STONE = [P.black, P.ink, P.slate, P.steel];
 const CRYSTAL = [P.maroon, P.brown, P.tanShade, P.cream];
 
 /** Radii from keys into a reused array, scaled by k (no allocation). */
@@ -542,149 +541,355 @@ function shotPour(ctx, lt) {
 }
 
 // --- 4. NOSE -----------------------------------------------------------------------
-// A man in his forties in profile, facing left into the light, raises the
-// glass and closes his eyes. Rim light on the profile, the rest in shadow.
+// A man in his forties in profile, facing left into a low warm key, raises the
+// glass to just under his nose, breathes in and closes his eyes. The bust is a
+// baked sprite: organic region outlines, banded key-light shading computed per
+// pixel at bake time (the distance light travels through the figure, so the
+// bands follow the forms), then hand-placed features: brow, lidded eye with
+// lashes, nostril wing, two-tone lips, nasolabial fold, ear with its concha,
+// hair clumps, shirt collar, lapel. Sprite space: x = 0 at the nose tip, y = 0
+// at the crown; the head is 79 px from crown to chin (about 1/7 of his height).
 
-const noseBg = lazy(() => gradient('bf-nose', W, H, { cx: 318, cy: 70, rx: 220, ry: 170, ramp: [P.black, P.maroon, P.brown], gamma: 1.5, seam: 0.45 }));
+const noseBg = lazy(() => gradient('bf-nose', W, H, { cx: 300, cy: 78, rx: 210, ry: 160, ramp: [P.black, P.maroon, P.brown], gamma: 1.5, seam: 0.45 }));
 
-// Local coordinates: nose tip at (0, 0), x grows toward the back of the head.
-const SKIN_SRC = [
-  [26, -42], [14, -40], [9, -34], [6, -26], [5, -19], [8, -15], [7, -12], [3, -5], [0, 0], [3, 2], [5, 3], [4, 6],
-  [6, 8], [5, 10], [7, 12], [5, 16], [8, 20], [20, 22], [24, 28], [23, 36], [26, 46], [46, 46], [50, 30], [50, 18],
-  [56, 6], [58, -10], [56, -26], [48, -38], [38, -43],
+const HEAD_PTS = [
+  [0, 51], [0.4, 49.5], [2, 47.6], [4, 45.4], [6, 43], [7.8, 40.4], [9.4, 37.6], [8.6, 35.2], [7.2, 33], [7.4, 30], [8, 26],
+  [9, 21], [11, 16], [13.5, 11.5], [17, 7], [21, 4], [26, 1.8], [32, 0.5], [38, 0.3], [44, 1.2], [50, 3.5], [55, 7], [59, 11.5],
+  [62, 17], [64, 23], [65, 30], [64.6, 37], [63.2, 44], [61, 50], [58.6, 56], [56.4, 61], [55, 64.5], [49, 65.5], [44, 66],
+  [41, 69.5], [37, 73], [31.5, 76.4], [25, 78.6], [18, 79.2], [13.4, 77.6], [10.6, 75], [9.6, 72.2], [10.2, 69.6], [11.6, 67.6],
+  [9.4, 66.2], [8.2, 64.2], [9.2, 62.4], [7.4, 61.2], [7, 59.6], [8.2, 58], [8.6, 56.4], [5.6, 55.6], [2.6, 54.6], [0.7, 53.2],
 ];
-// a short, side-parted cut that follows the skull
-const HAIR_SRC = [
-  [8, -35], [10, -40], [17, -44], [27, -46], [38, -45], [47, -41], [54, -34], [58, -25], [59, -15], [57, -6],
-  [53, -1], [50, -4], [49, -11], [45, -14], [42, -22], [36, -29], [27, -32], [18, -32], [12, -31],
+const NECK_PTS = [[19, 77.5], [27, 77.6], [40, 70], [45, 65], [56, 62], [57.5, 72], [59.5, 86], [62, 100], [24.5, 100], [22.6, 92], [21.2, 88.4], [22.2, 84.4], [20.4, 80]];
+const HAIR_PTS = [
+  [12.6, 13.6], [16.6, 6.6], [20.8, 3.4], [26, 1.2], [32, -0.2], [38, -0.4], [44, 0.6], [50.4, 2.9], [55.6, 6.5], [59.6, 11.1],
+  [62.7, 16.7], [64.7, 22.9], [65.7, 30], [65.3, 37], [63.9, 44.2], [61.8, 50.3], [59.6, 55.2], [57.2, 57.8], [55.6, 56.4],
+  [54.4, 58.6], [53.6, 53], [52.6, 44], [49.6, 39.6], [45.6, 38], [42, 39.4], [40.6, 41], [40.4, 47.6], [38.6, 48.4], [37.2, 46],
+  [36.8, 38.4], [34.4, 32.4], [30.4, 28.6], [27.6, 24.4], [25.6, 19], [22.8, 16.4], [18, 15.2], [14.4, 14.6],
 ];
-const EAR_SRC = [[40, -15], [45, -16], [47, -9], [46, -1], [42, 1], [40, -5]];
-const SUIT_SRC = [[24, 44], [18, 50], [12, 70], [8, 140], [118, 140], [108, 66], [86, 52], [58, 42], [44, 46], [34, 47]];
-const COLLAR_SRC = [[23, 42], [31, 45], [27, 53], [19, 50]];
-// hand and forearm in glass-relative coordinates (glass bottom centre = 0, 0)
-const HAND_SRC = [[-19, -15], [-8, -17], [3, -15], [6, -7], [5, 3], [-6, 5], [-19, 2], [-21, -6]];
-const ARM_SRC = [[-2, -10], [12, -6], [52, 120], [22, 120]];
-const mk = (src) => src.map((p) => [p[0], p[1]]);
-const SKIN = mk(SKIN_SRC);
-const HAIR = mk(HAIR_SRC);
-const EAR = mk(EAR_SRC);
-const SUIT = mk(SUIT_SRC);
-const COLLAR = mk(COLLAR_SRC);
-const ARM = mk(ARM_SRC);
-const HAND = mk(HAND_SRC);
-// transform shared by the paint functions (set per frame; no closures)
-const XF = { ox: 0, oy: 0, k: 1, a: 0, px: 30, py: 40, hx: 0, hy: 0 };
-/** Head points rotate by XF.a about the neck pivot; then scale and place. */
-function placeHead(src, dst) {
-  const ca = cos(XF.a);
-  const sa = sin(XF.a);
-  for (let i = 0; i < src.length; i++) {
-    const x = src[i][0] - XF.px;
-    const y = src[i][1] - XF.py;
-    dst[i][0] = XF.ox + (XF.px + x * ca - y * sa) * XF.k;
-    dst[i][1] = XF.oy + (XF.py + x * sa + y * ca) * XF.k;
+const EAR_PTS = [[43.6, 41], [46.6, 38.6], [50.4, 39.4], [52.6, 42.8], [53.2, 48], [52.2, 53], [50.2, 57], [47.6, 59.6], [45.4, 59.2], [44.4, 56.2], [45, 52.2], [43.4, 48.6], [42.8, 44.4]];
+const COLLAR_PTS = [[21.6, 95], [26, 92.6], [36, 94.2], [46, 94.6], [57, 93.4], [61.6, 95.4], [63.4, 101], [60, 106], [46, 103.6], [36.4, 108], [30.6, 115], [27, 109], [23, 103]];
+const SUIT_PTS = [
+  [16.4, 108], [22.6, 102.4], [29, 113], [30.6, 115.4], [37, 107.6], [47, 103.4], [60, 104.6], [64, 100], [72, 103.6], [86, 108.6],
+  [100, 114], [111, 122], [118, 134], [122, 150], [125, 172], [6, 172], [8, 150], [11, 128], [13.6, 116],
+];
+// the shirt front in the open collar, between the lapel and the chest
+const SHIRT_PTS = [[16.4, 108], [22.6, 102.4], [29, 113], [28, 124], [24.6, 134], [13.4, 130], [13.6, 116]];
+
+// region ids in the bake buffer
+const SKIN_ID = 1;
+const HAIR_ID = 2;
+const EAR_ID = 3;
+const SUIT_ID = 4;
+const COLL_ID = 5;
+const SHIRT_ID = 6;
+const BUST_W = 128;
+const BUST_H = 172;
+const BUST_OX = 6; // sprite x = 0 (nose tip) sits 6 px into the canvas
+const HEAD_DY = 0; // the head bakes in place; it is drawn 1 px off for the inhale
+
+function inPts(pts, x, y) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i];
+    const [xj, yj] = pts[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+const inEll = (x, y, cx, cy, rx, ry) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1;
+
+/**
+ * Rasterise the regions (painter order) into an id buffer, then light every
+ * pixel by how far the key light (from front-left, a little above) travels
+ * through the figure to reach it: the bands hug the forms like a real key.
+ */
+function bakeRegions(w, h, ox, oy, regions) {
+  const id = new Uint8Array(w * h);
+  for (const [rid, pts] of regions) {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) if (inPts(pts, x + 0.5 - ox, y + 0.5 - oy)) id[y * w + x] = rid;
+    }
+  }
+  const dist = new Float32Array(w * h);
+  const LX = -0.83;
+  const LY = -0.56;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!id[y * w + x]) continue;
+      let d = 0;
+      let px = x + 0.5;
+      let py = y + 0.5;
+      while (d < 30) {
+        px += LX * 0.5;
+        py += LY * 0.5;
+        const ix = floor(px);
+        const iy = floor(py);
+        if (ix < 0 || iy < 0 || ix >= w || iy >= h || !id[iy * w + ix]) break;
+        d += 0.5;
+      }
+      dist[y * w + x] = d;
+    }
+  }
+  return { id, dist };
+}
+
+const SKIN_BANDS = [P.skin, P.tan, P.tanShade, P.brown, P.maroon];
+function skinBand(d, x, y) {
+  let b = d <= 1.2 ? 0 : d <= 3 ? 1 : d <= 7 ? 2 : d <= 13 ? 3 : 4;
+  // facial planes: the socket and the hollow under the cheekbone fall away
+  if (b >= 2 && inEll(x, y, 15, 38, 4, 2.6)) b += 1;
+  if (b >= 3 && inEll(x, y, 27, 58, 6, 4)) b += 1;
+  return SKIN_BANDS[clamp(b, 0, 4)];
+}
+
+// hand-placed features over the baked head ([colour key, x, y] runs in sprite space)
+const FEATURE_KEYS = { k: P.black, m: P.maroon, b: P.brown, t: P.tanShade, n: P.tan, s: P.skin, c: P.cream };
+// rows of pixels: [x0, y, 'string'] where each char is a key or '.' (skip)
+const FEATURES = [
+  // brow: a soft ridge of hair over the socket, densest toward the front
+  [10, 33, 'bmmmmb'],
+  [10, 34, '.kkmm'],
+  // nostril wing and the nostril
+  [6, 52, 'mb'],
+  [4, 53, 'kkm'],
+  [6, 54, 'b'],
+  // nasolabial fold running down from the wing
+  [10, 56, 'b'], [11, 57, 'b'], [12, 58, 'b'], [12, 59, 'm'], [13, 60, 'm'],
+  // lips: lit upper lip edge, the mouth line, a fuller lower lip that catches light
+  [7, 59, 'n'], [7, 60, 'tb'], [8, 61, 'b'],
+  [9, 62, 'kkm'],
+  [8, 63, 'nt'], [8, 64, 'tb'], [9, 65, 'b'],
+  [10, 66, 'mm'],
+];
+const EAR_FEATURES = [
+  // helix rim catching a little light, a dark concha, the lobe
+  [46, 39, 'bt'], [45, 40, 'bt'], [44, 41, 't'], [44, 42, 'b'],
+  [47, 43, 'mkk'], [46, 44, 'mkkm'], [46, 45, 'mk'], [46, 46, 'mk'], [46, 47, 'mkk'], [47, 48, 'mkm'], [48, 49, 'mk'],
+  [46, 56, 'b'], [47, 57, 'b'],
+];
+// hair clumps: combed back from a side part; only the lit ones show
+const STRANDS = [
+  [[13, 13], [17, 8], [23, 4.6], [31, 3]],
+  [[15, 16.5], [20, 11], [27, 7.6], [36, 6]],
+  [[19, 19.5], [25, 14], [32, 11], [41, 10.4]],
+  [[25, 23], [31, 18], [38, 16]],
+  [[30, 27], [36, 23], [44, 21.6], [52, 23]],
+  [[40, 33], [47, 31], [54, 34]],
+];
+function paintFeatures(put, list) {
+  for (const [x0, y, row] of list) for (let i = 0; i < row.length; i++) if (row[i] !== '.') put(x0 + i, y, FEATURE_KEYS[row[i]]);
+}
+
+const bustArt = lazy(() =>
+  cached('bf-bust', BUST_W, BUST_H, (c) => {
+    const regions = [
+      [SUIT_ID, SUIT_PTS], [SHIRT_ID, SHIRT_PTS], [SKIN_ID, NECK_PTS], [COLL_ID, COLLAR_PTS],
+      [SKIN_ID, HEAD_PTS], [HAIR_ID, HAIR_PTS], [EAR_ID, EAR_PTS],
+    ];
+    const { id, dist } = bakeRegions(BUST_W, BUST_H, BUST_OX, HEAD_DY, regions);
+    const put = (x, y, col) => {
+      const px = round(x) + BUST_OX;
+      const py = round(y) + HEAD_DY;
+      if (px >= 0 && py >= 0 && px < BUST_W && py < BUST_H) R(c, px, py, 1, 1, col);
+    };
+    for (let y = 0; y < BUST_H; y++) {
+      for (let x = 0; x < BUST_W; x++) {
+        const r = id[y * BUST_W + x];
+        if (!r) continue;
+        const d = dist[y * BUST_W + x];
+        const sx = x + 0.5 - BUST_OX;
+        const sy = y + 0.5;
+        let col;
+        if (r === SKIN_ID) {
+          col = skinBand(d, sx, sy);
+          // the jaw throws the neck into shadow
+          if (sy > 66 && sx > 16 && d > 3) col = inPts(HEAD_PTS, sx, sy - 2.5) && sx > 24 ? P.black : P.maroon;
+        } else if (r === EAR_ID) col = d <= 3 ? P.tanShade : d <= 14 ? P.brown : P.maroon;
+        else if (r === HAIR_ID) col = d <= 1 ? P.tanShade : d <= 2.5 ? P.brown : d <= 5 ? P.maroon : P.black;
+        // a white shirt: warm where the key reaches it, cool grey in shadow
+        else if (r === COLL_ID) col = d <= 1.5 ? P.cream : d <= 4 ? P.fog : d <= 12 ? P.steel : P.slate;
+        else if (r === SHIRT_ID) col = d <= 1.5 ? P.cream : d <= 4 ? P.fog : d <= 9 ? P.steel : P.slate;
+        else col = d <= 1 ? P.brown : d <= 2.5 ? P.maroon : P.black; // charcoal suit, warm rim
+        // selective outline: a back edge against the glow gets the darkest tone
+        const right = x + 1 < BUST_W ? id[y * BUST_W + x + 1] : 0;
+        if (!right && d > 4) col = P.black;
+        R(c, x, y, 1, 1, col);
+      }
+    }
+    // hair clumps: a dark parting under each lit strand; in the shadow they vanish
+    for (const st of STRANDS) {
+      for (let i = 0; i + 1 < st.length; i++) {
+        const [ax, ay] = st[i];
+        const [bx, by] = st[i + 1];
+        const n = ceil(Math.hypot(bx - ax, by - ay));
+        for (let q = 0; q <= n; q++) {
+          const x = ax + ((bx - ax) * q) / n;
+          const y = ay + ((by - ay) * q) / n;
+          const ix = round(x) + BUST_OX;
+          const iy = round(y);
+          if (id[iy * BUST_W + ix] !== HAIR_ID) continue;
+          const d = dist[iy * BUST_W + ix];
+          if (d > 9) continue;
+          put(x, y, d <= 3.5 ? P.tanShade : d <= 6 ? P.brown : P.maroon);
+          if (id[(iy + 1) * BUST_W + ix] === HAIR_ID) put(x, y + 1, P.black);
+        }
+      }
+    }
+    paintFeatures(put, FEATURES);
+    paintFeatures(put, EAR_FEATURES);
+    // collar point and the lapel's edge, with stitching catching the rim light
+    put(30, 114, P.tanShade);
+    for (let y = 108; y < 160; y++) {
+      const x = y < 122 ? 29 + (y - 108) * 0.55 : 36.7 - (y - 122) * 0.42;
+      put(x, y, y < 122 ? P.maroon : P.brown);
+      if (y > 124 && y % 3 === 0) put(x + 2, y, P.maroon);
+    }
+    put(37, 122, P.brown);
+    put(38, 121, P.brown);
+  }),
+);
+
+// The eye in its three states, placed over the baked head (sprite space 12..19, 36..41)
+const EYES = [
+  // open: the upper lid and lashes, a wet glint on the eyeball, the lower lid
+  [[13, 36, 'mm'], [12, 37, 'kkkm'], [11, 38, 'kcbm'], [12, 39, 'mbb']],
+  // half shut
+  [[13, 36, 'bm'], [12, 37, 'mmmm'], [11, 38, 'kkkm'], [12, 39, 'mbb']],
+  // closed: one curved lid line, the lashes pointing down
+  [[13, 36, 'bb'], [12, 37, 'bmmm'], [12, 38, 'kkkm'], [11, 39, 'k.b']],
+];
+function eye(ctx, ox, oy, state) {
+  const rows = EYES[state];
+  for (const [x0, y, row] of rows) {
+    for (let i = 0; i < row.length; i++) if (row[i] !== '.') R(ctx, ox + x0 + i, oy + y, 1, 1, FEATURE_KEYS[row[i]]);
   }
 }
-function placeBody(src, dst, dx = 0, dy = 0) {
-  for (let i = 0; i < src.length; i++) {
-    dst[i][0] = XF.ox + (src[i][0] + dx) * XF.k;
-    dst[i][1] = XF.oy + (src[i][1] + dy) * XF.k;
+
+// --- the hand round the tumbler (glass-relative: x = 0 at its axis, y = 0 at its foot)
+// The back of his right hand faces us; three fingers wrap the front of the glass
+// with their nails toward the lens, knuckles at the right, the wrist below.
+const HAND_W = 60;
+const HAND_H = 52;
+const HAND_OX = 20; // glass axis in the hand canvas
+const HAND_OY = 26; // glass foot in the hand canvas
+// [y top, thickness, x of the fingertip, x of the knuckle]: index, middle, ring
+const FINGERS = [
+  [-15, 4.4, -6.5, 14.6],
+  [-10.4, 4.6, -8.5, 15.4],
+  [-5.6, 4.3, -6, 15.8],
+];
+const BACK_PTS = [[12.4, -17.4], [17.6, -18], [22.4, -14.2], [25.8, -7], [27.6, 0], [28.4, 7.6], [19.4, 9.6], [15.2, 3.6], [12.8, -4.6]];
+// a finger seen from its back: lit along the top, rounding into shadow underneath
+const FINGER_RAMP = [P.tan, P.tan, P.tanShade, P.tanShade, P.brown, P.maroon];
+function bakeHand(c) {
+  const put = (x, y, col) => R(c, round(x) + HAND_OX, round(y) + HAND_OY, 1, 1, col);
+  // the back of the hand, lit by the same key as his face
+  const { id, dist } = bakeRegions(HAND_W, HAND_H, HAND_OX, HAND_OY, [[SKIN_ID, BACK_PTS]]);
+  for (let y = 0; y < HAND_H; y++) {
+    for (let x = 0; x < HAND_W; x++) {
+      if (!id[y * HAND_W + x]) continue;
+      const d = dist[y * HAND_W + x];
+      R(c, x, y, 1, 1, SKIN_BANDS[d <= 1 ? 0 : d <= 3 ? 1 : d <= 7 ? 2 : d <= 12 ? 3 : 4]);
+    }
+  }
+  // tendons fanning from the knuckles toward the wrist
+  for (let i = 0; i < 3; i++) for (let y = -12; y < 4; y += 3) put(17 + i * 2.4 + (y + 12) * 0.28, y, P.tanShade);
+  // the fingers, bottom one first so each overlaps the one below like a real grip
+  for (let f = FINGERS.length - 1; f >= 0; f--) {
+    const [y0, fh, tip, kn] = FINGERS[f];
+    const n = round(fh);
+    for (let x = ceil(tip); x <= kn; x++) {
+      // the rounded fingertip: rows shrink toward the tip
+      const u = (x - tip) / 2.4;
+      const inset = u < 1 ? round((1 - sqrt(max(0, 1 - (1 - u) * (1 - u)))) * (n / 2)) : 0;
+      for (let j = inset; j < n - inset; j++) {
+        const v = (j + 0.5) / n;
+        put(x, y0 + j, FINGER_RAMP[clamp(floor(v * FINGER_RAMP.length), 0, FINGER_RAMP.length - 1)]);
+      }
+      // the shadow it casts on the glass and on the finger below (not at the tip)
+      if (x > tip + 3) put(x, y0 + n, x > kn - 4 ? P.maroon : P.black);
+    }
+    // nail at the tip, toward the lens; the two joint creases; the knuckle
+    put(tip + 1, y0 + 1, P.cream);
+    put(tip + 2, y0 + 1, P.skin);
+    put(tip + 1, y0 + 2, P.skin);
+    put(tip + 2, y0 + 2, P.tan);
+    put(tip + 3, y0 + 1, P.tanShade);
+    const dip = round(tip + 5.5);
+    put(dip, y0 + 1, P.brown);
+    put(dip, y0 + 2, P.tanShade);
+    const pip = round(tip + 11.5 + f * 0.6);
+    put(pip, y0 + 1, P.brown);
+    put(pip + 1, y0 + 2, P.brown);
+    put(pip, y0 + 2, P.tanShade);
+    put(kn, y0 - 0.5, P.tan);
+    put(kn + 1, y0, P.tanShade);
+  }
+  // the shirt cuff and the dark sleeve swallowing the wrist
+  for (let x = 17; x < 31; x++) {
+    const yy = 7 + (x - 17) * 0.14;
+    put(x, yy, P.cream);
+    put(x, yy + 1, P.fog);
+    for (let y = yy + 2; y < 26; y++) put(x, y, x < 19 ? P.brown : x < 20 ? P.maroon : P.black);
   }
 }
-// painters for litShape: fill the shape in `col`, offset by (ox, oy)
-let PT = null; // the point list being painted
-const OFFS = new WeakMap(); // point list -> its own offset copy (built once)
-function paintPts(c, col, ox, oy) {
-  let off = OFFS.get(PT);
-  if (!off) OFFS.set(PT, (off = mk(PT)));
-  for (let i = 0; i < PT.length; i++) {
-    off[i][0] = PT[i][0] + ox;
-    off[i][1] = PT[i][1] + oy;
-  }
-  poly(c, off, col);
-}
-// light from the left and slightly above: a cream edge, a warm second pixel, deep shadow
-const SKIN_LIGHT = [[P.cream, 0, 0], [P.tanShade, 1, 0], [P.maroon, 2, 1]];
-const HAIR_LIGHT = [[P.tanShade, 0, 0], [P.black, 1, 1]];
-const SUIT_LIGHT = [[P.brown, 0, 0], [P.black, 1, 1]];
-const HAND_LIGHT = [[P.cream, 0, 0], [P.brown, 1, 0], [P.maroon, 2, 1]];
-const EAR_LIGHT = [[P.maroon, 0, 0]];
-const COLLAR_LIGHT = [[P.tanShade, 0, 0], [P.brown, 1, 1]];
-function lit(ctx, pts, layers) {
-  PT = pts;
-  litShape(ctx, paintPts, layers);
-}
+const handArt = lazy(() => cached('bf-hand', HAND_W, HAND_H, bakeHand));
 
 const SMALL_KEYS = [[0, 16], [0.85, 15], [1, 15]];
 const SPROF = new Float32Array(60);
 const SMALL_CUTS = { cv: null, top: 0, h: 0, turn: 0.2 };
 const SMALL_GLASS = { top: 0, edge: 1, wall: 1, edgeColor: P.tanShade };
 const SMALL_O = { rows: 0, ramp: AMBER, ambient: 0.25, glass: SMALL_GLASS, label: SMALL_CUTS, stripes: [[-0.55, 0.07, P.cream]], rim: RIM, tilt: 0.2, seam: 0.5 };
-const ARM_LIGHT = [[P.tanShade, 0, 0], [P.black, 1, 1]];
-const LIFT = [[0, 0], [2.4, 0], [3.0, -1, 'inOut'], [3.8, 0, 'inOut']];
-const TILT = [[0, 0.02], [1.2, 0.02], [2.3, 0.07, 'inOut'], [3.2, 0.07], [4.4, 0.0, 'inOut']];
-function placeAt(src, dst, x, y, k) {
-  for (let i = 0; i < src.length; i++) {
-    dst[i][0] = x + src[i][0] * k;
-    dst[i][1] = y + src[i][1] * k;
-  }
-}
+const ARM_PTS = [[0, 0], [0, 0], [0, 0], [0, 0]];
+// he breathes in (shoulders and chin up a pixel), holds, lets it go
+const INHALE = [[0, 0], [2.5, 0], [3.1, -1, 'inOut'], [3.9, -1], [4.4, 0, 'inOut']];
+const LEAN = [[0, 0], [1.4, 0], [2.2, 1, 'inOut']];
+const BUST_X = 206; // screen x of the nose tip
+const BUST_Y = 34; // screen y of the crown
+const NOSE_LEN = 4.4;
 
 function shotNose(ctx, lt) {
   ctx.drawImage(noseBg(), 0, 0);
-  const k = tween(lt, 0, 4.4, 1.0, 1.06, 'inOut');
-  // he leans in to the glass, breathes in, lifts his chin a touch
-  XF.k = k;
-  XF.ox = 236 - (k - 1) * 120;
-  XF.oy = 98 - (k - 1) * 40 + round(key(lt, LIFT));
-  XF.a = key(lt, TILT);
-  placeBody(SUIT_SRC, SUIT);
-  placeBody(COLLAR_SRC, COLLAR);
-  placeHead(SKIN_SRC, SKIN);
-  placeHead(HAIR_SRC, HAIR);
-  placeHead(EAR_SRC, EAR);
-  lit(ctx, SUIT, SUIT_LIGHT);
-  lit(ctx, COLLAR, COLLAR_LIGHT);
-  lit(ctx, SKIN, SKIN_LIGHT);
-  lit(ctx, EAR, EAR_LIGHT);
-  lit(ctx, HAIR, HAIR_LIGHT);
-  // features in the shadow side of the face: brow, eye (closing), a crease by the mouth
-  const eyesShut = lt > 2.0;
-  const ex = SKIN[5][0] + 4 * k;
-  const ey = SKIN[5][1] - 1 * k;
-  R(ctx, ex - 1, ey - 3 * k, round(6 * k), 1, P.black);
-  if (eyesShut) R(ctx, ex, ey + 1, round(4 * k), 1, P.black);
-  else {
-    R(ctx, ex, ey, round(3 * k), 1, P.black);
-    R(ctx, ex, ey + 1, 1, 1, P.tanShade);
-  }
-  R(ctx, SKIN[12][0] + 2 * k, SKIN[12][1], 1, round(2 * k), P.black);
-  // the glass rises from below frame to chin height, just under his nose
+  // a warm haze behind him; the background is the light, he is the shadow
+  const breath = round(key(lt, INHALE));
+  const lean = round(key(lt, LEAN));
+  const bx = BUST_X - BUST_OX - lean;
+  const by = BUST_Y + breath;
+  ctx.drawImage(bustArt(), bx, by);
+  const shut = lt < 2.05 ? 0 : lt < 2.2 ? 1 : 2;
+  eye(ctx, bx + BUST_OX, by, shut);
+  // the glass rises from below frame to just under his nose, slowing as it arrives
   const gp = smooth(prog(lt, 0.3, 2.3));
-  const gx = round(XF.ox - 20 * k);
-  const gy = round(XF.oy + (128 - gp * 92) * k);
-  placeAt(ARM_SRC, ARM, gx, gy, k);
-  lit(ctx, ARM, ARM_LIGHT);
-  const gh = round(22 * k);
+  const gx = BUST_X + 6 - lean;
+  const gh = 23;
+  const gy = round(lerp(H + 30, BUST_Y + 51 + 6 + gh + breath, gp)); // rim ~6 px under the nostril
+  // forearm: from the wrist down out of frame
+  ARM_PTS[0][0] = gx + 17;
+  ARM_PTS[0][1] = gy + 12;
+  ARM_PTS[1][0] = gx + 31;
+  ARM_PTS[1][1] = gy + 12;
+  ARM_PTS[2][0] = gx + 50;
+  ARM_PTS[2][1] = H;
+  ARM_PTS[3][0] = gx + 26;
+  ARM_PTS[3][1] = H;
+  poly(ctx, ARM_PTS, P.black);
+  line(ctx, gx + 17, gy + 12, gx + 26, H, P.brown); // the sleeve's lit edge
   SMALL_GLASS.top = round(gh * 0.45);
   SMALL_O.rows = gh;
   SMALL_CUTS.cv = cutsTex();
   SMALL_CUTS.top = round(gh * 0.5);
   SMALL_CUTS.h = gh - SMALL_CUTS.top;
-  lathe(ctx, gx, gy - gh, fill(SPROF, gh, SMALL_KEYS, k), SMALL_O);
-  ovalRing(ctx, gx, round(gy - gh + 3 * k), round(16 * k), max(1, round(3 * k)), A(P.cream, 0.55));
-  placeAt(HAND_SRC, HAND, gx, gy, k);
-  lit(ctx, HAND, HAND_LIGHT);
-  // the gaps between the fingers
-  for (let i = 0; i < 3; i++) R(ctx, round(gx - 18 * k), round(gy - (11 - i * 5) * k), round(12 * k), 1, P.black);
+  lathe(ctx, gx, gy - gh, fill(SPROF, gh, SMALL_KEYS, 1), SMALL_O);
+  ovalRing(ctx, gx, gy - gh + 3, 16, 3, A(P.cream, 0.55));
+  ctx.drawImage(handArt(), gx - HAND_OX, gy - HAND_OY);
   vignette(ctx, 0.55);
   // tasting notes in the space he faces, on the voice
   const tx = 104;
-  fadeUp(ctx, 'TASTING NOTES', tx, 60, lt - 0.5, { face: 'micro', color: P.tanShade, track: 2, align: 'center', dur: 0.9 });
-  rule(ctx, tx, 70, 40, (lt - 0.7) / 0.9, P.tanShade, { alpha: 0.8 });
-  fadeUp(ctx, 'OAK', tx, 80, lt - 1.1, { face: 'serif', color: P.cream, track: 3, align: 'center', dur: 0.9 });
-  fadeUp(ctx, 'CARAMEL', tx, 98, lt - 1.7, { face: 'serif', color: P.cream, track: 3, align: 'center', dur: 0.9 });
-  fadeUp(ctx, 'DIAL-UP', tx, 116, lt - 2.8, { face: 'serif', color: GOLD, track: 3, align: 'center', dur: 1.1 });
+  fadeUp(ctx, 'TASTING NOTES', tx, 62, lt - 0.4, { face: 'micro', color: P.cream, track: 2, align: 'center', dur: 0.9 });
+  rule(ctx, tx, 72, 40, (lt - 0.6) / 0.9, P.tanShade);
+  fadeUp(ctx, 'OAK', tx, 82, lt - 0.7, { face: 'serif', color: P.cream, track: 3, align: 'center', dur: 0.8 });
+  fadeUp(ctx, 'CARAMEL', tx, 100, lt - 1.4, { face: 'serif', color: P.cream, track: 3, align: 'center', dur: 0.8 });
+  fadeUp(ctx, 'DIAL-UP', tx, 118, lt - 2.6, { face: 'serif', color: GOLD, track: 3, align: 'center', dur: 1.0 });
 }
 
 // --- 5. HERO -----------------------------------------------------------------------

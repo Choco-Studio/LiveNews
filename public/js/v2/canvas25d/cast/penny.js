@@ -7,7 +7,7 @@
 //     sits behind the nape on the far side: a tight, groomed silhouette with
 //     the bun peeking out below the ear (nothing like Lola's bob);
 //   - a mid-grey tailored jacket with notch lapels and a high one-button
-//     closure over an ivory blouse with a soft collar, a small silver bar pin,
+//     closure over a crisp white blouse with a soft collar, a small silver bar pin,
 //     pearl studs. No green anywhere in the wardrobe: green is market data on
 //     screen and the desk line.
 // She rests a pen in her hand (props: ['pen'], drawn by HANDS' drawProps; it is
@@ -22,10 +22,10 @@ import { LocalXY, localBox, clumpTone } from './kit-a.js';
 export const penny = defineLook({
   id: 'penny',
   name: 'Penny Sterling',
-  head: { top: -9.8, craniumY: -2.7, R: 7.0, cheekY: 1.3, cheekHW: 6.7, chinY: 8.85, chinHW: 2.25, jawPow: 1.95 },
+  head: { top: -9.75, craniumY: -2.7, R: 6.85, cheekY: 1.3, cheekHW: 6.55, chinY: 8.85, chinHW: 2.2, jawPow: 1.95 },
   headAt: [0, -12.9],
   neck: { hw: 2.4 },
-  eyes: { y: -0.6, x: 2.8, w: 2.7, h: 1.4, iris: [P.steel, P.slate], lash: P.black, lashes: true },
+  eyes: { y: -0.6, x: 2.72, w: 2.65, h: 1.4, iris: [P.steel, P.slate], lash: P.black, lashes: true },
   brows: { y: -2.2, len: 3.1, thick: 0.42, color: P.tanShade, arch: 0.5 },
   nose: { y0: -0.2, y1: 3.15, w: 1.2, big: false },
   mouth: { y: 5.7, w: 3.3, lip: P.darkRed, lipHi: P.skinShade, upper: P.skinShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
@@ -42,7 +42,7 @@ export const penny = defineLook({
   neckline: 'blouse',
   lapel: { notchY: 6.4, w: 4.0, collarW: 3.1 },
   jacket: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black }, // charcoal, tailored: the blouse and face carry the light
-  shirt: { ramp: [P.white, P.white, P.cream, P.tan], line: P.tanShade }, // ivory blouse
+  shirt: { ramp: [P.white, P.white, P.silver, P.fog], line: P.steel }, // crisp white blouse (cool shade: the face stays the warmest)
   pin: { at: [5.6, 9.6], ramp: [P.white, P.silver, P.steel] },
   buttons: 1,
   arm: { upper: 21, fore: 19.5, rUpper: 3.0, rElbow: 2.6, rWrist: 2.05, hand: 10.2 },
@@ -59,10 +59,11 @@ function drawSleekAndPearls(buf, L, m, head, s, sk) {
 // Sleek hair pulled back from a side part. Silhouette: close to the skull; on
 // the big side a soft sweep crosses the temple and is tucked back above the
 // ear. Finish: long combed clumps with continuous fine separations (groomed,
-// not textured), a long sheen of cream strokes over the lit crown, the hair
-// beside the face in shade.
+// not textured), a sheen of fine cream strokes over the lit crown (never a
+// flat light patch: the face stays the brightest warm area), the hair beside
+// the face in shade.
 const LXY = new LocalXY();
-const CO = { cw: 1.7, s: 1, seed: 41, sep: true, hiLo: 0.6, hiHi: 8.0, hiW: 0.3, gap: 5.0, keepLit: true };
+const CO = { cw: 1.7, s: 1, seed: 41, sep: true, hiLo: 0.6, hiHi: 8.0, hiW: 0.28, gap: 5.0 };
 export function drawSleek(buf, L, m, head, s) {
   const H = L.head;
   const cyc = H.craniumY - 0.2;
@@ -101,7 +102,15 @@ export function drawSleek(buf, L, m, head, s) {
     if (nearFace) t = Math.max(t, x > 0 ? 3 : 2);
     const onPart = y < hairline + 0.1 && y > hairline - 2.6 && Math.abs(dPart) < 0.24 + (s < 1.6 ? 0.25 : 0);
     if (onPart) return 2;
-    if (tier < 2 || nearFace) return t;
+    if (nearFace) return t;
+    if (tier < 2) {
+      // blonde catches the key in a narrow band only, so the face stays the brightest warm area
+      if (t === 0) {
+        const band = (x + 1.2) * (x + 1.2) * 0.08 + (y - (H.top + 2.2));
+        return Math.abs(band) < (tier === 0 ? 0.9 : 0.6) ? 0 : 1;
+      }
+      return t;
+    }
     if (x * x + (y - cyc) * (y - cyc) > (RV - 0.4) * (RV - 0.4) && t >= 2) return t; // clean outer edge for the rim
     // combed back from the part: over the crown on the big side, down the small side
     const ry = y - hairline;
@@ -125,7 +134,7 @@ const CHIG = { cw: 1.1, s: 1, seed: 47, sep: true, hiLo: 0.2, hiHi: 3.4, hiW: 0.
 export function drawChignon(buf, L, m, head, s, sk) {
   const H = L.head;
   const lag = sk ? sk.hairLag || 0 : 0;
-  const bx = H.R * 0.66 + 0.15 * lag, by = 4.4, rx = 3.5, ry = 2.9;
+  const bx = H.R * 0.74 + 0.15 * lag, by = 4.6, rx = 3.6, ry = 3.0;
   const tier = s < 1.35 ? 0 : s < 2.2 ? 1 : 2;
   const [x0, y0, x1, y1] = localBox(head, -H.R - 0.6, -2.5, bx + rx + 0.8, by + ry + 0.8);
   const q = LXY.set(head);

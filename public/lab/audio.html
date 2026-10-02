@@ -373,11 +373,14 @@
         const unity = 20 * Math.log10(pk) + 30;
         stats.unity = unity;
         const errs = rows.map((r) => r.L.integrated - expected(r));
-        const maxErr = Math.max(...rows.map((r) => Math.abs(r.L.integrated - (r.est.integrated + r.est.gainDb + 20 * Math.log10(Math.min(10 ** (1 / 20), (r.volume ?? 0.5) / 0.5))))));
+        const modelErr = (r) => r.L.integrated - (r.est.integrated + r.est.gainDb + 20 * Math.log10(Math.min(10 ** (1 / 20), (r.volume ?? 0.5) / 0.5)));
+        // Items with a measured target (the stinger) carry a trim that corrects the model.
+        const maxErr = Math.max(...rows.filter((r) => r.item.target === undefined).map((r) => Math.abs(modelErr(r))));
         const spread = Math.max(...errs) - Math.min(...errs);
         const worstHf = Math.max(...rows.map((r) => r.hf));
         stats.loudnessSummary = { spread, maxModelErr: maxErr, worstHf, unity };
-        micro(`OFF-TARGET SPREAD ${spread.toFixed(1)} LU  MODEL ERR MAX ${maxErr.toFixed(1)} LU  WORST >8K ${worstHf.toFixed(1)} DB`, 4, H - 17, spread <= 3 && maxErr <= 1.5 ? P.green : P.red);
+        const sting = rows.find((r) => r.item.id === 'stinger');
+        micro(`OFF-TARGET SPREAD ${spread.toFixed(1)} LU  MODEL ERR MAX ${maxErr.toFixed(1)} LU (STINGER ${sting ? modelErr(sting).toFixed(1) : '-'}, TRIMMED)  WORST >8K ${worstHf.toFixed(0)} DB`, 4, H - 17, spread <= 3 && maxErr <= 1.5 ? P.green : P.red);
         micro(`MIXER GAIN AT -30 DBFS ${unity.toFixed(2)} DB   CYAN LINE = VOICE LEVEL, WHITE TICK = EACH TUNE'S TARGET`, 4, H - 9, Math.abs(unity) < 0.5 ? P.green : P.red);
       }
 

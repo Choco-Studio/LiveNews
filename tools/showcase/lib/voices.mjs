@@ -83,6 +83,7 @@ export class VoiceWorker {
       env: { ...process.env, ...env },
     });
     this.stderr = [];
+    this.proc.stdin.on('error', () => {}); // a dead worker answers 'worker closed', never crashes the recorder
     this.proc.stderr.on('data', (d) => {
       const s = String(d);
       this.stderr.push(s);
@@ -116,8 +117,11 @@ export class VoiceWorker {
 
   request(obj) {
     return new Promise((resolve) => {
+      if (!this.proc.stdin.writable) return resolve({ ok: false, error: 'worker closed' });
       this.waiting.push({ resolve });
-      this.proc.stdin.write(`${JSON.stringify({ cache: this.cache, ...obj })}\n`);
+      this.proc.stdin.write(`${JSON.stringify({ cache: this.cache, ...obj })}\n`, (err) => {
+        if (err) resolve({ ok: false, error: String(err.message || err) });
+      });
     });
   }
 
@@ -186,7 +190,7 @@ export class VoicePool {
   }
 
   #pump() {
-    while (this.idle.length && this.queue.length) {
+    while (!this.closed && this.idle.length && this.queue.length) {
       const w = this.idle.shift();
       const job = this.queue.shift();
       job.started = true;
@@ -203,6 +207,8 @@ export class VoicePool {
   }
 
   async close() {
+    this.closed = true;
+    this.queue.length = 0;
     await Promise.all(this.workers.map((w) => w.close()));
   }
 }

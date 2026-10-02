@@ -32,6 +32,10 @@
       timeline at 120 Hz up to t, with a frozen clock (15:42 London). window.__lab.render(t, opts?) draws instant t;
       window.__lab.set({ scenario, bg, theme, replay, kicker, breaking, caption }). URL params use the same names.
       Backgrounds: neutral, photo (bright picture), wide / close (real studio shots, drawn by studio.js), montage (cards.js).
+      Round 2 scenarios: headline-two (two-line story strap and back), breaking-ad (breaking item arrives during an ad),
+      breaking-card (ticker holds under the card), ticker-dedupe (the story on the strap never repeats in the ticker),
+      news60 (held programme tag, progress rule, static UP NEXT), money-figures (BOTTOM LINE figures with glyphs),
+      caption-lines (one caption line under a strap, re-paged when it arrives), montage-dup (no caption repeating the card).
     </div>
     <script type="module">
       import { Graphics } from '../js/graphics/index.js';

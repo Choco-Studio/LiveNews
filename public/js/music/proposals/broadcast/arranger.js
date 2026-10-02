@@ -71,7 +71,8 @@ export class Bed {
     this.wetPre.gain.value = db(trim);
     this.wetFader = c.createGain();
     this.dlyIn = c.createGain();
-    this.dlyIn.gain.value = db(trim);
+    this.dlyBase = db(trim);
+    this.dlyIn.gain.value = this.dlyBase;
     this.echo = makeDelay(c, { time: this.spb * def.delay, feedback: 0.3 });
     this.echoOut = c.createGain();
     this.echoOut.gain.value = 0.8;
@@ -307,6 +308,8 @@ export class Bed {
     const from = valueAt(f, t);
     rampTo(this.fader.gain, t, Math.max(0.01, dur), from, to);
     rampTo(this.wetFader.gain, t, Math.max(0.01, dur), from, to);
+    // A faded bed feeds no new echoes (tails already in the loop still ring).
+    rampTo(this.dlyIn.gain, t, Math.max(0.01, dur), from * this.dlyBase, to * this.dlyBase);
     this.faderLevel = { t, dur, from, to };
   }
 

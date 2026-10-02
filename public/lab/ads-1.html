@@ -42,7 +42,8 @@
       // or a break of two ads back to back the way director.js plays them
       // (stinger, the shot changes at its midpoint, every ad starts at dt = 0).
       // 'specimen' shows the kit's display faces, 'kit' the premium helpers.
-      //   window.__lab.set({ ad: 'bitfizz-cola', mode: 'single'|'break'|'specimen'|'kit', second: 'cloudbrella', subs: true })
+      //   window.__lab.set({ ad: 'bitfizz-cola', mode: 'single'|'break'|'specimen'|'kit', second: 'cloudbrella', subs: true, zoom: [x, y, s] })
+      //   ?zoom=x,y,s shows the 384/s x 216/s crop at (x, y) blown up s times (nearest neighbour) to judge pixels
       //   window.__lab.render(t)     window.__lab.duration()     window.__lab.perf()
       //   window.__audio.render({ ad, seconds })  -> the ad's tune rendered offline (tools/render-audio.mjs)
       import { ADS } from '../js/ads/index.js';
@@ -55,7 +56,13 @@
       ctx.imageSmoothingEnabled = false;
       const $ = (id) => document.getElementById(id);
       const params = new URLSearchParams(location.search);
-      const state = { ad: params.get('ad') || ADS[0].id, second: params.get('second') || null, mode: params.get('mode') || 'single', subs: params.has('subs') };
+      const state = { ad: params.get('ad') || ADS[0].id, second: params.get('second') || null, mode: params.get('mode') || 'single', subs: params.has('subs'), zoom: params.get('zoom') ? params.get('zoom').split(',').map(Number) : null };
+      // zoom: the ad draws into an offscreen frame, a crop of it is scaled up on screen
+      const off = document.createElement('canvas');
+      off.width = 384;
+      off.height = 216;
+      const offCtx = off.getContext('2d');
+      offCtx.imageSmoothingEnabled = false;
       const byId = (id) => ADS.find((a) => a.id === id) || ADS[0];
 
       // Rough speech length so `info.speaking` is plausible (TTS ~14 chars/s).
@@ -184,11 +191,18 @@
           if (b.on) [ad, dt] = b.on;
         } else ad = byId(state.ad);
         let info = null;
+        const z = state.zoom;
+        const dst = z ? offCtx : ctx;
         if (ad) {
           info = infoAt(ad, dt);
-          ctx.save();
-          ad.draw(ctx, t, dt, info);
-          ctx.restore();
+          dst.save();
+          ad.draw(dst, t, dt, info);
+          dst.restore();
+        }
+        if (z) {
+          const [zx, zy, zs] = z;
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(off, zx, zy, 384 / zs, 216 / zs, 0, 0, 384, 216);
         }
         if (sting >= 0 && drawStinger) drawStinger(ctx, t, sting, { channel: 'GLOBIT 24' });
         const vo = ad && info.line >= 0 ? ad.script[info.line].text : '';

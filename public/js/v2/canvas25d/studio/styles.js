@@ -76,8 +76,8 @@ const DEFS = {
     top: { y0: -136, y1: -119, to: 0 },
     sides: { x0: 180, x1: 262 },
     pools: [
-      { X: -104, Y: -66, rx: 58, ry: 70, amount: 0.95 },
-      { X: 104, Y: -66, rx: 58, ry: 70, amount: 0.95 },
+      { X: -104, Y: -70, rx: 56, ry: 68, amount: 0.78 },
+      { X: 104, Y: -70, rx: 56, ry: 68, amount: 0.78 },
     ],
     poolMax: 3.0, // a pool centre is at most steel
     glow: 0.15,
@@ -99,8 +99,8 @@ const DEFS = {
     base: 0.55,
     pools: duoPools(0.75, 96, 74),
     tintPools: [
-      { X: -104, Y: -96, rx: 84, ry: 92, amount: 0.42 },
-      { X: 104, Y: -96, rx: 84, ry: 92, amount: 0.42 },
+      { X: -104, Y: -96, rx: 84, ry: 92, amount: 0.3 },
+      { X: 104, Y: -96, rx: 84, ry: 92, amount: 0.3 },
     ],
     tints: { slate: 'purple' },
     tintNames: ['purple'],
@@ -127,8 +127,8 @@ const DEFS = {
       { X: 0, Y: -6, rx: 150, ry: 46, amount: 0.55 },
     ],
     tintPools: [
-      { X: -196, Y: -64, rx: 30, ry: 62, amount: 0.62 },
-      { X: 196, Y: -64, rx: 30, ry: 62, amount: 0.62 },
+      { X: -196, Y: -60, rx: 26, ry: 60, amount: 0.36 },
+      { X: 196, Y: -60, rx: 26, ry: 60, amount: 0.36 },
     ],
     tints: { slate: 'brown', ink: 'maroon' },
     tintNames: ['maroon', 'brown', 'cream', 'tanShade'],

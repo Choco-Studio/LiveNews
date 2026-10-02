@@ -43,7 +43,20 @@ export const TARGET = {
 // Bed trims (dB) per 'programme:moment' so every bed lands on its target.
 // Measured with the lab renders (ffmpeg ebur128) and fed back here.
 export const TRIM = {
+  'world-now:headlines': -5.7, 'world-now:roundup': -4.4, 'world-now:lighter': -5.3,
+  'tech-bytes:headlines': -6.7, 'tech-bytes:chat': -6.6, 'tech-bytes:number': -7.8, 'tech-bytes:lighter': -7.6, 'tech-bytes:outro': -6.7,
+  'cosmos:headlines': -7.7, 'cosmos:story': -8.7, 'cosmos:lighter': -12.5,
+  'money-minute:intro': -1.6, 'money-minute:outro': 0.9, 'money-minute:number': -0.7, 'money-minute:drone': -12.4,
+  'news-60:story': -13.4, 'news-60:grave': -14.2,
+  'channel:standby': -7.4, 'channel:bumper': 3.8,
+  // One-shots. In-programme stings peak (400 ms momentary) at least 6 LU under
+  // the -16 LUFS voice; the channel's ident and lead-ins are -16 +/- 1 LUFS
+  // integrated (channel-and-breaks.md), the promo about -18, the replay tag -26.
   sting: 0,
+  'sting:world-now:signoff': -6, 'sting:pip': -1, 'sting:breaking': -10.5,
+  'sting:tech-bytes:endcard': -13.5, 'sting:tech-bytes:number': -12.5, 'sting:tech-bytes:featureEnd': -12.5,
+  'sting:money-minute:number': -2, 'sting:money-minute:endcard': -2, 'sting:money-minute:signoff': -2,
+  'sting:bumperIn': 0.5, 'sting:countdown': 3, 'sting:bumperOut': 2, 'sting:upNext': -0.5, 'sting:replay': 8.5,
 };
 
 export class BroadcastMusic {
@@ -232,6 +245,7 @@ export class BroadcastMusic {
       bed.faderLevel = { t: origin, dur: 0, from: 0, to: 0 };
       bed.fader.gain.setValueAtTime(0, origin);
       bed.wetFader.gain.setValueAtTime(0, origin);
+      bed.dlyIn.gain.setValueAtTime(0, origin);
       if (!muted) {
         bed.fade(origin, fadeIn, 1);
         if (sweepIn) bed.sweep(origin, fadeIn, 450, 18000);

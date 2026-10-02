@@ -33,13 +33,14 @@ export const ada = defineLook({
   earrings: P.silver,
   torso: { neckHW: 2.9, shoulderTop: 3.0, shoulderHW: 17.9, sideHW: 16.7, bottom: 46, vDepth: 14, shoulderJoint: [15.5, 7.0] },
   outfit: 'turtleneck',
-  jacket: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black }, // charcoal knit (sleeves share it)
-  shirt: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black },
+  // charcoal-black knit: one step darker than TECH BYTES' slate cove so she reads as a clean dark shape
+  jacket: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black },
+  shirt: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black },
   cuff: P.ink,
   arm: { upper: 21.2, fore: 19.6, rUpper: 2.95, rElbow: 2.55, rWrist: 2.0, hand: 10.2 },
   persona: { sway: 0.5, headMotion: 0.75, blinkMin: 2.8, blinkMax: 6.2, energy: 0.8, smile: 0.05 },
   mats: {
-    collar: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black, rim: P.silver },
+    collar: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black, rim: P.silver }, // the roll catches more light
   },
   parts: { hairBack: drawHairBack, hair: drawStraight, over: drawOver },
 });
@@ -136,7 +137,9 @@ function drawStraight(buf, L, m, head, s, sk) {
       const u = clamp((-x - inner) / Math.max(0.6, outer - inner), 0, 1); // 0 face side → 1 outer edge
       t = u > 0.72 ? 1 : u > 0.18 ? 2 : 3;
       if (y < 0.5 && u > 0.55) t = 1; // where it falls over the skull it still catches the key
-      if (tr === 2 && t === 2 && strandAt((fx + 20) / strandW) < 0.22) t = 3;
+      // a soft vertical sheen where the panel turns toward the key, broken into strands
+      if (tr === 2 && u > 0.45 && u < 0.68 && y > -2 && y < END - 3 && strandAt((fx + 20) / strandW + 7) > 0.3) t = 1;
+      if (tr === 2 && t === 2 && strandAt((fx + 20) / strandW) < 0.28) t = 3;
       if (tr > 0 && y > END - 0.9) t = Math.max(t, 2); // the blunt ends sit in shadow
     } else {
       t = x > hw + 0.5 ? 3 : 2;

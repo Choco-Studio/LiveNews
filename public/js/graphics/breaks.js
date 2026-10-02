@@ -101,6 +101,8 @@ function boundary(a, b) {
   // two capitalised words inside a sentence are one name: "Great Barrier Reef", "New Zealand"
   if (a.cap && b.cap && !a.initial) c += 2.5;
   else if (b.cap && COMPASS.has(a.bare)) c += 2;
+  // a name mid-sentence binds to the word after it: "the Pacific / coast", "Chile / spots"
+  else if (a.cap && !a.initial && !b.cap && !CLAUSE_START.has(b.bare) && !PHRASE_START.has(b.bare)) c += 0.8;
   return c;
 }
 

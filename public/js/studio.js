@@ -43,7 +43,7 @@ export function slotPositions(cast) {
 }
 
 export class Renderer {
-  constructor(canvas, audio) {
+  constructor(canvas, audio, { v2 = false, perf = false } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.ctx.imageSmoothingEnabled = false;
@@ -56,6 +56,10 @@ export class Renderer {
     this.anim = {};
     this.graphics = new Graphics({ audio });
     this.guard = new FrameGuard(); // a throwing shot shows a held frame / slate, never black
+    // Wave 2 (?v2=1): the v2 Stage draws the studio shots (runtime/host.js). Loaded only when
+    // asked, so the default path never runs v2 code; any v2 failure falls back to the shots below.
+    this.v2 = null;
+    if (v2) import('./v2/canvas25d/runtime/host.js').then((m) => (this.v2 = new m.StageHost({ audio, perf })), (err) => console.warn('[v2] stage unavailable, old renderer on air', err));
   }
 
   anchorState(slot, t, scene) {
@@ -138,6 +142,7 @@ export class Renderer {
   }
 
   drawShot(t, scene) {
+    if (this.v2?.frame(this.ctx, t, scene)) return; // v2 studio shot drawn (bookkeeping runs on every shot)
     const ctx = this.ctx;
     const dt = t - (scene.shotSince || 0);
     const img = scene.storyId ? scene.images.get(scene.storyId) : null;

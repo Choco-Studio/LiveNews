@@ -86,15 +86,25 @@ const plot = (b, x, y, c) => {
 
 const HEADS = [];
 for (let i = 0; i < 3; i++) HEADS.push({ x0: 0, y0: 0, x1: 0, y1: 0, on: false });
-const BOX_TOP = { x0: 0, y0: 0, x1: 0, y1: 0 }, BOX_L = { x0: 0, y0: 0, x1: 0, y1: 0 }, BOX_R = { x0: 0, y0: 0, x1: 0, y1: 0 }, BOX_F = { x0: 0, y0: 0, x1: 0, y1: 0 };
-const LAYOUT = { heads: 0, top: BOX_TOP, left: BOX_L, right: BOX_R, full: BOX_F, band: 0, sx0: 0, sy0: 0 };
+const box4 = () => ({ x0: 0, y0: 0, x1: 0, y1: 0 });
+const LAYOUT = { heads: 0, top: box4(), left: box4(), right: box4(), full: box4(), band: 0, sx0: 0, sy0: 0, k: 1 };
+// the screen area wall text and emblems may use: clear of the graphics top row (y 8-21) and above
+// the caption band (y 136), so nothing on the wall sits under the graphics
+const USABLE = { x0: 8, y0: 22, x1: 376, y1: 136 };
+const clampN = (v, a, b) => (v < a ? a : v > b ? b : v);
 
-/** Head boxes (wall-local px, grown by MARGIN) of the seated presenters that overlap the wall. */
-function layoutFor(cam, solo, wx0, wy0, w, h, k) {
-  const L = LAYOUT;
+/**
+ * Free boxes on the wall (wall-local px) for this camera: the part of the wall that is on screen
+ * and usable, minus the solo dark band, split around the heads (grown by MARGIN) that overlap it.
+ */
+function computeLayout(L, cam, solo, wx0, wy0, w, h, k) {
   L.band = solo ? Math.round(BAND_U * k) : 0;
   L.sx0 = wx0;
   L.sy0 = wy0;
+  L.k = k;
+  const vx0 = clampN(USABLE.x0 - wx0, 0, w), vx1 = clampN(USABLE.x1 - wx0, 0, w);
+  const vy0 = clampN(USABLE.y0 - wy0, 0, h), vy1 = clampN(USABLE.y1 - wy0, 0, h);
+  const yb = Math.max(vy0, Math.min(vy1, h - L.band));
   let n = 0;
   if (cam) {
     const kp = kAt(cam, SET.presenterZ);
@@ -107,23 +117,49 @@ function layoutFor(cam, solo, wx0, wy0, w, h, k) {
       hb.x1 = Math.ceil(nx + 11 * s) - wx0 + MARGIN;
       hb.y0 = Math.floor(ny - 27 * s) - wy0 - MARGIN;
       hb.y1 = Math.ceil(ny + 2 * s) - wy0 + MARGIN;
-      hb.on = hb.x1 > 0 && hb.x0 < w && hb.y1 > 0 && hb.y0 < h;
+      hb.on = hb.x1 > vx0 && hb.x0 < vx1 && hb.y1 > vy0 && hb.y0 < yb;
       if (hb.on) n++;
     }
   }
   L.heads = n;
-  const yb = h - L.band;
-  set4(BOX_F, 0, 0, w, yb);
-  let topY = yb, lx = w, rx = 0;
+  set4(L.full, vx0, vy0, vx1, yb);
+  let topY = yb, lx = vx1, rx = vx0;
   for (let i = 0; i < n; i++) {
     const hb = HEADS[i];
     topY = Math.min(topY, hb.y0);
     lx = Math.min(lx, hb.x0);
     rx = Math.max(rx, hb.x1);
   }
-  set4(BOX_TOP, 0, 0, w, Math.max(0, Math.min(yb, topY)));
-  set4(BOX_L, 0, 0, Math.max(0, Math.min(w, lx)), yb);
-  set4(BOX_R, Math.min(w, Math.max(0, rx)), 0, w, yb);
+  set4(L.top, vx0, vy0, vx1, Math.max(vy0, Math.min(yb, topY)));
+  set4(L.left, vx0, vy0, Math.max(vx0, Math.min(vx1, lx)), yb);
+  set4(L.right, Math.min(vx1, Math.max(vx0, rx)), vy0, vx1, yb);
+  return L;
+}
+
+/**
+ * The layout of a wall state, frozen at the cut that put it up (stored in wall units), so a slow
+ * camera move scales the content with the wall instead of sliding it around.
+ */
+function layoutOf(spec, env, w, h) {
+  const L = LAYOUT;
+  let F = spec._lay;
+  if (!F) {
+    computeLayout(L, env.cam, spec.solo, env.wx0, env.wy0, w, h, env.k);
+    const u = 1 / env.k;
+    const cp = (b) => ({ x0: b.x0 * u, y0: b.y0 * u, x1: b.x1 * u, y1: b.y1 * u });
+    F = spec._lay = { heads: L.heads, band: L.band * u, top: cp(L.top), left: cp(L.left), right: cp(L.right), full: cp(L.full), sx0: L.sx0, sy0: L.sy0 };
+  }
+  const k = env.k;
+  const sc = (src, dst) => set4(dst, Math.round(src.x0 * k), Math.round(src.y0 * k), Math.round(src.x1 * k), Math.round(src.y1 * k));
+  L.heads = F.heads;
+  L.band = Math.round(F.band * k);
+  sc(F.top, L.top);
+  sc(F.left, L.left);
+  sc(F.right, L.right);
+  sc(F.full, L.full);
+  L.sx0 = env.wx0;
+  L.sy0 = env.wy0;
+  L.k = k;
   return L;
 }
 function set4(b, x0, y0, x1, y1) {
@@ -134,15 +170,20 @@ function set4(b, x0, y0, x1, y1) {
 }
 const bw = (b) => Math.max(0, b.x1 - b.x0), bh = (b) => Math.max(0, b.y1 - b.y0);
 
-/** The free box that best fits a w x h block: the whole wall without heads, else the larger fitting side/top. */
+/**
+ * The free box for a w x h block: the whole wall when no head overlaps it; otherwise the first
+ * box that fits, in order (the side away from the head first, or the top band first), else the
+ * one that comes closest.
+ */
 function pickBox(L, needW, needH, preferSide = true) {
   if (!L.heads) return L.full;
-  const cands = preferSide ? [L.left, L.right, L.top] : [L.top, L.left, L.right];
-  let best = null, score = -1;
+  const side = bw(L.left) >= bw(L.right) ? L.left : L.right;
+  const other = side === L.left ? L.right : L.left;
+  const cands = preferSide ? [side, L.top, other] : [L.top, side, other];
+  for (const b of cands) if (bw(b) >= needW && bh(b) >= needH) return b;
+  let best = cands[0], score = -1;
   for (const b of cands) {
-    const W = bw(b), H = bh(b);
-    const fits = W >= needW && H >= needH;
-    const sc = (fits ? 1e6 : 0) + Math.min(W / Math.max(1, needW), H / Math.max(1, needH)) * 1000 + W * H * 1e-3;
+    const sc = Math.min(bw(b) / Math.max(1, needW), bh(b) / Math.max(1, needH));
     if (sc > score) {
       score = sc;
       best = b;
@@ -159,7 +200,9 @@ function fillField(b, style, soft) {
   const ca = C[a], cz = C[z];
   const { w, h, px } = b;
   if (ca === cz) {
-    px.fill(soft ? C[DARKER[a]] || ca : ca);
+    // out of focus, a field brighter than slate drops a step; ink and darker stay (MONEY MINUTE
+    // keeps the home value range in its MCU-R)
+    px.fill(soft && LSTAR[a] > LSTAR.slate ? C[DARKER[a]] : ca);
     return;
   }
   // top colour easing into the bottom colour (keeps the area behind heads dark)
@@ -180,8 +223,11 @@ function topFalloff(b, c, rows) {
   }
 }
 
-function darkBand(b, band, c = C.ink) {
-  if (band > 0) rect(b, 0, b.h - band, b.w, b.h, c);
+/** The solo dark band at the wall's bottom: the field's own darkest colour (never lighter than the field). */
+function darkBand(b, band, style, soft) {
+  if (band <= 0) return;
+  const n = style.wallField[1];
+  rect(b, 0, b.h - band, b.w, b.h, C[n] === C.navy ? C.ink : soft && LSTAR[n] > LSTAR.ink ? C[DARKER[n]] : C[n]);
 }
 
 // ---------------------------------------------------------------------------
@@ -232,7 +278,7 @@ const isLand = (lat, lon) => {
 const GLOBE_TILT = 22 * DEG;
 const GCT = Math.cos(GLOBE_TILT), GST = Math.sin(GLOBE_TILT);
 const GLIGHT = (() => {
-  const v = [-0.55, -0.45, 0.7]; // camera-left, from above, toward the viewer (screen y down)
+  const v = [-0.42, -0.4, 0.82]; // camera-left, from above, mostly frontal (screen y down)
   const n = Math.hypot(...v);
   return v.map((a) => a / n);
 })();
@@ -550,7 +596,11 @@ const lin = (v) => {
 };
 const unlin = (v) => Math.round(255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055));
 
-/** Colour table (source colour → palette u32) dimmed so the picture's mean L* ≤ maxL. */
+/**
+ * Colour table (source colour → palette u32), dimmed in linear light until the picture's mean L*
+ * is at most maxL and at most 8 % of it is brighter than L* 66 (ART_DIRECTION: wall average ≤ 45,
+ * highlights on at most 10 % of the wall).
+ */
 function pictureMap(src, maxL) {
   let m = src.maps.get(maxL);
   if (m) return m;
@@ -558,21 +608,22 @@ function pictureMap(src, maxL) {
   const tab = new Uint32Array(nc);
   const total = src.hist.reduce((a, b) => a + b, 0) || 1;
   const build = (f) => {
-    let sum = 0;
+    let sum = 0, bright = 0;
     for (let j = 0; j < nc; j++) {
       const r = unlin(lin(src.rgb[j * 3]) * f), g = unlin(lin(src.rgb[j * 3 + 1]) * f), b2 = unlin(lin(src.rgb[j * 3 + 2]) * f);
       const name = nearestName(r, g, b2, PICTURE_NAMES);
       tab[j] = C[name];
       sum += LSTAR[name] * src.hist[j];
+      if (LSTAR[name] > 66) bright += src.hist[j];
     }
-    return sum / total;
+    return sum / total <= maxL && bright / total <= 0.08;
   };
-  let lo = 0.05, hi = 1;
-  if (build(1) > maxL) {
-    for (let it = 0; it < 9; it++) {
+  if (!build(1)) {
+    let lo = 0.04, hi = 1;
+    for (let it = 0; it < 10; it++) {
       const mid = (lo + hi) / 2;
-      if (build(mid) > maxL) hi = mid;
-      else lo = mid;
+      if (build(mid)) lo = mid;
+      else hi = mid;
     }
     build(lo);
   }
@@ -733,20 +784,22 @@ function fitLine(text, maxW, font, scale) {
 }
 
 function drawFigureBlock(b, L, fig, style, ts, money) {
-  const value = fitLine(fig.value, b.w - 4, 'body', 2 * ts) || fig.value;
-  const vw = textWidth(value, 'body', 2 * ts), vh = capHeight('body', 2 * ts);
-  const label = fig.label ? fitLine(fig.label, b.w - 4, 'micro', ts) : '';
-  const lw = label ? textWidth(label, 'micro', ts) : 0, lh = label ? capHeight('micro', ts) + 3 * ts : 0;
-  const ruleH = ts, gap = 3 * ts;
+  // the figure is Display 2x (money-minute.md MCU-R panel), the label micro
+  const vs = 2;
+  const value = fitLine(fig.value, b.w - 4, 'body', vs) || fig.value;
+  const vw = textWidth(value, 'body', vs), vh = capHeight('body', vs);
+  const label = fig.label ? fitLine(fig.label, b.w - 4, 'micro', 1) : '';
+  const lw = label ? textWidth(label, 'micro', 1) : 0, lh = label ? capHeight('micro', 1) + 3 : 0;
+  const ruleH = 1, gap = 3;
   const needW = Math.max(vw, lw), needH = ruleH + gap + vh + lh;
   let box = pickBox(L, needW + 4, needH + 4);
   if (money) box = clampScreen(box, L, 24, 176, 120);
   const cx = Math.round((box.x0 + box.x1) / 2);
   const top = Math.round(box.y0 + Math.max(2, (bh(box) - needH) * 0.42));
   const accent = style.id === 'money-minute' ? C.darkGreen : C[style.accentName];
-  rect(b, cx - Math.round(needW / 2), top, cx - Math.round(needW / 2) + Math.min(needW, 16 * ts), top + ruleH, accent);
-  stampText(b.px, b.w, b.h, value, cx, top + ruleH + gap, C.white, 'body', 2 * ts, 'center');
-  if (label) stampText(b.px, b.w, b.h, label, cx, top + ruleH + gap + vh + 3 * ts, C.fog, 'micro', ts, 'center');
+  rect(b, cx - Math.round(needW / 2), top, cx - Math.round(needW / 2) + Math.min(needW, 16), top + ruleH, accent);
+  stampText(b.px, b.w, b.h, value, cx, top + ruleH + gap, C.white, 'body', vs, 'center');
+  if (label) stampText(b.px, b.w, b.h, label, cx, top + ruleH + gap + vh + 3, C.fog, 'micro', 1, 'center');
 }
 
 /** MONEY MINUTE MCU-R: the figure panel stays inside screen x 24-176 and above y 120. */
@@ -770,7 +823,7 @@ function drawPlate(b, L, spec, style, ts) {
   const x0 = cx - Math.round(needW / 2);
   rect(b, x0, top, x0 + Math.min(needW, 12 * ts), top + ts, accent);
   if (kicker) stampText(b.px, b.w, b.h, kicker, x0, top + 4 * ts, C.silver, 'body', ts, 'left');
-  if (sub) stampText(b.px, b.w, b.h, sub, x0, top + 4 * ts + kh + 3 * ts, C.steel, 'micro', ts, 'left');
+  if (sub) stampText(b.px, b.w, b.h, sub, x0, top + 4 * ts + kh + 3 * ts, C.fog, 'micro', ts, 'left');
 }
 
 // ---------------------------------------------------------------------------
@@ -779,12 +832,12 @@ function drawPlate(b, L, spec, style, ts) {
 const ENV = { k: 1, cs: 1, ts: 1, soft: false, cam: null, wx0: 0, wy0: 0, t: 0, lod: 0, frozenLam: -10, frozenAz: 55 * DEG };
 
 /** Integer scale for wall text and emblems: 1 in the wide and two-shot, 2-3 in singles. */
-export const wallTextScale = (k) => Math.max(1, Math.floor((k / WIDE_K) * 0.9 + 0.25));
+export const wallTextScale = (k) => (k < 1.25 ? 1 : 2);
 
 /** Render `spec` into `b`; returns a signature of the time-driven pixels (globe dots, planet terminator, map frame). */
 function renderSpec(b, spec, style, env) {
   const { cs, ts, soft } = env;
-  const L = layoutFor(env.cam, spec.solo, env.wx0, env.wy0, b.w, b.h, env.k);
+  const L = layoutOf(spec, env, b.w, b.h);
   fillField(b, style, soft);
   let sig = 0;
   switch (spec.mode) {
@@ -794,29 +847,29 @@ function renderSpec(b, spec, style, env) {
       const maxL = (style.wallMaxL || 45) - (soft ? 6 : 2);
       b.px.fill(C.black);
       drawPicture(b, src, mat, mat, b.w - 2 * mat, b.h - 2 * mat - L.band, maxL);
-      darkBand(b, L.band, C.black);
+      darkBand(b, L.band, style, true);
       break;
     }
     case 'map': {
       const dt = Math.max(0, env.t - spec.since);
       if (!drawMiniMap(b, spec, style, env.t, Math.min(dt, MAP_ANIM[style.id] || MAP_ANIM.default))) drawStaticLocator(b, spec, style, ts);
-      darkBand(b, L.band);
+      darkBand(b, L.band, style, soft);
       sig = 1;
       break;
     }
     case 'figure': {
       const fig = splitFigure(spec.figure);
       if (fig) drawFigureBlock(b, L, fig, style, ts, style.id === 'money-minute');
-      darkBand(b, L.band);
+      darkBand(b, L.band, style, soft);
       break;
     }
     case 'plate':
       drawPlate(b, L, spec, style, ts);
-      darkBand(b, L.band);
+      darkBand(b, L.band, style, soft);
       break;
     default:
       sig = drawIdle(b, L, spec, style, env);
-      darkBand(b, L.band, C[style.wallField[1]]);
+      darkBand(b, L.band, style, soft);
   }
   return sig;
 }
@@ -825,12 +878,12 @@ function drawIdle(b, L, spec, style, env) {
   const { cs, ts, soft } = env;
   switch (style.wallIdle) {
     case 'chip': {
+      // static two-tone chip in the upper half (or the free side in a single)
       const need = 27 * ts;
       const box = pickBox(L, need, need, false);
       const cx = Math.round((box.x0 + box.x1) / 2);
-      // the upper half of the wall (bottom 16 px stay dark)
-      const cy = Math.round(box.y0 + Math.min(bh(box) * 0.45, (b.h - L.band) * 0.42));
-      drawChip(b, cx, Math.max(box.y0 + 14 * ts, cy), ts);
+      const cy = Math.round(box.y0 + Math.max(14 * ts, Math.min(bh(box) * 0.45, bh(box) - 14 * ts)));
+      drawChip(b, cx, cy, ts);
       return 0;
     }
     case 'planet': {
@@ -840,10 +893,11 @@ function drawIdle(b, L, spec, style, env) {
         if (soft && s.c === 'steel') continue;
         plot(b, x, y, soft ? C[DARKER[s.c]] : C[s.c]);
       }
-      const box = pickBox(L, 4 * R, 2.6 * R, false);
-      const cx = (box.x0 + box.x1) / 2 + R * 0.2, cy = box.y0 + Math.min(bh(box) * 0.5, (b.h - L.band) * 0.44);
+      const box = pickBox(L, 4 * R, 2.4 * R, false);
+      const cx = (box.x0 + box.x1) / 2 + R * 0.2;
+      const cy = box.y0 + Math.max(R + 3, Math.min(bh(box) * 0.48, bh(box) - R - 3));
       const az = env.lod >= 2 ? env.frozenAz : planetAzimuth(env.t);
-      return drawPlanet(b, cx, Math.max(box.y0 + R + 2, cy), R, az);
+      return drawPlanet(b, cx, cy, R, az);
     }
     case 'wordmark': {
       topFalloff(b, C.slate, Math.round(12 * cs));
@@ -851,26 +905,26 @@ function drawIdle(b, L, spec, style, env) {
       const tw = textWidth(text, 'body', ts), th = capHeight('body', ts);
       const box = pickBox(L, tw + 4, th + 8 * ts, false);
       const cx = Math.round((box.x0 + box.x1) / 2);
-      const top = Math.round(box.y0 + Math.max(3 * ts, Math.min((bh(box) - th - 6 * ts) * 0.45, (b.h - L.band) * 0.3)));
+      const top = Math.round(box.y0 + Math.max(3 * ts, (bh(box) - th - 6 * ts) * 0.4));
       stampText(b.px, b.w, b.h, text, cx, top, C.fog, 'body', ts, 'center');
       rect(b, cx - 8 * ts, top + th + 4 * ts, cx + 8 * ts, top + th + 5 * ts, C.darkGreen);
       return 0;
     }
     case 'dial': {
-      const box = pickBox(L, 30 * ts, 30 * ts, false);
+      const box = pickBox(L, 24 * ts, 24 * ts, false);
       const r = Math.max(8, Math.floor((Math.min(bw(box), bh(box)) - 6) / 2));
       const rr = Math.min(r, Math.round(22 * cs));
-      const cx = Math.round((box.x0 + box.x1) / 2), cy = Math.round(box.y0 + 3 + rr);
+      const cx = Math.round((box.x0 + box.x1) / 2), cy = Math.round(box.y0 + (bh(box) - 2 * rr) / 2 + rr);
       drawDial(b, cx, cy, rr, spec.phase, ts);
       return 0;
     }
     default: {
       // WORLD NOW / generic: the dotted globe turning once per 120 s, London marked
-      const R = Math.max(6, Math.round(Math.min(b.h * 0.36, 23 * cs)));
+      const R = Math.max(6, Math.round(23 * cs));
       const box = pickBox(L, 2 * R + 4, 2 * R + 4, false);
+      const Rf = Math.max(6, Math.min(R, Math.floor(Math.min(bw(box), bh(box)) / 2) - 2));
       const cx = (box.x0 + box.x1) / 2;
-      const cy = L.heads ? box.y0 + Math.max(R + 2, bh(box) / 2) : b.h * 0.46;
-      const Rf = L.heads ? Math.max(6, Math.min(R, Math.floor(Math.min(bw(box), bh(box)) / 2) - 2)) : R;
+      const cy = box.y0 + bh(box) / 2;
       const lam = globeLam(env.t, env.lod, env.frozenLam);
       return drawGlobe(b, cx, cy, Rf, lam, true);
     }
@@ -1049,6 +1103,12 @@ export function updateWall(req, styleIn, w, h, k, t, cam, opts, lod = 0) {
   }
   const spec = readSpec(req, style, t);
   const cut = isCut(cam, opts, style, t);
+  if (cut) {
+    // a new shot re-lays the wall out for its framing
+    if (S.shown) S.shown._lay = null;
+    if (S.next) S.next._lay = null;
+    S.aKey.cam = S.bKey.cam = NaN;
+  }
   let changed = false;
   if (!S.shown) {
     S.shown = copySpec(spec, t);
@@ -1156,36 +1216,79 @@ export function drawWallContent(fr, x0, y0, x1, y1, k, t, soft) {
 const LEGACY = new Buf();
 const LEGACY_SPEC = { mode: 'idle', phase: 'intro', solo: false };
 
-const FROM = { scene: null, wall: null, img: null, card: null, kicker: null, out: null, styleId: null };
+const FROM = { wall: null, img: null, seg: null, kicker: null, framing: null, styleId: null, phase: '', focus: '', solo: undefined, out: null };
+
+/** What a story's wall shows, in order of preference, per programme (docs/programmes/*.md "Set and light"). */
+const STORY_WALL = {
+  'world-now': ['picture', 'map', 'figure', 'plate'], // "the picture or a locator map"
+  'tech-bytes': ['picture', 'plate'], // the picture on its mat; figures live on the ledger card
+  cosmos: ['picture', 'plate'], // "without a picture, the kicker plate"; no diagrams
+  'money-minute': ['picture', 'plate'], // the WIDE; the MCU-R carries the figure panel (below)
+  'news-60': ['picture', 'plate'],
+  default: ['picture', 'map', 'figure', 'plate'],
+};
+const KICKER_CATS = { general: '', world: 'WORLD', tech: 'TECHNOLOGY', science: 'SCIENCE', business: 'BUSINESS', culture: 'CULTURE', sport: 'SPORT', health: 'HEALTH' };
 
 /**
- * Map the director's scene to a wall request (memoised on the inputs, so a static scene
- * returns the same object every frame). Legacy modes: 'logo' / 'rundown' → idle, 'image' →
- * picture (scene.images.get(storyId)), 'source' → plate (kicker or category, source line).
- * New-style scene.wall objects (mode idle/picture/map/figure/plate) pass through.
+ * Map the director's scene to a wall request, from live episode data (memoised on its inputs, so
+ * a static scene returns the same object every frame):
+ *   - intro, chats, outro (legacy wall 'logo' / 'rundown'): the programme's idle (NEWS IN 60: the
+ *     dial's outro state in the outro);
+ *   - a story: the picture (scene.images.get(storyId)) when it has one, else per programme the
+ *     locator map (seg.location), the figure (seg.numbers[0] / seg.fact) or the kicker plate
+ *     (seg.kicker, category or source, with the source on the micro line);
+ *   - MONEY MINUTE's MCU-R (scene.framing 'mcu-r'): the figure panel, unless the story's plan
+ *     already shows the figure on a card (then the kicker), money-minute.md §3.5;
+ *   - a new-style scene.wall ({ mode: 'idle'|'picture'|'map'|'figure'|'plate', ... }) passes through.
+ * The current segment is read from scene.segPlan.ctx.seg (INTEGRATION) when it is the story on air.
  */
 export function wallFromScene(scene, styleIn) {
   const style = resolveStyle(styleIn ?? scene?.program?.id);
   const w = scene?.wall || null;
-  const sid = scene?.storyId ?? w?.storyId;
-  const img = w && (w.mode === 'image' || w.mode === 'picture') && sid != null ? scene.images?.get?.(sid) || w.image || null : w?.image || null;
-  const kicker = scene?.lowerThird?.kicker || null;
-  const phase = scene?.segPlan?.ctx?.type === 'outro' || w?.phase === 'outro' ? 'outro' : 'intro';
+  const sid = scene?.storyId ?? w?.storyId ?? null;
+  const ctxSeg = scene?.segPlan?.ctx?.seg || null;
+  const seg = ctxSeg && (ctxSeg.type !== 'story' || sid == null || ctxSeg.storyId === sid) ? ctxSeg : null;
+  const img = sid != null ? scene.images?.get?.(sid) || null : null;
+  const kicker = scene?.lowerThird?.kicker || seg?.kicker || null;
+  const type = seg?.type || (w?.mode === 'logo' || w?.mode === 'rundown' ? 'idle' : 'story');
+  const phase = type === 'outro' || w?.phase === 'outro' ? 'outro' : 'intro';
   const focus = scene?.focus || '';
   const solo = scene?.cast ? !scene.cast.B : undefined;
+  const framing = scene?.framing || null;
   const F2 = FROM;
-  if (F2.out && F2.wall === w && F2.img === img && F2.kicker === kicker && F2.styleId === style.id && F2.out.phase === phase && F2.out.focus === focus && F2.out.solo === solo) return F2.out;
+  if (F2.out && F2.wall === w && F2.img === img && F2.seg === seg && F2.kicker === kicker && F2.framing === framing && F2.styleId === style.id && F2.phase === phase && F2.focus === focus && F2.solo === solo) return F2.out;
   let out;
   const mode = w?.mode;
-  if (mode === 'image' || mode === 'picture') out = img ? { mode: 'picture', image: img } : { mode: 'plate', label: kicker || w?.category || '', sub: w?.source || '' };
-  else if (mode === 'source' || mode === 'plate') out = { mode: 'plate', label: w.label || kicker || (w.category && w.category !== 'general' ? w.category : '') || w.source || '', sub: w.label || kicker ? w.source || '' : '' };
-  else if (mode === 'map') out = { mode: 'map', location: w.location || scene?.card || null };
-  else if (mode === 'figure') out = { mode: 'figure', figure: w.figure || scene?.card?.fact || null };
-  else out = { mode: 'idle' };
+  if (mode === 'idle' || mode === 'picture' || mode === 'map' || mode === 'figure' || mode === 'plate') {
+    out = { ...w };
+    if (mode === 'picture' && !out.image) out.image = img;
+  } else if (mode === 'logo' || mode === 'rundown' || type === 'intro' || type === 'outro' || type === 'chat' || type === 'idle' || (!mode && !seg)) {
+    out = { mode: 'idle' };
+  } else {
+    const loc = seg?.location;
+    const fig = seg?.numbers?.[0] || seg?.fact || null;
+    const label = kicker || (w?.category && KICKER_CATS[w.category] !== undefined ? KICKER_CATS[w.category] : w?.category || seg?.category || '') || '';
+    const source = w?.source || seg?.source || '';
+    const plate = { mode: 'plate', label: label || source, sub: label ? source : '' };
+    if (style.id === 'money-minute' && framing === 'mcu-r') {
+      const carded = (scene?.segPlan?.ctx?.shots || []).some((s) => s.shot === 'fact');
+      out = fig && !carded ? { mode: 'figure', figure: fig } : plate;
+    } else {
+      out = null;
+      for (const m of STORY_WALL[style.id] || STORY_WALL.default) {
+        if (m === 'picture' && img && (mode === 'image' || mode === 'picture' || !mode)) out = { mode: 'picture', image: img };
+        else if (m === 'map' && loc && Number.isFinite(Number(loc.lat)) && Number.isFinite(Number(loc.lon))) out = { mode: 'map', location: loc };
+        else if (m === 'figure' && fig) out = { mode: 'figure', figure: fig };
+        else if (m === 'plate' && (plate.label || plate.sub)) out = plate;
+        if (out) break;
+      }
+      if (!out) out = { mode: 'idle' };
+    }
+  }
   out.phase = phase;
   out.focus = focus;
   out.solo = solo;
   if (w && Number.isFinite(w.since)) out.since = w.since;
-  Object.assign(F2, { wall: w, img, kicker, styleId: style.id, out });
+  Object.assign(F2, { wall: w, img, seg, kicker, framing, styleId: style.id, phase, focus, solo, out });
   return out;
 }

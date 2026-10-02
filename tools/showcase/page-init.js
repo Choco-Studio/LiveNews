@@ -652,36 +652,130 @@
     location: sg?.location?.place ?? null,
     text: sg?.text ?? '',
   });
+  // Prefetch: the sentences the engine will speak, predicted with its own
+  // splitter and speech normaliser (same modules, same text), so the recorder
+  // can synthesise them while the picture is being captured.
+  SC.prefetch = [];
+  let splitFn = null;
+  let timelineFn = null;
+  let predictorsLoading = null;
+  const waitingEpisodes = [];
+  SC.loadPredictors = () => {
+    predictorsLoading ??= Promise.all([
+      import('/js/audio/sentences.js').catch(() => import('/js/audio.js')).then((m) => { splitFn = m.splitSentences ?? null; }).catch(() => {}),
+      import('/js/audio/visemes.js').then((m) => { timelineFn = m.buildTimeline ?? null; }).catch(() => {}),
+    ]).then(() => {
+      // Episodes that started before the modules arrived (the first one usually).
+      for (const ep of waitingEpisodes.splice(0)) SC.predictEpisode(ep);
+      return Boolean(splitFn);
+    });
+    return predictorsLoading;
+  };
+  function predict(text, lang) {
+    if (!splitFn || !text) return [];
+    let parts = [];
+    try {
+      parts = splitFn(text);
+    } catch {
+      return [];
+    }
+    return parts.map((sentence) => {
+      try {
+        return (timelineFn && timelineFn(sentence, { lang }).spoken) || sentence;
+      } catch {
+        return sentence;
+      }
+    });
+  }
+  const presenterLang = (id) => window.__showcase?.player?.channel?.presenters?.[id]?.voice?.lang || 'en-GB';
+  SC.takePrefetch = () => SC.prefetch.splice(0);
+
+  const episodeInfo = (ep) => ({
+    episodeId: ep?.id ?? null,
+    programId: ep?.program?.id ?? null,
+    title: ep?.program?.title ?? null,
+    replay: Boolean(ep?.replay),
+    cast: ep?.cast ?? null,
+    segments: (ep?.segments || []).map((sg) => {
+      const i = segInfo(sg);
+      i.chars = i.text.length;
+      delete i.text;
+      return i;
+    }),
+  });
+  const predicted = new Set();
+  /** Queue every sentence of an episode for synthesis (once per episode id). */
+  SC.predictEpisode = (ep) => {
+    if (!ep || predicted.has(ep.id)) return 0;
+    if (!splitFn) {
+      waitingEpisodes.push(ep);
+      SC.loadPredictors();
+      return 0;
+    }
+    predicted.add(ep.id);
+    let n = 0;
+    try {
+      for (const sg of ep.segments || []) {
+        const presenter = ep.cast?.[sg.anchor] ?? null;
+        const lang = presenterLang(presenter);
+        for (const text of predict(sg.text, lang)) {
+          SC.prefetch.push({ text, presenter, slot: sg.anchor, lang, programId: ep.program?.id ?? null });
+          n++;
+        }
+      }
+    } catch { /* prediction is best effort */ }
+    return n;
+  };
   SC.instrument = () => {
     const g = window.__showcase;
     if (!g?.player || g.__wrapped) return Boolean(g?.__wrapped);
     g.__wrapped = true;
     const p = g.player;
+    SC.loadPredictors();
     const done = {
-      playEpisode: wrap(p, 'playEpisode', (ep) => ({
-        episodeId: ep?.id ?? null,
-        programId: ep?.program?.id ?? null,
-        title: ep?.program?.title ?? null,
-        replay: Boolean(ep?.replay),
-        cast: ep?.cast ?? null,
-        segments: (ep?.segments || []).map((sg) => {
-          const i = segInfo(sg);
-          i.chars = i.text.length;
-          delete i.text;
-          return i;
-        }),
-      })),
+      playEpisode: wrap(p, 'playEpisode', (ep) => {
+        SC.predictEpisode(ep);
+        return episodeInfo(ep);
+      }),
+      playAd: wrap(p, 'playAd', (ad) => {
+        try {
+          const lang = ad?.voice?.lang || 'en-GB';
+          for (const line of ad?.script || []) {
+            for (const text of predict(line.text, lang)) SC.prefetch.push({ text, slot: 'ad', lang, ad: { id: ad.id, brand: ad.brand ?? null, voice: ad.voice ?? null } });
+          }
+        } catch { /* best effort */ }
+        return { adId: ad?.id ?? null, brand: ad?.brand ?? null, duration: ad?.duration ?? null };
+      }),
       playBreak: wrap(p, 'playBreak', (it) => ({
         breakId: it?.id ?? null,
         ads: it?.ads ?? null,
         filler: Boolean(it?.filler),
         next: it?.next ? { id: it.next.id ?? null, title: it.next.title ?? null, ready: Boolean(it.next.ready) } : null,
       })),
-      playAd: wrap(p, 'playAd', (ad) => ({ adId: ad?.id ?? null, brand: ad?.brand ?? null, duration: ad?.duration ?? null })),
       say: wrap(p, 'say', (sg) => segInfo(sg)),
       breaking: wrap(p, 'breaking', (it) => ({ text: it?.text ?? null, source: it?.source ?? null })),
     };
     log({ ev: 'instrumented', wrapped: done });
+    return true;
+  };
+  // One render per video frame: the fake clock fires requestAnimationFrame
+  // every 16 ms, twice per 30 fps frame; under load the second render is pure
+  // cost. Callbacks run on the first tick of each frame slot (all callbacks of
+  // that tick run, so every rAF consumer still sees every slot).
+  SC.throttleRaf = (fps) => {
+    if (SC.rafThrottled || !(fps > 0)) return false;
+    SC.rafThrottled = true;
+    const orig = window.requestAnimationFrame.bind(window);
+    const slotMs = 1000 / fps;
+    let lastTs = -1;
+    let lastSlot = -1;
+    window.requestAnimationFrame = (cb) => orig(function tick(ts) {
+      const slot = Math.floor(ts / slotMs + 1e-6);
+      if (ts !== lastTs && slot === lastSlot) return orig(tick);
+      lastTs = ts;
+      lastSlot = slot;
+      return cb(ts);
+    });
     return true;
   };
   SC.frame = (sel = '#screen') => document.querySelector(sel)?.toDataURL('image/png') ?? null;

@@ -31,18 +31,19 @@ import { GROUPS } from '../character.js';
 import { defineLook } from './base.js';
 import { LOOK, tier } from './wardrobe-b.js';
 
-// Head-local design (units; 1 u = 1 px in the wide). Wide: head 21 x 18, visor 15 x 10.
-export const CASE = { hw: 10.4, top: -9.2, bot: 8.8, nTop: 3.6, nBot: 3.0, taper: 0.2 };
-export const VISOR = { hw: 7.4, top: -4.6, bot: 4.9, rc: 1.9, taper: 0.1 };
-export const POD = { y: 0.2, h: 3.4, w: 0.9 }; // flush side plates (they make it a head, not a box)
-export const EYE = { x: 4.1, y: -1.2, share: 0.12 };
-export const IND_Y = 2.7;
+// Head-local design (units; 1 u = 1 px in the wide). Wide: head 18 x 16, visor 13 x 8.
+// Wider than a human head (a helmet-like casing) but never a big-headed mascot: ~1.2x a human head.
+export const CASE = { hw: 9.0, top: -8.1, bot: 7.7, nTop: 3.6, nBot: 3.0, taper: 0.2 };
+export const VISOR = { hw: 6.4, top: -4.0, bot: 4.3, rc: 1.7, taper: 0.1 };
+export const POD = { y: 0.2, h: 3.0, w: 0.8 }; // flush side plates (they make it a head, not a box)
+export const EYE = { x: 3.6, y: -1.05, share: 0.12 };
+export const IND_Y = 2.35;
 
 export const unit8 = defineLook({
   id: 'unit8',
   name: 'UNIT-8',
   head: { top: CASE.top, craniumY: -2, R: CASE.hw, cheekY: 2, cheekHW: CASE.hw, chinY: CASE.bot, chinHW: 8.6, jawPow: 4 },
-  headAt: [0, -14.0],
+  headAt: [0, -12.9],
   neck: { hw: 2.7 },
   // face proportions other modules may read (glassesAnchor, framing); the face itself is drawn here
   eyes: { y: EYE.y, x: EYE.x, w: 2.5, h: 0.6, iris: [P.silver, P.silver], lash: P.silver, lashes: false, bags: false },
@@ -108,7 +109,7 @@ function drawCasing(buf, L, m, head, s) {
   buf.part(head.gb + GROUPS.head, 10, false);
   const x0 = Math.floor(cx - (CASE.hw + 1) * s), x1 = Math.ceil(cx + (CASE.hw + 1) * s);
   const y0 = Math.floor(cy + (CASE.top - 1) * s), y1 = Math.ceil(cy + (CASE.bot + 1) * s);
-  const seamY = 6.5;
+  const seamY = 5.6;
   const px1 = 1 / s;
   buf.shape(x0, y0, x1, y1, m.casing, (px, py) => {
     const x = (px - cx) / s, y = (py - cy) / s;
@@ -348,6 +349,11 @@ const HOLD = { tick: -1, w: 1, quiet: 0 };
 /** Width (odd px) of the indicator for face params f at scale s; sets IND.rest. */
 export function indicatorWidth(f, s, L = null) {
   const { rate, max } = indicatorSpec(s);
+  if (f.speech === null && Number.isFinite(f.t)) {
+    // a known silent source: at rest
+    IND.rest = true;
+    return 1;
+  }
   if (f.speech && Number.isFinite(f.t)) {
     const n = Math.floor(f.t * rate + 1e-9);
     const w = widthAtTick(f.speech, n, s);
@@ -376,11 +382,11 @@ export function indicatorWidth(f, s, L = null) {
 function drawAntenna(buf, L, m, head, s) {
   headOffset(head, OFF);
   const cx = head.cx + OFF[0], cy = head.cy + OFF[1];
-  const ax = -5.9;
-  const topY = CASE.top + 1.6; // the base hides behind the crown (drawn behind the head)
+  const ax = -5.1;
+  const topY = CASE.top + 1.5; // the base hides behind the crown (drawn behind the head)
   const rw = Math.max(1, Math.round(0.55 * s));
   const rx = Math.round(cx + ax * s - rw / 2);
-  const yTop = Math.round(cy + (topY - 6.6) * s), yBase = Math.round(cy + topY * s);
+  const yTop = Math.round(cy + (topY - 6.0) * s), yBase = Math.round(cy + topY * s);
   for (let y = yTop; y < yBase; y++) for (let i = 0; i < rw; i++) buf.plot(rx + i, y, m.rod, rw >= 2 && i === 0 ? 0 : 1);
   // base collar and a flat cap (no light, no ball)
   const cw = Math.max(rw + 2, Math.round(1.7 * s)), ch = Math.max(1, Math.round(0.9 * s));

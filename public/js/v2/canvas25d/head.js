@@ -133,8 +133,8 @@ function bumpsOf(L) {
   const out = [];
   const pair = (x, y, sx, sy, a) => out.push([-x, y, sx, sy, a], [x, y, sx, sy, a]);
   pair(ex, B.y + 0.6, 1.9, 0.75, 0.42); // brow ridge over each eye
-  pair(ex - 0.2, ey - 0.1, 1.55, 1.0, -0.72); // eye socket, deepest toward the nose
-  pair(ex + 0.95, ey + 2.35, 1.45, 0.95, 0.5); // cheekbone
+  pair(ex - 0.2, ey - 0.1, 1.55, 1.0, -0.55); // eye socket, deepest toward the nose
+  pair(ex + 1.0, ey + 2.5, 1.8, 1.1, 0.3); // cheekbone (broad and low: never a lit island on the shade side)
   pair(H.cheekHW - 0.9, ey - 1.8, 1.0, 1.5, -0.32); // temple
   pair(nw * 0.55, N.y1 - 0.1, 0.48, 0.42, 0.3); // nose wings
   out.push([0, N.y1 - 0.45, 0.72 * nw, 0.7, N.big ? 0.5 : 0.4]); // nose tip
@@ -152,9 +152,9 @@ function occlusionOf(L) {
   const out = [];
   const pair = (x, y, sx, sy, a) => out.push([-x, y, sx, sy, a], [x, y, sx, sy, a]);
   pair(E.x - E.w * 0.6, E.y + 0.05, 0.55, 0.55, 0.22); // inner eye corner
-  pair(N.w * 0.42, N.y1 + 0.15, 0.42, 0.32, 0.4); // nostril
+  pair(N.w * 0.42, N.y1 + 0.15, 0.42, 0.32, 0.22); // nostril
   pair(M.w * 0.56, M.y + 0.05, 0.45, 0.45, 0.2); // mouth corner
-  out.push([0, N.y1 + 0.55, 0.85, 0.35, 0.16]); // under the septum
+  out.push([0, N.y1 + 0.55, 0.85, 0.35, 0.1]); // under the septum
   return out;
 }
 
@@ -202,6 +202,10 @@ function faceMap(L) {
     }
   }
   const nx = new Float32Array(nw * nh), ny = new Float32Array(nw * nh), nz = new Float32Array(nw * nh);
+  // where the key may raise a highlight: the forehead and the nose ridge only (a
+  // cheekbone highlight under the eye reads as a blotch at this resolution)
+  const hl = new Uint8Array(nw * nh);
+  const E = L.eyes, N = L.nose;
   for (let j = 0; j < nh; j++) {
     const y = y0 + j * STEP;
     const yc = clamp(y, H.top + 0.05, H.chinY - 0.05);
@@ -228,9 +232,12 @@ function faceMap(L) {
       nx[c] = ax / n;
       ny[c] = ay / n;
       nz[c] = az / n;
+      const forehead = y < E.y - 1.5 && Math.abs(x) < hw * 0.75;
+      const ridge = Math.abs(x) < N.w * 0.5 && y > E.y - 0.4 && y < N.y1 - 0.2;
+      hl[c] = forehead || ridge ? 1 : 0;
     }
   }
-  fm = { x0, y0, nw, nh, nx, ny, nz, ao: aoArr };
+  fm = { x0, y0, nw, nh, nx, ny, nz, ao: aoArr, hl };
   MAPS.set(L, fm);
   return fm;
 }
@@ -242,7 +249,7 @@ function faceMap(L) {
 const TONES = [
   [9, 0.3, -0.42], // wide: lit / shade, no highlight, deep only under the jaw
   [0.985, 0.32, -0.16], // medium
-  [0.93, 0.36, -0.07], // close-up
+  [0.95, 0.36, -0.07], // close-up
 ];
 const HW_LUT = new Float32Array(1024);
 // Per-frame state of the head being drawn (module scratch: no closure, no allocation).
@@ -290,7 +297,7 @@ function skinAt(px, py) {
     if (y > H.chinY + S.jaw - 0.75) return 2;
     return l > th[1] ? 1 : 2;
   }
-  if (l > th[0]) return nx3 < 0.05 ? 0 : 1;
+  if (l > th[0]) return fm.hl[c] && nx3 < 0.05 ? 0 : 1;
   if (l > th[1]) return 1;
   if (l > th[2]) return 2;
   return 3;
@@ -329,6 +336,45 @@ export function drawHead(buf, L, m, head, s) {
   S.lutN = n;
   const [x0, y0, x1, y1] = headBox(head, 0.5);
   buf.shape(x0, y0, x1, y1, m.skin, skinAt);
+  if (S.tier) cleanTones(buf, m.skin, x0, y0, x1, y1);
+}
+
+/**
+ * Pixel-art clean-up of the skin's tone clusters: a pixel that disagrees with
+ * three or four of its same-material neighbours takes their tone (no 1 px spurs,
+ * notches or orphans along the terminator); runs twice so a 2 px stair settles.
+ */
+function cleanTones(buf, mat, x0, y0, x1, y1) {
+  const w = buf.w, M = buf.mat, T = buf.tone, G = buf.grp, g = buf.g;
+  const xa = Math.max(2, Math.floor(x0)), xb = Math.min(w - 2, Math.ceil(x1));
+  const ya = Math.max(2, Math.floor(y0)), yb = Math.min(buf.h - 2, Math.ceil(y1));
+  for (let pass = 0; pass < 2; pass++) {
+    for (let y = ya; y < yb; y++) {
+      for (let x = xa; x < xb; x++) {
+        const i = y * w + x;
+        if (M[i] !== mat || G[i] !== g) continue;
+        const t = T[i];
+        let a = -1, na = 0, b = -1, nb = 0, same = 0;
+        for (let k = 0; k < 4; k++) {
+          const j = k === 0 ? i - 1 : k === 1 ? i + 1 : k === 2 ? i - w : i + w;
+          if (M[j] !== mat || G[j] !== g) {
+            same++; // the silhouette edge does not vote
+            continue;
+          }
+          const tj = T[j];
+          if (tj === t) same++;
+          else if (a < 0 || tj === a) {
+            a = tj;
+            na++;
+          } else {
+            b = tj;
+            nb++;
+          }
+        }
+        if (same <= 1) T[i] = na >= nb ? a : b;
+      }
+    }
+  }
 }
 
 const EP = [0, 0];

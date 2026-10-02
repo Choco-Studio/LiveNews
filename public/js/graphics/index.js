@@ -137,6 +137,7 @@ export class Graphics {
     this.tickerKey = 0;
     this.dupText = null;
     this.dupRef = null;
+    this.dupTag = '';
     this.dupSkip = false;
     this.errors = new Set();
   }
@@ -281,13 +282,20 @@ export class Graphics {
     return null;
   }
 
-  /** True when a caption only repeats the headline on air (every content word is in it). */
+  /**
+   * True when a caption only repeats what the graphics already say: every
+   * content word is in the headline on air or the strap's tag ("Around the
+   * world." under an AROUND THE WORLD kicker).
+   */
   repeatsOnAir(text, scene) {
     const ref = this.onAirHeadline(scene);
     if (!ref) return false;
-    if (text === this.dupText && ref === this.dupRef) return this.dupSkip;
-    const head = new Set(contentWords(ref));
+    const c = this.strap.cur;
+    const tag = c && ref === c.headline ? c.tag : '';
+    if (text === this.dupText && ref === this.dupRef && tag === this.dupTag) return this.dupSkip;
+    const head = new Set(contentWords(tag ? `${ref} ${tag}` : ref));
     const words = contentWords(text);
+    this.dupTag = tag;
     this.dupText = text;
     this.dupRef = ref;
     this.dupSkip = words.length >= 2 && words.every((w) => head.has(w));

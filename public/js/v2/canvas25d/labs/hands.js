@@ -99,9 +99,15 @@ function gestureView(t) {
   const near = seat === 1 ? sk.arms.R : sk.arms.L;
   const far = seat === 1 ? sk.arms.L : sk.arms.R;
   const useFar = (GESTURES[state.gesture]?.focus || 'near') === 'far';
-  const w = useFar ? far.wrist : near.wrist;
-  focus.x = pl.x + (w[0] + sk.body.x) * pl.s;
-  focus.y = pl.y + (w[1] + w[2] * TILT + sk.body.y) * pl.s;
+  if (state.focus === 'hand') {
+    const w = useFar ? far.wrist : near.wrist;
+    focus.x = pl.x + (w[0] + sk.body.x) * pl.s;
+    focus.y = pl.y + (w[1] + w[2] * TILT + sk.body.y) * pl.s;
+  } else {
+    // a still window on the upper body (a moving window would hide the motion)
+    focus.x = pl.x + (seat === 1 ? 6 : -6) * pl.s;
+    focus.y = pl.y + (state.focusY ?? 14) * pl.s;
+  }
 }
 
 // ---------------------------------------------------------------------------

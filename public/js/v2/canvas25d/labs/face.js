@@ -27,6 +27,8 @@ import { SET, kAt, syOf } from '../studio/geometry.js';
 import { makeCamera, placeActor, singleCam } from '../camera.js';
 import { GESTURES } from '../gestures/index.js';
 import { liveSpeech } from '../speech.js';
+import { drawGlasses } from '../glasses.js';
+import { deriveLook } from '../cast/base.js';
 import { planSegment } from '../direction/index.js';
 import { hashSeed } from '../direction/context.js';
 import { buildTimeline, sampleTimeline, wordAtChar } from '../../../audio/visemes.js';
@@ -229,8 +231,24 @@ const TALK_SRC = { frame: () => TALK };
 const ALL = ['paco', 'lola', 'max', 'ada', 'nova', 'unit8', 'penny', 'sam'];
 
 const tileActors = new Map();
-function tileActor(id, variant, seat) {
-  const key = `${id}|${variant}|${seat}`;
+const glassLooks = new Map();
+/** A look wearing lab glasses (style 'rect' | 'round' | 'half') on top of its own `over` hook. */
+function withGlasses(look, style) {
+  const key = `${look.id}|${style}`;
+  let g = glassLooks.get(key);
+  if (g) return g;
+  const over = look.parts.over;
+  g = deriveLook(look, {
+    id: `${look.id}-g${style}`,
+    glasses: { style, ramp: [P.slate, P.ink, P.black, P.black] },
+    parts: { over: (buf, L, m, head, s, sk) => { if (over) over(buf, L, m, head, s, sk); drawGlasses(buf, L, head, sk.face, s); } },
+  });
+  glassLooks.set(key, g);
+  return g;
+}
+
+function tileActor(id, variant, seat, glasses = null) {
+  const key = `${id}|${variant}|${seat}|${glasses}`;
   let a = tileActors.get(key);
   if (a) return a;
   const perf = { side: seat, seed: 11, emotions: [], look: [] };
@@ -238,6 +256,7 @@ function tileActor(id, variant, seat) {
   else if (variant === 'talk') perf.speech = TALK_SRC;
   else if (variant === 'partner' || variant === 'notes' || variant === 'wall') perf.look = [{ t0: -5, t1: 500, target: variant }];
   a = actor(id, perf);
+  if (glasses) a.look = withGlasses(a.look, glasses);
   tileActors.set(key, a);
   return a;
 }
@@ -270,7 +289,7 @@ function drawSheet(t, st) {
       const variant = tier.cols[c];
       const seat = st.seat === -1 ? -1 : 1;
       frame.clear(C.ink);
-      const heads = drawActors(st.tileT ?? 0.3, [{ actor: tileActor(id, variant, seat), x: 192, y: 150, s: tier.s }]);
+      const heads = drawActors(st.tileT ?? 0.3, [{ actor: tileActor(id, variant, seat, st.glasses), x: 192, y: 150, s: tier.s }]);
       const hd = heads[0];
       const cx = hd.cx, cy = Math.round(hd.cy + tier.dy * tier.s);
       blit(sheet, ox + c * tier.tw, oy + r * tier.th, frame.px, cx - (tier.tw >> 1) + 1, cy - (tier.th >> 1) + 1, tier.tw - 1, tier.th - 1, C.ink);
@@ -329,7 +348,7 @@ function drawStrip(t, st) {
     frame.clear(C.ink);
     const hd = drawActors(ti, [{ actor: l.actor, ...pl }])[0];
     const M = l.actor.look.mouth;
-    const cy = Math.round(hd.cy + (M ? M.y - 2.2 : 3) * pl.s);
+    const cy = Math.round(hd.cy + (M ? M.y - 0.6 : 5) * pl.s);
     const c = i % 6, r = Math.floor(i / 6);
     blit(sheet, c * tw, r * th, frame.px, hd.cx - (tw >> 1) + 1, cy - (th >> 1), tw - 1, th - 1, C.ink);
     const fr = l.audio.speechFrame(ti * 1000, l.slot);
@@ -500,7 +519,7 @@ export function createFaceLab(canvas, { drawText = null } = {}) {
   const state = {
     mode: 'sheet', tier: 'close', presenter: 'paco', presenters: null, emotion: null, seat: 1,
     text: 'Good evening. Markets moved sharply today, as the bank promised more support.', sample: null,
-    episode: 'world-now', cam: 'auto', k: 4.0, hud: true, tileT: 0.3, zoom: 1, zx: 0, zy: 0,
+    episode: 'world-now', cam: 'auto', k: 4.0, hud: true, tileT: 0.3, zoom: 1, zx: 0, zy: 0, glasses: null,
   };
   const lab = {
     state,

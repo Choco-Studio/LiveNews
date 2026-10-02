@@ -19,7 +19,8 @@
 //   'single'     the approved single of the focus seat (camera demo, k 3.4)
 //   'close'      a tighter single (THE CATCH)
 //   'mcu-l'      MCU with the speaker on the left third and the wall content in
-//   'mcu-r'      the right third (mirrored for -r); the programme decides the
+//   'mcu-r'      the right third (mirrored for -r; a duo speaker always keeps
+//                their own seat's side, the wall being between the seats); the programme decides the
 //                numbers (WORLD NOW: speaker in the third nearer their desk
 //                position; MONEY MINUTE MCU-R: head centre x 248-264, eye line
 //                y 64-76; NEWS IN 60: MCU-L)
@@ -37,8 +38,8 @@
 // are monotone in k) and each layer edge, rounded to whole pixels, steps at
 // most once per frame at the slow rates the bibles allow. move = { type:
 // 'push' | 'pull', amount (scale fraction at the presenters' depth, ≤ 0.06
-// hard ceiling), delay (s after the event), dur (s) }; eased sine in-out,
-// no overshoot. A pull starts `amount` tighter and settles on the framing.
+// hard ceiling), delay (s after the event), dur (s), from? (start scale, 1) };
+// eased sine in-out, no overshoot. A pull widens from the framing by `amount`.
 import { F, SET, kAt, sxOf, syOf } from './studio/geometry.js';
 import { lookFor } from './cast/index.js';
 
@@ -83,18 +84,30 @@ export function singleCam(slot, k = 3.0) {
 // clearance margins below.
 
 const METRICS = new WeakMap();
+// Hair volume beyond the skull per hair style (head-local units: extra height above
+// head.top, extra half width beyond the cheeks / cranium). Looks with more volume may
+// publish their own `L.bounds = { top, hw }` (head-local, from the head centre).
+const HAIR = {
+  bob: [2.2, 2.6],
+  coily: [3.9, 4.1], // CAST-B: curls reach ~13.8 u above and ~11.3 u beside the head centre
+  textured: [2.4, 2.0],
+  chignon: [2.0, 2.2],
+  none: [5.2, 1.2], // UNIT-8: the antenna tip ~15 u above the head centre
+};
 export function lookMetrics(L) {
   if (L && METRICS.has(L)) return METRICS.get(L);
   const H = L?.head || { top: -10.2, R: 7.6, cheekHW: 7.15, chinY: 9.4 };
   const at = L?.headAt || [0, -13.4];
-  const bob = L?.hair?.style === 'bob';
+  const [up, side] = HAIR[L?.hair?.style] || [1.7, 1.9];
+  const top = Number.isFinite(L?.bounds?.top) ? L.bounds.top : H.top - up;
+  const hw = Number.isFinite(L?.bounds?.hw) ? L.bounds.hw : Math.max(H.R, H.cheekHW) + side;
   const m = {
     cx: at[0],
     cy: at[1],
-    top: at[1] + H.top - (bob ? 2.2 : 1.7), // crown of the hair
+    top: at[1] + top, // crown of the hair (or antenna), relative to the neck base
     chin: at[1] + H.chinY,
     eye: at[1] + (L?.eyes?.y ?? -0.7),
-    hw: Math.max(H.R, H.cheekHW) + (bob ? 2.6 : 1.9), // half width with ears / hair
+    hw, // half width with ears / hair
   };
   if (L) METRICS.set(L, m);
   return m;
@@ -182,28 +195,49 @@ const SINGLES = {
     ots: { k: 2.4, headX: 100, eyeY: 74, cz: 640, cy: -24, soft: 0 },
   },
   'money-minute': { mcuR: { k: 3.4, headX: 256, eyeY: 70, cz: 0, cy: -48 } },
-  'news-60': { mcu: { k: 3.1, headX: 118, eyeY: 70, cz: 380, cy: -36 } },
+  'news-60': { mcu: { k: 2.75, headX: 116, eyeY: 72, cz: 380, cy: -36 }, centre: { k: 3.3, headX: 192, eyeY: 70, cz: 420, cy: -36 } },
 };
 
 const CLEAR = 10; // px kept between a head and a bezel edge (ART_DIRECTION: none within 6 px; tests: 4)
 
-/** Compose a single and walk the head away from the wall edge until it clears the bezel. */
+/** The bezel edge nearest a head box: { gap, vertical, edge } (edge = its screen x or y). */
+function nearestEdge(h, bz) {
+  const edges = [
+    { vertical: true, edge: bz.x0, a: bz.y0, b: bz.y1 },
+    { vertical: true, edge: bz.x1, a: bz.y0, b: bz.y1 },
+    { vertical: false, edge: bz.y0, a: bz.x0, b: bz.x1 },
+    { vertical: false, edge: bz.y1, a: bz.x0, b: bz.x1 },
+  ];
+  let best = null;
+  for (const e of edges) {
+    const along = e.vertical ? Math.max(h.y0 - e.b, e.a - h.y1, 0) : Math.max(h.x0 - e.b, e.a - h.x1, 0);
+    const across = e.vertical ? Math.max(h.x0 - e.edge, e.edge - h.x1, 0) : Math.max(h.y0 - e.edge, e.edge - h.y1, 0);
+    const gap = Math.hypot(along, across);
+    if (!best || gap < best.gap) best = { ...e, gap };
+  }
+  return best;
+}
+
+/**
+ * Compose a single, then walk it clear of the bezel: a vertical edge next to the
+ * head moves the head away from it (the wall shifts less than the presenter, so
+ * the gap opens); the bottom edge near the chin lowers the camera (the wall drops
+ * behind the shoulders); a top edge near the crown raises it.
+ */
 function fitSingle(spec, slot) {
   let cam = compose(spec);
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 40; i++) {
     const info = framingInfo(cam, [{ slot, X: spec.X, look: spec.look }]);
     const h = info.heads[0];
-    const gap = bezelClearance(h, info.bezel);
-    if (gap >= CLEAR) break;
-    // a vertical bezel edge next to the head: move the head away from it (outward);
-    // the bottom edge across the neck: lower the camera (the wall drops behind the shoulders)
-    const nearV = Math.min(Math.abs(info.bezel.x0 - h.x1), Math.abs(info.bezel.x0 - h.x0), Math.abs(info.bezel.x1 - h.x0), Math.abs(info.bezel.x1 - h.x1));
-    const nearH = Math.min(Math.abs(info.bezel.y1 - h.y1), Math.abs(info.bezel.y1 - h.y0));
-    if (nearH <= nearV && info.bezel.y1 > h.y0 - CLEAR && info.bezel.y1 < h.y1 + CLEAR * 3) spec = { ...spec, cy: (spec.cy ?? -60) + 4 };
-    else {
-      const wallCx = (info.bezel.x0 + info.bezel.x1) / 2;
-      const dir = h.cx < wallCx ? -1 : 1;
-      spec = { ...spec, headX: spec.headX + dir * 3 };
+    const e = nearestEdge(h, info.bezel);
+    if (e.gap >= CLEAR) break;
+    if (e.vertical) {
+      const kp = kAt(cam, SET.presenterZ), kw = info.kw;
+      const dir = h.cx < e.edge ? -1 : 1;
+      spec = { ...spec, headX: spec.headX + dir * Math.max(1, (CLEAR - e.gap + 1) / Math.max(0.2, 1 - kw / kp)) };
+    } else {
+      const below = e.edge >= (h.y0 + h.y1) / 2;
+      spec = { ...spec, cy: (spec.cy ?? -60) + (below ? 3 : -3) };
     }
     cam = compose(spec);
   }
@@ -257,9 +291,15 @@ function build(name, { cast, solo, focus, programId, side }) {
       return makeCamera(SOLO_WIDE);
     case 'two':
       return makeCamera(solo ? SOLO_WIDE : TWO);
-    case 'single':
+    case 'single': {
+      // the approved single's composition (camera demo, k 3.4), walked clear of the bezel
       if (solo) return build('mcu', { cast, solo, focus, programId, side });
-      return singleCam(focus, 3.4);
+      const ref = singleCam(focus, 3.4);
+      const h = framingInfo(ref, [{ slot: focus, X, look }]).heads[0];
+      // keep the crown below the top graphics row (y 8-21) whatever the hair
+      const eyeY = h.eye + Math.max(0, 24 - h.y0);
+      return fitSingle({ k: 3.4, headX: h.cx, eyeY, cz: ref.z, cy: ref.y, X, look }, focus);
+    }
     case 'close': {
       const c = P.close;
       const left = leftSeat;
@@ -267,7 +307,8 @@ function build(name, { cast, solo, focus, programId, side }) {
     }
     case 'mcu-l':
     case 'mcu-r': {
-      const left = name === 'mcu-l';
+      // a duo speaker keeps their own seat's side (the wall is between the seats)
+      const left = solo ? name === 'mcu-l' : focus === 'A';
       if (!left && P.mcuR) return fitSingle({ ...P.mcuR, X, look }, focus);
       const c = P.mcu;
       return fitSingle({ ...c, X, look, headX: left ? c.headX : mirror(c.headX) }, focus);
@@ -296,12 +337,18 @@ export const FRAMINGS = ['wide', 'two', 'single', 'close', 'mcu-l', 'mcu-r', 'mc
 /** Sine in-out: zero speed at both ends, no overshoot. */
 export const easeMove = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : 0.5 - 0.5 * Math.cos(Math.PI * u));
 
-/** Scale factor of a move at dt s after its event (1 = the framing itself). */
+/**
+ * Scale factor of a move at dt s after its event (1 = the framing itself).
+ * A push goes from `from` (default 1) to from·(1 + amount); a pull from `from`
+ * to from / (1 + amount), wider than the framing, so a move never starts with a
+ * jump whether or not its event was a cut.
+ */
 export function moveScale(move, dt) {
-  if (!move || !(move.amount > 0) || !(move.dur > 0)) return 1;
+  if (!move || !(move.amount > 0) || !(move.dur > 0)) return move?.from > 0 ? move.from : 1;
   const a = Math.min(MOVE_CEILING, move.amount);
+  const from = move.from > 0 ? move.from : 1;
   const e = easeMove((dt - (move.delay || 0)) / move.dur);
-  return move.type === 'pull' ? 1 + a * (1 - e) : 1 + a * e;
+  return move.type === 'pull' ? from / (1 + a * e) : from * (1 + a * e);
 }
 
 const SCRATCH = makeCamera();

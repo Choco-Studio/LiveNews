@@ -5,6 +5,7 @@
 // Stems: 'mix' (default), 'music' (as broadcast, ducked), 'voice'.
 
 import { BroadcastMusic } from './conductor.js';
+import { bedDef } from './packages.js';
 
 const VOICE_DIR = new URL('./lab/voice/', import.meta.url);
 
@@ -218,6 +219,15 @@ export async function renderBroadcast(opts = {}) {
   if (stem !== 'voice') musicOut.connect(ctx.destination);
   if (stem !== 'music') voiceOut.connect(ctx.destination);
   const music = new BroadcastMusic({ context: ctx, destination: musicOut, grave: opts.grave || 'silence', seed: opts.seed ?? 7, solo: opts.solo || null, mute: opts.mute || null, ...(opts.trim ? { trim: opts.trim } : {}) });
+  // Calibration: one bed alone, unducked (opts.bed = bed key of the programme).
+  if (opts.bed) {
+    const def = bedDef(opts.programme || 'world-now', opts.bed, opts);
+    music.programme = opts.programme || 'world-now';
+    music.startBed(def, 0, 'cut', 0, { cued: opts.bed });
+    music.pump(seconds + 2);
+    const out = await ctx.startRendering();
+    return { sampleRate, channels: [out.getChannelData(0), out.getChannelData(1)], plan: [] };
+  }
   // Voices are planned (for ducking) whenever the render has them or asks for the duck.
   const plan = timeline({ ...opts, seconds, withVoice: withVoice || opts.duck === true });
   const events = [...plan].sort((a, b) => a.at - b.at);

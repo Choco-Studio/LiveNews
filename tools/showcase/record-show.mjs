@@ -37,13 +37,17 @@
 //   --time ISO                wall-clock time the channel shows at start (default now)
 //   --sheet-every S           contact-sheet sampling (default: 20 tiles over the recording)
 //   --voice-engine auto|fallback   use the voice stream's engine when it loads (auto) or the built-in one
+//   --voice-workers N         Kokoro processes (default 2; idle ones prefetch the sentences already on air)
+//   --preset fast             x264 preset of the final 5x encode
+//   --no-raf-throttle         render on every fake 16 ms rAF tick instead of once per video frame
+//   --keep                    keep the raw float renders and the lossless native-size video in <out>.work/
 
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { VoiceWorker, voiceFor, loadPresets, FAKE_VOICES } from './lib/voices.mjs';
+import { VoicePool, voiceFor, loadPresets, FAKE_VOICES } from './lib/voices.mjs';
 import { deriveCues, speechRegions, quietIntervals, renderBedsInPage, bedChunkInPage } from './lib/music.mjs';
 import { syncReport, loadMono, levels } from './lib/analysis.mjs';
 import { composeSheetInPage, composeAudioSheetInPage } from './lib/sheet.mjs';
@@ -62,7 +66,7 @@ async function loadPlaywright() {
 // ------------------------------------------------------------------ options
 const opts = {
   seconds: 90, skip: 0, fps: 30, scale: 5, start: 'now', until: null, 'max-wait': 240, music: 'lofi',
-  'bed-db': 0, 'duck-db': -6, lufs: -16, tp: -1.5, sr: 48000, port: 8602, 'voice-engine': 'auto',
+  'bed-db': 0, 'duck-db': -6, lufs: -16, tp: -1.5, sr: 48000, port: 8602, 'voice-engine': 'auto', 'voice-workers': 2,
 };
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
@@ -75,7 +79,7 @@ for (let i = 0; i < argv.length; i++) {
     i++;
   }
 }
-for (const k of ['seconds', 'skip', 'fps', 'scale', 'max-wait', 'bed-db', 'duck-db', 'lufs', 'tp', 'sr', 'port']) opts[k] = Number(opts[k]);
+for (const k of ['seconds', 'skip', 'fps', 'scale', 'max-wait', 'bed-db', 'duck-db', 'lufs', 'tp', 'sr', 'port', 'voice-workers']) opts[k] = Number(opts[k]);
 if (!opts.out) {
   console.error('usage: node tools/showcase/record-show.mjs --out show.mp4 [--port 8602 | --url URL] [--seconds 90] [--start now|open|break|endcard] [--until next-open+20] [--music lofi|broadcast|none]');
   process.exit(1);
@@ -136,8 +140,8 @@ await page.clock.install({ time: T0 });
 await page.clock.pauseAt(T0 + 1000);
 
 const presets = loadPresets();
-const voices = new VoiceWorker({ cache: CACHE, env: { SHOWCASE_VOICE_ENGINE: opts['voice-engine'] } });
-const voiceReady = voices.ready.then((r) => (say(`voice worker ready (${r.engine})`), r));
+const voices = new VoicePool({ size: opts['voice-workers'], cache: CACHE, env: { SHOWCASE_VOICE_ENGINE: opts['voice-engine'] } });
+const voiceReady = voices.ready.then((r) => (say(`voice workers ready (${r.engine}, ${opts['voice-workers']} processes)`), r));
 
 await page.goto(url, { waitUntil: 'domcontentloaded' });
 
@@ -154,30 +158,54 @@ async function settle(inflight, cap = 6000) {
 }
 
 const clips = new Map(); // speech id -> { out, label, engine, cached, elapsed }
-const synthStats = { requests: 0, cached: 0, seconds: 0, synthTime: 0, errors: 0 };
+const synthStats = { requests: 0, cached: 0, seconds: 0, synthTime: 0, waitTime: 0, errors: 0 };
 async function serviceSpeech(reqs) {
   for (const r of reqs) {
     synthStats.requests++;
     const v = voiceFor(r, presets);
     await voiceReady;
-    const res = await voices.request({ id: r.id, text: r.text, voice: v.voice, speed: v.speed ?? null, lang: v.lang ?? null, effect: null });
+    const tw = Date.now();
+    const res = await voices.request({ text: r.text, voice: v.voice, speed: v.speed ?? null, lang: v.lang ?? null, effect: null }, { urgent: true });
     if (!res.ok) {
       synthStats.errors++;
       say(`voice error for #${r.id}: ${res.error}`);
       await page.evaluate(([id, e]) => window.__sc.deliver(id, { error: e }), [r.id, res.error || 'synthesis failed']);
       continue;
     }
-    if (res.cached) synthStats.cached++;
-    else synthStats.synthTime += res.elapsed || 0;
+    const waited = (Date.now() - tw) / 1000;
+    synthStats.waitTime += waited;
+    if (res.cached || waited < 0.5) synthStats.cached++;
+    synthStats.synthTime += res.cached ? 0 : res.elapsed || 0;
     synthStats.seconds += res.duration;
     clips.set(r.id, { out: res.out, label: v.label, engine: res.engine, cached: res.cached, words: res.words });
     await page.evaluate(([id, d]) => window.__sc.deliver(id, d), [r.id, { duration: res.duration, words: res.words, clip: res.out, voice: v.label }]);
   }
 }
 
+// Sentences predicted by the page (episode / ad on air, next episode) are
+// synthesised by idle workers in the background.
+function prefetch(list) {
+  for (const r of list || []) {
+    const v = voiceFor(r, presets);
+    voices.request({ text: r.text, voice: v.voice, speed: v.speed ?? null, lang: v.lang ?? null, effect: null }, { urgent: false });
+  }
+}
+// After a break starts, predict the next ready episode from the server's queue.
+const predictedNext = new Set();
+async function predictNextEpisode() {
+  try {
+    const q = await (await fetch(`${origin}/api/queue`)).json();
+    const ep = Array.isArray(q) ? q.find((e) => !predictedNext.has(e.id)) : null;
+    if (!ep) return;
+    predictedNext.add(ep.id);
+    await page.evaluate((e) => window.__sc.predictEpisode(e), ep);
+  } catch { /* dev endpoint missing: no prefetch */ }
+}
+
 // One step of page time: settle network, run the clock, serve speech asked for.
 async function step(ms) {
-  let st = await page.evaluate(() => ({ reqs: window.__sc.takeRequests(), inflight: window.__sc.inflight }));
+  let st = await page.evaluate(() => ({ reqs: window.__sc.takeRequests(), inflight: window.__sc.inflight, pre: window.__sc.takePrefetch() }));
+  prefetch(st.pre);
   if (st.reqs.length) await serviceSpeech(st.reqs);
   if (st.inflight > 0) await settle(st.inflight);
   await page.clock.runFor(ms);
@@ -194,7 +222,9 @@ for (let i = 0; i < 400; i++) {
   if (i === 399) throw new Error('channel page never became ready (is the server running?)');
 }
 const instrumented = await page.evaluate(() => window.__sc.instrument());
-say(`page ready${instrumented ? '' : ' (director not instrumented: timeline from shots only)'} · ${elapsed()}`);
+const predictors = await page.evaluate(() => window.__sc.loadPredictors());
+if (!opts['no-raf-throttle']) await page.evaluate((fps) => window.__sc.throttleRaf(fps), FPS);
+say(`page ready${instrumented ? '' : ' (director not instrumented: timeline from shots only)'}${predictors ? '' : ' (no sentence predictor: no prefetch)'} · ${elapsed()}`);
 
 // ------------------------------------------------------------- skip/start
 const pageNow = () => page.evaluate(() => performance.now());
@@ -225,11 +255,13 @@ await page.evaluate(() => {
 });
 
 // ------------------------------------------------------------------ record
-const videoPath = path.join(WORK, 'video.mp4');
+// Frames go to a lossless native-size file while recording (cheap, never
+// back-pressures the capture loop); the 5x nearest-neighbour H.264 encode runs
+// once at the end, together with the mux.
+const videoPath = path.join(WORK, 'video-native.mkv');
 const ff = spawn('ffmpeg', [
   '-v', 'error', '-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'png', '-i', '-',
-  '-vf', `scale=iw*${opts.scale}:ih*${opts.scale}:flags=neighbor`,
-  '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', 'medium', '-tune', 'animation', '-movflags', '+faststart', videoPath,
+  '-c:v', 'libx264rgb', '-qp', '0', '-preset', 'ultrafast', videoPath,
 ], { stdio: ['pipe', 'inherit', 'inherit'] });
 const ffDone = once(ff, 'close');
 
@@ -240,23 +272,37 @@ let R = null; // page time (ms) of frame 0
 let stopAt = untilMatch ? Infinity : null;
 let frames = 0;
 let lastReport = Date.now();
+const timing = { frame: 0, encode: 0, speech: 0, clock: 0, other: 0 };
+let tMark = Date.now();
+const lap = (k) => {
+  const n = Date.now();
+  timing[k] += n - tMark;
+  tMark = n;
+};
 for (let i = 0; i < maxFrames; i++) {
+  lap('other');
   const st = await page.evaluate(() => {
     const s = window.__sc.step();
     s.t = performance.now();
+    s.pre = window.__sc.takePrefetch();
     return s;
   });
   if (R === null) R = st.t;
   if (!st.png) throw new Error('no #screen canvas');
   const png = Buffer.from(st.png.split(',')[1], 'base64');
+  lap('frame');
   if (!ff.stdin.write(png)) await once(ff.stdin, 'drain');
+  lap('encode');
   frames++;
   if (i % Math.max(1, Math.round(sheetEvery * FPS)) === 0) sheetTiles.push({ i, t: i / FPS, png: st.png });
+  prefetch(st.pre);
   if (st.reqs.length) await serviceSpeech(st.reqs);
   if (st.inflight > 0) await settle(st.inflight);
+  lap('speech');
   // Stop conditions measured on the page clock.
   if (i % 3 === 0) {
     const fresh = await pullLog();
+    if (fresh.some((e) => e.ev === 'playBreak' && e.phase === 'start')) predictNextEpisode();
     if (untilMatch && stopAt === Infinity) {
       const [, kind, plus] = untilMatch;
       for (const e of fresh) {
@@ -273,10 +319,12 @@ for (let i = 0; i < maxFrames; i++) {
     if (stopAt && stopAt !== Infinity && st.t >= stopAt) break;
   }
   const ms = Math.round(((i + 1) * 1000) / FPS) - Math.round((i * 1000) / FPS);
+  lap('other');
   await page.clock.runFor(ms);
+  lap('clock');
   if (Date.now() - lastReport > 15000) {
     lastReport = Date.now();
-    say(`${(i / FPS).toFixed(1)} s recorded · ${synthStats.requests} utterances (${synthStats.cached} cached, ${synthStats.synthTime.toFixed(0)} s synth) · ${elapsed()}`);
+    say(`${(i / FPS).toFixed(1)} s recorded · ${synthStats.requests} utterances (${synthStats.cached} ready from cache/prefetch, ${synthStats.waitTime.toFixed(0)} s waited) · queue ${voices.pending} · ${elapsed()}`);
   }
 }
 const Rend = R + Math.round((frames * 1000) / FPS);
@@ -284,7 +332,7 @@ const seconds = frames / FPS;
 ff.stdin.end();
 await pullLog();
 const pageStats = await page.evaluate(() => ({ stats: window.__sc.stats, errors: window.__sc.errors, contexts: window.__sc.contexts.length }));
-say(`recorded ${frames} frames (${seconds.toFixed(1)} s) · ${elapsed()}; rendering WebAudio`);
+say(`recorded ${frames} frames (${seconds.toFixed(1)} s) · ${elapsed()}; real time spent (s): ${Object.entries(timing).map(([k, v]) => `${k} ${(v / 1000).toFixed(0)}`).join(', ')}; rendering WebAudio`);
 
 // --------------------------------------------------------- WebAudio render
 const rendered = await page.evaluate(([a, b]) => window.__sc.renderAudio(a, b), [R, Rend]);
@@ -389,7 +437,7 @@ const manifest = {
   beds: bedsInfo && !bedsInfo.error ? path.join(WORK, 'beds.f32') : null,
   bedsDry: bedsInfo && !bedsInfo.error ? path.join(WORK, 'beds-dry.f32') : null,
   voices: heard.map((s) => ({ path: s.clip, start: s.start, cut: s.cut, gain: s.volume })),
-  voiceGain: 0.8, // the engine's master volume: browser TTS plays at utterance.volume = 0.8 too
+  voiceGain: 1, // each clip already carries utterance.volume (= the engine's master volume, like WebAudio's)
   speech: regions,
   quiet: quietIntervals(allLog, R),
   bedGainDb: opts['bed-db'],
@@ -409,8 +457,15 @@ if (mixRun.status !== 0) {
 const mixReport = JSON.parse(mixRun.stdout.trim().split('\n').pop());
 say(`mix: ${JSON.stringify(mixReport.final)} · ${elapsed()}`);
 
-const mux = spawnSync('ffmpeg', ['-v', 'error', '-y', '-i', videoPath, '-i', manifest.aac, '-map', '0:v', '-map', '1:a', '-c', 'copy', '-shortest', '-movflags', '+faststart', OUT], { encoding: 'utf8' });
-if (mux.status !== 0) throw new Error(`mux failed: ${mux.stderr}`);
+const tEnc = Date.now();
+const mux = spawnSync('ffmpeg', [
+  '-v', 'error', '-y', '-i', videoPath, '-i', manifest.aac, '-map', '0:v', '-map', '1:a',
+  '-vf', `scale=iw*${opts.scale}:ih*${opts.scale}:flags=neighbor`,
+  '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', String(opts.preset || 'fast'), '-tune', 'animation',
+  '-c:a', 'copy', '-shortest', '-movflags', '+faststart', OUT,
+], { encoding: 'utf8', maxBuffer: 16 << 20 });
+if (mux.status !== 0) throw new Error(`encode/mux failed: ${mux.stderr}`);
+say(`encoded ${opts.scale}x H.264 + AAC in ${((Date.now() - tEnc) / 1000).toFixed(0)} s · ${elapsed()}`);
 
 // ------------------------------------------------------- checks and sheet
 const stem = (name) => loadMono(path.join(WORK, `${name}.wav`));
@@ -470,12 +525,12 @@ const timeline = {
   speech: speech.map(({ clip, ...s }) => ({ ...s, clip: clip ? path.basename(clip) : null })),
   music: cues.map((c) => ({ t: rel(c.t), moment: c.moment, opts: c.opts, why: c.why })),
   events,
-  reports: { mix: mixReport, sync, synth: synthStats, page: pageStats, webaudio: rendered, beds: bedsInfo, pageErrors: pageErrors.slice(0, 50) },
+  reports: { mix: mixReport, sync, timingMs: timing, synth: { ...synthStats, pool: voices.stats }, page: pageStats, webaudio: rendered, beds: bedsInfo, pageErrors: pageErrors.slice(0, 50) },
 };
 const timelinePath = OUT.replace(/\.mp4$/i, '') + '-timeline.json';
 fs.writeFileSync(timelinePath, JSON.stringify(timeline, null, 1));
 if (!opts.keep) {
-  for (const f of ['webaudio.f32', 'beds.f32', 'beds-dry.f32', 'mix-raw.wav']) fs.rmSync(path.join(WORK, f), { force: true });
+  for (const f of ['webaudio.f32', 'beds.f32', 'beds-dry.f32', 'mix-raw.wav', 'video-native.mkv']) fs.rmSync(path.join(WORK, f), { force: true });
 }
 say(`done in ${elapsed()}: ${OUT}`);
 say(`sheet ${sheetPath}`);

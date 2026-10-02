@@ -55,7 +55,7 @@ export function cuesFromPlan(plan, { hasImg = true } = {}) {
     if (!story && !STUDIO.has(shot)) continue;
     if (shot === 'full' && !hasImg) continue;
     if (shot === 'map' && !(seg.location && Number.isFinite(seg.location.lat))) continue;
-    if (shot === 'fact' && !(seg.fact || seg.numbers?.length || seg.quote)) continue;
+    if (shot === 'fact' && !seg.fact) continue; // the director's fact card needs seg.fact
     const focus = e.focus && e.focus in ctx.cast ? e.focus : ctx.speaker;
     const framing = e.framing ?? null;
     const prev = out[out.length - 1];
@@ -70,6 +70,8 @@ export function cuesFromPlan(plan, { hasImg = true } = {}) {
   return out.length ? out : null;
 }
 
+const WARM = { id: 'warm-up', program: { id: 'world-now' }, cast: { A: 'paco', B: 'lola' }, segments: [{ type: 'story', anchor: 'A', text: 'Good evening. Floods have forced 40,000 people from their homes in southern Brazil.', cues: [] }] };
+
 export class LiveDirection {
   /** @param opts { director (setShot, scene), channel ({ presenters }), audio (mode) } */
   constructor({ director, channel = null, audio = null }) {
@@ -81,12 +83,16 @@ export class LiveDirection {
     this.plans = new WeakMap();
     this.story = null; // { seg, cues, handler } registered by playStory
     this.idle = typeof requestIdleCallback === 'function' ? (fn) => requestIdleCallback(fn, { timeout: 1500 }) : (fn) => setTimeout(fn, 30);
+    // the first plan of a session warms the text model and lexicon (~100-200 ms): do it now,
+    // on the start card, so no programme open ever pays for it
+    this.idle(() => planSegment(WARM, 0, {}));
   }
 
   /** A new episode is on air: remember it and plan its segments in idle time. */
   episode(ep) {
     this.ep = ep && Array.isArray(ep.segments) ? ep : null;
     this.scene.episode = this.ep;
+    this.scene.presenters = this.channel?.presenters || null; // the Stage's looks for ids without a design
     this.scene.segPlan = null;
     this.story = null;
     this.warm(this.ep, 0);

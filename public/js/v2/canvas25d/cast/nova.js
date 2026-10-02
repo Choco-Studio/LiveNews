@@ -28,7 +28,7 @@ export const nova = defineLook({
   skinLine: P.maroon,
   hair: { style: 'coily', ramp: [P.brown, P.maroon, P.black, P.black], line: P.black },
   necklace: [P.silver, P.fog],
-  torso: { neckHW: 3.0, shoulderTop: 3.0, shoulderHW: 18.6, sideHW: 17.4, bottom: 46, vDepth: 18, shoulderJoint: [16.0, 7.0] },
+  torso: { neckHW: 3.0, shoulderTop: 3.0, shoulderHW: 18.6, sideHW: 17.4, bottom: 46, vDepth: 12.5, shoulderJoint: [16.0, 7.0] },
   outfit: 'cardigan',
   jacket: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black }, // muted slate knit, darker than her face
   shirt: { ramp: [P.brown, P.maroon, P.black, P.black], line: P.black }, // deep maroon top
@@ -43,7 +43,7 @@ export const nova = defineLook({
 
 // The rounded shape around the head (head-local units): centre, half-width,
 // height above and below the centre, and the scallop that the outer clusters make.
-const HALO = { cy: -3.4, rx: 11.3, up: 10.4, down: 9.4 };
+const HALO = { cy: -3.7, rx: 11.9, up: 11.0, down: 9.8 };
 const LC = [0, 0], SC = [0, 0];
 const hash = (a, b) => {
   const h = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
@@ -106,7 +106,7 @@ function drawCoils(buf, L, m, head, s, sk) {
   });
   if (tr === 0) return;
   // ---- clusters on a jittered hexagonal lattice, top rows first so lower curls overlap
-  const d = tr === 1 ? 2.7 : 2.05; // spacing (units)
+  const d = tr === 1 ? 2.7 : s >= 3 ? 1.8 : 2.05; // spacing (units)
   const r = d * (tr === 1 ? 0.62 : 0.66);
   const sph = (cx, cy, out) => {
     local(head, cx, cy, LC);
@@ -119,19 +119,19 @@ function drawCoils(buf, L, m, head, s, sk) {
     const y = HALO.cy - HALO.up + j * d * 0.86;
     const off = j & 1 ? d * 0.5 : 0;
     for (let x = -HALO.rx - off; x <= HALO.rx + d; x += d) {
-      const jx = x + off + (hash(j, x) - 0.5) * d * 0.35;
-      const jy = y + (hash(x, j) - 0.5) * d * 0.3;
+      const jx = x + off + (hash(j, x) - 0.5) * d * 0.45;
+      const jy = y + (hash(x, j) - 0.5) * d * 0.4;
       const v = halo(jx, jy, lag);
       if (v < 0.015) continue;
       if (inFace(jx, jy) || below(jx, jy)) continue;
       // clusters at the edge of the face window are smaller (the hairline is soft)
       const nearFace = inFace(jx, jy + 0.9) || inFace(jx + Math.sign(jx) * -0.9, jy);
-      const rr = (nearFace ? r * 0.72 : r) * (0.9 + hash(jx, jy) * 0.2);
+      const rr = (nearFace ? r * 0.72 : r) * (0.8 + hash(jx, jy) * 0.4);
       const k = jy > HALO.cy ? (jy - HALO.cy) / HALO.down : 0;
       screen(head, jx + yawX * 0.6 + lag * k * 0.6, jy, SC);
       const nx = jx / HALO.rx, ny = (jy - HALO.cy) / HALO.up;
-      const bias = -0.55 * nx - 0.7 * ny < -0.45 ? 1 : 0;
-      blob(buf, m.hair, SC[0], SC[1], rr * s, 0.16, hash(j * 3.1, jx) * 6.28, bias, sph);
+      const facing = -0.55 * nx - 0.7 * ny;
+      blob(buf, m.hair, SC[0], SC[1], rr * s, 0.16, hash(j * 3.1, jx) * 6.28, facing < -0.45 ? 1 : 0, sph, facing > 0.42 && hash(jy, j) > 0.4);
     }
   }
 }

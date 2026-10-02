@@ -166,13 +166,16 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
     }
     const covered = open < 0.75 ? 1 : 0; // half-closed: the top eye row goes under the lid
     const lidY = yTop + covered;
-    const ix = clamp(Math.floor(x0 + (W - 2) / 2 + lx * W * 0.3 + 0.5), x0, x0 + W - 2);
+    // a 3 px iris (iris, pupil, iris) on an odd eye and 2 px on an even one, so a
+    // gaze at the lens is centred; the gaze moves it a pixel either way
+    const iw = W % 2 ? 3 : 2;
+    const ix = clamp(x0 + ((W - iw) >> 1) + Math.round(lx * 1.2), x0, x0 + W - iw);
+    const px = iw === 3 ? ix + 1 : ix + (lx < 0 ? 0 : 1);
     for (let r = 1 + covered; r <= rows; r++) {
       for (let i = 0; i < W; i++) {
         const x = x0 + i;
         let m = x < ix ? mt.silver : mt.fog;
-        if (x === ix) m = mt.irisDark;
-        else if (x === ix + 1) m = mt.pupil;
+        if (x >= ix && x < ix + iw) m = x === px ? mt.pupil : mt.irisDark;
         // the top row of a 2-row eye is in the lid's shadow
         if (rows >= 2 && r === 1 + covered && m === mt.silver) m = mt.fog;
         buf.plot(x, yTop + r, m, 1);
@@ -258,6 +261,9 @@ function browY(B, raise, frown, u) {
   return B.y - raise * (0.7 + 0.3 * u) - B.arch * Math.sin(Math.min(1, u * 1.35) * Math.PI) * (1 + Math.max(0, raise) * 0.4) + frown * 0.6 * (1 - u) * (1 - u) + Math.max(0, u - 0.7) * 1.2;
 }
 
+const BU = [0, 0.3, 0.62, 0.86, 1];
+const BX = new Float64Array(5), BYS = new Float64Array(5);
+
 function drawBrows(buf, L, mt, sk, f, s, tier) {
   const B = L.brows, E = L.eyes;
   const thick = Math.max(1, B.thick * s);
@@ -266,32 +272,43 @@ function drawBrows(buf, L, mt, sk, f, s, tier) {
     const frown = f.browIn || 0; // + inner ends down (serious), - inner ends up (worried)
     const xi = side * (E.x - B.len * 0.48);
     const xo = side * (E.x + B.len * 0.52);
-    mapF(xi, browY(B, raise, frown, 0));
-    const ax = F.x;
-    mapF(xo, browY(B, raise, frown, 1));
-    const bx = F.x;
-    const n = Math.max(2, Math.round(Math.abs(bx - ax)));
-    let prevY = null;
-    for (let k = 0; k <= n; k++) {
-      const u = k / n;
-      mapF(xi + (xo - xi) * u, browY(B, raise, frown, u));
-      const px = Math.round(F.x), cyb = F.y;
-      if (tier === 0) {
-        if (u > 0.92) continue;
-        buf.plot(px, Math.round(cyb), mt.brow, 1);
-        continue;
+    if (tier === 0) {
+      // wide: one straight 1 px stroke (an arch at this size only makes stairs)
+      mapF(xi + (xo - xi) * 0.05, browY(B, raise, frown, 0.3));
+      const ax = Math.round(F.x), ay = F.y;
+      mapF(xi + (xo - xi) * 0.85, browY(B, raise, frown, 0.6));
+      const bx = Math.round(F.x), y = Math.round((ay + F.y) / 2);
+      for (let x = Math.min(ax, bx); x <= Math.max(ax, bx); x++) buf.plot(x, y, mt.brow, 1);
+      continue;
+    }
+    // a connected polyline through the head, arch and tail; thickness tapers along it
+    for (let k = 0; k < 5; k++) {
+      mapF(xi + (xo - xi) * BU[k], browY(B, raise, frown, BU[k]));
+      BX[k] = F.x;
+      BYS[k] = F.y;
+    }
+    for (let k = 0; k < 4; k++) {
+      let x0 = Math.round(BX[k]), y0 = Math.round(BYS[k]);
+      const x1 = Math.round(BX[k + 1]), y1 = Math.round(BYS[k + 1]);
+      const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
+      const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+      let err = dx + dy;
+      for (let n = 0; n < 64; n++) {
+        const u = BU[k] + (BU[k + 1] - BU[k]) * (dx ? Math.abs(x0 - Math.round(BX[k])) / dx : 0);
+        const th = tier === 1 ? (u < 0.7 ? Math.min(2, Math.round(thick)) : 1) : Math.max(1, Math.round(thick * (u < 0.35 ? 1 : u < 0.75 ? 0.85 : 0.5)));
+        const top = y0 - (th >> 1);
+        for (let j = 0; j < th; j++) buf.plot(x0, top + j, mt.brow, 1);
+        if (x0 === x1 && y0 === y1) break;
+        const e2 = 2 * err;
+        if (e2 >= dy) {
+          err += dy;
+          x0 += sx;
+        }
+        if (e2 <= dx) {
+          err += dx;
+          y0 += sy;
+        }
       }
-      // thickness: full at the head, thinning along the arch, a 1 px tail
-      const th = Math.max(1, Math.round(thick * (u < 0.35 ? 1 : u < 0.75 ? 0.85 : 0.55)));
-      const y0 = Math.round(cyb - th / 2);
-      const tail = u > 0.9 && tier === 2;
-      for (let j = 0; j < th; j++) {
-        if (tail) deepen(buf, px, y0 + j, sk); // soft end: the brow fades into the skin
-        else buf.plot(px, y0 + j, mt.brow, 1);
-      }
-      // keep the stroke connected when it steps by more than a pixel
-      if (prevY !== null && Math.abs(y0 - prevY) > 1 && !tail) buf.plot(px, (y0 + prevY) >> 1, mt.brow, 1);
-      prevY = y0;
     }
   }
 }
@@ -306,15 +323,12 @@ function drawNose(buf, L, sk, s, tier) {
     buf.plot(Math.round(F.x), Math.round(F.y), sk, 2);
     return;
   }
-  // nostrils: the far one always, the near one only in close-ups
+  // nostrils: the far one always, the near (lit) one only in close-ups and one tone lighter
   mapF(N.w * 0.36, N.y1 + 0.1, 0.7);
-  buf.plot(Math.round(F.x), Math.round(F.y), sk, 3);
+  buf.plot(Math.round(F.x), Math.round(F.y), sk, tier === 2 ? 3 : 2);
   if (tier === 2) {
     mapF(-N.w * 0.36, N.y1 + 0.1, 0.7);
-    buf.plot(Math.round(F.x), Math.round(F.y), sk, s >= 3.2 ? 3 : 2);
-    // a lit point on the tip
-    mapF(-N.w * 0.12, N.y1 - 0.65, 1.3);
-    buf.plot(Math.round(F.x), Math.round(F.y), sk, 0);
+    buf.plot(Math.round(F.x), Math.round(F.y), sk, 2);
   } else {
     // medium: the tip's shadow on the far side
     mapF(N.w * 0.1, N.y1 + 0.35, 0.9);
@@ -325,6 +339,21 @@ function drawNose(buf, L, sk, s, tier) {
 // ---------------------------------------------------------------------------
 // Mouth
 
+const MX = { y: 0 };
+/** Screen column of the mouth at feature x (units): each corner rides the head's curve on its own. */
+function mx(fx, y) {
+  mapF(fx, y, 0.6);
+  MX.y = F.y;
+  return Math.round(F.x);
+}
+
+/** Paint a row between two feature-space x positions (exclusive right end). */
+function row(buf, fx0, fx1, yUnits, py, m, tone = 1) {
+  const a = mx(fx0, yUnits), b = mx(fx1, yUnits);
+  for (let x = a; x < b; x++) buf.plot(x, py, m, tone);
+  return b - a;
+}
+
 function drawMouth(buf, L, mt, sk, head, f, s, tier) {
   const M = L.mouth;
   const open = clamp(f.open || 0, 0, 1);
@@ -332,109 +361,114 @@ function drawMouth(buf, L, mt, sk, head, f, s, tier) {
   const mw = clamp(f.mwide ?? 0, -1, 1);
   const smile = clamp(f.smile || 0, -1, 1);
   const press = (f.press || 0) > 0.5;
-  mapF(0, M.y, 0.6);
-  const x0 = Math.round(F.x), y0 = Math.round(F.y);
-  const wpx = M.w * s * (1 + mw * 0.16) * (1 - round * 0.3);
-  const half = Math.max(1, Math.round(wpx / 2));
+  const tuck = (f.tuck || 0) > 0.5;
+  const hw = (M.w / 2) * (1 + mw * 0.16) * (1 - round * 0.3); // half width, units
+  mx(0, M.y);
+  const y0 = Math.round(MX.y);
   const lift = smile > 0.3 ? 1 : smile < -0.25 ? -1 : 0;
+  const xl = mx(-hw, M.y), xr = mx(hw, M.y); // corners, xr exclusive
 
   if (tier === 0) {
     // wide: a short deep line; a maroon middle while the jaw is open
-    const hw = Math.max(1, half - (round > 0.5 ? 1 : 0));
     const isOpen = open > 0.35 && !press;
-    for (let i = -hw; i < hw; i++) {
-      const edge = i === -hw || i === hw - 1;
-      buf.plot(x0 + i, y0 - (edge && lift > 0 && hw > 1 ? 1 : 0), isOpen && !edge ? mt.inner : sk, 3);
+    const a = round > 0.5 ? xl + 1 : xl, b = round > 0.5 ? xr - 1 : xr;
+    for (let x = a; x < Math.max(a + 1, b); x++) {
+      const edge = x === a || x === b - 1;
+      buf.plot(x, y0 - (edge && lift > 0 && b - a > 3 ? 1 : 0), isOpen && !edge ? mt.inner : sk, 3);
     }
     return;
   }
 
   const maxRows = tier === 1 ? 1 : s >= 3.2 ? 3 : 2;
   const rows = press ? 0 : Math.min(maxRows, Math.round(open * (maxRows + 0.35)));
-  const corner = (x, y) => buf.plot(x, y, mt.lip, 1);
 
   if (tier === 1) {
-    // medium: a lip line with soft ends; one row of interior when open
-    for (let i = -half; i < half; i++) {
-      const edge = i === -half || i === half - 1;
-      if (edge) buf.plot(x0 + i, y0 - (lift > 0 ? 1 : 0) + (lift < 0 ? 1 : 0), sk, 3);
-      else buf.plot(x0 + i, y0, mt.lip, 1);
+    // medium: a lip line with soft ends; one row of interior and the lit lower lip when open
+    for (let x = xl; x < xr; x++) {
+      const edge = x === xl || x === xr - 1;
+      if (edge) buf.plot(x, y0 - (lift > 0 ? 1 : 0) + (lift < 0 ? 1 : 0), sk, 3);
+      else buf.plot(x, y0, mt.lip, 1);
     }
     if (rows > 0) {
-      for (let i = -half + 1; i < half - 1; i++) buf.plot(x0 + i, y0 + 1, mt.inner, 1);
-      for (let i = -half + 2; i < half - 2; i++) buf.plot(x0 + i, y0 + 2, mt.lipHi, 1);
+      row(buf, -hw * 0.7, hw * 0.7, M.y, y0 + 1, mt.inner);
+      row(buf, -hw * 0.5, hw * 0.5, M.y, y0 + 2, mt.lipHi);
     }
     return;
   }
 
   // ---- close-up
-  const upW = Math.max(1, Math.round(half * (round > 0.5 ? 0.8 : 0.66)));
-  const loW = Math.max(1, Math.round(half * (round > 0.5 ? 0.72 : 0.58)));
   // upper lip: a darker plane (it faces down, away from the key)
-  for (let i = -upW; i < upW; i++) buf.plot(x0 + i, y0 - 1, mt.upper, 1);
+  row(buf, -hw * (round > 0.5 ? 0.8 : 0.66), hw * (round > 0.5 ? 0.8 : 0.66), M.y, y0 - 1, mt.upper);
+  const loW = hw * (round > 0.5 ? 0.72 : 0.56);
   if (rows === 0) {
     // closed (or pressed for m/b/p): the lip line, corners shaped by the smile
-    const hw = press ? half - 1 : half;
-    for (let i = -hw; i < hw; i++) {
-      const edge = i === -hw || i === hw - 1;
-      if (edge) {
-        if (lift > 0) corner(x0 + i, y0 - 1);
-        else if (lift < 0) corner(x0 + i, y0 + 1);
-        else buf.plot(x0 + i, y0, sk, 3);
-      } else buf.plot(x0 + i, y0, mt.lip, 1);
+    const a = press ? xl + 1 : xl, b = press ? xr - 1 : xr;
+    for (let x = a; x < b; x++) {
+      const edge = x === a || x === b - 1;
+      if (!edge) buf.plot(x, y0, mt.lip, 1);
+      else if (lift > 0) buf.plot(x, y0 - 1, mt.lip, 1);
+      else if (lift < 0) buf.plot(x, y0 + 1, mt.lip, 1);
+      else buf.plot(x, y0, sk, 3);
     }
     // lower lip: lit from above; pressed lips roll in and darken
-    const lw = press ? Math.max(1, loW - 1) : loW;
-    for (let i = -lw; i < lw; i++) buf.plot(x0 + i, y0 + 1, press ? mt.upper : mt.lipHi, 1);
-    for (let i = -lw + 1; i < lw - 1; i++) deepen(buf, x0 + i, y0 + 2, sk);
+    row(buf, -loW * (press ? 0.8 : 1), loW * (press ? 0.8 : 1), M.y, y0 + 1, press ? mt.upper : mt.lipHi);
+    const a2 = mx(-loW * 0.7, M.y), b2 = mx(loW * 0.7, M.y);
+    for (let x = a2; x < b2; x++) deepen(buf, x, y0 + 2, sk);
     smileLines(buf, L, sk, smile, s);
     return;
   }
-  // open: a lip line on top, rows of warm interior, then the lower lip
-  const teeth = (f.teeth || 0) > 0.45 && !(f.tuck > 0.5);
+  // open: the top lip line, rows of warm interior pinched at the corners, the lower lip
+  for (let x = xl; x < xr; x++) {
+    const edge = x === xl || x === xr - 1;
+    if (edge && lift > 0) buf.plot(x, y0 - 1, mt.lip, 1);
+    else if (edge) buf.plot(x, y0, sk, 3);
+    else buf.plot(x, y0, mt.lip, 1);
+  }
+  const teeth = (f.teeth || 0) > 0.45 && !tuck;
   const tongue = (f.tongue || 0) > 0.5 && rows >= 2;
-  for (let i = -half; i < half; i++) {
-    const edge = i === -half || i === half - 1;
-    buf.plot(x0 + i, y0, edge ? (lift > 0 ? sk : mt.lip) : mt.lip, edge && lift > 0 ? 3 : 1);
-  }
-  if (lift > 0) {
-    corner(x0 - half, y0 - 1);
-    corner(x0 + half - 1, y0 - 1);
-  }
   for (let r = 1; r <= rows; r++) {
-    // rounded: the first and last rows are narrower; pursed lips narrower still
-    const shrink = rows >= 3 && (r === 1 || r === rows) ? 1 : 0;
-    const hw = Math.max(1, half - 1 - shrink - (round > 0.5 ? 1 : 0));
-    for (let i = -hw; i < hw; i++) {
-      let m = mt.inner;
-      if (f.tuck > 0.5 && r === 1) m = mt.teeth; // f/v: upper teeth on the lower lip
-      else if (teeth && r === 1 && (rows >= 2 || Math.abs(i + 0.5) < hw * 0.45) && Math.abs(i + 0.5) < hw * 0.72) m = mt.teeth;
-      else if (tongue && r === rows && Math.abs(i + 0.5) < hw * 0.5) m = mt.tongue;
-      buf.plot(x0 + i, y0 + r, m, 1);
+    // the interior narrows toward the corners and at its top and bottom rows
+    const edgeRow = rows >= 2 && (r === rows || (rows === 3 && r === 1));
+    const iw = hw * (0.78 - (edgeRow ? 0.16 : 0) - round * 0.12);
+    const a = mx(-iw, M.y), b = mx(iw, M.y);
+    for (let x = a; x < b; x++) buf.plot(x, y0 + r, mt.inner, 1);
+    buf.plot(a - 1, y0 + r, mt.lip, 1);
+    buf.plot(b, y0 + r, mt.lip, 1);
+    if (r === 1 && (tuck || teeth)) {
+      // f/v: the upper teeth rest on the lower lip; otherwise a short band of upper teeth
+      const k = tuck ? 0.7 : rows >= 2 ? 0.48 : f.teeth > 0.8 ? 0.3 : 0;
+      if (k > 0) row(buf, -iw * k, iw * k, M.y, y0 + 1, mt.teeth);
     }
-    buf.plot(x0 - hw - 1, y0 + r, mt.lip, 1);
-    buf.plot(x0 + hw, y0 + r, mt.lip, 1);
+    if (tongue && r === rows) row(buf, -iw * 0.45, iw * 0.45, M.y, y0 + r, mt.tongue);
   }
   const yl = y0 + rows + 1;
-  const lw = f.tuck > 0.5 ? Math.max(1, loW - 1) : loW;
-  for (let i = -lw; i < lw; i++) buf.plot(x0 + i, yl, f.tuck > 0.5 ? mt.upper : mt.lipHi, 1);
-  for (let i = -lw + 1; i < lw - 1; i++) deepen(buf, x0 + i, yl + 1, sk);
+  row(buf, -loW * (tuck ? 0.8 : 1), loW * (tuck ? 0.8 : 1), M.y, yl, tuck ? mt.upper : mt.lipHi);
+  const a3 = mx(-loW * 0.7, M.y), b3 = mx(loW * 0.7, M.y);
+  for (let x = a3; x < b3; x++) deepen(buf, x, yl + 1, sk);
   smileLines(buf, L, sk, smile, s);
 }
 
-/** Close-ups: the folds from the nose wings toward the mouth corners, only in a real smile. */
+/**
+ * Close-ups: the folds from the nose wings toward the mouth corners in a real
+ * smile, as one connected 1 px line on lit skin (never loose dots on the shade side).
+ */
 function smileLines(buf, L, sk, smile, s) {
-  if (smile < 0.42) return;
+  if (smile < 0.45 || s < 3) return;
   const N = L.nose, M = L.mouth;
-  const n = Math.max(2, Math.round(1.6 * s * Math.min(1, (smile - 0.42) * 4)));
   for (let side = -1; side <= 1; side += 2) {
-    mapF(side * (N.w * 0.62 + 0.35), N.y1 + 0.55, 0.4);
-    const ax = F.x, ay = F.y;
-    mapF(side * (M.w * 0.56 + 0.45), M.y - 0.3, 0.3);
-    const bx = F.x, by = F.y;
-    for (let k = 0; k < n; k++) {
-      const u = k / Math.max(1, n - 1);
-      deepen(buf, Math.round(ax + (bx - ax) * u), Math.round(ay + (by - ay) * u), sk);
+    mapF(side * (N.w * 0.62 + 0.35), N.y1 + 0.6, 0.4);
+    const ax = Math.round(F.x), ay = Math.round(F.y);
+    mapF(side * (M.w * 0.56 + 0.4), M.y - 0.4, 0.3);
+    const bx = Math.round(F.x), by = Math.round(F.y);
+    const n = Math.max(Math.abs(bx - ax), Math.abs(by - ay));
+    if (n < 2) continue;
+    let ok = true;
+    for (let k = 0; k <= n && ok; k++) {
+      const x = Math.round(ax + ((bx - ax) * k) / n), y = Math.round(ay + ((by - ay) * k) / n);
+      const i = y * buf.w + x;
+      if (buf.mat[i] !== L._mats.skin || buf.tone[i] !== 1) ok = false;
     }
+    if (!ok) continue;
+    for (let k = 1; k < n; k++) buf.plot(Math.round(ax + ((bx - ax) * k) / n), Math.round(ay + ((by - ay) * k) / n), sk, 2);
   }
 }

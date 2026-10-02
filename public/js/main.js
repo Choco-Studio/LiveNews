@@ -8,13 +8,16 @@ canvas.width = W;
 canvas.height = H;
 
 const audio = new AudioEngine({ lang: 'en' });
-const renderer = new Renderer(canvas, audio);
+// Wave 2 presenters/studio: opt-in during the parallel wave (?v2=1); ?v2=0 is an explicit off.
+// ?perf=1 logs the v2 shot's p50/p95 every 10 s.
+const v2 = params.has('v2') ? params.get('v2') !== '0' : false;
+const renderer = new Renderer(canvas, audio, { v2, perf: params.get('perf') === '1' });
 
 const channel = await fetch('/api/channel')
   .then((r) => r.json())
   .catch(() => ({ name: 'GLOBIT 24', slogan: '', presenters: {}, programs: {}, rotation: [] }));
 document.title = `${channel.name} · Live`;
-const player = new Director({ audio, channel });
+const player = new Director({ audio, channel, v2 });
 const scene = player.scene;
 scene.subtitles = params.get('subs') !== '0';
 

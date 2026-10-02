@@ -18,11 +18,11 @@ import { LocalXY, localBox, clumpTone } from './kit-a.js';
 export const sam = defineLook({
   id: 'sam',
   name: 'Sam Night',
-  head: { top: -10.4, craniumY: -2.9, R: 7.2, cheekY: 2.2, cheekHW: 6.85, chinY: 9.7, chinHW: 3.3, jawPow: 2.6 },
-  headAt: [0, -13.7],
+  head: { top: -10.5, craniumY: -3.0, R: 6.85, cheekY: 2.2, cheekHW: 6.5, chinY: 9.7, chinHW: 3.25, jawPow: 2.6 },
+  headAt: [0, -14.3],
   neck: { hw: 3.05 },
-  eyes: { y: -0.5, x: 2.8, w: 2.6, h: 1.38, iris: [P.tanShade, P.brown], lash: P.maroon, lashes: false, bags: false },
-  brows: { y: -2.35, len: 3.4, thick: 0.6, color: P.maroon, arch: 0.18 },
+  eyes: { y: -0.5, x: 2.7, w: 2.55, h: 1.38, iris: [P.tanShade, P.brown], lash: P.maroon, lashes: false, bags: false },
+  brows: { y: -2.45, len: 3.3, thick: 0.5, color: P.brown, arch: 0.28 },
   nose: { y0: -0.3, y1: 3.45, w: 1.4, big: false },
   mouth: { y: 6.35, w: 3.7, lip: P.brown, lipHi: P.skinShade, upper: P.skinShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   ears: { y: -0.25, h: 2.7, w: 0.95 },
@@ -55,8 +55,8 @@ const CO = { cw: 1.3, s: 1, seed: 21, sep: true, hiLo: 0.3, hiHi: 3.6, hiW: 0.46
 export function drawCrop(buf, L, m, head, s) {
   const H = L.head;
   const cyc = H.craniumY - 0.2;
-  const a = H.R + 0.55; // half-width of the top's volume
-  const topY = H.top - 1.45; // the top of the volume (head-local)
+  const a = H.R + 0.75; // half-width of the top's volume
+  const topY = H.top - 2.5; // the top of the volume (head-local): the textured top stands up
   const b = cyc - topY;
   const yawX = Math.sin(head.yaw) * H.R * 0.85;
   const pitchShift = Math.sin(head.pitch) * 2.0;
@@ -75,9 +75,10 @@ export function drawCrop(buf, L, m, head, s) {
     if (y < cyc) {
       // a squarer top than Paco's round volume
       // the front-left (camera-left) is pushed up a little higher than the back-right
-      const lean = 1 + 0.06 * clamp1(-x / a);
+      const lean = 1 + 0.15 * clamp1(-x / a);
       const ux = ax0 / a, uy = (cyc - y) / (b * lean);
       if (Math.pow(ux, 2.35) + Math.pow(uy, 2.35) > 1) return -1;
+      if (hw > 0 && ax0 > hw + 0.3 + (cyc - y) * 0.6) return -1; // the volume tapers into the short sides
     } else if (ax0 > hw + 0.3) return -1;
     const fx = x - yawX;
     const ax = Math.abs(fx);

@@ -8,9 +8,10 @@ import { zoneTime, longDate, mulberry32 } from '../public/js/util.js';
 import { THEME_ACCENT } from '../public/js/cast.js';
 import { P } from '../public/js/palette.js';
 import { paginate, pageAt, CaptionState, CAPTION_TIMING } from '../public/js/graphics/captions.js';
-import { StrapState, strapContent, strapPage, categoryLabel, STRAP_TIMING, TEXT_ROOM } from '../public/js/graphics/strap.js';
-import { TickerState, makeEntry, makeEntries, TICKER_TIMING, TICKER_ROOM } from '../public/js/graphics/ticker.js';
-import { Graphics, OVERLAYS, BREAKING_STRAP } from '../public/js/graphics/index.js';
+import { StrapState, strapContent, strapPage, categoryLabel, drawStrap, STRAP_TIMING, TEXT_ROOM, BAR_TOP } from '../public/js/graphics/strap.js';
+import { TickerState, makeEntry, makeEntries, makeFigureEntry, makeNextEntry, TICKER_TIMING, TICKER_ROOM } from '../public/js/graphics/ticker.js';
+import { Graphics, OVERLAYS, BREAKING_STRAP, BREAKING_TICKER, BREAKING_MAX_AGE, PROGRAM_TAG, programGraphics, sameStory } from '../public/js/graphics/index.js';
+import { FrameGuard, GUARD_HOLD } from '../public/js/graphics/guard.js';
 import { CAPTION, inkOn, clipped } from '../public/js/graphics/layout.js';
 import { layoutText, linePages } from '../public/js/graphics/breaks.js';
 import { buildTimeline, sampleTimeline } from '../public/js/audio/visemes.js';
@@ -514,4 +515,339 @@ test('graphics: an exception inside a clipped region is contained and the contex
   }
   assert.equal(armed, false, 'the injected error fired');
   assert.equal(g.errors.size, 1, 'logged once');
+});
+
+// --- fix round 2 ---------------------------------------------------------------
+
+// Real subtitling probes (critic 1, round 2): each must break at a phrase. Golden layouts.
+const CAPTION_GOLDEN = [
+  ['The Panama Canal has reopened to ships after fog closed it for a day, Ledger Line reports.',
+    'The Panama Canal has reopened / to ships after fog closed it for a day, || Ledger Line reports.'],
+  ['And finally: coral recovers on parts of the Great Barrier Reef, Bitport Herald reports.',
+    'And finally: coral recovers / on parts of the Great Barrier Reef, || Bitport Herald reports.'],
+  ['Officials in New Zealand say the trial will run until the end of the school year in December.',
+    'Officials in New Zealand say the trial will run / until the end of the school year in December.'],
+  ['The company said the new chip would be available before Christmas in the United States and Europe.',
+    'The company said the new chip would be available / before Christmas in the United States and Europe.'],
+  ['Rescue teams worked through the night after the storm, which hit the coast during high tide.',
+    'Rescue teams worked / through the night after the storm, || which hit the coast during high tide.'],
+  ['Prime Minister Ana Silva said the deal was signed in São Paulo on Tuesday after months of talks.',
+    'Prime Minister Ana Silva said the deal was signed / in São Paulo on Tuesday after months of talks.'],
+  ['Prices rose 4.5 per cent in September, the highest rate since 2023, the statistics office said.',
+    'Prices rose 4.5 per cent in September, || the highest rate since 2023, / the statistics office said.'],
+  ['It is the third eruption since December, and lava has reached the edge of the town of Grindavik.',
+    'It is the third eruption since December, || and lava has reached the edge / of the town of Grindavik.'],
+  ['Scientists say the water vapour was found using the James Webb Space Telescope over several nights.',
+    'Scientists say the water vapour was found / using the James Webb Space Telescope || over several nights.'],
+];
+const show = (pages) => pages.map((p) => p.lines.join(' / ')).join(' || ');
+
+test('captions r2: realistic sentences break at phrases (golden layouts), names and modifiers stay whole', () => {
+  for (const [text, want] of CAPTION_GOLDEN) assert.equal(show(paginate(text)), want);
+  // one line at a time (a strap is up) keeps the same phrase breaks
+  assert.equal(show(paginate(CAPTION_GOLDEN[6][0], CAPTION.maxW, 1)), 'Prices rose 4.5 per cent in September, || the highest rate since 2023, || the statistics office said.');
+  const lines = CAPTION_GOLDEN.flatMap(([text]) => [...paginate(text), ...paginate(text, CAPTION.maxW, 1)].flatMap((p) => p.lines));
+  for (const l of lines) {
+    assert.doesNotMatch(l, /\b(the|a|of|to|in|after|before|through|during|across)$/i, `no line ends on a weak word: ${l}`);
+    assert.doesNotMatch(l, /\b(Great|New|United|James Webb Space)$/, `names stay whole: ${l}`);
+  }
+});
+
+test('captions r2: one line per page while a strap is up; a strap arriving mid-sentence re-pages forward', () => {
+  const s = new CaptionState();
+  s.update(0, LONG, 0, null, 2);
+  assert.equal(s.lines.length, 2);
+  const first = s.pages[0].lines.join(' ');
+  s.update(3, LONG, 0, null, 1); // the strap came on: same sentence, one line at a time
+  assert.equal(s.perPage, 1);
+  assert.equal(s.lines.length, 1);
+  // the line shown is still inside what was on screen (nothing skipped)
+  assert.ok(first.includes(s.lines[0]) || s.pages[s.page].start <= paginate(LONG)[1].start, s.lines[0]);
+  let last = s.page;
+  for (let t = 3; t < 20; t += 0.1) {
+    s.update(t, LONG, 0, null, 1);
+    assert.ok(s.page >= last, 'pages only move forward');
+    last = s.page;
+  }
+  assert.equal(s.page, s.pages.length - 1, 'the last line airs');
+});
+
+test('captions r2: white on black, and the caption leaves by rolling out (no alpha)', async () => {
+  const { CAPTION_COLOR, drawCaptions, CAPTION_TIMING: CT } = await import('../public/js/graphics/captions.js');
+  assert.equal(CAPTION_COLOR, P.white);
+  const s = new CaptionState();
+  s.update(0, 'Hello there.', 0);
+  s.update(2, null);
+  const ctx = fakeCtx();
+  const alphas = [];
+  const fill = ctx.fillRect;
+  ctx.fillRect = function (...a) {
+    alphas.push(this.globalAlpha);
+    return fill.apply(this, a);
+  };
+  for (let t = 2; t < 2 + CT.hold + CT.out; t += 0.02) drawCaptions(ctx, t, s, { bottom: 196 });
+  assert.ok(alphas.length > 0 && alphas.every((a) => a === 1));
+  assert.equal(ctx.depth, 0);
+});
+
+test('graphics r2: a caption that only repeats the strap tag is not burnt in', () => {
+  const g = new Graphics({ now: () => 0 });
+  const scene = { shot: 'close', ticker: [], subtitles: true, lowerThird: { headline: 'Canada and Mexico sign water deal', kicker: 'AROUND THE WORLD', source: 'W', since: 0 }, subtitle: 'Around the world.' };
+  g.update(0, scene);
+  assert.equal(g.captions.active, false);
+  scene.subtitle = 'Canada and Mexico have signed an agreement.';
+  g.update(0.1, scene);
+  assert.equal(g.captions.active, true);
+});
+
+test('graphics r2: a caption repeating the montage card headline is not burnt in', () => {
+  const g = new Graphics({ now: () => 0 });
+  const rundown = [{ storyId: 'c1', headline: 'Wellington schools trial a four-day week' }];
+  const scene = { shot: 'montage', rundown, card: { index: 0 }, ticker: [], subtitle: 'Wellington schools trial a four-day week.', subtitles: true };
+  g.update(0, scene);
+  assert.equal(g.captions.active, false);
+  scene.subtitle = 'Parents are split on the idea.';
+  g.update(0.1, scene);
+  assert.equal(g.captions.active, true);
+});
+
+test('ticker r2: continuation pages start with an ellipsis, no page is a scrap, plates fit their label', () => {
+  const titles = [
+    'Telescope in Chile spots water vapour on a distant planet',
+    'Moderate earthquake shakes northern Chile, no damage reported',
+    'Kerala floods: thousands moved to relief camps as heavy rain continues',
+    'Tech giants agree on a common charger standard for laptops',
+    'Bees use the sun as a compass even on cloudy days, study says',
+  ];
+  for (const text of titles) {
+    const pages = makeEntries({ source: 'Starfield Journal', text });
+    for (const [i, e] of pages.entries()) {
+      const bare = e.text.replace(/^\.\.\./, '').replace(/\.\.\.$/, '');
+      if (pages.length > 1) assert.ok(bare.split(/\s+/).length >= 3, `no scrap page: ${e.text}`);
+      if (i > 0) assert.match(e.text, /^\.\.\./);
+      assert.ok(e.x + measureText(e.text) <= 371, `inside action-safe: ${e.text}`);
+    }
+  }
+  // the split follows the phrase: a compass word stays with its name, the comma is the break
+  assert.deepEqual(makeEntries({ text: titles[1] }).map((e) => e.text), ['Moderate earthquake shakes northern Chile...', '...no damage reported']);
+  // the plate is sized to its label: LATEST items get more room than BREAKING ones
+  const latest = makeEntry({ text: 'Short' });
+  const breaking = makeEntry({ text: 'Short', label: 'BREAKING', plate: P.red, breaking: true });
+  assert.ok(latest.x < breaking.x);
+  // an editorial ticker-length `short` headline is used first
+  assert.equal(makeEntry({ text: 'A very long headline that would never fit the band in one piece at all, really', short: 'Short version' }).text, 'Short version');
+});
+
+test('ticker r2: a single entry never pushes itself; a full-screen card holds the flipper', () => {
+  const s = new TickerState();
+  const only = makeEntries({ text: 'Only item' });
+  s.update(0, only, 1);
+  for (let t = 0; t < 30; t += 0.1) s.update(t, only, 1);
+  assert.equal(s.prev, null, 'no push of the same entry');
+  const list = [...makeEntries({ text: 'One' }), ...makeEntries({ text: 'Two' })];
+  const h = new TickerState();
+  h.update(0, list, 1);
+  for (let t = 0; t < 10; t += 0.1) h.update(t, list, 1, true); // held for 10 s
+  assert.equal(h.cur.text, 'One', 'nothing pushed while held');
+  h.update(10, list, 1);
+  assert.equal(h.cur.text, 'One', 'time held does not count');
+  h.update(10 + list[0].dur + 0.01, list, 1);
+  assert.equal(h.cur.text, 'Two');
+});
+
+test('graphics r2: the ticker never repeats the story on the strap, and keeps its rotation', () => {
+  assert.ok(sameStory('Lisbon opens a new riverside tram line', 'LISBON OPENS A NEW RIVERSIDE TRAM LINE'));
+  assert.ok(!sameStory('Lisbon opens a new riverside tram line', 'Oil prices slide as demand cools'));
+  const g = new Graphics({ now: () => 0 });
+  const ticker = [
+    { source: 'A', text: 'Lisbon opens a new riverside tram line' },
+    { source: 'B', text: 'Robot vacuum learns to climb stairs' },
+    { source: 'C', text: 'Coffee futures reach a ten-year high' },
+  ];
+  const scene = { shot: 'wide', ticker, lowerThird: { headline: 'Lisbon opens riverside tram line', source: 'A', since: 0 } };
+  for (let t = 0; t < 60; t += 0.1) {
+    g.update(t, scene);
+    assert.ok(!/LISBON/i.test(g.ticker.cur?.text || ''), `t=${t.toFixed(1)}: ${g.ticker.cur?.text}`);
+  }
+});
+
+test('graphics r2: a breaking item that arrives during an ad takes the strap when the news returns', () => {
+  const g = new Graphics({ now: () => 0 });
+  const br = { source: 'W', text: 'Quake strikes off northern Japan', since: 5 };
+  const lt = { headline: 'Oil prices slide', source: 'Wire', since: 41 };
+  const scene = { shot: 'ad', ticker: [{ source: 'A', text: 'Other news' }], breaking: br, lowerThird: null };
+  for (let t = 0; t < 40; t += 1 / 30) g.update(t, scene);
+  assert.equal(g.brAir, null, 'not on air during the ad');
+  scene.shot = 'wide';
+  scene.lowerThird = lt;
+  g.update(40.05, scene);
+  assert.equal(g.strap.cur.breaking, true, 'the strap carries it first');
+  for (let t = 40.05; t < 40 + BREAKING_STRAP - 0.5; t += 1 / 30) g.update(t, scene);
+  assert.equal(g.strap.cur.breaking, true, 'held for its full on-air time');
+  for (let t = 40 + BREAKING_STRAP - 0.5; t < 40 + BREAKING_STRAP + 2; t += 1 / 30) g.update(t, scene);
+  assert.equal(g.strap.cur.breaking, false);
+  assert.equal(g.ticker.cur.breaking, true, 'then the ticker takes it');
+  assert.ok(g.tickerList.some((e) => e.breaking));
+  for (let t = 42 + BREAKING_STRAP; t < 40 + BREAKING_TICKER + 1; t += 0.5) g.update(t, scene);
+  assert.ok(!g.tickerList.some((e) => e.breaking), 'and drops it after its on-air window');
+  // an item that could never air within BREAKING_MAX_AGE is dropped
+  const old = new Graphics({ now: () => 0 });
+  const s2 = { shot: 'ad', ticker: [], breaking: { source: 'W', text: 'Old news', since: 0 }, lowerThird: lt };
+  old.update(0, s2);
+  s2.shot = 'wide';
+  old.update(BREAKING_MAX_AGE + 1, s2);
+  assert.equal(old.strap.cur.breaking, false);
+});
+
+test('strap r2: a story headline wider than the bar gets two balanced lines (no ellipsis, no paging)', () => {
+  const c = strapContent({ headline: 'PERU ARCHAEOLOGISTS UNCOVER 3,000-YEAR-OLD TEMPLE IN THE ANDES', source: 'Pixelburg Post', since: 0 });
+  assert.equal(c.pages.length, 1);
+  assert.equal(c.pages[0].length, 2);
+  assert.equal(c.twoLine, true);
+  assert.equal(c.barY, BAR_TOP.two);
+  assert.ok(!c.pages[0].join(' ').includes('...'));
+  for (const l of c.pages[0]) assert.ok(measureText(l) <= TEXT_ROOM);
+  assert.equal(c.pages[0].join(' '), 'PERU ARCHAEOLOGISTS UNCOVER 3,000-YEAR-OLD TEMPLE IN THE ANDES');
+  const one = strapContent({ headline: 'OIL PRICES SLIDE', since: 0 });
+  assert.equal(one.barY, BAR_TOP.one);
+  // the bar top eases between the two heights on the flip, and captions follow it
+  const s = new StrapState();
+  s.update(0, one);
+  s.update(5, c);
+  assert.equal(s.barY(5), BAR_TOP.one);
+  const mid = s.barY(5 + STRAP_TIMING.flip / 2);
+  assert.ok(mid < BAR_TOP.one && mid > BAR_TOP.two);
+  assert.equal(s.barY(5 + STRAP_TIMING.flip), BAR_TOP.two);
+  assert.equal(s.top(6), BAR_TOP.two - 11);
+  // breaking items still page, every page but the first reads as a continuation
+  const br = strapContent({ headline: 'Earthquake of magnitude 7.4 strikes off the coast of central Chile, tsunami warning issued for the Pacific coast', breaking: true, since: 0 });
+  assert.ok(br.pages.length >= 2);
+  for (const p of br.pages.slice(1)) assert.match(p[0], /^\.\.\./);
+});
+
+test('strap r2: tag-row type sits 2 px down (3 with accented capitals); text lands with the wipe', () => {
+  assert.equal(strapContent({ headline: 'X', kicker: 'OIL MARKETS' }).tagY, 2);
+  assert.equal(strapContent({ headline: 'X', kicker: 'MÉXICO' }).tagY, 3);
+  const s = new StrapState();
+  s.update(0, strapContent({ headline: 'Oil', since: 0 }));
+  assert.ok(s.textAt <= STRAP_TIMING.in + 0.1, 'text is fully up within 0.1 s of the bar settling');
+});
+
+test('graphics r2: NEWS IN 60 keeps its tag, shows a never-shrinking progress rule and a static UP NEXT plate', () => {
+  assert.equal(programGraphics({ id: 'news-60' }).ticker, 'next');
+  assert.equal(programGraphics({ theme: 'flash' }).progressRule, true);
+  assert.equal(programGraphics({ id: 'world-now', theme: 'world' }).tagHold, PROGRAM_TAG.hold);
+  const g = new Graphics({ now: () => 0 });
+  const scene = {
+    shot: 'wide', program: { id: 'news-60', title: 'NEWS IN 60', theme: 'flash' }, programTagUntil: 15, progress: 0,
+    schedule: { upcoming: [{ title: 'Cosmos Desk', tagline: 'Science' }] }, ticker: [{ source: 'A', text: 'Other news' }],
+    lowerThird: { headline: 'Oil prices slide', source: 'W', since: 0 }, rundown: [],
+  };
+  let lastW = 0;
+  for (let t = 0; t < 50; t += 0.1) {
+    scene.progress = t < 20 ? t / 40 : 0.3; // a late estimate may go back: the rule never does
+    g.update(t, scene);
+    assert.ok(g.strap.progress >= lastW);
+    lastW = g.strap.progress;
+  }
+  assert.equal(g.tagOut, null, 'programme tag held for the whole episode');
+  assert.equal(g.tickerList.length, 1);
+  assert.equal(g.tickerList[0].label, 'UP NEXT');
+  assert.equal(g.tickerList[0].text, 'COSMOS DESK');
+  assert.equal(g.ticker.prev, null, 'nothing flips');
+  // the rule is drawn in whole pixels: slate track + yellow fill
+  const ctx = fakeCtx();
+  const fills = [];
+  const fr = ctx.fillRect;
+  ctx.fillRect = function (x, y, w, h) {
+    fills.push([this.fillStyle, x, y, w, h]);
+    return fr.call(this, x, y, w, h);
+  };
+  drawStrap(ctx, 50, g.strap);
+  const rule = fills.filter(([c, , y, , h]) => c === P.yellow && h === 1 && y === BAR_TOP.one);
+  assert.equal(rule.length, 1);
+  assert.equal(rule[0][3], Math.floor(346 * lastW));
+});
+
+test('graphics r2: MONEY MINUTE flips aired figures with shape glyphs (market figures only)', () => {
+  const e = makeFigureEntry({ value: '$82', label: 'Brent crude' }, { dir: 'down', market: true });
+  assert.equal(e.glyph, 'down');
+  assert.equal(makeFigureEntry({ value: '4.5%', label: 'Inflation' }, { dir: 'up', market: false }).glyph, null);
+  const rundown = [
+    { storyId: 'm1', headline: 'Oil slides', numbers: [{ value: '$82', label: 'BRENT', dir: 'down', market: true }] },
+    { storyId: 'm2', headline: 'Pound up', numbers: [{ value: '$1.27', label: 'STERLING', dir: 'up', market: true }] },
+    { storyId: 'm3', headline: 'Coffee high', numbers: [{ value: '$3.10', label: 'ARABICA', dir: 'flat', market: true }] },
+  ];
+  const g = new Graphics({ now: () => 0 });
+  const scene = { shot: 'wide', program: { id: 'money-minute', title: 'MONEY MINUTE', theme: 'money' }, rundown, storyId: 'm2', ticker: [{ source: 'A', text: 'Other news' }], lowerThird: null };
+  g.update(0, scene);
+  assert.ok(g.tickerList.every((x) => !x.value), 'fewer than two aired figures: headlines');
+  scene.storyId = 'm3';
+  g.update(1, scene);
+  const figs = g.tickerList.filter((x) => x.value);
+  assert.deepEqual(figs.map((x) => x.text), ['BRENT', 'STERLING'], 'only stories already aired, never the one on air');
+  assert.equal(figs[0].label, 'BOTTOM LINE');
+});
+
+test('guard: a persistently throwing shot shows the last good frame, then a slate; context reset; logged once', () => {
+  const log = [];
+  const ctx = fakeCtx();
+  ctx.reset = function () {
+    this.depth = 0;
+    this.globalAlpha = 1;
+    log.push('reset');
+  };
+  const canvas = { width: 384, height: 216, getContext: () => ctx };
+  ctx.canvas = canvas;
+  const stage = { width: 384, height: 216, getContext: () => ({ reset() {}, imageSmoothingEnabled: false }) };
+  let broken = false;
+  const renderer = {
+    canvas,
+    stage,
+    ctx,
+    drawShot() {
+      if (broken) {
+        ctx.save();
+        ctx.globalAlpha = 0.2;
+        throw new Error('shot boom');
+      }
+    },
+  };
+  const guard = new FrameGuard();
+  const draws = [];
+  const di = ctx.drawImage;
+  ctx.drawImage = function (img, ...a) {
+    draws.push(img);
+    return di.call(this, img, ...a);
+  };
+  const fills = [];
+  const fr = ctx.fillRect;
+  ctx.fillRect = function (...a) {
+    fills.push(this.fillStyle);
+    return fr.apply(this, a);
+  };
+  assert.equal(guard.shot(renderer, 0, {}), true);
+  assert.ok(guard.has, 'the clean frame was kept');
+  broken = true;
+  const errors = console.error;
+  let logged = 0;
+  console.error = () => logged++;
+  try {
+    for (let t = 1; t < 1 + GUARD_HOLD - 0.1; t += 0.1) {
+      draws.length = 0;
+      assert.equal(guard.shot(renderer, t, {}), false);
+      assert.equal(ctx.depth, 0, 'state reset after the throw');
+      assert.equal(ctx.globalAlpha, 1);
+      assert.ok(draws.includes(guard.last), 'held frame repainted');
+    }
+    fills.length = 0;
+    guard.shot(renderer, 1 + GUARD_HOLD + 0.5, {});
+    assert.ok(fills.includes(P.ink), 'then the slate');
+  } finally {
+    console.error = errors;
+  }
+  assert.equal(logged, 1, 'logged once');
+  broken = false;
+  assert.equal(guard.shot(renderer, 10, {}), true);
+  assert.equal(guard.failSince, null, 'recovers when the shot draws again');
 });

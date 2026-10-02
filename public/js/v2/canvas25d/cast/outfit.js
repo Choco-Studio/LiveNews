@@ -235,7 +235,8 @@ function jacketTone(o, F, tier) {
   const fex = T.sideHW * 0.6, fey = Math.min(vY - 3, T.shoulderJoint[1] + 6.5);
   const sag = 2.0;
   const foldTh = Math.max(0.3, 1.15 / s); // ~1-2 px at the thickest point
-  const sideBase = 2.9, sideBulge = 1.8;
+  // the approved prototype's broad shade on the far third, following the ribcage
+  const sideBase = T.sideHW * 0.34, sideBulge = T.sideHW * 0.06;
   return (px, py) => {
     const dl = (px + 0.5 - ROW_L[py]) / s;
     const dr = (ROW_R[py] - px - 0.5) / s;
@@ -251,12 +252,12 @@ function jacketTone(o, F, tier) {
     // the far side turns away: a side plane wider over the deltoid and ribcage
     const sideW = sideBase + sideBulge * Math.exp(-((y - 7) * (y - 7)) / 40);
     if (dr < sideW) t = 2;
-    if (tier === 2 && dr < 0.75 + 0.25 * Math.exp(-((y - 7) * (y - 7)) / 40)) t = 3;
+    if (tier === 2 && dr < 1.5 + 0.4 * Math.exp(-((y - 7) * (y - 7)) / 40)) t = 3;
     // shoulder tops catch the key (a band that follows the slope), the left one more
     const band = tier === 0 ? 1.4 : 1.9;
     if (top < band && ax > T.neckHW + 1.2) {
       if (x < 0) t = 0;
-      else if (t === 2 && top < band * 0.6) t = 1;
+      else if (t >= 2) t = 1; // the far shoulder's top still faces the light (the rim sits on it)
     }
     // the key-light edge on the left
     if (dl < (tier === 0 ? 1.1 : 1.0)) t = 0;
@@ -579,13 +580,13 @@ export function drawLapels(buf, L, m, toS, s, vY, g, o = null, F = null) {
         const x = v.x, y = F.unlift(v.x, v.y);
         // distance inside the main edge (Lp → B), positive inward
         const d = (x - Lp[0]) * nx + (y - Lp[1]) * ny;
-        if (y < N[1] - 0.2) return side < 0 ? 1 : 2; // the collar above the notch
+        if (y < N[1] - 0.2) return 1; // the collar above the notch
         if (side < 0) return d < bandW ? 0 : 1;
         return d < bandW ? 2 : 1;
       };
     buf.poly(poly, mat, toneAt);
-    // edges: selective outline (local deep tone on the far lapel, softer on the lit one)
-    const eTone = side < 0 ? 2 : deep;
+    // edges in the deep tone, as in the approved prototype (the lit lapel's band softens its edge)
+    const eTone = deep;
     const seg = (a, b, t, gg = g) => {
       const p0 = o.toS(a[0], ly(a[1])), p1 = o.toS(b[0], ly(b[1]));
       paintLine(buf, p0[0], p0[1], p1[0], p1[1], mat, t, gg);

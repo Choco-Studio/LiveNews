@@ -19,7 +19,7 @@ const MONTAGE_FRAME = 2.6; // seconds per headline in the cold open
 const MIN_SHOT = 3; // no camera shot shorter than this (seconds)
 
 export class Director {
-  constructor({ audio, channel }) {
+  constructor({ audio, channel, v2 = false }) {
     this.audio = audio;
     this.channel = channel;
     setPresenters(channel.presenters);
@@ -48,6 +48,11 @@ export class Director {
       stinger: null,
       panDir: 1,
     };
+    // Wave 2 (?v2=1): live direction for the v2 Stage (segment plans, speech clock, v2 shot
+    // cues; v2/canvas25d/runtime/direction.js). Loaded only when asked: with this.v2 null
+    // every method below behaves exactly as before.
+    this.v2 = null;
+    if (v2) import('./v2/canvas25d/runtime/direction.js').then((m) => (this.v2 = new m.LiveDirection({ director: this, channel, audio })), (err) => console.warn('[director] v2 direction unavailable', err));
   }
 
   setShot(shot, extra = {}) {
@@ -61,6 +66,7 @@ export class Director {
       s.shot = shot;
       s.shotSince = now();
       if (shot === 'full') s.panDir = Math.random() < 0.5 ? 1 : -1;
+      if (this.v2 && !('framing' in extra)) s.framing = s.cameraMove = null; // v2: a framing belongs to the cue that set it
     }
   }
 
@@ -197,6 +203,7 @@ export class Director {
     const voices = {};
     for (const [slot, id] of Object.entries(episode.cast)) voices[slot] = this.channel.presenters[id]?.voice;
     this.audio.setVoices?.(voices);
+    this.v2?.episode(episode); // v2: scene.episode; every segment is planned in idle time
   }
 
   /** Start a presenter animation (see cues.js) or change an expression. */
@@ -230,14 +237,19 @@ export class Director {
     // speech timeline, re-synced on TTS word boundaries; after the last word
     // they fire as the speech ends).
     const cues = this.defaultCues(seg);
+    const v2 = this.v2?.begin(seg); // v2: scene.segPlan (speech start/end for the cue clock) + its shot cues
+    const v2marks = v2?.speak?.marks || []; // v2 cuts that fall inside a sentence
     await this.audio.speak(seg.text, seg.anchor, {
+      audio: seg.audio, // recorded voice from the server, when the episode has one (voice contract)
       onSentence: (sentence, i) => {
         s.subtitle = sentence;
+        v2?.sentence(i);
         onSentence?.(i);
       },
-      marks: cues.map((cue) => cue.char),
-      onMark: (i) => this.perform(cues[i].slot || seg.anchor, cues[i]),
+      marks: [...cues.map((cue) => cue.char), ...v2marks],
+      onMark: (i) => (i < cues.length ? this.perform(cues[i].slot || seg.anchor, cues[i]) : v2?.speak?.onMark(i - cues.length)),
     });
+    v2?.end();
     s.subtitle = null;
   }
 
@@ -350,15 +362,17 @@ export class Director {
       await sleep(2600); // the card is on air for at most 3 s (stinger tail + hold): a calm colour change, not a show
     }
     let pending = null;
-    const shotFor = (i) => {
-      const beat = beats[Math.min(i, beats.length - 1)];
+    // v2: shots come from the plan's cues (cue.k > 0 arrive through shotFor at their sentence or word)
+    const v2cues = this.v2?.shots(seg, hasImg, (cue) => shotFor(cue.k, cue)) || null;
+    const shotFor = (i, cue = null) => {
+      const beat = cue ? cue.shot : beats[Math.min(i, beats.length - 1)];
       const card =
         beat === 'map'
           ? { ...seg.location }
           : beat === 'fact'
             ? { fact: seg.fact, label: /\d/.test(seg.fact) ? 'BY THE NUMBERS' : 'KEY FACT', source: seg.source }
             : null;
-      const apply = () => this.setShot(beat, { focus: seg.anchor, storyId: seg.storyId, wall, card });
+      const apply = () => this.setShot(beat, { focus: cue?.focus || seg.anchor, storyId: seg.storyId, wall, card, ...(cue && { framing: cue.framing, cameraMove: cue.move }) });
       // Hold every shot for at least MIN_SHOT seconds before cutting away.
       clearTimeout(pending);
       const held = now() - s.shotSince;
@@ -369,16 +383,18 @@ export class Director {
     const presenter = s.cast[seg.anchor];
     const showName = !this.introduced?.has(presenter);
     this.introduced?.add(presenter);
-    shotFor(0);
+    shotFor(0, v2cues?.[0]);
     s.lowerThird = {
       headline: seg.headline,
       source: seg.source || '',
       anchorName: presenterName(presenter),
       showName,
       breaking: seg.breaking,
+      kicker: seg.kicker, // editorial's topic label for the strap tag (graphics request)
+      category: seg.category,
       since: now() + 1,
     };
-    await this.say(seg, (i) => i > 0 && shotFor(i));
+    await this.say(seg, (i) => i > 0 && !v2cues && shotFor(i));
     clearTimeout(pending);
   }
 }

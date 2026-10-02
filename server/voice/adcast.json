@@ -1,0 +1,57 @@
+{
+  "_note": "Voice-over artists for the commercials (ids = ad module ids in public/js/ads/). Kokoro blends kept apart from the presenters' voices (server/voice/casting.json) so an advert never sounds like the newsreader who just handed over. 'default' covers ads added later: picked by the ad's own voice.gender and voice.lang. speed is the Kokoro speed; every line must fit the gap before the ad's next script line (checked when the server renders them).",
+  "bitfizz-cola": {
+    "voice": "bm_fable:0.7+am_onyx:0.3",
+    "speed": 0.9,
+    "lang": "en-gb",
+    "notes": "Whispered whisky-ad baritone: fable's plummy en-GB, darkened with onyx."
+  },
+  "screechnet": {
+    "voice": "am_onyx:0.55+bm_george:0.45",
+    "speed": 0.92,
+    "lang": "en-gb",
+    "notes": "Film-trailer narrator, deep and earnest, read with British phonemes."
+  },
+  "safesector": {
+    "voice": "bf_lily:0.7+bf_alice:0.3",
+    "speed": 0.92,
+    "lang": "en-gb",
+    "notes": "Sombre insurance-ad woman: soft, sincere, unhurried."
+  },
+  "grand-buffer": {
+    "voice": "bm_fable:0.6+bm_lewis:0.4",
+    "speed": 0.86,
+    "lang": "en-gb",
+    "notes": "Slow, plummy hotel concierge."
+  },
+  "cloudbrella": {
+    "voice": "af_sky:0.6+af_river:0.4",
+    "speed": 0.98,
+    "lang": "en-us",
+    "notes": "Calm keynote presenter, Californian and airy."
+  },
+  "hi-res-gym": {
+    "voice": "am_onyx:0.5+am_michael:0.3+am_eric:0.2",
+    "speed": 0.88,
+    "lang": "en-us",
+    "notes": "Low, intense sports-brand motivator."
+  },
+  "corners": {
+    "voice": "af_nicole:0.5+bf_emma:0.3+bf_lily:0.2",
+    "speed": 0.88,
+    "lang": "en-gb",
+    "notes": "Velvet food-ad voice: nicole's breathy softness with British vowels."
+  },
+  "serene": {
+    "voice": "bm_daniel:0.6+bm_fable:0.25+am_liam:0.15",
+    "speed": 0.9,
+    "lang": "en-gb",
+    "notes": "Hushed luxury-travel narrator."
+  },
+  "default": {
+    "male-gb": { "voice": "bm_daniel:0.6+bm_fable:0.4", "speed": 0.92, "lang": "en-gb" },
+    "female-gb": { "voice": "bf_lily:0.6+bf_alice:0.4", "speed": 0.92, "lang": "en-gb" },
+    "male-us": { "voice": "am_eric:0.6+am_onyx:0.4", "speed": 0.92, "lang": "en-us" },
+    "female-us": { "voice": "af_sky:0.6+af_aoede:0.4", "speed": 0.95, "lang": "en-us" }
+  }
+}

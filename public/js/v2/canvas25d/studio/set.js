@@ -104,6 +104,9 @@ function bakeWall(style) {
         if (d < 26) pos += style.glow * (1 - d / 26) * (1 - d / 26);
       }
       if (style.poolMax !== undefined && pos > style.poolMax) pos = style.poolMax;
+      // below head height the wall falls back toward ink (the pools are lit from above), so the
+      // lower frame of a single, behind the strap and captions, stays dark and quiet
+      if (Y > 4 && pos > 0.6) pos += (0.6 - pos) * smooth((Y - 4) / 36);
       // ceiling: black above y ~10 in the wide
       const tp = style.top;
       if (Y < tp.y1) pos += (tp.to - pos) * smooth((tp.y1 - Y) / (tp.y1 - tp.y0));
@@ -320,7 +323,9 @@ function drawWallDetails(fr, cam, style) {
     // one static steel softbox edge per side (x ≈ 40 and 344 in the wide, y 20-110)
     for (const sx of [-1, 1]) {
       const X = sx * 213;
-      layerVLine(fr, cam, Zw, X + sx * 2.4, -104, 21, C.ink, 1.4);
+      // the softbox body beyond its lit edge (seen edge-on), then the edge itself
+      layerRect(fr, cam, Zw, Math.min(X + sx * 1.4, X + sx * 14), -106, Math.max(X + sx * 1.4, X + sx * 14), 23, C.black);
+      layerVLine(fr, cam, Zw, X + sx * 2.1, -104, 21, C.ink, 1.4);
       layerVLine(fr, cam, Zw, X, -104, 21, C.steel, 2.8);
     }
   } else if (style.practical === 'warm') {
@@ -444,7 +449,11 @@ function logoPixels(scale) {
       const ctx = c.getContext('2d');
       ctx.imageSmoothingEnabled = false;
       drawLogo(ctx, 0, 0, { variant: 'bug', scale });
-      out = { w, h, data: new Uint32Array(ctx.getImageData(0, 0, w, h).data.buffer.slice(0)) };
+      const data = new Uint32Array(ctx.getImageData(0, 0, w, h).data.buffer.slice(0));
+      // on the red plate the bug's own black plate and outline become the plate's dark red, so the
+      // desk carries one red block with the chrome wordmark set into it (not a badge stuck on red)
+      for (let i = 0; i < data.length; i++) if (data[i] >>> 24 > 128 && (data[i] === C.black || data[i] === C.ink)) data[i] = C.darkRed;
+      out = { w, h, data };
     }
   } catch {
     out = null;

@@ -1,0 +1,1978 @@
+{
+ "kind": "episode",
+ "id": "emur81b6y0-rec",
+ "createdAt": "2026-10-02T17:12:45.034Z",
+ "program": {
+  "id": "world-now",
+  "title": "WORLD NOW",
+  "tagline": "THE STORIES SHAPING OUR WORLD",
+  "theme": "world"
+ },
+ "cast": {
+  "A": "paco",
+  "B": "lola"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "write",
+   "ms": 3034,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 1,
+   "images": 3
+  }
+ ],
+ "title": "WORLD NOW (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Panama Canal reopens after a day-long closure. North Sea wind farm starts supplying power to 1.2 million homes. Lisbon opens a new riverside tram line. Good evening, and welcome to WORLD NOW. I'm Paco Pixel, with Lola Byte.",
+   "cues": [
+    {
+     "char": 191,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 223,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s73bb228b7b",
+    "sadae5c525f",
+    "sf2538c295c"
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 6
+     },
+     {
+      "t": 0.572,
+      "char": 7,
+      "len": 5
+     },
+     {
+      "t": 0.908,
+      "char": 13,
+      "len": 7
+     },
+     {
+      "t": 1.356,
+      "char": 21,
+      "len": 5
+     },
+     {
+      "t": 1.692,
+      "char": 27,
+      "len": 1
+     },
+     {
+      "t": 1.804,
+      "char": 29,
+      "len": 8
+     },
+     {
+      "t": 2.309,
+      "char": 38,
+      "len": 7
+     },
+     {
+      "t": 3.207,
+      "char": 47,
+      "len": 5
+     },
+     {
+      "t": 3.604,
+      "char": 53,
+      "len": 3
+     },
+     {
+      "t": 3.869,
+      "char": 57,
+      "len": 4
+     },
+     {
+      "t": 4.201,
+      "char": 62,
+      "len": 4
+     },
+     {
+      "t": 4.532,
+      "char": 67,
+      "len": 6
+     },
+     {
+      "t": 4.996,
+      "char": 74,
+      "len": 9
+     },
+     {
+      "t": 5.658,
+      "char": 84,
+      "len": 5
+     },
+     {
+      "t": 6.056,
+      "char": 90,
+      "len": 2
+     },
+     {
+      "t": 6.255,
+      "char": 93,
+      "len": 3
+     },
+     {
+      "t": 6.97,
+      "char": 97,
+      "len": 7
+     },
+     {
+      "t": 7.39,
+      "char": 105,
+      "len": 5
+     },
+     {
+      "t": 8.156,
+      "char": 112,
+      "len": 6
+     },
+     {
+      "t": 8.618,
+      "char": 119,
+      "len": 5
+     },
+     {
+      "t": 9.015,
+      "char": 125,
+      "len": 1
+     },
+     {
+      "t": 9.147,
+      "char": 127,
+      "len": 3
+     },
+     {
+      "t": 9.411,
+      "char": 131,
+      "len": 9
+     },
+     {
+      "t": 10.072,
+      "char": 141,
+      "len": 4
+     },
+     {
+      "t": 10.402,
+      "char": 146,
+      "len": 4
+     },
+     {
+      "t": 11.182,
+      "char": 152,
+      "len": 4
+     },
+     {
+      "t": 11.521,
+      "char": 157,
+      "len": 7
+     },
+     {
+      "t": 12.064,
+      "char": 166,
+      "len": 3
+     },
+     {
+      "t": 12.335,
+      "char": 170,
+      "len": 7
+     },
+     {
+      "t": 12.878,
+      "char": 178,
+      "len": 2
+     },
+     {
+      "t": 13.081,
+      "char": 181,
+      "len": 5
+     },
+     {
+      "t": 13.488,
+      "char": 187,
+      "len": 3
+     },
+     {
+      "t": 14.209,
+      "char": 192,
+      "len": 3
+     },
+     {
+      "t": 14.504,
+      "char": 196,
+      "len": 4
+     },
+     {
+      "t": 14.872,
+      "char": 201,
+      "len": 5
+     },
+     {
+      "t": 15.313,
+      "char": 208,
+      "len": 4
+     },
+     {
+      "t": 15.682,
+      "char": 213,
+      "len": 4
+     },
+     {
+      "t": 16.05,
+      "char": 218,
+      "len": 4
+     }
+    ],
+    "duration": 16.718
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Breaking news. Ledger Line reports that the Panama Canal has reopened to ships after fog closed it for a day. The canal authority says about 30 ships are waiting to cross.",
+   "cues": [
+    {
+     "char": 171,
+     "slot": "B",
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "s73bb228b7b",
+   "headline": "Panama Canal reopens after a day-long closure",
+   "shot": "map",
+   "breaking": true,
+   "location": {
+    "place": "PANAMA",
+    "lat": 8.5,
+    "lon": -80.8
+   },
+   "fact": "ABOUT 30 SHIPS",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "TRADE",
+   "numbers": [
+    {
+     "value": "30",
+     "label": "SHIPS",
+     "qualifier": "ABOUT"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 8
+     },
+     {
+      "t": 0.653,
+      "char": 9,
+      "len": 4
+     },
+     {
+      "t": 1.366,
+      "char": 15,
+      "len": 6
+     },
+     {
+      "t": 1.86,
+      "char": 22,
+      "len": 4
+     },
+     {
+      "t": 2.212,
+      "char": 27,
+      "len": 7
+     },
+     {
+      "t": 2.776,
+      "char": 35,
+      "len": 4
+     },
+     {
+      "t": 3.128,
+      "char": 40,
+      "len": 3
+     },
+     {
+      "t": 3.41,
+      "char": 44,
+      "len": 6
+     },
+     {
+      "t": 3.904,
+      "char": 51,
+      "len": 5
+     },
+     {
+      "t": 4.327,
+      "char": 57,
+      "len": 3
+     },
+     {
+      "t": 4.609,
+      "char": 61,
+      "len": 8
+     },
+     {
+      "t": 5.243,
+      "char": 70,
+      "len": 2
+     },
+     {
+      "t": 5.454,
+      "char": 73,
+      "len": 5
+     },
+     {
+      "t": 5.877,
+      "char": 79,
+      "len": 5
+     },
+     {
+      "t": 6.3,
+      "char": 85,
+      "len": 3
+     },
+     {
+      "t": 6.582,
+      "char": 89,
+      "len": 6
+     },
+     {
+      "t": 7.076,
+      "char": 96,
+      "len": 2
+     },
+     {
+      "t": 7.287,
+      "char": 99,
+      "len": 3
+     },
+     {
+      "t": 7.569,
+      "char": 103,
+      "len": 1
+     },
+     {
+      "t": 7.71,
+      "char": 105,
+      "len": 3
+     },
+     {
+      "t": 8.442,
+      "char": 110,
+      "len": 3
+     },
+     {
+      "t": 8.707,
+      "char": 114,
+      "len": 5
+     },
+     {
+      "t": 9.106,
+      "char": 120,
+      "len": 9
+     },
+     {
+      "t": 9.77,
+      "char": 130,
+      "len": 4
+     },
+     {
+      "t": 10.101,
+      "char": 135,
+      "len": 5
+     },
+     {
+      "t": 10.5,
+      "char": 141,
+      "len": 2
+     },
+     {
+      "t": 10.699,
+      "char": 144,
+      "len": 5
+     },
+     {
+      "t": 11.097,
+      "char": 150,
+      "len": 3
+     },
+     {
+      "t": 11.363,
+      "char": 154,
+      "len": 7
+     },
+     {
+      "t": 11.894,
+      "char": 162,
+      "len": 2
+     },
+     {
+      "t": 12.093,
+      "char": 165,
+      "len": 5
+     }
+    ],
+    "duration": 12.791
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Thanks, Paco. From Ledger Line: An offshore wind farm in the North Sea has started supplying electricity. The developer says its 140 turbines can power about 1.2 million homes.",
+   "cues": [
+    {
+     "char": 13,
+     "slot": null,
+     "action": "point_screen"
+    },
+    {
+     "char": 176,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "sadae5c525f",
+   "headline": "North Sea wind farm starts supplying power to 1.2 million homes",
+   "shot": "full",
+   "breaking": false,
+   "location": null,
+   "fact": "ABOUT 1.2 MILLION HOMES",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": true,
+   "kicker": "ENERGY",
+   "numbers": [
+    {
+     "value": "1.2 MILLION",
+     "label": "HOMES",
+     "qualifier": "ABOUT"
+    },
+    {
+     "value": "140",
+     "label": "TURBINES"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 6
+     },
+     {
+      "t": 0.589,
+      "char": 8,
+      "len": 4
+     },
+     {
+      "t": 1.332,
+      "char": 14,
+      "len": 4
+     },
+     {
+      "t": 1.624,
+      "char": 19,
+      "len": 6
+     },
+     {
+      "t": 2.034,
+      "char": 26,
+      "len": 4
+     },
+     {
+      "t": 2.326,
+      "char": 32,
+      "len": 2
+     },
+     {
+      "t": 2.501,
+      "char": 35,
+      "len": 8
+     },
+     {
+      "t": 3.028,
+      "char": 44,
+      "len": 4
+     },
+     {
+      "t": 3.32,
+      "char": 49,
+      "len": 4
+     },
+     {
+      "t": 3.612,
+      "char": 54,
+      "len": 2
+     },
+     {
+      "t": 3.788,
+      "char": 57,
+      "len": 3
+     },
+     {
+      "t": 4.022,
+      "char": 61,
+      "len": 5
+     },
+     {
+      "t": 4.373,
+      "char": 67,
+      "len": 3
+     },
+     {
+      "t": 4.607,
+      "char": 71,
+      "len": 3
+     },
+     {
+      "t": 4.841,
+      "char": 75,
+      "len": 7
+     },
+     {
+      "t": 5.308,
+      "char": 83,
+      "len": 9
+     },
+     {
+      "t": 5.893,
+      "char": 93,
+      "len": 11
+     },
+     {
+      "t": 7.045,
+      "char": 106,
+      "len": 3
+     },
+     {
+      "t": 7.296,
+      "char": 110,
+      "len": 9
+     },
+     {
+      "t": 7.922,
+      "char": 120,
+      "len": 4
+     },
+     {
+      "t": 8.235,
+      "char": 125,
+      "len": 3
+     },
+     {
+      "t": 8.486,
+      "char": 129,
+      "len": 3
+     },
+     {
+      "t": 8.737,
+      "char": 133,
+      "len": 8
+     },
+     {
+      "t": 9.301,
+      "char": 142,
+      "len": 3
+     },
+     {
+      "t": 9.551,
+      "char": 146,
+      "len": 5
+     },
+     {
+      "t": 9.927,
+      "char": 152,
+      "len": 5
+     },
+     {
+      "t": 10.303,
+      "char": 158,
+      "len": 3
+     },
+     {
+      "t": 11.004,
+      "char": 162,
+      "len": 7
+     },
+     {
+      "t": 11.405,
+      "char": 170,
+      "len": 5
+     }
+    ],
+    "duration": 12.005
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Our number of the day: 40,000. Lisbon has opened a new tram line along the Tagus river, Pixelburg Post reports. The city says the 9 kilometre route will carry 40,000 passengers a day and cut car traffic in the old town. As the mayor put it: “This line will change how people move around the old town.”",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "steeple"
+    },
+    {
+     "char": 219,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "sf2538c295c",
+   "headline": "Lisbon opens a new riverside tram line",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "LISBON, PORTUGAL",
+    "lat": 38.72,
+    "lon": -9.14
+   },
+   "fact": "40,000 PASSENGERS A DAY",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "40,000",
+     "label": "PASSENGERS A DAY"
+    }
+   ],
+   "quote": {
+    "text": "This line will change how people move around the old town",
+    "by": "the mayor"
+   },
+   "feature": "number",
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 3
+     },
+     {
+      "t": 0.485,
+      "char": 4,
+      "len": 6
+     },
+     {
+      "t": 1.018,
+      "char": 11,
+      "len": 2
+     },
+     {
+      "t": 1.246,
+      "char": 14,
+      "len": 3
+     },
+     {
+      "t": 1.551,
+      "char": 18,
+      "len": 3
+     },
+     {
+      "t": 1.855,
+      "char": 23,
+      "len": 6
+     },
+     {
+      "t": 2.839,
+      "char": 31,
+      "len": 6
+     },
+     {
+      "t": 3.295,
+      "char": 38,
+      "len": 3
+     },
+     {
+      "t": 3.556,
+      "char": 42,
+      "len": 6
+     },
+     {
+      "t": 4.013,
+      "char": 49,
+      "len": 1
+     },
+     {
+      "t": 4.143,
+      "char": 51,
+      "len": 3
+     },
+     {
+      "t": 4.404,
+      "char": 55,
+      "len": 4
+     },
+     {
+      "t": 4.73,
+      "char": 60,
+      "len": 4
+     },
+     {
+      "t": 5.056,
+      "char": 65,
+      "len": 5
+     },
+     {
+      "t": 5.448,
+      "char": 71,
+      "len": 3
+     },
+     {
+      "t": 5.709,
+      "char": 75,
+      "len": 5
+     },
+     {
+      "t": 6.1,
+      "char": 81,
+      "len": 5
+     },
+     {
+      "t": 6.492,
+      "char": 88,
+      "len": 9
+     },
+     {
+      "t": 7.144,
+      "char": 98,
+      "len": 4
+     },
+     {
+      "t": 7.47,
+      "char": 103,
+      "len": 7
+     },
+     {
+      "t": 8.442,
+      "char": 112,
+      "len": 3
+     },
+     {
+      "t": 8.731,
+      "char": 116,
+      "len": 4
+     },
+     {
+      "t": 9.092,
+      "char": 121,
+      "len": 4
+     },
+     {
+      "t": 9.453,
+      "char": 126,
+      "len": 3
+     },
+     {
+      "t": 9.742,
+      "char": 130,
+      "len": 1
+     },
+     {
+      "t": 9.887,
+      "char": 132,
+      "len": 9
+     },
+     {
+      "t": 10.609,
+      "char": 142,
+      "len": 5
+     },
+     {
+      "t": 11.043,
+      "char": 148,
+      "len": 4
+     },
+     {
+      "t": 11.404,
+      "char": 153,
+      "len": 5
+     },
+     {
+      "t": 11.837,
+      "char": 159,
+      "len": 6
+     },
+     {
+      "t": 12.343,
+      "char": 166,
+      "len": 10
+     },
+     {
+      "t": 13.138,
+      "char": 177,
+      "len": 1
+     },
+     {
+      "t": 13.282,
+      "char": 179,
+      "len": 3
+     },
+     {
+      "t": 13.571,
+      "char": 183,
+      "len": 3
+     },
+     {
+      "t": 13.86,
+      "char": 187,
+      "len": 3
+     },
+     {
+      "t": 14.149,
+      "char": 191,
+      "len": 3
+     },
+     {
+      "t": 14.438,
+      "char": 195,
+      "len": 7
+     },
+     {
+      "t": 15.016,
+      "char": 203,
+      "len": 2
+     },
+     {
+      "t": 15.233,
+      "char": 206,
+      "len": 3
+     },
+     {
+      "t": 15.522,
+      "char": 210,
+      "len": 3
+     },
+     {
+      "t": 15.811,
+      "char": 214,
+      "len": 4
+     },
+     {
+      "t": 16.622,
+      "char": 220,
+      "len": 2
+     },
+     {
+      "t": 16.846,
+      "char": 223,
+      "len": 3
+     },
+     {
+      "t": 17.144,
+      "char": 227,
+      "len": 5
+     },
+     {
+      "t": 17.591,
+      "char": 233,
+      "len": 3
+     },
+     {
+      "t": 17.889,
+      "char": 237,
+      "len": 2
+     },
+     {
+      "t": 18.113,
+      "char": 241,
+      "len": 5
+     },
+     {
+      "t": 18.56,
+      "char": 247,
+      "len": 4
+     },
+     {
+      "t": 18.933,
+      "char": 252,
+      "len": 4
+     },
+     {
+      "t": 19.306,
+      "char": 257,
+      "len": 6
+     },
+     {
+      "t": 19.828,
+      "char": 264,
+      "len": 3
+     },
+     {
+      "t": 20.126,
+      "char": 268,
+      "len": 6
+     },
+     {
+      "t": 20.648,
+      "char": 275,
+      "len": 4
+     },
+     {
+      "t": 21.021,
+      "char": 280,
+      "len": 6
+     },
+     {
+      "t": 21.542,
+      "char": 287,
+      "len": 3
+     },
+     {
+      "t": 21.841,
+      "char": 291,
+      "len": 3
+     },
+     {
+      "t": 22.139,
+      "char": 295,
+      "len": 4
+     }
+    ],
+    "duration": 22.812
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "serious",
+   "text": "Now, around the world in 30 seconds. Heavy monsoon rain has flooded streets in several coastal towns in Kerala, India, Pixelburg Post reports.",
+   "cues": [],
+   "storyId": "sfa4f308e5c",
+   "headline": "Heavy rain floods streets in coastal towns of Kerala",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "KERALA, INDIA",
+    "lat": 10.5,
+    "lon": 76.3
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 0,
+    "count": 4
+   },
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 3
+     },
+     {
+      "t": 0.461,
+      "char": 5,
+      "len": 6
+     },
+     {
+      "t": 0.952,
+      "char": 12,
+      "len": 3
+     },
+     {
+      "t": 1.233,
+      "char": 16,
+      "len": 5
+     },
+     {
+      "t": 1.654,
+      "char": 22,
+      "len": 2
+     },
+     {
+      "t": 1.864,
+      "char": 25,
+      "len": 2
+     },
+     {
+      "t": 2.075,
+      "char": 28,
+      "len": 7
+     },
+     {
+      "t": 3.086,
+      "char": 37,
+      "len": 5
+     },
+     {
+      "t": 3.413,
+      "char": 43,
+      "len": 7
+     },
+     {
+      "t": 3.849,
+      "char": 51,
+      "len": 4
+     },
+     {
+      "t": 4.122,
+      "char": 56,
+      "len": 3
+     },
+     {
+      "t": 4.34,
+      "char": 60,
+      "len": 7
+     },
+     {
+      "t": 4.776,
+      "char": 68,
+      "len": 7
+     },
+     {
+      "t": 5.212,
+      "char": 76,
+      "len": 2
+     },
+     {
+      "t": 5.375,
+      "char": 79,
+      "len": 7
+     },
+     {
+      "t": 5.811,
+      "char": 87,
+      "len": 7
+     },
+     {
+      "t": 6.247,
+      "char": 95,
+      "len": 5
+     },
+     {
+      "t": 6.574,
+      "char": 101,
+      "len": 2
+     },
+     {
+      "t": 6.738,
+      "char": 104,
+      "len": 6
+     },
+     {
+      "t": 7.12,
+      "char": 112,
+      "len": 5
+     },
+     {
+      "t": 7.447,
+      "char": 119,
+      "len": 9
+     },
+     {
+      "t": 7.992,
+      "char": 129,
+      "len": 4
+     },
+     {
+      "t": 8.264,
+      "char": 134,
+      "len": 7
+     }
+    ],
+    "duration": 9
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "A fissure eruption has started again on the Reykjanes peninsula in Iceland.",
+   "cues": [],
+   "storyId": "s5fb454f418",
+   "headline": "Iceland volcano erupts again on the Reykjanes peninsula",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "REYKJANES PENINSULA, ICELAND",
+    "lat": 63.9,
+    "lon": -22.3
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 1,
+    "count": 4
+   },
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 1
+     },
+     {
+      "t": 0.292,
+      "char": 2,
+      "len": 7
+     },
+     {
+      "t": 0.741,
+      "char": 10,
+      "len": 8
+     },
+     {
+      "t": 1.247,
+      "char": 19,
+      "len": 3
+     },
+     {
+      "t": 1.471,
+      "char": 23,
+      "len": 7
+     },
+     {
+      "t": 1.92,
+      "char": 31,
+      "len": 5
+     },
+     {
+      "t": 2.257,
+      "char": 37,
+      "len": 2
+     },
+     {
+      "t": 2.426,
+      "char": 40,
+      "len": 3
+     },
+     {
+      "t": 2.65,
+      "char": 44,
+      "len": 9
+     },
+     {
+      "t": 3.212,
+      "char": 54,
+      "len": 9
+     },
+     {
+      "t": 3.773,
+      "char": 64,
+      "len": 2
+     },
+     {
+      "t": 3.941,
+      "char": 67,
+      "len": 7
+     }
+    ],
+    "duration": 4.691
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Venice has raised its sea barriers for a test ahead of the autumn high tides, Bitport Herald reports.",
+   "cues": [],
+   "storyId": "s701ea0e9b9",
+   "headline": "Venice raises its sea barriers in a test before the autumn tides",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "VENICE, ITALY",
+    "lat": 45.44,
+    "lon": 12.32
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 2,
+    "count": 4
+   },
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 6
+     },
+     {
+      "t": 0.622,
+      "char": 7,
+      "len": 3
+     },
+     {
+      "t": 0.875,
+      "char": 11,
+      "len": 6
+     },
+     {
+      "t": 1.317,
+      "char": 18,
+      "len": 3
+     },
+     {
+      "t": 1.569,
+      "char": 22,
+      "len": 3
+     },
+     {
+      "t": 1.822,
+      "char": 26,
+      "len": 8
+     },
+     {
+      "t": 2.391,
+      "char": 35,
+      "len": 3
+     },
+     {
+      "t": 2.643,
+      "char": 39,
+      "len": 1
+     },
+     {
+      "t": 2.769,
+      "char": 41,
+      "len": 4
+     },
+     {
+      "t": 3.085,
+      "char": 46,
+      "len": 5
+     },
+     {
+      "t": 3.464,
+      "char": 52,
+      "len": 2
+     },
+     {
+      "t": 3.654,
+      "char": 55,
+      "len": 3
+     },
+     {
+      "t": 3.906,
+      "char": 59,
+      "len": 6
+     },
+     {
+      "t": 4.348,
+      "char": 66,
+      "len": 4
+     },
+     {
+      "t": 4.664,
+      "char": 71,
+      "len": 5
+     },
+     {
+      "t": 5.043,
+      "char": 78,
+      "len": 7
+     },
+     {
+      "t": 5.548,
+      "char": 86,
+      "len": 6
+     },
+     {
+      "t": 5.991,
+      "char": 93,
+      "len": 7
+     }
+    ],
+    "duration": 6.796
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "A large solar plant on the edge of the Sahara in Morocco is now running at full power, Bitport Herald reports.",
+   "cues": [],
+   "storyId": "s6e5fa12524",
+   "headline": "Morocco desert solar plant reaches full power",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "MOROCCO",
+    "lat": 31.8,
+    "lon": -7.1
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 3,
+    "count": 4
+   },
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 1
+     },
+     {
+      "t": 0.315,
+      "char": 2,
+      "len": 5
+     },
+     {
+      "t": 0.721,
+      "char": 8,
+      "len": 5
+     },
+     {
+      "t": 1.126,
+      "char": 14,
+      "len": 5
+     },
+     {
+      "t": 1.532,
+      "char": 20,
+      "len": 2
+     },
+     {
+      "t": 1.735,
+      "char": 23,
+      "len": 3
+     },
+     {
+      "t": 2.005,
+      "char": 27,
+      "len": 4
+     },
+     {
+      "t": 2.343,
+      "char": 32,
+      "len": 2
+     },
+     {
+      "t": 2.546,
+      "char": 35,
+      "len": 3
+     },
+     {
+      "t": 2.816,
+      "char": 39,
+      "len": 6
+     },
+     {
+      "t": 3.29,
+      "char": 46,
+      "len": 2
+     },
+     {
+      "t": 3.492,
+      "char": 49,
+      "len": 7
+     },
+     {
+      "t": 4.033,
+      "char": 57,
+      "len": 2
+     },
+     {
+      "t": 4.236,
+      "char": 60,
+      "len": 3
+     },
+     {
+      "t": 4.506,
+      "char": 64,
+      "len": 7
+     },
+     {
+      "t": 5.047,
+      "char": 72,
+      "len": 2
+     },
+     {
+      "t": 5.25,
+      "char": 75,
+      "len": 4
+     },
+     {
+      "t": 5.588,
+      "char": 80,
+      "len": 5
+     },
+     {
+      "t": 5.994,
+      "char": 87,
+      "len": 7
+     },
+     {
+      "t": 6.534,
+      "char": 95,
+      "len": 6
+     },
+     {
+      "t": 7.008,
+      "char": 102,
+      "len": 7
+     }
+    ],
+    "duration": 7.848
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "And finally: Scientists say coral cover has grown on parts of the Great Barrier Reef for a second year. “The reef is showing it can bounce back when it gets a break,” a lead researcher said.",
+   "cues": [
+    {
+     "char": 190,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s9efe8cbd21",
+   "headline": "Coral recovers on parts of the Great Barrier Reef",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "GREAT BARRIER REEF, AUSTRALIA",
+    "lat": -18.3,
+    "lon": 147.7
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AND FINALLY",
+   "quote": {
+    "text": "The reef is showing it can bounce back when it gets a break",
+    "by": "a lead researcher"
+   },
+   "feature": "lighter",
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 3
+     },
+     {
+      "t": 0.441,
+      "char": 4,
+      "len": 7
+     },
+     {
+      "t": 0.964,
+      "char": 13,
+      "len": 10
+     },
+     {
+      "t": 1.683,
+      "char": 24,
+      "len": 3
+     },
+     {
+      "t": 1.945,
+      "char": 28,
+      "len": 5
+     },
+     {
+      "t": 2.337,
+      "char": 34,
+      "len": 5
+     },
+     {
+      "t": 2.729,
+      "char": 40,
+      "len": 3
+     },
+     {
+      "t": 2.99,
+      "char": 44,
+      "len": 5
+     },
+     {
+      "t": 3.383,
+      "char": 50,
+      "len": 2
+     },
+     {
+      "t": 3.579,
+      "char": 53,
+      "len": 5
+     },
+     {
+      "t": 3.971,
+      "char": 59,
+      "len": 2
+     },
+     {
+      "t": 4.167,
+      "char": 62,
+      "len": 3
+     },
+     {
+      "t": 4.428,
+      "char": 66,
+      "len": 5
+     },
+     {
+      "t": 4.821,
+      "char": 72,
+      "len": 7
+     },
+     {
+      "t": 5.343,
+      "char": 80,
+      "len": 4
+     },
+     {
+      "t": 5.67,
+      "char": 85,
+      "len": 3
+     },
+     {
+      "t": 5.932,
+      "char": 89,
+      "len": 1
+     },
+     {
+      "t": 6.062,
+      "char": 91,
+      "len": 6
+     },
+     {
+      "t": 6.52,
+      "char": 98,
+      "len": 4
+     },
+     {
+      "t": 7.297,
+      "char": 104,
+      "len": 4
+     },
+     {
+      "t": 7.652,
+      "char": 109,
+      "len": 4
+     },
+     {
+      "t": 8.007,
+      "char": 114,
+      "len": 2
+     },
+     {
+      "t": 8.22,
+      "char": 117,
+      "len": 7
+     },
+     {
+      "t": 8.788,
+      "char": 125,
+      "len": 2
+     },
+     {
+      "t": 9.001,
+      "char": 128,
+      "len": 3
+     },
+     {
+      "t": 9.285,
+      "char": 132,
+      "len": 6
+     },
+     {
+      "t": 9.782,
+      "char": 139,
+      "len": 4
+     },
+     {
+      "t": 10.137,
+      "char": 144,
+      "len": 4
+     },
+     {
+      "t": 10.492,
+      "char": 149,
+      "len": 2
+     },
+     {
+      "t": 10.705,
+      "char": 152,
+      "len": 4
+     },
+     {
+      "t": 11.06,
+      "char": 157,
+      "len": 1
+     },
+     {
+      "t": 11.202,
+      "char": 159,
+      "len": 5
+     },
+     {
+      "t": 11.628,
+      "char": 167,
+      "len": 1
+     },
+     {
+      "t": 11.77,
+      "char": 169,
+      "len": 4
+     },
+     {
+      "t": 12.125,
+      "char": 174,
+      "len": 10
+     },
+     {
+      "t": 12.907,
+      "char": 185,
+      "len": 4
+     }
+    ],
+    "duration": 13.562
+   }
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "A good note to end on.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 1
+     },
+     {
+      "t": 0.381,
+      "char": 2,
+      "len": 4
+     },
+     {
+      "t": 0.883,
+      "char": 7,
+      "len": 4
+     },
+     {
+      "t": 1.385,
+      "char": 12,
+      "len": 2
+     },
+     {
+      "t": 1.686,
+      "char": 15,
+      "len": 3
+     },
+     {
+      "t": 2.087,
+      "char": 19,
+      "len": 2
+     }
+    ],
+    "duration": 2.689
+   }
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "Rare enough that we should enjoy it.",
+   "cues": [],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 4
+     },
+     {
+      "t": 0.521,
+      "char": 5,
+      "len": 6
+     },
+     {
+      "t": 0.999,
+      "char": 12,
+      "len": 4
+     },
+     {
+      "t": 1.34,
+      "char": 17,
+      "len": 2
+     },
+     {
+      "t": 1.545,
+      "char": 20,
+      "len": 6
+     },
+     {
+      "t": 2.022,
+      "char": 27,
+      "len": 5
+     },
+     {
+      "t": 2.431,
+      "char": 33,
+      "len": 2
+     }
+    ],
+    "duration": 2.936
+   }
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's WORLD NOW. From Lola Byte and from me, thank you for watching. Stay with us on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 17,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 6
+     },
+     {
+      "t": 0.635,
+      "char": 7,
+      "len": 5
+     },
+     {
+      "t": 1.024,
+      "char": 13,
+      "len": 3
+     },
+     {
+      "t": 1.734,
+      "char": 18,
+      "len": 4
+     },
+     {
+      "t": 2.102,
+      "char": 23,
+      "len": 4
+     },
+     {
+      "t": 2.47,
+      "char": 28,
+      "len": 4
+     },
+     {
+      "t": 2.839,
+      "char": 33,
+      "len": 3
+     },
+     {
+      "t": 3.133,
+      "char": 37,
+      "len": 4
+     },
+     {
+      "t": 3.501,
+      "char": 42,
+      "len": 2
+     },
+     {
+      "t": 3.722,
+      "char": 46,
+      "len": 5
+     },
+     {
+      "t": 4.164,
+      "char": 52,
+      "len": 3
+     },
+     {
+      "t": 4.458,
+      "char": 56,
+      "len": 3
+     },
+     {
+      "t": 4.753,
+      "char": 60,
+      "len": 8
+     },
+     {
+      "t": 5.865,
+      "char": 70,
+      "len": 4
+     },
+     {
+      "t": 6.29,
+      "char": 75,
+      "len": 4
+     },
+     {
+      "t": 6.715,
+      "char": 80,
+      "len": 2
+     },
+     {
+      "t": 6.97,
+      "char": 83,
+      "len": 2
+     },
+     {
+      "t": 7.224,
+      "char": 86,
+      "len": 6
+     },
+     {
+      "t": 7.819,
+      "char": 93,
+      "len": 2
+     }
+    ],
+    "duration": 8.374
+   }
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s73bb228b7b",
+   "headline": "Panama Canal reopens after a day-long closure",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "TRADE"
+  },
+  {
+   "storyId": "sadae5c525f",
+   "headline": "North Sea wind farm starts supplying power to 1.2 million homes",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": true,
+   "kicker": "ENERGY"
+  },
+  {
+   "storyId": "sf2538c295c",
+   "headline": "Lisbon opens a new riverside tram line",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "NUMBER OF THE DAY"
+  },
+  {
+   "storyId": "sfa4f308e5c",
+   "headline": "Heavy rain floods streets in coastal towns of Kerala",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s5fb454f418",
+   "headline": "Iceland volcano erupts again on the Reykjanes peninsula",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s701ea0e9b9",
+   "headline": "Venice raises its sea barriers in a test before the autumn tides",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s6e5fa12524",
+   "headline": "Morocco desert solar plant reaches full power",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s9efe8cbd21",
+   "headline": "Coral recovers on parts of the Great Barrier Reef",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AND FINALLY"
+  }
+ ],
+ "storyIds": [
+  "s73bb228b7b",
+  "sadae5c525f",
+  "sf2538c295c",
+  "sfa4f308e5c",
+  "s5fb454f418",
+  "s701ea0e9b9",
+  "s6e5fa12524",
+  "s9efe8cbd21"
+ ]
+}

@@ -75,7 +75,25 @@ export function defaultFraming(shot, solo, inset) {
   return solo ? 'solo-wide' : 'wide';
 }
 
+const INSET_AREA = 104 * 62 * 0.6; // px of visible wall that make the inset box redundant
+
+/** Screen area (px) of the video wall's interior that a camera shows. */
+function wallVisible(cam) {
+  const k = kAt(cam, SET.wallZ);
+  const S = SET.screen;
+  const x0 = Math.max(0, sxOf(cam, k, S.x0)), x1 = Math.min(W, sxOf(cam, k, S.x1));
+  const y0 = Math.max(0, syOf(cam, k, S.y0)), y1 = Math.min(216, syOf(cam, k, S.y1));
+  return x1 > x0 && y1 > y0 ? (x1 - x0) * (y1 - y0) : 0;
+}
+
 const REST_FRAME = Object.freeze({ slot: null, speaking: false, level: 0, viseme: 'rest', next: 'rest', mix: 0, wordIndex: -1, charIndex: -1, sentenceIndex: -1, accent: 0, pause: false });
+
+const FRAME_KEYS = ['slot', 'speaking', 'level', 'viseme', 'next', 'mix', 'wordIndex', 'charIndex', 'sentenceIndex', 'accent', 'pause'];
+function copyFrame(src, out) {
+  if (!out || out === src) return src;
+  for (let i = 0; i < FRAME_KEYS.length; i++) out[FRAME_KEYS[i]] = src[FRAME_KEYS[i]];
+  return out;
+}
 
 /** The wall a scene asks for (until SET's wallFromScene() lands). */
 function wallOf(scene, plan, out) {
@@ -118,8 +136,9 @@ export class Stage {
     this.key = null;
     this.actors = [];
     this.frames = {};
-    // liveSpeech() reads this proxy: one real speechFrame() per slot per frame (sampled in update)
-    this.proxy = { speechFrame: (ms, slot) => this.frames[slot] || REST_FRAME };
+    // liveSpeech() reads this proxy: one real speechFrame() per slot per frame (sampled in
+    // update); like the engine it fills `out` when given one (FACES' source reads it back)
+    this.proxy = { speechFrame: (ms, slot, out) => copyFrame(this.frames[slot] || REST_FRAME, out) };
     this.epoch = 0;
     this.cast = {};
     this.solo = false;
@@ -221,11 +240,12 @@ export class Stage {
     this.clock.epoch = t;
     this.clock.perfs = {};
     const epId = scene.episode?.id ?? key;
+    const presenters = scene.presenters || this.presenters || {}; // config/channel.json entries (set by the v2 director)
     this.actors = seats.map(({ slot, X, side }) => {
       const id = cast[slot];
       const perf = { side, seed: hashSeed(`${epId}${slot}`), gestures: [], emotions: [], look: [], speech: liveSpeech(this.proxy, slot), listen: false, gain: 1 };
       this.clock.perfs[slot] = perf;
-      return { slot, id, X, side, emotion: null, actor: makeActor(id, perf, this.presenters?.[id]), perf };
+      return { slot, id, X, side, emotion: null, actor: makeActor(id, perf, presenters[id]), perf };
     });
     this.list = this.actors.map((a) => ({ actor: a.actor, X: a.X, x: 0, y: 0, s: 1, clip: true, slot: a.slot }));
     for (const a of this.actors) this.frames[a.slot] ||= {};
@@ -266,7 +286,7 @@ export class Stage {
     wall.since = scene.shotSince ?? t;
     wall.focus = this.solo ? 'solo' : scene.focus === 'B' ? 'B' : 'A';
     wall.solo = this.solo;
-    this.inset = STUDIO_SHOTS.has(scene.shot) && scene.shot === 'close' && wall.mode === 'picture' && scene.framing !== 'ots' ? wall.image?.small || null : null;
+    this.inset = scene.shot === 'close' && wall.mode === 'picture' && scene.framing !== 'ots' ? wall.image?.small || null : null;
     // camera framing for this shot
     const spec = this.spec;
     spec.framing = scene.framing || defaultFraming(scene.shot, this.solo, !!this.inset);
@@ -277,6 +297,8 @@ export class Stage {
     spec.programId = this.programId;
     spec.move = scene.cameraMove || null;
     this.base = this.frameCamera(spec, scene);
+    // SET shows the picture on the wall itself: the inset box only when this framing hides the wall
+    if (this.inset && typeof SETM.wallFromScene === 'function' && wallVisible(this.base) >= INSET_AREA) this.inset = null;
     this.bgOpts.cut = true;
   }
 

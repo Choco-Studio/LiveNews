@@ -9,13 +9,38 @@
 //                             wall), bg cached, desk, actors — per the current programme/framing
 //   FRAMINGS, WALLS, CASTS    the lab's vocabularies
 //   setImage(name, img)       register a picture (a canvas / ImageData / { width, height, data })
-import { C } from '../pixbuf.js';
-import { frame, actor, drawActors } from '../scene.js';
+import { C, Frame } from '../pixbuf.js';
 import { drawBackground, drawDesk, setCacheEnabled, invalidateSet, wallRect, bgStats } from '../studio/set.js';
 import { styleFor, STYLE_IDS } from '../studio/styles.js';
 import { resetWall } from '../studio/wall.js';
-import { framing as camFraming, cameraAt as camAt, makeCamera, placeActor } from '../camera.js';
-import { SET } from '../studio/geometry.js';
+import { SET, kAt, sxOf, syOf } from '../studio/geometry.js';
+import { lstarOf, nameOf, SATURATED, SKIN } from '../studio/color.js';
+
+// The presenters and CAMERA's framings come from other streams' files, which may be mid-edit:
+// load them dynamically so the set lab keeps working (set only, our own camera presets) if not.
+let SCENE = null, CAM = null;
+try {
+  SCENE = await import('../scene.js');
+} catch (err) {
+  console.warn('[set lab] presenters unavailable:', err.message);
+}
+try {
+  CAM = await import('../camera.js');
+} catch (err) {
+  console.warn('[set lab] camera.js unavailable, using the set lab presets:', err.message);
+}
+const frame = SCENE ? SCENE.frame : new Frame();
+const makeCamera = (o = {}) => ({ x: 0, y: -60, z: 0, zoom: 1, hy: 52, soft: 0, ...o });
+function placeActor(cam, X, Z = SET.presenterZ) {
+  if (CAM) return CAM.placeActor(cam, X, Z);
+  const k = kAt(cam, Z);
+  return { x: sxOf(cam, k, X), y: syOf(cam, k, SET.neckY), s: Math.max(0.5, Math.round(22 * k) / 22), k };
+}
+const PRESETS = {
+  wide: makeCamera(),
+  'solo-wide': makeCamera({ x: 0, y: -36, z: 80, hy: 76 }),
+  two: makeCamera({ z: 420, hy: 59 }),
+};
 
 export const CASTS = {
   'world-now': { A: 'paco', B: 'lola' },
@@ -56,6 +81,7 @@ export function setImage(name, img) {
 
 const ACTORS = new Map();
 function actorsFor(prog) {
+  const actor = SCENE.actor;
   let list = ACTORS.get(prog);
   if (list) return list;
   const cast = CASTS[prog] || CASTS.generic;
@@ -74,6 +100,8 @@ export function cameraFor(name, prog = LAB.programme) {
   const solo = !cast.B;
   const programId = prog === 'generic' ? 'weekend-review' : prog;
   const o = { cast, solo, programId, focus: 'A' };
+  if (!CAM) return name === 'two' ? PRESETS.two : solo ? PRESETS['solo-wide'] : PRESETS.wide;
+  const camFraming = CAM.framing;
   try {
     switch (name) {
       case 'wide':
@@ -129,6 +157,7 @@ function camAtTime(t) {
   const prog = L.programme;
   const cast = CASTS[prog] || CASTS.generic;
   // a move is a dolly from the framing: reuse CAMERA's cameraAt on the equivalent spec
+  if (!CAM) return base;
   try {
     SPEC.framing = L.framing === 'single-a' || L.framing === 'single-b' ? (cast.B ? 'single' : 'mcu') : L.framing === 'solo' ? (cast.B ? 'mcu-l' : 'solo-mcu') : L.framing;
     SPEC.cast = cast;
@@ -136,7 +165,7 @@ function camAtTime(t) {
     SPEC.solo = !cast.B;
     SPEC.programId = prog;
     SPEC.move = L.move;
-    return camAt(SPEC, t);
+    return CAM.cameraAt(SPEC, t);
   } catch {
     return base;
   }
@@ -154,9 +183,9 @@ export function render(t = 0) {
   drawBackground(frame, cam, t, OPTS);
   drawDesk(frame, cam, clipRows);
   let heads = [];
-  if (L.presenters) {
+  if (L.presenters && SCENE) {
     const list = actorsFor(prog).map(({ a, X }) => ({ actor: a, ...placeActor(cam, X) }));
-    heads = drawActors(t, list, clipRows);
+    heads = SCENE.drawActors(t, list, clipRows);
   }
   return { cam, heads };
 }
@@ -226,9 +255,9 @@ export function profile(n = 120) {
     drawBackground(frame, cam, 50, OPTS);
     drawDesk(frame, cam, clipRows);
   }) - out.bgCached;
-  if (L.presenters) {
+  if (L.presenters && SCENE) {
     const list = actorsFor(prog).map(({ a, X }) => ({ actor: a, ...placeActor(cam, X) }));
-    out.actors = run((i) => drawActors(10 + i / 60, list, clipRows));
+    out.actors = run((i) => SCENE.drawActors(10 + i / 60, list, clipRows));
   }
   Object.assign(L, saved);
   setCacheEnabled(L.cache);
@@ -236,4 +265,134 @@ export function profile(n = 120) {
   return out;
 }
 
+
+// ---------------------------------------------------------------------------
+// Measuring (the bibles' value and colour checks; node tests and the lab use it)
+
+const W = 384, H = 216;
+const MASK = new Uint8Array(W * H);
+
+/** Presenter pixels (materials plus their 1 px outline) of the last drawActors. */
+function presenterMask() {
+  MASK.fill(0);
+  if (!SCENE || !LAB.presenters) return MASK;
+  const m = SCENE.parts.mat;
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      const i = y * W + x;
+      if (m[i] || m[i - 1] || m[i + 1] || m[i - W] || m[i + W]) MASK[i] = 1;
+    }
+  }
+  return MASK;
+}
+
+function stats(px, test) {
+  let n = 0, sum = 0, max = 0;
+  const by = {};
+  for (let i = 0; i < W * H; i++) {
+    if (!test(i)) continue;
+    const L = lstarOf(px[i]);
+    n++;
+    sum += L;
+    if (L > max) max = L;
+    const nm = nameOf(px[i]) || 'off';
+    by[nm] = (by[nm] || 0) + 1;
+  }
+  return { n, mean: n ? sum / n : 0, max, by };
+}
+const shareOf = (st, names) => (st.n ? names.reduce((a, k) => a + (st.by[k] || 0), 0) / st.n : 0);
+
+/**
+ * Render the current lab state at t and measure it:
+ *   faces [mean L* of each human face], headZone (duo: the art-direction head-zone rectangles in
+ *   the wide; solo: the 12 px ring around the head) mean / max, wall mean, ring patches brighter
+ *   than the face, and the set census (presenters and wall content excluded): saturated share,
+ *   accent and tint shares, off-palette count.
+ */
+export function measure(t = 10) {
+  const { cam, heads } = render(t);
+  const px = frame.px;
+  const mask = presenterMask();
+  const r = wallRect(cam);
+  const inWall = (i) => {
+    const x = i % W, y = (i / W) | 0;
+    return x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1;
+  };
+  const style = styleFor(LAB.programme === 'generic' ? 'weekend-review' : LAB.programme);
+  const faces = [];
+  const boxes = [];
+  for (const h of heads) {
+    const s = h.s;
+    let n = 0, sum = 0;
+    for (let y = Math.floor(h.cy - 9 * s); y <= Math.ceil(h.cy + 10 * s); y++) {
+      for (let x = Math.floor(h.cx - 8 * s); x <= Math.ceil(h.cx + 8 * s); x++) {
+        if (x < 0 || y < 0 || x >= W || y >= H) continue;
+        const dx = (x + 0.5 - h.cx) / (7.5 * s), dy = (y + 0.5 - h.cy - 0.5 * s) / (9.5 * s);
+        if (dx * dx + dy * dy > 1) continue;
+        const nm = nameOf(px[y * W + x]);
+        if (!nm || !SKIN.has(nm)) continue;
+        n++;
+        sum += lstarOf(px[y * W + x]);
+      }
+    }
+    if (n > 6 * s * s) faces.push(sum / n);
+    boxes.push({ x0: Math.floor(h.cx - 12 * s), y0: Math.floor(h.cy - 16 * s), x1: Math.ceil(h.cx + 12 * s), y1: Math.ceil(h.cy + 12 * s) });
+  }
+  const cast = CASTS[LAB.programme] || CASTS.generic;
+  let zone;
+  if (cast.B && LAB.framing === 'wide') {
+    const inRect = (i, x0, y0, x1, y1) => {
+      const x = i % W, y = (i / W) | 0;
+      return x >= x0 && x < x1 && y >= y0 && y < y1;
+    };
+    zone = stats(px, (i) => !mask[i] && !inWall(i) && (inRect(i, 80, 40, 140, 110) || inRect(i, 244, 40, 304, 110)));
+  } else {
+    // a 12 px ring around each head box (news-60.md "head zone")
+    zone = stats(px, (i) => {
+      if (mask[i]) return false;
+      const x = i % W, y = (i / W) | 0;
+      for (const b of boxes) if (x >= b.x0 - 12 && x < b.x1 + 12 && y >= b.y0 - 12 && y < b.y1 + 12) return true;
+      return false;
+    });
+  }
+  const wall = stats(px, (i) => !mask[i] && inWall(i));
+  const set = stats(px, (i) => !mask[i] && !inWall(i));
+  // studio 4x4 patches brighter than the face mean (presenters excluded)
+  const faceMean = faces.length ? Math.min(...faces) : 100;
+  let patches = 0;
+  for (let y = 0; y + 4 <= H; y += 2) {
+    for (let x = 0; x + 4 <= W; x += 2) {
+      let ok = true;
+      for (let j = 0; j < 4 && ok; j++) for (let i = 0; i < 4 && ok; i++) {
+        const q = (y + j) * W + x + i;
+        if (mask[q] || lstarOf(px[q]) <= faceMean) ok = false;
+      }
+      if (ok) patches++;
+    }
+  }
+  return {
+    programme: LAB.programme,
+    framing: LAB.framing,
+    wallMode: LAB.wall,
+    faces,
+    headZone: { mean: zone.mean, max: zone.max, n: zone.n },
+    wall: { mean: wall.mean, max: wall.max, n: wall.n },
+    patches,
+    set: {
+      n: set.n,
+      saturated: shareOf(set, [...SATURATED]),
+      accent: shareOf(set, [style.accentName]),
+      cyan: shareOf(set, ['cyan']),
+      yellow: shareOf(set, ['yellow']),
+      cosmosColours: shareOf(set, ['magenta', 'purple']),
+      tint: shareOf(set, style.tintNames || []),
+      navy: shareOf(set, ['navy']),
+      off: set.by.off || 0,
+      by: set.by,
+    },
+  };
+}
+
 export { frame, wallRect, C };
+export const hasPresenters = () => !!SCENE;
+export const hasCamera = () => !!CAM;

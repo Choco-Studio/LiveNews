@@ -145,6 +145,25 @@ function nextBoundary(tl, t) {
   return null;
 }
 
+/**
+ * The single a story opens on: the programme's single, or the over-the-shoulder
+ * wall framing when the previous segment was a story by the same presenter (so
+ * the story change is a visible cut, never a jump on the same framing).
+ */
+function storySingle(ctx) {
+  const base = singleFraming(ctx);
+  const id = styleOf(ctx.programId);
+  if (id === 'money-minute' || id === 'news-60') return base;
+  const segs = ctx.episode?.segments || [];
+  let run = 0;
+  for (let j = ctx.index - 1; j >= 0; j--) {
+    const p = segs[j];
+    if (p.type !== 'story' || p.anchor !== segs[ctx.index]?.anchor || p.roundup) break;
+    run++;
+  }
+  return run % 2 === 1 ? 'ots' : base;
+}
+
 /** Studio framing of a single for the speaker, per programme. */
 function singleFraming(ctx, slot = ctx.speaker) {
   switch (styleOf(ctx.programId)) {
@@ -306,7 +325,7 @@ function worldNow(ctx, tl) {
   // stories
   if (ctx.seg.roundup || roundupLike(ctx)) return roundupMap(ctx, tl, 'world-now');
   const out = storyBeats(ctx, tl, {
-    single: singleFraming(ctx),
+    single: storySingle(ctx),
     map: !!seg.location,
     picture: ctx.hasImage,
     fact: seg.fact || seg.numbers?.[0]?.value ? factHold(seg) : 0,
@@ -388,6 +407,8 @@ function chatLeadIn(ctx, tl, out, always = false) {
   const prev = out.filter((e) => e.at <= last.t + 1e-6).pop();
   if (!prev || last.t - prev.at < MIN_SHOT) return;
   if (tl.end - last.t + run < MIN_SHOT) return;
+  // optional lead-ins never make the wide longer than the studio maximum
+  if (run >= MIN_SHOT && tl.end - last.t + run > (SHOT_STYLES[styleOf(ctx.programId)].studioMax || 15)) return;
   // drop planned cuts after it and put the wide on the last sentence
   for (let k = out.length - 1; k >= 0; k--) if (out[k].at > last.t - 1e-6) out.splice(k, 1);
   out.push(ev(ctx, last.t, last.char, 'wide', 'wide', ctx.speaker, 'wide'));
@@ -459,7 +480,7 @@ function techBytes(ctx, tl) {
     return out;
   }
   const out = storyBeats(ctx, tl, {
-    single: singleFraming(ctx),
+    single: storySingle(ctx),
     map: !!seg.location && !ctx.hasImage,
     picture: ctx.hasImage,
     fact: 0,
@@ -503,15 +524,24 @@ function cosmos(ctx, tl) {
       out.push(ev(ctx, 0, 0, 'montage', null, me, 'cold', { card: 0 }));
       const g = ctx.sentences[1];
       const b = tl.bounds.find((x) => x.i === 1);
-      if (b && tl.end - b.t >= MIN_SHOT) out.push(ev(ctx, g.t0, g.start, 'wide', 'wide', me, 'greeting'));
+      // every COSMOS shot holds 4 s: a cold line shorter than that plays on the wide
+      if (b && b.t >= MIN_SHOT && tl.end - b.t >= MIN_SHOT) out.push(ev(ctx, g.t0, g.start, 'wide', 'wide', me, 'greeting'));
       else out.length = 0;
     }
-    if (!out.length) out.push(ev(ctx, 0, 0, 'wide', 'wide', me, 'greeting'));
+    if (!out.length) {
+      // a wide over 15 s: the teasers on Nova's single, the greeting (naming both) on the wide
+      const g = splitIntro(ctx, 3).greet;
+      const b = tl.bounds.find((x) => x.i === g && !x.blocked);
+      if (tl.end > S.studioMax && b && b.t >= MIN_SHOT && tl.end - b.t >= MIN_SHOT) {
+        out.push(ev(ctx, 0, 0, 'close', singleFraming(ctx), me, 'teaser'));
+        out.push(ev(ctx, b.t, b.char, 'wide', 'wide', me, 'greeting'));
+      } else out.push(ev(ctx, 0, 0, 'wide', 'wide', me, 'greeting'));
+    }
     return out;
   }
   if (ctx.type === 'chat') return [ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? 'wide' : 'mcu', me, 'chat')];
   if (ctx.type === 'outro') return [ev(ctx, 0, 0, 'wide', 'wide', me, 'signoff')];
-  const single = singleFraming(ctx);
+  const single = storySingle(ctx);
   let out;
   if (ctx.feature === 'number' && !ctx.isLead) {
     // the Reading on UNIT-8's first word; the single on sentence 2, no earlier than 4 s after the cut
@@ -717,14 +747,31 @@ export function pauseCut(ctx, i) {
 // NEWS IN 60 (solo)
 
 function news60(ctx, tl) {
-  const S = SHOT_STYLES['news-60'];
   const me = ctx.speaker;
-  const seg = ctx.seg;
-  if (ctx.type !== 'story') return [ev(ctx, 0, 0, 'wide', 'wide', me, ctx.type === 'outro' ? 'signoff' : ctx.type === 'intro' ? 'greeting' : 'wide')];
-  if (seg.roundup || roundupLike(ctx)) return roundupMap(ctx, tl, 'news-60');
-  const out = [];
-  const image = ctx.hasImage;
-  // one shot per sentence cut on its first word; a sentence under MIN_SHOT shares the next one's shot
+  if (ctx.type !== 'story') {
+    const e = ev(ctx, 0, 0, 'wide', 'wide', me, ctx.type === 'outro' ? 'signoff' : ctx.type === 'intro' ? 'greeting' : 'wide');
+    // the templated intro is ~3 s: ask the director to hold the WIDE to MIN_SHOT
+    if (tl.end < MIN_SHOT) e.minLen = MIN_SHOT;
+    return [e];
+  }
+  if (ctx.seg.roundup || roundupLike(ctx)) return roundupMap(ctx, tl, 'news-60');
+  const item = news60Item(ctx, tl, 0);
+  const out = item.map(({ b, kind }) => ev(ctx, b.t, b.char, kind === 'full' ? 'full' : kind === 'fact' ? 'fact' : 'close', kind === 'full' || kind === 'fact' ? null : kind, me, kind === 'full' ? 'picture' : kind));
+  const hold = Number(ctx.episode?.plan?.pictureHold) > 0 && isLastItem(ctx) && item[item.length - 1].kind === 'full';
+  if (hold) out[out.length - 1].hold = Number(ctx.episode.plan.pictureHold);
+  return out;
+}
+
+/**
+ * The shots of one NEWS IN 60 item: [{ b: { t, char }, kind: 'mcu-l' | 'mcu' | 'full' | 'fact' }].
+ * One shot per sentence, cut on its first word (a sentence under MIN_SHOT shares
+ * the next one's shot). With an image MCU-L and FULL alternate: the lead starts
+ * on MCU-L, other items in a seeded order, the item after the round-up on MCU-L,
+ * and with the picture hold the last item ends on FULL. Sam is in vision in
+ * every item, and every item change is a visible cut: an item never opens on the
+ * framing the previous item ended on.
+ */
+function news60Item(ctx, tl, depth) {
   const starts = [{ t: 0, char: 0 }];
   let cur = 0;
   for (const b of tl.bounds) {
@@ -732,26 +779,45 @@ function news60(ctx, tl) {
     starts.push(b);
     cur = b.t;
   }
-  const lastItem = isLastItem(ctx);
-  const hold = lastItem && image && Number(ctx.episode?.plan?.pictureHold) > 0;
-  if (!image) {
-    // MCU for the whole item; the lead may take its FACT on sentence 2
-    out.push(ev(ctx, 0, 0, 'close', 'mcu', me, 'mcu'));
-    if (ctx.isLead && (seg.fact || seg.numbers?.length) && starts.length > 1) out.push(ev(ctx, starts[1].t, starts[1].char, 'fact', null, me, 'fact'));
+  const prevEnd = news60PrevEnd(ctx, depth);
+  if (!ctx.hasImage) {
+    // MCU for the whole item (the looser MCU-L when the previous item ended on the MCU); the lead may take its
+    // FACT; an item over the 12 s studio maximum changes framing at the sentence nearest its middle
+    const kind = prevEnd === 'mcu' ? 'mcu-l' : 'mcu';
+    const out = [{ b: starts[0], kind }];
+    if (ctx.isLead && (ctx.seg.fact || ctx.seg.numbers?.length) && starts.length > 1) out.push({ b: starts[1], kind: 'fact' });
+    else if (tl.end > SHOT_STYLES['news-60'].studioMax && starts.length > 1) {
+      const mid = tl.end / 2;
+      const b = starts.slice(1).reduce((m, x) => (Math.abs(x.t - mid) < Math.abs(m.t - mid) ? x : m));
+      out.push({ b, kind: kind === 'mcu' ? 'mcu-l' : 'mcu' });
+    }
     return out;
   }
-  // MCU-L / FULL alternation: the lead starts on MCU-L; other items seeded per item;
-  // the item after the round-up opens on MCU-L; with the picture hold the last item ends on FULL
+  if (starts.length === 1) return [{ b: starts[0], kind: prevEnd === 'mcu-l' ? 'mcu' : 'mcu-l' }];
   const r = rng((ctx.episodeSeed ^ Math.imul(ctx.index + 1, 0x9e3779b1)) >>> 0);
   let mcuFirst = ctx.isLead || afterRoundup(ctx) || r() < 0.5;
-  if (hold && starts.length >= 1) mcuFirst = starts.length % 2 === 0; // end on FULL
-  if (starts.length === 1) mcuFirst = true; // Sam in vision in every item
-  starts.forEach((b, k) => {
-    const mcu = (k % 2 === 0) === mcuFirst;
-    out.push(ev(ctx, b.t, b.char, mcu ? 'close' : 'full', mcu ? 'mcu-l' : null, me, mcu ? 'mcu-l' : 'picture'));
-  });
-  if (hold) out[out.length - 1].hold = Number(ctx.episode.plan.pictureHold);
-  return out;
+  if (Number(ctx.episode?.plan?.pictureHold) > 0 && isLastItem(ctx)) mcuFirst = starts.length % 2 === 0; // end on FULL
+  if (mcuFirst && prevEnd === 'mcu-l') mcuFirst = false;
+  else if (!mcuFirst && prevEnd === 'full' && !ctx.isLead) mcuFirst = true;
+  return starts.map((b, k) => ({ b, kind: (k % 2 === 0) === mcuFirst ? 'mcu-l' : 'full' }));
+}
+
+/** What the previous NEWS IN 60 item ended on ('wide' after the intro, 'map' after the round-up). */
+function news60PrevEnd(ctx, depth) {
+  const segs = ctx.episode?.segments || [];
+  const j = ctx.index - 1;
+  const p = segs[j];
+  if (!p) return null;
+  if (p.type !== 'story') return 'wide';
+  if (p.roundup || (p.location && p.chars <= 150 && segs[j - 1]?.type === 'story' && segs[j - 1]?.location)) return 'map';
+  const c = depth < 8 ? neighbour(ctx, j) : null;
+  if (c) {
+    const item = news60Item(c, timeline(c), depth + 1);
+    return item[item.length - 1].kind;
+  }
+  // no neighbour context: predict from the summary (two shots for a two-sentence item)
+  if (!p.hasImage) return 'mcu';
+  return p.chars >= 150 ? 'full' : 'mcu-l';
 }
 
 function isLastItem(ctx) {
