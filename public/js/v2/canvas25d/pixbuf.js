@@ -18,7 +18,6 @@
 // Rotation and scale are therefore free: the part is re-rasterised at the
 // new angle and size, the pixel grid stays crisp ("RotSprite" without
 // sprites).
-import { P } from '../../palette.js';
 
 export const W = 384;
 export const H = 216;
@@ -494,6 +493,37 @@ export class PartBuffer {
         }
         px[fi] = c;
       }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Small shared helpers (moved here from character.js / face.js so every part
+// module can use them without importing another part module)
+
+/** A decal material that paints one exact palette colour. */
+export function decal(hex) {
+  return material(`decal:${hex}`, { ramp: [hex], decal: true });
+}
+
+/** Integer Bresenham line between float endpoints. */
+export function line(ax, ay, bx, by, fn) {
+  let x0 = Math.round(ax), y0 = Math.round(ay);
+  const x1 = Math.round(bx), y1 = Math.round(by);
+  const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  for (let n = 0; n < 512; n++) {
+    fn(x0, y0);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) {
+      err += dy;
+      x0 += sx;
+    }
+    if (e2 <= dx) {
+      err += dx;
+      y0 += sy;
     }
   }
 }

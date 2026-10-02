@@ -57,8 +57,12 @@ export function longDate(now = Date.now()) {
 }
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-export const easeOut = (x) => 1 - (1 - clamp(x, 0, 1)) ** 3;
+export const clamp01 = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x);
+export const lerp = (a, b, k) => a + (b - a) * k;
+// Cubic easing (no overshoot): the one set of curves for graphics, logo and set.
+export const easeOut = (x) => 1 - (1 - clamp01(x)) ** 3;
+export const easeIn = (x) => clamp01(x) ** 3;
 export const easeInOut = (x) => {
-  const v = clamp(x, 0, 1);
+  const v = clamp01(x);
   return v < 0.5 ? 4 * v * v * v : 1 - (-2 * v + 2) ** 3 / 2;
 };

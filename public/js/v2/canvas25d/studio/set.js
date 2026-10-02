@@ -1,11 +1,7 @@
-// The GLOBIT 24 studio as 2.5D depth layers seen through a virtual camera.
+// The GLOBIT 24 studio set as 2.5D depth layers seen through a virtual
+// camera (owner: STUDIO SET stream). Geometry and projection: geometry.js;
+// wall content: wall.js; cameras: ../camera.js.
 //
-// World units are centimetres (the rig's units): X right, Y down with the
-// desk top at Y = 0, Z away from the camera. The camera never rotates (a
-// studio pedestal: it trucks, pedestals, dollies and zooms), so every plane
-// facing the lens (back wall, set flats, presenters, desk front) is a 2D
-// layer scaled by k = F·zoom / (Z − cam.z) — that is the per-layer parallax —
-// while the desk top and the floor are true perspective surfaces.
 // Each layer is re-rasterised every frame at its exact scale with integer
 // edges, so a slow push-in stays pixel-clean at every zoom.
 //
@@ -14,42 +10,12 @@
 // falling off to black, one symmetric pair of static practical lights on
 // the set flats, brand red only as flat blocks (desk plate, one LED line),
 // dark glossy floor with 1 px reflections, Bayer 4x4 only on light falloff.
-import { P } from '../../palette.js';
-import { C, bayer, mix32, u32 } from './pixbuf.js';
-import { LAND } from '../../scenes/worlddata.js';
-import { drawLogo, measureLogo } from '../../logo.js';
+import { C, bayer, mix32 } from '../pixbuf.js';
+import { drawLogo, measureLogo } from '../../../logo.js';
+import { F, SET, kAt, sxOf, syOf } from './geometry.js';
+import { drawWallContent } from './wall.js';
 
-export const F = 1000;
-export const SET = {
-  presenterZ: 1000,
-  neckY: -30, // neck base of a seated presenter, relative to the desk top (desk at elbow height)
-  seatX: { A: -74, B: 74 },
-  wallZ: 1400,
-  flatsZ: 1180,
-  deskFrontZ: 900,
-  deskDepth: 82,
-  deskHW: 238,
-  deskCurve: 58,
-  deskH: 52,
-  floorY: 52,
-  screen: { x0: -73, x1: 73, y0: -110, y1: -22 },
-};
-
-export function makeCamera(o = {}) {
-  return { x: 0, y: -60, z: 0, zoom: 1, hy: 52, soft: 0, ...o };
-}
-
-export const kAt = (cam, Z) => (F * cam.zoom) / (Z - cam.z);
-const sxOf = (cam, k, X) => 192 + (X - cam.x) * k;
-const syOf = (cam, k, Y) => cam.hy + (Y - cam.y) * k;
-
-/** Screen position and scale of a seated presenter's neck base. */
-export function placeActor(cam, X, Z = SET.presenterZ) {
-  const k = kAt(cam, Z);
-  // quantise the scale so the head (22 u) is a whole number of pixels: fewer re-samples while zooming
-  const s = Math.max(0.5, Math.round(22 * k) / 22);
-  return { x: sxOf(cam, k, X), y: syOf(cam, k, SET.neckY), s, k };
-}
+export { SET };
 
 // ---------------------------------------------------------------------------
 // Layer helpers (integer edges: shared edges never gap)
@@ -98,94 +64,6 @@ function layerPool(fr, cam, Z, Xc, Yc, rx, ry, a, b, strength, only = null) {
       if (only !== null && px[i] !== only) continue;
       const l = strength * (1 - d) * (1 - d * 0.35);
       if (l > bayer(x - ox, y - oy)) px[i] = b;
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// The world globe on the video wall, rasterised per pixel at the exact size
-
-let LANDMASK = null;
-const LMW = 512, LMH = 256;
-function landMask() {
-  if (LANDMASK) return LANDMASK;
-  const bin = atob(LAND.rle);
-  const W = LAND.w, H = LAND.h;
-  const sx = W / LMW, sy = H / LMH;
-  const m = new Uint8Array(LMW * LMH);
-  let p = 0;
-  for (let j = 0; j < H; j++) {
-    const keep = j % sy === sy >> 1;
-    const row = (j / sy) | 0;
-    let x = 0, cur = 0;
-    while (x < W) {
-      let run = 0, shift = 0, byte;
-      do {
-        byte = bin.charCodeAt(p++);
-        run |= (byte & 127) << shift;
-        shift += 7;
-      } while (byte & 128);
-      if (keep && cur) {
-        for (let q = Math.ceil((x - (sx >> 1)) / sx); q * sx + (sx >> 1) < x + run; q++) if (q >= 0 && q < LMW) m[row * LMW + q] = 1;
-      }
-      x += run;
-      cur ^= 1;
-    }
-  }
-  LANDMASK = m;
-  return m;
-}
-
-const GL = (() => {
-  const l = Math.hypot(-0.5, -0.45, 0.74);
-  return [-0.5 / l, -0.45 / l, 0.74 / l];
-})();
-
-function drawGlobe(fr, cx, cy, R, rot, soft, clip) {
-  const mask = landMask();
-  const tilt = 0.38;
-  const ct = Math.cos(tilt), st = Math.sin(tilt);
-  const px = fr.px;
-  const ocean = soft ? [C.navy, C.navy, C.ink, C.ink] : [C.navy, C.navy, C.ink, C.black];
-  const land = soft ? [C.steel, C.slate, C.slate, C.ink] : [C.fog, C.steel, C.slate, C.ink];
-  const grid = soft ? C.navy : C.slate;
-  const R2 = R * R;
-  const x0 = Math.max(clip[0], Math.floor(cx - R - 1)), x1 = Math.min(clip[2], Math.ceil(cx + R + 1));
-  const y0 = Math.max(clip[1], Math.floor(cy - R - 1)), y1 = Math.min(clip[3], Math.ceil(cy + R + 1));
-  const step = Math.PI / 6;
-  const lineW = 0.55 / R;
-  const lonL = -0.0, latL = 51.5 * (Math.PI / 180);
-  for (let y = y0; y < y1; y++) {
-    for (let x = x0; x < x1; x++) {
-      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
-      const d2 = dx * dx + dy * dy;
-      if (d2 > R2) {
-        // a thin atmosphere ring
-        if (d2 <= (R + 1) * (R + 1) && !soft) px[y * fr.w + x] = dx < 0 && dy < R * 0.3 ? C.blue : C.navy;
-        continue;
-      }
-      const nx = dx / R, ny = dy / R;
-      const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
-      // tilt the axis toward the viewer, then spin
-      const wy = ny * ct - nz * st, wz = ny * st + nz * ct;
-      const lat = -Math.asin(Math.max(-1, Math.min(1, wy)));
-      let lon = Math.atan2(nx, wz) + rot;
-      lon = ((lon + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
-      const u = ((lon / (2 * Math.PI) + 0.5) * LMW) | 0;
-      const v = ((0.5 - lat / Math.PI) * LMH) | 0;
-      const isLand = mask[Math.min(LMH - 1, v) * LMW + Math.min(LMW - 1, u)];
-      const l = nx * GL[0] + ny * GL[1] + nz * GL[2];
-      const tone = l > 0.82 ? 0 : l > 0.35 ? 1 : l > 0.0 ? 2 : 3;
-      let c = isLand ? land[tone] : ocean[tone];
-      // graticule every 30 degrees (thin, only on the lit side)
-      if (!isLand && tone <= 2) {
-        const gl = Math.abs(((lat + step / 2) % step + step) % step - step / 2);
-        const go = Math.abs(((lon + step / 2) % step + step) % step - step / 2) * Math.max(0.2, Math.cos(lat));
-        if (nz > 0.35 && (gl < lineW / nz || go < lineW / nz)) c = grid;
-      }
-      // London: one red pixel (two at large sizes)
-      if (Math.abs(lat - latL) < 1.2 / R && Math.abs(lon - lonL) * Math.cos(lat) < 1.2 / R && nz > 0.2) c = C.red;
-      px[y * fr.w + x] = c;
     }
   }
 }
@@ -293,15 +171,7 @@ function drawScreen(fr, cam, t, soft) {
   fr.span(x0 - b - 1, y0 - b - 1, x1 + b + 1, y1 + b + 1, C.black);
   fr.span(x0 - b, y0 - b, x1 + b, y1 + b, soft ? C.ink : C.slate);
   fr.span(x0 - b, y0 - b, x1 + b, y0 - b + 1, soft ? C.slate : C.silver);
-  // field: navy at the top easing to ink at the bottom (keeps the area behind heads dark)
-  fr.dither(x0, y0, x1 - x0, y1 - y0, C.navy, C.ink, (x, y) => ((y - y0) / Math.max(1, y1 - y0)) * 1.25 - 0.15);
-  // globe (slow spin) in the upper-middle of the screen
-  const R = Math.max(6, ((S.y1 - S.y0) * 0.36) * k);
-  const gcx = (x0 + x1) / 2, gcy = y0 + (y1 - y0) * 0.44;
-  drawGlobe(fr, gcx, gcy, R, -0.35 + t * 0.06, soft, [x0, y0, x1, y1]);
-  // a flat red tag at the screen's top-left: the only brand block on the wall
-  const tw = Math.max(4, Math.round(16 * k)), th = Math.max(2, Math.round(4 * k));
-  fr.span(x0 + Math.round(5 * k), y0 + Math.round(5 * k), x0 + Math.round(5 * k) + tw, y0 + Math.round(5 * k) + th, soft ? C.darkRed : C.red);
+  drawWallContent(fr, x0, y0, x1, y1, k, t, soft);
 }
 
 /** Floor plane (Y = floorY): ray-cast per row, glossy black with converging seams. */

@@ -5,17 +5,25 @@
 // (ease-out, whole pixels), the text rises in 0.1 s after it, a story change
 // flips the text in 0.3 s and keeps the bar, the exit takes 0.25 s. Breaking
 // news turns the strap red with one calm wipe; no flashing.
+// The strap never scrolls: a headline wider than the bar (a long live
+// breaking item) is shown as phrase pages (graphics/breaks.js) that flip with
+// the same 0.3 s push. A breaking strap pages through once and holds its last
+// page; a story strap shows its second page once and returns to the first.
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
 import { STRAP, inkOn, easeOut, easeIn, easeInOut, lerp, rect, clipped } from './layout.js';
+import { linePages } from './breaks.js';
 
-export const STRAP_TIMING = { in: 0.35, textDelay: 0.1, textRise: 0.2, flip: 0.3, out: 0.25, red: 0.45, name: 5 };
+export const STRAP_TIMING = { in: 0.35, textDelay: 0.1, textRise: 0.2, flip: 0.3, out: 0.25, red: 0.45, name: 5, page: 5, breakingPage: 4 };
 const T = STRAP_TIMING;
 
 const BAR_W = STRAP.right - STRAP.x;
 const TEXT_X = STRAP.x + 5; // aligned with the tag text above
-const TEXT_ROOM = STRAP.right - 5 - TEXT_X;
+/** Room for headline text inside the bar. */
+export const TEXT_ROOM = STRAP.right - 5 - TEXT_X;
+const TEXT_Y = 3; // cap line inside the tag row: 3 px above for accents, the bar's accent line below
 const BAR = P.ink;
+const BAR_HI = P.slate; // 1 px lit edge under the accent line: separates the bar from dark ink sets
 const BAR_RED = P.darkRed;
 
 const CATEGORY_LABEL = {
@@ -37,6 +45,7 @@ export function strapContent(lt, { accent = P.red, category = '' } = {}) {
   if (!tag) tag = 'NEWS';
   const plate = tag === source ? '' : source;
   const headline = String(lt.headline || '').trim();
+  const pages = linePages(headline, TEXT_ROOM);
   return {
     key: `${breaking ? 1 : 0}|${tag}|${headline}`,
     tag,
@@ -44,9 +53,33 @@ export function strapContent(lt, { accent = P.red, category = '' } = {}) {
     plate,
     name: lt.showName && lt.anchorName ? String(lt.anchorName) : '',
     headline,
+    pages: pages.length ? pages : [''],
     breaking,
     since: Number.isFinite(lt.since) ? lt.since : 0,
   };
+}
+
+/** Seconds from the text coming up until a strap has shown all its pages once. */
+export const strapReadTime = (c) => (c.pages.length - 1) * (c.breaking ? T.breakingPage : T.page);
+
+/**
+ * Page on air `local` seconds after the strap's text came up, written into
+ * `out` = { i, from, k } (k < 1 while flipping from page `from` to page `i`).
+ */
+export function strapPage(c, local, out = { i: 0, from: 0, k: 1 }) {
+  const n = c.pages.length;
+  out.i = 0;
+  out.from = 0;
+  out.k = 1;
+  if (n < 2 || local <= 0) return out;
+  const hold = c.breaking ? T.breakingPage : T.page;
+  const flips = c.breaking ? n - 1 : n; // breaking: once through; story: once through and back to page 1
+  const step = Math.min(flips, Math.floor(local / hold));
+  if (step === 0) return out;
+  out.i = step % n;
+  out.from = (step - 1) % n;
+  out.k = easeInOut((local - step * hold) / T.flip);
+  return out;
 }
 
 /** Tracks what the strap shows so it can wipe, flip, turn red and leave smoothly. */
@@ -60,6 +93,8 @@ export class StrapState {
     this.redAt = -Infinity;
     this.redFrom = false;
     this.tagFromW = 0;
+    this.textAt = 0; // when the current content's text is fully up (pages count from here)
+    this.prevPage = 0; // page the previous content showed when it was flipped away
   }
 
   reset() {
@@ -87,6 +122,7 @@ export class StrapState {
       this.cur = want;
       this.prev = null;
       this.inAt = Math.max(t + lead, want.since);
+      this.textAt = this.inAt + T.in + T.textDelay + T.textRise;
       this.outAt = null;
       this.flipAt = -Infinity;
       this.redAt = -Infinity;
@@ -102,6 +138,7 @@ export class StrapState {
         this.redFrom = this.cur.breaking;
         this.cur = want;
         this.flipAt = -Infinity;
+        this.textAt = t;
       }
       return;
     }
@@ -113,8 +150,10 @@ export class StrapState {
       this.redFrom = this.cur.breaking;
     }
     if (textShown) {
+      this.prevPage = strapPage(this.cur, t - this.textAt, SCRATCH).i;
       this.prev = this.cur;
       this.flipAt = t;
+      this.textAt = t + T.flip;
     }
     this.cur = want;
   }
@@ -128,49 +167,39 @@ export class StrapState {
   }
 }
 
+const SCRATCH = { i: 0, from: 0, k: 1 };
+const PAGE_NOW = { i: 0, from: 0, k: 1 };
+
 // The black plate beside the tag: the presenter's name for the first seconds
-// (name super), then the source in micro type. Returns the label on air at t.
-function plateAt(c, t) {
-  const k = c.name ? easeInOut((t - c.since - T.name) / T.flip) : 1;
-  return { k, name: c.name, source: c.plate };
+// (name super), then the source in micro type. `k` is the name -> source push
+// (0 = name, 1 = source) of content `c` at time t.
+const plateK = (c, t) => (c.name ? easeInOut((t - c.since - T.name) / T.flip) : 1);
+const nameW = (c) => (c.name ? measureText(c.name) + 10 : 0);
+const sourceW = (c) => (c.plate ? measureText(c.plate, 1, 'micro') + 10 : 0);
+function plateWidth(c, k) {
+  if (k <= 0) return nameW(c);
+  if (k >= 1) return sourceW(c);
+  return Math.round(lerp(nameW(c), sourceW(c), k));
 }
-const nameW = (p) => (p.name ? measureText(p.name) + 10 : 0);
-const sourceW = (p) => (p.source ? measureText(p.source, 1, 'micro') + 10 : 0);
-function plateWidth(p) {
-  if (p.k <= 0) return nameW(p);
-  if (p.k >= 1) return sourceW(p);
-  return Math.round(lerp(nameW(p), sourceW(p), p.k));
+function drawName(ctx, c, x, y) {
+  if (c.name) drawText(ctx, c.name, x + 5, y + TEXT_Y, { color: P.white });
+}
+function drawSource(ctx, c, x, y) {
+  if (c.plate) drawText(ctx, c.plate, x + 5, y + TEXT_Y, { color: P.silver, font: 'micro' });
 }
 /** Draw one plate label with a vertical offset (name and source push past each other). */
-function drawPlateLabel(ctx, p, x, y, h, dy) {
-  const name = (o) => p.name && drawText(ctx, p.name, x + 5, y + 2 + o, { color: P.white });
-  const source = (o) => p.source && drawText(ctx, p.source, x + 5, y + 3 + o, { color: P.silver, font: 'micro' });
-  if (p.k <= 0) name(dy);
-  else if (p.k >= 1) source(dy);
+function drawPlateLabel(ctx, c, k, x, y, h, dy) {
+  if (k <= 0) drawName(ctx, c, x, y + dy);
+  else if (k >= 1) drawSource(ctx, c, x, y + dy);
   else {
-    name(dy - Math.round(p.k * h));
-    source(dy + Math.round((1 - p.k) * h));
+    drawName(ctx, c, x, y + dy - Math.round(k * h));
+    drawSource(ctx, c, x, y + dy + Math.round((1 - k) * h));
   }
 }
-const samePlate = (a, b) => a.k === b.k && (a.k >= 1 ? a.source === b.source : a.name === b.name);
+const samePlate = (a, ka, b, kb) => ka === kb && (ka >= 1 ? a.plate === b.plate : a.name === b.name);
 
-/** Horizontal scroll for a headline wider than the bar (rare: headlines are capped at ~45-56 chars). */
-function overflowShift(w, local) {
-  const over = w - TEXT_ROOM;
-  if (over <= 0) return 0;
-  const glide = over / 25;
-  const cycle = 3 + glide + 3 + glide / 2;
-  const p = local % cycle;
-  if (p < 3) return 0;
-  if (p < 3 + glide) return Math.round(((p - 3) / glide) * over);
-  if (p < 6 + glide) return over;
-  return Math.round((1 - (p - 6 - glide) / (glide / 2)) * over);
-}
-
-function drawHeadline(ctx, c, t, dy) {
-  const w = measureText(c.headline);
-  const shift = overflowShift(w, Math.max(0, t - c.since - 1));
-  drawText(ctx, c.headline, TEXT_X - shift, STRAP.barY + 5 + dy, { color: P.white });
+function drawLine(ctx, text, dy) {
+  drawText(ctx, text, TEXT_X, STRAP.barY + 5 + dy, { color: P.white });
 }
 
 /** Draw the strap for state `s` at time t. */
@@ -186,25 +215,34 @@ export function drawStrap(ctx, t, s) {
   const redK = easeInOut((t - s.redAt) / T.red);
   const base = c.breaking ? BAR_RED : BAR;
   clipped(ctx, STRAP.x, STRAP.barY, barVis, STRAP.barH, () => {
-    if (redK < 1) {
-      const split = Math.round(BAR_W * redK);
-      rect(ctx, STRAP.x, STRAP.barY, BAR_W, STRAP.barH, s.redFrom ? BAR_RED : BAR);
-      rect(ctx, STRAP.x, STRAP.barY, split, STRAP.barH, base);
-    } else rect(ctx, STRAP.x, STRAP.barY, BAR_W, STRAP.barH, base);
+    const split = redK < 1 ? Math.round(BAR_W * redK) : BAR_W;
+    if (split < BAR_W) {
+      const from = s.redFrom ? BAR_RED : BAR;
+      rect(ctx, STRAP.x, STRAP.barY, BAR_W, STRAP.barH, from);
+      if (from === BAR) rect(ctx, STRAP.x + split, STRAP.barY + 1, BAR_W - split, 1, BAR_HI);
+    }
+    rect(ctx, STRAP.x, STRAP.barY, split, STRAP.barH, base);
+    if (base === BAR) rect(ctx, STRAP.x, STRAP.barY + 1, split, 1, BAR_HI);
     // 1 px accent line along the top ties the bar to the tag and lifts it off dark sets
     const line = c.breaking ? P.red : c.tagColor;
     rect(ctx, STRAP.x, STRAP.barY, BAR_W, 1, s.prev && redK < 1 ? s.prev.tagColor : line);
-    if (redK < 1) rect(ctx, STRAP.x, STRAP.barY, Math.round(BAR_W * redK), 1, line);
+    if (redK < 1) rect(ctx, STRAP.x, STRAP.barY, split, 1, line);
     rect(ctx, STRAP.x, STRAP.barY + STRAP.barH - 1, BAR_W, 1, P.black);
 
     const textK = easeOut((t - s.inAt - T.in - T.textDelay) / T.textRise);
     if (textK <= 0) return;
-    clipped(ctx, TEXT_X - 2, STRAP.barY + 1, TEXT_ROOM + 4, STRAP.barH - 2, () => {
+    clipped(ctx, TEXT_X - 2, STRAP.barY + 2, TEXT_ROOM + 4, STRAP.barH - 3, () => {
       const fk = easeInOut((t - s.flipAt) / T.flip);
       if (s.prev && fk < 1) {
-        drawHeadline(ctx, s.prev, t, -Math.round(fk * 12));
-        drawHeadline(ctx, c, t, Math.round((1 - fk) * 12));
-      } else drawHeadline(ctx, c, t, Math.round((1 - textK) * 6));
+        drawLine(ctx, s.prev.pages[s.prevPage] ?? '', -Math.round(fk * 12));
+        drawLine(ctx, c.pages[0], Math.round((1 - fk) * 12));
+        return;
+      }
+      const pg = strapPage(c, t - s.textAt, PAGE_NOW);
+      if (pg.k < 1) {
+        drawLine(ctx, c.pages[pg.from], -Math.round(pg.k * 12));
+        drawLine(ctx, c.pages[pg.i], Math.round((1 - pg.k) * 12));
+      } else drawLine(ctx, c.pages[pg.i], Math.round((1 - textK) * 6));
     });
   });
 
@@ -213,10 +251,10 @@ export function drawStrap(ctx, t, s) {
   const fk = easeInOut((t - s.flipAt) / T.flip);
   const flipping = !!s.prev && fk < 1;
   const tagW = s.tagWidth(t);
-  const plate = plateAt(c, t);
-  const prevPlate = flipping ? plateAt(s.prev, s.flipAt) : null;
-  const plateChanges = flipping && !samePlate(prevPlate, plate);
-  const plateW = plateChanges ? Math.round(lerp(plateWidth(prevPlate), plateWidth(plate), fk)) : plateWidth(plate);
+  const pk = plateK(c, t);
+  const prevK = flipping ? plateK(s.prev, s.flipAt) : 1;
+  const plateChanges = flipping && !samePlate(s.prev, prevK, c, pk);
+  const plateW = plateChanges ? Math.round(lerp(plateWidth(s.prev, prevK), plateWidth(c, pk), fk)) : plateWidth(c, pk);
   const rowVis = Math.round((tagW + plateW) * tagIn * (1 - rout));
   if (rowVis <= 0) return;
   const y = STRAP.tagY;
@@ -230,9 +268,9 @@ export function drawStrap(ctx, t, s) {
     if (textK > 0) {
       clipped(ctx, STRAP.x, y, tagW, h, () => {
         if (flipping && s.prev.tag !== c.tag) {
-          drawText(ctx, s.prev.tag, STRAP.x + 5, y + 2 - Math.round(fk * h), { color: inkOn(s.prev.tagColor) });
-          drawText(ctx, c.tag, STRAP.x + 5, y + 2 + Math.round((1 - fk) * h), { color: inkOn(c.tagColor) });
-        } else drawText(ctx, c.tag, STRAP.x + 5, y + 2 + Math.round((1 - textK) * 4), { color: inkOn(c.tagColor) });
+          drawText(ctx, s.prev.tag, STRAP.x + 5, y + TEXT_Y - Math.round(fk * h), { color: inkOn(s.prev.tagColor) });
+          drawText(ctx, c.tag, STRAP.x + 5, y + TEXT_Y + Math.round((1 - fk) * h), { color: inkOn(c.tagColor) });
+        } else drawText(ctx, c.tag, STRAP.x + 5, y + TEXT_Y + Math.round((1 - textK) * 4), { color: inkOn(c.tagColor) });
       });
     }
     if (plateW > 0) {
@@ -241,9 +279,9 @@ export function drawStrap(ctx, t, s) {
       if (textK > 0) {
         clipped(ctx, px, y, plateW, h, () => {
           if (plateChanges) {
-            drawPlateLabel(ctx, prevPlate, px, y, h, -Math.round(fk * h));
-            drawPlateLabel(ctx, plate, px, y, h, Math.round((1 - fk) * h));
-          } else drawPlateLabel(ctx, plate, px, y, h, Math.round((1 - textK) * 4));
+            drawPlateLabel(ctx, s.prev, prevK, px, y, h, -Math.round(fk * h));
+            drawPlateLabel(ctx, c, pk, px, y, h, Math.round((1 - fk) * h));
+          } else drawPlateLabel(ctx, c, pk, px, y, h, Math.round((1 - textK) * 4));
         });
       }
     }

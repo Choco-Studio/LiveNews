@@ -1,15 +1,22 @@
 // Lo-fi newsroom proposal: music theory helpers. The whole channel is built from
-// ONE motif (scale degrees 5-1-3-2: "so-do-mi-re"). It ends on the 9th instead
-// of the tonic on purpose: a 24/7 channel never quite resolves, the news goes on.
-// Everything here is pure (no WebAudio) so it can be unit-tested and reused.
+// ONE signature, shared with the opens and idents of the audio stream
+// (public/js/audio/themes.js MOTIF): low 5 - 1 - 2 - high 5 ("da-da-da-DAH"),
+// no third, so it fits every mode; a fifth "colour" note gives each programme
+// its mood (home 3, tech b7, cosmos #4, money 6, news-60 octave, breaking b3,
+// up-next 2 "left hanging"). The beds sing it in scale steps so it follows each
+// programme's mode. Everything here is pure (no WebAudio).
 
-/** The channel motif in scale steps from the tonic (0 = tonic, -3 = the 5th below). */
-export const MOTIF = Object.freeze([
-  { d: -3, at: 0, len: 0.5 }, // so (pickup)
-  { d: 0, at: 0.5, len: 0.5 }, // do
-  { d: 2, at: 1, len: 1 }, // mi (major) / me (minor modes)
-  { d: 1, at: 2, len: 2 }, // re: the open ending, the 9th over the tonic chord
+/** The signature in scale steps (0 = tonic) and beats. Semitones: [-5, 0, 2, 7]. */
+export const SIGNATURE = Object.freeze([
+  { d: -3, len: 0.5 }, // low 5
+  { d: 0, len: 0.5 }, // 1
+  { d: 1, len: 0.5 }, // 2
+  { d: 4, len: 1 }, // high 5
 ]);
+export const SIGNATURE_SEMITONES = Object.freeze([-5, 0, 2, 7]);
+
+/** Colour notes in scale steps (in each palette's own mode they give 3, b7, #4, 6, 8, b3, 2). */
+export const COLOUR = Object.freeze({ home: 2, tech: 6, cosmos: 3, money: 5, sixty: 7, breaking: 2, next: 1 });
 
 export const SCALES = Object.freeze({
   major: [0, 2, 4, 5, 7, 9, 11],
@@ -159,40 +166,41 @@ export function hash(...parts) {
 }
 
 /**
- * Motif variations, all from the same 4 notes, so the channel sounds like one
- * network: statement, inversion, retrograde, displacement, answer and
- * augmentation. Returns [{d, at, len}] in beats.
+ * Signature variations, all from the same notes so the channel sounds like one
+ * network. `colour` is a scale step (COLOUR.*) or null. Returns [{d, at, len}].
+ *   statement  da-da-da-DAH + colour (exactly one bar)
+ *   head       da-da-da-DAAAH (no colour, the high 5 rings)
+ *   answer     ... + 3 then 1: the sign-off, home at last
+ *   displaced  starts on beat 2: lazier, conversational
+ *   retrograde high 5 - 2 - 1 - low 5, then the colour (the replay tag)
+ *   echo       just "2 - 5 - colour" on beats 3-4: a fragment for fills
+ *   augmented  half speed over two bars: dreamy (cosmos, standby)
  */
-export function motifVariant(kind, shift = 0) {
-  const base = MOTIF.map((n) => ({ ...n, d: n.d + shift }));
+export function motifVariant(kind, shift = 0, colour = COLOUR.home) {
+  const seq = (notes, start = 0) => {
+    let at = start;
+    return notes.map(([d, len]) => {
+      const n = { d: d + shift, at, len };
+      at += len;
+      return n;
+    });
+  };
+  const sig = SIGNATURE.map((n) => [n.d, n.len]);
+  const withColour = (base, len = 1.5) => (colour == null ? base : [...base, [colour, len]]);
   switch (kind) {
-    case 'inversion': // mirror the intervals around the first "do"
-      return base.map((n) => ({ ...n, d: 2 * shift - n.d }));
-    case 'retrograde': {
-      const rev = [...base].reverse();
-      let at = 0;
-      return rev.map((n, i) => {
-        const len = [0.5, 0.5, 1, 2][i];
-        const out = { d: n.d, at, len };
-        at += len;
-        return out;
-      });
-    }
-    case 'displaced': // starts on beat 2: lazier, conversational
-      return base.map((n) => ({ ...n, at: n.at + 1, len: n.len === 2 ? 1.5 : n.len }));
-    case 'answer': // so-do-mi then steps back down to do: the "resolved" version for outros
-      return [
-        { d: -3 + shift, at: 0, len: 0.5 },
-        { d: 0 + shift, at: 0.5, len: 0.5 },
-        { d: 2 + shift, at: 1, len: 0.5 },
-        { d: 1 + shift, at: 1.5, len: 0.5 },
-        { d: 0 + shift, at: 2, len: 2 },
-      ];
-    case 'augmented': // double length, two bars: dreamy (cosmos, standby)
-      return base.map((n) => ({ ...n, at: n.at * 2, len: n.len * 2 }));
-    case 'head': // just "so-do-mi": a fragment for fills
-      return base.slice(0, 3).map((n) => ({ ...n, len: n.len === 1 ? 1.5 : n.len }));
-    default:
-      return base;
+    case 'head':
+      return seq([...sig.slice(0, 3), [4, 2.5]]);
+    case 'answer':
+      return seq([...sig, [2, 0.75], [0, 1.25]]);
+    case 'displaced':
+      return seq(withColour(sig, 0.5), 1);
+    case 'retrograde':
+      return seq(withColour([...sig].reverse().map(([d], i) => [d, [0.5, 0.5, 0.5, 1][i]])));
+    case 'echo':
+      return seq(withColour([[1, 0.5], [4, 0.5]], 1), 2);
+    case 'augmented':
+      return seq(withColour(sig).map(([d, len]) => [d, len * 2]));
+    default: // 'statement' / 'signature'
+      return seq(withColour(sig));
   }
 }

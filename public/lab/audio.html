@@ -844,7 +844,7 @@
       // speech timeline at `ms` into the sample sentence: a deterministic film
       // strip of what viewers see. shot: 'close' | 'wide'.
       let studio = null;
-      async function mouth(ms, shot = 'close') {
+      async function studioMouth(ms, shot = 'close') {
         if (!studio) {
           const [{ Renderer }, cast] = await Promise.all([import('../js/studio.js'), import('../js/cast.js')]);
           cast.setPresenters?.({ paco: { name: 'Paco Pixel' }, lola: { name: 'Lola Byte' } });
@@ -869,7 +869,7 @@
         const f = sampleTimeline(studio.tl, ms);
         return `${ms.toFixed(0)} ${f.viseme}>${f.next} ${f.level.toFixed(2)}`;
       }
-      window.__lab = { render, views: VIEWS, stats: () => stats, analyse, mouth };
+      window.__lab = { render, views: VIEWS, stats: () => stats, analyse, mouth: studioMouth };
       const q = new URLSearchParams(location.search);
       render(Number(q.get('view') || 0));
     </script>

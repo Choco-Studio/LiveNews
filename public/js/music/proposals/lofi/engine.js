@@ -42,6 +42,11 @@ const AIR = new Set(['air', 'tex']); // bypass the bed low-pass
 const GROUPS = Object.keys(SENDS);
 const dbToGain = (db) => 10 ** (db / 20);
 
+// Automation that can interrupt itself at any time. Chromium only continues
+// smoothly from cancelAndHoldAtTime() with setTargetAtTime(): a linear or
+// exponential ramp after a hold that cut a running setTarget jumps (measured in
+// the lab: a 0.66 step). So every "ramp" here is a target approach that gets
+// within ~5% of the value after `dur`.
 function holdAt(param, t) {
   if (typeof param.cancelAndHoldAtTime === 'function') param.cancelAndHoldAtTime(t);
   else {
@@ -49,13 +54,12 @@ function holdAt(param, t) {
     param.setValueAtTime(param.value, t);
   }
 }
-function rampTo(param, v, t, dur) {
-  holdAt(param, t);
-  param.linearRampToValueAtTime(v, t + Math.max(0.005, dur));
-}
 function targetTo(param, v, t, tc) {
   holdAt(param, t);
-  param.setTargetAtTime(v, t, tc);
+  param.setTargetAtTime(v, t, Math.max(0.002, tc));
+}
+function rampTo(param, v, t, dur) {
+  targetTo(param, v, t, Math.max(0.005, dur) / 3);
 }
 
 /** One running programme song with its own buses, echo and texture. */
@@ -87,7 +91,7 @@ class Bed {
 
     this.out = g(0);
     this.out.gain.setValueAtTime(0, Math.max(0, t0 - 0.01));
-    this.out.gain.setValueAtTime(dbToGain(arr.gain), t0);
+    this.out.gain.setValueAtTime(dbToGain(arr.gain + (this.pal.trim || 0)), t0);
     this.lp = ctx.createBiquadFilter();
     this.lp.type = 'lowpass';
     this.lp.Q.value = 0.5;
@@ -197,7 +201,7 @@ class Bed {
     this.timeline.push({ bar, arr });
     this.current = arr;
     for (const name of LAYERS) rampTo(this.layer[name].gain, this.engine.level(arr, name), t, dur);
-    rampTo(this.out.gain, dbToGain(arr.gain), t, dur);
+    rampTo(this.out.gain, dbToGain(arr.gain + (this.pal.trim || 0)), t, dur);
     targetTo(this.lp.frequency, arr.lp, t, dur / 2);
   }
 
@@ -213,10 +217,7 @@ class Bed {
     this.endAt = Math.min(this.endAt, t);
     targetTo(this.out.gain, 0, t, dur / 4);
     this.out.gain.setValueAtTime(0, t + dur * 1.8);
-    if (sweep) {
-      holdAt(this.lp.frequency, t);
-      this.lp.frequency.exponentialRampToValueAtTime(320, t + dur);
-    }
+    if (sweep) targetTo(this.lp.frequency, 320, t, dur / 3);
     if (!tail) {
       for (const [verb, echo] of Object.values(this.sends)) {
         targetTo(verb.gain, 0, t, dur / 4);
@@ -291,12 +292,13 @@ class Bed {
 }
 
 export class LofiEngine {
-  constructor(ctx, destination, { gravePad = false, seed = 24 } = {}) {
+  constructor(ctx, destination, { gravePad = false, sharedStings = false, seed = 24 } = {}) {
     this.ctx = ctx;
     this.rig = new Rig(ctx, { seed });
     this.rig.out.gain.value = MIX.output;
     this.rig.out.connect(destination);
     this.gravePad = gravePad;
+    this.sharedStings = sharedStings;
     this.solo = null; // Set of layer names, or null for all
     this.bed = null;
     this.beds = new Set();
@@ -353,7 +355,7 @@ export class LofiEngine {
 
   /** cue('story', { programId, emotion, breaking, next, seconds }) at context time `at`. */
   cue(moment, opts = {}, at = this.ctx.currentTime) {
-    const action = resolveCue(moment, opts, { gravePad: this.gravePad });
+    const action = resolveCue(moment, opts, { gravePad: this.gravePad, sharedStings: this.sharedStings });
     this.pump(at + LOOKAHEAD);
     this.log.push({ t: at, moment, action: action.kind, detail: action.moment || action.name || '' });
     switch (action.kind) {

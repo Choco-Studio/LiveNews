@@ -1,17 +1,17 @@
-// Shared scene plumbing for canvas25d: one Frame (the picture) and one
-// PartBuffer (character materials), actors (look + performance) and a
-// helper that poses, rasterises and resolves them.
+// Shared scene plumbing for canvas25d (owner: INTEGRATION stream): one Frame
+// (the picture) and one PartBuffer (character materials), actors (look +
+// performance) and a helper that poses, rasterises and resolves them.
 import { Frame, PartBuffer } from './pixbuf.js';
 import { drawCharacter, GROUPS_PER_ACTOR } from './character.js';
 import { poseAt } from './rig.js';
-import { LOOKS } from './looks.js';
+import { lookFor } from './cast/index.js';
 
 export const frame = new Frame();
 export const parts = new PartBuffer();
 
 /** An actor is a look plus a performance description (rig.js evaluate()). */
 export function actor(id, perf = {}) {
-  return { id, look: LOOKS[id], perf: { side: 1, gestures: [], emotions: [], look: [], ...perf } };
+  return { id, look: lookFor(id), perf: { side: 1, gestures: [], emotions: [], look: [], ...perf } };
 }
 
 /**

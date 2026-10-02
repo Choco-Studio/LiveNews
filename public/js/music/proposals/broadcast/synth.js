@@ -160,7 +160,7 @@ export class Synth {
   // ------------------------------------------------------------------ voices
 
   /** Plucked pulse: bright attack closing to a warm tail (ostinatos, arps). */
-  pluck(dest, t, m, vel, { wave = 'pulse25', decay = 0.22, cut = 2200, cutEnd = 500, q = 1, gain = 0.5 } = {}) {
+  pluck(dest, t, m, vel, { wave = 'pulse25', decay = 0.22, cut = 2200, cutEnd = 500, q = 1, gain = 2.5 } = {}) {
     const d = Math.round(decay * 100) / 100;
     return this.play(this.bake.pluck(wave, Math.round(m), d, Math.round(cut), Math.round(Math.max(60, cutEnd)), q), dest, t, vel * gain);
   }
@@ -246,7 +246,7 @@ export class Synth {
   }
 
   /** Soft timpani: settling pitch, an inharmonic partial and a felt-mallet thump. */
-  timp(dest, t, m, vel, { decay = 1.5, gain = 0.9 } = {}) {
+  timp(dest, t, m, vel, { decay = 1.5, gain = 0.42 } = {}) {
     return this.play(this.bake.timp(Math.round(m), Math.round(decay * 10) / 10), dest, t, vel * gain);
   }
 
@@ -260,12 +260,12 @@ export class Synth {
   }
 
   /** Round, short kick that stays under 120 Hz (no click in the speech band). */
-  kick(dest, t, vel, { gain = 0.9, decay = 0.32 } = {}) {
+  kick(dest, t, vel, { gain = 0.5, decay = 0.32 } = {}) {
     return this.play(this.bake.kick(decay), dest, t, vel * gain);
   }
 
   /** Air: high-passed noise grain (shaker / hat), above the speech band. */
-  shaker(dest, t, vel, { gain = 0.25 } = {}) {
+  shaker(dest, t, vel, { gain = 0.35 } = {}) {
     return this.play(this.bake.noise('shaker', this.hits++ % 4), dest, t, vel * gain);
   }
 

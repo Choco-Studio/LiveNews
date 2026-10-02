@@ -20,7 +20,7 @@
 // holds still the finished frame is reused as is.
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
-import { clamp, seg, easeOutQuint, easeInOut, easeInOutSine, dropBounce, ringPts, memo, nowMs, ellipsis, wrapLines } from '../gfx/index.js';
+import { clamp, seg, easeOutQuint, easeInOut, easeInOutSine, ringPts, memo, nowMs, ellipsis, wrapLines } from '../gfx/index.js';
 import { mulberry32 } from '../util.js';
 import { LAND, BORDERS } from './worlddata.js';
 

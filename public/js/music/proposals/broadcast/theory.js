@@ -4,17 +4,23 @@
 
 // ------------------------------------------------------------------ motif
 
-// THE channel signature: sol-do-re-sol (scale degrees 5, 1, 2, 5'), "da-da DUM
-// DUMMM". Degrees 1, 2 and 5 are identical in major, minor, dorian, lydian and
-// mixolydian, so the very same four notes sit in every programme's mode; only
-// the harmony underneath changes. Its pitch set {1, 2, 5} is a sus2 chord, which
-// gives the whole package its open, confident "newsroom" colour.
-export const MOTIF = Object.freeze({
-  steps: Object.freeze([-5, 0, 2, 7]), // semitones from the tonic
-  beats: Object.freeze([0.5, 0.5, 1, 2]), // short-short-long-longer
-});
+import { MOTIF as CHANNEL_MOTIF, COLOURS as CHANNEL_COLOURS } from '../../../audio/themes.js';
 
-// Derived shapes every bed draws from, so swapping MOTIF re-derives the package.
+// THE channel signature, imported from the sonic identity (audio/themes.js) so
+// the opens, the idents and these beds can never drift apart: low 5, 1, 2,
+// high 5 ("da-da-da-DAH"). Degrees 1, 2 and 5 are identical in major, minor,
+// dorian, lydian and mixolydian, so the same four notes sit in every
+// programme's mode; a fifth "colour" note (COLOURS) gives each show its mood.
+// Its pitch set {1, 2, 5} is a sus2 chord: the open, confident colour of the
+// whole package, which is why the beds lean on sus2/add9 voicings and why the
+// ostinatos pulse on do-re-sol.
+export const MOTIF = Object.freeze({
+  steps: Object.freeze(CHANNEL_MOTIF.map(([s]) => s)), // semitones from the tonic
+  beats: Object.freeze(CHANNEL_MOTIF.map(([, b]) => b)),
+});
+export const COLOURS = CHANNEL_COLOURS;
+
+// Derived shapes every bed draws from, so changing the signature re-derives the package.
 export function motifShapes(m = MOTIF) {
   const steps = [...m.steps];
   const beats = [...m.beats];
@@ -24,9 +30,9 @@ export function motifShapes(m = MOTIF) {
     beats,
     head: steps.slice(0, 2), // rising fourth: timpani 5 -> 1, bass pickups
     tail: steps.slice(-2), // 2 -> 5: the rising fifth of the pads
-    retro: [...steps].reverse(), // closing gesture (outro, end card)
+    retro: [...steps].reverse(), // closing gesture (outro, replay)
     retroBeats: [...beats].reverse(),
-    mirror: steps.map((s) => -s), // inversion around the tonic (breaking, replay)
+    mirror: steps.map((s) => -s), // inversion around the tonic
     cell: pcs.sort((a, b) => a - b), // pitch-class cell [0, 2, 7] for ostinatos
     total: beats.reduce((a, b) => a + b, 0),
   };

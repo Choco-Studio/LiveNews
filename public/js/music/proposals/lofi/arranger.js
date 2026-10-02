@@ -172,33 +172,34 @@ function fitShift(pal, chord, variant, r) {
   return 0;
 }
 
-function motifNotes(pal, chord, kind, offset, r, inst, vel = 0.8) {
+function motifNotes(pal, chord, kind, offset, r, inst, vel = 0.8, colour = pal.colour) {
   const scale = SCALES[pal.scale];
-  const base = motifVariant(kind);
-  const shift = kind === 'signature' || kind === 'statement' ? (r.chance(0.6) ? 0 : fitShift(pal, chord, base, r)) : fitShift(pal, chord, base, r);
-  const v = motifVariant(kind === 'signature' ? 'statement' : kind, shift);
+  // The signature itself is never transposed (it is the channel's name); variations follow the chords.
+  const shift = kind === 'statement' ? 0 : fitShift(pal, chord, motifVariant(kind, 0, colour), r);
+  const v = motifVariant(kind, shift, colour);
   const oct = pal.lead.oct;
   return v.map((n, i) => ({
     inst, layer: 'lead', at: offset + n.at, dur: n.len * 0.95,
     midi: degreeToMidi(pal.tonic + oct, scale, n.d), vel: vel * (i === v.length - 1 ? 0.9 : 1) * (0.92 + r() * 0.12),
+    p: inst === 'ep' ? { index: 0.9, tine: 0.3, attack: 0.01, decay: 1.1 } : {},
   }));
 }
 
 // 4-bar lead plans for the generative standby melody. null = rest bar.
 const LEAD_PLANS = [
   ['v0', null, 'v1', null],
-  [null, 'displaced', null, 'head'],
-  ['augmented', null, 'answer', null],
-  ['v0', 'head', null, null],
-  [null, 'v1', null, 'answer'],
+  [null, 'displaced', null, 'echo'],
+  ['augmented', null, 'head', null],
+  ['v0', null, null, 'echo'],
+  [null, 'v1', null, 'head'],
 ];
 
 function leadFor(pal, id, arr, n, chord, r) {
   const inst = pal.lead.inst;
   const mode = arr.lead;
   if (mode === 'signature') {
-    if (n === 0) return motifNotes(pal, chord, 'signature', 0, r, inst, 0.9);
-    if (n === 2) return motifNotes(pal, chord, 'head', 1, r, inst, 0.6);
+    if (n === 0) return motifNotes(pal, chord, 'statement', 0, r, inst, 0.9);
+    if (n === 2) return motifNotes(pal, chord, 'echo', 0, r, inst, 0.6);
     return [];
   }
   if (mode === 'answer') {
@@ -212,11 +213,13 @@ function leadFor(pal, id, arr, n, chord, r) {
     const pr = rng(hash(id, 'plan', period));
     const plan = pr.pick(LEAD_PLANS);
     const variants = pal.lead.variants;
+    const colours = pal.lead.colours || [pal.colour];
+    const colour = colours[period % colours.length];
     const slot = plan[n % 4];
     if (!slot) return [];
     const kind = slot === 'v0' ? variants[period % variants.length] : slot === 'v1' ? pr.pick(variants) : slot;
     if (kind === 'augmented' && n % 4 === 3) return [];
-    return motifNotes(pal, chord, kind, 0, r, inst, 0.75);
+    return motifNotes(pal, chord, kind, 0, r, inst, 0.75, colour);
   }
   return [];
 }

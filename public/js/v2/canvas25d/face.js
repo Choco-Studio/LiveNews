@@ -1,4 +1,5 @@
-// Faces for the canvas25d rig: eyes, lids, brows, nose and a parametric mouth.
+// Faces for the canvas25d rig (owner: FACES stream): eyes, lids, brows, nose
+// and a parametric mouth.
 //
 // Feature positions are authored in head space (units, origin at the head
 // centre) and pushed through faceX(), which wraps them around the head so a
@@ -19,43 +20,13 @@
 // 1 px band and only for the visemes that show them, the jaw drops ≤ 2 px at
 // close-up scale and every change is blended upstream (visemes.js).
 import { P } from '../../palette.js';
-import { material } from './pixbuf.js';
+import { decal } from './pixbuf.js';
+import { faceX } from './head.js';
+import { clamp } from './space.js';
 
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-
-/** A decal material that paints one exact palette colour. */
-export function decal(hex) {
-  return material(`decal:${hex}`, { ramp: [hex], decal: true });
-}
-
-/** Head half-width at head-local y (units). Returns ≤ 0 outside. */
-export function headHW(H, y, jaw = 0) {
-  if (y < H.craniumY) {
-    const d = y - H.craniumY;
-    const v = H.R * H.R - d * d;
-    return v > 0 ? Math.sqrt(v) : -1;
-  }
-  if (y < H.cheekY) return H.R + ((H.cheekHW - H.R) * (y - H.craniumY)) / (H.cheekY - H.craniumY);
-  const chinY = H.chinY + jaw;
-  if (y > chinY) return -1;
-  const u = (y - H.cheekY) / (chinY - H.cheekY);
-  let hw = H.cheekHW * Math.pow(Math.max(0, 1 - Math.pow(u, H.jawPow)), 1 / H.jawPow);
-  if (u > 0.74) {
-    const k = (u - 0.74) / 0.26;
-    const chin = H.chinHW * Math.sqrt(Math.max(0, 1 - k * k * k * 0.9));
-    if (chin > hw) hw = chin;
-  }
-  return hw;
-}
-
-/** Feature-space x → head-local x after a yaw turn (features ride on the head's curve). */
-export function faceX(H, x, y, yaw, protrude = 0) {
-  if (!yaw) return x;
-  const hw = Math.max(1, headHW(H, clamp(y, H.top + 1, H.chinY - 0.5), 0));
-  const a = Math.asin(clamp(x / hw, -0.99, 0.99)) + yaw;
-  const jy = clamp((y - H.cheekY) / (H.chinY - H.cheekY), 0, 1);
-  return hw * Math.sin(a) + Math.sin(yaw) * (protrude + 1.3 * jy);
-}
+// headHW / faceX / decal moved to head.js and pixbuf.js; re-exported for older imports.
+export { headHW, faceX } from './head.js';
+export { decal };
 
 // ---------------------------------------------------------------------------
 

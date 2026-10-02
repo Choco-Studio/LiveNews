@@ -6,7 +6,7 @@
 // end card resolve, up-next plays only three of the four notes and leaves the
 // last one to the programme's own open.
 
-import { MOTIF, motifShapes, parseChord, voice, nearest, hz } from './theory.js';
+import { MOTIF, COLOURS, motifShapes, parseChord, voice, nearest, hz } from './theory.js';
 import { INST, timpDo } from './arranger.js';
 
 const SHAPES = motifShapes(MOTIF);
@@ -23,7 +23,10 @@ function lead(pkg) {
  * Plays a motif statement. `beats` scale the rhythm; returns the time of the
  * last note.
  */
-function statement(bed, out, t, doM, spb, { steps = SHAPES.steps, beats = SHAPES.beats, count = steps.length, inst, harm = [], vel = 0.8, hold = 1, L = {} } = {}) {
+function statement(bed, out, t, doM, spb, { steps: st = SHAPES.steps, beats: bt = SHAPES.beats, colour = null, count, inst, harm = [], vel = 0.8, hold = 1, L = {} } = {}) {
+  const steps = colour == null ? st : [...st, colour];
+  const beats = colour == null ? bt : [...bt, 1.5];
+  if (count == null) count = steps.length;
   let at = t;
   let last = t;
   for (let k = 0; k < count; k++) {
@@ -49,7 +52,7 @@ export const STINGS = {
     const P = bed.bus('pad', -10, { rev: 0.5 });
     const X = bed.bus('perc', -8, { rev: 0.4 });
     const B = bed.bus('bass', -9, { rev: 0.1 });
-    const end = statement(bed, L, t, doM, spb, { inst: lead(pkg), harm: pkg.timbre.harm, vel: 0.85, hold: 2, L: { cut: 1700 } });
+    const end = statement(bed, L, t, doM, spb, { colour: pkg.colour, inst: lead(pkg), harm: pkg.timbre.harm, vel: 0.85, hold: 1.4, L: { cut: 1700 } });
     const fin = chord(pkg.final);
     s.timp(X, t, timpDo(pkg.tonic) - 5, 0.45);
     s.timp(X, end, timpDo(pkg.tonic), 0.85, { decay: 2 });
@@ -76,7 +79,7 @@ export const STINGS = {
     const G = bed.bus('sparkle', -19, { rev: 0.6, dly: 0.35, pan: 0.35 });
     s.swell(X, t, 0.5, 0.7, { gain: 0.14 });
     const t1 = t + 0.5;
-    const end = statement(bed, L, t1, doM, spb, { inst: INST.horn, harm: [-7], vel: 0.8, hold: 1.4 });
+    const end = statement(bed, L, t1, doM, spb, { inst: INST.horn, harm: [-7], vel: 0.8, hold: 1.6 });
     statement(bed, G, t1, doM + 24, spb, { inst: INST.glock, vel: 0.5 });
     s.pad(P, t1, spb * 2, voice(chord(pkg.home), null, { n: 4, lo: 50, hi: 70 }), 0.8, { a: 0.05, r: 0.5, cut: 1500 });
     s.pad(P, end, 1.2, voice(domSus(pkg.tonic), null, { n: 4, lo: 52, hi: 72 }), 0.9, { a: 0.05, r: 1.1, cut: 1700, cutTo: 900 });
@@ -94,7 +97,7 @@ export const STINGS = {
     const L = bed.bus('lead', -10, { rev: 0.45, dly: 0.15 });
     const P = bed.bus('pad', -11, { rev: 0.5 });
     const X = bed.bus('perc', -9, { rev: 0.4 });
-    const end = statement(bed, L, t, doM, spb, { inst: INST.horn, harm: [-7], vel: 0.8, hold: 1.8 });
+    const end = statement(bed, L, t, doM, spb, { colour: COLOURS.home, inst: INST.horn, harm: [-7], vel: 0.8, hold: 1.2 });
     s.pad(P, t, spb * 2, voice(domSus(pkg.tonic), null, { n: 4, lo: 52, hi: 72 }), 0.7, { a: 0.05, r: 0.4, cut: 1300 });
     s.pad(P, end, 1.2, voice(chord(pkg.final), null, { n: 5, lo: 50, hi: 74 }), 0.9, { a: 0.03, r: 1.3, cut: 1800, cutTo: 900 });
     s.timp(X, end, timpDo(pkg.tonic), 0.8, { decay: 1.8 });
@@ -126,7 +129,7 @@ export const STINGS = {
     }
     s.timp(X, t, timpDo(pkg.tonic), 0.55);
     const t2 = t + half * spb;
-    statement(bed, L, t2, doM, spb, { count: 3, inst: lead(pkg), harm: pkg.timbre.harm, vel: 0.75, hold: (beats - half - 1) * 0.9 + 0.5, L: { cut: 1600 } });
+    statement(bed, L, t2 - spb, doM, spb, { colour: COLOURS.next, inst: lead(pkg), harm: pkg.timbre.harm, vel: 0.75, hold: Math.max(0.6, (beats - half - 1.5) / 1.5), L: { cut: 1600 } });
     s.timp(X, t + (beats - 1) * spb, timpDo(pkg.tonic) - 5, 0.4);
     s.timp(X, t + (beats - 0.5) * spb, timpDo(pkg.tonic) - 5, 0.55);
     return beats * spb + 0.6;
@@ -162,7 +165,7 @@ export const STINGS = {
     s.tone(B, hit, 1.3, tonic - 12, 0.9, { wave: 'tri', a: 0.008, d: 0.6, s: 0.6, r: 0.5, cut: 600, gain: 0.6 });
     s.pad(P, hit, 1.3, voice(chord('Dmadd9'), null, { n: 5, lo: 50, hi: 72 }), 0.8, { a: 0.02, r: 0.7, cut: 1500, cutTo: 700 });
     const spb = 60 / 150;
-    statement(bed, L, hit, 62, spb, { beats: [0.5, 0.5, 1, 2], inst: INST.horn, harm: [-7], vel: 0.85, hold: 1.1, L: { cut: 1600 } });
+    statement(bed, L, hit, 62, spb, { colour: COLOURS.breaking, inst: INST.horn, harm: [-7], vel: 0.85, hold: 0.9, L: { cut: 1600 } });
     return 2.9;
   },
 

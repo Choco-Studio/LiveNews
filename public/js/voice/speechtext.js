@@ -580,7 +580,7 @@ export function spellLetters(letters) {
 
 // ================================================================ the passes
 
-const QUOTE_CHARS = '"“”„«»\'‘’';
+const QUOTE_CHARS = '"\u201C\u201D\u201E\u00AB\u00BB\'\u2018\u2019';
 const CUE_NAMES = new Set([...Object.keys(ACTIONS), ...EMOTIONS]);
 const TITLES = {
   Dr: 'Doctor', Mr: 'Mister', Mrs: 'Missus', Ms: 'Miz', Mx: 'Mix', Prof: 'Professor', Gen: 'General', Lt: 'Lieutenant',
@@ -622,19 +622,19 @@ function endsSentence(s, i) {
 function cleanup(st) {
   st = sub(st, /&(?:amp|nbsp|quot|apos|lt|gt|mdash|ndash|hellip|rsquo|lsquo|ldquo|rdquo|#\d{1,5}|#x[0-9a-f]{1,4});/gi, (mt) => {
     const e = mt[0].toLowerCase();
-    const named = { '&amp;': '&', '&nbsp;': ' ', '&quot;': '"', '&apos;': "'", '&lt;': '<', '&gt;': '>', '&mdash;': '—', '&ndash;': '–', '&hellip;': '…', '&rsquo;': "'", '&lsquo;': "'", '&ldquo;': '"', '&rdquo;': '"' };
+    const named = { '&amp;': '&', '&nbsp;': ' ', '&quot;': '"', '&apos;': "'", '&lt;': '<', '&gt;': '>', '&mdash;': '\u2014', '&ndash;': '\u2013', '&hellip;': '\u2026', '&rsquo;': "'", '&lsquo;': "'", '&ldquo;': '"', '&rdquo;': '"' };
     if (named[e]) return named[e];
     const code = e.startsWith('&#x') ? parseInt(e.slice(3), 16) : parseInt(e.slice(2), 10);
     return Number.isFinite(code) && code > 31 ? String.fromCodePoint(code) : ' ';
   });
   st = sub(st, /<\/?[a-z][^<>]{0,200}>/gi, () => ' ');
-  st = sub(st, /[  -   　\t]/g, () => ' ');
-  st = sub(st, /[​‌‎‏⁠﻿­]/g, () => '');
-  st = sub(st, /[‘’‚‛′]/g, () => "'");
-  st = sub(st, /[“”„‟″«»]/g, () => '"');
-  st = sub(st, /[‐‑‒−﹣－]/g, () => '-');
-  st = sub(st, /―/g, () => '—');
-  st = sub(st, /\.{3,}/g, () => '…');
+  st = sub(st, /[\u00A0\u2000-\u200A\u202F\u205F\u3000\t]/g, () => ' ');
+  st = sub(st, /[\u200B\u200C\u200E\u200F\u2060\uFEFF\u00AD]/g, () => '');
+  st = sub(st, /[\u2018\u2019\u201A\u201B\u2032]/g, () => "'");
+  st = sub(st, /[\u201C\u201D\u201E\u201F\u2033\u00AB\u00BB]/g, () => '"');
+  st = sub(st, /[\u2010\u2011\u2012\u2212\uFE63\uFF0D]/g, () => '-');
+  st = sub(st, /\u2015/g, () => '\u2014');
+  st = sub(st, /\.{3,}/g, () => '\u2026');
   // Stage directions are performed, not read.
   st = sub(st, /\[\s*(?:[AB]\s*:\s*)?([a-z_]+)\s*\]/gi, (mt) => (CUE_NAMES.has(mt[1].toLowerCase()) ? ' ' : null));
   st = sub(st, /[*`]+/g, () => '');
@@ -1021,6 +1021,8 @@ function plainNumbers(st, L) {
     const agree = (words) => (fem ? words.replace(/ientos\b/g, 'ientas').replace(/(?:uno|ún|un)$/, 'una') : words);
     const first = signWord + agree(numberWords(mt[2], L, { apocope: apocope && !mt[5] }));
     if (!mt[5]) return first;
+    // "a 50-50 chance": the same number twice is a split, not a range.
+    if (mt[2] === mt[5] && /-/.test(mt[3]) && !mt[1] && !mt[4]) return `${first}-${first}`;
     const second = (mt[4] ? `${w.minus} ` : '') + agree(numberWords(mt[5], L, { apocope }));
     const at2 = mt[0].length - mt[5].length - mt[4].length;
     return [[first, 0], [` ${w.to} `, mt[1].length + mt[2].length], [second, at2]];
@@ -1181,22 +1183,23 @@ export function speakable(text, opts) {
 
 // Presenter pacing. `speed` multiplies the voice's natural rate, `pause` scales
 // every planned silence, `variation` scales the seeded humanising jitter.
+// `lang` mirrors voice.lang in config/channel.json (the default for planSpeech).
 export const PERSONAS = {
-  paco: { id: 'paco', speed: 0.98, pause: 1.12, variation: 0.55, desc: 'measured veteran, weighty full stops' },
-  lola: { id: 'lola', speed: 1.05, pause: 0.95, variation: 1.15, desc: 'energetic and warm' },
-  max: { id: 'max', speed: 1.08, pause: 0.86, variation: 1.3, desc: 'excitable, quick on the exclamations' },
-  ada: { id: 'ada', speed: 1.03, pause: 1.0, variation: 0.8, desc: 'crisp and clear' },
-  nova: { id: 'nova', speed: 1.0, pause: 1.1, variation: 0.9, wonder: true, desc: 'warm, with a breath of wonder before big reveals' },
-  unit8: { id: 'unit8', speed: 1.0, pause: 1.0, variation: 0, even: true, quantize: 0.1, desc: 'even and precise' },
-  penny: { id: 'penny', speed: 1.03, pause: 1.0, variation: 0.7, numbers: 0.95, desc: 'numbers first, figures read with care' },
-  sam: { id: 'sam', speed: 1.1, pause: 0.84, variation: 1.0, desc: 'fast and friendly rolling news' },
+  paco: { id: 'paco', lang: 'en-GB', speed: 0.98, pause: 1.08, variation: 0.55, desc: 'measured veteran, weighty full stops' },
+  lola: { id: 'lola', lang: 'en-US', speed: 1.05, pause: 0.95, variation: 1.15, desc: 'energetic and warm' },
+  max: { id: 'max', lang: 'en-US', speed: 1.08, pause: 0.86, variation: 1.3, desc: 'excitable, quick on the exclamations' },
+  ada: { id: 'ada', lang: 'en-GB', speed: 1.03, pause: 1.0, variation: 0.8, desc: 'crisp and clear' },
+  nova: { id: 'nova', lang: 'en-US', speed: 1.0, pause: 1.1, variation: 0.9, wonder: true, desc: 'warm, with a breath of wonder before big reveals' },
+  unit8: { id: 'unit8', lang: 'en-US', speed: 1.0, pause: 1.0, variation: 0, even: true, quantize: 0.1, desc: 'even and precise' },
+  penny: { id: 'penny', lang: 'en-GB', speed: 1.03, pause: 1.0, variation: 0.7, numbers: 0.95, desc: 'numbers first, figures read with care' },
+  sam: { id: 'sam', lang: 'en-US', speed: 1.1, pause: 0.84, variation: 1.0, desc: 'fast and friendly rolling news' },
   default: { id: 'default', speed: 1, pause: 1, variation: 0.8 },
 };
 
 const EMOTION_PROSODY = {
   neutral: { speed: 1, pause: 1, variation: 1 },
   happy: { speed: 1.03, pause: 0.92, variation: 1.2 },
-  serious: { speed: 0.955, pause: 1.15, variation: 0.6 },
+  serious: { speed: 0.955, pause: 1.12, variation: 0.6 },
   sad: { speed: 0.935, pause: 1.22, variation: 0.5 },
   surprised: { speed: 1.04, pause: 0.9, variation: 1.2 },
   thinking: { speed: 0.965, pause: 1.2, variation: 1 },
@@ -1276,7 +1279,8 @@ const wordCount = (s) => (s.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) ||
 /**
  * Plan how `text` is spoken: normalise it, split it into phrases at clause
  * boundaries and give each a pause after it and a speed factor. Returns
- * `{ spoken, map, phrases, duration }`; see planProsody for the phrase shape.
+ * `{ spoken, map, phrases, groups, duration }`; see planProsody for the phrase
+ * shape and groupPhrases for the groups a voice engine should synthesise.
  *
  * Options: persona (id, presenter config or {speed,pause,variation,...}),
  * emotion (cues.js EMOTIONS), segmentType ('story','intro','chat','outro',
@@ -1286,12 +1290,16 @@ const wordCount = (s) => (s.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) ||
  */
 export function planSpeech(text, opts = {}) {
   const src = String(text ?? '');
-  const { spoken, map } = normalizeForSpeech(src, opts);
   const persona = resolvePersona(opts.persona);
+  const lang = opts.lang || persona.voice?.lang || persona.lang || 'en-US';
+  const { spoken, map } = normalizeForSpeech(src, { ...opts, lang });
   const seg = SEGMENT_PROSODY[opts.segmentType] || SEGMENT_PROSODY.default;
   const baseEmotion = opts.grave && (!opts.emotion || opts.emotion === 'neutral') ? 'serious' : opts.emotion || 'neutral';
   const rand = rng(hashString(`${src}|${persona.id}|${opts.seed ?? ''}`));
-  const emotionCues = (opts.cues || []).filter((c) => c.emotion && EMOTION_PROSODY[c.emotion]).sort((a, b) => a.char - b.char);
+  // Emotion cues: passed in (parseCues output for a clean text) or still
+  // inline in the text ("... [sad] But thousands lost their homes.").
+  const inline = [...src.matchAll(/\[\s*([a-z]+)\s*\]/gi)].map((m) => ({ char: m.index, emotion: m[1].toLowerCase() }));
+  const emotionCues = [...(opts.cues || []), ...inline].filter((c) => c.emotion && EMOTION_PROSODY[c.emotion]).sort((a, b) => a.char - b.char);
   const emotionAt = (orig) => {
     let e = baseEmotion;
     for (const c of emotionCues) if (c.char <= orig && !c.slot) e = c.emotion;
@@ -1435,6 +1443,9 @@ export function planSpeech(text, opts = {}) {
     phrases.push({
       text: src.slice(os, oe),
       spoken: spokenText,
+      // What to hand a TTS that synthesises this phrase on its own: a cut with no
+      // punctuation gets a comma so the voice keeps a continuation contour.
+      say: kind === 'breath' || kind === 'wonder' ? `${spokenText},` : spokenText,
       start: os,
       end: oe,
       spokenStart: lead(p),
@@ -1451,12 +1462,62 @@ export function planSpeech(text, opts = {}) {
       sentenceJitter = 1 + (rand() * 2 - 1) * 0.02 * Math.max(0.5, variation);
     }
   }
-  return { spoken, map, phrases, duration: estimateDuration(phrases) };
+  return { spoken, map, phrases, groups: groupPhrases(phrases, src), duration: estimateDuration(phrases) };
+}
+
+// Boundaries where a voice may stop and restart: sentence ends, colons,
+// semicolons, dashes and Nova's wonder breath. Commas stay inside a group.
+export const GROUP_BREAKS = Object.freeze(['stop', 'question', 'exclaim', 'ellipsis', 'paragraph', 'colon', 'semicolon', 'dash', 'wonder', 'end']);
+
+/**
+ * Join phrases into synthesis groups. Neural voices (Kokoro) phrase a whole
+ * sentence better than comma-sized pieces, which each restart the intonation;
+ * so a voice engine synthesises one group per call (its commas get the model's
+ * own short pause) and inserts `pauseAfter` only between groups.
+ * Returns [{ text?, spoken, say, start, end, spokenStart, spokenEnd, speedFactor
+ * (length-weighted), pauseAfter, boundary, from, to (phrase indices) }].
+ */
+export function groupPhrases(phrases, src = null, { breaks = GROUP_BREAKS, maxChars = 220 } = {}) {
+  const stops = new Set(breaks);
+  const groups = [];
+  let from = 0;
+  let len = 0;
+  for (let k = 0; k < phrases.length; k++) {
+    len += phrases[k].spoken.length + 1;
+    // A very long sentence still breathes: break at a comma or breath once the
+    // group is long enough that the next phrase would push it past maxChars.
+    const next = phrases[k + 1];
+    const tooLong = next && len > maxChars / 2 && len + next.spoken.length > maxChars;
+    if (!stops.has(phrases[k].boundary) && !tooLong && k < phrases.length - 1) continue;
+    const ps = phrases.slice(from, k + 1);
+    const first = ps[0];
+    const last = ps[ps.length - 1];
+    const chars = ps.reduce((n, p) => n + p.spoken.length, 0) || 1;
+    const spoken = ps.map((p) => p.spoken).join(' ');
+    groups.push({
+      ...(src != null ? { text: src.slice(first.start, last.end) } : {}),
+      spoken,
+      say: last.boundary === 'breath' || last.boundary === 'wonder' ? `${spoken},` : spoken,
+      start: first.start,
+      end: last.end,
+      spokenStart: first.spokenStart,
+      spokenEnd: last.spokenEnd,
+      speedFactor: round3(ps.reduce((n, p) => n + p.speedFactor * p.spoken.length, 0) / chars),
+      pauseAfter: last.pauseAfter,
+      boundary: last.boundary,
+      from,
+      to: k,
+    });
+    from = k + 1;
+    len = 0;
+  }
+  return groups;
 }
 
 /**
  * Phrases for `text`: [{ text (original slice, as captions show it), spoken
- * (what to synthesise), start, end (offsets in text), spokenStart, spokenEnd,
+ * (its normalised slice), say (spoken, ready for a per-phrase TTS call), start,
+ * end (offsets in text), spokenStart, spokenEnd,
  * pauseAfter (s), speedFactor (x the voice's natural rate), emphasis
  * [{word,start,end,strength}], boundary, sentence, emotion }].
  */

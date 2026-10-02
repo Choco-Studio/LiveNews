@@ -3278,8 +3278,10 @@ const L_RIM = [0.85, -0.25, -0.45];
  *   ramp: colours dark -> light (the material), ambient (0.15), light: [x, y, z]
  *     unit vector toward the key light (default upper-left-front),
  *   rim: { dir, k (0.9), color? } back light (default from the right),
- *   stripes: [[xn, halfWidth, colour], ...] vertical softbox reflections at
- *     normalised x (-1..1) — the commercial look on glass and metal,
+ *   stripes: [[xn, halfWidth, colour, from?, to?], ...] vertical softbox
+ *     reflections at normalised x (-1..1), optionally only on rows from..to
+ *     (0..1 of the height) — the commercial look on glass and metal; they skip
+ *     opaque label texels (paper is matte),
  *   label: { cv, top, h, turn } a texture (one full turn wide) wrapped on rows
  *     top..top+h, shaded with palette shadow colours; transparent texels show the material,
  *   glass: { top, edge, wall, edgeColor } rows above `top` are empty glass:
@@ -3343,13 +3345,19 @@ export function lathe(ctx, cx, y, prof, o = {}) {
       const by = j + (tilt ? floor(tilt * r * nz) : 0);
       if (by >= bh) continue;
       const di = by * S + bx;
-      // softbox reflections win over everything
+      // softbox reflections (on glass and metal; a paper label stays matte)
       let col = 0;
       if (stripes) {
+        const fr = j / n;
         for (let k = 0; k < stripes.length; k++) {
           const st = stripes[k];
-          if (abs(xn - st[0]) < st[1]) col = pack(st[2]);
+          if (abs(xn - st[0]) < st[1] && (st[3] === undefined || (fr >= st[3] && fr < st[4]))) col = pack(st[2]);
         }
+      }
+      if (col && inLabel) {
+        let u = Math.asin(xn) / (2 * PI) + (lab.turn || 0);
+        u -= floor(u);
+        if (tex.u32[ty * tex.w + min(tex.w - 1, floor(u * tex.w))] >>> 24 > 127) col = 0;
       }
       if (col) {
         buf[di] = col;
@@ -3357,6 +3365,16 @@ export function lathe(ctx, cx, y, prof, o = {}) {
       }
       const edge = (1 - abs(xn)) * r; // px to the silhouette edge
       if (empty) {
+        if (inLabel) {
+          // labels/cuts on empty glass still show (e.g. cut-crystal facets)
+          let u = Math.asin(xn) / (2 * PI) + (lab.turn || 0);
+          u -= floor(u);
+          const t = tex.u32[ty * tex.w + min(tex.w - 1, floor(u * tex.w))];
+          if (t >>> 24 > 127) {
+            buf[di] = t | 0xff000000;
+            continue;
+          }
+        }
         if (edge < (glass.edge ?? 1.2)) buf[di] = glassC;
         continue;
       }
@@ -3479,5 +3497,24 @@ export function motes(ctx, t, { x = 0, y = 0, w = W, h = H, n = 30, seed = 3, dr
     if (inside && !inside(px, py)) continue;
     const b = 0.35 + 0.65 * (0.5 + 0.5 * sin(t * (0.6 + hash01(i, seed + 4)) + ph));
     R(ctx, px, py, 1, 1, A(color, alpha * b));
+  }
+}
+
+const WARM = new WeakSet();
+/**
+ * Pre-bake a spot's static art without a visible hitch: call it from draw()
+ * with the spot's shot list; while dt < 2 s it renders one not-yet-seen shot
+ * per frame (at lt = 1 and 3) into a hidden scratch canvas, so every cached
+ * canvas, gradient and type line exists before its shot comes on air.
+ */
+export function warmUp(shots, dt, info = null, slot = 5) {
+  if (dt > 2) return;
+  for (const s of shots) {
+    if (WARM.has(s)) continue;
+    WARM.add(s);
+    const b = scratch(slot);
+    s.draw(b.c, 1, info, s.at + 1);
+    s.draw(b.c, 3, info, s.at + 3);
+    return;
   }
 }

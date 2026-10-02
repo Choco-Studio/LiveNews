@@ -1,12 +1,15 @@
 // Lo-fi newsroom proposal: one "song" per programme plus the channel's home bed.
-// Every programme shares the motif (theory.js) but has its own key, tempo,
-// groove and instruments. The keys sit on a chain of fifths
-// (F channel - C money - G news-60 - D world - A tech - E cosmos), so any
-// handoff is a near neighbour and the network sounds like one family.
+// Every programme sings the channel signature (theory.js) with its own colour
+// note, in the same key as its open (audio/themes.js): home D (channel and
+// World Now), Tech Bytes A dorian, Cosmos E lydian, Money Minute F, News in 60
+// G. D-A-E are a chain of fifths and G is D's IV, so most handoffs are near
+// neighbours and the network sounds like one family.
 //
 // A programme is a song; a MOMENT is an arrangement of that song (which layers
 // play and how loud). Changing moment inside a programme never stops the song:
 // layers fade on a bar line ("vertical remix"), so transitions are seamless.
+
+import { COLOUR } from './theory.js';
 
 export const LAYERS = ['pad', 'keys', 'bass', 'kick', 'snare', 'hat', 'perc', 'arp', 'lead', 'tex'];
 
@@ -65,7 +68,7 @@ export const MOMENTS = {
 /** Programme songs. tonic = MIDI note of the key in octave 4. */
 export const PALETTES = {
   'world-now': {
-    title: 'WORLD NOW', key: 'D major', tonic: 62, scale: 'major', bpm: 76, swing: 0.58,
+    title: 'WORLD NOW', key: 'D major', tonic: 62, scale: 'major', bpm: 76, swing: 0.58, trim: 0,
     mood: 'steady flagship: Rhodes, brushes, warm triangle bass, music-box motif',
     sections: {
       A: ['Dmaj9', 'Bm9', 'Gmaj9', 'A9sus'],
@@ -74,6 +77,8 @@ export const PALETTES = {
       B2: ['Gmaj7#11', 'F#m7', 'Em9', 'A9sus'],
     },
     form: ['A', 'A2', 'B', 'A', 'B2', 'A2'],
+    cadence: { I: 'Dmaj9', IV: 'Gmaj9', V: 'A9sus' },
+    colour: COLOUR.home,
     keys: { inst: 'ep', lo: 54, index: 0.85, attack: 0.012 },
     pad: { wave: 'pulse25', lo: 50, lpTo: 1000, attack: 1.0 },
     bass: { style: 'lofi', wave: 'triangle', lp: 650 },
@@ -86,7 +91,7 @@ export const PALETTES = {
     neutralStory: 'storyNeutral',
   },
   'tech-bytes': {
-    title: 'TECH BYTES', key: 'A dorian', tonic: 57, scale: 'dorian', bpm: 88, swing: 0.55,
+    title: 'TECH BYTES', key: 'A dorian', tonic: 57, scale: 'dorian', bpm: 88, swing: 0.55, trim: 2.5,
     mood: 'playful geek: chip plucks, bouncy sine bass, rim + shaker, 16th arps',
     sections: {
       A: ['Am9', 'D9', 'Fmaj9', 'E9sus'],
@@ -95,19 +100,21 @@ export const PALETTES = {
       B2: ['Fmaj9', 'G6', 'Cmaj7', 'E9sus'],
     },
     form: ['A', 'A2', 'A', 'B', 'A2', 'B2'],
+    cadence: { I: 'Am9', IV: 'D9', V: 'E9sus' },
+    colour: COLOUR.tech,
     keys: { inst: 'pluck', lo: 57, wave: 'pulse25', bright: 1900, decay: 0.32 },
     pad: { wave: 'square', lo: 52, lpTo: 900, attack: 0.7 },
     bass: { style: 'bounce', wave: 'sine', lp: 520 },
     drums: 'bounce',
     arp: { inst: 'pluck', rate: 0.25, pattern: 'updown', oct: 12, wave: 'pulse125' },
-    lead: { inst: 'chip', oct: 12, variants: ['statement', 'displaced', 'inversion', 'head'] },
+    lead: { inst: 'chip', oct: 12, variants: ['statement', 'displaced', 'echo', 'head'] },
     perc: 'shaker',
     tex: 0.3,
     fx: { reverb: 0.14, echo: 0.2, tremolo: 0 },
     neutralStory: 'story',
   },
   cosmos: {
-    title: 'COSMOS DESK', key: 'E lydian', tonic: 64, scale: 'lydian', bpm: 68, swing: 0.5,
+    title: 'COSMOS DESK', key: 'E lydian', tonic: 64, scale: 'lydian', bpm: 68, swing: 0.5, trim: -1,
     mood: 'floating wonder: glass pads, sub sine, bells in a long echo, half-time pulse',
     sections: {
       A: ['Emaj9', 'F#add9/E', 'Emaj9', 'F#add9/E'],
@@ -116,6 +123,8 @@ export const PALETTES = {
       B2: ['C#m9', 'Amaj9', 'Emaj9', 'B9sus'],
     },
     form: ['A', 'A2', 'B', 'A', 'B2', 'A2'],
+    cadence: { I: 'Emaj9', IV: 'Amaj7#11', V: 'B9sus' },
+    colour: COLOUR.cosmos,
     keys: { inst: 'ep', lo: 56, index: 0.45, attack: 0.03, roll: 0.06 },
     pad: { wave: 'glass', lo: 52, lpTo: 1400, attack: 1.8 },
     bass: { style: 'sub', wave: 'sine', lp: 400 },
@@ -128,16 +137,18 @@ export const PALETTES = {
     neutralStory: 'story',
   },
   'money-minute': {
-    title: 'MONEY MINUTE', key: 'C major', tonic: 60, scale: 'major', bpm: 82, swing: 0.52,
+    title: 'MONEY MINUTE', key: 'F major', tonic: 65, scale: 'major', bpm: 82, swing: 0.52, trim: 0.5,
     mood: 'crisp and tidy: bright Rhodes, walking bass, straight hats, a pluck ticker',
     sections: {
-      A: ['Cmaj9', 'Am9', 'Dm9', 'G13'],
-      A2: ['Em7', 'Am9', 'Dm9', 'G9sus'],
-      B: ['Fmaj9', 'Em7', 'Dm9', 'G13'],
-      B2: ['Fmaj9', 'Em7', 'Dm9', 'Dm9/G'],
+      A: ['Fmaj9', 'Dm9', 'Gm9', 'C13'],
+      A2: ['Am7', 'Dm9', 'Gm9', 'C9sus'],
+      B: ['Bbmaj9', 'Am7', 'Gm9', 'C13'],
+      B2: ['Bbmaj9', 'Am7', 'Gm9', 'Gm9/C'],
     },
     form: ['A', 'A2', 'B', 'A', 'A2', 'B2'],
-    keys: { inst: 'ep', lo: 55, index: 1.0, attack: 0.008 },
+    cadence: { I: 'Fmaj9', IV: 'Bbmaj9', V: 'C9sus' },
+    colour: COLOUR.money,
+    keys: { inst: 'ep', lo: 53, index: 1.0, attack: 0.008 },
     pad: { wave: 'pulse25', lo: 50, lpTo: 900, attack: 0.8 },
     bass: { style: 'tidy', wave: 'triangle', lp: 700 },
     drums: 'tight',
@@ -149,7 +160,7 @@ export const PALETTES = {
     neutralStory: 'storyNeutral',
   },
   'news-60': {
-    title: 'NEWS IN 60', key: 'G major', tonic: 67, scale: 'major', bpm: 92, swing: 0.5,
+    title: 'NEWS IN 60', key: 'G major', tonic: 67, scale: 'major', bpm: 92, swing: 0.5, trim: 2,
     mood: 'rolling clock: straight 8th pulse bass, off-beat chip stabs, soft ticking',
     sections: {
       A: ['Gadd9', 'Em7', 'Cmaj9', 'D6'],
@@ -158,6 +169,8 @@ export const PALETTES = {
       B2: ['Cmaj9', 'D6', 'Bm7', 'Em7'],
     },
     form: ['A', 'A2', 'A', 'B', 'A2', 'B2'],
+    cadence: { I: 'Gadd9', IV: 'Cmaj9', V: 'D9sus' },
+    colour: COLOUR.sixty,
     keys: { inst: 'pulse', lo: 55, wave: 'pulse25', decay: 0.2 },
     pad: { wave: 'pulse25', lo: 50, lpTo: 900, attack: 0.6 },
     bass: { style: 'pulse8', wave: 'triangle', lp: 600 },
@@ -170,21 +183,24 @@ export const PALETTES = {
     neutralStory: 'story',
   },
   channel: {
-    title: 'GLOBIT 24', key: 'F major', tonic: 65, scale: 'major', bpm: 72, swing: 0.6,
-    mood: 'home: the coziest bed, Rhodes with tremolo, lazy brushes, vinyl, the motif sung on bells',
+    title: 'GLOBIT 24', key: 'D major', tonic: 62, scale: 'major', bpm: 72, swing: 0.6, trim: 1,
+    mood: 'home: the coziest bed, Rhodes with tremolo, lazy brushes, vinyl, the signature sung on a Rhodes',
+    // Starts on IV and walks down to I: floating, never in a hurry ("we'll be right back").
     sections: {
-      A: ['Fmaj9', 'Am7', 'Dm9', 'C9sus'],
-      A2: ['Bbmaj9', 'Am7', 'Gm9', 'C13'],
-      B: ['Dm9', 'Bbmaj7', 'Gm9', 'C9sus'],
-      B2: ['Bbmaj7#11', 'Am7', 'Gm9', 'Gm9/C'],
+      A: ['Gmaj9', 'F#m7', 'Em9', 'Dmaj9'],
+      A2: ['Gmaj9', 'F#m7', 'Bm9', 'A9sus'],
+      B: ['Em9', 'F#m7', 'Gmaj7#11', 'A13'],
+      B2: ['Bm9', 'Gmaj9', 'Em9', 'A9sus'],
     },
     form: ['A', 'A2', 'B', 'A', 'B2', 'A2', 'A', 'B'],
+    cadence: { I: 'Dmaj9', IV: 'Gmaj9', V: 'A9sus' },
+    colour: COLOUR.home,
     keys: { inst: 'ep', lo: 53, index: 0.8, attack: 0.012 },
     pad: { wave: 'pulse25', lo: 48, lpTo: 1000, attack: 1.1 },
     bass: { style: 'lofi', wave: 'triangle', lp: 620 },
     drums: 'boombap',
     arp: { inst: 'bell', rate: 0.5, pattern: 'broken', oct: 12 },
-    lead: { inst: 'bell', oct: 12, variants: ['statement', 'displaced', 'answer', 'augmented', 'head', 'retrograde'] },
+    lead: { inst: 'ep', oct: 12, variants: ['statement', 'displaced', 'echo', 'augmented', 'head', 'statement'], colours: [COLOUR.home, COLOUR.next] },
     perc: 'shaker',
     tex: 1,
     fx: { reverb: 0.3, echo: 0.18, tremolo: 0.4 },

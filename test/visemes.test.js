@@ -5,7 +5,8 @@ import { parseTune, flatten, songSeconds, noteToMidi, resolveInstrument } from '
 import { themeFor, THEME_IDS, MOTIF, COLOURS, CUES, IDENT, STINGER, BREAKING, OUTRO, PROMO } from '../public/js/audio/themes.js';
 import { measureLoudness, estimateLoudness, envelopeEnergy, TARGET_LUFS } from '../public/js/audio/loudness.js';
 import { resolveVoices, normProfile, voiceQuality } from '../public/js/audio/voices.js';
-import { ADS } from '../public/js/ads/index.js';
+// The ad registry belongs to the ads stream; its tunes are checked when it loads.
+const { ADS } = await import('../public/js/ads/index.js').catch(() => ({ ADS: [] }));
 
 // The audio stream's pure modules (public/js/audio/): the speech timeline
 // behind the presenters' mouths (AudioEngine.speechFrame), the tune format,

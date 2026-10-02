@@ -72,7 +72,6 @@ export function motif(tonic, colour, beat = 0, { scale = 1, colourBeats = 1.5, o
   if (colour != null) out.push([b, tonic + colour + 12 * octave, colourBeats * scale, 0.94 * vel]);
   return out;
 }
-const MOTIF_BEATS = 2.5; // the four notes; the colour note follows
 
 // ------------------------------------------------------------------ opens
 

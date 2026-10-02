@@ -1,5 +1,7 @@
-// The three deliverable demos of the canvas25d prototype, each a pure
-// function of time t (seconds) so contact sheets are deterministic.
+// The three demos of the approved canvas25d prototype (owner: INTEGRATION
+// stream; frozen as the owner-approved reference: other streams build their
+// own lab drivers under labs/), each a pure function of time t (seconds) so
+// contact sheets are deterministic.
 //   rig     Paco at the desk (medium single) performing the 7 gestures in
 //           sequence with overlaps that show blending; or one gesture.
 //   talk    medium close-up of Paco or Lola speaking a line (visemes).
@@ -7,8 +9,10 @@
 //           single on Lola.
 import { C } from './pixbuf.js';
 import { frame, parts, actor, drawActors } from './scene.js';
-import { makeCamera, drawBackground, drawDesk, placeActor, SET, kAt } from './studio25d.js';
-import { GESTURES, DEMO_SEQUENCE } from './gestures.js';
+import { drawBackground, drawDesk } from './studio/set.js';
+import { SET } from './studio/geometry.js';
+import { makeCamera, placeActor, singleCam, kAt } from './camera.js';
+import { GESTURES, DEMO_SEQUENCE } from './gestures/index.js';
 import { buildSpeech } from './visemes.js';
 
 const clipRows = new Int16Array(384);
@@ -78,18 +82,7 @@ const talkers = {
   lola: actor('lola', { side: -1, seed: 23, speech: buildSpeech(LINE, { t0: 0.4, rate: 1.06 }), emotions: [{ t0: 0, name: 'happy' }] }),
 };
 
-/** Single camera on a seat, composed so the screen's edge never sits next to the head. */
-export function singleCam(slot, k = 3.0) {
-  const cz = 460;
-  const zoom = (k * (SET.presenterZ - cz)) / 1000;
-  const kw = k * (SET.presenterZ - cz) / (SET.wallZ - cz);
-  const side = slot === 'B' ? 1 : -1;
-  // largest |cam.x| that keeps the bezel clear of the head (≥ 14 u of head + hair + margin)
-  const clear = 10.5 * k;
-  const cx = side * ((74 * k - 73 * kw - clear) / (k - kw));
-  const neck = 26 + 23.6 * k; // head top 26 px below the frame top
-  return makeCamera({ x: cx, y: -60, z: cz, zoom, hy: neck - (SET.neckY + 60) * k, soft: 1 });
-}
+export { singleCam };
 
 export function talk(t, opts) {
   const who = opts.presenter === 'lola' ? 'lola' : 'paco';

@@ -1,7 +1,8 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  LEXICON, PAUSES, PERSONAS, addPronunciations, estimateDuration, normalizeForSpeech, planProsody, planSpeech,
+  GROUP_BREAKS, LEXICON, PAUSES, PERSONAS, addPronunciations, estimateDuration, groupPhrases, normalizeForSpeech,
+  planProsody, planSpeech,
   remapCues, speakable, spellLetters, toOriginal, toSpoken,
 } from '../public/js/voice/speechtext.js';
 import { parseCues } from '../public/js/cues.js';
@@ -27,6 +28,7 @@ table('numbers (American English)', us, [
   ['A 7.1 magnitude quake struck.', 'A seven point one magnitude quake struck.'],
   ['The vote passed 52 to 48.', 'The vote passed fifty-two to forty-eight.'],
   ['Expect 3-4 storms.', 'Expect three to four storms.'],
+  ['A 2-for-1 deal, a 50-50 chance and a 9-to-5 job.', 'A two-for-one deal, a fifty-fifty chance and a nine-to-five job.'],
   ['It costs 1,099 a seat, up from 120.', 'It costs one thousand ninety-nine a seat, up from one hundred twenty.'],
   ['The index fell -2.5 points.', 'The index fell minus two point five points.'],
   ['A 1,234,567 strong crowd.', 'A one million two hundred thirty-four thousand five hundred sixty-seven strong crowd.'],
@@ -433,6 +435,8 @@ describe('planProsody', () => {
     assert.equal(p[1].spoken, 'about twice the size of Earth.');
     assert.ok(p[1].speedFactor < p[0].speedFactor);
     assert.ok(!planProsody('The planet is about twice the size of Earth.', { persona: 'ada' }).some((x) => x.boundary === 'wonder'));
+    assert.equal(p[0].say, 'The planet is,');
+    assert.equal(p[1].say, p[1].spoken);
   });
 
   test('Penny reads figures with care', () => {
@@ -475,6 +479,12 @@ describe('planProsody', () => {
     assert.ok(p[1].speedFactor < p[0].speedFactor);
   });
 
+  test('emotion cues still inline in the text work too', () => {
+    const p = planProsody('Markets cheered the news. [sad] But thousands lost their homes.', { persona: 'lola' });
+    assert.deepEqual(p.map((x) => x.emotion), ['neutral', 'sad']);
+    assert.equal(p[1].spoken, 'But thousands lost their homes.');
+  });
+
   test('emphasis marks figures, superlatives and negations', () => {
     const p = planProsody('Coffee hit a record high of $5 a pound. It will not fall soon.', { persona: 'penny' });
     assert.deepEqual(p[0].emphasis.map((e) => e.word), ['record', '$5']);
@@ -511,6 +521,42 @@ describe('planProsody', () => {
     assert.ok(long > short * 4);
     assert.ok(planSpeech(STORY, { persona: 'paco' }).duration > long);
     assert.equal(estimateDuration([]), 0);
+  });
+
+  test('the presenter\'s own English is the default: Paco is British, Sam American', () => {
+    assert.match(planSpeech('It rose 120 points on 2 October.', { persona: 'paco' }).spoken, /one hundred and twenty .* the second of October/);
+    assert.match(planSpeech('It rose 120 points on 2 October.', { persona: 'sam' }).spoken, /one hundred twenty .* October second/);
+    assert.match(planSpeech('It rose 120 points.', { persona: { id: 'x', voice: { lang: 'en-GB' } } }).spoken, /hundred and twenty/);
+    assert.match(planSpeech('It rose 120 points.', { persona: 'paco', lang: 'en-US' }).spoken, /hundred twenty/);
+  });
+
+  test('groups join comma phrases into one synthesis call per sentence or major clause', () => {
+    const { phrases, groups, spoken } = planSpeech(STORY, { persona: 'ada' });
+    assert.deepEqual(groups.map((g) => g.boundary), ['stop', 'semicolon', 'stop', 'dash', 'end']);
+    assert.equal(groups.map((g) => g.spoken).join(' '), spoken);
+    assert.equal(groups[3].spoken, 'Meanwhile, the central bank held rates at three point five percent, saying inflation is easing,');
+    assert.equal(groups[3].text, 'Meanwhile, the central bank held rates at 3.5%, saying inflation is easing —');
+    for (const g of groups) {
+      assert.equal(g.pauseAfter, phrases[g.to].pauseAfter);
+      assert.ok(g.speedFactor >= Math.min(...phrases.slice(g.from, g.to + 1).map((p) => p.speedFactor)));
+      assert.ok(g.speedFactor <= Math.max(...phrases.slice(g.from, g.to + 1).map((p) => p.speedFactor)));
+    }
+  });
+
+  test('a very long sentence is split into groups that still fit one breath', () => {
+    const text = 'The company, which employs 3,400 people in 12 countries and has been operating since 2015 without a single major incident in all that time, said on Tuesday that it would cut 1,200 jobs across Europe, Asia and North America by the end of 2027, blaming weaker demand, higher energy costs and new tariffs.';
+    const { groups, spoken } = planSpeech(text, { persona: 'ada' });
+    assert.ok(groups.length >= 2);
+    assert.ok(groups.every((g) => g.spoken.length <= 220), groups.map((g) => g.spoken.length).join(' '));
+    assert.equal(groups.map((g) => g.spoken).join(' '), spoken);
+  });
+
+  test('custom group breaks, and a wonder group keeps its continuation comma', () => {
+    const phrases = planProsody('The planet is about twice the size of Earth, they say.', { persona: 'nova', seed: 0 });
+    const groups = groupPhrases(phrases);
+    assert.equal(groups[0].say, 'The planet is,');
+    assert.equal(groups[0].text, undefined);
+    assert.equal(groupPhrases(phrases, null, { breaks: [...GROUP_BREAKS, 'comma'] }).length, phrases.length);
   });
 
   test('an empty text plans nothing', () => {

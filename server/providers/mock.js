@@ -145,7 +145,8 @@ function study(story) {
   const grave = GRAVE.test(text);
   const loc = locate(s.title, s.summary || '');
   const precise = loc && !loc.entry.broad ? loc : null;
-  const figures = extractFigures(s.summary || '').filter((f) => f.fact.length <= 40);
+  // A fact card is a whole beat on screen: only figures worth one ("3 YEARS" is not).
+  const figures = extractFigures(s.summary || '').filter((f) => f.fact.length <= 40 && f.score >= 2);
   return {
     s,
     grave,

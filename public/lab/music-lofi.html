@@ -43,6 +43,7 @@
       import { PALETTES, LAYERS } from '../js/music/proposals/lofi/palettes.js';
       import { CUE_SHEET } from '../js/music/proposals/lofi/cuesheet.js';
       import { render, TIMELINES, CLIPS, speechRegions } from '../js/music/proposals/lofi/render.js';
+      import { SIGNATURE, SIGNATURE_SEMITONES } from '../js/music/proposals/lofi/theory.js';
 
       const $ = (id) => document.getElementById(id);
       const params = new URLSearchParams(location.search);
@@ -198,6 +199,14 @@
         requestAnimationFrame(draw);
       }
       draw();
+
+      // One network, one signature: warn if the audio stream's MOTIF and ours ever diverge.
+      import('../js/audio/themes.js').then(({ MOTIF }) => {
+        const ours = SIGNATURE.map((n, i) => [SIGNATURE_SEMITONES[i], n.len]);
+        const same = JSON.stringify(ours) === JSON.stringify(MOTIF.map(([s, l]) => [s, l]));
+        $('note').insertAdjacentHTML('beforeend', same ? '<br>Signature matches audio/themes.js MOTIF.' : '<br><b style="color:#e43b44">Signature differs from audio/themes.js MOTIF: update theory.js SIGNATURE.</b>');
+        if (!same) console.warn('[lofi] signature mismatch', ours, MOTIF);
+      }).catch(() => {});
 
       window.__audio = {
         render: (opts = {}) => render({ voiceBase: VOICE_BASE, ...opts }),

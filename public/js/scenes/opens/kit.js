@@ -5,10 +5,11 @@
 // Every open lasts 4 s in three acts on the same clock:
 //   BUILD  0.0-1.5  the yellow "bit" from the logo appears at centre stage and
 //                   the programme's emblem builds around it (its one motion idea)
-//   REVEAL 1.5-3.2  the emblem glides to its slot on the left, the title plate
-//                   wipes out from behind it, the title rises in at 2x, then the
-//                   tagline and credits; the bit hops onto the plate's corner and
-//                   the channel bug wipes in top-left with its glint
+//   REVEAL 1.5-3.2  the emblem glides (and pulls back) to its slot on the left,
+//                   the title plate wipes out from behind it, the title rises in
+//                   at 2x, then the tagline and credits; the bit travels to the
+//                   plate's corner and the on-air top row (bug, LIVE, clock) comes
+//                   on with its single glint, so the cut keeps the same pixels
 //   SETTLE 3.2-4.0  the lock-up holds perfectly still for the hard cut
 //
 // Everything is a pure function of dt, drawn in whole pixels with palette
@@ -44,7 +45,7 @@ export const TL = {
   pop: 2.12, // the bit pops out of the emblem's shoulder...
   hop: 2.46, // ...and hops onto the plate's top-right corner
   hopDur: 0.42,
-  bug: 2.3, // GLOBIT 24 bug wipes in top-left; its glint ends by STILL
+  bug: 2.3, // fallback logo bug (when the graphics top row is unavailable); its glint ends by STILL
   still: 3.2, // nothing moves from here to the cut
 };
 

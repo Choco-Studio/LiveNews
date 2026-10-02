@@ -301,7 +301,7 @@ const INST = {
   bell: (s, out, t, dur, m, v) => s.bell(out, t, Math.max(0.8, dur + 0.6), m, v, { ratio: 3.5, index: 1.1 }),
   glock: (s, out, t, dur, m, v) => s.bell(out, t, Math.max(0.6, dur + 0.4), m, v, { ratio: 2, index: 0.9, gain: 0.22 }),
   musicbox: (s, out, t, dur, m, v) => s.bell(out, t, 1.3, m, v, { ratio: 4, index: 0.55, gain: 0.3, cut: 3200 }),
-  chip: (s, out, t, dur, m, v) => s.pluck(out, t, m, v, { wave: 'pulse12', decay: 0.1, cut: 2600, cutEnd: 900, gain: 0.35 }),
+  chip: (s, out, t, dur, m, v) => s.pluck(out, t, m, v, { wave: 'pulse12', decay: 0.1, cut: 2600, cutEnd: 900, gain: 1.6 }),
 };
 export { INST };
 
@@ -312,10 +312,11 @@ const LAYERS = {
     if (L.pump) {
       // Side-chain feel: the pad breathes on every beat.
       const g = lay.pump.gain;
-      for (let k = 0; k < 4; k++) {
+      const every = L.pumpEvery || 1;
+      for (let k = 0; k < 4; k += every) {
         const t = b.t0 + k * bed.spb;
         g.setValueAtTime(1 - L.pump, t);
-        g.setTargetAtTime(1, t + 0.012, bed.spb * 0.2);
+        g.setTargetAtTime(1, t + 0.012, bed.spb * 0.2 * every);
       }
     }
     const fresh = bed.lastActive.get(lay) !== b.i - 1;
@@ -341,7 +342,7 @@ const LAYERS = {
       else if (deg === '8') m = root + 12;
       else if (deg === '3') m = third;
       else if (deg === 'a') m = approach(bed, root, bassNote(b.next, root, L.lo, L.hi));
-      bed.s.tone(lay.in, b.time(beat), beats * bed.spb * 0.92, m, vel * jit(b.r), { wave: L.wave, a: L.a, d: 0.3, s: L.s, r: L.r, cut: L.cut, gain: 0.6 });
+      bed.s.tone(lay.in, b.time(beat), beats * bed.spb * 0.92, m, vel * jit(b.r), { wave: L.wave, a: L.a, d: 0.3, s: L.s, r: L.r, cut: L.wave === 'tri' || L.wave === 'sub' ? 0 : L.cut, gain: 0.36 });
     }
     bed.prev.bass = root;
   },
@@ -437,15 +438,21 @@ const LAYERS = {
     const { L } = lay;
     if (((b.li % L.every) + L.every) % L.every !== L.at) return;
     const doM = nearest(bed.def.tonic % 12, L.oct ?? bed.def.tonic + 12);
-    const steps = L.retro ? SHAPES.retro : SHAPES.steps;
+    const steps = L.retro ? [...SHAPES.retro] : [...SHAPES.steps];
     const beats = (L.retro ? SHAPES.retroBeats : SHAPES.beats).map((x) => x * L.aug);
+    // The programme's colour note (audio/themes.js COLOURS) ends a forward statement.
+    const colour = L.retro || L.colourNote === false ? null : bed.def.pkg.colour;
+    if (colour != null) {
+      steps.push(colour);
+      beats.push(1.5 * L.aug);
+    }
     const play = INST[L.inst] || INST.horn;
     let beat = L.beat;
     for (let k = 0; k < steps.length; k++) {
       const last = k === steps.length - 1;
       const dur = beats[k] * bed.spb * (last ? 1.1 : 0.94);
       const t = b.time(beat);
-      const v = L.vel * (last ? 1 : 0.85 + 0.1 * k) * jit(b.r, 0.06);
+      const v = L.vel * (last ? 0.95 : 0.8 + 0.07 * Math.min(k, 3)) * jit(b.r, 0.06);
       play(bed.s, lay.in, t, dur, doM + steps[k], v, L);
       for (const h of L.harm) play(bed.s, lay.in, t, dur, doM + steps[k] + h, v * 0.6, L);
       beat += beats[k];

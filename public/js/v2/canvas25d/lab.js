@@ -1,12 +1,13 @@
-// Lab driver for the canvas25d prototype: picks a demo and renders exact
-// instants for deterministic contact sheets.
+// Lab driver for the canvas25d foundation lab (owner: INTEGRATION stream):
+// picks a demo and renders exact instants for deterministic contact sheets.
 //   window.__lab.render(t)                 draw the instant t (seconds)
 //   window.__lab.set({ demo, presenter, gesture, k })
 //   window.__lab.bench(frames)             average ms per frame for the current demo
 import { C } from './pixbuf.js';
 import { frame, drawActors, actor } from './scene.js';
 import { DEMOS as SHOTS, RIG_TIMES, PROFILE } from './demos.js';
-import { GESTURES } from './gestures.js';
+import { GESTURES } from './gestures/index.js';
+import { PRESENTER_IDS } from './cast/index.js';
 
 const state = { demo: 'rig', presenter: 'paco', gesture: 'sequence', s: 2.7, k: 4.0 };
 
@@ -57,3 +58,4 @@ export function createLab(canvas) {
 
 export const DEMO_NAMES = Object.keys(DEMOS);
 export const GESTURE_NAMES = Object.keys(GESTURES);
+export { PRESENTER_IDS };

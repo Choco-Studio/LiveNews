@@ -1,53 +1,11 @@
-// Gesture library for the canvas25d rig, authored as keyframe tracks.
-//
-// Space: "partner space" in rig units. +x points toward the co-presenter
-// (the rig mirrors it for whoever sits on the right), y down, z toward the
-// camera. Arm channels are for the NEAR arm (toward the partner / the video
-// wall) and the FAR arm (suffix F). Wrist positions are offsets from that
-// arm's shoulder joint, in Paco's proportions (other presenters are scaled
-// by arm length).
-//
-// Each track is [[time, value, flag?], ...]. Values may be 'R' (the rest
-// value of that channel), numbers or [x, y, z]. Interpolation is a cardinal
-// spline through the keys (continuous velocity, so motion flows through a
-// key instead of stopping on it); flag 's' makes the motion ease into and
-// out of that key (a hold or the end of an overshoot). The 12-principles
-// beats are written explicitly: anticipation key, eased arc keys, an
-// overshoot key, a settle key, and hand-direction keys that lag the wrist
-// by ~60 ms for follow-through.
-//
-// Channels
-//   arms (override): wrist, dir (hand direction), curl [thumb..pinky 0 open → 1 curled],
-//                    spread, facing (+1 palm to camera, -1 back), pole (elbow hint)
-//   body/head/face (additive): yaw, pitch, roll, hx, hy, lean, bx, by, shN, shF (shoulder lift),
-//                    brow, browIn, smile, squint, lid, lookX, lookY
+// The approved prototype's gestures (owner: HANDS & GESTURES stream), each a
+// set of keyframe tracks in partner space (see gestures/index.js for the
+// channels). The 12-principles beats are written explicitly: anticipation
+// key, eased arc keys, an overshoot key, a settle key, and hand-direction
+// keys that lag the wrist by ~60 ms for follow-through.
+import { OPEN, POINT, FIST, CUP, UP } from './shapes.js';
 
-export const REST = {
-  wrist: [-5.6, 19.3, 13.5],
-  wristF: [5.6, 19.3, 13.5],
-  dir: [-0.8, 0.12, 0.58],
-  dirF: [0.8, 0.12, 0.58],
-  curl: [0.35, 0.62, 0.66, 0.7, 0.74],
-  curlF: [0.35, 0.62, 0.66, 0.7, 0.74],
-  spread: 0.15,
-  spreadF: 0.15,
-  facing: -1,
-  facingF: -1,
-  pole: [0.55, 0.9, -0.7],
-  poleF: [-0.55, 0.9, -0.7],
-  yaw: 0, pitch: 0, roll: 0, hx: 0, hy: 0, lean: 0, bx: 0, by: 0, shN: 0, shF: 0,
-  brow: 0, browIn: 0, smile: 0, squint: 0, lid: 0, lookX: 0, lookY: 0,
-};
-
-export const ARM_CHANNELS = ['wrist', 'wristF', 'dir', 'dirF', 'curl', 'curlF', 'spread', 'spreadF', 'facing', 'facingF', 'pole', 'poleF'];
-
-const OPEN = [0.1, 0.02, 0.0, 0.04, 0.1];
-const POINT = [0.75, 0.0, 0.92, 0.96, 0.98];
-const FIST = [0.85, 0.95, 0.97, 0.98, 1];
-const CUP = [0.2, 0.15, 0.12, 0.15, 0.2];
-const UP = [0.04, -1, 0.12];
-
-export const GESTURES = {
+export const LIBRARY = {
   raise_hand: {
     dur: 1.7,
     desc: 'raise an open hand to make a point',
@@ -179,12 +137,3 @@ export const GESTURES = {
   },
 };
 
-// Resolve 'R' keys once.
-for (const g of Object.values(GESTURES)) {
-  for (const [ch, keys] of Object.entries(g.tracks)) {
-    for (const k of keys) if (k[1] === 'R') k[1] = REST[ch];
-  }
-}
-
-/** The 7 gestures in the order the rig demo performs them. */
-export const DEMO_SEQUENCE = ['raise_hand', 'wave', 'point_screen', 'nod', 'look_partner', 'shrug', 'count'];

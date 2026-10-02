@@ -1,1029 +1,820 @@
-// BITFIZZ COLA — "Feeling a bit... low-res?" A guy melts on a park bench in a
-// 1-bit world until the only thing in colour, a BitFizz machine, glows at him.
-// One sip and the world re-renders 1 -> 2 -> 4 -> 8 bits. Brand colours: cola
-// red, fizz yellow, white. Tagline: "Taste every bit."
+// BITFIZZ RESERVE — a luxury spirits commercial, played completely straight,
+// for a fizzy soft drink. Whispered voice-over, amber light, slow motion,
+// gold serif type, and the joke is all in the copy: aged twelve years in a
+// decommissioned server farm, tasting notes of oak, caramel and dial-up,
+// "Uncompressed." Letterboxed 2.2:1; the legal line sits on the bottom bar.
 //
-// Storyboard (150 bpm, a beat is 0.4 s; every cut lands on a beat):
-//  1  0.0 LOW-RES      1-bit park, he fans himself, sighs.           VO "Feeling a bit... low-res?"
-//  2  3.6 THE GLOW     close-up; red light on his face, eyes pop.
-//  3  5.2 THE MACHINE  whip pan to a full-colour vending machine; he walks up, CLUNK.
-//                                                                      VO "Crack open an ice-cold BitFizz Cola..."
-//  4  7.6 CRACK        extreme close-up: finger, tab, anticipation, PSSHT, bits spray.
-//  5  9.6 UPGRADE      the sip; the world rescans to 2, 4 and 8 bits.  VO "...and upgrade to eight bits of flavour!"
-//  6 12.8 PARTY        full colour; dancing on the bench, 256 TASTES.  VO "Two hundred and fifty-six tastes in every sip!"
-//  7 17.6 HERO CAN     2.5D turntable can, ice, light sweep.           VO "BitFizz Cola."
-//  8 19.6 END SLATE    logo, tagline, url, legal; a 1-bit pigeon gets its colour.   VO "Taste every bit."
+// Shot list (24 s, 72 bpm, a bar is 3.33 s; the brand chord lands at 20.0 s):
+//  1  0.0 MACRO    inside the liquid: slow bubbles in backlit amber.        VO "Some things cannot be rushed."
+//  2  4.0 CELLAR   a dark server hall; bottles rest in the racks; a window
+//                  beam full of dust; slow truck right; documentary caption. VO "Aged twelve years, in a decommissioned server farm."
+//  3  8.6 POUR     slow-motion pour into a crystal tumbler over one ice cube. VO "Poured over ice, hand-chipped by a retired sysadmin."
+//  4 13.4 NOSE     a man in profile, rim-lit, raises the glass; tasting
+//                  notes set in serif in the empty half of the frame.       VO "Notes of oak, caramel... and dial-up."
+//  5 17.8 HERO     the bottle on a stone plinth; the lights come up and a
+//                  softbox sweep travels round the glass.                    VO "BitFizz Reserve."
+//  6 20.4 SLATE    bottle left, gold lock-up right, legal on the bar.        VO "Uncompressed."
 import {
-  P, W, H, R, A, rrect, disc, oval, ring, poly, line, dither, bands, sparkle, twinkle, shadow, sunburst, spr, draw,
-  cached, text, bigText, kinetic, micro, play, hero, faceCU, wordmark, drawMark, glint, cloud, mulberry32, prog, lerp,
-  easeOut, easeIn, easeOutBack, spring, wobble, key, tween, poseAt, blink, breath, kick, withCam, squashArt, cylinder,
-  spotlight, badge, endSlate, lazy, clipRect, clipCircle, rep, tune, frame, stroke,
+  P, W, H, R, A, oval, poly, ring, disc, cached, lazy, play, key, tween, prog, smooth, clamp,
+  type, typeWidth, trackIn, fadeUp, rule, smallPrint, gradient, vignette, letterbox, beam, contact, glintStar,
+  litShape, lathe, ovalRing, bubbles, motes, hash01, clipRect, warmUp, tune,
 } from './kit.js';
 
-// --- colour depth -------------------------------------------------------------
-// Each mode maps every palette token onto the colours that depth can show.
-function table(groups) {
-  const m = {};
-  for (const [to, list] of groups) for (const c of list) m[c] = to;
-  return m;
-}
-const MODES = {
-  1: table([
-    [P.black, [P.black, P.ink, P.slate, P.steel, P.maroon, P.brown, P.darkGreen, P.navy, P.purple, P.darkRed, P.tanShade, P.rust, P.red, P.blue, P.magenta]],
-    [P.cream, [P.fog, P.silver, P.white, P.yellow, P.cream, P.skin, P.skinShade, P.tan, P.cyan, P.orange, P.pink, P.green]],
-  ]),
-  2: table([
-    [P.black, [P.black, P.ink, P.maroon, P.purple, P.navy]],
-    [P.darkGreen, [P.slate, P.darkGreen, P.brown, P.darkRed, P.tanShade, P.rust, P.steel, P.magenta]],
-    [P.green, [P.fog, P.red, P.orange, P.green, P.tan, P.skinShade, P.pink, P.blue]],
-    [P.cream, [P.silver, P.white, P.yellow, P.cream, P.skin, P.cyan]],
-  ]),
-  // 4-bit: an EGA-like 16-colour set (pink skin, brown shading, no subtle tones)
-  4: table([
-    [P.black, [P.black, P.ink, P.maroon]],
-    [P.steel, [P.slate, P.steel]],
-    [P.silver, [P.fog, P.silver]],
-    [P.white, [P.white, P.cream]],
-    [P.pink, [P.skin, P.pink]],
-    [P.rust, [P.skinShade, P.tan, P.tanShade, P.rust, P.orange]],
-    [P.darkRed, [P.brown, P.darkRed]],
-    [P.magenta, [P.purple, P.magenta]],
-  ]),
-  8: {},
-};
-const mapper = (d) => {
-  const m = MODES[d];
-  return (hex) => m[hex] || hex;
-};
-const PALS = new Map();
-/** A character palette as seen at depth d (cached). */
-function palAt(name, pal, d) {
-  const k = `${name}|${d}`;
-  let v = PALS.get(k);
-  if (!v) {
-    const c = mapper(d);
-    v = { K: P.black, W: c(P.white), M: c(P.maroon), N: c(P.pink) };
-    for (const [key, hex] of Object.entries(pal)) v[key] = c(hex);
-    PALS.set(k, v);
-  }
-  return v;
+const { round, sin, cos, PI, max, min, abs } = Math;
+
+const BAR = 24; // letterbox bar height (2.2:1)
+const GOLD = [P.cream, P.yellow, P.yellow];
+// Backlit whisky-amber, dark to light; orange only where the light passes through.
+const AMBER = [P.black, P.maroon, P.brown, P.tanShade, P.orange, P.yellow];
+const GILT = [P.black, P.brown, P.tanShade, P.yellow, P.cream];
+const STONE = [P.black, P.ink, P.slate, P.steel];
+const CRYSTAL = [P.maroon, P.brown, P.tanShade, P.cream];
+
+/** Radii from keys into a reused array, scaled by k (no allocation). */
+function fill(out, h, keys, k) {
+  for (let j = 0; j < h; j++) out[j] = key(j / max(1, h - 1), keys) * k;
+  return out;
 }
 
-const GUY = { S: P.skin, s: P.skinShade, H: P.brown, h: P.tan, E: P.brown, T: P.white, t: P.silver, L: P.white, C: P.white, X: P.white, b: P.red, Y: P.yellow, P: P.navy, p: P.ink, B: P.red };
-const BIT_COLS = [P.red, P.orange, P.yellow, P.green, P.cyan, P.blue, P.magenta, P.pink];
+// --- the bottle ------------------------------------------------------------------
+// A broad decanter with a gilt stopper, a black label with gold type, full of
+// amber to the shoulder. Drawn per pixel by kit.lathe at any size.
 
-// --- brand ---------------------------------------------------------------------
+const STOP_KEYS = [[0, 5], [0.14, 9, 'out'], [0.5, 9.5], [0.62, 6.5, 'inOut'], [0.72, 6.5], [0.78, 9, 'out'], [1, 9]];
+const BODY_KEYS = [[0, 7], [0.07, 7], [0.11, 9, 'inOut'], [0.25, 34, 'inOut'], [0.31, 37, 'out'], [0.94, 36], [1, 33, 'in']];
+const BODY_R = 37; // widest radius at scale 1
+const PROF = new Float32Array(400);
+const STOP = new Float32Array(80);
+const BODY_H = 108;
+const STOP_H = 15;
+const RIM = { k: 0.95 };
+const RIM_DYN = { k: 0.95 };
+// softbox reflections; the third is a sweep moved by the hero shot (9 = parked)
+const STRIPES = [[-0.56, 0.05, P.cream], [0.7, 0.03, P.yellow]];
+const SWEEP = [[-0.56, 0.05, P.cream], [0.7, 0.03, P.yellow], [9, 0.1, P.cream]];
+const STOP_STRIPES = [[-0.5, 0.12, P.cream]];
 
-const MARK = lazy(() => wordmark('BITFIZZ', {
-  h: 32, pen: 4, slant: 0.16, wide: 0.95, gap: 1,
-  fill: [P.pink, P.red, P.red, P.darkRed], hi: P.white,
-  outline: [[P.white, 2], [P.black, 2]], depth: 4, depthColor: P.maroon,
-  wave: (i) => [0, -2, 1, -1, 2, 0, -2][i % 7],
-  deco: (c, info) => {
-    // fizz bubbles inside the letters
-    const rand = mulberry32(11);
-    for (const l of info.letters) {
-      for (let k = 0; k < 2; k++) {
-        const p = l.pts[Math.floor(rand() * l.pts.length)];
-        c.fillStyle = P.white;
-        c.fillRect(p[0] + info.pad, p[1] + info.pad, 2, 2);
-      }
-    }
-  },
-}));
-const SUB = lazy(() => wordmark('COLA', { h: 16, pen: 2, wide: 1.1, gap: 3, fill: [P.yellow, P.orange], outline: [[P.black, 2]], depth: 2, depthColor: P.rust }));
-const MINI_BIT = lazy(() => wordmark('BIT', { h: 13, pen: 1, square: true, wide: 0.8, gap: 2, slant: 0.15, fill: [P.white, P.white, P.silver], outline: [[P.maroon, 1]] }));
-const MINI_FIZZ = lazy(() => wordmark('FIZZ', { h: 13, pen: 1, square: true, wide: 0.75, gap: 2, slant: 0.15, fill: [P.yellow, P.yellow, P.orange], outline: [[P.maroon, 1]] }));
-
-// --- the can -------------------------------------------------------------------
-
-/** Label texture for a can of radius r and label height h: one full turn wide. */
-const label = (r, h) =>
-  cached(`bf-label-${r}-${h}`, Math.round(2 * Math.PI * r), h, (c) => {
-    const lw = Math.round(2 * Math.PI * r);
-    R(c, 0, 0, lw, h, P.red);
-    // a white "fizz wave" band and a yellow pinstripe
-    const by = Math.round(h * 0.2);
-    for (let x = 0; x < lw; x++) {
-      const yy = by + Math.round(Math.sin((x / lw) * Math.PI * 6) * 2);
-      R(c, x, yy, 1, 3, P.white);
-      R(c, x, yy + 3, 1, 1, P.yellow);
-      R(c, x, h - by + Math.round(Math.sin((x / lw) * Math.PI * 6 + 2) * 2), 1, 2, P.darkRed);
-    }
-    // front: stacked BIT / FIZZ lettering, centred on u = 0.5
-    const fx = Math.round(lw / 2);
-    const bit = MINI_BIT();
-    const fizz = MINI_FIZZ();
-    const k = Math.min(1, h / 64);
-    drawMark(c, bit, fx, Math.round(h * 0.34));
-    drawMark(c, fizz, fx, Math.round(h * 0.34) + Math.round(16 * k) + 1);
-    micro(c, 'COLA', fx, Math.round(h * 0.34) + Math.round(34 * k) + 2, { color: P.white, align: 'center' });
-    // back: a big "8" bit badge and the nutrition table in micro type
-    const bx = Math.round(lw * 0.02) + 4;
-    disc(c, bx + 6, Math.round(h * 0.5), 7, P.yellow);
-    text(c, '8', bx + 4, Math.round(h * 0.5) - 3, { color: P.maroon });
-    micro(c, 'BITS 8', Math.round(lw * 0.9), Math.round(h * 0.42), { color: P.white, align: 'center' });
-    micro(c, 'FUN 256', Math.round(lw * 0.9), Math.round(h * 0.42) + 7, { color: P.white, align: 'center' });
-    // bubbles and condensation drops all round
-    const rand = mulberry32(5 + r);
-    for (let i = 0; i < lw / 3; i++) {
-      const x = Math.floor(rand() * lw);
-      const y = 3 + Math.floor(rand() * (h - 6));
-      if (Math.abs(x - fx) < 16 && y > h * 0.28 && y < h * 0.85) continue;
-      R(c, x, y, 1, 1, rand() < 0.6 ? P.pink : P.white);
-      if (rand() < 0.25) R(c, x, y + 1, 1, 1, P.white);
-    }
+/** The label texture for a bottle of radius r: one full turn, label on the front third. */
+const labelTex = (r) =>
+  cached(`bf-label-${r}`, round(2 * PI * r), round(r * 1.5), (c) => {
+    const tw = round(2 * PI * r);
+    const lh = round(r * 1.5);
+    const lw = round(tw * 0.36);
+    const x0 = round((tw - lw) / 2);
+    const cx = round(tw / 2);
+    R(c, x0, 0, lw, lh, P.black);
+    R(c, x0 + 2, 2, lw - 4, 1, P.yellow);
+    R(c, x0 + 2, lh - 3, lw - 4, 1, P.yellow);
+    R(c, x0 + 2, 2, 1, lh - 4, P.tanShade);
+    R(c, x0 + lw - 3, 2, 1, lh - 4, P.tanShade);
+    const big = r >= 30;
+    let y = big ? 7 : 6;
+    type(c, 'BITFIZZ', cx, y, { face: big ? 'serif' : 'body', color: big ? GOLD : P.cream, track: big ? 0 : 1, align: 'center' });
+    y += big ? 15 : 11;
+    type(c, 'RESERVE', cx, y, { face: 'micro', color: P.yellow, track: 2, align: 'center' });
+    y += 9;
+    R(c, cx - 10, y, 21, 1, P.tanShade);
+    y += 4;
+    type(c, 'AGED 12 YEARS', cx, y, { face: 'micro', color: P.cream, track: 1, align: 'center' });
+    if (lh - y > 16) type(c, 'SERVER FARM 7', cx, y + 8, { face: 'micro', color: P.tanShade, track: 1, align: 'center' });
   });
 
-/** Full can at radius r: lid ellipse, turning label, base. (cx, top) = lid centre. */
-function can(ctx, cx, top, r, turn, { tab = 0, lidOnly = false } = {}) {
-  const lh = Math.round(r * 2.6);
-  const ry = Math.max(2, Math.round(r * 0.28));
-  const y0 = top + ry;
-  // body outline
-  R(ctx, cx - r - 1, y0, 2 * r + 2, lh + 1, P.black);
-  oval(ctx, cx, y0 + lh, r + 1, ry + 1, P.black);
-  oval(ctx, cx, y0, r + 1, ry + 1, P.black);
-  if (!lidOnly) {
-    // base rim
-    oval(ctx, cx, y0 + lh, r, ry, P.steel);
-    R(ctx, cx - r, y0 + lh - 3, 2 * r, 3, P.silver);
-    cylinder(ctx, label(r, lh - 3), cx, y0, r, turn);
-  }
-  // lid: rim, recess, tab
-  oval(ctx, cx, y0, r, ry, P.silver);
-  oval(ctx, cx, y0 + 1, r - 2, Math.max(1, ry - 1), P.fog);
-  R(ctx, cx - r + 2, y0 - 1, 2 * r - 4, 1, P.white);
-  const tx = cx + Math.round(r * 0.1);
-  if (tab < 0.5) {
-    // tab lying flat, lifting slightly as the finger pulls (tab 0..0.5)
-    const lift = Math.round(tab * 4);
-    R(ctx, tx - 3, y0 - 1 - lift, 7, 3, P.black);
-    R(ctx, tx - 2, y0 - lift, 5, 1, P.white);
-    R(ctx, tx - 4, y0 + 1, 3, 1, P.steel);
-  } else {
-    // popped: tab stands up, the opening is dark
-    oval(ctx, tx - 4, y0 + 1, 3, 1, P.black);
-    R(ctx, tx - 1, y0 - 7, 4, 8, P.black);
-    R(ctx, tx, y0 - 6, 2, 6, P.white);
+const LAB = { cv: null, top: 0, h: 0, turn: 0.5 };
+const GLASS = { top: 0, edge: 1.4, wall: 0.9, edgeColor: P.tanShade };
+const BODY_O = { rows: 0, ramp: AMBER, ambient: 0.1, glass: GLASS, label: LAB, stripes: STRIPES, rim: RIM, key: 1, seam: 0.5 };
+const STOP_O = { rows: 0, ramp: GILT, ambient: 0.14, stripes: STOP_STRIPES, rim: RIM, key: 1, seam: 0.5 };
+
+/**
+ * Bottle standing on y = bottom, axis at cx, at scale k. tex: the label texture
+ * (built for the nominal radius); sweep: x of the moving softbox (-1.3..1.3) or null.
+ */
+function bottle(ctx, cx, bottom, k, tex, { turn = 0.5, keyK = 1, rimK = 0.95, sweep = null } = {}) {
+  const bh = round(BODY_H * k);
+  const sh = round(STOP_H * k);
+  const top = bottom - bh - sh;
+  RIM_DYN.k = rimK;
+  STOP_O.rows = sh;
+  STOP_O.key = keyK;
+  STOP_O.rim = RIM_DYN;
+  lathe(ctx, cx, top, fill(STOP, sh, STOP_KEYS, k), STOP_O);
+  GLASS.top = round(bh * 0.2);
+  LAB.cv = tex;
+  LAB.top = round(bh * 0.42);
+  LAB.h = round((tex.height * k * BODY_R) / (tex.width / (2 * PI)));
+  LAB.turn = turn;
+  BODY_O.rows = bh;
+  BODY_O.key = keyK;
+  BODY_O.rim = RIM_DYN;
+  if (sweep !== null) {
+    SWEEP[2][0] = sweep;
+    BODY_O.stripes = SWEEP;
+  } else BODY_O.stripes = STRIPES;
+  lathe(ctx, cx, top + sh, fill(PROF, bh, BODY_KEYS, k), BODY_O);
+  return top;
+}
+
+/** Dark stone plinth: top ellipse at y, front band down to the bar. */
+function plinth(ctx, cx, y, rx, ry, depth = 30) {
+  R(ctx, cx - rx, y, rx * 2 + 1, depth, P.black);
+  oval(ctx, cx, y, rx, ry, P.black);
+  oval(ctx, cx - round(rx * 0.1), y - 1, round(rx * 0.7), max(1, ry - 3), A(P.maroon, 0.6));
+  ovalRing(ctx, cx, y, rx, ry, P.ink);
+  // the front lip catches the key light (left of centre)
+  for (let i = -rx + 3; i <= rx - 3; i++) {
+    const kx = i / rx;
+    const yy = y + round(ry * Math.sqrt(1 - kx * kx));
+    R(ctx, cx + i, yy, 1, 1, abs(kx + 0.35) < 0.28 ? P.slate : P.ink);
   }
 }
 
-// --- park ------------------------------------------------------------------------
+// --- 1. MACRO ----------------------------------------------------------------------
 
-const WW = 600; // the park is wider than the screen so the camera can travel
-const GROUND = 178; // the path where people stand
-const SEAT = 150; // bench seat top
-const BENCH_X = 200;
-const MACHINE_X = 470;
+const macroBg = lazy(() => gradient('bf-macro', W, H, { cx: 268, cy: 64, rx: 330, ry: 230, ramp: [P.black, P.maroon, P.brown, P.tanShade], gamma: 1.35, seam: 0.45 }));
 
-function paintPark(c, d) {
-  const k = mapper(d);
-  const one = d === 1;
-  // sky
-  if (one) R(c, 0, 0, WW, 116, P.cream);
-  else bands(c, 0, 0, WW, 116, [k(P.blue), k(P.cyan), k(P.cream)]);
-  if (one) dither(c, 0, 0, WW, 12, P.black, 'dots');
-  // far city
-  const rand = mulberry32(3);
-  for (let x = -10; x < WW; x += 18 + Math.floor(rand() * 14)) {
-    const h = 14 + Math.floor(rand() * 26);
-    R(c, x, 112 - h, 16, h, one ? P.cream : k(P.fog));
-    if (one) {
-      R(c, x, 112 - h, 16, 1, P.black);
-      R(c, x, 112 - h, 1, h, P.black);
-      dither(c, x + 1, 112 - h + 1, 15, h - 1, P.black, 'sparse');
-    } else for (let wy = 112 - h + 3; wy < 108; wy += 5) for (let wx = x + 3; wx < x + 14; wx += 4) R(c, wx, wy, 2, 2, k(P.silver));
+/** A bubble seen through a macro lens: refracted light low-left, specular top-right. */
+function macroBubble(ctx, x, y, r) {
+  x = round(x);
+  y = round(y);
+  if (r < 2) {
+    R(ctx, x, y, 2, 2, P.tanShade);
+    R(ctx, x + 1, y, 1, 1, P.cream);
+    return;
   }
-  // hills and tree line
-  for (const [hx, hr] of [[60, 90], [230, 120], [420, 100], [560, 80]]) {
-    oval(c, hx, 118, hr, 22, one ? P.black : k(P.darkGreen));
-    if (one) oval(c, hx, 119, hr - 1, 21, P.cream);
-    if (one) dither(c, hx - hr, 97, hr * 2, 21, P.black, 'checker');
+  disc(ctx, x, y, r, A(P.black, 0.22));
+  ring(ctx, x, y, r, A(P.orange, 0.6));
+  // the refracted light gathers in a crescent on the inner lower-left edge
+  const steps = 6 + r;
+  for (let i = 0; i <= steps; i++) {
+    const a = (0.5 + (i / steps) * 0.9) * PI;
+    const rr = r - 1.3;
+    R(ctx, x + cos(a) * rr, y + sin(a) * rr, 1, 1, A(P.yellow, 0.4 + 0.4 * sin((i / steps) * PI)));
+    if (r >= 7) R(ctx, x + cos(a) * (rr - 1), y + sin(a) * (rr - 1), 1, 1, A(P.yellow, 0.25 * sin((i / steps) * PI)));
   }
-  for (let x = 6; x < WW; x += 34 + ((x * 7) % 17)) {
-    const tr = 12 + ((x * 13) % 7);
-    const ty = 104 + ((x * 5) % 6);
-    R(c, x - 1, ty, 3, 14, one ? P.black : k(P.brown));
-    disc(c, x, ty - 2, tr + 1, P.black);
-    disc(c, x, ty - 2, tr, one ? P.black : k(P.darkGreen));
-    disc(c, x - 3, ty - 5, tr - 4, one ? P.black : k(P.green));
-    if (one) dither(c, x - tr + 2, ty - tr, tr * 2 - 6, tr - 2, P.cream, 'dots');
-  }
-  // grass
-  R(c, 0, 116, WW, 100, one ? P.cream : k(P.green));
-  R(c, 0, 116, WW, 2, one ? P.black : k(P.darkGreen));
-  if (one) {
-    dither(c, 0, 118, WW, 6, P.black, 'checker');
-    dither(c, 0, 124, WW, 10, P.black, 'sparse');
-    dither(c, 0, 194, WW, 22, P.black, 'dots');
-  } else {
-    dither(c, 0, 118, WW, 8, k(P.darkGreen), 'sparse');
-    bands(c, 0, 186, WW, 30, [k(P.green), k(P.darkGreen)]);
-  }
-  for (let i = 0; i < 90; i++) {
-    const x = Math.floor(rand() * WW);
-    const y = 128 + Math.floor(rand() * 84);
-    if (y > 162 && y < 188) continue;
-    R(c, x, y, 1, 2, one ? P.black : k(P.darkGreen));
-    R(c, x + 2, y + 1, 1, 1, one ? P.black : k(P.darkGreen));
-  }
-  // path
-  R(c, 0, 163, WW, 1, P.black);
-  R(c, 0, 164, WW, 22, one ? P.cream : k(P.cream));
-  R(c, 0, 164, WW, 2, one ? P.black : k(P.tan));
-  R(c, 0, 186, WW, 1, P.black);
-  if (one) dither(c, 0, 166, WW, 3, P.black, 'sparse');
-  for (let x = 4; x < WW; x += 23) R(c, x, 176 + ((x * 3) % 7), 2, 1, one ? P.black : k(P.tan));
-  // lamp post
-  const lx = 112;
-  R(c, lx - 2, 60, 5, 104, P.black);
-  R(c, lx - 1, 60, 3, 104, one ? P.black : k(P.slate));
-  R(c, lx, 60, 1, 104, one ? P.cream : k(P.steel));
-  R(c, lx - 6, 52, 13, 9, P.black);
-  R(c, lx - 5, 53, 11, 7, one ? P.cream : k(P.cream));
-  R(c, lx - 7, 50, 15, 3, P.black);
-  R(c, lx - 4, 160, 9, 4, P.black);
-  // trash bin
-  const bx = 318;
-  R(c, bx - 9, 140, 18, 25, P.black);
-  R(c, bx - 8, 141, 16, 23, one ? P.cream : k(P.green));
-  for (let x = bx - 6; x < bx + 7; x += 4) R(c, x, 143, 1, 19, one ? P.black : k(P.darkGreen));
-  R(c, bx - 10, 138, 20, 4, P.black);
-  // bench back (the seat front is drawn over the guy's hips)
-  const b0 = BENCH_X - 44;
-  R(c, b0, 120, 88, 26, P.black);
-  for (let i = 0; i < 3; i++) R(c, b0 + 1, 121 + i * 8, 86, 6, one ? P.cream : k(P.tan));
-  for (let i = 0; i < 3; i++) R(c, b0 + 1, 126 + i * 8, 86, 1, one ? P.black : k(P.tanShade));
-  R(c, b0 + 6, 120, 4, 44, P.black);
-  R(c, b0 + 78, 120, 4, 44, P.black);
-}
-const park = (d) => cached(`bf-park-${d}`, WW, H, (c) => paintPark(c, d));
-
-/** Bench seat front and legs (in front of a sitting person). */
-function benchFront(ctx, x, d) {
-  const k = mapper(d);
-  const b0 = x - 46;
-  R(ctx, b0, SEAT - 1, 92, 7, P.black);
-  R(ctx, b0 + 1, SEAT, 90, 4, d === 1 ? P.cream : k(P.tan));
-  R(ctx, b0 + 1, SEAT + 4, 90, 1, d === 1 ? P.black : k(P.tanShade));
-  for (const lx of [b0 + 6, b0 + 82]) {
-    R(ctx, lx, SEAT + 5, 4, GROUND - SEAT - 9, P.black);
-    R(ctx, lx - 2, GROUND - 5, 8, 2, P.black);
-  }
+  // the window of the key light, upper right, and its small twin lower left
+  const sx = x + round(r * 0.4);
+  const sy = y - round(r * 0.5);
+  R(ctx, sx - 1, sy, r >= 7 ? 3 : 2, 1, P.cream);
+  if (r >= 5) R(ctx, sx, sy - 1, 1, 1, P.white);
+  if (r >= 7) R(ctx, x - round(r * 0.45), y + round(r * 0.35), 1, 1, A(P.cream, 0.6));
 }
 
-/** Shins and shoes of someone sitting on the bench (drawn over the seat front). */
-function shins(ctx, x, pal) {
-  for (const sd of [-1, 1]) {
-    line(ctx, x + sd * 5 - 4, SEAT + 2, x + sd * 6 - 4, GROUND - 8, P.black, 8);
-    line(ctx, x + sd * 5 - 3, SEAT + 2, x + sd * 6 - 3, GROUND - 8, pal.P, 6);
-    R(ctx, x + sd * 6 - 5, GROUND - 8, 10, 5, P.black);
-    R(ctx, x + sd * 6 - 4, GROUND - 7, 8, 3, pal.B);
-  }
-}
-
-function sun(ctx, x, y, lt, d) {
-  const k = mapper(d);
-  if (d === 1) {
-    disc(ctx, x, y, 17, P.black);
-    disc(ctx, x, y, 16, P.cream);
-    ring(ctx, x, y, 20 + (Math.floor(lt * 3) % 3), P.black);
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2 + lt * 0.2;
-      line(ctx, x + Math.cos(a) * 24, y + Math.sin(a) * 24, x + Math.cos(a) * 30, y + Math.sin(a) * 30, P.black);
+/** The curved glass wall on the left of frame, catching the backlight. */
+const glassWall = lazy(() =>
+  cached('bf-wall', W, H, (c) => {
+    for (let y = 0; y < H; y++) {
+      const x = round(62 + ((y - 108) / 108) ** 2 * 14);
+      R(c, 0, y, x - 3, 1, A(P.black, 0.35));
+      R(c, x - 3, y, 2, 1, A(P.tanShade, 0.35));
+      R(c, x - 1, y, 1, 1, P.cream);
+      R(c, x, y, 2, 1, A(P.yellow, 0.35));
+      R(c, x + 5, y, 1, 1, A(P.orange, 0.25));
     }
-  } else {
-    disc(ctx, x, y, 22, A(k(P.yellow), 0.25));
-    disc(ctx, x, y, 17, k(P.orange));
-    disc(ctx, x, y, 15, k(P.yellow));
-    disc(ctx, x - 3, y - 3, 8, k(P.cream));
-  }
-}
+  }),
+);
 
-/** Rising heat shimmer (1-bit: dotted wavy columns). */
-function heat(ctx, x0, w, lt) {
-  for (let i = 0; i < 6; i++) {
-    const x = x0 + ((i * 53) % w);
-    const ph = (lt * 0.7 + i * 0.37) % 1;
-    for (let j = 0; j < 4; j++) {
-      const y = 150 - ph * 50 - j * 5;
-      R(ctx, x + Math.round(Math.sin((y + i) * 0.4) * 2), y, 1, 2, P.black);
+// nucleation points on the bottom of the glass: columns of bubbles in a line
+const COLUMNS = [[118, 15, 16], [232, 12, 19], [292, 17, 14]];
+function shotMacro(ctx, lt) {
+  ctx.drawImage(macroBg(), 0, 0);
+  // far: a sparse haze of fine bubbles deep in the glass
+  bubbles(ctx, lt, { x: 70, y: BAR, w: 300, h: H - 2 * BAR, n: 18, seed: 3, rise: 8, size: 1, wobble: 0.6, color: P.tanShade, hi: P.tanShade });
+  // columns: each nucleation point releases a bubble every `gap` px of rise
+  for (let c = 0; c < COLUMNS.length; c++) {
+    const [cx, sp, gap] = COLUMNS[c];
+    const base = H - BAR + 6;
+    const span = base - BAR + 10;
+    for (let i = 0; i * gap < span; i++) {
+      const d = (lt * sp + i * gap) % span; // height above the bottom
+      const y = base - d;
+      const r = d < 30 ? 0 : d < 80 ? 1 : d < 130 ? 2 : 3;
+      macroBubble(ctx, cx + sin(d * 0.05 + c) * (1 + d * 0.012), y, r);
     }
   }
-}
-
-// Pigeon (faces right): stand / step / peck. G body, g wing, n neck sheen, Y
-// feet and beak, E eye, t tail. Outlined by spr().
-const PIGEON = [
-  spr([
-    '.........GGG...',
-    '........GGEGG..',
-    '........GGGGGY.',
-    '........nnGG...',
-    '.......nnnn....',
-    '...GGGGGnnGG...',
-    '.tGgggGGGGGGG..',
-    'ttggggggGGGGGG.',
-    '.tgggggggGGGGG.',
-    '...gggggGGGGG..',
-    '.....GGGGGG....',
-    '......Y..Y.....',
-    '.....YY.YY.....',
-  ], -7, -13),
-  spr([
-    '..........GGG..',
-    '.........GGEGG.',
-    '.........GGGGGY',
-    '........nnGG...',
-    '.......nnnn....',
-    '...GGGGGnnGG...',
-    '.tGgggGGGGGGG..',
-    'ttggggggGGGGGG.',
-    '.tgggggggGGGGG.',
-    '...gggggGGGGG..',
-    '.....GGGGGG....',
-    '.....Y....Y....',
-    '....YY...YY....',
-  ], -7, -13),
-  spr([
-    '...............',
-    '...............',
-    '...............',
-    '...............',
-    '...GGGGG.......',
-    '.tGgggGGGGG....',
-    'ttggggggGGnnGG.',
-    '.tgggggggGnnGEG',
-    '...gggggGGGGGGG',
-    '.....GGGGGG..GY',
-    '...............',
-    '......Y..Y.....',
-    '.....YY.YY.....',
-  ], -7, -13),
-];
-const pigeonPal = (d) =>
-  palAt('pigeon', { K: P.black, G: P.fog, g: P.steel, n: P.green, Y: P.orange, E: P.black, t: P.slate }, d);
-/** mode: 'peck' (idle pecking), 'walk', 'bob' (dancing), or 'stand'. */
-function pigeon(ctx, x, gy, lt, d, { shades = false, flip = false, mode = 'peck' } = {}) {
-  let f = 0;
-  if (mode === 'peck') f = frame(lt + (x % 7) * 0.13, 3, 5) === 2 ? 2 : 0;
-  else if (mode === 'walk') f = frame(lt, 8, 2);
-  const bob = mode === 'bob' ? -(Math.floor(lt * 5) % 2) : 0;
-  draw(ctx, PIGEON[f], x, gy + bob, pigeonPal(d), flip);
-  if (shades && f !== 2) {
-    const ex = flip ? x - 4 : x + 4;
-    R(ctx, ex - 3, gy - 12 + bob, 7, 2, P.black);
-    R(ctx, ex - 2, gy - 12 + bob, 1, 1, P.white);
-  }
-}
-
-// --- vending machine (always full colour: it is the only colour in the world) ---
-
-const MW = 64;
-const MH = 116;
-const machineArt = () =>
-  cached('bf-machine', MW, MH, (c) => {
-    rrect(c, 0, 0, MW, MH, P.black, 3);
-    rrect(c, 1, 1, MW - 2, MH - 2, P.red, 2);
-    R(c, 3, 2, 4, MH - 6, P.pink);
-    R(c, MW - 6, 2, 4, MH - 6, P.darkRed);
-    // header sign
-    R(c, 6, 5, MW - 12, 15, P.black);
-    R(c, 7, 6, MW - 14, 13, P.white);
-    const bit = MINI_BIT();
-    const fizz = MINI_FIZZ();
-    const x0 = Math.round((MW - (bit.w + 2 + fizz.w)) / 2);
-    drawMark(c, bit, x0 + bit.w / 2, 6);
-    drawMark(c, fizz, x0 + bit.w + 2 + fizz.w / 2, 6);
-    // window of cans
-    R(c, 6, 23, 36, 58, P.black);
-    R(c, 7, 24, 34, 56, P.navy);
-    for (let row = 0; row < 4; row++) {
-      for (let col = 0; col < 4; col++) {
-        const x = 9 + col * 8;
-        const y = 26 + row * 14;
-        R(c, x, y, 6, 10, P.black);
-        R(c, x + 1, y + 1, 4, 8, P.red);
-        R(c, x + 1, y + 1, 4, 1, P.silver);
-        R(c, x + 1, y + 4, 4, 1, P.white);
-        R(c, x + 1, y + 1, 1, 8, P.pink);
-      }
-      R(c, 7, 36 + row * 14, 34, 1, P.cyan);
-    }
-    R(c, 8, 25, 2, 54, A(P.white, 0.35));
-    // button panel
-    R(c, 45, 23, 13, 58, P.black);
-    R(c, 46, 24, 11, 56, P.silver);
-    R(c, 48, 27, 7, 7, P.black);
-    R(c, 49, 28, 5, 5, P.green);
-    text(c, '8', 50, 28, { color: P.black });
-    for (let i = 0; i < 3; i++) {
-      R(c, 48, 38 + i * 8, 7, 6, P.black);
-      R(c, 49, 39 + i * 8, 5, 4, i === 0 ? P.yellow : P.white);
-    }
-    R(c, 50, 64, 3, 9, P.black);
-    R(c, 51, 65, 1, 7, P.steel);
-    // dispenser tray
-    R(c, 8, 88, 48, 18, P.black);
-    R(c, 9, 89, 46, 16, P.maroon);
-    R(c, 9, 89, 46, 4, P.darkRed);
-    R(c, 12, 96, 40, 1, P.black);
-    R(c, 4, MH - 6, MW - 8, 5, P.darkRed);
-  });
-
-function machine(ctx, x, gy, lt, { squash = 0, glowA = 1 } = {}) {
-  // light pool: the machine throws red onto the 1-bit ground
-  if (glowA > 0) {
-    dither(ctx, x - 58, gy - 8, 116, 14, P.red, 'sparse');
-    dither(ctx, x - 40, gy - 6, 80, 10, P.red, 'checker');
-    dither(ctx, x - MW / 2 - 14, gy - MH - 6, 14, MH, P.red, 'sparse');
-    dither(ctx, x + MW / 2, gy - MH - 6, 14, MH, P.red, 'sparse');
-  }
-  shadow(ctx, x, gy - 1, 36, 0.45);
-  squashArt(ctx, machineArt(), x, gy, 1 + squash * 0.6, 1 - squash);
-  // buzzing sign light
-  if (frame(lt, 10, 23) !== 7) R(ctx, x - MW / 2 + 7, gy - MH * (1 - squash) + 6, 2, 2, P.white);
-}
-
-// --- shared bits -----------------------------------------------------------------
-
-/** Depth readout: a little old-computer window ("DISPLAY") in the corner. */
-function depthWindow(ctx, x, y, depth, d, lt) {
-  const k = mapper(d);
-  const w = 104;
-  R(ctx, x, y, w, 30, P.black);
-  R(ctx, x + 1, y + 1, w - 2, 28, d === 1 ? P.cream : k(P.white));
-  for (let i = 0; i < 4; i++) R(ctx, x + 2, y + 2 + i * 2, w - 4, 1, P.black);
-  R(ctx, x + 34, y + 2, 36, 8, d === 1 ? P.cream : k(P.white));
-  micro(ctx, 'DISPLAY', x + 52, y + 4, { color: P.black, align: 'center' });
-  micro(ctx, 'COLOUR DEPTH', x + 5, y + 14, { color: P.black });
-  const cells = depth;
-  for (let i = 0; i < 8; i++) {
-    R(ctx, x + 5 + i * 12, y + 21, 10, 5, P.black);
-    if (i < cells) R(ctx, x + 6 + i * 12, y + 22, 8, 3, d === 8 ? BIT_COLS[i] : d === 1 ? P.cream : k(BIT_COLS[i]));
-  }
-  micro(ctx, `${depth}-BIT`, x + w - 5, y + 14, { color: d === 8 && Math.floor(lt * 4) % 2 ? P.red : P.black, align: 'right' });
-}
-
-/** Spray of 0/1 bits and bubbles from (x, y), age in seconds. */
-function bitSpray(ctx, x, y, age, { n = 26, power = 1, seed = 4 } = {}) {
-  const rand = mulberry32(seed);
-  for (let i = 0; i < n; i++) {
-    const a = -Math.PI / 2 + (rand() - 0.5) * 1.6;
-    const v = (60 + rand() * 90) * power;
-    const delay = rand() * 0.25;
-    const tt = age - delay;
-    if (tt <= 0 || tt > 1.4) continue;
-    const px = x + Math.cos(a) * v * tt;
-    const py = y + Math.sin(a) * v * tt + 120 * tt * tt;
-    if (i % 3 === 0) ring(ctx, px, py, 1 + (i % 2), P.white);
-    else text(ctx, i % 2 ? '1' : '0', px, py, { color: [P.yellow, P.white, P.cyan, P.pink][i % 4] });
-  }
-}
-
-// --- shots -----------------------------------------------------------------------
-
-// 1. LOW-RES: the 1-bit park; he fans himself with a newspaper, then sighs.
-const SUN_X = 400;
-const OSD = [13, 10];
-function shotLowRes(ctx, lt) {
-  const cam = Math.round(tween(lt, 0, 3.6, 58, 72, 'inOut'));
-  withCam(ctx, cam, 0, (c) => {
-    c.drawImage(park(1), 0, 0);
-    sun(c, SUN_X, 36, lt, 1);
-    heat(c, 150, 200, lt);
-    pigeon(c, 262, GROUND - 1, lt, 1);
-    const sigh = prog(lt, 2.5, 2.9) - prog(lt, 3.3, 3.6);
-    const bob = breath(lt, 2.2, 1) + Math.round(sigh * 2);
-    const fanning = 1 - prog(lt, 2.4, 2.8);
-    const fan = poseAt(lt, [[0, [[-3, 7], [5, 12]]], [0.35, [[-8, -2], [-3, -12]], 'outBack'], [2.5, [[-8, -2], [-3, -12]]], [2.95, [[-3, 7], [5, 12]], 'inOut']], Math.sin(lt * 13) * 0.5 * fanning * prog(lt, 0.3, 0.5));
-    const eyes = sigh > 0.5 ? 'closed' : blink(lt, 3) ? 'closed' : 'sleepy';
-    const pal = palAt('guy', GUY, 1);
-    const me = hero(c, BENCH_X, SEAT, { pal, hair: 'spiky', eyes, brows: 'sad', mouth: sigh > 0.3 ? 'o' : 'wavy', legs: 'none', bob, sleeves: 'short', armL: fan, armR: [[-3, 7], [4, 12]], sweat: lt });
-    // the folded newspaper he fans himself with
-    const [hx, hy] = me.handL;
-    R(c, hx - 4, hy - 15, 9, 16, P.black);
-    R(c, hx - 3, hy - 14, 7, 14, P.cream);
-    for (let i = 0; i < 4; i++) R(c, hx - 2, hy - 12 + i * 3, 5, 1, P.black);
-    disc(c, hx, hy, 3, P.black);
-    disc(c, hx, hy, 2, pal.S);
-    benchFront(c, BENCH_X, 1);
-    shins(c, BENCH_X, pal);
-  });
-  depthWindow(ctx, OSD[0], OSD[1], 1, 1, lt);
-  if (lt > 1.6) kinetic(ctx, 'LOW-RES?', 214, 52, lt - 1.6, { style: 'stamp', scale: 3, color: P.cream, outline: P.black, ow: 2, depth: 2, depthColor: P.black });
-}
-
-// 2. THE GLOW: close-up, a red light washes over him from screen right.
-function shotGlow(ctx, lt) {
-  cuBackground(ctx, 1);
-  // the glow arrives from the right as dithered light, densest at the source
-  const g = easeOut(prog(lt, 0.2, 0.8));
-  if (g > 0) {
-    const gx = Math.round(W - 150 * g);
-    dither(ctx, gx, 0, W - gx, H, P.red, 'dots');
-    dither(ctx, gx + 50, 0, W, H, P.red, 'sparse');
-    dither(ctx, gx + 100, 0, W, H, P.red, 'checker');
-  }
-  const look = tween(lt, 0.55, 0.85, 0, 1, 'outBack');
-  const wide = lt > 0.75;
-  const squint = lt > 0.6 && lt <= 0.75;
-  const s = Math.round(tween(lt, 0, 1.6, 46, 50, 'out'));
-  const cx = 176;
-  const cy = 128 + Math.round(wobble(lt, 0.75, 3, 3, 6));
-  faceCU(ctx, cx, cy, s, {
-    pal: palAt('guy', GUY, 1), hair: 'spiky', iris: P.black,
-    eyes: wide ? 'wide' : squint ? 'closed' : blink(lt, 2) ? 'closed' : 'sleepy', brows: wide ? 'up' : 'sad',
-    mouth: wide ? 'O' : 'wavy', look,
-  });
-  // red rim light on the side of his face that sees the machine
-  if (g > 0.3) {
-    const ry = Math.round(s * 0.92);
-    for (let dy = -ry + 6; dy < ry - 4; dy++) {
-      const hw = Math.floor(s * Math.sqrt(1 - (dy / (ry + 0.5)) ** 2));
-      R(ctx, cx + hw - 3, cy + dy, 2, 1, P.red);
-    }
-  }
-  // follow-through: the sweat drop flies off when his head snaps round
-  if (lt > 0.75 && lt < 1.3) {
-    const tt = lt - 0.75;
-    disc(ctx, cx - s - 6 - tt * 60, cy - 30 - tt * 50 + tt * tt * 200, 2, P.black);
-  }
-  if (lt > 0.8) {
-    const p = spring(lt - 0.8);
-    bigText(ctx, '!', 250, Math.round(60 - p * 8), { scale: 3, color: P.cream, outline: P.black, ow: 2 });
-  }
-}
-
-// 3. THE MACHINE: whip-panned to; he walks up and presses the button. CLUNK.
-function shotMachine(ctx, lt) {
-  const walk = prog(lt, 0.0, 1.1);
-  const gx = Math.round(lerp(300, 396, easeOut(walk)));
-  const cam = Math.round(tween(lt, 0, 2.4, 176, 194, 'out'));
-  const clunk = 1.55;
-  const [sx, sy] = kick(lt, clunk, 0.25, 3, 5);
-  withCam(ctx, cam + sx, sy, (c) => {
-    c.drawImage(park(1), 0, 0);
-    sun(c, SUN_X, 36, lt, 1);
-    pigeon(c, 262, GROUND - 1, lt, 1);
-    const squash = Math.max(0, wobble(lt, clunk, 0.07, 4, 7));
-    machine(c, MACHINE_X, GROUND + 2, lt, { squash });
-    // he walks, stops with a little lean, reaches with anticipation, presses
-    const press = poseAt(lt, [[1.0, 'down'], [1.2, [[-1, 10], [3, 14]], 'inOut'], [1.45, [[-8, -1], [-15, -3]], 'outBack'], [1.8, [[-8, -1], [-15, -3]]], [2.2, 'down', 'inOut']]);
-    const walking = walk < 1;
-    const bob = walking ? 0 : Math.round(wobble(lt, 1.1, 1.5, 2.5, 5));
-    hero(c, gx, GROUND, {
-      pal: palAt('guy', GUY, 1), hair: 'spiky', legs: walking ? 'walk' : 'stand', step: Math.floor(lt * 7), sleeves: 'short',
-      eyes: lt > clunk ? 'wide' : 'open', brows: 'up', mouth: lt > clunk ? 'O' : 'smile', look: 1, armL: 'down', armR: press, bob,
-    });
-    // the can lands in the tray
-    if (lt > clunk) {
-      const tx = MACHINE_X - 6;
-      const ty = GROUND + 2 - MH + 95 + Math.round(Math.min(0, -8 + (lt - clunk) * 80));
-      clipRect(c, MACHINE_X - 23, GROUND + 2 - MH + 89, 46, 16);
-      R(c, tx - 4, ty - 6, 9, 13, P.black);
-      R(c, tx - 3, ty - 5, 7, 11, P.red);
-      R(c, tx - 3, ty - 5, 7, 2, P.silver);
-      c.restore();
-    }
-  });
-  if (lt > clunk) kinetic(ctx, 'CLUNK!', 158, 62, lt - clunk, { style: 'stamp', scale: 3, color: P.cream, outline: P.black, ow: 2, depth: 2 });
-  depthWindow(ctx, OSD[0], OSD[1], 1, 1, lt);
-}
-
-// 4. CRACK: extreme close-up on the tab. Anticipation, then PSSHT.
-function finger(ctx, x, y, len, pal) {
-  rrect(ctx, x - 1, y - 1, len + 2, 11, P.black, 3);
-  rrect(ctx, x, y, len, 9, pal.S, 3);
-  R(ctx, x + 2, y + 7, len - 5, 1, pal.s);
-  R(ctx, x + len - 9, y + 2, 1, 5, P.black);
-  R(ctx, x + 3, y + 1, len - 12, 1, P.white);
-}
-function shotCrack(ctx, lt) {
-  const pal = palAt('guy', GUY, 1);
-  R(ctx, 0, 0, W, H, P.cream);
-  dither(ctx, 0, 0, W, 24, P.black, 'checker');
-  dither(ctx, 0, 24, W, 20, P.black, 'sparse');
-  dither(ctx, 0, 180, W, 36, P.black, 'sparse');
-  const pop = 0.75;
-  const age = lt - pop;
-  // comic burst lines from the tab for a beat
-  if (age > 0 && age < 0.35) {
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 14) * Math.PI * 2;
-      const r0 = 50 + age * 120;
-      line(ctx, 196 + Math.cos(a) * r0, 66 + Math.sin(a) * r0 * 0.7, 196 + Math.cos(a) * (r0 + 26), 66 + Math.sin(a) * (r0 + 26) * 0.7, P.black, 2);
-    }
-  }
-  const [sx, sy] = kick(lt, pop, 0.3, 3, 9);
-  const sq = wobble(lt, pop, 0.07, 5, 7);
-  const r = 40;
-  const cx = 192 + sx;
-  const top = 66 + sy;
-  // palm behind the can and the wrist running out of shot
-  stroke(ctx, [[cx - r - 4, top + 100], [cx - r - 30, H + 20]], 22, pal.S, P.black);
-  rrect(ctx, cx - r - 18, top + 44, 30, 66, P.black, 6);
-  rrect(ctx, cx - r - 17, top + 45, 28, 64, pal.S, 6);
-  dither(ctx, cx - r - 17, top + 45, 8, 64, P.black, 'sparse');
-  R(ctx, cx - r - 52, H - 14, 46, 14, P.black);
-  dither(ctx, cx - r - 51, H - 13, 44, 12, P.cream, 'checker');
-  ctx.save();
-  ctx.translate(cx, top + 122);
-  ctx.scale(1 - sq * 0.5, 1 + sq);
-  ctx.translate(-cx, -(top + 122));
-  const tab = lt < pop ? tween(lt, 0.3, pop, 0, 0.45, 'in') - prog(lt, 0.2, 0.32) * 0.1 + prog(lt, 0.32, 0.4) * 0.1 : 1;
-  can(ctx, cx, top, r, 0.5, { tab });
-  ctx.restore();
-  // fingers wrapped round the front, a little curved
-  [[0, 24], [12, 26], [24, 24], [36, 19]].forEach(([dy, len], i) => finger(ctx, cx - r - 6 + (i === 0 ? 1 : 0), top + 52 + dy, len, pal));
-  // the other hand comes in from the top right: its index finger hooks the tab
-  // and pulls (anticipation: a tiny push down first)
-  const reach = easeOut(prog(lt, 0, 0.28));
-  const push = prog(lt, 0.22, 0.32) - prog(lt, 0.32, 0.42);
-  const lift = lt < pop ? tween(lt, 0.42, pop, 0, 5, 'in') - push * 2 : 7 - wobble(lt, pop, 3, 3, 6);
-  const tipX = cx + 10 + Math.round((1 - reach) * 80);
-  const tipY = top + 6 - Math.round(lift) - Math.round((1 - reach) * 40);
-  const curl = lt > pop ? 3 : 0; // the finger curls as the tab gives
-  const mid = [tipX + 9, tipY - 9 - curl];
-  const base = [tipX + 22, tipY - 16];
-  // back of the hand with curled fingers along its edge
-  oval(ctx, base[0] + 20, base[1] - 14, 24, 19, P.black);
-  oval(ctx, base[0] + 20, base[1] - 14, 23, 18, pal.S);
-  R(ctx, base[0] + 6, base[1] - 26, 20, 1, P.white);
-  for (let i = 0; i < 3; i++) {
-    disc(ctx, base[0] + 8 + i * 10, base[1] + 3, 6, P.black);
-    disc(ctx, base[0] + 8 + i * 10, base[1] + 3, 5, pal.S);
-    R(ctx, base[0] + 4 + i * 10, base[1] + 6, 8, 1, pal.s);
-  }
-  dither(ctx, base[0] + 22, base[1] - 32, 18, 30, P.black, 'sparse');
-  stroke(ctx, [base, mid, [tipX, tipY]], 8, pal.S, P.black);
-  R(ctx, mid[0] - 2, mid[1] - 1, 4, 1, P.black);
-  R(ctx, tipX - 3, tipY - 3, 5, 4, P.black);
-  R(ctx, tipX - 2, tipY - 2, 3, 2, P.white);
-  if (age > 0) {
-    // foam bubbles over the lid, then settles
-    const foam = Math.min(1, age * 4) * (1 - prog(age, 0.6, 1.4) * 0.6);
-    const rand = mulberry32(17);
-    for (let i = 0; i < 16; i++) {
-      const fx = cx + 4 + (rand() - 0.5) * 36 * foam;
-      const fy = top + 8 - rand() * 18 * foam - Math.sin(age * 8 + i) * 1.5;
-      const fr = Math.max(1, Math.round((2 + rand() * 4) * foam));
-      disc(ctx, fx, fy, fr + 1, P.black);
-      disc(ctx, fx, fy, fr, P.white);
-    }
-    if (age < 0.5) cloud(ctx, cx + 4, top - 12 - age * 40, Math.round(8 + age * 34), P.white, P.silver);
-    bitSpray(ctx, cx + 4, top + 2, age, { n: 56, power: 1.4 });
-    kinetic(ctx, 'PSSHT!', 314, 40, age, { style: 'stamp', scale: 3, color: P.white, outline: P.black, ow: 2, depth: 3, depthColor: P.red });
-  }
-}
-
-/** Close-up background of the park at depth d (simple, behind a face). */
-function cuBackground(ctx, d) {
-  const k = mapper(d);
-  if (d === 1) R(ctx, 0, 0, W, H, P.cream);
-  else bands(ctx, 0, 0, W, 140, [k(P.blue), k(P.cyan), k(P.cream)]);
-  for (let x = -20; x < W; x += 46) {
-    disc(ctx, x, 120, 26, d === 1 ? P.black : k(P.darkGreen));
-    disc(ctx, x - 6, 112, 14, d === 1 ? P.black : k(P.green));
-    if (d === 1) dither(ctx, x - 22, 96, 44, 22, P.cream, 'dots');
-  }
-  R(ctx, 0, 140, W, 76, d === 1 ? P.cream : k(P.green));
-  if (d === 1) {
-    dither(ctx, 0, 140, W, 8, P.black, 'checker');
-    dither(ctx, 0, 148, W, 30, P.black, 'sparse');
-  } else dither(ctx, 0, 140, W, 8, k(P.darkGreen), 'checker');
-}
-
-/** The can seen end-on while he drinks (its base points at the camera). */
-function canBottom(ctx, cx, cy, r) {
-  disc(ctx, cx, cy + 6, r + 1, P.black);
-  disc(ctx, cx, cy + 6, r, P.darkRed);
-  disc(ctx, cx, cy, r + 1, P.black);
-  disc(ctx, cx, cy, r, P.silver);
-  disc(ctx, cx, cy, r - 3, P.fog);
-  disc(ctx, cx + 1, cy + 1, r - 6, P.steel);
-  disc(ctx, cx, cy, r - 7, P.fog);
-  R(ctx, cx - r + 3, cy - 2, 3, 3, P.white);
-  micro(ctx, '8', cx, cy - 2, { color: P.slate, align: 'center' });
-}
-
-// 5. UPGRADE: the sip; the frame rescans from the top at each new depth.
-const UPGRADES = [[0.4, 2], [1.2, 4], [2.0, 8]];
-function drinker(ctx, lt, d) {
-  const k = mapper(d);
-  cuBackground(ctx, d);
-  if (d === 8) {
-    sunburst(ctx, 192, 118, lt * 0.06, 12, P.yellow, P.orange);
-    for (let i = 0; i < 30; i++) {
-      const x = (i * 71 + lt * 20 * (1 + (i % 3))) % W;
-      const y = (i * 37 + lt * 60 * (1 + (i % 2))) % H;
-      R(ctx, x, y, 2, 2, BIT_COLS[i % 8]);
-    }
-  }
-  const done = prog(lt, 2.35, 2.7);
-  const happy = lt > 2.15;
-  faceCU(ctx, 192, 118 - Math.round(done * 2), 44, {
-    pal: palAt('guy', GUY, d), hair: 'spiky', iris: k(P.navy),
-    eyes: happy ? (done > 0.5 ? 'stars' : 'happy') : 'closed', brows: happy ? 'up' : 'flat',
-    mouth: done > 0.4 ? 'grin' : 'flat', blush: d === 8,
-  });
-  // the can tips down out of shot once he is done
-  const cy = 146 + Math.round(easeIn(done) * 90);
-  canBottom(ctx, 192, cy, 18);
-  for (const sd of [-1, 1]) {
-    disc(ctx, 192 + sd * 21, cy + 6, 7, P.black);
-    disc(ctx, 192 + sd * 21, cy + 6, 6, k(P.skin));
-  }
-}
-function shotUpgrade(ctx, lt) {
-  let d = 1;
-  let scan = -1;
-  let from = 1;
-  for (const [t0, depth] of UPGRADES) {
-    if (lt >= t0 + 0.35) d = depth;
-    else if (lt >= t0) {
-      from = d;
-      d = depth;
-      scan = (lt - t0) / 0.35;
-    }
-  }
-  if (scan < 0) drinker(ctx, lt, d);
-  else {
-    // CRT-style redraw: rows above the beam are already at the new depth
-    const y = Math.round(easeOut(scan) * H);
-    drinker(ctx, lt, from);
-    clipRect(ctx, 0, 0, W, y);
-    drinker(ctx, lt, d);
-    ctx.restore();
-    R(ctx, 0, y - 1, W, 2, P.white);
-    R(ctx, 0, y + 1, W, 1, A(P.white, 0.4));
-  }
-  const label = UPGRADES.filter(([t0]) => lt >= t0 + 0.2).pop();
-  if (label) {
-    const [t0, depth] = label;
-    const big = depth === 8;
-    kinetic(ctx, big ? '8-BIT!' : `${depth}-BIT`, 312, big ? 62 : 66, lt - t0 - 0.2, {
-      style: 'stamp', scale: big ? 4 : 3, color: big ? P.yellow : mapper(depth)(P.white), outline: P.black, ow: 2, depth: big ? 3 : 2, depthColor: big ? P.red : P.black,
-    });
-  }
-  depthWindow(ctx, OSD[0], OSD[1], d, d, lt);
-}
-
-// 6. PARTY: full colour; he dances on the bench and the whole park joins in.
-const GRANNY = { S: P.skin, s: P.skinShade, H: P.silver, h: P.white, E: P.fog, T: P.magenta, t: P.purple, L: P.magenta, C: P.white, X: P.magenta, D: P.purple, d: P.maroon, B: P.maroon };
-const KID = { S: P.tanShade, s: P.brown, H: P.black, h: P.slate, E: P.black, T: P.cyan, t: P.blue, L: P.cyan, C: P.cyan, X: P.cyan, b: P.navy, Y: P.navy, P: P.navy, p: P.ink, B: P.white, A: P.yellow, a: P.orange };
-const UP = [[-5, -7], [-8, -15]];
-const OUT = [[-7, 1], [-14, -2]];
-const HIP = [[-6, 7], [0, 12]];
-function shotParty(ctx, lt) {
-  const cam = Math.round(tween(lt, 0, 4.8, 92, 76, 'inOut'));
-  const beat = (lt * 150) / 60; // beats since the cut
-  const ph = beat % 2;
-  const hop = -Math.round(Math.abs(Math.sin(beat * Math.PI)) * 5);
-  withCam(ctx, cam, 0, (c) => {
-    c.drawImage(park(8), 0, 0);
-    sun(c, SUN_X, 36, lt, 8);
-    for (let i = 0; i < 3; i++) cloud(c, ((i * 190 + lt * 6) % 620) - 30, 22 + i * 14, 12 + i * 2, P.white, P.silver);
-    // flowers bloom along the path edge, one after another
-    for (let i = 0; i < 12; i++) {
-      const fx = 20 + i * 44 + ((i * 13) % 11);
-      const s = spring(lt - 0.1 - i * 0.06);
-      if (s <= 0) continue;
-      const fy = 162;
-      R(c, fx, fy - Math.round(8 * Math.min(1, s)), 1, Math.round(8 * Math.min(1, s)), P.darkGreen);
-      disc(c, fx, fy - Math.round(9 * s), Math.max(1, Math.round(3 * s)), BIT_COLS[i % 8]);
-      R(c, fx, fy - Math.round(9 * s), 1, 1, P.white);
-    }
-    // granny on the path: hip sway, one arm up on the off-beat
-    const gIn = easeOut(prog(lt, 0.3, 1.0));
-    const gx = Math.round(lerp(96, 128, gIn));
-    hero(c, gx, GROUND, {
-      pal: palAt('granny', GRANNY, 8), hair: 'bun', glasses: true, legs: 'skirt', eyes: 'happy', mouth: 'open', blush: true,
-      armL: poseAt((beat + 1) % 2, [[0, HIP], [1, UP, 'inOutBack'], [2, HIP, 'inOutBack']]), armR: HIP, bob: Math.round(Math.sin(beat * Math.PI) * 1.5),
-    });
-    // the kid hops on the beat
-    const kx = Math.round(lerp(330, 292, easeOut(prog(lt, 0.5, 1.2))));
-    const kj = Math.round(Math.abs(Math.sin(beat * Math.PI)) * 6);
-    hero(c, kx, GROUND - kj, {
-      pal: palAt('kid', KID, 8), hair: 'puff', small: true, legs: kj > 2 ? 'walk' : 'stand', step: 1, eyes: 'happy', mouth: 'grin',
-      armL: kj > 3 ? UP : OUT, armR: kj > 3 ? UP : OUT,
-    });
-    pigeon(c, 252, GROUND - 1, lt, 8, { shades: true, mode: 'bob' });
-    // him: dancing on the bench, can held high
-    const armL = poseAt(ph, [[0, UP], [1, OUT, 'inOutBack'], [2, UP, 'inOutBack']]);
-    const armR = poseAt(ph, [[0, OUT], [1, UP, 'inOutBack'], [2, OUT, 'inOutBack']]);
-    const me = hero(c, BENCH_X, SEAT - 3 + hop, {
-      pal: palAt('guy', GUY, 8), hair: 'spiky', legs: 'stand', sleeves: 'short', eyes: blink(lt, 5) ? 'closed' : 'happy',
-      mouth: 'grin', blush: true, armL, armR, look: Math.round(Math.sin(beat * Math.PI)),
-    });
-    const [hx, hy] = me.handR;
-    R(c, hx - 5, hy - 15, 11, 16, P.black);
-    R(c, hx - 4, hy - 14, 9, 14, P.red);
-    R(c, hx - 4, hy - 14, 9, 2, P.silver);
-    R(c, hx - 4, hy - 9, 9, 2, P.white);
-    if (Math.floor(beat * 2) % 2 === 0) for (let i = 0; i < 3; i++) R(c, hx - 2 + i * 2, hy - 20 - i * 3, 1, 1, P.white);
-    benchFront(c, BENCH_X, 8);
-  });
-  // colour confetti
-  for (let i = 0; i < 46; i++) {
-    const x = (i * 83 + Math.sin(lt * 2 + i) * 8 + 1000) % W;
-    const y = ((i * 41 + lt * (40 + (i % 5) * 9)) % (H + 20)) - 10;
-    R(ctx, x, y, 2, 2, BIT_COLS[i % 8]);
-  }
-  // 256 TASTES badge on "two hundred and fifty-six"
-  const bp = spring(lt - 0.75, 1.4, 4.5);
-  const rr = badge(ctx, 322, 98, 32, bp, { n: 16, fill: P.yellow, rot: lt * 0.4, ring: P.orange });
-  if (rr > 20) {
-    bigText(ctx, '256', 322, 84, { scale: 3, color: P.red, outline: P.white, ow: 1, align: 'center' });
-    micro(ctx, 'TASTES!', 322, 108, { color: P.black, align: 'center' });
-  }
-  depthWindow(ctx, OSD[0], OSD[1], 8, 8, lt);
-}
-
-// 7. HERO CAN: the turntable, the light sweep, ice.
-function heroSet(ctx, lt) {
-  bands(ctx, 0, 0, W, 166, [P.black, P.maroon]);
-  // radial dithered glow behind the product
-  clipCircle(ctx, 192, 104, 78);
-  dither(ctx, 110, 20, 170, 150, P.darkRed, 'sparse');
-  ctx.restore();
-  clipCircle(ctx, 192, 104, 54);
-  dither(ctx, 130, 40, 130, 120, P.darkRed, 'checker');
-  ctx.restore();
-  R(ctx, 0, 166, W, 50, P.black);
-  R(ctx, 0, 166, W, 1, P.maroon);
-  spotlight(ctx, 192, 166, { top: -4, w0: 16, w1: 56, a: 0.05, pool: P.maroon, poolRx: 60 });
-  // fizz bits rising behind
-  for (let i = 0; i < 14; i++) {
-    const age = (lt * 0.8 + i / 14) % 1;
-    const x = 192 + Math.sin(age * 9 + i) * (38 + i * 3);
-    text(ctx, i % 2 ? '1' : '0', x, 150 - age * 140, { color: i % 3 ? P.pink : P.yellow });
-  }
-}
-/** Ice-cold: condensation drops sliding down the front and a cold mist at the base. */
-function frost(ctx, cx, top, r, lt) {
-  const lh = Math.round(r * 2.6);
-  for (let i = 0; i < 6; i++) {
-    const x = cx - r + 6 + ((i * 17) % (2 * r - 10));
-    const ph = (lt * (0.25 + (i % 3) * 0.08) + i * 0.37) % 1;
-    const y = top + 14 + Math.round(ph * (lh - 18));
-    R(ctx, x, y, 2, 2, P.white);
-    R(ctx, x, y + 2, 2, 1, P.pink);
-    R(ctx, x, y - 3, 1, 3, A(P.white, 0.35));
-  }
+  // mid: a few larger bubbles drifting up in slow motion
   for (let i = 0; i < 5; i++) {
-    const ph = (lt * 0.5 + i / 5) % 1;
-    const sd = i % 2 ? 1 : -1;
-    dither(ctx, cx + sd * (r - 6 + ph * 34) - 8, top + lh + 2 - ph * 6, 16, 4, P.white, ph < 0.5 ? 'checker' : 'sparse');
+    const sp = 6 + hash01(i, 21) * 6;
+    const span = H + 40;
+    const y = H + 20 - ((lt * sp + hash01(i, 22) * span) % span);
+    const x = 90 + hash01(i, 23) * 270 + sin(lt * 0.9 + i) * 2;
+    macroBubble(ctx, x, y, 3 + round(hash01(i, 24) * 3));
   }
+  // the hero bubble rises through the middle of frame
+  const hy = tween(lt, 0.4, 4.4, 200, 66, 'inOut');
+  macroBubble(ctx, 186 + sin(lt * 1.1) * 3, hy, 11);
+  // near: out-of-focus bubbles drifting past the lens
+  for (let i = 0; i < 3; i++) {
+    const span = H + 80;
+    const y = H + 40 - ((lt * 20 + hash01(i, 31) * span) % span);
+    const x = 100 + hash01(i, 32) * 280;
+    const r = 16 + round(hash01(i, 33) * 10);
+    disc(ctx, x, y, r, A(P.tanShade, 0.07));
+    ring(ctx, x, y, r, A(P.yellow, 0.1));
+  }
+  ctx.drawImage(glassWall(), 0, 0);
+  vignette(ctx, 0.75);
+  // fade up from black
+  if (lt < 1.6) R(ctx, 0, 0, W, H, A(P.black, 1 - smooth(lt / 1.6)));
 }
-function shotHero(ctx, lt) {
-  heroSet(ctx, lt);
-  const rise = Math.round(tween(lt, 0, 0.8, 10, 0, 'out'));
-  const r = 32;
-  const top = 64 + rise;
-  const turn = 0.32 + lt * 0.28;
-  // reflection on the glossy floor
-  clipRect(ctx, 0, 167, W, 49);
-  ctx.save();
-  ctx.globalAlpha = 0.25;
-  ctx.translate(0, 2 * 167);
-  ctx.scale(1, -1);
-  can(ctx, 192, top, r, turn);
-  ctx.restore();
-  ctx.restore();
-  shadow(ctx, 192, 167, 36, 0.5);
-  can(ctx, 192, top, r, turn);
-  // diagonal light sweep across the can
-  const g = prog(lt, 0.6, 1.2);
-  if (g > 0 && g < 1) {
-    clipRect(ctx, 192 - r, top, 2 * r, Math.round(r * 2.6) + 8);
-    for (let yy = 0; yy < 80; yy += 2) R(ctx, 192 - r - 20 + Math.round(g * (2 * r + 50)) + Math.round((80 - yy) * 0.4) - 16, top + yy, 6, 2, A(P.white, 0.6));
-    ctx.restore();
-  }
-  frost(ctx, 192, top + Math.max(2, Math.round(r * 0.28)), r, lt);
-  sparkle(ctx, 172, 98 + rise, twinkle(lt, 0.1), P.white);
-  sparkle(ctx, 212, 132 + rise, twinkle(lt, 0.5), P.white);
-  if (lt > 0.5) {
-    const bp = spring(lt - 0.5, 1.5, 5);
-    const rr = badge(ctx, 296, 62, 26, bp, { n: 12, fill: P.yellow, rot: -0.2 });
-    if (rr > 16) {
-      micro(ctx, 'NEW', 296, 51, { color: P.red, align: 'center' });
-      text(ctx, '8-BIT', 296, 58, { color: P.black, align: 'center' });
-      micro(ctx, 'RECIPE', 296, 68, { color: P.red, align: 'center' });
+
+// --- 2. CELLAR ---------------------------------------------------------------------
+
+const CW = 560; // the hall is wider than the frame so the camera can travel
+
+const hallBack = lazy(() =>
+  cached('bf-hall-back', CW, H, (c) => {
+    c.drawImage(gradient('bf-hall-wall', CW, H, { kind: 'vertical', ramp: [P.black, P.ink, P.black], from: 0.05, to: 1, seam: 0.4 }), 0, 0);
+    // concrete panels
+    for (let x = 0; x < CW; x += 72) R(c, x, 30, 1, 140, P.black);
+    R(c, 0, 92, CW, 1, P.black);
+    // the high industrial window: the only light in the hall, with its haze
+    const wx = 76;
+    const wy = 36;
+    for (let i = 4; i >= 1; i--) oval(c, wx + 30, wy + 22, 30 + i * 9, 22 + i * 7, A(P.steel, 0.05));
+    R(c, wx - 2, wy - 2, 64, 47, P.black);
+    for (let gy = 0; gy < 3; gy++) {
+      for (let gx = 0; gx < 5; gx++) {
+        const px = wx + gx * 12;
+        const py = wy + gy * 15;
+        const dirty = hash01(gx + gy * 5, 4) < 0.25;
+        R(c, px, py, 11, 14, dirty ? P.slate : gy === 0 ? P.fog : P.steel);
+        R(c, px, py, 11, 1, dirty ? P.steel : P.silver);
+        if (!dirty && (gx + gy) % 2) R(c, px + 1, py + 2, 1, 10, A(P.silver, 0.5));
+      }
     }
+    // cable trays along the ceiling
+    R(c, 0, 24, CW, 3, P.black);
+    R(c, 0, 27, CW, 1, P.ink);
+    // floor: polished concrete, darker away from the window
+    c.drawImage(gradient('bf-hall-floor', CW, 30, { kind: 'vertical', ramp: [P.ink, P.black], seam: 0.5 }), 0, 168);
+    R(c, 0, 168, CW, 1, P.slate);
+  }),
+);
+
+/** A rack cabinet: frame, 1U rails, bottles resting where the servers were. */
+function paintRack(c, x, y, w, h, s, seed) {
+  R(c, x, y, w, h, P.black);
+  R(c, x, y, 2, h, P.ink);
+  R(c, x + w - 2, y, 2, h, P.ink);
+  R(c, x, y, w, 2, P.ink);
+  const rows = Math.floor((h - 10) / (s * 2 + 4));
+  const cols = Math.floor((w - 8) / (s * 2 + 3));
+  const ox = x + round((w - cols * (s * 2 + 3)) / 2) + s + 1;
+  for (let j = 0; j < rows; j++) {
+    const yy = y + 6 + j * (s * 2 + 4) + s;
+    R(c, x + 3, yy + s + 1, w - 6, 1, P.ink); // shelf rail
+    if (hash01(j, seed) < 0.18) {
+      // an old server left in the rack: dark faceplate, dead lights
+      R(c, x + 4, yy - s, w - 8, s * 2, P.ink);
+      for (let v = x + 8; v < x + w - 10; v += 3) R(c, v, yy - 1, 1, 2, P.black);
+      continue;
+    }
+    for (let i = 0; i < cols; i++) {
+      const bx = ox + i * (s * 2 + 3);
+      if (hash01(i + j * 31, seed + 9) < 0.08) continue; // one already drunk
+      // a bottle lying on its side, base towards us: dark glass, amber inside, a glint
+      disc(c, bx, yy, s, P.black);
+      if (s >= 3) {
+        disc(c, bx, yy, s - 1, P.maroon);
+        disc(c, bx + 1, yy + 1, s - 3, P.brown);
+        disc(c, bx + 1, yy + 1, max(0, s - 4), P.maroon); // the punt
+        R(c, bx - round(s * 0.5), yy - round(s * 0.55), 1, 1, P.tanShade);
+      } else R(c, bx, yy, 1, 1, P.brown);
+    }
+    if (s >= 4 && j % 2 === 0) R(c, x + 6, yy + s + 2, 5, 1, P.cream); // a vintage tag on the rail
   }
 }
 
-// 8. END SLATE, with the button gag: a 1-bit pigeon waddles in, pecks the can
-// and gets its colour.
-function slateBg(ctx, lt) {
-  sunburst(ctx, 96, 112, lt * 0.03, 12, P.red, P.darkRed);
+const hallRacks = lazy(() =>
+  cached('bf-hall-racks', CW, H, (c) => {
+    for (let k = 0; k < 9; k++) paintRack(c, 150 + k * 58, 74, 46, 96, 2, k + 1);
+  }),
+);
+const hallNear = lazy(() =>
+  cached('bf-hall-near', 150, H, (c) => {
+    paintRack(c, 4, 26, 142, 170, 5, 77);
+    // status strip down the post: one light still on (drawn live)
+    for (let y = 40; y < 180; y += 9) R(c, 8, y, 1, 2, P.black);
+  }),
+);
+
+// the window beam falls from the window to the floor on the right
+const BEAM = { x0: 106, y0: 52, x1: 214, y1: 186, w0: 56, w1: 150 };
+function inBeam(x, y) {
+  const s = (y - BEAM.y0) / (BEAM.y1 - BEAM.y0);
+  if (s < 0 || s > 1) return false;
+  const cx = BEAM.x0 + (BEAM.x1 - BEAM.x0) * s;
+  const hw = (BEAM.w0 + (BEAM.w1 - BEAM.w0) * s) / 2;
+  return abs(x - cx) < hw * 0.8;
 }
-function slateProduct(ctx, lt) {
-  oval(ctx, 96, 152, 46, 7, P.maroon);
-  oval(ctx, 96, 151, 44, 5, P.black);
-  shadow(ctx, 96, 151, 26, 0.5);
-  const bob = Math.round(Math.sin(lt * 2.4) * 1.5);
-  const hit = 3.0; // the peck
-  const jolt = Math.round(wobble(lt, hit, 2, 4, 6));
-  can(ctx, 96 + jolt, 70 + bob, 24, 0.5 + Math.sin(lt * 0.8) * 0.06);
-  sparkle(ctx, 80, 92 + bob, twinkle(lt, 0.1), P.white);
-  sparkle(ctx, 116, 128 + bob, twinkle(lt, 0.45), P.white);
-  if (lt > 1.6) {
-    const x = Math.round(Math.min(58, -14 + (lt - 1.6) * 40));
-    const walking = x < 58;
-    const pecking = lt > hit - 0.3 && lt < hit + 0.1;
-    const gy = 151;
-    const scan = prog(lt, hit + 0.05, hit + 0.45);
-    const mode = walking ? 'walk' : pecking ? 'peck' : 'stand';
-    pigeon(ctx, x, gy, walking ? lt : 0.13 * 2, scan >= 1 ? 8 : 1, { mode, shades: false });
-    if (scan > 0 && scan < 1) {
-      // its own little rescan, top to bottom
-      clipRect(ctx, x - 12, gy - 16, 24, Math.round(18 * scan));
-      pigeon(ctx, x, gy, 0, 8, { mode });
-      ctx.restore();
+
+function shotCellar(ctx, lt) {
+  const cam = tween(lt, 0, 4.8, 0, 64, 'inOut');
+  ctx.drawImage(hallBack(), -round(cam * 0.35), 0);
+  // the beam and its dust ride with the back wall
+  ctx.save();
+  ctx.translate(-round(cam * 0.35), 0);
+  beam(ctx, BEAM.x0, BEAM.y0, BEAM.x1, BEAM.y1, BEAM.w0, BEAM.w1, { color: P.silver, alpha: 0.05 });
+  beam(ctx, BEAM.x0 + 4, BEAM.y0, BEAM.x1 + 10, BEAM.y1, BEAM.w0 * 0.5, BEAM.w1 * 0.5, { color: P.cream, alpha: 0.035 });
+  motes(ctx, lt, { x: 60, y: 50, w: 200, h: 140, n: 46, seed: 9, drift: 5, fall: 1.2, color: P.cream, alpha: 0.75, inside: inBeam });
+  // the beam's pool on the floor
+  oval(ctx, BEAM.x1 + 6, 180, 70, 6, A(P.cream, 0.05));
+  ctx.restore();
+  ctx.drawImage(hallRacks(), -round(cam * 0.7), 0);
+  // a bottle in the far racks catches the beam
+  glintStar(ctx, 268 - round(cam * 0.7), 103, ((lt + 0.4) % 3.2) / 1.1, P.cream);
+  // near rack slides past on the right, sharp
+  const nx = 300 - round(cam * 1.25);
+  ctx.drawImage(hallNear(), nx, 0);
+  // the one status light still on, breathing slowly
+  const g = 0.35 + 0.65 * (0.5 + 0.5 * sin(lt * 1.7));
+  R(ctx, nx + 8, 76, 1, 2, A(P.green, g));
+  R(ctx, nx + 7, 75, 3, 4, A(P.green, g * 0.15));
+  // foreground post: out of focus, crossing fast
+  const fx = 470 - round(cam * 2.4);
+  R(ctx, fx, 0, 26, H, A(P.black, 0.85));
+  R(ctx, fx + 26, 0, 3, H, A(P.black, 0.45));
+  vignette(ctx, 0.6);
+  // documentary caption, bottom left above the bar
+  fadeUp(ctx, 'SERVER FARM 7', 20, H - BAR - 22, lt - 1.2, { face: 'body', color: P.cream, track: 2, dur: 1 });
+  fadeUp(ctx, 'SLOUGH, BERKSHIRE', 20, H - BAR - 11, lt - 1.5, { face: 'micro', color: P.fog, track: 1, dur: 1 });
+}
+
+// --- 3. POUR -----------------------------------------------------------------------
+
+const pourBg = lazy(() => gradient('bf-pour', W, H, { cx: 200, cy: 92, rx: 230, ry: 150, ramp: [P.black, P.maroon, P.brown], gamma: 1.6, seam: 0.45 }));
+const barTop = lazy(() => gradient('bf-bartop', W, 48, { kind: 'vertical', ramp: [P.brown, P.maroon, P.black], seam: 0.5 }));
+
+// A heavy cut-crystal tumbler: wider than tall, a thick base, diamond cuts
+// round the lower half (a label texture of facet lines, so they wrap and turn).
+const TUMBLER_KEYS = [[0, 35], [0.86, 33], [1, 33]];
+const BASE_KEYS = [[0, 33], [0.7, 33], [1, 31.5]];
+const TPROF = new Float32Array(260);
+const BPROF = new Float32Array(60);
+const TGLASS = { top: 0, edge: 1.2, wall: 1, edgeColor: P.tanShade };
+const T_STRIPES = [[-0.64, 0.05, P.cream, 0.04, 0.5], [-0.64, 0.03, P.cream, 0.62, 0.98], [0.76, 0.03, P.cream, 0.08, 0.9]];
+const CUTS = { cv: null, top: 0, h: 0, turn: 0.3 };
+const TUMBLER_O = { rows: 0, ramp: AMBER, ambient: 0.16, glass: TGLASS, stripes: T_STRIPES, label: CUTS, rim: RIM, tilt: 0.2, seam: 0.5 };
+const BASE_O = { rows: 0, ramp: CRYSTAL, ambient: 0.3, stripes: T_STRIPES, rim: false, tilt: 0.2, seam: 0.5 };
+const cutsTex = lazy(() =>
+  cached('bf-cuts', 220, 28, (c) => {
+    // a band of diamond cuts: two families of diagonals, brighter where they cross
+    for (let y = 0; y < 28; y++) {
+      for (let x = 0; x < 220; x++) {
+        const a = (x + y) % 14 === 0;
+        const b = (x - y + 280) % 14 === 0;
+        if (a && b) R(c, x, y, 1, 1, P.cream);
+        else if (a || b) R(c, x, y, 1, 1, y < 3 || y > 24 ? P.brown : P.tanShade);
+      }
     }
-    if (scan >= 1) {
-      micro(ctx, '8-BIT!', x + 1, 126 - Math.round(spring(lt - hit - 0.45) * 6), { color: P.yellow, align: 'center' });
-      sparkle(ctx, x - 9, 132, twinkle(lt, 0.2), P.white);
+    R(c, 0, 0, 220, 1, P.tanShade);
+  }),
+);
+
+const ICE = [[0, 0], [0, 0], [0, 0], [0, 0]];
+const ICE_L = [[0, 0], [0, 0], [0, 0], [0, 0]];
+const ICE_R = [[0, 0], [0, 0], [0, 0], [0, 0]];
+/** A hand-chipped cube: top face and two front faces, translucent with crisp lit edges. */
+function iceCube(ctx, x, y, s, a, strong) {
+  for (let k = 0; k < 4; k++) {
+    const ang = a + (k * PI) / 2 + (hash01(k, 5) - 0.5) * 0.22;
+    const rr = s * (0.92 + hash01(k, 6) * 0.16);
+    ICE[k][0] = x + cos(ang) * rr;
+    ICE[k][1] = y + sin(ang) * rr * 0.42;
+  }
+  // the lowest corner faces the camera; side faces hang below the two front edges
+  let f = 0;
+  for (let k = 1; k < 4; k++) if (ICE[k][1] > ICE[f][1]) f = k;
+  const l = ICE[(f + 1) % 4];
+  const rr = ICE[(f + 3) % 4];
+  const c = ICE[f];
+  const d = s * 1.05;
+  ICE_L[0][0] = l[0]; ICE_L[0][1] = l[1]; ICE_L[1][0] = c[0]; ICE_L[1][1] = c[1];
+  ICE_L[2][0] = c[0]; ICE_L[2][1] = c[1] + d; ICE_L[3][0] = l[0]; ICE_L[3][1] = l[1] + d * 0.9;
+  ICE_R[0][0] = c[0]; ICE_R[0][1] = c[1]; ICE_R[1][0] = rr[0]; ICE_R[1][1] = rr[1];
+  ICE_R[2][0] = rr[0]; ICE_R[2][1] = rr[1] + d * 0.95; ICE_R[3][0] = c[0]; ICE_R[3][1] = c[1] + d;
+  const k = strong ? 1 : 0.45;
+  poly(ctx, ICE_L, A(P.cream, 0.24 * k));
+  poly(ctx, ICE_R, A(P.yellow, 0.14 * k));
+  poly(ctx, ICE, A(P.white, 0.32 * k));
+  // lit edges: the top rim and the front corner
+  ctx.fillStyle = A(P.white, 0.85 * k);
+  for (let e = 0; e < 4; e++) {
+    const p0 = ICE[e];
+    const p1 = ICE[(e + 1) % 4];
+    const n = max(abs(p1[0] - p0[0]), abs(p1[1] - p0[1]));
+    for (let i = 0; i <= n; i++) ctx.fillRect(round(p0[0] + ((p1[0] - p0[0]) * i) / n), round(p0[1] + ((p1[1] - p0[1]) * i) / n), 1, 1);
+  }
+  R(ctx, c[0], c[1], 1, round(d), A(P.white, 0.6 * k));
+  // fracture lines inside
+  R(ctx, round(x - s * 0.3), round(y + s * 0.5), round(s * 0.5), 1, A(P.white, 0.25 * k));
+  R(ctx, round(x + s * 0.1), round(y + s * 0.2), 1, round(s * 0.4), A(P.white, 0.18 * k));
+}
+
+/** The bottle's neck tilted into the top of frame, mid-pour: dark glass, gilt collar. */
+const NECK = [[0, 0], [0, 0], [0, 0], [0, 0]];
+function neck(ctx, mx, my, k) {
+  const ang = 0.6; // radians below horizontal
+  const dx = cos(ang);
+  const dy = sin(ang);
+  const len = 160 * k;
+  const hw = 9 * k;
+  NECK[0][0] = mx - dy * hw; NECK[0][1] = my + dx * hw;
+  NECK[1][0] = mx + dy * hw; NECK[1][1] = my - dx * hw;
+  NECK[2][0] = mx - dx * len + dy * hw * 1.3; NECK[2][1] = my - dy * len - dx * hw * 1.3;
+  NECK[3][0] = mx - dx * len - dy * hw * 1.3; NECK[3][1] = my - dy * len + dx * hw * 1.3;
+  poly(ctx, NECK, P.black);
+  // across the neck: dark glass, amber core, a long softbox line on the upper edge
+  for (let i = 3; i < len; i++) {
+    const x = mx - dx * i;
+    const y = my - dy * i;
+    const w = hw * (1 + (0.3 * i) / len);
+    for (let q = -w + 1; q < w - 1; q++) {
+      const e = abs(q) / w;
+      const col = e < 0.45 ? P.brown : e < 0.7 ? P.maroon : null;
+      if (col) R(ctx, x - dy * q, y + dx * q, 1, 1, col);
     }
+    R(ctx, x + dy * (w - 2), y - dx * (w - 2), 1, 1, P.tanShade);
+    if (i % 3 === 0) R(ctx, x + dy * (w - 3), y - dx * (w - 3), 1, 1, A(P.cream, 0.5));
+  }
+  // gilt foil collar near the lip and the lip itself
+  for (let i = 10 * k; i < 18 * k; i++) {
+    const x = mx - dx * i;
+    const y = my - dy * i;
+    for (let q = -hw; q <= hw; q++) R(ctx, x - dy * q, y + dx * q, 1, 1, q > hw * 0.4 ? P.yellow : q > -hw * 0.3 ? P.tanShade : P.brown);
+  }
+  for (let q = -hw; q <= hw; q++) R(ctx, mx - dy * q, my + dx * q, 1, 1, q > 0 ? P.cream : P.tanShade);
+}
+
+const POUR_FX = 196;
+const POUR_FY = 132;
+function shotPour(ctx, lt) {
+  ctx.drawImage(pourBg(), 0, 0);
+  const k = tween(lt, 0, 5, 1, 1.12, 'inOut');
+  const fx = POUR_FX;
+  const fy = POUR_FY;
+  // bar top
+  const by = round(fy + (150 - fy) * k);
+  ctx.drawImage(barTop(), 0, by);
+  R(ctx, 0, by, W, 1, P.tanShade);
+  const cx = round(fx + (196 - fx) * k);
+  const th = round(66 * k);
+  const bottom = round(fy + (176 - fy) * k);
+  const top = bottom - th;
+  const baseH = round(11 * k);
+  const tubeH = th - baseH;
+  // liquid rises as it pours
+  const fillP = tween(lt, 0, 5, 0.18, 0.55, 'linear');
+  const levelRow = round(tubeH * (1 - fillP));
+  const r0 = 35 * k;
+  TGLASS.top = levelRow;
+  TUMBLER_O.rows = tubeH;
+  CUTS.cv = cutsTex();
+  CUTS.top = round(tubeH * 0.5);
+  CUTS.h = tubeH - CUTS.top;
+  CUTS.turn = 0.3 + lt * 0.01;
+  fill(TPROF, tubeH, TUMBLER_KEYS, k);
+  fill(BPROF, baseH, BASE_KEYS, k);
+  // its reflection in the polished bar
+  clipRect(ctx, 0, bottom + 1, W, H - bottom);
+  ctx.save();
+  ctx.globalAlpha = 0.16;
+  ctx.translate(0, 2 * bottom + 2 * round(0.2 * r0));
+  ctx.scale(1, -1);
+  lathe(ctx, cx, top, TPROF, TUMBLER_O);
+  lathe(ctx, cx, top + tubeH, BPROF, BASE_O);
+  ctx.restore();
+  ctx.restore();
+  contact(ctx, cx, bottom + round(6 * k), round(r0 * 1.02), 0.5);
+  lathe(ctx, cx, top, TPROF, TUMBLER_O);
+  BASE_O.rows = baseH;
+  lathe(ctx, cx, top + tubeH, BPROF, BASE_O);
+  // liquid surface, seen from slightly above
+  const lr = TPROF[levelRow] - 1;
+  const ly = top + levelRow + round(0.1 * lr);
+  oval(ctx, cx, ly, round(lr), max(2, round(lr * 0.2)), P.tanShade);
+  oval(ctx, cx - round(lr * 0.15), ly - 1, round(lr * 0.6), max(1, round(lr * 0.1)), A(P.orange, 0.6));
+  // slow rings spreading from where the stream lands
+  for (let i = 0; i < 3; i++) {
+    const ph = (lt * 0.7 + i / 3) % 1;
+    const rr = round((4 + ph * 18) * k);
+    ovalRing(ctx, cx + round(6 * k), ly, rr, max(1, round(rr * 0.22)), A(P.cream, 0.35 * (1 - ph)));
+  }
+  // the ice cube, part above the surface, part seen through the amber
+  const ix = cx - round(8 * k);
+  const iy = ly - round(6 * k) + round(sin(lt * 1.6) * 1);
+  clipRect(ctx, 0, 0, W, ly);
+  iceCube(ctx, ix, iy, 15 * k, 0.35 + lt * 0.03, true);
+  ctx.restore();
+  clipRect(ctx, 0, ly, W, H - ly);
+  iceCube(ctx, ix, iy, 15 * k, 0.35 + lt * 0.03, false);
+  ctx.restore();
+  // rising bubbles inside the liquid
+  bubbles(ctx, lt, { x: cx - round(lr * 0.75), y: ly + 3, w: round(lr * 1.5), h: max(4, top + tubeH - ly - 5), n: 18, seed: 12, rise: 10, size: 2, color: P.yellow, hi: P.cream });
+  // the rim of the glass
+  ovalRing(ctx, cx, top + round(r0 * 0.2), round(r0), max(2, round(r0 * 0.2)), A(P.cream, 0.6));
+  // the stream: leaves the neck with some forward speed, falls, thins
+  const mx = round(fx + (150 - fx) * k);
+  const my = round(fy + (50 - fy) * k);
+  neck(ctx, mx, my, k);
+  const ix1 = cx + round(6 * k);
+  for (let y = my + 2; y < ly; y++) {
+    const s = (y - my) / max(1, ly - my);
+    const x = round(mx + (ix1 - mx) * (1 - (1 - s) * (1 - s)));
+    const w = max(2, round((4.4 - s * 1.9) * k));
+    R(ctx, x - (w >> 1), y, w, 1, P.orange);
+    R(ctx, x - (w >> 1), y, 1, 1, P.yellow);
+    if (w > 2) R(ctx, x + w - (w >> 1) - 1, y, 1, 1, P.tanShade);
+    // slow-motion glints travelling down the stream
+    if ((y - lt * 26) % 13 < 2) R(ctx, x - (w >> 1), y, 1, 1, P.cream);
+  }
+  // crown of droplets at the impact, in slow motion
+  for (let i = 0; i < 7; i++) {
+    const ph = (lt * 0.9 + hash01(i, 41)) % 1;
+    const vx = (hash01(i, 42) - 0.5) * 30 * k;
+    const vy = (18 + hash01(i, 43) * 16) * k;
+    const t = ph * 1.1;
+    const x = ix1 + vx * t;
+    const y = ly - vy * t + 34 * k * t * t;
+    if (y < ly) R(ctx, x, y, 1 + (i % 2), 1 + (i % 2), i % 3 ? P.yellow : P.cream);
+  }
+  vignette(ctx, 0.6);
+}
+
+// --- 4. NOSE -----------------------------------------------------------------------
+// A man in his forties in profile, facing left into the light, raises the
+// glass and closes his eyes. Rim light on the profile, the rest in shadow.
+
+const noseBg = lazy(() => gradient('bf-nose', W, H, { cx: 318, cy: 70, rx: 220, ry: 170, ramp: [P.black, P.maroon, P.brown], gamma: 1.5, seam: 0.45 }));
+
+// Local coordinates: nose tip at (0, 0), x grows toward the back of the head.
+const SKIN_SRC = [
+  [26, -42], [14, -40], [9, -34], [6, -26], [5, -19], [8, -15], [7, -12], [3, -5], [0, 0], [3, 2], [5, 3], [4, 6],
+  [6, 8], [5, 10], [7, 12], [5, 16], [8, 20], [20, 22], [24, 28], [23, 36], [26, 46], [46, 46], [50, 30], [50, 18],
+  [56, 6], [58, -10], [56, -26], [48, -38], [38, -43],
+];
+// a short, side-parted cut that follows the skull
+const HAIR_SRC = [
+  [8, -35], [10, -40], [17, -44], [27, -46], [38, -45], [47, -41], [54, -34], [58, -25], [59, -15], [57, -6],
+  [53, -1], [50, -4], [49, -11], [45, -14], [42, -22], [36, -29], [27, -32], [18, -32], [12, -31],
+];
+const EAR_SRC = [[40, -15], [45, -16], [47, -9], [46, -1], [42, 1], [40, -5]];
+const SUIT_SRC = [[24, 44], [18, 50], [12, 70], [8, 140], [118, 140], [108, 66], [86, 52], [58, 42], [44, 46], [34, 47]];
+const COLLAR_SRC = [[23, 42], [31, 45], [27, 53], [19, 50]];
+// hand and forearm in glass-relative coordinates (glass bottom centre = 0, 0)
+const HAND_SRC = [[-19, -15], [-8, -17], [3, -15], [6, -7], [5, 3], [-6, 5], [-19, 2], [-21, -6]];
+const ARM_SRC = [[-2, -10], [12, -6], [52, 120], [22, 120]];
+const mk = (src) => src.map((p) => [p[0], p[1]]);
+const SKIN = mk(SKIN_SRC);
+const HAIR = mk(HAIR_SRC);
+const EAR = mk(EAR_SRC);
+const SUIT = mk(SUIT_SRC);
+const COLLAR = mk(COLLAR_SRC);
+const ARM = mk(ARM_SRC);
+const HAND = mk(HAND_SRC);
+// transform shared by the paint functions (set per frame; no closures)
+const XF = { ox: 0, oy: 0, k: 1, a: 0, px: 30, py: 40, hx: 0, hy: 0 };
+/** Head points rotate by XF.a about the neck pivot; then scale and place. */
+function placeHead(src, dst) {
+  const ca = cos(XF.a);
+  const sa = sin(XF.a);
+  for (let i = 0; i < src.length; i++) {
+    const x = src[i][0] - XF.px;
+    const y = src[i][1] - XF.py;
+    dst[i][0] = XF.ox + (XF.px + x * ca - y * sa) * XF.k;
+    dst[i][1] = XF.oy + (XF.py + x * sa + y * ca) * XF.k;
   }
 }
+function placeBody(src, dst, dx = 0, dy = 0) {
+  for (let i = 0; i < src.length; i++) {
+    dst[i][0] = XF.ox + (src[i][0] + dx) * XF.k;
+    dst[i][1] = XF.oy + (src[i][1] + dy) * XF.k;
+  }
+}
+// painters for litShape: fill the shape in `col`, offset by (ox, oy)
+let PT = null; // the point list being painted
+const OFFS = new WeakMap(); // point list -> its own offset copy (built once)
+function paintPts(c, col, ox, oy) {
+  let off = OFFS.get(PT);
+  if (!off) OFFS.set(PT, (off = mk(PT)));
+  for (let i = 0; i < PT.length; i++) {
+    off[i][0] = PT[i][0] + ox;
+    off[i][1] = PT[i][1] + oy;
+  }
+  poly(c, off, col);
+}
+// light from the left and slightly above: a cream edge, a warm second pixel, deep shadow
+const SKIN_LIGHT = [[P.cream, 0, 0], [P.tanShade, 1, 0], [P.maroon, 2, 1]];
+const HAIR_LIGHT = [[P.tanShade, 0, 0], [P.black, 1, 1]];
+const SUIT_LIGHT = [[P.brown, 0, 0], [P.black, 1, 1]];
+const HAND_LIGHT = [[P.cream, 0, 0], [P.brown, 1, 0], [P.maroon, 2, 1]];
+const EAR_LIGHT = [[P.maroon, 0, 0]];
+const COLLAR_LIGHT = [[P.slate, 0, 0], [P.ink, 1, 1]];
+function lit(ctx, pts, layers) {
+  PT = pts;
+  litShape(ctx, paintPts, layers);
+}
+
+const SMALL_KEYS = [[0, 16], [0.85, 15], [1, 15]];
+const SPROF = new Float32Array(60);
+const SMALL_CUTS = { cv: null, top: 0, h: 0, turn: 0.2 };
+const SMALL_GLASS = { top: 0, edge: 1, wall: 1, edgeColor: P.tanShade };
+const SMALL_O = { rows: 0, ramp: AMBER, ambient: 0.25, glass: SMALL_GLASS, label: SMALL_CUTS, stripes: [[-0.55, 0.07, P.cream]], rim: RIM, tilt: 0.2, seam: 0.5 };
+const ARM_LIGHT = [[P.tanShade, 0, 0], [P.black, 1, 1]];
+const LIFT = [[0, 0], [2.4, 0], [3.0, -1, 'inOut'], [3.8, 0, 'inOut']];
+const TILT = [[0, 0.02], [1.2, 0.02], [2.3, 0.07, 'inOut'], [3.2, 0.07], [4.4, 0.0, 'inOut']];
+function placeAt(src, dst, x, y, k) {
+  for (let i = 0; i < src.length; i++) {
+    dst[i][0] = x + src[i][0] * k;
+    dst[i][1] = y + src[i][1] * k;
+  }
+}
+
+function shotNose(ctx, lt) {
+  ctx.drawImage(noseBg(), 0, 0);
+  const k = tween(lt, 0, 4.4, 1.0, 1.06, 'inOut');
+  // he leans in to the glass, breathes in, lifts his chin a touch
+  XF.k = k;
+  XF.ox = 236 - (k - 1) * 120;
+  XF.oy = 98 - (k - 1) * 40 + round(key(lt, LIFT));
+  XF.a = key(lt, TILT);
+  placeBody(SUIT_SRC, SUIT);
+  placeBody(COLLAR_SRC, COLLAR);
+  placeHead(SKIN_SRC, SKIN);
+  placeHead(HAIR_SRC, HAIR);
+  placeHead(EAR_SRC, EAR);
+  lit(ctx, SUIT, SUIT_LIGHT);
+  lit(ctx, COLLAR, COLLAR_LIGHT);
+  lit(ctx, SKIN, SKIN_LIGHT);
+  lit(ctx, EAR, EAR_LIGHT);
+  lit(ctx, HAIR, HAIR_LIGHT);
+  // features in the shadow side of the face: brow, eye (closing), a crease by the mouth
+  const eyesShut = lt > 2.0;
+  const ex = SKIN[5][0] + 4 * k;
+  const ey = SKIN[5][1] - 1 * k;
+  R(ctx, ex - 1, ey - 3 * k, round(6 * k), 1, P.black);
+  if (eyesShut) R(ctx, ex, ey + 1, round(4 * k), 1, P.black);
+  else {
+    R(ctx, ex, ey, round(3 * k), 1, P.black);
+    R(ctx, ex, ey + 1, 1, 1, P.tanShade);
+  }
+  R(ctx, SKIN[12][0] + 2 * k, SKIN[12][1], 1, round(2 * k), P.black);
+  // the glass rises from below frame to chin height, just under his nose
+  const gp = smooth(prog(lt, 0.3, 2.3));
+  const gx = round(XF.ox - 20 * k);
+  const gy = round(XF.oy + (128 - gp * 92) * k);
+  placeAt(ARM_SRC, ARM, gx, gy, k);
+  lit(ctx, ARM, ARM_LIGHT);
+  const gh = round(22 * k);
+  SMALL_GLASS.top = round(gh * 0.45);
+  SMALL_O.rows = gh;
+  SMALL_CUTS.cv = cutsTex();
+  SMALL_CUTS.top = round(gh * 0.5);
+  SMALL_CUTS.h = gh - SMALL_CUTS.top;
+  lathe(ctx, gx, gy - gh, fill(SPROF, gh, SMALL_KEYS, k), SMALL_O);
+  ovalRing(ctx, gx, round(gy - gh + 3 * k), round(16 * k), max(1, round(3 * k)), A(P.cream, 0.55));
+  placeAt(HAND_SRC, HAND, gx, gy, k);
+  lit(ctx, HAND, HAND_LIGHT);
+  // the gaps between the fingers
+  for (let i = 0; i < 3; i++) R(ctx, round(gx - 18 * k), round(gy - (11 - i * 5) * k), round(12 * k), 1, P.black);
+  vignette(ctx, 0.55);
+  // tasting notes in the space he faces, on the voice
+  const tx = 104;
+  fadeUp(ctx, 'TASTING NOTES', tx, 60, lt - 0.5, { face: 'micro', color: P.tanShade, track: 2, align: 'center', dur: 0.9 });
+  rule(ctx, tx, 70, 40, (lt - 0.7) / 0.9, P.tanShade, { alpha: 0.8 });
+  fadeUp(ctx, 'OAK', tx, 80, lt - 1.1, { face: 'serif', color: P.cream, track: 3, align: 'center', dur: 0.9 });
+  fadeUp(ctx, 'CARAMEL', tx, 98, lt - 1.7, { face: 'serif', color: P.cream, track: 3, align: 'center', dur: 0.9 });
+  fadeUp(ctx, 'DIAL-UP', tx, 116, lt - 2.8, { face: 'serif', color: GOLD, track: 3, align: 'center', dur: 1.1 });
+}
+
+// --- 5. HERO -----------------------------------------------------------------------
+
+const heroBg = lazy(() => gradient('bf-hero', W, H, { cx: 192, cy: 96, rx: 200, ry: 150, ramp: [P.black, P.maroon, P.brown], gamma: 1.8, seam: 0.45 }));
+const texHero = lazy(() => labelTex(37));
+const texSlate = lazy(() => labelTex(30));
+
+function shotHero(ctx, lt) {
+  ctx.drawImage(heroBg(), 0, 0);
+  const up = smooth(prog(lt, 0.0, 1.3));
+  beam(ctx, 192, 0, 192, 172, 40, 110, { color: P.cream, alpha: 0.035 * up });
+  const k = tween(lt, 0, 2.8, 1, 1.07, 'inOut');
+  const fy = 120;
+  const base = round(fy + (172 - fy) * k);
+  const prx = round(66 * k);
+  const pry = round(9 * k);
+  plinth(ctx, 192, base, prx, pry);
+  const turn = tween(lt, 0, 2.8, 0.42, 0.5, 'inOut');
+  const keyK = 0.25 + 0.75 * up;
+  const sweep = lt > 0.5 && lt < 2.1 ? tween(lt, 0.5, 2.1, -1.3, 1.3, 'inOut') : null;
+  // its reflection in the polished stone
+  clipRect(ctx, 192 - prx, base, prx * 2, pry + 1);
+  ctx.save();
+  ctx.globalAlpha = 0.14;
+  ctx.translate(0, 2 * (base + 2));
+  ctx.scale(1, -1);
+  bottle(ctx, 192, base + 2, k, texHero(), { turn, keyK, rimK: 0, sweep });
+  ctx.restore();
+  ctx.restore();
+  contact(ctx, 192, base + 1, round(36 * k), 0.5);
+  bottle(ctx, 192, base + 2, k, texHero(), { turn, keyK, rimK: 0.95 * up, sweep });
+  glintStar(ctx, 188, base + 2 - round((BODY_H + STOP_H) * k) + 3, (lt - 1.9) / 0.8, P.white);
+  vignette(ctx, 0.65);
+}
+
+// --- 6. SLATE ----------------------------------------------------------------------
+
+const slateBg = lazy(() => gradient('bf-slate', W, H, { cx: 112, cy: 100, rx: 190, ry: 140, ramp: [P.black, P.maroon, P.brown], gamma: 1.9, seam: 0.45 }));
+const LEGAL = 'BITFIZZ RESERVE IS A CARBONATED SOFT DRINK. CONTAINS NO ALCOHOL AND NO DATA. THE SERVER FARM WAS DECOMMISSIONED FOR UNRELATED REASONS. PLEASE FIZZ RESPONSIBLY.';
+
 function shotSlate(ctx, lt) {
-  endSlate(ctx, lt, {
-    bg: slateBg, product: slateProduct, mark: MARK, sub: SUB, markX: 266, markY: 22,
-    line: 'NOW WITH 8 BITS OF FLAVOUR', lineColor: P.cream,
-    tagline: 'TASTE EVERY BIT.', tag: { bg: P.yellow, edge: P.orange, color: P.maroon }, tagX: 266, tagY: 128,
-    url: 'BITFIZZ.BIT', pill: { bg: P.maroon, border: P.pink }, urlY: 158,
-    legal: 'CONTAINS NO ACTUAL BITS. 1-BIT EDITION AVAILABLE FOR PURISTS. SIDE EFFECTS MAY INCLUDE BURPING IN 8-BIT.',
-  });
+  ctx.drawImage(slateBg(), 0, 0);
+  beam(ctx, 112, 0, 112, 170, 30, 90, { color: P.cream, alpha: 0.03 });
+  plinth(ctx, 112, 170, 54, 8);
+  contact(ctx, 112, 171, 30, 0.6);
+  const top = bottle(ctx, 112, 172, 0.8, texSlate(), { turn: 0.47 + lt * 0.012 });
+  glintStar(ctx, 109, top + 3, (lt - 2.3) / 0.9, P.white);
+  vignette(ctx, 0.5);
+  // the lock-up, right third
+  const x = 270;
+  trackIn(ctx, 'BITFIZZ', x, 50, lt - 0.1, { face: 'serif', color: GOLD, track: 3, from: 9, dur: 1.8, scale: 2 });
+  fadeUp(ctx, 'RESERVE', x + 2, 80, lt - 0.8, { face: 'thin', color: P.cream, track: 7, align: 'center', dur: 1 });
+  rule(ctx, x, 97, 110, (lt - 1.1) / 1, P.yellow, { alpha: 0.7 });
+  fadeUp(ctx, 'UNCOMPRESSED.', x, 105, lt - 0.3, { face: 'serif', color: P.cream, track: 3, align: 'center', dur: 1.2 });
+  fadeUp(ctx, 'AGED 12 YEARS IN A SERVER FARM', x, 124, lt - 1.6, { face: 'micro', color: P.tanShade, track: 1, align: 'center', dur: 1 });
+}
+
+// --- the whole spot ---------------------------------------------------------------
+
+/** Letterbox and the legal line on the bottom bar are part of the film. */
+function frame(ctx, dt) {
+  letterbox(ctx, 1, BAR);
+  if (dt > 20.9) smallPrint(ctx, LEGAL, W / 2, H - BAR + 5, W - 40, { color: P.steel, lt: dt - 20.9, dur: 1 });
 }
 
 const SHOTS = [
-  { at: 0, draw: shotLowRes },
-  { at: 3.6, draw: shotGlow },
-  { at: 5.2, draw: shotMachine, wipe: 'whip', wd: 0.36, dir: 1 },
-  { at: 7.6, draw: shotCrack },
-  { at: 9.6, draw: shotUpgrade, wipe: 'match', wd: 0.4, cx: 196, cy: 120 },
-  { at: 12.8, draw: shotParty, wipe: 'flash', wd: 0.3 },
-  { at: 17.6, draw: shotHero, wipe: 'irisInOut', wd: 0.8, fx: 286, fy: 112, cx: 192, cy: 110 },
-  { at: 19.6, draw: shotSlate, wipe: 'match', wd: 0.4, cx: 120, cy: 112 },
+  { at: 0, draw: shotMacro },
+  { at: 4.0, draw: shotCellar, wipe: 'fade', wd: 1.0 },
+  { at: 8.6, draw: shotPour, wipe: 'fade', wd: 0.9 },
+  { at: 13.4, draw: shotNose, wipe: 'black', wd: 0.8, hold: 0.05 },
+  { at: 17.8, draw: shotHero, wipe: 'black', wd: 0.8, hold: 0.15 },
+  { at: 20.4, draw: shotSlate, wipe: 'fade', wd: 1.0 },
 ];
 
-// Jingle, 150 bpm, 60 beats = the whole spot. Lazy 1-bit summer, a sparkle for
-// the glow, footsteps to the machine, the crack, three level-up arpeggios, the
-// "BIT-FIZZ CO-LA" party theme and the "TASTE EV-ERY BIT" sting on the slate.
+// Lounge jazz at 72 bpm in D minor, 8 bars: soft sine chords, a walking bass,
+// a sparse electric-piano motif, brushes. Bar 7 (20.0 s) resolves to F major 9
+// under the end slate.
+const EP = { wave: 'sine', a: 0.004, d: 0.9, s: 0.12, r: 0.5, vib: false };
+const PADI = { wave: 'sine', a: 0.35, d: 1.2, s: 0.75, r: 0.9, vib: [6, 4.5, 0.3] };
 export default {
   id: 'bitfizz-cola',
-  brand: 'BITFIZZ COLA',
+  brand: 'BITFIZZ RESERVE',
   duration: 24,
-  voice: { gender: 'male', lang: 'en-US', pitch: 1.0, rate: 1.05 },
+  voice: { gender: 'male', lang: 'en-GB', pitch: 0.82, rate: 0.9 },
   script: [
-    { at: 0.5, text: 'Feeling a bit... low-res?' },
-    { at: 5.4, text: 'Crack open an ice-cold BitFizz Cola...' },
-    { at: 9.8, text: '...and upgrade to eight bits of flavour!' },
-    { at: 13.3, text: 'Two hundred and fifty-six tastes in every sip!' },
-    { at: 17.8, text: 'BitFizz Cola.' },
-    { at: 19.9, text: 'Taste every bit.' },
+    { at: 0.8, text: 'Some things cannot be rushed.' },
+    { at: 4.4, text: 'Aged twelve years, in a decommissioned server farm.' },
+    { at: 9.0, text: 'Poured over ice, hand-chipped by a retired sysadmin.' },
+    { at: 13.8, text: 'Notes of oak, caramel... and dial-up.' },
+    { at: 18.4, text: 'BitFizz Reserve.' },
+    { at: 20.6, text: 'Uncompressed.' },
   ],
   tune: {
-    bpm: 150,
-    wave: 'square',
-    notes: tune(
-      'E4:1 R:0.5 D4:0.5 C4:2 R:1 G3:1 C4:1 D4:1 E4:1',
-      'B4:0.5 C5:0.5 B4:0.5 C5:0.5 E5:2',
-      'G4:0.5 A4:0.5 B4:0.5 C5:0.5 D5:1 R:0.75 C4:0.5 R:1.75',
-      'R:1 E5:0.5 F5:0.5 C6:1 G5:0.5 E5:0.5 C5:1',
-      'C4:0.5 G4:0.5 C5:0.25 E5:0.25 G5:0.25 C6:0.25 R:1 D5:0.25 F#5:0.25 A5:0.25 D6:0.25 R:1 E5:0.25 G#5:0.25 B5:0.25 E6:0.25 G6:2',
-      'C5:0.5 C5:0.5 G5:1 E5:0.5 F5:0.5 G5:1 A5:0.5 G5:0.5 F5:0.5 E5:0.5 D5:1 G4:1 C6:0.5 B5:0.5 A5:0.5 B5:0.5 C6:2',
-      'E6:0.5 D6:0.5 C6:1 G5:1 E5:1 G5:1',
-      'G5:0.5 G5:0.5 A5:0.5 G5:0.5 C6:2 R:1 E5:0.5 G5:0.5 C6:3 R:2',
-    ),
-    bass: tune(
-      'C3:3 G2:3 A2:3',
-      'E2:4',
-      'G2:1 A2:1 B2:1 C3:1 D3:1 G2:1',
-      'R:2 C3:1 G2:1 C3:1',
-      'C3:1 C3:2 D3:2 E3:3',
-      'C3:1 C3:1 G2:1 C3:1 F2:1 F2:1 G2:1 G2:1 F2:1 G2:1 C3:2',
-      'C3:2 G2:2 C3:1',
-      'F2:2 G2:2 C3:1 R:1 C3:1 G2:1 C3:1 R:2',
-    ),
-    bassWave: 'triangle',
-    drums: tune(
-      rep('H:1.5', 6),
-      'R:4',
-      'K:0.5 H:0.5 K:0.5 H:0.5 K:0.5 H:0.5 R:0.75 K:0.5 R:1.75',
-      'R:1.5 S:0.25 S:0.25 S:1 R:2',
-      rep('K:1 S:1', 4),
-      rep('K:0.5 H:0.5 S:0.5 H:0.5', 6),
-      'K:1 H:1 S:1 H:1 K:1',
-      'K:1 S:1 K:1 S:1 K:2 R:1 K:1 S:1 R:2',
-    ),
+    bpm: 72,
+    swing: 0.18,
+    room: 0.5,
+    echo: { beats: 0.75, feedback: 0.28 },
+    loudness: -2,
+    tracks: [
+      {
+        kind: 'harmony', inst: PADI, gain: 0.8,
+        notes: tune(
+          'D3+F3+A3+C4+E4:4@0.42 Bb2+D3+F3+A3+C4:4@0.42 G2+Bb2+D3+F3+A3:4@0.42 A2+C#3+G3+Bb3+E4:4@0.4',
+          'D3+F3+A3+C4+E4:4@0.42 Bb2+D3+F3+A3+E4:4@0.42 F2+A2+C3+E3+G3:4@0.5 D3+F3+A3+C4+E4:4@0.36',
+        ),
+      },
+      {
+        kind: 'bass', inst: 'sine', gain: 0.9,
+        notes: tune('D2:2@0.7 A1:2@0.6 Bb1:2@0.7 F2:2@0.6 G1:2@0.7 D2:2@0.6 A1:2@0.7 E2:1@0.6 C#2:1@0.6', 'D2:2@0.7 A1:1@0.6 C2:1@0.6 Bb1:2@0.7 F2:2@0.6 F1:2@0.75 C2:2@0.6 D2:4@0.6'),
+      },
+      {
+        kind: 'lead', inst: EP, gain: 0.7, echo: 0.35,
+        notes: tune(
+          'R:2 A4:1@0.4 E5:1@0.35 D5:3@0.4 R:1 R:2 Bb4:1@0.35 F5:1@0.35 E5:2@0.4 C#5:2@0.35',
+          'R:4 R:2 A4:0.5@0.35 C5:0.5@0.35 E5:1@0.4 A5:2@0.45 G5:1@0.4 E5:1@0.4 D5:4@0.35',
+        ),
+      },
+      {
+        drums: tune(
+          'H:1@0.12 H:1@0.1 H:1@0.12 H:1@0.1 H:1@0.12 H:1@0.1 H:1@0.12 H:1@0.1',
+          'K:1@0.3 H:0.5@0.14 H:0.5@0.1 X:1@0.18 H:1@0.12 K:1@0.3 H:0.5@0.14 H:0.5@0.1 X:1@0.18 H:1@0.12',
+          'K:1@0.3 H:0.5@0.14 H:0.5@0.1 X:1@0.18 H:1@0.12 K:1@0.3 H:0.5@0.14 H:0.5@0.1 X:1@0.18 H:1@0.12',
+          'K:1@0.32 H:1@0.12 X:1@0.16 H:1@0.1 R:4',
+        ),
+      },
+    ],
   },
   draw(ctx, t, dt, info) {
+    warmUp(SHOTS, dt, info);
     play(ctx, dt, info, SHOTS);
+    frame(ctx, dt);
   },
 };

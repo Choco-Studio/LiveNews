@@ -8,14 +8,19 @@ import { PALETTES } from './palettes.js';
 const bed = (palette, moment) => ({ kind: 'bed', palette, moment });
 
 /**
- * resolveCue(moment, { programId, emotion, breaking, next, seconds }, { gravePad })
+ * resolveCue(moment, { programId, emotion, breaking, next, seconds }, { gravePad, sharedStings })
  * -> { kind: 'bed', palette, moment } | { kind: 'silence', fade } | { kind: 'gravePad', palette }
  *  | { kind: 'sting', name, palette, stopBed, hard?, seconds? } | { kind: 'ending', palette }
  */
-export function resolveCue(moment, opts = {}, { gravePad = false } = {}) {
+export function resolveCue(moment, opts = {}, { gravePad = false, sharedStings = false } = {}) {
   const pid = PALETTES[opts.programId] ? opts.programId : 'channel';
   const emotion = opts.emotion || 'neutral';
   const grave = emotion === 'serious' || emotion === 'sad';
+  // sharedStings: audio.js plays its own breaking / promo / sign-off cues; the beds just step aside.
+  if (sharedStings) {
+    if (moment === 'breaking' || (moment === 'story' && opts.breaking)) return { kind: 'silence', fade: 0.15 };
+    if (moment === 'upNext') return { kind: 'silence', fade: 0.4 };
+  }
   switch (moment) {
     case 'openTail':
       return bed(pid, 'openTail');

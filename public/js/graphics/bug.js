@@ -1,54 +1,69 @@
 // Top row of the graphics package: the channel bug (top-left, 13 px high,
-// under 48 px wide), the LIVE / REPLAY tag with its static red square, the
-// programme name for a few seconds after the open, and the London clock
-// (top-right, HH:MM, static colon). Everything wipes in when the graphics
-// come on and the bug's glint plays only then.
+// 48 px wide: the doc's limit), the LIVE / REPLAY tag with its static red
+// square, the programme name for a few seconds after the open, and the London
+// clock (top-right, HH:MM, static colon). Everything wipes in when the
+// graphics come on and the bug's glint plays only then.
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
 import { W, TOP, inkOn, easeOut, easeIn, clamp01, rect, clipped } from './layout.js';
 
-// Same 11x11 globe as logo.js (GLOBE_S): red, D shadow, H highlight, W/S seams.
+// The 11x11 brand globe (logo.js GLOBE_S) redrawn for 1x on air: at this size
+// white seams read as crosshairs, so the equator is silver and the meridian
+// lens a lighter red. R red, D shadow, H highlight/seam, S equator.
 const GLOBE = [
   '...RRRRR...',
   '..RHRRRRR..',
-  '.RHWRRRWRR.',
-  'RRWRRRRRWRR',
-  'RRWRRRRRWRD',
-  'WWWWWWWWWWS',
-  'RRWRRRRRWRD',
-  'RRWRRRRRWDD',
-  '.RRWRRRWDD.',
+  '.RHHRRRHRR.',
+  'RRHRRRRRHRR',
+  'RRHRRRRRHRD',
+  'SSSSSSSSSSD',
+  'RRHRRRRRHDD',
+  'RRHRRRRRHDD',
+  '.RRHRRRHDD.',
   '..RRRRDDD..',
   '...DDDDD...',
 ];
-// Bold digital "24" (logo.js DIGITS_S).
-const DIGITS = {
-  2: ['####.', '...##', '...##', '.###.', '##...', '##...', '#####'],
-  4: ['##.##', '##.##', '##.##', '#####', '...##', '...##', '...##'],
+// Hand-set 5 px wordmark (a logo, not the micro text face): round G and O.
+const WORD = {
+  G: ['.###', '#...', '#.##', '#..#', '.##.'],
+  L: ['#..', '#..', '#..', '#..', '###'],
+  O: ['.##.', '#..#', '#..#', '#..#', '.##.'],
+  B: ['##.', '#.#', '##.', '#.#', '##.'],
+  I: ['#', '#', '#', '#', '#'],
+  T: ['###', '.#.', '.#.', '.#.', '.#.'],
+  2: ['##.', '..#', '.#.', '#..', '###'],
+  4: ['#.#', '#.#', '###', '..#', '..#'],
 };
 const COLOR = { K: P.black, R: P.red, D: P.darkRed, H: P.pink, W: P.white, S: P.silver, Y: P.yellow, C: P.cream };
 // Each colour under the glint (missing = untouched), as in logo.js.
 const GLINT = { R: 'H', D: 'R', H: 'W', S: 'W', Y: 'C', C: 'W', K: null };
 
-/** Build the bug as rows of colour keys: black plate, globe + bit, red "24" tag. */
+/** Paint `text` from WORD into px (keys) at x, top row y; returns the x after it. */
+function paintWord(px, text, x, y, key) {
+  for (const ch of text) {
+    const rows = WORD[ch];
+    rows.forEach((row, dy) => [...row].forEach((c, dx) => c === '#' && (px[y + dy][x + dx] = key)));
+    x += rows[0].length + 1;
+  }
+  return x - 1;
+}
+
+/** Build the bug as rows of colour keys: black plate, globe + bit, GLOBIT, red "24" tag. */
 function buildBug() {
   const h = TOP.h;
-  const tagX = 15;
-  const tagW = 15;
+  const textY = 4; // 5 px caps centred in 13 rows
+  const textX = 13;
+  const textEnd = textX + [...'GLOBIT'].reduce((w, ch) => w + WORD[ch][0].length + 1, -1);
+  const tagX = textEnd + 2;
+  const tagW = 9;
   const w = tagX + tagW + 1;
   const px = Array.from({ length: h }, () => new Array(w).fill('K'));
-  GLOBE.forEach((row, y) => [...row].forEach((k, x) => k !== '.' && (px[y + 1][x + 1] = k)));
+  GLOBE.forEach((row, y) => [...row].forEach((k, x) => k !== '.' && (px[y + 1][x] = k)));
   // the yellow "bit" popping off the globe's top-right edge
-  px[1][12] = 'Y';
-  px[1][13] = 'Y';
-  px[2][12] = 'Y';
-  px[2][13] = 'Y';
+  for (const [x, y] of [[11, 1], [12, 1], [11, 2], [12, 2]]) px[y][x] = 'Y';
+  paintWord(px, 'GLOBIT', textX, textY, 'W');
   for (let y = 1; y < h - 1; y++) for (let x = tagX; x < tagX + tagW; x++) px[y][x] = y === h - 2 ? 'D' : 'R';
-  let dx = tagX + 2;
-  for (const d of '24') {
-    DIGITS[d].forEach((row, y) => [...row].forEach((c, x) => c === '#' && (px[y + 3][dx + x] = 'W')));
-    dx += 6;
-  }
+  paintWord(px, '24', tagX + 1, textY, 'W');
   return { w, h, px };
 }
 
@@ -87,7 +102,7 @@ function drawGlint(ctx, x0, y0, p) {
 }
 
 const LIVE_W = 4 + 3 + 3 + measureText('LIVE') + 4;
-const REPLAY_W = 4 + measureText('REPLAY') + 4;
+const REPLAY_W = 4 + 3 + 3 + measureText('REPLAY') + 4;
 const CLOCK_LABEL = 'LONDON';
 
 /**
@@ -109,7 +124,8 @@ export function drawTopRow(ctx, t, v) {
     if (g > 0 && g < 1) clipped(ctx, TOP.x, y, bugW, h, () => drawGlint(ctx, TOP.x, y, easeOut(g)));
   }
 
-  // LIVE (black plate, static red square) or REPLAY (black on yellow)
+  // LIVE (black plate, static red square) or REPLAY (black plate, yellow text and
+  // square: yellow on black, so it never merges with a yellow programme tag)
   let x = TOP.x + BUG.w + 1;
   const tagW = v.replay ? REPLAY_W : LIVE_W;
   const tagP = easeOut((since - 0.08) / 0.3);
@@ -117,8 +133,9 @@ export function drawTopRow(ctx, t, v) {
   if (shown > 0) {
     clipped(ctx, x, y, shown, h, () => {
       if (v.replay) {
-        rect(ctx, x, y, tagW, h, P.yellow);
-        drawText(ctx, 'REPLAY', x + 4, y + 3, { color: P.black });
+        rect(ctx, x, y, tagW, h, P.black);
+        rect(ctx, x + 4, y + 5, 3, 3, P.yellow);
+        drawText(ctx, 'REPLAY', x + 10, y + 3, { color: P.yellow });
       } else {
         rect(ctx, x, y, tagW, h, P.black);
         rect(ctx, x + 4, y + 5, 3, 3, P.red);
