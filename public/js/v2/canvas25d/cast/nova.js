@@ -57,6 +57,7 @@ for (let i = 0; i < SC_N; i++) {
   const a = (i / SC_N) * 2 * Math.PI - Math.PI;
   SCALLOP[i] = 0.045 * Math.cos(a * 11) + 0.02 * Math.cos(a * 7 + 1.3);
 }
+const SC_MAX = 0.066; // |SCALLOP| never exceeds this
 
 /** Signed "inside" of the halo outline at (x, y): > 0 inside. Scalloped by the outer clusters. */
 function halo(x, y, lag) {
@@ -64,9 +65,13 @@ function halo(x, y, lag) {
   const ry = dy < 0 ? HALO.up : HALO.down;
   const xx = x - (dy > 0 ? lag * (dy / HALO.down) * 0.8 : 0);
   const u = xx / HALO.rx, v = dy / ry;
+  const r2 = u * u + v * v;
+  // the scallop only matters near the outline: skip the angle well inside and well outside
+  if (r2 > 1.16) return 1 - Math.sqrt(r2) + SC_MAX;
+  if (r2 < 0.82) return 1 - Math.sqrt(r2) - SC_MAX + 0.001 > 0 ? 0.1 : 1 - Math.sqrt(r2);
   const a = fastAtan2(v, u);
   const k = ((((a + Math.PI) / (2 * Math.PI)) * SC_N) | 0) & (SC_N - 1);
-  return 1 + SCALLOP[k] - Math.sqrt(u * u + v * v);
+  return 1 + SCALLOP[k] - Math.sqrt(r2);
 }
 
 // The hairline's small wave across the forehead, tabulated (feature-space x from -16 to 16 u).

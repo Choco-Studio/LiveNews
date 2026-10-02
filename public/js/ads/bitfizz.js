@@ -79,22 +79,30 @@ const labelTex = (r) =>
     { cpu: true },
   );
 
-/** The label's words, flat over its front; `big` for the hero bottle, else the end-slate one. */
-function labelText(ctx, cx, top, big, alpha) {
-  if (alpha <= 0) return;
-  const a0 = ctx.globalAlpha;
-  ctx.globalAlpha = a0 * alpha;
+/**
+ * The label's words, flat over its front; `big` for the hero bottle, else the
+ * end-slate one. `light` (0..1) steps the ink through darker palette colours as
+ * the key comes up (palette-pure, no alpha), the way the lathe shades the label.
+ */
+const GOLD_MID = [P.tanShade, P.tanShade, P.brown];
+function labelText(ctx, cx, top, big, light) {
+  if (light <= 0.05) return;
+  const lo = light < 0.4;
+  const mid = light < 0.75;
+  const gold = lo ? P.brown : mid ? GOLD_MID : GOLD;
+  const cream = lo ? P.brown : mid ? P.tanShade : P.cream;
+  const yellow = lo ? P.maroon : mid ? P.tanShade : P.yellow;
+  const dim = lo ? P.maroon : mid ? P.brown : P.tanShade;
   if (big) {
-    type(ctx, 'BITFIZZ', cx, top + 7, { face: 'serif', color: GOLD, align: 'center' });
-    type(ctx, 'RESERVE', cx + 1, top + 22, { face: 'body', color: P.yellow, track: 2, align: 'center' });
-    R(ctx, cx - 10, top + 32, 21, 1, P.tanShade);
-    type(ctx, 'AGED 12 YEARS', cx, top + 36, { face: 'micro', color: P.cream, track: 1, align: 'center' });
-    type(ctx, 'SERVER FARM 7', cx, top + 44, { face: 'micro', color: P.tanShade, track: 1, align: 'center' });
+    type(ctx, 'BITFIZZ', cx, top + 7, { face: 'serif', color: gold, align: 'center' });
+    type(ctx, 'RESERVE', cx + 1, top + 22, { face: 'body', color: yellow, track: 2, align: 'center' });
+    R(ctx, cx - 10, top + 32, 21, 1, dim);
+    type(ctx, 'AGED 12 YEARS', cx, top + 36, { face: 'micro', color: cream, track: 1, align: 'center' });
+    type(ctx, 'SERVER FARM 7', cx, top + 44, { face: 'micro', color: dim, track: 1, align: 'center' });
   } else {
-    type(ctx, 'BITFIZZ', cx, top + 8, { face: 'body', color: P.cream, align: 'center' });
-    type(ctx, 'RESERVE', cx + 1, top + 19, { face: 'micro', color: P.yellow, track: 1, align: 'center' });
+    type(ctx, 'BITFIZZ', cx, top + 8, { face: 'body', color: cream, align: 'center' });
+    type(ctx, 'RESERVE', cx + 1, top + 19, { face: 'micro', color: yellow, track: 1, align: 'center' });
   }
-  ctx.globalAlpha = a0;
 }
 
 const LAB = { cv: null, top: 0, h: 0, turn: 0.5 };
@@ -1039,7 +1047,7 @@ function shotHero(ctx, lt) {
   ctx.restore();
   contact(ctx, 192, base + 1, round(36 * k), 0.5);
   BO.rimK = 0.95 * up;
-  BO.text = 0.15 + 0.85 * up;
+  BO.text = 0.2 + 0.8 * up;
   bottle(ctx, 192, base + 2, k, texHero(), BO);
   glintStar(ctx, 188, base + 2 - round((BODY_H + STOP_H) * k) + 3, (lt - 2.55) / 0.8, P.white);
   vignette(ctx, 0.65);

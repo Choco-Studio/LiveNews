@@ -984,12 +984,55 @@ const fy = (v) => FY + v * FK;
 function localPts(arr) {
   for (let i = 0; i < arr.length; i += 2) pt(fx(arr[i]), fy(arr[i + 1]));
 }
-// Light from the front (screen right), wrapping a little over and under.
+// Light from the front (screen right), wrapping a little over and under: it
+// gives the rim. The form comes from planes painted like a hand-shaded portrait:
+// each a cluster of one tone, the ones that face the light lighter.
 const FACE_DIRS = [1, 0, 1, -0.45, 1, 0.45];
-/** Ramp index from the distance to the lit edge: a white rim, then the falloff. */
-const faceBand = (d) => (d <= 1 ? 0 : d <= 3 ? 1 : d <= 6 ? 2 : d <= 10 ? 3 : d <= 16 ? 4 : d <= 25 ? 5 : 6);
-// The jaw line (local), from below the ear to the chin: the neck under it is in shadow.
-const jawY = (lx) => 66 + (lx - 44) * (34 / 34);
+const rimBand = (d) => (d <= 1 ? 0 : d <= 2 ? 1 : d <= 3 ? 2 : 9);
+const FACE_PLANES = [
+  // [ramp index, polygon in face units]
+  [6, [44, 70, 79, 102, 70, 105, 60, 104, 50, 96, 40, 84]], // the neck under the jaw
+  [4, [52, 72, 63, 69, 76, 71, 80, 82, 76, 92, 66, 97, 54, 90]], // jaw and lower cheek
+  [3, [66, 10, 76, 14, 81, 24, 84, 34, 86, 40, 77, 41, 69, 34, 64, 22]], // forehead
+  [2, [73, 39, 86, 40, 85, 44, 76, 43.5]], // brow ridge
+  [5, [70, 45, 83, 46, 83, 54, 72, 54]], // the socket under the brow
+  [4, [61, 58, 72, 55, 81, 59, 83, 66, 76, 70, 63, 68]], // cheek
+  [3, [70, 57, 80, 59, 82, 64, 74, 65]], // cheekbone
+  [3, [79, 55, 84, 63, 89, 71, 84, 72, 79, 64, 76, 57]], // side of the nose
+  [2, [80, 49, 86, 54, 90, 62, 94, 71, 89, 71, 84, 63, 79, 55]], // ridge of the nose
+  [6, [83, 73, 92, 74, 88, 75, 85, 76, 82, 75]], // under the nose
+  [3, [79, 76, 85, 76, 87, 81, 86, 83, 79, 82]], // upper lip
+  [3, [80, 85, 86, 86, 85, 88, 80, 88]], // lower lip
+  [6, [78, 88, 85, 88, 82, 91, 78, 90.5]], // under the lower lip
+  [3, [73, 92, 82, 91, 84, 95, 83, 99, 79, 101.5, 72, 98]], // chin
+];
+const EAR = [42, 47, 46, 48, 47.5, 52, 47, 58, 45.5, 62, 44, 66, 41, 66.5, 39.5, 63, 39, 58, 38.5, 52, 40, 48];
+const EAR_BOWL = [42, 51, 44.6, 52, 45, 57, 44, 61, 42, 61, 41, 56];
+/** Fill a polygon (face units) into a ramp-index buffer, only inside the mask. */
+function polyIndex(idx, ids, arr, val) {
+  NP = 0;
+  localPts(arr);
+  let y0 = Infinity;
+  let y1 = -Infinity;
+  for (let i = 1; i < NP * 2; i += 2) {
+    if (PT[i] < y0) y0 = PT[i];
+    if (PT[i] > y1) y1 = PT[i];
+  }
+  for (let y = max(0, floor(y0)); y <= min(H - 1, ceil(y1)); y++) {
+    const sy = y + 0.5;
+    let k = 0;
+    for (let i = 0, j = NP - 1; i < NP; j = i++) {
+      const ay = PT[j * 2 + 1];
+      const by = PT[i * 2 + 1];
+      if ((ay <= sy && by > sy) || (by <= sy && ay > sy)) XS[k++] = PT[j * 2] + ((sy - ay) / (by - ay)) * (PT[i * 2] - PT[j * 2]);
+    }
+    if (k < 2) continue;
+    const a = max(0, round(min(XS[0], XS[1])));
+    const b = min(W, round(max(XS[0], XS[1])));
+    for (let x = a; x < b; x++) if (ids[y * W + x]) idx[y * W + x] = val;
+  }
+  NP = 0;
+}
 const faceBg = () => bake('hg-face-bg', W, H, (c) => {
   ditherField(c, 0, 0, W, H, [P.black, P.ink, P.slate], (x, y) => 0.95 - hypot((x - 40) / 260, (y - 90) / 200) * 1.1);
   glowBake(c, 340, 100, 90, 110, P.ink, 0.6);
@@ -1002,55 +1045,52 @@ const faceArt = () => bake('hg-face', W, H, (c) => {
     localPts(SHOULDER);
     fillPts(k, P.white);
   });
+  // the skin in shadow: ink, the back of the head and the shoulder darker
   const idx = new Int8Array(W * H).fill(-1);
-  distanceLight(ids, 0, 0, W, H, FACE_DIRS, 40, (x, y, id, d) => {
-    let b = faceBand(d);
-    const lx = (x - FX) / FK;
-    const ly = (y - FY) / FK;
-    if (b > 0) {
-      // the cheekbone: a broad plane that turns towards the light
-      if (hypot((lx - 69) / 13, (ly - 62) / 7) < 1) b = max(1, b - 1);
-      // the socket under the brow ridge
-      if (hypot((lx - 75) / 6, (ly - 51) / 3.6) < 1) b = min(6, b + 2);
-      // under the jaw the neck turns away from the light
-      if (lx > 40 && lx < 80 && ly > jawY(lx) && ly < jawY(lx) + 12) b = min(6, b + 2);
-      // the temple and the back of the skull fall off
-      if (lx < 60 && ly < 60) b = max(b, 4);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (!ids[y * W + x]) continue;
+      const lx = (x - FX) / FK;
+      const ly = (y - FY) / FK;
+      idx[y * W + x] = lx < 52 || ly > 112 ? 6 : 5;
     }
-    return b;
-  }, idx);
+  }
+  for (const [v, poly] of FACE_PLANES) polyIndex(idx, ids, poly, v);
+  // the rim along every edge that faces the light, wrapping the nose and chin
+  const rim = new Int8Array(W * H).fill(9);
+  distanceLight(ids, 0, 0, W, H, FACE_DIRS, 5, (x, y, id, d) => rimBand(d), rim);
+  for (let i = 0; i < W * H; i++) if (idx[i] >= 0 && rim[i] < idx[i]) idx[i] = rim[i];
   paintIndex(c, idx, GREYS);
-  // close-cropped hair: black, a little texture, a lit edge at the hairline
+  // close-cropped hair: black with a little texture, a lit edge at the hairline
   localPts(HAIR_S);
   fillPts(c, P.black);
   for (let k = 0; k < 40; k++) R(c, round(fx(12 + hash(k) * 44)), round(fy(4 + hash(k + 30) * 50)), 1, 1, P.ink);
   for (let i = 6; i < HAIR.length - 18; i += 2) R(c, round(fx(HAIR[i])) + 1, round(fy(HAIR[i + 1])), 1, 1, P.slate);
-  // the ear: rim of the helix lit at the front, the bowl dark, the lobe
-  ellipse(c, fx(42.6), fy(56), 4.6 * FK, 8.6 * FK, P.slate);
-  ellipse(c, fx(42), fy(57), 2.8 * FK, 5.6 * FK, P.ink);
-  ellipse(c, fx(42.4), fy(58), 1.4 * FK, 3 * FK, P.black);
-  for (let a = -1.2; a < 1.3; a += 0.12) R(c, round(fx(42.6) + cos(a) * 4.6 * FK - 1), round(fy(56) + sin(a) * 8.6 * FK), 1, 1, P.fog);
-  ellipse(c, fx(43), fy(64), 2.2 * FK, 1.8 * FK, P.slate);
-  R(c, round(fx(46)), round(fy(55)), 2, 3, P.steel);
+  // the ear: helix, the bowl in shadow, a lit rim on its upper edge, the lobe
+  localPts(EAR);
+  fillPts(c, P.slate);
+  localPts(EAR_BOWL);
+  fillPts(c, P.black);
+  for (let i = 0; i < 12; i += 2) R(c, round(fx(EAR[i])), round(fy(EAR[i + 1])) + 1, 1, 1, P.steel);
+  R(c, round(fx(46.6)), round(fy(55)), 2, 3, P.steel);
+  line(c, fx(41.5), fy(64), fx(43.5), fy(65.5), P.ink);
   // the brow: short hairs over the lit ridge
-  for (let k = 0; k < 9; k++) R(c, round(fx(70 + k * 1.3)), round(fy(45 + k * 0.12)), 1, 2, k & 1 ? P.ink : P.black);
-  // the eye: upper lid and lashes, a dark eye, a soft catchlight, the lower lid
-  line(c, fx(71), fy(49), fx(79.5), fy(49.6), P.black);
-  line(c, fx(79.5), fy(49.6), fx(81), fy(49), P.black);
-  ellipse(c, fx(76.5), fy(50.6), 2.2 * FK, 0.9 * FK, P.ink);
-  R(c, round(fx(77.4)), round(fy(50.2)), 2, 2, P.black);
-  R(c, round(fx(78.2)), round(fy(50)), 1, 1, P.fog);
-  line(c, fx(72.5), fy(52.4), fx(78.5), fy(52.1), P.slate);
+  for (let k = 0; k < 9; k++) R(c, round(fx(72 + k * 1.3)), round(fy(44.6 + k * 0.1)), 1, 2, k & 1 ? P.ink : P.black);
+  // the eye, half-closed in the effort: lid, lashes, the iris and a soft catchlight
+  line(c, fx(74), fy(49.4), fx(80), fy(49.8), P.black);
+  line(c, fx(80), fy(49.8), fx(81.5), fy(49.3), P.black);
+  R(c, round(fx(77.6)), round(fy(50.2)), 3, 2, P.black);
+  R(c, round(fx(76)), round(fy(50.6)), 2, 1, P.ink);
+  R(c, round(fx(79)), round(fy(50.2)), 1, 1, P.fog);
+  line(c, fx(75), fy(52.2), fx(79.5), fy(52), P.ink);
   // the nose: the crease of the wing and the nostril inside it
-  line(c, fx(82), fy(69.5), fx(84), fy(73.5), P.ink);
-  line(c, fx(84), fy(73.5), fx(86.5), fy(74.2), P.ink);
-  R(c, round(fx(86.5)), round(fy(73.4)), 2, 1, P.black);
-  // the lips: the line between them, a shadow under the lower lip
-  line(c, fx(78), fy(84.4), fx(84.5), fy(84), P.black);
-  line(c, fx(80), fy(88.5), fx(84), fy(88.2), P.ink);
-  R(c, round(fx(78)), round(fy(84.8)), 1, 1, P.ink);
+  line(c, fx(81), fy(69), fx(83.5), fy(73.2), P.ink);
+  R(c, round(fx(86)), round(fy(73.6)), 2, 1, P.black);
+  // the lips: the line between them
+  line(c, fx(78.5), fy(84.4), fx(84.5), fy(84), P.black);
   // the neck: the long muscle from behind the ear, the strap of the vest
-  line(c, fx(48), fy(72), fx(61), fy(117), P.ink);
+  line(c, fx(48), fy(74), fx(61), fy(117), P.black);
+  line(c, fx(49), fy(74), fx(62), fy(117), P.ink);
   pt(fx(8), fy(121));
   pt(fx(16), fy(119));
   pt(fx(10), fy(160));
