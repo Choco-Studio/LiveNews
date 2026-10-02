@@ -1726,180 +1726,184 @@ function knuckleNotches(b, y, xs) {
 
 const HAND_POSES = {
   palm(b, M) {
-    const F = [[-7, -27, 3], [-3, -29, 3], [1, -28, 3], [5, -24, 2]];
-    for (const [x, t, w] of F) finger(b, M, x, t, -15, w);
-    seam(b, M, -4, -24, -15);
-    seam(b, M, 0, -25, -15);
-    seam(b, M, 4, -21, -15);
-    b.rect(-7, -16, 14, 12, M);
-    b.poly([[-7, -13], [-12, -21], [-15, -20], [-11, -9], [-7, -5]], M);
-    b.rect(-5, -5, 10, 5, M);
-    b.toneLine(-4, -11, 4, -13, 1, [M]);
-    b.toneLine(-7, -12, -6, -7, 1, [M]);
+    const F = [[-10, -38, 4], [-5, -41, 4], [0, -39, 4], [5, -34, 3]];
+    for (const [x, t, w] of F) finger(b, M, x, t, -21, w);
+    seam(b, M, -6, -34, -21);
+    seam(b, M, -1, -35, -21);
+    seam(b, M, 4, -30, -21);
+    b.rect(-10, -22, 18, 16, M);
+    b.poly([[-10, -18], [-16, -29], [-20, -28], [-15, -12], [-10, -7]], M);
+    b.rect(-7, -7, 14, 7, M);
+    b.toneLine(-6, -15, 6, -18, 1, [M]);
+    b.toneLine(-9, -17, -8, -9, 1, [M]);
   },
   spread(b, M) {
-    finger(b, M, -10, -25, -14, 3);
-    finger(b, M, -4, -29, -15, 3);
-    finger(b, M, 1, -28, -15, 3);
-    finger(b, M, 6, -23, -14, 2);
-    b.rect(-8, -16, 15, 12, M);
-    b.poly([[-8, -12], [-14, -19], [-16, -17], [-11, -7], [-8, -5]], M);
-    b.rect(-5, -5, 10, 5, M);
-    b.toneLine(-5, -11, 4, -12, 1, [M]);
+    finger(b, M, -14, -35, -19, 4);
+    finger(b, M, -6, -41, -21, 4);
+    finger(b, M, 0, -39, -21, 4);
+    finger(b, M, 6, -32, -19, 3);
+    b.rect(-11, -22, 19, 16, M);
+    b.poly([[-11, -16], [-19, -27], [-22, -25], [-16, -10], [-11, -7]], M);
+    b.rect(-7, -7, 14, 7, M);
+    b.toneLine(-7, -15, 6, -17, 1, [M]);
   },
   point_up(b, M) {
-    finger(b, M, -6, -31, -17, 3);
-    b.rect(-7, -18, 14, 13, M);
-    knuckleNotches(b, -18, [-3, 0, 3, 6]);
-    for (const x of [-3, 0, 3]) b.toneLine(x, -17, x, -13, 1, [M]);
-    b.toneLine(-2, -12, 6, -12, 1, [M]);
-    b.poly([[-8, -11], [3, -12], [4, -9], [-8, -8]], M, -1);
-    b.toneLine(-7, -8, 3, -8, 2, [M]);
-    b.rect(-5, -6, 10, 6, M);
+    finger(b, M, -9, -44, -24, 4);
+    b.rect(-10, -25, 19, 18, M);
+    knuckleNotches(b, -25, [-5, -1, 3, 8]);
+    for (const x of [-5, -1, 3]) b.toneLine(x, -24, x, -18, 1, [M]);
+    b.toneLine(-4, -17, 8, -17, 1, [M]);
+    b.poly([[-11, -16], [4, -17], [5, -12], [-11, -11]], M, -1);
+    b.toneLine(-10, -11, 4, -11, 2, [M]);
+    b.rect(-7, -8, 14, 8, M);
   },
   count2(b, M) {
-    finger(b, M, -7, -30, -17, 3);
-    finger(b, M, -2, -31, -17, 3);
-    seam(b, M, -3, -21, -17);
-    b.rect(-7, -18, 14, 13, M);
-    knuckleNotches(b, -18, [2, 5]);
-    for (const x of [-3, 2]) b.toneLine(x, -17, x, -13, 1, [M]);
-    b.toneLine(1, -12, 6, -12, 1, [M]);
-    b.poly([[-8, -11], [3, -12], [4, -9], [-8, -8]], M, -1);
-    b.toneLine(-7, -8, 3, -8, 2, [M]);
-    b.rect(-5, -6, 10, 6, M);
+    finger(b, M, -10, -42, -24, 4);
+    finger(b, M, -4, -43, -24, 4);
+    seam(b, M, -6, -31, -24);
+    seam(b, M, -5, -31, -24);
+    b.rect(-10, -25, 19, 18, M);
+    knuckleNotches(b, -25, [3, 8]);
+    for (const x of [-5, 3]) b.toneLine(x, -24, x, -18, 1, [M]);
+    b.toneLine(1, -17, 8, -17, 1, [M]);
+    b.poly([[-11, -16], [4, -17], [5, -12], [-11, -11]], M, -1);
+    b.toneLine(-10, -11, 4, -11, 2, [M]);
+    b.rect(-7, -8, 14, 8, M);
   },
   count3(b, M) {
-    finger(b, M, -8, -28, -17, 3);
-    finger(b, M, -4, -31, -17, 3);
-    finger(b, M, 0, -30, -17, 3);
-    seam(b, M, -5, -22, -17);
-    seam(b, M, -1, -24, -17);
-    b.rect(-8, -18, 15, 13, M);
-    knuckleNotches(b, -18, [6]);
-    b.toneLine(3, -17, 3, -13, 1, [M]);
-    b.poly([[-9, -11], [2, -12], [3, -9], [-9, -8]], M, -1);
-    b.toneLine(-8, -8, 2, -8, 2, [M]);
-    b.rect(-5, -6, 10, 6, M);
+    finger(b, M, -11, -39, -24, 4);
+    finger(b, M, -6, -43, -24, 4);
+    finger(b, M, -1, -41, -24, 4);
+    seam(b, M, -7, -31, -24);
+    seam(b, M, -2, -33, -24);
+    b.rect(-11, -25, 20, 18, M);
+    knuckleNotches(b, -25, [8]);
+    b.toneLine(4, -24, 4, -18, 1, [M]);
+    b.poly([[-12, -16], [3, -17], [4, -12], [-12, -11]], M, -1);
+    b.toneLine(-11, -11, 3, -11, 2, [M]);
+    b.rect(-7, -8, 14, 8, M);
   },
   thumbs_up(b, M) {
-    b.span(-5, -4, -29, M);
-    b.rect(-6, -28, 4, 11, M);
-    b.pts([[-5, -27], [-4, -27], [-5, -26]], -1, [M]);
-    b.rect(-6, -18, 13, 14, M);
-    knuckleNotches(b, -18, [6]);
-    for (const y of [-15, -12, -9]) {
-      b.toneLine(-2, y, 6, y, 1, [M]);
-      b.set(6, y, 0, 0);
+    b.span(-8, -6, -40, M);
+    b.rect(-9, -39, 5, 15, M);
+    b.pts([[-8, -38], [-7, -38], [-6, -38], [-8, -37], [-7, -37]], -1, [M]);
+    b.rect(-9, -25, 18, 19, M);
+    knuckleNotches(b, -25, [8]);
+    for (const y of [-21, -17, -13]) {
+      b.toneLine(-3, y, 8, y, 1, [M]);
+      b.set(8, y, 0, 0);
     }
-    b.toneLine(-3, -17, -3, -6, 1, [M]);
-    b.rect(-4, -5, 9, 5, M);
+    b.toneLine(-4, -24, -4, -9, 1, [M]);
+    b.rect(-6, -7, 12, 7, M);
   },
   fist(b, M) {
-    b.rect(-7, -20, 14, 15, M);
-    knuckleNotches(b, -20, [-7, -4, 0, 3, 6]);
-    for (const x of [-4, 0, 3]) b.toneLine(x, -19, x, -14, 1, [M]);
-    b.toneLine(-6, -13, 6, -13, 1, [M]);
-    b.poly([[-8, -12], [3, -12], [4, -9], [-8, -9]], M, -1);
-    b.toneLine(-7, -8, 3, -8, 2, [M]);
-    b.rect(-5, -6, 10, 6, M);
+    b.rect(-10, -27, 19, 20, M);
+    knuckleNotches(b, -27, [-10, -6, -1, 4, 8]);
+    for (const x of [-6, -1, 4]) b.toneLine(x, -26, x, -19, 1, [M]);
+    b.toneLine(-9, -18, 8, -18, 1, [M]);
+    b.poly([[-11, -17], [4, -17], [5, -12], [-11, -12]], M, -1);
+    b.toneLine(-10, -11, 4, -11, 2, [M]);
+    b.rect(-7, -8, 14, 8, M);
   },
   point_side(b, M) {
-    b.rect(-7, -18, 12, 13, M);
-    b.rect(5, -17, 11, 3, M);
-    b.set(16, -16, M, 0);
-    b.rect(-1, -20, 7, 2, M, -1);
-    b.toneLine(-5, -14, 4, -14, 1, [M]);
-    b.toneLine(-5, -11, 4, -11, 1, [M]);
-    b.toneLine(5, -15, 14, -15, 1, [M]);
-    b.rect(-5, -6, 10, 6, M);
+    b.rect(-10, -25, 17, 18, M);
+    b.rect(7, -23, 15, 4, M);
+    b.span(22, 22, -22, M);
+    b.span(22, 22, -21, M);
+    b.rect(-2, -27, 10, 2, M, -1);
+    b.toneLine(-8, -19, 6, -19, 1, [M]);
+    b.toneLine(-8, -15, 6, -15, 1, [M]);
+    b.toneLine(7, -20, 20, -20, 1, [M]);
+    b.rect(-7, -8, 14, 8, M);
   },
   point_diag(b, M) {
-    b.rect(-7, -17, 13, 12, M);
-    knuckleNotches(b, -17, [-7]);
-    for (let k = 0; k < 11; k++) b.rect(1 + k, -18 - k, 3, 2, M);
-    b.set(14, -29, M, 0);
-    b.rect(-3, -20, 4, 3, M, -1);
-    b.toneLine(-5, -13, 5, -13, 1, [M]);
-    b.toneLine(-5, -10, 5, -10, 1, [M]);
-    b.rect(-5, -6, 10, 6, M);
+    b.rect(-10, -24, 18, 17, M);
+    knuckleNotches(b, -24, [-10]);
+    for (let k = 0; k < 15; k++) b.rect(1 + k, -25 - k, 4, 2, M);
+    b.set(19, -41, M, 0);
+    b.rect(-4, -27, 5, 4, M, -1);
+    b.toneLine(-8, -18, 7, -18, 1, [M]);
+    b.toneLine(-8, -14, 7, -14, 1, [M]);
+    b.rect(-7, -8, 14, 8, M);
   },
   point_cam(b, M) {
-    b.rect(-7, -20, 14, 16, M);
-    knuckleNotches(b, -20, [-7, -3, 1, 6]);
-    for (const x of [-3, 1]) b.toneLine(x, -19, x, -17, 1, [M]);
-    b.disc(-1, -13, 3, M, 2);
-    b.disc(-1, -13, 2, M, -1);
-    b.set(-2, -14, M, -2);
-    b.rect(-9, -17, 3, 10, M, -1);
-    b.toneLine(-6, -16, -6, -8, 1, [M]);
-    b.rect(-5, -5, 10, 5, M);
+    b.rect(-10, -27, 19, 21, M);
+    knuckleNotches(b, -27, [-10, -4, 2, 8]);
+    for (const x of [-4, 2]) b.toneLine(x, -26, x, -23, 1, [M]);
+    b.disc(-1, -17, 4, M, 2);
+    b.disc(-1, -17, 3, M, -1);
+    b.pts([[-2, -19], [-3, -18]], -2, [M]);
+    b.rect(-13, -23, 4, 14, M, -1);
+    b.toneLine(-9, -22, -9, -11, 1, [M]);
+    b.rect(-7, -7, 14, 7, M);
   },
   palm_side(b, M) {
-    b.rect(-6, -14, 11, 10, M);
-    for (const [y, h, end] of [[-14, 3, 14], [-11, 3, 15], [-8, 3, 14], [-5, 2, 11]]) {
-      b.rect(5, y, end - 5, h, M);
-      b.set(end, y + 1, M, 0);
-      b.toneLine(5, y + h - 1, end - 1, y + h - 1, 1, [M]);
+    b.rect(-9, -19, 16, 13, M);
+    for (const [y, h, end] of [[-19, 4, 19], [-15, 4, 21], [-11, 4, 19], [-7, 3, 15]]) {
+      b.rect(7, y, end - 7, h, M);
+      b.span(end, end, y + 1, M);
+      b.span(end, end, y + h - 2, M);
+      b.toneLine(7, y + h - 1, end - 1, y + h - 1, 1, [M]);
     }
-    for (let k = 0; k < 7; k++) b.rect(-4 + k, -15 - k, 3, 2, M, -1);
-    b.rect(-5, -4, 9, 4, M);
+    for (let k = 0; k < 9; k++) b.rect(-6 + k, -21 - k, 4, 2, M, -1);
+    b.rect(-7, -6, 13, 6, M);
   },
   back(b, M) {
-    const F = [[4, -27, 3], [0, -29, 3], [-4, -28, 3], [-7, -24, 2]];
+    const F = [[6, -38, 4], [1, -41, 4], [-4, -39, 4], [-8, -34, 3]];
     for (const [x, t, w] of F) {
-      finger(b, M, x, t, -15, w);
-      b.pts([[x + (w > 2 ? 1 : 0), t + 1], [x + (w > 2 ? 1 : 0), t + 2]], -1, [M]);
+      finger(b, M, x, t, -21, w);
+      b.pts([[x + 1, t + 1], [x + 2, t + 1], [x + 1, t + 2], [x + 2, t + 2]].slice(0, w > 3 ? 4 : 2), -1, [M]);
     }
-    seam(b, M, 3, -24, -15);
-    seam(b, M, -1, -25, -15);
-    seam(b, M, -5, -21, -15);
-    b.rect(-7, -16, 14, 12, M);
-    b.poly([[6, -13], [11, -21], [14, -20], [10, -9], [6, -5]], M);
-    for (const x of [-6, -3, 1, 5]) {
-      b.setTone(x, -15, -1, [M]);
-      b.setTone(x, -14, 1, [M]);
+    seam(b, M, 5, -34, -21);
+    seam(b, M, 0, -35, -21);
+    seam(b, M, -5, -30, -21);
+    b.rect(-8, -22, 18, 16, M);
+    b.poly([[10, -18], [16, -29], [20, -28], [15, -12], [10, -7]], M);
+    for (const x of [-7, -3, 2, 7]) {
+      b.setTone(x, -21, -1, [M]);
+      b.setTone(x + 1, -21, -1, [M]);
+      b.setTone(x, -20, 1, [M]);
     }
-    b.rect(-5, -5, 10, 5, M);
+    b.rect(-6, -7, 14, 7, M);
   },
   steeple(b, M) {
-    for (let y = -1; y >= -28; y--) {
+    for (let y = -1; y >= -38; y--) {
       const xc = Math.round((y + 1) * 0.42);
-      const w = y < -21 ? Math.max(2, 8 - (-21 - y)) : 8;
+      const w = y < -29 ? Math.max(3, 11 - (-29 - y)) : 11;
       b.span(xc - Math.floor(w / 2), xc + Math.ceil(w / 2) - 1, y, M);
     }
-    for (let y = -26; y < -14; y++) {
+    for (let y = -36; y < -20; y++) {
       const xc = Math.round((y + 1) * 0.42);
-      b.setTone(xc - 1, y, 1, [M]);
+      b.setTone(xc - 2, y, 1, [M]);
       b.setTone(xc + 1, y, 1, [M]);
     }
-    b.rect(-6, -13, 3, 7, M, -1);
+    b.rect(-9, -18, 4, 9, M, -1);
   },
   // --- UNIT-8 hands ---
   robot_open(b, M) {
-    b.rect(-8, -16, 16, 12, M);
-    b.rect(-8, -27, 4, 12, M);
-    b.rect(-3, -29, 4, 14, M);
-    b.rect(2, -27, 4, 12, M);
-    b.rect(-13, -18, 4, 9, M);
-    for (const y of [-23, -18]) b.toneLine(-8, y, 5, y, 2, [M]);
-    b.rect(-5, -4, 10, 4, M, 1);
-    b.set(0, -10, M, -2);
-    b.set(0, -9, M, 2);
+    b.rect(-11, -22, 22, 16, M);
+    b.rect(-11, -37, 5, 16, M);
+    b.rect(-4, -40, 6, 19, M);
+    b.rect(4, -37, 5, 16, M);
+    b.rect(-17, -24, 6, 11, M);
+    for (const y of [-31, -23]) b.toneLine(-11, y, 8, y, 2, [M]);
+    b.rect(-7, -6, 14, 6, M, 1);
+    b.set(0, -14, M, -2);
+    b.set(0, -13, M, 2);
   },
   robot_point(b, M) {
-    b.rect(-8, -18, 16, 14, M);
-    b.rect(-7, -30, 4, 13, M);
-    b.toneLine(-7, -24, -4, -24, 2, [M]);
-    for (const y of [-14, -10]) b.toneLine(-3, y, 7, y, 2, [M]);
-    b.rect(-5, -4, 10, 4, M, 1);
-    b.set(2, -16, M, -2);
+    b.rect(-11, -25, 22, 19, M);
+    b.rect(-10, -41, 6, 17, M);
+    b.toneLine(-10, -33, -5, -33, 2, [M]);
+    for (const y of [-19, -13]) b.toneLine(-3, y, 10, y, 2, [M]);
+    b.rect(-7, -6, 14, 6, M, 1);
+    b.set(3, -22, M, -2);
   },
   robot_fist(b, M) {
-    b.rect(-8, -20, 16, 16, M);
-    for (const x of [-4, 0, 4]) b.toneLine(x, -20, x, -14, 2, [M]);
-    b.toneLine(-8, -13, 7, -13, 2, [M]);
-    b.rect(-5, -4, 10, 4, M, 1);
+    b.rect(-11, -27, 22, 21, M);
+    for (const x of [-5, 0, 5]) b.toneLine(x, -27, x, -19, 2, [M]);
+    b.toneLine(-11, -18, 10, -18, 2, [M]);
+    b.rect(-7, -6, 14, 6, M, 1);
   },
 };
 
@@ -1917,9 +1921,9 @@ function buildHand(id, pose, s, rim, acc) {
   const robot = !!D.robot;
   const M = mats.push({ ramp: robot ? D.cloth : D.skin, rim: robot ? acc.ramp[3] : acc.skinRim }) - 1;
   const name = robot ? ROBOT_POSE[pose] || 'robot_open' : pose;
-  const tmp = new Buf(-24, -36, 48, 40);
+  const tmp = new Buf(-30, -48, 60, 52);
   HAND_POSES[name](tmp, M);
-  const b = new Buf(-24, -36, 48, 40);
+  const b = new Buf(-30, -48, 60, 52);
   tmp.each((x, y) => {
     const m = tmp.mat(x, y);
     if (m) b.set(s > 0 ? x : -1 - x, y, m, tmp.tone(x, y));
@@ -1939,7 +1943,7 @@ function buildHand(id, pose, s, rim, acc) {
   for (const [x, y] of form) b.setTone(x, y, 1);
   for (const [x, y] of lit) b.setTone(x, y, outline ? 1 : -1);
   b.each((x, y) => {
-    if (own(x, y) && !own(x + rim, y) && y < -6 && !outline) b.setTone(x, y, RIM);
+    if (own(x, y) && !own(x + rim, y) && y < -8 && !outline) b.setTone(x, y, RIM);
   });
   return b.render(mats);
 }
@@ -1951,7 +1955,7 @@ function drawSleeve(ctx, R, wx, wy, ex, ey) {
   for (let y = wy + 2; y < y1; y++) {
     const k = (y - wy) / Math.max(1, ey - wy);
     const xc = Math.round(wx + (ex - wx) * k);
-    const hw = Math.round(8 + 3 * k);
+    const hw = Math.round(10 + 3 * k);
     const xl = xc - hw;
     const xr = xc + hw - 1;
     rect(ctx, xl, y, xr - xl + 1, 1, base);
@@ -1967,7 +1971,7 @@ function drawSleeve(ctx, R, wx, wy, ex, ey) {
     if (R.robot && (y - wy) % 9 === 0) rect(ctx, xl + 1, y, xr - xl - 1, 1, deep);
   }
   // cuff
-  const cw = R.robot ? 7 : 7;
+  const cw = 9;
   rect(ctx, wx - cw, wy - 1, cw * 2, 3, R.cuff);
   rect(ctx, R.rim > 0 ? wx + cw - 3 : wx - cw, wy - 1, 3, 3, R.cuffShade);
   rect(ctx, wx - cw, wy + 2, cw * 2, 1, deep);
@@ -2076,58 +2080,58 @@ const TRACKS = {
   wave(p, G) {
     const e = env(p, 0.15, 0.85);
     const sw = R(Math.sin(p * Math.PI * 7) * 3 * e);
-    return { hands: [lift(G, Math.floor(p * 14) % 2 ? 'palm' : 'spread', G.arm, G.cx + G.arm * 58 + sw, G.top + 86, e)], emotion: 'happy', head: { dx: R(G.arm * e) } };
+    return { hands: [lift(G, Math.floor(p * 14) % 2 ? 'palm' : 'spread', G.arm, G.cx + G.arm * 60 + sw, G.top + 94, e)], emotion: 'happy', head: { dx: R(G.arm * e) } };
   },
   raise_hand(p, G) {
     const e = env(p);
-    return { hands: [lift(G, 'palm', G.arm, G.cx + G.arm * 56, G.top + 88, e)], brows: 'hi' };
+    return { hands: [lift(G, 'palm', G.arm, G.cx + G.arm * 58, G.top + 96, e)], brows: 'hi' };
   },
   point_screen(p, G) {
     const e = env(p, 0.18, 0.85);
-    if (!G.screen) return { hands: [lift(G, 'point_diag', 1, G.cx + 46, G.top + 108, e)], look: [2, -1], head: { dx: R(e) } };
-    return { hands: [lift(G, 'point_side', G.screen, G.cx + G.screen * 44, G.top + 112, e)], look: [2 * G.screen, 0], head: { dx: R(G.screen * e) } };
+    if (!G.screen) return { hands: [lift(G, 'point_diag', 1, G.cx + 46, G.top + 116, e)], look: [2, -1], head: { dx: R(e) } };
+    return { hands: [lift(G, 'point_side', G.screen, G.cx + G.screen * 46, G.top + 118, e)], look: [2 * G.screen, 0], head: { dx: R(G.screen * e) } };
   },
   point_camera(p, G) {
     const e = env(p);
-    return { hands: [lift(G, 'point_cam', G.arm, G.cx + G.arm * 20, G.top + 114, e)], head: { dy: R(e) }, brows: 'serious' };
+    return { hands: [lift(G, 'point_cam', G.arm, G.cx + G.arm * 22, G.top + 120, e)], head: { dy: R(e) }, brows: 'serious' };
   },
   point_partner(p, G) {
     const e = env(p);
-    return { hands: [lift(G, 'palm_side', G.partner, G.cx + G.partner * 42, G.top + 114, e)], look: [2 * G.partner, 0], head: { dx: R(G.partner * e) } };
+    return { hands: [lift(G, 'palm_side', G.partner, G.cx + G.partner * 44, G.top + 120, e)], look: [2 * G.partner, 0], head: { dx: R(G.partner * e) } };
   },
   thumbs_up(p, G) {
     const e = env(p);
-    return { hands: [lift(G, 'thumbs_up', G.arm, G.cx + G.arm * 48, G.top + 110, e)], emotion: 'happy' };
+    return { hands: [lift(G, 'thumbs_up', G.arm, G.cx + G.arm * 50, G.top + 118, e)], emotion: 'happy' };
   },
   shrug(p, G) {
     const e = env(p, 0.25, 0.75);
-    return { hands: [-1, 1].map((s) => lift(G, 'palm_side', s, G.cx + s * 48, G.top + 118, e)), body: { dy: -R(2 * e) }, head: { dy: R(2 * e) }, brows: 'surprised', mouth: 'sad', tilt: e > 0.5 ? G.arm : 0, robot: 'thinking' };
+    return { hands: [-1, 1].map((s) => lift(G, 'palm_side', s, G.cx + s * 50, G.top + 124, e)), body: { dy: -R(2 * e) }, head: { dy: R(2 * e) }, brows: 'surprised', mouth: 'sad', tilt: e > 0.5 ? G.arm : 0, robot: 'thinking' };
   },
   count(p, G) {
     const e = env(p, 0.15, 0.88);
     const pose = p < 0.42 ? 'point_up' : p < 0.62 ? 'count2' : 'count3';
-    return { hands: [lift(G, pose, G.arm, G.cx + G.arm * 50, G.top + 104, e)], look: [G.arm, 0] };
+    return { hands: [lift(G, pose, G.arm, G.cx + G.arm * 52, G.top + 112, e)], look: [G.arm, 0] };
   },
   steeple(p, G) {
     const e = env(p, 0.2, 0.85);
-    return { hands: [-1, 1].map((s) => lift(G, 'steeple', s, G.cx + s * 11, G.top + 122, e)), brows: 'serious' };
+    return { hands: [-1, 1].map((s) => lift(G, 'steeple', s, G.cx + s * 15, G.top + G.chin + 56, e)), brows: 'serious' };
   },
   chin(p, G) {
     const e = env(p, 0.2, 0.85);
-    return { hands: [lift(G, 'fist', G.arm, G.cx + G.arm * 7, G.top + G.chin + 21, e)], emotion: 'thinking', look: [-G.arm, -1], tilt: e > 0.5 ? G.arm : 0 };
+    return { hands: [lift(G, 'fist', G.arm, G.cx + G.arm * 8, G.top + G.chin + 28, e)], emotion: 'thinking', look: [-G.arm, -1], tilt: e > 0.5 ? G.arm : 0 };
   },
   wow(p, G) {
     const e = env(p, 0.15, 0.8);
-    return { hands: [-1, 1].map((s) => lift(G, 'spread', s, G.cx + s * 48, G.top + 88, e)), emotion: 'surprised', mouth: 'AO', robot: 'surprised' };
+    return { hands: [-1, 1].map((s) => lift(G, 'spread', s, G.cx + s * 52, G.top + 96, e)), emotion: 'surprised', mouth: 'AO', robot: 'surprised' };
   },
   fist_pump(p, G) {
     const e = env(p, 0.15, 0.85);
     const pump = R(-Math.abs(Math.sin(p * Math.PI * 3)) * 9 * e);
-    return { hands: [lift(G, 'fist', G.arm, G.cx + G.arm * 52, G.top + 102 + pump, e)], emotion: 'happy', body: { dy: pump < -5 ? -1 : 0 } };
+    return { hands: [lift(G, 'fist', G.arm, G.cx + G.arm * 54, G.top + 104 + pump, e)], emotion: 'happy', body: { dy: pump < -5 ? -1 : 0 } };
   },
   facepalm(p, G) {
     const e = env(p, 0.2, 0.8);
-    return { hands: [lift(G, 'back', G.arm, G.cx + G.arm * 15, G.top + 64, e)], eyes: e > 0.6 ? 'closed' : null, mouth: 'serious', head: { dy: R(e) }, robot: 'sad' };
+    return { hands: [lift(G, 'back', G.arm, G.cx + G.arm * 16, G.top + 70, e)], eyes: e > 0.6 ? 'closed' : null, mouth: 'serious', head: { dy: R(e) }, robot: 'sad' };
   },
   laugh(p, G) {
     const e = env(p, 0.1, 0.85);
@@ -2155,12 +2159,12 @@ const TRACKS = {
     const e = env(p, 0.2, 0.85);
     const tap = R(-Math.abs(Math.sin(p * Math.PI * 3)) * 4 * e);
     const y = R(lerp(H + 24, G.top + 138 + tap, G.robot ? Math.round(e * 3) / 3 : e));
-    return { hands: [-1, 1].map((s) => ({ pose: 'fist', s, x: G.cx + s * 26, y: y + 19 })), papers: { x: G.cx, y }, look: [0, 1] };
+    return { hands: [-1, 1].map((s) => ({ pose: 'fist', s, x: G.cx + s * 27, y: y + 24 })), papers: { x: G.cx, y }, look: [0, 1] };
   },
   glasses(p, G) {
     const e = env(p, 0.25, 0.8);
-    if (G.glasses) return { hands: [lift(G, 'point_up', G.arm, G.cx + G.arm * 31, G.top + G.eyeY + 31 + (p > 0.4 && p < 0.65 ? -2 : 0), e)] };
-    return { hands: [lift(G, 'back', G.arm, G.cx + G.arm * 32, G.top + 48 + R(Math.sin(p * 9) * 1.5), e)], look: [-G.arm, 0] };
+    if (G.glasses) return { hands: [lift(G, 'point_up', G.arm, G.cx + G.arm * 33, G.top + G.eyeY + 43 + (p > 0.4 && p < 0.65 ? -2 : 0), e)] };
+    return { hands: [lift(G, 'back', G.arm, G.cx + G.arm * 34, G.top + 58 + R(Math.sin(p * 9) * 1.5), e)], look: [-G.arm, 0] };
   },
 };
 const ROBOT_REACT = { wave: 'happy', thumbs_up: 'happy', fist_pump: 'happy', count: 'neutral', chin: 'thinking', point_camera: 'serious' };
@@ -2401,8 +2405,8 @@ export function drawCloseup(ctx, t, id, state, { side = 'center', accent = null 
     if (a.g > 0) {
       const e = 1 - (1 - a.g) ** 3;
       const s = a.gSide || G.arm;
-      const side2 = a.gPose === 'palm_side' ? 44 : 50;
-      hands = [lift(G, a.gPose, s, cx + s * side2, top + 120 + (a.gPose === 'palm_side' ? 2 : 0), e)];
+      const side2 = a.gPose === 'palm_side' ? 46 : 52;
+      hands = [lift(G, a.gPose, s, cx + s * side2, top + 128 + (a.gPose === 'palm_side' ? 2 : 0), e)];
     }
   } else a.g = 0;
   if (A.papers) drawPapers(ctx, A.papers.x + bodyDx, A.papers.y + bodyDy);
@@ -2412,7 +2416,7 @@ export function drawCloseup(ctx, t, id, state, { side = 'center', accent = null 
       if (hd.y >= H + 30) continue;
       const x = hd.x + bodyDx;
       const y = hd.y + bodyDy;
-      drawSleeve(ctx, R2, x, y, x + hd.s * 14, H + 40);
+      drawSleeve(ctx, R2, x, y, x + hd.s * 16, H + 46);
       const spr = cached(`hand|${id}|${hd.pose}|${hd.s}|${rim}|${acc.ramp[2]}`, () => buildHand(id, hd.pose, hd.s, rim, acc));
       ctx.drawImage(spr.canvas, x + spr.x0, y + spr.y0);
     }
