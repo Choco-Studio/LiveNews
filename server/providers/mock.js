@@ -351,7 +351,7 @@ function runningOrder(infos, n, program) {
   if (features.includes('lighter') && slots >= 1) {
     const ok = (i) => !i.breaking && !i.grave && !i.live;
     const own = (i) => !primary || i.s.category === primary;
-    lighter = take((i) => ok(i) && own(i) && i.curious) || take((i) => ok(i) && own(i) && i.light) || (primary ? null : take((i) => ok(i) && i.curious)) || take((i) => ok(i) && i.curious && !BEAT_OF_OTHERS.test(i.s.category)) || take((i) => ok(i) && i.light);
+    lighter = take((i) => ok(i) && own(i) && i.curious) || take((i) => ok(i) && own(i) && i.light) || take((i) => ok(i) && i.curious && !BEAT_OF_OTHERS.test(i.s.category)) || take((i) => ok(i) && i.light);
     if (lighter) slots--;
   }
   let number = null;

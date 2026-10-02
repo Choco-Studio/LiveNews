@@ -508,6 +508,71 @@ test('Stage: errors are logged once and reported, the frame returns false', () =
   assert.equal(logged.length, 1, 'each distinct error once');
 });
 
+test('Stage soak (simulated): 3 hours of episodes keep every list bounded and the rig clock under 900 s', () => {
+  const st = new Stage({ audio: null, channel: { presenters: {} } });
+  const voice = { slot: null, ctx: null, t0: 0, cps: 15 };
+  const fr = { slot: null, speaking: false, level: 0, viseme: 'rest', next: 'rest', mix: 0, wordIndex: -1, charIndex: -1, sentenceIndex: -1, accent: 0, pause: false };
+  st.audio = {
+    speechFrame(ms, slot, out = {}) {
+      const t = ms / 1000;
+      Object.assign(out, fr, { slot });
+      if (slot !== voice.slot || !voice.ctx) return out;
+      const c = Math.floor((t - voice.t0) * voice.cps);
+      const ss = voice.ctx.sentences;
+      if (c < 0 || c >= voice.ctx.seg.text.length) return out;
+      let k = 0;
+      while (k + 1 < ss.length && ss[k + 1].start <= c) k++;
+      out.speaking = true;
+      out.sentenceIndex = k;
+      out.charIndex = c - ss[k].start;
+      return out;
+    },
+  };
+  const DTS = 1 / 30;
+  let t = 1000;
+  let maxLists = 0;
+  let maxRig = 0;
+  let episodes = 0;
+  const heap0 = process.memoryUsage().heapUsed;
+  const long = episodeOf('world-now');
+  long.id = 'long-episode';
+  long.segments = [...long.segments, ...long.segments, ...long.segments, ...long.segments, ...long.segments]; // ~16 minutes
+  const order = [long, ...PROGRAMMES.map(episodeOf)];
+  while (t < 1000 + 3 * 3600) {
+    const ep = clone(order[episodes % order.length]);
+    ep.id = `${ep.id}-${episodes++}`;
+    const scene = sceneOf(ep, { shot: 'open', shotSince: t });
+    for (let i = 0; i < ep.segments.length; i++) {
+      const p = planSegment(ep, i, { gapAfter: 0.3 });
+      const plan = { id: `${ep.id}:${i}`, ctx: p.ctx, events: p.events, voice: 'mute', speechStart: null, speechEnd: null };
+      scene.segPlan = plan;
+      scene.anchors = { [p.ctx.speaker]: { emotion: p.ctx.emotion } };
+      scene.shot = i % 3 === 2 ? 'map' : i % 2 ? 'close' : 'wide';
+      scene.focus = p.ctx.speaker;
+      scene.shotSince = t;
+      const len = p.ctx.seg.text.length;
+      voice.slot = p.ctx.speaker;
+      voice.ctx = p.ctx;
+      voice.t0 = t + 0.1;
+      const end = voice.t0 + len / voice.cps;
+      for (; t < end + 0.4; t += DTS) {
+        if (t >= voice.t0 && plan.speechStart == null) plan.speechStart = t;
+        if (t >= end && plan.speechEnd == null) plan.speechEnd = t;
+        st.update(t, scene);
+        maxRig = Math.max(maxRig, t - st.epoch);
+        for (const a of st.actors) maxLists = Math.max(maxLists, a.perf.gestures.length, a.perf.look.length, a.perf.emotions.length);
+      }
+    }
+  }
+  assert.ok(episodes > 30, `${episodes} episodes`);
+  assert.ok(maxLists <= 40, `perf lists stay short (max ${maxLists})`);
+  assert.ok(maxRig < 900, `rig clock max ${maxRig.toFixed(0)} s`);
+  assert.ok(st.clock.stats.fired > 500, `events fired: ${st.clock.stats.fired}`);
+  global.gc?.();
+  const grew = (process.memoryUsage().heapUsed - heap0) / 1e6;
+  assert.ok(grew < 60, `heap growth ${grew.toFixed(1)} MB`);
+});
+
 // ---------------------------------------------------------------------------
 // fallback with backoff, perf watchdog
 

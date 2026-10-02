@@ -265,13 +265,7 @@ export class Stage {
     this.programId = program.id || 'world-now';
     this.accent = u32(THEME_ACCENT[program.theme] || P.red);
     this.style = null;
-    if (STYLES) {
-      try {
-        this.style = (STYLES.styleFor || STYLES.setStyle)?.(this.programId) || null;
-      } catch (err) {
-        this.log(`style ${this.programId}: ${err?.message || err}`);
-      }
-    }
+    this.styled = false;
     this.cutSince = undefined; // re-frame on the next update
     this.base = null;
   }
@@ -339,7 +333,19 @@ export class Stage {
 
   // --- picture ---------------------------------------------------------------
 
+  /** The programme's set style (SET's styles.js loads asynchronously: picked up as soon as it is there). */
+  styleNow() {
+    if (this.styled || !STYLES) return;
+    this.styled = true;
+    try {
+      this.style = (STYLES.styleFor || STYLES.setStyle)?.(this.programId) || null;
+    } catch (err) {
+      this.log(`style ${this.programId}: ${err?.message || err}`);
+    }
+  }
+
   render(ctx, t, scene) {
+    this.styleNow();
     const spec = this.spec;
     let cam = this.base || CAM.makeCamera();
     if (spec.move && typeof CAM.cameraAt === 'function') cam = CAM.cameraAt(spec, t - (scene.shotSince ?? this.cutAt), this.camOut) || cam;

@@ -1049,7 +1049,7 @@ const faceArt = () => bake('hg-face', W, H, (c) => {
   // the skin in shadow: ink near the lit side, black further back (the line
   // between them follows the profile, at a fixed depth from the lit edge)
   const idx = new Int8Array(W * H).fill(-1);
-  distanceLight(ids, 0, 0, W, H, FACE_BACK, 48, (x, y, id, d) => (d > 40 || (y - FY) / FK > 112 ? 6 : 5), idx);
+  distanceLight(ids, 0, 0, W, H, FACE_BACK, 48, (x, y, id, d) => (d > 40 ? 6 : 5), idx);
   for (const [v, poly] of FACE_PLANES) polyIndex(idx, ids, poly, v);
   // the rim along every edge that faces the light, wrapping the nose and chin
   const rim = new Int8Array(W * H).fill(9);
@@ -1230,10 +1230,12 @@ const revealArt = (lit) => bake(lit ? 'hg-reveal-lit' : 'hg-reveal-dark', W, H, 
     // the vest: dark cloth that turns from the key across the chest (its own
     // edges hide behind the arms); the pecs catch a little more of it
     if (id === 2) {
-      let v = 4 + floor((x - RX + 22) / 13);
-      if (y < 100 && hypot((x - (RX - 12)) / 12, (y - 92) / 8) < 1) v -= 1;
-      if (y > 100 && y < 104 && x < RX) v += 1;
-      return max(4, min(6, v));
+      // a dithered turn (Bayer 4x4, light falloff on cloth only)
+      let v = 4 + (x - RX + 26) / 16;
+      if (y < 100 && hypot((x - (RX - 12)) / 12, (y - 92) / 8) < 1) v -= 0.6;
+      const i = floor(v);
+      const k = (v - i) * 16 > BAYER[(y & 3) * 4 + (x & 3)] + 0.5 ? i + 1 : i;
+      return max(4, min(6, k));
     }
     let b = d <= 1 ? 1 : d <= 3 ? 2 : d <= 7 ? 3 : d <= 12 ? 4 : d <= 20 ? 5 : 6;
     // split light: his right side (screen right) falls into shadow
@@ -1304,6 +1306,7 @@ const revealArt = (lit) => bake(lit ? 'hg-reveal-lit' : 'hg-reveal-dark', W, H, 
   line(c, x - 6, 78, x, 83, P.ink);
   line(c, x + 6, 78, x, 83, P.black);
   line(c, x - 16, 64, x - 26, 94, P.slate);
+  line(c, x - 24, 101, x - 6, 102, P.ink);
   line(c, x - 24, 118, x - 15, 150, P.ink);
   line(c, x - 20, 124, x - 12, 160, P.ink);
   line(c, x + 13, 112, x + 20, 160, P.black);

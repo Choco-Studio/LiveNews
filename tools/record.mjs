@@ -33,6 +33,8 @@
 // --time     wall-clock time the page sees at start (ISO; default now)
 // --report   write events, loudness and A/V sync measurements to this JSON file
 // --wav      keep the rendered sound as this WAV file
+// --item     a saved episode/break JSON served for the page's first /api/next (re-record
+//            the same item; nothing advances the channel for it)
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -450,6 +452,15 @@ if (!opts.step) {
     const body = `${await res.text()}${hook}`;
     await route.fulfill({ response: res, body, headers: { ...res.headers(), 'cache-control': 'no-store', 'content-length': String(Buffer.byteLength(body)) } });
   });
+  if (opts.item) {
+    const item = fs.readFileSync(opts.item, 'utf8');
+    let served = false;
+    await page.route(/\/api\/next(\?.*)?$/, async (route) => {
+      if (served) return route.continue();
+      served = true;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: item });
+    });
+  }
   const T0 = opts.time ? new Date(opts.time).getTime() : Math.floor(Date.now() / 1000) * 1000;
   await page.clock.install({ time: T0 });
   await page.clock.pauseAt(T0 + 1000);
