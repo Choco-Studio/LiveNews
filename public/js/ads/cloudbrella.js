@@ -6,7 +6,7 @@
 // specifications. The product is "Cloud White" with a walnut handle; nothing
 // else has colour.
 //
-// Shot list (25.6 s, 96 bpm: a beat is 0.625 s, a bar 2.5 s; cuts on the beat grid):
+// Shot list (25.5 s, 96 bpm: a beat is 0.625 s, a bar 2.5 s; cuts on the beat grid):
 //  1  0.00 PROBLEM  a phone on the turntable, screen-lit; notification cards
 //                   stack up, then flood; keynote labels on the voice.      VO "For years, the cloud has followed you everywhere." / "Updates. Pop-ups. Terms and conditions."
 //  2  7.50 REVEAL   (from black) the spotlight comes on; the furled umbrella
@@ -153,7 +153,7 @@ const NOTES = [
   ['SYSTEM', 'UPDATE READY', 2], ['CLOUD', 'SYNC FAILED', 5], ['LEGAL', 'NEW TERMS', 4],
   ['BROWSER', 'COOKIES?', 3], ['ACCOUNT', 'SIGN IN AGAIN', 1], ['SYSTEM', 'RESTART NOW?', 2],
 ];
-const ARRIVE = [0.9, 2.0, 3.0, 4.2, 4.95, 5.7, 6.1, 6.4, 6.62, 6.8, 6.95, 7.07, 7.17, 7.26, 7.34, 7.41, 7.47, 7.53, 7.58, 7.63, 7.68];
+const ARRIVE = [0.9, 2.0, 3.0, 4.45, 5.2, 5.95, 6.3, 6.55, 6.75, 6.92, 7.06, 7.17, 7.26, 7.34, 7.41, 7.47, 7.53, 7.58, 7.63, 7.68, 7.72];
 const CARD_W = SC_W - 6;
 const CARD_H = 19;
 const PITCH = CARD_H + 3;
@@ -235,9 +235,9 @@ function shotProblem(ctx, lt) {
   fadeUp(ctx, '01', 200, 44, lt - 1.0, { face: 'thin', color: P.fog, dur: 0.8 });
   fadeUp(ctx, 'THE PROBLEM', 216, 46, lt - 1.1, { face: 'micro', color: P.fog, track: 2, dur: 0.8 });
   rule(ctx, 200, 60, 40, (lt - 1.3) / 0.8, P.slate, { align: 'left' });
-  fadeUp(ctx, 'UPDATES.', 200, 82, lt - 4.2, { face: 'thin', color: P.silver, track: 1, dur: 0.6 });
-  fadeUp(ctx, 'POP-UPS.', 200, 98, lt - 4.95, { face: 'thin', color: P.silver, track: 1, dur: 0.6 });
-  fadeUp(ctx, 'TERMS AND CONDITIONS.', 200, 114, lt - 5.7, { face: 'thin', color: P.white, track: 1, dur: 0.6 });
+  fadeUp(ctx, 'UPDATES.', 200, 82, lt - 4.45, { face: 'thin', color: P.silver, track: 1, dur: 0.6 });
+  fadeUp(ctx, 'POP-UPS.', 200, 98, lt - 5.2, { face: 'thin', color: P.silver, track: 1, dur: 0.6 });
+  fadeUp(ctx, 'TERMS AND CONDITIONS.', 200, 114, lt - 5.95, { face: 'thin', color: P.white, track: 1, dur: 0.6 });
 }
 
 // --- the product ------------------------------------------------------------------
@@ -708,7 +708,7 @@ const SHOTS = [
 // reveal resolves to D major as the light comes on (beat 12), a soft sub pulse
 // under the details; the resolution and a single bell on the end slate (beat
 // 34, 21.25 s). Every track ends in rests so the looping bed never restarts
-// inside the spot (27.5 s of music for 25.6 s).
+// inside the spot (27.5 s of music for 25.5 s).
 const PLUCK = { wave: 'tri', a: 0.003, d: 0.32, s: 0, r: 0.2, vib: false };
 const AIR = { wave: 'sine', a: 0.6, d: 1.5, s: 0.8, r: 1.2, vib: [5, 4, 0.4] };
 const BELL = { wave: 'sine', a: 0.002, d: 1.4, s: 0, r: 0.8, vib: false };
@@ -722,11 +722,11 @@ const ARP_A = 'E5:0.5@0.3 A4:0.5@0.2 C#5:0.5@0.26 A4:0.5@0.2 D5:0.5@0.3 A4:0.5@0
 export default {
   id: 'cloudbrella',
   brand: 'CLOUDBRELLA',
-  duration: 25.6,
+  duration: 25.5,
   voice: { gender: 'female', lang: 'en-US', pitch: 1.0, rate: 0.95 },
   script: [
-    { at: 0.6, text: 'For years, the cloud has followed you everywhere.' },
-    { at: 4.2, text: 'Updates. Pop-ups. Terms and conditions.' },
+    { at: 0.5, text: 'For years, the cloud has followed you everywhere.' },
+    { at: 4.45, text: 'Updates. Pop-ups. Terms and conditions.' },
     { at: 7.9, text: 'So we built something simpler.' },
     { at: 11.5, text: 'A zero-sync canopy.' },
     { at: 14.6, text: 'No Bluetooth. Anywhere.' },

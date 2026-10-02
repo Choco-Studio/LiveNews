@@ -107,7 +107,7 @@ export const ARMS = {
   steeple: {
     dur: 2.2,
     desc: 'fingertips together, thoughtful or serious',
-    stroke: 0.2,
+    stroke: 0.24,
     apex: 0.62,
     hold: 1.62,
     focus: 'both',
@@ -210,7 +210,7 @@ export const ARMS = {
   facepalm: {
     dur: 1.8,
     desc: 'facepalm, light comedy only',
-    stroke: 0.22,
+    stroke: 0.26,
     apex: 0.64,
     hold: 1.2,
     focus: 'near',
@@ -234,7 +234,7 @@ export const ARMS = {
   papers: {
     dur: 2.4,
     desc: 'tidy the papers on the desk, moving on',
-    stroke: 0.16,
+    stroke: 0.24,
     apex: 0.62,
     hold: 1.55,
     focus: 'both',
@@ -265,7 +265,7 @@ export const ARMS = {
   glasses: {
     dur: 1.4,
     desc: 'adjust glasses',
-    stroke: 0.18,
+    stroke: 0.22,
     apex: 0.6,
     hold: 0.9,
     focus: 'near',

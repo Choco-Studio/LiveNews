@@ -87,14 +87,15 @@ function drawTextured(buf, L, m, head, s, sk) {
     if (top ? x * x + dy * dy > vol * vol : Math.abs(x) > vol) return -1;
     const fx = x - yawX;
     const hw = hwAt(L, y);
-    const sideburn = Math.abs(x) > hw - 0.6 && y < -0.9 && y > H.craniumY - 1.5;
+    const sideburn = Math.abs(x) > hw - 0.45 && y < -1.1 && y > H.craniumY - 1.5;
     if (y > hairline(fx) && !sideburn && Math.abs(x) < hw - 0.05) return -1;
     if (y > H.craniumY + 0.6 && !sideburn) return -1;
     // the cap as a dome lit from the key (no square root per pixel: the front of the dome faces the lens)
     const l = -0.55 * (x / RV) - 0.7 * (dy / RV);
     let t = l > 0.62 ? 0 : l > -0.1 ? 1 : l > -0.55 ? 2 : 3;
     // faded sides read darker and flatter than the top; the top sits under the clumps
-    if (y > H.craniumY - 2.0) t = x > 0 ? 2 : 1;
+    // faded sides: short and flat, one step down from the top; only the far edge goes dark
+    if (y > H.craniumY - 2.0) t = x > hw - 0.1 ? 2 : 1;
     else if (tr > 0) t = y > hairline(fx) - 1.4 ? (x > 2.5 ? 2 : 1) : Math.min(3, t + 1); // short front hairs stay lit
     return t;
   });

@@ -68,6 +68,15 @@ function halo(x, y, lag) {
   return 1 + SCALLOP[k] - Math.sqrt(u * u + v * v);
 }
 
+// The hairline's small wave across the forehead, tabulated (feature-space x from -16 to 16 u).
+const HL_N = 512;
+const HL_WAVE = new Float32Array(HL_N);
+for (let i = 0; i < HL_N; i++) HL_WAVE[i] = Math.sin((i / (HL_N - 1) * 32 - 16) * 2.1);
+const clampIdx = (fx) => {
+  const i = Math.round(((fx + 16) / 32) * (HL_N - 1));
+  return i < 0 ? 0 : i >= HL_N ? HL_N - 1 : i;
+};
+
 /** Tight screen box of the halo (+ pad units), ignoring roll (≤ a few degrees). */
 function haloBox(head, pad, yFrom = HALO.cy - HALO.up) {
   const s = head.s;
@@ -96,7 +105,7 @@ function drawCoils(buf, L, m, head, s, sk) {
   const tr = tier(s);
   const yawX = Math.sin(head.yaw) * H.R * 0.75;
   const pitchShift = Math.sin(head.pitch) * 2.0;
-  const hairline = (fx) => H.top + 4.4 + pitchShift + fx * fx * 0.012 + 0.25 * Math.sin(fx * 2.1);
+  const hairline = (fx) => H.top + 4.4 + pitchShift + fx * fx * 0.012 + 0.25 * HL_WAVE[clampIdx(fx)];
   // a face window: open forehead and cheeks, hair down the sides to the jaw
   const inFace = (x, y) => {
     const fx = x - yawX;
@@ -107,9 +116,9 @@ function drawCoils(buf, L, m, head, s, sk) {
   buf.shape(x0, y0, x1, y1, m.hair, (px, py) => {
     local(head, px, py, LC);
     const x = LC[0], y = LC[1];
+    if (inFace(x, y) || below(x, y)) return -1; // cheap table tests first: the face is a big share of the box
     const v = halo(x, y, lag);
     if (v < 0) return -1;
-    if (inFace(x, y) || below(x, y)) return -1;
     const nx = x / HALO.rx, ny = (y - HALO.cy) / HALO.up;
     const l = -0.55 * nx - 0.7 * ny;
     if (tr === 0) {
@@ -121,7 +130,7 @@ function drawCoils(buf, L, m, head, s, sk) {
   });
   if (tr === 0) return;
   // ---- clusters on a jittered hexagonal lattice, top rows first so lower curls overlap
-  const d = tr === 1 ? 2.7 : s >= 3 ? 1.8 : 2.05; // spacing (units)
+  const d = tr === 1 ? 2.7 : s >= 3 ? 1.95 : 2.1; // spacing (units)
   const r = d * (tr === 1 ? 0.62 : 0.66);
   const sph = (cx, cy, out) => {
     local(head, cx, cy, LC);

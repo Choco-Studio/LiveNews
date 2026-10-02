@@ -472,6 +472,13 @@ const DFX = new Float32Array(DESK_N + 1), DFT = new Float32Array(DESK_N + 1), DF
 const DBX = new Float32Array(DESK_N + 1), DBT = new Float32Array(DESK_N + 1);
 const DNX = new Float32Array(DESK_N + 1);
 
+/** A desk colour on a facet turned away from the key: one step darker, or black. */
+function facetDim(c, facet, topC) {
+  if (facet === 2) return C.black;
+  if (facet === 1) return c === topC || c === C.slate ? C.ink : C.black;
+  return c;
+}
+
 function interpCol(xs, ys, n, x) {
   if (x < xs[0] || x > xs[n]) return NaN;
   let lo = 0, hi = n;
@@ -547,46 +554,54 @@ function rasterDesk(fr, cam, clipRows, led, style) {
   const panelHi = tech ? C.slate : C.ink, panelLo = tech ? C.ink : C.black;
   const refName = REFLECT[nameOfLed(led)];
   const refC = refName ? C[refName] : 0;
-  for (let x = 0; x < fr.w; x++) {
+  // marching indices over the tessellation (both edges are monotonic in x), then each column is a
+  // handful of flat segments: top surface, the silver edge, fascia, LED, panel, lower panel, kick
+  let jf = 0, jb = 0;
+  const W0 = fr.w;
+  for (let x = 0; x < W0; x++) {
     const cx = x + 0.5;
-    const yb = interpCol(DBX, DBT, DESK_N, cx);
-    const yt = interpCol(DFX, DFT, DESK_N, cx);
-    const ybot = interpCol(DFX, DFB, DESK_N, cx);
-    if (Number.isNaN(yt)) {
-      if (!Number.isNaN(yb)) clipRows[x] = Math.max(0, Math.round(yb)); // beyond the front curve, over the top surface
+    while (jb < DESK_N - 1 && DBX[jb + 1] <= cx) jb++;
+    while (jf < DESK_N - 1 && DFX[jf + 1] <= cx) jf++;
+    const inB = cx >= DBX[0] && cx <= DBX[DESK_N];
+    const inF = cx >= DFX[0] && cx <= DFX[DESK_N];
+    const ub = inB ? (cx - DBX[jb]) / Math.max(1e-6, DBX[jb + 1] - DBX[jb]) : 0;
+    const yb = inB ? DBT[jb] + (DBT[jb + 1] - DBT[jb]) * ub : NaN;
+    if (!inF) {
+      if (inB) clipRows[x] = Math.max(0, Math.round(yb)); // beyond the front curve, over the top surface
       continue;
     }
-    const top0 = Number.isNaN(yb) ? Math.round(yt) : Math.round(Math.min(yb, yt));
+    const uf = (cx - DFX[jf]) / Math.max(1e-6, DFX[jf + 1] - DFX[jf]);
+    const yt = DFT[jf] + (DFT[jf + 1] - DFT[jf]) * uf;
+    const ybot = DFB[jf] + (DFB[jf + 1] - DFB[jf]) * uf;
+    const turn = Math.abs(DNX[jf] + (DNX[jf + 1] - DNX[jf]) * uf);
+    const top0 = inB ? Math.round(Math.min(yb, yt)) : Math.round(yt);
     const top1 = Math.round(yt);
-    const bot = Math.round(ybot);
+    const bot = Math.min(fr.h, Math.round(ybot));
     clipRows[x] = Math.max(0, top0);
     // the curved ends turn away from the key: two flat facets, one and two steps darker
-    const turn = Math.abs(interpCol(DFX, DNX, DESK_N, cx));
     const facet = turn > 0.78 ? 2 : turn > 0.46 ? 1 : 0;
-    const fall = facet / 2;
     const kz = (ybot - yt) / D.deskH;
-    // the LED line and the silver edge are exactly 1 px per column, wherever the curve puts them
-    const ledRow = Math.round(yt + LED_Y * kz);
-    const ya = Math.max(0, top0), yz = Math.min(fr.h, bot);
-    for (let y = ya; y < yz; y++) {
+    // row boundaries on the panel (world Y → screen row, pixel-centre rule)
+    const ledRow = Math.round(yt + LED_Y * kz); // exactly 1 px per column, wherever the curve puts it
+    const rSplit = Math.ceil(yt + PANEL_SPLIT * kz - 0.5), rKick = Math.ceil(yt + (D.deskH - 8) * kz - 0.5);
+    const cTop = facetDim(topC, facet, topC), cFascia = facetDim(C.slate, facet, topC);
+    const cHi = facetDim(panelHi, facet, topC), cLo = facetDim(panelLo, facet, topC), cKick = C.black;
+    const cEdge = facet ? C.steel : C.silver;
+    for (let y = Math.max(0, top0); y < bot; y++) {
       let c;
-      if (y < top1) c = topC; // desk top surface
-      else if (y === top1) c = fall > 0.6 ? C.steel : C.silver; // 1 px silver highlight on the front edge
+      if (y < top1) c = cTop;
+      else if (y === top1) c = cEdge;
       else if (y === ledRow) c = led;
-      else {
-        // matte panels are flat colour with seams (ART_DIRECTION): fascia, front panel, kick plate
-        const Yp = (y + 0.5 - yt) / kz; // world Y of this row on the panel
-        if (Yp < LED_Y) c = C.slate; // a slim fascia under the edge
-        else if (Yp > D.deskH - 8) c = C.black; // kick plate
-        else c = Yp < PANEL_SPLIT ? panelHi : panelLo;
-      }
-      if (facet && c !== led && c !== C.silver) c = facet === 2 ? C.black : c === topC || c === C.slate ? C.ink : C.black;
-      px[y * fr.w + x] = c;
+      else if (y < ledRow) c = cFascia;
+      else if (y < rSplit) c = cHi;
+      else if (y < rKick) c = cLo;
+      else c = cKick;
+      px[y * W0 + x] = c;
     }
-    // floor reflection of the LED line (a darker palette step, ≤ 30 %)
+    // floor reflection of the LED line (a darker palette step, ≤ 30 %), never in the graphics zone
     if (refC) {
       const ry = Math.round(ybot + (D.deskH - LED_Y) * kz * 0.9);
-      if (ry >= 0 && ry < fr.h && ry < 150) px[ry * fr.w + x] = refC; // never inside the graphics zone
+      if (ry >= 0 && ry < fr.h && ry < 150) px[ry * W0 + x] = refC;
     }
   }
   // logo plate: a flat red block centred on the front, logo at the nearest integer scale

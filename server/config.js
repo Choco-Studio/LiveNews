@@ -67,9 +67,10 @@ export const config = {
   feedsFile: path.resolve(ROOT, env('FEEDS_FILE', path.join('config', 'feeds.json'))),
   dataDir: path.join(ROOT, 'data'),
   // Presenter voices: 'kokoro' synthesises every segment ahead of air with local neural voices
-  // (tools/voice, server/voice); 'browser' (or Kokoro missing) leaves it to the viewer's speechSynthesis.
+  // (tools/voice, server/voice; .env.example turns it on); 'browser' (the default, or Kokoro missing)
+  // leaves it to the viewer's speechSynthesis. Off by default so a bare checkout never loads a model.
   voice: {
-    engine: env('VOICE_ENGINE', 'kokoro').trim().toLowerCase() === 'kokoro' ? 'kokoro' : 'browser',
+    engine: env('VOICE_ENGINE', 'browser').trim().toLowerCase() === 'kokoro' ? 'kokoro' : 'browser',
     // Where kokoro-v1.0.onnx and voices-v1.0.bin live (empty: data/models, then ~/.cache/kokoro)
     kokoroDir: env('KOKORO_DIR', ''),
     // CPU threads for the voice model (0 = all), so OBS and the browser keep theirs

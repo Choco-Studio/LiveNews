@@ -152,10 +152,10 @@ describe('config from the environment', () => {
     }
   });
 
-  test('voices: Kokoro by default, browser for anything else, with the cache under data/voice', async () => {
+  test('voices: browser by default, Kokoro only when asked, with the cache under data/voice', async () => {
     const config = await loadConfig();
     assert.deepEqual(config.voice, {
-      engine: 'kokoro',
+      engine: 'browser',
       kokoroDir: '',
       threads: 0,
       python: 'python3',
@@ -203,7 +203,8 @@ describe('.env.example', () => {
     const fromExample = await loadConfig(
       Object.fromEntries(['HOST', 'PORT', 'PROVIDERS', 'QUEUE_SIZE', 'CANDIDATE_POOL', 'REVIEW_PASS', 'MIN_NEW_STORIES', 'MAX_STORY_AGE_HOURS', 'FEED_REFRESH_MINUTES', 'CODEX_TIMEOUT_MS', 'VOICE_ENGINE', 'KOKORO_DIR', 'KOKORO_THREADS', 'VOICE_PYTHON', 'VOICE_BUDGET_S', 'VOICE_CACHE_MB'].map((k) => [k, example[k]]))
     );
-    assert.deepEqual(fromExample.voice, defaults.voice);
+    // A .env made from the example turns the neural voices on; everything else about them is the default.
+    assert.deepEqual(fromExample.voice, { ...defaults.voice, engine: 'kokoro' });
     for (const key of ['host', 'port', 'providers', 'queueSize', 'candidatePool', 'reviewPass', 'minNewStories', 'maxStoryAgeHours', 'feedRefreshMinutes']) {
       assert.deepEqual(fromExample[key], defaults[key], key);
     }

@@ -64,8 +64,10 @@ export function drawCrop(buf, L, m, head, s) {
   const [x0, y0, x1, y1] = localBox(head, -a - 0.6, topY - 0.6, a + 0.6, 0.8);
   const q = LXY.set(head);
   CO.s = s;
-  CO.cw = s >= 3 ? 1.25 : 1.6;
-  CO.sep = tier === 2;
+  // close-ups: fine clumps; wider mediums (s ≥ 1.75): a few broad clumps so the top never reads as a cap
+  const clumps = tier === 2 || s >= 1.75;
+  CO.cw = s >= 3 ? 1.25 : tier === 2 ? 1.6 : 2.7;
+  CO.sep = clumps;
   buf.shape(x0, y0, x1, y1, m.hair, (px, py) => {
     q.at(px, py);
     const x = q.x, y = q.y;
@@ -100,7 +102,7 @@ export function drawCrop(buf, L, m, head, s) {
       if (tier === 2 && sideburn && y > -0.8) t = x > 0 ? 3 : 2;
       return t === 0 ? 1 : t;
     }
-    if (tier < 2) return t;
+    if (!clumps) return t;
     // textured top: clumps pushed up from the hairline, fanning back
     const up = hairline - y; // along the strands (units from the hairline)
     // clumps of uneven width (a warped across-coordinate), fanning back from the hairline

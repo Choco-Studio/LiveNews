@@ -398,8 +398,11 @@ export function createIntegLab(canvas, { episodes = EPISODES, presenters = PRESE
       const studioShots = show.shots.filter((s) => STUDIO_SHOTS.has(s.shot));
       const t0 = from ?? (studioShots[1] || studioShots[0]).t;
       const out = [];
+      const prof = { bg: 0, desk: 0, actors: 0, present: 0, n: 0 };
+      let total = 0, count = 0;
       for (let r = 0; r < runs; r++) {
         resetSim(Math.max(0, t0 - 2));
+        stage.prof = prof;
         const ms = [];
         let t = simFrom;
         for (let k = 0; ms.length < frames && k < frames * 8; k++) {
@@ -411,13 +414,24 @@ export function createIntegLab(canvas, { episodes = EPISODES, presenters = PRESE
           const a = performance.now();
           stage.frame(ctx, t, scene, draw && studio);
           const d = performance.now() - a;
-          if ((studio || !draw) && t >= t0) ms.push(d);
+          if ((studio || !draw) && t >= t0) {
+            ms.push(d);
+            total += d;
+            count++;
+          }
         }
         ms.sort((x, y) => x - y);
         out.push({ p50: ms[Math.floor(ms.length * 0.5)], p95: ms[Math.floor(ms.length * 0.95)], n: ms.length });
       }
       simT = Infinity; // force a fresh replay on the next render
-      return { runs: out, p50: Math.min(...out.map((o) => o.p50)), p95: Math.min(...out.map((o) => o.p95)) };
+      const k = 1 / Math.max(1, prof.n);
+      return {
+        runs: out,
+        p50: Math.min(...out.map((o) => o.p50)),
+        p95: Math.min(...out.map((o) => o.p95)),
+        mean: total / Math.max(1, count),
+        sections: { bg: prof.bg * k, desk: prof.desk * k, actors: prof.actors * k, present: prof.present * k },
+      };
     },
     state() {
       return { scene: { shot: scene?.shot, framing: scene?.framing, focus: scene?.focus, seg: scene?.segPlan?.index }, clock: stage?.clock.stats, perf: stage?.actors.map((a) => ({ slot: a.slot, gestures: a.perf.gestures.map((g) => g.name), looks: a.perf.look.length, emotions: a.perf.emotions.map((e) => e.name) })) };

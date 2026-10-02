@@ -245,7 +245,7 @@ export class Director {
     const cues = this.defaultCues(seg);
     // The server's recorded voice (or one that finished after the episode was fetched); null = browser voice.
     const recorded = await this.voices.audioFor(seg);
-    const v2 = this.v2?.begin(seg); // v2: scene.segPlan (speech start/end for the cue clock) + its shot cues
+    const v2 = this.v2?.begin(seg, recorded ?? null); // v2: scene.segPlan (timed for the voice that plays) + its shot cues
     const v2marks = v2?.speak?.marks || []; // v2 cuts that fall inside a sentence
     await this.audio.speak(seg.text, seg.anchor, {
       audio: recorded, // recorded voice from the server, when the episode has one (voice contract)

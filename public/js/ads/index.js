@@ -15,9 +15,12 @@ export const ADS = [bitfizz, screechnet, safesector, grandbuffer, cloudbrella, h
 
 /**
  * `count` distinct ads for a break. Ads never seen in `recentIds` (the play
- * history, oldest first) come first in random order; after that the least
- * recently played. The break never opens with the ad that played last, so an
- * ad cannot repeat back to back across breaks. `rand` is injectable for tests.
+ * history, oldest first) come first in random order; after that a random pick
+ * among the least recently played (up to the 2 x needed oldest, never the most
+ * recent ones), so once every ad has aired the order does not settle into a
+ * fixed carousel of fixed pairs. The break never opens with the ad that played
+ * last, so an ad cannot repeat back to back across breaks. `rand` is injectable
+ * (seeded) for tests and deterministic playout.
  */
 export function pickAds(count, recentIds = [], { ads = ADS, rand = Math.random } = {}) {
   const n = Math.max(0, Math.min(Math.floor(count) || 0, ads.length));
@@ -30,9 +33,11 @@ export function pickAds(count, recentIds = [], { ads = ADS, rand = Math.random }
     }
     return list;
   };
-  const fresh = shuffle(ads.filter((ad) => !lastSeen.has(ad.id)));
+  const fresh = shuffle(ads.filter((ad) => !lastSeen.has(ad.id))).slice(0, n);
   const stale = ads.filter((ad) => lastSeen.has(ad.id)).sort((a, b) => lastSeen.get(a.id) - lastSeen.get(b.id));
-  const picked = shuffle([...fresh, ...stale].slice(0, n));
+  const need = n - fresh.length;
+  const window = Math.max(need, Math.min(stale.length - need, 2 * need));
+  const picked = shuffle([...fresh, ...shuffle(stale.slice(0, window)).slice(0, need)]);
   const last = recentIds[recentIds.length - 1];
   if (picked.length > 1 && picked[0].id === last) picked.push(picked.shift());
   return picked;

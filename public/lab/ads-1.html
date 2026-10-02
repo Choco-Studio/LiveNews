@@ -40,7 +40,8 @@
     <script type="module">
       // Ads lab: renders any registered ad at any instant t (deterministic),
       // or a break of two ads back to back the way director.js plays them
-      // (stinger, the shot changes at its midpoint, every ad starts at dt = 0).
+      // (stinger, the shot changes at its midpoint, every ad starts at dt = 0 and its
+      // voice-over and bed run on that picture clock, as director.playAd does).
       // 'specimen' shows the kit's display faces, 'kit' the premium helpers.
       //   window.__lab.set({ ad: 'bitfizz-cola', mode: 'single'|'break'|'specimen'|'kit', second: 'cloudbrella', subs: true, zoom: [x, y, s] })
       //   ?zoom=x,y,s shows the 384/s x 216/s crop at (x, y) blown up s times (nearest neighbour) to judge pixels

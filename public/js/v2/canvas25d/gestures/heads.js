@@ -31,7 +31,7 @@ export const HEADS = {
     desc: 'shake head, disbelief or no',
     stroke: 0.1,
     apex: 0.3,
-    hold: 0.94,
+    hold: 0.82,
     focus: 'head',
     tracks: {
       yaw: [[0, 0], [0.1, 0.015], [0.3, -0.11], [0.52, 0.11], [0.74, -0.075], [0.94, 0.04], [1.25, 0, 's']],
@@ -62,7 +62,7 @@ export const HEADS = {
   lean_in: {
     dur: 2.0,
     desc: 'lean towards the camera for emphasis',
-    stroke: 0.2,
+    stroke: 0.24,
     apex: 0.62,
     hold: 1.4,
     focus: 'head',

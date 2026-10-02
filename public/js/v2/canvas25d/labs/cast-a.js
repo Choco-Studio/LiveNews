@@ -4,7 +4,7 @@
 //
 //   const lab = createCastALab(canvas | null)
 //   lab.render(t)     draw instant t (seconds) of the current mode
-//   lab.set({ mode, presenter, seat, scale, emotion, gesture, yaw, pitch, bg, k })
+//   lab.set({ mode, presenter, seat, scale, emotion, gesture, yaw, pitch, bg, k, zoom })
 //   lab.bench(n)      { min, median, runs } ms per frame: one presenter in a close single (k = 4), 5 runs
 //   lab.profile(n)    ms per frame by section: total, face (FACES), hair, body (neck, outfit, ears),
 //                     look (over hooks), arms (HANDS), resolve, and `rest` = total − face
@@ -17,6 +17,7 @@
 //     'gesture'     closeup performing `gesture` (any GESTURES name) from t = 0.3, looping every 4 s
 //     'studio'      the approved close single (camera.js singleCam, k) in the set, speaking
 //   `bg`: 'ink' (default) or 'set' (studio background behind closeups when the set module loads)
+//   `zoom`: integer nearest-neighbour enlargement around the head for close-up modes (1 = off)
 import { C } from '../pixbuf.js';
 import { frame, parts, actor, drawActors } from '../scene.js';
 import { drawCharacter, CHAR_PROFILE, GROUPS_PER_ACTOR } from '../character.js';
@@ -38,7 +39,7 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
 let SETMOD = null;
 import('../studio/set.js').then((m) => { SETMOD = m; }).catch(() => { SETMOD = null; });
 
-const state = { mode: 'lineup', presenter: 'paco', seat: 1, scale: 2.15, emotion: null, gesture: 'raise_hand', yaw: 0, pitch: 0, bg: 'ink', k: 4 };
+const state = { mode: 'lineup', presenter: 'paco', seat: 1, scale: 2.15, emotion: null, gesture: 'raise_hand', yaw: 0, pitch: 0, bg: 'ink', k: 4, zoom: 1 };
 const actors = new Map();
 function actorFor(id, kind) {
   const key = `${id}|${kind}|${state.seat}|${state.emotion}|${state.gesture}`;
@@ -69,15 +70,28 @@ function background(cam, t) {
   return false;
 }
 
-/** Draw one presenter with optional head offsets (turnaround) at screen (x, y), scale s. */
+/** Draw one presenter with optional head offsets (turnaround) at screen (x, y), scale s; returns the head frame. */
 function drawOne(a, t, x, y, s, yaw = 0, pitch = 0, clip = null) {
   parts.clear();
   if (clip) parts.clipY.set(clip);
   const sk = poseAt(a, t);
   sk.head.yaw += yaw;
   sk.head.pitch += pitch;
-  drawCharacter(parts, a.look, sk, { x, y, s, gb: 0, clip: !!clip });
+  const head = drawCharacter(parts, a.look, sk, { x, y, s, gb: 0, clip: !!clip });
   parts.resolve(frame);
+  return head;
+}
+
+/** Nearest-neighbour zoom of the frame around (cx, cy) by an integer factor (inspection at 1x pixels). */
+function zoomFrame(cx, cy, z) {
+  if (!(z > 1)) return;
+  const w = Math.floor(W / z), h = Math.floor(H / z);
+  const x0 = Math.max(0, Math.min(W - w, Math.round(cx - w / 2))), y0 = Math.max(0, Math.min(H - h, Math.round(cy - h / 2)));
+  for (let y = 0; y < H; y++) {
+    const sy = y0 + Math.min(h - 1, (y / z) | 0);
+    for (let x = 0; x < W; x++) comp[y * W + x] = frame.px[sy * W + x0 + Math.min(w - 1, (x / z) | 0)];
+  }
+  frame.px.set(comp);
 }
 
 function lineup(t) {
@@ -96,7 +110,9 @@ function lineup(t) {
 function closeup(t, kind, yaw = state.yaw, pitch = state.pitch) {
   const s = state.scale;
   background(state.bg === 'set' ? singleCam('A', s * 1.0) : null, t);
-  drawOne(actorFor(state.presenter, kind), t, 192, neckRow(s), s, yaw, pitch);
+  const head = drawOne(actorFor(state.presenter, kind), t, 192, neckRow(s), s, yaw, pitch);
+  // zoom: the head and shoulders enlarged (head a third down the frame)
+  if (state.zoom > 1) zoomFrame(head.cx, head.cy + 4 * s, state.zoom);
 }
 
 function turnaround(t) {

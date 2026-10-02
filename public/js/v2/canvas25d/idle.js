@@ -38,8 +38,10 @@ export function schedule(seed, persona) {
   let t = 0.6 + rnd() * 1.5;
   while (t < 900) {
     blinks.push(t);
-    if (rnd() < 0.2) blinks.push(t + 0.27 + rnd() * 0.06); // a double blink now and then
-    t += persona.blinkMin + rnd() * (persona.blinkMax - persona.blinkMin);
+    if (rnd() < 0.12) blinks.push(t + 0.27 + rnd() * 0.06); // a double blink now and then
+    // spread a little wider than the persona's range: speech and gaze shifts add their
+    // own blinks, and a newsreader who blinks too often reads as nervous (~15/min overall)
+    t += (persona.blinkMin + rnd() * (persona.blinkMax - persona.blinkMin)) * 1.4;
   }
   const sacc = [];
   t = 0;
@@ -90,8 +92,8 @@ function eventBlink(perf, fr, t, seed) {
     }
   }
   if (fr) {
-    if (t - fr.endAt < 0.3 && t >= fr.endAt && eventHash(fr.endAt, seed + 2) < 0.6 && fr.endAt + 0.05 > tb) tb = fr.endAt + 0.05;
-    if (t - fr.pauseAt < 0.3 && t >= fr.pauseAt && eventHash(fr.pauseAt, seed + 3) < 0.35 && fr.pauseAt + 0.03 > tb) tb = fr.pauseAt + 0.03;
+    if (t - fr.endAt < 0.3 && t >= fr.endAt && eventHash(fr.endAt, seed + 2) < 0.5 && fr.endAt + 0.05 > tb) tb = fr.endAt + 0.05;
+    if (t - fr.pauseAt < 0.3 && t >= fr.pauseAt && eventHash(fr.pauseAt, seed + 3) < 0.3 && fr.pauseAt + 0.03 > tb) tb = fr.pauseAt + 0.03;
   }
   return tb;
 }

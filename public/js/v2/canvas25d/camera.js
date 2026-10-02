@@ -42,6 +42,9 @@
 // eased sine in-out, no overshoot. A pull widens from the framing by `amount`.
 import { F, SET, kAt, sxOf, syOf } from './studio/geometry.js';
 import { lookFor } from './cast/index.js';
+import { PartBuffer } from './pixbuf.js';
+import { drawCharacter, GROUPS } from './character.js';
+import { poseAt } from './rig.js';
 
 export { kAt };
 
@@ -99,18 +102,64 @@ export function lookMetrics(L) {
   const H = L?.head || { top: -10.2, R: 7.6, cheekHW: 7.15, chinY: 9.4 };
   const at = L?.headAt || [0, -13.4];
   const [up, side] = HAIR[L?.hair?.style] || [1.7, 1.9];
-  const top = Number.isFinite(L?.bounds?.top) ? L.bounds.top : H.top - up;
-  const hw = Number.isFinite(L?.bounds?.hw) ? L.bounds.hw : Math.max(H.R, H.cheekHW) + side;
-  const m = {
+  let top = at[1] + (Number.isFinite(L?.bounds?.top) ? L.bounds.top : H.top - up);
+  let hw = Number.isFinite(L?.bounds?.hw) ? L.bounds.hw : Math.max(H.R, H.cheekHW) + side;
+  // the drawn head (hair, ears, glasses, antenna) measured once per look, with a margin for sway and nods
+  const m = L && !L.bounds ? measureHead(L, at[1] + H.chinY) : null;
+  if (m) {
+    top = m.top - 1.4; // margin: sway, nods and the 1.5x sampling
+    hw = m.hw + 1.4;
+  }
+  const out = {
     cx: at[0],
     cy: at[1],
-    top: at[1] + top, // crown of the hair (or antenna), relative to the neck base
+    top, // crown of the hair (or antenna), relative to the neck base
     chin: at[1] + H.chinY,
     eye: at[1] + (L?.eyes?.y ?? -0.7),
     hw, // half width with ears / hair
   };
-  if (L) METRICS.set(L, m);
-  return m;
+  if (L) METRICS.set(L, out);
+  return out;
+}
+
+/** Measure the cast's looks ahead of the first cut (INTEGRATION: call it when an episode arrives, idle time). */
+export function warmFraming(cast = {}) {
+  for (const id of Object.values(cast)) if (id) lookMetrics(lookFor(id));
+}
+
+let MEASURE_BUF = null;
+/**
+ * Extent of the head groups above the chin (rig units from the neck base), from
+ * the look drawn at s = 3 in a few idle poses. null if the rig cannot draw it.
+ */
+function measureHead(L, chin) {
+  try {
+    MEASURE_BUF ??= new PartBuffer();
+    const buf = MEASURE_BUF;
+    const s = 1.5, X = 192, Y = 100; // small: a few ms per look, once (warmFraming() at episode arrival)
+    const head = new Set([GROUPS.hairBack, GROUPS.ears, GROUPS.head, GROUPS.hair, GROUPS.over]);
+    for (let g = GROUPS.look; g <= GROUPS.glassesEnd; g++) head.add(g);
+    const a = { id: L.id, look: L, perf: { side: 1, seed: 11, gestures: [], emotions: [], look: [] } };
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity;
+    const yc = Math.floor(Y + chin * s);
+    for (const t of [0, 2.6]) {
+      buf.clear();
+      drawCharacter(buf, L, poseAt(a, t), { x: X, y: Y, s, gb: 0, clip: false });
+      for (let y = Math.max(0, buf.by0); y < Math.min(yc, buf.by1); y++) {
+        for (let x = buf.bx0; x < buf.bx1; x++) {
+          const i = y * buf.w + x;
+          if (!buf.mat[i] || !head.has(buf.grp[i])) continue;
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+        }
+      }
+    }
+    if (!Number.isFinite(y0)) return null;
+    return { top: (y0 - Y) / s, hw: Math.max(X - x0, x1 + 1 - X) / s };
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +249,7 @@ const SINGLES = {
 
 const CLEAR = 10; // px kept between a head and a bezel edge (ART_DIRECTION: none within 6 px; tests: 4)
 const CROWN_MIN = 24; // the crown stays below the top graphics row (bug, tag, clock: y 8-21)
+const EYE_MAX = 78; // eye lines stay on the upper third (y 60-80)
 
 /** The bezel edge nearest a head box: { gap, vertical, edge } (edge = its screen x or y). */
 function nearestEdge(h, bz) {
@@ -231,8 +281,10 @@ function fitSingle(spec, slot) {
     const info = framingInfo(cam, [{ slot, X: spec.X, look: spec.look }]);
     const h = info.heads[0];
     if (h.y0 < CROWN_MIN) {
-      // big hair (or an antenna): keep the crown below the top graphics row
-      spec = { ...spec, eyeY: spec.eyeY + (CROWN_MIN - h.y0) };
+      // big hair (or an antenna): keep the crown below the top graphics row; past the
+      // lower third of the eye-line band the shot loosens instead
+      const eyeY = spec.eyeY + (CROWN_MIN - h.y0);
+      spec = eyeY <= EYE_MAX ? { ...spec, eyeY } : { ...spec, k: spec.k * 0.94 };
       cam = compose(spec);
       continue;
     }
@@ -241,7 +293,10 @@ function fitSingle(spec, slot) {
     if (e.vertical) {
       const kp = kAt(cam, SET.presenterZ), kw = info.kw;
       const dir = h.cx < e.edge ? -1 : 1;
-      spec = { ...spec, headX: spec.headX + dir * Math.max(1, (CLEAR - e.gap + 1) / Math.max(0.2, 1 - kw / kp)) };
+      const step = dir * Math.max(1, (CLEAR - e.gap + 1) / Math.max(0.2, 1 - kw / kp));
+      // the frame edge wins over the bezel: a head that would leave the frame gets a looser shot instead
+      if (h.x0 + step < 2 || h.x1 + step > 382) spec = { ...spec, k: spec.k * 0.94 };
+      else spec = { ...spec, headX: spec.headX + step };
     } else {
       const below = e.edge >= (h.y0 + h.y1) / 2;
       spec = { ...spec, cy: (spec.cy ?? -60) + (below ? 3 : -3) };

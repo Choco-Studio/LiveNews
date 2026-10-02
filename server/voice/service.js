@@ -240,7 +240,9 @@ export class VoiceService {
     const t0 = Date.now();
     try {
       this.cache.ensureDir();
-      const timeoutMs = 90_000 + estimateSeconds(job.req.text) * 6000;
+      // Generous: on a busy machine Kokoro can run 10x slower than real time, and
+      // killing a slow but healthy worker only adds a model reload.
+      const timeoutMs = 240_000 + estimateSeconds(job.req.text) * 30_000;
       const reply = await this.worker.request({ ...job.req, out, levels: true }, { timeoutMs });
       const meta = {
         id: job.id,
@@ -381,13 +383,16 @@ export class VoiceService {
 
   /** Render every advert's voice-over lines (once; lowest priority). */
   async ensureAds() {
-    if (this.adsStarted || !this.enabled) return;
+    if (this.adsStarted || !this.enabled || Date.now() < (this.adsRetryAt || 0)) return;
     this.adsStarted = true;
     let ads;
     try {
       ads = await this.loadAds();
     } catch (err) {
-      this.log.warn?.(`[voice] adverts not voiced (${err.message})`);
+      // An advert module mid-edit must not cost the voice-overs for good: try again later.
+      this.log.warn?.(`[voice] adverts not voiced yet (${err.message})`);
+      this.adsStarted = false;
+      this.adsRetryAt = Date.now() + RETRY_MS;
       return;
     }
     const speech = await this.speechModule();

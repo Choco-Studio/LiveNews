@@ -258,9 +258,8 @@ const S = {
   pitchShift: 0, jaw: 0, jawY0: 0, jawK: 0, top: 0, lutY0: 0, lutN: 0, th: TONES[2], tier: 2, eyeY: 0, lx: 0, ly: 0, lz: 0,
 };
 
-function skinAt(px, py) {
-  const dx = px - S.cx, dy = py - S.cy;
-  const x = (dx * S.cr + dy * S.sr) * S.inv, y = (-dx * S.sr + dy * S.cr) * S.inv;
+/** Skin tone at head-local (x, y) units, or -1 outside the head (reads the per-frame state S). */
+function skinTone(x, y) {
   const H = S.H;
   if (y < S.top) return -1;
   const li = Math.round((y - S.lutY0) * 20);
@@ -268,7 +267,8 @@ function skinAt(px, py) {
   const hw = HW_LUT[li];
   if (hw <= 0) return -1;
   // the jaw follows the turn a little (3/4 view), as faceX moves the features
-  const jy = clamp((y - H.cheekY) / (H.chinY - H.cheekY), 0, 1);
+  let jy = (y - H.cheekY) * S.jyK;
+  jy = jy < 0 ? 0 : jy > 1 ? 1 : jy;
   const xs = x - S.yawShift * 1.3 * jy;
   if (xs > hw || xs < -hw) return -1;
   // back to feature space: undo pitch, the open jaw and the yaw
@@ -276,7 +276,7 @@ function skinAt(px, py) {
   if (S.jaw && fy > S.jawY0) fy -= S.jaw * Math.min(1, (fy - S.jawY0) * S.jawK);
   let fx = xs;
   if (S.yaw) {
-    let a = Math.asin(clamp(xs / hw, -1, 1)) - S.yaw;
+    let a = Math.asin(xs / hw) - S.yaw;
     if (a < -1.5707) a = -1.5707;
     else if (a > 1.5707) a = 1.5707;
     fx = hw * Math.sin(a);
@@ -290,7 +290,7 @@ function skinAt(px, py) {
   const nx1 = nx0 * S.cyw + nz0 * S.syw, nz1 = -nx0 * S.syw + nz0 * S.cyw;
   const ny2 = ny0 * S.cp + nz1 * S.sp, nz2 = -ny0 * S.sp + nz1 * S.cp;
   const nx3 = nx1 * S.cr - ny2 * S.sr, ny3 = nx1 * S.sr + ny2 * S.cr;
-  let l = nx3 * S.lx + ny3 * S.ly + nz2 * S.lz - fm.ao[c] * (S.tier ? 1 : 0.4);
+  const l = nx3 * S.lx + ny3 * S.ly + nz2 * S.lz - fm.ao[c] * (S.tier ? 1 : 0.4);
   const th = S.th;
   if (S.tier === 0) {
     // wide: one clean terminator, the far edge and the chin's underside in shade
@@ -312,7 +312,7 @@ export function drawHead(buf, L, m, head, s) {
   S.cr = head.cr;
   S.sr = head.sr;
   S.inv = 1 / s;
-  S.yaw = head.yaw || 0;
+  S.yaw = Math.abs(head.yaw || 0) < 1e-4 ? 0 : head.yaw;
   S.yawShift = Math.sin(S.yaw);
   S.cyw = Math.cos(S.yaw);
   S.syw = Math.sin(S.yaw);
@@ -323,6 +323,7 @@ export function drawHead(buf, L, m, head, s) {
   S.jaw = head.jaw || 0;
   S.jawY0 = L.mouth.y - 0.4;
   S.jawK = 1 / Math.max(0.5, H.chinY - S.jawY0);
+  S.jyK = 1 / (H.chinY - H.cheekY);
   S.top = H.top - 0.2;
   S.tier = s < 1.35 ? 0 : s < 2.2 ? 1 : 2;
   S.th = TONES[S.tier];
@@ -334,11 +335,34 @@ export function drawHead(buf, L, m, head, s) {
   const n = Math.min(HW_LUT.length, Math.ceil((H.chinY + S.jaw + 0.5 - S.lutY0) * 20) + 1);
   for (let i = 0; i < n; i++) HW_LUT[i] = headHW(H, S.lutY0 + i / 20, S.jaw);
   S.lutN = n;
-  const [x0, y0, x1, y1] = headBox(head, 0.5);
-  buf.shape(x0, y0, x1, y1, m.skin, skinAt);
-  if (S.tier) cleanTones(buf, m.skin, x0, y0, x1, y1);
+  // a tight box: the head's own extents (plus the jaw's 3/4 shift), rotated by the roll
+  const hx = (Math.max(H.R, H.cheekHW) + 1.5) * s, top = (H.top - 0.4) * s, bot = (H.chinY + S.jaw + 0.6) * s;
+  const ar = Math.abs(head.sr);
+  const bx0 = head.cx - hx - ar * bot - 1, bx1 = head.cx + hx + ar * bot + 1;
+  const by0 = head.cy + top - ar * hx - 1, by1 = head.cy + bot + ar * hx + 1;
+  // the pixel loop, inlined (PartBuffer.shape semantics: clip rows, group, depth)
+  const [x0, y0, x1, y1] = buf._bounds(bx0, by0, bx1, by1);
+  const { w, mat, tone, grp, z, clipY } = buf;
+  const g = buf.g, cz = buf.cz, clip = buf.clip, mt = m.skin;
+  const kx = head.cr * S.inv, ky = head.sr * S.inv;
+  for (let y = y0; y < y1; y++) {
+    const dy = y + 0.5 - head.cy;
+    const dx0 = x0 + 0.5 - head.cx;
+    let lx = dx0 * kx + dy * ky, ly = -dx0 * ky + dy * kx;
+    const row = y * w;
+    for (let x = x0; x < x1; x++, lx += kx, ly -= ky) {
+      if (clip && y >= clipY[x]) continue;
+      const t = skinTone(lx, ly);
+      if (t < 0) continue;
+      const i = row + x;
+      mat[i] = mt;
+      tone[i] = t;
+      grp[i] = g;
+      z[i] = cz;
+    }
+  }
+  if (S.tier) cleanTones(buf, mt, x0, y0, x1, y1);
 }
-
 /**
  * Pixel-art clean-up of the skin's tone clusters: a pixel that disagrees with
  * three or four of its same-material neighbours takes their tone (no 1 px spurs,

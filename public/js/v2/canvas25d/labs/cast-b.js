@@ -216,7 +216,7 @@ function applyZoom() {
   if (Array.isArray(state.focus)) [fx, fy] = state.focus;
   else if (heads[hi]) {
     fx = heads[hi].cx;
-    fy = heads[hi].cy + 4 * heads[hi].s;
+    fy = heads[hi].cy + 1.5 * heads[hi].s;
   }
   const w = 384 / z, h = 216 / z;
   const x0 = Math.round(Math.max(0, Math.min(384 - w, fx - w / 2))), y0 = Math.round(Math.max(0, Math.min(216 - h, fy - h / 2)));

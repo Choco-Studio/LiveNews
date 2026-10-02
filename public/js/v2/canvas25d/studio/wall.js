@@ -198,21 +198,25 @@ function pickBox(L, needW, needH, preferSide = true) {
 // ---------------------------------------------------------------------------
 // Fields
 
+/** The wall's idle field, filled only where the wall is on screen (CLIP, from the current camera). */
+const CLIP = { x0: 0, y0: 0, x1: 0, y1: 0 };
 function fillField(b, style, soft) {
   const [a, z] = style.wallField;
   const ca = C[a], cz = C[z];
   const { w, h, px } = b;
+  const x0 = CLIP.x0, x1 = CLIP.x1, y0 = CLIP.y0, y1 = CLIP.y1;
   if (ca === cz) {
     // out of focus, a field brighter than slate drops a step; ink and darker stay (MONEY MINUTE
     // keeps the home value range in its MCU-R)
-    px.fill(soft && LSTAR[a] > LSTAR.slate ? C[DARKER[a]] : ca);
+    const c = soft && LSTAR[a] > LSTAR.slate ? C[DARKER[a]] : ca;
+    for (let y = y0; y < y1; y++) px.fill(c, y * w + x0, y * w + x1);
     return;
   }
   // top colour easing into the bottom colour (keeps the area behind heads dark)
-  for (let y = 0; y < h; y++) {
+  for (let y = y0; y < y1; y++) {
     const q = Math.round(Math.max(0, Math.min(1, (y / Math.max(1, h)) * 1.25 - 0.15)) * 16);
     const row = y * w, br = (y & 3) << 2;
-    for (let x = 0; x < w; x++) px[row + x] = q > B16[br + (x & 3)] ? cz : ca;
+    for (let x = x0; x < x1; x++) px[row + x] = q > B16[br + (x & 3)] ? cz : ca;
   }
 }
 
@@ -467,20 +471,23 @@ function drawRing(b, cx, cy, R, front) {
   // a tilted annulus: steel with a fog band, a 1 px silver lit edge on the near (lower) rim
   const a0 = R * 1.42, a1 = R * 1.95, fl = 0.3, tilt = -0.31;
   const ct = Math.cos(tilt), st = Math.sin(tilt);
-  const ext = Math.ceil(a1 + 1);
-  for (let y = -ext; y <= ext; y++) {
-    for (let x = -ext; x <= ext; x++) {
-      const rx = x * ct + y * st, ry = (-x * st + y * ct) / fl;
-      const d = Math.hypot(rx, ry);
-      if (d < a0 || d > a1) continue;
-      const isFront = ry > 0;
-      if (isFront !== front) continue;
-      if (!front && x * x + y * y < (R + 0.5) * (R + 0.5)) continue; // hidden behind the planet
-      const u = (d - a0) / (a1 - a0);
+  // bounding box of the rotated ellipse (semi-axes a1 and a1·fl)
+  const ex = Math.ceil(Math.sqrt((a1 * ct) ** 2 + (a1 * fl * st) ** 2)) + 1;
+  const ey = Math.ceil(Math.sqrt((a1 * st) ** 2 + (a1 * fl * ct) ** 2)) + 1;
+  const a02 = a0 * a0, a12 = a1 * a1, R2 = (R + 0.5) * (R + 0.5), ifl = 1 / fl;
+  const icx = Math.round(cx), icy = Math.round(cy);
+  for (let y = -ey; y <= ey; y++) {
+    for (let x = -ex; x <= ex; x++) {
+      const rx = x * ct + y * st, ry = (-x * st + y * ct) * ifl;
+      const d2 = rx * rx + ry * ry;
+      if (d2 < a02 || d2 > a12) continue;
+      if (ry > 0 !== front) continue;
+      if (!front && x * x + y * y < R2) continue; // hidden behind the planet
+      const u = (Math.sqrt(d2) - a0) / (a1 - a0);
       let col = u > 0.45 && u < 0.7 ? C.fog : C.steel;
       if (u > 0.9 && ry > 0) col = C.silver;
       if (u < 0.12) col = C.slate; // the gap's shadowed inner edge
-      plot(b, Math.round(cx) + x, Math.round(cy) + y, col);
+      plot(b, icx + x, icy + y, col);
     }
   }
 }
@@ -927,6 +934,8 @@ export const wallTextScale = (k) => (k < 1.25 ? 1 : 2);
 function renderSpec(b, spec, style, env) {
   const { cs, ts, soft } = env;
   const L = layoutOf(spec, env, b.w, b.h);
+  // what of the wall is on screen with the CURRENT camera (a move may show more than at the cut)
+  set4(CLIP, clampN(-env.wx0 - 2, 0, b.w), clampN(-env.wy0 - 2, 0, b.h), clampN(386 - env.wx0, 0, b.w), clampN(218 - env.wy0, 0, b.h));
   fillField(b, style, soft);
   let sig = 0;
   switch (spec.mode) {
@@ -940,7 +949,7 @@ function renderSpec(b, spec, style, env) {
       } else {
         // the whole wall: TECH BYTES keeps its 2 px black mat inside the bezel
         const mat = style.pictureMat ? Math.max(2, Math.round(style.pictureMat * env.k)) : 0;
-        b.px.fill(C.black);
+        rect(b, CLIP.x0, CLIP.y0, CLIP.x1, CLIP.y1, C.black);
         drawPicture(b, src, m.x + mat, m.y + mat, m.w - 2 * mat, m.h - 2 * mat, maxL);
         darkBand(b, L.band, style, true);
       }
@@ -952,8 +961,17 @@ function renderSpec(b, spec, style, env) {
       // the map renders at the size it had at the cut (worldmap.js keeps buffers per size), and a
       // slow camera move resamples it instead of asking for a new size every frame
       if (!spec._mapWH) spec._mapWH = [Math.max(8, m.w), Math.max(8, m.h)];
-      SUB.size(spec._mapWH[0], spec._mapWH[1]);
-      if (!drawMiniMap(SUB, spec, style, env.t, Math.min(dt, MAP_ANIM[style.id] || MAP_ANIM.default))) drawStaticLocator(SUB, spec, style, ts);
+      const end = MAP_ANIM[style.id] || MAP_ANIM.default;
+      // once the locator has settled its last frame is kept: a camera move only resamples it
+      if (!(spec._mapDone && SUB.w === spec._mapWH[0] && SUB.h === spec._mapWH[1] && SUB.owner === spec)) {
+        SUB.size(spec._mapWH[0], spec._mapWH[1]);
+        SUB.owner = spec;
+        if (drawMiniMap(SUB, spec, style, env.t, Math.min(dt, end))) spec._mapDone = dt >= end;
+        else {
+          drawStaticLocator(SUB, spec, style, ts);
+          spec._mapDone = true;
+        }
+      }
       if (m.framed) frameBox(b, m, style, env);
       if (SUB.w === m.w && SUB.h === m.h) blitSub(b, SUB, m.x, m.y);
       else resampleSub(b, SUB, m.x, m.y, m.w, m.h);
@@ -1039,6 +1057,7 @@ function drawIdle(b, L, spec, style, env) {
 /** Clock of the time-driven content: re-render only when it changes. */
 function clockOf(spec, style, env) {
   if (spec.mode === 'map') {
+    if (!MAPFN || MAP_FAILED) return 0; // our static locator does not animate
     const dt = env.t - spec.since;
     const end = MAP_ANIM[style.id] || MAP_ANIM.default;
     if (!(dt < end)) return -1; // settled: one last frame, then still
@@ -1210,8 +1229,8 @@ export function updateWall(req, styleIn, w, h, k, t, cam, opts, lod = 0) {
   const cut = isCut(cam, opts, style, t);
   if (cut) {
     // a new shot re-lays the wall out for its framing
-    if (S.shown) S.shown._lay = S.shown._mapWH = null;
-    if (S.next) S.next._lay = S.next._mapWH = null;
+    if (S.shown) S.shown._lay = S.shown._mapWH = S.shown._mapDone = null;
+    if (S.next) S.next._lay = S.next._mapWH = S.next._mapDone = null;
     S.aKey.cam = S.bKey.cam = NaN;
   }
   let changed = false;
@@ -1255,8 +1274,8 @@ export function updateWall(req, styleIn, w, h, k, t, cam, opts, lod = 0) {
       const a = S.A.px, b = S.B.px, o = S.O.px;
       for (let y = 0; y < h; y++) {
         const row = y * w;
-        o.set(b.subarray(row, row + edge), row);
-        o.set(a.subarray(row + edge, row + w), row + edge);
+        for (let x = 0; x < edge; x++) o[row + x] = b[row + x];
+        for (let x = edge; x < w; x++) o[row + x] = a[row + x];
       }
       out = S.O;
       changed = true;

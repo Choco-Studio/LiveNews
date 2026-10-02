@@ -70,6 +70,7 @@ export function cuesFromPlan(plan, { hasImg = true } = {}) {
   return out.length ? out : null;
 }
 
+const NONE = {}; // replan key: no recording
 const WARM = { id: 'warm-up', program: { id: 'world-now' }, cast: { A: 'paco', B: 'lola' }, segments: [{ type: 'story', anchor: 'A', text: 'Good evening. Floods have forced 40,000 people from their homes in southern Brazil.', cues: [] }] };
 
 export class LiveDirection {
@@ -81,6 +82,7 @@ export class LiveDirection {
     this.audio = audio;
     this.ep = null;
     this.plans = new WeakMap();
+    this.replans = new WeakMap(); // seg -> { key, plan } made for the voice that really plays
     this.story = null; // { seg, cues, handler } registered by playStory
     this.idle = typeof requestIdleCallback === 'function' ? (fn) => requestIdleCallback(fn, { timeout: 1500 }) : (fn) => setTimeout(fn, 30);
     // the first plan of a session warms the text model and lexicon (~100-200 ms): do it now,
@@ -120,6 +122,21 @@ export class LiveDirection {
     return p;
   }
 
+  /** Plan segment i again for the voice that will actually play (recorded words, or none). */
+  replan(i, recorded) {
+    const seg = this.ep.segments[i];
+    const key = recorded || NONE;
+    const hit = this.replans.get(seg);
+    if (hit && hit.key === key) return hit.plan;
+    const segments = this.ep.segments.slice();
+    segments[i] = { ...seg, audio: recorded || undefined };
+    const t0 = performance.now();
+    const res = planSegment({ ...this.ep, segments }, i, { presenters: this.channel?.presenters || {}, gapAfter: GAP_AFTER });
+    const plan = { id: `${this.ep.id}:${i}`, index: i, ctx: res.ctx, events: res.events, errors: res.errors, voice: null, speechStart: null, speechEnd: null, ms: performance.now() - t0 };
+    this.replans.set(seg, { key, plan });
+    return plan;
+  }
+
   indexOf(seg) {
     return this.ep?.segments?.indexOf(seg) ?? -1;
   }
@@ -136,11 +153,17 @@ export class LiveDirection {
     return cues;
   }
 
-  /** say(): the segment's plan goes on air. Returns the handle for speak() and onSentence. */
-  begin(seg) {
+  /**
+   * say(): the segment's plan goes on air. `recorded` = the voice speak() will really play
+   * (the voice player's answer: a recording that arrived after the episode, or null when it
+   * falls back to the browser voice); a plan made for other timing is re-made for it.
+   * Returns the handle for speak() and onSentence.
+   */
+  begin(seg, recorded = undefined) {
     const i = this.indexOf(seg);
-    const p = i >= 0 ? this.planAt(i) : null;
+    let p = i >= 0 ? this.planAt(i) : null;
     if (!p) return null;
+    if (recorded !== undefined && (recorded || null) !== (seg.audio || null) && (recorded?.words?.length || seg.audio?.words?.length)) p = this.replan(i, recorded);
     p.voice = this.audio?.mode ?? null;
     p.speechStart = null;
     p.speechEnd = null;

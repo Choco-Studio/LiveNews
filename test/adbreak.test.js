@@ -1,6 +1,8 @@
 // Ad-break playout: pickAds rotation (no back-to-back repeats), the director
-// restarting the clock of every ad and headline-montage frame, the contract
-// every spot follows, and the commercial kit's faces and pure helpers.
+// restarting the clock of every ad and headline-montage frame and keeping the
+// voice-over and bed on that picture clock, the contract every spot follows
+// (including a smoke run of every spot's draw() on a recording fake canvas),
+// and the commercial kit's faces and pure helpers.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ADS, pickAds } from '../public/js/ads/index.js';
@@ -49,6 +51,20 @@ test('a long run of breaks with the real history never repeats an ad back to bac
       recent = [...recent, ad.id].slice(-24);
     }
   }
+});
+
+test('after every ad has aired, breaks do not settle into a fixed carousel of pairs', () => {
+  const rand = seeded(11);
+  let recent = ADS.map((a) => a.id); // everything has played once
+  const pairs = new Set();
+  for (let b = 0; b < 40; b++) {
+    const picked = pickAds(2, recent, { rand });
+    // never one of the two most recently played
+    for (const ad of picked) assert.ok(!recent.slice(-2).includes(ad.id), `break ${b}: ${ad.id} just played`);
+    pairs.add(picked.map((a) => a.id).join('>'));
+    recent = [...recent, ...picked.map((a) => a.id)].slice(-24);
+  }
+  assert.ok(pairs.size > ADS.length / 2 + 2, `only ${pairs.size} distinct pairs in 40 breaks`);
 });
 
 test('director restarts the shot clock for consecutive ads and montage frames', () => {
@@ -103,15 +119,140 @@ test('ads-1 spots: each voice-over line ends before the next one and inside the 
   }
 });
 
-test('ads-1 jingles cover the whole spot, every track in step', () => {
+test('ads-1 jingles cover the whole spot with a tail, every track in step', () => {
   for (const id of ['bitfizz-cola', 'cloudbrella']) {
     const ad = ADS.find((a) => a.id === id);
     const song = parseTune(ad.tune);
     const seconds = (song.beats * 60) / song.bpm;
-    assert.ok(seconds >= ad.duration - 0.5, `${id}: ${seconds.toFixed(1)} s of music for ${ad.duration} s`);
+    assert.ok(seconds >= ad.duration + 1, `${id}: ${seconds.toFixed(1)} s of music for ${ad.duration} s`);
     for (const tr of song.tracks) assert.equal(tr.beats, song.beats, `${id}: a ${tr.kind} track repeats early`);
     assert.ok(song.bpm <= 110, `${id}: a calm tempo`);
   }
+});
+
+test('no looping ad bed restarts inside its spot (music >= duration + 0.5 s)', () => {
+  for (const ad of ADS) {
+    const song = parseTune(ad.tune);
+    const seconds = (song.beats * 60) / song.bpm;
+    assert.ok(seconds >= ad.duration + 0.5, `${ad.id}: ${seconds.toFixed(2)} s of music for a ${ad.duration} s spot`);
+  }
+});
+
+test('ads-1 voice-overs stay short and calm (channel-and-breaks §5.5)', () => {
+  const words = (ad) => ad.script.reduce((n, l) => n + l.text.split(/\s+/).filter(Boolean).length, 0);
+  const bf = ADS.find((a) => a.id === 'bitfizz-cola');
+  assert.ok(words(bf) <= 25, `luxury spirits VO is ${words(bf)} words`);
+  for (const ad of [bf, ADS.find((a) => a.id === 'cloudbrella')]) {
+    for (const l of ad.script) assert.ok(!l.text.includes('!'), `${ad.id}: no exclamation in "${l.text}"`);
+  }
+});
+
+// --- the director keeps an ad's sound on its picture clock ------------------------
+
+test('playAd speaks each line and starts the bed on the picture clock, not 0.4 s late', async () => {
+  const spoken = [];
+  let tuneOpts = null;
+  const audio = {
+    setVoices() {},
+    playTune(tune, opts) {
+      tuneOpts = opts;
+      return { stop() {} };
+    },
+    async speak(text) {
+      spoken.push({ text, t: performance.now() / 1000 });
+    },
+  };
+  const director = new Director({ audio, channel: { name: 'T', slogan: '', presenters: {} } });
+  const ad = { id: 'x', voice: {}, tune: 'C4:1', duration: 0.62, script: [{ at: 0.32, text: 'one' }, { at: 0.48, text: 'two' }] };
+  director.setShot('ad', { card: { ad, line: -1 } });
+  const s = director.scene;
+  // the stinger's second half has already run when playAd is called
+  s.shotSince = performance.now() / 1000 - 0.25;
+  await director.playAd(ad);
+  const end = performance.now() / 1000 - s.shotSince;
+  assert.equal(spoken.length, 2);
+  for (let i = 0; i < 2; i++) {
+    const dt = spoken[i].t - s.shotSince;
+    assert.ok(Math.abs(dt - ad.script[i].at) < 0.06, `line ${i} at ${dt.toFixed(3)} s on the picture clock, script says ${ad.script[i].at}`);
+  }
+  assert.ok(Math.abs(tuneOpts.startAt - s.shotSince * 1000) < 1, 'the bed is scheduled from the cut');
+  assert.ok(end >= ad.duration - 0.02 && end < ad.duration + 0.1, `the ad holds ${end.toFixed(3)} s for a ${ad.duration} s spot`);
+});
+
+// --- every spot draws cleanly ----------------------------------------------------------
+
+/**
+ * A recording fake 2D context: counts save/restore, flags non-finite numeric
+ * arguments, out-of-range alpha and missing images. Canvases created by the
+ * ads (cached art, scratch buffers) get their own fake contexts.
+ */
+function fakeCanvasWorld() {
+  const issues = [];
+  let depth = 0;
+  let where = '';
+  const note = (kind) => {
+    if (issues.length < 20) issues.push(`${where}: ${kind}`);
+  };
+  const makeCtx = (cv) => {
+    const state = { canvas: cv };
+    return new Proxy(state, {
+      get(t, p) {
+        if (p in t) return t[p];
+        if (p === 'save') return () => depth++;
+        if (p === 'restore') return () => depth--;
+        if (p === 'createImageData') return (a, b) => {
+          const w = typeof a === 'object' ? a.width : a;
+          const h = typeof a === 'object' ? a.height : b;
+          return { width: w, height: h, data: new Uint8ClampedArray(w * h * 4) };
+        };
+        if (p === 'getImageData') return (x, y, w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) });
+        if (p === 'measureText') return () => ({ width: 10 });
+        if (p === 'createPattern' || p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+        return (...args) => {
+          for (const a of args) if (typeof a === 'number' && !Number.isFinite(a)) note(`${String(p)} got ${a}`);
+          if (p === 'drawImage' && (!args[0] || !args[0].width || !args[0].height)) note('drawImage of an empty image');
+        };
+      },
+      set(t, p, v) {
+        if (p === 'globalAlpha' && !(v >= 0 && v <= 1)) note(`globalAlpha ${v}`);
+        t[p] = v;
+        return true;
+      },
+    });
+  };
+  const doc = {
+    createElement() {
+      const cv = { width: 300, height: 150 };
+      let ctx = null;
+      cv.getContext = () => (ctx ||= makeCtx(cv));
+      return cv;
+    },
+  };
+  return { doc, makeCtx, issues, at: (w) => (where = w), depth: () => depth };
+}
+
+test('every ad draws its whole spot without errors, bad numbers or unbalanced save/restore', () => {
+  const world = fakeCanvasWorld();
+  const prevDoc = globalThis.document;
+  globalThis.document = world.doc;
+  try {
+    for (const ad of ADS) {
+      const ctx = world.makeCtx({ width: 384, height: 216 });
+      for (let dt = 0; dt < ad.duration + 0.5; dt += 0.1) {
+        world.at(`${ad.id} @${dt.toFixed(1)}s`);
+        const before = world.depth();
+        let line = -1;
+        ad.script.forEach((l, i) => {
+          if (dt >= l.at && dt < l.at + 2.5) line = i;
+        });
+        assert.doesNotThrow(() => ad.draw(ctx, dt, dt, { line, speaking: line >= 0, duration: ad.duration }), `${ad.id} at ${dt.toFixed(1)} s`);
+        assert.equal(world.depth(), before, `${ad.id} at ${dt.toFixed(1)} s: save/restore balanced`);
+      }
+    }
+  } finally {
+    globalThis.document = prevDoc;
+  }
+  assert.deepEqual(world.issues, [], world.issues.join('\n'));
 });
 
 test('kit display faces have every capital, digit and common mark', () => {

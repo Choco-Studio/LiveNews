@@ -88,6 +88,12 @@ function wallVisible(cam) {
 
 const REST_FRAME = Object.freeze({ slot: null, speaking: false, level: 0, viseme: 'rest', next: 'rest', mix: 0, wordIndex: -1, charIndex: -1, sentenceIndex: -1, accent: 0, pause: false });
 
+function lap(prof, key, since) {
+  const now = performance.now();
+  prof[key] = (prof[key] || 0) + now - since;
+  return now;
+}
+
 const FRAME_KEYS = ['slot', 'speaking', 'level', 'viseme', 'next', 'mix', 'wordIndex', 'charIndex', 'sentenceIndex', 'accent', 'pause'];
 function copyFrame(src, out) {
   if (!out || out === src) return src;
@@ -161,6 +167,7 @@ export class Stage {
     this.inset = null;
     this.nextPrune = 0;
     this.speaker = null;
+    this.prof = null;
   }
 
   setChannel(channel) {
@@ -323,13 +330,17 @@ export class Stage {
     let cam = this.base || CAM.makeCamera();
     if (spec.move && typeof CAM.cameraAt === 'function') cam = CAM.cameraAt(spec, t - (scene.shotSince ?? this.cutAt), this.camOut) || cam;
     QUALITY.lag = this.lod < 1;
+    const prof = this.prof; // labs: { bg, desk, actors, present, n } ms accumulators, null on air
+    let p0 = prof ? performance.now() : 0;
     const o = this.bgOpts;
     o.style = this.style || this.programId;
     o.shotSince = scene.shotSince ?? this.cutAt;
     o.lod = this.lod;
     SETM.drawBackground(frame, cam, t, o);
     o.cut = false;
+    if (prof) p0 = lap(prof, 'bg', p0);
     SETM.drawDesk(frame, cam, this.clipRows, this.style ? undefined : this.accent);
+    if (prof) p0 = lap(prof, 'desk', p0);
     // place the actors (inline placeActor: no allocation), skip anyone off screen
     const k = kAt(cam, SET.presenterZ);
     const s = Math.max(0.5, Math.round(22 * k) / 22);
@@ -344,8 +355,13 @@ export class Stage {
       if (it.x + 48 * s >= 0 && it.x - 48 * s <= W) vis.push(it);
     }
     const heads = drawActors(t - this.epoch, vis, this.clipRows);
+    if (prof) p0 = lap(prof, 'actors', p0);
     frame.present(ctx);
     if (this.inset) this.drawInset(ctx, heads);
+    if (prof) {
+      lap(prof, 'present', p0);
+      prof.n++;
+    }
   }
 
   /** The story picture beside a single (old renderer's inset box, calmer frame). */
