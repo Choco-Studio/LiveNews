@@ -14,15 +14,21 @@
 // shot, light gestures never on grave stories.
 import { GESTURES } from '../gestures/index.js';
 
-/** @returns planned gesture and emotion events for every slot */
+// OWNERSHIP (CONTRACTS "planner arbitration"): this planner owns the SPEAKER's
+// body only. Cues for another slot ([B:nod], [B:look_partner]) and every
+// look_partner cue are eyeline/listener business: planBehaviour (FACES) reads
+// them from ctx.seg.cues. direction/index.js drops listener nods from here.
+
+/** @returns planned gesture and emotion events for the speaker (emotions for any slot) */
 export function planGestures(ctx) {
   const seg = ctx.seg;
   const out = [];
-  const cues = seg.cues?.length ? seg.cues : defaultCues(ctx);
+  const cues = Array.isArray(seg.cues) && seg.cues.length ? seg.cues : defaultCues(ctx);
   for (const cue of cues) {
-    const slot = cue.slot && ctx.cast[cue.slot] ? cue.slot : ctx.speaker;
+    const slot = cue.slot && cue.slot in ctx.cast ? cue.slot : ctx.speaker;
     const at = Math.max(0, ctx.timeAt(cue.char) - 0.25);
     if (cue.emotion) out.push({ kind: 'emotion', slot, name: cue.emotion, char: cue.char, at });
+    else if (slot !== ctx.speaker || cue.action === 'look_partner') continue;
     else if (cue.action && GESTURES[cue.action]) out.push({ kind: 'gesture', slot, name: cue.action, char: cue.char, at });
   }
   return out;
@@ -30,8 +36,7 @@ export function planGestures(ctx) {
 
 function defaultCues(ctx) {
   const { seg } = ctx;
-  if (seg.type === 'intro' || seg.type === 'outro') return [{ char: 0, action: ctx.grave ? 'nod' : 'wave' }];
-  if (seg.type === 'chat') return [{ char: 0, action: ctx.duo ? 'look_partner' : 'nod' }];
+  if (seg.type === 'intro' || seg.type === 'outro') return [{ char: 0, action: 'nod' }];
   if (seg.type === 'story') return [{ char: 0, action: seg.hasImage ? 'point_screen' : ctx.grave ? 'nod' : 'raise_hand' }];
   return [];
 }

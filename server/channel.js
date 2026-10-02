@@ -59,6 +59,48 @@ export function validateChannel(ch) {
       }
     }
     if (p.chemistry !== undefined && typeof p.chemistry !== 'string') throw new Error(`programme "${id}" has a "chemistry" that is not text`);
+    validateEditorial(id, p);
+  }
+  for (const [id, who] of Object.entries(ch.presenters)) {
+    if (who.role !== undefined && typeof who.role !== 'string') throw new Error(`presenter "${id}" has a "role" that is not text`);
+  }
+}
+
+const isList = (v) => Array.isArray(v) && v.every((x) => typeof x === 'string');
+const isListOrMap = (v) => isList(v) || (v && typeof v === 'object' && !Array.isArray(v) && Object.values(v).every(isList));
+
+/** Optional editorial keys a programme may carry (see CONTRACTS.md, editorial): types and ranges. */
+function validateEditorial(id, p) {
+  const fail = (msg) => {
+    throw new Error(`programme "${id}" ${msg}`);
+  };
+  if (p.headlineMax !== undefined && !(Number.isInteger(p.headlineMax) && p.headlineMax >= 20 && p.headlineMax <= 80)) fail('has a "headlineMax" outside 20..80');
+  if (p.intro !== undefined && !['headlines', 'teaser', 'frame'].includes(p.intro)) fail('has an unknown "intro" (headlines, teaser or frame)');
+  if (p.numberSlot !== undefined && !['main', 'second', 'last'].includes(p.numberSlot)) fail('has an unknown "numberSlot" (main, second or last)');
+  if (p.toss !== undefined && (typeof p.toss !== 'string' || !p.toss.includes('{name}'))) fail('has a "toss" without {name}');
+  if (p.outroAnchor !== undefined && !['A', 'B'].includes(p.outroAnchor)) fail('has an "outroAnchor" that is not A or B');
+  for (const key of ['noQuestions']) if (p[key] !== undefined && typeof p[key] !== 'boolean') fail(`has a "${key}" that is not true/false`);
+  if (p.thanksMax !== undefined && !(Number.isInteger(p.thanksMax) && p.thanksMax >= 0)) fail('has a "thanksMax" that is not a whole number');
+  if (p.happyOnly !== undefined && !isList(p.happyOnly)) fail('has a "happyOnly" that is not a list');
+  if (p.roundup !== undefined) {
+    const r = p.roundup;
+    if (!r || typeof r !== 'object') fail('has a "roundup" that is not an object');
+    if (r.opener !== undefined && typeof r.opener !== 'string') fail('has a round-up "opener" that is not text');
+    for (const k of ['min', 'max']) if (r[k] !== undefined && !(Number.isInteger(r[k]) && r[k] >= 2 && r[k] <= 6)) fail(`has a round-up "${k}" outside 2..6`);
+  }
+  if (p.chats !== undefined) {
+    const c = p.chats;
+    if (!c || typeof c !== 'object' || (c.after !== undefined && !(isList(c.after) && c.after.every((a) => ['lead', 'story', 'lighter'].includes(a))))) fail('has "chats" with an invalid "after" (lead, story, lighter)');
+  }
+  if (p.timing !== undefined) {
+    const t = p.timing;
+    if (!t || typeof t !== 'object' || !(t.target > 0) || !(t.wpm > 0)) fail('has a "timing" without a positive target and wpm');
+  }
+  if (p.gestures !== undefined) {
+    const g = p.gestures;
+    if (!g || typeof g !== 'object') fail('has "gestures" that are not an object');
+    for (const k of ['allow', 'listener']) if (g[k] !== undefined && !isListOrMap(g[k])) fail(`has gestures "${k}" that are not a list (or a list per presenter)`);
+    for (const k of ['deny', 'grave']) if (g[k] !== undefined && !isList(g[k])) fail(`has gestures "${k}" that are not a list`);
   }
 }
 
@@ -71,7 +113,7 @@ export function castOf(channel, programId) {
 /** Public view of the channel for the browser (no prompt-only fields). */
 export function publicChannel(channel) {
   const presenters = Object.fromEntries(
-    Object.entries(channel.presenters).map(([id, p]) => [id, { name: p.name, voice: p.voice }])
+    Object.entries(channel.presenters).map(([id, p]) => [id, { name: p.name, voice: p.voice, ...(p.role ? { role: p.role } : {}) }])
   );
   const programs = Object.fromEntries(
     Object.entries(channel.programs).map(([id, p]) => [

@@ -45,10 +45,6 @@ const smooth = (x) => {
   return v * v * (3 - 2 * v);
 };
 const sine = (x) => (1 - cos(PI * c01(x))) / 2;
-const io = (x) => {
-  const v = c01(x);
-  return v < 0.5 ? 4 * v * v * v : 1 - (-2 * v + 2) ** 3 / 2;
-};
 const mod = (a, n) => ((a % n) + n) % n;
 const ramp = (t, a, b) => sine(prog(t, a, b));
 /** Keyframe track on a flat [t0, v0, t1, v1, ...] array, sine-eased between keys. */
@@ -680,7 +676,7 @@ const rail = () => bake('hg-rail', RAIL_W, 66, (c) => {
 const RUN_TH = [0, -0.5, 0.15, -0.12, 0.3, 0.45, 0.45, 0.78, 0.5, 0.66, 0.75, 0.1, 1, -0.5];
 const RUN_KN = [0, 0.35, 0.15, 1.75, 0.3, 1.3, 0.45, 0.4, 0.5, 0.2, 0.75, 0.45, 1, 0.35];
 const RUN_PF = [0, 0.7, 0.2, 0.3, 0.45, -0.1, 0.5, -0.2, 0.75, 0.1, 1, 0.7];
-const RUN_LAYERS = [[P.white, 0, 0], [P.fog, 1, 0], [P.slate, 2, 1], [P.black, 3, 1]];
+const RUN_LAYERS = [[P.white, 0, 0], [P.slate, 1, 0], [P.black, 2, 1]];
 const STRIDE = 1.5; // seconds per full cycle (slow motion)
 function shotRun(c, lt) {
   c.drawImage(sky(), 0, 0);
@@ -752,7 +748,7 @@ const gym = () => bake('hg-gym', W, H, (c) => {
   c.globalAlpha = 1;
 });
 const LIFT_Q = [0, 0, 0.35, 0, 1.25, 1, 1.75, 1, 2.35, 0, 2.45, 0, 3.25, 1, 3.75, 1, 4.45, 0];
-const LIFT_LAYERS = [[P.silver, 0, 0], [P.steel, 0, 1], [P.slate, 0, 2], [P.black, 0, 4]];
+const LIFT_LAYERS = [[P.silver, 0, 0], [P.slate, 0, 1], [P.black, 0, 3]];
 function plate(c, x, y, r) {
   ellipse(c, x, y, r, r, P.black);
   ellipse(c, x, y - 1, r - 1, r - 1, P.slate);
@@ -856,7 +852,7 @@ function paintFace(c, col, ox, oy) {
   facePts(FACE_S, ox, oy);
   fillPts(c, col);
 }
-const FACE_LAYERS = [[P.white, 0, 0], [P.silver, -1, 0], [P.fog, -2, 0], [P.steel, -3, 0], [P.slate, -6, 0], [P.ink, -12, 0], [P.black, -24, 1]];
+const FACE_LAYERS = [[P.white, 0, 0], [P.fog, -1, 0], [P.steel, -3, 0], [P.slate, -6, 0], [P.ink, -12, 0], [P.black, -24, 1]];
 // A separation light on the wall behind the head; dark in front of the face,
 // where the key light comes from out of frame.
 const faceBg = () => bake('hg-face-bg', W, H, (c) => {
@@ -965,34 +961,44 @@ function paintBust(c, col) {
   ellipse(c, x, top + 0.5 * u - RC, 0.37 * u, 0.5 * u, col);
   ellipse(c, x, top + 0.83 * u - RC, 0.27 * u, 0.19 * u, col);
 }
-// Light bands: [colour, dx, dy, width, gap]. A band keeps the silhouette's
-// pixels within `width` of an edge facing (dx, dy) that has at least `gap`
-// empty pixels in front of it, so narrow inner gaps stay dark.
-const BANDS = [
-  P.ink, -1, 0, 8, 5, P.ink, 1, 0, 8, 5, P.slate, 0, -1, 3, 4,
-  P.steel, -1, 0, 3, 6, P.slate, 1, 0, 3, 6,
-  P.silver, -1, 0, 1, 6, P.fog, 1, 0, 1, 6,
+// Rim light by masks, on a figure-sized scratch. For each light direction the
+// silhouette S is dilated once towards the light (D = S shifted 0..GAP px);
+// a band of width w is then S minus D shifted by w: the pixels within w of an
+// edge that faces the light across at least GAP empty pixels, so the narrow
+// gaps between arm and torso stay dark.
+const RB_X = 112; // scratch window over the bust
+const RB_W = 160;
+const GAP = 6;
+// [dx, dy, then (colour, width) pairs, widest first]
+const LIGHTS = [
+  [-1, 0, P.ink, 8, P.steel, 3, P.silver, 1],
+  [1, 0, P.ink, 8, P.slate, 3, P.fog, 1],
+  [0, -1, P.slate, 3],
 ];
 function rimLit(ctx, paint) {
-  const S = buf('hg-sil');
+  const S = buf('hg-sil', RB_W, H);
+  S.c.translate(-RB_X, 0);
   paint(S.c, P.white);
-  const T = buf('hg-tint');
+  const T = buf('hg-tint', RB_W, H);
   T.c.drawImage(S.cv, 0, 0);
   T.c.globalCompositeOperation = 'source-in';
   T.c.fillStyle = P.black;
-  T.c.fillRect(0, 0, W, H);
-  ctx.drawImage(T.cv, 0, 0);
-  for (let b = 0; b < BANDS.length; b += 5) {
-    const B = buf('hg-band');
-    B.c.drawImage(S.cv, 0, 0);
-    B.c.globalCompositeOperation = 'destination-out';
-    const dx = BANDS[b + 1];
-    const dy = BANDS[b + 2];
-    for (let k = BANDS[b + 3]; k <= BANDS[b + 3] + BANDS[b + 4]; k++) B.c.drawImage(S.cv, -dx * k, -dy * k);
-    B.c.globalCompositeOperation = 'source-in';
-    B.c.fillStyle = BANDS[b];
-    B.c.fillRect(0, 0, W, H);
-    ctx.drawImage(B.cv, 0, 0);
+  T.c.fillRect(0, 0, RB_W, H);
+  ctx.drawImage(T.cv, RB_X, 0);
+  for (let l = 0; l < LIGHTS.length; l++) {
+    const L = LIGHTS[l];
+    const D = buf('hg-dil', RB_W, H);
+    for (let k = 0; k <= GAP; k++) D.c.drawImage(S.cv, -L[0] * k, -L[1] * k);
+    for (let b = 2; b < L.length; b += 2) {
+      const B = buf('hg-band', RB_W, H);
+      B.c.drawImage(S.cv, 0, 0);
+      B.c.globalCompositeOperation = 'destination-out';
+      B.c.drawImage(D.cv, -L[0] * L[b + 1], -L[1] * L[b + 1]);
+      B.c.globalCompositeOperation = 'source-in';
+      B.c.fillStyle = L[b];
+      B.c.fillRect(0, 0, RB_W, H);
+      ctx.drawImage(B.cv, RB_X, 0);
+    }
   }
 }
 function shotReveal(c, lt) {

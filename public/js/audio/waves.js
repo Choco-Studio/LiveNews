@@ -2,28 +2,36 @@
 // PeriodicWaves) and the loudness model (which needs their harmonic energy).
 // Pure math, no WebAudio: NES-style pulses with 12.5 / 25 / 50 % duty, the
 // NES 4-bit stepped triangle, a sawtooth, a smooth triangle and a sine.
+// Every table is cheap to build (a few ms): the first note of a programme
+// must never stall the main thread while an open is animating.
 
 export const HARMONICS = 256; // enough for a full spectrum down to ~80 Hz
 
 const cache = new Map();
 
-// Fourier coefficients of a periodic signal given by `fn(phase 0..1)`,
-// computed numerically (M points), as PeriodicWave real/imag arrays.
-function series(fn, n = HARMONICS, M = 8192) {
-  const x = new Float64Array(M);
-  for (let m = 0; m < M; m++) x[m] = fn((m + 0.5) / M);
-  const real = new Float32Array(n + 1);
-  const imag = new Float32Array(n + 1);
-  for (let k = 1; k <= n; k++) {
+// Exact Fourier coefficients of a staircase wave: `steps[j]` holds from phase
+// j/n to (j+1)/n. Integrating each flat step in closed form costs n x HARMONICS
+// trig calls instead of a numerical transform.
+function staircase(steps) {
+  const n = steps.length;
+  const real = new Float32Array(HARMONICS + 1);
+  const imag = new Float32Array(HARMONICS + 1);
+  for (let k = 1; k <= HARMONICS; k++) {
     let re = 0;
     let im = 0;
-    const w = (2 * Math.PI * k) / M;
-    for (let m = 0; m < M; m++) {
-      re += x[m] * Math.cos(w * m);
-      im += x[m] * Math.sin(w * m);
+    const w = (2 * Math.PI * k) / n;
+    let s0 = 0;
+    let c0 = 1;
+    for (let j = 0; j < n; j++) {
+      const s1 = Math.sin(w * (j + 1));
+      const c1 = Math.cos(w * (j + 1));
+      re += steps[j] * (s1 - s0);
+      im += steps[j] * (c0 - c1);
+      s0 = s1;
+      c0 = c1;
     }
-    real[k] = (2 * re) / M;
-    imag[k] = (2 * im) / M;
+    real[k] = re / (Math.PI * k);
+    imag[k] = im / (Math.PI * k);
   }
   return { real, imag };
 }
@@ -40,18 +48,14 @@ function pulse(duty) {
 
 // The NES triangle channel steps through 15..0..15 (32 steps): a soft tone
 // with a faint buzz that reads as "chip" rather than "flute".
-const NES_TRI = (p) => {
-  const step = Math.floor(p * 32) % 32;
-  const v = step < 16 ? 15 - step : step - 16;
-  return (v - 7.5) / 7.5;
-};
+const NES_TRI_STEPS = Array.from({ length: 32 }, (_, step) => ((step < 16 ? 15 - step : step - 16) - 7.5) / 7.5);
 
 function build(kind) {
   switch (kind) {
     case 'pulse12': return pulse(0.125);
     case 'pulse25': return pulse(0.25);
     case 'pulse50': return pulse(0.5);
-    case 'tri': return series(NES_TRI);
+    case 'tri': return staircase(NES_TRI_STEPS);
     case 'triangle': {
       const real = new Float32Array(HARMONICS + 1);
       const imag = new Float32Array(HARMONICS + 1);
@@ -73,6 +77,30 @@ function build(kind) {
   }
 }
 
+// Peak of the summed series over one period, sampled at M points. cos(k p)
+// and sin(k p) come from a rotating phasor (complex multiplication), so the
+// whole search is M x HARMONICS multiply-adds with no trig in the inner loop.
+function seriesPeak(real, imag, M = 2048) {
+  let peak = 0;
+  const n = real.length;
+  for (let m = 0; m < M; m++) {
+    const p = (2 * Math.PI * m) / M;
+    const cr = Math.cos(p);
+    const ci = Math.sin(p);
+    let c = cr;
+    let s = ci;
+    let v = 0;
+    for (let k = 1; k < n; k++) {
+      v += real[k] * c + imag[k] * s;
+      const c2 = c * cr - s * ci;
+      s = s * cr + c * ci;
+      c = c2;
+    }
+    if (Math.abs(v) > peak) peak = Math.abs(v);
+  }
+  return peak;
+}
+
 export const WAVE_KINDS = ['pulse12', 'pulse25', 'pulse50', 'tri', 'triangle', 'saw', 'sine'];
 
 /**
@@ -84,14 +112,7 @@ export function waveTable(kind) {
   let t = cache.get(key);
   if (t) return t;
   const { real, imag } = build(key);
-  let peak = 0;
-  const M = 4096;
-  for (let m = 0; m < M; m++) {
-    let v = 0;
-    const p = (2 * Math.PI * m) / M;
-    for (let k = 1; k < real.length; k++) if (real[k] || imag[k]) v += real[k] * Math.cos(k * p) + imag[k] * Math.sin(k * p);
-    peak = Math.max(peak, Math.abs(v));
-  }
+  const peak = key === 'sine' ? 1 : seriesPeak(real, imag);
   const amp2 = new Float32Array(real.length); // squared amplitude of each harmonic after normalisation
   for (let k = 1; k < real.length; k++) amp2[k] = (real[k] * real[k] + imag[k] * imag[k]) / (peak * peak);
   t = { kind: key, real, imag, peak, amp2 };
@@ -101,8 +122,8 @@ export function waveTable(kind) {
 
 /**
  * Mean square of the normalised wave at `freq`, each harmonic weighted by
- * `weight(f)` (a power gain such as K-weighting); harmonics above Nyquist are
- * dropped as the browser's band-limited tables do.
+ * `weight(f)` (a power gain such as K-weighting times a filter response);
+ * harmonics above Nyquist are dropped as the browser's band-limited tables do.
  */
 export function waveEnergy(kind, freq, weight = () => 1, nyquist = 24000) {
   const { amp2 } = waveTable(kind);

@@ -14,10 +14,14 @@
 //     tracks: [
 //       { inst: 'brass' | { wave: 'pulse25', a, d, s, r, vib, scoop, legato }, notes: 'A3:0.5 D4:0.5@0.8',
 //         kind: 'lead' | 'bass' | 'harmony', gain: 1, pan: -1..1, echo: 0..1, octave: 0, arp: 0.05 },
-//       { drums: 'K:1 S:1 H:0.5 O:0.5 C:2 T:1 P:1 X:0.25 W:2' },  (W: a noise sweep lasting its length)
+//       { drums: 'K:1 S:1 H:0.5 O:0.5 C:2 T:1 P:1 X:0.25 W:2 F:1 A:2' },
 //     ],
+//     duck: dB under a voice (-40..0; default -18, -14 for a looping ad bed),
 //   }
 //   A token may end in @velocity (0..1): 'C5:1@0.6'.
+//   Instruments may set cutoff (Hz, low-pass), q (resonance in dB) and
+//   fenv: [amount, seconds] (the filter opens to cutoff x amount and closes).
+//   W is a noise sweep lasting its length, F a low felt thump, A a soft air swell.
 
 export const MAX_EVENTS = 1500;
 const SEMITONE = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
@@ -26,7 +30,7 @@ const REST_RE = /^(r|rest|-|_|\.)$/i;
 export const DRUM_KEYS = {
   k: 'k', kick: 'k', bd: 'k', s: 's', snare: 's', sd: 's', h: 'h', hat: 'h', hh: 'h', o: 'o', open: 'o', oh: 'o',
   c: 'c', crash: 'c', cy: 'c', t: 't', tom: 't', p: 'p', clap: 'p', cp: 'p', x: 'x', tick: 'x', rim: 'x',
-  w: 'w', whoosh: 'w', sweep: 'w',
+  w: 'w', whoosh: 'w', sweep: 'w', f: 'f', felt: 'f', thump: 'f', a: 'a', air: 'a', swell: 'a',
 };
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
@@ -37,30 +41,36 @@ const num = (v, fallback, lo, hi) => (v == null || v === '' || !Number.isFinite(
 // a/d/s/r: attack (s), decay time constant x3 (s), sustain level, release (s).
 // vib: [depth in cents, rate Hz, delay s] on notes long enough to notice.
 // scoop: cents below pitch the note starts at (brass), legato: gate fraction.
+// cutoff: low-pass corner in Hz (never below 3x the note's pitch), q: its
+// resonance in dB (WebAudio's lowpass Q), fenv: [amount, s] the filter opens
+// to cutoff x amount at the attack and settles back (brass bite, pluck).
+// Every preset is filtered: raw NES pulses read as an 8-bit game, a pulse
+// with its top octaves rolled off reads as a warm analogue synth.
 export const INSTRUMENTS = {
-  pulse50: { wave: 'pulse50', a: 0.004, d: 0.12, s: 0.7, r: 0.05, vib: [14, 5.6, 0.22], gain: 0.62 },
-  pulse25: { wave: 'pulse25', a: 0.004, d: 0.14, s: 0.68, r: 0.06, vib: [13, 5.6, 0.22], gain: 0.78 },
-  pulse12: { wave: 'pulse12', a: 0.003, d: 0.12, s: 0.6, r: 0.06, vib: [11, 5.8, 0.2], gain: 0.95 },
-  brass: { wave: 'pulse25', a: 0.022, d: 0.2, s: 0.78, r: 0.09, vib: [16, 5.4, 0.26], scoop: 45, gain: 0.78 },
-  bell: { wave: 'pulse12', a: 0.002, d: 0.42, s: 0, r: 0.12, legato: 1, gain: 0.95 },
-  pluck: { wave: 'pulse25', a: 0.002, d: 0.16, s: 0.22, r: 0.05, gain: 0.8 },
-  pad: { wave: 'pulse50', a: 0.08, d: 0.4, s: 0.8, r: 0.28, vib: [9, 4.8, 0.12], legato: 1, gain: 0.55 },
-  tri: { wave: 'tri', a: 0.003, d: 0.08, s: 0.92, r: 0.04, gain: 1 },
-  triangle: { wave: 'tri', a: 0.003, d: 0.08, s: 0.92, r: 0.04, gain: 1 },
-  softtri: { wave: 'triangle', a: 0.01, d: 0.2, s: 0.85, r: 0.12, vib: [10, 5, 0.2], gain: 1 },
-  timpani: { wave: 'tri', a: 0.002, d: 0.5, s: 0, r: 0.08, legato: 1, gain: 1.1 },
-  saw: { wave: 'saw', a: 0.004, d: 0.12, s: 0.7, r: 0.05, vib: [12, 5.6, 0.22], gain: 0.62 },
-  sawtooth: { wave: 'saw', a: 0.004, d: 0.12, s: 0.7, r: 0.05, vib: [12, 5.6, 0.22], gain: 0.62 },
-  sine: { wave: 'sine', a: 0.006, d: 0.18, s: 0.82, r: 0.08, vib: [9, 5.2, 0.2], gain: 1 },
-  square: { wave: 'pulse50', a: 0.004, d: 0.12, s: 0.7, r: 0.05, vib: [14, 5.6, 0.22], gain: 0.62 },
+  pulse50: { wave: 'pulse50', a: 0.006, d: 0.12, s: 0.7, r: 0.06, vib: [12, 5.4, 0.25], gain: 0.62, cutoff: 3400 },
+  pulse25: { wave: 'pulse25', a: 0.006, d: 0.14, s: 0.68, r: 0.07, vib: [11, 5.4, 0.25], gain: 0.78, cutoff: 3400 },
+  pulse12: { wave: 'pulse12', a: 0.005, d: 0.12, s: 0.6, r: 0.07, vib: [10, 5.6, 0.22], gain: 0.95, cutoff: 3000 },
+  brass: { wave: 'pulse25', a: 0.03, d: 0.22, s: 0.78, r: 0.12, vib: [12, 5.2, 0.3], scoop: 35, gain: 0.78, cutoff: 1500, q: 1, fenv: [1.9, 0.22] },
+  bell: { wave: 'pulse12', a: 0.003, d: 0.5, s: 0, r: 0.16, legato: 1, gain: 0.95, cutoff: 3600, fenv: [1.5, 0.25] },
+  pluck: { wave: 'pulse25', a: 0.003, d: 0.18, s: 0.2, r: 0.07, gain: 0.8, cutoff: 1800, fenv: [2.2, 0.1] },
+  keys: { wave: 'pulse50', a: 0.004, d: 0.35, s: 0.25, r: 0.12, gain: 0.7, cutoff: 1700, fenv: [1.8, 0.15] },
+  pad: { wave: 'pulse50', a: 0.14, d: 0.5, s: 0.82, r: 0.4, vib: [7, 4.6, 0.2], legato: 1, gain: 0.55, cutoff: 1300 },
+  tri: { wave: 'tri', a: 0.004, d: 0.08, s: 0.92, r: 0.05, gain: 1, cutoff: 5000 },
+  triangle: { wave: 'tri', a: 0.004, d: 0.08, s: 0.92, r: 0.05, gain: 1, cutoff: 5000 },
+  softtri: { wave: 'triangle', a: 0.014, d: 0.2, s: 0.85, r: 0.14, vib: [9, 5, 0.22], gain: 1, cutoff: 3600 },
+  timpani: { wave: 'tri', a: 0.003, d: 0.55, s: 0, r: 0.1, legato: 1, gain: 1.1, cutoff: 1400 },
+  saw: { wave: 'saw', a: 0.006, d: 0.12, s: 0.7, r: 0.06, vib: [11, 5.4, 0.25], gain: 0.62, cutoff: 2800 },
+  sawtooth: { wave: 'saw', a: 0.006, d: 0.12, s: 0.7, r: 0.06, vib: [11, 5.4, 0.25], gain: 0.62, cutoff: 2800 },
+  sine: { wave: 'sine', a: 0.008, d: 0.18, s: 0.82, r: 0.09, vib: [8, 5.2, 0.22], gain: 1 },
+  square: { wave: 'pulse50', a: 0.006, d: 0.12, s: 0.7, r: 0.06, vib: [12, 5.4, 0.25], gain: 0.62, cutoff: 3400 },
 };
-// Bass versions: no vibrato, firmer sustain, shorter release.
+// Bass versions: no vibrato, firmer sustain, shorter release, darker.
 const BASS = {
-  pulse50: { wave: 'pulse50', a: 0.003, d: 0.1, s: 0.8, r: 0.04, gain: 0.55 },
-  pulse25: { wave: 'pulse25', a: 0.003, d: 0.1, s: 0.8, r: 0.04, gain: 0.68 },
-  tri: { wave: 'tri', a: 0.003, d: 0.1, s: 0.9, r: 0.04, gain: 1 },
-  saw: { wave: 'saw', a: 0.003, d: 0.1, s: 0.78, r: 0.04, gain: 0.55 },
-  sine: { wave: 'sine', a: 0.004, d: 0.12, s: 0.9, r: 0.05, gain: 1 },
+  pulse50: { wave: 'pulse50', a: 0.004, d: 0.1, s: 0.8, r: 0.05, gain: 0.55, cutoff: 900 },
+  pulse25: { wave: 'pulse25', a: 0.004, d: 0.1, s: 0.8, r: 0.05, gain: 0.68, cutoff: 1000 },
+  tri: { wave: 'tri', a: 0.004, d: 0.1, s: 0.9, r: 0.05, gain: 1, cutoff: 1000 },
+  saw: { wave: 'saw', a: 0.004, d: 0.1, s: 0.78, r: 0.05, gain: 0.55, cutoff: 900 },
+  sine: { wave: 'sine', a: 0.005, d: 0.12, s: 0.9, r: 0.06, gain: 1 },
 };
 const CLASSIC_WAVE = { square: 'pulse50', triangle: 'tri', sawtooth: 'saw', sine: 'sine' };
 
@@ -94,11 +104,23 @@ export function resolveInstrument(inst, kind = 'lead', fallback = 'pulse50') {
       scoop: num(inst.scoop, from.scoop ?? 0, 0, 400),
       legato: num(inst.legato, from.legato ?? 0.92, 0.2, 1),
       gain: num(inst.gain, from.gain ?? 1, 0, 2),
+      cutoff: num(inst.cutoff, from.cutoff ?? 20000, 200, 20000),
+      q: num(inst.q, from.q ?? 0, -6, 12),
+      fenv: inst.fenv === false || inst.fenv === 0 ? null : fenvOf(inst.fenv) ?? from.fenv ?? null,
     };
   }
   if (!base) base = pick(fallback) ?? INSTRUMENTS.pulse50;
-  return { legato: 0.92, scoop: 0, vib: null, ...base };
+  return { legato: 0.92, scoop: 0, vib: null, cutoff: 20000, q: 0, fenv: null, ...base };
 }
+
+// [amount, seconds] -> a valid filter envelope, or null.
+function fenvOf(v) {
+  if (!Array.isArray(v) || v.length < 2 || !v.every((x) => Number.isFinite(Number(x)))) return null;
+  return [clamp(Number(v[0]), 1, 8), clamp(Number(v[1]), 0.01, 2)];
+}
+
+/** The low-pass corner a note actually gets: never below 3x its pitch. */
+export const noteCutoff = (inst, midi) => Math.min(20000, Math.max(inst.cutoff ?? 20000, 3 * 440 * 2 ** ((midi - 69) / 12)));
 
 // ------------------------------------------------------------------- tokens
 
@@ -196,6 +218,7 @@ export function parseTune(tune) {
     room: num(t.room, 0.16, 0, 1),
     fadeOut: num(t.fadeOut, 0.08, 0.02, 3),
     trim: num(t.loudness, 0, -12, 12),
+    duck: t.duck == null || t.duck === '' || !Number.isFinite(Number(t.duck)) ? null : clamp(Number(t.duck), -40, 0),
   };
 }
 

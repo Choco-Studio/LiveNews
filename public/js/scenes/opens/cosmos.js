@@ -1,9 +1,12 @@
-// COSMOS DESK open: dawn on a ringed planet. The sun swings round from behind
-// it (crescent to full light), its rings draw themselves around it and a moon
-// sweeps one orbit leaving a short magenta trail before it parks. Accent:
-// magenta; the starfield behind is still.
+// COSMOS DESK open: dawn on a ringed planet. The planet is revealed by light
+// alone: first a dark disc with a 1 px slate limb, then the sun swings round
+// from behind it (a thin crescent widening to the key light), its rings draw
+// themselves around it (their shadow sweeps across the disc with them) and a
+// moon sweeps one orbit leaving a short magenta trail before it parks clear of
+// the planet, lower left. Shading is in clean clusters (hard steps on a 5-tone
+// hue-shifted ramp, no per-pixel dither). Accent: magenta; the stars are still.
 import { P } from '../../palette.js';
-import { u32, clamp, seg, easeOut, easeOutQuint, easeInOut, bayer } from '../../gfx/index.js';
+import { u32, clamp, seg, easeOut, easeOutQuint, easeInOut } from '../../gfx/index.js';
 import { mulberry32 } from '../../util.js';
 import { lazyBackdrop, frameBuffer, playOpen, CENTRE, ZOOM, W, H } from './kit.js';
 
@@ -15,12 +18,15 @@ const TILT = -0.28; // right side higher
 const CTL = Math.cos(TILT);
 const STL = Math.sin(TILT);
 
+// light bands and dark bands, each a ramp from night to full key light (shadows shift to maroon)
+const LIGHT_BAND = [P.black, P.maroon, P.tanShade, P.tan, P.cream];
+const DARK_BAND = [P.black, P.maroon, P.brown, P.tanShade, P.skinShade];
 const BANDS = [
-  [-0.7, [P.cream, P.tan, P.tanShade]],
-  [-0.42, [P.skin, P.skinShade, P.brown]],
-  [0.36, [P.cream, P.tan, P.tanShade]],
-  [0.62, [P.skin, P.skinShade, P.brown]],
-  [2, [P.cream, P.tan, P.tanShade]],
+  [-0.7, LIGHT_BAND],
+  [-0.42, DARK_BAND],
+  [0.36, LIGHT_BAND],
+  [0.62, DARK_BAND],
+  [2, LIGHT_BAND],
 ].map(([to, cs]) => [to, cs.map((c) => u32(c))]);
 const C = Object.fromEntries(['black', 'ink', 'slate', 'steel', 'fog', 'silver', 'cream', 'tan', 'purple', 'magenta'].map((k) => [k, u32(P[k])]));
 
@@ -42,6 +48,7 @@ function geometry(PR) {
   const ringC = new Uint8Array(n);
   const ang = new Float32Array(n); // ring drawing order (angle 0..1)
   const shadow = new Uint8Array(n);
+  const limb = new Uint8Array(n); // planet pixels on the outline
   const RR = PR + 0.5;
   for (let y = 0; y < BH; y++) {
     for (let x = 0; x < BW; x++) {
@@ -62,6 +69,7 @@ function geometry(PR) {
       }
       if (!onPlanet) continue;
       kind[i] = 1;
+      limb[i] = dx * dx + dy * dy > (RR - 1.15) * (RR - 1.15) ? 1 : 0;
       nx[i] = dx / RR;
       ny[i] = -dy / RR;
       nz[i] = Math.sqrt(Math.max(0, 1 - nx[i] * nx[i] - ny[i] * ny[i]));
@@ -77,9 +85,11 @@ function geometry(PR) {
       const ve = (v - (2.5 * PR) / PR0) / PR;
       const es = Math.sqrt(ue * ue + (ve / RK) * (ve / RK));
       shadow[i] = v < 0 && es > RING_IN && es < 1.85 ? 1 : 0;
+      // the shadow appears with the part of the ring that casts it
+      if (shadow[i]) ang[i] = (Math.atan2(ve / RK, ue) / (Math.PI * 2) + 1.25) % 1;
     }
   }
-  GEO = { kind, nx, ny, nz, band, ringC, ang, shadow, BW, BH, BCX, BCY, PR };
+  GEO = { kind, nx, ny, nz, band, ringC, ang, shadow, limb, BW, BH, BCX, BCY, PR };
   GEOS.set(PR, GEO);
   return GEO;
 }
@@ -88,24 +98,25 @@ const L0 = [0.95, 0.05, -0.32]; // sun behind and to the right: a thin crescent
 const L1 = [-0.56, 0.5, 0.66]; // the channel key light: upper left, in front
 const LV = [0, 0, 0];
 
-function renderPlanet(fb, G, light, ringP) {
-  const { BW } = G;
+function renderPlanet(fb, G, light, ringP, power, rimP) {
   const d = fb.d;
   const [lx, ly, lz] = light;
+  const rimC = rimP >= 1 ? C.slate : C.ink;
   for (let i = 0; i < d.length; i++) {
     const k = G.kind[i];
     if (!k) {
       d[i] = 0;
       continue;
     }
-    const x = i % BW;
-    const y = (i / BW) | 0;
     if (k === 1) {
       const dif = G.nx[i] * lx + G.ny[i] * ly + G.nz[i] * lz;
-      let lv = clamp((dif + 0.12) * 2.6, 0, 3.2) - (G.shadow[i] ? 1.1 : 0);
-      lv = Math.floor(lv) + (lv - Math.floor(lv) > bayer(x, y) ? 1 : 0);
-      const set = BANDS[G.band[i]][1];
-      d[i] = lv <= 0 ? C.black : lv === 1 ? set[2] : lv === 2 ? set[1] : set[0];
+      // hard steps (clusters): 0 night .. 4 full light, scaled by the light's power as it rises
+      let lv = Math.floor(clamp((dif + 0.1) * 3.4 * power, 0, 4.2));
+      if (G.shadow[i] && G.ang[i] <= ringP && lv > 0) lv = Math.max(lv - 2, 1);
+      if (lv > 4) lv = 4;
+      // the night side keeps a 1 px slate limb so the silhouette never dissolves into the field
+      if (lv === 0) d[i] = G.limb[i] && rimP > 0 ? rimC : C.black;
+      else d[i] = BANDS[G.band[i]][1][lv];
     } else {
       if (G.ang[i] > ringP) {
         d[i] = 0;
@@ -134,8 +145,8 @@ function lightAt(dt) {
 // --- moon on its own orbit (wider and rounder than the rings)
 const ORX = 44;
 const ORY = 20;
-const TH0 = -2.6; // start angle (radians, screen space)
-const TH1 = TH0 + Math.PI * 2 + 1.25; // one turn and a bit, parking upper left
+const TH1 = Math.PI - 0.5; // parks lower left, in front of the rings and well clear of the limb
+const TH0 = TH1 - Math.PI * 2 - 0.9; // a little over one orbit
 function orbitPt(th, k, out) {
   const ex = Math.cos(th) * ORX * k;
   const ey = Math.sin(th) * ORY * k;
@@ -189,22 +200,16 @@ function emblem(ctx, dt, x, y, k = 1) {
   const { BW, BH, BCX, BCY } = G;
   moonAndTrail(ctx, dt, x, y, k, PR, false);
   const fb = frameBuffer('cosmos-planet', BW, BH);
-  const settled = dt > 1.55;
+  const settled = dt > 1.7;
   const key = settled ? 'final' : Math.round(dt * 240);
   if (fb.key !== key) {
     fb.key = key;
-    renderPlanet(fb, G, lightAt(dt), easeInOut(seg(dt, 0.4, 0.75)));
+    // the limb fades up through ink to slate, then the light rises on the far side and swings round
+    const rimP = seg(dt, 0.2, 0.16);
+    const power = easeOut(seg(dt, 0.3, 0.5));
+    renderPlanet(fb, G, lightAt(dt), easeInOut(seg(dt, 0.55, 0.8)), power, rimP);
   }
-  // the planet rises a little as it is lit (ease-out), never pops in
-  const rise = Math.round(14 * (1 - easeOutQuint(seg(dt, 0.2, 0.9))));
-  ctx.save();
-  if (rise > 0) {
-    ctx.beginPath();
-    ctx.rect(x - BCX, y - BCY - 4, BW, BH + 4 - rise);
-    ctx.clip();
-  }
-  ctx.drawImage(fb.cv, x - BCX, y - BCY + rise);
-  ctx.restore();
+  ctx.drawImage(fb.cv, x - BCX, y - BCY);
   moonAndTrail(ctx, dt, x, y, k, PR, true);
 }
 
@@ -236,11 +241,10 @@ export const COSMOS = {
   style: { accent: P.magenta, plate: P.black, ink: 'light', bar: P.magenta },
   background,
   emblem,
+  extent: Math.ceil(PR0 * RING_OUT) + 1, // the rings' right tip
   absorb: 0.32,
   shoulder: 27,
-  warm: () => {
-    for (let r = PR0; r <= Math.round(PR0 * ZOOM); r++) geometry(r);
-  },
+  warmJobs: () => Array.from({ length: Math.round(PR0 * ZOOM) - PR0 + 1 }, (_, i) => () => geometry(PR0 + i)),
 };
 
 export function drawCosmos(ctx, dt, info) {

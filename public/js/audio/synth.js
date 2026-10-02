@@ -1,21 +1,36 @@
-// Chiptune synth on WebAudio, usable with a live AudioContext (the channel)
-// or an OfflineAudioContext (the lab renders and measures every tune with the
-// exact same code). NES-flavoured voices: pulse waves with 12.5/25/50 % duty,
-// the stepped triangle, LFSR noise drums; ADSR envelopes that always start and
-// end at zero (no clicks), delayed vibrato, a tempo-synced echo, a small room,
-// music ducking under speech and a master bus that never exceeds -1 dBFS.
+// Chip synth on WebAudio, usable with a live AudioContext (the channel) or an
+// OfflineAudioContext (the lab renders and measures every tune with the exact
+// same code). NES-derived voices - pulse waves with 12.5/25/50 % duty, the
+// stepped triangle, LFSR noise drums - but every note goes through its own
+// low-pass (with an optional filter envelope), so the result reads as a warm
+// analogue synth rather than an 8-bit game. ADSR envelopes always start and
+// end at zero (no clicks); delayed vibrato, a tempo-synced echo and a small
+// room. Music ducks under speech with a hold (no pumping between sentences)
+// and a presence dip; the master bus never exceeds -1.2 dBFS.
 
 import { waveTable } from './waves.js';
-import { parseTune, flatten, songSeconds, KIND_GAIN } from './tune.js';
+import { parseTune, flatten, songSeconds, KIND_GAIN, noteCutoff } from './tune.js';
 import { estimateLoudness } from './loudness.js';
 
-export const DUCK_LEVEL = 0.32; // music under speech: -10 dB
 export const CEILING = 0.87; // master peak limit, -1.2 dBFS
 const COMP = { threshold: -7, knee: 3, ratio: 12 };
 // WebAudio's DynamicsCompressor adds make-up gain, (1 / gain at 0 dBFS) ^ 0.6;
 // with its soft knee that is 3.3 dB for these settings (measured in the lab).
 export const COMP_MAKEUP = 10 ** (3.3 / 20);
 const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
+const dbToGain = (db) => 10 ** (db / 20);
+
+/**
+ * Ducking under speech. Depths are in dB below the music's own level:
+ * programme beds on audio.musicBus -20, tunes -18 (opens, cues), a looping
+ * tune (a commercial's music bed under its voice-over) -14; a tune may set
+ * its own `duck`. Attack/release are time constants (about 120 ms / 500 ms to
+ * settle); the duck is held 0.7 s after the last word so the 300 ms gaps
+ * between sentences and segments never let the music swell back. While
+ * anyone speaks a -6 dB dip around 2.8 kHz clears the consonants.
+ */
+export const DUCK = Object.freeze({ attack: 0.04, release: 0.17, hold: 0.7, dipDb: -6, dipHz: 2800, bedsDb: -20, tunesDb: -18, loopDb: -14 });
+export const DUCK_LEVEL = dbToGain(DUCK.tunesDb); // kept for old imports
 
 // ------------------------------------------------------------------ bank
 
@@ -108,12 +123,25 @@ function clipCurve(n = 2048) {
   return c;
 }
 
+function presenceDip(ctx) {
+  const f = ctx.createBiquadFilter();
+  f.type = 'peaking';
+  f.frequency.value = DUCK.dipHz;
+  f.Q.value = 0.7;
+  f.gain.value = 0;
+  return f;
+}
+
 /**
- * The channel's mixer: tunes and sfx -> music (ducked) -> master; blips ->
- * speech -> master; master -> compressor -> soft clipper -> volume -> mute.
- * `raw` skips the dynamics (the lab's envelope probe).
+ * The channel's mixer:
+ *   tunes (each player ducks itself) -> tunesDip -> master;  room returns -> tunes
+ *   music (programme beds, audio.musicBus) -> duck -> bedsDip -> master
+ *   speech (blips/murmur, recorded voices) -> master
+ *   master -> compressor -> soft clipper -> volume (out) -> mute -> speakers
+ * `raw` skips the dynamics (the lab's envelope probe). `ducker` (a Ducker)
+ * drives the bed duck and both presence dips.
  */
-export function buildBuses(ctx, { volume = 0.8, raw = false } = {}) {
+export function buildBuses(ctx, { volume = 0.8, raw = false, ducker = null, bedsDb = DUCK.bedsDb } = {}) {
   const b = bank(ctx);
   const mute = ctx.createGain();
   mute.connect(ctx.destination);
@@ -139,8 +167,14 @@ export function buildBuses(ctx, { volume = 0.8, raw = false } = {}) {
     clip.oversample = 'none';
     master.connect(comp).connect(unmake).connect(clip).connect(out);
   }
+  const tunesDip = presenceDip(ctx);
+  tunesDip.connect(master);
+  const tunes = ctx.createGain();
+  tunes.connect(tunesDip);
+  const bedsDip = presenceDip(ctx);
+  bedsDip.connect(master);
   const duck = ctx.createGain();
-  duck.connect(master);
+  duck.connect(bedsDip);
   const music = ctx.createGain();
   music.connect(duck);
   const reverb = ctx.createConvolver();
@@ -150,18 +184,85 @@ export function buildBuses(ctx, { volume = 0.8, raw = false } = {}) {
   dark.type = 'lowpass';
   dark.frequency.value = 3200;
   dark.Q.value = 0.5;
-  reverb.connect(dark).connect(duck);
+  reverb.connect(dark).connect(tunes);
   const speech = ctx.createGain();
   speech.connect(master);
-  return { ctx, master, duck, music, reverb, speech, out, mute, comp, raw };
+  const buses = { ctx, master, tunes, tunesDip, music, duck, bedsDip, reverb, speech, out, mute, comp, raw, ducker, bedTarget: null };
+  if (ducker) {
+    const t = ctx.currentTime;
+    buses.bedTarget = ducker.add({ param: duck.gain, on: dbToGain(bedsDb), off: 1 }, t);
+    ducker.add({ param: tunesDip.gain, on: DUCK.dipDb, off: 0 }, t);
+    ducker.add({ param: bedsDip.gain, on: DUCK.dipDb, off: 0 }, t);
+  }
+  return buses;
 }
 
-// Music down while someone talks (fast), back up slowly after.
-export function setDuck(param, on, t) {
-  try {
-    param.cancelScheduledValues(t);
-    param.setTargetAtTime(on ? DUCK_LEVEL : 1, t, on ? 0.06 : 0.35);
-  } catch { /* ignore */ }
+/**
+ * Shared duck state for a context. `start(t)` when a voice becomes audible,
+ * `end(t)` when it stops: the release waits DUCK.hold and is cancelled by
+ * the next start, all on the audio clock (sample-accurate, offline too).
+ * Targets are { param, on, off } (gain or dB values).
+ */
+export class Ducker {
+  constructor() {
+    this.speaking = false;
+    this.releaseAt = -Infinity;
+    this.targets = new Set();
+  }
+
+  add(target, t) {
+    this.targets.add(target);
+    const p = target.param;
+    try {
+      p.cancelScheduledValues(t);
+      if (this.speaking) p.setValueAtTime(target.on, t);
+      else if (t < this.releaseAt) {
+        p.setValueAtTime(target.on, t);
+        p.setTargetAtTime(target.off, this.releaseAt, DUCK.release);
+      } else p.setValueAtTime(target.off, t);
+    } catch { /* ignore */ }
+    return target;
+  }
+
+  remove(target) {
+    this.targets.delete(target);
+  }
+
+  // Change a target's ducked value (e.g. audio.musicDuckDb) and re-apply.
+  retarget(target, on, t) {
+    target.on = on;
+    if (this.targets.has(target)) this.add(target, t);
+  }
+
+  start(t) {
+    if (this.speaking) return;
+    this.speaking = true;
+    for (const x of this.targets) {
+      try {
+        x.param.cancelScheduledValues(t);
+        x.param.setTargetAtTime(x.on, t, DUCK.attack);
+      } catch { /* ignore */ }
+    }
+  }
+
+  end(t, hold = DUCK.hold) {
+    if (!this.speaking) return;
+    this.speaking = false;
+    this.releaseAt = t + hold;
+    for (const x of this.targets) {
+      try {
+        x.param.setTargetAtTime(x.off, this.releaseAt, DUCK.release);
+      } catch { /* ignore */ }
+    }
+  }
+
+  /** Speech intervals [[from, to], ...] in seconds (offline renders). */
+  apply(intervals) {
+    for (const [a, b] of [...intervals].sort((x, y) => x[0] - y[0])) {
+      this.start(a);
+      this.end(b);
+    }
+  }
 }
 
 // ----------------------------------------------------------------- voices
@@ -178,12 +279,26 @@ function envDecay(p, when, peak, attack, tau, end) {
   p.linearRampToValueAtTime(0, end + 0.012);
 }
 
+/** Duck depth (dB) a tune gets: its own `duck`, else by role. */
+export function duckDbFor(song, { loop = false, duckDb } = {}) {
+  if (Number.isFinite(Number(duckDb)) && duckDb !== null) return Math.max(-40, Math.min(0, Number(duckDb)));
+  if (song?.duck != null) return song.duck;
+  return loop ? DUCK.loopDb : DUCK.tunesDb;
+}
+
+/** Linear gain for a playTune volume: 0.5 is the reference, at most +1 dB above it. */
+export const volumeGain = (volume) => Math.max(0, Math.min(dbToGain(1), (Number.isFinite(Number(volume)) ? Number(volume) : 0.5) / 0.5));
+
+const LATE_OK = 0.35; // a note up to this late (s) still plays from now, shortened
+
 /**
  * Plays parsed songs on a context. One instance per playTune() call; the
- * owner calls scheduleUntil() regularly (or once, offline).
+ * owner calls scheduleUntil() regularly (or once, offline). `start(when)`
+ * may be in the past (a tune synced to a picture that already started):
+ * notes already due play at once, shortened, and older ones are skipped.
  */
 export class TunePlayer {
-  constructor(ctx, buses, song, { volume = 0.5, loop = false, probe = false, normalise = true } = {}) {
+  constructor(ctx, buses, song, { volume = 0.5, loop = false, probe = false, normalise = true, duckDb } = {}) {
     this.ctx = ctx;
     this.song = song;
     this.loop = loop;
@@ -200,15 +315,23 @@ export class TunePlayer {
     this.done = false;
     this.stopped = false;
     this.hits = 0;
-    // Graph: tracks -> panners -> out -> music bus, with echo and room sends.
+    this.buses = buses;
+    // Graph: tracks -> panners -> out -> duck -> tunes bus, with echo inside
+    // and the room send after the duck (so the reverb ducks too).
     this.out = ctx.createGain();
-    this.out.gain.value = this.loudness.gain * (Math.max(0, Math.min(1, volume)) / 0.5);
-    this.out.connect(buses.music);
-    this.nodes = [this.out];
+    this.out.gain.value = this.loudness.gain * volumeGain(volume);
+    this.duckGain = ctx.createGain();
+    this.out.connect(this.duckGain);
+    this.duckGain.connect(buses.tunes ?? buses.music);
+    this.nodes = [this.out, this.duckGain];
+    this.duckTarget = null;
+    if (buses.ducker && !probe) {
+      this.duckTarget = buses.ducker.add({ param: this.duckGain.gain, on: dbToGain(duckDbFor(song, { loop, duckDb })), off: 1 }, ctx.currentTime);
+    }
     if (!probe && song.room > 0) {
       const send = ctx.createGain();
       send.gain.value = song.room;
-      this.out.connect(send).connect(buses.reverb);
+      this.duckGain.connect(send).connect(buses.reverb);
       this.nodes.push(send);
     }
     this.echoIn = null;
@@ -218,7 +341,7 @@ export class TunePlayer {
       delay.delayTime.value = Math.min(1.5, song.echo.beats * this.spb);
       const lp = ctx.createBiquadFilter();
       lp.type = 'lowpass';
-      lp.frequency.value = 2600;
+      lp.frequency.value = 2400;
       const fb = ctx.createGain();
       fb.gain.value = song.echo.feedback;
       input.connect(delay).connect(lp).connect(fb).connect(delay);
@@ -252,12 +375,12 @@ export class TunePlayer {
 
   scheduleUntil(tEnd) {
     if (this.t0 === null || this.stopped || this.done || !this.events.length) return;
-    const lateLimit = this.ctx.currentTime - 0.02;
+    const now = this.ctx.currentTime;
     for (let guard = 0; guard < 4000; guard++) {
       const ev = this.events[this.cursor];
       const when = this.t0 + (this.pass * this.song.beats + ev.at) * this.spb;
       if (when >= tEnd) return;
-      if (when >= lateLimit) this.play(ev, when); // a late timer skips notes rather than clicking them in
+      this.schedule(ev, when, now);
       this.cursor++;
       if (this.cursor >= this.events.length) {
         if (!this.loop) {
@@ -270,9 +393,25 @@ export class TunePlayer {
     }
   }
 
+  // On time, or late: a few ms late plays as is; a held note further behind
+  // plays its remainder with a soft 30 ms fade-in; a late drum is dropped.
+  schedule(ev, when, now) {
+    const soon = now + 0.006;
+    const late = soon - when;
+    if (late <= 0) return this.play(ev, when);
+    if (late < 0.03) return this.play(ev, soon);
+    const isDrum = this.tracks[ev.track].track.kind === 'drums';
+    const rest = ev.dur * this.spb - late;
+    if (isDrum || late > LATE_OK || rest < 0.12) return undefined;
+    return this.play(ev, soon, rest / this.spb, 0.03);
+  }
+
   stop(when = this.ctx.currentTime, fade = this.song.fadeOut) {
     if (this.stopped) return;
     this.stopped = true;
+    // A fading tail is no longer ducked: the open's last chord rings over the
+    // first words of the studio shot as it fades.
+    if (this.duckTarget) this.buses.ducker?.remove(this.duckTarget);
     const g = this.out.gain;
     try {
       g.cancelScheduledValues(when);
@@ -305,36 +444,38 @@ export class TunePlayer {
     };
   }
 
-  play(ev, when) {
+  play(ev, when, beats = ev.dur, fadeIn = 0) {
     const { track, dest } = this.tracks[ev.track];
-    const dur = ev.dur * this.spb;
+    const dur = beats * this.spb;
     if (track.kind === 'drums') this.drum(ev.e.drum, KIND_GAIN.drums * track.gain * ev.e.vel, when, dur, dest);
-    else this.note(track, ev.e, when, dur, dest);
+    else this.note(track, ev.e, when, dur, dest, fadeIn);
   }
 
-  note(track, e, when, dur, dest) {
+  note(track, e, when, dur, dest, fadeIn = 0) {
     const ctx = this.ctx;
     const inst = track.inst;
     const gate = Math.max(0.03, dur * inst.legato);
     const voices = track.arp > 0 && e.midis.length > 1 ? [e.midis] : e.midis.map((m) => [m]);
     const peak = (KIND_GAIN[track.kind] * track.gain * inst.gain * e.vel) / Math.sqrt(voices.length);
+    const attack = Math.max(inst.a, fadeIn);
     for (const notes of voices) {
       const g = ctx.createGain();
       let src;
       const extra = [g];
+      let head = g;
       if (this.probe) {
         src = ctx.createConstantSource();
       } else {
         src = ctx.createOscillator();
         src.setPeriodicWave(this.bank.wave(inst.wave));
         if (notes.length > 1) {
-          // Chiptune chord: one voice cycling through the notes.
+          // Chord as one voice cycling through the notes (only when asked).
           let k = 0;
           for (let t = when; t < when + gate + inst.r; t += track.arp) src.frequency.setValueAtTime(hz(notes[k++ % notes.length]), t);
         } else src.frequency.setValueAtTime(hz(notes[0]), when);
         if (inst.scoop) {
           src.detune.setValueAtTime(-inst.scoop, when);
-          src.detune.linearRampToValueAtTime(0, when + 0.06);
+          src.detune.linearRampToValueAtTime(0, when + 0.07);
         }
         const vib = inst.vib;
         if (vib && gate > vib[2] + 0.1) {
@@ -344,7 +485,7 @@ export class TunePlayer {
           depth.gain.value = 0;
           depth.gain.setValueAtTime(0, when);
           depth.gain.setValueAtTime(0, when + vib[2]);
-          depth.gain.linearRampToValueAtTime(vib[0], when + vib[2] + 0.18);
+          depth.gain.linearRampToValueAtTime(vib[0], when + vib[2] + 0.25);
           lfo.connect(depth).connect(src.detune);
           lfo.start(when);
           lfo.stop(when + gate + inst.r + 0.02);
@@ -355,24 +496,40 @@ export class TunePlayer {
             } catch { /* ignore */ }
           };
         }
+        // Each note through its own low-pass; the filter envelope opens it
+        // at the attack and lets it close (brass bite, pluck, bell).
+        const cut = noteCutoff(inst, Math.max(...notes));
+        if (cut < 19000) {
+          const f = ctx.createBiquadFilter();
+          f.type = 'lowpass';
+          f.Q.value = inst.q ?? 0;
+          if (inst.fenv) {
+            f.frequency.setValueAtTime(Math.min(18000, cut * inst.fenv[0]), when);
+            f.frequency.setTargetAtTime(cut, when + attack, inst.fenv[1] / 3);
+          } else f.frequency.value = cut;
+          f.connect(g);
+          head = f;
+          extra.push(f);
+        }
       }
       // ADSR, always from zero and back to zero (see envDecay about the 0).
       const p = g.gain;
       p.value = 0;
       p.setValueAtTime(0, when);
       let level;
-      if (gate <= inst.a) {
-        level = peak * (gate / inst.a);
+      if (gate <= attack) {
+        level = peak * (gate / attack);
         p.linearRampToValueAtTime(level, when + gate);
       } else {
-        p.linearRampToValueAtTime(peak, when + inst.a);
+        p.linearRampToValueAtTime(peak, when + attack);
         const tau = Math.max(0.002, inst.d / 3);
-        p.setTargetAtTime(peak * inst.s, when + inst.a, tau);
-        level = peak * (inst.s + (1 - inst.s) * Math.exp(-(gate - inst.a) / tau));
+        p.setTargetAtTime(peak * inst.s, when + attack, tau);
+        level = peak * (inst.s + (1 - inst.s) * Math.exp(-(gate - attack) / tau));
         p.setValueAtTime(level, when + gate);
       }
       p.linearRampToValueAtTime(0, when + gate + inst.r);
-      src.connect(g).connect(dest);
+      src.connect(head);
+      g.connect(dest);
       src.start(when);
       src.stop(when + gate + inst.r + 0.01);
       this.track(src, ...extra);
@@ -392,14 +549,19 @@ export class TunePlayer {
 
   drum(kind, level, when, dur, dest) {
     const ctx = this.ctx;
+    const chain = (src, filters, g) => {
+      let n = src;
+      for (const f of filters) n = n.connect(f);
+      n.connect(g).connect(dest);
+    };
     const voice = (src, filter, peak, attack, tau, end) => {
       const g = ctx.createGain();
       envDecay(g.gain, when, peak, attack, tau, when + end);
-      if (filter) src.connect(filter).connect(g).connect(dest);
-      else src.connect(g).connect(dest);
+      const filters = !filter ? [] : Array.isArray(filter) ? filter : [filter];
+      chain(src, filters, g);
       if (!src.started) src.start?.(when);
       src.stop(when + end + 0.02);
-      this.track(src, g, ...(filter ? [filter] : []));
+      this.track(src, g, ...filters);
     };
     const filt = (type, f, q = 0.8) => {
       const n = ctx.createBiquadFilter();
@@ -426,25 +588,31 @@ export class TunePlayer {
     };
     switch (kind) {
       case 'k':
-        voice(tone('sine', 150, 46, 0.11), null, level, 0.0015, 0.07, 0.32);
-        voice(noise(false, 1), filt('highpass', 1800), level * 0.25, 0.001, 0.004, 0.02);
+        voice(tone('sine', 140, 46, 0.11), null, level, 0.002, 0.07, 0.32);
+        voice(noise(false, 1), [filt('highpass', 1600), filt('lowpass', 5000)], level * 0.18, 0.001, 0.004, 0.02);
         break;
       case 's':
-        voice(noise(false, 1), filt('bandpass', 1900, 0.9), level * 0.85, 0.001, 0.05, 0.22);
+        voice(noise(false, 1), [filt('bandpass', 1800, 0.9), filt('lowpass', 6000)], level * 0.8, 0.001, 0.05, 0.22);
         voice(tone('tri', 190, 150, 0.08), null, level * 0.45, 0.001, 0.035, 0.12);
         break;
       case 'h':
-        voice(noise(true, 1.6), filt('highpass', 6500), level * 0.5, 0.001, 0.014, 0.06);
+        // Band-limited (5-9 kHz) and soft: a brushed hat, not a sizzle.
+        voice(noise(true, 1.6), [filt('highpass', 5000), filt('lowpass', 9000)], level * 0.36, 0.0015, 0.014, 0.06);
         break;
       case 'o':
-        voice(noise(true, 1.6), filt('highpass', 6000), level * 0.42, 0.002, 0.09, 0.36);
+        voice(noise(true, 1.6), [filt('highpass', 4800), filt('lowpass', 8500)], level * 0.32, 0.003, 0.09, 0.36);
         break;
       case 'c':
-        voice(noise(false, 1), filt('highpass', 3800), level * 0.5, 0.002, 0.32, 1.5);
-        voice(noise(true, 1.9), filt('highpass', 5000), level * 0.25, 0.002, 0.25, 1.2);
+        voice(noise(false, 1), [filt('highpass', 3800), filt('lowpass', 9000)], level * 0.45, 0.003, 0.32, 1.5);
+        voice(noise(true, 1.9), [filt('highpass', 5000), filt('lowpass', 9500)], level * 0.2, 0.003, 0.25, 1.2);
         break;
       case 't':
-        voice(tone('tri', 210, 118, 0.2), null, level * 0.9, 0.0015, 0.09, 0.36);
+        voice(tone('tri', 210, 118, 0.2), filt('lowpass', 1600), level * 0.9, 0.002, 0.09, 0.36);
+        break;
+      case 'f':
+        // Felt thump: a soft low sine with a dark breath of noise on top.
+        voice(tone('sine', 86, 48, 0.16), null, level, 0.008, 0.12, 0.55);
+        voice(noise(false, 1), filt('lowpass', 420, 0.5), level * 0.22, 0.004, 0.03, 0.12);
         break;
       case 'p':
         for (const d of [0, 0.011, 0.022]) {
@@ -460,21 +628,24 @@ export class TunePlayer {
         }
         break;
       case 'x':
-        voice(noise(true, 2), filt('bandpass', 3200, 2), level * 0.6, 0.001, 0.006, 0.03);
+        voice(noise(true, 2), [filt('bandpass', 2600, 2), filt('lowpass', 4000)], level * 0.5, 0.001, 0.006, 0.03);
         break;
-      case 'w': {
-        // Whoosh: band-passed hiss sweeping up, swelling to 60 % of its length.
+      case 'w':
+      case 'a': {
+        // W: band-passed hiss sweeping up (kept for old tunes). A: a soft,
+        // low-passed air swell with no sweep - the network's transitions.
         const len = Math.max(0.15, dur);
+        const air = kind === 'a';
         const src = noise(false, 1);
-        const f = filt('bandpass', 300, 1.4);
+        const f = filt(air ? 'lowpass' : 'bandpass', air ? 700 : 300, air ? 0.3 : 1.4);
         if (!this.probe) {
-          f.frequency.setValueAtTime(300, when);
-          f.frequency.exponentialRampToValueAtTime(3400, when + len);
+          f.frequency.setValueAtTime(air ? 700 : 300, when);
+          f.frequency.exponentialRampToValueAtTime(air ? 1500 : 3400, when + len);
         }
         const g = ctx.createGain();
         g.gain.value = 0;
         g.gain.setValueAtTime(0, when);
-        g.gain.linearRampToValueAtTime(level * 0.9, when + len * 0.6);
+        g.gain.linearRampToValueAtTime(level * (air ? 0.7 : 0.9), when + len * (air ? 0.75 : 0.6));
         g.gain.linearRampToValueAtTime(0, when + len);
         src.connect(f).connect(g).connect(dest);
         if (this.probe) src.start(when);
@@ -488,51 +659,85 @@ export class TunePlayer {
   }
 }
 
-// ------------------------------------------------------------------ blips
+// ----------------------------------------------------------------- murmur
+
+// Rough vowel formants (Hz) per mouth shape for an adult voice; the voice's
+// `formant` factor shifts them (female voices sit ~15 % higher).
+const FORMANTS = {
+  AH: [730, 1150], OH: [520, 900], OO: [340, 820], WQ: [360, 860], EE: [330, 2000], L: [380, 1300],
+  TH: [420, 1500], S: [420, 1600], FV: [420, 1400], MBP: [280, 900], rest: [420, 1200],
+};
+const SEG_AMP = { MBP: 0.14, L: 0.32, TH: 0.1, S: 0.08, FV: 0.08, rest: 0.18 };
 
 /**
- * One sentence of "Animal Crossing" speech: one oscillator, a gain envelope
- * per beep (6 ms in, 12 ms out, pitch changes only while silent) through a
- * low-pass. `beeps` come from visemes.blipPlan(); `t0` is the context time of
- * the sentence start. Returns a function that cuts it short.
+ * One sentence of the "blips" voice: a low, muffled murmur, like a newsreader
+ * heard through a studio wall - never pitched beeps. A soft pulse at a fixed
+ * pitch per presenter (gentle declination, no random jitter, no rising
+ * question tail) through two vowel formants that follow the same mouth
+ * timeline as the lips, then a low-pass. `tl` comes from
+ * visemes.buildTimeline(); `t0` is the context time of the sentence start.
+ * Returns a function that cuts it short.
  */
-export function scheduleBlips(ctx, dest, blip, beeps, t0, totalSec, rnd = Math.random) {
-  if (!beeps.length) return () => {};
+export function scheduleMurmur(ctx, dest, voice, tl, t0) {
+  const segs = tl?.segs ?? [];
+  if (!segs.length) return () => {};
+  const total = tl.total / 1000;
   const osc = ctx.createOscillator();
-  osc.setPeriodicWave(bank(ctx).wave(blip.wave ?? 'tri'));
+  osc.setPeriodicWave(bank(ctx).wave(voice.wave ?? 'pulse25'));
+  const f1 = ctx.createBiquadFilter();
+  f1.type = 'bandpass';
+  f1.Q.value = 5;
+  const f2 = ctx.createBiquadFilter();
+  f2.type = 'bandpass';
+  f2.Q.value = 7;
+  const g2 = ctx.createGain();
+  g2.gain.value = 0.5;
+  const amp = ctx.createGain();
+  amp.gain.value = 0;
   const lp = ctx.createBiquadFilter();
   lp.type = 'lowpass';
-  lp.frequency.value = blip.cut;
-  const g = ctx.createGain();
-  g.gain.value = 0;
-  osc.connect(lp).connect(g).connect(dest);
-  osc.frequency.value = blip.base;
-  for (const b of beeps) {
-    const t = t0 + b.at / 1000;
-    const d = Math.max(0.03, (b.dur / 1000) * (blip.len / 0.78));
-    const v = blip.gain * b.peak;
-    const f = blip.base * (1 + (b.ratio - 1) * (1 - blip.flat)) * (1 - blip.vary / 2 + rnd() * blip.vary);
-    osc.frequency.setValueAtTime(f, t);
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(v, t + 0.006);
-    g.gain.setValueAtTime(v, t + d - 0.012);
-    g.gain.linearRampToValueAtTime(0, t + d);
+  lp.frequency.value = voice.cut ?? 2400;
+  lp.Q.value = -3;
+  osc.connect(f1).connect(amp);
+  osc.connect(f2).connect(g2).connect(amp);
+  amp.connect(lp).connect(dest);
+  const k = voice.formant ?? 1;
+  const base = voice.base ?? 120;
+  const decl = voice.monotone ? 0 : 0.07;
+  osc.frequency.setValueAtTime(base, t0);
+  if (decl) osc.frequency.linearRampToValueAtTime(base * (1 - decl), t0 + total);
+  const a = amp.gain;
+  a.setValueAtTime(0, t0 - 0.01);
+  const [F1, F2] = FORMANTS[segs[0].v] ?? FORMANTS.rest;
+  f1.frequency.setValueAtTime(F1 * k, t0);
+  f2.frequency.setValueAtTime(F2 * k, t0);
+  for (const s of segs) {
+    const t = t0 + s.t0 / 1000;
+    const [fa, fb] = FORMANTS[s.v] ?? FORMANTS.rest;
+    f1.frequency.setTargetAtTime(fa * k, t, 0.02);
+    f2.frequency.setTargetAtTime(fb * k, t, 0.025);
+    const level = s.k === 'pause' ? 0 : s.k === 'v' ? 0.3 + 0.7 * Math.min(1, s.o / 0.8) : (SEG_AMP[s.v] ?? 0.12);
+    a.setTargetAtTime(level * voice.gain, t, s.k === 'v' ? 0.018 : 0.025);
   }
-  osc.start(t0);
-  osc.stop(t0 + totalSec + 0.05);
+  a.setTargetAtTime(0, t0 + total, 0.03);
+  osc.start(t0 - 0.01);
+  osc.stop(t0 + total + 0.25);
   osc.onended = () => {
     try {
       osc.disconnect();
+      f1.disconnect();
+      f2.disconnect();
+      g2.disconnect();
+      amp.disconnect();
       lp.disconnect();
-      g.disconnect();
     } catch { /* ignore */ }
   };
   return () => {
     try {
       const now = ctx.currentTime;
-      g.gain.cancelScheduledValues(now);
-      g.gain.setTargetAtTime(0, now, 0.004);
-      osc.stop(now + 0.03);
+      a.cancelScheduledValues(now);
+      a.setTargetAtTime(0, now, 0.012);
+      osc.stop(now + 0.1);
     } catch { /* already stopped */ }
   };
 }
@@ -544,7 +749,9 @@ export const asSong = (tune) => (tune && Array.isArray(tune.tracks) && tune.trac
 /**
  * Render a tune offline with the channel's own mixer.
  * opts: seconds, sampleRate (48000), volume (0.5), loop, duck: [[from, to], ...]
- * (speech intervals in seconds), probe (envelopes only, no dynamics), normalise.
+ * (speech intervals in seconds, with the live hold and time constants),
+ * duckDb, startAt (s; may be negative = synced to a picture that started
+ * earlier), probe (envelopes only, no dynamics), normalise, stopAt.
  * Resolves to { buffer, song, loudness } or null without OfflineAudioContext.
  */
 export async function renderTune(tune, opts = {}) {
@@ -555,14 +762,12 @@ export async function renderTune(tune, opts = {}) {
   const loop = Boolean(opts.loop);
   const seconds = opts.seconds ?? Math.min(60, songSeconds(song) + 1.6);
   const ctx = new Offline(2, Math.ceil(seconds * sampleRate), sampleRate);
-  const buses = buildBuses(ctx, { volume: 1, raw: Boolean(opts.probe) });
-  const player = new TunePlayer(ctx, buses, song, { volume: opts.volume ?? 0.5, loop, probe: opts.probe, normalise: opts.normalise !== false });
-  player.start(0.05);
+  const ducker = opts.probe ? null : new Ducker();
+  const buses = buildBuses(ctx, { volume: 1, raw: Boolean(opts.probe), ducker });
+  const player = new TunePlayer(ctx, buses, song, { volume: opts.volume ?? 0.5, loop, probe: opts.probe, normalise: opts.normalise !== false, duckDb: opts.duckDb });
+  player.start(opts.startAt ?? 0.05);
   player.scheduleUntil(seconds);
-  for (const [a, b] of opts.duck ?? []) {
-    setDuck(buses.duck.gain, true, a);
-    setDuck(buses.duck.gain, false, b);
-  }
+  if (ducker && opts.duck) ducker.apply(opts.duck);
   if (opts.stopAt) player.stop(opts.stopAt);
   const buffer = await ctx.startRendering();
   return { buffer, song, loudness: player.loudness };

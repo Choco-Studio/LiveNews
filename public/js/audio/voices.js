@@ -32,8 +32,9 @@ const NOVELTY_RE = new RegExp(
 );
 // Child voices (Edge's "Ana", the macOS/Azure "Maisie"): charming, but not for a news desk.
 const CHILD_RE = /(?<!\p{L})(?:ana|maisie|kid|child)(?!\p{L})/iu;
-// Legacy macOS voices that sound robotic: what the 'robot' gender looks for.
-const ROBOT_RE = /(?<!\p{L})(?:zarvox|trinoids|fred|ralph|junior|albert|robot)(?!\p{L})/iu;
+// The robot presenter (UNIT-8) is robotic by monotone delivery, never by a
+// novelty voice or a deep pitch shift (cosmos.md, tech-bytes.md): it gets the
+// best natural voice nobody else uses, at near-natural pitch.
 
 // Regional variants to prefer, best first. A region in the engine option goes in front.
 const LANG_PREF = { en: ['en-gb', 'en-us'], es: ['es-es'] };
@@ -76,11 +77,10 @@ export function voiceScore(v, gender, pref) {
   let s = rank >= 0 ? Math.max(10, 30 - rank * 10) : 10;
   const name = voiceName(v);
   const g = voiceGender(v);
-  const robotic = gender === 'robot' && ROBOT_RE.test(name);
   if (gender === 'male' || gender === 'female') s += g === gender ? 50 : g ? -50 : 0;
-  else if (gender === 'robot') s += robotic ? 60 : g === 'male' ? 20 : 0;
-  if (gender !== 'robot') s += voiceQuality(v);
-  if (NOVELTY_RE.test(name) && !robotic) s -= 60;
+  else if (gender === 'robot') s += g === 'male' ? 20 : 0; // UNIT-8 reads as a male voice
+  s += voiceQuality(v);
+  if (NOVELTY_RE.test(name) || /(?<!\p{L})(?:fred|robot)(?!\p{L})/iu.test(name)) s -= 60;
   if (CHILD_RE.test(name) && /^en/i.test(String(v.lang ?? ''))) s -= 45;
   return s;
 }
@@ -102,7 +102,7 @@ export function chooseVoice(pool, gender, pref, used) {
 const GENDER_DEFAULTS = {
   male: { pitch: 0.95, rate: 1.02 },
   female: { pitch: 1.08, rate: 1.08 },
-  robot: { pitch: 0.5, rate: 1.15 },
+  robot: { pitch: 1, rate: 1.04 }, // even and level: monotone, not pitch-shifted
   neutral: { pitch: 1, rate: 1.05 },
 };
 
@@ -118,7 +118,9 @@ export function normProfile(p, explicit = true) {
   return {
     gender,
     lang: typeof src.lang === 'string' && src.lang.trim() ? src.lang.trim() : null,
-    pitch: numOr(src.pitch, d.pitch, 0.1, 2),
+    // A robot below 0.9 sounds comic or menacing (config/channel.json still
+    // asks for 0.6): keep it near natural.
+    pitch: gender === 'robot' ? numOr(src.pitch, d.pitch, 0.9, 1.1) : numOr(src.pitch, d.pitch, 0.1, 2),
     rate: numOr(src.rate, d.rate, 0.5, 2),
     explicit,
   };
@@ -128,14 +130,15 @@ export function normProfile(p, explicit = true) {
 export const DEFAULT_PROFILES = new Map([['A', normProfile('male', false)], ['B', normProfile('female', false)]]);
 export const NEUTRAL_PROFILE = normProfile('neutral', false);
 
-// Blip timbres per gender. Robots are low, flat, staccato and heavily filtered.
-// Gains put every voice at about -18 LUFS (measured in public/lab/audio.html),
-// ~10 LU above the ducked music.
+// The "blips" voice is a low murmur (synth.js scheduleMurmur): a soft pulse
+// at a fixed speaking pitch through vowel formants, like a newsreader heard
+// through a wall. Gains put every voice at the house voice level, -16 LUFS
+// (measured in public/lab/audio.html). The robot is monotone and darker.
 const BLIP_KINDS = {
-  male: { base: 200, wave: 'pulse50', gain: 0.25, cut: 2600, vary: 0.12, flat: 0, len: 0.78 },
-  female: { base: 350, wave: 'tri', gain: 0.35, cut: 2600, vary: 0.12, flat: 0, len: 0.78 },
-  neutral: { base: 270, wave: 'tri', gain: 0.34, cut: 2600, vary: 0.12, flat: 0, len: 0.78 },
-  robot: { base: 130, wave: 'pulse50', gain: 0.33, cut: 1400, vary: 0.03, flat: 0.8, len: 0.55 },
+  male: { base: 112, wave: 'pulse25', gain: 0.52, cut: 2400, formant: 1 },
+  female: { base: 196, wave: 'pulse25', gain: 0.5, cut: 2700, formant: 1.15 },
+  neutral: { base: 150, wave: 'pulse25', gain: 0.5, cut: 2500, formant: 1.07 },
+  robot: { base: 104, wave: 'pulse50', gain: 0.4, cut: 2000, formant: 0.96, monotone: true },
 };
 
 function hash01(str) {
@@ -144,13 +147,13 @@ function hash01(str) {
   return (h >>> 0) / 4294967296;
 }
 
-// Slots with their own profile get a pitch from it plus a small per-slot offset,
-// so two presenters of the same gender do not beep alike either.
+// Slots with their own profile get a pitch from it plus a small fixed
+// per-slot offset, so two presenters of the same gender never sound alike.
 export function blipFor(key, prof) {
   const kind = BLIP_KINDS[prof.gender];
   if (!prof.explicit && (key === 'A' || key === 'B')) return { ...kind };
-  const pitch = prof.gender === 'robot' ? 1 : clamp(prof.pitch, 0.6, 1.6);
-  return { ...kind, base: Math.max(90, kind.base * pitch * (1 + (hash01(key) - 0.5) * 0.14)) };
+  const pitch = prof.gender === 'robot' ? 1 : clamp(prof.pitch, 0.8, 1.25);
+  return { ...kind, base: Math.max(80, kind.base * pitch * (1 + (hash01(key) - 0.5) * 0.1)) };
 }
 
 /**
@@ -182,7 +185,7 @@ export function resolveVoices({ all = [], voices = [], profiles = new Map(), see
     out.set(key, {
       gender: prof.gender,
       voice,
-      pitch: clamp(pitch, 0.1, 2),
+      pitch: clamp(pitch, prof.gender === 'robot' ? 0.9 : 0.1, 2),
       rate: prof.rate,
       lang: prof.lang ?? plan.pref[0] ?? plan.base,
       blip: blipFor(key, prof),

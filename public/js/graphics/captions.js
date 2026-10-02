@@ -144,9 +144,11 @@ export function drawCaptions(ctx, t, s, place) {
   const before = ctx.globalAlpha;
   ctx.globalAlpha = before * alpha;
   try {
+    // one uniform roll through the window: both blocks travel its full height, so
+    // the old page is out of sight before it is dropped even when it was taller
     clipped(ctx, 0, top, W, boxH, () => {
-      if (k < 1 && oldH) drawBlock(ctx, s.prevLines, bottom - oldH - Math.round(k * newH));
-      drawBlock(ctx, s.lines, bottom - newH + Math.round((1 - k) * newH));
+      if (k < 1 && oldH) drawBlock(ctx, s.prevLines, bottom - oldH - Math.round(k * boxH));
+      drawBlock(ctx, s.lines, bottom - newH + Math.round((1 - k) * boxH));
     });
   } finally {
     ctx.globalAlpha = before;

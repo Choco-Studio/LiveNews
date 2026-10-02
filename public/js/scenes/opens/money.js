@@ -1,92 +1,112 @@
-// MONEY MINUTE open: a market chart builds itself. The baseline and grid draw
-// out, five green bars rise one after another (ease-out, no bounce) and a
-// white trend line climbs across them to an arrow head. Accent: green.
+// MONEY MINUTE open: "the bottom line" (money-minute.md 3.7). A cream ledger
+// card unrolls at centre stage, lit from the upper left like a real sheet of
+// paper (white top edge, tan thickness on the shaded sides, a folded corner, a
+// 1 px drop shadow), and is ruled live: three steel lines draw across it one
+// after another. Then one green line draws on the dark field, 2 px under the
+// card: the bottom line. In the reveal the card glides to its slot and the line
+// extends from under it to underline the title (the plate's accent bar, 1 px).
+// No numbers, bars, trend lines or arrows: a chart that rises every evening
+// would contradict the market. Accent: green, never touching the cream.
 import { P } from '../../palette.js';
-import { seg, easeOutQuint, easeInOut, linePts, memo } from '../../gfx/index.js';
-import { lazyBackdrop, playOpen, CENTRE } from './kit.js';
+import { seg, easeOutQuint, Pix, memo } from '../../gfx/index.js';
+import { lazyBackdrop, playOpen, CENTRE, PLATE_X, ZOOM } from './kit.js';
 
 const cached = memo(48);
-const BARS = [13, 21, 17, 29, 40];
+const CW = 30; // card size in the lock-up (x ZOOM at centre stage)
+const CH = 38;
+const PAD = 2; // the sheet under it shows 2 px above and to the right (a pad of paper)
+const EXTENT = (CW >> 1) + PAD + 1; // right half-width incl. the sheet below and the drop shadow
+const SLOT_X = PLATE_X - 4 - EXTENT;
 
-/** Chart geometry at size factor k, cached per integer layout. */
-function layout(k) {
+/** Card geometry at size factor k: the green line sits 2 px under the card, on the plate's bar row at k = 1. */
+function geom(k) {
   return cached(Math.round(k * 100), () => {
-    const bw = Math.round(8 * k);
-    const gap = Math.round(4 * k);
-    const base = Math.round(22 * k);
-    const hs = BARS.map((h) => Math.round(h * k));
-    const span = BARS.length * bw + (BARS.length - 1) * gap;
-    const pts = hs.map((h, i) => [Math.round(-span / 2 + i * (bw + gap) + bw / 2), base - h - Math.round(6 * k)]);
-    pts[pts.length - 1][1] -= Math.round(2 * k);
-    const px = [];
-    for (let j = 1; j < pts.length; j++) {
-      linePts(pts[j - 1][0], pts[j - 1][1], pts[j][0], pts[j][1], (x, y, i) => {
-        if (j > 1 && i === 0) return;
-        px.push(x, y);
-      });
+    const w = Math.round(CW * k);
+    const h = Math.round(CH * k);
+    const bottom = Math.round(11 * k); // relative to the emblem centre
+    const m = Math.max(3, Math.round(4 * k)); // inner margin
+    const rows = [0.5, 0.67, 0.84].map((f) => bottom - h + Math.round(h * f));
+    return { w, h, bottom, top: bottom - h, left: -(w >> 1), m, rows, fold: Math.max(4, Math.round(6 * k)) };
+  });
+}
+
+/** The card itself (baked per size): paper on a pad, edges, folded corner, title block and margin rule. */
+function cardSprite(g) {
+  return cached(`card|${g.w}x${g.h}`, () => {
+    const { w, h, fold, m } = g;
+    const p = new Pix(w + PAD + 1, h + PAD + 1); // the pad's sheet above/right, the drop shadow below
+    const o = PAD; // the top sheet starts PAD px down
+    // the sheet below: cream with a tan edge, showing above and to the right of the top sheet
+    p.rect(PAD, 0, w, h, P.cream);
+    p.rect(PAD, 0, w, 1, P.tan);
+    p.rect(PAD + w - 1, 0, 1, h, P.tanShade);
+    p.rect(PAD + w, 1, 1, h, P.black); // its shadow
+    // drop shadow of the top sheet (the field is dark: palette black, 1 px, offset down-right)
+    p.rect(1, o + h, w + PAD - 1, 1, P.black);
+    // the top sheet, drawn in its own frame shifted down by PAD
+    const top = new Pix(w, h);
+    top.rect(0, 0, w, h, P.cream);
+    // key light from the upper left: lit top and left edges, thickness on the shaded sides
+    top.rect(0, 0, w, 1, P.white);
+    top.rect(0, 1, 1, h - 1, P.white);
+    top.rect(w - 1, 1, 1, h - 1, P.tan);
+    top.rect(1, h - 1, w - 1, 1, P.tanShade);
+    // folded top-right corner: the corner is cut away (the sheet below shows) and folded down
+    const CUT = 1;
+    for (let y = 0; y < fold; y++) {
+      for (let x = w - fold + y; x < w; x++) top.px(x, y, CUT);
+      for (let x = w - fold; x < w - fold + y; x++) top.px(x, y, x === w - fold ? P.tanShade : P.tan);
+      top.px(w - fold + y, y, P.tanShade); // crease
     }
-    return { bw, gap, base, hs, span, line: Int16Array.from(px), tip: pts[pts.length - 1], grid: [12, 24, 36].map((g) => Math.round(g * k)) };
+    // a printed title block and a short sub-line (no figures), and a warm margin rule
+    const tw = Math.round(w * 0.42);
+    top.rect(m, m + 1, tw, Math.max(1, Math.round(h / 18)), P.ink);
+    top.rect(m, m + 1 + Math.max(2, Math.round(h / 12)), Math.round(tw * 0.6), 1, P.steel);
+    top.rect(m - 2, Math.round(h * 0.34), 1, h - Math.round(h * 0.34) - 2, P.tan);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const c = top.d[y * w + x];
+        if (c !== CUT) p.d[(o + y) * p.w + x] = c;
+      }
+    }
+    return { cv: p.canvas() };
   });
 }
 
 function emblem(ctx, dt, x, y, k = 1) {
-  const L = layout(k);
-  const x0 = x - (L.span >> 1);
-  const by = y + L.base;
-  // baseline and grid draw out from the centre
-  const g = easeOutQuint(seg(dt, 0.12, 0.4));
-  if (g > 0) {
-    const half = Math.round(((L.span >> 1) + 6) * g);
-    ctx.fillStyle = P.slate;
-    L.grid.forEach((gy, i) => {
-      const hw = Math.round(half * (1 - (i + 1) * 0.1));
-      ctx.fillRect(x - hw, by - gy, hw * 2, 1);
-    });
-    ctx.fillStyle = P.fog;
-    ctx.fillRect(x - half, by, half * 2, 1);
+  const g = geom(k);
+  const left = x + g.left;
+  const top = y + g.top; // the top sheet; the sprite starts PAD px higher (the pad's sheet)
+  // the card unrolls from its top edge (a clip that grows downwards, eased out)
+  const u = easeOutQuint(seg(dt, 0.1, 0.32));
+  if (u <= 0) return;
+  const C = cardSprite(g);
+  const vis = Math.max(1, Math.round((g.h + PAD + 1) * u));
+  ctx.save();
+  try {
+    ctx.beginPath();
+    ctx.rect(left, top - PAD, g.w + PAD + 1, vis);
+    ctx.clip();
+    ctx.drawImage(C.cv, left, top - PAD);
+  } finally {
+    ctx.restore();
   }
-  // the bars rise one after another
-  const shade = Math.max(2, Math.round(2 * k));
-  L.hs.forEach((h, i) => {
-    const hh = Math.round(h * easeOutQuint(seg(dt, 0.34 + i * 0.1, 0.42)));
-    if (hh <= 0) return;
-    const bx = x0 + i * (L.bw + L.gap);
-    const top = by - hh;
-    // restrained bars: dark green bodies with a lit green cap, the accent kept to a sliver
-    ctx.fillStyle = P.darkGreen;
-    ctx.fillRect(bx, top, L.bw, hh);
-    ctx.fillStyle = P.black;
-    ctx.fillRect(bx + L.bw - shade + 1, top, shade - 1, hh);
+  // ruled live: three steel lines across the sheet, one after another, ease-out
+  const x0 = left + g.m;
+  const span = g.w - 2 * g.m;
+  for (let i = 0; i < 3; i++) {
+    const p = easeOutQuint(seg(dt, 0.36 + i * 0.2, 0.18));
+    const len = Math.round(span * p);
+    if (len <= 0 || y + g.rows[i] >= top - PAD + vis) continue;
+    ctx.fillStyle = P.steel;
+    ctx.fillRect(x0, y + g.rows[i], len, 1);
+  }
+  // the bottom line: green, on the dark field 2 px under the card (never on the cream)
+  const lp = easeOutQuint(seg(dt, 1.0, 0.35));
+  const lw = Math.round((g.w + 4) * lp);
+  if (lw > 0) {
     ctx.fillStyle = P.green;
-    ctx.fillRect(bx, top, L.bw - shade + 1, Math.min(hh, 2));
-  });
-  // trend line climbs across them (1 px white with a 1 px black underline)
-  const n = L.line.length / 2;
-  const upto = Math.round(n * easeInOut(seg(dt, 0.9, 0.5)));
-  for (let i = 0; i < upto; i++) {
-    const lx = x + L.line[i * 2];
-    const ly = y + L.line[i * 2 + 1];
-    ctx.fillStyle = P.black;
-    ctx.fillRect(lx, ly + 1, 1, 1);
-    ctx.fillStyle = P.white;
-    ctx.fillRect(lx, ly, 1, 1);
-  }
-  if (upto > 0 && upto < n) {
-    ctx.fillStyle = P.white;
-    ctx.fillRect(x + L.line[(upto - 1) * 2] - 1, y + L.line[(upto - 1) * 2 + 1] - 1, 3, 3);
-  }
-  // the arrow head grows out of the tip once the line arrives
-  const ap = easeOutQuint(seg(dt, 1.36, 0.22));
-  if (ap > 0) {
-    const tx = x + L.tip[0];
-    const ty = y + L.tip[1];
-    // corner of the head sits just beyond the tip, arms run left and down
-    const s = Math.max(1, Math.round(Math.round(6 * k) * ap));
-    const cx = tx + 1;
-    const cy = ty - 1;
-    ctx.fillStyle = P.white;
-    ctx.fillRect(cx - s + 1, cy, s, 1);
-    ctx.fillRect(cx, cy, 1, s);
+    ctx.fillRect(left - 2, y + g.bottom + 2, lw, 1);
   }
 }
 
@@ -94,11 +114,18 @@ const background = lazyBackdrop({ key: 'money', colors: [P.black, P.ink], cx: CE
 
 export const MONEY = {
   accent: P.green,
-  style: { accent: P.green, plate: P.black, ink: 'light', bar: P.green },
+  // the plate's accent bar is the bottom line itself: 1 px, starting under the card
+  style: { accent: P.green, plate: P.black, ink: 'light', bar: P.green, barH: 1, barX0: SLOT_X - (CW >> 1) - 2 },
   background,
   emblem,
-  absorb: 0.36,
-  shoulder: 30,
+  extent: EXTENT,
+  absorb: 0.2,
+  shoulder: 20,
+  warmJobs: () => {
+    const jobs = [];
+    for (let k = 1; k <= ZOOM + 0.001; k += 0.1) jobs.push(() => cardSprite(geom(k)));
+    return jobs;
+  },
 };
 
 export function drawMoneyMinute(ctx, dt, info) {

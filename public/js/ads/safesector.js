@@ -306,7 +306,7 @@ function shotDesk(ctx, lt) {
   if (lt > 2.0) elbowArm(ctx, ex, 150);
   if (ang < 0.05) steam(ctx, 176, baseY - 46, lt, 1 - prog(lt, 2.8, 3.3));
   ctx.restore();
-  vignette(ctx, 0.6, 'ss1');
+  vignette(ctx, 0.6);
 }
 
 // --- S2: slow motion — the coffee leaves the mug -----------------------------------------
@@ -387,7 +387,7 @@ function shotSpill(ctx, lt) {
       rect(ctx, x - 1, y - 1, 1, 1, C.coffeeH);
     }
   }
-  vignette(ctx, 0.65, 'ss2');
+  vignette(ctx, 0.65);
 }
 
 // --- S3: a fridge at night; a magnet slides down the door ---------------------------------
@@ -467,7 +467,7 @@ function shotFridge(ctx, lt) {
   ellipse(ctx, mx - 1, my - 1, 6, 6, mix(P.black, P.ink, 0.5));
   rect(ctx, mx - 5, my - 6, 4, 1, P.steel);
   rect(ctx, mx - 6, my - 5, 1, 2, P.slate);
-  vignette(ctx, 0.7, 'ss3');
+  vignette(ctx, 0.7);
 }
 
 // --- S4: a sunny windowsill --------------------------------------------------------------
@@ -545,7 +545,7 @@ function shotSill(ctx, lt) {
     const off = round(sin(y * 0.8 + lt * 6) * 1.3 * ((y - 92) / 29));
     if (off) ctx.drawImage(cv, 110, y, 172, 1, 110 + off, y, 172, 1);
   }
-  vignette(ctx, 0.45, 'ss4');
+  vignette(ctx, 0.45);
 }
 
 // --- S5: the adviser ---------------------------------------------------------------------
@@ -683,7 +683,7 @@ function shotAdviser(ctx, lt, info) {
     tracked(ctx, 'SENIOR CLAIMS ADVISER  ·  31 YEARS', 24, 198, { color: P.fog, font: 'micro', track: 1 });
     ctx.globalAlpha = 1;
   }
-  vignette(ctx, 0.5, 'ss5');
+  vignette(ctx, 0.5);
 }
 
 // --- S6: the restored disk, presented like jewellery -------------------------------------
@@ -753,7 +753,7 @@ function shotCase(ctx, lt) {
   const gy = track(lt, [[0.8, 206], [2.3, 270, 'inOut']]);
   if (gy < 266) glove(ctx, gx, gy);
   ctx.restore();
-  vignette(ctx, 0.55, 'ss6');
+  vignette(ctx, 0.55);
 }
 
 // --- S7: end slate -----------------------------------------------------------------------
@@ -819,8 +819,8 @@ const SHOTS = [
 
 // Soft piano (a decaying triangle), a sine pad and a low sine bass. 60 bpm, so
 // one beat is one second and every chord change sits on a cut.
-const PIANO = { wave: 'tri', a: 0.004, d: 1.7, s: 0, r: 0.9, vib: false };
-const PAD = { wave: 'sine', a: 0.7, d: 1.2, s: 0.8, r: 1.4, vib: [6, 4.2, 0.4] };
+const PIANO = { wave: 'triangle', a: 0.004, d: 1.7, s: 0, r: 0.9, vib: false };
+const PAD = { wave: 'sine', a: 0.45, d: 1.2, s: 0.8, r: 1.4, vib: [6, 4.2, 0.4], legato: 1 };
 
 export default {
   id: 'safesector',
@@ -846,7 +846,7 @@ export default {
       {
         kind: 'lead',
         inst: PIANO,
-        gain: 0.8,
+        gain: 1,
         notes: 'R:1 F#5:1.5@0.7 E5:0.5@0.5 D5:1.5@0.6 R:0.25 C#5:0.5@0.5 D5:0.5@0.55 B4:1@0.5 R:0.25 B4:0.5@0.5 A4:0.5@0.45 G4:1@0.5 R:0.25 A4:0.5@0.5 B4:0.25@0.45 C#5:1@0.55 D5:1.5@0.45 R:0.5 F#5:1@0.4 E5:0.5@0.35 D5:1@0.4 A4:1.25@0.35 B4:1@0.5 D5:0.5@0.5 C#5:0.5@0.45 E5:1@0.55 R:0.75 F#5:1@0.7 E5:0.5@0.55 D5:2.5@0.6 R:2',
       },
       {
@@ -858,10 +858,10 @@ export default {
       {
         kind: 'harmony',
         inst: PAD,
-        gain: 0.45,
+        gain: 0.22,
         notes: 'B2+F#3+D4:4.5@0.5 G2+D3+B3:2.25@0.5 E3+G3+B3:2.25@0.5 A2+D3+E3:2@0.5 D3+F#3+A3:4@0.45 G2+B2+D3:1.75@0.45 E3+G3+B3:2@0.5 A2+C#3+E3:1.75@0.5 D3+F#3+A3:4@0.55 R:2',
       },
-      { kind: 'bass', inst: 'sine', gain: 0.7, notes: 'B1:4.5 G1:2.25 E2:2.25 A1:2 D2:4 G1:1.75 E2:2 A1:1.75 D2:4 R:2' },
+      { kind: 'bass', inst: 'sine', gain: 0.5, notes: 'B1:4.5 G1:2.25 E2:2.25 A1:2 D2:4 G1:1.75 E2:2 A1:1.75 D2:4 R:2' },
     ],
   },
   draw(ctx, t, dt, info) {

@@ -4,10 +4,42 @@
 // target before the first note sounds. Pure math, no WebAudio.
 
 import { waveEnergy } from './waves.js';
-import { flatten, songSeconds, KIND_GAIN } from './tune.js';
+import { flatten, songSeconds, KIND_GAIN, noteCutoff } from './tune.js';
 
-export const TARGET_LUFS = -17; // channel music level for a tune played at volume 0.5
+// The channel's level plan is set against the voice, as broadcasters do:
+// the house voice target (tools/voice/dsp.py, blips calibrated to it) is
+// -16 LUFS; a programme open plays level with it, cues 1-3 LU under it
+// (their `loudness` trim), the stinger 6 LU under, and anything under a
+// voice is ducked to 14-20 LU below it (synth.js).
+export const VOICE_LUFS = -16;
+export const TARGET_LUFS = VOICE_LUFS; // a tune played at volume 0.5 with no trim
 const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
+
+/**
+ * Power gain of WebAudio's lowpass BiquadFilter at frequency f (Q in dB, as
+ * the Web Audio spec defines it for this filter type), at sample rate fs.
+ */
+export function lowpassPower(f, cutoff, qDb = 0, fs = 48000) {
+  if (!(cutoff < fs / 2 - 1)) return 1;
+  const w0 = (2 * Math.PI * cutoff) / fs;
+  const alpha = Math.sin(w0) / (2 * 10 ** (qDb / 20));
+  const cw = Math.cos(w0);
+  const b0 = (1 - cw) / 2;
+  const b1 = 1 - cw;
+  const a0 = 1 + alpha;
+  const a1 = -2 * cw;
+  const a2 = 1 - alpha;
+  const w = (2 * Math.PI * f) / fs;
+  const c1 = Math.cos(w);
+  const s1 = Math.sin(w);
+  const c2 = Math.cos(2 * w);
+  const s2 = Math.sin(2 * w);
+  const nr = b0 + b1 * c1 + b0 * c2;
+  const ni = -(b1 * s1 + b0 * s2);
+  const dr = a0 + a1 * c1 + a2 * c2;
+  const di = -(a1 * s1 + a2 * s2);
+  return (nr * nr + ni * ni) / (dr * dr + di * di);
+}
 
 // ----------------------------------------------------------- K-weighting
 
@@ -126,7 +158,7 @@ export function measureLoudness(channels, fs = 48000) {
 
 // K-weighted energy of one drum hit at unit gain (measured offline in
 // public/lab/audio.html with the synth's own drum voices).
-export const DRUM_ENERGY = { k: 0.03, s: 0.012, h: 0.0009, o: 0.004, c: 0.03, t: 0.025, p: 0.01, x: 0.0004, w: 0.02 };
+export const DRUM_ENERGY = { k: 0.03, s: 0.012, h: 0.0009, o: 0.004, c: 0.03, t: 0.025, p: 0.01, x: 0.0004, w: 0.02, f: 0.02, a: 0.008 };
 
 // Integral of the squared ADSR envelope over a note gated for `gate` seconds.
 export function envelopeEnergy(inst, gate) {
@@ -143,11 +175,15 @@ export function envelopeEnergy(inst, gate) {
 }
 
 const energyCache = new Map();
-function noteEnergy(wave, midi) {
-  const key = `${wave}:${midi}`;
+// K-weighted energy of one note of an instrument through its low-pass.
+function noteEnergy(inst, midi) {
+  const cut = Math.round(noteCutoff(inst, midi));
+  const q = inst.q ?? 0;
+  const key = `${inst.wave}:${midi}:${cut}:${q}`;
   let e = energyCache.get(key);
   if (e === undefined) {
-    e = waveEnergy(wave, hz(midi), (f) => kWeight(f));
+    e = waveEnergy(inst.wave, hz(midi), (f) => kWeight(f) * lowpassPower(f, cut, q));
+    if (energyCache.size > 4000) energyCache.clear();
     energyCache.set(key, e);
   }
   return e;
@@ -188,7 +224,7 @@ export function estimateLoudness(song) {
     const midis = ev.e.midis;
     // A chord shares one note's energy (each voice at 1/sqrt(n)); an arpeggio is one voice.
     let w = 0;
-    for (const m of midis) w += noteEnergy(inst.wave, m);
+    for (const m of midis) w += noteEnergy(inst, m);
     w /= midis.length;
     deposit(t0, gate + inst.r, g * g * w * env * extra);
   }

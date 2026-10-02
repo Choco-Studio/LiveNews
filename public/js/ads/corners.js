@@ -171,7 +171,7 @@ function shotHero(ctx, lt) {
   const s = track(lt, [[0, 38], [4.0, 44, 'smooth']]);
   crisp(ctx, 192, 104 + sin(lt * 0.9) * 2, s, -0.42 + sin(lt * 0.5) * 0.18, sin(lt * 0.42 - 0.4) * 0.75, 0.18 + lt * 0.04, { warm: 0.06, curl: 0.16, rim: mix(P.cream, P.yellow, 0.3) });
   saltFall(ctx, lt, 100, 290, 20, 196, 0.35, 0.6);
-  vignette(ctx, 0.7, 'cn1');
+  vignette(ctx, 0.7);
 }
 
 // --- S2: slow motion, crisps settle on slate --------------------------------------------------
@@ -230,7 +230,7 @@ function shotTumble(ctx, lt) {
     crisp(ctx, f.x, y, f.s, rx, ry, f.rz, { curl: 0.12, warm: 0.1, rim: mix(P.cream, P.yellow, 0.4) });
   }
   ctx.restore();
-  vignette(ctx, 0.65, 'cn2');
+  vignette(ctx, 0.65);
 }
 
 // --- S3: Ian, master squarer ------------------------------------------------------------------
@@ -362,7 +362,7 @@ function shotIan(ctx, lt, info) {
     tracked(ctx, 'MASTER SQUARER  ·  22 YEARS', 24, 198, { color: P.fog, font: 'micro', track: 1 });
     ctx.globalAlpha = 1;
   }
-  vignette(ctx, 0.55, 'cn3');
+  vignette(ctx, 0.55);
 }
 
 // --- S4: salt through a shaft of light ------------------------------------------------------
@@ -405,7 +405,7 @@ function shotSalt(ctx, lt) {
   ctx.globalCompositeOperation = 'source-over';
   saltFall(ctx, lt, 150, 250, -10, 186, 0.5, 0.9);
   ctx.restore();
-  vignette(ctx, 0.65, 'cn4');
+  vignette(ctx, 0.65);
 }
 
 // --- S5: three packs on a plinth ---------------------------------------------------------------
@@ -475,7 +475,7 @@ function shotPacks(ctx, lt) {
     rect(ctx, x + PACK_W - 3, y + 9, 1, PACK_H - 18, mix(GOLD, P.yellow, 0.3));
   }
   ctx.restore();
-  vignette(ctx, 0.55, 'cn5');
+  vignette(ctx, 0.55);
 }
 
 // --- S6: end slate --------------------------------------------------------------------------------
@@ -516,7 +516,7 @@ const SHOTS = [
 
 // A slow, velvet bed: soft electric-piano chords (minor ninths), a walking
 // sine bass and brushed time. 70 bpm.
-const EP = { wave: 'tri', a: 0.006, d: 1.4, s: 0.1, r: 0.8, vib: [6, 5, 0.3] };
+const EP = { wave: 'triangle', a: 0.006, d: 1.4, s: 0.1, r: 0.8, vib: [6, 5, 0.3] };
 const LEADV = { wave: 'sine', a: 0.04, d: 0.6, s: 0.6, r: 0.5, vib: [10, 5, 0.3] };
 
 export default {

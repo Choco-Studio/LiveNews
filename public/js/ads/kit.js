@@ -1,13 +1,22 @@
-// Commercial-break toolkit (owner: ads-1). Integer-only pixel primitives, an
-// ASCII sprite compiler with automatic outlines, little pixel people, a shot
-// sequencer with transitions, motion/easing helpers, camera moves, kinetic
-// type, product hero furniture and the shared end slate. Every draw function
-// is a pure function of its inputs; module state is only lazily-built caches
-// of static art and a few pooled scratch canvases (rewritten before each use).
-// Nothing here allocates canvases, gradients or JSON per frame.
+// Commercial-break toolkit (owner: ads-1). Integer-only pixel primitives, a
+// shot sequencer with transitions, motion/easing helpers, and (the PREMIUM
+// section at the end of the file) what grown-up parody commercials need:
+// hand-drawn serif and thin display faces with tracking-in / fade-up type,
+// baked dithered light (backdrops, vignette, beams, rim light on any
+// silhouette), a per-pixel lit "lathe" for bottles, glasses and products with
+// softbox reflections and wrapped labels, a turntable, slow-motion bubbles and
+// dust, cinema bars and warm-up baking. Every draw function is a pure function
+// of its inputs; module state is only lazily-built caches of static art and a
+// few pooled scratch canvases. Nothing here allocates canvases, gradients,
+// ImageData or JSON per frame.
+//
+// LEGACY (kept exported for older ads; do not use for new work, the channel is
+// for adults): the cartoon people hero/person/faceCU, kinetic/words/slogan/
+// bubble, badge, sunburst/ripples, jump/squashArt/wobble and endSlate.
 //
 // AN AD MODULE default-exports { id, brand, duration, voice, script:[{at,text}],
-// tune, draw(ctx, t, dt, info) } and usually draws with play(ctx, dt, info, SHOTS).
+// tune, draw(ctx, t, dt, info) } and usually draws with play(ctx, dt, info, SHOTS)
+// after warmUp(SHOTS, dt, info).
 //
 // SHOTS: play(ctx, dt, info, [{ at, draw(ctx, lt, info, dt), wipe, wd, ...o }])
 //   lt = seconds since the shot started; the last shot holds while the VO overruns.
@@ -15,7 +24,9 @@
 //   smeared pan, o.dir = 1 | -1) | 'match' (match dissolve growing from the shared
 //   shape at o.cx, o.cy) | 'iris' (circle opens at o.cx, o.cy) | 'irisInOut'
 //   (closes to black on o.fx, o.fy then opens on o.cx, o.cy) | 'slide' (new shot
-//   slides over, o.dir) | 'push' | 'blocks' | 'bars' | 'dissolve' | 'diag' | 'flash'.
+//   slides over, o.dir) | 'push' | 'blocks' | 'bars' | 'dissolve' | 'diag' | 'flash'
+//   | 'fade' (eased cross-dissolve) | 'black' (dip to black, o.hold) | 'soft'
+//   (feathered slow wipe, o.dir). Premium spots use cut, fade, black and soft.
 // MOTION: key(t, [[t0, v0], [t1, v1, ease], ...]) keyframe track (numbers or arrays,
 //   ease names in EASE or functions); tween(t, t0, t1, a, b, ease); spring(x),
 //   wobble(t, t0, amp, hz, damp) damped jiggle after an impact; easeInBack (anticipation),
@@ -3016,10 +3027,17 @@ export function trackIn(ctx, s, x, y, lt, { face = 'serif', color = P.white, tra
 }
 
 /** A line that fades up from `rise` px below over `dur` s (then holds). */
-export function fadeUp(ctx, s, x, y, lt, { dur = 0.8, rise = 3, ...o } = {}) {
+const FADE_O = { face: 'serif', color: P.white, track: 0, align: 'left', scale: 1, alpha: 1 };
+export function fadeUp(ctx, s, x, y, lt, { dur = 0.8, rise = 3, face = 'serif', color = P.white, track = 0, align = 'left', scale = 1, alpha = 1 } = {}) {
   if (lt <= 0) return 0;
   const p = smooth(lt / dur);
-  return type(ctx, s, x, y + round((1 - p) * rise), { ...o, alpha: (o.alpha ?? 1) * p });
+  FADE_O.face = face;
+  FADE_O.color = color;
+  FADE_O.track = track;
+  FADE_O.align = align;
+  FADE_O.scale = scale;
+  FADE_O.alpha = alpha * p;
+  return type(ctx, s, x, y + round((1 - p) * rise), FADE_O);
 }
 
 /** Hairline rule that draws outward from its centre (align 'center') or from the left. */

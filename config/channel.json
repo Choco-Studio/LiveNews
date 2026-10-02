@@ -10,7 +10,8 @@
         "lang": "en-GB",
         "pitch": 0.95,
         "rate": 1.0
-      }
+      },
+      "role": "Anchor"
     },
     "lola": {
       "name": "Lola Byte",
@@ -20,7 +21,8 @@
         "lang": "en-US",
         "pitch": 1.08,
         "rate": 1.06
-      }
+      },
+      "role": "Anchor"
     },
     "max": {
       "name": "Max Circuit",
@@ -30,7 +32,8 @@
         "lang": "en-US",
         "pitch": 1.05,
         "rate": 1.1
-      }
+      },
+      "role": "Technology correspondent"
     },
     "ada": {
       "name": "Ada Volt",
@@ -40,7 +43,8 @@
         "lang": "en-GB",
         "pitch": 1.0,
         "rate": 1.04
-      }
+      },
+      "role": "Tech analyst"
     },
     "nova": {
       "name": "Dr Nova Reyes",
@@ -50,7 +54,8 @@
         "lang": "en-US",
         "pitch": 1.02,
         "rate": 1.0
-      }
+      },
+      "role": "Science editor"
     },
     "unit8": {
       "name": "UNIT-8",
@@ -58,9 +63,10 @@
       "voice": {
         "gender": "robot",
         "lang": "en-US",
-        "pitch": 0.6,
+        "pitch": 1.0,
         "rate": 1.05
-      }
+      },
+      "role": "Robot co-host"
     },
     "penny": {
       "name": "Penny Sterling",
@@ -70,17 +76,19 @@
         "lang": "en-GB",
         "pitch": 0.98,
         "rate": 1.05
-      }
+      },
+      "role": "Markets correspondent"
     },
     "sam": {
       "name": "Sam Night",
-      "personality": "relaxed rolling-news anchor, concise, friendly, gets straight to the point",
+      "personality": "calm late-shift anchor, concise and exact, dry when it fits, gets straight to the point",
       "voice": {
         "gender": "male",
         "lang": "en-US",
         "pitch": 0.92,
         "rate": 1.08
-      }
+      },
+      "role": "Anchor"
     }
   },
   "programs": {
@@ -96,16 +104,76 @@
         "world",
         "business"
       ],
-      "stories": 6,
+      "stories": 8,
       "maxChats": 2,
       "features": [
         "roundup",
         "number",
         "lighter"
       ],
-      "style": "Flagship world news bulletin. Lead with the biggest global story, told with authority. Two or three main stories, then 'Around the world in 30 seconds' for quick items with a clear place, and 'And finally' a lighter story to close. Serious but warm; brief exchanges between presenters only around lighter stories.",
-      "storyLength": "2 to 4 sentences, max 450 characters; round-up items exactly 1 sentence",
-      "chemistry": "Paco is the steady veteran with a bone-dry one-liner; Lola brings warmth, curiosity and the human angle. Paco tosses with a single word (\"Lola?\"); Lola often picks up with \"Thanks, Paco\" and now and then deflates his dryness. Never banter around grave stories."
+      "style": "Flagship world news bulletin. Lead with the biggest global story, told with authority; a breaking story always leads. Two main stories, one of which may be the number of the day, then 'Around the world' for quick items with a clear place, read by Lola, and 'And finally' a lighter story to close. Plain public-broadcaster English, declarative sentences, at most 20 words each. No humour in the headlines, the lead, the main stories or the round-up: the wit lives only in 'And finally', the chat straight after it and the sign-off.",
+      "storyLength": "lead 3 to 5 sentences, max 520 characters; other stories 2 to 4 sentences, max 450 characters; round-up items exactly 1 sentence of 12 to 20 words; at most 20 words per sentence",
+      "chemistry": "Paco is the steady veteran with a bone-dry one-liner; Lola brings warmth, curiosity and the human angle, reads the story with the clearest human angle, the round-up and And finally, and now and then deflates Paco's dryness with a plain fact or a wry understatement. Paco tosses with her name and a full stop (\"Lola.\"); she says \"Thanks, Paco\" at most once. Never banter around grave stories.",
+      "headlineMax": 45,
+      "intro": "headlines",
+      "roundup": {
+        "opener": "Now, around the world in 30 seconds.",
+        "min": 2,
+        "max": 4,
+        "words": "12 to 20",
+        "reader": "B"
+      },
+      "numberSlot": "main",
+      "chats": {
+        "after": [
+          "lighter"
+        ],
+        "max": {
+          "lighter": 2
+        }
+      },
+      "happyOnly": [
+        "lighter",
+        "chat",
+        "outro"
+      ],
+      "noQuestions": true,
+      "toss": "{name}.",
+      "thanksMax": 1,
+      "outroAnchor": "A",
+      "gestures": {
+        "allow": [
+          "nod",
+          "lean_in",
+          "steeple",
+          "raise_hand",
+          "point_screen",
+          "look_partner",
+          "point_partner",
+          "shrug",
+          "shake_head",
+          "papers"
+        ],
+        "listener": [
+          "nod",
+          "look_partner"
+        ],
+        "grave": [
+          "nod",
+          "steeple"
+        ],
+        "map": {
+          "wave": "nod",
+          "point_camera": "nod",
+          "count": "steeple",
+          "chin": "steeple"
+        },
+        "perSegment": 2,
+        "defaults": {
+          "intro": "nod",
+          "outro": "nod"
+        }
+      }
     },
     "tech-bytes": {
       "title": "TECH BYTES",
@@ -125,9 +193,67 @@
         "number",
         "lighter"
       ],
-      "style": "Technology magazine show for grown-ups. For every story say plainly what it means for ordinary people, but only what the summary supports. Max brings the enthusiasm, Ada the healthy scepticism and the hard question; short, dry back-and-forth exchanges are welcome. A number of the day when a summary has a striking figure.",
-      "storyLength": "2 to 4 sentences, max 450 characters",
-      "chemistry": "Max gets interested first; Ada raises an eyebrow and asks the question viewers are thinking, using only what the summary says. They needle each other like old colleagues, deadpan, never cute."
+      "style": "Technology magazine show for grown-ups. Max reads the lead with interest, never hype; then THE CATCH: Ada asks the question viewers are thinking and Max answers it, both strictly from the summary. For every story say plainly what it means for ordinary people, only where the summary says so. Plain, adult register: no 'game-changer', 'revolutionary', 'mind-blowing', 'wow', exclamation marks or puns. Humour only in chats, aimed at hype and jargon, never at people.",
+      "storyLength": "lead story 3 to 5 sentences, max 520 characters; other stories 2 to 4 sentences, max 450 characters; sentences average 10 to 15 words, never more than 22",
+      "chemistry": "Max gets interested first; Ada raises an eyebrow and asks the question viewers are thinking, using only what the summary says, and Max answers. They needle each other like old colleagues, deadpan, never cute. A first-name toss only before a question; \"Thanks, Max\" or \"Thanks, Ada\" at most once.",
+      "headlineMax": 45,
+      "intro": "teaser",
+      "numberSlot": "main",
+      "chats": {
+        "after": [
+          "lead",
+          "lighter",
+          "story"
+        ],
+        "max": {
+          "lead": 2,
+          "lighter": 1,
+          "story": 1
+        }
+      },
+      "thanksMax": 1,
+      "outroAnchor": "A",
+      "gestures": {
+        "allow": {
+          "max": [
+            "lean_in",
+            "raise_hand",
+            "point_screen",
+            "count",
+            "look_partner",
+            "nod"
+          ],
+          "ada": [
+            "steeple",
+            "chin",
+            "glasses",
+            "shake_head",
+            "shrug",
+            "look_partner",
+            "nod"
+          ]
+        },
+        "listener": [
+          "nod",
+          "look_partner"
+        ],
+        "grave": [
+          "nod",
+          "steeple"
+        ],
+        "map": {
+          "wave": "nod",
+          "point_camera": "nod"
+        },
+        "perSegment": {
+          "max": 2,
+          "ada": 1
+        },
+        "defaults": {
+          "intro": "nod",
+          "outro": "nod"
+        }
+      }
     },
     "cosmos": {
       "title": "COSMOS DESK",
@@ -147,9 +273,53 @@
         "number",
         "lighter"
       ],
-      "style": "Science and space show with a sense of wonder but no gushing. Nova explains with plain, everyday analogies that add no new facts; UNIT-8 reads out the figures exactly as stated, deadpan, and takes idioms literally (never invent data). The number of the day is UNIT-8's moment.",
-      "storyLength": "2 to 4 sentences, max 450 characters",
-      "chemistry": "Nova is the warm, precise explainer; UNIT-8 is the literal-minded robot who appreciates a stated figure and misreads a human idiom now and then, which Nova lets pass with a straight face."
+      "style": "Science and space show, deliberately unhurried, with a sense of wonder but no gushing. Nova explains with at most one plain, everyday analogy per story that adds no facts or figures; UNIT-8 reads out the figures exactly as stated, deadpan. After the lead UNIT-8 restates one stated figure and Nova bridges on; the number of the day is UNIT-8's story, always second. Banned: 'amazing', 'incredible', 'mind-blowing', 'epic', 'wow', 'out of this world', 'over the moon', 'rocket science', space puns. Nobody laughs.",
+      "storyLength": "3 or 4 sentences, 40 to 70 words, max 450 characters; one sentence of 3 to 6 words in each story",
+      "chemistry": "Nova is the warm, precise explainer and calls him \"UNIT-8\"; UNIT-8 is the literal-minded robot who calls her \"Dr Reyes\", appreciates a stated figure and misreads a human idiom now and then, which Nova lets pass with a straight face.",
+      "headlineMax": 45,
+      "intro": "teaser",
+      "numberSlot": "second",
+      "chats": {
+        "after": [
+          "lead",
+          "lighter"
+        ],
+        "max": {
+          "lead": 2,
+          "lighter": 1
+        }
+      },
+      "happyOnly": [
+        "lighter"
+      ],
+      "outroAnchor": "A",
+      "gestures": {
+        "deny": [
+          "wave",
+          "wow",
+          "fist_pump",
+          "thumbs_up",
+          "facepalm",
+          "laugh",
+          "point_camera"
+        ],
+        "listener": [
+          "nod",
+          "look_partner"
+        ],
+        "grave": [
+          "nod",
+          "steeple"
+        ],
+        "map": {
+          "wave": "nod"
+        },
+        "perSegment": 1,
+        "defaults": {
+          "intro": "nod",
+          "outro": "nod"
+        }
+      }
     },
     "money-minute": {
       "title": "MONEY MINUTE",
@@ -166,8 +336,41 @@
       "features": [
         "number"
       ],
-      "style": "Short business and economy round-up by a single presenter. Lead with the figure that matters, then what it means for people's wallets when the summary says so. Crisp, calm and clear; a number of the day when a summary has a striking figure.",
-      "storyLength": "2 to 3 sentences, max 360 characters"
+      "style": "Short business and economy round-up by a single presenter. Lead with the exact figure that matters, in the first or second sentence; one figure per sentence, two per story at most. What it means for people's money only when the summary says so; never advice. Direction verbs: rose, fell, held, edged up, slipped. Crisp, calm and clear; the number of the day closes the programme.",
+      "storyLength": "lead 3 sentences, other stories 2 to 3 sentences, max 360 characters; the number of the day 1 or 2 sentences, max 200 characters; 8 to 22 words per sentence",
+      "headlineMax": 45,
+      "intro": "teaser",
+      "numberSlot": "last",
+      "happyOnly": [
+        "outro"
+      ],
+      "noQuestions": true,
+      "gestures": {
+        "allow": [
+          "nod",
+          "steeple",
+          "lean_in",
+          "papers"
+        ],
+        "grave": [
+          "nod",
+          "steeple"
+        ],
+        "map": {
+          "count": "steeple",
+          "point_camera": "nod",
+          "raise_hand": "nod",
+          "wave": "nod"
+        },
+        "only": {
+          "papers": "outro"
+        },
+        "perSegment": 2,
+        "defaults": {
+          "intro": "nod",
+          "outro": "nod"
+        }
+      }
     },
     "news-60": {
       "title": "NEWS IN 60",
@@ -182,13 +385,61 @@
         "tech",
         "science"
       ],
-      "stories": 5,
+      "stories": 6,
       "maxChats": 0,
       "features": [
         "roundup"
       ],
-      "style": "Rapid-fire headline round-up by a single presenter. One or two short sentences per story, no banter. Stories with a clear place can run as a quick 'around the world' sequence on the map.",
-      "storyLength": "1 or 2 short sentences, max 200 characters"
+      "style": "The headlines in one minute, read by one calm presenter. One idea per story: the fact, then one detail and the attribution. No teasers, no signposts between stories, no banter. City first; on map items the place comes within the first three words.",
+      "storyLength": "lead story 2 or 3 sentences, 32 to 38 words; every other story exactly 2 sentences, 25 to 28 words; round-up items exactly 1 sentence, 14 to 18 words; no sentence over 18 words",
+      "headlineMax": 36,
+      "intro": "frame",
+      "roundup": {
+        "opener": "Around the world.",
+        "min": 2,
+        "max": 3,
+        "words": "14 to 18",
+        "timed": false
+      },
+      "happyOnly": [
+        "last"
+      ],
+      "timing": {
+        "target": 60,
+        "accept": [
+          55,
+          65
+        ],
+        "wpm": 170,
+        "gap": 0.7,
+        "minStories": 5
+      },
+      "gestures": {
+        "allow": [
+          "nod",
+          "lean_in",
+          "papers"
+        ],
+        "grave": [
+          "nod"
+        ],
+        "map": {
+          "wave": "nod",
+          "point_camera": "nod",
+          "point_screen": "nod",
+          "raise_hand": "nod"
+        },
+        "only": {
+          "lean_in": "lead",
+          "papers": "outro"
+        },
+        "perSegment": 1,
+        "perEpisode": 2,
+        "defaults": {
+          "intro": "nod",
+          "outro": "nod"
+        }
+      }
     }
   },
   "rotation": [

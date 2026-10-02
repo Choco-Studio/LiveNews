@@ -1,7 +1,11 @@
 // TECH BYTES open: signals race in along thin cyan circuit traces from the
 // frame edges, a chip shutters open around the bit, its pins catch the signal
 // and the die boots a single byte; then the traces retract into the pins and
-// the chip pulls back to the lock-up. Accent: cyan (thin lines only).
+// the chip pulls back to the lock-up. The chip is an object, not an icon: a
+// dark epoxy package lit from the upper left (silver bevel on the key side,
+// shaded sides and pins on the far side, solder-bright pin tips, a moulded
+// pin-1 dimple) with a recessed die whose surface carries a fine grid.
+// Accent: cyan (thin lines and the booted cells only).
 import { P } from '../../palette.js';
 import { u32, seg, easeOutQuint, easeInOut, linePts, Pix, memo } from '../../gfx/index.js';
 import { lazyBackdrop, playOpen, CENTRE, ZOOM, W, H } from './kit.js';
@@ -74,31 +78,70 @@ const traces = () => cached('traces', () => {
 function chipSprite(k) {
   const D = dims(k);
   return cached(D.body * 10000 + D.pin * 100 + D.pinW, () => {
-    const S = D.body + D.pin * 2;
+    const S = D.body + D.pin * 2 + 1; // +1: drop shadow
     const p = new Pix(S, S);
     const o = D.pin;
     const pw = D.pinW;
+    const B = D.body;
+    // pins: steel legs; the key side (top, left) is lit, the far side (bottom, right) is in
+    // shade; each tip carries a bright solder spot on its lit corner
     for (const off of D.offs) {
       const c = D.half + off + o - (pw >> 1);
-      for (const [x, y, w, h, hx, hy, hw, hh] of [
-        [c, 0, pw, o, c, 0, 1, o],
-        [c, S - o, pw, o, c, S - o, 1, o],
-        [0, c, o, pw, 0, c, o, 1],
-        [S - o, c, o, pw, S - o, c, o, 1],
-      ]) {
-        p.rect(x, y, w, h, P.steel);
-        p.rect(hx, hy, hw, hh, P.silver);
+      // top and bottom rows (vertical legs): lit column on the left, shaded column on the right
+      for (const [y0, lit] of [[0, true], [o + B, false]]) {
+        p.rect(c, y0, pw, o, lit ? P.steel : P.slate);
+        p.rect(c, y0, 1, o, lit ? P.silver : P.steel);
+        p.rect(c + pw - 1, y0, 1, o, lit ? P.slate : P.ink);
+        p.px(c, lit ? y0 : y0 + o - 1, lit ? P.white : P.fog); // solder tip
+      }
+      // left and right columns (horizontal legs): lit row on top, shaded row below
+      for (const [x0, lit] of [[0, true], [o + B, false]]) {
+        p.rect(x0, c, o, pw, lit ? P.steel : P.slate);
+        p.rect(x0, c, o, 1, lit ? P.silver : P.steel);
+        p.rect(x0, c + pw - 1, o, 1, lit ? P.slate : P.ink);
+        p.px(lit ? x0 : x0 + o - 1, c, lit ? P.white : P.fog);
       }
     }
-    p.rect(o, o, D.body, D.body, P.black);
-    p.rect(o, o, D.body, 1, P.fog);
-    p.rect(o, o + 1, 1, D.body - 1, P.slate);
-    p.rect(o + D.body - 1, o + 1, 1, D.body - 1, P.ink);
-    p.rect(o, o + D.body - 1, D.body, 1, P.ink);
+    // drop shadow on the board/field, down and right
+    p.rect(o + 1, o + B, B, 1, P.black);
+    p.rect(o + B, o + 1, 1, B, P.black);
+    // package: black epoxy top face, a 2 px bevel lit on the key side, shaded on the far side
+    p.rect(o, o, B, B, P.black);
+    p.rect(o, o, B, 1, P.silver);
+    p.rect(o, o + 1, 1, B - 1, P.silver);
+    p.rect(o + 1, o + 1, B - 2, 1, P.steel);
+    p.rect(o + 1, o + 2, 1, B - 3, P.steel);
+    p.rect(o + B - 1, o + 1, 1, B - 1, P.slate);
+    p.rect(o + 1, o + B - 1, B - 1, 1, P.slate);
+    p.rect(o + B - 2, o + 2, 1, B - 3, P.ink);
+    p.rect(o + 2, o + B - 2, B - 3, 1, P.ink);
+    p.px(o, o, P.white); // the specular corner
+    // moulded pin-1 dimple: a small pit, dark on its lit rim, catching light on its far rim
     const dot = Math.max(2, Math.round(2 * k));
-    p.rect(o + 2 * dot, o + 2 * dot, dot, dot, P.slate);
-    return { cv: p.canvas(), S };
+    const dx = o + 3 * dot;
+    p.rect(dx, dx, dot, dot, P.ink);
+    p.rect(dx, dx, dot, 1, P.black);
+    p.rect(dx + dot - 1, dx + 1, 1, dot - 1, P.slate);
+    // recessed die window: shadowed inner edge on the key side, lit inner edge on the far side,
+    // and a fine grid on the die surface
+    const { x0, y0, w, h } = dieRect(D, o + D.half, o + D.half);
+    p.rect(x0, y0, w, h, P.ink);
+    for (let yy = y0 + 2; yy < y0 + h - 1; yy += 3) for (let xx = x0 + 2; xx < x0 + w - 1; xx += 3) p.px(xx, yy, P.black);
+    p.rect(x0 - 1, y0 - 1, w + 2, 1, P.black);
+    p.rect(x0 - 1, y0, 1, h + 1, P.black);
+    p.rect(x0, y0 + h, w + 1, 1, P.slate);
+    p.rect(x0 + w, y0, 1, h, P.slate);
+    return { cv: p.canvas(), S: S - 1 };
   });
+}
+
+/** The die window (inside the cyan outline) for a chip centred at (cx, cy). */
+function dieRect(D, cx, cy) {
+  const gridW = 4 * D.cell + 3 * D.gap;
+  const gridH = 2 * D.cellH + D.gap;
+  const w = gridW + 2 * (D.gap + 1) + 2;
+  const h = gridH + 2 * (D.gap + 1) + 2 + 2 * D.gap;
+  return { x0: cx - (w >> 1), y0: cy - (h >> 1), w, h, gridW, gridH };
 }
 
 /** The die: a cyan outline that draws round clockwise, then the byte boots cell by cell. */
@@ -106,39 +149,39 @@ function drawDie(ctx, dt, x, y, D) {
   const cw = D.cell;
   const ch = D.cellH;
   const g = D.gap;
-  const gridW = 4 * cw + 3 * g;
-  const gridH = 2 * ch + g;
-  const w = gridW + 2 * (g + 1) + 2;
-  const h = gridH + 2 * (g + 1) + 2 + 2 * g;
-  const x0 = x - (w >> 1);
-  const y0 = y - (h >> 1);
+  const R = dieRect(D, x, y);
+  const { x0, y0, w, h } = R;
   const p = easeInOut(seg(dt, 0.72, 0.4));
   let len = Math.round(2 * (w + h) * p);
-  const take = (n) => {
-    const v = Math.min(n, len);
-    len -= v;
-    return v;
-  };
   ctx.fillStyle = P.cyan;
-  let v = take(w);
+  let v = Math.min(w, len);
+  len -= v;
   if (v) ctx.fillRect(x0, y0, v, 1);
-  v = take(h);
+  v = Math.min(h, len);
+  len -= v;
   if (v) ctx.fillRect(x0 + w - 1, y0, 1, v);
-  v = take(w);
+  v = Math.min(w, len);
+  len -= v;
   if (v) ctx.fillRect(x0 + w - v, y0 + h - 1, v, 1);
-  v = take(h);
+  v = Math.min(h, len);
   if (v) ctx.fillRect(x0, y0 + h - v, 1, v);
-  const gx = x - (gridW >> 1);
-  const gy = y - (gridH >> 1);
+  const gx = x - (R.gridW >> 1);
+  const gy = y - (R.gridH >> 1);
   for (let i = 0; i < 8; i++) {
     if (dt < 0.95 + i * 0.05) continue;
     const cx = gx + (i % 4) * (cw + g);
     const cy = gy + (i >> 2) * (ch + g);
-    ctx.fillStyle = BYTE[i] ? P.cyan : P.slate;
-    ctx.fillRect(cx, cy, cw, ch);
     if (BYTE[i]) {
+      ctx.fillStyle = P.cyan;
+      ctx.fillRect(cx, cy, cw, ch);
       ctx.fillStyle = P.blue;
       ctx.fillRect(cx, cy + ch - 1, cw, 1);
+      ctx.fillRect(cx + cw - 1, cy, 1, ch - 1);
+    } else {
+      ctx.fillStyle = P.slate;
+      ctx.fillRect(cx, cy, cw, ch);
+      ctx.fillStyle = P.black;
+      ctx.fillRect(cx, cy, cw, 1);
     }
   }
 }
@@ -167,12 +210,15 @@ function emblem(ctx, dt, x, y, k = 1) {
   const hh = Math.max(2, Math.round(C.S * open));
   const top = y - half + ((C.S - hh) >> 1);
   ctx.save();
-  ctx.beginPath();
-  ctx.rect(x - half, top, C.S, hh);
-  ctx.clip();
-  ctx.drawImage(C.cv, x - half, y - half);
-  drawDie(ctx, dt, x, y, D);
-  ctx.restore();
+  try {
+    ctx.beginPath();
+    ctx.rect(x - half, top, C.S + 1, hh + (open >= 1 ? 1 : 0));
+    ctx.clip();
+    ctx.drawImage(C.cv, x - half, y - half);
+    drawDie(ctx, dt, x, y, D);
+  } finally {
+    ctx.restore();
+  }
   // pins catch the signal as each trace arrives (one short white flash each)
   if (dt < 1.3) {
     ctx.fillStyle = P.white;
@@ -207,11 +253,13 @@ export const TECH = {
   style: { accent: P.cyan, plate: P.black, ink: 'light', bar: P.cyan },
   background,
   emblem,
+  extent: 28, // half the package plus a pin
   absorb: 0.5,
   shoulder: 30,
-  warm: () => {
-    traces();
-    for (let k = 1; k <= ZOOM + 0.001; k += 0.05) chipSprite(k);
+  warmJobs: () => {
+    const jobs = [traces];
+    for (let k = 1; k <= ZOOM + 0.001; k += 0.05) jobs.push(() => chipSprite(k));
+    return jobs;
   },
 };
 

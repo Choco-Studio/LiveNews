@@ -5,15 +5,17 @@
 //   drawOpen(ctx, t, dt, programId, info)  full frame; dt = seconds since the open started
 //   openFor(programId) -> { duration, tune }  (the director waits `duration`, plays `tune` once)
 //   OPENS[id] = { duration, tune, draw(ctx, t, dt, info) }
-//   info = { title, tagline, presenters: ['PACO PIXEL', ...], date, channel }
+//   info = { title, tagline, presenters: ['PACO PIXEL', ...], date, channel, replay?, bug? }
+//     replay: true shows REPLAY instead of LIVE in the top row; bug: false leaves the
+//     top row out (the UP NEXT promo replays an open in the middle of a break)
+//   lockupFor(programId, info) -> the lock-up geometry (plateX/Y/W/H, titleX, tagY, credY, bottom)
 //
 // Unknown programme ids get the generic open with their own title. Frames are a
 // pure function of dt (t is ignored), so the lab renders any instant exactly.
 import { P } from '../palette.js';
 import { drawText } from '../font.js';
-import * as audio from '../audio.js';
 import { HAS_DOM } from '../gfx/index.js';
-import { DURATION, normInfo, W, H } from './opens/kit.js';
+import { DURATION, normInfo, lockupLayout, W, H } from './opens/kit.js';
 import { WORLD, drawWorldNow } from './opens/world.js';
 import { TECH, drawTechBytes } from './opens/tech.js';
 import { COSMOS, drawCosmos } from './opens/cosmos.js';
@@ -23,25 +25,29 @@ import { GENERIC, drawGeneric } from './opens/generic.js';
 import { TUNES } from './opens/tunes.js';
 
 const wrap = (fn) => (ctx, t, dt, info) => fn(ctx, dt, info);
+const open = (fn, prog, tune) => ({ duration: DURATION, tune, draw: wrap(fn), accent: prog.accent, prog });
 
 export const OPENS = {
-  'world-now': { duration: DURATION, tune: TUNES['world-now'], draw: wrap(drawWorldNow), accent: WORLD.accent },
-  'tech-bytes': { duration: DURATION, tune: TUNES['tech-bytes'], draw: wrap(drawTechBytes), accent: TECH.accent },
-  cosmos: { duration: DURATION, tune: TUNES.cosmos, draw: wrap(drawCosmos), accent: COSMOS.accent },
-  'money-minute': { duration: DURATION, tune: TUNES['money-minute'], draw: wrap(drawMoneyMinute), accent: MONEY.accent },
-  'news-60': { duration: DURATION, tune: TUNES['news-60'], draw: wrap(drawNews60), accent: FLASH.accent },
+  'world-now': open(drawWorldNow, WORLD, TUNES['world-now']),
+  'tech-bytes': open(drawTechBytes, TECH, TUNES['tech-bytes']),
+  cosmos: open(drawCosmos, COSMOS, TUNES.cosmos),
+  'money-minute': open(drawMoneyMinute, MONEY, TUNES['money-minute']),
+  'news-60': open(drawNews60, FLASH, TUNES['news-60']),
 };
-const FALLBACK = { duration: DURATION, tune: TUNES.generic, draw: wrap(drawGeneric), accent: GENERIC.accent };
+const FALLBACK = open(drawGeneric, GENERIC, TUNES.generic);
 
 // The audio stream's shared sonic signature (themeFor) re-orchestrated per
-// programme; loaded lazily so the opens keep working if it is not there.
+// programme; loaded lazily so the opens keep working (and drawing) if the audio
+// modules are missing or broken.
 let THEMES = null;
+let AUDIO = null;
 import('../audio/themes.js').then((m) => (THEMES = m)).catch(() => {});
+import('../audio.js').then((m) => (AUDIO = m)).catch(() => {});
 
 let warned = false;
 /** Draw the opening titles of a programme (full frame). */
 export function drawOpen(ctx, t, dt, programId, info) {
-  const open = OPENS[programId] || FALLBACK;
+  const op = OPENS[programId] || FALLBACK;
   const d = Number.isFinite(dt) ? Math.max(0, dt) : 0;
   const ni = normInfo(info);
   ctx.save();
@@ -49,7 +55,9 @@ export function drawOpen(ctx, t, dt, programId, info) {
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
   try {
-    open.draw(ctx, t, d, ni);
+    // every save() inside the opens is paired with a restore() in a finally, so a throw
+    // leaves no clip or transform behind
+    op.draw(ctx, t, d, ni);
   } catch (err) {
     // never leave the screen broken: a plain branded card instead
     ctx.fillStyle = P.black;
@@ -70,21 +78,39 @@ export function drawOpen(ctx, t, dt, programId, info) {
  * a shared signature (themeFor), its re-orchestration for this programme wins.
  */
 export function openFor(programId) {
-  const open = OPENS[programId] || FALLBACK;
-  let tune = open.tune;
+  const op = OPENS[programId] || FALLBACK;
+  let tune = op.tune;
   try {
-    const fn = typeof THEMES?.themeFor === 'function' ? THEMES.themeFor : typeof audio.themeFor === 'function' ? audio.themeFor : null;
-    const shared = fn ? fn(programId, { duration: open.duration }) : null;
+    const fn = typeof THEMES?.themeFor === 'function' ? THEMES.themeFor : typeof AUDIO?.themeFor === 'function' ? AUDIO.themeFor : null;
+    const shared = fn ? fn(programId, { duration: op.duration }) : null;
     if (shared) tune = shared;
   } catch {
     /* keep the built-in jingle */
   }
-  return { duration: open.duration, tune };
+  return { duration: op.duration, tune };
 }
 
-// Warm the heavy caches in the background so the first open never stutters.
+/** Lock-up geometry of a programme's open for this info (cached): where the plate, title and credits sit. */
+export function lockupFor(programId, info) {
+  const op = OPENS[programId] || FALLBACK;
+  return lockupLayout(normInfo(info), op.prog.style);
+}
+
+// Warm the heavy caches in the background so the first open never stutters: one small job per
+// timer slice (globe tables, sprites, backdrops), then one hidden lock-up frame of each open,
+// which also warms the top row and the text caches.
 if (HAS_DOM && typeof setTimeout === 'function') {
-  const jobs = [WORLD.warm, TECH.warm, COSMOS.warm, () => WORLD.background(), () => TECH.background(), () => COSMOS.background(), () => MONEY.background(), () => FLASH.background(), () => GENERIC.background()].filter(Boolean);
+  const progs = [WORLD, TECH, COSMOS, MONEY, FLASH, GENERIC];
+  const jobs = [];
+  for (const p of progs) jobs.push(p.background);
+  for (const p of progs) if (p.warmJobs) jobs.push(...p.warmJobs());
+  let scratch = null;
+  for (const id of [...Object.keys(OPENS), '']) {
+    jobs.push(() => {
+      if (!scratch) scratch = document.createElement('canvas').getContext('2d');
+      for (const dt of [0.6, 1.2, 1.9, 2.6, 3.5]) drawOpen(scratch, 0, dt, id, { title: 'GLOBIT 24', tagline: 'WARM', presenters: ['GLOBIT'] });
+    });
+  }
   let j = 0;
   const step = () => {
     if (j >= jobs.length) return;
@@ -93,7 +119,7 @@ if (HAS_DOM && typeof setTimeout === 'function') {
     } catch {
       j = jobs.length;
     }
-    setTimeout(step, 30);
+    setTimeout(step, 16);
   };
   setTimeout(step, 500);
 }

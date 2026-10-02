@@ -154,7 +154,7 @@ function shotStreet(ctx, lt) {
   rect(ctx, 238, 126, 12, 10, C.crtL);
   ctx.globalAlpha = 1;
   ctx.restore();
-  vignette(ctx, 0.6, 'sn1');
+  vignette(ctx, 0.6);
   letterbox(ctx, LB);
 }
 
@@ -217,7 +217,7 @@ function shotHouse(ctx, lt) {
   rect(ctx, 150, 112, 100, 2, mix(C.house, P.black, 0.5));
   wire(ctx, -20, 30, 120, 70, 6);
   ctx.restore();
-  vignette(ctx, 0.6, 'sn1b');
+  vignette(ctx, 0.6);
   letterbox(ctx, LB);
 }
 const windowGlow = () =>
@@ -348,6 +348,10 @@ function shotRoom(ctx, lt) {
   rect(ctx, 300, 142, 50, 1, mix(C.beige, P.white, 0.4));
   rect(ctx, 300, 150, 50, 1, C.beigeDD);
   for (let i = 0; i < 6; i++) rect(ctx, 306 + i * 6, 147, 2, 1, i < 2 || (lt > 1.6 && (i === 3 || floor(lt * 8 + i) % 2 === 0)) ? C.led : C.ledOff);
+  // keyboard below the screen, catching its light
+  rect(ctx, 196, 148, 62, 5, C.beigeD);
+  rect(ctx, 196, 148, 62, 1, mix(C.beige, C.crtL, 0.3));
+  for (let k = 0; k < 14; k++) rect(ctx, 199 + k * 4, 150, 2, 1, C.beigeDD);
   ctx.restore();
   // Daniel in the foreground, from behind (over his shoulder)
   ctx.save();
@@ -358,8 +362,15 @@ function shotRoom(ctx, lt) {
   d.nod = round(track(lt, [[1.2, 0], [1.6, 1], [2.4, 0]]));
   d.tiltX = round(track(lt, [[0, 0], [1.2, 2, 'inOut']]));
   bust(ctx, d, 216);
+  // his right forearm reaches past his body to the mouse (hand rests, then clicks)
+  const click = lt > 1.45 && lt < 1.65 ? 1 : 0;
+  const hx = d.x + 92;
+  const hy = 166;
+  capsule(ctx, d.x + 40, 190, hx - 4, hy + 2, 9, 6, d.pal.top, { d: P.black, f: 0.4, m: 1, side: -1, r: d.pal.rim });
+  ellipse(ctx, hx + 3, hy + 2, 7, 4, C.beige, { d: C.beigeD, f: 0.4, m: 1, side: 1 });
+  ellipse(ctx, hx + 1, hy - click, 5, 3.5, d.pal.skin, { d: d.pal.skinD, f: 0.4, m: 1, side: 1, r: d.pal.rim });
   ctx.restore();
-  vignette(ctx, 0.62, 'sn2');
+  vignette(ctx, 0.62);
   letterbox(ctx, LB);
 }
 
@@ -450,7 +461,7 @@ function shotModem(ctx, lt) {
       ctx.globalAlpha = 1;
     }
   }
-  vignette(ctx, 0.6, 'sn3');
+  vignette(ctx, 0.6);
   letterbox(ctx, LB);
 }
 
@@ -506,7 +517,7 @@ function shotFace(ctx, lt) {
   ctx.globalAlpha = 0.06 + 0.04 * sin(lt * 17);
   rect(ctx, 0, LB, W, H - LB * 2, C.crt);
   ctx.globalAlpha = 1;
-  vignette(ctx, 0.7, 'sn4');
+  vignette(ctx, 0.7);
   letterbox(ctx, LB);
 }
 
@@ -531,6 +542,10 @@ const crtFrame = () =>
     rect(c, 38, 184, 308, 2, mix(C.beige, P.white, 0.3));
   });
 
+// status-bar strings built once (no template strings per frame)
+const PCT_LABEL = Array.from({ length: 101 }, (_, i) => `RECEIVING  ${i}%`);
+const MIN_LABEL = Array.from({ length: 20 }, (_, i) => `2.1 KB/S   ${i} MIN LEFT`);
+
 function shotPhoto(ctx, lt) {
   // screen: desktop, a viewer window, the photo arriving line by line
   rect(ctx, 40, 32, 304, 152, mix(P.navy, P.darkGreen, 0.35));
@@ -546,8 +561,8 @@ function shotPhoto(ctx, lt) {
   if (rows < 92) rect(ctx, wx + 20, wy + 14 + rows, floor(hash(floor(lt * 12)) * 150), 1, mix(P.purple, P.rust, 0.5));
   const pct = round(clamp(lt / 3.2) * 67);
   const mins = 17 - floor(lt * 0.9);
-  text(ctx, `RECEIVING  ${pct}%`, wx + 20, wy + 110, { color: P.ink, font: 'micro' });
-  text(ctx, `2.1 KB/S   ${mins} MIN LEFT`, wx + 170, wy + 110, { color: P.ink, font: 'micro', align: 'right' });
+  text(ctx, PCT_LABEL[pct], wx + 20, wy + 110, { color: P.ink, font: 'micro' });
+  text(ctx, MIN_LABEL[max(0, mins)], wx + 170, wy + 110, { color: P.ink, font: 'micro', align: 'right' });
   // his reflection on the glass, very faint: head and shoulders
   ctx.globalAlpha = 0.12;
   ellipse(ctx, 252, 104, 22, 27, P.black);
@@ -563,7 +578,7 @@ function shotPhoto(ctx, lt) {
   for (let y = 33; y < 184; y += 2) rect(ctx, 40, y, 304, 1, P.black);
   ctx.globalAlpha = 1;
   ctx.drawImage(crtFrame(), 0, 0);
-  vignette(ctx, 0.5, 'sn5');
+  vignette(ctx, 0.5);
   letterbox(ctx, LB);
 }
 
@@ -619,7 +634,6 @@ const MUM = figure({
   },
 });
 
-const TARGET = { x: 0, y: 0 };
 function shotHall(ctx, lt) {
   ctx.drawImage(hallSet(), 0, 0);
   ctx.globalCompositeOperation = 'lighter';
@@ -634,12 +648,14 @@ function shotHall(ctx, lt) {
   m.look = lift < 0.5 ? -1 : 0;
   m.nod = round(lerp(1, 0, lift));
   m.blink = blinkAt(lt, 2);
-  // the hand travels from the table edge to her ear; the elbow follows (IK)
-  TARGET.x = lerp(178, m.x - m.hh * 0.42, lift);
-  TARGET.y = lerp(150, m.y + m.hh * 0.62, lift);
-  m.armL.to = TARGET;
-  m.armL.len = lerp(1, 0.62, lift);
-  m.armL.fore = 1;
+  // the hand travels from beside the table up in front of her chest to her ear,
+  // the elbow staying out to the side (keyframed: poses solved offline so the
+  // path is one smooth arc, no IK branch switching)
+  m.armL.to = null;
+  m.armL.a = lerp(1.3, 1.58, lift);
+  m.armL.e = lerp(1.77, 3.81, lift);
+  m.armL.len = lerp(1, 0.6, lift);
+  m.armL.fore = lerp(0.9, 1.1, lift);
   m.armL.hand = 'hold';
   m.armR.a = 0.12;
   m.armR.e = 0.25;
@@ -657,7 +673,7 @@ function shotHall(ctx, lt) {
     const u = i / 26;
     ctx.fillRect(round(lerp(hx + 1, 150, u) + sin(u * 44) * 1.5), round(lerp(hy + 9, 142, u) + 40 * u * (1 - u)), 1, 1);
   }
-  vignette(ctx, 0.6, 'sn6');
+  vignette(ctx, 0.6);
   letterbox(ctx, LB);
 }
 
@@ -670,7 +686,7 @@ function shotLost(ctx, lt) {
   for (let y = 33; y < 184; y += 2) rect(ctx, 40, y, 304, 1, P.black);
   ctx.globalAlpha = 1;
   ctx.drawImage(crtFrame(), 0, 0);
-  vignette(ctx, 0.55, 'sn5');
+  vignette(ctx, 0.55);
   letterbox(ctx, LB);
 }
 
@@ -725,8 +741,8 @@ const SHOTS = [
 // serenade: an answer tone, the two-note "bong", a hiss of noise sweeps and a
 // flutter of data, then the ballad swells; everything stops for NO CARRIER.
 const LEAD = { wave: 'pulse25', a: 0.03, d: 0.5, s: 0.55, r: 0.35, vib: [12, 5, 0.25] };
-const KEYS = { wave: 'tri', a: 0.004, d: 1.2, s: 0, r: 0.6, vib: false };
-const PAD = { wave: 'sine', a: 0.5, d: 1, s: 0.8, r: 1.0, vib: [5, 4, 0.4] };
+const KEYS = { wave: 'triangle', a: 0.004, d: 1.2, s: 0, r: 0.6, vib: false };
+const PAD = { wave: 'sine', a: 0.4, d: 1, s: 0.8, r: 1.0, vib: [5, 4, 0.4], legato: 1 };
 
 export default {
   id: 'screechnet',
@@ -761,7 +777,7 @@ export default {
       {
         kind: 'harmony',
         inst: PAD,
-        gain: 0.4,
+        gain: 0.3,
         notes: 'D3+F#3+A3+C#4:4@0.4 B2+D3+F#3+A3:2@0.4 G2+B2+D3+F#3:2@0.4 E3+G3+B3+D4:2@0.4 A2+D3+E3+G3:2@0.4 A2+E3+A3:3@0.45 D3+F#3+A3:2@0.55 F#2+A2+C#3:2@0.55 G2+B2+D3:2@0.55 A2+C#3+E3:2@0.55 B2+D3+F#3:1.5@0.5 R:1 G2+B2+D3+F#3:2@0.45 D3+F#3+A3:3.5@0.45 R:2',
       },
       { kind: 'bass', inst: 'tri', gain: 0.6, notes: 'D2:4 B1:2 G1:2 E2:2 A1:2 A1:3 D2:2 F#1:2 G1:2 A1:2 B1:1.5 R:1 G1:2 D2:3.5 R:2' },

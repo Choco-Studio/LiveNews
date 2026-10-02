@@ -67,8 +67,19 @@
 <script type="module">
 import { BroadcastMusic, renderBroadcast } from '../js/music/proposals/broadcast/index.js';
 
-// tools/render-audio.mjs entry point.
-window.__audio = { render: (opts) => renderBroadcast(opts) };
+// tools/render-audio.mjs entry point. Samples are rounded to 1e-5 (a third of
+// a 16-bit step) so the JSON transfer out of the page is ~3x lighter.
+window.__audio = {
+  render: async (opts) => {
+    const r = await renderBroadcast(opts);
+    const round = (c) => {
+      const a = new Array(c.length);
+      for (let i = 0; i < c.length; i++) a[i] = Math.round(c[i] * 1e5) / 1e5;
+      return a;
+    };
+    return { sampleRate: r.sampleRate, channels: r.channels.map(round), plan: r.plan };
+  },
+};
 
 const $ = (id) => document.getElementById(id);
 const log = (s) => { $('log').textContent = `${s}\n${$('log').textContent}`.slice(0, 4000); };

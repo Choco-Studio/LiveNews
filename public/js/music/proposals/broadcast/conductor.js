@@ -13,8 +13,8 @@
 //   sting   end card, bumpers, up-next, breaking: one-shot on the boundary
 //           (breaking and bumper-in don't wait: they cut in within 50 ms)
 //
-// Speech: a look-ahead duck (-9 dB, 120 ms before the first syllable, held
-// through pauses, 0.4 s release) plus a -6 dB "presence pocket" at 2.5 kHz,
+// Speech: a look-ahead duck (-7 dB, 120 ms before the first syllable, held
+// through pauses, 0.4 s release) plus a -8 dB "presence pocket" at 2.5 kHz,
 // so the bed gets out of the way of consonants rather than just getting quieter.
 // Works on any BaseAudioContext: live (start() runs a look-ahead pump) or
 // offline (call pump(t) yourself; see render.js).
@@ -32,7 +32,17 @@ export const TARGET = { headlines: -26, story: -30, chat: -28, roundup: -27, out
 // Bed trims (dB) per 'programme:moment' so every bed lands on its target.
 // Measured with the lab renders (ffmpeg ebur128) and fed back here.
 export const TRIM = {
+  'world-now:headlines': -8.2, 'world-now:story': -10.2, 'world-now:chat': -6.2, 'world-now:roundup': -5.8, 'world-now:outro': -7.1,
+  'tech-bytes:headlines': -5.3, 'tech-bytes:story': -8.5, 'tech-bytes:chat': -6.3, 'tech-bytes:roundup': -6.3, 'tech-bytes:outro': -6.3,
+  'cosmos:headlines': -8.6, 'cosmos:story': -11.1, 'cosmos:chat': -7.2, 'cosmos:roundup': -9.6, 'cosmos:outro': -8.3,
+  'money-minute:headlines': -3.6, 'money-minute:story': -5.3, 'money-minute:chat': -3.6, 'money-minute:roundup': -4.6, 'money-minute:outro': -4.7,
+  'news-60:headlines': -2.8, 'news-60:story': -7.1, 'news-60:chat': -5.7, 'news-60:roundup': -3.4, 'news-60:outro': -5.0,
+  'channel:standby': -7.3,
+  // One-shots: stings sit just under speech level (-21 LUFS short-term), the
+  // replay tag and the accents well below it.
   sting: 0,
+  'sting:endcard': -5, 'sting:bumperIn': -4, 'sting:bumperOut': -4, 'sting:upNext': -4.5, 'sting:breaking': -3.5,
+  'sting:replay': 8, 'sting:frame': -6, 'sting:item': -6, 'sting:drone': 0,
 };
 
 export class BroadcastMusic {
@@ -40,11 +50,11 @@ export class BroadcastMusic {
    * @param {object} o
    * @param {BaseAudioContext} o.context
    * @param {AudioNode} [o.destination]  defaults to context.destination
-   * @param {number} [o.duckDb=-9]       bed level while someone speaks
-   * @param {number} [o.pocketDb=-6]     extra cut at 2.5 kHz while someone speaks
+   * @param {number} [o.duckDb=-7]       bed level while someone speaks
+   * @param {number} [o.pocketDb=-8]     extra cut at 2.5 kHz while someone speaks
    * @param {'silence'|'pad'} [o.grave]  what plays under grave stories
    */
-  constructor({ context, destination, duckDb = -9, pocketDb = -6, grave = 'silence', seed = 7, lookahead = 1.6, solo = null, mute = null, trim = TRIM } = {}) {
+  constructor({ context, destination, duckDb = -7, pocketDb = -8, grave = 'silence', seed = 7, lookahead = 1.6, solo = null, mute = null, trim = TRIM } = {}) {
     const c = context;
     this.ctx = c;
     this.synth = new Synth(c);
@@ -63,6 +73,7 @@ export class BroadcastMusic {
     this.items = 0;
     this.frames = 0;
     this.releaseAt = -1;
+    this.talking = false;
     this.timer = 0;
 
     this.mix = c.createGain();
@@ -216,7 +227,7 @@ export class BroadcastMusic {
 
   oneShot(kind, t, pkg, exclusive) {
     const def = { id: `${pkg.id}:${kind}`, programme: pkg.id, moment: null, pkg, bpm: pkg.bpm, tonic: pkg.tonic, mode: pkg.mode, hr: 1, swing: 0, progs: { A: [pkg.home] }, form: 'A', layers: [], delay: 0.75 };
-    const bed = new Bed(this, def, { origin: t, entry: 'cut', seed: this.seed, trim: this.trim.sting ?? 0 });
+    const bed = new Bed(this, def, { origin: t, entry: 'cut', seed: this.seed, trim: this.trim[`sting:${kind}`] ?? this.trim.sting ?? 0 });
     const fn = kind === 'drone' ? graveDrone : STINGS[kind];
     const n = kind === 'item' ? this.items++ : kind === 'frame' ? this.frames++ : 0;
     const len = fn(bed, t, pkg, n);
@@ -256,6 +267,8 @@ export class BroadcastMusic {
 
   /** Someone starts (on) or stops talking at context time `at`. */
   speech(on, at = this.now) {
+    if (Boolean(on) === this.talking) return; // cheap to poll with audio.speaking
+    this.talking = Boolean(on);
     const g = this.duck.gain;
     const p = this.pocket.gain;
     if (on) {

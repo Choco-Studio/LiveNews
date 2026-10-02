@@ -547,33 +547,51 @@ describe('mock provider', () => {
     assert.equal(kinds(script)[0], 'intro');
   });
 
-  test('cold open: the intro starts with the top headline, greets with the programme, channel and presenters, and teases the next story', async () => {
+  test('cold open: the lead\'s headline, then the second and third stories in running order (as the montage shows them), then the greeting', async () => {
     const script = await raw({ stories: lightStories });
-    const intro = spoken(script.segments[0].text);
-    assert.ok(intro.startsWith('New robot learns to cook.'), intro);
-    assert.match(intro, /TECH BYTES/);
-    assert.match(intro, /I'm Max Circuit, with Ada Volt\./);
-    assert.match(intro, /Also coming up: NASA telescope spots a new planet/);
-    assert.ok(intro.length < 170, `the intro runs under a 3-picture montage: keep it short (${intro.length} chars)`);
-    assert.ok(script.segments[0].text.includes('[wave]'), 'a light top story gets a wave');
-    assert.ok(script.segments[0].text.includes('[B:nod]'), 'the co-presenter acknowledges the introduction');
+    const intro = script.segments[0];
+    const said = spoken(intro.text);
+    assert.equal(
+      said,
+      "New robot learns to cook. Also coming up: NASA telescope spots a new planet. Later in the programme: Scientists discover a talking parrot. This is TECH BYTES. I'm Max Circuit, with Ada Volt."
+    );
+    assert.deepEqual(intro.teases, ['l1', 'l2', 'l3'], 'which story each sentence is about');
+    assert.ok(!intro.text.includes('[wave]'), 'a news channel nods, it does not wave');
+    assert.ok(intro.text.includes('[B:nod]'), 'the co-presenter acknowledges the introduction');
+  });
+
+  test('intro shapes by programme: WORLD NOW reads three headlines and greets by the London clock; NEWS IN 60 is only its frame', async () => {
+    const world = await raw({ stories: placed, program: { ...FLAGSHIP, intro: 'headlines' }, now: new Date('2026-10-02T09:00:00Z') });
+    const said = spoken(world.segments[0].text);
+    const heads = storySegs(world).slice(0, 3).map((x) => placed.find((p) => p.id === x.storyId).title);
+    assert.equal(said, `${heads.map((h) => `${h}.`).join(' ')} Good morning, and welcome to WORLD NOW. I'm Max Circuit, with Ada Volt.`);
+    const near = await raw({ stories: placed, program: { ...FLAGSHIP, intro: 'headlines' }, now: new Date('2026-10-02T10:45:00Z') });
+    assert.match(spoken(near.segments[0].text), /Hello, and welcome to WORLD NOW/, 'within half an hour of noon it could air on either side: plain hello');
+    const quick = await raw({ stories: placed, presenters: SOLO, program: { id: 'news-60', title: 'NEWS IN 60', stories: 5, maxChats: 0, intro: 'frame' } });
+    assert.equal(spoken(quick.segments[0].text), "This is NEWS IN 60. I'm Penny Sterling.");
   });
 
   test('a grave top story opens soberly: no wave, a serious face, a nod', async () => {
-    const script = await raw({ stories });
+    const script = await raw({ stories: stories.filter((x) => x.id !== 's4') });
     const intro = script.segments[0];
     assert.equal(intro.emotion, 'serious');
     assert.ok(!intro.text.includes('[wave]'), intro.text);
     assert.ok(intro.text.includes('[nod]'));
   });
 
-  test('the outro signs off with the programme and the channel, waving unless the last story is grave', async () => {
+  test('the outro signs off with the programme and the channel, with a nod (no wave), and never "for now"', async () => {
     const outro = (await raw({ stories: lightStories })).segments.at(-1);
     assert.equal(outro.type, 'outro');
-    assert.match(spoken(outro.text), /TECH BYTES/);
+    assert.match(spoken(outro.text), /^That's TECH BYTES\./);
     assert.match(spoken(outro.text), /TEST/);
-    assert.ok(outro.text.includes('[wave]'));
-    const graveLast = (await raw({ stories: [lightStories[0], stories[0]], count: 2 })).segments.at(-1);
+    assert.ok(outro.text.includes('[nod]') && !outro.text.includes('[wave]'));
+    for (const id of ['world-now', 'cosmos', 'money-minute', 'news-60']) {
+      const o = (await raw({ stories: lightStories, program: { ...PROGRAM, id, title: id.toUpperCase() } })).segments.at(-1);
+      assert.ok(!/for now/.test(o.text) && !o.text.includes('[wave]'), o.text);
+    }
+    const generic = (await raw({ stories: lightStories, program: { ...PROGRAM, id: 'other', title: 'OTHER' } })).segments.at(-1);
+    assert.ok(generic.text.includes('[wave]'), 'a programme without its own sign-off keeps the old wave');
+    const graveLast = (await raw({ stories: [lightStories[0], stories[0]], count: 2, program: { ...PROGRAM, id: 'other' } })).segments.at(-1);
     assert.ok(!graveLast.text.includes('[wave]'), graveLast.text);
   });
 
@@ -594,8 +612,9 @@ describe('mock provider', () => {
   test('end-to-end: generate -> extractJson -> normalizeBulletin gives a valid bulletin that keeps every story', async () => {
     const bulletin = await bulletinOf({ stories, count: 4 });
     const segs = bulletin.segments.filter((s) => s.type === 'story');
-    assert.deepEqual(segs.map((s) => s.storyId), stories.map((s) => s.id));
-    assert.deepEqual(bulletin.rundown.map((r) => r.storyId), stories.map((s) => s.id));
+    // The breaking story (s4) leads; the rest keep the desk's order.
+    assert.deepEqual(segs.map((s) => s.storyId), ['s4', 's1', 's2', 's3']);
+    assert.deepEqual(bulletin.rundown.map((r) => r.storyId), ['s4', 's1', 's2', 's3']);
     assert.equal(bulletin.segments[0].type, 'intro');
     assert.equal(bulletin.segments.at(-1).type, 'outro');
     assert.equal(bulletin.title, 'TECH BYTES (demo)');
@@ -605,17 +624,21 @@ describe('mock provider', () => {
       assert.ok(seg.text.includes(story.source), `text mentions ${story.source}`);
       assert.equal(seg.hasImage, !!story.image);
     }
-    assert.deepEqual(segs.map((s) => s.location?.place ?? null), ['VALENCIA, SPAIN', null, null, null], 'only the fire names a place');
+    assert.deepEqual(segs.map((s) => s.location?.place ?? null), [null, 'VALENCIA, SPAIN', null, null], 'only the fire names a place');
   });
 
   test('picks the tone from the content and varies the shots: map for a place, the picture or a close-up, else wide', async () => {
     const segs = storySegs(await raw({ stories }));
-    assert.equal(segs[0].emotion, 'serious'); // fire / injured
-    assert.equal(segs[1].emotion, 'happy'); // tech
-    assert.equal(segs[2].emotion, 'neutral');
+    const by = Object.fromEntries(segs.map((x) => [x.storyId, x]));
+    assert.equal(by.s1.emotion, 'serious'); // fire / injured
+    assert.equal(by.s2.emotion, 'happy'); // tech
+    assert.equal(by.s3.emotion, 'neutral');
+    assert.equal(by.s4.emotion, 'neutral');
     assert.deepEqual(segs.map((s) => s.anchor), ['A', 'B', 'A', 'B']);
-    assert.deepEqual(segs.map((s) => s.shot), ['map', 'full', 'wide', 'close']);
-    assert.deepEqual(segs.map((s) => s.breaking), [false, false, false, true]);
+    assert.deepEqual(segs.map((s) => s.storyId), ['s4', 's1', 's2', 's3'], 'breaking news leads');
+    assert.deepEqual(segs.map((s) => s.shot), ['close', 'map', 'close', 'wide']);
+    assert.deepEqual(segs.map((s) => s.breaking), [true, false, false, false]);
+    assert.match(spoken(segs[0].text), /^Breaking news\. /);
   });
 
   test('a story with a place gets its location from the gazetteer (the city rather than its country) and a map shot', async () => {
@@ -633,7 +656,8 @@ describe('mock provider', () => {
     const [lisbon, kenya] = bulletin.segments.filter((s) => s.type === 'story');
     assert.equal(lisbon.fact, '40,000 PASSENGERS A DAY');
     assert.deepEqual(lisbon.numbers[0], { value: '40,000', label: 'PASSENGERS A DAY' });
-    assert.equal(kenya.fact, '300,000 HOMES');
+    assert.equal(kenya.fact, 'ABOUT 300,000 HOMES', 'the qualifier stays with the figure');
+    assert.deepEqual(kenya.numbers[0], { value: '300,000', label: 'HOMES', qualifier: 'ABOUT' });
     const none = storySegs(await raw({ stories: [placed[4]], count: 1 }))[0];
     assert.equal(none.fact, null);
     assert.equal(none.numbers, undefined);
@@ -663,7 +687,7 @@ describe('mock provider', () => {
   });
 
   test('adds a chat after light stories, but never after the last story, a grave one, or right before a grave one', async () => {
-    assert.deepEqual(kinds(await raw({ stories })), ['intro', 'story', 'story', 'chat', 'story', 'story', 'outro']);
+    assert.deepEqual(kinds(await raw({ stories })), ['intro', 'story', 'story', 'story', 'chat', 'story', 'outro']);
     assert.deepEqual(kinds(await raw({ stories: lightStories, program: { ...PROGRAM, maxChats: 9 } })), ['intro', 'story', 'chat', 'story', 'chat', 'story', 'chat', 'story', 'outro']);
     const beforeGrave = [lightStories[0], stories[0], lightStories[1]];
     assert.deepEqual(kinds(await raw({ stories: beforeGrave, count: 3, program: { ...PROGRAM, maxChats: 9 } })), ['intro', 'story', 'story', 'story', 'outro']);
@@ -695,19 +719,20 @@ describe('mock provider', () => {
     assert.equal(script.segments.at(-1).type, 'outro');
   });
 
-  test('"news-60" gets one summary sentence per story, other programmes two', async () => {
-    const quick = storySegs(await raw({ stories, program: { id: 'news-60', title: 'NEWS IN 60', stories: 4, maxChats: 0 }, presenters: SOLO }));
-    const full = storySegs(await raw({ stories }));
-    assert.ok(spoken(quick[0].text).includes('Firefighters put out the blaze.'));
-    assert.ok(!spoken(quick[0].text).includes('Several people were evacuated.'));
-    assert.ok(spoken(full[0].text).includes('Firefighters put out the blaze. Several people were evacuated.'));
-    assert.ok(!spoken(full[0].text).includes('Third sentence.'));
+  test('"news-60" keeps to its word budget (lead up to about 38 words, other items about 28); other programmes say more', async () => {
+    const long = placed.map((p) => ({ ...p, summary: `${p.summary} One more detail sentence about it here. And a final remark that is rather long as well.` }));
+    const quick = storySegs(await raw({ stories: long, program: { id: 'news-60', title: 'NEWS IN 60', stories: 5, maxChats: 0 }, presenters: SOLO }));
+    const words = (t) => spoken(t).split(/\s+/).length;
+    assert.ok(words(quick[0].text) <= 40, `lead: ${words(quick[0].text)} words`);
+    for (const x of quick.slice(1)) assert.ok(words(x.text) <= 32, `${words(x.text)} words: ${x.text}`);
+    const full = storySegs(await raw({ stories: long }));
+    assert.ok(words(full[0].text) > words(quick[0].text));
   });
 
   test('works with a single story whose summary is empty: the headline, attributed', async () => {
     const one = [stories[2]];
     const bulletin = await bulletinOf({ stories: one });
-    assert.equal(bulletin.segments.filter((s) => s.type === 'story').length, 1);
+    assert.equal(bulletin.segments.filter((s) => s.type === 'story').length, 1, 'the story stays even though the intro read the same headline');
     assert.match(bulletin.segments[1].text, /City council opens the municipal pool/);
     assert.match(bulletin.segments[1].text, /NPR/);
   });
@@ -722,7 +747,7 @@ describe('mock provider', () => {
     assert.deepEqual(await raw({ stories: placed, program: FLAGSHIP }), await raw({ stories: placed, program: FLAGSHIP }));
   });
 
-  test('flagship features: two lead stories, a round-up of placed stories, a number of the day and an "and finally"', async () => {
+  test('flagship features: lead, a main story, the number of the day (never first), a round-up in different countries and an "and finally"', async () => {
     const bulletin = await bulletinOf({ stories: placed, program: FLAGSHIP });
     const segs = bulletin.segments.filter((s) => s.type === 'story');
     const roundup = segs.filter((s) => s.feature === 'roundup');
@@ -734,17 +759,121 @@ describe('mock provider', () => {
       assert.equal(s.shot, 'map');
       assert.ok(s.location);
       assert.equal(s.kicker, 'AROUND THE WORLD');
+      assert.equal(s.fact, null, 'no fact cards inside the round-up');
     });
-    assert.match(roundup[0].text, /around the world in 30 seconds/);
+    const countries = roundup.map((s) => s.location.place.split(', ').pop());
+    assert.equal(new Set(countries).size, countries.length, 'one country per item');
+    assert.match(roundup[0].text, /around the world/);
     const last = segs.at(-1);
     assert.equal(last.feature, 'lighter');
     assert.equal(last.storyId, 'p6', 'the panda cubs close the show');
-    assert.match(last.text, /(?:^|\. )And finally: Paris zoo welcomes twin panda cubs/);
+    assert.match(last.text, /And finally: /);
     const number = segs.find((s) => s.feature === 'number');
     assert.ok(number, 'there is a number of the day');
-    assert.match(number.text, /^Our number of the day: 40,000 passengers a day\./);
+    assert.notEqual(segs.indexOf(number), 0, 'never the lead');
+    assert.match(number.text, /^(?:Thanks, \w+\. )?Our number of the day: /);
     assert.equal(number.kicker, 'NUMBER OF THE DAY');
-    assert.equal(number.cues[0].action, 'count');
+  });
+
+  test('the number of the day is never the lead, never an age, and goes where the programme puts it', async () => {
+    for (const program of [FLAGSHIP, { ...PROGRAM, features: ['number'] }, { ...PROGRAM, features: ['number'], numberSlot: 'second' }]) {
+      const segs = storySegs(await raw({ stories: placed, program }));
+      const i = segs.findIndex((x) => x.feature === 'number');
+      assert.ok(i > 0, `${program.id}: number at ${i}`);
+      if (program.numberSlot === 'second') assert.equal(i, 1);
+      assert.ok(!/years? (?:old|ago)/i.test(segs[i].fact), segs[i].fact);
+    }
+    const money = storySegs(await raw({ stories: placed, presenters: SOLO, program: { id: 'money-minute', title: 'MONEY MINUTE', stories: 4, maxChats: 0, features: ['number'], numberSlot: 'last' } }));
+    assert.equal(money.at(-1).feature, 'number', 'MONEY MINUTE closes on it');
+  });
+
+  test('a breaking story always leads, whatever the desk order', async () => {
+    const list = [placed[0], placed[1], { ...placed[2], id: 'b1', title: 'BREAKING: Iceland volcano erupts again on the Reykjanes peninsula' }];
+    const segs = storySegs(await raw({ stories: list, program: FLAGSHIP }));
+    assert.equal(segs[0].storyId, 'b1');
+    assert.equal(segs[0].breaking, true);
+    assert.ok(!segs[0].feature);
+  });
+
+  test('live pages are not read out: their "follow the latest" line is no story', async () => {
+    const live = { id: 'lv', title: 'Climate talks in Nairobi – live', summary: 'Follow the latest from the climate talks in Nairobi, where ministers from 40 countries are meeting this week.', source: 'Pixelburg Post', category: 'world', image: null, live: true };
+    const script = await raw({ stories: [live, ...placed.slice(0, 3)], count: 3 });
+    assert.ok(!storySegs(script).some((x) => x.storyId === 'lv'));
+    assert.ok(!script.segments.some((x) => /Follow the latest/.test(x.text)));
+  });
+
+  test('no repetition: the lead does not re-read the headline the intro just read, and a summary that restates its headline replaces it', async () => {
+    for (const program of [PROGRAM, { ...FLAGSHIP, intro: 'headlines' }]) {
+      const script = await raw({ stories: placed, program });
+      const introLine = spoken(script.segments[0].text).split('. ')[0];
+      const lead = spoken(storySegs(script)[0].text);
+      assert.ok(!lead.includes(introLine), `${lead} repeats ${introLine}`);
+    }
+    const lisbon = storySegs(await raw({ stories: [placed[4], placed[0]], count: 2 }))[1];
+    assert.ok(!spoken(lisbon.text).includes('Lisbon opens a new riverside tram line'), 'the richer first sentence says it instead');
+    assert.match(spoken(lisbon.text), /Lisbon has opened a new tram line along the Tagus river/);
+  });
+
+  test('openings vary: no two stories in a row start with the same attribution template', async () => {
+    const script = await raw({ stories: [...lightStories, ...placed], count: 8, program: { ...PROGRAM, stories: 8, maxChats: 0 } });
+    const template = (t) => {
+      const x = spoken(t).replace(/^Thanks, \w+\. /, '');
+      if (/^From [^:]+: /.test(x)) return 'colon';
+      if (/^According to /.test(x)) return 'according';
+      if (/^[\w ]+ reports that /.test(x)) return 'that';
+      if (/^[^.]*, [A-Z][\w ]+ reports\./.test(x)) return 'tail';
+      return 'none';
+    };
+    const kinds = storySegs(script).map((x) => template(x.text));
+    for (let i = 1; i < kinds.length; i++) if (kinds[i] !== 'none') assert.notEqual(kinds[i], kinds[i - 1], kinds.join(' '));
+    assert.ok(!script.segments.some((x) => /That's according to/.test(x.text)));
+  });
+
+  test('chats follow the programme: WORLD NOW only after "And finally" (Paco, then Lola), COSMOS after the lead and the closer, TECH BYTES has THE CATCH', async () => {
+    const world = await raw({ stories: placed, program: { ...FLAGSHIP, chats: { after: ['lighter'] } }, presenters: { A: { id: 'paco', name: 'Paco Pixel' }, B: { id: 'lola', name: 'Lola Byte' } } });
+    const segsW = world.segments;
+    segsW.forEach((x, i) => {
+      if (x.type !== 'chat') return;
+      const prev = segsW.slice(0, i).filter((y) => y.type === 'story').at(-1);
+      assert.equal(prev.feature, 'lighter', 'a WORLD NOW chat only follows And finally');
+    });
+    assert.deepEqual(segsW.filter((x) => x.type === 'chat').map((x) => x.anchor), ['A', 'B']);
+    assert.ok(!segsW.some((x) => /\[laugh\]/.test(x.text)));
+
+    const science = [
+      { id: 'c1', title: 'Rover finds layered rocks on Mars', summary: 'A rover found layered rocks. The layers could hold clues about past water.', source: 'Starfield Journal', category: 'science', image: null },
+      { id: 'c2', title: 'Swedish plant recovers gold from old phones', summary: 'A plant in Sweden can recover 1 kilogram of gold from 40,000 old phones.', source: 'Circuit Weekly', category: 'tech', image: null },
+      { id: 'c3', title: 'Comet will pass close enough to see with binoculars', summary: 'A comet will be visible with binoculars this week.', source: 'Starfield Journal', category: 'science', image: null },
+    ];
+    const cosmos = await raw({ stories: science, presenters: { A: { id: 'nova', name: 'Dr Nova Reyes' }, B: { id: 'unit8', name: 'UNIT-8' } }, program: { id: 'cosmos', title: 'COSMOS DESK', stories: 3, maxChats: 3, features: ['number', 'lighter'], numberSlot: 'second', chats: { after: ['lead', 'lighter'] } } });
+    assert.deepEqual(kinds(cosmos), ['intro', 'story', 'chat', 'chat', 'story', 'story', 'chat', 'outro']);
+    assert.equal(storySegs(cosmos)[1].anchor, 'B', 'the number of the day is UNIT-8\'s');
+    assert.ok(!cosmos.segments.some((x) => /sky|looking up/i.test(x.text) && x.type === 'chat' && x !== cosmos.segments.at(-2)), 'sky lines only after a sky story');
+
+    const gadget = [
+      { id: 't1', title: 'Chipmaker unveils a laptop processor', summary: 'A chipmaker has unveiled a processor that runs for 20 hours on a charge. The first laptops using it will go on sale in the spring.', source: 'Circuit Weekly', category: 'tech', image: null },
+      ...lightStories.slice(1),
+    ];
+    const tech = await raw({ stories: gadget, program: { ...PROGRAM, maxChats: 4, chats: { after: ['lead', 'lighter', 'story'] } } });
+    const [ask, answer] = tech.segments.slice(2, 4);
+    assert.deepEqual([ask.type, ask.anchor, answer.type, answer.anchor], ['chat', 'B', 'chat', 'A'], 'Ada asks, Max answers');
+    assert.match(spoken(ask.text), /\?$/);
+    assert.equal(spoken(answer.text), 'The first laptops using it will go on sale in the spring.', 'the answer is the summary\'s own sentence');
+    assert.ok(!spoken(storySegs(tech)[0].text).includes('go on sale'), 'the story kept that sentence back for the catch');
+  });
+
+  test('WORLD NOW tosses with a name and a full stop, at most twice, never twice in a row', async () => {
+    const script = await raw({ stories: placed, program: { ...FLAGSHIP, toss: '{name}.' } });
+    const tosses = script.segments.filter((x) => /\[look_partner\] \w+\.$/.test(x.text));
+    assert.ok(tosses.length <= 2);
+    assert.ok(!script.segments.some((x) => x.type === 'story' && /\w\?\s*$/.test(spoken(x.text))), 'no question-mark tosses');
+  });
+
+  test('a figure too weak for a card ("3 years") gets no fact card', async () => {
+    const weak = [{ id: 'w1', title: 'Probe sets off for the Sun', summary: 'The journey will take 3 years.', source: 'Starfield Journal', category: 'science', image: null }];
+    const [seg] = storySegs(await raw({ stories: weak }));
+    assert.equal(seg.fact, null);
+    assert.ok(!('numbers' in seg));
   });
 
   test('a programme without features gets none', async () => {
@@ -793,9 +922,9 @@ describe('mock provider', () => {
 
   test('its stage directions come through normalizeBulletin as cues, and brackets never reach the spoken text', async () => {
     const bulletin = await bulletinOf({ stories: lightStories, program: { ...PROGRAM, maxChats: 9 }, count: 4 });
-    assert.ok(bulletin.segments[0].cues.some((c) => c.action === 'wave'));
+    assert.ok(bulletin.segments[0].cues.some((c) => c.action === 'nod'));
     assert.ok(bulletin.segments.some((s) => s.cues.some((c) => c.slot === 'B')), 'presenter B reacts somewhere');
-    assert.ok(bulletin.segments.at(-1).cues.some((c) => c.action === 'wave'));
+    assert.ok(bulletin.segments.at(-1).cues.some((c) => c.action === 'nod'));
     for (const seg of bulletin.segments) assert.ok(!seg.text.includes('['), seg.text);
   });
 

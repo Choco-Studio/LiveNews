@@ -15,8 +15,8 @@
 //  7 20.6 SLATE    product, wordmark in thin type, tagline, small print.    VO "Cloudbrella. Stay offline."
 import {
   P, W, H, R, A, oval, disc, ring, line, stroke, cached, lazy, play, key, tween, prog, smooth, lerp,
-  type, trackIn, fadeUp, rule, smallPrint, gradient, vignette, beam, contact, glintStar, lathe, turntable, sheen,
-  ovalRing, motes, hash01, warmUp, tune,
+  trackIn, fadeUp, rule, smallPrint, gradient, vignette, beam, contact, glintStar, lathe, turntable, sheen,
+  motes, hash01, warmUp, tune,
 } from './kit.js';
 
 const { round, sin, cos, PI, max, min, abs, sqrt } = Math;
@@ -313,6 +313,7 @@ function flatCloud(ctx, x, y, col, hi) {
   R(ctx, x + 9, y - 8, 8, 1, hi);
 }
 
+const WORDS = ['UPDATES.', 'POP-UPS.', 'TERMS AND CONDITIONS.'];
 function shotProblem(ctx, lt) {
   R(ctx, 0, 0, W, H, P.black);
   ctx.drawImage(stageBack(), 0, 0);
@@ -345,8 +346,7 @@ function shotProblem(ctx, lt) {
     ctx.restore();
   }
   // the three words, as quiet labels
-  const words = ['UPDATES.', 'POP-UPS.', 'TERMS AND CONDITIONS.'];
-  for (let i = 0; i < 3; i++) fadeUp(ctx, words[i], 204, 78 + i * 15, lt - (0.45 + i * 0.85), { face: 'thin', color: i === 2 ? P.white : P.fog, track: 1, dur: 0.7 });
+  for (let i = 0; i < 3; i++) fadeUp(ctx, WORDS[i], 204, 78 + i * 15, lt - (0.45 + i * 0.85), { face: 'thin', color: i === 2 ? P.white : P.fog, track: 1, dur: 0.7 });
   vignette(ctx, 0.4);
 }
 

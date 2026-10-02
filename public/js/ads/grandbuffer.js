@@ -4,7 +4,8 @@
 // unresolved chord ("almost there"), gold serif lettering on night navy,
 // marble and brass, and the loading spinner treated as a precious heirloom.
 //
-// Six shots, 24.6 s, joined by slow dissolves and dips to black:
+// Six shots, 24.6 s, joined by slow dissolves, a dip to black and one match
+// cut (the lobby clock pushes in and becomes the heirloom's ring of pearls):
 //  1  0.0 EXTERIOR  night rain; the camera cranes down the facade to the doorman.
 //                                                      VO "In a world that refreshes every second..."
 //  2  4.0 LOBBY     a guest rings the desk bell; the concierge keeps writing
@@ -25,7 +26,7 @@
 // puppets with adult proportions (6.8 heads), flat key-light shading from the
 // left and a silver rim, posed by eased keys so each gesture travels its whole
 // arc. Scenery is baked once into cached canvases; polygons fill through one
-// preallocated span buffer; transitions use two pooled scratch canvases.
+// preallocated span buffer; transitions use pooled scratch canvases.
 import { P, W, H, A, R, bands, drawText, measureText, glint, prog, lerp } from './kit.js';
 
 const { sin, cos, PI, round, floor, ceil, min, max, abs, sqrt, hypot, atan2 } = Math;
@@ -960,9 +961,20 @@ const lampHead = () => bake('gb-lamp', 15, 24, (c) => {
   R(c, 1, 1, 13, 1, P.black);
   R(c, 5, 0, 5, 1, P.black);
 });
+const LAMP_X = [16, 368];
 function shotExterior(ctx, lt) {
   const camY = round(84 * io(prog(lt, 0.15, 3.85)));
   ctx.drawImage(facade(), 0, -camY);
+  // someone on the fourth floor turns in for the night: one window dims, slowly
+  const off = ramp(lt, 2.2, 2.9);
+  if (off > 0) {
+    ctx.globalAlpha = off;
+    R(ctx, 210, 163 - camY, 14, 20, P.brown);
+    R(ctx, 211, 164 - camY, 12, 8, P.tanShade);
+    R(ctx, 217, 163 - camY, 1, 20, P.black);
+    R(ctx, 210, 170 - camY, 14, 1, P.black);
+    ctx.globalAlpha = 1;
+  }
   // doorman by the door: still, breathing, he turns his head a touch to us
   QD.breath = (1 - cos(lt * 1.6)) / 2;
   QD.turn = -ramp(lt, 2.4, 3.4) * 0.6;
@@ -973,7 +985,8 @@ function shotExterior(ctx, lt) {
   QD.reach0 = null;
   frontPerson(ctx, 226, 265 - camY, 5.6, DOORMAN, QD);
   // foreground lamp posts rise faster than the facade (parallax)
-  for (const lx of [16, 368]) {
+  for (let i = 0; i < 2; i++) {
+    const lx = LAMP_X[i];
     const y = round(236 - camY * 1.35);
     const lc = lampHead();
     if (y < H) {
@@ -986,7 +999,7 @@ function shotExterior(ctx, lt) {
   }
   rain(ctx, lt, 0.3);
   // the dateline super, letter-spaced, fades in and out
-  art(ctx, label('gb-geneva', 'GENEVA * SINCE 1897', 3, P.cream), 192, 196, ramp(lt, 1.3, 2.0) * (1 - ramp(lt, 3.5, 4.1)));
+  art(ctx, label('gb-geneva', 'GENEVA * SINCE 1897', 3, P.cream), 192, 197, ramp(lt, 2.8, 3.4));
 }
 function rain(ctx, lt, a) {
   ctx.fillStyle = A(P.fog, a);
@@ -1173,6 +1186,8 @@ function gloveHand(ctx, gx, gy, s) {
   capsule(ctx, ex + 1, ey + 2, wx + 5 * s, wy + 2, 10 * s, 6.5 * s, P.ink);
   capsule(ctx, wx + 3 * s, wy, wx - 1 * s, wy - 1.5 * s, 6.4 * s, 6 * s, P.silver);
   capsule(ctx, wx + 3 * s, wy - 1, wx - 1 * s, wy - 2.5 * s, 5.6 * s, 5 * s, P.white);
+  // the seam between cuff and glove
+  line(ctx, wx - 1.5 * s, wy - 7 * s, wx - 2.5 * s, wy + 4 * s, P.steel);
   // back of the hand
   ellipse(ctx, gx + 3.5 * s, gy + 1.5 * s, 6 * s, 5.2 * s, P.fog);
   ellipse(ctx, gx + 2.8 * s, gy + 0.6 * s, 5.4 * s, 4.6 * s, P.silver);
@@ -1285,7 +1300,7 @@ function shotJewel(ctx, lt) {
   ellipse(ctx, hx, hy, 2 * s, 2 * s, P.yellow);
   // a gloved hand comes in from the right and takes the crank
   const reach = ramp(lt, 0.8, 1.7);
-  gloveHand(ctx, lerp(W + 40, hx + 4 * s, reach), lerp(hy + 30, hy + 1, reach), s * 1.2);
+  gloveHand(ctx, lerp(W + 40, hx + 5 * s, reach), lerp(hy + 30, hy + 1, reach), s * 1.4);
   // the super: name of the piece, then the provenance
   const a1 = ramp(lt, 1.6, 2.4);
   art(ctx, serif('gb-heirloom', 'THE HEIRLOOM', 2), 92, 88, a1);
@@ -1353,12 +1368,26 @@ const suite = () => bake('gb-suite', W, H, (c) => {
   R(c, 192, 160, 192, 4, P.silver);
   R(c, 191, 164, 193, 1, P.fog);
   for (let x = 210; x < W; x += 24) line(c, x, 166, x - 8, 196, A(P.slate, 0.7));
+  // a dark runner thrown across the foot of the bed
+  pt(186, 176);
+  pt(W, 176);
+  pt(W, 196);
+  pt(178, 196);
+  fillPts(c, P.maroon);
+  R(c, 185, 176, W - 185, 1, P.darkRed);
+  R(c, 180, 190, W - 180, 1, P.orange);
   pt(176, 198);
   pt(W, 198);
   pt(W, 210);
   pt(178, 210);
   fillPts(c, P.slate);
   R(c, 176, 198, W - 176, 1, P.fog);
+  pt(178, 196);
+  pt(W, 196);
+  pt(W, 206);
+  pt(179, 206);
+  fillPts(c, P.black);
+  R(c, 179, 196, W - 179, 1, P.maroon);
   ellipse(c, 312, 136, 22, 6, P.fog);
   ellipse(c, 311, 135, 21, 5, P.silver);
   R(c, 296, 139, 30, 1, A(P.steel, 0.6));
@@ -1519,7 +1548,7 @@ function shotDinner(ctx, lt) {
   QW.b1 = 0.1;
   frontPerson(ctx, 200, 186, 14, WAITER, QW);
   ctx.drawImage(diningTable(), 0, 0);
-  for (const k of [-16, 0, 16]) flame(ctx, 84 + k, 102, lt, k);
+  for (let k = -16; k <= 16; k += 16) flame(ctx, 84 + k, 102, lt, k);
   frontArms(ctx, 144, 208, 14, DINER, QN);
   if (watch > 0.15) R(ctx, round(HAND[0] - 1), round(HAND[1] + 2), 2, 1, P.yellow);
   // under the cloche: the spinner, served
@@ -1558,11 +1587,15 @@ function shotSlate(ctx, lt) {
     ctx.globalAlpha = 1;
   }
   const mark = serif('gb-mark', 'THE GRAND BUFFER', 3);
-  // the wordmark is unveiled left to right behind a soft edge
-  const rev = ramp(lt, 0.5, 1.5);
+  // the wordmark fades up and settles two pixels, then a slow glint crosses it
+  const rev = ramp(lt, 0.45, 1.5);
   const mx = round(192 - mark.width / 2);
-  const mw = round(mark.width * rev);
-  if (mw > 0) ctx.drawImage(mark, 0, 0, mw, mark.height, mx, 76, mw, mark.height);
+  const my = 76 + round((1 - rev) * 2);
+  if (rev > 0) {
+    ctx.globalAlpha = rev;
+    ctx.drawImage(mark, mx, my);
+    ctx.globalAlpha = 1;
+  }
   if (lt > 2.6) glint(ctx, mark, mx, 76, prog(lt, 2.6, 3.6), { width: 6, alpha: 0.55 });
   // hairline with a centre lozenge
   const hw = round(70 * ramp(lt, 1.1, 1.8));
@@ -1588,11 +1621,13 @@ function shotSlate(ctx, lt) {
 }
 
 // --- shot list and transitions -------------------------------------------------------------
-// tr: 'dissolve' (cross-fade) | 'dip' (through black) into the shot, over d seconds.
+// tr: 'dissolve' (cross-fade) | 'dip' (through black) | 'match' (the outgoing
+// shot pushes in so its point (fx, fy) grows by z onto (tx, ty) while the new
+// shot dissolves in: the lobby clock becomes the heirloom's ring) over d seconds.
 const SHOTS = [
   { at: T_EXT, draw: shotExterior },
   { at: T_LOBBY, draw: shotLobby, tr: 'dissolve', d: 0.8 },
-  { at: T_JEWEL, draw: shotJewel, tr: 'dip', d: 0.9 },
+  { at: T_JEWEL, draw: shotJewel, tr: 'match', d: 1.0, fx: 164, fy: 44, tx: 250, ty: 106, z: 2.2 },
   { at: T_SUITE, draw: shotSuite, tr: 'dissolve', d: 0.8 },
   { at: T_DINNER, draw: shotDinner, tr: 'dissolve', d: 0.8 },
   { at: T_SLATE, draw: shotSlate, tr: 'dip', d: 1.0 },
@@ -1611,6 +1646,20 @@ function run(ctx, dt) {
       else s.draw(ctx, lt);
       ctx.globalAlpha = 1 - abs(p - 0.5) * 2;
       R(ctx, 0, 0, W, H, P.black);
+      ctx.globalAlpha = 1;
+    } else if (s.tr === 'match') {
+      const a = buf('gb-ta');
+      prev.draw(a.c, dt - prev.at);
+      const e = io(p / 0.8);
+      const z = 1 + (s.z - 1) * e;
+      const cx = lerp(s.fx, s.tx, e);
+      const cy = lerp(s.fy, s.ty, e);
+      R(ctx, 0, 0, W, H, P.black);
+      ctx.drawImage(a.cv, s.fx - cx / z, s.fy - cy / z, W / z, H / z, 0, 0, W, H);
+      const b = buf('gb-tb');
+      s.draw(b.c, lt);
+      ctx.globalAlpha = smooth(prog(p, 0.2, 0.95));
+      ctx.drawImage(b.cv, 0, 0);
       ctx.globalAlpha = 1;
     } else {
       prev.draw(ctx, dt - prev.at);
@@ -1659,7 +1708,7 @@ export default {
         notes: 'D4+F#4+A4:4 D4+F#4+B4:4 D4+G4+B4:4 C#4+E4+A4:4 D4+F#4+A4:4 D4+G4+B4:4 D4+G4+B4:4 C#4+G4+A4:4',
       },
       {
-        kind: 'harmony', inst: 'pluck', gain: 0.5, pan: 0.25,
+        kind: 'harmony', inst: { wave: 'tri', a: 0.003, d: 0.55, s: 0, r: 0.35, legato: 1 }, gain: 0.55, pan: 0.25,
         notes: [
           'D3:0.5 A3:0.5 D4:0.5 F#4:0.5 A4:0.5 F#4:0.5 D4:0.5 A3:0.5',
           'B2:0.5 F#3:0.5 B3:0.5 D4:0.5 F#4:0.5 D4:0.5 B3:0.5 F#3:0.5',

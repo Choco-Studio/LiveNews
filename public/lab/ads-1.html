@@ -47,7 +47,6 @@
       //   window.__audio.render({ ad, seconds })  -> the ad's tune rendered offline (tools/render-audio.mjs)
       import { ADS } from '../js/ads/index.js';
       import * as K from '../js/ads/kit.js';
-      import { drawStinger, STINGER_DURATION } from '../js/scenes/cards.js';
       import { drawText } from '../js/font.js';
       import { renderTune } from '../js/audio/synth.js';
 
@@ -80,7 +79,18 @@
         const b = state.second ? byId(state.second) : ADS[(ADS.indexOf(a) + 1) % ADS.length];
         return [a, b];
       };
-      const half = STINGER_DURATION / 2;
+      // The channel stinger lives in cards.js, which pulls in the opens; load it
+      // lazily so a broken in-progress scene elsewhere never takes the ads lab down.
+      let drawStinger = null;
+      let STINGER_DURATION = 0.8;
+      import('../js/scenes/cards.js')
+        .then((m) => {
+          drawStinger = m.drawStinger;
+          STINGER_DURATION = m.STINGER_DURATION;
+          half = STINGER_DURATION / 2;
+        })
+        .catch((err) => console.warn('[lab] stinger unavailable:', err.message));
+      let half = STINGER_DURATION / 2;
 
       /** What is on screen at break time T: [ad, dt] (or null) plus a stinger progress. */
       function breakAt(T) {
@@ -180,7 +190,7 @@
           ad.draw(ctx, t, dt, info);
           ctx.restore();
         }
-        if (sting >= 0) drawStinger(ctx, t, sting, { channel: 'GLOBIT 24' });
+        if (sting >= 0 && drawStinger) drawStinger(ctx, t, sting, { channel: 'GLOBIT 24' });
         const vo = ad && info.line >= 0 ? ad.script[info.line].text : '';
         if (state.subs && vo) {
           ctx.fillStyle = 'rgba(0,0,0,0.7)';

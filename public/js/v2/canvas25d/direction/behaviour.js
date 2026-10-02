@@ -17,17 +17,29 @@
 // solo presenters' note glances, never staring, never mechanical repetition.
 import { rng } from './context.js';
 
+// OWNERSHIP (CONTRACTS "planner arbitration"): every eyeline (listeners, the
+// speaker's hand-over glance, the writer's look_partner cue) and every LISTENER
+// nod ([B:nod] cues included) is planned here; planGestures owns the speaker's body.
 export function planBehaviour(ctx) {
   const out = [];
   if (!ctx.duo) return out;
   const r = rng(ctx.seed ^ 0x5bd1e995);
   const speech = ctx.duration;
+  let glanced = false;
   if (ctx.turnStart) {
     for (const slot of ctx.listeners) {
       const at = 0.2 + r() * 0.15;
       const dur = Math.min(2.6 + r() * 1.2, Math.max(0.8, speech - at - 0.4));
       out.push({ kind: 'look', slot, target: 'partner', char: 0, at, dur });
+      glanced = true;
     }
+  }
+  // the writer's reaction cues for the listener, and the speaker's look_partner cue
+  for (const cue of Array.isArray(ctx.seg.cues) ? ctx.seg.cues : []) {
+    const slot = cue.slot && cue.slot in ctx.cast ? cue.slot : ctx.speaker;
+    const at = Math.max(0, ctx.timeAt(cue.char) - 0.2);
+    if (cue.action === 'nod' && slot !== ctx.speaker) out.push({ kind: 'gesture', slot, name: 'nod', char: cue.char, at });
+    else if (cue.action === 'look_partner' && !(glanced && slot !== ctx.speaker)) out.push({ kind: 'look', slot, target: 'partner', char: cue.char, at, dur: 1.9 });
   }
   if (ctx.handover && speech > 3) {
     const at = Math.max(0, speech - 1.1 - r() * 0.3);

@@ -3,7 +3,7 @@
 // Europe, London gets a marker and one ripple, and three great-circle routes
 // draw out of it in the brand red. Accent: red.
 import { P } from '../../palette.js';
-import { LAND } from '../worlddata.js';
+import { landMip } from '../worldmap.js';
 import { u32, clamp, seg, easeOut, easeOutQuint, bayer, ring } from '../../gfx/index.js';
 import { lazyBackdrop, frameBuffer, clipDisc, playOpen, CENTRE } from './kit.js';
 
@@ -21,7 +21,8 @@ const LAM_END = -12; // centre longitude when settled: Europe and Africa face us
 const LONDON = [51.5, -0.13];
 const ROUTES = [[40.7, -74.0], [-1.3, 36.8], [28.6, 77.2]]; // New York, Nairobi, New Delhi
 
-// --- texture: 512x256 equirectangular, bit0 land, bit1 graticule, bit2 equator
+// --- texture: 512x256 equirectangular, bit0 land, bit1 graticule, bit2 equator. The land comes from
+// the world map's decoded mask (its 512x256 box-filtered level), so there is one RLE decoder.
 const TW = 512;
 const TH = 256;
 let TEX = null;
@@ -29,49 +30,8 @@ export function globeTexture() {
   if (TEX) return TEX;
   const tex = new Uint8Array(TW * TH);
   try {
-    const bin = atob(LAND.rle);
-    const SW = LAND.w;
-    const SH = LAND.h;
-    const fx = SW / TW;
-    const fy = SH / TH;
-    const cov = new Float32Array(TW);
-    const thr = fx * fy * 0.5;
-    let p = 0;
-    for (let j = 0; j < SH && p < bin.length; j++) {
-      let x = 0;
-      let cur = 0;
-      while (x < SW && p < bin.length) {
-        let run = 0;
-        let shift = 0;
-        let b;
-        do {
-          b = bin.charCodeAt(p++);
-          run |= (b & 127) << shift;
-          shift += 7;
-        } while (b & 128 && p < bin.length && shift < 28);
-        run = Math.min(run, SW - x);
-        if (cur && run > 0) {
-          const e = x + run;
-          const i0 = Math.floor(x / fx);
-          const i1 = Math.floor((e - 1) / fx);
-          if (i0 === i1) cov[i0] += e - x;
-          else {
-            cov[i0] += (i0 + 1) * fx - x;
-            for (let i = i0 + 1; i < i1; i++) cov[i] += fx;
-            cov[i1] += e - i1 * fx;
-          }
-        }
-        x += run;
-        cur ^= 1;
-      }
-      if ((j + 1) % fy === 0) {
-        const row = ((j + 1) / fy - 1) * TW;
-        for (let i = 0; i < TW; i++) {
-          tex[row + i] = cov[i] > thr ? 1 : 0;
-          cov[i] = 0;
-        }
-      }
-    }
+    const mip = landMip(3);
+    if (mip && mip.w === TW && mip.h === TH) for (let i = 0; i < TW * TH; i++) tex[i] = mip.d[i] > 127 ? 1 : 0;
   } catch {
     /* no land data: an ocean world */
   }
@@ -269,12 +229,12 @@ export const WORLD = {
   style: { accent: P.red, plate: P.black, ink: 'light' },
   background,
   emblem,
+  extent: R0, // an opaque globe: it may sit in front of the plate's left end, as in the mark
+  front: true,
   absorb: 0.24,
   shoulder: 27,
-  warm: () => {
-    globeTexture();
-    for (let r = R0; r <= Math.round(R0 * 1.6); r++) globeTable(r);
-  },
+  // one small job per background slice (the director's first open must not stutter)
+  warmJobs: () => [globeTexture, ...Array.from({ length: Math.round(R0 * 0.6) + 1 }, (_, i) => () => globeTable(R0 + i))],
 };
 
 export function drawWorldNow(ctx, dt, info) {

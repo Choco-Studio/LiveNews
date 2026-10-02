@@ -49,6 +49,29 @@ export function wrapLines(text, maxW, scale = 1, maxLines = 99) {
   });
 }
 
+const BAL = textCache(400);
+/**
+ * Word wrap with balanced lines: the fewest lines that fit maxW, then the narrowest width that
+ * keeps that line count, so the last line is never a one-word widow (cached, frozen).
+ */
+export function balanceLines(text, maxW, scale = 1, maxLines = 99) {
+  const raw = typeof text === 'string' ? text : String(text ?? '');
+  return BAL(raw, (maxW * 8 + scale) * 128 + Math.min(127, maxLines), () => {
+    const first = wrapLines(raw, maxW, scale, maxLines);
+    if (first.length < 2 || first[first.length - 1].endsWith('...')) return first;
+    let lo = Math.ceil(maxW / first.length), hi = maxW, best = first;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const try2 = wrapText(normalizeText(raw).trim(), mid, scale);
+      if (try2.length === first.length && try2.every((l) => measureText(l, scale) <= mid)) {
+        best = Object.freeze(try2);
+        hi = mid - 1;
+      } else lo = mid + 1;
+    }
+    return best;
+  });
+}
+
 /** Largest integer scale in [minS, maxS] at which text fits maxW. */
 export function fitScale(text, maxW, maxS = 2, minS = 1) {
   for (let s = maxS; s > minS; s--) if (measureText(text, s) <= maxW) return s;

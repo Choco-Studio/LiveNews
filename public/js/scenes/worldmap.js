@@ -1,36 +1,68 @@
 // Animated locator world map (the "cut to the map" shot for world stories) and
 // its small sibling for the studio video wall.
 //
-//   drawWorldMap(ctx, t, dt, { lat, lon, place, x, y, w, h, mini, label, now })
-//     full-screen: w 384, h 216 (default). Fly-in 0-1.7 s on an eased arc, the
-//     pin drops with a small bounce at 1.7 s and sends two ripples, the place
-//     label wipes in at 2.1 s, neighbouring countries are named at 2.5 s; then
-//     everything holds still.
+//   drawWorldMap(ctx, t, dt, { lat, lon, place, x, y, w, h, mini, label, now,
+//                              accent, programId, from, follow, pins, duration })
+//     full screen: w 384, h 216 (default). The camera flies in from the world on
+//     an eased arc (pan and zoom on separate curves; 1.2 s, 0.9 s for NEWS IN 60).
+//     As it settles a square marker in the programme accent (5x5, 1 px black
+//     outline) is planted on the place and one white ring expands from it once;
+//     the place label wipes out beside it (on the side that keeps the target's
+//     own coastline clear) and neighbouring countries are named; then nothing
+//     moves. The night side is not shaded on locators (legibility first).
+//     from: { lat, lon } pans from a previous pin at (nearly) constant zoom
+//     instead of flying in from the world (round-ups: 0.9 s, 0.7 s for NEWS IN 60),
+//     the old marker fading out by palette steps. follow: true does that
+//     automatically when this map shot cuts straight from another map shot.
+//     pins: [{ lat, lon, place }] adds smaller markers with micro tags and frames
+//     them all (multi-place stories). duration: the shot length in seconds when
+//     known; shots under 3 s compress the timeline so the label still reads.
 //     mini (video wall locator, e.g. x 140, y 18, w 104, h 62, mini: true): the
-//     same fly-in, a small pin and a micro place tag along the bottom.
-//     No lat/lon: an idle world view panning by whole pixels, London marked.
-//     now: epoch ms for the day/night terminator (default: the graphics clock).
+//     same move, a 3x3 marker and a micro place tag on a tab along the TOP edge.
+//     No lat/lon: an idle world view panning by whole pixels, London marked, with
+//     the day/night terminator (now: epoch ms, default: the graphics clock).
 //
 // Every output pixel is shaded individually from the view: the land mask
 // (Natural Earth, 4096x2048 bit-packed, plus a box-filtered mip pyramid) is
 // sampled and thresholded so coastlines are crisp at every zoom, borders are
 // vector polylines rasterised as 1 px lines, and all colours are exact palette
-// colours (Bayer 4x4 between adjacent steps for depth, terrain and the night
-// side). The base layer is rebuilt only when the view changes; when the view
-// holds still the finished frame is reused as is.
+// colours (Bayer 4x4 between adjacent steps for terrain and the night side).
+// Rows beyond the poles repeat the polar row (Arctic sea, Antarctic ice), never
+// a black band. The base layer is rebuilt only when the view changes; when the
+// view holds still the finished frame is reused as is.
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
-import { clamp, seg, easeOutQuint, easeInOut, easeInOutSine, ringPts, memo, nowMs, ellipsis, wrapLines } from '../gfx/index.js';
+import { clamp, seg, easeOutQuint, easeInOut, easeInOutSine, ringPts, memo, nowMs, ellipsis, wrapLines, textW } from '../gfx/index.js';
 import { mulberry32 } from '../util.js';
 import { LAND, BORDERS } from './worlddata.js';
 
 const DEG = Math.PI / 180;
-const FLY_T = 1.7; // seconds of fly-in (world -> target)
-const PIN_T = 1.7; // pin starts to drop
-const PIN_DROP = 0.5; // drop + bounce duration
-const LABEL_T = PIN_T + 0.4; // label wipes in
-const CONTEXT_T = LABEL_T + 0.4; // neighbouring countries are named
+const RING_DUR = 0.5; // the marker's single ring
 const START_LON_OFFSET = 24; // the fly starts this many degrees west of the target
+/**
+ * Per-programme timeline (seconds from the cut): fly-in, pan between pins, marker, label, context.
+ * WORLD NOW zooms in 1.2 s (world-now.md); NEWS IN 60 pans pin to pin in 0.7 s (news-60.md).
+ */
+const TIMINGS = {
+  default: { fly: 1.2, pan: 0.9 },
+  'news-60': { fly: 0.9, pan: 0.7 },
+};
+const TIMING_CACHE = new Map();
+function timingFor(programId, duration) {
+  const base = TIMINGS[programId] || TIMINGS.default;
+  // a short shot compresses everything so the label is up for at least ~0.9 s
+  const q = Number.isFinite(duration) && duration > 0 ? clamp(Math.round(duration * 10), 15, 30) : 30;
+  const key = `${programId in TIMINGS ? programId : 'default'}|${q}`;
+  let T = TIMING_CACHE.get(key);
+  if (!T) {
+    const k = q / 30;
+    const fly = base.fly * Math.max(0.65, k);
+    const pan = base.pan * Math.max(0.7, k);
+    T = Object.freeze({ fly, pan, mark: -0.08, label: 0.22 * Math.max(0.6, k), context: 0.6 * Math.max(0.6, k) });
+    TIMING_CACHE.set(key, T);
+  }
+  return T;
+}
 const cached = memo(64);
 
 // ---------------------------------------------------------------------------------------------
@@ -116,7 +148,7 @@ function b64(s) {
  */
 export function decodeLandBits(rle, W, H) {
   const bin = typeof rle === 'string' ? b64(rle) : rle;
-  const stride = W >> 3;
+  const stride = (W + 7) >> 3; // rows are byte-aligned, so a width that is not a multiple of 8 never bleeds
   const bits = new Uint8Array(stride * H);
   const n = bin.length;
   let p = 0;
@@ -439,11 +471,45 @@ function* stageMisc() {
 // Init runs as three generators (each yields every few ms of work) drained in the background,
 // one slice per timer task, right after the module loads; drawWorldMap finishes whatever is left.
 const TASKS = [stageLand(), stageTerrain(), stageMisc()];
+// If a stage fails (corrupt data), its fallback keeps the map drawable: an ocean world, flat
+// terrain, no borders or lights. The error is logged once and never rethrown per frame.
+const FALLBACKS = [
+  () => {
+    const mips = [];
+    let w = LAND.w, h = LAND.h;
+    mips.push({ w, h, stride: (w + 7) >> 3, bits: new Uint8Array(((w + 7) >> 3) * h) });
+    for (let l = 1; l <= 6; l++) mips.push({ w: (w >>= 1), h: (h >>= 1), d: new Uint8Array(w * h) });
+    GEO.mips = mips;
+  },
+  () => {
+    GEO.terrain = GEO.terrain || new Uint8Array(TW * TH).fill(80);
+    GEO.depth = GEO.depth || new Uint8Array(TW * TH);
+    if (!GEO.landTone) {
+      GEO.landTone = new Uint8Array(4096).fill(T_LAND0);
+      GEO.seaTone = new Uint8Array(4096).fill(T_OCEAN);
+    }
+  },
+  () => {
+    GEO.lines = GEO.lines || [];
+  },
+];
 let taskIdx = 0;
 function stepInit() {
   if (taskIdx >= TASKS.length) return false;
-  if (TASKS[taskIdx].next().done) taskIdx++;
+  try {
+    if (TASKS[taskIdx].next().done) taskIdx++;
+  } catch (err) {
+    console.warn('[worldmap] data stage failed, using a fallback', err);
+    FALLBACKS[taskIdx]();
+    taskIdx++;
+  }
   return taskIdx < TASKS.length;
+}
+
+/** The land mask's mip level (0 = 4096x2048 bits, 3 = 512x256 coverage 0..255), decoding it if needed. */
+export function landMip(level) {
+  while (!GEO.mips && stepInit());
+  return GEO.mips ? GEO.mips[clamp(level | 0, 0, GEO.mips.length - 1)] : null;
 }
 function ensureInit() {
   while (stepInit());
@@ -490,10 +556,99 @@ function sunPosition(ms) {
 
 // ---------------------------------------------------------------------------------------------
 // View: where the camera is at dt. The fly-in pans and zooms on separate eased curves (the pan
-// leads, the zoom follows) and the target travels to its spot along a gentle arc, so the move
-// reads like a camera crane rather than a straight digital zoom.
+// leads, the zoom follows) and the focus travels to its spot along a gentle arc, so the move
+// reads like a camera crane rather than a straight digital zoom. A pan from a previous pin keeps
+// the zoom (dipping out a little for long hops). The camera centre snaps to whole pixels of the
+// current scale so thresholded coastlines never swim.
 // ---------------------------------------------------------------------------------------------
-function computeView(out, w, h, mini, t, dt, lat, lon) {
+
+/**
+ * Where the camera ends: the focus point, the zoom and the row the focus sits on. One target: zoom
+ * 5.5 (4.5 mini) with the target a little above centre. With extra pins the places are framed
+ * together (the zoom drops until all fit inside the safe area). Cached per instance and target.
+ */
+function goalFor(rt, mini, lat, lon, pins) {
+  const n = Array.isArray(pins) ? pins.length : 0;
+  let sig = lat * 1.618 + lon * 2.718 + (mini ? 0.5 : 0);
+  for (let i = 0; i < n; i++) sig += (Number(pins[i]?.lat) || 0) * (i + 3.1) + (Number(pins[i]?.lon) || 0) * (i + 5.3);
+  const G = rt.goal;
+  if (G.sig === sig && G.n === n) return G;
+  G.sig = sig;
+  G.n = n;
+  const w = rt.w, h = rt.h, s0 = w / 360;
+  let zoom = (mini ? 4.5 : 5.5) * islandZoom(lat, lon);
+  let flat = lat, flon = lon;
+  let fy = mini ? h / 2 : Math.round(h * 0.42);
+  if (n) {
+    let minLo = 0, maxLo = 0, minLa = lat, maxLa = lat;
+    for (let i = 0; i < n; i++) {
+      const pl = Number(pins[i]?.lat), pn = Number(pins[i]?.lon);
+      if (!Number.isFinite(pl) || !Number.isFinite(pn)) continue;
+      let dl = pn - lon;
+      dl -= Math.round(dl / 360) * 360;
+      minLo = Math.min(minLo, dl); maxLo = Math.max(maxLo, dl);
+      minLa = Math.min(minLa, pl); maxLa = Math.max(maxLa, pl);
+    }
+    flon = lon + (minLo + maxLo) / 2;
+    flat = (minLa + maxLa) / 2;
+    const kx = clamp(Math.cos(flat * DEG), 0.5, 1);
+    const spanX = (maxLo - minLo) * s0 * kx, spanY = (maxLa - minLa) * s0;
+    const availX = w - (mini ? 24 : 150), availY = mini ? h - 30 : 72;
+    zoom = clamp(Math.min(zoom, availX / Math.max(spanX, 1e-3), availY / Math.max(spanY, 1e-3)), 1, zoom);
+    fy = mini ? (h >> 1) + 4 : 84;
+  }
+  G.flat = clamp(flat, -80, 80);
+  G.flon = flon;
+  G.zoom = zoom;
+  G.fy = fy;
+  G.kx = clamp(Math.cos(G.flat * DEG), 0.5, 1);
+  return G;
+}
+
+/**
+ * Extra zoom for places on islands (Honolulu, Suva, Crete, Sicily): the area of the land connected to
+ * the target within 5 degrees, flood-filled on the mask's 1024x512 level. A continent fills the
+ * window and keeps the regional view; an island gets closer (up to 2.8x) so its own coastline shows
+ * around the marker instead of vanishing under it.
+ */
+const ISL_R = 14;
+const ISL_N = 2 * ISL_R + 1;
+const ISL_SEEN = new Uint8Array(ISL_N * ISL_N);
+const ISL_Q = new Int16Array(ISL_N * ISL_N * 2);
+function islandZoom(lat, lon) {
+  const m = GEO.mips && GEO.mips[2];
+  if (!m || !m.d) return 1;
+  const cx = Math.floor(((lon + 180) / 360) * m.w), cy = Math.floor(((90 - lat) / 180) * m.h);
+  const land = (dx, dy) => {
+    const yy = cy + dy;
+    if (yy < 0 || yy >= m.h) return false;
+    return m.d[yy * m.w + ((((cx + dx) % m.w) + m.w) % m.w)] > 127;
+  };
+  let sx = 99, sy = 99, best = 99;
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (land(dx, dy) && dx * dx + dy * dy < best) { best = dx * dx + dy * dy; sx = dx; sy = dy; }
+  if (best === 99) return 1; // a speck the mask does not hold, or open sea: keep the region
+  ISL_SEEN.fill(0);
+  let head = 0, tail = 0, count = 0;
+  ISL_Q[tail++] = sx; ISL_Q[tail++] = sy;
+  ISL_SEEN[(sy + ISL_R) * ISL_N + sx + ISL_R] = 1;
+  while (head < tail) {
+    const x = ISL_Q[head++], y = ISL_Q[head++];
+    count++;
+    for (let k = 0; k < 4; k++) {
+      const nx = x + (k === 0 ? -1 : k === 1 ? 1 : 0), ny = y + (k === 2 ? -1 : k === 3 ? 1 : 0);
+      if (nx < -ISL_R || nx > ISL_R || ny < -ISL_R || ny > ISL_R) continue;
+      const si = (ny + ISL_R) * ISL_N + nx + ISL_R;
+      if (ISL_SEEN[si] || !land(nx, ny)) continue;
+      ISL_SEEN[si] = 1;
+      ISL_Q[tail++] = nx; ISL_Q[tail++] = ny;
+    }
+  }
+  const area = count * (360 / m.w) * (180 / m.h) * Math.cos(lat * DEG); // square degrees (ground)
+  return area < 0.4 ? 2.8 : area < 1.5 ? 2 : area < 4 ? 1.5 : 1;
+}
+
+function computeView(out, rt, mini, t, dt, lat, lon, G, T, from) {
+  const w = rt.w, h = rt.h;
   const s0 = w / 360; // world view: the whole globe across the width
   if (lat === null) {
     const s = s0 * (mini ? 1.7 : 1.4);
@@ -504,46 +659,71 @@ function computeView(out, w, h, mini, t, dt, lat, lon) {
     out.kx = 1;
     out.ax = -1;
     out.ay = -1;
+    out.fx = -1;
+    out.fy = -1;
     out.idle = true;
     return out;
   }
-  const zoom = mini ? 4.5 : 5.5;
-  const kxEnd = clamp(Math.cos(lat * DEG), 0.5, 1);
-  const f = clamp(dt / FLY_T, 0, 1);
-  const ez = easeInOut(clamp((f - 0.1) / 0.9, 0, 1)); // zoom starts a beat after the pan
-  const ep = easeInOutSine(clamp(f / 0.92, 0, 1));
-  const s = s0 * Math.pow(zoom, ez);
-  const kx = 1 + (kxEnd - 1) * ez;
-  const pinX = w / 2, pinY = mini ? h / 2 : Math.round(h * 0.42);
-  const ax0 = w / 2 + START_LON_OFFSET * s0, ay0 = h / 2 - lat * s0;
-  const arc = (mini ? 6 : 16) * Math.sin(Math.PI * ep);
-  const ax = ax0 + (pinX - ax0) * ep, ay = ay0 + (pinY - ay0) * ep - arc;
-  out.clon = lon - (ax - w / 2) / (s * kx);
-  out.clat = lat + (ay - h / 2) / s;
+  const pinX = w / 2, pinY = G.fy;
+  let s, kx, clon, clat;
+  if (from) {
+    const e = easeInOut(clamp(dt / T.pan, 0, 1));
+    const kxF = clamp(Math.cos(from.lat * DEG), 0.5, 1);
+    let dl = G.flon - from.lon;
+    dl -= Math.round(dl / 360) * 360;
+    const dla = G.flat - from.lat;
+    const dist = Math.hypot(dl * Math.cos(((G.flat + from.lat) / 2) * DEG), dla);
+    const dip = clamp((dist - 20) / 90, 0, 0.6); // long hops pull out a little on the way
+    s = s0 * G.zoom * (1 - dip * Math.sin(Math.PI * e));
+    kx = kxF + (G.kx - kxF) * e;
+    clon = from.lon + dl * e - (pinX - w / 2) / (s * kx);
+    clat = from.lat + dla * e + (pinY - h / 2) / s;
+  } else {
+    const f = clamp(dt / T.fly, 0, 1);
+    const ez = easeInOut(clamp((f - 0.1) / 0.9, 0, 1)); // zoom starts a beat after the pan
+    const ep = easeInOutSine(clamp(f / 0.92, 0, 1));
+    s = s0 * Math.pow(G.zoom, ez);
+    kx = 1 + (G.kx - 1) * ez;
+    const ax0 = w / 2 + START_LON_OFFSET * s0, ay0 = h / 2 - G.flat * s0;
+    const arc = (mini ? 6 : 16) * Math.sin(Math.PI * ep);
+    const ax = ax0 + (pinX - ax0) * ep, ay = ay0 + (pinY - ay0) * ep - arc;
+    clon = G.flon - (ax - w / 2) / (s * kx);
+    clat = G.flat + (ay - h / 2) / s;
+  }
+  const sx = s * kx;
+  clon = Math.round(clon * sx) / sx;
+  clat = Math.round(clat * s) / s;
+  out.clon = clon;
+  out.clat = clat;
   out.s = s;
   out.kx = kx;
-  out.ax = ax;
-  out.ay = ay;
+  let tl = lon - clon;
+  tl -= Math.round(tl / 360) * 360;
+  out.ax = w / 2 + tl * sx;
+  out.ay = h / 2 + (clat - lat) * s;
+  if (from) {
+    let fl = from.lon - clon;
+    fl -= Math.round(fl / 360) * 360;
+    out.fx = w / 2 + fl * sx;
+    out.fy = h / 2 + (clat - from.lat) * s;
+  } else {
+    out.fx = -1;
+    out.fy = -1;
+  }
   out.idle = false;
   return out;
 }
 
 // ---------------------------------------------------------------------------------------------
-// Per-size render state
+// Per-size render state (typed arrays; the canvas is created on first draw so the layout code
+// also runs without a DOM, in tests)
 // ---------------------------------------------------------------------------------------------
 const INSTANCES = new Map();
 
-function getInstance(w, h) {
-  const key = `${w}x${h}`;
-  let rt = INSTANCES.get(key);
-  if (rt) return rt;
-  const canvas = document.createElement('canvas');
-  canvas.width = w; canvas.height = h;
-  const cctx = canvas.getContext('2d');
-  const img = cctx.createImageData(w, h);
+function makeState(w, h) {
   const half = ((w + 1) >> 1) * ((h + 1) >> 1);
-  rt = {
-    w, h, canvas, cctx, img, u32: new Uint32Array(img.data.buffer),
+  return {
+    w, h, canvas: null, cctx: null, img: null, u32: null,
     base: new Uint8Array(w * h), land: new Uint8Array(w * h), edge: new Uint8Array(w * h), bT: new Int16Array(half), bD: new Int16Array(half),
     cx0: new Int32Array(w), cx1: new Int32Array(w), cfx: new Float32Array(w),
     tx0: new Int32Array(w), tx1: new Int32Array(w), tfx: new Float32Array(w),
@@ -551,10 +731,28 @@ function getInstance(w, h) {
     ry0: new Int32Array(h), ry1: new Int32Array(h), rfy: new Float32Array(h),
     ty0: new Int32Array(h), ty1: new Int32Array(h), tfy: new Float32Array(h),
     rowLat: new Float64Array(h), rowSpace: new Uint8Array(h), grow: new Uint8Array(h), rowA: new Float32Array(h), rowB: new Float32Array(h),
-    lastClon: NaN, lastClat: NaN, lastS: NaN, lastKx: NaN, phase: NaN, minute: NaN, labelFor: null, context: null,
-    view: { clon: 0, clat: 0, s: 1, kx: 1, ax: -1, ay: -1, idle: true },
+    near: null, queue: null, // flood-fill scratch for the label keep-out (allocated on first label)
+    lastClon: NaN, lastClat: NaN, lastS: NaN, lastKx: NaN, phase: NaN, minute: NaN, acc: null, labelFor: null, context: null,
+    view: { clon: 0, clat: 0, s: 1, kx: 1, ax: -1, ay: -1, fx: -1, fy: -1, idle: true },
+    goal: { sig: NaN, n: -1, flat: 0, flon: 0, zoom: 1, fy: 0, kx: 1 },
+    trace: { lat: NaN, lon: NaN, t: -1e9 }, // the last target drawn (follow mode)
+    follow: { lat: NaN, lon: NaN, has: false, from: { lat: 0, lon: 0 } },
+    fromBuf: { lat: 0, lon: 0 },
   };
-  INSTANCES.set(key, rt);
+}
+
+function getInstance(w, h) {
+  const key = w * 4096 + h;
+  let rt = INSTANCES.get(key);
+  if (!rt) INSTANCES.set(key, (rt = makeState(w, h)));
+  if (!rt.canvas) {
+    rt.canvas = document.createElement('canvas');
+    rt.canvas.width = w;
+    rt.canvas.height = h;
+    rt.cctx = rt.canvas.getContext('2d');
+    rt.img = rt.cctx.createImageData(w, h);
+    rt.u32 = new Uint32Array(rt.img.data.buffer);
+  }
   return rt;
 }
 
@@ -590,9 +788,10 @@ function renderBase(rt, view) {
     tx0[x] = a0; tx1[x] = a0 + 1 >= TW ? 0 : a0 + 1;
   }
   for (let y = 0; y < h; y++) {
-    const lat = view.clat - (y + 0.5 - halfH) / sy;
+    // beyond a pole the polar row repeats (Arctic sea / Antarctic ice) instead of a black band
+    const raw = view.clat - (y + 0.5 - halfH) / sy;
+    const lat = raw > 89.99 ? 89.99 : raw < -89.99 ? -89.99 : raw;
     rowLat[y] = lat;
-    if (lat > 90 || lat < -90) { rowSpace[y] = 1; continue; }
     rowSpace[y] = 0;
     let b = ((90 - lat) / 180) * Hl - 0.5, b0 = Math.floor(b);
     rfy[y] = b - b0;
@@ -757,84 +956,68 @@ function drawBorders(rt, view, fade) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Pin sprite and ripples
+// Markers (drawn into the composed frame)
 // ---------------------------------------------------------------------------------------------
-function makePin(R, H) {
-  const w = 2 * R + 1;
-  const shape = new Uint8Array(w * H);
-  const cy = R, rr = (R + 0.45) * (R + 0.45);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < w; x++) {
-      const dx = x - R, dy = y - cy;
-      let inside = dx * dx + dy * dy <= rr;
-      if (!inside && y > cy) {
-        const k = (y - cy) / (H - 1 - cy);
-        inside = Math.abs(dx) <= (R + 0.45) * (1 - k) * (1 - 0.18 * k);
-      }
-      shape[y * w + x] = inside ? 1 : 0;
-    }
-  }
-  const px = new Uint32Array(w * H);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < w; x++) {
-      if (!shape[y * w + x]) continue;
-      const edge = !(x > 0 && shape[y * w + x - 1]) || !(x < w - 1 && shape[y * w + x + 1]) || !(y > 0 && shape[(y - 1) * w + x]) || !(y < H - 1 && shape[(y + 1) * w + x]);
-      const dx = x - R, dy = y - cy;
-      let c;
-      if (edge) c = RGB.black;
-      else if (dx * dx + dy * dy <= (R >= 5 ? (R * 0.42) * (R * 0.42) + 0.6 : 1)) c = RGB.white;
-      else if (-dx * 0.75 - dy * 0.75 > R * 0.78) c = RGB.pink;
-      else if (dx * 0.7 + dy * 0.45 > R * 0.55 || (y > cy + R * 0.7 && dx > 0)) c = RGB.darkRed;
-      else c = RGB.red;
-      px[y * w + x] = c;
-    }
-  }
-  return { w, h: H, px, tipX: R, tipY: H - 1 };
-}
-const PIN_FULL = makePin(5, 16);
-const PIN_MINI = makePin(3, 10);
-
 function plot(u32, w, h, x, y, c) {
   if (x >= 0 && x < w && y >= 0 && y < h) u32[y * w + x] = c;
 }
 
-/** Height of the pin above its spot (px): a gravity fall, one small hop, then still. */
-function pinLift(u, drop) {
-  if (u >= 1) return 0;
-  if (u < 0.62) {
-    const k = u / 0.62;
-    return drop * (1 - k * k);
+/** The accent's one-step-darker palette colour (for the fading previous marker). */
+const SHADE_OF = { [P.red]: P.darkRed, [P.yellow]: P.orange, [P.cyan]: P.blue, [P.magenta]: P.purple, [P.green]: P.darkGreen };
+const PACKED = new Map();
+const packed = (hex) => {
+  let v = PACKED.get(hex);
+  if (v === undefined) PACKED.set(hex, (v = pack(hex)));
+  return v;
+};
+
+/** A square marker: `hs` px from the centre to the edge of the accent core, then 1 px of black. */
+function square(rt, cx, cy, hs, c) {
+  const { u32, w, h } = rt;
+  for (let dy = -hs - 1; dy <= hs + 1; dy++) {
+    for (let dx = -hs - 1; dx <= hs + 1; dx++) {
+      const edge = dx === -hs - 1 || dx === hs + 1 || dy === -hs - 1 || dy === hs + 1;
+      plot(u32, w, h, cx + dx, cy + dy, edge ? RGB.black : c);
+    }
   }
-  if (u < 0.86) return 3 * Math.sin(((u - 0.62) / 0.24) * Math.PI);
-  return 0;
 }
 
-/** Two ripples from the landing spot, fading through palette steps (red, dark red, maroon), then none. */
-function drawRipples(rt, cx, cy, tl, mini) {
-  const { u32, w, h } = rt;
-  const rMax = mini ? 10 : 26;
-  for (let k = 0; k < 2; k++) {
-    const u = (tl - k * 0.42) / 0.95;
-    if (u <= 0 || u >= 1) continue;
-    const r = Math.round(3 + (rMax - 3) * easeOutQuint(u));
-    const c = u < 0.45 ? RGB.red : u < 0.75 ? RGB.darkRed : RGB.maroon;
+/**
+ * The place marker: planted, not dropped. It grows 1 px -> 3 px -> full in two frames as the camera
+ * settles, then one white 1 px ring expands from it once (white, silver, fog) and is gone.
+ */
+function drawMarker(rt, cx, cy, tm, acc, mini) {
+  const core = mini ? 1 : 2; // 3x3 on the wall, 5x5 full screen
+  const hs = tm < 0.035 ? 0 : tm < 0.07 ? Math.min(1, core) : core;
+  const u = tm / RING_DUR;
+  if (u > 0 && u < 1) {
+    const r = Math.round(core + 3 + ((mini ? 9 : 18) - core - 3) * easeOutQuint(u));
+    const c = u < 0.5 ? RGB.white : u < 0.8 ? RGB.silver : RGB.fog;
     const pts = ringPts(r);
+    const { u32, w, h } = rt;
     for (let q = 0; q < pts.length; q += 2) plot(u32, w, h, cx + pts[q], cy + pts[q + 1], c);
   }
+  square(rt, cx, cy, hs, packed(acc));
 }
 
-function drawPin(rt, cx, cy, lift, sprite, shadowK) {
-  const { u32, w, h } = rt;
-  // flat ground shadow, solid palette black, growing as the pin comes down
-  const rx = Math.round(sprite.w * 0.36 * shadowK);
-  if (rx >= 1) for (let dx = -rx; dx <= rx; dx++) plot(u32, w, h, cx + dx, cy + 1, RGB.black);
-  if (rx >= 3) for (let dx = -rx + 2; dx <= rx - 2; dx++) plot(u32, w, h, cx + dx, cy + 2, RGB.black);
-  const x0 = cx - sprite.tipX, y0 = Math.round(cy - sprite.tipY - lift);
-  for (let y = 0; y < sprite.h; y++) {
-    for (let x = 0; x < sprite.w; x++) {
-      const c = sprite.px[y * sprite.w + x];
-      if (c) plot(u32, w, h, x0 + x, y0 + y, c);
-    }
+/** The previous pin while the camera pans away from it: the accent, one step darker, then gone. */
+function drawOldMarker(rt, x, y, e, acc, mini) {
+  if (e >= 0.5) return;
+  square(rt, x, y, mini ? 1 : 2, packed(e < 0.25 ? acc : SHADE_OF[acc] || P.darkRed));
+}
+
+/** Extra places of a multi-pin story: smaller markers, planted one after another. */
+function drawExtraPins(rt, view, pins, tm, acc, mini) {
+  const n = Array.isArray(pins) ? pins.length : 0;
+  const sx = view.s * view.kx;
+  for (let i = 0; i < n; i++) {
+    if (tm < 0.12 + i * 0.1) continue;
+    const pl = Number(pins[i]?.lat), pn = Number(pins[i]?.lon);
+    if (!Number.isFinite(pl) || !Number.isFinite(pn)) continue;
+    let dl = pn - view.clon;
+    dl -= Math.round(dl / 360) * 360;
+    const px = Math.round(rt.w / 2 + dl * sx), py = Math.round(rt.h / 2 + (view.clat - pl) * view.s);
+    square(rt, px, py, mini ? 0 : 1, packed(acc));
   }
 }
 
@@ -875,64 +1058,112 @@ const COUNTRIES = [
 // ---------------------------------------------------------------------------------------------
 // Frame
 // ---------------------------------------------------------------------------------------------
-export function drawWorldMap(ctx, t, dt, { lat = null, lon = null, place = '', x = 0, y = 0, w = 384, h = 216, mini = false, label = true, now = null } = {}) {
+const ACCENTS = new Set([P.red, P.cyan, P.magenta, P.green, P.yellow]);
+
+/** Follow mode: a new target that starts right after another map frame pans from the old pin. */
+function followFrom(rt, t, dt, lat, lon) {
+  const F = rt.follow;
+  if (F.lat !== lat || F.lon !== lon) {
+    const tr = rt.trace;
+    F.lat = lat;
+    F.lon = lon;
+    F.has = dt < 0.3 && t - tr.t < 0.6 && t >= tr.t && (tr.lat !== lat || tr.lon !== lon) && Number.isFinite(tr.lat);
+    if (F.has) {
+      F.from.lat = tr.lat;
+      F.from.lon = tr.lon;
+    }
+  }
+  return F.has ? F.from : null;
+}
+
+export function drawWorldMap(ctx, t, dt, opts = {}) {
+  const o = opts || {};
+  const place = o.place ? String(o.place) : '';
+  const mini = !!o.mini;
+  const label = o.label !== false;
   ensureInit();
-  w = Math.max(8, Math.round(w)); h = Math.max(8, Math.round(h));
-  x = Math.round(x); y = Math.round(y);
+  const w = Math.max(8, Math.round(Number(o.w) || 384)), h = Math.max(8, Math.round(Number(o.h) || 216));
+  const x = Math.round(Number(o.x) || 0), y = Math.round(Number(o.y) || 0);
   t = Number.isFinite(t) ? t : 0;
   dt = Number.isFinite(dt) ? Math.max(0, dt) : 0;
-  lat = lat === null || lat === undefined || lat === '' ? NaN : Number(lat);
-  lon = lon === null || lon === undefined || lon === '' ? NaN : Number(lon);
+  let lat = o.lat === null || o.lat === undefined || o.lat === '' ? NaN : Number(o.lat);
+  const lon = o.lon === null || o.lon === undefined || o.lon === '' ? NaN : Number(o.lon);
   const hasTarget = Number.isFinite(lat) && Number.isFinite(lon);
+  if (hasTarget) lat = clamp(lat, -89.9, 89.9);
   const rt = getInstance(w, h);
-  const view = computeView(rt.view, w, h, mini, t, dt, hasTarget ? clamp(lat, -89.9, 89.9) : null, hasTarget ? lon : null);
+  const T = timingFor(o.programId, Number(o.duration));
+  const acc = ACCENTS.has(o.accent) ? o.accent : P.red;
+  const pins = hasTarget && Array.isArray(o.pins) && o.pins.length ? o.pins : null;
+
+  // where the move starts: an explicit previous pin, the previous map shot (follow), or the world
+  let from = null;
+  if (hasTarget) {
+    const f = o.from;
+    if (f && Number.isFinite(Number(f.lat)) && Number.isFinite(Number(f.lon))) {
+      rt.fromBuf.lat = clamp(Number(f.lat), -89.9, 89.9);
+      rt.fromBuf.lon = Number(f.lon);
+      from = rt.fromBuf;
+    } else if (o.follow) from = followFrom(rt, t, dt, lat, lon);
+    rt.trace.lat = lat;
+    rt.trace.lon = lon;
+    rt.trace.t = t;
+  }
+  const G = hasTarget ? goalFor(rt, mini, lat, lon, pins) : null;
+  const view = computeView(rt.view, rt, mini, t, dt, hasTarget ? lat : null, hasTarget ? lon : null, G, T, from);
   const viewChanged = view.clon !== rt.lastClon || view.clat !== rt.lastClat || view.s !== rt.lastS || view.kx !== rt.lastKx;
   if (viewChanged) {
     renderBase(rt, view);
     rt.lastClon = view.clon; rt.lastClat = view.clat; rt.lastS = view.s; rt.lastKx = view.kx;
   }
 
-  // the composed picture only changes with the view, the minute (terminator) or the pin animation
-  const ms = Number.isFinite(now) ? now : nowMs();
-  const tp = dt - PIN_T;
-  // phase: -1 idle, frame numbers while flying / dropping, a fixed value once at rest
-  const phase = view.idle ? -1 : tp < 0 ? Math.round(dt * 60) : tp < PIN_DROP + 1.4 ? 1000 + Math.round(tp * 60) : 9999;
-  const minute = Math.floor(ms / 60000);
+  // the composed picture only changes with the view, the minute (idle terminator) or the marker animation
+  const move = from ? T.pan : T.fly;
+  const tm = dt - (move + T.mark); // time since the marker was planted
+  const phase = view.idle ? -1 : tm < 0 ? Math.round(dt * 60) : tm < RING_DUR + 0.05 ? 1000 + Math.round(tm * 60) : 9999;
+  const ms = Number.isFinite(o.now) ? o.now : nowMs();
+  const minute = view.idle ? Math.floor(ms / 60000) : -1;
   const cx = Math.round(view.ax), cy = Math.round(view.ay);
-  if (viewChanged || phase !== rt.phase || minute !== rt.minute) {
+  const sig = G ? G.sig : 0;
+  if (viewChanged || phase !== rt.phase || minute !== rt.minute || rt.acc !== acc || rt.sig !== sig) {
     rt.phase = phase;
     rt.minute = minute;
-    composeFrame(rt, view, ms, mini);
+    rt.acc = acc;
+    rt.sig = sig;
+    composeFrame(rt, view, ms, mini, view.idle);
     if (view.idle) drawIdleMarker(rt, view, mini);
-    else if (tp < 0) drawReticle(rt, cx, cy, dt, mini);
     else {
-      const sprite = mini ? PIN_MINI : PIN_FULL;
-      const u = tp / PIN_DROP;
-      const lift = pinLift(u, (mini ? 12 : 20) + view.ay);
-      if (u > 0.62) drawRipples(rt, cx, cy, tp - PIN_DROP * 0.62, mini);
-      drawPin(rt, cx, cy, lift, sprite, u >= 1 ? 1 : clamp(u / 0.62, 0.3, 1));
+      if (from) drawOldMarker(rt, Math.round(view.fx), Math.round(view.fy), dt / T.pan, acc, mini);
+      if (tm < 0) {
+        if (!from) drawReticle(rt, cx, cy, dt / T.fly, mini);
+      } else {
+        drawExtraPins(rt, view, pins, tm, acc, mini);
+        drawMarker(rt, cx, cy, tm, acc, mini);
+      }
     }
     rt.cctx.putImageData(rt.img, 0, 0);
   }
   ctx.drawImage(rt.canvas, x, y);
 
-  if (view.idle || tp < 0 || !place) return;
+  if (view.idle || tm < 0) return;
+  if (pins && !mini) drawPinTags(ctx, x, y, rt, view, pins, tm);
+  if (!place) return;
   if (mini) {
-    if (label) drawMiniTag(ctx, x, y, w, h, place, tp - PIN_DROP);
+    if (label) drawMiniTag(ctx, x, y, w, place, tm - 0.1, acc);
     return;
   }
   if (!label) return;
-  const pin = rt.pin || (rt.pin = { cx: 0, cy: 0, head: 0 });
-  pin.cx = cx;
-  pin.cy = cy;
-  pin.head = cy - PIN_FULL.tipY + PIN_FULL.w / 2;
-  const box = drawLabel(rt, ctx, x, y, w, h, pin, place, lat, lon, dt);
-  if (box && dt >= CONTEXT_T) drawContext(rt, ctx, x, y, w, h, view, pin, box, place, dt);
+  const box = drawLabel(rt, ctx, x, y, cx, cy, place, lat, lon, tm - T.label, acc);
+  if (box && tm >= T.context) drawContext(rt, ctx, x, y, view, cx, cy, box, place, tm - T.context, pins);
 }
 
-/** Palette lookup of the base layer with the day/night terminator (Bayer 4x4) and city lights. */
-function composeFrame(rt, view, ms, mini) {
+/** Palette lookup of the base layer; the idle view adds the day/night terminator (Bayer 4x4) and city lights. */
+function composeFrame(rt, view, ms, mini, night) {
   const { u32, base, colLon, colC, rowLat, rowA, rowB, w, h } = rt;
+  const n = w * h;
+  if (!night) {
+    for (let i = 0; i < n; i++) u32[i] = PAL[base[i]];
+    return;
+  }
   const sun = sunPosition(ms);
   const sinD = Math.sin(sun.dec), cosD = Math.cos(sun.dec);
   for (let xx = 0; xx < w; xx++) colC[xx] = Math.cos((colLon[xx] - sun.lon) * DEG);
@@ -979,15 +1210,16 @@ function drawIdleMarker(rt, view, mini) {
   for (let yy = -s; yy <= s; yy++) for (let xx = -s; xx <= s; xx++) plot(u32, w, h, px + xx, py + yy, Math.abs(xx) === s || Math.abs(yy) === s ? RGB.black : RGB.red);
 }
 
-/** While flying: four ticks close in on the target (steady, never blinking). */
-function drawReticle(rt, cx, cy, dt, mini) {
+/** While flying: four fog ticks close in on the target (steady, never blinking). */
+function drawReticle(rt, cx, cy, f, mini) {
   const { u32, w, h } = rt;
-  const k = easeOutQuint(clamp(dt / FLY_T, 0, 1));
+  const k = easeOutQuint(clamp(f, 0, 1));
   const d = Math.round((mini ? 8 : 16) - (mini ? 5 : 11) * k);
   const len = mini ? 2 : 3;
+  const c = RGB.fog;
   for (let q = 0; q < len; q++) {
-    plot(u32, w, h, cx - d - q, cy, RGB.white); plot(u32, w, h, cx + d + q, cy, RGB.white);
-    plot(u32, w, h, cx, cy - d - q, RGB.white); plot(u32, w, h, cx, cy + d + q, RGB.white);
+    plot(u32, w, h, cx - d - q, cy, c); plot(u32, w, h, cx + d + q, cy, c);
+    plot(u32, w, h, cx, cy - d - q, c); plot(u32, w, h, cx, cy + d + q, c);
   }
 }
 
@@ -995,7 +1227,7 @@ function coordText(lat, lon) {
   return `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? 'N' : 'S'}  ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? 'E' : 'W'}`;
 }
 
-/** Place label layout (cached per place): name at 2x in up to two lines, coordinates in micro type. */
+/** Place label layout (cached per place): name at 2x in up to two lines, an accent rule, coordinates in micro. */
 function labelLayout(place, lat, lon) {
   return cached(`label|${place}|${lat.toFixed(2)}|${lon.toFixed(2)}`, () => {
     let scale = 2;
@@ -1005,69 +1237,179 @@ function labelLayout(place, lat, lon) {
       lines = wrapLines(place, 150, 1, 3);
     }
     const coords = coordText(lat, lon);
-    let tw = measureText(coords, 1, 'micro');
-    for (const l of lines) tw = Math.max(tw, measureText(l, scale));
+    let nameW = 0;
+    for (const l of lines) nameW = Math.max(nameW, measureText(l, scale));
+    const tw = Math.max(nameW, measureText(coords, 1, 'micro'));
     const lineH = 7 * scale;
     const gap = scale === 2 ? 4 : 3;
-    const bw = tw + 17;
-    const bh = 6 + lines.length * lineH + (lines.length - 1) * gap + 5 + 5 + 6;
-    return { scale, lines, coords, bw, bh, lineH, gap };
+    const bw = tw + 14;
+    const nameH = lines.length * lineH + (lines.length - 1) * gap;
+    const bh = 6 + nameH + 3 + 1 + 3 + 5 + 5;
+    return { scale, lines, coords, bw, bh, lineH, gap, nameW, nameH };
   });
 }
 
+// ---------------------------------------------------------------------------------------------
+// Label placement. The target's own coastline (the land connected to the marker within 40 px,
+// found by a flood fill) is a keep-out area weighted far above any other land, so a label never
+// hides the island it names; then the plate prefers the side, then the height, that hides least.
+// ---------------------------------------------------------------------------------------------
+const NEAR_R = 40;
+function nearLand(rt, cx, cy) {
+  const { w, h, land } = rt;
+  if (!rt.near) {
+    rt.near = new Uint8Array(w * h);
+    rt.queue = new Int32Array(w * h);
+  }
+  const near = rt.near, q = rt.queue;
+  near.fill(0);
+  // start from the closest land pixel within 4 px (a coastal city may sit on the sea side)
+  let start = -1, best = 99;
+  for (let dy = -4; dy <= 4; dy++) {
+    for (let dx = -4; dx <= 4; dx++) {
+      const x = cx + dx, y = cy + dy;
+      if (x < 0 || y < 0 || x >= w || y >= h || land[y * w + x] !== 1) continue;
+      const d = dx * dx + dy * dy;
+      if (d < best) { best = d; start = y * w + x; }
+    }
+  }
+  if (start < 0) return 0;
+  let head = 0, tail = 0, count = 0;
+  q[tail++] = start;
+  near[start] = 1;
+  const x0 = cx - NEAR_R, x1 = cx + NEAR_R, y0 = cy - NEAR_R, y1 = cy + NEAR_R;
+  while (head < tail) {
+    const i = q[head++];
+    count++;
+    const x = i % w, y = (i / w) | 0;
+    if (x > 0 && x - 1 >= x0 && !near[i - 1] && land[i - 1] === 1) { near[i - 1] = 1; q[tail++] = i - 1; }
+    if (x < w - 1 && x + 1 <= x1 && !near[i + 1] && land[i + 1] === 1) { near[i + 1] = 1; q[tail++] = i + 1; }
+    if (y > 0 && y - 1 >= y0 && !near[i - w] && land[i - w] === 1) { near[i - w] = 1; q[tail++] = i - w; }
+    if (y < h - 1 && y + 1 <= y1 && !near[i + w] && land[i + w] === 1) { near[i + w] = 1; q[tail++] = i + w; }
+  }
+  return count;
+}
+
+/** Near-land and other-land pixels under a box (near counted exactly, other land sampled every 2 px). */
+function coverage(rt, bx, by, bw, bh, out) {
+  const { w, h, land, near } = rt;
+  let nearN = 0, landN = 0, n = 0;
+  const xa = Math.max(0, bx), xb = Math.min(w, bx + bw), ya = Math.max(0, by), yb = Math.min(h, by + bh);
+  for (let y = ya; y < yb; y++) {
+    const row = y * w;
+    for (let x = xa; x < xb; x++) {
+      if (near && near[row + x]) nearN++;
+      if (((x | y) & 1) === 0) {
+        n++;
+        if (land[row + x] === 1) landN++;
+      }
+    }
+  }
+  out.near = nearN;
+  out.land = n ? landN / n : 1;
+  return out;
+}
+const COV = { near: 0, land: 0 };
+
 /**
- * The place label: a black plate with a red bar on the pin side, the name at 2x and the
- * coordinates under it, joined to the pin by a 1 px leader. It wipes out from the pin, then the
- * text rises in. Kept in y 26..138 (the top row and the captions own the rest).
+ * Best plate position for a marker at (cx, cy): right or left of it, level with it or raised /
+ * lowered, kept in y 26..134 (the top row and the captions own the rest). Returns { x, y, right, near }.
  */
-function drawLabel(rt, ctx, ox, oy, w, h, pin, place, lat, lon, dt) {
-  const tl = dt - LABEL_T;
+export function placeLabel(rt, cx, cy, bw, bh, out = { x: 0, y: 0, right: true, near: 0 }) {
+  const { w } = rt;
+  nearLand(rt, cx, cy);
+  let bestCost = Infinity;
+  const lift = (bh >> 1) + 10;
+  const offsets = [0, -lift, lift, -2 * lift, 2 * lift];
+  for (let side = 0; side < 2; side++) {
+    const right = side === 0;
+    for (let k = 0; k < offsets.length; k++) {
+      let bx = right ? cx + 10 : cx - 10 - bw;
+      if (bx < 13 || bx + bw > w - 13) continue;
+      const by = clamp(Math.round(cy - bh / 2 + offsets[k]), 26, 134 - bh);
+      // never over the marker or its ring
+      if (bx < cx + 8 && bx + bw > cx - 8 && by < cy + 8 && by + bh > cy - 8) continue;
+      coverage(rt, bx, by, bw, bh, COV);
+      const cost = COV.near * 40 + COV.land * 30 + Math.abs(by - (cy - bh / 2)) * 0.12 + (right ? 0 : 1.5);
+      if (cost < bestCost) {
+        bestCost = cost;
+        out.x = bx;
+        out.y = by;
+        out.right = right;
+        out.near = COV.near;
+      }
+    }
+  }
+  if (bestCost === Infinity) {
+    // nothing fits beside the marker: the side with more room, level with it
+    out.right = cx < w / 2;
+    out.x = clamp(out.right ? cx + 10 : cx - 10 - bw, 13, w - 13 - bw);
+    out.y = clamp(Math.round(cy - bh / 2), 26, 134 - bh);
+    out.near = 0;
+  }
+  return out;
+}
+
+/**
+ * The place label: an ink plate beside the marker, the name at 2x with an accent rule under it
+ * and the coordinates in micro type, joined to the marker by a 1 px silver leader. It wipes out
+ * from the marker side, then the text rises in.
+ */
+function drawLabel(rt, ctx, ox, oy, cx, cy, place, lat, lon, tl, acc) {
   if (tl < 0) return null;
   let L = rt.labelFor;
-  if (!L || L.place !== place || L.lat !== lat || L.lon !== lon) {
-    L = { ...labelLayout(place, lat, lon), place, lat, lon, box: { x: 0, y: 0, w: 0, h: 0 } };
+  if (!L || L.place !== place || L.lat !== lat || L.lon !== lon || L.cx !== cx || L.cy !== cy) {
+    L = { ...labelLayout(place, lat, lon), place, lat, lon, cx, cy, box: { x: 0, y: 0, w: 0, h: 0 }, pos: null };
+    L.pos = placeLabel(rt, cx, cy, L.bw, L.bh);
     rt.labelFor = L;
   }
-  const gap = 14;
-  const by = clamp(Math.round(pin.head - L.bh / 2), 26, Math.max(26, 138 - L.bh));
-  // the label goes on the side where it hides less land (right on a tie), decided once per place
-  if (L.right === undefined) {
-    const fitsR = pin.cx + gap + L.bw <= w - 13;
-    const fitsL = pin.cx - gap - L.bw >= 13;
-    const landR = fitsR ? landUnder(rt, pin.cx + gap, by, L.bw, L.bh) : 2;
-    const landL = fitsL ? landUnder(rt, pin.cx - gap - L.bw, by, L.bw, L.bh) : 2;
-    L.right = landR <= landL + 0.08;
-  }
-  const right = L.right;
-  let bx = right ? pin.cx + gap : pin.cx - gap - L.bw;
-  bx = clamp(bx, 13, w - 13 - L.bw);
+  const { x: bx, y: by, right } = L.pos;
   const e = easeOutQuint(clamp(tl / 0.36, 0, 1));
-  const vis = Math.max(1, Math.round((L.bw + gap) * e));
-  ctx.save();
-  ctx.beginPath();
-  if (right) ctx.rect(ox + pin.cx + 6, oy + by - 1, vis, L.bh + 2);
-  else ctx.rect(ox + pin.cx - 6 - vis, oy + by - 1, vis, L.bh + 2);
-  ctx.clip();
-  // leader from the pin head to the plate
-  const ly = clamp(Math.round(pin.head), by + 3, by + L.bh - 4);
-  ctx.fillStyle = P.white;
-  if (right) ctx.fillRect(ox + pin.cx + 6, oy + ly, bx - pin.cx - 6, 1);
-  else ctx.fillRect(ox + bx + L.bw, oy + ly, pin.cx - 6 - (bx + L.bw), 1);
-  ctx.fillStyle = P.black;
-  ctx.fillRect(ox + bx, oy + by, L.bw, L.bh);
-  ctx.fillStyle = P.slate;
-  ctx.fillRect(ox + bx, oy + by, L.bw, 1);
-  ctx.fillStyle = P.red;
-  ctx.fillRect(ox + (right ? bx : bx + L.bw - 3), oy + by, 3, L.bh);
-  ctx.restore();
-  // text rises in once the plate is out
-  const tx = ox + bx + (right ? 9 : 7);
-  let cy = oy + by + 6;
-  for (let i = 0; i < L.lines.length; i++) {
-    riseIn(ctx, L.lines[i], tx, cy, seg(tl, 0.16 + i * 0.06, 0.3), L.scale, 'body', P.white, ox + bx, L.bw);
-    cy += L.lineH + L.gap;
+  // leader: level with the marker when the plate is beside it, else an elbow up or down to it
+  const ly = clamp(cy, by + 3, by + L.bh - 4);
+  const near = right ? bx : bx + L.bw;
+  const start = right ? cx + 4 : cx - 4;
+  const lead = Math.min(1, e * 3);
+  ctx.fillStyle = P.silver;
+  if (ly === cy) {
+    const len = Math.round(Math.abs(near - start) * lead);
+    if (len > 0) ctx.fillRect(ox + (right ? start : start - len + 1), oy + cy, len, 1);
+  } else {
+    const up = ly < cy;
+    const vlen = Math.round((Math.abs(ly - cy) - 3) * lead);
+    if (vlen > 0) ctx.fillRect(ox + cx, oy + (up ? cy - 3 - vlen : cy + 4), 1, vlen);
+    if (lead >= 1) {
+      const hl = Math.abs(near - cx);
+      ctx.fillRect(ox + (right ? cx : near), oy + ly, hl, 1);
+    }
   }
-  riseIn(ctx, L.coords, tx, cy - L.gap + 5, seg(tl, 0.3, 0.3), 1, 'micro', P.fog, ox + bx, L.bw);
+  const vis = Math.round(L.bw * e);
+  if (vis > 0) {
+    ctx.save();
+    try {
+      ctx.beginPath();
+      ctx.rect(ox + (right ? bx : bx + L.bw - vis), oy + by, vis, L.bh);
+      ctx.clip();
+      ctx.fillStyle = P.ink;
+      ctx.fillRect(ox + bx, oy + by, L.bw, L.bh);
+      ctx.fillStyle = P.slate;
+      ctx.fillRect(ox + bx, oy + by, L.bw, 1);
+      // the accent rule under the name (WORLD NOW's signature device, in each programme's accent)
+      const ry = oy + by + 6 + L.nameH + 3;
+      ctx.fillStyle = acc;
+      ctx.fillRect(ox + bx + 7, ry, Math.round(L.nameW * clamp((tl - 0.12) / 0.3, 0, 1)), 1);
+    } finally {
+      ctx.restore();
+    }
+  }
+  // text rises in once the plate is out
+  const tx = ox + bx + 7;
+  let ty = oy + by + 6;
+  for (let i = 0; i < L.lines.length; i++) {
+    riseIn(ctx, L.lines[i], tx, ty, seg(tl, 0.16 + i * 0.06, 0.3), L.scale, 'body', P.white, ox + bx, L.bw);
+    ty += L.lineH + L.gap;
+  }
+  riseIn(ctx, L.coords, tx, oy + by + 6 + L.nameH + 7, seg(tl, 0.3, 0.3), 1, 'micro', P.fog, ox + bx, L.bw);
   const box = L.box;
   box.x = bx;
   box.y = by;
@@ -1076,83 +1418,112 @@ function drawLabel(rt, ctx, ox, oy, w, h, pin, place, lat, lon, dt) {
   return box;
 }
 
-/** Fraction of land pixels under a rectangle of the current view. */
-function landUnder(rt, x0, y0, bw, bh) {
-  let n = 0, l = 0;
-  for (let y = Math.max(0, y0); y < Math.min(rt.h, y0 + bh); y += 2) {
-    for (let x = Math.max(0, x0); x < Math.min(rt.w, x0 + bw); x += 2) {
-      n++;
-      if (rt.land[y * rt.w + x] === 1) l++;
-    }
-  }
-  return n ? l / n : 1;
-}
-
 function riseIn(ctx, text, x, y, p, scale, font, color, clipX, clipW) {
   if (p <= 0) return;
   const cap = font === 'micro' ? 5 : 7 * scale;
   const off = Math.round((1 - easeOutQuint(p)) * (cap + 2));
   ctx.save();
-  ctx.beginPath();
-  ctx.rect(clipX, y - 2 * scale, clipW, cap + 2 * scale + 1);
-  ctx.clip();
-  drawText(ctx, text, x, y + off, { color, scale, font });
-  ctx.restore();
+  try {
+    ctx.beginPath();
+    ctx.rect(clipX, y - 2 * scale, clipW, cap + 2 * scale + 1);
+    ctx.clip();
+    drawText(ctx, text, x, y + off, font === 'micro' ? (color === P.fog ? MICRO_FOG : { color, font }) : scale === 2 ? BODY2_WHITE : BODY1_WHITE);
+  } finally {
+    ctx.restore();
+  }
+}
+const MICRO_FOG = { color: P.fog, font: 'micro' };
+const BODY2_WHITE = { color: P.white, scale: 2 };
+const BODY1_WHITE = { color: P.white, scale: 1 };
+
+/** Micro place tags beside the extra pins of a multi-place story (only where they fit). */
+function drawPinTags(ctx, ox, oy, rt, view, pins, tm) {
+  const sx = view.s * view.kx;
+  for (let i = 0; i < pins.length; i++) {
+    const tp = tm - 0.2 - i * 0.1;
+    if (tp < 0) continue;
+    const pl = Number(pins[i]?.lat), pn = Number(pins[i]?.lon);
+    const name = pins[i]?.place ? String(pins[i].place) : '';
+    if (!name || !Number.isFinite(pl) || !Number.isFinite(pn)) continue;
+    let dl = pn - view.clon;
+    dl -= Math.round(dl / 360) * 360;
+    const px = Math.round(rt.w / 2 + dl * sx), py = Math.round(rt.h / 2 + (view.clat - pl) * view.s);
+    const text = ellipsis(name, 90, 1);
+    const tw = textW(text, 1);
+    let tx = px + 5;
+    if (tx + tw > rt.w - 13) tx = px - 5 - tw;
+    if (py - 2 < 26 || py + 6 > 134 || tx < 13) continue;
+    const off = Math.round((1 - easeOutQuint(clamp(tp / 0.3, 0, 1))) * 4);
+    ctx.save();
+    try {
+      ctx.beginPath();
+      ctx.rect(ox + tx - 1, oy + py - 3, tw + 3, 9);
+      ctx.clip();
+      drawText(ctx, text, ox + tx, oy + py - 2 + off, NAME_LIGHT);
+    } finally {
+      ctx.restore();
+    }
+  }
 }
 
 /**
  * Up to five neighbouring country names in micro type, placed where they do not collide with
- * the pin, the label or each other; computed once the camera has settled, then cached.
+ * the marker, the label, the extra pins or each other; computed once the camera has settled.
  */
-function contextLabels(rtU32, w, h, view, pin, box, place) {
-  {
-    const sx = view.s * view.kx, sy = view.s;
-    const up = String(place || '').toUpperCase();
-    const cand = [];
-    for (const [name, la, lo] of COUNTRIES) {
-      if (up.includes(name)) continue;
-      let dl = lo - view.clon;
-      dl -= Math.round(dl / 360) * 360;
-      const px = Math.round(dl * sx + w / 2), py = Math.round((view.clat - la) * sy + h / 2);
-      const tw = measureText(name, 1, 'micro');
-      const r = { x: px - (tw >> 1) - 1, y: py - 3, w: tw + 3, h: 8, name, d: Math.hypot(px - pin.cx, py - pin.cy), dark: false };
-      if (r.x < 13 || r.x + r.w > w - 13 || r.y < 28 || r.y + r.h > 138) continue;
-      if (r.d < 22) continue;
-      cand.push(r);
-    }
-    cand.sort((a, b) => a.d - b.d);
-    const placed = [];
-    const hit = (a, b, m = 3) => a.x < b.x + b.w + m && b.x < a.x + a.w + m && a.y < b.y + b.h + m && b.y < a.y + a.h + m;
-    const keepOut = [box, { x: pin.cx - 8, y: pin.cy - 20, w: 16, h: 24 }];
-    for (const r of cand) {
-      if (placed.length >= 5) break;
-      if (keepOut.some((k) => hit(r, k, 4)) || placed.some((p) => hit(r, p))) continue;
-      placed.push(r);
-    }
-    // on light land (dry land, ice) the names are black; elsewhere silver with a black shadow
-    for (const r of placed) {
-      let lum = 0, n = 0;
-      for (let yy = r.y; yy < r.y + r.h; yy += 2) {
-        for (let xx = r.x; xx < r.x + r.w; xx += 2) {
-          if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
-          const c = rtU32[yy * w + xx];
-          lum += (c & 255) * 0.3 + ((c >> 8) & 255) * 0.59 + ((c >> 16) & 255) * 0.11;
-          n++;
-        }
-      }
-      r.dark = n > 0 && lum / n > 120;
-    }
-    return placed;
+function contextLabels(rtU32, w, h, view, cx, cy, box, place, pins) {
+  const sx = view.s * view.kx, sy = view.s;
+  const up = String(place || '').toUpperCase();
+  const cand = [];
+  for (const [name, la, lo] of COUNTRIES) {
+    if (up.includes(name)) continue;
+    let dl = lo - view.clon;
+    dl -= Math.round(dl / 360) * 360;
+    const px = Math.round(dl * sx + w / 2), py = Math.round((view.clat - la) * sy + h / 2);
+    const tw = measureText(name, 1, 'micro');
+    const r = { x: px - (tw >> 1) - 1, y: py - 3, w: tw + 3, h: 8, name, d: Math.hypot(px - cx, py - cy), dark: false };
+    if (r.x < 13 || r.x + r.w > w - 13 || r.y < 28 || r.y + r.h > 134) continue;
+    if (r.d < 22) continue;
+    cand.push(r);
   }
+  cand.sort((a, b) => a.d - b.d);
+  const placed = [];
+  const hit = (a, b, m = 3) => a.x < b.x + b.w + m && b.x < a.x + a.w + m && a.y < b.y + b.h + m && b.y < a.y + a.h + m;
+  const keepOut = [box, { x: cx - 8, y: cy - 8, w: 16, h: 16 }];
+  if (pins) {
+    for (const p of pins) {
+      let dl = Number(p?.lon) - view.clon;
+      dl -= Math.round(dl / 360) * 360;
+      const px = Math.round(dl * sx + w / 2), py = Math.round((view.clat - Number(p?.lat)) * sy + h / 2);
+      if (Number.isFinite(px) && Number.isFinite(py)) keepOut.push({ x: px - 6, y: py - 5, w: 100, h: 11 });
+    }
+  }
+  for (const r of cand) {
+    if (placed.length >= 5) break;
+    if (keepOut.some((k) => hit(r, k, 4)) || placed.some((p) => hit(r, p))) continue;
+    placed.push(r);
+  }
+  // on light land (dry land, ice) the names are black; elsewhere silver with a black shadow
+  for (const r of placed) {
+    let lum = 0, n = 0;
+    for (let yy = r.y; yy < r.y + r.h; yy += 2) {
+      for (let xx = r.x; xx < r.x + r.w; xx += 2) {
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+        const c = rtU32[yy * w + xx];
+        lum += (c & 255) * 0.3 + ((c >> 8) & 255) * 0.59 + ((c >> 16) & 255) * 0.11;
+        n++;
+      }
+    }
+    r.dark = n > 0 && lum / n > 120;
+  }
+  return placed;
 }
 
-function drawContext(rt, ctx, ox, oy, w, h, view, pin, box, place, dt) {
-  const tc = dt - CONTEXT_T;
+function drawContext(rt, ctx, ox, oy, view, cx, cy, box, place, tc, pins) {
   if (tc < 0) return;
-  // computed once per place when the camera has settled (it no longer moves after FLY_T)
+  // computed once per place when the camera has settled
   let C = rt.context;
   if (!C || C.place !== place || C.clon !== view.clon || C.clat !== view.clat || C.s !== view.s) {
-    C = { place, clon: view.clon, clat: view.clat, s: view.s, list: contextLabels(rt.u32, w, h, view, pin, box, place) };
+    C = { place, clon: view.clon, clat: view.clat, s: view.s, list: contextLabels(rt.u32, rt.w, rt.h, view, cx, cy, box, place, pins) };
     rt.context = C;
   }
   const list = C.list;
@@ -1162,21 +1533,24 @@ function drawContext(rt, ctx, ox, oy, w, h, view, pin, box, place, dt) {
     if (p <= 0) continue;
     const off = Math.round((1 - easeOutQuint(p)) * 6);
     ctx.save();
-    ctx.beginPath();
-    ctx.rect(ox + r.x - 1, oy + r.y - 1, r.w + 2, r.h + 1);
-    ctx.clip();
-    drawText(ctx, r.name, ox + r.x + 1, oy + r.y + 1 + off, r.dark ? NAME_DARK : NAME_LIGHT);
-    ctx.restore();
+    try {
+      ctx.beginPath();
+      ctx.rect(ox + r.x - 1, oy + r.y - 1, r.w + 2, r.h + 1);
+      ctx.clip();
+      drawText(ctx, r.name, ox + r.x + 1, oy + r.y + 1 + off, r.dark ? NAME_DARK : NAME_LIGHT);
+    } finally {
+      ctx.restore();
+    }
   }
 }
 const NAME_DARK = { color: P.black, font: 'micro' };
 const NAME_LIGHT = { color: P.silver, font: 'micro', shadow: P.black };
 
 /**
- * Mini (video wall) locator: the place in micro type on a black tab along the top edge (the wall's
- * bottom rows stay clear because a solo presenter's head overlaps them).
+ * Mini (video wall) locator: the place in micro type on a black tab along the top edge with an
+ * accent bar (the wall's bottom rows stay clear because a solo presenter's head overlaps them).
  */
-function drawMiniTag(ctx, ox, oy, w, h, place, tl) {
+function drawMiniTag(ctx, ox, oy, w, place, tl, acc) {
   if (tl < 0) return;
   const text = ellipsis(place, w - 10, 1);
   const tw = measureText(text, 1, 'micro') + 8;
@@ -1185,12 +1559,38 @@ function drawMiniTag(ctx, ox, oy, w, h, place, tl) {
   if (vis <= 0) return;
   ctx.fillStyle = P.black;
   ctx.fillRect(ox, oy, vis, 9);
-  ctx.fillStyle = P.red;
+  ctx.fillStyle = acc;
   ctx.fillRect(ox, oy, 2, 9);
   ctx.save();
-  ctx.beginPath();
-  ctx.rect(ox, oy, vis, 9);
-  ctx.clip();
-  drawText(ctx, text, ox + 5, oy + 2, { color: P.white, font: 'micro' });
-  ctx.restore();
+  try {
+    ctx.beginPath();
+    ctx.rect(ox, oy, vis, 9);
+    ctx.clip();
+    drawText(ctx, text, ox + 5, oy + 2, MINI_TAG);
+  } finally {
+    ctx.restore();
+  }
 }
+const MINI_TAG = { color: P.white, font: 'micro' };
+
+// ---------------------------------------------------------------------------------------------
+// Test hooks (no DOM needed): the end view of a target and where its label would go.
+// ---------------------------------------------------------------------------------------------
+export const __test = {
+  /** Label placement for a full-screen locator of (lat, lon): { box, near, nearTotal, cx, cy }. */
+  labelFor(place, lat, lon, programId = 'world-now') {
+    ensureInit();
+    const rt = makeState(384, 216);
+    const T = timingFor(programId);
+    const G = goalFor(rt, false, lat, lon, null);
+    const view = computeView(rt.view, rt, false, 0, 10, lat, lon, G, T, null);
+    renderBase(rt, view);
+    const L = labelLayout(place, lat, lon);
+    const cx = Math.round(view.ax), cy = Math.round(view.ay);
+    const pos = placeLabel(rt, cx, cy, L.bw, L.bh);
+    let nearTotal = 0;
+    for (let i = 0; i < rt.near.length; i++) nearTotal += rt.near[i];
+    return { box: { x: pos.x, y: pos.y, w: L.bw, h: L.bh }, near: pos.near, nearTotal, cx, cy, landAt: (x, y) => rt.land[y * rt.w + x] };
+  },
+  timingFor,
+};

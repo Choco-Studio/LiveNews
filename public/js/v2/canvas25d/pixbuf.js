@@ -51,7 +51,9 @@ export class Frame {
   constructor(w = W, h = H) {
     this.w = w;
     this.h = h;
-    this.image = new ImageData(w, h);
+    // Outside a browser (node tests: silhouettes, light values, timings) there is
+    // no ImageData; a plain RGBA buffer gives the same pixels, only present() needs a canvas.
+    this.image = typeof ImageData === 'function' ? new ImageData(w, h) : { width: w, height: h, data: new Uint8ClampedArray(w * h * 4) };
     this.px = new Uint32Array(this.image.data.buffer);
   }
 

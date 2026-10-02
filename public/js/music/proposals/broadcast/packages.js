@@ -12,6 +12,7 @@
 // r(oot) 5 8(octave) 3(rd) a(pproach to the next chord).
 
 import { COLOURS } from './theory.js';
+import { themeFor } from '../../../audio/themes.js';
 
 // ------------------------------------------------------------ layer helpers
 
@@ -82,7 +83,7 @@ const WORLD = {
       },
       layers: [
         pad({ level: -12, cut: 560, cutTo: 820, a: 1.6, r: 2.6 }),
-        bass({ pattern: [[0, 3.8, 'r', 0.75]], a: 0.08, r: 0.5, level: -12 }),
+        bass({ pattern: [[0, 4.5, 'r', 0.75]], a: 0.08, r: 0.5, level: -12 }),
         osti({ pedal: false, rate: 2, base: 45, variants: [
           { notes: [0, 7, 12, 7, 0, 7, 12, 7], acc: '53435343' },
           { notes: [0, 12, 7, 12, 0, 12, 14, 12], acc: '53435344' },
@@ -251,11 +252,11 @@ const COSMOS = {
       form: 'ABAC',
       layers: [
         pad({ no7: true, wave: 'soft', level: -12, cut: 600, cutTo: 1900, a: 1.4, r: 3, n: 5, lo: 52, hi: 76, detune: 9 }),
-        bass({ wave: 'sub', pattern: [[0, 7.8, 'r', 0.8]], level: -10, a: 0.3, r: 1, only: 'even' }),
-        arp({ wave: 'glass', rate: 4, shape: 'updown', lo: 64, span: 2, decay: 0.35, cut: 1600, cutEnd: 600, level: -19, dly: 0.45, rev: 0.5 }),
+        bass({ wave: 'sub', pattern: [[0, 8.9, 'r', 0.8]], level: -10, a: 0.3, r: 1, only: 'even' }),
+        arp({ wave: 'glass', rate: 4, shape: 'updown', lo: 52, span: 2, decay: 0.35, cut: 1150, cutEnd: 450, level: -19, dly: 0.45, rev: 0.5 }),
         timp({ hits: [['even', 0, 'do', 0.55]], level: -11, rev: 0.6 }),
         kit({ kick: '6...............', shaker: '..2...2...2...2.', level: -14 }),
-        motif({ inst: 'glass', oct: 76, aug: 2, at: 0, beat: 3, level: -17 }), // colour #4 lands on F#/E
+        motif({ inst: 'glass', oct: 64, aug: 2, at: 0, beat: 3, level: -17, cut: 1500 }), // colour #4 lands on F#/E
       ],
     },
     story: {
@@ -266,7 +267,7 @@ const COSMOS = {
       },
       layers: [
         pad({ no7: true, level: -12, cut: 520, cutTo: 900, a: 2, r: 3, n: 5, lo: 52, hi: 76, detune: 9 }),
-        bass({ wave: 'sub', pattern: [[0, 7.8, 'r', 0.7]], level: -12, a: 0.4, r: 1.2, only: 'even' }),
+        bass({ wave: 'sub', pattern: [[0, 8.9, 'r', 0.7]], level: -12, a: 0.4, r: 1.2, only: 'even' }),
         arp({ wave: 'tri', rate: 2, shape: 'cell', lo: 64, span: 1, decay: 0.5, cut: 1000, cutEnd: 400, level: -22, dly: 0.5, rev: 0.5, on: 'xx.x' }),
         timp({ hits: [[0, 0, 'do', 0.3]], level: -15, rev: 0.6 }),
       ],
@@ -279,9 +280,9 @@ const COSMOS = {
         pad({ no7: true, level: -16, cut: 600, cutTo: 900, a: 0.6, n: 4, lo: 52, hi: 72 }),
         bass({ wave: 'sub', pattern: [[0, 1.5, 'r', 0.8], [2.5, 1, '5', 0.55]], level: -11 }),
         kit({ kick: '7.....5.........', shaker: '..2...2...2...2.', level: -13 }),
-        sparkle({ inst: 'chip', chance: 0.16, lo: 76, level: -24 }), // UNIT-8's bleeps
-        arp({ wave: 'glass', rate: 2, shape: 'cell', lo: 64, decay: 0.4, cut: 1300, level: -21, dly: 0.45 }),
-        motif({ inst: 'glass', oct: 76, at: 0, beat: 1.5, every: 4, level: -19 }),
+        sparkle({ inst: 'chip', chance: 0.12, lo: 64, level: -27 }), // UNIT-8's bleeps, kept low and soft
+        arp({ wave: 'glass', rate: 2, shape: 'cell', lo: 52, decay: 0.4, cut: 1100, level: -21, dly: 0.45 }),
+        motif({ inst: 'glass', oct: 64, at: 0, beat: 1.5, every: 8, level: -19, cut: 1500 }),
       ],
     },
     outro: {
@@ -290,10 +291,10 @@ const COSMOS = {
       form: 'A',
       layers: [
         pad({ no7: true, level: -11, cut: 600, cutTo: 2000, a: 1.4, r: 3, n: 5, lo: 52, hi: 76, detune: 9 }),
-        bass({ wave: 'sub', pattern: [[0, 7.8, 'r', 0.75]], level: -11, a: 0.3, r: 1, only: 'even' }),
-        arp({ wave: 'glass', rate: 4, shape: 'updown', lo: 64, span: 2, decay: 0.3, cut: 1500, level: -20, dly: 0.45 }),
+        bass({ wave: 'sub', pattern: [[0, 8.9, 'r', 0.75]], level: -11, a: 0.3, r: 1, only: 'even' }),
+        arp({ wave: 'glass', rate: 4, shape: 'updown', lo: 52, span: 2, decay: 0.3, cut: 1150, level: -20, dly: 0.45, no7: true }),
         timp({ hits: [['even', 0, 'do', 0.5]], level: -12, rev: 0.6 }),
-        motif({ inst: 'glass', at: 2, beat: 3, aug: 2, oct: 76, level: -16, enter: 0, tail: 0 }),
+        motif({ inst: 'glass', at: 2, beat: 3, aug: 2, oct: 64, level: -16, cut: 1500, enter: 0, tail: 0 }),
       ],
     },
   },
@@ -460,7 +461,7 @@ const CHANNEL = {
       layers: [
         pad({ no7: true, level: -12, cut: 650, cutTo: 1050, a: 2, r: 3 }),
         arp({ wave: 'tri', rate: 2, lo: 62, span: 2, decay: 0.45, cut: 1300, level: -19, variants: ['up', 'updown', 'cell', 'down'] }),
-        bass({ wave: 'sub', pattern: [[0, 3.8, 'r', 0.6]], level: -13, a: 0.2, r: 0.8 }),
+        bass({ wave: 'sub', pattern: [[0, 4.5, 'r', 0.6]], level: -13, a: 0.2, r: 0.8 }),
         kit({ shaker: '2.1.2.1.2.1.2.1.', on: '.xx.', level: -16 }),
         motif({ inst: 'musicbox', oct: 74, level: -17, at: 6, every: 8, enter: 1 }),
         sparkle({ inst: 'glock', chance: 0.08, lo: 74, level: -25, on: 'x.xx' }),
@@ -518,4 +519,20 @@ function finish(pkg, key, bed, colour, force) {
     layers: bed.layers.filter((l) => !l.colour || l.colour === c),
     delay: bed.delay || pkg.delay || 0.75,
   };
+}
+
+/**
+ * Checks the packages against the programme opens of the sonic identity: the
+ * bed's tonic must be the open's key (its last chord is caught at the cut).
+ * Returns [{ programId, bed, open, ok }]; run it after any theme change.
+ */
+export function alignment() {
+  const pc = (name) => ({ C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[name[0]] + (name[1] === '#' ? 1 : name[1] === 'b' ? -1 : 0) + 12) % 12;
+  return Object.values(PROGRAMMES).map((p) => {
+    let open = null;
+    try {
+      open = themeFor(p.id)?.meta?.key ?? null;
+    } catch { /* theme missing */ }
+    return { programId: p.id, bed: p.tonic % 12, open: open && pc(open), ok: open != null && pc(open) === p.tonic % 12 };
+  });
 }

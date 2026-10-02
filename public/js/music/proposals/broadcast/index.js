@@ -4,5 +4,5 @@
 // (scratchpad/audio/music/broadcast) for the cue sheet and mix numbers.
 export { BroadcastMusic, TRIM } from './conductor.js';
 export { MOTIF, motifShapes } from './theory.js';
-export { PROGRAMMES, CHANNEL_PKG, bedDef, storyColour } from './packages.js';
+export { PROGRAMMES, CHANNEL_PKG, bedDef, storyColour, alignment } from './packages.js';
 export { renderBroadcast, timeline, LINES, NEXT } from './render.js';

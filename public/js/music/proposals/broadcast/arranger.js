@@ -472,7 +472,12 @@ const LAYERS = {
   motif(bed, lay, b) {
     const { L } = lay;
     if (((b.li % L.every) + L.every) % L.every !== L.at) return;
-    const doM = nearest(bed.def.tonic % 12, L.oct ?? bed.def.tonic + 12);
+    // Under speech a statement becomes an under-statement: 6 dB softer, and an
+    // octave lower if it would sit in the presenter's presence range.
+    const talking = bed.cond.talking;
+    let doM = nearest(bed.def.tonic % 12, L.oct ?? bed.def.tonic + 12);
+    if (talking && doM >= 67) doM -= 12;
+    const quiet = talking ? 0.5 : 1;
     const steps = L.retro ? [...SHAPES.retro] : [...SHAPES.steps];
     const beats = (L.retro ? SHAPES.retroBeats : SHAPES.beats).map((x) => x * L.aug);
     // The programme's colour note (audio/themes.js COLOURS) ends a forward statement.
@@ -487,7 +492,7 @@ const LAYERS = {
       const last = k === steps.length - 1;
       const dur = beats[k] * bed.spb * (last ? 1.1 : 0.94);
       const t = b.time(beat);
-      const v = L.vel * (last ? 0.95 : 0.8 + 0.07 * Math.min(k, 3)) * jit(b.r, 0.06);
+      const v = quiet * L.vel * (last ? 0.95 : 0.8 + 0.07 * Math.min(k, 3)) * jit(b.r, 0.06);
       play(bed.s, lay.in, t, dur, doM + steps[k], v, L);
       for (const h of L.harm) play(bed.s, lay.in, t, dur, doM + steps[k] + h, v * 0.6, L);
       beat += beats[k];

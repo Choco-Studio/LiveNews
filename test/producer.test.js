@@ -428,7 +428,7 @@ describe('Producer.produce: the script is normalised with the programme rules', 
     const stories = [makeStory(1, { summary: 'Some 40,000 people were evacuated in Kyiv.' }), ...makeStories(7).slice(1)];
     const { episode } = await produceWith(
       scriptText([
-        storySeg('s1', { shot: 'map', location: { place: 'KYIV, UKRAINE', lat: 50.4501, lon: 30.5234 }, fact: '40,000 EVACUATED' }),
+        storySeg('s1', { shot: 'map', location: { place: 'KYIV, UKRAINE', lat: 50.4501, lon: 30.5234 }, fact: '40,000 EVACUATED', text: 'Some 40,000 people were evacuated in Kyiv.' }),
         storySeg('s2', { shot: 'map' }),
       ]),
       { stories }
@@ -723,7 +723,7 @@ describe('Producer with the real NewsDesk, ProviderChain and mock provider', () 
       assert.ok(episode, 'enough stories were available');
       assert.equal(episode.program.id, programId);
       assert.equal(episode.provider, 'mock');
-      assert.deepEqual(stageNames(episode), ['write', 'review', 'assets']);
+      assert.deepEqual(stageNames(episode), program.timing ? ['write', 'review', 'fit', 'assets'] : ['write', 'review', 'assets']);
 
       const solo = program.presenters.length === 1;
       assert.deepEqual(Object.keys(episode.cast), solo ? ['A'] : ['A', 'B']);
@@ -739,6 +739,30 @@ describe('Producer with the real NewsDesk, ProviderChain and mock provider', () 
       assert.equal(episode.title, `${program.title} (demo)`);
     });
   }
+
+  test('every programme follows its own rules: a breaking story leads, the number of the day is never first, no chat next to grave news', async () => {
+    for (const programId of Object.keys(realChannel.programs)) {
+      const desk = makeRealDesk();
+      const episode = await makeRealProducer(desk).produce(realChannel, programId);
+      const stories = episode.segments.filter((s) => s.type === 'story');
+      assert.notEqual(stories[0].feature, 'number', programId);
+      episode.segments.forEach((s, i) => {
+        if (s.type !== 'chat') return;
+        const prev = episode.segments.slice(0, i).filter((x) => x.type === 'story').at(-1);
+        assert.ok(!['serious', 'sad'].includes(prev.emotion), `${programId}: chat after a grave story`);
+      });
+      for (const s of stories) assert.ok(s.headline.length <= 80 && !/\b(?:of|to|in|on|for|the|a)$/i.test(s.headline), s.headline);
+    }
+  });
+
+  test('NEWS IN 60 is fitted to its minute: the fit stage estimates the running time and drops tail stories only if that helps', async () => {
+    const desk = makeRealDesk();
+    const episode = await makeRealProducer(desk).produce(realChannel, 'news-60');
+    const fit = episode.pipeline.find((p) => p.stage === 'fit');
+    assert.ok(fit && fit.estimate > 0, JSON.stringify(fit));
+    assert.equal(episode.storyIds.length, episode.segments.filter((s) => s.type === 'story').length);
+    assert.deepEqual(episode.rundown.map((r) => r.storyId), episode.storyIds);
+  });
 
   test('with only the offline mock the review stage reports reviewed: false (nothing was checked) and keeps the script', async () => {
     const desk = makeRealDesk();

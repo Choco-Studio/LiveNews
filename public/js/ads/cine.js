@@ -96,11 +96,23 @@ export function rgb(hex) {
   return v;
 }
 const hx = (n) => clamp(round(n), 0, 255).toString(16).padStart(2, '0');
-/** Mix two hex colours (init / bake time only: returns a new string). */
+// Memo: a -> b -> p -> result, so a mix() repeated every frame is three Map
+// lookups on existing keys (no string building, no parsing, no allocation).
+const MIX = new Map();
+/** Mix two hex colours; memoised, safe to call in per-frame code. */
 export function mix(a, b, p) {
-  const A = rgb(a);
-  const B = rgb(b);
-  return `#${hx(lerp(A[0], B[0], p))}${hx(lerp(A[1], B[1], p))}${hx(lerp(A[2], B[2], p))}`;
+  let mb = MIX.get(a);
+  if (!mb) MIX.set(a, (mb = new Map()));
+  let mp = mb.get(b);
+  if (!mp) mb.set(b, (mp = new Map()));
+  let out = mp.get(p);
+  if (out === undefined) {
+    const A = rgb(a);
+    const B = rgb(b);
+    out = `#${hx(lerp(A[0], B[0], p))}${hx(lerp(A[1], B[1], p))}${hx(lerp(A[2], B[2], p))}`;
+    mp.set(p, out);
+  }
+  return out;
 }
 /** n colours evenly through the given stops. */
 export function ramp(stops, n) {
@@ -128,13 +140,17 @@ export function canvas(w, h) {
 }
 
 const BAKED = new Map();
+/** How long each bake took (ms), for the lab's performance checks. */
+export const BAKE_MS = new Map();
 /** Static art painted once into a cached w x h canvas: paint(ctx, canvas). */
 export function bake(key, w, h, paint) {
   let cv = BAKED.get(key);
   if (!cv) {
+    const t0 = performance.now();
     cv = canvas(w, h);
     paint(cv.getContext('2d'), cv);
     BAKED.set(key, cv);
+    BAKE_MS.set(key, performance.now() - t0);
   }
   return cv;
 }
@@ -529,9 +545,14 @@ export function letterbox(ctx, h = 24, c = '#000000') {
   rect(ctx, 0, H - h, W, h, c);
 }
 
-/** Vignette (baked, dithered): darkens the corners by up to `amount` steps of black. */
-export function vignette(ctx, amount = 0.55, key = 'v') {
-  const cv = bake(`vig|${key}|${amount}`, W, H, (c) => {
+/** Vignette (baked once per amount, dithered): darkens the corners by up to `amount`. */
+const VIG = new Map(); // amount -> canvas (no key strings built per frame)
+export function vignette(ctx, amount = 0.55) {
+  let cv = VIG.get(amount);
+  if (!cv) {
+    cv = canvas(W, H);
+    VIG.set(amount, cv);
+    const c = cv.getContext('2d');
     const img = c.createImageData(W, H);
     const d = img.data;
     for (let y = 0; y < H; y++) {
@@ -547,7 +568,7 @@ export function vignette(ctx, amount = 0.55, key = 'v') {
       }
     }
     c.putImageData(img, 0, 0);
-  });
+  }
   ctx.drawImage(cv, 0, 0);
 }
 
@@ -671,11 +692,14 @@ function glyphRows(ch, style) {
   return rows;
 }
 
-const GLYPH_CV = new Map(); // `${style}|${color}|${scale}` -> Map(ch -> canvas)
+const GLYPH_CV = new Map(); // style -> colour -> scale -> Map(ch -> canvas), no key strings per frame
 function glyphCanvas(ch, style, color, scale) {
-  const key = `${style}|${color}|${scale}`;
-  let m = GLYPH_CV.get(key);
-  if (!m) GLYPH_CV.set(key, (m = new Map()));
+  let ms = GLYPH_CV.get(style);
+  if (!ms) GLYPH_CV.set(style, (ms = new Map()));
+  let mc = ms.get(color);
+  if (!mc) ms.set(color, (mc = new Map()));
+  let m = mc.get(scale);
+  if (!m) mc.set(scale, (m = new Map()));
   let cv = m.get(ch);
   if (cv === undefined) {
     const rows = glyphRows(ch, style);
@@ -883,6 +907,11 @@ function recipes(pal) {
       limb: { d: topM, f: 0.4, m: 1, dd: pal.topD, df: 0.18, side: 1, ...rim },
       hand: { d: skinM, f: 0.35, m: 1, dd: pal.skinD, df: 0.12, side: 1 },
       shirt: { d: pal.shirtD, f: 0.3, m: 1, side: 1 },
+      skinTurned: { d: skinM, f: 0.2, m: 1, dd: pal.skinD, df: 0.13, side: 1, ...rim },
+      bun: { d: pal.hairD, f: 0.45, m: 1, side: 1 },
+      hairMass: { d: pal.hairD, f: 0.4, m: 1, side: 1, ...rim },
+      mouthIn: mix(pal.lip, P.black, 0.5),
+      sil: null,
     };
     SH.set(pal, r);
   }
@@ -928,7 +957,9 @@ export function bust(ctx, o, bottom = H + 2) {
   fill(ctx, pal.top, rc.top);
   // neckline and garment details
   const nY = G.neckB - hh * 0.06;
-  if (o.garment === 'jacket' || o.garment === 'cardigan') {
+  if (o.back) {
+    // seen from behind: no lapels, buttons or drawstrings
+  } else if (o.garment === 'jacket' || o.garment === 'cardigan') {
     const deep = o.garment === 'jacket' ? 1.15 : 0.95;
     begin();
     pt(cx - hh * 0.2, nY);
@@ -1024,7 +1055,7 @@ export function head(ctx, o) {
           ctx.fillRect(round(sx), round(top + hh * (0.08 + u * 0.6)), 1, 1);
         }
       }
-      ellipse(ctx, cx + hw * 0.05, top + hh * 0.8, hh * 0.25, hh * 0.15, pal.hair, { d: pal.hairD, f: 0.4, m: 1, side: 1 });
+      ellipse(ctx, cx + hw * 0.05, top + hh * 0.8, hh * 0.25, hh * 0.15, pal.hair, rc.bun);
       ctx.fillStyle = pal.hairL;
       ctx.fillRect(round(cx - hw * 0.4), round(top + hh * 0.74), round(hw * 0.5), 1);
       ctx.fillStyle = pal.hairD;
@@ -1059,7 +1090,7 @@ export function head(ctx, o) {
   ellipse(ctx, cx + hw + 0.5 + turn * hw * 0.25, eY, max(1, hh * 0.06), hh * 0.1, pal.skinD);
   // face
   headSpans(cx, top, hh, hw);
-  paint(ctx, pal.skin, turn > 0.25 ? { ...rc.skin, f: 0.2 } : rc.skin);
+  paint(ctx, pal.skin, turn > 0.25 ? rc.skinTurned : rc.skin);
   // a soft lit plane on the key side of the forehead / cheek
   ctx.fillStyle = pal.skinL;
   const lx = round(cx - hw * 0.62 + turn * hw * 0.3);
@@ -1089,7 +1120,7 @@ function hairBack(ctx, o) {
   pt(cx + hw * (wide - 0.25), top + hh * len);
   pt(cx - hw * (wide - 0.25), top + hh * len);
   pt(cx - hw * wide, top + hh * len - hh * 0.1);
-  fill(ctx, pal.hair, { d: pal.hairD, f: 0.4, m: 1, side: 1, ...(pal.rim ? { r: pal.rim } : {}) });
+  fill(ctx, pal.hair, recipes(pal).hairMass);
 }
 
 function face(ctx, o, cx, top, hh, hw) {
@@ -1155,7 +1186,7 @@ function face(ctx, o, cx, top, hh, hw) {
     ctx.fillRect(mx + mw, mY - 1, 1, 1);
   }
   if (open) {
-    ctx.fillStyle = mix(pal.lip, P.black, 0.5);
+    ctx.fillStyle = recipes(pal).mouthIn;
     ctx.fillRect(mx + 1, mY + 1, mw - 2, open);
     ctx.fillStyle = pal.lip;
     ctx.fillRect(mx + 1, mY + 1 + open, mw - 2, 1);
@@ -1263,12 +1294,19 @@ function armGeom(o, side) {
     const ty = a.to.y - ARM.sy;
     const d = clamp(sqrt(tx * tx + ty * ty), abs(up - fo) + 0.01, up + fo - 0.01);
     const A = Math.acos(clamp((up * up + d * d - fo * fo) / (2 * up * d), -1, 1));
-    // of the two solutions, bend 1 keeps the elbow on the outer side of the body
+    // of the two solutions keep the elbow hanging low (bend 1; -1 picks the high
+    // one), outward on a tie, so it never flips sides during a movement;
+    // a.elbow = 'out' always keeps it on the outer side (reaching sideways)
     const base = Math.atan2(ty, tx);
-    const e1x = ARM.sx + cos(base + A) * up;
-    const e2x = ARM.sx + cos(base - A) * up;
-    const outer = (e1x - o.x) * side > (e2x - o.x) * side ? 1 : -1;
-    const ang = base + outer * (a.bend ?? 1) * A;
+    const e1y = ARM.sy + sin(base + A) * up;
+    const e2y = ARM.sy + sin(base - A) * up;
+    let pick;
+    if (a.elbow === 'out' || abs(e1y - e2y) < 1.5) {
+      const e1x = ARM.sx + cos(base + A) * up;
+      const e2x = ARM.sx + cos(base - A) * up;
+      pick = (e1x - o.x) * side > (e2x - o.x) * side ? 1 : -1;
+    } else pick = e1y > e2y ? 1 : -1;
+    const ang = base + pick * (a.bend ?? 1) * A;
     ARM.ex = ARM.sx + cos(ang) * up;
     ARM.ey = ARM.sy + sin(ang) * up;
     const fx = a.to.x - ARM.ex;
@@ -1299,9 +1337,8 @@ export function arm(ctx, o, side, { sleeve = true, bare = false } = {}) {
   const r1 = hh * 0.19;
   if (bare) {
     // a bare arm: slimmer, skin shaded like the face (rim included)
-    const sh = pal.rim ? { ...rc.skin } : rc.skin;
-    capsule(ctx, ARM.sx, ARM.sy, ARM.ex, ARM.ey, hh * 0.14, hh * 0.11, pal.skin, sh);
-    capsule(ctx, ARM.ex, ARM.ey, ARM.wx, ARM.wy, hh * 0.11, hh * 0.085, pal.skin, sh);
+    capsule(ctx, ARM.sx, ARM.sy, ARM.ex, ARM.ey, hh * 0.14, hh * 0.11, pal.skin, rc.skin);
+    capsule(ctx, ARM.ex, ARM.ey, ARM.wx, ARM.wy, hh * 0.11, hh * 0.085, pal.skin, rc.skin);
   } else if (sleeve) {
     capsule(ctx, ARM.sx, ARM.sy, ARM.ex, ARM.ey, r0, r1, pal.top, rc.limb);
     capsule(ctx, ARM.ex, ARM.ey, ARM.wx, ARM.wy, r1, hh * 0.16, pal.top, rc.limb);
@@ -1387,10 +1424,18 @@ export function profile(ctx, o) {
   const Y = (v) => o.y + v * hh;
   const side = -f; // the dark side is the back of the head
   // rim from the face side: a fixed 2 px edge, a half-lit band, then shadow
-  const lit = o.light
-    ? { d: pal.skinD, f: 0.5, m: 1, side, l: o.light, lf: 0, lm: o.rimPx ?? 2, dd: mix(pal.skinD, P.black, 0.35), df: 0.2 }
-    : { d: pal.skinD, f: 0.4, m: 1, side };
-  const half = o.light ? { l: mix(pal.skin, o.light, 0.45), lf: 0.1, lm: 2, side } : null;
+  if (!o._rc || o._rc.flip !== f) {
+    o._rc = {
+      flip: f,
+      lit: o.light
+        ? { d: pal.skinD, f: 0.5, m: 1, side, l: o.light, lf: 0, lm: o.rimPx ?? 2, dd: mix(pal.skinD, P.black, 0.35), df: 0.2 }
+        : { d: pal.skinD, f: 0.4, m: 1, side },
+      half: o.light ? { l: mix(pal.skin, o.light, 0.45), lf: 0.1, lm: 2, side } : null,
+      ear: { d: pal.skinD, f: 0.5, m: 1, side },
+      hair: { d: pal.hairD, f: 0.55, m: 1, side, l: o.light ? mix(pal.hair, o.light, 0.4) : pal.hairL, lf: 0, lm: 1 },
+    };
+  }
+  const { lit, half } = o._rc;
   begin();
   for (let i = 0; i < NECK.length; i += 2) pt(X(NECK[i]), Y(NECK[i + 1]));
   fill(ctx, pal.skin, lit);
@@ -1417,7 +1462,7 @@ export function profile(ctx, o) {
     }
   }
   // ear: skin with a darker inner fold
-  ellipse(ctx, X(-0.06), Y(0.53), hh * 0.06, hh * 0.1, pal.skin, { d: pal.skinD, f: 0.5, m: 1, side });
+  ellipse(ctx, X(-0.06), Y(0.53), hh * 0.06, hh * 0.1, pal.skin, o._rc.ear);
   ellipse(ctx, X(-0.055), Y(0.54), hh * 0.025, hh * 0.055, pal.skinD);
   // eye, brow, nostril, mouth line
   const eyeY = Y(0.47);
@@ -1444,7 +1489,7 @@ export function profile(ctx, o) {
   const hp = PROFILE_HAIR[o.hair] || PROFILE_HAIR.short;
   begin();
   for (let i = 0; i < hp.length; i += 2) pt(X(hp[i]), Y(hp[i + 1]));
-  fill(ctx, pal.hair, { d: pal.hairD, f: 0.55, m: 1, side, l: o.light ? mix(pal.hair, o.light, 0.4) : pal.hairL, lf: 0, lm: 1 });
+  fill(ctx, pal.hair, o._rc.hair);
   // a few strands catching the light
   if (o.light) {
     ctx.fillStyle = mix(pal.hair, o.light, 0.25);
@@ -1469,8 +1514,18 @@ export function standing(ctx, o) {
   const top = o.gy - H8 + (o.dip || 0);
   const cx = o.x + (o.lean || 0);
   const { pal } = o;
-  const dark = o.silhouette ? { d: pal.topD, f: 0.6, m: 1, side: o.rimSide ?? 1, r: o.silhouette } : recipes(pal).top;
-  const skinSh = o.silhouette ? { d: pal.skinD, f: 0.6, m: 1, side: o.rimSide ?? 1, r: o.silhouette } : recipes(pal).skin;
+  // silhouette recipes are built once per figure object (no per-frame objects)
+  if (o.silhouette && !o._sil) {
+    const side = o.rimSide ?? 1;
+    o._sil = {
+      top: { d: pal.topD, f: 0.6, m: 1, side, r: o.silhouette },
+      skin: { d: pal.skinD, f: 0.6, m: 1, side, r: o.silhouette },
+      hair: { d: pal.hairD, f: 0.6, m: 1, side, r: o.silhouette },
+    };
+  }
+  const dark = o.silhouette ? o._sil.top : recipes(pal).top;
+  const skinSh = o.silhouette ? o._sil.skin : recipes(pal).skin;
+  const hairSh = o.silhouette ? o._sil.hair : recipes(pal).hair;
   const shY = top + hh * 1.35;
   const sw = hh * (o.shoulders ?? 0.82);
   const hipY = top + hh * 3.5;
@@ -1542,7 +1597,7 @@ export function standing(ctx, o) {
   const hairStyle = o.hair || 'short';
   if (hairStyle === 'bun') {
     const bx = hx - (o.turn || 0) * hw * 0.7;
-    ellipse(ctx, bx, ht + hh * 0.12, hh * 0.24, hh * 0.2, pal.hair, o.silhouette ? { d: pal.hairD, f: 0.6, m: 1, side: o.rimSide ?? 1, r: o.silhouette } : recipes(pal).hair);
+    ellipse(ctx, bx, ht + hh * 0.12, hh * 0.24, hh * 0.2, pal.hair, hairSh);
   }
   if (hairStyle !== 'none') {
     SN = 0;
@@ -1591,7 +1646,7 @@ export function standing(ctx, o) {
       SY[SN] = y;
       SN++;
     }
-    paint(ctx, pal.hair, o.silhouette ? { d: pal.hairD, f: 0.6, m: 1, side: o.rimSide ?? 1, r: o.silhouette } : recipes(pal).hair);
+    paint(ctx, pal.hair, hairSh);
   }
   if (!o.silhouette && hh >= 11) {
     const fx = hx + (o.turn || 0) * hw * 0.35;

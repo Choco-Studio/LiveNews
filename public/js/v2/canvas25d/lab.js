@@ -1,7 +1,10 @@
 // Lab driver for the canvas25d foundation lab (owner: INTEGRATION stream):
 // picks a demo and renders exact instants for deterministic contact sheets.
 //   window.__lab.render(t)                 draw the instant t (seconds)
-//   window.__lab.set({ demo, presenter, gesture, k })
+//   window.__lab.set({ demo, presenter, gesture, k, s, seat, emotion })
+//                                          static demo: seat +1 (left, A) | -1 (right, B),
+//                                          default -1 for lola, +1 otherwise; emotion = a
+//                                          cues.js EMOTIONS name held from t = 0
 //   window.__lab.bench(frames)             average ms per frame for the current demo
 import { C } from './pixbuf.js';
 import { frame, drawActors, actor } from './scene.js';
@@ -9,11 +12,12 @@ import { DEMOS as SHOTS, RIG_TIMES, PROFILE } from './demos.js';
 import { GESTURES } from './gestures/index.js';
 import { PRESENTER_IDS } from './cast/index.js';
 
-const state = { demo: 'rig', presenter: 'paco', gesture: 'sequence', s: 2.7, k: 4.0 };
+const state = { demo: 'rig', presenter: 'paco', gesture: 'sequence', s: 2.7, k: 4.0, seat: null, emotion: null };
 
 function demoStatic(t) {
   frame.clear(C.ink);
-  const a = actor(state.presenter, { side: state.presenter === 'lola' ? -1 : 1 });
+  const side = state.seat === 1 || state.seat === -1 ? state.seat : state.presenter === 'lola' ? -1 : 1;
+  const a = actor(state.presenter, { side, emotions: state.emotion ? [{ t0: 0, name: state.emotion }] : [] });
   drawActors(t, [{ actor: a, x: 192, y: 116, s: state.s }]);
 }
 

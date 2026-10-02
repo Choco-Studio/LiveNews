@@ -208,7 +208,7 @@ function shotCity(ctx, lt) {
   bust(ctx, f, 270);
   bareBack(ctx, f);
   ctx.restore();
-  vignette(ctx, 0.6, 'se1');
+  vignette(ctx, 0.6);
 }
 
 /** Bare shoulders and upper back above a low dress line, thin straps (back views). */
@@ -258,7 +258,7 @@ function shotLuna(ctx, lt) {
   const ey = track(lt, [[0, 168], [2.5 + 0.4, 112, 'smooth']]);
   ctx.drawImage(earthArt(26), 230 - 28, round(ey) - 28);
   ctx.drawImage(horizonSet(), 0, 0);
-  vignette(ctx, 0.5, 'se2');
+  vignette(ctx, 0.5);
 }
 
 // --- S3: the residence on the Sea of Serenity ----------------------------------------------
@@ -327,7 +327,7 @@ function shotHouse(ctx, lt) {
   ctx.drawImage(residenceArt(), 158, 104);
   ctx.restore();
   superTitle(ctx, 'MARE SERENITATIS', 24, 192, lt - 0.8, { color: P.fog, rule: GOLD_D, track: 2 });
-  vignette(ctx, 0.5, 'se3');
+  vignette(ctx, 0.5);
 }
 
 // --- S4: inside: an evening dress, a glass, the Earth in the window --------------------------
@@ -386,7 +386,7 @@ const LADY = {
   },
   bareArms: true,
   armL: { a: 0.1, e: 0.15 },
-  armR: { a: 0.2, e: 1.9 },
+  armR: { a: 0.12, e: 2.35 },
 };
 
 function flute(ctx, x, y, a = 1) {
@@ -412,11 +412,11 @@ function shotLounge(ctx, lt) {
   ctx.translate(-round(camX), 0);
   // she turns her head from the view to us and back; the glass rests at her chest
   LADY.turn = track(lt, [[0, 0.6], [1.8, 0.6], [2.4, 0.15], [3.6, 0.15], [4.2, 0.6]]);
-  LADY.armR.e = 1.95 + sin(lt * 0.8) * 0.04;
+  LADY.armR.e = 2.35 + sin(lt * 0.8) * 0.04;
   standing(ctx, LADY);
   flute(ctx, LADY.armR.wx + 1, LADY.armR.wy - 2);
   ctx.restore();
-  vignette(ctx, 0.5, 'se4');
+  vignette(ctx, 0.5);
 }
 
 // --- S5: over her shoulder, a toast to the Earth ----------------------------------------------
@@ -471,7 +471,7 @@ function shotToast(ctx, lt) {
   arm(ctx, m, 1, { bare: true });
   const w = wrist(m, 1);
   flute(ctx, round(w.wx), round(w.wy) - 5);
-  vignette(ctx, 0.55, 'se5');
+  vignette(ctx, 0.55);
 }
 
 // --- S6: end slate ------------------------------------------------------------------------------
@@ -519,9 +519,9 @@ const SHOTS = [
 
 // Ethereal: celesta (decaying pulse), harp arpeggios, a sine pad, low sine bass.
 // F lydian colours (Fmaj7#11), 60 bpm: chords change on the cuts.
-const CELESTA = { wave: 'pulse12', a: 0.002, d: 1.6, s: 0, r: 0.9, vib: false };
-const HARP = { wave: 'tri', a: 0.003, d: 1.1, s: 0, r: 0.7, vib: false };
-const PAD = { wave: 'sine', a: 0.9, d: 1.2, s: 0.85, r: 1.6, vib: [6, 4, 0.5] };
+const CELESTA = { wave: 'sine', a: 0.002, d: 1.4, s: 0, r: 0.9, vib: false };
+const HARP = { wave: 'triangle', a: 0.003, d: 1.1, s: 0, r: 0.7, vib: false };
+const PAD = { wave: 'sine', a: 0.6, d: 1.2, s: 0.85, r: 1.6, vib: [6, 4, 0.5], legato: 1 };
 
 export default {
   id: 'serene',
@@ -542,9 +542,9 @@ export default {
     echo: { beats: 0.75, feedback: 0.3 },
     fadeOut: 2,
     tracks: [
-      { kind: 'lead', inst: CELESTA, gain: 0.55, notes: 'R:1 E6:1@0.4 C6:1@0.35 A5:2@0.4 B5:1@0.4 G5:1.5@0.35 A5:1@0.4 F5:1@0.35 E5:0.5@0.3 D5:2@0.35 F5:1@0.35 D5:1@0.3 C5:2.5@0.35 A5:1@0.4 C6:1@0.4 B5:1@0.4 G5:1@0.35 A5:1@0.4 E6:3@0.45 R:2' },
+      { kind: 'lead', inst: CELESTA, gain: 0.8, notes: 'R:1 E6:1@0.4 C6:1@0.35 A5:2@0.4 B5:1@0.4 G5:1.5@0.35 A5:1@0.4 F5:1@0.35 E5:0.5@0.3 D5:2@0.35 F5:1@0.35 D5:1@0.3 C5:2.5@0.35 A5:1@0.4 C6:1@0.4 B5:1@0.4 G5:1@0.35 A5:1@0.4 E6:3@0.45 R:2' },
       { kind: 'harmony', inst: HARP, gain: 0.6, notes: 'F2:0.5@0.4 C3:0.5@0.35 E3:0.5@0.35 A3:0.5@0.35 B3:0.5@0.35 A3:0.5@0.3 E3:0.5@0.3 C3:0.5@0.3 E3:0.5@0.3 A3:0.5@0.3 A2:0.5@0.4 E3:0.5@0.35 G3:0.5@0.35 B3:0.5@0.35 C4:0.5@0.35 D3:0.5@0.4 A3:0.5@0.35 C4:0.5@0.35 E4:0.5@0.35 F4:0.5@0.35 G2:0.5@0.4 D3:0.5@0.35 F3:0.5@0.35 B3:0.5@0.35 Bb2:0.5@0.4 F3:0.5@0.35 A3:0.5@0.35 D4:0.5@0.35 F4:0.5@0.35 E2:0.5@0.4 C3:0.5@0.35 G3:0.5@0.35 C4:0.5@0.35 A2:0.5@0.4 C3:0.5@0.35 F3:0.5@0.35 E4:0.5@0.35 G2:0.5@0.4 Bb2:0.5@0.35 D3:0.5@0.35 F3:0.5@0.35 F2:0.5@0.4 C3:0.5@0.35 G3:0.5@0.35 A3:0.5@0.35 E4:2@0.35 R:2' },
-      { kind: 'harmony', inst: PAD, gain: 0.5, notes: 'F3+A3+C4+E4:5@0.4 A2+C3+E3+G3:2.5@0.4 D3+F3+A3+C4:2.5@0.4 G2+B2+D3+F3:2@0.4 Bb2+D3+F3+A3:2.5@0.4 C3+E3+G3:2@0.4 F3+A3+C4:2@0.4 G2+Bb2+D3+F3:2@0.4 F3+A3+C4+G4:4@0.45 R:2' },
+      { kind: 'harmony', inst: PAD, gain: 0.3, notes: 'F3+A3+C4+E4:5@0.4 A2+C3+E3+G3:2.5@0.4 D3+F3+A3+C4:2.5@0.4 G2+B2+D3+F3:2@0.4 Bb2+D3+F3+A3:2.5@0.4 C3+E3+G3:2@0.4 F3+A3+C4:2@0.4 G2+Bb2+D3+F3:2@0.4 F3+A3+C4+G4:4@0.45 R:2' },
       { kind: 'bass', inst: 'sine', gain: 0.6, notes: 'F1:5 A1:2.5 D2:2.5 G1:2 Bb1:2.5 E2:2 A1:2 G1:2 F1:4 R:2' },
     ],
   },

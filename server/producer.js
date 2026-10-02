@@ -17,6 +17,7 @@ export class Producer {
     this.stages = [
       { name: 'write', run: (ctx) => this.write(ctx) },
       { name: 'review', run: (ctx) => this.review(ctx), enabled: () => this.config.reviewPass },
+      { name: 'fit', run: (ctx) => this.fit(ctx), enabled: (ctx) => !!ctx.program.timing },
       { name: 'assets', run: (ctx) => this.assets(ctx) },
     ];
   }
@@ -42,7 +43,7 @@ export class Producer {
     const started = Date.now();
     try {
       for (const stage of this.stages) {
-        if (stage.enabled && !stage.enabled()) continue;
+        if (stage.enabled && !stage.enabled(ctx)) continue;
         const t0 = Date.now();
         const note = await stage.run(ctx);
         ctx.pipeline.push({ stage: stage.name, ms: Date.now() - t0, ...(note || {}) });
@@ -81,6 +82,9 @@ export class Producer {
         maxChats: ctx.program.maxChats ?? 3,
         solo: !ctx.presenters.B,
         features: ctx.program.features || [],
+        // the programme's editorial rules (headline length, chats, gestures, emotions...) and who sits in which slot
+        program: ctx.program,
+        presenters: ctx.presenters,
         // names that may legitimately contain numbers ("NEWS IN 60", "UNIT-8")
         ownNames: [ctx.program.title, ...Object.values(ctx.presenters).map((p) => p.name)],
       });
@@ -119,6 +123,44 @@ export class Producer {
       else this.log.warn?.(`[producer] review skipped: ${err.message}`);
       return { reviewed: false, error: err.message };
     }
+  }
+
+  /**
+   * Fit a timed programme (NEWS IN 60) to its slot: estimate the running time
+   * from the words (wpm, gaps between segments) and drop stories from the tail
+   * (never the lead, a round-up item or breaking news) while that brings the
+   * estimate closer to the target. Dropped stories are only "offered", so they
+   * can air later. Never pads: a short episode airs short and says so.
+   */
+  fit(ctx) {
+    const timing = ctx.program.timing;
+    const words = (seg) => String(seg.text).split(/\s+/).filter(Boolean).length;
+    const estimate = (segs) => 0.3 + segs.reduce((n, seg) => n + words(seg), 0) / (timing.wpm / 60) + (timing.gap ?? 0.7) * (segs.length - 1);
+    const minStories = timing.minStories ?? 1;
+    let segs = ctx.episode.segments;
+    const options = [{ segs, t: estimate(segs) }];
+    for (;;) {
+      const stories = segs.filter((seg) => seg.type === 'story');
+      if (stories.length <= minStories) break;
+      let i = segs.length - 1;
+      while (i >= 0 && !(segs[i].type === 'story' && segs[i] !== stories[0] && !segs[i].roundup && !segs[i].breaking)) i--;
+      if (i < 0) break;
+      const cut = i;
+      segs = segs.filter((seg, k) => k !== cut && !(k === cut + 1 && seg.type === 'chat'));
+      options.push({ segs, t: estimate(segs) });
+    }
+    // Closest to the target; within a second of each other, more stories win.
+    let best = options[0];
+    for (const o of options.slice(1)) if (Math.abs(o.t - timing.target) < Math.abs(best.t - timing.target) - 1) best = o;
+    const kept = new Set(best.segs.filter((seg) => seg.storyId).map((seg) => seg.storyId));
+    const dropped = ctx.episode.storyIds.filter((id) => !kept.has(id)).length;
+    ctx.episode.segments = best.segs;
+    ctx.episode.rundown = ctx.episode.rundown.filter((r) => kept.has(r.storyId));
+    ctx.episode.storyIds = ctx.episode.storyIds.filter((id) => kept.has(id));
+    const intro = best.segs[0];
+    if (intro?.teases) intro.teases = intro.teases.map((id) => (id && kept.has(id) ? id : null));
+    const accept = timing.accept || [timing.target * 0.9, timing.target * 1.1];
+    return { estimate: Math.round(best.t * 10) / 10, dropped, ...(best.t < accept[0] ? { short: true } : {}) };
   }
 
   async assets(ctx) {

@@ -10,8 +10,13 @@
 // The letters -> sound rules are deliberately small (English spelling is not
 // phonetic): what matters on a 384x216 face is the rhythm of open and closed
 // mouths, the lip closures on m/b/p, the lip-teeth contact on f/v and the
-// rounding on o/u/w. Numbers, acronyms and symbols are expanded to the words a
-// TTS engine would say, because they change how long a sentence lasts.
+// rounding on o/u/w. The timeline is built from what is actually SAID:
+// voice/speechtext.js normalizeForSpeech() turns "$2bn", "IMF", "14:30" and
+// "GLOBIT 24" into the words a newsreader (and the TTS engine, which is given
+// the same text) says, so durations match; char and word indexes are mapped
+// back to the original sentence for captions and cues.
+
+import { normalizeForSpeech, toOriginal } from '../voice/speechtext.js';
 
 export const VISEMES = Object.freeze(['rest', 'MBP', 'FV', 'TH', 'L', 'EE', 'AH', 'OH', 'OO', 'WQ', 'S']);
 
@@ -239,117 +244,14 @@ function spanishPhones(s, region = 'es') {
   return out;
 }
 
-// ------------------------------------------------------------------ numbers
+// ---------------------------------------------------------- letters, digits
 
-const EN_ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
-  'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
-const EN_TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
-const EN_SCALES = [[1e12, 'trillion'], [1e9, 'billion'], [1e6, 'million'], [1e3, 'thousand']];
-
-function enUnder100(n) {
-  if (n < 20) return [EN_ONES[n]];
-  return n % 10 ? [EN_TENS[Math.floor(n / 10)], EN_ONES[n % 10]] : [EN_TENS[n / 10]];
-}
-function enUnder1000(n) {
-  const out = [];
-  if (n >= 100) {
-    out.push(EN_ONES[Math.floor(n / 100)], 'hundred');
-    if (n % 100) out.push('and');
-  }
-  if (n % 100 || n === 0) out.push(...enUnder100(n % 100));
-  return out;
-}
-function enInt(n) {
-  if (!Number.isFinite(n) || n >= 1e15) return ['a', 'lot'];
-  if (n < 1000) return enUnder1000(n);
-  const out = [];
-  let rest = n;
-  for (const [size, name] of EN_SCALES) {
-    if (rest >= size) {
-      out.push(...enUnder1000(Math.floor(rest / size)), name);
-      rest %= size;
-    }
-  }
-  if (rest) out.push(...enUnder1000(rest));
-  return out;
-}
-function enYear(n) {
-  if (n >= 2000 && n < 2010) return n === 2000 ? ['two', 'thousand'] : ['two', 'thousand', 'and', EN_ONES[n - 2000]];
-  const hi = Math.floor(n / 100);
-  const lo = n % 100;
-  return [...enUnder100(hi), ...(lo === 0 ? ['hundred'] : lo < 10 ? ['oh', EN_ONES[lo]] : enUnder100(lo))];
-}
-
-const ES_ONES = ['cero', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez', 'once', 'doce', 'trece',
-  'catorce', 'quince', 'dieciseis', 'diecisiete', 'dieciocho', 'diecinueve', 'veinte', 'veintiuno', 'veintidos', 'veintitres',
-  'veinticuatro', 'veinticinco', 'veintiseis', 'veintisiete', 'veintiocho', 'veintinueve'];
-const ES_TENS = ['', '', '', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
-const ES_HUNDREDS = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'];
-function esUnder1000(n) {
-  if (n === 100) return ['cien'];
-  const out = [];
-  if (n >= 100) out.push(ES_HUNDREDS[Math.floor(n / 100)]);
-  const r = n % 100;
-  if (r < 30 && (r || n === 0)) out.push(ES_ONES[r]);
-  else if (r >= 30) out.push(ES_TENS[Math.floor(r / 10)], ...(r % 10 ? ['y', ES_ONES[r % 10]] : []));
-  return out;
-}
-function esInt(n) {
-  if (!Number.isFinite(n) || n >= 1e15) return ['muchos'];
-  if (n < 1000) return esUnder1000(n);
-  const out = [];
-  let rest = n;
-  if (rest >= 1e6) {
-    const m = Math.floor(rest / 1e6);
-    out.push(...(m === 1 ? ['un', 'millon'] : [...esInt(m), 'millones']));
-    rest %= 1e6;
-  }
-  if (rest >= 1000) {
-    const k = Math.floor(rest / 1000);
-    out.push(...(k === 1 ? [] : esUnder1000(k)), 'mil');
-    rest %= 1000;
-  }
-  if (rest) out.push(...esUnder1000(rest));
-  return out;
-}
-
-const CURRENCY = { $: ['dollars', 'dolares'], '£': ['pounds', 'libras'], '€': ['euros', 'euros'], '¥': ['yen', 'yenes'] };
-const SUFFIX = {
-  bn: ['billion', 'mil millones'], b: ['billion', 'mil millones'], m: ['million', 'millones'], mn: ['million', 'millones'],
-  k: ['thousand', 'mil'], tn: ['trillion', 'billones'], '%': ['percent', 'por ciento'], km: ['kilometres', 'kilometros'],
-  kg: ['kilos', 'kilos'], st: [], nd: [], rd: [], th: [], s: [], º: [], ª: [], 'ºc': ['degrees', 'grados'], '°c': ['degrees', 'grados'],
+// Digits that survive normalisation (or with normalisation off) are read one
+// by one: rare, and only their duration matters.
+const DIGITS = {
+  en: ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'],
+  es: ['cero', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'],
 };
-const NUM_RE = /^([$£€¥]?)(\d[\d.,]*\d|\d)([a-z%º°ª]*)$/i;
-
-// Spoken words for a number token ("$1.2bn", "2026", "6.1", "45%", "1.500"
-// in Spanish), or null when it is not a number we know how to read.
-function numberWords(token, lang) {
-  const m = NUM_RE.exec(token);
-  if (!m) return null;
-  const es = lang === 'es';
-  const [, cur, raw, sufRaw] = m;
-  const suf = sufRaw.toLowerCase();
-  if (suf && !(suf in SUFFIX)) return null;
-  // English groups thousands with "," and uses "." for decimals; Spanish the other way round.
-  const [sep, point] = es ? ['.', ','] : [',', '.'];
-  const grouped = new RegExp(`^\\d{1,3}(\\${sep}\\d{3})+(\\${point}\\d+)?$`).test(raw);
-  const body = grouped ? raw.split(sep).join('') : raw;
-  let [intPart, decPart] = body.split(point);
-  if (decPart === undefined && es && /^\d+\.\d+$/.test(body)) [intPart, decPart] = body.split('.');
-  if (!/^\d+$/.test(intPart) || (decPart !== undefined && !/^\d+$/.test(decPart))) return null;
-  const int = Number(intPart);
-  const words = [];
-  const isYear = !cur && decPart === undefined && !suf && !grouped && intPart.length === 4 && int >= 1100 && int <= 2099;
-  if (isYear && !es) words.push(...enYear(int));
-  else words.push(...(es ? esInt(int) : enInt(int)));
-  if (decPart) words.push(es ? 'coma' : 'point', ...[...decPart.slice(0, 4)].map((d) => (es ? ES_ONES : EN_ONES)[Number(d)]));
-  const sw = SUFFIX[suf]?.[es ? 1 : 0];
-  if (sw) words.push(...String(sw).split(' '));
-  if (['st', 'nd', 'rd', 'th'].includes(suf)) words.push('th'); // close enough for timing
-  if (cur) words.push(CURRENCY[cur][es ? 1 : 0]);
-  return words;
-}
-
 const EN_LETTERS = { a: 'ay', b: 'bee', c: 'see', d: 'dee', e: 'ee', f: 'ef', g: 'jee', h: 'aych', i: 'eye', j: 'jay', k: 'kay',
   l: 'el', m: 'em', n: 'en', o: 'oh', p: 'pee', q: 'kyoo', r: 'ar', s: 'es', t: 'tee', u: 'yoo', v: 'vee', w: 'dubbelyoo',
   x: 'eks', y: 'wye', z: 'zed' };
@@ -358,18 +260,22 @@ const ES_LETTERS = { a: 'a', b: 'be', c: 'ce', d: 'de', e: 'e', f: 'efe', g: 'ge
   x: 'equis', y: 'ye', z: 'zeta' };
 const SYMBOLS = { '&': ['and', 'y'], '+': ['plus', 'mas'], '%': ['percent', 'por ciento'], '@': ['at', 'arroba'], '#': ['number', 'numero'], '=': ['equals', 'igual'] };
 
-// Acronyms are spelled out ("BBC", "U.S.", "EU"); pronounceable ones ("NASA") are read.
+// Letter-by-letter words: dotted ("U.S."), hyphen-spelled as speechtext.js
+// writes them ("I-M-F"), one or two capitals ("EU"), or capitals with no
+// vowel after the first letter ("BBC", "IMF"). Pronounceable capitals are
+// words ("NASA", "GLOBIT", shouted "STOP").
 function spelledOut(core) {
+  if (/^\p{L}(?:-\p{L})+$/u.test(core)) return true;
   const letters = core.replace(/\./g, '');
   if (!/^\p{Lu}{2,6}$/u.test(letters)) return false;
   if (core.includes('.')) return true;
-  return letters.length <= 3 || !/[AEIOU]/.test(letters.slice(1)) || /^[^AEIOU]{2}/.test(letters);
+  return letters.length <= 2 || !/[AEIOUY]/.test(letters.slice(1));
 }
 
 // ------------------------------------------------------------------- tokens
 
-// Whitespace-separated chunks of the sentence -> spoken words with source
-// positions. Each chunk is one "word" for TTS boundary events.
+// Whitespace-separated chunks of (already normalised) text -> spoken words
+// with their positions. Each chunk is one "word" for TTS boundary events.
 export function speechTokens(text, lang = 'en') {
   const es = String(lang).toLowerCase().startsWith('es');
   const src = String(text ?? '');
@@ -394,11 +300,10 @@ export function speechTokens(text, lang = 'en') {
         continue;
       } else continue;
     } else if (/\d/.test(core)) {
-      words = numberWords(core, es ? 'es' : 'en');
-      if (!words) words = core.split(/[^\p{L}\p{N}]+/u).filter(Boolean).flatMap((p) => (/^\d+$/.test(p) ? (es ? esInt(Number(p)) : enInt(Number(p))) : [p.toLowerCase()]));
+      words = core.split(/[^\p{L}\p{N}]+/u).filter(Boolean).flatMap((p) => (/^\d+$/.test(p) ? [...p.slice(0, 12)].map((d) => DIGITS[es ? 'es' : 'en'][Number(d)]) : [p.toLowerCase()]));
     } else if (spelledOut(core)) {
       spelled = true;
-      words = [...core.replace(/\./g, '').toLowerCase()].map((ch) => (es ? ES_LETTERS : EN_LETTERS)[ch] ?? ch);
+      words = [...core.replace(/[.-]/g, '').toLowerCase()].map((ch) => (es ? ES_LETTERS : EN_LETTERS)[ch] ?? ch);
     } else {
       words = core.toLowerCase().split(/[-–—/]+/).filter(Boolean);
     }
@@ -422,15 +327,53 @@ export function speechTokens(text, lang = 'en') {
 
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
+// Language tag speechtext.js understands ('en' -> US English, 'es-MX'...).
+const speechLang = (lang) => String(lang || 'en');
+
 /**
- * Build the mouth timeline of one sentence.
- * @returns {{ text, total, segs: Array<{t0,t1,v,o,ci,wi,k,stress}>, words: Array<{ci,end,t0,t1}>, cps }}
+ * Build the mouth timeline of one sentence. The text is normalised for
+ * speech first (normalise: false skips it); `spoken` is what a TTS engine
+ * should be given. `ci` / `wi` are in ORIGINAL units (offset and
+ * whitespace-token index in `text`); `words` has one entry per SPOKEN token
+ * with both its spoken offset `sci` (for TTS boundary events) and `ci`.
+ * @returns {{ text, spoken, map, total, segs: Array<{t0,t1,v,o,ci,wi,k,stress}>, words: Array<{ci,sci,end,wi,t0,t1}>, cps }}
  */
-export function buildTimeline(text, { lang = 'en', rate = 1 } = {}) {
+export function buildTimeline(text, { lang = 'en', rate = 1, normalise = true } = {}) {
   const es = String(lang).toLowerCase().startsWith('es');
   const region = String(lang).toLowerCase().split(/[-_]/)[1] ?? 'es';
   const r = Math.min(2.5, Math.max(0.4, Number(rate) || 1));
-  const tokens = speechTokens(text, lang);
+  const src = String(text ?? '');
+  let spoken = src;
+  let map = null;
+  if (normalise && src.trim()) {
+    try {
+      const n = normalizeForSpeech(src, { lang: speechLang(lang), terminal: false });
+      if (n && typeof n.spoken === 'string' && Array.isArray(n.map) && n.map.length === n.spoken.length + 1) {
+        spoken = n.spoken;
+        map = n.map;
+      }
+    } catch { /* speak the raw text */ }
+  }
+  const toOrig = (i) => (map ? toOriginal(map, i) : Math.min(i, src.length));
+  // Original whitespace tokens: the contract's word indexes.
+  const oStarts = [];
+  const oEnds = [];
+  for (const m of src.matchAll(/\S+/g)) {
+    oStarts.push(m.index);
+    oEnds.push(m.index + m[0].length);
+  }
+  const origWord = (ci) => {
+    let lo = 0;
+    let hi = oStarts.length - 1;
+    if (hi < 0) return 0;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (oStarts[mid] <= ci) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  };
+  const tokens = speechTokens(spoken, lang);
   const phones = [];
   const words = [];
   tokens.forEach((tok, ti) => {
@@ -438,9 +381,11 @@ export function buildTimeline(text, { lang = 'en', rate = 1 } = {}) {
     const fn = tok.words.length === 1 && FUNCTION_WORDS.has(tok.words[0]);
     const lower = tok.raw.toLowerCase();
     const literal = !tok.spelled && !/\d/.test(tok.raw);
+    const ciTok = toOrig(tok.src);
+    const wiTok = origWord(ciTok);
     let from = 0;
     tok.words.forEach((word, k) => {
-      // Where this spoken word sits in the source text (for charIndex).
+      // Where this spoken word sits in the spoken text (for charIndex).
       const at = literal ? lower.indexOf(word, from) : -1;
       const base = at >= 0 ? at : from;
       if (at >= 0) from = at + word.length;
@@ -453,8 +398,9 @@ export function buildTimeline(text, { lang = 'en', rate = 1 } = {}) {
       else if (nuclei.length > 1 && word.length > 5 && PREFIX_RE.test(word)) stressAt = 1;
       let nucleus = 0;
       for (const p of ps) {
-        const ci = literal ? tok.src + Math.min(base + p.i, tok.raw.length - 1) : tok.src;
-        const ph = { ...p, ci, wi: tok.index, stress: false };
+        const sci = literal ? tok.src + Math.min(base + p.i, tok.raw.length - 1) : tok.src;
+        const ci = Math.max(ciTok, toOrig(sci));
+        const ph = { ...p, ci, wi: wiTok, sw: tok.index, stress: false };
         if (p.k === 'v') {
           const stressed = !fn && nucleus === stressAt && !(tok.spelled && k < tok.words.length - 1);
           ph.stress = stressed;
@@ -465,7 +411,7 @@ export function buildTimeline(text, { lang = 'en', rate = 1 } = {}) {
         } else if (fn) ph.d *= 0.8;
         phones.push(ph);
       }
-      if (k < tok.words.length - 1) phones.push({ v: 'rest', o: 0.2, d: WORD_GAP, k: 'gap', ci: tok.src, wi: tok.index, stress: false });
+      if (k < tok.words.length - 1) phones.push({ v: 'rest', o: 0.2, d: WORD_GAP, k: 'gap', ci: ciTok, wi: wiTok, sw: tok.index, stress: false });
     });
     // Phrase-final lengthening on the last vowel before a pause or the end.
     if (tok.pause || tok.final || ti === tokens.length - 1) {
@@ -475,9 +421,10 @@ export function buildTimeline(text, { lang = 'en', rate = 1 } = {}) {
     }
     if (phones.length > start) {
       const pause = tok.pause ? tok.pause / Math.sqrt(r) * TEMPO : 0;
-      words.push({ ci: tok.src, end: tok.end, wi: tok.index });
-      if (pause) phones.push({ v: 'rest', o: 0.04, d: pause, k: 'pause', ci: tok.end, wi: tok.index, stress: false, fixed: true });
-      else if (ti < tokens.length - 1) phones.push({ v: 'rest', o: 0.3, d: WORD_GAP, k: 'gap', ci: tok.end, wi: tok.index, stress: false });
+      const ciEnd = Math.max(ciTok, toOrig(tok.end));
+      words.push({ ci: ciTok, sci: tok.src, end: oEnds[wiTok] ?? ciEnd, wi: wiTok, sw: tok.index });
+      if (pause) phones.push({ v: 'rest', o: 0.04, d: pause, k: 'pause', ci: ciEnd, wi: wiTok, sw: tok.index, stress: false, fixed: true });
+      else if (ti < tokens.length - 1) phones.push({ v: 'rest', o: 0.3, d: WORD_GAP, k: 'gap', ci: ciEnd, wi: wiTok, sw: tok.index, stress: false });
     }
   });
   // Transparent consonants (k, g, h) take the lip shape of the next vowel in
@@ -485,11 +432,11 @@ export function buildTimeline(text, { lang = 'en', rate = 1 } = {}) {
   for (let i = 0; i < phones.length; i++) {
     const p = phones[i];
     if (p.k !== 'x') continue;
-    let src = null;
-    for (let j = i + 1; j < phones.length && phones[j].wi === p.wi; j++) if (phones[j].k === 'v') { src = phones[j]; break; }
-    if (!src) for (let j = i - 1; j >= 0 && phones[j].wi === p.wi; j--) if (phones[j].k === 'v' || phones[j].k === 'g') { src = phones[j]; break; }
-    p.v = src ? src.v : 'EE';
-    p.o = (src ? src.o : 0.4) * 0.5;
+    let from = null;
+    for (let j = i + 1; j < phones.length && phones[j].sw === p.sw; j++) if (phones[j].k === 'v') { from = phones[j]; break; }
+    if (!from) for (let j = i - 1; j >= 0 && phones[j].sw === p.sw; j--) if (phones[j].k === 'v' || phones[j].k === 'g') { from = phones[j]; break; }
+    p.v = from ? from.v : 'EE';
+    p.o = (from ? from.o : 0.4) * 0.5;
     p.k = 'c';
   }
   // Word gaps take the shape around them (no mouth closing between words).
@@ -512,16 +459,16 @@ export function buildTimeline(text, { lang = 'en', rate = 1 } = {}) {
       last.o = (last.o * (last.t1 - last.t0) + p.o * d) / (last.t1 - last.t0 + d);
       last.t1 = t + d;
     } else {
-      segs.push({ t0: t, t1: t + d, v: p.v, o: p.o, ci: p.ci, wi: p.wi, k: p.k === 'g' ? 'v' : p.k, stress: p.stress, glide: p.k === 'g' });
+      segs.push({ t0: t, t1: t + d, v: p.v, o: p.o, ci: p.ci, wi: p.wi, sw: p.sw, k: p.k === 'g' ? 'v' : p.k, stress: p.stress, glide: p.k === 'g' });
     }
     t += d;
   }
   // A trailing pause belongs to the gap between sentences, not to this one.
   while (segs.length && segs[segs.length - 1].k === 'pause') t = segs.pop().t0;
-  // Word times from the phones that belong to each word (pauses excluded).
-  const byIndex = new Map(words.map((wd) => [wd.wi, wd]));
+  // Word times from the phones that belong to each spoken word (pauses excluded).
+  const bySpoken = new Map(words.map((wd) => [wd.sw, wd]));
   for (const sg of segs) {
-    const wd = byIndex.get(sg.wi);
+    const wd = bySpoken.get(sg.sw);
     if (!wd || sg.k === 'pause') continue;
     if (wd.t0 === undefined) wd.t0 = sg.t0;
     wd.t1 = sg.t1;
@@ -530,16 +477,30 @@ export function buildTimeline(text, { lang = 'en', rate = 1 } = {}) {
     if (wd.t0 === undefined) wd.t0 = wd.t1 = 0;
   }
   const total = t;
-  const centers = segs.map((s) => (s.t0 + s.t1) / 2);
-  const len = String(text ?? '').length;
-  return { text: String(text ?? ''), lang: es ? 'es' : 'en', rate: r, total, segs, centers, words, cps: total ? (len / total) * 1000 : 0 };
+  const centers = segs.map((x) => (x.t0 + x.t1) / 2);
+  return { text: src, spoken, map, lang: es ? 'es' : 'en', rate: r, total, segs, centers, words, cps: total ? (src.length / total) * 1000 : 0 };
 }
 
-// Index of the word whose text contains `charIndex` (TTS boundary events).
+// Index (into tl.words) of the first spoken word of the original word that
+// contains `charIndex` - recorded voices report times in original units.
 export function wordAtChar(tl, charIndex) {
+  const w = tl.words;
   let best = 0;
-  for (let i = 0; i < tl.words.length; i++) {
-    if (tl.words[i].ci <= charIndex) best = i;
+  for (let i = 0; i < w.length; i++) {
+    if (w[i].ci <= charIndex) best = i;
+    else break;
+  }
+  while (best > 0 && w[best - 1].ci === w[best].ci) best--;
+  return best;
+}
+
+// Index of the spoken word at offset `sci` of tl.spoken (TTS boundary events:
+// the engine is given the spoken text).
+export function wordAtSpoken(tl, sci) {
+  const w = tl.words;
+  let best = 0;
+  for (let i = 0; i < w.length; i++) {
+    if ((w[i].sci ?? w[i].ci) <= sci) best = i;
     else break;
   }
   return best;
@@ -709,8 +670,14 @@ export class SpeechClock {
     this.boundaries++;
   }
 
+  // Boundary in ORIGINAL text units (old engines / callers).
   anchorChar(charIndex, now) {
     this.anchorWord(wordAtChar(this.tl, charIndex), now);
+  }
+
+  // Boundary charIndex in the SPOKEN text (what the TTS engine was given).
+  anchorSpoken(sci, now) {
+    this.anchorWord(wordAtSpoken(this.tl, sci), now);
   }
 
   end(now) {

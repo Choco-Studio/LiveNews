@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { claimGrounded, extractFigures, groundQuote, isGrave, numbersGrounded, numbersIn, quotesIn, wordsGrounded } from '../server/facts.js';
+import { claimGrounded, extractFigures, groundQuote, isGrave, numbersGrounded, numbersIn, quotationsGrounded, quotesIn, wordsGrounded } from '../server/facts.js';
 
 describe('numbersIn', () => {
   test('reads figures as news copy writes them, with scale words', () => {
@@ -87,14 +87,19 @@ describe('extractFigures', () => {
   });
 
   test('percentages keep their direction when the copy gives one; money and scales are read as written', () => {
-    assert.equal(extractFigures('Brent crude dropped 2 percent to 71 dollars a barrel.')[0].fact, 'DOWN 2%');
-    assert.equal(extractFigures('A deal worth about 12 billion dollars.')[0].fact, '12 BILLION DOLLARS');
-    assert.equal(extractFigures('More than 160 million passengers used the network.')[0].fact, '160 MILLION PASSENGERS');
+    assert.equal(extractFigures('Brent crude dropped 2 percent to 71 dollars a barrel.').find((f) => f.value === '2%').fact, 'BRENT CRUDE DOWN 2%');
+    assert.equal(extractFigures('The index has gained 21 percent since January.')[0].fact, 'INDEX UP 21%', 'a percentage names what moved');
+    assert.equal(extractFigures('A survey found 62 percent of traders use solar.')[0].fact, '62% OF TRADERS');
+    assert.equal(extractFigures('The cost of shipping a container has fallen by 20 percent.')[0].fact, 'COST DOWN 20%');
+    assert.equal(extractFigures('Electric models made up 17 percent of new cars.')[0].fact, '17% OF NEW CARS', '"made up" is not a rise');
+    assert.deepEqual(extractFigures('It is 20 percent.'), [], 'a bare percentage with nothing to say is dropped');
+    assert.equal(extractFigures('A deal worth about 12 billion dollars.')[0].fact, 'ABOUT 12 BILLION DOLLARS');
+    assert.equal(extractFigures('More than 160 million passengers used the network.')[0].fact, 'MORE THAN 160 MILLION PASSENGERS');
   });
 
   test('a magnitude is named before its figure, and labels stop at the verb', () => {
     assert.equal(extractFigures('A magnitude 5.8 earthquake shook northern Chile.')[0].fact, 'MAGNITUDE 5.8');
-    assert.equal(extractFigures('Some 300 workers took part.')[0].fact, '300 WORKERS');
+    assert.equal(extractFigures('Some 300 workers took part.')[0].fact, 'ABOUT 300 WORKERS');
   });
 
   test('skips bare years, dates, clock times, ordinals and bare small numbers', () => {
@@ -104,6 +109,71 @@ describe('extractFigures', () => {
   test('every figure it extracts is grounded in its own source', () => {
     const src = 'A magnitude 5.8 earthquake shook the north. Curators say the larger boat is 43 metres long and was rebuilt from 1,200 pieces.';
     for (const f of extractFigures(src)) assert.ok(claimGrounded(f.fact, src), f.fact);
+  });
+});
+
+describe('extractFigures: qualifiers and ages', () => {
+  test('keeps "about", "more than" and "up to" with the figure, on the card and in speech', () => {
+    const [f] = extractFigures('It will cost about 1,500 dollars when it launches.');
+    assert.deepEqual(f, { value: '1,500', label: 'DOLLARS', fact: 'ABOUT 1,500 DOLLARS', said: 'about 1,500 dollars', score: 5.5, qualifier: 'ABOUT' });
+    assert.equal(extractFigures('Waves of up to 3 metres hit the coast.')[0].fact, 'UP TO 3 METRES');
+    assert.equal(extractFigures('It supplies more than 1 million people.')[0].fact, 'MORE THAN 1 MILLION PEOPLE');
+  });
+
+  test('marks ages ("7,000 years old", "3,000-year-old") so they are never the number of the day', () => {
+    assert.equal(extractFigures('Footprints about 7,000 years old were found.')[0].age, true);
+    assert.equal(extractFigures('A 3,000-year-old temple was found.')[0].age, true);
+    assert.equal(extractFigures('It will carry 40,000 passengers a day.')[0].age, undefined);
+  });
+
+  test('labels stop at time words: "6 million passengers last month" is "6 MILLION PASSENGERS"', () => {
+    assert.equal(extractFigures('Airports handled a record 6 million passengers last month.')[0].fact, '6 MILLION PASSENGERS');
+  });
+});
+
+describe('numbersGrounded: scale, percent, currency, counted thing and words', () => {
+  const W = { words: true };
+  test('the scale must match: 12 million is not 12 billion', () => {
+    assert.equal(numbersGrounded('a 12 million dollar deal', 'worth about 12 billion dollars', W), false);
+    assert.equal(numbersGrounded('$12 MILLION DEAL', 'A deal worth about 12 billion dollars', W), false);
+    assert.equal(numbersGrounded('$12 BILLION DEAL', 'A deal worth about 12 billion dollars', W), true);
+    assert.equal(numbersGrounded('1 million trees', 'Volunteers planted one million trees.', W), true, 'number words in the source count too');
+  });
+
+  test('a percentage needs a percentage, a currency the same currency', () => {
+    assert.equal(numbersGrounded('up 40%', 'about 40 people attended', W), false);
+    assert.equal(numbersGrounded('40 people', 'prices rose 40 percent', W), false);
+    assert.equal(numbersGrounded('£12 million', 'a $12 million fund', W), false);
+    assert.equal(numbersGrounded('€300m', 'It cost 300 million euros.', W), true);
+  });
+
+  test('the thing counted must match when the source counts something else', () => {
+    assert.equal(numbersGrounded('120 people died', 'Officials opened 120 relief camps.', W), false);
+    assert.equal(numbersGrounded('120 relief camps', 'Officials opened 120 relief camps.', W), true);
+    assert.equal(numbersGrounded('Three people were injured.', 'Fire leaves three injured.', W), true, 'the source counts no other thing');
+    assert.equal(numbersGrounded('at 3.5 percent, Ledger Line reports', 'kept rates at 3.5 percent.', W), true, 'the counted noun stops at the comma');
+  });
+
+  test('numbers in words are claims too; "one" alone is not (it is usually a pronoun)', () => {
+    assert.equal(numbersGrounded('Seven people were hurt.', 'Two people were hurt.', W), false);
+    assert.equal(numbersGrounded('Two people were hurt.', 'Two people were hurt.', W), true);
+    assert.equal(numbersGrounded('Hundreds of people were killed.', 'Rain flooded streets.', W), false);
+    assert.equal(numbersGrounded('One of the cubs is female.', 'Two cubs were born.', W), true);
+    assert.equal(numbersGrounded('Seven people were hurt.', 'Two people were hurt.'), true, 'words are only checked when asked (labels)');
+  });
+});
+
+describe('quotationsGrounded and the speaker of a quote', () => {
+  const src = 'In Kerala, rain flooded streets. “We are working day and night,” the chief minister said.';
+  test('a quotation in spoken text must be in the source word for word', () => {
+    assert.equal(quotationsGrounded('“We are working day and night,” the chief minister said.', src), true);
+    assert.equal(quotationsGrounded('“We will rebuild every home by Christmas,” the chief minister said.', src), false);
+    assert.equal(quotationsGrounded('He said "yes" and left.', src), true, 'one or two words in quotes are not a quotation');
+  });
+
+  test('"by" is kept only when it is the speaker the source gives for that quotation', () => {
+    assert.equal(groundQuote({ text: 'We are working day and night', by: 'the chief minister' }, src).by, 'the chief minister');
+    assert.equal(groundQuote({ text: 'We are working day and night', by: 'Kerala' }, src).by, null, 'a place the summary names is not the speaker');
   });
 });
 

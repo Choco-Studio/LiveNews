@@ -77,6 +77,20 @@ export function headFrame(L, sk, toS, s) {
       const dx = px - cx, dy = py - cy;
       return [(dx * cr + dy * sr) / s, (-dx * sr + dy * cr) / s];
     },
+    // Allocation-free variants for per-pixel loops (same maths; `out` is a
+    // caller-owned 2-element array). toScreen/toLocal keep their [x, y] return
+    // value because cast files destructure it (CONTRACTS "head frame").
+    toScreenInto(x, y, out) {
+      out[0] = cx + s * (x * cr - y * sr);
+      out[1] = cy + s * (x * sr + y * cr);
+      return out;
+    },
+    toLocalInto(px, py, out) {
+      const dx = px - cx, dy = py - cy;
+      out[0] = (dx * cr + dy * sr) / s;
+      out[1] = (-dx * sr + dy * cr) / s;
+      return out;
+    },
   };
 }
 

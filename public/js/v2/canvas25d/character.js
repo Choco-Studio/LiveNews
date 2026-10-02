@@ -27,10 +27,26 @@ import { drawArm, drawProps } from './hands.js';
 export { TILT } from './space.js';
 export { matsOf };
 
-// Group ids inside one character (offset by the character's group base).
-// Each hand uses 6 consecutive groups (palm, thumb, 4 fingers) so fingers get separation lines.
-const G = { hairBack: 1, neck: 2, shirt: 3, tie: 4, jacket: 5, ears: 6, head: 7, hair: 8, over: 9, mustache: 9, collar: 10, armA: 11, cuffA: 12, handA: 13, armB: 20, cuffB: 21, handB: 22, extra: 30 };
-export const GROUPS_PER_ACTOR = 32;
+// Group ids inside one character (offset by the character's group base, which
+// the head frame carries as head.gb so look hooks can pick their own groups).
+// Two parts in different groups get a 1 px inner line where they overlap, so
+// separate groups are how fingers, hair clumps or glasses read as separate.
+// Each hand uses 6 consecutive groups (palm, thumb, 4 fingers).
+// RANGES (wave 2, CONTRACTS "group ids"): the PartBuffer holds 256 groups, so a
+// character gets 64 (up to 4 characters per frame). Owners only use their range:
+//   1-10, 19    body, head, hair, over (PRESENTERS A, character.js / cast/outfit.js)
+//   11-18, 20-27 arms, cuffs, hands (HANDS)   28-29 spare (HANDS)
+//   30-39       props: papers, pen, sleeve folds (HANDS; drawProps gets gb + 30)
+//   40-55       look-owned extras: hair clumps, jewellery, robot plates (the look's
+//               stream: PRESENTERS A for paco/lola/sam/penny, B for max/ada/nova/unit8)
+//   56-59       face extras: glasses frame and lenses (FACES; drawGlasses)
+//   60-63       reserved (INTEGRATION)
+const G = {
+  hairBack: 1, neck: 2, shirt: 3, tie: 4, jacket: 5, ears: 6, head: 7, hair: 8, over: 9, mustache: 9, collar: 10,
+  armA: 11, cuffA: 12, handA: 13, armB: 20, cuffB: 21, handB: 22, extra: 30,
+  props: 30, propsEnd: 39, look: 40, lookEnd: 55, glasses: 56, glassesEnd: 59, reserved: 60,
+};
+export const GROUPS_PER_ACTOR = 64;
 
 /**
  * Draw a solved presenter.
@@ -59,6 +75,7 @@ export function drawCharacter(buf, L, sk, xf) {
 
   // ---- back hair (e.g. a bob) behind the head and neck
   const head = headFrame(L, sk, toS, s);
+  head.gb = gb; // group base for look hooks: buf.part(head.gb + GROUPS.look + i, z)
   if (parts.hairBack) {
     buf.part(gb + G.hairBack, 2, false);
     parts.hairBack(buf, L, m, head, s, sk);

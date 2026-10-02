@@ -3,14 +3,20 @@
 // and an emblem (docs/ART_DIRECTION.md, "Programme open").
 //
 // Every open lasts 4 s in three acts on the same clock:
-//   BUILD  0.0-1.5  the yellow "bit" from the logo appears at centre stage and
+//   BUILD  0.0-1.55 the yellow "bit" from the logo appears at centre stage and
 //                   the programme's emblem builds around it (its one motion idea)
-//   REVEAL 1.5-3.2  the emblem glides (and pulls back) to its slot on the left,
-//                   the title plate wipes out from behind it, the title rises in
-//                   at 2x, then the tagline and credits; the bit travels to the
-//                   plate's corner and the on-air top row (bug, LIVE, clock) comes
-//                   on with its single glint, so the cut keeps the same pixels
+//   REVEAL 1.55-3.15 the emblem glides (and pulls back) to its slot on the left,
+//                   the title plate wipes out beside it, the title rises in at
+//                   2x, then the tagline and credits; the bit travels to the
+//                   plate's corner and the on-air top row (bug, LIVE, clock)
+//                   comes on with its single glint, so the cut keeps the same
+//                   pixels. The last move lands just before the theme's final
+//                   chord (themeFor hitAt = 3.2 s).
 //   SETTLE 3.2-4.0  the lock-up holds perfectly still for the hard cut
+//
+// The title column is the same for every programme (plate at x 130, title at
+// x 152); each emblem declares its right-hand extent and its slot is placed so
+// it never touches the plate (only opaque globes may sit in front of it).
 //
 // Everything is a pure function of dt, drawn in whole pixels with palette
 // colours; static layers are baked once into offscreen canvases.
@@ -27,23 +33,26 @@ export const W = 384;
 export const H = 216;
 export const DURATION = 4.0;
 
-/** Where the emblem builds (act 1) and where it settles in the lock-up. */
+/** Where the emblem builds (act 1); the lock-up row (y) and the shared title column. */
 export const CENTRE = { x: 192, y: 98 };
 export const SLOT = { x: 100, y: 98 };
+export const PLATE_X = 130;
+export const TITLE_X = 152;
+const PLATE_GAP = 4; // clear pixels between an emblem and the plate
 
 /** The shared clock (seconds from the start of the open). */
 export const TL = {
   seed: 0.08, // the bit appears where the emblem will grow
-  glide: 1.5, // emblem glides from centre stage to its slot
-  glideDur: 0.75,
-  plate: 1.92, // title plate wipes out from behind the emblem
+  glide: 1.55, // emblem glides from centre stage to its slot
+  glideDur: 0.85,
+  plate: 2.15, // title plate wipes out beside the emblem
   plateDur: 0.42,
-  title: 2.18, // title rises in, 0.1 s after most of the plate is out
-  bar: 2.22,
-  tag: 2.4,
-  credits: 2.55,
-  pop: 2.12, // the bit pops out of the emblem's shoulder...
-  hop: 2.46, // ...and hops onto the plate's top-right corner
+  title: 2.45, // title rises in, once most of the plate is out
+  bar: 2.5,
+  tag: 2.68,
+  credits: 2.82,
+  pop: 2.35, // the bit pops out of the emblem's shoulder...
+  hop: 2.72, // ...and hops onto the plate's top-right corner
   hopDur: 0.42,
   bug: 2.3, // fallback logo bug (when the graphics top row is unavailable); its glint ends by STILL
   still: 3.2, // nothing moves from here to the cut
@@ -62,12 +71,24 @@ export function emblemScale(dt) {
   return lerp(ZOOM, 1, easeInOut(seg(dt, TL.glide, TL.glideDur)));
 }
 
-/** Emblem centre at dt: centre stage, then an eased glide with a gentle arc. */
-export function emblemPos(dt, out = { x: 0, y: 0 }) {
+/** Emblem centre at dt: centre stage, then an eased glide with a gentle arc to (slotX, SLOT.y). */
+export function emblemPos(dt, out = { x: 0, y: 0 }, slotX = SLOT.x) {
   const k = easeInOut(seg(dt, TL.glide, TL.glideDur));
-  out.x = Math.round(lerp(CENTRE.x, SLOT.x, k));
+  out.x = Math.round(lerp(CENTRE.x, slotX, k));
   out.y = Math.round(lerp(CENTRE.y, SLOT.y, k) - 3 * Math.sin(Math.PI * k));
   return out;
+}
+
+/**
+ * Lock-up x of a programme's emblem: its right-hand extent (at size 1) ends PLATE_GAP px before the
+ * plate; `front` emblems (opaque globes) may overlap the plate's left end by 4 px, as in the mark.
+ */
+export function slotFor(prog) {
+  if (prog._slotX === undefined) {
+    const ext = prog.extent ?? 30;
+    prog._slotX = PLATE_X - PLATE_GAP - ext + (prog.front ? 8 : 0);
+  }
+  return prog._slotX;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,7 +97,7 @@ export function emblemPos(dt, out = { x: 0, y: 0 }) {
 
 /**
  * Baked backdrop canvas. spec = { key, cx, cy, colors: [dark..light], reach,
- * texture(pix32, w, h, level) } where level(x, y) is the ramp value 0..n.
+ * texture(pix32, level) } where level(x, y) is the ramp value 0..n.
  */
 export function backdrop(spec) {
   return cached(`bg|${spec.key}`, () => {
@@ -87,9 +108,11 @@ export function backdrop(spec) {
     const cols = (spec.colors || [P.black, P.ink]).map((h) => u32(h));
     const n = cols.length - 1;
     const reach = spec.reach || 210;
+    const ox = spec.cx ?? 192;
+    const oy = spec.cy ?? 98;
     const level = (x, y) => {
-      const dx = (x - (spec.cx ?? 192)) / (reach * 1.35);
-      const dy = (y - (spec.cy ?? 98)) / reach;
+      const dx = (x - ox) / (reach * 1.35);
+      const dy = (y - oy) / reach;
       // a short dithered falloff between flat steps, not one wide checkerboard
       return clamp(((1 - Math.sqrt(dx * dx + dy * dy)) * 2.1 - 0.55) * n, 0, n);
     };
@@ -163,13 +186,13 @@ function titleCanvas(text, ink) {
   });
 }
 
-/** Lock-up geometry for a title/tagline/credits set (cached). */
+/** Lock-up geometry for a title/tagline/credits set (cached). The column is the same for every show. */
 export function lockupLayout(info, style) {
   const hit = info.layouts?.get(style.ink);
   if (hit) return hit;
   const key = `lay|${style.ink}|${info.key || `${info.title}|${info.tagline}|${info.presenters.join(',')}`}`;
   const v = cached(key, () => {
-    const titleX = SLOT.x + 52;
+    const titleX = TITLE_X;
     const maxTitle = W - 19 - 12 - titleX;
     let lines = [String(info.title || '').toUpperCase().trim() || 'GLOBIT 24'];
     if (measureText(lines[0], 2) > maxTitle) {
@@ -185,10 +208,11 @@ export function lockupLayout(info, style) {
       lines = best ? [ellipsis(best.a, maxTitle, 2), ellipsis(best.b, maxTitle, 2)] : [ellipsis(lines[0], maxTitle, 2)];
     }
     const titles = lines.map((l) => titleCanvas(l, style.ink));
-    const titleW = Math.max(...titles.map((t) => t.w));
+    let titleW = 0;
+    for (let i = 0; i < titles.length; i++) titleW = Math.max(titleW, titles[i].w);
     const plateH = 12 + titles.length * 14 + (titles.length - 1) * 4;
     const plateY = SLOT.y - 13 - (titles.length - 1) * 9;
-    const plateX = SLOT.x + 30;
+    const plateX = PLATE_X;
     const plateW = titleX - plateX + titleW + 12;
     const textW = W - 19 - titleX;
     const tagline = info.tagline ? ellipsis(info.tagline, textW) : '';
@@ -200,23 +224,30 @@ export function lockupLayout(info, style) {
       tagline, tagY, credits, credY: tagY + (tagline ? 12 : 0),
       bitX: plateX + plateW - 2, bitY: plateY - 2,
     };
+    out.bottom = credits ? out.credY + 7 : tagline ? tagY + 7 : plateY + plateH + 2; // last text row
     return out;
   });
   info.layouts?.set(style.ink, v);
   return v;
 }
 
-/** Opens a mask for text that rises `rise` px into place at its own rows; returns the offset or -1. */
-function riseMask(ctx, p, x, y, h, rise) {
-  if (p <= 0) return -1;
+/** Text that rises `rise` px into place inside a mask at its own rows (state always restored). */
+function riseText(ctx, p, x, y, h, rise, draw) {
+  if (p <= 0) return;
+  const off = Math.round((1 - easeOutQuint(p)) * rise);
   ctx.save();
-  clipRect(ctx, x - 2, y - 1, W, h + 2);
-  return Math.round((1 - easeOutQuint(p)) * rise);
+  try {
+    clipRect(ctx, x - 2, y - 1, W, h + 2);
+    draw(off);
+  } finally {
+    ctx.restore();
+  }
 }
 
 /**
  * Plate, title, accent bar, tagline and credits. style = { accent, plate,
- * ink: 'light' | 'dark', bar }.
+ * ink: 'light' | 'dark', bar, barH (default 2), barX0 (the bar may start left of
+ * the plate, e.g. from under the emblem) }.
  */
 export function drawLockup(ctx, dt, info, style) {
   const L = lockupLayout(info, style);
@@ -229,41 +260,42 @@ export function drawLockup(ctx, dt, info, style) {
     ctx.fillRect(L.plateX, L.plateY, vis, 1);
   }
   // accent bar under the plate grows left to right
-  const bar = Math.round(L.plateW * easeOutQuint(seg(dt, TL.bar, 0.36)));
+  const x0 = style.barX0 ?? L.plateX;
+  const bar = Math.round((L.plateX + L.plateW - x0) * easeOutQuint(seg(dt, TL.bar, 0.4)));
   if (bar > 0) {
     ctx.fillStyle = style.bar || style.accent;
-    ctx.fillRect(L.plateX, L.plateY + L.plateH, bar, 2);
+    ctx.fillRect(x0, L.plateY + L.plateH, bar, style.barH || 2);
   }
   // title rises inside the plate
-  const tp = seg(dt, TL.title, 0.3);
-  if (tp > 0) {
+  if (dt > TL.title && vis > 0) {
     ctx.save();
-    clipRect(ctx, L.plateX, L.plateY + 1, Math.max(0, vis), L.plateH - 1);
-    L.titles.forEach((T, i) => {
-      const y = L.plateY + 6 + i * 18;
-      const off = Math.round((1 - easeOutQuint(seg(dt, TL.title + i * 0.06, 0.3))) * 9);
-      ctx.drawImage(T.cv, L.titleX, y - 4 + off);
-    });
-    ctx.restore();
+    try {
+      clipRect(ctx, L.plateX, L.plateY + 1, vis, L.plateH - 1);
+      for (let i = 0; i < L.titles.length; i++) {
+        const T = L.titles[i];
+        const y = L.plateY + 6 + i * 18;
+        const off = Math.round((1 - easeOutQuint(seg(dt, TL.title + i * 0.06, 0.32))) * 9);
+        ctx.drawImage(T.cv, L.titleX, y - 4 + off);
+      }
+    } finally {
+      ctx.restore();
+    }
   }
   // tagline and credits
   if (L.tagline) {
-    const off = riseMask(ctx, seg(dt, TL.tag, 0.3), L.titleX, L.tagY, 7, 7);
-    if (off >= 0) {
-      drawText(ctx, L.tagline, L.titleX, L.tagY + off, { color: P.silver });
-      ctx.restore();
-    }
+    riseText(ctx, seg(dt, TL.tag, 0.3), L.titleX, L.tagY, 7, 7, (off) => drawText(ctx, L.tagline, L.titleX, L.tagY + off, TAG_STYLE));
   }
   if (L.credits) {
-    const off = riseMask(ctx, seg(dt, TL.credits, 0.3), L.titleX, L.credY, 7, 7);
-    if (off >= 0) {
-      const lw = drawText(ctx, L.credits.label, L.titleX, L.credY + off, { color: P.fog });
-      drawText(ctx, L.credits.names, L.titleX + lw + 4, L.credY + off, { color: P.white });
-      ctx.restore();
-    }
+    riseText(ctx, seg(dt, TL.credits, 0.3), L.titleX, L.credY, 7, 7, (off) => {
+      const lw = drawText(ctx, L.credits.label, L.titleX, L.credY + off, LABEL_STYLE);
+      drawText(ctx, L.credits.names, L.titleX + lw + 4, L.credY + off, NAMES_STYLE);
+    });
   }
   return L;
 }
+const TAG_STYLE = { color: P.silver };
+const LABEL_STYLE = { color: P.fog };
+const NAMES_STYLE = { color: P.white };
 
 /**
  * The bit pops out of the emblem's top-right shoulder (like the logo's bit off its globe), then
@@ -283,20 +315,25 @@ export function drawHopBit(ctx, dt, ex, ey, L, shoulder = 30, popAt = TL.pop) {
   drawBit(ctx, x, y, 4);
 }
 
-// The on-air top row (bug, LIVE, London clock) from the graphics package, so the lock-up ends on
-// exactly the pixels the programme continues with. It comes on at 1.7 s so its single glint is
-// over by TL.still. Falls back to the logo's bug if the graphics module is unavailable.
+// The on-air top row (bug, LIVE or REPLAY, London clock) from the graphics package, so the lock-up
+// ends on exactly the pixels the programme continues with. It comes on at 1.7 s so its single glint
+// is over by TL.still. Falls back to the logo's bug if the graphics module is unavailable.
 const TOP_V = { onAt: 1.7, replay: false, program: null, programIn: null, programOut: null, clock: '' };
 let BUG_W = 0;
-export function drawBug(ctx, dt) {
+export function drawBug(ctx, dt, info = null) {
+  if (info && info.bug === false) return;
   if (typeof topRow.drawTopRow === 'function') {
     if (dt < TOP_V.onAt) return;
     TOP_V.clock = clockIn().time;
+    TOP_V.replay = !!info?.replay;
+    ctx.save();
     try {
       topRow.drawTopRow(ctx, dt, TOP_V);
       return;
     } catch {
       /* fall back to the logo bug below */
+    } finally {
+      ctx.restore();
     }
   }
   const p = easeOutQuint(seg(dt, TL.bug, 0.34));
@@ -304,12 +341,15 @@ export function drawBug(ctx, dt) {
   if (!BUG_W) BUG_W = measureLogo({ variant: 'bug' }).w || 48;
   const vis = Math.round((BUG_W + 1) * p);
   ctx.save();
-  clipRect(ctx, 13, 8, vis, 14);
-  // logo.js plays its glint during the first 0.9 s of a cycle: start it with the wipe so it
-  // is over by TL.still, and stop animating after that
-  const lt = dt - TL.bug;
-  drawLogo(ctx, 13, 8, { variant: 'bug', t: lt < 0.9 ? lt : null });
-  ctx.restore();
+  try {
+    clipRect(ctx, 13, 8, vis, 14);
+    // logo.js plays its glint during the first 0.9 s of a cycle: start it with the wipe so it
+    // is over by TL.still, and stop animating after that
+    const lt = dt - TL.bug;
+    drawLogo(ctx, 13, 8, { variant: 'bug', t: lt < 0.9 ? lt : null });
+  } finally {
+    ctx.restore();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -342,22 +382,31 @@ export function frameBuffer(key, w, h) {
 }
 
 let LAST = null;
+function samePresenters(a, b) {
+  if (a.length !== b.length) return false;
+  for (let k = 0; k < b.length; k++) if (a[k] !== String(b[k] ?? '')) return false;
+  return true;
+}
 /**
- * Normalised open info (title, tagline, presenters, channel). The caller may pass a fresh object
- * every frame: while the values are the same the previous normalised object (and its cached
- * layouts) is returned, so nothing is rebuilt.
+ * Normalised open info (title, tagline, presenters, channel, replay, bug). The caller may pass a fresh
+ * object every frame: while the values are the same the previous normalised object (and its cached
+ * layouts) is returned, so nothing is rebuilt. `bug: false` leaves the on-air top row out (promos).
  */
 export function normInfo(info) {
   const i = info || {};
   const title = String(i.title || i.channel || 'GLOBIT 24');
   const tagline = String(i.tagline || '');
   const pres = Array.isArray(i.presenters) ? i.presenters : [];
-  if (LAST && LAST.title === title && LAST.tagline === tagline && LAST.presenters.length === pres.length && pres.every((p, k) => LAST.presenters[k] === String(p ?? ''))) return LAST;
+  const replay = !!i.replay;
+  const bug = i.bug !== false;
+  if (LAST && LAST.title === title && LAST.tagline === tagline && LAST.replay === replay && LAST.bug === bug && samePresenters(LAST.presenters, pres)) return LAST;
   const presenters = pres.map((n) => String(n ?? ''));
   LAST = {
     title,
     tagline,
     presenters,
+    replay,
+    bug,
     date: String(i.date || ''),
     channel: String(i.channel || 'GLOBIT 24'),
     key: `${title}|${tagline}|${presenters.join(',')}`,
@@ -369,19 +418,25 @@ export function normInfo(info) {
 /**
  * Runs one open: backdrop, seed, emblem (act 1 at centre, then gliding), the
  * lock-up and the bug, in the shared order. prog = { style, background(),
- * emblem(ctx, dt, x, y, k) with k the size factor (ZOOM -> 1), absorb (when
- * the seed bit is absorbed), shoulder (where the bit pops out, at k = 1),
- * popAt, bit (false: no hopping bit) }.
+ * emblem(ctx, dt, x, y, k) with k the size factor (ZOOM -> 1), extent (right
+ * half-width at k = 1), front (opaque: may overlap the plate), absorb (when the
+ * seed bit is absorbed), shoulder (where the bit pops out, at k = 1), popAt,
+ * bit (false: no hopping bit) }.
  */
 export function playOpen(ctx, dt, info, prog) {
   ctx.drawImage(prog.background(), 0, 0);
   prog.under?.(ctx, dt);
-  const pos = emblemPos(dt, POS);
+  const pos = emblemPos(dt, POS, slotFor(prog));
   const k = emblemScale(dt);
   const L = drawLockup(ctx, dt, info, prog.style);
   drawSeed(ctx, dt, CENTRE.x, CENTRE.y, prog.absorb ?? 0.4);
-  prog.emblem(ctx, dt, pos.x, pos.y, k);
+  ctx.save();
+  try {
+    prog.emblem(ctx, dt, pos.x, pos.y, k);
+  } finally {
+    ctx.restore();
+  }
   if (prog.bit !== false) drawHopBit(ctx, dt, pos.x, pos.y, L, Math.round((prog.shoulder ?? 30) * k), prog.popAt);
-  drawBug(ctx, dt);
+  drawBug(ctx, dt, info);
 }
 const POS = { x: 0, y: 0 };

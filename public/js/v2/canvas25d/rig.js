@@ -16,9 +16,17 @@
 //                                      small nods); behaviour.js listening nods
 // Then partner space is mirrored to screen space for whoever sits on the
 // right (solve), and both arms are solved with 3D two-bone IK (elbow pole hints).
+// FROZEN layer signatures (CONTRACTS "rig layer signatures"; change only by a
+// dated CONTRACTS entry agreed by HANDS and FACES):
+//   applyEmotion(c, perf, t, persona)          applyLook(c, perf, t, gestLook) → gestLook
+//   applyIdle(c, persona, perf, t, seed, gestLook)   applySpeech(c, persona, perf, t) → frame
+//   applyListen(c, perf, t, seed)              solveFace(c, face, m)
+// Everything a layer needs travels in perf (side: +1 | -1 | 0 solo, seed, look[] entries
+// { t0, t1, target, amt? }, gestures[] entries { name, t0, speed?, n?, variant?, amp? }).
+// FACES adds channels through expression.js FACE_REST (reset here every frame).
 import { REST, GESTURES, ARM_CHANNELS } from './gestures/index.js';
 import { evalTrack, copy } from './tracks.js';
-import { applyEmotion, solveFace } from './expression.js';
+import { applyEmotion, solveFace, FACE_REST } from './expression.js';
 import { applyLook, applyListen } from './behaviour.js';
 import { applyIdle } from './idle.js';
 import { applySpeech } from './speech.js';
@@ -36,6 +44,7 @@ function newChannels() {
   c.wide = 0;
   c.blink = 0;
   c.breathe = 0;
+  for (const k in FACE_REST) c[k] = FACE_REST[k]; // channels the FACES stream adds
   return c;
 }
 
@@ -47,6 +56,7 @@ function resetChannels(c) {
   c.wide = 0;
   c.blink = 0;
   c.breathe = 0;
+  for (const k in FACE_REST) c[k] = FACE_REST[k];
 }
 
 // ---------------------------------------------------------------------------

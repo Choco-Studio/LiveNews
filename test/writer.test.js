@@ -61,8 +61,9 @@ const PLACES = makeStory('s1', {
     'Some 40,000 people were evacuated after a magnitude seven point one earthquake struck off the coast of Japan, a 7.1 magnitude quake. ' +
     'A $2 billion deal was signed. The word ' + 'x'.repeat(43) + ' was used.',
 });
-/** Like storyOf, for a story whose source supports the places and facts. */
-const placeOf = (extra, opts) => normalize([storySeg('s1', extra)], { stories: [PLACES], opts }).segments[1];
+/** Like storyOf, for a story whose source supports the places and facts (and whose text says the figures). */
+const placeOf = (extra, opts) =>
+  normalize([storySeg('s1', { text: 'Some 40,000 people were evacuated. A $2 billion deal was signed. A 7.1 magnitude quake struck.', ...extra })], { stories: [PLACES], opts }).segments[1];
 
 const types = (bulletin) => bulletin.segments.map((s) => s.type);
 
@@ -201,7 +202,8 @@ describe('normalizeBulletin: story segments', () => {
   test('breaking is only true for a literal boolean true', () => {
     const stories = ['s1', 's2', 's3'].map((id) => makeStory(id, { title: `BREAKING: story ${id}` }));
     const b = normalize([storySeg('s1', { breaking: 'true' }), storySeg('s2', { breaking: 1 }), storySeg('s3', { breaking: true })], { stories });
-    assert.deepEqual(b.segments.filter((s) => s.type === 'story').map((s) => s.breaking), [false, false, true]);
+    const flags = Object.fromEntries(b.segments.filter((s) => s.type === 'story').map((s) => [s.storyId, s.breaking]));
+    assert.deepEqual(flags, { s1: false, s2: false, s3: true });
   });
 
   test('breaking also needs the outlet itself to call it breaking news (a writer cannot promote an ordinary story)', () => {
@@ -213,7 +215,17 @@ describe('normalizeBulletin: story segments', () => {
       makeStory('s5', { title: 'Election night – live' }),
     ];
     const b = normalize(stories.map((s) => storySeg(s.id, { breaking: true })), { stories });
-    assert.deepEqual(b.segments.filter((s) => s.type === 'story').map((s) => s.breaking), [false, true, true, false, false]);
+    const flags = Object.fromEntries(b.segments.filter((s) => s.type === 'story').map((s) => [s.storyId, s.breaking]));
+    assert.deepEqual(flags, { s1: false, s2: true, s3: true, s4: false, s5: false });
+  });
+
+  test('a breaking story always leads, ahead of any chat, and is never a feature', () => {
+    const stories = [makeStory('s1'), makeStory('s2', { title: 'BREAKING: headline of story s2' }), makeStory('s3')];
+    const b = normalize([storySeg('s1'), otherSeg('chat', { text: 'A chat line.' }), storySeg('s2', { breaking: true, feature: 'lighter' }), storySeg('s3')], { stories });
+    assert.deepEqual(b.segments.map((s) => s.storyId || s.type), ['intro', 's2', 's1', 'chat', 's3', 'outro']);
+    assert.equal(b.segments[1].breaking, true);
+    assert.ok(!('feature' in b.segments[1]));
+    assert.deepEqual(b.rundown.map((r) => r.storyId), ['s2', 's1', 's3']);
   });
 
   test('maxStories keeps the first N valid, distinct stories and drops the rest', () => {
@@ -272,40 +284,45 @@ describe('normalizeBulletin: field validation', () => {
     assert.deepEqual([outro.anchor, outro.emotion], ['A', 'sad']);
   });
 
-  test('clamps the headline to 56 characters at a word boundary', () => {
-    const headline = 'seven '.repeat(12).trim(); // 71 chars, words of 5 letters
-    const s = storyOf({ headline });
-    assert.ok(s.headline.length <= 56, `length ${s.headline.length}`);
-    assert.equal(s.headline, 'seven '.repeat(9).trim());
-    assert.ok(headline.startsWith(s.headline) && headline[s.headline.length] === ' ', 'cut must fall on a word boundary');
+  test('keeps the writer\'s headline when it is a complete phrase the source supports, up to 45 characters', () => {
+    const stories = [makeStory('s1', { title: 'Lisbon opens a new riverside tram line', summary: 'Lisbon has opened a new tram line along the river.' })];
+    const hl = (headline, opts) => normalize([storySeg('s1', { headline })], { stories, opts }).segments[1].headline;
+    assert.equal(hl('Lisbon opens new tram line'), 'Lisbon opens new tram line');
+    assert.equal(hl('Lisbon opens a new tram line along the river'), 'Lisbon opens a new tram line along the river', '44 characters fit');
+    assert.equal(hl('Lisbon opens a new riverside tram line along the river'), 'Lisbon opens new riverside tram line along the river', 'articles go first when it is too long');
+    assert.equal(hl('Riverside tram opens in Lisbon'), 'Riverside tram opens in Lisbon');
   });
 
-  test('keeps a headline that is already short enough, including exactly 56 characters', () => {
-    const exactly56 = 'word ' + 'x'.repeat(51);
-    assert.equal(exactly56.length, 56);
-    assert.equal(storyOf({ headline: exactly56 }).headline, exactly56);
-    assert.equal(storyOf({ headline: 'Short' }).headline, 'Short');
+  test('a headline cut mid-phrase, too long to cut cleanly, or not supported by the source falls back to the outlet\'s title', () => {
+    const stories = [makeStory('s1', { title: 'Study finds city trees cut summer temperatures by 2 degrees', summary: 'Streets with many trees were about 2 degrees cooler.' })];
+    const hl = (headline) => normalize([storySeg('s1', { headline })], { stories }).segments[1].headline;
+    const own = 'Study finds city trees cut summer temperatures by 2 degrees';
+    assert.equal(hl('Study finds city trees cut temperatures by 2'), own, 'a figure cut off from its unit');
+    assert.equal(hl('Study finds city trees cut summer temperatures in'), own, 'ends on a preposition');
+    assert.equal(hl('Trees kill heatwave victims in Paris'), own, 'a claim the source does not make');
+    assert.equal(hl('seven '.repeat(12).trim()), own, 'no clean cut under the hard limit');
+    assert.equal(hl(''), own);
+    assert.equal(hl(undefined), own);
   });
 
-  test('strips trailing punctuation left over after clamping the headline', () => {
-    const headline = 'x'.repeat(50) + ', ' + 'yyyyyyyy zzz';
-    assert.equal(storyOf({ headline }).headline, 'x'.repeat(50));
+  test('the outlet\'s title is shortened only at clean points, and kept whole (for the graphics to wrap) otherwise', () => {
+    const titleOf = (title) => normalize([storySeg('s1', { headline: '' })], { stories: [makeStory('s1', { title })] }).segments[1].headline;
+    assert.equal(titleOf('Coffee futures reach a ten-year high after poor harvests'), 'Coffee futures reach ten-year high');
+    assert.equal(titleOf('Kerala floods: thousands moved to relief camps as heavy rain continues'), 'Kerala floods: thousands moved to relief camps');
+    assert.equal(titleOf('Tech giants agree on a common charger standard for laptops'), 'Tech giants agree on a common charger standard for laptops');
+    assert.equal(titleOf('BREAKING: Panama Canal reopens after a day-long closure'), 'Panama Canal reopens after a day-long closure', 'no BREAKING marker on the strap');
+    assert.equal(titleOf('Climate talks in Nairobi – live'), 'Climate talks in Nairobi');
+    assert.equal(titleOf('Smartphone battery breakthrough promises a week of use'), 'Smartphone battery breakthrough promises a week of use', '"a week" keeps its article');
   });
 
-  test('a single very long word is still clamped to 56 characters', () => {
-    assert.equal(storyOf({ headline: 'a'.repeat(100) }).headline, 'a'.repeat(56));
-  });
-
-  test('falls back to the (clamped) story title when the headline is empty or missing', () => {
-    const stories = [makeStory('s1', { title: 'Original headline of the story' }), makeStory('s2', { title: 'word '.repeat(20) })];
-    const b = normalize([storySeg('s1', { headline: '' }), storySeg('s2', { headline: undefined })], { stories });
-    const [, a, c] = b.segments;
-    assert.equal(a.headline, 'Original headline of the story');
-    assert.ok(c.headline.length <= 56 && c.headline.startsWith('word word'));
+  test('a programme may set a tighter headline limit (headlineMax)', () => {
+    const stories = [makeStory('s1', { title: 'Coffee futures reach a ten-year high after poor harvests' })];
+    const b = normalize([storySeg('s1', { headline: '' })], { stories, opts: { program: { headlineMax: 30 } } });
+    assert.equal(b.segments[1].headline, 'Coffee futures reach ten-year high');
   });
 
   test('clips long text to 520 characters, preferably at a sentence end', () => {
-    const text = 'This is a filler sentence for the script. '.repeat(30).trim();
+    const text = Array.from({ length: 30 }, (_, i) => `This is filler sentence ${'abcdefghijklmnopqrstuvwxyzABCD'[i]} for the script.`).join(' ');
     const s = storyOf({ text });
     assert.ok(text.length > 520);
     assert.ok(s.text.length <= 520, `length ${s.text.length}`);
@@ -328,28 +345,42 @@ describe('normalizeBulletin: field validation', () => {
     assert.ok(s.text.endsWith('word…'), s.text.slice(-20));
   });
 
+  test('a sentence said twice in a segment is said once', () => {
+    assert.equal(storyOf({ text: 'The tram line opens today. It runs along the river. The tram line opens today.' }).text, 'The tram line opens today. It runs along the river.');
+  });
+
+  test('the lead does not repeat the intro\'s line about it word for word', () => {
+    const stories = [makeStory('s1', { title: 'Lisbon opens a new riverside tram line', summary: 'Lisbon has opened a new tram line along the river.' })];
+    const b = normalize(
+      [otherSeg('intro', { text: 'Lisbon opens a new riverside tram line. Hello.' }), storySeg('s1', { text: 'Lisbon opens a new riverside tram line, BBC News reports. It runs along the river.' })],
+      { stories }
+    );
+    assert.equal(b.segments[1].text, 'It runs along the river.');
+  });
+
   test('leaves short text untouched', () => {
-    assert.equal(storyOf({ text: 'Two sentences. Nothing more.' }).text, 'Two sentences. Nothing more.');
+    assert.equal(storyOf({ text: 'Short sentences. Nothing more.' }).text, 'Short sentences. Nothing more.');
   });
 
   test('strips markdown characters (* _ # `) and collapses whitespace in text, headline and title', () => {
-    const b = normalize([storySeg('s1', { text: '**Hello**   _world_\n# `code`', headline: '## **Headline** `one`' })], {
+    const b = normalize([storySeg('s1', { text: '**Hello**   _world_\n# `code`', headline: '## **Headline** of `story`' })], {
       raw: { title: '*Bulletin* #1' },
     });
     assert.equal(b.segments[1].text, 'Hello world code');
-    assert.equal(b.segments[1].headline, 'Headline one');
+    assert.equal(b.segments[1].headline, 'Headline of story');
     assert.equal(b.title, 'Bulletin 1');
   });
 
   test('markdown underscores are removed but snake_case words are kept', () => {
     assert.equal(storyOf({ text: '_Hello_ world, __bold__ and _italic text_ here' }).text, 'Hello world, bold and italic text here');
     assert.equal(storyOf({ text: 'The file_name and a_b_c stay' }).text, 'The file_name and a_b_c stay');
-    assert.equal(storyOf({ headline: 'The_snake_case _title_' }).headline, 'The_snake_case title');
+    assert.equal(normalize([storySeg('s1', { headline: 'The_snake_case _story_' })], { stories: [makeStory('s1', { title: 'The snake_case story' })] }).segments[1].headline, 'The_snake_case story');
     assert.equal(normalize([storySeg('s1')], { raw: { title: '_Big_ news_item' } }).title, 'Big news_item');
   });
 
   test('text never exceeds 520 characters, even without spaces or sentence stops', () => {
-    for (const text of ['a'.repeat(600), 'word '.repeat(200), 'Sentence one is short. '.repeat(40), 'x'.repeat(519) + ' ' + 'y'.repeat(40), 'a'.repeat(521)]) {
+    const varied = Array.from({ length: 40 }, (_, i) => `Sentence ${'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN'[i]} is short.`).join(' ');
+    for (const text of ['a'.repeat(600), 'word '.repeat(200), varied, 'x'.repeat(519) + ' ' + 'y'.repeat(40), 'a'.repeat(521)]) {
       const clipped = storyOf({ text }).text;
       assert.ok(clipped.length <= 520, `length ${clipped.length} for ${text.slice(0, 12)}...`);
       assert.ok(clipped.length > 400, `clipped far too much: ${clipped.length}`);
@@ -600,11 +631,11 @@ describe('normalizeBulletin: structure', () => {
   });
 
   test('rundown lists the stories in running order with headline, source, category and hasImage; storyIds lists the used ids', () => {
-    const b = normalize([storySeg('s3', { headline: 'Third' }), otherSeg('chat'), storySeg('s1', { headline: 'First' }), storySeg('unknown'), storySeg('s2', { headline: 'Second' })]);
+    const b = normalize([storySeg('s3', { headline: 'Story s3 headline' }), otherSeg('chat'), storySeg('s1', { headline: 'Story s1 headline' }), storySeg('unknown'), storySeg('s2', { headline: 'Story s2 headline' })]);
     assert.deepEqual(b.rundown, [
-      { storyId: 's3', headline: 'Third', source: 'BBC News', category: 'world', hasImage: false },
-      { storyId: 's1', headline: 'First', source: 'BBC News', category: 'world', hasImage: false },
-      { storyId: 's2', headline: 'Second', source: 'Al Jazeera', category: 'business', hasImage: true },
+      { storyId: 's3', headline: 'Story s3 headline', source: 'BBC News', category: 'world', hasImage: false },
+      { storyId: 's1', headline: 'Story s1 headline', source: 'BBC News', category: 'world', hasImage: false },
+      { storyId: 's2', headline: 'Story s2 headline', source: 'Al Jazeera', category: 'business', hasImage: true },
     ]);
     assert.deepEqual(b.storyIds, ['s3', 's1', 's2']);
     assert.deepEqual(
@@ -784,7 +815,7 @@ describe('normalizeBulletin: stage-direction cues', () => {
   });
 
   test('cues that fall in text cut off by the 520-character limit are dropped', () => {
-    const long = 'Sentence number one is here. '.repeat(30).trim();
+    const long = Array.from({ length: 30 }, (_, i) => `Sentence ${'abcdefghijklmnopqrstuvwxyzABCD'[i]} is here.`).join(' ');
     const s = storyOf({ text: `${long} [nod]` });
     assert.ok(s.text.length <= 520);
     assert.deepEqual(s.cues, []);
@@ -931,8 +962,9 @@ describe('buildPrompt', () => {
   });
 
   test('limits the chat segments to the programme maxChats, or forbids them when it is 0', () => {
-    assert.match(prompt({ program: { ...PROGRAM, maxChats: 3 } }), /At most 3 "chat" segments in total\./);
-    assert.match(prompt({ program: { ...PROGRAM, maxChats: 1 } }), /At most 1 "chat" segments in total\./);
+    assert.match(prompt({ program: { ...PROGRAM, maxChats: 3 } }), /At most 3 "chat" segments in total, only between stories; never right before or after a grave story\./);
+    assert.match(prompt({ program: { ...PROGRAM, maxChats: 1 } }), /At most 1 "chat" segments in total/);
+    assert.match(prompt({ program: { ...PROGRAM, maxChats: 2, chats: { after: ['lighter'] } } }), /only directly after the "And finally" story/);
     const none = prompt({ program: { ...PROGRAM, maxChats: 0 }, presenters: SOLO });
     assert.match(none, /No "chat" segments\./);
     assert.ok(!none.includes('At most'));
@@ -1017,7 +1049,7 @@ describe('buildReviewPrompt', () => {
   });
 
   test('asks the editor to keep the bracketed stage directions', () => {
-    assert.match(review(), /Keep the bracketed stage directions such as \[wave\] or \[B:nod\] \(they are not read aloud\); remove only ones that are inappropriate for the tone\./);
+    assert.match(review(), /Keep the bracketed stage directions such as \[nod\] or \[B:nod\] \(they are not read aloud\); remove only ones that are inappropriate for the tone\./);
   });
 
   test('never contains the string "undefined"', () => {
@@ -1035,7 +1067,8 @@ describe('normalizeBulletin: optional graphics fields (kicker, numbers, quote, m
       'Lisbon has opened a new tram line along the Tagus river. The city says the 9 kilometre route will carry 40,000 passengers a day. ' +
       '“This line will change how people move around the old town,” the mayor said. Visitors from Spain and France came for the opening.',
   });
-  const rich = (extra, opts) => normalize([storySeg('r1', extra)], { stories: [RICH], opts }).segments[1];
+  const rich = (extra, opts) =>
+    normalize([storySeg('r1', { text: 'The city says the 9 kilometre route will carry 40,000 passengers a day.', ...extra })], { stories: [RICH], opts }).segments[1];
 
   test('none of them appear when the writer gives none (the client may ignore them all)', () => {
     const s = rich({});
@@ -1058,6 +1091,7 @@ describe('normalizeBulletin: optional graphics fields (kicker, numbers, quote, m
         { value: '40,000', label: 'passengers again' },
         { value: 'many', label: 'people' },
         { value: '9', label: 'deaths' },
+        { value: '40,000', label: '' },
         'junk',
       ],
     });
@@ -1067,11 +1101,14 @@ describe('normalizeBulletin: optional graphics fields (kicker, numbers, quote, m
     ]);
     assert.ok(!('numbers' in rich({ numbers: [{ value: '1,000', label: 'trams' }] })));
     assert.ok(!('numbers' in rich({ numbers: 'lots' })));
+    assert.ok(!('numbers' in rich({ numbers: [{ value: '40,000' }] })), 'a figure without a label says nothing on a card');
+    assert.ok(!('numbers' in rich({ text: 'The tram line has opened.', numbers: [{ value: '40,000', label: 'passengers a day' }] })), 'a figure the presenter never says is not on a card');
   });
 
   test('numbers give old clients a fact card: the first figure becomes the fact when none was written', () => {
     assert.equal(rich({ numbers: [{ value: '40,000', label: 'passengers a day' }] }).fact, '40,000 PASSENGERS A DAY');
     assert.equal(rich({ fact: '9 KILOMETRE ROUTE', numbers: [{ value: '40,000', label: 'passengers a day' }] }).fact, '9 KILOMETRE ROUTE');
+    assert.equal(rich({ text: 'The tram line has opened.', fact: '40,000 PASSENGERS A DAY' }).fact, null, 'a fact card shows only what is said');
   });
 
   test('quote: only words quoted in the summary, with a speaker only if the summary names one', () => {
@@ -1123,16 +1160,55 @@ describe('normalizeBulletin: recurring features', () => {
 
   test('a round-up is a run of 2-4 consecutive stories with a place: each gets its position, a map shot and the kicker', () => {
     const segs = feat([
-      storySeg('f1', { feature: 'number', numbers: [{ value: '40,000', label: 'passengers a day' }] }),
-      storySeg('f2', { feature: 'roundup', location: LOC.f2, shot: 'wide' }),
+      storySeg('f5', { emotion: 'serious' }),
+      storySeg('f1', { feature: 'number', numbers: [{ value: '40,000', label: 'passengers a day' }], text: 'Lisbon has opened a tram line that will carry 40,000 passengers a day.' }),
+      storySeg('f2', { feature: 'roundup', location: LOC.f2, shot: 'wide', numbers: [{ value: '300,000', label: 'homes' }], text: 'A solar farm near Nairobi can light 300,000 homes. A second sentence.' }),
       storySeg('f3', { feature: 'roundup', location: LOC.f3 }),
       storySeg('f4', { feature: 'roundup', location: LOC.f4, kicker: 'HISTORY' }),
       storySeg('f6', { feature: 'lighter', emotion: 'happy' }),
     ]);
-    assert.deepEqual(segs.map((s) => s.feature), ['number', 'roundup', 'roundup', 'roundup', 'lighter']);
-    assert.deepEqual(segs.slice(1, 4).map((s) => s.roundup), [{ index: 0, count: 3 }, { index: 1, count: 3 }, { index: 2, count: 3 }]);
-    assert.deepEqual(segs.slice(1, 4).map((s) => s.shot), ['map', 'map', 'map']);
-    assert.deepEqual(segs.map((s) => s.kicker), ['NUMBER OF THE DAY', 'AROUND THE WORLD', 'AROUND THE WORLD', 'AROUND THE WORLD', 'AND FINALLY']);
+    assert.deepEqual(segs.map((s) => s.feature ?? null), [null, 'number', 'roundup', 'roundup', 'roundup', 'lighter']);
+    assert.deepEqual(segs.slice(2, 5).map((s) => s.roundup), [{ index: 0, count: 3 }, { index: 1, count: 3 }, { index: 2, count: 3 }]);
+    assert.deepEqual(segs.slice(2, 5).map((s) => s.shot), ['map', 'map', 'map']);
+    assert.deepEqual(segs.slice(1).map((s) => s.kicker), ['NUMBER OF THE DAY', 'AROUND THE WORLD', 'AROUND THE WORLD', 'AROUND THE WORLD', 'AND FINALLY']);
+    assert.equal(segs[2].text, 'A solar farm near Nairobi can light 300,000 homes.', 'a round-up item is one sentence');
+    assert.ok(!('numbers' in segs[2]) && segs[2].fact === null, 'no fact cards inside the round-up');
+    assert.match(segs[1].text, /^Our number of the day: 40,000\. Lisbon has opened/, 'the lead-in is added when the writer left it out');
+    assert.match(segs[5].text, /^And finally: /);
+  });
+
+  test('the number of the day is never the lead; MONEY MINUTE (numberSlot "last") moves it to the end', () => {
+    const lead = feat([storySeg('f1', { feature: 'number', numbers: [{ value: '40,000', label: 'passengers a day' }], text: 'It will carry 40,000 passengers a day.' }), storySeg('f3')]);
+    assert.ok(!('feature' in lead[0]));
+    const segs = feat(
+      [
+        storySeg('f3'),
+        storySeg('f1', { feature: 'number', numbers: [{ value: '40,000', label: 'passengers a day' }], text: 'Our number of the day: 40,000. It will carry 40,000 passengers a day.' }),
+        storySeg('f4'),
+      ],
+      { program: { numberSlot: 'last' } }
+    );
+    assert.deepEqual(segs.map((s) => s.storyId), ['f3', 'f4', 'f1']);
+    assert.equal(segs[2].feature, 'number');
+  });
+
+  test('no banter next to grave news: a chat after or before a grave story is dropped, and light cues after one go', () => {
+    const b = normalize(
+      [storySeg('f1'), otherSeg('chat', { text: 'Before the fire.' }), storySeg('f5', { emotion: 'serious' }), otherSeg('chat', { text: 'Ha, what a day [laugh].' }), storySeg('f6', { text: '[wave] Pandas. [thumbs_up] Twins.' })],
+      { stories: FEAT }
+    );
+    assert.deepEqual(b.segments.map((s) => s.storyId || s.type), ['intro', 'f1', 'f5', 'f6', 'outro']);
+    assert.deepEqual(b.segments[3].cues, []);
+    const lighter = feat([storySeg('f1'), storySeg('f5'), storySeg('f6', { feature: 'lighter' })]);
+    assert.ok(!('feature' in lighter[2]), '"and finally" never straight after grave news');
+  });
+
+  test('chats go only where the programme wants them, trimmed by its priority rather than script order', () => {
+    const segments = [storySeg('f1'), otherSeg('chat', { text: 'After the lead.' }), storySeg('f2'), otherSeg('chat', { text: 'After a story.' }), storySeg('f6', { feature: 'lighter' }), otherSeg('chat', { text: 'After finally.' })];
+    const chats = (program, maxChats = 3) => normalize(segments, { stories: FEAT, opts: { program, maxChats } }).segments.filter((s) => s.type === 'chat').map((s) => s.text);
+    assert.deepEqual(chats({ chats: { after: ['lighter'] } }), ['After finally.']);
+    assert.deepEqual(chats({ chats: { after: ['lead', 'lighter', 'story'] } }, 2), ['After the lead.', 'After finally.']);
+    assert.deepEqual(chats(null, 2), ['After the lead.', 'After a story.']);
   });
 
   test('a round-up item without a location, a lone item, a run broken by a chat or a second run loses the feature', () => {
@@ -1157,9 +1233,9 @@ describe('normalizeBulletin: recurring features', () => {
 
   test('one number of the day, only with a stated figure and never on grave news', () => {
     const segs = feat([
-      storySeg('f5', { feature: 'number', fact: '3 INJURED' }),
-      storySeg('f2', { feature: 'number', numbers: [{ value: '300,000', label: 'homes' }] }),
-      storySeg('f1', { feature: 'number', numbers: [{ value: '40,000', label: 'passengers a day' }] }),
+      storySeg('f5', { feature: 'number', fact: '3 INJURED', text: 'Three people were injured in Valencia.' }),
+      storySeg('f2', { feature: 'number', numbers: [{ value: '300,000', label: 'homes' }], text: 'It can light 300,000 homes.' }),
+      storySeg('f1', { feature: 'number', numbers: [{ value: '40,000', label: 'passengers a day' }], text: 'It will carry 40,000 passengers a day.' }),
       storySeg('f3', { feature: 'number' }),
     ]);
     assert.deepEqual(segs.map((s) => s.feature ?? null), [null, 'number', null, null]);
@@ -1190,22 +1266,45 @@ describe('normalizeBulletin: numbers in the spoken text', () => {
   });
 
   test('scales, words and decimals are understood, and cues keep their place', () => {
-    const [, story] = spoken([storySeg('n1', { text: 'It cost €300m. [B:nod] Some 40 thousand riders a day. Twelve stops.' })]);
-    assert.equal(story.text, 'It cost €300m. Some 40 thousand riders a day. Twelve stops.');
+    const [, story] = spoken([storySeg('n1', { text: 'It cost €300m. [B:nod] Some 40 thousand passengers a day. Twelve stops.' })]);
+    assert.equal(story.text, 'It cost €300m. Some 40 thousand passengers a day.', '"Twelve" is a number the source never states');
     assert.deepEqual(story.cues, [{ char: 14, slot: 'B', action: 'nod' }]);
+  });
+
+  test('scale, percent, currency and the thing counted must match the source', () => {
+    const one = (text) => spoken([storySeg('n1', { text: `${text} The tram opens.` })])[1].text;
+    assert.equal(one('It cost 300 million euros.'), 'It cost 300 million euros. The tram opens.');
+    assert.equal(one('It cost 300 billion euros.'), 'The tram opens.', 'million is not billion');
+    assert.equal(one('It cost 300 million dollars.'), 'The tram opens.', 'euros are not dollars');
+    assert.equal(one('Fares rose 40 percent.'), 'The tram opens.', 'a percentage the source never gives');
+    assert.equal(one('It will carry 40,000 tourists a day.'), 'The tram opens.', '40,000 passengers are not 40,000 tourists');
+    assert.equal(one('Three people were hurt.'), 'The tram opens.', 'numbers in words are checked too');
+    assert.equal(one('Hundreds of people cheered.'), 'The tram opens.');
+  });
+
+  test('a quotation in the spoken text must be in the source word for word', () => {
+    const Q = [makeStory('q1', { title: 'Mayor opens tram line', summary: 'The mayor opened the line. “This line will change the old town,” the mayor said.' })];
+    const text = (t) => normalize([storySeg('q1', { text: `The line opened. ${t}` })], { stories: Q }).segments[1].text;
+    assert.equal(text('“This line will change the old town,” the mayor said.'), 'The line opened. “This line will change the old town,” the mayor said.');
+    assert.equal(text('“We will rebuild every home by Christmas,” the mayor said.'), 'The line opened.');
+  });
+
+  test('format numbers count only in their own phrases: "in 30 seconds" in a story is still a claim', () => {
+    const [, story] = spoken([storySeg('n1', { text: 'Now, around the world in 30 seconds. Crews arrived in 30 seconds. It ran for 24 hours.' })]);
+    assert.equal(story.text, 'Now, around the world in 30 seconds.');
   });
 
   test('intro, chats and outro may use figures from any offered story, and our own names do not count', () => {
     const segs = spoken(
       [
-        otherSeg('intro', { text: 'Welcome to NEWS IN 60 on GLOBIT 24. A line for 40,000 riders. Also 7 other things.' }),
+        otherSeg('intro', { text: 'Welcome to NEWS IN 60 on GLOBIT 24. A line for 40,000 passengers. Also 7 other things.' }),
         storySeg('n1'),
         otherSeg('chat', { anchor: 'B', text: 'I am UNIT-8. I counted 40,000. And 12 more.' }),
         otherSeg('outro', { text: 'That was NEWS IN 60. Around the world in 30 seconds, every hour. Here 24 hours a day.' }),
       ],
       { channelName: 'GLOBIT 24', ownNames: ['NEWS IN 60', 'UNIT-8'] }
     );
-    assert.equal(segs[0].text, 'Welcome to NEWS IN 60 on GLOBIT 24. A line for 40,000 riders.');
+    assert.equal(segs[0].text, 'Welcome to NEWS IN 60 on GLOBIT 24. A line for 40,000 passengers.');
     assert.equal(segs[2].text, 'I am UNIT-8. I counted 40,000.');
     assert.equal(segs[3].text, 'That was NEWS IN 60. Around the world in 30 seconds, every hour. Here 24 hours a day.');
   });
@@ -1224,10 +1323,15 @@ describe('buildPrompt: features, chemistry and tone', () => {
     assert.ok(!none.includes('RECURRING FEATURES'));
     const p = prompt({ program: { ...PROGRAM, features: ['roundup', 'lighter'] } });
     assert.match(p, /RECURRING FEATURES/);
-    assert.match(p, /AROUND THE WORLD IN 30 SECONDS/);
+    assert.match(p, /AROUND THE WORLD/);
+    assert.match(p, /Now, around the world in 30 seconds\./);
     assert.match(p, /AND FINALLY/);
     assert.ok(!p.includes('NUMBER OF THE DAY'));
-    assert.match(p, /the biggest story first, a lighter one last/);
+    assert.match(p, /the biggest story first; a breaking story \("breaking": true\) always leads; a lighter one last/);
+    const quick = prompt({ program: { ...PROGRAM, features: ['roundup'], roundup: { opener: 'Around the world.', max: 3 } } });
+    assert.match(quick, /2 to 3 brief items/);
+    assert.match(quick, /"Around the world\."/);
+    assert.match(prompt({ program: { ...PROGRAM, features: ['number'], numberSlot: 'last' } }), /never the lead story.*Put it last in the running order\./);
   });
 
   test('asks for the optional graphics fields and says when to leave them out', () => {
@@ -1241,7 +1345,8 @@ describe('buildPrompt: features, chemistry and tone', () => {
     assert.match(prompt({ program: { ...PROGRAM, chemistry: 'Paco is dry; Lola is warm.' } }), /Chemistry: Paco is dry; Lola is warm\./);
     const p = prompt();
     assert.match(p, /Chemistry: Paco and Lola are a team/);
-    assert.match(p, /"Lola\?" or "Over to you, Lola\."/);
+    assert.match(p, /"Lola\?"/);
+    assert.match(prompt({ program: { ...PROGRAM, toss: '{name}.' } }), /\("Lola\."\)/);
     assert.match(p, /"Thanks, Paco\."/);
     const solo = prompt({ presenters: SOLO, program: { ...PROGRAM, maxChats: 0, chemistry: 'ignored' } });
     assert.ok(!solo.includes('Chemistry') && !solo.includes('Hand-overs'));

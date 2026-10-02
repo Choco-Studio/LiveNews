@@ -1,8 +1,11 @@
 // Fallback open for programmes without their own (new ids from the editorial
-// desk): the GLOBIT 24 mark comes alive. Its red globe, cel-shaded like the
-// logo with the white equator and meridian-lens seams, opens like an iris and
-// spins down; the logo's yellow bit pops out of its shoulder and, like in every
-// open, hops onto the title plate. Same package and clock as the others.
+// desk): the GLOBIT 24 mark as an object. A dark globe (ink to steel in clean
+// clusters, lit from the upper left like the WORLD NOW earth, a 1 px silver rim
+// on the key side and a slate limb in shade) carries the logo's equator and
+// meridian-lens seams as 1 px red lines (dark red on the night side): red stays
+// a thin line, never a big saturated disc. It opens like an iris and spins
+// down; the logo's yellow bit sits on its shoulder and, like in every open,
+// hops onto the title plate. Same package and clock as the others.
 import { P } from '../../palette.js';
 import { u32, seg, easeOutQuint, ring } from '../../gfx/index.js';
 import { lazyBackdrop, clipDisc, frameBuffer, playOpen, CENTRE, ZOOM } from './kit.js';
@@ -10,7 +13,8 @@ import { lazyBackdrop, clipDisc, frameBuffer, playOpen, CENTRE, ZOOM } from './k
 const R0 = 30;
 const DEG = Math.PI / 180;
 const MERID = 50; // the lens seams sit at +-50 degrees when settled
-const C = Object.fromEntries(['red', 'darkRed', 'pink', 'white', 'silver', 'maroon'].map((k) => [k, u32(P[k])]));
+const C = Object.fromEntries(['black', 'ink', 'slate', 'steel', 'fog', 'red', 'darkRed', 'white', 'silver', 'maroon'].map((k) => [k, u32(P[k])]));
+const BODY = [C.black, C.ink, C.slate, C.steel]; // night .. full key light
 const L = (() => {
   const v = [-0.5, 0.55, 0.67];
   const n = Math.hypot(...v);
@@ -39,20 +43,24 @@ function renderGlobe(fb, R, rot) {
       const ny = -dy / RR;
       const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
       const dif = nx * L[0] + ny * L[1] + nz * L[2];
-      // flat cel bands like the logo: red body, dark red crescent (no glossy highlight)
-      let col = dif > 0.12 ? C.red : C.darkRed;
-      const lit = dif > 0.12;
-      // seams of light: the equator row and two meridians either side of the centre
-      if (dy === 0) col = lit ? C.white : C.silver;
-      else {
+      const lit = dif > 0.05;
+      // clean clusters: hard steps on the neutral ramp
+      let col = BODY[Math.min(3, Math.floor(Math.max(0, dif + 0.15) * 3.6))];
+      const rim = dx * dx + dy * dy > (RR - 1.1) * (RR - 1.1);
+      // seams: the equator row and two meridians either side of the centre, 1 px wide
+      let seam = dy === 0;
+      if (!seam) {
         // screen-x distance from each meridian's projected curve, so seams stay 1 px wide
         const cl = Math.sqrt(Math.max(0, 1 - ny * ny));
-        for (const m of [-MERID, MERID]) {
+        for (let m = -MERID; m <= MERID; m += 2 * MERID) {
           const a = (m - rot) * DEG;
           if (Math.cos(a) <= 0.05) continue;
-          if (Math.abs(nx - Math.sin(a) * cl) * RR < 0.55) col = lit ? C.white : C.silver;
+          if (Math.abs(nx - Math.sin(a) * cl) * RR < 0.55) seam = true;
         }
       }
+      if (seam) col = lit ? C.red : C.darkRed;
+      // the limb: a 1 px silver rim where the key light grazes it, slate on the night side
+      if (rim) col = dif > 0.2 ? C.silver : dif > -0.1 ? (seam ? C.darkRed : C.steel) : C.slate;
       d[i] = col;
     }
   }
@@ -73,9 +81,12 @@ function emblem(ctx, dt, x, y, k = 1) {
   const iris = Math.round((R + 3) * easeOutQuint(seg(dt, 0.2, 0.6)));
   if (iris < R + 3) {
     ctx.save();
-    clipDisc(ctx, x, y, iris);
-    ctx.drawImage(fb.cv, x - (S >> 1), y - (S >> 1));
-    ctx.restore();
+    try {
+      clipDisc(ctx, x, y, iris);
+      ctx.drawImage(fb.cv, x - (S >> 1), y - (S >> 1));
+    } finally {
+      ctx.restore();
+    }
     if (iris > 1) ring(ctx, x, y, iris, P.silver);
   } else ctx.drawImage(fb.cv, x - (S >> 1), y - (S >> 1));
 }
@@ -87,12 +98,12 @@ export const GENERIC = {
   style: { accent: P.red, plate: P.black, ink: 'light', bar: P.red },
   background,
   emblem,
+  extent: R0, // an opaque globe, like WORLD NOW's: it may overlap the plate's left end
+  front: true,
   absorb: 0.26,
   shoulder: 30,
   popAt: 0.8, // the logo's bit sits on the globe's shoulder from the start, as in the mark
-  warm: () => {
-    for (let r = R0; r <= Math.round(R0 * ZOOM); r++) frameBuffer('generic-globe', 2 * r + 3, 2 * r + 3);
-  },
+  warmJobs: () => Array.from({ length: Math.round(R0 * ZOOM) - R0 + 1 }, (_, i) => () => frameBuffer('generic-globe', 2 * (R0 + i) + 3, 2 * (R0 + i) + 3)),
 };
 
 export function drawGeneric(ctx, dt, info) {

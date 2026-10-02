@@ -237,6 +237,18 @@
       render(t);
       requestAnimationFrame(loop);
       window.__lab = { render, set, infoAt, get ad() { return ad; } };
+      // Offline render of an ad's music bed for tools/render-audio.mjs:
+      //   --opts '{"ad":"serene"}' -> { sampleRate, channels } (looped like the director plays it)
+      window.__audio = {
+        async render({ ad: id = ad.id, seconds = null } = {}) {
+          const { renderTune } = await import('../js/audio/synth.js');
+          const a = ADS.find((x) => x.id === id) || ad;
+          const res = await renderTune(a.tune, { seconds: seconds ?? a.duration + 1, loop: true, volume: 0.45 });
+          if (!res) throw new Error('no OfflineAudioContext');
+          const b = res.buffer;
+          return { sampleRate: b.sampleRate, channels: [b.getChannelData(0), b.getChannelData(1)] };
+        },
+      };
     </script>
   </body>
 </html>

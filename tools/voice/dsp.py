@@ -7,7 +7,8 @@ low-level junk. A presenter on a real channel goes through a processing chain
 before air; this module is that chain, run once per clip:
 
   1. high-pass 70 Hz (4th order), notches on the vocoder whistles, per-voice
-     tonal match, mud cut, presence, air
+     tonal match, mud cut, presence, air; adaptive boom/chest control; top
+     octave restored (SBR-style) on voices trained without one
   2. optional character effect (UNIT-8's robot)
   3. de-esser (split-band, only the 5 kHz+ band is turned down, only on 's')
   4. gentle compressor (RMS, soft knee, ~2-4 dB on vowels)
@@ -33,7 +34,9 @@ DEFAULTS = {
     'hp_hz': 70.0,
     'notch_hz': (4800.0, 9600.0), 'notch_db': -24.0, 'notch_sigma': 9.0,
     'mud_hz': 290.0, 'mud_db': -1.5, 'mud_q': 1.0,
-    'presence_hz': 3300.0, 'presence_db': 1.5, 'presence_q': 0.9,
+    'presence_hz': 3300.0, 'presence_db': 1.0, 'presence_q': 0.9,
+    'boom_max_db': 4.0, 'boom_ref_db': -10.0, 'chest_max_db': 3.0, 'chest_ref_db': 1.5,
+    'air_restore': True, 'air_gap_db': 10.0, 'air_fill_db': -8.0,
     'air_hz': 9000.0, 'air_db': 1.5,
     'deess_from': 4800.0, 'deess_to': 6200.0, 'deess_rel_db': -9.0, 'deess_ratio': 3.0,
     'deess_max_db': 8.0,
@@ -127,6 +130,98 @@ def equalise(x, sr, o, tone=None):
             h = h * notch(freqs)
         return h
     return fft_filter(x, response, sr, pad=0.3)
+
+
+def band_powers(x, sr, bands, gate=None, n=2048):
+    """Long-term power (dB) of each (lo, hi) band of x, averaged over the speech
+    frames of `gate` (default x itself: frames within 35 dB of the loudest)."""
+    x = np.asarray(x, dtype=np.float64)
+    if len(x) < 2 * n:
+        return [-120.0] * len(bands)
+    g = x if gate is None else np.asarray(gate, dtype=np.float64)
+    hop = n // 2
+    count = 1 + (len(x) - n) // hop
+    idx = np.arange(n)[None, :] + hop * np.arange(count)[:, None]
+    win = np.hanning(n)
+    lv = 10 * np.log10(((g[idx] * win) ** 2).mean(axis=1) + 1e-12)
+    fr = x[idx][lv > lv.max() - 35] * win
+    psd = (np.abs(np.fft.rfft(fr, axis=1)) ** 2).mean(axis=0)
+    f = np.fft.rfftfreq(n, 1 / sr)
+    return [10 * math.log10(psd[(f >= lo) & (f < hi)].sum() + 1e-20) for lo, hi in bands]
+
+
+def band_levels(x, sr, bands, n=2048):
+    """Band powers (dB) relative to the 300-3000 Hz speech core."""
+    powers = band_powers(x, sr, [(300, 3000)] + list(bands), n=n)
+    return [p - powers[0] for p in powers[1:]]
+
+
+def low_end(x, sr, o):
+    """Adaptive low-end control: cut only what sticks out.
+
+    Deep blends (e.g. Sam) carry boom below 100 Hz, and some (Paco) a thick
+    100-300 Hz chest. Measured against the speech core, the excess over a
+    reference is cut with a low shelf (boom) and a broad bell (chest), so
+    every presenter sits in the same tonal window without thinning anyone.
+    """
+    sub, chest = band_levels(x, sr, [(20, 100), (100, 300)])
+    boom_cut = -min(o['boom_max_db'], max(0.0, sub - o['boom_ref_db']))
+    chest_cut = -min(o['chest_max_db'], max(0.0, (chest - o['chest_ref_db']) * 0.7))
+    coeffs = []
+    if boom_cut < -0.2:
+        coeffs.append(biquad('lowshelf', 110, sr, gain_db=boom_cut, slope=0.8))
+    if chest_cut < -0.2:
+        coeffs.append(biquad('peak', 200, sr, q=0.8, gain_db=chest_cut))
+    if not coeffs:
+        return x, 0.0, 0.0
+    y = fft_filter(x, lambda f: biquad_response(coeffs, f, sr), sr, pad=0.2)
+    return y, boom_cut, chest_cut
+
+
+def air_restore(x, sr, o):
+    """Give band-limited voices back their top octave (spectral band replication).
+
+    Some Kokoro voices were trained on audio with nothing above ~10 kHz (e.g.
+    bm_george, Paco's base), which sounds dull next to the others. Harmonic
+    exciters would alias at 24 kHz, so, like HE-AAC's SBR, the 5.5-7.5 kHz band
+    is copied up by 4.5 kHz with a single-sideband shift (its own envelope, so
+    it follows the 's' and 't' sounds), only the part above the voice's cutoff
+    is kept, and it is mixed ~8 dB under the 5-9 kHz band. Voices that already
+    have air are left alone.
+    """
+    if not o['air_restore'] or sr < 22000:
+        return x, 0.0
+    sib, air = band_levels(x, sr, [(5000, 9000), (9500, min(12000, sr / 2))])
+    if air > sib - o['air_gap_db']:
+        return x, 0.0
+    n = next_fast_len(len(x) + int(0.05 * sr))
+    spec = np.fft.rfft(x, n)
+    f = np.fft.rfftfreq(n, 1 / sr)
+    shift = 4500.0
+    # Raised-cosine edges: a hard-edged mask on a whole-clip spectrum rings
+    # through the entire clip as a steady tone at the edge frequency
+    rise = np.clip((f - 5300) / 500, 0, 1)
+    fall = np.clip((7700 - f) / 500, 0, 1)
+    src = (0.5 - 0.5 * np.cos(np.pi * rise)) * (0.5 - 0.5 * np.cos(np.pi * fall))
+    # Analytic band (positive frequencies only) shifted up = single sideband
+    full = np.zeros(n, dtype=complex)
+    full[:len(spec)] = spec * src * 2
+    band = np.fft.ifft(full)[:len(x)]
+    t = np.arange(len(x)) / sr
+    shifted = np.real(band * np.exp(2j * np.pi * shift * t))
+    # Keep only what lands above the cutoff, with a soft edge
+    lo = 9600.0
+    shifted = fft_filter(shifted, lambda fr: 0.5 - 0.5 * np.cos(np.pi * np.clip((fr - lo) / 700.0, 0, 1)),
+                         sr, pad=0.02)
+    top = min(12000, sr / 2)
+    have, sib_abs = band_powers(x, sr, [(9500, top), (5000, 9000)])
+    got = band_powers(shifted, sr, [(9500, top)], gate=x)[0]
+    # Fill the top band up to air_fill_db under the 5-9 kHz band (power sum)
+    want = 10 ** ((sib_abs + o['air_fill_db']) / 10) - 10 ** (have / 10)
+    if want <= 0:
+        return x, 0.0
+    gain_db = 10 * math.log10(want) - got
+    return x + shifted * 10 ** (gain_db / 20), round(sib + o['air_fill_db'] - air, 1)
 
 
 def band_split(x, sr, f_from, f_to):
@@ -426,7 +521,7 @@ ROBOT = {
     'low_machine': 0.85,
     'high_machine': 0.30,
     'comb_ms': 2.7, 'comb_g': 0.22,   # short metallic body
-    'crush_mix': 0.06, 'crush_bits': 8, 'crush_hz': 9000,
+    'crush_mix': 0.04, 'crush_bits': 8, 'crush_hz': 9000,
 }
 
 
@@ -487,6 +582,8 @@ def broadcast(x, sr, tone=None, effect=None, overrides=None):
     x = x - float(np.mean(x))
     speech_end = len(x)
     y = equalise(x, sr, o, tone)
+    y, boom_cut, chest_cut = low_end(y, sr, o)
+    y, air_added = air_restore(y, sr, o)
     if effect == 'robot':
         y = robot(y, sr)
     # Work at a known level so thresholds mean the same for every voice
@@ -506,5 +603,7 @@ def broadcast(x, sr, tone=None, effect=None, overrides=None):
         'deessMaxDb': round(deess_max, 1),
         'compMaxDb': round(comp_max, 1),
         'compMeanDb': round(comp_mean, 1),
+        'lowCutDb': [round(boom_cut, 1), round(chest_cut, 1)],
+        'airAddedDb': air_added,
     }
     return y, stats

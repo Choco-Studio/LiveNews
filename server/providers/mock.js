@@ -2,91 +2,119 @@
 // Lets the whole channel run (and be demoed) without any account or API key.
 // It only ever re-uses the feed's own words: headlines, summary sentences,
 // figures and quotations as written. Variety comes from how they are framed
-// (openers, hand-overs, recurring features), chosen deterministically from the
-// story ids so the same news always makes the same episode.
+// (openers, attribution, hand-overs, recurring features), and the structure
+// of each programme follows its style bible (docs/programmes/*.md) through
+// the programme's config: intro shape, where the number of the day and the
+// chats go, who reads the round-up. Everything is chosen deterministically
+// from the story ids, so the same news always makes the same episode.
 
-import { isBreaking } from '../news.js';
-import { GRAVE, LIGHT, extractFigures, quotesIn, wordsGrounded } from '../facts.js';
+import { isBreaking, plainTitle } from '../news.js';
+import { GRAVE, LIGHT, contentWords, extractFigures, numbersIn, quotesIn } from '../facts.js';
 import { locate, placesIn } from '../gazetteer.js';
+import { shortHeadline } from '../writer.js';
 
 const DEATHS = /\b(?:dead|deaths?|die[sd]|killed|killings?|victims?|mourn\w*|funeral)\b/i;
 // Not grave, but not something to smile about either.
 const SOBER = /\b(?:volcan\w*|erupt\w*|storms?|strikes?|protests?|elections?|courts?|police|cancel\w*|closures?|bans?|shortages?|prices|inflation|recession|stocks?|shares|markets?|rates?)\b/i;
 // The best "and finally" material: curiosities, animals, culture, the sky.
 const LIGHTER = /\b(?:zoo|pandas?|leopards?|tortoises?|penguins?|whales?|dolphins?|bees|parrots?|birds?|festival|museum|tomatoes|chocolate|coffee|trees|gardens?|reef|coral|footprints|dinosaurs?|fossils?|comet|eclipse|drones|telescope|stars|moon|music|art|mushroom)\b/i;
-const SURPRISE = /\b(?:first|largest|biggest|record|discover\w*|uncover\w*|rare|unexpected|surpris\w*)\b/i;
+const CURIOUS = /\b(?:discover\w*|uncover\w*|rare|unexpected|surpris\w*|new species|first time|glowing)\b/i;
 // A summary sentence that says what follows from the news (a purpose or a consequence).
 const WHY =
   /\b(?:aims? to|so that|to help|in order to|which means|means that|(?:will|would|could|can|should) (?:help|cut|save|reduce|let|allow|make|carry|light|power|create|protect|improve|speed|bring|give|lower|ease|keep|feed|connect|double|halve)|to (?:cut|reduce|protect|improve|cool|save|ease|lower))\b/i;
+// The sentence already says who says it: no "X reports" on top.
+const OWN_ATTRIBUTION = /\b(?:says?|said|according to|reports?|reported|announced|told|officials|estimates?)\b/i;
+// Live pages: lines that point at the outlet's own coverage are not news.
+const LIVE_BOILERPLATE = /^(?:follow|read|watch|see) (?:the |our |all the )?(?:latest|live|updates)|\blive updates?\b|\bas it happened\b/i;
 
+// Most specific first, matched on the headline before the summary.
 const KICKERS = [
   [/volcan|eruption|lava/i, 'VOLCANO'],
   [/earthquake|quake|tremor/i, 'EARTHQUAKE'],
   [/flood|monsoon|heavy rain|storm|hurricane|typhoon|cyclone|strong winds|heatwave/i, 'WEATHER'],
-  [/\b(?:tram|train|rail|metro|ferry|ferries|airport|flights?|bus|buses|bicycle|cycling|bike)\b/i, 'TRANSPORT'],
-  [/deforest|forest|climate|emission|carbon|glacier|ice sheet/i, 'CLIMATE'],
-  [/archaeolog|temple|ancient|ruins|fossil|dinosaur|tomb/i, 'HISTORY'],
+  [/\binternet\b|broadband|\b5G\b/i, 'CONNECTIVITY'],
+  [/telescope|galaxy|galaxies|planet|comet|asteroid|eclipse|\bstars?\b|\bmoon\b|nebula/i, 'ASTRONOMY'],
+  [/rocket|\borbit|astronaut|space station|spacecraft|\bprobe\b|\brover\b|\bmars\b/i, 'SPACE'],
+  [/\b(?:tram|train|rail|metro|ferry|ferries|airport|flights?|bus|buses|bicycle|cycling|bike|tunnel)\b/i, 'TRANSPORT'],
+  [/deforest|climate|emission|carbon|glacier|ice sheet/i, 'CLIMATE'],
+  [/archaeolog|temple|ancient|ruins|fossil|dinosaur|tomb|footprints/i, 'HISTORY'],
   [/\bschools?\b|education|students?|universit/i, 'EDUCATION'],
   [/clean water|drinking water|water projects|reservoir/i, 'WATER'],
   [/wildlife|zoo|panda|penguins?|elephants?|tortoises?|leopards?|turtles?|mangroves?|birds?\b|species|bees?\b/i, 'WILDLIFE'],
   [/\btrees\b|city parks?|gardens?\b|green spaces?/i, 'GREEN CITIES'],
   [/\bstocks?\b|shares|index|markets?\b|investors/i, 'MARKETS'],
   [/inflation|prices|interest rates?|economy|growth|recession/i, 'ECONOMY'],
-  [/\btrade\b|exports?|imports?|tariffs?|shipping|port\b/i, 'TRADE'],
+  [/\btrade\b|exports?|imports?|tariffs?|shipping|port\b|canal/i, 'TRADE'],
   [/\bjobs\b|unemployment|wages|workers/i, 'JOBS'],
   [/robot/i, 'ROBOTICS'],
   [/\bAI\b|artificial intelligence|chatbot/i, 'AI'],
   [/\bchips?\b|semiconductor|processor/i, 'CHIPS'],
-  [/smartphone|\bphones?\b|gadget|headset|wearable/i, 'GADGETS'],
+  [/smartphone|\bphones?\b|gadget|headset|wearable|earbuds|glasses/i, 'GADGETS'],
   [/\bapps?\b|software|update|browser/i, 'SOFTWARE'],
   [/video games?|gaming|console/i, 'GAMING'],
-  [/rocket|\borbit|satellite|astronaut|space station|spacecraft|\bprobe\b/i, 'SPACE'],
-  [/telescope|galaxy|galaxies|planet|comet|asteroid|eclipse|\bstars?\b|\bmoon\b|nebula/i, 'ASTRONOMY'],
-  [/solar (?:farm|panels?|plant|power|park)|wind farm|turbines?|tidal power|power grid|energy|electricity|batter(?:y|ies)/i, 'ENERGY'],
+  [/satellite/i, 'SPACE'],
+  [/solar (?:farm|panels?|plant|power|park)|wind farm|turbines?|tidal power|power grid|energy|electricity|batter(?:y|ies)|geothermal/i, 'ENERGY'],
   [/vaccine|hospital|health|medicine|disease|patients/i, 'HEALTH'],
   [/ocean|whales?|reef|coral|dolphins?|sea turtles?/i, 'OCEANS'],
 ];
 
-const OPENERS = [
-  (t, src) => `${t}, ${src} reports.`,
-  (t, src) => `${src} reports: ${t}.`,
-  (t, src) => `This from ${src}: ${t}.`,
-  (t, src) => `${t}. That's according to ${src}.`,
-  (t, src) => `From ${src} now: ${t}.`,
-];
-const GRAVE_OPENERS = [0, 1, 3];
+// ---------------------------------------------------------------- the presenters' own lines (no facts, no figures)
 
-const WHY_LEADS = ['Why does it matter?', 'Why it matters:', 'What it means:'];
-// One sentence with the names: the cold open runs under a 3-picture montage, so the intro stays short.
-const GREETINGS = [
-  (title, channel, names) => `Hello [wave] and welcome to ${title}, I'm ${names}.`,
-  (title, channel, names) => `This is ${title} on ${channel}. [wave] I'm ${names}.`,
-  (title, channel, names) => `Welcome [wave] to ${title}, I'm ${names}.`,
-];
-const SIGNOFFS_DUO = [
-  (title, channel, partner) => `That's ${title} for now. [wave] From ${partner} and from me, thanks for watching. Stay with us here on ${channel}.`,
-  (title, channel) => `And that's ${title}. [wave] Thanks for your company. There's more news around the clock here on ${channel}.`,
-];
-const SIGNOFFS_SOLO = [
-  (title, channel) => `That's ${title} for now. [wave] Stay with us here on ${channel}.`,
-  (title, channel) => `And that's ${title}. [wave] Thanks for watching, and stay with us on ${channel}.`,
-];
-
-// Reactions in a chat: personality first, dry and grown-up, no facts, never next to grave news.
-const CHATS = {
-  paco: ['[nod] Well. Not a sentence I expected to read tonight. [papers]', '[chin] Remarkable. [papers] Moving on.', '[nod] File that under good news. We do have some. [look_partner]'],
-  lola: ['[laugh] I will admit, that one made my evening. [look_partner]', '[chin] Not what I expected when I came in this morning. [papers]', '[nod] Some good news, for once. [papers]'],
-  max: ['[raise_hand] For the record, I would like one. Purely for research. [look_partner]', '[nod] Clever. Quietly, properly clever. [papers]', '[laugh] My bank manager will want a word before I go near that. [papers]'],
-  ada: ['[chin] Promising. I will believe it when it survives its first software update. [look_partner]', '[shrug] We will see how it holds up outside the press release. [papers]', '[nod] Fair enough. That one I like. [papers]'],
-  nova: ['[chin] Every answer comes with a new question attached. That is the job. [look_partner]', '[nod] Worth looking up tonight, if the clouds allow. [papers]', '[steeple] Science at its best: patient, careful and slightly stubborn. [papers]'],
-  unit8: ['[nod] Data logged. I have filed it under remarkable, subsection humans.', '[shake_head] You say over the moon. I checked. Nobody is over the moon. [papers]', '[nod] Noted. My circuits remain calm. This is how I express enthusiasm. [papers]'],
-  penny: ['[nod] Worth keeping an eye on. [papers]'],
-  sam: ['[nod] Quick one, but worth knowing. [papers]'],
+// WORLD NOW, after "And finally" only: Paco's dry line, then Lola's deflation.
+const WORLD_PAIRS = {
+  HISTORY: [['[nod] Older than this building, I suspect.', 'Older than your jokes, Paco. Just.']],
+  ASTRONOMY: [['I may look up tonight.', '[shrug] Take a coat.']],
+  SPACE: [['I may look up tonight.', '[shrug] Take a coat.']],
+  WILDLIFE: [['[nod] Finally, some news nobody will complain about.', 'Give it an hour.']],
+  any: [
+    ['[nod] A good note to end on.', 'Rare enough that we should enjoy it.'],
+    ['Well. That is the most cheerful thing I have read all day.', '[shrug] It is a low bar, Paco. But yes.'],
+    ['I have nothing to add. A first.', 'Let the record show it.'],
+    ['[nod] Some stories do not need us at all.', 'Do not tell the management.'],
+  ],
 };
-const GENERIC_CHATS = ['[nod] Remarkable. [papers] Moving on.', '[chin] Something to think about. [papers]', '[nod] Well, there we are. [papers]'];
 
-const PICKUPS = (name) => [`Thanks, ${name}.`, `Thank you, ${name}.`];
-const TOSSES = (name) => [`[look_partner] ${name}?`, `[point_partner] Over to you, ${name}.`];
+// TECH BYTES, THE CATCH: Ada asks what a remaining summary sentence answers; Max answers with it.
+const CATCH = [
+  { test: /\b(?:cost|price|priced|dollars|euros|pounds|\$|£|€)/i, q: (max) => `[glasses] ${max}, the question everyone asks. What does it cost?` },
+  { test: /\b(?:next year|this year|later this year|next month|in the (?:spring|summer|autumn|winter)|on sale|go on sale|launch(?:es)? (?:in|next)|from next|by \d{4})\b/i, q: () => '[chin] And when does it reach actual people?' },
+  { test: /\b(?:but|however|only|not yet|still|although)\b/i, q: () => '[steeple] So what is the catch?' },
+  { test: /\b(?:using|uses|by (?:using|\w+ing)|works (?:by|without)|without an?)\b/i, q: () => '[chin] How does it actually work?' },
+];
+// The button after "And finally", by what kind of story it was: a product, or science.
+const PRODUCT_KICKERS = new Set(['GADGETS', 'ROBOTICS', 'CHIPS', 'GAMING', 'SOFTWARE', 'AI', 'CONNECTIVITY']);
+const TECH_BUTTONS = {
+  product: {
+    ada: ['[shrug] We will see how it holds up outside the press release.', '[chin] Promising. I will believe it when it survives its first software update.'],
+    max: ['[raise_hand] For the record, I would like one. Purely for research.', '[nod] Clever. Quietly, properly clever.'],
+  },
+  science: {
+    ada: ['[nod] No launch event, no price tag. I approve.', '[nod] Fair enough. That one I like.'],
+    max: ['[nod] I have questions. Most of them start with how.', '[look_partner] Somewhere, a researcher is very pleased with themselves. Rightly.'],
+  },
+};
+
+// COSMOS: UNIT-8's literal line after "And finally".
+const UNIT8_LINES = {
+  ASTRONOMY: ['I will keep one sensor pointed upwards, Dr Reyes. For the record.'],
+  SPACE: ['I will keep one sensor pointed upwards, Dr Reyes. For the record.'],
+  any: ['[nod] Logged under good news, Dr Reyes. The file is short. I am glad to add to it.', 'I have no further data, Dr Reyes. I find I do not mind.', '[nod] Noted. My circuits remain calm. This is how I express enthusiasm.'],
+};
+
+// Programmes without a chat policy: a short dry reaction after a light story.
+const CHATS = {
+  paco: ['[nod] Well. Not a sentence I expected to read tonight.', '[nod] File that under good news. We do have some.'],
+  lola: ['[chin] Not what I expected when I came in this morning.', '[nod] Some good news, for once.'],
+  max: ['[nod] Clever. Quietly, properly clever.', '[look_partner] I did not see that one coming.'],
+  ada: ['[nod] Fair enough. That one I like.', '[chin] Noted. I will want to see how that plays out.'],
+  nova: ['[chin] Every answer comes with a new question attached. That is the job.', '[steeple] Science at its best: patient, careful and slightly stubborn.'],
+  unit8: UNIT8_LINES.any,
+  penny: ['[nod] Worth keeping an eye on.'],
+  sam: ['[nod] Quick one, but worth knowing.'],
+};
+const GENERIC_CHATS = ['[nod] Remarkable. Moving on.', '[chin] Something to think about.', '[nod] Well, there we are.'];
+
+// ---------------------------------------------------------------- helpers
 
 // FNV-1a: stable variety from story ids.
 function hash(s) {
@@ -96,40 +124,38 @@ function hash(s) {
 }
 const choose = (list, key) => list[hash(key) % list.length];
 
-// Markers that belong to the strap, not to the spoken headline: "BREAKING: …", "… – live".
-const plainTitle = (t) =>
-  String(t)
-    .replace(/^\s*breaking(?: news)?\s*[:|–—-]\s*/i, '')
-    .replace(/\s*(?:,|\s[|–—-])\s*breaking\s*$/i, '')
-    .replace(/\s*[-–—]\s*live(?: updates)?\s*$/i, '')
-    .trim();
-
 const sentencesOf = (s) =>
   String(s || '')
     .split(/(?<=[.!?])\s+(?=[A-Z0-9"“‘'])/)
     .map((x) => x.trim())
     .filter(Boolean);
-const asSentence = (t) => `${String(t).trim().replace(/[\s.!?:;,]+$/, '')}.`;
 const unstop = (t) => String(t).trim().replace(/[\s.!?:;,]+$/, '');
+const asSentence = (t) => `${unstop(t)}.`;
+const wordCount = (t) => String(t).replace(/\[[^\]]*\]/g, ' ').split(/\s+/).filter(Boolean).length;
 const firstName = (p) => String(p?.name || 'my colleague').replace(/^(?:Dr|Mr|Ms|Mrs|Prof)\.?\s+/i, '').split(/\s+/)[0];
 const lowerArticle = (by) => by.replace(/^(The|A|An) /, (m) => m.toLowerCase());
+// A sentence can follow "According to X," only if its first word is not a name.
+const COMMON_START = /^(?:A|An|The|This|These|Those|Its|Their|Some|More|Most|Many|Several|Scientists|Researchers|Officials|Astronomers|Archaeologists|Rangers|Volunteers|Engineers|Doctors|Experts|Shops|Traders|Policymakers|Curators|Investors|Workers|Students|Residents|Visitors|Users|Strong|Heavy|Rail|Oil|Coffee|Rice|Prices|Sales|Shares|Stocks)\b/;
+const lcFirst = (s) => (COMMON_START.test(s) ? s[0].toLowerCase() + s.slice(1) : null);
+// Content-word overlap relative to the headline: does this sentence just restate it?
+function restates(sentence, title) {
+  const t = new Set(contentWords(title));
+  if (!t.size) return false;
+  const s = new Set(contentWords(sentence));
+  let shared = 0;
+  for (const w of t) if (s.has(w) || [...s].some((x) => x.slice(0, 5) === w.slice(0, 5) && w.length > 4)) shared++;
+  const figuresOf = (x) => numbersIn(x).map((n) => n.scaled);
+  const tf = figuresOf(title);
+  return shared / t.size >= 0.4 || (tf.length > 0 && tf.every((v) => figuresOf(sentence).includes(v)));
+}
 
 /** How a place is said aloud: "the Andes", "the United States", "the Reykjanes peninsula", "Nairobi". */
 function spokenPlace(entry) {
   const the = entry.aliases.find((a) => /^the /.test(a));
   if (the) return the;
   if (/^(?:United |Netherlands|Philippines|Czech Republic|Democratic Republic|Dominican Republic|Gambia)/.test(entry.name)) return `the ${entry.name}`;
-  if (entry.kind === 'region' && / [a-z]/.test(entry.name)) return `the ${entry.name}`; // "Greek islands", "Reykjanes peninsula"
+  if (entry.kind === 'region' && / [a-z]/.test(entry.name)) return `the ${entry.name}`;
   return entry.name;
-}
-
-/** Up to 44 characters for the strap, cutting a trailing phrase rather than a word. */
-function caption(title) {
-  const t = unstop(title);
-  if (t.length <= 44) return t;
-  const cut = t.match(/^(.{20,44}?)\s+(?:in|on|at|for|near|after|with|as|to|amid|over|across)\s+\S/);
-  if (cut) return cut[1];
-  return t;
 }
 
 function kickerFor(s) {
@@ -138,65 +164,141 @@ function kickerFor(s) {
   return null;
 }
 
-/** What the mock knows about a story, from its own text only. */
+/** Greeting by the London studio clock, unless the episode might air across a boundary (it is made minutes ahead). */
+function timeGreeting(now) {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(now);
+  const h = Number(parts.find((p) => p.type === 'hour')?.value);
+  const m = Number(parts.find((p) => p.type === 'minute')?.value);
+  const mins = h * 60 + m;
+  const near = [5 * 60, 12 * 60, 18 * 60].some((b) => b - mins > 0 && b - mins < 30);
+  if (near || !Number.isFinite(mins)) return 'Hello';
+  if (mins >= 18 * 60 || mins < 5 * 60) return 'Good evening';
+  return mins >= 12 * 60 ? 'Good afternoon' : 'Good morning';
+}
+
+/** The figure as said in a teaser, with its qualifier: "40,000", "more than 1 million", "21 percent", "about 1,500 dollars". */
+function spokenValue(f) {
+  const n = numbersIn(f.said)[0];
+  if (!n) return f.value.toLowerCase();
+  const after = f.said.slice(n.end).match(/^\s*(dollars|pounds|euros|yen|percent|per cent)\b/i);
+  return `${f.said.slice(0, n.index)}${n.raw}${after ? ` ${after[1]}` : ''}`;
+}
+
+// ---------------------------------------------------------------- what the mock knows about a story
+
 function study(story) {
-  const s = { ...story, title: plainTitle(story.title) || story.title, breaking: isBreaking(story.title) };
-  const text = `${s.title} ${s.summary || ''}`;
+  const title = plainTitle(story.title) || story.title;
+  const s = { ...story, title };
+  const text = `${title} ${s.summary || ''}`;
   const grave = GRAVE.test(text);
-  const loc = locate(s.title, s.summary || '');
+  const loc = locate(title, s.summary || '');
   const precise = loc && !loc.entry.broad ? loc : null;
   // A fact card is a whole beat on screen: only figures worth one ("3 YEARS" is not).
   const figures = extractFigures(s.summary || '').filter((f) => f.fact.length <= 40 && f.score >= 2);
+  const sentences = sentencesOf(s.summary).filter((x) => !LIVE_BOILERPLATE.test(x) && unstop(x).toLowerCase() !== unstop(title).toLowerCase());
+  // Breaking news is never "light", whatever it is about.
+  const light = !grave && !isBreaking(story.title) && LIGHT.test(title) && !SOBER.test(text);
   return {
     s,
+    breaking: isBreaking(story.title),
+    live: !!story.live,
     grave,
     sad: grave && DEATHS.test(text),
-    light: !grave && LIGHT.test(s.title) && !SOBER.test(text),
-    surprising: SURPRISE.test(s.title),
+    light,
+    curious: light && (LIGHTER.test(title) || CURIOUS.test(title)),
     loc: precise,
+    country: precise ? precise.entry.country || precise.entry.name : null,
     places: placesIn(text),
     figures,
+    sentences,
     quote: quotesIn(s.summary || '').find((q) => q.text.split(/\s+/).length >= 4) || null,
     kicker: kickerFor(s),
   };
 }
 
-/** Body sentences of the summary: skips a first sentence that just repeats the headline (unless asked to keep it). */
-function body(info, max, { keepFirst = false } = {}) {
-  const all = sentencesOf(info.s.summary);
-  if (!keepFirst && all.length > 1 && wordsGrounded(all[0], info.s.title) >= 0.7) all.shift();
-  if (!all.length) return [];
-  return all.slice(0, max).filter((x) => unstop(x).toLowerCase() !== unstop(info.s.title).toLowerCase());
-}
+// ---------------------------------------------------------------- running order
 
 /**
- * The running order: the top stories as ranked, then a round-up of stories
- * with a clear place (if the programme has one), then the rest, and a
- * lighter story last (if the programme has an "and finally").
+ * The running order, by the programme's rules: a breaking story leads; then
+ * the main stories (the number of the day among them, never first), a round-up
+ * of located stories in different countries, and an "and finally" last.
  */
-function runningOrder(infos, n, features) {
-  const pool = infos.slice(0, n + 3);
-  let picked = pool.slice(0, n);
+function runningOrder(infos, n, program) {
+  const features = program?.features || [];
+  const pool = [...infos];
+  const take = (pred) => {
+    const i = pool.findIndex(pred);
+    return i < 0 ? null : pool.splice(i, 1)[0];
+  };
+  const lead = take((i) => i.breaking) || take((i) => !i.live) || take(() => true);
+  if (!lead) return { order: [], roundup: [], lighter: null, number: null };
+  let slots = n - 1;
   let lighter = null;
-  if (features.includes('lighter')) {
-    const lighterOf = (test) => [...picked].reverse().find((i) => test(i) && i !== picked[0]) || pool.slice(n).find(test) || null;
-    lighter = lighterOf((i) => i.light && LIGHTER.test(i.s.title)) || lighterOf((i) => i.light);
-    if (lighter && !picked.includes(lighter)) picked = [...picked.slice(0, n - 1), lighter];
-    if (lighter) picked = [...picked.filter((i) => i !== lighter), lighter];
+  if (features.includes('lighter') && slots >= 1) {
+    lighter = take((i) => i.curious && !i.breaking) || take((i) => i.light && !i.breaking);
+    if (lighter) slots--;
+  }
+  // The number of the day first (it is one of the main stories), then the round-up from what is left.
+  let number = null;
+  if (features.includes('number')) {
+    const ok = (i) => !i.grave && !i.breaking && !i.live && i.figures.some((f) => f.score >= 3 && !f.age);
+    const best = (list) => list.filter(ok).sort((a, b) => bestFigure(b).score - bestFigure(a).score)[0] || null;
+    // From the programme's own beat when it has one (COSMOS: a science figure before a gadget's sales).
+    const primary = program?.categories?.length > 1 ? program.categories[0] : null;
+    const near = pool.slice(0, slots + 3);
+    number = (primary && best(near.filter((i) => i.s.category === primary))) || best(near);
+    if (number) {
+      pool.splice(pool.indexOf(number), 1);
+      slots--;
+    }
   }
   let roundup = [];
-  if (features.includes('roundup') && n >= 3) {
-    // NEWS IN 60 can run almost entirely on the map; a flagship keeps two lead stories first.
-    const lead = n >= 6 ? 2 : 1;
-    const max = n >= 6 ? 3 : 4;
-    roundup = picked.slice(lead).filter((i) => i.loc && i !== lighter).slice(0, max);
-    if (roundup.length < 2) roundup = [];
+  const r = program?.roundup || {};
+  if (features.includes('roundup') && slots >= 2) {
+    const min = r.min || 2;
+    // Room for the main stories first (WORLD NOW keeps two, the number of the day counting as one).
+    const mainsNeeded = Math.max(0, (program?.id === 'world-now' ? 2 : 1) - (number ? 1 : 0));
+    const want = Math.min(r.max || (n >= 6 ? 3 : 4), slots - mainsNeeded);
+    const countries = new Set([lead.country]);
+    for (const i of [...pool]) {
+      if (roundup.length >= want) break;
+      if (!i.loc || i.breaking || i.live || countries.has(i.country)) continue;
+      countries.add(i.country);
+      roundup.push(i);
+      pool.splice(pool.indexOf(i), 1);
+    }
+    if (roundup.length < min) {
+      pool.push(...roundup);
+      roundup = [];
+    }
+    // A grave item never sits right before "and finally": it opens the round-up instead.
+    roundup.sort((a, b) => Number(b.grave) - Number(a.grave));
+    slots -= roundup.length;
   }
-  const rest = picked.filter((i) => !roundup.includes(i) && i !== lighter);
-  const lead = rest.slice(0, roundup.length ? (n >= 6 ? 2 : 1) : rest.length);
-  const after = rest.slice(lead.length);
-  return { order: [...lead, ...roundup, ...after, ...(lighter ? [lighter] : [])], roundup, lighter };
+  const mains = [];
+  while (slots > 0 && pool.length) {
+    mains.push(take((i) => !i.live) || pool.shift());
+    slots--;
+  }
+  // Where the number of the day goes: second, last, or among the main stories (never the lead).
+  let middle = [...mains];
+  if (number) {
+    if (program?.numberSlot === 'last') middle = [...mains];
+    else if (program?.numberSlot === 'second') middle = [number, ...mains];
+    else middle.splice(Math.min(1, middle.length), 0, number);
+  }
+  // NEWS IN 60 runs the round-up after its first item; others after the main stories.
+  const before = program?.id === 'news-60' ? middle.slice(0, 1) : middle;
+  const after = program?.id === 'news-60' ? middle.slice(1) : [];
+  const order = [lead, ...before, ...roundup, ...after];
+  if (number && program?.numberSlot === 'last') order.push(number);
+  if (lighter) order.push(lighter);
+  return { order, roundup, lighter, number };
 }
+
+const bestFigure = (info) => info.figures.filter((f) => !f.age).sort((a, b) => b.score - a.score)[0] || info.figures[0];
+
+// ---------------------------------------------------------------- the provider
 
 export function createMockProvider() {
   return {
@@ -204,118 +306,244 @@ export function createMockProvider() {
     // It copies the feed text, so it has nothing to check: it never stands in for the editor.
     reviews: false,
     available: () => true,
-    async generate({ stage = 'write', script, stories, channelName, program, presenters = { A: { name: 'the presenter' } }, count }) {
+    async generate({ stage = 'write', script, stories, channelName, program, presenters = { A: { name: 'the presenter' } }, count, now }) {
       const usage = { input: 0, output: 0, cached: 0 };
       // Asked to review anyway (outside a ProviderChain): return the script untouched and say so.
       if (stage === 'review') return { text: JSON.stringify(script), usage, reviewed: false };
-      return { text: JSON.stringify(writeEpisode({ stories, channelName, program, presenters, count })), usage };
+      return { text: JSON.stringify(writeEpisode({ stories, channelName, program, presenters, count, now: now ?? new Date() })), usage };
     },
   };
 }
 
-function writeEpisode({ stories, channelName, program, presenters, count }) {
+// Attribution templates; each takes the sentence and the outlet. Rotated, never twice in a row.
+const ATTRIBUTIONS = [
+  { id: 'tail', fn: (t, src) => `${unstop(t)}, ${src} reports.` },
+  { id: 'according', fn: (t, src) => (lcFirst(t) ? `According to ${src}, ${unstop(lcFirst(t))}.` : null) },
+  { id: 'that', fn: (t, src) => (lcFirst(t) ? `${src} reports that ${unstop(lcFirst(t))}.` : null) },
+  { id: 'colon', fn: (t, src) => `From ${src}: ${asSentence(t)}` },
+];
+
+function writeEpisode({ stories, channelName, program, presenters, count, now }) {
   const title = program?.title || channelName;
   const solo = !presenters.B;
-  const quick = program?.id === 'news-60';
-  const features = program?.features || [];
-  const n = Math.min(stories.length, count ?? program?.stories ?? 5);
-  const infos = stories.map(study);
-  const { order, roundup, lighter } = runningOrder(infos, n, features);
-  const seed = order.map((i) => i.s.id).join('|') + (program?.id || '');
+  const pid = program?.id || '';
+  const quick = pid === 'news-60';
+  // A live page whose only lines point at the outlet's own coverage has nothing to read out.
+  const all = stories.map(study).filter((i) => !i.live || i.sentences.length);
+  // Live pages only when there is nothing else.
+  const fresh = all.filter((i) => !i.live);
+  const pool = fresh.length >= Math.min(all.length, count ?? program?.stories ?? 5) ? fresh : all;
+  const n = Math.min(pool.length, count ?? program?.stories ?? 5);
+  const { order, roundup, lighter, number } = runningOrder(pool, n, program);
+  const seed = order.map((i) => i.s.id).join('|') + pid;
+  const nameOf = (slot) => firstName(presenters[slot]);
+  const idOf = (slot) => presenters[slot]?.id;
+  const other = (slot) => (slot === 'A' ? 'B' : 'A');
 
-  // Number of the day: the most striking stated figure of a story that is not grave, a round-up item or the closer.
-  const numberStory = features.includes('number')
-    ? order
-        .filter((i) => !i.grave && !roundup.includes(i) && i !== lighter && i.figures[0]?.score >= 3)
-        .sort((a, b) => b.figures[0].score - a.figures[0].score)[0] || null
-    : null;
-
-  // Anchors: each lead story, the whole round-up and the closer are one "block" each.
+  // Anchors: blocks alternate (the round-up is one block). WORLD NOW: Lola reads the round-up and And finally.
+  const reader = program?.roundup?.reader;
   const anchors = [];
   let block = -1;
   order.forEach((info, k) => {
     if (!(roundup.includes(info) && k > 0 && roundup.includes(order[k - 1]))) block++;
-    anchors.push(solo || block % 2 === 0 ? 'A' : 'B');
+    let a = solo || block % 2 === 0 ? 'A' : 'B';
+    if (!solo && reader && (roundup.includes(info) || info === lighter)) a = reader;
+    if (!solo && pid === 'cosmos' && info === number) a = 'B'; // the number is UNIT-8's moment
+    anchors.push(a);
   });
-  const other = (slot) => (slot === 'A' ? 'B' : 'A');
-  const nameOf = (slot) => firstName(presenters[slot]);
 
   const segments = [];
-  // Cold open: the top story's headline, the greeting, a teaser.
+  const tease = [];
+  // ---- intro
   const top = order[0];
-  const second = order[1];
   const names = solo ? presenters.A.name : `${presenters.A.name}, with ${presenters.B.name}`;
-  const greet = choose(GREETINGS, seed)(title, channelName, names) + (solo ? '' : ' [B:nod]');
-  const sober = top?.grave || second?.grave; // no waving at the viewer while teasing grave news
-  const intro = [
-    top ? `${top.grave ? '[serious] ' : ''}${asSentence(top.s.title)}` : '',
-    sober ? greet.replace('[wave]', '[nod]') : greet,
-    second ? `[point_camera] Also coming up: ${caption(second.s.title)}${numberStory && numberStory !== second ? ', and our number of the day' : ''}.` : '',
-  ];
-  segments.push({ type: 'intro', anchor: 'A', emotion: top?.grave ? 'serious' : sober ? 'neutral' : 'happy', text: intro.filter(Boolean).join(' ').replace(/\.\./g, '.') });
+  const grave0 = top?.grave;
+  const shape = program?.intro || 'teaser';
+  const featureTease = (info) => (info === number ? 'our number of the day' : null);
+  const introParts = [];
+  if (shape === 'frame') {
+    introParts.push(`[nod] This is ${title}. I'm ${names}.`);
+  } else if (shape === 'headlines') {
+    order.slice(0, 3).forEach((info, k) => {
+      introParts.push(`${k === 0 && info.grave ? '[serious] ' : ''}${asSentence(info.s.title)}`);
+      tease.push(info.s.id);
+    });
+    introParts.push(`${timeGreeting(now)}, and welcome to ${title}. [nod] I'm ${names}.${solo ? '' : ' [B:nod]'}`);
+  } else {
+    if (top) {
+      introParts.push(`${grave0 ? '[serious] ' : ''}${top.breaking ? 'Breaking news: ' : ''}${asSentence(top.s.title)}`);
+      tease.push(top.s.id);
+    }
+    const second = order[1];
+    const third = order[2];
+    if (second) {
+      introParts.push(`[point_camera] Also coming up: ${featureTease(second) || unstop(second.s.title)}.`);
+      tease.push(second.s.id);
+    }
+    if (third) {
+      introParts.push(third === number ? 'And later, our number of the day.' : third === lighter ? `And later: ${asSentence(third.s.title)}` : `Later in the programme: ${asSentence(third.s.title)}`);
+      tease.push(third.s.id);
+    }
+    const greet = solo ? `This is ${title}. [nod] I'm ${names}.` : `This is ${title}. [nod] I'm ${names}. [B:nod]`;
+    introParts.push(greet);
+  }
+  segments.push({ type: 'intro', anchor: 'A', emotion: grave0 ? 'serious' : 'neutral', text: introParts.join(' '), teases: tease });
+  const introSaidHeadline = shape !== 'frame';
 
+  // ---- stories
   let chats = 0;
-  let whyCount = 0;
+  const maxChats = solo ? 0 : program?.maxChats ?? 3;
+  let thanked = 0;
   let tossed = false;
+  let tosses = 0;
+  let lastTemplate = null;
+  const named = new Map(); // outlet -> times attributed
+  const policy = program?.chats || null;
+
+  const attribute = (sentence, info, key, only = null) => {
+    const src = info.s.source;
+    const times = named.get(src) || 0;
+    named.set(src, times + 1);
+    // A sentence that names its own source ("officials said") gets no second "X reports" on top:
+    // the outlet is named up front the first time ("From Bitport Herald: ..."), then not at all.
+    if (OWN_ATTRIBUTION.test(sentence) && (times > 0 || (only && !only.includes('colon')))) return asSentence(sentence);
+    if (times > 1 && hash(key) % 2 === 0) return asSentence(sentence);
+    const offset = hash(seed) % ATTRIBUTIONS.length;
+    for (let j = 0; j < ATTRIBUTIONS.length; j++) {
+      const t = ATTRIBUTIONS[(offset + segments.length + j) % ATTRIBUTIONS.length];
+      if (t.id === lastTemplate || (only && !only.includes(t.id))) continue;
+      if (OWN_ATTRIBUTION.test(sentence) && t.id !== 'colon') continue;
+      const out = t.fn(sentence, src);
+      if (out) {
+        lastTemplate = t.id;
+        return out;
+      }
+    }
+    return `${unstop(sentence)}, ${src} reports.`;
+  };
+
   order.forEach((info, k) => {
     const s = info.s;
     const anchor = anchors[k];
     const partner = other(anchor);
     const key = `${seed}#${s.id}`;
     const inRoundup = roundup.includes(info);
-    const isNumber = info === numberStory;
+    const isNumber = info === number;
     const isLighter = info === lighter;
     const parts = [];
     const afterChat = segments.at(-1)?.type === 'chat';
-    const pickedUp = !solo && k > 0 && anchors[k - 1] !== anchor && !tossed && !afterChat && !order[k - 1].grave && !info.grave && hash(key) % 2 === 0;
-    if (pickedUp) parts.push(choose(PICKUPS(nameOf(anchors[k - 1])), key));
+    const prev = order[k - 1];
+    const pickup =
+      !solo && k > 0 && anchors[k - 1] !== anchor && !tossed && !afterChat && !prev.grave && !info.grave && thanked < 1 && !(inRoundup && roundup.indexOf(info) > 0) && hash(key) % 2 === 0;
+    if (pickup) {
+      parts.push(`Thanks, ${nameOf(anchors[k - 1])}.`);
+      thanked++;
+    }
     tossed = false;
+    const used = new Set();
+    const pickSentence = (pred) => {
+      const x = info.sentences.find((t) => !used.has(t) && pred(t));
+      if (x) used.add(x);
+      return x || null;
+    };
 
     if (inRoundup) {
-      // One sentence per item, place first, attributed.
+      // One sentence per item, its place named early, attributed.
       const idx = roundup.indexOf(info);
-      const line = unstop(body(info, 1, { keepFirst: true })[0] || s.title);
-      // Lead with the place, or with its country when the sentence names the region itself ("the Reykjanes peninsula").
-      const { entry } = info.loc;
-      const country = entry.kind !== 'country' && entry.country ? placesIn(entry.country)[0]?.entry : null;
-      const place = entry.kind === 'region' && country && entry.label.includes(',') && line.includes(entry.name) ? spokenPlace(country) : spokenPlace(entry);
-      const lead = idx === 0 ? `[point_screen] Now, around the world in 30 seconds. First, ${place}.` : idx === roundup.length - 1 ? `And to finish the round-up, ${place}.` : choose([`To ${place} next.`, `Now ${place}.`, `Over to ${place}.`], key);
-      parts.push(lead, `${line}, ${s.source} reports.`);
+      const max = quick ? 18 : 20;
+      const placeWords = [info.loc.entry.name, ...info.loc.entry.aliases, info.country].filter(Boolean);
+      const namesPlace = (t) => placeWords.some((p) => t.includes(p.replace(/^the /, '')));
+      // A sentence that names the place and fits, else the headline (it says what happened), never a stray detail.
+      const line = pickSentence((t) => namesPlace(t) && wordCount(t) + 2 <= max) || (wordCount(s.title) + 2 <= max ? s.title : null) || pickSentence((t) => namesPlace(t)) || s.title;
+      const lead = idx === 0 ? program?.roundup?.opener || 'Now, around the world in 30 seconds.' : '';
+      const where = namesPlace(line) ? '' : `${idx === 0 ? 'First, ' : 'Now to '}${spokenPlace(info.loc.entry)}.`;
+      parts.push(...[`${idx === 0 ? '[point_screen] ' : ''}${lead}`.trim(), where].filter(Boolean), attribute(line, info, key, ['tail']));
     } else {
-      const opener = info.grave ? OPENERS[GRAVE_OPENERS[hash(key) % GRAVE_OPENERS.length]] : choose(OPENERS, key);
-      const cue = isNumber ? '[count] ' : info.grave ? '[lean_in] ' : s.image ? '[point_screen] ' : choose(['[raise_hand] ', '[point_camera] ', ''], key);
-      // When the headline already says it in full, the figure alone works as a teaser.
+      // Openers: the summary's first sentence when it says the headline better (or the intro already read the headline).
+      const first = info.sentences[0];
+      const skipHeadline = first && ((k === 0 && introSaidHeadline) || restates(first, s.title));
+      let opener = skipHeadline ? pickSentence(() => true) : s.title;
+      const cue = isNumber ? '[count] ' : info.grave ? '[lean_in] ' : s.image ? '[point_screen] ' : choose(['[raise_hand] ', '[lean_in] ', ''], key);
+      let figureLine = null;
       if (isNumber) {
-        const { said } = info.figures[0];
-        const short = said.split(/\s+/).slice(0, /\d\s+(?:thousand|million|billion|trillion)\b/i.test(said) ? 2 : 1).join(' ');
-        parts.push(`${cue}Our number of the day: ${unstop(s.title.toLowerCase().includes(said.toLowerCase()) ? short : said)}.`);
+        const f = bestFigure(info);
+        // "Our number of the day: 40,000." Then the story in the summary's order, so "It"/"Its" keep their
+        // subject, with the sentence that gives the figure straight after the opener; the headline is not read.
+        const raw = numbersIn(f.said)[0]?.raw || f.value;
+        if (!skipHeadline && info.sentences.length) opener = pickSentence(() => true);
+        if (!opener.includes(raw)) figureLine = pickSentence((t) => t.includes(raw));
+        parts.push(`${cue}Our number of the day: ${spokenValue(f)}.`);
       }
-      if (isLighter) parts.push(`${isNumber ? '' : cue}And finally: ${unstop(s.title)}, ${s.source} reports.`);
-      else parts.push(`${isNumber ? '' : cue}${opener(unstop(s.title), s.source)}`);
-      const lines = body(info, quick ? 1 : 2);
-      if (s.breaking) parts[parts.length - 1] = `Breaking news. ${parts.at(-1)}`;
-      // With nothing more to say, the co-presenter reacts to the headline itself.
-      if (!lines.length && !solo && !info.grave) parts[parts.length - 1] += ` [${partner}:nod]`;
-      lines.forEach((line, j) => {
-        let text = line;
-        if (j > 0 && !quick && !info.grave && whyCount < 2 && WHY.test(line)) {
-          text = `${choose(WHY_LEADS, key)} ${line}`;
-          whyCount++;
-        }
-        // The co-presenter reacts after the first fact (never at a grave story).
-        if (j === 0 && !solo && !info.grave) text += ` [${partner}:${choose(['nod', 'nod', 'chin'], key)}]`;
+      let line = attribute(opener, info, key, isLighter ? ['tail', 'according', 'that'] : null);
+      if (info.breaking) line = `Breaking news. ${line}`;
+      else if (info.live) line = `A developing story: ${line}`;
+      if (isLighter) line = `And finally: ${line}`;
+      parts.push(`${isNumber || isLighter ? '' : cue}${line}`);
+      if (figureLine) parts.push(figureLine);
+      // Details: news-60 keeps to its word budget; the TECH BYTES lead keeps one sentence back for THE CATCH.
+      const budget = quick ? (k === 0 ? 38 : 28) : Infinity;
+      const maxDetails = quick ? 2 : isNumber ? (figureLine ? 0 : 1) : k === 0 ? 2 : 1;
+      const catchFor = pid === 'tech-bytes' && k === 0 && !info.grave ? CATCH.find((c) => info.sentences.some((t) => !used.has(t) && c.test.test(t))) : null;
+      const reserved = catchFor ? info.sentences.find((t) => !used.has(t) && catchFor.test.test(t)) : null;
+      if (reserved) used.add(reserved);
+      let details = 0;
+      for (const t of info.sentences) {
+        if (details >= maxDetails || used.has(t)) continue;
+        if (/^(?:It|They|This|These)\b/.test(t) && WHY.test(t)) continue; // "It says..." with no subject reads as a label
+        if (wordCount(parts.join(' ')) + wordCount(t) > budget) continue;
+        let text = t;
+        if (details === 0 && !solo && !info.grave) text += ` [${partner}:${choose(['nod', 'nod', 'look_partner'], key)}]`;
         parts.push(text);
-      });
-      const quoteFits = info.quote?.by && !quick && !lines.some((l) => l.includes(info.quote.text.slice(0, 20)));
+        used.add(t);
+        details++;
+      }
+      if (!details && !solo && !info.grave) parts[parts.length - 1] += ` [${partner}:nod]`;
+      const quoteFits = info.quote?.by && !quick && !inRoundup && ![...used].some((l) => l.includes(info.quote.text.slice(0, 20)));
       if (quoteFits && parts.join(' ').length + info.quote.text.length < 420) parts.push(`As ${lowerArticle(info.quote.by)} put it: “${unstop(info.quote.text)}.”`);
+      if (reserved) info.catchAnswer = { line: reserved, q: catchFor.q };
     }
 
-    // Hand-over: toss to the partner who reads the next block, sometimes.
+    // ---- chats that follow this story
     const next = order[k + 1];
+    const slot = k === 0 ? 'lead' : isLighter ? 'lighter' : 'story';
+    const chatOk = !solo && !info.grave && !(next && next.grave) && chats < maxChats && !(inRoundup && next && roundup.includes(next));
+    const planned = [];
+    if (chatOk) {
+      if (policy) {
+        if (policy.after?.includes(slot)) {
+          if (pid === 'world-now' && slot === 'lighter') {
+            const pair = choose(WORLD_PAIRS[info.kicker] || WORLD_PAIRS.any, `${key}~pair`);
+            planned.push({ anchor: 'A', text: pair[0] }, { anchor: 'B', text: pair[1] });
+          } else if (pid === 'tech-bytes' && slot === 'lead' && info.catchAnswer) {
+            const askB = idOf('B') === 'ada' || idOf('A') !== 'ada' ? 'B' : 'A';
+            planned.push({ anchor: askB, text: info.catchAnswer.q(nameOf(other(askB))) }, { anchor: other(askB), text: `[lean_in] ${info.catchAnswer.line}` });
+          } else if (pid === 'tech-bytes' && slot === 'lighter') {
+            const sp = partner;
+            const kind = PRODUCT_KICKERS.has(info.kicker) ? 'product' : 'science';
+            planned.push({ anchor: sp, text: choose(TECH_BUTTONS[kind][idOf(sp)] || GENERIC_CHATS, `${key}~btn`) });
+          } else if (pid === 'cosmos' && slot === 'lead') {
+            const unit = idOf('B') === 'unit8' ? 'B' : partner;
+            const f = info.figures.find((x) => parts.join(' ').includes(numbersIn(x.said)[0]?.raw || x.value) && !x.age);
+            planned.push({ anchor: unit, text: f ? `[nod] ${f.said.replace(/^(?:about|around|nearly|almost|some|more than|over|up to|at least) /i, '').replace(/^\w/, (c) => c.toUpperCase())}. Noted.` : '[nod] Logged, Dr Reyes.' });
+            planned.push({ anchor: other(unit), text: next === number ? `[look_partner] Thank you, UNIT-8. Our number of the day is yours.` : 'Thank you, UNIT-8.' });
+          } else if (pid === 'cosmos' && slot === 'lighter') {
+            const unit = idOf('B') === 'unit8' ? 'B' : partner;
+            planned.push({ anchor: unit, text: choose(UNIT8_LINES[info.kicker] || UNIT8_LINES.any, `${key}~u8`) });
+          }
+        }
+      } else if (info.light && next && !inRoundup) {
+        planned.push({ anchor: partner, text: choose(CHATS[idOf(partner)] || GENERIC_CHATS, `${key}~chat`) });
+      }
+    }
+    const chatsHere = planned.slice(0, maxChats - chats);
+
+    // ---- hand-over: a toss to the partner who reads next, sometimes (never next to grave news).
     const nextAnchor = anchors[k + 1];
-    const chatNext = !solo && info.light && !info.grave && next && !next.grave && !inRoundup && chats < (program?.maxChats ?? 3);
-    if (!solo && next && nextAnchor !== anchor && !chatNext && !info.grave && !next.grave && hash(`${key}>`) % 3 === 0) {
-      parts.push(choose(TOSSES(nameOf(nextAnchor)), key));
+    const tossOk = !solo && !pickup && next && nextAnchor !== anchor && !chatsHere.length && !info.grave && !next.grave && pid !== 'tech-bytes' && !(inRoundup && roundup.includes(next));
+    if (tossOk && tosses < 2 && !segments.at(-1)?.text?.includes('[look_partner] ') && hash(`${key}>`) % 3 === 0) {
+      tosses++;
+      const toss = program?.toss ? program.toss.replace('{name}', nameOf(nextAnchor)) : choose([`${nameOf(nextAnchor)}?`, `Over to you, ${nameOf(nextAnchor)}.`], key);
+      parts.push(`[look_partner] ${toss}`);
       tossed = true;
     }
 
@@ -323,37 +551,52 @@ function writeEpisode({ stories, channelName, program, presenters, count }) {
       type: 'story',
       storyId: s.id,
       anchor,
-      emotion: info.sad ? 'sad' : info.grave ? 'serious' : isLighter || info.light ? 'happy' : info.surprising ? 'surprised' : 'neutral',
-      headline: caption(s.title),
+      emotion: info.sad ? 'sad' : info.grave ? 'serious' : isLighter ? (info.curious && CURIOUS.test(s.title) ? 'surprised' : 'happy') : info.light ? 'happy' : 'neutral',
+      headline: shortHeadline(s.title, program?.headlineMax),
       text: parts.join(' '),
       shot: info.loc ? 'map' : s.image ? (k % 3 === 1 ? 'full' : 'close') : solo ? 'close' : 'wide',
-      breaking: s.breaking,
+      breaking: info.breaking,
       location: info.loc ? { place: info.loc.place, lat: info.loc.lat, lon: info.loc.lon } : null,
-      fact: info.figures[0]?.fact || null,
+      fact: inRoundup ? null : info.figures[0]?.fact || null,
       kicker: info.kicker,
     };
-    if (info.figures.length) story.numbers = info.figures.map(({ value, label }) => ({ value, label }));
-    if (info.quote) story.quote = { text: info.quote.text, by: info.quote.by };
-    if (info.places.length >= 2) story.map = info.places.map(({ place, lat, lon }) => ({ place, lat, lon }));
+    if (isNumber) story.fact = bestFigure(info).fact;
+    if (!inRoundup && info.figures.length) story.numbers = info.figures.map(({ value, label, qualifier }) => ({ value, label, ...(qualifier ? { qualifier } : {}) }));
+    if (!inRoundup && info.quote) story.quote = { text: info.quote.text, by: info.quote.by };
+    if (!inRoundup && info.places.length >= 2) story.map = info.places.map(({ place, lat, lon }) => ({ place, lat, lon }));
     if (inRoundup) story.feature = 'roundup';
     else if (isNumber) story.feature = 'number';
     else if (isLighter) story.feature = 'lighter';
     segments.push(story);
 
-    if (chatNext) {
+    for (const c of chatsHere) {
       chats++;
-      const speaker = partner;
-      const lines = CHATS[presenters[speaker]?.id] || GENERIC_CHATS;
-      segments.push({ type: 'chat', anchor: speaker, emotion: info.surprising ? 'surprised' : 'happy', text: choose(lines, `${key}~chat`) });
+      segments.push({ type: 'chat', anchor: solo ? 'A' : c.anchor, emotion: isLighter && pid !== 'cosmos' ? 'happy' : 'neutral', text: c.text });
     }
   });
 
+  // ---- sign-off
   const last = order.at(-1);
-  const closer = solo ? choose(SIGNOFFS_SOLO, seed)(title, channelName) : choose(SIGNOFFS_DUO, seed)(title, channelName, presenters.A.name);
+  const outroAnchor = solo ? 'A' : program?.outroAnchor || 'B';
+  const partnerName = presenters[other(outroAnchor)]?.name;
+  const closers = {
+    'world-now': () => `That's ${title}. [nod] From ${partnerName} and from me, thank you for watching. Stay with us on ${channelName}.`,
+    'tech-bytes': () => `That's ${title}. [nod] From ${partnerName} and from me, thanks for watching. More news around the clock on ${channelName}.`,
+    cosmos: () => `That's ${title}. [nod] From ${partnerName} and from me, thank you for watching. Stay with us on ${channelName}.`,
+    'money-minute': () => `That's your ${title}. I'm ${presenters.A.name}. Stay with us on ${channelName}. [papers]`,
+    'news-60': () => `That's the minute. Stay with us on ${channelName}. [papers]`,
+  };
+  const generic = solo
+    ? choose([`That's ${title}. [wave] Stay with us here on ${channelName}.`, `And that's ${title}. [wave] Thanks for watching, and stay with us on ${channelName}.`], seed)
+    : choose(
+        [`That's ${title}. [wave] From ${partnerName} and from me, thanks for watching. Stay with us here on ${channelName}.`, `And that's ${title}. [wave] Thanks for your company. There's more news around the clock here on ${channelName}.`],
+        seed
+      );
+  const closer = closers[pid] ? closers[pid]() : generic;
   segments.push({
     type: 'outro',
-    anchor: solo ? 'A' : 'B',
-    emotion: last?.grave ? 'neutral' : 'happy',
+    anchor: outroAnchor,
+    emotion: last?.grave ? 'neutral' : closers[pid] ? 'neutral' : 'happy',
     text: last?.grave ? closer.replace('[wave]', '[nod]') : closer,
   });
   return { title: `${title} (demo)`, segments };

@@ -15,6 +15,11 @@ export const EMOTIONS = {
   thinking: { brow: 0.1, browIn: 0.25, smile: -0.05, squint: 0.1, lid: 0.15, wide: 0, lookY: -0.45, lookX: -0.4 },
 };
 export const FACE_KEYS = ['brow', 'browIn', 'smile', 'squint', 'lid', 'wide', 'lookX', 'lookY'];
+// Extra scalar channels the FACES stream adds (e.g. a separate mouth width
+// `mwide`), with their rest values. rig.js resets every key here at the start
+// of each evaluation, so FACES can add channels without editing rig.js
+// (CONTRACTS "rig layer signatures"). Empty in the approved prototype.
+export const FACE_REST = {};
 
 /** Layer 2: perf.emotions = [{ t0, name }] (sorted), crossfaded; plus the persona's resting smile. */
 export function applyEmotion(c, perf, t, persona) {

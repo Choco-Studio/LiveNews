@@ -142,9 +142,10 @@ const wordsAround = (s, index, end, before, after) => {
   const tail = fold(s.slice(end, end + 80)).match(/[a-z][a-z'-]*/g) || [];
   return { before: head.slice(-before), after: tail.slice(0, after) };
 };
-/** The thing a figure counts ("120 people" -> "people"), from the next few words. */
+/** The thing a figure counts ("120 people" -> "people"), from the next few words of the same phrase. */
 function countedNoun(s, n) {
-  const { after } = wordsAround(s, n.index, n.end, 0, 4);
+  const phrase = s.slice(n.end, n.end + 80).split(/[,;:.!?()“”"]/)[0];
+  const after = (fold(phrase).match(/[a-z][a-z'-]*/g) || []).slice(0, 4);
   for (const w of after) {
     const word = w.replace(/^-+/, '');
     if (!word || NOUN_SKIP.has(word) || CURRENCY_WORD_RE.test(word)) continue;
@@ -184,8 +185,11 @@ function supports(c, s, claimText, sourceText) {
   } else if (!(close(c.value, s.value) || close(c.value, s.scaled))) return false;
   const noun = countedNoun(claimText, c);
   if (!noun) return true;
+  // The source must count something else for this to be a mismatch: "three injured" supports
+  // "three people were injured", "120 relief camps" does not support "120 people".
+  const counted = countedNoun(sourceText, s);
+  if (!counted || /(?:ed|ing)$/.test(counted)) return true;
   const { before, after } = wordsAround(sourceText, s.index, s.end, 3, 5);
-  if (!after.length) return true;
   return [...before, ...after].some((w) => sameWord(noun, w));
 }
 
@@ -326,9 +330,9 @@ const IRREGULAR_PAST = new Set('shook rose fell grew took made hit struck began 
 const QUALIFIER_RE = /\b(about|around|nearly|almost|roughly|approximately|some|more than|over|up to|at least|less than|fewer than|under)\s+$/i;
 const QUALIFIER_LABEL = { some: 'ABOUT', roughly: 'ABOUT', approximately: 'ABOUT', around: 'ABOUT', over: 'MORE THAN', 'fewer than': 'LESS THAN', under: 'LESS THAN' };
 const DOWN_BEFORE = /\b(?:fell|fallen|falls?|dropped|drops?|down|cut|decreased|declined|slid|slipped|eased|lost|shed|shrank|shrunk|shrinks?|slumped|plunged|sank|fall of|drop of|decline of)\s+(?:by\s+)?$/;
-const UP_BEFORE = /\b(?:rose|risen|rises?|up|grew|grown|grows?|jumped|increased|climbed|gained|surged|soared|added|rise of|increase of|jump of)\s+(?:by\s+)?$/;
+const UP_BEFORE = /\b(?:rose|risen|rises?|(?<!made )up|grew|grown|grows?|jumped|increased|climbed|gained|surged|soared|added|rise of|increase of|jump of)\s+(?:by\s+)?$/;
 const AUX = new Set('has have had is are was were be been will would could can may might should did does do'.split(' '));
-const SUBJECT_SKIP = new Set('the a an its their his her this that these those our your new'.split(' '));
+const SUBJECT_SKIP = new Set('the a an its their his her this that these those our your new large small big main major global total average annual overall national local key it they he she we you'.split(' '));
 
 /**
  * The noun phrase a percentage is about: "The index has gained 21 percent" ->
@@ -349,7 +353,7 @@ function subjectBefore(s, index) {
     const w = raw.replace(/[^A-Za-z'’-]/g, '');
     const lw = w.toLowerCase().replace(/['’]s$/, '');
     if (!w) break;
-    if (!out.length && SUBJECT_SKIP.has(lw)) continue;
+    if (SUBJECT_SKIP.has(lw)) continue;
     if (AUX.has(lw) || LABEL_STOP.has(lw) || /ed$/.test(lw) || IRREGULAR_PAST.has(lw) || DOWN_BEFORE.test(`${lw} `) || UP_BEFORE.test(`${lw} `)) break;
     out.push(lw.replace(/['’]s$/, ''));
     if (out.length >= 2) break;
@@ -390,7 +394,11 @@ export function extractFigures(text, max = 3) {
         break;
       }
       if (n.percent && !label.length && lw === 'of' && next && !LABEL_STOP.has(next)) {
-        label.push('of', next); // "62 percent of traders"
+        // "62 percent of traders", "17 percent of new cars"
+        const third = (tokens[i + 2] || '').replace(/[^A-Za-z]/g, '').toLowerCase();
+        const ends = /[,.;:!?]$/.test(tokens[i + 1] || '');
+        const describes = /^(?:new|all|young|older|small|large|local|rural|urban|adult|online|first-time)$/.test(next);
+        label.push('of', next, ...(describes && third && !ends && !LABEL_STOP.has(third) ? [third] : []));
         break;
       }
       if (LABEL_STOP.has(lw)) break;
