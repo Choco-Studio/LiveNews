@@ -159,7 +159,7 @@ export class Bed {
   setGate(on, t) {
     for (const g of this.gates) {
       g.gain.cancelScheduledValues(t);
-      g.gain.setTargetAtTime(on ? 0 : 1, t, on ? 0.03 : 0.25);
+      g.gain.setTargetAtTime(on ? 0 : 1, t, on ? 0.03 : 0.3);
     }
   }
 

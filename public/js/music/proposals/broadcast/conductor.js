@@ -20,7 +20,7 @@
 //
 // Grave stories: silence, and the next segment gets no bed either (NEWS IN 60
 // keeps a lone pad instead). Speech: a look-ahead duck (programme depth, -9 dB
-// by default, 120 ms before the first syllable, held through pauses, 0.4 s
+// by default, 120 ms before the first syllable, held 0.9 s through pauses, 0.5 s
 // release), a -8 dB "presence pocket" at 2.5 kHz, and GATES that silence the
 // layers allowed only between voices (bells, pips, motif peeks).
 // Works on any BaseAudioContext: live (start() runs a look-ahead pump) or
@@ -401,9 +401,11 @@ export class BroadcastMusic {
       this.logSpeech(t, true);
       this.releaseAt = -1;
     } else {
-      const t = Math.max(this.now, at + 0.3); // hold through the breath between sentences
-      g.setTargetAtTime(1, t, 0.4);
-      p.setTargetAtTime(0, t, 0.4);
+      // Hold through the breaths between sentences (0.9 s), then bloom slowly:
+      // the bed only comes up in a real gap, and never pumps.
+      const t = Math.max(this.now, at + 0.9);
+      g.setTargetAtTime(1, t, 0.5);
+      p.setTargetAtTime(0, t, 0.5);
       for (const bed of this.beds) bed.setGate(false, t);
       this.logSpeech(t, false);
       this.releaseAt = t;

@@ -173,11 +173,12 @@ export function fabricFold(o, mat, group, a, c, b, hw, lit = 0, core = 2) {
   const [cx, cy] = toS(c[0], c[1]);
   const [bx, by] = toS(b[0], b[1]);
   ONLY = group;
-  stroke(buf, mat, ax, ay, cx, cy, bx, by, 0.35, 0.3, (nx, ny, u, aa) => {
-    const litSide = -0.6 * nx - 0.8 * ny > 0.2;
-    if (Math.abs(aa) > 0.55 && litSide) return lit;
+  stroke(buf, mat, ax, ay, cx, cy, bx, by, 0.2, 0.2, (nx, ny, u, aa) => {
+    // a soft valley: the shaded core along the middle, the lit lip on the side toward the key
+    const litSide = -0.6 * nx - 0.8 * ny > 0.15;
+    if (Math.abs(aa) > 0.45) return litSide ? lit : -1;
     return core;
-  }, 6, hw * s);
+  }, 8, hw * s);
   ONLY = 0;
 }
 
@@ -288,16 +289,18 @@ function clothTone(o, opts = {}) {
 function drape(o, mat, group, t, soft = 0) {
   if (t === 0) return;
   const T = o.L.torso;
-  const k = 1 - soft * 0.35;
-  const xa = T.sideHW - 4.6, xb = xa - 5.0 * k;
+  const k = 1 - soft * 0.3;
+  // from under the arm (its start hides behind the sleeve) sweeping down toward the front
+  // (the sleeves cover |x| > ~shoulderHW - 2 rUpper, so the folds start just under the sleeve edge)
+  const xa = T.sideHW - 5.0, xb = T.sideHW - 11.5 * k;
   for (const side of [-1, 1]) {
     if (t === 1) {
-      bodyPaint(o, [[side * xa, 13.6], [side * xb, 17.4 - soft]], mat, side < 0 ? 1 : 2, group);
+      bodyPaint(o, [[side * (xa - 3), 13.2], [side * xb, 17.6]], mat, side < 0 ? 1 : 2, group);
       continue;
     }
     const lit = side < 0 ? 0 : 1;
-    fabricFold(o, mat, group, [side * xa, 13.2], [side * (xa - 2.2 * k), 14.6], [side * xb, 17.8 - soft * 1.5], 0.45 * k, lit, 2);
-    fabricFold(o, mat, group, [side * (xa + 0.6), 19.6], [side * (xa - 1.2), 20.8], [side * (xb + 1.4), 22.6 - soft], 0.34 * k, lit, 2);
+    fabricFold(o, mat, group, [side * xa, 12.0], [side * (xa - 3.4 * k), 13.4], [side * xb, 17.4 - soft], 0.6 * k, lit, 2);
+    if (o.s >= 3) fabricFold(o, mat, group, [side * (xa + 0.4), 20.0], [side * (xa - 2.2), 21.0], [side * (xb + 2.8), 22.8 - soft], 0.4 * k, lit, 2);
   }
 }
 

@@ -228,6 +228,8 @@ export function bezelClearance(head, bezel) {
 // SET change re-composes the shots instead of breaking them.
 
 const WIDE = { x: 0, y: -60, z: 0, zoom: 1, hy: 52, soft: 0 };
+// the tighter two-shot: heads at y ≈ 85 and the desk plate at or under the ticker band
+// (lab / variety framing; the grammar plans chats on the wide)
 const TWO = { x: 0, y: -60, z: 420, zoom: 1, hy: 59, soft: 0 };
 // solo desk: a touch tighter than the duo wide, camera lowered so the wall's bottom
 // edge passes behind the shoulders (not across the chin) and the plate stays above the strap
