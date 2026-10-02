@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { NewsDesk, parseFeed } from '../server/news.js';
-import { Producer } from '../server/producer.js';
+import { Producer, planVisuals } from '../server/producer.js';
 import {
   GOOD_WIDTH,
   feedCandidates,
@@ -473,6 +473,25 @@ describe('pictures: the producer stamps what airs', () => {
     assert.equal(ctx.episode.rundown[1].imageCredit, 'Gamma');
     assert.equal(note.images, 2);
     assert.equal(note.borrowed, 1);
+  });
+
+  test('visual hints: map, picture and figure in order, and a locator inset when the text is too short for both', () => {
+    const seg = (extra) => ({ type: 'story', storyId: 's1', text: 'One. Two. Three.', ...extra });
+    const loc = { place: 'LISBON, PORTUGAL', lat: 38.7, lon: -9.1 };
+    const a = seg({ location: loc, hasImage: true, fact: '40,000 PASSENGERS A DAY' });
+    planVisuals(a);
+    assert.deepEqual(a.visuals, ['map', 'picture', 'fact']);
+    assert.equal(a.locator, undefined, 'three sentences: a beat each for the map and the picture');
+    const b = seg({ location: loc, hasImage: true, text: 'Lisbon has a new tram. It runs along the river.' });
+    planVisuals(b);
+    assert.equal(b.locator, true, 'two sentences: the picture full frame with a locator map');
+    const c = seg({ location: loc, hasImage: true, roundup: { index: 0, count: 2 }, text: 'In Lisbon, a tram.' });
+    planVisuals(c);
+    assert.deepEqual(c.visuals, ['map']);
+    assert.equal(c.locator, undefined, 'a round-up item stays on its map');
+    const d = seg({ hasImage: false });
+    planVisuals(d);
+    assert.equal(d.visuals, undefined);
   });
 
   test('the pictures stage runs before the writer, so candidates already carry their picture', async () => {

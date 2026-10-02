@@ -73,8 +73,13 @@ harness voices those lines itself, with the same casting, and the clock waits fo
    `clock.pauseAt`: after a plain `install()` time keeps flowing in real time). Page time only moves
    when the recorder calls `clock.runFor(1/fps)`; `#screen` is grabbed after every step and piped as
    PNG to a lossless native-size file; the nearest-neighbour 5x H.264 encode runs once at the end,
-   with the mux. The page renders once per video frame (the fake clock ticks rAF every 16 ms; the
-   second render of each frame is skipped). Before each step the recorder waits for fetches, image
+   with the mux. **Frame-exact rendering** (`--raf frame`, default): the recorder owns
+   `requestAnimationFrame`; the page's callbacks are queued and run at each video frame's exact page
+   time, right before the canvas is read, so frame k shows the state at k/fps, like a 30 fps camera
+   (the fake clock's own 16 ms ticks never line up with 33.3 ms frames: rendering on the first tick
+   of a frame slot showed the scene up to a frame late against the sample-exact sound). The timeline
+   samples the scene in the same callback, so every logged shot/caption time is the time of the
+   first frame that shows it. Before each step the recorder waits for fetches, image
    loads and **audio decodes** in flight (tracked by the init script), so replies land at the fake
    time they were asked for, and for any voice the page is waiting for.
 2. **WebAudio capture** (`page-init.js`). `window.AudioContext` is replaced by an
@@ -157,7 +162,9 @@ bed under light/neutral story copy, default soft),
 `--lufs -16`, `--tp -1.5`, `--voice-workers 2`, `--voice-engine auto|fallback`, `--cache DIR`,
 `--time ISO` (the wall-clock time the channel shows), `--sheet-every S`, `--url URL`,
 `--preset veryfast` (x264 preset of the final encode), `--measure-duck` (render the beds a second time
-without speech to measure the duck; on by default up to 900 s), `--no-raf-throttle`, `--keep`.
+without speech to measure the duck; on by default up to 900 s), `--raf frame|throttle|native` (frame-exact
+rendering, default; `throttle` = first fake 16 ms tick per frame slot, the old behaviour; `native` = every
+16 ms tick, also `--no-raf-throttle`), `--keep`.
 
 ## Notes and limits
 

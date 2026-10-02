@@ -180,7 +180,7 @@ const PROGRAMMES = {
     },
     open: { firstWord: 0.7 },
     gaps: { story: 1.3, handover: 1.05, chatTurn: 0.6, intoChat: 0.8, outOfChat: 1.0, beforeFinally: 1.3, afterIntro: 0.9, beforeOutro: 1.15, block: 1.6 },
-    holds: { signoff: 4.0, endcard: 3.5, montage: 4.5 }, // cosmos.md: the wide holds >= 4 s, then the dip
+    holds: { signoff: 1.5, endcard: 3.5 }, // contemplative: the wide lingers after the last word, then the dip
     shots: { min: 4.0, cooldown: 4.5, median: [6, 9], studioMax: 15, singleSoft: 11, picture: [6, 10], map: [4, 6], cutsPerMinMax: 6, staticMax: 14 }, // cosmos.md: 4 s everywhere, maps 4-6 s, pictures 6-10 s
     moves: { max: 0, minGap: Infinity }, // cosmos.md: the set camera never moves; only pictures pan
     gestures: { perMin: 3.5, minGap: 6, beatsPerMin: 5, rest: 0.72, grave: 1.5 }, // cosmos.md: <= 1 per 6 s

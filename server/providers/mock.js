@@ -388,7 +388,10 @@ function runningOrder(infos, n, program) {
   if (want) {
     const countries = new Set([lead.country]);
     const located = pool.filter((i) => i.loc && !i.breaking && !i.live);
-    for (const i of [...located].sort((a, b) => Number(!!a.s.image) - Number(!!b.s.image))) {
+    // One map sentence is for the smaller stories: a picture, a second outlet or people at risk make a story a
+    // main one (it gets its photo beat and its full telling); the round-up takes the rest first.
+    const weight = (i) => (i.s.image ? 2 : 0) + ((i.s.outlets || 1) > 1 ? 2 : 0) + (i.grave ? 1.5 : 0);
+    for (const i of [...located].sort((a, b) => weight(a) - weight(b))) {
       if (roundup.length >= want) break;
       if (countries.has(i.country)) continue;
       countries.add(i.country);

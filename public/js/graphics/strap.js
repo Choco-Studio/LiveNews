@@ -16,8 +16,10 @@ import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
 import { STRAP, inkOn, easeOut, easeIn, easeInOut, lerp, rect, clipStart, clipEnd } from './layout.js';
 import { linePages, layoutText, withEllipsis, ELLIPSIS_W } from './breaks.js';
+import { CHANNEL } from '../pace.js';
 
-export const STRAP_TIMING = { in: 0.35, textDelay: 0.1, textRise: 0.3, flip: 0.3, out: 0.25, red: 0.45, name: 5, page: 5, breakingPage: 4 };
+// PACE: in/out/flip and dwell (name super, page holds) from the one pacing table (pace.js CHANNEL.strap)
+export const STRAP_TIMING = CHANNEL.strap;
 const T = STRAP_TIMING;
 
 const BAR_W = STRAP.right - STRAP.x; // 346

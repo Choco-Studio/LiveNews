@@ -3,6 +3,26 @@ import { castOf } from './channel.js';
 import { embedCues } from '../public/js/cues.js';
 
 /**
+ * The visual beats a story offers, in the order the desk suggests (`visuals`:
+ * the map when it names a place, then its picture, then its figure card), and
+ * `locator` when it has both a place and a picture but too few sentences for a
+ * beat each (one sentence per shot): the client can then show the picture
+ * full frame with a small locator map inset, rather than dropping either.
+ * Round-up items stay on their map. Both fields are optional hints.
+ */
+export function planVisuals(seg) {
+  const visuals = [];
+  if (seg.location) visuals.push('map');
+  if (seg.hasImage && !seg.roundup) visuals.push('picture');
+  if (!seg.roundup && (seg.fact || seg.numbers?.length)) visuals.push('fact');
+  if (visuals.length) seg.visuals = visuals;
+  else delete seg.visuals;
+  const sentences = String(seg.text || '').split(/(?<=[.!?…])\s+(?=["“'A-Z0-9])/).filter((x) => x.trim()).length;
+  if (seg.location && seg.hasImage && !seg.roundup && sentences < 3) seg.locator = true;
+  else delete seg.locator;
+}
+
+/**
  * Makes one episode of a programme through a pipeline of stages. Each stage
  * gets the shared production context and can improve it; new quality steps
  * (extra fact checks, better images, server-side voices...) slot in here.
@@ -210,7 +230,11 @@ export class Producer {
       if (s?.image && s.imageCredit) item.imageCredit = s.imageCredit;
       else delete item.imageCredit;
     };
-    for (const seg of ctx.episode.segments) if (seg.storyId) apply(seg);
+    for (const seg of ctx.episode.segments) {
+      if (!seg.storyId) continue;
+      apply(seg);
+      planVisuals(seg);
+    }
     for (const item of ctx.episode.rundown) apply(item);
     const borrowed = stories.filter((s) => s.image && s.imageCredit).length;
     return { images: stories.filter((s) => s.image).length, ...(borrowed ? { borrowed } : {}), ...(verified || {}) };

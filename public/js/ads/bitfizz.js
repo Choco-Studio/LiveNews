@@ -900,337 +900,331 @@ function drips(ctx, lt) {
   }
 }
 
-const HEAD_PTS = [
-  [0, 51], [0.4, 49.5], [2, 47.6], [4, 45.4], [6, 43], [7.8, 40.4], [9.4, 37.6], [8.6, 35.2], [7.2, 33], [7.4, 30], [8, 26],
-  [9, 21], [11, 16], [13.5, 11.5], [17, 7], [21, 4], [26, 1.8], [32, 0.5], [38, 0.3], [44, 1.2], [50, 3.5], [55, 7], [59, 11.5],
-  [62, 17], [64, 23], [65, 30], [64.6, 37], [63.2, 44], [61, 50], [58.6, 56], [56.4, 61], [55, 64.5], [49, 65.5], [44, 66],
-  [41, 69.5], [37, 73], [31.5, 76.4], [25, 78.6], [18, 79.2], [13.4, 77.6], [10.6, 75], [9.6, 72.2], [10.2, 69.6], [11.6, 67.6],
-  [9.4, 66.2], [8.2, 64.2], [9.2, 62.4], [7.4, 61.2], [7, 59.6], [8.2, 58], [8.6, 56.4], [5.6, 55.6], [2.6, 54.6], [0.7, 53.2],
-];
-const NECK_PTS = [[19, 77.5], [27, 77.6], [40, 70], [45, 65], [56, 62], [57.5, 72], [59.5, 86], [62, 100], [24.5, 100], [22.6, 92], [21.2, 88.4], [22.2, 84.4], [20.4, 80]];
-const HAIR_PTS = [
-  [12.6, 13.6], [16.6, 6.6], [20.8, 3.4], [26, 1.2], [32, -0.2], [38, -0.4], [44, 0.6], [50.4, 2.9], [55.6, 6.5], [59.6, 11.1],
-  [62.7, 16.7], [64.7, 22.9], [65.7, 30], [65.3, 37], [63.9, 44.2], [61.8, 50.3], [59.6, 55.2], [57.2, 57.8], [55.6, 56.4],
-  [54.4, 58.6], [53.6, 53], [52.6, 44], [49.6, 39.6], [45.6, 38], [42, 39.4], [40.6, 41], [40.4, 47.6], [38.6, 48.4], [37.2, 46],
-  [36.8, 38.4], [34.4, 32.4], [30.4, 28.6], [27.6, 24.4], [25.6, 19], [22.8, 16.4], [18, 15.2], [14.4, 14.6],
-];
-const EAR_PTS = [[43.6, 41], [46.6, 38.6], [50.4, 39.4], [52.6, 42.8], [53.2, 48], [52.2, 53], [50.2, 57], [47.6, 59.6], [45.4, 59.2], [44.4, 56.2], [45, 52.2], [43.4, 48.6], [42.8, 44.4]];
-const COLLAR_PTS = [[21.6, 95], [26, 92.6], [36, 94.2], [46, 94.6], [57, 93.4], [61.6, 95.4], [63.4, 101], [60, 106], [46, 103.6], [36.4, 108], [30.6, 115], [27, 109], [23, 103]];
-const SUIT_PTS = [
-  [16.4, 108], [22.6, 102.4], [29, 113], [30.6, 115.4], [37, 107.6], [47, 103.4], [60, 104.6], [64, 100], [72, 103.6], [86, 108.6],
-  [100, 114], [111, 122], [118, 134], [122, 150], [125, 172], [6, 172], [8, 150], [11, 128], [13.6, 116],
-];
-// the shirt front in the open collar, between the lapel and the chest
-const SHIRT_PTS = [[16.4, 108], [22.6, 102.4], [29, 113], [28, 124], [24.6, 134], [13.4, 130], [13.6, 116]];
+// Pixel keys for the hand-pixelled sprites below ('.' = clear).
+const PIX = {
+  K: P.black, I: P.ink, L: P.slate, E: P.steel, F: P.fog, V: P.silver, W: P.white,
+  m: P.maroon, b: P.brown, t: P.tanShade, s: P.skinShade, n: P.tan, k: P.skin, c: P.cream, r: P.rust,
+};
+/** Paint ASCII rows into a canvas at (ox, oy), one fillRect per run of a colour. */
+function paintRows(c, rows, ox, oy) {
+  for (let y = 0; y < rows.length; y++) {
+    const row = rows[y];
+    let x = 0;
+    while (x < row.length) {
+      const ch = row[x];
+      let e = x + 1;
+      while (e < row.length && row[e] === ch) e++;
+      if (ch !== '.') R(c, ox + x, oy + y, e - x, 1, PIX[ch]);
+      x = e;
+    }
+  }
+}
 
-// region ids in the bake buffer
-const SKIN_ID = 1;
-const HAIR_ID = 2;
-const EAR_ID = 3;
-const SUIT_ID = 4;
-const COLL_ID = 5;
-const SHIRT_ID = 6;
-const BUST_W = 128;
-const BUST_H = 172;
-const BUST_OX = 6; // sprite x = 0 (nose tip) sits 6 px into the canvas
-const HEAD_DY = 0; // the head bakes in place; it is drawn 1 px off for the inhale
+// His head and neck in profile, facing left, hand-pixelled (70 x 102; crown y 0,
+// chin y 70, nose tip x 3). Key light warm from the front-left, a cool rim from
+// the window behind him; hair combed back in clumps, a touch of grey at the temple.
+const HEAD = [
+  '.................................bbbtbbbbt............................',
+  '...........................bbbbbbbbbtbtmbbtttttt......................',
+  '........................bbbbbbbbbbbbbbtmbbbbbbbbttt...................',
+  '.....................ttbbbbbbbbbbtttbbbtmbbbbbbbbbtttt................',
+  '....................tbbbbbbbtttttbbbbbbbttmmmmmbbbbbbtt...............',
+  '..................tttbbbmmttbbbbbbbbbbbbbbtttttmmmbbbbtEE.............',
+  '.................ttbbbmmttbbbbbbbbmmmtmbbbbbbbbtttmmbbbbtE............',
+  '...............tttbbbbmtbbbbbbmmmmtttttmmbbbbbbbbbttmbbbbtEE..........',
+  '..............ttbbbbmmtbbbbbtttttbbbbbbttmmmmmbbbbbttmmbbbbbE.........',
+  '.............ttbbbbbttbbbbbbbbbbbbbbbbbbbttttttbbbbbbttmbbbbbE........',
+  '.............tbbbmmttbbbbbbbbbbbbbmmmbbbbbbbbbbttbbbbbtttbbbbbE.......',
+  '............tbbbmttbbbbbttbbbbmmmmtttttbbbbbbbbbbbbbbbbbbbbbbbbE......',
+  '............tbbbmtbbbbbttbbbmmttttbbbbbttbbbbbbbbbbbbbbbbbbttbbE......',
+  '...........kbbbmtbbbbbttbbbmttbbbbbbbbbbbtttttbbbbbbbbbbbbbbtbbbE.....',
+  '..........kknsmtbbbbttbbbbmtbbbbbbbbbbbbbbbbbbttmbmmmbbbbbbbbbbbE.....',
+  '..........kkknnnsbbmtbbbbmtbbbbbbbbbbbbbbbbbbbbbtKmmmmmbbbbbbbbbbE....',
+  '..........kkknnnnnstbbbbmttbbbbbbbmmmmmbmmbbbbbbtbKKmmmmmbbbbbbbbE....',
+  '.........kkkknnnnnnnsbbttbbbbbbbmmmmmmmmmmmmmmmbbbbbKKmmmmbbbbbtmmE...',
+  '.........kckknnnnnnnssbtbbbbmmmmmmmKKKmmmmmbbbmmmmmbbKKmmmbbbbbbKmE...',
+  '.........kckkknnnnnnnnssbbmmmmmmmKKbbbbKmmmmmmbbKmmmmbbKmmmbbbbbKmE...',
+  '.........kckkknnnnnnnnnssmbbmmmmmbbmmmmbKKmmmmmbmmmmmmmbKmmmbbmmKmmE..',
+  '.........kkkkknnnnnnnnnnssbmmmmbbmmmmmmmbbKKmmmmmmmmmmmbbKmmbKmmbmmE..',
+  '.........kkkknnnnnnnnssssstmmmmmmmmmKKmmmmbbbmmKKmmmmmmmbmmmmKmmbmmE..',
+  '.........kkkknnnnnnnnssssstmmmmmmmKbbbmmmmmmmmmKKKmmmmmmbmmmmKmmKmmE..',
+  '.........kkkknnnnnnnnsssssstmmmmmKbmmmmmmmmmmmbKKKKmmmmmbmKKmmmbKmmE..',
+  '.........kkkknnnnnnnnnssssstmmmmmbmmmmmmmmmmmmmKKKKmmmmmbKKKmmmmKmmmE.',
+  '........kkkkknnnnnnnnnnssssstmmmmbmmmmmmmmmmmmmmKKKKmmmmKKKKmmmmbKmmE.',
+  '........kkkkknnnnnnnnnnnssssstbmmbmmbbmmmmmbKmmmKKKKKmmKKKKKmmmmbKmmE.',
+  '........kkkkkknnnnnnnnnnssssstbmmKmmmbmbKmmbKKKmKKKKKmKKKKKKmmmmbKmmE.',
+  '.........kknnnbbbbbbnnnnsssssstbmmmmmbmbKmmbKKsnnsKKKmKKKKKKmmmmbKmmE.',
+  '.........kktmmmmmmmbbnnnnsssssstmmmmmbbmKmmbsnkkknsKKmKKKKKKmmmmbKmmE.',
+  '..........knmmmbssssnnnnnnsssssstmKbmmbmKmmsnktttknsKKKKKKKKmmmmbKmmE.',
+  '..........knstttsnnnnnnnnnnssssssstbmmbmKmsnktnnttnnsKKKKKKKmmmmbKmmE.',
+  '..........knsnnnsnnnnnnnnnnnssssssstmmbbKmsnkttnntnstKKKKKKmmmmmbKmmE.',
+  '..........kbKKmmbsnnnnnnnnnnssssssstmmbbmmsnnsttntnstKKKKKKmmmmmmmmmE.',
+  '.........kknbcsbnnnnnnnnnnnnnssssssstmmbmmsnnsbtnntnsKKKKKKmmmmmmKLE..',
+  '........kkknsnnnnnnnnnnnnnnnnnssssssstmbmmtnsbbtnntnsKKKKKKmmmmmKKLE..',
+  '.......kkkkknnnnnnnnnnnnnnnnnnssssssstmbmmtnnsbbtntnsKKKKKKmKKKmKKLE..',
+  '.......kcknnnkkkkkknnnnnnnnnnnssssssstbbmmtnsbmbtntnstKKKKKmKKKmKKLE..',
+  '......kcknnnnkkkkkkkknnnnnnnnnnssssssstmmmtknbmmbntnstKKKKKmKKKmKKLE..',
+  '.....kcknnnnkkkkkkkkkknnnnnnnnnssssssstmmstknbmmbntnstmKKKKmKKKmKKLE..',
+  '.....kcknnnnkkkkkkkkkknnnnnnnnnssssssstbbstknbmbtntnstmKKKKmKKKmKKLE..',
+  '....kkknnnnnkkkkkkkkknnnnnnnnnnnsssssstmmstnsbbtnntnstmKKKKmKKKmKLE...',
+  '....kkknnnssnkkkkkkknnnnnnnnnnnnsssssstmKstssbtnntnsttKKKKKmKKKmKLE...',
+  '...kckknnnnsnkkkkkknnnnnnnnnnnnnsssssstKsstbtnntnstttKKKKKKmKKKmKLE...',
+  '...kkknnnnnsskkkkknnnnnnnnnnnnnnssssssssstttsnnsnnsttKKKKKKmKKKmKLE...',
+  '...knnnnnnnsnnnnnnnnnnnnnnnnnnnnsssssssssttssnknnsttbmKKKKKKKKKKLE....',
+  '....tsmbsssnsnnnnnnnnnnnnnsssssssssssssssttssnnnsttbbKKKKKKKKKKKLE....',
+  '.....tttsnnnsnnnnnnnnnnssssssssssssssssssttstsnsttbbbKKmmKKKKKKKLE....',
+  '........snnnnsnnnnnnnnnssssssssssssssssssttstssttbbbbKKmKKKKKKKLE.....',
+  '........nnnnnsnnnnnnnnnssssssssssssssssstttttttbbbbbKKKKKKKKKKKLE.....',
+  '........knnnnsnnnnnnnnnsssssssssssssssssstttttttbbbbKKKKKKKKKKLE......',
+  '........knnnnsnnnnnnnnnsssssssssssssssssstttttttbbbbKKKKKKKKKKmE......',
+  '........ssnnnsnnnnnnnnnsssssssssssssssssstttttttbbbbbKKKKKKKKLE.......',
+  '........sssnntnnnnnnnnnsssssssssssssssssstttttttbbbbbKKKKKKKKmE.......',
+  '.........bbbttnnnnnnnnnnssssssssssssssssstttttttbbbbbKKKKKKKLE........',
+  '.........kknsnnnnnnnnnnnnssssssssssssssssttttttttbbbbbmmKKKKLE........',
+  '........kcknnnnnnnnnnnnnnnsssssssssssssssttttttttbbbbbKKKKKLE.........',
+  '.........nsnnnnnnnnnnnnnnnsssssssssssssssttttttttbbbbbbKLLLE..........',
+  '..........ssnnnnnnnnnnnnnnssssssssssssttttttmmmtbbbbbbbLEEE...........',
+  '...........snnnnnnnnnnnnnssssssssssssttttttmmbbbbbbbbbmE..............',
+  '...........kknnnnnnnnnnnssssssssssstttttbbmmbbbbbbbbbbmE..............',
+  '...........kknnnnnnnnnnssssssssssssttttbbbmmbbbbbbbbbbmE..............',
+  '..........kkknnnnnnnnnsssssssssssstttbbbmmbbbbbbbbbbbbmE..............',
+  '..........kcknnnnnnnnsssssssssssstttbbbmmbbbbbbbbbbbbbmE..............',
+  '..........kkknnnnnnnssssssssssstttbbbmmbbbbbbbbbbbbbbbmE..............',
+  '..........kkknnnnnnsssssssssstttbbbmmbbbbtbbbbbbbbbbbbmE..............',
+  '..........kkknnnnnssssssssstttbbbmmbbbbbtbbbbbbbbbbbbbmE..............',
+  '...........knnnnnsssssssstttbbbmmbbbbbbtbbbbbbbbbbbbbbmE..............',
+  '............nssssstttttbbbbbmmbbbbbbbbtbbbbbbbbbbbbbbbmE..............',
+  '..............tttttbbbbbmmmbbbbbbbbbbtbbbbbbbbbbbbbbbbmE..............',
+  '....................bmmmmmmmmmmbbbbbtbbbbbbbbbbbbbbbbbmE..............',
+  '....................bmmmmmmbbbbbbbbbtbbbbbbbbbbbbbbbbbmE..............',
+  '.....................tbmbbbbbbbbbbbtbbbbbbbbbbbbbbbbbbmE..............',
+  '.....................stbbbbbbbbbbbtbbbbbbbbbbbbbbbbbbbmE..............',
+  '....................sstbbbbbbbbbbtbbbbbbbbbbbbbbbbbbbbmE..............',
+  '....................nstbbbbbbbbbtbbbbbbbbbbbbbbbbbbbbbmE..............',
+  '...................nnstbbbbbbbbbtbbbbbbbbbbbbbbbbbbbbbbmE.............',
+  '...................snstbbbbbbbbtbbbbbbbbbbbbbbbbbbbbbbbmE.............',
+  '....................sstbbbbbbbtbbbbbbbbbbbbbbbbbbbbbbbbmE.............',
+  '....................sstbbbbbbtbbbbbbbbbbbbbbbbbbbbbbbbmmEE............',
+  '....................sstbbbbbtbbbbbbbbbbbbbbbbbbbmmFFEEEEEEE...........',
+  '.....................stbbbbtbbbbbbbbbbbbbbbmmFFFFFFFEEEEEEE...........',
+  '.....................stbbbbtbbbbbbbbbbmmFFFFFFFFFFFFEEEEEEE...........',
+  '....................sstbbbtbbbbbbbmmVVVVFFFFFFFFFFFFEEEEEEE...........',
+  '....................sstbbtbbmmVVVVVVVVVVFFFFFFFFFFFFEEEEEEE...........',
+  '....................stbmmVVVVVVVVVVVVVVVFFFFFFFFFFFFEEEEEEE...........',
+  '...................ssVVVVcccVVVVVVVVVVVVFFFFFFFFFFFFEEEEEEEE..........',
+  '...................sscccccccVVVVVVVVVVVVFFFFFFFFFFFFEEEEEEEE..........',
+  '...................sscccccccVVVVVVVVVVVVFFFFFFFFFFFFEEEEEEEE..........',
+  '...................sscccccccVVVVVVVVVVVVFFFFFFFFFFFFEEEEEEmE..........',
+  '...................sscccccccVVVVVVVVVVVVFFFFFbbbbbbmmmmmmmmE..........',
+  '.....................sccccccVVVVVVVVVVVVFttttbbbbbbmmmmmmmE...........',
+  '......................ccccccVVVVVVVVVttttttttbbbbbbmmmE...............',
+  '......................ccccccVVVVVV....................................',
+  '.......................cccccVVVVV.....................................',
+  '.......................cccccVVVV......................................',
+  '........................ccccVV........................................',
+  '........................ccccVV........................................',
+  '.........................cccV.........................................',
+  '.........................ccc..........................................',
+  '..........................cc..........................................',
+];
 
-function inPts(pts, x, y) {
+// The eye in its states, over the head (open / half / shut): [x, y, pixels]
+const EYES = [
+  [[11, 34, 'bKKmmbs'], [11, 35, 'nbcsbn']],
+  [[11, 34, 'bnnnsss'], [11, 35, 'KKmbbn']],
+  [[11, 34, 'nnnnsss'], [11, 35, 'Kmmbsn']],
+];
+function eye(ctx, ox, oy, state) {
+  const rows = EYES[state];
+  for (let i = 0; i < rows.length; i++) {
+    const x0 = rows[i][0];
+    const y = rows[i][1];
+    const px = rows[i][2];
+    for (let j = 0; j < px.length; j++) R(ctx, ox + x0 + j, oy + y, 1, 1, PIX[px[j]]);
+  }
+}
+
+// The jacket (charcoal, warm key on the front of the chest and the shoulder,
+// cool rim on the back), the shirt and a dark tie in the V of the collar.
+const BUST_W = 92;
+const BUST_H = 158;
+const JACKET = [[21, 95], [19, 104], [16, 116], [14, 128], [14, 142], [15, 158], [86, 158], [85, 140], [83, 124], [79, 110], [73, 99], [66, 91], [60, 86], [52, 89], [44, 91], [36, 93], [28, 96]];
+const LAPEL = [[22, 97], [30, 99], [27, 110], [23, 122], [19, 134], [16, 134], [17, 120], [19, 107]];
+function inPoly(pts, x, y) {
   let inside = false;
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-    const [xi, yi] = pts[i];
-    const [xj, yj] = pts[j];
+    const xi = pts[i][0];
+    const yi = pts[i][1];
+    const xj = pts[j][0];
+    const yj = pts[j][1];
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
   }
   return inside;
 }
-const inEll = (x, y, cx, cy, rx, ry) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1;
-
-/**
- * Rasterise the regions (painter order) into an id buffer, then light every
- * pixel by how far the key light (from front-left, a little above) travels
- * through the figure to reach it: the bands hug the forms like a real key.
- */
-function bakeRegions(w, h, ox, oy, regions) {
-  const id = new Uint8Array(w * h);
-  for (const [rid, pts] of regions) {
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) if (inPts(pts, x + 0.5 - ox, y + 0.5 - oy)) id[y * w + x] = rid;
-    }
-  }
-  const dist = new Float32Array(w * h);
-  const LX = -0.83;
-  const LY = -0.56;
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (!id[y * w + x]) continue;
-      let d = 0;
-      let px = x + 0.5;
-      let py = y + 0.5;
-      while (d < 30) {
-        px += LX * 0.5;
-        py += LY * 0.5;
-        const ix = floor(px);
-        const iy = floor(py);
-        if (ix < 0 || iy < 0 || ix >= w || iy >= h || !id[iy * w + ix]) break;
-        d += 0.5;
-      }
-      dist[y * w + x] = d;
-    }
-  }
-  return { id, dist };
-}
-
-const SKIN_BANDS = [P.skin, P.tan, P.tanShade, P.brown, P.maroon];
-function skinBand(d, x, y) {
-  let b = d <= 1.2 ? 0 : d <= 3 ? 1 : d <= 7 ? 2 : d <= 13 ? 3 : 4;
-  // facial planes: the socket and the hollow under the cheekbone fall away
-  if (b >= 2 && inEll(x, y, 15, 38, 4, 2.6)) b += 1;
-  if (b >= 3 && inEll(x, y, 27, 58, 6, 4)) b += 1;
-  return SKIN_BANDS[clamp(b, 0, 4)];
-}
-
-// hand-placed features over the baked head ([colour key, x, y] runs in sprite space)
-const FEATURE_KEYS = { k: P.black, m: P.maroon, b: P.brown, t: P.tanShade, n: P.tan, s: P.skin, c: P.cream };
-// rows of pixels: [x0, y, 'string'] where each char is a key or '.' (skip)
-const FEATURES = [
-  // brow: a soft ridge of hair over the socket, densest toward the front
-  [10, 33, 'bmmmmb'],
-  [10, 34, '.kkmm'],
-  // nostril wing and the nostril
-  [6, 52, 'mb'],
-  [4, 53, 'kkm'],
-  [6, 54, 'b'],
-  // nasolabial fold running down from the wing
-  [10, 56, 'b'], [11, 57, 'b'], [12, 58, 'b'], [12, 59, 'm'], [13, 60, 'm'],
-  // lips: lit upper lip edge, the mouth line, a fuller lower lip that catches light
-  [7, 59, 'n'], [7, 60, 'tb'], [8, 61, 'b'],
-  [9, 62, 'kkm'],
-  [8, 63, 'nt'], [8, 64, 'tb'], [9, 65, 'b'],
-  [10, 66, 'mm'],
-];
-const EAR_FEATURES = [
-  // helix rim catching a little light, a dark concha, the lobe
-  [46, 39, 'bt'], [45, 40, 'bt'], [44, 41, 't'], [44, 42, 'b'],
-  [47, 43, 'mkk'], [46, 44, 'mkkm'], [46, 45, 'mk'], [46, 46, 'mk'], [46, 47, 'mkk'], [47, 48, 'mkm'], [48, 49, 'mk'],
-  [46, 56, 'b'], [47, 57, 'b'],
-];
-// hair clumps: combed back from a side part; only the lit ones show
-const STRANDS = [
-  [[13, 13], [17, 8], [23, 4.6], [31, 3]],
-  [[15, 16.5], [20, 11], [27, 7.6], [36, 6]],
-  [[19, 19.5], [25, 14], [32, 11], [41, 10.4]],
-  [[25, 23], [31, 18], [38, 16]],
-  [[30, 27], [36, 23], [44, 21.6], [52, 23]],
-  [[40, 33], [47, 31], [54, 34]],
-];
-function paintFeatures(put, list) {
-  for (const [x0, y, row] of list) for (let i = 0; i < row.length; i++) if (row[i] !== '.') put(x0 + i, y, FEATURE_KEYS[row[i]]);
-}
-
 const bustArt = lazy(() =>
-  cached('bf-bust', BUST_W, BUST_H, (c) => {
-    const regions = [
-      [SUIT_ID, SUIT_PTS], [SHIRT_ID, SHIRT_PTS], [SKIN_ID, NECK_PTS], [COLL_ID, COLLAR_PTS],
-      [SKIN_ID, HEAD_PTS], [HAIR_ID, HAIR_PTS], [EAR_ID, EAR_PTS],
-    ];
-    const { id, dist } = bakeRegions(BUST_W, BUST_H, BUST_OX, HEAD_DY, regions);
-    const put = (x, y, col) => {
-      const px = round(x) + BUST_OX;
-      const py = round(y) + HEAD_DY;
-      if (px >= 0 && py >= 0 && px < BUST_W && py < BUST_H) R(c, px, py, 1, 1, col);
-    };
-    for (let y = 0; y < BUST_H; y++) {
+  cached('bf-man', BUST_W, BUST_H, (c) => {
+    for (let y = 84; y < BUST_H; y++) {
       for (let x = 0; x < BUST_W; x++) {
-        const r = id[y * BUST_W + x];
-        if (!r) continue;
-        const d = dist[y * BUST_W + x];
-        const sx = x + 0.5 - BUST_OX;
-        const sy = y + 0.5;
-        let col;
-        if (r === SKIN_ID) {
-          col = skinBand(d, sx, sy);
-          // the jaw throws the neck into shadow
-          if (sy > 66 && sx > 16 && d > 3) col = inPts(HEAD_PTS, sx, sy - 2.5) && sx > 24 ? P.black : P.maroon;
-        } else if (r === EAR_ID) col = d <= 3 ? P.tanShade : d <= 14 ? P.brown : P.maroon;
-        else if (r === HAIR_ID) col = d <= 1 ? P.tanShade : d <= 2.5 ? P.brown : d <= 5 ? P.maroon : P.black;
-        // a white shirt: warm where the key reaches it, cool grey in shadow
-        else if (r === COLL_ID) col = d <= 1.5 ? P.cream : d <= 4 ? P.fog : d <= 12 ? P.steel : P.slate;
-        else if (r === SHIRT_ID) col = d <= 1.5 ? P.cream : d <= 4 ? P.fog : d <= 9 ? P.steel : P.slate;
-        else col = d <= 1 ? P.brown : d <= 2.5 ? P.maroon : P.black; // charcoal suit, warm rim
-        // selective outline: a back edge against the glow gets the darkest tone
-        const right = x + 1 < BUST_W ? id[y * BUST_W + x + 1] : 0;
-        if (!right && d > 4) col = P.black;
+        if (!inPoly(JACKET, x + 0.5, y + 0.5)) continue;
+        const edgeR = !inPoly(JACKET, x + 1.5, y + 0.5);
+        const edgeR2 = !inPoly(JACKET, x + 2.5, y + 0.5);
+        const top = !inPoly(JACKET, x + 0.5, y - 0.5) || !inPoly(JACKET, x + 0.5, y - 1.5);
+        let col = P.black;
+        // the front of the chest and the top of the shoulder face the lamp
+        if (x < 30 && y < 140) col = P.ink;
+        if (top && x < 70) col = x < 40 ? P.slate : P.ink;
+        if (inPoly(LAPEL, x + 0.5, y + 0.5)) col = !inPoly(LAPEL, x - 0.5, y + 0.5) ? P.slate : P.ink;
+        // a fold where the raised arm pulls the cloth, from the shoulder toward the chest
+        const fx = 52 - (y - 100) * 0.55;
+        if (y > 102 && y < 150 && abs(x - fx) < 0.6) col = P.black;
+        if (y > 102 && y < 150 && abs(x - fx + 1) < 0.6 && col === P.black) col = P.ink;
+        // the window behind him rims the back
+        if (edgeR) col = y < 120 ? P.steel : P.slate;
+        else if (edgeR2 && y < 112) col = P.slate;
         R(c, x, y, 1, 1, col);
       }
     }
-    // hair clumps: a dark parting under each lit strand; in the shadow they vanish
-    for (const st of STRANDS) {
-      for (let i = 0; i + 1 < st.length; i++) {
-        const [ax, ay] = st[i];
-        const [bx, by] = st[i + 1];
-        const n = ceil(Math.hypot(bx - ax, by - ay));
-        for (let q = 0; q <= n; q++) {
-          const x = ax + ((bx - ax) * q) / n;
-          const y = ay + ((by - ay) * q) / n;
-          const ix = round(x) + BUST_OX;
-          const iy = round(y);
-          if (id[iy * BUST_W + ix] !== HAIR_ID) continue;
-          const d = dist[iy * BUST_W + ix];
-          if (d > 9) continue;
-          put(x, y, d <= 3.5 ? P.tanShade : d <= 6 ? P.brown : P.maroon);
-          if (id[(iy + 1) * BUST_W + ix] === HAIR_ID) put(x, y + 1, P.black);
-        }
-      }
+    // the shirt and the tie in the V between the collar and the lapel
+    for (let y = 92; y < 118; y++) {
+      const x0 = round(21 - (y - 92) * 0.18);
+      R(c, x0, y, 2, 1, y < 100 ? P.cream : P.silver);
+      R(c, x0 - 1, y, 1, 1, y < 112 ? P.maroon : P.black);
     }
-    paintFeatures(put, FEATURES);
-    paintFeatures(put, EAR_FEATURES);
-    // collar point and the lapel's edge, with stitching catching the rim light
-    put(30, 114, P.tanShade);
-    for (let y = 108; y < 160; y++) {
-      const x = y < 122 ? 29 + (y - 108) * 0.55 : 36.7 - (y - 122) * 0.42;
-      put(x, y, y < 122 ? P.maroon : P.brown);
-      if (y > 124 && y % 3 === 0) put(x + 2, y, P.maroon);
-    }
-    put(37, 122, P.brown);
-    put(38, 121, P.brown);
+    paintRows(c, HEAD, 0, 0);
   }),
 );
 
-// The eye in its three states, placed over the baked head (sprite space 12..19, 36..41)
-const EYES = [
-  // open: the upper lid and lashes, a wet glint on the eyeball, the lower lid
-  [[13, 36, 'mm'], [12, 37, 'kkkm'], [11, 38, 'kcbm'], [12, 39, 'mbb']],
-  // half shut
-  [[13, 36, 'bm'], [12, 37, 'mmmm'], [11, 38, 'kkkm'], [12, 39, 'mbb']],
-  // closed: one curved lid line, the lashes pointing down
-  [[13, 36, 'bb'], [12, 37, 'bmmm'], [12, 38, 'kkkm'], [11, 39, 'k.b']],
+// His left hand round the tumbler, back to camera: fingers wrap the front of the
+// glass (staggered, creased, knuckles catching the key), the thumb up its back
+// edge with the nail lit, the shirt cuff at the wrist. Glass axis x 14, rim y 5.
+const HAND = [
+  '..........................................',
+  '..........................................',
+  '..........................................',
+  '..........................................',
+  '..........................................',
+  '........................kks...............',
+  '.......................kccns..............',
+  '.......................kkcnst.............',
+  '........................knnnst............',
+  '...nkkkkkkkkkk..........stttsst...........',
+  '..skkkkkkkkkkckkkkkknnnnnknnnsst..........',
+  '..snnnnnnnnnnkkkkknnnnnnnnnnnnsst.........',
+  '..sssssssssssskkknnnnnnnnnnnnnsst.........',
+  '..tbbbbbbbtttskknnnnnnnnnnnnnnsst.........',
+  '.nkkkkkkkkkkkknnnnnnnnnnnnnnnnsst.........',
+  'skkkkkkkkkkkkcnnnnnnnnnnnnnnnnssst........',
+  'snnnnnnnnnnnnknnnnnnnnnnnnnnnsssst........',
+  'snnnnnnnnnnnnnnnnnnnnnnnnnnnssssst........',
+  'ssssssssssssssnnnnnnnnnnnnnssssssst.......',
+  '.tbbbbbbbbtttsnnnnnnnnnnnnsssssssst.......',
+  '.nkkkkkkkkkkkknnnnnnnnnnnssssssssstt......',
+  '.skkkkkkkkkkcknnnnnnnnnnsssssssssttt......',
+  '.snnnnnnnnnnknnnnnnnnnnssssssssstttt......',
+  '.ssssssssssssnnnnnnnnnssssssssstttttt.....',
+  '..tbbbbbbbttsnnnnnnnnsssssssssttttttt.....',
+  '...nkkkkkkkkknnnnnnnssssssssstttttttt.....',
+  '...sknnnnnnnknnnnnnssssssssstttttttttt....',
+  '...sssssssssstsnnnsssssssssstttttttttt....',
+  '....tttttttttttttssssssssttttttttttttt....',
+  '..................ttttttsssssttttttttttt..',
+  '......................ttttsssssssstttttt..',
+  '.......................VccccccccccVVVFEE..',
+  '.......................FVVVVVVVVVVFFFEEL..',
 ];
-function eye(ctx, ox, oy, state) {
-  const rows = EYES[state];
-  for (const [x0, y, row] of rows) {
-    for (let i = 0; i < row.length; i++) if (row[i] !== '.') R(ctx, ox + x0 + i, oy + y, 1, 1, FEATURE_KEYS[row[i]]);
-  }
-}
+const HAND_GX = 14; // glass axis in the hand sprite
+const HAND_RIM = 1; // rim row (the hand holds the lower glass; his little finger tucks under the base)
+const handArt = lazy(() => cached('bf-hand2', 42, 33, (c) => paintRows(c, HAND, 0, 0)));
 
-// --- the hand round the tumbler (glass-relative: x = 0 at its axis, y = 0 at its foot)
-// The back of his right hand faces us; three fingers wrap the front of the glass
-// with their nails toward the lens, knuckles at the right, the wrist below.
-const HAND_W = 60;
-const HAND_H = 52;
-const HAND_OX = 20; // glass axis in the hand canvas
-const HAND_OY = 26; // glass foot in the hand canvas
-// [y top, thickness, x of the fingertip, x of the knuckle]: index, middle, ring
-const FINGERS = [
-  [-15, 4.4, -6.5, 14.6],
-  [-10.4, 4.6, -8.5, 15.4],
-  [-5.6, 4.3, -6, 15.8],
-];
-const BACK_PTS = [[12.4, -17.4], [17.6, -18], [22.4, -14.2], [25.8, -7], [27.6, 0], [28.4, 7.6], [19.4, 9.6], [15.2, 3.6], [12.8, -4.6]];
-// a finger seen from its back: lit along the top, rounding into shadow underneath
-const FINGER_RAMP = [P.tan, P.tan, P.tanShade, P.tanShade, P.brown, P.maroon];
-function bakeHand(c) {
-  const put = (x, y, col) => R(c, round(x) + HAND_OX, round(y) + HAND_OY, 1, 1, col);
-  // the back of the hand, lit by the same key as his face
-  const { id, dist } = bakeRegions(HAND_W, HAND_H, HAND_OX, HAND_OY, [[SKIN_ID, BACK_PTS]]);
-  for (let y = 0; y < HAND_H; y++) {
-    for (let x = 0; x < HAND_W; x++) {
-      if (!id[y * HAND_W + x]) continue;
-      const d = dist[y * HAND_W + x];
-      R(c, x, y, 1, 1, SKIN_BANDS[d <= 1 ? 0 : d <= 3 ? 1 : d <= 7 ? 2 : d <= 12 ? 3 : 4]);
-    }
-  }
-  // tendons fanning from the knuckles toward the wrist
-  for (let i = 0; i < 2; i++) for (let y = -13; y < 3; y++) if (y % 5 !== 0) put(18.6 + i * 3.4 + (y + 13) * 0.3, y, i ? P.brown : P.tanShade);
-  // the fingers, bottom one first so each overlaps the one below like a real grip
-  for (let f = FINGERS.length - 1; f >= 0; f--) {
-    const [y0, fh, tip, kn] = FINGERS[f];
-    const n = round(fh);
-    for (let x = ceil(tip); x <= kn; x++) {
-      // the rounded fingertip: rows shrink toward the tip
-      const u = (x - tip) / 2.4;
-      const inset = u < 1 ? round((1 - sqrt(max(0, 1 - (1 - u) * (1 - u)))) * (n / 2)) : 0;
-      for (let j = inset; j < n - inset; j++) {
-        const v = (j + 0.5) / n;
-        put(x, y0 + j, FINGER_RAMP[clamp(floor(v * FINGER_RAMP.length), 0, FINGER_RAMP.length - 1)]);
-      }
-      // the shadow it casts on the glass and on the finger below (not at the tip)
-      if (x > tip + 3) put(x, y0 + n, x > kn - 4 ? P.maroon : P.black);
-    }
-    // nail at the tip, toward the lens; the two joint creases; the knuckle
-    put(tip + 1, y0 + 1, P.cream);
-    put(tip + 2, y0 + 1, P.skin);
-    put(tip + 1, y0 + 2, P.skin);
-    put(tip + 2, y0 + 2, P.tan);
-    put(tip + 3, y0 + 1, P.tanShade);
-    const dip = round(tip + 5.5);
-    put(dip, y0 + 1, P.brown);
-    put(dip, y0 + 2, P.tanShade);
-    const pip = round(tip + 11.5 + f * 0.6);
-    put(pip, y0 + 1, P.brown);
-    put(pip + 1, y0 + 2, P.brown);
-    put(pip, y0 + 2, P.tanShade);
-    put(kn, y0 - 0.5, P.tan);
-    put(kn + 1, y0, P.tanShade);
-  }
-  // the shirt cuff and the dark sleeve swallowing the wrist
-  for (let x = 17; x < 31; x++) {
-    const yy = 7 + (x - 17) * 0.14;
-    put(x, yy, P.cream);
-    put(x, yy + 1, P.fog);
-    for (let y = yy + 2; y < 26; y++) put(x, y, x < 19 ? P.brown : x < 20 ? P.maroon : P.black);
-  }
-}
-const handArt = lazy(() => cached('bf-hand', HAND_W, HAND_H, bakeHand));
-
-const SMALL_KEYS = [[0, 16], [0.85, 15], [1, 15]];
-const SPROF = new Float32Array(60);
+// The rocks glass in his hand (same cut crystal as the pour, smaller).
+const SMALL_KEYS = [[0, 13.5], [0.86, 12.6], [1, 12.6]];
+const SPROF = new Float32Array(40);
 const SMALL_CUTS = { cv: null, top: 0, h: 0, turn: 0.2 };
 const SMALL_GLASS = { top: 0, edge: 1, wall: 1, edgeColor: P.tanShade };
 const SMALL_O = { rows: 0, ramp: AMBER, ambient: 0.25, glass: SMALL_GLASS, label: SMALL_CUTS, stripes: [[-0.55, 0.07, P.cream]], rim: RIM, tilt: 0.2, seam: 0.5 };
-const ARM_PTS = [[0, 0], [0, 0], [0, 0], [0, 0]];
-// he breathes in (shoulders and chin up a pixel), holds, lets it go
-const INHALE = [[0, 0], [2.5, 0], [3.1, -1, 'inOut'], [3.9, -1], [4.4, 0, 'inOut']];
-const LEAN = [[0, 0], [1.4, 0], [2.2, 1, 'inOut']];
-const BUST_X = 206; // screen x of the nose tip
-const BUST_Y = 34; // screen y of the crown
-const NOSE_LEN = 4.4;
+const GLASS_H = 25;
+
+// The arm: two sleeves from the shoulder through the elbow to the cuff, solved
+// each frame (two-bone IK, elbow down) so the elbow swings forward naturally as
+// the glass comes up. Charcoal cloth: the lit upper edge, a cool rim underneath.
+const UPPER = 72;
+const FORE = 72;
+const ARM = { ex: 0, ey: 0 };
+function elbow(sx, sy, wx, wy) {
+  const dx = wx - sx;
+  const dy = wy - sy;
+  const d = Math.min(UPPER + FORE - 0.5, Math.hypot(dx, dy));
+  const a = (UPPER * UPPER - FORE * FORE + d * d) / (2 * d);
+  const h = sqrt(max(0, UPPER * UPPER - a * a));
+  const ux = dx / d;
+  const uy = dy / d;
+  ARM.ex = sx + ux * a + uy * h;
+  ARM.ey = sy + uy * a - ux * h;
+  return ARM;
+}
+const SLEEVE = [[0, 0], [0, 0], [0, 0], [0, 0]];
+/** A tapered sleeve from (ax, ay) w0 wide to (bx, by) w1 wide, lit on the side facing up-left. */
+function sleeve(ctx, ax, ay, bx, by, w0, w1) {
+  const len = Math.hypot(bx - ax, by - ay) || 1;
+  const nx = (by - ay) / len; // normal (pointing to the right of the a->b direction)
+  const ny = -(bx - ax) / len;
+  const quad = (o0, o1, i0, i1, col) => {
+    SLEEVE[0][0] = ax + nx * w0 * o0; SLEEVE[0][1] = ay + ny * w0 * o0;
+    SLEEVE[1][0] = ax + nx * w0 * o1; SLEEVE[1][1] = ay + ny * w0 * o1;
+    SLEEVE[2][0] = bx + nx * w1 * i1; SLEEVE[2][1] = by + ny * w1 * i1;
+    SLEEVE[3][0] = bx + nx * w1 * i0; SLEEVE[3][1] = by + ny * w1 * i0;
+    poly(ctx, SLEEVE, col);
+  };
+  quad(-0.5, 0.5, -0.5, 0.5, P.black);
+  // which side faces the lamp (up-left): the side whose normal points that way
+  const lit = nx * -0.8 + ny * -0.6 > 0 ? 1 : -1;
+  quad(0.5 * lit, 0.3 * lit, 0.5 * lit, 0.3 * lit, P.ink);
+  quad(0.5 * lit, 0.42 * lit, 0.5 * lit, 0.42 * lit, P.slate);
+  quad(-0.5 * lit, -0.44 * lit, -0.5 * lit, -0.44 * lit, P.slate);
+}
+
+// Timing (shot length 4.2 s; it opens through a dip to black): the glass comes up
+// from his chest to under his nose, his eyes close as it arrives, he breathes in.
+const INHALE = [[0, 0], [2.45, 0], [3.0, -1, 'inOut'], [3.8, -1], [4.3, 0, 'inOut']];
+const BUST_X = 204; // screen x of the sprite's left edge (nose tip at +3)
+const BUST_Y = 38; // screen y of the crown
+const SHOULDER_X = 254;
+const SHOULDER_Y = 134;
+const REST_X = 206; // glass axis at rest, in front of his chest
+const REST_Y = 151; // rim at rest
+const UP_X = 195; // glass axis under his nose (the tip hangs over the rim)
+const UP_Y = 89; // rim just under the nostril
 
 function shotNose(ctx, lt) {
   ctx.drawImage(lounge(), 0, 0);
   drips(ctx, lt);
-  // a warm haze behind him; the background is the light, he is the shadow
   const breath = round(key(lt, INHALE));
-  const lean = round(key(lt, LEAN));
-  const bx = BUST_X - BUST_OX - lean;
+  const bx = BUST_X;
   const by = BUST_Y + breath;
   ctx.drawImage(bustArt(), bx, by);
-  const shut = lt < 2.05 ? 0 : lt < 2.2 ? 1 : 2;
-  eye(ctx, bx + BUST_OX, by, shut);
-  // the glass rises from below frame to just under his nose, slowing as it arrives
-  const gp = smooth(prog(lt, 0.3, 2.3));
-  const gx = BUST_X + 6 - lean;
-  const gh = 23;
-  const gy = round(lerp(H + 30, BUST_Y + 51 + 6 + gh + breath, gp)); // rim ~6 px under the nostril
-  // forearm: from the wrist down out of frame
-  ARM_PTS[0][0] = gx + 17;
-  ARM_PTS[0][1] = gy + 12;
-  ARM_PTS[1][0] = gx + 31;
-  ARM_PTS[1][1] = gy + 12;
-  ARM_PTS[2][0] = gx + 50;
-  ARM_PTS[2][1] = H;
-  ARM_PTS[3][0] = gx + 26;
-  ARM_PTS[3][1] = H;
-  poly(ctx, ARM_PTS, P.black);
-  line(ctx, gx + 17, gy + 12, gx + 26, H, P.brown); // the sleeve's lit edge
-  SMALL_GLASS.top = round(gh * 0.45);
-  SMALL_O.rows = gh;
+  eye(ctx, bx, by, lt < 1.85 ? 0 : lt < 2.0 ? 1 : 2);
+  // the glass rises on a slight arc (it comes up in front of the chest, then in to the nose)
+  const gp = smooth(prog(lt, 0.55, 2.05));
+  const arc = sin(gp * PI) * 5;
+  const gx = round(lerp(REST_X, UP_X, gp) - arc);
+  const gy = round(lerp(REST_Y, UP_Y, gp)) + breath;
+  const hx = gx - HAND_GX;
+  const hy = gy - HAND_RIM;
+  // the wrist (centre of the cuff's lower edge) and the arm solved to it
+  const wx = hx + 31;
+  const wy = hy + 32;
+  const e = elbow(SHOULDER_X, SHOULDER_Y + breath, wx, wy);
+  sleeve(ctx, SHOULDER_X, SHOULDER_Y + breath, e.ex, e.ey, 24, 22);
+  sleeve(ctx, e.ex, e.ey, wx, wy, 22, 18);
+  // the glass, then the hand round it
+  SMALL_GLASS.top = 4; // a generous pour over ice: the amber shows above his fingers
+  SMALL_O.rows = GLASS_H;
   SMALL_CUTS.cv = cutsTex();
-  SMALL_CUTS.top = round(gh * 0.5);
-  SMALL_CUTS.h = gh - SMALL_CUTS.top;
-  lathe(ctx, gx, gy - gh, fill(SPROF, gh, SMALL_KEYS, 1), SMALL_O);
-  ovalRing(ctx, gx, gy - gh + 3, 16, 3, A(P.cream, 0.55));
-  ctx.drawImage(handArt(), gx - HAND_OX, gy - HAND_OY);
+  SMALL_CUTS.top = round(GLASS_H * 0.5);
+  SMALL_CUTS.h = GLASS_H - SMALL_CUTS.top;
+  lathe(ctx, gx, gy, fill(SPROF, GLASS_H, SMALL_KEYS, 1), SMALL_O);
+  ovalRing(ctx, gx, gy + 2, 13, 3, A(P.cream, 0.55));
+  ctx.drawImage(handArt(), hx, hy);
   vignette(ctx, 0.55);
   // tasting notes in the space he faces, on the voice
   const tx = 104;

@@ -20,6 +20,7 @@ import { drawTopRow, drawAdTag } from './bug.js';
 import { StrapState, STRAP_TIMING, strapContent, strapReadTime, categoryLabel, drawStrap } from './strap.js';
 import { CaptionState, drawCaptions } from './captions.js';
 import { TickerState, makeEntries, makeFigureEntry, makeNextEntry, drawTicker } from './ticker.js';
+import { CHANNEL } from '../pace.js';
 
 /** Which graphics sit on top of each shot ('news' all, 'bug' no strap/captions, 'ad', none). */
 export const OVERLAYS = {
@@ -36,7 +37,7 @@ export const OVERLAYS = {
 /** Shots whose full-screen graphic owns the bottom of the frame: captions go to the top, no strap. */
 export const CAPTIONS_TOP = new Set(['montage']);
 
-export const PROGRAM_TAG = { delay: 0.5, hold: 8 }; // programme name beside the bug after the open
+export const PROGRAM_TAG = CHANNEL.programTag; // programme name beside the bug after the open (PACE: pace.js)
 
 /**
  * Per-programme graphics (docs/programmes/*.md). `tagHold`: seconds the

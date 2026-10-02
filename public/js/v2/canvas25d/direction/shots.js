@@ -77,8 +77,9 @@ export const SHOT_STYLES = {
   'world-now': { ...fromPace('world-now'), moves: true },
   'tech-bytes': { ...fromPace('tech-bytes'), catch: true },
   cosmos: { ...fromPace('cosmos'), placeWindow: 0.3 },
-  'money-minute': { ...fromPace('money-minute'), shotMax: PACE['money-minute'].shots.studioMax, numberGap: 1.2, pauseCuts: true },
-  'news-60': { ...fromPace('news-60'), fullMax: PACE['news-60'].shots.picture[1], fullHoldMax: 10.5 },
+  // MONEY MINUTE and NEWS IN 60 keep their own per-story plans (no single splitting)
+  'money-minute': { ...fromPace('money-minute'), singleSoft: undefined, shotMax: PACE['money-minute'].shots.studioMax, numberGap: 1.2, pauseCuts: true },
+  'news-60': { ...fromPace('news-60'), singleSoft: undefined, fullMax: PACE['news-60'].shots.picture[1], fullHoldMax: 10.5 },
 };
 
 const styleOf = (id) => (SHOT_STYLES[id] ? id : 'world-now');

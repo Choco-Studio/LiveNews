@@ -14,8 +14,10 @@ import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
 import { W, TICKER, inkOn, easeOut, easeIn, easeInOut, lerp, rect, clipStart, clipEnd } from './layout.js';
 import { linePages } from './breaks.js';
+import { CHANNEL, paceTrace } from '../pace.js';
 
-export const TICKER_TIMING = { push: 0.3, base: 1.5, perWord: 0.4, bandIn: 0.35, bandDelay: 0.15, bandOut: 0.25 };
+// PACE: push and hold from the one pacing table (pace.js CHANNEL.ticker; owner 18:52: items held longer, >= 6 s)
+export const TICKER_TIMING = CHANNEL.ticker;
 const T = TICKER_TIMING;
 
 /** Width of a plate that carries `label` (text at graphics-safe x, 6 px after it). */
@@ -223,6 +225,7 @@ export class TickerState {
     this.prev = this.cur;
     this.cur = next;
     this.start = start;
+    paceTrace({ k: 'ticker', id: next.id, hold: next.dur }); // PACE trace (no-op outside the recorder)
   }
 
   push(t, idx) {

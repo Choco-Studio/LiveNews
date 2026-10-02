@@ -15,16 +15,13 @@ import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
 import { W, CAPTION, easeOut, easeIn, easeInOut, clipStart, clipEnd } from './layout.js';
 import { layoutText } from './breaks.js';
+import { CHANNEL } from '../pace.js';
 
-export const CAPTION_TIMING = {
-  cps: 15, // speech pace when nothing better is known (matches audio.js mute pace)
-  lead: 4, // characters: turn the page just before its first word is spoken
-  minPage: 1.2, // seconds a page stays up at least
-  grace: 0.5, // after the speech timeline stops, wait this long before pacing on by the clock
-  roll: 0.22, // page change
-  hold: 0.5, // caption lingers after speech before rolling out
-  out: 0.22, // roll out (the same move as a page change, no alpha)
-};
+// PACE: page holds and roll timings from the one pacing table (pace.js CHANNEL.captions):
+//   cps (speech pace when nothing better is known, = audio.js mute pace), lead (chars: turn the page just
+//   before its first word), minPage (s a page stays up at least), grace (after the speech timeline stops),
+//   roll (page change), hold (caption lingers after speech), out (roll out, the same move as a page change)
+export const CAPTION_TIMING = CHANNEL.captions;
 const C = CAPTION_TIMING;
 export const CAPTION_COLOR = P.white;
 const BOX = P.black;
