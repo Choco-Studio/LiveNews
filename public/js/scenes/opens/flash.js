@@ -3,7 +3,7 @@
 // twelve, then "60" lights up segment by segment. Accent: yellow, with black
 // text on the yellow title plate.
 import { P } from '../../palette.js';
-import { seg, easeInOut, ringPts, memo } from '../../gfx/index.js';
+import { seg, easeInOut, easeOutQuint, ringPts, memo } from '../../gfx/index.js';
 import { backdrop, playOpen, CENTRE } from './kit.js';
 
 const R0 = 32; // dial radius in the lock-up (x ZOOM at centre stage)
@@ -88,14 +88,20 @@ function emblem(ctx, dt, x, y, k = 1) {
     }
   }
   // digits light segment by segment once the minute is complete
-  const dp = seg(dt, 1.3, 0.3);
+  const dp = seg(dt, 1.28, 0.32);
   if (dp > 0) {
-    const n = Math.ceil(6 * dp);
+    // "60" rises into place inside its own window
     const S = segs(k);
     const gap = Math.round(2 * k);
     const dy = y - Math.round(S.dh * 0.35);
-    digit(ctx, '6', x - S.dw - gap, dy, n, S);
-    digit(ctx, '0', x + gap, dy, n, S);
+    const off = Math.round((1 - easeOutQuint(dp)) * (S.dh + 2));
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x - S.dw - gap - 1, dy - 1, 2 * (S.dw + gap) + 2, S.dh + 2);
+    ctx.clip();
+    digit(ctx, '6', x - S.dw - gap, dy + off, 6, S);
+    digit(ctx, '0', x + gap, dy + off, 6, S);
+    ctx.restore();
   }
   // hand on top
   if (dt > 0.3) {

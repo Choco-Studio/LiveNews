@@ -22,7 +22,8 @@ const MIME = {
 
 const usage = new UsageTracker(config.dataDir);
 const newsDesk = new NewsDesk();
-const images = new ImageCache();
+// Pictures of local (offline fixture) feeds are served from their own folders only.
+const images = new ImageCache({ localRoots: () => newsDesk.localImageRoots });
 const chain = new ProviderChain(createProviders(config), usage);
 const producer = new Producer({ config, newsDesk, chain });
 const station = new Station({ config, newsDesk, producer, chain });
@@ -92,6 +93,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/channel') return sendJson(res, 200, station.publicChannel());
     if (req.method === 'GET' && url.pathname === '/api/schedule') return sendJson(res, 200, station.schedule());
+    // Editorial dev views (lab pages, debugging): what the desk holds and what is queued, without advancing the channel.
+    if (req.method === 'GET' && url.pathname === '/api/desk') return sendJson(res, 200, newsDesk.deskView());
+    if (req.method === 'GET' && url.pathname === '/api/queue') return sendJson(res, 200, station.queue);
     const img = url.pathname.match(/^\/api\/img\/(s[0-9a-f]{10})$/);
     if (req.method === 'GET' && img) return await serveImage(res, img[1]);
     if (req.method === 'POST' && url.pathname === '/api/refresh') {

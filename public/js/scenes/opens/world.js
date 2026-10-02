@@ -94,7 +94,7 @@ const LUT = (() => {
   const L = new Uint32Array(8 * 8);
   const ocean = [P.black, P.ink, P.ink, P.navy, P.navy];
   const land = [P.ink, P.slate, P.steel, P.fog, P.silver];
-  const grid = [P.ink, P.slate, P.slate, P.blue, P.blue];
+  const grid = [P.ink, P.slate, P.slate, P.steel, P.steel];
   const equ = [P.maroon, P.darkRed, P.darkRed, P.red, P.red];
   for (let tv = 0; tv < 8; tv++) {
     const set = tv & 4 ? equ : tv & 1 ? land : tv & 2 ? grid : ocean;
@@ -166,6 +166,11 @@ function drawGlobe(ctx, x, y, R, lam0) {
     fb.cx.putImageData(fb.img, 0, 0);
   }
   ctx.drawImage(fb.cv, x - T.c, y - T.c);
+}
+
+/** The shaded earth at radius R centred on (x, y), centre longitude lam (also used by the cards). */
+export function drawEarth(ctx, x, y, R, lam) {
+  drawGlobe(ctx, Math.round(x), Math.round(y), Math.round(R), lam);
 }
 
 /** Earth-frame unit vector of a lat/lon. */

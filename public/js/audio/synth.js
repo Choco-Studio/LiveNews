@@ -11,6 +11,9 @@ import { estimateLoudness } from './loudness.js';
 
 export const DUCK_LEVEL = 0.32; // music under speech: -10 dB
 export const CEILING = 0.87; // master peak limit, -1.2 dBFS
+const COMP = { threshold: -7, knee: 3, ratio: 12 };
+// WebAudio's DynamicsCompressor make-up gain: (1 / gain at 0 dBFS) ^ 0.6.
+export const COMP_MAKEUP = 10 ** ((0.6 * (-COMP.threshold - -COMP.threshold / COMP.ratio)) / 20);
 const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
 
 // ------------------------------------------------------------------ bank
@@ -121,15 +124,19 @@ export function buildBuses(ctx, { volume = 0.8, raw = false } = {}) {
   if (raw) master.connect(out);
   else {
     comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -7;
-    comp.knee.value = 3;
-    comp.ratio.value = 12;
+    comp.threshold.value = COMP.threshold;
+    comp.knee.value = COMP.knee;
+    comp.ratio.value = COMP.ratio;
     comp.attack.value = 0.002;
     comp.release.value = 0.16;
+    // Browsers add automatic make-up gain after the compressor; take it back
+    // out so quiet material passes at unity and the loudness targets hold.
+    const unmake = ctx.createGain();
+    unmake.gain.value = 1 / COMP_MAKEUP;
     const clip = ctx.createWaveShaper();
     clip.curve = clipCurve();
     clip.oversample = 'none';
-    master.connect(comp).connect(clip).connect(out);
+    master.connect(comp).connect(unmake).connect(clip).connect(out);
   }
   const duck = ctx.createGain();
   duck.connect(master);
@@ -155,7 +162,10 @@ export function setDuck(param, on, t) {
 // ----------------------------------------------------------------- voices
 
 // Exponential decay from `peak` that lands exactly on zero at `end`.
+// Gain params must start at 0: before its first event an AudioParam sits at
+// its default (1), and a source starting one frame early would click.
 function envDecay(p, when, peak, attack, tau, end) {
+  p.value = 0;
   p.setValueAtTime(0, when);
   p.linearRampToValueAtTime(peak, when + attack);
   p.setTargetAtTime(0, when + attack, tau);
@@ -242,7 +252,7 @@ export class TunePlayer {
       const ev = this.events[this.cursor];
       const when = this.t0 + (this.pass * this.song.beats + ev.at) * this.spb;
       if (when >= tEnd) return;
-      if (when >= lateLimit || this.ctx instanceof (globalThis.OfflineAudioContext ?? Object)) this.play(ev, when);
+      if (when >= lateLimit) this.play(ev, when); // a late timer skips notes rather than clicking them in
       this.cursor++;
       if (this.cursor >= this.events.length) {
         if (!this.loop) {
@@ -326,6 +336,7 @@ export class TunePlayer {
           const lfo = ctx.createOscillator();
           const depth = ctx.createGain();
           lfo.frequency.value = vib[1];
+          depth.gain.value = 0;
           depth.gain.setValueAtTime(0, when);
           depth.gain.setValueAtTime(0, when + vib[2]);
           depth.gain.linearRampToValueAtTime(vib[0], when + vib[2] + 0.18);
@@ -340,8 +351,9 @@ export class TunePlayer {
           };
         }
       }
-      // ADSR, always from zero and back to zero.
+      // ADSR, always from zero and back to zero (see envDecay about the 0).
       const p = g.gain;
+      p.value = 0;
       p.setValueAtTime(0, when);
       let level;
       if (gate <= inst.a) {
@@ -455,6 +467,7 @@ export class TunePlayer {
           f.frequency.exponentialRampToValueAtTime(3400, when + len);
         }
         const g = ctx.createGain();
+        g.gain.value = 0;
         g.gain.setValueAtTime(0, when);
         g.gain.linearRampToValueAtTime(level * 0.9, when + len * 0.6);
         g.gain.linearRampToValueAtTime(0, when + len);
@@ -468,6 +481,55 @@ export class TunePlayer {
         break;
     }
   }
+}
+
+// ------------------------------------------------------------------ blips
+
+/**
+ * One sentence of "Animal Crossing" speech: one oscillator, a gain envelope
+ * per beep (6 ms in, 12 ms out, pitch changes only while silent) through a
+ * low-pass. `beeps` come from visemes.blipPlan(); `t0` is the context time of
+ * the sentence start. Returns a function that cuts it short.
+ */
+export function scheduleBlips(ctx, dest, blip, beeps, t0, totalSec, rnd = Math.random) {
+  if (!beeps.length) return () => {};
+  const osc = ctx.createOscillator();
+  osc.setPeriodicWave(bank(ctx).wave(blip.wave ?? 'tri'));
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = blip.cut;
+  const g = ctx.createGain();
+  g.gain.value = 0;
+  osc.connect(lp).connect(g).connect(dest);
+  osc.frequency.value = blip.base;
+  for (const b of beeps) {
+    const t = t0 + b.at / 1000;
+    const d = Math.max(0.03, (b.dur / 1000) * (blip.len / 0.78));
+    const v = blip.gain * b.peak;
+    const f = blip.base * (1 + (b.ratio - 1) * (1 - blip.flat)) * (1 - blip.vary / 2 + rnd() * blip.vary);
+    osc.frequency.setValueAtTime(f, t);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(v, t + 0.006);
+    g.gain.setValueAtTime(v, t + d - 0.012);
+    g.gain.linearRampToValueAtTime(0, t + d);
+  }
+  osc.start(t0);
+  osc.stop(t0 + totalSec + 0.05);
+  osc.onended = () => {
+    try {
+      osc.disconnect();
+      lp.disconnect();
+      g.disconnect();
+    } catch { /* ignore */ }
+  };
+  return () => {
+    try {
+      const now = ctx.currentTime;
+      g.gain.cancelScheduledValues(now);
+      g.gain.setTargetAtTime(0, now, 0.004);
+      osc.stop(now + 0.03);
+    } catch { /* already stopped */ }
+  };
 }
 
 // ---------------------------------------------------------------- offline

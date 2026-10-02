@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lab · audio</title>
+    <style>
+      body { background: #101014; color: #c0cbdc; font: 12px/1.5 monospace; margin: 12px; }
+      #screen { width: 1152px; height: 648px; image-rendering: pixelated; display: block; background: #000; }
+      #ui { margin: 8px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      select, button { font: inherit; }
+      #note { color: #8b9bb4; max-width: 1152px; }
+      pre { color: #8b9bb4; max-width: 1152px; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <canvas id="screen" width="384" height="216"></canvas>
+    <div id="ui">
+      <label>view <select id="view"></select></label>
+      <button id="play">play it (needs a click)</button>
+      <button id="stop">stop</button>
+    </div>
+    <div id="note">
+      Dev tool for public/js/audio. Every tune and cue is rendered offline (OfflineAudioContext, 48 kHz) with the
+      channel's own synth and mixer, then measured: waveform with the -1 dBFS ceiling, BS.1770 momentary loudness
+      against the channel target, spectrogram, and an envelope probe (every oscillator replaced by a constant) whose
+      per-sample steps reveal clicks. Other views: the signature, the loudness of every tune, ducking under speech, the
+      viseme timeline of a sentence, TTS re-sync and the blip voice. window.__lab.render(i) draws view i (async);
+      window.__lab.stats() returns the numbers; window.__lab.views lists the views.
+    </div>
+    <pre id="out"></pre>
+    <script type="module">
+      import { P } from '../js/palette.js';
+      import { drawText, measureText } from '../js/font.js';
+      import { renderTune, buildBuses, scheduleBlips, asSong } from '../js/audio/synth.js';
+      import { themeFor, THEME_IDS, IDENT, STINGER, BREAKING, OUTRO, PROMO, MOTIF, COLOURS } from '../js/audio/themes.js';
+      import { measureLoudness, TARGET_LUFS } from '../js/audio/loudness.js';
+      import { buildTimeline, sampleTimeline, blipPlan, SpeechClock, VISEMES } from '../js/audio/visemes.js';
+      import { resolveVoices, normProfile } from '../js/audio/voices.js';
+      import { AudioEngine } from '../js/audio.js';
+      import { ADS } from '../js/ads/index.js';
+
+      const W = 384;
+      const H = 216;
+      const canvas = document.getElementById('screen');
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      const SR = 48000;
+      const ACCENT = { 'world-now': P.red, 'tech-bytes': P.cyan, cosmos: P.magenta, 'money-minute': P.green, 'news-60': P.yellow, generic: P.silver };
+
+      // ------------------------------------------------------------ catalogue
+      const TUNES = [
+        ...THEME_IDS.map((id) => ({ id, label: `OPEN ${id.toUpperCase()}`, tune: themeFor(id, { duration: 4 }), accent: ACCENT[id], cut: 4 })),
+        { id: 'generic', label: 'OPEN GENERIC', tune: themeFor('unknown', { duration: 4 }), accent: P.silver, cut: 4 },
+        { id: 'ident', label: 'IDENT (BREAK IN)', tune: IDENT, accent: P.red },
+        { id: 'stinger', label: 'STINGER', tune: STINGER, accent: P.silver },
+        { id: 'breaking', label: 'BREAKING STING', tune: BREAKING, accent: P.red },
+        { id: 'outro', label: 'SIGN-OFF', tune: OUTRO, accent: P.red },
+        { id: 'promo', label: 'UP NEXT PROMO', tune: PROMO, accent: P.yellow },
+        ...ADS.map((ad) => ({ id: `ad-${ad.id}`, label: `AD ${String(ad.brand || ad.id).toUpperCase()}`, tune: ad.tune, accent: P.orange, seconds: 12, loop: true })),
+      ];
+      const VIEWS = ['signature', ...TUNES.map((t) => t.id), 'loudness', 'ducking', 'visemes', 'resync', 'blips', 'voices'];
+
+      // --------------------------------------------------------- drawing kit
+      const rect = (x, y, w, h, c) => {
+        ctx.fillStyle = c;
+        ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+      };
+      const text = (s, x, y, color = P.silver, opts = {}) => drawText(ctx, String(s), Math.round(x), Math.round(y), { color, ...opts });
+      const micro = (s, x, y, color = P.fog, align = 'left') => drawText(ctx, String(s).toUpperCase(), Math.round(x), Math.round(y), { color, font: 'micro', align });
+      const db = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : '-INF');
+      function frame(title, sub, accent = P.red) {
+        rect(0, 0, W, H, P.black);
+        rect(0, 0, W, 15, P.ink);
+        rect(0, 0, 3, 15, accent);
+        text(title, 7, 1, P.white);
+        if (sub) micro(sub, W - 6, 4, P.fog, 'right');
+      }
+      function panel(x, y, w, h, label) {
+        rect(x, y, w, h, '#1d2033');
+        if (label) micro(label, x + 2, y + 1, P.steel);
+      }
+
+      // ---------------------------------------------------------- analysis
+      function mono(buffer) {
+        const a = buffer.getChannelData(0);
+        const b = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : a;
+        const m = new Float32Array(a.length);
+        for (let i = 0; i < a.length; i++) m[i] = (a[i] + b[i]) * 0.5;
+        return m;
+      }
+
+      function fft(re, im) {
+        const n = re.length;
+        for (let i = 1, j = 0; i < n; i++) {
+          let bit = n >> 1;
+          for (; j & bit; bit >>= 1) j ^= bit;
+          j ^= bit;
+          if (i < j) {
+            [re[i], re[j]] = [re[j], re[i]];
+            [im[i], im[j]] = [im[j], im[i]];
+          }
+        }
+        for (let len = 2; len <= n; len <<= 1) {
+          const ang = (-2 * Math.PI) / len;
+          const wr = Math.cos(ang);
+          const wi = Math.sin(ang);
+          for (let i = 0; i < n; i += len) {
+            let cr = 1;
+            let ci = 0;
+            for (let k = 0; k < len / 2; k++) {
+              const ar = re[i + k + len / 2] * cr - im[i + k + len / 2] * ci;
+              const ai = re[i + k + len / 2] * ci + im[i + k + len / 2] * cr;
+              re[i + k + len / 2] = re[i + k] - ar;
+              im[i + k + len / 2] = im[i + k] - ai;
+              re[i + k] += ar;
+              im[i + k] += ai;
+              const t = cr * wr - ci * wi;
+              ci = cr * wi + ci * wr;
+              cr = t;
+            }
+          }
+        }
+      }
+
+      const RAMP = [P.black, P.ink, P.navy, P.purple, P.magenta, P.red, P.orange, P.yellow, P.cream, P.white];
+      function spectrogram(x0, y0, w, h, data, seconds) {
+        const N = 2048;
+        const re = new Float64Array(N);
+        const im = new Float64Array(N);
+        const fLo = 40;
+        const fHi = 16000;
+        for (let col = 0; col < w; col++) {
+          const c = Math.floor(((col + 0.5) / w) * seconds * SR);
+          for (let i = 0; i < N; i++) {
+            const s = data[c - N / 2 + i] ?? 0;
+            re[i] = s * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N));
+            im[i] = 0;
+          }
+          fft(re, im);
+          for (let row = 0; row < h; row++) {
+            const fA = fLo * (fHi / fLo) ** (row / h);
+            const fB = fLo * (fHi / fLo) ** ((row + 1) / h);
+            const kA = Math.max(1, Math.floor((fA * N) / SR));
+            const kB = Math.max(kA + 1, Math.ceil((fB * N) / SR));
+            let m = 0;
+            for (let k = kA; k < kB; k++) m = Math.max(m, re[k] * re[k] + im[k] * im[k]);
+            const dbv = 10 * Math.log10(m / ((N / 4) ** 2) + 1e-12);
+            const lvl = Math.max(0, Math.min(RAMP.length - 1, Math.floor((dbv + 84) / 8)));
+            rect(x0 + col, y0 + h - 1 - row, 1, 1, RAMP[lvl]);
+          }
+        }
+      }
+
+      function waveform(x0, y0, w, h, buffer, seconds, color) {
+        const data = [buffer.getChannelData(0), buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : buffer.getChannelData(0)];
+        const mid = y0 + h / 2;
+        const ceil = 10 ** (-1 / 20);
+        rect(x0, Math.round(mid - (h / 2) * ceil), w, 1, P.darkRed);
+        rect(x0, Math.round(mid + (h / 2) * ceil) - 1, w, 1, P.darkRed);
+        rect(x0, Math.round(mid), w, 1, P.slate);
+        for (let col = 0; col < w; col++) {
+          const a = Math.floor((col / w) * seconds * SR);
+          const b = Math.floor(((col + 1) / w) * seconds * SR);
+          let lo = 0;
+          let hi = 0;
+          let rms = 0;
+          for (const ch of data) {
+            for (let i = a; i < b && i < ch.length; i++) {
+              const v = ch[i];
+              if (v < lo) lo = v;
+              if (v > hi) hi = v;
+              rms += v * v;
+            }
+          }
+          rms = Math.sqrt(rms / Math.max(1, (b - a) * 2));
+          const over = Math.max(-lo, hi) > ceil;
+          rect(x0 + col, mid - hi * (h / 2), 1, Math.max(1, (hi - lo) * (h / 2)), over ? P.red : P.steel);
+          rect(x0 + col, mid - rms * (h / 2), 1, Math.max(1, 2 * rms * (h / 2)), color);
+        }
+      }
+
+      function timeAxis(x0, y, w, seconds) {
+        const step = seconds > 14 ? 2 : seconds > 6 ? 1 : 0.5;
+        for (let s = 0; s <= seconds + 1e-6; s += step) {
+          const x = x0 + Math.round((s / seconds) * (w - 1));
+          rect(x, y, 1, 2, P.steel);
+          if (Math.abs(s - Math.round(s)) < 1e-6) micro(`${Math.round(s)}s`, x + 1, y + 1, P.steel);
+        }
+      }
+
+      // Envelope probe: every voice is a constant, so the output is the sum of
+      // the envelopes; a step bigger than 3 % of the peak in one sample clicks.
+      function probeStats(buffer) {
+        const d = buffer.getChannelData(0);
+        let peak = 1e-9;
+        for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+        let worst = 0;
+        const clicks = [];
+        for (let i = 1; i < d.length; i++) {
+          const step = Math.abs(d[i] - d[i - 1]) / peak;
+          if (step > worst) worst = step;
+          if (step > 0.03 && (!clicks.length || i - clicks[clicks.length - 1] > SR * 0.01)) clicks.push(i);
+        }
+        return { worst, clicks, peak, data: d };
+      }
+
+      const cache = new Map();
+      async function analyse(item) {
+        if (cache.has(item.id)) return cache.get(item.id);
+        const song = asSong(item.tune);
+        const seconds = item.seconds ?? Math.min(14, (song.beats * 60) / song.bpm + 1.6);
+        const stopAt = item.cut ? item.cut + 0.05 : undefined;
+        const main = await renderTune(item.tune, { seconds, loop: item.loop, stopAt });
+        const probe = await renderTune(item.tune, { seconds, loop: item.loop, probe: true, stopAt });
+        const L = measureLoudness([main.buffer.getChannelData(0), main.buffer.getChannelData(1)], SR);
+        const res = { item, song, seconds, buffer: main.buffer, probe: probeStats(probe.buffer), L, est: main.loudness };
+        cache.set(item.id, res);
+        return res;
+      }
+
+      // --------------------------------------------------------------- views
+      async function drawTune(item) {
+        const a = await analyse(item);
+        const { L, probe, seconds, song } = a;
+        frame(item.label, `${song.bpm.toFixed(0)} BPM  ${song.tracks.length} TRACKS  ${seconds.toFixed(1)}S`, item.accent);
+        const x0 = 6;
+        const w = 372;
+        panel(x0, 18, w, 46, 'WAVEFORM  RED LINES -1 DBFS');
+        waveform(x0, 19, w, 44, a.buffer, seconds, item.accent);
+        if (item.cut) {
+          const xc = x0 + Math.round((item.cut / seconds) * w);
+          const xl = x0 + Math.round(((item.cut - 0.8) / seconds) * w);
+          rect(xl, 18, 1, 46, P.fog);
+          rect(xc, 18, 1, 46, P.white);
+          micro('LOCK', xl + 2, 57, P.fog);
+          micro('CUT', xc + 2, 57, P.white);
+        }
+        // Momentary loudness (400 ms) on a -40..-5 LUFS scale with the target band.
+        panel(x0, 67, w, 32, 'MOMENTARY LOUDNESS  BAND = TARGET +-3 LU');
+        const ly = (v) => 67 + 31 - Math.max(0, Math.min(31, ((v + 40) / 35) * 31));
+        rect(x0, ly(TARGET_LUFS + 3), w, ly(TARGET_LUFS - 3) - ly(TARGET_LUFS + 3), '#2a3150');
+        rect(x0, ly(TARGET_LUFS), w, 1, P.slate);
+        const m = L.momentary;
+        for (let col = 0; col < w; col++) {
+          const tSec = (col / w) * seconds;
+          const idx = Math.round(tSec / 0.1 - 2);
+          const v = m[Math.max(0, Math.min(m.length - 1, idx))];
+          if (Number.isFinite(v) && v > -40) rect(x0 + col, ly(v), 1, 1, P.white);
+        }
+        panel(x0, 102, w, 58, 'SPECTROGRAM 40 HZ - 16 KHZ');
+        spectrogram(x0, 102, w, 58, mono(a.buffer), seconds);
+        // Envelope probe.
+        panel(x0, 163, w, 22, 'ENVELOPE PROBE  RED = CLICK');
+        const pd = probe.data;
+        for (let col = 0; col < w; col++) {
+          const i0 = Math.floor((col / w) * seconds * SR);
+          const i1 = Math.floor(((col + 1) / w) * seconds * SR);
+          let mx = 0;
+          for (let i = i0; i < i1 && i < pd.length; i++) mx = Math.max(mx, Math.abs(pd[i]));
+          const hgt = Math.round((mx / probe.peak) * 18);
+          rect(x0 + col, 184 - hgt, 1, hgt, P.slate);
+        }
+        for (const c of probe.clicks) rect(x0 + Math.round((c / SR / seconds) * w), 164, 1, 20, P.red);
+        timeAxis(x0, 185, w, seconds);
+        // Numbers.
+        const ok = (cond) => (cond ? P.green : P.red);
+        const dev = L.integrated - TARGET_LUFS - (song.trim || 0);
+        const y = 196;
+        micro('LOUDNESS', 6, y, P.steel);
+        micro(`${db(L.integrated)} LUFS`, 6, y + 8, ok(Math.abs(dev) <= 3));
+        micro('MODEL', 72, y, P.steel);
+        micro(`${db(a.est.integrated + a.est.gainDb)} LUFS`, 72, y + 8, P.silver);
+        micro('PEAK', 138, y, P.steel);
+        micro(`${db(L.peakDb)} DBFS`, 138, y + 8, ok(L.peakDb < -1));
+        micro('WORST ENV STEP', 196, y, P.steel);
+        micro(`${(probe.worst * 100).toFixed(2)}%/SAMPLE`, 196, y + 8, ok(probe.worst <= 0.03));
+        micro('CLICKS', 290, y, P.steel);
+        micro(String(probe.clicks.length), 290, y + 8, ok(!probe.clicks.length));
+        micro('TRIM', 336, y, P.steel);
+        micro(`${(song.trim || 0).toFixed(0)} DB`, 336, y + 8, P.silver);
+      }
+
+      async function drawLoudness() {
+        frame('LOUDNESS OF EVERY TUNE', `TARGET ${TARGET_LUFS} LUFS (+TRIM)  +-3 LU`, P.green);
+        const rows = [];
+        for (const item of TUNES) rows.push(await analyse(item));
+        const x0 = 96;
+        const w = 230;
+        const lo = -30;
+        const hi = -8;
+        const xv = (v) => x0 + Math.round(((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * w);
+        rect(xv(TARGET_LUFS - 3), 18, xv(TARGET_LUFS + 3) - xv(TARGET_LUFS - 3), rows.length * 10 + 2, '#24304a');
+        rect(xv(TARGET_LUFS), 18, 1, rows.length * 10 + 2, P.steel);
+        rows.forEach((r, i) => {
+          const y = 19 + i * 10;
+          const target = TARGET_LUFS + (r.song.trim || 0);
+          const ok = Math.abs(r.L.integrated - target) <= 3;
+          micro(r.item.label.replace(/^OPEN /, '').slice(0, 22), 6, y + 1, P.fog);
+          rect(x0, y + 2, xv(r.L.integrated) - x0, 5, ok ? r.item.accent : P.red);
+          rect(xv(target), y, 1, 9, P.white);
+          micro(db(r.L.integrated), 330, y + 1, ok ? P.silver : P.red);
+          micro(db(r.L.peakDb), 358, y + 1, r.L.peakDb < -1 ? P.steel : P.red);
+        });
+        micro('LUFS', 330, H - 9, P.steel);
+        micro('PEAK', 358, H - 9, P.steel);
+        for (const v of [-30, -25, -20, -15, -10]) {
+          rect(xv(v), H - 12, 1, 3, P.steel);
+          micro(String(v), xv(v) - 6, H - 8, P.steel);
+        }
+        // The mixer must pass quiet material at unity (compressor make-up removed).
+        const off = new OfflineAudioContext(2, SR, SR);
+        const buses = buildBuses(off, { volume: 1 });
+        const osc = off.createOscillator();
+        const g = off.createGain();
+        g.gain.value = 10 ** (-30 / 20);
+        osc.frequency.value = 1000;
+        osc.connect(g).connect(buses.master);
+        osc.start();
+        const buf = await off.startRendering();
+        let pk = 0;
+        for (const v of buf.getChannelData(0).subarray(SR / 2)) pk = Math.max(pk, Math.abs(v));
+        const unity = 20 * Math.log10(pk) + 30;
+        micro(`MIXER GAIN AT -30 DBFS ${unity.toFixed(2)} DB`, 250, H - 26, Math.abs(unity) < 0.5 ? P.green : P.red);
+        stats.unity = unity;
+        const meas = rows.map((r) => r.L.integrated - (r.song.trim || 0));
+        const spread = Math.max(...meas) - Math.min(...meas);
+        micro(`SPREAD ${spread.toFixed(1)} LU (TRIM REMOVED)`, 96, H - 26, spread <= 6 ? P.green : P.red);
+      }
+
+      async function drawDucking() {
+        frame('DUCKING UNDER SPEECH', 'MUSIC -10 DB WHILE A PRESENTER TALKS', P.cyan);
+        const speech = [[1.5, 3.6], [5.0, 6.6]];
+        const seconds = 8;
+        const plain = await renderTune(PROMO, { seconds, loop: true });
+        const ducked = await renderTune(PROMO, { seconds, loop: true, duck: speech });
+        const La = measureLoudness([plain.buffer.getChannelData(0), plain.buffer.getChannelData(1)], SR);
+        const Lb = measureLoudness([ducked.buffer.getChannelData(0), ducked.buffer.getChannelData(1)], SR);
+        const x0 = 6;
+        const w = 372;
+        panel(x0, 18, w, 40, 'MUSIC ALONE');
+        waveform(x0, 19, w, 38, plain.buffer, seconds, P.steel);
+        panel(x0, 62, w, 40, 'MUSIC WITH SPEECH (CYAN = PRESENTER TALKING)');
+        for (const [a, b] of speech) rect(x0 + (a / seconds) * w, 62, ((b - a) / seconds) * w, 40, '#173a4a');
+        waveform(x0, 63, w, 38, ducked.buffer, seconds, P.cyan);
+        panel(x0, 106, w, 64, 'MOMENTARY LOUDNESS: WHITE ALONE, CYAN DUCKED');
+        const ly = (v) => 106 + 63 - Math.max(0, Math.min(63, ((v + 45) / 40) * 63));
+        for (const [a, b] of speech) rect(x0 + (a / seconds) * w, 106, ((b - a) / seconds) * w, 64, '#173a4a');
+        for (let col = 0; col < w; col++) {
+          const idx = Math.round(((col / w) * seconds) / 0.1 - 2);
+          const va = La.momentary[Math.max(0, Math.min(La.momentary.length - 1, idx))];
+          const vb = Lb.momentary[Math.max(0, Math.min(Lb.momentary.length - 1, idx))];
+          if (Number.isFinite(va)) rect(x0 + col, ly(va), 1, 1, P.white);
+          if (Number.isFinite(vb)) rect(x0 + col, ly(vb), 1, 1, P.cyan);
+        }
+        timeAxis(x0, 171, w, seconds);
+        // Depth: mean loudness difference in the settled part of each speech interval.
+        const mean = (L, a, b) => {
+          const v = L.momentary.slice(Math.round(a / 0.1), Math.round(b / 0.1)).map((x) => 10 ** (x / 10));
+          return 10 * Math.log10(v.reduce((s, x) => s + x, 0) / v.length);
+        };
+        const depth = mean(Lb, 2.2, 3.2) - mean(La, 2.2, 3.2);
+        const back = mean(Lb, 4.4, 4.9) - mean(La, 4.4, 4.9);
+        micro('DEPTH WHILE TALKING', 6, 184, P.steel);
+        micro(`${depth.toFixed(1)} LU`, 6, 192, Math.abs(depth + 10) < 2 ? P.green : P.red);
+        micro('0.8 S AFTER SPEECH', 110, 184, P.steel);
+        micro(`${back.toFixed(1)} LU`, 110, 192, back > -3 ? P.green : P.red);
+        micro('ATTACK 60 MS  RELEASE 350 MS (TIME CONSTANTS)', 200, 184, P.fog);
+        micro(`PEAK ${db(Lb.peakDb)} DBFS`, 200, 192, Lb.peakDb < -1 ? P.green : P.red);
+        stats.ducking = { depth, back, peak: Lb.peakDb };
+      }
+
+      // A tiny mouth for each viseme (what the face team should aim for).
+      const MOUTH = {
+        rest: { w: 6, h: 1, round: 0, teeth: 0 }, MBP: { w: 6, h: 0, round: 0, teeth: 0 }, FV: { w: 6, h: 1, round: 0, teeth: 1 },
+        TH: { w: 6, h: 2, round: 0, teeth: 1, tongue: 1 }, L: { w: 6, h: 2, round: 0, teeth: 0, tongue: 1 }, EE: { w: 8, h: 2, round: 0, teeth: 1 },
+        AH: { w: 7, h: 4, round: 0, teeth: 0 }, OH: { w: 5, h: 4, round: 1, teeth: 0 }, OO: { w: 3, h: 3, round: 1, teeth: 0 },
+        WQ: { w: 3, h: 2, round: 1, teeth: 0 }, S: { w: 7, h: 1, round: 0, teeth: 1 },
+      };
+      function mouth(x, y, vis, level = 1) {
+        const m = MOUTH[vis] ?? MOUTH.rest;
+        rect(x - 6, y - 5, 12, 10, P.skin);
+        const h = Math.max(0, Math.round(m.h * Math.max(0.35, level)));
+        const left = x - Math.floor(m.w / 2);
+        if (h === 0) {
+          rect(left, y, m.w, 1, P.brown);
+          return;
+        }
+        rect(left + (m.round ? 0 : 0), y - Math.floor(h / 2), m.w, h, P.maroon);
+        if (m.round) {
+          rect(left, y - Math.floor(h / 2), 1, 1, P.skin);
+          rect(left + m.w - 1, y - Math.floor(h / 2), 1, 1, P.skin);
+        }
+        if (m.teeth) rect(left + 1, y - Math.floor(h / 2), m.w - 2, 1, P.white);
+        if (m.tongue) rect(left + 1, y - Math.floor(h / 2) + h - 1, m.w - 2, 1, P.pink);
+        rect(left, y - Math.floor(h / 2) - 1, m.w, 1, P.skinShade);
+      }
+      const VIS_COLOR = { rest: P.ink, MBP: P.red, FV: P.orange, TH: P.yellow, L: P.tan, EE: P.cyan, AH: P.green, OH: P.blue, OO: P.navy, WQ: P.purple, S: P.magenta };
+
+      const SAMPLE = 'Good evening, I’m Paco Pixel — and this is World Now on GLOBIT 24.';
+      function drawVisemes() {
+        const tl = buildTimeline(SAMPLE, { rate: 1 });
+        const beeps = blipPlan(tl);
+        frame('SPEECH TIMELINE (MOUTH)', `${(tl.total / 1000).toFixed(2)} S  ${tl.cps.toFixed(1)} CHARS/S  ${tl.segs.length} SHAPES`, P.cyan);
+        const x0 = 6;
+        const w = 372;
+        const span = tl.total + 200;
+        const xt = (ms) => x0 + ((ms + 100) / span) * w;
+        // Words at their start times, on two rows.
+        tl.words.forEach((wd, i) => {
+          const word = SAMPLE.slice(wd.ci, wd.end).toUpperCase();
+          rect(xt(wd.t0), 18, 1, 16, P.slate);
+          micro(word, xt(wd.t0) + 1, 19 + (i % 2) * 8, P.silver);
+        });
+        // Viseme strip.
+        panel(x0, 36, w, 14);
+        for (const s of tl.segs) {
+          rect(xt(s.t0), 37, Math.max(1, xt(s.t1) - xt(s.t0)), 12, VIS_COLOR[s.v]);
+          if (xt(s.t1) - xt(s.t0) >= 10 && s.v !== 'rest') micro(s.v, xt(s.t0) + 1, 41, s.v === 'OO' || s.v === 'WQ' || s.v === 'MBP' ? P.white : P.black);
+        }
+        // Level (jaw) and blend curves.
+        panel(x0, 53, w, 44, 'JAW LEVEL (WHITE)  BLEND TO NEXT SHAPE (BLUE)  BEEPS (YELLOW)');
+        for (let col = 0; col < w; col++) {
+          const ms = (col / w) * span - 100;
+          const f = sampleTimeline(tl, ms);
+          rect(x0 + col, 96 - Math.round(f.level * 38), 1, 1, P.white);
+          if (f.mix > 0 && f.mix < 1) rect(x0 + col, 96 - Math.round(f.mix * 38), 1, 1, P.blue);
+          if (f.accent > 0.5) rect(x0 + col, 54, 1, 2, P.orange);
+        }
+        for (const b of beeps) rect(xt(b.at), 96 - Math.round(b.peak * 12), Math.max(1, (b.dur / span) * w), 1, P.yellow);
+        for (const v of [0.22, 0.62]) rect(x0, 96 - Math.round(v * 38), 3, 1, P.steel);
+        // Mouth film strip: 16 instants.
+        panel(x0, 100, w, 30, 'THE MOUTH EVERY 1/16 OF THE SENTENCE');
+        for (let i = 0; i < 16; i++) {
+          const ms = (i / 15) * tl.total;
+          const f = sampleTimeline(tl, ms);
+          const vis = f.mix > 0.5 ? f.next : f.viseme;
+          const x = x0 + 12 + i * 23;
+          mouth(x, 116, vis, f.level / 0.8);
+          micro(vis, x - 6, 123, P.fog);
+          rect(xt(ms), 98, 1, 2, P.fog);
+        }
+        // Legend: the 11 shapes.
+        panel(x0, 134, w, 34, 'THE 11 SHAPES (CONTRACT)');
+        VISEMES.forEach((v, i) => {
+          const x = x0 + 16 + i * 33;
+          rect(x - 8, 144, 3, 3, VIS_COLOR[v]);
+          mouth(x + 4, 150, v, 1);
+          micro(v, x - 4, 159, P.silver);
+        });
+        micro('LETTERS AND DIGRAPHS -> 11 SHAPES WITH NATURAL DURATIONS; K/G/H TAKE THE NEXT VOWEL; M/B/P ALWAYS CLOSE', 6, 174, P.fog);
+        micro('NUMBERS SPOKEN AS WORDS ("24" = TWENTY FOUR); COMMAS AND DASHES REST THE MOUTH; STRESS = ORANGE TICKS', 6, 182, P.fog);
+        // How calm is it?
+        let wide = 0;
+        let closed = 0;
+        let n = 0;
+        let changes = 0;
+        let prev = -1;
+        for (let ms = 0; ms <= tl.total; ms += 5) {
+          const f = sampleTimeline(tl, ms);
+          const st = f.level > 0.62 ? 2 : f.level > 0.22 ? 1 : 0;
+          if (st === 2) wide++;
+          if (st === 0) closed++;
+          if (prev >= 0 && st !== prev) changes++;
+          prev = st;
+          n++;
+        }
+        const perSec = changes / (tl.total / 1000);
+        micro(`WIDE OPEN ${Math.round((wide / n) * 100)}% OF THE TIME   CLOSED ${Math.round((closed / n) * 100)}%   3-STATE CHANGES ${perSec.toFixed(1)}/S`, 6, 194, perSec < 12 ? P.green : P.red);
+        stats.visemes = { total: tl.total, cps: tl.cps, wide: wide / n, closed: closed / n, perSec };
+      }
+
+      function drawResync() {
+        const text = 'Markets rallied on Friday as investors cheered the latest jobs figures from Washington.';
+        const tl = buildTimeline(text, { rate: 1 });
+        frame('TTS RE-SYNC ON WORD BOUNDARIES', 'SIMULATED VOICE 22% SLOWER, JITTER +-40 MS', P.cyan);
+        // A deterministic "real" voice: slower, uneven, with a pause after "Friday".
+        let rnd = 1;
+        const jitter = () => ((rnd = (rnd * 16807) % 2147483647) / 2147483647 - 0.5) * 80;
+        const real = tl.words.map((wd, i) => wd.t0 * 1.22 + (i ? jitter() : 0) + (i >= 4 ? 180 : 0));
+        const endReal = tl.total * 1.22 + 180;
+        const clock = new SpeechClock(tl, { speed: 1, soft: true });
+        const free = new SpeechClock(tl, { speed: 1, soft: true });
+        clock.start(0);
+        free.start(0);
+        const x0 = 30;
+        const w = 346;
+        const y0 = 22;
+        const h = 150;
+        panel(x0, y0, w, h, '');
+        const xs = (ms) => x0 + (ms / endReal) * w;
+        const ys = (ms) => y0 + h - (ms / tl.total) * h;
+        micro('TIMELINE', 2, y0, P.steel);
+        micro('WALL CLOCK', x0 + w - 44, y0 + h + 3, P.steel);
+        tl.words.forEach((wd, i) => {
+          rect(x0, ys(wd.t0), w, 1, '#262b44');
+          rect(xs(real[i]), y0, 1, h, '#262b44');
+        });
+        let next = 0;
+        let errBefore = 0;
+        let errAfter = 0;
+        for (let now = 0; now <= endReal; now += 4) {
+          while (next < real.length && real[next] <= now) clock.anchorWord(next++, now);
+          const t = clock.timeAt(now);
+          const tf = free.timeAt(now);
+          rect(xs(now), ys(tf), 1, 1, P.red);
+          rect(xs(now), ys(t), 1, 1, P.cyan);
+        }
+        // Error at each word start, measured just before its boundary arrives.
+        const c2 = new SpeechClock(tl, { speed: 1, soft: true });
+        c2.start(0);
+        const f2 = new SpeechClock(tl, { speed: 1, soft: true });
+        f2.start(0);
+        for (let i = 1; i < real.length; i++) {
+          for (let k = 0; k < i; k++) if (c2.lastWord < k) c2.anchorWord(k, real[k]);
+          errAfter += Math.abs(c2.timeAt(real[i] - 1) - tl.words[i].t0);
+          errBefore += Math.abs(f2.timeAt(real[i] - 1) - tl.words[i].t0);
+        }
+        tl.words.forEach((wd, i) => rect(xs(real[i]) - 1, ys(wd.t0) - 1, 3, 3, P.yellow));
+        micro('RED: FREE-RUNNING GUESS   CYAN: RE-SYNCED CLOCK   YELLOW: WORD STARTS REPORTED BY THE VOICE', 6, 180, P.fog);
+        const ea = errAfter / (real.length - 1);
+        const eb = errBefore / (real.length - 1);
+        micro(`MEAN ERROR AT WORD STARTS: FREE ${eb.toFixed(0)} MS -> RE-SYNCED ${ea.toFixed(0)} MS   LEARNED SPEED ${clock.speed.toFixed(2)} (TRUE 0.82)`, 6, 192, ea < 80 ? P.green : P.red);
+        stats.resync = { errFree: eb, errSynced: ea, speed: clock.speed };
+      }
+
+      async function drawBlips() {
+        const tl = buildTimeline(SAMPLE, { rate: 1.02 });
+        const beeps = blipPlan(tl);
+        const seconds = tl.total / 1000 + 0.4;
+        const off = new OfflineAudioContext(2, Math.ceil(seconds * SR), SR);
+        const buses = buildBuses(off, { volume: 1 });
+        let seed = 3;
+        const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+        const voices = resolveVoices({ profiles: new Map([['A', normProfile({ gender: 'male' })], ['B', normProfile({ gender: 'female' })]]) });
+        scheduleBlips(off, buses.speech, voices.get('A').blip, beeps, 0.1, tl.total / 1000, rnd);
+        const buf = await off.startRendering();
+        const L = measureLoudness([buf.getChannelData(0), buf.getChannelData(1)], SR);
+        frame('BLIP VOICE (PACO)', 'ONE BEEP PER VOWEL FROM THE SAME TIMELINE AS THE MOUTH', P.cyan);
+        const x0 = 6;
+        const w = 372;
+        panel(x0, 18, w, 54, 'WAVEFORM');
+        waveform(x0, 19, w, 52, buf, seconds, P.cyan);
+        panel(x0, 76, w, 14);
+        const xt = (ms) => x0 + ((ms + 100) / (seconds * 1000)) * w;
+        for (const s of tl.segs) rect(xt(s.t0), 77, Math.max(1, xt(s.t1) - xt(s.t0)), 12, VIS_COLOR[s.v]);
+        panel(x0, 94, w, 60, 'SPECTROGRAM');
+        spectrogram(x0, 94, w, 60, mono(buf), seconds);
+        tl.words.forEach((wd, i) => micro(SAMPLE.slice(wd.ci, wd.end).toUpperCase(), xt(wd.t0), 158 + (i % 2) * 8, P.silver));
+        micro(`LOUDNESS ${db(L.integrated)} LUFS   PEAK ${db(L.peakDb)} DBFS   ${beeps.length} BEEPS`, 6, 186, L.peakDb < -1 ? P.green : P.red);
+        micro('BEEPS START 0.1 S IN: THE MOUTH IS SAMPLED AT HEARD TIME (OUTPUT TIMESTAMP / LATENCY)', 6, 196, P.fog);
+        stats.blips = { lufs: L.integrated, peak: L.peakDb, beeps: beeps.length };
+      }
+
+      function drawSignature() {
+        frame('THE GLOBIT SIGNATURE', 'LOW 5 - 1 - 2 - HIGH 5, THEN A COLOUR NOTE', P.red);
+        const rows = [
+          ['CHANNEL / WORLD NOW', 'D MAJOR', 'home', P.red, '3: HOME'],
+          ['TECH BYTES', 'A DORIAN', 'tech', P.cyan, 'B7: COOL'],
+          ['COSMOS DESK', 'E LYDIAN', 'cosmos', P.magenta, '#4: WONDER'],
+          ['MONEY MINUTE', 'F MAJOR', 'money', P.green, '6: LIFT'],
+          ['NEWS IN 60', 'G MAJOR', 'sixty', P.yellow, '8: DONE!'],
+          ['BREAKING', 'D MINOR', 'breaking', P.red, 'B3: FIRM'],
+          ['UP NEXT PROMO', 'D MAJOR', 'next', P.silver, '2: WAIT...'],
+        ];
+        const x0 = 150;
+        rows.forEach(([label, key, colour, accent, what], r) => {
+          const y = 20 + r * 27;
+          rect(4, y, 376, 25, r % 2 ? '#1a1d2e' : '#202439');
+          rect(4, y, 2, 25, accent);
+          micro(label, 10, y + 4, P.silver);
+          micro(key, 10, y + 12, P.fog);
+          micro(what, 80, y + 12, accent);
+          // Notes on a pitch grid: one row per semitone from -5 to +12.
+          const py = (semi) => y + 22 - Math.round(((semi + 5) / 17) * 19);
+          const notes = [...MOTIF, [COLOURS[colour], 1.5]];
+          let b = 0;
+          notes.forEach(([semi, len], i) => {
+            const x = x0 + b * 40;
+            const wN = Math.max(6, len * 40 - 3);
+            rect(x, py(semi), wN, 3, i === notes.length - 1 ? accent : P.silver);
+            b += len;
+          });
+          rect(x0 - 4, py(0) + 1, 2, 1, P.steel);
+        });
+        micro('UP A 4TH, A STEP, A 4TH: OPEN AND CONFIDENT, NO THIRD - THE 5TH NOTE GIVES EACH SHOW ITS MODE', 6, 210, P.fog);
+      }
+
+      function drawVoices() {
+        frame('TTS VOICE CHOICE', 'SIMULATED EDGE + CHROME VOICE LISTS', P.cyan);
+        const lists = {
+          'EDGE (WINDOWS)': ['Microsoft David - English (United States)', 'Microsoft Zira - English (United States)', 'Microsoft Mark - English (United States)',
+            'Microsoft Ryan Online (Natural) - English (United Kingdom)', 'Microsoft Sonia Online (Natural) - English (United Kingdom)',
+            'Microsoft Libby Online (Natural) - English (United Kingdom)', 'Microsoft Thomas Online (Natural) - English (United Kingdom)',
+            'Microsoft Guy Online (Natural) - English (United States)', 'Microsoft Jenny Online (Natural) - English (United States)',
+            'Microsoft Aria Online (Natural) - English (United States)', 'Microsoft Ana Online (Natural) - English (United States)',
+            'Microsoft Christopher Online (Natural) - English (United States)', 'Microsoft Michelle Online (Natural) - English (United States)'],
+          'CHROME (MAC)': ['Samantha', 'Daniel', 'Karen', 'Moira', 'Tessa', 'Fred', 'Albert', 'Zarvox', 'Google US English', 'Google UK English Female', 'Google UK English Male', 'Ava (Premium)', 'Zoe (Enhanced)', 'Evan (Enhanced)'],
+          'CHROME (LINUX)': ['English (Great Britain)', 'English (America)', 'English (America)+female1', 'English (America)+male2'],
+        };
+        const langOf = (n) => (/United Kingdom|UK|Daniel|Great Britain|Libby|Sonia|Ryan|Thomas|Kate/.test(n) ? 'en-GB' : /Karen/.test(n) ? 'en-AU' : /Moira/.test(n) ? 'en-IE' : /Tessa/.test(n) ? 'en-ZA' : 'en-US');
+        const cast = { A: { gender: 'male', lang: 'en-GB', pitch: 0.95 }, B: { gender: 'female', lang: 'en-US', pitch: 1.08 }, max: { gender: 'male', lang: 'en-US' }, ada: { gender: 'female', lang: 'en-GB' }, unit8: { gender: 'robot', lang: 'en-US' } };
+        let y = 20;
+        for (const [title, names] of Object.entries(lists)) {
+          const all = names.map((name) => ({ name: name.includes('espeak') ? name : name, lang: langOf(name), localService: !/Online|Google/.test(name) }));
+          const res = resolveVoices({ all, voices: all, profiles: new Map(Object.entries(cast).map(([k, p]) => [k, normProfile(p)])) });
+          micro(title, 6, y, P.white);
+          y += 9;
+          for (const [slot, c] of res) {
+            if (!['A', 'B', 'max', 'ada', 'unit8'].includes(slot)) continue;
+            micro(`${slot.padEnd(5)} ${c.gender.padEnd(6)}`, 10, y, P.fog);
+            micro(`${(c.voice?.name ?? '-').slice(0, 52)}  P${c.pitch.toFixed(2)}`, 80, y, P.silver);
+            y += 8;
+          }
+          y += 4;
+        }
+      }
+
+      // ------------------------------------------------------------- driver
+      const stats = {};
+      async function render(t = 0) {
+        const i = Math.max(0, Math.min(VIEWS.length - 1, Math.floor(Number(t) || 0)));
+        const name = VIEWS[i];
+        sel.value = String(i);
+        if (name === 'signature') drawSignature();
+        else if (name === 'loudness') await drawLoudness();
+        else if (name === 'ducking') await drawDucking();
+        else if (name === 'visemes') drawVisemes();
+        else if (name === 'resync') drawResync();
+        else if (name === 'blips') await drawBlips();
+        else if (name === 'voices') drawVoices();
+        else {
+          const item = TUNES.find((x) => x.id === name);
+          await drawTune(item);
+          const a = cache.get(item.id);
+          stats[item.id] = { lufs: a.L.integrated, model: a.est.integrated + a.est.gainDb, peak: a.L.peakDb, worstStep: a.probe.worst, clicks: a.probe.clicks.length, trim: a.song.trim };
+        }
+        document.getElementById('out').textContent = JSON.stringify(stats, null, 1);
+        return name;
+      }
+
+      const sel = document.getElementById('view');
+      VIEWS.forEach((v, i) => sel.add(new Option(`${i} ${v}`, String(i))));
+      sel.addEventListener('change', () => render(Number(sel.value)));
+      let engine = null;
+      let playing = null;
+      document.getElementById('play').addEventListener('click', async () => {
+        engine ??= new AudioEngine({ lang: 'en' });
+        await engine.unlock();
+        playing?.stop();
+        const name = VIEWS[Number(sel.value)];
+        const item = TUNES.find((x) => x.id === name);
+        if (item) playing = engine.playTune(item.tune, { loop: item.loop, volume: 0.5 });
+        else if (name === 'visemes' || name === 'blips') {
+          engine.setMode('blips');
+          engine.speak(SAMPLE, 'A');
+        }
+      });
+      document.getElementById('stop').addEventListener('click', () => {
+        playing?.stop();
+        engine?.stop();
+      });
+      window.__lab = { render, views: VIEWS, stats: () => stats, analyse };
+      const q = new URLSearchParams(location.search);
+      render(Number(q.get('view') || 0));
+    </script>
+  </body>
+</html>

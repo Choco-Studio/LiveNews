@@ -147,6 +147,7 @@
           return (t) => ({ shot: 'wide', lowerThird: a, breaking: br });
         },
         'caption-in': () => (t) => ({ shot: 'wide', ...(t >= 0.2 ? { subtitle: SHORT[1], subtitleSince: 0.2 } : { subtitle: null }) }),
+        'caption-out': () => (t) => ({ shot: 'wide', ...(t < 0.2 ? { subtitle: SHORT[1], subtitleSince: -2 } : { subtitle: null }) }),
         'caption-pages': () => {
           const sp = speech(LONG, 0.2);
           return (t) => ({ shot: 'wide', lowerThird: null, ...subtitleAt(sp, t) });

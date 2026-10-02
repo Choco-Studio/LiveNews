@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { XMLParser } from 'fast-xml-parser';
 import { config, ROOT } from './config.js';
 
@@ -137,6 +137,42 @@ export function extractImage(item) {
   return usable[0]?.url || null;
 }
 
+const LOCAL_IMAGE_RE = /\.(?:png|jpe?g|webp|gif)$/i;
+
+/**
+ * A picture shipped next to a LOCAL feed (offline demos and fixtures): a
+ * relative path in media:content / media:thumbnail / enclosure, resolved
+ * inside the feed's own folder. Remote feeds never get this.
+ */
+export function extractLocalImage(item, baseDir) {
+  const urls = [];
+  const collect = (m) => {
+    for (const node of asArray(m)) {
+      const url = node?.['@_url'] || node?.['@_href'];
+      if (url) urls.push(String(url));
+      if (node?.['media:content']) collect(node['media:content']);
+    }
+  };
+  collect(item['media:content']);
+  collect(item['media:group']);
+  collect(item['media:thumbnail']);
+  collect(item.enclosure);
+  const root = path.resolve(baseDir);
+  for (const url of urls) {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith('/') || url.startsWith('\\') || !LOCAL_IMAGE_RE.test(url)) continue;
+    const file = path.resolve(root, url);
+    if (file.startsWith(root + path.sep)) return pathToFileURL(file).href;
+  }
+  return null;
+}
+
+/** The file behind a feed URL that points to the local disk, or null for a web feed. */
+export function localFeedPath(url) {
+  if (/^file:/i.test(url)) return fileURLToPath(url);
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) return path.resolve(ROOT, url);
+  return null;
+}
+
 function itemLink(item) {
   for (const l of asArray(item.link)) {
     if (typeof l === 'string') return l.trim();
@@ -148,8 +184,12 @@ function itemLink(item) {
 
 export const storyId = (key) => 's' + crypto.createHash('sha1').update(key).digest('hex').slice(0, 10);
 
-/** Normalize the parsed XML of an RSS 2.0 or Atom feed into story objects. */
-export function parseFeed(xml, feed) {
+/**
+ * Normalize the parsed XML of an RSS 2.0 or Atom feed into story objects.
+ * `baseDir` is given only for local feeds from the operator's list: their
+ * stories may carry pictures stored next to the feed file.
+ */
+export function parseFeed(xml, feed, { baseDir = null } = {}) {
   const doc = parser.parse(xml);
   const items = doc?.rss?.channel?.item ?? doc?.feed?.entry ?? doc?.['rdf:RDF']?.item ?? [];
   const stories = [];
@@ -170,7 +210,9 @@ export function parseFeed(xml, feed) {
       category: feed.category || 'general',
       weight: Number(feed.weight) || 1,
       published,
-      image: extractImage(item),
+      image: extractImage(item) || (baseDir ? extractLocalImage(item, baseDir) : null),
+      ...(baseDir ? { local: true } : {}),
+      ...(isLiveBlog(title) ? { live: true } : {}),
     });
   }
   return stories;
@@ -232,6 +274,7 @@ export class NewsDesk {
     this.covered = new Map(); // id -> timestamp when it was used in a bulletin
     this.lastRefresh = 0;
     this.feedStatus = {};
+    this.localImageRoots = new Set(); // folders of local feeds, whose pictures may be served
   }
 
   loadFeeds() {
@@ -244,10 +287,8 @@ export class NewsDesk {
    * operator's feed list gets this; links found inside feeds never do.
    */
   async readFeed(url) {
-    if (/^file:/i.test(url) || !/^[a-z][a-z0-9+.-]*:/i.test(url)) {
-      const file = /^file:/i.test(url) ? fileURLToPath(url) : path.resolve(ROOT, url);
-      return (await fs.promises.readFile(file)).subarray(0, 3_000_000).toString('utf8');
-    }
+    const file = localFeedPath(url);
+    if (file) return (await fs.promises.readFile(file)).subarray(0, 3_000_000).toString('utf8');
     return this.fetchText(url);
   }
 
@@ -268,7 +309,10 @@ export class NewsDesk {
     const results = await Promise.allSettled(
       feeds.map(async (feed) => {
         const xml = await this.readFeed(feed.url);
-        return parseFeed(xml, feed);
+        const file = localFeedPath(feed.url);
+        const baseDir = file ? path.dirname(file) : null;
+        if (baseDir) this.localImageRoots.add(baseDir);
+        return parseFeed(xml, feed, { baseDir });
       })
     );
     const maxAge = config.maxStoryAgeHours * 3600_000;
@@ -380,9 +424,30 @@ export class NewsDesk {
     return this.stories.get(id);
   }
 
+  /** A compact view of the desk for dev tools: the most interesting stories first. */
+  deskView(limit = 80, now = Date.now()) {
+    return [...this.stories.values()]
+      .map((s) => ({ s, score: interestScore(s, now) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(({ s, score }) => ({
+        id: s.id,
+        title: s.title,
+        source: s.source,
+        category: s.category,
+        hasImage: !!s.image,
+        outlets: s.outlets || 1,
+        covered: this.covered.has(s.id),
+        breaking: isBreaking(s.title),
+        live: !!s.live,
+        score: Math.round(score * 1000) / 1000,
+      }));
+  }
+
   /** Try og:image / twitter:image from the article page when the feed has none. */
   async resolveImage(story) {
-    if (story.image || story.imageChecked) return story.image;
+    // Local (offline) stories have no article page to look at.
+    if (story.image || story.imageChecked || story.local) return story.image;
     story.imageChecked = true;
     try {
       const html = await this.fetchText(story.link, { timeoutMs: 8000, maxBytes: 400_000 });

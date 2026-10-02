@@ -104,7 +104,9 @@ export function drawTicker(ctx, t, s, onAt) {
   const k = easeInOut((t - s.start) / T.push);
   const pushing = k < 1;
   const h = TICKER.h;
-  clipped(ctx, ITEM_X - 2, y + 1, TICKER.right - ITEM_X + 2, h - 1, () => {
+  // text slides under the plate on the left and off the screen edge on the right, like a real crawl;
+  // a glide still stops with the last word inside the safe margin (ROOM)
+  clipped(ctx, PLATE_W, y + 1, W - PLATE_W, h - 1, () => {
     if (pushing && s.prev) drawEntry(ctx, s.prev, t, s.start - s.prev.dur, y - Math.round(k * h));
     if (s.cur) drawEntry(ctx, s.cur, t, s.start, y + (pushing ? Math.round((1 - k) * h) : 0));
   });

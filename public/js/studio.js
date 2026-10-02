@@ -157,11 +157,11 @@ export class Renderer {
       case 'title':
         return cards.drawTitleCard(ctx, t, dt, { channel: program?.title || scene.channel.name, subtitle: program?.tagline || scene.channel.slogan, date: longDate().toUpperCase() });
       case 'endcard':
-        return cards.drawEndCard(ctx, t, dt, { channel: program?.title || scene.channel.name, line1: card.line1 || 'STAY WITH US', line2: card.line2 || '' });
+        return cards.drawEndCard(ctx, t, dt, { channel: program?.title || scene.channel.name, line1: card.line1 || 'STAY WITH US', line2: card.line2 || '', accent: THEME_ACCENT[program?.theme] || P.red });
       case 'ident':
-        return this.drawIdent(ctx, t, dt, scene);
+        return cards.drawIdentCard(ctx, t, dt);
       case 'promo':
-        return this.drawPromo(ctx, t, dt, scene);
+        return cards.drawPromoCard(ctx, t, dt, card, presenterName);
       case 'montage': {
         const item = scene.rundown[card.index] || {};
         const pic = scene.images.get(item.storyId);

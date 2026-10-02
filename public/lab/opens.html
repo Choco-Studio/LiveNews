@@ -34,6 +34,7 @@
       import { drawWorldMap } from '../js/scenes/worldmap.js';
       import { pixelate } from '../js/pixelate.js';
       import { setNow } from '../js/gfx/clock.js';
+      import { P as PAL } from '../js/palette.js';
 
       // Friday 2 October 2026, 18:42:07 in London (17:42 UTC): a fixed clock for every frame.
       const FIXED_NOW = Date.UTC(2026, 9, 2, 17, 42, 7);
@@ -108,7 +109,7 @@
         return PHOTO;
       }
 
-      const has = (fn) => typeof fn === 'function';
+      const PROMO = { label: 'UP NEXT', footer: 'AFTER THE BREAK', next: { id: 'tech-bytes', title: 'TECH BYTES', tagline: 'THE FUTURE, ONE BYTE AT A TIME', theme: 'tech', presenters: ['max', 'ada'] } };
       const CARDS = {
         'montage-photo': (t) => cards.drawHeadlineFrame(ctx, 1000 + t, t, { index: 0, total: 3, headline: 'Storm closes ports across the north as ferries cancel', source: 'BBC News', category: 'world', image: photo().card }),
         'montage-2': (t) => cards.drawHeadlineFrame(ctx, 1000 + t, t, { index: 1, total: 3, headline: 'New chip promises week-long phone battery', source: 'The Verge', category: 'tech', image: null }),
@@ -119,18 +120,14 @@
         end: (t) => cards.drawEndCard(ctx, 1000 + t, t, { channel: 'WORLD NOW', line1: 'STAY WITH US', line2: 'GLOBIT 24 · LIVE 24 HOURS' }),
         standby: (t) => cards.drawStandby(ctx, 1000 + t, { channel: 'GLOBIT 24', message: 'PREPARING THE NEXT PROGRAMME' }),
         start: (t) => cards.drawStartScreen(ctx, 1000 + t, { channel: 'GLOBIT 24', prompt: 'CLICK TO TUNE IN' }),
-        promo: (t) => (has(cards.drawPromoCard) ? cards.drawPromoCard(ctx, 1000 + t, t, { label: 'UP NEXT', footer: 'AFTER THE BREAK', next: { id: 'tech-bytes', title: 'TECH BYTES', tagline: 'THE FUTURE, ONE BYTE AT A TIME', theme: 'tech', presenters: ['MAX CIRCUIT', 'ADA VOLT'] } }) : missing('drawPromoCard')),
-        ident: (t) => (has(cards.drawIdentCard) ? cards.drawIdentCard(ctx, 1000 + t, t, {}) : missing('drawIdentCard')),
+        promo: (t) => cards.drawPromoCard(ctx, 1000 + t, t, PROMO, (id) => ({ max: 'MAX CIRCUIT', ada: 'ADA VOLT' })[id] || id),
+        ident: (t) => cards.drawIdentCard(ctx, 1000 + t, t),
         stinger: (t) => {
           cards.drawHeadlineFrame(ctx, 1000, 3, { index: 0, total: 3, headline: 'Storm closes ports across the north', source: 'BBC News', category: 'world', image: photo().card });
           cards.drawStinger(ctx, 1000 + t, t / cards.STINGER_DURATION, { channel: 'GLOBIT 24' });
         },
         title: (t) => cards.drawTitleCard(ctx, 1000 + t, t, { channel: 'WORLD NOW', subtitle: 'THE STORIES SHAPING OUR WORLD', date: 'FRIDAY 2 OCTOBER' }),
       };
-      function missing(name) {
-        ctx.fillStyle = '#300';
-        ctx.fillRect(0, 0, 384, 216);
-      }
 
       const MAPS = {};
       for (const [k, p] of Object.entries(PLACES)) {
@@ -202,7 +199,27 @@
       requestAnimationFrame(tick);
       fillItems();
       render(state.t);
-      window.__lab = { render, set, kinds: () => Object.fromEntries(Object.entries(KINDS).map(([k, v]) => [k, Object.keys(v)])), openFor };
+      /** FNV-1a hash of the frame at t (to prove a lock-up holds still). */
+      function hash(t, opts) {
+        render(t, opts);
+        const d = ctx.getImageData(0, 0, 384, 216).data;
+        let h = 2166136261;
+        for (let i = 0; i < d.length; i += 4) h = Math.imul(h ^ (d[i] | (d[i + 1] << 8) | (d[i + 2] << 16)), 16777619);
+        return (h >>> 0).toString(16);
+      }
+      /** Every colour in the frame at t that is not in the channel palette (should be empty). */
+      function offPalette(t, opts) {
+        render(t, opts);
+        const pal = new Set(Object.values(PAL).map((h) => h.toLowerCase()));
+        const d = ctx.getImageData(0, 0, 384, 216).data;
+        const out = new Map();
+        for (let i = 0; i < d.length; i += 4) {
+          const hex = `#${[d[i], d[i + 1], d[i + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+          if (!pal.has(hex)) out.set(hex, (out.get(hex) || 0) + 1);
+        }
+        return [...out.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
+      }
+      window.__lab = { render, set, hash, offPalette, kinds: () => Object.fromEntries(Object.entries(KINDS).map(([k, v]) => [k, Object.keys(v)])), openFor };
     </script>
   </body>
 </html>

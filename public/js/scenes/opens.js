@@ -33,6 +33,11 @@ export const OPENS = {
 };
 const FALLBACK = { duration: DURATION, tune: TUNES.generic, draw: wrap(drawGeneric), accent: GENERIC.accent };
 
+// The audio stream's shared sonic signature (themeFor) re-orchestrated per
+// programme; loaded lazily so the opens keep working if it is not there.
+let THEMES = null;
+import('../audio/themes.js').then((m) => (THEMES = m)).catch(() => {});
+
 let warned = false;
 /** Draw the opening titles of a programme (full frame). */
 export function drawOpen(ctx, t, dt, programId, info) {
@@ -68,7 +73,8 @@ export function openFor(programId) {
   const open = OPENS[programId] || FALLBACK;
   let tune = open.tune;
   try {
-    const shared = typeof audio.themeFor === 'function' ? audio.themeFor(programId, { duration: open.duration }) : null;
+    const fn = typeof THEMES?.themeFor === 'function' ? THEMES.themeFor : typeof audio.themeFor === 'function' ? audio.themeFor : null;
+    const shared = fn ? fn(programId, { duration: open.duration }) : null;
     if (shared) tune = shared;
   } catch {
     /* keep the built-in jingle */

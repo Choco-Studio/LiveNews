@@ -353,7 +353,7 @@ export class Director {
     if (seg.breaking) {
       await this.stinger(() => this.setShot('breakingCard', { storyId: seg.storyId, card: { headline: seg.headline, source: seg.source } }));
       this.audio.sfx('breaking');
-      await sleep(3500);
+      await sleep(2600); // the card is on air for at most 3 s (stinger tail + hold): a calm colour change, not a show
     }
     let pending = null;
     const shotFor = (i) => {

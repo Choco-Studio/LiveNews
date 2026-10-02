@@ -163,7 +163,7 @@ export function estimateLoudness(song) {
   const spb = 60 / song.bpm;
   const bins = new Float64Array(Math.max(1, Math.ceil(secs / 0.1) + 4));
   const echoGain = (send) => (send * send * 0.7) / (1 - song.echo.feedback ** 2 * 0.7);
-  const room = song.room * song.room * 0.5;
+  const room = song.room * song.room;
   const deposit = (t0, len, energy) => {
     // Energy spread evenly over the time the note is audible.
     const a = Math.max(0, Math.floor(t0 / 0.1));

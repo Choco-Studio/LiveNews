@@ -16,14 +16,12 @@ const CTL = Math.cos(TILT);
 const STL = Math.sin(TILT);
 
 const BANDS = [
-  [-0.78, [P.cream, P.tan, P.tanShade]],
-  [-0.52, [P.pink, P.magenta, P.purple]],
-  [-0.3, [P.cream, P.tan, P.tanShade]],
-  [-0.12, [P.skin, P.skinShade, P.brown]],
-  [0.1, [P.cream, P.tan, P.tanShade]],
-  [0.3, [P.pink, P.magenta, P.purple]],
-  [0.52, [P.cream, P.skin, P.tanShade]],
-  [0.76, [P.skin, P.skinShade, P.brown]],
+  [-0.7, [P.cream, P.tan, P.tanShade]],
+  [-0.42, [P.skin, P.skinShade, P.brown]],
+  [-0.1, [P.cream, P.tan, P.tanShade]],
+  [0.04, [P.pink, P.magenta, P.purple]],
+  [0.36, [P.cream, P.tan, P.tanShade]],
+  [0.62, [P.skin, P.skinShade, P.brown]],
   [2, [P.cream, P.tan, P.tanShade]],
 ].map(([to, cs]) => [to, cs.map((c) => u32(c))]);
 const C = Object.fromEntries(['black', 'ink', 'slate', 'steel', 'fog', 'silver', 'cream', 'tan', 'purple', 'magenta'].map((k) => [k, u32(P[k])]));

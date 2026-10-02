@@ -75,9 +75,7 @@ export class Graphics {
   update(t, scene) {
     const mode = this.modeOf(scene);
     if (mode !== this.mode) {
-      if (ON.has(mode) && !ON.has(this.mode)) {
-        this.onAt = t;
-      }
+      if (ON.has(mode) && !ON.has(this.mode)) this.onAt = t; // everything wipes in, the bug glints once
       if (mode === 'ad' && this.mode !== 'ad') this.adAt = t;
       if (!ON.has(mode)) {
         this.strap.reset();

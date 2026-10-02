@@ -2,8 +2,8 @@
 // out, five green bars rise one after another (ease-out, no bounce) and a
 // white trend line climbs across them to an arrow head. Accent: green.
 import { P } from '../../palette.js';
-import { u32, seg, easeOutQuint, easeInOut, linePts, memo } from '../../gfx/index.js';
-import { backdrop, playOpen, CENTRE, W, H } from './kit.js';
+import { seg, easeOutQuint, easeInOut, linePts, memo } from '../../gfx/index.js';
+import { backdrop, playOpen, CENTRE } from './kit.js';
 
 const cached = memo(48);
 const BARS = [13, 21, 17, 29, 40];
@@ -91,20 +91,7 @@ function emblem(ctx, dt, x, y, k = 1) {
   }
 }
 
-// ledger texture: faint dotted rules every 12 px where the backdrop is lit
-function ledger(d, level) {
-  const c = u32(P.ink);
-  const c2 = u32(P.slate);
-  for (let y = 6; y < H; y += 12) {
-    for (let x = 0; x < W; x += 2) {
-      const lv = level(x, y);
-      if (lv < 0.2) continue;
-      d[y * W + x] = lv > 0.9 ? c2 : c;
-    }
-  }
-}
-
-const background = () => backdrop({ key: 'money', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230, texture: ledger });
+const background = () => backdrop({ key: 'money', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230 });
 
 export const MONEY = {
   accent: P.green,

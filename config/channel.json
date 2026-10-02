@@ -4,7 +4,7 @@
   "presenters": {
     "paco": {
       "name": "Paco Pixel",
-      "personality": "veteran anchor, calm and authoritative, dry wit, short punchy sentences",
+      "personality": "veteran anchor, calm and authoritative, bone-dry wit, short punchy sentences",
       "voice": {
         "gender": "male",
         "lang": "en-GB",
@@ -14,7 +14,7 @@
     },
     "lola": {
       "name": "Lola Byte",
-      "personality": "co-anchor, energetic and curious, warm, loves a good human story",
+      "personality": "co-anchor, sharp and curious, warm without gushing, an eye for the human story",
       "voice": {
         "gender": "female",
         "lang": "en-US",
@@ -24,7 +24,7 @@
     },
     "max": {
       "name": "Max Circuit",
-      "personality": "excitable gadget geek, quick jokes and the odd pun, always first to try new tech",
+      "personality": "technology correspondent, quick and enthusiastic but never silly, dry one-liners, always first to try the new thing",
       "voice": {
         "gender": "male",
         "lang": "en-US",
@@ -44,7 +44,7 @@
     },
     "nova": {
       "name": "Dr Nova Reyes",
-      "personality": "astrophysicist and science presenter, warm, full of wonder, great at simple analogies",
+      "personality": "astrophysicist and science presenter, warm and precise, good at plain-English analogies",
       "voice": {
         "gender": "female",
         "lang": "en-US",
@@ -54,7 +54,7 @@
     },
     "unit8": {
       "name": "UNIT-8",
-      "personality": "the channel's robot co-host: literal-minded, deadpan, adores data, occasionally misunderstands human idioms",
+      "personality": "the channel's robot co-host: literal-minded and deadpan, fond of exact figures, now and then takes a human idiom too literally",
       "voice": {
         "gender": "robot",
         "lang": "en-US",
@@ -105,7 +105,7 @@
       ],
       "style": "Flagship world news bulletin. Lead with the biggest global story, told with authority. Two or three main stories, then 'Around the world in 30 seconds' for quick items with a clear place, and 'And finally' a lighter story to close. Serious but warm; brief exchanges between presenters only around lighter stories.",
       "storyLength": "2 to 4 sentences, max 450 characters; round-up items exactly 1 sentence",
-      "chemistry": "Paco is the steady veteran with a dry one-liner; Lola brings warmth, curiosity and the human angle. Paco tosses with a single word (\"Lola?\"); Lola often picks up with \"Thanks, Paco\" and sometimes teases his dryness. Never banter around grave stories."
+      "chemistry": "Paco is the steady veteran with a bone-dry one-liner; Lola brings warmth, curiosity and the human angle. Paco tosses with a single word (\"Lola?\"); Lola often picks up with \"Thanks, Paco\" and now and then deflates his dryness. Never banter around grave stories."
     },
     "tech-bytes": {
       "title": "TECH BYTES",
@@ -125,9 +125,9 @@
         "number",
         "lighter"
       ],
-      "style": "Fun technology magazine show. For every story say plainly what it means for ordinary people, but only what the summary supports. Max brings the enthusiasm and the odd pun, Ada the healthy scepticism and the hard question; short back-and-forth exchanges are welcome. A number of the day when a summary has a striking figure.",
+      "style": "Technology magazine show for grown-ups. For every story say plainly what it means for ordinary people, but only what the summary supports. Max brings the enthusiasm, Ada the healthy scepticism and the hard question; short, dry back-and-forth exchanges are welcome. A number of the day when a summary has a striking figure.",
       "storyLength": "2 to 4 sentences, max 450 characters",
-      "chemistry": "Max gets excited first; Ada raises an eyebrow and asks the question viewers are thinking, using only what the summary says. They tease each other like old colleagues: Max calls Ada the sceptic, Ada calls Max the early adopter."
+      "chemistry": "Max gets interested first; Ada raises an eyebrow and asks the question viewers are thinking, using only what the summary says. They needle each other like old colleagues, deadpan, never cute."
     },
     "cosmos": {
       "title": "COSMOS DESK",
@@ -147,9 +147,9 @@
         "number",
         "lighter"
       ],
-      "style": "Science and space show full of wonder. Nova explains with simple, everyday analogies that add no new facts; UNIT-8 reads out the figures exactly as stated, deadpan, and takes idioms literally (never invent data). The number of the day is UNIT-8's moment.",
+      "style": "Science and space show with a sense of wonder but no gushing. Nova explains with plain, everyday analogies that add no new facts; UNIT-8 reads out the figures exactly as stated, deadpan, and takes idioms literally (never invent data). The number of the day is UNIT-8's moment.",
       "storyLength": "2 to 4 sentences, max 450 characters",
-      "chemistry": "Nova is the warm explainer; UNIT-8 is the literal-minded robot who loves a stated figure and misreads a human idiom now and then, which Nova gently corrects."
+      "chemistry": "Nova is the warm, precise explainer; UNIT-8 is the literal-minded robot who appreciates a stated figure and misreads a human idiom now and then, which Nova lets pass with a straight face."
     },
     "money-minute": {
       "title": "MONEY MINUTE",

@@ -1,14 +1,26 @@
 // Audio for the show. English by default; `new AudioEngine({ lang: 'es' })` uses
 // Spanish voices. Sentence-by-sentence Web Speech TTS, Animal Crossing style
 // "blips" through WebAudio, a silent mode that still moves the presenters' lips,
-// and chiptune jingles built from oscillators only. Nothing here may throw: a
-// missing API just means less sound, never a broken broadcast.
+// and the channel's chiptune music and cues. Nothing here may throw: a missing
+// API just means less sound, never a broken broadcast.
+//
+// Pieces (public/js/audio/): visemes.js turns each sentence into a mouth
+// timeline (speechFrame), synth.js is the chip synth and mixer, tune.js the
+// tune format, themes.js the channel's sonic identity, voices.js the TTS voice
+// choice and loudness.js levels tunes from different authors.
+
+import { buildTimeline, sampleTimeline, blipPlan, SpeechClock } from './audio/visemes.js';
+import { buildBuses, setDuck, TunePlayer, asSong, scheduleBlips, DUCK_LEVEL } from './audio/synth.js';
+import { CUES } from './audio/themes.js';
+import { langPlan, normProfile, resolveVoices } from './audio/voices.js';
+
+export { themeFor, CUES, MOTIF } from './audio/themes.js';
+export { VISEMES } from './audio/visemes.js';
 
 const MODES = ['tts', 'blips', 'mute'];
 const MAX_CHUNK = 180;
 const MIN_CHUNK = 12;
-const MUTE_CPS = 15; // characters per second when nothing is audible
-const BLIP_STEP = 1000 / 16; // ms per character in blips mode (~15 cps with the pauses)
+const MUTE_CPS = 15; // characters per second a failed TTS sentence is squeezed into
 const GAP = { tts: 60, blips: 120, mute: 220 }; // ms of closed mouth between sentences
 
 // ---------------------------------------------------------------- sentences
@@ -95,218 +107,40 @@ export function splitSentences(text) {
   return merged.flatMap((p) => (p.length > MAX_CHUNK ? cutLong(p) : [p]));
 }
 
-// ------------------------------------------------------------------- voices
-
-// Name hints for the voice's gender, English and Spanish together (a voice list
-// only ever holds one language in practice). The first group matches as a
-// substring, the second only as a whole word so "Tom" does not hit "Tomás".
-const MALE_RE = new RegExp(
-  'jorge|pablo|alvaro|álvaro|diego|enrique|carlos|juan|raul|raúl|hombre|' +
-  '(?<!\\p{L})(?:male|eddy|reed|rocko|grandpa|alonso|tomás|tomas|miguel|ricardo|sergio|óscar|oscar|' +
-  'jesús|jesus|darío|dario|elías|elias|saúl|saul|teo|yago|pelayo|gerardo|cecilio|liberto|luciano|' +
-  'daniel|george|arthur|ryan|thomas|oliver|guy|christopher|eric|david|mark|alex|tom|aaron|evan|gordon|' +
-  'lee|rishi|james|brian|roger|steffan|davis|jason|tony|andrew|william|liam|connor|luke|noah|alfie|' +
-  'ethan|prabhat|mitchell|fred)(?!\\p{L})',
-  'iu',
-);
-const FEMALE_RE = new RegExp(
-  'helena|laura|lucia|lucía|elvira|monica|mónica|paulina|sabina|conchita|female|mujer|elena|dalia|' +
-  '(?<!\\p{L})(?:flo|sandy|shelley|grandma|marisol|lupe|paloma|abril|estrella|irene|laia|triana|' +
-  'vera|beatriz|candela|carlota|marina|nuria|renata|ximena|' +
-  'samantha|ava|allison|susan|serena|kate|libby|sonia|jenny|aria|michelle|hazel|zira|maisie|mia|emma|' +
-  'jane|sara|nancy|ana|amy|joanna|karen|moira|tessa|fiona|victoria|martha|nicky|catherine|natasha|' +
-  'neerja|clara|emily|leah|heather|zoe)(?!\\p{L})',
-  'iu',
-);
-// Robotic / novelty voices that macOS lists next to the real ones.
-const NOVELTY_RE = new RegExp(
-  '(?<!\\p{L})(?:albert|agnes|bad news|bahh|bells|boing|bubbles|bruce|cellos|deranged|good news|' +
-  'hysterical|jester|junior|kathy|organ|princess|ralph|superstar|trinoids|vicki|whisper|wobble|zarvox)(?!\\p{L})',
-  'iu',
-);
-
-// Regional variants to prefer, best first. A region in the engine option goes in front.
-const LANG_PREF = { en: ['en-gb', 'en-us'], es: ['es-es'] };
-
-function langPlan(option) {
-  const [head, region] = String(option || 'en').toLowerCase().split(/[-_]/);
-  const base = (head || '').replace(/[^a-z]/g, '') || 'en';
-  const pref = [...new Set([...(region ? [`${base}-${region}`] : []), ...(LANG_PREF[base] ?? [])])];
-  return { base, pref, match: new RegExp(`^${base}(?:[-_]|$)`, 'i') };
-}
-
-// Legacy macOS voices that sound robotic: what the 'robot' gender looks for.
-const ROBOT_RE = /(?<!\p{L})(?:zarvox|trinoids|fred|ralph|junior|albert|robot)(?!\p{L})/iu;
-
-const voiceName = (v) => String(v?.name ?? '');
-
-// 'male' | 'female' | null from the voice name alone.
-function voiceGender(v) {
-  const name = voiceName(v);
-  const male = MALE_RE.test(name);
-  const female = FEMALE_RE.test(name);
-  return male && !female ? 'male' : female && !male ? 'female' : null;
-}
-
-// Language variant first (en-GB, then en-US, then any en-*), gender hint second.
-function voiceScore(v, gender, pref) {
-  const rank = pref.indexOf(String(v.lang ?? '').toLowerCase().replace('_', '-'));
-  let s = rank >= 0 ? Math.max(10, 30 - rank * 10) : 10;
-  const name = voiceName(v);
-  const g = voiceGender(v);
-  const robotic = gender === 'robot' && ROBOT_RE.test(name);
-  if (gender === 'male' || gender === 'female') s += g === gender ? 50 : g ? -50 : 0;
-  else if (gender === 'robot') s += robotic ? 60 : g === 'male' ? 20 : 0;
-  if (gender !== 'robot' && /natural|neural/i.test(name)) s += 12; // Edge's neural voices beat the old SAPI ones
-  if (NOVELTY_RE.test(name) && !robotic) s -= 60;
-  return s;
-}
-
-// Best voice for a slot. Prefers voices of the right gender that no other slot
-// has taken yet, so two female presenters do not share one voice unless they must.
-function chooseVoice(pool, gender, pref, used) {
-  const scored = pool.map((v) => ({ v, s: voiceScore(v, gender, pref), g: voiceGender(v) }));
-  const fits = scored.filter((c) => !((gender === 'male' && c.g === 'female') || (gender === 'female' && c.g === 'male')));
-  const fresh = fits.filter((c) => !used.has(c.v));
-  const list = fresh.length ? fresh : fits.length ? fits : scored;
-  return list.reduce((best, c) => (c.s > best.s ? c : best)).v;
-}
-
-// ----------------------------------------------------------- voice profiles
-
-const GENDER_DEFAULTS = {
-  male: { pitch: 0.95, rate: 1.02 },
-  female: { pitch: 1.08, rate: 1.08 },
-  robot: { pitch: 0.5, rate: 1.15 },
-  neutral: { pitch: 1, rate: 1.05 },
-};
-
-const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
-const numOr = (v, fallback, lo, hi) => (v == null || v === '' || !Number.isFinite(Number(v)) ? fallback : clamp(Number(v), lo, hi));
-
-// Forgiving: { gender: 'male'|'female'|'robot', lang, pitch, rate } or just a gender string.
-function normProfile(p, explicit = true) {
-  const src = typeof p === 'string' ? { gender: p } : p ?? {};
-  const g = String(src.gender ?? '').trim().toLowerCase();
-  const gender = /^(f|w|girl)/.test(g) ? 'female' : /^(m|boy)/.test(g) ? 'male' : /^(r|bot|android)/.test(g) ? 'robot' : 'neutral';
-  const d = GENDER_DEFAULTS[gender];
-  return {
-    gender,
-    lang: typeof src.lang === 'string' && src.lang.trim() ? src.lang.trim() : null,
-    pitch: numOr(src.pitch, d.pitch, 0.1, 2),
-    rate: numOr(src.rate, d.rate, 0.5, 2),
-    explicit,
-  };
-}
-
-// Without a profile: 'A' is the male anchor, 'B' the female one, anything else a neutral announcer.
-const DEFAULT_PROFILES = new Map([['A', normProfile('male', false)], ['B', normProfile('female', false)]]);
-const NEUTRAL_PROFILE = normProfile('neutral', false);
-
-// Blip timbres per gender. Robots are low, flat, staccato and heavily filtered.
-const BLIP_KINDS = {
-  male: { base: 200, type: 'square', gain: 0.12, cut: 2600, vary: 0.16, flat: 0, len: 0.78 },
-  female: { base: 350, type: 'triangle', gain: 0.28, cut: 2600, vary: 0.16, flat: 0, len: 0.78 },
-  neutral: { base: 270, type: 'triangle', gain: 0.26, cut: 2600, vary: 0.16, flat: 0, len: 0.78 },
-  robot: { base: 130, type: 'square', gain: 0.13, cut: 1400, vary: 0.03, flat: 0.8, len: 0.55 },
-};
-
-function hash01(str) {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
-  return (h >>> 0) / 4294967296;
-}
-
-// Slots with their own profile get a pitch from it plus a small per-slot offset,
-// so two presenters of the same gender do not beep alike either.
-function blipFor(key, prof) {
-  const kind = BLIP_KINDS[prof.gender];
-  if (!prof.explicit && (key === 'A' || key === 'B')) return { ...kind };
-  const pitch = prof.gender === 'robot' ? 1 : clamp(prof.pitch, 0.6, 1.6);
-  return { ...kind, base: Math.max(90, kind.base * pitch * (1 + (hash01(key) - 0.5) * 0.14)) };
-}
-
-// -------------------------------------------------------------- mouth level
-
-// Web Speech exposes no audio, so fake plausible syllable flapping: two sines
-// around 9 and 12 Hz, a slow phrase envelope, noise, and a kick on every word.
-function synthLevel(run, now) {
-  const t = now / 1000 + run.phase;
-  const syl = 0.5 + 0.3 * Math.sin(t * 56.5) + 0.2 * Math.sin(t * 73.9 + 1.3);
-  const phrase = 0.8 + 0.2 * Math.sin(t * 14.5);
-  const kick = 0.35 * Math.exp(-Math.max(0, now - run.boundaryAt) / 120);
-  const attack = Math.min(1, (now - run.talkAt) / 90);
-  const v = (syl * phrase + (Math.random() - 0.5) * 0.22) * attack + kick;
-  return v < 0 ? 0 : v > 1 ? 1 : v;
-}
-
-// -------------------------------------------------------------------- blips
-
-// [letters, mouth openness, pitch ratio]: open vowels beep louder and lower.
-const VOWEL = new Map();
-for (const [chars, open, pitch] of [['aá', 1, 1], ['eé', 0.8, 1.12], ['ií', 0.6, 1.26], ['oó', 0.9, 0.94], ['uúü', 0.7, 0.84]]) {
-  for (const c of chars) VOWEL.set(c, { open, pitch });
-}
-const Y_VOWEL = { open: 0.6, pitch: 1.2 }; // "city", "my", "system"; not "yes" or "play"
-const isVowel = (c) => VOWEL.has(c?.toLowerCase());
-
-// Timeline for one sentence: vowels are beeps, consonants silent ticks, spaces
-// and punctuation pauses. Times are ms from the start of the sentence.
-function planBlips(sentence, blip) {
-  const beeps = [];
-  let t = 0;
-  let stop = false;
-  const chars = [...sentence];
-  for (let i = 0; i < chars.length; i++) {
-    const ch = chars[i];
-    const lc = ch.toLowerCase();
-    // A 'y' with no vowel next to it sounds like one.
-    const vowel = VOWEL.get(lc) ?? (lc === 'y' && !isVowel(chars[i - 1]) && !isVowel(chars[i + 1]) ? Y_VOWEL : undefined);
-    const long = /[.!?…]/.test(ch);
-    if (long || /[,;:]/.test(ch)) {
-      if (!stop) t += BLIP_STEP * (long ? 4 : 3); // "..." or "?!" count once
-      stop = true;
-      continue;
-    }
-    stop = false;
-    if (vowel) {
-      beeps.push({
-        at: t,
-        dur: BLIP_STEP * blip.len,
-        freq: blip.base * (1 + (vowel.pitch - 1) * (1 - blip.flat)) * (1 - blip.vary / 2 + Math.random() * blip.vary),
-        peak: 0.65 + 0.35 * vowel.open,
-      });
-      t += BLIP_STEP;
-    } else if (/[\s\-–—]/.test(ch)) {
-      t += BLIP_STEP * 0.8;
-    } else if (/[\p{L}\p{N}]/u.test(ch)) {
-      t += BLIP_STEP;
-    } // quotes, brackets and ¿¡ take no time
-  }
-  if (blip.flat < 0.5 && /\?[\s"'’”»)\]]*$/.test(sentence)) {
-    beeps.slice(-6).forEach((b, i) => { b.freq *= 1 + 0.05 * (i + 1); }); // questions rise
-  }
-  return { beeps, total: Math.max(t, 300) };
-}
-
 // ---------------------------------------------------------------------- run
 
 // State of one speak() call. `wakers` holds everything currently waiting
-// (timers, utterances) so stop() can release them all at once.
+// (timers, utterances) so stop() can release them all at once. The current
+// sentence's mouth timeline lives here too.
 class Run {
   constructor(key) {
     this.key = key; // voice slot: 'A', 'B', 'announcer', 'ad2'...
     this.cancelled = false;
-    this.talking = false; // tts / mute: mouth is flapping
-    this.talkAt = 0;
-    this.boundaryAt = -1e9;
-    this.phase = Math.random() * 6.28;
-    this.beeps = null; // blips: timeline of the current sentence
-    this.beepIdx = -1;
-    this.t0 = 0;
     this.reset = false;
     this.utter = null; // keeps the utterance alive: Chrome may GC it before onend
     this.wakers = new Set();
+    this.tl = null; // speech timeline of the sentence being said
+    this.clock = null; // tts / mute: wall clock -> timeline time
+    this.perf0 = null; // blips: performance.now() at which the first beep is heard
+    this.sentence = -1;
+  }
+
+  setTimeline(tl, clock, perf0 = null) {
+    this.tl = tl;
+    this.clock = clock;
+    this.perf0 = perf0;
+  }
+
+  clearTimeline() {
+    this.tl = null;
+    this.clock = null;
+    this.perf0 = null;
+  }
+
+  timeAt(now) {
+    if (!this.tl) return null;
+    if (this.clock) return this.clock.timeAt(now);
+    return this.perf0 === null ? null : now - this.perf0;
   }
 
   sleep(ms) {
@@ -328,96 +162,27 @@ class Run {
 
   cancel() {
     this.cancelled = true;
-    this.talking = false;
-    this.beeps = null;
+    this.clearTimeline();
     this.wake();
   }
 }
 
-// -------------------------------------------------------------------- tunes
-
-// Tune data comes from other people's files, so parsing never throws: bad
-// tokens simply become rests and missing fields get defaults.
-//   { bpm, wave, notes: 'C5:1 E5:1 G5:2 R:1', bass: 'C3:2 G2:2', bassWave, drums: 'K:1 H:0.5 S:1' }
-const SEMITONE = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
-const NOTE_RE = /^([A-Ga-g])([#b♯♭]?)(-?\d)?$/;
-const REST_RE = /^(r|rest|-|_|\.)$/i;
-const DRUM_KEYS = { k: 'k', kick: 'k', bd: 'k', s: 's', snare: 's', sd: 's', h: 'h', hat: 'h', hh: 'h', o: 'h' };
-const WAVES = new Set(['square', 'triangle', 'sawtooth', 'sine']);
-const WAVE_GAIN = { square: 1, triangle: 1.4, sawtooth: 0.7, sine: 1.3 }; // evens out loudness
-const MAX_EVENTS = 1500;
-const TUNE_LOOKAHEAD = 2.5; // seconds of music scheduled ahead of the clock (timers may be throttled)
-const DUCK_LEVEL = 0.4; // music level while someone talks: 60% lower
-
-// Octave 4 when omitted: 'C' is middle C (MIDI 60).
-function noteToMidi(name) {
-  const m = NOTE_RE.exec(name);
-  if (!m) return null;
-  const accidental = m[2] === '#' || m[2] === '♯' ? 1 : m[2] ? -1 : 0;
-  return 12 * ((m[3] === undefined ? 4 : Number(m[3])) + 1) + SEMITONE[m[1].toLowerCase()] + accidental;
-}
-
-// Beats as '1', '0.5', '.5' or '1/2'.
-function parseBeats(text) {
-  const m = /^(\d*\.?\d+)(?:\/(\d*\.?\d+))?$/.exec(text ?? '');
-  const n = m ? Number(m[1]) / (m[2] ? Number(m[2]) : 1) : NaN;
-  return Number.isFinite(n) && n > 0 ? clamp(n, 0.0625, 64) : 1;
-}
-
-// 'C4+E4+G4:2' is a chord. Returns the events and the track length in beats.
-function parseTrack(src, drums = false) {
-  const text = Array.isArray(src) ? src.join(' ') : typeof src === 'string' ? src : '';
-  const events = [];
-  let at = 0;
-  for (const token of text.split(/[\s,|]+/)) {
-    if (!token || events.length >= MAX_EVENTS) continue;
-    const [name, dur] = token.split(':');
-    const len = parseBeats(dur);
-    if (drums) {
-      const drum = DRUM_KEYS[name.toLowerCase()];
-      if (drum) events.push({ at, dur: len, drum });
-    } else if (!REST_RE.test(name)) {
-      const midis = name.split('+').map(noteToMidi).filter((m) => m !== null);
-      if (midis.length) events.push({ at, dur: len, midis });
-    }
-    at += len;
-  }
-  return { events, beats: at };
-}
-
-function parseTune(tune) {
-  const t = typeof tune === 'string' ? { notes: tune } : tune;
-  if (!t || typeof t !== 'object') return null;
-  const get = (...keys) => keys.map((k) => t[k]).find((v) => v != null);
-  const wave = (v, fallback) => (WAVES.has(String(v).toLowerCase()) ? String(v).toLowerCase() : fallback);
-  const lead = wave(get('wave', 'waveform'), 'square');
-  const tracks = [
-    { kind: 'lead', wave: lead, ...parseTrack(get('notes', 'melody', 'lead')) },
-    { kind: 'bass', wave: wave(get('bassWave'), 'triangle'), ...parseTrack(get('bass')) },
-    { kind: 'drums', wave: lead, ...parseTrack(get('drums', 'percussion'), true) },
-  ].filter((track) => track.events.length);
-  if (!tracks.length) return null;
-  return {
-    bpm: clamp(Number(get('bpm', 'tempo')) || 120, 30, 400),
-    tracks,
-    beats: Math.max(...tracks.map((track) => track.beats)),
-  };
-}
+const REST_FRAME = Object.freeze({ viseme: 'rest', level: 0 });
+const RELEASE_MS = 130; // an interrupted mouth closes over this long
+const LOOKAHEAD = 1.6; // seconds of music scheduled ahead (timers may be throttled)
 
 // ------------------------------------------------------------------- engine
-
-const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
 
 export class AudioEngine {
   #synth = null;
   #ctx = null;
-  #master = null;
-  #noiseBuf = null;
+  #buses = null;
   #volume = 0.8;
   #requested = 'tts';
-  #music = null; // bus for playTune(): ducked while someone talks
   #ducked = false;
-  #tunes = new Set();
+  #players = new Set(); // live tune handles
+  #pending = new Set(); // tunes waiting for the context to start
+  #pump = 0;
   #lang;
   #all = []; // every installed voice
   #voices = []; // the ones in the engine's language
@@ -426,7 +191,11 @@ export class AudioEngine {
   #resolved = new Map(); // slot -> { voice, pitch, rate, lang, blip }
   #lastRefresh = 0;
   #primed = false;
+  #armed = null;
   #run = null;
+  #speed = new Map(); // slot -> learned TTS speed (timeline ms per wall ms)
+  #last = new Map(); // slot -> { at, viseme, level } last sampled mouth, for releases
+  #scratch = {};
 
   // `lang` picks the voice language ('en', 'es', or 'en-AU' to prefer a region).
   constructor(opts) {
@@ -452,8 +221,28 @@ export class AudioEngine {
     if (!Number.isFinite(n)) return;
     this.#volume = Math.min(1, Math.max(0, n));
     try {
-      this.#master?.gain.setTargetAtTime(this.#volume, this.#ctx.currentTime, 0.01);
+      this.#buses?.out.gain.setTargetAtTime(this.#volume, this.#ctx.currentTime, 0.01);
     } catch { /* no audio */ }
+  }
+
+  /** The AudioContext (null until unlock()); for other audio modules. */
+  get context() {
+    return this.#ctx;
+  }
+
+  /** Gain node for background music: routed to the master, ducked under speech. */
+  get musicBus() {
+    return this.#buses?.music ?? null;
+  }
+
+  /** Gain node for voice audio played through WebAudio (not ducked, limited). */
+  get speechBus() {
+    return this.#buses?.speech ?? null;
+  }
+
+  /** True while anyone is speaking (between their sentences too). */
+  get speaking() {
+    return Boolean(this.#run && !this.#run.cancelled);
   }
 
   get ttsAvailable() {
@@ -467,11 +256,18 @@ export class AudioEngine {
     return this.#requested === 'tts' && !this.ttsAvailable ? 'blips' : this.#requested;
   }
 
+  /** The modes that can actually be selected right now, in V-key order. */
+  get modes() {
+    return this.ttsAvailable ? [...MODES] : MODES.filter((m) => m !== 'tts');
+  }
+
   setMode(mode) {
     if (!MODES.includes(mode)) return;
     const before = this.mode;
     this.#requested = mode;
-    if (mode === 'mute') this.#stopTunes();
+    // Mute silences the output but keeps every tune running, so an ad's music
+    // comes back when sound is switched on again.
+    this.#applyMute();
     if (this.mode === before) return;
     // Cut what is sounding now; a running speak() carries on with its next sentence.
     try {
@@ -481,6 +277,7 @@ export class AudioEngine {
   }
 
   // Call from a user gesture. Everything async is bounded so it can never hang.
+  // Without one (autostart) it also listens for the first gesture and retries.
   async unlock() {
     let resumed = null;
     try {
@@ -494,6 +291,7 @@ export class AudioEngine {
     try {
       if (resumed) await Promise.race([resumed, new Promise((r) => setTimeout(r, 1000))]);
     } catch { /* ignore */ }
+    if (!this.#unlocked()) this.#armUnlock();
     try {
       await this.#loadVoices();
     } catch { /* ignore */ }
@@ -510,6 +308,11 @@ export class AudioEngine {
     } catch { /* keep what parsed */ }
     this.#profiles = next;
     this.#resolve();
+  }
+
+  /** Which voice each slot got (for the control panel and the lab). */
+  voiceInfo() {
+    return [...this.#resolved].map(([slot, c]) => ({ slot, voice: c.voice?.name ?? null, lang: c.voice?.lang ?? c.lang, gender: c.gender, pitch: c.pitch, rate: c.rate }));
   }
 
   // `anchor` is any slot key. Resolves when the text has been spoken or stop() ran.
@@ -538,12 +341,59 @@ export class AudioEngine {
     this.#stopTunes();
   }
 
-  level(anchor) {
+  /**
+   * The mouth of `slot` (default: whoever is speaking) at `now`:
+   * { slot, speaking, level 0..1, viseme, next, mix 0..1, wordIndex, charIndex,
+   *   sentenceIndex, accent 0..1 (stressed syllable), pause (comma pause) }.
+   * Visemes: rest MBP FV TH L EE AH OH OO WQ S. Works in tts, blips and mute.
+   */
+  speechFrame(now = performance.now(), slot) {
     const run = this.#run;
-    if (!run || run.cancelled || run.key !== anchor) return 0;
-    const now = performance.now();
-    if (run.beeps) return this.#blipLevel(run, now);
-    return run.talking ? synthLevel(run, now) : 0;
+    const key = slot ?? (run && !run.cancelled ? run.key : null);
+    const f = { slot: key, speaking: false, level: 0, viseme: 'rest', next: 'rest', mix: 0, wordIndex: -1, charIndex: -1, sentenceIndex: -1, accent: 0, pause: false };
+    if (key === null) return f;
+    const live = run && !run.cancelled && run.key === key ? run : null;
+    const t = live ? live.timeAt(now) : null;
+    if (live && t !== null) {
+      const s = sampleTimeline(live.tl, t, this.#scratch);
+      f.speaking = s.speaking;
+      f.level = s.level;
+      f.viseme = s.viseme;
+      f.next = s.next;
+      f.mix = s.mix;
+      f.wordIndex = s.wordIndex;
+      f.charIndex = s.charIndex;
+      f.accent = s.accent;
+      f.pause = s.pause;
+      f.sentenceIndex = live.sentence;
+      const shown = s.mix > 0.5 ? s.next : s.viseme;
+      const last = this.#last.get(key);
+      if (last) {
+        last.at = now;
+        last.viseme = shown;
+        last.level = s.level;
+      } else this.#last.set(key, { at: now, viseme: shown, level: s.level });
+      return f;
+    }
+    // Interrupted (sentence ended early, stop(), mode change): close smoothly.
+    const last = this.#last.get(key) ?? REST_FRAME;
+    const since = now - (last.at ?? -1e9);
+    if (since < RELEASE_MS && last.level > 0.01) {
+      const k = since / RELEASE_MS;
+      const ease = k * k * (3 - 2 * k);
+      f.viseme = last.viseme;
+      f.next = 'rest';
+      f.mix = ease;
+      f.level = last.level * (1 - ease);
+      if (live) f.sentenceIndex = live.sentence;
+    }
+    return f;
+  }
+
+  // Mouth openness 0..1 for the existing presenters (studio.js); kept until the
+  // new face system reads speechFrame() directly.
+  level(anchor) {
+    return this.speechFrame(performance.now(), anchor).level;
   }
 
   isSpeaking(anchor) {
@@ -551,23 +401,12 @@ export class AudioEngine {
     return Boolean(run && !run.cancelled && run.key === anchor);
   }
 
+  /** Channel cues: jingle/ident, whoosh/stinger, breaking, outro, promo, blip. */
   sfx(name) {
     try {
-      const ctx = this.#ctx;
-      if (!ctx || this.#requested === 'mute') return;
-      if (ctx.state !== 'running') {
-        Promise.resolve(ctx.resume()).catch(() => {});
-        return;
-      }
-      const t = ctx.currentTime + 0.02;
-      switch (name) {
-        case 'jingle': this.#jingle(t); break;
-        case 'outro': this.#outro(t); break;
-        case 'whoosh': this.#whoosh(t); break;
-        case 'breaking': this.#breaking(t); break;
-        case 'blip': this.#tone('square', 880, t, 0.05, 0.08, { to: 1320 }); break;
-        default: break;
-      }
+      if (name === 'blip') return this.#blip();
+      const cue = CUES[name];
+      if (cue) this.playTune(cue, { volume: 0.5 });
     } catch { /* never break the show over a sound effect */ }
   }
 
@@ -586,6 +425,7 @@ export class AudioEngine {
   async #play(run, sentences, onSentence) {
     try {
       for (let i = 0; i < sentences.length && !run.cancelled; i++) {
+        run.sentence = i;
         try {
           onSentence?.(sentences[i], i);
         } catch (err) {
@@ -595,7 +435,7 @@ export class AudioEngine {
         if (mode === 'tts') await this.#sayTts(run, sentences[i]);
         else if (mode === 'blips') await this.#sayBlips(run, sentences[i]);
         else await this.#sayMute(run, sentences[i]);
-        run.talking = false;
+        run.clearTimeline();
         if (i < sentences.length - 1 && !run.cancelled) await run.sleep(GAP[mode]);
       }
     } catch (err) {
@@ -609,10 +449,20 @@ export class AudioEngine {
     }
   }
 
-  async #sayMute(run, sentence, ms = (sentence.length / MUTE_CPS) * 1000) {
-    run.talking = true;
-    run.talkAt = performance.now();
-    await run.sleep(Math.max(250, ms));
+  #timeline(key, sentence, rate) {
+    const cfg = this.#config(key);
+    return buildTimeline(sentence, { lang: cfg.voice?.lang || cfg.lang || this.#lang.base, rate: rate ?? cfg.rate });
+  }
+
+  // No sound: the mouth follows the timeline on the wall clock. `ms` squeezes
+  // it into the time left when a TTS engine failed mid-sentence.
+  async #sayMute(run, sentence, ms) {
+    const tl = this.#timeline(run.key, sentence);
+    const speed = ms ? Math.min(2, Math.max(0.5, tl.total / Math.max(250, ms))) : 1;
+    const clock = new SpeechClock(tl, { speed, soft: false });
+    clock.start(performance.now());
+    run.setTimeline(tl, clock);
+    await run.sleep(tl.total / clock.speed + 40);
   }
 
   async #sayTts(run, sentence) {
@@ -631,6 +481,9 @@ export class AudioEngine {
       if (run.cancelled || this.mode !== 'tts') return;
     }
     const cfg = this.#config(run.key);
+    const tl = this.#timeline(run.key, sentence);
+    const clock = new SpeechClock(tl, { speed: this.#speed.get(run.key) ?? 1, soft: true });
+    run.setTimeline(tl, clock);
     const t0 = performance.now();
     const how = await new Promise((resolve) => {
       let settled = false;
@@ -643,11 +496,7 @@ export class AudioEngine {
       u.rate = cfg.rate;
       u.volume = this.#volume;
       run.utter = u;
-      const begin = () => {
-        if (run.talking) return;
-        run.talking = true;
-        run.talkAt = performance.now();
-      };
+      const begin = () => clock.start(performance.now());
       const finish = (result) => {
         if (settled) return;
         settled = true;
@@ -661,8 +510,9 @@ export class AudioEngine {
       run.wakers.add(wake);
       u.onstart = begin;
       u.onboundary = (e) => {
-        begin();
-        if (!e.name || e.name === 'word') run.boundaryAt = performance.now();
+        if (e.name && e.name !== 'word') return;
+        // Word boundaries re-synchronise the mouth with the voice.
+        clock.anchorChar(Number(e.charIndex) || 0, performance.now());
       };
       u.onend = () => finish('end');
       u.onerror = () => finish('error');
@@ -680,93 +530,70 @@ export class AudioEngine {
         finish('error');
       }
     });
-    run.talking = false;
+    const end = performance.now();
+    clock.end(end);
+    if (how === 'end' && clock.started) this.#learnSpeed(run.key, tl, clock, end);
+    run.clearTimeline();
     if (how === 'cancel' || run.cancelled) return;
-    const elapsed = performance.now() - t0;
+    const elapsed = end - t0;
     if (how === 'error' || (how === 'end' && elapsed < sentence.length * 22)) {
       // Engine failed or "finished" implausibly fast (no output device?): keep the show's pace.
       await this.#sayMute(run, sentence, (sentence.length / MUTE_CPS) * 1000 - elapsed);
     }
   }
 
+  // The voice's real pace: from word boundaries when the engine sends them,
+  // else from how long the sentence took; used to start the next sentence right.
+  #learnSpeed(key, tl, clock, end) {
+    const prev = this.#speed.get(key) ?? 1;
+    let next = prev;
+    if (clock.boundaries >= 3) next = clock.speed;
+    else {
+      const took = end - clock.startR;
+      if (took > 400) next = prev + (tl.total / took - prev) * 0.5;
+    }
+    if (Number.isFinite(next)) this.#speed.set(key, Math.min(2, Math.max(0.5, next)));
+  }
+
   async #sayBlips(run, sentence) {
     const lead = 40;
-    const blip = this.#config(run.key).blip;
-    const plan = planBlips(sentence, blip);
-    run.t0 = performance.now() + lead;
-    run.beepIdx = -1;
-    run.beeps = plan.beeps;
-    const silence = this.#scheduleBlips(blip, plan, lead);
+    const cfg = this.#config(run.key);
+    const tl = this.#timeline(run.key, sentence);
+    const beeps = blipPlan(tl);
+    const ctx = this.#ctx;
+    let perf0 = performance.now() + lead;
+    let silence = null;
+    if (ctx && this.#buses && ctx.state === 'running') {
+      try {
+        const t0 = ctx.currentTime + lead / 1000;
+        silence = scheduleBlips(ctx, this.#buses.speech, cfg.blip, beeps, t0, tl.total / 1000);
+        perf0 = this.#heardAt(t0);
+      } catch { /* the mouth still moves */ }
+    }
+    run.setTimeline(tl, null, perf0);
     try {
-      await run.sleep(lead + plan.total);
+      await run.sleep(perf0 - performance.now() + tl.total);
     } finally {
-      run.beeps = null;
       silence?.();
     }
   }
 
-  // Beeps are put on the AudioContext clock up front (one oscillator per
-  // sentence, gain automation per beep). The returned function cuts it short.
-  #scheduleBlips(blip, plan, lead) {
+  // performance.now() at which context time `t` reaches the listener's ears:
+  // the output timestamp when the browser gives a sane one, else the stated
+  // output + base latency.
+  #heardAt(t) {
     const ctx = this.#ctx;
-    if (!ctx || !this.#master || ctx.state !== 'running') return null;
+    const now = performance.now();
+    const naive = now + (t - ctx.currentTime) * 1000;
+    let heard = naive + ((Number(ctx.outputLatency) || 0) + (Number(ctx.baseLatency) || 0)) * 1000;
     try {
-      const osc = ctx.createOscillator();
-      const lp = ctx.createBiquadFilter();
-      const g = ctx.createGain();
-      osc.type = blip.type;
-      osc.frequency.value = plan.beeps[0]?.freq ?? blip.base;
-      lp.type = 'lowpass';
-      lp.frequency.value = blip.cut;
-      g.gain.value = 0;
-      osc.connect(lp).connect(g).connect(this.#master);
-      const t0 = ctx.currentTime + lead / 1000;
-      for (const b of plan.beeps) {
-        const t = t0 + b.at / 1000;
-        const d = b.dur / 1000;
-        const v = blip.gain * b.peak;
-        osc.frequency.setValueAtTime(b.freq, t);
-        g.gain.setValueAtTime(0, t);
-        g.gain.linearRampToValueAtTime(v, t + 0.006);
-        g.gain.setValueAtTime(v, t + d - 0.012);
-        g.gain.linearRampToValueAtTime(0, t + d);
+      const ts = ctx.getOutputTimestamp?.();
+      if (ts && ts.performanceTime > 0 && ts.contextTime > 0) {
+        const v = ts.performanceTime + (t - ts.contextTime) * 1000;
+        if (v >= naive - 5 && v <= naive + 400) heard = v;
       }
-      osc.start();
-      osc.stop(t0 + plan.total / 1000 + 0.05);
-      osc.onended = () => {
-        try {
-          osc.disconnect();
-          lp.disconnect();
-          g.disconnect();
-        } catch { /* ignore */ }
-      };
-      return () => {
-        try {
-          const now = ctx.currentTime;
-          g.gain.cancelScheduledValues(now);
-          g.gain.setTargetAtTime(0, now, 0.004);
-          osc.stop(now + 0.03);
-        } catch { /* already stopped */ }
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  // ~1 while a beep sounds, then a fast exponential fall. The index only moves
-  // forward, so each call is O(1) amortised.
-  #blipLevel(run, now) {
-    const beeps = run.beeps;
-    const t = now - run.t0;
-    if (t < 0) return 0;
-    let i = run.beepIdx;
-    while (i + 1 < beeps.length && beeps[i + 1].at <= t) i++;
-    run.beepIdx = i;
-    if (i < 0) return 0;
-    const b = beeps[i];
-    const end = b.at + b.dur;
-    const v = t <= end ? b.peak : b.peak * Math.exp(-(t - end) / 55);
-    return v < 0.02 ? 0 : v;
+    } catch { /* ignore */ }
+    return heard;
   }
 
   // ------------------------------------------------------------------ voices
@@ -796,46 +623,8 @@ export class AudioEngine {
     return cfg;
   }
 
-  // Assigns a voice, pitch, rate and blip timbre to every known slot, in a fixed
-  // order (profiles, then A and B, then the rest) so assignments stay stable.
   #resolve() {
-    const used = new Map(); // voice -> slots using it
-    const out = new Map();
-    for (const key of new Set([...this.#profiles.keys(), 'A', 'B', ...this.#seen])) {
-      const prof = this.#profiles.get(key) ?? DEFAULT_PROFILES.get(key) ?? NEUTRAL_PROFILE;
-      // Profile language family first; if nothing is installed, the engine's language.
-      const plan = prof.lang ? langPlan(prof.lang) : this.#lang;
-      const family = this.#all.filter((v) => plan.match.test(String(v.lang ?? '')));
-      const pool = family.length ? family : this.#voices;
-      const voice = pool.length ? chooseVoice(pool, prof.gender, plan.pref, used) : null;
-      let pitch = prof.pitch;
-      if (voice) {
-        const g = voiceGender(voice);
-        if (prof.gender === 'male' && g === 'female') pitch *= 0.85;
-        else if (prof.gender === 'female' && g === 'male') pitch *= 1.2;
-        // Voice already taken by a slot of this gender (any slot, for neutral): nudge the pitch apart.
-        const taken = used.get(voice) ?? [];
-        const twins = prof.gender === 'neutral' ? taken.length : taken.filter((k) => out.get(k).gender === prof.gender).length;
-        if (twins) pitch *= twins % 2 ? 1.12 : 0.88;
-        used.set(voice, [...taken, key]);
-      }
-      out.set(key, {
-        gender: prof.gender,
-        voice,
-        pitch: clamp(pitch, 0.1, 2),
-        rate: prof.rate,
-        lang: prof.lang ?? plan.pref[0] ?? plan.base,
-        blip: blipFor(key, prof),
-      });
-    }
-    // Default anchors forced onto one voice: split them well apart by pitch.
-    const a = out.get('A');
-    const b = out.get('B');
-    if (!this.#profiles.has('A') && !this.#profiles.has('B') && a.voice && a.voice === b.voice) {
-      a.pitch = 0.85;
-      b.pitch = 1.2;
-    }
-    this.#resolved = out;
+    this.#resolved = resolveVoices({ all: this.#all, voices: this.#voices, profiles: this.#profiles, seen: this.#seen, lang: this.#lang });
   }
 
   // Voices load asynchronously in Chrome: wait for 'voiceschanged', at most 1.5 s.
@@ -874,25 +663,45 @@ export class AudioEngine {
     const Ctor = globalThis.AudioContext || globalThis.webkitAudioContext;
     if (!Ctor) return null;
     try {
-      const ctx = new Ctor();
-      const master = ctx.createGain();
-      master.gain.value = this.#volume;
-      master.connect(ctx.destination);
-      const music = ctx.createGain();
-      music.gain.value = this.#ducked ? DUCK_LEVEL : 1;
-      music.connect(master);
-      // One second of white noise, shared by every hat / whoosh.
-      const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      const ctx = new Ctor({ latencyHint: 'playback' });
       this.#ctx = ctx;
-      this.#master = master;
-      this.#music = music;
-      this.#noiseBuf = buf;
+      this.#buses = buildBuses(ctx, { volume: this.#volume });
+      this.#buses.duck.gain.value = this.#ducked ? DUCK_LEVEL : 1;
+      this.#applyMute();
+      ctx.addEventListener?.('statechange', () => this.#onState());
     } catch {
       this.#ctx = null;
+      this.#buses = null;
     }
     return this.#ctx;
+  }
+
+  #unlocked() {
+    const ctxOk = !this.#ctx || this.#ctx.state === 'running';
+    const gesture = globalThis.navigator?.userActivation;
+    return ctxOk && (gesture ? gesture.hasBeenActive : true);
+  }
+
+  // Autostart has no gesture to unlock audio with: wait for the first one
+  // (click, key, touch) and unlock then, as often as needed.
+  #armUnlock() {
+    const win = globalThis.window;
+    if (this.#armed || !win?.addEventListener) return;
+    const events = ['pointerdown', 'keydown', 'touchend', 'click'];
+    const handler = () => {
+      this.unlock();
+      if (this.#ctx?.state === 'running') {
+        for (const e of events) win.removeEventListener(e, handler, true);
+        this.#armed = null;
+      }
+    };
+    this.#armed = handler;
+    for (const e of events) win.addEventListener(e, handler, true);
+  }
+
+  #onState() {
+    if (this.#ctx?.state !== 'running') return;
+    for (const start of [...this.#pending]) start();
   }
 
   // iOS only unlocks audio after something plays inside the gesture.
@@ -904,248 +713,145 @@ export class AudioEngine {
   }
 
   // Same for speech: a silent utterance inside the gesture unlocks later speak() calls.
+  // Outside a gesture (autostart) it would not count, so it waits for the real one.
   #primeSpeech() {
     const synth = this.#synth;
-    if (!synth || this.#primed) return;
+    if (!synth || this.#primed || synth.speaking || synth.pending) return;
+    const activation = globalThis.navigator?.userActivation;
+    if (activation && !activation.isActive) return;
     this.#primed = true;
     const u = new globalThis.SpeechSynthesisUtterance(' ');
     u.volume = 0;
     synth.speak(u);
   }
 
+  #applyMute() {
+    try {
+      const g = this.#buses?.mute.gain;
+      if (!g) return;
+      const now = this.#ctx.currentTime;
+      g.cancelScheduledValues(now);
+      g.setTargetAtTime(this.#requested === 'mute' ? 0 : 1, now, 0.015);
+    } catch { /* ignore */ }
+  }
+
+  // Music drops 10 dB while anyone is talking and comes back slowly.
+  #duck(on) {
+    if (this.#ducked === on) return;
+    this.#ducked = on;
+    if (this.#buses) setDuck(this.#buses.duck.gain, on, this.#ctx.currentTime);
+  }
+
   // ------------------------------------------------------------------ tunes
 
-  // Chiptune player for jingles and ad music. Notes are scheduled on the
-  // AudioContext clock a couple of seconds ahead, so loops are seamless even if
-  // timers lag. Shorter tracks repeat to fill the longest one.
+  /**
+   * Plays a tune (classic or rich format, see tune.js) on the music bus,
+   * levelled to the channel loudness; `volume` 0.5 is the reference level.
+   * opts: { loop, volume }. Returns { stop(), song } and never throws. If the
+   * context is still locked, a looping tune starts as soon as it unlocks.
+   */
   playTune(tune, opts = {}) {
-    const none = { stop() {} };
+    const none = { stop() {}, song: null };
     try {
-      const ctx = this.#ctx;
-      if (!ctx || !this.#music || this.#requested === 'mute') return none;
-      if (ctx.state !== 'running') {
-        Promise.resolve(ctx.resume()).catch(() => {});
-        return none;
-      }
-      const song = parseTune(tune);
-      if (!song) return none;
+      const ctx = this.#ensureContext();
+      const song = asSong(tune);
+      if (!ctx || !this.#buses || !song) return none;
       const loop = Boolean(opts?.loop);
-      const gain = ctx.createGain();
-      gain.gain.value = numOr(opts?.volume, 0.5, 0, 1);
-      gain.connect(this.#music);
-      const live = new Set();
-      const passSec = Math.max(0.05, (song.beats * 60) / song.bpm);
-      let next = ctx.currentTime + 0.05;
-      let timer = 0;
+      const volume = Number.isFinite(Number(opts?.volume)) ? Number(opts.volume) : 0.5;
+      let player = null;
       let stopped = false;
-
-      const stop = () => {
-        if (stopped) return;
-        stopped = true;
-        clearInterval(timer);
-        clearTimeout(timer);
-        this.#tunes.delete(handle);
-        const now = ctx.currentTime;
-        try {
-          gain.gain.cancelScheduledValues(now);
-          gain.gain.setValueAtTime(gain.gain.value, now);
-          gain.gain.linearRampToValueAtTime(0, now + 0.08);
-        } catch { /* ignore */ }
-        for (const rec of live) {
-          try {
-            rec.src.stop(now + 0.1);
-          } catch { /* not started or already stopped */ }
-        }
-        setTimeout(() => {
-          try {
-            gain.disconnect();
-          } catch { /* ignore */ }
-        }, 300);
+      const asked = performance.now();
+      const begin = () => {
+        this.#pending.delete(begin);
+        // A one-shot that could not start within 0.4 s would land out of sync: skip it.
+        if (stopped || (!loop && performance.now() - asked > 400)) return;
+        player = new TunePlayer(ctx, this.#buses, song, { volume, loop });
+        player.start(ctx.currentTime + 0.05);
+        player.scheduleUntil(ctx.currentTime + LOOKAHEAD);
+        if (!loop) player.endAt = player.t0 + player.passSec + 1.2;
+        this.#players.add(player);
+        this.#startPump();
       };
-      const pump = () => {
-        try {
-          while (!stopped && next < ctx.currentTime + TUNE_LOOKAHEAD) {
-            this.#schedulePass(song, next, gain, live);
-            next += passSec;
-            if (!loop) {
-              timer = setTimeout(stop, (next - ctx.currentTime) * 1000 + 600); // let the tail ring out
-              return;
-            }
+      const handle = {
+        song,
+        stop: () => {
+          if (stopped) return;
+          stopped = true;
+          this.#pending.delete(begin);
+          if (player) {
+            this.#players.delete(player);
+            player.stop(ctx.currentTime);
           }
-        } catch {
-          stop();
-        }
+        },
       };
-      const handle = { stop };
-      this.#tunes.add(handle);
-      pump();
-      if (loop && !stopped) timer = setInterval(pump, 250);
+      if (ctx.state === 'running') begin();
+      else {
+        this.#pending.add(begin);
+        Promise.resolve(ctx.resume()).catch(() => {});
+      }
       return handle;
     } catch {
       return none;
     }
   }
 
-  #stopTunes() {
-    for (const tune of [...this.#tunes]) tune.stop();
-  }
-
-  // One pass of the song starting at `t`; each track tiles to the song length.
-  #schedulePass(song, t, dest, live) {
-    const sec = 60 / song.bpm;
-    let budget = 4000;
-    for (const track of song.tracks) {
-      for (let off = 0; off < song.beats - 1e-6; off += track.beats) {
-        for (const e of track.events) {
-          const at = off + e.at;
-          if (at >= song.beats - 1e-6) break;
-          if (--budget < 0) return;
-          const when = t + at * sec;
-          if (track.kind === 'drums') {
-            this.#drum(e.drum, when, dest, live);
-            continue;
+  #startPump() {
+    if (this.#pump) return;
+    this.#pump = setInterval(() => {
+      const ctx = this.#ctx;
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      for (const p of [...this.#players]) {
+        try {
+          p.scheduleUntil(now + LOOKAHEAD);
+          if (p.endAt && now > p.endAt) {
+            this.#players.delete(p);
+            p.stop(now, 0.3);
           }
-          const dur = Math.min(e.dur, song.beats - at) * sec;
-          const gain = ((track.kind === 'bass' ? 0.2 : 0.15) * WAVE_GAIN[track.wave]) / Math.sqrt(e.midis.length);
-          for (const midi of e.midis) {
-            this.#tone(track.wave, hz(midi), when, Math.max(0.04, dur * 0.94), gain, {
-              release: Math.min(0.04, dur * 0.3), dest, live,
-            });
-          }
+        } catch {
+          this.#players.delete(p);
+          try {
+            p.stop(now);
+          } catch { /* ignore */ }
         }
       }
+      if (!this.#players.size) {
+        clearInterval(this.#pump);
+        this.#pump = 0;
+      }
+    }, 120);
+  }
+
+  #stopTunes() {
+    const now = this.#ctx?.currentTime ?? 0;
+    for (const p of [...this.#players]) {
+      try {
+        p.stop(now);
+      } catch { /* ignore */ }
     }
+    this.#players.clear();
+    this.#pending.clear();
   }
 
-  #drum(kind, t, dest, live) {
-    if (kind === 'k') {
-      this.#tone('sine', 160, t, 0.16, 0.5, { to: 42, attack: 0.002, release: 0.1, dest, live });
-    } else if (kind === 's') {
-      this.#noise(t, 0.14, 0.13, { from: 1800, dest, live });
-      this.#tone('triangle', 200, t, 0.08, 0.12, { to: 120, dest, live });
-    } else {
-      this.#noise(t, 0.045, 0.05, { dest, live });
-    }
-  }
-
-  // Music drops to 40% while anyone is talking and comes back slowly.
-  #duck(on) {
-    if (this.#ducked === on) return;
-    this.#ducked = on;
-    try {
-      const g = this.#music?.gain;
-      if (!g) return;
-      const now = this.#ctx.currentTime;
-      g.cancelScheduledValues(now);
-      g.setValueAtTime(g.value, now);
-      g.setTargetAtTime(on ? DUCK_LEVEL : 1, now, on ? 0.08 : 0.4);
-    } catch { /* ignore */ }
-  }
-
-  // ------------------------------------------------------------------- sfx
-
-  // One oscillator note: short attack, hold, release. `to` slides the pitch.
-  // `dest` defaults to the master bus; `live` collects nodes so a tune can cut them.
-  #tone(type, freq, t, dur, gain, { to = 0, attack = 0.004, release = 0.03, dest = null, live = null } = {}) {
+  // UI blip: a short rising pulse.
+  #blip() {
     const ctx = this.#ctx;
+    if (!ctx || !this.#buses || ctx.state !== 'running') return;
+    const t = ctx.currentTime + 0.01;
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
-    const rec = { src: osc };
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, t);
-    if (to) osc.frequency.exponentialRampToValueAtTime(to, t + dur);
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(880, t);
+    osc.frequency.exponentialRampToValueAtTime(1320, t + 0.05);
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(gain, t + attack);
-    g.gain.setValueAtTime(gain, Math.max(t + attack, t + dur - release));
-    g.gain.linearRampToValueAtTime(0, t + dur);
-    osc.connect(g).connect(dest ?? this.#master);
+    g.gain.linearRampToValueAtTime(0.06, t + 0.004);
+    g.gain.linearRampToValueAtTime(0, t + 0.06);
+    osc.connect(g).connect(this.#buses.music);
     osc.start(t);
-    osc.stop(t + dur + 0.02);
-    live?.add(rec);
+    osc.stop(t + 0.07);
     osc.onended = () => {
-      live?.delete(rec);
       osc.disconnect();
       g.disconnect();
     };
-  }
-
-  // Filtered noise: a hi-hat when `hit`, a sweep when `swell`.
-  #noise(t, dur, gain, { type = 'highpass', from = 6500, to = 0, q = 0.7, swell = false, dest = null, live = null } = {}) {
-    const ctx = this.#ctx;
-    const src = ctx.createBufferSource();
-    const rec = { src };
-    const f = ctx.createBiquadFilter();
-    const g = ctx.createGain();
-    src.buffer = this.#noiseBuf;
-    f.type = type;
-    f.Q.value = q;
-    f.frequency.setValueAtTime(from, t);
-    if (to) f.frequency.exponentialRampToValueAtTime(to, t + dur);
-    if (swell) {
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.linearRampToValueAtTime(gain, t + dur * 0.4);
-      g.gain.linearRampToValueAtTime(0, t + dur);
-    } else {
-      g.gain.setValueAtTime(gain, t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    }
-    src.connect(f).connect(g).connect(dest ?? this.#master);
-    src.start(t, Math.random() * Math.max(0, this.#noiseBuf.duration - dur - 0.05));
-    src.stop(t + dur + 0.02);
-    live?.add(rec);
-    src.onended = () => {
-      live?.delete(rec);
-      src.disconnect();
-      f.disconnect();
-      g.disconnect();
-    };
-  }
-
-  // ~2.5 s news intro: rising C and G arpeggios (square), bass (triangle),
-  // off-beat hats, and a big C major chord with a crash on the last beat.
-  #jingle(t) {
-    const S = 0.12;
-    const lead = [
-      [0, 72, 1], [1, 76, 1], [2, 79, 1], [3, 84, 1], [4, 88, 2], [6, 84, 1], [7, 88, 1],
-      [8, 79, 1], [9, 83, 1], [10, 86, 1], [11, 91, 1], [12, 89, 2], [14, 86, 1], [15, 83, 1],
-    ];
-    const bass = [[0, 48, 2], [2, 48, 2], [4, 43, 2], [6, 48, 2], [8, 43, 2], [10, 43, 2], [12, 50, 2], [14, 43, 2]];
-    for (const [step, note, len] of lead) this.#tone('square', hz(note), t + step * S, len * S * 0.95, 0.09);
-    for (const [step, note, len] of bass) this.#tone('triangle', hz(note), t + step * S, len * S * 0.9, 0.22);
-    for (let i = 1; i < 16; i += 2) this.#noise(t + i * S, 0.04, 0.04);
-    const end = t + 16 * S;
-    for (const note of [60, 64, 67, 72, 76]) this.#tone('square', hz(note), end, 0.6, 0.05, { release: 0.35 });
-    this.#tone('triangle', hz(36), end, 0.65, 0.28, { release: 0.3 });
-    this.#noise(end, 0.5, 0.06, { from: 5000 });
-  }
-
-  // ~2 s calmer sign-off: soft descending line (triangle) landing on a chord.
-  #outro(t) {
-    const S = 0.14;
-    const lead = [[0, 88, 2], [2, 86, 2], [4, 84, 2], [6, 79, 2], [8, 76, 2]];
-    const bass = [[0, 48, 4], [4, 43, 4], [8, 43, 2]];
-    for (const [step, note, len] of lead) {
-      this.#tone('triangle', hz(note), t + step * S, len * S * 0.95, 0.2, { release: 0.08 });
-      this.#tone('square', hz(note - 12), t + step * S, len * S * 0.8, 0.025, { release: 0.08 });
-    }
-    for (const [step, note, len] of bass) this.#tone('triangle', hz(note), t + step * S, len * S * 0.9, 0.2);
-    const end = t + 10 * S;
-    for (const note of [60, 64, 67, 72]) this.#tone('square', hz(note), end, 0.7, 0.04, { release: 0.5 });
-    this.#tone('triangle', hz(48), end, 0.7, 0.22, { release: 0.45 });
-  }
-
-  // ~0.35 s noise sweep for shot transitions, kept quiet.
-  #whoosh(t) {
-    this.#noise(t, 0.35, 0.16, { type: 'bandpass', from: 300, to: 3200, q: 1.4, swell: true });
-  }
-
-  // ~1.2 s two-tone alert, eight notes alternating high / low with a pulsing bass.
-  #breaking(t) {
-    for (let i = 0; i < 8; i++) {
-      const at = t + i * 0.15;
-      this.#tone('square', i % 2 ? 740 : 988, at, 0.13, 0.1);
-      this.#tone('triangle', i % 2 ? 98 : 123, at, 0.13, 0.25);
-      this.#noise(at, 0.04, 0.04);
-    }
   }
 }

@@ -88,7 +88,8 @@ export function backdrop(spec) {
     const level = (x, y) => {
       const dx = (x - (spec.cx ?? 192)) / (reach * 1.35);
       const dy = (y - (spec.cy ?? 98)) / reach;
-      return clamp((1 - Math.sqrt(dx * dx + dy * dy)) * (n + 0.35), 0, n);
+      // a short dithered falloff between flat steps, not one wide checkerboard
+      return clamp(((1 - Math.sqrt(dx * dx + dy * dy)) * 2.1 - 0.55) * n, 0, n);
     };
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {

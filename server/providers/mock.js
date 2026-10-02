@@ -67,18 +67,18 @@ const SIGNOFFS_SOLO = [
   (title, channel) => `And that's ${title}. [wave] Thanks for watching, and stay with us on ${channel}.`,
 ];
 
-// Reactions in a chat: personality first, no facts, never after or before grave news.
+// Reactions in a chat: personality first, dry and grown-up, no facts, never next to grave news.
 const CHATS = {
-  paco: ['[nod] Well. There you have it. [papers] Moving on.', '[chin] Not something you hear every day. [papers]', '[nod] Remarkable. [look_partner] Right, on we go.'],
-  lola: ['[laugh] Oh, I love that one. [look_partner] Who knew?', '[wow] Now that is a story. [papers] Okay, next.', "[happy] That's put a smile on my face. [look_partner]"],
-  max: ['[fist_pump] Okay, I need to know more about this. [look_partner]', "[wow] That is very cool. Don't look at me like that. [papers]", '[laugh] Byte-sized brilliance. Sorry. [papers] Moving on.'],
-  ada: ["[chin] Promising. I'll believe it when it works for everyone. [look_partner]", "[shrug] We'll see how it holds up. [papers] Next.", '[nod] Fair enough. That one I like. [papers]'],
-  nova: ['[wow] Isn\'t that wonderful? [look_partner] UNIT-8, your verdict?', '[happy] Every answer brings a new question. [papers] That is the fun of it.', '[chin] Science, folks. It never stops surprising us. [papers]'],
-  unit8: ['[nod] Data logged. My circuits are tingling. That is a figure of speech.', '[shake_head] Humans say "mind blown". My mind remains attached. [papers]', '[nod] Fascinating. I have filed it under "wow". [papers]'],
+  paco: ['[nod] Well. Not a sentence I expected to read tonight. [papers]', '[chin] Remarkable. [papers] Moving on.', '[nod] File that under good news. We do have some. [look_partner]'],
+  lola: ['[laugh] I will admit, that one made my evening. [look_partner]', '[chin] I would love to know how that conversation started. [papers]', '[nod] Some good news, for once. [papers]'],
+  max: ['[raise_hand] For the record, I would like one. Purely for research. [look_partner]', '[nod] Clever. Quietly, properly clever. [papers]', '[laugh] My bank manager will want a word before I go near that. [papers]'],
+  ada: ['[chin] Promising. I will believe it when it survives its first software update. [look_partner]', '[shrug] We will see how it holds up outside the press release. [papers]', '[nod] Fair enough. That one I like. [papers]'],
+  nova: ['[chin] Every answer comes with a new question attached. That is the job. [look_partner]', '[nod] Worth looking up tonight, if the clouds allow. [papers]', '[steeple] Science at its best: patient, careful and slightly stubborn. [papers]'],
+  unit8: ['[nod] Data logged. I have filed it under remarkable, subsection humans.', '[shake_head] You say over the moon. I checked. Nobody is over the moon. [papers]', '[nod] Noted. My circuits remain calm. This is how I express enthusiasm. [papers]'],
   penny: ['[nod] Worth keeping an eye on. [papers]'],
   sam: ['[nod] Quick one, but worth knowing. [papers]'],
 };
-const GENERIC_CHATS = ['[wow] Fascinating stuff. [papers] Let us move on.', '[nod] Who knew? [papers] On we go.', '[chin] Something to think about. [papers]'];
+const GENERIC_CHATS = ['[nod] Remarkable. [papers] Moving on.', '[chin] Something to think about. [papers]', '[nod] Well, there we are. [papers]'];
 
 const PICKUPS = (name) => [`Thanks, ${name}.`, `Thank you, ${name}.`];
 const TOSSES = (name) => [`[look_partner] ${name}?`, `[point_partner] Over to you, ${name}.`];
@@ -90,6 +90,14 @@ function hash(s) {
   return h >>> 0;
 }
 const choose = (list, key) => list[hash(key) % list.length];
+
+// Markers that belong to the strap, not to the spoken headline: "BREAKING: …", "… – live".
+const plainTitle = (t) =>
+  String(t)
+    .replace(/^\s*breaking(?: news)?\s*[:|–—-]\s*/i, '')
+    .replace(/\s*(?:,|\s[|–—-])\s*breaking\s*$/i, '')
+    .replace(/\s*[-–—]\s*live(?: updates)?\s*$/i, '')
+    .trim();
 
 const sentencesOf = (s) =>
   String(s || '')
@@ -126,7 +134,8 @@ function kickerFor(s) {
 }
 
 /** What the mock knows about a story, from its own text only. */
-function study(s) {
+function study(story) {
+  const s = { ...story, title: plainTitle(story.title) || story.title, breaking: isBreaking(story.title) };
   const text = `${s.title} ${s.summary || ''}`;
   const grave = GRAVE.test(text);
   const loc = locate(s.title, s.summary || '');
@@ -271,6 +280,9 @@ function writeEpisode({ stories, channelName, program, presenters, count }) {
       if (isLighter) parts.push(`${isNumber ? '' : cue}And finally: ${unstop(s.title)}, ${s.source} reports.`);
       else parts.push(`${isNumber ? '' : cue}${opener(unstop(s.title), s.source)}`);
       const lines = body(info, quick ? 1 : 2);
+      if (s.breaking) parts[parts.length - 1] = `Breaking news. ${parts.at(-1)}`;
+      // With nothing more to say, the co-presenter reacts to the headline itself.
+      if (!lines.length && !solo && !info.grave) parts[parts.length - 1] += ` [${partner}:nod]`;
       lines.forEach((line, j) => {
         let text = line;
         if (j > 0 && !quick && !info.grave && whyCount < 2 && WHY.test(line)) {
@@ -278,7 +290,7 @@ function writeEpisode({ stories, channelName, program, presenters, count }) {
           whyCount++;
         }
         // The co-presenter reacts after the first fact (never at a grave story).
-        if (j === 0 && !solo && !info.grave) text += ` [${partner}:${info.light && info.surprising ? 'wow' : choose(['nod', 'nod', 'chin'], key)}]`;
+        if (j === 0 && !solo && !info.grave) text += ` [${partner}:${choose(['nod', 'nod', 'chin'], key)}]`;
         parts.push(text);
       });
       const quoteFits = info.quote?.by && !quick && !lines.some((l) => l.includes(info.quote.text.slice(0, 20)));
@@ -302,7 +314,7 @@ function writeEpisode({ stories, channelName, program, presenters, count }) {
       headline: caption(s.title),
       text: parts.join(' '),
       shot: info.loc ? 'map' : s.image ? (k % 3 === 1 ? 'full' : 'close') : solo ? 'close' : 'wide',
-      breaking: isBreaking(s.title),
+      breaking: s.breaking,
       location: info.loc ? { place: info.loc.place, lat: info.loc.lat, lon: info.loc.lon } : null,
       fact: info.figures[0]?.fact || null,
       kicker: info.kicker,

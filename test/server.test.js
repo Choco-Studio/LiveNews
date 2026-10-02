@@ -167,7 +167,7 @@ describe('server/index.js: HTTP API of a running channel', () => {
     assert.ok(Object.values(json.feeds).length >= 10 && Object.values(json.feeds).every((f) => f.ok && f.items === 8));
     assert.match(json.lastRefresh, /^\d{4}-\d\d-\d\dT/);
     assert.deepEqual(json.providers.map((p) => [p.name, p.configured]), [['mock', true]]);
-    assert.ok(json.usage.today.mock.calls >= 4, 'two episodes, each written and reviewed');
+    assert.ok(json.usage.today.mock.calls >= 2, 'two episodes written (the mock never stands in for the editor)');
     assert.equal(json.usage.today.mock.errors, 0);
     assert.deepEqual(Object.keys(json.schedule), ['now', 'upcoming']);
   });

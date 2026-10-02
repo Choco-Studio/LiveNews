@@ -1,27 +1,40 @@
-// CLOUDBRELLA — the umbrella that protects you from cloud computing.
-// Brand colours: sky blue, white, sunshine yellow. "Stay dry. Stay offline."
+// CLOUDBRELLA — the umbrella that protects you from cloud computing. A commuter
+// is pelted by updates, pop-ups, cookies and terms & conditions until the
+// Cloudbrella opens with a FWOMP. Brand colours: sky blue, white, sunshine
+// yellow. Tagline: "Stay dry. Stay offline."
+//
+// Storyboard (120 bpm, a beat is 0.5 s):
+//  1  0.0 DOWNPOUR  a storm cloud rains notifications on a hunched commuter.  VO "Is the cloud... raining on your parade?"
+//  2  4.0 BARRAGE   close-up; one hit per word, each with its own gag.         VO "Updates. Pop-ups. Cookies. Terms and conditions!"
+//  3  8.0 REVEAL    whip pan to the studio: the umbrella rises, FWOMP, sweep.   VO "Introducing... Cloudbrella!"
+//  4 11.0 DEMO      a jaunty walk; everything bounces off; the cloud drops the  VO "It blocks ninety-nine percent of notifications..."
+//                   giant T&C scroll and it BOINGs away.                       VO "...and one hundred percent of terms and conditions."
+//  5 16.0 BLISS     under the canopy, offline at last.
+//  6 19.5 SLATE     logo, tagline, url, legal; then real rain falls straight    VO "Cloudbrella. Stay dry. Stay offline."
+//                   through the canopy (the legal line explains).
 import {
-  P, W, H, R, A, rrect, panel, disc, oval, ring, poly, line, dither, bands, sparkle, twinkle, particles, shadow,
-  sunburst, stroke, cached, text, bigText, bubble, finePrint, slogan, play, hero, faceCU, wordmark, drawMark, glint,
-  glow, urlPill, prog, lerp, easeOut, easeIn, easeOutBack, wave, shake, clipRect, cloud, mulberry32, rep, tune,
+  P, W, H, R, A, rrect, panel, disc, oval, ring, poly, line, dither, bands, sparkle, twinkle, shadow, stroke, cached,
+  text, bigText, kinetic, words, micro, play, hero, faceCU, wordmark, drawMark, cloud, mulberry32, prog, lerp, easeOut,
+  easeIn, easeOutBack, easeOutElastic, spring, wobble, tween, key, poseAt, blink, breath, kick, clipRect, clipCircle,
+  spotlight, endSlate, lazy, frame, rep, tune,
 } from './kit.js';
 
-const COMMUTER = { S: P.tan, s: P.tanShade, H: P.black, h: P.slate, E: P.black, T: P.steel, t: P.slate, C: P.white, X: P.yellow, P: P.slate, p: P.ink, B: P.black };
+const COMMUTER = { S: P.tan, s: P.tanShade, H: P.black, h: P.slate, E: P.black, T: P.steel, t: P.slate, L: P.steel, C: P.white, X: P.yellow, P: P.slate, p: P.ink, B: P.black, b: P.ink, Y: P.silver };
 
 // --- brand -------------------------------------------------------------------
 
-const MARK = () => wordmark('CLOUDBRELLA', {
+const MARK = lazy(() => wordmark('CLOUDBRELLA', {
   h: 24, pen: 2, wide: 0.8, gap: 2,
   fill: [P.white, P.white, P.silver], hi: P.white,
   outline: [[P.blue, 2], [P.navy, 1]], depth: 2, depthColor: P.navy,
   wave: (i) => Math.round(Math.sin(i * 0.9) * 2),
-});
+}));
 
 // --- props -------------------------------------------------------------------
 
 const KINDS = ['mail', 'popup', 'sync', 'cookie', 'badge', 'update'];
 
-/** Notification icons (cached 18 x 14 each). */
+/** Notification icons (cached 18 x 14 each), centred on (x, y). */
 function icon(ctx, kind, x, y) {
   const cv = cached(`cb-icon-${kind}`, 18, 14, (c) => {
     if (kind === 'mail') {
@@ -29,6 +42,7 @@ function icon(ctx, kind, x, y) {
       R(c, 2, 3, 14, 9, P.white);
       line(c, 2, 3, 9, 8, P.black);
       line(c, 15, 3, 9, 8, P.black);
+      disc(c, 15, 3, 3, P.red);
     } else if (kind === 'popup') {
       R(c, 0, 0, 18, 14, P.black);
       R(c, 1, 1, 16, 3, P.blue);
@@ -63,42 +77,77 @@ function icon(ctx, kind, x, y) {
   ctx.drawImage(cv, Math.round(x) - 9, Math.round(y) - 7);
 }
 
-/** Open umbrella canopy; (cx, cy) = middle of the rim, apex at cy - ry. */
-function canopy(ctx, cx, cy, rx, ry, colA = P.blue, colB = P.white, logo = true) {
+/**
+ * Open umbrella seen from the side, 2.5D: its 8 panels are meridians of a dome,
+ * so `turn` (revolutions) twirls it. (cx, rimY) = middle of the rim; apex at rimY - ry.
+ */
+function canopy(ctx, cx, rimY, rx, ry, turn = 0, { colA = P.blue, colB = P.white, logo = true, tilt = 0.16 } = {}) {
   const n = 8;
-  const tips = [];
-  for (let i = 0; i <= n; i++) {
-    const a = Math.PI + (i / n) * Math.PI;
-    tips.push([cx + Math.cos(a) * rx, cy + Math.sin(a) * ry * 0.18]);
+  const seams = [];
+  for (let i = 0; i <= n * 2; i++) {
+    const th = (i / n) * Math.PI + turn * 2 * Math.PI;
+    seams.push(th);
   }
-  const top = [cx, cy - ry];
+  const apex = [cx, rimY - ry];
+  const tipOf = (th) => [cx + Math.cos(th) * rx, rimY + Math.sin(th) * ry * tilt];
+  // silhouette: dome + rim, outlined
   const outline = [];
-  for (let i = 0; i <= 24; i++) {
-    const a = Math.PI + (i / 24) * Math.PI;
-    outline.push([cx + Math.cos(a) * rx, cy - ry * 0.18 + Math.sin(a) * ry * 0.82]);
+  for (let k = 0; k <= 20; k++) {
+    const a = Math.PI + (k / 20) * Math.PI;
+    outline.push([cx + Math.cos(a) * (rx + 1), rimY - 1 + Math.sin(a) * (ry + 1)]);
   }
-  // scalloped rim
-  const rim = [];
-  for (let i = n; i >= 1; i--) {
-    const [x0, y0] = tips[i];
-    const [x1, y1] = tips[i - 1];
-    rim.push([x0, y0], [(x0 + x1) / 2, (y0 + y1) / 2 - ry * 0.12]);
+  outline.push([cx + rx + 1, rimY + 2], [cx, rimY + ry * tilt + 3], [cx - rx - 1, rimY + 2]);
+  poly(ctx, outline, P.black);
+  // front-facing panels between consecutive seams (sin > 0 means towards us)
+  const curve = (th, steps = 6) => {
+    const pts = [];
+    for (let k = 0; k <= steps; k++) {
+      const ph = (k / steps) * (Math.PI / 2);
+      pts.push([cx + Math.cos(th) * rx * Math.sin(ph), rimY - ry * Math.cos(ph) + Math.sin(th) * ry * tilt * Math.sin(ph)]);
+    }
+    return pts;
+  };
+  const wrap = (v) => ((v % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  for (let i = 0; i < n * 2; i++) {
+    const a = wrap(seams[i]);
+    for (const off of [0, -2 * Math.PI]) {
+      const lo = Math.max(a + off, 0);
+      const hi = Math.min(a + off + Math.PI / n, Math.PI);
+      if (hi <= lo) continue;
+      const ca = curve(lo);
+      const cb = curve(hi).reverse();
+      const ta = tipOf(lo);
+      const tb = tipOf(hi);
+      const scallop = [(ta[0] + tb[0]) / 2, (ta[1] + tb[1]) / 2 - ry * 0.07];
+      const side = Math.cos((lo + hi) / 2);
+      const base = i % 2 ? colB : colA;
+      const col = side > 0.45 ? (base === colB ? P.silver : P.navy) : base;
+      poly(ctx, [...ca, scallop, ...cb], col);
+      if (side < -0.35 && base === colB) poly(ctx, [...ca.slice(1, 4), [ca[3][0] + 2, ca[3][1]], [ca[1][0] + 1, ca[1][1]]], P.white);
+    }
   }
-  rim.push(tips[0]);
-  const shape = [...outline, ...rim];
-  poly(ctx, shape.map(([x, y]) => [x + (x < cx ? -1 : 1), y + (y < cy - ry * 0.5 ? -1 : 1)]), P.black);
-  poly(ctx, shape, colA);
-  for (let i = 0; i < n; i += 2) {
-    const [x0, y0] = tips[i];
-    const [x1, y1] = tips[i + 1];
-    poly(ctx, [top, [x0, y0], [(x0 + x1) / 2, (y0 + y1) / 2 - ry * 0.12], [x1, y1]], colB);
+  // seams
+  for (let i = 0; i < n * 2; i++) {
+    const th = ((seams[i] % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    if (th <= 0.05 || th >= Math.PI - 0.05) continue;
+    const c = curve(th, 5);
+    for (let k = 0; k + 1 < c.length; k++) line(ctx, c[k][0], c[k][1], c[k + 1][0], c[k + 1][1], P.navy);
+    const tp = tipOf(th);
+    disc(ctx, tp[0], tp[1], 1, P.white);
   }
-  for (let i = 1; i < n; i++) line(ctx, top[0], top[1], tips[i][0], tips[i][1], P.navy);
-  R(ctx, cx - 1, cy - ry - 4, 3, 5, P.black);
+  // highlight on the lit shoulder
+  for (let k = 3; k <= 7; k++) {
+    const a = Math.PI + (k / 20) * Math.PI;
+    R(ctx, cx + Math.cos(a) * (rx - 3), rimY - 1 + Math.sin(a) * (ry - 3), 2, 1, A(P.white, 0.6));
+  }
+  R(ctx, cx - 1, rimY - ry - 5, 3, 6, P.black);
+  R(ctx, cx, rimY - ry - 4, 1, 4, P.silver);
+  // the brand mark on the front panel: a cloud with a red slash
   if (logo && rx > 30) {
-    const ly = Math.round(cy - ry * 0.45);
-    cloud(ctx, cx, ly, Math.max(5, Math.round(rx / 7)), P.navy);
-    line(ctx, cx - rx / 6, ly + rx / 9, cx + rx / 6, ly - rx / 9, P.red, 2);
+    const lx = cx + Math.round(Math.sin(turn * 2 * Math.PI) * rx * 0.12);
+    const ly = Math.round(rimY - ry * 0.45);
+    cloud(ctx, lx, ly, Math.max(5, Math.round(rx / 7)), P.navy);
+    line(ctx, lx - rx / 6, ly + rx / 9, lx + rx / 6, ly - rx / 9, P.red, 2);
   }
 }
 
@@ -108,212 +157,412 @@ function handle(ctx, cx, y0, len) {
   stroke(ctx, [[cx, y0 + len], [cx, y0 + len + 6], [cx - 3, y0 + len + 9], [cx - 7, y0 + len + 7]], 2, P.brown, P.black);
 }
 
-const UMB_W = 110;
-const UMB_H = 86;
-const umbrellaArt = () =>
-  cached('cb-umbrella', UMB_W, UMB_H, (c) => {
-    canopy(c, 55, 44, 52, 40);
-    handle(c, 55, 45, 30);
-  });
+/** Closed umbrella: a slim furled cone with a strap. (cx, tipY) = the top of the ferrule. */
+function furled(ctx, cx, tipY, h, squash = 0) {
+  const hh = Math.round(h * (1 - squash));
+  const w = Math.round(7 * (1 + squash * 1.5));
+  poly(ctx, [[cx, tipY], [cx + w + 1, tipY + hh], [cx - w - 1, tipY + hh]], P.black);
+  poly(ctx, [[cx, tipY + 2], [cx + w, tipY + hh - 1], [cx - w, tipY + hh - 1]], P.blue);
+  poly(ctx, [[cx, tipY + 4], [cx - 1, tipY + hh - 2], [cx - w + 1, tipY + hh - 2]], P.white);
+  R(ctx, cx - w, tipY + Math.round(hh * 0.6), w * 2, 3, P.navy);
+  R(ctx, cx - 1, tipY - 5, 3, 6, P.black);
+  handle(ctx, cx, tipY + hh - 1, 26);
+}
 
+/** The storm cloud: a grumpy cloud-computing icon with sync arrows on its belly. */
 function stormCloud(ctx, cx, cy, s, lt, mood = 'mean') {
-  cloud(ctx, cx, cy, s, P.slate, P.ink);
-  const u = s / 14;
+  const puff = mood === 'windup' ? 1 + Math.sin(lt * 40) * 0.04 + 0.12 : mood === 'sulk' ? 0.8 : 1;
+  const ss = Math.round(s * puff);
+  cloud(ctx, cx, cy, ss, mood === 'windup' ? P.slate : P.steel, P.ink);
+  const u = ss / 14;
   const ex = Math.round(8 * u);
   const ey = cy - Math.round(1 * u);
   for (const sd of [-1, 1]) {
-    R(ctx, cx + sd * ex - 2, ey, 4, 3, P.white);
-    R(ctx, cx + sd * ex - (sd < 0 ? 0 : 1), ey + 1, 2, 2, P.black);
-    if (mood === 'angry') line(ctx, cx + sd * (ex + 3), ey - 3, cx + sd * (ex - 3), ey - 1, P.black, 2);
+    R(ctx, cx + sd * ex - 2, ey, 5, 4, P.white);
+    R(ctx, cx + sd * ex - (sd < 0 ? 0 : 1), ey + (mood === 'sulk' ? 2 : 1), 2, 2, mood === 'windup' ? P.red : P.black);
+    if (mood === 'angry' || mood === 'windup') line(ctx, cx + sd * (ex + 4), ey - 3, cx + sd * (ex - 3), ey - 1, P.black, 2);
+    if (mood === 'sulk') line(ctx, cx + sd * (ex + 3), ey - 1, cx + sd * (ex - 3), ey - 3, P.black, 1);
   }
-  R(ctx, cx - 4, ey + 6, 8, 1, P.black);
-  R(ctx, cx - 5, ey + 7, 1, 1, P.black);
-  R(ctx, cx + 4, ey + 7, 1, 1, P.black);
-  // wifi antenna-ish ears
-  ring(ctx, cx, cy - Math.round(12 * u), 3, P.cyan);
+  if (mood === 'sulk') {
+    R(ctx, cx - 3, ey + 8, 6, 1, P.black);
+    R(ctx, cx - 4, ey + 9, 1, 1, P.black);
+    R(ctx, cx + 3, ey + 9, 1, 1, P.black);
+  } else {
+    R(ctx, cx - 4, ey + 7, 8, 1, P.black);
+    R(ctx, cx - 5, ey + 8, 1, 1, P.black);
+    R(ctx, cx + 4, ey + 8, 1, 1, P.black);
+  }
+  // sync arrows on its belly
+  const by = cy + Math.round(5 * u);
+  for (const sd of [-1, 1]) {
+    const ax = cx + sd * Math.round(16 * u);
+    R(ctx, ax - 1, by - 2, 2, 5, P.cyan);
+    if (sd < 0) R(ctx, ax - 2, by - 2, 4, 1, P.cyan);
+    else R(ctx, ax - 2, by + 2, 4, 1, P.cyan);
+  }
 }
 
-/** Icons raining from x0..x0+w; returns nothing. Bouncing off a canopy if given. */
-function iconRain(ctx, lt, { x0, w, y0, ground, n = 14, seed = 1, speed = 70, canopy: cp = null }) {
+/** Icons raining down; they bounce off a canopy { cx, cy (rim), rx, ry } if given. */
+function iconRain(ctx, lt, { x0, w, y0, ground, n = 14, seed = 1, speed = 70, canopy: cp = null, onHit = null }) {
   const rand = mulberry32(seed);
   for (let i = 0; i < n; i++) {
     const x = x0 + rand() * w;
     const period = 1.4 + rand() * 1.2;
     const ph = rand() * period;
+    const vk = 1.2 + rand() * 0.4;
     const kind = KINDS[i % KINDS.length];
     const t = (lt + ph) % period;
-    let y = y0 + t * speed * (1.2 + rand() * 0.4);
+    let y = y0 + t * speed * vk;
     let xx = x + Math.sin(t * 4 + i) * 2;
     if (cp && Math.abs(x - cp.cx) < cp.rx) {
-      const hitY = cp.cy - cp.ry * Math.sqrt(Math.max(0, 1 - ((x - cp.cx) / cp.rx) ** 2)) * 0.9;
-      const tHit = (hitY - y0) / (speed * 1.3);
+      const hitY = cp.cy - cp.ry * Math.sqrt(Math.max(0, 1 - ((x - cp.cx) / cp.rx) ** 2)) - 4;
+      const tHit = (hitY - y0) / (speed * vk);
       if (t > tHit) {
         const tt = t - tHit;
         xx = x + Math.sign(x - cp.cx || 1) * tt * 90;
-        y = hitY - tt * 70 + tt * tt * 260;
-        if (tt < 0.12) sparkle(ctx, x, hitY - 4, 2, P.white);
+        y = hitY - tt * 80 + tt * tt * 300;
+        if (tt < 0.1) {
+          sparkle(ctx, x, hitY - 2, 2, P.white);
+          onHit?.(x, hitY);
+        }
       }
     }
-    if (y > ground) continue;
+    if (y > ground || y < -10) continue;
     icon(ctx, kind, xx, y);
   }
 }
 
-function street(ctx, lt, scroll, sunny) {
-  bands(ctx, 0, 0, W, 150, sunny ? [P.blue, P.cyan, P.cream] : [P.ink, P.slate, P.steel]);
-  const far = Math.round(scroll * 0.2);
-  for (let k = -1; k < 12; k++) {
-    const x = ((k * 40 - far) % 480 + 480) % 480 - 40;
-    R(ctx, x, 60 - ((k * 37) % 30), 34, 100, sunny ? P.fog : P.slate);
+// --- the street --------------------------------------------------------------
+
+const STRIP = 480; // tiled backdrop width
+function paintFar(c, sunny) {
+  const rand = mulberry32(8);
+  for (let x = 0; x < STRIP; x += 26 + Math.floor(rand() * 14)) {
+    const h = 50 + Math.floor(rand() * 50);
+    R(c, x, 150 - h, 30, h, sunny ? P.fog : P.slate);
+    if (sunny) R(c, x, 150 - h, 30, 1, P.silver);
   }
-  const mid = Math.round(scroll * 0.5);
-  for (let k = -1; k < 8; k++) {
-    const x = ((k * 70 - mid) % 560 + 560) % 560 - 70;
-    const top = 86 - ((k * 23) % 26);
-    R(ctx, x, top, 62, 80, sunny ? P.steel : P.ink);
-    for (let wy = top + 6; wy < 146; wy += 10) for (let wx = x + 6; wx < x + 56; wx += 12) R(ctx, wx, wy, 6, 5, sunny ? P.cyan : P.navy);
+}
+function paintNear(c, sunny) {
+  const rand = mulberry32(21);
+  for (let x = 0; x < STRIP; x += 74 + Math.floor(rand() * 20)) {
+    const top = 70 + Math.floor(rand() * 30);
+    R(c, x, top, 64, 150 - top, sunny ? P.steel : P.ink);
+    R(c, x, top, 64, 2, sunny ? P.fog : P.slate);
+    for (let wy = top + 7; wy < 140; wy += 11) {
+      for (let wx = x + 6; wx < x + 58; wx += 13) {
+        R(c, wx, wy, 7, 6, sunny ? P.cyan : P.navy);
+        if (!sunny && rand() < 0.25) R(c, wx, wy, 7, 6, P.yellow);
+        R(c, wx, wy + 6, 7, 1, sunny ? P.fog : P.slate);
+      }
+    }
   }
-  R(ctx, 0, 150, W, 18, P.silver);
-  R(ctx, 0, 150, W, 1, P.white);
-  for (let x = -(Math.round(scroll) % 32); x < W; x += 32) R(ctx, x, 150, 1, 18, P.fog);
-  R(ctx, 0, 168, W, 48, P.slate);
-  for (let x = -(Math.round(scroll * 1.2) % 60); x < W; x += 60) R(ctx, x, 190, 30, 3, P.yellow);
+}
+function paintStreet(c, sunny) {
+  R(c, 0, 150, STRIP, 20, sunny ? P.silver : P.steel);
+  R(c, 0, 150, STRIP, 1, sunny ? P.white : P.fog);
+  for (let x = 0; x < STRIP; x += 32) R(c, x, 150, 1, 20, sunny ? P.fog : P.slate);
+  R(c, 0, 170, STRIP, 3, P.black);
+  R(c, 0, 173, STRIP, 43, P.slate);
+  for (let x = 0; x < STRIP; x += 60) R(c, x, 192, 30, 3, P.yellow);
+  // a lamp post and a bus-stop sign
+  for (const lx of [40, 280]) {
+    R(c, lx - 2, 76, 4, 75, P.black);
+    R(c, lx - 1, 76, 2, 75, sunny ? P.fog : P.slate);
+    R(c, lx - 8, 70, 18, 7, P.black);
+    R(c, lx - 7, 71, 16, 4, sunny ? P.white : P.yellow);
+  }
+  R(c, 168, 112, 2, 39, P.black);
+  rrect(c, 160, 100, 18, 14, P.black, 2);
+  rrect(c, 161, 101, 16, 12, P.green, 2);
+  text(c, 'B', 166, 104, { color: P.white });
+}
+const far = (s) => cached(`cb-far-${s}`, STRIP, 160, (c) => paintFar(c, s));
+const near = (s) => cached(`cb-near-${s}`, STRIP, 160, (c) => paintNear(c, s));
+const pavement = (s) => cached(`cb-street-${s}`, STRIP, H, (c) => paintStreet(c, s));
+
+function tile(ctx, cv, offset) {
+  const x = -(((Math.round(offset) % STRIP) + STRIP) % STRIP);
+  ctx.drawImage(cv, x, 0);
+  ctx.drawImage(cv, x + STRIP, 0);
+}
+function street(ctx, scroll, sunny) {
+  bands(ctx, 0, 0, W, 152, sunny ? [P.blue, P.cyan, P.cream] : [P.ink, P.slate, P.steel]);
+  tile(ctx, far(sunny), scroll * 0.2);
+  tile(ctx, near(sunny), scroll * 0.5);
+  tile(ctx, pavement(sunny), scroll);
+}
+
+/** The commuter walking on the pavement (ground y 168). */
+function commuter(ctx, x, lt, { happy = false, umbrella = false, hunch = 0 } = {}) {
+  const step = Math.floor(lt * (happy ? 6 : 4.5));
+  const bounce = happy ? -Math.round(Math.abs(Math.sin(lt * 6 * Math.PI / 2)) * 2) : hunch;
+  const eyes = blink(lt, 4) ? 'closed' : happy ? 'happy' : 'sad';
+  const armR = umbrella ? [[-5, -6], [-6, -12]] : [[-1, 9], [1, 15]];
+  const me = hero(ctx, x, 168, {
+    pal: COMMUTER, eyes, mouth: happy ? 'smile' : 'frown', brows: happy ? 'flat' : 'sad', legs: 'walk', step, bob: bounce,
+    armL: poseAt(lt * (happy ? 3 : 2.25) % 2, [[0, [[-2, 7], [-4, 13]]], [1, [[0, 7], [3, 13]], 'inOut'], [2, [[-2, 7], [-4, 13]], 'inOut']]),
+    armR, blush: happy, sweat: happy ? 0 : lt,
+  });
+  if (!umbrella) {
+    // briefcase
+    const [hx, hy] = me.handR;
+    rrect(ctx, hx - 7, hy + 1, 16, 12, P.black, 1);
+    rrect(ctx, hx - 6, hy + 2, 14, 10, P.brown, 1);
+    R(ctx, hx - 6, hy + 5, 14, 1, P.tanShade);
+  }
+  return me;
 }
 
 // --- shots -------------------------------------------------------------------
 
-// 1. Establishing: a commuter in a downpour of notifications.
+// 1. DOWNPOUR: the street in a storm of notifications.
 function shotDownpour(ctx, lt) {
-  const scroll = lt * 40;
-  street(ctx, lt, scroll, false);
-  const x = 176;
-  const pile = Math.min(7, Math.floor(lt * 1.8));
-  iconRain(ctx, lt, { x0: x - 46, w: 92, y0: 58, ground: 160, n: 26, seed: 4, speed: 80 });
-  const me = hero(ctx, x, 168, { pal: COMMUTER, eyes: 'sad', mouth: 'frown', legs: 'walk', step: Math.floor(lt * 5), armL: 'down', armR: 'down', sweat: lt });
-  rrect(ctx, me.handR[0] - 2, me.handR[1], 16, 12, P.black, 1);
-  rrect(ctx, me.handR[0] - 1, me.handR[1] + 1, 14, 10, P.brown, 1);
-  // icons stuck on him
-  for (let i = 0; i < pile; i++) icon(ctx, KINDS[(i + 2) % 6], x - 14 + ((i * 11) % 30), me.top + 26 + ((i * 7) % 16));
-  stormCloud(ctx, x, 46 + wave(lt, 0.6, 2), 22, lt);
-  for (let i = 0; i < 3; i++) R(ctx, (lt * 120 + i * 140) % W, 176 + i * 9, 18, 1, P.steel);
-}
-
-// 2. Close-up: popups stuck to his face.
-function shotSticky(ctx, lt) {
-  bands(ctx, 0, 0, W, H, [P.ink, P.slate]);
-  clipRect(ctx, 0, 24, W, H);
-  iconRain(ctx, lt, { x0: 0, w: W, y0: 10, ground: H, n: 22, seed: 7, speed: 90 });
-  ctx.restore();
-  faceCU(ctx, 192, 124, 44, { pal: COMMUTER, eyes: lt % 1.6 < 0.12 ? 'closed' : 'sad', mouth: 'wavy', iris: P.brown });
-  // sticky popup on his forehead
-  const sy = Math.round(easeOutBack(prog(lt, 0.2, 0.5), 2) * 10);
-  panel(ctx, 128, 60 + sy, 72, 40, P.white, P.black, 1);
-  R(ctx, 129, 61 + sy, 70, 8, P.blue);
-  R(ctx, 191, 62 + sy, 6, 5, P.red);
-  text(ctx, 'ACCEPT ALL?', 164, 72 + sy, { color: P.black, align: 'center' });
-  panel(ctx, 140, 84 + sy, 22, 11, P.silver, P.black, 1);
-  panel(ctx, 168, 84 + sy, 22, 11, P.silver, P.black, 1);
-  text(ctx, 'YES', 151, 86 + sy, { color: P.black, align: 'center' });
-  text(ctx, 'YES', 179, 86 + sy, { color: P.black, align: 'center' });
-  if (lt > 0.8) {
-    disc(ctx, 236, 146, 12, P.black);
-    disc(ctx, 236, 146, 11, P.red);
-    text(ctx, '99+', 236, 143, { color: P.white, align: 'center' });
+  const scroll = lt * 34;
+  street(ctx, scroll, false);
+  const x = 170;
+  iconRain(ctx, lt, { x0: x - 60, w: 120, y0: 52, ground: 166, n: 22, seed: 4, speed: 78 });
+  const me = commuter(ctx, x, lt, { hunch: 2 });
+  // icons stuck to his suit, more and more
+  const pile = Math.min(6, Math.floor(lt * 1.7));
+  for (let i = 0; i < pile; i++) icon(ctx, KINDS[(i + 2) % 6], x - 12 + ((i * 11) % 26), me.top + 26 + ((i * 7) % 14));
+  // the ones that missed pile up on the pavement behind him
+  for (let i = 0; i < 9; i++) icon(ctx, KINDS[i % 6], ((i * 47 - scroll) % 420 + 420) % 420 - 20, 164 - (i % 3) * 3);
+  stormCloud(ctx, x + Math.round(Math.sin(lt * 0.8) * 6), 42 + Math.round(Math.sin(lt * 1.7) * 2), 22, lt);
+  if (lt > 1.4) {
+    const p = spring(lt - 1.4);
+    panel(ctx, 262, 18, 108, 20, P.white, P.black, 2);
+    R(ctx, 263, 19, 106, 5, P.blue);
+    micro(ctx, `${Math.min(999, Math.floor((lt - 1.4) * 140))} NEW NOTIFICATIONS`, 316, 28, { color: P.black, align: 'center' });
+    if (p < 0.9) R(ctx, 262, 18, 108, 20, A(P.white, 0.5));
   }
-  if (lt > 1.3) icon(ctx, 'cookie', 150, 152);
 }
 
-// 3. Product hero: FWOMP.
-function shotReveal(ctx, lt) {
-  bands(ctx, 0, 0, W, H, [P.navy, P.blue, P.navy]);
-  for (let i = 0; i < 3; i++) poly(ctx, [[192 - 20 - i * 10, 0], [192 + 20 + i * 10, 0], [192 + 70 + i * 16, 200], [192 - 70 - i * 16, 200]], A(P.cyan, 0.05));
-  oval(ctx, 192, 196, 70, 8, A(P.black, 0.35));
-  const open = prog(lt, 0.9, 1.4);
-  const drop = easeOutBack(prog(lt, 0.0, 0.6), 1.6);
-  const y = Math.round(lerp(-120, 96, drop));
-  if (open <= 0) {
-    // closed umbrella, a slim tapered shape
-    poly(ctx, [[192, y - 64], [200, y - 6], [184, y - 6]], P.black);
-    poly(ctx, [[192, y - 62], [198, y - 8], [186, y - 8]], P.blue);
-    R(ctx, 189, y - 40, 2, 30, P.white);
-    handle(ctx, 192, y - 8, 26);
-  } else {
-    const sx = 1 + Math.sin(Math.min(1, open) * Math.PI) * 0.25;
-    const sy = 1 - Math.sin(Math.min(1, open) * Math.PI) * 0.3;
-    const rx = Math.round(lerp(10, 78, easeOutBack(open, 2)) * (open < 1 ? sx : 1));
-    const ry = Math.round(58 * (open < 1 ? sy : 1));
-    canopy(ctx, 192, y + 4, rx, ry);
-    handle(ctx, 192, y + 5, 40);
-    if (open >= 1) {
-      // glint along the canopy
-      const g = prog(lt, 1.6, 2.3);
-      if (g > 0 && g < 1) {
-        clipRect(ctx, 114, y - 56, 156, 62);
-        for (let yy = y - 56; yy < y + 6; yy += 2) R(ctx, 100 + g * 200 + (y + 6 - yy) * 0.6 - 40, yy, 8, 2, A(P.white, 0.55));
-        ctx.restore();
-      }
-      for (let i = 0; i < 5; i++) sparkle(ctx, 120 + i * 36, y - 60 + ((i * 17) % 30), twinkle(lt, i * 0.2), P.white);
+// 2. BARRAGE: close-up; one hit per word of the voice-over.
+const HITS = [0.5, 1.25, 2.0, 2.75];
+function shotBarrage(ctx, lt) {
+  bands(ctx, 0, 0, W, H, [P.ink, P.slate, P.steel]);
+  clipRect(ctx, 0, 0, W, H);
+  iconRain(ctx, lt, { x0: 0, w: W, y0: -10, ground: H, n: 16, seed: 7, speed: 90 });
+  ctx.restore();
+  let dx = 0;
+  let dy = 0;
+  for (const h of HITS) {
+    const [kx, ky] = kick(lt, h, 0.22, 3, Math.round(h * 10));
+    dx += kx;
+    dy += ky;
+  }
+  const hitNow = HITS.some((h) => lt >= h && lt < h + 0.18);
+  const cx = 192 + dx;
+  const cy = 132 + dy;
+  const s = 44;
+  const covered = prog(lt, 2.75, 3.3);
+  faceCU(ctx, cx, cy, s, { pal: COMMUTER, eyes: hitNow ? 'closed' : covered > 0.6 ? 'wide' : blink(lt, 2) ? 'closed' : 'sad', mouth: hitNow ? 'wavy' : 'frown', iris: P.brown, look: lt > 1.6 && lt < 2.0 ? 1 : 0 });
+  // 1 UPDATE NOW drops onto his head and stays there
+  if (lt > 0.2) {
+    const land = prog(lt, 0.2, 0.5);
+    const y = Math.round(lerp(-40, cy - s - 30, easeIn(land)));
+    const sq = wobble(lt, 0.5, 0.25, 4, 7);
+    const w = Math.round(64 * (1 + sq));
+    const h2 = Math.round(30 * (1 - sq));
+    const bx = cx - 6 - Math.round(w / 2);
+    const by = y + (30 - h2);
+    panel(ctx, bx, by, w, h2, P.white, P.black, 2);
+    R(ctx, bx + 1, by + 1, w - 2, 6, P.green);
+    micro(ctx, 'UPDATE NOW?', bx + w / 2, by + 11, { color: P.black, align: 'center' });
+    if (h2 > 24) {
+      panel(ctx, bx + 6, by + h2 - 11, 22, 9, P.green, P.black, 1);
+      panel(ctx, bx + w - 28, by + h2 - 11, 22, 9, P.green, P.black, 1);
+      micro(ctx, 'NOW', bx + 17, by + h2 - 9, { color: P.white, align: 'center' });
+      micro(ctx, 'NOW', bx + w - 17, by + h2 - 9, { color: P.white, align: 'center' });
     }
   }
-  if (lt > 0.95 && lt < 1.8) bigText(ctx, 'FWOMP!', 300, 54, { scale: 3, color: P.white, outline: P.navy, ow: 2, depth: 2, depthColor: P.blue, align: 'center' });
-  if (lt > 2.0) {
-    const p = easeOut(prog(lt, 2.0, 2.4));
-    text(ctx, 'INTRODUCING THE', 192, Math.round(lerp(216, 186, p)), { color: P.cyan, align: 'center' });
+  // 2 a pop-up slaps onto his cheek
+  if (lt > 1.0) {
+    const p = easeOutBack(prog(lt, 1.0, 1.25), 1.5);
+    const px = Math.round(lerp(-90, cx - s - 28, p));
+    panel(ctx, px, cy + 2, 62, 34, P.white, P.black, 2);
+    R(ctx, px + 1, cy + 3, 60, 6, P.blue);
+    R(ctx, px + 54, cy + 4, 4, 3, P.red);
+    micro(ctx, 'ACCEPT ALL?', px + 31, cy + 13, { color: P.black, align: 'center' });
+    panel(ctx, px + 8, cy + 22, 46, 10, P.yellow, P.black, 1);
+    micro(ctx, 'YES', px + 31, cy + 24, { color: P.black, align: 'center' });
+  }
+  // 3 a cookie boinks off his nose and leaves crumbs
+  if (lt > 1.75 && lt < 2.9) {
+    const t = lt - 1.75;
+    const hit = 0.25;
+    const nx = cx + 2;
+    const ny = cy + 12;
+    let x;
+    let y;
+    if (t < hit) {
+      x = lerp(W + 20, nx + 8, t / hit);
+      y = lerp(ny - 30, ny, t / hit);
+    } else {
+      const u = t - hit;
+      x = nx + 8 + u * 140;
+      y = ny - u * 120 + u * u * 340;
+    }
+    disc(ctx, x, y, 8, P.black);
+    disc(ctx, x, y, 7, P.tan);
+    for (const [ox, oy] of [[-3, -2], [2, -3], [-1, 3], [3, 2]]) R(ctx, x + ox, y + oy, 2, 1, P.brown);
+    if (t > hit) for (let i = 0; i < 5; i++) R(ctx, nx - 6 + i * 3, ny + 2 + ((t - hit) * 60 + i * 7) % 30, 1, 1, P.tan);
+  }
+  // 4 the terms and conditions unroll over everything
+  if (lt > 2.6) {
+    const p = easeOut(prog(lt, 2.6, 3.2));
+    const top = 18;
+    const len = Math.round(p * 190);
+    R(ctx, 112, top, 160, len, P.black);
+    R(ctx, 113, top, 158, len, P.cream);
+    for (let yy = top + 16; yy < top + len - 4; yy += 6) R(ctx, 120, yy, 120 + ((yy * 7) % 24), 1, P.fog);
+    micro(ctx, 'TERMS & CONDITIONS', 192, top + 6, { color: P.navy, align: 'center' });
+    micro(ctx, 'PAGE 1 OF 4,096', 192, top + 12, { color: P.steel, align: 'center' });
+    rrect(ctx, 106, top + len - 4, 172, 10, P.black, 3);
+    rrect(ctx, 107, top + len - 3, 170, 8, P.silver, 3);
+    // his eyes peek over the top edge while it is still unrolling
+    if (len < 60) {
+      R(ctx, cx - 18, top - 2, 36, 1, P.black);
+    }
+  }
+  // the four words pile up around him
+  const labels = [['UPDATES!', 74, 42], ['POP-UPS!', 66, 168], ['COOKIES!', 318, 132], ['T&CS!', 320, 46]];
+  labels.forEach(([wd, x, y], i) => {
+    if (lt > HITS[i]) kinetic(ctx, wd, x, y, lt - HITS[i], { style: 'stamp', scale: 2, color: P.yellow, outline: P.black, ow: 2, depth: 2, depthColor: P.rust });
+  });
+}
+
+// 3. REVEAL: the studio, the umbrella rises, FWOMP, a light sweep.
+function shotReveal(ctx, lt) {
+  bands(ctx, 0, 0, W, 168, [P.navy, P.blue]);
+  R(ctx, 0, 168, W, 48, P.navy);
+  R(ctx, 0, 168, W, 1, P.cyan);
+  spotlight(ctx, 192, 176, { top: -4, w0: 18, w1: 74, a: 0.06, color: P.white, pool: P.ink, poolRx: 80 });
+  const fwomp = 1.25;
+  const rise = easeOutBack(prog(lt, 0, 0.6), 1.4);
+  const y = Math.round(lerp(260, 74, rise));
+  if (lt < fwomp) {
+    // anticipation: it sinks and squashes a little before it opens
+    const sq = prog(lt, 0.9, fwomp) * 0.12;
+    furled(ctx, 192, y + Math.round(sq * 40), 64, sq);
+    if (lt > 0.4) kinetic(ctx, 'INTRODUCING', 192, 26, lt - 0.4, { style: 'type', scale: 1, color: P.cyan, outline: null, cps: 26 });
+  } else {
+    const t = lt - fwomp;
+    const open = easeOutElastic(prog(t, 0, 0.7), 0.35);
+    const rx = Math.round(lerp(8, 84, open));
+    const ry = Math.round(lerp(60, 56, open) * (1 - wobble(lt, fwomp, 0.18, 3, 6)));
+    // shockwave
+    if (t < 0.5) {
+      ring(ctx, 192, y + 10, Math.round(30 + t * 300), P.white);
+      ring(ctx, 192, y + 10, Math.round(26 + t * 260), P.cyan);
+    }
+    const turn = 0.03 + t * 0.06;
+    canopy(ctx, 192, y + 12, rx, ry, turn);
+    handle(ctx, 192, y + 12, 40);
+    // the light sweep across the canopy
+    const g = prog(t, 0.6, 1.2);
+    if (g > 0 && g < 1) {
+      clipRect(ctx, 192 - rx, y + 12 - ry, rx * 2, ry + 6);
+      for (let yy = 0; yy < ry + 6; yy += 2) R(ctx, 192 - rx - 30 + Math.round(g * (rx * 2 + 60)) + Math.round((ry - yy) * 0.5) - 20, y + 12 - ry + yy, 8, 2, A(P.white, 0.55));
+      ctx.restore();
+    }
+    for (let i = 0; i < 5; i++) sparkle(ctx, 120 + i * 36, y - 50 + ((i * 17) % 30), twinkle(lt, i * 0.2), P.white);
+    if (t < 0.9) kinetic(ctx, 'FWOMP!', 316, 44, t, { style: 'stamp', scale: 3, color: P.white, outline: P.navy, ow: 2, depth: 2, depthColor: P.blue });
+    const mk = MARK();
+    if (t > 0.3) drawMark(ctx, mk, 192, 180, { reveal: prog(t, 0.3, 0.9), drop: 24 });
   }
 }
 
-// 4. Demo: everything bounces off.
+// 4. DEMO: a jaunty walk under the canopy; the cloud's big T&C scroll BOINGs off.
 function shotDemo(ctx, lt) {
-  const scroll = lt * 40;
-  const sunny = lt > 3.6;
-  street(ctx, lt, scroll, sunny);
+  const scroll = 200 + lt * 44;
+  const sunny = lt > 4.2;
+  street(ctx, scroll, sunny);
   if (sunny) {
-    const p = easeOut(prog(lt, 3.6, 4.6));
-    glow(ctx, 340, Math.round(lerp(110, 46, p)), 40, P.yellow, 0.1);
-    disc(ctx, 340, Math.round(lerp(110, 46, p)), 14, P.yellow);
+    const p = easeOut(prog(lt, 4.2, 5));
+    disc(ctx, 344, Math.round(lerp(110, 44, p)), 18, A(P.yellow, 0.3));
+    disc(ctx, 344, Math.round(lerp(110, 44, p)), 14, P.yellow);
   }
-  const x = 176;
-  const me = hero(ctx, x, 168, { pal: COMMUTER, eyes: 'happy', mouth: 'smile', legs: 'walk', step: Math.floor(lt * 5), armL: 'down', armR: [[-5, -6], [-6, -12]], blush: true });
-  const cp = { cx: me.handR[0], cy: me.top - 6, rx: 52, ry: 36 };
+  const x = 168;
+  const me = commuter(ctx, x, lt, { happy: true, umbrella: true });
+  const boing = 3.7;
+  const squash = Math.max(0, wobble(lt, boing, 0.22, 4, 6));
+  const cp = { cx: me.handR[0], cy: me.top - 8 + Math.round(squash * 10), rx: Math.round(54 * (1 + squash * 0.3)), ry: Math.round(36 * (1 - squash)) };
   R(ctx, cp.cx - 1, cp.cy, 3, me.handR[1] - cp.cy, P.black);
   R(ctx, cp.cx, cp.cy, 1, me.handR[1] - cp.cy, P.silver);
   disc(ctx, me.handR[0], me.handR[1], 3, P.black);
   disc(ctx, me.handR[0], me.handR[1], 2, COMMUTER.S);
-  canopy(ctx, cp.cx, cp.cy, cp.rx, cp.ry);
-  iconRain(ctx, lt, { x0: x - 70, w: 150, y0: 30, ground: 160, n: 16, seed: 11, canopy: cp });
-  const mood = lt > 1.2 ? 'angry' : 'mean';
-  stormCloud(ctx, x - 6, 22 + wave(lt, 0.7, 2), 20, lt, mood);
-  // terms & conditions scroll falls and bounces away
-  if (lt > 2.0 && lt < 3.6) {
-    const t = lt - 2.0;
-    const hitT = 0.45;
+  canopy(ctx, cp.cx, cp.cy, cp.rx, cp.ry, lt * 0.25);
+  let blocked = 0;
+  iconRain(ctx, lt, { x0: x - 80, w: 160, y0: 28, ground: 166, n: 18, seed: 11, canopy: cp, onHit: () => blocked++ });
+  const mood = lt > 4.2 ? 'sulk' : lt > 3.0 && lt < boing ? 'windup' : lt > 1.2 ? 'angry' : 'mean';
+  stormCloud(ctx, x - 6 + Math.round(Math.sin(lt * 0.9) * 4), 22 + Math.round(Math.sin(lt * 1.4) * 2) - (mood === 'sulk' ? Math.round(prog(lt, 4.2, 5) * 30) : 0), 20, lt, mood);
+  // the giant T&C scroll: dropped, BOING, and away it spins
+  if (lt > 3.3 && lt < 5) {
+    const t = lt - 3.3;
+    const hitT = boing - 3.3;
     let sx = x - 4;
-    let sy = 10 + t * 120;
+    let sy = 20 + t * t * 900;
+    let flip = false;
     if (t > hitT) {
-      const tt = t - hitT;
-      sx = x - 4 + tt * 150;
-      sy = 10 + hitT * 120 - tt * 90 + tt * tt * 220;
-    }
-    R(ctx, sx - 14, sy - 30, 28, 46, P.black);
-    R(ctx, sx - 13, sy - 29, 26, 44, P.white);
-    text(ctx, 'T&C', sx, sy - 27, { color: P.red, align: 'center' });
-    for (let i = 0; i < 6; i++) R(ctx, sx - 10, sy - 16 + i * 5, 20, 1, P.fog);
-    if (t > hitT && t < hitT + 0.5) bigText(ctx, 'BOING!', x + 70, 70, { scale: 2, color: P.yellow, outline: P.black, ow: 2 });
+      const u = t - hitT;
+      sx = x - 4 + u * 210;
+      sy = cp.cy - cp.ry - 34 - u * 150 + u * u * 260;
+      flip = Math.floor(u * 10) % 2 === 1;
+    } else sy = Math.min(sy, cp.cy - cp.ry - 34);
+    const w = flip ? 52 : 34;
+    const h = flip ? 34 : 52;
+    R(ctx, sx - w / 2 - 1, sy - h / 2 - 1, w + 2, h + 2, P.black);
+    R(ctx, sx - w / 2, sy - h / 2, w, h, P.cream);
+    micro(ctx, 'T&C', sx, sy - h / 2 + 3, { color: P.red, align: 'center' });
+    for (let i = 0; i < 5; i++) R(ctx, sx - w / 2 + 4, sy - h / 2 + 11 + i * 6, w - 8, 1, P.fog);
+    R(ctx, sx - w / 2 - 3, sy - h / 2 - 3, w + 6, 4, P.silver);
+    R(ctx, sx - w / 2 - 3, sy + h / 2 - 1, w + 6, 4, P.silver);
+    if (t > hitT) kinetic(ctx, 'BOING!', x + 92, 64, t - hitT, { style: 'stamp', scale: 3, color: P.yellow, outline: P.black, ow: 2, depth: 2, depthColor: P.rust });
   }
+  // blocked counter
   if (lt > 0.4) {
-    panel(ctx, 262, 182, 116, 24, P.black, P.cyan, 2);
-    text(ctx, 'BLOCKED: ' + Math.min(999, Math.floor(lt * 61)), 320, 186, { color: P.green, align: 'center' });
-    text(ctx, 'NOTIFICATIONS', 320, 196, { color: P.white, align: 'center' });
+    panel(ctx, 258, 180, 118, 26, P.black, P.cyan, 2);
+    const pct = Math.min(99, Math.floor(prog(lt, 0.4, 2.6) * 99));
+    micro(ctx, 'NOTIFICATIONS BLOCKED', 317, 184, { color: P.white, align: 'center' });
+    text(ctx, `${pct}%`, 317, 194, { color: P.green, align: 'center' });
+    if (lt > boing) {
+      micro(ctx, 'T&CS', 274, 196, { color: P.white, align: 'center' });
+      micro(ctx, '100%', 360, 196, { color: P.yellow, align: 'center' });
+    }
   }
 }
 
-// 5. Reaction: blissfully offline under the canopy.
+// 5. BLISS: offline at last, under the canopy.
 function shotBliss(ctx, lt) {
   bands(ctx, 0, 0, W, H, [P.blue, P.cyan, P.cream]);
-  glow(ctx, 340, 40, 50, P.yellow, 0.1);
-  disc(ctx, 340, 40, 16, P.yellow);
-  faceCU(ctx, 192, 130, 42, { pal: COMMUTER, eyes: 'happy', mouth: 'grin', blush: true });
-  // under the canopy: dark underside, ribs to the shaft, scalloped rim
+  disc(ctx, 330, 52, 26, A(P.yellow, 0.3));
+  disc(ctx, 330, 52, 18, P.yellow);
+  // two birds crossing, with little notes
+  for (let i = 0; i < 2; i++) {
+    const bx = Math.round(-30 + lt * 70 + i * 26);
+    const by = 96 + i * 10 + Math.round(Math.sin(lt * 6 + i) * 3);
+    const up = frame(lt + i * 0.2, 6, 2) === 0;
+    R(ctx, bx - 3, by, 7, 3, P.navy);
+    R(ctx, bx + 3, by - 1, 2, 2, P.navy);
+    R(ctx, bx + 5, by, 1, 1, P.orange);
+    if (up) {
+      R(ctx, bx - 4, by - 3, 3, 3, P.navy);
+      R(ctx, bx, by - 3, 3, 3, P.navy);
+    } else {
+      R(ctx, bx - 4, by + 3, 3, 2, P.navy);
+      R(ctx, bx, by + 3, 3, 2, P.navy);
+    }
+    if (frame(lt, 2, 3) === i) {
+      R(ctx, bx + 8, by - 10, 1, 6, P.navy);
+      R(ctx, bx + 6, by - 5, 3, 2, P.navy);
+      R(ctx, bx + 9, by - 10, 3, 1, P.navy);
+    }
+  }
+  const content = lt > 2.2 && !blink(lt, 6);
+  faceCU(ctx, 184, 138 + breath(lt, 3, 1), 44, { pal: COMMUTER, eyes: content ? 'happy' : 'closed', mouth: 'smile', blush: true, iris: P.brown });
+  // the canopy overhead seen from underneath
   const tips = [];
   for (let i = 0; i <= 8; i++) tips.push([-40 + i * 58, 58 + Math.round(Math.sin((i / 8) * Math.PI) * 14)]);
   const rim = [];
@@ -327,84 +576,124 @@ function shotBliss(ctx, lt) {
   for (let i = 0; i < 8; i += 2) poly(ctx, [[256, -30], tips[i], [(tips[i][0] + tips[i + 1][0]) / 2, (tips[i][1] + tips[i + 1][1]) / 2 - 8], tips[i + 1]], P.blue);
   for (let i = 1; i < 8; i++) line(ctx, 256, -30, tips[i][0], tips[i][1], P.ink);
   for (let i = 0; i <= 8; i++) disc(ctx, tips[i][0], tips[i][1], 2, P.white);
-  R(ctx, 254, 0, 4, 160, P.black);
-  R(ctx, 255, 0, 2, 160, P.silver);
-  disc(ctx, 256, 164, 7, P.black);
-  disc(ctx, 256, 164, 6, COMMUTER.S);
+  R(ctx, 254, 0, 4, 168, P.black);
+  R(ctx, 255, 0, 2, 168, P.silver);
+  disc(ctx, 256, 170, 7, P.black);
+  disc(ctx, 256, 170, 6, COMMUTER.S);
   // notifications slide off the rim and drop away
   const edge = [1, 7, 0, 8, 2, 6];
   for (let i = 0; i < 6; i++) {
-    const t = (lt * 0.9 + i / 6) % 1;
+    const t = (lt * 0.8 + i / 6) % 1;
     const [tx, ty] = tips[edge[i]];
     const sd = tx < 192 ? -1 : 1;
     icon(ctx, KINDS[i], tx + sd * t * 50, ty + 6 + t * t * 170);
   }
-  // a sad popup slides away
-  const p = prog(lt, 0.6, 2.2);
-  panel(ctx, Math.round(lerp(300, 330, p)), Math.round(lerp(120, 230, p)), 70, 24, P.white, P.black, 1);
-  text(ctx, 'SYNC FAILED', Math.round(lerp(335, 365, p)), Math.round(lerp(124, 234, p)), { color: P.black, align: 'center' });
-  text(ctx, ':(', Math.round(lerp(335, 365, p)), Math.round(lerp(134, 244, p)), { color: P.blue, align: 'center' });
+  if (lt > 0.6) words(ctx, 'OFFLINE. AT LAST.', 192, 196, lt - 0.6, { per: 0.3, scale: 2, color: P.white, outline: P.navy, ow: 2 });
 }
 
-// 6. End slate.
-function shotSlate(ctx, lt) {
+// 6. END SLATE, with the button: real rain falls straight through the canopy.
+function slateBg(ctx, lt) {
   bands(ctx, 0, 0, W, H, [P.blue, P.cyan, P.cream]);
-  glow(ctx, 350, 40, 60, P.yellow, 0.08);
-  disc(ctx, 350, 40, 18, P.yellow);
-  disc(ctx, 350, 40, 14, P.white);
+  disc(ctx, 350, 34, 22, A(P.yellow, 0.3));
+  disc(ctx, 350, 34, 16, P.yellow);
+  disc(ctx, 346, 30, 7, P.white);
   for (let i = 0; i < 4; i++) cloud(ctx, ((i * 120 + lt * (6 + i * 2)) % (W + 80)) - 40, 150 + (i % 2) * 14, 12 + (i % 3) * 3, P.white, P.silver);
-  const bob = wave(lt, 0.5, 2);
-  const ux = 46;
-  const uy = 40 + bob;
-  ctx.drawImage(umbrellaArt(), ux, uy);
-  glint(ctx, umbrellaArt(), ux, uy, ((lt + 0.6) % 3) / 0.8, { width: 8, alpha: 0.6 });
-  for (let i = 0; i < 4; i++) sparkle(ctx, ux + 10 + i * 28, uy - 4 + ((i * 13) % 20), twinkle(lt, i * 0.25), P.white);
-  const mk = MARK();
-  const x0 = drawMark(ctx, mk, 262, 50, { reveal: prog(lt, 0.2, 1.0), drop: 30 });
-  if (lt > 1.2) glint(ctx, mk.cv, x0 - mk.ox, 50 - mk.oy, ((lt - 1.2) % 3.2) / 0.7, { width: 6 });
-  if (lt > 1.0) text(ctx, 'THE UMBRELLA FOR CLOUD COMPUTING', 262, 86, { color: P.navy, align: 'center' });
-  if (lt > 1.5) slogan(ctx, 'STAY DRY. STAY OFFLINE.', 192, 140, lt - 1.5, { scale: 2, bg: P.yellow, edge: P.orange, color: P.navy });
-  if (lt > 2.1) urlPill(ctx, 'CLOUDBRELLA.OFF', 192, 170, { bg: P.navy, border: P.white, color: P.white });
-  finePrint(ctx, 'NOT EFFECTIVE AGAINST ACTUAL RAIN. DO NOT OPEN INDOORS, YOUR WI-FI WILL GET SAD.', { lt: lt - 2.3 });
+}
+function slateProduct(ctx, lt) {
+  const bob = Math.round(Math.sin(lt * 2) * 2);
+  const ux = 96;
+  const rim = 82 + bob;
+  shadow(ctx, ux, 168, 30, 0.3);
+  canopy(ctx, ux, rim, 56, 40, 0.05 + lt * 0.05);
+  handle(ctx, ux, rim, 46);
+  for (let i = 0; i < 3; i++) sparkle(ctx, ux - 40 + i * 40, rim - 48 + ((i * 13) % 16), twinkle(lt, i * 0.3), P.white);
+  // the button gag: a plain raincloud drifts over and rains on it, for real
+  const rainAt = 3.4;
+  if (lt > rainAt - 0.8) {
+    const cx = Math.round(lerp(-40, ux, easeOut(prog(lt, rainAt - 0.8, rainAt))));
+    cloud(ctx, cx, 20, 16, P.fog, P.steel);
+    if (lt > rainAt) {
+      const rand = mulberry32(2);
+      for (let i = 0; i < 16; i++) {
+        const x = cx - 22 + rand() * 44;
+        const ph = rand();
+        const yy = 30 + (((lt - rainAt) * 160 + ph * 150) % 150);
+        R(ctx, x, yy, 1, 4, P.blue);
+        if (yy > 166) R(ctx, x - 2, 168, 5, 1, P.blue);
+      }
+      if (lt > rainAt + 0.6) {
+        const p = spring(lt - rainAt - 0.6);
+        bigText(ctx, '?', ux + 44, Math.round(64 - p * 6), { scale: 2, color: P.white, outline: P.navy, ow: 2 });
+      }
+    }
+  }
+}
+function shotSlate(ctx, lt) {
+  endSlate(ctx, lt, {
+    bg: slateBg, product: slateProduct, mark: MARK, markX: 262, markY: 40,
+    line: 'THE UMBRELLA FOR CLOUD COMPUTING', lineColor: P.navy,
+    tagline: 'STAY DRY. STAY OFFLINE.', tag: { bg: P.yellow, edge: P.orange, color: P.navy }, tagX: 250, tagY: 118,
+    url: 'CLOUDBRELLA.OFF', pill: { bg: P.navy, border: P.white, color: P.white }, urlY: 150,
+    legal: 'NOT EFFECTIVE AGAINST ACTUAL RAIN. DO NOT OPEN INDOORS, YOUR WI-FI WILL GET SAD.',
+    legalColor: P.silver, legalBg: P.navy,
+  });
 }
 
-const SCENES = [
+const SHOTS = [
   { at: 0, draw: shotDownpour },
-  { at: 5.0, draw: shotSticky, wipe: 'iris', wd: 0.4, cx: 176, cy: 120 },
-  { at: 7.5, draw: shotReveal, wipe: 'bars', wd: 0.45 },
-  { at: 11.6, draw: shotDemo, wipe: 'push', wd: 0.5 },
-  { at: 17.0, draw: shotBliss, wipe: 'iris', wd: 0.4, cx: 176, cy: 110 },
-  { at: 19.7, draw: shotSlate, wipe: 'dissolve', wd: 0.5 },
+  { at: 4.0, draw: shotBarrage },
+  { at: 8.0, draw: shotReveal, wipe: 'whip', wd: 0.4, dir: -1 },
+  { at: 11.0, draw: shotDemo, wipe: 'iris', wd: 0.5, cx: 192, cy: 90 },
+  { at: 16.0, draw: shotBliss, wipe: 'slide', wd: 0.4, dir: 1 },
+  { at: 19.5, draw: shotSlate, wipe: 'match', wd: 0.45, cx: 120, cy: 60 },
 ];
 
+// Jingle, 120 bpm, 51 beats: a minor drizzle, four stabs for the four hits, the
+// rising FWOMP, a bouncy G-major "CLOUD-BREL-LA" theme, a dreamy bridge and the
+// sting on the slate, ending on two raindrop plinks for the button.
 export default {
   id: 'cloudbrella',
   brand: 'CLOUDBRELLA',
   duration: 25.3,
   voice: { gender: 'male', lang: 'en-GB', pitch: 1.0, rate: 1.03 },
   script: [
-    { at: 0.6, text: 'Caught in another downpour of updates, syncs and pop-ups?' },
-    { at: 7.7, text: 'Introducing the Cloudbrella. Total protection from cloud computing.' },
-    { at: 11.9, text: 'It blocks ninety-nine percent of updates, notifications... and terms and conditions.' },
-    { at: 20.1, text: 'Cloudbrella. Stay dry. Stay offline.' },
+    { at: 0.6, text: 'Is the cloud... raining on your parade?' },
+    { at: 4.2, text: 'Updates. Pop-ups. Cookies. Terms and conditions!' },
+    { at: 8.5, text: 'Introducing... Cloudbrella!' },
+    { at: 11.3, text: 'It blocks ninety-nine percent of notifications...' },
+    { at: 14.4, text: '...and one hundred percent of terms and conditions.' },
+    { at: 19.8, text: 'Cloudbrella. Stay dry. Stay offline.' },
   ],
-  // 128 bpm: gloomy drizzle, a rising FWOMP, a bouncy sunny theme, and the
-  // CLOUD-BREL-LA sting resolving on G with the end slate at beat 42.
   tune: {
-    bpm: 128,
+    bpm: 120,
     wave: 'square',
     notes: tune(
-      rep('E4:1 E4:0.5 D4:0.5 E4:1 G4:1 F#4:2 D4:2', 2),
-      'B4:0.5 D5:0.5 G5:0.5 B5:0.5 R:1 D6:3 R:2',
-      'G5:0.5 G5:0.5 A5:0.5 B5:0.5 D6:1 B5:1 C6:0.5 B5:0.5 A5:0.5 G5:0.5 A5:2',
-      'E5:0.5 E5:0.5 F#5:0.5 G5:0.5 B5:1 G5:1 A5:0.5 G5:0.5 F#5:0.5 E5:0.5 D5:2 D5:1 F#5:1',
-      'D5:1 G5:1 B5:1 R:0.5 A5:0.5 B5:1 G5:3 R:4',
+      'E4:1 G4:0.5 F#4:0.5 E4:1 B3:1 E4:1 G4:0.5 A4:0.5 G4:1 F#4:1',
+      'R:1 E5:0.5 R:1 F5:0.5 R:1 F#5:0.5 R:1 G5:0.5 R:0.5 B4:0.5 C5:0.5 D#5:0.5',
+      'B4:0.5 D5:0.5 G5:0.5 R:1 D6:2 B5:0.5 D6:1',
+      'G5:0.5 G5:0.5 B5:1 A5:0.5 G5:0.5 E5:1 D5:0.5 E5:0.5 G5:1 A5:0.5 B5:0.5 A5:1 B5:0.5 A5:0.5 G5:1',
+      'D6:1 B5:1 G5:2 A5:1 F#5:1 D5:1',
+      'G5:0.5 G5:0.5 B5:1 D6:2 R:1 B5:0.5 A5:0.5 G5:3 R:1 E6:0.25 R:0.75 E6:0.25 R:0.75',
     ),
-    bass: tune('E2:4 C3:4 E2:4 D2:4', 'G2:2 D3:2 G2:4', rep('G2:1 D3:1 G2:1 D3:1 C3:1 G2:1 D3:2', 2), 'D3:2', 'G2:2 C3:2 D3:2 G2:2 R:4'),
+    bass: tune(
+      'E2:2 C3:2 E2:2 B2:2',
+      'E2:1.5 E2:1.5 F2:1.5 F#2:1.5 G2:2',
+      'G2:2.5 G2:2 D3:1.5',
+      'G2:1 D3:1 G2:1 D3:1 C3:1 G2:1 C3:1 D3:1 G2:2',
+      'G2:2 C3:2 D3:3',
+      'G2:2 E2:2 C3:2 D3:2 G2:2 R:2',
+    ),
     bassWave: 'triangle',
-    drums: tune(rep('H:0.5', 32), 'S:0.25 S:0.25 S:0.25 S:0.25 S:0.5 S:0.5 K:2 R:4', rep('K:1 H:0.5 H:0.5 S:1 H:1', 4), 'K:1 K:1', 'K:1 S:1 K:1 S:1 K:0.5 K:0.5 S:1 K:2 R:4'),
+    drums: tune(
+      rep('H:0.5', 16),
+      'R:1 K:0.5 R:1 K:0.5 R:1 K:0.5 R:1 K:0.5 S:0.25 S:0.25 S:0.25 S:0.25 S:0.5 S:0.5',
+      'R:2.5 K:1 S:0.5 S:0.5 K:1 S:0.5',
+      rep('K:0.5 H:0.5 S:0.5 H:0.5', 5),
+      rep('H:1', 7),
+      'K:1 S:1 K:1 S:1 K:2 R:6',
+    ),
   },
   draw(ctx, t, dt, info) {
-    play(ctx, dt, info, SCENES);
+    play(ctx, dt, info, SHOTS);
   },
 };

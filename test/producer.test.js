@@ -408,7 +408,7 @@ describe('Producer.produce: the script is normalised with the programme rules', 
     const made = makeProducer({ stories });
     const open = makeChannel();
     delete open.programs.duo.maxChats;
-    made.chain.write = async () => scriptText([storySeg('s1'), ...Array.from({ length: 5 }, (_, i) => chatSeg({ text: `Chat ${i}.` })), storySeg('s2')]);
+    made.chain.write = async () => scriptText([storySeg('s1'), ...Array.from({ length: 5 }, (_, i) => chatSeg({ text: `Chat ${'ABCDE'[i]}.` })), storySeg('s2')]);
     const episode = await made.producer.produce(open, 'duo');
     assert.equal(episode.segments.filter((s) => s.type === 'chat').length, 3);
   });
@@ -425,11 +425,13 @@ describe('Producer.produce: the script is normalised with the programme rules', 
   });
 
   test('map shots without a location are downgraded; locations and facts reach the episode', async () => {
+    const stories = [makeStory(1, { summary: 'Some 40,000 people were evacuated in Kyiv.' }), ...makeStories(7).slice(1)];
     const { episode } = await produceWith(
       scriptText([
         storySeg('s1', { shot: 'map', location: { place: 'KYIV, UKRAINE', lat: 50.4501, lon: 30.5234 }, fact: '40,000 EVACUATED' }),
         storySeg('s2', { shot: 'map' }),
-      ])
+      ]),
+      { stories }
     );
     const [a, b] = episode.segments.filter((s) => s.type === 'story');
     assert.deepEqual([a.shot, a.location, a.fact], ['map', { place: 'KYIV, UKRAINE', lat: 50.45, lon: 30.52 }, '40,000 EVACUATED']);

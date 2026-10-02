@@ -17,7 +17,7 @@ import {
   P, W, H, R, A, rrect, disc, oval, ring, poly, line, dither, bands, sparkle, twinkle, shadow, sunburst, spr, draw,
   cached, text, bigText, kinetic, micro, play, hero, faceCU, wordmark, drawMark, glint, cloud, mulberry32, prog, lerp,
   easeOut, easeIn, easeOutBack, spring, wobble, key, tween, poseAt, blink, breath, kick, withCam, squashArt, cylinder,
-  spotlight, badge, endSlate, lazy, clipRect, rep, tune, frame,
+  spotlight, badge, endSlate, lazy, clipRect, clipCircle, rep, tune, frame, stroke,
 } from './kit.js';
 
 // --- colour depth -------------------------------------------------------------
@@ -171,7 +171,7 @@ function can(ctx, cx, top, r, turn, { tab = 0, lidOnly = false } = {}) {
 
 // --- park ------------------------------------------------------------------------
 
-const WW = 560; // the park is wider than the screen so the camera can travel
+const WW = 600; // the park is wider than the screen so the camera can travel
 const GROUND = 178; // the path where people stand
 const SEAT = 150; // bench seat top
 const BENCH_X = 200;
@@ -391,8 +391,11 @@ const machineArt = () =>
     // header sign
     R(c, 6, 5, MW - 12, 15, P.black);
     R(c, 7, 6, MW - 14, 13, P.white);
-    drawMark(c, MINI_BIT(), 22, 7);
-    drawMark(c, MINI_FIZZ(), 43, 7);
+    const bit = MINI_BIT();
+    const fizz = MINI_FIZZ();
+    const x0 = Math.round((MW - (bit.w + 2 + fizz.w)) / 2);
+    drawMark(c, bit, x0 + bit.w / 2, 6);
+    drawMark(c, fizz, x0 + bit.w + 2 + fizz.w / 2, 6);
     // window of cans
     R(c, 6, 23, 36, 58, P.black);
     R(c, 7, 24, 34, 56, P.navy);
@@ -482,73 +485,74 @@ function bitSpray(ctx, x, y, age, { n = 26, power = 1, seed = 4 } = {}) {
 // --- shots -----------------------------------------------------------------------
 
 // 1. LOW-RES: the 1-bit park; he fans himself with a newspaper, then sighs.
+const SUN_X = 400;
+const OSD = [13, 10];
 function shotLowRes(ctx, lt) {
-  const cam = Math.round(tween(lt, 0, 3.6, 70, 86, 'inOut'));
+  const cam = Math.round(tween(lt, 0, 3.6, 58, 72, 'inOut'));
   withCam(ctx, cam, 0, (c) => {
     c.drawImage(park(1), 0, 0);
-    sun(c, 130, 34, lt, 1);
-    heat(c, 130, 200, lt);
-    pigeon(c, 268, GROUND - 1, lt, 1);
+    sun(c, SUN_X, 36, lt, 1);
+    heat(c, 150, 200, lt);
+    pigeon(c, 262, GROUND - 1, lt, 1);
     const sigh = prog(lt, 2.5, 2.9) - prog(lt, 3.3, 3.6);
     const bob = breath(lt, 2.2, 1) + Math.round(sigh * 2);
-    const fan = poseAt(lt, [[0, 'down'], [0.3, [[-8, -2], [-2, -12]], 'outBack'], [2.5, [[-8, -2], [-2, -12]]], [2.9, [[-3, 7], [6, 12]], 'inOut']], Math.sin(lt * 14) * 0.45 * (1 - prog(lt, 2.4, 2.8)));
+    const fanning = 1 - prog(lt, 2.4, 2.8);
+    const fan = poseAt(lt, [[0, [[-3, 7], [5, 12]]], [0.35, [[-8, -2], [-3, -12]], 'outBack'], [2.5, [[-8, -2], [-3, -12]]], [2.95, [[-3, 7], [5, 12]], 'inOut']], Math.sin(lt * 13) * 0.5 * fanning * prog(lt, 0.3, 0.5));
     const eyes = sigh > 0.5 ? 'closed' : blink(lt, 3) ? 'closed' : 'sleepy';
-    const me = hero(c, BENCH_X, SEAT, { pal: palAt('guy', GUY, 1), hair: 'spiky', eyes, brows: 'sad', mouth: sigh > 0.3 ? 'o' : 'wavy', legs: 'none', bob, sleeves: 'short', armL: fan, armR: 'down', sweat: lt });
-    // the newspaper fan in his hand
+    const pal = palAt('guy', GUY, 1);
+    const me = hero(c, BENCH_X, SEAT, { pal, hair: 'spiky', eyes, brows: 'sad', mouth: sigh > 0.3 ? 'o' : 'wavy', legs: 'none', bob, sleeves: 'short', armL: fan, armR: [[-3, 7], [4, 12]], sweat: lt });
+    // the folded newspaper he fans himself with
     const [hx, hy] = me.handL;
-    R(c, hx - 9, hy - 12, 12, 14, P.black);
-    R(c, hx - 8, hy - 11, 10, 12, P.cream);
-    for (let i = 0; i < 4; i++) R(c, hx - 7, hy - 9 + i * 3, 8, 1, P.black);
+    R(c, hx - 4, hy - 15, 9, 16, P.black);
+    R(c, hx - 3, hy - 14, 7, 14, P.cream);
+    for (let i = 0; i < 4; i++) R(c, hx - 2, hy - 12 + i * 3, 5, 1, P.black);
+    disc(c, hx, hy, 3, P.black);
+    disc(c, hx, hy, 2, pal.S);
     benchFront(c, BENCH_X, 1);
-    shins(c, BENCH_X, palAt('guy', GUY, 1));
+    shins(c, BENCH_X, pal);
   });
-  depthWindow(ctx, 13, 10, 1, 1, lt);
-  if (lt > 1.6) kinetic(ctx, 'LOW-RES?', 300, 26, lt - 1.6, { style: 'stamp', scale: 3, color: P.cream, outline: P.black, ow: 2, depth: 2, depthColor: P.black });
+  depthWindow(ctx, OSD[0], OSD[1], 1, 1, lt);
+  if (lt > 1.6) kinetic(ctx, 'LOW-RES?', 214, 52, lt - 1.6, { style: 'stamp', scale: 3, color: P.cream, outline: P.black, ow: 2, depth: 2, depthColor: P.black });
 }
 
 // 2. THE GLOW: close-up, a red light washes over him from screen right.
 function shotGlow(ctx, lt) {
-  R(ctx, 0, 0, W, H, P.cream);
-  for (let x = -20; x < W; x += 46) {
-    disc(ctx, x, 120, 26, P.black);
-    dither(ctx, x - 22, 96, 44, 22, P.cream, 'dots');
-  }
-  R(ctx, 0, 140, W, 76, P.cream);
-  dither(ctx, 0, 140, W, 8, P.black, 'checker');
-  dither(ctx, 0, 148, W, 30, P.black, 'sparse');
-  // the glow arrives from the right
-  const g = easeOut(prog(lt, 0.25, 0.9));
+  cuBackground(ctx, 1);
+  // the glow arrives from the right as dithered light, densest at the source
+  const g = easeOut(prog(lt, 0.2, 0.8));
   if (g > 0) {
-    const gx = Math.round(W - 110 * g);
-    dither(ctx, gx, 0, W - gx, H, P.red, 'sparse');
-    dither(ctx, gx + 36, 0, W - gx, H, P.red, 'checker');
-    R(ctx, gx + 80, 0, W, H, P.red);
+    const gx = Math.round(W - 150 * g);
+    dither(ctx, gx, 0, W - gx, H, P.red, 'dots');
+    dither(ctx, gx + 50, 0, W, H, P.red, 'sparse');
+    dither(ctx, gx + 100, 0, W, H, P.red, 'checker');
   }
   const look = tween(lt, 0.55, 0.85, 0, 1, 'outBack');
   const wide = lt > 0.75;
   const squint = lt > 0.6 && lt <= 0.75;
-  const s = Math.round(tween(lt, 0, 1.6, 44, 47, 'out'));
-  const cy = 124 + Math.round(wobble(lt, 0.75, 3, 3, 6));
-  faceCU(ctx, 168, cy, s, {
+  const s = Math.round(tween(lt, 0, 1.6, 46, 50, 'out'));
+  const cx = 176;
+  const cy = 128 + Math.round(wobble(lt, 0.75, 3, 3, 6));
+  faceCU(ctx, cx, cy, s, {
     pal: palAt('guy', GUY, 1), hair: 'spiky', iris: P.black,
     eyes: wide ? 'wide' : squint ? 'closed' : blink(lt, 2) ? 'closed' : 'sleepy', brows: wide ? 'up' : 'sad',
     mouth: wide ? 'O' : 'wavy', look,
   });
   // red rim light on the side of his face that sees the machine
   if (g > 0.3) {
-    clipRect(ctx, 168 + s - 6, cy - s, 12, s * 2);
-    oval(ctx, 168, cy, s, Math.round(s * 0.92), P.red);
-    ctx.restore();
-    oval(ctx, 168, cy, s - 5, Math.round(s * 0.92) - 2, P.cream);
+    const ry = Math.round(s * 0.92);
+    for (let dy = -ry + 6; dy < ry - 4; dy++) {
+      const hw = Math.floor(s * Math.sqrt(1 - (dy / (ry + 0.5)) ** 2));
+      R(ctx, cx + hw - 3, cy + dy, 2, 1, P.red);
+    }
   }
   // follow-through: the sweat drop flies off when his head snaps round
   if (lt > 0.75 && lt < 1.3) {
     const tt = lt - 0.75;
-    disc(ctx, 168 - s - 4 - tt * 60, cy - 26 - tt * 50 + tt * tt * 200, 2, P.black);
+    disc(ctx, cx - s - 6 - tt * 60, cy - 30 - tt * 50 + tt * tt * 200, 2, P.black);
   }
   if (lt > 0.8) {
     const p = spring(lt - 0.8);
-    bigText(ctx, '!', 232, Math.round(54 - p * 8), { scale: 3, color: P.cream, outline: P.black, ow: 2 });
+    bigText(ctx, '!', 250, Math.round(60 - p * 8), { scale: 3, color: P.cream, outline: P.black, ow: 2 });
   }
 }
 
@@ -561,7 +565,8 @@ function shotMachine(ctx, lt) {
   const [sx, sy] = kick(lt, clunk, 0.25, 3, 5);
   withCam(ctx, cam + sx, sy, (c) => {
     c.drawImage(park(1), 0, 0);
-    pigeon(c, 268, GROUND - 1, lt, 1);
+    sun(c, SUN_X, 36, lt, 1);
+    pigeon(c, 262, GROUND - 1, lt, 1);
     const squash = Math.max(0, wobble(lt, clunk, 0.07, 4, 7));
     machine(c, MACHINE_X, GROUND + 2, lt, { squash });
     // he walks, stops with a little lean, reaches with anticipation, presses
@@ -583,52 +588,93 @@ function shotMachine(ctx, lt) {
       c.restore();
     }
   });
-  if (lt > clunk) kinetic(ctx, 'CLUNK!', 150, 40, lt - clunk, { style: 'stamp', scale: 2, color: P.cream, outline: P.black, ow: 2, depth: 2 });
-  depthWindow(ctx, 13, 10, 1, 1, lt);
+  if (lt > clunk) kinetic(ctx, 'CLUNK!', 158, 62, lt - clunk, { style: 'stamp', scale: 3, color: P.cream, outline: P.black, ow: 2, depth: 2 });
+  depthWindow(ctx, OSD[0], OSD[1], 1, 1, lt);
 }
 
 // 4. CRACK: extreme close-up on the tab. Anticipation, then PSSHT.
+function finger(ctx, x, y, len, pal) {
+  rrect(ctx, x - 1, y - 1, len + 2, 11, P.black, 3);
+  rrect(ctx, x, y, len, 9, pal.S, 3);
+  R(ctx, x + 2, y + 7, len - 5, 1, pal.s);
+  R(ctx, x + len - 9, y + 2, 1, 5, P.black);
+  R(ctx, x + 3, y + 1, len - 12, 1, P.white);
+}
 function shotCrack(ctx, lt) {
+  const pal = palAt('guy', GUY, 1);
   R(ctx, 0, 0, W, H, P.cream);
-  dither(ctx, 0, 0, W, 30, P.black, 'sparse');
-  dither(ctx, 0, 186, W, 30, P.black, 'sparse');
+  dither(ctx, 0, 0, W, 24, P.black, 'checker');
+  dither(ctx, 0, 24, W, 20, P.black, 'sparse');
+  dither(ctx, 0, 180, W, 36, P.black, 'sparse');
   const pop = 0.75;
+  const age = lt - pop;
+  // comic burst lines from the tab for a beat
+  if (age > 0 && age < 0.35) {
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2;
+      const r0 = 50 + age * 120;
+      line(ctx, 196 + Math.cos(a) * r0, 66 + Math.sin(a) * r0 * 0.7, 196 + Math.cos(a) * (r0 + 26), 66 + Math.sin(a) * (r0 + 26) * 0.7, P.black, 2);
+    }
+  }
   const [sx, sy] = kick(lt, pop, 0.3, 3, 9);
-  const sq = wobble(lt, pop, 0.08, 5, 7);
+  const sq = wobble(lt, pop, 0.07, 5, 7);
   const r = 40;
   const cx = 192 + sx;
-  const top = 64 + sy;
-  // the 1-bit hand behind the can
-  rrect(ctx, cx - r - 16, top + 50, 34, 60, P.black, 3);
-  rrect(ctx, cx - r - 15, top + 51, 32, 58, P.cream, 3);
+  const top = 66 + sy;
+  // palm behind the can and the wrist running out of shot
+  stroke(ctx, [[cx - r - 4, top + 100], [cx - r - 30, H + 20]], 22, pal.S, P.black);
+  rrect(ctx, cx - r - 18, top + 44, 30, 66, P.black, 6);
+  rrect(ctx, cx - r - 17, top + 45, 28, 64, pal.S, 6);
+  dither(ctx, cx - r - 17, top + 45, 8, 64, P.black, 'sparse');
+  R(ctx, cx - r - 52, H - 14, 46, 14, P.black);
+  dither(ctx, cx - r - 51, H - 13, 44, 12, P.cream, 'checker');
   ctx.save();
-  ctx.translate(cx, top + 120);
+  ctx.translate(cx, top + 122);
   ctx.scale(1 - sq * 0.5, 1 + sq);
-  ctx.translate(-cx, -(top + 120));
-  can(ctx, cx, top, r, 0.5, { tab: lt < pop ? tween(lt, 0.2, pop, 0, 0.45, 'in') - (lt < 0.4 ? prog(lt, 0.2, 0.4) * 0.1 : 0) : 1 });
+  ctx.translate(-cx, -(top + 122));
+  const tab = lt < pop ? tween(lt, 0.3, pop, 0, 0.45, 'in') - prog(lt, 0.2, 0.32) * 0.1 + prog(lt, 0.32, 0.4) * 0.1 : 1;
+  can(ctx, cx, top, r, 0.5, { tab });
   ctx.restore();
-  // fingers wrapped round the front
-  for (let i = 0; i < 4; i++) {
-    const fy = top + 62 + i * 12;
-    rrect(ctx, cx - r - 4, fy, 22, 11, P.black, 2);
-    rrect(ctx, cx - r - 3, fy + 1, 20, 9, P.cream, 2);
-    R(ctx, cx - r + 12, fy + 3, 1, 5, P.black);
+  // fingers wrapped round the front, a little curved
+  [[0, 24], [12, 26], [24, 24], [36, 19]].forEach(([dy, len], i) => finger(ctx, cx - r - 6 + (i === 0 ? 1 : 0), top + 52 + dy, len, pal));
+  // the other hand comes in from the top right: its index finger hooks the tab
+  // and pulls (anticipation: a tiny push down first)
+  const reach = easeOut(prog(lt, 0, 0.28));
+  const push = prog(lt, 0.22, 0.32) - prog(lt, 0.32, 0.42);
+  const lift = lt < pop ? tween(lt, 0.42, pop, 0, 5, 'in') - push * 2 : 7 - wobble(lt, pop, 3, 3, 6);
+  const tipX = cx + 10 + Math.round((1 - reach) * 80);
+  const tipY = top + 6 - Math.round(lift) - Math.round((1 - reach) * 40);
+  const curl = lt > pop ? 3 : 0; // the finger curls as the tab gives
+  const mid = [tipX + 9, tipY - 9 - curl];
+  const base = [tipX + 22, tipY - 16];
+  // back of the hand with curled fingers along its edge
+  oval(ctx, base[0] + 20, base[1] - 14, 24, 19, P.black);
+  oval(ctx, base[0] + 20, base[1] - 14, 23, 18, pal.S);
+  R(ctx, base[0] + 6, base[1] - 26, 20, 1, P.white);
+  for (let i = 0; i < 3; i++) {
+    disc(ctx, base[0] + 8 + i * 10, base[1] + 3, 6, P.black);
+    disc(ctx, base[0] + 8 + i * 10, base[1] + 3, 5, pal.S);
+    R(ctx, base[0] + 4 + i * 10, base[1] + 6, 8, 1, pal.s);
   }
-  // index finger hooks the tab and pulls
-  const fx = cx + 6 + Math.round(tween(lt, 0, 0.25, 30, 0, 'out'));
-  const lift = lt < pop ? Math.round(tween(lt, 0.25, pop, 0, 4, 'in')) : Math.round(6 - wobble(lt, pop, 3, 3, 6));
-  const fy = top - 2 - lift;
-  rrect(ctx, fx, fy - 4, 46, 12, P.black, 3);
-  rrect(ctx, fx + 1, fy - 3, 44, 10, P.cream, 3);
-  R(ctx, fx + 8, fy - 1, 1, 6, P.black);
-  R(ctx, fx + 2, fy - 2, 5, 3, P.cream);
-  if (lt > pop) {
-    const age = lt - pop;
-    if (age < 0.5) {
-      cloud(ctx, cx + 4, top - 6 - age * 30, Math.round(8 + age * 30), P.white, P.silver);
+  dither(ctx, base[0] + 22, base[1] - 32, 18, 30, P.black, 'sparse');
+  stroke(ctx, [base, mid, [tipX, tipY]], 8, pal.S, P.black);
+  R(ctx, mid[0] - 2, mid[1] - 1, 4, 1, P.black);
+  R(ctx, tipX - 3, tipY - 3, 5, 4, P.black);
+  R(ctx, tipX - 2, tipY - 2, 3, 2, P.white);
+  if (age > 0) {
+    // foam bubbles over the lid, then settles
+    const foam = Math.min(1, age * 4) * (1 - prog(age, 0.6, 1.4) * 0.6);
+    const rand = mulberry32(17);
+    for (let i = 0; i < 16; i++) {
+      const fx = cx + 4 + (rand() - 0.5) * 36 * foam;
+      const fy = top + 8 - rand() * 18 * foam - Math.sin(age * 8 + i) * 1.5;
+      const fr = Math.max(1, Math.round((2 + rand() * 4) * foam));
+      disc(ctx, fx, fy, fr + 1, P.black);
+      disc(ctx, fx, fy, fr, P.white);
     }
-    bitSpray(ctx, cx + 4, top + 4, age, { n: 34, power: 1.2 });
-    kinetic(ctx, 'PSSHT!', 318, 46, age, { style: 'stamp', scale: 3, color: P.white, outline: P.black, ow: 2, depth: 3, depthColor: P.red });
+    if (age < 0.5) cloud(ctx, cx + 4, top - 12 - age * 40, Math.round(8 + age * 34), P.white, P.silver);
+    bitSpray(ctx, cx + 4, top + 2, age, { n: 56, power: 1.4 });
+    kinetic(ctx, 'PSSHT!', 314, 40, age, { style: 'stamp', scale: 3, color: P.white, outline: P.black, ow: 2, depth: 3, depthColor: P.red });
   }
 }
 
@@ -717,42 +763,59 @@ function shotUpgrade(ctx, lt) {
   if (label) {
     const [t0, depth] = label;
     const big = depth === 8;
-    kinetic(ctx, big ? '8-BIT!' : `${depth}-BIT`, 318, big ? 30 : 36, lt - t0 - 0.2, {
+    kinetic(ctx, big ? '8-BIT!' : `${depth}-BIT`, 312, big ? 62 : 66, lt - t0 - 0.2, {
       style: 'stamp', scale: big ? 4 : 3, color: big ? P.yellow : mapper(depth)(P.white), outline: P.black, ow: 2, depth: big ? 3 : 2, depthColor: big ? P.red : P.black,
     });
   }
-  depthWindow(ctx, 13, 10, d, d, lt);
+  depthWindow(ctx, OSD[0], OSD[1], d, d, lt);
 }
 
-// 6. PARTY: full colour; he dances on the bench, the pigeon wears shades.
+// 6. PARTY: full colour; he dances on the bench and the whole park joins in.
+const GRANNY = { S: P.skin, s: P.skinShade, H: P.silver, h: P.white, E: P.fog, T: P.magenta, t: P.purple, L: P.magenta, C: P.white, X: P.magenta, D: P.purple, d: P.maroon, B: P.maroon };
+const KID = { S: P.tanShade, s: P.brown, H: P.black, h: P.slate, E: P.black, T: P.cyan, t: P.blue, L: P.cyan, C: P.cyan, X: P.cyan, b: P.navy, Y: P.navy, P: P.navy, p: P.ink, B: P.white, A: P.yellow, a: P.orange };
+const UP = [[-5, -7], [-8, -15]];
+const OUT = [[-7, 1], [-14, -2]];
+const HIP = [[-6, 7], [0, 12]];
 function shotParty(ctx, lt) {
-  const cam = Math.round(tween(lt, 0, 4.8, 92, 74, 'inOut'));
+  const cam = Math.round(tween(lt, 0, 4.8, 92, 76, 'inOut'));
   const beat = (lt * 150) / 60; // beats since the cut
+  const ph = beat % 2;
+  const hop = -Math.round(Math.abs(Math.sin(beat * Math.PI)) * 5);
   withCam(ctx, cam, 0, (c) => {
     c.drawImage(park(8), 0, 0);
-    sun(c, 130, 34, lt, 8);
+    sun(c, SUN_X, 36, lt, 8);
     for (let i = 0; i < 3; i++) cloud(c, ((i * 190 + lt * 6) % 620) - 30, 22 + i * 14, 12 + i * 2, P.white, P.silver);
-    // flowers bloom along the path edge
+    // flowers bloom along the path edge, one after another
     for (let i = 0; i < 12; i++) {
       const fx = 20 + i * 44 + ((i * 13) % 11);
       const s = spring(lt - 0.1 - i * 0.06);
       if (s <= 0) continue;
-      const fy = 160;
+      const fy = 162;
       R(c, fx, fy - Math.round(8 * Math.min(1, s)), 1, Math.round(8 * Math.min(1, s)), P.darkGreen);
       disc(c, fx, fy - Math.round(9 * s), Math.max(1, Math.round(3 * s)), BIT_COLS[i % 8]);
       R(c, fx, fy - Math.round(9 * s), 1, 1, P.white);
     }
-    pigeon(c, 268, GROUND - 1, lt, 8, { shades: true, mode: 'bob' });
-    // dancing on the bench, can held high, hops on the beat
-    const ph = beat % 2;
-    const hop = -Math.round(Math.abs(Math.sin(beat * Math.PI)) * 5);
-    const up = [[-5, -7], [-8, -15]];
-    const out = [[-7, 1], [-14, -2]];
-    const armL = poseAt(ph, [[0, up], [1, out, 'inOutBack'], [2, up, 'inOutBack']]);
-    const armR = poseAt(ph, [[0, out], [1, up, 'inOutBack'], [2, out, 'inOutBack']]);
+    // granny on the path: hip sway, one arm up on the off-beat
+    const gIn = easeOut(prog(lt, 0.3, 1.0));
+    const gx = Math.round(lerp(96, 128, gIn));
+    hero(c, gx, GROUND, {
+      pal: palAt('granny', GRANNY, 8), hair: 'bun', glasses: true, legs: 'skirt', eyes: 'happy', mouth: 'open', blush: true,
+      armL: poseAt((beat + 1) % 2, [[0, HIP], [1, UP, 'inOutBack'], [2, HIP, 'inOutBack']]), armR: HIP, bob: Math.round(Math.sin(beat * Math.PI) * 1.5),
+    });
+    // the kid hops on the beat
+    const kx = Math.round(lerp(330, 292, easeOut(prog(lt, 0.5, 1.2))));
+    const kj = Math.round(Math.abs(Math.sin(beat * Math.PI)) * 6);
+    hero(c, kx, GROUND - kj, {
+      pal: palAt('kid', KID, 8), hair: 'puff', small: true, legs: kj > 2 ? 'walk' : 'stand', step: 1, eyes: 'happy', mouth: 'grin',
+      armL: kj > 3 ? UP : OUT, armR: kj > 3 ? UP : OUT,
+    });
+    pigeon(c, 252, GROUND - 1, lt, 8, { shades: true, mode: 'bob' });
+    // him: dancing on the bench, can held high
+    const armL = poseAt(ph, [[0, UP], [1, OUT, 'inOutBack'], [2, UP, 'inOutBack']]);
+    const armR = poseAt(ph, [[0, OUT], [1, UP, 'inOutBack'], [2, OUT, 'inOutBack']]);
     const me = hero(c, BENCH_X, SEAT - 3 + hop, {
       pal: palAt('guy', GUY, 8), hair: 'spiky', legs: 'stand', sleeves: 'short', eyes: blink(lt, 5) ? 'closed' : 'happy',
-      mouth: 'grin', blush: true, armL, armR, look: Math.round(Math.sin(beat * Math.PI) * 1),
+      mouth: 'grin', blush: true, armL, armR, look: Math.round(Math.sin(beat * Math.PI)),
     });
     const [hx, hy] = me.handR;
     R(c, hx - 5, hy - 15, 11, 16, P.black);
@@ -770,50 +833,67 @@ function shotParty(ctx, lt) {
   }
   // 256 TASTES badge on "two hundred and fifty-six"
   const bp = spring(lt - 0.75, 1.4, 4.5);
-  const rr = badge(ctx, 316, 66, 34, bp, { n: 16, fill: P.yellow, rot: lt * 0.4, ring: P.orange });
+  const rr = badge(ctx, 322, 98, 32, bp, { n: 16, fill: P.yellow, rot: lt * 0.4, ring: P.orange });
   if (rr > 20) {
-    bigText(ctx, '256', 316, 51, { scale: 3, color: P.red, outline: P.white, ow: 1, align: 'center' });
-    micro(ctx, 'TASTES!', 316, 77, { color: P.black, align: 'center' });
+    bigText(ctx, '256', 322, 84, { scale: 3, color: P.red, outline: P.white, ow: 1, align: 'center' });
+    micro(ctx, 'TASTES!', 322, 108, { color: P.black, align: 'center' });
   }
-  depthWindow(ctx, 13, 10, 8, 8, lt);
+  depthWindow(ctx, OSD[0], OSD[1], 8, 8, lt);
 }
 
 // 7. HERO CAN: the turntable, the light sweep, ice.
 function heroSet(ctx, lt) {
-  bands(ctx, 0, 0, W, 160, [P.black, P.maroon, P.darkRed]);
-  R(ctx, 0, 160, W, 56, P.black);
-  R(ctx, 0, 160, W, 1, P.darkRed);
+  bands(ctx, 0, 0, W, 166, [P.black, P.maroon]);
+  // radial dithered glow behind the product
+  clipCircle(ctx, 192, 104, 78);
+  dither(ctx, 110, 20, 170, 150, P.darkRed, 'sparse');
+  ctx.restore();
+  clipCircle(ctx, 192, 104, 54);
+  dither(ctx, 130, 40, 130, 120, P.darkRed, 'checker');
+  ctx.restore();
+  R(ctx, 0, 166, W, 50, P.black);
+  R(ctx, 0, 166, W, 1, P.maroon);
   spotlight(ctx, 192, 166, { top: -4, w0: 16, w1: 56, a: 0.05, pool: P.maroon, poolRx: 60 });
   // fizz bits rising behind
   for (let i = 0; i < 14; i++) {
     const age = (lt * 0.8 + i / 14) % 1;
-    const x = 192 + Math.sin(age * 9 + i) * (30 + i * 3);
-    text(ctx, i % 2 ? '1' : '0', x, 150 - age * 140, { color: i % 3 ? A(P.pink, 0.6) : A(P.yellow, 0.7) });
+    const x = 192 + Math.sin(age * 9 + i) * (38 + i * 3);
+    text(ctx, i % 2 ? '1' : '0', x, 150 - age * 140, { color: i % 3 ? P.pink : P.yellow });
   }
 }
-function iceCube(ctx, x, y, s) {
-  R(ctx, x - 1, y - 1, s + 2, s + 2, P.black);
-  R(ctx, x, y, s, s, A(P.cyan, 0.45));
-  R(ctx, x, y, s, 2, A(P.white, 0.7));
-  R(ctx, x, y, 2, s, A(P.white, 0.5));
-  R(ctx, x + s - 3, y + s - 3, 2, 2, A(P.white, 0.8));
+/** Ice-cold: condensation drops sliding down the front and a cold mist at the base. */
+function frost(ctx, cx, top, r, lt) {
+  const lh = Math.round(r * 2.6);
+  for (let i = 0; i < 6; i++) {
+    const x = cx - r + 6 + ((i * 17) % (2 * r - 10));
+    const ph = (lt * (0.25 + (i % 3) * 0.08) + i * 0.37) % 1;
+    const y = top + 14 + Math.round(ph * (lh - 18));
+    R(ctx, x, y, 2, 2, P.white);
+    R(ctx, x, y + 2, 2, 1, P.pink);
+    R(ctx, x, y - 3, 1, 3, A(P.white, 0.35));
+  }
+  for (let i = 0; i < 5; i++) {
+    const ph = (lt * 0.5 + i / 5) % 1;
+    const sd = i % 2 ? 1 : -1;
+    dither(ctx, cx + sd * (r - 6 + ph * 34) - 8, top + lh + 2 - ph * 6, 16, 4, P.white, ph < 0.5 ? 'checker' : 'sparse');
+  }
 }
 function shotHero(ctx, lt) {
   heroSet(ctx, lt);
   const rise = Math.round(tween(lt, 0, 0.8, 10, 0, 'out'));
-  const r = 26;
+  const r = 32;
   const top = 64 + rise;
   const turn = 0.32 + lt * 0.28;
-  // reflection on the glossy floor (stays in the floor zone)
-  clipRect(ctx, 0, 166, W, 50);
+  // reflection on the glossy floor
+  clipRect(ctx, 0, 167, W, 49);
   ctx.save();
   ctx.globalAlpha = 0.25;
-  ctx.translate(0, 2 * 166);
+  ctx.translate(0, 2 * 167);
   ctx.scale(1, -1);
   can(ctx, 192, top, r, turn);
   ctx.restore();
   ctx.restore();
-  shadow(ctx, 192, 166, 30, 0.5);
+  shadow(ctx, 192, 167, 36, 0.5);
   can(ctx, 192, top, r, turn);
   // diagonal light sweep across the can
   const g = prog(lt, 0.6, 1.2);
@@ -822,51 +902,61 @@ function shotHero(ctx, lt) {
     for (let yy = 0; yy < 80; yy += 2) R(ctx, 192 - r - 20 + Math.round(g * (2 * r + 50)) + Math.round((80 - yy) * 0.4) - 16, top + yy, 6, 2, A(P.white, 0.6));
     ctx.restore();
   }
-  iceCube(ctx, 136, 152, 12);
-  iceCube(ctx, 150, 156, 9);
-  iceCube(ctx, 238, 154, 11);
-  sparkle(ctx, 172, 96 + rise, twinkle(lt, 0.1), P.white);
-  sparkle(ctx, 212, 130 + rise, twinkle(lt, 0.5), P.white);
+  frost(ctx, 192, top + Math.max(2, Math.round(r * 0.28)), r, lt);
+  sparkle(ctx, 172, 98 + rise, twinkle(lt, 0.1), P.white);
+  sparkle(ctx, 212, 132 + rise, twinkle(lt, 0.5), P.white);
   if (lt > 0.5) {
     const bp = spring(lt - 0.5, 1.5, 5);
-    const rr = badge(ctx, 286, 62, 24, bp, { n: 12, fill: P.yellow, rot: -0.2 });
-    if (rr > 14) {
-      micro(ctx, 'NEW', 286, 52, { color: P.red, align: 'center' });
-      text(ctx, '8-BIT', 286, 59, { color: P.black, align: 'center' });
-      micro(ctx, 'RECIPE', 286, 69, { color: P.red, align: 'center' });
+    const rr = badge(ctx, 296, 62, 26, bp, { n: 12, fill: P.yellow, rot: -0.2 });
+    if (rr > 16) {
+      micro(ctx, 'NEW', 296, 51, { color: P.red, align: 'center' });
+      text(ctx, '8-BIT', 296, 58, { color: P.black, align: 'center' });
+      micro(ctx, 'RECIPE', 296, 68, { color: P.red, align: 'center' });
     }
   }
 }
 
-// 8. END SLATE, with the button gag: a 1-bit pigeon waddles in and gets its colour.
+// 8. END SLATE, with the button gag: a 1-bit pigeon waddles in, pecks the can
+// and gets its colour.
 function slateBg(ctx, lt) {
   sunburst(ctx, 96, 112, lt * 0.03, 12, P.red, P.darkRed);
 }
 function slateProduct(ctx, lt) {
-  oval(ctx, 96, 152, 42, 7, P.maroon);
-  oval(ctx, 96, 151, 40, 5, P.black);
+  oval(ctx, 96, 152, 46, 7, P.maroon);
+  oval(ctx, 96, 151, 44, 5, P.black);
   shadow(ctx, 96, 151, 26, 0.5);
   const bob = Math.round(Math.sin(lt * 2.4) * 1.5);
-  can(ctx, 96, 70 + bob, 24, 0.5 + Math.sin(lt * 0.8) * 0.06);
+  const hit = 3.0; // the peck
+  const jolt = Math.round(wobble(lt, hit, 2, 4, 6));
+  can(ctx, 96 + jolt, 70 + bob, 24, 0.5 + Math.sin(lt * 0.8) * 0.06);
   sparkle(ctx, 80, 92 + bob, twinkle(lt, 0.1), P.white);
   sparkle(ctx, 116, 128 + bob, twinkle(lt, 0.45), P.white);
-  // the pigeon
-  if (lt > 1.8) {
-    const t = lt - 1.8;
-    const x = Math.round(Math.min(56, -12 + t * 34));
-    const colour = t > 2.3;
-    const stepping = x < 56;
-    pigeon(ctx, x, 150 - (stepping && Math.floor(t * 8) % 2 ? 1 : 0), lt, colour ? 8 : 1, { peck: !stepping && !colour, shades: colour });
-    if (t > 2.3 && t < 2.9) sparkle(ctx, x + 2, 132, twinkle(t - 2.3, 0, 14), P.white);
-    if (t > 2.3) micro(ctx, '8-BIT!', x + 2, 128 - Math.round(spring(t - 2.3) * 6), { color: P.yellow, align: 'center' });
+  if (lt > 1.6) {
+    const x = Math.round(Math.min(58, -14 + (lt - 1.6) * 40));
+    const walking = x < 58;
+    const pecking = lt > hit - 0.3 && lt < hit + 0.1;
+    const gy = 151;
+    const scan = prog(lt, hit + 0.05, hit + 0.45);
+    const mode = walking ? 'walk' : pecking ? 'peck' : 'stand';
+    pigeon(ctx, x, gy, walking ? lt : 0.13 * 2, scan >= 1 ? 8 : 1, { mode, shades: false });
+    if (scan > 0 && scan < 1) {
+      // its own little rescan, top to bottom
+      clipRect(ctx, x - 12, gy - 16, 24, Math.round(18 * scan));
+      pigeon(ctx, x, gy, 0, 8, { mode });
+      ctx.restore();
+    }
+    if (scan >= 1) {
+      micro(ctx, '8-BIT!', x + 1, 126 - Math.round(spring(lt - hit - 0.45) * 6), { color: P.yellow, align: 'center' });
+      sparkle(ctx, x - 9, 132, twinkle(lt, 0.2), P.white);
+    }
   }
 }
 function shotSlate(ctx, lt) {
   endSlate(ctx, lt, {
-    bg: slateBg, product: slateProduct, mark: MARK, sub: SUB, markX: 266, markY: 30,
+    bg: slateBg, product: slateProduct, mark: MARK, sub: SUB, markX: 266, markY: 22,
     line: 'NOW WITH 8 BITS OF FLAVOUR', lineColor: P.cream,
-    tagline: 'TASTE EVERY BIT.', tag: { bg: P.yellow, edge: P.orange, color: P.maroon },
-    url: 'BITFIZZ.BIT', pill: { bg: P.maroon, border: P.pink },
+    tagline: 'TASTE EVERY BIT.', tag: { bg: P.yellow, edge: P.orange, color: P.maroon }, tagX: 266, tagY: 128,
+    url: 'BITFIZZ.BIT', pill: { bg: P.maroon, border: P.pink }, urlY: 158,
     legal: 'CONTAINS NO ACTUAL BITS. 1-BIT EDITION AVAILABLE FOR PURISTS. SIDE EFFECTS MAY INCLUDE BURPING IN 8-BIT.',
   });
 }

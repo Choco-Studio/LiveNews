@@ -54,6 +54,16 @@ const normalize = (segments, { stories = STORIES, raw = {}, opts } = {}) => norm
 /** The single story segment produced from one input story segment. */
 const storyOf = (extra, opts) => normalize([storySeg('s1', extra)], { opts }).segments[1];
 
+/** A story whose summary names the places (and states the figures) the tests below put on screen. */
+const PLACES = makeStory('s1', {
+  summary:
+    'Reports came from Paris, Sydney, Lima, Kyiv, Gaza City, Rome, Greenwich and Quito, and from the edge of a very long place name indeed. ' +
+    'Some 40,000 people were evacuated after a magnitude seven point one earthquake struck off the coast of Japan, a 7.1 magnitude quake. ' +
+    'A $2 billion deal was signed. The word ' + 'x'.repeat(43) + ' was used.',
+});
+/** Like storyOf, for a story whose source supports the places and facts. */
+const placeOf = (extra, opts) => normalize([storySeg('s1', extra)], { stories: [PLACES], opts }).segments[1];
+
 const types = (bulletin) => bulletin.segments.map((s) => s.type);
 
 // ---------------------------------------------------------------- constants
@@ -129,7 +139,8 @@ describe('extractJson', () => {
 
 describe('normalizeBulletin: story segments', () => {
   test('keeps valid story segments and decorates them with source, category, hasImage, location, fact and flags', () => {
-    const b = normalize([storySeg('s1', { breaking: true }), storySeg('s2', { shot: 'close', emotion: 'serious', anchor: 'B' })]);
+    const stories = [makeStory('s1', { title: 'BREAKING: headline of story s1' }), STORIES[1], STORIES[2]];
+    const b = normalize([storySeg('s1', { breaking: true }), storySeg('s2', { shot: 'close', emotion: 'serious', anchor: 'B' })], { stories });
     const [, s1, s2] = b.segments;
     assert.equal(s1.storyId, 's1');
     assert.equal(s1.source, 'BBC News');
@@ -188,8 +199,21 @@ describe('normalizeBulletin: story segments', () => {
   });
 
   test('breaking is only true for a literal boolean true', () => {
-    const b = normalize([storySeg('s1', { breaking: 'true' }), storySeg('s2', { breaking: 1 }), storySeg('s3', { breaking: true })]);
+    const stories = ['s1', 's2', 's3'].map((id) => makeStory(id, { title: `BREAKING: story ${id}` }));
+    const b = normalize([storySeg('s1', { breaking: 'true' }), storySeg('s2', { breaking: 1 }), storySeg('s3', { breaking: true })], { stories });
     assert.deepEqual(b.segments.filter((s) => s.type === 'story').map((s) => s.breaking), [false, false, true]);
+  });
+
+  test('breaking also needs the outlet itself to call it breaking news (a writer cannot promote an ordinary story)', () => {
+    const stories = [
+      makeStory('s1'),
+      makeStory('s2', { title: 'Minister resigns – BREAKING' }),
+      makeStory('s3', { summary: 'This is breaking news from the capital.' }),
+      makeStory('s4', { title: 'Record-breaking heatwave hits Europe' }),
+      makeStory('s5', { title: 'Election night – live' }),
+    ];
+    const b = normalize(stories.map((s) => storySeg(s.id, { breaking: true })), { stories });
+    assert.deepEqual(b.segments.filter((s) => s.type === 'story').map((s) => s.breaking), [false, true, true, false, false]);
   });
 
   test('maxStories keeps the first N valid, distinct stories and drops the rest', () => {
@@ -344,22 +368,22 @@ describe('normalizeBulletin: field validation', () => {
 
 describe('normalizeBulletin: location', () => {
   test('keeps a valid location, with lat/lon rounded to 2 decimals', () => {
-    const s = storyOf({ location: { place: 'PARIS, FRANCE', lat: 48.8566, lon: 2.3522 } });
+    const s = placeOf({ location: { place: 'PARIS, FRANCE', lat: 48.8566, lon: 2.3522 } });
     assert.deepEqual(s.location, { place: 'PARIS, FRANCE', lat: 48.86, lon: 2.35 });
   });
 
   test('accepts negative coordinates and numeric strings', () => {
-    assert.deepEqual(storyOf({ location: { place: 'SYDNEY, AUSTRALIA', lat: -33.8688, lon: 151.2093 } }).location, { place: 'SYDNEY, AUSTRALIA', lat: -33.87, lon: 151.21 });
-    assert.deepEqual(storyOf({ location: { place: 'LIMA, PERU', lat: '-12.0464', lon: '-77.0428' } }).location, { place: 'LIMA, PERU', lat: -12.05, lon: -77.04 });
+    assert.deepEqual(placeOf({ location: { place: 'SYDNEY, AUSTRALIA', lat: -33.8688, lon: 151.2093 } }).location, { place: 'SYDNEY, AUSTRALIA', lat: -33.87, lon: 151.21 });
+    assert.deepEqual(placeOf({ location: { place: 'LIMA, PERU', lat: '-12.0464', lon: '-77.0428' } }).location, { place: 'LIMA, PERU', lat: -12.05, lon: -77.04 });
   });
 
   test('the poles and the date line are valid, one step beyond is not', () => {
-    assert.deepEqual(storyOf({ location: { place: 'EDGE', lat: 90, lon: 180 } }).location, { place: 'EDGE', lat: 90, lon: 180 });
-    assert.deepEqual(storyOf({ location: { place: 'EDGE', lat: -90, lon: -180 } }).location, { place: 'EDGE', lat: -90, lon: -180 });
-    assert.equal(storyOf({ location: { place: 'EDGE', lat: 90.01, lon: 0 } }).location, null);
-    assert.equal(storyOf({ location: { place: 'EDGE', lat: -90.5, lon: 0 } }).location, null);
-    assert.equal(storyOf({ location: { place: 'EDGE', lat: 0, lon: 180.01 } }).location, null);
-    assert.equal(storyOf({ location: { place: 'EDGE', lat: 0, lon: -181 } }).location, null);
+    assert.deepEqual(placeOf({ location: { place: 'EDGE', lat: 90, lon: 180 } }).location, { place: 'EDGE', lat: 90, lon: 180 });
+    assert.deepEqual(placeOf({ location: { place: 'EDGE', lat: -90, lon: -180 } }).location, { place: 'EDGE', lat: -90, lon: -180 });
+    assert.equal(placeOf({ location: { place: 'EDGE', lat: 90.01, lon: 0 } }).location, null);
+    assert.equal(placeOf({ location: { place: 'EDGE', lat: -90.5, lon: 0 } }).location, null);
+    assert.equal(placeOf({ location: { place: 'EDGE', lat: 0, lon: 180.01 } }).location, null);
+    assert.equal(placeOf({ location: { place: 'EDGE', lat: 0, lon: -181 } }).location, null);
   });
 
   test('an invalid location becomes null', () => {
@@ -380,38 +404,38 @@ describe('normalizeBulletin: location', () => {
       { place: 'PARIS', lat: 48.85 },
     ];
     for (const location of bad) {
-      assert.equal(storyOf({ location }).location, null, JSON.stringify(location));
+      assert.equal(placeOf({ location }).location, null, JSON.stringify(location));
     }
   });
 
   test('clamps the place name to 32 characters at a word boundary', () => {
-    const s = storyOf({ location: { place: 'A VERY LONG PLACE NAME INDEED, WITH A COUNTRY NAME', lat: 1, lon: 2 } });
+    const s = placeOf({ location: { place: 'A VERY LONG PLACE NAME INDEED, WITH A COUNTRY NAME', lat: 1, lon: 2 } });
     assert.equal(s.location.place, 'A VERY LONG PLACE NAME INDEED');
     assert.ok(s.location.place.length <= 32);
   });
 
   test('strips markdown and extra whitespace from the place name', () => {
-    assert.equal(storyOf({ location: { place: '**GAZA**   CITY', lat: 31.5, lon: 34.47 } }).location.place, 'GAZA CITY');
+    assert.equal(placeOf({ location: { place: '**GAZA**   CITY', lat: 31.5, lon: 34.47 } }).location.place, 'GAZA CITY');
   });
 
   test('a "map" shot is kept when the story has a valid location', () => {
-    const s = storyOf({ shot: 'map', location: { place: 'KYIV, UKRAINE', lat: 50.45, lon: 30.52 } });
+    const s = placeOf({ shot: 'map', location: { place: 'KYIV, UKRAINE', lat: 50.45, lon: 30.52 } });
     assert.equal(s.shot, 'map');
     assert.equal(s.location.place, 'KYIV, UKRAINE');
   });
 
   test('a "map" shot is downgraded to "close" when there is no valid location', () => {
-    assert.equal(storyOf({ shot: 'map' }).shot, 'close');
-    assert.equal(storyOf({ shot: 'map', location: null }).shot, 'close');
-    assert.equal(storyOf({ shot: 'map', location: { place: 'KYIV', lat: 500, lon: 30 } }).shot, 'close');
+    assert.equal(placeOf({ shot: 'map' }).shot, 'close');
+    assert.equal(placeOf({ shot: 'map', location: null }).shot, 'close');
+    assert.equal(placeOf({ shot: 'map', location: { place: 'KYIV', lat: 500, lon: 30 } }).shot, 'close');
   });
 
   test('other shots are untouched by a missing location', () => {
-    for (const shot of ['wide', 'close', 'full']) assert.equal(storyOf({ shot }).shot, shot);
+    for (const shot of ['wide', 'close', 'full']) assert.equal(placeOf({ shot }).shot, shot);
   });
 
   test('a location without a "map" shot is kept as is', () => {
-    const s = storyOf({ shot: 'close', location: { place: 'KYIV, UKRAINE', lat: 50.45, lon: 30.52 } });
+    const s = placeOf({ shot: 'close', location: { place: 'KYIV, UKRAINE', lat: 50.45, lon: 30.52 } });
     assert.equal(s.shot, 'close');
     assert.deepEqual(s.location, { place: 'KYIV, UKRAINE', lat: 50.45, lon: 30.52 });
   });
@@ -419,49 +443,80 @@ describe('normalizeBulletin: location', () => {
   test('null, empty, boolean, array or object coordinates are not valid (they must not be read as 0 or 1)', () => {
     const bad = [null, '', '   ', true, false, [], [5], {}, 'north', undefined];
     for (const value of bad) {
-      assert.equal(storyOf({ location: { place: 'PARIS, FRANCE', lat: value, lon: 2.35 } }).location, null, `lat ${JSON.stringify(value)}`);
-      assert.equal(storyOf({ location: { place: 'PARIS, FRANCE', lat: 48.85, lon: value } }).location, null, `lon ${JSON.stringify(value)}`);
+      assert.equal(placeOf({ location: { place: 'PARIS, FRANCE', lat: value, lon: 2.35 } }).location, null, `lat ${JSON.stringify(value)}`);
+      assert.equal(placeOf({ location: { place: 'PARIS, FRANCE', lat: 48.85, lon: value } }).location, null, `lon ${JSON.stringify(value)}`);
     }
-    assert.equal(storyOf({ location: { place: 'PARIS, FRANCE', lat: null, lon: null } }).location, null);
-    assert.equal(storyOf({ shot: 'map', location: { place: 'PARIS, FRANCE', lat: null, lon: null } }).shot, 'close', 'and a map shot cannot rely on it');
+    assert.equal(placeOf({ location: { place: 'PARIS, FRANCE', lat: null, lon: null } }).location, null);
+    assert.equal(placeOf({ shot: 'map', location: { place: 'PARIS, FRANCE', lat: null, lon: null } }).shot, 'close', 'and a map shot cannot rely on it');
   });
 
   test('a genuine 0 is a valid coordinate (equator, prime meridian)', () => {
-    assert.deepEqual(storyOf({ location: { place: 'GREENWICH, UK', lat: 51.48, lon: 0 } }).location, { place: 'GREENWICH, UK', lat: 51.48, lon: 0 });
-    assert.deepEqual(storyOf({ location: { place: 'QUITO, ECUADOR', lat: '0', lon: '-78.5' } }).location, { place: 'QUITO, ECUADOR', lat: 0, lon: -78.5 });
+    assert.deepEqual(placeOf({ location: { place: 'GREENWICH, UK', lat: 51.48, lon: 0 } }).location, { place: 'GREENWICH, UK', lat: 51.48, lon: 0 });
+    assert.deepEqual(placeOf({ location: { place: 'QUITO, ECUADOR', lat: '0', lon: '-78.5' } }).location, { place: 'QUITO, ECUADOR', lat: 0, lon: -78.5 });
+  });
+
+  test('a place the story does not name is dropped, and its map shot with it', () => {
+    const s = placeOf({ shot: 'map', location: { place: 'MADRID, SPAIN', lat: 40.42, lon: -3.7 } });
+    assert.equal(s.location, null);
+    assert.equal(s.shot, 'close');
+    assert.equal(storyOf({ location: { place: 'PARIS, FRANCE', lat: 48.86, lon: 2.35 } }).location, null, 'the default story names no place');
+  });
+
+  test('any part of the place, a demonym or a city of a named country is enough support', () => {
+    const story = (summary) => [makeStory('s1', { summary })];
+    const loc = (place, summary, lat = 10, lon = 10) => normalize([storySeg('s1', { location: { place, lat, lon } })], { stories: story(summary) }).segments[1].location;
+    assert.equal(loc('LISBON, PORTUGAL', 'Lisbon opened a tram line.', 38.72, -9.14)?.place, 'LISBON, PORTUGAL');
+    assert.equal(loc('PORTUGAL', 'Lisbon opened a tram line.', 39.6, -8)?.place, 'PORTUGAL');
+    assert.equal(loc('FRANCE', 'French farmers protested.', 46.6, 2.4)?.place, 'FRANCE');
+    assert.equal(loc('KENYA', 'A farm near Nairobi.', 0, 37.9)?.place, 'KENYA');
+    assert.equal(loc('BRAZIL', 'A farm near Nairobi.', -14, -52), null);
+  });
+
+  test('a well-known city with coordinates far off is put back where it is', () => {
+    const s = placeOf({ location: { place: 'PARIS, FRANCE', lat: 40.0, lon: -3.0 } });
+    assert.deepEqual(s.location, { place: 'PARIS, FRANCE', lat: 48.86, lon: 2.35 });
+    const close = placeOf({ location: { place: 'PARIS, FRANCE', lat: 48.5, lon: 2.0 } });
+    assert.deepEqual(close.location, { place: 'PARIS, FRANCE', lat: 48.5, lon: 2 }, 'small differences are the writer\'s choice');
   });
 
   test('numeric strings may have spaces around them', () => {
-    assert.deepEqual(storyOf({ location: { place: 'LIMA, PERU', lat: ' -12.0464 ', lon: ' -77.0428' } }).location, { place: 'LIMA, PERU', lat: -12.05, lon: -77.04 });
+    assert.deepEqual(placeOf({ location: { place: 'LIMA, PERU', lat: ' -12.0464 ', lon: ' -77.0428' } }).location, { place: 'LIMA, PERU', lat: -12.05, lon: -77.04 });
   });
 });
 
 describe('normalizeBulletin: fact', () => {
   test('keeps a short fact as is', () => {
-    assert.equal(storyOf({ fact: '40,000 EVACUATED' }).fact, '40,000 EVACUATED');
-    assert.equal(storyOf({ fact: '$2BN DEAL' }).fact, '$2BN DEAL');
+    assert.equal(placeOf({ fact: '40,000 EVACUATED' }).fact, '40,000 EVACUATED');
+    assert.equal(placeOf({ fact: '$2BN DEAL' }).fact, '$2BN DEAL');
   });
 
   test('is null when missing, empty or not text-like', () => {
     for (const fact of [undefined, null, '', '   ', '***']) {
-      assert.equal(storyOf({ fact }).fact, null, String(fact));
+      assert.equal(placeOf({ fact }).fact, null, String(fact));
     }
   });
 
   test('keeps a fact of exactly 48 characters, and cuts a longer one at a word boundary', () => {
     const exactly48 = 'word ' + 'x'.repeat(43);
     assert.equal(exactly48.length, 48);
-    assert.equal(storyOf({ fact: exactly48 }).fact, exactly48);
+    assert.equal(placeOf({ fact: exactly48 }).fact, exactly48);
 
     const long = 'MAGNITUDE SEVEN POINT ONE EARTHQUAKE STRIKES OFF THE COAST OF JAPAN';
-    const cut = storyOf({ fact: long }).fact;
+    const cut = placeOf({ fact: long }).fact;
     assert.ok(cut.length <= 48, `length ${cut.length}`);
     assert.ok(long.startsWith(cut) && long[cut.length] === ' ', 'cut must fall on a word boundary');
     assert.equal(cut, 'MAGNITUDE SEVEN POINT ONE EARTHQUAKE STRIKES OFF');
   });
 
+  test('a fact the source does not state is dropped: its numbers must be there, and at least half its words', () => {
+    assert.equal(placeOf({ fact: '50,000 EVACUATED' }).fact, null, 'a number the source never gives');
+    assert.equal(placeOf({ fact: '40,000 DEAD' }).fact, null, 'the right number, the wrong word');
+    assert.equal(placeOf({ fact: '$2BN DEAL' }).fact, '$2BN DEAL', '"bn" stands for billion');
+    assert.equal(storyOf({ fact: '40,000 EVACUATED' }).fact, null, 'the default story states no figure');
+  });
+
   test('strips markdown and whitespace', () => {
-    assert.equal(storyOf({ fact: '**7.1**   MAGNITUDE' }).fact, '7.1 MAGNITUDE');
+    assert.equal(placeOf({ fact: '**7.1**   MAGNITUDE' }).fact, '7.1 MAGNITUDE');
   });
 });
 
@@ -469,17 +524,17 @@ describe('normalizeBulletin: fact', () => {
 
 describe('normalizeBulletin: structure', () => {
   test('keeps at most 3 chat segments by default', () => {
-    const b = normalize([storySeg('s1'), ...Array.from({ length: 5 }, (_, i) => otherSeg('chat', { text: `Chat ${i}.` })), storySeg('s2')]);
+    const b = normalize([storySeg('s1'), ...Array.from({ length: 5 }, (_, i) => otherSeg('chat', { text: `Chat ${'ABCDE'[i]}.` })), storySeg('s2')]);
     const chats = b.segments.filter((s) => s.type === 'chat');
-    assert.deepEqual(chats.map((c) => c.text), ['Chat 0.', 'Chat 1.', 'Chat 2.']);
+    assert.deepEqual(chats.map((c) => c.text), ['Chat A.', 'Chat B.', 'Chat C.']);
   });
 
   test('maxChats caps the chat segments; 0 removes them all', () => {
-    const segments = [storySeg('s1'), otherSeg('chat', { text: 'Chat 0.' }), storySeg('s2'), otherSeg('chat', { text: 'Chat 1.' }), otherSeg('chat', { text: 'Chat 2.' }), storySeg('s3')];
+    const segments = [storySeg('s1'), otherSeg('chat', { text: 'Chat A.' }), storySeg('s2'), otherSeg('chat', { text: 'Chat B.' }), otherSeg('chat', { text: 'Chat C.' }), storySeg('s3')];
     const chatsWith = (maxChats) => normalize(segments, { opts: { maxChats } }).segments.filter((s) => s.type === 'chat').map((c) => c.text);
-    assert.deepEqual(chatsWith(1), ['Chat 0.']);
-    assert.deepEqual(chatsWith(2), ['Chat 0.', 'Chat 1.']);
-    assert.deepEqual(chatsWith(10), ['Chat 0.', 'Chat 1.', 'Chat 2.']);
+    assert.deepEqual(chatsWith(1), ['Chat A.']);
+    assert.deepEqual(chatsWith(2), ['Chat A.', 'Chat B.']);
+    assert.deepEqual(chatsWith(10), ['Chat A.', 'Chat B.', 'Chat C.']);
     assert.deepEqual(chatsWith(0), []);
   });
 
@@ -786,7 +841,7 @@ describe('normalizeBulletin: solo programmes', () => {
   test('solo does not change the other rules (maxStories, maxChats, location)', () => {
     const b = normalize(
       [storySeg('s1', { shot: 'map', location: { place: 'ROME, ITALY', lat: 41.9, lon: 12.5 } }), storySeg('s2'), otherSeg('chat'), storySeg('s3')],
-      { opts: { solo: true, maxStories: 2, maxChats: 0 } }
+      { stories: [PLACES, STORIES[1], STORIES[2]], opts: { solo: true, maxStories: 2, maxChats: 0 } }
     );
     assert.deepEqual(b.storyIds, ['s1', 's2']);
     assert.ok(!types(b).includes('chat'));

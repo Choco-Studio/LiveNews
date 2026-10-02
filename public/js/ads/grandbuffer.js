@@ -31,7 +31,7 @@ const T_LOUNGE = 8.3;
 const T_POOL = 12.4;
 const T_TIPS = 15.3;
 const T_SLATE = 19.4;
-const DURATION = 24.8;
+const DURATION = 24.6;
 
 // --- motion helpers (local) ----------------------------------------------------
 const c01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -282,7 +282,7 @@ const P_SELFIE = [[-7, -4], [-11, -13]];
 const P_HANDLE = [[-5, 5], [-12, 9]];
 const P_BEHIND = [[-8, -3], [-3, -11]];
 const P_REST = [[-4, 7], [-9, 12]];
-const P_SIP = [[-2, 8], [8, -6]];
+const P_SIP = [[-3, 8], [7, 3]];
 const P_TRAY = [[-2, 8], [6, 7]];
 const P_LIFT = [[-7, -3], [-9, -13]];
 const P_THUMB = [[-6, 4], [-8, -5]];
@@ -708,10 +708,16 @@ function phone(ctx, lt, dt) {
   const x = PHONE_X;
   rrect(ctx, x - 26, py, 52, 86, P.black, 3);
   rrect(ctx, x - 24, py + 2, 48, 82, P.slate, 3);
-  R(ctx, x - 21, py + 8, 42, 64, P.ink);
-  spinner(ctx, x, py + 28, 9, spinPhase(dt), 2);
-  text(ctx, 'GRAND', x, py + 46, { color: P.cream, align: 'center' });
-  text(ctx, 'BUFFER', x, py + 56, { color: P.cream, align: 'center' });
+  // the hotel's app: its screen IS the facade medallion, for the match cut
+  R(ctx, x - 21, py + 8, 42, 64, P.purple);
+  R(ctx, x - 21, py + 8, 42, 2, P.magenta);
+  disc(ctx, x, py + 28, 16, P.black);
+  disc(ctx, x, py + 28, 15, P.yellow);
+  disc(ctx, x, py + 28, 13, P.orange);
+  disc(ctx, x, py + 28, 12, P.ink);
+  spinner(ctx, x, py + 28, 9, spinPhase(dt), 2, P.yellow, P.orange, P.purple);
+  text(ctx, 'GRAND', x, py + 49, { color: P.cream, align: 'center' });
+  text(ctx, 'BUFFER', x, py + 59, { color: P.cream, align: 'center' });
   R(ctx, x - 6, py + 4, 12, 1, P.black);
   // hand
   disc(ctx, x - 22, py + 70, 9, P.black);
@@ -947,28 +953,36 @@ const lounge = () => cached('gb-lounge', W, H + 8, (c) => {
     }
   }
 });
+// Loungers seen from behind: striped backrest, a head with the screen's warm
+// rim light on top, elbows out with the hands behind the head.
 function chairBack(ctx, x, y) {
-  rrect(ctx, x - 18, y, 36, 44, P.black, 2);
-  for (let i = 0; i < 6; i++) R(ctx, x - 17 + i * 6, y + 1, 6, 43, i % 2 ? P.slate : P.navy);
-  R(ctx, x - 17, y + 1, 34, 1, A(P.yellow, 0.8));
+  rrect(ctx, x - 22, y, 44, 70, P.black, 3);
+  for (let i = 0; i < 7; i++) R(ctx, x - 21 + i * 6, y + 2, 6, 68, i % 2 ? P.slate : P.navy);
+  R(ctx, x - 21, y + 1, 42, 4, P.silver);
+  R(ctx, x - 20, y + 1, 40, 1, P.yellow);
+  R(ctx, x - 21, y + 5, 42, 1, P.ink);
 }
 function headBack(ctx, x, y, hair, hat) {
-  disc(ctx, x, y, 9, P.black);
-  disc(ctx, x, y, 8, hair);
-  R(ctx, x - 4, y - 8, 8, 1, P.yellow);
+  disc(ctx, x, y, 12, P.black);
+  disc(ctx, x, y, 11, hair);
+  R(ctx, x - 6, y - 11, 12, 1, P.yellow);
+  R(ctx, x - 9, y - 8, 2, 1, P.yellow);
+  R(ctx, x + 7, y - 8, 2, 1, P.yellow);
   if (hat) {
-    oval(ctx, x, y - 3, 14, 4, P.black);
-    oval(ctx, x, y - 4, 13, 3, hat);
-    rrect(ctx, x - 7, y - 13, 14, 10, P.black, 2);
-    rrect(ctx, x - 6, y - 12, 12, 9, hat, 2);
-    R(ctx, x - 6, y - 6, 12, 2, P.red);
-    R(ctx, x - 5, y - 12, 10, 1, P.yellow);
+    oval(ctx, x, y - 4, 20, 5, P.black);
+    oval(ctx, x, y - 5, 19, 4, hat);
+    rrect(ctx, x - 10, y - 18, 20, 14, P.black, 2);
+    rrect(ctx, x - 9, y - 17, 18, 13, hat, 2);
+    R(ctx, x - 9, y - 8, 18, 3, P.red);
+    R(ctx, x - 8, y - 17, 16, 1, P.yellow);
+    R(ctx, x - 18, y - 6, 36, 1, A(P.yellow, 0.7));
   }
 }
 function lazyArms(ctx, x, y) {
   for (let sd = -1; sd <= 1; sd += 2) {
-    seg(ctx, x + sd * 8, y + 10, x + sd * 15, y - 2, 3, P.skin, P.black);
-    seg(ctx, x + sd * 15, y - 2, x + sd * 5, y - 6, 3, P.skin, P.black);
+    seg(ctx, x + sd * 10, y + 14, x + sd * 22, y - 4, 4, P.skin, P.black);
+    seg(ctx, x + sd * 22, y - 4, x + sd * 7, y - 8, 4, P.skin, P.black);
+    R(ctx, x + sd * 22 - 1, y - 6, 2, 1, P.yellow);
   }
 }
 function cocktail(ctx, x, y, dt) {
@@ -1003,43 +1017,50 @@ function shotLounge(ctx, lt) {
   const cap = lt - 2.55;
   if (cap < 0) text(ctx, 'LOADING YOUR HOLIDAY...', 192, 107 - up, { color: P.cream, align: 'center' });
   else {
-    const s = slam(cap, 0.55);
+    const bw = round(easeOut(prog(cap, 0, 0.18)) * 216);
+    rrect(ctx, 192 - bw / 2, 100 - up, bw, 22, P.black, 2);
+    rrect(ctx, 192 - bw / 2 + 1, 101 - up, bw - 2, 20, P.ink, 1);
+    const s = slam(cap - 0.08, 0.55);
     const art = holidayArt();
     const w = round(art.width * s);
     const h = round(art.height * s);
     ctx.drawImage(art, round(192 - w / 2), round(111 - up - h / 2), w, h);
   }
   // guests, seen from behind, enjoying the view
-  const fy = 150 + round(dolly * 10);
-  const xs = [104, 192, 280];
+  const fy = 158 + round(dolly * 10);
+  const xs = [96, 192, 288];
+  // side tables between the loungers
+  for (const tx of [144, 240]) {
+    R(ctx, tx - 10, fy + 18, 20, 3, P.black);
+    R(ctx, tx - 9, fy + 18, 18, 2, P.yellow);
+    R(ctx, tx - 1, fy + 21, 3, 40, P.black);
+    cocktail(ctx, tx - 2, fy + 8, dt + tx);
+  }
   for (let k = 0; k < 3; k++) {
     const x = xs[k];
-    if (k !== 1) lazyArms(ctx, x, fy - 10);
+    if (k !== 1) lazyArms(ctx, x, fy - 12);
     chairBack(ctx, x, fy);
-    headBack(ctx, x, fy - 8, [P.brown, P.black, P.tanShade][k], k === 0 ? P.cream : null);
+    headBack(ctx, x, fy - 9, [P.brown, P.black, P.tanShade][k], k === 0 ? P.cream : null);
     if (k === 2) {
-      disc(ctx, x, fy - 18, 5, P.black);
-      disc(ctx, x, fy - 18, 4, P.tanShade);
+      disc(ctx, x, fy - 22, 6, P.black);
+      disc(ctx, x, fy - 22, 5, P.tanShade);
+      R(ctx, x - 3, fy - 27, 6, 1, P.yellow);
     }
   }
-  // the middle guest raises a toast to the screen
+  // the middle guest raises a toast to the screen (elbow leads, glass follows)
   const x = 192;
   const up2 = easeOutBack(prog(lt, 0.9, 1.5), 1.8) * (1 - smooth(prog(lt, 3.1, 3.7)));
-  const hx = round(x + 20 + up2 * 2);
-  const hy = round(fy + 12 - up2 * 30);
-  seg(ctx, x + 8, fy + 2, round(x + 18 + up2 * 4), round(fy + 6 - up2 * 12), 3, P.skin, P.black);
-  seg(ctx, round(x + 18 + up2 * 4), round(fy + 6 - up2 * 12), hx, hy, 3, P.skin, P.black);
-  cocktail(ctx, hx, hy - 9, dt);
-  disc(ctx, hx, hy, 2, P.black);
-  disc(ctx, hx, hy, 1, P.skin);
-  seg(ctx, x - 8, fy + 2, x - 16, fy + 12, 3, P.skin, P.black);
-  // side tables
-  for (const tx of [148, 236]) {
-    R(ctx, tx - 9, fy + 20, 18, 3, P.black);
-    R(ctx, tx - 8, fy + 20, 16, 2, P.yellow);
-    R(ctx, tx - 1, fy + 23, 2, 30, P.black);
-    cocktail(ctx, tx - 2, fy + 10, dt + tx);
-  }
+  const ex = round(x + 26 + up2 * 2);
+  const ey = round(fy + 10 - up2 * 16);
+  const hx = round(x + 28 - up2 * 2);
+  const hy = round(fy + 14 - up2 * 40);
+  seg(ctx, x + 11, fy + 2, ex, ey, 4, P.skin, P.black);
+  seg(ctx, ex, ey, hx, hy, 4, P.skin, P.black);
+  cocktail(ctx, hx, hy - 10, dt);
+  disc(ctx, hx, hy, 3, P.black);
+  disc(ctx, hx, hy, 2, P.skin);
+  R(ctx, hx - 4, hy - 13, 9, 1, A(P.yellow, 0.8));
+  seg(ctx, x - 11, fy + 2, x - 24, fy + 14, 4, P.skin, P.black);
 }
 const holidayArt = () => cached('gb-holiday', measureText('IS THE HOLIDAY.', 2) + 8, 26, (c) => {
   bigText(c, 'IS THE HOLIDAY.', 4, 9, { scale: 2, color: P.yellow, outline: P.maroon, ow: 1, depth: 2, depthColor: P.black });
@@ -1047,14 +1068,17 @@ const holidayArt = () => cached('gb-holiday', measureText('IS THE HOLIDAY.', 2) 
 
 // --- 6. the famous progress-bar pool ----------------------------------------------
 const POOL_W = W + 48;
-const beachTop = () => cached('gb-beach-top', W, 128, (c) => {
+function seaSky(c, sun) {
   bands(c, 0, 0, W, 98, [P.blue, P.cyan, P.cyan, P.cream]);
-  glow(c, 330, 34, 30, P.white, 0.12, 3);
-  disc(c, 330, 34, 13, P.yellow);
-  disc(c, 330, 34, 10, P.cream);
+  if (sun) {
+    glow(c, 330, 34, 30, P.white, 0.12, 3);
+    disc(c, 330, 34, 13, P.yellow);
+    disc(c, 330, 34, 10, P.cream);
+  }
   bands(c, 0, 96, W, 32, [P.blue, P.navy]);
   R(c, 0, 96, W, 1, P.white);
-});
+}
+const beachTop = () => cached('gb-beach-top', W, 128, (c) => seaSky(c, true));
 const poolDeck = () => cached('gb-pool', POOL_W, 100, (c) => {
   // deck starts at local y 0 (= screen y 124)
   R(c, 0, 0, POOL_W, 100, P.cream);
@@ -1069,12 +1093,16 @@ const poolDeck = () => cached('gb-pool', POOL_W, 100, (c) => {
   R(c, px - 4, 52, pw + 8, 8, P.orange);
   R(c, px - 1, 22, pw + 2, 36, P.black);
   bands(c, px, 23, pw, 34, [P.cyan, P.blue]);
-  const dry = round(pw * 0.01) + 1;
-  R(c, px + pw - dry, 23, dry, 34, P.cream);
-  R(c, px + pw - dry, 23, 1, 34, P.white);
-  // painted percentage + sign post
-  bigText(c, '99%', px + pw + 10, 32, { scale: 1, color: P.maroon, outline: null });
+  // the last 1%: dry tiles nobody ever reaches
+  R(c, px + pw - 8, 23, 8, 34, P.cream);
+  for (let y = 23; y < 57; y += 6) R(c, px + pw - 8, y, 8, 1, P.tan);
+  R(c, px + pw - 8, 23, 1, 34, P.white);
+  text(c, '99%', px + pw + 9, 36, { color: P.maroon });
+  text(c, 'LOADING...', px + 8, 68, { color: P.tan });
 });
+const POOL_X = 30;
+const POOL_W2 = 340;
+const STRIPE = [[0, 0], [0, 0], [0, 0], [0, 0]];
 function floatRing(ctx, x, y, dt, front) {
   if (!front) {
     oval(ctx, x, y, 21, 7, P.black);
@@ -1103,6 +1131,21 @@ function shotPool(ctx, lt) {
   for (let i = 0; i < 9; i++) R(ctx, round(mod(i * 53 + lt * 14 - truck * 0.4, W + 30) - 15), 102 + (i % 4) * 6, 12, 1, A(P.white, 0.8));
   ctx.drawImage(poolDeck(), -round(truck), 124);
   const ox = -round(truck);
+  // the water runs like an indeterminate progress bar: diagonal stripes drift right
+  clipRect(ctx, ox + POOL_X, 147, POOL_W2 - 8, 34);
+  for (let k = -1; k < 16; k++) {
+    const sx = ox + POOL_X + k * 24 + mod(lt * 18, 24);
+    STRIPE[0][0] = sx;
+    STRIPE[0][1] = 181;
+    STRIPE[1][0] = sx + 10;
+    STRIPE[1][1] = 181;
+    STRIPE[2][0] = sx + 22;
+    STRIPE[2][1] = 147;
+    STRIPE[3][0] = sx + 12;
+    STRIPE[3][1] = 147;
+    poly(ctx, STRIPE, A(P.white, 0.14));
+  }
+  ctx.restore();
   // water shimmer
   for (let i = 0; i < 14; i++) {
     const wx = 34 + mod(i * 61 + lt * 22, 330);
@@ -1165,7 +1208,8 @@ const barArt = () => cached('gb-bar-word', measureText('PROGRESS BAR', 2) + 10, 
 
 // --- 7. a helpful tip, served under a cloche ------------------------------------------
 const terrace = () => cached('gb-terrace', W, H, (c) => {
-  c.drawImage(beachTop(), 0, 0);
+  seaSky(c, false);
+  cloud(c, 230, 26, 9, P.white, P.silver);
   // balustrade
   R(c, 0, 118, W, 4, P.black);
   R(c, 0, 119, W, 2, P.cream);
@@ -1291,20 +1335,23 @@ function shotTips(ctx, lt) {
   R(ctx, cxl - 5, cyl - 10, 3, 2, P.white);
   R(ctx, cxl - 1, cyl - 14, 3, 2, P.black);
   // the tip springs out of the tray and becomes a card; later it flips over
+  // (it only scales while flying; the landing overshoot is a bounce at full
+  // size, so the lettering is never resampled once it can be read)
   const a = lt - 1.3;
   if (a > 0) {
-    const grow = spring(a, 1.8, 6);
+    const g = easeOut(prog(a, 0, 0.28));
     const fq = prog(lt, 2.95, 3.3);
-    const flip = abs(cos(fq * PI));
+    const flip = fq > 0 && fq < 1 ? abs(cos(fq * PI)) : 1;
     const k = fq >= 0.5 ? 1 : 0;
     const card = tipCard(k);
-    const cw = round(card.width * c01(grow) * (fq > 0 && fq < 1 ? flip : 1));
-    const ch = round(card.height * grow);
-    const ccx = lerp(tx, 266, c01(grow));
-    const ccy = lerp(ty - 6, 58, c01(grow));
+    const sc = 0.15 + 0.85 * g;
+    const cw = round(card.width * sc * flip);
+    const ch = round(card.height * sc);
+    const ccx = round(lerp(tx, 266, g));
+    const ccy = round(lerp(ty - 6, 58, g) - wobble(a, 0.28, 5, 2.4, 6) - wobble(lt, 3.3, 3, 2.4, 6));
     if (cw > 1 && ch > 1) {
-      ctx.drawImage(card, round(ccx - cw / 2), round(ccy - ch / 2), cw, ch);
-      if (grow > 0.95 && (fq <= 0 || fq >= 1)) spinner(ctx, round(ccx - 56), round(ccy + 5), 7, spinPhase(dt), 1, P.yellow, P.orange, P.slate);
+      ctx.drawImage(card, ccx - (cw >> 1), ccy - (ch >> 1), cw, ch);
+      if (g >= 1 && flip === 1) spinner(ctx, ccx - 56, ccy + 5, 7, spinPhase(dt), 1, P.yellow, P.orange, P.slate);
     }
   }
 }
@@ -1314,9 +1361,28 @@ const slateBg = () => cached('gb-slate', W, H, (c) => {
   bands(c, 0, 0, W, H, [P.ink, P.ink, P.purple, P.maroon]);
   const rand = (i) => ((i * 7919 + 13) % 997) / 997;
   for (let i = 0; i < 44; i++) R(c, round(rand(i) * W), round(18 + rand(i + 99) * 130), 1, 1, i % 4 ? P.silver : P.white);
-  glow(c, 192, 40, 34, P.yellow, 0.06, 3);
+  // the hotel's silhouette on the horizon, windows still loading
+  R(c, 0, 186, W, 30, P.black);
+  R(c, 0, 186, W, 1, P.yellow);
+  R(c, 140, 150, 104, 36, P.black);
+  R(c, 132, 160, 12, 26, P.black);
+  R(c, 240, 160, 12, 26, P.black);
+  R(c, 160, 142, 64, 8, P.black);
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 8; col++) {
+      if ((row * 3 + col * 5) % 4 === 0) continue;
+      R(c, 148 + col * 12, 156 + row * 9, 4, 4, (row + col) % 3 ? P.yellow : P.orange);
+    }
+  }
+  for (const [px, sd] of [[60, 1], [324, -1], [100, -1], [286, 1]]) {
+    seg(c, px, 186, px + sd * 3, 160, 3, P.black, null);
+    for (let i = 0; i < 5; i++) {
+      const a = -PI / 2 + (i - 2) * 0.62;
+      seg(c, px + sd * 3, 160, round(px + sd * 3 + cos(a) * 16), round(160 + sin(a) * 10 + 5), 2, P.black, null);
+    }
+  }
 });
-const SLATE_SPIN = [192, 40, 15];
+const SLATE_SPIN = [192, 33, 13];
 function assembledSpinner(ctx, lt, dt) {
   const [cx, cy, r] = SLATE_SPIN;
   const head = floor(mod(spinPhase(dt), 1) * 8);
@@ -1361,24 +1427,24 @@ function shotSlate(ctx, lt) {
   assembledSpinner(ctx, lt, dt);
   if (lt > 0.45) {
     const p = easeOutBack(prog(lt, 0.45, 0.75), 2);
-    text(ctx, 'THE', 192, 62 + round((1 - p) * 6), { color: P.yellow, align: 'center' });
+    text(ctx, 'THE', 192, 54 + round((1 - p) * 6), { color: P.yellow, align: 'center' });
   }
   const mk = MARK();
-  const x0 = drawMark(ctx, mk, 192, 72, { reveal: prog(lt, 0.15, 0.85), drop: 26 });
-  if (lt > 1.15) glint(ctx, mk.cv, x0 - mk.ox, 72 - mk.oy, mod(lt - 1.15, 3.5) / 0.7, { width: 6 });
+  const x0 = drawMark(ctx, mk, 192, 65, { reveal: prog(lt, 0.15, 0.85), drop: 26 });
+  if (lt > 1.15) glint(ctx, mk.cv, x0 - mk.ox, 65 - mk.oy, mod(lt - 1.15, 3.5) / 0.7, { width: 6 });
   // ornament + sub line
   if (lt > 0.9) {
     const e = easeOut(prog(lt, 0.9, 1.3));
     const half = round(e * 92);
-    R(ctx, 192 - 40 - half, 108, half, 1, P.yellow);
-    R(ctx, 192 + 40, 108, half, 1, P.yellow);
-    text(ctx, 'HOTEL & SPA', 192, 105, { color: P.cream, align: 'center' });
+    R(ctx, 192 - 40 - half, 102, half, 1, P.yellow);
+    R(ctx, 192 + 40, 102, half, 1, P.yellow);
+    text(ctx, 'HOTEL & SPA', 192, 99, { color: P.cream, align: 'center' });
   }
   // the bar loads... and stays at 99%
   if (lt > 1.0) {
     const p = 0.99 * easeOut(prog(lt, 1.0, 1.8));
-    progressBar(ctx, 132, 121, 120, 5, p, lt);
-    text(ctx, PCT[floor(p * 100)], 260, 120, { color: P.yellow });
+    progressBar(ctx, 132, 115, 120, 5, p, lt);
+    text(ctx, PCT[floor(p * 100)], 260, 114, { color: P.yellow });
   }
   // slogan ribbon, word by word on the VO
   if (lt > 1.35) {
@@ -1386,7 +1452,7 @@ function shotSlate(ctx, lt) {
     const fw = SLOGAN_X.total + 24;
     const w = round(fw * open);
     const x = round(192 - w / 2);
-    const y = 136;
+    const y = 130;
     R(ctx, x - 7, y + 4, 9, 20, P.darkRed);
     R(ctx, x + w - 2, y + 4, 9, 20, P.darkRed);
     rrect(ctx, x, y, w, 24, P.black, 2);
@@ -1403,13 +1469,13 @@ function shotSlate(ctx, lt) {
       const cx = left + SLOGAN_X[i] + (art.width - 4) / 2;
       ctx.drawImage(art, round(cx - ww / 2), round(y + 12 - hh / 2), ww, hh);
     }
-    if (lt > 3.85 && lt < 4.6) for (let i = 0; i < 4; i++) sparkle(ctx, 300 + i * 9, 132 + (i % 2) * 22, twinkle(lt, i * 0.2), P.white);
+    if (lt > 3.85 && lt < 4.6) for (let i = 0; i < 4; i++) sparkle(ctx, 300 + i * 9, 126 + (i % 2) * 22, twinkle(lt, i * 0.2), P.white);
   }
   if (lt > 2.5) {
     const p = easeOutBack(prog(lt, 2.5, 2.8), 2.4);
     const s = 'GRANDBUFFER.WAIT';
     const w = measureText(s) + 14;
-    const y = 168 + round((1 - p) * 10);
+    const y = 164 + round((1 - p) * 10);
     panel(ctx, round(192 - w / 2), y, w, 13, P.purple, P.yellow, 2);
     text(ctx, s, 192, y + 3, { color: P.cream, align: 'center' });
   }
@@ -1453,38 +1519,39 @@ export default {
     { at: 15.4, text: 'Enjoy a helpful tip. Then... another tip.' },
     { at: 19.5, text: 'The Grand Buffer. Stay at ninety-nine percent... forever.' },
   ],
-  // 100 bpm (0.6 s a beat): a breathless double-time run for the sightseeing
-  // (beats 0-8), a deflating sigh for the close-up, a dreamy rise for the
-  // hotel reveal, a lazy bossa under the lounge, pool and tips, and the sting
-  // lands on the end slate at beat 32 (19.2 s) and resolves on C.
+  // 100 bpm (0.6 s a beat), 41 beats = the whole ad: a breathless double-time
+  // run for the sightseeing (beats 0-8), a deflating sigh for the close-up
+  // (8-10), a dreamy rise for the hotel reveal (10-14), a lazy bossa under the
+  // lounge, pool and tips (14-32), and the sting from the end slate (32 =
+  // 19.2 s) resolving on C.
   tune: {
     bpm: 100,
     wave: 'triangle',
     notes: tune(
       rep('C5:0.25 E5:0.25 G5:0.25 E5:0.25 D5:0.25 F5:0.25 A5:0.25 F5:0.25', 3),
       'E5:0.25 G5:0.25 C6:0.25 G5:0.25 B5:0.5 G5:0.5',
-      'C6:0.5 R:0.5 A5:1 F5:1 D5:1',
+      'C6:0.5 A5:0.5 F5:0.5 D5:0.5',
       'E5:1.5 G5:0.5 B5:2',
-      'A5:1.5 F5:0.5 E5:1 D5:1',
-      rep('E5:1 D5:0.5 E5:1.5 C5:1 A4:2 R:2 D5:1 C5:0.5 D5:1.5 B4:1 G4:2 R:2', 1),
-      'E5:1 G5:0.5 A5:1.5 G5:1 E5:2 R:2',
+      'E5:1 D5:0.5 E5:1.5 C5:1 A4:2 R:2',
+      'D5:1 C5:0.5 D5:1.5 B4:1 G4:2 R:2',
+      'A4:1 B4:1',
       'G5:1 E5:1 C5:1 D5:1 E5:1 D5:1 C5:3',
     ),
     bass: tune(
       rep('C3:0.5 G2:0.5', 6), 'C3:0.5 G2:0.5 C3:1',
-      'F2:2 G2:2',
-      'A2:2 E2:2 D2:2 G2:2',
-      'C3:1.5 G2:0.5 C3:2 A2:1.5 E2:0.5 A2:2 D3:1.5 A2:0.5 D3:2 G2:1.5 D2:0.5 G2:2',
+      'F2:2',
+      'A2:2 E2:2',
       'C3:1.5 G2:0.5 C3:2 A2:1.5 E2:0.5 A2:2',
+      'D3:1.5 A2:0.5 D3:2 G2:1.5 D2:0.5 G2:2',
+      'F2:1 G2:1',
       'F2:2 G2:2 C3:5',
     ),
     bassWave: 'sine',
     drums: tune(
-      rep('K:0.5 H:0.25 H:0.25 S:0.5 H:0.5', 4),
-      'K:2 R:2',
+      rep('K:0.5 H:0.25 H:0.25 S:0.5 H:0.5', 3), 'K:0.5 S:0.5 S:0.5 S:0.5',
+      'K:2',
       rep('H:1', 4),
-      rep('K:1 H:0.5 S:0.5 H:0.5 K:0.5 S:1', 4),
-      rep('K:1 H:0.5 S:0.5 H:0.5 K:0.5 S:1', 2),
+      rep('K:1 H:0.5 S:0.5 H:0.5 K:0.5 S:1', 4), 'K:1 S:1',
       'K:1 H:1 S:1 H:1 K:1 R:4',
     ),
   },
