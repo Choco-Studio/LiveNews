@@ -394,7 +394,27 @@
     for (let i = 0; i < u8.length; i += CH) s += String.fromCharCode.apply(null, u8.subarray(i, i + CH));
     return btoa(s);
   }
+  // The tap passes audio through and posts only the frames inside [from, to)
+  // (the recorded window), batched: a long show renders minutes of waiting
+  // before its start, and one message per 128-frame quantum would flood the
+  // main thread for nothing.
   const TAP = `registerProcessor('sc-tap', class extends AudioWorkletProcessor {
+    constructor(options) {
+      super();
+      const o = (options && options.processorOptions) || {};
+      this.from = Number(o.from) || 0;
+      this.to = Number.isFinite(Number(o.to)) ? Number(o.to) : Infinity;
+      this.N = 4096;
+      this.bl = new Float32Array(this.N);
+      this.br = new Float32Array(this.N);
+      this.n = 0;
+      this.at = 0;
+    }
+    flush() {
+      if (!this.n) return;
+      this.port.postMessage([this.at, this.bl.slice(0, this.n), this.br.slice(0, this.n)]);
+      this.n = 0;
+    }
     process(inputs, outputs) {
       const i = inputs[0];
       const o = outputs[0];
@@ -402,7 +422,15 @@
       const R = i[1] || L;
       if (o[0]) o[0].set(L);
       if (o[1]) o[1].set(R);
-      this.port.postMessage([currentFrame, L.slice(), R.slice()]);
+      const f = currentFrame;
+      if (f + L.length > this.from && f < this.to) {
+        if (this.n && this.at + this.n !== f) this.flush();
+        if (!this.n) this.at = f;
+        this.bl.set(L, this.n);
+        this.br.set(R, this.n);
+        this.n += L.length;
+        if (this.n + 128 > this.N || f + L.length >= this.to) this.flush();
+      }
       return true;
     }
   });`;
@@ -425,7 +453,7 @@
     // Only the recorded window is kept (a long show waits minutes for its start).
     const keep = Math.max(0, Math.min(need, Math.floor(fromSec * sr)));
     const makeTap = () => {
-      const node = new AudioWorkletNode(ctx, 'sc-tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit' });
+      const node = new AudioWorkletNode(ctx, 'sc-tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit', processorOptions: { from: keep, to: need } });
       const t = { node, L: new Float32Array(need - keep), R: new Float32Array(need - keep), got: 0 };
       node.port.onmessage = (e) => {
         const [frame, l, r] = e.data;

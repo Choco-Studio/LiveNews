@@ -207,7 +207,15 @@ function bakeWall(style) {
       tex[row + tx] = (tq << 8) | ((q >> 4) << 4) | (q & 15);
     }
   }
-  b = { tex, lo, hi, tlo, thi };
+  // per texel: where its run of identical texels ends on its row (the render fills a whole run of a
+  // flat ramp step with one native fill, and loops only over dithered runs)
+  const end = new Uint16Array(TW * TH);
+  for (let ty = 0; ty < TH; ty++) {
+    const row = ty * TW;
+    end[row + TW - 1] = TW;
+    for (let tx = TW - 2; tx >= 0; tx--) end[row + tx] = tex[row + tx + 1] === tex[row + tx] ? end[row + tx + 1] : tx + 1;
+  }
+  b = { tex, end, lo, hi, tlo, thi };
   BAKED.set(style.bakeKey, b);
   return b;
 }
@@ -283,13 +291,15 @@ if (typeof document !== 'undefined' && typeof setTimeout === 'function') {
 }
 
 const COL = new Int32Array(W);
-const RUN = new Int32Array(W + 1); // per column: where its run of identical texels ends
+const XOF = new Int32Array(TW + 2); // per texel column: the first screen x that samples it or a later one
 const THR = new Uint8Array(4);
+const RPAT = new Uint32Array(4);
 
 /**
  * Render the baked wall light above row `yEnd` (the floor covers the rest), skipping the screen
- * rectangle [sx0, sx1) x [sy0, sy1) (the wall content covers it). One texture read and one or two
- * Bayer compares per pixel; the dither is anchored to the screen.
+ * rectangle [sx0, sx1) x [sy0, sy1) (the wall content covers it). The row is walked run by run of
+ * identical texels: a flat ramp step is one native fill, a dithered run repeats its 4 px Bayer
+ * pattern; the dither is anchored to the screen.
  */
 function renderWall(fr, cam, baked, sx0, sy0, sx1, sy1, yEnd, xl = 0, xr = W) {
   const k = kAt(cam, SET.wallZ);
@@ -301,14 +311,11 @@ function renderWall(fr, cam, baked, sx0, sy0, sx1, sy1, yEnd, xl = 0, xr = W) {
     let tx = Math.floor(cam.x + (x + 0.5 - 192) * inv - TX0);
     COL[x] = tx < 0 ? 0 : tx >= TW ? TW - 1 : tx;
   }
-  // magnified (singles: one texel covers 2-3 px), walk the row texel by texel: a flat texel is one
-  // read for its whole run of pixels
-  const runs = k > 1.3;
-  if (runs) {
-    RUN[W] = W;
-    for (let x = W - 1; x >= 0; x--) RUN[x] = x + 1 < W && COL[x + 1] === COL[x] ? RUN[x + 1] : x + 1;
-  }
-  const { tex, lo, hi, tlo, thi } = baked;
+  // COL never decreases, so a texel run [a, b) covers the screen columns [XOF[a], XOF[b])
+  let t = 0;
+  for (let x = 0; x < W; x++) while (t <= COL[x]) XOF[t++] = x;
+  while (t <= TW) XOF[t++] = W;
+  const { tex, end, lo, hi, tlo, thi } = baked;
   const px = fr.px;
   const ye = Math.min(H, yEnd);
   xl = Math.max(0, xl);
@@ -325,39 +332,27 @@ function renderWall(fr, cam, baked, sx0, sy0, sx1, sy1, yEnd, xl = 0, xr = W) {
     const skip = y >= sy0 && y < sy1;
     const xa = skip ? Math.max(xl, Math.min(xr, sx0)) : xr;
     const xb = skip ? Math.max(xl, Math.min(xr, sx1)) : xr;
+    const row = y * W;
     for (let pass = 0; pass < 2; pass++) {
-      const x0 = pass ? xb : xl, x1 = pass ? xr : xa;
-      const row = y * W;
-      if (runs) {
-        let x = x0;
-        while (x < x1) {
-          const v = tex[rb + COL[x]];
-          const xe = RUN[x] < x1 ? RUN[x] : x1;
-          if ((v & 0xf0f) === 0) {
-            const c = lo[v >> 4];
-            for (; x < xe; x++) px[row + x] = c;
-            continue;
-          }
-          const p = (v >> 4) & 15, sh = v & 15, tq = v >> 8;
-          for (; x < xe; x++) {
-            const T = THR[x & 3];
-            px[row + x] = tq > T ? (sh > T ? thi[p] : tlo[p]) : sh > T ? hi[p] : lo[p];
-          }
-        }
-        continue;
-      }
-      let i = row + x0;
-      for (let x = x0; x < x1; x++, i++) {
-        const v = tex[rb + COL[x]];
-        // a flat ramp step (no Bayer share, no tint): the lower colour whatever the threshold
+      const x1 = pass ? xr : xa;
+      let x = pass ? xb : xl;
+      while (x < x1) {
+        const ti = rb + COL[x];
+        const v = tex[ti];
+        let xe = XOF[end[ti]];
+        if (xe > x1) xe = x1;
         if ((v & 0xf0f) === 0) {
-          px[i] = lo[v >> 4];
+          // a flat ramp step (no Bayer share, no tint): the lower colour whatever the threshold
+          px.fill(lo[v >> 4], row + x, row + xe);
+          x = xe;
           continue;
         }
-        const T = THR[x & 3];
-        const p = (v >> 4) & 15;
-        if (v >> 8 > T) px[i] = (v & 15) > T ? thi[p] : tlo[p];
-        else px[i] = (v & 15) > T ? hi[p] : lo[p];
+        const p = (v >> 4) & 15, sh = v & 15, tq = v >> 8;
+        for (let j = 0; j < 4; j++) {
+          const T = THR[j];
+          RPAT[j] = tq > T ? (sh > T ? thi[p] : tlo[p]) : sh > T ? hi[p] : lo[p];
+        }
+        for (; x < xe; x++) px[row + x] = RPAT[x & 3];
       }
     }
   }

@@ -38,10 +38,16 @@ const W = 384, H = 216;
 const clipRows = new Int16Array(W);
 const sheet = new Uint32Array(W * H);
 
-// The studio set is another stream's file and may be mid-edit: load it lazily
-// and fall back to a plain ink room with a slate desk so the lab keeps working.
+// The studio set is another stream's file and may be mid-edit: load it with a
+// top-level await (so the very first frame of a fresh page already has its set,
+// w2-set round 2 request) and fall back to a plain ink room with a slate desk if
+// the import fails, so the lab keeps working.
 let SETMOD = null;
-import('../studio/set.js').then((m) => { SETMOD = m; }).catch(() => { SETMOD = null; });
+try {
+  SETMOD = await import('../studio/set.js');
+} catch {
+  SETMOD = null;
+}
 
 function drawRoom(cam, t) {
   if (SETMOD) {
