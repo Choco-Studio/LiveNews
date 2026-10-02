@@ -813,10 +813,11 @@ export class AudioEngine {
         const g = voiceGender(voice);
         if (prof.gender === 'male' && g === 'female') pitch *= 0.85;
         else if (prof.gender === 'female' && g === 'male') pitch *= 1.2;
-        // Same voice already used by another slot of this gender: nudge the pitch apart.
-        const twins = (used.get(voice) ?? []).filter((k) => out.get(k).gender === prof.gender).length;
+        // Voice already taken by a slot of this gender (any slot, for neutral): nudge the pitch apart.
+        const taken = used.get(voice) ?? [];
+        const twins = prof.gender === 'neutral' ? taken.length : taken.filter((k) => out.get(k).gender === prof.gender).length;
         if (twins) pitch *= twins % 2 ? 1.12 : 0.88;
-        used.set(voice, [...(used.get(voice) ?? []), key]);
+        used.set(voice, [...taken, key]);
       }
       out.set(key, {
         gender: prof.gender,
