@@ -4,7 +4,7 @@
 import { P } from '../../../palette.js';
 import { toneN, decal } from '../pixbuf.js';
 import { headHW } from '../head.js';
-import { LocalXY, localBox, clumpTone, selOutEdge, hairLight, rimMat, HeadWidthLUT } from './kit-a.js';
+import { LocalXY, localBox, clumpTone, strokeTone, selOutEdge, hairLight, rimMat, HeadWidthLUT } from './kit-a.js';
 import { clamp } from '../space.js';
 import { GROUPS } from '../character.js';
 import { defineLook } from './base.js';
@@ -35,6 +35,7 @@ export const lola = defineLook({
   arm: { upper: 21, fore: 19.5, rUpper: 3.0, rElbow: 2.6, rWrist: 2.05, hand: 10.2 },
   cuff: P.yellow,
   persona: { sway: 0.85, headMotion: 1.05, blinkMin: 2.2, blinkMax: 5.2, energy: 1.05, smile: 0.26 },
+  mats: { hairD: { ramp: [P.rust, P.brown, P.maroon, P.black], decal: true } }, // hair strokes (kit-a strokeTone)
   parts: { hairBack: drawBobBack, hair: drawBobAndStuds, coversEars: true },
 });
 
@@ -138,7 +139,7 @@ export function drawBob(buf, L, m, head, s, lag) {
     const d2 = x * x + (y - cyc) * (y - cyc);
     if (d2 > (RV - 0.5) * (RV - 0.5) && y < cyc && t >= 2) return t; // clean outer edge for the rim
     // the sheen is a band at a fixed "latitude" of the dome (distance from the dome's centre), not round the crown
-    return clumpTone(t, v, Math.sqrt(d2), CO);
+    return strokeTone(t, clumpTone(t, v, Math.sqrt(d2), CO), m.hairD);
   });
   const g = head.gb + GROUPS.hair;
   selOutEdge(buf, x0, y0, x1, y1, g, head.gb + GROUPS.head, m.hair, m.hairEdge);

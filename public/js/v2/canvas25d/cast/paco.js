@@ -9,7 +9,7 @@
 // upper arm ≈ 1.15 head, desk at elbow height.
 import { P } from '../../../palette.js';
 import { toneN } from '../pixbuf.js';
-import { LocalXY, localBox, clumpTone, HeadWidthLUT } from './kit-a.js';
+import { LocalXY, localBox, clumpTone, strokeTone, HeadWidthLUT } from './kit-a.js';
 import { faceInverse } from '../head.js';
 import { defineLook, SKIN_LIGHT } from './base.js';
 
@@ -40,6 +40,7 @@ export const paco = defineLook({
   cuff: P.white,
   // personality for the idle layer: calm, economical
   persona: { sway: 0.6, headMotion: 0.7, blinkMin: 2.6, blinkMax: 5.8, energy: 0.7, smile: 0.18 },
+  mats: { hairD: { ramp: [P.silver, P.fog, P.steel, P.slate], decal: true } }, // hair strokes (kit-a strokeTone)
   parts: { hair: drawShortHair, over: drawMustache },
 });
 
@@ -126,7 +127,7 @@ export function drawShortHair(buf, L, m, head, s) {
     // the hair lifts beside the parting: a lit lip on the big side
     if (tier === 2 && dPart > 0.28 && dPart < 0.28 + 1.2 / s && t <= 1 && y < hairline - 0.4) return 0;
     if (r2 > (RV - 0.45) * (RV - 0.45) && t >= 2) return t; // keep the outer edge clean for the rim
-    return clumpTone(t, v, u, CO);
+    return strokeTone(t, clumpTone(t, v, u, CO), m.hairD);
   });
 }
 

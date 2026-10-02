@@ -17,7 +17,7 @@ import { P } from '../../../palette.js';
 import { toneN } from '../pixbuf.js';
 import { GROUPS } from '../character.js';
 import { defineLook, SKIN_LIGHT } from './base.js';
-import { LocalXY, localBox, clumpTone, selOutEdge, hairLight, rimMat, hash01, HeadWidthLUT } from './kit-a.js';
+import { LocalXY, localBox, clumpTone, strokeTone, selOutEdge, hairLight, rimMat, hash01, HeadWidthLUT } from './kit-a.js';
 
 export const sam = defineLook({
   id: 'sam',
@@ -49,6 +49,7 @@ export const sam = defineLook({
   cuff: P.silver,
   // calm and economical: the least sway of the men, a slow blink
   persona: { sway: 0.5, headMotion: 0.72, blinkMin: 2.8, blinkMax: 6.2, energy: 0.78, smile: 0.15 },
+  mats: { hairD: { ramp: [P.tanShade, P.brown, P.maroon, P.black], decal: true } }, // hair strokes (kit-a strokeTone)
   parts: { hair: drawCrop },
 });
 
@@ -129,7 +130,7 @@ export function drawCrop(buf, L, m, head, s) {
     const v0 = fx * (1 + up * 0.06) - up * 0.42 + 30; // pushed up and over to the right
     const v = v0 + 0.38 * CO.cw * Math.sin(v0 * 1.9 / CO.cw + 1.3);
     if ((x * x) / (a * a) + Math.pow((cyc - y) / b, 2) > 0.8 && t >= 2) return t; // clean outer edge for the rim
-    return clumpTone(t, v, up, CO);
+    return strokeTone(t, clumpTone(t, v, up, CO), m.hairD);
   });
   const g = head.gb + GROUPS.hair;
   selOutEdge(buf, x0, y0, x1, y1, g, head.gb + GROUPS.head, m.hair, m.hairEdge);
