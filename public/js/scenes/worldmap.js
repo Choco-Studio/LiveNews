@@ -61,7 +61,7 @@ for (let t = 0; t < 16; t++) {
     else if (v === 2) c = mix(c, WHITE, 0.2);
     else if (v === 3) c = mix(c, BLACK, 0.34);
     PAL[(v << 4) | t] = pack(c);
-    PAL[128 | (v << 4) | t] = pack(t < 3 ? c : mix(c, NIGHT, 0.6));
+    PAL[128 | (v << 4) | t] = pack(t < 3 ? c : mix(c, NIGHT, 0.54));
   }
 }
 const RGB = { red: col('red'), darkRed: col('darkRed'), pink: col('pink'), white: col('white'), black: col('black'), yellow: col('yellow'), orange: col('orange'), cream: col('cream'), silver: col('silver') };
@@ -353,6 +353,15 @@ function* stageTerrain() {
     olvl[i] = L; ofr[i] = Math.round(fs * 255);
   }
   GEO.olvl = olvl; GEO.ofr = ofr;
+  // value x 4x4 dither cell -> final tone, so the per-pixel work is a single lookup
+  const landTone = new Uint8Array(4096), seaTone = new Uint8Array(4096);
+  for (let v = 0; v < 256; v++) {
+    for (let k = 0; k < 16; k++) {
+      landTone[(v << 4) | k] = T_LAND0 + lvl[v] + (fr[v] > B4_255[k] ? 1 : 0);
+      seaTone[(v << 4) | k] = T_OCEAN_HI - olvl[v] + (ofr[v] > B4_255[k] ? -1 : 0);
+    }
+  }
+  GEO.landTone = landTone; GEO.seaTone = seaTone;
 }
 
 // Major cities [lat, lon, size 1..5] -> clusters of night lights.
@@ -402,13 +411,13 @@ function* stageMisc() {
   const rnd = mulberry32(20240607);
   const lon = [], lat = [], kind = [];
   for (const [la, lo, sz] of CITIES) {
-    const n = 2 + sz * sz;
+    const n = 3 + sz * sz * 2;
     const spread = 0.1 + 0.1 * sz;
     for (let k = 0; k < n; k++) {
       const a = rnd() * Math.PI * 2, r = spread * Math.sqrt(-Math.log(1 - rnd() * 0.97)) * 0.7;
       lon.push(lo + (Math.cos(a) * r) / Math.max(0.35, Math.cos(la * DEG)));
       lat.push(la + Math.sin(a) * r);
-      kind.push(k === 0 ? 3 : rnd() < 0.45 ? 1 : 0);
+      kind.push(k === 0 ? 3 : rnd() < 0.2 ? 1 : 0);
     }
   }
   GEO.lights = { lon: Float32Array.from(lon), lat: Float32Array.from(lat), kind: Uint8Array.from(kind), n: lon.length };
@@ -446,9 +455,23 @@ function stepInit() {
 function ensureInit() {
   while (stepInit());
 }
+// After the data is ready, run a few throw-away frames (also in background slices) so the render loops are
+// JIT-optimised and the full-screen / mini buffers exist before the first real map shot.
+let warmN = 0;
+function warmStep() {
+  if (typeof document === 'undefined' || warmN >= 14) return;
+  try {
+    if (!warmStep.ctx) warmStep.ctx = document.createElement('canvas').getContext('2d');
+    const k = warmN++;
+    drawWorldMap(warmStep.ctx, k * 0.1, 0.1 + k * 0.11, { lat: 48 + k, lon: 20 + k, w: 384, h: 216 });
+    if (k % 3 === 2) drawWorldMap(warmStep.ctx, k * 0.1, k * 0.2, { lat: 10, lon: 10, w: 104, h: 62, mini: true });
+  } catch (e) { warmN = 99; }
+  setTimeout(warmStep, 20);
+}
 if (typeof setTimeout === 'function') {
   const kick = () => {
     if (stepInit()) setTimeout(kick, 0);
+    else setTimeout(warmStep, 50);
   };
   setTimeout(kick, 0);
 }
@@ -517,7 +540,7 @@ function getInstance(w, h) {
   const img = cctx.createImageData(w, h);
   rt = {
     w, h, canvas, cctx, img, u32: new Uint32Array(img.data.buffer),
-    base: new Uint8Array(w * h), land: new Uint8Array(w * h), edge: new Uint8Array(w * h),
+    base: new Uint8Array(w * h), land: new Uint8Array(w * h), edge: new Uint8Array(w * h), bT: new Int16Array(((w + 1) >> 1) * ((h + 1) >> 1)), bD: new Int16Array(((w + 1) >> 1) * ((h + 1) >> 1)),
     cx0: new Int32Array(w), cx1: new Int32Array(w), cfx: new Float32Array(w),
     tx0: new Int32Array(w), tx1: new Int32Array(w), tfx: new Float32Array(w),
     colLon: new Float64Array(w), colC: new Float32Array(w), gcol: new Uint8Array(w),
@@ -541,7 +564,7 @@ function renderBase(rt, view) {
   let lvl = Math.floor(Math.log2(pxDeg / GEO.texel0));
   lvl = lvl < 0 ? 0 : lvl > mips.length - 1 ? mips.length - 1 : lvl;
   const mip = mips[lvl], Wl = mip.w, Hl = mip.h, m = mip.d;
-  const terr = GEO.terrain, depth = GEO.depth, LVL = GEO.lvl, FR = GEO.fr, OLVL = GEO.olvl, OFR = GEO.ofr;
+  const terr = GEO.terrain, depth = GEO.depth, LT = GEO.landTone, ST = GEO.seaTone;
   const { cx0, cx1, cfx, tx0, tx1, tfx, colLon, ry0, ry1, rfy, ty0, ty1, tfy, rowLat, rowSpace, land, edge, base, gcol, grow } = rt;
   const halfW = w / 2, halfH = h / 2;
 
@@ -607,7 +630,11 @@ function renderBase(rt, view) {
     }
   }
 
-  // pass 2: tones (terrain / ocean depth, ordered-dithered between adjacent tones)
+  // pass 2: tones (terrain / ocean depth, ordered-dithered between adjacent tones). The smooth 0.5-degree
+  // fields are sampled once per 2x2 block (lazily) while the dither threshold is applied per pixel.
+  const bw = (w + 1) >> 1;
+  const bT = rt.bT, bD = rt.bD;
+  bT.fill(-1); bD.fill(-1);
   for (let y = 0; y < h; y++) {
     const row = y * w;
     if (rowSpace[y]) {
@@ -617,26 +644,35 @@ function renderBase(rt, view) {
       }
       continue;
     }
-    const t0 = ty0[y], t1 = ty1[y], tfyv = tfy[y], by4 = (y & 3) << 2;
+    const ye = y & ~1;
+    const t0 = ty0[ye], t1 = ty1[ye], tfyv = tfy[ye], by4 = (y & 3) << 2, brow = (y >> 1) * bw;
     for (let x = 0; x < w; x++) {
       const i = row + x, L = land[i];
       if (L === 1) {
         if (edge[i]) base[i] = T_COAST;
         else {
-          const a0 = tx0[x], a1 = tx1[x], fx = tfx[x];
-          const a = terr[t0 + a0], b = terr[t0 + a1], c = terr[t1 + a0], d = terr[t1 + a1];
-          const top = a + (b - a) * fx;
-          const v = (top + (c + (d - c) * fx - top) * tfyv) | 0;
-          base[i] = T_LAND0 + LVL[v] + (FR[v] > B4_255[by4 | (x & 3)] ? 1 : 0);
+          const bi = brow + (x >> 1);
+          let v = bT[bi];
+          if (v < 0) {
+            const xe = x & ~1, a0 = tx0[xe], a1 = tx1[xe], fx = tfx[xe];
+            const a = terr[t0 + a0], b = terr[t0 + a1], c = terr[t1 + a0], d = terr[t1 + a1];
+            const top = a + (b - a) * fx;
+            v = bT[bi] = (top + (c + (d - c) * fx - top) * tfyv) | 0;
+          }
+          base[i] = LT[(v << 4) | by4 | (x & 3)];
         }
       } else if (L === 0) {
         if (edge[i]) base[i] = T_HALO;
         else {
-          const a0 = tx0[x], a1 = tx1[x], fx = tfx[x];
-          const a = depth[t0 + a0], b = depth[t0 + a1], c = depth[t1 + a0], d = depth[t1 + a1];
-          const top = a + (b - a) * fx;
-          const v = (top + (c + (d - c) * fx - top) * tfyv) | 0;
-          base[i] = T_OCEAN_HI - OLVL[v] + (OFR[v] > B4_255[by4 | (x & 3)] ? -1 : 0);
+          const bi = brow + (x >> 1);
+          let v = bD[bi];
+          if (v < 0) {
+            const xe = x & ~1, a0 = tx0[xe], a1 = tx1[xe], fx = tfx[xe];
+            const a = depth[t0 + a0], b = depth[t0 + a1], c = depth[t1 + a0], d = depth[t1 + a1];
+            const top = a + (b - a) * fx;
+            v = bD[bi] = (top + (c + (d - c) * fx - top) * tfyv) | 0;
+          }
+          base[i] = ST[(v << 4) | by4 | (x & 3)];
         }
       } else base[i] = T_SPACE;
     }
@@ -672,9 +708,10 @@ function renderBase(rt, view) {
 function drawBorders(rt, view, fade) {
   const { w, h, base } = rt;
   const sx = view.s * view.kx, sy = view.s;
-  const lonL = view.clon - w / 2 / sx, lonR = view.clon + w / 2 / sx;
-  const latT = view.clat + h / 2 / sy, latB = view.clat - h / 2 / sy;
-  const halfW = w / 2, halfH = h / 2, clon = view.clon, clat = view.clat;
+  const clon = ((((view.clon + 180) % 360) + 360) % 360) - 180, clat = view.clat; // keep copies at -360/0/+360 in reach
+  const lonL = clon - w / 2 / sx, lonR = clon + w / 2 / sx;
+  const latT = clat + h / 2 / sy, latB = clat - h / 2 / sy;
+  const halfW = w / 2, halfH = h / 2;
   const thrF = fade * 16;
   for (const ln of GEO.lines) {
     if (ln.maxy < latB || ln.miny > latT) continue;
@@ -736,7 +773,7 @@ function makePin(R, H) {
       const dx = x - R, dy = y - cy;
       let c;
       if (edge) c = RGB.black;
-      else if (dx * dx + dy * dy <= (R * 0.42) * (R * 0.42) + 0.6) c = RGB.white;
+      else if (dx * dx + dy * dy <= (R >= 5 ? (R * 0.42) * (R * 0.42) + 0.6 : 1)) c = RGB.white;
       else if (-dx * 0.75 - dy * 0.75 > R * 0.78) c = RGB.pink;
       else if (dx * 0.7 + dy * 0.45 > R * 0.55 || y > cy + R * 0.7 && dx > 0) c = RGB.darkRed;
       else c = RGB.red;
@@ -779,7 +816,7 @@ function dropOffset(u, hgt) {
 
 function drawRings(rt, cx, cy, tLocal, mini, a0 = 1) {
   const { u32, w, h } = rt;
-  const period = mini ? 1.5 : 1.8, rMax = mini ? 11 : 28, rMin = mini ? 2 : 4;
+  const period = mini ? 1.5 : 1.8, rMax = mini ? 9 : 28, rMin = mini ? 2 : 4;
   for (let k = 0; k < 3; k++) {
     const u = (((tLocal - (k * period) / 3) % period) + period) % period / period;
     if (tLocal < (k * period) / 3) continue; // rings appear one after another
@@ -789,7 +826,7 @@ function drawRings(rt, cx, cy, tLocal, mini, a0 = 1) {
     const thr = alpha * 16;
     for (let q = 0; q < pts.length; q += 2) {
       const x = cx + pts[q], y = cy + pts[q + 1];
-      if (B4[((y & 3) << 2) | (x & 3)] * 16 < thr) plot(u32, w, h, x, y, k === 1 ? RGB.white : RGB.red);
+      if (B4[((y & 3) << 2) | (x & 3)] * 16 < thr) plot(u32, w, h, x, y, k === 1 && !mini ? RGB.white : RGB.red);
     }
     if (!mini && u < 0.5) {
       const p2 = ringPoints(Math.max(1, r - 1));
@@ -830,6 +867,8 @@ export function drawWorldMap(ctx, t, dt, { lat = null, lon = null, place = '', x
   w = Math.max(8, Math.round(w)); h = Math.max(8, Math.round(h));
   x = Math.round(x); y = Math.round(y);
   dt = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+  lat = lat === null || lat === undefined || lat === '' ? NaN : Number(lat);
+  lon = lon === null || lon === undefined || lon === '' ? NaN : Number(lon);
   const hasTarget = Number.isFinite(lat) && Number.isFinite(lon);
   const view = computeView(w, h, mini, t, dt, hasTarget ? clamp(lat, -89.9, 89.9) : null, hasTarget ? lon : null);
   const rt = getInstance(w, h);

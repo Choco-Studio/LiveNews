@@ -1,42 +1,72 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ANCHORS, EMOTIONS, SHOTS, buildPrompt, extractJson, normalizeBulletin } from '../server/writer.js';
+import { EMOTIONS, SHOTS, buildPrompt, buildReviewPrompt, extractJson, normalizeBulletin } from '../server/writer.js';
 
 // ---------------------------------------------------------------- helpers
 
 const makeStory = (id, extra = {}) => ({
   id,
-  title: `Titular de la noticia ${id}`,
-  summary: 'Resumen de la noticia. Segunda frase del resumen.',
-  source: 'Fuente Uno',
-  category: 'general',
+  title: `Headline of story ${id}`,
+  summary: 'Summary of the story. A second sentence of the summary.',
+  source: 'BBC News',
+  category: 'world',
   image: null,
   ...extra,
 });
 
-const STORIES = [makeStory('s1'), makeStory('s2', { image: 'https://img.test/s2.jpg', source: 'Fuente Dos' }), makeStory('s3')];
+const STORIES = [makeStory('s1'), makeStory('s2', { image: 'https://img.test/s2.jpg', source: 'Al Jazeera', category: 'business' }), makeStory('s3')];
+
+const PROGRAM = {
+  id: 'world-now',
+  title: 'WORLD NOW',
+  tagline: 'THE STORIES SHAPING OUR WORLD',
+  theme: 'world',
+  presenters: ['paco', 'lola'],
+  categories: ['world', 'business'],
+  stories: 5,
+  maxChats: 3,
+  style: 'Flagship world news bulletin. Lead with the biggest global story.',
+  storyLength: '2 to 4 sentences, max 450 characters',
+};
+
+const PACO = { name: 'Paco Pixel', personality: 'veteran anchor, calm and authoritative' };
+const LOLA = { name: 'Lola Byte', personality: 'co-anchor, energetic and curious' };
+const DUO = { A: PACO, B: LOLA };
+const SOLO = { A: { name: 'Penny Sterling', personality: 'crisp markets correspondent' } };
 
 const storySeg = (id, extra = {}) => ({
   type: 'story',
   storyId: id,
   anchor: 'A',
   emotion: 'neutral',
-  headline: `Rótulo ${id}`,
-  text: `Texto de la noticia ${id}.`,
+  headline: `Caption ${id}`,
+  text: `Text of story ${id}.`,
   shot: 'wide',
   ...extra,
 });
 
-const otherSeg = (type, extra = {}) => ({ type, anchor: 'A', emotion: 'neutral', text: `Texto de ${type}.`, ...extra });
+const otherSeg = (type, extra = {}) => ({ type, anchor: 'A', emotion: 'neutral', text: `Text of ${type}.`, ...extra });
 
-const normalize = (segments, { stories = STORIES, raw = {}, opts } = {}) => normalizeBulletin({ title: 'Boletín', ...raw, segments }, stories, opts);
+const normalize = (segments, { stories = STORIES, raw = {}, opts } = {}) => normalizeBulletin({ title: 'Bulletin', ...raw, segments }, stories, opts);
+
+/** The single story segment produced from one input story segment. */
+const storyOf = (extra, opts) => normalize([storySeg('s1', extra)], { opts }).segments[1];
 
 const types = (bulletin) => bulletin.segments.map((s) => s.type);
+
+// ---------------------------------------------------------------- constants
+
+describe('writer constants', () => {
+  test('EMOTIONS and SHOTS match what the renderer understands', () => {
+    assert.deepEqual(EMOTIONS, ['neutral', 'happy', 'serious', 'surprised', 'sad', 'thinking']);
+    assert.deepEqual(SHOTS, ['wide', 'close', 'full', 'map']);
+  });
+});
 
 // ---------------------------------------------------------------- extractJson
 
 describe('extractJson', () => {
-  const obj = { title: 'T', segments: [{ type: 'intro', text: 'Hola' }] };
+  const obj = { title: 'T', segments: [{ type: 'intro', text: 'Hello' }] };
 
   test('parses plain JSON', () => {
     assert.deepEqual(extractJson(JSON.stringify(obj)), obj);
@@ -52,18 +82,18 @@ describe('extractJson', () => {
   });
 
   test('ignores text before and after the object', () => {
-    const raw = `Claro, aquí tienes el boletín:\n\n${JSON.stringify(obj)}\n\nEspero que te guste. ¡Un saludo!`;
+    const raw = `Sure, here is the script:\n\n${JSON.stringify(obj)}\n\nHope you like it. Best wishes!`;
     assert.deepEqual(extractJson(raw), obj);
   });
 
   test('handles braces inside string values', () => {
     const tricky = { text: 'a } b', other: 'x { y', nested: { k: '}}}' } };
-    assert.deepEqual(extractJson(`prefijo ${JSON.stringify(tricky)} sufijo`), tricky);
+    assert.deepEqual(extractJson(`prefix ${JSON.stringify(tricky)} suffix`), tricky);
     assert.deepEqual(extractJson('{"text": "a } b"}'), { text: 'a } b' });
   });
 
   test('handles escaped quotes and backslashes inside strings', () => {
-    const tricky = { text: 'dijo "hola }" y una barra \\', ok: true };
+    const tricky = { text: 'said "hello }" and a backslash \\', ok: true };
     assert.deepEqual(extractJson(JSON.stringify(tricky) + ' trailing }'), tricky);
   });
 
@@ -76,38 +106,48 @@ describe('extractJson', () => {
     assert.deepEqual(extractJson('{"n":1} {"n":2}'), { n: 1 });
   });
 
-  test('throws when there is no JSON object at all', () => {
-    assert.throws(() => extractJson('Lo siento, no puedo ayudar con eso.'), /no contiene JSON/);
-    assert.throws(() => extractJson(''), /no contiene JSON/);
+  test('throws "reply contains no JSON" when there is no JSON object at all', () => {
+    assert.throws(() => extractJson("I'm sorry, I cannot help with that."), /reply contains no JSON/);
+    assert.throws(() => extractJson(''), /reply contains no JSON/);
+    assert.throws(() => extractJson(undefined), /reply contains no JSON/);
   });
 
-  test('throws on truncated JSON', () => {
-    assert.throws(() => extractJson('{"title": "T", "segments": [{"type": "intro"'), /incompleto/);
-    assert.throws(() => extractJson('{"a": {"b": 1}'), /incompleto/);
-    assert.throws(() => extractJson('{"text": "sin cerrar'), /incompleto/);
+  test('throws "incomplete JSON in reply" on truncated JSON', () => {
+    assert.throws(() => extractJson('{"title": "T", "segments": [{"type": "intro"'), /incomplete JSON in reply/);
+    assert.throws(() => extractJson('{"a": {"b": 1}'), /incomplete JSON in reply/);
+    assert.throws(() => extractJson('{"text": "never closed'), /incomplete JSON in reply/);
   });
 
   test('throws a SyntaxError when the braces balance but the content is not valid JSON', () => {
-    assert.throws(() => extractJson('{esto no es json}'), SyntaxError);
+    assert.throws(() => extractJson('{this is not json}'), SyntaxError);
   });
 });
 
-// ---------------------------------------------------------------- normalizeBulletin
+// ---------------------------------------------------------------- normalizeBulletin: stories
 
 describe('normalizeBulletin: story segments', () => {
-  test('keeps valid story segments and decorates them with source, hasImage and flags', () => {
+  test('keeps valid story segments and decorates them with source, category, hasImage, location, fact and flags', () => {
     const b = normalize([storySeg('s1', { breaking: true }), storySeg('s2', { shot: 'close', emotion: 'serious', anchor: 'B' })]);
     const [, s1, s2] = b.segments;
     assert.equal(s1.storyId, 's1');
-    assert.equal(s1.source, 'Fuente Uno');
+    assert.equal(s1.source, 'BBC News');
+    assert.equal(s1.category, 'world');
     assert.equal(s1.hasImage, false);
     assert.equal(s1.breaking, true);
-    assert.equal(s2.source, 'Fuente Dos');
+    assert.equal(s1.location, null);
+    assert.equal(s1.fact, null);
+    assert.equal(s2.source, 'Al Jazeera');
+    assert.equal(s2.category, 'business');
     assert.equal(s2.hasImage, true);
     assert.equal(s2.breaking, false);
     assert.equal(s2.shot, 'close');
     assert.equal(s2.emotion, 'serious');
     assert.equal(s2.anchor, 'B');
+  });
+
+  test('the story segment has exactly the fields the renderer expects', () => {
+    const [, s] = normalize([storySeg('s1')]).segments;
+    assert.deepEqual(Object.keys(s).sort(), ['anchor', 'breaking', 'category', 'emotion', 'fact', 'hasImage', 'headline', 'location', 'shot', 'source', 'storyId', 'text', 'type']);
   });
 
   test('drops segments with an unknown storyId', () => {
@@ -117,28 +157,28 @@ describe('normalizeBulletin: story segments', () => {
   });
 
   test('drops duplicate story segments (the first one wins)', () => {
-    const b = normalize([storySeg('s1', { text: 'Primera versión.' }), storySeg('s1', { text: 'Segunda versión.' }), storySeg('s2')]);
+    const b = normalize([storySeg('s1', { text: 'First version.' }), storySeg('s1', { text: 'Second version.' }), storySeg('s2')]);
     const stories = b.segments.filter((s) => s.type === 'story');
     assert.deepEqual(stories.map((s) => s.storyId), ['s1', 's2']);
-    assert.equal(stories[0].text, 'Primera versión.');
+    assert.equal(stories[0].text, 'First version.');
   });
 
-  test('throws when no valid story remains', () => {
-    assert.throws(() => normalize([storySeg('nope'), otherSeg('intro'), otherSeg('outro')]), /no contiene noticias válidas/);
-    assert.throws(() => normalize([otherSeg('intro'), otherSeg('chat'), otherSeg('outro')]), /no contiene noticias válidas/);
-    assert.throws(() => normalize([]), /no contiene noticias válidas/);
-    assert.throws(() => normalizeBulletin({}, STORIES), /no contiene noticias válidas/);
-    assert.throws(() => normalizeBulletin(null, STORIES), /no contiene noticias válidas/);
-    assert.throws(() => normalizeBulletin({ segments: 'texto' }, STORIES), /no contiene noticias válidas/);
-    assert.throws(() => normalize([storySeg('s1')], { stories: [] }), /no contiene noticias válidas/);
+  test('throws "bulletin has no valid stories" when no valid story remains', () => {
+    assert.throws(() => normalize([storySeg('nope'), otherSeg('intro'), otherSeg('outro')]), /bulletin has no valid stories/);
+    assert.throws(() => normalize([otherSeg('intro'), otherSeg('chat'), otherSeg('outro')]), /bulletin has no valid stories/);
+    assert.throws(() => normalize([]), /bulletin has no valid stories/);
+    assert.throws(() => normalizeBulletin({}, STORIES), /bulletin has no valid stories/);
+    assert.throws(() => normalizeBulletin(null, STORIES), /bulletin has no valid stories/);
+    assert.throws(() => normalizeBulletin({ segments: 'text' }, STORIES), /bulletin has no valid stories/);
+    assert.throws(() => normalize([storySeg('s1')], { stories: [] }), /bulletin has no valid stories/);
   });
 
   test('drops segments with an unknown type or no text', () => {
     const b = normalize([
       storySeg('s1'),
-      { type: 'banner', text: 'no existe este tipo' },
+      { type: 'banner', text: 'this type does not exist' },
       null,
-      'texto suelto',
+      'loose text',
       storySeg('s2', { text: '   ' }),
       storySeg('s3'),
     ]);
@@ -149,31 +189,47 @@ describe('normalizeBulletin: story segments', () => {
     const b = normalize([storySeg('s1', { breaking: 'true' }), storySeg('s2', { breaking: 1 }), storySeg('s3', { breaking: true })]);
     assert.deepEqual(b.segments.filter((s) => s.type === 'story').map((s) => s.breaking), [false, false, true]);
   });
+
+  test('maxStories keeps the first N valid, distinct stories and drops the rest', () => {
+    const stories = ['s1', 's2', 's3', 's4'].map((id) => makeStory(id));
+    const b = normalize([storySeg('s1'), storySeg('nope'), storySeg('s1'), storySeg('s2'), storySeg('s3'), storySeg('s4')], { stories, opts: { maxStories: 2 } });
+    assert.deepEqual(b.storyIds, ['s1', 's2']);
+    assert.deepEqual(b.rundown.map((r) => r.storyId), ['s1', 's2']);
+    assert.equal(b.segments.filter((s) => s.type === 'story').length, 2);
+  });
+
+  test('without maxStories every valid story is kept', () => {
+    const stories = Array.from({ length: 12 }, (_, i) => makeStory(`s${i}`));
+    const b = normalize(stories.map((s) => storySeg(s.id)), { stories });
+    assert.equal(b.storyIds.length, 12);
+  });
 });
+
+// ---------------------------------------------------------------- normalizeBulletin: fields
 
 describe('normalizeBulletin: field validation', () => {
   test('invalid emotion becomes "neutral"; valid ones are kept', () => {
     for (const emotion of EMOTIONS) {
-      assert.equal(normalize([storySeg('s1', { emotion })]).segments[1].emotion, emotion);
+      assert.equal(storyOf({ emotion }).emotion, emotion);
     }
     for (const emotion of ['furious', '', undefined, 42, 'HAPPY']) {
-      assert.equal(normalize([storySeg('s1', { emotion })]).segments[1].emotion, 'neutral', String(emotion));
+      assert.equal(storyOf({ emotion }).emotion, 'neutral', String(emotion));
     }
   });
 
-  test('invalid shot becomes "wide"; valid ones are kept', () => {
-    for (const shot of SHOTS) {
-      assert.equal(normalize([storySeg('s1', { shot })]).segments[1].shot, shot);
+  test('invalid shot becomes "wide"; valid ones are kept (map needs a location, see below)', () => {
+    for (const shot of ['wide', 'close', 'full']) {
+      assert.equal(storyOf({ shot }).shot, shot);
     }
     for (const shot of ['zoom', '', undefined, null]) {
-      assert.equal(normalize([storySeg('s1', { shot })]).segments[1].shot, 'wide', String(shot));
+      assert.equal(storyOf({ shot }).shot, 'wide', String(shot));
     }
   });
 
   test('any anchor other than "B" becomes "A"', () => {
-    assert.equal(normalize([storySeg('s1', { anchor: 'B' })]).segments[1].anchor, 'B');
+    assert.equal(storyOf({ anchor: 'B' }).anchor, 'B');
     for (const anchor of ['A', 'C', 'b', '', undefined, 1]) {
-      assert.equal(normalize([storySeg('s1', { anchor })]).segments[1].anchor, 'A', String(anchor));
+      assert.equal(storyOf({ anchor }).anchor, 'A', String(anchor));
     }
   });
 
@@ -191,42 +247,40 @@ describe('normalizeBulletin: field validation', () => {
   });
 
   test('clamps the headline to 56 characters at a word boundary', () => {
-    const headline = 'cinco '.repeat(12).trim(); // 71 chars, words of 5 letters
-    const [, s] = normalize([storySeg('s1', { headline })]).segments;
+    const headline = 'seven '.repeat(12).trim(); // 71 chars, words of 5 letters
+    const s = storyOf({ headline });
     assert.ok(s.headline.length <= 56, `length ${s.headline.length}`);
-    assert.equal(s.headline, 'cinco '.repeat(9).trim());
+    assert.equal(s.headline, 'seven '.repeat(9).trim());
     assert.ok(headline.startsWith(s.headline) && headline[s.headline.length] === ' ', 'cut must fall on a word boundary');
   });
 
   test('keeps a headline that is already short enough, including exactly 56 characters', () => {
-    const exactly56 = 'palabra ' + 'x'.repeat(48);
+    const exactly56 = 'word ' + 'x'.repeat(51);
     assert.equal(exactly56.length, 56);
-    assert.equal(normalize([storySeg('s1', { headline: exactly56 })]).segments[1].headline, exactly56);
-    assert.equal(normalize([storySeg('s1', { headline: 'Corto' })]).segments[1].headline, 'Corto');
+    assert.equal(storyOf({ headline: exactly56 }).headline, exactly56);
+    assert.equal(storyOf({ headline: 'Short' }).headline, 'Short');
   });
 
   test('strips trailing punctuation left over after clamping the headline', () => {
     const headline = 'x'.repeat(50) + ', ' + 'yyyyyyyy zzz';
-    const [, s] = normalize([storySeg('s1', { headline })]).segments;
-    assert.equal(s.headline, 'x'.repeat(50));
+    assert.equal(storyOf({ headline }).headline, 'x'.repeat(50));
   });
 
-  test('a single very long word is still clamped to 56 characters', { todo: 'BUG server/writer.js:116 - clipWords slices max+1 chars and only trims at whitespace, so a headline with no spaces comes back 57 chars long' }, () => {
-    const [, s] = normalize([storySeg('s1', { headline: 'a'.repeat(100) })]).segments;
-    assert.ok(s.headline.length <= 56, `length ${s.headline.length}`);
+  test('a single very long word is still clamped to 56 characters', () => {
+    assert.equal(storyOf({ headline: 'a'.repeat(100) }).headline, 'a'.repeat(56));
   });
 
   test('falls back to the (clamped) story title when the headline is empty or missing', () => {
-    const stories = [makeStory('s1', { title: 'Titular original de la noticia' }), makeStory('s2', { title: 'palabra '.repeat(20) })];
+    const stories = [makeStory('s1', { title: 'Original headline of the story' }), makeStory('s2', { title: 'word '.repeat(20) })];
     const b = normalize([storySeg('s1', { headline: '' }), storySeg('s2', { headline: undefined })], { stories });
     const [, a, c] = b.segments;
-    assert.equal(a.headline, 'Titular original de la noticia');
-    assert.ok(c.headline.length <= 56 && c.headline.startsWith('palabra palabra'));
+    assert.equal(a.headline, 'Original headline of the story');
+    assert.ok(c.headline.length <= 56 && c.headline.startsWith('word word'));
   });
 
   test('clips long text to 520 characters, preferably at a sentence end', () => {
-    const text = 'Esta es una frase de relleno para el guion. '.repeat(30).trim();
-    const [, s] = normalize([storySeg('s1', { text })]).segments;
+    const text = 'This is a filler sentence for the script. '.repeat(30).trim();
+    const s = storyOf({ text });
     assert.ok(text.length > 520);
     assert.ok(s.text.length <= 520, `length ${s.text.length}`);
     assert.ok(s.text.endsWith('.'), s.text.slice(-20));
@@ -234,96 +288,229 @@ describe('normalizeBulletin: field validation', () => {
   });
 
   test('clips long text without sentence stops at a word boundary and adds an ellipsis', () => {
-    const [, s] = normalize([storySeg('s1', { text: 'palabra '.repeat(200) })]).segments;
+    const s = storyOf({ text: 'word '.repeat(200) });
     assert.ok(s.text.length <= 520, `length ${s.text.length}`);
-    assert.ok(s.text.endsWith('palabra…'), s.text.slice(-20));
+    assert.ok(s.text.endsWith('word…'), s.text.slice(-20));
   });
 
   test('leaves short text untouched', () => {
-    assert.equal(normalize([storySeg('s1', { text: 'Dos frases. Nada más.' })]).segments[1].text, 'Dos frases. Nada más.');
+    assert.equal(storyOf({ text: 'Two sentences. Nothing more.' }).text, 'Two sentences. Nothing more.');
   });
 
   test('strips markdown characters (* _ # `) and collapses whitespace in text, headline and title', () => {
-    const b = normalize([storySeg('s1', { text: '**Hola**   _mundo_\n# `código`', headline: '## **Titular** `uno`' })], {
-      raw: { title: '*Boletín* #1' },
+    const b = normalize([storySeg('s1', { text: '**Hello**   _world_\n# `code`', headline: '## **Headline** `one`' })], {
+      raw: { title: '*Bulletin* #1' },
     });
-    assert.equal(b.segments[1].text, 'Hola mundo código');
-    assert.equal(b.segments[1].headline, 'Titular uno');
-    assert.equal(b.title, 'Boletín 1');
+    assert.equal(b.segments[1].text, 'Hello world code');
+    assert.equal(b.segments[1].headline, 'Headline one');
+    assert.equal(b.title, 'Bulletin 1');
   });
 
-  test('title defaults to "Boletín informativo" and is capped at 80 characters', () => {
-    assert.equal(normalize([storySeg('s1')], { raw: { title: undefined } }).title, 'Boletín informativo');
-    assert.equal(normalize([storySeg('s1')], { raw: { title: '  ' } }).title, 'Boletín informativo');
+  test('title defaults to "News bulletin" and is capped at 80 characters', () => {
+    assert.equal(normalize([storySeg('s1')], { raw: { title: undefined } }).title, 'News bulletin');
+    assert.equal(normalize([storySeg('s1')], { raw: { title: '  ' } }).title, 'News bulletin');
     assert.equal(normalize([storySeg('s1')], { raw: { title: 'T'.repeat(200) } }).title.length, 80);
   });
 });
 
+// ---------------------------------------------------------------- normalizeBulletin: location, map shot, fact
+
+describe('normalizeBulletin: location', () => {
+  test('keeps a valid location, with lat/lon rounded to 2 decimals', () => {
+    const s = storyOf({ location: { place: 'PARIS, FRANCE', lat: 48.8566, lon: 2.3522 } });
+    assert.deepEqual(s.location, { place: 'PARIS, FRANCE', lat: 48.86, lon: 2.35 });
+  });
+
+  test('accepts negative coordinates and numeric strings', () => {
+    assert.deepEqual(storyOf({ location: { place: 'SYDNEY, AUSTRALIA', lat: -33.8688, lon: 151.2093 } }).location, { place: 'SYDNEY, AUSTRALIA', lat: -33.87, lon: 151.21 });
+    assert.deepEqual(storyOf({ location: { place: 'LIMA, PERU', lat: '-12.0464', lon: '-77.0428' } }).location, { place: 'LIMA, PERU', lat: -12.05, lon: -77.04 });
+  });
+
+  test('the poles and the date line are valid, one step beyond is not', () => {
+    assert.deepEqual(storyOf({ location: { place: 'EDGE', lat: 90, lon: 180 } }).location, { place: 'EDGE', lat: 90, lon: 180 });
+    assert.deepEqual(storyOf({ location: { place: 'EDGE', lat: -90, lon: -180 } }).location, { place: 'EDGE', lat: -90, lon: -180 });
+    assert.equal(storyOf({ location: { place: 'EDGE', lat: 90.01, lon: 0 } }).location, null);
+    assert.equal(storyOf({ location: { place: 'EDGE', lat: -90.5, lon: 0 } }).location, null);
+    assert.equal(storyOf({ location: { place: 'EDGE', lat: 0, lon: 180.01 } }).location, null);
+    assert.equal(storyOf({ location: { place: 'EDGE', lat: 0, lon: -181 } }).location, null);
+  });
+
+  test('an invalid location becomes null', () => {
+    const bad = [
+      undefined,
+      null,
+      'PARIS',
+      42,
+      {},
+      { place: 'PARIS, FRANCE' },
+      { lat: 48.85, lon: 2.35 },
+      { place: '', lat: 48.85, lon: 2.35 },
+      { place: '   ', lat: 48.85, lon: 2.35 },
+      { place: 'PARIS', lat: 'north', lon: 2.35 },
+      { place: 'PARIS', lat: 48.85, lon: 'east' },
+      { place: 'PARIS', lat: NaN, lon: 2.35 },
+      { place: 'PARIS', lat: Infinity, lon: 2.35 },
+      { place: 'PARIS', lat: 48.85 },
+    ];
+    for (const location of bad) {
+      assert.equal(storyOf({ location }).location, null, JSON.stringify(location));
+    }
+  });
+
+  test('clamps the place name to 32 characters at a word boundary', () => {
+    const s = storyOf({ location: { place: 'A VERY LONG PLACE NAME INDEED, WITH A COUNTRY NAME', lat: 1, lon: 2 } });
+    assert.equal(s.location.place, 'A VERY LONG PLACE NAME INDEED');
+    assert.ok(s.location.place.length <= 32);
+  });
+
+  test('strips markdown and extra whitespace from the place name', () => {
+    assert.equal(storyOf({ location: { place: '**GAZA**   CITY', lat: 31.5, lon: 34.47 } }).location.place, 'GAZA CITY');
+  });
+
+  test('a "map" shot is kept when the story has a valid location', () => {
+    const s = storyOf({ shot: 'map', location: { place: 'KYIV, UKRAINE', lat: 50.45, lon: 30.52 } });
+    assert.equal(s.shot, 'map');
+    assert.equal(s.location.place, 'KYIV, UKRAINE');
+  });
+
+  test('a "map" shot is downgraded to "close" when there is no valid location', () => {
+    assert.equal(storyOf({ shot: 'map' }).shot, 'close');
+    assert.equal(storyOf({ shot: 'map', location: null }).shot, 'close');
+    assert.equal(storyOf({ shot: 'map', location: { place: 'KYIV', lat: 500, lon: 30 } }).shot, 'close');
+  });
+
+  test('other shots are untouched by a missing location', () => {
+    for (const shot of ['wide', 'close', 'full']) assert.equal(storyOf({ shot }).shot, shot);
+  });
+
+  test('a location without a "map" shot is kept as is', () => {
+    const s = storyOf({ shot: 'close', location: { place: 'KYIV, UKRAINE', lat: 50.45, lon: 30.52 } });
+    assert.equal(s.shot, 'close');
+    assert.deepEqual(s.location, { place: 'KYIV, UKRAINE', lat: 50.45, lon: 30.52 });
+  });
+
+  test(
+    'null, empty or boolean coordinates are not valid and must not be read as 0',
+    {
+      todo:
+        'BUG server/writer.js:165-166 - Number(null), Number("") and Number(false) are 0 and Number(true) is 1, so {place:"PARIS, FRANCE", lat:null, lon:null} is accepted as {lat:0, lon:0} (the Gulf of Guinea) instead of being rejected',
+    },
+    () => {
+      assert.equal(storyOf({ location: { place: 'PARIS, FRANCE', lat: null, lon: null } }).location, null);
+      assert.equal(storyOf({ location: { place: 'PARIS, FRANCE', lat: '', lon: '' } }).location, null);
+      assert.equal(storyOf({ location: { place: 'PARIS, FRANCE', lat: true, lon: false } }).location, null);
+    }
+  );
+});
+
+describe('normalizeBulletin: fact', () => {
+  test('keeps a short fact as is', () => {
+    assert.equal(storyOf({ fact: '40,000 EVACUATED' }).fact, '40,000 EVACUATED');
+    assert.equal(storyOf({ fact: '$2BN DEAL' }).fact, '$2BN DEAL');
+  });
+
+  test('is null when missing, empty or not text-like', () => {
+    for (const fact of [undefined, null, '', '   ', '***']) {
+      assert.equal(storyOf({ fact }).fact, null, String(fact));
+    }
+  });
+
+  test('keeps a fact of exactly 48 characters, and cuts a longer one at a word boundary', () => {
+    const exactly48 = 'word ' + 'x'.repeat(43);
+    assert.equal(exactly48.length, 48);
+    assert.equal(storyOf({ fact: exactly48 }).fact, exactly48);
+
+    const long = 'MAGNITUDE SEVEN POINT ONE EARTHQUAKE STRIKES OFF THE COAST OF JAPAN';
+    const cut = storyOf({ fact: long }).fact;
+    assert.ok(cut.length <= 48, `length ${cut.length}`);
+    assert.ok(long.startsWith(cut) && long[cut.length] === ' ', 'cut must fall on a word boundary');
+    assert.equal(cut, 'MAGNITUDE SEVEN POINT ONE EARTHQUAKE STRIKES OFF');
+  });
+
+  test('strips markdown and whitespace', () => {
+    assert.equal(storyOf({ fact: '**7.1**   MAGNITUDE' }).fact, '7.1 MAGNITUDE');
+  });
+});
+
+// ---------------------------------------------------------------- normalizeBulletin: structure
+
 describe('normalizeBulletin: structure', () => {
-  test('keeps at most 3 chat segments', () => {
+  test('keeps at most 3 chat segments by default', () => {
     const b = normalize([storySeg('s1'), ...Array.from({ length: 5 }, (_, i) => otherSeg('chat', { text: `Chat ${i}.` })), storySeg('s2')]);
     const chats = b.segments.filter((s) => s.type === 'chat');
     assert.deepEqual(chats.map((c) => c.text), ['Chat 0.', 'Chat 1.', 'Chat 2.']);
   });
 
-  test('adds a default intro and outro (using the channel name) when they are missing', () => {
-    const b = normalize([storySeg('s1'), storySeg('s2')], { opts: { channelName: 'MI CANAL' } });
+  test('maxChats caps the chat segments; 0 removes them all', () => {
+    const segments = [storySeg('s1'), otherSeg('chat', { text: 'Chat 0.' }), storySeg('s2'), otherSeg('chat', { text: 'Chat 1.' }), otherSeg('chat', { text: 'Chat 2.' }), storySeg('s3')];
+    const chatsWith = (maxChats) => normalize(segments, { opts: { maxChats } }).segments.filter((s) => s.type === 'chat').map((c) => c.text);
+    assert.deepEqual(chatsWith(1), ['Chat 0.']);
+    assert.deepEqual(chatsWith(2), ['Chat 0.', 'Chat 1.']);
+    assert.deepEqual(chatsWith(10), ['Chat 0.', 'Chat 1.', 'Chat 2.']);
+    assert.deepEqual(chatsWith(0), []);
+  });
+
+  test('adds a default English intro and outro (using the channel name) when they are missing', () => {
+    const b = normalize([storySeg('s1'), storySeg('s2')], { opts: { channelName: 'GLOBIT 24' } });
     assert.deepEqual(types(b), ['intro', 'story', 'story', 'outro']);
     assert.equal(b.segments[0].anchor, 'A');
-    assert.match(b.segments[0].text, /MI CANAL/);
+    assert.equal(b.segments[0].emotion, 'happy');
+    assert.equal(b.segments[0].text, 'Hello and welcome to GLOBIT 24. Here are the headlines.');
     assert.equal(b.segments.at(-1).anchor, 'B');
-    assert.match(b.segments.at(-1).text, /MI CANAL/);
+    assert.equal(b.segments.at(-1).emotion, 'happy');
+    assert.equal(b.segments.at(-1).text, "That's all for now. Stay with us, GLOBIT 24 is live around the clock.");
   });
 
   test('default channel name is LIVENEWS', () => {
     const b = normalize([storySeg('s1')]);
     assert.match(b.segments[0].text, /LIVENEWS/);
+    assert.match(b.segments.at(-1).text, /LIVENEWS/);
   });
 
   test('uses the intro and outro written by the model instead of the defaults', () => {
-    const b = normalize([otherSeg('intro', { text: 'Mi intro.' }), storySeg('s1'), otherSeg('outro', { text: 'Mi despedida.' })]);
+    const b = normalize([otherSeg('intro', { text: 'My intro.' }), storySeg('s1'), otherSeg('outro', { text: 'My sign-off.' })]);
     assert.deepEqual(types(b), ['intro', 'story', 'outro']);
-    assert.equal(b.segments[0].text, 'Mi intro.');
-    assert.equal(b.segments[2].text, 'Mi despedida.');
+    assert.equal(b.segments[0].text, 'My intro.');
+    assert.equal(b.segments[2].text, 'My sign-off.');
   });
 
   test('puts the intro first and the outro last even when the model misplaced them', () => {
     const b = normalize([
       storySeg('s1'),
-      otherSeg('outro', { text: 'Adiós.' }),
-      otherSeg('intro', { text: 'Hola.' }),
+      otherSeg('outro', { text: 'Goodbye.' }),
+      otherSeg('intro', { text: 'Hello.' }),
       storySeg('s2'),
-      otherSeg('chat', { text: 'Comentario.' }),
+      otherSeg('chat', { text: 'Comment.' }),
     ]);
     assert.deepEqual(types(b), ['intro', 'story', 'story', 'chat', 'outro']);
-    assert.equal(b.segments[0].text, 'Hola.');
-    assert.equal(b.segments.at(-1).text, 'Adiós.');
+    assert.equal(b.segments[0].text, 'Hello.');
+    assert.equal(b.segments.at(-1).text, 'Goodbye.');
   });
 
   test('keeps only one intro and one outro', () => {
-    const b = normalize([otherSeg('intro', { text: 'Uno.' }), otherSeg('intro', { text: 'Dos.' }), storySeg('s1'), otherSeg('outro', { text: 'Fin A.' }), otherSeg('outro', { text: 'Fin B.' })]);
+    const b = normalize([otherSeg('intro', { text: 'One.' }), otherSeg('intro', { text: 'Two.' }), storySeg('s1'), otherSeg('outro', { text: 'End A.' }), otherSeg('outro', { text: 'End B.' })]);
     assert.deepEqual(types(b), ['intro', 'story', 'outro']);
-    assert.equal(b.segments[0].text, 'Uno.');
-    assert.equal(b.segments[2].text, 'Fin A.');
+    assert.equal(b.segments[0].text, 'One.');
+    assert.equal(b.segments[2].text, 'End A.');
   });
 
   test('removes leading chat segments before the first story, keeps later ones', () => {
-    const b = normalize([otherSeg('chat', { text: 'Chat inicial 1.' }), otherSeg('chat', { text: 'Chat inicial 2.' }), storySeg('s1'), otherSeg('chat', { text: 'Chat posterior.' }), storySeg('s2')]);
+    const b = normalize([otherSeg('chat', { text: 'First chat.' }), otherSeg('chat', { text: 'Second chat.' }), storySeg('s1'), otherSeg('chat', { text: 'Later chat.' }), storySeg('s2')]);
     assert.deepEqual(types(b), ['intro', 'story', 'chat', 'story', 'outro']);
-    assert.equal(b.segments[2].text, 'Chat posterior.');
+    assert.equal(b.segments[2].text, 'Later chat.');
   });
 
   test('also removes leading chats that come right after the intro', () => {
-    const b = normalize([otherSeg('intro'), otherSeg('chat', { text: 'Chat huérfano.' }), storySeg('s1')]);
+    const b = normalize([otherSeg('intro'), otherSeg('chat', { text: 'Orphan chat.' }), storySeg('s1')]);
     assert.deepEqual(types(b), ['intro', 'story', 'outro']);
   });
 
-  test('rundown lists the story headlines in running order; storyIds lists the used ids', () => {
-    const b = normalize([storySeg('s3', { headline: 'Tercera' }), otherSeg('chat'), storySeg('s1', { headline: 'Primera' }), storySeg('unknown'), storySeg('s2', { headline: 'Segunda' })]);
+  test('rundown lists the stories in running order with headline, source, category and hasImage; storyIds lists the used ids', () => {
+    const b = normalize([storySeg('s3', { headline: 'Third' }), otherSeg('chat'), storySeg('s1', { headline: 'First' }), storySeg('unknown'), storySeg('s2', { headline: 'Second' })]);
     assert.deepEqual(b.rundown, [
-      { storyId: 's3', headline: 'Tercera' },
-      { storyId: 's1', headline: 'Primera' },
-      { storyId: 's2', headline: 'Segunda' },
+      { storyId: 's3', headline: 'Third', source: 'BBC News', category: 'world', hasImage: false },
+      { storyId: 's1', headline: 'First', source: 'BBC News', category: 'world', hasImage: false },
+      { storyId: 's2', headline: 'Second', source: 'Al Jazeera', category: 'business', hasImage: true },
     ]);
     assert.deepEqual(b.storyIds, ['s3', 's1', 's2']);
     assert.deepEqual(
@@ -332,11 +519,61 @@ describe('normalizeBulletin: structure', () => {
     );
   });
 
+  test('the bulletin has exactly title, segments, rundown and storyIds', () => {
+    assert.deepEqual(Object.keys(normalize([storySeg('s1')])).sort(), ['rundown', 'segments', 'storyIds', 'title']);
+  });
+
   test('does not mutate the raw input', () => {
-    const raw = { title: 'T', segments: [storySeg('s1', { headline: '**x**' })] };
+    const raw = { title: 'T', segments: [storySeg('s1', { headline: '**x**', location: { place: 'PARIS', lat: 48.8566, lon: 2.3522 } })] };
     const copy = structuredClone(raw);
     normalizeBulletin(raw, STORIES);
     assert.deepEqual(raw, copy);
+  });
+});
+
+describe('normalizeBulletin: solo programmes', () => {
+  const solo = { solo: true };
+
+  test('every segment is read by anchor "A", whatever the model wrote', () => {
+    const b = normalize(
+      [
+        otherSeg('intro', { anchor: 'B' }),
+        storySeg('s1', { anchor: 'B' }),
+        otherSeg('chat', { anchor: 'B', text: 'A chat.' }),
+        storySeg('s2', { anchor: 'B' }),
+        otherSeg('outro', { anchor: 'B' }),
+      ],
+      { opts: solo }
+    );
+    assert.deepEqual(types(b), ['intro', 'story', 'chat', 'story', 'outro']);
+    assert.ok(b.segments.every((s) => s.anchor === 'A'), JSON.stringify(b.segments.map((s) => s.anchor)));
+  });
+
+  test('the default outro is also read by "A" (a duo programme closes with "B")', () => {
+    const soloOutro = normalize([storySeg('s1')], { opts: solo }).segments.at(-1);
+    const duoOutro = normalize([storySeg('s1')]).segments.at(-1);
+    assert.equal(soloOutro.type, 'outro');
+    assert.equal(soloOutro.anchor, 'A');
+    assert.equal(duoOutro.anchor, 'B');
+  });
+
+  test('the default intro is read by "A" too', () => {
+    assert.equal(normalize([storySeg('s1')], { opts: solo }).segments[0].anchor, 'A');
+  });
+
+  test('duo programmes keep anchor "B" where the model wrote it', () => {
+    const b = normalize([storySeg('s1', { anchor: 'B' })]);
+    assert.equal(b.segments[1].anchor, 'B');
+  });
+
+  test('solo does not change the other rules (maxStories, maxChats, location)', () => {
+    const b = normalize(
+      [storySeg('s1', { shot: 'map', location: { place: 'ROME, ITALY', lat: 41.9, lon: 12.5 } }), storySeg('s2'), otherSeg('chat'), storySeg('s3')],
+      { opts: { solo: true, maxStories: 2, maxChats: 0 } }
+    );
+    assert.deepEqual(b.storyIds, ['s1', 's2']);
+    assert.ok(!types(b).includes('chat'));
+    assert.equal(b.segments[1].shot, 'map');
   });
 });
 
@@ -344,44 +581,144 @@ describe('normalizeBulletin: structure', () => {
 
 describe('buildPrompt', () => {
   const now = new Date('2026-10-15T10:30:00Z');
+  const prompt = (extra = {}) => buildPrompt({ channelName: 'GLOBIT 24', program: PROGRAM, presenters: DUO, stories: STORIES, now, ...extra });
+  const candidatesIn = (text) => JSON.parse(text.slice(text.indexOf('CANDIDATES\n') + 'CANDIDATES\n'.length));
 
-  test('mentions every story id and the channel name', () => {
-    const prompt = buildPrompt({ channelName: 'CANAL PRUEBA', stories: STORIES, now });
-    assert.match(prompt, /"CANAL PRUEBA"/);
+  test('is written in English and names the channel, the programme, its tagline and its style', () => {
+    const p = prompt();
+    assert.match(p, /"GLOBIT 24", a 24-hour English-language news channel/);
+    assert.match(p, /the programme "WORLD NOW" \(THE STORIES SHAPING OUR WORLD\)/);
+    assert.ok(p.includes(`Programme style: ${PROGRAM.style}`));
+    assert.match(p, /Write the script in English/);
+    assert.match(p, /ACCURACY RULES/);
+    assert.match(p, /Never invent numbers, names, quotes, dates, causes or consequences/);
+  });
+
+  test('lists every presenter with their slot, name and personality', () => {
+    const p = prompt();
+    assert.ok(p.includes('- A: Paco Pixel, veteran anchor, calm and authoritative.'));
+    assert.ok(p.includes('- B: Lola Byte, co-anchor, energetic and curious.'));
+    const soloPrompt = prompt({ presenters: SOLO });
+    assert.ok(soloPrompt.includes('- A: Penny Sterling, crisp markets correspondent.'));
+    assert.ok(!soloPrompt.includes('- B:'));
+  });
+
+  test('embeds every candidate as JSON with id, outlet, section, outletsCovering, headline and summary', () => {
+    const list = candidatesIn(prompt({ stories: [makeStory('s1', { outlets: 3 }), makeStory('s2', { source: 'NPR', category: 'tech' })] }));
+    assert.deepEqual(list, [
+      { id: 's1', outlet: 'BBC News', section: 'world', outletsCovering: 3, headline: 'Headline of story s1', summary: 'Summary of the story. A second sentence of the summary.' },
+      { id: 's2', outlet: 'NPR', section: 'tech', outletsCovering: 1, headline: 'Headline of story s2', summary: 'Summary of the story. A second sentence of the summary.' },
+    ]);
+  });
+
+  test('mentions every story id and title, and asks the model to prefer widely covered stories', () => {
+    const p = prompt();
     for (const s of STORIES) {
-      assert.ok(prompt.includes(`"id": "${s.id}"`), `missing id ${s.id}`);
-      assert.ok(prompt.includes(s.title), `missing title of ${s.id}`);
+      assert.ok(p.includes(`"id": "${s.id}"`), `missing id ${s.id}`);
+      assert.ok(p.includes(s.title), `missing title of ${s.id}`);
     }
-    assert.ok(prompt.includes('Fuente Dos'));
+    assert.ok(p.includes('Al Jazeera'));
+    assert.match(p, /"outletsCovering" > 1/);
+  });
+
+  test('truncates long summaries to 700 characters', () => {
+    const long = makeStory('big', { summary: 'word '.repeat(300) });
+    const [parsed] = candidatesIn(prompt({ stories: [long] }));
+    assert.equal(parsed.id, 'big');
+    assert.equal(parsed.summary.length, 700);
+  });
+
+  test('asks for the number of stories in `count`, defaulting to the programme size', () => {
+    assert.match(prompt(), /select the 5 stories of greatest interest/);
+    assert.match(prompt({ count: 3 }), /select the 3 stories of greatest interest/);
+  });
+
+  test('includes the programme story length and the JSON output contract', () => {
+    const p = prompt();
+    assert.ok(p.includes(`Story "text": ${PROGRAM.storyLength}.`));
+    assert.match(p, /Reply with ONLY a valid JSON object/);
+    for (const e of EMOTIONS) assert.ok(p.includes(e), `emotion ${e}`);
+    for (const s of SHOTS) assert.ok(p.includes(s), `shot ${s}`);
+    assert.match(p, /"location"/);
+    assert.match(p, /"fact"/);
+    assert.match(p, /"breaking"/);
+  });
+
+  test('duo programmes alternate between presenters "A" and "B"', () => {
+    const p = prompt();
+    assert.ok(p.includes('"anchor": "A" | "B"'));
+    assert.match(p, /Alternate presenters between stories/);
+    assert.ok(!p.includes('single presenter'));
+  });
+
+  test('solo programmes use only anchor "A"', () => {
+    const p = prompt({ presenters: SOLO });
+    assert.ok(!p.includes('"A" | "B"'));
+    assert.match(p, /There is a single presenter: always use "anchor": "A"/);
+    assert.ok(!p.includes('Alternate presenters'));
+  });
+
+  test('limits the chat segments to the programme maxChats, or forbids them when it is 0', () => {
+    assert.match(prompt({ program: { ...PROGRAM, maxChats: 3 } }), /At most 3 "chat" segments in total\./);
+    assert.match(prompt({ program: { ...PROGRAM, maxChats: 1 } }), /At most 1 "chat" segments in total\./);
+    const none = prompt({ program: { ...PROGRAM, maxChats: 0 }, presenters: SOLO });
+    assert.match(none, /No "chat" segments\./);
+    assert.ok(!none.includes('At most'));
+  });
+
+  test('gives the time in UTC, in English', () => {
+    assert.match(prompt(), /Current time: Thursday,? 15 October,?( at)? 10:30 UTC\./);
   });
 
   test('never contains the string "undefined"', () => {
-    const prompt = buildPrompt({ channelName: 'TEST', stories: STORIES, now });
-    assert.ok(!prompt.includes('undefined'));
-    assert.ok(!buildPrompt({ channelName: 'TEST', stories: STORIES }).includes('undefined'), 'also with the default "now"');
-    assert.ok(!buildPrompt({ channelName: 'TEST', stories: [makeStory('x', { summary: '' })], now }).includes('undefined'));
+    assert.ok(!prompt().includes('undefined'));
+    assert.ok(!prompt({ now: undefined }).includes('undefined'), 'also with the default "now"');
+    assert.ok(!prompt({ stories: [makeStory('x', { summary: '' })] }).includes('undefined'));
+    assert.ok(!prompt({ presenters: SOLO, program: { ...PROGRAM, maxChats: 0 } }).includes('undefined'));
+  });
+});
+
+// ---------------------------------------------------------------- buildReviewPrompt
+
+describe('buildReviewPrompt', () => {
+  const script = { title: 'WORLD NOW', segments: [{ type: 'story', storyId: 's1', anchor: 'A', emotion: 'neutral', headline: 'Caption', text: 'Text.', shot: 'wide', breaking: false, location: null, fact: null }] };
+  const review = (extra = {}) => buildReviewPrompt({ channelName: 'GLOBIT 24', program: PROGRAM, script, stories: STORIES, ...extra });
+
+  test('is written in English and names the channel and the programme', () => {
+    const p = review();
+    assert.match(p, /standards editor of "GLOBIT 24"/);
+    assert.match(p, /the programme "WORLD NOW"/);
+    assert.match(p, /ACCURACY RULES/);
   });
 
-  test('names both anchors and the JSON output contract', () => {
-    const prompt = buildPrompt({ channelName: 'TEST', stories: STORIES, now });
-    assert.ok(prompt.includes(ANCHORS.A.name) && prompt.includes(ANCHORS.B.name));
-    for (const e of EMOTIONS) assert.ok(prompt.includes(e), `emotion ${e}`);
-    for (const s of SHOTS) assert.ok(prompt.includes(s), `shot ${s}`);
+  test('embeds the script as JSON', () => {
+    const p = review();
+    const json = p.slice(p.indexOf('SCRIPT\n') + 'SCRIPT\n'.length, p.indexOf('\n\nSOURCES\n'));
+    assert.deepEqual(JSON.parse(json), script);
   });
 
-  test('formats the date in Madrid time', () => {
-    const prompt = buildPrompt({ channelName: 'TEST', stories: STORIES, now });
-    assert.match(prompt, /Fecha y hora \(Madrid\): .*octubre.*12:30/);
+  test('embeds the sources (id, outlet, headline, summary) and nothing else about them', () => {
+    const p = review({ stories: [makeStory('s1', { image: 'https://img.test/x.jpg', link: 'https://example.test/s1' }), makeStory('s2', { summary: 'word '.repeat(300) })] });
+    const sources = JSON.parse(p.slice(p.indexOf('SOURCES\n') + 'SOURCES\n'.length));
+    assert.deepEqual(Object.keys(sources[0]), ['id', 'outlet', 'headline', 'summary']);
+    assert.equal(sources[0].id, 's1');
+    assert.equal(sources[0].outlet, 'BBC News');
+    assert.equal(sources[0].headline, 'Headline of story s1');
+    assert.equal(sources[1].summary.length, 700);
   });
 
-  test('truncates long summaries to 700 characters and embeds stories as JSON', () => {
-    const long = makeStory('big', { summary: 'palabra '.repeat(200) });
-    const prompt = buildPrompt({ channelName: 'TEST', stories: [long], now });
-    const json = prompt.slice(prompt.indexOf('NOTICIAS\n') + 'NOTICIAS\n'.length);
-    const [parsed] = JSON.parse(json);
-    assert.equal(parsed.id, 'big');
-    assert.equal(parsed.fuente, 'Fuente Uno');
-    assert.equal(parsed.titular, long.title);
-    assert.equal(parsed.resumen.length, 700);
+  test('tells the editor to check facts, locations and tone, keep the structure and reply with JSON only', () => {
+    const p = review();
+    assert.match(p, /not supported by the source/);
+    assert.match(p, /"fact" field/);
+    assert.match(p, /"location" matches a place named in the source/);
+    assert.match(p, /Do not add new stories/);
+    assert.match(p, /Keep the same JSON structure/);
+    assert.match(p, /Reply with ONLY the corrected JSON object/);
+  });
+
+  test('never contains the string "undefined"', () => {
+    assert.ok(!review().includes('undefined'));
+    assert.ok(!review({ stories: [makeStory('x', { summary: '' })] }).includes('undefined'));
   });
 });

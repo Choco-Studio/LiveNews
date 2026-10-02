@@ -260,7 +260,6 @@ const HAIR = {
       '..gG...HHHHHHH..GG..',
       '..gG............GG..',
       '..G..............G..',
-      '..G..............G..',
     ],
     -10,
     -4,
@@ -294,8 +293,9 @@ const HAIR = {
 
 // Face layout per style (x from the face centre, y from the skull top).
 const FACE = {
-  short: { eyeOx: -5, browOx: -6, noseY: 9, noseH: 2, mouthY: 13, cheekY: 9, jaw: [-3, 17, 6] },
-  bob: { eyeOx: -4, browOx: -5, noseY: 9, noseH: 1, mouthY: 11, cheekY: 8, jaw: [-2, 16, 4] },
+  // jaw: [x, y, width] of the extra chin row on wide-open vowels; ear: [x, y] where earrings hang
+  short: { eyeOx: -5, browOx: -6, noseY: 9, noseH: 2, mouthY: 13, cheekY: 9, jaw: [-3, 17, 6], ear: [-9, 10] },
+  bob: { eyeOx: -4, browOx: -5, noseY: 9, noseH: 1, mouthY: 11, cheekY: 8, jaw: [-2, 16, 4], ear: [-7, 13] },
 };
 
 const GLASSES = spr(['..fFFF....fFFF..', 'FF....FFFF....FF', '.F....F..F....F.', '..FFFF....FFFF..'], -8, 5);
@@ -369,10 +369,11 @@ const MOUTHS = {
 // under a mustache a closed smile shows as a toothy grin
 const MOUTHS_MUSTACHE = { happy0: spr(['.LTTTTL.', '..LLLL..'], -4, 0) };
 
-function mouthSprite(emotion, mouth, mustache) {
-  if (mouth <= 0) return (mustache && MOUTHS_MUSTACHE[emotion + '0']) || MOUTHS[emotion + '0'] || MOUTHS.neutral0;
+function mouthSprite(emotion, open, mustache) {
+  const mouth = Math.max(0, Math.min(2, Math.round(open) || 0));
+  if (mouth === 0) return (mustache && MOUTHS_MUSTACHE[emotion + '0']) || MOUTHS[emotion + '0'] || MOUTHS.neutral0;
   const base = emotion === 'happy' || emotion === 'sad' || emotion === 'surprised' ? emotion : 'neutral';
-  return MOUTHS[base + Math.min(2, mouth)];
+  return MOUTHS[base + mouth];
 }
 
 // ---------------------------------------------------------------------------
@@ -507,7 +508,7 @@ export function drawAnchor(ctx, x, y, L, state) {
 
   // head; on wide-open vowels the jaw drops a pixel
   draw(ctx, HEAD[style], hx, hy, pal);
-  if (mouth >= 2) {
+  if (mouth >= 1.5) {
     ctx.fillStyle = pal.S;
     ctx.fillRect(hx + F.jaw[0], hy + F.jaw[1], F.jaw[2], 1);
   }
@@ -559,11 +560,12 @@ export function drawAnchor(ctx, x, y, L, state) {
   // drop earrings that swing a little
   if (L.earrings) {
     const swing = Math.round(Math.sin(phase * (speaking ? 6 : 1.6)) * (speaking ? 1 : 0.7));
+    const [ex, ey] = F.ear;
     ctx.fillStyle = L.earrings;
-    ctx.fillRect(hx - 7, hy + 13, 1, 2);
-    ctx.fillRect(hx + 6, hy + 13, 1, 2);
-    ctx.fillRect(hx - 7 + swing, hy + 15, 1, 1);
-    ctx.fillRect(hx + 6 + swing, hy + 15, 1, 1);
+    ctx.fillRect(hx + ex, hy + ey, 1, 2);
+    ctx.fillRect(hx - 1 - ex, hy + ey, 1, 2);
+    ctx.fillRect(hx + ex + swing, hy + ey + 2, 1, 1);
+    ctx.fillRect(hx - 1 - ex + swing, hy + ey + 2, 1, 1);
   }
 
   return { gesture, by };

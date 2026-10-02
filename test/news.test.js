@@ -1,12 +1,24 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { config } from '../server/config.js';
-import { NewsDesk, cleanHtml, decodeEntities, extractImage, normalizeTitleKey, parseFeed, storyId } from '../server/news.js';
+import {
+  NewsDesk,
+  cleanHtml,
+  decodeEntities,
+  extractImage,
+  interestScore,
+  keywords,
+  normalizeTitleKey,
+  parseFeed,
+  sameEvent,
+  storyId,
+} from '../server/news.js';
 
 // ---------------------------------------------------------------- helpers
 
 const silentLogger = { info() {}, warn() {}, error() {} };
 
+const MINUTE = 60_000;
 const HOUR = 3600_000;
 const NOW = Date.now();
 /** RFC 822 date as found in RSS feeds, `hoursAgo` hours before now. */
@@ -20,17 +32,28 @@ const rssFeed = (...items) =>
 <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/">
 <channel><title>Test feed</title>${items.join('\n')}</channel></rss>`;
 
-const FEED = { name: 'Fuente', category: 'mundo' };
+/** One-item feed whose description is `description` (wrapped in CDATA), parsed into a single story. */
+const summaryOf = (description, feed = FEED) =>
+  parseFeed(rssFeed(rssItem({ title: 'Some title', link: 'https://example.com/x', description: `<![CDATA[${description}]]>` })), feed)[0].summary;
 
-/** A story object as produced by parseFeed, `minutesAgo` old. */
+const FEED = { name: 'Test Wire', category: 'world' };
+
+const LONG_SUMMARY = 'A reasonably long summary that goes well beyond eighty characters so that it counts as real substance.';
+
+/**
+ * A story as produced by parseFeed, `minutesAgo` old. The default title is
+ * unique per id (ids of 1-2 characters are not keywords), so two default
+ * stories are never mistaken for the same event.
+ */
 const makeStory = (id, source, minutesAgo, extra = {}) => ({
   id,
-  title: `Titular de ${id}`,
-  summary: '',
+  title: `${id} dispatch`,
+  summary: LONG_SUMMARY,
   link: `https://example.test/${id}`,
   source,
-  category: 'general',
-  published: NOW - minutesAgo * 60_000,
+  category: 'world',
+  weight: 1,
+  published: NOW - minutesAgo * MINUTE,
   image: null,
   ...extra,
 });
@@ -45,6 +68,9 @@ function makeDesk({ stories = [], fetchImpl = noNetwork, feeds } = {}) {
   if (feeds) desk.loadFeeds = () => feeds;
   return desk;
 }
+
+const ids = (stories) => stories.map((s) => s.id);
+const close = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-9, message ?? `${actual} is not close to ${expected}`);
 
 /**
  * Fake fetch driven by a `url -> spec` table. A spec is an XML/HTML string
@@ -66,8 +92,8 @@ function routedFetch(routes) {
 }
 
 const FEEDS = [
-  { name: 'Alfa', url: 'https://alfa.test/rss', category: 'general' },
-  { name: 'Beta', url: 'https://beta.test/rss', category: 'tecnologia' },
+  { name: 'Alfa', url: 'https://alfa.test/rss', category: 'world', weight: 1.2 },
+  { name: 'Beta', url: 'https://beta.test/rss', category: 'tech', weight: 0.8 },
   { name: 'Gamma', url: 'https://gamma.test/rss' },
 ];
 
@@ -78,9 +104,9 @@ describe('parseFeed', () => {
     const pubDate = new Date(Date.UTC(2026, 9, 1, 10, 30, 0)).toUTCString();
     const xml = rssFeed(
       rssItem({
-        title: '<![CDATA[Terremoto de magnitud 6 sacude Chile]]>',
-        link: 'https://example.com/noticia/1?at_medium=rss&amp;at_campaign=x',
-        description: '<![CDATA[<p>Un <strong>fuerte</strong> sismo ha sacudido la costa.</p><p>No hay v&#237;ctimas.</p>]]>',
+        title: '<![CDATA[Magnitude 6 earthquake shakes Chile]]>',
+        link: 'https://example.com/news/1?at_medium=rss&amp;at_campaign=x',
+        description: '<![CDATA[<p>A <strong>strong</strong> quake hit the coast.</p><p>No victims reported, say officials in Santiago.</p>]]>',
         pubDate,
         extra:
           '<media:thumbnail url="https://img.example.com/small.jpg" width="240" height="135"/>' +
@@ -88,15 +114,16 @@ describe('parseFeed', () => {
       })
     );
 
-    const stories = parseFeed(xml, FEED);
+    const stories = parseFeed(xml, { ...FEED, weight: 1.1 });
 
     assert.equal(stories.length, 1);
     const [s] = stories;
-    assert.equal(s.title, 'Terremoto de magnitud 6 sacude Chile');
-    assert.equal(s.summary, 'Un fuerte sismo ha sacudido la costa. No hay víctimas.');
-    assert.equal(s.link, 'https://example.com/noticia/1?at_medium=rss&at_campaign=x');
-    assert.equal(s.source, 'Fuente');
-    assert.equal(s.category, 'mundo');
+    assert.equal(s.title, 'Magnitude 6 earthquake shakes Chile');
+    assert.equal(s.summary, 'A strong quake hit the coast. No victims reported, say officials in Santiago.');
+    assert.equal(s.link, 'https://example.com/news/1?at_medium=rss&at_campaign=x');
+    assert.equal(s.source, 'Test Wire');
+    assert.equal(s.category, 'world');
+    assert.equal(s.weight, 1.1);
     assert.equal(s.published, Date.parse(pubDate));
     assert.equal(s.image, 'https://img.example.com/large.jpg');
     assert.match(s.id, /^s[0-9a-f]{10}$/);
@@ -104,9 +131,9 @@ describe('parseFeed', () => {
 
   test('story id ignores the query string and fragment of the link', () => {
     const xml = rssFeed(
-      rssItem({ title: 'Uno', link: 'https://example.com/a?utm_source=rss' }),
-      rssItem({ title: 'Dos', link: 'https://example.com/a#top' }),
-      rssItem({ title: 'Tres', link: 'https://example.com/b' })
+      rssItem({ title: 'One', link: 'https://example.com/a?utm_source=rss' }),
+      rssItem({ title: 'Two', link: 'https://example.com/a#top' }),
+      rssItem({ title: 'Three', link: 'https://example.com/b' })
     );
     const [one, two, three] = parseFeed(xml, FEED);
     assert.equal(one.id, two.id);
@@ -115,8 +142,17 @@ describe('parseFeed', () => {
   });
 
   test('defaults the category to "general" when the feed has none', () => {
-    const [s] = parseFeed(rssFeed(rssItem({ title: 'X', link: 'https://example.com/x' })), { name: 'Sin categoria' });
+    const [s] = parseFeed(rssFeed(rssItem({ title: 'X', link: 'https://example.com/x' })), { name: 'No category' });
     assert.equal(s.category, 'general');
+  });
+
+  test('stories carry the weight of their feed, defaulting to 1 when it is missing or not a number', () => {
+    const weightOf = (feed) => parseFeed(rssFeed(rssItem({ title: 'X', link: 'https://example.com/x' })), feed)[0].weight;
+    assert.equal(weightOf({ name: 'A', weight: 1.2 }), 1.2);
+    assert.equal(weightOf({ name: 'A', weight: 0.7 }), 0.7);
+    assert.equal(weightOf({ name: 'A', weight: '0.8' }), 0.8);
+    assert.equal(weightOf({ name: 'A' }), 1);
+    assert.equal(weightOf({ name: 'A', weight: 'heavy' }), 1);
   });
 
   test('parses an Atom entry (alternate link, summary, updated)', () => {
@@ -124,72 +160,73 @@ describe('parseFeed', () => {
 <feed xmlns="http://www.w3.org/2005/Atom">
   <title>Atom feed</title>
   <entry>
-    <title>Entrada Atom</title>
+    <title>Atom entry</title>
     <link rel="self" href="https://example.com/atom/self"/>
-    <link rel="alternate" type="text/html" href="https://example.com/atom/articulo"/>
+    <link rel="alternate" type="text/html" href="https://example.com/atom/article"/>
     <id>tag:example.com,2026:1</id>
-    <summary>Resumen de la entrada.</summary>
+    <summary>Summary of the entry.</summary>
     <updated>2026-10-01T10:30:00Z</updated>
   </entry>
 </feed>`;
 
-    const stories = parseFeed(xml, { name: 'Atomico', category: 'ciencia' });
+    const stories = parseFeed(xml, { name: 'Atomic', category: 'science', weight: 0.9 });
 
     assert.equal(stories.length, 1);
-    assert.equal(stories[0].title, 'Entrada Atom');
-    assert.equal(stories[0].link, 'https://example.com/atom/articulo');
-    assert.equal(stories[0].summary, 'Resumen de la entrada.');
+    assert.equal(stories[0].title, 'Atom entry');
+    assert.equal(stories[0].link, 'https://example.com/atom/article');
+    assert.equal(stories[0].summary, 'Summary of the entry.');
     assert.equal(stories[0].published, Date.parse('2026-10-01T10:30:00Z'));
-    assert.equal(stories[0].source, 'Atomico');
-    assert.equal(stories[0].category, 'ciencia');
+    assert.equal(stories[0].source, 'Atomic');
+    assert.equal(stories[0].category, 'science');
+    assert.equal(stories[0].weight, 0.9);
   });
 
   test('Atom: link without rel counts as alternate; <content> is used when there is no summary', () => {
     const xml = `<feed xmlns="http://www.w3.org/2005/Atom">
   <entry>
-    <title>Sin rel</title>
-    <link href="https://example.com/atom/sin-rel"/>
-    <content type="html">&lt;p&gt;Contenido &lt;b&gt;html&lt;/b&gt; final&lt;/p&gt;</content>
+    <title>No rel</title>
+    <link href="https://example.com/atom/no-rel"/>
+    <content type="html">&lt;p&gt;Final &lt;b&gt;html&lt;/b&gt; content&lt;/p&gt;</content>
     <published>2026-10-01T08:00:00Z</published>
   </entry>
 </feed>`;
     const [s] = parseFeed(xml, FEED);
-    assert.equal(s.link, 'https://example.com/atom/sin-rel');
-    assert.equal(s.summary, 'Contenido html final.');
+    assert.equal(s.link, 'https://example.com/atom/no-rel');
+    assert.equal(s.summary, 'Final html content.');
     assert.equal(s.published, Date.parse('2026-10-01T08:00:00Z'));
   });
 
   test('parses an RSS 1.0 (rdf:RDF) item with dc:date', () => {
     const xml = `<?xml version="1.0"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns="http://purl.org/rss/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/">
-  <item rdf:about="https://example.com/rdf/1"><title>Item RDF</title><link>https://example.com/rdf/1</link><description>Texto.</description><dc:date>2026-10-01T10:00:00Z</dc:date></item>
+  <item rdf:about="https://example.com/rdf/1"><title>RDF item</title><link>https://example.com/rdf/1</link><description>Text.</description><dc:date>2026-10-01T10:00:00Z</dc:date></item>
 </rdf:RDF>`;
     const [s] = parseFeed(xml, FEED);
-    assert.equal(s.title, 'Item RDF');
+    assert.equal(s.title, 'RDF item');
     assert.equal(s.published, Date.parse('2026-10-01T10:00:00Z'));
   });
 
   test('picks the real image over a tracking pixel in the description HTML', () => {
     const xml = rssFeed(
       rssItem({
-        title: 'Noticia con p&#237;xel de seguimiento',
+        title: 'Story with a tracking p&#237;xel',
         link: 'https://example.com/tracker',
         description:
           '<![CDATA[<p><img src="http://secure-uk.imrworldwide.com/cgi-bin/m?ci=bbc&amp;cc=1&amp;ml_name=ref" width="1" height="1"/></p>' +
-          '<p><img src="https://img.example.com/photos/real.jpg?w=640&amp;h=360" alt="foto"/>Texto de la noticia.</p>]]>',
+          '<p><img src="https://img.example.com/photos/real.jpg?w=640&amp;h=360" alt="photo"/>Story text.</p>]]>',
       })
     );
     const [s] = parseFeed(xml, FEED);
     assert.equal(s.image, 'https://img.example.com/photos/real.jpg?w=640&h=360');
-    assert.equal(s.title, 'Noticia con píxel de seguimiento');
+    assert.equal(s.title, 'Story with a tracking píxel');
   });
 
   test('image is null when the only candidate is a tracking pixel', () => {
     const xml = rssFeed(
       rssItem({
-        title: 'Solo tracker',
+        title: 'Only a tracker',
         link: 'https://example.com/only-tracker',
-        description: '<![CDATA[<img src="http://secure-uk.imrworldwide.com/cgi-bin/m?ci=bbc"/>Texto.]]>',
+        description: '<![CDATA[<img src="http://secure-uk.imrworldwide.com/cgi-bin/m?ci=bbc"/>Text.]]>',
       })
     );
     assert.equal(parseFeed(xml, FEED)[0].image, null);
@@ -198,57 +235,85 @@ describe('parseFeed', () => {
   test('decodes numeric HTML entities (decimal and hex) and &amp; in summaries', () => {
     const xml = rssFeed(
       rssItem({
-        title: 'Entidades',
+        title: 'Entities',
         link: 'https://example.com/entities',
-        description: '<![CDATA[Jos&#x00E9; y Mar&#237;a hablaron de I+D &amp; innovaci&#243;n&hellip;]]>',
+        description: '<![CDATA[Jos&#x00E9; and Mar&#237;a talked about R&amp;D and innovati&#243;n&hellip;]]>',
       })
     );
-    assert.equal(parseFeed(xml, FEED)[0].summary, 'José y María hablaron de I+D & innovación…');
+    assert.equal(parseFeed(xml, FEED)[0].summary, 'José and María talked about R&D and innovatión…');
+  });
+
+  test('decodes named accented entities such as &eacute; / &ntilde; / &oacute; in summaries', () => {
+    const xml = rssFeed(
+      rssItem({
+        title: 'Named entities',
+        link: 'https://example.com/named-entities',
+        description: '<![CDATA[<p>Jos&eacute; lives in Espa&ntilde;a and spoke to Mar&iacute;a, who is over there.</p>]]>',
+      })
+    );
+    assert.equal(parseFeed(xml, FEED)[0].summary, 'José lives in España and spoke to María, who is over there.');
+  });
+
+  test('keeps a real ellipsis in the summary', () => {
+    assert.equal(summaryOf('He waited... and waited&hellip; then left.'), 'He waited... and waited… then left.');
+  });
+
+  test('strips feed boilerplate: "Continue reading...", "Read more", "The post X appeared first on Y."', () => {
+    assert.equal(summaryOf('Useful text. Continue reading...'), 'Useful text.');
+    assert.equal(summaryOf('Useful text. Continue reading'), 'Useful text.');
+    assert.equal(summaryOf('Useful text. Read more...'), 'Useful text.');
+    assert.equal(summaryOf('Useful text. The post Big launch day appeared first on Example Tech.'), 'Useful text.');
+    assert.equal(summaryOf('Useful text. Comments'), 'Useful text.');
+    assert.equal(summaryOf('Texto util. Leer la noticia completa.'), 'Texto util.');
+  });
+
+  test('boilerplate is removed whatever its case', () => {
+    assert.equal(summaryOf('Useful text. CONTINUE READING'), 'Useful text.');
+    assert.equal(summaryOf('Useful text. read more'), 'Useful text.');
   });
 
   test(
-    'decodes named accented entities such as &aacute; / &eacute; / &ntilde; in summaries',
+    'does not cut an ordinary sentence that ends with the word "comment"',
     {
       todo:
-        'BUG server/news.js:25-32 - NAMED_ENTITIES has no Latin-1 letters, so "&aacute;" inside CDATA/escaped HTML is left as literal text',
+        'BUG server/news.js:53 - BOILERPLATE_RE contains /Comments?\\.?$/i, so "The spokesman declined to comment." is stored as "The spokesman declined to" (the sentence is truncated)',
     },
     () => {
-      const xml = rssFeed(
-        rssItem({
-          title: 'Entidades con nombre',
-          link: 'https://example.com/named-entities',
-          description: '<![CDATA[<p>Jos&eacute; vive en Espa&ntilde;a y habl&oacute; con Mar&iacute;a, que est&aacute; all&iacute;.</p>]]>',
-        })
-      );
-      assert.equal(parseFeed(xml, FEED)[0].summary, 'José vive en España y habló con María, que está allí.');
+      assert.equal(summaryOf('The spokesman declined to comment.'), 'The spokesman declined to comment.');
     }
   );
 
-  test('strips the "Leer la noticia completa" boilerplate and caps the summary at 900 chars', () => {
-    const xml = rssFeed(
-      rssItem({ title: 'Boilerplate', link: 'https://example.com/b1', description: 'Texto util. Leer la noticia completa.' }),
-      rssItem({ title: 'Largo', link: 'https://example.com/b2', description: 'palabra '.repeat(300) })
-    );
-    const [a, b] = parseFeed(xml, FEED);
-    assert.equal(a.summary, 'Texto util.');
-    assert.ok(b.summary.length <= 900);
+  test(
+    'does not remove "read more" / "continue reading" from the middle of a sentence',
+    {
+      todo:
+        'BUG server/news.js:53 - BOILERPLATE_RE is not anchored, so "Children who read more are happier." becomes "Children who  are happier."',
+    },
+    () => {
+      assert.equal(summaryOf('Children who read more are happier.'), 'Children who read more are happier.');
+    }
+  );
+
+  test('caps the summary at 900 characters', () => {
+    const xml = rssFeed(rssItem({ title: 'Long', link: 'https://example.com/b2', description: 'word '.repeat(500) }));
+    assert.ok(parseFeed(xml, FEED)[0].summary.length <= 900);
   });
 
   test('skips items without title or link, and falls back to a permalink guid', () => {
     const xml = rssFeed(
-      '<item><title>Sin enlace</title></item>',
-      '<item><link>https://example.com/sin-titulo</link></item>',
-      '<item><title>Con guid</title><guid isPermaLink="true">https://example.com/guid</guid></item>'
+      '<item><title>No link</title></item>',
+      '<item><link>https://example.com/no-title</link></item>',
+      '<item><title>With guid</title><guid isPermaLink="true">https://example.com/guid</guid></item>'
     );
     const stories = parseFeed(xml, FEED);
-    assert.deepEqual(stories.map((s) => [s.title, s.link]), [['Con guid', 'https://example.com/guid']]);
+    assert.deepEqual(stories.map((s) => [s.title, s.link]), [['With guid', 'https://example.com/guid']]);
   });
 
   test('a missing or invalid date falls back to the current time', () => {
     const before = Date.now();
     const xml = rssFeed(
-      '<item><title>Sin fecha</title><link>https://example.com/nodate</link></item>',
-      rssItem({ title: 'Fecha rota', link: 'https://example.com/baddate', pubDate: 'ayer por la tarde' })
+      '<item><title>No date</title><link>https://example.com/nodate</link></item>',
+      rssItem({ title: 'Broken date', link: 'https://example.com/baddate', pubDate: 'yesterday afternoon' })
     );
     for (const s of parseFeed(xml, FEED)) {
       assert.ok(s.published >= before && s.published <= Date.now() + 1000, `published=${s.published}`);
@@ -257,9 +322,24 @@ describe('parseFeed', () => {
 
   test('returns [] for empty or non-feed documents', () => {
     assert.deepEqual(parseFeed('', FEED), []);
-    assert.deepEqual(parseFeed('<html><body>no es un feed</body></html>', FEED), []);
+    assert.deepEqual(parseFeed('<html><body>not a feed</body></html>', FEED), []);
     assert.deepEqual(parseFeed(rssFeed(), FEED), []);
   });
+
+  test(
+    'one item with an impossible numeric entity must not make the whole feed fail',
+    {
+      todo:
+        'BUG server/news.js:31-32 - String.fromCodePoint() throws RangeError for code points above 0x10FFFF ("&#1114112;", "&#x110000;"), so parseFeed() throws and the whole feed is lost on every refresh',
+    },
+    () => {
+      const xml = rssFeed(
+        rssItem({ title: 'Good item', link: 'https://example.com/good' }),
+        rssItem({ title: 'Bad entity', link: 'https://example.com/bad', description: '<![CDATA[Broken &#1114112; entity]]>' })
+      );
+      assert.doesNotThrow(() => parseFeed(xml, FEED));
+    }
+  );
 });
 
 // ---------------------------------------------------------------- extractImage
@@ -348,7 +428,7 @@ describe('extractImage', () => {
 
   test('returns null when there is nothing usable', () => {
     assert.equal(extractImage({}), null);
-    assert.equal(extractImage({ description: 'solo texto' }), null);
+    assert.equal(extractImage({ description: 'text only' }), null);
   });
 });
 
@@ -356,28 +436,54 @@ describe('extractImage', () => {
 
 describe('cleanHtml', () => {
   test('strips tags, scripts, styles and comments', () => {
-    const html = '<script>alert("x")</script><style>p { color: red }</style><!-- comentario --><div><b>Hola</b> <a href="/x">mundo</a></div>';
-    assert.equal(cleanHtml(html), 'Hola mundo');
+    const html = '<script>alert("x")</script><style>p { color: red }</style><!-- comment --><div><b>Hello</b> <a href="/x">world</a></div>';
+    assert.equal(cleanHtml(html), 'Hello world');
   });
 
-  test('collapses whitespace and newlines', () => {
-    assert.equal(cleanHtml('  uno \n\n  dos\t\ttres   '), 'uno dos tres');
+  test('collapses runs of spaces and tabs', () => {
+    assert.equal(cleanHtml('  one \t two\t\tthree   '), 'one two three');
   });
 
-  test('turns paragraph and line breaks into sentence breaks', () => {
-    assert.equal(cleanHtml('<p>Primero</p><p>Segundo</p>'), 'Primero. Segundo.');
+  test('turns paragraph, list, heading and line breaks into sentence breaks', () => {
+    assert.equal(cleanHtml('<p>First</p><p>Second</p>'), 'First. Second.');
     assert.equal(cleanHtml('a<br>b<br/>c'), 'a. b. c');
+    assert.equal(cleanHtml('<ul><li>One</li><li>Two</li></ul>'), 'One. Two.');
+    assert.equal(cleanHtml('<h2>Headline</h2><p>Body text.</p>'), 'Headline. Body text.');
+  });
+
+  test('does not double the punctuation when the sentence already ended', () => {
+    assert.equal(cleanHtml('<p>Done.</p><p>Really?</p><p>Yes!</p><p>Note:</p><p>Body</p>'), 'Done. Really? Yes! Note: Body.');
+    assert.equal(cleanHtml('<p>Wait&hellip;</p><p>Next</p>'), 'Wait… Next.');
+  });
+
+  test('keeps a real "..." ellipsis intact, also right before a break', () => {
+    assert.equal(cleanHtml('Wait... look at this'), 'Wait... look at this');
+    assert.equal(cleanHtml('Wait&hellip; look at this'), 'Wait… look at this');
+    assert.equal(cleanHtml('Done...<br>Next'), 'Done... Next');
+  });
+
+  test('drops leading dots and whitespace', () => {
+    assert.equal(cleanHtml('  ...and then'), 'and then');
+    assert.equal(cleanHtml('<p></p><p>Text</p>'), 'Text.');
   });
 
   test('decodes entities after stripping tags (escaped markup is not re-interpreted as a tag boundary)', () => {
     assert.equal(cleanHtml('<p>Tom &amp; Jerry &mdash; &quot;ok&quot;</p>'), 'Tom & Jerry — "ok".');
   });
 
+  test('returns an empty string for empty input', () => {
+    assert.equal(cleanHtml(''), '');
+    assert.equal(cleanHtml('<p> </p>'), '');
+  });
+
   test(
-    'keeps a literal "..." ellipsis intact',
-    { todo: 'BUG server/news.js:43 - /(\\.\\s*){2,}/ collapses "..." into ". " ("Espera... mira" -> "Espera. mira")' },
+    'a plain newline inside a sentence is just whitespace, not a sentence break',
+    {
+      todo:
+        'BUG server/news.js:42,46 - every "\\n" becomes ". " (literal newlines from hard-wrapped HTML are indistinguishable from <br>/</p>): cleanHtml("Police said,\\nthe suspect fled") returns "Police said,. the suspect fled"',
+    },
     () => {
-      assert.equal(cleanHtml('Espera... mira esto'), 'Espera... mira esto');
+      assert.equal(cleanHtml('Police said,\nthe suspect fled'), 'Police said, the suspect fled');
     }
   );
 });
@@ -385,96 +491,534 @@ describe('cleanHtml', () => {
 describe('decodeEntities', () => {
   test('decodes numeric, hex and the supported named entities', () => {
     assert.equal(decodeEntities('&#233; &#x00E9; &#X41; &amp; &lt;b&gt; &quot;q&quot; &apos;a&apos; &hellip; &ndash; &mdash;'), 'é é A & <b> "q" \'a\' … – —');
+    assert.equal(decodeEntities('&laquo;a&raquo; &ldquo;b&rdquo; &lsquo;c&rsquo; a&nbsp;b'), '«a» “b” ‘c’ a b');
+  });
+
+  test('decodes accented named entities, upper and lower case', () => {
+    assert.equal(decodeEntities('Jos&eacute; Espa&ntilde;a &Eacute;cole &uuml;ber &ccedil;a &agrave; &icirc; &otilde; &Aring;'), 'José España École über ça à î õ Å');
+  });
+
+  test('entity names are case-insensitive for the plain named ones', () => {
+    assert.equal(decodeEntities('&AMP; &Hellip;'), '& …');
   });
 
   test('leaves unknown entities untouched', () => {
-    assert.equal(decodeEntities('&unknownentity; y &'), '&unknownentity; y &');
+    assert.equal(decodeEntities('&unknownentity; and a lone &'), '&unknownentity; and a lone &');
   });
+
+  test('decodes only once (an escaped entity stays a literal entity)', () => {
+    assert.equal(decodeEntities('&amp;eacute; &amp;amp;'), '&eacute; &amp;');
+  });
+
+  test(
+    'does not throw on a numeric entity beyond the Unicode range',
+    { todo: 'BUG server/news.js:31-32 - decodeEntities("&#1114112;") throws RangeError: Invalid code point 1114112' },
+    () => {
+      assert.doesNotThrow(() => decodeEntities('x &#1114112; y &#x110000; z'));
+    }
+  );
 });
 
 // ---------------------------------------------------------------- normalizeTitleKey
 
 describe('normalizeTitleKey', () => {
   test('is identical for titles that differ only in accents, punctuation and case', () => {
-    const a = normalizeTitleKey('Sánchez anuncia nuevas medidas económicas, hoy');
-    const b = normalizeTitleKey('SANCHEZ anuncia: nuevas medidas economicas hoy!');
-    const c = normalizeTitleKey('  sánchez   ANUNCIA “nuevas” medidas económicas... hoy ');
+    const a = normalizeTitleKey('Sánchez announces new economic measures, today');
+    const b = normalizeTitleKey('SANCHEZ announces: new economic measures today!');
+    const c = normalizeTitleKey('  sánchez   ANNOUNCES “new” economic measures... today ');
     assert.equal(a, b);
     assert.equal(a, c);
-    assert.equal(a, 'sanchez anuncia nuevas medidas economicas'); // "hoy" is too short to count
+    assert.equal(a, 'sanchez announces economic measures today'); // "new" is too short to count
   });
 
   test('differs for different headlines', () => {
-    assert.notEqual(normalizeTitleKey('El Gobierno aprueba el plan de vivienda'), normalizeTitleKey('El Gobierno rechaza el plan de vivienda'));
+    assert.notEqual(normalizeTitleKey('Government approves the housing plan'), normalizeTitleKey('Government rejects the housing plan'));
   });
 
   test('ignores short words and only uses the first 8 significant words', () => {
-    const key = normalizeTitleKey('El de la en los tres gatos negros duermen siempre tranquilos aunque llueva muchisimo fuera');
+    const key = normalizeTitleKey('The of a in us three black cats sleep always peacefully although raining heavily outside');
     assert.equal(key.split(' ').length, 8);
-    assert.equal(key, normalizeTitleKey('El de la en los tres gatos negros duermen siempre tranquilos aunque llueva muchisimo y otra cosa'));
+    assert.equal(key, normalizeTitleKey('The of a in us three black cats sleep always peacefully although raining heavily elsewhere and more'));
   });
 
   test('is an empty string when there are no significant words', () => {
-    assert.equal(normalizeTitleKey('¿Y ya?'), '');
+    assert.equal(normalizeTitleKey('Is it up?'), '');
   });
 });
 
-// ---------------------------------------------------------------- NewsDesk: selection
+// ---------------------------------------------------------------- keywords / sameEvent
+
+describe('keywords', () => {
+  test('lowercases, strips accents and punctuation, and drops stopwords and tiny words', () => {
+    const kw = keywords('BREAKING: The Président says "Café" talks are over in Zürich!');
+    assert.ok(kw instanceof Set);
+    assert.deepEqual([...kw].sort(), ['breaking', 'cafe', 'president', 'talks', 'zurich']);
+  });
+
+  test('keeps numbers and splits on any non-alphanumeric character', () => {
+    assert.deepEqual([...keywords('COVID-19: 4000 hospitalised')].sort(), ['4000', 'covid', 'hospitalised']);
+  });
+
+  test('stopwords include the common Spanish ones too', () => {
+    assert.deepEqual([...keywords('El presidente de la república')].sort(), ['presidente', 'republica']);
+  });
+
+  test('is empty when nothing is left', () => {
+    assert.equal(keywords('The new live update').size, 0);
+    assert.equal(keywords('').size, 0);
+  });
+});
+
+describe('sameEvent', () => {
+  const set = (...words) => new Set(words);
+
+  test('headlines about the same event with different wording match', () => {
+    assert.equal(sameEvent(keywords('Earthquake strikes northern Japan'), keywords('Powerful earthquake hits northern Japan')), true);
+    assert.equal(sameEvent(keywords('Fed raises interest rates by 0.5 points'), keywords('US Fed raises rates again, markets slide')), true);
+  });
+
+  test('unrelated headlines do not match', () => {
+    assert.equal(sameEvent(keywords('Earthquake strikes northern Japan'), keywords('Parliament passes new budget law')), false);
+    assert.equal(sameEvent(keywords('Earthquake strikes northern Japan'), keywords('Tourism in northern Norway booms')), false);
+  });
+
+  test('a single shared keyword is never enough', () => {
+    assert.equal(sameEvent(set('japan', 'quake'), set('japan', 'tourism')), false);
+    assert.equal(sameEvent(set('japan'), set('japan')), false);
+  });
+
+  test('needs at least 2 shared keywords and a 20% overlap (shared / union)', () => {
+    const base = ['a1', 'a2'];
+    const pad = (n, tag) => Array.from({ length: n }, (_, i) => `${tag}${i}`);
+    // 2 shared, union = 2 + 4 + 4 = 10 -> exactly 0.2: a match
+    assert.equal(sameEvent(set(...base, ...pad(4, 'x')), set(...base, ...pad(4, 'y'))), true);
+    // 2 shared, union = 2 + 4 + 5 = 11 -> 0.18: not a match
+    assert.equal(sameEvent(set(...base, ...pad(4, 'x')), set(...base, ...pad(5, 'y'))), false);
+  });
+
+  test('is symmetric and false for empty sets', () => {
+    const a = keywords('Earthquake strikes northern Japan');
+    const b = keywords('Powerful earthquake hits northern Japan');
+    assert.equal(sameEvent(a, b), sameEvent(b, a));
+    assert.equal(sameEvent(new Set(), new Set()), false);
+    assert.equal(sameEvent(a, new Set()), false);
+  });
+});
+
+// ---------------------------------------------------------------- interestScore
+
+describe('interestScore', () => {
+  const base = { published: NOW, summary: LONG_SUMMARY, weight: 1, outlets: 1, image: null };
+  const score = (extra = {}, now = NOW) => interestScore({ ...base, ...extra }, now);
+
+  test('a brand-new story from one outlet with a real summary and no picture scores exactly 1', () => {
+    close(score(), 1);
+  });
+
+  test('recency halves the score after 6 hours and keeps falling', () => {
+    close(score({ published: NOW - 6 * HOUR }), 0.5);
+    close(score({ published: NOW - 18 * HOUR }), 0.25);
+    assert.ok(score({ published: NOW - HOUR }) > score({ published: NOW - 2 * HOUR }));
+  });
+
+  test('a story dated in the future is not boosted above a fresh one', () => {
+    close(score({ published: NOW + 5 * HOUR }), 1);
+  });
+
+  test('more outlets covering the event raise the score by 0.9 per extra outlet, capped at 5 outlets', () => {
+    close(score({ outlets: 2 }), 1.9);
+    close(score({ outlets: 3 }), 2.8);
+    close(score({ outlets: 5 }), 4.6);
+    close(score({ outlets: 50 }), 4.6);
+  });
+
+  test('a missing outlets count counts as a single outlet', () => {
+    close(score({ outlets: undefined }), 1);
+  });
+
+  test('feed weight multiplies the score; a missing weight counts as 1', () => {
+    close(score({ weight: 1.2 }), 1.2);
+    close(score({ weight: 0.7 }), 0.7);
+    close(score({ weight: undefined }), 1);
+  });
+
+  test('a picture adds 15%', () => {
+    close(score({ image: 'https://img.test/a.jpg' }), 1.15);
+  });
+
+  test('a thin summary (80 characters or fewer, or none) costs 30%', () => {
+    close(score({ summary: 'x'.repeat(80) }), 0.7);
+    close(score({ summary: 'x'.repeat(81) }), 1);
+    close(score({ summary: '' }), 0.7);
+    close(score({ summary: undefined }), 0.7);
+  });
+
+  test('every time the editor passed a story over its score is multiplied by 0.6', () => {
+    close(score({ offered: 1 }), 0.6);
+    close(score({ offered: 2 }), 0.36);
+    close(score({ offered: 0 }), 1);
+  });
+
+  test('the factors combine multiplicatively', () => {
+    const s = { published: NOW - 6 * HOUR, outlets: 3, weight: 1.1, image: 'https://img.test/a.jpg', summary: 'short', offered: 1 };
+    close(score(s), 0.5 * 2.8 * 1.1 * 1.15 * 0.7 * 0.6);
+  });
+
+  test('now defaults to the current time', () => {
+    const fresh = interestScore({ ...base, published: Date.now() });
+    assert.ok(fresh > 0.99 && fresh <= 1.0001, String(fresh));
+  });
+});
+
+// ---------------------------------------------------------------- NewsDesk: trending
+
+describe('NewsDesk.updateTrending', () => {
+  const quake = (id, source, title, minutesAgo = 10) => makeStory(id, source, minutesAgo, { title });
+
+  test('outlets is the number of distinct outlets reporting the same event (the story itself included)', () => {
+    const desk = makeDesk({
+      stories: [
+        quake('q1', 'BBC', 'Earthquake strikes northern Japan'),
+        quake('q2', 'Sky', 'Powerful earthquake hits northern Japan'),
+        quake('q3', 'DW', 'Japan earthquake: northern coast hit'),
+        makeStory('other', 'NPR', 5, { title: 'Parliament passes new budget law' }),
+      ],
+    });
+
+    desk.updateTrending();
+
+    assert.equal(desk.get('q1').outlets, 3);
+    assert.equal(desk.get('q2').outlets, 3);
+    assert.equal(desk.get('q3').outlets, 3);
+    assert.equal(desk.get('other').outlets, 1);
+  });
+
+  test('several reports from the same outlet count once', () => {
+    const desk = makeDesk({
+      stories: [
+        quake('q1', 'BBC', 'Earthquake strikes northern Japan'),
+        quake('q2', 'BBC', 'Japan earthquake: what we know so far'),
+        quake('q3', 'Sky', 'Powerful earthquake hits northern Japan'),
+      ],
+    });
+
+    desk.updateTrending();
+
+    assert.equal(desk.get('q1').outlets, 2);
+    assert.equal(desk.get('q2').outlets, 2);
+    assert.equal(desk.get('q3').outlets, 2);
+  });
+
+  test('an event covered by a single outlet has outlets = 1', () => {
+    const desk = makeDesk({ stories: [makeStory('a', 'BBC', 1), makeStory('b', 'Sky', 2)] });
+    desk.updateTrending();
+    assert.deepEqual([desk.get('a').outlets, desk.get('b').outlets], [1, 1]);
+  });
+
+  test('is recomputed on every call, so it follows stories that arrive or leave', () => {
+    const desk = makeDesk({ stories: [quake('q1', 'BBC', 'Earthquake strikes northern Japan')] });
+    desk.updateTrending();
+    assert.equal(desk.get('q1').outlets, 1);
+
+    desk.stories.set('q2', quake('q2', 'Sky', 'Powerful earthquake hits northern Japan'));
+    desk.updateTrending();
+    assert.equal(desk.get('q1').outlets, 2);
+
+    desk.stories.delete('q2');
+    desk.updateTrending();
+    assert.equal(desk.get('q1').outlets, 1);
+  });
+
+  test('refresh() updates the trending counts of the stories it stores', async () => {
+    const fetchImpl = routedFetch({
+      'https://alfa.test/rss': rssFeed(
+        rssItem({ title: 'Earthquake strikes northern Japan', link: 'https://alfa.test/quake' }),
+        rssItem({ title: 'Parliament passes new budget law', link: 'https://alfa.test/budget' })
+      ),
+      'https://beta.test/rss': rssFeed(rssItem({ title: 'Powerful earthquake hits northern Japan', link: 'https://beta.test/quake' })),
+    });
+    const desk = makeDesk({ feeds: FEEDS.slice(0, 2), fetchImpl });
+
+    await desk.refresh();
+
+    const bySource = (source, text) => [...desk.stories.values()].find((s) => s.source === source && s.title.includes(text));
+    assert.equal(bySource('Alfa', 'Earthquake').outlets, 2);
+    assert.equal(bySource('Beta', 'earthquake').outlets, 2);
+    assert.equal(bySource('Alfa', 'budget').outlets, 1);
+  });
+});
+
+// ---------------------------------------------------------------- NewsDesk: candidates / pickStories
+
+describe('NewsDesk.candidates', () => {
+  test('ranks by interest: a story covered by several outlets beats a fresher single-outlet one', () => {
+    const desk = makeDesk({
+      stories: [
+        makeStory('fresh', 'A', 5, { title: 'Local bakery wins award' }),
+        makeStory('big1', 'B', 120, { title: 'Earthquake strikes northern Japan' }),
+        makeStory('big2', 'C', 130, { title: 'Powerful earthquake hits northern Japan' }),
+        makeStory('big3', 'D', 140, { title: 'Japan earthquake: northern coast hit' }),
+      ],
+    });
+    desk.updateTrending();
+
+    const [first, second] = desk.candidates(5);
+
+    assert.equal(first.id, 'big1');
+    assert.equal(second.id, 'fresh');
+  });
+
+  test('with everything else equal the freshest story comes first', () => {
+    const desk = makeDesk({ stories: [makeStory('old', 'A', 300), makeStory('new', 'B', 10), makeStory('mid', 'C', 100)] });
+    assert.deepEqual(ids(desk.candidates(3)), ['new', 'mid', 'old']);
+  });
+
+  test('feed weight, a picture and a real summary all push a story up', () => {
+    const desk = makeDesk({
+      stories: [
+        makeStory('plain', 'A', 10),
+        makeStory('weighty', 'B', 10, { weight: 1.2 }),
+        makeStory('picture', 'C', 10, { image: 'https://img.test/c.jpg' }),
+        makeStory('thin', 'D', 10, { summary: '' }),
+      ],
+    });
+    assert.deepEqual(ids(desk.candidates(4)), ['weighty', 'picture', 'plain', 'thin']);
+  });
+
+  test('stories the editor already passed over sink in the ranking', () => {
+    const desk = makeDesk({ stories: [makeStory('fresh', 'A', 10, { offered: 2 }), makeStory('older', 'B', 60)] });
+    assert.deepEqual(ids(desk.candidates(2)), ['older', 'fresh']);
+  });
+
+  test('returns at most `count` stories, and fewer when there are fewer', () => {
+    const desk = makeDesk({ stories: [makeStory('a', 'A', 1), makeStory('b', 'B', 2), makeStory('c', 'C', 3)] });
+    assert.equal(desk.candidates(2).length, 2);
+    assert.equal(desk.candidates(99).length, 3);
+    assert.deepEqual(desk.candidates(0), []);
+  });
+
+  test('filters by category; null means every category; an empty list means none', () => {
+    const desk = makeDesk({
+      stories: [
+        makeStory('w', 'A', 1, { category: 'world' }),
+        makeStory('t', 'B', 2, { category: 'tech' }),
+        makeStory('s', 'C', 3, { category: 'science' }),
+        makeStory('b', 'D', 4, { category: 'business' }),
+      ],
+    });
+    assert.deepEqual(ids(desk.candidates(10, { categories: ['tech', 'science'] })), ['t', 's']);
+    assert.deepEqual(ids(desk.candidates(10, { categories: ['business'] })), ['b']);
+    assert.equal(desk.candidates(10, { categories: null }).length, 4);
+    assert.equal(desk.candidates(10, {}).length, 4);
+    assert.deepEqual(desk.candidates(10, { categories: [] }), []);
+    assert.deepEqual(desk.candidates(10, { categories: ['sport'] }), []);
+  });
+
+  test('keeps one story per event: the highest-ranked report wins', () => {
+    const desk = makeDesk({
+      stories: [
+        makeStory('q-old', 'A', 120, { title: 'Earthquake strikes northern Japan' }),
+        makeStory('q-new', 'B', 20, { title: 'Powerful earthquake hits northern Japan' }),
+        makeStory('budget', 'C', 60, { title: 'Parliament passes new budget law' }),
+      ],
+    });
+    desk.updateTrending();
+
+    const picked = desk.candidates(5);
+
+    assert.deepEqual(ids(picked), ['q-new', 'budget']);
+  });
+
+  test('takes at most 3 stories per outlet by default, or `perSource`', () => {
+    const stories = Array.from({ length: 5 }, (_, i) => makeStory(`a${i}`, 'Alpha', i + 1)).concat([makeStory('b0', 'Beta', 10), makeStory('c0', 'Gamma', 11)]);
+    const desk = makeDesk({ stories });
+
+    assert.deepEqual(ids(desk.candidates(10)), ['a0', 'a1', 'a2', 'b0', 'c0']);
+    assert.deepEqual(ids(desk.candidates(10, { perSource: 1 })), ['a0', 'b0', 'c0']);
+    assert.deepEqual(ids(desk.candidates(10, { perSource: 99 })), ['a0', 'a1', 'a2', 'a3', 'a4', 'b0', 'c0']);
+  });
+
+  test('the per-outlet cap is applied before `count`, so other outlets fill the list', () => {
+    const stories = Array.from({ length: 4 }, (_, i) => makeStory(`a${i}`, 'Alpha', i + 1)).concat([makeStory('b0', 'Beta', 30)]);
+    assert.deepEqual(ids(makeDesk({ stories }).candidates(4, { perSource: 2 })), ['a0', 'a1', 'b0']);
+  });
+
+  test('excludes covered stories', () => {
+    const desk = makeDesk({ stories: [makeStory('a', 'A', 1), makeStory('b', 'B', 2), makeStory('c', 'C', 3)] });
+    desk.markCovered(['a']);
+    assert.deepEqual(ids(desk.candidates(5)), ['b', 'c']);
+  });
+
+  test('returns an empty list when there are no stories or everything is covered', () => {
+    assert.deepEqual(makeDesk().candidates(5), []);
+    const desk = makeDesk({ stories: [makeStory('a', 'A', 1), makeStory('b', 'B', 2)] });
+    desk.markCovered(ids(desk.candidates(99)));
+    assert.deepEqual(desk.candidates(5), []);
+  });
+
+  test('`now` sets the clock used for the recency ranking', () => {
+    // A is brand new, B is 6 hours older but covered by two outlets (x1.9).
+    const stories = () => [
+      makeStory('A', 'Alpha', 0, { title: 'Parliament passes new budget law' }),
+      makeStory('B', 'Beta', 6 * 60, { title: 'Earthquake strikes northern Japan', outlets: 2 }),
+    ];
+    const desk = makeDesk({ stories: stories() });
+    assert.deepEqual(ids(desk.candidates(2, { now: NOW })), ['A', 'B']);
+    assert.deepEqual(ids(desk.candidates(2, { now: NOW + 24 * HOUR })), ['B', 'A']);
+  });
+
+  test('works on stories that were never run through updateTrending (outlets defaults to 1)', () => {
+    const desk = makeDesk({ stories: [makeStory('a', 'A', 1)] });
+    assert.deepEqual(ids(desk.candidates(1)), ['a']);
+  });
+});
 
 describe('NewsDesk.pickStories', () => {
-  const stories = () => [
-    makeStory('a1', 'A', 1),
-    makeStory('a2', 'A', 2),
-    makeStory('a3', 'A', 3),
-    makeStory('b1', 'B', 4),
-    makeStory('b2', 'B', 5),
-    makeStory('c1', 'C', 6),
-  ];
-
-  test('round-robins across sources, newest first inside each source', () => {
-    const desk = makeDesk({ stories: stories() });
-    assert.deepEqual(desk.pickStories(4).map((s) => s.id), ['a1', 'b1', 'c1', 'a2']);
+  test('is an alias for candidates(count) with the default options', () => {
+    const stories = [
+      makeStory('a1', 'A', 1),
+      makeStory('a2', 'A', 2),
+      makeStory('a3', 'A', 3),
+      makeStory('a4', 'A', 4),
+      makeStory('b1', 'B', 20, { category: 'tech' }),
+    ];
+    const desk = makeDesk({ stories });
+    assert.deepEqual(ids(desk.pickStories(10)), ids(desk.candidates(10)));
+    assert.deepEqual(ids(desk.pickStories(10)), ['a1', 'a2', 'a3', 'b1']);
+    assert.deepEqual(ids(desk.pickStories(2)), ['a1', 'a2']);
   });
 
-  test('returns everything available (still interleaved) when asked for more than exists', () => {
-    const desk = makeDesk({ stories: stories() });
-    assert.deepEqual(desk.pickStories(99).map((s) => s.id), ['a1', 'b1', 'c1', 'a2', 'b2', 'a3']);
+  test('skips covered stories', () => {
+    const desk = makeDesk({ stories: [makeStory('a', 'A', 1), makeStory('b', 'B', 2)] });
+    desk.markCovered(['a']);
+    assert.deepEqual(ids(desk.pickStories(5)), ['b']);
   });
+});
 
-  test('excludes stories that were marked as covered', () => {
-    const desk = makeDesk({ stories: stories() });
-    desk.markCovered(['a1', 'b1']);
-    assert.deepEqual(desk.pickStories(3).map((s) => s.id), ['a2', 'b2', 'c1']);
-    assert.deepEqual(desk.uncovered().map((s) => s.id), ['a2', 'a3', 'b2', 'c1']);
-  });
-
-  test('returns an empty list once everything is covered', () => {
-    const desk = makeDesk({ stories: stories() });
-    desk.markCovered(desk.pickStories(99).map((s) => s.id));
-    assert.deepEqual(desk.pickStories(3), []);
-  });
-
-  test('puts stories with an image first in the running order', () => {
-    const list = stories();
-    list[3].image = 'https://img.test/b1.jpg'; // b1
-    const desk = makeDesk({ stories: list });
-    assert.deepEqual(desk.pickStories(4).map((s) => s.id), ['b1', 'a1', 'c1', 'a2']);
+describe('NewsDesk.uncovered / get', () => {
+  test('uncovered() lists stories that have not been covered, newest first', () => {
+    const desk = makeDesk({ stories: [makeStory('old', 'A', 50), makeStory('new', 'B', 1), makeStory('mid', 'C', 20)] });
+    desk.markCovered(['mid']);
+    assert.deepEqual(ids(desk.uncovered()), ['new', 'old']);
   });
 
   test('get() returns a story by id', () => {
-    const desk = makeDesk({ stories: stories() });
-    assert.equal(desk.get('b2').source, 'B');
+    const desk = makeDesk({ stories: [makeStory('x', 'Src', 1)] });
+    assert.equal(desk.get('x').source, 'Src');
     assert.equal(desk.get('nope'), undefined);
+  });
+});
+
+// ---------------------------------------------------------------- NewsDesk: markCovered / markOffered
+
+describe('NewsDesk.markCovered', () => {
+  const quakeStories = () => [
+    makeStory('q1', 'BBC', 10, { title: 'Earthquake strikes northern Japan' }),
+    makeStory('q2', 'Sky', 12, { title: 'Powerful earthquake hits northern Japan' }),
+    makeStory('q3', 'Same outlet', 14, { title: 'Japan earthquake: northern coast hit' }),
+    makeStory('budget', 'NPR', 5, { title: 'Parliament passes new budget law' }),
+  ];
+
+  test('marks the given stories as covered, with a timestamp', () => {
+    const desk = makeDesk({ stories: [makeStory('a', 'A', 1), makeStory('b', 'B', 2)] });
+    const before = Date.now();
+
+    desk.markCovered(['a']);
+
+    assert.ok(desk.covered.get('a') >= before);
+    assert.equal(desk.covered.has('b'), false);
+    assert.deepEqual(ids(desk.uncovered()), ['b']);
+  });
+
+  test('also covers other outlets\' reports of the same event, but not unrelated stories', () => {
+    const desk = makeDesk({ stories: quakeStories() });
+
+    desk.markCovered(['q1']);
+
+    assert.deepEqual([...desk.covered.keys()].sort(), ['q1', 'q2', 'q3']);
+    assert.deepEqual(ids(desk.uncovered()), ['budget']);
+    assert.deepEqual(ids(desk.candidates(10)), ['budget']);
+  });
+
+  test('works from any report of the event', () => {
+    const desk = makeDesk({ stories: quakeStories() });
+    desk.markCovered(['q3']);
+    assert.deepEqual([...desk.covered.keys()].sort(), ['q1', 'q2', 'q3']);
+  });
+
+  test('an id that is no longer on the desk is still remembered, and nothing else is covered', () => {
+    const desk = makeDesk({ stories: quakeStories() });
+    desk.markCovered(['gone']);
+    assert.deepEqual([...desk.covered.keys()], ['gone']);
+  });
+
+  test('accepts several ids and an empty list', () => {
+    const desk = makeDesk({ stories: quakeStories() });
+    desk.markCovered([]);
+    assert.equal(desk.covered.size, 0);
+    desk.markCovered(['q1', 'budget']);
+    assert.equal(desk.covered.size, 4);
+  });
+
+  test('does not touch the timestamp of a story that was already covered by an earlier event match', () => {
+    const desk = makeDesk({ stories: quakeStories() });
+    desk.covered.set('q2', 1234);
+    desk.markCovered(['q1']);
+    assert.equal(desk.covered.get('q2'), 1234);
+  });
+});
+
+describe('NewsDesk.markOffered', () => {
+  test('counts how many times a story was offered to the writer', () => {
+    const desk = makeDesk({ stories: [makeStory('a', 'A', 1), makeStory('b', 'B', 2)] });
+
+    desk.markOffered(['a']);
+    desk.markOffered(['a', 'b']);
+
+    assert.equal(desk.get('a').offered, 2);
+    assert.equal(desk.get('b').offered, 1);
+  });
+
+  test('a story offered 3 times is covered (dropped); before that it stays available', () => {
+    const desk = makeDesk({ stories: [makeStory('a', 'A', 1), makeStory('b', 'B', 2)] });
+
+    desk.markOffered(['a']);
+    desk.markOffered(['a']);
+    assert.equal(desk.covered.has('a'), false);
+    assert.deepEqual(ids(desk.candidates(5)), ['b', 'a'], 'a has sunk in the ranking but is still there');
+
+    desk.markOffered(['a']);
+    assert.equal(desk.covered.has('a'), true);
+    assert.deepEqual(ids(desk.candidates(5)), ['b']);
+  });
+
+  test('ignores ids it does not know', () => {
+    const desk = makeDesk({ stories: [makeStory('a', 'A', 1)] });
+    assert.doesNotThrow(() => desk.markOffered(['nope']));
+    assert.equal(desk.covered.size, 0);
+  });
+
+  test('does not cover other reports of the same event (only markCovered does)', () => {
+    const desk = makeDesk({
+      stories: [
+        makeStory('q1', 'BBC', 10, { title: 'Earthquake strikes northern Japan' }),
+        makeStory('q2', 'Sky', 12, { title: 'Powerful earthquake hits northern Japan' }),
+      ],
+    });
+    desk.markOffered(['q1']);
+    desk.markOffered(['q1']);
+    desk.markOffered(['q1']);
+    assert.deepEqual([...desk.covered.keys()], ['q1']);
   });
 });
 
 // ---------------------------------------------------------------- NewsDesk: refresh
 
 describe('NewsDesk.refresh', () => {
-  test('stores fresh stories, tags them with the feed name and records feed status', async () => {
+  test('stores fresh stories, tags them with the feed name, category and weight, and records feed status', async () => {
     const xml = rssFeed(
-      rssItem({ title: 'Primera noticia del día', link: 'https://example.com/1', description: 'Resumen uno.' }),
-      rssItem({ title: 'Segunda noticia distinta', link: 'https://example.com/2', description: 'Resumen dos.' })
+      rssItem({ title: 'First story of the day', link: 'https://example.com/1', description: 'Summary one.' }),
+      rssItem({ title: 'Second distinct story', link: 'https://example.com/2', description: 'Summary two.' })
     );
     const desk = makeDesk({
       feeds: [FEEDS[0]],
@@ -486,14 +1030,14 @@ describe('NewsDesk.refresh', () => {
     assert.equal(added, 2);
     assert.equal(desk.stories.size, 2);
     assert.deepEqual(desk.feedStatus, { Alfa: { ok: true, items: 2 } });
-    assert.ok([...desk.stories.values()].every((s) => s.source === 'Alfa' && s.category === 'general'));
+    assert.ok([...desk.stories.values()].every((s) => s.source === 'Alfa' && s.category === 'world' && s.weight === 1.2));
     assert.ok(desk.lastRefresh >= NOW);
   });
 
   test('dedupes the same link across feeds (first feed wins) and across refreshes', async () => {
     const xml = rssFeed(
-      rssItem({ title: 'Noticia compartida por todos', link: 'https://example.com/shared' }),
-      rssItem({ title: 'Otra noticia compartida', link: 'https://example.com/shared-2?utm=1' })
+      rssItem({ title: 'Story shared by everyone', link: 'https://example.com/shared' }),
+      rssItem({ title: 'Another shared story', link: 'https://example.com/shared-2?utm=1' })
     );
     const fetchImpl = routedFetch(Object.fromEntries(FEEDS.map((f) => [f.url, xml])));
     const desk = makeDesk({ feeds: FEEDS, fetchImpl });
@@ -509,9 +1053,9 @@ describe('NewsDesk.refresh', () => {
 
   test('dedupes near-identical titles coming from different feeds with different links', async () => {
     const fetchImpl = routedFetch({
-      'https://alfa.test/rss': rssFeed(rssItem({ title: 'Sánchez anuncia nuevas medidas económicas hoy', link: 'https://alfa.test/a' })),
-      'https://beta.test/rss': rssFeed(rssItem({ title: 'SANCHEZ anuncia: nuevas medidas economicas hoy!', link: 'https://beta.test/b' })),
-      'https://gamma.test/rss': rssFeed(rssItem({ title: 'Una historia completamente diferente', link: 'https://gamma.test/c' })),
+      'https://alfa.test/rss': rssFeed(rssItem({ title: 'Sánchez announces new economic measures today', link: 'https://alfa.test/a' })),
+      'https://beta.test/rss': rssFeed(rssItem({ title: 'SANCHEZ announces: new economic measures today!', link: 'https://beta.test/b' })),
+      'https://gamma.test/rss': rssFeed(rssItem({ title: 'A completely different story', link: 'https://gamma.test/c' })),
     });
     const desk = makeDesk({ feeds: FEEDS, fetchImpl });
 
@@ -525,10 +1069,10 @@ describe('NewsDesk.refresh', () => {
 
   test('also dedupes against titles of stories already in the desk', async () => {
     const desk = makeDesk({
-      stories: [makeStory('old', 'Vieja', 30, { title: 'Sánchez anuncia nuevas medidas económicas hoy' })],
+      stories: [makeStory('old', 'Old', 30, { title: 'Sánchez announces new economic measures today' })],
       feeds: [FEEDS[0]],
       fetchImpl: routedFetch({
-        'https://alfa.test/rss': rssFeed(rssItem({ title: 'SANCHEZ anuncia nuevas medidas economicas hoy', link: 'https://alfa.test/new' })),
+        'https://alfa.test/rss': rssFeed(rssItem({ title: 'SANCHEZ announces new economic measures today', link: 'https://alfa.test/new' })),
       }),
     });
     assert.equal(await desk.refresh(), 0);
@@ -537,7 +1081,7 @@ describe('NewsDesk.refresh', () => {
 
   test('records an HTTP 403 for one feed in feedStatus without throwing, and keeps the other feeds', async () => {
     const fetchImpl = routedFetch({
-      'https://alfa.test/rss': rssFeed(rssItem({ title: 'Noticia de Alfa en directo', link: 'https://alfa.test/1' })),
+      'https://alfa.test/rss': rssFeed(rssItem({ title: 'Live story from Alfa', link: 'https://alfa.test/1' })),
       'https://beta.test/rss': 403,
       'https://gamma.test/rss': new Error('connect ECONNRESET'),
     });
@@ -558,7 +1102,7 @@ describe('NewsDesk.refresh', () => {
     await desk.refresh();
     assert.equal(desk.feedStatus.Alfa.ok, false);
 
-    routes['https://alfa.test/rss'] = rssFeed(rssItem({ title: 'Ya funciona otra vez', link: 'https://alfa.test/ok' }));
+    routes['https://alfa.test/rss'] = rssFeed(rssItem({ title: 'Working again now', link: 'https://alfa.test/ok' }));
     await desk.refresh();
     assert.deepEqual(desk.feedStatus.Alfa, { ok: true, items: 1 });
   });
@@ -566,9 +1110,9 @@ describe('NewsDesk.refresh', () => {
   test('drops items older than maxStoryAgeHours but keeps recent ones', async () => {
     const maxAge = config.maxStoryAgeHours;
     const xml = rssFeed(
-      rssItem({ title: 'Noticia reciente de hoy', link: 'https://example.com/fresh', pubDate: rssDate(1) }),
-      rssItem({ title: 'Casi caducada pero valida', link: 'https://example.com/almost', pubDate: rssDate(maxAge - 1) }),
-      rssItem({ title: 'Noticia antigua caducada', link: 'https://example.com/stale', pubDate: rssDate(maxAge + 1) })
+      rssItem({ title: 'Fresh news from today', link: 'https://example.com/fresh', pubDate: rssDate(1) }),
+      rssItem({ title: 'Almost expired but valid', link: 'https://example.com/almost', pubDate: rssDate(maxAge - 1) }),
+      rssItem({ title: 'Old expired report', link: 'https://example.com/stale', pubDate: rssDate(maxAge + 1) })
     );
     const desk = makeDesk({ feeds: [FEEDS[0]], fetchImpl: routedFetch({ 'https://alfa.test/rss': xml }) });
 
@@ -598,8 +1142,8 @@ describe('NewsDesk.refresh', () => {
 
   test('works with the real config/feeds.json when every URL returns the same XML', async () => {
     const xml = rssFeed(
-      rssItem({ title: 'Noticia primera para todos los feeds', link: 'https://example.com/real-1' }),
-      rssItem({ title: 'Noticia segunda para todos los feeds', link: 'https://example.com/real-2' })
+      rssItem({ title: 'First story for all feeds', link: 'https://example.com/real-1' }),
+      rssItem({ title: 'Second story for all feeds', link: 'https://example.com/real-2' })
     );
     const calls = [];
     const desk = makeDesk({
@@ -610,10 +1154,6 @@ describe('NewsDesk.refresh', () => {
     });
     const feeds = desk.loadFeeds();
     assert.ok(feeds.length >= 2, 'config/feeds.json should list several feeds');
-    for (const f of feeds) {
-      assert.equal(typeof f.name, 'string');
-      assert.match(f.url, /^https?:\/\//);
-    }
 
     const added = await desk.refresh();
 
@@ -622,6 +1162,23 @@ describe('NewsDesk.refresh', () => {
     assert.deepEqual(Object.keys(desk.feedStatus).sort(), feeds.map((f) => f.name).sort());
     assert.deepEqual(calls.map((c) => c.url).sort(), feeds.map((f) => f.url).sort());
     assert.ok(calls.every((c) => /LiveNewsBot/.test(c.init.headers['user-agent'])));
+    // the first feed wins the duplicates, and its category and weight are carried over
+    assert.ok([...desk.stories.values()].every((s) => s.source === feeds[0].name && s.category === feeds[0].category && s.weight === feeds[0].weight));
+  });
+});
+
+describe('config/feeds.json', () => {
+  const feeds = makeDesk().loadFeeds();
+
+  test('every feed has a unique name, an http(s) URL, a category and a positive numeric weight', () => {
+    assert.ok(feeds.length >= 2);
+    assert.equal(new Set(feeds.map((f) => f.name)).size, feeds.length, 'feed names must be unique (they key feedStatus)');
+    for (const f of feeds) {
+      assert.equal(typeof f.name, 'string', JSON.stringify(f));
+      assert.match(f.url, /^https?:\/\//, f.name);
+      assert.match(f.category, /^[a-z]+$/, f.name);
+      assert.ok(typeof f.weight === 'number' && f.weight > 0 && f.weight <= 2, `${f.name} weight ${f.weight}`);
+    }
   });
 });
 

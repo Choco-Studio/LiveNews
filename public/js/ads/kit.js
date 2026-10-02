@@ -556,6 +556,49 @@ export function bubble(ctx, x, y, w, s, { tail = 'down', tx = null, fill = P.whi
   return h;
 }
 
+/** Save + clip to a pixel-stepped disc; the caller must ctx.restore(). */
+export function clipCircle(ctx, cx, cy, rad) {
+  cx = round(cx);
+  cy = round(cy);
+  rad = max(0, round(rad));
+  ctx.save();
+  ctx.beginPath();
+  const rr = (rad + 0.5) ** 2;
+  for (let dy = -rad; dy <= rad; dy++) {
+    const hw = floor(sqrt(max(0, rr - dy * dy)));
+    ctx.rect(cx - hw, cy + dy, hw * 2 + 1, 1);
+  }
+  ctx.clip();
+}
+
+/** Save + clip to a rectangle; the caller must ctx.restore(). */
+export function clipRect(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(round(x), round(y), round(w), round(h));
+  ctx.clip();
+}
+
+/** Star / burst polygon points (n spikes). */
+export function starPts(cx, cy, n, r1, r2, rot = 0) {
+  const pts = [];
+  for (let i = 0; i < n * 2; i++) {
+    const a = rot + (i * PI) / n - PI / 2;
+    const rr = i % 2 ? r2 : r1;
+    pts.push([cx + Math.cos(a) * rr, cy + sin(a) * rr]);
+  }
+  return pts;
+}
+
+/** Puffy cloud made of discs. */
+export function cloud(ctx, cx, cy, s, c, shade = null) {
+  const u = s / 10;
+  const parts = [[-9, 2, 6], [-3, -2, 8], [5, -1, 7], [11, 3, 5]];
+  if (shade) for (const [dx, dy, rr] of parts) disc(ctx, cx + round(dx * u), cy + round(dy * u) + 1, round(rr * u), shade);
+  for (const [dx, dy, rr] of parts) disc(ctx, cx + round(dx * u), cy + round(dy * u), round(rr * u), c);
+  R(ctx, cx - round(14 * u), cy + round(2 * u), round(29 * u), round(5 * u), c);
+}
+
 // ---------------------------------------------------------------------------
 // Scenes & transitions
 
@@ -987,7 +1030,7 @@ export function person(ctx, x, gy, o = {}) {
   const armSpr = (k) => (k === 'down' && small ? ARMS.downS : ARMS[k] || ARMS.down);
   draw(ctx, armSpr(o.armL || 'down'), x, ty, pal);
   draw(ctx, armSpr(o.armR || 'down'), x, ty, pal, true);
-  if (o.hair === 'long') draw(ctx, HAIR.long, x, top, { ...pal, h: pal.H, S: null });
+  if (o.hair === 'long') draw(ctx, HAIR.long, x, top, pal);
   draw(ctx, HEAD, x, top, pal);
   face(ctx, x, top, o, pal);
   const hair = HAIR[o.hair || 'short'];
