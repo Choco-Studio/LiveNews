@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { castOf, loadChannel, publicChannel, validateChannel } from '../server/channel.js';
 import { ROOT } from '../server/config.js';
+import { Station } from '../server/station.js';
 
 // ---------------------------------------------------------------- helpers
 
@@ -124,18 +125,55 @@ describe('validateChannel', () => {
     assert.throws(() => validateChannel(withProgram('solo', { presenters: 'cyd' })), /programme "solo" needs 1 or 2 presenters/);
   });
 
-  test(
-    'rejects a programme that does not say how many stories it airs (a typo must not silently take it off air)',
-    {
-      todo:
-        'VALIDATION GAP server/channel.js:31-38 - a programme without a numeric "stories" (e.g. a typo: "storys": 4) passes validateChannel(), but Producer.canProduce() then computes Math.min(undefined, n) = NaN, so it can never be produced and Station.fill() skips its slot forever with no error (a missing "style"/"storyLength"/"tagline" likewise puts the text "undefined" into the writer prompt)',
-    },
-    () => {
-      for (const stories of [undefined, 0, -3, 'five', NaN]) {
-        assert.throws(() => validateChannel(withProgram('duo', { stories })), /stories/, String(stories));
+  test('rejects a programme whose "title", "tagline", "style" or "storyLength" is missing, empty or not text', () => {
+    for (const key of ['title', 'tagline', 'style', 'storyLength']) {
+      for (const value of [undefined, null, '', '   ', 42, ['text'], {}]) {
+        assert.throws(() => validateChannel(withProgram('duo', { [key]: value })), new RegExp(`programme "duo" needs a "${key}" text`), `${key} = ${JSON.stringify(value)}`);
       }
     }
-  );
+  });
+
+  test('rejects a programme that does not say how many stories it airs (a typo must not silently take it off air)', () => {
+    for (const stories of [undefined, null, 0, -3, 2.5, 'five', '3', NaN, Infinity, [3]]) {
+      assert.throws(() => validateChannel(withProgram('duo', { stories })), /programme "duo" needs "stories" \(a whole number ≥ 1\)/, String(stories));
+    }
+    const typo = makeChannel();
+    delete typo.programs.duo.stories;
+    typo.programs.duo.storys = 5;
+    assert.throws(() => validateChannel(typo), /needs "stories"/);
+  });
+
+  test('accepts any whole number of stories from 1 up', () => {
+    for (const stories of [1, 2, 10, 25]) assert.doesNotThrow(() => validateChannel(withProgram('duo', { stories })), String(stories));
+  });
+
+  test('rejects a programme without a non-empty list of "categories"', () => {
+    for (const categories of [undefined, null, [], 'world', {}, 7]) {
+      assert.throws(() => validateChannel(withProgram('duo', { categories })), /programme "duo" needs a list of "categories"/, JSON.stringify(categories));
+    }
+    assert.doesNotThrow(() => validateChannel(withProgram('duo', { categories: ['world', 'business'] })));
+  });
+
+  test('"theme" and "maxChats" stay optional', () => {
+    const channel = makeChannel();
+    delete channel.programs.solo.theme;
+    delete channel.programs.solo.maxChats;
+    assert.doesNotThrow(() => validateChannel(channel));
+  });
+
+  test('names the programme that is wrong, whichever it is', () => {
+    assert.throws(() => validateChannel(withProgram('solo', { title: '' })), /programme "solo" needs a "title" text/);
+    assert.throws(() => validateChannel(withProgram('solo', { stories: 0 })), /programme "solo" needs "stories"/);
+  });
+
+  test('checks the texts, then the story count, then the categories, then the presenters', () => {
+    const everythingWrong = { title: '', stories: 0, categories: [], presenters: [] };
+    assert.throws(() => validateChannel(withProgram('duo', everythingWrong)), /needs a "title" text/);
+    assert.throws(() => validateChannel(withProgram('duo', { ...everythingWrong, title: 'OK' })), /needs a "tagline"|needs a "style"|needs "stories"/);
+    assert.throws(() => validateChannel(withProgram('duo', { stories: 0, categories: [], presenters: [] })), /needs "stories"/);
+    assert.throws(() => validateChannel(withProgram('duo', { categories: [], presenters: [] })), /needs a list of "categories"/);
+    assert.throws(() => validateChannel(withProgram('duo', { presenters: [] })), /needs 1 or 2 presenters/);
+  });
 
   test('checks the rotation before the programmes', () => {
     const channel = withProgram('duo', { presenters: [] });
@@ -274,7 +312,153 @@ describe('loadChannel', () => {
     assert.equal(loadChannel(a.file).name, 'CHANNEL A');
   });
 
-  test('throws the validation error for an invalid channel and does not cache it', (t) => {
+  describe('a broken edit keeps the last good line-up', () => {
+    let errors;
+    const quiet = (t) => {
+      errors = [];
+      t.mock.method(console, 'error', (...args) => errors.push(args.join(' ')));
+    };
+
+    test('invalid JSON after a good load: the previous channel is returned and the problem is logged', (t) => {
+      quiet(t);
+      const f = tempChannelFile(t);
+      f.write(makeChannel());
+      const good = loadChannel(f.file);
+
+      f.write('{ "name": "half-typed');
+      const during = loadChannel(f.file);
+
+      assert.equal(during, good, 'the very same object stays on air');
+      assert.equal(errors.length, 1);
+      assert.match(errors[0], /^\[channel\] channel\.json is invalid, keeping the previous version: /);
+    });
+
+    test('a file that parses but fails validation is handled the same way, naming the reason', (t) => {
+      quiet(t);
+      const f = tempChannelFile(t);
+      f.write(makeChannel());
+      const good = loadChannel(f.file);
+
+      f.write(makeChannel({ rotation: ['ghost'] }));
+      assert.equal(loadChannel(f.file), good);
+      assert.match(errors[0], /rotation references unknown programme "ghost"/);
+
+      f.write(withProgram('duo', { stories: 0 }));
+      assert.equal(loadChannel(f.file), good);
+      assert.match(errors[1], /programme "duo" needs "stories"/);
+    });
+
+    test('the broken file is not parsed (or logged) again until it changes', (t) => {
+      quiet(t);
+      const f = tempChannelFile(t);
+      f.write(makeChannel());
+      const good = loadChannel(f.file);
+      f.write('nope');
+
+      for (let i = 0; i < 5; i++) assert.equal(loadChannel(f.file), good);
+      assert.equal(errors.length, 1, 'logged once, not on every call');
+
+      f.write('still nope');
+      assert.equal(loadChannel(f.file), good);
+      assert.equal(errors.length, 2, 'a new edit is looked at again');
+    });
+
+    test('once the file is fixed the new line-up goes on air', (t) => {
+      quiet(t);
+      const f = tempChannelFile(t);
+      f.write(makeChannel());
+      const good = loadChannel(f.file);
+      f.write('{ broken');
+      assert.equal(loadChannel(f.file), good);
+
+      f.write(makeChannel({ name: 'FIXED TV', rotation: ['solo'] }));
+      const fixed = loadChannel(f.file);
+
+      assert.notEqual(fixed, good);
+      assert.equal(fixed.name, 'FIXED TV');
+      assert.deepEqual(fixed.rotation, ['solo']);
+      assert.equal(loadChannel(f.file), fixed);
+      assert.equal(errors.length, 1);
+    });
+
+    test('several broken edits in a row all fall back to the same last good version', (t) => {
+      quiet(t);
+      const f = tempChannelFile(t);
+      f.write(makeChannel({ name: 'GOOD TV' }));
+      const good = loadChannel(f.file);
+      for (const bad of ['', '[]', 'null', '{}', '{"presenters":{}}']) {
+        f.write(bad);
+        assert.equal(loadChannel(f.file), good, JSON.stringify(bad));
+      }
+      assert.equal(errors.length, 5);
+    });
+
+    test('a good edit after a bad one replaces the fallback too', (t) => {
+      quiet(t);
+      const f = tempChannelFile(t);
+      f.write(makeChannel({ name: 'ONE' }));
+      loadChannel(f.file);
+      f.write(makeChannel({ name: 'TWO' }));
+      const two = loadChannel(f.file);
+      f.write('broken');
+      assert.equal(loadChannel(f.file), two, 'falls back to TWO, not to ONE');
+    });
+
+    test('there is nothing to fall back to for a file that has never loaded: the error is thrown, every time', (t) => {
+      quiet(t);
+      const f = tempChannelFile(t);
+      f.write('{ not json');
+      assert.throws(() => loadChannel(f.file), SyntaxError);
+      assert.throws(() => loadChannel(f.file), SyntaxError, 'and not cached as if it were fine');
+      assert.deepEqual(errors, []);
+    });
+
+    test('the fallback belongs to one file: another broken file does not borrow it', (t) => {
+      quiet(t);
+      const a = tempChannelFile(t);
+      const b = tempChannelFile(t);
+      a.write(makeChannel({ name: 'CHANNEL A' }));
+      loadChannel(a.file);
+      b.write('{ broken');
+      assert.throws(() => loadChannel(b.file), SyntaxError);
+    });
+
+    test('a running Station keeps broadcasting the old line-up through a broken edit', async (t) => {
+      quiet(t);
+      const f = tempChannelFile(t);
+      f.write(makeChannel());
+      const station = new Station({
+        config: { queueSize: 1 },
+        newsDesk: { stories: new Map(), uncovered: () => [], feedStatus: {}, lastRefresh: 0 },
+        producer: {
+          canProduce: () => true,
+          produce: async (channel, id) => ({ kind: 'episode', id: `e-${id}`, program: { id, title: channel.programs[id].title }, cast: {} }),
+        },
+        chain: { status: () => [] },
+        channel: () => loadChannel(f.file),
+        log: { info() {}, warn() {}, error() {} },
+      });
+
+      assert.equal(station.publicChannel().name, 'TEST TV'); // on air with the good line-up
+      f.write('{ half-typed');
+      await station.fill();
+      assert.deepEqual(station.queue.map((e) => e.program.id), ['duo']);
+      assert.equal(station.publicChannel().name, 'TEST TV');
+      assert.equal(station.schedule().upcoming.length, 4, 'one ready episode plus the three slots of the rotation');
+
+      f.write(makeChannel({ name: 'FIXED TV', rotation: ['solo'] }));
+      assert.equal(station.publicChannel().name, 'FIXED TV');
+    });
+  });
+
+  test('a missing file is still a stat error, even after a good load of a different file', (t) => {
+    const f = tempChannelFile(t);
+    f.write(makeChannel());
+    loadChannel(f.file);
+    assert.throws(() => loadChannel(path.join(path.dirname(f.file), 'missing.json')), { code: 'ENOENT' });
+  });
+
+  test('throws the validation error for an invalid channel that never loaded, and does not cache it', (t) => {
     const f = tempChannelFile(t);
     f.write(makeChannel({ rotation: ['ghost'] }));
     assert.throws(() => loadChannel(f.file), /rotation references unknown programme "ghost"/);

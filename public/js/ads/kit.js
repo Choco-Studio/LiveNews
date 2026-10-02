@@ -678,7 +678,7 @@ export function play(ctx, dt, info, list) {
     } else if (kind === 'flash') {
       if (p < 0.5) prev.draw(ctx, plt, info, dt);
       else s.draw(ctx, lt, info, dt);
-      R(ctx, 0, 0, W, H, A(P.white, 1 - abs(p - 0.5) * 2));
+      R(ctx, 0, 0, W, H, A(P.white, 0.85 * (1 - abs(p - 0.5) * 2)));
     } else {
       prev.draw(ctx, plt, info, dt);
       wipeClip(ctx, kind, p, s);

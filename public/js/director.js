@@ -16,6 +16,7 @@ const frame = () => new Promise((r) => setTimeout(r, 0));
 const SMALL = { w: 104, h: 62 }; // studio video wall / over-the-shoulder box
 const FULL = { w: 416, h: 234 }; // full screen with room for a slow pan
 const MONTAGE_FRAME = 2.6; // seconds per headline in the cold open
+const MIN_SHOT = 3; // no camera shot shorter than this (seconds)
 
 export class Director {
   constructor({ audio, channel }) {
@@ -262,10 +263,12 @@ export class Director {
       this.setShot('open', { storyId: null, card: null });
     });
     // Each programme has its own opening titles and theme tune.
+    this.introduced = new Set();
     const open = openFor(episode.program.id);
     const tune = this.audio.playTune?.(open.tune, { volume: 0.6 });
     await Promise.all([sleep(open.duration * 1000), imagesReady]);
     tune?.stop?.();
+    s.programTagUntil = now() + 15;
 
     for (const seg of episode.segments) {
       switch (seg.type) {
@@ -316,7 +319,7 @@ export class Director {
     await speech;
     const minimum = frames * MONTAGE_FRAME - (now() - started);
     if (minimum > 0) await sleep(minimum * 1000);
-    await this.stinger(() => this.setShot('wide', { focus: seg.anchor, wall: { mode: 'logo' }, card: null }));
+    this.setShot('wide', { focus: seg.anchor, wall: { mode: 'logo' }, card: null });
   }
 
   /**
@@ -348,6 +351,7 @@ export class Director {
       this.audio.sfx('breaking');
       await sleep(3500);
     }
+    let pending = null;
     const shotFor = (i) => {
       const beat = beats[Math.min(i, beats.length - 1)];
       const card =
@@ -356,18 +360,27 @@ export class Director {
           : beat === 'fact'
             ? { fact: seg.fact, label: /\d/.test(seg.fact) ? 'BY THE NUMBERS' : 'KEY FACT', source: seg.source }
             : null;
-      this.setShot(beat, { focus: seg.anchor, storyId: seg.storyId, wall, card });
+      const apply = () => this.setShot(beat, { focus: seg.anchor, storyId: seg.storyId, wall, card });
+      // Hold every shot for at least MIN_SHOT seconds before cutting away.
+      clearTimeout(pending);
+      const held = now() - s.shotSince;
+      if (i === 0 || held >= MIN_SHOT) apply();
+      else pending = setTimeout(apply, (MIN_SHOT - held) * 1000);
     };
-    await this.stinger(() => {
-      s.lowerThird = {
-        headline: seg.headline,
-        source: seg.source || '',
-        anchorName: presenterName(s.cast[seg.anchor]),
-        breaking: seg.breaking,
-        since: now() + 0.3,
-      };
-      shotFor(0);
-    });
+    // Between stories the director simply cuts; the stinger is kept for opens, breaks and breaking news.
+    const presenter = s.cast[seg.anchor];
+    const showName = !this.introduced?.has(presenter);
+    this.introduced?.add(presenter);
+    shotFor(0);
+    s.lowerThird = {
+      headline: seg.headline,
+      source: seg.source || '',
+      anchorName: presenterName(presenter),
+      showName,
+      breaking: seg.breaking,
+      since: now() + 1,
+    };
     await this.say(seg, (i) => i > 0 && shotFor(i));
+    clearTimeout(pending);
   }
 }

@@ -329,7 +329,6 @@ function shotDanger(ctx, lt) {
     caption(ctx, 'COASTERS', st);
   }
   ctx.restore();
-  R(ctx, 0, 0, W, H, A(P.white, Math.max(0, 0.6 - st * 3)));
 }
 
 // 3. The agent: a talking-head shot, SafeSector to the rescue.

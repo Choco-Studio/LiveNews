@@ -222,12 +222,12 @@ function shotDad(ctx, lt) {
   const asleep = lt > 1.5;
   faceCU(ctx, 192, 112, 44, { pal: DAD, glasses: true, eyes: asleep ? 'closed' : 'sleepy', mouth: asleep ? 'o' : 'flat' });
   const cols = [P.cyan, P.yellow, P.pink, P.green, P.white, P.orange];
-  const col = cols[Math.floor(lt * 15) % cols.length];
+  const col = cols[Math.floor(lt * 6) % cols.length];
   for (const sd of [-1, 1]) {
     const x = 192 + sd * 17;
     R(ctx, x - 9, 105, 17, 11, A(P.white, 0.35));
     R(ctx, x - 9, 105, 17, 3, A(col, 0.75));
-    for (let k = 0; k < 3; k++) R(ctx, x - 7, 110 + k * 2, 8 + ((k * 5 + Math.floor(lt * 15)) % 6), 1, A(P.black, 0.35));
+    for (let k = 0; k < 3; k++) R(ctx, x - 7, 110 + k * 2, 8 + ((k * 5 + Math.floor(lt * 6)) % 6), 1, A(P.black, 0.35));
   }
   if (lt > 0.5) bubble(ctx, 262, 40, 76, 'BORING.', { tail: 'down', tx: 270, scale: 1 });
   if (asleep) text(ctx, 'Z Z Z', 268, 96 - (Math.floor(lt * 3) % 3) * 2, { color: P.white });
@@ -236,8 +236,8 @@ function shotDad(ctx, lt) {
 // 3. Product hero: the modem rises, gleams... and screams.
 function shotModem(ctx, lt) {
   const screech = lt > 2.0 && lt < 4.8;
-  const flash = screech && Math.floor(lt * 12) % 2;
-  bands(ctx, 0, 0, W, 150, flash ? [P.purple, P.magenta] : [P.ink, P.navy, P.blue]);
+  // one steady change of mood when it screams (no strobing: photosensitivity)
+  bands(ctx, 0, 0, W, 150, screech ? [P.ink, P.purple, P.magenta] : [P.ink, P.navy, P.blue]);
   if (!screech) glow(ctx, 198, 110, 90, P.cyan, 0.05, 5);
   R(ctx, 0, 150, W, 66, P.brown);
   R(ctx, 0, 150, W, 2, P.tan);

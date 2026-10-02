@@ -2234,7 +2234,16 @@ export function drawCloseup(ctx, t, id, state, { side = 'center', accent = null 
   // ----- per-presenter animation memory -----
   const a = (live[id] ||= { g: 0, gPose: 'palm', gOn: false, lastT: null, blinkOn: false, blinkSince: -1, blinkOff: -1, prevMouth: 0, browUntil: -1, hist: [], scanLine: -1 });
   const dt = a.lastT === null ? 1 : Math.max(0, Math.min(0.25, t - a.lastT));
-  if (a.lastT !== null && (t < a.lastT || t - a.lastT > 1)) a.hist.length = 0;
+  if (a.lastT !== null && (t < a.lastT || t - a.lastT > 1)) {
+    // time jumped (new shot, seek): forget transient animation memory
+    a.hist.length = 0;
+    a.blinkOn = false;
+    a.blinkSince = -1;
+    a.blinkOff = -1;
+    a.browUntil = -1;
+    a.g = 0;
+    a.gOn = false;
+  }
   a.lastT = t;
   if (st.blink && !a.blinkOn) a.blinkSince = t;
   if (!st.blink && a.blinkOn) a.blinkOff = t;

@@ -17,13 +17,6 @@ import { ACTIONS } from './cues.js';
 export { W, H };
 
 const SOLO_X = 192;
-const CLOCKS = [
-  ['LONDON', 'Europe/London'],
-  ['NEW YORK', 'America/New_York'],
-  ['TOKYO', 'Asia/Tokyo'],
-  ['DUBAI', 'Asia/Dubai'],
-  ['SÃO PAULO', 'America/Sao_Paulo'],
-];
 
 // Which graphics sit on top of each shot
 const OVERLAYS = {
@@ -274,79 +267,92 @@ export class Renderer {
 
   drawOverlays(t, scene) {
     const mode = OVERLAYS[scene.shot];
-    if (!mode) return;
+    if (!mode) {
+      this.ltState = null;
+      return;
+    }
     const ctx = this.ctx;
+    const M = 13; // title-safe margin
 
     if (mode === 'ad') {
-      r(ctx, 6, 6, measureText('ADVERTISEMENT') + 8, 11, P.black);
-      drawText(ctx, 'ADVERTISEMENT', 10, 8, { color: P.fog });
+      r(ctx, M, 8, measureText('ADVERTISEMENT') + 8, 11, P.black);
+      drawText(ctx, 'ADVERTISEMENT', M + 4, 10, { color: P.fog });
       return;
     }
 
-    // Logo bug + LIVE / REPLAY + programme name
-    const bug = drawLogo(ctx, 6, 6, { variant: 'bug', t });
-    let x = 6 + bug.w + 2;
+    // Static logo bug, LIVE / REPLAY, and the programme name for a while after it starts
+    const bug = drawLogo(ctx, M, 8, { variant: 'bug' });
+    let x = M + bug.w + 2;
     const live = scene.replay ? 'REPLAY' : 'LIVE';
     const lw = measureText(live) + (scene.replay ? 8 : 14);
-    r(ctx, x, 6, lw, 13, scene.replay ? P.yellow : P.black);
-    if (!scene.replay && Math.floor(t * 1.5) % 2 === 0) r(ctx, x + 4, 10, 4, 4, P.red);
-    drawText(ctx, live, x + (scene.replay ? 4 : 10), 9, { color: scene.replay ? P.black : P.white });
+    r(ctx, x, 8, lw, 13, scene.replay ? P.yellow : P.black);
+    if (!scene.replay) r(ctx, x + 4, 12, 4, 4, P.red);
+    drawText(ctx, live, x + (scene.replay ? 4 : 10), 11, { color: scene.replay ? P.black : P.white });
     x += lw;
-    if (scene.program && mode === 'news') {
+    if (scene.program && mode === 'news' && t < (scene.programTagUntil || 0)) {
       const pw = measureText(scene.program.title) + 8;
-      r(ctx, x, 6, pw, 13, THEME_ACCENT[scene.program.theme] || P.red);
-      drawText(ctx, scene.program.title, x + 4, 9, { color: scene.program.theme === 'flash' ? P.black : P.white });
+      r(ctx, x, 8, pw, 13, THEME_ACCENT[scene.program.theme] || P.red);
+      drawText(ctx, scene.program.title, x + 4, 11, { color: scene.program.theme === 'flash' ? P.black : P.white });
     }
 
-    // World clocks, rotating
-    const [city, tz] = CLOCKS[Math.floor(t / 6) % CLOCKS.length];
-    const clock = `${city} ${zoneTime(tz).label}`;
+    // Studio clock (London)
+    const clock = zoneTime().label;
     const cw = measureText(clock) + 10;
-    r(ctx, W - cw - 6, 6, cw, 13, P.black);
-    r(ctx, W - cw - 6, 18, cw, 1, P.steel);
-    drawText(ctx, clock, W - 11, 9, { color: P.white, align: 'right' });
+    r(ctx, W - cw - M, 8, cw, 13, P.black);
+    drawText(ctx, clock, W - M - 5, 11, { color: P.white, align: 'right' });
 
     if (mode === 'bug') return this.drawTicker(t, scene.ticker);
 
-    // Breaking banner
+    // Breaking banner: red tag, two pulses on entry, no continuous flashing
     if (scene.breaking) {
       const bt = t - scene.breaking.since;
       if (bt < 22) {
-        const flash = Math.floor(t * 3) % 2 === 0;
-        r(ctx, 0, 24, W, 14, flash ? P.red : P.darkRed);
-        r(ctx, 0, 24, 64, 14, P.yellow);
-        drawText(ctx, 'BREAKING', 6, 28, { color: P.black });
+        const pulse = (bt > 0 && bt < 0.18) || (bt > 0.6 && bt < 0.78);
+        r(ctx, 0, 26, W, 14, P.darkRed);
+        r(ctx, 0, 26, 66, 14, pulse ? P.white : P.red);
+        drawText(ctx, 'BREAKING', 8, 30, { color: pulse ? P.red : P.white });
         const text = `${scene.breaking.source.toUpperCase()}: ${scene.breaking.text}`;
         const tw = measureText(text);
         const tx = Math.round(W - ((bt * 40) % (tw + W)));
         ctx.save();
         ctx.beginPath();
-        ctx.rect(66, 24, W - 66, 14);
+        ctx.rect(68, 26, W - 68, 14);
         ctx.clip();
-        drawText(ctx, text, tx, 28, { color: P.white });
+        drawText(ctx, text, tx, 30, { color: P.white });
         ctx.restore();
       }
     }
 
-    // Lower third
+    // Lower third: wipes in over 0.35 s (text 0.1 s later), out over 0.25 s
     let subtitleBottom = 198;
-    const lt = scene.lowerThird;
+    const lt = this.lowerThirdState(t, scene.lowerThird);
     if (lt) {
-      const dt = t - lt.since;
-      const off = Math.round((1 - easeOut(dt / 0.35)) * -W);
-      const accent = lt.breaking ? P.red : THEME_ACCENT[scene.program?.theme] || P.blue;
-      const tag = lt.breaking ? 'BREAKING' : lt.source.toUpperCase();
+      const { data, inP, outP } = lt;
+      const reveal = easeOut(inP) * (1 - easeOut(outP));
+      const barW = Math.round((W - 2 * M) * reveal);
+      const textOn = inP >= 1 && outP <= 0;
+      const accent = data.breaking ? P.red : THEME_ACCENT[scene.program?.theme] || P.blue;
+      const tag = data.breaking ? 'BREAKING' : data.source.toUpperCase();
       const tagW = measureText(tag) + 10;
-      const nameW = measureText(lt.anchorName) + 10;
-      r(ctx, 12 + off, 166, tagW, 12, lt.breaking ? P.red : P.navy);
-      drawText(ctx, tag, 17 + off, 169, { color: lt.breaking && Math.floor(t * 3) % 2 ? P.yellow : P.white });
-      r(ctx, 12 + tagW + off, 166, nameW, 12, P.black);
-      drawText(ctx, lt.anchorName, 17 + tagW + off, 169, { color: P.silver });
-      r(ctx, 12 + off, 178, W - 24, 17, P.white);
-      r(ctx, 12 + off, 178, 3, 17, accent);
-      r(ctx, 12 + off, 195, W - 24, 2, P.fog);
-      drawText(ctx, lt.headline, 20 + off, 183, { color: P.black });
-      subtitleBottom = 162;
+      if (barW > 0) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(M, 160, barW, 40);
+        ctx.clip();
+        r(ctx, M, 166, tagW, 11, data.breaking ? P.red : P.navy);
+        if (textOn) drawText(ctx, tag, M + 5, 168, { color: P.white });
+        if (data.showName && t - data.since < 5) {
+          const nameW = measureText(data.anchorName) + 10;
+          r(ctx, M + tagW, 166, nameW, 11, P.black);
+          if (textOn) drawText(ctx, data.anchorName, M + tagW + 5, 168, { color: P.silver });
+        }
+        r(ctx, M, 177, W - 2 * M, 17, P.white);
+        r(ctx, M, 177, 3, 17, accent);
+        r(ctx, M, 194, W - 2 * M, 1, P.fog);
+        if (textOn) drawText(ctx, data.headline, M + 8, 182, { color: P.black });
+        ctx.restore();
+      }
+      subtitleBottom = 160;
     }
 
     // Subtitles
@@ -364,35 +370,57 @@ export class Renderer {
     this.drawTicker(t, scene.ticker);
   }
 
+  /** Tracks the lower third so it can animate out after the director clears it. */
+  lowerThirdState(t, current) {
+    const prev = this.ltState;
+    if (current) {
+      if (!prev || prev.data !== current) this.ltState = { data: current, out: null };
+      else if (prev.out !== null) this.ltState = { data: current, out: null };
+    } else if (prev && prev.out === null) {
+      prev.out = t;
+    }
+    const st = this.ltState;
+    if (!st) return null;
+    const outP = st.out === null ? 0 : (t - st.out) / 0.25;
+    if (outP >= 1) {
+      this.ltState = null;
+      return null;
+    }
+    const inP = Math.max(0, Math.min(1, (t - st.data.since) / 0.35));
+    // text appears 0.1 s after the bar has finished
+    return { data: st.data, inP: t - st.data.since >= 0.45 ? 1 : Math.min(inP, 0.999), outP };
+  }
+
+  /** BBC-style flipper: one headline at a time. */
   drawTicker(t, items) {
     const ctx = this.ctx;
     const y = 202;
+    const label = 52;
     r(ctx, 0, y, W, 14, P.ink);
-    r(ctx, 0, y, W, 1, P.blue);
+    r(ctx, 0, y, W, 1, P.steel);
     if (items?.length) {
-      const gap = 18;
-      const widths = items.map((it) => measureText(`${it.source} ▸ ${it.text}`) + gap);
-      const total = widths.reduce((a, b) => a + b, 0);
-      let x = 52 - ((t * 32) % total);
+      const SLOT = 6;
+      const i = Math.floor(t / SLOT) % items.length;
+      const dt = t % SLOT;
+      const it = items[i];
+      const src = `${it.source} ▸ `;
+      const sw = measureText(src);
+      const tw = sw + measureText(it.text);
+      const room = W - label - 12;
+      // long headlines glide left after a pause, short ones sit still
+      const shift = tw > room ? Math.round(Math.min(tw - room, Math.max(0, dt - 1.2) * 24)) : 0;
+      const enter = Math.round((1 - easeOut(dt / 0.3)) * 14);
       ctx.save();
       ctx.beginPath();
-      ctx.rect(50, y, W - 50, 14);
+      ctx.rect(label + 2, y + 1, W - label - 2, 13);
       ctx.clip();
-      for (let pass = 0; pass < 2 && x < W; pass++) {
-        items.forEach((it, i) => {
-          if (x + widths[i] > 50 && x < W) {
-            const sw = drawText(ctx, `${it.source} ▸`, x, y + 4, { color: P.yellow });
-            drawText(ctx, it.text, x + sw + 4, y + 4, { color: P.white });
-            r(ctx, x + widths[i] - gap / 2 - 1, y + 6, 2, 2, P.red);
-          }
-          x += widths[i];
-        });
-      }
+      const x = label + 8 - shift;
+      drawText(ctx, src, x, y + 4 + enter, { color: P.yellow });
+      drawText(ctx, it.text, x + sw, y + 4 + enter, { color: P.white });
       ctx.restore();
     }
-    r(ctx, 0, y, 48, 14, P.yellow);
-    r(ctx, 48, y, 2, 14, P.orange);
-    drawText(ctx, 'LATEST', 6, y + 4, { color: P.black });
+    r(ctx, 0, y, label, 14, P.red);
+    drawText(ctx, 'LATEST', 7, y + 4, { color: P.white });
   }
 
   render(t, scene) {

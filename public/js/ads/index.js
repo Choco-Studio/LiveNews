@@ -5,8 +5,9 @@ import screechnet from './screechnet.js';
 import safesector from './safesector.js';
 import grandbuffer from './grandbuffer.js';
 import cloudbrella from './cloudbrella.js';
+import hiresgym from './hiresgym.js';
 
-export const ADS = [bitfizz, screechnet, safesector, grandbuffer, cloudbrella];
+export const ADS = [bitfizz, screechnet, safesector, grandbuffer, cloudbrella, hiresgym];
 
 /** `count` distinct ads in random order, avoiding `recentIds` when possible. */
 export function pickAds(count, recentIds = []) {

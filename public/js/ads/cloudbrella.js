@@ -11,7 +11,7 @@ const COMMUTER = { S: P.tan, s: P.tanShade, H: P.black, h: P.slate, E: P.black, 
 // --- brand -------------------------------------------------------------------
 
 const MARK = () => wordmark('CLOUDBRELLA', {
-  h: 22, pen: 3, wide: 0.74, gap: 2,
+  h: 24, pen: 2, wide: 0.8, gap: 2,
   fill: [P.white, P.white, P.silver], hi: P.white,
   outline: [[P.blue, 2], [P.navy, 1]], depth: 2, depthColor: P.navy,
   wave: (i) => Math.round(Math.sin(i * 0.9) * 2),
@@ -324,17 +324,20 @@ function shotBliss(ctx, lt) {
   rim.push(tips[8]);
   poly(ctx, [[-40, -2], [424, -2], ...rim.slice().reverse().map(([x, y]) => [x, y + 2])], P.black);
   poly(ctx, [[-40, -2], [424, -2], ...rim.slice().reverse()], P.navy);
-  for (let i = 0; i < 8; i += 2) poly(ctx, [[220, -30], tips[i], [(tips[i][0] + tips[i + 1][0]) / 2, (tips[i][1] + tips[i + 1][1]) / 2 - 8], tips[i + 1]], P.blue);
-  for (let i = 1; i < 8; i++) line(ctx, 220, -30, tips[i][0], tips[i][1], P.ink);
+  for (let i = 0; i < 8; i += 2) poly(ctx, [[256, -30], tips[i], [(tips[i][0] + tips[i + 1][0]) / 2, (tips[i][1] + tips[i + 1][1]) / 2 - 8], tips[i + 1]], P.blue);
+  for (let i = 1; i < 8; i++) line(ctx, 256, -30, tips[i][0], tips[i][1], P.ink);
   for (let i = 0; i <= 8; i++) disc(ctx, tips[i][0], tips[i][1], 2, P.white);
-  R(ctx, 218, 0, 4, 160, P.black);
-  R(ctx, 219, 0, 2, 160, P.silver);
-  disc(ctx, 220, 164, 7, P.black);
-  disc(ctx, 220, 164, 6, COMMUTER.S);
+  R(ctx, 254, 0, 4, 160, P.black);
+  R(ctx, 255, 0, 2, 160, P.silver);
+  disc(ctx, 256, 164, 7, P.black);
+  disc(ctx, 256, 164, 6, COMMUTER.S);
+  // notifications slide off the rim and drop away
+  const edge = [1, 7, 0, 8, 2, 6];
   for (let i = 0; i < 6; i++) {
-    const t = (lt * 1.3 + i / 6) % 1;
-    const sd = i % 2 ? 1 : -1;
-    icon(ctx, KINDS[i], 220 + sd * (40 + t * 220), 40 - t * 30 + t * t * 120);
+    const t = (lt * 0.9 + i / 6) % 1;
+    const [tx, ty] = tips[edge[i]];
+    const sd = tx < 192 ? -1 : 1;
+    icon(ctx, KINDS[i], tx + sd * t * 50, ty + 6 + t * t * 170);
   }
   // a sad popup slides away
   const p = prog(lt, 0.6, 2.2);

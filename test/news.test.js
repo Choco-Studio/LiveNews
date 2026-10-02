@@ -7,6 +7,7 @@ import {
   decodeEntities,
   extractImage,
   interestScore,
+  isBreaking,
   keywords,
   normalizeTitleKey,
   parseFeed,
@@ -272,25 +273,50 @@ describe('parseFeed', () => {
     assert.equal(summaryOf('Useful text. read more'), 'Useful text.');
   });
 
+  test('also strips the trailing "»", "…" and "→" variants, and a bare "Comments" after a sentence end', () => {
+    assert.equal(summaryOf('Useful text. Continue reading »'), 'Useful text.');
+    assert.equal(summaryOf('Useful text. Read more…'), 'Useful text.');
+    assert.equal(summaryOf('Useful text. Read more →'), 'Useful text.');
+    assert.equal(summaryOf('Useful text! Comments'), 'Useful text!');
+    assert.equal(summaryOf('Useful text? Comment'), 'Useful text?');
+  });
+
+  test('does not cut an ordinary sentence that ends with the word "comment"', () => {
+    assert.equal(summaryOf('The spokesman declined to comment.'), 'The spokesman declined to comment.');
+    assert.equal(summaryOf('The spokesman declined to comment'), 'The spokesman declined to comment');
+    assert.equal(summaryOf('He said "no comment"'), 'He said "no comment"');
+    assert.equal(summaryOf('There were 12 comments. Comments are closed on the old thread.'), 'There were 12 comments. Comments are closed on the old thread.');
+  });
+
+  test('does not remove "read more" / "continue reading" from the middle of a sentence', () => {
+    assert.equal(summaryOf('Children who read more are happier.'), 'Children who read more are happier.');
+    assert.equal(summaryOf('Readers who continue reading the series will find answers.'), 'Readers who continue reading the series will find answers.');
+  });
+
+  test('only the boilerplate at the very end of the summary is removed', () => {
+    assert.equal(summaryOf('Read more about it. Useful text. Read more...'), 'Read more about it. Useful text.');
+  });
+
   test(
-    'does not cut an ordinary sentence that ends with the word "comment"',
+    'does not cut a real sentence that happens to end with "read more" or "continue reading"',
     {
       todo:
-        'BUG server/news.js:53 - BOILERPLATE_RE contains /Comments?\\.?$/i, so "The spokesman declined to comment." is stored as "The spokesman declined to" (the sentence is truncated)',
+        'STILL BROKEN server/news.js:53 - the end-anchored /\\s*(?:Read more|Continue reading)\\s*\\.?$/i cannot tell the feed link from a sentence: "Experts say children should read more." is stored as "Experts say children should", "Please continue reading." as "Please"',
     },
     () => {
-      assert.equal(summaryOf('The spokesman declined to comment.'), 'The spokesman declined to comment.');
+      assert.equal(summaryOf('Experts say children should read more.'), 'Experts say children should read more.');
+      assert.equal(summaryOf('Please continue reading.'), 'Please continue reading.');
     }
   );
 
   test(
-    'does not remove "read more" / "continue reading" from the middle of a sentence',
+    'does not wipe a sentence that merely contains "the post ... appeared first on"',
     {
       todo:
-        'BUG server/news.js:53 - BOILERPLATE_RE is not anchored, so "Children who read more are happier." becomes "Children who  are happier."',
+        'STILL BROKEN server/news.js:53 - /The post .{0,200}? appeared first on .{0,80}?\\./ is neither anchored nor limited to the end: "The post office said it appeared first on Monday that stamps rise." leaves an EMPTY summary',
     },
     () => {
-      assert.equal(summaryOf('Children who read more are happier.'), 'Children who read more are happier.');
+      assert.equal(summaryOf('The post office said it appeared first on Monday that stamps rise.'), 'The post office said it appeared first on Monday that stamps rise.');
     }
   );
 
@@ -326,20 +352,15 @@ describe('parseFeed', () => {
     assert.deepEqual(parseFeed(rssFeed(), FEED), []);
   });
 
-  test(
-    'one item with an impossible numeric entity must not make the whole feed fail',
-    {
-      todo:
-        'BUG server/news.js:31-32 - String.fromCodePoint() throws RangeError for code points above 0x10FFFF ("&#1114112;", "&#x110000;"), so parseFeed() throws and the whole feed is lost on every refresh',
-    },
-    () => {
-      const xml = rssFeed(
-        rssItem({ title: 'Good item', link: 'https://example.com/good' }),
-        rssItem({ title: 'Bad entity', link: 'https://example.com/bad', description: '<![CDATA[Broken &#1114112; entity]]>' })
-      );
-      assert.doesNotThrow(() => parseFeed(xml, FEED));
-    }
-  );
+  test('one item with an impossible numeric entity does not make the whole feed fail', () => {
+    const xml = rssFeed(
+      rssItem({ title: 'Good item', link: 'https://example.com/good' }),
+      rssItem({ title: 'Bad &#x110000; entity', link: 'https://example.com/bad', description: '<![CDATA[Broken &#1114112; entity]]>' })
+    );
+    const stories = parseFeed(xml, FEED);
+    assert.deepEqual(stories.map((s) => s.title), ['Good item', 'Bad &#x110000; entity']);
+    assert.equal(stories[1].summary, 'Broken &#1114112; entity');
+  });
 });
 
 // ---------------------------------------------------------------- extractImage
@@ -476,16 +497,25 @@ describe('cleanHtml', () => {
     assert.equal(cleanHtml('<p> </p>'), '');
   });
 
-  test(
-    'a plain newline inside a sentence is just whitespace, not a sentence break',
-    {
-      todo:
-        'BUG server/news.js:42,46 - every "\\n" becomes ". " (literal newlines from hard-wrapped HTML are indistinguishable from <br>/</p>): cleanHtml("Police said,\\nthe suspect fled") returns "Police said,. the suspect fled"',
-    },
-    () => {
-      assert.equal(cleanHtml('Police said,\nthe suspect fled'), 'Police said, the suspect fled');
-    }
-  );
+  test('a plain newline inside a sentence is just whitespace, not a sentence break', () => {
+    assert.equal(cleanHtml('Police said,\nthe suspect fled'), 'Police said, the suspect fled');
+    assert.equal(cleanHtml('uno \n\n  dos\t\ttres'), 'uno dos tres');
+    assert.equal(cleanHtml('<p>Police said,\nthe suspect fled</p><p>Next\nparagraph</p>'), 'Police said, the suspect fled. Next paragraph.');
+  });
+
+  test('newlines between block elements (pretty-printed HTML) do not double the sentence break', () => {
+    assert.equal(cleanHtml('<p>Done.</p>\n<p>Next</p>\n'), 'Done. Next.');
+    assert.equal(cleanHtml('<p>First</p>\n\n<p>Second</p>'), 'First. Second.');
+    assert.equal(cleanHtml('<p>a</p></p><br><p>b</p>'), 'a. b.');
+  });
+
+  test('a break right after a literal newline still ends the sentence', () => {
+    assert.equal(cleanHtml('First line\n<br>Second line'), 'First line. Second line');
+  });
+
+  test('the internal block marker never leaks into the result', () => {
+    assert.ok(!cleanHtml('<p>a</p><p>b</p><li>c</li><h2>d</h2>e<br>f').includes('\u0001'));
+  });
 });
 
 describe('decodeEntities', () => {
@@ -510,11 +540,82 @@ describe('decodeEntities', () => {
     assert.equal(decodeEntities('&amp;eacute; &amp;amp;'), '&eacute; &amp;');
   });
 
+  test('a numeric entity beyond the Unicode range is left as it is instead of throwing', () => {
+    assert.equal(decodeEntities('x &#1114112; y &#x110000; z &#99999999999; w'), 'x &#1114112; y &#x110000; z &#99999999999; w');
+    assert.equal(decodeEntities('ok &#x10FFFF; &#65;'), `ok ${String.fromCodePoint(0x10ffff)} A`);
+  });
+});
+
+// ---------------------------------------------------------------- isBreaking
+
+describe('isBreaking', () => {
+  test('recognises an explicit BREAKING marker at the start of the headline', () => {
+    for (const title of ['BREAKING: Magnitude 7 earthquake hits Japan', 'Breaking: minister resigns', 'Breaking news: minister resigns', 'breaking news - minister resigns', 'Breaking | minister resigns', 'BREAKING — minister resigns', '  BREAKING: leading spaces']) {
+      assert.equal(isBreaking(title), true, title);
+    }
+  });
+
+  test('recognises a BREAKING marker at the end of the headline, after a separator', () => {
+    for (const title of ['Minister resigns | BREAKING', 'Minister resigns, breaking', 'Minister resigns - BREAKING', 'Minister resigns – breaking', 'Minister resigns — Breaking  ']) {
+      assert.equal(isBreaking(title), true, title);
+    }
+  });
+
+  test('recognises the capitalised word BREAKING anywhere', () => {
+    assert.equal(isBreaking('BREAKING minister resigns'), true);
+    assert.equal(isBreaking('Minister resigns BREAKING'), true);
+    assert.equal(isBreaking('BREAKING NEWS'), true);
+  });
+
+  test('recognises "– live" and "live updates"', () => {
+    for (const title of ['Iran strikes – live', 'Iran strikes - live', 'Election night — live', 'Election night -live', 'Live updates: vote count under way', 'Live update: vote count under way', 'Vote count: live updates']) {
+      assert.equal(isBreaking(title), true, title);
+    }
+  });
+
+  test('recognises the Spanish "última hora"', () => {
+    assert.equal(isBreaking('Última hora: dimite el ministro'), true);
+    assert.equal(isBreaking('ÚLTIMA HORA: dimite el ministro'), true);
+    assert.equal(isBreaking('Dimite el ministro, última hora'), true);
+  });
+
+  test('does not react to "breaking" as an ordinary word or part of a compound', () => {
+    for (const title of [
+      'Record-breaking heatwave hits southern Europe',
+      'Ground-breaking study on sleep published',
+      'Heart-breaking scenes after the flood',
+      'Bread-breaking ceremony held in Rome',
+      'Man charged with breaking into home',
+      'Breaking the news gently to children',
+      'Breaking Bad star dies',
+      'Law-breaking tourists fined',
+    ]) {
+      assert.equal(isBreaking(title), false, title);
+    }
+  });
+
+  test('does not react to other headlines that merely contain "live"', () => {
+    for (const title of ['Live music festival opens in Lisbon', 'Olive harvest begins early', 'Alive and well after ten days at sea', 'Deliver the goods, says union', 'Update on the budget talks', 'Minister resigns']) {
+      assert.equal(isBreaking(title), false, title);
+    }
+  });
+
+  test('always returns a boolean, also for empty or missing titles', () => {
+    assert.equal(isBreaking(''), false);
+    assert.equal(isBreaking(undefined), false);
+    assert.equal(isBreaking('BREAKING: x'), true);
+  });
+
   test(
-    'does not throw on a numeric entity beyond the Unicode range',
-    { todo: 'BUG server/news.js:31-32 - decodeEntities("&#1114112;") throws RangeError: Invalid code point 1114112' },
+    'does not mistake a headline that ENDS in "record-breaking" (or is all capitals) for breaking news',
+    {
+      todo:
+        'STILL BROKEN server/news.js:61 - /[,|–—-]\\s*breaking\\s*$/i also matches the hyphen of "-breaking": "The heatwave is record-breaking" and "Sales are record-breaking" are flagged; and /\\bBREAKING\\b/ (case-sensitive) matches "RECORD-BREAKING HEATWAVE HITS EUROPE" in an all-caps headline',
+    },
     () => {
-      assert.doesNotThrow(() => decodeEntities('x &#1114112; y &#x110000; z'));
+      for (const title of ['The heatwave is record-breaking', 'Sales are record-breaking', 'The scenes were heart-breaking', 'RECORD-BREAKING HEATWAVE HITS EUROPE']) {
+        assert.equal(isBreaking(title), false, title);
+      }
     }
   );
 });

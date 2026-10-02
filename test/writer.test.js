@@ -1,6 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EMOTIONS, SHOTS, buildPrompt, buildReviewPrompt, extractJson, normalizeBulletin } from '../server/writer.js';
+import { createMockProvider } from '../server/providers/mock.js';
 import { ACTIONS, EMOTIONS as CUE_EMOTIONS } from '../public/js/cues.js';
 
 // ---------------------------------------------------------------- helpers
@@ -316,6 +317,22 @@ describe('normalizeBulletin: field validation', () => {
     assert.equal(b.title, 'Bulletin 1');
   });
 
+  test('markdown underscores are removed but snake_case words are kept', () => {
+    assert.equal(storyOf({ text: '_Hello_ world, __bold__ and _italic text_ here' }).text, 'Hello world, bold and italic text here');
+    assert.equal(storyOf({ text: 'The file_name and a_b_c stay' }).text, 'The file_name and a_b_c stay');
+    assert.equal(storyOf({ headline: 'The_snake_case _title_' }).headline, 'The_snake_case title');
+    assert.equal(normalize([storySeg('s1')], { raw: { title: '_Big_ news_item' } }).title, 'Big news_item');
+  });
+
+  test('text never exceeds 520 characters, even without spaces or sentence stops', () => {
+    for (const text of ['a'.repeat(600), 'word '.repeat(200), 'Sentence one is short. '.repeat(40), 'x'.repeat(519) + ' ' + 'y'.repeat(40), 'a'.repeat(521)]) {
+      const clipped = storyOf({ text }).text;
+      assert.ok(clipped.length <= 520, `length ${clipped.length} for ${text.slice(0, 12)}...`);
+      assert.ok(clipped.length > 400, `clipped far too much: ${clipped.length}`);
+    }
+    assert.equal(storyOf({ text: 'a'.repeat(600) }).text, 'a'.repeat(519) + '…');
+  });
+
   test('title defaults to "News bulletin" and is capped at 80 characters', () => {
     assert.equal(normalize([storySeg('s1')], { raw: { title: undefined } }).title, 'News bulletin');
     assert.equal(normalize([storySeg('s1')], { raw: { title: '  ' } }).title, 'News bulletin');
@@ -399,18 +416,24 @@ describe('normalizeBulletin: location', () => {
     assert.deepEqual(s.location, { place: 'KYIV, UKRAINE', lat: 50.45, lon: 30.52 });
   });
 
-  test(
-    'null, empty or boolean coordinates are not valid and must not be read as 0',
-    {
-      todo:
-        'BUG server/writer.js:174-175 - Number(null), Number("") and Number(false) are 0 and Number(true) is 1, so {place:"PARIS, FRANCE", lat:null, lon:null} is accepted as {lat:0, lon:0} (the Gulf of Guinea) instead of being rejected',
-    },
-    () => {
-      assert.equal(storyOf({ location: { place: 'PARIS, FRANCE', lat: null, lon: null } }).location, null);
-      assert.equal(storyOf({ location: { place: 'PARIS, FRANCE', lat: '', lon: '' } }).location, null);
-      assert.equal(storyOf({ location: { place: 'PARIS, FRANCE', lat: true, lon: false } }).location, null);
+  test('null, empty, boolean, array or object coordinates are not valid (they must not be read as 0 or 1)', () => {
+    const bad = [null, '', '   ', true, false, [], [5], {}, 'north', undefined];
+    for (const value of bad) {
+      assert.equal(storyOf({ location: { place: 'PARIS, FRANCE', lat: value, lon: 2.35 } }).location, null, `lat ${JSON.stringify(value)}`);
+      assert.equal(storyOf({ location: { place: 'PARIS, FRANCE', lat: 48.85, lon: value } }).location, null, `lon ${JSON.stringify(value)}`);
     }
-  );
+    assert.equal(storyOf({ location: { place: 'PARIS, FRANCE', lat: null, lon: null } }).location, null);
+    assert.equal(storyOf({ shot: 'map', location: { place: 'PARIS, FRANCE', lat: null, lon: null } }).shot, 'close', 'and a map shot cannot rely on it');
+  });
+
+  test('a genuine 0 is a valid coordinate (equator, prime meridian)', () => {
+    assert.deepEqual(storyOf({ location: { place: 'GREENWICH, UK', lat: 51.48, lon: 0 } }).location, { place: 'GREENWICH, UK', lat: 51.48, lon: 0 });
+    assert.deepEqual(storyOf({ location: { place: 'QUITO, ECUADOR', lat: '0', lon: '-78.5' } }).location, { place: 'QUITO, ECUADOR', lat: 0, lon: -78.5 });
+  });
+
+  test('numeric strings may have spaces around them', () => {
+    assert.deepEqual(storyOf({ location: { place: 'LIMA, PERU', lat: ' -12.0464 ', lon: ' -77.0428' } }).location, { place: 'LIMA, PERU', lat: -12.05, lon: -77.04 });
+  });
 });
 
 describe('normalizeBulletin: fact', () => {
@@ -603,12 +626,41 @@ describe('normalizeBulletin: stage-direction cues', () => {
     }
   });
 
-  test('every action of the shared vocabulary in public/js/cues.js reaches the bulletin', {
-    todo:
-      'BUG server/writer.js:195 - the text goes through clean() (which deletes "_", see line 148) before parseCues(), so "[point_screen]" becomes the unknown cue "[pointscreen]" and is dropped: raise_hand, point_screen, point_camera, point_partner, thumbs_up, fist_pump, shake_head, lean_in and look_partner (9 of the 20 actions, including most of those the mock provider writes) never reach the episode',
-  }, () => {
-    const dropped = Object.keys(ACTIONS).filter((name) => !cuesOf(`Hello [${name}] there.`).some((c) => c.action === name));
-    assert.deepEqual(dropped, []);
+  test('every action of the shared vocabulary in public/js/cues.js reaches the bulletin, including the ones with an underscore', () => {
+    for (const name of Object.keys(ACTIONS)) {
+      assert.deepEqual(cuesOf(`Hello [${name}] there.`), [{ char: 5, slot: null, action: name }], name);
+    }
+    assert.deepEqual(cuesOf('[point_screen] Look at this. [B:look_partner] Right.').map((c) => [c.action, c.slot]), [['point_screen', null], ['look_partner', 'B']]);
+  });
+
+  test('the cues the mock provider writes survive normalization', async () => {
+    const stories = [makeStory('m1', { image: 'https://img.test/m1.jpg', title: 'Robot learns to juggle' }), makeStory('m2', { title: 'Fire damages a warehouse' })];
+    const { text } = await createMockProvider().generate({ stories, channelName: 'TEST', program: { id: 'p', title: 'P', stories: 2, maxChats: 2 }, presenters: { A: { name: 'Ann' }, B: { name: 'Bob' } }, count: 2 });
+    const bulletin = normalizeBulletin(JSON.parse(text), stories, { channelName: 'TEST' });
+    const actions = bulletin.segments.flatMap((seg) => seg.cues.map((c) => c.action));
+    assert.ok(actions.includes('point_screen'), actions.join()); // a story with a picture
+    assert.ok(actions.includes('lean_in'), actions.join()); // a grave story
+    assert.ok(actions.includes('point_camera'), actions.join()); // the intro
+  });
+
+  test('cues given as a "cues" array on the segment (what the review pass may send back) are read too', () => {
+    const s = storyOf({ text: 'Hello there', cues: [{ char: 5, slot: null, action: 'wave' }, { char: 11, slot: 'B', action: 'nod' }] });
+    assert.equal(s.text, 'Hello there');
+    assert.deepEqual(s.cues, [{ char: 5, slot: null, action: 'wave' }, { char: 11, slot: 'B', action: 'nod' }]);
+  });
+
+  test('a "cues" array goes through the same rules as bracketed cues (grave, solo, limit, emotions)', () => {
+    assert.deepEqual(storyOf({ emotion: 'serious', text: 'Hello there', cues: [{ char: 0, action: 'wave' }, { char: 5, action: 'nod' }] }).cues.map((c) => c.action), ['nod']);
+    assert.deepEqual(storyOf({ text: 'Hello there', cues: [{ char: 5, slot: 'B', action: 'nod' }] }, { solo: true }).cues, []);
+    assert.equal(storyOf({ text: 'a b c d e f', cues: ['nod', 'shrug', 'wave', 'wow', 'chin', 'glasses'].map((action, i) => ({ char: i * 2, action })) }).cues.length, 4);
+    assert.deepEqual(storyOf({ text: 'Hello there', cues: [{ char: 5, emotion: 'surprised' }] }).cues, [{ char: 5, slot: null, emotion: 'surprised' }]);
+  });
+
+  test('an empty, missing or malformed "cues" value changes nothing', () => {
+    for (const cues of [[], undefined, null, 'wave', 7, {}]) {
+      assert.deepEqual(storyOf({ text: 'Hello [wave] there', cues }).cues, [{ char: 5, slot: null, action: 'wave' }], JSON.stringify(cues));
+    }
+    assert.deepEqual(storyOf({ text: 'Hello there', cues: [null, 'x', {}, { char: 2 }] }).cues, []);
   });
 
   test('emotion names in brackets become expression cues', () => {
@@ -907,6 +959,10 @@ describe('buildReviewPrompt', () => {
     assert.match(p, /Do not add new stories/);
     assert.match(p, /Keep the same JSON structure/);
     assert.match(p, /Reply with ONLY the corrected JSON object/);
+  });
+
+  test('asks the editor to keep the bracketed stage directions', () => {
+    assert.match(review(), /Keep the bracketed stage directions such as \[wave\] or \[B:nod\] \(they are not read aloud\); remove only ones that are inappropriate for the tone\./);
   });
 
   test('never contains the string "undefined"', () => {
