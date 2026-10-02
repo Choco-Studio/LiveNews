@@ -14,6 +14,14 @@
 //                    its cache); p95 > 16 ms at level 2 asks for the fallback;
 //                    120 s under 8 ms at p95 recovers one level. ?perf=1 logs
 //                    p50/p95 every 10 s (the watchdog always runs).
+//                    Windows are measured in ON-AIR time of the v2 shot (a clock that
+//                    only runs while studio frames are drawn; a gap between two
+//                    samples counts at most GAP s): maps, cards, ads and opens never
+//                    age a window, so a window always holds ~30 s of studio frames
+//                    and the few costly first frames after a long cutaway (re-framing,
+//                    cache misses) cannot dominate a nearly empty window. Seen in the
+//                    offline channel: a wall-clock window over a 30 s map round-up
+//                    held ~3 s of studio frames and stepped down on their first frames.
 // Each transition is logged once, when it happens.
 
 export const ERRORS_TO_DROP = 3;
@@ -80,6 +88,7 @@ const OK_P95 = 8; // ms: recover a level
 const STEP_WINDOW = 30; // s
 const OK_WINDOW = 120; // s
 const MIN_SAMPLES = 90; // frames a window needs before it decides
+const GAP = 0.25; // s: the most one gap between two v2 frames adds to the on-air clock
 const N = 8192; // ring size: 120 s at 60 fps fits
 const BINS = 400; // histogram: 0.1 ms bins up to 40 ms (+ overflow)
 
@@ -99,24 +108,31 @@ export class PerfWatchdog {
     this.nextReport = 0;
     this.hist = new Uint32Array(BINS + 1);
     this.last = { p50: 0, p95: 0, count: 0 };
+    this.clock = 0; // on-air time of the v2 shot (s): the windows' time base
+    this.lastT = null; // renderer time of the previous sample
   }
 
   /**
-   * One v2 shot frame that took `ms` at time t (s). Returns 'fallback' when the
-   * Stage should be dropped, else null. this.level is the detail level to use.
+   * One v2 shot frame that took `ms` at renderer time `wall` (s). Returns 'fallback'
+   * when the Stage should be dropped, else null. this.level is the detail level to use.
    */
-  sample(t, ms) {
+  sample(wall, ms) {
+    // the on-air clock: real time between consecutive v2 frames, a cutaway counts at most GAP
+    const dt = this.lastT === null ? 0 : wall - this.lastT;
+    this.lastT = wall;
+    if (dt > 0) this.clock += dt < GAP ? dt : GAP;
+    const t = this.clock;
     const i = this.n % N;
     this.ts[i] = t;
     this.ms[i] = ms;
     this.n++;
     if (this.levelSince === -Infinity) this.levelSince = t;
-    if (this.report && t >= this.nextReport) {
+    if (this.report && wall >= this.nextReport) {
       if (this.nextReport) {
-        const r = this.percentiles(t, 10);
-        this.info?.(`v2 perf p50 ${r.p50.toFixed(2)} ms, p95 ${r.p95.toFixed(2)} ms over ${r.count} frames (level ${this.level})`);
+        const r = this.percentiles(wall, 10);
+        this.info?.(`v2 perf p50 ${r.p50.toFixed(2)} ms, p95 ${r.p95.toFixed(2)} ms over the last ${r.count} studio frames (level ${this.level})`);
       }
-      this.nextReport = t + 10;
+      this.nextReport = wall + 10;
     }
     if (t < this.nextEval || !this.decide) return null;
     this.nextEval = t + 1;
@@ -153,11 +169,15 @@ export class PerfWatchdog {
     this.goodSince = t;
   }
 
-  /** p50 / p95 (ms) of the samples in the last `win` s (only those at the current level). */
-  percentiles(t, win) {
+  /**
+   * p50 / p95 (ms) of the samples in the last `win` s of on-air v2 time (only those at the
+   * current level). The first argument (renderer time) is kept for callers; the window always
+   * ends at the latest sample.
+   */
+  percentiles(_t, win) {
     const h = this.hist;
     h.fill(0);
-    const from = Math.max(t - win, this.levelSince);
+    const from = Math.max(this.clock - win, this.levelSince);
     const count = Math.min(this.n, N);
     let c = 0;
     for (let k = 1; k <= count; k++) {
@@ -175,8 +195,8 @@ export class PerfWatchdog {
   }
 
   /** Mark the start of a fresh Stage: forget older samples. */
-  restart(t) {
-    this.setLevel(0, t);
+  restart() {
+    this.setLevel(0, this.clock);
   }
 }
 

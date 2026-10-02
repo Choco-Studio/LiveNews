@@ -692,6 +692,38 @@ test('watchdog: p95 > 12 ms steps the detail level down, > 16 ms at the lowest l
   assert.ok(r.p50 > 3.9 && r.p50 < 4.2 && r.p95 < 4.2, JSON.stringify(r));
 });
 
+test('watchdog: windows count on-air v2 time, so a long cutaway and the costly first frames after it never step down', () => {
+  // the WORLD NOW round-up seen in the offline channel (30 fps under load): studio shots, ~30 s
+  // of maps (no v2 frames), then the studio comes back and its first frames are slow (re-framing,
+  // cache misses, a busy machine). A wall-clock window held only those first ~3 s and stepped down.
+  const fps = 30;
+  const w = new PerfWatchdog();
+  let t = 0;
+  const studio = (secs, ms, slow = 0) => {
+    for (let k = 0; k < secs * fps; k++) {
+      t += 1 / fps;
+      assert.equal(w.sample(t, k < slow ? 40 : ms), null);
+    }
+  };
+  studio(40, 4);
+  t += 30; // the maps
+  studio(5, 4, 8); // 8 slow frames out of the first 90 (> 5 %)
+  assert.equal(w.level, 0, 'never stepped down on the first frames back from a cutaway');
+  const r = w.percentiles(t, 30);
+  assert.ok(r.count >= 29 * fps && r.p95 < 5, `the window holds 30 s of studio frames: ${JSON.stringify(r)}`);
+  // a slow studio, even split by cutaways, still steps down once 30 s of it have been on air
+  const w2 = new PerfWatchdog();
+  t = 0;
+  let rounds = 0;
+  while (rounds < 12 && !w2.level) {
+    for (let k = 0; k < 5 * FPS; k++) w2.sample((t += DT), 13);
+    t += 20;
+    rounds++;
+  }
+  assert.equal(w2.level, 1);
+  assert.ok(rounds >= 6 && rounds <= 7, `stepped down after ~30 s of slow studio frames (${rounds} x 5 s)`);
+});
+
 test('host: the watchdog verdict reaches the Stage (detail level) and the fallback', () => {
   let cost = 13;
   const { host, setMs } = hostWith(() => {

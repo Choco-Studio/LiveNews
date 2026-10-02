@@ -197,6 +197,8 @@ function hash(s) {
 const choose = (list, key) => list[hash(key) % list.length];
 const lineText = (line) => (typeof line === 'string' ? line : line.text);
 const plainLine = (line) => lineText(line).replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+// A line's sentences, as the station remembers aired chat lines (one sentence each).
+const lineSentences = (line) => plainLine(line).split(/(?<=[.!?])\s+/).filter(Boolean);
 
 /**
  * A presenter line for this story: only lines whose `needs` the story's words
@@ -210,7 +212,7 @@ function chooseFresh(list, key, { recent = null, text = '' } = {}) {
   const start = hash(key) % pool.length;
   for (let k = 0; k < pool.length; k++) {
     const line = pool[(start + k) % pool.length];
-    if (!recent || !recent.has(plainLine(line))) return lineText(line);
+    if (!recent || !lineSentences(line).some((x) => recent.has(x))) return lineText(line);
   }
   return lineText(pool[start]);
 }
@@ -480,7 +482,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
   const quick = pid === 'news-60';
   const maxWords = program?.sentenceWords || SENTENCE_WORDS[pid] || 24;
   const placeWithin = PLACE_WITHIN[pid] ?? Infinity;
-  const aired = new Set((recent || []).map(plainLine));
+  const aired = new Set((recent || []).flatMap(lineSentences));
   // A live page whose only lines point at the outlet's own coverage has nothing to read out.
   const all = stories.map(study).filter((i) => !i.live || i.sentences.length);
   // Live pages only when there is nothing else.
@@ -494,7 +496,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
   const other = (slot) => (slot === 'A' ? 'B' : 'A');
   const pickLine = (list, key, info) => {
     const line = chooseFresh(list, key, { recent: aired, text: info ? `${info.s.title} ${info.s.summary || ''}` : '' });
-    if (line) aired.add(plainLine(line));
+    if (line) for (const x of lineSentences(line)) aired.add(x);
     return line;
   };
 
@@ -785,7 +787,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
             const keyed = pairs.map((p) => ({ text: p[0], pair: p }));
             const firstLine = pickLine(keyed, `${key}~pair`, info);
             const pair = pairs.find((p) => p[0] === firstLine) || pairs[0];
-            aired.add(plainLine(pair[1]));
+            for (const x of lineSentences(pair[1])) aired.add(x);
             planned.push({ anchor: 'A', text: pair[0] }, { anchor: 'B', text: pair[1] });
           } else if (pid === 'tech-bytes' && slot === 'lead' && info.catchAnswer) {
             const askB = idOf('B') === 'ada' || idOf('A') !== 'ada' ? 'B' : 'A';

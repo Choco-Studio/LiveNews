@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './config.js';
 import { FEATURES } from './writer.js';
+import { ACTIONS } from '../public/js/cues.js';
 
 const FILE = path.join(ROOT, 'config', 'channel.json');
 
@@ -81,28 +82,58 @@ function validateEditorial(id, p) {
   if (p.outroAnchor !== undefined && !['A', 'B'].includes(p.outroAnchor)) fail('has an "outroAnchor" that is not A or B');
   for (const key of ['noQuestions']) if (p[key] !== undefined && typeof p[key] !== 'boolean') fail(`has a "${key}" that is not true/false`);
   if (p.thanksMax !== undefined && !(Number.isInteger(p.thanksMax) && p.thanksMax >= 0)) fail('has a "thanksMax" that is not a whole number');
-  if (p.happyOnly !== undefined && !isList(p.happyOnly)) fail('has a "happyOnly" that is not a list');
+  if (p.maxChats !== undefined && !(Number.isInteger(p.maxChats) && p.maxChats >= 0)) fail('has a "maxChats" that is not a whole number');
+  if (p.sentenceWords !== undefined && !(Number.isInteger(p.sentenceWords) && p.sentenceWords >= 8 && p.sentenceWords <= 40)) fail('has a "sentenceWords" outside 8..40');
+  if (p.happyOnly !== undefined && !(isList(p.happyOnly) && p.happyOnly.every((r) => HAPPY_ROLES.includes(r)))) fail(`has a "happyOnly" that is not a list of ${HAPPY_ROLES.join(', ')}`);
   if (p.roundup !== undefined) {
     const r = p.roundup;
-    if (!r || typeof r !== 'object') fail('has a "roundup" that is not an object');
+    if (!r || typeof r !== 'object' || Array.isArray(r)) fail('has a "roundup" that is not an object');
     if (r.opener !== undefined && typeof r.opener !== 'string') fail('has a round-up "opener" that is not text');
     for (const k of ['min', 'max']) if (r[k] !== undefined && !(Number.isInteger(r[k]) && r[k] >= 2 && r[k] <= 6)) fail(`has a round-up "${k}" outside 2..6`);
+    if (r.min !== undefined && r.max !== undefined && r.min > r.max) fail('has a round-up "min" above its "max"');
+    if (r.words !== undefined && !(typeof r.words === 'string' ? /^\d{1,2}(?:\s*(?:to|-|–)\s*\d{1,2})?$/.test(r.words.trim()) : Number.isInteger(r.words) && r.words > 0)) fail('has round-up "words" that are not "12 to 20" or a number');
+    if (r.reader !== undefined && !['A', 'B'].includes(r.reader)) fail('has a round-up "reader" that is not A or B');
+    if (r.timed !== undefined && typeof r.timed !== 'boolean') fail('has a round-up "timed" that is not true/false');
   }
   if (p.chats !== undefined) {
     const c = p.chats;
-    if (!c || typeof c !== 'object' || (c.after !== undefined && !(isList(c.after) && c.after.every((a) => ['lead', 'story', 'lighter'].includes(a))))) fail('has "chats" with an invalid "after" (lead, story, lighter)');
+    if (!c || typeof c !== 'object' || (c.after !== undefined && !(isList(c.after) && c.after.every((a) => CHAT_SLOTS.includes(a))))) fail('has "chats" with an invalid "after" (lead, story, lighter)');
+    if (c.max !== undefined && !(c.max && typeof c.max === 'object' && !Array.isArray(c.max) && Object.entries(c.max).every(([k, v]) => CHAT_SLOTS.includes(k) && Number.isInteger(v) && v >= 0))) fail('has chats "max" that is not { lead|story|lighter: whole number }');
   }
   if (p.timing !== undefined) {
     const t = p.timing;
     if (!t || typeof t !== 'object' || !(t.target > 0) || !(t.wpm > 0)) fail('has a "timing" without a positive target and wpm');
+    if (t.accept !== undefined && !(Array.isArray(t.accept) && t.accept.length === 2 && t.accept.every((x) => typeof x === 'number' && x > 0) && t.accept[0] < t.accept[1])) fail('has timing "accept" that is not [low, high] seconds');
+    if (t.gap !== undefined && !(typeof t.gap === 'number' && t.gap >= 0 && t.gap <= 5)) fail('has a timing "gap" outside 0..5 seconds');
+    if (t.minStories !== undefined && !(Number.isInteger(t.minStories) && t.minStories >= 1)) fail('has a timing "minStories" that is not a whole number ≥ 1');
   }
   if (p.gestures !== undefined) {
     const g = p.gestures;
-    if (!g || typeof g !== 'object') fail('has "gestures" that are not an object');
-    for (const k of ['allow', 'listener']) if (g[k] !== undefined && !isListOrMap(g[k])) fail(`has gestures "${k}" that are not a list (or a list per presenter)`);
-    for (const k of ['deny', 'grave']) if (g[k] !== undefined && !isList(g[k])) fail(`has gestures "${k}" that are not a list`);
+    if (!g || typeof g !== 'object' || Array.isArray(g)) fail('has "gestures" that are not an object');
+    const known = (list) => list.every((n) => ACTIONS[n]);
+    const names = (v) => (Array.isArray(v) ? v : Object.values(v).flat());
+    for (const k of ['allow', 'listener']) {
+      if (g[k] === undefined) continue;
+      if (!isListOrMap(g[k])) fail(`has gestures "${k}" that are not a list (or a list per presenter)`);
+      if (!known(names(g[k]))) fail(`has gestures "${k}" naming an unknown action (${names(g[k]).filter((n) => !ACTIONS[n]).join(', ')})`);
+    }
+    for (const k of ['deny', 'grave']) {
+      if (g[k] === undefined) continue;
+      if (!isList(g[k])) fail(`has gestures "${k}" that are not a list`);
+      if (!known(g[k])) fail(`has gestures "${k}" naming an unknown action (${g[k].filter((n) => !ACTIONS[n]).join(', ')})`);
+    }
+    if (g.map !== undefined && !(g.map && typeof g.map === 'object' && !Array.isArray(g.map) && Object.entries(g.map).every(([a, b]) => ACTIONS[a] && ACTIONS[b]))) fail('has gestures "map" that is not { action: action } with known actions');
+    if (g.only !== undefined && !(g.only && typeof g.only === 'object' && !Array.isArray(g.only) && Object.entries(g.only).every(([a, w]) => ACTIONS[a] && (Array.isArray(w) ? w : [w]).every((x) => GESTURE_PLACES.includes(x))))) fail(`has gestures "only" that is not { action: ${GESTURE_PLACES.join('|')} }`);
+    const count = (v) => Number.isInteger(v) && v >= 0;
+    if (g.perSegment !== undefined && !(count(g.perSegment) || (g.perSegment && typeof g.perSegment === 'object' && !Array.isArray(g.perSegment) && Object.values(g.perSegment).every(count)))) fail('has gestures "perSegment" that is not a whole number (or one per presenter)');
+    if (g.perEpisode !== undefined && !count(g.perEpisode)) fail('has gestures "perEpisode" that is not a whole number');
+    if (g.defaults !== undefined && !(g.defaults && typeof g.defaults === 'object' && Object.entries(g.defaults).every(([k, a]) => ['intro', 'outro'].includes(k) && ACTIONS[a]))) fail('has gestures "defaults" that are not { intro|outro: known action }');
   }
 }
+
+const HAPPY_ROLES = ['lighter', 'last', 'chat', 'outro', 'lead', 'story', 'intro'];
+const CHAT_SLOTS = ['lead', 'story', 'lighter'];
+const GESTURE_PLACES = ['lead', 'story', 'intro', 'outro', 'chat'];
 
 /** Presenter slots for a programme: A (left/solo) and optionally B (right). */
 export function castOf(channel, programId) {

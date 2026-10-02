@@ -846,3 +846,16 @@ describe('Producer.fit (timed programmes)', () => {
     assert.equal(note.short, true);
   });
 });
+
+describe('Producer: a memory of aired presenter lines (24/7 variety)', () => {
+  test('chat lines of produced episodes are passed to the next write request as `recent`, capped', async () => {
+    const { producer, chain } = makeProducer({ config: { ...CONFIG, reviewPass: false, recentLines: 3 } });
+    chain.write = async ({ stories }) =>
+      scriptText([storySeg(stories[0].id), chatSeg({ text: 'Well, there we are. Quite a day.' }), storySeg(stories[1].id), chatSeg({ text: 'Remarkable.' })]);
+    await producer.produce(makeChannel(), 'duo');
+    assert.deepEqual(chain.requests.at(-1).recent, []);
+    await producer.produce(makeChannel(), 'duo');
+    assert.deepEqual(chain.requests.at(-1).recent, ['Well, there we are.', 'Quite a day.', 'Remarkable.'].slice(-3));
+    assert.equal(producer.recentLines.length, 3);
+  });
+});

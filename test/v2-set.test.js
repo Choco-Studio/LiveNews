@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { C, Frame } from '../public/js/v2/canvas25d/pixbuf.js';
 import { styleFor, setStyle, STYLE_IDS, currentStyle } from '../public/js/v2/canvas25d/studio/styles.js';
 import { drawBackground, drawDesk, setCacheEnabled, invalidateSet, wallRect, wallFromScene } from '../public/js/v2/canvas25d/studio/set.js';
-import { resetWall, wallShown, planetAzimuth } from '../public/js/v2/canvas25d/studio/wall.js';
+import { resetWall, wallShown, planetAzimuth, plateRectFor } from '../public/js/v2/canvas25d/studio/wall.js';
 import { LSTAR, lstarRGB, nameOf, isPalette, census, share, SATURATED } from '../public/js/v2/canvas25d/studio/color.js';
 import { SET } from '../public/js/v2/canvas25d/studio/geometry.js';
 import * as lab from '../public/js/v2/canvas25d/labs/set.js';
@@ -346,6 +346,58 @@ describe('video wall', () => {
     assert.deepEqual([outro.mode, outro.phase], ['idle', 'outro']);
     const sc = { ...base, program: { id: 'world-now' }, wall: { mode: 'logo' } };
     assert.ok(wallFromScene(sc) === wallFromScene(sc), 'memoised for a static scene');
+  });
+});
+
+describe('round 3: wall plates inside their free area, clean tint clusters', () => {
+  test('a plate (kicker + source) stays inside the visible wall, clear of the graphics rows and every head', () => {
+    const texts = [['WILDLIFE', 'BITPORT HERALD'], ['NUMBER OF THE DAY', 'LEDGER LINE'], ['CONNECTIVITY', 'CIRCUIT WEEKLY'], ['A VERY LONG KICKER THAT CANNOT EVER FIT', 'AN EVEN LONGER SOURCE NAME FOR THE LINE']];
+    let n = 0;
+    for (const programme of [...PROGRAMS, 'generic']) {
+      for (const framing of lab.FRAMINGS) {
+        const cam = lab.cameraFor(framing, programme);
+        const r = wallRect(cam);
+        for (const [label, sub] of texts) {
+          const p = plateRectFor(cam, label, sub, programme === 'generic' ? 'weekend-review' : programme);
+          if (!p) continue;
+          n++;
+          const what = `${programme} ${framing} "${p.kicker}" x ${p.x0}-${p.x1} y ${p.y0}-${p.y1} wall ${r.x0}-${r.x1}`;
+          assert.ok(p.x0 >= Math.max(8, r.x0) && p.x1 <= Math.min(376, r.x1), what);
+          assert.ok(p.y0 >= Math.max(22, r.y0) && p.y1 <= Math.min(136, r.y1), what);
+          for (const h of p.heads) assert.ok(p.x1 <= h.x0 || p.x0 >= h.x1 || p.y1 <= h.y0 || p.y0 >= h.y1, `${what} overlaps a head`);
+        }
+      }
+    }
+    assert.ok(n > 150, `${n} plates laid out`);
+    // the NEWS IN 60 case w2-integ reported (scale 2 lost its first column behind the bezel)
+    const p = plateRectFor(lab.cameraFor('single-a', 'news-60'), 'WILDLIFE', 'BITPORT HERALD', 'news-60');
+    assert.ok(p.x0 >= 8 && p.kicker === 'WILDLIFE' && p.sub === 'BITPORT HERALD');
+  });
+  const blockOf = (px, name, size = 3) => {
+    const c = C[name];
+    for (let y = 0; y + size <= 150; y++) for (let x = 0; x + size <= W; x++) {
+      let all = true;
+      for (let j = 0; j < size && all; j++) for (let i = 0; i < size && all; i++) if (px[(y + j) * W + x + i] !== c) all = false;
+      if (all) return true;
+    }
+    return false;
+  };
+  test('a full tint is a flat cluster (no Bayer dot grid): COSMOS purple beams, MONEY MINUTE warm sconce cores', () => {
+    assert.ok(blockOf(shot({ programme: 'cosmos', framing: 'wide' }), 'purple', 4), 'a 4x4 purple block in the COSMOS beams');
+    assert.ok(blockOf(shot({ programme: 'money-minute', framing: 'wide' }), 'brown', 3), 'a 3x3 brown block at a MONEY MINUTE sconce');
+  });
+  test('COSMOS: the purple lives in the two flank beams only (never in the head zones or behind the wall)', () => {
+    for (const framing of ['wide', 'two']) {
+      const px = shot({ programme: 'cosmos', framing });
+      let inner = 0, outer = 0;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        if (px[y * W + x] !== C.purple) continue;
+        if (framing === 'wide' && x > 92 && x < 292) inner++;
+        else outer++;
+      }
+      assert.equal(inner, 0, `${framing}: purple between the beams`);
+      if (framing === 'wide') assert.ok(outer > 200, `wide: beams ${outer} px`);
+    }
   });
 });
 

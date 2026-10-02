@@ -118,6 +118,10 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
         fr.mix = 0;
       }
     }
+    // out of a pause the lips part with the sound, not with the timeline's blend into the
+    // first vowel (with recorded voices that blend can lead the recorded word by up to
+    // ~0.1 s): while the shape is still mostly 'rest', the opening grows with the blend
+    if (fr.viseme === 'rest' && fr.next !== 'rest') fr.level *= fr.mix * fr.mix;
     fr.env = ease(fr.env, fr.level, 0.03, 0.12, dt);
     // the jaw (chin outline) moves with the phrase, not with every syllable: a chin
     // that bobs a pixel per syllable reads as chattering at this resolution

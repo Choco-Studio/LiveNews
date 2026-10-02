@@ -933,26 +933,64 @@ function plateSize(label, sub, ts) {
   return { w: Math.max(kw, sw), h: ts + 3 * ts + kh + sh, kh };
 }
 
-function drawPlate(b, L, spec, style, ts0) {
-  // the text scale drops to 1x when no free area holds the whole plate (kicker AND source line) at 2x
-  const label0 = spec.label || '', sub0 = spec.sub || '';
-  const big = plateSize(label0, sub0, ts0);
-  const ts = ts0 > 1 && !fitsSomewhere(L, big.w + 6, big.h + 4) ? 1 : ts0;
-  const full = plateSize(label0, sub0, ts);
+/** Where a plate goes in layout L: { ts, kicker, sub, x0, top, w, h, kh } in wall-local px, or null. */
+function layoutPlate(L, label0, sub0, ts0) {
+  // the largest form some free area holds: 2x, else 1x, else the kicker alone at 1x (lines are cut
+  // at words to the box width); when even that has no room (a head fills the wall), no plate at all
+  let ts = ts0, full = null;
+  for (const [s2, withSub] of [[ts0, true], [1, true], [1, false]]) {
+    if (!withSub && !sub0) continue;
+    const z = plateSize(label0, withSub ? sub0 : '', s2);
+    const zw = Math.min(z.w, (L.heads ? Math.max(bw(L.top), bw(L.left), bw(L.right)) : bw(L.full)) - 6);
+    if (fitsSomewhere(L, Math.max(24, zw) + 6, z.h + 4)) {
+      ts = s2;
+      full = z;
+      if (!withSub) sub0 = '';
+      break;
+    }
+  }
+  if (!full) return null;
   const box = pickBox(L, full.w + 6, full.h + 4, true);
   // every line fits the box it is set in (never under a bezel, a head or the frame edge)
   const maxW = Math.max(8, bw(box) - 4);
   const kicker = fitLine(label0, maxW, 'body', ts);
   const sub = sub0 ? fitLine(sub0, maxW, 'micro', ts) : '';
-  if (!kicker && !sub) return;
-  const { w: needW, h: needH, kh } = plateSize(kicker, sub, ts);
+  if (!kicker && !sub) return null;
+  const { w, h, kh } = plateSize(kicker, sub, ts);
   const cx = Math.round((box.x0 + box.x1) / 2);
-  const top = Math.round(box.y0 + Math.max(2, (bh(box) - needH) * 0.42));
+  const top = Math.round(box.y0 + Math.max(2, (bh(box) - h) * 0.42));
+  const x0 = Math.max(box.x0 + 2, Math.min(box.x1 - 2 - w, cx - Math.round(w / 2)));
+  return { ts, kicker, sub, x0, top, w, h, kh };
+}
+
+function drawPlate(b, L, spec, style, ts0) {
+  const P = layoutPlate(L, spec.label || '', spec.sub || '', ts0);
+  if (!P) return;
+  const { ts, kicker, sub, x0, top, w: needW, kh } = P;
   const accent = style.id === 'money-minute' ? C.darkGreen : C[style.accentName];
-  const x0 = Math.max(box.x0 + 2, Math.min(box.x1 - 2 - needW, cx - Math.round(needW / 2)));
   rect(b, x0, top, x0 + Math.min(needW, 12 * ts), top + ts, accent);
   if (kicker) stampText(b.px, b.w, b.h, kicker, x0, top + 4 * ts, C.silver, 'body', ts, 'left');
   if (sub) stampText(b.px, b.w, b.h, sub, x0, top + 4 * ts + kh + 3 * ts, C.fog, 'micro', ts, 'left');
+}
+
+/**
+ * The plate's rectangle in SCREEN px for a camera (as laid out on a cut), plus the head boxes it must
+ * keep clear of: { x0, y0, x1, y1, ts, kicker, sub, heads: [{ x0, y0, x1, y1 }] } or null (tests, labs).
+ */
+export function plateRectFor(cam, label, sub, styleIn) {
+  const style = resolveStyle(styleIn);
+  const k = kAt(cam, SET.wallZ);
+  const o = wallOrigin(cam);
+  const w = Math.round((SET.screen.x1 - SET.screen.x0) * k), h = Math.round((SET.screen.y1 - SET.screen.y0) * k);
+  const L = computeLayout(LAYOUT, cam, style.solo, o.x, o.y, w, h, k);
+  const P = layoutPlate(L, label || '', sub || '', wallTextScale(k));
+  if (!P) return null;
+  const heads = [];
+  for (let i = 0; i < L.heads; i++) {
+    const hb = HEADS[i];
+    heads.push({ x0: hb.x0 + o.x + MARGIN, y0: hb.y0 + o.y + MARGIN, x1: hb.x1 + o.x - MARGIN, y1: hb.y1 + o.y - MARGIN });
+  }
+  return { x0: P.x0 + o.x, y0: P.top + o.y, x1: P.x0 + P.w + o.x, y1: P.top + P.h + o.y, ts: P.ts, kicker: P.kicker, sub: P.sub, heads };
 }
 
 // ---------------------------------------------------------------------------
@@ -976,7 +1014,11 @@ function mediaRect(L, b, ts) {
       }
     }
     const pad = 4 * ts;
-    const aw = bw(best) - 2 * pad, ah = bh(best) - 2 * pad;
+    // a box BESIDE the head may run below the solo dark band (that band only keeps the wall dark
+    // behind the head and shoulders), down to the caption line: the picture gets the room it needs
+    let bot = best.y1;
+    if (best !== L.top) bot = Math.max(bot, Math.min(USABLE.y1 - L.sy0, b.h - 2 * ts));
+    const aw = bw(best) - 2 * pad, ah = bot - best.y0 - 2 * pad;
     const w = Math.floor(Math.min(aw, ah * 1.6)), h = Math.floor(w / 1.6);
     if (w >= 36 && h >= 22) {
       m.x = Math.round(best.x0 + (bw(best) - w) / 2);

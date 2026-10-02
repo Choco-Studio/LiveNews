@@ -39,7 +39,7 @@
 // level and sized for the largest close-up.
 import { P } from '../../palette.js';
 import { TILT, clamp } from './space.js';
-import { material, toneN } from './pixbuf.js';
+import { material, toneN, MAT, LIGHT } from './pixbuf.js';
 import { GROUPS, GROUPS_PER_ACTOR } from './character.js'; // read at draw time only (character.js imports this module)
 
 export { drawProps } from './props.js';
@@ -348,6 +348,11 @@ function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0
   const len2 = dx * dx + dy * dy || 1e-6;
   const { mat, tone, grp, z, clipY } = buf;
   const g = buf.g, cz = buf.cz, clip = buf.clip;
+  // the material's Lambert thresholds and the key light, read once (the per-pixel tone is inlined:
+  // one square root and one division a pixel, the hot loop of the arms at close-up scales)
+  const th0 = MAT.th[m * 3], th1 = MAT.th[m * 3 + 1], th2 = MAT.th[m * 3 + 2];
+  const dxi = dx / len2, dyi = dy / len2, dr = rb - ra;
+  const flatK = flatStart > 0;
   for (let y = y0; y < y1; y++) {
     const cy = y + 0.5;
     // x-range of the oriented box on this row
@@ -366,20 +371,25 @@ function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0
     }
     if (xb < xa) continue;
     const xs = Math.max(bx0, Math.floor(xa - 0.5)), xe = Math.min(bx1, Math.ceil(xb + 0.5));
+    const ry = cy - ay;
+    const uRow = ry * dyi - ax * dxi;
+    const row = y * W;
     for (let x = xs; x < xe; x++) {
       if (clip && y >= clipY[x]) continue;
       const cx = x + 0.5;
-      let u = ((cx - ax) * dx + (cy - ay) * dy) / len2;
+      let u = cx * dxi + uRow;
       u = u < 0 ? 0 : u > 1 ? 1 : u;
-      const r = ra + (rb - ra) * u;
-      const ex = cx - (ax + dx * u), ey = cy - (ay + dy * u);
+      const r = ra + dr * u;
+      const ex = cx - ax - dx * u, ey = ry - dy * u;
       const d2 = ex * ex + ey * ey;
-      if (d2 > r * r) continue;
-      const i = y * W + x;
+      const r2 = r * r;
+      if (d2 > r2) continue;
+      const i = row + x;
       mat[i] = m;
-      let tt = toneN(m, ex / r, ey / r) + toneBias;
+      const l = (ex * LGX + ey * LGY + Math.sqrt(r2 - d2) * LGZ) / r;
+      let tt = (l > th0 ? 0 : l > th1 ? 1 : l > th2 ? 2 : 3) + toneBias;
       // the start of an upper arm under the shoulder stays flat-lit: no dome highlight on the cap
-      if (flatStart && u < flatStart && tt < 1) tt = 1;
+      if (flatK && u < flatStart && tt < 1) tt = 1;
       tone[i] = tt < 0 ? 0 : tt > 3 ? 3 : tt;
       if (collect && d2 > (r - 1.5) * (r - 1.5) && (ey < 0 || ex > 0) && edgeN < EDGE_IDX.length) EDGE_IDX[edgeN++] = i;
       // the start of the bone may belong to another group (the sleeve cap, seamless with the jacket)
@@ -388,6 +398,7 @@ function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0
     }
   }
 }
+const LGX = LIGHT[0], LGY = LIGHT[1], LGZ = LIGHT[2];
 
 /** Flat-ended tapered quad (the shirt cuff): a ring of fabric, flat at the wrist end. */
 const QUAD = new Float64Array(12);
@@ -1050,22 +1061,50 @@ function rasterPalm(g, B, s, hn, lod) {
   const y0 = Math.max(0, Math.floor(minY) - by0), y1 = Math.min(bh, Math.ceil(maxY) + 1 - by0);
   const ew = lod >= 2 ? 1.6 : 1.05; // edge band width (px)
   const base = 0.32 + lFace * 0.55;
+  // Per row: the span inside the convex hull (from the edge equations, its two ends checked with the
+  // exact per-pixel test), then each edge visits only the pixels of its edge band. Same result as
+  // testing every edge at every pixel, at a fraction of the cost.
   for (let j = y0; j < y1; j++) {
     const cy = by0 + j + 0.5;
     const o = j * LW;
-    for (let i = x0; i < x1; i++) {
-      const cx = bx0 + i + 0.5;
-      let md = 1e9, mel = 0;
-      let e = 0;
-      for (; e < hn; e++) {
-        const d = EDGE[e * 4] * cx + EDGE[e * 4 + 1] * cy + EDGE[e * 4 + 2];
-        if (d < 0) break;
-        if (d < md) {
-          md = d;
-          mel = EDGE[e * 4 + 3];
+    let lo = x0, hi = x1 - 1;
+    for (let e = 0; e < hn && lo <= hi; e++) {
+      const nx = EDGE[e * 4], k = EDGE[e * 4 + 1] * cy + EDGE[e * 4 + 2];
+      if (nx > 1e-9) lo = Math.max(lo, Math.ceil(-k / nx - bx0 - 0.5));
+      else if (nx < -1e-9) hi = Math.min(hi, Math.floor(-k / nx - bx0 - 0.5));
+      else if (k < 0) hi = lo - 1;
+    }
+    if (lo > hi) {
+      // rounding can leave a one-pixel row out: test the candidate exactly
+      if (lo === hi + 1 && hi >= x0 && insideHull(bx0 + hi + 0.5, cy, hn)) lo = hi;
+      else if (lo === hi + 1 && lo < x1 && insideHull(bx0 + lo + 0.5, cy, hn)) hi = lo;
+      else continue;
+    }
+    while (lo <= hi && !insideHull(bx0 + lo + 0.5, cy, hn)) lo++;
+    while (hi >= lo && !insideHull(bx0 + hi + 0.5, cy, hn)) hi--;
+    while (lo - 1 >= x0 && insideHull(bx0 + lo - 0.5, cy, hn)) lo--;
+    while (hi + 1 < x1 && insideHull(bx0 + hi + 1.5, cy, hn)) hi++;
+    if (lo > hi) continue;
+    for (let i = lo; i <= hi; i++) {
+      MDR[i] = 1e9;
+      MELR[i] = 0;
+    }
+    for (let e = 0; e < hn; e++) {
+      const nx = EDGE[e * 4], k = EDGE[e * 4 + 1] * cy + EDGE[e * 4 + 2], mel = EDGE[e * 4 + 3];
+      let a = lo, b = hi;
+      if (nx > 1e-9) b = Math.min(hi, Math.ceil((ew - k) / nx - bx0 - 0.5) + 1);
+      else if (nx < -1e-9) a = Math.max(lo, Math.floor((ew - k) / nx - bx0 - 0.5) - 1);
+      else if (k >= ew) continue;
+      for (let i = a; i <= b; i++) {
+        const d = nx * (bx0 + i + 0.5) + k;
+        if (d < MDR[i]) {
+          MDR[i] = d;
+          MELR[i] = mel;
         }
       }
-      if (e < hn) continue;
+    }
+    for (let i = lo; i <= hi; i++) {
+      const cx = bx0 + i + 0.5;
       const depth = zc + gx * (cx - p0x) + gy * (cy - p0y);
       const k = o + i;
       if (depth <= ZB[k]) continue;
@@ -1077,10 +1116,19 @@ function rasterPalm(g, B, s, hn, lod) {
       let l = base;
       // form shading at the rim of the plate: shade where the edge turns from the key,
       // a lit edge only where it faces the key squarely
+      const md = MDR[i], mel = MELR[i];
       if (md < ew) l += mel < 0 ? 0.95 * mel : mel > 0.72 ? 0.9 * mel : 0;
       LV[k] = l;
     }
   }
+}
+const MDR = new Float64Array(LW);
+const MELR = new Float64Array(LW);
+
+/** Is the pixel centre (cx, cy) inside the convex hull (every edge distance ≥ 0)? */
+function insideHull(cx, cy, hn) {
+  for (let e = 0; e < hn; e++) if (EDGE[e * 4] * cx + EDGE[e * 4 + 1] * cy + EDGE[e * 4 + 2] < 0) return false;
+  return true;
 }
 
 /**

@@ -16,6 +16,9 @@ export class Producer {
     this.images = images; // server/images ImageCache: pictures are verified (and warmed) before air, optional
     this.log = log;
     this.seq = 0;
+    // The presenters' own lines (chats, buttons, sign-offs) of the last episodes: the writer avoids them, so
+    // a 24/7 rotation does not hear the same exchange twice in a few hours.
+    this.recentLines = [];
     this.stages = [
       // The picture desk works before the writer, so the writer knows which candidates have a picture.
       { name: 'pictures', run: (ctx) => this.pictures(ctx), enabled: () => typeof this.news.findPictures === 'function' },
@@ -69,6 +72,7 @@ export class Producer {
     }
 
     const used = new Set(ctx.episode.storyIds);
+    this.rememberLines(ctx.episode);
     this.news.markCovered(ctx.episode.storyIds);
     this.news.markOffered(candidates.filter((s) => !used.has(s.id)).map((s) => s.id));
 
@@ -105,10 +109,21 @@ export class Producer {
       });
   }
 
+  /** Keep the chat lines of an episode (sentence by sentence, plain text) in a short memory of what aired. */
+  rememberLines(episode) {
+    const max = this.config.recentLines ?? 60;
+    for (const seg of episode?.segments || []) {
+      if (seg.type !== 'chat') continue;
+      for (const line of String(seg.text).split(/(?<=[.!?])\s+/)) if (line.trim()) this.recentLines.push(line.trim());
+    }
+    if (this.recentLines.length > max) this.recentLines.splice(0, this.recentLines.length - max);
+  }
+
   async write(ctx) {
     const prompt = buildPrompt({ channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, stories: ctx.candidates });
     const { provider, value } = await this.chain.generate(
-      { stage: 'write', prompt, stories: ctx.candidates, channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, count: ctx.program.stories },
+      // `recent`: lines aired lately, for writers that pick from their own repertoire (the offline mock).
+      { stage: 'write', prompt, stories: ctx.candidates, channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, count: ctx.program.stories, recent: [...this.recentLines] },
       this.normalizer(ctx, ctx.candidates)
     );
     ctx.episode = value;

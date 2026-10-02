@@ -55,6 +55,7 @@ const BASE = {
   floor: 'black',
   wallMaxL: 45, // mean L* ceiling of the wall content (ART_DIRECTION values)
   wallField: ['navy', 'ink'], // idle field: top colour → bottom colour (Bayer)
+  wallBand: [0.2, 0.6], // where the field's top colour falls to its bottom colour (share of the height): navy only up top
   pictureMat: 0, // world units of black mat around wall pictures (TECH BYTES: 2 px in the wide)
   values: { face: [55, 73], headZone: [18, 45], wall: 45 },
 };
@@ -136,8 +137,8 @@ const DEFS = {
     // (a wall-washer's scallop: a lift into slate shaped like the beam, warm only in its core: the
     // ink around it stays ink, so the wash never reads as specks or a flame)
     scallops: [
-      { X: -196, Y: -66, up: 72, down: 52, w0: 3.5, spread: 0.55, amount: 0.92, hard: 0.42 },
-      { X: 196, Y: -66, up: 72, down: 52, w0: 3.5, spread: 0.55, amount: 0.92, hard: 0.42 },
+      { X: -196, Y: -66, up: 76, down: 54, w0: 4, spread: 0.6, amount: 0.92, hard: 0.64 },
+      { X: 196, Y: -66, up: 76, down: 54, w0: 4, spread: 0.6, amount: 0.92, hard: 0.64 },
     ],
     tintPools: [],
     tints: { steel: 'tanShade', slate: 'brown' },
@@ -169,6 +170,7 @@ const DEFS = {
     practical: 'off',
     bezel: { base: 'slate', top: 'steel', left: 'steel', soft: 'ink' },
     wallField: ['ink', 'black'],
+    wallBand: [0.62, 0.82],
     values: { face: [60, 100], ringMean: 35, ringMax: 45, wall: 45, yellowMax: 0.015, saturatedMax: 0.06, tintMax: 0.04 },
   },
 };

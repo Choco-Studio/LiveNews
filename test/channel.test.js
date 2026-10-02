@@ -633,6 +633,27 @@ describe('validateChannel: optional editorial keys (style bibles)', () => {
     ]) assert.throws(() => validateChannel(withProgram(extra)), re, JSON.stringify(extra));
   });
 
+  test('a typo in any rule is refused (hot reload keeps the last good file) instead of being silently ignored', () => {
+    for (const [extra, re] of [
+      [{ chats: { after: ['lead'], max: { lead: 'two' } } }, /chats "max"/],
+      [{ chats: { max: { anywhere: 1 } } }, /chats "max"/],
+      [{ gestures: { perSegment: 'two' } }, /perSegment/],
+      [{ gestures: { only: { lean_in: 'everywhere' } } }, /gestures "only"/],
+      [{ gestures: { map: { wave: 'nodd' } } }, /gestures "map"/],
+      [{ gestures: { perEpisode: -1 } }, /perEpisode/],
+      [{ gestures: { defaults: { intro: 'wavee' } } }, /defaults/],
+      [{ gestures: { allow: ['nod', 'jazz_hands'] } }, /unknown action \(jazz_hands\)/],
+      [{ gestures: { grave: ['nod', 'smirk'] } }, /unknown action/],
+      [{ roundup: { words: 'lots' } }, /round-up "words"/],
+      [{ roundup: { reader: 'C' } }, /round-up "reader"/],
+      [{ roundup: { min: 4, max: 3 } }, /"min" above/],
+      [{ timing: { target: 60, wpm: 170, accept: [65, 55] } }, /accept/],
+      [{ timing: { target: 60, wpm: 170, minStories: 0 } }, /minStories/],
+      [{ happyOnly: ['lighter', 'always'] }, /happyOnly/],
+      [{ maxChats: 'some' }, /maxChats/],
+    ]) assert.throws(() => validateChannel(withProgram(extra)), re, JSON.stringify(extra));
+  });
+
   test('a presenter role reaches the public channel (for the strap: "NAME • ROLE")', () => {
     const ch = makeChannel();
     ch.presenters.ann.role = 'Anchor';

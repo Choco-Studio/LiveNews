@@ -85,7 +85,7 @@ const BAKED = new Map();
 
 /**
  * Bake (once per style) the wall light into a 16-bit texture: bits 0-3 the Bayer share of the
- * pair's upper colour, bits 4-7 the ramp pair (black/ink, ink/slate, slate/steel...), bits 8-11
+ * pair's upper colour, bits 4-7 the ramp pair (black/ink, ink/slate, slate/steel...), bits 8-12
  * the tint strength inside the style's tint pools. A tinted pixel swaps its colour for the
  * style's tint colour (ink → maroon, slate → brown, slate → purple), so warmth rises with the
  * light, every pixel stays a palette colour, and the render is still one read per pixel.
@@ -225,7 +225,8 @@ function bakeWall(style) {
       // clean clusters: flat ramp steps with the Bayer only in the band between them (a pixel
       // artist's posterised gradient), instead of dither over the whole pool
       const q = Math.round(posterise(pos) * 16);
-      const tq = tints ? Math.min(15, Math.round(band(tv[i]) * 16)) : 0;
+      // 0..16 (bits 8-12): 16 tints every Bayer cell, so a full tint is a flat cluster, not a dot grid
+      const tq = tints ? Math.min(16, Math.round(band(tv[i]) * 16)) : 0;
       tex[row + tx] = (tq << 8) | ((q >> 4) << 4) | (q & 15);
     }
   }
@@ -363,7 +364,7 @@ function renderWall(fr, cam, baked, sx0, sy0, sx1, sy1, yEnd, xl = 0, xr = W) {
         const v = tex[ti];
         let xe = XOF[end[ti]];
         if (xe > x1) xe = x1;
-        if ((v & 0xf0f) === 0) {
+        if ((v & 0x1f0f) === 0) {
           // a flat ramp step (no Bayer share, no tint): the lower colour whatever the threshold
           px.fill(lo[v >> 4], row + x, row + xe);
           x = xe;

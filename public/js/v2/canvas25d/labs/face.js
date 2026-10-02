@@ -150,12 +150,15 @@ function timelineMs(s, x) {
   return (l.tt + (x - l.at) / (s.pace || 1)) * 1000;
 }
 
+/** The clip's loudness at file time x, mapped as AudioEngine.loudness() maps the envelope. */
 function loudAt(levels, x) {
   if (!levels) return 1;
   const vals = levels.values;
-  const n = typeof vals === 'string' ? vals.length : vals.length;
-  const i = Math.max(0, Math.min(n - 1, Math.round(x * levels.rate)));
-  return typeof vals === 'string' ? (vals.charCodeAt(i) - 48) / 74 : vals[i];
+  const n = vals.length;
+  const at = (i) => (i < 0 || i >= n ? 0 : typeof vals === 'string' ? (vals.charCodeAt(i) - 48) / 74 : Number(vals[i]) || 0);
+  const u = x * levels.rate, i = Math.floor(u);
+  const v = at(i) + (at(i + 1) - at(i)) * (u - i);
+  return Math.min(1, Math.max(0, (v - 0.2) / 0.75));
 }
 
 const SCRATCH = {};
