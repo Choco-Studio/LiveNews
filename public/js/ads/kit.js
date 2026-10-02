@@ -283,6 +283,7 @@ export function ring(ctx, cx, cy, rad, c) {
 }
 
 /** Scanline polygon fill (any simple polygon), pixel-exact spans. */
+const POLY_XS = []; // reused crossing list (no array per call)
 export function poly(ctx, pts, c) {
   ctx.fillStyle = c;
   let y0 = Infinity;
@@ -291,7 +292,7 @@ export function poly(ctx, pts, c) {
     y0 = min(y0, p[1]);
     y1 = max(y1, p[1]);
   }
-  const xs = [];
+  const xs = POLY_XS;
   for (let y = floor(y0); y <= ceil(y1); y++) {
     const sy = y + 0.5;
     xs.length = 0;
@@ -947,7 +948,7 @@ function wrapDraw(ctx, cv, x) {
   else if (x < 0) ctx.drawImage(cv, x + W, 0);
 }
 
-const WD = { whip: 0.36, match: 0.4, slide: 0.4, irisInOut: 0.8, flash: 0.3 };
+const WD = { whip: 0.36, match: 0.4, slide: 0.4, irisInOut: 0.8, flash: 0.3, fade: 0.8, black: 1.0, soft: 0.9 };
 
 /**
  * Run a list of shots [{ at, draw(ctx, lt, info, dt), wipe, wd, cx, cy, fx, fy, dir }].
@@ -1020,6 +1021,43 @@ export function play(ctx, dt, info, list) {
     if (p < 0.5) prev.draw(ctx, plt, info, dt);
     else s.draw(ctx, lt, info, dt);
     R(ctx, 0, 0, W, H, A(P.white, 0.85 * (1 - abs(p - 0.5) * 2)));
+  } else if (kind === 'fade') {
+    // true cross-dissolve: the new shot composited over the old with eased alpha
+    prev.draw(ctx, plt, info, dt);
+    const b = scratch(0);
+    s.draw(b.c, lt, info, dt);
+    ctx.save();
+    ctx.globalAlpha = smooth(p);
+    ctx.drawImage(b.cv, 0, 0);
+    ctx.restore();
+  } else if (kind === 'black') {
+    // dip to black: out on the first half, in on the second (o.hold = black hold share)
+    const hold = s.hold ?? 0.12;
+    const a = p < 0.5 - hold / 2 ? smooth(p / (0.5 - hold / 2)) : p > 0.5 + hold / 2 ? smooth((1 - p) / (0.5 - hold / 2)) : 1;
+    if (p < 0.5) prev.draw(ctx, plt, info, dt);
+    else s.draw(ctx, lt, info, dt);
+    R(ctx, 0, 0, W, H, A(P.black, a));
+  } else if (kind === 'soft') {
+    // slow wipe with a 24 px feathered edge (o.dir 1 = left to right)
+    prev.draw(ctx, plt, info, dt);
+    const b = scratch(0);
+    s.draw(b.c, lt, info, dt);
+    const F = 24;
+    const edge = round(-F + smooth(p) * (W + 2 * F));
+    ctx.save();
+    for (let k = 0; k < F; k += 2) {
+      // column band k px behind the edge is k/F opaque
+      const a = (k + 1) / F;
+      const x = dir > 0 ? edge - k : W - edge + k - 2;
+      if (x < 0 || x >= W) continue;
+      ctx.globalAlpha = a;
+      ctx.drawImage(b.cv, x, 0, 2, H, x, 0, 2, H);
+    }
+    ctx.globalAlpha = 1;
+    const solid = dir > 0 ? edge - F : W - edge + F;
+    if (dir > 0 && solid > 0) ctx.drawImage(b.cv, 0, 0, min(W, solid), H, 0, 0, min(W, solid), H);
+    else if (dir < 0 && solid < W) ctx.drawImage(b.cv, max(0, solid), 0, W - max(0, solid), H, max(0, solid), 0, W - max(0, solid), H);
+    ctx.restore();
   } else {
     prev.draw(ctx, plt, info, dt);
     wipeClip(ctx, kind, p, s);

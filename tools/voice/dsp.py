@@ -31,7 +31,7 @@ from loudness import (biquad_response, fft_filter, integrated_loudness, next_fas
 # index, spectral tilt and STOI for the robot. Change with care.
 DEFAULTS = {
     'hp_hz': 70.0,
-    'notch_hz': (4800.0, 9600.0), 'notch_db': -20.0, 'notch_sigma': 9.0,
+    'notch_hz': (4800.0, 9600.0), 'notch_db': -24.0, 'notch_sigma': 9.0,
     'mud_hz': 290.0, 'mud_db': -1.5, 'mud_q': 1.0,
     'presence_hz': 3300.0, 'presence_db': 1.5, 'presence_q': 0.9,
     'air_hz': 9000.0, 'air_db': 1.5,
@@ -98,8 +98,10 @@ def notch_curve(centres, depth_db, sigma):
     def magnitude(freqs):
         db = np.zeros_like(freqs, dtype=np.float64)
         for c in centres:
-            db += depth_db * np.exp(-0.5 * ((freqs - c) / sigma) ** 2)
-            db += 0.3 * depth_db * np.exp(-0.5 * ((freqs - c) / (3 * sigma)) ** 2)
+            # Higher whistles are smeared a little wider by the speech envelope
+            width = sigma * math.sqrt(c / 4800.0)
+            db += depth_db * np.exp(-0.5 * ((freqs - c) / width) ** 2)
+            db += 0.25 * depth_db * np.exp(-0.5 * ((freqs - c) / (3 * width)) ** 2)
         return 10 ** (np.maximum(db, depth_db) / 20)
     return magnitude
 

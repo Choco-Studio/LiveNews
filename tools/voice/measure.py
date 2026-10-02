@@ -181,6 +181,8 @@ def cmd_samples(args):
             'rawSibilanceDb': round(metrics.sibilance_db(raw, sr), 1),
             'balance': metrics.band_balance(audio, sr),
             'rawBalance': metrics.band_balance(raw, sr),
+            'whistleDb': metrics.whistle_db(audio, sr),
+            'rawWhistleDb': metrics.whistle_db(raw, sr),
             'clicks': metrics.clicks(audio, sr),
             'rawClicks': metrics.clicks(raw, sr),
             'edges': metrics.edges(audio, sr),

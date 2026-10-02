@@ -81,7 +81,7 @@ table('dates and times (British)', gb, [
   ['The IMF lent $2bn on 2 October 2026.', 'The I-M-F lent two billion dollars on the second of October, twenty twenty-six.'],
   ['He was born on October 3rd, 1905.', 'He was born on October the third, nineteen oh five.'],
   ['The 2026/27 season starts on 14/08/2026 at 12:00.', "The twenty twenty-six twenty-seven season starts on the fourteenth of August, twenty twenty-six at twelve o'clock."],
-  ['Strikes at 0600 GMT and 2:15pm.', 'Strikes at oh six hundred GMT and two fifteen P-M.'],
+  ['Strikes at 0600 GMT and 2:15pm.', 'Strikes at oh six hundred G-M-T and two fifteen P-M.'],
 ]);
 
 table('units', us, [
@@ -167,7 +167,7 @@ table('pronunciation lexicon', us, [
   ['Putin spoke in Kyiv and Lviv.', 'Pootin spoke in Keev and Luh-veev.'],
   ['The FTSE 100 rose.', 'The Footsie one hundred rose.'],
   ['UNIT-8 joins GLOBIT 24 with Dr Nova Reyes.', 'Unit Eight joins Globit twenty-four with Doctor Nova Rayess.'],
-  ['QATAR AND NIGER SIGN DEAL', 'Qatar and neezhair sign deal.'],
+  ['QATAR AND NIGER SIGN DEAL', 'Qatar and Neezhair sign deal.'],
 ]);
 
 table('Spanish', es, [
@@ -262,7 +262,7 @@ describe('character map', () => {
     const { spoken, map } = normalizeForSpeech(text);
     const moved = remapCues(cues, map);
     assert.equal(spoken.slice(0, moved[0].char).trim(), 'The I-M-F lent two billion dollars');
-    assert.equal(moved[1].char, spoken.length - 1);
+    assert.equal(moved[1].char, spoken.length);
   });
 
   test('empty and missing text give an empty result', () => {

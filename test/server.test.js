@@ -172,6 +172,23 @@ describe('server/index.js: HTTP API of a running channel', () => {
     assert.deepEqual(Object.keys(json.schedule), ['now', 'upcoming']);
   });
 
+  test('GET /api/desk (editorial dev view) lists the desk, most interesting first, without advancing the channel', async () => {
+    const { status, json } = await app.request('/api/desk');
+    assert.equal(status, 200);
+    assert.ok(Array.isArray(json) && json.length > 10 && json.length <= 80);
+    assert.deepEqual(Object.keys(json[0]).sort(), ['breaking', 'category', 'covered', 'hasImage', 'id', 'live', 'outlets', 'score', 'source', 'title']);
+    assert.ok(json.every((s, i) => i === 0 || json[i - 1].score >= s.score));
+    assert.equal((await app.request('/api/status')).json.aired, 0);
+  });
+
+  test('GET /api/queue shows the episodes ready to air, as the clients will get them', async () => {
+    const { status, json } = await app.request('/api/queue');
+    assert.equal(status, 200);
+    assert.deepEqual(json.map((e) => e.program.id), [real.rotation[0], real.rotation[1]]);
+    assert.ok(json.every((e) => e.kind === 'episode' && e.pipeline.find((p) => p.stage === 'review').reviewed === false));
+    assert.equal((await app.request('/api/status')).json.aired, 0);
+  });
+
   test('GET /api/schedule lists what is ready and what comes next in the rotation', async () => {
     const { json } = await app.request('/api/schedule');
     assert.equal(json.now, null);

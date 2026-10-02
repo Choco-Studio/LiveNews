@@ -7,6 +7,7 @@
   relative to the core speech band (consistency between presenters).
 - clicks(): discontinuities that are much sharper than the local signal.
 - edges(): first/last samples and level in the first/last 3 ms.
+- whistle_db(): Kokoro's vocoder whistles (4800/9600 Hz) above the voice around them.
 - f0_median(), speech_rate(): rough pitch and speaking rate for presets.
 """
 
@@ -177,6 +178,24 @@ def edges(x, sr):
         return round(20 * math.log10(max(1e-9, v)), 1)
     return {'first': db(abs(x[0])), 'last': db(abs(x[-1])),
             'head3ms': db(np.sqrt(np.mean(head ** 2))), 'tail3ms': db(np.sqrt(np.mean(tail ** 2)))}
+
+
+def whistle_db(x, sr, centres=(4800, 9600)):
+    """Peak within 8 Hz of each centre minus the median 120-300 Hz either side (dB)."""
+    n = 32768
+    x = np.asarray(x, float)
+    x = np.pad(x, (0, max(0, 2 * n - len(x))))
+    fr = _frames(x, n, n // 4) * np.hanning(n)
+    psd = (np.abs(np.fft.rfft(fr, axis=1)) ** 2).mean(axis=0)
+    f = np.fft.rfftfreq(n, 1 / sr)
+    db = 10 * np.log10(psd + 1e-20)
+    out = {}
+    for c in centres:
+        if c >= sr / 2 - 300:
+            continue
+        base = np.median(db[((f > c - 300) & (f < c - 120)) | ((f > c + 120) & (f < c + 300))])
+        out[str(c)] = round(float(db[(f > c - 8) & (f < c + 8)].max() - base), 1)
+    return out
 
 
 def f0_median(x, sr):

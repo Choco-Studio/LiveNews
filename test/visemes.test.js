@@ -412,9 +412,10 @@ describe('loudness', () => {
   test('the model levels every theme, cue and ad tune to the channel target', () => {
     const tunes = [...THEME_IDS.map((id) => themeFor(id)), IDENT, BREAKING, OUTRO, ...ADS.map((ad) => ad.tune)];
     for (const tune of tunes) {
-      const est = estimateLoudness(parseTune(tune));
+      const song = parseTune(tune);
+      const est = estimateLoudness(song);
       assert.ok(Number.isFinite(est.integrated));
-      assert.ok(Math.abs(est.integrated + est.gainDb - TARGET_LUFS) < 0.01, 'within the ±12 dB correction range');
+      assert.ok(Math.abs(est.integrated + est.gainDb - (TARGET_LUFS + song.trim)) < 0.01, 'within the ±12 dB correction range');
     }
   });
 });

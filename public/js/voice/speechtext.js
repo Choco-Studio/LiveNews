@@ -542,7 +542,7 @@ const SHOUT_WORDS = new Set(('NO SO GO DO TO OF IN ON AT BY UP MY BE WE HE ME OR
 const ONSETS = new Set(('bl br ch cl cr dr dw fl fr gl gn gr kn kr ph pl pr ps qu sc sch scr sh shr sk sl sm sn sp spl spr ' +
   'st str sw th thr tr tw wh wr').split(' '));
 const CODAS = new Set(('st nd nt rt rd rk rn rm rs lk ld lt lm mp nk ng sk sp ft ct pt ch sh th ck ll ss ff zz ns ts ds ks ls ' +
-  'ms ps gs bs ws ys rp rb lf lp nch rch tch rst cs x').split(' '));
+  'ms ps gs bs ws ys rp rb lf lp nch rch tch rst cs x gh ght ht gn mb wn wl rl rth nth lth pth xt').split(' '));
 
 function pronounceable(word) {
   const w = word.toLowerCase();
@@ -664,6 +664,10 @@ function abbreviations(st, L) {
         if (!mt[0].endsWith('.') && !/[-–]\s?$/.test(before) && !/^\s?[-–]/.test(s.slice(mt.index + mt[0].length))) return null;
         return DAYS_ABBR[mt[1]];
       });
+  }
+  if (!L.es) {
+    const DAY = 'Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday';
+    st = sub(st, new RegExp(`\\b(${DAY})\\s?[-–]\\s?(?=(?:${DAY})\\b)`, 'g'), (mt) => [[mt[1], 0], [' to ', mt[1].length]]);
   }
   // Dotted acronyms: "U.S." -> "US" (the acronym rules spell it later).
   st = sub(st, /(?<![\p{L}.])((?:[A-Za-z]\.){2,})(?=[\s,;:!?)"']|$)/gu, (mt, s) => {
@@ -889,7 +893,7 @@ function otherNumbers(st, L) {
     const plural = n === 1 ? den : d === 2 ? 'halves' : `${den}s`;
     return `${cardinalEn(n, L.gb)} ${plural}`;
   };
-  st = sub(st, /(\d+)?\s?([½⅓⅔¼¾⅕⅛⅜⅝⅞])/g, (mt) => {
+  st = sub(st, /(?:(\d+)\s?)?([½⅓⅔¼¾⅕⅛⅜⅝⅞])/g, (mt) => {
     const [n, d] = VULGAR[mt[2]];
     if (mt[1]) return `${numberWords(mt[1], L)} ${w.and} ${n === 1 ? (L.es ? (d === 2 ? 'medio' : fraction(n, d)) : `a ${fraction(1, d).split(' ')[1]}`) : fraction(n, d)}`;
     return fraction(n, d);
@@ -1045,7 +1049,9 @@ function acronyms(st, L) {
     if ((tok === 'IT' || tok === 'AM') && shout) return lowerWord(tok, s, i);
     if (SHOUT_WORDS.has(tok) && !suffix) return lowerWord(tok, s, i);
     if (shout) {
-      if (LETTER_ACRONYMS.has(tok) || !pronounceable(tok)) return letters(tok, suffix);
+      // Real words dominate shouted copy: spell only known acronyms, vowel-less
+      // clusters and short unknown tokens.
+      if (LETTER_ACRONYMS.has(tok) || !/[AEIOUY]/.test(tok) || tok.length <= 3) return letters(tok, suffix);
       return lowerWord(tok, s, i) + suffix;
     }
     if (tok.length <= 3 || LETTER_ACRONYMS.has(tok) || !pronounceable(tok)) return letters(tok, suffix);
@@ -1073,7 +1079,7 @@ function pauses(st) {
   return st;
 }
 
-function tidy(st, { terminal = true } = {}) {
+function tidy(st, srcText, { terminal = true } = {}) {
   st = sub(st, /\s*\n[\s\n]*/g, (mt, s) => (/[\p{L}\p{N}]/u.test(s[mt.index - 1] || '') ? '. ' : ' '));
   st = sub(st, / {2,}/g, () => ' ');
   st = sub(st, / +(?=[,.;:!?…])/g, () => '');
@@ -1087,6 +1093,8 @@ function tidy(st, { terminal = true } = {}) {
   st = sub(st, /^[\s,;:.!?…]+/g, () => '');
   st = sub(st, /[\s,;:]+$/g, () => '');
   st = sub(st, / {2,}/g, () => ' ');
+  // A sentence that started with a figure starts with a capital word now.
+  st = sub(st, /(?<=^|[.!?…]\s)\p{Ll}/gu, (mt, s) => (/\p{Ll}/u.test(srcText[st.m[mt.index]] || '') ? null : mt[0].toUpperCase()));
   if (terminal && st.s && !/[.!?…]$/.test(st.s)) {
     st = { s: `${st.s}.`, m: [...st.m.slice(0, -1), st.m[st.m.length - 1], st.m[st.m.length - 1]] };
   }
@@ -1114,7 +1122,7 @@ export function normalizeForSpeech(text, { lang = 'en-US', lexicon = null, termi
   st = symbols(st, L);
   st = acronyms(st, L);
   st = pauses(st);
-  st = tidy(st, { terminal });
+  st = tidy(st, String(text ?? ''), { terminal });
   return { spoken: st.s, map: st.m };
 }
 
@@ -1307,17 +1315,19 @@ export function planSpeech(text, opts = {}) {
   let sentence = 0;
   let sentenceJitter = 1 + (rand() * 2 - 1) * 0.02;
   const pcount = pieces.length;
+  // Original slices partition the text: a phrase runs up to where the next
+  // one starts, so a dash or bracket between them stays with the first.
+  const lead = (p) => p.ss + (spoken.slice(p.ss, p.se).length - spoken.slice(p.ss, p.se).trimStart().length);
+  const starts = pieces.map((p, k) => (k ? toOriginal(map, lead(p)) : 0));
   for (let k = 0; k < pcount; k++) {
     const p = pieces[k];
     const next = pieces[k + 1];
-    const origStart = toOriginal(map, p.ss + (spoken.slice(p.ss, p.se).length - spoken.slice(p.ss, p.se).trimStart().length));
-    const origEndRaw = next ? toOriginal(map, next.ss) : src.length;
-    let os = origStart;
-    let oe = origEndRaw;
+    let os = starts[k];
+    let oe = next ? starts[k + 1] : src.length;
     while (oe > os && /\s/.test(src[oe - 1])) oe--;
     while (os < oe && /\s/.test(src[os])) os++;
     const markOrig = p.mark ? src[toOriginal(map, p.se - 1)] : '';
-    const between = next ? src.slice(toOriginal(map, p.se - 1), toOriginal(map, next.ss)) : '';
+    const between = next ? src.slice(toOriginal(map, p.se - 1), starts[k + 1]) : '';
     let kind = p.wonder ? 'wonder' : p.breath ? 'breath' : p.mark ? classify(p.mark, markOrig, between) : 'stop';
     // '"Yes!" he replied.' - a quoted line running into its attribution.
     if ((kind === 'exclaim' || kind === 'question') && next && /^\s*\p{Ll}/u.test(spoken.slice(next.ss, next.se))) kind = 'quote';
@@ -1376,7 +1386,7 @@ export function planSpeech(text, opts = {}) {
       spoken: spokenText,
       start: os,
       end: oe,
-      spokenStart: p.ss + (spoken.slice(p.ss, p.se).length - spoken.slice(p.ss, p.se).trimStart().length),
+      spokenStart: lead(p),
       spokenEnd: p.ss + spoken.slice(p.ss, p.se).trimEnd().length,
       pauseAfter: round3(clamp(pause, 0, 2.5)),
       speedFactor: round3(clamp(speed, 0.8, 1.2)),
