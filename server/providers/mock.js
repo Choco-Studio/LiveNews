@@ -24,7 +24,7 @@ export function createMockProvider() {
           type: 'intro',
           anchor: 'A',
           emotion: 'happy',
-          text: `Hello and welcome to ${title} on ${channelName}. I'm ${presenters.A.name}. Here's what's making news.`,
+          text: `Hello [wave] and welcome to ${title} on ${channelName}. I'm ${presenters.A.name}. [point_camera] Here's what's making news.`,
         },
       ];
       let chats = 0;
@@ -38,7 +38,7 @@ export function createMockProvider() {
           anchor,
           emotion: grave ? 'serious' : LIGHT.test(s.title) ? 'happy' : 'neutral',
           headline: s.title,
-          text: `${s.source} reports: ${s.title}. ${body === s.title ? '' : body}`.trim(),
+          text: `${grave ? '[lean_in] ' : s.image ? '[point_screen] ' : '[raise_hand] '}${s.source} reports: ${s.title}. ${body === s.title ? '' : `${grave ? '' : solo ? '' : '[B:nod] '}${body}`}`.trim(),
           shot: s.image ? (i % 3 === 1 ? 'full' : 'close') : 'wide',
           breaking: /\bbreaking\b/i.test(s.title),
           location: null,
@@ -46,14 +46,14 @@ export function createMockProvider() {
         });
         if (!solo && !grave && LIGHT.test(s.title) && i < picked.length - 1 && chats < (program?.maxChats ?? 3)) {
           chats++;
-          segments.push({ type: 'chat', anchor: anchor === 'A' ? 'B' : 'A', emotion: 'surprised', text: 'Fascinating stuff. Let us move on.' });
+          segments.push({ type: 'chat', anchor: anchor === 'A' ? 'B' : 'A', emotion: 'surprised', text: '[wow] Fascinating stuff. [papers] Let us move on.' });
         }
       });
       segments.push({
         type: 'outro',
         anchor: solo ? 'A' : 'B',
         emotion: 'happy',
-        text: `That's ${title} for now. Stay with us here on ${channelName}.`,
+        text: `That's ${title} for now. [wave] Stay with us here on ${channelName}.`,
       });
       return { text: JSON.stringify({ title: `${title} (demo)`, segments }), usage: { input: 0, output: 0, cached: 0 } };
     },

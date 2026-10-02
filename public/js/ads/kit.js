@@ -696,7 +696,7 @@ export function play(ctx, dt, info, list) {
 export const BASE_PAL = {
   K: P.black, W: P.white, w: P.silver, S: P.skin, s: P.skinShade, H: P.brown, h: P.tan,
   T: P.blue, t: P.navy, C: P.white, X: P.red, b: P.ink, P: P.slate, p: P.ink, B: P.black,
-  D: P.magenta, d: P.purple, A: P.yellow, a: P.orange, M: P.maroon, N: P.pink,
+  D: P.magenta, d: P.purple, A: P.yellow, a: P.orange, M: P.maroon, N: P.pink, Y: P.yellow,
 };
 
 const HEAD = spr([
@@ -1067,4 +1067,480 @@ export function bigHeart(ctx, cx, cy, size, c = P.red) {
   disc(ctx, cx - round(s / 2), cy - round(s / 4), round(s / 2), c);
   disc(ctx, cx + round(s / 2), cy - round(s / 4), round(s / 2), c);
   poly(ctx, [[cx - s - 0.5, cy - s / 4 + 0.5], [cx + s + 1.5, cy - s / 4 + 0.5], [cx + 0.5, cy + s + 1]], c);
+}
+
+// ---------------------------------------------------------------------------
+// Big pixel people (~52px tall): sprite head, hair and torso, procedural
+// limbs (thick outlined Bresenham strokes) so any pose is possible.
+// Extra keys: E brows, Y buckle, L sleeve (defaults to T).
+
+const HEAD_L = spr([
+  '..........SSSSSSSS..........',
+  '.......SSSSSSSSSSSSSS.......',
+  '.....SSSSSSSSSSSSSSSSSS.....',
+  '....SSSSSSSSSSSSSSSSSSSS....',
+  '...SSSSSSSSSSSSSSSSSSSSSS...',
+  '...SSSSSSSSSSSSSSSSSSSSSS...',
+  '..SSSSSSSSSSSSSSSSSSSSSSSS..',
+  '..SSSSSSSSSSSSSSSSSSSSSSSS..',
+  '..SSSSSSSSSSSSSSSSSSSSSSSS..',
+  '..SSSSSSSSSSSSSSSSSSSSSSSS..',
+  '.sSSSSSSSSSSSSSSSSSSSSSSSSs.',
+  'ssSSSSSSSSSSSSSSSSSSSSSSSSss',
+  'ssSSSSSSSSSSSSSSSSSSSSSSSSss',
+  '.sSSSSSSSSSSSSSSSSSSSSSSSSs.',
+  '..SSSSSSSSSSSSSSSSSSSSSSSs..',
+  '..SSSSSSSSSSSSSSSSSSSSSSSs..',
+  '...SSSSSSSSSSSSSSSSSSSSSs...',
+  '...sSSSSSSSSSSSSSSSSSSSss...',
+  '....sSSSSSSSSSSSSSSSSSss....',
+  '.....ssSSSSSSSSSSSSSSss.....',
+  '.......sssSSSSSSSSsss.......',
+  '..........ssssssss..........',
+], -14, 0);
+
+const HAIR_L = {
+  short: spr([
+    '..........HHHHHHHH..........',
+    '.......HHHHHHHHHHHHHH.......',
+    '.....HHHHHHhhhhHHHHHHHH.....',
+    '....HHHHHhhHHHHHHHHHHHHH....',
+    '...HHHHhhHHHHHHHHHHHHHHHH...',
+    '..HHHHhHHHHHHHHHHHHHHHHHHH..',
+    '..HHHHHHHHHHHHHHHHHHHHHHHH..',
+    '.HHHHHHHHHHHHHHHHHHHHHHHHHH.',
+    '.HHHHHHHHHHHHHHHHHHHHHHHHHH.',
+    '.HHH.HHHHHHHHHHH..HHHHHHHHH.',
+    '.HH...HHHHHHHH.....HHHHHHHH.',
+    '.HH.....HHHH........HHHHHHH.',
+    '.HH..................HHHHH..',
+    '..H...................HHH...',
+  ], -14, -2),
+  bob: spr([
+    '..........HHHHHHHH..........',
+    '.......HHHHHHHHHHHHHH.......',
+    '.....HHHHHHhhhhHHHHHHHH.....',
+    '....HHHHHhhHHHHHHHHHHHHH....',
+    '...HHHHhhHHHHHHHHHHHHHHHH...',
+    '..HHHHhHHHHHHHHHHHHHHHHHHH..',
+    '..HHHHHHHHHHHHHHHHHHHHHHHH..',
+    '.HHHHHHHHHHHHHHHHHHHHHHHHHH.',
+    '.HHHHHHHHHHHHHHHHHHHHHHHHHH.',
+    'HHHHHHHHHHHHHHHHHHHHHHHHHHHH',
+    'HHHHHHHHHHHHHHHHHHHHHHHHHHHH',
+    'HHHH....................HHHH',
+    'HHH......................HHH',
+    'HHH......................HHH',
+    'HHH......................HHH',
+    'HHH......................HHH',
+    'HHHH....................HHHH',
+    'HHHH....................HHHH',
+    '.HHH....................HHH.',
+    '..HH....................HH..',
+  ], -14, -2),
+  long: spr([
+    'HHH......................HHH',
+    'HHH......................HHH',
+    'HHHH....................HHHH',
+    'HHHH....................HHHH',
+    'HHHHH..................HHHHH',
+    'HHHHH..................HHHHH',
+    'HHHHH..................HHHHH',
+    'HHHHH..................HHHHH',
+    'HHHHH..................HHHHH',
+    'HHHHH..................HHHHH',
+    'HHHHH..................HHHHH',
+    'HHHHH..................HHHHH',
+    'HHHH....................HHHH',
+    '.HHH....................HHH.',
+  ], -14, 16),
+  bun: spr([
+    '...........HHHHHH...........',
+    '..........HhhHHHHH..........',
+    '..........HHHHHHHH..........',
+    '...........HHHHHH...........',
+    '..........HHHHHHHH..........',
+    '.......HHHHHHHHHHHHHH.......',
+    '.....HHHhhhHHHHHHHHHHHH.....',
+    '....HHhhHHHHHHHHHHHHHHHH....',
+    '...HHhHHHHHHHHHHHHHHHHHHH...',
+    '..HHHHHHHHHHHHHHHHHHHHHHHH..',
+    '..HHHHHHHHHHHHHHHHHHHHHHHH..',
+    '.HHHHHHH...HHHHHH...HHHHHHH.',
+    '.HHHH..................HHHH.',
+    '.HHH....................HHH.',
+    '.HH......................HH.',
+    '.HH......................HH.',
+  ], -14, -6),
+  spiky: spr([
+    '....H.....H.....H.....H.....',
+    '....HH...HHH...HHH...HH.....',
+    '....HHH.HHHHH.HHHHH.HHH.....',
+    '...HHHHHHHHHHHHHHHHHHHHHH...',
+    '...HHHHHHhhhHHHHHHHHHHHHH...',
+    '..HHHHHhhHHHHHHHHHHHHHHHHH..',
+    '..HHHHhHHHHHHHHHHHHHHHHHHH..',
+    '.HHHHHHHHHHHHHHHHHHHHHHHHHH.',
+    '.HHHHHHHHHHHHHHHHHHHHHHHHHH.',
+    '.HHHHHH.HHHHHHH.HHHHHHHHHHH.',
+    '.HHH.....HHHHH....HHHHHHHHH.',
+    '.HH.......HHH.......HHHHHHH.',
+    '.HH..................HHHHH..',
+    '..H...................HHH...',
+  ], -14, -5),
+  bald: spr([
+    '.HH......................HH.',
+    'HHH......................HHH',
+    'HHH......................HHH',
+    '.HH......................HH.',
+  ], -14, 8),
+  towel: spr([
+    '.........WWWWWWWWWW.........',
+    '......WWWWWWWWWWWWWWWW......',
+    '....WWWWwWWWWWWWWWWWWWWW....',
+    '...WWWWWWwWWWWWWWWWWwWWWW...',
+    '..WWWWWWWWwwWWWWWWWwWWWWWW..',
+    '..WwWWWWWWWWwwWWWwwWWWWWWW..',
+    '.WWWwwWWWWWWWWwwwWWWWWWwWWW.',
+    '.WWWWWwwwWWWWWWWWWWWwwWWWWW.',
+    '.wWWWWWWWwwwwWWWWwwwWWWWWWw.',
+    '.wwwwwwwwwwwwwwwwwwwwwwwwww.',
+  ], -14, -4),
+};
+
+const TORSO_ROWS = [
+  '.....TTTTTTTTTTTT.....',
+  '...TTTTTTCCCCTTTTTT...',
+  '..TTTTTTTCXXCTTTTTTT..',
+  '.TTTTTTTTCXXCTTTTTTTT.',
+  'TTTTTTTTTTXXTTTTTTTTTT',
+  'TTTTTTTTTTXXTTTTTTTTTt',
+  'TTTTTTTTTXXXXTTTTTTTTt',
+  'tTTTTTTTTXXXXTTTTTTTTt',
+  'tTTTTTTTTXXXXTTTTTTTTt',
+  'tTTTTTTTTXXXXTTTTTTTTt',
+  'tTTTTTTTTTXXTTTTTTTTTt',
+  'tTTTTTTTTTTTTTTTTTTTTt',
+  'tTTTTTTTTTTTTTTTTTTTTt',
+  'tTTTTTTTTTTTTTTTTTTTtt',
+  'bbbbbbbbbbYYbbbbbbbbbb',
+  'bbbbbbbbbbYYbbbbbbbbbb',
+];
+const TORSO_L = spr(TORSO_ROWS, -11, 22);
+const TORSO_LS = spr([0, 1, 2, 3, 4, 6, 9, 11, 13, 14, 15].map((i) => TORSO_ROWS[i]), -11, 22);
+
+const ARM_POSES = {
+  down: [[-1, 7], [-1, 14]],
+  up: [[-5, -7], [-8, -15]],
+  wave: [[-7, -2], [-9, -12]],
+  out: [[-7, 1], [-14, 0]],
+  hold: [[-1, 9], [7, 8]],
+  mouth: [[0, 8], [9, -7]],
+  hips: [[-6, 7], [0, 12]],
+  flex: [[-9, 0], [-8, -9]],
+  point: [[-6, 3], [-14, -1]],
+  ear: [[-6, 2], [-3, -11]],
+  forward: [[-1, 8], [3, 14]],
+};
+
+function stroke(ctx, pts, w, col, ol) {
+  const o = floor(w / 2);
+  if (ol) for (let i = 0; i + 1 < pts.length; i++) line(ctx, pts[i][0] - o - 1, pts[i][1] - o - 1, pts[i + 1][0] - o - 1, pts[i + 1][1] - o - 1, ol, w + 2);
+  for (let i = 0; i + 1 < pts.length; i++) line(ctx, pts[i][0] - o, pts[i][1] - o, pts[i + 1][0] - o, pts[i + 1][1] - o, col, w);
+}
+
+function armL(ctx, sx, sy, side, pose, pal, k, sleeves, wiggle) {
+  const p = Array.isArray(pose) ? pose : ARM_POSES[pose] || ARM_POSES.down;
+  // poses are authored for the left arm (negative x = outward)
+  const m = -side;
+  const e = [sx + m * round(p[0][0] * k), sy + round(p[0][1] * k)];
+  const hd = [sx + m * round((p[1][0] + (pose === 'wave' ? wiggle : 0)) * k), sy + round(p[1][1] * k)];
+  const s = [sx, sy];
+  // outline both segments first so the elbow joint stays clean
+  line(ctx, s[0] - 3, s[1] - 3, e[0] - 3, e[1] - 3, pal.K, 7);
+  line(ctx, e[0] - 3, e[1] - 3, hd[0] - 3, hd[1] - 3, pal.K, 7);
+  stroke(ctx, [s, e], 5, pal.L || pal.T, null);
+  stroke(ctx, [e, hd], 5, sleeves === 'short' ? pal.S : pal.L || pal.T, null);
+  disc(ctx, hd[0], hd[1], 3, pal.K);
+  disc(ctx, hd[0], hd[1], 2, pal.S);
+  R(ctx, hd[0] + (side < 0 ? 0 : -1), hd[1] + 1, 2, 1, pal.s);
+  return hd;
+}
+
+function faceL(ctx, x, y, o, pal) {
+  const K = pal.K;
+  const E = pal.E || K;
+  const lx = round(o.look || 0);
+  const ly = round(o.lookY || 0);
+  const eyes = o.eyes || 'open';
+  const brows = o.brows || (eyes === 'sad' ? 'sad' : eyes === 'angry' ? 'angry' : eyes === 'wide' ? 'up' : 'flat');
+  const L0 = x - 7;
+  const R0 = x + 4;
+  const eyeOpen = (x0) => {
+    R(ctx, x0 + lx, y + 10 + ly, 3, 4, K);
+    R(ctx, x0 + lx, y + 10 + ly, 1, 1, pal.W);
+  };
+  if (eyes === 'open' || eyes === 'sad' || eyes === 'angry') {
+    eyeOpen(L0);
+    eyeOpen(R0);
+  } else if (eyes === 'happy') {
+    for (const x0 of [L0, R0]) {
+      R(ctx, x0 - 1, y + 12, 1, 2, K);
+      R(ctx, x0, y + 11, 3, 1, K);
+      R(ctx, x0 + 3, y + 12, 1, 2, K);
+    }
+  } else if (eyes === 'closed') {
+    R(ctx, L0 - 1, y + 12, 5, 1, K);
+    R(ctx, R0 - 1, y + 12, 5, 1, K);
+    R(ctx, L0 - 1, y + 13, 1, 1, K);
+    R(ctx, R0 + 3, y + 13, 1, 1, K);
+  } else if (eyes === 'sleepy') {
+    for (const x0 of [L0, R0]) {
+      R(ctx, x0 - 1, y + 11, 5, 1, K);
+      R(ctx, x0 + lx, y + 12, 3, 2, K);
+    }
+  } else if (eyes === 'wide') {
+    for (const x0 of [L0, R0]) {
+      R(ctx, x0 - 2, y + 8, 7, 7, K);
+      R(ctx, x0 - 1, y + 9, 5, 5, pal.W);
+      R(ctx, x0 + (lx > 0 ? 2 : lx < 0 ? 0 : 1), y + 10 + ly, 2, 2, K);
+    }
+  } else if (eyes === 'shades') {
+    R(ctx, x - 12, y + 9, 24, 2, K);
+    R(ctx, x - 11, y + 10, 9, 5, K);
+    R(ctx, x + 2, y + 10, 9, 5, K);
+    R(ctx, x - 10, y + 11, 2, 1, P.steel);
+    R(ctx, x + 3, y + 11, 2, 1, P.steel);
+    R(ctx, x - 9, y + 12, 1, 1, P.steel);
+    R(ctx, x + 4, y + 12, 1, 1, P.steel);
+  } else if (eyes === 'x') {
+    for (const x0 of [L0, R0]) {
+      line(ctx, x0 - 1, y + 9, x0 + 3, y + 13, K);
+      line(ctx, x0 + 3, y + 9, x0 - 1, y + 13, K);
+    }
+  } else if (eyes === 'hearts') {
+    for (const x0 of [L0 - 2, R0 - 2]) heart(ctx, x0, y + 9, P.red, P.pink);
+  } else if (eyes === 'stars') {
+    for (const x0 of [L0 + 1, R0 + 1]) {
+      R(ctx, x0 - 2, y + 11, 5, 1, P.yellow);
+      R(ctx, x0, y + 9, 1, 5, P.yellow);
+      R(ctx, x0 - 1, y + 10, 3, 3, P.yellow);
+    }
+  } else if (eyes === 'cucumber') {
+    for (const x0 of [L0 - 2, R0 - 2]) {
+      disc(ctx, x0 + 3, y + 11, 4, P.darkGreen);
+      disc(ctx, x0 + 3, y + 11, 3, P.green);
+      disc(ctx, x0 + 3, y + 11, 2, P.cream);
+      R(ctx, x0 + 2, y + 10, 1, 1, P.green);
+      R(ctx, x0 + 4, y + 12, 1, 1, P.green);
+    }
+  } else if (eyes === 'spiral') {
+    for (const x0 of [L0, R0]) {
+      R(ctx, x0 - 1, y + 9, 5, 1, K);
+      R(ctx, x0 + 3, y + 9, 1, 5, K);
+      R(ctx, x0 - 1, y + 13, 5, 1, K);
+      R(ctx, x0 - 1, y + 11, 1, 2, K);
+      R(ctx, x0 + 1, y + 11, 1, 1, K);
+    }
+  }
+  // brows
+  if (!['shades', 'cucumber', 'hearts'].includes(eyes) && brows !== 'none') {
+    const B = (bx, rows) => rows.forEach((dy, i) => R(ctx, bx + i, y + dy, 1, 1, E));
+    if (brows === 'sad') {
+      B(L0 - 1, [8, 8, 7, 6]);
+      B(R0, [6, 7, 8, 8]);
+    } else if (brows === 'angry') {
+      B(L0 - 1, [6, 7, 8, 9]);
+      B(R0, [9, 8, 7, 6]);
+    } else if (brows === 'up') {
+      B(L0 - 1, [6, 5, 5, 6]);
+      B(R0, [6, 5, 5, 6]);
+    } else {
+      B(L0 - 1, [8, 7, 7, 8]);
+      B(R0, [8, 7, 7, 8]);
+    }
+  }
+  if (o.glasses) {
+    for (const x0 of [L0, R0]) {
+      R(ctx, x0 - 2, y + 8, 7, 1, K);
+      R(ctx, x0 - 2, y + 14, 7, 1, K);
+      R(ctx, x0 - 2, y + 8, 1, 7, K);
+      R(ctx, x0 + 4, y + 8, 1, 7, K);
+      R(ctx, x0 - 1, y + 9, 1, 1, P.white);
+    }
+    R(ctx, x - 2, y + 10, 4, 1, K);
+  }
+  // nose + cheeks
+  R(ctx, x - 1, y + 14, 2, 1, pal.s);
+  if (o.blush) {
+    R(ctx, x - 11, y + 15, 3, 1, P.pink);
+    R(ctx, x + 8, y + 15, 3, 1, P.pink);
+  }
+  if (o.tears) {
+    const ty = y + 14 + (floor(o.tears * 8) % 6);
+    R(ctx, L0, ty, 1, 2, P.cyan);
+    R(ctx, R0 + 2, ty, 1, 2, P.cyan);
+  }
+  if (o.mustache) {
+    R(ctx, x - 5, y + 15, 10, 2, pal.H);
+    R(ctx, x - 6, y + 16, 1, 2, pal.H);
+    R(ctx, x + 5, y + 16, 1, 2, pal.H);
+  }
+  if (o.beard) {
+    const b = o.beard;
+    R(ctx, x - 12, y + 12, 2, 4 + b * 2, pal.H);
+    R(ctx, x + 10, y + 12, 2, 4 + b * 2, pal.H);
+    R(ctx, x - 11, y + 16, 22, 2 + b * 2, pal.H);
+    R(ctx, x - 9, y + 18 + b * 2, 18, 2 + b, pal.H);
+    R(ctx, x - 6, y + 20 + b * 3, 12, 1 + b * 2, pal.H);
+    if (b >= 2) R(ctx, x - 3, y + 21 + b * 5, 6, b * 2, pal.H);
+    R(ctx, x - 3, y + 16, 6, 2, pal.S);
+  }
+  const m = o.mouth || 'smile';
+  const my = y + 16;
+  if (m === 'smile') {
+    R(ctx, x - 3, my + 1, 6, 1, K);
+    R(ctx, x - 4, my, 1, 1, K);
+    R(ctx, x + 3, my, 1, 1, K);
+  } else if (m === 'grin') {
+    R(ctx, x - 4, my - 1, 8, 1, K);
+    R(ctx, x - 4, my, 1, 2, K);
+    R(ctx, x + 3, my, 1, 2, K);
+    R(ctx, x - 3, my, 6, 1, pal.W);
+    R(ctx, x - 3, my + 1, 6, 1, pal.M);
+    R(ctx, x - 1, my + 1, 3, 1, pal.N);
+    R(ctx, x - 3, my + 2, 6, 1, K);
+  } else if (m === 'flat') {
+    R(ctx, x - 2, my + 1, 4, 1, K);
+  } else if (m === 'o') {
+    R(ctx, x - 1, my - 1, 2, 1, K);
+    R(ctx, x - 2, my, 1, 2, K);
+    R(ctx, x + 1, my, 1, 2, K);
+    R(ctx, x - 1, my, 2, 2, pal.M);
+    R(ctx, x - 1, my + 2, 2, 1, K);
+  } else if (m === 'O') {
+    R(ctx, x - 2, my - 2, 4, 1, K);
+    R(ctx, x - 3, my - 1, 1, 5, K);
+    R(ctx, x + 2, my - 1, 1, 5, K);
+    R(ctx, x - 2, my - 1, 4, 5, pal.M);
+    R(ctx, x - 2, my + 2, 4, 2, pal.N);
+    R(ctx, x - 2, my + 4, 4, 1, K);
+  } else if (m === 'frown') {
+    R(ctx, x - 3, my, 6, 1, K);
+    R(ctx, x - 4, my + 1, 1, 1, K);
+    R(ctx, x + 3, my + 1, 1, 1, K);
+  } else if (m === 'wavy') {
+    for (let i = 0; i < 8; i++) R(ctx, x - 4 + i, my + (i % 2), 1, 1, K);
+  } else if (m === 'open') {
+    R(ctx, x - 3, my - 1, 6, 1, K);
+    R(ctx, x - 3, my, 1, 2, K);
+    R(ctx, x + 2, my, 1, 2, K);
+    R(ctx, x - 2, my, 4, 2, pal.M);
+    R(ctx, x - 1, my + 1, 2, 1, pal.N);
+    R(ctx, x - 2, my + 2, 4, 1, K);
+  } else if (m === 'teeth') {
+    R(ctx, x - 5, my - 1, 10, 4, K);
+    R(ctx, x - 4, my, 8, 2, pal.W);
+    R(ctx, x - 1, my, 1, 2, K);
+    R(ctx, x + 2, my, 1, 2, K);
+    R(ctx, x - 3, my, 1, 2, K);
+  } else if (m === 'tongue') {
+    R(ctx, x - 3, my, 6, 1, K);
+    R(ctx, x - 1, my + 1, 3, 2, pal.N);
+    R(ctx, x - 1, my + 3, 3, 1, K);
+  } else if (m === 'kiss') {
+    R(ctx, x - 1, my - 1, 2, 1, K);
+    R(ctx, x, my, 1, 1, K);
+    R(ctx, x - 1, my + 1, 2, 1, K);
+  }
+}
+
+/**
+ * Draw a big pixel person standing on ground line gy, centred on x.
+ * o: { pal, hair, eyes, brows, mouth, look, lookY, armL, armR, legs ('stand' |
+ *      'walk' | 'skirt' | 'none'), step, bob, small, blush, tears, mustache, beard,
+ *      sleeves ('long' | 'short'), wiggle, hat }
+ * Returns { top, handL, handR } (top = head top y; hands = [x, y]).
+ */
+export function hero(ctx, x, gy, o = {}) {
+  const pal = mergePal(o.pal);
+  x = round(x);
+  const small = !!o.small;
+  const legs = o.legs || 'stand';
+  const k = small ? 0.75 : 1;
+  const torsoH = small ? 11 : 16;
+  const legH = legs === 'none' ? 0 : small ? 9 : 12;
+  const f = (o.step || 0) % 4;
+  const walkBob = legs === 'walk' && (f === 1 || f === 3) ? -1 : 0;
+  const top = round(gy - (22 + torsoH + legH) + (o.bob || 0) + walkBob);
+  const hipY = top + 22 + torsoH;
+  // long hair hangs behind everything
+  if (o.hair === 'long') draw(ctx, HAIR_L.long, x, top, pal);
+  // legs
+  if (legs !== 'none') {
+    const fy = gy - 4;
+    const lift = (side) => (legs === 'walk' && ((side < 0 && f === 1) || (side > 0 && f === 3)) ? 3 : 0);
+    if (legs === 'skirt') {
+      for (const side of [-1, 1]) stroke(ctx, [[x + side * 4, hipY], [x + side * 4, fy - lift(side)]], 3, pal.S, pal.K);
+    } else {
+      for (const side of [-1, 1]) stroke(ctx, [[x + side * 4, hipY - 1], [x + side * 5, fy - lift(side)]], 6, pal.P, pal.K);
+      R(ctx, x - 7, hipY - 2, 14, 4, pal.P);
+      R(ctx, x - 1, hipY + 1, 1, legH - 6, pal.p);
+    }
+    for (const side of [-1, 1]) {
+      const sx = x + side * 5 + (side < 0 ? -5 : -2);
+      const sy = fy - lift(side);
+      R(ctx, sx - 1, sy - 1, 9, 5, pal.K);
+      R(ctx, sx, sy, 7, 3, pal.B);
+      R(ctx, sx + (side < 0 ? 0 : 3), sy, 4, 1, A(P.white, 0.25));
+    }
+    if (legs === 'skirt') {
+      poly(ctx, [[x - 12, hipY - 3], [x + 12, hipY - 3], [x + 16, hipY + 7], [x - 16, hipY + 7]], pal.K);
+      poly(ctx, [[x - 11, hipY - 3], [x + 11, hipY - 3], [x + 15, hipY + 6], [x - 15, hipY + 6]], pal.D);
+      R(ctx, x + 6, hipY - 2, 3, 8, pal.d);
+    }
+  }
+  draw(ctx, small ? TORSO_LS : TORSO_L, x, top, pal);
+  const sy = top + (small ? 24 : 25);
+  const handL = armL(ctx, x - 10, sy, -1, o.armL || 'down', pal, k, o.sleeves, o.wiggle || 0);
+  const handR = armL(ctx, x + 9, sy, 1, o.armR || 'down', pal, k, o.sleeves, -(o.wiggle || 0));
+  draw(ctx, HEAD_L, x, top, pal);
+  faceL(ctx, x, top, o, pal);
+  if (o.hair === 'puff') {
+    for (const [dx, dy, rr] of [[-10, 2, 6], [10, 2, 6], [-6, -3, 7], [6, -3, 7], [0, -5, 8], [-13, 9, 4], [13, 9, 4]]) disc(ctx, x + dx, top + dy, rr + 1, pal.K);
+    for (const [dx, dy, rr] of [[-10, 2, 6], [10, 2, 6], [-6, -3, 7], [6, -3, 7], [0, -5, 8], [-13, 9, 4], [13, 9, 4]]) disc(ctx, x + dx, top + dy, rr, pal.H);
+    R(ctx, x - 7, top - 6, 3, 2, pal.h);
+    R(ctx, x - 9, top - 3, 2, 2, pal.h);
+  } else if (o.hair === 'long') draw(ctx, HAIR_L.bob, x, top, pal);
+  else if (o.hair !== 'none') draw(ctx, HAIR_L[o.hair || 'short'] || HAIR_L.short, x, top, pal);
+  if (o.hat === 'sunhat') {
+    oval(ctx, x, top + 1, 25, 5, pal.K);
+    oval(ctx, x, top, 24, 4, pal.A);
+    rrect(ctx, x - 13, top - 13, 26, 14, pal.K, 3);
+    rrect(ctx, x - 12, top - 12, 24, 13, pal.A, 3);
+    R(ctx, x - 12, top - 3, 24, 3, pal.a);
+    R(ctx, x - 9, top - 10, 4, 2, P.white);
+  } else if (o.hat === 'cap') {
+    rrect(ctx, x - 13, top - 5, 26, 12, pal.K, 3);
+    rrect(ctx, x - 12, top - 4, 24, 10, pal.A, 3);
+    R(ctx, x - 2, top + 4, 22, 3, pal.K);
+    R(ctx, x - 1, top + 4, 20, 2, pal.a);
+  } else if (o.hat === 'headband') {
+    R(ctx, x - 13, top + 5, 26, 4, pal.K);
+    R(ctx, x - 12, top + 6, 24, 2, pal.A);
+  }
+  // hands raised to the face stay in front of it
+  for (const [pose, hd] of [[o.armL, handL], [o.armR, handR]]) {
+    if (pose === 'mouth' || pose === 'ear') {
+      disc(ctx, hd[0], hd[1], 3, pal.K);
+      disc(ctx, hd[0], hd[1], 2, pal.S);
+    }
+  }
+  if (o.sweat) {
+    const s = floor(o.sweat * 6) % 5;
+    R(ctx, x + 13, top + 4 + s, 2, 1, P.cyan);
+    R(ctx, x + 12, top + 5 + s, 3, 3, P.blue);
+    R(ctx, x + 13, top + 5 + s, 1, 1, P.white);
+  }
+  return { top, handL, handR };
 }

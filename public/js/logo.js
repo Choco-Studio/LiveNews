@@ -21,7 +21,6 @@ const COLOR = {
   K: P.black, // outline / ink
   Q: P.black, // bug plate (separate key so the glint can sheen it)
   I: P.ink,
-  N: P.navy, // globe gaps: the brand background showing through
   R: P.red,
   D: P.darkRed,
   H: P.pink,
@@ -34,36 +33,46 @@ const COLOR = {
 // What each key turns into under the glint (missing = untouched).
 const GLINT = { R: 'H', D: 'R', H: 'W', S: 'W', Y: 'C', C: 'W', O: 'Y', Q: 'I' };
 
-const mirrorV = (top) => [...top, ...top.slice(0, -1).reverse()];
-
-// Large globe, 21x21. R red, D shadow, H highlight, '-' gap (transparent but
-// part of the silhouette, so the outline wraps around it).
+// Large globe, 21x21. R red, D shadow, H highlight; the equator and the
+// meridian lens are 1px seams of light: W lit, S in the shadow.
 const GLOBE_L = [
   '.......RRRRRRR.......',
-  '.....RRR-RRR-RRR.....',
-  '...RRRR-RRRRR-RRRR...',
-  '..RHHR-RRRRRRR-RRRD..',
-  '..RHRR-RRRRRRR-RRRD..',
-  '.RRRR-RRRRRRRRR-RRRD.',
-  '.RRRR-RRRRRRRRR-RRDD.',
-  'RRRRR-RRRRRRRRR-RRRDD',
-  'RRRRR-RRRRRRRRR-RRRDD',
-  'RRRRR-RRRRRRRRR-RRRDD',
-  '---------------------',
-  'RRRRR-RRRRRRRRR-RRDDD',
-  'RRRRR-RRRRRRRRR-RRDDD',
-  'RRRRR-RRRRRRRRR-RDDDD',
-  '.RRRR-RRRRRRRRD-DDDD.',
-  '.RRRR-RRRRRRRDD-DDDD.',
-  '..RRRR-RRRRRDD-DDDD..',
-  '..DRRR-RRRDDDD-DDDD..',
-  '...DDDD-DDDDD-DDDD...',
-  '.....DDD-DDD-DDD.....',
+  '.....RRRWRRRWRRR.....',
+  '...RRRRWRRRRRWRRRR...',
+  '..RHHRWRRRRRRRWRRRD..',
+  '..RHRRWRRRRRRRWRRRD..',
+  '.RRRRWRRRRRRRRRWRRRD.',
+  '.RRRRWRRRRRRRRRWRRDD.',
+  'RRRRRWRRRRRRRRRWRRRDD',
+  'RRRRRWRRRRRRRRRWRRRDD',
+  'RRRRRWRRRRRRRRRWRRRDD',
+  'WWWWWWWWWWWWWWWWWWSSS',
+  'RRRRRWRRRRRRRRRWRRDDD',
+  'RRRRRWRRRRRRRRRWRRDDD',
+  'RRRRRWRRRRRRRRRWRDDDD',
+  '.RRRRWRRRRRRRRDSDDDD.',
+  '.RRRRWRRRRRRRDDSDDDD.',
+  '..RRRRWRRRRRDDSDDDD..',
+  '..DRRRWRRRDDDDSDDDD..',
+  '...DDDDSDDDDDSDDDD...',
+  '.....DDDSDDDSDDD.....',
   '.......DDDDDDD.......',
 ];
 
 // Small globe for the on-screen bug, 11x11, flat.
-const GLOBE_S = mirrorV(['...RRRRR...', '..RRRRRRR..', '.RR-RRR-RR.', 'RR-RRRRR-RR', 'RR-RRRRR-RR', '-----------']);
+const GLOBE_S = [
+  '...RRRRR...',
+  '..RHRRRRR..',
+  '.RHWRRRWRR.',
+  'RRWRRRRRWRR',
+  'RRWRRRRRWRD',
+  'WWWWWWWWWWS',
+  'RRWRRRRRWRD',
+  'RRWRRRRRWDD',
+  '.RRWRRRWDD.',
+  '..RRRRDDD..',
+  '...DDDDD...',
+];
 
 // Wordmark, cap height 13, 3px stems, chamfered rounds.
 const WORD_L = {
@@ -136,12 +145,7 @@ function blit(dst, src, x, y) {
     if (k) set(dst, x + i, y + j, k);
   }
 }
-/** Turn '-' gap pixels into `key` (null = transparent). */
-function gaps(src, key = null) {
-  src.px = src.px.map((k) => (k === '-' ? key : k));
-  return src;
-}
-/** 1px outline (4-neighbour, so outer corners stay chamfered). '-' gaps count as solid and are kept. */
+/** 1px outline (4-neighbour, so outer corners stay chamfered). */
 function outline(src, key = 'K') {
   const s = sprite(src.w + 2, src.h + 2);
   blit(s, src, 1, 1);
@@ -182,7 +186,7 @@ function tint(s, fromY, from, to) {
 // Logo parts at 1x
 function buildMark() {
   // globe 23x23 with outline, bit 6x6 with outline, square 27x27 overall
-  const globe = gaps(outline(fromRows(GLOBE_L)), 'N');
+  const globe = outline(fromRows(GLOBE_L));
   const bit = sprite(4, 4);
   fill(bit, 0, 0, 4, 4, 'Y');
   set(bit, 0, 0, 'C');
@@ -232,7 +236,8 @@ function buildFull(slogan) {
   const badge = buildBadge();
   const gapMW = 3;
   const w = mark.w + gapMW + wm.w + 1 + badge.w;
-  const textY = 4 + Math.round((23 - wm.h) / 2) + 1;
+  // the wordmark's chrome split (cap row 7) continues the globe's equator
+  const textY = 4 + 1 + 10 - 7 - 1;
   const h = mark.h + (slogan ? 11 : 0);
   const s = sprite(w, h);
   blit(s, mark, 0, 0);
@@ -243,21 +248,23 @@ function buildFull(slogan) {
 }
 
 function buildBug() {
-  const globe = gaps(fromRows(GLOBE_S), 'N');
+  // black plate: small globe + bit, bold wordmark, inset red "24" tag
+  const globe = fromRows(GLOBE_S);
   const letters = word(WORD_S, 'GLOBIT', 1, 'W');
   const digits = word(DIGITS_S, '24', 1, 'W');
   const H = 13;
-  const plateW = 2 + globe.w + 2 + 2 + letters.w + 4;
+  const textX = 2 + globe.w + 4;
+  const tagX = textX + letters.w + 3;
   const tagW = digits.w + 6;
-  const s = sprite(plateW + tagW, H);
-  fill(s, 0, 0, plateW, H, 'Q');
-  fill(s, plateW, 0, tagW, H, 'R');
-  fill(s, plateW, H - 1, tagW, 1, 'D');
+  const s = sprite(tagX + tagW + 1, H);
+  fill(s, 0, 0, s.w, H, 'Q');
+  fill(s, tagX, 1, tagW, H - 2, 'R');
+  fill(s, tagX, H - 2, tagW, 1, 'D');
   blit(s, globe, 2, 1);
   const bit = { x: 2 + globe.w, y: 1, w: 2, h: 2 };
   fill(s, bit.x, bit.y, 2, 2, 'Y');
-  blit(s, letters, 2 + globe.w + 4, 3);
-  blit(s, digits, plateW + 3, 3);
+  blit(s, letters, textX, 3);
+  blit(s, digits, tagX + 3, 3);
   return { s, bit };
 }
 

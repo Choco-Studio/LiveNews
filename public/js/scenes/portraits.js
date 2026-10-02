@@ -318,7 +318,7 @@ function buildPresenter(id, acc) {
   const HAIR = mat(D.hair);
   const GREY = D.grey ? mat(D.grey) : HAIR;
   const SUIT = id === 'A' ? mat([P.steel, P.slate, P.ink, P.black, P.black, P.black], acc.ramp[2]) : mat([P.cyan, P.blue, P.blue, P.navy, P.ink, P.black], rimHard);
-  const SHIRT = id === 'A' ? mat([P.white, P.white, P.white, P.silver, P.fog, P.steel]) : mat([P.white, P.white, P.cream, P.skin, P.tan, P.tanShade], P.white);
+  const SHIRT = id === 'A' ? mat([P.white, P.white, P.white, P.silver, P.fog, P.steel]) : mat([P.white, P.white, P.cream, P.silver, P.fog, P.steel], P.white);
   const TIE = mat([P.pink, P.pink, P.red, P.darkRed, P.maroon, P.black], P.pink);
   const DARK = mat([P.steel, P.slate, P.black, P.black, P.black, P.black]);
   const prof = faceProfile(D.face);
@@ -329,126 +329,103 @@ function buildPresenter(id, acc) {
   const body = new Buf(-96, 44, 192, 140);
   const nhw = D.neckHW;
   const neckTop = D.mouthY - 4;
-  const collarY = chinBottom + 9;
-  body.rect(-nhw, neckTop, nhw * 2, collarY + 16 - neckTop, SKIN, 0);
-  // jaw cast shadow on the neck (deeper in the middle), shadow side of the neck
+  const C = chinBottom + (id === 'A' ? 15 : 10); // collar line
+  const lineX = (s, v) => (s < 0 ? -v - 1 : v); // pixel column for a mirrored offset
+  body.rect(-nhw, neckTop, nhw * 2, C + 16 - neckTop, SKIN, 0);
+  // jaw cast shadow on the neck (deeper in the middle) + shadow side of the neck
   for (let x = -nhw; x < nhw; x++) {
-    const depth = Math.round(5 - (Math.abs(x + 0.5) / nhw) * 2);
+    const depth = Math.round(4 - (Math.abs(x + 0.5) / nhw) * 2);
     for (let y = neckTop; y < chinBottom + depth; y++) body.setTone(x, y, 2);
-    for (let y = chinBottom + depth; y < collarY + 16; y++) body.setTone(x, y, 1);
+    for (let y = chinBottom + depth; y < C + 16; y++) body.setTone(x, y, side * (x + 0.5) > -3 ? 1 : 0);
   }
-  for (let y = chinBottom + 3; y < collarY + 16; y++) {
-    body.setTone(sx(-nhw), y, 0);
-    body.setTone(sx(-nhw + 1), y, 0);
-    body.setTone(sx(-nhw + 2), y, 0);
-    body.setTone(sx(nhw - 1), y, 2);
-  }
+  for (let y = chinBottom + 2; y < C + 16; y++) body.setTone(sx(nhw - 1), y, 2);
+  // neck muscle catching the key light
+  body.toneLine(sx(-nhw + 2), chinBottom + 4, sx(-3), C + 2, -1, [SKIN]);
 
   const mirrorPts = (pts) => [...pts, ...pts.slice().reverse().map(([x, y]) => [-x, y])];
-  const C = collarY;
   if (id === 'A') {
     body.poly(
-      mirrorPts([
-        [-12, C - 6], [-24, C - 2], [-38, C + 3], [-50, C + 8], [-60, C + 11], [-67, C + 15], [-71, C + 21], [-73, C + 29], [-75, C + 50], [-76, C + 80],
-      ]),
+      mirrorPts([[-13, C - 10], [-20, C - 8], [-30, C - 6], [-42, C - 4], [-53, C - 2], [-62, C + 1], [-68, C + 5], [-72, C + 11], [-74, C + 19], [-75, C + 40], [-76, C + 80]]),
       SUIT,
     );
-    // shirt V
-    body.poly([[-13, C - 9], [13, C - 9], [13, C + 2], [3, C + 70], [-3, C + 70], [-13, C + 2]], SHIRT);
-    for (let y = C - 9; y < C + 70; y++) for (let x = 0; x < 14; x++) body.setTone(sx(x), y, x > 4 ? 1 : 0, [SHIRT]);
-    // lapels
-    for (const s of [-1, 1]) {
-      const lit = s !== side;
-      body.poly(
-        [[s * 12, C - 6], [s * 21, C - 3], [s * 26, C + 21], [s * 23, C + 24], [s * 29, C + 27], [s * 6, C + 72], [s * 3, C + 70], [s * 12, C + 4]],
-        SUIT,
-        lit ? -1 : 1,
-      );
-      // roll line + notch shadow
-      for (let y = C + 27; y < C + 72; y++) {
-        const x = Math.round(s * (29 - ((y - C - 27) / 45) * 23));
-        body.setTone(s < 0 ? x - 1 : x, y, 3, [SUIT]);
-      }
-      body.toneLine(s * 26 - (s < 0 ? 1 : 0), C + 21, s * 23 - (s < 0 ? 1 : 0), C + 24, 3, [SUIT]);
-      body.toneLine(s * 23 - (s < 0 ? 1 : 0), C + 24, s * 28 - (s < 0 ? 1 : 0), C + 27, 3, [SUIT]);
-      // gorge seam
-      body.toneLine(s * 21 - (s < 0 ? 1 : 0), C - 2, s * 25 - (s < 0 ? 1 : 0), C + 19, lit ? 0 : 2, [SUIT]);
+    // shirt V below the knot
+    body.poly([[-11, C - 1], [11, C - 1], [3, C + 66], [-3, C + 66]], SHIRT);
+    for (let y = C - 1; y < C + 70; y++) {
+      for (let x = 0; x < 12; x++) body.setTone(sx(x), y, x > 3 ? 1 : 0, [SHIRT]);
+      body.setTone(sx(-5), y, y > C + 12 ? 1 : 0, [SHIRT]);
     }
-    // collar wings
+    // lapels (left one faces the key light)
     for (const s of [-1, 1]) {
       const lit = s !== side;
-      const pts = [[s * 1, C + 2], [s * 12, C - 9], [s * 15, C - 6], [s * 11, C + 11], [s * 3, C + 8]];
-      body.poly(pts, SHIRT, lit ? 0 : 1);
-      // edge shadow under the wing (on the shirt / jacket)
-      body.toneLine(s * 11 - (s < 0 ? 1 : 0), C + 11, s * 3 - (s < 0 ? 1 : 0), C + 8, lit ? 1 : 2, [SHIRT]);
-      body.toneLine(s * 15 - (s < 0 ? 1 : 0), C - 6, s * 11 - (s < 0 ? 1 : 0), C + 11, lit ? 1 : 2, [SHIRT]);
+      body.poly([[s * 13, C - 10], [s * 20, C - 8], [s * 25, C + 18], [s * 22, C + 21], [s * 28, C + 24], [s * 6, C + 70], [s * 3, C + 66], [s * 12, C + 3]], SUIT, lit ? -1 : 1);
+      // outer roll edge of the lapel
+      for (let y = C + 24; y < C + 70; y++) body.setTone(lineX(s, Math.round(28 - ((y - C - 24) / 46) * 22)), y, lit ? 1 : 3, [SUIT]);
+      // notch
+      body.toneLine(lineX(s, 25), C + 18, lineX(s, 22), C + 21, 3, [SUIT]);
+      body.toneLine(lineX(s, 22), C + 21, lineX(s, 27), C + 24, 3, [SUIT]);
+      body.toneLine(lineX(s, 20), C - 7, lineX(s, 24), C + 17, lit ? 0 : 3, [SUIT]); // gorge seam
+      // lapel edge along the shirt catches light on the lit side
+      body.toneLine(lineX(s, 12), C + 4, lineX(s, 4), C + 62, lit ? -2 : 2, [SUIT]);
+    }
+    // the neck shows between the collar wings
+    for (let y = C - 12; y < C + 2; y++) for (let x = -nhw + 1; x < nhw - 1; x++) body.set(x, y, SKIN, side * (x + 0.5) > 4 ? 2 : 1);
+    // collar wings hugging the neck, meeting at the knot
+    for (const s of [-1, 1]) {
+      const lit = s !== side;
+      body.poly([[s * 1, C + 1], [s * 10, C - 12], [s * 14, C - 10], [s * 15, C - 6], [s * 11, C + 9], [s * 4, C + 6]], SHIRT, lit ? 0 : 1);
+      body.toneLine(lineX(s, 11), C + 9, lineX(s, 4), C + 6, lit ? 1 : 2, [SHIRT]);
+      body.toneLine(lineX(s, 15), C - 6, lineX(s, 11), C + 9, lit ? 1 : 2, [SHIRT]);
+      body.toneLine(lineX(s, 10), C - 11, lineX(s, 2), C + 1, lit ? -1 : 0, [SHIRT]);
     }
     // tie knot + blade
-    body.poly([[-4, C + 1], [4, C + 1], [3, C + 9], [-3, C + 9]], TIE);
-    body.poly([[-3, C + 9], [3, C + 9], [6, C + 70], [-6, C + 70]], TIE);
-    for (let y = C + 1; y < C + 72; y++) {
+    body.poly([[-4, C], [4, C], [3, C + 8], [-3, C + 8]], TIE);
+    body.poly([[-3, C + 8], [3, C + 8], [6, C + 70], [-6, C + 70]], TIE);
+    for (let y = C; y < C + 72; y++) {
       for (let x = -7; x < 7; x++) {
         if (body.mat(x, y) !== TIE) continue;
-        if (y === C + 9) body.setTone(x, y, 2);
-        else if (y === C + 1) body.setTone(x, y, 1);
+        if (y === C + 8) body.setTone(x, y, 2);
+        else if (y === C) body.setTone(x, y, 1);
         else if (side * (x + 0.5) > 1.5) body.setTone(x, y, 1);
       }
     }
-    body.pts([[sx(-2), C + 3], [sx(-2), C + 4], [sx(-1), C + 3], [sx(-2), C + 12], [sx(-2), C + 13], [sx(-3), C + 16], [sx(-3), C + 17], [sx(-3), C + 18], [sx(-4), C + 26]], -1, [TIE]);
-    body.pts([[0, C + 11], [-1, C + 11], [0, C + 12]], 2, [TIE]); // dimple
-    // pocket square (wearer's left breast) + welt
-    const pw = sx(30);
-    const dir = side;
-    for (let k = 0; k < 12; k++) body.set(pw + dir * k, C + 40 - Math.floor(k / 6), DARK, 0);
-    body.pts([[pw + dir * 2, C + 39], [pw + dir * 3, C + 38], [pw + dir * 4, C + 39], [pw + dir * 6, C + 38], [pw + dir * 7, C + 37], [pw + dir * 8, C + 38]], 0);
-    for (const [x, y] of [[pw + dir * 2, C + 39], [pw + dir * 3, C + 38], [pw + dir * 4, C + 39], [pw + dir * 6, C + 38], [pw + dir * 7, C + 37], [pw + dir * 8, C + 38], [pw + dir * 3, C + 39], [pw + dir * 7, C + 38]]) body.set(x, y, SHIRT, x === pw + dir * 3 ? 0 : 1);
+    body.pts([[sx(-2), C + 2], [sx(-2), C + 3], [sx(-1), C + 2], [sx(-2), C + 11], [sx(-2), C + 12], [sx(-3), C + 15], [sx(-3), C + 16], [sx(-3), C + 17], [sx(-4), C + 25], [sx(-4), C + 26]], -1, [TIE]);
+    body.pts([[0, C + 10], [-1, C + 10], [0, C + 11]], 2, [TIE]); // dimple
+    // breast pocket welt + pocket square (wearer's left)
+    for (let k = 0; k < 12; k++) body.setTone(sx(30 + k), C + 37 - Math.floor(k / 6), 3, [SUIT]);
+    for (const [x, y, tn] of [[31, 36, 0], [32, 35, 0], [33, 36, 1], [35, 35, 0], [36, 34, 0], [37, 35, 1], [32, 36, 0], [36, 35, 1]]) body.set(sx(x), C + y, SHIRT, tn);
     // lapel mic
-    body.set(sx(-19), C + 22, DARK, -1);
-    body.set(sx(-18), C + 22, DARK, 0);
-    body.set(sx(-19), C + 23, DARK, 0);
-    body.set(sx(-18), C + 23, DARK, 0);
-    body.set(sx(-18), C + 24, DARK, 0);
+    for (const [x, y, tn] of [[-19, 26, -1], [-18, 26, 0], [-19, 27, 0], [-18, 27, 0], [-18, 28, 0]]) body.set(sx(x), C + y, DARK, tn);
   } else {
     body.poly(
-      mirrorPts([
-        [-11, C - 7], [-22, C - 3], [-34, C + 2], [-45, C + 7], [-53, C + 11], [-59, C + 16], [-62, C + 23], [-64, C + 32], [-65, C + 55], [-66, C + 80],
-      ]),
+      mirrorPts([[-11, C - 8], [-19, C - 6], [-29, C - 4], [-40, C - 2], [-49, C + 1], [-56, C + 5], [-61, C + 10], [-64, C + 17], [-65, C + 30], [-66, C + 80]]),
       SUIT,
     );
-    // cream top inside the blazer
-    body.poly([[-19, C - 8], [19, C - 8], [13, C + 72], [-13, C + 72]], SHIRT);
-    // scoop neckline showing the collarbones
+    // cream top inside the blazer, scoop neckline
+    body.poly([[-16, C - 7], [16, C - 7], [9, C + 70], [-9, C + 70]], SHIRT);
     for (let y = C - 10; y < C + 12; y++) {
       for (let x = -16; x < 16; x++) {
-        const dx = (x + 0.5) / 13;
-        const dy = (y + 0.5 - (C - 8)) / 15;
-        if (dx * dx + dy * dy <= 1 && body.mat(x, y) === SHIRT) body.set(x, y, SKIN, 0);
+        const dx = (x + 0.5) / 12;
+        const dy = (y + 0.5 - (C - 9)) / 13;
+        if (dx * dx + dy * dy <= 1 && body.mat(x, y) === SHIRT) body.set(x, y, SKIN, side * (x + 0.5) > 2 ? 1 : 0);
       }
     }
     for (let y = C - 10; y < C + 12; y++) {
-      for (let x = -16; x < 16; x++) {
-        if (body.mat(x, y) !== SKIN || y < neckTop) continue;
-        if (body.mat(x, y + 1) === SHIRT) body.set(x, y + 1, SHIRT, -1); // hem catches the light
-      }
+      for (let x = -16; x < 16; x++) if (body.mat(x, y) === SKIN && body.mat(x, y + 1) === SHIRT) body.set(x, y + 1, SHIRT, -1); // hem
     }
     // collarbones
-    body.pts([[sx(-4), C + 1], [sx(-5), C + 1], [sx(-6), C + 2], [sx(-7), C + 2], [sx(-8), C + 2]], 1, [SKIN]);
-    body.pts([[sx(3), C + 1], [sx(4), C + 1], [sx(5), C + 2], [sx(6), C + 2], [sx(7), C + 2]], 1, [SKIN]);
-    body.pts([[sx(-5), C + 2], [sx(-6), C + 3], [sx(-7), C + 3]], -1, [SKIN]);
+    body.pts([[sx(-3), C - 1], [sx(-4), C - 1], [sx(-5), C], [sx(-6), C], [sx(-7), C], [sx(-8), C + 1]], 1, [SKIN]);
+    body.pts([[sx(2), C - 1], [sx(3), C - 1], [sx(4), C], [sx(5), C], [sx(6), C], [sx(7), C + 1]], 1, [SKIN]);
+    body.pts([[sx(-5), C + 1], [sx(-6), C + 1], [sx(-7), C + 2]], -1, [SKIN]);
     // top shading + soft folds
-    for (let y = C - 8; y < C + 72; y++) for (let x = 0; x < 20; x++) if (x > 8) body.setTone(sx(x), y, 1, [SHIRT]);
-    body.toneLine(sx(-6), C + 20, sx(-4), C + 34, 1, [SHIRT]);
-    body.toneLine(sx(5), C + 24, sx(4), C + 40, 1, [SHIRT]);
-    // lapels (soft, wide)
+    for (let y = C - 8; y < C + 72; y++) for (let x = Math.round(10 - (y - C) / 9); x < 20; x++) body.setTone(sx(x), y, 1, [SHIRT]);
+    body.pts([[sx(-3), C + 16], [sx(-3), C + 17], [sx(-2), C + 22], [sx(-2), C + 23], [sx(-2), C + 24]], 1, [SHIRT]);
+    // lapels (wide, softly rolled)
     for (const s of [-1, 1]) {
       const lit = s !== side;
-      body.poly([[s * 11, C - 7], [s * 21, C - 3], [s * 29, C + 22], [s * 17, C + 72], [s * 12, C + 72], [s * 18, C + 6]], SUIT, lit ? 0 : 1);
-      for (let y = C + 22; y < C + 72; y++) {
-        const x = Math.round(s * (29 - ((y - C - 22) / 50) * 12));
-        body.setTone(s < 0 ? x - 1 : x, y, 2, [SUIT]);
-      }
-      body.toneLine(s * 18 - (s < 0 ? 1 : 0), C + 6, s * 12 - (s < 0 ? 1 : 0), C + 70, lit ? -1 : 2, [SUIT]);
-      body.toneLine(s * 21 - (s < 0 ? 1 : 0), C - 3, s * 28 - (s < 0 ? 1 : 0), C + 20, lit ? -1 : 2, [SUIT]);
+      body.poly([[s * 11, C - 8], [s * 19, C - 6], [s * 28, C + 22], [s * 15, C + 72], [s * 8, C + 72], [s * 15, C + 2]], SUIT, lit ? 0 : 1);
+      for (let y = C + 22; y < C + 72; y++) body.setTone(lineX(s, Math.round(28 - ((y - C - 22) / 50) * 13)), y, lit ? 1 : 2, [SUIT]);
+      body.toneLine(lineX(s, 15), C + 2, lineX(s, 8), C + 70, lit ? -2 : 2, [SUIT]);
+      body.toneLine(lineX(s, 19), C - 5, lineX(s, 27), C + 20, lit ? -2 : 2, [SUIT]);
     }
   }
 
@@ -465,13 +442,12 @@ function buildPresenter(id, acc) {
   });
   for (const [x, y] of shoulderPts) body.setTone(x, y, -1);
   for (const s of [-1, 1]) {
-    const far = id === 'A' ? 70 : 60;
+    const far = id === 'A' ? 72 : 62;
     const lit = s !== side;
     const fold = lit ? 1 : 2;
     const xo = (v) => (s < 0 ? -v - 1 : v);
-    // armpit creases
-    body.toneLine(xo(far - 16), C + 40, xo(far - 24), C + 54, fold, [SUIT]);
-    body.toneLine(xo(far - 14), C + 48, xo(far - 19), C + 56, fold, [SUIT]);
+    // armpit creases (short, curved)
+    body.pts([[xo(far - 18), C + 34], [xo(far - 19), C + 35], [xo(far - 20), C + 37], [xo(far - 21), C + 38], [xo(far - 16), C + 42], [xo(far - 17), C + 43], [xo(far - 18), C + 45]], fold, [SUIT]);
     // sleeve seam
     body.toneLine(xo(far - 9), C + 18, xo(far - 7), C + 70, lit ? 1 : 3, [SUIT]);
   }
@@ -521,56 +497,48 @@ function buildPresenter(id, acc) {
     const y = chinBottom - k;
     for (let x = -prof[y]; x < prof[y]; x++) if (k === 0 || Math.abs(x + 0.5) > 3) head.setTone(x, y, 1, [SKIN]);
   }
-  // eye sockets
+  // eye sockets: shade under the brow ridge, deeper on the shadow side + inner corners
   const eY = D.eyeY;
   for (const s of [-1, 1]) {
     const shadow = s === side;
-    for (let k = 0; k < 12; k++) {
-      const x = s < 0 ? -D.eyeX - 1 - k : D.eyeX + k;
-      if (k < 11) head.setTone(x, eY - 2, 1, [SKIN]);
-      if (shadow && k > 1 && k < 10) head.setTone(x, eY - 3, 1, [SKIN]);
-    }
-    const ix = s < 0 ? -D.eyeX : D.eyeX - 1;
-    for (let y = eY - 2; y < eY + 3; y++) head.setTone(ix, y, 1, [SKIN]);
-    if (id === 'A') for (let k = 3; k < 8; k++) head.setTone(s < 0 ? -D.eyeX - 1 - k : D.eyeX + k, eY + 6, 1, [SKIN]);
+    const o = (k) => (s < 0 ? -D.eyeX - 1 - k : D.eyeX + k);
+    for (let k = 0; k < 12; k++) if (shadow || k < 3) head.setTone(o(k), eY - 3, 1, [SKIN]);
+    for (let y = eY - 3; y < eY + 2; y++) head.setTone(o(0), y, 1, [SKIN]);
+    if (shadow) for (let y = eY - 1; y < eY + 4; y++) head.setTone(o(12), y, 1, [SKIN]);
+    if (id === 'A') for (let k = 3; k < 8; k++) head.setTone(o(k), eY + 7, 1, [SKIN]); // the veteran's under-eye line
   }
-  // cheek + forehead highlights on the lit side
-  head.pts([[sx(-14), eY + 9], [sx(-13), eY + 9], [sx(-15), eY + 10], [sx(-14), eY + 10]], -1, [SKIN]);
-  head.pts([[sx(-9), 19], [sx(-8), 19], [sx(-7), 19], [sx(-10), 20], [sx(-9), 20]], -1, [SKIN]);
-  // nose
+  // small, deliberate highlights on the lit side
+  head.pts([[sx(-9), 18], [sx(-8), 18], [sx(-10), 19]], -1, [SKIN]);
+  head.pts(id === 'A' ? [[sx(-15), eY + 10]] : [[sx(-14), eY + 9], [sx(-13), eY + 9], [sx(-14), eY + 10]], -1, [SKIN]);
+  // nose: bridge shadow, short bridge highlight, tip, wings, nostrils
   const nY = D.noseY;
   const big = id === 'A';
-  for (let y = eY + 2; y < nY - 2; y++) head.setTone(sx(big ? 2 : 1), y, 1, [SKIN]);
-  for (let y = eY + 5; y < nY - 4; y += 1) if (y % 3 !== 0) head.setTone(sx(-1), y, -1, [SKIN]);
+  for (let y = eY + 1; y < nY - 3; y++) head.setTone(sx(big ? 2 : 1), y, 1, [SKIN]);
+  head.pts([[sx(-1), nY - 8], [sx(-1), nY - 7], [sx(-1), nY - 5]], -1, [SKIN]);
   const noseKey = { h: -1, b: 0, s: 1, d: 2, n: 3 };
   const noseRows = big
-    ? ['....hbbs...', '..s.hbbbs..', '.s.bbbbbbs.', 's.bbbbbbbbs', '.sdn.ss.nds', '...sssssss.']
-    : ['...hbs...', '..shbbs..', '.sbbbbbs.', '.sn.s.ns.', '...ssss..'];
+    ? ['...h..s.', '..sh..s.', '.s.hb.ss', 's......s', 'sdn..nds', '.ssssss.']
+    : ['..h.s.', '.sh.s.', 's....s', 'sn..nd', '.ssss.'];
   noseRows.forEach((row, j) => {
     for (let k = 0; k < row.length; k++) {
       const tn = noseKey[row[k]];
       if (tn === undefined) continue;
-      const x = -Math.floor(row.length / 2) + k;
-      head.setTone(side > 0 ? x : -1 - x, nY - 4 + j, tn, [SKIN]);
+      const x = -row.length / 2 + k;
+      head.setTone(side > 0 ? x : -1 - x, nY - (big ? 4 : 3) + j, tn, [SKIN]);
     }
   });
-  // cast shadow under the nose, philtrum
-  head.pts([[sx(2), nY + 2], [sx(3), nY + 2], [sx(4), nY + 2]], 1, [SKIN]);
-  // under-lip shadow and chin dimple light
+  // cast shadow under the nose on the shadow side
+  head.pts([[sx(2), nY + 2], [sx(3), nY + 2], [sx(4), nY + 2], [sx(3), nY + 3]], 1, [SKIN]);
+  // under-lip shadow, chin light
   for (let x = -4; x < 4; x++) head.setTone(x, D.mouthY + 4, 1, [SKIN]);
-  head.pts([[sx(-2), chinBottom - 4], [sx(-1), chinBottom - 4], [sx(-2), chinBottom - 5]], -1, [SKIN]);
+  head.pts([[sx(-2), chinBottom - 4], [sx(-1), chinBottom - 4]], -1, [SKIN]);
   if (id === 'A') {
-    // nasolabial folds and a little age under the cheekbone
+    // short nasolabial folds
     for (const s of [-1, 1]) {
       const o = (x) => (s < 0 ? -1 - x : x);
-      head.pts([[o(7), nY], [o(8), nY + 1], [o(9), nY + 2], [o(9), nY + 3], [o(10), nY + 4], [o(10), nY + 5]], 1, [SKIN]);
+      head.pts([[o(7), nY + 1], [o(8), nY + 2], [o(8), nY + 3], [o(9), nY + 4]], 1, [SKIN]);
     }
   }
-  // rim light on the shadow-side silhouette of face and ears
-  head.each((x, y) => {
-    if (head.edge(x, y, side, 0, [SKIN]) && y > 14 && y < chinBottom - 2) head.setTone(x, y, RIM);
-  });
-
   // ===================== HAIR =====================
   const front = new Buf(-34, -8, 68, 50);
   const back = new Buf(-34, -8, 68, 70);
@@ -583,20 +551,24 @@ function buildPresenter(id, acc) {
     back.ascii(LOLA_BACK, -31, -6, key);
     front.ascii(LOLA_FRONT, -31, -6, key);
   }
+  // rim light on the shadow-side silhouette of face and ears (not where hair sits behind)
+  head.each((x, y) => {
+    if (head.edge(x, y, side, 0, [SKIN]) && !back.mat(x + side, y) && y > 14 && y < chinBottom - 2) head.setTone(x, y, RIM);
+  });
   // soft shadow the hair casts onto the forehead
   head.each((x, y) => {
     if (head.mat(x, y) === SKIN && front.mat(x, y - 1) && !front.mat(x, y) && head.tone(x, y) !== RIM) head.shift(x, y, 1);
   });
 
-  // glasses (front layer)
+  // glasses (front layer): thin metal frames, rounded corners, glints
   if (id === 'A') {
     const METAL = mat([P.white, P.silver, P.fog, P.steel, P.slate, P.ink], P.white);
     const gy = eY - 3;
+    const w = EYE_W + 4;
+    const h = 10;
     for (const s of [-1, 1]) {
       const shadow = s === side;
-      const x0 = s < 0 ? -D.eyeX - 14 : D.eyeX;
-      const w = 14;
-      const h = 9;
+      const x0 = s < 0 ? -D.eyeX - EYE_W - 2 : D.eyeX - 2;
       for (let x = x0 + 1; x < x0 + w - 1; x++) {
         front.set(x, gy, METAL, shadow ? 1 : 0);
         front.set(x, gy + h - 1, METAL, shadow ? 2 : 1);
@@ -605,7 +577,6 @@ function buildPresenter(id, acc) {
         front.set(x0, y, METAL, shadow ? 1 : 0);
         front.set(x0 + w - 1, y, METAL, shadow ? 2 : 1);
       }
-      // glints on the upper-left corners
       front.set(x0 + 1, gy, METAL, -2);
       front.set(x0 + 2, gy, METAL, -1);
       front.set(x0, gy + 1, METAL, -1);
@@ -615,8 +586,8 @@ function buildPresenter(id, acc) {
       const to = s < 0 ? -hwAt(yA) - 1 : hwAt(yA);
       for (let x = Math.min(from, to); x <= Math.max(from, to); x++) front.set(x, yA, METAL, shadow ? 2 : 1);
     }
-    front.span(-D.eyeX + 1, D.eyeX - 2, gy + 1, METAL, 0);
-    front.set(-1, gy + 1, METAL, -1);
+    front.span(-D.eyeX + 3, D.eyeX - 4, gy + 1, METAL, 0);
+    front.set(sx(-2), gy + 1, METAL, -1);
   }
 
   return {
@@ -769,7 +740,7 @@ function drawMouth(ctx, cx, y, D, name) {
   sprite(ctx, rows, D.lips, cx - 8, y + lift);
 }
 
-const MUSTACHE = ['......kmmmmk......', '...kmmmpmmmmmmk...', '..kmmpmmmpmmmmmkk.', '.kmpmmmmmmmmmmmkkk', '.kmmmk......kmmkkk', 'kmmk..........kkkk'];
+const MUSTACHE = ['.....kmmmmmmk.....', '...kmpmmpmmmmmmk..', '..kmpmmpmmmmmmmkk.', '.kmpmmpmmmmmmmmmkk', '.kmmkmmmkmmmkmmkkk', 'kmk............kkk'];
 const MUSTACHE_KEY = { k: P.black, m: P.maroon, p: P.purple };
 
 // ---------------------------------------------------------------------------
@@ -843,7 +814,7 @@ const BOKEH = Array.from({ length: 22 }, (_, i) => ({
   hot: hash(i, 16) > 0.65,
 }));
 
-function drawLights(ctx, t, id, side, acc, sky, calm) {
+function drawLights(ctx, t, id, side, acc, sky, calm, headX) {
   const { X } = viewOf(id, side);
   const S = SKY[sky];
   const [, md, base, hi] = acc.ramp;
@@ -872,7 +843,7 @@ function drawLights(ctx, t, id, side, acc, sky, calm) {
     const x = X(Math.round(cx + Math.sin(t * b.sp + b.ph) * 3));
     const y = Math.round(cy + Math.cos(t * b.sp * 0.8 + b.ph) * 2);
     const rr = b.r + (Math.sin(t * b.sp * 3 + b.ph) > 0.7 ? 1 : 0);
-    if (avoid(x, y, rr)) continue;
+    if (avoid(x, y, rr) || (Math.abs(x - headX) < 44 + rr && y < 140)) continue;
     if (wall) {
       disc(ctx, x, y, rr, b.hot ? base : md);
       if (b.hot) disc(ctx, x, y, rr - 2, hi);
@@ -1021,7 +992,7 @@ export function drawCloseup(ctx, t, id, state, { side = 'center', accent = null 
 
   // ----- backdrop -----
   ctx.drawImage(bg, 0, 0);
-  drawLights(ctx, t, id, side, acc, sky, CALM[side]);
+  drawLights(ctx, t, id, side, acc, sky, CALM[side], BUST_X[side]);
 
   // ----- presenter -----
   const blit = (layer, x, y) => ctx.drawImage(layer.canvas, x + layer.x0, y + layer.y0);
@@ -1061,7 +1032,7 @@ export function drawCloseup(ctx, t, id, state, { side = 'center', accent = null 
   }
   // mouth
   drawMouth(ctx, hx, hy + D.mouthY - 1 + (jaw && false ? 1 : 0), D, mouthName({ emotion, mouth, t }, id));
-  if (id === 'A') sprite(ctx, MUSTACHE, MUSTACHE_KEY, hx - 9, hy + D.mouthY - 6, D.rimSide < 0);
+  if (id === 'A') sprite(ctx, MUSTACHE, MUSTACHE_KEY, hx - 9, hy + D.mouthY - 5, D.rimSide < 0);
 
   blit(L.front, hx, hy);
 
@@ -1152,20 +1123,20 @@ const PACO_HAIR = [
 ];
 const LOLA_BACK = [
   '..............................................................',
-  '.......................ddddMMMMMMMMddRR.......................',
-  '..................dddddddddMMMMMMMMddRRRRRRR..................',
-  '...............ddddddddddddMMMMMMMMddRRRRRRRRRR...............',
-  '.............ddddddddddddddMMMMMMMMddRRRRRRRRRRRR.............',
-  '...........cdddddddddddddddMMMMMMMMddRRRRRRRRRRRRRR...........',
-  '..........cddddddddddddMMMMMMMMMMMMMMMMddRRRRRRRRRRR..........',
-  '.........cddddddddddMMMMMMMMMMMMMMMMMMMMMMddRRRRRRRRR.........',
-  '........cddddddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRRRRR........',
-  '.......cddddddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRRRRR.......',
-  '......cddddddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRRRRR......',
-  '......cddddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRRR......',
-  '.....cddddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRRR.....',
+  '.......................MMMMMMMMMMMMMMMM.......................',
+  '..................dddddMMMMMMMMMMMMMMMMddRRR..................',
+  '...............ddddRRddMMMMMMMMMMMMMMMMddRRRRRR...............',
+  '.............ddddRRRRddMMMMMMMMMMMMMMMMddRRRRRRRR.............',
+  '...........ddddRRRRRRddMMMMMMMMMMMMMMMMddRRRRRRRRRR...........',
+  '..........ddddRRRRRRRddMMMMMMMMMMMMMMMMddRRRRRRRRRRR..........',
+  '.........cdddRRRRRddMMMMMMMMMMMMMMMMMMMMMMddRRRRRRRRR.........',
+  '........cdddRRRddMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRRRRR........',
+  '.......cdddRRRddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRRRRR.......',
+  '......cdddRRRddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRRRRR......',
+  '......cdddRddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRRR......',
+  '.....cdddRddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRRR.....',
   '.....cdddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRR.....',
-  '....cddddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRRR....',
+  '....cdddRddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRRR....',
   '....cdddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRR....',
   '....cddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRR....',
   '...cdddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRR...',
@@ -1179,82 +1150,82 @@ const LOLA_BACK = [
   '...cddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddR...',
   '..cdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRR..',
   '..cdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRR..',
-  '..cdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoMModRR..',
-  '..cdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoMMddoR..',
-  '..cdRdMRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoMMddoR..',
-  '..cdRdMRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoMModoR..',
-  '..cdRdMRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModoR..',
-  '..cdRdMRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModoR..',
-  '..cdRdMRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoMModRR..',
-  '..cdRdMRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoMModRR..',
-  '..cdRdMRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoMMddoR..',
-  '..cdRdMRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoMMddoR..',
-  '..cdRdMRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoMModoR..',
-  '..cdRddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMdoRoR..',
-  '..cdRddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMdoRoR..',
-  '..cdRddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoMdoRRR..',
-  '..cdRddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoMdoRRR..',
-  '..cdRddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoMddoRR..',
-  '..cdRddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoMddoRR..',
-  '..cdRddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoMdooRR..',
-  '..cdRddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMdoRRR..',
-  '..cdRddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMdoRRR..',
-  '..cddddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoMdoRRR..',
-  '..cddddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoModRRR..',
-  '..cddddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModdRRRR..',
-  '..cddddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModdRRRR..',
-  '..cddddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModoRRRR..',
-  '...cdddRdMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddoRRR...',
-  '...cdddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRR...',
-  '....cdddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModRRRR....',
-  '......cdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModRR......',
-  '......cddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMdoRoR......',
-  '......cdRRRdMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddoodd......',
-  '......cMddddRRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMooodddMM......',
-  '........cMMdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMdddMMM........',
-  '...........cMMddddddddddddddddddddddddddddddddddMMM...........',
-  '..............cMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM..............',
+  '..cdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRR..',
+  '..cdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRR..',
+  '..cdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRR..',
+  '..cdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRR..',
+  '..cdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModRR..',
+  '..cdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModRR..',
+  '..cdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModRR..',
+  '..cdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModRR..',
+  '..cdddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoModRR..',
+  '..cdddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoModRR..',
+  '..cdddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoModRR..',
+  '..cdddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModoRRR..',
+  '..cdddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModoRoR..',
+  '..cdddRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModoRoR..',
+  '..cdRdRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModoRoR..',
+  '..cdRdRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModoRoR..',
+  '..cdRdRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModoRoR..',
+  '..cdRdRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModoRoR..',
+  '..cdRdRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModoRoR..',
+  '..cdRdRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModoRoR..',
+  '..cdRdRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModdRoR..',
+  '..cdRdRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModdRoR..',
+  '..cdddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModRRoR..',
+  '..cdddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModRRoR..',
+  '...cddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMModRRR...',
+  '...cdddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMdoRRRR...',
+  '....cddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRR....',
+  '....cdddddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRRRR....',
+  '......cdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRR......',
+  '......cRdddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddRoo......',
+  '......cdRRRdMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMdooodd......',
+  '......cMdddRRMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMoodddMM......',
+  '........cMMddMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMddMMM........',
+  '...........cMdMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMdMM...........',
+  '..............cMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMd..............',
   '..............................................................',
 ];
 const LOLA_FRONT = [
   '..............................................................',
-  '.......................ccRRRRRRRRRRRRRR.......................',
+  '.......................ccccRRRRRRRRRRRR.......................',
   '..................cccccRRRRRRRRRRRRRRRRRRRRR..................',
-  '...............cccRRRRRRRRRRRRRRddRRRRRRRRRRRRR...............',
-  '.............ccRRRRRRRRRRRRRRRRddRRRRRRRRRRRRRRRR.............',
-  '...........ccRRRRRRRRRRRRRRRoddoooooRRoyyyRRRRRRRRR...........',
-  '..........cRRRRRRRRRRRRRRooooRRooooMRRooooyRyRRRRRRR..........',
-  '.........cRRRRRRRRRRRRRoRRoooRRRddRRMdRoooRooyRRRRRRR.........',
-  '........cRRRRRRRRRRRoooRRRdRRRRddRRRMRRRdRRoooooRRRRRR........',
-  '.......cRRRRRRRRRRRRRRRRddRRRRddRRRdRMRddRRRRoooRRRRRRR.......',
-  '......cRRRRRRRRRRRRRRRRRdRRRRdRRRRdRRMddRRRRRRRRRRoRRRRR......',
-  '......cddddddddddRRRRRRdRRRRddRRRdRRRMdRRRRoRRRRRRoooRRR......',
-  '.....cdddddddddddRRRRRdRRRRddRRRdooRRdMRRRRooRRRRRRoooRRR.....',
-  '.....cdddddddddddRRRRRdRRRRdRoRddoRRddMRRRRRRoRRRRRRooRRR.....',
-  '....cddddddddddddRRRRdRRRRdooRdooRRddRMRRRRRRoRRRRRRRRRRRR....',
-  '....cddddddddddddRRRddRoRRoRRRdoRRddRRddRRRRRoRRRRRRRRRRRR....',
-  '....cddddddddddddRRRdRooRdoRRddRRddRRd..ddRRRRoRRRRRRRRRRR....',
-  '...cdddddddddddddRRdRoRRdoRRdooRRdRRd.....ddRRooRRRRRRRRRRR...',
-  '...cdddddddddddddRRdRoRRoRRRdoRRdRdd........dRRRRRRRRRRRRRR...',
-  '...cdddddddddddddRdRRoRdoRRdoRRdRdd..........dRooRRRRRRRRRR...',
-  '...cdddddddddddddRdRoRRdoRRooRdddd............dRoRRRRRRRRRR...',
-  '...cdddddddddddddRdooRdoRRdRRRddd..............dRRRRRRRRRRR...',
-  '...cddddddddddddddRRRRdoRddRRd..................RRRRRRRRRRR...',
-  '...cddddddddddddddRoRdoRRdRRRd..................dRRRRRRRRRR...',
-  '...cdddddddddddddRooRdRRRdddd....................RRRRRRRRRR...',
-  '...cdddddddddddddRRRRdRRd.ddd....................dRRRRRRRRR...',
-  '..cddddddddddddddRoRddRRd.........................RRRRRRRRRR..',
-  '..cddddddddddddddRRddRRd..........................RRRRRRRRRR..',
-  '..cddddddddddddddRRddddd..........................dRRRRRRRRR..',
-  '..cddddddddddddddRd..dd............................RRRRRRRRR..',
-  '..cdddddddddddddddd................................RRRRRRRRR..',
-  '..cddddddddddddddd.................................RRRRRRRRR..',
-  '..cddddddddddd.dd..................................RRRRRRRRR..',
-  '..cddddddddddd......................................RRRRRRRR..',
-  '..cdddddddddd.......................................RRRRRRRR..',
-  '..cdddddddddd.......................................RRRRRRRR..',
+  '...............cccRRRRRRRRRRRRoooooooooRRRRRRRR...............',
+  '.............ccRRRRRRRRRRRoooooRRRoooooyyyoRRRRRR.............',
+  '...........ccRRRRRRRRRRRRooRRRRRRRMRRRRoooyyoRRRRRR...........',
+  '..........cdRRRRRRRRRRRRRRRRRRRRdRRMRRRRRRoooyoRRRRR..........',
+  '.........cdRRRRRRRRRRRRRRdRRRRRdRRRMRRRRRRRRRooooRRRR.........',
+  '........cdRRRRRRRRRRRRRRddRRoRddRRoRMRRRRRRRRRRoooRRRR........',
+  '.......cdRRRRRRRRRRRRRRddRRoRRdRRoodMRRRRRRoRRRRRoRRRRR.......',
+  '......cdddRRRRRRRRRRRRddRRoRRdRRRoddRMRRRRRRoRRRRRRRRRRR......',
+  '......cdddRRRRRRRRRRRRdRRooRddRRoRdRRMRRRRRRooRRRRRRRRRR......',
+  '.....cdddRRRRRRRRRRRRddRRoRRdRRoRddRoMRRRRRRRoRRRRRRRRRRR.....',
+  '.....cdddRRRRRRRRRRRddRRRRRdRRooRdRooRMRRRRRRRoRRRRRRRRRR.....',
+  '....cdddRRRRRRRRRRRRdRRooRRdRoRRddoRRRMRRRRRRRoRRRRRRRRRRR....',
+  '....cdddRRRRRRRRRRRddRRoRRdRRoRRdooRRRddRRRRRRooRRRRRRRRRR....',
+  '....cdddRRRRRRRRRRRdRRRoRddRooRddoRRRd..ddRRRRRRRRRRRRRRRR....',
+  '...cdddRRRRRRRRRRRdRRRoRRdRRRRRdoRRRd.....ddRRRRoRRRRRRRRRR...',
+  '...cdddRRRRRRRRRRRdRRoRRddRoRRdooRRd........dRRRoRRRRRRRRRR...',
+  '...cdddRRRRRRRRRRdRRRoRRdRRoRRdoRRd..........dRRooRRRRRRRRR...',
+  '...cdddRRRRRRRRRRdRRoRRddRooRddRRd............dRRRRRRRRRRRR...',
+  '...cdddRRRRRRRRRdRRRRRRdRRRRddRRd..............dRRRRRRRRRRR...',
+  '...cdddRRRRRRRRRdRRoRRddRoodd.Rd................RRRRRRRRRRR...',
+  '...cdddRRRRRRRRdRRRoRRdRRodd..d.................dRRRRRRRRRR...',
+  '...cdddddRRRRRRdRRoRRRdRRdd......................RRRRRRRRRR...',
+  '...cdddddRRRRRRdRRoRRdRRdd.......................dRRRRRRRRR...',
+  '..cdddddRRRRRRdRRRRRddRdd.........................RRRRRRRRRR..',
+  '..cdddddRRRRRRdRRoRdd.Rd..........................RRRRRRRRRR..',
+  '..cddddddddRRRdRRodd..d...........................dRRRRRRRRR..',
+  '..cddddddddRRdRRRdd................................RRRRRRRRR..',
+  '..cddddddddRRdRRdd.................................RRRRRRRRR..',
+  '..cddddddddRRdRdd..................................RRRRRRRRR..',
+  '..cddddddddRdRdd...................................RRRRRRRRR..',
+  '..cddddddddRddd.....................................RRRRRRRR..',
+  '..cddddddddRdd......................................RRRRRRRR..',
+  '..cddddddddRd.......................................RRRRRRRR..',
   '..cddddddddd........................................RRRRRRRR..',
-  '..cdddddddd..........................................RRRRRRR..',
+  '..cdddddddd.........................................RRdddddd..',
   '..............................................................',
   '..............................................................',
 ];

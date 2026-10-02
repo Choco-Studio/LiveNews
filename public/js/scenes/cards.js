@@ -523,7 +523,7 @@ function globe(ctx, cx, cy, R, rot, t, theme = 'brand') {
         if (i > nl) i = nl;
         c = ld[i];
         if (f & 1) c = th.rimLand;
-        else if (b < 0.16 && hash2(la, li) < 0.12 && hash2(li + tw, la) < 0.8) c = th.city;
+        else if (b < 0.16 && hash2(la, li) < 0.06 && hash2(li + tw, la) < 0.8) c = th.city;
       } else {
         let i = (b * ns + thr[k]) | 0;
         if (i > ns) i = ns;
@@ -553,7 +553,7 @@ function brandField(cx = 192, cy = 100) {
       const dx = (x - cx) / 260;
       const dy = (y - cy) / 170;
       const d = Math.sqrt(dx * dx + dy * dy);
-      return rmp(1.75 - d * 2.1, x, y);
+      return rmp(1.9 - d * 1.95, x, y);
     });
     fieldCache.set(key, c);
   }
@@ -636,18 +636,61 @@ function speedBars(ctx, time, bars) {
   }
 }
 
+const stripeCache = new Map();
+/**
+ * Endless slanted stripes (cached strip, scrolled by t * speed) filling
+ * x..x+W horizontally and `h` rows from y. Callers clip if needed.
+ */
+function stripes(ctx, t, { color, a, period, width, slope, speed, x = 0, y = 0, h = H, sx = 0, sh = h }) {
+  const key = `${color}|${a}|${period}|${width}|${slope}|${h}`;
+  let c = stripeCache.get(key);
+  if (!c) {
+    const reach = Math.ceil(Math.abs(slope) * h);
+    c = mkCanvas(W + period * 2, h);
+    const cx = c.getContext('2d');
+    const fill = rgba(color, a);
+    for (let px = -reach - period; px < c.width + reach + period; px += period) slab(cx, px, 0, width, h, slope, fill);
+    stripeCache.set(key, c);
+  }
+  const off = ((Math.floor(t * speed) % period) + period) % period;
+  ctx.drawImage(c, sx, 0, c.width - sx, Math.min(sh, h), x - period + off + sx, y, c.width - sx, Math.min(sh, h));
+}
+
 /** Red brand ribbon with sheen stripes, top highlight and bottom shade. */
 function ribbon(ctx, x, y, w, h, t) {
   if (h <= 0 || w <= 0) return;
   r(ctx, x, y, w, h, P.red);
   ctx.save();
   clipRect(ctx, x, y, w, h);
-  const off = Math.floor(t * 9) % 30;
-  const sheen = rgba(P.darkRed, 0.32);
-  for (let sx = x - 60 + off; sx < x + w + 30; sx += 30) slab(ctx, sx, y, 11, h, -0.5, sheen);
+  stripes(ctx, t, { color: P.darkRed, a: 0.32, period: 30, width: 11, slope: -0.5, speed: 9, x, y, h: 64, sh: h });
   ctx.restore();
   r(ctx, x, y, w, 1, P.pink);
   if (h > 8) r(ctx, x, y + h - 3, w, 3, P.darkRed);
+}
+
+/** Four-point lens sparkle; k runs 0..1 over its life. */
+function sparkle(ctx, x, y, k, color = P.white) {
+  if (k <= 0 || k >= 1) return;
+  const s = round(Math.sin(k * Math.PI) * 6);
+  if (s <= 0) return;
+  r(ctx, x - s, y, 2 * s + 1, 1, rgba(color, 0.75));
+  r(ctx, x, y - s, 1, 2 * s + 1, rgba(color, 0.75));
+  if (s > 2) {
+    r(ctx, x - 1, y - 1, 3, 3, color);
+    r(ctx, x - (s >> 1), y, s + 1, 1, color);
+    r(ctx, x, y - (s >> 1), 1, s + 1, color);
+  } else r(ctx, x, y, 1, 1, color);
+}
+
+/** Rectangle outline, optionally dithered. */
+function rectOutline(ctx, x, y, w, h, color, level = 1) {
+  const f = dither(color, level);
+  if (!f) return;
+  ctx.fillStyle = f;
+  ctx.fillRect(x, y, w, 1);
+  ctx.fillRect(x, y + h - 1, w, 1);
+  ctx.fillRect(x, y + 1, 1, h - 2);
+  ctx.fillRect(x + w - 1, y + 1, 1, h - 2);
 }
 
 /** Moving light band confined to a rectangle. */
@@ -668,7 +711,8 @@ function lockup(ctx, x, y, channel, scale, t) {
   const pad = 3 * scale;
   const bh = 7 * scale + pad * 2;
   const icon = bh;
-  r(ctx, x, y, icon, bh, P.black);
+  r(ctx, x, y, icon, bh, P.navy);
+  r(ctx, x, y, icon, 1, P.blue);
   globe(ctx, x + (icon >> 1), y + (bh >> 1), (bh >> 1) - 3, t * 30, t);
   r(ctx, x + icon, y, tw + pad * 2, bh, P.red);
   r(ctx, x + icon, y, tw + pad * 2, 1, P.pink);
@@ -739,6 +783,8 @@ export function drawTitleCard(ctx, t, dt, { channel = 'LIVENEWS', subtitle = 'WO
   // light sweep across the ribbon (first pass, then every few seconds)
   const gl = every(dt, 1.25, 4.5, 0.6);
   if (gl >= 0 && openP >= 1) sweep(ctx, 0, top, W, rh - 3, gl, 22, 0.2);
+  // lens sparkle on the globe's lit limb
+  sparkle(ctx, 152, CY - 40, every(dt, 0.95, 5, 0.45));
 
   // channel name: letters drop into the ribbon one by one
   const sc = fitScale(channel, 344, 4, 2);
@@ -810,59 +856,74 @@ export function drawEndCard(ctx, t, dt, { channel = 'LIVENEWS', line1 = 'STAY WI
   drawBeams(ctx, t);
   drawSpecks(ctx, t);
 
-  // lockup slides in
-  const lp = easeOut(seg(dt, 0.3, 0.5));
-  const lk = lockup(ctx, round(X0 - 190 * (1 - lp)), 40, channel, 2, t);
-  const glk = every(dt, 1.4, 3.8, 0.5);
-  if (glk >= 0) sweep(ctx, X0, 40, lk.w, lk.h, glk, 10, 0.25);
-
-  // line 1 rises in
+  // line 1 and line 2 are measured first so the block can be centred
   const s1 = fitScale(line1 || '', 330, 3, 2);
   const l1 = wrapClamp(line1 || '', 330, s1, 2);
   const lh1 = s1 * 10;
-  const y1 = 88;
+  const s2 = line2 ? fitScale(line2, 300, 2) : 1;
+  const t2 = line2 ? ellipsis(line2, 300, s2) : '';
+  const blockH = 30 + 14 + l1.length * lh1 + (line2 ? 12 + 7 * s2 + 10 : 0);
+  const Y0 = clamp(round((180 - blockH) / 2) + 6, 16, 60);
+
+  // lockup slides in
+  const lp = easeOut(seg(dt, 0.3, 0.5));
+  const lk = lockup(ctx, round(X0 - 190 * (1 - lp)), Y0, channel, 2, t);
+  const glk = every(dt, 1.4, 3.8, 0.5);
+  if (glk >= 0) sweep(ctx, X0, Y0, lk.w, lk.h, glk, 10, 0.25);
+
+  // line 1 rises in
+  const y1 = Y0 + lk.h + 14 + ASCENT * s1;
   let maxW = 0;
   l1.forEach((ln, i) => {
     maxW = Math.max(maxW, measureText(ln, s1));
     const p = seg(dt, 0.55 + i * 0.1, 0.45);
     riseText(ctx, ln, X0, y1 + i * lh1, p, { color: P.white, scale: s1, shadow: P.black });
   });
-  const ulY = y1 + l1.length * lh1 - 1;
+  const ulY = y1 + (l1.length - 1) * lh1 + 7 * s1 + 5;
   const ul = round(maxW * easeOut(seg(dt, 0.8, 0.45)));
   if (ul > 0) {
     r(ctx, X0, ulY, ul, 3, P.red);
-    r(ctx, X0, ulY, Math.min(ul, 10), 3, P.yellow);
+    r(ctx, X0, ulY, Math.min(ul, 12), 3, P.yellow);
   }
 
   // line 2: chevrons + typed text on a dark tab
   const p2 = seg(dt, 1.0, 0.5);
-  if (p2 > 0 && line2) {
-    const s2 = ellipsis(line2, 300);
-    const w2 = measureText(s2) + 30;
+  if (p2 > 0 && t2) {
+    const pad = 2 + 3 * s2;
+    const w2 = measureText(t2, s2) + 12 * s2 + pad * 2 + 4;
+    const th = 7 * s2 + pad * 2;
     const ty = ulY + 9;
     const cw = round(w2 * easeOut(seg(dt, 1.0, 0.3)));
-    r(ctx, X0, ty, cw, 15, P.black);
-    r(ctx, X0, ty + 14, cw, 1, P.steel);
+    r(ctx, X0, ty, cw, th, P.black);
+    r(ctx, X0, ty + th - 1, cw, 1, P.steel);
     ctx.save();
-    clipRect(ctx, X0, ty, cw, 15);
+    clipRect(ctx, X0, ty, cw, th);
     const ph = Math.floor(t * 6) % 4;
-    for (let i = 0; i < 3; i++) drawText(ctx, '▸', X0 + 5 + i * 4, ty + 4, { color: i === ph ? P.yellow : P.darkRed });
-    drawText(ctx, typed(s2, seg(dt, 1.1, 0.6)), X0 + 22, ty + 4, { color: P.yellow });
+    for (let i = 0; i < 3; i++) drawText(ctx, '▸', X0 + pad + i * 4 * s2, ty + pad, { color: i === ph ? P.yellow : P.darkRed, scale: s2 });
+    drawText(ctx, typed(t2, seg(dt, 1.1, 0.6)), X0 + pad + 12 * s2 + 4, ty + pad, { color: P.yellow, scale: s2 });
     ctx.restore();
   }
 
-  // outro progress rail
+  // outro progress rail + studio clock
+  const RY = 192;
   const pr = round((W - X0 * 2) * easeInOut(seg(dt, 0.6, 2.3)));
-  r(ctx, X0, 196, W - X0 * 2, 1, P.slate);
+  r(ctx, X0, RY + 1, W - X0 * 2, 1, P.slate);
   if (pr > 0) {
-    r(ctx, X0, 195, pr, 3, P.red);
-    r(ctx, X0 + pr - 2, 194, 2, 5, P.yellow);
+    r(ctx, X0, RY, pr, 3, P.red);
+    r(ctx, X0 + pr - 2, RY - 1, 2, 5, P.yellow);
+  }
+  const cp = seg(dt, 1.3, 0.4);
+  if (cp > 0) {
+    const ck = `LONDON ${zoneTime().label}`;
+    const cx0 = W - X0 - measureText(ck);
+    drawText(ctx, typed(ck, cp), cx0, RY - 11, { color: P.fog });
+    if (cp >= 1 && Math.floor(t * 1.5) % 2 === 0) r(ctx, cx0 - 7, RY - 9, 3, 3, P.red);
   }
 
   // opening wipe: brand bars sweep right-to-left revealing the card
-  const wp = seg(dt, 0, 0.62);
+  const wp = seg(dt, 0, 0.6);
   if (wp < 1) {
-    const E = round(lerp(W + 30, -180, easeInOut(wp)));
+    const E = round(lerp(W - 30, -180, easeOut(wp)));
     slab(ctx, -400, 0, E + 400, H, 0.5, P.black);
     slab(ctx, E, 0, 26, H, 0.5, P.red);
     slab(ctx, E + 26, 0, 12, H, 0.5, P.darkRed);
@@ -960,7 +1021,7 @@ export function drawStandby(ctx, t, { channel = 'LIVENEWS', message = '' } = {})
   const bw = W - 128;
   const by = 62;
   const lines = wrapClamp(message || 'PREPARING THE NEXT BULLETIN', bw - 24, 1, 2);
-  const bh = 34 + lines.length * 10;
+  const bh = 41 + lines.length * 10;
   r(ctx, bx, by, bw, bh, P.black);
   r(ctx, bx, by, bw, 2, P.red);
   r(ctx, bx, by + bh, bw, 1, P.darkRed);
@@ -974,7 +1035,7 @@ export function drawStandby(ctx, t, { channel = 'LIVENEWS', message = '' } = {})
   }
   lines.forEach((ln, i) => drawText(ctx, ln, cx, by + 30 + i * 10, { color: P.yellow, align: 'center' }));
   // bouncing dots
-  const dy = by + bh - 6;
+  const dy = by + bh - 8;
   for (let i = 0; i < 3; i++) {
     const hop = Math.max(0, Math.sin(t * 6 - i * 0.9)) > 0.6 ? 1 : 0;
     r(ctx, cx - 6 + i * 5, dy - hop, 2, 2, hop ? P.white : P.steel);
@@ -1083,8 +1144,10 @@ export function drawStartScreen(ctx, t, { channel = 'LIVENEWS', prompt = 'CLICK 
   for (let i = 0; i < 4; i++) r(ctx, X0 + 7 + i, py + 5 + i, 1, 9 - 2 * i, P.white);
   const on = t % 1.2 < 0.85;
   if (on) drawText(ctx, pr, X0 + 25, py + 6, { color: P.black });
-  const rr2 = Math.floor((t * 10) % 10);
-  if (rr2 < 6) ring(ctx, X0 + 9, py + 9, 11 + rr2, P.yellow, 0.6 - rr2 * 0.1);
+  const k = (t % 1.2) / 1.2;
+  const g = 2 + round(easeOut(k) * 6);
+  rectOutline(ctx, X0 - 1 - g, py - 1 - g, pw + 2 + g * 2, 20 + g * 2, P.yellow, 0.8 * (1 - k));
+  sparkle(ctx, GX - 50, GY - 52, every(t, 1.5, 6, 0.5));
 
   // date / time line
   const info = `${longDate()}  •  LONDON ${zoneTime().label}`;
@@ -1133,9 +1196,7 @@ function categoryBackground(ctx, t, cat) {
   ctx.drawImage(f, 0, 0);
   drawMap(ctx, t, 5, 0.35);
   // marching diagonal stripes
-  const off = Math.floor(t * 14) % 24;
-  const st = rgba(cat.b, 0.08);
-  for (let x = -120 + off; x < W + 24; x += 24) slab(ctx, x, 0, 10, H, 0.5, st);
+  stripes(ctx, t, { color: cat.b, a: 0.08, period: 24, width: 10, slope: 0.5, speed: 14 });
   // giant repeating category words scrolling in opposite directions
   const word = `${cat.label} • `;
   const ww = measureText(word, 4) + 4;
@@ -1151,6 +1212,11 @@ function categoryBackground(ctx, t, cat) {
 export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline = '', source = '', category: catName = 'general', image = null } = {}) {
   const cat = category(catName);
   const DUR = 2.6;
+  const X = 16;
+  const lay = layoutText(headline, W - X - 16, 3, 5);
+  const blockH = lay.lines.length * lay.lh;
+  const textTop = 196 - blockH;
+  const chipY = textTop - 17;
 
   // --- backdrop: image (or animated category field) pushes in from the right
   r(ctx, 0, 0, W, H, P.black);
@@ -1174,10 +1240,11 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
     slab(ctx, E - 15, 0, 3, H, 0.25, P.yellow);
   }
   if (image) {
-    shadeBottom(ctx, 84, 202, 0.86);
+    shadeBottom(ctx, chipY - 56, chipY + 10, 0.8);
+    r(ctx, 0, chipY + 10, W, H - chipY - 10, rgba(P.black, 0.8));
     const s = every(dt, 1.1, 99, 1.1);
-    if (s >= 0) sweep(ctx, 0, 0, W, H, s, 40, 0.06);
-  } else shadeBottom(ctx, 110, 202, 0.6);
+    if (s >= 0) sweep(ctx, 0, 0, W, chipY - 4, s, 40, 0.07);
+  } else shadeBottom(ctx, chipY - 30, 202, 0.6);
 
   // --- TOP STORIES tag + progress pips (under the logo bug)
   const tagP = easeOut(seg(dt, 0.2, 0.4));
@@ -1202,27 +1269,23 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
   }
 
   // --- headline block, bottom-anchored above the ticker
-  const X = 16;
-  const maxW = W - X - 16;
-  const lay = layoutText(headline, maxW, 3, 5);
-  const blockH = lay.lines.length * lay.lh;
-  const textTop = 196 - blockH;
-  const chipY = textTop - 17;
   // category chip + source
   const cp = easeOut(seg(dt, 0.35, 0.35));
   const label = cat.label;
   const cw = measureText(label) + 10;
   const src = ellipsis(source || '', 200);
   const chipFull = cw + (src ? measureText(src) + 12 : 0);
-  ctx.save();
-  clipRect(ctx, X - 2, chipY, round(chipFull * cp) + 2, 12);
-  r(ctx, X - 2, chipY, cw, 12, cat.b);
-  drawText(ctx, label, X + 3, chipY + 3, { color: P.white, shadow: cat.a });
-  if (src) {
-    r(ctx, X - 2 + cw, chipY, chipFull - cw, 12, rgba(P.black, 0.75));
-    drawText(ctx, src, X + cw + 4, chipY + 3, { color: P.silver });
+  if (cp > 0) {
+    ctx.save();
+    clipRect(ctx, X - 2, chipY, round(chipFull * cp), 12);
+    r(ctx, X - 2, chipY, cw, 12, cat.b);
+    drawText(ctx, label, X + 3, chipY + 3, { color: P.white, shadow: cat.a });
+    if (src) {
+      r(ctx, X - 2 + cw, chipY, chipFull - cw, 12, P.black);
+      drawText(ctx, src, X + cw + 4, chipY + 3, { color: P.silver });
+    }
+    ctx.restore();
   }
-  ctx.restore();
   // accent bar grows down the left edge
   const ab = round((blockH + 17) * easeOut(seg(dt, 0.3, 0.5)));
   r(ctx, X - 8, chipY, 3, ab, P.red);
@@ -1237,9 +1300,7 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
 function drawStripesInto(ctx, E, t) {
   ctx.save();
   clipSlab(ctx, E - 400, 0, 400, H, 0.25);
-  const off = Math.floor(t * 20) % 16;
-  const c = rgba(P.navy, 0.5);
-  for (let x = E - 420 + off; x < E + 60; x += 16) slab(ctx, x, 0, 6, H, 0.25, c);
+  stripes(ctx, t, { color: P.navy, a: 0.5, period: 16, width: 6, slope: 0.25, speed: 20 });
   ctx.restore();
 }
 
@@ -1263,7 +1324,7 @@ function sirenLayer(t) {
         const dx = xx - cx;
         const dy = y - cy;
         ang[i] = Math.atan2(dy, dx) / TAU + 0.5;
-        base[i] = 1.55 - Math.sqrt(dx * dx + dy * dy * 2.4) / 150;
+        base[i] = 1.85 - Math.sqrt(dx * dx + dy * dy * 2.4) / 140;
         th[i] = bayerAt(xx, y) - 0.5;
       }
     }
@@ -1434,24 +1495,37 @@ function formatCount(f, k) {
 }
 
 export function drawFactCard(ctx, t, dt, { fact = '', label = 'KEY FACT', source = '', image = null } = {}) {
-  // backdrop
+  // backdrop: the story picture pushed back (darkened, tinted, slow drift)
   if (image) {
-    ctx.drawImage(image, 0, 0);
+    r(ctx, 0, 0, W, H, P.black);
+    ctx.drawImage(image, 0, -Math.min(10, Math.floor(dt * 3)));
     const v = easeOut(seg(dt, 0, 0.5));
-    r(ctx, 0, 0, W, H, rgba(P.black, round(v * 12) / 20));
-    r(ctx, 0, 0, W, H, rgba(P.navy, round(v * 5) / 20));
+    r(ctx, 0, 0, W, H, rgba(P.black, round(v * 11) / 20));
+    r(ctx, 0, 0, W, H, rgba(P.navy, round(v * 6) / 20));
   } else {
     ctx.drawImage(brandField(192, 110), 0, 0);
     drawMap(ctx, t, 3);
+    drawPulses(ctx, 192, 112, t, 90, 260, 3, P.navy, 2, 0.8);
   }
   drawBeams(ctx, t);
   drawSpecks(ctx, t, 18);
 
+  // measure the content so the panel hugs it and sits centred
+  const f = parseFact(fact);
+  const PW = 292;
+  const PX = (W - PW) >> 1;
+  const inner = PW - 36;
+  const fs = f.big ? fitScale(f.big, inner, 4, 2) : 0;
+  const rest = f.rest ? layoutText(f.rest, inner, f.big ? 2 : 3, f.big ? 3 : 5) : null;
+  const restH = rest ? (rest.lines.length - 1) * rest.lh + 7 * rest.scale : 0;
+  const PAD_T = 24;
+  let contentH = f.big ? 7 * fs + 2 + 9 + 3 + (rest ? 12 + restH : 0) : restH;
+  contentH += source ? 22 : 6;
+  const PH = PAD_T + contentH + 10;
+  const PY = clamp(round(112 - PH / 2), 30, 120);
+  const mid = PX + (PW >> 1);
+
   // panel unfolds: a line, then it opens vertically
-  const PX = 40;
-  const PW = W - 80;
-  const PY = 40;
-  const PH = 148;
   const lineP = easeOut(seg(dt, 0.05, 0.3));
   const openP = easeOutBack(seg(dt, 0.28, 0.32), 1.2);
   const cy = PY + (PH >> 1);
@@ -1462,99 +1536,96 @@ export function drawFactCard(ctx, t, dt, { fact = '', label = 'KEY FACT', source
   }
   const ph = Math.max(2, round(PH * openP));
   const py = cy - (ph >> 1);
-  r(ctx, PX + 3, py + 4, PW, ph, rgba(P.black, 0.5));
-  r(ctx, PX, py, PW, ph, rgba(P.ink, 0.94));
+  r(ctx, PX + 4, py + 4, PW, ph, rgba(P.black, 0.45));
+  r(ctx, PX, py, PW, ph, rgba(P.ink, 0.9));
   r(ctx, PX, py, PW, 3, P.red);
-  r(ctx, PX, py + ph - 1, PW, 1, P.slate);
-  r(ctx, PX, py, 1, ph, P.slate);
-  r(ctx, PX + PW - 1, py, 1, ph, P.slate);
+  r(ctx, PX, py + ph - 2, PW, 2, P.darkRed);
+  r(ctx, PX, py + 3, 1, ph - 5, P.slate);
+  r(ctx, PX + PW - 1, py + 3, 1, ph - 5, P.slate);
   if (openP < 0.98) return;
+
+  // label tab (red, fused with the top rule like a folder tab)
+  const lp = easeOut(seg(dt, 0.5, 0.35));
+  const lab = ellipsis(label || 'KEY FACT', PW - 80);
+  const lw = measureText(lab) + 16;
+  ctx.save();
+  clipRect(ctx, PX + 12, PY - 9, round(lw * lp), 13);
+  r(ctx, PX + 12, PY - 9, lw, 12, P.red);
+  r(ctx, PX + 12, PY - 9, lw, 1, P.pink);
+  drawText(ctx, lab, PX + 20, PY - 6, { color: P.white });
+  ctx.restore();
 
   ctx.save();
   clipRect(ctx, PX, py, PW, ph);
-  const f = parseFact(fact);
-  const mid = PX + (PW >> 1);
-
-  // label tab
-  const lp = easeOut(seg(dt, 0.55, 0.35));
-  const lab = ellipsis(label || 'KEY FACT', PW - 60);
-  const lw = measureText(lab) + 14;
-  const lx = round(PX + 10 - (lw + 20) * (1 - lp));
-  r(ctx, lx, PY + 10, lw, 13, P.red);
-  r(ctx, lx, PY + 22, lw, 1, P.darkRed);
-  drawText(ctx, lab, lx + 7, PY + 13, { color: P.white });
-
-  // tiny animated bar chart icon (top right)
+  // tiny animated bar-chart icon (top right)
   const cp = easeOut(seg(dt, 0.6, 1.4));
-  [9, 14, 6, 18].forEach((hgt, i) => {
+  [6, 10, 4, 13].forEach((hgt, i) => {
     const hh = Math.max(1, round(hgt * cp * (0.85 + 0.15 * Math.sin(t * 3 + i))));
-    r(ctx, PX + PW - 34 + i * 6, PY + 26 - hh, 4, hh, i === 3 ? P.yellow : P.steel);
+    r(ctx, PX + PW - 30 + i * 5, PY + 19 - hh, 3, hh, i === 3 ? P.yellow : P.steel);
   });
-  r(ctx, PX + PW - 36, PY + 26, 26, 1, P.fog);
+  r(ctx, PX + PW - 32, PY + 19, 22, 1, P.fog);
 
-  const srcY = PY + PH - 16;
+  let y = PY + PAD_T;
   if (f.big) {
-    // big figure counts up
-    const k = easeOut(seg(dt, 0.65, 1.3));
-    const fs = fitScale(f.big, PW - 30, 4, 2);
+    // the figure counts up, the meter fills with it
+    const k = easeOut(seg(dt, 0.6, 1.3));
     const shown = f.count && k < 1 ? formatCount(f, k) : f.big;
-    const ny = PY + 38;
     const bw = measureText(f.big, fs);
     const nx = mid - (bw >> 1);
-    const settle = dt - 1.95;
-    const col = settle > 0 && settle < 0.12 ? P.white : P.yellow;
+    const ny = y;
+    const settle = dt - 1.9;
+    const col = settle > 0 && settle < 0.1 ? P.white : P.yellow;
     extruded(ctx, shown, nx, ny, fs, col, P.rust, 2);
     const g = every(dt, 2.2, 2.6, 0.55);
     if (g >= 0) textGlint(ctx, f.big, nx, ny, fs, lerp(nx - 30, nx + bw + 30, g), 7, P.cream);
-    // segmented meter fills with the count
-    const segs = 24;
-    const mx = mid - ((segs * 10) >> 1);
-    const my = ny + 7 * fs + 8;
+    y += 7 * fs + 2 + 9;
+    const segs = clamp(Math.floor((inner + 2) / 10), 8, 24);
+    const mx = mid - ((segs * 10 - 2) >> 1);
     const lit = round(segs * k);
+    const run = every(dt, 2.0, 2.6, 0.7);
+    const runAt = run >= 0 ? Math.floor(run * (segs + 4)) - 2 : -9;
     for (let i = 0; i < segs; i++) {
       const on = i < lit;
-      const head = i === lit - 1 && k < 1;
-      r(ctx, mx + i * 10, my, 8, 3, head ? P.white : on ? (i % 6 === 5 ? P.orange : P.yellow) : P.slate);
+      const head = (i === lit - 1 && k < 1) || Math.abs(i - runAt) < 1;
+      r(ctx, mx + i * 10, y, 8, 3, head ? P.white : on ? (i % 6 === 5 ? P.orange : P.yellow) : P.slate);
     }
-    // the rest of the fact rises in
-    if (f.rest) {
-      const lay = layoutText(f.rest, PW - 30, 2, 3);
-      const ry = my + 12;
-      lay.lines.forEach((ln, i) => {
-        riseText(ctx, ln, mid, ry + i * lay.lh + 3 * lay.scale, seg(dt, 1.55 + i * 0.1, 0.4), { color: P.white, scale: lay.scale, shadow: P.black, align: 'center' });
+    y += 3;
+    if (rest) {
+      y += 12;
+      rest.lines.forEach((ln, i) => {
+        riseText(ctx, ln, mid, y + i * rest.lh, seg(dt, 1.5 + i * 0.1, 0.4), { color: P.white, scale: rest.scale, shadow: P.black, align: 'center' });
       });
+      y += restH;
     }
-  } else {
+  } else if (rest) {
     // no leading figure: type the fact in with a block cursor
-    const lay = layoutText(f.rest, PW - 30, 3, 5);
-    const total = lay.lines.reduce((a, l) => a + chars(l).length, 0);
-    let budget = Math.floor(total * seg(dt, 0.7, Math.min(2.2, 0.05 * total)));
-    const y0 = PY + 30 + ((PH - 50 - lay.lines.length * lay.lh) >> 1);
+    const total = rest.lines.reduce((a, l) => a + chars(l).length, 0);
+    let budget = Math.floor(total * seg(dt, 0.65, Math.min(2.2, 0.045 * total)));
     let cursor = null;
-    lay.lines.forEach((ln, i) => {
+    rest.lines.forEach((ln, i) => {
       const cs = chars(ln);
       const nshow = Math.min(cs.length, budget);
       budget -= nshow;
-      const lnW = measureText(ln, lay.scale);
-      const x0 = mid - (lnW >> 1);
-      const y = y0 + i * lay.lh + 3 * lay.scale;
-      if (nshow > 0) drawText(ctx, cs.slice(0, nshow).join(''), x0, y, { color: P.white, scale: lay.scale, shadow: P.black });
-      if (nshow < cs.length && !cursor) cursor = [x0 + (nshow ? measureText(cs.slice(0, nshow).join(''), lay.scale) + lay.scale : 0), y];
+      const x0 = mid - (measureText(ln, rest.scale) >> 1);
+      const ly = y + i * rest.lh;
+      if (nshow > 0) drawText(ctx, cs.slice(0, nshow).join(''), x0, ly, { color: P.white, scale: rest.scale, shadow: P.black });
+      if (nshow < cs.length && !cursor) cursor = [x0 + (nshow ? measureText(cs.slice(0, nshow).join(''), rest.scale) + rest.scale : 0), ly];
     });
     if (!cursor) {
-      const last = lay.lines[lay.lines.length - 1] || '';
-      const lnW = measureText(last, lay.scale);
-      cursor = [mid + (lnW >> 1) + 2 * lay.scale, y0 + (lay.lines.length - 1) * lay.lh + 3 * lay.scale];
+      const last = rest.lines[rest.lines.length - 1];
+      cursor = [mid + (measureText(last, rest.scale) >> 1) + 2 * rest.scale, y + (rest.lines.length - 1) * rest.lh];
     }
-    if (Math.floor(t * 3) % 2 === 0) r(ctx, cursor[0], cursor[1], 4 * lay.scale, 7 * lay.scale, P.yellow);
+    if (dt < 0.65 || Math.floor(t * 3) % 2 === 0) r(ctx, cursor[0], cursor[1], 3 * rest.scale, 7 * rest.scale, P.yellow);
+    y += restH;
   }
 
   // source line
   const sp = seg(dt, 1.9, 0.5);
   if (source && sp > 0) {
+    const sy = y + 10;
     const s = ellipsis(`SOURCE: ${normalizeText(source)}`, PW - 30);
-    r(ctx, PX + 10, srcY - 3, round((PW - 20) * easeOut(sp)), 1, P.slate);
-    drawText(ctx, typed(s, sp), PX + 10, srcY + 2, { color: P.fog });
+    r(ctx, PX + 12, sy - 4, round((PW - 24) * easeOut(sp)), 1, P.slate);
+    drawText(ctx, typed(s, sp), PX + 12, sy + 2, { color: P.fog });
   }
   ctx.restore();
 }
@@ -1584,9 +1655,17 @@ export function drawStinger(ctx, t, p, { channel = 'LIVENEWS' } = {}) {
   // speed streaks and the bright leading/trailing edges of the main panel
   ctx.save();
   clipSlab(ctx, red.tail, 0, red.lead - red.tail, H, -SL);
-  const streak = rgba(P.darkRed, 0.55);
+  stripes(ctx, p * 1.5, { color: P.darkRed, a: 0.28, period: 34, width: 12, slope: -SL, speed: 160 });
+  const cy = H >> 1;
+  const sc = fitScale(channel, 250, 4, 2);
+  const bandH = 7 * sc + 26;
+  r(ctx, 0, cy - (bandH >> 1), W, bandH, rgba(P.darkRed, 0.55));
+  r(ctx, 0, cy - (bandH >> 1), W, 1, rgba(P.pink, 0.6));
+  r(ctx, 0, cy + (bandH >> 1), W, 2, rgba(P.maroon, 0.6));
+  const streak = rgba(P.pink, 0.45);
   for (let i = 0; i < 7; i++) {
-    const y = 18 + i * 29;
+    const y = 14 + i * 31;
+    if (Math.abs(y - cy) < bandH / 2 + 2) continue;
     const len = 40 + ((i * 53) % 70);
     const x = ((i * 97 + p * 1400) % (W + len + 120)) - len - 60 + y * -SL;
     r(ctx, round(x), y, len, i % 3 === 0 ? 2 : 1, streak);
@@ -1594,19 +1673,17 @@ export function drawStinger(ctx, t, p, { channel = 'LIVENEWS' } = {}) {
   slab(ctx, red.lead - 3, 0, 3, H, -SL, rgba(P.white, 0.5));
   slab(ctx, red.tail, 0, 3, H, -SL, rgba(P.white, 0.35));
   // logo sweeps through while the screen is covered
-  const lp = seg(p, 0.26, 0.48);
+  const lp = seg(p, 0.24, 0.52);
   if (lp > 0 && lp < 1) {
-    const sc = fitScale(channel, 230, 3, 2);
     const tw = measureText(channel, sc);
-    const gR = 7 * sc - 6;
-    const total = gR * 2 + 8 + tw;
-    const drift = round(lerp(-26, 26, lp) + (easeInOut(lp) - lp) * 30);
+    const gR = 7 * sc - 7;
+    const total = gR * 2 + 10 + tw;
+    const drift = round(lerp(-22, 22, lp) + (easeInOut(lp) - lp) * 40);
     const x0 = ((W - total) >> 1) + drift;
-    const cy = H >> 1;
     globe(ctx, x0 + gR, cy, gR, t * 60, t);
-    const tx = x0 + gR * 2 + 8;
+    const tx = x0 + gR * 2 + 10;
     const ty = cy - round((7 * sc) / 2);
-    extruded(ctx, channel, tx, ty, sc, P.white, P.darkRed, 2);
+    extruded(ctx, channel, tx, ty, sc, P.white, P.maroon, 2);
     const ulw = round(tw * easeOut(seg(lp, 0.1, 0.5)));
     r(ctx, tx, ty + 7 * sc + 4, ulw, 2, P.yellow);
     textGlint(ctx, channel, tx, ty, sc, lerp(tx - 20, tx + tw + 20, easeInOut(seg(lp, 0.2, 0.6))), 6, P.yellow);

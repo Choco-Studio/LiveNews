@@ -1,5 +1,6 @@
 // Builds the prompt for the news writer and turns the model's JSON reply into
 // a safe, validated bulletin for the renderer.
+import { parseCues, describeActions } from '../public/js/cues.js';
 
 export const EMOTIONS = ['neutral', 'happy', 'serious', 'surprised', 'sad', 'thinking'];
 export const SHOTS = ['wide', 'close', 'full', 'map'];
@@ -71,6 +72,14 @@ TONE
 - Grave stories (deaths, war, disasters, violence, illness): sober tone, emotion "serious" or "sad", no jokes or light banter before or after them.
 - Lighter stories: engaging and a little witty, true to each presenter's personality.
 - Short sentences that are easy to say aloud. No emojis, no markdown, spell out unusual abbreviations.
+
+STAGE DIRECTIONS (make the presenters move naturally)
+- Inside any "text" you may place cues in square brackets exactly where the movement should happen; they are not read aloud.
+- "[action]" is performed by the presenter speaking${solo ? '' : '; "[A:action]" or "[B:action]" makes a specific presenter do it (e.g. the co-presenter reacting with "[B:nod]")'}.
+- Actions: ${describeActions()}.
+- An emotion name in brackets (e.g. "[surprised]") changes the speaker's expression from that point.
+- Use 1 to 3 cues per segment, varied and motivated by what is said: wave when greeting or signing off, point_screen when introducing pictures, count when listing, lean_in for important points, shrug for uncertainty${solo ? '' : ', look_partner or point_partner on hand-overs'}.
+- Never use wave, thumbs_up, fist_pump, facepalm, laugh or wow in grave stories.
 
 OUTPUT FORMAT
 Reply with ONLY a valid JSON object, no text before or after, shaped like this:
@@ -181,13 +190,20 @@ export function normalizeBulletin(raw, stories, { channelName = 'LIVENEWS', maxS
   for (const seg of Array.isArray(raw?.segments) ? raw.segments : []) {
     const type = pick(seg?.type, TYPES, null);
     if (!type) continue;
-    const text = clip(seg.text, LIMITS.text);
+    const emotion = pick(seg.emotion, EMOTIONS, 'neutral');
+    const grave = emotion === 'serious' || emotion === 'sad';
+    const parsed = parseCues(clean(seg.text, 2000), { grave });
+    const text = clip(parsed.text, LIMITS.text);
     if (!text) continue;
+    const cues = parsed.cues
+      .filter((c) => c.char <= text.length && (!c.slot || (c.slot === 'B' ? !solo : true)))
+      .map((c) => ({ ...c, slot: c.slot === (seg.anchor === 'B' && !solo ? 'B' : 'A') ? null : c.slot }));
     const base = {
       type,
       anchor: seg.anchor === 'B' && !solo ? 'B' : 'A',
-      emotion: pick(seg.emotion, EMOTIONS, 'neutral'),
+      emotion,
       text,
+      cues,
     };
     if (type === 'story') {
       const story = byId.get(seg.storyId);
@@ -224,12 +240,14 @@ export function normalizeBulletin(raw, stories, { channelName = 'LIVENEWS', maxS
     anchor: 'A',
     emotion: 'happy',
     text: `Hello and welcome to ${channelName}. Here are the headlines.`,
+    cues: [{ char: 0, slot: null, action: 'wave' }],
   };
   const outro = segments.find((s) => s.type === 'outro') || {
     type: 'outro',
     anchor: solo ? 'A' : 'B',
     emotion: 'happy',
     text: `That's all for now. Stay with us, ${channelName} is live around the clock.`,
+    cues: [{ char: 0, slot: null, action: 'wave' }],
   };
   const body = segments.filter((s) => s.type === 'story' || s.type === 'chat');
   while (body.length && body[0].type === 'chat') body.shift();

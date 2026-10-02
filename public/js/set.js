@@ -405,28 +405,29 @@ function buildLondon(th) {
     p.rect(x, G - h, w, h, th.mid);
     litWindows(p, rand, x, G - h, w, G, th, slots);
   }
+  // Westminster is sandstone by day and floodlit gold at night
+  const [tw, thi, tlo] = th.tower;
   // Victoria Tower
-  block(p, 1, 20, 7, G, th);
-  p.rect(1, 17, 1, 3, th.near);
-  p.rect(7, 17, 1, 3, th.near);
-  p.rect(4, 18, 1, 2, th.near);
+  block(p, 1, 20, 7, G, { hi: thi, lo: tlo }, tw);
+  p.rect(1, 17, 1, 3, tw);
+  p.rect(7, 17, 1, 3, tw);
+  p.rect(4, 18, 1, 2, tw);
   p.rect(4, 12, 1, 6, th.lo);
   p.rect(5, 12, 2, 2, P.red);
   for (let y = 23; y < 44; y += 5) {
-    p.rect(3, y, 1, 3, th.lo);
-    p.rect(5, y, 1, 3, th.lo);
+    p.rect(3, y, 1, 3, tlo);
+    p.rect(5, y, 1, 3, tlo);
   }
   // Palace of Westminster
-  p.rect(8, 37, 21, G - 37, th.near);
-  p.rect(8, 37, 21, 1, th.hi);
-  for (let x = 9; x < 29; x += 2) p.rect(x, 40, 1, G - 42, th.lo);
-  for (let x = 8; x < 29; x += 3) p.rect(x, 35, 1, 2, th.near);
-  litWindows(p, rand, 8, 37, 21, G, { ...th, lit: th.lit * 0.6 }, slots);
-  p.rect(17, 30, 3, 7, th.near); // central lantern
-  p.px(17, 30, th.hi);
-  p.rect(18, 25, 1, 5, th.near);
+  p.rect(8, 37, 21, G - 37, tw);
+  p.rect(8, 37, 21, 1, thi);
+  for (let x = 9; x < 29; x += 2) p.rect(x, 40, 1, G - 42, tlo);
+  for (let x = 8; x < 29; x += 3) p.rect(x, 35, 1, 2, tw);
+  for (let x = 10; x < 28; x += 4) if (th.lamps) p.px(x, 42, th.litA);
+  p.rect(17, 30, 3, 7, tw); // central lantern
+  p.px(17, 30, thi);
+  p.rect(18, 25, 1, 5, tw);
   // Elizabeth Tower (Big Ben)
-  const [tw, thi, tlo] = th.tower;
   p.rect(30, 21, 5, G - 21, tw);
   p.rect(30, 21, 1, G - 21, thi);
   p.rect(34, 21, 1, G - 21, tlo);
@@ -464,10 +465,15 @@ function buildLondon(th) {
     const hw = Math.round(((y - 3) * 5) / 43);
     p.rect(78 - hw, y, hw + 1, 1, sa);
     p.rect(79, y, hw, 1, sb);
+    if (th.lamps && y > 6 && y < 13) p.px(78, y, y < 10 ? P.white : P.fog); // lit spire
   }
   p.px(78, 5, th.sky[0]);
   p.px(78, 6, th.sky[0]);
   p.px(78, 3, sa);
+  if (th.lamps) {
+    p.px(77, 4, P.fog);
+    p.px(79, 4, P.fog);
+  }
   for (let y = 14; y < G - 2; y += 4) for (let x = 76; x < 82; x += 2) if (rand() < th.lit) p.px(x, y, th.litB);
   // embankment + river
   p.rect(0, G, WIN.w, 1, th.near);
@@ -586,8 +592,8 @@ const STARS = (() => {
 
 const BOKEH = (() => {
   const rand = mulberry32(99);
-  const cols = [P.yellow, P.orange, P.cyan, P.pink, P.cream, P.yellow];
-  return Array.from({ length: 7 }, (_, i) => ({
+  const cols = [P.yellow, P.cream, P.cyan, P.orange, P.yellow];
+  return Array.from({ length: 5 }, (_, i) => ({
     x: 4 + Math.floor(rand() * (WIN.w - 8)),
     y: 16 + Math.floor(rand() * 32),
     big: rand() < 0.45,
@@ -603,6 +609,7 @@ function glass() {
   const p = new Pix(WIN.w, WIN.h);
   for (let y = 0; y < WIN.h; y++) {
     for (let x = 0; x < WIN.w; x++) {
+      p.over(x, y, P.ink, 0.16); // tinted studio glass keeps the view behind the presenters
       const d = (x + y * 0.8) % 46;
       if (d >= 10 && d < 13) p.over(x, y, P.white, 0.07);
       if (d >= 15 && d < 16) p.over(x, y, P.white, 0.09);
@@ -681,19 +688,20 @@ function drawWindow(ctx, side, t, tm, phase) {
     fill(c, x, y, 2, 1, i % 3 ? th.glint : rgba(th.glint, 0.5));
   }
   if (th.bokeh) {
+    // out-of-focus city lights drifting in and out
     for (const b of BOKEH) {
-      const a = 0.16 + 0.14 * Math.sin(t * b.rate + b.ph + (side === 'L' ? 0 : 2));
+      const a = 0.24 + 0.16 * Math.sin(t * b.rate + b.ph + (side === 'L' ? 0 : 2));
+      if (a < 0.12) continue;
       const x = side === 'L' ? b.x : WIN.w - b.x;
-      c.fillStyle = rgba(b.color, a);
+      c.fillStyle = rgba(b.color, a * 0.55);
       if (b.big) {
         c.fillRect(x - 2, b.y - 1, 5, 3);
         c.fillRect(x - 1, b.y - 2, 3, 1);
         c.fillRect(x - 1, b.y + 2, 3, 1);
-      } else {
-        c.fillRect(x - 1, b.y, 3, 1);
-        c.fillRect(x, b.y - 1, 1, 1);
-        c.fillRect(x, b.y + 1, 1, 1);
       }
+      c.fillStyle = rgba(b.color, a);
+      c.fillRect(x - 1, b.y, 3, 1);
+      c.fillRect(x, b.y - 1, 1, 3);
     }
   }
   c.drawImage(glass(), 0, 0);
@@ -933,8 +941,8 @@ function landTexture() {
 
 // colours per surface type [ocean, land, ice] x light level 0..4
 const GLOBE_COLORS = [
-  [P.ink, P.navy, P.navy, P.blue, P.cyan],
-  [P.darkGreen, P.darkGreen, P.darkGreen, P.green, P.green],
+  [P.ink, P.navy, P.blue, P.blue, P.cyan],
+  [P.darkGreen, P.darkGreen, P.green, P.green, P.green],
   [P.steel, P.fog, P.silver, P.white, P.white],
 ].map((row) => row.map(u32));
 
@@ -965,7 +973,7 @@ function buildGlobe(R) {
         const la = (-Math.asin(clamp(qy, -1, 1)) * 180) / Math.PI;
         const lo = (Math.atan2(qx, nz) * 180) / Math.PI;
         const dif = nx * L[0] + ny * L[1] + nz * L[2];
-        let v = clamp((dif + 0.2) * 2.6, 0, 3);
+        let v = clamp((dif + 0.08) * 3.3, 0, 3);
         const k = Math.floor(v);
         v = Math.min(3, k + (v - k > bayer(dx + 64, dy + 64) ? 1 : 0));
         if (dif > 0.965) v = 4;
@@ -1352,6 +1360,11 @@ function drawWallHalo(ctx, color, t) {
 const FIXTURES = [22, 60, 118, 160, 192, 224, 266, 324, 362];
 const PILLARS = [3, 379];
 const FLOOR_Y = 134;
+// front edge of the round riser the desk stands on (y per column; H = none)
+const RISER = Array.from({ length: W }, (_, x) => {
+  const u = (x + 0.5 - 192) / 190;
+  return Math.abs(u) >= 1 ? H : Math.round(FLOOR_Y + 48 * Math.sqrt(1 - u * u));
+});
 
 let bgLayer = null;
 function background() {
@@ -1386,7 +1399,7 @@ function background() {
       const dx = Math.abs(x + 0.5 - ax);
       if (dx > half) return -1;
       return (1 - dx / half) ** 0.7 * Math.max(0, 1 - dy / 125) ** 1.15 * 2.3;
-    }, 1.3);
+    }, 2.6);
   }
   // panel seams framing the presenter bays
   for (const sx of [98, 136, 247, 285]) {
@@ -1435,7 +1448,7 @@ function background() {
   }
   // world map dots
   WORLD.forEach((row, rr) => {
-    [...row].forEach((ch, cc) => p.px(MON_R.x + cc * 2, MON_R.y + 1 + rr * 2, ch === '#' ? P.steel : P.ink));
+    [...row].forEach((ch, cc) => p.px(MON_R.x + cc * 2, MON_R.y + 1 + rr * 2, ch === '#' ? P.blue : P.ink));
   });
   // video wall bezel
   {
@@ -1460,12 +1473,27 @@ function background() {
   p.rect(0, FLOOR_Y - 4, W, 1, P.black);
   p.rect(0, FLOOR_Y - 3, W, 2, P.slate);
   p.rect(0, FLOOR_Y - 1, W, 1, P.navy);
-  // glossy floor: perspective seams over a dark gradient
+  // glossy floor: a round riser under the desk with radial seams and an LED
+  // edge, on a darker studio floor
   p.vgrad(0, FLOOR_Y, W, H - FLOOR_Y, [P.ink, P.ink, P.black], 1.3);
   for (let k = -14; k <= 14; k++) {
-    linePts(192, 56, 192 + k * 30, 260, (x, y) => y > FLOOR_Y && p.over(x, y, P.slate, 0.4));
+    linePts(192, 56, 192 + k * 30, 260, (x, y) => y > FLOOR_Y && p.over(x, y, P.slate, y < RISER[x] ? 0.4 : 0.18));
   }
-  for (const y of [143, 158, 182]) for (let x = 0; x < W; x++) p.over(x, y, P.slate, 0.3);
+  for (let x = 0; x < W; x++) {
+    const ry = RISER[x];
+    for (let y = Math.max(FLOOR_Y, ry); y < H; y++) p.over(x, y, P.black, 0.35);
+    if (ry >= H) continue;
+    const y0 = Math.max(FLOOR_Y, Math.min(ry, (RISER[x - 1] ?? H) + 1, (RISER[x + 1] ?? H) + 1));
+    p.over(x, y0 - 1, P.white, 0.1);
+    for (let y = y0; y <= ry; y++) {
+      p.px(x, y, P.steel); // lip
+      p.px(x, y + 1, P.black);
+      p.px(x, y + 2, P.navy); // LED strip on the riser face
+      p.px(x, y + 3, P.black);
+    }
+    p.over(x, ry + 4, P.blue, 0.22);
+    p.over(x, ry + 5, P.blue, 0.1);
+  }
   // pillar reflections + cove light on the floor
   for (const lx of PILLARS) {
     for (let i = 0; i < 26; i++) {
@@ -1537,6 +1565,17 @@ function drawRig(ctx, t) {
   }
   // cove light breathing
   fill(ctx, 0, FLOOR_Y - 1, W, 1, rgba(P.cyan, 0.25 + 0.15 * Math.sin(t * 0.9)));
+  // riser LED: comets running round the platform edge
+  for (let k = 0; k < 2; k++) {
+    const d = Math.floor((t * 52 + k * 96) % 192);
+    for (const dir of [-1, 1]) {
+      for (let j = 0; j < 14; j++) {
+        const x = dir > 0 ? 192 + d - j : 191 - d + j;
+        if (x < 0 || x >= W || RISER[x] >= H - 2) continue;
+        fill(ctx, x, RISER[x] + 2, 1, 1, j === 0 ? P.white : j < 5 ? P.cyan : P.blue);
+      }
+    }
+  }
 }
 
 /** Moving-head beams sweeping through the haze on both sides of the set. */
@@ -1548,9 +1587,11 @@ function drawBeams(ctx, t) {
       const y = 14 + i;
       const cx = sx + tan * i;
       const hw = 1 + i * 0.09;
-      const a = 0.075 * (1 - i / 130);
+      const a = 0.1 * (1 - i / 135);
       ctx.fillStyle = rgba(P.cream, a);
       ctx.fillRect(Math.round(cx - hw), y, Math.round(hw * 2) + 1, 2);
+      ctx.fillStyle = rgba(P.white, a * 0.6);
+      ctx.fillRect(Math.round(cx - hw * 0.3), y, Math.round(hw * 0.6) + 1, 2);
     }
   }
 }
@@ -1577,47 +1618,63 @@ export function drawSet(ctx, t, scene) {
 }
 
 // ---------------------------------------------------------------------------
-// The anchor desk: a curved news desk with wings angled away from camera
+// The anchor desk: a curved news desk bowing towards the camera. Its top edge
+// is an arc that sits exactly on DESK_Y under both presenters (where their
+// hands rest) and rises as the ends curve away; the floor line curves more.
 
-const DESK = { x0: 36, x1: 347, c0: 84, c1: 299, bot: 155 };
-const deskK = (x) => (x < DESK.c0 ? (DESK.c0 - x) / (DESK.c0 - DESK.x0) : x > DESK.c1 ? (x - DESK.c1) / (DESK.x1 - DESK.c1) : 0);
-const deskTop = (x) => DESK_Y - Math.round(3 * deskK(x));
-const deskBot = (x) => DESK.bot - Math.round(7 * deskK(x));
+const DESK = { x0: 36, x1: 347, cx: 191.5, half: 156 };
+const deskDx = (x) => x + 0.5 - 192;
+const ANCHOR_D2 = (ANCHOR_X.B - ANCHOR_X.A) ** 2 / 4;
+const deskTop = (x) => DESK_Y + Math.round((ANCHOR_D2 - deskDx(x) ** 2) / ANCHOR_D2);
+const deskBot = (x) => 155 + Math.round(((ANCHOR_D2 - deskDx(x) ** 2) * 8) / (DESK.half ** 2 - ANCHOR_D2));
+const DESK_BOT = deskBot(192);
 
 let deskLayer = null;
 function desk() {
   if (deskLayer) return deskLayer;
   const p = new Pix(W, H);
   for (let x = DESK.x0; x <= DESK.x1; x++) {
-    const k = deskK(x);
+    const e = Math.min(1, Math.abs(deskDx(x)) / DESK.half); // 0 centre .. 1 ends
     const top = deskTop(x);
     const bot = deskBot(x);
     // glossy top surface + bevelled front edge
     p.px(x, top, P.slate);
     p.px(x, top + 1, P.steel);
     p.px(x, top + 2, P.steel);
-    p.px(x, top + 3, P.fog);
-    p.px(x, top + 4, P.silver);
+    p.px(x, top + 3, e > 0.93 ? P.steel : P.fog);
+    p.px(x, top + 4, e > 0.93 ? P.fog : P.silver);
     p.px(x, top + 5, P.black);
     // LED channel
     p.px(x, top + 6, P.black);
     p.px(x, top + 7, P.navy);
     p.px(x, top + 8, P.black);
-    // front face: lit navy in the middle, falling off into the wings
+    // front face: lit navy facing the camera, turning darker as it curves away
     const f0 = top + 9;
     const f1 = bot - 5;
+    const sheen = Math.exp(-(((e - 0.66) / 0.07) ** 2)) * 0.7;
     p.shade(x, f0, 1, f1 - f0 + 1, [P.blue, P.navy, P.ink, P.black], (xx, y) => {
       const v = (y - f0) / Math.max(1, f1 - f0);
-      return k > 0 ? 1.5 + v * 0.9 + k * 0.7 : 0.75 + v * 1.25;
-    }, 1.6);
-    p.px(x, bot - 4, k > 0 ? P.ink : P.slate);
+      return 0.75 + v * 1.2 + e ** 2.2 * 1.3 - sheen * (1 - v);
+    }, 1.7);
+    p.px(x, bot - 4, e > 0.8 ? P.ink : P.slate);
     p.rect(x, bot - 3, 1, 4, P.black);
   }
-  // crisp vertical edges where the wings fold back, panel seams and end caps
-  for (const x of [DESK.c0, DESK.c1]) p.rect(x, DESK_Y + 9, 1, DESK.bot - DESK_Y - 13, P.blue);
-  for (const x of [106, 278]) p.rect(x, DESK_Y + 9, 1, DESK.bot - DESK_Y - 13, P.black);
-  p.rect(DESK.x0, deskTop(DESK.x0), 1, deskBot(DESK.x0) - deskTop(DESK.x0) + 1, P.steel);
-  p.rect(DESK.x1, deskTop(DESK.x1), 1, deskBot(DESK.x1) - deskTop(DESK.x1) + 1, P.ink);
+  // panel seams spaced as on a curved surface, with a lit edge facing centre
+  for (const deg of [36, 54, 72]) {
+    const d = Math.round(DESK.half * Math.sin((deg * Math.PI) / 180));
+    for (const [x, hi] of [[192 - d, 1], [191 + d, -1]]) {
+      const top = deskTop(x) + 9;
+      const len = deskBot(x) - 5 - top;
+      p.rect(x, top, 1, len, P.black);
+      p.rect(x + hi, top, 1, len, deg === 72 ? P.navy : P.blue);
+    }
+  }
+  // rounded desk ends
+  for (const [x, c1, c2] of [[DESK.x0, P.slate, P.steel], [DESK.x1, P.black, P.ink]]) {
+    const top = deskTop(x);
+    p.rect(x, top, 1, deskBot(x) - top + 1, c1);
+    p.rect(x, top + 1, 1, 4, c2);
+  }
   // reflection in the glossy floor + contact shadow
   for (let x = DESK.x0 - 4; x <= DESK.x1 + 4; x++) {
     const inside = x >= DESK.x0 && x <= DESK.x1;
@@ -1678,12 +1735,12 @@ function plate(channel) {
   // its reflection on the floor, built from the finished plate
   const src = new Uint32Array(c.getImageData(0, 0, pw, ph).data.buffer);
   const x0 = Math.floor((W - pw) / 2);
-  const y0 = 127;
-  const ry0 = 2 * DESK.bot + 1 - (y0 + ph - 1);
+  const y0 = deskTop(192) + 10;
+  const ry0 = 2 * DESK_BOT + 1 - (y0 + ph - 1);
   const rp = new Pix(pw, ph);
   for (let j = 0; j < ph; j++) {
     const dy = ry0 + j;
-    const a = 0.26 * clamp(1 - (dy - DESK.bot) / 30, 0, 1);
+    const a = 0.26 * clamp(1 - (dy - DESK_BOT) / 30, 0, 1);
     for (let i = 0; i < pw; i++) rp.over(i, j, src[(ph - 1 - j) * pw + i], a);
   }
   pl = { cv, refl: rp.canvas(), x: x0, y: y0, w: pw, h: ph, ry: ry0 };
@@ -1697,7 +1754,13 @@ export function drawDesk(ctx, t, channel, withLogo = true) {
   const g = lastGlow;
   for (const [x0, x1, a] of [[118, 266, 0.1], [136, 248, 0.12], [156, 228, 0.12]]) {
     ctx.fillStyle = rgba(g, a);
-    ctx.fillRect(x0, DESK_Y, x1 - x0, 5);
+    for (let x = x0; x < x1;) {
+      const top = deskTop(x);
+      let x2 = x + 1;
+      while (x2 < x1 && deskTop(x2) === top) x2++;
+      ctx.fillRect(x, top, x2 - x, 5);
+      x = x2;
+    }
   }
   // a specular highlight gliding along the desk edge
   const st = t % 10;
@@ -1729,14 +1792,15 @@ export function drawDesk(ctx, t, channel, withLogo = true) {
   for (let i = 0; ; i++) {
     const dx = (pl ? 192 - inner : 2) + i * 7;
     const xl = 192 - dx - 2;
-    if (xl < DESK.c0 + 5) break;
+    if (xl < 62) break;
     const ph = (((i - n) % 9) + 9) % 9;
     const col = ph === 0 ? P.cyan : ph === 1 ? P.blue : P.ink;
-    fill(ctx, xl, 139, 2, 2, col);
-    fill(ctx, 192 + dx, 139, 2, 2, col);
+    const y = deskTop(xl) + 21;
+    fill(ctx, xl, y, 2, 2, col);
+    fill(ctx, 192 + dx, y, 2, 2, col);
     if (ph === 0) {
-      fill(ctx, xl, 139, 1, 1, P.white);
-      fill(ctx, 192 + dx + 1, 139, 1, 1, P.white);
+      fill(ctx, xl, y, 1, 1, P.white);
+      fill(ctx, 192 + dx + 1, y, 1, 1, P.white);
     }
   }
   if (!pl) return;

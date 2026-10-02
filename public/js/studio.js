@@ -10,6 +10,7 @@ import { lookOf, portraitOf, presenterName, THEME_ACCENT } from './cast.js';
 import { drawCloseup } from './scenes/portraits.js';
 import { drawWorldMap } from './scenes/worldmap.js';
 import * as cards from './scenes/cards.js';
+import { drawOpen } from './scenes/opens.js';
 import { drawLogo, measureLogo } from './logo.js';
 
 export { W, H };
@@ -68,15 +69,18 @@ export class Renderer {
     const other = slot === 'A' ? 'B' : 'A';
     let look = 0;
     if (scene.cast?.[other] && this.audio.isSpeaking(other) && scene.shot === 'wide') look = slot === 'A' ? 1 : -1;
+    const act = scene.actions?.[slot];
+    const action = act && t < act.t0 + act.dur ? { name: act.name, t0: act.t0, dur: act.dur, p: Math.max(0, (t - act.t0) / act.dur) } : null;
     return {
       t,
       speaking,
+      action,
       emotion: scene.anchors[slot]?.emotion || 'neutral',
       mouth: level > 0.62 ? 2 : level > 0.22 ? 1 : 0,
       blink: t < a.blinkUntil,
       look,
       bob: speaking && Math.sin(t * 5.3) > 0.7 ? 1 : 0,
-      gesture: speaking && t < a.gestureUntil ? 1 : 0,
+      gesture: !action && speaking && t < a.gestureUntil ? 1 : 0,
     };
   }
 
@@ -101,6 +105,14 @@ export class Renderer {
         return cards.drawStartScreen(ctx, t, { channel: scene.channel.name, prompt: card.prompt || 'CLICK TO TUNE IN' });
       case 'standby':
         return cards.drawStandby(ctx, t, { channel: scene.channel.name, message: card.message || 'PREPARING THE NEXT PROGRAMME' });
+      case 'open':
+        return drawOpen(ctx, t, dt, program?.id, {
+          title: program?.title || scene.channel.name,
+          tagline: program?.tagline || '',
+          presenters: Object.values(scene.cast || {}).map(presenterName),
+          date: longDate().toUpperCase(),
+          channel: scene.channel.name,
+        });
       case 'title':
         return cards.drawTitleCard(ctx, t, dt, { channel: program?.title || scene.channel.name, subtitle: program?.tagline || scene.channel.slogan, date: longDate().toUpperCase() });
       case 'endcard':

@@ -6,6 +6,8 @@ import { presenterName, setPresenters } from './cast.js';
 import { STINGER_DURATION } from './scenes/cards.js';
 import { pickAds } from './ads/index.js';
 import { splitSentences } from './audio.js';
+import { ACTIONS } from './cues.js';
+import { openFor } from './scenes/opens.js';
 
 const now = () => performance.now() / 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -32,6 +34,7 @@ export class Director {
       storyId: null,
       wall: { mode: 'logo' },
       anchors: {},
+      actions: {}, // slot -> { name, t0, dur } animation currently playing
       lowerThird: null,
       subtitle: null,
       subtitles: true,
@@ -186,6 +189,26 @@ export class Director {
     this.audio.setVoices?.(voices);
   }
 
+  /** Start a presenter animation (see cues.js) or change an expression. */
+  perform(slot, cue) {
+    const s = this.scene;
+    if (!s.cast?.[slot]) return;
+    if (cue.emotion) s.anchors[slot] = { ...s.anchors[slot], emotion: cue.emotion };
+    if (cue.action && ACTIONS[cue.action]) s.actions[slot] = { name: cue.action, t0: now(), dur: ACTIONS[cue.action].dur };
+  }
+
+  /** Cues the writer did not provide: greet, show the pictures, hand over. */
+  defaultCues(seg) {
+    if (seg.cues?.length) return seg.cues;
+    if (seg.type === 'intro' || seg.type === 'outro') return [{ char: 0, action: 'wave' }];
+    if (seg.type === 'chat') return [{ char: 0, action: this.scene.cast.B ? 'look_partner' : 'nod' }];
+    if (seg.type === 'story') {
+      const grave = seg.emotion === 'serious' || seg.emotion === 'sad';
+      return [{ char: 0, action: seg.hasImage ? 'point_screen' : grave ? 'lean_in' : 'raise_hand' }];
+    }
+    return [];
+  }
+
   async say(seg, onSentence) {
     const s = this.scene;
     s.anchors[seg.anchor] = { emotion: seg.emotion };
@@ -193,13 +216,37 @@ export class Director {
       if (slot === seg.anchor) continue;
       s.anchors[slot] = { emotion: seg.emotion === 'happy' ? 'happy' : seg.emotion === 'serious' || seg.emotion === 'sad' ? 'serious' : 'neutral' };
     }
+    // Map each cue to the sentence it falls in, then fire it at roughly the
+    // right word (speech runs at about 15 characters per second).
+    const sentences = splitSentences(seg.text);
+    const starts = [];
+    let from = 0;
+    for (const sentence of sentences) {
+      const at = seg.text.indexOf(sentence.slice(0, 12), from);
+      starts.push(at >= 0 ? at : from);
+      from = (at >= 0 ? at : from) + sentence.length;
+    }
+    const cues = this.defaultCues(seg);
+    const timers = [];
+    const fire = (i) => {
+      const start = starts[i] ?? 0;
+      const end = i + 1 < starts.length ? starts[i + 1] : Infinity;
+      for (const cue of cues) {
+        if (cue.char < start || cue.char >= end) continue;
+        const delay = Math.min(6, (cue.char - start) / 15) * 1000;
+        timers.push(setTimeout(() => this.perform(cue.slot || seg.anchor, cue), delay));
+      }
+    };
     await this.audio.speak(seg.text, seg.anchor, {
       onSentence: (sentence, i) => {
         s.subtitle = sentence;
+        fire(i);
         onSentence?.(i);
       },
     });
     s.subtitle = null;
+    // Reactions placed after the last word still play out; anything else is dropped.
+    setTimeout(() => timers.forEach(clearTimeout), 2500);
   }
 
   async playEpisode(episode) {
@@ -212,10 +259,13 @@ export class Director {
       s.lowerThird = null;
       s.subtitle = null;
       this.setCast(episode);
-      this.setShot('title', { storyId: null, card: null });
+      this.setShot('open', { storyId: null, card: null });
     });
-    this.audio.sfx('jingle');
-    await Promise.all([sleep(3200), imagesReady]);
+    // Each programme has its own opening titles and theme tune.
+    const open = openFor(episode.program.id);
+    const tune = this.audio.playTune?.(open.tune, { volume: 0.6 });
+    await Promise.all([sleep(open.duration * 1000), imagesReady]);
+    tune?.stop?.();
 
     for (const seg of episode.segments) {
       switch (seg.type) {
