@@ -15,8 +15,8 @@
 //                  softbox sweep travels round the glass.                    VO "BitFizz Reserve."
 //  6 20.4 SLATE    bottle left, gold lock-up right, legal on the bar.        VO "Uncompressed."
 import {
-  P, W, H, R, A, oval, poly, ring, disc, cached, lazy, play, key, tween, prog, smooth, clamp,
-  type, typeWidth, trackIn, fadeUp, rule, smallPrint, gradient, vignette, letterbox, beam, contact, glintStar,
+  P, W, H, R, A, oval, poly, ring, disc, cached, lazy, play, key, tween, prog, smooth,
+  type, trackIn, fadeUp, rule, smallPrint, gradient, vignette, letterbox, beam, contact, glintStar,
   litShape, lathe, ovalRing, bubbles, motes, hash01, clipRect, warmUp, tune,
 } from './kit.js';
 

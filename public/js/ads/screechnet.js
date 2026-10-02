@@ -8,7 +8,7 @@
 // Every frame is a pure function of the ad clock: sets are baked once with
 // dithered light (cine.js), people and props use the crisp rasteriser.
 import {
-  P, W, H, clamp, lerp, prog, smooth, easeInOut, track, window01, hash, blinkAt, mix, bake, shadeInto, ditherInto,
+  P, W, H, clamp, lerp, prog, smooth, easeInOut, track, window01, hash, blinkAt, mix, bake, shader, shadeInto, ditherInto,
   pool, rect, line, begin, pt, fill, ellipse, capsule, film, vignette, letterbox, thin, tracked, text, smallPrint,
   figure, bust, arm, profile, standing,
 } from './cine.js';

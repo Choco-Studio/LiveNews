@@ -2,9 +2,9 @@
 // programme accent, calm motion, everything eased in and out.
 //   top row  bug (top-left) + LIVE/REPLAY + programme name, London clock (top-right)
 //   strap    lower third with kicker/category, source or presenter name, headline;
-//            turns red for breaking news
-//   captions paged, never dropping lines, clear of strap and ticker
-//   ticker   one headline at a time
+//            turns red for breaking news; long text is paged, never scrolled
+//   captions yellow-on-black pages, never dropping lines, clear of strap and ticker
+//   ticker   one headline (or headline page) at a time
 // Renderer (studio.js) calls `graphics.draw(ctx, t, scene)` after the shot.
 // `update()` is separate from drawing so lab pages can replay a timeline
 // deterministically (see public/lab/graphics.html).
@@ -13,9 +13,9 @@ import { THEME_ACCENT } from '../cast.js';
 import { zoneTime, STUDIO_TZ } from '../util.js';
 import { CAPTION, lerp, easeInOut } from './layout.js';
 import { drawTopRow, drawAdTag } from './bug.js';
-import { StrapState, STRAP_TIMING, strapContent, drawStrap } from './strap.js';
+import { StrapState, STRAP_TIMING, strapContent, strapReadTime, categoryLabel, drawStrap } from './strap.js';
 import { CaptionState, drawCaptions } from './captions.js';
-import { TickerState, makeEntry, drawTicker } from './ticker.js';
+import { TickerState, makeEntries, drawTicker } from './ticker.js';
 
 /** Which graphics sit on top of each shot ('news' all, 'bug' no strap/captions, 'ad', none). */
 export const OVERLAYS = {
@@ -32,12 +32,28 @@ export const OVERLAYS = {
 /** Shots whose full-screen graphic owns the bottom of the frame: captions go to the top. */
 export const CAPTIONS_TOP = new Set(['montage']);
 
+// A category that only repeats the programme's own beat tells the viewer nothing
+// ("WORLD" under WORLD NOW): without a kicker the strap tag shows the source then.
+const PROGRAM_TOPIC = { world: 'WORLD', tech: 'TECH', space: 'SCIENCE', money: 'BUSINESS' };
+
 export const PROGRAM_TAG = { delay: 0.5, hold: 8 }; // programme name beside the bug after the open
-export const BREAKING_STRAP = 12; // seconds a live breaking item takes over the strap
+export const BREAKING_STRAP = 12; // minimum seconds a live breaking item takes over the strap
 export const BREAKING_TICKER = 90; // seconds it stays in the ticker rotation
+const BREAKING_LEAD = STRAP_TIMING.in + STRAP_TIMING.textDelay + STRAP_TIMING.textRise; // until its text is up
 const LIFT = 0.3; // captions rise above a strap before it wipes in, and settle after it has gone
 
 const ON = new Set(['news', 'bug']);
+const STOP = new Set('A AN THE OF TO IN ON AT BY FOR FROM WITH AND OR BUT IS ARE WAS WERE BE HAS HAVE HAD IT ITS THIS THAT AS'.split(' '));
+
+/** Content words of a line of text, upper-cased, without possessive 's. */
+function contentWords(text) {
+  const out = [];
+  for (const raw of String(text).toUpperCase().split(/[^\p{L}\p{N}'’]+/u)) {
+    const w = raw.replace(/['’]S$/, '').replace(/['’]/g, '');
+    if (w && !STOP.has(w)) out.push(w);
+  }
+  return out;
+}
 
 export class Graphics {
   /** `audio` (optional) may expose speechFrame(); `now()` gives the wall clock in ms. */
@@ -48,19 +64,30 @@ export class Graphics {
     this.captions = new CaptionState();
     this.ticker = new TickerState();
     this.mode = null;
-    this.onAt = 0;
+    this.lastShot = null;
+    this.onAt = 0; // when the graphics came on (programme tag, glint)
+    this.topAt = 0; // the top row's own clock: already settled when we come out of an open
     this.adAt = 0;
+    this.band = { on: false, inAt: 0, outAt: null }; // the ticker band (hidden while it has nothing to say)
     this.lift = { from: 0, to: 0, at: 0 };
     this.tagUntil = null;
     this.tagIn = null;
     this.tagOut = null;
     this.ltRef = null;
+    this.ltAccent = null;
     this.ltContent = null;
     this.brRef = null;
     this.brContent = null;
-    this.tickerRefs = [];
+    this.brUntil = 0;
+    this.tickerItems = null;
+    this.tickerBreak = null;
+    this.tickerNext = null;
     this.tickerList = [];
     this.tickerKey = 0;
+    this.dupText = null;
+    this.dupStrap = null;
+    this.dupSkip = false;
+    this.errors = new Set();
   }
 
   modeOf(scene) {
@@ -75,14 +102,20 @@ export class Graphics {
   update(t, scene) {
     const mode = this.modeOf(scene);
     if (mode !== this.mode) {
-      if (ON.has(mode) && !ON.has(this.mode)) this.onAt = t; // everything wipes in, the bug glints once
+      if (ON.has(mode) && !ON.has(this.mode)) {
+        this.onAt = t; // everything wipes in, the bug glints once...
+        // ...unless we cut from a programme open, which ends on these very pixels (opens/kit.js drawBug)
+        this.topAt = this.lastShot === 'open' ? t - 3 : t;
+      }
       if (mode === 'ad' && this.mode !== 'ad') this.adAt = t;
       if (!ON.has(mode)) {
         this.strap.reset();
-        this.captions = new CaptionState();
+        this.captions.reset();
+        this.band.on = false;
       }
       this.mode = mode;
     }
+    this.lastShot = scene.shot;
     if (!ON.has(mode)) return;
 
     // programme name: from just after the open for PROGRAM_TAG.hold seconds
@@ -98,51 +131,104 @@ export class Graphics {
     this.strap.update(t, mode === 'news' ? this.wantStrap(t, scene) : null, capsBelow ? LIFT : 0);
     this.updateLift(t);
 
-    const text = mode === 'news' && scene.subtitles !== false && scene.subtitle ? scene.subtitle : null;
-    const frame = text && this.audio?.speechFrame ? safeFrame(this.audio) : null;
-    this.captions.update(t, text, { since: scene.subtitleSince ?? null, charIndex: frame?.speaking ? frame.charIndex : null });
+    let text = mode === 'news' && scene.subtitles !== false && typeof scene.subtitle === 'string' ? scene.subtitle : null;
+    if (text && this.repeatsStrap(text)) text = null;
+    const frame = text && this.audio?.speechFrame ? this.safeFrame() : null;
+    this.captions.update(t, text, scene.subtitleSince ?? null, frame?.speaking ? frame.charIndex : null);
 
-    const { list, key } = this.tickerEntries(t, scene);
-    this.ticker.update(t, list, key);
+    this.updateTickerList(t, scene);
+    this.ticker.update(t, this.tickerList, this.tickerKey);
+    this.updateBand(t);
+  }
+
+  /** Seconds a live breaking item holds the strap: long enough to show every page. */
+  breakingHold(content) {
+    return Math.max(BREAKING_STRAP, BREAKING_LEAD + strapReadTime(content) + STRAP_TIMING.breakingPage);
+  }
+
+  breakingContent(b) {
+    if (b !== this.brRef) {
+      this.brRef = b;
+      this.brContent = strapContent({ headline: b.text, source: b.source, breaking: true, since: b.since });
+      this.brUntil = b.since + this.breakingHold(this.brContent);
+    }
+    return this.brContent;
   }
 
   wantStrap(t, scene) {
     const b = scene.breaking;
-    if (b && t >= b.since && t - b.since < BREAKING_STRAP && b.text) {
-      if (b !== this.brRef) {
-        this.brRef = b;
-        this.brContent = strapContent({ headline: b.text, source: b.source, breaking: true, since: b.since });
-      }
-      return this.brContent;
+    if (b && b.text && Number.isFinite(b.since) && t >= b.since) {
+      const content = this.breakingContent(b);
+      if (t < this.brUntil) return content;
     }
     const lt = scene.lowerThird;
-    if (!lt) return null;
-    if (lt !== this.ltRef) {
+    if (!lt || typeof lt !== 'object') return null;
+    const accent = this.accentOf(scene);
+    if (lt !== this.ltRef || accent !== this.ltAccent) {
       this.ltRef = lt;
-      const story = scene.storyId ? scene.rundown?.find((r) => r.storyId === scene.storyId) : null;
-      this.ltContent = strapContent(
-        { ...lt, kicker: lt.kicker ?? story?.kicker, category: lt.category ?? story?.category },
-        { accent: this.accentOf(scene) }
-      );
+      this.ltAccent = accent;
+      const rundown = Array.isArray(scene.rundown) ? scene.rundown : null;
+      const story = scene.storyId && rundown ? rundown.find((r) => r?.storyId === scene.storyId) : null;
+      const kicker = lt.kicker ?? story?.kicker;
+      let category = lt.category ?? story?.category;
+      if (!kicker && categoryLabel(category) === PROGRAM_TOPIC[scene.program?.theme]) category = '';
+      this.ltContent = strapContent({ ...lt, kicker, category }, { accent });
     }
     return this.ltContent;
   }
 
-  tickerEntries(t, scene) {
-    const items = Array.isArray(scene.ticker) ? scene.ticker : [];
-    const b = scene.breaking && t >= scene.breaking.since && t - scene.breaking.since < BREAKING_TICKER ? scene.breaking : null;
-    const next = scene.schedule?.upcoming?.[0] || null;
-    const refs = this.tickerRefs;
-    if (refs[0] !== items || refs[1] !== b || refs[2] !== next) {
-      this.tickerRefs = [items, b, next];
-      const list = [];
-      if (b?.text) list.push(makeEntry({ label: 'BREAKING', plate: P.red, source: b.source, text: b.text, breaking: true }));
-      for (const it of items) if (it?.text) list.push(makeEntry({ source: it.source, text: it.text }));
-      if (next?.title && list.length) list.push(makeEntry({ label: 'NEXT', plate: P.yellow, source: '', text: next.tagline ? `${next.title} · ${next.tagline}` : next.title }));
-      this.tickerList = list;
-      this.tickerKey++;
+  /** True when a caption only repeats the headline on the strap (every content word is in it). */
+  repeatsStrap(text) {
+    const c = this.strap.cur;
+    if (!c || this.strap.outAt !== null || !c.headline) return false;
+    if (text === this.dupText && c === this.dupStrap) return this.dupSkip;
+    const head = new Set(contentWords(c.headline));
+    const words = contentWords(text);
+    this.dupText = text;
+    this.dupStrap = c;
+    this.dupSkip = words.length >= 2 && words.every((w) => head.has(w));
+    return this.dupSkip;
+  }
+
+  /** Rebuild the flipper list when its inputs change (bumps tickerKey). */
+  updateTickerList(t, scene) {
+    const items = Array.isArray(scene.ticker) ? scene.ticker : null;
+    const raw = scene.breaking;
+    let b = null;
+    if (raw && raw.text && Number.isFinite(raw.since) && t >= raw.since && t - raw.since < BREAKING_TICKER) {
+      // the strap carries the item first (the same words twice on screen read as a
+      // glitch); the ticker takes it into its rotation once the strap hands back
+      this.breakingContent(raw);
+      if (t >= this.brUntil) b = raw;
     }
-    return { list: this.tickerList, key: this.tickerKey };
+    const next = scene.schedule?.upcoming?.[0] || null;
+    if (items === this.tickerItems && b === this.tickerBreak && next === this.tickerNext) return;
+    this.tickerItems = items;
+    this.tickerBreak = b;
+    this.tickerNext = next;
+    const list = [];
+    if (b) list.push(...makeEntries({ label: 'BREAKING', plate: P.red, source: b.source, text: b.text, breaking: true }));
+    if (items) for (const it of items) if (it && it.text) list.push(...makeEntries({ source: it.source, text: it.text }));
+    if (next && next.title) {
+      const text = next.tagline ? `${next.title} · ${next.tagline}` : next.title;
+      list.push(...makeEntries({ label: 'NEXT', plate: P.yellow, text }));
+    }
+    this.tickerList = list;
+    this.tickerKey++;
+  }
+
+  /** The band shows while the ticker has something to say; it slides in and out. */
+  updateBand(t) {
+    const want = this.tickerList.length > 0 || this.ticker.cur !== null;
+    const band = this.band;
+    if (want && !band.on) {
+      band.on = true;
+      band.inAt = Math.max(t, this.onAt);
+      band.outAt = null;
+    } else if (!want && band.on) {
+      band.on = false;
+      band.outAt = t;
+    }
   }
 
   captionsOnTop(scene) {
@@ -162,19 +248,38 @@ export class Graphics {
     const from = this.liftAt(t);
     // rise so the move ends as the bar starts; settle only once the bar has fully left
     const at = occupied ? Math.max(t, s.inAt - LIFT) : s.outAt !== null ? Math.max(t, s.outAt + STRAP_TIMING.out) : t;
-    this.lift = { from, to: occupied, at };
+    this.lift.from = from;
+    this.lift.to = occupied;
+    this.lift.at = at;
   }
 
-  /** Caption placement: above the strap/ticker, or at the top over full-screen graphics. */
+  /** Bottom edge (or { top }) of the caption block. */
   captionPlace(t, scene) {
-    if (this.captionsOnTop(scene)) return { top: CAPTION.top };
-    return { bottom: Math.round(lerp(CAPTION.bottomFree, CAPTION.bottomStrap, this.liftAt(t))) };
+    if (this.captionsOnTop(scene)) return TOP_PLACE;
+    BOTTOM_PLACE.bottom = Math.round(lerp(CAPTION.bottomFree, CAPTION.bottomStrap, this.liftAt(t)));
+    return BOTTOM_PLACE;
   }
 
-  /** Update and draw every overlay for this frame. */
+  /**
+   * Update and draw every overlay for this frame. A bad scene field or a bug in
+   * one element must never take the picture (or the stinger after us) down:
+   * errors are logged once each and the frame carries on.
+   */
   draw(ctx, t, scene) {
-    this.update(t, scene);
-    this.render(ctx, t, scene);
+    try {
+      this.update(t, scene);
+      this.render(ctx, t, scene);
+    } catch (err) {
+      ctx.globalAlpha = 1;
+      this.logOnce(err);
+    }
+  }
+
+  logOnce(err) {
+    const key = `${err?.name}: ${err?.message}`;
+    if (this.errors.has(key) || this.errors.size >= 20) return;
+    this.errors.add(key);
+    console.error('[graphics]', err);
   }
 
   /** Draw the current state (no state changes). */
@@ -182,30 +287,39 @@ export class Graphics {
     const mode = this.mode;
     if (mode === 'ad') return drawAdTag(ctx, t, this.adAt);
     if (!ON.has(mode)) return;
-    const program = mode === 'news' && scene.program?.title ? { title: scene.program.title, color: this.accentOf(scene) } : null;
-    drawTopRow(ctx, t, {
-      onAt: this.onAt,
-      replay: !!scene.replay,
-      program,
-      programIn: this.tagIn,
-      programOut: this.tagOut,
-      clock: zoneTime(STUDIO_TZ, this.now()).label,
-    });
+    const program = mode === 'news' && scene.program?.title ? this.programTag(scene) : null;
+    TOP_ROW.onAt = this.topAt;
+    TOP_ROW.replay = !!scene.replay;
+    TOP_ROW.program = program;
+    TOP_ROW.programIn = this.tagIn;
+    TOP_ROW.programOut = this.tagOut;
+    TOP_ROW.clock = zoneTime(STUDIO_TZ, this.now()).label;
+    drawTopRow(ctx, t, TOP_ROW);
     if (mode === 'news') {
       drawStrap(ctx, t, this.strap);
       drawCaptions(ctx, t, this.captions, this.captionPlace(t, scene));
     }
-    drawTicker(ctx, t, this.ticker, this.onAt);
+    if (this.band.on || this.band.outAt !== null) drawTicker(ctx, t, this.ticker, this.band.inAt, this.band.outAt);
+  }
+
+  programTag(scene) {
+    const title = String(scene.program.title);
+    const color = this.accentOf(scene);
+    if (this.progTag?.title !== title || this.progTag.color !== color) this.progTag = { title, color };
+    return this.progTag;
+  }
+
+  safeFrame() {
+    try {
+      return this.audio.speechFrame();
+    } catch (err) {
+      this.logOnce(err);
+      return null;
+    }
   }
 }
 
-let frameErrorLogged = false;
-function safeFrame(audio) {
-  try {
-    return audio.speechFrame();
-  } catch (err) {
-    if (!frameErrorLogged) console.warn('[graphics] speechFrame failed', err);
-    frameErrorLogged = true;
-    return null;
-  }
-}
+// Reused per frame (no allocations in steady state).
+const TOP_ROW = { onAt: 0, replay: false, program: null, programIn: null, programOut: null, clock: '' };
+const TOP_PLACE = Object.freeze({ top: CAPTION.top });
+const BOTTOM_PLACE = { bottom: CAPTION.bottomFree };
