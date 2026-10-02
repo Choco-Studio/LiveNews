@@ -507,7 +507,12 @@ function planetTable(R) {
 /** Light azimuth (radians from the lens toward camera-left) at time t: 55° ± 35° on a 90 s sine. */
 export const planetAzimuth = (t) => (55 + 35 * Math.sin((2 * Math.PI * t) / 90)) * DEG;
 
-function drawRing(b, cx, cy, R, front) {
+// The ring never changes (only the planet's light swings): its back and front halves are built once
+// per radius as pixel lists, so the per-frame redraw of the planet costs only its disc.
+const RING_TABLES = new Map();
+function ringTable(R) {
+  let T = RING_TABLES.get(R);
+  if (T) return T;
   // a tilted annulus: steel with a fog band, a 1 px silver lit edge on the near (lower) rim
   const a0 = R * 1.42, a1 = R * 1.95, fl = 0.3, tilt = -0.31;
   const ct = Math.cos(tilt), st = Math.sin(tilt);
@@ -515,20 +520,36 @@ function drawRing(b, cx, cy, R, front) {
   const ex = Math.ceil(Math.sqrt((a1 * ct) ** 2 + (a1 * fl * st) ** 2)) + 1;
   const ey = Math.ceil(Math.sqrt((a1 * st) ** 2 + (a1 * fl * ct) ** 2)) + 1;
   const a02 = a0 * a0, a12 = a1 * a1, R2 = (R + 0.5) * (R + 0.5), ifl = 1 / fl;
-  const icx = Math.round(cx), icy = Math.round(cy);
+  const lists = [[], []];
   for (let y = -ey; y <= ey; y++) {
     for (let x = -ex; x <= ex; x++) {
       const rx = x * ct + y * st, ry = (-x * st + y * ct) * ifl;
       const d2 = rx * rx + ry * ry;
       if (d2 < a02 || d2 > a12) continue;
-      if (ry > 0 !== front) continue;
+      const front = ry > 0;
       if (!front && x * x + y * y < R2) continue; // hidden behind the planet
       const u = (Math.sqrt(d2) - a0) / (a1 - a0);
       let col = u > 0.45 && u < 0.7 ? C.fog : C.steel;
       if (u > 0.9 && ry > 0) col = C.silver;
       if (u < 0.12) col = C.slate; // the gap's shadowed inner edge
-      plot(b, icx + x, icy + y, col);
+      lists[front ? 1 : 0].push(x, y, col);
     }
+  }
+  const pack = (l) => ({ xy: Int16Array.from(l.filter((_, i) => i % 3 !== 2)), col: Uint32Array.from(l.filter((_, i) => i % 3 === 2)) });
+  T = { back: pack(lists[0]), front: pack(lists[1]) };
+  if (RING_TABLES.size > 24) RING_TABLES.clear();
+  RING_TABLES.set(R, T);
+  return T;
+}
+
+function drawRing(b, cx, cy, R, front) {
+  const T = ringTable(R)[front ? 'front' : 'back'];
+  const icx = Math.round(cx), icy = Math.round(cy);
+  const { xy, col } = T;
+  const w = b.w, h = b.h, px = b.px;
+  for (let i = 0, j = 0; j < col.length; i += 2, j++) {
+    const x = icx + xy[i], y = icy + xy[i + 1];
+    if (x >= 0 && y >= 0 && x < w && y < h) px[y * w + x] = col[j];
   }
 }
 
@@ -888,7 +909,9 @@ function drawFigureBlock(b, L, fig, style, ts, money) {
   const needW = Math.max(vw, lw), needH = ruleH + gap + vh + lh;
   let box = pickBox(L, needW + 4, needH + 4);
   if (money) box = clampScreen(box, L, 24, 176, 120);
-  const cx = Math.round((box.x0 + box.x1) / 2);
+  // centred in its box, but never past the box's edges (a bezel, a head or the frame edge)
+  const half = Math.round(needW / 2);
+  const cx = Math.max(box.x0 + 2 + half, Math.min(box.x1 - 2 - (needW - half), Math.round((box.x0 + box.x1) / 2)));
   const top = Math.round(box.y0 + Math.max(2, (bh(box) - needH) * 0.42));
   const accent = style.id === 'money-minute' ? C.darkGreen : C[style.accentName];
   rect(b, cx - Math.round(needW / 2), top, cx - Math.round(needW / 2) + Math.min(needW, 16), top + ruleH, accent);
@@ -903,20 +926,30 @@ function clampScreen(box, L, sx0, sx1, sy1) {
   return bw(CLAMP) > 8 && bh(CLAMP) > 8 ? CLAMP : box;
 }
 
+/** Size of a plate (rule, kicker, source line) at text scale ts. */
+function plateSize(label, sub, ts) {
+  const kw = label ? textWidth(label, 'body', ts) : 0, sw = sub ? textWidth(sub, 'micro', ts) : 0;
+  const kh = label ? capHeight('body', ts) : 0, sh = sub ? capHeight('micro', ts) + 3 * ts : 0;
+  return { w: Math.max(kw, sw), h: ts + 3 * ts + kh + sh, kh };
+}
+
 function drawPlate(b, L, spec, style, ts0) {
-  // the text scale drops to 1x when the free area is too small for 2x
-  const ts = ts0 > 1 && !fitsSomewhere(L, textWidth(spec.label || '', 'body', ts0) + 4, 16 * ts0) ? 1 : ts0;
-  const kicker = fitLine(spec.label || '', b.w - 6 * ts, 'body', ts);
-  const sub = spec.sub ? fitLine(spec.sub, b.w - 6 * ts, 'micro', ts) : '';
+  // the text scale drops to 1x when no free area holds the whole plate (kicker AND source line) at 2x
+  const label0 = spec.label || '', sub0 = spec.sub || '';
+  const big = plateSize(label0, sub0, ts0);
+  const ts = ts0 > 1 && !fitsSomewhere(L, big.w + 6, big.h + 4) ? 1 : ts0;
+  const full = plateSize(label0, sub0, ts);
+  const box = pickBox(L, full.w + 6, full.h + 4, true);
+  // every line fits the box it is set in (never under a bezel, a head or the frame edge)
+  const maxW = Math.max(8, bw(box) - 4);
+  const kicker = fitLine(label0, maxW, 'body', ts);
+  const sub = sub0 ? fitLine(sub0, maxW, 'micro', ts) : '';
   if (!kicker && !sub) return;
-  const kw = kicker ? textWidth(kicker, 'body', ts) : 0, kh = kicker ? capHeight('body', ts) : 0;
-  const sw = sub ? textWidth(sub, 'micro', ts) : 0, sh = sub ? capHeight('micro', ts) + 3 * ts : 0;
-  const needW = Math.max(kw, sw), needH = ts + 3 * ts + kh + sh;
-  const box = pickBox(L, needW + 4, needH + 4, true);
+  const { w: needW, h: needH, kh } = plateSize(kicker, sub, ts);
   const cx = Math.round((box.x0 + box.x1) / 2);
   const top = Math.round(box.y0 + Math.max(2, (bh(box) - needH) * 0.42));
   const accent = style.id === 'money-minute' ? C.darkGreen : C[style.accentName];
-  const x0 = cx - Math.round(needW / 2);
+  const x0 = Math.max(box.x0 + 2, Math.min(box.x1 - 2 - needW, cx - Math.round(needW / 2)));
   rect(b, x0, top, x0 + Math.min(needW, 12 * ts), top + ts, accent);
   if (kicker) stampText(b.px, b.w, b.h, kicker, x0, top + 4 * ts, C.silver, 'body', ts, 'left');
   if (sub) stampText(b.px, b.w, b.h, sub, x0, top + 4 * ts + kh + 3 * ts, C.fog, 'micro', ts, 'left');
@@ -1463,7 +1496,10 @@ export function resetWall() {
 export function warmWall() {
   landMask();
   for (const R of [23, 24, 30]) globeTable(R);
-  for (const R of [12, 13, 16]) planetTable(R);
+  for (const R of [12, 13, 16]) {
+    planetTable(R);
+    ringTable(R);
+  }
   for (const s of [1, 2]) {
     textWidth('MONEY MINUTE', 'body', s);
     stampText(WARM_PX, 1, 1, 'MONEY MINUTE', 0, 0, 0, 'body', s);

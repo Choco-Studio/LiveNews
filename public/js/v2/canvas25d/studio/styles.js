@@ -96,13 +96,16 @@ const DEFS = {
     accentName: 'magenta',
     deskLineName: 'magenta',
     wallIdle: 'planet',
-    // a flat black wall (no dithered "dark grey"), ink pools behind the seats with a Bayer edge
+    // a flat black wall (no dithered "dark grey") and an ink pool behind each seat with a Bayer edge;
+    // on the flanks, outside the head zones, a pair of downlights grazes the wall from the ceiling:
+    // a soft ink beam with a hard-edged purple core (palette swap ink → purple), one clean cluster of
+    // coloured light each, never purple specks on black
     base: 0.1,
     pools: duoPools(1.08, 96, 74),
-    // a purple wash from above over each seat (palette swap, flat in its core, Bayer only at its edge)
-    tintPools: [
-      { X: -112, Y: -116, rx: 56, ry: 54, amount: 0.95 },
-      { X: 112, Y: -116, rx: 56, ry: 54, amount: 0.95 },
+    tintPools: [],
+    scallops: [
+      { X: -166, Y: -124, up: 1, down: 120, w0: 2.5, spread: 0.3, cone: 0.45, amount: 1.05, hard: 0.62 },
+      { X: 166, Y: -124, up: 1, down: 120, w0: 2.5, spread: 0.3, cone: 0.45, amount: 1.05, hard: 0.62 },
     ],
     tints: { slate: 'purple', ink: 'purple' },
     tintNames: ['purple'],
@@ -130,12 +133,14 @@ const DEFS = {
     ],
     // the pair of sconces at X ±196 washes the panels up and down in cream (palette swap: slate →
     // brown, ink → maroon), narrow at the fixture and fanning out, never reaching the head zones
+    // (a wall-washer's scallop: a lift into slate shaped like the beam, warm only in its core: the
+    // ink around it stays ink, so the wash never reads as specks or a flame)
     scallops: [
-      { X: -196, Y: -66, up: 88, down: 62, w0: 3, spread: 0.4, amount: 0.7, tint: 1.15 },
-      { X: 196, Y: -66, up: 88, down: 62, w0: 3, spread: 0.4, amount: 0.7, tint: 1.15 },
+      { X: -196, Y: -66, up: 72, down: 52, w0: 3.5, spread: 0.55, amount: 0.92, hard: 0.42 },
+      { X: 196, Y: -66, up: 72, down: 52, w0: 3.5, spread: 0.55, amount: 0.92, hard: 0.42 },
     ],
     tintPools: [],
-    tints: { steel: 'tanShade', slate: 'brown', ink: 'maroon' },
+    tints: { steel: 'tanShade', slate: 'brown' },
     tintNames: ['maroon', 'brown', 'cream', 'tanShade'],
     tintMax: 0.08,
     practical: 'warm',

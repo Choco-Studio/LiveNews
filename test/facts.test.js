@@ -116,7 +116,10 @@ describe('extractFigures: qualifiers and ages', () => {
   test('keeps "about", "more than" and "up to" with the figure, on the card and in speech', () => {
     const [f] = extractFigures('It will cost about 1,500 dollars when it launches.');
     assert.deepEqual(f, { value: '1,500', label: 'DOLLARS', fact: 'ABOUT 1,500 DOLLARS', said: 'about 1,500 dollars', score: 5.5, qualifier: 'ABOUT' });
-    assert.equal(extractFigures('Waves of up to 3 metres hit the coast.')[0].fact, 'UP TO 3 METRES');
+    // a unit alone says nothing on a card: the thing measured comes first ("WAVES UP TO 3 METRES")
+    assert.equal(extractFigures('Waves of up to 3 metres hit the coast.')[0].fact, 'WAVES UP TO 3 METRES');
+    assert.equal(extractFigures('The quake struck at a depth of 30 km.')[0].fact, 'DEPTH 30 KM');
+    assert.equal(extractFigures('Winds of 130 mph battered the coast.')[0].fact, 'WINDS 130 MPH');
     assert.equal(extractFigures('It supplies more than 1 million people.')[0].fact, 'MORE THAN 1 MILLION PEOPLE');
   });
 

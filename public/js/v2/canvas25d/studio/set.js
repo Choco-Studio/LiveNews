@@ -151,7 +151,8 @@ function bakeWall(style) {
       const dy = TY0 + ty + 0.5 - sc.Y;
       const d = Math.abs(dy) / (dy < 0 ? sc.up : sc.down);
       if (d >= 1) continue;
-      const fall = (1 - d) * (1 - 0.5 * d);
+      // a wall-washer fades from the fixture; a beam (cone) keeps its light along most of its reach
+      const fall = sc.cone ? 1 - smooth((d - sc.cone) / (1 - sc.cone)) : (1 - d) * (1 - 0.5 * d);
       const hw = sc.w0 + sc.spread * Math.abs(dy);
       let i = (ty - tya) * lw + (xa - txa);
       for (let tx = xa; tx < xb; tx++, i++) {
@@ -159,7 +160,13 @@ function bakeWall(style) {
         if (dx <= -1 || dx >= 1) continue;
         const v = fall * (1 - dx * dx);
         acc[i] += sc.amount * v;
-        if (tints) tv[i] += sc.tint * v;
+        if (!tints) continue;
+        if (sc.hard) {
+          // a hard-edged warm (or coloured) core: flat inside v > hard with a 1-2 px Bayer edge, so the
+          // tint is one clean cluster in the beam, never specks scattered over the soft halo
+          const hv = (v - sc.hard) / 0.08 + 0.5;
+          if (hv > tv[i]) tv[i] = hv;
+        } else tv[i] += sc.tint * v;
       }
     }
   }
@@ -170,6 +177,7 @@ function bakeWall(style) {
     SIDE[tx] = ax > sd.x0 ? 1 - smooth((ax - sd.x0) / (sd.x1 - sd.x0)) : 1;
   }
   const glow = style.glow, pm = style.poolMax, hasPm = pm !== undefined, top = RAMP.length - 1.01;
+  const lowCap = style.lowCap ?? 0.6; // the light the lower wall falls back to (COSMOS keeps its horizon glow)
   for (let ty = tya; ty < TH; ty++) {
     const Y = TY0 + ty + 0.5;
     let rowBase = style.base;
@@ -193,7 +201,7 @@ function bakeWall(style) {
       if (hasPm && pos > pm) pos = pm;
       // below head height the wall falls back toward ink (the pools are lit from above), so the
       // lower frame of a single, behind the strap and captions, stays dark and quiet
-      if (Y > 4 && pos > 0.6) pos += (0.6 - pos) * low;
+      if (Y > 4 && pos > lowCap) pos += (lowCap - pos) * low;
       // ceiling: black above y ~10 in the wide
       if (Y < tp.y1) pos += (tp.to - pos) * ceil;
       // sides fall off to black
@@ -348,6 +356,14 @@ function renderWall(fr, cam, baked, sx0, sy0, sx1, sy1, yEnd, xl = 0, xr = W) {
           continue;
         }
         const p = (v >> 4) & 15, sh = v & 15, tq = v >> 8;
+        if (xe - x < 4) {
+          // a short dithered run (minified wides): per pixel
+          for (; x < xe; x++) {
+            const T = THR[x & 3];
+            px[row + x] = tq > T ? (sh > T ? thi[p] : tlo[p]) : sh > T ? hi[p] : lo[p];
+          }
+          continue;
+        }
         for (let j = 0; j < 4; j++) {
           const T = THR[j];
           RPAT[j] = tq > T ? (sh > T ? thi[p] : tlo[p]) : sh > T ? hi[p] : lo[p];
@@ -847,19 +863,36 @@ function rasterDesk(fr, cam, clipRows, led, style) {
     const cGroove = C.black, cLip = rSplit + 1 < 150 || cHi === C.ink ? cHi : cLo;
     const cJoint = cHi === C.ink ? C.black : facetDim(C.ink, facet, topC);
     const joint = JCOL[x] === 1;
-    for (let y = Math.max(0, top0); y < bot; y++) {
-      let c;
-      if (y < top1) c = cTop;
-      else if (y === top1) c = cEdge;
-      else if (y === ledRow) c = led;
-      else if (y < ledRow) c = cFascia;
-      else if (y < rSplit) c = joint && y > ledRow + 1 ? cJoint : cHi;
-      else if (reveal && y === rSplit) c = cGroove;
-      else if (reveal && y === rSplit + 1) c = cLip;
-      else if (y < rKick) c = cLo;
-      else c = cKick;
-      px[y * W0 + x] = c;
+    // the column top to bottom as flat segments (same rows as the rules above, no per-pixel branching):
+    // top surface, silver edge, fascia, LED, upper panel (joint seam below the LED), reveal, lower
+    // panel, kick
+    let y = Math.max(0, top0), o = y * W0 + x, e;
+    for (e = Math.min(bot, top1); y < e; y++, o += W0) px[o] = cTop;
+    if (y === top1 && y < bot) {
+      px[o] = cEdge;
+      y++;
+      o += W0;
     }
+    for (e = Math.min(bot, ledRow); y < e; y++, o += W0) px[o] = cFascia;
+    if (y === ledRow && y < bot) {
+      px[o] = led;
+      y++;
+      o += W0;
+    }
+    for (e = Math.min(bot, rSplit, joint ? ledRow + 2 : rSplit); y < e; y++, o += W0) px[o] = cHi;
+    for (e = Math.min(bot, rSplit); y < e; y++, o += W0) px[o] = cJoint;
+    if (reveal && y === rSplit && y < bot) {
+      px[o] = cGroove;
+      y++;
+      o += W0;
+      if (y < bot) {
+        px[o] = cLip;
+        y++;
+        o += W0;
+      }
+    }
+    for (e = Math.min(bot, rKick); y < e; y++, o += W0) px[o] = cLo;
+    for (; y < bot; y++, o += W0) px[o] = cKick;
     // floor reflection of the LED line (a darker palette step, ≤ 30 %), never in the graphics zone
     if (refC) {
       const ry = Math.round(ybot + (D.deskH - LED_Y) * kz * 0.9);

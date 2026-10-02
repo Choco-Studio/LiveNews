@@ -51,8 +51,16 @@ const otherSeg = (type, extra = {}) => ({ type, anchor: 'A', emotion: 'neutral',
 
 const normalize = (segments, { stories = STORIES, raw = {}, opts } = {}) => normalizeBulletin({ title: 'Bulletin', ...raw, segments }, stories, opts);
 
-/** The single story segment produced from one input story segment. */
-const storyOf = (extra, opts) => normalize([storySeg('s1', extra)], { opts }).segments[1];
+/** The text as it is spoken (cues and markdown out), so a test source can state what a test script says. */
+const said = (text) => String(text ?? '').replace(/\[[^\]]*\]/g, ' ').replace(/[*_#`]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/**
+ * The single story segment produced from one input story segment. The story's source states the script's own
+ * words, so the tests of clipping, cues and markdown are not about grounding (the validator drops a sentence
+ * that adds actors or facts the source does not give; that has its own tests).
+ */
+const storyOf = (extra, opts) =>
+  normalize([storySeg('s1', extra)], { stories: [makeStory('s1', extra?.text ? { summary: `Summary of the story. ${said(extra.text)}` } : {})], opts }).segments[1];
 
 /** A story whose summary names the places (and states the figures) the tests below put on screen. */
 const PLACES = makeStory('s1', {
@@ -289,14 +297,15 @@ describe('normalizeBulletin: field validation', () => {
     const hl = (headline, opts) => normalize([storySeg('s1', { headline })], { stories, opts }).segments[1].headline;
     assert.equal(hl('Lisbon opens new tram line'), 'Lisbon opens new tram line');
     assert.equal(hl('Lisbon opens a new tram line along the river'), 'Lisbon opens a new tram line along the river', '44 characters fit');
-    assert.equal(hl('Lisbon opens a new riverside tram line along the river'), 'Lisbon opens new riverside tram line along the river', 'articles go first when it is too long');
+    assert.equal(hl('Lisbon opens a new riverside tram line along the river'), 'Lisbon opens a new riverside tram line', 'a clean cut that fits keeps its articles');
     assert.equal(hl('Riverside tram opens in Lisbon'), 'Riverside tram opens in Lisbon');
   });
 
   test('a headline cut mid-phrase, too long to cut cleanly, or not supported by the source falls back to the outlet\'s title', () => {
     const stories = [makeStory('s1', { title: 'Study finds city trees cut summer temperatures by 2 degrees', summary: 'Streets with many trees were about 2 degrees cooler.' })];
     const hl = (headline) => normalize([storySeg('s1', { headline })], { stories }).segments[1].headline;
-    const own = 'Study finds city trees cut summer temperatures by 2 degrees';
+    // the outlet's title (59 characters, over the strap's 56) loses its trailing phrase cleanly
+    const own = 'Study finds city trees cut summer temperatures';
     assert.equal(hl('Study finds city trees cut temperatures by 2'), own, 'a figure cut off from its unit');
     assert.equal(hl('Study finds city trees cut summer temperatures in'), own, 'ends on a preposition');
     assert.equal(hl('Trees kill heatwave victims in Paris'), own, 'a claim the source does not make');
@@ -307,9 +316,10 @@ describe('normalizeBulletin: field validation', () => {
 
   test('the outlet\'s title is shortened only at clean points, and kept whole (for the graphics to wrap) otherwise', () => {
     const titleOf = (title) => normalize([storySeg('s1', { headline: '' })], { stories: [makeStory('s1', { title })] }).segments[1].headline;
-    assert.equal(titleOf('Coffee futures reach a ten-year high after poor harvests'), 'Coffee futures reach ten-year high');
+    assert.equal(titleOf('Coffee futures reach a ten-year high after poor harvests'), 'Coffee futures reach a ten-year high', 'a cut that fits keeps its articles');
     assert.equal(titleOf('Kerala floods: thousands moved to relief camps as heavy rain continues'), 'Kerala floods: thousands moved to relief camps');
-    assert.equal(titleOf('Tech giants agree on a common charger standard for laptops'), 'Tech giants agree on a common charger standard for laptops');
+    assert.equal(titleOf('Data centre near Reykjavik runs on wind and geothermal power'), 'Data centre near Reykjavik runs on wind and geothermal power', 'no clean cut: kept whole');
+    assert.equal(titleOf('Peru archaeologists uncover a 3,000-year-old temple in the Andes'), 'Peru archaeologists uncover a 3,000-year-old temple', 'no articles dropped when it still does not fit');
     assert.equal(titleOf('BREAKING: Panama Canal reopens after a day-long closure'), 'Panama Canal reopens after a day-long closure', 'no BREAKING marker on the strap');
     assert.equal(titleOf('Climate talks in Nairobi – live'), 'Climate talks in Nairobi');
     assert.equal(titleOf('Smartphone battery breakthrough promises a week of use'), 'Smartphone battery breakthrough promises a week of use', '"a week" keeps its article');
@@ -365,6 +375,7 @@ describe('normalizeBulletin: field validation', () => {
   test('strips markdown characters (* _ # `) and collapses whitespace in text, headline and title', () => {
     const b = normalize([storySeg('s1', { text: '**Hello**   _world_\n# `code`', headline: '## **Headline** of `story`' })], {
       raw: { title: '*Bulletin* #1' },
+      stories: [makeStory('s1', { title: 'Story headline arrives', summary: 'The headline of the story. Hello world code.' })],
     });
     assert.equal(b.segments[1].text, 'Hello world code');
     assert.equal(b.segments[1].headline, 'Headline of story');
@@ -374,7 +385,7 @@ describe('normalizeBulletin: field validation', () => {
   test('markdown underscores are removed but snake_case words are kept', () => {
     assert.equal(storyOf({ text: '_Hello_ world, __bold__ and _italic text_ here' }).text, 'Hello world, bold and italic text here');
     assert.equal(storyOf({ text: 'The file_name and a_b_c stay' }).text, 'The file_name and a_b_c stay');
-    assert.equal(normalize([storySeg('s1', { headline: 'The_snake_case _story_' })], { stories: [makeStory('s1', { title: 'The snake_case story' })] }).segments[1].headline, 'The_snake_case story');
+    assert.equal(normalize([storySeg('s1', { headline: 'The_snake_case _story_' })], { stories: [makeStory('s1', { title: 'Naming conventions explained', summary: 'The snake_case story is here.' })] }).segments[1].headline, 'The_snake_case story');
     assert.equal(normalize([storySeg('s1')], { raw: { title: '_Big_ news_item' } }).title, 'Big news_item');
   });
 
@@ -1475,5 +1486,119 @@ describe('buildPrompt: programme rules from the style bibles', () => {
     assert.equal(JSON.parse(p.split('CANDIDATES\n')[1])[0].breaking, true);
     assert.match(p, /a breaking story \("breaking": true\) always leads/);
     assert.match(p, /The lead story must not repeat the intro's line about it/);
+  });
+});
+
+// ---------------------------------------------------------------- editorial round 2: the critics' probes
+
+describe('normalizeBulletin: invented claims, outlet names, qualifiers (editorial r2)', () => {
+  const CANAL = makeStory('c1', {
+    title: 'BREAKING: Panama Canal reopens after a day-long closure',
+    summary: 'The Panama Canal has reopened after fog closed it for a day. Engineers say about 30 ships are waiting and the backlog should clear soon.',
+    source: 'Ledger Line',
+  });
+  const one = (seg, extra = {}) => normalize([storySeg('c1', seg)], { stories: [CANAL], ...extra }).segments[1];
+
+  test('a writer headline that adds a cause, an actor or a duration falls back to the outlet\'s own', () => {
+    const own = 'Panama Canal reopens after a day-long closure';
+    for (const h of ['Panama Canal reopens after terror attack', 'Panama Canal closed by strike', 'US Navy reopens Panama Canal', 'Fog closes Panama Canal for a week', 'Canal reopens after cyberattack', 'Chaos as Panama Canal reopens']) {
+      assert.equal(one({ headline: h, text: 'The Panama Canal has reopened.' }).headline, own, h);
+    }
+    assert.equal(one({ headline: 'Panama Canal reopens after fog', text: 'The Panama Canal has reopened.' }).headline, 'Panama Canal reopens after fog', 'every word is in the source');
+  });
+
+  test('a story sentence that invents a cause, a speaker, a title or a name is dropped; grounded ones stay', () => {
+    const text = [
+      'The Panama Canal has reopened after fog closed it for a day.',
+      'Officials blamed a cyberattack for the closure.',
+      'President Laurentino Cortizo said the canal is safe.',
+      'The backlog should clear soon, the mayor said.',
+      'The canal reopened after a cyberattack.',
+      'Engineers say about 30 ships are waiting.',
+    ].join(' ');
+    assert.equal(one({ text }).text, 'The Panama Canal has reopened after fog closed it for a day. Engineers say about 30 ships are waiting.');
+  });
+
+  test('outlets with digits in their names keep their attribution ("France 24", "Channel 4 News", "ABC7")', () => {
+    for (const source of ['France 24', 'Channel 4 News', 'ABC7']) {
+      const st = makeStory('p1', { title: 'Paris opens a new tram line', summary: 'Paris has opened a new tram line. The city says it will cut traffic.', source });
+      const b = normalize([storySeg('p1', { text: `${source} reports that Paris has opened a new tram line. The city says it will cut traffic.` })], { stories: [st] });
+      assert.equal(b.segments[1].text, `${source} reports that Paris has opened a new tram line. The city says it will cut traffic.`, source);
+    }
+  });
+
+  test('a figure keeps the source\'s qualifier: "more than 30" for "about 30" is dropped, and cards take the source\'s', () => {
+    assert.equal(one({ text: 'The Panama Canal has reopened. More than 30 ships are waiting.' }).text, 'The Panama Canal has reopened.');
+    const s = one({ text: 'The Panama Canal has reopened. About 30 ships are waiting.', numbers: [{ value: '30', label: 'SHIPS', qualifier: 'MORE THAN' }] });
+    assert.deepEqual(s.numbers, [{ value: '30', label: 'SHIPS', qualifier: 'ABOUT' }]);
+    const t = one({ text: 'The Panama Canal has reopened. About 30 ships are waiting.', numbers: [{ value: '30', label: 'SHIPS' }] });
+    assert.equal(t.numbers[0].qualifier, 'ABOUT', 'a qualifier the writer forgot comes back');
+  });
+
+  test('intro, chats and outro use figures from the stories that air only, and promise no clock time', () => {
+    const other = makeStory('l1', { title: 'Lisbon tram', summary: 'The 9 kilometre route will carry 40,000 passengers a day.' });
+    const segs = normalize(
+      [
+        otherSeg('intro', { text: 'The canal is open again. A tram for 40,000 passengers. Good evening.' }),
+        storySeg('c1', { text: 'The Panama Canal has reopened.' }),
+        otherSeg('outro', { text: 'That is all. See you tomorrow at 9. Goodnight.' }),
+      ],
+      { stories: [CANAL, other] }
+    ).segments;
+    assert.equal(segs[0].text, 'The canal is open again. Good evening.', '40,000 belongs to a story that is not in this episode');
+    assert.equal(segs.at(-1).text, 'That is all. Goodnight.');
+  });
+
+  test('a wrong pin for an unknown city in a known country is put on that country', () => {
+    const st = makeStory('k1', { title: 'Port city in Panama opens a ferry terminal', summary: 'A new ferry terminal has opened in Colon, Panama.' });
+    const s = normalize([storySeg('k1', { text: 'A new ferry terminal has opened in Colon, Panama.', shot: 'map', location: { place: 'COLON, PANAMA', lat: 40, lon: -3 } })], { stories: [st] }).segments[1];
+    assert.deepEqual(s.location, { place: 'PANAMA', lat: 8.5, lon: -80.8 });
+  });
+});
+
+describe('shortHeadline: grammatical, meaningful and stable (editorial r2)', async () => {
+  const fs = await import('node:fs');
+  const { shortHeadline } = await import('../server/writer.js');
+  const { contentWords } = await import('../server/facts.js');
+  const titles = [];
+  for (const f of fs.readdirSync(new URL('../config/fixtures/', import.meta.url)).filter((x) => x.endsWith('.xml'))) {
+    const xml = fs.readFileSync(new URL(`../config/fixtures/${f}`, import.meta.url), 'utf8');
+    for (const m of xml.matchAll(/<item>\s*<title>([^<]*)<\/title>/g)) titles.push(m[1].replace(/&amp;/g, '&'));
+  }
+
+  test('every fixture title, at 45 and 36: a second pass changes nothing, and most of the meaning stays', () => {
+    assert.ok(titles.length > 60);
+    for (const max of [45, 36]) {
+      for (const t of titles) {
+        const h = shortHeadline(t, max);
+        assert.equal(shortHeadline(h, max), h, `unstable at ${max}: ${t}`);
+        assert.ok(!/\b(?:a|an|the|and|or|of|to|in|on|at|for|by|with|as)$/i.test(h), `dangling: ${h}`);
+        const all = new Set(contentWords(t));
+        const kept = contentWords(h).filter((w) => all.has(w)).length;
+        assert.ok(kept / all.size >= 0.45 || kept >= 3, `too little kept at ${max}: ${h} <= ${t}`);
+      }
+    }
+  });
+
+  test('"as" is cut only where it starts a clause, never "Bees use sun"', () => {
+    for (const t of ['Bees use the sun as a compass even on cloudy days, study says', 'Bees use sun as compass even on cloudy days']) {
+      for (const max of [36, 45]) assert.ok(!/^Bees use (?:the )?sun\.?$/.test(shortHeadline(t, max)), `${t} @${max}: ${shortHeadline(t, max)}`);
+    }
+    assert.equal(shortHeadline('Oil prices slide as global demand cools', 36), 'Oil prices slide');
+    assert.equal(shortHeadline('Chocolate makers warn of higher prices as cocoa stays expensive', 45), 'Chocolate makers warn of higher prices');
+  });
+
+  test('a trailing phrase goes before the headline is kept whole; a label gives way to its clause only with the place', () => {
+    assert.equal(shortHeadline('Lagos shops switch to solar power to cut fuel costs', 45), 'Lagos shops switch to solar power');
+    assert.equal(shortHeadline('North Sea wind farm starts supplying power to 1.2 million homes', 45), 'North Sea wind farm starts supplying power');
+    assert.equal(shortHeadline('Small businesses get a new online tool to file taxes', 45), 'Small businesses get a new online tool to file taxes', 'the tool needs its purpose');
+    assert.equal(shortHeadline('Mexico City closes its historic centre to cars on Sundays', 45), 'Mexico City closes its historic centre to cars', '"to cars" completes "closes"');
+    assert.equal(shortHeadline('Iceland volcano: lava fountains light up the Reykjanes sky', 45), 'Lava fountains light up the Reykjanes sky');
+    assert.equal(shortHeadline('Kerala floods: thousands moved to relief camps as heavy rain continues', 45), 'Kerala floods: thousands moved to relief camps');
+  });
+
+  test('NEWS IN 60 house style (36): present tense, no articles', () => {
+    assert.equal(shortHeadline('Lisbon opens a new riverside tram line', 36), 'Lisbon opens new riverside tram line');
+    assert.equal(shortHeadline('Wellington schools trial a four-day week', 36), 'Wellington schools trial four-day week');
   });
 });

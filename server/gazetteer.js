@@ -571,13 +571,23 @@ const snapRadius = (e) => (e.kind === 'city' ? 3 : e.kind === 'region' ? (e.broa
 /**
  * Put a writer's pin where the place really is: a known place (any kind) whose
  * coordinates are clearly off, swapped, or at (0, 0) gets the gazetteer point.
- * An unknown place at exactly (0, 0) is no pin at all. Returns the location or null.
+ * An unknown place at exactly (0, 0) is no pin at all; an unknown city in a known
+ * country ("SPRINGFIELD, USA") must at least be in that country, or it is
+ * pinned (and labelled) at the country. Returns the location or null.
  */
 export function snapLocation(loc) {
   if (!loc) return null;
   const known = lookupPlace(loc.place);
   const nowhere = loc.lat === 0 && loc.lon === 0;
-  if (!known) return nowhere ? null : loc;
+  if (!known) {
+    // "PANAMA CITY, PANAMA" when we do not know the city: the pin must at least be in the country (or region)
+    // the label names; a pin outside it is put on that country and the label says only what we know.
+    const parts = String(loc.place).split(',').map((p) => p.trim()).filter(Boolean);
+    const wider = parts.length > 1 ? lookupPlace(parts.at(-1)) : null;
+    if (!wider) return nowhere ? null : loc;
+    if (nowhere || degreesApart(loc, wider) > snapRadius(wider)) return { place: wider.label, lat: wider.lat, lon: wider.lon };
+    return loc;
+  }
   if (nowhere || degreesApart(loc, known) > snapRadius(known)) return { ...loc, lat: known.lat, lon: known.lon };
   return loc;
 }

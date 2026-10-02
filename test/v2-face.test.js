@@ -152,7 +152,8 @@ test('listener nods: at most one per turn, on a stressed content word, never on 
         assert.notEqual(n.slot, ctx.speaker, 'speaker nods belong to planGestures');
         assert.ok(!ctx.grave, 'no nod on a grave segment');
         const w = ctx.words.find((x) => x.char === n.char);
-        assert.ok(w && w.stressed && w.content, `${id} #${ctx.index}: nod on a stressed content word`);
+        // a stressed content word, or the listener's own name in the greeting (world-now.md: greeting nod once per presenter)
+        assert.ok(w && w.content && (w.stressed || n.why === 'nod-greeting'), `${id} #${ctx.index}: nod on a stressed content word`);
         for (const l of looksOf(events, n.slot)) assert.ok(!(n.at >= l.at - 0.3 && n.at < l.at + RULES.nodAfterLook), 'not within 1 s of a look start');
         nods++;
       }

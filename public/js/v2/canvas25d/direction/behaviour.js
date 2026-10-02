@@ -175,6 +175,17 @@ function charAt(ctx, t) {
   return w[lo].char;
 }
 
+/** The word that contains char `ch` (or the last word starting before it). */
+function wordAtChar(ctx, ch) {
+  const w = ctx.words;
+  let best = null;
+  for (const x of w) {
+    if (x.char > ch) break;
+    best = x;
+  }
+  return best;
+}
+
 const between = (r, [a, b]) => a + (b - a) * r();
 /** Seeded hold that favours the middle of the range (the demo's 3.7 s is near the top). */
 const hold = (r, [a, b]) => a + (b - a) * (0.5 * (r() + r()));
@@ -408,12 +419,32 @@ function planInterest(ctx, style, r, plan, slot, robot) {
   }
 }
 
+/** Char offset of the listener's own name in an intro's greeting ("I'm Paco Pixel, with Lola Byte"), or -1. */
+function greetingNameAt(ctx, slot) {
+  if (ctx.type !== 'intro') return -1;
+  const text = ctx.seg.text.toLowerCase();
+  let at = -1;
+  for (const n of namesOf(ctx.cast[slot])) {
+    const k = text.lastIndexOf(n);
+    if (k > at) at = k;
+  }
+  // only the greeting's own sentence names the co-presenter (not a headline that mentions them)
+  const last = ctx.sentences[ctx.sentences.length - 1];
+  return last && at >= last.start ? at : -1;
+}
+
 function planNod(ctx, style, r, plan, slot, robot) {
   if (ctx.grave) return; // never on grave lines
-  const hint = (Array.isArray(ctx.seg.cues) ? ctx.seg.cues : []).find((c) => c && c.action === 'nod' && c.slot === slot);
+  let hint = (Array.isArray(ctx.seg.cues) ? ctx.seg.cues : []).find((c) => c && c.action === 'nod' && c.slot === slot);
+  // the greeting nod (world-now.md: once per presenter): named in the intro, the co-presenter
+  // acknowledges it with a small nod even when the writer sent no [B:nod]
+  const named = greetingNameAt(ctx, slot);
+  if (!hint && named >= 0) hint = { char: named, action: 'nod', slot };
+  const greeting = named >= 0 && !!hint && Math.abs(hint.char - named) < 24;
   // the straight face: nobody nods along to UNIT-8's literal lines unless the writer asks
   if (!hint && ROBOT.has(ctx.speakerId) && ctx.type === 'chat') return;
-  const p = hint ? style.hintNodP : style.nodP;
+  // the greeting nod is part of the format (once per presenter), not a chance reaction
+  const p = greeting ? 1 : hint ? style.hintNodP : style.nodP;
   if (r() >= p) return;
   const D = ctx.duration;
   const looks = plan.list(slot);
@@ -426,10 +457,24 @@ function planNod(ctx, style, r, plan, slot, robot) {
     const shot = shotAt(ctx, at);
     return shot === null || shot === 'wide';
   };
-  const cands = ctx.words.filter(ok);
-  if (!cands.length) return;
-  let w;
+  // the hinted word itself (a name at the very end of the turn included): the nod lands where the
+  // writer put it, and may run on into the gap; otherwise the nearest stressed word to the hint
+  let w = null;
   if (hint) {
+    const hw = wordAtChar(ctx, hint.char);
+    // a stressed content word (the greeting's name may carry no accent mark of its own)
+    if (hw && hw.content && (hw.stressed || greeting) && hw.t >= 1.2 && hw.t <= D + 0.05 && (!dry || hw.t < dry.t0 - 0.3)) {
+      const at = hw.t + 0.05;
+      const clearOfLooks = looks.every((l) => !(at >= l.at - 0.3 && at < l.at + RULES.nodAfterLook));
+      const shot = shotAt(ctx, at);
+      if (clearOfLooks && (shot === null || shot === 'wide')) w = hw;
+    }
+  }
+  const cands = w ? [w] : ctx.words.filter(ok);
+  if (!cands.length) return;
+  if (w) {
+    // the hinted word passed
+  } else if (hint) {
     const ht = ctx.timeAt(hint.char);
     w = cands.reduce((b, c) => (Math.abs(c.t - ht) < Math.abs(b.t - ht) ? c : b), cands[0]);
   } else {
@@ -441,7 +486,7 @@ function planNod(ctx, style, r, plan, slot, robot) {
   const serious = ctx.emotion === 'serious' || ctx.emotion === 'sad';
   plan.nods.push({
     kind: 'gesture', slot, name: 'nod', char: w.char, at: round3(w.t + 0.05),
-    speed: robot ? 0.75 : serious ? 0.8 : 0.95, amp: robot ? 0.5 : 0.6, why: hint ? 'nod-hint' : 'nod',
+    speed: robot ? 0.75 : serious ? 0.8 : 0.95, amp: robot ? 0.5 : 0.6, why: greeting ? 'nod-greeting' : hint ? 'nod-hint' : 'nod',
   });
 }
 

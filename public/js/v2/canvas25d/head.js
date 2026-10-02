@@ -134,8 +134,8 @@ function bumpsOf(L) {
   const pair = (x, y, sx, sy, a) => out.push([-x, y, sx, sy, a], [x, y, sx, sy, a]);
   pair(ex, B.y + 0.6, 1.9, 0.75, 0.42); // brow ridge over each eye
   pair(ex - 0.2, ey - 0.1, 1.55, 1.0, -0.55); // eye socket, deepest toward the nose
-  pair(ex + 1.0, ey + 2.5, 1.8, 1.1, 0.42); // cheekbone (broad and low: never a lit island on the shade side)
-  pair(H.cheekHW - 1.7, M.y - 0.7, 1.3, 1.5, -0.3); // the hollow under the cheekbone, toward the jaw
+  pair(ex + 1.0, ey + 2.5, 1.8, 1.1, 0.55); // cheekbone (broad and low: never a lit island on the shade side)
+  pair(H.cheekHW - 1.7, M.y - 0.7, 1.3, 1.5, -0.45); // the hollow under the cheekbone, toward the jaw
   pair(H.cheekHW - 0.9, ey - 1.8, 1.0, 1.5, -0.32); // temple
   pair(nw * 0.55, N.y1 - 0.1, 0.48, 0.42, 0.3); // nose wings
   out.push([0, N.y1 - 0.45, 0.72 * nw, 0.7, N.big ? 0.5 : 0.4]); // nose tip
@@ -176,6 +176,32 @@ function noseRidge(L, x, y) {
   return a * Math.exp(-(x * x) / (w * w));
 }
 
+// Profile exponent per row (feature space): [y offset from a landmark, q] keys,
+// smoothed between them. q > 1 flattens the front of the row and turns its sides
+// sooner (a broad plane); q near 1 is a round section.
+const QK = new Float64Array(14);
+function profileQ(L, y) {
+  const E = L.eyes, M = L.mouth, H = L.head;
+  // forehead broad; temple and socket rounder; cheekbone broad; the hollow under it
+  // rounder; the jaw broad again; the chin's ball round
+  QK[0] = E.y - 3.5; QK[1] = 1.35;
+  QK[2] = E.y - 0.4; QK[3] = 1.05;
+  QK[4] = E.y + 2.3; QK[5] = 1.75;
+  QK[6] = M.y - 0.7; QK[7] = 1.15;
+  QK[8] = M.y + 1.4; QK[9] = 1.55;
+  QK[10] = H.chinY - 0.6; QK[11] = 1.2;
+  QK[12] = H.chinY + 2; QK[13] = 1.2;
+  if (y <= QK[0]) return QK[1];
+  for (let k = 2; k < 14; k += 2) {
+    if (y <= QK[k]) {
+      const a = (y - QK[k - 2]) / (QK[k] - QK[k - 2]);
+      const sm = a * a * (3 - 2 * a);
+      return QK[k - 1] + (QK[k + 1] - QK[k - 1]) * sm;
+    }
+  }
+  return QK[13];
+}
+
 function faceMap(L) {
   let fm = MAPS.get(L);
   if (fm) return fm;
@@ -210,7 +236,7 @@ function faceMap(L) {
   // where the key may raise a highlight: the forehead and the nose ridge only (a
   // cheekbone highlight under the eye reads as a blotch at this resolution)
   const hl = new Uint8Array(nw * nh);
-  const E = L.eyes, N = L.nose;
+  const E = L.eyes, N = L.nose, B = L.brows;
   for (let j = 0; j < nh; j++) {
     const y = y0 + j * STEP;
     const yc = clamp(y, H.top + 0.05, H.chinY - 0.05);
@@ -223,9 +249,15 @@ function faceMap(L) {
     else if (y < L.eyes.y - 1) vy = -0.22 * (1 - (y - H.craniumY) / Math.max(0.5, L.eyes.y - 1 - H.craniumY));
     else if (y > H.cheekY) vy = 0.1 + 0.22 * ((y - H.cheekY) / (H.chinY - H.cheekY));
     if (y > H.chinY - 1.1) vy += (y - (H.chinY - 1.1)) * 1.5;
+    const q = profileQ(L, y);
     for (let i = 0; i < nw; i++) {
       const x = x0 + i * STEP;
-      const u = clamp(x / hw, -0.995, 0.995);
+      // the cross-section is not a half-cylinder: a broad front plane that turns more
+      // sharply at the sides (profile exponent q per row), so the terminator wanders
+      // with the head's planes (in at the temple and socket, out on the cheekbone, in
+      // under it, out again on the jaw) instead of running down the face as a straight line
+      const u0 = clamp(x / hw, -0.995, 0.995);
+      const u = u0 < 0 ? -Math.pow(-u0, q) : Math.pow(u0, q);
       const bz = Math.sqrt(1 - u * u);
       const c = j * nw + i;
       const gx = (height[j * nw + Math.min(nw - 1, i + 1)] - height[j * nw + Math.max(0, i - 1)]) / (2 * STEP);
@@ -237,12 +269,16 @@ function faceMap(L) {
       nx[c] = ax / n;
       ny[c] = ay / n;
       nz[c] = az / n;
-      const forehead = y < E.y - 2.3 && Math.abs(x) < hw * 0.75; // above the brows: a lit brow ridge reads as a stray patch
+      // the forehead's sheen: a short band above the key-side brow and toward the centre
+      // (a highlight under the hairline reads as a bald patch, cast-a round 2)
+      const fx = (x + E.x * 0.45) / (E.x * 0.75), fy = (y - B.y + 1.2) / 0.62;
+      const forehead = fx * fx + fy * fy < 1;
       // the nose ridge's highlight runs from mid-bridge to just above the tip (a full-length stripe reads as paint)
       const ridge = Math.abs(x) < N.w * 0.4 && y > (E.y + N.y1) * 0.5 - 0.2 && y < N.y1 - 0.3;
       // the chin's ball catches a small highlight too (a cheekbone highlight reads as a freckle or a tear here)
       const chin = Math.abs(x) < 1.3 && y > H.chinY - 2.9 && y < H.chinY - 1.3;
-      hl[c] = forehead || ridge || chin ? 1 : 0;
+      // 2 = the forehead's sheen, which needs a touch less light than the ridge and chin (its plane is broad)
+      hl[c] = forehead ? 2 : ridge || chin ? 1 : 0;
     }
   }
   fm = { x0, y0, nw, nh, nx, ny, nz, ao: aoArr, hl };
@@ -309,7 +345,9 @@ function skinTone(x, y) {
   }
   // the highlight is judged on the yaw-turned normal only: the small pitch and roll
   // of speech would make a 1-2 px highlight blink on and off (shimmer)
-  if (fm.hl[c] && nx1 < 0.05 && nx1 * S.lx + ny0 * S.ly + nz1 * S.lz - ao > th[0]) return 0;
+  const hk = fm.hl[c];
+  // (the forehead's sheen only in close-ups: in a medium it is a 2 px cream blob)
+  if (hk && (hk === 1 || S.tier === 2) && nx1 < 0.05 && nx1 * S.lx + ny0 * S.ly + nz1 * S.lz - ao > th[0] - (hk === 2 ? 0.1 : 0)) return 0;
   if (l > th[1]) return 1;
   if (l > th[2]) return 2;
   return 3;
@@ -342,7 +380,7 @@ export function drawHead(buf, L, m, head, s) {
   // reach further round the face, so a deep skin keeps a readable lit cheek and forehead
   const lift = L.skinLift > 0 ? Math.min(1, L.skinLift) : 0;
   const T = TONES[S.tier];
-  TH[0] = T[0] - 0.06 * lift;
+  TH[0] = T[0]; // the lift widens the lit planes, never the highlight (a pale band on a deep skin)
   TH[1] = T[1] - 0.22 * lift;
   TH[2] = T[2] - 0.12 * lift;
   S.th = TH;

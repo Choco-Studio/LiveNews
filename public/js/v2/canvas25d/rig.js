@@ -265,6 +265,9 @@ export function evaluate(L, perf, t, c = newChannels()) {
   const fr = applySpeech(c, persona, perf, t); // 6
   if (!fr.speaking && perf.listen) applyListen(c, perf, t, seed);
   c.face = c; // face params live on the channel object
+  // the script stack on the desk travels with the channels, so every solve path (with or without the
+  // follow-through pass) draws it: a detail-level switch never makes the papers pop
+  c.papers = !!(perf.papers || (Array.isArray(L.props) && L.props.includes('papers')));
   return c;
 }
 
@@ -383,6 +386,7 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
   sk.props ||= { papers: false, hold: 0, tilt: 0 };
   sk.props.hold = clamp(c.hold, 0, 1);
   sk.props.tilt = clamp(c.tilt, 0, 1);
+  sk.props.papers = !!c.papers;
 
   const T = L.torso;
   const A = L.arm;
@@ -449,9 +453,7 @@ export function poseAt(actor, t) {
   const perf = actor.perf;
   const c = evaluate(actor.look, perf, t, actor._c);
   const lag = perf.lagPose === false ? null : evaluateLag(actor.look, perf, t - 0.12, actor._lag);
-  const sk = solve(actor.look, c, perf.side ?? 1, actor._sk, lag);
-  sk.props.papers = !!(perf.papers || (Array.isArray(actor.look.props) && actor.look.props.includes('papers')));
-  return sk;
+  return solve(actor.look, c, perf.side ?? 1, actor._sk, lag);
 }
 
 /** Names of every gesture the rig can perform (all 20 cues.js ACTIONS). */

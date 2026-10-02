@@ -318,7 +318,7 @@ const SPAN = new Float64Array(8);
 const EDGE_IDX = new Int32Array(4096);
 let edgeN = 0;
 
-function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0, collect = false) {
+function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0, collect = false, splitU = -1, splitG = 0) {
   const dx = bx - ax, dy = by - ay;
   const len = Math.hypot(dx, dy);
   const R = Math.max(ra, rb);
@@ -382,7 +382,8 @@ function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0
       if (flatStart && u < flatStart && tt < 1) tt = 1;
       tone[i] = tt < 0 ? 0 : tt > 3 ? 3 : tt;
       if (collect && d2 > (r - 1.5) * (r - 1.5) && (ey < 0 || ex > 0) && edgeN < EDGE_IDX.length) EDGE_IDX[edgeN++] = i;
-      grp[i] = g;
+      // the start of the bone may belong to another group (the sleeve cap, seamless with the jacket)
+      grp[i] = u < splitU ? splitG : g;
       z[i] = cz;
     }
   }
@@ -449,7 +450,18 @@ export function drawArm(buf, L, m, arm, side, toS, s, ga, gc, gh, z) {
   buf.part(ga, z, false);
   edgeN = 0;
   const rimOn = s >= 1.6;
-  capsuleFast(buf, cx0, cy0, exp, eyp, A.rUpper * 0.99 * s, A.rElbow * s, m.sleeve, 0, 0.22, rimOn);
+  // The sleeve cap (the upper arm down to the armpit) is its own group joined to the jacket and to the
+  // rest of the sleeve: no inner line where it lies over the torso, so the round start of the capsule
+  // never draws a ball joint (owner 17:50 "circles"; CONTRACTS w2-cast-a r2). A sewn armhole seam is
+  // painted instead (armSeam), taller than wide, from the shoulder top to the armpit.
+  const rU = A.rUpper * s;
+  const gTop = gh + 1; // a spare hand group (the hand uses only gh)
+  buf.joinGroups(gTop, jacketG);
+  buf.joinGroups(gTop, ga);
+  const capLen = ul * (1 - capK);
+  const splitU = clamp((SEAM_DOWN * rU - capK * ul) / (capLen || 1), 0, 0.6);
+  capsuleFast(buf, cx0, cy0, exp, eyp, A.rUpper * 0.99 * s, A.rElbow * s, m.sleeve, 0, Math.max(0.22, splitU), rimOn, splitU, gTop);
+  if (s >= 1.9) armSeam(buf, sxp, syp, ux / ul, uy / ul, B, rU, side, gTop, jacketG, hm.sleeveD);
   const fx = wxp - exp, fy = wyp - eyp;
   const fl = Math.hypot(fx, fy) || 1;
   const cuffLen = Math.min(fl * 0.4, 1.3 * s); // shirt cuff showing past the jacket sleeve
@@ -476,6 +488,48 @@ export function drawArm(buf, L, m, arm, side, toS, s, ga, gc, gh, z) {
   // ---- the hand
   handGeometry(L, arm, side, HG);
   rasterHand(buf, L, hm, HG, B, s, gh, z + 3);
+}
+
+// the armhole seam runs from the shoulder top to the armpit, SEAM_DOWN sleeve radii below the shoulder joint
+const SEAM_DOWN = 2.3;
+
+/**
+ * The armhole seam: a 1 px curve from the top of the shoulder down the inside of the sleeve cap to the
+ * armpit (a quadratic arc, about three sleeve radii tall and one wide), painted with the jacket's exact
+ * shade (deep on the screen-right arm, away from the key light) over the cap and the jacket only. Below
+ * the armpit the sleeve's own inner line against the torso takes over, so the two read as one seam.
+ */
+function armSeam(buf, sx, sy, ux, uy, B, rU, side, gTop, jacketG, mD) {
+  // inner normal: across the arm, toward the body's centre line (body x = 0)
+  let nx = -uy, ny = ux;
+  // (B[0]: screen x of the body origin, on the centre line)
+  if (nx * (B[0] - sx) < 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  // top (on the shoulder line), control point (bulging into the cap), armpit (the sleeve's inner edge)
+  const tx = sx - ux * 0.75 * rU - nx * 0.05 * rU, ty = sy - uy * 0.75 * rU - ny * 0.05 * rU;
+  const qx = sx + ux * 0.55 * rU + nx * 1.08 * rU, qy = sy + uy * 0.55 * rU + ny * 1.08 * rU;
+  const ax = sx + ux * SEAM_DOWN * rU + nx * 0.92 * rU, ay = sy + uy * SEAM_DOWN * rU + ny * 0.92 * rU;
+  const tone = side > 0 ? 3 : 2;
+  const W = buf.w;
+  const { mat, tone: tn, grp } = buf;
+  const steps = Math.max(8, Math.ceil(rU * 5));
+  let lx = -9999, ly = -9999;
+  for (let q = 0; q <= steps; q++) {
+    const u = q / steps, a = (1 - u) * (1 - u), b = 2 * u * (1 - u), c = u * u;
+    const x = Math.floor(a * tx + b * qx + c * ax), y = Math.floor(a * ty + b * qy + c * ay);
+    if (x === lx && y === ly) continue;
+    lx = x;
+    ly = y;
+    if (x < 1 || y < 1 || x >= W - 1 || y >= buf.h - 1) continue;
+    const i = y * W + x;
+    if (!mat[i] || (grp[i] !== gTop && grp[i] !== jacketG)) continue;
+    // only inside the fabric: a seam pixel on the silhouette would notch the outline
+    if (!mat[i - 1] || !mat[i + 1] || !mat[i - W] || !mat[i + W]) continue;
+    mat[i] = mD;
+    tn[i] = tone;
+  }
 }
 
 /**
@@ -838,7 +892,17 @@ function formTones(lod) {
       // toward the key (left, above): a lit edge
       const lf = i > 0 ? OWN[k - 1] : -1, u = j > 0 ? OWN[k - LW] : -1;
       if (lf < 0 || u < 0) l += lit;
-      TN[k] = toneOfL(l);
+      let tn = toneOfL(l);
+      // a highlight belongs on an edge that faces the key light (nothing, or a part further back, to
+      // its left or above): inside a form it reads as a scratch across the palm, so it drops to the base
+      if (tn === 0) {
+        const a = OWN[k], zk = ZB[k] - 0.3;
+        const kl = k - 1, ku = k - LW;
+        const edgeL = lf < 0 || (OWN[kl] !== a && ZB[kl] < zk);
+        const edgeU = u < 0 || (OWN[ku] !== a && ZB[ku] < zk);
+        if (!edgeL && !edgeU) tn = 1;
+      }
+      TN[k] = tn;
     }
   }
 }

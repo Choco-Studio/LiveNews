@@ -280,6 +280,22 @@ export function allWordsGrounded(text, source, { ignore = [] } = {}) {
   return words.every((w) => pool.some((p) => sameWord(base(w), p)));
 }
 
+// Time spans a headline may not invent ("for a week" when the source says a day).
+const TIME_WORDS = /^(?:hours?|days?|weeks?|months?|years?|decades?|centur(?:y|ies)|minutes?)$/;
+
+/**
+ * A writer's headline is grounded when every content word is in the source
+ * (inflections and irregular verbs allowed), time spans included, and its
+ * numbers are the source's: it may rephrase the order, never add a cause, an
+ * actor, a qualifier or a duration.
+ */
+export function headlineGrounded(text, source, { ignore = [] } = {}) {
+  if (!numbersGrounded(text, source, { words: true }) || !allWordsGrounded(text, source, { ignore })) return false;
+  const times = (fold(text).match(/[a-z]+/g) || []).filter((w) => TIME_WORDS.test(w));
+  const pool = (fold(source).match(/[a-z]+/g) || []).filter((w) => TIME_WORDS.test(w));
+  return times.every((w) => pool.some((p) => p.replace(/s$/, '') === w.replace(/s$/, '') || (w.startsWith('centur') && p.startsWith('centur'))));
+}
+
 const QUALIFIER_WORDS = /\b(about|around|roughly|approximately|some|nearly|almost|more than|over|at least|up to|less than|fewer than|under)\s+$/i;
 const QUALIFIER_CLASS = { about: 'approx', around: 'approx', roughly: 'approx', approximately: 'approx', some: 'approx', nearly: 'below', almost: 'below', 'up to': 'below', 'less than': 'below', 'fewer than': 'below', under: 'below', 'more than': 'above', over: 'above', 'at least': 'above' };
 const qualifierAt = (s, index) => s.slice(Math.max(0, index - 24), index).match(QUALIFIER_WORDS)?.[1]?.toLowerCase() || null;
@@ -456,16 +472,20 @@ function subjectBefore(s, index) {
   return out.length ? out.join(' ').toUpperCase() : null;
 }
 
+const TIME_UNIT = /^(?:DAYS?|HOURS?|MINUTES?|SECONDS?|WEEKS?|MONTHS?|YEARS?|DECADES?)$/;
 // Labels that are only a unit of measure or of time.
 const UNIT_ONLY = /^(?:KM|KMS|KILOMETRES?|KILOMETERS?|MILES?|MPH|KPH|KM\/H|KMH|METRES?|METERS?|M|CM|MM|FEET|FOOT|FT|INCH(?:ES)?|C|F|°C|°F|DEGREES?(?: CELSIUS| FAHRENHEIT)?|CELSIUS|KG|KILOGRAMS?|TONNES?|TONS?|LITRES?|DAYS?|HOURS?|MINUTES?|SECONDS?|WEEKS?|MONTHS?|YEARS?|DECADES?|KNOTS?|HECTARES?|ACRES?)$/;
 const MEASURE_SKIP = new Set('a an the of at to up by about around nearly almost some over under reached reaching hit hitting topped topping rose fell rising falling with was were is are has had have more than less just only its their his her this that which'.split(' '));
 /** The noun a measurement belongs to, from the few words before the figure ("winds of" -> WINDS), or null. */
 function measuredBefore(s, index) {
   const words = s.slice(Math.max(0, index - 50), index).split(/[,;:.!?()]/).pop().trim().split(/\s+/).filter(Boolean);
+  let of = false;
   for (let i = words.length - 1; i >= Math.max(0, words.length - 4); i--) {
     const w = words[i].replace(/[^A-Za-z-]/g, '').toLowerCase();
+    if (w === 'of') of = true;
     if (!w || MEASURE_SKIP.has(w)) continue;
-    if (w.length < 4 || /(?:ed|ly)$/.test(w)) return null;
+    // Only "<noun> of <figure>" names what is measured ("winds of 130 mph"); "will take 3 years" does not.
+    if (!of || w.length < 4 || /(?:ed|ly|ing)$/.test(w)) return null;
     return w.toUpperCase();
   }
   return null;
@@ -543,9 +563,11 @@ export function extractFigures(text, max = 3) {
     // A unit is not a subject: "30 KM" or "130 MPH" says nothing on a card. Name what is measured from the words
     // just before the figure ("a depth of 30 km" -> DEPTH 30 KM, "winds of 130 mph" -> WINDS 130 MPH), or skip it.
     if (!n.percent && !n.currency && UNIT_ONLY.test(labelText)) {
+      // A duration is not a card ("3 YEARS").
+      if (TIME_UNIT.test(labelText)) continue;
       const subject = measuredBefore(s, n.index);
       if (!subject) continue;
-      figures.push({ value: `${value} ${labelText}`.slice(0, 12), label: subject, fact: [qualifier, subject, value, labelText].filter(Boolean).join(' '), said: `${q ? `${q} ` : ''}${n.raw}${label.length ? ` ${label.join(' ')}` : ''}`, score: 2, index: n.index, ...(qualifier ? { qualifier } : {}) });
+      figures.push({ value: `${value} ${labelText}`.slice(0, 12), label: subject, fact: [subject, qualifier, value, labelText].filter(Boolean).join(' '), said: `${q ? `${q} ` : ''}${n.raw}${label.length ? ` ${label.join(' ')}` : ''}`, score: 2, index: n.index, ...(qualifier ? { qualifier } : {}) });
       continue;
     }
     const fact = [qualifier, core].filter(Boolean).join(' ');
@@ -564,4 +586,70 @@ export function extractFigures(text, max = 3) {
     .filter((f) => (seen.has(f.value) ? false : seen.add(f.value)))
     .slice(0, max)
     .map(({ index, ...f }) => f);
+}
+
+// ---------------------------------------------------------------- invented actors and causes
+
+// Words that frame a sentence rather than carry its facts.
+const FRAME_WORDS = new Set(
+  ('reports reported report reporting says said say saying according told tells officials announced announces confirmed confirms added adds stated meanwhile however also still now today tonight yesterday here there such other another latest news story stories update updates developing breaking finally first next number thanks thank put ' +
+    // figures and their qualifiers are checked by numbersGrounded and qualifierConflict
+    'some about around nearly almost roughly approximately least less fewer than over under hundred hundreds thousand thousands million millions billion billions trillion dozen dozens percent per cent half').split(' ')
+);
+// A title that names a person or office ("President X", "Minister Y").
+const TITLE_RE = /\b(?:President|Prime Minister|Minister|Chancellor|Governor|Mayor|Senator|General|King|Queen|Prince|Princess|Pope|Judge|Justice|Secretary|Ambassador|Commissioner|Chief Executive|Chairman|Chairwoman|Director|Professor|Dr|Sheikh|Sultan|Emperor|Premier)\.?\s+(?=\p{Lu})/u;
+// "..., the mayor said" / "Ana Silva says" / "according to the ministry".
+const SPEAKER_RES = [
+  /(?:^|[,;]\s*)((?:the |an? )?[a-z][a-z' -]{2,40}?|\p{Lu}[\p{L}'’.-]+(?: \p{Lu}[\p{L}'’.-]+){0,3})\s+(?:said|says|told|added|warned|insisted|confirmed|explained)\b/u,
+  /\b(?:said|says|added|warned)\s+((?:the |an? )[a-z][a-z' -]{2,30}?|\p{Lu}[\p{L}'’.-]+(?: \p{Lu}[\p{L}'’.-]+){0,3})(?=[.,;]|$)/u,
+  /\baccording to\s+((?:the |an? )?[\p{L}][\p{L}' -]{2,40}?)(?=[.,;]|$)/u,
+];
+// What a sentence blames: "caused by X", "after an X", "due to X", "blamed on X".
+const CAUSE_RE = /\b(?:caused by|because of|due to|blamed (?:on|for)|blames?|triggered by|sparked by|following|after|amid)\s+(?:an?\s+|the\s+|a\s+series of\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)?)/gi;
+
+const inSource = (word, pool) => pool.some((p) => sameWord(base(word), p));
+
+/**
+ * Does a spoken story sentence add an actor, a cause, a speaker or a name
+ * that its source never mentions? Returns a short reason, or null when the
+ * sentence stays within the source. `ignore` lists names that may appear
+ * freely (the outlet, the channel, the presenters, the programme).
+ * - mostly new content: 3+ content words of its own, fewer than half of them
+ *   in the source (attribution and framing words do not count);
+ * - a cause the source does not give ("after a cyberattack", "caused by a strike");
+ * - a speaker the source does not name ("..., the mayor said");
+ * - a person's or an organisation's name, or a title + name, not in the source.
+ */
+export function inventedClaim(sentence, source, { ignore = [] } = {}) {
+  let s = String(sentence ?? '');
+  for (const name of ignore.filter(Boolean)) s = s.replace(new RegExp(String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' ');
+  s = s.replace(/[“”"‘’][^“”"‘’]*[“”"‘’]/g, ' '); // quotations are checked word for word elsewhere
+  const src = String(source ?? '');
+  const pool = contentWords(src).map(base);
+  const foldedSource = fold(src);
+  const words = contentWords(s).filter((w) => !FRAME_WORDS.has(w) && !/^\d/.test(w));
+  const fresh = words.filter((w) => !inSource(w, pool));
+  if (words.length >= 3 && fresh.length >= 2 && (words.length - fresh.length) / words.length < 0.5) return 'not in the source';
+  for (const m of s.matchAll(CAUSE_RE)) {
+    const cause = contentWords(m[1]).filter((w) => !FRAME_WORDS.has(w));
+    if (cause.length && !cause.every((w) => inSource(w, pool))) return `cause "${m[1]}"`;
+  }
+  for (const re of SPEAKER_RES) {
+    const m = s.match(re);
+    if (!m) continue;
+    const who = contentWords(m[1]).filter((w) => !FRAME_WORDS.has(w));
+    if (who.length && !who.every((w) => inSource(w, pool))) return `speaker "${m[1].trim()}"`;
+  }
+  // Names: a title before a capitalised word, or two capitalised words in a row past the first word.
+  const titled = s.match(TITLE_RE);
+  if (titled && !foldedSource.includes(fold(titled[0]).trim().replace(/\.$/, ''))) return `title "${titled[0].trim()}"`;
+  const body = s.replace(/^\s*(?:\[[^\]]*\]\s*)*\S+/, ' ');
+  for (const m of body.matchAll(/(?<![\p{L}.])(\p{Lu}[\p{Ll}'’-]+(?:\s+(?:of|the|de|du|von|van|al|bin)?\s*\p{Lu}[\p{Ll}'’-]+)+)/gu)) {
+    const name = fold(m[1]).replace(/\s+/g, ' ');
+    if (foldedSource.includes(name)) continue;
+    // a known place the source names (or a country of it) is not a new actor
+    if (contentWords(name).every((w) => inSource(w, pool))) continue;
+    return `name "${m[1]}"`;
+  }
+  return null;
 }
