@@ -199,6 +199,7 @@ def cmd_samples(args):
             'ogg': ebur128(os.path.join(out, pid + '.ogg')),
             'raw': ebur128(os.path.join(out, 'raw', pid + '.wav')),
             'wpm': round(overall_wpm(reply)),
+            'paceWpm': round(metrics.syllable_wpm(reply['phones'], reply['duration'])),
             'targetWpm': TARGET_WPM.get(pid),
             'f0': round(metrics.f0_median(audio, sr)),
             'sibilanceDb': round(metrics.sibilance_db(audio, sr), 1),
@@ -219,7 +220,7 @@ def cmd_samples(args):
         print(f"{pid:6s} {entry['voice']:30s} dur {entry['duration']:5.2f}s  m4a I {entry['m4a']['I']} "
               f"TP {entry['m4a']['TP']}  ogg I {entry['ogg']['I']} TP {entry['ogg']['TP']}  "
               f"raw I {entry['raw']['I']} TP {entry['raw']['TP']}  sib {entry['sibilanceDb']} "
-              f"(raw {entry['rawSibilanceDb']})  clicks {entry['clicks']}  wpm {entry['wpm']}  "
+              f"(raw {entry['rawSibilanceDb']})  clicks {entry['clicks']}  wpm {entry['wpm']} pace {entry['paceWpm']}  "
               f"f0 {entry['f0']}" + (f"  STOI {entry['stoiVsClean']}" if 'stoiVsClean' in entry else ''),
               flush=True)
     with open(os.path.join(out, 'report.json'), 'w', encoding='utf-8') as f:

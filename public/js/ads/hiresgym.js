@@ -701,8 +701,8 @@ function shotRun(c, lt) {
   solveLegFK(0, loopKeys(p, RUN_TH), loopKeys(p, RUN_KN), loopKeys(p, RUN_PF));
   solveLegFK(2, loopKeys(p + 0.5, RUN_TH), loopKeys(p + 0.5, RUN_KN), loopKeys(p + 0.5, RUN_PF));
   const sw = sin(mod(p, 1) * TAU - 0.9);
-  solveArm(0, 0.15 + 0.75 * sw, 1.45 - 0.25 * sw);
-  solveArm(2, 0.15 - 0.75 * sw, 1.45 + 0.25 * sw);
+  solveArm(0, 0.1 + 0.95 * sw, 1.35 + 0.35 * sw);
+  solveArm(2, 0.1 - 0.95 * sw, 1.35 - 0.35 * sw);
   litShape(c, paintSide, RUN_LAYERS);
   nearLimbs(c, A(P.fog, 0.9), P.black, -1, 0);
   // white soles and the one red detail: the shoe stripe
@@ -874,9 +874,9 @@ function shotFace(c, lt) {
   fillPts(c, P.black);
   for (let k = 0; k < 14; k++) R(c, round(FX + (12 + hash(k) * 24) * FK), round(FY + FO + (12 + hash(k + 30) * 34) * FK), 1, 1, P.ink);
   // ear: a dark shape with a lit front rim
-  ellipse(c, FX + 42 * FK, FY + FO + 56 * FK, 5 * FK, 9 * FK, P.ink);
-  ellipse(c, FX + 41.4 * FK, FY + FO + 56.5 * FK, 3.6 * FK, 7.4 * FK, P.black);
-  ellipse(c, FX + 42.6 * FK, FY + FO + 58 * FK, 1.6 * FK, 3 * FK, P.ink);
+  ellipse(c, FX + 42.6 * FK, FY + FO + 56 * FK, 4.6 * FK, 8.6 * FK, P.slate);
+  ellipse(c, FX + 42 * FK, FY + FO + 56 * FK, 4.4 * FK, 8.4 * FK, P.ink);
+  line(c, FX + 41 * FK, FY + FO + 51 * FK, FX + 40 * FK, FY + FO + 60 * FK, P.black);
   // brow ridge, eye socket, eye (the lid closes once, slowly)
   const blink = max(0, 1 - abs(lt - 0.95) / 0.12);
   pt(FX + 70 * FK, FY + FO + 44.5 * FK);
@@ -920,8 +920,9 @@ function shotFace(c, lt) {
     dy = FY + FO + 102 * FK + 1.2 + 70 * ft * ft;
     stretch = max(0, 1.6 - ft * 3);
   }
-  ellipse(c, dx, dy + stretch / 2, 1.6, 2 + stretch / 2, P.fog);
-  ellipse(c, dx - 0.4, dy + stretch / 2 - 0.4, 1, 1.4 + stretch / 3, P.silver);
+  ellipse(c, dx, dy + stretch / 2, 2.2, 2.6 + stretch / 2, P.steel);
+  ellipse(c, dx - 0.3, dy + stretch / 2 - 0.3, 1.7, 2.1 + stretch / 2, P.fog);
+  ellipse(c, dx - 0.6, dy + stretch / 2 - 0.6, 1, 1.4 + stretch / 3, P.silver);
   R(c, round(dx - 1), round(dy - 1 + stretch / 4), 1, 1, P.white);
 }
 
@@ -941,23 +942,23 @@ function paintBust(c, col) {
   const x = 192;
   const top = RY;
   for (let sd = -1; sd <= 1; sd += 2) {
-    capsule(c, x + sd * 1.04 * u, top + 1.7 * u, x + sd * 1.22 * u, top + 3.2 * u, 0.36 * u, 0.27 * u, col);
-    ellipse(c, x + sd * 1.15 * u, top + 2.45 * u, 0.33 * u, 0.42 * u, col);
-    capsule(c, x + sd * 1.22 * u, top + 3.2 * u, x + sd * 1.1 * u, top + 4.8 * u, 0.28 * u, 0.24 * u, col);
-    ellipse(c, x + sd * 0.99 * u, top + 1.62 * u, 0.37 * u, 0.38 * u, col);
+    capsule(c, x + sd * 0.936 * u, top + 1.7 * u, x + sd * 1.098 * u, top + 3.2 * u, 0.36 * u, 0.27 * u, col);
+    ellipse(c, x + sd * 1.035 * u, top + 2.45 * u, 0.33 * u, 0.42 * u, col);
+    capsule(c, x + sd * 1.098 * u, top + 3.2 * u, x + sd * 0.99 * u, top + 4.8 * u, 0.28 * u, 0.24 * u, col);
+    ellipse(c, x + sd * 0.891 * u, top + 1.62 * u, 0.37 * u, 0.38 * u, col);
     ellipse(c, x + sd * 0.37 * u, top + 0.53 * u - RC, 0.07 * u, 0.13 * u, col);
   }
   pt(x - 0.24 * u, top + 1.0 * u);
-  pt(x - 0.58 * u, top + 1.12 * u);
-  pt(x - 0.92 * u, top + 1.36 * u);
-  pt(x - 1.0 * u, top + 2.0 * u);
-  pt(x - 0.82 * u, top + 3.4 * u);
-  pt(x - 0.76 * u, top + 5 * u);
-  pt(x + 0.76 * u, top + 5 * u);
-  pt(x + 0.82 * u, top + 3.4 * u);
-  pt(x + 1.0 * u, top + 2.0 * u);
-  pt(x + 0.92 * u, top + 1.36 * u);
-  pt(x + 0.58 * u, top + 1.12 * u);
+  pt(x - 0.522 * u, top + 1.12 * u);
+  pt(x - 0.828 * u, top + 1.36 * u);
+  pt(x - 0.9 * u, top + 2.0 * u);
+  pt(x - 0.738 * u, top + 3.4 * u);
+  pt(x - 0.684 * u, top + 5 * u);
+  pt(x + 0.684 * u, top + 5 * u);
+  pt(x + 0.738 * u, top + 3.4 * u);
+  pt(x + 0.9 * u, top + 2.0 * u);
+  pt(x + 0.828 * u, top + 1.36 * u);
+  pt(x + 0.522 * u, top + 1.12 * u);
   pt(x + 0.24 * u, top + 1.0 * u);
   fillPts(c, col);
   capsule(c, x, top + 0.82 * u - RC, x, top + 1.3 * u, 0.26 * u, 0.31 * u, col);
@@ -1004,30 +1005,43 @@ function shotReveal(c, lt) {
   const u = RU;
   const x = 192;
   const top = RY;
-  // muscle definition from a soft top light
+  // body: collarbones, the scoop of the tank top and its straps, arms parted
+  // from the torso by a faint line, the red mark
   for (let sd = -1; sd <= 1; sd += 2) {
-    capsule(c, x + sd * 1.0 * u, top + 1.32 * u, x + sd * 0.8 * u, top + 1.3 * u, 0.06 * u, 0.03 * u, P.slate);
-    line(c, x + sd * 0.1 * u, top + 2.12 * u, x + sd * 0.66 * u, top + 2.24 * u, P.ink);
-    line(c, x + sd * 0.28 * u, top + 1.1 * u, x + sd * 0.78 * u, top + 1.34 * u, P.ink);
-    line(c, x + sd * 0.4 * u, top + 1.12 * u, x + sd * 0.5 * u, top + 2.4 * u, P.ink);
+    line(c, x + sd * 0.06 * u, top + 1.14 * u, x + sd * 0.54 * u, top + 1.2 * u, P.slate);
+    capsule(c, x + sd * 0.9 * u, top + 1.32 * u, x + sd * 0.72 * u, top + 1.3 * u, 0.06 * u, 0.03 * u, P.slate);
+    line(c, x + sd * 0.42 * u, top + 1.16 * u, x + sd * 0.5 * u, top + 2.35 * u, P.ink);
+    line(c, x + sd * 0.42 * u, top + 1.5 * u, x + sd * 0.12 * u, top + 1.72 * u, P.ink);
+    line(c, x + sd * 0.828 * u, top + 2.02 * u, x + sd * 0.738 * u, top + 3.4 * u, P.ink);
+    line(c, x + sd * 0.81 * u, top + 2.3 * u, x + sd * 0.864 * u, top + 3.1 * u, P.black);
   }
-  // the red mark on the chest
+  line(c, x - 0.12 * u, top + 1.72 * u, x + 0.12 * u, top + 1.72 * u, P.ink);
   const mw = round(u * 0.16);
   for (let k = 0; k < round(u * 0.09); k++) R(c, round(x - 0.55 * u + mw * 0.5 - k), round(top + 2.55 * u + k), mw, 1, P.red);
-  // face: brow, nose, mouth, two glints that keep the eyes alive
+  // face under a soft top key: brow, deep sockets with a glint, nose, cheeks, lips, chin
   const hy = top + 0.5 * u - RC;
-  R(c, round(x - 0.27 * u), round(hy - 0.1 * u), round(0.54 * u), 1, P.slate);
+  ellipse(c, x, hy - 0.25 * u, 0.36 * u, 0.26 * u, P.black);
+  for (let k = 0; k < 10; k++) R(c, round(x + (hash(k + 60) - 0.5) * 0.6 * u), round(hy - 0.4 * u + hash(k + 61) * 0.22 * u), 1, 1, P.ink);
+  ellipse(c, x, hy - 0.13 * u, 0.25 * u, 0.06 * u, P.ink);
+  R(c, round(x - 0.27 * u), round(hy - 0.07 * u), round(0.54 * u), 1, P.slate);
+  for (let sd = -1; sd <= 1; sd += 2) {
+    ellipse(c, x + sd * 0.15 * u, hy + 0.03 * u, 0.09 * u, 0.045 * u, P.black);
+    R(c, round(x + sd * 0.15 * u - 1), round(hy + 0.03 * u), 2, 1, P.ink);
+    ellipse(c, x + sd * 0.2 * u, hy + 0.17 * u, 0.07 * u, 0.035 * u, P.ink);
+    R(c, round(x + sd * 0.07 * u), round(hy + 0.26 * u), 1, 1, P.black);
+    line(c, x + sd * 0.2 * u, hy + 0.56 * u, x + sd * 0.06 * u, top + 1.12 * u, P.ink);
+  }
+  R(c, round(x - 0.15 * u), round(hy + 0.03 * u), 1, 1, P.silver);
+  R(c, round(x + 0.15 * u), round(hy + 0.03 * u), 1, 1, P.fog);
   R(c, round(x), round(hy - 0.02 * u), 1, round(0.22 * u), P.slate);
-  R(c, round(x - 1), round(hy + 0.2 * u), 3, 1, P.slate);
-  R(c, round(x - 0.2 * u), round(hy + 0.03 * u), 3, 1, P.black);
-  R(c, round(x + 0.1 * u), round(hy + 0.03 * u), 3, 1, P.black);
-  R(c, round(x - 0.19 * u), round(hy + 0.03 * u), 1, 1, P.silver);
-  R(c, round(x + 0.12 * u), round(hy + 0.03 * u), 1, 1, P.fog);
-  R(c, round(x - 0.1 * u), round(hy + 0.32 * u), round(0.2 * u), 1, P.black);
+  R(c, round(x - 1), round(hy + 0.21 * u), 3, 1, P.steel);
+  R(c, round(x - 0.1 * u), round(hy + 0.34 * u), round(0.2 * u), 1, P.black);
+  R(c, round(x - 0.07 * u), round(hy + 0.37 * u), round(0.14 * u), 1, P.slate);
+  ellipse(c, x, hy + 0.47 * u, 0.07 * u, 0.025 * u, P.slate);
   // sweat glints on the shoulders
   for (let k = 0; k < 5; k++) {
     const sd = k % 2 ? 1 : -1;
-    R(c, round(x + sd * (0.75 + hash(k) * 0.35) * u), round(top + (1.32 + hash(k + 9) * 0.3) * u), 1, 1, P.white);
+    R(c, round(x + sd * (0.68 + hash(k) * 0.3) * u), round(top + (1.32 + hash(k + 9) * 0.3) * u), 1, 1, P.white);
   }
 }
 

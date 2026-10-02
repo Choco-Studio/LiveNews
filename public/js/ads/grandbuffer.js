@@ -6,10 +6,10 @@
 //
 // Six shots, 24.6 s, joined by slow dissolves and dips to black:
 //  1  0.0 EXTERIOR  night rain; the camera cranes down the facade to the doorman.
-//                                                      VO "Some things cannot be rushed."
+//                                                      VO "In a world that refreshes every second..."
 //  2  4.0 LOBBY     a guest rings the desk bell; the concierge keeps writing
 //                   and raises one finger. And holds it.
-//                                                      VO "At The Grand Buffer, we have perfected the art of the wait."
+//                                                      VO "...one hotel has never once been in a hurry."
 //  3  9.0 HEIRLOOM  beauty shot: eight pearls under a glass dome, lit one by
 //                   one as a gloved hand turns a brass crank. Slow push-in.
 //                                                      VO "Every spinner is still turned by hand."
@@ -1635,8 +1635,8 @@ export default {
   duration: DURATION,
   voice: { gender: 'male', lang: 'en-GB', pitch: 0.9, rate: 0.9 },
   script: [
-    { at: 0.5, text: 'Some things cannot be rushed.' },
-    { at: 4.3, text: 'At The Grand Buffer, we have perfected the art of the wait.' },
+    { at: 0.5, text: 'In a world that refreshes every second...' },
+    { at: 4.4, text: 'one hotel has never once been in a hurry.' },
     { at: 9.4, text: 'Every spinner is still turned by hand.' },
     { at: 13.1, text: 'Every suite... almost ready.' },
     { at: 16.8, text: 'Dinner will be served... shortly.' },

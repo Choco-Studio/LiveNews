@@ -222,6 +222,21 @@ def f0_median(x, sr):
     return float(np.median(res)) if res else 0.0
 
 
+_VOWEL_SYMBOLS = set('aeiouæɑɒɔəɛɜɪʊʌɐᵻɚɝʉɨøœɘɵɤy')
+
+
+def syllable_wpm(phones, duration, syllables_per_word=1.45):
+    """Pace that does not depend on word length: syllables per minute (vowel
+    nuclei in the phoneme timeline) expressed as words of average news copy."""
+    count, prev = 0, False
+    for _, p in phones:
+        v = p in _VOWEL_SYMBOLS
+        if v and not prev:
+            count += 1
+        prev = v
+    return 60 * count / duration / syllables_per_word if duration else 0.0
+
+
 def speech_rate(words, phrases):
     """Words per minute over the time actually spent speaking."""
     talk = sum(p['dur'] for p in phrases)

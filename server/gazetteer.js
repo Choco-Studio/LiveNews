@@ -403,6 +403,33 @@ function build() {
 
 const { entries: ENTRIES, byName: BY_NAME } = build();
 
+// Place names that are also common first names: "Israel Adesanya", "Sydney Sweeney",
+// "Santiago Abascal", "Paris Hilton". Followed by a capitalised word that is not a
+// place, they are taken as a person, not a pin on the map.
+const PERSON_NAMES = new Set(['israel', 'sydney', 'santiago', 'paris', 'victoria', 'jordan', 'georgia', 'chad', 'lincoln', 'austin', 'florence', 'madison', 'charlotte', 'phoenix', 'houston', 'dallas', 'orlando', 'adelaide', 'regina', 'washington', 'darwin', 'hamilton', 'kent', 'lima', 'wellington', 'chelsea', 'jackson', 'aurora', 'dakota', 'denver', 'sofia', 'valencia', 'savannah', 'eugene', 'tyler']);
+// Capitalised words that keep a place a place: "Sydney Harbour", "Paris Monday", "Lima Airport".
+const PLACE_FOLLOWERS = /^(?:City|Airport|Harbour|Harbor|Police|Metro|Zoo|Museum|University|Council|Mayor|Bay|River|Region|Province|Summit|Agreement|Accord|Opera|Marathon|Club|Stock|Exchange|Fashion|Motor|Games|Olympics|Declaration|Conference|Talks|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December)$/;
+// "New Mexico", "South Wales", "West Virginia": a compass word or "New" in front of a
+// name makes a different place (the real compound, when we know it, is matched first).
+const PREFIXED = /(?:^|[^\p{L}])(?:New|North|South|East|West)\s$/u;
+// A few everyday clashes: the bird, not the country; the US state, not the capital.
+const CONTEXT_CLASH = {
+  turkey: (text) => /\b(?:Thanksgiving|Christmas|poultry|roast|bird flu|farmers?)\b/.test(text),
+  washington: (text, end) => /^\s+(?:state|State)\b/.test(text.slice(end, end + 8)),
+};
+
+/** Is the match of `entry` at [index, end) in `text` really that place? */
+function realHit(entry, text, index, end, matched) {
+  const key = fold(matched);
+  if (PREFIXED.test(text.slice(Math.max(0, index - 7), index)) && !/^(?:new|north|south|east|west) /.test(key)) return false;
+  if (PERSON_NAMES.has(key)) {
+    const next = text.slice(end).match(/^ ([A-Z][\p{L}'’-]+)/u);
+    if (next && !PLACE_FOLLOWERS.test(next[1]) && !BY_NAME.has(fold(next[1]))) return false;
+  }
+  const clash = CONTEXT_CLASH[fold(entry.name)];
+  return !(clash && clash(text, end));
+}
+
 export const GAZETTEER = ENTRIES;
 
 /** Look a place up by its name, an alias or its label ("NAIROBI, KENYA" → Nairobi). */
@@ -427,6 +454,8 @@ export function findPlaces(text) {
     e.re.lastIndex = 0;
     for (const m of s.matchAll(e.re)) hits.push({ entry: e, index: m.index, end: m.index + m[0].length, text: m[0] });
   }
+  // Longest names first win overlaps below; filtered hits must not block shorter real ones.
+  for (let i = hits.length - 1; i >= 0; i--) if (!realHit(hits[i].entry, s, hits[i].index, hits[i].end, hits[i].text)) hits.splice(i, 1);
   hits.sort((a, b) => a.index - b.index || b.end - b.index - (a.end - a.index));
   const out = [];
   let reach = -1;
@@ -485,22 +514,52 @@ export function placesIn(text, max = 4) {
  * France) or a place inside a named country ("Lisbon" supports PORTUGAL).
  */
 export function placeSupported(place, text) {
-  const body = fold(text);
+  const raw = String(text ?? '');
+  const body = fold(raw);
   if (!body.trim()) return false;
   const wordIn = (n) => {
     const f = fold(n).trim();
     return f.length >= 2 && new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(f)}(?![\\p{L}\\p{N}])`, 'u').test(body);
   };
-  const named = findPlaces(text).map((h) => h.entry);
+  // A known place counts only where the text really names it (not "Sydney Sweeney", not "New Mexico").
+  const namedAsPlace = (e) => {
+    for (const n of [e.name, ...e.aliases]) {
+      const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(n)}(?![\\p{L}\\p{N}])`, 'gu');
+      for (const m of raw.matchAll(re)) if (realHit(e, raw, m.index, m.index + m[0].length, m[0])) return true;
+    }
+    return false;
+  };
+  const named = findPlaces(raw).map((h) => h.entry);
   for (const part of String(place ?? '').split(/[,/]/).map((p) => p.trim()).filter(Boolean)) {
-    if (wordIn(part)) return true;
     const e = lookupPlace(part);
-    if (!e) continue;
-    if (e.amb && wordIn(e.name)) return true;
-    if (e.demonymRe && e.demonymRe.test(String(text))) return true;
+    if (!e) {
+      if (wordIn(part)) return true;
+      continue;
+    }
+    if (namedAsPlace(e)) return true;
+    if (e.demonymRe && e.demonymRe.test(raw)) return true;
     if (named.some((n) => n === e || (e.kind === 'country' && n.country === e.name))) return true;
   }
   return false;
+}
+
+// How far a writer's pin may sit from our point before it is put back: a city is
+// small, a region bigger, and the widest countries span tens of degrees.
+const WIDE = new Set(['Russia', 'Canada', 'United States', 'China', 'Brazil', 'Australia', 'India', 'Argentina', 'Kazakhstan', 'Algeria', 'Democratic Republic of the Congo', 'Saudi Arabia', 'Mexico', 'Indonesia', 'Chile', 'Norway', 'Antarctica']);
+const snapRadius = (e) => (e.kind === 'city' ? 3 : e.kind === 'region' ? (e.broad ? 30 : 8) : WIDE.has(e.name) ? 25 : 12);
+
+/**
+ * Put a writer's pin where the place really is: a known place (any kind) whose
+ * coordinates are clearly off, swapped, or at (0, 0) gets the gazetteer point.
+ * An unknown place at exactly (0, 0) is no pin at all. Returns the location or null.
+ */
+export function snapLocation(loc) {
+  if (!loc) return null;
+  const known = lookupPlace(loc.place);
+  const nowhere = loc.lat === 0 && loc.lon === 0;
+  if (!known) return nowhere ? null : loc;
+  if (nowhere || degreesApart(loc, known) > snapRadius(known)) return { ...loc, lat: known.lat, lon: known.lon };
+  return loc;
 }
 
 /** Great-circle-ish distance in degrees, good enough to spot a wrong pin. */

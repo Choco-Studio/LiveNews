@@ -84,6 +84,12 @@ export class BroadcastMusic {
     this.hp = c.createBiquadFilter();
     this.hp.type = 'highpass';
     this.hp.frequency.value = 32;
+    // Beds are thinned at the bottom so they never fight the voice's chest
+    // resonance or boom on small speakers.
+    this.low = c.createBiquadFilter();
+    this.low.type = 'lowshelf';
+    this.low.frequency.value = 120;
+    this.low.gain.value = -3;
     this.glue = c.createDynamicsCompressor();
     this.glue.threshold.value = -20;
     this.glue.knee.value = 12;
@@ -92,7 +98,7 @@ export class BroadcastMusic {
     this.glue.release.value = 0.25;
     this.out = c.createGain();
     this.revIn.connect(reverb).connect(revOut).connect(this.pocket);
-    this.mix.connect(this.pocket).connect(this.duck).connect(this.shelf).connect(this.hp).connect(this.glue).connect(this.out);
+    this.mix.connect(this.pocket).connect(this.duck).connect(this.shelf).connect(this.low).connect(this.hp).connect(this.glue).connect(this.out);
     this.out.connect(destination || c.destination);
   }
 
@@ -180,11 +186,14 @@ export class BroadcastMusic {
     if (this.current?.bed === bed) this.current = null;
   }
 
+  // Grave stories: the bed bows out at once (1.6 s, last beat thrown into the
+  // echo) so it is gone within the presenter's first words. Other silences
+  // (ads, off) wait for the next boundary and take a bar.
   toSilence(at, gravePkg) {
     const cur = this.current;
     if (cur) {
-      const b = Math.min(this.boundary(cur.bed, at), at + 0.6);
-      this.fadeOut(cur.bed, b, cur.bed.barSec * (gravePkg ? 1 : 0.75), { echo: true });
+      if (gravePkg) this.fadeOut(cur.bed, at, 1.6, { echo: true });
+      else this.fadeOut(cur.bed, Math.min(this.boundary(cur.bed, at), at + 0.6), cur.bed.barSec * 0.75, { echo: true });
     }
     if (gravePkg && this.graveMode === 'pad') this.oneShot('drone', at + 0.4, gravePkg, false);
     this.current = null;

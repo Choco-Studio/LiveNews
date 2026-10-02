@@ -365,51 +365,89 @@ function shotRoom(ctx, lt) {
 
 // --- S3: the modem sings (macro on the front panel) -----------------------------------------
 const LEDS = ['HS', 'AA', 'CD', 'OH', 'RD', 'SD', 'TR', 'MR'];
+// The modem's front panel in perspective: near end at the left, receding right.
+const PNL = { x0: -10, x1: 430, t0: 66, b0: 176, t1: 108, b1: 140 };
+const pnlTop = (x) => lerp(PNL.t0, PNL.t1, clamp((x - PNL.x0) / (PNL.x1 - PNL.x0)) ** 0.85);
+const pnlBot = (x) => lerp(PNL.b0, PNL.b1, clamp((x - PNL.x0) / (PNL.x1 - PNL.x0)) ** 0.85);
+const ledX = (i) => lerp(150, 392, (i / 7) ** 0.82);
+const ledY = (i) => lerp(pnlTop(ledX(i)), pnlBot(ledX(i)), 0.5);
 const modemSet = () =>
-  bake('sn-modem', 420, H, (c) => {
-    shadeInto(c, 0, 0, 420, H, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.5)], (x, y) => clamp(1 - sqrt(((x - 300) / 300) ** 2 + ((y + 20) / 200) ** 2)) * 0.9);
-    // top surface (blue spill from the screen above) and front panel
-    shadeInto(c, 20, 70, 390, 24, [C.beigeDD, mix(C.beigeD, C.crt, 0.25), mix(C.beige, C.crtL, 0.3)], (x, y) => 0.25 + ((x - 20) / 390) * 0.6 + (y - 70) * 0.01);
-    for (let x = 40; x < 400; x += 8) rect(c, x, 76 + ((x >> 3) & 1), 5, 1, C.beigeDD);
-    shadeInto(c, 20, 94, 390, 70, [mix(C.beigeDD, P.black, 0.3), C.beigeDD, C.beigeD, mix(C.beigeD, C.beige, 0.5)], (x, y) => 0.6 - (y - 94) * 0.006 + ((x - 20) / 390) * 0.25);
-    rect(c, 20, 94, 390, 1, mix(C.beige, P.white, 0.3));
-    rect(c, 20, 163, 390, 2, P.black);
-    // LED window strip and labels
-    rect(c, 150, 112, 230, 26, mix(P.black, P.maroon, 0.25));
-    rect(c, 150, 137, 230, 1, mix(C.beigeD, C.beige, 0.5));
-    LEDS.forEach((s, i) => text(c, s, 166 + i * 28, 142, { color: mix(P.ink, C.beigeDD, 0.3), font: 'micro', align: 'center' }));
-    // brand plate
-    thin(c, 'SCREECHNET', 40, 112, { color: mix(P.ink, C.beigeDD, 0.2), track: 1 });
-    text(c, '56K DATA / FAX', 40, 126, { color: mix(P.ink, C.beigeDD, 0.35), font: 'micro' });
-    // desk below
-    shadeInto(c, 0, 165, 420, H - 165, [P.black, mix(P.black, P.ink, 0.6), P.ink], (x, y) => 0.5 - (y - 165) * 0.02 + (x / 420) * 0.3);
+  bake('sn-modem', 430, H, (c) => {
+    // darkness, a cool wash from the screen above-right
+    shadeInto(c, 0, 0, 430, H, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.5)], (x, y) => clamp(1 - sqrt(((x - 300) / 300) ** 2 + ((y + 30) / 190) ** 2)) * 0.85);
+    // top surface (catching the blue light), with vent slots receding
+    shadeInto(c, 0, 0, 430, H, [C.beigeDD, mix(C.beigeD, C.crt, 0.25), mix(C.beige, C.crtL, 0.3)], (x, y) => {
+      const top = pnlTop(x);
+      const back = top - lerp(30, 12, clamp(x / 430));
+      if (y < back || y >= top) return -1;
+      return clamp(0.3 + ((y - back) / (top - back)) * 0.5 - x * 0.0006);
+    });
+    for (let i = 0; i < 26; i++) {
+      const x = 30 + i * 15 * (1 - i * 0.012);
+      const top = pnlTop(x);
+      const back = top - lerp(30, 12, clamp(x / 430));
+      line(c, x, back + (top - back) * 0.3, x + 6 * (1 - i / 30), back + (top - back) * 0.3, C.beigeDD);
+    }
+    // front panel: beige, lit from the top edge, falling into shadow to the right
+    shadeInto(c, 0, 0, 430, H, [mix(C.beigeDD, P.black, 0.45), mix(C.beigeDD, P.black, 0.15), C.beigeDD, mix(C.beigeDD, C.beigeD, 0.5), C.beigeD], (x, y) => {
+      const t = pnlTop(x);
+      const b = pnlBot(x);
+      if (y < t || y >= b) return -1;
+      const v = (y - t) / (b - t);
+      return clamp(0.95 - v * 0.2 - clamp((x - 140) / 280) * 0.75);
+    });
+    line(c, 0, pnlTop(0), 430, pnlTop(430), mix(C.beige, P.white, 0.35));
+    // LED window strip (recessed), perspective
+    shadeInto(c, 0, 0, 430, H, [mix(P.black, P.maroon, 0.35), mix(P.black, P.maroon, 0.15)], (x, y) => {
+      if (x < 136 || x > 404) return -1;
+      const mid = lerp(pnlTop(x), pnlBot(x), 0.5);
+      const hh = (pnlBot(x) - pnlTop(x)) * 0.17;
+      return y >= mid - hh && y < mid + hh ? 0.5 : -1;
+    });
+    LEDS.forEach((s2, i) => {
+      const x = ledX(i);
+      const y = lerp(pnlTop(x), pnlBot(x), 0.72);
+      if (i < 6) text(c, s2, x, y, { color: mix(P.ink, C.beigeDD, 0.25), font: 'micro', align: 'center' });
+    });
+    // brand plate on the near end
+    thin(c, 'SCREECHNET', 26, 98, { color: mix(P.ink, C.beigeDD, 0.15), track: 2 });
+    thin(c, '56K', 26, 114, { color: mix(P.ink, C.beigeDD, 0.1), track: 1, scale: 2 });
+    text(c, 'DATA / FAX / VOICE', 26, 140, { color: mix(P.ink, C.beigeDD, 0.35), font: 'micro' });
+    // the desk: dark, glossy enough to hold the LEDs' reflections
+    shadeInto(c, 0, 0, 430, H, [P.black, mix(P.black, P.ink, 0.6), P.ink], (x, y) => (y < pnlBot(x) ? -1 : clamp(0.55 - (y - pnlBot(x)) * 0.015 + (x / 430) * 0.2)));
   });
-const ledGlow = () => pool('sn-ledglow', 8, 6, C.led, 4, 0.5);
+const ledGlow = () => pool('sn-ledglow', 10, 8, C.led, 4, 0.55);
 
 /** Which LEDs are lit at time lt of the handshake (deterministic). */
 function ledOn(i, lt) {
-  const s = LEDS[i];
-  if (s === 'MR' || s === 'TR') return true;
-  if (s === 'OH') return lt > 0.15;
-  if (s === 'HS') return lt > 0.9;
-  if (s === 'AA') return false;
-  if (s === 'CD') return lt > 1.6;
-  if (s === 'RD' || s === 'SD') return lt > 1.0 && floor(lt * (s === 'RD' ? 11 : 7) + i) % 2 === 0;
+  const s2 = LEDS[i];
+  if (s2 === 'MR' || s2 === 'TR') return true;
+  if (s2 === 'OH') return lt > 0.15;
+  if (s2 === 'HS') return lt > 0.9;
+  if (s2 === 'AA') return false;
+  if (s2 === 'CD') return lt > 1.6;
+  if (s2 === 'RD' || s2 === 'SD') return lt > 1.0 && floor(lt * (s2 === 'RD' ? 11 : 7) + i) % 2 === 0;
   return false;
 }
 
 function shotModem(ctx, lt) {
-  const camX = track(lt, [[0, 0], [2.4, 22, 'smooth']]);
+  const camX = track(lt, [[0, 0], [2.4, 26, 'smooth']]);
   ctx.drawImage(modemSet(), -round(camX), 0);
   for (let i = 0; i < LEDS.length; i++) {
-    const x = 166 + i * 28 - round(camX);
+    const x = ledX(i) - camX;
+    const y = ledY(i);
+    const sz = lerp(4, 2, i / 7);
     const on = ledOn(i, lt);
-    rect(ctx, x - 2, 122, 4, 3, on ? C.led : C.ledOff);
+    rect(ctx, x - sz / 2, y - 1, sz, 2 + (i < 4 ? 1 : 0), on ? C.led : C.ledOff);
     if (on) {
-      rect(ctx, x - 1, 122, 2, 1, mix(C.led, P.white, 0.5));
+      rect(ctx, x - sz / 2, y - 1, max(1, sz - 1), 1, mix(C.led, P.white, 0.5));
       ctx.globalCompositeOperation = 'lighter';
-      ctx.drawImage(ledGlow(), x - 8, 117);
+      ctx.drawImage(ledGlow(), round(x - 10), round(y - 8));
       ctx.globalCompositeOperation = 'source-over';
+      // reflection in the desk below the panel
+      ctx.globalAlpha = 0.35;
+      rect(ctx, x - sz / 2, pnlBot(x + camX) + 4 + (7 - i) * 0.6, sz, 1, C.led);
+      ctx.globalAlpha = 1;
     }
   }
   vignette(ctx, 0.6, 'sn3');

@@ -188,11 +188,12 @@ const slateSet = () =>
   });
 
 // each falling crisp: x, landing y, start delay, spin, final pose
+// (negative starts: the first crisps are already falling when the shot opens)
 const FALLERS = [
-  { x: 150, y: 168, t0: 0.0, s: 26, spin: 1.3, rz: 0.3 },
-  { x: 232, y: 174, t0: 0.6, s: 28, spin: -1.0, rz: -0.25 },
-  { x: 300, y: 162, t0: 1.3, s: 22, spin: 1.6, rz: 0.6 },
-  { x: 196, y: 186, t0: 2.0, s: 30, spin: -1.4, rz: 0.05 },
+  { x: 150, y: 168, t0: -1.3, s: 26, spin: 1.1, rz: 0.3 },
+  { x: 232, y: 174, t0: -0.5, s: 28, spin: -0.9, rz: -0.25 },
+  { x: 300, y: 162, t0: 0.2, s: 22, spin: 1.3, rz: 0.6 },
+  { x: 196, y: 186, t0: 0.9, s: 30, spin: -1.2, rz: 0.05 },
 ];
 
 function shotTumble(ctx, lt) {
@@ -209,9 +210,10 @@ function shotTumble(ctx, lt) {
     let rx;
     let ry;
     if (k < fallT) {
+      // tumbling, but arriving exactly in the resting pose (no pop on landing)
       y = -40 + 0.5 * G * k * k;
-      rx = -1.2 + k * f.spin;
-      ry = k * f.spin * 0.6;
+      rx = -0.98 + (k - fallT) * f.spin;
+      ry = (k - fallT) * f.spin * 0.6;
     } else {
       // settles flat with a small, damped rock (no bounce)
       const q = k - fallT;

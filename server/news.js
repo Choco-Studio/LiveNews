@@ -65,10 +65,14 @@ const BOILERPLATE_RES = [
   // link text glued to the excerpt without a full stop: "… the end Read more »" (capitalised only)
   /(?<=[a-z0-9,;)])\s+(?:Continue reading|Read more)\s*(?:\.{3}|…|»|→)?\s*$/,
   /(?<=[.!?])\s*Comments?\s*$/i,
-  // WordPress: "The post <title> appeared first on <Site Name>." (site = capitalised words or a domain)
-  /(?:^|(?<=[.!?…"”]))\s*The post .{1,200}? appeared first on (?:(?:[A-Z0-9][\w.&'’-]*|[a-z0-9-]+(?:\.[a-z0-9-]+)+)\s?){1,6}\.?\s*$/,
+  // WordPress: "The post <title> appeared first on <Site Name>." (site = capitalised words or a domain).
+  // Words of the site name are separated by mandatory spaces, so a long run of capitals can be
+  // split only one way: the regex stays linear on hostile input (no catastrophic backtracking).
+  /(?:^|(?<=[.!?…"”]))\s*The post .{1,200}? appeared first on (?:[A-Z0-9][\w.&'’-]*|[a-z0-9-]+(?:\.[a-z0-9-]+)+)(?: (?:[A-Z0-9][\w.&'’-]*|[a-z0-9-]+(?:\.[a-z0-9-]+)+)){0,5}\.?\s*$/,
 ];
-export const stripBoilerplate = (summary) => BOILERPLATE_RES.reduce((s, re) => s.replace(re, ''), String(summary)).trim();
+// Feed summaries are capped before any regex runs: nothing on air needs more than the first few paragraphs.
+const MAX_SUMMARY_SCAN = 5000;
+export const stripBoilerplate = (summary) => BOILERPLATE_RES.reduce((s, re) => s.replace(re, ''), String(summary).slice(0, MAX_SUMMARY_SCAN)).trim();
 
 // Explicit breaking-news markers only ("Record-breaking heatwave" is not breaking news).
 const BREAKING_START = /^\s*breaking(?: news)?\s*[:|–—-]/i;
@@ -93,6 +97,17 @@ export const isBreaking = (title) => {
 // trigger the BREAKING banner.
 const LIVE_RES = [/[-–—]\s*live\b(?![-'’])/i, /\blive updates?\b/i, /\blive blog\b/i, /^\s*live\s*[:|]/i];
 export const isLiveBlog = (title) => LIVE_RES.some((re) => re.test(String(title ?? '')));
+
+/** A headline as it is said on air: without the outlet's "BREAKING:" or "– live" markers (they belong to the strap). */
+export const plainTitle = (title) =>
+  String(title ?? '')
+    .replace(/^\s*breaking(?: news)?\s*[:|–—-]\s*/i, '')
+    .replace(/\s*(?:,|\s[|–—-])\s*breaking\s*$/i, '')
+    .replace(/^\s*live(?: updates)?\s*[:|]\s*/i, '')
+    .replace(/\s*[-–—]\s*live(?: updates| blog)?\s*$/i, '')
+    .replace(/\s*[:|]\s*live updates?\s*$/i, '')
+    .trim()
+    .replace(/^\p{Ll}/u, (c) => c.toUpperCase());
 
 const TRACKER_RE = /imrworldwide|doubleclick|feedburner|pixel|1x1|tracking|gravatar|\/stats?\b|\.gif(\?|$)/i;
 
@@ -265,8 +280,13 @@ export function interestScore(s, now = Date.now()) {
   const image = s.image ? 1.15 : 1;
   const substance = (s.summary || '').length > 80 ? 1 : 0.7;
   const passedOver = 0.6 ** (s.offered || 0);
-  return recency * trend * (s.weight || 1) * image * substance * passedOver;
+  // What the outlet itself calls breaking news tops the desk; rolling live pages sink (no clear news line).
+  const urgency = isBreaking(s.title) ? 3 : s.live ? 0.5 : 1;
+  return recency * trend * (s.weight || 1) * image * substance * passedOver * urgency;
 }
+
+/** A programme's own beat counts for more: its first category weighs 1.5x the others. */
+export const PRIMARY_CATEGORY_WEIGHT = 1.5;
 
 export class NewsDesk {
   constructor({ fetchImpl = fetch, log = console } = {}) {
@@ -375,9 +395,10 @@ export class NewsDesk {
    * `perSource` from the same outlet. The writer makes the final selection.
    */
   candidates(count, { perSource = 3, categories = null, now = Date.now() } = {}) {
+    const primary = categories && categories.length > 1 ? categories[0] : null;
     const ranked = this.uncovered()
       .filter((s) => !categories || categories.includes(s.category))
-      .map((s) => ({ s, score: interestScore(s, now) }))
+      .map((s) => ({ s, score: interestScore(s, now) * (s.category === primary ? PRIMARY_CATEGORY_WEIGHT : 1) }))
       .sort((a, b) => b.score - a.score);
     const picked = [];
     const perSourceCount = new Map();

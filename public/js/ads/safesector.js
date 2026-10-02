@@ -344,6 +344,10 @@ function shotSpill(ctx, lt) {
   ctx.fillRect(250, 178, 46, 2);
   ctx.fillRect(250, 186, 34, 2);
   const a = track(lt, [[0, 0.42], [2.25, 1.02, 'out']]);
+  // contact shadow where the rim of the foot still touches the desk
+  ctx.globalAlpha = 0.5;
+  ellipse(ctx, px - 4, py + 1, 14, 2, P.black);
+  ctx.globalAlpha = 1;
   mug(ctx, px, py, 46, 55, a);
   // the stream: a ballistic ribbon from the lip, slowed down twenty times
   const pour = lt - 0.25;

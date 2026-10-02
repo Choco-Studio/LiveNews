@@ -41,6 +41,7 @@
       import hiresgym from '../js/ads/hiresgym.js';
       import { drawText, measureText } from '../js/font.js';
       import { P } from '../js/palette.js';
+      import { renderTune } from '../js/audio/synth.js';
 
       const ADS = [grandbuffer, hiresgym];
       const canvas = document.getElementById('screen');
@@ -174,10 +175,42 @@
         else if (e.key === 'ArrowLeft') render(t - (e.shiftKey ? 1 : 1 / 25));
       });
 
+      /**
+       * Draw cost per frame over the whole spot (ms): every `step` seconds, after
+       * one warm-up pass so baked art is excluded. For the perf budget check.
+       */
+      function perf(id = ad.id, step = 1 / 30) {
+        set(id);
+        for (let x = 0; x < ad.duration; x += 0.5) render(x);
+        const times = [];
+        for (let x = 0; x < ad.duration; x += step) {
+          const a = performance.now();
+          render(x);
+          times.push(performance.now() - a);
+        }
+        times.sort((p, q) => p - q);
+        const avg = times.reduce((p, q) => p + q, 0) / times.length;
+        return { ad: id, frames: times.length, avg: +avg.toFixed(3), p95: +times[Math.floor(times.length * 0.95)].toFixed(3), max: +times[times.length - 1].toFixed(3) };
+      }
+
+      /**
+       * Offline render of an ad's tune for tools/render-audio.mjs, ducked under
+       * the voice-over lines as the channel does: { sampleRate, channels }.
+       */
+      async function renderAudio({ ad: id = ad.id, seconds = null, duck = true } = {}) {
+        const a = ADS.find((x) => x.id === id) || ad;
+        const spans = duck ? a.script.map((l) => [l.at, l.at + (l.text.length / 14 + (l.text.split('...').length - 1) * 0.35) / (a.voice?.rate || 1)]) : [];
+        const out = await renderTune(a.tune, { seconds: seconds ?? a.duration + 1, loop: true, volume: 0.45, duck: spans });
+        if (!out) throw new Error('no OfflineAudioContext');
+        const b = out.buffer;
+        return { sampleRate: b.sampleRate, channels: [b.getChannelData(0), b.getChannelData(1)] };
+      }
+
       set(ad.id);
       render(t);
       requestAnimationFrame(loop);
-      window.__lab = { render, set, infoAt, ads: ADS.map((a) => a.id), get ad() { return ad; } };
+      window.__lab = { render, set, infoAt, perf, ads: ADS.map((a) => a.id), get ad() { return ad; } };
+      window.__audio = { render: renderAudio };
     </script>
   </body>
 </html>

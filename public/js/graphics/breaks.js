@@ -33,10 +33,10 @@ const sq = (x) => x * x;
 // more than a line break there, balance and fill keep text from looking ragged.
 // A one-line page (strap, ticker) is read as a unit, so it should carry most of
 // the text ("fill1"), and a page with only a word or two on it is never right.
-const COST = { page: 1, line: 0.25, fill: 0.6, fill1: 1, widow: 0.8, scrap: 2.5, balance: 1, lineBreak: 1, pageBreak: 1.6, overlong: 10 };
+const COST = { page: 1, line: 0.25, fill: 0.6, fill1: 1, widow: 0.8, scrap: 2.5, balance: 2.5, lineBreak: 1, pageBreak: 1.6, overlong: 10 };
 // A one-line page under this share of its width is a scrap (ramped, no cliff);
 // a closing page may be shorter ("...across the Greek islands").
-const SCRAP = { page: 0.35, last: 0.22 };
+const SCRAP = { page: 0.35, last: 0.22, line: 0.3 };
 
 /** Word tokens of `text` with their character offsets and lookup forms. */
 function tokenize(text) {
@@ -148,7 +148,8 @@ function solve(tokens, maxW, firstMaxW, perPage, more) {
         const lim2 = maxW - (fin ? 0 : more);
         if (w2 > lim2 && !single2) continue;
         const over2 = w2 > lim2 ? COST.overlong : 0;
-        const bal = COST.balance * sq((w1 - w2) / maxW);
+        // two lines of a caption read as one block: keep them close in length, never a lone word on top
+        const bal = COST.balance * sq((w1 - w2) / maxW) + COST.scrap * Math.max(0, (SCRAP.line - Math.min(w1, w2) / maxW) / SCRAP.line);
         const fill = COST.fill * sq((maxW - Math.max(w1, w2)) / maxW);
         const cost = COST.page + 2 * COST.line + bal + fill + over1 + over2 + lineCut + (fin ? 0 : COST.pageBreak * cut[m]) + best[m];
         if (cost < best[i]) {

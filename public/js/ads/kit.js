@@ -2874,6 +2874,8 @@ function faceOf(name) {
 }
 /** Cap height in pixels of a face at scale 1. */
 export const faceCap = (name) => faceOf(name).cap;
+/** Does a hand-drawn face ('serif' | 'thin') have its own glyph for `ch`? */
+export const hasGlyph = (name, ch) => !!faceOf(name).glyphs?.has(ch);
 
 const plain = (c) => c.normalize('NFD').replace(/[̀-ͯ]/g, '');
 function glyphW(f, ch) {
