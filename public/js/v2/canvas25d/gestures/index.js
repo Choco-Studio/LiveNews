@@ -82,6 +82,9 @@ export const REST = {
   hold: 0,
   tilt: 0,
   reach: 0,
+  // body units added to the glasses aim while the index is at the hinge (negative = up): the push that adjusts
+  // the frame (critic r3: a rigid touch read as touching the temple)
+  reachY: 0,
   yaw: 0, pitch: 0, roll: 0, hx: 0, hy: 0, lean: 0, bx: 0, by: 0, shN: 0, shF: 0,
   brow: 0, browIn: 0, smile: 0, squint: 0, lid: 0, lookX: 0, lookY: 0,
 };
@@ -97,7 +100,7 @@ REST.proF = pronationSide(REST.dirF, -1);
 }
 
 /** Channels that OVERRIDE (a gesture blends them toward its own value); every other channel adds. */
-export const ARM_CHANNELS = ['wrist', 'wristF', 'dir', 'dirF', 'curl', 'curlF', 'spread', 'spreadF', 'facing', 'facingF', 'sup', 'supF', 'pro', 'proF', 'palm', 'palmF', 'palmW', 'palmWF', 'pole', 'poleF', 'hold', 'tilt', 'reach'];
+export const ARM_CHANNELS = ['wrist', 'wristF', 'dir', 'dirF', 'curl', 'curlF', 'spread', 'spreadF', 'facing', 'facingF', 'sup', 'supF', 'pro', 'proF', 'palm', 'palmF', 'palmW', 'palmWF', 'pole', 'poleF', 'hold', 'tilt', 'reach', 'reachY'];
 const OVERRIDE = new Set(ARM_CHANNELS);
 /** Hand-shape channels: evaluated 40 ms late (fingers follow the hand). */
 export const FINGER_CHANNELS = new Set(['curl', 'curlF', 'spread', 'spreadF']);
@@ -359,7 +362,7 @@ const NEG = new Set(['yaw', 'roll', 'hx', 'bx', 'lookX', 'pro', 'proF']);
 export function mirrorDef(d) {
   const tracks = {};
   for (const [ch, keys] of Object.entries(d.tracks)) {
-    if (ch === 'reach') continue; // the glasses reach is the near hand's own
+    if (ch === 'reach' || ch === 'reachY') continue; // the glasses reach is the near hand's own
     tracks[SWAP[ch] || ch] = keys.map((k) => {
       let v = k[1] === 'R' ? REST[ch] : k[1];
       if (NEG_X.has(ch)) v = [-v[0], v[1], v[2]];

@@ -449,7 +449,7 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
     arm.hand.palm[1] = pv[1];
     arm.hand.palm[2] = pv[2];
     arm.hand.palmW = clamp(pass === 0 ? c.palmW : c.palmWF, 0, 1);
-    if (pass === 0 && reach > 0.001) reachGlasses(L, sk, arm, reach, sideKey);
+    if (pass === 0 && reach > 0.001) reachGlasses(L, sk, arm, reach, sideKey, c.reachY || 0);
     const pole = pass === 0 ? c.pole : c.poleF;
     PW[0] = pole[0] * m;
     PW[1] = pole[1];
@@ -470,7 +470,7 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
 const RG = newHandGeometry();
 const RARM = { wrist: [0, 0, 0], handDir: null, hand: null };
 const REACH_Z = 7.5; // body units: the fingertip's depth, in front of the face plane
-function reachGlasses(L, sk, arm, reach, sideKey) {
+function reachGlasses(L, sk, arm, reach, sideKey, nudgeY = 0) {
   const h = sk.head;
   BODY_HEAD.L = L;
   BODY_HEAD.cx = L.headAt[0] + h.x;
@@ -488,7 +488,7 @@ function reachGlasses(L, sk, arm, reach, sideKey) {
   const J = RG.J;
   const ax = ANCHOR[0] - J[9];
   const az = REACH_Z - J[11];
-  const ay = ANCHOR[1] - J[10] - REACH_Z * TILT;
+  const ay = ANCHOR[1] + nudgeY - J[10] - REACH_Z * TILT;
   TW[0] += (ax - TW[0]) * reach;
   TW[1] += (ay - TW[1]) * reach;
   TW[2] += (az - TW[2]) * reach;
