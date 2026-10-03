@@ -340,7 +340,7 @@ function nextSpace(text, i) {
 /** End of the source token at `i` without its trailing punctuation ("Brazil." → after the "l"). */
 function tokenEnd(text, i) {
   const tok = text.slice(i, nextSpace(text, i));
-  const core = tok.replace(/[^\p{L}\p{N}%$€£'’]+$/u, '');
+  const core = tok.replace(/[^\p{L}\p{N}%$€£¥'’]+$/u, '');
   return i + Math.max(1, core.length);
 }
 

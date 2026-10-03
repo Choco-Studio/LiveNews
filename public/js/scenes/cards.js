@@ -261,7 +261,7 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
 const MAGNITUDES = { THOUSAND: 1e3, K: 1e3, MILLION: 1e6, M: 1e6, MN: 1e6, BILLION: 1e9, BN: 1e9, B: 1e9, TRILLION: 1e12, TN: 1e12 };
 // A leading qualifier is part of the stated figure ("ABOUT 1,500", "MORE THAN 62%"): it is kept and
 // drawn with the figure (micro type above it), never dropped, so the card never overstates.
-const QUALIFIER = /^(AN ESTIMATED|MORE THAN|LESS THAN|FEWER THAN|AT LEAST|AT MOST|UP TO|JUST OVER|JUST UNDER|CLOSE TO|APPROXIMATELY|ALMOST|NEARLY|ABOUT|AROUND|ROUGHLY|SOME|OVER|UNDER|ESTIMATED)\s+(?=[$€£]?\d)/;
+const QUALIFIER = /^(AN ESTIMATED|MORE THAN|LESS THAN|FEWER THAN|AT LEAST|AT MOST|UP TO|JUST OVER|JUST UNDER|CLOSE TO|APPROXIMATELY|ALMOST|NEARLY|ABOUT|AROUND|ROUGHLY|SOME|OVER|UNDER|ESTIMATED)\s+(?=[$€£¥]?\d)/;
 const FIG_CACHE = new Map();
 /**
  * { text, rest, value, pct, year, range, qual } for a fact string or a numbers[] value: `text` is the
@@ -276,7 +276,7 @@ export function parseFigure(raw) {
   const q = s.match(QUALIFIER);
   const qual = q ? q[1] : '';
   if (q) s = s.slice(q[0].length);
-  const m = s.match(/^([$€£]?)(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?\s?(%|PER ?CENT\b|[KMB]\b|MN\b|BN\b|TN\b)?(\s?(?:-|TO)\s?\d[\d,.]*)?\s*(.*)$/);
+  const m = s.match(/^([$€£¥]?)(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?\s?(%|PER ?CENT\b|[KMB]\b|MN\b|BN\b|TN\b)?(\s?(?:-|TO)\s?\d[\d,.]*)?\s*(.*)$/);
   if (!m) f = { text: null, rest: key.toUpperCase().replace(/\s+/g, ' ').trim(), value: NaN, pct: false, year: false, range: false, qual: '' };
   else {
     const [, pre, int, dec = '', suf = '', range = '', tail0] = m;
