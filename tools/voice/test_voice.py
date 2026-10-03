@@ -182,6 +182,20 @@ class ChainTest(unittest.TestCase):
             self.assertAlmostEqual(loudness.integrated_loudness(y, SR), -16.0, delta=0.3, msg=name)
             self.assertLessEqual(loudness.true_peak(y), -1.9, name)
 
+    def test_breath_sits_inside_the_pause(self):
+        # owner 3 Oct: natural voices, "sin exagerar": a soft inhale ~30 dB under the speech, inside the pause
+        silence = np.zeros(int(0.31 * SR))
+        out = dsp.breath_into(silence, SR, -20.0, seed=7)
+        self.assertEqual(len(out), len(silence))
+        nz = np.flatnonzero(np.abs(out) > 0)
+        self.assertGreater(len(nz), int(0.12 * SR))
+        self.assertLessEqual(nz[-1], len(out) - int(0.06 * SR))  # it ends before the next phrase
+        level = 20 * np.log10(np.sqrt(np.mean(out[nz] ** 2)))
+        self.assertAlmostEqual(level, -50.0, delta=3.0)
+        # a pause too short keeps its silence; the same seed gives the same breath
+        self.assertFalse(np.any(dsp.breath_into(np.zeros(int(0.15 * SR)), SR, -20.0)))
+        self.assertTrue(np.array_equal(out, dsp.breath_into(silence, SR, -20.0, seed=7)))
+
     def test_limiter_never_overshoots(self):
         x = speechlike(2.0) * 3.0
         y = dsp.limit(x, SR, -2.0)

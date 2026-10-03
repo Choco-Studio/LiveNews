@@ -24,6 +24,7 @@ import math
 import os
 import re
 import sys
+import zlib
 import time
 
 import numpy as np
@@ -454,6 +455,8 @@ class VoiceEngine:
         gap_max = float(gap_max) if gap_max else 0.0
         sr = SAMPLE_RATE
         lead, tail = int(0.012 * sr), int(0.025 * sr)
+        # breaths between sentences (dsp.breath_into): presenters only, unless the request turns them off
+        breaths = req.get('breaths', True) is not False and not str(req.get('effect') or '').startswith('robot') and not req.get('raw')
 
         clips = []
         for ph in phrases:
@@ -501,7 +504,13 @@ class VoiceEngine:
             cursor += len(c['audio'])
             if i < len(clips) - 1:
                 gap = int(c['phrase'].pause * sr)
-                pieces.append(np.zeros(gap))
+                silence = np.zeros(gap)
+                # owner, 3 Oct ("voces más naturales, sin exagerar"): a soft inhale in a sentence pause before a
+                # longer phrase, inside the pause (the timeline never moves); never for UNIT-8 (a machine)
+                nxt = clips[i + 1]
+                if breaths and gap >= int(0.24 * sr) and len(nxt['tokens']) >= 6:
+                    silence = dsp.breath_into(silence, sr, c['level'], seed=zlib.crc32(nxt['phrase'].text.encode('utf-8')))
+                pieces.append(silence)
                 cursor += gap
         dry = np.concatenate(pieces)
 

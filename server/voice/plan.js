@@ -8,7 +8,7 @@
 import crypto from 'node:crypto';
 
 // Bump when the recipe below changes in a way that changes the audio.
-export const RECIPE = 3;
+export const RECIPE = 4; // 4: soft breaths in sentence pauses (tools/voice/dsp.py breath_into, owner 3 Oct)
 
 // Segments a presenter reads aloud.
 export const SPOKEN = new Set(['intro', 'story', 'chat', 'outro']);

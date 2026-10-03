@@ -458,6 +458,46 @@ def trim_tail(x, sr, speech_end, tail_max, floor_db=-60.0):
     return x[:max(end, min(len(x), speech_end))]
 
 
+# ---------------------------------------------------------------- breaths
+
+BREATH = {
+    'dur': (0.20, 0.30),   # seconds, drawn per breath
+    'below_db': 30.0,      # under the phrase's active speech level (the chain's compressor brings it up 2-4 dB)
+    'band': (380.0, 3600.0),
+    'end_gap': 0.07,       # the inhale ends this long before the next phrase starts
+}
+
+
+def breath_into(silence, sr, speech_db, seed=0, **params):
+    """A soft inhale at the end of a pause (owner 3 Oct: more natural voices, "sin exagerar").
+
+    Band-limited noise with a quick rise and a slower fall, centred on the air
+    band of an intake of breath, about 30 dB under the speech around it. It
+    sits inside the existing pause, so no word moves on the timeline.
+    """
+    p = {**BREATH, **params}
+    n = len(silence)
+    rng = np.random.default_rng(seed)
+    dur = p['dur'][0] + (p['dur'][1] - p['dur'][0]) * float(rng.random())
+    end = n - int(p['end_gap'] * sr)
+    # as long as the pause allows (it starts 30 ms into the pause at the earliest): a 0.31 s sentence pause
+    # takes a ~0.2 s inhale; a pause too short for 0.12 s of breath keeps its silence
+    m = min(int(dur * sr), end - int(0.03 * sr))
+    if m < int(0.12 * sr):
+        return silence
+    noise = rng.standard_normal(m + int(0.1 * sr))
+    lo, hi = p['band']
+    shaped = fft_filter(noise, lambda f: biquad_response([biquad('highpass', lo, sr, q=0.7), biquad('lowpass', hi, sr, q=0.7)], f, sr), sr, pad=0.02)[:m]
+    t = np.linspace(0.0, 1.0, m)
+    env = np.where(t < 0.35, np.sin(0.5 * np.pi * t / 0.35) ** 2, np.cos(0.5 * np.pi * (t - 0.35) / 0.65) ** 1.5)
+    shaped = shaped * env
+    rms = float(np.sqrt(np.mean(shaped ** 2))) or 1.0
+    target = 10 ** ((speech_db - p['below_db']) / 20)
+    out = np.array(silence, dtype=np.float64, copy=True)
+    out[end - m:end] += shaped / rms * target
+    return out
+
+
 # ---------------------------------------------------------------- robot
 
 def _stft(x, n_fft, hop):
