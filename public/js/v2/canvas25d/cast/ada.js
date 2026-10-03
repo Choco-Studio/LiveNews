@@ -46,13 +46,14 @@ export const ada = defineLook({
   outfit: 'turtleneck',
   // charcoal knit: a step lighter than her hair so the long side reads against it, still darker than
   // TECH BYTES' lit cove pools; a silver rim keeps the far shoulder off the background
-  jacket: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black },
-  shirt: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black },
+  // owner 3 Oct (polish round): a bottle-green knit (was graphite), her own colour beside Max's brown blazer
+  jacket: { ramp: [P.darkGreen, P.darkGreen, P.ink, P.black], line: P.black },
+  shirt: { ramp: [P.darkGreen, P.darkGreen, P.ink, P.black], line: P.black },
   cuff: P.slate,
   arm: { upper: 21.2, fore: 19.6, rUpper: 2.95, rElbow: 2.55, rWrist: 2.0, hand: 10.2 },
   persona: { sway: 0.5, headMotion: 0.75, blinkMin: 2.8, blinkMax: 6.2, energy: 0.8, smile: 0.05 },
   mats: {
-    collar: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black, rim: P.silver }, // the roll of the same knit
+    collar: { ramp: [P.darkGreen, P.darkGreen, P.ink, P.black], line: P.black, rim: P.silver }, // the roll of the same knit
     collarFlat: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black }, // the wide: no rim stripe down the neck column
     // the hair without the resolve rim (it would dot the stepped outline); drawStraight paints it as arcs
     strands: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black, th: [0.62, 0.08, -0.42] },

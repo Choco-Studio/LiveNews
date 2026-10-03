@@ -542,7 +542,8 @@ export function indicatorWidth(f, s, L = null) {
 export const indicatorAtRest = () => IND.rest;
 
 // ---------------------------------------------------------------------------
-// The antenna: a thin static steel rod on the lit side of the crown, no light, no ball
+// The antenna: a thin static steel rod on the lit side of the crown, and a small static status light on its tip
+const LED_TIP = decal(P.magenta), LED_HOT = decal(P.pink);
 
 function drawAntenna(buf, L, m, head, s) {
   headOffset(head, OFF);
@@ -553,6 +554,12 @@ function drawAntenna(buf, L, m, head, s) {
   const rx = Math.round(cx + ax * s - rw / 2);
   const yTop = Math.round(cy + (CASE.top - 2.7) * s), yBase = Math.round(cy + baseY * s);
   for (let y = yTop; y < yBase; y++) for (let i = 0; i < rw; i++) buf.plot(rx + i, y, m.rod, rw >= 2 && i === 0 ? 0 : 1);
+  // owner 3 Oct (polish round): a small status light at the tip, COSMOS's magenta, its warm-white heart at
+  // close-ups (static: a light that is on, not a blinker)
+  const lw = s >= 2.2 ? rw + 1 : rw;
+  const lx = rx - (lw > rw ? 1 : 0), ly = yTop - lw;
+  for (let j = 0; j < lw; j++) for (let i = 0; i < lw; i++) buf.plot(lx + i, ly + j, LED_TIP, 1);
+  if (s >= 3) buf.plot(lx, ly, LED_HOT, 1);
   // a low machined boss where the rod leaves the housing (medium and close-up)
   if (s >= 1.35) {
     const cw = rw + 2, ch = Math.max(1, Math.round(0.45 * s));

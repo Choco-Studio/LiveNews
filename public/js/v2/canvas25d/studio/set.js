@@ -33,6 +33,7 @@ import { drawLogo, measureLogo } from '../../../logo.js';
 import { F, SET, kAt, sxOf, syOf } from './geometry.js';
 import { resolveStyle, styleFor, setStyle, currentStyle, STYLE_IDS } from './styles.js';
 import { updateWall, drawWallContent, wallFromScene, wallVersionOf, wallWarmTasks, warmWallContent, prepareImage } from './wall.js';
+import { drawDressing, DESK_FRONTS, DRESSING } from './dressing.js';
 
 export { SET, setStyle, styleFor, wallFromScene, drawWallContent, warmWallContent, prepareImage };
 
@@ -563,6 +564,12 @@ export function invalidateSet() {
   CACHE.deskKey.fill(NaN);
 }
 
+/** Each programme's set dressing on (default) or off (the bare network architecture: tests, labs). */
+export function setDressing(on) {
+  DRESSING.on = !!on;
+  invalidateSet();
+}
+
 const KEY = new Float64Array(10);
 function fillKey(cam, sSerial, wallVer, lod) {
   KEY[0] = cam.x;
@@ -641,6 +648,7 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   renderWall(fr, cam, baked, r.x0 - b - 1, r.y0 - b - 1, r.x1 + b + 1, r.y1 + b + 1, yFloor, xl, xr);
   if (pOn) p0 = lap(PROF, 'light', p0);
   drawWallDetails(fr, cam, style, soft);
+  drawDressing(fr, cam, style, soft); // the programme's own studio (dressing.js)
   drawScreen(fr, r, b, style, soft, wall);
   if (pOn) p0 = lap(PROF, 'screen', p0);
   drawFlats(fr, cam, style, soft);
@@ -928,6 +936,8 @@ function blitLogo(fr, cx, cy, scale) {
 const DESK_N = 96;
 const DESK_JOINTS = [-178, -104, 104, 178]; // world X of the front's module seams (symmetric, clear of the plate)
 const JCOL = new Uint8Array(W);
+// per column, the desk front's panel rows (for the programme's front pattern): upper panel top, split, kick
+const PTOP = new Int16Array(W), PSPLIT = new Int16Array(W), PKICK = new Int16Array(W);
 const DFX = new Float32Array(DESK_N + 1), DFT = new Float32Array(DESK_N + 1), DFB = new Float32Array(DESK_N + 1);
 const DBX = new Float32Array(DESK_N + 1), DBT = new Float32Array(DESK_N + 1);
 const DNX = new Float32Array(DESK_N + 1);
@@ -1040,12 +1050,14 @@ function rasterDesk(fr, cam, clipRows, led, style) {
   clipRows.fill(fr.h);
   const px = fr.px;
   const kc = kAt(cam, D.deskFrontZ);
-  const topC = C[style.deskTop] || C.slate;
+  const front = (DRESSING.on && DESK_FRONTS[style.id]) || null; // the programme's own front (dressing.js)
+  const topC = C[front?.top || style.deskTop] || C.slate;
   const tech = style.deskTop === 'steel';
   // the front panel: ink over a darker lower band (TECH BYTES' plinth: slate over ink)
   // (the plinth's lit face ends at the reveal, above y 150 in the wide: below it the lower panel is
   // black like every other desk, so the graphics zone stays the darkest)
-  const panelHi = tech ? C.slate : C.ink, panelLo = C.black;
+  const panelHi = front ? C[front.hi] : tech ? C.slate : C.ink, panelLo = front ? C[front.lo] : C.black;
+  PTOP.fill(-1);
   const refName = REFLECT[nameOfLed(led)];
   const refC = refName ? C[refName] : 0;
   // the front's module joints: 1 px recessed seams at fixed world X, found on the front curve
@@ -1136,10 +1148,25 @@ function rasterDesk(fr, cam, clipRows, led, style) {
     }
     for (e = Math.min(bot, rKick); y < e; y++, o += W0) px[o] = cLo;
     for (; y < bot; y++, o += W0) px[o] = cKick;
+    PTOP[x] = ledRow + 1;
+    PSPLIT[x] = Math.min(bot, rSplit);
+    PKICK[x] = Math.min(bot, rKick);
     // floor reflection of the LED line (a darker palette step, ≤ 30 %), never in the graphics zone
     if (refC) {
       const ry = Math.round(ybot + (D.deskH - LED_Y) * kz * 0.9);
       if (ry >= 0 && ry < fr.h && ry < 150) px[ry * W0 + x] = refC;
+    }
+  }
+  if (front) {
+    if (front.pattern) deskPattern(fr, cam, front, kc);
+    // the graphics zone (y >= 150) keeps the network's plain dark panel whatever the programme's front
+    const hiC = C[front.hi], loC = C[front.lo];
+    for (let x = 0; x < W; x++) {
+      if (PTOP[x] < 0) continue;
+      for (let y = Math.max(150, PTOP[x]); y < Math.min(fr.h, PKICK[x]); y++) {
+        const o = y * W + x;
+        if (px[o] === hiC || px[o] === loC) px[o] = C.ink;
+      }
     }
   }
   // logo plate: a flat red block centred on the front, logo at the nearest integer scale
@@ -1151,6 +1178,39 @@ function rasterDesk(fr, cam, clipRows, led, style) {
   fr.span(ix0, iy0, ix0 + 1, iy1, C.darkRed);
   const ls = Math.max(1, Math.min(3, Math.floor(kc * 0.62)));
   blitLogo(fr, (pX0 + pX1) / 2, (pY0 + pY1) / 2 - 0.5 * kc, ls);
+}
+
+/**
+ * The programme's desk front pattern over the upper panel (dressing.js DESK_FRONTS): wood grain lines, a few
+ * star points, or a band of the accent at the panel's foot. Above the reveal only (never in y >= 150).
+ */
+function deskPattern(fr, cam, front, kc) {
+  const px = fr.px;
+  const W0 = fr.w;
+  const grain = C.tanShade, star = C.silver, stripe = C[front.stripe || 'yellow'];
+  for (let x = 0; x < W0; x++) {
+    const t = PTOP[x], sp = PSPLIT[x];
+    if (t < 0 || sp <= t) continue;
+    const h = sp - t;
+    if (front.pattern === 'grain') {
+      // three long grain lines that wander a pixel (a seeded wave along the desk)
+      for (const f of [0.28, 0.55, 0.8]) {
+        const y = t + Math.round(h * f + Math.sin(x * 0.11 + f * 9) * 0.8);
+        if (y > t && y < sp && y < 150) px[y * W0 + x] = grain;
+      }
+    } else if (front.pattern === 'stars') {
+      const hsh = Math.imul(x * 2654435761, 1) >>> 0;
+      if (hsh % 29 === 0) {
+        const y = t + 2 + (hsh >>> 8) % Math.max(1, h - 3);
+        if (y < sp && y < 150) px[y * W0 + x] = star;
+      }
+    } else if (front.pattern === 'stripe') {
+      // a band of the accent across the upper panel (a third of the way down), clear of the graphics zone
+      const bw = Math.max(1, Math.round(kc));
+      const y0 = t + Math.max(1, Math.round(h * 0.3));
+      for (let y = y0; y < y0 + bw; y++) if (y < sp && y < 150) px[y * W0 + x] = stripe;
+    }
+  }
 }
 
 const LED_NAMES = new Map(['red', 'cyan', 'magenta', 'yellow', 'darkGreen', 'green'].map((n) => [C[n] >>> 0, n]));

@@ -38,7 +38,8 @@ export const nova = defineLook({
   torso: { neckHW: 3.0, shoulderTop: 3.0, shoulderHW: 18.6, sideHW: 17.4, bottom: 46, vDepth: 12.5, shoulderJoint: [16.0, 7.0] },
   outfit: 'cardigan',
   // a muted blue-grey knit: darker than her lit face, a step lighter than UNIT-8's graphite shell
-  jacket: { ramp: [P.fog, P.steel, P.slate, P.ink], line: P.black },
+  // owner 3 Oct (polish round): a plum cardigan (was grey), COSMOS's colour, deep enough that the face stays the warmest
+  jacket: { ramp: [P.purple, P.purple, P.maroon, P.black], line: P.black },
   // a charcoal round-neck top: off the skin ramp, so neck and garment separate at 1x (a maroon / brown
   // top read as a plunging bare neckline on air)
   shirt: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black },

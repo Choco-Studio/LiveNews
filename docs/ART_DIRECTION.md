@@ -210,3 +210,32 @@ Solo shows alternate the single with pictures. NEWS IN 60 may cut at 3–6 s but
 - [ ] Rotate clocks, blink the LIVE tag, or flash continuously.
 - [ ] Show a name super on every story, or let headlines exceed about 45 characters.
 - [ ] Move the camera on the set.
+
+## Set dressing per programme (owner polish round, 3 Oct)
+
+The owner asked for each programme to have its own studio. The network's architecture stays: the wall, the hero screen, the desk and the GLOBIT 24 red plate. On top of it, `public/js/v2/canvas25d/studio/dressing.js` hangs each programme's dressing on the back wall, beside the presenters, and changes the desk front:
+
+| Programme | Back wall | Desk front |
+| --- | --- | --- |
+| WORLD NOW | Two tall windows on a night city: lit windows, a red beacon, red sills. The world's clocks above them. | The home desk |
+| TECH BYTES | Hexagonal acoustic panels with cyan circuit traces. Shelves with gadgets. | Steel plinth |
+| COSMOS DESK | A starfield and a purple nebula. Two portholes: the Moon and a ringed planet. An orbit arc over the screen. | Purple panel with silver stars |
+| MONEY MINUTE | Wood panelling. Two market boards with green and red figures. Two candlestick charts. The bronze sconces. | Wood with grain lines |
+| NEWS IN 60 | Sixty marks round the screen, the first quarter yellow. A bank of small monitors each side, each with a steel strap; the top inner one carries a yellow tag (it is live). The room stays under the 1.5 % yellow cap. | A thin yellow band |
+
+The rules still hold, and `test/v2-set.test.js` checks them:
+- every pixel is a palette colour;
+- nothing is behind a head;
+- the graphics zone (y 150-216) stays plain black/ink;
+- only points of light (stars, windows, LEDs) are brighter than the faces;
+- nothing moves (the background is cached).
+
+`setDressing(false)` shows the bare architecture, which the older census tests use.
+
+The presenters' wardrobe (same round) gives each presenter a signature colour:
+- Penny: burgundy blazer.
+- Nova: plum cardigan.
+- Ada: bottle-green knit.
+- Sam: camel-gold tie and a pocket square.
+- UNIT-8: a magenta status light on the antenna tip.
+

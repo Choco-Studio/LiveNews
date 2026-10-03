@@ -44,7 +44,9 @@ export const penny = defineLook({
   outfit: 'tailored',
   neckline: 'blouse',
   lapel: { notchY: 6.4, w: 4.0, collarW: 3.1 },
-  jacket: { ramp: [P.steel, P.ink, P.black, P.black], line: P.black }, // ink, tailored: the blouse and face carry the light
+  // owner 3 Oct (polish round): a burgundy blazer (was ink), her own colour on the wood-and-green set; the blouse and
+  // the face still carry the light
+  jacket: { ramp: [P.darkRed, P.maroon, P.black, P.black], line: P.black },
   shirt: { ramp: [P.white, P.white, P.silver, P.fog], line: P.steel }, // crisp white blouse (cool shade: the face stays the warmest)
   pin: { at: [5.6, 9.6], ramp: [P.white, P.silver, P.steel] },
   buttons: 1,

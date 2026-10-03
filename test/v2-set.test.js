@@ -1,9 +1,9 @@
-import { describe, test } from 'node:test';
+import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { C, Frame } from '../public/js/v2/canvas25d/pixbuf.js';
 import { styleFor, setStyle, STYLE_IDS, currentStyle } from '../public/js/v2/canvas25d/studio/styles.js';
-import { drawBackground, drawDesk, setCacheEnabled, invalidateSet, wallRect, wallFromScene } from '../public/js/v2/canvas25d/studio/set.js';
+import { drawBackground, drawDesk, setCacheEnabled, invalidateSet, wallRect, wallFromScene, setDressing } from '../public/js/v2/canvas25d/studio/set.js';
 import { resetWall, wallShown, planetAzimuth, plateRectFor, mediaRectFor, figureRectFor, warmWallContent, updateWall, wallPicture, prepareImage } from '../public/js/v2/canvas25d/studio/wall.js';
 import { LSTAR, lstarRGB, nameOf, isPalette, census, share, SATURATED, labRGB } from '../public/js/v2/canvas25d/studio/color.js';
 import { SET } from '../public/js/v2/canvas25d/studio/geometry.js';
@@ -125,6 +125,9 @@ function setCensus(programme, framing = 'wide', o = {}) {
 }
 
 describe('tint and accent censuses (wide, presenters hidden)', () => {
+  // the network architecture's own rules (the programme's set dressing, owner polish round, has its own tests)
+  before(() => setDressing(false));
+  after(() => setDressing(true));
   test('WORLD NOW: no extra tint, navy ≤ 10 %, red only on the plate and the desk line', () => {
     const { cs } = setCensus('world-now');
     assert.ok(share(cs, ['navy']) <= 0.1);
@@ -366,6 +369,9 @@ describe('video wall', () => {
 
 const CAMERA = lab.hasCamera();
 describe('round 3: wall plates inside their free area, clean tint clusters', () => {
+  // the network architecture's own rules (the programme's set dressing, owner polish round, has its own tests)
+  before(() => setDressing(false));
+  after(() => setDressing(true));
   // the layouts depend on CAMERA's framings (camera.js, another stream's file): when it cannot load
   // (mid-edit elsewhere), the lab's own presets are not the real framings, so these are skipped
   test('a plate (kicker + source) stays inside the visible wall, clear of the graphics rows and every head', { skip: !CAMERA && 'camera.js unavailable (framings are CAMERA\'s)' }, () => {
@@ -453,6 +459,9 @@ describe('round 3: wall plates inside their free area, clean tint clusters', () 
 });
 
 describe('frame 0: never a frame without the set (owner, 21:05)', () => {
+  // the network architecture's own rules (the programme's set dressing, owner polish round, has its own tests)
+  before(() => setDressing(false));
+  after(() => setDressing(true));
   // A fresh instance of set.js (a new module URL) has baked only the home look at import, exactly
   // like a page that has just loaded. Its first frame of every programme must already be the whole
   // set (bake synchronously on first use), identical to the frame of a warmed instance.
@@ -621,6 +630,9 @@ describe('tools/measure-frame.mjs', () => {
 });
 
 describe('fix round 1: layout, pictures, light (critics of round 3)', () => {
+  // the network architecture's own rules (the programme's set dressing, owner polish round, has its own tests)
+  before(() => setDressing(false));
+  after(() => setDressing(true));
   const SOLO_FRAMINGS = ['wide', 'single-a', 'solo', 'mcu-l', 'mcu-r', 'ots'];
   test('every kicker of up to 18 characters gets a plate in every solo framing and every duo single', { skip: !CAMERA && 'camera.js unavailable (framings are CAMERA\'s)' }, () => {
     const kickers = ['MARKETS', 'VOLCANO', 'TECHNOLOGY', 'HEALTH CARE', 'ENERGY PRICES', 'CLIMATE TALKS', 'HOUSING MARKET',
@@ -1127,5 +1139,61 @@ describe('fix round 3 (critics of fix round 2)', () => {
     // wallFromScene queues every picture of scene.images for that preparation by itself
     const images = new Map([['a', fixture('mars')], ['b', fixture('reef')]]);
     assert.doesNotThrow(() => wallFromScene({ program: { id: 'world-now' }, cast: { A: 'paco', B: 'lola' }, images, storyId: 'a', wall: { mode: 'image' }, segPlan: { ctx: { seg: { type: 'story', storyId: 'a' } } } }));
+  });
+});
+
+describe('set dressing: each programme its own studio (owner polish round, 3 Oct)', () => {
+  const wideOf = (programme, on) => {
+    setDressing(on);
+    const px = shot({ programme, framing: 'wide' });
+    setDressing(true);
+    return px;
+  };
+  test('every programme is dressed, and no two programmes are dressed alike', () => {
+    const changed = {};
+    for (const programme of PROGRAMS) {
+      const on = wideOf(programme, true), off = wideOf(programme, false);
+      let n = 0;
+      for (let i = 0; i < on.length; i++) if (on[i] !== off[i]) n++;
+      changed[programme] = n;
+      assert.ok(n > 2500, `${programme}: only ${n} pixels of dressing`);
+    }
+    const wides = PROGRAMS.map((p) => wideOf(p, true));
+    for (let a = 0; a < wides.length; a++) for (let b = a + 1; b < wides.length; b++) {
+      let d = 0;
+      for (let i = 0; i < wides[a].length; i++) if (wides[a][i] !== wides[b][i]) d++;
+      assert.ok(d > 8000, `${PROGRAMS[a]} and ${PROGRAMS[b]} differ in ${d} pixels only`);
+    }
+  });
+  test('the dressing keeps the art direction: palette only, never behind a head, never in the graphics zone, no bright block', () => {
+    for (const programme of PROGRAMS) {
+      const on = wideOf(programme, true), off = wideOf(programme, false);
+      const cam = lab.cameraFor('wide', programme);
+      const heads = plateRectFor(cam, 'X', 'Y', programme)?.heads || [];
+      let bright = 0;
+      for (let i = 0; i < on.length; i++) {
+        if (!isPalette(on[i])) assert.fail(`${programme}: off-palette pixel at ${i % W},${(i / W) | 0}`);
+        if (on[i] === off[i]) continue;
+        const x = i % W, y = (i / W) | 0;
+        // the graphics zone stays plain black / ink
+        assert.ok(y < 150 || on[i] === C.black || on[i] === C.ink, `${programme}: dressing in the graphics zone at ${x},${y}`);
+        for (const h of heads) assert.ok(x < h.x0 - 2 || x >= h.x1 + 2 || y < h.y0 - 2 || y >= h.y1 + 2, `${programme}: dressing behind a head at ${x},${y}`);
+        if (LSTAR[nameOf(on[i])] > 75) bright++;
+      }
+      // points of light (stars, lit windows, LEDs), never a bright area: under 1.5 % of the frame
+      assert.ok(bright < W * H * 0.015, `${programme}: ${bright} bright dressing pixels`);
+    }
+  });
+  test('the desk fronts: wood for MONEY MINUTE, purple for COSMOS, a yellow band for NEWS IN 60; the plate stays red', () => {
+    const at = (programme, name) => {
+      const px = wideOf(programme, true);
+      let n = 0;
+      for (let y = 112; y < 150; y++) for (let x = 0; x < W; x++) if (px[y * W + x] === C[name]) n++;
+      return n;
+    };
+    assert.ok(at('money-minute', 'brown') > 1500);
+    assert.ok(at('cosmos', 'purple') > 1500);
+    assert.ok(at('news-60', 'yellow') > 200);
+    for (const programme of PROGRAMS) assert.ok(at(programme, 'red') > 100, `${programme}: the GLOBIT 24 plate`);
   });
 });

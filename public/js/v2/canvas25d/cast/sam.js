@@ -42,8 +42,9 @@ export const sam = defineLook({
   // mid-grey, not navy: news-60.md caps saturated colour at 6 % of the studio layer (presenter included)
   jacket: { ramp: [P.fog, P.steel, P.slate, P.ink], line: P.black },
   shirt: { ramp: [P.white, P.silver, P.fog, P.steel], line: P.steel }, // pale blue-grey, quieter than white next to the face
-  tie: { ramp: [P.steel, P.ink, P.black, P.black], line: P.black, style: 'knit' }, // slim ink knit
-  pocket: false,
+  // owner 3 Oct (polish round): a slim camel-gold knit tie and a pocket square (was ink, none): NEWS IN 60's warmth
+  tie: { ramp: [P.cream, P.tan, P.tanShade, P.brown], line: P.brown, style: 'knit' },
+  pocket: true,
   buttons: 1,
   arm: { upper: 22.5, fore: 20.5, rUpper: 3.4, rElbow: 2.9, rWrist: 2.3, hand: 11.0 },
   cuff: P.silver,

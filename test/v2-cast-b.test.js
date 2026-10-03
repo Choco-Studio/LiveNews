@@ -126,8 +126,10 @@ test('palette-only and no accent colours across gestures, emotions and speech (s
               if (c === C.ink) continue;
               assert.ok(PALETTE.has(c), `${id} ${g}: off-palette colour`);
               assert.ok(c !== C.cyan, `${id} ${g}: cyan`);
-              if (id === 'nova') assert.ok(c !== C.magenta && c !== C.purple && c !== C.pink, `nova ${g}: accent pixel`);
-              if (id === 'unit8') assert.ok(neutral.has(c), `unit8 ${g}: a coloured pixel`);
+              // (owner polish round, 3 Oct: Nova's plum cardigan is COSMOS's purple; no magenta or pink on her)
+              if (id === 'nova') assert.ok(c !== C.magenta && c !== C.pink, `nova ${g}: accent pixel`);
+              // UNIT-8: neutral but for the small status light on the antenna's tip (owner polish round)
+              if (id === 'unit8') assert.ok(neutral.has(c) || c === C.magenta || c === C.pink, `unit8 ${g}: a coloured pixel`);
             }
           }
         }
@@ -169,13 +171,14 @@ test('hair follow-through: sk.hairLag moves the hair of max, ada and nova', () =
   }
 });
 
-test("Nova's wardrobe has no P.magenta or P.purple (cosmos accent pixels), in data and in pixels", () => {
-  const banned = [P.magenta, P.purple, P.pink];
+test("Nova's wardrobe has no P.magenta or P.pink (her cardigan is COSMOS's deep purple, owner polish round), in data and in pixels", () => {
+  const banned = [P.magenta, P.pink];
   const ramps = [nova.jacket.ramp, nova.shirt.ramp, nova.hair.ramp, nova.skin, [nova.cuff], nova.necklace || [], ...Object.values(nova.mats || {}).map((m) => m.ramp)];
   for (const r of ramps) for (const c of r) assert.ok(!banned.includes(c), `nova uses ${c}`);
   for (const s of [1, 2.7, 5]) {
     const { px } = render(nova, s, 0.8);
-    assert.equal(count(px, C.magenta) + count(px, C.purple) + count(px, C.pink), 0, `nova s=${s}`);
+    assert.equal(count(px, C.magenta) + count(px, C.pink), 0, `nova s=${s}`);
+    assert.ok(count(px, C.purple) > 0, `nova s=${s}: the plum cardigan`);
   }
 });
 
