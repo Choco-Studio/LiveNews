@@ -201,8 +201,12 @@ export function holdCut(plan, si, onAir, { programId = null, gap = 0.6, cues = n
     framing = closeFraming;
   }
   // a studio shot that would only continue as the next segment's identical opening: no gain (a picture or map
-  // past its maximum still goes back to the presenter: the new story's strap changes that picture anyway)
-  if (STUDIO.has(onAir.shot) && next === end && nextOpen && nextOpen.shot === shot && (nextOpen.framing ?? null) === (framing ?? null) && nextOpen.focus === ctx.speaker) return null;
+  // past its maximum still goes back to the presenter: the new story's strap changes that picture anyway). An
+  // intro is the exception when a later sentence start can still split the new shot (both parts ≥ the cooldown):
+  // the guard comes back to the wide there (critic r2: a MONEY MINUTE intro whose next story opens on the MCU-R
+  // held its solo wide 22.9 s, because every cut to the MCU-R was refused as "continuing into the story")
+  const splitLater = ctx.type === 'intro' && (ctx.sentences || []).some((x) => Number.isFinite(x.t0) && x.t0 - t0 >= S.cooldown && end - x.t0 >= S.cooldown && !(dry && x.t0 >= dry.t0 - 0.05 && x.t0 <= dry.t1 + DRY_HOLD));
+  if (STUDIO.has(onAir.shot) && next === end && !splitLater && nextOpen && nextOpen.shot === shot && (nextOpen.framing ?? null) === (framing ?? null) && nextOpen.focus === ctx.speaker) return null;
   return { k: 1000 + si, char, at: t0, sentence: si, mid: !!point, shot, framing: framing ?? null, focus: ctx.speaker, move: null, card: null, minLen: null, beat: 'hold', guard: true };
 }
 
@@ -242,6 +246,7 @@ export function guardMarks(plan, skip = []) {
 // a short partner pickup at a story's start ("Thanks, Ada."): heard on the studio shot on air, not over a card
 const PICKUP = /^(thanks|thank you)\b/i;
 const CARD_SHOTS = new Set(['fact', 'full', 'map']);
+const PICKUP_SLACK = 0.5; // s
 
 /** The shortest a card / picture / map should hold on air (s, pace.js). */
 function minHold(shot, programId) {
@@ -271,7 +276,8 @@ export function pickupOpening(cues, plan, { programId = null, gap = 0.6 } = {}) 
   const t1 = ss[1].t0;
   let next = (ctx.duration || 0) + gap;
   for (const c of cues) if (c.k > 0 && Number.isFinite(c.at) && c.at > t1 + 0.05 && c.at < next) next = c.at;
-  if (next - t1 < minHold(c0.shot, programId)) return cues;
+  // (0.5 s of slack: the director's cut cooldown holds the card at least that long before the next cut anyway)
+  if (next - t1 < minHold(c0.shot, programId) - PICKUP_SLACK) return cues;
   const close = cues.find((c) => c.shot === 'close' && c.focus === ctx.speaker && c.framing && c.framing !== 'ots')?.framing ?? null;
   const out = [{ k: 0, char: 0, at: 0, sentence: 0, mid: false, shot: 'close', framing: close, focus: ctx.speaker, move: null, card: null, minLen: null, beat: 'pickup', keep: true }];
   out.push({ ...c0, k: 1, char: ss[1].start, at: t1, sentence: 1, mid: false });
@@ -334,6 +340,9 @@ export class LiveDirection {
     // the scheduler (tests and labs replace `schedule` / `retry`)
     this.schedule = typeof requestIdleCallback === 'function' ? (fn) => requestIdleCallback(fn, { timeout: 1500 }) : (fn) => setTimeout(fn, 30);
     this.retry = (fn) => setTimeout(fn, BUSY_RETRY);
+    // the wall warm-up waits longer for real idle time (one warm can block 50-250 ms on a loaded box: better between
+    // frames that have time to spare than forced by a short timeout; a wall not warmed in time only costs its cut frame)
+    this.scheduleWall = typeof requestIdleCallback === 'function' ? (fn) => requestIdleCallback(fn, { timeout: 5000 }) : (fn) => setTimeout(fn, 60);
     // idle work never runs while a break element is on air (it waits for the programme)
     this.idle = (fn) =>
       this.schedule(() => {
@@ -395,16 +404,18 @@ export class LiveDirection {
     });
   }
 
-  /** Warm the next queued wall, one per idle callback. */
+  /** Warm the next queued wall, one per idle callback (never during a break element: it waits like every idle task). */
   pumpWalls() {
     if (this.wallBusy || !this.wallQueue.length) return;
     this.wallBusy = true;
-    this.idle(() => {
+    const run = () => {
+      if (BUSY_SHOTS.has(this.scene.shot)) return this.retry(() => this.scheduleWall(run));
       this.wallBusy = false;
       const item = this.wallQueue.shift();
-      if (item && item.ep === this.ep) this.warmWall(item);
+      if (item && item.ep === this.ep) guarded('wall', () => this.warmWall(item));
       this.pumpWalls();
-    });
+    };
+    this.scheduleWall(run);
   }
 
   /** SET's warmWallContent for one studio cue: the wall the Stage will latch on that cut, at that framing's size. */

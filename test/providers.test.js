@@ -551,9 +551,10 @@ describe('mock provider', () => {
     const script = await raw({ stories: lightStories });
     const intro = script.segments[0];
     const said = spoken(intro.text);
-    assert.equal(
+    // (fix r2) the lead-ins vary from episode to episode (24/7: not the same words every half hour)
+    assert.match(
       said,
-      "New robot learns to cook. Also coming up: NASA telescope spots a new planet. Later in the programme: software update fixes the app. This is TECH BYTES. I'm Max Circuit, with Ada Volt."
+      /^New robot learns to cook\. (?:Also coming up|Coming up|Also ahead): NASA telescope spots a new planet\. (?:Later in the programme|Later|Still to come): software update fixes the app\. This is TECH BYTES\. I'm Max Circuit, with Ada Volt\.$/
     );
     // running order by news value: the curiosity (a talking parrot) sinks below the software update
     assert.deepEqual(storySegs(script).map((x) => x.storyId), ['l1', 'l2', 'l4', 'l3']);
@@ -593,8 +594,9 @@ describe('mock provider', () => {
     }
     const generic = (await raw({ stories: lightStories, program: { ...PROGRAM, id: 'other', title: 'OTHER' } })).segments.at(-1);
     assert.ok(generic.text.includes('[wave]'), 'a programme without its own sign-off keeps the old wave');
-    // a breaking story leads, so the grave one airs last (grave news otherwise leads on news value)
-    const graveLast = (await raw({ stories: [stories[3], stories[0]], count: 2, program: { ...PROGRAM, id: 'other' } })).segments.at(-1);
+    // after grave news the sign-off never waves (two grave stories: the last one is grave)
+    const flood = { id: 'g2', title: 'Floods leave families homeless in Porto', summary: 'Floods have left 200 families homeless. Rescuers are working through the night.', source: 'Sky News', category: 'world', image: null };
+    const graveLast = (await raw({ stories: [stories[0], flood], count: 2, program: { ...PROGRAM, id: 'other' } })).segments.at(-1);
     assert.ok(!graveLast.text.includes('[wave]'), graveLast.text);
   });
 
@@ -615,9 +617,11 @@ describe('mock provider', () => {
   test('end-to-end: generate -> extractJson -> normalizeBulletin gives a valid bulletin that keeps every story', async () => {
     const bulletin = await bulletinOf({ stories, count: 4 });
     const segs = bulletin.segments.filter((s) => s.type === 'story');
-    // The breaking story (s4) leads; the rest keep the desk's order.
-    assert.deepEqual(segs.map((s) => s.storyId), ['s4', 's1', 's2', 's3']);
-    assert.deepEqual(bulletin.rundown.map((r) => r.storyId), ['s4', 's1', 's2', 's3']);
+    // (fix r2) The fire with people injured leads over the breaking timetable change, which plays second with
+    // its flag on the strap only; the rest keep the desk's order.
+    assert.deepEqual(segs.map((s) => s.storyId), ['s1', 's4', 's2', 's3']);
+    assert.deepEqual(bulletin.rundown.map((r) => r.storyId), ['s1', 's4', 's2', 's3']);
+    assert.deepEqual(segs.map((s) => [s.breaking, !!s.breakingNote]), [[false, false], [false, true], [false, false], [false, false]]);
     assert.equal(bulletin.segments[0].type, 'intro');
     assert.equal(bulletin.segments.at(-1).type, 'outro');
     assert.equal(bulletin.title, 'TECH BYTES (demo)');
@@ -627,7 +631,7 @@ describe('mock provider', () => {
       assert.ok(seg.text.includes(story.source), `text mentions ${story.source}`);
       assert.equal(seg.hasImage, !!story.image);
     }
-    assert.deepEqual(segs.map((s) => s.location?.place ?? null), [null, 'VALENCIA, SPAIN', null, null], 'only the fire names a place');
+    assert.deepEqual(segs.map((s) => s.location?.place ?? null), ['VALENCIA, SPAIN', null, null, null], 'only the fire names a place');
   });
 
   test('picks the tone from the content and varies the shots: map for a place, the picture or a close-up, else wide', async () => {
@@ -638,11 +642,16 @@ describe('mock provider', () => {
     assert.equal(by.s3.emotion, 'neutral');
     assert.equal(by.s4.emotion, 'neutral');
     assert.deepEqual(segs.map((s) => s.anchor), ['A', 'B', 'A', 'B']);
-    assert.deepEqual(segs.map((s) => s.storyId), ['s4', 's1', 's2', 's3'], 'breaking news leads');
+    // (fix r2) a breaking story leads over stories of its own weight or less: the fire with people injured leads,
+    // the timetable change the outlet calls breaking plays second (the validator keeps its flag on the strap only)
+    assert.deepEqual(segs.map((s) => s.storyId), ['s1', 's4', 's2', 's3'], 'people harmed lead before a breaking timetable change');
     // a place opens on the map (its picture follows); a picture with no place is shown full screen
-    assert.deepEqual(segs.map((s) => s.shot), ['full', 'map', 'full', 'wide']);
-    assert.deepEqual(segs.map((s) => s.breaking), [true, false, false, false]);
-    assert.match(spoken(segs[0].text), /^Breaking news\. /);
+    assert.deepEqual(segs.map((s) => s.shot), ['map', 'full', 'full', 'wide']);
+    assert.deepEqual(segs.map((s) => s.breaking), [false, true, false, false]);
+    assert.ok(!/^Breaking news/.test(spoken(segs[1].text)), 'no "Breaking news." when it does not lead');
+    const lead = storySegs(await raw({ stories: [stories[3], stories[1], stories[2]], count: 3 }));
+    assert.equal(lead[0].storyId, 's4', 'with nothing graver, breaking news leads');
+    assert.match(spoken(lead[0].text), /^Breaking news\. /);
   });
 
   test('a story with a place gets its location from the gazetteer (the city rather than its country) and a map shot', async () => {

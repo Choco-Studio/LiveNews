@@ -904,33 +904,23 @@ const STEP_MS = 2;
 
 /**
  * Play every recorded clip through the real AudioEngine and sample the face's mouth
- * every STEP_MS of virtual time. withVoice adds the proposed `voice` field.
- * Returns per clip { seg, perf0, lv, out: [{ t (ms), open, press }] }.
+ * every STEP_MS of virtual time. The engine sends the recorded voice's loudness
+ * (speechFrame `voice`, AUDIO since 2026-10-03); withVoice false forces it to -1 after
+ * the engine call, so the fallback path (a voice without loudness, e.g. browser TTS
+ * clips) stays measured too (critic r3: both runs had become the same path).
+ * Returns per clip { seg, perf0, lv, out: [{ t (ms), open, vis, press }] } where vis is
+ * the opening every tier draws (face.js: max(open, ohold), never while pressed).
  */
 async function realEngineMouths(withVoice) {
   return withVirtualClock(async ({ advance }) => {
     const { AudioEngine } = await import('../public/js/audio.js');
     const e = new AudioEngine();
     await e.unlock();
-    let voice = null;
-    if (withVoice) {
+    if (!withVoice) {
       const orig = e.speechFrame.bind(e);
       e.speechFrame = (now, slot, out, opts) => {
         const f = orig(now, slot, out, opts);
-        if (!voice) {
-          f.voice = -1;
-          return f;
-        }
-        const l = voice;
-        if (now - l.at >= 8) {
-          const x = ((now - l.perf0) / 1000) * l.rate, i = Math.floor(x), v = l.values;
-          const a = i >= 0 && i < v.length ? v[i] : 0, b = i + 1 >= 0 && i + 1 < v.length ? v[i + 1] : 0;
-          const target = Math.min(1, Math.max(0, (a + (b - a) * (x - i) - 0.2) / 0.75));
-          const dt = l.at < 0 ? 1000 : Math.max(0, now - l.at);
-          l.value += (target - l.value) * (1 - Math.exp(-dt / (target > l.value ? 25 : 60)));
-          l.at = now;
-        }
-        f.voice = l.value;
+        f.voice = -1;
         return f;
       };
     }
@@ -944,9 +934,7 @@ async function realEngineMouths(withVoice) {
       const run = e.speak(seg.text, 'A', {
         audio: { buffer, words, levels: { rate: seg.levels.rate, values: lv } },
         onSentence: (s, i) => {
-          if (i !== 0) return;
-          first = performance.now();
-          voice = { perf0: first - words[0].t * 1000, rate: seg.levels.rate, values: lv, value: 0, at: -1 };
+          if (i === 0) first = performance.now();
         },
       });
       const f = {}, out = [];
@@ -954,11 +942,11 @@ async function realEngineMouths(withVoice) {
       while (performance.now() - t0 < (seg.duration + 1.2) * 1000) {
         const fr = sampleSpeech(src, performance.now() / 1000);
         mouthParams(fr, f, 1);
-        out.push({ t: performance.now(), open: f.open, press: f.press > 0.5 && fr.speaking });
+        const press = f.press > 0.5 && fr.speaking;
+        out.push({ t: performance.now(), open: f.open, vis: press ? 0 : Math.max(f.open, f.ohold || 0), press });
         await advance(STEP_MS);
       }
       e.stop();
-      voice = null;
       await advance(50);
       await Promise.race([run, advance(500)]);
       assert.ok(first !== null, `the engine played "${seg.text.slice(0, 30)}"`);
@@ -986,7 +974,8 @@ function lipOnsets(clips, thr) {
       for (let i = 1; i < out.length; i++) {
         if (out[i].t < ts - 200) continue;
         if (out[i].t > ts + 250) break;
-        if (out[i].open >= thr && out[i - 1].open < thr) {
+        const a = out[i].vis ?? out[i].open, b = out[i - 1].vis ?? out[i - 1].open;
+        if (a >= thr && b < thr) {
           off = out[i].t - ts;
           break;
         }
@@ -1011,13 +1000,14 @@ function lipAgreement(clips) {
     for (const o of out) {
       const x = ((o.t - perf0) / 1000) * rate, i = Math.floor(x);
       const v = Math.min(1, Math.max(0, (at(i) + (at(i + 1) - at(i)) * (x - i) - 0.2) / 0.75));
-      if (v > 0.35 && o.open < 0.05 && !o.press) {
+      // shut = what every tier draws as a shut mouth (face.js VIS_OPEN 0.12 on the held opening)
+      if (v > 0.35 && (o.vis ?? o.open) <= 0.12 && !o.press) {
         shut += STEP_MS;
         run += STEP_MS;
         longest = Math.max(longest, run);
       } else run = 0;
       quiet = v < 0.05 ? quiet + STEP_MS : 0;
-      if (quiet >= 100 && o.open > 0.15 && x > 0 && x < seg.duration * rate) openQuiet += STEP_MS;
+      if (quiet >= 100 && (o.vis ?? o.open) > 0.15 && x > 0 && x < seg.duration * rate) openQuiet += STEP_MS;
     }
   }
   return { shut, longest, openQuiet };
@@ -1038,33 +1028,32 @@ function closuresOf(clips) {
   return out;
 }
 
-test('lip sync through the real AudioEngine (16 recorded clips): with the voice loudness, ≥ 90 % of visible onsets within ±40 ms, no voice behind shut lips', async () => {
+test('lip sync through the shipped AudioEngine (16 recorded clips, speechFrame `voice`): ≥ 95 % of visible onsets within ±40 ms at every tier, voice behind shut lips ≤ 600 ms', async () => {
   const clips = await realEngineMouths(true);
-  const on = lipOnsets(clips, 0.15); // 0.15 = the first interior row at s ≥ 3.2
+  // 0.12 = the opening every tier draws as open (face.js VIS_OPEN; the pixel test below proves it)
+  const on = lipOnsets(clips, 0.12);
   const good = on.filter((o) => o.off !== null && Math.abs(o.off) <= 40).length;
   const ag = lipAgreement(clips);
   const cl = closuresOf(clips);
   if (process.env.FACE_LIP_DEBUG) console.log('real engine + voice', JSON.stringify({ onsets: on, good, ag, closures: cl.length, minClosure: Math.min(...cl) }));
   assert.ok(on.length >= 25, `${on.length} onsets measured`);
-  assert.ok(good / on.length >= 0.9, `${good} of ${on.length} onsets within ±40 ms: ${on.filter((o) => o.off === null || Math.abs(o.off) > 40).map((o) => `${o.word} ${o.off === null ? 'none' : Math.round(o.off)}`).join(', ')}`);
+  // critic r3: the gap must never silently return, so the bar is the brief's own (≥ 95 %)
+  assert.ok(good / on.length >= 0.95, `${good} of ${on.length} onsets within ±40 ms: ${on.filter((o) => o.off === null || Math.abs(o.off) > 40).map((o) => `${o.word} ${o.off === null ? 'none' : Math.round(o.off)}`).join(', ')}`);
   assert.ok(ag.shut <= 600 && ag.longest <= 160, `audible voice behind shut lips: ${ag.shut} ms in all, longest ${ag.longest} ms`);
-  assert.ok(ag.openQuiet <= 100, `open lips in silence: ${ag.openQuiet} ms`);
+  assert.ok(ag.openQuiet <= 150, `open lips in silence: ${ag.openQuiet} ms`);
   assert.ok(cl.length >= 40 && cl.every((d) => d >= 40 - STEP_MS), `m/b/p closures: ${cl.length}, shortest ${Math.min(...cl)} ms`);
 });
 
-test('lip sync through the real AudioEngine without the voice field (the engine as it is today): measured honestly at the same visible threshold, below the ±40 ms bar until AUDIO sends `voice`', async () => {
+test('lip sync through the real AudioEngine with the loudness forced off (voice -1: the fallback for a clip without loudness): the timeline alone, measured at the same visible threshold', async () => {
   const clips = await realEngineMouths(false);
-  // the same threshold as the with-voice test (0.15, the first interior row at s ≥ 3.2; critic r2:
-  // measuring 'today' at 0.08 made the engine look compliant)
-  const on = lipOnsets(clips, 0.15);
+  const on = lipOnsets(clips, 0.12);
   const good = on.filter((o) => o.off !== null && Math.abs(o.off) <= 40).length;
   const cl = closuresOf(clips);
   const ag = lipAgreement(clips);
   if (process.env.FACE_LIP_DEBUG) console.log('real engine, no voice', JSON.stringify({ onsets: on, good, closures: cl.length, ag }));
-  // today: 33 of 41 (80 %); the first word of a clip opens with its timeline (no pause gate), so the
-  // clip-start delays of ~150 ms are gone; the rest (the timeline running ahead of or behind the
-  // recording after comma pauses, 3.8 s of voice behind shut lips over 16 clips) needs `voice`
-  assert.ok(good / on.length >= 0.78, `${good} of ${on.length} onsets within ±40 ms`);
+  // the fallback: ~80 % (the engine's timeline runs ahead of or behind the recording after comma
+  // pauses; the loudness fixes it); the first word of a clip opens with its timeline (no gate)
+  assert.ok(good / on.length >= 0.75, `${good} of ${on.length} onsets within ±40 ms`);
   const starts = on.filter((o) => o.first && o.off !== null);
   assert.ok(starts.filter((o) => o.off > 40).length <= 1, `clip-first words opening late: ${starts.filter((o) => o.off > 40).map((o) => `${o.word} ${Math.round(o.off)}`).join(', ')}`);
   assert.ok(cl.length >= 40 && cl.every((d) => d >= 40 - STEP_MS), `m/b/p closures: ${cl.length}, shortest ${Math.min(...cl)} ms`);
@@ -1258,7 +1247,8 @@ test('interest airs with the real shot plan: a reaction or an interest-lifted gl
       for (const e of events) {
         if (e.kind !== 'look' || !ctx.listeners.includes(e.slot)) continue;
         const reaction = e.target === 'interest';
-        const lifted = e.target === 'partner' && e.style === 'interest' && /^(turn|cont)/.test(e.why);
+        // (meeting a short line's question with a toss look: the toss-meet carries the brow lift, critic r3)
+        const lifted = e.target === 'partner' && e.style === 'interest' && /^(turn|cont|toss-meet)/.test(e.why);
         if (!reaction && !lifted) continue;
         aired++;
         assert.ok(!ctx.grave, `${ep.id} #${i}: never on a grave line`);

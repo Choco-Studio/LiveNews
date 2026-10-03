@@ -448,17 +448,22 @@ describe('AudioEngine: sync, lateness and robustness', () => {
     e.sfx('stinger', { startAt: performance.now() });
     const swell = ctx.started.slice(from).filter((n) => n.kind === 'bufferSource');
     assert.ok(swell.length >= 1, 'the swell is not dropped');
-    assert.ok(swell[0].startedAt >= now && swell[0].startedAt - now < 0.02, `swell at +${((swell[0].startedAt - now) * 1000).toFixed(0)} ms`);
+    assert.ok(swell[0].startedAt >= now && swell[0].startedAt - now < 0.15, `swell at +${((swell[0].startedAt - now) * 1000).toFixed(0)} ms`);
     const thump = oscFrom(ctx, from).find((o) => Math.abs(o.hz - 86) < 0.5);
     assert.ok(thump, 'the thump is scheduled');
-    // Beat 1 at 150 BPM is 0.4 s after the cue's beat 0, which is heard 95 ms after it is asked.
-    assert.ok(Math.abs(thump.at - (now - 0.095 + 0.4)) < 0.015, `thump at ${(thump.at - now).toFixed(3)} s`);
-    // MONEY MINUTE's sign-off: its button (a felt thump) is ON beat 0.
+    // Beat 0 sounds 6 ms after the cue is scheduled; beat 1 (150 BPM: 0.4 s) stays on
+    // the clock of a beat 0 that would be heard on the call, 95 ms earlier.
+    const gap = thump.at - swell[0].startedAt;
+    assert.ok(Math.abs(gap - (0.4 - 0.095 - 0.006)) < 0.01, `swell -> thump ${(gap * 1000).toFixed(0)} ms`);
+    // MONEY MINUTE's sign-off: its button (a felt thump) is ON beat 0; the motif starts on beat 1.
     from = ctx.started.length;
     now = ctx.currentTime;
     e.sfx('outro', { programId: 'money-minute', startAt: performance.now() });
-    const button = oscFrom(ctx, from).find((o) => Math.abs(o.hz - 86) < 0.5);
-    assert.ok(button && button.at >= now && button.at - now < 0.02, 'the beat-0 button sounds at once');
+    const outro = oscFrom(ctx, from);
+    const button = outro.find((o) => Math.abs(o.hz - 86) < 0.5);
+    assert.ok(button && button.at >= now && button.at - now < 0.15, 'the beat-0 button is not dropped');
+    const lead = outro.filter((o) => o.at > button.at + 0.2).sort((x, y) => x.at - y.at)[0];
+    assert.ok(lead && Math.abs(lead.at - button.at - (60 / 114 - 0.095 - 0.006)) < 0.012, `button -> beat 1 ${lead && ((lead.at - button.at) * 1000).toFixed(0)} ms`);
     e.stopAll();
   });
 

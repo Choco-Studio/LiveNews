@@ -247,21 +247,12 @@ export class Ducker {
     if (this.targets.has(target)) this.add(target, t);
   }
 
-  // Change a target's ducked value with a glide (no step on a sounding note).
+  // A gentler duck for a target from the next voice on (a stopped tune's
+  // fading tail). While a voice speaks, or the duck is still held after one,
+  // nothing changes: a fading tail must never swell back up.
   soften(target, on, t) {
-    if (!this.targets.has(target)) return;
+    if (!this.targets.has(target) || this.speaking || t < this.releaseAt) return;
     target.on = on;
-    const p = target.param;
-    try {
-      if (this.speaking) {
-        p.cancelScheduledValues(t);
-        p.setTargetAtTime(on, t, 0.05);
-      } else if (t < this.releaseAt) {
-        p.cancelScheduledValues(t);
-        p.setTargetAtTime(on, t, 0.05);
-        p.setTargetAtTime(target.off, this.releaseAt, DUCK.release);
-      }
-    } catch { /* ignore */ }
   }
 
   start(t) {

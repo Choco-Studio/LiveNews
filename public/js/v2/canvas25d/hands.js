@@ -129,6 +129,8 @@ export function newHandGeometry() {
 }
 
 const TMP = [0, 0, 0], TMP2 = [0, 0, 0], REF = [0, 0, 0], WV = [0, 0, 0];
+// half-width of the soft pronation side (D·WV): narrow, so authored poses keep their palm side
+const SOFT_D = 0.18;
 
 /**
  * Build the 3D hand of a solved arm.
@@ -161,28 +163,23 @@ export function handGeometry(L, arm, side, g) {
     REF[2] += f[2] * f[1] * k;
   }
   norm3(REF);
-  // WV: where the palm goes when it turns away from the camera (natural pronation: down and a little outward)
-  WV[0] = -side * 0.35;
-  WV[1] = 1;
-  WV[2] = 0;
-  let k = dot3(WV, f);
-  WV[0] -= f[0] * k;
-  WV[1] -= f[1] * k;
-  WV[2] -= f[2] * k;
-  k = dot3(WV, REF);
-  WV[0] -= REF[0] * k;
-  WV[1] -= REF[1] * k;
-  WV[2] -= REF[2] * k;
-  if (Math.sqrt(WV[0] * WV[0] + WV[1] * WV[1] + WV[2] * WV[2]) < 1e-3) {
-    cross3(f, REF, WV);
-    WV[0] *= side;
-    WV[1] *= side;
-    WV[2] *= side;
-  }
+  // WV: the axis the palm turns toward as it leaves the camera, f × REF (unit: f and REF are perpendicular unit
+  // vectors), on the side of natural pronation D = (−0.35·side, 1, 0) (down and a little outward). The side is
+  // a SOFT sign: where the hand's screen direction runs along D (or it points at the lens) the hard sign flipped
+  // the palm through 180° in one frame (critic r3: the lift / point_screen flutter); there the roll now turns
+  // continuously through the nearer pole instead.
+  cross3(f, REF, WV);
   norm3(WV);
+  const sgD = clamp((WV[1] - side * 0.35 * WV[0]) / SOFT_D, -1, 1);
   const facing = clamp(hd.facing, -1, 1);
   const sup = clamp(hd.sup || 0, 0, 1);
-  const th = Math.acos(facing) * (1 - 2 * sup);
+  // roll from the camera reference: acos(facing) on the pronation side (sup 0) or the supination side (sup 1).
+  // A change of side turns through the NEARER pole: through "palm to camera" while the palm faces the lens,
+  // through "back to camera" while the back does (a sup switch at facing −1 is no motion at all, where the old
+  // a·(1 − 2·sup) rolled the hand a full turn through palm-out in 0.14 s)
+  const sgn = sgD * (1 - 2 * sup);
+  const a = Math.acos(facing);
+  const th = facing >= 0 ? a * sgn : Math.PI - (Math.PI - a) * sgn;
   const ct = Math.cos(th), st = Math.sin(th);
   n[0] = REF[0] * ct + WV[0] * st;
   n[1] = REF[1] * ct + WV[1] * st;

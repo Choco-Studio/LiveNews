@@ -28,6 +28,9 @@
 // short band only for the visemes that show them; the opening is at most 2
 // rows below s 3.2 and 3 rows above it, the jaw drops at most 2 px (head.js);
 // m/b/p press the lips shut; blends happen upstream (speechFrame mix).
+// Every tier shows the first opening at the same level (VIS_OPEN, from the 80 ms
+// held opening f.ohold): critic r3 measured the wide / medium mouths opening only
+// above 0.36-0.38, so they looked shut for ~70 % of the voiced time and read dubbed.
 import { P } from '../../palette.js';
 import { decal } from './pixbuf.js';
 import { WRAP, wrapBegin, wrapX } from './head.js';
@@ -563,6 +566,7 @@ function litPlot(buf, x, y, sk, skin, maxTone) {
 // ---------------------------------------------------------------------------
 // Mouth
 
+const VIS_OPEN = 0.12; // the opening every tier shows as an open mouth (its first interior row)
 const MX = { y: 0 };
 // mouth scratch: MS[0] = the feature x (units) for mxS(), the half width for rowS()
 const MS = new Float64Array(1);
@@ -594,6 +598,8 @@ function drawMouth(buf, L, mt, sk, head, f, s, tier) {
   const smile = clamp(f.smile || 0, -1, 1);
   const press = (f.press || 0) > 0.5;
   const tuck = (f.tuck || 0) > 0.5;
+  // visibly open: the held opening (no single-frame flicker between syllables), never while pressed
+  const vis = !press && Math.max(open, f.ohold || 0) > VIS_OPEN;
   const hw = (M.w / 2) * (1 + mw * 0.16) * (1 - round * 0.3); // half width, units
   MS[0] = 0;
   mxS();
@@ -607,7 +613,7 @@ function drawMouth(buf, L, mt, sk, head, f, s, tier) {
     // corners soften to the shade tone instead. Under a mustache the line keeps to the
     // mustache's flat middle (its drooping ends reach the mouth row and painted over the
     // corners, leaving a stray mustache pixel beside the open mouth: critic r2)
-    const isOpen = open > 0.35 && !press;
+    const isOpen = vis;
     let a = round > 0.5 ? xl + 1 : xl, b = round > 0.5 ? xr - 1 : xr;
     if (L.mustache) {
       MS[0] = -Math.min(hw, L.mustache.w * 0.5 * 0.55);
@@ -627,7 +633,7 @@ function drawMouth(buf, L, mt, sk, head, f, s, tier) {
   }
 
   const maxRows = tier === 1 ? 1 : s >= 3.2 ? 3 : 2;
-  const rows = press ? 0 : Math.min(maxRows, Math.round(open * (maxRows + 0.35)));
+  const rows = press ? 0 : Math.max(vis ? 1 : 0, Math.min(maxRows, Math.round(open * (maxRows + 0.35))));
 
   if (tier === 1) {
     // medium: a lip line with soft ends; one row of interior and the lit lower lip when open

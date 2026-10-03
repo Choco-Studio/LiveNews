@@ -27,8 +27,10 @@ export const FACE_KEYS = ['brow', 'browIn', 'smile', 'squint', 'lid', 'wide', 'l
 //   level   the voice envelope 0..1 (30 ms attack, 120 ms release) for UNIT-8's
 //           speech indicator (PRESENTERS B), written by speech.js
 //   t       the evaluation time (s), so face hooks can quantise their own updates
+//   ohold   the mouth opening held for 80 ms (speech.js / visemes.js): the small mouths
+//           of the wide and medium tiers open from it, without single-frame flicker
 // (solveFace also passes f.speech = perf.speech and f.speaking, set by speech.js)
-export const FACE_REST = { mwide: 0, level: 0, t: 0 };
+export const FACE_REST = { mwide: 0, level: 0, t: 0, ohold: 0 };
 
 /** Layer 2: perf.emotions = [{ t0, name }] (sorted), crossfaded; plus the persona's resting smile. */
 export function applyEmotion(c, perf, t, persona) {
@@ -82,6 +84,7 @@ export function solveFace(c, f, m) {
   f.tuck = c.tuck;
   f.jaw = c.jaw || 0;
   f.level = c.level || 0;
+  f.ohold = c.ohold || 0;
   f.t = c.t || 0;
   // for faces drawn by a look's own hook (UNIT-8's indicator): the live source and its state
   f.speech = c.speech || null;

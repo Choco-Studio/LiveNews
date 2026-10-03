@@ -237,10 +237,12 @@ export function fabricFold(o, mat, group, a, c, b, hw, lit = 0, core = 2) {
  * pushed in and out by `wob` (0..0.3) with phase `ph`, shaded with a lit crescent toward the key,
  * a deep crease on the far side and `bias` added to every tone. `sph(nx, ny)` optionally mixes in
  * the larger form's normal (a curl on a round head of hair is lit like the head). `hi` false keeps
- * the crescent one step down (only clusters that face the key get the highlight colour).
+ * the crescent one step down (only clusters that face the key get the highlight colour); `crease`
+ * is the tone of the tuck on the far side (3 deep; a lighter tone keeps coils from reading as cracks)
+ * and `arc` how far in the lit crescent reaches (d² from the centre; larger = a thinner rim arc).
  */
 const BLOB = { sx: 0, sy: 0, mix: 0 };
-export function blob(buf, m, cx, cy, r, wob, ph, bias = 0, sph = null, hi = true) {
+export function blob(buf, m, cx, cy, r, wob, ph, bias = 0, sph = null, hi = true, crease = 3, arc = 0.2) {
   const R = r * (1 + wob);
   const x0 = Math.max(1, Math.floor(cx - R)), y0 = Math.max(1, Math.floor(cy - R));
   const x1 = Math.min(buf.w - 1, Math.ceil(cx + R) + 1), y1 = Math.min(buf.h - 1, Math.ceil(cy + R) + 1);
@@ -272,11 +274,11 @@ export function blob(buf, m, cx, cy, r, wob, ph, bias = 0, sph = null, hi = true
       }
       // explicit cluster tones: a lit crescent toward the key, the body, a shaded far side
       const lit = -0.6 * nx - 0.8 * ny;
-      let t = (lit > 0.5 && d2 > 0.2 ? (hi ? 0 : 1) : lit < -0.3 ? 2 : 1) + bias;
+      let t = (lit > 0.5 && d2 > arc ? (hi ? 0 : 1) : lit < -0.3 ? 2 : 1) + bias;
       // the crease where this clump tucks under its neighbour: a crescent on the far side's outer ring
       // that thickens toward the lower right (never a hairline crack)
       const far = (dx + dy * 0.8) / rr;
-      if (far > 0.25 && d2 > 0.62 - far * 0.22) t = 3;
+      if (far > 0.25 && d2 > 0.62 - far * 0.22) t = crease < 3 && (far < 0.62 || d2 < 0.74) ? crease : 3; // a lighter crease keeps a deep tip
       const i = y * w + x;
       mat[i] = m;
       tn[i] = t < 0 ? 0 : t > 3 ? 3 : t;

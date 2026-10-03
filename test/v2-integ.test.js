@@ -1293,7 +1293,7 @@ test('direction: the max-hold guard returns to the speaker\'s studio shot before
  * The runtime's guard on planned time (LiveDirection.begin0: planned cues at sentence starts and speech marks,
  * holdCut at sentence starts without a planned cut and at phrase marks). Returns the shots [{ shot, framing, focus, t }].
  */
-function simulateGuard(p, cues, { programId, gap, anchor, closeFraming = null, wideFraming = null }) {
+function simulateGuard(p, cues, { programId, gap, anchor, closeFraming = null, wideFraming = null, nextOpen = null }) {
   const S = paceFor(programId).shots;
   const ss = p.ctx.sentences;
   let onAir = { ...(cues[0] || { shot: 'close', framing: null, focus: anchor }), t: 0 };
@@ -1307,7 +1307,7 @@ function simulateGuard(p, cues, { programId, gap, anchor, closeFraming = null, w
   for (const ch of checks) {
     const planned = ch.cue || (!ch.point && cues.find((c) => c.k > 0 && c.sentence === ch.si && !c.mid));
     const close = closeFraming ?? cues.find((c) => c.shot === 'close' && c.focus === anchor && c.framing && c.framing !== 'ots')?.framing ?? null;
-    const next = planned || holdCut(p, ch.si, { shot: onAir.shot, framing: onAir.framing, focus: onAir.focus, held: ch.t - onAir.t }, { programId, gap, cues, closeFraming: close, wideFraming, point: ch.point });
+    const next = planned || holdCut(p, ch.si, { shot: onAir.shot, framing: onAir.framing, focus: onAir.focus, held: ch.t - onAir.t }, { programId, gap, cues, closeFraming: close, wideFraming, point: ch.point, nextOpen });
     if (next && ch.t - onAir.t >= S.cooldown - 1e-6) shots.push((onAir = { ...next, t: ch.t }));
   }
   return shots;
@@ -1357,7 +1357,10 @@ test('direction: a long MONEY MINUTE intro leaves its wide before the studio max
   const p = { ...planSegment(ep, 0, { gapAfter: (j) => paceGap(ep, j).gap }), index: 0 };
   const cues = cuesFromPlan(p, { rundown: ep.rundown }) || [];
   const S = paceFor('money-minute').shots;
-  const shots = simulateGuard(p, cues, { programId: 'money-minute', gap, anchor: 'A', closeFraming: 'mcu-r', wideFraming: 'wide' });
+  // the next story opens on Penny's MCU-R: the guard's cut to it must not be refused as "continuing into the story"
+  const nextOpen = cuesFromPlan({ ...planSegment(ep, 1, {}), index: 1 }, { hasImg: false })[0];
+  assert.equal(nextOpen.framing, 'mcu-r');
+  const shots = simulateGuard(p, cues, { programId: 'money-minute', gap, anchor: 'A', closeFraming: 'mcu-r', wideFraming: 'wide', nextOpen });
   const end = p.ctx.duration + gap;
   const lens = shots.map((a, k) => (shots[k + 1]?.t ?? end) - a.t);
   assert.ok(p.ctx.duration > S.studioMax, `the intro is long (${p.ctx.duration.toFixed(1)} s)`);
@@ -1417,6 +1420,7 @@ test('direction: the walls of the coming studio cuts are warmed in idle time, on
   const queue = [];
   const later = [];
   live.schedule = (fn) => queue.push(fn);
+  live.scheduleWall = (fn) => queue.push(fn);
   live.retry = (fn) => later.push(fn);
   const drain = (max = 400) => {
     let n = 0;

@@ -19,11 +19,18 @@
 //            the listening posture cross-fade instead of popping at turn changes
 //   pauseAt, sentAt, endAt   when the last comma pause began, the last sentence
 //            changed and the speech last stopped (s): idle.js blinks on them
+//   ohold    the opening held for 80 ms (a peak hold): face.js opens the small mouths
+//            of the wide / medium tiers from it, so a 1 px mouth that shows each syllable
+//            never flickers for a single frame between syllables (critic r3)
 import { speechFrame, mouthParams } from './visemes.js';
 import { smooth } from './space.js';
 
 const FAR = -1e9;
 const MIN_HOLD = 0.042; // s a dominant mouth shape is held at least
+const MBP_LEAD = 1 / 60; // a lip closure may cut that hold short by one 60 Hz frame (it is the shape that must show)
+const RISE = 15; // per s: the opening rises at most 0.25 per 60 Hz frame (shut to half open over ~2 frames, never in one)
+const OHOLD = 0.08; // s the visible opening is held (ohold)
+const PREROLL = 90; // steps of 1/60 s replayed after a jump: 1.5 s, longer than the slowest envelope's memory
 
 /** Smooth non-repeating drift in -1..1 (same recipe as idle.js wobble; kept here to avoid an import cycle). */
 function wobble(t, seed) {
@@ -60,8 +67,12 @@ export function sampleSpeech(sp, t) {
     if (fr.act === undefined) fr.act = fr.speaking ? 1 : 0;
     return fr;
   }
+  // a built timeline is pure in t: the held opening from two earlier instants (sampled first:
+  // speechFrame fills one shared object), the slow signals from its span
+  const l2 = sp ? speechFrame(sp, t - 0.08, null).level : 0;
+  const l1 = sp ? speechFrame(sp, t - 0.04, null).level : 0;
   const fr = speechFrame(sp, t, null);
-  // a built timeline is pure in t: derive the slow signals from its span
+  fr.ohold = Math.max(fr.level, l1, l2);
   fr.env = fr.level;
   fr.act = sp ? smooth((t - sp.t0 + 0.05) / 0.3) * (1 - smooth((t - sp.t1) / 0.6)) : 0;
   fr.pauseAt = fr.sentAt = fr.pausePrev = fr.endPrev = FAR;
@@ -76,8 +87,9 @@ export function sampleSpeech(sp, t) {
  * the same instant from several layers and the follow-through pose asks for an
  * earlier one: both get the current frame) into a reused object, and keeps the
  * envelopes as state. A jump (first frame, a seek, a lab capture out of order)
- * pre-rolls 0.5 s at 60 Hz from a quiet state, so any instant renders the same
- * whatever came before it, within a frame's worth of envelope.
+ * pre-rolls 1.5 s at 60 Hz from a quiet state (longer than the slowest envelope's
+ * memory: act releases over 0.6 s), so an instant renders (nearly) the same whatever
+ * came before it.
  */
 export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
   const raw = {};
@@ -85,7 +97,10 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
   let lastT = null;
   let wasPause = false, wasSpeaking = false, lastSentence = -1, opened = false;
   let shown = 'rest', shownAt = -1e9, lastShape = 'rest', lastShapeAt = -1e9;
+  let lastLevel = 0, oholdAt = -1e9;
   const reset = () => {
+    lastLevel = 0;
+    oholdAt = -1e9;
     Object.assign(fr, blankFrame(slot));
     wasPause = false;
     wasSpeaking = false;
@@ -117,7 +132,7 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
       lastShapeAt = t;
     }
     if (dom !== shown) {
-      if (t - shownAt >= MIN_HOLD || dom === 'MBP' || !fr.speaking) {
+      if (t - shownAt >= (dom === 'MBP' ? MIN_HOLD - MBP_LEAD : MIN_HOLD) || !fr.speaking) {
         shown = dom;
         shownAt = t;
       } else if (fr.viseme === shown) fr.mix = Math.min(fr.mix, 0.49);
@@ -159,6 +174,15 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
       // only made the first word open ~150 ms late (critic r2)
       fr.level *= fr.mix * fr.mix;
     }
+    // the opening never jumps from shut to half open in one frame (critic r3: 21 % of the onsets
+    // rose 0.1 → 0.5 in under 25 ms); closing is free (a lip closure is instant)
+    if (fr.level > lastLevel + RISE * dt) fr.level = lastLevel + RISE * dt;
+    lastLevel = fr.level;
+    // the visible opening, held for OHOLD after its last peak (see ohold in the header)
+    if (fr.level >= fr.ohold || t - oholdAt > OHOLD) {
+      fr.ohold = fr.level;
+      oholdAt = t;
+    }
     if (!fr.speaking) opened = false;
     else if (fr.level > 0.12) opened = true;
     fr.env = ease(fr.env, fr.level, 0.03, 0.12, dt);
@@ -191,7 +215,7 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
       if (lastT !== null && t < lastT && lastT - t < 0.5) return fr; // follow-through pose: same frame
       if (lastT === null || t < lastT || t - lastT > 0.5) {
         reset();
-        for (let k = 30; k >= 1; k--) step(t - k / 60, 1 / 60);
+        for (let k = PREROLL; k >= 1; k--) step(t - k / 60, 1 / 60);
         step(t, 1 / 60);
       } else step(t, t - lastT);
       lastT = t;

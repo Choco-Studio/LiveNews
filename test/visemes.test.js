@@ -608,10 +608,12 @@ describe('loudness', () => {
   // within 1.1 LU of its target with the gain derived from them (the stinger
   // trim compensates its known -3 LU model error). If a tune or the model
   // changes, re-measure in the lab before updating this table.
+  // Re-measured 2026-10-03 after the broadcast-tilt re-voicing (audio fix r2): lab
+  // model error max 1.24 LU (stinger excepted), off-target spread 2.1 LU.
   const GOLDEN = {
-    'open:world-now': -17.95, 'open:tech-bytes': -15.4, 'open:cosmos': -13.87, 'open:money-minute': -15.81, 'open:news-60': -22.47, 'open:generic': -16.06,
-    'ident:day': -21.03, 'ident:night': -21.04, stinger: -25.1, 'breaking:channel': -19.33, 'outro:channel': -18.94, 'outro:world-now': -20.11,
-    'outro:cosmos': -15.65, 'outro:news-60': -21.41, 'promo:world-now': -22.66,
+    'open:world-now': -18.8, 'open:tech-bytes': -20.85, 'open:cosmos': -15.88, 'open:money-minute': -18.5, 'open:news-60': -23.39, 'open:generic': -20.09,
+    'ident:day': -22.62, 'ident:night': -22.62, stinger: -25.1, 'breaking:channel': -18.8, 'outro:channel': -20.1, 'outro:world-now': -19.47,
+    'outro:cosmos': -15.95, 'outro:news-60': -25.44, 'promo:world-now': -23.74,
   };
   test('model predictions match the golden table (within 0.5 LU)', () => {
     const tunes = {

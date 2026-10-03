@@ -144,13 +144,30 @@ describe('fix r2: a broken item never costs the feed', () => {
     assert.ok(stories.some((s) => s.title.endsWith('number 1')) && stories.some((s) => s.title.endsWith('number 5')));
   });
 
-  test('a date in the future is never later than now; more than a day ahead it counts as undated', () => {
+  test('a date in the future is never later than now; a broken clock ranks after fresh stories and expires', async () => {
     const now = Date.parse('2026-10-03T04:00:00Z');
     const xml = rss([item(1, '', 'Fri, 01 Jan 2100 00:00:00 GMT'), item(2, '', new Date(now + 3600_000).toUTCString()), item(3, '', new Date(now - 3600_000).toUTCString())]);
     const [far, soon, past] = parseFeed(xml, { name: 'Clock', category: 'world' }, { now });
-    assert.ok(far.published <= now && far.undated, 'the year 2100 is a broken clock: undated');
+    assert.ok(far.published < past.published && far.brokenDate, 'the year 2100 is a broken clock: ranked as half a day old');
     assert.equal(soon.published, now, 'an hour ahead: clamped to now');
     assert.equal(past.published, now - 3600_000);
+    // on a desk: the fresh story heads the ticker, the 2100 one leaves with the age sweep
+    const desk = new NewsDesk({ log: quiet, fetchImpl: async () => { throw new Error('no network'); } });
+    desk.loadFeeds = () => [{ name: 'Clock', url: 'https://feed.test/rss', category: 'world' }];
+    desk.readFeed = async () => rss([item(1, '', 'Fri, 01 Jan 2100 00:00:00 GMT'), item(3, '', new Date(Date.now() - 600_000).toUTCString())]);
+    const realNow = Date.now;
+    try {
+      await desk.refresh();
+      const order = [...desk.stories.values()].sort((a, b) => b.published - a.published).map((s) => s.title);
+      assert.match(order[0], /number 3$/);
+      const start = realNow();
+      Date.now = () => start + 30 * 3600_000;
+      desk.readFeed = async () => rss([]);
+      await desk.refresh();
+      assert.deepEqual([...desk.stories.values()].map((s) => s.brokenDate || false), [false], 'the 2100 story expired first; the real one is still within its 36 hours');
+    } finally {
+      Date.now = realNow;
+    }
   });
 
   test('undated items of a feed that still lists them never age out all at once (the offline slate after 36 h)', async () => {

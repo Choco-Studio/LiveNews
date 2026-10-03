@@ -79,9 +79,12 @@ const DEFS = {
     // one soft pool from above behind each head: its steel heart sits above the hair (centre Y -106,
     // y ~13 in the wide, tall: light from above) and its Bayer edge clear of the head, so the cove's flat slate is all the
     // head ring sees (Max's darker skin keeps 25+ L* over it)
+    // each a downlight's wash from the ceiling line: brightest at the top by its source, narrower there
+    // and widening as it falls, fading toward its foot above the hair, a narrow Bayer edge on the lower
+    // arc (no free-floating oval with a dithered ring)
     pools: [
-      { X: -104, Y: -106, rx: 50, ry: 62, amount: 0.95 },
-      { X: 104, Y: -106, rx: 50, ry: 62, amount: 0.95 },
+      { X: -104, Y: -118, rx: 40, ry: 24, below: 2.55, flare: 0.3, edge: 0.24, fade: 0.55, amount: 0.95 },
+      { X: 104, Y: -118, rx: 40, ry: 24, below: 2.55, flare: 0.3, edge: 0.24, fade: 0.55, amount: 0.95 },
     ],
     poolMax: 3.0, // a pool centre is at most steel
     glow: 0.15,

@@ -6,17 +6,17 @@
 // tanShade / brown / maroon) lit with care: the planes that face the key
 // (forehead, cheekbone, nose bridge, chin) turn to tan, so her face stays the
 // warmest, brightest area of a COSMOS frame; a muted slate cardigan worn open
-// over a deep maroon round-neck top and a fine silver chain
+// over a charcoal round-neck top and a fine silver chain
 // (cast/wardrobe-b.js 'cardigan').
 // No P.magenta / P.purple anywhere: on COSMOS those are programme accent pixels
 // (cosmos.md §5 item 9).
 import { P } from '../../../palette.js';
-import { material } from '../pixbuf.js';
+import { material, decal } from '../pixbuf.js';
 import { clamp } from '../space.js';
 import { drawHead } from '../head.js';
 import { GROUPS } from '../character.js';
 import { defineLook } from './base.js';
-import { blob, local, screen, tier, hwAt, fastAtan2, rimRuns } from './wardrobe-b.js';
+import { blob, local, screen, tier, hwAt, fastAtan2 } from './wardrobe-b.js';
 
 export const nova = defineLook({
   id: 'nova',
@@ -39,7 +39,9 @@ export const nova = defineLook({
   outfit: 'cardigan',
   // a muted blue-grey knit: darker than her lit face, a step lighter than UNIT-8's graphite shell
   jacket: { ramp: [P.fog, P.steel, P.slate, P.ink], line: P.black },
-  shirt: { ramp: [P.brown, P.maroon, P.black, P.black], line: P.black }, // deep maroon top
+  // a charcoal round-neck top: off the skin ramp, so neck and garment separate at 1x (a maroon / brown
+  // top read as a plunging bare neckline on air)
+  shirt: { ramp: [P.slate, P.ink, P.black, P.black], line: P.black },
   cuff: P.steel,
   arm: { upper: 21.4, fore: 19.8, rUpper: 3.1, rElbow: 2.65, rWrist: 2.05, hand: 10.3 },
   persona: { sway: 0.7, headMotion: 0.85, blinkMin: 2.5, blinkMax: 5.6, energy: 0.85, smile: 0.2 },
@@ -61,16 +63,36 @@ const hash = (a, b) => {
   return h - Math.floor(h);
 };
 
+/** Signed distance (units, > 0 inside, first order) to an ellipse. */
+function planeD(x, y, cx, cy, rx, ry) {
+  const u = (x - cx) / rx, v = (y - cy) / ry;
+  return (1 - Math.sqrt(u * u + v * v)) * (rx < ry ? rx : ry);
+}
+
+/** Signed distance (units, > 0 inside) to a capsule of radius r from (ax, ay) to (bx, by). */
+function capD(x, y, ax, ay, bx, by, r) {
+  const vx = bx - ax, vy = by - ay;
+  let k = ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy);
+  k = k < 0 ? 0 : k > 1 ? 1 : k;
+  const ux = x - ax - vx * k, uy = y - ay - vy * k;
+  return r - Math.sqrt(ux * ux + uy * uy);
+}
+
 // The scallop of the outline by angle, tabulated once (11 lobes plus a slower 7-lobe variation).
 const SC_N = 512;
 const SCALLOP = new Float32Array(SC_N);
+// the wide: no clusters inside, so the outline itself carries the coils: 10 lobes ~1-1.5 px deep over
+// the top and the sides, fading out under the jaw line
+const SCALLOP0 = new Float32Array(SC_N);
 for (let i = 0; i < SC_N; i++) {
   const a = (i / SC_N) * 2 * Math.PI - Math.PI;
   SCALLOP[i] = 0.04 * Math.cos(a * 11) + 0.018 * Math.cos(a * 7 + 1.3);
+  const lower = Math.sin(a); // a = atan2(v, u): > 0 below the centre line
+  SCALLOP0[i] = (0.1 * Math.cos(a * 10 + 0.4) + 0.025 * Math.cos(a * 4 + 2.1)) * clamp(1 - (lower - 0.25) / 0.5, 0, 1);
 }
 
 /** Signed "inside" of the halo outline at (x, y): > 0 inside. Scalloped by the outer clusters. */
-function halo(x, y, lag) {
+function halo(x, y, lag, wide = false) {
   const dy = y - HALO.cy;
   const below = dy > 0;
   const ry = below ? HALO.down : HALO.up;
@@ -80,10 +102,10 @@ function halo(x, y, lag) {
   const u = xx / rx;
   const r2 = u * u + v * v;
   // the scallop only matters near the outline: skip the angle well inside and well outside
-  if (r2 > 1.16 || r2 < 0.8) return 1 - Math.sqrt(r2);
+  if (wide ? r2 > 1.27 || r2 < 0.76 : r2 > 1.16 || r2 < 0.8) return 1 - Math.sqrt(r2);
   const a = fastAtan2(v, u);
   const k = ((((a + Math.PI) / (2 * Math.PI)) * SC_N) | 0) & (SC_N - 1);
-  return 1 + SCALLOP[k] - Math.sqrt(r2);
+  return 1 + (wide ? SCALLOP0[k] : SCALLOP[k]) - Math.sqrt(r2);
 }
 
 // The hairline's small wave across the forehead, tabulated (feature-space x from -16 to 16 u).
@@ -122,16 +144,25 @@ function drawWarmHead(buf, L, m, head, s) {
   const w = buf.w, M = buf.mat, T = buf.tone, Gr = buf.grp;
   const kx = head.cr / s, ky = head.sr / s;
   const chinY = H.chinY + (head.jaw || 0) - 0.8;
-  // hand-placed lit planes (head-local units, feature space), shaped on the face's structure rather
-  // than as discs: the forehead plane hugs the key-side brow ridge (its lower edge follows the brows and
-  // dips between them toward the nose bridge, its top rounds off well below the hairline, its far edge
-  // is the terminator slanting away), the cheekbone is a crescent under the lit eye that follows the
-  // orbit, and a small plane sits on the front of the chin. Painted only over the base tone, so they
-  // keep FACES' shading
+  // hand-placed lit planes (head-local units, feature space), shaped on the face's structure: a broad
+  // forehead plane over the key-side brow ridge that runs down the glabella into the nose bridge (where
+  // FACES' ridge light continues it), a diagonal along the zygomatic arch from under the lit eye out to
+  // the lit side of the face, and a small plane on the front of the chin. Each is a cluster: a tan core,
+  // then a 1 px ring of P.skinShade (the hue-shifted step between tan and tanShade) before the base, so
+  // no plane has a hard tan-on-tanShade edge. Positions are mapped through the head's curve (the same
+  // asin turn as faceX), so on a turn the planes compress toward the far side instead of sliding as a
+  // block; the cheek plane fades out as that cheek turns away. Painted only over the base tone, so
+  // they keep FACES' shading
   const ex = L.eyes.x, ey = L.eyes.y;
   const by = L.brows.y;
   const chY = L.mouth.y + 2.1;
-  const yawShift = Math.sin(head.yaw || 0) * H.R * 0.75; // the planes ride the turn with the features
+  const yaw = head.yaw || 0;
+  const syaw = Math.sin(yaw);
+  // the ring (units): 1 px in the medium, 2 px at close-up; the tan core is what is left inside it, so
+  // a narrow plane (the glabella, the chin) is all mid-tone and only the broad ones reach tan
+  const ring = (tr === 2 ? Math.max(2, Math.round(0.5 * s)) : 1) / s;
+  const cheekK = clamp((yaw + 0.3) / 0.15, 0, 1); // the key-side cheek turns away for yaw < -0.15
+  const mid = decal(P.skinShade);
   for (let y = y0; y < y1; y++) {
     const dy = y + 0.5 - head.cy;
     for (let x = x0; x < x1; x++) {
@@ -148,32 +179,33 @@ function drawWarmHead(buf, L, m, head, s) {
         continue;
       }
       if (t !== 1 || ly > chinY) continue;
-      const fx = lx - yawShift;
-      let on = false;
-      // forehead: between the brow ridge and a rounded top ~2 u above it (under the hairline), key side to the terminator
-      const yb = by - 0.5 + 0.6 * Math.exp(-(fx * fx) / 0.6) - 0.25 * Math.exp(-((fx + ex) * (fx + ex)) / 2.2);
-      if (ly < yb && fx > -ex - 1.4 && fx < 1.3 + 0.35 * (ly - by)) {
-        const u = (fx + 1.2) / 2.6;
-        const top = yb - 2.05 * (1 - u * u * 0.5);
-        if (ly > top) on = true;
+      // screen → feature space through the head's curve (inverse of head.js faceX)
+      let fx = lx;
+      if (yaw) {
+        const hw = Math.max(1, hwAt(L, ly));
+        const jy = clamp((ly - H.cheekY) / (H.chinY - H.cheekY), 0, 1);
+        const xs = lx - syaw * 1.3 * jy;
+        fx = hw * Math.sin(clamp(Math.asin(clamp(xs / hw, -0.99, 0.99)) - yaw, -1.5707, 1.5707));
       }
-      // cheekbone: a crescent under the lit eye, thickest below its centre, following the orbit
-      if (!on && fx < -ex + 1.8 && fx > -ex - 2.4) {
-        const q = fx + ex;
-        const yu = ey + 1.2 + 0.12 * q * q + 0.2 * q; // rises toward the temple along the zygomatic arch
-        const v = (q + 0.45) / 2.05;
-        const yl = yu + 1.2 * (1 - v * v);
-        if (ly > yu && ly < yl) on = true;
+      // signed distance (units, > 0 inside) to the nearest plane
+      let d = planeD(fx, ly, -1.1, by - 1.5, 2.5, 1.05);
+      const dg = capD(fx, ly, -0.3, by + 0.1, -0.3, ey + 1.1, 0.5); // glabella → nose bridge (mid-tone only)
+      if (dg > d) d = dg;
+      if (cheekK > 0) {
+        // the cheekbone: from under the outer half of the lit eye, slanting up toward the temple
+        const dc = capD(fx, ly, -ex + 0.7, ey + 2.0, -ex - 1.9, ey + 1.05, 0.9 * cheekK);
+        if (dc > d) d = dc;
       }
-      // chin: a small plane on its front, left of centre
-      if (!on && ly > chY - 0.55 && ly < chY + 0.45 && fx > -1.45 + (ly - chY) * 0.7 && fx < 0.45 - (ly - chY) * 0.4) on = true;
-      if (!on) continue;
+      const dn = planeD(fx, ly, -0.45, chY, 1.0, 0.5);
+      if (dn > d) d = dn;
+      if (d <= 0) continue;
       // keep a base pixel beside every shadow tone (no lit rim around the eyes, nose or mouth)
       if (T[i - 1] >= 2 && M[i - 1] === mt) continue;
       if (T[i + 1] >= 2 && M[i + 1] === mt) continue;
       if (T[i - w] >= 2 && M[i - w] === mt) continue;
       if (T[i + w] >= 2 && M[i + w] === mt) continue;
-      T[i] = 0;
+      if (d > ring) T[i] = 0;
+      else M[i] = mid;
     }
   }
   if (tr === 0) {
@@ -229,22 +261,30 @@ function drawCoils(buf, L, m, head, s, sk) {
     local(head, px, py, LC);
     const x = LC[0], y = LC[1];
     if (inFace(x, y) || below(x, y)) return -1; // cheap table tests first: the face is a big share of the box
-    const v = halo(x, y, lag);
+    const v = halo(x, y, lag, tr === 0);
     if (v < 0) return -1;
     const nx = x / HALO.rx, ny = (y - HALO.cy) / HALO.up;
     const l = -0.55 * nx - 0.7 * ny;
     if (tr === 0) {
-      // wide: the shape with a lit crown; no clusters (they would be noise at 1 px)
-      if (v < 0.07 && l > 0.32) return 0;
+      // wide: the scalloped shape (no clusters: they would be noise at 1 px), and on the upper left a
+      // few single lit coil tops on a coarse jittered lattice, well inside the outline
+      if (l > 0.45 && v > 0.14) {
+        const gx = Math.floor((x + 40) / 3.3), gy = Math.floor((y + 40) / 3.1);
+        const h = hash(gx, gy);
+        if (h < 0.55) {
+          const qx = (gx + 0.3 + 0.4 * h) * 3.3 - 40, qy = (gy + 0.3 + 0.4 * hash(gy, gx)) * 3.1 - 40;
+          if (Math.abs(x - qx) < 0.5 / s && Math.abs(y - qy) < 0.5 / s) return 0;
+        }
+      }
       return l > -0.2 ? 1 : l > -0.75 ? 2 : 3;
     }
-    // the interior between clusters: maroon toward the key, black on the far side
-    return l > -0.25 ? 1 : l > -0.8 ? 2 : 3;
+    // the interior between clusters shows only as small rounded pockets: black, maroon only on the lit crown
+    return l > 0.35 ? 1 : 2;
   });
   if (tr > 0) {
     // ---- clusters on a jittered hexagonal lattice, top rows first so lower curls overlap
     const d = tr === 1 ? 2.6 : s >= 3 ? 2.05 : 2.2; // spacing (units): clusters ~4-5 px across at close-up
-    const r = d * (tr === 1 ? 0.6 : 0.64);
+    const r = d * (tr === 1 ? 0.6 : 0.6); // a touch under half the spacing on the diagonal: small dark pockets between coils
     const sph = (cx, cy, out) => {
       local(head, cx, cy, LC);
       out.sx = clamp(LC[0] / HALO.rx, -1, 1);
@@ -277,18 +317,65 @@ function drawCoils(buf, L, m, head, s, sk) {
         const crown = jy < HALO.cy - HALO.up * 0.55;
         // the far side's clusters sit one step down (body black, crescent maroon): structure without glare
         const bias = facing < -0.62 ? 1 : 0;
-        blob(buf, mc, SC[0], SC[1], rr * s * (crown ? 1.08 : 1), crown ? 0.07 : 0.14, hash(j * 3.1, jx) * 6.28, bias, sph, facing > 0.38 && hash(jy, j) > 0.35);
+        // every cluster that faces the key gets a brown crescent on its upper left, and the front clusters
+        // tuck under their neighbours in maroon (black creases read as cracks); only the far side goes black
+        blob(buf, mc, SC[0], SC[1], rr * s * (crown ? 1.08 : 1), crown ? 0.07 : 0.14, hash(j * 3.1, jx) * 6.28, bias, sph, facing > -0.2 || hash(jy, j) > 0.6, bias ? 3 : 1, tr === 2 ? 0.42 : 0.2);
       }
     }
   }
-  // ---- rim: short continuous silver arcs along the top of the hair only (never on single scallops)
+  // ---- rim: short silver arcs on the tops of the lumps only (a rim along the whole outline reads as
+  // one straight staircase across the curls), from just left of centre rightwards (the hair light comes
+  // from the upper right; a rim over the whole crown would outline the curls like a cap)
   {
     const g = buf.g;
-    const [bx0, by0, bx1, by1] = haloBox(head, 1);
+    const [, by0, bx1, by1] = haloBox(head, 1);
     const yLimit = head.cy + (HALO.cy - HALO.up * 0.45) * s;
-    // only from just left of centre rightwards: the hair light comes from the upper right (a rim over the
-    // whole crown would outline the curls like a cap)
-    rimRuns(buf, g, g, head.cx - 1.5 * s, bx1, by0, by1, rimDecal(), tr === 1 ? 2 : 3, (x, y) => y < yLimit);
+    rimPeaks(buf, g, head.cx - 1.5 * s, bx1, by0, Math.min(by1, yLimit), rimDecal(), Math.max(2, Math.round(0.9 * s)), s >= 3 ? 1 : 0);
+  }
+}
+
+const PEAK_TOPS = new Int16Array(400);
+/**
+ * Paint `rim` on the top pixel of each column x0..x1 (rows y0..y1) whose top belongs to group g and
+ * is a local peak of the outline: no column within `win` on either side reaches higher than its top
+ * minus `slack`. Only runs of 2+ neighbouring peak columns are painted (no single sparkles).
+ */
+function rimPeaks(buf, g, x0, x1, y0, y1, rim, win, slack) {
+  x0 = Math.max(1, Math.round(x0));
+  x1 = Math.min(buf.w - 2, Math.round(x1), x0 + PEAK_TOPS.length - 1);
+  y0 = Math.max(1, Math.round(y0));
+  y1 = Math.min(buf.h - 2, Math.round(y1));
+  const w = buf.w, M = buf.mat, Gr = buf.grp;
+  for (let x = x0; x <= x1; x++) {
+    let top = -1;
+    for (let y = y0; y <= y1; y++) {
+      const i = y * w + x;
+      if (!M[i]) continue;
+      if (Gr[i] === g) top = y;
+      break;
+    }
+    PEAK_TOPS[x - x0] = top;
+  }
+  const peak = (x) => {
+    const t = PEAK_TOPS[x - x0];
+    if (t < 0) return false;
+    for (let k = -win; k <= win; k++) {
+      const q = x + k;
+      if (q < x0 || q > x1 || !k) continue;
+      const u = PEAK_TOPS[q - x0];
+      if (u >= 0 && u < t - slack) return false;
+    }
+    return true;
+  };
+  let run = 0;
+  for (let x = x0; x <= x1 + 1; x++) {
+    const ok = x <= x1 && peak(x) && (run === 0 || Math.abs(PEAK_TOPS[x - x0] - PEAK_TOPS[x - 1 - x0]) <= 1);
+    if (ok) {
+      run++;
+      continue;
+    }
+    if (run >= 2) for (let q = x - run; q < x; q++) buf.paint(q, PEAK_TOPS[q - x0], rim, 0);
+    run = x <= x1 && peak(x) ? 1 : 0;
   }
 }
 

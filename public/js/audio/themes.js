@@ -160,7 +160,7 @@ const OPENS = {
         echo: { amount: 1, beats: 0.75, feedback: 0.34 },
         fadeOut: 0.8,
         tracks: [
-          { kind: 'lead', inst: LEAD.techPluck, notes: part(motif(k, COLOURS.tech, m0), total), gain: 1.1, echo: 0.45 },
+          { kind: 'lead', inst: LEAD.techPluck, notes: part([...motif(k, COLOURS.tech, m0), [H, k + 12, C - H - 0.25, 0.85]], total), gain: 1.1, echo: 0.45 }, // b7 -> 1 on the hit, released before the cut's button
           { kind: 'harmony', inst: { wave: 'pulse25', preset: 'pulse25', a: 0.004, d: 0.2, s: 0.35, r: 0.12, cutoff: 2600, vib: false }, notes: part(arp, total), gain: 0.45, pan: 0.3, echo: 0.55 },
           { kind: 'harmony', inst: 'pad', notes: part([
             [0, [k - 12, k - 9, k - 5, k - 2, k + 2], m0 + 1, 0.55], // Am9
@@ -169,9 +169,9 @@ const OPENS = {
             [H, [k - 12, k - 9, k - 3, k + 2, k - 5], total - H, 0.75], // Am6/9
           ], total), pan: -0.2 },
           { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, m0 + 1], [m0 + 1, k - 31, 1.5, 0.9], [m0 + 2.5, k - 24, 1.5], [H, k - 24, total - H]], total), gain: 0.45 },
-          stab('pluck', [k - 12, k - 5, k], C, total, 0.7),
+          stab('pluck', [k - 12, k - 5, k], C, total, 0.8, 1.3),
           { drums: drums([[0, 'K', 0.5], [2, 'S', 0.3], [4, 'K', 0.45], [H, 'K', 0.65], [C, 'F', 0.55]], total) },
-          { drums: drums([[C, 'T', 0.45]], total) },
+          { drums: drums([[C, 'T', 0.55]], total) },
           { drums: drums(range(0, H, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.16 : 0.24]), total) },
         ],
       };
@@ -193,7 +193,7 @@ const OPENS = {
         echo: { amount: 1.3, beats: 0.75, feedback: 0.45 },
         fadeOut: 1.2,
         tracks: [
-          { kind: 'lead', inst: 'softtri', notes: part(motif(k, COLOURS.cosmos, m0, { colourBeats: 1.5 }), total), gain: 0.95 },
+          { kind: 'lead', inst: 'softtri', notes: part([...motif(k, COLOURS.cosmos, m0, { colourBeats: 1.5 }), [H, k + 7, C - H - 0.25, 0.8]], total), gain: 0.95 }, // #4 rises to 5 on the hit, released before the button
           { kind: 'lead', inst: LEAD.halo, notes: part(motif(k + 12, COLOURS.cosmos, m0, { vel: 0.55 }), total), gain: 0.8, echo: 0.6, pan: -0.25 },
           { kind: 'harmony', inst: 'bell', notes: part([[0, k + 19, 1, 0.4], [m0 + 2, k + 14, 1, 0.34], [m0 + 3, k + 18, 1, 0.36], [H, k + 19, 2, 0.45]], total), gain: 1.2, echo: 0.65, pan: 0.35 },
           { kind: 'harmony', inst: 'pad', notes: part([
@@ -202,9 +202,9 @@ const OPENS = {
             [H, [k - 12, k - 5, k - 1, k + 2, k + 6], total - H, 0.75], // Emaj9#11
           ], total), pan: 0.15 },
           { kind: 'bass', inst: 'sine', notes: part([[0, k - 24, H, 0.75], [H, k - 24, total - H, 0.85]], total), gain: 0.65 },
-          stab('pluck', [k - 12, k - 5, k - 1], C, total, 0.6, 0.8),
-          { drums: drums([[H, 'F', 0.5], [C, 'F', 0.45]], total) },
-          { drums: drums([[C, 'T', 0.4]], total) },
+          stab('pluck', [k - 12, k - 5, k - 1], C, total, 0.8, 1.4),
+          { drums: drums([[H, 'F', 0.55], [C, 'F', 0.45]], total) },
+          { drums: drums([[C, 'T', 0.5]], total) },
         ],
       };
     },
@@ -234,16 +234,16 @@ const OPENS = {
         echo: { amount: 0.5, beats: 0.75, feedback: 0.22 },
         fadeOut: 0.8,
         tracks: [
-          { kind: 'lead', inst: LEAD.epiano, notes: part(motif(k, COLOURS.money, m0), total), gain: 1.05 },
+          { kind: 'lead', inst: LEAD.epiano, notes: part([...motif(k, COLOURS.money, m0), [H, k + 12, C - H - 0.25, 0.85]], total), gain: 1.05 }, // 6 -> 1 on the hit, released before the button
           { kind: 'harmony', inst: 'pad', notes: part([
             [0, ch.fmaj9, 2, 0.5], [2, ch.dm9, 1.5, 0.52], [3.5, ch.bbmaj9, 1, 0.55], [m0 + 2.5, ch.c6sus, 1.5, 0.56], [H, ch.f69, total - H, 0.66],
           ], total), pan: -0.22 },
           { kind: 'harmony', inst: 'keys', notes: part([
-            [1.5, ch.fmaj9.slice(1), 0.4, 0.45], [3.5, ch.bbmaj9.slice(1), 0.4, 0.45], [5.5, ch.c6sus.slice(1), 0.4, 0.42], [H, ch.f69, 1.5, 0.5],
+            [1.5, ch.fmaj9.slice(1), 0.4, 0.45], [3.5, ch.bbmaj9.slice(1), 0.4, 0.45], [5.5, ch.c6sus.slice(1), 0.4, 0.42], [H, ch.f69, 1.5, 0.7],
           ], total), pan: 0.25, echo: 0.2 },
           { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, 2], [2, k - 27, 1.5], [3.5, k - 31, 1], [m0 + 2.5, k - 24, 1.5], [H, k - 24, total - H]], total), gain: 0.55 },
           stab('keys', [k - 12, ...ch.f69.slice(0, 3)], C, total, 0.7, 1),
-          { drums: drums([...range(0, H, 0.5).map((b) => [b, 'H', 0.14]), [H, 'F', 0.7], [C, 'F', 0.55]], total) },
+          { drums: drums([[H, 'F', 0.75], [C, 'F', 0.55]], total) },
           { drums: drums([[C, 'T', 0.42]], total) },
         ],
       };
@@ -275,10 +275,10 @@ const OPENS = {
             [m0 + 2.5, [k - 12, k - 10, k - 5], 1.5, 0.55], // G sus2 under the octave
             [H, [k - 12, k - 8, k - 5, k + 2], total - H, 0.62],
           ], total), pan: -0.18 },
-          { kind: 'lead', inst: 'bell', notes: part([[H, [k, k + 4, k + 7, k + 14], total - H, 0.6]], total), gain: 0.5, echo: 0.3, pan: 0.15 },
+          { kind: 'lead', inst: 'bell', notes: part([[H, [k, k + 4, k + 7, k + 14], total - H, 0.75]], total), gain: 0.6, echo: 0.3, pan: 0.15 },
           { kind: 'bass', inst: { wave: 'tri', preset: 'tri', s: 0.4, d: 0.12 }, notes: part([...range(0, H, 1).map((b) => [b, k - 24, 0.4, 0.75]), [H, k - 24, total - H, 0.85]], total), gain: 0.7 },
           stab(LEAD.tick, [k - 12, k - 5], C, total, 0.75, 0.9),
-          { drums: drums([[H, 'K', 0.6], [C, 'F', 0.55]], total) },
+          { drums: drums([[H, 'K', 0.72], [C, 'F', 0.55]], total) },
           { drums: drums([[C, 'T', 0.4]], total) },
         ],
       };
@@ -302,7 +302,7 @@ const GENERIC = {
       echo: { amount: 0.7, beats: 0.75, feedback: 0.26 },
       fadeOut: 0.8,
       tracks: [
-        { kind: 'lead', inst: { ...LEAD.softPulse, cutoff: 3400 }, notes: part([...motif(k, COLOURS.home, m0), [H, k, total - H, 0.85]], total) },
+        { kind: 'lead', inst: { ...LEAD.softPulse, cutoff: 3400 }, notes: part([...motif(k, COLOURS.home, m0), [H, k, C - H - 0.25, 0.85]], total) },
         { kind: 'harmony', inst: 'pad', notes: part([
           [0, [k - 8, k - 5, k + 2, k + 4], m0 + 1, 0.55], // Cadd9
           [m0 + 1, [k - 10, k - 7, k - 3, k + 4], 1.5, 0.6], // Dm9 over C
@@ -311,7 +311,7 @@ const GENERIC = {
         ], total) },
         { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, H], [H, k - 24, total - H]], total), gain: 0.5 },
         { kind: 'harmony', inst: 'bell', notes: part([[H, [k + 7, k + 14, k + 16], total - H, 0.45]], total), gain: 0.8, echo: 0.4, pan: 0.2 },
-        stab('pluck', [k - 12, k - 5, k], C, total, 0.65),
+        stab('pluck', [k - 12, k - 5, k], C, total, 0.8, 1.3),
         { drums: drums([[H, 'F', 0.65], [C, 'F', 0.55]], total) },
         { drums: drums([[C, 'T', 0.4]], total) },
       ],

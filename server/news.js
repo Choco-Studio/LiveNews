@@ -320,8 +320,11 @@ export function parseFeed(xml, feed, { baseDir = null, now = Date.now(), log = n
   return stories;
 }
 
-// A date this far ahead is a broken clock or a hostile feed: the item counts as undated.
+// A date a little ahead (a time-zone slip) is "now"; this far ahead it is a broken clock or a hostile feed: the
+// item is ranked as if it were half a day old (after every fresh story, out of the ticker's head) and expires
+// like any other, instead of topping the desk for ever.
 const FUTURE_SLACK_MS = 24 * 3600_000;
+const BROKEN_CLOCK_AGE_MS = 12 * 3600_000;
 
 function parseItem(item, index, feed, { baseDir, now }) {
   {
@@ -336,8 +339,9 @@ function parseItem(item, index, feed, { baseDir, now }) {
     // so the desk ranks them the same way on every run. A date in the future is never later than now (it
     // would top the ticker and never expire); more than a day ahead, the item counts as undated.
     const parsed = Date.parse(dateStr);
-    const dated = Number.isFinite(parsed) && parsed <= now + FUTURE_SLACK_MS;
-    const published = dated ? Math.min(parsed, now) : now - index * 1000;
+    const dated = Number.isFinite(parsed);
+    const broken = dated && parsed > now + FUTURE_SLACK_MS;
+    const published = !dated ? now - index * 1000 : broken ? now - BROKEN_CLOCK_AGE_MS - index * 1000 : Math.min(parsed, now);
     const pictures = itemPictures(item, { baseDir, link });
     const credits = creditsOf(pictures);
     // A local feed's item may link to a local article page (offline fixtures), inside the feed's folder.
@@ -359,6 +363,7 @@ function parseItem(item, index, feed, { baseDir, now }) {
       ...(baseDir ? { local: true } : {}),
       ...(isLiveBlog(title) ? { live: true } : {}),
       ...(dated ? {} : { undated: true }),
+      ...(broken ? { brokenDate: true } : {}),
     };
     stampCredit(story);
     return story;
