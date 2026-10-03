@@ -63,7 +63,7 @@ Estado (3 oct, 09:30): trabajando punto por punto. ✅ = hecho y subido; 🟡 = 
 32. Música de fondo suave por programa y momento (equipo de música en cola).
 
 ## H. Tiempo real y 24/7
-33. Prueba de 6 horas seguidas: sin cortes, sin fugas de memoria y recuperándose sola.
+33. 🟡 Prueba larga: 2 h seguidas en tiempo real con voces reales (3 oct): 60 fps de mediana (mínimo 57), memoria estable (22→26 MB), 0 errores, el servidor siempre con programas preparados por delante. Las 6 h necesitan tu ordenador: aquí un proceso en segundo plano dura como mucho 2 h (`tools/soak.mjs`).
 34. Emisión a YouTube o Twitch (navegador sin pantalla y un codificador de vídeo funcionando a la vez). Sin probar todavía.
 35. Conectar gpt6luna como orquestador real y medir su coste y lo que tarda en responder.
 
