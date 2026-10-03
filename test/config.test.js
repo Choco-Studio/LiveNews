@@ -10,7 +10,14 @@ import { ROOT } from '../server/config.js';
 
 const KEYS = [
   'HOST',
+  'FEEDS_FILE',
+  'PICTURE_BUDGET_MS',
+  'PICTURE_VERIFY_MS',
   'PORT',
+  'RECENT_LINES_HOURS',
+  'RECYCLE_AFTER_HOURS',
+  'RECYCLE_GAP',
+  'RECYCLE_STORIES',
   'PROVIDERS',
   'CODEX_BIN',
   'CODEX_MODEL',
@@ -22,12 +29,30 @@ const KEYS = [
   'DEEPSEEK_API_KEY',
   'DEEPSEEK_MODEL',
   'DEEPSEEK_BASE_URL',
+  'AI_INBOX_DIR',
+  'AI_INBOX_TIMEOUT_MS',
   'QUEUE_SIZE',
   'CANDIDATE_POOL',
   'REVIEW_PASS',
   'MIN_NEW_STORIES',
   'MAX_STORY_AGE_HOURS',
   'FEED_REFRESH_MINUTES',
+  'VOICE_ENGINE',
+  'KOKORO_DIR',
+  'KOKORO_THREADS',
+  'VOICE_PYTHON',
+  'VOICE_WORKERS',
+  'VOICE_BUDGET_S',
+  'VOICE_FIRST_BUDGET_S',
+  'IMAGE_SEARCH',
+  'GOOGLE_CSE_KEY',
+  'GOOGLE_CSE_CX',
+  'BING_IMAGE_KEY',
+  'VOICE_CACHE_MB',
+  'WEATHER',
+  'WEATHER_WARNINGS',
+  'WEATHER_TTL_MIN',
+  'ROTATION_START',
 ];
 
 let copies = 0;
@@ -143,6 +168,33 @@ describe('config from the environment', () => {
     }
   });
 
+  test('voices: browser by default, Kokoro only when asked, with the cache under data/voice', async () => {
+    const config = await loadConfig();
+    assert.deepEqual(config.voice, {
+      engine: 'browser',
+      kokoroDir: '',
+      threads: 0,
+      python: 'python3',
+      workers: 1,
+      budgetSeconds: 90,
+      firstBudgetSeconds: 480,
+      cacheMb: 300,
+      dir: path.join(REPO, 'data', 'voice'),
+    });
+    assert.equal((await loadConfig({ VOICE_ENGINE: ' Kokoro ' })).voice.engine, 'kokoro');
+    for (const value of ['browser', 'tts', 'off', 'none']) assert.equal((await loadConfig({ VOICE_ENGINE: value })).voice.engine, 'browser', value);
+    const tuned = (await loadConfig({ KOKORO_DIR: '/models', KOKORO_THREADS: '2', VOICE_BUDGET_S: '30', VOICE_CACHE_MB: 'lots' })).voice;
+    assert.deepEqual([tuned.kokoroDir, tuned.threads, tuned.budgetSeconds, tuned.cacheMb], ['/models', 2, 30, 300]);
+  });
+
+  test('image search: Wikimedia Commons by default; google / bing listed with their keys; off turns it off', async () => {
+    assert.deepEqual((await loadConfig()).imageSearch.providers, ['commons']);
+    assert.deepEqual((await loadConfig({ IMAGE_SEARCH: 'Commons, google bing nonsense' })).imageSearch.providers, ['commons', 'google', 'bing']);
+    assert.deepEqual((await loadConfig({ IMAGE_SEARCH: 'off' })).imageSearch.providers, []);
+    const keyed = (await loadConfig({ GOOGLE_CSE_KEY: 'k', GOOGLE_CSE_CX: 'c', BING_IMAGE_KEY: 'b' })).imageSearch;
+    assert.deepEqual([keyed.google, keyed.bing], [{ key: 'k', cx: 'c' }, { key: 'b' }]);
+  });
+
   test('CODEX_EXTRA_ARGS is split on whitespace', async () => {
     const config = await loadConfig({ CODEX_EXTRA_ARGS: '-c model_reasoning_effort=low   --flag ' });
     assert.deepEqual(config.codex.extraArgs, ['-c', 'model_reasoning_effort=low', '--flag']);
@@ -165,9 +217,20 @@ describe('.env.example', () => {
       .map((m) => [m[1], m[2]])
   );
 
+  test('(fix r2) numbers outside their range fall back to the default with a warning', async () => {
+    const c = await loadConfig({ RECYCLE_GAP: '-5', PICTURE_BUDGET_MS: '-1', RECYCLE_AFTER_HOURS: '-3', RECENT_LINES_HOURS: '1000' });
+    assert.equal(c.recycleGap, 6);
+    assert.equal(c.pictureBudgetMs, 6000);
+    assert.equal(c.recycleAfterHours, 4);
+    assert.equal(c.recentLinesHours, 6);
+    const ok = await loadConfig({ RECYCLE_GAP: '8', PICTURE_BUDGET_MS: '2500' });
+    assert.equal(ok.recycleGap, 8);
+    assert.equal(ok.pictureBudgetMs, 2500);
+  });
+
   test('documents every environment variable that server/config.js reads', () => {
     const source = fs.readFileSync(path.join(REPO, 'server', 'config.js'), 'utf8');
-    const used = [...source.matchAll(/\b(?:env|num)\('([A-Z0-9_]+)'/g)].map((m) => m[1]);
+    const used = [...source.matchAll(/\b(?:env|num|bounded)\('([A-Z0-9_]+)'/g)].map((m) => m[1]);
     assert.deepEqual([...used].sort(), [...KEYS].sort(), 'the list of variables in this test is out of date');
     for (const key of used) assert.ok(key in example, `${key} is missing from .env.example`);
   });
@@ -175,8 +238,10 @@ describe('.env.example', () => {
   test('the example values for the tuning knobs are the defaults', async () => {
     const defaults = await loadConfig();
     const fromExample = await loadConfig(
-      Object.fromEntries(['HOST', 'PORT', 'PROVIDERS', 'QUEUE_SIZE', 'CANDIDATE_POOL', 'REVIEW_PASS', 'MIN_NEW_STORIES', 'MAX_STORY_AGE_HOURS', 'FEED_REFRESH_MINUTES', 'CODEX_TIMEOUT_MS'].map((k) => [k, example[k]]))
+      Object.fromEntries(['HOST', 'PORT', 'PROVIDERS', 'QUEUE_SIZE', 'CANDIDATE_POOL', 'REVIEW_PASS', 'MIN_NEW_STORIES', 'MAX_STORY_AGE_HOURS', 'FEED_REFRESH_MINUTES', 'CODEX_TIMEOUT_MS', 'VOICE_ENGINE', 'KOKORO_DIR', 'KOKORO_THREADS', 'VOICE_PYTHON', 'VOICE_WORKERS', 'VOICE_BUDGET_S', 'VOICE_CACHE_MB'].map((k) => [k, example[k]]))
     );
+    // A .env made from the example turns the neural voices on; everything else about them is the default.
+    assert.deepEqual(fromExample.voice, { ...defaults.voice, engine: 'kokoro' });
     for (const key of ['host', 'port', 'providers', 'queueSize', 'candidatePool', 'reviewPass', 'minNewStories', 'maxStoryAgeHours', 'feedRefreshMinutes']) {
       assert.deepEqual(fromExample[key], defaults[key], key);
     }

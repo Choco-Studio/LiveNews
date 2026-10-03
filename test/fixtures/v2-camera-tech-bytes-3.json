@@ -1,0 +1,263 @@
+{
+ "kind": "episode",
+ "id": "emurd6xv51",
+ "createdAt": "2026-10-02T19:37:05.777Z",
+ "program": {
+  "id": "tech-bytes",
+  "title": "TECH BYTES",
+  "tagline": "THE FUTURE, ONE BYTE AT A TIME",
+  "theme": "tech"
+ },
+ "cast": {
+  "A": "max",
+  "B": "ada"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "pictures",
+   "ms": 0,
+   "pictures": 3,
+   "of": 6,
+   "found": 0,
+   "borrowed": 0
+  },
+  {
+   "stage": "write",
+   "ms": 48,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 1,
+   "images": 2,
+   "verified": 2
+  }
+ ],
+ "title": "TECH BYTES (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Chipmaker unveils a laptop processor with all-day battery life. Also coming up: rocket launches a probe to study the Sun's poles. And later, our number of the day. This is TECH BYTES. I'm Max Circuit, with Ada Volt.",
+   "cues": [
+    {
+     "char": 63,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 183,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 215,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s6b65619146",
+    "s759a9bc1a2",
+    "s4f4b5d33da"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "The first laptops using it will go on sale in the spring, Circuit Weekly reports. A chipmaker has unveiled a new laptop processor it says can run for 20 hours on a single charge.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "point_screen"
+    },
+    {
+     "char": 178,
+     "slot": "B",
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "s6b65619146",
+   "headline": "Chipmaker unveils laptop processor with all-day battery life",
+   "shot": "full",
+   "breaking": false,
+   "location": null,
+   "fact": "20 HOURS",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": true,
+   "kicker": "CHIPS",
+   "numbers": [
+    {
+     "value": "20",
+     "label": "HOURS"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Thanks, Max. A rocket has launched a probe that will study the Sun's poles for the first time. The journey to its final orbit will take 3 years, according to Starfield Journal.",
+   "cues": [
+    {
+     "char": 176,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s759a9bc1a2",
+   "headline": "Rocket launches probe to study Sun's poles",
+   "shot": "full",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": true,
+   "kicker": "SPACE"
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Our number of the day: 50,000. A research ship has mapped 50,000 square kilometres of sea floor near Antarctica. The maps reveal underwater canyons and an extinct volcano, Starfield Journal reports.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "count"
+    },
+    {
+     "char": 198,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s4f4b5d33da",
+   "headline": "Scientists map ocean floor near Antarctica in new detail",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": "50,000 SQUARE KILOMETRES",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "50,000",
+     "label": "SQUARE KILOMETRES"
+    }
+   ],
+   "feature": "number"
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "And finally: A home robotics company has shown a robot vacuum that can climb stairs using two small legs. It will cost about 1,500 dollars when it launches next year, according to Circuit Weekly.",
+   "cues": [
+    {
+     "char": 195,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s73f99cbdf2",
+   "headline": "Robot vacuum learns to climb stairs",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": "ABOUT 1,500 DOLLARS",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AND FINALLY",
+   "numbers": [
+    {
+     "value": "1,500",
+     "label": "DOLLARS",
+     "qualifier": "ABOUT"
+    }
+   ],
+   "feature": "lighter"
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "The engineer in me approves. The accountant in me is less sure.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's TECH BYTES. From Ada Volt and from me, thanks for watching. More news around the clock on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 18,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s6b65619146",
+   "headline": "Chipmaker unveils laptop processor with all-day battery life",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": true,
+   "kicker": "CHIPS"
+  },
+  {
+   "storyId": "s759a9bc1a2",
+   "headline": "Rocket launches probe to study Sun's poles",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": true,
+   "kicker": "SPACE"
+  },
+  {
+   "storyId": "s4f4b5d33da",
+   "headline": "Scientists map ocean floor near Antarctica in new detail",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY"
+  },
+  {
+   "storyId": "s73f99cbdf2",
+   "headline": "Robot vacuum learns to climb stairs",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AND FINALLY"
+  }
+ ],
+ "storyIds": [
+  "s6b65619146",
+  "s759a9bc1a2",
+  "s4f4b5d33da",
+  "s73f99cbdf2"
+ ]
+}

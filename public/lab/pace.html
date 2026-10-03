@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab · pace</title>
+<style>
+  :root { --bg: #181425; --fg: #c0cbdc; --ui: #262b44; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 12px/1.5 monospace; }
+  #screen { display: block; width: 1152px; height: 648px; image-rendering: pixelated; background: #000; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px; background: var(--ui); align-items: center; }
+  select, button, input { font: inherit; }
+  #t { width: 480px; }
+  #note { padding: 6px 8px; color: #8b9bb4; max-width: 1136px; }
+</style>
+</head>
+<body>
+<!-- PACE lab: the rhythm of a real episode as the director plays it, BEFORE (the old fixed 0.3 s
+     pause after every segment, the old ticker) and AFTER (public/js/pace.js), on one time scale:
+     shots by type, who speaks, the air between segments, marked gestures / nods / looks, ticker
+     items. Plans come from the v2 planners (direction/index.js planSegment) for the episode, so
+     nothing here is authored per story. Deterministic: window.__lab.render(T) draws instant T. -->
+<canvas id="screen" width="384" height="216"></canvas>
+<div class="bar">
+  <select id="programme"></select>
+  <select id="view"><option value="rhythm">rhythm: before / after</option><option value="profile">pace profiles</option><option value="measured">measured on air: before / after</option></select>
+  <button id="play">play</button>
+  <input id="t" type="range" min="0" max="300" step="0.05" value="0">
+  <span id="tv">0.00 s</span>
+</div>
+<div id="note">window.__lab.set({ programme, view }), __lab.render(T), __lab.load(episodeJsonOrUrl), __lab.report().
+  Episodes: the v2 fixtures (one per programme, same JSON as test/fixtures/v2-episodes) or ?source=queue for the live
+  server's upcoming episodes. Query: ?programme=cosmos&amp;view=profile&amp;t=42 (&amp;still=1 for captures).</div>
+<script type="module">
+  import { planSegment } from '../js/v2/canvas25d/direction/index.js';
+  import { paceFor, gapAfter, CHANNEL, PROGRAMME_IDS, wordCount } from '../js/pace.js';
+  import { drawText, measureText } from '../js/font.js';
+  import { P } from '../js/palette.js';
+
+  const $ = (id) => document.getElementById(id);
+  const q = new URLSearchParams(location.search);
+  const canvas = $('screen');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const W = 384;
+  const TITLES = { 'world-now': 'WORLD NOW', 'tech-bytes': 'TECH BYTES', cosmos: 'COSMOS DESK', 'money-minute': 'MONEY MINUTE', 'news-60': 'NEWS IN 60' };
+  // presenters' voice rates (config/channel.json) for the estimated speech timing
+  const PRESENTERS = {
+    paco: { voice: { lang: 'en-GB', rate: 1.0 } }, lola: { voice: { lang: 'en-GB', rate: 1.05 } },
+    max: { voice: { lang: 'en-US', rate: 1.1 } }, ada: { voice: { lang: 'en-GB', rate: 1.04 } },
+    nova: { voice: { lang: 'en-US', rate: 1.0 } }, unit8: { voice: { lang: 'en-US', rate: 1.05 } },
+    penny: { voice: { lang: 'en-GB', rate: 1.05 } }, sam: { voice: { lang: 'en-US', rate: 1.08 } },
+  };
+  // the BEFORE rhythm: the director's fixed pause and the old ticker formula
+  const LEGACY = { gap: 0.3, ticker: (w) => 0.3 + 1.5 + 0.4 * w };
+
+  let episodes = {};
+  const opts = { programme: q.get('programme') || 'world-now', view: q.get('view') || 'rhythm' };
+  let model = null;
+
+  /** Episodes: the integration lab's saved fixtures (the same JSON as the tests), or the live queue. */
+  async function loadDefault() {
+    if (q.get('source') === 'queue') {
+      try {
+        const list = await (await fetch('/api/queue')).json();
+        for (const ep of list) if (ep?.program?.id && !episodes[ep.program.id]) episodes[ep.program.id] = ep;
+        if (Object.keys(episodes).length) return;
+      } catch { /* no dev endpoint: fixtures */ }
+    }
+    const src = await (await fetch('../js/v2/canvas25d/labs/integ.js')).text();
+    const m = src.match(/const EPISODES = (\{.*\});\s*$/m);
+    episodes = m ? JSON.parse(m[1]) : {};
+  }
+
+  /** Every plan of the episode on one clock, with the pause after each segment. */
+  function layout(ep, gapFn) {
+    const shots = [];
+    const segs = [];
+    const events = [];
+    let T = 0;
+    (ep.segments || []).forEach((seg, i) => {
+      const { ctx: c, events: evs } = planSegment(ep, i, { presenters: PRESENTERS, gapAfter: gapFn });
+      if (!c) return;
+      const g = gapFn(i);
+      const first = shots.length;
+      const kind = gapAfter(ep, i).kind;
+      segs.push({ i, type: c.type, speaker: c.speaker, t0: T, dur: c.duration, gap: g, kind, target: kind === 'signoff' ? paceFor(ep.program.id).holds.signoff : paceFor(ep.program.id).gaps[kind] });
+      for (const e of evs) {
+        if (e.kind === 'shot') {
+          const prev = shots[shots.length - 1];
+          if (prev && e.zoom && prev.shot === e.shot) continue;
+          const same = prev && prev.shot === e.shot && prev.framing === e.framing && (e.framing === 'wide' || e.framing === 'two' || prev.focus === e.focus) && (!!e.framing || prev.seg === i) && (prev.card ?? null) === (e.card ?? null);
+          if (!same) shots.push({ t: T + e.at, shot: e.shot, framing: e.framing, focus: e.focus, seg: i, minLen: e.minLen ?? null, move: !!e.move, card: e.card ?? null });
+        } else events.push({ t: T + e.at, kind: e.kind, slot: e.slot, name: e.name, speaker: c.speaker });
+      }
+      const last = shots.length > first ? shots[shots.length - 1] : null;
+      const hold = last?.minLen ? Math.min(2, Math.max(0, last.t + last.minLen - (T + c.duration + g))) : 0;
+      T += c.duration + g + hold;
+    });
+    for (let k = 0; k < shots.length; k++) shots[k].len = (k + 1 < shots.length ? shots[k + 1].t : T) - shots[k].t;
+    // ticker: the rundown's headlines in rotation for the length of the programme
+    const items = (ep.rundown || []).map((r) => wordCount(r.headline));
+    const ticks = [];
+    return { shots, segs, events, total: T, items, ticks };
+  }
+  const legacyGap = () => LEGACY.gap;
+
+  function tickerTimes(items, total, holdOf) {
+    const out = [];
+    let t = 0;
+    for (let k = 0; items.length && t < total; k++) {
+      out.push(t);
+      t += holdOf(items[k % items.length]);
+    }
+    return out;
+  }
+
+  function stats(lay, P) {
+    const body = lay.shots.filter((s) => s.shot !== 'montage');
+    const lens = body.map((s) => s.len).sort((a, b) => a - b);
+    const med = lens.length ? lens[Math.floor((lens.length - 1) / 2)] * 0.5 + lens[Math.ceil((lens.length - 1) / 2)] * 0.5 : 0;
+    const montage = lay.shots.filter((s) => s.shot === 'montage').reduce((a, s) => a + s.len, 0);
+    const gaps = lay.segs.slice(0, -1).map((s) => s.gap);
+    return {
+      total: lay.total,
+      n: body.length,
+      min: lens[0] || 0,
+      median: med,
+      cuts: (Math.max(0, body.length - 1) * 60) / Math.max(1, lay.total - montage),
+      under: body.filter((s) => s.len < P.shots.min - 0.05).length,
+      gapMin: gaps.length ? Math.min(...gaps) : 0,
+      gapMed: gaps.length ? [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)] : 0,
+    };
+  }
+
+  function rebuild() {
+    const ep = episodes[opts.programme] || episodes['world-now'];
+    if (!ep) return;
+    const P = paceFor(ep.program.id);
+    const before = layout(ep, legacyGap);
+    const after = layout(ep, (i) => gapAfter(ep, i).gap);
+    before.ticks = tickerTimes(before.items, before.total, LEGACY.ticker);
+    after.ticks = tickerTimes(after.items, after.total, (w) => CHANNEL.ticker.push + CHANNEL.ticker.base + CHANNEL.ticker.perWord * w);
+    model = { ep, P, before, after, sb: stats(before, P), sa: stats(after, P), span: Math.max(before.total, after.total) };
+    const mspan = Math.max(MEASURED.before[opts.programme]?.length || 0, MEASURED.after[opts.programme]?.length || 0);
+    $('t').max = String(Math.ceil(opts.view === 'measured' && mspan ? mspan : model.span));
+  }
+
+  // ------------------------------------------------------------------ drawing
+  const SHOT_COLOR = { wide: P.steel, close: P.slate, full: P.tan, map: P.navy, fact: P.darkRed, montage: P.purple };
+  const rect = (x, y, w, h, c) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(x | 0, y | 0, Math.max(1, w | 0), Math.max(1, h | 0));
+  };
+  const text = (s, x, y, color = P.silver, font = 'body') => drawText(ctx, s, x, y, { color, font });
+  const X0 = 22;
+  const XW = 354;
+
+  function lane(lay, y, label, t, scale) {
+    const px = (s) => X0 + s * scale;
+    text(label, 4, y, P.fog, 'micro');
+    // shots
+    for (const s of lay.shots) {
+      const x0 = Math.round(px(s.t));
+      const x1 = Math.round(px(s.t + s.len));
+      const short = s.shot !== 'montage' && s.len < model.P.shots.min - 0.05;
+      rect(x0, y + 8, x1 - x0, 11, SHOT_COLOR[s.shot] || P.slate);
+      if (s.framing === 'ots') rect(x0, y + 8, x1 - x0, 2, P.fog); // the over-the-shoulder single: a lit top edge
+      if (s.move) rect(x0 + 1, y + 17, Math.max(1, x1 - x0 - 2), 1, P.silver); // a slow push / pull
+      rect(x0, y + 8, 1, 11, P.black);
+      if (short) {
+        rect(x0, y + 7, x1 - x0, 1, P.red);
+        rect(x0, y + 19, x1 - x0, 1, P.red);
+      }
+    }
+    // who speaks, and the air between (the gaps are the bare track)
+    const rows = { A: y + 23, B: y + 28 };
+    rect(X0, rows.A, XW, 3, P.black);
+    if (model.ep.cast.B) rect(X0, rows.B, XW, 3, P.black);
+    for (const g of lay.segs) {
+      const r = rows[g.speaker] ?? rows.A;
+      rect(px(g.t0), r, Math.max(1, g.dur * scale), 3, g.speaker === 'B' ? P.cream : P.silver);
+    }
+    // marked gestures (yellow), nods (fog), looks (steel) above each row
+    for (const e of lay.events) {
+      const r = rows[e.slot] ?? rows.A;
+      if (e.kind === 'gesture') rect(px(e.t), r - 2, 1, 2, e.name === 'nod' ? P.fog : P.yellow);
+      else if (e.kind === 'look') rect(px(e.t), r - 1, 1, 1, P.steel);
+    }
+    // the air after each segment: green when it is the profile's pause (within 25 %), red when it is rushed
+    for (const g of lay.segs) rect(px(g.t0 + g.dur), y + 33, Math.max(1, g.gap * scale), 2, g.gap >= (g.target || 0) * 0.75 ? P.green : P.red);
+    // ticker pushes
+    const ty = y + 37;
+    rect(X0, ty, XW, 2, P.ink);
+    for (const tk of lay.ticks) rect(px(tk), ty - 1, 1, 4, P.yellow);
+    // playhead
+    rect(Math.round(px(Math.min(t, lay.total))), y + 6, 1, 35, t <= lay.total ? P.white : P.steel);
+    if (t > lay.total) text('OFF AIR', Math.min(W - 40, Math.round(px(lay.total)) + 3), y + 9, P.steel, 'micro');
+  }
+
+  function nowAt(lay, t) {
+    const s = [...lay.shots].reverse().find((x) => x.t <= t);
+    const g = lay.segs.find((x) => t >= x.t0 && t < x.t0 + x.dur + x.gap);
+    const inGap = g && t >= g.t0 + g.dur;
+    return { s, g, inGap };
+  }
+
+  const f1 = (v) => (Number.isFinite(v) ? v.toFixed(1) : '-');
+  function readout(lay, st, y, t, label) {
+    const { s, g, inGap } = nowAt(lay, t);
+    const shot = s ? `${(s.framing || s.shot).toUpperCase()} ${f1(s.len)}S` : '-';
+    const what = !g ? 'OFF AIR' : inGap ? `PAUSE ${g.kind.toUpperCase()} ${g.gap.toFixed(2)}S` : `${g.type.toUpperCase()} ${g.speaker}`;
+    text(label, 4, y, P.fog, 'micro');
+    text(`${shot}  ${what}`, 46, y - 1, inGap ? P.yellow : P.silver);
+    const flag = (ok) => (ok ? P.green : P.red);
+    const P0 = model.P;
+    // every figure against its target (critic r1: a length far under its target printed neutral)
+    text(`LEN ${Math.round(st.total)}S`, 46, y + 10, flag(st.total >= P0.length.target[0] && st.total <= P0.length.target[1]), 'micro');
+    text(`MED ${f1(st.median)}`, 92, y + 10, flag(st.median >= P0.shots.median[0] - 0.5 && st.median <= P0.shots.median[1] + 0.5), 'micro');
+    text(`MIN ${f1(st.min)}`, 136, y + 10, flag(st.under === 0), 'micro');
+    text(`CUTS ${f1(st.cuts)}/MIN`, 180, y + 10, flag(st.cuts <= P0.shots.cutsPerMinMax), 'micro');
+    text(`PAUSES MIN ${st.gapMin.toFixed(2)} MED ${st.gapMed.toFixed(2)}S`, 250, y + 10, flag(st.gapMed >= P0.gaps.handover * 0.75), 'micro');
+  }
+
+  function drawRhythm(t) {
+    rect(0, 0, W, 216, P.black);
+    const m = model;
+    const P0 = m.P;
+    text('PACE', 4, 4, P.white);
+    rect(4, 13, measureText('PACE'), 1, P.red); // the channel's 1 px red rule under a title
+    text(TITLES[m.ep.program.id] || m.ep.program.id.toUpperCase(), 40, 4, P.silver);
+    text(P0.label.toUpperCase(), 42 + measureText(TITLES[m.ep.program.id] || '') + 6, 6, P.fog, 'micro');
+    text(`T ${t.toFixed(1)}S`, W - 4 - measureText(`T ${t.toFixed(1)}S`, 1, 'micro'), 6, P.fog, 'micro');
+    rect(4, 17, W - 8, 1, P.ink);
+    const scale = XW / Math.max(1, m.span);
+    lane(m.before, 24, 'BEFORE', t, scale);
+    lane(m.after, 69, 'AFTER', t, scale);
+    // seconds scale
+    for (let s = 0; s <= m.span; s += 10) rect(X0 + s * scale, 112, 1, s % 60 === 0 ? 3 : 1, P.steel);
+    text('10 S', X0, 117, P.steel, 'micro');
+    // legend
+    let lx = 44;
+    for (const [k, c] of [['WIDE', P.steel], ['SINGLE', P.slate], ['PICTURE', P.tan], ['MAP', P.navy], ['CARD', P.darkRed], ['HEADLINES', P.purple], ['AIR OK', P.green], ['RUSHED', P.red]]) {
+      rect(lx, 118, 5, 4, c);
+      text(k, lx + 7, 117, P.fog, 'micro');
+      lx += measureText(k, 1, 'micro') + 12;
+    }
+    rect(4, 126, W - 8, 1, P.ink);
+    readout(m.before, m.sb, 132, t, 'BEFORE');
+    readout(m.after, m.sa, 156, t, 'AFTER');
+    rect(4, 178, W - 8, 1, P.ink);
+    const tgt = `TARGET  SHOT >= ${P0.shots.min}S  MEDIAN ${P0.shots.median.join('-')}S  <= ${P0.shots.cutsPerMinMax} CUTS/MIN  HAND-OVER ${P0.gaps.handover}S  STORY ${P0.gaps.story}S  ${P0.length.target.map((s) => Math.round(s / 6) / 10).join('-')} MIN`;
+    text(tgt, 4, 184, P.fog, 'micro');
+    text('ROWS: SHOTS, A SPEAKING (SILVER), B SPEAKING (CREAM), THE AIR AFTER EACH SEGMENT, TICKER PUSHES', 4, 194, P.steel, 'micro');
+    text('TICKS ABOVE A ROW: YELLOW = MARKED GESTURE, GREY = NOD, DOT = LOOK. WHITE LINE = NOW', 4, 203, P.steel, 'micro');
+  }
+
+  function drawProfiles() {
+    rect(0, 0, W, 216, P.black);
+    text('PACE', 4, 4, P.white);
+    rect(4, 13, measureText('PACE'), 1, P.red);
+    text('ONE TABLE FOR THE CHANNEL', 40, 6, P.fog, 'micro');
+    rect(4, 17, W - 8, 1, P.ink);
+    const cols = PROGRAMME_IDS;
+    const cx = (k) => 98 + k * 57;
+    const SHORT = { 'world-now': 'WORLD NOW', 'tech-bytes': 'TECH BYTES', cosmos: 'COSMOS', 'money-minute': 'MONEY MIN.', 'news-60': 'NEWS IN 60' };
+    cols.forEach((id, k) => text(SHORT[id] || id.toUpperCase().slice(0, 10), cx(k), 22, id === opts.programme ? P.white : P.silver, 'micro'));
+    const rows = [
+      ['LENGTH MIN', (p) => p.length.target.map((s) => Math.round(s / 6) / 10).join('-')],
+      ['SHOT MIN S', (p) => p.shots.min],
+      ['SHOT MEDIAN', (p) => p.shots.median.join('-')],
+      ['CUTS/MIN MAX', (p) => p.shots.cutsPerMinMax],
+      ['MAP S', (p) => p.shots.map.join('-')],
+      ['PICTURE S', (p) => p.shots.picture.join('-')],
+      ['STORY PAUSE', (p) => p.gaps.story],
+      ['HAND-OVER', (p) => p.gaps.handover],
+      ['CHAT TURN', (p) => p.gaps.chatTurn],
+      ['BLOCK', (p) => p.gaps.block],
+      ['AND FINALLY', (p) => p.gaps.beforeFinally],
+      ['SIGN-OFF HOLD', (p) => p.holds.signoff],
+      ['FIRST WORD', (p) => p.open.firstWord],
+      ['MOVES MAX', (p) => p.moves.max],
+      ['GESTURES/MIN', (p) => p.gestures.perMin],
+      ['GESTURE GAP', (p) => p.gestures.minGap],
+      ['HANDS AT REST', (p) => `${Math.round(p.gestures.rest * 100)}%`],
+      ['REACTION GAP', (p) => p.listener.reactionGap],
+      ['BED MIN S', (p) => p.music.minBed],
+    ];
+    rows.forEach(([label, fn], r) => {
+      const y = 31 + r * 9;
+      if (r % 2 === 0) rect(4, y - 1, W - 8, 8, P.ink);
+      text(label, 6, y, P.fog, 'micro');
+      cols.forEach((id, k) => text(String(fn(paceFor(id))), cx(k), y, id === opts.programme ? P.white : P.silver, 'micro'));
+    });
+    text(`TICKER >= ${CHANNEL.ticker.minHold}S A ITEM · STRAP PAGE ${CHANNEL.strap.page}S · CAPTION PAGE >= ${CHANNEL.captions.minPage}S · STINGER ${CHANNEL.stinger}S`, 6, 205, P.steel, 'micro');
+  }
+
+  // Measured on air (tools/pace/strips.mjs writes this block from two recordings' analyser JSON).
+  /* MEASURED:BEGIN (tools/pace/strips.mjs) */ const MEASURED = {"before":{"world-now":{"length":122.97,"stories":8,"strip":{"shots":[[0,4,"open",null],[4,3.84,"montage",null],[7.84,4.09,"montage",null],[11.94,3.34,"montage",null],[15.27,5.6,"wide",null],[20.87,3,"breakingCard",null],[23.87,5.75,"close",null],[29.62,6.75,"close",null],[36.37,5.37,"map",null],[41.74,4.88,"close",null],[46.62,5.62,"fact",null],[52.24,7.48,"map",null],[59.71,5.28,"full",null],[65,10.92,"map",null],[75.92,5.93,"map",null],[81.85,5.46,"map",null],[87.3,6.62,"map",null],[93.93,6.44,"close",null],[100.36,4.32,"map",null],[104.68,14.18,"wide",null],[118.87,4.1,"endcard",null]],"says":[[4.12,20.1,"A","intro"],[24,29.26,"A","story"],[29.74,41.38,"B","story"],[41.86,64.64,"A","story"],[65.12,75.56,"B","story"],[76.04,81.5,"B","story"],[81.96,86.92,"B","story"],[87.42,93.58,"B","story"],[94.04,104.3,"B","story"],[104.8,107.92,"A","chat"],[108.4,110.38,"B","chat"],[110.88,118.1,"A","outro"]],"gaps":[[20.1,3.9,"breakingCard",0.75],[29.26,0.48,"handover",0.85],[41.38,0.48,"handover",0.85],[64.64,0.48,"block",1.3],[75.56,0.48,"roundupItem",0.65],[81.5,0.46,"roundupItem",0.65],[86.92,0.5,"roundupItem",0.65],[93.58,0.46,"beforeFinally",1.2],[104.3,0.5,"intoChat",0.65],[107.92,0.48,"chatTurn",0.5],[110.38,0.5,"beforeOutro",0.95]]},"summary":{"programme":"WORLD NOW","partial":false,"length":122.97,"stories":8,"shotMin":4.32,"shotMedian":5.75,"shotP10":5.04,"cutsPerMin":8.11,"under4":0,"sameFraming":0,"mapMin":4.32,"handover":0.48,"story":null,"chatTurn":0.48,"block":0.48,"beforeFinally":0.46,"allPausesMedian":0.48,"openToFirstWord":0.12,"lastWordToEndcard":0.76,"strapIn":null,"tickerMin":null,"captionMin":1.57,"gesturesPerMin":null,"gestureRepeats":null,"musicPerMin":10.25,"voiceGapsOver1_5":0,"statics":0,"overMax":1,"mapShare":0.46,"singleShare":0.24,"mapRun":4,"patternRun":1,"gestureFloorOk":null,"deadAir1":0,"fallbackShare":0},"file":"before-3prog-timeline.json"},"tech-bytes":{"length":85.3,"stories":4,"strip":{"shots":[[0,4,"open",null],[4,4.47,"montage",null],[8.47,3.98,"montage",null],[12.44,5.31,"wide",null],[17.75,7.06,"close",null],[24.82,5.99,"wide",null],[30.8,4.86,"close",null],[35.67,5.19,"full",null],[40.86,9.83,"fact",null],[50.69,5.81,"close",null],[56.5,13.19,"close",null],[69.69,11.49,"wide",null],[81.18,4.12,"endcard",null]],"says":[[4.11,17.41,"A","intro"],[17.87,24.43,"A","story"],[24.93,27.01,"B","chat"],[27.49,30.43,"A","chat"],[30.93,40.47,"B","story"],[40.99,56.15,"A","story"],[56.61,69.29,"B","story"],[69.81,72.93,"A","chat"],[73.43,80.41,"A","outro"]],"gaps":[[17.41,0.46,"afterIntro",0.75],[24.43,0.5,"intoChat",0.55],[27.01,0.48,"chatTurn",0.42],[30.43,0.5,"outOfChat",0.75],[40.47,0.52,"handover",0.7],[56.15,0.46,"beforeFinally",1],[69.29,0.52,"intoChat",0.55],[72.93,0.5,"beforeOutro",0.95]]},"summary":{"programme":"TECH BYTES","partial":false,"length":85.3,"stories":4,"shotMin":4.86,"shotMedian":5.99,"shotP10":5.13,"cutsPerMin":6.98,"under4":0,"sameFraming":0,"mapMin":null,"handover":0.52,"story":null,"chatTurn":0.48,"block":null,"beforeFinally":0.46,"allPausesMedian":0.5,"openToFirstWord":0.11,"lastWordToEndcard":0.76,"strapIn":null,"tickerMin":null,"captionMin":1.23,"gesturesPerMin":null,"gestureRepeats":null,"musicPerMin":11.25,"voiceGapsOver1_5":0,"statics":0,"overMax":2,"mapShare":0,"singleShare":0.45,"mapRun":0,"patternRun":1,"gestureFloorOk":null,"deadAir1":0,"fallbackShare":0},"file":"before-3prog-timeline.json"},"news-60":{"length":59.57,"stories":6,"strip":{"shots":[[0,4,"open",null],[4,4.3,"wide",null],[8.3,5.5,"close",null],[13.8,5.88,"full",null],[19.68,6.19,"close",null],[25.87,7.01,"map",null],[32.88,5.18,"map",null],[38.06,6.5,"map",null],[44.56,6.7,"close",null],[51.26,4.19,"wide",null],[55.45,4.11,"endcard",null]],"says":[[4.13,6.71,"A","intro"],[8.43,19.33,"A","story"],[19.81,25.51,"A","story"],[25.99,32.51,"A","story"],[33.01,37.71,"A","story"],[38.19,44.19,"A","story"],[44.69,50.91,"A","story"],[51.39,54.71,"A","outro"]],"gaps":[[6.71,1.72,"afterIntro",0.6],[19.33,0.48,"story",0.75],[25.51,0.48,"block",0.9],[32.51,0.5,"roundupItem",0.75],[37.71,0.48,"roundupItem",0.75],[44.19,0.5,"block",0.9],[50.91,0.48,"beforeOutro",0.7]]},"summary":{"programme":"NEWS IN 60","partial":false,"length":59.57,"stories":6,"shotMin":4.19,"shotMedian":5.88,"shotP10":4.28,"cutsPerMin":9.33,"under4":0,"sameFraming":0,"mapMin":5.18,"handover":null,"story":0.48,"chatTurn":null,"block":0.49,"beforeFinally":null,"allPausesMedian":0.48,"openToFirstWord":0.13,"lastWordToEndcard":0.74,"strapIn":null,"tickerMin":null,"captionMin":0.9,"gesturesPerMin":null,"gestureRepeats":null,"musicPerMin":17.12,"voiceGapsOver1_5":1,"statics":0,"overMax":0,"mapShare":0.36,"singleShare":0.36,"mapRun":3,"patternRun":1,"gestureFloorOk":null,"deadAir1":0,"fallbackShare":0},"file":"before-3prog-timeline.json"}},"after":{"news-60":{"length":69.33,"stories":5,"strip":{"shots":[[0,4,"open","solo-wide"],[4,4,"wide","wide"],[8,6.21,"close","mcu-l"],[14.21,4.74,"full","solo-wide"],[18.95,10.5,"close","mcu-l"],[29.44,5.65,"full","solo-wide"],[35.09,9.61,"map","solo-wide"],[44.7,7.58,"map","solo-wide"],[52.28,8.47,"map","solo-wide"],[60.75,5.11,"wide","wide"],[65.86,3.47,"endcard","solo-wide"]],"says":[[4.41,6.93,"A","intro"],[7.45,22.84,"A","story"],[23.52,34.34,"A","story"],[35.19,44.14,"A","story"],[44.81,51.67,"A","story"],[52.38,60.21,"A","story"],[60.85,64.46,"A","outro"]],"gaps":[[6.93,0.52,"afterIntro",0.6],[22.84,0.67,"story",0.75],[34.34,0.85,"block",0.9],[44.14,0.67,"roundupItem",0.75],[51.67,0.71,"roundupItem",0.75],[60.21,0.65,"beforeOutro",0.7]]},"summary":{"programme":"NEWS IN 60","partial":false,"length":69.33,"stories":5,"shotMin":4,"shotMedian":6.21,"shotP10":4.59,"cutsPerMin":7.76,"under4":0,"sameFraming":0,"mapMin":7.58,"handover":null,"story":0.67,"chatTurn":null,"block":0.85,"beforeFinally":null,"allPausesMedian":0.67,"openToFirstWord":0.41,"lastWordToEndcard":1.4,"strapIn":1,"tickerMin":null,"captionMin":0.94,"gesturesPerMin":1.07,"gestureRepeats":0,"musicPerMin":12.98,"voiceGapsOver1_5":0,"statics":0,"overMax":1,"mapShare":0.41,"singleShare":0.27,"mapRun":3,"patternRun":1,"gestureFloorOk":true,"deadAir1":null,"fallbackShare":null},"file":"v2b-timeline.json"},"world-now":{"length":250.38,"stories":14,"strip":{"shots":[[0,4,"open","wide"],[4,4.72,"montage","wide"],[8.72,3.88,"montage","wide"],[12.6,3.88,"montage","wide"],[16.48,5.15,"wide","wide"],[21.62,9.39,"close","mcu-l"],[31.01,9.74,"map","wide"],[40.75,4.48,"full","wide"],[45.24,5.69,"close","mcu-r"],[50.92,8.03,"map","wide"],[58.96,5.35,"full","wide"],[64.31,5.87,"close","mcu-l"],[70.18,6.98,"map","wide"],[77.16,6.86,"full","wide"],[84.02,5.16,"close","mcu-r"],[89.18,5.63,"map","wide"],[94.81,5.82,"full","wide"],[100.62,13.34,"close","mcu-l"],[113.96,5.89,"fact","wide"],[119.85,4.97,"close","mcu-r"],[124.82,4.91,"map","wide"],[129.73,6.28,"close","mcu-r"],[136.01,10.37,"close","mcu-l"],[146.38,6.81,"wide","wide"],[153.19,8.61,"close","mcu-r"],[161.8,5.71,"map","wide"],[167.51,5.79,"close","mcu-r"],[173.3,8.97,"map","wide"],[182.27,6.37,"map","wide"],[188.64,7.82,"full","wide"],[196.46,8.41,"map","wide"],[204.87,7.35,"map","wide"],[212.22,6.99,"close","mcu-r"],[219.2,10.26,"close","ots"],[229.46,7.3,"wide","two"],[236.76,9.56,"wide","wide"],[246.32,4.06,"endcard","wide"]],"says":[[4.61,21.09,"A","intro"],[21.73,44.52,"A","story"],[45.34,63.62,"B","story"],[64.41,83.34,"A","story"],[84.12,99.93,"B","story"],[100.73,119.18,"A","story"],[119.96,135.31,"B","story"],[136.12,145.93,"A","story"],[146.48,152,"A","chat"],[153.29,172.15,"B","story"],[173.41,181.83,"B","story"],[182.38,188.17,"B","story"],[188.75,196.03,"B","story"],[196.56,204.37,"B","story"],[204.98,211.16,"B","story"],[212.32,228.97,"B","story"],[229.57,233.7,"A","chat"],[234.14,236.03,"B","chat"],[236.87,244.42,"A","outro"]],"gaps":[[21.09,0.64,"afterIntro",0.75],[44.52,0.82,"handover",0.85],[63.62,0.79,"handover",0.85],[83.34,0.78,"handover",0.85],[99.93,0.8,"handover",0.85],[119.18,0.78,"handover",0.85],[135.31,0.81,"handover",0.85],[145.93,0.56,"intoChat",0.65],[152,1.29,"block",1.3],[172.15,1.25,"block",1.3],[181.83,0.55,"roundupItem",0.65],[188.17,0.58,"roundupItem",0.65],[196.03,0.53,"roundupItem",0.65],[204.37,0.6,"roundupItem",0.65],[211.16,1.17,"beforeFinally",1.2],[228.97,0.59,"intoChat",0.65],[233.7,0.44,"chatTurn",0.5],[236.03,0.84,"beforeOutro",0.95]]},"summary":{"programme":"WORLD NOW","partial":false,"length":250.38,"stories":14,"shotMin":4.48,"shotMedian":6.83,"shotP10":5.15,"cutsPerMin":8.09,"under4":0,"sameFraming":0,"mapMin":4.91,"handover":0.8,"story":null,"chatTurn":0.44,"block":1.27,"beforeFinally":1.17,"allPausesMedian":0.78,"openToFirstWord":0.61,"lastWordToEndcard":1.9,"strapIn":1,"tickerMin":6.9,"captionMin":1.47,"gesturesPerMin":2.94,"gestureRepeats":5,"musicPerMin":6.71,"voiceGapsOver1_5":0,"statics":0,"overMax":0,"mapShare":0.31,"singleShare":0.36,"mapRun":2,"patternRun":3,"gestureFloorOk":false,"deadAir1":null,"fallbackShare":null},"file":"v2b-timeline.json"},"tech-bytes":{"length":180.36,"stories":10,"strip":{"shots":[[0,4,"open","wide"],[4,4.17,"montage","wide"],[8.17,4.17,"montage","wide"],[12.35,6.32,"wide","wide"],[18.66,7.56,"close","single"],[26.22,4.99,"full","wide"],[31.21,6.78,"close","single"],[38,4.86,"wide","wide"],[42.86,4.55,"fact","wide"],[47.41,10.45,"close","single"],[57.86,7.94,"close","single"],[65.8,7.97,"full","wide"],[73.77,8.06,"close","single"],[81.83,5.24,"full","wide"],[87.07,5.87,"close","single"],[92.94,12.07,"close","single"],[105.01,5.03,"wide","wide"],[110.03,6.05,"close","single"],[116.09,7.05,"full","wide"],[123.13,4.6,"close","single"],[127.73,6.19,"full","wide"],[133.92,5.63,"close","single"],[139.55,9.7,"close","single"],[149.25,6.98,"close","single"],[156.23,6.77,"full","wide"],[163,13.52,"wide","wide"],[176.52,3.84,"endcard","wide"]],"says":[[4.6,18.04,"A","intro"],[18.77,30.65,"A","story"],[31.32,42.35,"B","story"],[42.96,57.39,"A","story"],[57.97,73.3,"B","story"],[73.88,92.38,"A","story"],[93.04,104.61,"B","story"],[105.11,109.02,"B","chat"],[110.14,122.65,"A","story"],[123.24,139.07,"B","story"],[139.66,148.41,"A","story"],[149.35,162.67,"B","story"],[163.1,166.65,"A","chat"],[167.53,175.12,"A","outro"]],"gaps":[[18.04,0.72,"afterIntro",0.75],[30.65,0.67,"handover",0.7],[42.35,0.61,"handover",0.7],[57.39,0.57,"handover",0.7],[73.3,0.58,"handover",0.7],[92.38,0.66,"handover",0.7],[104.61,0.5,"intoChat",0.55],[109.02,1.12,"block",1.15],[122.65,0.59,"handover",0.7],[139.07,0.58,"handover",0.7],[148.41,0.94,"beforeFinally",1],[162.67,0.44,"intoChat",0.55],[166.65,0.87,"beforeOutro",0.95]]},"summary":{"programme":"TECH BYTES","partial":false,"length":180.36,"stories":10,"shotMin":4.55,"shotMedian":6.77,"shotP10":4.89,"cutsPerMin":8.04,"under4":0,"sameFraming":0,"mapMin":null,"handover":0.59,"story":null,"chatTurn":null,"block":1.12,"beforeFinally":0.94,"allPausesMedian":0.61,"openToFirstWord":0.6,"lastWordToEndcard":1.4,"strapIn":1,"tickerMin":6.9,"captionMin":1.07,"gesturesPerMin":3.38,"gestureRepeats":0,"musicPerMin":6.99,"voiceGapsOver1_5":0,"statics":0,"overMax":1,"mapShare":0,"singleShare":0.56,"mapRun":0,"patternRun":1,"gestureFloorOk":false,"deadAir1":null,"fallbackShare":null},"file":"v2b-timeline.json"},"cosmos":{"length":196.98,"stories":8,"strip":{"shots":[[0,4,"open","wide"],[4,13.43,"close","mcu-l"],[17.43,5.09,"wide","wide"],[22.52,7.04,"close","mcu-l"],[29.56,6.27,"close","ots"],[35.84,7.26,"wide","wide"],[43.1,5.8,"fact","wide"],[48.9,11.11,"close","mcu-r"],[60.01,4.73,"close","mcu-l"],[64.73,6.29,"map","wide"],[71.02,6.04,"close","mcu-l"],[77.05,7.79,"wide","wide"],[84.85,6.99,"close","mcu-r"],[91.84,6.95,"map","wide"],[98.79,5.46,"close","mcu-r"],[104.25,6.59,"wide","wide"],[110.83,6.84,"close","mcu-l"],[117.67,6.5,"full","wide"],[124.17,5.18,"close","mcu-l"],[129.35,6.79,"close","mcu-r"],[136.13,8.42,"map","wide"],[144.56,7.8,"close","mcu-l"],[152.36,14.39,"close","ots"],[166.75,12.46,"full","wide"],[179.2,13.43,"wide","wide"],[192.64,4.34,"endcard","wide"]],"says":[[4.8,21.84,"A","intro"],[22.63,35.26,"A","story"],[35.94,37.91,"B","chat"],[38.44,42.32,"A","chat"],[43.2,59.09,"B","story"],[60.11,76.44,"A","story"],[77.16,79.95,"B","chat"],[80.45,81.9,"A","chat"],[82.79,103.63,"B","story"],[104.35,109.41,"B","chat"],[110.94,128.56,"A","story"],[129.45,143.76,"B","story"],[144.66,156.27,"A","story"],[157.4,178.6,"A","story"],[179.31,181.94,"B","chat"],[182.98,190.74,"A","outro"]],"gaps":[[21.84,0.78,"afterIntro",0.9],[35.26,0.68,"intoChat",0.8],[37.91,0.52,"chatTurn",0.6],[42.32,0.89,"outOfChat",1],[59.09,1.02,"handover",1.05],[76.44,0.72,"intoChat",0.8],[79.95,0.51,"chatTurn",0.6],[81.9,0.89,"outOfChat",1],[103.63,0.72,"intoChat",0.8],[109.41,1.53,"block",1.6],[128.56,0.89,"handover",1.05],[143.76,0.9,"handover",1.05],[156.27,1.13,"beforeFinally",1.3],[178.6,0.71,"intoChat",0.8],[181.94,1.04,"beforeOutro",1.15]]},"summary":{"programme":"COSMOS DESK","partial":false,"length":196.98,"stories":8,"shotMin":4.73,"shotMedian":6.89,"shotP10":5.26,"cutsPerMin":7.32,"under4":0,"sameFraming":0,"mapMin":6.29,"handover":0.9,"story":null,"chatTurn":0.52,"block":1.53,"beforeFinally":1.13,"allPausesMedian":0.89,"openToFirstWord":0.8,"lastWordToEndcard":1.9,"strapIn":1,"tickerMin":6.9,"captionMin":1.21,"gesturesPerMin":3.29,"gestureRepeats":0,"musicPerMin":11.57,"voiceGapsOver1_5":1,"statics":0,"overMax":1,"mapShare":0.11,"singleShare":0.43,"mapRun":1,"patternRun":1,"gestureFloorOk":false,"deadAir1":null,"fallbackShare":null},"file":"v2b-timeline.json"}},"made":"2026-10-03T04:29"}; /* MEASURED:END */
+
+  function measuredLane(m, y, label, t, scale, P0) {
+    const px = (s) => X0 + s * scale;
+    text(label, 4, y, P.fog, 'micro');
+    if (!m?.strip) {
+      text('NOT RECORDED', X0, y + 10, P.steel, 'micro');
+      return;
+    }
+    const NOT_BODY = new Set(['open', 'endcard']);
+    for (const [at, dur, shot, framing] of m.strip.shots) {
+      const x0 = Math.round(px(at));
+      const x1 = Math.round(px(at + dur));
+      rect(x0, y + 8, x1 - x0, 11, SHOT_COLOR[shot] || (NOT_BODY.has(shot) ? P.ink : shot === 'breakingCard' ? P.red : P.slate));
+      if (framing === 'two' || framing === 'solo-wide') rect(x0, y + 8, x1 - x0, 1, P.fog);
+      rect(x0, y + 8, 1, 11, P.black);
+      if (!NOT_BODY.has(shot) && shot !== 'montage' && shot !== 'breakingCard' && dur < P0.shots.min - 0.05) {
+        rect(x0, y + 7, x1 - x0, 1, P.red);
+        rect(x0, y + 19, x1 - x0, 1, P.red);
+      }
+    }
+    const rows = { A: y + 23, B: y + 28 };
+    rect(X0, rows.A, XW, 3, P.black);
+    rect(X0, rows.B, XW, 3, P.black);
+    for (const [on, off, who] of m.strip.says) rect(px(on), rows[who] ?? rows.A, Math.max(1, (off - on) * scale), 3, who === 'B' ? P.cream : P.silver);
+    for (const [at, gap, kind, target] of m.strip.gaps) {
+      if (kind === 'breakingCard') continue;
+      rect(px(at), y + 33, Math.max(1, gap * scale), 2, gap >= (target || 0.5) * 0.75 ? P.green : P.red);
+    }
+    rect(Math.round(px(Math.min(t, m.length))), y + 6, 1, 31, t <= m.length ? P.white : P.steel);
+    if (t > m.length) text('OFF AIR', Math.min(W - 40, Math.round(px(m.length)) + 3), y + 9, P.steel, 'micro');
+  }
+
+  function measuredReadout(m, y, label, P0) {
+    text(label, 4, y, P.fog, 'micro');
+    const s = m?.summary;
+    if (!s) return;
+    const flag = (ok) => (ok ? P.green : P.red);
+    // every figure against its target, red when off it (critic r1: LEN 231S printed neutral against 480-600)
+    text(`LEN ${Math.round(s.length)}S`, 46, y, flag(s.length >= P0.length.target[0] && s.length <= P0.length.target[1]), 'micro');
+    text(`${s.stories} STORIES`, 84, y, P.fog, 'micro');
+    text(`SHOT MIN ${f1(s.shotMin)}`, 130, y, flag(s.under4 === 0), 'micro');
+    text(`MED ${f1(s.shotMedian)}`, 186, y, flag(s.shotMedian >= P0.shots.median[0] - 0.5 && s.shotMedian <= P0.shots.median[1] + 0.5), 'micro');
+    text(`CUTS ${f1(s.cutsPerMin)}/MIN`, 220, y, flag(s.cutsPerMin <= P0.shots.cutsPerMinMax), 'micro');
+    text(`PAUSE MED ${s.allPausesMedian == null ? '-' : s.allPausesMedian.toFixed(2)}S`, 280, y, flag((s.allPausesMedian ?? 0) >= 0.6), 'micro');
+    text(`FIRST WORD ${s.openToFirstWord == null ? '-' : s.openToFirstWord.toFixed(2)}S`, 46, y + 8, flag((s.openToFirstWord ?? 0) >= P0.open.firstWord * 0.6), 'micro');
+    text(`HAND-OVER ${s.handover == null ? '-' : s.handover.toFixed(2)}S`, 130, y + 8, s.handover == null ? P.fog : flag(s.handover >= P0.gaps.handover * 0.75), 'micro');
+    text(`SIGN-OFF ${s.lastWordToEndcard == null ? '-' : s.lastWordToEndcard.toFixed(2)}S`, 220, y + 8, P.fog, 'micro');
+    // the maxima and the map share (analyser JSON from the fix round on; older strips print '-')
+    text(`OVER MAX ${s.overMax ?? '-'}`, 296, y + 8, s.overMax == null ? P.fog : flag(s.overMax === 0), 'micro');
+    if (s.mapShare != null) text(`MAP ${Math.round(s.mapShare * 100)}%`, 342, y + 8, flag(s.mapShare <= P0.shots.share.map + 0.02), 'micro');
+  }
+
+  function drawMeasured(t) {
+    rect(0, 0, W, 216, P.black);
+    const id = opts.programme;
+    const P0 = paceFor(id);
+    const b = MEASURED.before[id];
+    const a = MEASURED.after[id];
+    text('PACE', 4, 4, P.white);
+    rect(4, 13, measureText('PACE'), 1, P.red);
+    text(TITLES[id] || id.toUpperCase(), 40, 4, P.silver);
+    text('MEASURED ON AIR', 42 + measureText(TITLES[id] || '') + 6, 6, P.fog, 'micro');
+    text(`T ${t.toFixed(1)}S`, W - 4 - measureText(`T ${t.toFixed(1)}S`, 1, 'micro'), 6, P.fog, 'micro');
+    rect(4, 17, W - 8, 1, P.ink);
+    const span = Math.max(30, b?.length || 0, a?.length || 0);
+    const scale = XW / span;
+    measuredLane(b, 24, 'BEFORE', t, scale, P0);
+    measuredLane(a, 69, 'AFTER', t, scale, P0);
+    for (let s = 0; s <= span; s += 10) rect(X0 + s * scale, 110, 1, s % 60 === 0 ? 3 : 1, P.steel);
+    text('10 S TICKS', 4, 115, P.steel, 'micro');
+    let lx = 52;
+    for (const [k, c] of [['WIDE', P.steel], ['SINGLE', P.slate], ['PICTURE', P.tan], ['MAP', P.navy], ['CARD', P.darkRed], ['HEADLINES', P.purple], ['AIR OK', P.green], ['RUSHED', P.red]]) {
+      rect(lx, 116, 5, 4, c);
+      text(k, lx + 7, 115, P.fog, 'micro');
+      lx += measureText(k, 1, 'micro') + 11;
+    }
+    rect(4, 124, W - 8, 1, P.ink);
+    measuredReadout(b, 130, 'BEFORE', P0);
+    measuredReadout(a, 152, 'AFTER', P0);
+    rect(4, 172, W - 8, 1, P.ink);
+    text(`TARGET  SHOT >= ${P0.shots.min}S  MEDIAN ${P0.shots.median.join('-')}S  <= ${P0.shots.cutsPerMinMax} CUTS/MIN  HAND-OVER ${P0.gaps.handover}S  FIRST WORD ${P0.open.firstWord}S`, 4, 178, P.fog, 'micro');
+    // (a -trace timeline is tools/pace/trace.mjs: estimated voices; a recording has the server's Kokoro voices)
+    const voices = (m) => (/trace|v2b|v1/.test(m?.file || '') ? 'EST.' : 'KOKORO');
+    text(`?V2=1, ${voices(b)} / ${voices(a)} VOICES; SHOTS AS THE VIEWER SAW THEM (FOCUS-ONLY RE-SETS MERGED)`, 4, 188, P.steel, 'micro');
+    text(`${(b?.file || '-').toUpperCase().slice(0, 40)}  VS  ${(a?.file || '-').toUpperCase().slice(0, 40)}`, 4, 197, P.steel, 'micro');
+    if (MEASURED.made) text(`MEASURED ${MEASURED.made.replace('T', ' ')}  ·  TOOLS/PACE/STRIPS.MJS`, 4, 206, P.steel, 'micro');
+  }
+
+  function render(t = 0) {
+    if (!model) return;
+    if (opts.view === 'profile') drawProfiles();
+    else if (opts.view === 'measured') drawMeasured(Math.max(0, t));
+    else drawRhythm(Math.max(0, t));
+    $('tv').textContent = `${t.toFixed(2)} s`;
+  }
+
+  const lab = {
+    opts,
+    async ready() { return booted; },
+    set(o = {}) {
+      Object.assign(opts, o);
+      rebuild();
+      render(Number($('t').value) || 0);
+    },
+    render,
+    async load(src) {
+      const ep = typeof src === 'string' ? await (await fetch(src)).json() : src;
+      const list = Array.isArray(ep) ? ep : [ep];
+      for (const e of list) if (e?.program?.id) episodes[e.program.id] = e;
+      if (list[0]?.program?.id) opts.programme = list[0].program.id;
+      rebuild();
+    },
+    report() {
+      return model && { programme: model.ep.program.id, before: model.sb, after: model.sa };
+    },
+  };
+  window.__lab = lab;
+  const booted = (async () => {
+    await loadDefault();
+    for (const id of PROGRAMME_IDS) $('programme').add(new Option(TITLES[id] || id, id));
+    $('programme').value = opts.programme;
+    $('view').value = opts.view;
+    rebuild();
+    render(Number(q.get('t')) || 0);
+  })();
+  $('programme').onchange = (e) => lab.set({ programme: e.target.value });
+  $('view').onchange = (e) => lab.set({ view: e.target.value });
+  $('t').oninput = (e) => render(Number(e.target.value));
+  let playing = false;
+  let last = 0;
+  $('play').onclick = () => {
+    playing = !playing;
+    last = performance.now();
+  };
+  if (!q.has('still')) {
+    const loop = (now) => {
+      if (playing) {
+        const v = (Number($('t').value) + (now - last) / 1000) % Math.max(1, Number($('t').max));
+        $('t').value = String(v);
+        render(v);
+      }
+      last = now;
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+</script>
+</body>
+</html>

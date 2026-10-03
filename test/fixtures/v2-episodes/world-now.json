@@ -1,0 +1,421 @@
+{
+ "kind": "episode",
+ "id": "emur828xi0",
+ "createdAt": "2026-10-02T17:13:28.758Z",
+ "program": {
+  "id": "world-now",
+  "title": "WORLD NOW",
+  "tagline": "THE STORIES SHAPING OUR WORLD",
+  "theme": "world"
+ },
+ "cast": {
+  "A": "paco",
+  "B": "lola"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "write",
+   "ms": 2684,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 2,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 6,
+   "images": 3
+  }
+ ],
+ "title": "WORLD NOW (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Panama Canal reopens after a day-long closure. North Sea wind farm starts supplying power to 1.2 million homes. Lisbon opens a new riverside tram line. Good evening, and welcome to WORLD NOW. I'm Paco Pixel, with Lola Byte.",
+   "cues": [
+    {
+     "char": 191,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 223,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s73bb228b7b",
+    "sadae5c525f",
+    "sf2538c295c"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Breaking news. Ledger Line reports that the Panama Canal has reopened to ships after fog closed it for a day. The canal authority says about 30 ships are waiting to cross.",
+   "cues": [
+    {
+     "char": 171,
+     "slot": "B",
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "s73bb228b7b",
+   "headline": "Panama Canal reopens after a day-long closure",
+   "shot": "map",
+   "breaking": true,
+   "location": {
+    "place": "PANAMA",
+    "lat": 8.5,
+    "lon": -80.8
+   },
+   "fact": "ABOUT 30 SHIPS",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "TRADE",
+   "numbers": [
+    {
+     "value": "30",
+     "label": "SHIPS",
+     "qualifier": "ABOUT"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Thanks, Paco. From Ledger Line: An offshore wind farm in the North Sea has started supplying electricity. The developer says its 140 turbines can power about 1.2 million homes.",
+   "cues": [
+    {
+     "char": 13,
+     "slot": null,
+     "action": "point_screen"
+    },
+    {
+     "char": 176,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "sadae5c525f",
+   "headline": "North Sea wind farm starts supplying power to 1.2 million homes",
+   "shot": "full",
+   "breaking": false,
+   "location": null,
+   "fact": "ABOUT 1.2 MILLION HOMES",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": true,
+   "kicker": "ENERGY",
+   "numbers": [
+    {
+     "value": "1.2 MILLION",
+     "label": "HOMES",
+     "qualifier": "ABOUT"
+    },
+    {
+     "value": "140",
+     "label": "TURBINES"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Our number of the day: 40,000. Lisbon has opened a new tram line along the Tagus river, Pixelburg Post reports. The city says the 9 kilometre route will carry 40,000 passengers a day and cut car traffic in the old town. As the mayor put it: “This line will change how people move around the old town.”",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "steeple"
+    },
+    {
+     "char": 219,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "sf2538c295c",
+   "headline": "Lisbon opens a new riverside tram line",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "LISBON, PORTUGAL",
+    "lat": 38.72,
+    "lon": -9.14
+   },
+   "fact": "40,000 PASSENGERS A DAY",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "40,000",
+     "label": "PASSENGERS A DAY"
+    }
+   ],
+   "quote": {
+    "text": "This line will change how people move around the old town",
+    "by": "the mayor"
+   },
+   "feature": "number"
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "serious",
+   "text": "Now, around the world in 30 seconds. Heavy monsoon rain has flooded streets in several coastal towns in Kerala, India, Pixelburg Post reports.",
+   "cues": [],
+   "storyId": "sfa4f308e5c",
+   "headline": "Heavy rain floods streets in coastal towns of Kerala",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "KERALA, INDIA",
+    "lat": 10.5,
+    "lon": 76.3
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 0,
+    "count": 4
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "A fissure eruption has started again on the Reykjanes peninsula in Iceland.",
+   "cues": [],
+   "storyId": "s5fb454f418",
+   "headline": "Iceland volcano erupts again on the Reykjanes peninsula",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "REYKJANES PENINSULA, ICELAND",
+    "lat": 63.9,
+    "lon": -22.3
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 1,
+    "count": 4
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Venice has raised its sea barriers for a test ahead of the autumn high tides, Bitport Herald reports.",
+   "cues": [],
+   "storyId": "s701ea0e9b9",
+   "headline": "Venice raises its sea barriers in a test before the autumn tides",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "VENICE, ITALY",
+    "lat": 45.44,
+    "lon": 12.32
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 2,
+    "count": 4
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "A large solar plant on the edge of the Sahara in Morocco is now running at full power, Bitport Herald reports.",
+   "cues": [],
+   "storyId": "s6e5fa12524",
+   "headline": "Morocco desert solar plant reaches full power",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "MOROCCO",
+    "lat": 31.8,
+    "lon": -7.1
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 3,
+    "count": 4
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "And finally: Scientists say coral cover has grown on parts of the Great Barrier Reef for a second year. “The reef is showing it can bounce back when it gets a break,” a lead researcher said.",
+   "cues": [
+    {
+     "char": 190,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s9efe8cbd21",
+   "headline": "Coral recovers on parts of the Great Barrier Reef",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "GREAT BARRIER REEF, AUSTRALIA",
+    "lat": -18.3,
+    "lon": 147.7
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AND FINALLY",
+   "quote": {
+    "text": "The reef is showing it can bounce back when it gets a break",
+    "by": "a lead researcher"
+   },
+   "feature": "lighter"
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "A good note to end on.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "Rare enough that we should enjoy it.",
+   "cues": []
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's WORLD NOW. From Lola Byte and from me, thank you for watching. Stay with us on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 17,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s73bb228b7b",
+   "headline": "Panama Canal reopens after a day-long closure",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "TRADE"
+  },
+  {
+   "storyId": "sadae5c525f",
+   "headline": "North Sea wind farm starts supplying power to 1.2 million homes",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": true,
+   "kicker": "ENERGY"
+  },
+  {
+   "storyId": "sf2538c295c",
+   "headline": "Lisbon opens a new riverside tram line",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "NUMBER OF THE DAY"
+  },
+  {
+   "storyId": "sfa4f308e5c",
+   "headline": "Heavy rain floods streets in coastal towns of Kerala",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s5fb454f418",
+   "headline": "Iceland volcano erupts again on the Reykjanes peninsula",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s701ea0e9b9",
+   "headline": "Venice raises its sea barriers in a test before the autumn tides",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s6e5fa12524",
+   "headline": "Morocco desert solar plant reaches full power",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s9efe8cbd21",
+   "headline": "Coral recovers on parts of the Great Barrier Reef",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AND FINALLY"
+  }
+ ],
+ "storyIds": [
+  "s73bb228b7b",
+  "sadae5c525f",
+  "sf2538c295c",
+  "sfa4f308e5c",
+  "s5fb454f418",
+  "s701ea0e9b9",
+  "s6e5fa12524",
+  "s9efe8cbd21"
+ ]
+}

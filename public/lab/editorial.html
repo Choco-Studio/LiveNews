@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lab · editorial</title>
+    <style>
+      body { background: #101014; color: #c0cbdc; font: 12px/1.5 monospace; margin: 12px; }
+      #screen { width: 1152px; height: 648px; image-rendering: pixelated; display: block; background: #000; }
+      #ui { margin: 8px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      select, button { font: inherit; }
+      #note { color: #8b9bb4; max-width: 1152px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="screen" width="384" height="216"></canvas>
+    <div id="ui">
+      <label>mode <select id="mode"><option>photos</option><option>board</option></select></label>
+      <button id="prev">◀</button><span id="pos">0</span><button id="next">▶</button>
+      <span id="status">loading…</span>
+    </div>
+    <div id="note">
+      Dev tool for the editorial stream. Needs a running server (npm run demo:offline). <b>photos</b>: every story picture
+      on the desk through the channel's own pixelate filter (pixelate.js, same sizes and colours as director.js):
+      t = n.0 shows picture n full screen (416x234 crop, as the full shot), t = n.5 shows it at video-wall size
+      (104x62) at 1x and 3x. <b>board</b>: the episodes queued at the station (GET /api/queue, does not advance the
+      channel), one segment per t, with the optional editorial fields (kicker, numbers, fact, quote, map, feature,
+      roundup) drawn at 1x in the bitmap font so lengths can be judged. window.__lab.render(t), window.__lab.set({ mode }),
+      window.__lab.ready().
+    </div>
+    <script type="module">
+      import { pixelate, loadImage } from '../js/pixelate.js';
+      import { drawText, measureText, wrapLines } from '../js/font.js';
+      import { P } from '../js/palette.js';
+
+      const W = 384;
+      const H = 216;
+      const SMALL = { w: 104, h: 62 }; // director.js: video wall
+      const FULL = { w: 416, h: 234 }; // director.js: full screen
+      const canvas = document.getElementById('screen');
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      const params = new URLSearchParams(location.search);
+      const state = { mode: params.get('mode') || 'photos', t: 0, ready: false, photos: [], segments: [] };
+      const $ = (id) => document.getElementById(id);
+
+      const text = (s, x, y, color = P.white, opts = {}) => drawText(ctx, String(s), x, y, { color, ...opts });
+      const micro = (s, x, y, color = P.fog) => drawText(ctx, String(s), x, y, { color, font: 'micro' });
+
+      async function init() {
+        try {
+          const desk = await (await fetch('/api/desk')).json();
+          for (const s of desk.filter((d) => d.hasImage)) {
+            try {
+              const img = await loadImage(`/api/img/${s.id}`);
+              state.photos.push({ s, small: pixelate(img, SMALL.w, SMALL.h, { colors: 16 }), full: pixelate(img, FULL.w, FULL.h, { colors: 24 }) });
+            } catch (err) {
+              console.warn('image', s.id, err.message);
+            }
+          }
+          const queue = await (await fetch('/api/queue')).json();
+          for (const ep of queue) ep.segments.forEach((seg, i) => state.segments.push({ ep, seg, i }));
+          $('status').textContent = `${state.photos.length} pictures, ${queue.length} queued episodes, ${state.segments.length} segments`;
+        } catch (err) {
+          $('status').textContent = `error: ${err.message} (is the server running?)`;
+        }
+        state.ready = true;
+        render(state.t);
+      }
+
+      function drawPhotos(t) {
+        ctx.fillStyle = P.black;
+        ctx.fillRect(0, 0, W, H);
+        if (!state.photos.length) return text('NO PICTURES ON THE DESK', 120, 100, P.fog);
+        const n = Math.floor(t) % state.photos.length;
+        const { s, small, full } = state.photos[(n + state.photos.length) % state.photos.length];
+        if (t - Math.floor(t) < 0.5) {
+          ctx.drawImage(full, -16, -9); // as director.js builds the card
+        } else {
+          ctx.fillStyle = P.ink;
+          ctx.fillRect(0, 0, W, H);
+          ctx.drawImage(small, 0, 0, SMALL.w, SMALL.h, 12, 24, SMALL.w * 3, SMALL.h * 3);
+          ctx.fillStyle = P.slate;
+          ctx.fillRect(12 + SMALL.w * 3 + 9, 23, SMALL.w + 2, SMALL.h + 2);
+          ctx.drawImage(small, 12 + SMALL.w * 3 + 10, 24);
+          micro('WALL 1X', 12 + SMALL.w * 3 + 10, 92, P.fog);
+          micro('WALL 3X', 12, 14, P.fog);
+        }
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(0, H - 14, W, 14);
+        micro(`${n + 1}/${state.photos.length} ${s.source.toUpperCase()} · ${s.title.toUpperCase()}`.slice(0, 92), 4, H - 10, P.silver);
+      }
+
+      function tag(label, x, y, bg, fg) {
+        const w = measureText(label) + 6;
+        ctx.fillStyle = bg;
+        ctx.fillRect(x, y, w, 11);
+        text(label, x + 3, y + 2, fg);
+        return w;
+      }
+
+      function drawBoard(t) {
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(0, 0, W, H);
+        if (!state.segments.length) return text('NO EPISODE QUEUED YET', 110, 100, P.fog);
+        const k = ((Math.floor(t) % state.segments.length) + state.segments.length) % state.segments.length;
+        const { ep, seg, i } = state.segments[k];
+        micro(`${ep.program.title} · ${ep.provider} · SEGMENT ${i + 1}/${ep.segments.length}`, 8, 6, P.fog);
+        const cast = ep.cast?.[seg.anchor] || seg.anchor;
+        micro(`${seg.type.toUpperCase()} · ${String(cast).toUpperCase()} · ${seg.emotion.toUpperCase()}${seg.shot ? ' · SHOT ' + seg.shot.toUpperCase() : ''}${seg.feature ? ' · FEATURE ' + seg.feature.toUpperCase() : ''}${seg.roundup ? ` ${seg.roundup.index + 1}/${seg.roundup.count}` : ''}`, 8, 15, P.silver);
+        let y = 26;
+        if (seg.type === 'story') {
+          // strap preview: tag row + headline bar, as the graphics package lays it out
+          let x = 19;
+          if (seg.breaking) x += tag('BREAKING', x, y, P.red, P.white) + 2;
+          else if (seg.kicker) x += tag(seg.kicker, x, y, P.yellow, P.black) + 2;
+          tag(seg.source.toUpperCase(), x, y, P.navy, P.white);
+          y += 11;
+          ctx.fillStyle = P.black;
+          ctx.fillRect(19, y, 346, 17);
+          text(seg.headline.toUpperCase(), 23, y + 5, P.white);
+          const hw = measureText(seg.headline.toUpperCase());
+          if (hw > 338) micro(`HEADLINE TOO WIDE: ${hw}PX`, 240, y + 19, P.red);
+          y += 22;
+          // fact card / numbers
+          if (seg.fact || seg.numbers) {
+            ctx.fillStyle = P.black;
+            ctx.fillRect(19, y, 150, 44);
+            micro(seg.feature === 'number' ? 'NUMBER OF THE DAY' : 'BY THE NUMBERS', 23, y + 3, P.red);
+            if (seg.fact) text(seg.fact, 23, y + 12, P.white);
+            (seg.numbers || []).slice(0, 2).forEach((n, j) => micro(`${n.value} ${n.label}`.slice(0, 36), 23, y + 24 + j * 8, P.silver));
+          }
+          if (seg.location || seg.map) {
+            ctx.fillStyle = P.black;
+            ctx.fillRect(176, y, 189, 44);
+            micro('MAP', 180, y + 3, P.cyan || P.blue);
+            const places = seg.map || [seg.location];
+            places.slice(0, 4).forEach((p, j) => micro(`${p.place} ${p.lat},${p.lon}`.slice(0, 44), 180, y + 12 + j * 8, P.white));
+          }
+          if (seg.fact || seg.numbers || seg.location || seg.map) y += 48;
+          if (seg.quote) {
+            const lines = wrapLines(`“${seg.quote.text}”${seg.quote.by ? ' — ' + seg.quote.by : ''}`.toUpperCase(), 346, 1, 'micro');
+            lines.slice(0, 3).forEach((l, j) => micro(l, 19, y + j * 8, P.yellow));
+            y += Math.min(3, lines.length) * 8 + 4;
+          }
+        }
+        // the spoken text, cue marks shown where they fire
+        let spoken = seg.text;
+        for (const c of [...(seg.cues || [])].sort((a, b) => b.char - a.char)) {
+          spoken = `${spoken.slice(0, c.char)}[${c.slot ? c.slot + ':' : ''}${c.action || c.emotion}]${spoken.slice(c.char)}`;
+        }
+        const lines = wrapLines(spoken.toUpperCase(), 360, 1, 'micro');
+        lines.slice(0, Math.floor((H - y - 4) / 8)).forEach((l, j) => micro(l, 12, y + j * 8, P.fog));
+      }
+
+      function render(t, opts = {}) {
+        if (opts.mode) state.mode = opts.mode;
+        state.t = t;
+        if (state.mode === 'board') drawBoard(t);
+        else drawPhotos(t);
+        $('pos').textContent = t.toFixed(1);
+      }
+
+      function set(opts) {
+        Object.assign(state, opts);
+        $('mode').value = state.mode;
+        render(state.t);
+      }
+
+      window.__lab = { render, set, ready: () => state.ready };
+      $('mode').value = state.mode;
+      $('mode').addEventListener('change', (e) => set({ mode: e.target.value }));
+      $('prev').addEventListener('click', () => render(Math.max(0, state.t - 0.5)));
+      $('next').addEventListener('click', () => render(state.t + 0.5));
+      init();
+    </script>
+  </body>
+</html>

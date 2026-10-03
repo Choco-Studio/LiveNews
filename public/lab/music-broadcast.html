@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Broadcast Music Lab</title>
+<style>
+  :root { --bg: #10141f; --panel: #181e2e; --ink: #e8ecf4; --dim: #8b93a7; --accent: #e43b44; --ok: #63c74d; --line: #2a3350; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 ui-monospace, Menlo, Consolas, monospace; }
+  main { max-width: 980px; margin: 0 auto; padding: 18px 16px 40px; }
+  h1 { font-size: 18px; margin: 0 0 4px; letter-spacing: 0.06em; }
+  h1 b { color: var(--accent); }
+  p.sub { margin: 0 0 16px; color: var(--dim); }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; margin-bottom: 14px; }
+  h2 { font-size: 13px; margin: 0 0 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.08em; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+  label { color: var(--dim); }
+  select, input, button { font: inherit; background: #0c1018; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--dim); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.on { background: var(--ok); color: #000; border-color: var(--ok); }
+  canvas { width: 100%; height: 120px; background: #0c1018; border-radius: 4px; display: block; }
+  #log { white-space: pre-wrap; color: var(--dim); font-size: 12px; max-height: 160px; overflow: auto; margin: 8px 0 0; }
+  .cues button { min-width: 92px; }
+</style>
+</head>
+<body>
+<main>
+  <h1><b>GLOBIT 24</b> · broadcast music lab</h1>
+  <p class="sub">Classic news-package music in pixel form, written to the programme style bibles: one motif (low 5, 1, 2, high 5), five programme colours, bar-synced transitions, music only where it helps, beds that duck and carve a pocket for the presenter. <b>demo</b> = the programme's open, open tail, headlines, a light story, a grave story, the chat, the sign-off and the end card (60 s); <b>bulletin</b> = a realistic WORLD NOW / TECH BYTES running order.</p>
+
+  <section>
+    <h2>Offline render</h2>
+    <div class="row">
+      <label>programme <select id="prog">
+        <option value="world-now">WORLD NOW</option><option value="tech-bytes">TECH BYTES</option><option value="cosmos">COSMOS DESK</option>
+        <option value="money-minute">MONEY MINUTE</option><option value="news-60">NEWS IN 60</option>
+      </select></label>
+      <label>moment <select id="moment">
+        <option>demo</option><option>bulletin</option><option>openTail</option><option>headlines</option><option>light</option><option>story</option><option>underscore</option><option>grave</option><option>lighter</option>
+        <option>chat</option><option>roundup</option><option>number</option><option>picture</option><option>itemTick</option>
+        <option>endcard</option><option>breaking</option><option>standby</option><option>bumper</option><option>bumperIn</option>
+        <option>countdown</option><option>bumperOut</option><option>upNext</option><option>replay</option>
+      </select></label>
+      <label>emotion <select id="emotion"><option value="">auto</option><option>happy</option><option>neutral</option><option>serious</option></select></label>
+      <label>seconds <input id="secs" type="number" value="20" min="2" max="240" style="width:70px"></label>
+      <label><input id="voice" type="checkbox" checked> voice</label>
+      <label>stem <select id="stem"><option>mix</option><option>music</option><option>voice</option></select></label>
+      <label>stories <select id="storyBeds"><option value="bible">bible (dry)</option><option value="soft">soft underscore</option></select></label>
+      <label>grave <select id="grave"><option value="silence">silence</option><option value="pad">near-silent pad</option></select></label>
+      <button class="primary" id="render">Render &amp; play</button>
+      <button id="stopbuf">Stop</button>
+    </div>
+    <canvas id="wave" width="1900" height="240"></canvas>
+    <div id="log"></div>
+  </section>
+
+  <section>
+    <h2>Live conductor</h2>
+    <div class="row">
+      <button class="primary" id="live">Start live</button>
+      <button id="speak">Hold to speak</button>
+      <span id="state" style="color:var(--dim)">stopped</span>
+    </div>
+    <div class="row cues" id="cues"></div>
+  </section>
+</main>
+<script type="module">
+import { BroadcastMusic, renderBroadcast } from '../js/music/proposals/broadcast/index.js';
+
+// tools/render-audio.mjs entry point. Samples are rounded to 1e-5 (a third of
+// a 16-bit step) so the JSON transfer out of the page is ~3x lighter.
+window.__audio = {
+  render: async (opts) => {
+    const r = await renderBroadcast(opts);
+    const round = (c) => {
+      const a = new Array(c.length);
+      for (let i = 0; i < c.length; i++) a[i] = Math.round(c[i] * 1e5) / 1e5;
+      return a;
+    };
+    return { sampleRate: r.sampleRate, channels: r.channels.map(round), plan: r.plan };
+  },
+};
+
+const $ = (id) => document.getElementById(id);
+const log = (s) => { $('log').textContent = `${s}\n${$('log').textContent}`.slice(0, 4000); };
+let ctx = null;
+let src = null;
+
+function ensureCtx() {
+  if (!ctx) ctx = new AudioContext();
+  if (ctx.state !== 'running') ctx.resume();
+  return ctx;
+}
+
+function draw(ch, sr, plan) {
+  const cv = $('wave');
+  const g = cv.getContext('2d');
+  const W = cv.width;
+  const H = cv.height;
+  g.fillStyle = '#0c1018';
+  g.fillRect(0, 0, W, H);
+  const per = Math.max(1, Math.floor(ch[0].length / W));
+  g.fillStyle = '#5a6ea8';
+  for (let x = 0; x < W; x++) {
+    let m = 0;
+    for (let k = x * per; k < (x + 1) * per && k < ch[0].length; k++) m = Math.max(m, Math.abs(ch[0][k]), Math.abs(ch[1][k]));
+    const h = Math.max(1, m * H);
+    g.fillRect(x, (H - h) / 2, 1, h);
+  }
+  const secs = ch[0].length / sr;
+  g.font = '18px monospace';
+  for (const ev of plan || []) {
+    const x = (ev.at / secs) * W;
+    g.fillStyle = ev.cue ? '#e43b44' : '#63c74d';
+    g.fillRect(x, 0, 2, ev.cue ? 22 : H);
+    if (ev.cue && ev.cue !== 'frame' && ev.cue !== 'item') g.fillText(ev.cue, x + 4, 18);
+  }
+}
+
+$('render').onclick = async () => {
+  const c = ensureCtx();
+  const opts = { programme: $('prog').value, moment: $('moment').value, seconds: Number($('secs').value), withVoice: $('voice').checked, stem: $('stem').value, storyBeds: $('storyBeds').value, grave: $('grave').value };
+  if ($('emotion').value) opts.emotion = $('emotion').value;
+  if (opts.moment === 'underscore') opts.storyBeds = 'soft';
+  if (opts.moment === 'demo' || opts.moment === 'bulletin') opts.seconds = 60;
+  log(`rendering ${JSON.stringify(opts)}...`);
+  const t0 = performance.now();
+  const r = await renderBroadcast(opts);
+  log(`done in ${Math.round(performance.now() - t0)} ms`);
+  draw(r.channels, r.sampleRate, r.plan);
+  const buf = c.createBuffer(2, r.channels[0].length, r.sampleRate);
+  buf.copyToChannel(r.channels[0], 0);
+  buf.copyToChannel(r.channels[1], 1);
+  src?.stop();
+  src = c.createBufferSource();
+  src.buffer = buf;
+  src.connect(c.destination);
+  src.start();
+};
+$('stopbuf').onclick = () => { src?.stop(); src = null; };
+
+// Live: the conductor on the real clock, cued by hand like the director would.
+let music = null;
+const CUES = ['openTail', 'frame', 'greeting', 'story:happy', 'story:neutral', 'story:serious', 'roundup', 'item', 'lighter', 'chat', 'number', 'featureEnd', 'picture', 'single', 'outro', 'signoff', 'endcard', 'standby', 'bumper', 'bumperIn', 'countdown', 'upNext', 'bumperOut', 'replay', 'breaking', 'off'];
+for (const c of CUES) {
+  const b = document.createElement('button');
+  b.textContent = c;
+  b.onclick = () => {
+    if (!music) return;
+    const [m, emotion] = c.split(':');
+    const feature = ['roundup', 'lighter', 'number'].includes(m) ? m : undefined;
+    music.cue(feature ? 'story' : m, { programId: $('prog').value, emotion, feature, next: $('prog').value, seconds: 8 });
+    $('state').textContent = `on air: ${music.moment ?? 'silence / sting'}`;
+  };
+  $('cues').append(b);
+}
+$('live').onclick = () => {
+  const c = ensureCtx();
+  if (music) {
+    music.stop(0.6);
+    setTimeout(() => { music?.dispose(); music = null; }, 1500);
+    $('live').textContent = 'Start live';
+    $('state').textContent = 'stopped';
+    return;
+  }
+  music = new BroadcastMusic({ context: c, storyBeds: $('storyBeds').value, grave: $('grave').value });
+  music.start();
+  music.cue('openTail', { programId: $('prog').value });
+  $('live').textContent = 'Stop live';
+  $('state').textContent = 'on air: headlines';
+};
+const speak = (on) => { if (music) { music.speech(on); $('speak').classList.toggle('on', on); } };
+$('speak').onpointerdown = () => speak(true);
+$('speak').onpointerup = () => speak(false);
+$('speak').onpointerleave = () => speak(false);
+</script>
+</body>
+</html>

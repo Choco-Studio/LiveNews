@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Presenters B Lab</title>
+<style>
+  :root { --bg: #181425; --fg: #c0cbdc; --ui: #262b44; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 monospace; }
+  #screen { display: block; width: 1152px; height: 648px; image-rendering: pixelated; background: #000; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--ui); align-items: center; }
+  button, select { background: #3a4466; color: #fff; border: 0; padding: 4px 8px; font: inherit; }
+  #t { width: 300px; }
+</style>
+</head>
+<body>
+<!-- PRESENTERS B (Max, Ada, Nova, UNIT-8) in isolation. Deterministic captures:
+     node tools/shoot.mjs --url "http://127.0.0.1:8503/lab/v2-cast-b.html?still=1" \
+       --step "window.__lab.set({ mode: 'talk', presenter: 'unit8' }); window.__lab.render(T)" ...
+     See public/js/v2/canvas25d/labs/cast-b.js for the API. ?still=1 disables playback. -->
+<canvas id="screen" width="384" height="216"></canvas>
+<div class="bar">
+  <select id="mode"></select>
+  <select id="presenter"></select>
+  <select id="pair"><option value="cosmos">cosmos (Nova + UNIT-8)</option><option value="tech">tech (Max + Ada)</option></select>
+  <select id="scale"><option>1</option><option>1.37</option><option>2.15</option><option selected>3.4</option><option>5</option></select>
+  <select id="zoom"><option>1</option><option>2</option><option>3</option></select>
+  <button id="play">pause</button>
+  <input id="t" type="range" min="0" max="12" step="0.01" value="0">
+  <span id="info"></span>
+</div>
+<script type="module">
+import { createLab, MODE_NAMES, LINEUP } from '../js/v2/canvas25d/labs/cast-b.js';
+const lab = createLab(document.getElementById('screen'));
+window.__lab = lab;
+const $ = (id) => document.getElementById(id);
+for (const n of MODE_NAMES) $('mode').add(new Option(n, n));
+for (const n of LINEUP) $('presenter').add(new Option(n, n));
+$('mode').value = lab.state.mode;
+$('presenter').value = lab.state.presenter;
+let t0 = performance.now();
+$('mode').onchange = () => { lab.set({ mode: $('mode').value }); t0 = performance.now(); };
+$('presenter').onchange = () => lab.set({ presenter: $('presenter').value });
+$('pair').onchange = () => lab.set({ pair: $('pair').value });
+$('scale').onchange = () => lab.set({ scale: Number($('scale').value) });
+$('zoom').onchange = () => lab.set({ zoom: Number($('zoom').value) });
+const still = new URLSearchParams(location.search).has('still');
+let playing = !still;
+$('play').onclick = () => {
+  playing = !playing;
+  $('play').textContent = playing ? 'pause' : 'play';
+  t0 = performance.now() - Number($('t').value) * 1000;
+};
+$('t').oninput = () => { playing = false; $('play').textContent = 'play'; lab.render(Number($('t').value)); };
+function loop() {
+  if (playing) {
+    const t = ((performance.now() - t0) / 1000) % 12;
+    $('t').value = t;
+    lab.render(lab.state.mode === 'lineup' ? Math.floor(t / 3) : t);
+  }
+  requestAnimationFrame(loop);
+}
+lab.render(0);
+if (!still) loop();
+</script>
+</body>
+</html>

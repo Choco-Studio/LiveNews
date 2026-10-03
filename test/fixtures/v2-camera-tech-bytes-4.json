@@ -1,0 +1,256 @@
+{
+ "kind": "episode",
+ "id": "emurd7tda8",
+ "createdAt": "2026-10-02T19:37:46.606Z",
+ "program": {
+  "id": "tech-bytes",
+  "title": "TECH BYTES",
+  "tagline": "THE FUTURE, ONE BYTE AT A TIME",
+  "theme": "tech"
+ },
+ "cast": {
+  "A": "max",
+  "B": "ada"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "pictures",
+   "ms": 1,
+   "pictures": 0,
+   "of": 6,
+   "found": 0,
+   "borrowed": 0
+  },
+  {
+   "stage": "write",
+   "ms": 115,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 0,
+   "images": 0,
+   "verified": 0
+  }
+ ],
+ "title": "TECH BYTES (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Smart glasses show live subtitles for deaf users. Also coming up: Tech giants agree on a common charger standard for laptops. And later, our number of the day. This is TECH BYTES. I'm Max Circuit, with Ada Volt.",
+   "cues": [
+    {
+     "char": 49,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 179,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 211,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s2f82184227",
+    "s79697b4219",
+    "scb62a8f7d0"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "“We want everyone to follow the conversation,” a spokesperson said. A company in Berlin has shown smart glasses that display live subtitles of conversations, Circuit Weekly reports.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "lean_in"
+    },
+    {
+     "char": 181,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s2f82184227",
+   "headline": "Smart glasses show live subtitles for deaf users",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "BERLIN, GERMANY",
+    "lat": 52.52,
+    "lon": 13.4
+   },
+   "fact": null,
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "GADGETS",
+   "quote": {
+    "text": "We want everyone to follow the conversation",
+    "by": "a spokesperson"
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Several large technology companies have agreed on a common charging standard for laptops. Chargers will work across brands from next year, according to Circuit Weekly.",
+   "cues": [
+    {
+     "char": 167,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s79697b4219",
+   "headline": "Tech giants agree on a common charger standard for laptops",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "TECHNOLOGY"
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Thanks, Ada. Our number of the day: 3 percent. Measurements show a large glacier in the Alps lost 3 percent of its volume this summer, Starfield Journal reports. Scientists say the ice is now thinner than at any time since records began.",
+   "cues": [
+    {
+     "char": 12,
+     "slot": null,
+     "action": "count"
+    },
+    {
+     "char": 237,
+     "slot": "B",
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "scb62a8f7d0",
+   "headline": "Glacier in the Alps shrinks by 3 percent in one summer",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "ALPS",
+    "lat": 46.5,
+    "lon": 10
+   },
+   "fact": "GLACIER DOWN 3%",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY",
+   "feature": "number"
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "And finally: A comet discovered last year will pass close to Earth this week and should be visible with binoculars just after sunset.",
+   "cues": [
+    {
+     "char": 133,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s29ea4efdc2",
+   "headline": "Comet will pass close enough to see with binoculars this week",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "AND FINALLY",
+   "feature": "lighter"
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "I have questions. Most of them start with how.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's TECH BYTES. From Ada Volt and from me, thanks for watching. More news around the clock on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 18,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s2f82184227",
+   "headline": "Smart glasses show live subtitles for deaf users",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "GADGETS"
+  },
+  {
+   "storyId": "s79697b4219",
+   "headline": "Tech giants agree on a common charger standard for laptops",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "TECHNOLOGY"
+  },
+  {
+   "storyId": "scb62a8f7d0",
+   "headline": "Glacier in the Alps shrinks by 3 percent in one summer",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY"
+  },
+  {
+   "storyId": "s29ea4efdc2",
+   "headline": "Comet will pass close enough to see with binoculars this week",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "AND FINALLY"
+  }
+ ],
+ "storyIds": [
+  "s2f82184227",
+  "s79697b4219",
+  "scb62a8f7d0",
+  "s29ea4efdc2"
+ ]
+}

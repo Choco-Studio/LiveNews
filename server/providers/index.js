@@ -1,12 +1,14 @@
 import { createCodexProvider } from './codexExec.js';
 import { createOpenAICompatProvider } from './openaiCompat.js';
 import { createMockProvider } from './mock.js';
+import { createInboxProvider } from './inbox.js';
 
 export function createProviders(config) {
   const factories = {
     codex: () => createCodexProvider(config.codex),
     openai: () => createOpenAICompatProvider('openai', config.openai),
     deepseek: () => createOpenAICompatProvider('deepseek', config.deepseek),
+    inbox: () => createInboxProvider(config.inbox),
     mock: () => createMockProvider(),
   };
   return config.providers.filter((n) => factories[n]).map((n) => factories[n]());
@@ -28,8 +30,14 @@ export class ProviderChain {
 
   async generate(request, validate) {
     const errors = [];
+    let nonReviewers = 0;
     for (const p of this.providers) {
       if (!p.available()) continue;
+      // A provider that cannot check facts (the offline mock) never stands in for the editor.
+      if (request.stage === 'review' && p.reviews === false) {
+        nonReviewers++;
+        continue;
+      }
       if ((this.cooldownUntil.get(p.name) || 0) > this.now()) continue;
       const started = this.now();
       try {
@@ -49,6 +57,9 @@ export class ProviderChain {
         this.log.warn?.(`[ai] ${p.name} failed (${err.message}); pausing it for ${Math.round(pauseMs / 1000)} s`);
         errors.push(`${p.name}: ${err.message}`);
       }
+    }
+    if (!errors.length && nonReviewers && !this.providers.some((p) => p.reviews !== false && p.available())) {
+      throw Object.assign(new Error('no AI editor configured (the offline mock writes but cannot review)'), { code: 'NO_REVIEWER' });
     }
     throw new Error(`no AI provider available (${errors.join(' | ') || 'all paused'})`);
   }

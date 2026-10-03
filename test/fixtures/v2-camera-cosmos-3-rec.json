@@ -1,0 +1,1176 @@
+{
+ "kind": "episode",
+ "id": "emurd7htr3-rec",
+ "createdAt": "2026-10-02T19:37:31.647Z",
+ "program": {
+  "id": "cosmos",
+  "title": "COSMOS DESK",
+  "tagline": "SCIENCE, SPACE & OUR PLANET",
+  "theme": "space"
+ },
+ "cast": {
+  "A": "nova",
+  "B": "unit8"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "pictures",
+   "ms": 1,
+   "pictures": 0,
+   "of": 6,
+   "found": 0,
+   "borrowed": 0
+  },
+  {
+   "stage": "write",
+   "ms": 232,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 3,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 0,
+   "images": 0,
+   "verified": 0
+  }
+ ],
+ "title": "COSMOS DESK (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Study finds city trees cut summer temperatures by 2 degrees. Also coming up: our number of the day. And later: Open-source AI model runs on an ordinary laptop. This is COSMOS DESK. I'm Dr Nova Reyes, with UNIT-8.",
+   "cues": [
+    {
+     "char": 180,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 212,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "sbd2a6a32da",
+    "s29418f9aa5",
+    "sa475fbfbcd"
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 5
+     },
+     {
+      "t": 0.594,
+      "char": 6,
+      "len": 5
+     },
+     {
+      "t": 1.008,
+      "char": 12,
+      "len": 4
+     },
+     {
+      "t": 1.352,
+      "char": 17,
+      "len": 5
+     },
+     {
+      "t": 1.766,
+      "char": 23,
+      "len": 3
+     },
+     {
+      "t": 2.042,
+      "char": 27,
+      "len": 6
+     },
+     {
+      "t": 2.525,
+      "char": 34,
+      "len": 12
+     },
+     {
+      "t": 3.421,
+      "char": 47,
+      "len": 2
+     },
+     {
+      "t": 3.628,
+      "char": 50,
+      "len": 1
+     },
+     {
+      "t": 3.766,
+      "char": 52,
+      "len": 7
+     },
+     {
+      "t": 4.768,
+      "char": 61,
+      "len": 4
+     },
+     {
+      "t": 5.215,
+      "char": 66,
+      "len": 6
+     },
+     {
+      "t": 5.842,
+      "char": 73,
+      "len": 2
+     },
+     {
+      "t": 6.11,
+      "char": 77,
+      "len": 3
+     },
+     {
+      "t": 6.468,
+      "char": 81,
+      "len": 6
+     },
+     {
+      "t": 7.094,
+      "char": 88,
+      "len": 2
+     },
+     {
+      "t": 7.363,
+      "char": 91,
+      "len": 3
+     },
+     {
+      "t": 7.72,
+      "char": 95,
+      "len": 3
+     },
+     {
+      "t": 8.528,
+      "char": 100,
+      "len": 3
+     },
+     {
+      "t": 8.814,
+      "char": 104,
+      "len": 5
+     },
+     {
+      "t": 9.242,
+      "char": 111,
+      "len": 11
+     },
+     {
+      "t": 10.098,
+      "char": 123,
+      "len": 2
+     },
+     {
+      "t": 10.312,
+      "char": 126,
+      "len": 5
+     },
+     {
+      "t": 10.74,
+      "char": 132,
+      "len": 4
+     },
+     {
+      "t": 11.097,
+      "char": 137,
+      "len": 2
+     },
+     {
+      "t": 11.311,
+      "char": 140,
+      "len": 2
+     },
+     {
+      "t": 11.525,
+      "char": 143,
+      "len": 8
+     },
+     {
+      "t": 12.167,
+      "char": 152,
+      "len": 6
+     },
+     {
+      "t": 13.116,
+      "char": 160,
+      "len": 4
+     },
+     {
+      "t": 13.53,
+      "char": 165,
+      "len": 2
+     },
+     {
+      "t": 13.778,
+      "char": 168,
+      "len": 6
+     },
+     {
+      "t": 14.358,
+      "char": 175,
+      "len": 4
+     },
+     {
+      "t": 15.221,
+      "char": 181,
+      "len": 3
+     },
+     {
+      "t": 15.552,
+      "char": 185,
+      "len": 2
+     },
+     {
+      "t": 15.801,
+      "char": 188,
+      "len": 4
+     },
+     {
+      "t": 16.214,
+      "char": 193,
+      "len": 5
+     },
+     {
+      "t": 16.711,
+      "char": 200,
+      "len": 4
+     },
+     {
+      "t": 17.125,
+      "char": 205,
+      "len": 6
+     }
+    ],
+    "duration": 18.004
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Researchers say parks also reduced heat-related illness. A study of 90 European cities found that streets with many trees were about 2 degrees cooler in summer.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "raise_hand"
+    },
+    {
+     "char": 160,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "sbd2a6a32da",
+   "headline": "Study finds city trees cut summer temperatures by 2 degrees",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": "90 EUROPEAN CITIES",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "GREEN CITIES",
+   "numbers": [
+    {
+     "value": "90",
+     "label": "EUROPEAN CITIES"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 11
+     },
+     {
+      "t": 0.801,
+      "char": 12,
+      "len": 3
+     },
+     {
+      "t": 1.008,
+      "char": 16,
+      "len": 5
+     },
+     {
+      "t": 1.318,
+      "char": 22,
+      "len": 4
+     },
+     {
+      "t": 1.577,
+      "char": 27,
+      "len": 7
+     },
+     {
+      "t": 1.99,
+      "char": 35,
+      "len": 12
+     },
+     {
+      "t": 2.663,
+      "char": 48,
+      "len": 7
+     },
+     {
+      "t": 3.527,
+      "char": 57,
+      "len": 1
+     },
+     {
+      "t": 3.679,
+      "char": 59,
+      "len": 5
+     },
+     {
+      "t": 4.137,
+      "char": 65,
+      "len": 2
+     },
+     {
+      "t": 4.366,
+      "char": 68,
+      "len": 2
+     },
+     {
+      "t": 4.595,
+      "char": 71,
+      "len": 8
+     },
+     {
+      "t": 5.282,
+      "char": 80,
+      "len": 6
+     },
+     {
+      "t": 5.816,
+      "char": 87,
+      "len": 5
+     },
+     {
+      "t": 6.274,
+      "char": 93,
+      "len": 4
+     },
+     {
+      "t": 6.656,
+      "char": 98,
+      "len": 7
+     },
+     {
+      "t": 7.267,
+      "char": 106,
+      "len": 4
+     },
+     {
+      "t": 7.648,
+      "char": 111,
+      "len": 4
+     },
+     {
+      "t": 8.03,
+      "char": 116,
+      "len": 5
+     },
+     {
+      "t": 8.488,
+      "char": 122,
+      "len": 4
+     },
+     {
+      "t": 8.87,
+      "char": 127,
+      "len": 5
+     },
+     {
+      "t": 9.328,
+      "char": 133,
+      "len": 1
+     },
+     {
+      "t": 9.48,
+      "char": 135,
+      "len": 7
+     },
+     {
+      "t": 10.091,
+      "char": 143,
+      "len": 6
+     },
+     {
+      "t": 10.625,
+      "char": 150,
+      "len": 2
+     },
+     {
+      "t": 10.854,
+      "char": 153,
+      "len": 6
+     }
+    ],
+    "duration": 11.689
+   }
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "90 European cities. Logged.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 2
+     },
+     {
+      "t": 0.399,
+      "char": 3,
+      "len": 8
+     },
+     {
+      "t": 1.054,
+      "char": 12,
+      "len": 6
+     },
+     {
+      "t": 2.015,
+      "char": 20,
+      "len": 6
+     }
+    ],
+    "duration": 2.776
+   }
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Thank you, UNIT-8. Our number of the day is yours.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "look_partner"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 5
+     },
+     {
+      "t": 0.618,
+      "char": 6,
+      "len": 3
+     },
+     {
+      "t": 0.91,
+      "char": 11,
+      "len": 6
+     },
+     {
+      "t": 1.871,
+      "char": 19,
+      "len": 3
+     },
+     {
+      "t": 2.245,
+      "char": 23,
+      "len": 6
+     },
+     {
+      "t": 2.899,
+      "char": 30,
+      "len": 2
+     },
+     {
+      "t": 3.179,
+      "char": 33,
+      "len": 3
+     },
+     {
+      "t": 3.553,
+      "char": 37,
+      "len": 3
+     },
+     {
+      "t": 3.927,
+      "char": 41,
+      "len": 2
+     },
+     {
+      "t": 4.207,
+      "char": 44,
+      "len": 5
+     }
+    ],
+    "duration": 5.068
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Our number of the day: 2 million. A new handheld games console sold 2 million units in its first week, its maker says. Shops in Tokyo reported long queues on launch day.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "count"
+    },
+    {
+     "char": 169,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s29418f9aa5",
+   "headline": "Handheld games console sells 2 million units in its first week",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "TOKYO, JAPAN",
+    "lat": 35.68,
+    "lon": 139.69
+   },
+   "fact": "2 MILLION UNITS",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "2 MILLION",
+     "label": "UNITS"
+    }
+   ],
+   "feature": "number",
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 3
+     },
+     {
+      "t": 0.584,
+      "char": 4,
+      "len": 6
+     },
+     {
+      "t": 1.291,
+      "char": 11,
+      "len": 2
+     },
+     {
+      "t": 1.593,
+      "char": 14,
+      "len": 3
+     },
+     {
+      "t": 1.997,
+      "char": 18,
+      "len": 3
+     },
+     {
+      "t": 2.401,
+      "char": 23,
+      "len": 1
+     },
+     {
+      "t": 2.603,
+      "char": 25,
+      "len": 7
+     },
+     {
+      "t": 3.861,
+      "char": 34,
+      "len": 1
+     },
+     {
+      "t": 4.039,
+      "char": 36,
+      "len": 3
+     },
+     {
+      "t": 4.395,
+      "char": 40,
+      "len": 8
+     },
+     {
+      "t": 5.195,
+      "char": 49,
+      "len": 5
+     },
+     {
+      "t": 5.729,
+      "char": 55,
+      "len": 7
+     },
+     {
+      "t": 6.441,
+      "char": 63,
+      "len": 4
+     },
+     {
+      "t": 6.886,
+      "char": 68,
+      "len": 1
+     },
+     {
+      "t": 7.064,
+      "char": 70,
+      "len": 7
+     },
+     {
+      "t": 7.776,
+      "char": 78,
+      "len": 5
+     },
+     {
+      "t": 8.309,
+      "char": 84,
+      "len": 2
+     },
+     {
+      "t": 8.576,
+      "char": 87,
+      "len": 3
+     },
+     {
+      "t": 8.932,
+      "char": 91,
+      "len": 5
+     },
+     {
+      "t": 9.466,
+      "char": 97,
+      "len": 4
+     },
+     {
+      "t": 9.911,
+      "char": 103,
+      "len": 3
+     },
+     {
+      "t": 10.267,
+      "char": 107,
+      "len": 5
+     },
+     {
+      "t": 10.801,
+      "char": 113,
+      "len": 4
+     },
+     {
+      "t": 11.695,
+      "char": 119,
+      "len": 5
+     },
+     {
+      "t": 12.194,
+      "char": 125,
+      "len": 2
+     },
+     {
+      "t": 12.443,
+      "char": 128,
+      "len": 5
+     },
+     {
+      "t": 12.942,
+      "char": 134,
+      "len": 8
+     },
+     {
+      "t": 13.689,
+      "char": 143,
+      "len": 4
+     },
+     {
+      "t": 14.105,
+      "char": 148,
+      "len": 6
+     },
+     {
+      "t": 14.686,
+      "char": 155,
+      "len": 2
+     },
+     {
+      "t": 14.935,
+      "char": 158,
+      "len": 6
+     },
+     {
+      "t": 15.517,
+      "char": 165,
+      "len": 3
+     }
+    ],
+    "duration": 16.149
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "Thanks, UNIT-8. And finally: Researchers have released an AI model small enough to run on an ordinary laptop, Circuit Weekly reports. They say it needs about 8 gigabytes of memory and works without an internet connection.",
+   "cues": [
+    {
+     "char": 221,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "sa475fbfbcd",
+   "headline": "Open-source AI model runs on an ordinary laptop",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AND FINALLY",
+   "feature": "lighter",
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 6
+     },
+     {
+      "t": 0.594,
+      "char": 8,
+      "len": 6
+     },
+     {
+      "t": 1.458,
+      "char": 16,
+      "len": 3
+     },
+     {
+      "t": 1.731,
+      "char": 20,
+      "len": 7
+     },
+     {
+      "t": 2.278,
+      "char": 29,
+      "len": 11
+     },
+     {
+      "t": 3.098,
+      "char": 41,
+      "len": 4
+     },
+     {
+      "t": 3.44,
+      "char": 46,
+      "len": 8
+     },
+     {
+      "t": 4.055,
+      "char": 55,
+      "len": 2
+     },
+     {
+      "t": 4.261,
+      "char": 58,
+      "len": 2
+     },
+     {
+      "t": 4.466,
+      "char": 61,
+      "len": 5
+     },
+     {
+      "t": 4.876,
+      "char": 67,
+      "len": 5
+     },
+     {
+      "t": 5.286,
+      "char": 73,
+      "len": 6
+     },
+     {
+      "t": 5.765,
+      "char": 80,
+      "len": 2
+     },
+     {
+      "t": 5.97,
+      "char": 83,
+      "len": 3
+     },
+     {
+      "t": 6.243,
+      "char": 87,
+      "len": 2
+     },
+     {
+      "t": 6.448,
+      "char": 90,
+      "len": 2
+     },
+     {
+      "t": 6.653,
+      "char": 93,
+      "len": 8
+     },
+     {
+      "t": 7.269,
+      "char": 102,
+      "len": 6
+     },
+     {
+      "t": 7.747,
+      "char": 110,
+      "len": 7
+     },
+     {
+      "t": 8.294,
+      "char": 118,
+      "len": 6
+     },
+     {
+      "t": 8.773,
+      "char": 125,
+      "len": 7
+     },
+     {
+      "t": 9.77,
+      "char": 134,
+      "len": 4
+     },
+     {
+      "t": 10.126,
+      "char": 139,
+      "len": 3
+     },
+     {
+      "t": 10.412,
+      "char": 143,
+      "len": 2
+     },
+     {
+      "t": 10.626,
+      "char": 146,
+      "len": 5
+     },
+     {
+      "t": 11.054,
+      "char": 152,
+      "len": 5
+     },
+     {
+      "t": 11.482,
+      "char": 158,
+      "len": 1
+     },
+     {
+      "t": 11.625,
+      "char": 160,
+      "len": 9
+     },
+     {
+      "t": 12.338,
+      "char": 170,
+      "len": 2
+     },
+     {
+      "t": 12.552,
+      "char": 173,
+      "len": 6
+     },
+     {
+      "t": 13.051,
+      "char": 180,
+      "len": 3
+     },
+     {
+      "t": 13.337,
+      "char": 184,
+      "len": 5
+     },
+     {
+      "t": 13.765,
+      "char": 190,
+      "len": 7
+     },
+     {
+      "t": 14.336,
+      "char": 198,
+      "len": 2
+     },
+     {
+      "t": 14.55,
+      "char": 201,
+      "len": 8
+     },
+     {
+      "t": 15.192,
+      "char": 210,
+      "len": 10
+     }
+    ],
+    "duration": 16.277
+   }
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "I have no further data, Dr Reyes. I find I do not mind.",
+   "cues": [],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 1
+     },
+     {
+      "t": 0.382,
+      "char": 2,
+      "len": 4
+     },
+     {
+      "t": 0.887,
+      "char": 7,
+      "len": 2
+     },
+     {
+      "t": 1.19,
+      "char": 10,
+      "len": 7
+     },
+     {
+      "t": 1.997,
+      "char": 18,
+      "len": 4
+     },
+     {
+      "t": 2.502,
+      "char": 24,
+      "len": 2
+     },
+     {
+      "t": 2.805,
+      "char": 27,
+      "len": 5
+     },
+     {
+      "t": 3.861,
+      "char": 34,
+      "len": 1
+     },
+     {
+      "t": 4.125,
+      "char": 36,
+      "len": 4
+     },
+     {
+      "t": 4.784,
+      "char": 41,
+      "len": 1
+     },
+     {
+      "t": 5.048,
+      "char": 43,
+      "len": 2
+     },
+     {
+      "t": 5.443,
+      "char": 46,
+      "len": 3
+     },
+     {
+      "t": 5.971,
+      "char": 50,
+      "len": 4
+     }
+    ],
+    "duration": 6.93
+   }
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's COSMOS DESK. From UNIT-8 and from me, thank you for watching. Stay with us on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 19,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 6
+     },
+     {
+      "t": 0.637,
+      "char": 7,
+      "len": 6
+     },
+     {
+      "t": 1.095,
+      "char": 14,
+      "len": 4
+     },
+     {
+      "t": 1.871,
+      "char": 20,
+      "len": 4
+     },
+     {
+      "t": 2.268,
+      "char": 25,
+      "len": 6
+     },
+     {
+      "t": 2.822,
+      "char": 32,
+      "len": 3
+     },
+     {
+      "t": 3.139,
+      "char": 36,
+      "len": 4
+     },
+     {
+      "t": 3.535,
+      "char": 41,
+      "len": 2
+     },
+     {
+      "t": 3.773,
+      "char": 45,
+      "len": 5
+     },
+     {
+      "t": 4.248,
+      "char": 51,
+      "len": 3
+     },
+     {
+      "t": 4.565,
+      "char": 55,
+      "len": 3
+     },
+     {
+      "t": 4.882,
+      "char": 59,
+      "len": 8
+     },
+     {
+      "t": 6.046,
+      "char": 69,
+      "len": 4
+     },
+     {
+      "t": 6.523,
+      "char": 74,
+      "len": 4
+     },
+     {
+      "t": 7,
+      "char": 79,
+      "len": 2
+     },
+     {
+      "t": 7.287,
+      "char": 82,
+      "len": 2
+     },
+     {
+      "t": 7.573,
+      "char": 85,
+      "len": 6
+     },
+     {
+      "t": 8.242,
+      "char": 92,
+      "len": 2
+     }
+    ],
+    "duration": 8.828
+   }
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "sbd2a6a32da",
+   "headline": "Study finds city trees cut summer temperatures by 2 degrees",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "GREEN CITIES"
+  },
+  {
+   "storyId": "s29418f9aa5",
+   "headline": "Handheld games console sells 2 million units in its first week",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY"
+  },
+  {
+   "storyId": "sa475fbfbcd",
+   "headline": "Open-source AI model runs on an ordinary laptop",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AND FINALLY"
+  }
+ ],
+ "storyIds": [
+  "sbd2a6a32da",
+  "s29418f9aa5",
+  "sa475fbfbcd"
+ ]
+}

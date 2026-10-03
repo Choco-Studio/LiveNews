@@ -1,0 +1,300 @@
+{
+ "kind": "episode",
+ "id": "emurd7oo66",
+ "createdAt": "2026-10-02T19:37:40.518Z",
+ "program": {
+  "id": "news-60",
+  "title": "NEWS IN 60",
+  "tagline": "THE HEADLINES IN A MINUTE",
+  "theme": "flash"
+ },
+ "cast": {
+  "A": "sam"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "pictures",
+   "ms": 1,
+   "pictures": 1,
+   "of": 12,
+   "found": 0,
+   "borrowed": 0
+  },
+  {
+   "stage": "write",
+   "ms": 59,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "fit",
+   "ms": 0,
+   "estimate": 58.5,
+   "dropped": 0
+  },
+  {
+   "stage": "assets",
+   "ms": 0,
+   "images": 0,
+   "verified": 0
+  }
+ ],
+ "title": "NEWS IN 60 (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "This is NEWS IN 60. I'm Sam Night.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Ten schools in Wellington, New Zealand, will trial a four-day week for one term, Pixelburg Post reports. Education officials say they want to measure the effect on attendance and wellbeing.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "lean_in"
+    }
+   ],
+   "storyId": "sebb4587a88",
+   "headline": "Wellington schools trial four-day week",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "WELLINGTON, NEW ZEALAND",
+    "lat": -41.29,
+    "lon": 174.78
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "EDUCATION"
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Canada and Mexico have signed an agreement to fund clean water projects in rural communities. The two governments will share the cost of 50 new treatment plants, according to Pixelburg Post.",
+   "cues": [],
+   "storyId": "s0c01830e41",
+   "headline": "Canada and Mexico sign agreement on clean water projects",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "CANADA",
+    "lat": 56.1,
+    "lon": -106.3
+   },
+   "fact": "50 NEW TREATMENT PLANTS",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "WATER",
+   "numbers": [
+    {
+     "value": "50",
+     "label": "NEW TREATMENT PLANTS"
+    }
+   ],
+   "map": [
+    {
+     "place": "CANADA",
+     "lat": 56.1,
+     "lon": -106.3
+    },
+    {
+     "place": "MEXICO",
+     "lat": 23.6,
+     "lon": -102.6
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Around the world. First, Valencia. Solar eclipse to be visible across northern Spain next August, Starfield Journal reports.",
+   "cues": [],
+   "storyId": "s654d06e121",
+   "headline": "Solar eclipse to be visible across northern Spain next August",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "VALENCIA, SPAIN",
+    "lat": 39.47,
+    "lon": -0.38
+   },
+   "fact": null,
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 0,
+    "count": 3
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "In Sweden, the company wants to process 2 million phones a year, according to Circuit Weekly.",
+   "cues": [],
+   "storyId": "s81d71bbe9a",
+   "headline": "Swedish recycling plant recovers gold from old phones",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "SWEDEN",
+    "lat": 62,
+    "lon": 15
+   },
+   "fact": null,
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 1,
+    "count": 3
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "In Iceland, a data centre powered by wind and geothermal energy has opened near Reykjavik.",
+   "cues": [],
+   "storyId": "sdc41c4532f",
+   "headline": "Data centre near Reykjavik runs on wind and geothermal power",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "REYKJAVIK, ICELAND",
+    "lat": 64.15,
+    "lon": -21.94
+   },
+   "fact": null,
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 2,
+    "count": 3
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "serious",
+   "text": "A magnitude 5.8 earthquake shook northern Chile on Tuesday morning, Pixelburg Post reports. Emergency services say there are no reports of damage or injuries.",
+   "cues": [],
+   "storyId": "s1f89c80c5b",
+   "headline": "Moderate earthquake shakes northern Chile",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "CHILE",
+    "lat": -35.7,
+    "lon": -71.5
+   },
+   "fact": "MAGNITUDE 5.8",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "EARTHQUAKE",
+   "numbers": [
+    {
+     "value": "5.8",
+     "label": "MAGNITUDE"
+    }
+   ]
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's the minute. Stay with us on GLOBIT 24.",
+   "cues": []
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "sebb4587a88",
+   "headline": "Wellington schools trial four-day week",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "EDUCATION"
+  },
+  {
+   "storyId": "s0c01830e41",
+   "headline": "Canada and Mexico sign agreement on clean water projects",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "WATER"
+  },
+  {
+   "storyId": "s654d06e121",
+   "headline": "Solar eclipse to be visible across northern Spain next August",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s81d71bbe9a",
+   "headline": "Swedish recycling plant recovers gold from old phones",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "sdc41c4532f",
+   "headline": "Data centre near Reykjavik runs on wind and geothermal power",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s1f89c80c5b",
+   "headline": "Moderate earthquake shakes northern Chile",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "EARTHQUAKE"
+  }
+ ],
+ "storyIds": [
+  "sebb4587a88",
+  "s0c01830e41",
+  "s654d06e121",
+  "s81d71bbe9a",
+  "sdc41c4532f",
+  "s1f89c80c5b"
+ ]
+}

@@ -1,5 +1,34 @@
 import { loadChannel, publicChannel } from './channel.js';
 import { isBreaking } from './news.js';
+import { publicError } from './usage.js';
+
+/** A feed's status as the public may see it: ok and item count, or a short reason (the detail is in the log). */
+function publicFeedStatus(feeds) {
+  const reason = (e) => {
+    const m = String(e || '');
+    if (/^HTTP \d{3}$/.test(m)) return m;
+    if (/ENOENT|no such file/i.test(m)) return 'feed file not found';
+    if (/timeout|timed out|abort/i.test(m)) return 'timeout';
+    if (/ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|network|socket|refused/i.test(m)) return 'unreachable';
+    if (/xml|parse|tag/i.test(m)) return 'not a feed';
+    return publicError(m) === 'internal error' ? 'error' : publicError(m).slice(0, 60);
+  };
+  return Object.fromEntries(Object.entries(feeds || {}).map(([name, f]) => [name, f?.ok ? { ok: true, items: f.items } : { ok: false, error: reason(f?.error) }]));
+}
+
+/**
+ * Expected air time of an episode in seconds: each segment's recorded voice, or its words at 2.75 a second (pace.js
+ * estimateAir), a short pause between segments and the open and close. Rough, but it only decides whether a programme ran long enough to earn a full break.
+ */
+export function episodeAir(ep) {
+  const segs = Array.isArray(ep?.segments) ? ep.segments : [];
+  let t = 12; // open, sign-off and end card
+  for (const seg of segs) {
+    const d = Number(seg?.audio?.duration);
+    t += Number.isFinite(d) && d > 0 ? d : String(seg?.text || '').split(/\s+/).filter(Boolean).length / 2.75;
+  }
+  return t + 0.6 * Math.max(0, segs.length - 1);
+}
 
 /**
  * Master control: keeps finished episodes ready ahead of air, follows the
@@ -17,7 +46,14 @@ export class Station {
     this.log = log;
     this.queue = []; // finished episodes, in air order
     this.history = []; // what has aired (episodes and breaks)
+    // ROTATION_START=<programme id>: the channel starts at that slot of the rotation (demos, recordings)
     this.rotationIndex = 0;
+    try {
+      const start = config?.rotationStart ? channel().rotation.indexOf(config.rotationStart) : -1;
+      if (start > 0) this.rotationIndex = start;
+    } catch {
+      /* the default start */
+    }
     this.producing = null; // programme id currently in production
     this.extraBreaks = 0;
     this.lastError = null;
@@ -75,7 +111,9 @@ export class Station {
       this.producing = programId;
       this.emit('status', this.status());
       try {
-        const episode = await this.producer.produce(channel, programId);
+        // The next programmes in the rotation keep their own beat (COSMOS keeps the science).
+        const upcoming = [1, 2, 3].map((k) => rotation[(this.rotationIndex + k) % rotation.length]).filter((id) => id !== programId);
+        const episode = await this.producer.produce(channel, programId, { upcoming });
         this.rotationIndex++;
         if (!episode) {
           misses++;
@@ -99,11 +137,21 @@ export class Station {
     return p ? { id: programId, title: p.title, tagline: p.tagline, theme: p.theme, presenters: p.presenters } : null;
   }
 
-  /** What comes after the current break, as far as we know. */
+  /**
+   * What comes after the current break, as far as we know: the next ready
+   * episode, the one in production, else the next slot of the rotation that
+   * can really be made (a slot short of news is skipped, so it is never
+   * promised). Null when nothing can be made right now: no promise at all.
+   */
   upNext(channel) {
     if (this.queue.length) return { ...this.programMeta(channel, this.queue[0].program.id), ready: true };
-    const id = this.producing || channel.rotation[this.rotationIndex % channel.rotation.length];
-    return { ...this.programMeta(channel, id), ready: false };
+    if (this.producing) return { ...this.programMeta(channel, this.producing), ready: false };
+    const rotation = channel.rotation;
+    for (let k = 0; k < rotation.length; k++) {
+      const id = rotation[(this.rotationIndex + k) % rotation.length];
+      if (typeof this.producer.canProduce !== 'function' || this.producer.canProduce(channel, id)) return { ...this.programMeta(channel, id), ready: false };
+    }
+    return null;
   }
 
   schedule() {
@@ -121,14 +169,33 @@ export class Station {
   }
 
   breakItem(channel, { filler = false } = {}) {
-    const { adsPerBreak = 2 } = channel.breaks || {};
+    const { adsPerBreak = 2, minProgrammeBetween = 0 } = channel.breaks || {};
+    // Break cadence (pace: CHANNEL.breaks.minProgrammeBetween): a programme that ends within that much programme air of
+    // the last commercial break goes on with a LIGHT break: one spot and the UP NEXT promo (`light: true`; a director
+    // that honours it may play the promo alone). NEWS IN 60 is no longer sandwiched between two full breaks.
+    const light = !filler && minProgrammeBetween > 0 && this.airSinceBreak() < minProgrammeBetween;
     return {
       kind: 'break',
       id: `k${Date.now().toString(36)}${(this.seq++).toString(36)}`,
       filler,
-      ads: filler ? 1 : adsPerBreak,
+      ads: filler || light ? 1 : adsPerBreak,
+      ...(light ? { light: true } : {}),
       next: this.upNext(channel),
     };
+  }
+
+  /** Seconds of programme air since the last commercial break (a light break does not count as one). */
+  airSinceBreak() {
+    let air = 0;
+    for (let i = this.history.length - 1; i >= 0; i--) {
+      const h = this.history[i];
+      if (h.kind === 'break') {
+        if (!h.light) break;
+        continue;
+      }
+      air += episodeAir(h);
+    }
+    return air;
   }
 
   /** Decide the next item on air. Returns null only when there is nothing at all to show. */
@@ -168,6 +235,7 @@ export class Station {
     const item = this.advance();
     if (!item) return null;
     this.history.push(item);
+    this.airedTotal = (this.airedTotal || 0) + 1; // the history keeps the last 30; this counts them all
     if (this.history.length > 30) this.history.shift();
     this.emit('schedule', this.schedule());
     return item;
@@ -182,10 +250,11 @@ export class Station {
       queue: this.queue.map((e) => e.program.title),
       producing: this.producing ? this.channel().programs[this.producing]?.title : null,
       aired: this.history.length,
-      lastError: this.lastError,
+      airedTotal: this.airedTotal || 0,
+      lastError: this.lastError ? publicError(this.lastError) : null,
       stories: this.news.stories.size,
       uncovered: this.news.uncovered().length,
-      feeds: this.news.feedStatus,
+      feeds: publicFeedStatus(this.news.feedStatus),
       lastRefresh: this.news.lastRefresh ? new Date(this.news.lastRefresh).toISOString() : null,
       providers: this.chain.status(),
     };

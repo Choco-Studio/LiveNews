@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set Lab (v2)</title>
+<style>
+  :root { --bg: #181425; --fg: #c0cbdc; --ui: #262b44; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 monospace; }
+  #screen { display: block; width: 1152px; height: 648px; image-rendering: pixelated; background: #000; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--ui); align-items: center; }
+  button, select { background: #3a4466; color: #fff; border: 0; padding: 4px 8px; font: inherit; }
+  #t { width: 360px; }
+</style>
+</head>
+<body>
+<!-- STUDIO SET lab: per-programme set, light and live video-wall content.
+     window.__lab: render(t), set({ programme, framing, wall, presenters, cache, phase, image,
+     place, lat, lon, figure, label, sub, since, move, lod }), profile(n), ready (images loaded).
+     Pictures load from ../../config/fixtures/img (serve the repo root, e.g.
+     `timeout 1500 python3 -m http.server 8505 --bind 127.0.0.1`, then /public/lab/v2-set.html)
+     and are pixelated exactly like the director does (416x234, 24 colours). ?still=1 for captures. -->
+<canvas id="screen" width="384" height="216"></canvas>
+<div class="bar">
+  <select id="programme"></select>
+  <select id="framing"></select>
+  <select id="wall"></select>
+  <select id="phase"><option>intro</option><option>outro</option></select>
+  <label><input type="checkbox" id="presenters" checked> presenters</label>
+  <label><input type="checkbox" id="cache" checked> cache</label>
+  <button id="play">pause</button>
+  <button id="prof">profile</button>
+  <input id="t" type="range" min="0" max="20" step="0.01" value="0">
+  <span id="info"></span>
+</div>
+<script type="module">
+  import * as lab from '../js/v2/canvas25d/labs/set.js';
+  import { pixelate } from '../js/pixelate.js';
+  const canvas = document.getElementById('screen');
+  const ctx = canvas.getContext('2d');
+  const $ = (id) => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+
+  const NAMES = ['port', 'chip', 'rocket', 'observatory', 'volcano', 'train', 'solar', 'forest', 'rice', 'wildfire', 'coffee', 'greenhouse', 'reef', 'mars'];
+  const load = (src) => new Promise((ok, no) => {
+    const img = new Image();
+    img.onload = () => ok(img);
+    img.onerror = no;
+    img.src = src;
+  });
+  // the wall's mini map (scenes/worldmap.js) loads its data in background slices after boot; a lab
+  // capture wants it now
+  const mapData = import('../js/scenes/worldmap.js').then((m) => m.warmMapData?.()).catch(() => {});
+  const ready = Promise.all([mapData, ...NAMES.map(async (n) => {
+    try {
+      const img = await load(params.get('imgbase') ? `${params.get('imgbase')}/${n}.png` : `../../config/fixtures/img/${n}.png`);
+      lab.setImage(n, { small: pixelate(img, 104, 62, { colors: 16 }), full: pixelate(img, 416, 234, { colors: 24 }) });
+    } catch { /* no fixture pictures on this server: picture mode falls back to the plate */ }
+  })]);
+
+  const present = () => lab.frame.present(ctx);
+  window.__lab = {
+    render(t = 0) {
+      lab.render(t);
+      present();
+    },
+    set: lab.set,
+    profile: lab.profile,
+    reset: lab.reset,
+    state: lab.LAB,
+    ready,
+    FRAMINGS: lab.FRAMINGS,
+    WALLS: lab.WALLS,
+    PROGRAMMES: lab.PROGRAMMES,
+  };
+
+  for (const n of lab.PROGRAMMES) $('programme').add(new Option(n, n));
+  for (const n of lab.FRAMINGS) $('framing').add(new Option(n, n));
+  for (const n of lab.WALLS) $('wall').add(new Option(n, n));
+  for (const k of ['programme', 'framing', 'wall', 'phase']) {
+    if (params.has(k)) lab.set({ [k]: params.get(k) });
+    $(k).value = lab.LAB[k];
+    $(k).onchange = () => lab.set({ [k]: $(k).value });
+  }
+  $('presenters').onchange = () => lab.set({ presenters: $('presenters').checked });
+  $('cache').onchange = () => lab.set({ cache: $('cache').checked });
+  $('prof').onclick = () => {
+    const p = lab.profile(120);
+    $('info').textContent = `bg uncached ${p.bgUncached.toFixed(3)} ms, cached ${p.bgCached.toFixed(3)} ms, wall patch ${p.bgPatch.toFixed(3)} ms, desk ${p.desk.toFixed(3)} ms`;
+  };
+  const still = params.has('still');
+  let playing = !still;
+  let t0 = performance.now();
+  $('play').onclick = () => {
+    playing = !playing;
+    $('play').textContent = playing ? 'pause' : 'play';
+    t0 = performance.now() - Number($('t').value) * 1000;
+  };
+  $('t').oninput = () => {
+    playing = false;
+    $('play').textContent = 'play';
+    window.__lab.render(Number($('t').value));
+  };
+  function loop() {
+    if (playing) {
+      const t = (performance.now() - t0) / 1000;
+      $('t').value = t % 20;
+      window.__lab.render(t);
+    }
+    requestAnimationFrame(loop);
+  }
+  ready.then(() => window.__lab.render(0));
+  if (!still) loop();
+</script>
+</body>
+</html>

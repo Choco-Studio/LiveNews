@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Presenters A Lab (v2)</title>
+<style>
+  :root { --bg: #181425; --fg: #c0cbdc; --ui: #262b44; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 monospace; }
+  #screen { display: block; width: 1152px; height: 648px; image-rendering: pixelated; background: #000; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--ui); align-items: center; }
+  button, select, input { background: #3a4466; color: #fff; border: 0; padding: 4px 8px; font: inherit; }
+  #t { width: 300px; }
+</style>
+</head>
+<body>
+<!-- PRESENTERS A lab (Paco, Lola, Sam, Penny): line-ups at the four scales,
+     close-ups, turnaround, idle, talk and gesture loops, the studio single.
+     window.__lab.render(t), window.__lab.set({ mode, presenter, seat, scale,
+     emotion, gesture, yaw, pitch, bg, k }), __lab.bench(), __lab.profile();
+     ?still=1 for captures (the capture drives the clock). -->
+<canvas id="screen" width="384" height="216"></canvas>
+<div class="bar">
+  <select id="mode"></select>
+  <select id="presenter"></select>
+  <select id="scale"></select>
+  <select id="seat"><option value="1">seat A (+1)</option><option value="-1">seat B (-1)</option></select>
+  <select id="emotion"><option value="">(no emotion)</option><option>neutral</option><option>happy</option><option>serious</option><option>surprised</option><option>sad</option><option>thinking</option></select>
+  <select id="gesture"></select>
+  <select id="bg"><option>ink</option><option>set</option></select>
+  <button id="play">pause</button>
+  <input id="t" type="range" min="0" max="12" step="0.01" value="0">
+  <button id="bench">bench</button>
+  <span id="info"></span>
+</div>
+<script type="module">
+import { createCastALab, CAST_A, SCALES } from '../js/v2/canvas25d/labs/cast-a.js';
+import { GESTURES } from '../js/v2/canvas25d/gestures/index.js';
+
+const $ = (id) => document.getElementById(id);
+const lab = createCastALab($('screen'));
+window.__lab = lab;
+for (const m of lab.modes) $('mode').add(new Option(m, m));
+for (const p of CAST_A) $('presenter').add(new Option(p, p));
+for (const s of [...SCALES, 2.7, 4, 5]) $('scale').add(new Option(`s ${s}`, s));
+for (const g of Object.keys(GESTURES)) $('gesture').add(new Option(g, g));
+$('mode').value = lab.state.mode;
+$('scale').value = lab.state.scale;
+$('gesture').value = lab.state.gesture;
+const sync = () => lab.set({
+  mode: $('mode').value, presenter: $('presenter').value, scale: Number($('scale').value), seat: Number($('seat').value),
+  emotion: $('emotion').value || null, gesture: $('gesture').value, bg: $('bg').value,
+});
+for (const id of ['mode', 'presenter', 'scale', 'seat', 'emotion', 'gesture', 'bg']) $(id).onchange = () => { sync(); t0 = performance.now(); };
+
+const still = new URLSearchParams(location.search).has('still');
+let playing = !still;
+let t0 = performance.now();
+$('play').onclick = () => {
+  playing = !playing;
+  $('play').textContent = playing ? 'pause' : 'play';
+  t0 = performance.now() - Number($('t').value) * 1000;
+};
+$('t').oninput = () => {
+  playing = false;
+  $('play').textContent = 'play';
+  lab.render(Number($('t').value));
+};
+$('bench').onclick = () => { $('info').textContent = JSON.stringify(lab.profile()); };
+function loop() {
+  if (playing) {
+    const t = (performance.now() - t0) / 1000;
+    $('t').value = t % 12;
+    lab.render(t);
+  }
+  requestAnimationFrame(loop);
+}
+lab.render(0);
+if (!still) loop();
+</script>
+</body>
+</html>

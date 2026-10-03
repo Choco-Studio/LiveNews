@@ -9,6 +9,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { storyId } from '../server/news.js';
 import { publicChannel } from '../server/channel.js';
+import { episodeAir } from '../server/station.js';
 
 // End-to-end: the real server/index.js runs as a child process, from a throw-away
 // copy of the project (so its data/usage.json is not the project's), with the mock
@@ -16,7 +17,8 @@ import { publicChannel } from '../server/channel.js';
 // feeds, article pages and images from memory. No network is touched.
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PNG = Buffer.from('iVBORw0KGgo=', 'base64');
+// A PNG header with a real size (640x360): the image server reads the bytes, not the Content-Type.
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAoAAAAFoCAIAAAAAAAAA', 'base64');
 
 const STUB_FETCH = `
 import fs from 'node:fs';
@@ -90,8 +92,8 @@ async function startApp(env = {}) {
       fs.rmSync(dir, { recursive: true, force: true });
     },
     /** GET/POST a path and return { status, headers, text, json }. */
-    async request(urlPath, { method = 'GET' } = {}) {
-      const res = await fetch(app.base + urlPath, { method });
+    async request(urlPath, { method = 'GET', headers = {}, base = app.base } = {}) {
+      const res = await fetch(base + urlPath, { method, headers });
       const text = await res.text();
       let json;
       try {
@@ -143,7 +145,7 @@ describe('server/index.js: HTTP API of a running channel', () => {
 
   test('announces itself on the console', () => {
     assert.match(app.output.stdout, /GLOBIT 24 on air at http:\/\/127\.0\.0\.1:\d+/);
-    assert.match(app.output.stdout, /AI providers: mock \(with editorial review pass\)/);
+    assert.match(app.output.stdout, /AI providers: mock \(review pass: no AI editor configured\)/, 'the mock writes but never reviews');
   });
 
   test('GET /api/channel is the public view of config/channel.json, as uncacheable JSON', async () => {
@@ -167,9 +169,26 @@ describe('server/index.js: HTTP API of a running channel', () => {
     assert.ok(Object.values(json.feeds).length >= 10 && Object.values(json.feeds).every((f) => f.ok && f.items === 8));
     assert.match(json.lastRefresh, /^\d{4}-\d\d-\d\dT/);
     assert.deepEqual(json.providers.map((p) => [p.name, p.configured]), [['mock', true]]);
-    assert.ok(json.usage.today.mock.calls >= 4, 'two episodes, each written and reviewed');
+    assert.ok(json.usage.today.mock.calls >= 2, 'two episodes written (the mock never stands in for the editor)');
     assert.equal(json.usage.today.mock.errors, 0);
     assert.deepEqual(Object.keys(json.schedule), ['now', 'upcoming']);
+  });
+
+  test('GET /api/desk (editorial dev view) lists the desk, most interesting first, without advancing the channel', async () => {
+    const { status, json } = await app.request('/api/desk');
+    assert.equal(status, 200);
+    assert.ok(Array.isArray(json) && json.length > 10 && json.length <= 80);
+    assert.deepEqual(Object.keys(json[0]).sort(), ['breaking', 'category', 'covered', 'hasImage', 'id', 'imageCredit', 'imageCreditVia', 'imageVia', 'live', 'outlets', 'score', 'source', 'title']);
+    assert.ok(json.every((s, i) => i === 0 || json[i - 1].score >= s.score));
+    assert.equal((await app.request('/api/status')).json.aired, 0);
+  });
+
+  test('GET /api/queue shows the episodes ready to air, as the clients will get them', async () => {
+    const { status, json } = await app.request('/api/queue');
+    assert.equal(status, 200);
+    assert.deepEqual(json.map((e) => e.program.id), [real.rotation[0], real.rotation[1]]);
+    assert.ok(json.every((e) => e.kind === 'episode' && e.pipeline.find((p) => p.stage === 'review').reviewed === false));
+    assert.equal((await app.request('/api/status')).json.aired, 0);
   });
 
   test('GET /api/schedule lists what is ready and what comes next in the rotation', async () => {
@@ -229,6 +248,22 @@ describe('server/index.js: HTTP API of a running channel', () => {
     assert.equal(res.json.queue.length, 2);
   });
 
+  test('a second manual refresh within 30 s is refused: each one re-reads every feed', async () => {
+    const res = await app.request('/api/refresh', { method: 'POST' });
+    assert.equal(res.status, 429);
+    assert.match(res.json.error, /recently/);
+  });
+
+  test('a forwarded request (a same-host reverse proxy) is never trusted as local: dev views and refresh answer 404', async () => {
+    for (const headers of [{ 'x-forwarded-for': '203.0.113.9' }, { forwarded: 'for=203.0.113.9' }, { 'x-real-ip': '203.0.113.9' }]) {
+      for (const [urlPath, method] of [['/api/desk', 'GET'], ['/api/queue', 'GET'], ['/api/refresh', 'POST']]) {
+        const res = await app.request(urlPath, { method, headers });
+        assert.equal(res.status, 404, `${method} ${urlPath} ${JSON.stringify(headers)}`);
+      }
+    }
+    assert.equal((await app.request('/api/channel', { headers: { 'x-forwarded-for': '203.0.113.9' } })).status, 200, 'the public API is unaffected');
+  });
+
   describe('playout over HTTP', () => {
     let first;
     let breakItem;
@@ -242,7 +277,7 @@ describe('server/index.js: HTTP API of a running channel', () => {
       assert.equal(first.program.id, real.rotation[0]);
       assert.deepEqual(first.cast, { A: real.programs[first.program.id].presenters[0], B: real.programs[first.program.id].presenters[1] });
       assert.equal(first.provider, 'mock');
-      assert.deepEqual(first.pipeline.map((p) => p.stage), ['write', 'review', 'assets']);
+      assert.deepEqual(first.pipeline.map((p) => p.stage), ['pictures', 'write', 'review', 'assets']);
       assert.equal(first.segments[0].type, 'intro');
       assert.equal(first.segments.at(-1).type, 'outro');
       assert.ok(first.storyIds.length >= 1 && first.storyIds.length <= real.programs[first.program.id].stories);
@@ -255,7 +290,10 @@ describe('server/index.js: HTTP API of a running channel', () => {
       assert.equal(res.status, 200);
       assert.equal(breakItem.kind, 'break');
       assert.equal(breakItem.filler, false);
-      assert.equal(breakItem.ads, real.breaks.adsPerBreak);
+      // break cadence: a full commercial break only after minProgrammeBetween s of programme air, else a light one
+      const light = episodeAir(first) < (real.breaks.minProgrammeBetween ?? 0);
+      assert.equal(!!breakItem.light, light);
+      assert.equal(breakItem.ads, light ? 1 : real.breaks.adsPerBreak);
       assert.equal(breakItem.next.id, real.rotation[1]);
       assert.equal(breakItem.next.ready, true);
     });
@@ -317,7 +355,6 @@ describe('server/index.js: HTTP API of a running channel', () => {
 
     test(
       'the 404 explains itself in English',
-      { todo: 'BUG server/index.js:66 - the only Spanish string left in the server: GET /api/img/<story without a picture> answers {"error":"sin imagen"}' },
       async () => {
         const res = await app.request(`/api/img/${withoutImage}`);
         assert.match(res.json.error, /no image/i);
@@ -379,6 +416,43 @@ describe('server/index.js: HTTP API of a running channel', () => {
       assert.ok(res.status >= 400 && res.status < 600, String(res.status));
       assert.equal((await app.request('/api/channel')).status, 200);
     });
+
+    test('(fix r2) a NUL in the path is a 400, not a 500 with a stack trace', async () => {
+      const res = await app.request('/%00');
+      assert.equal(res.status, 400);
+      assert.equal((await app.request('/js/%00.js')).status, 400);
+    });
+  });
+});
+
+// ---------------------------------------------------------------- bound to every interface
+
+/** The machine's first non-loopback IPv4 address, if it has one. */
+const outsideAddress = () =>
+  Object.values(os.networkInterfaces())
+    .flat()
+    .find((i) => i && i.family === 'IPv4' && !i.internal)?.address || null;
+
+describe('server/index.js: bound to 0.0.0.0, reached from a non-loopback address', { skip: !outsideAddress() && 'no non-loopback IPv4 interface here' }, () => {
+  let app;
+  before(async () => {
+    app = await startApp({ HOST: '0.0.0.0' });
+  });
+  after(() => app?.stop());
+
+  test('the dev views and the manual refresh are not reachable from outside the machine; the public API is', async () => {
+    const base = `http://${outsideAddress()}:${app.port}`;
+    assert.equal((await app.request('/api/channel', { base })).status, 200);
+    assert.equal((await app.request('/api/desk', { base })).status, 404);
+    assert.equal((await app.request('/api/queue', { base })).status, 404);
+    assert.equal((await app.request('/api/refresh', { base, method: 'POST' })).status, 404);
+    assert.equal((await app.request('/api/desk')).status, 200, 'loopback still sees them');
+    // (fix r2) the public status keeps the queue and the feeds; provider usage and errors are the operator's
+    const pub = await app.request('/api/status', { base });
+    assert.equal(pub.status, 200);
+    assert.ok(Array.isArray(pub.json.queue));
+    assert.equal(pub.json.usage, undefined);
+    assert.ok((await app.request('/api/status')).json.usage, 'loopback still sees the usage');
   });
 });
 

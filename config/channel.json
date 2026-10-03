@@ -4,33 +4,36 @@
   "presenters": {
     "paco": {
       "name": "Paco Pixel",
-      "personality": "veteran anchor, calm and authoritative, dry wit, short punchy sentences",
+      "personality": "veteran anchor, calm and authoritative, bone-dry wit, short punchy sentences",
       "voice": {
         "gender": "male",
         "lang": "en-GB",
         "pitch": 0.95,
         "rate": 1.0
-      }
+      },
+      "role": "Anchor"
     },
     "lola": {
       "name": "Lola Byte",
-      "personality": "co-anchor, energetic and curious, warm, loves a good human story",
+      "personality": "co-anchor, sharp and curious, warm without gushing, an eye for the human story",
       "voice": {
         "gender": "female",
         "lang": "en-US",
         "pitch": 1.08,
         "rate": 1.06
-      }
+      },
+      "role": "Anchor"
     },
     "max": {
       "name": "Max Circuit",
-      "personality": "excitable gadget geek, quick jokes and the odd pun, always first to try new tech",
+      "personality": "technology correspondent, quick and enthusiastic but never silly, dry one-liners, always first to try the new thing",
       "voice": {
         "gender": "male",
         "lang": "en-US",
         "pitch": 1.05,
         "rate": 1.1
-      }
+      },
+      "role": "Technology correspondent"
     },
     "ada": {
       "name": "Ada Volt",
@@ -40,27 +43,30 @@
         "lang": "en-GB",
         "pitch": 1.0,
         "rate": 1.04
-      }
+      },
+      "role": "Tech analyst"
     },
     "nova": {
       "name": "Dr Nova Reyes",
-      "personality": "astrophysicist and science presenter, warm, full of wonder, great at simple analogies",
+      "personality": "astrophysicist and science presenter, warm and precise, good at plain-English analogies",
       "voice": {
         "gender": "female",
         "lang": "en-US",
         "pitch": 1.02,
         "rate": 1.0
-      }
+      },
+      "role": "Science editor"
     },
     "unit8": {
       "name": "UNIT-8",
-      "personality": "the channel's robot co-host: literal-minded, deadpan, adores data, occasionally misunderstands human idioms",
+      "personality": "the channel's robot co-host: literal-minded and deadpan, fond of exact figures, now and then takes a human idiom too literally",
       "voice": {
         "gender": "robot",
         "lang": "en-US",
-        "pitch": 0.6,
+        "pitch": 1.0,
         "rate": 1.05
-      }
+      },
+      "role": "Robot co-host"
     },
     "penny": {
       "name": "Penny Sterling",
@@ -70,17 +76,19 @@
         "lang": "en-GB",
         "pitch": 0.98,
         "rate": 1.05
-      }
+      },
+      "role": "Markets correspondent"
     },
     "sam": {
       "name": "Sam Night",
-      "personality": "relaxed rolling-news anchor, concise, friendly, gets straight to the point",
+      "personality": "calm late-shift anchor, concise and exact, dry when it fits, gets straight to the point",
       "voice": {
         "gender": "male",
         "lang": "en-US",
         "pitch": 0.92,
         "rate": 1.08
-      }
+      },
+      "role": "Anchor"
     }
   },
   "programs": {
@@ -96,10 +104,81 @@
         "world",
         "business"
       ],
-      "stories": 5,
-      "maxChats": 3,
-      "style": "Flagship world news bulletin. Lead with the biggest global story. Serious but warm; brief exchanges between presenters only on lighter stories.",
-      "storyLength": "2 to 4 sentences, max 450 characters"
+      "stories": 14,
+      "maxChats": 6,
+      "targetSeconds": [480, 600],
+      "features": [
+        "roundup",
+        "number",
+        "lighter"
+      ],
+      "style": "Flagship world news bulletin. Lead with the biggest global story, told with authority; a breaking story always leads. Five to seven main stories, one of which may be the number of the day (after the lead and a main story Lola may add one more detail from the same summary in a short, sober exchange), then 'Around the world' for quick items with a clear place, read by Lola, and 'And finally' a lighter story to close. Plain public-broadcaster English, declarative sentences, at most 20 words each. No humour in the headlines, the lead, the main stories or the round-up: the wit lives only in 'And finally', the chat straight after it and the sign-off.",
+      "storyLength": "lead 3 to 5 sentences, max 520 characters; other stories 2 to 4 sentences, max 450 characters; round-up items exactly 1 sentence of 12 to 20 words; at most 20 words per sentence",
+      "chemistry": "Paco is the steady veteran with a bone-dry one-liner; Lola brings warmth, curiosity and the human angle, reads the story with the clearest human angle, the round-up and And finally, and now and then deflates Paco's dryness with a plain fact or a wry understatement. Paco tosses with her name and a full stop (\"Lola.\"); she says \"Thanks, Paco\" at most once. Never banter around grave stories.",
+      "headlineMax": 45,
+      "intro": "headlines",
+      "roundup": {
+        "opener": "Now, around the world in 30 seconds.",
+        "min": 2,
+        "max": 5,
+        "words": "12 to 20",
+        "reader": "B"
+      },
+      "numberSlot": "main",
+      "chats": {
+        "after": [
+          "lighter",
+          "lead",
+          "story"
+        ],
+        "max": {
+          "lighter": 2,
+          "lead": 2,
+          "story": 1
+        }
+      },
+      "happyOnly": [
+        "lighter",
+        "chat",
+        "outro"
+      ],
+      "noQuestions": true,
+      "toss": "{name}.",
+      "thanksMax": 1,
+      "outroAnchor": "A",
+      "gestures": {
+        "allow": [
+          "nod",
+          "lean_in",
+          "steeple",
+          "raise_hand",
+          "point_screen",
+          "look_partner",
+          "point_partner",
+          "shrug",
+          "shake_head",
+          "papers"
+        ],
+        "listener": [
+          "nod",
+          "look_partner"
+        ],
+        "grave": [
+          "nod",
+          "steeple"
+        ],
+        "map": {
+          "wave": "nod",
+          "point_camera": "nod",
+          "count": "steeple",
+          "chin": "steeple"
+        },
+        "perSegment": 2,
+        "defaults": {
+          "intro": "nod",
+          "outro": "nod"
+        }
+      }
     },
     "tech-bytes": {
       "title": "TECH BYTES",
@@ -113,10 +192,77 @@
         "tech",
         "science"
       ],
-      "stories": 4,
-      "maxChats": 4,
-      "style": "Fun technology magazine show. Explain why each story matters to normal people. Max brings the enthusiasm, Ada the healthy scepticism; short back-and-forth exchanges are welcome.",
-      "storyLength": "2 to 4 sentences, max 450 characters"
+      "beat": {
+        "science": ["SPACE", "ENERGY", "AI", "ROBOTICS", "CHIPS", "GADGETS", "SOFTWARE", "CONNECTIVITY", "HEALTH", "MOTORING", "TRANSPORT", "CLIMATE"]
+      },
+      "stories": 10,
+      "maxChats": 7,
+      "targetSeconds": [360, 480],
+      "features": [
+        "number",
+        "lighter"
+      ],
+      "style": "Technology magazine show for grown-ups. Max reads the lead with interest, never hype; then THE CATCH: Ada asks the question viewers are thinking and Max answers it, both strictly from the summary. For every story say plainly what it means for ordinary people, only where the summary says so. Plain, adult register: no 'game-changer', 'revolutionary', 'mind-blowing', 'wow', exclamation marks or puns. Humour only in chats, aimed at hype and jargon, never at people.",
+      "storyLength": "lead story 3 to 5 sentences, max 520 characters; other stories 2 to 4 sentences, max 450 characters; sentences average 10 to 15 words, never more than 22",
+      "chemistry": "Max gets interested first; Ada raises an eyebrow and asks the question viewers are thinking, using only what the summary says, and Max answers. They needle each other like old colleagues, deadpan, never cute. A first-name toss only before a question; \"Thanks, Max\" or \"Thanks, Ada\" at most once.",
+      "headlineMax": 45,
+      "intro": "teaser",
+      "numberSlot": "main",
+      "chats": {
+        "after": [
+          "lead",
+          "lighter",
+          "story"
+        ],
+        "max": {
+          "lead": 2,
+          "lighter": 1,
+          "story": 2
+        }
+      },
+      "thanksMax": 1,
+      "outroAnchor": "A",
+      "gestures": {
+        "allow": {
+          "max": [
+            "lean_in",
+            "raise_hand",
+            "point_screen",
+            "count",
+            "look_partner",
+            "nod"
+          ],
+          "ada": [
+            "steeple",
+            "chin",
+            "glasses",
+            "shake_head",
+            "shrug",
+            "look_partner",
+            "nod"
+          ]
+        },
+        "listener": [
+          "nod",
+          "look_partner"
+        ],
+        "grave": [
+          "nod",
+          "steeple"
+        ],
+        "map": {
+          "wave": "nod",
+          "point_camera": "nod"
+        },
+        "perSegment": {
+          "max": 2,
+          "ada": 1
+        },
+        "defaults": {
+          "intro": "nod",
+          "outro": "nod"
+        }
+      }
     },
     "cosmos": {
       "title": "COSMOS DESK",
@@ -130,10 +276,65 @@
         "science",
         "tech"
       ],
-      "stories": 3,
-      "maxChats": 3,
-      "style": "Science and space show full of wonder. Nova explains with simple analogies; UNIT-8 adds deadpan robot remarks about the data (never invent data).",
-      "storyLength": "2 to 4 sentences, max 450 characters"
+      "beat": {
+        "tech": ["SPACE", "ASTRONOMY", "CLIMATE", "OCEANS", "WILDLIFE", "HEALTH", "HISTORY", "VOLCANO", "EARTHQUAKE", "WEATHER"]
+      },
+      "stories": 8,
+      "maxChats": 6,
+      "targetSeconds": [360, 480],
+      "features": [
+        "number",
+        "lighter"
+      ],
+      "style": "Science and space show, deliberately unhurried, with a sense of wonder but no gushing. Nova explains with at most one plain, everyday analogy per story that adds no facts or figures; UNIT-8 reads out the figures exactly as stated, deadpan. After the lead UNIT-8 restates one stated figure and Nova bridges on; the number of the day is UNIT-8's story, always second. Banned: 'amazing', 'incredible', 'mind-blowing', 'epic', 'wow', 'out of this world', 'over the moon', 'rocket science', space puns. Nobody laughs.",
+      "storyLength": "3 or 4 sentences, 40 to 70 words, max 450 characters; one sentence of 3 to 6 words in each story",
+      "chemistry": "Nova is the warm, precise explainer and calls him \"UNIT-8\"; UNIT-8 is the literal-minded robot who calls her \"Dr Reyes\", appreciates a stated figure and misreads a human idiom now and then, which Nova lets pass with a straight face.",
+      "headlineMax": 45,
+      "intro": "teaser",
+      "numberSlot": "second",
+      "chats": {
+        "after": [
+          "lead",
+          "lighter",
+          "story"
+        ],
+        "max": {
+          "lead": 2,
+          "lighter": 1,
+          "story": 2
+        }
+      },
+      "happyOnly": [
+        "lighter"
+      ],
+      "outroAnchor": "A",
+      "gestures": {
+        "deny": [
+          "wave",
+          "wow",
+          "fist_pump",
+          "thumbs_up",
+          "facepalm",
+          "laugh",
+          "point_camera"
+        ],
+        "listener": [
+          "nod",
+          "look_partner"
+        ],
+        "grave": [
+          "nod",
+          "steeple"
+        ],
+        "map": {
+          "wave": "nod"
+        },
+        "perSegment": 1,
+        "defaults": {
+          "intro": "nod",
+          "outro": "nod"
+        }
+      }
     },
     "money-minute": {
       "title": "MONEY MINUTE",
@@ -145,10 +346,47 @@
       "categories": [
         "business"
       ],
-      "stories": 3,
+      "stories": 7,
       "maxChats": 0,
-      "style": "Short business and economy round-up by a single presenter. Focus on what each story means for ordinary people. Crisp and clear.",
-      "storyLength": "2 to 3 sentences, max 360 characters"
+      "targetSeconds": [240, 360],
+      "features": [
+        "number"
+      ],
+      "style": "Short business and economy round-up by a single presenter. Lead with the exact figure that matters, in the first or second sentence; one figure per sentence, two per story at most. What it means for people's money only when the summary says so; never advice. Direction verbs: rose, fell, held, edged up, slipped. Crisp, calm and clear; the number of the day closes the programme.",
+      "storyLength": "lead 3 sentences, other stories 2 to 3 sentences, max 360 characters; the number of the day 1 or 2 sentences, max 200 characters; 8 to 22 words per sentence",
+      "headlineMax": 45,
+      "intro": "teaser",
+      "numberSlot": "last",
+      "happyOnly": [
+        "outro"
+      ],
+      "noQuestions": true,
+      "gestures": {
+        "allow": [
+          "nod",
+          "steeple",
+          "lean_in",
+          "papers"
+        ],
+        "grave": [
+          "nod",
+          "steeple"
+        ],
+        "map": {
+          "count": "steeple",
+          "point_camera": "nod",
+          "raise_hand": "nod",
+          "wave": "nod"
+        },
+        "only": {
+          "papers": "outro"
+        },
+        "perSegment": 2,
+        "defaults": {
+          "intro": "nod",
+          "outro": "nod"
+        }
+      }
     },
     "news-60": {
       "title": "NEWS IN 60",
@@ -163,10 +401,72 @@
         "tech",
         "science"
       ],
-      "stories": 4,
+      "stories": 6,
       "maxChats": 0,
-      "style": "Rapid-fire headline round-up by a single presenter. One or two short sentences per story. No banter.",
-      "storyLength": "1 or 2 short sentences, max 200 characters"
+      "targetSeconds": [55, 70],
+      "features": [
+        "roundup"
+      ],
+      "style": "The headlines in one minute, read by one calm presenter. One idea per story: the fact, then one detail and the attribution. No teasers, no signposts between stories, no banter. City first; on map items the place comes within the first three words.",
+      "storyLength": "lead story 2 or 3 sentences, 32 to 38 words; every other story exactly 2 sentences, 25 to 28 words; round-up items exactly 1 sentence, 14 to 18 words; no sentence over 18 words",
+      "headlineMax": 36,
+      "pictures": "every",
+      "intro": "frame",
+      "roundup": {
+        "opener": "Around the world.",
+        "min": 2,
+        "max": 3,
+        "words": "14 to 18",
+        "timed": false
+      },
+      "happyOnly": [
+        "last"
+      ],
+      "timing": {
+        "target": 60,
+        "accept": [
+          55,
+          65
+        ],
+        "wpm": 170,
+        "gap": 0.7,
+        "minStories": 5
+      },
+      "gestures": {
+        "allow": [
+          "nod",
+          "lean_in",
+          "papers"
+        ],
+        "grave": [
+          "nod"
+        ],
+        "map": {
+          "wave": "nod",
+          "point_camera": "nod",
+          "point_screen": "nod",
+          "raise_hand": "nod"
+        },
+        "only": {
+          "lean_in": "lead",
+          "papers": "outro"
+        },
+        "perSegment": 1,
+        "perEpisode": 2,
+        "defaults": {
+          "intro": "nod",
+          "outro": "nod"
+        }
+      }
+    },
+    "world-weather": {
+      "kind": "weather",
+      "title": "WORLD WEATHER",
+      "tagline": "THE SKIES OVER EVERY CONTINENT",
+      "theme": "weather",
+      "presenters": ["sam"],
+      "targetSeconds": [270, 480],
+      "style": "The world's weather from real data (Open-Meteo forecast, GDACS alerts), written by server/weatherwriter.js: the six zones west to east, the presenter standing and walking along the map wall, pointing at each city as he names it; warnings on a second panel, serious and official; tomorrow round the world; a warm sign-off. Every figure is a figure of the forecast."
     }
   },
   "rotation": [
@@ -174,12 +474,14 @@
     "tech-bytes",
     "news-60",
     "cosmos",
+    "world-weather",
     "world-now",
     "money-minute",
     "news-60"
   ],
   "breaks": {
     "adsPerBreak": 2,
-    "maxExtraAds": 6
+    "maxExtraAds": 6,
+    "minProgrammeBetween": 420
   }
 }

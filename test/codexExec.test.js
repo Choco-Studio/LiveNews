@@ -292,9 +292,12 @@ describe('codex exec provider (fake CLI)', () => {
     const fake = makeFake(t, { ...success(), sleepMs: 10_000 });
     const started = Date.now();
 
-    await assert.rejects(makeProvider(fake.bin, { timeoutMs: 400 }).generate({ prompt: 'p' }), /codex exec timed out after 400 ms/);
+    // 2 s, not a few hundred ms: on a loaded machine the fake CLI (a node process) can take longer than that
+    // just to start, and then it has never written its "start" record. The fake sleeps 10 s, so the margin is cheap.
+    await assert.rejects(makeProvider(fake.bin, { timeoutMs: 2000 }).generate({ prompt: 'p' }), /codex exec timed out after 2000 ms/);
 
-    assert.ok(Date.now() - started < 5000, 'rejected at the timeout, not when the process finished');
+    assert.ok(Date.now() - started < 8000, 'rejected at the timeout, not when the process finished');
+    for (let i = 0; i < 40 && !fake.starts().length; i++) await new Promise((resolve) => setTimeout(resolve, 50));
     const [{ pid }] = fake.starts();
     const alive = () => {
       try {
@@ -315,7 +318,7 @@ describe('codex exec provider (fake CLI)', () => {
     const slow = makeFake(t, { sleepMs: 10_000 });
     await makeProvider(ok.bin).generate({ prompt: 'p' });
     await assert.rejects(makeProvider(failing.bin).generate({ prompt: 'p' }));
-    await assert.rejects(makeProvider(slow.bin, { timeoutMs: 300 }).generate({ prompt: 'p' }), /timed out/);
+    await assert.rejects(makeProvider(slow.bin, { timeoutMs: 2000 }).generate({ prompt: 'p' }), /timed out/);
     await assert.rejects(makeProvider('/nonexistent/codex').generate({ prompt: 'p' }));
     assert.deepEqual(leftovers(), []);
   });
@@ -356,7 +359,7 @@ describe('codex exec provider (fake CLI)', () => {
 
   test('a timed-out call does not block the next one either', async (t) => {
     const fake = makeFake(t, [{ sleepMs: 10_000 }, success('{"call":2}')]);
-    const provider = makeProvider(fake.bin, { timeoutMs: 400 });
+    const provider = makeProvider(fake.bin, { timeoutMs: 2000 });
 
     const [a, b] = await Promise.allSettled([provider.generate({ prompt: 'one' }), provider.generate({ prompt: 'two' })]);
 
@@ -367,12 +370,15 @@ describe('codex exec provider (fake CLI)', () => {
   });
 
   test('separate providers do not share a queue', async (t) => {
-    const fakeA = makeFake(t, { ...success('{"who":"a"}'), sleepMs: 300 });
-    const fakeB = makeFake(t, { ...success('{"who":"b"}'), sleepMs: 300 });
-    const started = Date.now();
+    // Judged from the fakes' own start/end records (not the wall clock), so a loaded machine cannot fail it.
+    const fakeA = makeFake(t, { ...success('{"who":"a"}'), sleepMs: 1500 });
+    const fakeB = makeFake(t, { ...success('{"who":"b"}'), sleepMs: 1500 });
     const results = await Promise.all([makeProvider(fakeA.bin).generate({ prompt: 'p' }), makeProvider(fakeB.bin).generate({ prompt: 'p' })]);
     assert.deepEqual(results.map((r) => r.text), ['{"who":"a"}', '{"who":"b"}']);
-    assert.ok(Date.now() - started < 1200, 'they ran in parallel');
+    const span = (fake) => [fake.log().find((e) => e.event === 'start').t, fake.log().find((e) => e.event === 'end').t];
+    const [a0, a1] = span(fakeA);
+    const [b0, b1] = span(fakeB);
+    assert.ok(a0 < b1 && b0 < a1, 'they ran in parallel (their runs overlap)');
   });
 
   // -------------------------------------------------------------- inside the provider chain
@@ -409,10 +415,6 @@ describe('codex exec provider (fake CLI)', () => {
 
   test(
     'a CLI that exits without reading a very large prompt rejects the call instead of crashing the process',
-    {
-      todo:
-        'BUG server/providers/codexExec.js:102 - child.stdin.end(input) has no "error" listener on child.stdin: when the child exits before reading the whole prompt Node emits an unhandled EPIPE and the whole server process dies with an uncaught exception instead of the call rejecting',
-    },
     (t) => {
       const fake = makeFake(t, { exitImmediately: true, exit: 1 });
       const script = `

@@ -1,0 +1,1310 @@
+{
+ "kind": "episode",
+ "id": "emurd6xv51-rec",
+ "createdAt": "2026-10-02T19:37:05.777Z",
+ "program": {
+  "id": "tech-bytes",
+  "title": "TECH BYTES",
+  "tagline": "THE FUTURE, ONE BYTE AT A TIME",
+  "theme": "tech"
+ },
+ "cast": {
+  "A": "max",
+  "B": "ada"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "pictures",
+   "ms": 0,
+   "pictures": 3,
+   "of": 6,
+   "found": 0,
+   "borrowed": 0
+  },
+  {
+   "stage": "write",
+   "ms": 48,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 1,
+   "images": 2,
+   "verified": 2
+  }
+ ],
+ "title": "TECH BYTES (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Chipmaker unveils a laptop processor with all-day battery life. Also coming up: rocket launches a probe to study the Sun's poles. And later, our number of the day. This is TECH BYTES. I'm Max Circuit, with Ada Volt.",
+   "cues": [
+    {
+     "char": 63,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 183,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 215,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s6b65619146",
+    "s759a9bc1a2",
+    "s4f4b5d33da"
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 9
+     },
+     {
+      "t": 0.673,
+      "char": 10,
+      "len": 7
+     },
+     {
+      "t": 1.067,
+      "char": 18,
+      "len": 1
+     },
+     {
+      "t": 1.165,
+      "char": 20,
+      "len": 6
+     },
+     {
+      "t": 1.51,
+      "char": 27,
+      "len": 9
+     },
+     {
+      "t": 2.003,
+      "char": 37,
+      "len": 4
+     },
+     {
+      "t": 2.249,
+      "char": 42,
+      "len": 7
+     },
+     {
+      "t": 2.643,
+      "char": 50,
+      "len": 7
+     },
+     {
+      "t": 3.037,
+      "char": 58,
+      "len": 4
+     },
+     {
+      "t": 3.733,
+      "char": 64,
+      "len": 4
+     },
+     {
+      "t": 4.057,
+      "char": 69,
+      "len": 6
+     },
+     {
+      "t": 4.509,
+      "char": 76,
+      "len": 2
+     },
+     {
+      "t": 4.703,
+      "char": 80,
+      "len": 6
+     },
+     {
+      "t": 5.156,
+      "char": 87,
+      "len": 8
+     },
+     {
+      "t": 5.738,
+      "char": 96,
+      "len": 1
+     },
+     {
+      "t": 5.867,
+      "char": 98,
+      "len": 5
+     },
+     {
+      "t": 6.255,
+      "char": 104,
+      "len": 2
+     },
+     {
+      "t": 6.449,
+      "char": 107,
+      "len": 5
+     },
+     {
+      "t": 6.837,
+      "char": 113,
+      "len": 3
+     },
+     {
+      "t": 7.096,
+      "char": 117,
+      "len": 5
+     },
+     {
+      "t": 7.483,
+      "char": 123,
+      "len": 5
+     },
+     {
+      "t": 8.321,
+      "char": 130,
+      "len": 3
+     },
+     {
+      "t": 8.623,
+      "char": 134,
+      "len": 5
+     },
+     {
+      "t": 9.076,
+      "char": 141,
+      "len": 3
+     },
+     {
+      "t": 9.377,
+      "char": 145,
+      "len": 6
+     },
+     {
+      "t": 9.905,
+      "char": 152,
+      "len": 2
+     },
+     {
+      "t": 10.132,
+      "char": 155,
+      "len": 3
+     },
+     {
+      "t": 10.433,
+      "char": 159,
+      "len": 3
+     },
+     {
+      "t": 11.185,
+      "char": 164,
+      "len": 4
+     },
+     {
+      "t": 11.548,
+      "char": 169,
+      "len": 2
+     },
+     {
+      "t": 11.766,
+      "char": 172,
+      "len": 4
+     },
+     {
+      "t": 12.129,
+      "char": 177,
+      "len": 5
+     },
+     {
+      "t": 13.014,
+      "char": 184,
+      "len": 3
+     },
+     {
+      "t": 13.29,
+      "char": 188,
+      "len": 3
+     },
+     {
+      "t": 13.566,
+      "char": 192,
+      "len": 7
+     },
+     {
+      "t": 14.118,
+      "char": 201,
+      "len": 4
+     },
+     {
+      "t": 14.463,
+      "char": 206,
+      "len": 3
+     },
+     {
+      "t": 14.739,
+      "char": 210,
+      "len": 4
+     }
+    ],
+    "duration": 15.383
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "The first laptops using it will go on sale in the spring, Circuit Weekly reports. A chipmaker has unveiled a new laptop processor it says can run for 20 hours on a single charge.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "point_screen"
+    },
+    {
+     "char": 178,
+     "slot": "B",
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "s6b65619146",
+   "headline": "Chipmaker unveils laptop processor with all-day battery life",
+   "shot": "full",
+   "breaking": false,
+   "location": null,
+   "fact": "20 HOURS",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": true,
+   "kicker": "CHIPS",
+   "numbers": [
+    {
+     "value": "20",
+     "label": "HOURS"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 3
+     },
+     {
+      "t": 0.439,
+      "char": 4,
+      "len": 5
+     },
+     {
+      "t": 0.827,
+      "char": 10,
+      "len": 7
+     },
+     {
+      "t": 1.344,
+      "char": 18,
+      "len": 5
+     },
+     {
+      "t": 1.732,
+      "char": 24,
+      "len": 2
+     },
+     {
+      "t": 1.926,
+      "char": 27,
+      "len": 4
+     },
+     {
+      "t": 2.249,
+      "char": 32,
+      "len": 2
+     },
+     {
+      "t": 2.443,
+      "char": 35,
+      "len": 2
+     },
+     {
+      "t": 2.637,
+      "char": 38,
+      "len": 4
+     },
+     {
+      "t": 2.96,
+      "char": 43,
+      "len": 2
+     },
+     {
+      "t": 3.154,
+      "char": 46,
+      "len": 3
+     },
+     {
+      "t": 3.413,
+      "char": 50,
+      "len": 6
+     },
+     {
+      "t": 3.865,
+      "char": 58,
+      "len": 7
+     },
+     {
+      "t": 4.383,
+      "char": 66,
+      "len": 6
+     },
+     {
+      "t": 4.835,
+      "char": 73,
+      "len": 7
+     },
+     {
+      "t": 5.802,
+      "char": 82,
+      "len": 1
+     },
+     {
+      "t": 5.939,
+      "char": 84,
+      "len": 9
+     },
+     {
+      "t": 6.621,
+      "char": 94,
+      "len": 3
+     },
+     {
+      "t": 6.894,
+      "char": 98,
+      "len": 8
+     },
+     {
+      "t": 7.509,
+      "char": 107,
+      "len": 1
+     },
+     {
+      "t": 7.645,
+      "char": 109,
+      "len": 3
+     },
+     {
+      "t": 7.918,
+      "char": 113,
+      "len": 6
+     },
+     {
+      "t": 8.396,
+      "char": 120,
+      "len": 9
+     },
+     {
+      "t": 9.078,
+      "char": 130,
+      "len": 2
+     },
+     {
+      "t": 9.283,
+      "char": 133,
+      "len": 4
+     },
+     {
+      "t": 9.624,
+      "char": 138,
+      "len": 3
+     },
+     {
+      "t": 9.897,
+      "char": 142,
+      "len": 3
+     },
+     {
+      "t": 10.17,
+      "char": 146,
+      "len": 3
+     },
+     {
+      "t": 10.443,
+      "char": 150,
+      "len": 2
+     },
+     {
+      "t": 10.648,
+      "char": 153,
+      "len": 5
+     },
+     {
+      "t": 11.057,
+      "char": 159,
+      "len": 2
+     },
+     {
+      "t": 11.262,
+      "char": 162,
+      "len": 1
+     },
+     {
+      "t": 11.399,
+      "char": 164,
+      "len": 6
+     },
+     {
+      "t": 11.876,
+      "char": 171,
+      "len": 6
+     }
+    ],
+    "duration": 12.654
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Thanks, Max. A rocket has launched a probe that will study the Sun's poles for the first time. The journey to its final orbit will take 3 years, according to Starfield Journal.",
+   "cues": [
+    {
+     "char": 176,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s759a9bc1a2",
+   "headline": "Rocket launches probe to study Sun's poles",
+   "shot": "full",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": true,
+   "kicker": "SPACE",
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 6
+     },
+     {
+      "t": 0.64,
+      "char": 8,
+      "len": 3
+     },
+     {
+      "t": 1.353,
+      "char": 13,
+      "len": 1
+     },
+     {
+      "t": 1.496,
+      "char": 15,
+      "len": 6
+     },
+     {
+      "t": 1.995,
+      "char": 22,
+      "len": 3
+     },
+     {
+      "t": 2.281,
+      "char": 26,
+      "len": 8
+     },
+     {
+      "t": 2.924,
+      "char": 35,
+      "len": 1
+     },
+     {
+      "t": 3.066,
+      "char": 37,
+      "len": 5
+     },
+     {
+      "t": 3.495,
+      "char": 43,
+      "len": 4
+     },
+     {
+      "t": 3.852,
+      "char": 48,
+      "len": 4
+     },
+     {
+      "t": 4.209,
+      "char": 53,
+      "len": 5
+     },
+     {
+      "t": 4.637,
+      "char": 59,
+      "len": 3
+     },
+     {
+      "t": 4.923,
+      "char": 63,
+      "len": 5
+     },
+     {
+      "t": 5.351,
+      "char": 69,
+      "len": 5
+     },
+     {
+      "t": 5.779,
+      "char": 75,
+      "len": 3
+     },
+     {
+      "t": 6.065,
+      "char": 79,
+      "len": 3
+     },
+     {
+      "t": 6.351,
+      "char": 83,
+      "len": 5
+     },
+     {
+      "t": 6.779,
+      "char": 89,
+      "len": 4
+     },
+     {
+      "t": 7.586,
+      "char": 95,
+      "len": 3
+     },
+     {
+      "t": 7.839,
+      "char": 99,
+      "len": 7
+     },
+     {
+      "t": 8.345,
+      "char": 107,
+      "len": 2
+     },
+     {
+      "t": 8.535,
+      "char": 110,
+      "len": 3
+     },
+     {
+      "t": 8.788,
+      "char": 114,
+      "len": 5
+     },
+     {
+      "t": 9.167,
+      "char": 120,
+      "len": 5
+     },
+     {
+      "t": 9.547,
+      "char": 126,
+      "len": 4
+     },
+     {
+      "t": 9.863,
+      "char": 131,
+      "len": 4
+     },
+     {
+      "t": 10.179,
+      "char": 136,
+      "len": 1
+     },
+     {
+      "t": 10.306,
+      "char": 138,
+      "len": 5
+     },
+     {
+      "t": 10.685,
+      "char": 145,
+      "len": 9
+     },
+     {
+      "t": 11.318,
+      "char": 155,
+      "len": 2
+     },
+     {
+      "t": 11.508,
+      "char": 158,
+      "len": 9
+     },
+     {
+      "t": 12.14,
+      "char": 168,
+      "len": 7
+     }
+    ],
+    "duration": 12.946
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Our number of the day: 50,000. A research ship has mapped 50,000 square kilometres of sea floor near Antarctica. The maps reveal underwater canyons and an extinct volcano, Starfield Journal reports.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "count"
+    },
+    {
+     "char": 198,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s4f4b5d33da",
+   "headline": "Scientists map ocean floor near Antarctica in new detail",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": "50,000 SQUARE KILOMETRES",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "50,000",
+     "label": "SQUARE KILOMETRES"
+    }
+   ],
+   "feature": "number",
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 3
+     },
+     {
+      "t": 0.465,
+      "char": 4,
+      "len": 6
+     },
+     {
+      "t": 0.965,
+      "char": 11,
+      "len": 2
+     },
+     {
+      "t": 1.179,
+      "char": 14,
+      "len": 3
+     },
+     {
+      "t": 1.464,
+      "char": 18,
+      "len": 3
+     },
+     {
+      "t": 1.75,
+      "char": 23,
+      "len": 6
+     },
+     {
+      "t": 2.699,
+      "char": 31,
+      "len": 1
+     },
+     {
+      "t": 2.81,
+      "char": 33,
+      "len": 8
+     },
+     {
+      "t": 3.308,
+      "char": 42,
+      "len": 4
+     },
+     {
+      "t": 3.584,
+      "char": 47,
+      "len": 3
+     },
+     {
+      "t": 3.806,
+      "char": 51,
+      "len": 6
+     },
+     {
+      "t": 4.193,
+      "char": 58,
+      "len": 6
+     },
+     {
+      "t": 4.581,
+      "char": 65,
+      "len": 6
+     },
+     {
+      "t": 4.968,
+      "char": 72,
+      "len": 10
+     },
+     {
+      "t": 5.577,
+      "char": 83,
+      "len": 2
+     },
+     {
+      "t": 5.743,
+      "char": 86,
+      "len": 3
+     },
+     {
+      "t": 5.964,
+      "char": 90,
+      "len": 5
+     },
+     {
+      "t": 6.296,
+      "char": 96,
+      "len": 4
+     },
+     {
+      "t": 6.573,
+      "char": 101,
+      "len": 10
+     },
+     {
+      "t": 7.632,
+      "char": 113,
+      "len": 3
+     },
+     {
+      "t": 7.829,
+      "char": 117,
+      "len": 4
+     },
+     {
+      "t": 8.075,
+      "char": 122,
+      "len": 6
+     },
+     {
+      "t": 8.42,
+      "char": 129,
+      "len": 10
+     },
+     {
+      "t": 8.962,
+      "char": 140,
+      "len": 7
+     },
+     {
+      "t": 9.356,
+      "char": 148,
+      "len": 3
+     },
+     {
+      "t": 9.553,
+      "char": 152,
+      "len": 2
+     },
+     {
+      "t": 9.701,
+      "char": 155,
+      "len": 7
+     },
+     {
+      "t": 10.095,
+      "char": 163,
+      "len": 7
+     },
+     {
+      "t": 10.489,
+      "char": 172,
+      "len": 9
+     },
+     {
+      "t": 10.981,
+      "char": 182,
+      "len": 7
+     },
+     {
+      "t": 11.376,
+      "char": 190,
+      "len": 7
+     }
+    ],
+    "duration": 12.07
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "And finally: A home robotics company has shown a robot vacuum that can climb stairs using two small legs. It will cost about 1,500 dollars when it launches next year, according to Circuit Weekly.",
+   "cues": [
+    {
+     "char": 195,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s73f99cbdf2",
+   "headline": "Robot vacuum learns to climb stairs",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": "ABOUT 1,500 DOLLARS",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AND FINALLY",
+   "numbers": [
+    {
+     "value": "1,500",
+     "label": "DOLLARS",
+     "qualifier": "ABOUT"
+    }
+   ],
+   "feature": "lighter",
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 3
+     },
+     {
+      "t": 0.444,
+      "char": 4,
+      "len": 7
+     },
+     {
+      "t": 0.972,
+      "char": 13,
+      "len": 1
+     },
+     {
+      "t": 1.104,
+      "char": 15,
+      "len": 4
+     },
+     {
+      "t": 1.435,
+      "char": 20,
+      "len": 8
+     },
+     {
+      "t": 2.029,
+      "char": 29,
+      "len": 7
+     },
+     {
+      "t": 2.557,
+      "char": 37,
+      "len": 3
+     },
+     {
+      "t": 2.821,
+      "char": 41,
+      "len": 5
+     },
+     {
+      "t": 3.218,
+      "char": 47,
+      "len": 1
+     },
+     {
+      "t": 3.35,
+      "char": 49,
+      "len": 5
+     },
+     {
+      "t": 3.746,
+      "char": 55,
+      "len": 6
+     },
+     {
+      "t": 4.208,
+      "char": 62,
+      "len": 4
+     },
+     {
+      "t": 4.538,
+      "char": 67,
+      "len": 3
+     },
+     {
+      "t": 4.802,
+      "char": 71,
+      "len": 5
+     },
+     {
+      "t": 5.199,
+      "char": 77,
+      "len": 6
+     },
+     {
+      "t": 5.661,
+      "char": 84,
+      "len": 5
+     },
+     {
+      "t": 6.057,
+      "char": 90,
+      "len": 3
+     },
+     {
+      "t": 6.321,
+      "char": 94,
+      "len": 5
+     },
+     {
+      "t": 6.717,
+      "char": 100,
+      "len": 4
+     },
+     {
+      "t": 7.497,
+      "char": 106,
+      "len": 2
+     },
+     {
+      "t": 7.682,
+      "char": 109,
+      "len": 4
+     },
+     {
+      "t": 7.99,
+      "char": 114,
+      "len": 4
+     },
+     {
+      "t": 8.298,
+      "char": 119,
+      "len": 5
+     },
+     {
+      "t": 8.668,
+      "char": 125,
+      "len": 5
+     },
+     {
+      "t": 9.038,
+      "char": 131,
+      "len": 7
+     },
+     {
+      "t": 9.531,
+      "char": 139,
+      "len": 4
+     },
+     {
+      "t": 9.839,
+      "char": 144,
+      "len": 2
+     },
+     {
+      "t": 10.023,
+      "char": 147,
+      "len": 8
+     },
+     {
+      "t": 10.578,
+      "char": 156,
+      "len": 4
+     },
+     {
+      "t": 10.886,
+      "char": 161,
+      "len": 4
+     },
+     {
+      "t": 11.194,
+      "char": 167,
+      "len": 9
+     },
+     {
+      "t": 11.81,
+      "char": 177,
+      "len": 2
+     },
+     {
+      "t": 11.995,
+      "char": 180,
+      "len": 7
+     },
+     {
+      "t": 12.488,
+      "char": 188,
+      "len": 6
+     }
+    ],
+    "duration": 13.219
+   }
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "The engineer in me approves. The accountant in me is less sure.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 3
+     },
+     {
+      "t": 0.426,
+      "char": 4,
+      "len": 8
+     },
+     {
+      "t": 0.98,
+      "char": 13,
+      "len": 2
+     },
+     {
+      "t": 1.165,
+      "char": 16,
+      "len": 2
+     },
+     {
+      "t": 1.35,
+      "char": 19,
+      "len": 8
+     },
+     {
+      "t": 2.354,
+      "char": 29,
+      "len": 3
+     },
+     {
+      "t": 2.638,
+      "char": 33,
+      "len": 10
+     },
+     {
+      "t": 3.419,
+      "char": 44,
+      "len": 2
+     },
+     {
+      "t": 3.632,
+      "char": 47,
+      "len": 2
+     },
+     {
+      "t": 3.845,
+      "char": 50,
+      "len": 2
+     },
+     {
+      "t": 4.058,
+      "char": 53,
+      "len": 4
+     },
+     {
+      "t": 4.413,
+      "char": 58,
+      "len": 4
+     }
+    ],
+    "duration": 5.068
+   }
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's TECH BYTES. From Ada Volt and from me, thanks for watching. More news around the clock on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 18,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 6
+     },
+     {
+      "t": 0.582,
+      "char": 7,
+      "len": 4
+     },
+     {
+      "t": 0.87,
+      "char": 12,
+      "len": 5
+     },
+     {
+      "t": 1.664,
+      "char": 19,
+      "len": 4
+     },
+     {
+      "t": 2.002,
+      "char": 24,
+      "len": 3
+     },
+     {
+      "t": 2.272,
+      "char": 28,
+      "len": 4
+     },
+     {
+      "t": 2.609,
+      "char": 33,
+      "len": 3
+     },
+     {
+      "t": 2.879,
+      "char": 37,
+      "len": 4
+     },
+     {
+      "t": 3.216,
+      "char": 42,
+      "len": 2
+     },
+     {
+      "t": 3.419,
+      "char": 46,
+      "len": 6
+     },
+     {
+      "t": 3.891,
+      "char": 53,
+      "len": 3
+     },
+     {
+      "t": 4.161,
+      "char": 57,
+      "len": 8
+     },
+     {
+      "t": 5.218,
+      "char": 67,
+      "len": 4
+     },
+     {
+      "t": 5.563,
+      "char": 72,
+      "len": 4
+     },
+     {
+      "t": 5.908,
+      "char": 77,
+      "len": 6
+     },
+     {
+      "t": 6.39,
+      "char": 84,
+      "len": 3
+     },
+     {
+      "t": 6.666,
+      "char": 88,
+      "len": 5
+     },
+     {
+      "t": 7.08,
+      "char": 94,
+      "len": 2
+     },
+     {
+      "t": 7.287,
+      "char": 97,
+      "len": 6
+     },
+     {
+      "t": 7.77,
+      "char": 104,
+      "len": 2
+     }
+    ],
+    "duration": 8.277
+   }
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s6b65619146",
+   "headline": "Chipmaker unveils laptop processor with all-day battery life",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": true,
+   "kicker": "CHIPS"
+  },
+  {
+   "storyId": "s759a9bc1a2",
+   "headline": "Rocket launches probe to study Sun's poles",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": true,
+   "kicker": "SPACE"
+  },
+  {
+   "storyId": "s4f4b5d33da",
+   "headline": "Scientists map ocean floor near Antarctica in new detail",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY"
+  },
+  {
+   "storyId": "s73f99cbdf2",
+   "headline": "Robot vacuum learns to climb stairs",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AND FINALLY"
+  }
+ ],
+ "storyIds": [
+  "s6b65619146",
+  "s759a9bc1a2",
+  "s4f4b5d33da",
+  "s73f99cbdf2"
+ ]
+}

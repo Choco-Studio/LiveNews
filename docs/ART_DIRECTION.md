@@ -109,12 +109,13 @@ What real newscasts do, and the rules for our 384x216 pixel-art studio. Written 
   | Area | Target |
   | --- | --- |
   | Head-zone background | 18–45 (ink to steel) |
-  | Wall average | ≤ 45; highlights up to 85 on at most 10% of the wall |
+  | Wall average | ≤ 45 for idles, plates and figures; a story picture ≤ 56 (COSMOS ≤ 50), highlights rolled off under 88 |
   | Faces | 55–73 (skin, tan) |
   | White | collars, eye glints, logo and text only |
   | Floor | ≤ 18; reflections ≤ 30 |
 
 - **The wall is dimmed and cool,** as real LED walls are balanced to camera. Its spill on the desk is at most 10–15% alpha and never reaches faces.
+- **Story pictures on the wall (owner, 3 Oct):** a picture shows the photo in its own colours, quantised to its own palette with an ordered dither (the full-screen shot's look), never forced onto the set palette or a cool grade; it covers the whole wall screen, the presenter in front of it.
 
 **Materials via limited dithering**
 - **Bayer 4x4 only,** mixing two adjacent ramp steps (black↔ink, ink↔slate, slate↔steel), and only for wall light falloff, wall glow and floor gradients.

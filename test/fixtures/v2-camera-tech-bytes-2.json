@@ -1,0 +1,276 @@
+{
+ "kind": "episode",
+ "id": "emur82nad8",
+ "createdAt": "2026-10-02T17:13:47.365Z",
+ "program": {
+  "id": "tech-bytes",
+  "title": "TECH BYTES",
+  "tagline": "THE FUTURE, ONE BYTE AT A TIME",
+  "theme": "tech"
+ },
+ "cast": {
+  "A": "max",
+  "B": "ada"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "write",
+   "ms": 92,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 0,
+   "images": 0
+  }
+ ],
+ "title": "TECH BYTES (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Medicine-carrying drones expand across Rwanda. Also coming up: Smart glasses show live subtitles for deaf users. And later, our number of the day. This is TECH BYTES. I'm Max Circuit, with Ada Volt.",
+   "cues": [
+    {
+     "char": 46,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 166,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 198,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "sb04f719620",
+    "s2f82184227",
+    "scb62a8f7d0"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "From Circuit Weekly: Drones now deliver medicine to 400 health centres across Rwanda, the operator says. The average flight takes about 30 minutes.",
+   "cues": [
+    {
+     "char": 147,
+     "slot": "B",
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "sb04f719620",
+   "headline": "Medicine-carrying drones expand across Rwanda",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "RWANDA",
+    "lat": -1.9,
+    "lon": 29.9
+   },
+   "fact": "400 HEALTH CENTRES",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "HEALTH",
+   "numbers": [
+    {
+     "value": "400",
+     "label": "HEALTH CENTRES"
+    },
+    {
+     "value": "30",
+     "label": "MINUTES",
+     "qualifier": "ABOUT"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Thanks, Max. Circuit Weekly reports that a company in Berlin has shown smart glasses that display live subtitles of conversations. “We want everyone to follow the conversation,” a spokesperson said.",
+   "cues": [
+    {
+     "char": 198,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s2f82184227",
+   "headline": "Smart glasses show live subtitles for deaf users",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "BERLIN, GERMANY",
+    "lat": 52.52,
+    "lon": 13.4
+   },
+   "fact": null,
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "GADGETS",
+   "quote": {
+    "text": "We want everyone to follow the conversation",
+    "by": "a spokesperson"
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Our number of the day: 3 percent. From Starfield Journal: Measurements show a large glacier in the Alps lost 3 percent of its volume this summer. Scientists say the ice is now thinner than at any time since records began.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "count"
+    },
+    {
+     "char": 221,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "scb62a8f7d0",
+   "headline": "Glacier in the Alps shrinks by 3 percent in one summer",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "ALPS",
+    "lat": 46.5,
+    "lon": 10
+   },
+   "fact": "GLACIER DOWN 3%",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY",
+   "feature": "number"
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "And finally: Rangers have released 50 young giant tortoises on an island in the Galápagos where the species vanished about 100 years ago, Starfield Journal reports. “It is a homecoming,” a park ranger said.",
+   "cues": [
+    {
+     "char": 206,
+     "slot": "A",
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "sff99368150",
+   "headline": "Giant tortoises return to a Galápagos island",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "GALÁPAGOS, ECUADOR",
+    "lat": -0.8,
+    "lon": -91
+   },
+   "fact": "50 YOUNG GIANT TORTOISES",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "AND FINALLY",
+   "numbers": [
+    {
+     "value": "50",
+     "label": "YOUNG GIANT TORTOISES"
+    },
+    {
+     "value": "100",
+     "label": "YEARS AGO",
+     "qualifier": "ABOUT"
+    }
+   ],
+   "quote": {
+    "text": "It is a homecoming",
+    "by": "a park ranger"
+   },
+   "feature": "lighter"
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "Somewhere, a researcher is very pleased with themselves. Rightly.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "look_partner"
+    }
+   ]
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's TECH BYTES. From Ada Volt and from me, thanks for watching. More news around the clock on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 18,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "sb04f719620",
+   "headline": "Medicine-carrying drones expand across Rwanda",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "HEALTH"
+  },
+  {
+   "storyId": "s2f82184227",
+   "headline": "Smart glasses show live subtitles for deaf users",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "GADGETS"
+  },
+  {
+   "storyId": "scb62a8f7d0",
+   "headline": "Glacier in the Alps shrinks by 3 percent in one summer",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY"
+  },
+  {
+   "storyId": "sff99368150",
+   "headline": "Giant tortoises return to a Galápagos island",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "AND FINALLY"
+  }
+ ],
+ "storyIds": [
+  "sb04f719620",
+  "s2f82184227",
+  "scb62a8f7d0",
+  "sff99368150"
+ ]
+}

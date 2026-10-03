@@ -1,0 +1,7 @@
+[
+  {"name": "Pixelburg Post", "url": "config/fixtures/world.xml", "category": "world", "weight": 1.1},
+  {"name": "Bitport Herald", "url": "config/fixtures/world2.xml", "category": "world", "weight": 1.0},
+  {"name": "Ledger Line", "url": "config/fixtures/business.xml", "category": "business", "weight": 1.0},
+  {"name": "Circuit Weekly", "url": "config/fixtures/tech.xml", "category": "tech", "weight": 1.0},
+  {"name": "Starfield Journal", "url": "config/fixtures/science.xml", "category": "science", "weight": 1.0}
+]

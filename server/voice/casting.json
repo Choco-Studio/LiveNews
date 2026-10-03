@@ -1,0 +1,83 @@
+{
+ "paco": {
+  "voice": "bm_george:0.6+bm_lewis:0.4",
+  "speed": 1.15,
+  "lang": "en-gb",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "Veteran British anchor: bm_george (authority) with 40% bm_lewis (weight, lower centre). Lowest, steadiest en-GB male of the auditions (median F0 ~135 Hz, pitch IQR ~4.5 st), best recogniser score of the four Paco takes. Speed hits WORLD NOW's 163 wpm with the bible's longer pauses (the calm is in the pauses, the words run ~185 wpm). Keep bm_george/bm_daniel/bm_lewis out of any other voice so nobody sounds like Paco."
+ },
+ "lola": {
+  "voice": "af_heart:0.75+af_bella:0.25",
+  "speed": 1.0,
+  "lang": "en-us",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "Co-anchor, warm and curious: af_heart with 25% af_bella. Chosen over the sharper af_heart+af_sarah blend, which measured too close to Penny (Bhattacharyya 0.30), and over af_heart+af_kore, too close to Nova (0.6 st). ~7 st above Paco plus the accent contrast (en-US vs en-GB). WORLD NOW pace 171 wpm, same pause set as Paco so the two read as one programme."
+ },
+ "max": {
+  "voice": "am_fenrir:0.6+am_puck:0.4",
+  "speed": 0.98,
+  "lang": "en-us",
+  "notes": "Technology correspondent, quick and keen but adult: am_fenrir with 40% am_puck. Highest, brightest US male (median F0 ~131 Hz, widest pitch movement of the cast, ~6.4 st IQR) so his enthusiasm is in the melody, never in volume. ~3 st above Sam; opposite gender and accent to Ada. TECH BYTES pace 175 wpm."
+ },
+ "ada": {
+  "voice": "bf_emma:0.7+af_sarah:0.3",
+  "speed": 0.87,
+  "lang": "en-gb",
+  "notes": "Sceptical analyst, clear explainer: bf_emma with 30% af_sarah, read with en-GB phonemes (accent stays British). Same recogniser score as pure Emma with more question intonation (pitch IQR 3.9 vs 3.0 st). Distinct from Penny (the other British woman) by timbre (Bhattacharyya ~0.73, cepstral distance ~12.3 dB) rather than pitch, since their profiles share a pitch. TECH BYTES pace 166 wpm, ~9 wpm under Max."
+ },
+ "nova": {
+  "voice": "af_nova:0.55+af_alloy:0.25+af_kore:0.2",
+  "speed": 0.81,
+  "lang": "en-us",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.35
+  },
+  "notes": "Astrophysicist, warm and precise: af_nova with 25% af_alloy and 20% af_kore. Lowest, darkest female voice of the cast (median F0 ~155 Hz), best recogniser score of the Nova takes, 4.7 st under Lola so the two American women never blur. COSMOS pace 145 wpm with the bible's pauses; the words themselves stay above 150 wpm on her copy."
+ },
+ "unit8": {
+  "voice": "am_echo:0.7+am_fenrir:0.3",
+  "speed": 0.82,
+  "lang": "en-us",
+  "effect": "robot-soft",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.48,
+   "colon": 0.3
+  },
+  "notes": "Robot co-host, deadpan but charming: base am_echo with 30% am_fenrir, effect 'robot-soft' (owner 3 Oct picked A of four: mostly the voice itself with a gentle machine sheen, no buzz, no crush; the classic 'robot' was a monotone 100 Hz vocoder below 2.4 kHz and read odd and annoying). Chosen for intelligibility under the effect: pure am_echo and am_onyx+am_echo lose consonants (21% recogniser errors on the news sentence, vs 3%). Keep speed >= 0.82: slower speeds measurably smear the vocoder (15-18% errors at 0.78-0.80). The deliberate pace (~135 wpm, top of the COSMOS range) comes from a 0.48 s beat at full stops; for slower, lengthen pauses, never lower the speed."
+ },
+ "penny": {
+  "voice": "bf_isabella:0.6+af_kore:0.25+bf_alice:0.15",
+  "speed": 1.04,
+  "lang": "en-gb",
+  "pauses": {
+   "sentence": 0.4
+  },
+  "notes": "Markets correspondent, numbers first: bf_isabella with 25% af_kore and 15% bf_alice (en-GB phonemes). The clearest of the four Penny takes on figures at equal speed (recogniser errors 26% vs 37-54%), and no bf_emma so she stays distinct from Ada. MONEY MINUTE pace 170 wpm, 0.40 s at full stops."
+ },
+ "sam": {
+  "voice": "am_michael:0.75+am_onyx:0.25",
+  "speed": 1.19,
+  "lang": "en-us",
+  "notes": "Relaxed rolling-news anchor: am_michael with 25% am_onyx. Lowest, darkest voice of the cast (median F0 ~109 Hz), steady, friendly; ~3 st under Max. NEWS IN 60 pace 175 wpm (speed ~1.19: Michael articulates slowly, so this does not sound rushed); urgency comes from the cuts, never from the voice."
+ },
+ "continuity": {
+  "voice": "bm_fable",
+  "speed": 1.1,
+  "lang": "en-gb",
+  "notes": "Continuity announcer for breaks, idents and the UP NEXT promo (not a presenter): bm_fable, the en-GB voice no presenter uses, as docs/programmes/channel-and-breaks.md asks; read at ~150 wpm, slower than the anchors."
+ }
+}

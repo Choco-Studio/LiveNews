@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canvas 2.5D Foundation Lab</title>
+<style>
+  :root { --bg: #181425; --fg: #c0cbdc; --ui: #262b44; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 monospace; }
+  #screen { display: block; width: 1152px; height: 648px; image-rendering: pixelated; background: #000; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--ui); align-items: center; }
+  button, select { background: #3a4466; color: #fff; border: 0; padding: 4px 8px; font: inherit; }
+  #t { width: 360px; }
+</style>
+</head>
+<body>
+<!-- The approved canvas25d foundation demos (rig / talk / camera / static).
+     New address: lab/cast.html (same page; this one is kept for old links). -->
+<canvas id="screen" width="384" height="216"></canvas>
+<div class="bar">
+  <select id="demo"></select>
+  <select id="presenter"></select>
+  <select id="gesture"></select>
+  <button id="play">pause</button>
+  <input id="t" type="range" min="0" max="20" step="0.01" value="0">
+  <span id="info"></span>
+</div>
+<script type="module" src="../js/v2/canvas25d/labpage.js"></script>
+</body>
+</html>

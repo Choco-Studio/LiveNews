@@ -1,0 +1,428 @@
+{
+ "kind": "episode",
+ "id": "emurd6xtq0",
+ "createdAt": "2026-10-02T19:37:05.726Z",
+ "program": {
+  "id": "world-now",
+  "title": "WORLD NOW",
+  "tagline": "THE STORIES SHAPING OUR WORLD",
+  "theme": "world"
+ },
+ "cast": {
+  "A": "paco",
+  "B": "lola"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "pictures",
+   "ms": 0,
+   "pictures": 4,
+   "of": 9,
+   "found": 0,
+   "borrowed": 0
+  },
+  {
+   "stage": "write",
+   "ms": 491,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 5,
+   "images": 3,
+   "verified": 3
+  }
+ ],
+ "title": "WORLD NOW (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Panama Canal reopens after a day-long closure. Iceland volcano erupts again on the Reykjanes peninsula. Lisbon opens a new riverside tram line. Good evening, and welcome to WORLD NOW. I'm Paco Pixel, with Lola Byte.",
+   "cues": [
+    {
+     "char": 183,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 215,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s73bb228b7b",
+    "s5fb454f418",
+    "sf2538c295c"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Breaking news. In Panama, the canal authority says about 30 ships are waiting to cross. The Panama Canal has reopened to ships after fog closed it for a day, according to Ledger Line.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "raise_hand"
+    },
+    {
+     "char": 183,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s73bb228b7b",
+   "headline": "Panama Canal reopens after a day-long closure",
+   "shot": "map",
+   "breaking": true,
+   "location": {
+    "place": "PANAMA",
+    "lat": 8.5,
+    "lon": -80.8
+   },
+   "fact": "ABOUT 30 SHIPS",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "TRADE",
+   "numbers": [
+    {
+     "value": "30",
+     "label": "SHIPS",
+     "qualifier": "ABOUT"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "A fissure eruption has started again on the Reykjanes peninsula in Iceland, Pixelburg Post reports. Scientists say lava is flowing away from nearby towns and flights are not affected.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "point_screen"
+    },
+    {
+     "char": 183,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s5fb454f418",
+   "headline": "Iceland volcano erupts again on the Reykjanes peninsula",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "REYKJANES PENINSULA, ICELAND",
+    "lat": 63.9,
+    "lon": -22.3
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "VOLCANO"
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Thanks, Lola. Our number of the day: 40,000. Lisbon has opened a new tram line along the Tagus river, according to Pixelburg Post. The city says the 9 kilometre route will carry 40,000 passengers a day and cut car traffic in the old town. As the mayor put it: “This line will change how people move around the old town.”",
+   "cues": [
+    {
+     "char": 13,
+     "slot": null,
+     "action": "steeple"
+    },
+    {
+     "char": 238,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "sf2538c295c",
+   "headline": "Lisbon opens a new riverside tram line",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "LISBON, PORTUGAL",
+    "lat": 38.72,
+    "lon": -9.14
+   },
+   "fact": "40,000 PASSENGERS A DAY",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "40,000",
+     "label": "PASSENGERS A DAY"
+    }
+   ],
+   "quote": {
+    "text": "This line will change how people move around the old town",
+    "by": "the mayor"
+   },
+   "feature": "number"
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "serious",
+   "text": "Now, around the world in 30 seconds. In Kerala, local authorities have opened 120 relief camps and closed schools for two days, Pixelburg Post reports.",
+   "cues": [],
+   "storyId": "sfa4f308e5c",
+   "headline": "Heavy rain floods streets in coastal towns of Kerala",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "KERALA, INDIA",
+    "lat": 10.5,
+    "lon": 76.3
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 0,
+    "count": 4
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Venice has raised its sea barriers for a test ahead of the autumn high tides, according to Bitport Herald.",
+   "cues": [],
+   "storyId": "s701ea0e9b9",
+   "headline": "Venice raises its sea barriers in a test before the autumn tides",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "VENICE, ITALY",
+    "lat": 45.44,
+    "lon": 12.32
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 1,
+    "count": 4
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "In Morocco, its operator says it supplies electricity for more than 1 million people.",
+   "cues": [],
+   "storyId": "s6e5fa12524",
+   "headline": "Morocco desert solar plant reaches full power",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "MOROCCO",
+    "lat": 31.8,
+    "lon": -7.1
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 2,
+    "count": 4
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "In China, the cost of shipping a container from Shanghai to Rotterdam has fallen by 20 percent in a month.",
+   "cues": [],
+   "storyId": "s29a543c827",
+   "headline": "Shipping costs fall as port congestion eases",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "SHANGHAI, CHINA",
+    "lat": 31.23,
+    "lon": 121.47
+   },
+   "fact": null,
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 3,
+    "count": 4
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "And finally: Scientists say coral cover has grown on parts of the Great Barrier Reef for a second year. “The reef is showing it can bounce back when it gets a break,” a lead researcher said.",
+   "cues": [
+    {
+     "char": 190,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s9efe8cbd21",
+   "headline": "Coral recovers on parts of the Great Barrier Reef",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "GREAT BARRIER REEF, AUSTRALIA",
+    "lat": -18.3,
+    "lon": 147.7
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AND FINALLY",
+   "quote": {
+    "text": "The reef is showing it can bounce back when it gets a break",
+    "by": "a lead researcher"
+   },
+   "feature": "lighter"
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "Good to hear the sea is having a better day than most of us.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "Low bar. But we will take it.",
+   "cues": []
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's WORLD NOW. From Lola Byte and from me, thank you for watching. Stay with us on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 17,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s73bb228b7b",
+   "headline": "Panama Canal reopens after a day-long closure",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "TRADE"
+  },
+  {
+   "storyId": "s5fb454f418",
+   "headline": "Iceland volcano erupts again on the Reykjanes peninsula",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "VOLCANO"
+  },
+  {
+   "storyId": "sf2538c295c",
+   "headline": "Lisbon opens a new riverside tram line",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "NUMBER OF THE DAY"
+  },
+  {
+   "storyId": "sfa4f308e5c",
+   "headline": "Heavy rain floods streets in coastal towns of Kerala",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s701ea0e9b9",
+   "headline": "Venice raises its sea barriers in a test before the autumn tides",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s6e5fa12524",
+   "headline": "Morocco desert solar plant reaches full power",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s29a543c827",
+   "headline": "Shipping costs fall as port congestion eases",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s9efe8cbd21",
+   "headline": "Coral recovers on parts of the Great Barrier Reef",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AND FINALLY"
+  }
+ ],
+ "storyIds": [
+  "s73bb228b7b",
+  "s5fb454f418",
+  "sf2538c295c",
+  "sfa4f308e5c",
+  "s701ea0e9b9",
+  "s6e5fa12524",
+  "s29a543c827",
+  "s9efe8cbd21"
+ ]
+}

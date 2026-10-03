@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lab · world weather</title>
+    <style>
+      body { margin: 0; background: #181425; color: #c0cbdc; font: 12px/1.4 monospace; }
+      main { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; }
+      #screen { width: 1152px; height: 648px; image-rendering: pixelated; background: #000; }
+      .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; max-width: 1152px; }
+      #text { max-width: 1152px; color: #feae34; min-height: 3em; }
+      button, select { font: inherit; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <canvas id="screen" width="384" height="216"></canvas>
+      <div class="bar">
+        <select id="seg"></select>
+        <button id="play">play the programme</button>
+        <label><input type="checkbox" id="gfx" checked /> channel graphics</label>
+        <span id="info"></span>
+      </div>
+      <div id="text"></div>
+    </main>
+    <script type="module">
+      // The weather centre without the playout: the server's weather script (/api/tools/weather, the same desk and
+      // writer as on air), each segment on its own clock; marks fire spread over the segment as a voice would reach
+      // them. window.renderAt(index, seconds, { from, hot }) draws one deterministic frame (tools, screenshots).
+      import { drawWeather, WALK } from '/js/scenes/weather/index.js';
+      import { warmMapData } from '/js/scenes/worldmap.js';
+      import { Graphics } from '/js/graphics/index.js';
+      const canvas = document.getElementById('screen');
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      const res = await fetch('/api/tools/weather');
+      const body = await res.json();
+      if (!res.ok) {
+        document.getElementById('info').textContent = body.error;
+        throw new Error(body.error);
+      }
+      const ep = body.script;
+      const sel = document.getElementById('seg');
+      ep.segments.forEach((s, i) => sel.add(new Option(`${i} · ${s.kind}${s.zone ? ' · ' + s.zone : ''}`, i)));
+      warmMapData?.();
+      const graphics = new Graphics({ audio: null });
+      const scene = { weather: null, cast: { A: 'sam' }, channel: { name: 'GLOBIT 24', presenters: {} }, program: { id: 'world-weather', title: 'WORLD WEATHER', theme: 'weather' }, shot: 'weather', anchors: {}, actions: {}, rundown: [], images: new Map(), subtitles: true };
+      const SPEAK = 15; // characters a second
+      let clock = null; // { t0, index }
+      function setSeg(index, since) {
+        const seg = ep.segments[index];
+        scene.weather = { data: ep.weather, seg, index, since, hot: null, hotAt: 0 };
+        document.getElementById('text').textContent = seg.text;
+      }
+      function frame(t) {
+        if (clock) {
+          const seg = ep.segments[clock.index];
+          const el = t - clock.t0;
+          const len = seg.text.length / SPEAK;
+          for (const m of seg.marks || []) {
+            const at = m.char / SPEAK;
+            if (el >= at && scene.weather.hotAt < clock.t0 + at) {
+              scene.weather.hot = m.city;
+              scene.weather.hotAt = clock.t0 + at;
+            }
+          }
+          scene.subtitle = seg.text.split(/(?<=[.!?])\s+/).find((s, i, all) => all.slice(0, i + 1).join(' ').length / SPEAK >= el) || null;
+          if (el > len + 0.6) {
+            if (clock.index + 1 >= ep.segments.length) clock = null;
+            else {
+              clock = { t0: t, index: clock.index + 1 };
+              setSeg(clock.index, t);
+              sel.value = clock.index;
+            }
+          }
+        }
+        drawWeather(ctx, t, scene, null);
+        if (document.getElementById('gfx').checked) graphics.draw(ctx, t, scene);
+      }
+      sel.onchange = () => {
+        clock = null;
+        setSeg(Number(sel.value), performance.now() / 1000);
+      };
+      document.getElementById('play').onclick = () => {
+        const t = performance.now() / 1000;
+        clock = { t0: t, index: 0 };
+        setSeg(0, t);
+      };
+      setSeg(0, performance.now() / 1000);
+      let live = true;
+      const loop = () => {
+        if (live) frame(performance.now() / 1000);
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+      // deterministic frames: the previous segment settled, then `index` from its start, `seconds` in
+      window.renderAt = (index, seconds, { from = null, hot = null, gfx = true } = {}) => {
+        live = false;
+        clock = null;
+        document.getElementById('gfx').checked = gfx;
+        const base = 1000 + index * 100;
+        if (from != null) {
+          setSeg(from, base - 20);
+          drawWeather(ctx, base - 1, scene, null);
+        }
+        setSeg(index, base);
+        if (hot) {
+          scene.weather.hot = hot;
+          scene.weather.hotAt = base + seconds - 0.4;
+        }
+        // walk through the move at 30 fps so the step phase accumulates as on air
+        for (let k = 0; k <= Math.ceil(seconds * 30); k++) drawWeather(ctx, base + Math.min(seconds, k / 30), scene, null);
+        frame(base + seconds);
+        return { kind: scene.weather.seg.kind, walk: WALK };
+      };
+      window.weatherReady = true;
+      document.getElementById('info').textContent = `${body.source} · ${ep.segments.length} segments · ${ep.weather.source}`;
+    </script>
+  </body>
+</html>

@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ads lab · ads-2</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; background: #12101c; color: #c0cbdc; font: 13px/1.4 ui-monospace, monospace; }
+      main { max-width: 1180px; margin: 0 auto; padding: 12px 16px; }
+      #screen { display: block; width: 1152px; max-width: 100%; aspect-ratio: 16 / 9; image-rendering: pixelated; background: #000; }
+      .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+      input[type='range'] { flex: 1; min-width: 200px; }
+      button, select { font: inherit; background: #262b44; color: #fff; border: 1px solid #5a6988; padding: 3px 9px; }
+      label { user-select: none; }
+      #vo { min-height: 1.6em; color: #feae34; }
+      #script { white-space: pre-wrap; color: #8b9bb4; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <canvas id="screen" width="384" height="216"></canvas>
+      <div class="row">
+        <select id="pick"></select>
+        <button id="play">play</button>
+        <button id="sound" title="Real-time playback with the jingle and the voice-over">play + sound</button>
+        <input id="scrub" type="range" min="0" max="25" step="0.02" value="0" />
+        <span id="clock">0.00 s</span>
+        <label><input id="overlay" type="checkbox" checked /> on-air tag</label>
+      </div>
+      <div id="vo"></div>
+      <div id="script"></div>
+    </main>
+    <script type="module">
+      // Lab for the ads-2 commercials (The Grand Buffer, Hi-Res Gym). Imports the
+      // ad modules directly and calls ad.draw(ctx, t, dt, info) exactly like
+      // studio.js does, so window.__lab.render(t) draws any instant
+      // deterministically for tools/shoot.mjs. "play + sound" runs it in real
+      // time with the jingle and the voice-over to check the sync by ear.
+      import grandbuffer from '../js/ads/grandbuffer.js';
+      import hiresgym, { LAB as HG_LAB } from '../js/ads/hiresgym.js';
+      import { drawAdTag } from '../js/graphics/bug.js';
+      import { buildTimeline } from '../js/audio/visemes.js';
+      import { renderTune } from '../js/audio/synth.js';
+
+      const ADS = [grandbuffer, hiresgym];
+      const canvas = document.getElementById('screen');
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      const $ = (id) => document.getElementById(id);
+      const params = new URLSearchParams(location.search);
+      let ad = ADS.find((a) => a.id === params.get('ad')) || ADS[0];
+      let t = Number(params.get('t')) || 0;
+      let overlay = params.get('overlay') !== '0';
+      // ?full=1 shows Hi-Res Gym's footage without its mosaic, to inspect the art
+      HG_LAB.fullRes = params.get('full') === '1';
+      let playing = false;
+      let audio = null;
+      let tuneHandle = null;
+      let last = 0;
+
+      // Speech length of a line from the channel's own speech timeline (the
+      // one the mute/blips voice follows), at the ad's voice rate, so the lab
+      // knows which line is being spoken like the director's isSpeaking('ad').
+      const SPANS = new Map();
+      function spanOf(a, line) {
+        const key = `${a.id}|${line.text}`;
+        if (!SPANS.has(key)) SPANS.set(key, buildTimeline(line.text, { lang: 'en', rate: a.voice?.rate || 1 }).total / 1000);
+        return SPANS.get(key);
+      }
+      const lineSpan = (line) => spanOf(ad, line);
+      function infoAt(time) {
+        let line = -1;
+        let speaking = false;
+        ad.script.forEach((ln, i) => {
+          if (time >= ln.at) {
+            line = i;
+            speaking = time < ln.at + lineSpan(ln);
+          }
+        });
+        if (!speaking && line >= 0 && time > ad.script[line].at + lineSpan(ad.script[line])) line = -1;
+        return { line, speaking, duration: ad.duration };
+      }
+
+      // The same tag the graphics package puts over every ad (micro font,
+      // 9 px, top left), shown fully drawn.
+      function onAirTag() {
+        drawAdTag(ctx, 10, 0);
+      }
+
+      function render(time, opts = {}) {
+        if (opts.ad) set(opts.ad);
+        if (opts.overlay !== undefined) overlay = !!opts.overlay;
+        t = Math.max(0, Number(time) || 0);
+        const info = infoAt(t);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.clearRect(0, 0, 384, 216);
+        // the studio passes its global clock as t; ads must only use dt
+        ad.draw(ctx, 1000 + t, t, info);
+        if (overlay) onAirTag();
+        $('clock').textContent = `${t.toFixed(2)} s / ${ad.duration} s`;
+        $('scrub').value = String(t);
+        $('vo').textContent = info.line >= 0 ? `VO ${info.line + 1}: ${ad.script[info.line].text}` : '';
+        return info;
+      }
+
+      function set(id) {
+        const next = ADS.find((a) => a.id === id);
+        if (!next) throw new Error(`unknown ad ${id}`);
+        ad = next;
+        $('pick').value = ad.id;
+        $('scrub').max = String(ad.duration);
+        $('script').textContent = ad.script
+          .map((l) => `${l.at.toFixed(1).padStart(5)} - ${(l.at + lineSpan(l)).toFixed(1).padStart(4)}  ${l.text}`)
+          .join('\n');
+      }
+
+      function stopSound() {
+        try {
+          tuneHandle?.stop();
+          audio?.stop?.();
+        } catch { /* lab only */ }
+        tuneHandle = null;
+      }
+
+      function loop(now) {
+        if (playing) {
+          t += Math.min(0.1, (now - last) / 1000);
+          if (t >= ad.duration) {
+            t = ad.duration;
+            playing = false;
+            stopSound();
+          }
+          render(t);
+        }
+        last = now;
+        requestAnimationFrame(loop);
+      }
+
+      async function playWithSound() {
+        const { AudioEngine } = await import('../js/audio.js');
+        audio ||= new AudioEngine({ lang: 'en' });
+        await audio.unlock?.();
+        stopSound();
+        audio.setVoices?.({ ad: ad.voice });
+        tuneHandle = audio.playTune?.(ad.tune, { loop: false, volume: 0.45 });
+        t = 0;
+        playing = true;
+        const started = performance.now();
+        const id = ad.id;
+        for (const line of ad.script) {
+          const wait = line.at * 1000 - (performance.now() - started);
+          if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+          if (!playing || ad.id !== id) return;
+          await audio.speak(line.text, 'ad');
+        }
+      }
+
+      for (const a of ADS) $('pick').append(new Option(`${a.brand || a.id} (${a.duration}s)`, a.id));
+      $('pick').onchange = () => {
+        set($('pick').value);
+        render(0);
+      };
+      $('scrub').oninput = () => {
+        playing = false;
+        render(Number($('scrub').value));
+      };
+      $('overlay').checked = overlay;
+      $('overlay').onchange = () => render(t, { overlay: $('overlay').checked });
+      $('play').onclick = () => {
+        playing = !playing;
+        if (t >= ad.duration) t = 0;
+      };
+      $('sound').onclick = () => playWithSound().catch((e) => console.warn(e));
+      addEventListener('keydown', (e) => {
+        if (e.key === ' ') {
+          playing = !playing;
+          e.preventDefault();
+        } else if (e.key === 'ArrowRight') render(t + (e.shiftKey ? 1 : 1 / 25));
+        else if (e.key === 'ArrowLeft') render(t - (e.shiftKey ? 1 : 1 / 25));
+      });
+
+      /**
+       * Draw cost per frame over the whole spot (ms): every `step` seconds, after
+       * one warm-up pass so baked art is excluded. For the perf budget check.
+       */
+      function perf(id = ad.id, step = 1 / 30) {
+        set(id);
+        for (let x = 0; x < ad.duration; x += 0.5) render(x);
+        const times = [];
+        for (let x = 0; x < ad.duration; x += step) {
+          const a = performance.now();
+          render(x);
+          times.push(performance.now() - a);
+        }
+        times.sort((p, q) => p - q);
+        const avg = times.reduce((p, q) => p + q, 0) / times.length;
+        return { ad: id, frames: times.length, avg: +avg.toFixed(3), p95: +times[Math.floor(times.length * 0.95)].toFixed(3), max: +times[times.length - 1].toFixed(3) };
+      }
+
+      /**
+       * Offline render of an ad's tune for tools/render-audio.mjs, ducked under
+       * the voice-over lines as the channel does: { sampleRate, channels }.
+       */
+      async function renderAudio({ ad: id = ad.id, seconds = null, duck = true } = {}) {
+        const a = ADS.find((x) => x.id === id) || ad;
+        const spans = duck ? a.script.map((l) => [l.at, l.at + spanOf(a, l)]) : [];
+        const out = await renderTune(a.tune, { seconds: seconds ?? a.duration + 1, loop: true, volume: 0.45, duck: spans });
+        if (!out) throw new Error('no OfflineAudioContext');
+        const b = out.buffer;
+        return { sampleRate: b.sampleRate, channels: [b.getChannelData(0), b.getChannelData(1)] };
+      }
+
+      set(ad.id);
+      render(t);
+      requestAnimationFrame(loop);
+      window.__lab = { render, set, infoAt, perf, ads: ADS.map((a) => a.id), get ad() { return ad; } };
+      window.__audio = { render: renderAudio };
+    </script>
+  </body>
+</html>

@@ -1,7 +1,8 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Station } from '../server/station.js';
+import { Station, episodeAir } from '../server/station.js';
 import { NewsDesk } from '../server/news.js';
+import { WeatherDesk } from '../server/weather.js';
 import { Producer } from '../server/producer.js';
 import { ProviderChain } from '../server/providers/index.js';
 import { createMockProvider } from '../server/providers/mock.js';
@@ -402,6 +403,29 @@ describe('Station playout: episodes and commercial breaks', () => {
     assert.equal(walk(bare.station, 2)[1].ads, 2);
   });
 
+  test('(editorial-2 fix r2) break cadence: a full break only after minProgrammeBetween s of programme air, light ones between', async () => {
+    const probe = makeStation();
+    await probe.station.fill();
+    const one = episodeAir(walk(probe.station, 1)[0]);
+    assert.ok(one > 0);
+    // about two and a half episodes of programme air between full breaks
+    const { station } = makeStation({ channel: makeChannel({ breaks: { adsPerBreak: 2, maxExtraAds: 3, minProgrammeBetween: Math.round(one * 2.5) } }) });
+    await station.fill();
+    const items = [];
+    let afterId;
+    for (let i = 0; i < 12; i++) {
+      const item = station.next(afterId);
+      items.push(item);
+      afterId = item.id;
+      await settle(station);
+    }
+    const breaks = items.filter((i) => i.kind === 'break' && !i.filler);
+    assert.ok(breaks.some((b) => b.light) && breaks.some((b) => !b.light), 'both kinds of break air');
+    for (const b of breaks) assert.equal(b.ads, b.light ? 1 : 2, 'a light break carries one spot and the UP NEXT promo');
+    assert.ok(breaks.every((b) => b.next), 'every break still says what is next');
+    assert.equal(items[1].light, true, 'one episode is not enough programme air for a full break');
+  });
+
   test('after a break comes the next ready episode, in rotation order, and the cycle repeats', async () => {
     const { station } = makeStation();
     await station.fill();
@@ -512,15 +536,23 @@ describe('Station playout: episodes and commercial breaks', () => {
     assert.equal(items[1].ads, 2);
   });
 
-  test('filler breaks announce the programme in production as "not ready", or the next in the rotation', async () => {
+  test('filler breaks announce the next slot that can really be made, "not ready", and promise nothing when none can', async () => {
     const { station, producer, channel } = makeStation();
-    producer.unavailable.add('alpha').add('bravo').add('charlie');
+    producer.unavailable.add('alpha').add('charlie');
     station.queue.push(makeEpisode(channel, 'charlie'));
     const [, brk, filler] = walk(station, 3);
 
-    // nothing in production: the next slot of the rotation (index 0 -> alpha), not ready
-    assert.deepEqual(brk.next, metaOf(channel, 'alpha', false));
-    assert.deepEqual(filler.next, metaOf(channel, 'alpha', false));
+    // nothing in production: alpha (rotation index 0) is short of news, so the promise is bravo, not ready
+    assert.deepEqual(brk.next, metaOf(channel, 'bravo', false));
+    assert.deepEqual(filler.next, metaOf(channel, 'bravo', false));
+
+    // nothing at all can be made: no "UP NEXT" that would never air
+    const dry = makeStation();
+    dry.producer.unavailable.add('alpha').add('bravo').add('charlie');
+    dry.station.queue.push(makeEpisode(dry.channel, 'charlie'));
+    const [, brk2, filler2] = walk(dry.station, 3);
+    assert.equal(brk2.next, null);
+    assert.equal(filler2.next, null);
   });
 
   test('a break during a production announces that programme, not ready yet', async () => {
@@ -841,22 +873,23 @@ describe('Station ticker and news refresh', () => {
       return breaking;
     };
 
-    test('announces headlines that say BREAKING, "– live", "live updates" or "última hora"', async () => {
+    test('announces headlines that say BREAKING or "última hora"', async () => {
       const titles = [
         'BREAKING: Magnitude 7 earthquake hits Japan',
         'Breaking news: minister resigns',
         'Minister resigns, breaking',
-        'Iran strikes – live',
-        'Iran strikes - live',
-        'Election night — live',
-        'Election night -live',
-        'Live updates: vote count under way',
-        'Live update: vote count under way',
+        'Minister resigns – BREAKING',
         'Última hora: dimite el ministro',
         'ÚLTIMA HORA: dimite el ministro',
       ];
       for (const title of titles) {
         assert.deepEqual(await breakingFor(title), [{ source: 'Outlet 2', text: title }], title);
+      }
+    });
+
+    test('does not announce live blogs ("– live", "live updates"): they are rolling coverage, not breaking news', async () => {
+      for (const title of ['Iran strikes – live', 'Election night -live', 'Live updates: vote count under way', 'Premier League – live']) {
+        assert.deepEqual(await breakingFor(title), [], title);
       }
     });
 
@@ -867,10 +900,6 @@ describe('Station ticker and news refresh', () => {
 
     test(
       'does not mistake "record-breaking", "ground-breaking" or "breaking into" for breaking news',
-      {
-        todo:
-          'BUG server/station.js:3 - BREAKING_RE = /\\bbreaking\\b|.../i matches the word inside "Record-breaking heatwave hits Europe", "Ground-breaking study" and "Man charged with breaking into home", so the on-air BREAKING banner is triggered for ordinary headlines',
-      },
       async () => {
         for (const title of ['Record-breaking heatwave hits southern Europe', 'Ground-breaking study on sleep published', 'Man charged with breaking into home']) {
           assert.deepEqual(await breakingFor(title), [], title);
@@ -941,6 +970,7 @@ describe('Station.status and publicChannel', () => {
       queue: ['BRAVO TECH', 'CHARLIE MONEY'],
       producing: null,
       aired: 1,
+      airedTotal: 1,
       lastError: null,
       stories: 2,
       uncovered: 1,
@@ -981,7 +1011,7 @@ describe('Station with the real Producer, NewsDesk and mock provider', () => {
   const WORDS = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel', 'india', 'juliet', 'kilo', 'lima', 'mike', 'november', 'oscar', 'papa', 'quebec', 'romeo', 'sierra', 'tango'];
 
   function makeNewsroom({ perCategory = 14, queueSize = 2, channel = loadChannel() } = {}) {
-    const desk = new NewsDesk({ log: silentLogger, fetchImpl: noNetwork });
+    const desk = new NewsDesk({ log: silentLogger, fetchImpl: noNetwork, lookup: async () => [] });
     let n = 0;
     for (const category of ['world', 'business', 'tech', 'science']) {
       for (let i = 0; i < perCategory; i++, n++) {
@@ -1001,7 +1031,7 @@ describe('Station with the real Producer, NewsDesk and mock provider', () => {
     desk.updateTrending();
     const config = { queueSize, candidatePool: 12, minNewStories: 3, reviewPass: true };
     const chain = new ProviderChain([createMockProvider()], { record() {} }, { log: silentLogger });
-    const producer = new Producer({ config, newsDesk: desk, chain, log: silentLogger });
+    const producer = new Producer({ config, newsDesk: desk, chain, weather: new WeatherDesk({ source: 'fixture', log: silentLogger }), log: silentLogger });
     const station = new Station({ config, newsDesk: desk, producer, chain, channel: () => channel, log: silentLogger });
     return { station, desk, channel };
   }
@@ -1032,10 +1062,20 @@ describe('Station with the real Producer, NewsDesk and mock provider', () => {
     assert.deepEqual(episodes.map((e) => e.program.id), channel.rotation.slice(0, 7), 'a whole turn of the rotation');
     const stories = episodes.flatMap((e) => e.storyIds);
     assert.equal(new Set(stories).size, stories.length, 'no story is aired twice');
-    for (const brk of items.filter((i) => i.kind === 'break')) {
-      assert.equal(brk.filler, false);
-      assert.equal(brk.ads, channel.breaks.adsPerBreak);
-      assert.ok(channel.programs[brk.next.id], 'a break always says what is next');
+    // (editorial-2 fix r2, pace's break cadence) a full commercial break only after minProgrammeBetween seconds of
+    // programme air since the last one; before that a light break (one spot and the UP NEXT promo)
+    let air = 0;
+    for (const item of items) {
+      if (item.kind === 'episode') {
+        air += episodeAir(item);
+        continue;
+      }
+      assert.equal(item.filler, false);
+      const light = air < channel.breaks.minProgrammeBetween;
+      assert.equal(!!item.light, light, `${Math.round(air)} s of programme air since the last commercial break`);
+      assert.equal(item.ads, light ? 1 : channel.breaks.adsPerBreak);
+      assert.ok(channel.programs[item.next.id], 'a break always says what is next');
+      if (!light) air = 0;
     }
   });
 
