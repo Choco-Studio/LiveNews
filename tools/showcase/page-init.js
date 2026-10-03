@@ -942,6 +942,7 @@
   }
   const segInfo = (sg) => ({
     type: sg?.type ?? null,
+    kind: sg?.kind ?? null, // WORLD WEATHER segments: intro | zone | warning | tomorrow | outro
     emotion: sg?.emotion ?? null,
     anchor: sg?.anchor ?? null,
     feature: sg?.feature ?? null,

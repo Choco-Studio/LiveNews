@@ -211,12 +211,13 @@ function drawLegend(ctx, x, y) {
   drawText(ctx, hi, x + steps * 6 - measureText(hi, 1, 'micro'), y + 6, { color: P.silver, font: 'micro' });
 }
 
-function drawSource(ctx, data, right = W - 13) {
+/** The data's source, under the temperature scale (the foot of the frame belongs to the captions). */
+function drawSource(ctx, data, right = W - 13, y = 40) {
   const txt = data.demo ? 'DEMO DATA · NOT A REAL FORECAST' : `DATA: ${data.source}`;
   const w = measureText(txt, 1, 'micro') + 6;
   ctx.fillStyle = P.black;
-  ctx.fillRect(right - w, AREA.bottom - 1, w, 8);
-  drawText(ctx, txt, right - w + 3, AREA.bottom, { color: data.demo ? P.yellow : P.fog, font: 'micro' });
+  ctx.fillRect(right - w, y - 1, w, 8);
+  drawText(ctx, txt, right - w + 3, y, { color: data.demo ? P.yellow : P.fog, font: 'micro' });
 }
 
 const LEVEL_COLOR = { red: P.red, orange: P.orange };

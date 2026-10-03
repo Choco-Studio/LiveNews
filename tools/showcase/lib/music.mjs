@@ -101,6 +101,9 @@ export function deriveCues(log, { headlineLead = 0.3 } = {}) {
         if (e.feature === 'lighter' && last) add(last.end + 150, 'featureEnd', {}, 'end of the feature');
       } else if (e.type === 'chat') {
         add(e.t, 'chat', { emotion, grave, segment }, `chat (${emotion})`);
+      } else if (e.type === 'weather') {
+        add(e.t, 'weather', { kind: e.kind, emotion, segment }, `weather ${e.kind}`);
+        if (e.kind === 'outro' && last) add(last.end + 120, 'signoffEnd', {}, 'after the last word of the sign-off');
       } else if (e.type === 'outro') {
         add(e.t, 'outro', { emotion, segment }, 'outro');
         if (last) add(last.end + 120, 'signoffEnd', {}, 'after the last word of the sign-off');
