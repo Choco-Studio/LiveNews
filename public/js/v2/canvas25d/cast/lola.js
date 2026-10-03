@@ -115,6 +115,12 @@ export function drawBob(buf, L, m, head, s, lag) {
     const nearFace = y > fringe - 0.2 && Math.abs(x) < hw + 1.0;
     const underside = y > bottom - 0.55 - (Math.abs(x) > hw + 1.6 ? 0.25 : 0);
     if (tier === 0) {
+      // the wide keeps the close-ups' colour (owner 22:50: presenters looked different far and near): the
+      // rust sheen is the same band round the dome, the mass the auburn brown (a rust-lit dome read orange)
+      if (t === 0) {
+        const d = Math.sqrt(x * x + (y - cyc) * (y - cyc));
+        if (d < RV * 0.42 || d > RV * 0.93) t = 1;
+      }
       if (nearFace) t = Math.max(t, x > 0 ? 3 : 2);
       return t;
     }

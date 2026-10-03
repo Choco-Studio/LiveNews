@@ -107,7 +107,8 @@ export function drawSleek(buf, L, m, head, s) {
     const nx = x / RV, ny = clamp((y - cyc) / (RV * 1.1), -1, 1);
     let t = toneN(m.hair, nx * 0.95, ny * 0.95);
     const nearFace = y > hairline - 0.3 && Math.abs(x) < hw + 0.4;
-    if (nearFace) t = Math.max(t, x > 0 ? 3 : 2);
+    // (the wide: the far side's shade one step lighter, a brown curtain beside a 15 px head read as dark hair)
+    if (nearFace) t = Math.max(t, x > 0 && tier > 0 ? 3 : 2);
     const onPart = y < hairline + 0.1 && y > hairline - 2.6 && Math.abs(dPart) < 0.24 + (s < 1.6 ? 0.25 : 0);
     if (onPart) return 2;
     if (nearFace) return t;
@@ -115,7 +116,9 @@ export function drawSleek(buf, L, m, head, s) {
       // blonde catches the key in a narrow band only (mediums), none in wides: a 1 px cream line
       // across a 15 px head reads as noise, and the face stays the brightest warm area
       if (t === 0) {
-        if (tier === 0) return 1;
+        // the wide keeps her blonde (owner 22:50: presenters looked different far and near): cream on the lit
+        // upper quarter of the dome only, the rest tan
+        if (tier === 0) return x < 0.6 && y < cyc - 0.6 ? 0 : 1;
         const band = (x + 1.2) * (x + 1.2) * 0.08 + (y - (H.top + 2.2));
         return Math.abs(band) < 0.8 ? 0 : 1;
       }
