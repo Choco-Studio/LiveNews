@@ -59,7 +59,7 @@ Estado (3 oct, 14:30): trabajando punto por punto. ✅ = hecho y subido; 🟡 = 
 28. BitFizz: persona y vaso ya corregidos; falta que tú lo veas.
 29. Grand Buffer y HiResGym: ronda de arreglos pendiente.
 30. Corners (patatas que caen raro), SafeSector y ScreechNet: ronda de arreglos pendiente.
-31. La música de los anuncios debe bajar bajo la voz.
+31. ✅ La música de los anuncios debe bajar bajo la voz. (Medido en el vídeo de correcciones: entre frases la música va 25-38 dB por debajo de la voz y baja 14 dB más cuando la voz habla.)
 
 ## G. Música y sonido
 32. ✅ Música de fondo suave por programa y momento. (Ahora suena también en el canal en directo, no solo en los vídeos grabados: cambia con cada programa y momento, baja sola bajo la voz, calla en las noticias graves y deja paso a la sintonía y a los anuncios. Se apaga con `?beds=0`.)
