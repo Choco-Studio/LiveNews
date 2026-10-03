@@ -148,23 +148,23 @@ function drawWarmHead(buf, L, m, head, s) {
       if (t !== 1 || ly > chinY) continue;
       const fx = lx - yawShift;
       let on = false;
-      // forehead: between the brow ridge and a rounded top ~1.9 u above it, key side to the terminator
+      // forehead: between the brow ridge and a rounded top ~2 u above it (under the hairline), key side to the terminator
       const yb = by - 0.5 + 0.6 * Math.exp(-(fx * fx) / 0.6) - 0.25 * Math.exp(-((fx + ex) * (fx + ex)) / 2.2);
-      if (ly < yb && fx > -ex - 1.3 && fx < 0.9 + 0.35 * (ly - by)) {
+      if (ly < yb && fx > -ex - 1.4 && fx < 1.3 + 0.35 * (ly - by)) {
         const u = (fx + 1.2) / 2.6;
-        const top = yb - 1.9 * (1 - u * u * 0.55);
+        const top = yb - 2.05 * (1 - u * u * 0.5);
         if (ly > top) on = true;
       }
       // cheekbone: a crescent under the lit eye, thickest below its centre, following the orbit
-      if (!on && fx < -ex + 1.6 && fx > -ex - 2.2) {
+      if (!on && fx < -ex + 1.8 && fx > -ex - 2.4) {
         const q = fx + ex;
-        const yu = ey + 1.25 + 0.13 * q * q;
-        const v = (q + 0.25) / 1.95;
-        const yl = yu + 0.95 * (1 - v * v);
+        const yu = ey + 1.2 + 0.12 * q * q + 0.2 * q; // rises toward the temple along the zygomatic arch
+        const v = (q + 0.45) / 2.05;
+        const yl = yu + 1.2 * (1 - v * v);
         if (ly > yu && ly < yl) on = true;
       }
       // chin: a small plane on its front, left of centre
-      if (!on && ly > chY - 0.4 && ly < chY + 0.35 && fx > -1.2 + (ly - chY) * 0.6 && fx < 0.35) on = true;
+      if (!on && ly > chY - 0.55 && ly < chY + 0.45 && fx > -1.45 + (ly - chY) * 0.7 && fx < 0.45 - (ly - chY) * 0.4) on = true;
       if (!on) continue;
       // keep a base pixel beside every shadow tone (no lit rim around the eyes, nose or mouth)
       if (T[i - 1] >= 2 && M[i - 1] === mt) continue;

@@ -214,8 +214,9 @@
     text(`${shot}  ${what}`, 46, y - 1, inGap ? P.yellow : P.silver);
     const flag = (ok) => (ok ? P.green : P.red);
     const P0 = model.P;
-    text(`LEN ${Math.round(st.total)}S`, 46, y + 10, P.fog, 'micro');
-    text(`MED ${f1(st.median)}`, 92, y + 10, flag(st.median >= P0.shots.median[0] - 0.5), 'micro');
+    // every figure against its target (critic r1: a length far under its target printed neutral)
+    text(`LEN ${Math.round(st.total)}S`, 46, y + 10, flag(st.total >= P0.length.target[0] && st.total <= P0.length.target[1]), 'micro');
+    text(`MED ${f1(st.median)}`, 92, y + 10, flag(st.median >= P0.shots.median[0] - 0.5 && st.median <= P0.shots.median[1] + 0.5), 'micro');
     text(`MIN ${f1(st.min)}`, 136, y + 10, flag(st.under === 0), 'micro');
     text(`CUTS ${f1(st.cuts)}/MIN`, 180, y + 10, flag(st.cuts <= P0.shots.cutsPerMinMax), 'micro');
     text(`PAUSES MIN ${st.gapMin.toFixed(2)} MED ${st.gapMed.toFixed(2)}S`, 250, y + 10, flag(st.gapMed >= P0.gaps.handover * 0.75), 'micro');
@@ -333,15 +334,19 @@
     const s = m?.summary;
     if (!s) return;
     const flag = (ok) => (ok ? P.green : P.red);
-    text(`LEN ${Math.round(s.length)}S`, 46, y, P.silver, 'micro');
+    // every figure against its target, red when off it (critic r1: LEN 231S printed neutral against 480-600)
+    text(`LEN ${Math.round(s.length)}S`, 46, y, flag(s.length >= P0.length.target[0] && s.length <= P0.length.target[1]), 'micro');
     text(`${s.stories} STORIES`, 84, y, P.fog, 'micro');
     text(`SHOT MIN ${f1(s.shotMin)}`, 130, y, flag(s.under4 === 0), 'micro');
-    text(`MED ${f1(s.shotMedian)}`, 186, y, flag(s.shotMedian >= P0.shots.median[0] - 0.5), 'micro');
+    text(`MED ${f1(s.shotMedian)}`, 186, y, flag(s.shotMedian >= P0.shots.median[0] - 0.5 && s.shotMedian <= P0.shots.median[1] + 0.5), 'micro');
     text(`CUTS ${f1(s.cutsPerMin)}/MIN`, 220, y, flag(s.cutsPerMin <= P0.shots.cutsPerMinMax), 'micro');
     text(`PAUSE MED ${s.allPausesMedian == null ? '-' : s.allPausesMedian.toFixed(2)}S`, 280, y, flag((s.allPausesMedian ?? 0) >= 0.6), 'micro');
     text(`FIRST WORD ${s.openToFirstWord == null ? '-' : s.openToFirstWord.toFixed(2)}S`, 46, y + 8, flag((s.openToFirstWord ?? 0) >= P0.open.firstWord * 0.6), 'micro');
     text(`HAND-OVER ${s.handover == null ? '-' : s.handover.toFixed(2)}S`, 130, y + 8, s.handover == null ? P.fog : flag(s.handover >= P0.gaps.handover * 0.75), 'micro');
     text(`SIGN-OFF ${s.lastWordToEndcard == null ? '-' : s.lastWordToEndcard.toFixed(2)}S`, 220, y + 8, P.fog, 'micro');
+    // the maxima and the map share (analyser JSON from the fix round on; older strips print '-')
+    text(`OVER MAX ${s.overMax ?? '-'}`, 296, y + 8, s.overMax == null ? P.fog : flag(s.overMax === 0), 'micro');
+    if (s.mapShare != null) text(`MAP ${Math.round(s.mapShare * 100)}%`, 342, y + 8, flag(s.mapShare <= P0.shots.share.map + 0.02), 'micro');
   }
 
   function drawMeasured(t) {

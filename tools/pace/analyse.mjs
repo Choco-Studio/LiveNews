@@ -19,12 +19,17 @@
 //   stingers and the shot before each, strap in-delay and flips, ticker holds, gestures and
 //   listener reactions per presenter per minute, music cue changes, studio holds without any
 //   move or reaction, silences in the programme body; breaks (ident, ads, promo).
+// Every shot is checked against BOTH ends of its window (pace.js shotMax: map / picture / fact card /
+// studio maxima), and the variety rules (map share, single share, map runs, the same beat order story
+// after story, And finally ending on a map), the gesture floor and vocabulary, listener nods per minute,
+// dead air on the live mix (> 1 s), the break load (ad share, programme between breaks) and, on a run
+// with recorded voices, the share of segments that fell back to the browser voice.
 // Pace traces (`ev: 'pace'`, public/js/pace.js paceTrace) add framings, moves, ticker pushes
 // and the rig's gestures/looks; without them those rows read "n/a".
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { paceFor, gapKind, wordCount, CHANNEL } from '../../public/js/pace.js';
+import { paceFor, gapKind, wordCount, CHANNEL, shotMax } from '../../public/js/pace.js';
 
 // ------------------------------------------------------------------ stats
 const r2 = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : null);
@@ -234,7 +239,8 @@ function analyseProgramme(t, prog, shots, env) {
     const seen = [];
     for (const s of mine) {
       const prev = seen[seen.length - 1];
-      if (prev && s.shot === 'wide' && prev.shot === 'wide') {
+      // (and a close re-set on the same presenter for the next story: the wall and strap change, the camera does not)
+      if (prev && ((s.shot === 'wide' && prev.shot === 'wide') || (s.shot === 'close' && prev.shot === 'close' && s.focus === prev.focus && (s.framing ?? null) === (prev.framing ?? null)))) {
         prev.dur += s.dur;
         prev.recuts = (prev.recuts || 0) + 1;
         continue;
@@ -273,6 +279,15 @@ function analyseProgramme(t, prog, shots, env) {
   const byType = {};
   for (const s of body) (byType[s.shot] ||= []).push(s.dur);
   const dwell = Object.fromEntries(Object.entries(byType).map(([k, v]) => [k, stats(v)]));
+  // over the window's top (pace.js shotMax: map[1], picture[1], factMax, studioMax), 0.5 s of grace
+  const overMax = bodyNoMontage.filter((s) => s.dur > shotMax(pid, s.shot) + 0.5).map((s) => ({ at: r2(s.at), shot: s.shot, framing: s.framing ?? null, dur: r2(s.dur), max: shotMax(pid, s.shot) }));
+  // variety: share of the edited body per shot type, the longest run of map cuts
+  const timeOf = (f) => bodyNoMontage.filter(f).reduce((a, s) => a + s.dur, 0);
+  const editBody = Math.max(1, timeOf(() => true));
+  const isSingle = (s) => s.shot === 'close' && s.framing !== 'ots' && s.framing !== 'two';
+  const share = { map: r2(timeOf((s) => s.shot === 'map') / editBody), single: r2(timeOf(isSingle) / editBody), picture: r2(timeOf((s) => s.shot === 'full') / editBody), studioWide: r2(timeOf((s) => s.shot === 'wide' || s.framing === 'two') / editBody) };
+  let mapRun = 0;
+  for (let i = 0, run = 0; i < bodyNoMontage.length; i++) mapRun = Math.max(mapRun, (run = bodyNoMontage[i].shot === 'map' ? run + 1 : 0));
 
   // utterances: say start/end + the recorded clip (or harness speech) + the voice stem
   const says = [];
@@ -308,6 +323,26 @@ function analyseProgramme(t, prog, shots, env) {
   const gapsByKind = {};
   for (const g of gaps) (gapsByKind[g.kind] ||= []).push(g.gap);
   const gapStats = Object.fromEntries(Object.entries(gapsByKind).map(([k, v]) => [k, { ...stats(v), target: P.gaps[k] ?? null }]));
+  // the beat order of each story (its shot types from its first word to the next segment's), and the longest run of
+  // stories in a row with the same order (round-up items excepted: one map each by design)
+  const storyShots = (i) => {
+    const a = says[i].on - 0.6;
+    const b = i + 1 < says.length ? says[i + 1].on - 0.3 : bodyEnd;
+    return bodyNoMontage.filter((s) => s.at + s.dur > a + 0.3 && s.at < b).map((s) => (s.shot === 'close' ? 'single' : s.shot));
+  };
+  const orders = says.map((x, i) => (x.type === 'story' && !x.roundup && x.feature !== 'roundup' ? storyShots(i).join('>') : null));
+  let patternRun = 0;
+  for (let i = 0, run = 0, last = null; i < orders.length; i++) {
+    if (orders[i] == null) continue;
+    run = orders[i] === last && orders[i].includes('>') ? run + 1 : 1;
+    last = orders[i];
+    patternRun = Math.max(patternRun, run);
+  }
+  const fin = says.findIndex((x) => x.type === 'story' && (x.feature === 'lighter' || /^\W*and finally\b/i.test(x.text)));
+  const finallyEnd = fin >= 0 ? storyShots(fin).at(-1) ?? null : null;
+  // recorded voice vs the browser voice (only on a run where clips play at all)
+  const clipsOn = t.events.some((e) => e.ev === 'clip');
+  const fallback = clipsOn ? says.filter((x) => !t.events.some((e) => e.ev === 'clip' && e.at >= x.t - 0.05 && e.at <= x.t + 1.5)).length : null;
   // speech rate (words per minute of voiced time) and inner pauses
   const wpm = says.filter((s) => s.off - s.on > 2 && s.words > 3).map((s) => (s.words * 60) / (s.off - s.on));
   const inner = [];
@@ -379,6 +414,12 @@ function analyseProgramme(t, prog, shots, env) {
     const listen = Math.max(0, says.filter((s) => s.anchor !== slot).reduce((a, s) => a + (s.off - s.on), 0));
     let rep = 0;
     for (let i = 1; i < marked.length; i++) if (marked[i].name === marked[i - 1].name) rep++;
+    // the vocabulary window: a marked gesture's name again within that presenter's last N (pace gestures.vocabWindow)
+    let vocab = 0;
+    for (let i = 1; i < marked.length; i++) if (marked.slice(Math.max(0, i - P.gestures.vocabWindow), i).some((e) => e.name === marked[i].name)) vocab++;
+    // a tic: the segment's first marked gesture (or nod) within 2 s of its first word, segment after segment
+    const ownSegs = says.filter((x) => x.anchor === slot && x.off - x.on > 3);
+    const atStart = ownSegs.filter((x) => g.some((e) => e.t >= x.on - 0.2 && e.t <= x.on + 2)).length;
     const gapsG = [];
     for (let i = 1; i < markedTalk.length; i++) gapsG.push(markedTalk[i].t - markedTalk[i - 1].t);
     presenters[slot] = {
@@ -389,6 +430,9 @@ function analyseProgramme(t, prog, shots, env) {
       nodsSpeaking: g.filter((e) => e.name === 'nod' && speaking(slot, e.t)).length,
       minGapBetweenGestures: gapsG.length ? r2(Math.min(...gapsG)) : null,
       immediateRepeats: rep,
+      vocabRepeats: vocab,
+      startShare: ownSegs.length ? r2(atStart / ownSegs.length) : null,
+      floor: P.gestures.floor,
       names: Object.entries(marked.reduce((m, e) => ((m[e.name] = (m[e.name] || 0) + 1), m), {})).sort((a, b) => b[1] - a[1]),
       listenerNodsPerMin: listen > 0 ? r2((nodsListen.length * 60) / listen) : null,
       listenerLooksPerMin: listen > 0 ? r2((looksListen.length * 60) / listen) : null,
@@ -432,10 +476,11 @@ function analyseProgramme(t, prog, shots, env) {
       return { at: r2(s.at), dur: r2(s.dur), shot: s.shot, framing: s.framing ?? null, alive: perf.length || cuts.length ? life : null };
     });
 
-  // silences: no voice > 1.5 s inside the body; dead air (whole mix quiet) > 1.5 s
+  // silences: no voice > 1.5 s inside the body; dead air (the whole live mix quiet) > 1.0 s (a pause of the
+  // profile's 0.7-1.6 s is only air when something sounds under it)
   const voiceGaps = [];
   for (const g of gaps) if (g.gap > 1.5 && g.kind !== 'breakingCard') voiceGaps.push(g);
-  const dead = env?.mix ? silentRuns(env.mix, bodyStart, bodyEnd, -50, 1.5) : null;
+  const dead = env?.mix ? silentRuns(env.mix, bodyStart, bodyEnd, -50, 1.0) : null;
 
   const length = t1 - t0;
   const [lo, hi] = P.length.target;
@@ -453,6 +498,9 @@ function analyseProgramme(t, prog, shots, env) {
     speech: r2(says.reduce((a, s) => a + Math.max(0, s.off - s.on), 0)),
     shots: { ...stats(durs), cutsPerMin: r2((Math.max(0, bodyNoMontage.length - 1) * 60) / editTime), under: under.length, underList: under.slice(0, 12), sameFraming: repeats.length, sameFramingList: repeats.slice(0, 8), worstTypeRun: worstRun, framings: [...new Set(bodyNoMontage.map((s) => s.framing).filter(Boolean))] },
     dwell,
+    overMax,
+    variety: { share, mapRun, patternRun, finallyEnd, orders: orders.filter(Boolean) },
+    voice: fallback == null ? null : { segments: says.length, fallback, share: r2(fallback / Math.max(1, says.length)) },
     moves: cuts.length ? { n: moves.length, perMin: r2((moves.length * 60) / Math.max(1, length)), minGap: moveGaps.length ? r2(Math.min(...moveGaps)) : null, list: moves.map((m) => ({ at: r2(m.t), move: m.move, amount: m.amount ?? null })) } : null,
     captions: { ...stats(caps.map((c) => c.dur)), cps: stats(caps.map((c) => c.cps)), over17cps: caps.filter((c) => c.cps > 17).length },
     gaps: gapStats,
@@ -469,7 +517,7 @@ function analyseProgramme(t, prog, shots, env) {
     music: { cues: music.length, perMin: r2((music.length * 60) / Math.max(1, length)), minGap: musicGaps.length ? r2(Math.min(...musicGaps)) : null, moments: music.map((m) => m.moment) },
     statics,
     voiceGapsOver1_5: voiceGaps,
-    deadAir: dead,
+    deadAir: dead, // runs of > 1.0 s
     audioMeasured: !!env,
     // the programme as the viewer saw it, relative to the open (public/lab/pace.html 'measured' view)
     strip: {
@@ -487,14 +535,35 @@ function checks(r, P, lo, hi) {
   const c = {};
   c.length = r.partial ? null : r.length >= lo && r.length <= hi;
   c.shotMin = r.shots.n ? r.shots.under === 0 : null;
-  c.shotMedian = r.shots.n ? r.shots.median >= P.shots.median[0] - 0.25 && r.shots.median <= P.shots.median[1] + 1.5 : null;
+  c.shotMedian = r.shots.n ? r.shots.median >= P.shots.median[0] - 0.25 && r.shots.median <= P.shots.median[1] + 0.5 : null;
   c.cutsPerMin = r.shots.n ? r.shots.cutsPerMin <= P.shots.cutsPerMinMax : null;
   c.sameFraming = r.shots.n ? r.shots.sameFraming === 0 : null;
-  c.mapDwell = r.dwell.map?.n ? r.dwell.map.min >= P.shots.map[0] - 0.6 : null;
-  c.pictureDwell = r.dwell.full?.n ? r.dwell.full.min >= P.shots.picture[0] - 0.3 : null;
+  c.overMax = r.shots.n ? r.overMax.length === 0 : null;
+  c.mapDwell = r.dwell.map?.n ? r.dwell.map.min >= P.shots.map[0] - 0.6 && r.dwell.map.max <= P.shots.map[1] + 0.5 : null;
+  c.pictureDwell = r.dwell.full?.n ? r.dwell.full.min >= P.shots.picture[0] - 0.3 && r.dwell.full.max <= P.shots.picture[1] + 0.5 : null;
+  c.factDwell = r.dwell.fact?.n ? r.dwell.fact.min >= P.shots.factMin - 0.3 && r.dwell.fact.max <= P.shots.factMax + 0.5 : null;
+  c.studioDwell = r.dwell.close?.n || r.dwell.wide?.n ? Math.max(r.dwell.close?.max ?? 0, r.dwell.wide?.max ?? 0) <= P.shots.studioMax + 0.5 : null;
+  c.mapShare = r.shots.n ? r.variety.share.map <= P.shots.share.map + 0.02 : null;
+  c.singleShare = r.shots.n ? r.variety.share.single <= P.shots.share.single + 0.02 : null;
+  c.mapRun = r.shots.n ? r.variety.mapRun <= P.shots.mapRun : null;
+  c.patternRun = r.shots.n ? r.variety.patternRun <= P.shots.patternRun : null;
+  c.finallyEnd = r.variety.finallyEnd != null ? r.variety.finallyEnd !== 'map' : null;
+  c.music = r.music.cues ? r.music.perMin <= P.music.maxChangesPerMin : null;
+  c.voice = r.voice ? r.voice.share <= 0.1 : null;
+  if (r.presenters) {
+    const ps = Object.values(r.presenters).filter((p) => p.speaking >= 30);
+    // floor (owner 20:40 "few gestures"): every presenter with half a minute of talk at least gestures.floor per minute
+    c.gestureFloor = ps.length ? ps.every((p) => (p.gesturesPerMinTalking ?? 0) >= P.gestures.floor) : null;
+    c.gestureCeiling = ps.length ? ps.every((p) => (p.gesturesPerMinTalking ?? 0) <= P.gestures.perMin) : null;
+    c.gestureVocab = ps.length ? ps.every((p) => p.immediateRepeats === 0 && p.vocabRepeats === 0) : null;
+    c.gestureStart = ps.length ? ps.every((p) => p.startShare == null || p.startShare <= P.gestures.startShareMax) : null;
+    const listeners = Object.values(r.presenters).filter((p) => p.listenerNodsPerMin != null && r.speech - p.speaking >= 30);
+    c.listenerNods = listeners.length ? listeners.every((p) => p.listenerNodsPerMin >= P.listener.nodsPerMin[0] && p.listenerNodsPerMin <= P.listener.nodsPerMin[1]) : null;
+  }
   const gk = Object.entries(r.gaps).filter(([k, g]) => g.target != null && k !== 'breakingCard');
   c.gaps = gk.length ? gk.every(([, g]) => g.median >= g.target * 0.75) : null;
-  c.captionPage = r.captions.n ? r.captions.min >= 1.2 : null;
+  c.captionPage = r.captions.n ? r.captions.min >= CHANNEL.captions.minPage - 0.1 : null;
+  c.captionCps = r.captions.n ? r.captions.over17cps === 0 : null;
   c.ticker = r.ticker?.n ? r.ticker.min >= CHANNEL.ticker.minHold - 0.3 : null;
   c.statics = r.statics.length ? r.statics.every((s) => s.alive !== false) : true;
   c.silences = r.deadAir ? r.deadAir.length === 0 : null;
@@ -515,15 +584,21 @@ function mdProgramme(r) {
   L.push('| measure | value | target |');
   L.push('| --- | --- | --- |');
   L.push(`| length | ${fmt(r.length, 0)} s (${r.stories} stories, ${r.chats} chats, ${fmt(r.speech, 0)} s of speech)${mark(r.checks.length)} | ${r.target[0]}-${r.target[1]} s |`);
-  L.push(`| shots (outside montages) | n ${s.n}, min ${fmt(s.min)}, p10 ${fmt(s.p10)}, median ${fmt(s.median)}, p90 ${fmt(s.p90)}, max ${fmt(s.max)}${mark(s.n ? r.checks.shotMin && r.checks.shotMedian : null)} | ≥ ${P.shots.min}, median ${P.shots.median.join('-')} |`);
+  L.push(`| shots (outside montages) | n ${s.n}, min ${fmt(s.min)}${mark(r.checks.shotMin)}, p10 ${fmt(s.p10)}, median ${fmt(s.median)}${mark(r.checks.shotMedian)}, p90 ${fmt(s.p90)}, max ${fmt(s.max)} | ≥ ${P.shots.min}, median ${P.shots.median.join('-')} |`);
   L.push(`| cuts per minute | ${fmt(s.cutsPerMin)}${mark(r.checks.cutsPerMin)} | ≤ ${P.shots.cutsPerMinMax} |`);
   L.push(`| shots under ${P.shots.min} s | ${s.under}${s.underList.length ? ` (${s.underList.slice(0, 4).map((u) => `${u.shot}${u.framing ? '/' + u.framing : ''} ${fmt(u.dur)} s @${fmt(u.at, 0)}`).join(', ')})` : ''} | 0 |`);
   L.push(`| same framing twice in a row | ${s.sameFraming}${mark(r.checks.sameFraming)} | 0 |`);
+  L.push(`| shots over their maximum | ${r.overMax.length}${r.overMax.length ? ` (${r.overMax.slice(0, 5).map((u) => `${u.shot}${u.framing ? '/' + u.framing : ''} ${fmt(u.dur)} > ${u.max} s @${fmt(u.at, 0)}`).join(', ')})` : ''}${mark(r.checks.overMax)} | 0 |`);
+  const v = r.variety;
+  L.push(`| variety: share of the edit | map ${fmt(v.share.map * 100, 0)}%${mark(r.checks.mapShare)}, single ${fmt(v.share.single * 100, 0)}%${mark(r.checks.singleShare)}, picture ${fmt(v.share.picture * 100, 0)}%, wide/two-shot ${fmt(v.share.studioWide * 100, 0)}% | map ≤ ${fmt(P.shots.share.map * 100, 0)}%, single ≤ ${fmt(P.shots.share.single * 100, 0)}% |`);
+  L.push(`| variety: runs | map cuts in a row ${v.mapRun}${mark(r.checks.mapRun)}, stories with the same beat order in a row ${v.patternRun}${mark(r.checks.patternRun)}, And finally ends on ${v.finallyEnd ?? 'n/a'}${mark(r.checks.finallyEnd)} | ≤ ${P.shots.mapRun}, ≤ ${P.shots.patternRun}, never a map |`);
+  if (r.voice) L.push(`| browser-voice fallback | ${r.voice.fallback} of ${r.voice.segments} segments (${fmt(r.voice.share * 100, 0)}%)${mark(r.checks.voice)} | ≤ 10% |`);
   for (const k of ['close', 'wide', 'full', 'map', 'fact', 'montage', 'breakingCard']) {
     const d = r.dwell[k];
     if (!d?.n) continue;
-    const tgt = k === 'map' ? `${P.shots.map.join('-')}` : k === 'full' ? `${P.shots.picture.join('-')}` : k === 'fact' ? `≥ ${P.shots.factMin}` : k === 'montage' ? `≥ ${P.holds.montage} (voice-paced)` : k === 'breakingCard' ? `≤ 3` : `≤ ${P.shots.studioMax}`;
-    L.push(`| ${k} dwell | n ${d.n}, min ${fmt(d.min)}, median ${fmt(d.median)}, max ${fmt(d.max)} | ${tgt} |`);
+    const tgt = k === 'map' ? `${P.shots.map.join('-')}` : k === 'full' ? `${P.shots.picture.join('-')}` : k === 'fact' ? `${P.shots.factMin}-${P.shots.factMax}` : k === 'montage' ? `≥ ${P.holds.montage} (voice-paced)` : k === 'breakingCard' ? `≤ 3` : `≤ ${P.shots.studioMax}`;
+    const ok = k === 'map' ? r.checks.mapDwell : k === 'full' ? r.checks.pictureDwell : k === 'fact' ? r.checks.factDwell : k === 'close' || k === 'wide' ? (d.max <= P.shots.studioMax + 0.5) : null;
+    L.push(`| ${k} dwell | n ${d.n}, min ${fmt(d.min)}, median ${fmt(d.median)}, max ${fmt(d.max)}${mark(ok)} | ${tgt} |`);
   }
   L.push(`| camera moves | ${r.moves ? `${r.moves.n} (${fmt(r.moves.perMin, 2)}/min, min gap ${fmt(r.moves.minGap)})` : 'n/a'} | ≤ ${P.moves.max}, gap ≥ ${P.moves.minGap} |`);
   for (const [k, v] of Object.entries(g)) L.push(`| pause: ${k} | n ${v.n}, min ${fmt(v.min, 2)}, median ${fmt(v.median, 2)}, max ${fmt(v.max, 2)} | ${v.target != null ? v.target : '—'} |`);
@@ -532,18 +607,22 @@ function mdProgramme(r) {
   L.push(`| open → first word | ${fmt(r.openToFirstWord, 2)} s${mark(r.checks.openBreath)} | ${P.open.firstWord} |`);
   L.push(`| last word → end card | ${fmt(r.lastWordToEndcard, 2)} s | ${P.holds.signoff} + stinger/2 |`);
   if (r.montage.length) L.push(`| montage frames | ${r.montage.map((m) => `${fmt(m.dur)} s (lag ${fmt(m.lag, 2)})`).join(', ')} | on the line, ≥ ${P.holds.montage} |`);
-  L.push(`| captions | page min ${fmt(r.captions.min)}, median ${fmt(r.captions.median)} s; cps median ${fmt(r.captions.cps.median)}, > 17 cps: ${r.captions.over17cps} | page ≥ 1.2 s, ≤ 17 cps |`);
+  L.push(`| captions | page min ${fmt(r.captions.min)}${mark(r.checks.captionPage)}, median ${fmt(r.captions.median)} s; cps median ${fmt(r.captions.cps.median)}, > 17 cps: ${r.captions.over17cps}${mark(r.checks.captionCps)} | page ≥ ${CHANNEL.captions.minPage} s, ≤ 17 cps |`);
   L.push(`| strap | on-air median ${fmt(r.strap.onAir.median)} s, in-delay median ${fmt(r.strap.inDelay.median, 2)} s, flips ${r.strap.flips}, entries ${r.strap.entries} | in ${P.strap.inAfterCut} s after the cut |`);
   L.push(`| ticker holds | ${r.ticker ? `n ${r.ticker.n}, min ${fmt(r.ticker.min)}, median ${fmt(r.ticker.median)}` : 'n/a'} | ≥ ${CHANNEL.ticker.minHold} |`);
   if (r.presenters) {
     for (const [slot, p] of Object.entries(r.presenters)) {
-      L.push(`| ${p.id} (${slot}) gestures | ${p.gestures} marked (${fmt(p.gesturesPerMinTalking)}/min talking, min gap ${fmt(p.minGapBetweenGestures)} s, repeats ${p.immediateRepeats}), listener nods ${fmt(p.listenerNodsPerMin)}/min, looks ${fmt(p.listenerLooksPerMin)}/min | ≤ ${P.gestures.perMin}/min, gap ≥ ${P.gestures.minGap} |`);
+      const few = p.speaking >= 30 && (p.gesturesPerMinTalking ?? 0) < P.gestures.floor;
+      const many = p.speaking >= 30 && (p.gesturesPerMinTalking ?? 0) > P.gestures.perMin;
+      const flags = [few && 'TOO FEW', many && 'TOO MANY', (p.immediateRepeats || p.vocabRepeats) && 'SAME NAME AGAIN', p.startShare > P.gestures.startShareMax && 'AT SEGMENT START'].filter(Boolean);
+      const nodsOk = p.listenerNodsPerMin == null ? null : p.listenerNodsPerMin >= P.listener.nodsPerMin[0] && p.listenerNodsPerMin <= P.listener.nodsPerMin[1];
+      L.push(`| ${p.id} (${slot}) gestures | ${p.gestures} marked (${fmt(p.gesturesPerMinTalking)}/min talking over ${fmt(p.speaking, 0)} s, min gap ${fmt(p.minGapBetweenGestures)} s, repeats ${p.immediateRepeats} / in window ${p.vocabRepeats}, at segment start ${fmt((p.startShare ?? 0) * 100, 0)}%)${flags.length ? ' ✗ ' + flags.join(', ') : p.speaking >= 30 ? ' ✓' : ''}; listener nods ${fmt(p.listenerNodsPerMin)}/min${mark(nodsOk)}, looks ${fmt(p.listenerLooksPerMin)}/min | ${P.gestures.floor}-${P.gestures.perMin}/min, gap ≥ ${P.gestures.minGap}, no name twice in ${P.gestures.vocabWindow}, ≤ ${fmt(P.gestures.startShareMax * 100, 0)}% at start; nods ${P.listener.nodsPerMin.join('-')}/min |`);
     }
   } else L.push('| gestures / listener | n/a (no pace traces) | — |');
-  L.push(`| music cues | ${r.music.cues} (${fmt(r.music.perMin, 2)}/min, min gap ${fmt(r.music.minGap)} s) | ≤ ${P.music.maxChangesPerMin}/min |`);
+  L.push(`| music cues | ${r.music.cues} (${fmt(r.music.perMin, 2)}/min, min gap ${fmt(r.music.minGap)} s)${mark(r.checks.music)} | ≤ ${P.music.maxChangesPerMin}/min |`);
   L.push(`| studio holds > ${P.shots.staticMax} s | ${r.statics.length}${r.statics.length ? ` (${r.statics.map((x) => `${fmt(x.dur)} s${x.alive === false ? ' static' : ''}`).join(', ')})` : ''} | none static |`);
   L.push(`| voice gaps > 1.5 s | ${r.voiceGapsOver1_5.length}${r.voiceGapsOver1_5.length ? ` (${r.voiceGapsOver1_5.map((x) => `${x.kind} ${fmt(x.gap)}`).join(', ')})` : ''} | intended beats only |`);
-  L.push(`| dead air > 1.5 s | ${r.deadAir ? r.deadAir.length : 'n/a'}${mark(r.checks.silences)} | 0 |`);
+  L.push(`| dead air > 1.0 s (live mix) | ${r.deadAir ? r.deadAir.length : 'n/a'}${r.deadAir?.length ? ` (${r.deadAir.slice(0, 4).map((x) => `${fmt(x.len, 2)} s @${fmt(x.from, 0)}`).join(', ')})` : ''}${mark(r.checks.silences)} | 0 |`);
   if (r.stingers.length) L.push(`| stingers | ${r.stingers.map((x) => `@${fmt(x.at, 0)} after ${x.before} ${fmt(x.beforeDur)} s`).join(', ')} | shot before ≥ ${P.shots.min} |`);
   L.push('');
   return L.join('\n');
@@ -555,7 +634,26 @@ export function analyseTimeline(t, { env = null } = {}) {
   t.events = (t.events || []).slice().sort((a, b) => a.t - b.t);
   const shots = shotsOf(t.events);
   const progs = programmesOf(t, shots).map((p) => analyseProgramme(t, p, shots, env));
-  return { meta: t.meta, programmes: progs, breaks: breaksOf(t, shots) };
+  const breaks = breaksOf(t, shots);
+  return { meta: t.meta, programmes: progs, breaks, breakLoad: breakLoad(progs, breaks) };
+}
+
+/**
+ * Break cadence (24/7: no ad fatigue): the commercials' share of the air analysed, and the programme time
+ * between two commercial breaks (pace CHANNEL.breaks.maxAdShare / minProgrammeBetween).
+ */
+export function breakLoad(progs, breaks) {
+  const real = breaks.filter((b) => b.ads.length && !b.filler);
+  if (!progs.length) return null;
+  const t0 = Math.min(...progs.map((p) => p.span[0]), ...breaks.map((b) => b.at));
+  const t1 = Math.max(...progs.map((p) => p.span[1]), ...breaks.map((b) => b.at + (b.length || 0)));
+  const ads = real.reduce((a, b) => a + b.ads.reduce((x, y) => x + (y.dur || 0), 0), 0);
+  // programme air between consecutive commercial breaks (the first one counts from the start of the analysis)
+  const between = [];
+  for (let i = 1; i < real.length; i++) between.push(r2(progs.filter((p) => p.span[0] >= real[i - 1].at && p.span[1] <= real[i].at + 1).reduce((a, p) => a + p.length, 0)));
+  const share = r2(ads / Math.max(1, t1 - t0));
+  const B = CHANNEL.breaks;
+  return { span: r2(t1 - t0), breaks: real.length, adSeconds: r2(ads), adShare: share, perHour: r2((real.length * 3600) / Math.max(1, t1 - t0)), between, ok: share <= B.maxAdShare && between.every((x) => x >= B.minProgrammeBetween) };
 }
 
 function analyseFile(file, opt) {
@@ -623,6 +721,14 @@ export function summary(p) {
     musicPerMin: p.music.perMin,
     voiceGapsOver1_5: p.voiceGapsOver1_5.length,
     statics: p.statics.filter((x) => x.alive === false).length,
+    overMax: p.overMax.length,
+    mapShare: p.variety.share.map,
+    singleShare: p.variety.share.single,
+    mapRun: p.variety.mapRun,
+    patternRun: p.variety.patternRun,
+    gestureFloorOk: p.checks.gestureFloor ?? null,
+    deadAir1: p.deadAir ? p.deadAir.length : null,
+    fallbackShare: p.voice?.share ?? null,
   };
 }
 
@@ -650,6 +756,11 @@ function cli() {
     md.push(`## ${path.basename(r.file)}`);
     md.push('');
     for (const p of r.programmes) md.push(mdProgramme(p));
+    if (r.breakLoad) {
+      const b = r.breakLoad;
+      md.push(`Break load: ${b.breaks} commercial breaks in ${fmt(b.span, 0)} s (${fmt(b.perHour, 1)}/hour), ads ${fmt(b.adSeconds, 0)} s = ${fmt(b.adShare * 100, 1)}% of air (target ≤ ${fmt(CHANNEL.breaks.maxAdShare * 100, 0)}%), programme between breaks ${b.between.length ? b.between.map((x) => fmt(x, 0) + ' s').join(', ') : 'n/a'} (target ≥ ${CHANNEL.breaks.minProgrammeBetween} s)${mark(b.ok)}`);
+      md.push('');
+    }
     if (r.breaks.length) {
       md.push('| break | length | ident | ads | black between | promo | stingers |');
       md.push('| --- | --- | --- | --- | --- | --- | --- |');

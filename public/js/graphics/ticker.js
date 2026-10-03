@@ -14,7 +14,7 @@ import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
 import { W, TICKER, inkOn, easeOut, easeIn, easeInOut, lerp, rect, clipStart, clipEnd } from './layout.js';
 import { linePages } from './breaks.js';
-import { CHANNEL, paceTrace } from '../pace.js';
+import { CHANNEL, paceTrace, tickerHold } from '../pace.js';
 
 // PACE: push and hold from the one pacing table (pace.js CHANNEL.ticker; owner 18:52: items held longer, >= 6 s)
 export const TICKER_TIMING = CHANNEL.ticker;
@@ -93,7 +93,7 @@ export function makeEntries({ label = 'LATEST', plate = P.yellow, source = '', t
       breaking,
       page: i,
       pages: pages.length,
-      dur: T.push + T.base + T.perWord * wordCount(s),
+      dur: tickerHold(wordCount(s)), // pace.js: push + base + per word, within [minHold, maxHold]
     })
   );
 }
@@ -129,7 +129,7 @@ export function makeFigureEntry({ value = '', label = '' } = {}, { dir = null, m
     breaking: false,
     page: 0,
     pages: 1,
-    dur: T.push + T.base + T.perWord * (wordCount(l) + 1),
+    dur: tickerHold(wordCount(l) + 1),
   });
 }
 

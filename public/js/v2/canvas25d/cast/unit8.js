@@ -177,7 +177,7 @@ function drawCasing(buf, L, m, head, s) {
       t = l > 0.55 ? 0 : l > 0.05 ? 1 : l > -0.5 ? 2 : 3;
     } else {
       // the front plate: flat, a step darker toward the lower right
-      t = -0.42 * u - 0.3 * (y / CASE.bot) > -0.3 ? 1 : 2;
+      t = -0.42 * u - 0.3 * (y / CASE.bot) > -0.46 ? 1 : 2;
     }
     const au = u < 0 ? -u : u;
     if (seams) {

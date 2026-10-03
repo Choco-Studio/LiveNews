@@ -173,8 +173,17 @@ function drawStraight(buf, L, m, head, s, sk) {
     } else if (zone === 2) {
       const q = depth / outerW; // 0 outer edge → 1 face side
       form = q < 0.72 ? 2 : 3;
-      // the outer face of the long side catches the key at the cheekbone: a slate sheen strip with strokes
-      if (tr > 0 && q > px1 / outerW && q < 0.62 && dy > 0.4 && dy < 7.8 - (0.62 - q) * 2) form = 1;
+      // the sheen of a straight curtain runs ACROSS the strands: a band at the cheekbone where the hair
+      // bends out over it, its lower edge broken into strand points (one per narrow clump), never a
+      // vertical stripe down the panel
+      if (tr > 0 && q > px1 / outerW && q < 0.84) {
+        const cwB = tr === 2 ? 0.85 : 1.3;
+        const kc = Math.floor(depth / cwB);
+        const wc = depth / cwB - kc;
+        const top = 3.4 + (hashInt(kc, 13) - 0.5) * 0.9 + q * 0.5;
+        const bot = 6.1 + (hashInt(kc, 17) - 0.5) * 1.7 - Math.abs(wc - 0.5) * 1.6 + q * 0.5;
+        if (dy > top && dy < bot) form = 1;
+      }
       ST.spec = false;
       if (y > END - 1.0) form = Math.min(3, form + 1); // the blunt ends sit in shadow
     } else {
@@ -209,8 +218,8 @@ function drawStraight(buf, L, m, head, s, sk) {
       ST.lo = 0.8 * RV;
       ST.hi = 1.4 * RV;
     } else if (zone === 2) {
-      ST.lo = PI2 * RV + 0.35 * RV + 1.0;
-      ST.hi = PI2 * RV + 0.35 * RV + 8.5;
+      ST.lo = PI2 * RV + 0.35 * RV + 3.8;
+      ST.hi = PI2 * RV + 0.35 * RV + 6.0;
     } else {
       ST.lo = 1e9;
       ST.hi = -1e9;

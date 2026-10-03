@@ -177,6 +177,30 @@ test('pace: gapKind names every pause and gapAfter is seeded per episode (same e
   assert.ok(e.segments.some((_, i) => gapAfter(e, i).gap !== gapAfter(other, i).gap), 'the variation follows the episode seed');
   assert.equal(gapKind(null, null), 'story');
   assert.equal(gapKind({ type: 'story', anchor: 'A' }, { type: 'story', anchor: 'A' }), 'story');
+  // ordinary copy is no signpost (critic r1): only a chat "Still to come" line or a flagged segment closes a block
+  const story = (text) => ({ type: 'story', anchor: 'A', text });
+  assert.equal(gapKind(story('Shares fell sharply after this announcement from the bank.'), story('Next.')), 'story');
+  assert.equal(gapKind(story('A new record is coming up for the club this weekend.'), story('Next.')), 'story');
+  assert.equal(gapKind(story('Still to come: the weather.'), story('Next.')), 'story');
+  assert.equal(gapKind({ ...story('Coming up after the break: the weather.'), signpost: true }, story('Next.')), 'block');
+  assert.equal(gapKind({ type: 'chat', anchor: 'B', text: '[nod] Still to come: the weather.' }, story('Next.')), 'block');
+});
+
+test('pace: the maxima reach the planners and the runtime guard (factMax, shotMax), no private hold formulas left', async () => {
+  const { shotMax } = await import('../public/js/pace.js');
+  const { maxHold } = await import('../public/js/v2/canvas25d/runtime/direction.js');
+  for (const id of PROGRAMME_IDS) {
+    const S = paceFor(id).shots;
+    assert.equal(maxHold('fact', id), S.factMax, `${id}: the runtime guard's card maximum is factMax`);
+    assert.equal(maxHold('map', id), S.map[1]);
+    assert.equal(shotMax(id, 'full'), S.picture[1]);
+    assert.ok(S.factMax >= S.factMin + 2 && factHold('2 MILLION UNITS SOLD THIS YEAR', id) <= S.factMax, id);
+  }
+  const shots = fs.readFileSync(new URL('../public/js/v2/canvas25d/direction/shots.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(shots, /\/ 3 \+ 2/, 'shots.js keeps no private fact hold (words / 3 + 2)');
+  assert.match(shots, /paceFactHold\(/);
+  const ticker = fs.readFileSync(new URL('../public/js/graphics/ticker.js', import.meta.url), 'utf8');
+  assert.match(ticker, /tickerHold\(/, 'the ticker holds its items for pace tickerHold()');
 });
 
 test('pace: cut cooldown and repetition rules', () => {
@@ -320,6 +344,29 @@ test('pace analyser: visible shots only, pauses by kind, strap wipe-in from the 
   assert.equal(s.programme, 'WORLD NOW');
   assert.equal(s.under4, 0);
   assert.equal(s.length, 51.5);
+  // both ends of every window (critic r1: the tables showed green over the maxima): the 10.9 s map is over its 10 s,
+  // the 17.1 s two-shot over studioMax 15
+  assert.deepEqual(p.overMax.map((x) => [x.shot, x.max]), [['map', 10], ['wide', 15]]);
+  assert.equal(p.checks.mapDwell, false);
+  assert.equal(p.checks.overMax, false);
+  assert.equal(p.checks.studioDwell, false);
+  assert.equal(p.checks.length, false, 'a 51 s WORLD NOW is far under its target: red, never neutral');
+  // variety: shares of the edit, the map run
+  assert.ok(p.variety.share.map > 0.2 && p.variety.mapRun === 1);
+  assert.equal(s.overMax, 2);
+});
+
+test('pace analyser: break load (ad share of the air, programme between breaks) against CHANNEL.breaks', async () => {
+  const { breakLoad } = await import('../tools/pace/analyse.mjs');
+  const prog = (a, b) => ({ span: [a, b], length: b - a });
+  const brk = (at) => ({ at, length: 60, ads: [{ ad: 'x', dur: 25 }, { ad: 'y', dur: 25 }], filler: false });
+  // a 60 s break after every short programme: 50 s of ads per ~140 s of air
+  const tight = breakLoad([prog(0, 80), prog(140, 220), prog(280, 360)], [brk(80), brk(220), brk(360)]);
+  assert.equal(tight.breaks, 3);
+  assert.ok(tight.adShare > CHANNEL.breaks.maxAdShare && tight.ok === false);
+  assert.deepEqual(tight.between, [80, 80]);
+  const calm = breakLoad([prog(0, 450), prog(450, 900)], [brk(900)]);
+  assert.ok(calm.ok, JSON.stringify(calm));
 });
 
 test('pace analyser: production lines from a server log', () => {

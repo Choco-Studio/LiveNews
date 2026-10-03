@@ -869,6 +869,100 @@ function rasterHand(buf, L, hm, g, B, s, gh, z) {
   bw = Math.min(LW, bx1 - bx0);
   bh = Math.min(LH, by1 - by0);
   if (bw <= 0 || bh <= 0) return;
+  // ---- a hand that has not moved inside its own pixel box since the last frame (most frames: resting
+  // on the papers, or held at a gesture's apex) reuses its raster. Everything below up to the write is a
+  // pure function of the projected joints and palm, the hand frame, the shape and the scale, so the
+  // slot keeps exactly those (positions relative to the box, ±RC_EPS px) and the finished OWN/TN window
+  const slot = rasterSlot(L, g.side);
+  const kn = rasterKey(g, B, s, hm.robot, hullN);
+  if (slot.n === kn && slot.bw === bw && slot.bh === bh && sameKey(slot.key, kn)) {
+    restoreRaster(slot);
+  } else {
+    rasterPasses(L, hm, g, B, s, hullN);
+    storeRaster(slot, kn);
+  }
+  writeHand(buf, hm, s, gh, z);
+}
+
+// Raster cache: one slot per look and hand side (two-shots and singles show each look once). The key is
+// every input of the raster passes: the projected joints (x, y relative to the box, depth), the palm
+// hull, the projection basis, the hand frame, the shape channels and the scale. Positions compare within
+// RC_EPS px (a raster sampled at pixel centres cannot change for less); the slot's buffers grow once.
+const RC_EPS = 0.02;
+const KEY = new Float64Array(20 * 3 + HULL_IN.length + 32);
+const SLOTS = new WeakMap(); // look → [screen-left hand, screen-right hand]
+function rasterSlot(L, side) {
+  let pair = SLOTS.get(L);
+  if (!pair) SLOTS.set(L, (pair = [newSlot(), newSlot()]));
+  return pair[side > 0 ? 1 : 0];
+}
+function newSlot() {
+  return { key: new Float64Array(KEY.length), n: -1, bw: 0, bh: 0, own: new Int8Array(0), tn: new Int8Array(0) };
+}
+function rasterKey(g, B, s, robot, hullN) {
+  let k = 0;
+  for (let i = 0; i < 20; i++) {
+    KEY[k++] = P2[i * 3] - bx0;
+    KEY[k++] = P2[i * 3 + 1] - by0;
+    KEY[k++] = P2[i * 3 + 2];
+  }
+  for (let i = 0; i < hullN; i++) {
+    KEY[k++] = HULL_IN[i * 2] - bx0;
+    KEY[k++] = HULL_IN[i * 2 + 1] - by0;
+  }
+  for (let i = 2; i < 8; i++) KEY[k++] = B[i];
+  for (let i = 0; i < 3; i++) {
+    KEY[k++] = g.f[i];
+    KEY[k++] = g.n[i];
+    KEY[k++] = g.t[i];
+  }
+  for (let i = 0; i < 5; i++) KEY[k++] = g.curl[i];
+  KEY[k++] = g.spread;
+  KEY[k++] = g.H;
+  KEY[k++] = g.back ? 1 : 0;
+  KEY[k++] = robot ? 1 : 0;
+  KEY[k++] = s;
+  KEY[k++] = hullN;
+  return k;
+}
+function sameKey(key, n) {
+  for (let i = 0; i < n; i++) {
+    const d = key[i] - KEY[i];
+    if (d > RC_EPS || d < -RC_EPS) return false;
+  }
+  return true;
+}
+function storeRaster(slot, n) {
+  for (let i = 0; i < n; i++) slot.key[i] = KEY[i];
+  slot.n = n;
+  slot.bw = bw;
+  slot.bh = bh;
+  if (slot.own.length < bw * bh) {
+    slot.own = new Int8Array(bw * bh);
+    slot.tn = new Int8Array(bw * bh);
+  }
+  // (plain loops: a subarray view per row would allocate every frame)
+  const own = slot.own, tn = slot.tn;
+  for (let j = 0, q = 0; j < bh; j++) {
+    for (let i = 0, o = j * LW; i < bw; i++, o++, q++) {
+      own[q] = OWN[o];
+      tn[q] = TN[o];
+    }
+  }
+}
+function restoreRaster(slot) {
+  const own = slot.own, tn = slot.tn;
+  for (let j = 0, q = 0; j < bh; j++) {
+    for (let i = 0, o = j * LW; i < bw; i++, o++, q++) {
+      OWN[o] = own[q];
+      TN[o] = tn[q];
+    }
+  }
+}
+
+/** The raster passes of a hand into the local window (OWN/TN, origin bx0/by0, size bw × bh). */
+function rasterPasses(L, hm, g, B, s, hullN) {
+  const J = g.J, R = g.R;
   for (let j = 0; j < bh; j++) {
     const o = j * LW;
     OWN.fill(-1, o, o + bw);
@@ -923,7 +1017,10 @@ function rasterHand(buf, L, hm, g, B, s, gh, z) {
   // ---- clean clusters (owner 17:50 "no noise"): no lone detail, line or highlight pixel survives, and a
   // separation broken into dashes is joined into one line
   if (lod >= 1) cleanClusters();
+}
 
+/** Write the finished local raster into the PartBuffer (outline and shadow against the face skin). */
+function writeHand(buf, hm, s, gh, z) {
   // ---- write into the PartBuffer
   const W = buf.w;
   const { mat, tone, grp, z: zbuf } = buf;

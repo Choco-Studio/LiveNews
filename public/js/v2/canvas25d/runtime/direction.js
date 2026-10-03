@@ -37,7 +37,7 @@ import { wallFromScene } from '../studio/set.js';
 // the Stage's module graph loads with this one: once the director's v2 side is ready, so is the
 // Renderer's (studio.js imports host.js itself; this only removes the start-up race)
 import './host.js';
-import { paceFor, gapAfter as paceGap, CHANNEL } from '../../../pace.js';
+import { paceFor, gapAfter as paceGap, CHANNEL, shotMax } from '../../../pace.js';
 
 const now = () => performance.now() / 1000;
 // PACE (public/js/pace.js, owner 23:10): the cut cooldown, the stinger and the pause after each
@@ -130,12 +130,9 @@ const HOLD_SHOTS = new Set(['wide', 'close', 'map', 'full', 'fact']);
 const HOLD_MARGIN = 1.0;
 const DRY_HOLD = 1.2; // s: never cut on a dry line or this soon after it (tech-bytes.md)
 
-/** The longest a shot may hold on air (s, pace.js): maps their window, pictures and fact cards the picture window, studio shots studioMax. */
+/** The longest a shot may hold on air (s, pace.js shotMax): maps their window, pictures the picture window, fact cards factMax, studio shots studioMax. */
 export function maxHold(shot, programId) {
-  const S = paceFor(programId).shots;
-  if (shot === 'map') return S.map[1];
-  if (shot === 'full' || shot === 'fact') return S.picture[1];
-  return S.studioMax;
+  return shotMax(programId, shot);
 }
 
 /**
@@ -346,7 +343,9 @@ export class LiveDirection {
     // the first line comes a breath after the cut from the open (pace open.firstWord; world-now.md 0.5 s)
     const breath = paceFor(this.scene.program?.id).open.firstWord;
     return new Promise((r) => setTimeout(r, breath * 1000)).then(() => this.director.say(seg)).then(() => {
-      const need = Math.min(2, (last?.minLen || 0) - (now() - (this.scene.shotSince || 0)));
+      // PACE: only a headline frame is held to its floor here; a studio wide's cooldown is the next story's opening cut's
+      // to wait for (it cuts when the wide has held it), so the next voice is never delayed (NEWS IN 60: 1.5 s of dead air)
+      const need = last?.shot === 'montage' ? Math.min(2, (last?.minLen || 0) - (now() - (this.scene.shotSince || 0))) : 0;
       return need > 0 ? new Promise((r) => setTimeout(r, need * 1000)) : undefined;
     });
   }

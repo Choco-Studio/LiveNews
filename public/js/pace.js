@@ -61,16 +61,13 @@ export const CHANNEL = Object.freeze({
  * open, breaks and breaking news (ART_DIRECTION §4).
  */
 export const TRANSITIONS = Object.freeze({
-  cut: Object.freeze({ dur: 0 }),
+  // (only transitions whose numbers reach the screen: the stinger = cards.js STINGER_DURATION (tested), the strap's
+  // in / out / flip = graphics STRAP_TIMING, the ticker's push = graphics TICKER_TIMING)
   stinger: Object.freeze({ dur: CHANNEL.stinger, ease: 'inOut', cutAt: 0.5 }),
   strapIn: Object.freeze({ dur: CHANNEL.strap.in, ease: 'out' }),
   strapOut: Object.freeze({ dur: CHANNEL.strap.out, ease: 'in' }),
   strapFlip: Object.freeze({ dur: CHANNEL.strap.flip, ease: 'inOut' }),
-  wallWipe: Object.freeze({ dur: 0.45, ease: 'inOut' }),
-  mapZoom: Object.freeze({ dur: 1.4, ease: 'inOut' }),
-  pinPan: Object.freeze({ dur: 0.8, ease: 'inOut' }),
   tickerPush: Object.freeze({ dur: CHANNEL.ticker.push, ease: 'inOut' }),
-  dip: Object.freeze({ down: 0.25, black: 0.15, up: 0.25 }), // COSMOS end (cosmos.md "Transitions")
 });
 
 // ---------------------------------------------------------------------------
@@ -417,8 +414,9 @@ export function listenerRules(programId) {
 /**
  * Estimated air time (s) of an episode under its profile: speech (recorded
  * durations, else words at `wpm`) + the profile's gaps + open, holds, end card.
- * The offline writer (server/providers/mock.js) budgets its optional depth blocks
- * with it against `length.target`; tools/pace/simulate.mjs and the tests use it too.
+ * tools/pace/simulate.mjs and the tests measure scripts with it against
+ * `length.target`; wave 3's producer should budget its blocks with it (not wired
+ * into the server yet: docs/PACING.md section 8).
  */
 export function estimateAir(episode, { wpm = 165, open = 4.0 } = {}) {
   const segs = episode?.segments || [];

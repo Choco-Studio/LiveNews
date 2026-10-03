@@ -85,13 +85,21 @@ for (let i = 0; i < LOBE_N; i++) {
 }
 const LC = [0, 0];
 const HS = { form: 0, u: 0, v: 0 }; // scratch for the strand coordinates of the pixel being shaded
+// exp(-q) for q in [0, 8) (the quiff's falloff), tabulated: the outline is evaluated for most pixels of the box
+const EXP_N = 1024, EXP_MAX = 8;
+const EXPQ = new Float32Array(EXP_N + 1);
+for (let i = 0; i <= EXP_N; i++) EXPQ[i] = Math.exp(-(i / EXP_N) * EXP_MAX);
+const expNeg = (q) => (q >= EXP_MAX ? 0 : EXPQ[(q * (EXP_N / EXP_MAX)) | 0]);
+// the front hairline per 0.05 u of feature-space x (rebuilt per frame: it depends on the pitch and the tier)
+const HL_X0 = -14, HL_STEP = 0.05, HL_N = Math.ceil(28 / HL_STEP) + 1;
+const HLT = new Float32Array(HL_N);
 
 /** Outer radius of the hair at angle a (feature space), lobes included (units over the dome centre). */
 function outerR(a, RV, tr, keepLobes) {
   const Q = QUIFF;
   const d = a - Q.peak;
   const w = d < 0 ? Q.wl : Q.wr;
-  let r = RV + Q.lift * Math.exp(-(d * d) / (w * w));
+  let r = RV + Q.lift * expNeg((d * d) / (w * w));
   if (keepLobes && a > -1.25 && a < 1.45) {
     const ph = (a + 6) / Q.period;
     const k = Math.floor(ph);
@@ -116,8 +124,16 @@ function drawTextured(buf, L, m, head, s, sk) {
   const px1 = 1 / s;
   const lift = QUIFF.lift;
   // the front hairline: a soft M (temples slightly receded), broken into short tips at close-ups
-  const hairline = (fx) => H.top + 4.1 + pitchShift + fx * fx * 0.034 - Math.exp(-((Math.abs(fx) - 4.6) ** 2) / 1.6) * 0.85 +
-    (tr === 2 ? 0.1 * Math.sin(fx * 1.7 + 0.4) : 0);
+  for (let i = 0; i < HL_N; i++) {
+    const fx = HL_X0 + i * HL_STEP;
+    HLT[i] = H.top + 4.1 + pitchShift + fx * fx * 0.034 - Math.exp(-((Math.abs(fx) - 4.6) ** 2) / 1.6) * 0.85 +
+      (tr === 2 ? 0.1 * Math.sin(fx * 1.7 + 0.4) : 0);
+  }
+  const hairline = (fx) => {
+    const i = Math.round((fx - HL_X0) / HL_STEP);
+    return HLT[i < 0 ? 0 : i >= HL_N ? HL_N - 1 : i];
+  };
+  const rMax = RV + lift + QUIFF.lobe * 1.3 + 0.1; // nothing of the crown reaches past this radius
   const x0 = head.cx - (RV + lift + 1.2) * s, x1 = head.cx + (RV + lift + 1.2) * s;
   const y0 = head.cy + (cyc - RV - lift - 1.4) * s, y1 = head.cy + 0.8 * s;
   const sheenLo = 1.3, sheenHi = 5.0; // along-strand window of the highlight strokes (units above the hairline)
@@ -136,9 +152,12 @@ function drawTextured(buf, L, m, head, s, sk) {
     const hl = hairline(fx);
     // ---- outline: the crown and quiff above sideTop (polar profile), clipped sides below
     let zone;
-    const r = Math.sqrt(fx * fx + dy * dy);
-    const a = fastAtan2(fx, -dy);
+    let a = 0;
     if (y < sideTop) {
+      const r2 = fx * fx + dy * dy;
+      if (r2 > rMax * rMax) return -1;
+      const r = Math.sqrt(r2);
+      a = fastAtan2(fx, -dy);
       const R = outerR(a, RV, tr, true);
       if (r > R) return -1;
       zone = 1;

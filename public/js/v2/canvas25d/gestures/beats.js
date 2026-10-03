@@ -16,7 +16,7 @@
 //   point_screen:open an open hand toward the wall instead of an index ("as you can see")
 //   raise_hand:box    both hands come up to the chest, palms facing, and frame the point (reads in
 //                     an MCU: the hands stay above the lower third)
-//   raise_hand:lift   one hand rises off the desk to the chest and beats once there (an MCU sees it)
+//   raise_hand:lift   one hand rises off the desk and opens palm-up beside the body, beating once there
 //   raise_hand:turn   the near hand turns from palm-down to palm-up low over the desk ("on the
 //                     other hand"), moving a little outward on the word
 //   raise_hand:settle the near hand lifts a little and settles flat on the desk on the word
@@ -135,8 +135,8 @@ export const BEATS = {
         // the lens, thumbs on top: they hold the shape of "the whole thing" in the air and set it down a
         // touch on the word; never a grab at the lapels (the oblique camera sees depth as height, so the
         // wrists sit forward and only chest-high, which an MCU keeps above the lower third)
-        wrist: [[0, 'R'], [0.1, [-5.9, 19.7, 13.4]], [0.3, [-6.4, 9.6, 16.6]], [0.46, [-6.2, 0.1, 18.6]], [0.56, [-6.25, 0.8, 18.7]], [0.68, [-6.22, 0.4, 18.66], 's'], [0.94, [-6.22, 0.55, 18.6], 's'], [1.24, [-6.2, 14.4, 15.6]], [1.5, 'R', 's']],
-        wristF: [[0, 'R'], [0.12, [5.9, 19.7, 13.4]], [0.32, [6.4, 9.6, 16.6]], [0.48, [6.2, 0.1, 18.6]], [0.58, [6.25, 0.8, 18.7]], [0.7, [6.22, 0.4, 18.66], 's'], [0.96, [6.22, 0.55, 18.6], 's'], [1.26, [6.2, 14.4, 15.6]], [1.5, 'R', 's']],
+        wrist: [[0, 'R'], [0.1, [-5.9, 19.7, 13.4]], [0.3, [-6.5, 8.0, 16.6]], [0.46, [-6.3, -2.5, 18.6]], [0.56, [-6.35, -1.8, 18.7]], [0.68, [-6.32, -2.2, 18.66], 's'], [0.94, [-6.32, -2.05, 18.6], 's'], [1.24, [-6.2, 13.6, 15.6]], [1.5, 'R', 's']],
+        wristF: [[0, 'R'], [0.12, [5.9, 19.7, 13.4]], [0.32, [6.5, 8.0, 16.6]], [0.48, [6.3, -2.5, 18.6]], [0.58, [6.35, -1.8, 18.7]], [0.7, [6.32, -2.2, 18.66], 's'], [0.96, [6.32, -2.05, 18.6], 's'], [1.26, [6.2, 13.6, 15.6]], [1.5, 'R', 's']],
         dir: [[0, 'R'], [0.18, [-0.66, -0.1, 0.74]], [0.38, [-0.02, -0.6, 0.8]], [0.54, [0.04, -0.66, 0.75]], [0.62, [0.04, -0.61, 0.79]], [0.74, [0.04, -0.64, 0.77], 's'], [1.0, [0.04, -0.64, 0.77], 's'], [1.3, [-0.72, 0.1, 0.66]], [1.5, 'R']],
         dirF: [[0, 'R'], [0.2, [0.66, -0.1, 0.74]], [0.4, [0.02, -0.6, 0.8]], [0.56, [-0.04, -0.66, 0.75]], [0.64, [-0.04, -0.61, 0.79]], [0.76, [-0.04, -0.64, 0.77], 's'], [1.02, [-0.04, -0.64, 0.77], 's'], [1.32, [0.72, 0.1, 0.66]], [1.5, 'R']],
         curl: [[0, 'R'], [0.3, LOOSE], [0.56, BOX, 's'], [1.0, BOX, 's'], [1.32, 'R']],
@@ -160,12 +160,13 @@ export const BEATS = {
       hold: 0.96,
       focus: 'near',
       tracks: {
-        // a small palm-up lift: the hand leaves the desk, comes up in front of the chest (forward of the
-        // jacket, outside the lapel), the forearm turning the palm up (supination while the back of the
-        // hand faces the lens: no flip through palm-out), fingers extended toward the lens and a little
-        // in, and it lifts once more on the word: "and this is the point" (no press first, an eased start)
-        wrist: [[0, 'R'], [0.3, [-4.4, 10.6, 15.6]], [0.48, [-3.2, 1.4, 15.4]], [0.58, [-3.1, 0.4, 15.6]], [0.7, [-3.12, 0.9, 15.55], 's'], [0.96, [-3.12, 0.8, 15.5], 's'], [1.24, [-5.6, 12.8, 15.4]], [1.5, 'R', 's']],
-        dir: [[0, 'R'], [0.2, [-0.7, -0.05, 0.7]], [0.4, [-0.7, -0.2, 0.68]], [0.56, [-0.72, -0.28, 0.64]], [0.64, [-0.72, -0.24, 0.65]], [0.76, [-0.72, -0.26, 0.64], 's'], [1.0, [-0.72, -0.26, 0.64], 's'], [1.3, [-0.74, 0.12, 0.64]], [1.5, 'R']],
+        // a small palm-up lift: the hand leaves the desk and opens outward beside the body at chest-to-
+        // shoulder height (well clear of the jacket and the lapel: critic r2, a palm on the chest read as
+        // "hand on heart"; and above the subtitle box of an MCU), the forearm turning the palm up
+        // (supination while the back of the hand faces the lens: no flip through palm-out), fingers
+        // extended outward, and it lifts once more on the word: "and this is the point" (an eased start)
+        wrist: [[0, 'R'], [0.3, [-2.0, 7.6, 15.0]], [0.48, [0.8, -1.4, 14.6]], [0.58, [1.0, -2.3, 14.5]], [0.7, [0.98, -1.8, 14.52], 's'], [0.96, [0.98, -1.9, 14.5], 's'], [1.24, [-3.6, 11.6, 14.6]], [1.5, 'R', 's']],
+        dir: [[0, 'R'], [0.2, [-0.7, -0.05, 0.7]], [0.4, [0.3, -0.2, 0.8]], [0.56, [0.72, -0.26, 0.62]], [0.64, [0.75, -0.24, 0.6]], [0.76, [0.74, -0.25, 0.61], 's'], [1.0, [0.74, -0.25, 0.61], 's'], [1.3, [-0.74, 0.12, 0.64]], [1.5, 'R']],
         curl: [[0, 'R'], [0.32, LOOSE], [0.6, LIFT, 's'], [1.0, LIFT, 's'], [1.34, 'R']],
         sup: [[0, 0], [0.06, 0, 's'], [0.2, 1, 's'], [1.36, 1, 's'], [1.46, 0, 's'], [1.5, 0]],
         facing: [[0, 'R'], [0.3, -1, 's'], [0.5, 0.4], [0.6, 0.5, 's'], [1.0, 0.48, 's'], [1.3, -1, 's'], [1.5, 'R']],

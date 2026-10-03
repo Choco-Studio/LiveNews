@@ -9,7 +9,7 @@ import { splitSentences } from './audio/sentences.js';
 import { ACTIONS } from './cues.js';
 import { openFor } from './scenes/opens.js';
 import { VoicePlayer } from './voice/player.js';
-import { paceFor, gapAfter, CHANNEL, paceTrace } from './pace.js';
+import { paceFor, gapAfter, CHANNEL, paceTrace, cutWait, isRepeat } from './pace.js';
 
 const now = () => performance.now() / 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -508,7 +508,9 @@ export class Director {
     if (anchorShot === 'wide' && segs[segs.indexOf(seg) + 1]?.type === 'chat') anchorShot = 'close';
     // PACE (critics r1): a story change is always a visible cut: never the wide already on air (a focus re-set of the
     // wide shows nothing new), never the same presenter's close again (a jump cut)
-    if (s.shot === anchorShot && (anchorShot === 'wide' || s.focus === seg.anchor)) anchorShot = anchorShot === 'close' ? 'wide' : 'close';
+    // (pace.js isRepeat: the default path's wide is one camera whoever has the focus)
+    const asSeen = (shot, focus) => ({ shot, focus: shot === 'wide' ? null : focus });
+    if (isRepeat(s.program?.id, [asSeen(s.shot, s.focus)], asSeen(anchorShot, seg.anchor))) anchorShot = anchorShot === 'close' ? 'wide' : 'close';
     // a round-up item opens on its map (the v2 planner's map to map), but after shots.mapRun maps in a row an item
     // shows its picture, else its reader in vision (never a 40 s run of one shot type)
     if ((seg.feature === 'roundup' || seg.roundup) && seg.location) return [(this.mapRun || 0) < pace(s).shots.mapRun ? 'map' : hasImg ? 'full' : anchorShot];
@@ -592,13 +594,15 @@ export class Director {
       if (!cue) return cutTo(i, beats[Math.min(i, beats.length - 1)]);
       const beat = cue.shot;
       const apply = () => this.setShot(beat, { focus: cue.focus || seg.anchor, storyId: seg.storyId, wall, card: cardFor(beat), framing: cue.framing, cameraMove: cue.move });
-      // Hold every shot for at least the profile's minimum before cutting away (cut cooldown).
+      // Hold every shot for at least the profile's minimum before cutting away (cut cooldown); the opening cut too when
+      // a studio shot is on air (NEWS IN 60's 2.5 s intro wide: the story's voice starts over it, no dead pause)
       clearTimeout(pending);
       const held = now() - s.shotSince;
       const MIN_SHOT = P.shots.cooldown;
-      if (i === 0 || held >= MIN_SHOT) apply();
-      else pending = setTimeout(apply, (MIN_SHOT - held) * 1000);
-      return 0;
+      const wait = i === 0 && !STUDIO.has(s.shot) ? 0 : cutWait(s.program?.id, now() - held, now());
+      if (wait <= 0.05) apply();
+      else pending = setTimeout(apply, wait * 1000);
+      return i === 0 ? Math.max(0, wait) : 0;
     };
     // ---- default path (PACE, critics r1)
     const anchorShot = STUDIO.has(beats[0]) ? beats[0] : seg.shot === 'wide' && s.cast.B ? 'wide' : 'close';
@@ -626,7 +630,7 @@ export class Director {
       clearTimeout(pending);
       const held = this.onAir();
       const MIN_SHOT = P.shots.cooldown;
-      const wait = i === 0 ? (STUDIO.has(s.shot) ? MIN_SHOT - held : 0) : i < 0 ? 0 : Math.max(0, MIN_SHOT - held);
+      const wait = (i === 0 && !STUDIO.has(s.shot)) || i < 0 ? 0 : cutWait(s.program?.id, now() - held, now()); // pace.js cooldown
       if (i > 0 && left() - wait < P.shots.min) return 0;
       if (wait > 0.05) {
         opening = i === 0;

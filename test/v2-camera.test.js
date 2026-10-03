@@ -14,6 +14,7 @@ import { SET, sxOf, syOf } from '../public/js/v2/canvas25d/studio/geometry.js';
 import { lookFor, PRESENTER_IDS } from '../public/js/v2/canvas25d/cast/index.js';
 import { segmentContext } from '../public/js/v2/canvas25d/direction/context.js';
 import { planShots, MIN_SHOT, SHOT_STYLES, pauseCut, isCatch } from '../public/js/v2/canvas25d/direction/shots.js';
+import { paceFor } from '../public/js/pace.js'; // PACE: the round-up's map-run rule
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const load = (name) => JSON.parse(fs.readFileSync(path.join(ROOT, `v2-camera-${name}.json`), 'utf8'));
@@ -525,6 +526,12 @@ test('grammar: every cut sits on a sentence start (±0.1 s), a named word, an it
           assert.ok(Math.abs(e.at - tName) <= 0.3, `${label}: within ±0.3 s of the place name`);
           continue;
         }
+        // PACE (pace.js maxima, logged in CONTRACTS): a cut on a word that opens a phrase (`place: 'phrase'`, or
+        // COSMOS' Reading 'word'): on that word's start
+        if (e.place === 'phrase' || e.place === 'word') {
+          assert.ok((ctx.words || []).some((w) => w.char === e.char && Math.abs(w.t - e.at) <= 0.1), `${label}: on a word start`);
+          continue;
+        }
         assert.ok(starts.some((t) => Math.abs(t - e.at) <= 0.1), `${label}: on a sentence start`);
       }
     }
@@ -638,9 +645,15 @@ test('grammar: WORLD NOW maps on sentence 2 (or the first sentence start the sin
         if (prior.length === 1) assert.ok(Math.abs(map.at - first.t0) <= 0.1, `${name} seg ${ctx.index}: map at ${map.at} vs ${first.t0}`);
       }
       if (ctx.seg.roundup) {
-        assert.equal(events[0].shot, 'map');
         assert.equal(events[0].at, 0, 'round-up items cut on their first word');
-        assert.ok(events.every((e) => e.shot === 'map'), 'all on the map');
+        // PACE (shots.mapRun, logged in CONTRACTS): after mapRun map items in a row, one item shows its picture or reader
+        const run = paceFor(ctx.programId).shots.mapRun;
+        const k = ctx.seg.roundup.index;
+        if (k > 0 && k % (run + 1) === run) assert.ok(events.length === 1 && ['full', 'close'].includes(events[0].shot), 'a break in the map run');
+        else {
+          assert.equal(events[0].shot, 'map');
+          assert.ok(events.every((e) => e.shot === 'map' || e.capped), 'all on the map');
+        }
       }
     }
   }
@@ -658,7 +671,8 @@ test('grammar: COSMOS: every shot ≥ 4 s, maps near the place name, the Reading
         assert.equal(events[0].shot, 'fact');
         assert.equal(events[0].at, 0, 'the Reading on the first word, no single before it');
         const single = events.find((e) => e.shot === 'close');
-        if (single) assert.ok(single.at >= 4 && ctx.sentences.some((s) => Math.abs(s.t0 - single.at) < 0.1), 'single on a sentence start ≥ 4 s after the cut');
+        // (or on the word the planner's readingSingle chose inside sentence 2 when the voice has no pause there)
+        if (single) assert.ok(single.at >= 4 && (ctx.sentences.some((s) => Math.abs(s.t0 - single.at) < 0.1) || (single.place === 'word' && ctx.words.some((w) => w.char === single.char))), 'single on a sentence start ≥ 4 s after the cut');
       }
       if (ctx.type === 'story') {
         // never cut away during sentence 1

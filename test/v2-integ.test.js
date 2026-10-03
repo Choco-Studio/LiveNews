@@ -850,7 +850,12 @@ test('direction: the intro follows its plan: montage frames on the teased storie
     },
     say(seg) {
       const h = live.begin(seg);
-      for (let si = 0; si < h.plan.ctx.sentences.length; si++) h.sentence(si);
+      const ss = h.plan.ctx.sentences;
+      for (let si = 0; si < ss.length; si++) {
+        h.sentence(si);
+        // speech marks inside the sentence, as speak() fires them (PACE: the greeting's wide may cut on a phrase word)
+        (h.speak?.marks || []).forEach((c, j) => c >= ss[si].start && c < (ss[si + 1]?.start ?? Infinity) && h.speak.onMark(j));
+      }
       h.end();
       return Promise.resolve();
     },

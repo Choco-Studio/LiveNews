@@ -760,6 +760,8 @@ class SegmentPlan {
       [rot[i], rot[j]] = [rot[j], rot[i]];
     }
     for (const [alt, v] of rot) if (!(alt === name && v == null) && ok(alt, v)) out.push([alt, v]);
+    // the full palm-out raise is the loudest of them: only when nothing quieter reads here
+    if (name !== 'raise_hand' && ok('raise_hand', null)) out.push(['raise_hand', null]);
     return out;
   }
 }
@@ -790,7 +792,8 @@ function fault(where, err) {
 /** Readable variants of the same action, tried first when a statement cannot air as written. */
 const SAME_ACTION = { steeple: ['tap'], raise_hand: ['lift', 'box'], point_screen: ['open'], chin: ['touch'] };
 /** Statements whose hands read in a head-and-shoulders single (chest and face level), rotated per sentence. */
-const CHEST = [['steeple', 'tap'], ['raise_hand', 'lift'], ['raise_hand', 'box'], ['raise_hand', null], ['point_screen', 'open'], ['count', null], ['chin', 'touch']];
+// (the full palm-out raise_hand is not in the rotation: alternatives() offers it last)
+const CHEST = [['steeple', 'tap'], ['raise_hand', 'lift'], ['raise_hand', 'box'], ['point_screen', 'open'], ['count', null], ['chin', 'touch']];
 const NUMBERISH = /\d|\b(one|two|three|four|five|first|second|third)\b|,/i;
 const NO_PREV = Object.freeze({ marked: Infinity, arm: Infinity, fam: null, usedM: 0, usedB: 0 });
 const MEM0 = Object.freeze({ t0: 0, recent: Object.freeze([]), raised: Object.freeze({}) });
@@ -1131,6 +1134,18 @@ function addBeats(P, ctx, R) {
       }
       if (done) break;
     }
+    // no hand beat reads here (the shot hides the desk or the subtitle covers the chest): the stressed
+    // word still gets a small beat of the head, the newsreader's own default
+    if (!done && P.admit('nod') === 'nod') {
+      for (const wi of cands) {
+        const opts = { variant: R.variants.nod || 'single', amp, free: true, beat: true };
+        const ev = P.tryAt('nod', wi, opts);
+        if (ev) {
+          P.commit(ev, opts);
+          break;
+        }
+      }
+    }
   }
 }
 
@@ -1360,8 +1375,10 @@ function handsVisible(ctx, ev, d) {
   const m = solo ? 1 : SIDE[ctx.speaker] ?? 1;
   const xa = p.x + Math.min(b.x0 * m, b.x1 * m) * p.s, xb = p.x + Math.max(b.x0 * m, b.x1 * m) * p.s;
   let floor = single ? HAND_FLOOR : HAND_FLOOR_WIDE;
-  // in a single the subtitle's columns (the hand's half-width either side of its centre counts)
-  if (single && xb + 6 >= CAPTION_BOX.x0 && xa - 6 <= CAPTION_BOX.x1) floor = CAPTION_BOX.top - CAPTION_CLEAR;
+  // in the subtitle's columns (the hand's half-width either side of its centre counts) the hand must
+  // clear the caption box, in any shot: below it there is only the strap (the desk hands of a two-shot
+  // sit behind its tag row, or peek through the 6 px gap)
+  if (xb + 6 >= CAPTION_BOX.x0 && xa - 6 <= CAPTION_BOX.x1) floor = Math.min(floor, CAPTION_BOX.top - CAPTION_CLEAR);
   if (p.y + b.bottom * p.s > floor || p.y + b.top * p.s < 12) return false;
   if (single && p.y + b.wrist * p.s > WRIST_FLOOR) return false;
   return xa >= 8 && xb <= 376;
