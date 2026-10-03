@@ -65,6 +65,8 @@ export const config = {
   },
   // Episodes produced ahead of air
   queueSize: num('QUEUE_SIZE', 2),
+  // the rotation slot the channel starts at (a programme id: demos and recordings), else the first
+  rotationStart: env('ROTATION_START', '').trim(),
   // Stories offered to the writer, who picks the best for each programme
   candidatePool: num('CANDIDATE_POOL', 12),
   // Second AI pass: a standards editor checks each script against its sources
@@ -106,6 +108,13 @@ export const config = {
     firstBudgetSeconds: num('VOICE_FIRST_BUDGET_S', 480),
     cacheMb: num('VOICE_CACHE_MB', 300),
     dir: path.join(ROOT, 'data', 'voice'),
+  },
+  // WORLD WEATHER's data (server/weather.js): 'auto' = Open-Meteo live, or the offline demo data (DEMO DATA on
+  // screen) while the news desk runs on the fixture feeds; 'open-meteo' | 'fixture' | 'off'. Warnings: GDACS.
+  weather: {
+    source: ((v) => (['auto', 'open-meteo', 'fixture', 'off'].includes(v) ? v : 'auto'))(env('WEATHER', 'auto').trim().toLowerCase()),
+    warnings: env('WEATHER_WARNINGS', 'gdacs').trim().toLowerCase() === 'off' ? 'off' : 'gdacs',
+    ttlMinutes: bounded('WEATHER_TTL_MIN', 30, 5, 360),
   },
   // Image search for stories still without a picture (owner 22:40: on air only REAL photos found on the
   // web): a FILE photo of the story's place. 'commons' (Wikimedia Commons, no key, free licences) by

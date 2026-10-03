@@ -17,7 +17,8 @@ import { readPNG, writePNG, measure as measureZones, ZONES } from '../tools/meas
 
 const W = 384, H = 216;
 const channel = JSON.parse(fs.readFileSync(new URL('../config/channel.json', import.meta.url), 'utf8'));
-const PROGRAMS = Object.keys(channel.programs);
+// the studio programmes (WORLD WEATHER airs from its own weather centre, scenes/weather, not the desk set)
+const PROGRAMS = Object.keys(channel.programs).filter((id) => channel.programs[id].kind !== 'weather');
 
 /** A fixture picture as the director would hold it: 416x234 RGBA (box-sampled, not pixelated). */
 function fixture(name) {

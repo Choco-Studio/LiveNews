@@ -22,6 +22,13 @@
 //     No lat/lon: an idle world view panning by whole pixels, London marked, with
 //     the day/night terminator (now: epoch ms, default: the graphics clock).
 //
+//   drawWorldMap(ctx, t, dt, { view: { lat, lon, zoom }, tint, x, y, w, h })
+//     WORLD WEATHER's map wall: the view is the caller's (centre and zoom, 1 = the whole
+//     globe across the width), no marker, no label, no move of its own. tint(lat, lon, x, y)
+//     may return a packed colour (0xAABBGGRR) for a land pixel (the temperature field);
+//     coastlines and borders keep their own colour. Returns the view { clon, clat, s, kx, w, h }
+//     for the caller's overlays (x = w/2 + dLon * s * kx, y = h/2 + (clat - lat) * s).
+//
 // Every output pixel is shaded individually from the view: the land mask
 // (Natural Earth, 4096x2048 bit-packed, plus a box-filtered mip pyramid) is
 // sampled and thresholded so coastlines are crisp at every zoom, borders are
@@ -1179,6 +1186,7 @@ export function drawWorldMap(ctx, t, dt, opts = {}) {
   }
   t = Number.isFinite(t) ? t : 0;
   dt = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+  if (o.view && typeof o.view === 'object') return drawViewMap(ctx, x, y, w, h, o.view, typeof o.tint === 'function' ? o.tint : null, o.tintKey ?? null);
   let lat = o.lat === null || o.lat === undefined || o.lat === '' ? NaN : Number(o.lat);
   const lon = o.lon === null || o.lon === undefined || o.lon === '' ? NaN : Number(o.lon);
   const hasTarget = Number.isFinite(lat) && Number.isFinite(lon);
@@ -1261,6 +1269,55 @@ export function drawWorldMap(ctx, t, dt, opts = {}) {
   if (!label) return;
   const box = drawLabel(rt, ctx, x, y, cx, cy, place, lat, lon, tm - T.label, acc);
   if (box && tm >= T.context) drawContext(rt, ctx, x, y, view, cx, cy, box, place, tm - T.context, pins, lat, lon);
+}
+
+/**
+ * The caller's view (WORLD WEATHER): no marker, no label; the land tinted by `tint` where it returns a colour.
+ * The composed frame is rebuilt only when the view or the tint (tintKey) changes. Returns the view.
+ */
+const VIEW_OUT = { clon: 0, clat: 0, s: 1, kx: 1, w: 384, h: 216 };
+function drawViewMap(ctx, x, y, w, h, v, tint, tintKey) {
+  const rt = getInstance(w, h);
+  const s0 = w / 360;
+  const lat0 = clamp(finite(v.lat, 0), -80, 80);
+  const s = s0 * clamp(finite(v.zoom, 1), 1, 40);
+  const kx = clamp(Math.cos(lat0 * DEG), 0.5, 1);
+  const sx = s * kx;
+  // never a band beyond the poles
+  const lim = 90 - (h / 2 + 1) / s;
+  let clat = lim > 0 ? clamp(lat0, -lim, lim) : 0;
+  let clon = finite(v.lon, 0);
+  clon = Math.round(clon * sx) / sx; // whole pixels: coastlines never swim while the camera pans
+  clat = Math.round(clat * s) / s;
+  const view = rt.view;
+  view.clon = clon; view.clat = clat; view.s = s; view.kx = kx; view.idle = false;
+  view.ax = view.ay = view.fx = view.fy = -1;
+  const changed = clon !== rt.lastClon || clat !== rt.lastClat || s !== rt.lastS || kx !== rt.lastKx;
+  if (changed) {
+    renderBase(rt, view);
+    rt.lastClon = clon; rt.lastClat = clat; rt.lastS = s; rt.lastKx = kx;
+  }
+  if (changed || rt.tintKey !== tintKey || rt.phase !== -2) {
+    const { u32, base, colLon, rowLat } = rt;
+    let i = 0;
+    for (let yy = 0; yy < h; yy++) {
+      const la = rowLat[yy];
+      for (let xx = 0; xx < w; xx++, i++) {
+        const b = base[i];
+        const tone = b & 15;
+        let c = 0;
+        // plain land only: coast and border pixels (the dark step) keep the map's own ink
+        if (tint && tone >= T_LAND0 && tone <= T_LAND1 && (b & 48) !== 48) c = tint(la, colLon[xx], xx, yy) >>> 0;
+        u32[i] = c || PAL[b];
+      }
+    }
+    rt.cctx.putImageData(rt.img, 0, 0);
+    rt.tintKey = tintKey;
+    rt.phase = -2; // the locator recomposes its own frame after a weather frame
+  }
+  ctx.drawImage(rt.canvas, x, y);
+  VIEW_OUT.clon = clon; VIEW_OUT.clat = clat; VIEW_OUT.s = s; VIEW_OUT.kx = kx; VIEW_OUT.w = w; VIEW_OUT.h = h;
+  return VIEW_OUT;
 }
 
 /** Palette lookup of the base layer; the idle view adds the day/night terminator (Bayer 4x4) and city lights. */

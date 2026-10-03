@@ -219,6 +219,17 @@ const PROGRAMMES = {
     gestures: { perMin: 3, minGap: 6, beatsPerMin: 6, rest: 0.7, grave: 1.5, floor: 1.5, floorGrave: 0.5 },
     music: { minBed: 30, maxChangesPerMin: 1 },
   },
+  'world-weather': {
+    label: 'calm and continuous',
+    // WORLD WEATHER is one continuous shot: the camera follows the presenter along the map wall (scenes/weather);
+    // between two segments a short breath only, the walk to the next zone runs under the next first words
+    length: { target: [270, 480], blocks: ['intro', 'zones', 'warnings', 'tomorrow', 'signoff'] },
+    open: { firstWord: 0.6 },
+    gaps: { weather: 0.55 },
+    holds: { signoff: 1.2, endcard: 3.0 },
+    moves: { max: 0, minGap: Infinity }, // no camera moves of the studio kind: the weather centre tracks him itself
+    music: { minBed: 40, maxChangesPerMin: 1 },
+  },
   'news-60': {
     label: 'brisk but readable',
     // news-60.md: 55-65 s of air ("NEWS IN 60"); up to 70 s when the six items run long, never two minutes

@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NewsDesk } from '../server/news.js';
+import { WeatherDesk } from '../server/weather.js';
 import { Producer, SOURCE_MAX, sourceWithCredit } from '../server/producer.js';
 import { Station } from '../server/station.js';
 import { ProviderChain } from '../server/providers/index.js';
@@ -28,7 +29,7 @@ async function offlineStation() {
   const channel = loadChannel();
   const config = { queueSize: 1, candidatePool: 12, minNewStories: 3, reviewPass: true };
   const chain = new ProviderChain([createMockProvider()], { record() {} }, { log: silent });
-  const producer = new Producer({ config, newsDesk: desk, chain, log: silent });
+  const producer = new Producer({ config, newsDesk: desk, chain, weather: new WeatherDesk({ source: 'auto', offline: () => desk.localOnly, log: silent }), log: silent });
   const station = new Station({ config, newsDesk: desk, producer, chain, channel: () => channel, log: silent });
   return { desk, channel, producer, station };
 }
@@ -64,7 +65,7 @@ test('offline: four rotations, every slot produced with at least its floor, no r
     'every slot of four rotations airs, in order'
   );
   assert.ok(episodes.every((e) => !e.replay), 'no replay');
-  for (const e of episodes) {
+  for (const e of episodes.filter((x) => x.provider !== 'weather')) {
     const program = { id: e.program.id, ...channel.programs[e.program.id] };
     assert.ok(e.storyIds.length >= producer.floorOf(program), `${e.program.title}: ${e.storyIds.length} stories, floor ${producer.floorOf(program)}`);
   }
@@ -75,7 +76,7 @@ test('offline: four rotations, every slot produced with at least its floor, no r
   }
   // the second time round, programmes are not the first rotation again in the same order
   const heads = (e) => e.rundown.map((r) => r.headline).join('|');
-  const same = channel.rotation.filter((_, i) => heads(episodes[i]) === heads(episodes[i + channel.rotation.length])).length;
+  const same = channel.rotation.filter((id, i) => channel.programs[id].kind !== 'weather' && heads(episodes[i]) === heads(episodes[i + channel.rotation.length])).length;
   assert.ok(same <= 1, `${same} programmes repeated their running order one rotation later`);
 
   // (fix r2) 24/7 variety: no presenter line (chat, button, signpost) airs twice in four rotations
@@ -141,6 +142,7 @@ test('every picture on air carries a credit; a picture that is not the outlet’
   const { channel, producer } = await offlineStation();
   let lent = 0;
   for (const [k, id] of channel.rotation.entries()) {
+    if (channel.programs[id].kind === 'weather') continue; // no pictures: the weather centre's own map
     const upcoming = [1, 2, 3].map((j) => channel.rotation[(k + j) % channel.rotation.length]).filter((x) => x !== id);
     const ep = await producer.produce(channel, id, { upcoming });
     for (const item of [...ep.segments.filter((s) => s.type === 'story'), ...ep.rundown]) {

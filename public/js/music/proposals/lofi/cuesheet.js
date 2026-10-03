@@ -128,7 +128,18 @@ const NEWS60 = (m, o) => {
   }
 };
 
-const POLICY = { 'world-now': WORLD, 'tech-bytes': TECH, cosmos: COSMOS, 'money-minute': MONEY, 'news-60': NEWS60 };
+// WORLD WEATHER (owner 17:05: soft music for every programme): WORLD NOW's light "and finally" song in its
+// sparse chat arrangement under the forecast; silence under the warnings (a storm is not a jingle)
+const WEATHER = (m, o) => {
+  switch (m) {
+    case 'weather': return o.kind === 'warning' ? silence(1.2) : bed('world-now/finally', 'chat');
+    case 'signoffEnd': return silence(1.5, { atBar: true });
+    case 'endcard': return silence(0.6);
+    default: return silence();
+  }
+};
+
+const POLICY = { 'world-now': WORLD, 'tech-bytes': TECH, cosmos: COSMOS, 'money-minute': MONEY, 'news-60': NEWS60, 'world-weather': WEATHER };
 
 // ------------------------------------------------------------------ channel
 

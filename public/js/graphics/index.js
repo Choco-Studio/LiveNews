@@ -30,6 +30,7 @@ export const OVERLAYS = {
   map: 'news',
   fact: 'news',
   montage: 'news',
+  weather: 'news', // WORLD WEATHER's weather centre (scenes/weather)
   breakingCard: 'bug',
   ad: 'ad',
 };
@@ -49,6 +50,7 @@ export const PROGRAM_TAG = CHANNEL.programTag; // programme name beside the bug 
 export const PROGRAM_GRAPHICS = {
   'news-60': { tagHold: Infinity, progressRule: true, ticker: 'next' }, // news-60.md "Graphics"
   'money-minute': { ticker: 'figures' }, // money-minute.md 3.6 "bottom line"
+  'world-weather': { ticker: 'next' }, // the forecast is the programme: one calm UP NEXT plate, no headlines
 };
 const THEME_PROGRAM = { flash: 'news-60', money: 'money-minute' };
 const DEFAULT_GRAPHICS = Object.freeze({ tagHold: PROGRAM_TAG.hold, progressRule: false, ticker: 'flip' });

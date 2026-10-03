@@ -135,6 +135,7 @@ export class Director {
       const moment = heavy ? 'story' : seg.feature === 'roundup' ? 'roundup' : seg.feature === 'lighter' ? 'finally' : seg.feature === 'number' ? 'number' : 'story';
       m.cue(moment, { emotion, grave, breaking: Boolean(seg.breaking), segment });
     } else if (seg.type === 'chat') m.cue('chat', { emotion, grave, segment });
+    else if (seg.type === 'weather') m.cue('weather', { kind: seg.kind, emotion, segment });
     else if (seg.type === 'outro') m.cue('outro', { emotion, segment });
     return null;
   }
@@ -387,7 +388,7 @@ export class Director {
     return [];
   }
 
-  async say(seg, onSentence) {
+  async say(seg, onSentence = null, extra = null) {
     const s = this.scene;
     s.anchors[seg.anchor] = { emotion: seg.emotion };
     for (const slot of Object.keys(s.cast)) {
@@ -403,8 +404,10 @@ export class Director {
     const ahead = this.voiceAhead?.seg === seg ? this.voiceAhead.job : null;
     this.voiceAhead = null;
     const recorded = await (ahead ?? this.voices.audioFor(seg));
-    const v2 = this.v2?.begin(seg, recorded ?? null); // v2: scene.segPlan (timed for the voice that plays) + its shot cues
+    // v2: scene.segPlan (timed for the voice that plays) + its shot cues; the weather centre directs itself
+    const v2 = seg.type === 'weather' ? null : this.v2?.begin(seg, recorded ?? null);
     const v2marks = v2?.speak?.marks || []; // v2 cuts that fall inside a sentence
+    const more = Array.isArray(extra?.marks) && typeof extra.onMark === 'function' ? extra.marks : []; // the caller's own marks
     const musicSentence = this.musicSegment(seg);
     await this.audio.speak(seg.text, seg.anchor, {
       audio: recorded, // recorded voice from the server, when the episode has one (voice contract)
@@ -414,8 +417,12 @@ export class Director {
         musicSentence?.(i);
         onSentence?.(i);
       },
-      marks: [...cues.map((cue) => cue.char), ...v2marks],
-      onMark: (i) => (i < cues.length ? this.perform(cues[i].slot || seg.anchor, cues[i]) : v2?.speak?.onMark(i - cues.length)),
+      marks: [...cues.map((cue) => cue.char), ...v2marks, ...more],
+      onMark: (i) => {
+        if (i < cues.length) return this.perform(cues[i].slot || seg.anchor, cues[i]);
+        if (i < cues.length + v2marks.length) return v2?.speak?.onMark(i - cues.length);
+        return extra.onMark(i - cues.length - v2marks.length);
+      },
     });
     v2?.end();
     s.subtitle = null;
@@ -464,6 +471,19 @@ export class Director {
         case 'story':
           await this.playStory(seg);
           break;
+        case 'weather': {
+          await this.playWeather(seg, index);
+          if (seg.kind !== 'outro') break;
+          // the sign-off: the programme's sign-off cue, the hold, then the end card (as any programme's outro)
+          this.audio.sfx('outro', { programId: s.program?.id, startAt: performance.now() + 150 });
+          await sleep(pace(s).holds.signoff * 1000);
+          await this.stinger(() => {
+            s.weather = null;
+            this.setShot('endcard', { card: { line1: 'STAY WITH US', line2: `${this.channel.name} · LIVE 24 HOURS` } });
+          });
+          await sleep(pace(s).holds.endcard * 1000);
+          continue;
+        }
         case 'chat': {
           s.lowerThird = null;
           // v2: the plan's own opening shot now (no default wide on air while a late clip is looked up);
@@ -497,7 +517,9 @@ export class Director {
       // Air between segments (owner 18:52): the pace profile's pause for this pair (story, hand-over,
       // chat turn, block, before And finally...), minus the silence the playout adds by itself (a voice
       // engine start-up: only when a voice plays, not in mute / blips)
-      const { kind, gap } = gapAfter(episode, index);
+      const { kind, gap: paced } = gapAfter(episode, index);
+      // WORLD WEATHER: a short breath (pace.js gaps.weather; the walk to the next mark runs under the next words)
+      const gap = seg.type === 'weather' ? pace(s).gaps.weather ?? paced : paced;
       if (gap >= pace(s).strap.outAtBlock && kind !== 'signoff') s.lowerThird = null; // a block pause clears the strap
       const latency = this.audio?.mode === 'tts' ? CHANNEL.voiceLatency : 0;
       // the next segment's recorded voice is looked up during the pause, not after it (air = max(gap, lookup))
@@ -505,6 +527,27 @@ export class Director {
       if (following) this.voiceAhead = { seg: following, job: Promise.resolve(this.voices.audioFor(following)).catch(() => null) };
       await sleep(Math.max(60, (gap - latency) * 1000));
     }
+  }
+
+  /**
+   * WORLD WEATHER: one segment in the weather centre (scenes/weather). The shot stays on the weather centre for
+   * the whole programme (no cuts: the camera follows the presenter along the wall); a new segment sends him to
+   * its mark. A city lights up, and he points at it, when the voice reaches its name (seg.marks).
+   */
+  async playWeather(seg, index) {
+    const s = this.scene;
+    s.lowerThird = null;
+    if (s.shot !== 'weather') this.setShot('weather', { storyId: null, card: null, focus: seg.anchor });
+    s.weather = { data: this.episode?.weather || null, seg, index, since: now(), hot: null, hotAt: 0 };
+    const marks = Array.isArray(seg.marks) ? seg.marks : [];
+    await this.say(seg, null, {
+      marks: marks.map((m) => m.char),
+      onMark: (i) => {
+        if (s.weather?.seg !== seg) return;
+        s.weather.hot = marks[i]?.city || null;
+        s.weather.hotAt = now();
+      },
+    });
   }
 
   /** Cold open: the headlines play as a montage under the presenter's intro. */

@@ -29,12 +29,14 @@ Estado (3 oct, 14:30): trabajando punto por punto. ✅ = hecho y subido; 🟡 = 
 18. **Expertos del canal** (8 fijos, ficticios). Dan vida al programa y se ciñen a los hechos de la fuente.
 19. **Entrevistas reales "IN THEIR WORDS".** La persona aparece en la pantalla o en el plató diciendo solo palabras de declaraciones públicas, con la etiqueta RECREACIÓN. Nunca víctimas, menores, particulares ni noticias graves.
 20. **Invitados.** Personalización del personaje por IA y cara esculpida preparada con antelación.
-21. **Nuevo programa WORLD WEATHER (5-8 min):**
-    - mapa del mundo por zonas, con temperatura, lluvia, sol y viento;
-    - presentador de pie que camina por el plató, con la cámara siguiéndole mientras señala;
-    - segundo panel de avisos (huracanes, olas de calor, inundaciones);
-    - datos reales de un servicio meteorológico (por ejemplo Open-Meteo) y avisos oficiales, citando la fuente;
-    - mismo estilo que el mapa de noticias.
+21. 🟡 **Nuevo programa WORLD WEATHER (≈5 min).** Hecho:
+    - mapa del mundo (el mismo de las noticias) por 6 zonas, con la tierra coloreada por temperatura, iconos animados (sol, nubes, lluvia, tormenta, nieve, niebla) y la máxima de cada ciudad;
+    - Sam de pie que camina de zona en zona con la cámara siguiéndole, y señala cada ciudad cuando la nombra;
+    - segundo panel de avisos (huracán girando en el mapa, nivel de alerta, vientos, fuente);
+    - datos reales de Open-Meteo y avisos oficiales de GDACS, citando la fuente; el guion sale solo de los datos (ninguna cifra inventada);
+    - cabecera propia (sol y nube) y música suave.
+
+    Falta: abrir la red a api.open-meteo.com y gdacs.org para los datos reales (sin red se ven DATOS DE DEMOSTRACIÓN, marcados así en pantalla), y las decisiones 8 y 12 (presentador del tiempo). Detalle en docs/programmes/world-weather.md.
 22. **Ritmo.** Transiciones, pausas entre bloques y tiempos de espera (el equipo de ritmo estaba a mitad).
 23. **Textos.** Comprobar el arreglo de las frases rotas de NEWS IN 60, que no se repita la misma noticia, más variedad 24/7, que no se cuele una foto de otra noticia y verificación de cifras.
 

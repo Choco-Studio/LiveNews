@@ -22,6 +22,7 @@ import { COSMOS, drawCosmos } from './opens/cosmos.js';
 import { MONEY, drawMoneyMinute } from './opens/money.js';
 import { FLASH, drawNews60 } from './opens/flash.js';
 import { GENERIC, drawGeneric } from './opens/generic.js';
+import { WEATHER_OPEN, drawWorldWeather } from './opens/weather.js';
 import { TUNES } from './opens/tunes.js';
 
 const wrap = (fn) => (ctx, t, dt, info) => fn(ctx, dt, info);
@@ -33,6 +34,7 @@ export const OPENS = {
   cosmos: open(drawCosmos, COSMOS, TUNES.cosmos),
   'money-minute': open(drawMoneyMinute, MONEY, TUNES['money-minute']),
   'news-60': open(drawNews60, FLASH, TUNES['news-60']),
+  'world-weather': open(drawWorldWeather, WEATHER_OPEN, TUNES.generic),
 };
 const FALLBACK = open(drawGeneric, GENERIC, TUNES.generic);
 /** The open for a programme id (own keys only: 'constructor' or '__proto__' get the generic open). */

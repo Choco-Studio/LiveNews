@@ -42,11 +42,14 @@ export function validateChannel(ch) {
     if (!ch.programs[id]) throw new Error(`rotation references unknown programme "${id}"`);
   }
   for (const [id, p] of Object.entries(ch.programs)) {
-    for (const key of ['title', 'tagline', 'style', 'storyLength']) {
+    if (p.kind !== undefined && p.kind !== 'weather') throw new Error(`programme "${id}" has an unknown "kind" (only "weather")`);
+    // a weather programme is written from the weather data (server/weatherwriter.js): no stories, no sections
+    const news = p.kind !== 'weather';
+    for (const key of news ? ['title', 'tagline', 'style', 'storyLength'] : ['title', 'tagline']) {
       if (typeof p[key] !== 'string' || !p[key].trim()) throw new Error(`programme "${id}" needs a "${key}" text`);
     }
-    if (!Number.isInteger(p.stories) || p.stories < 1) throw new Error(`programme "${id}" needs "stories" (a whole number ≥ 1)`);
-    if (!Array.isArray(p.categories) || !p.categories.length) throw new Error(`programme "${id}" needs a list of "categories"`);
+    if (news && (!Number.isInteger(p.stories) || p.stories < 1)) throw new Error(`programme "${id}" needs "stories" (a whole number ≥ 1)`);
+    if (news && (!Array.isArray(p.categories) || !p.categories.length)) throw new Error(`programme "${id}" needs a list of "categories"`);
     // Optional: running time [min, max] seconds (pace.js length.target, mirrored for the writer's prompt and the mock).
     if (p.targetSeconds !== undefined) {
       const t = p.targetSeconds;

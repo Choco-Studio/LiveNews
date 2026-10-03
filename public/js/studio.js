@@ -15,6 +15,9 @@ import { drawLogo, measureLogo } from './logo.js';
 import { ACTIONS } from './cues.js';
 import { Graphics } from './graphics/index.js';
 import { FrameGuard } from './graphics/guard.js';
+// WORLD WEATHER's weather centre (the standing presenter uses the v2 rig): loaded in the background at start-up
+let WEATHER = null;
+import('./scenes/weather/index.js').then((m) => (WEATHER = m), (err) => console.warn('[weather] scene unavailable', err));
 
 export { W, H };
 
@@ -189,6 +192,9 @@ export class Renderer {
         return cards.drawBreakingCard(ctx, t, dt, { headline: card.headline, source: card.source });
       case 'fact':
         return cards.drawFactCard(ctx, t, dt, { fact: card.fact, label: card.label, source: card.source, image: img?.card || null, numbers: card.numbers, quote: card.quote, headline: card.headline || scene.lowerThird?.headline, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
+      case 'weather':
+        if (WEATHER) return WEATHER.drawWeather(ctx, t, scene, this.audio);
+        return drawWorldMap(ctx, t, dt, {}); // the idle world until the weather centre has loaded
       case 'map':
         return drawWorldMap(ctx, t, dt, { lat: card.lat, lon: card.lon, place: card.place, accent: THEME_ACCENT[program?.theme], programId: program?.id, from: card.from, pins: card.pins, duration: card.duration, follow: true });
       case 'ad':

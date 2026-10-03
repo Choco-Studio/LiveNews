@@ -721,7 +721,9 @@ describe('Producer with the real NewsDesk, ProviderChain and mock provider', () 
 
   const realChannel = loadChannel();
 
-  for (const [programId, program] of Object.entries(realChannel.programs)) {
+  // the news programmes (WORLD WEATHER is written from the weather data: test/weather.test.js)
+  const newsPrograms = Object.entries(realChannel.programs).filter(([, p]) => p.kind !== 'weather');
+  for (const [programId, program] of newsPrograms) {
     test(`produces a valid "${program.title}" episode from config/channel.json`, async () => {
       const desk = makeRealDesk();
       const producer = makeRealProducer(desk);
@@ -749,7 +751,7 @@ describe('Producer with the real NewsDesk, ProviderChain and mock provider', () 
   }
 
   test('every programme follows its own rules: a breaking story leads, the number of the day is never first, no chat next to grave news', async () => {
-    for (const programId of Object.keys(realChannel.programs)) {
+    for (const [programId] of newsPrograms) {
       const desk = makeRealDesk();
       const episode = await makeRealProducer(desk).produce(realChannel, programId);
       const stories = episode.segments.filter((s) => s.type === 'story');

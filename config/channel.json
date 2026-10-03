@@ -458,6 +458,15 @@
           "outro": "nod"
         }
       }
+    },
+    "world-weather": {
+      "kind": "weather",
+      "title": "WORLD WEATHER",
+      "tagline": "THE SKIES OVER EVERY CONTINENT",
+      "theme": "weather",
+      "presenters": ["sam"],
+      "targetSeconds": [270, 480],
+      "style": "The world's weather from real data (Open-Meteo forecast, GDACS alerts), written by server/weatherwriter.js: the six zones west to east, the presenter standing and walking along the map wall, pointing at each city as he names it; warnings on a second panel, serious and official; tomorrow round the world; a warm sign-off. Every figure is a figure of the forecast."
     }
   },
   "rotation": [
@@ -465,6 +474,7 @@
     "tech-bytes",
     "news-60",
     "cosmos",
+    "world-weather",
     "world-now",
     "money-minute",
     "news-60"

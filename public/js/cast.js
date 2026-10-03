@@ -40,4 +40,5 @@ export const THEME_ACCENT = {
   space: P.magenta,
   money: P.green,
   flash: P.yellow,
+  weather: P.blue,
 };

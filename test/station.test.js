@@ -2,6 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Station, episodeAir } from '../server/station.js';
 import { NewsDesk } from '../server/news.js';
+import { WeatherDesk } from '../server/weather.js';
 import { Producer } from '../server/producer.js';
 import { ProviderChain } from '../server/providers/index.js';
 import { createMockProvider } from '../server/providers/mock.js';
@@ -1030,7 +1031,7 @@ describe('Station with the real Producer, NewsDesk and mock provider', () => {
     desk.updateTrending();
     const config = { queueSize, candidatePool: 12, minNewStories: 3, reviewPass: true };
     const chain = new ProviderChain([createMockProvider()], { record() {} }, { log: silentLogger });
-    const producer = new Producer({ config, newsDesk: desk, chain, log: silentLogger });
+    const producer = new Producer({ config, newsDesk: desk, chain, weather: new WeatherDesk({ source: 'fixture', log: silentLogger }), log: silentLogger });
     const station = new Station({ config, newsDesk: desk, producer, chain, channel: () => channel, log: silentLogger });
     return { station, desk, channel };
   }

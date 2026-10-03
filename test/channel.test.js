@@ -539,6 +539,8 @@ describe('config/channel.json', () => {
   const channel = loadChannel();
   const feedCategories = new Set(JSON.parse(fs.readFileSync(REAL_FEEDS_FILE, 'utf8')).map((f) => f.category));
   const programs = Object.entries(channel.programs);
+  // news programmes (a weather programme is written from the weather data: test/weather.test.js)
+  const news = programs.filter(([, p]) => p.kind !== 'weather');
 
   test('is a valid GLOBIT 24 channel line-up', () => {
     assert.doesNotThrow(() => validateChannel(channel));
@@ -557,7 +559,10 @@ describe('config/channel.json', () => {
   });
 
   test('every programme has what the writer and the producer need', () => {
-    for (const [id, p] of programs) {
+    for (const [id, p] of programs.filter(([, q]) => q.kind === 'weather')) {
+      for (const key of ['title', 'tagline', 'theme', 'style']) assert.ok(typeof p[key] === 'string' && p[key].trim(), `${id}.${key}`);
+    }
+    for (const [id, p] of news) {
       for (const key of ['title', 'tagline', 'theme', 'style', 'storyLength']) {
         assert.ok(typeof p[key] === 'string' && p[key].trim(), `${id}.${key}`);
       }
@@ -569,7 +574,7 @@ describe('config/channel.json', () => {
   });
 
   test('solo programmes have no chat segments (there is nobody to chat with)', () => {
-    for (const [id, p] of programs) {
+    for (const [id, p] of news) {
       if (p.presenters.length === 1) assert.equal(p.maxChats, 0, id);
     }
   });
@@ -582,7 +587,7 @@ describe('config/channel.json', () => {
 
   test('programme categories exist in config/feeds.json, and every feed category is used by some programme', () => {
     const used = new Set();
-    for (const [id, p] of programs) {
+    for (const [id, p] of news) {
       for (const c of p.categories) {
         assert.ok(feedCategories.has(c), `${id} asks for category "${c}" that no feed provides`);
         used.add(c);

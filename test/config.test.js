@@ -49,6 +49,10 @@ const KEYS = [
   'GOOGLE_CSE_CX',
   'BING_IMAGE_KEY',
   'VOICE_CACHE_MB',
+  'WEATHER',
+  'WEATHER_WARNINGS',
+  'WEATHER_TTL_MIN',
+  'ROTATION_START',
 ];
 
 let copies = 0;

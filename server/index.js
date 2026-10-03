@@ -11,6 +11,8 @@ import { Station } from './station.js';
 import { Producer } from './producer.js';
 import { createVoiceService } from './voice/index.js';
 import { ImageSearch } from './imagesearch.js';
+import { WeatherDesk } from './weather.js';
+import { writeWeather } from './weatherwriter.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const MIME = {
@@ -33,7 +35,9 @@ const chain = new ProviderChain(createProviders(config), usage);
 // Neural presenter voices (VOICE_ENGINE=kokoro), synthesised ahead of air; browser voices otherwise.
 const voice = createVoiceService(config, { root: ROOT });
 // The ImageCache is shared: the producer verifies (and warms) each picture before air, the client reads it.
-const producer = new Producer({ config, newsDesk, chain, voice, images });
+// WORLD WEATHER's data: Open-Meteo + GDACS, or the demo data while the desk runs on the offline fixture feeds
+const weather = new WeatherDesk({ source: config.weather.source, offline: () => newsDesk.localOnly, warnings: config.weather.warnings, ttlMs: config.weather.ttlMinutes * 60_000 });
+const producer = new Producer({ config, newsDesk, chain, voice, images, weather });
 const station = new Station({ config, newsDesk, producer, chain });
 
 function sendJson(res, status, body) {
@@ -136,6 +140,13 @@ const server = http.createServer(async (req, res) => {
     }
     const img = url.pathname.match(/^\/api\/img\/(s[0-9a-f]{10})$/);
     if (req.method === 'GET' && img) return await serveImage(res, img[1]);
+    // WORLD WEATHER's data and the script it gives (lab/weather.html, dev views only)
+    if (req.method === 'GET' && url.pathname === '/api/tools/weather') {
+      if (!devAllowed(req)) return sendJson(res, 404, { error: 'not found' });
+      const report = await weather.report();
+      if (!report) return sendJson(res, 503, { error: `no weather data (${weather.lastError || weather.source})` });
+      return sendJson(res, 200, { source: weather.source, report, script: writeWeather(report, { channelName: station.publicChannel().name }) });
+    }
     if (req.method === 'POST' && url.pathname === '/api/refresh') {
       if (!devAllowed(req)) return sendJson(res, 404, { error: 'not found' });
       if (Date.now() - lastManualRefresh < REFRESH_MIN_MS) return sendJson(res, 429, { error: 'refreshed recently', status: station.status() });

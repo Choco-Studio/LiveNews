@@ -3,6 +3,7 @@ import { castOf } from './channel.js';
 import { embedCues } from '../public/js/cues.js';
 import { onBeat } from './topics.js';
 import { pictureCredit } from './news.js';
+import { writeWeather } from './weatherwriter.js';
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 /** Is the credit just the outlet itself ("Pixelburg Post" on Pixelburg Post's own picture)? */
@@ -87,9 +88,13 @@ export function planVisuals(seg, { roundupPictures = false } = {}) {
  * (extra fact checks, better images, server-side voices...) slot in here.
  */
 export class Producer {
-  constructor({ config, newsDesk, chain, voice = null, images = null, log = console }) {
+  constructor({ config, newsDesk, chain, voice = null, images = null, weather = null, log = console }) {
     this.config = config;
     this.news = newsDesk;
+    this.weather = weather; // server/weather WeatherDesk: WORLD WEATHER's data (kind 'weather' programmes)
+    // news episodes produced since the last weather programme: the weather never airs twice in a row (a news
+    // drought falls back to filler and replays, not to the same forecast every slot)
+    this.newsSinceWeather = Infinity;
     this.chain = chain;
     this.voice = voice; // server/voice VoiceService (neural voices), optional
     this.images = images; // server/images ImageCache: pictures are verified (and warmed) before air, optional
@@ -182,6 +187,7 @@ export class Producer {
 
   canProduce(channel, programId) {
     const program = { id: programId, ...channel.programs[programId] };
+    if (program.kind === 'weather') return !!this.weather?.enabled && this.weather.usable?.() !== false && this.newsSinceWeather >= (program.minBetween ?? 3);
     return this.stock(program).length >= this.floorOf(program);
   }
 
@@ -189,6 +195,7 @@ export class Producer {
     const program = { id: programId, ...channel.programs[programId] };
     const cast = castOf(channel, programId);
     const presenters = Object.fromEntries(Object.entries(cast).map(([slot, id]) => [slot, { id, ...channel.presenters[id] }]));
+    if (program.kind === 'weather') return this.produceWeather(channel, program, cast, presenters);
     const candidates = this.stock(program, { upcoming: upcoming.map((id) => channel.programs[id]).filter(Boolean) });
     if (candidates.length < this.floorOf(program)) return null;
 
@@ -206,6 +213,7 @@ export class Producer {
       throw err;
     }
 
+    this.newsSinceWeather++;
     const used = new Set(ctx.episode.storyIds);
     this.rememberLines(ctx.episode);
     this.rememberFeatures(ctx.episode);
@@ -226,6 +234,42 @@ export class Producer {
       `[producer] ${program.title} ${episode.id} ready in ${((Date.now() - started) / 1000).toFixed(1)} s ` +
         `(${ctx.pipeline.map((p) => `${p.stage}${p.provider ? `:${p.provider}` : ''}`).join(' → ')}), ${episode.storyIds.length} stories`
     );
+    return episode;
+  }
+
+  /**
+   * WORLD WEATHER: the script is written from the weather report alone (server/weatherwriter.js: every figure
+   * is the forecast's, every warning GDACS's), then voiced like any episode. No report, no programme (null:
+   * the station skips the slot); never the offline demo data in place of a failed live fetch.
+   */
+  async produceWeather(channel, program, cast, presenters) {
+    const started = Date.now();
+    const t0 = Date.now();
+    const report = await this.weather?.report();
+    if (!report) {
+      this.log.warn?.(`[producer] ${program.title}: no weather data (${this.weather?.lastError || 'off'}); slot skipped`);
+      return null;
+    }
+    const body = writeWeather(report, { presenter: presenters.A, channelName: channel.name, title: program.title, seed: `${this.seq}` });
+    if (!body) return null;
+    this.newsSinceWeather = 0;
+    const ctx = { channelName: channel.name, program, presenters, cast, candidates: [], episode: body, provider: 'weather', pipeline: [{ stage: 'weather', ms: Date.now() - t0, source: report.source }] };
+    if (this.voice?.enabled) {
+      const tv = Date.now();
+      const note = await this.voice.voiceEpisode(ctx).catch((err) => ({ voice: 'browser', error: err.message }));
+      ctx.pipeline.push({ stage: 'voice', ms: Date.now() - tv, ...(note || {}) });
+    }
+    const episode = {
+      kind: 'episode',
+      id: `e${Date.now().toString(36)}${(this.seq++).toString(36)}`,
+      createdAt: new Date().toISOString(),
+      program: { id: program.id, title: program.title, tagline: program.tagline, theme: program.theme },
+      cast,
+      provider: 'weather',
+      pipeline: ctx.pipeline,
+      ...ctx.episode,
+    };
+    this.log.info?.(`[producer] ${program.title} ${episode.id} ready in ${((Date.now() - started) / 1000).toFixed(1)} s (${ctx.pipeline.map((p) => p.stage).join(' → ')}), ${report.source}, ${episode.weather.zones.length} zones, ${episode.weather.warnings.length} warnings`);
     return episode;
   }
 

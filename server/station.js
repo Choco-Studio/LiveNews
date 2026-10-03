@@ -46,7 +46,14 @@ export class Station {
     this.log = log;
     this.queue = []; // finished episodes, in air order
     this.history = []; // what has aired (episodes and breaks)
+    // ROTATION_START=<programme id>: the channel starts at that slot of the rotation (demos, recordings)
     this.rotationIndex = 0;
+    try {
+      const start = config?.rotationStart ? channel().rotation.indexOf(config.rotationStart) : -1;
+      if (start > 0) this.rotationIndex = start;
+    } catch {
+      /* the default start */
+    }
     this.producing = null; // programme id currently in production
     this.extraBreaks = 0;
     this.lastError = null;
