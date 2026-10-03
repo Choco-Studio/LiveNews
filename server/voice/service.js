@@ -52,6 +52,7 @@ export class VoiceService {
       kokoroDir: config.kokoroDir || '',
       threads: Number(config.threads) || 0,
       budgetMs: Math.max(0, Number(config.budgetSeconds ?? 90) * 1000),
+      firstBudgetMs: Math.max(0, Number(config.firstBudgetSeconds ?? 480) * 1000),
       dir: config.dir || path.join(root || '.', 'data', 'voice'),
       maxBytes: Math.max(10, Number(config.cacheMb ?? 300)) * 1024 * 1024,
       workers: Math.max(1, Math.min(8, Math.floor(Number(config.workers) || 1))),
@@ -71,6 +72,7 @@ export class VoiceService {
     // One lane per worker process (VOICE_WORKERS); lanes beyond the first start only when there is a queue.
     this.lanes = Array.from({ length: this.cfg.workers }, () => ({ worker: null, starting: null, busy: false }));
     this.state = 'idle'; // idle | ready | unavailable
+    this.coldStart = true; // until the first episode's voice stage (see voiceEpisode)
     this.lastError = null;
     this.disabledUntil = 0;
     this.crashes = [];
@@ -381,9 +383,15 @@ export class VoiceService {
           `${speechSeconds.toFixed(0)} s of speech in ${secs.toFixed(0)} s${failed ? `, ${failed} failed` : ''}`
       );
     });
+    // A cold start (the first episode since the service started: nothing on air, no clips cached for it)
+    // waits for every clip up to firstBudgetMs, so the channel's first programme airs with all its voices
+    // (owner 07:45: the first WORLD NOW aired 6 of 19 segments without them and read much worse); later
+    // episodes are produced minutes ahead and keep the normal budget (their late clips attach before air).
+    const budget = this.coldStart ? Math.max(this.cfg.budgetMs, this.cfg.firstBudgetMs) : this.cfg.budgetMs;
+    this.coldStart = false;
     let late = false;
     if (pending.length) {
-      late = await Promise.race([all.then(() => false), sleep(this.cfg.budgetMs).then(() => true)]);
+      late = await Promise.race([all.then(() => false), sleep(budget).then(() => true)]);
     }
     const ready = rendered();
     return { voice: 'kokoro', clips, cached, ready, ...(late ? { late: clips - ready - failed } : {}), ...(failed ? { failed } : {}) };

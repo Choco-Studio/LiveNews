@@ -43,6 +43,7 @@ const KEYS = [
   'VOICE_PYTHON',
   'VOICE_WORKERS',
   'VOICE_BUDGET_S',
+  'VOICE_FIRST_BUDGET_S',
   'VOICE_CACHE_MB',
 ];
 
@@ -168,6 +169,7 @@ describe('config from the environment', () => {
       python: 'python3',
       workers: 1,
       budgetSeconds: 90,
+      firstBudgetSeconds: 480,
       cacheMb: 300,
       dir: path.join(REPO, 'data', 'voice'),
     });

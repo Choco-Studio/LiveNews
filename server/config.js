@@ -101,6 +101,9 @@ export const config = {
     workers: num('VOICE_WORKERS', 1),
     // Seconds an episode waits for its voices before it is queued anyway (late clips still air when ready)
     budgetSeconds: num('VOICE_BUDGET_S', 90),
+    // The first episode after start waits for ALL its voices (up to this many seconds): nothing is on air
+    // yet, and a cold start must not air its first programme with half its clips missing (owner 07:45)
+    firstBudgetSeconds: num('VOICE_FIRST_BUDGET_S', 480),
     cacheMb: num('VOICE_CACHE_MB', 300),
     dir: path.join(ROOT, 'data', 'voice'),
   },

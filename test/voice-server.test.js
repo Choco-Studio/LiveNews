@@ -76,9 +76,9 @@ function fakeWorkerFactory({ delayMs = 0, failStart = null, failText = null, die
   return factory;
 }
 
-function makeService({ dir = tmpdir(), engine = 'kokoro', budgetSeconds = 5, factory = fakeWorkerFactory(), log = silent, root = REPO, ads = [] } = {}) {
+function makeService({ dir = tmpdir(), engine = 'kokoro', budgetSeconds = 5, firstBudgetSeconds = 0, factory = fakeWorkerFactory(), log = silent, root = REPO, ads = [] } = {}) {
   const service = new VoiceService({
-    config: { engine, dir, budgetSeconds, cacheMb: 50 },
+    config: { engine, dir, budgetSeconds, firstBudgetSeconds, cacheMb: 50 },
     root,
     log,
     createWorker: factory,
@@ -303,6 +303,17 @@ describe('voice service', () => {
     assert.ok(ctx.episode.segments.every((s) => !isSpoken(s) || s.voiceId), 'every spoken segment knows its clip id at once');
     await sleep(400);
     assert.ok(ctx.episode.segments.filter(isSpoken).every((s) => s.audio), 'and gets its audio later');
+  });
+
+  test('a cold start waits for every clip of the first episode (owner 07:45); the next episode keeps the normal budget', async () => {
+    const { service } = makeService({ budgetSeconds: 0.05, firstBudgetSeconds: 5, factory: fakeWorkerFactory({ delayMs: 40 }) });
+    const first = episodeCtx(SEGMENTS());
+    const n1 = await service.voiceEpisode(first);
+    assert.equal(n1.late, undefined, JSON.stringify(n1));
+    assert.ok(first.episode.segments.filter(isSpoken).every((s) => s.audio), 'the first programme airs with all its voices');
+    const second = episodeCtx(SEGMENTS().map((s) => ({ ...s, text: `${s.text} Again.` })));
+    const n2 = await service.voiceEpisode(second);
+    assert.ok(n2.late >= 1, JSON.stringify(n2));
   });
 
   test('a clip that fails leaves that segment to the browser voice; the others are voiced', async () => {
