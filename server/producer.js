@@ -353,7 +353,12 @@ export class Producer {
 
   /** Pictures for the candidates: article pages, then other outlets' reports of the same event (within a budget). */
   async pictures(ctx) {
-    return this.news.findPictures(ctx.candidates, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
+    const pictures = await this.news.findPictures(ctx.candidates, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
+    // the story dossier: the article text of the candidates the writer is most likely to make main stories (wave 3
+    // §3.1: depth for programmes of 8-10 minutes, never padding)
+    if (typeof this.news.readArticles !== 'function') return pictures;
+    const articles = await this.news.readArticles(ctx.candidates, { budgetMs: this.config.articleBudgetMs ?? 6000, max: this.config.articleMax ?? 8 });
+    return { ...pictures, ...articles };
   }
 
 

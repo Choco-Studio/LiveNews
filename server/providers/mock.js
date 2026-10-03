@@ -324,7 +324,12 @@ function study(story) {
   const precise = loc && !loc.entry.broad ? loc : null;
   // A fact card is a whole beat on screen: only figures worth one ("3 YEARS" is not).
   const figures = extractFigures(s.summary || '').filter((f) => f.fact.length <= 40 && f.score >= 2);
-  const sentences = sentencesOf(s.summary).filter((x) => !LIVE_BOILERPLATE.test(x) && unstop(x).toLowerCase() !== unstop(title).toLowerCase());
+  const fromSummary = sentencesOf(s.summary).filter((x) => !LIVE_BOILERPLATE.test(x) && unstop(x).toLowerCase() !== unstop(title).toLowerCase());
+  // the story dossier (wave 3 §3.1): the article's own sentences after the summary's, never one the summary
+  // already says, at most 7 in all (depth for programmes of 8-10 minutes, never padding)
+  const seen = new Set(fromSummary.map((x) => unstop(x).toLowerCase()));
+  const fromBody = s.body ? sentencesOf(s.body).filter((x) => !LIVE_BOILERPLATE.test(x) && !seen.has(unstop(x).toLowerCase()) && unstop(x).toLowerCase() !== unstop(title).toLowerCase() && wordCount(x) >= 6 && wordCount(x) <= 34) : [];
+  const sentences = [...fromSummary, ...fromBody].slice(0, Math.max(7, fromSummary.length));
   // Breaking news is never "light", whatever it is about.
   const light = !grave && !isBreaking(story.title) && LIGHT.test(title) && !SOBER.test(text);
   return {
@@ -949,10 +954,15 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // three sentences for both to reach the screen. NEWS IN 60 keeps to its word budget; the TECH BYTES
       // lead keeps one sentence back for THE CATCH.
       const visuals = (info.loc ? 1 : 0) + (s.image ? 1 : 0) + (info.figures.length ? 1 : 0);
-      const cap = pid === 'money-minute' ? 2 : 3;
+      // the story dossier (owner: programmes up to 10 minutes, with depth, never padding): in a long programme a
+      // story whose article was read (more sentences than a feed summary gives) tells more of it: the lead five
+      // details, a main story four (MONEY MINUTE three)
+      const deepRead = longForm && !info.grave && info.sentences.length >= 5;
+      const cap = pid === 'money-minute' ? (deepRead ? 3 : 2) : deepRead ? (k === 0 ? 5 : 4) : 3;
       // NEWS IN 60 counts the credit ("..., Ledger Line reports.") inside its word budget.
       const budget = quick ? (k === 0 ? 41 : 31) - (wordCount(s.source) + 1) : Infinity;
-      const maxDetails = quick ? 2 : isNumber ? (figureLine ? 0 : 1) : Math.min(cap, Math.max(k === 0 ? 2 : 1, visuals, longForm ? 2 : 0));
+      const depth = deepRead ? cap : longForm ? 2 : 0;
+      const maxDetails = quick ? 2 : isNumber ? (figureLine ? 0 : 1) : Math.min(cap, Math.max(k === 0 ? 2 : 1, visuals, depth));
       let details = 0;
       // People at risk: the warning and the advice come before the colour ("a red alert... asked people to avoid
       // going out" before "some schools have moved lessons").

@@ -67,7 +67,7 @@ function lengthRule(program, n) {
   const span = (s) => (s % 60 ? `${(s / 60).toFixed(1).replace(/\.0$/, '')}` : String(s / 60));
   // a programme under two minutes says its running time in seconds (NEWS IN 60: "55 to 70 seconds", not "0.9 to 1.2 minutes")
   const runs = t[1] < 120 ? `${t[0]} to ${t[1]} seconds` : `${span(t[0])} to ${span(t[1])} minutes`;
-  return `\n- On air this programme runs about ${runs}. Reach it with the ${n} stories and their depth (each main story with its key fact, its context and its figure or quote where the summary has them${program.maxChats ? ', and a short exchange between the presenters where allowed' : ''}), never by padding, repeating or slowing down. A thin summary makes a short story.`;
+  return `\n- On air this programme runs about ${runs}. Reach it with the ${n} stories and their depth (each main story with its key fact, its context and its figure or quote where the summary or the article has them; a story with an article can carry three to five sentences of its facts${program.maxChats ? ', and a short exchange between the presenters where allowed' : ''}), never by padding, repeating or slowing down. A thin summary without an article makes a short story.`;
 }
 
 function chatRule(program, solo) {
@@ -111,9 +111,12 @@ const SEGMENT_SCHEMA = (slots, headlineMax) => `{
   ]
 }`;
 
+/** Characters of a story's article text the writer and the editor see (the dossier; the rest is not read). */
+export const ARTICLE_MAX = 1600;
+
 const ACCURACY = `ACCURACY RULES (mandatory)
-- Use ONLY facts present in each candidate's "headline" and "summary". Never invent numbers, names, quotes, dates, causes or consequences.
-- If a summary is thin, say less; never fill gaps with assumptions.
+- Use ONLY facts present in each candidate's "headline", "summary" and "article" (the article text, when given). Never invent numbers, names, quotes, dates, causes or consequences.
+- If a summary is thin and there is no article, say less; never fill gaps with assumptions.
 - Attribute naturally ("the BBC reports", "according to Al Jazeera"), but only once per story.
 - Quotation marks only around words the summary itself quotes, copied exactly.
 - No political opinions and no judgements about real people.`;
@@ -142,6 +145,8 @@ export function buildPrompt({ channelName, program, presenters, stories, count, 
     outletsCovering: s.outlets || 1,
     headline: s.title,
     summary: s.summary.slice(0, 700),
+    // the story dossier (wave 3 §3.1): the article's own text, for the depth a programme of 8-10 minutes needs
+    ...(s.body ? { article: s.body.slice(0, ARTICLE_MAX) } : {}),
     ...(isBreaking(s.title) ? { breaking: true } : {}),
     ...(s.live ? { liveBlog: true } : {}),
     // The picture desk ran before the writer: a story with a picture can be shown, not only told.
@@ -240,11 +245,11 @@ ${JSON.stringify(input, null, 2)}`;
 
 /** Second pass: an editor checks the script against the sources and fixes it. */
 export function buildReviewPrompt({ channelName, program, script, stories }) {
-  const sources = stories.map((s) => ({ id: s.id, outlet: s.source, headline: s.title, summary: s.summary.slice(0, 700) }));
+  const sources = stories.map((s) => ({ id: s.id, outlet: s.source, headline: s.title, summary: s.summary.slice(0, 700), ...(s.body ? { article: s.body.slice(0, ARTICLE_MAX) } : {}) }));
   return `You are the standards editor of "${channelName}", checking a script for the programme "${program.title}" before it goes on air.
 
 Check every story segment against its SOURCE (matched by storyId):
-- Remove or correct any claim, number, name, quote, place or cause that is not supported by the source headline/summary. A figure must keep its scale, unit and currency (12 billion is not 12 million; 40 percent is not 40 people).
+- Remove or correct any claim, number, name, quote, place or cause that is not supported by the source headline/summary/article. A figure must keep its scale, unit and currency (12 billion is not 12 million; 40 percent is not 40 people).
 - Make sure the "fact" field (if any) appears in the source and in the story text, otherwise set it to null.
 - Make sure every "numbers" value is stated in the source, a "quote" is copied word for word from a quotation in the source, and every "map" place is named in the source; otherwise remove them.
 - Make sure "location" matches a place named in the source, otherwise set it to null.
@@ -1077,7 +1082,8 @@ export function normalizeBulletin(
   const names = [channelName, ...ownNames];
   const byId = new Map(stories.map((s) => [s.id, s]));
   const allowed = FEATURES.filter((f) => features.includes(f));
-  const sourceOf = (story) => `${story.title}. ${story.summary || ''}`;
+  // what a segment may say: the headline, the summary and the article text the desk read (the dossier)
+  const sourceOf = (story) => `${story.title}. ${story.summary || ''}${story.body ? ` ${story.body}` : ''}`;
   // Intro, chats and outro may only mention figures from the stories this episode airs (the writer's
   // selection), not from any candidate: "See you at 9" is not grounded by another story's "9 kilometres".
   const chosen = [];
@@ -1118,7 +1124,7 @@ export function normalizeBulletin(
       if (fact && !claimGrounded(fact, source)) fact = null;
       d.fact = fact;
       const quote = seg.quote ?? seg.quoteFromSummary;
-      d.quote = quote ? groundQuote(quote, story.summary) : null;
+      d.quote = quote ? groundQuote(quote, story.body ? `${story.summary || ''} ${story.body}` : story.summary) : null;
       d.map = normalizeMap(seg.map, source);
       d.kicker = normalizeKicker(seg.kicker, source);
       let feature = pick(seg.feature, allowed, null);

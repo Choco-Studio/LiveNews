@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { XMLParser } from 'fast-xml-parser';
 import { config, ROOT } from './config.js';
 import { GOOD_WIDTH, feedCandidates, pageCandidates, rankPictures } from './pictures.js';
+import { extractArticle } from './article.js';
 import { guardedFetch, readCapped } from './net.js';
 import { degreesApart, findPlaces, locate, lookupPlace } from './gazetteer.js';
 import { onBeat } from './topics.js';
@@ -1238,6 +1239,12 @@ export class NewsDesk {
 
   /** The same, for an offline fixture page: a local file inside the folder of one of the operator's local feeds. */
   async localPagePictures(story) {
+    const { html, root, file } = await this.localPageHtml(story);
+    return pageCandidates(html, null, { baseDir: root, from: path.dirname(file) }).candidates;
+  }
+
+  /** An offline fixture page's html (at most 600 KB), only from inside the folder of one of the operator's local feeds. */
+  async localPageHtml(story) {
     const file = path.resolve(fileURLToPath(story.page));
     const root = [...this.localImageRoots].map((r) => path.resolve(r)).find((r) => file.startsWith(r + path.sep));
     if (!root) throw new Error('page outside the local feed folders');
@@ -1245,9 +1252,42 @@ export class NewsDesk {
     try {
       const buf = Buffer.alloc(600_000);
       const { bytesRead } = await handle.read(buf, 0, buf.length, 0);
-      return pageCandidates(buf.subarray(0, bytesRead).toString('utf8'), null, { baseDir: root, from: path.dirname(file) }).candidates;
+      return { html: buf.subarray(0, bytesRead).toString('utf8'), root, file };
     } finally {
       await handle.close();
+    }
+  }
+
+  /**
+   * The story dossier's text (wave 3 §3.1; owner: programmes up to 10 minutes, with depth): the article page's
+   * main text (server/article.js) for up to `max` of these stories, a few at a time, within `budgetMs`. Each
+   * story is read once (a page without article text is remembered too). The text lands in `story.body`, which
+   * the writer reads beside the summary and the validator checks facts against. Returns counts for the log.
+   */
+  async readArticles(stories, { budgetMs = 6000, max = 8, concurrency = 4 } = {}) {
+    const todo = stories.filter((s) => s && !s.bodyChecked && (s.local ? !!s.page : /^https?:\/\//i.test(s.link || ''))).slice(0, max);
+    const deadline = Date.now() + budgetMs;
+    let next = 0;
+    const worker = async () => {
+      while (next < todo.length && Date.now() < deadline) await this.readArticle(todo[next++]);
+    };
+    const left = deadline - Date.now();
+    if (todo.length && left > 0) await Promise.race([Promise.all(Array.from({ length: Math.min(concurrency, todo.length) }, worker)), wait(left)]);
+    return { articles: stories.filter((s) => s?.body).length, read: todo.filter((s) => s.body).length, of: todo.length };
+  }
+
+  async readArticle(s) {
+    s.bodyChecked = true;
+    try {
+      const html = s.local ? (await this.localPageHtml(s)).html : await this.fetchText(s.link, { timeoutMs: 8000, maxBytes: 600_000 });
+      const a = extractArticle(html);
+      if (a) {
+        s.body = a.text;
+        s.bodyVia = a.via;
+      }
+    } catch (err) {
+      if (!this.articleWarned) this.log.warn?.(`[news] article text ${s.source}: ${err.message}`);
+      this.articleWarned = true;
     }
   }
 
