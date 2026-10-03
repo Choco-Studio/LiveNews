@@ -21,10 +21,10 @@ Estado (3 oct, 09:30): trabajando punto por punto. ✅ = hecho y subido; 🟡 = 
 
 ## C. Voces
 14. Siguiente nivel: risas suaves, respiraciones y pausas naturales, sin exagerar. Grabar una prueba A/B para que elijas.
-15. 🟡 UNIT-8: voz de robot más suave (3 versiones enviadas, falta que elijas) y menos molesta. Prepararte 3 versiones.
+15. ✅ UNIT-8: voz de robot más suave (elegiste la A, ya puesta).
 
 ## D. Programas, contenido y ritmo
-16. **Programas más largos.** WORLD NOW unos 26 min en 4 partes; TECH BYTES y COSMOS unos 14; MONEY MINUTE unos 9; NEWS IN 60 a en punto y a y media. Necesita el texto completo de los artículos, es decir, red.
+16. 🟡 **Programas más largos.** Hecho el dossier: el servidor lee el texto completo del artículo de cada noticia principal y el guionista escribe con él (con IA real llegará a 8-10 min; la demo sin conexión llega a ~4,6 min porque el texto de prueba es corto). Falta: duraciones/parrilla por partes (decisión 1).
 17. **Más tipos de diapositivas** (15 plantillas: cronologías, comparativas, cifras, citas…).
 18. **Expertos del canal** (8 fijos, ficticios). Dan vida al programa y se ciñen a los hechos de la fuente.
 19. **Entrevistas reales "IN THEIR WORDS".** La persona aparece en la pantalla o en el plató diciendo solo palabras de declaraciones públicas, con la etiqueta RECREACIÓN. Nunca víctimas, menores, particulares ni noticias graves.
@@ -45,7 +45,7 @@ Estado (3 oct, 09:30): trabajando punto por punto. ✅ = hecho y subido; 🟡 = 
     - halo detrás de la cabeza;
     - luces de MONEY MINUTE;
     - coste del primer corte a un plano nuevo.
-25. Gráficos:
+25. 🟡 Gráficos (£ y ¥ ya añadidos):
     - velocidad del rótulo inferior (la "última hora");
     - símbolos £ y ¥;
     - gráficos propios de cada programa;
