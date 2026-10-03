@@ -454,6 +454,15 @@ export class Director {
     if (!greeted && next?.type !== 'story') this.setShot('wide', { focus: seg.anchor, wall: { mode: 'logo' }, card: null });
   }
 
+  /** Default path: the air (s) of the chats and sign-off right after segment `index` that stay on the wide. */
+  wideTail(index) {
+    const segs = this.episode?.segments || [];
+    if (index < 0 || !this.scene.cast?.B) return segs[index + 1]?.type === 'outro' ? estimateSeg(segs[index + 1]) + pace(this.scene).holds.signoff : 0;
+    let t = 0;
+    for (let j = index + 1; j < segs.length && (segs[j].type === 'chat' || segs[j].type === 'outro'); j++) t += estimateSeg(segs[j]) + (j < segs.length - 1 ? gapAfter(this.episode, j).gap : pace(this.scene).holds.signoff);
+    return t;
+  }
+
   /** Default path: seconds the shot on air has been seen (a focus re-set of the wide is no cut: it keeps counting). */
   onAir() {
     const s = this.scene;
@@ -509,8 +518,10 @@ export class Director {
     // PACE (critics r1): a story change is always a visible cut: never the wide already on air (a focus re-set of the
     // wide shows nothing new), never the same presenter's close again (a jump cut)
     // (pace.js isRepeat: the default path's wide is one camera whoever has the focus)
+    // (a number of the day that opens on its card outside WORLD NOW puts the card between: no repeat to avoid)
     const asSeen = (shot, focus) => ({ shot, focus: shot === 'wide' ? null : focus });
-    if (isRepeat(s.program?.id, [asSeen(s.shot, s.focus)], asSeen(anchorShot, seg.anchor))) anchorShot = anchorShot === 'close' ? 'wide' : 'close';
+    const onCard = seg.feature === 'number' && !!seg.fact && s.program?.id !== 'world-now' && s.shot !== 'fact';
+    if (!onCard && isRepeat(s.program?.id, [asSeen(s.shot, s.focus)], asSeen(anchorShot, seg.anchor))) anchorShot = anchorShot === 'close' ? 'wide' : 'close';
     // a round-up item opens on its map (the v2 planner's map to map), but after shots.mapRun maps in a row an item
     // shows its picture, else its reader in vision (never a 40 s run of one shot type)
     if ((seg.feature === 'roundup' || seg.roundup) && seg.location) return [(this.mapRun || 0) < pace(s).shots.mapRun ? 'map' : hasImg ? 'full' : anchorShot];
@@ -616,10 +627,14 @@ export class Director {
       // pace), it gives way at the middle of its run, both parts at least the cooldown (a timer: mid-sentence if need be)
       clearTimeout(watch);
       const since = s.shotSince;
-      const total = left();
+      const own = left();
+      // a wide that the chats / the sign-off after this story would carry on (they play on the wide): their air counts,
+      // and the relief comes late enough in this story to leave its close the minimum before them (critic r1: a 25.9 s wide)
+      const tail = beat === 'wide' ? this.wideTail(index) : 0;
+      const total = own + tail;
       const max = maxOf(beat);
-      if (total > max + 0.5 && total >= 2 * P.shots.cooldown) {
-        const at = Math.max(P.shots.cooldown, Math.min(max - 0.5, total / 2));
+      if (total > max + 0.5 && own >= 2 * P.shots.cooldown) {
+        const at = tail > 0 ? Math.max(P.shots.cooldown, Math.min(max - 0.5, own - P.shots.min)) : Math.max(P.shots.cooldown, Math.min(max - 0.5, total / 2));
         watch = setTimeout(() => s.shotSince === since && s.shot === beat && cutTo(-1, relief(beat)), at * 1000);
       }
     };
