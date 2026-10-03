@@ -1,27 +1,27 @@
 # GLOBIT 24 — lista de todo lo que hay que corregir o modificar
 
-Estado: equipos en pausa desde el 3 oct, 06:00. Ordenado por prioridad. Detalle en OWNER_FEEDBACK.md, BACKLOG.md, WAVE3.md y STATUS.md.
+Estado (3 oct, 09:30): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a falta de algo tuyo. Ordenado por prioridad. Detalle en OWNER_FEEDBACK.md, BACKLOG.md, WAVE3.md y STATUS.md.
 
 ## A. Prioridad máxima (lo que más se nota)
-1. **Fotos reales en antena.** Nada dibujado al aire. Hace falta abrir el acceso a las webs de noticias e imágenes (o usar tu ordenador), un buscador de fotos (Wikimedia Commons por defecto; Google o Bing con clave opcional) y una demo grabada con fotos reales.
-2. **Pantalla del plató.** Fotos fieles, sin franjas de color ni "filtro mal puesto", y llenando la pantalla entera (también en NEWS IN 60).
-3. **El canal arranca "en frío".** Los primeros programas salen peores que desde COSMOS. Comparar los dos WORLD NOW del vídeo de 18 minutos y que el canal empiece ya "caliente".
-4. **Resumen de titulares.** A veces sale en negro o con la foto anterior porque el audio se adelanta: arreglo robusto y una prueba automática.
-5. **Aviso de anuncios.** "Volvemos en un minuto", cartel con cuenta atrás, etiqueta fija "ADVERTISING" en la esquina y cartel de vuelta.
-6. **Hacer la versión nueva (v2) la de por defecto** (ahora va detrás de `?v2=1`).
+1. 🟡 **Fotos reales en antena.** (Código hecho: buscador Wikimedia/Google/Bing, foto de archivo marcada FILE. Falta abrir la red para probarlo de verdad.) Nada dibujado al aire. Hace falta abrir el acceso a las webs de noticias e imágenes (o usar tu ordenador), un buscador de fotos (Wikimedia Commons por defecto; Google o Bing con clave opcional) y una demo grabada con fotos reales.
+2. ✅ **Pantalla del plató.** Fotos fieles, sin franjas de color ni "filtro mal puesto", y llenando la pantalla entera (también en NEWS IN 60).
+3. ✅ **El canal arranca "en frío".** (El primer programa espera a tener todas sus voces.) Los primeros programas salen peores que desde COSMOS. Comparar los dos WORLD NOW del vídeo de 18 minutos y que el canal empiece ya "caliente".
+4. ✅ **Resumen de titulares.** (Sin foto: mapa del lugar; el corte va con la voz.) A veces sale en negro o con la foto anterior porque el audio se adelanta: arreglo robusto y una prueba automática.
+5. ✅ **Aviso de anuncios.** (Cartel BACK IN 1 MINUTE, voz de continuidad, etiqueta con cuenta atrás.) "Volvemos en un minuto", cartel con cuenta atrás, etiqueta fija "ADVERTISING" en la esquina y cartel de vuelta.
+6. ✅ **Hacer la versión nueva (v2) la de por defecto** (ahora va detrás de `?v2=1`).
 
 ## B. Presentadores
-7. Max: los cascos están mal dibujados. Cada presentador debe verse igual de lejos y de cerca.
+7. ✅ Max: los cascos están mal dibujados (eran del dibujo antiguo; ahora es el mismo muñeco en todos los planos; pelo de Lola y Penny igual de lejos y de cerca). Cada presentador debe verse igual de lejos y de cerca.
 8. UNIT-8: rediseño del "instrumento" de la cara (los críticos lo marcaron como bloqueante) y un indicador de en directo.
 9. Nova y Max: pelo, piel y acabado. Ada: comprobar.
 10. Paco, Lola, Sam y Penny: acabado final (ropa, pelo, joyas).
 11. Caras: parpadeos que saltan, tamaño de ojos, mirada, brillo de cejas y gafas.
-12. Gestos en el momento justo (en la palabra que toca), sin abusar; Nova es la referencia. Averiguar por qué el primer episodio los usa peor.
-13. Manos: detalles pendientes (golpecito al juntar dedos, deslizar gafas, nudillos, mano relajada) y rendimiento.
+12. ✅ Gestos en el momento justo (en la palabra que toca), sin abusar; Nova es la referencia. Averiguar por qué el primer episodio los usa peor.
+13. 🟡 Manos: detalles pendientes (golpecito al juntar dedos, deslizar gafas, nudillos, mano relajada) y rendimiento.
 
 ## C. Voces
 14. Siguiente nivel: risas suaves, respiraciones y pausas naturales, sin exagerar. Grabar una prueba A/B para que elijas.
-15. UNIT-8: voz de robot más suave y menos molesta. Prepararte 3 versiones.
+15. 🟡 UNIT-8: voz de robot más suave (3 versiones enviadas, falta que elijas) y menos molesta. Prepararte 3 versiones.
 
 ## D. Programas, contenido y ritmo
 16. **Programas más largos.** WORLD NOW unos 26 min en 4 partes; TECH BYTES y COSMOS unos 14; MONEY MINUTE unos 9; NEWS IN 60 a en punto y a y media. Necesita el texto completo de los artículos, es decir, red.
