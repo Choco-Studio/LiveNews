@@ -132,7 +132,7 @@ export const BIBLE = {
     storyCount: [1, 2],
     beats: {
       density: { story: 0.62, chat: 0.4, intro: 0.3 },
-      variants: ['raise_hand:beat', 'raise_hand:offer', 'raise_hand:beat2', 'steeple:press', 'raise_hand:box', 'raise_hand:settle', 'raise_hand:tick', 'raise_hand:turn'],
+      variants: ['raise_hand:beat', 'raise_hand:offer', 'raise_hand:beat2', 'steeple:press', 'raise_hand:box', 'raise_hand:lift', 'raise_hand:settle', 'raise_hand:tick', 'raise_hand:turn'],
     },
   },
   'tech-bytes': {
@@ -148,7 +148,7 @@ export const BIBLE = {
     variants: { ada: { shake_head: 'slow' } },
     storyCount: [1, 2],
     beats: {
-      max: { density: { story: 0.68, chat: 0.45, intro: 0.3 }, variants: ['raise_hand:beat', 'raise_hand:offer', 'raise_hand:beat2', 'raise_hand:box', 'raise_hand:tick', 'raise_hand:turn'] },
+      max: { density: { story: 0.68, chat: 0.45, intro: 0.3 }, variants: ['raise_hand:beat', 'raise_hand:offer', 'raise_hand:beat2', 'raise_hand:box', 'raise_hand:lift', 'raise_hand:tick', 'raise_hand:turn'] },
       ada: { density: { story: 0.4, chat: 0.3 }, variants: ['steeple:press', 'shrug:small', 'steeple:tap'] },
     },
   },
@@ -166,7 +166,7 @@ export const BIBLE = {
     amp: { unit8: 0.85 },
     storyCount: [1, 1],
     // Nova only; armSpacing (6 s per presenter) still holds for every arm movement
-    beats: { nova: { density: { story: 0.5, chat: 0.3 }, variants: ['raise_hand:beat', 'steeple:press', 'raise_hand:box', 'raise_hand:settle', 'steeple:tap'] } },
+    beats: { nova: { density: { story: 0.5, chat: 0.3 }, variants: ['raise_hand:beat', 'steeple:press', 'raise_hand:box', 'raise_hand:lift', 'raise_hand:settle', 'steeple:tap'] } },
   },
   'money-minute': {
     speaker: ['nod', 'steeple', 'lean_in', 'papers'],
@@ -203,6 +203,7 @@ export const BIBLE = {
 const SETTLE = 0.3;
 const BEAT_AIR = 0.2; // s of stillness a beat keeps from the gestures around it
 const ARM_GAP_MIN = 2.6; // s: two arm gestures of one speaker (beats included) start at least this far apart
+const HEAD_GAP = 3.5; // s between two planned head statements of one speaker (speech.js adds its own emphasis nods)
 // lowest screen row a gesture's hand may reach at its apex in a single (6 px above the lower third's tag
 // row at y 166, where two caption lines also start) and in wider shots (6 px above the ticker band)
 const HAND_FLOOR = 160, HAND_FLOOR_WIDE = 190, WRIST_FLOOR = 166;
@@ -529,11 +530,13 @@ class SegmentPlan {
     // two arm movements of this speaker (also across the previous turns), the hands' rest share
     const B = this.budget;
     if (B && budgeted) {
-      if (opts.beat ? this.beats >= B.beats : this.marked >= B.marked) return why(ev, 'budget');
-      if (!opts.beat) {
+      if (opts.beat ? this.beats >= B.beats : arm && this.marked >= B.marked) return why(ev, 'budget');
+      if (!opts.beat && arm) {
         if (ev.at + this.prev.marked < B.minGap) return why(ev, 'min-gap-prev');
         for (const p of this.events) if (p.marked && Math.abs(p.at - ev.at) < B.minGap) return why(ev, 'min-gap');
       }
+      // head statements (a filler nod, lean_in, a head shake) are not arm strokes: their own, shorter gap
+      if (!opts.beat && !arm) for (const p of this.events) if (!p.arm && p.budgeted && Math.abs(p.at - ev.at) < HEAD_GAP) return why(ev, 'head-gap');
       if (arm) {
         if (ev.at + this.prev.arm < B.armGap) return why(ev, 'arm-gap-prev');
         for (const p of this.events) if (p.arm && p.budgeted && Math.abs(p.at - ev.at) < B.armGap) return why(ev, 'arm-gap');
@@ -572,7 +575,7 @@ class SegmentPlan {
     const d = defOf(ev);
     ev.arm = d.arm;
     ev.budgeted = !opts.free || !!opts.beat;
-    ev.marked = !opts.free && !opts.beat;
+    ev.marked = !opts.free && !opts.beat && d.arm; // pace.js "marked": arm strokes on meaningful words
     this.events.push(ev);
     const si = sentenceOf(this.ctx, ev.word);
     if (d.arm) this.sentArm.set(si, (this.sentArm.get(si) || 0) + 1);
@@ -832,7 +835,7 @@ const CONTRAST = /\b(but|however|yet|although|though|instead|despite|except|wher
 const SCALE = /\b(all|every|whole|entire|across|nationwide|worldwide|record|biggest|largest|most|millions?|billions?|thousands?|everyone|everywhere)\b/i;
 const STEADY = /\b(still|steady|steadily|unchanged|remains?|remained|calm|for now|so far|held|holds|stable|flat)\b/i;
 const LIST = /\b(first|second|third|also|another|both|either|plus)\b|,[^,]+,/i;
-const FAR_OK = new Set(['raise_hand:beat', 'raise_hand:offer', 'raise_hand:turn', 'raise_hand:settle', 'raise_hand:tick']);
+const FAR_OK = new Set(['raise_hand:beat', 'raise_hand:offer', 'raise_hand:turn', 'raise_hand:settle', 'raise_hand:tick', 'raise_hand:lift']);
 
 /** The speaker's beat settings in this programme ({ density, variants }) or null. */
 export function beatConfig(R, id) {

@@ -23,12 +23,13 @@
   <select id="voice"><option value="mute">voice: mute / blips / tts (by char)</option><option value="recorded">voice: recorded (by at)</option></select>
   <label><input id="guides" type="checkbox"> graphics safe areas</label>
   <label><input id="hud" type="checkbox"> hud</label>
+  <label><input id="graphics" type="checkbox" checked> graphics</label>
   <button id="play">play</button>
   <input id="t" type="range" min="0" max="300" step="0.05" value="0">
   <span id="tv">0.00 s</span>
 </div>
-<div id="note">window.__lab.set({ programme, voice, guides, hud }), __lab.render(T), __lab.timeline(), __lab.perf({ frames, runs, draw }), __lab.baseline({ runs }), __lab.state().
-  Query: ?programme=cosmos&amp;voice=recorded&amp;t=42 (&amp;still=1 for captures).</div>
+<div id="note">window.__lab.set({ programme, voice, guides, hud, graphics }), __lab.render(T), __lab.timeline(), __lab.perf({ frames, runs, draw }), __lab.baseline({ runs }), __lab.state(), __lab.hands(name, { slot, framing }).
+  Query: ?programme=cosmos&amp;voice=recorded&amp;t=42&amp;graphics=0 (&amp;still=1 for captures). The real graphics package is drawn on top by default.</div>
 <script type="module">
   import { createIntegLab } from '../js/v2/canvas25d/labs/integ.js';
   const $ = (id) => document.getElementById(id);
@@ -36,7 +37,8 @@
   const lab = createIntegLab($('screen'));
   window.__lab = lab;
   for (const id of ['world-now', 'tech-bytes', 'cosmos', 'money-minute', 'news-60']) $('programme').add(new Option(id, id));
-  lab.set({ programme: q.get('programme') || 'world-now', voice: q.get('voice') || 'mute' });
+  lab.set({ programme: q.get('programme') || 'world-now', voice: q.get('voice') || 'mute', graphics: q.get('graphics') !== '0' });
+  $('graphics').checked = lab.opts.graphics;
   $('programme').value = lab.opts.programme;
   $('voice').value = lab.opts.voice;
   const sync = () => {
@@ -53,6 +55,7 @@
   $('voice').onchange = () => { lab.set({ voice: $('voice').value }); show(); };
   $('guides').onchange = () => { lab.set({ guides: $('guides').checked }); show(); };
   $('hud').onchange = () => { lab.set({ hud: $('hud').checked }); show(); };
+  $('graphics').onchange = () => { lab.set({ graphics: $('graphics').checked }); show(); };
   $('t').oninput = () => { playing = false; $('play').textContent = 'play'; t = Number($('t').value); show(); };
   let playing = false;
   let last = 0;

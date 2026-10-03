@@ -16,6 +16,7 @@
 //   point_screen:open an open hand toward the wall instead of an index ("as you can see")
 //   raise_hand:box    both hands come up to the chest, palms facing, and frame the point (reads in
 //                     an MCU: the hands stay above the lower third)
+//   raise_hand:lift   one hand rises off the desk to the chest and beats once there (an MCU sees it)
 //   raise_hand:turn   the near hand turns from palm-down to palm-up low over the desk ("on the
 //                     other hand"), moving a little outward on the word
 //   raise_hand:settle the near hand lifts a little and settles flat on the desk on the word
@@ -31,7 +32,7 @@
 import { FLAT, STEEPLE } from './shapes.js';
 
 /** One-handed beats that also exist as `<variant>_far` (the far hand; gestures/index.js mirrors them). */
-export const FAR_BEATS = { raise_hand: ['beat', 'offer', 'turn', 'settle', 'tick'] };
+export const FAR_BEATS = { raise_hand: ['beat', 'offer', 'turn', 'settle', 'tick', 'lift'] };
 
 // fingers loosely extended, the way a hand leaves the desk to make a point
 const LOOSE = [0.24, 0.16, 0.2, 0.26, 0.32];
@@ -141,6 +142,25 @@ export const BEATS = {
         shF: [[0, 0], [0.12, 0.1], [0.38, -0.36], [0.58, -0.24], [0.94, -0.26], [1.28, 0.03], [1.46, 0]],
         pitch: [[0, 0], [0.3, -0.012], [0.56, 0.03], [0.8, 0.008], [1.46, 0]],
         brow: [[0, 0], [0.38, 0.24], [0.66, 0.16], [1.3, 0]],
+      },
+    },
+    lift: {
+      dur: 1.36,
+      stroke: 0.24,
+      apex: 0.52,
+      hold: 0.86,
+      focus: 'near',
+      tracks: {
+        // the hand comes up in front of the chest, palm half to the lens, and beats once on the word
+        wrist: [[0, 'R'], [0.1, [-5.8, 19.7, 13.4]], [0.28, [-4.8, 9.2, 14.6]], [0.44, [-4.2, 2.1, 15.4]], [0.52, [-4.1, 2.9, 15.5]], [0.64, [-4.15, 2.45, 15.45], 's'], [0.86, [-4.15, 2.6, 15.4], 's'], [1.12, [-5.4, 15.0, 14.2]], [1.36, 'R', 's']],
+        dir: [[0, 'R'], [0.18, [-0.7, -0.1, 0.7]], [0.36, [-0.3, -0.75, 0.6]], [0.5, [-0.2, -0.82, 0.54]], [0.58, [-0.2, -0.78, 0.6]], [0.7, [-0.2, -0.8, 0.56], 's'], [0.9, [-0.2, -0.8, 0.56], 's'], [1.16, [-0.72, 0.1, 0.66]], [1.36, 'R']],
+        curl: [[0, 'R'], [0.3, LOOSE], [0.54, BEAT, 's'], [0.9, BEAT, 's'], [1.2, 'R']],
+        facing: [[0, 'R'], [0.32, 0.35, 's'], [0.92, 0.35, 's'], [1.2, 'R']],
+        spread: [[0, 'R'], [0.5, 0.12], [0.9, 0.12], [1.2, 'R']],
+        pole: [[0, 'R'], [0.4, [0.8, 1, -0.3]], [0.9, [0.8, 1, -0.3]], [1.36, 'R']],
+        shN: [[0, 0], [0.1, 0.1], [0.36, -0.34], [0.54, -0.22], [0.88, -0.24], [1.2, 0.03], [1.36, 0]],
+        pitch: [[0, 0], [0.3, -0.01], [0.54, 0.028], [0.8, 0.006], [1.36, 0]],
+        brow: [[0, 0], [0.38, 0.22], [0.66, 0.15], [1.25, 0]],
       },
     },
     turn: {

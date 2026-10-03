@@ -300,6 +300,8 @@ function planDuo(ctx, style, r, plan) {
     const at = D - 0.9 - r() * 0.2;
     if (plan.fits(speaker, at, D - at)) plan.add(speaker, at, D - at + 0.3, 'partner', { why: 'handover' });
   }
+  // a short chat line: the speaker's own gaze at the partner stays within 60 % of it too
+  if (short) trimGaze(plan, speaker, D, RULES.shortShare * D);
   const speakerLooks = plan.list(speaker);
 
   // ---- listeners
