@@ -498,6 +498,8 @@ const KIND_WORD = (w) => INCIDENT_KINDS.some(([, re]) => re.test(w));
 const KIND_FAMILY = { storm: 'weather', flood: 'weather', wildfire: 'wildfire', fire: 'wildfire' };
 const family = (k) => KIND_FAMILY[k] || k;
 const sharedKinds = (a, b) => [...a].filter((k) => [...b].some((x) => family(x) === family(k)));
+// The same rare physical event on both sides (a hurricane that floods counts; a wildfire and a house fire do not).
+const physicalPair = (a, b) => [...a].some((k) => PHYSICAL.has(k) && [...b].some((x) => PHYSICAL.has(x) && family(x) === family(k)));
 const disjoint = (a, b) => a.size > 0 && b.size > 0 && !sharedKinds(a, b).length;
 // Rare physical events: two reports of an earthquake, a storm, a flood, an eruption or a wildfire in the same place
 // within a day and a half are one event; a fire, an opening, an arrest or a fraud in a big city are not.
@@ -838,7 +840,7 @@ export class NewsDesk {
     if (opposite(a.kw, b.kw) || ea.frame !== eb.frame || ea.another || eb.another) return false;
     const kinds = sharedKinds(ea.kinds, eb.kinds);
     if (sharedCount(ea.people, eb.people) > 0 && sameEvent(a.kw, b.kw)) return true;
-    if (agree === true && kinds.some((k) => PHYSICAL.has(family(k)) || PHYSICAL.has(k))) return true;
+    if (agree === true && physicalPair(ea.kinds, eb.kinds)) return true;
     if (agree === true && kinds.some((k) => DECISIONS.has(k)) && softShared(ea.topic, eb.topic, (w) => !KIND_WORD(w) && !ROLE_WORDS.has(w)) >= 1) return true;
     return sameEvent(a.kw, b.kw) && softShared(ea.subject, eb.subject) >= 2;
   }
@@ -859,7 +861,7 @@ export class NewsDesk {
     if (agree !== true) return false;
     if (ea.cause.size && eb.cause.size && sharedCount(ea.cause, eb.cause) === 0) return false;
     const kinds = sharedKinds(ea.kinds, eb.kinds);
-    if (kinds.some((k) => PHYSICAL.has(k) || PHYSICAL.has(family(k)) || DECISIONS.has(k))) return true;
+    if (physicalPair(ea.kinds, eb.kinds) || kinds.some((k) => DECISIONS.has(k))) return true;
     const shared = softShared(ea.subject, eb.subject);
     const small = Math.min(ea.subject.size, eb.subject.size) || 1;
     return shared >= 2 && (shared / small >= 2 / 3 || shared / (ea.subject.size + eb.subject.size - shared || 1) >= 0.5);
