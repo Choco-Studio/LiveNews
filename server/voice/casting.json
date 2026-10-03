@@ -51,13 +51,13 @@
   "voice": "am_echo:0.7+am_fenrir:0.3",
   "speed": 0.82,
   "lang": "en-us",
-  "effect": "robot",
+  "effect": "robot-soft",
   "pauses": {
    "comma": 0.18,
    "sentence": 0.48,
    "colon": 0.3
   },
-  "notes": "Robot co-host, deadpan but charming: base am_echo with 30% am_fenrir, effect 'robot' (tools/voice/dsp.py: monotone 100 Hz vocoder below 2.4 kHz, dry consonants above). Chosen for intelligibility under the effect: pure am_echo and am_onyx+am_echo lose consonants (21% recogniser errors on the news sentence, vs 3%). Keep speed >= 0.82: slower speeds measurably smear the vocoder (15-18% errors at 0.78-0.80). The deliberate pace (~135 wpm, top of the COSMOS range) comes from a 0.48 s beat at full stops; for slower, lengthen pauses, never lower the speed."
+  "notes": "Robot co-host, deadpan but charming: base am_echo with 30% am_fenrir, effect 'robot-soft' (owner 3 Oct picked A of four: mostly the voice itself with a gentle machine sheen, no buzz, no crush; the classic 'robot' was a monotone 100 Hz vocoder below 2.4 kHz and read odd and annoying). Chosen for intelligibility under the effect: pure am_echo and am_onyx+am_echo lose consonants (21% recogniser errors on the news sentence, vs 3%). Keep speed >= 0.82: slower speeds measurably smear the vocoder (15-18% errors at 0.78-0.80). The deliberate pace (~135 wpm, top of the COSMOS range) comes from a 0.48 s beat at full stops; for slower, lengthen pauses, never lower the speed."
  },
  "penny": {
   "voice": "bf_isabella:0.6+af_kore:0.25+bf_alice:0.15",

@@ -60,7 +60,7 @@ export function castFor(presenterId, presenter, casting) {
   if (own?.voice) return own;
   const v = presenter?.voice || {};
   const gb = /gb/i.test(v.lang || '');
-  if (v.gender === 'robot') return { voice: 'am_echo:0.7+am_fenrir:0.3', speed: 0.85, lang: 'en-us', effect: 'robot' };
+  if (v.gender === 'robot') return { voice: 'am_echo:0.7+am_fenrir:0.3', speed: 0.85, lang: 'en-us', effect: 'robot-soft' }; // the owner's pick (3 Oct)
   if (v.gender === 'female') return gb ? { voice: 'bf_lily:0.7+bf_alice:0.3', speed: 1, lang: 'en-gb' } : { voice: 'af_sarah:0.7+af_sky:0.3', speed: 1, lang: 'en-us' };
   return gb ? { voice: 'bm_daniel:0.7+bm_fable:0.3', speed: 1.05, lang: 'en-gb' } : { voice: 'am_eric:0.7+am_liam:0.3', speed: 1.05, lang: 'en-us' };
 }

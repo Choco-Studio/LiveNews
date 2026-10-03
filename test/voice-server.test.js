@@ -128,14 +128,14 @@ describe('voice plan: what the worker is asked', () => {
       assert.match(CASTING[id].voice, /^[a-z]{2}_[a-z]+(:\d*\.?\d+)?(\+[a-z]{2}_[a-z]+:\d*\.?\d+)*$/);
       assert.ok(CASTING[id].speed >= 0.7 && CASTING[id].speed <= 1.3, id);
     }
-    assert.equal(CASTING.unit8.effect, 'robot');
+    assert.equal(CASTING.unit8.effect, 'robot-soft'); // the owner's pick (3 Oct)
     assert.ok(CASTING.unit8.speed >= 0.82, 'UNIT-8 must stay at Kokoro speed >= 0.82');
   });
 
   test('an unknown presenter still gets a neural voice of the right gender and accent', () => {
     assert.match(castFor('zed', { voice: { gender: 'female', lang: 'en-GB' } }, CASTING).voice, /^bf_/);
     assert.match(castFor('zed', { voice: { gender: 'male', lang: 'en-US' } }, CASTING).voice, /^am_/);
-    assert.equal(castFor('zed', { voice: { gender: 'robot' } }, CASTING).effect, 'robot');
+    assert.equal(castFor('zed', { voice: { gender: 'robot' } }, CASTING).effect, 'robot-soft');
     assert.equal(castFor('paco', {}, CASTING), CASTING.paco);
   });
 
@@ -174,7 +174,7 @@ describe('voice plan: what the worker is asked', () => {
   test('UNIT-8 keeps the robot effect, its tuned chain and never drops below speed 0.82', () => {
     const seg = { type: 'outro', anchor: 'B', emotion: 'sad', text: 'Observation complete. Signing off, with regret, at the end of this transmission.' };
     const req = segmentRequest(seg, { presenterId: 'unit8', presenter: CHANNEL.presenters.unit8, casting: CASTING, presets: PRESETS, speech });
-    assert.equal(req.effect, 'robot');
+    assert.equal(req.effect, 'robot-soft');
     assert.deepEqual(req.chain, PRESETS.unit8.chain);
     for (const p of req.phrases) assert.ok(req.speed * p.speedFactor >= 0.819, String(req.speed * p.speedFactor));
   });
