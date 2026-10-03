@@ -36,6 +36,12 @@ What changed on air:
   orchestrator should settle it.
 - **v2 runtime.** The NEWS IN 60 intro no longer waits for the wide's 4 s. The story's voice starts after the 0.6 s pause,
   and its opening cut waits for the cooldown. The sign-off cue starts under the hold, 0.15 s after the last word.
+- **Air between segments (director, 05:44).** The pause after a segment now starts the next segment's recorded-voice lookup
+  (`voices.audioFor`), and `say()` awaits that job. A late clip's lookup (up to `lookupMs`, 700 ms) used to come after the
+  pause; now it runs inside it. INTEGRATION measured the result of the old order on air: pauses up to 2.6-2.9 s against
+  0.65-1.0 s profiles. On the fake clock with a 0.6 s lookup, WORLD NOW's pauses were the profile's plus 0.6 s
+  (1.52 / 1.51 / 1.97 s). Now they are the larger of the two (0.91 / 0.91 / 1.37 s). The test is `a late voice lookup runs
+  inside the pause`.
 - **Editorial (length and beat keys only).** "Around the world in 30 seconds" is said only when the run is about that long. The
   NEWS IN 60 target is back to 55-70 s, and the writer prompt says it in seconds. WORLD NOW's style text says "five to seven
   main stories", which matches `stories: 14`.
@@ -458,6 +464,17 @@ budget must become per block: synthesise block N+1 while block N airs.
   to the round-up, And finally, the chats and the sign-off. Done here: the sign-off cue now sounds under the hold.
 - **Music** (music / showcase): 7-14 cue calls per minute; the recorder now reports bed changes against `music` (BEFORE WORLD
   NOW 2.5 changes/min, shortest bed 11 s against 25): the bed engine's cue sheet should change beds only at block boundaries.
+- **WORLD NOW cut rate on long episodes** (bible owner / w2-camera; known issue): INTEGRATION's `world-now-long` fixture is
+  19 segments, the channel's current length, with 14 stories of about 16 s. It plans 8.42 cuts per minute on the v2 path and
+  8.52 on the default path, against WORLD NOW's 8. The cause is world-now.md's one beat per sentence (single, map, picture,
+  single) on three-sentence stories, where every visual already holds to its maximum (picture 8 s, map 10 s). No two beats
+  can merge without breaking a maximum or the map-on-sentence-2 rule.
+  - Tried and reverted: a cutaway budget per story. The dropped cutaway only became a return to the single, so the cut count
+    stayed the same.
+  - Real ways out: let the single hold two short sentences before the map, raise the map maximum, or write longer stories
+    (section 6.2).
+  - The analyser keeps the rate red on air. test/pace.test.js allows +0.75 cuts per minute for episodes of 16 or more segments
+    only, so a real regression still fails.
 - **Length** (editorial-2 / wave 3): source depth (section 6.2); WORLD NOW ~4 min, TECH BYTES ~3 min offline today.
 - **TECH BYTES singles**: fixed in fix round 1. `splitLongSingles` now also splits on a comma, with both parts ≥ 4.5 s
   (TECH BYTES and WORLD NOW only; COSMOS keeps its still singles). The TECH BYTES median shot is 6.8 s on the v2 trace, was 7.8 s.

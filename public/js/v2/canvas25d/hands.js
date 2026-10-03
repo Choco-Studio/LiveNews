@@ -518,9 +518,9 @@ export function drawArm(buf, L, m, arm, side, toS, s, ga, gc, gh, z) {
     sleeveRim(buf, ga, m.sleeve, hm.rim);
   }
 
-  // ---- the hand
-  handGeometry(L, arm, side, HG);
-  rasterHand(buf, L, hm, HG, B, s, gh, z + 3);
+  // ---- the hand (snapped inputs: see snapArm)
+  handGeometry(L, snapArm(arm), side, HG);
+  rasterHand(buf, L, hm, HG, snapBasis(B), s, gh, z + 3);
 }
 
 // the armhole seam runs from the shoulder top to the armpit, SEAM_DOWN sleeve radii below the shoulder joint
@@ -864,18 +864,24 @@ function rasterHand(buf, L, hm, g, B, s, gh, z) {
   const kn = rasterKey(g, B, s, hm.robot, hullN);
   if (slot.n === kn && slot.bw === bw && slot.bh === bh && sameKey(slot.key, kn)) {
     restoreRaster(slot);
+    RASTER_STATS.hits++;
   } else {
     rasterPasses(L, hm, g, B, s, hullN);
     storeRaster(slot, kn);
+    RASTER_STATS.misses++;
   }
   writeHand(buf, hm, s, gh, z);
 }
 
 // Raster cache: one slot per look and hand side (two-shots and singles show each look once). The key is
 // every input of the raster passes: the projected joints (x, y relative to the box, depth), the palm
-// hull, the projection basis, the hand frame, the shape channels and the scale. Positions compare within
-// RC_EPS px (a raster sampled at pixel centres cannot change for less); the slot's buffers grow once.
-const RC_EPS = 0.02;
+// hull, the projection basis, the hand frame, the shape channels and the scale, compared EXACTLY: the
+// hand's inputs are snapped to a fine grid first (snapArm / snapBasis, at most 1/64 px of drift), so a hit
+// and a miss give the same pixels and every frame is a pure function of the pose (critic r3: a ±0.02 px
+// tolerance made a frame depend on the frames drawn before it). The slot's buffers grow once.
+const RC_EPS = 0;
+/** Cache counters (tests and the lab bench read them). */
+export const RASTER_STATS = { hits: 0, misses: 0 };
 const KEY = new Float64Array(20 * 3 + HULL_IN.length + 32);
 const SLOTS = new WeakMap(); // look → [screen-left hand, screen-right hand]
 function rasterSlot(L, side) {
@@ -1726,8 +1732,37 @@ export function drawHand(buf, L, m, arm, side, toS, s, gh, z) {
   const B = projBasis(toS, BASIS);
   const hm = handMats(L, m);
   buf.part(gh, z, false);
-  handGeometry(L, arm, side, HG);
-  rasterHand(buf, L, hm, HG, B, s, gh, z);
+  handGeometry(L, snapArm(arm), side, HG);
+  rasterHand(buf, L, hm, HG, snapBasis(B), s, gh, z);
+}
+
+// ---------------------------------------------------------------------------
+// Snapped hand inputs (the raster cache's determinism): positions to 1/128 body unit, directions and shape
+// channels to 1/4096, the projection origin to 1/128 px and its axes to 1/16384 px per unit: far below
+// what a raster sampled at pixel centres can show, and the same pose always gives the same pixels.
+const QARM = { wrist: [0, 0, 0], handDir: [0, 0, 1], hand: { curl: [0, 0, 0, 0, 0], spread: 0, facing: -1, sup: 0, pro: 1, palm: [0, -1, 0], palmW: 0 } };
+const QB = new Float64Array(8);
+const qz = (v, k) => Math.round(v * k) / k;
+function snapArm(arm) {
+  const h = arm.hand, q = QARM.hand;
+  for (let i = 0; i < 3; i++) {
+    QARM.wrist[i] = qz(arm.wrist[i], 128);
+    QARM.handDir[i] = qz(arm.handDir[i], 4096);
+  }
+  for (let i = 0; i < 5; i++) q.curl[i] = qz(h.curl[i], 4096);
+  q.spread = qz(h.spread || 0, 4096);
+  q.facing = qz(h.facing, 4096);
+  q.sup = qz(h.sup || 0, 4096);
+  q.pro = h.pro == null ? null : qz(h.pro, 4096);
+  q.palmW = h.palmW > 0 ? qz(h.palmW, 4096) : 0;
+  if (h.palm) for (let i = 0; i < 3; i++) q.palm[i] = qz(h.palm[i], 4096);
+  return QARM;
+}
+function snapBasis(B) {
+  QB[0] = qz(B[0], 128);
+  QB[1] = qz(B[1], 128);
+  for (let i = 2; i < 8; i++) QB[i] = qz(B[i], 16384);
+  return QB;
 }
 
 /** Hand-length of a look in rig units (props.js and the lab use it). */

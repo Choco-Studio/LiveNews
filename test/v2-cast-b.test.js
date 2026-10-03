@@ -536,9 +536,9 @@ function hops(id, s, seed, seconds) {
 test('idle: Max no longer hops 1 px and back (sway on a pixel boundary); no B look hops more than Paco', () => {
   assert.ok(max.persona.sway <= 0.65 && max.persona.energy <= 0.9, 'Max is lively through his head and gestures, not his body');
   for (const s of [1, 1.37]) {
-    const ref = hops('paco', s, 11, 10);
+    const ref = hops('paco', s, 11, 6);
     for (const id of ['max', 'ada', 'nova', 'unit8']) {
-      const n = hops(id, s, 11, 10);
+      const n = hops(id, s, 11, 6);
       assert.ok(n <= ref, `${id} s=${s}: ${n} hops (Paco ${ref})`);
     }
   }

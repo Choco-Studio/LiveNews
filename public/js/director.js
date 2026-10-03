@@ -320,7 +320,10 @@ export class Director {
     // they fire as the speech ends).
     const cues = this.defaultCues(seg);
     // The server's recorded voice (or one that finished after the episode was fetched); null = browser voice.
-    const recorded = await this.voices.audioFor(seg);
+    // PACE: the lookup started in the pause before this segment (voiceAhead), so a late clip's lookup sits inside the gap
+    const ahead = this.voiceAhead?.seg === seg ? this.voiceAhead.job : null;
+    this.voiceAhead = null;
+    const recorded = await (ahead ?? this.voices.audioFor(seg));
     const v2 = this.v2?.begin(seg, recorded ?? null); // v2: scene.segPlan (timed for the voice that plays) + its shot cues
     const v2marks = v2?.speak?.marks || []; // v2 cuts that fall inside a sentence
     await this.audio.speak(seg.text, seg.anchor, {
@@ -410,6 +413,9 @@ export class Director {
       const { kind, gap } = gapAfter(episode, index);
       if (gap >= pace(s).strap.outAtBlock && kind !== 'signoff') s.lowerThird = null; // a block pause clears the strap
       const latency = this.audio?.mode === 'tts' ? CHANNEL.voiceLatency : 0;
+      // the next segment's recorded voice is looked up during the pause, not after it (air = max(gap, lookup))
+      const following = episode.segments[index + 1];
+      if (following) this.voiceAhead = { seg: following, job: Promise.resolve(this.voices.audioFor(following)).catch(() => null) };
       await sleep(Math.max(60, (gap - latency) * 1000));
     }
   }

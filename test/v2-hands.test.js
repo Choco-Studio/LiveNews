@@ -12,7 +12,7 @@ import { poseAt } from '../public/js/v2/canvas25d/rig.js';
 import { actor } from '../public/js/v2/canvas25d/scene.js';
 import { TILT, HIP } from '../public/js/v2/canvas25d/space.js';
 import { PartBuffer, Frame, MAT } from '../public/js/v2/canvas25d/pixbuf.js';
-import { drawArm, drawHand, handGeometry, newHandGeometry } from '../public/js/v2/canvas25d/hands.js';
+import { drawArm, drawHand, handGeometry, newHandGeometry, RASTER_STATS } from '../public/js/v2/canvas25d/hands.js';
 import { glassesAnchor } from '../public/js/v2/canvas25d/glasses.js';
 import { drawCharacter, GROUPS } from '../public/js/v2/canvas25d/character.js';
 import { SHAPES } from '../public/js/v2/canvas25d/gestures/shapes.js';
@@ -622,10 +622,30 @@ test('malformed input never throws: empty segments, missing text, unknown progra
 
 const ALL_SEGS = (pid, n) => episodes(pid, n).flatMap((ep) => planEpisode(ep));
 
+// critic r3: the coverage below used the camera planner's live cuts, so unrelated camera edits moved it across its
+// floor (42 % once, 58 % the next run). It now plans against a FROZEN cut list per segment: the speaker's head-
+// and-shoulders single for the first half, the two-shot (or the solo wide) for the rest.
+function frozenCuts(ctx) {
+  const half = ctx.duration * 0.5;
+  let char = 0;
+  for (const w of ctx.words) if (w.t <= half) char = w.char;
+  return [
+    { at: 0, char: 0, shot: 'close', focus: ctx.speaker, framing: ctx.duo ? 'mcu' : 'solo-mcu' },
+    { at: Math.round(half * 1000) / 1000, char, shot: 'wide', focus: ctx.speaker, framing: ctx.duo ? 'two' : 'solo-wide' },
+  ];
+}
+function withFrozenCuts(res) {
+  const ctx = Object.create(res.ctx);
+  ctx.shots = frozenCuts(res.ctx);
+  const events = planGestures(ctx).map((e) => ({ ...e, planner: 'gestures' }));
+  return { ctx, events };
+}
+
 test('beats: motivated gestures on most sentences of light/neutral stories (WORLD NOW, TECH BYTES), none on grave ones', () => {
   for (const pid of ['world-now', 'tech-bytes']) {
     let sentences = 0, moved = 0;
-    for (const res of ALL_SEGS(pid, 10)) {
+    for (const res0 of ALL_SEGS(pid, 10)) {
+      const res = withFrozenCuts(res0);
       const { ctx } = res;
       const g = gesturesOf(res);
       if (ctx.grave) {
@@ -983,6 +1003,61 @@ test('variety on air (critics r2): no marked family twice in a row or within 45 
   }
 });
 
+// critic r3 (pace.js gestures.vocabWindow 3): variety by NAME, as the viewer reads it: box, lift and a beat are all
+// "a hand rising" (raise_hand). Every fixture (world-now-long included) and 12 seeded variants per programme.
+test('vocabulary (critics r3, pace.js vocabWindow): no name twice in a row per presenter, a statement never repeats a name of the last 3, wall point ≤ 2 per presenter, chin ≤ 35 % in TECH BYTES', () => {
+  const dir = new URL('./fixtures/v2-episodes/', import.meta.url);
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+  const chin = { n: 0, of: 0 };
+  let checked = 0;
+  for (const f of files) {
+    const base = JSON.parse(fs.readFileSync(new URL(f, dir), 'utf8'));
+    for (const e0 of (Array.isArray(base) ? base : [base]).filter((e) => e && Array.isArray(e.segments))) {
+      for (let k = 0; k < 12; k++) {
+        const ep = k === 0 ? e0 : { ...e0, id: `${e0.id}-voc${k}` };
+        const seq = {};
+        for (const res of planEpisode(ep)) {
+          if (!res.ctx) continue;
+          for (const e of gesturesOf(res).sort((a, b) => a.at - b.at)) if (e.slot === res.ctx.speaker && e.name !== 'nod') (seq[e.slot] ||= []).push(e);
+        }
+        for (const [slot, list] of Object.entries(seq)) {
+          let walls = 0;
+          for (let i = 0; i < list.length; i++) {
+            const e = list[i];
+            checked++;
+            if (i > 0) assert.notEqual(list[i - 1].name, e.name, `${f} ${ep.id} ${slot}: ${e.name} twice in a row`);
+            const statement = !e.beat && e.name !== 'papers';
+            if (statement) for (let j = Math.max(0, i - 3); j < i; j++) assert.notEqual(list[j].name, e.name, `${f} ${ep.id} ${slot}: ${e.name} again within the last 3 (${list.slice(Math.max(0, i - 3), i + 1).map((x) => x.name).join(' ')})`);
+            if (e.name === 'point_screen' && statement) walls++;
+            if (ep.program?.id === 'tech-bytes' && statement && defOf(e).arm) {
+              chin.of++;
+              if (e.name === 'chin') chin.n++;
+            }
+          }
+          assert.ok(walls <= 2, `${f} ${ep.id} ${slot}: ${walls} wall points`);
+        }
+      }
+    }
+  }
+  assert.ok(checked > 100, `${checked} gestures checked`);
+  if (process.env.V2_HANDS_TABLE) console.log(`vocabulary: ${checked} gestures; TECH BYTES chin ${chin.n}/${chin.of}`);
+  assert.ok(chin.of > 0 && chin.n / chin.of <= 0.35, `TECH BYTES: chin ${chin.n} of ${chin.of} arm statements`);
+});
+
+test('the episode\'s own gesture policy replaces the client mirror when the context carries it (ctx.programGestures)', () => {
+  const ep = FIX['world-now'];
+  const seen = { def: new Set(), nod: new Set() };
+  for (const res of planEpisode(ep)) {
+    if (!res.ctx) continue;
+    for (const e of planGestures(res.ctx)) if (e.kind === 'gesture') seen.def.add(e.name);
+    const ctx = Object.create(res.ctx);
+    ctx.programGestures = { allow: ['nod'], grave: ['nod'] };
+    for (const e of planGestures(ctx)) if (e.kind === 'gesture') seen.nod.add(e.name);
+  }
+  assert.ok(seen.def.size > 1, `default policy: ${[...seen.def]}`);
+  assert.deepEqual([...seen.nod], ['nod'], `nod-only policy: ${[...seen.nod]}`);
+});
+
 test('meaning (critics r2): head shakes need a negation, contrast or doubt, shrugs uncertainty or a question, glasses the question', () => {
   const NEG = /\b(not|no|never|nothing|nobody|none|neither|nor|without|despite|still|yet|but|however|denied|denies|deny|refused|refuses|rejected|unclear|cannot|hardly|failed|fails|unlikely|doubts?|sceptic\w*|skeptic\w*)\b|n't\b/i;
   const UNC = /\b(maybe|perhaps|unclear|uncertain|unknown|possibly|might|remains? to be seen|who knows|hard to say|not sure|depends|anyone's guess|open question)\b|\?/i;
@@ -1140,7 +1215,7 @@ test('chest-level beats read as open hands, never a grab at the jacket: box and 
   }
 });
 
-test('hand raster cache (perf, critics r2): an unchanged hand reuses its raster; a cached frame never differs from a fresh raster by more than the fresh raster moves per frame', () => {
+test('hand raster cache (perf, critics r2/r3): an unchanged hand reuses its raster; a cached frame is exactly a fresh raster (history-independent)', () => {
   const s = 3.4;
   const toS = (x, y, z = 0) => [192 + x * s, 60 + (y + z * TILT) * s];
   const a = actor('paco', { side: 1, seed: 5, papers: true, gestures: [{ name: 'raise_hand', variant: 'lift', t0: 1.2 }] });
@@ -1179,8 +1254,15 @@ test('hand raster cache (perf, critics r2): an unchanged hand reuses its raster;
     prev.grp.set(b2.grp);
   }
   if (process.env.V2_HANDS_TABLE) console.log(`raster cache: worst ${worst} px, mean ${(total / N).toFixed(2)} px vs a fresh raster; the fresh raster itself changes ${(moved / (N - 1)).toFixed(2)} px per frame`);
-  assert.ok(total / N <= moved / (N - 1), 'the cache lags the truth by less than one frame of its own motion');
-  assert.ok(worst <= 24, `a cached frame differs from a fresh raster by ${worst} px`);
+  // critic r3: exact, whatever was drawn before (the inputs are snapped, the key compares exactly)
+  assert.equal(worst, 0, `a cached frame differs from a fresh raster by ${worst} px`);
+  // and the cache still pays off on resting hands (the first 0.7 s: breathing and idle only)
+  const h0 = RASTER_STATS.hits;
+  for (let f = 0; f < 40; f++) {
+    b1.clear();
+    arms(b1, poseAt(a, 0.2 + f / 60));
+  }
+  assert.ok(RASTER_STATS.hits - h0 >= 20, `resting hands reuse their raster: ${RASTER_STATS.hits - h0} hits in 80 hand draws`);
   // the same instant twice: identical
   b1.clear();
   arms(b1, poseAt(a, 2.0));

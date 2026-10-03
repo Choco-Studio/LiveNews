@@ -18,7 +18,10 @@
 // checklists; PLAN §9 digest). The editorial policy of config/channel.json
 // `programs.<id>.gestures` is mirrored in CONFIG_POLICY (a parity test keeps
 // them equal); `ctx.programGestures` / `ctx.program.gestures` replace it when
-// the server sends the policy with the episode. Both apply: where the bible
+// the segment context carries the episode's own policy (tested; today neither
+// server/producer.js nor direction/context.js passes it, so the mirror governs:
+// an edit of config/channel.json needs the mirror edited too, the parity test
+// says so; CONTRACTS request to w2-integ). Both apply: where the bible
 // is stricter than the config block, the bible wins. Unknown programmes use
 // the WORLD NOW rules.
 //
@@ -50,6 +53,10 @@
 // written gives way to a variant of the same action that reads in the shot (steeple → steeple:tap,
 // raise_hand → raise_hand:lift / box), then to a seeded rotation of chest-level options, then to a head
 // beat (nod / lean_in), never to the same gesture again.
+// Vocabulary (pace.js gestures.vocabWindow, critic r3): variety is also judged by NAME, the way a viewer reads
+// it (box, lift and a beat are all "a hand rising"): never the same name as the presenter's neighbouring gesture,
+// and a statement's name not within the presenter's last vocabWindow (3) gestures, across turns; the wall point
+// at most twice per presenter per episode, the second time with the open hand.
 // Meaning (critics r2): gestures that carry a meaning need it in the text: shake_head only near a
 // negation, contrast or doubt, shrug only on uncertainty or a question, glasses only on the question
 // (tech-bytes.md "before her question"); chin while speaking is a brief touch (the long thinking pose
@@ -72,6 +79,7 @@ import { evalTrack } from '../tracks.js';
 import { TILT } from '../space.js';
 import { planShots } from './shots.js';
 import { paceFor, gestureBudget, CHANNEL } from '../../../pace.js';
+import { CAPTION, STRAP, TICKER, W as LAYOUT_W } from '../../../graphics/layout.js';
 
 /** config/channel.json programs.<id>.gestures, mirrored for the client (test/v2-hands.test.js checks parity). */
 export const CONFIG_POLICY = {
@@ -223,11 +231,13 @@ const ARM_GAP_MIN = 2.6; // s: two arm gestures of one speaker (beats included) 
 const HEAD_GAP = 3.5; // s between two planned head statements of one speaker (speech.js adds its own emphasis nods)
 // lowest screen row a gesture's hand may reach at its apex in a single (6 px above the lower third's tag
 // row at y 166, where two caption lines also start) and in wider shots (6 px above the ticker band)
-const HAND_FLOOR = 160, HAND_FLOOR_WIDE = 190, WRIST_FLOOR = 166;
+// (derived from graphics/layout.js, never copied: critic r3, a caption change must move these too)
+const HAND_FLOOR = CAPTION.bottomStrap, HAND_FLOOR_WIDE = TICKER.y - 12, WRIST_FLOOR = STRAP.tagY;
 // the caption box over a strap (graphics/layout.js: STRAP.tagY 166 - gap 6 = bottom 160, one 12 px line
 // while a strap is up; centred, at most 264 + 2·5 px wide): a hand centre in its columns must clear its
 // top by 4 px (the hand is about 24 px long in a single: two thirds of it then show above the box)
-const CAPTION_BOX = { x0: 55, x1: 329, top: 148 };
+const CAPTION_W = CAPTION.maxW + 2 * CAPTION.padX;
+export const CAPTION_BOX = Object.freeze({ x0: (LAYOUT_W - CAPTION_W) / 2, x1: (LAYOUT_W + CAPTION_W) / 2, top: CAPTION.bottomStrap - CAPTION.pitch });
 const CAPTION_CLEAR = 4;
 const SINGLE_SCALE = 2.2; // presenter scale from which a framing counts as a single (the over-the-shoulder 2.41 too)
 const CPS = 14.5; // chars per second to estimate segment lengths from the episode summary
@@ -512,7 +522,14 @@ class SegmentPlan {
     const w = ctx.words[wi];
     if (!w) return null;
     const ev = { kind: 'gesture', slot: ctx.speaker, name, char: w.char };
-    const variant = opts.variant || R.variants[name];
+    let variant = opts.variant || R.variants[name];
+    // the high outward lift is placed for a head-and-shoulders single (above its caption); in a two-shot, a
+    // wide or an over-the-shoulder the same thought is the lower palm-up offer in front of the body (critic r3:
+    // a palm at the shoulder seam with the elbow pinned low read as carrying a tray there)
+    if (name === 'raise_hand' && (variant === 'lift' || variant === 'lift_far')) {
+      const sc = scaleAt(ctx, w.t);
+      if (sc != null && sc < SINGLE_SCALE) variant = variant === 'lift' ? 'offer' : 'offer_far';
+    }
     if (variant && GESTURES[name].variants?.[variant]) ev.variant = variant;
     if (name === 'count') ev.n = opts.n ?? countFromText(ctx.seg.text, w.char, ctx.sentences[sentenceOf(ctx, w.char)].end);
     // chin while speaking: a brief touch; the long thinking pose only on the question or held into the pause

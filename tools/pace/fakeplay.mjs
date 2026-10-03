@@ -47,10 +47,13 @@ export function fakeClock() {
   };
 }
 
-/** Play `ep` on the default path (no v2) on the fake clock: { shots, says, sfx, sleeps }. */
-export async function playDefault(ep, { pictures = true, mode = 'mute' } = {}) {
+/**
+ * Play `ep` on the default path (no v2) on the fake clock: { shots, says, sfx, lookups }. `voiceLookup` (s): each
+ * recorded-voice lookup (voices.audioFor) takes that long on the clock, as a late clip's server lookup does.
+ */
+export async function playDefault(ep, { pictures = true, mode = 'mute', voiceLookup = 0 } = {}) {
   const clock = fakeClock();
-  const log = { shots: [], says: [], sfx: [] };
+  const log = { shots: [], says: [], sfx: [], lookups: [] };
   try {
     const audio = {
       mode,
@@ -80,7 +83,11 @@ export async function playDefault(ep, { pictures = true, mode = 'mute' } = {}) {
       },
     };
     const d = new Director({ audio, channel: { name: 'GLOBIT 24', slogan: '', presenters: {} } });
-    d.voices = { episode() {}, audioFor: async () => null, refreshAds() {}, prepareAd() {}, adLine: () => null };
+    const audioFor = (seg) => {
+      log.lookups.push({ text: seg?.text, t: clock.now() });
+      return voiceLookup > 0 ? new Promise((r) => setTimeout(() => r(null), voiceLookup * 1000)) : Promise.resolve(null);
+    };
+    d.voices = { episode() {}, audioFor, refreshAds() {}, prepareAd() {}, adLine: () => null };
     d.prepareImages = async () => {};
     if (pictures) for (const r of ep.rundown || []) if (r.hasImage) d.images.set(r.storyId, { small: {}, full: {}, card: {} });
     const setShot = d.setShot.bind(d);
