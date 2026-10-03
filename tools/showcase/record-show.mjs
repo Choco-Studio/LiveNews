@@ -31,7 +31,11 @@
 //   --seconds N               recording length (with --until: the maximum)
 //   --start now|open|break|endcard   begin at the next programme open / break / end card (default now)
 //   --skip N                  run N s of channel time (no recording) before looking for --start
-//   --until next-open+S|break-end+S|episode-end+S   stop S s after that event (else after --seconds)
+//   --until next-open+S|break-end+S|episode-end+S|endcard+S   stop S s after that event (else after --seconds);
+//                             the cut never lands inside speech: it waits for the segment on air to end and
+//                             stops 1.5 s after its last word, or just before the next shot, whichever is first
+//                             (no new shot in the last 2 s), then fades picture and sound out over --fade s
+//   --fade S                  fade-out at the end (default 1.5 with --until, else 0)
 //   --count N                 stop at the Nth occurrence of the --until event (default 1): with --start open,
 //                             --until next-open+20 --count 2 records two programmes, their breaks and the third open
 //   --max-wait N              seconds of channel time allowed to reach --start (default 240)
@@ -39,8 +43,13 @@
 //   --music lofi|broadcast|none   bed engine (default lofi)
 //   --stories soft|off|drone  lofi's bedUnderStories switch: soft (default, the owner's soft bed under light and
 //                             neutral story copy), off (the bibles' dry story copy), drone
-//   --bed-under-voice N       level the bed so it sits N dB under the voice while someone speaks (default: off, the
-//                             music engine's own calibration against -16 LUFS voices is kept)
+//   --bed-under-voice N|off   bed rider (default 18, the WORLD NOW bible): the bed's loudness sits N LU under the
+//                             voice while someone speaks (each speech region kept within N-2..N+2) and rises to
+//                             --bed-gap LU under the voice in every real pause of 0.6 s or more (word timings from
+//                             the voice stems); off = the composer's level with a fixed >= 16 dB extra duck
+//   --bed-gap N               where the bed sits in pauses, LU under the voice (default 11)
+//   --room-tone DB|off        studio air under every studio segment, open to end card (default -58 dBFS RMS),
+//                             so no pause is digital silence
 //   --bed-db N                extra bed trim in dB (default 0); --duck-db N minimum extra bed duck under speech (default 0;
 //                             deeper where the engine's own duck is shallow, so the total is >= 16 dB)
 //   --lufs -16 --tp -1.5      loudness targets
@@ -50,7 +59,7 @@
 //   --voice-engine auto|fallback   use the voice stream's engine when it loads (auto) or the built-in one
 //   --voice-workers N         Kokoro processes (default 2; idle ones prefetch the sentences already on air)
 //   --preset veryfast         x264 preset of the final 5x encode (veryfast: 2x faster than fast, same size here)
-//   --measure-duck            also render the beds without speech to measure the duck (default for <= 900 s)
+//   --measure-duck [off]      also render the beds without speech to measure the duck (default for <= 900 s; off skips it)
 //   --raf frame|throttle|native   how the page renders: frame (default) = the recorder runs the page's
 //                             requestAnimationFrame callbacks at each video frame's exact page time, right before
 //                             grabbing it; throttle = first fake 16 ms tick of each frame slot (the picture can lag
@@ -82,6 +91,7 @@ async function loadPlaywright() {
 const opts = {
   seconds: 90, skip: 0, fps: 30, scale: 5, start: 'now', until: null, count: 1, 'max-wait': 240, music: 'lofi', stories: 'soft',
   'bed-db': 0, 'duck-db': 0, lufs: -16, tp: -1.5, sr: 48000, port: 8602, 'voice-engine': 'auto', 'voice-workers': 2,
+  'bed-under-voice': 18, 'bed-gap': 11, 'room-tone': -58,
 };
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
@@ -117,11 +127,14 @@ fs.mkdirSync(WORK, { recursive: true });
 const CACHE = path.resolve(opts.cache || path.join(os.homedir(), '.cache', 'globit-showcase', 'voices'));
 const FPS = opts.fps;
 const SR = opts.sr;
-const untilMatch = typeof opts.until === 'string' ? /^(next-open|break-end|episode-end)(?:\+(\d+(?:\.\d+)?))?$/.exec(opts.until) : null;
+const untilMatch = typeof opts.until === 'string' ? /^(next-open|break-end|episode-end|endcard)(?:\+(\d+(?:\.\d+)?))?$/.exec(opts.until) : null;
 if (opts.until && !untilMatch) {
-  console.error(`bad --until ${opts.until} (next-open+S | break-end+S | episode-end+S)`);
+  console.error(`bad --until ${opts.until} (next-open+S | break-end+S | episode-end+S | endcard+S)`);
   process.exit(1);
 }
+const FADE = opts.fade != null && opts.fade !== true ? Math.max(0, Number(opts.fade) || 0) : (untilMatch ? 1.5 : 0);
+const RIDER = opts['bed-under-voice'] === 'off' || opts['bed-under-voice'] === true ? null : Number(opts['bed-under-voice']);
+const ROOM_TONE = opts['room-tone'] === 'off' || opts['room-tone'] === true ? null : Number(opts['room-tone']);
 const maxSeconds = opts['max-wait'] + opts.skip + opts.seconds + 30;
 const say = (...a) => console.log('[showcase]', ...a);
 const t0Real = Date.now();
@@ -319,6 +332,11 @@ const sheetEvery = Number(opts['sheet-every']) || (untilMatch ? 15 : Math.max(2,
 let R = null; // page time (ms) of frame 0
 let stopAt = untilMatch ? Infinity : null;
 let untilHits = 0;
+// Where the cut may land (page clock, ms): segments on air (say start -> end), the last word's end
+// and every shot start, so the recording never stops inside speech or right after a new shot.
+const openSays = new Set();
+let lastSayEnd = -Infinity;
+const shotStarts = [];
 let frames = 0;
 let lastReport = Date.now();
 const timing = { frame: 0, encode: 0, speech: 0, clock: 0, other: 0 };
@@ -352,10 +370,18 @@ for (let i = 0; i < maxFrames; i++) {
   if (i % 3 === 0) {
     const fresh = await pullLog();
     if (fresh.some((e) => e.ev === 'playBreak' && e.phase === 'start')) predictNextEpisode();
+    for (const e of fresh) {
+      if (e.ev === 'say' && e.phase === 'start') openSays.add(e.t);
+      else if (e.ev === 'say' && e.phase === 'end') {
+        openSays.delete(e.ref);
+        lastSayEnd = Math.max(lastSayEnd, e.t);
+      } else if (e.ev === 'shot') shotStarts.push(e.at ?? e.t);
+    }
     if (untilMatch && stopAt === Infinity) {
       const [, kind, plus] = untilMatch;
       for (const e of fresh) {
         const hit = (kind === 'next-open' && e.ev === 'shot' && e.shot === 'open')
+          || (kind === 'endcard' && e.ev === 'shot' && e.shot === 'endcard')
           || (kind === 'break-end' && e.ev === 'playBreak' && e.phase === 'end')
           || (kind === 'episode-end' && e.ev === 'playEpisode' && e.phase === 'end');
         if (hit && ++untilHits >= opts.count) {
@@ -366,7 +392,13 @@ for (let i = 0; i < maxFrames; i++) {
         if (hit) say(`${kind} #${untilHits} of ${opts.count} at ${(((e.at ?? e.t) - R) / 1000).toFixed(1)} s`);
       }
     }
-    if (stopAt && stopAt !== Infinity && st.t >= stopAt) break;
+    if (stopAt && stopAt !== Infinity && st.t >= stopAt) {
+      // Never inside speech: let the segment on air finish, then record up to 1.6 s of its tail (or
+      // until the next shot); the exact cut is chosen after the loop.
+      if (!untilMatch) break;
+      const tailFrom = lastSayEnd >= stopAt - 2000 ? lastSayEnd : -Infinity;
+      if (!openSays.size && (tailFrom === -Infinity || st.t >= tailFrom + 1600 || shotStarts.some((t) => t > tailFrom + 1))) break;
+    }
   }
   const ms = Math.round(((i + 1) * 1000) / FPS) - Math.round((i * 1000) / FPS);
   lap('other');
@@ -377,10 +409,40 @@ for (let i = 0; i < maxFrames; i++) {
     say(`${(i / FPS).toFixed(1)} s recorded · ${synthStats.requests} utterances (${synthStats.cached} ready from cache/prefetch, ${synthStats.waitTime.toFixed(0)} s waited) · queue ${voices.pending} · ${elapsed()}`);
   }
 }
-const Rend = R + Math.round((frames * 1000) / FPS);
-const seconds = frames / FPS;
 ff.stdin.end();
 await pullLog();
+// The cut: after the stop point, at the end of the last segment's tail (its last word + 1.5 s) or
+// one frame before the next shot, whichever is first, and never with a shot starting in the last 2 s.
+let cutNote = null;
+if (untilMatch && stopAt !== Infinity && stopAt != null) {
+  const frameMs = 1000 / FPS;
+  for (const e of allLog) {
+    if (e.ev === 'say' && e.phase === 'end') lastSayEnd = Math.max(lastSayEnd, e.t);
+    if (e.ev === 'shot' && !shotStarts.includes(e.at ?? e.t)) shotStarts.push(e.at ?? e.t);
+  }
+  const recEnd = R + frames * frameMs;
+  let cut = stopAt;
+  if (lastSayEnd >= stopAt - 2000) {
+    cut = lastSayEnd + 1500;
+    const next = shotStarts.filter((t) => t > lastSayEnd + 1).sort((a, b) => a - b)[0];
+    if (next != null && next - frameMs < cut) cut = Math.max(lastSayEnd + 300, next - frameMs);
+  }
+  for (let k = 0; k < 4; k++) {
+    const late = shotStarts.filter((t) => t > cut - 2000 && t <= cut && t > stopAt - 4000).sort((a, b) => a - b)[0];
+    if (late == null || late - frameMs <= R) break;
+    cut = late - frameMs;
+  }
+  cut = Math.min(cut, recEnd);
+  const keep = Math.max(1, Math.round((cut - R) / frameMs));
+  if (keep < frames) {
+    cutNote = `cut at ${((keep * frameMs) / 1000).toFixed(2)} s (${frames - keep} tail frames dropped; last word ends at ${((lastSayEnd - R) / 1000).toFixed(2)} s)`;
+    frames = keep;
+    while (sheetTiles.length && sheetTiles[sheetTiles.length - 1].i >= frames) sheetTiles.pop();
+  }
+}
+const Rend = R + Math.round((frames * 1000) / FPS);
+const seconds = frames / FPS;
+if (cutNote) say(cutNote);
 const pageStats = await page.evaluate(() => ({ stats: window.__sc.stats, errors: window.__sc.errors, contexts: window.__sc.contexts.length }));
 say(`recorded ${frames} frames (${seconds.toFixed(1)} s) · ${elapsed()}; real time spent (s): ${Object.entries(timing).map(([k, v]) => `${k} ${(v / 1000).toFixed(0)}`).join(', ')}; rendering WebAudio`);
 
@@ -444,11 +506,35 @@ const voiced = [];
 }
 // Recorded voices the channel played itself (decoded clips started on the speech bus).
 const clipsPlayed = allLog.filter((e) => e.ev === 'clip').map((e) => ({ start: rel(e.at), end: rel(e.at) + e.duration, duration: e.duration }));
-const voiceSpans = [
-  ...heard.map((s) => ({ start: s.start, end: s.end })),
-  ...voiced.filter((v) => v.end > 0 && v.start < seconds),
-  ...clipsPlayed.filter((c) => c.end > 0 && c.start < seconds),
-];
+// Where a voice is really heard: with the server's recorded voices, the speech bus's own envelope
+// (10 ms, > -48 dBFS), so the pauses between sentences and segments are real gaps for the bed engine's
+// duck and the bed rider (a clip span covers its whole segment, pauses included); else the spans the
+// engine reports.
+function activitySpans(x, thresholdDb = -48) {
+  const hopN = Math.round(SR * 0.01);
+  const out = [];
+  let on = null;
+  for (let k = 0; (k + 1) * hopN <= x.length; k++) {
+    let sum = 0;
+    for (let i = k * hopN; i < (k + 1) * hopN; i++) sum += x[i] * x[i];
+    const loud = 10 * Math.log10(sum / hopN + 1e-20) > thresholdDb;
+    if (loud && on === null) on = k;
+    else if (!loud && on !== null) {
+      out.push({ start: on * 0.01, end: k * 0.01 });
+      on = null;
+    }
+  }
+  if (on !== null) out.push({ start: on * 0.01, end: x.length / SR });
+  return out;
+}
+const busActivity = stemSpeechBus && clipsPlayed.length ? activitySpans(stemSpeechBus) : null;
+const voiceSpans = busActivity
+  ? [...heard.map((s) => ({ start: s.start, end: s.end })), ...busActivity]
+  : [
+    ...heard.map((s) => ({ start: s.start, end: s.end })),
+    ...voiced.filter((v) => v.end > 0 && v.start < seconds),
+    ...clipsPlayed.filter((c) => c.end > 0 && c.start < seconds),
+  ];
 const events = allLog
   .filter((e) => e.ev !== 'speech')
   .map((e) => {
@@ -489,7 +575,7 @@ if (stemSpeechBus && clipsPlayed.length) {
 // ------------------------------------------------------------------- beds
 let cues = [];
 let bedsInfo = null;
-const measureDuck = Boolean(opts['measure-duck']) || seconds <= 900;
+const measureDuck = opts['measure-duck'] === 'off' ? false : Boolean(opts['measure-duck']) || seconds <= 900; // off: the rider does not need the dry render
 const PREROLL = 8;
 if (opts.music !== 'none') {
   cues = deriveCues([...allLog, ...recordedSentences]);
@@ -549,6 +635,21 @@ if (opts.music !== 'none') {
 
 // -------------------------------------------------------------------- mix
 const regions = speechRegions(voiceSpans);
+// Studio windows (recording clock): from the first shot after each programme open to its end card
+// (or the end of the recording). The room tone and the silence check cover these.
+const studio = [];
+{
+  const shots = events.filter((e) => e.ev === 'shot').map((e) => ({ shot: e.shot, at: e.at ?? e.t })).sort((a, b) => a.at - b.at);
+  for (let i = 0; i < shots.length; i++) {
+    if (shots[i].shot !== 'open') continue;
+    const first = shots.slice(i + 1).find((x) => x.shot !== 'open');
+    if (!first) continue;
+    const end = shots.slice(i + 1).find((x) => x.at > first.at && ['endcard', 'ident', 'ad', 'promo', 'open', 'standby'].includes(x.shot));
+    const a = Math.max(0, first.at);
+    const b = Math.min(seconds, end ? end.at : seconds);
+    if (b - a > 1) studio.push([a, b]);
+  }
+}
 const manifest = {
   sr: SR,
   seconds,
@@ -560,7 +661,11 @@ const manifest = {
   speech: regions,
   quiet: quietIntervals(allLog, R),
   bedGainDb: opts['bed-db'],
-  bedUnderVoiceDb: opts['bed-under-voice'] != null ? Number(opts['bed-under-voice']) : null, // null: keep the composer's level
+  bedUnderVoiceDb: null, // the old auto level (superseded by the rider)
+  bedRider: RIDER != null && Number.isFinite(RIDER) ? { underDb: RIDER, window: [-RIDER - 2, -RIDER + 2], gapDb: Number(opts['bed-gap']) || 11, gapMin: 0.6, maxLift: 8, ceilDb: 6 } : null,
+  roomTone: ROOM_TONE != null && Number.isFinite(ROOM_TONE) ? { db: ROOM_TONE, fade: 0.5 } : null,
+  studio,
+  fadeOut: FADE,
   webSpeech: speechInWebaudio ? path.join(WORK, 'speechbus.f32') : null, // voices inside the WebAudio stem (duck reference)
   extraDuckDb: opts['duck-db'],
   lufs: opts.lufs,
@@ -577,11 +682,13 @@ if (mixRun.status !== 0) {
 }
 const mixReport = JSON.parse(mixRun.stdout.trim().split('\n').pop());
 say(`mix: ${JSON.stringify(mixReport.final)} · ${elapsed()}`);
+if (mixReport.bedRider) say(`bed rider: ${JSON.stringify(mixReport.bedRider)}`);
+if (mixReport.silentRuns) say(`silent runs (< -70 dBFS for > 0.25 s, open to end card): ${mixReport.silentRuns.count}${mixReport.silentRuns.count ? ` ${JSON.stringify(mixReport.silentRuns.runs.slice(0, 5))}` : ''}`);
 
 const tEnc = Date.now();
 const mux = spawnSync('ffmpeg', [
   '-v', 'error', '-y', '-i', videoPath, '-i', manifest.aac, '-map', '0:v', '-map', '1:a',
-  '-vf', `scale=iw*${opts.scale}:ih*${opts.scale}:flags=neighbor`,
+  '-vf', `scale=iw*${opts.scale}:ih*${opts.scale}:flags=neighbor${FADE > 0 ? `,fade=t=out:st=${Math.max(0, seconds - FADE).toFixed(3)}:d=${FADE.toFixed(3)}` : ''}`,
   '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', String(opts.preset || 'veryfast'),
   // -t, not -shortest: with -shortest the frames still queued in x264's
   // lookahead/B-frames when the audio ends were dropped (2697 of 2700 frames).

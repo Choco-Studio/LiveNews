@@ -9,7 +9,7 @@
 // from the story ids, so the same news always makes the same episode.
 
 import { isBreaking, plainTitle } from '../news.js';
-import { LIGHT, contentWords, extractFigures, harmlessIncident, isGrave, leansOnPrevious, numbersIn, quotesIn, severity } from '../facts.js';
+import { LIGHT, contentWords, extractFigures, harmlessIncident, isGrave, leansOnPrevious, notForFeatures, numbersIn, quotesIn, severity } from '../facts.js';
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
 import { SENTENCE_WORDS, shortHeadline, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
@@ -79,6 +79,14 @@ const WORLD_PAIRS = {
   ],
 };
 WORLD_PAIRS.SPACE = WORLD_PAIRS.ASTRONOMY;
+// Pairs built from the story's own place ({place}), so a re-run of the same "And finally" reads differently.
+const WORLD_PLACE_PAIRS = [
+  ['[nod] Not the story I expected from {place} today.', 'A welcome one, though.'],
+  ['[nod] I may have to visit {place}.', '[shrug] You say that about everywhere, Paco.'],
+  ['Good news out of {place}, for once.', 'I will take it. Gladly.'],
+  ['[nod] {Place} has improved my evening.', 'It does not take much, Paco.'],
+  ['[nod] One more reason to keep an eye on {place}.', 'Noted, and filed.'],
+];
 
 // WORLD NOW (long programmes): the partner adds one detail the story kept back, soberly (no question marks).
 const WORLD_ADD = ['[nod] And one detail worth adding:', '[nod] Worth adding:', '[look_partner] And the context here:', '[nod] One more line from the report:', '[nod] And this matters too:'];
@@ -94,11 +102,12 @@ function midStory(order, roundup, lighter, number) {
 }
 
 // TECH BYTES, THE CATCH: Ada asks what a remaining summary sentence answers; Max answers with it.
+// Each question has several phrasings: a 24/7 rotation must not hear the same one every half hour.
 const CATCH = [
-  { test: /\b(?:cost|price|priced|dollars|euros|pounds|\$|£|€)/i, q: (max) => `[glasses] ${max}, the question everyone asks. What does it cost?` },
-  { test: /\b(?:next year|this year|later this year|next month|in the (?:spring|summer|autumn|winter)|on sale|go on sale|launch(?:es)? (?:in|next)|from next|by \d{4})\b/i, q: () => '[chin] And when does it reach actual people?' },
-  { test: /\b(?:but|however|only|not yet|still|although)\b/i, q: () => '[steeple] So what is the catch?' },
-  { test: /\b(?:using|uses|by (?:using|\w+ing)|works (?:by|without)|without an?)\b/i, q: () => '[chin] How does it actually work?' },
+  { test: /\b(?:cost|price|priced|dollars|euros|pounds|\$|£|€)/i, q: (max) => [`[glasses] ${max}, the question everyone asks. What does it cost?`, '[glasses] And the price tag?', `[chin] ${max}, what will all this cost?`] },
+  { test: /\b(?:next year|this year|later this year|next month|in the (?:spring|summer|autumn|winter)|on sale|go on sale|launch(?:es)? (?:in|next)|from next|by \d{4})\b/i, q: () => ['[chin] And when does it reach actual people?', '[chin] When can anyone actually use it?', '[glasses] And the timetable?'] },
+  { test: /\b(?:but|however|only|not yet|still|although)\b/i, q: () => ['[steeple] So what is the catch?', '[chin] There is always a but. What is it here?', '[steeple] And the small print?'] },
+  { test: /\b(?:using|uses|by (?:using|\w+ing)|works (?:by|without)|without an?)\b/i, q: () => ['[chin] How does it actually work?', '[chin] Walk me through how it works.', '[glasses] And the clever part is?'] },
 ];
 // The button after "And finally", by what kind of story it was: a product, or science.
 const PRODUCT_KICKERS = new Set(['GADGETS', 'ROBOTICS', 'CHIPS', 'GAMING', 'SOFTWARE', 'AI', 'CONNECTIVITY', 'MOTORING']);
@@ -191,20 +200,29 @@ const lineSentences = (line) => plainLine(line).split(/(?<=[.!?])\s+/).filter(Bo
 
 /**
  * A presenter line for this story: only lines whose `needs` the story's words
- * meet, in an order seeded by `key`, skipping lines aired recently (`recent`:
- * plain texts of the last lines on air). Every line recent: the seeded one.
+ * meet, the one aired longest ago first (never aired before all others), ties
+ * in an order seeded by `key`. `recent` maps a plain sentence to when it last
+ * aired (a higher number is more recent), across the station's last hours.
  */
 function chooseFresh(list, key, { recent = null, text = '' } = {}) {
   const fits = list.filter((l) => typeof l === 'string' || !l.needs || l.needs.test(text));
   const pool = fits.length ? fits : list.filter((l) => typeof l === 'string');
   if (!pool.length) return null;
   const start = hash(key) % pool.length;
+  let best = null;
+  let bestAge = Infinity;
   for (let k = 0; k < pool.length; k++) {
     const line = pool[(start + k) % pool.length];
-    if (!recent || !lineSentences(line).some((x) => recent.has(x))) return lineText(line);
+    const age = recent ? Math.max(-1, ...lineSentences(line).map((x) => (recent.has(x) ? recent.get(x) : -1))) : -1;
+    if (age < bestAge) {
+      best = line;
+      bestAge = age;
+    }
   }
-  return lineText(pool[start]);
+  return lineText(best);
 }
+/** Has any sentence of this line aired in the station's memory? */
+const airedBefore = (line, recent) => !!recent && lineSentences(line).some((x) => recent.has(x));
 
 const sentencesOf = (s) =>
   String(s || '')
@@ -329,6 +347,8 @@ function study(story) {
     sentences,
     quote: quotesIn(s.summary || '').find((q) => q.text.split(/\s+/).length >= 4) || null,
     kicker: kickerFor(s),
+    // never the number of the day: a quake that harmed no one, a closure, job losses
+    noFeature: notForFeatures(text),
   };
 }
 
@@ -345,7 +365,7 @@ function study(story) {
  * number of the day and the "and finally" come from the programme's own beat
  * whenever one qualifies (COSMOS: science, not a games console).
  */
-function runningOrder(infos, n, program) {
+function runningOrder(infos, n, program, featured = new Set()) {
   const features = program?.features || [];
   const primary = program?.categories?.length > 1 ? program.categories[0] : null;
   const pool = [...infos];
@@ -353,20 +373,29 @@ function runningOrder(infos, n, program) {
     const i = pool.findIndex(pred);
     return i < 0 ? null : pool.splice(i, 1)[0];
   };
-  const lead = take((i) => i.breaking) || takeLead(pool) || take(() => true);
+  // A breaking story leads over stories of its own weight or less: a hurricane with homes without power leads
+  // before a canal reopening the outlet calls breaking news (which then plays second).
+  const breaking = pool.find((i) => i.breaking) || null;
+  const graver = breaking ? pool.slice(0, 6).find((i) => !i.breaking && !i.live && i.severity >= 3 && i.severity > breaking.severity) : null;
+  const lead = (graver && take((i) => i === graver)) || take((i) => i.breaking) || takeLead(pool) || take(() => true);
   if (!lead) return { order: [], roundup: [], lighter: null, number: null };
   let slots = n - 1;
+  // A feature that ran lately (the station's memory) gives way to another story when one qualifies: the same
+  // "And finally" and the same number of the day do not come round every rotation.
+  const fresh = (i) => !featured.has(i.s.id);
   let lighter = null;
   if (features.includes('lighter') && slots >= 1) {
     const ok = (i) => !i.breaking && !i.grave && !i.live;
     const own = (i) => !primary || i.s.category === primary;
-    lighter = take((i) => ok(i) && own(i) && i.curious) || take((i) => ok(i) && own(i) && i.light) || take((i) => ok(i) && i.curious && !BEAT_OF_OTHERS.test(i.s.category)) || take((i) => ok(i) && i.light);
+    const tiers = [(i) => ok(i) && own(i) && i.curious, (i) => ok(i) && own(i) && i.light, (i) => ok(i) && i.curious && !BEAT_OF_OTHERS.test(i.s.category), (i) => ok(i) && i.light];
+    for (const strict of [true, false]) for (const t of tiers) lighter ||= take((i) => t(i) && (!strict || fresh(i)));
     if (lighter) slots--;
   }
   let number = null;
   if (features.includes('number')) {
-    const ok = (i) => !i.grave && !i.breaking && !i.live && i.figures.some((f) => f.score >= 3 && !f.age);
-    const best = (list) => list.filter(ok).sort((a, b) => bestFigure(b).score - bestFigure(a).score)[0] || null;
+    // never grave, never a harmless quake or a closure, never breaking news nor a live page
+    const ok = (i) => !i.grave && !i.mild && !i.noFeature && !i.breaking && !i.live && i.figures.some((f) => f.score >= 3 && !f.age);
+    const best = (list) => list.filter(ok).sort((a, b) => Number(fresh(b)) - Number(fresh(a)) || bestFigure(b).score - bestFigure(a).score)[0] || null;
     // From the programme's own beat when it has one (COSMOS: a science figure before a gadget's sales).
     number = (primary && best(pool.slice(0, slots + 8).filter((i) => i.s.category === primary))) || best(pool.slice(0, slots + 3));
     if (number) {
@@ -385,6 +414,8 @@ function runningOrder(infos, n, program) {
     if (want < min) want = 0;
   }
   const mains = [];
+  // a breaking story that does not lead plays first after the lead
+  if (breaking && breaking !== lead && pool.includes(breaking) && slots - want > 0) mains.push(take((i) => i === breaking));
   while (mains.length < slots - want && pool.length) mains.push(bestMain(pool));
   let roundup = [];
   if (want) {
@@ -412,7 +443,7 @@ function runningOrder(infos, n, program) {
   while (mains.length + roundup.length < slots && pool.length) mains.push(bestMain(pool));
   // The main stories air in order of news value (people at risk before a museum wing), the desk's order breaking ties.
   const rank = new Map(infos.map((x, k) => [x, k]));
-  mains.sort((a, b) => newsValue(a, rank.get(a)) - newsValue(b, rank.get(b)) || rank.get(a) - rank.get(b));
+  mains.sort((a, b) => Number(b.breaking) - Number(a.breaking) || newsValue(a, rank.get(a)) - newsValue(b, rank.get(b)) || rank.get(a) - rank.get(b));
   // Where the number of the day goes: second, last, or among the main stories (never the lead).
   let middle = [...mains];
   if (number) {
@@ -511,11 +542,11 @@ export function createMockProvider() {
     // It copies the feed text, so it has nothing to check: it never stands in for the editor.
     reviews: false,
     available: () => true,
-    async generate({ stage = 'write', script, stories, channelName, program, presenters = { A: { name: 'the presenter' } }, count, now, recent }) {
+    async generate({ stage = 'write', script, stories, channelName, program, presenters = { A: { name: 'the presenter' } }, count, now, recent, featured }) {
       const usage = { input: 0, output: 0, cached: 0 };
       // Asked to review anyway (outside a ProviderChain): return the script untouched and say so.
       if (stage === 'review') return { text: JSON.stringify(script), usage, reviewed: false };
-      return { text: JSON.stringify(writeEpisode({ stories, channelName, program, presenters, count, now: now ?? new Date(), recent })), usage };
+      return { text: JSON.stringify(writeEpisode({ stories, channelName, program, presenters, count, now: now ?? new Date(), recent, featured })), usage };
     },
   };
 }
@@ -533,14 +564,18 @@ const OPENERS = [
 // Where the place must come (the longest sentence a programme allows is writer.js SENTENCE_WORDS).
 const PLACE_WITHIN = { 'world-now': 6, 'news-60': 3, 'money-minute': 4 };
 
-function writeEpisode({ stories, channelName, program, presenters, count, now, recent }) {
+function writeEpisode({ stories, channelName, program, presenters, count, now, recent, featured }) {
   const title = program?.title || channelName;
   const solo = !presenters.B;
   const pid = program?.id || '';
   const quick = pid === 'news-60';
   const maxWords = program?.sentenceWords || SENTENCE_WORDS[pid] || 24;
   const placeWithin = PLACE_WITHIN[pid] ?? Infinity;
-  const aired = new Set((recent || []).flatMap(lineSentences));
+  // The station's memory of lines aired in the last hours, oldest first: sentence -> when it last aired.
+  const aired = new Map();
+  (recent || []).forEach((line, at) => lineSentences(line).forEach((x) => aired.set(x, at)));
+  let tick = (recent || []).length;
+  const markAired = (line) => lineSentences(line).forEach((x) => aired.set(x, tick++));
   // A live page whose only lines point at the outlet's own coverage has nothing to read out.
   const all = stories.map(study).filter((i) => !i.live || i.sentences.length);
   // Live pages only when there is nothing else.
@@ -567,14 +602,15 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       return !!x && wordCount(x) >= rMin - 4;
     });
   }
-  const { order, roundup, lighter, number } = runningOrder(pool, n, program);
-  const seed = order.map((i) => i.s.id).join('|') + pid;
+  const { order, roundup, lighter, number } = runningOrder(pool, n, program, new Set(featured || []));
+  // A re-run (NewsDesk.recycle) seeds differently: the same stories get other openings, credits and lines.
+  const seed = order.map((i) => `${i.s.id}${i.s.recycled ? `#${i.s.recycled}` : ''}`).join('|') + pid;
   const nameOf = (slot) => firstName(presenters[slot]);
   const idOf = (slot) => presenters[slot]?.id;
   const other = (slot) => (slot === 'A' ? 'B' : 'A');
   const pickLine = (list, key, info) => {
     const line = chooseFresh(list, key, { recent: aired, text: info ? `${info.s.title} ${info.s.summary || ''}` : '' });
-    if (line) for (const x of lineSentences(line)) aired.add(x);
+    if (line) markAired(line);
     return line;
   };
 
@@ -619,12 +655,14 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     }
     const second = order[1];
     const third = order[2];
+    const also = choose(['Also coming up:', 'Coming up:', 'Also ahead:'], `${seed}~also`);
+    const later = choose(['Later in the programme:', 'Later:', 'Still to come:'], `${seed}~later`);
     if (second) {
-      introParts.push(`[point_camera] Also coming up: ${featureTease(second) || lowerFirstWord(said(second), second)}.`);
+      introParts.push(`[point_camera] ${also} ${featureTease(second) || lowerFirstWord(said(second), second)}.`);
       tease.push(second.s.id);
     }
     if (third) {
-      introParts.push(third === number ? 'And later, our number of the day.' : third === lighter ? `And later: ${asSentence(lowerFirstWord(said(third), third))}` : `Later in the programme: ${asSentence(lowerFirstWord(said(third), third))}`);
+      introParts.push(third === number ? 'And later, our number of the day.' : third === lighter ? `And later: ${asSentence(lowerFirstWord(said(third), third))}` : `${later} ${asSentence(lowerFirstWord(said(third), third))}`);
       tease.push(third.s.id);
     }
     const greet = solo ? `This is ${title}. [nod] I'm ${names}.` : `This is ${title}. [nod] I'm ${names}. [B:nod]`;
@@ -896,7 +934,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       const body = [];
       if (opener && wordCount(opener) > maxWords + 1) opener = trimClause(opener, maxWords + 1, 8) || opener;
       let line = asSentence(isNumber || isLighter ? opener : placeFirst(opener, info));
-      if (info.breaking) line = `Breaking news. ${line}`;
+      if (info.breaking && k === 0) line = `Breaking news. ${line}`;
       else if (info.live) line = `A developing story: ${line}`;
       if (isLighter) line = `And finally: ${lowerFirstWord(line, info)}`;
       body.push(`${isNumber || isLighter ? '' : cue}${line}`);
@@ -939,9 +977,15 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // short headline, never one with figures in it: those belong to their own story)
       if (k === midIndex) {
         const later = order.slice(k + 1).filter((x) => !roundup.includes(x) && !x.grave && !/\d/.test(said(x)));
-        const pickL = later.find((x) => x === lighter) || later[0];
-        const tail = number && order.indexOf(number) > k && pickL !== number ? ', and our number of the day' : '';
-        if (pickL) info.signpost = `Still to come: ${lowerFirstWord(pickL === number ? 'our number of the day' : said(pickL), pickL)}${tail}.`;
+        // the "And finally" first, then the others: the first whose signpost has not aired lately
+        for (const pickL of [...later.filter((x) => x === lighter), ...later.filter((x) => x !== lighter)]) {
+          const tail = number && order.indexOf(number) > k && pickL !== number ? ', and our number of the day' : '';
+          const line = `Still to come: ${lowerFirstWord(pickL === number ? 'our number of the day' : said(pickL), pickL)}${tail}.`;
+          if (airedBefore(line, aired)) continue;
+          info.signpost = line;
+          markAired(line);
+          break;
+        }
       }
       if (reserved && catchFor) {
         info.catchAnswer = { line: reserved, q: catchFor.q };
@@ -959,18 +1003,21 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       if (policy) {
         if (policy.after?.includes(slot)) {
           if (pid === 'world-now' && slot === 'lighter') {
-            const pairs = WORLD_PAIRS[info.kicker] || WORLD_PAIRS.any;
-            const keyed = pairs.map((p) => ({ text: p[0], pair: p }));
-            const firstLine = pickLine(keyed, `${key}~pair`, info);
-            const pair = pairs.find((p) => p[0] === firstLine) || pairs[0];
-            for (const x of lineSentences(pair[1])) aired.add(x);
+            // the topic's pairs, pairs built from the story's own place, then the general ones: the pair aired
+            // longest ago wins, judged on both lines
+            const place = info.loc ? spokenPlace(info.loc.entry) : null;
+            const fill = (t) => t.replace('{Place}', place ? place[0].toUpperCase() + place.slice(1) : '').replace('{place}', place || '');
+            const pairs = [...(WORLD_PAIRS[info.kicker] || []), ...(place ? WORLD_PLACE_PAIRS.map((p) => p.map(fill)) : []), ...WORLD_PAIRS.any];
+            const keyed = pairs.map((p) => ({ text: `${p[0]} ${p[1]}`, pair: p }));
+            const both = pickLine(keyed, `${key}~pair`, info);
+            const pair = keyed.find((x) => x.text === both)?.pair || pairs[0];
             planned.push({ anchor: 'A', text: pair[0] }, { anchor: 'B', text: pair[1] });
           } else if (pid === 'world-now' && slot !== 'lighter' && info.addLine) {
             // PACE: the analysis exchange of a long WORLD NOW: the partner adds the detail the story kept back
             planned.push({ anchor: partner, text: `${pickLine(WORLD_ADD, `${key}~add`, info)} ${lowerFirstWord(info.addLine, info)}` });
           } else if (pid === 'tech-bytes' && (slot === 'lead' || slot === 'story') && info.catchAnswer) {
             const askB = idOf('B') === 'ada' || idOf('A') !== 'ada' ? 'B' : 'A';
-            planned.push({ anchor: askB, text: info.catchAnswer.q(nameOf(other(askB))) }, { anchor: other(askB), text: `[lean_in] ${info.catchAnswer.line}` });
+            planned.push({ anchor: askB, text: pickLine(info.catchAnswer.q(nameOf(other(askB))), `${key}~catch`, info) }, { anchor: other(askB), text: `[lean_in] ${info.catchAnswer.line}` });
           } else if (pid === 'tech-bytes' && slot === 'lighter') {
             const sp = partner;
             const kind = PRODUCT_KICKERS.has(info.kicker) ? 'product' : 'science';
@@ -980,8 +1027,13 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
             // figure is a tic, not a character); each time in a different shape.
             const unit = idOf('B') === 'unit8' ? 'B' : partner;
             const f = info.figures.find((x) => parts.join(' ').includes(numbersIn(x.said)[0]?.raw || x.value) && !x.age);
-            // UNIT-8 repeats the exact figure, else the place: only what was just said.
-            const restated = f ? f.said.replace(/^(?:about|around|nearly|almost|some|more than|over|up to|at least) /i, '').replace(/^\w/, (c) => c.toUpperCase()) : info.loc ? spokenPlace(info.loc.entry).replace(/^\w/, (ch) => ch.toUpperCase()) : null;
+            // UNIT-8 repeats the exact figure, else the place: only what was just said, and not what he said lately
+            // (a re-run's figure or place comes round again; then he only notes it).
+            const options = [
+              f ? f.said.replace(/^(?:about|around|nearly|almost|some|more than|over|up to|at least) /i, '').replace(/^\w/, (c) => c.toUpperCase()) : null,
+              info.loc ? spokenPlace(info.loc.entry).replace(/^\w/, (ch) => ch.toUpperCase()) : null,
+            ].filter(Boolean);
+            const restated = options.find((o) => !airedBefore(`${o}.`, aired)) || null;
             const shapes = UNIT8_RESTATE.filter((x) => !unitShapes.has(x));
             const shape = shapes.length ? pickLine(shapes, `${key}~u8n`, info) : UNIT8_RESTATE[0];
             unitShapes.add(shape);

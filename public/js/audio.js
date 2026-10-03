@@ -424,7 +424,9 @@ export class AudioEngine {
   /**
    * The mouth of `slot` (default: whoever is speaking) at `now`:
    * { slot, speaking, level 0..1, viseme, next, mix 0..1, wordIndex, charIndex,
-   *   sentenceIndex, accent 0..1 (stressed syllable), pause (comma pause) }.
+   *   sentenceIndex, accent 0..1 (stressed syllable), pause (comma pause),
+   *   voice (smoothed loudness 0..1 of the recorded clip playing for that
+   *   slot, between sentences too; -1 when no recording plays) }.
    * Visemes: rest MBP FV TH L EE AH OH OO WQ S. Works in tts, blips and mute.
    * Pass `out` (any object) to have it filled instead of a new one allocated.
    * `opts.calm`: the coarse stream for small faces - tongue shapes (TH, L, S)
@@ -447,8 +449,12 @@ export class AudioEngine {
     f.sentenceIndex = -1;
     f.accent = 0;
     f.pause = false;
+    f.voice = -1;
     if (key === null || key === undefined || !Number.isFinite(now)) return f;
     const live = run && !run.cancelled && run.key === key ? run : null;
+    // A recorded clip is playing for this slot: its smoothed loudness 0..1,
+    // also between sentences (FACES opens the lips with the sound; -1 = none).
+    if (live && live.loud) f.voice = live.loudness(now);
     const t = live ? live.timeAt(now) : null;
     if (live && t !== null && Number.isFinite(t)) {
       const s = sampleTimeline(live.tl, t, this.#scratch);

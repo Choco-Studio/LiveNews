@@ -1067,11 +1067,13 @@ describe('NewsDesk.markCovered', () => {
     assert.equal(desk.covered.size, 4);
   });
 
-  test('does not touch the timestamp of a story that was already covered by an earlier event match', () => {
+  test('covers again a report of the same event that an earlier episode covered (fix r2: a re-run keeps its mates off the air)', () => {
     const desk = makeDesk({ stories: quakeStories() });
     desk.covered.set('q2', 1234);
+    desk.coveredSeq.set('q2', 0);
     desk.markCovered(['q1']);
-    assert.equal(desk.covered.get('q2'), 1234);
+    assert.ok(desk.covered.get('q2') > 1234, 'the mate is covered now');
+    assert.equal(desk.coveredSeq.get('q2'), desk.coverSeq, 'with this episode, so recycling waits the full gap for it too');
   });
 });
 

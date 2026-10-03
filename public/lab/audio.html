@@ -36,7 +36,7 @@
       import { themeFor, THEME_IDS, IDENT, IDENT_NIGHT, STINGER, BREAKING, PROMO, MOTIF, COLOURS, cueFor } from '../js/audio/themes.js';
       import { measureLoudness, TARGET_LUFS, VOICE_LUFS } from '../js/audio/loudness.js';
       import { parseTune } from '../js/audio/tune.js';
-      import { buildTimeline, sampleTimeline, SpeechClock, VISEMES } from '../js/audio/visemes.js';
+      import { buildTimeline, sampleTimeline, sampleCalm, calmTimeline, SpeechClock, VISEMES } from '../js/audio/visemes.js';
       import { resolveVoices, normProfile } from '../js/audio/voices.js';
       import { AudioEngine } from '../js/audio.js';
       // The ad registry belongs to the ads streams: a broken ad must not take the lab down.
@@ -71,7 +71,8 @@
         // Ads: one full pass of their music bed (25-31 s), at the director's volume.
         ...ADS.map((ad) => ({ id: `ad-${ad.id}`, label: `AD ${String(ad.brand || ad.id).toUpperCase()}`, tune: ad.tune, accent: P.orange, seconds: Math.min(34, songLen(ad.tune) + 1), loop: true, volume: 0.45 })),
       ];
-      const VIEWS = ['signature', ...TUNES.map((t) => t.id), 'loudness', 'ducking', 'visemes', 'resync', 'blips', 'voices', 'sync', 'recorded', 'engine'];
+      // New views go at the end so the older indices keep working.
+      const VIEWS = ['signature', ...TUNES.map((t) => t.id), 'loudness', 'ducking', 'visemes', 'resync', 'blips', 'voices', 'sync', 'recorded', 'engine', 'bands', 'handover', 'latency', 'calm'];
 
       // --------------------------------------------------------- drawing kit
       const rect = (x, y, w, h, c) => {
@@ -240,6 +241,39 @@
         return all > 0 ? 10 * Math.log10(hi / all + 1e-12) : -Infinity;
       }
 
+      // Octave-band balance: energy in 2-4, 4-8 and 8-24 kHz relative to all
+      // the energy above 30 Hz (Hann 4096, half overlap; the critics' method).
+      // Broadcast tilt targets (critic r2): 2-4 kHz >= -20 dB, 4-8 kHz -30..-25,
+      // above 8 kHz -40..-32: bright enough to sit next to a crisp voice, never fizzy.
+      const BAND_TARGET = { b24: [-20, -8], b48: [-30, -25], b8: [-40, -32] };
+      function bandsOf(data) {
+        const N = 4096;
+        const re = new Float64Array(N);
+        const im = new Float64Array(N);
+        const win = new Float64Array(N).map((_, i) => 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (N - 1)));
+        const edges = [30, 120, 250, 500, 1000, 2000, 4000, 8000, SR / 2];
+        const acc = new Float64Array(edges.length - 1);
+        let all = 0;
+        for (let start = 0; start + N <= data.length; start += N / 2) {
+          for (let i = 0; i < N; i++) {
+            re[i] = data[start + i] * win[i];
+            im[i] = 0;
+          }
+          fft(re, im);
+          for (let k = 1; k <= N / 2; k++) {
+            const f = (k * SR) / N;
+            if (f < 30) continue;
+            const pw = re[k] * re[k] + im[k] * im[k];
+            all += pw;
+            for (let b = 0; b < acc.length; b++) if (f >= edges[b] && f < edges[b + 1]) { acc[b] += pw; break; }
+          }
+        }
+        const rel = [...acc].map((v) => 10 * Math.log10(v / (all || 1) + 1e-30));
+        return { octaves: rel, b24: rel[5], b48: rel[6], b8: rel[7] };
+      }
+      const inBand = (v, [lo, hi]) => v >= lo && v <= hi;
+      const bandsOk = (b) => inBand(b.b24, BAND_TARGET.b24) && inBand(b.b48, BAND_TARGET.b48) && inBand(b.b8, BAND_TARGET.b8);
+
       const cache = new Map();
       async function analyse(item) {
         if (cache.has(item.id)) return cache.get(item.id);
@@ -250,7 +284,8 @@
         const main = await renderTune(item.tune, { seconds, loop: item.loop, stopAt, volume });
         const probe = await renderTune(item.tune, { seconds, loop: item.loop, probe: true, stopAt, volume });
         const L = measureLoudness([main.buffer.getChannelData(0), main.buffer.getChannelData(1)], SR);
-        const res = { item, song, seconds, buffer: main.buffer, probe: probeStats(probe.buffer), L, est: main.loudness, hf: hfShare(mono(main.buffer)), volume };
+        const m = mono(main.buffer);
+        const res = { item, song, seconds, buffer: main.buffer, probe: probeStats(probe.buffer), L, est: main.loudness, hf: hfShare(m), bands: bandsOf(m), volume };
         cache.set(item.id, res);
         return res;
       }
@@ -316,8 +351,8 @@
         micro(`${(L.integrated - VOICE_LUFS) >= 0 ? '+' : ''}${db(L.integrated - VOICE_LUFS)} LU`, 62, y + 8, P.silver);
         micro('PEAK', 116, y, P.steel);
         micro(`${db(L.peakDb)} DBFS`, 116, y + 8, ok(L.peakDb < -1));
-        micro('ENERGY >8 KHZ', 170, y, P.steel);
-        micro(`${db(a.hf)} DB`, 170, y + 8, ok(a.hf <= -20));
+        micro('2-4K/4-8K/>8K', 170, y, P.steel);
+        micro(`${db(a.bands.b24, 0)}/${db(a.bands.b48, 0)}/${db(a.bands.b8, 0)} DB`, 170, y + 8, ok(bandsOk(a.bands)));
         micro('ENV STEP', 238, y, P.steel);
         micro(`${(probe.worst * 100).toFixed(2)}%`, 238, y + 8, ok(probe.worst <= 0.03));
         micro('CLICKS', 284, y, P.steel);
@@ -669,7 +704,8 @@
           }
           y += 36;
         }
-        micro(`TARGET ${VOICE_LUFS} LUFS (HOUSE VOICE LEVEL, TOOLS/VOICE/DSP.PY). NO SYSTEM VOICE: TTS SPEAKS SILENTLY (LIPS + CAPTIONS)`, 6, 205, P.fog);
+        micro(`TARGET ${VOICE_LUFS} LUFS: THE HOUSE VOICE LEVEL (TOOLS/VOICE/DSP.PY)`, 6, 199, P.fog);
+        micro('NO SYSTEM VOICE: TTS SPEAKS SILENTLY (LIPS + CAPTIONS)', 6, 207, P.fog);
       }
 
       function drawSignature() {
@@ -992,6 +1028,242 @@
         stats.engine = { before: mean(before), muted: mean(during), after: mean(after), lipsInMute, modes: engine.modes };
       }
 
+      // Band balance of every tune against the broadcast-tilt targets. The
+      // network package (opens, cues) is judged; ad beds belong to the ads
+      // streams and are shown for reference (they share the instrument presets).
+      async function drawBands() {
+        frame('BAND BALANCE (BROADCAST TILT)', 'ENERGY PER BAND VS ALL ENERGY ABOVE 30 HZ', P.cyan);
+        const rows = [];
+        for (const item of TUNES) rows.push(await analyse(item));
+        const network = rows.filter((r) => !r.item.id.startsWith('ad-') && r.item.id !== 'stinger');
+        const cols = [['2-4 KHZ', 'b24', 104], ['4-8 KHZ', 'b48', 196], ['>8 KHZ', 'b8', 288]];
+        const lo = -66;
+        const hi = -6;
+        const pw = 66;
+        const xv = (x0, v) => x0 + Math.round(((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * (pw - 1));
+        const rh = 6;
+        const y0 = 26;
+        for (const [label, key, x0] of cols) {
+          micro(`${label} ${BAND_TARGET[key][0]}..${BAND_TARGET[key][1]}`, x0, 18, P.steel);
+          rect(xv(x0, BAND_TARGET[key][0]), y0 - 1, xv(x0, BAND_TARGET[key][1]) - xv(x0, BAND_TARGET[key][0]) + 1, rows.length * rh + 1, '#22314a');
+        }
+        rows.forEach((r, i) => {
+          const y = y0 + i * rh;
+          const ad = r.item.id.startsWith('ad-');
+          micro(r.item.label.replace(/^OPEN /, '').replace(/^UP NEXT /, '').slice(0, 24), 4, y, ad ? P.steel : P.fog);
+          for (const [, key, x0] of cols) {
+            const v = r.bands[key];
+            const ok = inBand(v, BAND_TARGET[key]);
+            rect(x0, y + 2, pw, 1, '#1d2033');
+            rect(xv(x0, v) - 1, y + 1, 3, 3, ok ? (ad ? P.steel : P.green) : ad ? P.darkRed : P.red);
+            micro(db(v, 0), x0 + pw + 2, y, ok ? P.steel : ad ? P.darkRed : P.red);
+          }
+        });
+        const count = (key) => network.filter((r) => inBand(r.bands[key], BAND_TARGET[key])).length;
+        const all = network.filter((r) => bandsOk(r.bands)).length;
+        const n = network.length;
+        const yb = y0 + rows.length * rh + 3;
+        micro(`NETWORK OPENS AND CUES IN TARGET: ${all}/${n}   2-4K ${count('b24')}/${n}  4-8K ${count('b48')}/${n}  >8K ${count('b8')}/${n}   (STINGER: NO PITCH, NOT JUDGED)`, 4, yb, all >= n - 2 ? P.green : P.red);
+        micro('GREY ROWS: AD BEDS (ADS STREAMS) FOR REFERENCE. SHELF -3 DB AT 8 KHZ ON THE TUNES BUS', 4, yb + 8, P.fog);
+        stats.bands = { inTarget: all, of: n, b24: count('b24'), b48: count('b48'), b8: count('b8'),
+          rows: Object.fromEntries(rows.map((r) => [r.item.id, { b24: +r.bands.b24.toFixed(1), b48: +r.bands.b48.toFixed(1), b8: +r.bands.b8.toFixed(1) }])) };
+      }
+
+      // The open's last chord under the presenter's first words: the open is
+      // stopped on the cut (director), the voice is ducked in from the cut and
+      // heard 120 ms later (murmur stands in for the voice; TTS starts later).
+      // The voice must sit >= 10 LU over the music in the first second.
+      const HANDOVER_TEXT = 'Good evening. Tonight, the central bank holds its nerve as markets wobble.';
+      async function renderHandover(id, stem, { seconds = 7.5, cut = 4.05, lead = 0.12 } = {}) {
+        const off = new OfflineAudioContext(2, Math.ceil(seconds * SR), SR);
+        const ducker = new Ducker();
+        const buses = buildBuses(off, { volume: 1, ducker });
+        const tl = buildTimeline(HANDOVER_TEXT);
+        const v0 = cut + lead;
+        if (stem === 'music') {
+          const player = new TunePlayer(off, buses, asSong(themeFor(id, { duration: 4 })), { volume: 0.6 });
+          player.start(0.05);
+          player.scheduleUntil(seconds);
+          player.stop(cut);
+        } else {
+          const cfg = resolveVoices({ profiles: new Map([['A', normProfile({ gender: 'male' })]]) }).get('A');
+          scheduleMurmur(off, buses.speech, cfg.blip, tl, v0);
+        }
+        ducker.apply([[cut, v0 + tl.total / 1000]]);
+        return { buffer: await off.startRendering(), v0, cut };
+      }
+
+      async function drawHandover() {
+        frame('OPEN -> FIRST WORDS', 'THE LAST CHORD RINGS OVER THE CUT, DUCKED UNDER THE VOICE', P.green);
+        const ids = [...THEME_IDS, 'unknown'];
+        const x0 = 70;
+        const w = 230;
+        const from = 2.8;
+        const to = 6.6;
+        const xs = (sec) => x0 + ((sec - from) / (to - from)) * w;
+        const meas = (b) => measureLoudness([b.getChannelData(0), b.getChannelData(1)], SR);
+        // Power mean of momentary blocks starting in [a, b] (each covers 0.4 s).
+        const meanM = (L, a, b) => {
+          const v = L.momentary.slice(Math.round(a / 0.1), Math.round(b / 0.1) + 1).filter((x) => Number.isFinite(x) && x > -70).map((x) => 10 ** (x / 10));
+          return v.length ? 10 * Math.log10(v.reduce((x, y) => x + y, 0) / v.length) : -70;
+        };
+        stats.handover = {};
+        let y = 18;
+        let worst = Infinity;
+        for (const id of ids) {
+          const mu = await renderHandover(id, 'music');
+          const vo = await renderHandover(id, 'voice');
+          const Lm = meas(mu.buffer);
+          const Lv = meas(vo.buffer);
+          // The first second of speech: blocks starting from the first word to 0.6 s after it.
+          const sep = meanM(Lv, mu.v0, mu.v0 + 0.6) - meanM(Lm, mu.v0, mu.v0 + 0.6);
+          const ring = meanM(Lm, mu.cut - 0.4, mu.cut - 0.4); // the 400 ms just before the first word
+          const hit = meanM(Lm, 3.25, 3.45);
+          worst = Math.min(worst, sep);
+          stats.handover[id] = { sepLU: +sep.toFixed(1), musicFirstSecond: +meanM(Lm, mu.v0, mu.v0 + 0.6).toFixed(1), voice: +meanM(Lv, mu.v0, mu.v0 + 0.6).toFixed(1), lockup: +hit.toFixed(1), beforeWords: +ring.toFixed(1) };
+          micro((PROG_NAME[id] ?? 'GENERIC').slice(0, 13), 4, y + 3, P.silver);
+          panel(x0, y, w, 26);
+          // Only the window around the cut.
+          const seg = (buf) => {
+            const n = Math.floor((to - from) * SR);
+            const o = new OfflineAudioContext(2, n, SR).createBuffer(2, n, SR);
+            for (let c = 0; c < 2; c++) o.getChannelData(c).set(buf.getChannelData(c).subarray(Math.floor(from * SR), Math.floor(from * SR) + n));
+            return o;
+          };
+          waveform(x0, y, w, 26, seg(mu.buffer), to - from, ACCENT[id] ?? P.silver);
+          const vb = seg(vo.buffer);
+          const vd = vb.getChannelData(0);
+          for (let col = 0; col < w; col++) {
+            const a = Math.floor((col / w) * (to - from) * SR);
+            const b = Math.floor(((col + 1) / w) * (to - from) * SR);
+            let r2 = 0;
+            for (let i = a; i < b; i++) r2 += vd[i] * vd[i];
+            const r = Math.sqrt(r2 / Math.max(1, b - a));
+            if (r > 0.003) rect(x0 + col, y + 13 - r * 13, 1, Math.max(1, 2 * r * 13), P.white);
+          }
+          rect(xs(mu.cut), y, 1, 26, P.yellow);
+          rect(xs(mu.v0), y + 20, 1, 6, P.white);
+          const ok = sep >= 10;
+          micro(`VOICE ${sep >= 0 ? '+' : ''}${sep.toFixed(1)} LU`, 306, y + 3, ok ? P.green : P.red);
+          micro(`OVER THE MUSIC`, 306, y + 11, P.fog);
+          y += 30;
+        }
+        micro('YELLOW: THE CUT (OPEN STOPPED, DUCK STARTS); WHITE: THE MURMUR VOICE FROM 120 MS LATER', 4, 200, P.fog);
+        micro(`FIRST SECOND OF SPEECH: VOICE MINUS MUSIC, TARGET >= 10 LU (WORST ${worst.toFixed(1)})`, 4, 208, worst >= 10 ? P.green : P.red);
+        stats.handover.worst = worst;
+      }
+
+      // Lateness. (1) A cue asked for "now" is heard one output latency later:
+      // its beat 0 cannot be aligned, only played whole (the engine's grace =
+      // latency + 30 ms); compare the first 150 ms heard with an on-time start,
+      // and with the old rule (grace 30 ms: drums dropped, notes cut).
+      // (2) An ad bed started 0.42 s late: held chords play their remainder.
+      const LAT = 0.095;
+      async function drawLatency() {
+        frame('LATE STARTS: NOTHING IS LOST', `OUTPUT LATENCY ${Math.round(LAT * 1000)} MS; AD BEDS 0.42 S LATE`, P.cyan);
+        const rmsDb = (buf, a, b) => {
+          const d = mono(buf);
+          let s2 = 0;
+          const i0 = Math.max(0, Math.floor(a * SR));
+          const i1 = Math.min(d.length, Math.floor(b * SR));
+          for (let i = i0; i < i1; i++) s2 += d[i] * d[i];
+          return 10 * Math.log10(s2 / Math.max(1, i1 - i0) + 1e-12);
+        };
+        const cues = TUNES.filter((t) => !t.id.startsWith('ad-'));
+        const ads = TUNES.filter((t) => t.id.startsWith('ad-'));
+        stats.latency = { cues: {}, ads: {} };
+        let y = 18;
+        micro('SYNCED CUES ASKED FOR NOW: FIRST 150 MS HEARD VS ON TIME (DB)', 4, y, P.steel);
+        micro('GRACE', 250, y, P.steel);
+        micro('OLD RULE', 300, y, P.steel);
+        y += 8;
+        let worstCue = 0;
+        for (const item of cues) {
+          const seconds = 1.2;
+          const on = await renderTune(item.tune, { seconds, startAt: 0.05 });
+          const now = await renderTune(item.tune, { seconds, startAt: -LAT, grace: LAT + 0.03 });
+          const old = await renderTune(item.tune, { seconds, startAt: -LAT, grace: 0.03 });
+          const ref = rmsDb(on.buffer, 0.05, 0.2);
+          const dNew = rmsDb(now.buffer, 0.006, 0.156) - ref;
+          const dOld = rmsDb(old.buffer, 0.006, 0.156) - ref;
+          worstCue = Math.min(worstCue, dNew);
+          stats.latency.cues[item.id] = { grace: +dNew.toFixed(1), oldRule: +dOld.toFixed(1) };
+          micro(item.label.slice(0, 30), 8, y, P.fog);
+          micro(`${dNew >= 0 ? '+' : ''}${dNew.toFixed(1)}`, 250, y, Math.abs(dNew) <= 2 ? P.green : P.red);
+          micro(`${dOld >= 0 ? '+' : ''}${dOld.toFixed(1)}`, 300, y, Math.abs(dOld) <= 2 ? P.steel : P.orange);
+          y += 6;
+        }
+        y += 3;
+        micro('AD BEDS STARTED 0.42 S LATE: FIRST SECOND HEARD VS THE SAME MUSIC ON TIME (DB)', 4, y, P.steel);
+        y += 8;
+        let worstAd = 0;
+        for (const item of ads) {
+          const seconds = 2.2;
+          const late = 0.42;
+          const on = await renderTune(item.tune, { seconds, loop: true, volume: 0.45, startAt: 0.05 });
+          const lt = await renderTune(item.tune, { seconds, loop: true, volume: 0.45, startAt: -late + 0.05, grace: LAT + 0.03 });
+          const d = rmsDb(lt.buffer, 0.05, 1.05) - rmsDb(on.buffer, 0.05 + late, 1.05 + late);
+          worstAd = Math.min(worstAd, d);
+          stats.latency.ads[item.id] = +d.toFixed(1);
+          micro(item.label.slice(0, 30), 8, y, P.fog);
+          micro(`${d >= 0 ? '+' : ''}${d.toFixed(1)}`, 250, y, Math.abs(d) <= 2 ? P.green : P.red);
+          y += 6;
+        }
+        micro(`WORST: CUE ${worstCue.toFixed(1)} DB, AD BED ${worstAd.toFixed(1)} DB (ORANGE = WHAT THE OLD 30 MS RULE LOST)`, 4, 208, worstCue >= -2 && worstAd >= -2 ? P.green : P.red);
+        stats.latency.worstCue = worstCue;
+        stats.latency.worstAd = worstAd;
+      }
+
+      // The calm stream (speechFrame(..., { calm: true })) for small faces.
+      function drawCalm() {
+        const tl = buildTimeline(SAMPLE, { rate: 1, lang: 'en-GB' });
+        const c = calmTimeline(tl);
+        frame('CALM MOUTH STREAM', 'SPEECHFRAME(NOW, SLOT, OUT, { CALM: TRUE })', P.cyan);
+        const x0 = 6;
+        const w = 372;
+        const span = tl.total + 200;
+        const xt = (ms) => x0 + ((ms + 100) / span) * w;
+        tl.words.forEach((wd, i) => micro(tl.spoken.slice(wd.sci).split(' ')[0].replace(/[,.]$/, '').toUpperCase(), xt(wd.t0) + 1, 18 + (i % 2) * 7, P.silver));
+        const strip = (y, segs, label) => {
+          panel(x0, y, w, 16, '');
+          for (const g of segs) {
+            rect(xt(g.t0), y + 1, Math.max(1, xt(g.t1) - xt(g.t0)), 14, VIS_COLOR[g.v]);
+            if (xt(g.t1) - xt(g.t0) >= 10 && g.v !== 'rest') micro(g.v, xt(g.t0) + 1, y + 6, g.v === 'OO' || g.v === 'WQ' || g.v === 'MBP' ? P.white : P.black);
+          }
+          micro(label, x0 + w - 2, y - 7, P.steel, 'right');
+        };
+        strip(40, tl.segs, `FINE: ${tl.segs.length} SHAPES`);
+        strip(66, c.segs, `CALM: ${c.segs.length} SHAPES (TH L S FOLDED, >= 80 MS)`);
+        panel(x0, 86, w, 60, 'JAW: FINE (GREY) AND CALM (WHITE), SAMPLED AT 60 FPS');
+        const fine = {};
+        const calm = {};
+        const stat = (fn, out) => {
+          let prev = null;
+          let maxStep = 0;
+          let changes = 0;
+          let shown = 'rest';
+          for (let t = -80; t < tl.total + 80; t += 1000 / 60) {
+            const f = fn(tl, t, out);
+            if (prev !== null) maxStep = Math.max(maxStep, Math.abs(f.level - prev));
+            prev = f.level;
+            const v = f.mix > 0.5 ? f.next : f.viseme;
+            if (v !== shown) { changes++; shown = v; }
+          }
+          return { maxStep, perSec: changes / (tl.total / 1000) };
+        };
+        for (let col = 0; col < w; col++) {
+          const ms = (col / w) * span - 100;
+          rect(x0 + col, 144 - Math.round(sampleTimeline(tl, ms, fine).level * 50), 1, 1, P.steel);
+          rect(x0 + col, 144 - Math.round(sampleCalm(tl, ms, calm).level * 50), 1, 1, P.white);
+        }
+        const a = stat(sampleTimeline, fine);
+        const b = stat(sampleCalm, calm);
+        micro(`FINE: ${a.perSec.toFixed(1)} SHAPE CHANGES/S, JAW STEP <= ${a.maxStep.toFixed(2)} PER FRAME`, 6, 156, P.fog);
+        micro(`CALM: ${b.perSec.toFixed(1)} SHAPE CHANGES/S, JAW STEP <= ${b.maxStep.toFixed(2)} PER FRAME`, 6, 166, b.perSec < 7 && b.maxStep <= 0.13 ? P.green : P.red);
+        micro('CONSUMERS STILL BLEND 40-60 MS BETWEEN SHAPES; THE CALM STREAM IS FOR FACES UNDER ~12 PX', 6, 180, P.fog);
+        stats.calm = { fine: a, calm: b, shapesFine: tl.segs.length, shapesCalm: c.segs.length };
+      }
+
       // ------------------------------------------------------------- driver
       const stats = {};
       async function render(t = 0) {
@@ -1009,11 +1281,15 @@
         else if (name === 'sync') await drawSync();
         else if (name === 'recorded') await drawRecorded();
         else if (name === 'engine') await drawEngine();
+        else if (name === 'bands') await drawBands();
+        else if (name === 'handover') await drawHandover();
+        else if (name === 'latency') await drawLatency();
+        else if (name === 'calm') drawCalm();
         else {
           const item = TUNES.find((x) => x.id === name);
           await drawTune(item);
           const a = cache.get(item.id);
-          stats[item.id] = { lufs: a.L.integrated, target: expected(a), model: a.est.integrated + a.est.gainDb, peak: a.L.peakDb, hf: a.hf, worstStep: a.probe.worst, clicks: a.probe.clicks.length, trim: a.song.trim };
+          stats[item.id] = { lufs: a.L.integrated, target: expected(a), model: a.est.integrated + a.est.gainDb, peak: a.L.peakDb, hf: a.hf, bands: a.bands, worstStep: a.probe.worst, clicks: a.probe.clicks.length, trim: a.song.trim };
         }
         document.getElementById('out').textContent = JSON.stringify(stats, null, 1);
         return name;

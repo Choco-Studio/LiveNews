@@ -101,13 +101,16 @@ export class Director {
   async stinger(change, cue = null) {
     this.scene.stinger = { start: now() };
     this.audio.sfx('whoosh', { startAt: this.scene.stinger.start * 1000 }); // its felt thump lands on the cut
+    const cut = this.scene.stinger.start + STINGER_DURATION / 2;
     try {
-      cue?.((this.scene.stinger.start + STINGER_DURATION / 2) * 1000);
+      cue?.(cut * 1000);
     } catch (err) {
       console.warn('[director] cue', err);
     }
     await sleep(STINGER_DURATION * 500);
     change();
+    // The new shot's clock starts on the planned cut, where its music was scheduled (a late timer must not leave the picture behind it).
+    if (this.scene.shotSince > cut) this.scene.shotSince = cut;
     await sleep(STINGER_DURATION * 500);
   }
 
@@ -352,8 +355,7 @@ export class Director {
       s.subtitle = null;
       this.setCast(episode);
       this.setShot('open', { storyId: null, card: null });
-      tune = this.audio.playTune?.(open.tune, { volume: 0.6, startAt: performance.now() });
-    });
+    }, (cut) => (tune = this.audio.playTune?.(open.tune, { volume: 0.6, startAt: cut }))); // scheduled at the stinger's start, heard from the cut
     this.introduced = new Set();
     // The open never waits for pictures: its length is the theme's (the lock-up is still from 3.2 s
     // and the cut lands on the last hit). Pictures keep loading in the background; a story whose
@@ -583,8 +585,10 @@ export class Director {
       const rate = span > 2.5 && done > 30 ? done / span : chars / Math.max(0.5, est);
       return Math.max(0, (chars - done) / rate - (now() - sentAt)) + after;
     };
-    // (beats spaced by the median's lower bound: the cooldown is a floor, not the rhythm; owner 18:52 median 5-7 s)
-    const beats = this.storyBeats(seg, hasImg).slice(0, Math.max(1, Math.min(lines.length, Math.floor((est + after) / Math.max(P.shots.cooldown, P.shots.median[0])))));
+    // (beats spaced by the middle of the profile's median band: the cooldown is a floor, not the rhythm; owner 18:52
+    // median 5-7 s; measured: the band's lower bound cut COSMOS 8.7 and NEWS IN 60 10.5 times a minute)
+    const spacing = Math.max(P.shots.cooldown, (P.shots.median[0] + P.shots.median[1]) / 2);
+    const beats = this.storyBeats(seg, hasImg).slice(0, Math.max(1, Math.min(lines.length, Math.floor((est + after) / spacing))));
     const finallyStory = seg.feature === 'lighter' || /^\W*and finally\b/i.test(String(seg.text || ''));
     // And finally never ends on a map: the map hands back to the presenter when a sentence is left for it, else it goes
     // (by the estimate: the return must air the minimum plus the late-beat margin, else the map is not taken at all)
@@ -600,8 +604,7 @@ export class Director {
     if (seg.breaking) {
       await this.stinger(() => {
         this.setShot('breakingCard', { storyId: seg.storyId, card: { headline: seg.headline, source: seg.source } });
-        this.audio.sfx('breaking', { programId: s.program?.id, startAt: performance.now() });
-      });
+      }, (cut) => this.audio.sfx('breaking', { programId: s.program?.id, startAt: cut }));
       await sleep(pace(s).holds.breakingCard * 1000); // the card is on air for at most 3 s (stinger tail + hold): a calm colour change, not a show
     }
     let pending = null;

@@ -38,10 +38,11 @@ function sniff(buf) {
   return '';
 }
 
-/** Too small or oddly shaped for the screen (only when the bytes say their size). */
+/** Too small, too large or oddly shaped for the screen; a picture whose bytes do not say their size never airs. */
 export function badPictureSize(body) {
   const size = imageSize(body);
-  if (!size) return null;
+  // (an AVIF without its size box, a JPEG with no frame header: the caps could not be checked)
+  if (!size) return 'image size unreadable';
   if (size.w < MIN_WIDTH || size.h < 120) return `image too small (${size.w}x${size.h})`;
   if (size.w / size.h < 0.5 || size.w / size.h > 3.2) return `image shape not usable (${size.w}x${size.h})`;
   if (size.w * size.h > MAX_PIXELS) return `image too large to show (${size.w}x${size.h})`;

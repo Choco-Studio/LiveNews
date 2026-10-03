@@ -192,6 +192,9 @@
         "tech",
         "science"
       ],
+      "beat": {
+        "science": ["SPACE", "ENERGY", "AI", "ROBOTICS", "CHIPS", "GADGETS", "SOFTWARE", "CONNECTIVITY", "HEALTH", "MOTORING", "TRANSPORT", "CLIMATE"]
+      },
       "stories": 10,
       "maxChats": 7,
       "targetSeconds": [360, 480],

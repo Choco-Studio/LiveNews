@@ -109,6 +109,7 @@ function computeLayout(L, cam, solo, wx0, wy0, w, h, k) {
   L.sx0 = wx0;
   L.sy0 = wy0;
   L.k = k;
+  L.F = null; // not frozen: blocks are placed on the rounded boxes
   const vx0 = clampN(USABLE.x0 - wx0, 0, w), vx1 = clampN(USABLE.x1 - wx0, 0, w);
   const vy0 = clampN(USABLE.y0 - wy0, 0, h), vy1 = clampN(USABLE.y1 - wy0, 0, h);
   const yb = Math.max(vy0, Math.min(vy1, h - L.band));
@@ -192,7 +193,59 @@ function layoutOf(spec, env, w, h) {
   L.sx0 = env.wx0;
   L.sy0 = env.wy0;
   L.k = k;
+  L.F = F;
   return L;
+}
+
+const nameOfBox = (L, b) => (b === L.top ? 'top' : b === L.left ? 'left' : b === L.right ? 'right' : b === L.full ? 'full' : b === L.vis ? 'vis' : null);
+
+/**
+ * A layout box's edges as UNROUNDED wall-local px (from the layout frozen at the cut, in wall units,
+ * times the current scale, on the wall's unrounded screen origin): a block positioned on them and
+ * rounded once moves monotonically on screen under a slow push, instead of bobbing 1 px back and forth
+ * as the separately rounded box edges and wall origin step at different frames.
+ */
+const FBX = { x0: 0, y0: 0, x1: 0, y1: 0 };
+function fbox(L, b) {
+  const n = L.F ? nameOfBox(L, b) : null;
+  if (!n) {
+    set4(FBX, b.x0, b.y0, b.x1, b.y1);
+    return FBX;
+  }
+  const F = L.F[n], k = L.k, ox = ENV.wxf - L.sx0, oy = ENV.wyf - L.sy0;
+  set4(FBX, ox + F.x0 * k, oy + F.y0 * k, ox + F.x1 * k, oy + F.y1 * k);
+  return FBX;
+}
+
+/**
+ * Where a w x h block goes in free box `b`: centred across it and 42 % down its spare height, one
+ * rounding for the whole block (its rule and text never part), then kept inside the box's current
+ * edges. MONEY MINUTE's MCU-R panel (`money`) is also kept inside screen x 24-176 and above y 120.
+ * Returns PB { x, y } (wall-local px).
+ */
+const PB = { x: 0, y: 0 };
+function placeBlock(L, b, w, h, money = false) {
+  const f = fbox(L, b);
+  let x0 = f.x0, y0 = f.y0, x1 = f.x1, y1 = f.y1;
+  let lx0 = b.x0, ly1 = b.y1, lx1 = b.x1;
+  if (money) {
+    const cx0 = Math.max(x0, 24 - L.sx0), cx1 = Math.min(x1, 176 - L.sx0), cy1 = Math.min(y1, 120 - L.sy0);
+    if (cx1 - cx0 > 8 && cy1 - y0 > 8) {
+      x0 = cx0;
+      x1 = cx1;
+      y1 = cy1;
+      lx0 = Math.max(lx0, 24 - L.sx0);
+      lx1 = Math.min(lx1, 176 - L.sx0);
+      ly1 = Math.min(ly1, 120 - L.sy0);
+    }
+  }
+  let x = Math.round(x0 + (x1 - x0 - w) / 2);
+  let y = Math.round(y0 + Math.max(2, (y1 - y0 - h) * 0.42));
+  x = Math.max(lx0 + 2, Math.min(lx1 - 2 - w, x));
+  y = Math.max(b.y0 + 1, Math.min(ly1 - 2 - h, y));
+  PB.x = x;
+  PB.y = y;
+  return PB;
 }
 function set4(b, x0, y0, x1, y1) {
   b.x0 = x0;
@@ -1129,30 +1182,85 @@ function fitsSomewhere(L, w, h) {
   return false;
 }
 
-function drawFigureBlock(b, L, fig, style, ts, money) {
-  // the figure is Display 2x (money-minute.md MCU-R panel), the label micro
-  const vs = 2;
-  const value = fitLine(fig.value, b.w - 4, 'body', vs) || fig.value;
-  const vw = textWidth(value, 'body', vs), vh = capHeight('body', vs);
-  const label = fig.label ? fitLine(fig.label, b.w - 4, 'micro', 1) : '';
-  const lw = label ? textWidth(label, 'micro', 1) : 0, lh = label ? capHeight('micro', 1) + 3 : 0;
-  // a qualifier ("ABOUT", "MORE THAN") in micro above the value: the figure is never shown bare
-  const pre = fig.pre ? fitLine(fig.pre, b.w - 4, 'micro', 1) : '';
-  const pw = pre ? textWidth(pre, 'micro', 1) : 0, ph = pre ? capHeight('micro', 1) + 3 : 0;
-  const ruleH = 1, gap = 3;
-  const needW = Math.max(vw, lw, pw), needH = ruleH + gap + ph + vh + lh;
-  let box = pickBox(L, needW + 4, needH + 4);
-  if (money) box = clampScreen(box, L, 24, 176, 120);
-  // centred in its box, but never past the box's edges (a bezel, a head or the frame edge)
-  const half = Math.round(needW / 2);
-  const cx = Math.max(box.x0 + 2 + half, Math.min(box.x1 - 2 - (needW - half), Math.round((box.x0 + box.x1) / 2)));
-  const top = Math.round(box.y0 + Math.max(2, (bh(box) - needH) * 0.42));
-  const accent = style.id === 'money-minute' ? C.darkGreen : C[style.accentName];
-  rect(b, cx - Math.round(needW / 2), top, cx - Math.round(needW / 2) + Math.min(needW, 16), top + ruleH, accent);
-  if (pre) stampText(b.px, b.w, b.h, pre, cx, top + ruleH + gap, C.fog, 'micro', 1, 'center');
-  stampText(b.px, b.w, b.h, value, cx, top + ruleH + gap + ph, C.white, 'body', vs, 'center');
-  if (label) stampText(b.px, b.w, b.h, label, cx, top + ruleH + gap + ph + vh + 3, C.fog, 'micro', 1, 'center');
+/**
+ * The figure's form for layout L: the value is NEVER shortened (a figure with a word dropped is a
+ * wrong number on air: "$1.2 BILLION" is not "$1.2"), and value, qualifier and label are all measured
+ * against the free box they go in (not the wall). Tried in order: Display 2x on one line (money-
+ * minute.md: the figure panel is Display 2x), 2x broken on two lines by words, body 1x on one line,
+ * 1x on two lines; the qualifier ("ABOUT", "MORE THAN") on one micro line and the label on up to two,
+ * each whole. Each free box is tried (the wider side, the top band, the other side; MONEY MINUTE's
+ * MCU-R inside screen x 24-176, above y 120). Returns { vs, lines, pre, label, w, h, vh, box } or
+ * null when nothing fits whole (the caller then shows the story's plate or the idle).
+ */
+function figureForm(L, fig, money = false) {
+  const mh = capHeight('micro', 1);
+  for (const [vs, nl] of FIG_TRIES) {
+    for (const box0 of boxOrder(L)) {
+      const box = money ? clampScreen(box0, L, 24, 176, 120) : box0;
+      const maxW = bw(box) - 4;
+      if (maxW < 8) continue;
+      const lines = wrapWords(fig.value, maxW, 'body', vs, nl);
+      if (!lines || lines.length !== nl) continue;
+      const pre = fig.pre ? wrapWords(fig.pre, maxW, 'micro', 1, 1) : [];
+      const label = fig.label ? wrapWords(fig.label, maxW, 'micro', 1, 2) : [];
+      if (!pre || !label) continue;
+      const vh = capHeight('body', vs);
+      let w = 0;
+      for (const l of lines) w = Math.max(w, textWidth(l, 'body', vs));
+      for (const l of pre) w = Math.max(w, textWidth(l, 'micro', 1));
+      for (const l of label) w = Math.max(w, textWidth(l, 'micro', 1));
+      const h = 1 + 3 + (pre.length ? mh + 3 : 0) + nl * vh + (nl - 1) * 2 * vs + (label.length ? 3 + label.length * mh + (label.length - 1) * 2 : 0);
+      if (w + 4 > bw(box) || h + 4 > bh(box)) continue;
+      return { vs, lines, pre, label, w, h, vh, box: box0, money };
+    }
+  }
+  return null;
 }
+const FIG_TRIES = [[2, 1], [2, 2], [1, 1], [1, 2]];
+
+/** The figure laid out for layout L as drawn (tests, labs): { vs, lines, pre, label, x0, y0, w, h } wall-local, or null. */
+function layoutFigure(L, fig, money) {
+  const f = figureForm(L, fig, money);
+  if (!f) return null;
+  const p = placeBlock(L, f.box, f.w, f.h, money);
+  return { ...f, x0: p.x, y0: p.y };
+}
+
+/**
+ * Draw a figure block; false when it does not fit whole anywhere (nothing drawn). Its form is chosen
+ * on the cut (a slow push never re-breaks it mid-shot) and placed every frame with one rounding.
+ */
+function drawFigureBlock(b, L, spec, fig, style, money) {
+  let m = spec._fig;
+  if (!m || m.F !== L.F || m.value !== fig.value || m.label !== fig.label || m.pre !== fig.pre) {
+    const f = figureForm(L, fig, money);
+    m = spec._fig = { F: L.F, value: fig.value, label: fig.label, pre: fig.pre, f, name: f ? nameOfBox(L, f.box) : null };
+  }
+  const f = m.f;
+  if (!f || !m.name) return false;
+  const p = placeBlock(L, L[m.name], f.w, f.h, money);
+  const cx = p.x + f.w / 2;
+  const accent = style.id === 'money-minute' ? C.darkGreen : C[style.accentName];
+  rect(b, p.x, p.y, p.x + Math.min(f.w, 16), p.y + 1, accent);
+  const mh = capHeight('micro', 1);
+  let y = p.y + 4;
+  for (const l of f.pre) {
+    stampText(b.px, b.w, b.h, l, centreX(cx, l, 'micro', 1), y, C.fog, 'micro', 1);
+    y += mh + 3;
+  }
+  for (const l of f.lines) {
+    stampText(b.px, b.w, b.h, l, centreX(cx, l, 'body', f.vs), y, C.white, 'body', f.vs);
+    y += f.vh + 2 * f.vs;
+  }
+  y += 3 - 2 * f.vs;
+  for (const l of f.label) {
+    stampText(b.px, b.w, b.h, l, centreX(cx, l, 'micro', 1), y, C.fog, 'micro', 1);
+    y += mh + 2;
+  }
+  return true;
+}
+/** The integer left edge that centres a line on cx (one rounding per line, from the block's own origin). */
+const centreX = (cx, text, font, s) => Math.round(cx - textWidth(text, font, s) / 2);
 
 /** MONEY MINUTE MCU-R: the figure panel stays inside screen x 24-176 and above y 120. */
 const CLAMP = { x0: 0, y0: 0, x1: 0, y1: 0 };
@@ -1216,44 +1324,64 @@ function boxOrder(L) {
  * characters) wraps in a tall narrow box instead of failing the wide short one. Never under a
  * bezel, a head or the frame edge; null only when no free box holds even the kicker at 1x.
  */
-function layoutPlate(L, label0, sub0, ts0) {
+function plateForm(L, label0, sub0, ts0) {
+  if (!label0) return null; // a plate always carries its kicker (the place alone is the idle's caption)
   const boxes = boxOrder(L);
   const tries = [];
   for (const s of ts0 > 1 ? [ts0, 1] : [1]) tries.push([s, 1, true], [s, 2, true]);
   if (sub0) tries.push([1, 1, false], [1, 2, false]);
-  // then the two lines set 2 px apart (the solo wide's band above the head is 24 px tall), and last
-  // the place alone (a kicker too long for any free box still leaves the story's place)
-  if (label0) tries.push([1, 2, false, 2]);
-  if (sub0 && label0) tries.push([1, 0, true]);
+  // then the two lines set 2 px apart (the solo wide's band above the head is 24 px tall)
+  tries.push([1, 2, !!sub0, 2], [1, 2, false, 2]);
   for (const [ts, n, withSub, gap0] of tries) {
     const gap = gap0 ?? 3 * ts;
     for (const box of boxes) {
       const maxW = bw(box) - 4;
       if (maxW < 8) continue;
-      const lines = label0 && n > 0 ? wrapWords(label0, maxW, 'body', ts, n) : [];
+      const lines = wrapWords(label0, maxW, 'body', ts, n);
       if (!lines || (n === 2 && lines.length < 2)) continue;
       let sub = '';
       if (withSub && sub0) {
-        // the source is only shortened at 1x (a larger plate never pays with a cut name)
-        sub = ts > 1 ? (textWidth(sub0, 'micro', ts) <= maxW ? sub0 : '') : fitLine(sub0, maxW, 'micro', ts);
+        // the place whole, or the name before its region; never a name cut mid-way
+        sub = fitPlace(sub0, maxW, 'micro', ts);
         if (!sub) continue;
       }
-      if (!lines.length && !sub) continue;
       const z = plateSize(lines, sub, ts, gap);
       if (z.w + 4 > bw(box) || z.h + 4 > bh(box)) continue;
-      const cx = Math.round((box.x0 + box.x1) / 2);
-      const top = Math.round(box.y0 + Math.max(2, (bh(box) - z.h) * 0.42));
-      const x0 = Math.max(box.x0 + 2, Math.min(box.x1 - 2 - z.w, cx - Math.round(z.w / 2)));
-      return { ts, lines, sub, x0, top, w: z.w, h: z.h, kh: z.kh, gap };
+      return { ts, lines, sub, w: z.w, h: z.h, kh: z.kh, gap, box };
     }
   }
   return null;
 }
 
-function drawPlate(b, L, spec, style, ts0) {
-  const P = layoutPlate(L, spec.label || '', spec.sub || '', plateScale(spec, ts0));
-  if (!P) return false;
-  const { ts, lines, sub, x0, top, w: needW, kh, gap } = P;
+/** Where a plate goes in layout L (tests, labs): { ts, lines, sub, x0, top, w, h, kh, gap } wall-local, or null. */
+function layoutPlate(L, label0, sub0, ts0) {
+  const f = plateForm(L, label0, sub0, ts0);
+  if (!f) return null;
+  const p = placeBlock(L, f.box, f.w, f.h);
+  return { ...f, x0: p.x, top: p.y };
+}
+
+/**
+ * Draw the plate of `label` (the kicker) over `sub` (the place); false when no free box holds it
+ * (nothing drawn). The form is chosen on the cut and placed every frame with one rounding. In COSMOS
+ * the baked starfield lies under it (the wall is never a black void around a word).
+ */
+function drawPlate(b, L, spec, style, ts0, label = spec.label || '', sub = spec.sub || '') {
+  const ts1 = plateScale(spec, ts0);
+  let m = spec._pl;
+  if (!m || m.F !== L.F || m.label !== label || m.sub !== sub || m.ts !== ts1) {
+    const f = plateForm(L, label, sub, ts1);
+    m = spec._pl = { F: L.F, label, sub, ts: ts1, f, name: f ? nameOfBox(L, f.box) : null };
+  }
+  const f = m.f;
+  if (!f || !m.name) return false;
+  const { ts, lines, w: needW, kh, gap } = f;
+  const p = placeBlock(L, L[m.name], needW, f.h);
+  const x0 = p.x, top = p.y;
+  if (style.wallIdle === 'planet') {
+    drawStars(b, ENV, ENV.soft);
+    rect(b, x0 - 3, top - 3, x0 + needW + 3, top + f.h + 3, C[style.wallField[1]]);
+  }
   const accent = style.id === 'money-minute' ? C.darkGreen : C[style.accentName];
   rect(b, x0, top, x0 + Math.min(needW, 12 * ts), top + ts, accent);
   let y = top + ts + gap;
@@ -1261,8 +1389,18 @@ function drawPlate(b, L, spec, style, ts0) {
     stampText(b.px, b.w, b.h, l, x0, y, C.silver, 'body', ts, 'left');
     y += kh + gap;
   }
-  if (sub) stampText(b.px, b.w, b.h, sub, x0, lines.length ? y : top + ts + gap, C.fog, 'micro', ts, 'left');
+  if (f.sub) stampText(b.px, b.w, b.h, f.sub, x0, y, C.fog, 'micro', ts, 'left');
   return true;
+}
+
+/**
+ * A story wall with nothing for a plate beyond what the strap shows (no kicker of its own, or a
+ * feature label such as AND FINALLY, or no place): the programme's idle art, the story's place as a
+ * caption under it when it has one.
+ */
+function drawPlateOrIdle(b, L, spec, style, env, label = spec.label || '', sub = spec.sub || '') {
+  if (label && drawPlate(b, L, spec, style, env.ts, label, sub)) return 0;
+  return drawIdle(b, L, spec, style, env, sub);
 }
 
 /**
@@ -1475,7 +1613,7 @@ function resampleSub(b, sub, x0, y0, w, h) {
 // ---------------------------------------------------------------------------
 // Rendering one wall state into a buffer
 
-const ENV = { k: 1, cs: 1, ts: 1, soft: false, cam: null, wx0: 0, wy0: 0, ax: 0, ay: 0, fy: 0, hf: 63, fe: Infinity, t: 0, lod: 0, frozenLam: -10, frozenAz: 55 * DEG };
+const ENV = { k: 1, cs: 1, ts: 1, soft: false, cam: null, wx0: 0, wy0: 0, wxf: 0, wyf: 0, ax: 0, ay: 0, fy: 0, hf: 63, fe: Infinity, t: 0, lod: 0, frozenLam: -10, frozenAz: 55 * DEG };
 
 /** Integer scale for wall text and emblems: 1 in the wide and two-shot, 2-3 in singles. */
 export const wallTextScale = (k) => (k < 1.25 ? 1 : 2);
@@ -1874,6 +2012,8 @@ export function updateWall(req, styleIn, w, h, k, t, cam, opts, lod = 0) {
     const r = wallOrigin(cam);
     env.wx0 = r.x;
     env.wy0 = r.y;
+    env.wxf = r.xf;
+    env.wyf = r.yf;
     // screen phase of the buffer's origin (Bayer anchored to the screen) and the unrounded wall span
     env.ax = r.x & 3;
     env.ay = r.y & 3;
@@ -1967,10 +2107,11 @@ function wallSize(cam, k) {
   return WSIZE;
 }
 
-const ORIGIN = { x: 0, y: 0, yf: 0 };
+const ORIGIN = { x: 0, y: 0, xf: 0, yf: 0 };
 function wallOrigin(cam) {
   const k = kAt(cam, SET.wallZ);
-  ORIGIN.x = Math.round(sxOf(cam, k, SET.screen.x0));
+  ORIGIN.xf = sxOf(cam, k, SET.screen.x0);
+  ORIGIN.x = Math.round(ORIGIN.xf);
   ORIGIN.yf = syOf(cam, k, SET.screen.y0);
   ORIGIN.y = Math.round(ORIGIN.yf);
   return ORIGIN;
@@ -2039,7 +2180,7 @@ export function drawWallContent(fr, x0, y0, x1, y1, k, t, soft) {
   const style = resolveStyle(null);
   const b = LEGACY;
   b.size(w, h);
-  Object.assign(ENV, { k, cs: k / WIDE_K, ts: wallTextScale(k), soft: !!soft, cam: null, t, lod: 0, wx0: x0, wy0: y0, ax: x0 & 3, ay: y0 & 3, fy: 0, hf: h });
+  Object.assign(ENV, { k, cs: k / WIDE_K, ts: wallTextScale(k), soft: !!soft, cam: null, t, lod: 0, wx0: x0, wy0: y0, wxf: x0, wyf: y0, ax: x0 & 3, ay: y0 & 3, fy: 0, hf: h });
   renderSpec(b, LEGACY_SPEC, style, ENV);
   for (let y = Math.max(0, y0); y < Math.min(fr.h, y1); y++) {
     for (let x = Math.max(0, x0); x < Math.min(fr.w, x1); x++) fr.px[y * fr.w + x] = b.px[(y - y0) * w + (x - x0)];

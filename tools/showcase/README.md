@@ -16,6 +16,7 @@ node tools/showcase/record-show.mjs --port 8602 --start open --until next-open+2
 node tools/showcase/record-show.mjs --port 8602 --start open --until next-open+20 --count 2 --seconds 900 --out /tmp/two.mp4
 python3 tools/showcase/check-av.py /tmp/show.mp4   # A/V sync measured on the finished file
 node tools/showcase/selftest.mjs        # pure checks (cue rules, casting, onset detector)
+python3 tools/showcase/selftest-mix.py  # pure checks of the mixer (bed rider -18 LU / pause lift, room tone, silence check)
 node tools/showcase/selftest-page.mjs   # browser checks of the page instrumentation (clock, ended, value, speech, windowed render)
 ```
 
@@ -139,13 +140,25 @@ The renders run at about real time on an idle box.
    music (break, ads, promo) is not counted. The recorder prints it as `bed changes vs pace`. The rules
    themselves belong to the bed engine's cue sheet; the harness only measures them.
 5. **Mix** (`mix.py`). Harness voices (24 kHz, polyphase-upsampled) placed sample-exactly + WebAudio
-   (with the server voices in it) + beds. On top of the bed engine's own duck an extra duck makes every
-   voice sit **>= 16 dB** over the bed (lead 0.12 s, hold 0.35 s, release 0.7 s; deeper where the engine
-   ducked less). The bed keeps the composer's calibration against -16 LUFS voices (`--bed-under-voice N`
-   re-levels it to sit N dB under the voice instead). Then gain to **-16 LUFS** and a
-   look-ahead true-peak limiter (4x oversampled), verified on the decoded AAC (**TP <= -1.5 dBTP**),
-   re-run until both hold. The report includes the bed duck measured against the same cues rendered
-   without speech, and the bed level inside grave stories and ads.
+   (with the server voices in it) + beds + studio room tone. **Bed rider** (default, `--bed-under-voice 18`,
+   the WORLD NOW bible): speech regions come from the voice's own envelope (the speech bus at 10 ms,
+   > -48 dBFS; pauses under 0.6 s bridged), so the gaps between sentences and segments are real. The
+   bed engine ducks with these regions (its arrangement thins under speech), then the rider measures
+   the bed and the voice K-weighted (BS.1770 filters run by ffmpeg) and sets one base gain so the bed's
+   loudness under speech sits **18 LU under the voice** (median), corrects each region into the
+   **-20..-16 LU** window, and lifts the bed in every pause of **0.6 s or more** towards **-11 LU**
+   (`--bed-gap`; at most +8 dB, 100 ms peaks never above -6 LU, raised-cosine ramps that are back down
+   0.08 s before the next word). Silence stays silence (grave stories, ads, opens: the cue sheet's
+   choice). `--bed-under-voice off` restores the old behaviour (the composer's calibration plus an extra
+   duck making every voice sit >= 16 dB over the bed). **Room tone** (`--room-tone -58`): band-limited
+   pink noise at -58 dBFS RMS under every studio segment (first shot after an open to its end card),
+   so a pause is never digital silence. **Fades**: 10 ms in, `--fade` s out at the end. Then gain to
+   **-16 LUFS** and a look-ahead true-peak limiter (4x oversampled), verified on the decoded AAC
+   (**TP <= -1.5 dBTP**), re-run until both hold. The report (`reports.mix`) gives `bedRider` (voice
+   LUFS, base gain, bed vs voice under speech: median / p10 / p90 / regions outside the window; pauses
+   lifted and where the bed sits in them), `silentRuns` (runs below -70 dBFS longer than 0.25 s between
+   an open and its end card: should be 0), the bed level inside grave stories and ads, and the bed duck
+   against a speech-free render when `--measure-duck` is on.
 6. **Checks** (`lib/analysis.mjs`, in the timeline report): each stinger's whoosh onset in the
    WebAudio stem vs. the picture's wipe start and its thump vs. the cut; each caption vs. the first
    word of its harness voice (`captionLeadMs`) or vs. the onset of the server voice on the speech bus
@@ -165,18 +178,23 @@ The renders run at about real time on an idle box.
 ## Options
 
 `--start now|open|break|endcard` (begin at the next programme open / break / end card),
-`--skip N` (channel seconds to run first), `--until next-open+S|break-end+S|episode-end+S`
-(stop S s after that event; `--seconds` is then the cap), `--count N` (stop at the Nth such event:
-N programmes), `--max-wait N` (seconds of channel time
+`--skip N` (channel seconds to run first), `--until next-open+S|break-end+S|episode-end+S|endcard+S`
+(stop S s after that event; `--seconds` is then the cap; the cut never lands inside speech: it waits
+for the segment on air to end and stops 1.5 s after its last word or one frame before the next shot,
+with no shot starting in the last 2 s), `--fade S` (picture and sound fade-out at the end, default 1.5
+with `--until`), `--count N` (stop at the Nth such event: N programmes; `--until endcard+3 --count 2`
+ends on the second programme's end card), `--max-wait N` (seconds of channel time
 allowed to reach `--start`, default 240), `--fps 30 --scale 5`, `--voices auto|harness`, `--v2`
 (adds `v2=1`: the wave-2 presenters/studio), `--music lofi|broadcast|none`, `--bed-db` (bed trim,
-default 0), `--bed-under-voice N` (re-level the bed N dB under the voice; default off: the composer's level),
+default 0), `--bed-under-voice N|off` (bed rider: N LU under the voice while someone speaks, default 18),
+`--bed-gap N` (where the bed sits in pauses of 0.6 s or more, LU under the voice, default 11),
+`--room-tone DB|off` (studio air under the studio segments, default -58 dBFS RMS),
 `--duck-db` (minimum extra bed duck on top of the >= 16 dB rule, default 0), `--stories soft|off|drone` (lofi's
 bed under light/neutral story copy, default soft),
 `--lufs -16`, `--tp -1.5`, `--voice-workers 2`, `--voice-engine auto|fallback`, `--cache DIR`,
 `--time ISO` (the wall-clock time the channel shows), `--sheet-every S`, `--url URL`,
-`--preset veryfast` (x264 preset of the final encode), `--measure-duck` (render the beds a second time
-without speech to measure the duck; on by default up to 900 s), `--raf frame|throttle|native` (frame-exact
+`--preset veryfast` (x264 preset of the final encode), `--measure-duck [off]` (render the beds a second time
+without speech to measure the duck; on by default up to 900 s; `off` skips it, the rider does not need it), `--raf frame|throttle|native` (frame-exact
 rendering, default; `throttle` = first fake 16 ms tick per frame slot, the old behaviour; `native` = every
 16 ms tick, also `--no-raf-throttle`), `--keep`.
 

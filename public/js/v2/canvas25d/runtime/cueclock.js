@@ -24,13 +24,18 @@
 //   - CUT GUARD against ACTUAL cuts (cut(T), the Stage reports every real cut):
 //     a gesture due in [T, T + cutGuard) is shifted to T + cutGuard if that
 //     moves it by <= 0.3 s, otherwise dropped; nods, looks and emotions are exempt;
-//   - the listener's TURN GLANCE (a look whose why starts with 'turn') is never
-//     spent off screen: due while the shot on air does not show that listener
-//     (canSee(slot), from the Stage), it is held and fires 0.25 s after the next
-//     real cut that shows the listener, if that comes within 15 s and before the
-//     speech ends; otherwise it is dropped. A glance the planner moved onto a
-//     later shot (ev.onScreen) fires 0.25 s after an EARLIER real cut that shows
-//     the listener (the director's max-hold guard, a stinger delay) within 15 s;
+//   - the listener's TURN GLANCE (a look at the partner whose why is 'turn',
+//     'turn-late' or 'turn+dry'; FACES' 'turn-notes' look at the notes is not one)
+//     is never spent off screen: due while the shot on air does not show that
+//     listener (canSee(slot), from the Stage), it is held and fires 0.25 s after
+//     the next real cut that shows the listener, if that comes within the turn's
+//     glance window and before the speech ends; otherwise it is dropped. A glance
+//     the planner moved onto a later shot (ev.onScreen) fires 0.25 s after an
+//     EARLIER real cut that shows the listener (the director's max-hold guard, a
+//     stinger delay) within that window. The window is the first 4.5 s of a
+//     story turn (owner: "only at the start"; later it reads as a random look)
+//     and 15 s of an intro or chat (the greeting wide is the listener's first
+//     appearance); a story glance due past it is dropped;
 //   - after the speech ends, unfired events planned up to 2.5 s past the end
 //     keep their offset from the end; later ones are dropped (ANALYSIS bug 9);
 //     interrupted speech (N key, stop) drops everything still pending;
@@ -49,8 +54,17 @@ const STALL = 0.1; // s between two ticks beyond which a sentence start's timing
 const EXEMPT = new Set(['nod']);
 const KINDS = new Set(['gesture', 'look', 'emotion']);
 export const HOLD_MAX = 15; // s a held turn glance may wait for a shot that shows the listener
+export const STORY_WINDOW = 4.5; // s of a story turn a turn glance may fire in (FACES' bible wording: "the first 4.5 s")
 export const AFTER_CUT = 0.25; // s after that cut it fires (the approved glance's delay)
-const TURN = /^turn/;
+const TURN = /^turn(?!-notes)/;
+
+/** Is this event the listener's turn glance at the speaker (held / moved for the viewer)? */
+export function isTurnGlance(ev, speaker) {
+  return !!ev && ev.kind === 'look' && ev.slot !== speaker && (ev.target ?? 'partner') === 'partner' && TURN.test(ev.why || '');
+}
+
+/** The seconds from the speech start a turn glance may still fire in. */
+export const glanceWindow = (ctx) => (ctx?.type === 'story' ? STORY_WINDOW : HOLD_MAX);
 
 const W_WAIT = 0, W_DUE = 1, W_DONE = 2, W_HELD = 3;
 
@@ -151,7 +165,7 @@ export class CueClock {
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
       if (e.state === W_DONE) continue;
-      if (e.state === W_HELD && !this.release(e, t)) continue;
+      if (e.state === W_HELD && !this.release(e, t, ctx)) continue;
       if (e.state === W_WAIT && !this.schedule(e, t, ctx)) continue;
       if (t < e.dueAt) continue;
       // cut guard: no gesture starts in the first `guard` s of a shot
@@ -167,12 +181,20 @@ export class CueClock {
         }
         continue;
       }
-      // the listener's turn glance waits for a shot that shows the listener
-      if (ev.kind === 'look' && this.canSee && ev.slot !== ctx.speaker && TURN.test(ev.why || '') && !this.canSee(ev.slot)) {
-        e.state = W_HELD;
-        e.heldAt = t;
-        this.stats.held++;
-        continue;
+      if (this.canSee && isTurnGlance(ev, ctx.speaker)) {
+        // a story's turn glance only at the start of the turn (a late one reads as a random look)
+        if (t - this.started > glanceWindow(ctx) + AFTER_CUT) {
+          e.state = W_DONE;
+          this.stats.dropped++;
+          continue;
+        }
+        // the listener's turn glance waits for a shot that shows the listener
+        if (!this.canSee(ev.slot)) {
+          e.state = W_HELD;
+          e.heldAt = t;
+          this.stats.held++;
+          continue;
+        }
       }
       e.state = W_DONE;
       if (this.ended !== null && t > this.ended + TAIL) {
@@ -243,10 +265,10 @@ export class CueClock {
    */
   earlyGlances(ctx) {
     const T = this.lastCut;
-    if (!this.canSee || this.started === null || T < this.started || T - this.started > HOLD_MAX) return;
+    if (!this.canSee || this.started === null || T < this.started || T - this.started > glanceWindow(ctx)) return;
     for (const e of this.entries) {
       const ev = e.ev;
-      if (e.state === W_DONE || e.state === W_HELD || !ev.onScreen || ev.kind !== 'look' || ev.slot === ctx.speaker || !TURN.test(ev.why || '')) continue;
+      if (e.state === W_DONE || e.state === W_HELD || !ev.onScreen || !isTurnGlance(ev, ctx.speaker)) continue;
       if (e.state === W_DUE && e.dueAt <= T + AFTER_CUT) continue;
       if (!this.canSee(ev.slot)) continue;
       e.state = W_DUE;
@@ -255,8 +277,8 @@ export class CueClock {
   }
 
   /** A held turn glance: due AFTER_CUT s after a later real cut that shows its slot; dropped when too late. */
-  release(e, t) {
-    if (this.ended !== null || t - e.heldAt > HOLD_MAX) {
+  release(e, t, ctx) {
+    if (this.ended !== null || t - e.heldAt > HOLD_MAX || t - this.started > glanceWindow(ctx)) {
       e.state = W_DONE;
       this.stats.dropped++;
       return false;

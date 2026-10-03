@@ -481,7 +481,7 @@ const INCIDENT_KINDS = [
   ['crash', /^(?:crash|crashes|crashed|collision|derail(?:s|ed|ment)?|capsized?)$/],
   ['recall', /^(?:recalls?|recalled)$/],
   ['launch', /^(?:opens|opened|unveils|unveiled|launches|launched)$/],
-  ['closure', /^(?:closes|closed|closure|shuts|shut)$/],
+  ['closure', /^(?:close|closes|closed|closure|closing|shuts|shut)$/],
   ['raise', /^(?:raises|raised|hikes|hiked|lifts|increases)$/],
   ['lower', /^(?:cuts|lowers|lowered|slashes|reduces)$/],
   ['hold', /^(?:holds|held|keeps|pauses|freezes)$/],
@@ -539,7 +539,10 @@ const GENERIC_WORDS = new Set(
     'workers staff thousands people city cities country government officials police court state national local world global ' +
     'opens opened closes closed rises rise falls fall cuts high low year month week day night first second third report reports ' +
     'warns warning calls call asks says hits hit makes make gets takes faces start starts ends end business market markets ' +
-    'shows show signs sign parts part sets set back again near big top major former latest still now amid').split(' ')
+    'shows show signs sign parts part sets set back again near big top major former latest still now amid threatens threaten ' +
+    'putting puts put risk move moves surprise unexpectedly arrest arrests arrested charged charges detains detained ' +
+    'questioned investigates investigation probe launches launch unveils injures injured injuries injuring kills killed killing ' +
+    'dead dies died hurt hurts wounded wounds leaves leave left evacuate evacuates evacuated evacuation flee flees fled').split(' ')
 );
 const CAUSE_PHRASE = /\b(?:after|over|following|because of|due to)\s+(.+)$/i;
 /** The content words of a headline's "after ..." phrase ("after engine fire" -> engine, fire). */
@@ -557,6 +560,10 @@ const sharedCount = (a, b) => {
   for (const w of a) if (b.has(w)) n++;
   return n;
 };
+/** Is `name` (folded) written right after a place preposition in the headline ("in Pittsburgh")? */
+const placeAfterPreposition = (title, name) =>
+  new RegExp(`\\b(?:in|at|near|off|outside|across|from|to)\\s+(?:the\\s+)?${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(foldWord(String(title || '')));
+
 /** Words of `a` that `b` has too, inflections allowed ("recovers" ~ "recovery"), among those `keep` accepts. */
 const softShared = (a, b, keep = () => true) => {
   let n = 0;
@@ -803,8 +810,9 @@ export class NewsDesk {
       s.ev = {
         title: s.title,
         names,
-        // names that are not places: a storm, a person, a company, a product
-        people: new Set([...names].filter((n) => !placeWords.has(n) && !lookupPlace(n))),
+        // names that are not places: a storm, a person, a company, a product (a name after "in", "near"... is
+        // a place the gazetteer does not know: "Bridge collapses in Pittsburgh")
+        people: new Set([...names].filter((n) => !placeWords.has(n) && !lookupPlace(n) && !placeAfterPreposition(s.title, n))),
         topic,
         // what happened, without the place, who acted, the kind of event and the filler words
         subject: new Set([...topic].filter((w) => !GENERIC_WORDS.has(w) && !ROLE_WORDS.has(w) && !KIND_WORD(w) && !/^\d/.test(w))),
@@ -839,10 +847,20 @@ export class NewsDesk {
     if (ea.cause.size >= 2 && eb.cause.size >= 2 && sharedCount(ea.cause, eb.cause) === 0) return false;
     if (opposite(a.kw, b.kw) || ea.frame !== eb.frame || ea.another || eb.another) return false;
     const kinds = sharedKinds(ea.kinds, eb.kinds);
-    if (sharedCount(ea.people, eb.people) > 0 && sameEvent(a.kw, b.kw)) return true;
+    // names say who or where, not what happened: "Pittsburgh" in both is no shared subject
+    const notName = (w) => !ea.names.has(w) && !eb.names.has(w);
+    const subject = softShared(ea.subject, eb.subject, notName);
+    if (sharedCount(ea.people, eb.people) > 0 && sameEvent(a.kw, b.kw) && (kinds.length || subject >= 1)) return true;
     if (agree === true && physicalPair(ea.kinds, eb.kinds)) return true;
-    if (agree === true && kinds.some((k) => DECISIONS.has(k)) && softShared(ea.topic, eb.topic, (w) => !KIND_WORD(w) && !ROLE_WORDS.has(w)) >= 1) return true;
-    return sameEvent(a.kw, b.kw) && softShared(ea.subject, eb.subject) >= 2;
+    if (agree === true && kinds.some((k) => DECISIONS.has(k)) && softShared(ea.topic, eb.topic, (w) => !KIND_WORD(w) && !ROLE_WORDS.has(w) && notName(w)) >= 1) return true;
+    if (!sameEvent(a.kw, b.kw)) return false;
+    if (subject >= 2) return true;
+    // one specific word of what happened is enough in the same city or region ("Lisbon opens a new riverside
+    // tram line" / "Thousands ride Lisbon's new tram"; "Germany rail strike" / "Rail strike halts trains
+    // across Germany"), never on a country alone nor in a place nobody knows
+    const [pa, pb] = [this.whereOf(a), this.whereOf(b)];
+    const local = agree === true && (pa.kind !== 'country' || pb.kind !== 'country' || (pa === pb && softShared(ea.topic, eb.topic, (w) => GENERIC_WORDS.has(w) && !ROLE_WORDS.has(w)) >= 1));
+    return local && softShared(ea.subject, eb.subject, (w) => notName(w) && w.length >= 4) >= 1;
   }
 
   /**
@@ -862,17 +880,25 @@ export class NewsDesk {
     if (ea.cause.size && eb.cause.size && sharedCount(ea.cause, eb.cause) === 0) return false;
     const kinds = sharedKinds(ea.kinds, eb.kinds);
     if (physicalPair(ea.kinds, eb.kinds) || kinds.some((k) => DECISIONS.has(k))) return true;
-    const shared = softShared(ea.subject, eb.subject);
-    const small = Math.min(ea.subject.size, eb.subject.size) || 1;
-    return shared >= 2 && (shared / small >= 2 / 3 || shared / (ea.subject.size + eb.subject.size - shared || 1) >= 0.5);
+    const notName = (w) => !ea.names.has(w) && !eb.names.has(w);
+    const sa = new Set([...ea.subject].filter(notName));
+    const sb = new Set([...eb.subject].filter(notName));
+    const shared = softShared(sa, sb);
+    const small = Math.min(sa.size, sb.size) || 1;
+    return shared >= 2 && (shared / small >= 2 / 3 || shared / (sa.size + sb.size - shared || 1) >= 0.5);
   }
 
-  /** Stories that share a keyword with `s` (through the keyword index), excluding `s`. */
+  /** The index keys of a story: its keywords, and its kinds of event ("#weather": "Quake hits Tokyo" meets "Earthquake strikes Japan"). */
+  keysOf(s) {
+    const ev = this.eventFacts(s);
+    return [...s.kw, ...[...ev.kinds].map((k) => `#${family(k)}`)];
+  }
+
+  /** Stories that share an index key with `s` (a keyword or a kind of event), excluding `s`. */
   related(s) {
     const index = this.keywordIndex();
     const seen = new Set();
-    this.eventFacts(s);
-    for (const w of s.kw) {
+    for (const w of this.keysOf(s)) {
       const bucket = index.get(w);
       // a word on very many headlines ("record", "new") says nothing about the event
       if (!bucket || bucket.length > 200) continue;
@@ -881,13 +907,12 @@ export class NewsDesk {
     return seen;
   }
 
-  /** The keyword index of the desk (word -> stories), rebuilt when the desk changed. */
+  /** The keyword index of the desk (key -> stories), rebuilt when the desk changed. */
   keywordIndex() {
     if (this.kwIndex && this.kwIndexSize === this.stories.size && !this.kwIndexDirty) return this.kwIndex;
     const index = new Map();
     for (const s of this.stories.values()) {
-      this.eventFacts(s);
-      for (const w of s.kw) {
+      for (const w of this.keysOf(s)) {
         if (!index.has(w)) index.set(w, []);
         index.get(w).push(s);
       }
@@ -906,17 +931,20 @@ export class NewsDesk {
   updateTrending() {
     this.kwIndexDirty = true;
     const index = this.keywordIndex();
+    this.comparisons = 0; // same-event tests run (the desk's cost stays linear in practice: tests count them)
     for (const s of this.stories.values()) {
       const seen = new Map();
-      for (const w of s.kw) {
+      for (const w of this.keysOf(s)) {
         const bucket = index.get(w);
         if (!bucket || bucket.length > 200) continue;
         for (const o of bucket) if (o !== s && o.source !== s.source) seen.set(o, (seen.get(o) || 0) + 1);
       }
       const sources = new Set([s.source]);
       for (const [o, shared] of seen) {
-        // one shared word is enough only for an earthquake, a storm... in the same place (sameStory decides)
-        if (!sources.has(o.source) && (shared >= 2 || (s.ev.kinds.size && o.ev.kinds.size)) && this.sameStory(s, o)) sources.add(o.source);
+        // one shared key is enough only for an earthquake, a storm... in the same place (sameStory decides)
+        if (sources.has(o.source) || (shared < 2 && !(s.ev.kinds.size && o.ev.kinds.size))) continue;
+        this.comparisons++;
+        if (this.sameStory(s, o)) sources.add(o.source);
       }
       s.outlets = sources.size;
     }
@@ -929,19 +957,20 @@ export class NewsDesk {
    * donor: when the donor loses it, the borrower does too.
    */
   borrowPictures(targets = null) {
-    const all = [...this.stories.values()];
-    const donors = all.filter((o) => o.image && !o.imageFrom && o.imageVia !== 'duplicate' && !this.failedPictures.has(o.image));
+    const donor = (o) => o.image && !o.imageFrom && o.imageVia !== 'duplicate' && !this.failed(o.image);
     let lent = 0;
-    for (const s of targets || all) {
+    // each report is compared only with those sharing a keyword or a kind of event (the keyword index), not
+    // with the whole desk: a full desk of 3,000 stories costs milliseconds per refresh, not seconds
+    for (const s of targets || [...this.stories.values()]) {
       if (s.imageFrom) {
         const d = this.stories.get(s.imageFrom);
-        if (d && d.image === s.image && !this.failedPictures.has(s.image)) continue;
+        if (d && d.image === s.image && !this.failed(s.image)) continue;
         forgetPicture(s);
       }
       if (s.image) continue;
       let best = null;
-      for (const o of donors) {
-        if (o === s || o.source === s.source || !this.samePictureEvent(s, o)) continue;
+      for (const o of this.related(s)) {
+        if (!donor(o) || o.source === s.source || !this.samePictureEvent(s, o)) continue;
         if (!best || (o.imageWidth || 0) > (best.imageWidth || 0)) best = o;
       }
       if (best) {
@@ -1012,7 +1041,12 @@ export class NewsDesk {
     return this.candidates(count);
   }
 
-  /** Mark stories as aired, plus other outlets' reports of the same events (one call = one episode). */
+  /**
+   * Mark stories as aired, plus other outlets' reports of the same events (one call = one episode). A
+   * report of the same event that was covered before is covered again now: a re-run of one outlet's
+   * report must keep the other outlet's off the air for as long (no "second year" then "third year"
+   * of the same reef in back-to-back programmes).
+   */
   markCovered(ids) {
     const now = Date.now();
     const seq = ++this.coverSeq;
@@ -1024,9 +1058,7 @@ export class NewsDesk {
       cover(id);
       const aired = this.stories.get(id);
       if (!aired) continue;
-      for (const s of this.stories.values()) {
-        if (!this.covered.has(s.id) && s !== aired && this.sameStory(aired, s)) cover(s.id);
-      }
+      for (const s of this.related(aired)) if (this.sameStory(aired, s)) cover(s.id);
     }
   }
 
@@ -1062,8 +1094,17 @@ export class NewsDesk {
       if (this.coverSeq - seq < gap) continue;
       list.push({ s, at, seq });
     }
-    list.sort((a, b) => a.seq - b.seq || a.at - b.at);
-    const back = list.slice(0, count);
+    list.sort((a, b) => a.seq - b.seq || a.at - b.at || interestScore(b.s, now) - interestScore(a.s, now));
+    // One report per event comes back at a time (the first in that order), and none while another report of
+    // its event is on the desk or aired within `gap` episodes: two outlets' versions of one event never
+    // re-run in back-to-back programmes.
+    const back = [];
+    for (const entry of list) {
+      if (back.length >= count) break;
+      const mates = [...this.related(entry.s)].filter((o) => this.sameStory(entry.s, o));
+      const blocked = mates.some((o) => back.some((b) => b.s === o) || !this.covered.has(o.id) || this.coverSeq - (this.coveredSeq.get(o.id) ?? 0) < gap);
+      if (!blocked) back.push(entry);
+    }
     for (const { s } of back) {
       this.covered.delete(s.id);
       this.coveredSeq.delete(s.id);
@@ -1073,6 +1114,7 @@ export class NewsDesk {
       if (isBreaking(s.title)) {
         s.title = plainTitle(s.title);
         s.kw = undefined;
+        this.kwIndexDirty = true;
       }
     }
     return back.length;
@@ -1202,11 +1244,10 @@ export class NewsDesk {
     await run(todo);
     // Still without a picture of its own: another outlet's report of the same event may have one on its article
     // page (the cluster lends pictures, not only from feeds). Those pages are read next, within the same budget.
-    const all = [...this.stories.values()];
     const siblings = [];
     for (const s of stories) {
       if (s.image && !s.imageFrom) continue;
-      for (const o of all) if (o !== s && o.source !== s.source && !o.image && needs(o) && !siblings.includes(o) && !todo.includes(o) && this.samePictureEvent(s, o)) siblings.push(o);
+      for (const o of this.related(s)) if (o.source !== s.source && !o.image && needs(o) && !siblings.includes(o) && !todo.includes(o) && this.samePictureEvent(s, o)) siblings.push(o);
     }
     await run(siblings.slice(0, 8));
     this.borrowPictures(stories);

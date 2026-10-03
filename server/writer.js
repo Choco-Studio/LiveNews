@@ -7,7 +7,7 @@
 // lead, no banter next to grave news...), whatever the writer was.
 import { parseCues, embedCues, describeActions, ACTIONS } from '../public/js/cues.js';
 import { isBreaking, plainTitle } from './news.js';
-import { claimGrounded, contentWords, groundQuote, headlineGrounded, inventedClaim, isGrave, leansOnPrevious, numbersGrounded, pointsBack, numbersIn, numberWordsIn, qualifierConflict, quotationsGrounded, sameWord, sourceQualifier } from './facts.js';
+import { claimGrounded, contentWords, groundQuote, headlineGrounded, inventedClaim, isGrave, leansOnPrevious, notForFeatures, numbersGrounded, pointsBack, severity, numbersIn, numberWordsIn, qualifierConflict, quotationsGrounded, sameWord, sourceQualifier } from './facts.js';
 import { findPlaces, lookupPlace, placeSupported, snapLocation } from './gazetteer.js';
 
 export const EMOTIONS = ['neutral', 'happy', 'serious', 'surprised', 'sad', 'thinking'];
@@ -122,7 +122,7 @@ const ACCURACY = `ACCURACY RULES (mandatory)
  * @param program     programme definition from config/channel.json
  * @param presenters  { A: presenter, B?: presenter } with name + personality
  */
-export function buildPrompt({ channelName, program, presenters, stories, count, now = new Date() }) {
+export function buildPrompt({ channelName, program, presenters, stories, count, now = new Date(), recentLines = [] }) {
   const when = now.toLocaleString('en-GB', {
     timeZone: 'UTC',
     weekday: 'long',
@@ -188,7 +188,12 @@ ${introRule(program, solo, names)}
       ? ''
       : `
 - Hand-overs: when the next story is read by the other presenter, sometimes end with a natural toss using their first name ("${toss}"), or let them pick it up ("Thanks, ${a}."). Vary it, say "Thanks" at most once per episode, and never toss after a grave story.
-- Chat segments are short exchanges that sound like these two people: react to what was just said, add no new facts or figures, and lead into what comes next. An analysis exchange after a story (a question and its answer, or one more detail added by the other presenter) may use a detail from that same story's summary, never anything else.`
+- Chat segments are short exchanges that sound like these two people: react to what was just said, add no new facts or figures, and lead into what comes next. An analysis exchange after a story (a question and its answer, or one more detail added by the other presenter) may use a detail from that same story's summary, never anything else.${
+        recentLines.length
+          ? `
+- This channel runs around the clock: these presenter lines aired in the last hours; never use them again, nor close variations: ${JSON.stringify(recentLines.map((l) => l.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim()))}`
+          : ''
+      }`
   }
 ${
   features.length
@@ -889,7 +894,7 @@ function applyGestures(cues, policy, ctx) {
 
 // Words of an intro line that say nothing about which story it teases.
 const TEASE_SKIP = new Set('coming later programme program also tonight first next headlines welcome good evening morning afternoon hello join stay watching bulletin minute'.split(' '));
-const TEASE_PREFIX = /^((?:\[[^\]]*\]\s*)*(?:Breaking news[:.]\s*|Also coming up[:,]?\s*|Coming up[:,]?\s*|Also tonight[:,]?\s*|Later in the programme[:,]?\s*|Later[:,]\s*|And later[:,]?\s*|And finally[:,]?\s*|First[:,]\s*)?)/i;
+const TEASE_PREFIX = /^((?:\[[^\]]*\]\s*)*(?:Breaking news[:.]\s*|Also coming up[:,]?\s*|Coming up[:,]?\s*|Also ahead[:,]?\s*|Also tonight[:,]?\s*|Still to come[:,]?\s*|Later in the programme[:,]?\s*|Later[:,]\s*|And later[:,]?\s*|And finally[:,]?\s*|First[:,]\s*)?)/i;
 
 /**
  * Which story each intro sentence teases: the story (of `list`, in running
@@ -1034,7 +1039,7 @@ function keepOpener(tagged, written, story, check) {
 export function normalizeBulletin(
   raw,
   stories,
-  { channelName = 'LIVENEWS', maxStories = Infinity, maxChats = 3, solo = false, features = FEATURES, ownNames = [], program = null, presenters = null } = {}
+  { channelName = 'LIVENEWS', maxStories = Infinity, maxChats = 3, solo = false, features = FEATURES, ownNames = [], program = null, presenters = null, recent = null } = {}
 ) {
   const names = [channelName, ...ownNames];
   const byId = new Map(stories.map((s) => [s.id, s]));
@@ -1084,8 +1089,11 @@ export function normalizeBulletin(
       d.map = normalizeMap(seg.map, source);
       d.kicker = normalizeKicker(seg.kicker, source);
       let feature = pick(seg.feature, allowed, null);
-      // Breaking news is never a feature; grave news can be a round-up item, never the number or the lighter.
+      // Breaking news is never a feature; grave news can be a round-up item, never the number or the lighter;
+      // nor can a harmless quake, a closure or job losses be the number of the day.
       if (feature && (d.breaking || (d.heavy && feature !== 'roundup'))) feature = null;
+      if (feature && feature !== 'roundup' && notForFeatures(source)) feature = null;
+      d.severity = severity(source);
       if (feature === 'roundup' && !d.location) feature = null;
       d.feature = feature;
       // The headline: the writer's, if it is a complete phrase whose every word the source supports (no added
@@ -1110,8 +1118,23 @@ export function normalizeBulletin(
     if (d.type === 'story') units.push({ story: d, chats: [] });
     else if (d.type === 'chat' && units.length) units.at(-1).chats.push(d);
   }
-  // A breaking story always leads (stable among themselves).
+  // A breaking story leads (stable among themselves), over stories of its own weight or less: when a graver
+  // story is in the running order (a hurricane with homes without power), that one leads and the breaking
+  // one plays second, flagged on its strap only (`breakingNote`), without the full-screen alert.
   units.sort((x, y) => Number(y.story.breaking) - Number(x.story.breaking));
+  if (units[0]?.story.breaking) {
+    const top = units[0].story;
+    // graver = people harmed or at risk (severity 3): a heatwave with no harm stated does not push a resignation down
+    const graver = units.findIndex((u) => !u.story.breaking && u.story.severity >= 3 && u.story.severity > (top.severity || 0));
+    if (graver > 0) units.unshift(...units.splice(graver, 1));
+  }
+  units.forEach((u, i) => {
+    if (i > 0 && u.story.breaking) {
+      u.story.breaking = false;
+      u.story.breakingNote = true;
+      u.story.tagged = u.story.tagged.replace(/^((?:\[[^\]]*\]\s*)*)Breaking news[.:]\s*/i, '$1');
+    }
+  });
   // The number of the day is never the lead; some programmes air it last.
   if (units[0]?.story.feature === 'number') units[0].story.feature = null;
   if (program?.numberSlot === 'last') {
@@ -1223,6 +1246,11 @@ export function normalizeBulletin(
         if (program?.thanksMax !== undefined && thanks >= program.thanksMax) continue;
         thanks++;
       }
+      // 24/7: a chat line that aired in the last hours is not aired again (a short "Thanks, Lola." may be)
+      if (d.type === 'chat' && recent?.size && plain.split(/\s+/).length >= 4 && recent.has(plain.toLowerCase())) {
+        d.stale = true;
+        continue;
+      }
       if (program?.noQuestions && /\?/.test(plain)) {
         if (NAME_TOSS.test(plain) && d.type !== 'chat') s = s.replace(/\?(\s*(?:\[[^\]]*\]\s*)*)$/, '.$1');
         else if (d.type !== 'chat' || questions >= 1) continue;
@@ -1240,8 +1268,18 @@ export function normalizeBulletin(
       out.push(s);
       spoken++;
     }
-    // Never empty a segment: when every sentence would go, it stays as written.
+    // Never empty a segment: when every sentence would go, it stays as written (a chat made only of lines
+    // aired lately goes altogether).
     if (spoken) d.tagged = out.join(' ');
+    else if (d.stale) d.tagged = '';
+  }
+  // A reply never airs without the line it answers: after a chat that went, the story's later chats go too.
+  for (const u of units) {
+    let gone = false;
+    for (const c of u.chats) {
+      if (gone) c.tagged = '';
+      else if (c.stale && !stripTags(c.tagged)) gone = true;
+    }
   }
 
   // Phase 4: finalize every segment.
@@ -1287,6 +1325,7 @@ export function normalizeBulletin(
       hasImage: !!s.image,
     };
     if (d.kicker) out.kicker = d.kicker;
+    if (d.breakingNote) out.breakingNote = true;
     if (numbers?.length) out.numbers = numbers;
     if (d.quote && !inRoundup) out.quote = { text: clip(d.quote.text, LIMITS.quote), by: d.quote.by ? clipWords(d.quote.by, LIMITS.by) : null };
     if (d.map && !inRoundup) out.map = d.map;

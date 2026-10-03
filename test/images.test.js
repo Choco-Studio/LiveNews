@@ -8,7 +8,32 @@ import { ImageCache, badPictureSize } from '../server/images.js';
 
 // ---------------------------------------------------------------- helpers
 
-const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+// A 640x360 PNG header: the bytes say the size (a picture whose size cannot be read never airs, fix r2).
+const PNG = (() => {
+  const b = Buffer.alloc(33);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0);
+  b.writeUInt32BE(13, 8);
+  b.write('IHDR', 12, 'latin1');
+  b.writeUInt32BE(640, 16);
+  b.writeUInt32BE(360, 20);
+  return b;
+})();
+/** A JPEG whose baseline frame header (SOF0) says `w` x `h`. */
+const jpegOf = (w, h) => {
+  const b = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0xff, 0xc0, 0, 0x11, 8, 0, 0, 0, 0, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1]);
+  b.writeUInt16BE(h, 25);
+  b.writeUInt16BE(w, 27);
+  return b;
+};
+/** An AVIF whose 'ispe' property says `w` x `h` (ftyp, then a meta box holding ispe). */
+const avifOf = (w, h) => {
+  const ispe = Buffer.alloc(20);
+  ispe.writeUInt32BE(20, 0);
+  ispe.write('ispe', 4, 'latin1');
+  ispe.writeUInt32BE(w, 12);
+  ispe.writeUInt32BE(h, 16);
+  return Buffer.concat([Buffer.from([0, 0, 0, 0x1c]), Buffer.from('ftypavif', 'latin1'), Buffer.alloc(16), Buffer.from([0, 0, 0, 40]), Buffer.from('meta', 'latin1'), Buffer.alloc(4), ispe, Buffer.alloc(8)]);
+};
 
 /** Fake fetch: `respond(url, n)` returns a Response (or throws). Counts calls per URL. */
 function makeFetch(respond = () => imageResponse()) {
@@ -98,12 +123,18 @@ describe('ImageCache', () => {
   });
 
   // The bytes decide what a picture is (fix round 1): the header only has to be an image type or octet-stream.
+  const webp = Buffer.concat([Buffer.from('RIFF\0\0\0\0WEBPVP8X', 'latin1'), Buffer.alloc(14)]);
+  webp.writeUIntLE(639, 24, 3);
+  webp.writeUIntLE(359, 27, 3);
+  const gif = Buffer.concat([Buffer.from('GIF89a', 'latin1'), Buffer.alloc(20)]);
+  gif.writeUInt16LE(640, 6);
+  gif.writeUInt16LE(360, 8);
   const MAGIC = {
-    'image/jpeg': Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46]),
+    'image/jpeg': jpegOf(640, 360),
     'image/png': PNG,
-    'image/webp': Buffer.concat([Buffer.from('RIFF\0\0\0\0WEBPVP8 ', 'latin1'), Buffer.alloc(4)]),
-    'image/gif': Buffer.from('GIF89a\0\0\0\0', 'latin1'),
-    'image/avif': Buffer.concat([Buffer.from([0, 0, 0, 0x1c]), Buffer.from('ftypavif', 'latin1'), Buffer.alloc(4)]),
+    'image/webp': webp,
+    'image/gif': gif,
+    'image/avif': avifOf(640, 360),
   };
   test('accepts jpeg, png, webp, gif and avif, ignoring parameters such as a charset', async () => {
     const cache = new ImageCache({ lookup: publicLookup, fetchImpl: makeFetch((url) => imageResponse(MAGIC[url.split('?')[1].split(';')[0].toLowerCase()], { 'content-type': url.split('?')[1] })) });
@@ -123,6 +154,16 @@ describe('ImageCache', () => {
     assert.equal((await cache.get('a', 'https://img.test/x?mislabelled')).type, 'image/png');
     assert.equal((await cache.get('b', 'https://img.test/x?octet')).type, 'image/jpeg');
     assert.match((await cache.get('c', 'https://img.test/x?html')).error, /not a picture/);
+  });
+
+  test('(fix r2) an AVIF is held to the same caps as every picture; a picture whose size cannot be read never airs', () => {
+    assert.equal(badPictureSize(avifOf(640, 360)), null);
+    assert.match(badPictureSize(avifOf(60000, 60000)), /too large/);
+    assert.match(badPictureSize(avifOf(16, 16)), /too small/);
+    // no ispe box, a JPEG with no frame header
+    assert.match(badPictureSize(Buffer.concat([Buffer.from([0, 0, 0, 0x1c]), Buffer.from('ftypavif', 'latin1'), Buffer.alloc(40)])), /unreadable/);
+    assert.match(badPictureSize(Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10]), Buffer.alloc(40)])), /unreadable/);
+    assert.equal(badPictureSize(jpegOf(1200, 800)), null);
   });
 
   test('a picture with more pixels than the on-air browser can pixelate quickly is skipped for the next candidate', () => {

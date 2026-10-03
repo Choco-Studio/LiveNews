@@ -10,7 +10,7 @@ import { findPlaces, lookupPlace, placeSupported } from './gazetteer.js';
 // Grave news: no jokes, no light gestures, no "and finally" slot.
 // Natural disasters and accidents count as much as violence: a hurricane landfall is never the number of the day.
 export const GRAVE =
-  /\b(?:dead|deaths?|die[sd]?|dying|killed|killings?|kills?|war|wars|attacks?|victims?|murder\w*|shootings?|earthquakes?|fires?|wildfires?|blaze|crash\w*|violen\w*|injur\w*|bomb\w*|strikes? on|crisis|floods?|flooded|flooding|hostages?|famine|casualt\w*|missing|evacuat\w*|disaster\w*|tragedy|mourn\w*|funeral|cancer|outbreak|epidemic|pandemic|hurricanes?|typhoons?|cyclones?|tornado(?:es|s)?|tsunamis?|landslides?|mudslides?|avalanches?|droughts?|heatwaves?|heat waves?|collaps\w*|derail\w*|capsiz\w*|sinks|sank|sunk|sinking|drown\w*|cholera|landfall|life-threatening|storm surge|explosions?|blasts?|refugees?|displaced|shipwreck\w*|starvation|massacre\w*|genocide|ceasefire|airstrikes?|shelling|rescuers?|red alert|heat alert|extreme heat|state of emergency)\b/i;
+  /\b(?:dead|deaths?|die[sd]?|dying|killed|killings?|kills?|war|wars|attacks?|victims?|murder\w*|shootings?|earthquakes?|fires?|wildfires?|blaze|crash\w*|violen\w*|injur\w*|bomb\w*|strikes? on|crisis|floods?|flooded|flooding|hostages?|famine|casualt\w*|missing|evacuat\w*|disaster\w*|tragedy|mourn\w*|funeral|cancer|outbreak|epidemic|pandemic|hurricanes?|typhoons?|cyclones?|tornado(?:es|s)?|tsunamis?|landslides?|mudslides?|avalanches?|droughts?|heatwaves?|heat waves?|collaps\w*|derail\w*|capsiz\w*|sinks|sank|sunk|sinking|drown\w*|cholera|landfall|life-threatening|storm surge|storm damage|damaged by (?:the )?(?:storm|flood|fire|quake|earthquake)|explosions?|blasts?|refugees?|displaced|shipwreck\w*|starvation|massacre\w*|genocide|ceasefire|airstrikes?|shelling|rescuers?|red alert|heat alert|extreme heat|state of emergency)\b/i;
 // Lighter material: technology, science, curiosities.
 export const LIGHT =
   /\bAI\b|robot|\bchips?\b|phone|\bapps?\b|software|\bspace\b|nasa|planet|science|scientist|discover|study finds|telescope|\bgames?\b|record|festival|zoo|panda|penguin|dinosaur|fossil|museum|trees?\b|garden|bicycle|bike|tram|train|music|chocolate|coffee|parrot|whale|dolphin|stars?\b|comet|moon|reef|coral|tortoises?|leopards?|mangroves?|tomatoes|drones/i;
@@ -55,6 +55,14 @@ export function severity(text) {
 
 /** A grave-sounding story whose opening says nobody was harmed: sober news, never grave, never light. */
 export const harmlessIncident = (text) => GRAVE.test(withoutLookalikes(text)) && !isGrave(text);
+
+// Bad news for people that is not grave: a closure, job losses, a bankruptcy.
+const HARDSHIP = /\b(?:job (?:cuts|losses)|jobs? (?:are |were )?at risk|lay-?offs?|laid off|redundanc\w*|bankrupt\w*|insolven\w*|plant closure|(?:close|closes|closing|closure of|shut|shuts|shutting)\s+(?:its |the |a )?(?:\w+\s+)?(?:plant|factory|mine|branch|branches|site|stores?|offices?))\b/i;
+/**
+ * Never a recurring light feature (the number of the day, "and finally"): grave news, a grave-sounding
+ * incident that harmed no one (a quake is not a feature number), closures and job losses.
+ */
+export const notForFeatures = (text) => isGrave(text) || harmlessIncident(text) || HARDSHIP.test(String(text ?? ''));
 
 // A sentence that leans on the one before it: a pronoun ("It runs along the river."), or a definite common
 // noun that points back ("The canal authority says...", "Astronomers say the shadow will cross..."). Such a

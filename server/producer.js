@@ -43,9 +43,13 @@ export class Producer {
     this.images = images; // server/images ImageCache: pictures are verified (and warmed) before air, optional
     this.log = log;
     this.seq = 0;
-    // The presenters' own lines (chats, buttons, sign-offs) of the last episodes: the writer avoids them, so
-    // a 24/7 rotation does not hear the same exchange twice in a few hours.
-    this.recentLines = [];
+    // The presenters' own lines (chats, buttons, signposts) aired in the last hours (config.recentLinesHours,
+    // 6 by default), oldest first: the writer picks the line aired longest ago, the validator drops a chat
+    // line that aired lately, so a 24/7 rotation does not hear the same exchange every half hour.
+    this.recentLines = []; // [{ line, at }]
+    // Stories that were the number of the day or "And finally" lately: another story takes the feature when one
+    // qualifies (a re-run does not bring the same feature back every rotation).
+    this.recentFeatures = []; // [{ id, at }]
     this.stages = [
       // The picture desk works before the writer, so the writer knows which candidates have a picture.
       { name: 'pictures', run: (ctx) => this.pictures(ctx), enabled: () => typeof this.news.findPictures === 'function' },
@@ -112,7 +116,9 @@ export class Producer {
     const pool = Math.max(this.config.candidatePool ?? 12, Math.ceil((program.stories || 0) * 1.5));
     const minAgeMs = this.news.localOnly ? 0 : (this.config.recycleAfterHours ?? 4) * 3600_000;
     const cats = program.categories || null;
-    const back = this.news.recycle((pool - list.length) * 2, { filter: (s) => !cats || cats.includes(s.category), gap: this.config.recycleGap ?? 5, minAgeMs });
+    // only stories the programme could air: its sections, on its beat (no coral reef on TECH BYTES)
+    const fits = (s) => (!cats || cats.includes(s.category)) && (!program.beat || onBeat(s, program.beat));
+    const back = this.news.recycle((pool - list.length) * 2, { filter: fits, gap: this.config.recycleGap ?? 5, minAgeMs });
     if (back) list = this.select(program, opts);
     return list;
   }
@@ -145,6 +151,7 @@ export class Producer {
 
     const used = new Set(ctx.episode.storyIds);
     this.rememberLines(ctx.episode);
+    this.rememberFeatures(ctx.episode);
     this.news.markCovered(ctx.episode.storyIds);
     this.news.markOffered(candidates.filter((s) => !used.has(s.id)).map((s) => s.id));
 
@@ -168,6 +175,8 @@ export class Producer {
   normalizer(ctx, stories) {
     return (text) =>
       normalizeBulletin(extractJson(text), stories, {
+        // chat lines aired lately are not aired again (any writer)
+        recent: this.recentPlain(),
         channelName: ctx.channelName,
         maxStories: ctx.program.stories,
         maxChats: ctx.program.maxChats ?? 3,
@@ -181,21 +190,41 @@ export class Producer {
       });
   }
 
-  /** Keep the chat lines of an episode (sentence by sentence, plain text) in a short memory of what aired. */
-  rememberLines(episode) {
-    const max = this.config.recentLines ?? 60;
+  /** Keep the chat lines of an episode (sentence by sentence, plain text) in the station's memory of what aired. */
+  rememberLines(episode, now = Date.now()) {
+    const max = this.config.recentLines ?? 1000;
+    const window = (this.config.recentLinesHours ?? 6) * 3600_000;
     for (const seg of episode?.segments || []) {
       if (seg.type !== 'chat') continue;
-      for (const line of String(seg.text).split(/(?<=[.!?])\s+/)) if (line.trim()) this.recentLines.push(line.trim());
+      for (const line of String(seg.text).split(/(?<=[.!?])\s+/)) if (line.trim()) this.recentLines.push({ line: line.trim(), at: now });
     }
-    if (this.recentLines.length > max) this.recentLines.splice(0, this.recentLines.length - max);
+    while (this.recentLines.length && (this.recentLines.length > max || now - this.recentLines[0].at > window)) this.recentLines.shift();
+  }
+
+  /** The lines in memory, oldest first, as plain strings. */
+  recentText() {
+    return this.recentLines.map((x) => x.line);
+  }
+
+  /** The same, as the validator compares them: lower case, no stage directions. */
+  recentPlain() {
+    return new Set(this.recentLines.map((x) => x.line.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()));
+  }
+
+  /** Remember which stories were the number of the day or "And finally" (the last 16 episodes, at most 6 hours). */
+  rememberFeatures(episode, now = Date.now()) {
+    for (const seg of episode?.segments || []) if (seg.type === 'story' && (seg.feature === 'number' || seg.feature === 'lighter')) this.recentFeatures.push({ id: seg.storyId, at: now });
+    const window = (this.config.recentLinesHours ?? 6) * 3600_000;
+    while (this.recentFeatures.length && (this.recentFeatures.length > 32 || now - this.recentFeatures[0].at > window)) this.recentFeatures.shift();
   }
 
   async write(ctx) {
-    const prompt = buildPrompt({ channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, stories: ctx.candidates });
+    const recent = this.recentText();
+    const prompt = buildPrompt({ channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, stories: ctx.candidates, recentLines: recent.slice(-24) });
     const { provider, value } = await this.chain.generate(
-      // `recent`: lines aired lately, for writers that pick from their own repertoire (the offline mock).
-      { stage: 'write', prompt, stories: ctx.candidates, channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, count: ctx.program.stories, recent: [...this.recentLines] },
+      // `recent`: lines aired lately, for writers that pick from their own repertoire (the offline mock);
+      // `featured`: stories that were a feature lately (the same "And finally" does not come round every rotation).
+      { stage: 'write', prompt, stories: ctx.candidates, channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, count: ctx.program.stories, recent, featured: this.recentFeatures.map((x) => x.id) },
       this.normalizer(ctx, ctx.candidates)
     );
     ctx.episode = value;

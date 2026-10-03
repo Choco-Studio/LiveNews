@@ -20,7 +20,9 @@ import { paceFor } from '../public/js/pace.js';
 import { matsOf } from '../public/js/v2/canvas25d/cast/base.js';
 import { LOOKS, PRESENTER_IDS } from '../public/js/v2/canvas25d/cast/index.js';
 import { planSegment } from '../public/js/v2/canvas25d/direction/index.js';
-import { planGestures, CONFIG_POLICY, BIBLE, countFromText, episodePlan, familyOf, gestureVisible, DEBUG } from '../public/js/v2/canvas25d/direction/gestures.js';
+import { planGestures, CONFIG_POLICY, BIBLE, countFromText, episodePlan, familyOf, gestureVisible, handBandOf, DEBUG } from '../public/js/v2/canvas25d/direction/gestures.js';
+import { framing as cameraFraming, placeActor } from '../public/js/v2/canvas25d/camera.js';
+import { SET } from '../public/js/v2/canvas25d/studio/geometry.js';
 import { segmentContext } from '../public/js/v2/canvas25d/direction/context.js';
 
 const BASE = JSON.parse(fs.readFileSync(new URL('./fixtures/v2-motion-baseline.json', import.meta.url), 'utf8'));
@@ -1109,4 +1111,29 @@ test('hand raster cache (perf, critics r2): an unchanged hand reuses its raster;
   b2.clear();
   arms(b2, poseAt(a, 2.0));
   assert.equal(diff(b1, b2), 0, 'same pose, same pixels');
+});
+
+test('caption box (critic r2 stage find): planned arm gestures clear the subtitle over a strap; box and lift read above it in the mcu singles', () => {
+  // graphics/layout.js: the caption over a strap ends 6 px above the tag row (166) and is one 12 px line
+  const TOP = 148, X0 = 55, X1 = 329;
+  const CAST = { 'world-now': ['paco', 'lola'], 'tech-bytes': ['max', 'ada'], cosmos: ['nova', 'unit8'] };
+  for (const [pid, ids] of Object.entries(CAST)) {
+    const cast = { A: ids[0], B: ids[1] };
+    for (const slot of ['A', 'B']) {
+      const cam = cameraFraming('mcu-l', { cast, focus: slot, programId: pid, solo: false });
+      const p = placeActor(cam, SET.seatX[slot]);
+      const L = LOOKS[cast[slot]];
+      const m = slot === 'A' ? 1 : -1;
+      for (const v of ['box', 'lift']) {
+        const b = handBandOf(L, { name: 'raise_hand', variant: v });
+        const xa = p.x + Math.min(b.x0 * m, b.x1 * m) * p.s, xb = p.x + Math.max(b.x0 * m, b.x1 * m) * p.s;
+        const inCols = xb + 6 >= X0 && xa - 6 <= X1;
+        assert.ok(!inCols || p.y + b.bottom * p.s <= TOP - 4 + 0.5, `${pid} ${cast[slot]} raise_hand:${v} hand at y ${(p.y + b.bottom * p.s).toFixed(1)} behind the caption`);
+      }
+    }
+  }
+  // and the planner never plans a hand behind it: every planned arm gesture of the fixtures passes gestureVisible (caption-aware)
+  for (const pid of ['world-now', 'tech-bytes', 'cosmos']) {
+    for (const res of ALL_SEGS(pid, 6)) for (const e of gesturesOf(res)) if (defOf(e).arm) assert.ok(gestureVisible(res.ctx, e), `${pid}: ${e.name}:${e.variant || ''} hidden`);
+  }
 });

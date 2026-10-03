@@ -29,7 +29,12 @@
 // the framing travels in scene.framing (CONTRACTS "framings never reach graphics").
 // MAX HOLD (pace maxima on air, holdCut()): at a sentence start with no planned
 // cut, a story or intro shot that would otherwise run past its pace maximum
-// (map, picture, fact card, studio single) gives way to the speaker's studio shot.
+// (map, picture, fact card, studio single, an intro's long wide) gives way to the
+// speaker's studio shot; when no sentence start can split it, a phrase boundary
+// inside a sentence can (comma, colon, semicolon, dash, ' and ' / ' but ':
+// guardMarks(), fired by speak() marks), never within 1.5 s before a dry line.
+// An intro that the guard took off its wide comes back to the wide for the
+// greeting (the bibles' greeting wide) when both parts hold the cooldown.
 // Every public method is guarded: a throw is logged once and returns the neutral
 // value (null), so the director's own beats carry on (never freeze).
 import { planSegment } from '../direction/index.js';
@@ -129,6 +134,9 @@ const HOLD_SHOTS = new Set(['wide', 'close', 'map', 'full', 'fact']);
 // pause, voice start-up, timers on a busy machine), measured 1-3 s on the offline channel
 const HOLD_MARGIN = 1.0;
 const DRY_HOLD = 1.2; // s: never cut on a dry line or this soon after it (tech-bytes.md)
+const DRY_LEAD = 1.5; // s: a phrase-boundary cut lands at least this long before a dry line (it reads on a settled shot)
+// the greeting that ends an intro's headlines (director.js / direction/shots.js GREETING_RE)
+const GREETING = /^(good (morning|afternoon|evening)|hello|welcome|this is|i'm|i am|and i'm)\b|\bwelcome to\b/i;
 
 /** The longest a shot may hold on air (s, pace.js shotMax): maps their window, pictures the picture window, fact cards factMax, studio shots studioMax. */
 export function maxHold(shot, programId) {
@@ -136,36 +144,42 @@ export function maxHold(shot, programId) {
 }
 
 /**
- * Max-hold guard. At the start of sentence `si` of a story or intro (no planned cut there), the
- * shot on air (`onAir` = { shot, framing, focus, held: s since its cut }) would run past its pace
- * maximum (less a 1 s margin) before the next planned cut (or the end of the segment, at the voice's
- * real pace `rate`): if it has held the cooldown and
- * the shot that replaces it can hold the cooldown too, return a cue back to the speaker's studio
- * shot: a map, picture or card → the speaker's single (`closeFraming`); a single → the wide
- * (`wideFraming`; not NEWS IN 60, whose bible keeps the wide for the intro and sign-off); a wide in
- * a story → the single (an intro's wide is the bible's and stays). Never on or just after a dry line,
- * and never from a studio shot into one that would run straight into an identical opening shot of the
- * next segment (`nextOpen`: { shot, framing, focus }): that only makes one longer hold. Null otherwise. Pure.
+ * Max-hold guard. At the start of sentence `si` of a story or intro (no planned cut there), or at a
+ * phrase boundary inside it (`point` = { char, t0 }, from guardMarks()), the shot on air (`onAir` =
+ * { shot, framing, focus, held: s since its cut }) would run past its pace maximum (less a 1 s
+ * margin) before the next planned cut (or the end of the segment, at the voice's real pace `rate`):
+ * if it has held the cooldown and the shot that replaces it can hold the cooldown too, return a cue
+ * back to the speaker's studio shot: a map, picture or card → the speaker's single (`closeFraming`);
+ * a single → the wide (`wideFraming`; not NEWS IN 60, whose bible keeps the wide for the intro and
+ * sign-off); a wide → the single (an intro's wide too, but only once it would pass the studio maximum:
+ * critic r2, a 22 s MONEY MINUTE intro on one solo wide). Never on or just after a dry line (a phrase
+ * cut also not within DRY_LEAD s before it), and never from a studio shot into one that would run
+ * straight into an identical opening shot of the next segment (`nextOpen`: { shot, framing, focus }):
+ * that only makes one longer hold. At an intro's greeting sentence, a single on air goes back to the
+ * wide when both parts hold the cooldown (the bibles' greeting wide). Null otherwise. Pure.
  */
-export function holdCut(plan, si, onAir, { programId = null, gap = 0.6, cues = null, closeFraming = null, wideFraming = null, nextOpen = null, rate = 1 } = {}) {
+export function holdCut(plan, si, onAir, { programId = null, gap = 0.6, cues = null, closeFraming = null, wideFraming = null, nextOpen = null, rate = 1, point = null } = {}) {
   const ctx = plan?.ctx;
-  if (!ctx || !onAir || !HOLD_SHOTS.has(onAir.shot) || !(si > 0)) return null;
+  if (!ctx || !onAir || !HOLD_SHOTS.has(onAir.shot) || !(point ? si >= 0 : si > 0)) return null;
   if (ctx.type !== 'story' && ctx.type !== 'intro') return null;
-  // an intro's wide is the bible's greeting (WORLD NOW) or the whole intro (MONEY MINUTE, NEWS IN 60 §3.5): kept
-  if (ctx.type === 'intro' && onAir.shot === 'wide') return null;
   const S = paceFor(programId).shots;
   if (!(onAir.held >= S.cooldown)) return null;
   const sent = ctx.sentences?.[si];
   if (!sent || !Number.isFinite(sent.t0)) return null;
-  const t0 = sent.t0;
+  const t0 = point ? point.t0 : sent.t0;
+  const char = point ? point.char : sent.start;
+  if (!Number.isFinite(t0)) return null;
   const dry = ctx.dryLine;
-  if (dry && t0 >= dry.t0 - 0.05 && t0 <= dry.t1 + DRY_HOLD) return null;
+  if (dry && t0 >= dry.t0 - (point ? DRY_LEAD : 0.05) && t0 <= dry.t1 + DRY_HOLD) return null;
   const end = (ctx.duration || 0) + (Number.isFinite(gap) ? gap : 0.6);
   let next = end;
   for (const c of cues || []) if (c.k > 0 && Number.isFinite(c.at) && c.at > t0 + 0.05 && c.at < next) next = c.at;
   // the planned time left, at the pace the voice really runs (`rate` = elapsed on air / planned)
   const remaining = (next - t0) * (rate > 0 ? rate : 1);
   if (remaining < S.cooldown) return null; // the replacement would be short: the planned cut comes soon anyway
+  // the greeting of an intro the guard took off its wide: back to the wide (both parts hold the cooldown)
+  const greeting = !point && ctx.type === 'intro' && onAir.shot === 'close' && GREETING.test(String(sent.text ?? ctx.seg?.text?.slice(sent.start) ?? '').trim());
+  if (greeting) return { k: 1000 + si, char, at: t0, sentence: si, mid: false, shot: 'wide', framing: wideFraming ?? null, focus: ctx.speaker, move: null, card: null, minLen: null, beat: 'greeting', guard: true };
   if (onAir.held + remaining <= maxHold(onAir.shot, programId) - HOLD_MARGIN) return null;
   let shot, framing;
   if (onAir.shot === 'close') {
@@ -179,7 +193,40 @@ export function holdCut(plan, si, onAir, { programId = null, gap = 0.6, cues = n
   // a studio shot that would only continue as the next segment's identical opening: no gain (a picture or map
   // past its maximum still goes back to the presenter: the new story's strap changes that picture anyway)
   if (STUDIO.has(onAir.shot) && next === end && nextOpen && nextOpen.shot === shot && (nextOpen.framing ?? null) === (framing ?? null) && nextOpen.focus === ctx.speaker) return null;
-  return { k: 1000 + si, char: sent.start, at: t0, sentence: si, mid: false, shot, framing: framing ?? null, focus: ctx.speaker, move: null, card: null, minLen: null, beat: 'hold', guard: true };
+  return { k: 1000 + si, char, at: t0, sentence: si, mid: !!point, shot, framing: framing ?? null, focus: ctx.speaker, move: null, card: null, minLen: null, beat: 'hold', guard: true };
+}
+
+// a phrase boundary: after a comma / semicolon / colon / dash, or before ' and ' / ' but ' (the next word's char)
+const PHRASE = /[,;:]\s+(?=\S)|\s[\u2013\u2014-]\s+(?=\S)|\s(?=(?:and|but)\s)/gi;
+
+/**
+ * Phrase boundaries inside the sentences of a story or intro where the max-hold guard may cut when no
+ * sentence start can (speak() marks fire them): [{ char, t0, si }], not within 3 chars of a sentence
+ * start or a planned cut inside a sentence (`skip`: chars). Pure.
+ */
+export function guardMarks(plan, skip = []) {
+  const ctx = plan?.ctx;
+  if (!ctx || (ctx.type !== 'story' && ctx.type !== 'intro') || typeof ctx.timeAt !== 'function') return [];
+  const text = String(ctx.seg?.text || '');
+  const ss = ctx.sentences || [];
+  const out = [];
+  for (const m of text.matchAll(PHRASE)) {
+    const char = m.index + m[0].length;
+    let si = 0;
+    while (si + 1 < ss.length && ss[si + 1].start <= char) si++;
+    const sent = ss[si];
+    if (!sent || char - sent.start < 3 || (ss[si + 1] && ss[si + 1].start - char < 3)) continue;
+    if (skip.some((c) => Math.abs(c - char) < 3)) continue;
+    let t0 = NaN;
+    try {
+      t0 = ctx.timeAt(char);
+    } catch {
+      /* no timing: no mark */
+    }
+    if (Number.isFinite(t0)) out.push({ char, t0, si });
+    if (out.length >= 24) break;
+  }
+  return out;
 }
 
 /** Rundown index of the story a headline sentence teases (event storyId, seg.teases, else the planner's card). */
@@ -393,9 +440,22 @@ export class LiveDirection {
     };
     if (!story && cues?.[0]) fireCue(cues[0]);
     const mids = cues ? cues.filter((c) => c.k > 0 && c.mid) : [];
+    // the max-hold guard's phrase boundaries (a cut inside a sentence when no sentence start can split a long shot)
+    const gm = guardMarks(p, mids.map((c) => c.char));
+    const marks = [...mids.map((c) => c.char), ...gm.map((m) => m.char)];
     return {
       plan: p,
-      speak: mids.length ? { marks: mids.map((c) => c.char), onMark: (j) => mids[j] && fireCue(mids[j]) } : null,
+      speak: marks.length
+        ? {
+            marks,
+            onMark: (j) => {
+              if (j < mids.length) return mids[j] && fireCue(mids[j]);
+              const m = gm[j - mids.length];
+              const g = m ? this.holdCue(p, m.si, cues, m) : null;
+              if (g) fireCue(g);
+            },
+          }
+        : null,
       sentence: (si) => {
         if (si === 0 && p.speechStart == null) p.speechStart = now();
         let planned = false;
@@ -428,8 +488,8 @@ export class LiveDirection {
     else if (cue.shot === 'wide') this.framings.wide = cue.framing;
   }
 
-  /** The max-hold guard's cue at sentence `si` of plan `p` (holdCut with the shot on air), or null. */
-  holdCue(p, si, cues) {
+  /** The max-hold guard's cue at sentence `si` (or phrase mark `point` inside it) of plan `p` (holdCut with the shot on air), or null. */
+  holdCue(p, si, cues, point = null) {
     const s = this.scene;
     if (s.stinger || !Number.isFinite(s.shotSince)) return null;
     const ctx = p.ctx;
@@ -460,9 +520,9 @@ export class LiveDirection {
     const np = nextSeg ? this.plans.get(nextSeg) : null;
     const nextOpen = np ? cuesFromPlan(np, { hasImg: true })?.[0] || null : null;
     // how fast the voice really runs against the plan (a slower voice or a stalled page makes every shot longer)
-    const t0 = ctx?.sentences?.[si]?.t0;
+    const t0 = point ? point.t0 : ctx?.sentences?.[si]?.t0;
     const rate = p.speechStart != null && t0 > 1 ? Math.min(1.5, Math.max(0.9, (now() - p.speechStart) / t0)) : 1;
-    return holdCut(p, si, onAir, { programId: s.program?.id, gap, cues, closeFraming, wideFraming, nextOpen, rate });
+    return holdCut(p, si, onAir, { programId: s.program?.id, gap, cues, closeFraming, wideFraming, nextOpen, rate, point });
   }
 
   /** Default cue handler: studio cuts only, MIN_SHOT holds (chats, outros, intros without a montage). */

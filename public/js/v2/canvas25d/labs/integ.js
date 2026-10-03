@@ -34,7 +34,7 @@
 //   window.__lab.hands(name, { slot, framing })  hand pixels seen above the graphics at a gesture's apex
 import { Stage, STUDIO_SHOTS } from '../runtime/stage.js';
 import { planSegment } from '../direction/index.js';
-import { cuesFromPlan, holdCut } from '../runtime/direction.js';
+import { cuesFromPlan, holdCut, guardMarks } from '../runtime/direction.js';
 import { gestureVisibility } from '../runtime/visibility.js';
 import { Graphics } from '../../../graphics/index.js';
 import { paceFor, gapAfter as paceGap, CHANNEL } from '../../../pace.js';
@@ -229,13 +229,14 @@ function buildShow(epIn, presenters, voice) {
         onAir = { ...c, t: at };
         hold = Math.min(2, (c.minLen || 0) - (speechEnd - at));
       }
-      // the max-hold guard on a long studio intro (MONEY MINUTE's wide)
-      for (let si = 1; si < sentAt.length && onAir; si++) {
-        if (introCues.some((c) => c.k > 0 && c.sentence === si) || sentAt[si] < onAir.t) continue;
-        const g = holdCut(plan, si, { shot: onAir.shot, framing: onAir.framing, focus: onAir.focus, held: sentAt[si] - onAir.t }, { programId: ep.program?.id, gap: GAP, cues: introCues, closeFraming: framings.close[seg.anchor] ?? planned[seg.anchor] ?? null, wideFraming: framings.wide, nextOpen: opens[i + 1] });
+      // the max-hold guard on a long studio intro (MONEY MINUTE's wide), at sentence starts and phrase marks
+      for (const ch of guardChecks(plan, introCues, sentAt, timeOfChar)) {
+        if (!onAir || ch.at < onAir.t) continue;
+        if (!ch.point && introCues.some((c) => c.k > 0 && c.sentence === ch.si)) continue;
+        const g = holdCut(plan, ch.si, { shot: onAir.shot, framing: onAir.framing, focus: onAir.focus, held: ch.at - onAir.t }, { programId: ep.program?.id, gap: GAP, cues: introCues, closeFraming: framings.close[seg.anchor] ?? planned[seg.anchor] ?? null, wideFraming: framings.wide, nextOpen: opens[i + 1], point: ch.point });
         if (g) {
-          cut(sentAt[si], g.shot, { ...base, focus: g.focus, framing: g.framing, cue: g.k, guard: true });
-          onAir = { ...g, t: sentAt[si] };
+          cut(ch.at, g.shot, { ...base, focus: g.focus, framing: g.framing, cue: g.k, guard: true });
+          onAir = { ...g, t: ch.at };
           hold = 0;
         }
       }
@@ -273,18 +274,13 @@ function buildShow(epIn, presenters, voice) {
         note(c);
         onAir = { ...c, t: at };
       };
-      for (let si = 0; si < Math.max(1, sentAt.length); si++) {
-        const tS = si === 0 ? segStart : sentAt[si];
-        const next = si + 1 < sentAt.length ? sentAt[si + 1] : Infinity;
-        let planned = false;
-        while (k < timed.length && timed[k].at < next - 1e-9) {
-          if (!timed[k].c.mid && timed[k].c.sentence === si) planned = true;
-          apply(timed[k].c, timed[k].at);
-          k++;
-        }
-        if (planned || si === 0 || !onAir || tS < onAir.t) continue;
-        const g = holdCut(plan, si, { shot: onAir.shot, framing: onAir.framing, focus: onAir.focus, held: tS - onAir.t }, { programId: ep.program?.id, gap: GAP, cues, closeFraming: cues.find((c) => c.shot === 'close' && c.focus === seg.anchor && c.framing && c.framing !== 'ots')?.framing ?? framings.close[seg.anchor] ?? planned[seg.anchor] ?? null, wideFraming: framings.wide, nextOpen: opens[i + 1] });
-        if (g) apply(g, tS);
+      // the guard's checkpoints (LiveDirection: sentence starts without a planned cut, and phrase marks)
+      for (const ch of guardChecks(plan, cues, sentAt, timeOfChar)) {
+        while (k < timed.length && timed[k].at <= ch.at + 1e-9) apply(timed[k].c, timed[k++].at);
+        if (!onAir || ch.at < onAir.t) continue;
+        if (!ch.point && cues.some((c) => c.k > 0 && !c.mid && c.sentence === ch.si)) continue;
+        const g = holdCut(plan, ch.si, { shot: onAir.shot, framing: onAir.framing, focus: onAir.focus, held: ch.at - onAir.t }, { programId: ep.program?.id, gap: GAP, cues, closeFraming: cues.find((c) => c.shot === 'close' && c.focus === seg.anchor && c.framing && c.framing !== 'ots')?.framing ?? framings.close[seg.anchor] ?? planned[seg.anchor] ?? null, wideFraming: framings.wide, nextOpen: opens[i + 1], point: ch.point });
+        if (g) apply(g, ch.at);
       }
       while (k < timed.length) apply(timed[k].c, timed[k++].at);
     }
@@ -297,6 +293,18 @@ function buildShow(epIn, presenters, voice) {
   }
   shots.sort((a, b) => a.t - b.t);
   return { ep, segs, shots, images, duration: t, strapIn: P.strap.inAfterCut, tagWindow: CHANNEL.programTag.window };
+}
+
+/**
+ * The max-hold guard's checkpoints of a segment, in time order (as LiveDirection fires them): every
+ * sentence start after the first, and every phrase mark (guardMarks, minus the planned cuts inside a
+ * sentence) at its voice time. [{ at, si, point }]; point = { char, t0 } for a phrase mark.
+ */
+function guardChecks(plan, cues, sentAt, timeOfChar) {
+  const out = [];
+  for (let si = 1; si < sentAt.length; si++) out.push({ at: sentAt[si], si, point: null });
+  for (const m of guardMarks(plan, (cues || []).filter((c) => c.k > 0 && c.mid).map((c) => c.char))) out.push({ at: timeOfChar(m.char), si: m.si, point: { char: m.char, t0: m.t0 } });
+  return out.sort((a, b) => a.at - b.at);
 }
 
 /** A fake AudioEngine for the Stage: the simulated voice's speechFrame. */

@@ -86,6 +86,65 @@ describe('same event', () => {
     assert.ok(!d.covered.has('br'), 'Brazil’s decision is another story: it can still air');
   });
 
+  // (fix r2) Not a mirror of the last critic's table: for every city, headlines that share the place, a role
+  // word ("mayor", "police", "judge") and a template, and differ in what happened, neither cluster nor lend.
+  const CITIES = ['London', 'Paris', 'Tokyo', 'Berlin', 'Madrid', 'Sydney', 'Lagos', 'Toronto', 'Mumbai', 'Cairo', 'Rome', 'Chicago'];
+  const TEMPLATES = [
+    (p) => ['library', 'bridge', 'hospital', 'school', 'museum'].map((x) => `${p} mayor opens new ${x}`),
+    (p) => ['warehouse', 'hotel', 'school', 'factory'].map((x) => `Fire at ${p} ${x} injures two`),
+    (p) => ['robbery', 'stabbing', 'fraud', 'arson', 'protest'].map((x) => `${p} police arrest man over ${x}`),
+    (p) => ['housing', 'transport', 'parking', 'budget'].map((x) => `${p} council approves new ${x} plan`),
+    (p) => [`${p} court jails former bank chief for fraud`, `${p} court frees bank chief in fraud case`],
+    (p) => [`${p} stocks rise on bank earnings`, `${p} stocks fall on bank earnings`],
+    (p) => ['stadium', 'airport', 'park', 'metro line'].map((x) => `${p} unveils plans for new ${x}`),
+    (p) => [`${p} judge blocks new congestion toll`, `${p} judge sentences crypto founder`, `${p} judge rejects airport appeal`],
+    (p) => [`Earthquake drill held at ${p} schools`, `Earthquake strikes ${p}`],
+    (p) => [`Storm hits ${p}, thousands lose power`, `${p} braces as second storm forms`],
+  ];
+
+  test('generated: per city, headlines that differ in what happened neither cluster nor lend', () => {
+    const d = desk();
+    const bad = [];
+    for (const city of CITIES)
+      for (const make of TEMPLATES) {
+        const list = make(city).map((t) => S(t));
+        for (let i = 0; i < list.length; i++)
+          for (let j = i + 1; j < list.length; j++) {
+            if (d.sameStory(list[i], list[j])) bad.push(`cluster: ${list[i].title} // ${list[j].title}`);
+            if (d.samePictureEvent(list[i], list[j])) bad.push(`lend: ${list[i].title} // ${list[j].title}`);
+          }
+      }
+    assert.deepEqual(bad, []);
+  });
+
+  test('generated: two reports of one physical event in one city cluster and lend', () => {
+    const d = desk();
+    const PAIRS = [
+      (p) => [`Earthquake strikes ${p}`, `Powerful earthquake hits ${p}, buildings damaged`],
+      (p) => [`Wildfire near ${p} forces thousands to evacuate`, `${p} wildfire: firefighters battle flames overnight`],
+      (p) => [`Floods swamp streets in ${p}`, `${p} floods: thousands moved to shelters`],
+      (p) => [`Storm batters ${p} with record winds`, `${p} storm cuts power to 200,000 homes`],
+    ];
+    const missed = [];
+    for (const city of CITIES)
+      for (const make of PAIRS) {
+        const [a, b] = make(city).map((t) => S(t));
+        if (!d.sameStory(a, b) || !d.samePictureEvent(a, b)) missed.push(`${a.title} // ${b.title}`);
+      }
+    assert.deepEqual(missed, []);
+  });
+
+  test('(fix r2) one specific subject in the same city clusters, but only lends with most of the story in common', () => {
+    const d = desk();
+    const lisbon = [S('Lisbon opens a new riverside tram line'), S("Thousands ride Lisbon's new tram on its first day")];
+    assert.equal(d.sameStory(...lisbon), true, 'one event: covering one covers the other');
+    const fires = [S('Fire at London warehouse injures firefighters'), S('London flat fire kills two residents')];
+    assert.equal(d.sameStory(...fires), false);
+    assert.equal(d.samePictureEvent(...fires), false, 'a warehouse fire picture never illustrates a flat fire');
+    const turin = [S('Turin car plant closure threatens 2,400 jobs'), S('Carmaker to close Turin plant, putting 2,400 jobs at risk')];
+    assert.equal(d.samePictureEvent(...turin), true);
+  });
+
   test('helpers: names past the first word, places that agree', () => {
     assert.deepEqual([...namesOf('Hurricane Elena cuts power in Yucatán')], ['elena', 'yucatan']);
     assert.deepEqual([...namesOf('Storm Hits Florida Coast, Thousands Lose Power')], [], 'Title Case says nothing');

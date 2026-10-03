@@ -50,6 +50,15 @@ const JUNK_WORD = /(?:^|[\W_])(?:logos?|placeholders?|fallback|blank|spacer|favi
 const JUNK_STEM = /^(?:default|missing|generic|avatars?|icons?|badges?|buttons?|user|profile)(?:[-_ .]?(?:\d{1,4}(?:x\d{1,4})?|small|large|big|dark|light|white|black|square|sq))*$/i;
 const BAD_FORMAT = /\.(?:svg|svgz|gif|ico|bmp|tiff?)(?:[?#]|$)/i;
 
+/** decodeURIComponent that returns the text as written when an escape is malformed. */
+export function safeDecode(t) {
+  try {
+    return decodeURIComponent(t);
+  } catch {
+    return String(t);
+  }
+}
+
 /** Why a picture URL (and what is known of its size) must not air, or null when it may. */
 export function rejectReason(url, { w = 0, h = 0, local = false } = {}) {
   if (typeof url !== 'string' || !url) return 'empty';
@@ -62,8 +71,9 @@ export function rejectReason(url, { w = 0, h = 0, local = false } = {}) {
   } catch {
     return 'invalid';
   }
-  const file = decodeURIComponent(u.pathname.split('/').pop() || '').toLowerCase();
-  const dir = decodeURIComponent(u.pathname.split('/').slice(-2, -1)[0] || '').toLowerCase();
+  // a malformed escape ("prices-up-100%.jpg") is read as written: one bad URL must never throw out a whole feed
+  const file = safeDecode(u.pathname.split('/').pop() || '').toLowerCase();
+  const dir = safeDecode(u.pathname.split('/').slice(-2, -1)[0] || '').toLowerCase();
   if (BAD_FORMAT.test(u.pathname)) return 'format';
   if (!local && (TRACKER_HOST.test(u.hostname) || TRACKER_FILE.test(u.pathname) || TRACKER_PATH.test(u.pathname))) return 'tracker';
   const stem = file.replace(/\.[a-z0-9]{2,5}$/i, '');
@@ -247,16 +257,22 @@ const text = (v) => (v === undefined || v === null ? '' : typeof v === 'object' 
  * A picture credit as the source writes it ("© Jane Doe/Agency", "Photo: Reuters"), cleaned for a
  * credit line: markup, the copyright sign and "Photo:"-style labels go; a URL or an empty credit is none.
  */
+// What never belongs in an on-air credit: controls, bidi marks and isolates, zero-width marks, emoji and
+// pictographs (the bitmap font draws them as gaps), and "[wave]"-style cue tokens.
+const CREDIT_JUNK = /[\u0000-\u001f\u007f-\u009f\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\ufe0e\ufe0f]|\p{Extended_Pictographic}|[\u{1f1e6}-\u{1f1ff}\u{1f3fb}-\u{1f3ff}]|\[[A-Za-z]{1,8}(?::[A-Za-z_]{1,16})?\]/gu;
+export const CREDIT_MAX = 40;
+
 export function cleanCredit(raw) {
   let t = String(raw ?? '')
     .replace(/<[^>]{0,200}>/g, ' ')
     .replace(/&(?:copy|#169);/gi, '©')
-    .replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]/g, ' ')
+    .replace(CREDIT_JUNK, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   t = t.replace(/^(?:(?:photo(?:graph)?|image|picture|pic|credit|copyright|foto)s?\s*(?:by|credit)?\s*[:/-]?\s*|©\s*|\(c\)\s*)+/i, '').replace(/^\d{4}\s+/, '').trim();
   if (!t || /https?:|www\.|\.(?:com|org|net)\b/i.test(t) || !/\p{L}/u.test(t)) return null;
-  if (t.length > 40) t = t.slice(0, 41).replace(/\s+\S*$/, '').replace(/[\s,;/|-]+$/, '');
+  // at most CREDIT_MAX characters, cut at a word
+  if (t.length > CREDIT_MAX) t = t.slice(0, CREDIT_MAX + 1).replace(/\s+\S*$/, '').slice(0, CREDIT_MAX).replace(/[\s,;/|-]+$/, '');
   return t || null;
 }
 
@@ -501,9 +517,10 @@ export function extractImage(item) {
 
 // ---------------------------------------------------------------- picture bytes
 
-/** Width and height from the first bytes of a PNG, JPEG, GIF or WebP; null when unknown. */
+/** Width and height from the first bytes of a PNG, JPEG, GIF, WebP or AVIF; null when unknown. */
 export function imageSize(buf) {
   if (!buf || buf.length < 24) return null;
+  if (buf.toString('latin1', 4, 8) === 'ftyp' && /^avi[fs]$/.test(buf.toString('latin1', 8, 12))) return avifSize(buf);
   if (buf[0] === 0x89 && buf.toString('latin1', 1, 4) === 'PNG') return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
   if (buf.toString('latin1', 0, 4) === 'GIF8') return { w: buf.readUInt16LE(6), h: buf.readUInt16LE(8) };
   if (buf.toString('latin1', 0, 4) === 'RIFF' && buf.toString('latin1', 8, 12) === 'WEBP') {
@@ -535,4 +552,20 @@ export function imageSize(buf) {
     }
   }
   return null;
+}
+
+/**
+ * The size an AVIF declares: its largest 'ispe' (image spatial extents) property, read from the meta box
+ * near the start of the file (box: size, 'ispe', version and flags, width, height). Null when none.
+ */
+function avifSize(buf) {
+  let best = null;
+  const end = Math.min(buf.length - 12, 65536);
+  for (let o = 4; o < end; o++) {
+    if (buf[o] !== 0x69 || buf.toString('latin1', o, o + 4) !== 'ispe') continue;
+    const w = buf.readUInt32BE(o + 8);
+    const h = buf.readUInt32BE(o + 12);
+    if (w && h && (!best || w * h > best.w * best.h)) best = { w, h };
+  }
+  return best;
 }

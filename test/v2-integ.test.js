@@ -12,7 +12,7 @@ import { CueClock, prunePerf, TAIL, HOLD_MAX, AFTER_CUT } from '../public/js/v2/
 import { FallbackPolicy, PerfWatchdog, BACKOFF } from '../public/js/v2/canvas25d/runtime/watchdog.js';
 import { StageHost } from '../public/js/v2/canvas25d/runtime/host.js';
 import { Stage, castSeats, episodeKey, defaultFraming } from '../public/js/v2/canvas25d/runtime/stage.js';
-import { cuesFromPlan, legacyShot, LiveDirection, holdCut, maxHold } from '../public/js/v2/canvas25d/runtime/direction.js';
+import { cuesFromPlan, legacyShot, LiveDirection, holdCut, maxHold, guardMarks } from '../public/js/v2/canvas25d/runtime/direction.js';
 import { paceFor, gapAfter as paceGap } from '../public/js/pace.js';
 import { LOOKS } from '../public/js/v2/canvas25d/cast/index.js';
 
@@ -769,9 +769,99 @@ test('host: the watchdog verdict reaches the Stage (detail level) and the fallba
   for (let k = 0; k < 31 * FPS; k++) host.frame(null, (t += DT), scene);
   assert.equal(host.stage.lod, 2);
   cost = 20;
-  for (let k = 0; k < 31 * FPS && host.stage; k++) host.frame(null, (t += DT), scene);
-  assert.equal(host.stage, null, 'fell back');
+  for (let k = 0; k < 31 * FPS && !host.pendingDrop; k++) host.frame(null, (t += DT), scene);
+  assert.ok(host.pendingDrop, 'the Stage itself is over budget: a fallback is pending');
+  assert.ok(host.stage, 'never mid-programme: the Stage stays on air');
+  for (let k = 0; k < 60 * FPS; k++) assert.equal(host.frame(null, (t += DT), scene), true);
+  assert.equal(host.stage.lod, 2, 'at its lowest detail level');
+  scene.shot = 'map';
+  host.frame(null, (t += DT), scene);
+  assert.ok(host.stage, 'a map inside the programme is no boundary (the studio comes back after it)');
+  scene.shot = 'endcard';
+  host.frame(null, (t += DT), scene);
+  assert.equal(host.stage, null, 'fell back under the end card');
   assert.equal(host.stats().drops, 1);
+});
+
+test('host: a perf fallback swaps only at a boundary, and the old renderer airs a whole episode before the retry', () => {
+  let cost = 20;
+  const { host, made, logs } = hostWith(() => true);
+  host.now = (() => {
+    let c = 0;
+    let odd = false;
+    return () => ((odd = !odd) ? c : (c += cost));
+  })();
+  const scene = { episode: { id: 'e0' }, shot: 'close' };
+  let t = 0;
+  for (let k = 0; k < 200 * FPS && !host.pendingDrop; k++) host.frame(null, (t += DT), scene);
+  assert.ok(host.pendingDrop, 'pending after level 1, level 2 and a third window over budget');
+  assert.ok(logs.some((m) => /fallback pending/.test(m)), logs.join('\n'));
+  // two studio frames in the middle of the chat: never a swap between them
+  scene.focus = 'B';
+  assert.equal(host.frame(null, (t += DT), scene), true);
+  assert.ok(host.stage);
+  // the next episode's open: the swap happens there, and that episode is the old renderer's whole
+  scene.episode = { id: 'e1' };
+  scene.shot = 'open';
+  assert.equal(host.frame(null, (t += DT), scene), false);
+  assert.equal(host.stage, null);
+  scene.shot = 'close';
+  for (let k = 0; k < 10; k++) assert.equal(host.frame(null, (t += DT), scene), false, 'old renderer for e1');
+  scene.episode = { id: 'e2' };
+  host.frame(null, (t += DT), scene);
+  assert.ok(host.stage, 'retried at the next boundary (backoff 1 after a whole episode)');
+  assert.equal(made.length, 2);
+  // a swap under the end card: the rest of that episode (end card, break) does not count
+  cost = 20;
+  for (let k = 0; k < 200 * FPS && !host.pendingDrop; k++) host.frame(null, (t += DT), scene);
+  assert.ok(host.pendingDrop);
+  scene.shot = 'endcard';
+  host.frame(null, (t += DT), scene);
+  assert.equal(host.stage, null, 'swapped under the end card');
+  scene.episode = { id: 'e3' };
+  scene.shot = 'open';
+  host.frame(null, (t += DT), scene);
+  assert.equal(host.stage, null, 'e3 is aired whole by the old renderer (backoff 2 now)');
+  scene.episode = { id: 'e4' };
+  host.frame(null, (t += DT), scene);
+  assert.equal(host.stage, null, 'backoff 2: still waiting');
+  scene.episode = { id: 'e5' };
+  host.frame(null, (t += DT), scene);
+  assert.ok(host.stage, 'retried');
+});
+
+test('watchdog: preemption spikes or a starved page never ask for the fallback (the old renderer would not help)', () => {
+  // critic r2 (load 27-70 on 4 cores): p50 3.7-4.2 ms, p95 pinned in the 40 ms overflow bin, frame interval p95 90 ms
+  const logs = [];
+  const w = new PerfWatchdog({ log: (m) => logs.push(m) });
+  let t = 0;
+  for (let k = 0; k < 400 * FPS; k++) {
+    t += DT;
+    w.interval(k % 4 === 0 ? 95 : 18, t);
+    assert.equal(w.sample(t, k % 8 === 0 ? 45 : 4), null, 'spikes: no fallback');
+  }
+  assert.equal(w.level, 2, 'the detail still steps down (cheap, invisible)');
+  assert.ok(w.held >= 1 && logs.some((m) => /staying on v2/.test(m)), logs.join('\n'));
+  assert.ok(logs.filter((m) => /staying on v2/.test(m)).length <= 4, 'logged at most every 120 s');
+  // a page starved by something else: the Stage is slow-ish (p50 12 ms) but only a small share of a 90 ms frame
+  const w2 = new PerfWatchdog({ log: () => {} });
+  t = 0;
+  for (let k = 0; k < 300 * FPS; k++) {
+    t += DT;
+    w2.interval(90, t);
+    assert.equal(w2.sample(t, k % 5 === 0 ? 30 : 12), null, 'starved page: no fallback');
+  }
+  // the Stage itself too slow (p50 20 ms of a 33 ms frame): fallback
+  const w3 = new PerfWatchdog({ log: () => {} });
+  t = 0;
+  let verdict = null;
+  for (let k = 0; k < 300 * FPS && !verdict; k++) {
+    t += DT;
+    w3.interval(33, t);
+    verdict = w3.sample(t, 20);
+  }
+  assert.equal(verdict, 'fallback');
+  assert.equal(w3.level, 2, 'the level stays at its lowest while the swap waits for a boundary');
 });
 
 // ---------------------------------------------------------------------------
@@ -1158,6 +1248,30 @@ test('direction: the max-hold guard returns to the speaker\'s studio shot before
   assert.equal(holdCut(dry, last, longMap, { programId: 'world-now', cues: [] }), null);
 });
 
+/**
+ * The runtime's guard on planned time (LiveDirection.begin0: planned cues at sentence starts and speech marks,
+ * holdCut at sentence starts without a planned cut and at phrase marks). Returns the shots [{ shot, framing, focus, t }].
+ */
+function simulateGuard(p, cues, { programId, gap, anchor, closeFraming = null, wideFraming = null }) {
+  const S = paceFor(programId).shots;
+  const ss = p.ctx.sentences;
+  let onAir = { ...(cues[0] || { shot: 'close', framing: null, focus: anchor }), t: 0 };
+  const shots = [onAir];
+  const checks = [];
+  for (let si = 1; si < ss.length; si++) checks.push({ t: ss[si].t0, si, point: null });
+  const mids = cues.filter((c) => c.k > 0 && c.mid);
+  for (const c of mids) checks.push({ t: c.at, si: c.sentence, cue: c });
+  for (const m of guardMarks(p, mids.map((c) => c.char))) checks.push({ t: m.t0, si: m.si, point: { char: m.char, t0: m.t0 } });
+  checks.sort((a, b) => a.t - b.t);
+  for (const ch of checks) {
+    const planned = ch.cue || (!ch.point && cues.find((c) => c.k > 0 && c.sentence === ch.si && !c.mid));
+    const close = closeFraming ?? cues.find((c) => c.shot === 'close' && c.focus === anchor && c.framing && c.framing !== 'ots')?.framing ?? null;
+    const next = planned || holdCut(p, ch.si, { shot: onAir.shot, framing: onAir.framing, focus: onAir.focus, held: ch.t - onAir.t }, { programId, gap, cues, closeFraming: close, wideFraming, point: ch.point });
+    if (next && ch.t - onAir.t >= S.cooldown - 1e-6) shots.push((onAir = { ...next, t: ch.t }));
+  }
+  return shots;
+}
+
 test('direction: on the five fixture episodes the guard leaves no story beat past its pace maximum where a sentence start could split it', () => {
   for (const id of PROGRAMMES) {
     const ep = episodeOf(id);
@@ -1169,25 +1283,83 @@ test('direction: on the five fixture episodes the guard leaves no story beat pas
       const p = { ...planSegment(ep, i, { gapAfter: (j) => paceGap(ep, j).gap }), index: i };
       const cues = cuesFromPlan(p, { hasImg: !!seg.hasImage }) || [];
       const ss = p.ctx.sentences;
-      let onAir = { ...(cues[0] || { shot: 'close', framing: null, focus: seg.anchor }), t: 0 };
-      const shots = [onAir];
-      for (let si = 1; si < ss.length; si++) {
-        const t = ss[si].t0;
-        const planned = cues.find((c) => c.k > 0 && c.sentence === si && !c.mid);
-        const next = planned || holdCut(p, si, { shot: onAir.shot, framing: onAir.framing, focus: onAir.focus, held: t - onAir.t }, { programId: id, gap, cues });
-        if (next && t - onAir.t >= S.cooldown - 1e-6) shots.push((onAir = { ...next, t }));
-      }
+      const shots = simulateGuard(p, cues, { programId: id, gap, anchor: seg.anchor });
+      const marks = guardMarks(p, cues.filter((c) => c.k > 0 && c.mid).map((c) => c.char));
       const end = p.ctx.duration + gap;
+      const dry = p.ctx.dryLine;
       for (let k = 0; k < shots.length; k++) {
         const a = shots[k];
         const len = (shots[k + 1]?.t ?? end) - a.t;
         if (len <= maxHold(a.shot, id) + 0.5 || !['map', 'full', 'fact', 'close', 'wide'].includes(a.shot)) continue;
-        // over its maximum: no sentence start inside it could have taken a cut that holds the cooldown both sides
-        const splittable = ss.some((s) => s.t0 - a.t >= S.cooldown && (shots[k + 1]?.t ?? end) - s.t0 >= S.cooldown && !(p.ctx.dryLine && s.t0 >= p.ctx.dryLine.t0 - 0.05 && s.t0 <= p.ctx.dryLine.t1 + 1.2) && !(a.shot === 'close' && id === 'news-60'));
+        // over its maximum: no sentence start (nor phrase mark) inside it could have taken a cut that holds the cooldown both sides
+        const room = (t0) => t0 - a.t >= S.cooldown && (shots[k + 1]?.t ?? end) - t0 >= S.cooldown && !(a.shot === 'close' && id === 'news-60');
+        const splittable = ss.some((s) => room(s.t0) && !(dry && s.t0 >= dry.t0 - 0.05 && s.t0 <= dry.t1 + 1.2)) || marks.some((m) => room(m.t0) && !(dry && m.t0 >= dry.t0 - 1.5 && m.t0 <= dry.t1 + 1.2));
         assert.ok(!splittable, `${id} seg ${i}: ${a.shot} holds ${len.toFixed(1)} s (max ${maxHold(a.shot, id)})`);
       }
     }
   }
+});
+
+test('direction: a long MONEY MINUTE intro leaves its wide before the studio maximum and greets on the wide again', () => {
+  // critic r2: an 18.7-22 s intro of three teasers + the greeting held one solo WIDE (Penny ~40 px tall)
+  const ep = {
+    id: 'mm-long-intro',
+    program: { id: 'money-minute', theme: 'money' },
+    cast: { A: 'penny' },
+    rundown: [{ storyId: 's1' }, { storyId: 's2' }, { storyId: 's3' }],
+    segments: [
+      { type: 'intro', anchor: 'A', emotion: 'neutral', text: 'Chocolate makers warn of higher prices as cocoa stays expensive. Also coming up: electric car sales overtake diesel in Europe for the first time. Later in the programme: UK inflation rises unexpectedly to 3.8 percent. This is MONEY MINUTE. I\'m Penny Sterling.', teases: ['s1', 's2', 's3', null, null], cues: [] },
+      { type: 'story', anchor: 'A', emotion: 'neutral', storyId: 's1', text: 'Several chocolate makers say they will raise prices again because cocoa is still expensive. Shoppers can expect smaller bars too.', cues: [] },
+    ],
+  };
+  const gap = paceGap(ep, 0).gap;
+  const p = { ...planSegment(ep, 0, { gapAfter: (j) => paceGap(ep, j).gap }), index: 0 };
+  const cues = cuesFromPlan(p, { rundown: ep.rundown }) || [];
+  const S = paceFor('money-minute').shots;
+  const shots = simulateGuard(p, cues, { programId: 'money-minute', gap, anchor: 'A', closeFraming: 'mcu-r', wideFraming: 'wide' });
+  const end = p.ctx.duration + gap;
+  const lens = shots.map((a, k) => (shots[k + 1]?.t ?? end) - a.t);
+  assert.ok(p.ctx.duration > S.studioMax, `the intro is long (${p.ctx.duration.toFixed(1)} s)`);
+  lens.forEach((len, k) => {
+    assert.ok(len <= S.studioMax + 0.01, `shot ${k} (${shots[k].shot}) holds ${len.toFixed(1)} s, max ${S.studioMax}`);
+    assert.ok(len >= S.cooldown - 0.01, `shot ${k} holds the cooldown (${len.toFixed(1)} s)`);
+  });
+  assert.equal(shots[0].shot, 'wide', 'the cold open is on the wide (money-minute.md)');
+  const greet = p.ctx.sentences.findIndex((x) => /^This is MONEY MINUTE/.test(x.text));
+  const onAt = (t) => shots.filter((a) => a.t <= t + 1e-6).pop();
+  assert.equal(onAt(p.ctx.sentences[greet].t0 + 0.1).shot, 'wide', 'the greeting is on the wide');
+  assert.ok(shots.some((a) => a.shot === 'close' && a.framing === 'mcu-r'), 'a teaser on the MCU-R');
+  // a short intro keeps its one wide (the bible's), and a planned greeting cue is never doubled
+  const short = { ...ep, segments: [{ ...ep.segments[0], text: 'Cocoa stays expensive. This is MONEY MINUTE. I\'m Penny Sterling.', teases: ['s1', null, null] }, ep.segments[1]] };
+  const ps = { ...planSegment(short, 0, {}), index: 0 };
+  const sh = simulateGuard(ps, cuesFromPlan(ps, { rundown: ep.rundown }) || [], { programId: 'money-minute', gap, anchor: 'A', closeFraming: 'mcu-r', wideFraming: 'wide' });
+  assert.deepEqual(sh.map((a) => a.shot), ['wide']);
+});
+
+test('direction: with no sentence start to split it, a long single cuts at a phrase mark, never within 1.5 s before the dry line', () => {
+  // critic r2: TECH BYTES "And finally" single held 14 s (max 12): its only sentence start is the dry line
+  const ep = {
+    id: 'tb-finally',
+    program: { id: 'tech-bytes', theme: 'tech' },
+    cast: { A: 'max', B: 'ada' },
+    segments: [
+      { type: 'story', anchor: 'B', emotion: 'neutral', storyId: 'f1', text: 'And finally: Astronomers using a telescope in Chile have detected water vapour in the atmosphere of a planet 120 light years away, Starfield Journal reports. The planet is about twice the size of Earth.', cues: [] },
+      { type: 'chat', anchor: 'A', emotion: 'happy', text: 'Somewhere, a researcher is very pleased with themselves. Rightly.', cues: [] },
+    ],
+  };
+  const gap = paceGap(ep, 0).gap;
+  const p = { ...planSegment(ep, 0, { gapAfter: (j) => paceGap(ep, j).gap }), index: 0 };
+  const cues = cuesFromPlan(p, { hasImg: false }) || []; // no picture: the planner's over-the-shoulder split is dropped
+  const S = paceFor('tech-bytes').shots;
+  const marks = guardMarks(p, []);
+  assert.ok(marks.length >= 1, 'the commas give phrase marks');
+  const shots = simulateGuard(p, cues, { programId: 'tech-bytes', gap, anchor: 'B', closeFraming: 'single', wideFraming: 'wide' });
+  const end = p.ctx.duration + gap;
+  assert.ok(shots.length >= 2, `split: ${JSON.stringify(shots.map((a) => [a.shot, a.t.toFixed(2)]))}`);
+  shots.forEach((a, k) => assert.ok((shots[k + 1]?.t ?? end) - a.t <= maxHold(a.shot, 'tech-bytes') + 0.01 && (shots[k + 1]?.t ?? end) - a.t >= S.cooldown - 0.01, `shot ${k} ${a.shot} at ${a.t.toFixed(2)}`));
+  const dry = p.ctx.dryLine;
+  if (dry) for (const a of shots.slice(1)) assert.ok(a.t <= dry.t0 - 1.5 || a.t >= dry.t1 + 1.2, `no cut near the dry line (${a.t.toFixed(2)} vs ${dry.t0.toFixed(2)})`);
+  assert.equal(shots[1].mid, true, 'a cut inside the sentence (speech mark)');
 });
 
 const splitCount = (text) => (String(text).match(/[.!?](\s|$)/g) || []).length;
@@ -1196,18 +1368,20 @@ test('director: with v2 a new framing of the same shot restarts the shot clock; 
   const { Director } = await import('../public/js/director.js');
   const channel = { name: 'T', slogan: '', presenters: {} };
   const old = new Director({ audio: {}, channel });
+  // (a sentinel in the past, never `5`: the director's clock is performance.now(), under 5 s in a fresh process)
   old.setShot('close', { focus: 'A', storyId: 's1' });
-  old.scene.shotSince = 5;
+  old.scene.shotSince = -100;
   old.setShot('close', { focus: 'A', storyId: 's1', framing: 'ots' });
-  assert.equal(old.scene.shotSince, 5, 'v2 off: exactly as before (framing is not looked at)');
+  assert.equal(old.scene.shotSince, -100, 'v2 off: exactly as before (framing is not looked at)');
   const d = new Director({ audio: {}, channel });
   d.v2 = { episode() {} }; // what LiveDirection looks like to setShot
   d.setShot('close', { focus: 'A', storyId: 's1', framing: 'single' });
-  d.scene.shotSince = 5;
+  d.scene.shotSince = -100;
   d.setShot('close', { focus: 'A', storyId: 's1', framing: 'single' });
-  assert.equal(d.scene.shotSince, 5, 'same framing: no cut');
+  assert.equal(d.scene.shotSince, -100, 'same framing: no cut');
   d.setShot('close', { focus: 'A', storyId: 's1', framing: 'ots' });
-  assert.ok(d.scene.shotSince > 5, 'single → ots is a cut: the shot clock restarts');
+  assert.notEqual(d.scene.shotSince, -100, 'single → ots is a cut: the shot clock restarts');
+  assert.ok(d.scene.shotSince >= 0);
   const since = d.scene.shotSince;
   d.setShot('close', { focus: 'A', storyId: 's1' });
   assert.equal(d.scene.shotSince, since, 'a call without a framing does not count as a reframe');
@@ -1335,8 +1509,9 @@ test('watchdog: ?perf=1 reports the renderer frame interval p95 too (report only
   assert.match(line, /frame interval p95 50 ms/);
   assert.equal(w.level, 0, 'the interval never changes the detail level');
   const quiet = new PerfWatchdog({ log: () => {}, info: () => {}, report: false });
-  quiet.interval(30);
-  assert.equal(quiet.ivCount, 0, 'nothing kept without ?perf=1');
+  quiet.interval(30, 1);
+  assert.equal(quiet.ivCount, 0, 'no report histogram without ?perf=1 (the starved-page ring still keeps it)');
+  assert.equal(quiet.ivN, 1);
 });
 
 test('Stage: warmSets bakes the sets in short idle slices until SET reports done (never one long block)', async () => {

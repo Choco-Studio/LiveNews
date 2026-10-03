@@ -6,6 +6,59 @@ well: transitions, cooldowns... entertaining, polished programmes of up to 10 mi
 This document is the PACE stream's record: how the channel's rhythm is measured, the targets (one table,
 `public/js/pace.js`), the numbers before and after, what still limits programme length, and what wave 3 should reuse.
 
+## Fix round 1 (critics r1, 03:30-04:40): what changed, measured again
+
+The analyser is stricter now, so these tables show more red than the first round's: every shot is checked against BOTH
+ends of its window (`shotMax`), the median tolerance is +0.5 s (was +1.5 s), and it adds variety (map share, single share,
+map runs, the same beat order story after story, what And finally ends on), the gesture floor and vocabulary, listener nods
+per minute, live-mix silences over 1.0 s, the break load and the browser-voice fallback share. Length is red when it is off
+target, in the analyser and in the lab.
+
+What changed on air:
+- **Default path, the blocker.** The headline montage follows the voice. There is one frame per teased line, cut on that
+  line's first word and held at least 3.8 s. NEWS IN 60's greeting-only intro ("This is NEWS IN 60. I'm Sam Night.") gets
+  no montage: the wide, then the first story. Before this fix it aired 9.0 s of silent headline frames. Measured now: 0.51-0.55 s
+  between the intro and the first story. A fake-clock test (`tools/pace/fakeplay.mjs`) checks every fixture episode.
+- **Default path, cut rules.** The opening cut waits for the cooldown when a studio shot is on air. A later beat is taken only
+  when it can air the minimum shot plus a 1 s margin before the next segment, and beats are capped at one per cooldown of the
+  estimated air. "Time left" is estimated from the moment of the cut. The rules from pace.js now apply: `isRepeat` (no repeat
+  of the wide or the same close), a fact card gives way after `factMax`, and any shot past its maximum gives way to a relief.
+  A relief is never a wide that the following chats would carry on. The round-up keeps at most `mapRun` maps in a row. And
+  finally never ends on a map. On the 27 fixture episodes (fake clock), no shot is under 4 s. Two shots run over their
+  maximum where nothing can split them.
+- **v2 planner (shots.js).** Maps, pictures and figure cards are never planned past `shotMax`. They hand back to the single
+  at a sentence start, else on a word that opens a phrase (a `mid` cue). Round-ups break after two maps (the item's picture,
+  else its reader). And finally ends on its picture or presenter. A two-sentence single over `singleSoft` splits on a comma.
+  The last headline frame holds 3.8 s: the greeting starts under it and the wide cuts on its first phrase word. A COSMOS chat
+  run under 4 s gets the story's last phrase on the wide. The MONEY MINUTE intro over 12 s reads its teasers on the MCU-R
+  and its greeting on the wide. The private `factHold` is gone. The runtime guard's card maximum is `factMax`.
+- **v2 runtime.** The NEWS IN 60 intro no longer waits for the wide's 4 s. The story's voice starts after the 0.6 s pause,
+  and its opening cut waits for the cooldown. The sign-off cue starts under the hold, 0.15 s after the last word.
+- **Editorial (length and beat keys only).** "Around the world in 30 seconds" is said only when the run is about that long. The
+  NEWS IN 60 target is back to 55-70 s, and the writer prompt says it in seconds. WORLD NOW's style text says "five to seven
+  main stories", which matches `stories: 14`.
+
+v2 path, real offline channel (`trace.mjs --v2 --count 5`, estimated voices, 04:01):
+
+| programme | length (target) | shots min / median | cuts/min (max) | over max | map share / map run / same order run | after intro | first word | montage frames | And finally ends on |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| NEWS IN 60 | 69 s (55-70) ✓ | 4.0 / 6.2 ✓ | 7.8 ✓ | map 9.6 > 8 ✗ | 41% / 3 / 1 (bible: one map, pin pans) | 0.52 s | 0.41 s | none | — |
+| WORLD NOW | 250 s (480-600) ✗ | 4.5 / 6.8 ✓ | 8.1 ✗ | 0 ✓ | 31% / 2 / 3 ✗ | 0.64 s | 0.61 s | 4.7 / 3.9 / 3.9 | single |
+| TECH BYTES | 180 s (360-480) ✗ | 4.5 / 6.8 ✓ | 8.0 ✓ | wide 13.5 > 12 ✗ (chat + sign-off) | 0% / 0 / 1 ✓ | 0.72 s | 0.60 s | 4.2 / 4.2 | picture |
+| NEWS IN 60 | 74 s (55-70) ✗ | 4.0 / 6.0 ✓ | 9.0 ✓ | 0 ✓ | 0% / 0 / 1 ✓ | 0.51 s | 0.41 s | none | — |
+| COSMOS DESK | 197 s (360-480) ✗ | 4.7 / 6.9 ✓ | 7.3 ✗ | picture 12.5 > 10 ✗ | 11% / 1 / 1 ✓ | 0.78 s | 0.80 s | none | picture |
+
+The first round's critic measured NEWS IN 60's v2 pause after the intro at 1.57 s; it is now 0.51 s. WORLD NOW's third
+headline frame was 2.9 s; it is now 3.9 s. The WORLD NOW round-up was 40 s of maps; it now runs at most two map items in
+a row, with a picture between them.
+
+<!-- DEFAULT-PATH:BEGIN -->
+<!-- DEFAULT-PATH:END -->
+
+Break load, measured: 6 commercial breaks in 1144 s, ads 26 % of air. Programme air between breaks was 69-250 s, against
+the new targets of 15 % and 420 s. `CHANNEL.breaks.minProgrammeBetween` / `maxAdShare` are the contract; server/station.js
+belongs to editorial-2, so this is requested in CONTRACTS.
+
 <!-- TABLES:BEGIN -->
 ## 0. Before / after at a glance (recorded, v2 path, server Kokoro voices)
 
@@ -133,8 +186,10 @@ hold, intended).
   went from 8.1 to 7.7 per minute in WORLD NOW and the shot median from 5.8 to 6.8 s.
 - **The open breathes.** The first word now comes 0.5 s after the cut from the open (COSMOS 0.7, NEWS IN 60 0.3), not 0.1 s.
 - **Graphics are readable.** The strap enters 1.0 s after the cut; ticker items hold at least 6 s (3 words 6.45 s, 7 words
-  8.2 s, 11 words 10 s), captions page at most 15 characters per second and never shorter than 1.4 s, a long strap pages
-  every 5.5 s.
+  8.2 s, 11 words 10 s; `tickerHold`), a long strap pages every 5.5 s. Captions page with the voice and target 15 characters
+  per second, never shorter than 1.4 s on screen: measured on the Kokoro AFTER recording, 6-9 pages per programme ran over
+  17 cps (a fast-spoken sentence) and one NEWS IN 60 page was cut at 0.9 s on the director's clock (a one-word sentence), so
+  the 15 cps is a target the captions do not enforce yet (graphics, section 7).
 - **Longer programmes.** WORLD NOW airs 14 stories (before: 8), TECH BYTES 10 (before: 4), COSMOS 8 (3), MONEY MINUTE 7 (3),
   each with the editorial arc of its bible (section 6). How long that makes them is limited by how much the sources say
   (section 6.2).
@@ -278,6 +333,11 @@ the story now cuts straight from the montage's last frame (owner 20:40, item 2).
 
 - Shot grammar varies per programme (bibles) and per story (the planner picks from the story's data); identical framings
   twice in a row are never planned (`isRepeat`, tested on the fixtures) and were measured 0 on air.
+- Repetition limits on air (fix round 1): round-ups break the map run after two items (`mapRun`; the item's picture or its
+  reader), And finally never ends on a map, and maps / pictures / cards never run past their window. The analyser measures map
+  share, single share, map runs and "same beat order story after story" (`patternRun`); WORLD NOW still repeats single → map
+  → single for three stories in a row on both paths (requested from w2-camera: rotate the order, open ~1 hand-over in 3 on
+  the two-shot, `tossEvery`).
 - The pause rhythm varies with the editorial structure (story, hand-over, chat, block, "And finally") and a seeded ±8 %.
 - A mid-programme "Still to come" (WORLD NOW, TECH BYTES, COSMOS) signposts the second half; the block pause around it
   and the strap clearing make the boundary audible and visible.
@@ -326,6 +386,22 @@ Two caps were found:
    Editorial-2 answered both: the desk now fills past the per-outlet cap when a section has few outlets, and 24 fixture
    summaries got 1-2 more factual sentences (the "after" column above includes both). The rest is for wave 3.
 
+**Fix round 1, honestly.** The critic is right that the extra minutes came from more stories of the same kind. WORLD NOW airs
+14 stories in about 4 minutes. That is a new story every ~18 s, or ~21 s without the round-up. Two things were tried inside
+the current architecture:
+- The analysis exchange (the partner adds the detail a story kept back) now qualifies on 3-sentence summaries, the lead
+  included. It adds presenter interplay, not minutes: the sentence moves from the story to the exchange.
+- Depth blocks from data the server already has. Measured with `simulate.mjs` on the offline desk, they cannot reach 6
+  minutes without padding. The summaries are 2-3 sentences (world 9/21 have 3, tech 10/15 have only 2). Most WORLD NOW main
+  stories in the offline slate are grave, and editorial policy (rightly) puts no chat next to grave news. So the exchanges
+  rarely air, and a "number explained" block would have to invent context.
+
+What would honestly reach 6-10 minutes: article text, which the desk already fetches for pictures (first 4-6 paragraphs);
+wire copy; or wave 3's research step and rolling blocks. Until then the targets stay at 6-10 minutes, and the analyser and
+the lab show the shortfall in red (WORLD NOW ~250 s = 52 % of 480 s, TECH BYTES ~180 s = 50 %, COSMOS ~197 s = 55 %).
+NEWS IN 60 is back to its bible's 55-70 s target: 69-74 s on air, so it is flagged when long. The round-up opener no longer
+promises "30 seconds" for a ~40 s run.
+
 ### 6.3 Production ahead of air
 
 The write stage is instant offline (mock: 0.1-1 s per episode; `simulate.mjs` prints it). The voice stage is the budget:
@@ -348,18 +424,26 @@ budget must become per block: synthesise block N+1 while block N airs.
 
 ## 7. Still open (other teams' files unless noted)
 
-- **Gestures** (w2-hands, adopting `gestureBudget()` now): on air TECH BYTES still had 6.7-7.7 marked gestures per minute
-  of talking against 6 and up to 4 immediate repeats; WORLD NOW 4.6/min (within 5) with one repeat.
+- **Gestures** (w2-hands adopted `gestureBudget()`; fix round 1 requested `floor`, `vocabWindow`, `startShareMax`): the
+  first round traded too many for too few: WORLD NOW lola 1.6 marked gestures per minute of talking (floor 2.5), every
+  WORLD NOW arm gesture raise_hand, listener nods 0-0.7 per minute (floor 1). The analyser now flags TOO FEW / SAME NAME
+  AGAIN / AT SEGMENT START per presenter.
+- **Break cadence** (editorial-2, server/station.js): a break after every programme (26 % ads); `CHANNEL.breaks` asks for
+  ≥ 420 s of programme between commercial breaks and ≤ 15 % ads.
+- **Voice budget for long episodes** (editorial-2 / voices): the fixed 90 s budget; requested: scale it with `estimateAir`
+  and synthesise in air order (the analyser reports the browser-voice fallback share).
+- **Programme beds** (music / audio): nothing plays on `audio.musicBus` on the live page, so pauses between light items are
+  digital silence. world-now.md keeps silence under the news on purpose (greeting, lead, main stories, number); beds belong
+  to the round-up, And finally, the chats and the sign-off. Done here: the sign-off cue now sounds under the hold.
 - **Music** (music / showcase): 7-14 cue calls per minute; the recorder now reports bed changes against `music` (BEFORE WORLD
   NOW 2.5 changes/min, shortest bed 11 s against 25): the bed engine's cue sheet should change beds only at block boundaries.
 - **Length** (editorial-2 / wave 3): source depth (section 6.2); WORLD NOW ~4 min, TECH BYTES ~3 min offline today.
-- **TECH BYTES singles** (w2-camera): two-sentence stories without a map or photo hold one single for 10-12 s (median shot
-  7.8 s against 4.5-6.5): `splitLongSingles` needs a sentence start ≥ 4.5 s from both ends, which short second sentences
-  rarely give. Lowering `singleSoft` alone changed nothing (tried 8.5 s, reverted).
+- **TECH BYTES singles**: fixed in fix round 1. `splitLongSingles` now also splits on a comma, with both parts ≥ 4.5 s
+  (TECH BYTES and WORLD NOW only; COSMOS keeps its still singles). The TECH BYTES median shot is 6.8 s on the v2 trace, was 7.8 s.
 - **Captions**: a one-word sentence ("Respectfully.") pages for 0.9 s on the director's clock (graphics hold it 1.4 s on
   screen by `CHANNEL.captions.minPage`).
-- **Default path only** (director.js, pace): a story's last beat delayed by the 4 s cooldown can air for 2-2.5 s before the
-  next segment (once per programme in the trace).
+- **Default path**: fixed in fix round 1. A late beat needs the minimum shot plus a 1 s margin. The fake-clock test plays
+  every fixture episode: no shot under 4 s.
 - **Production under load**: synthesis ran at 0.08-0.59x real time on this shared machine; the fallback voice covers it.
 
 ## 8. For wave 3 (20-30 minute rolling programmes)

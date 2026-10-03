@@ -223,8 +223,24 @@ describe('normalizeBulletin: story segments', () => {
       makeStory('s5', { title: 'Election night – live' }),
     ];
     const b = normalize(stories.map((s) => storySeg(s.id, { breaking: true })), { stories });
-    const flags = Object.fromEntries(b.segments.filter((s) => s.type === 'story').map((s) => [s.storyId, s.breaking]));
+    // (fix r2) only the lead carries the full-screen alert; a second breaking story keeps it on its strap only
+    const flags = Object.fromEntries(b.segments.filter((s) => s.type === 'story').map((s) => [s.storyId, s.breaking || !!s.breakingNote]));
     assert.deepEqual(flags, { s1: false, s2: true, s3: true, s4: false, s5: false });
+    assert.equal(b.segments.filter((s) => s.breaking).length, 1);
+  });
+
+  test('(fix r2) a graver story leads over a breaking one of less weight, which plays second without the alert', () => {
+    const stories = [
+      makeStory('canal', { title: 'BREAKING: Panama Canal reopens after a day-long closure', summary: 'The Panama Canal has reopened to ships after fog closed it for a day.' }),
+      makeStory('storm', { title: 'Hurricane Elena makes landfall', summary: 'Hurricane Elena has made landfall. About 1.2 million homes are without power, the agency says.' }),
+      makeStory('tram', { title: 'Lisbon opens a tram line', summary: 'Lisbon has opened a tram line.' }),
+    ];
+    const b = normalize([storySeg('canal', { breaking: true, text: 'Breaking news. The Panama Canal has reopened to ships after fog closed it for a day.' }), storySeg('storm', { text: 'Hurricane Elena has made landfall.' }), storySeg('tram', { text: 'Lisbon has opened a tram line.' })], { stories });
+    const order = b.segments.filter((s) => s.type === 'story');
+    assert.deepEqual(order.map((s) => s.storyId), ['storm', 'canal', 'tram']);
+    assert.equal(order[1].breaking, false);
+    assert.equal(order[1].breakingNote, true);
+    assert.ok(!/^Breaking news/.test(order[1].text), order[1].text);
   });
 
   test('a breaking story always leads, ahead of any chat, and is never a feature', () => {

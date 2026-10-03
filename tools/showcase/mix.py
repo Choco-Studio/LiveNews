@@ -186,6 +186,202 @@ def engine_duck(wet, dry, sr, a, b):
     return rms_db(wet[s0:s1]) - ref
 
 
+# ITU-R BS.1770 K-weighting at 48 kHz (pre-filter shelf + RLB high-pass), run by ffmpeg's biquad
+# (numpy has no IIR filter and a Python loop over 20M samples is far too slow).
+KW_48K = ('biquad=b0=1.53512485958697:b1=-2.69169618940638:b2=1.19839281085285:a0=1:a1=-1.69065929318241:a2=0.73248077421585,'
+          'biquad=b0=1:b1=-2:b2=1:a0=1:a1=-1.99004745483398:a2=0.99007225036621')
+HOP = 0.01  # s: resolution of the loudness rider
+
+
+def kweight(x, sr):
+    """K-weighted copy of a mono signal (unweighted when the rate is not 48 kHz)."""
+    if sr != 48000 or not len(x):
+        return np.asarray(x, dtype=np.float64)
+    p = subprocess.run([FFMPEG, '-v', 'error', '-f', 'f64le', '-ar', str(sr), '-ac', '1', '-i', '-', '-af', KW_48K, '-f', 'f64le', '-'],
+                       input=np.asarray(x, dtype='<f8').tobytes(), capture_output=True, check=True)
+    y = np.frombuffer(p.stdout, dtype='<f8')
+    return y[:len(x)].copy() if len(y) >= len(x) else np.pad(y, (0, len(x) - len(y)))
+
+
+def hop_power(k, sr, channels=1.0):
+    """Mean square of a K-weighted signal per HOP, times the channel count it is heard on (BS.1770 sums channel powers)."""
+    h = int(round(HOP * sr))
+    m = len(k) // h
+    return np.mean(np.square(k[:m * h]).reshape(m, h), axis=1) * channels
+
+
+def lufs(p):
+    """Loudness (LUFS) of a run of hop powers; -inf for nothing."""
+    p = np.asarray(p)
+    return -0.691 + 10 * math.log10(float(np.mean(p))) if p.size and float(np.mean(p)) > 1e-14 else float('-inf')
+
+
+def raised(k):
+    return 0.5 - 0.5 * np.cos(np.pi * np.clip(k, 0.0, 1.0))
+
+
+def ride_bed(beds, ref, sr, regions, cfg):
+    """Level the bed against the real voice (owner 17:05, WORLD NOW bible): under speech the bed's
+    loudness sits `underDb` LU below the voice (each speech region kept inside `window`), and in every
+    pause of `gapMin` s or more (the regions are built from the voice's own envelope, so these are real
+    gaps between words, sentences and segments) it rises towards `gapDb` LU below the voice, never
+    above `ceilDb` (short peaks such as pips), with gentle raised-cosine ramps that are down again
+    before the next word. Silence stays silence (grave stories, ads, opens: the cue sheet's choice).
+    Returns (gain per sample, report)."""
+    n = len(beds)
+    kb = hop_power(kweight(beds[:, 0], sr), sr) + hop_power(kweight(beds[:, 1], sr), sr)
+    kv = hop_power(kweight(ref, sr), sr, channels=2.0)  # the mono voice is heard on both channels
+    H = len(kb)
+    hop = lambda t: int(min(H, max(0, round(t / HOP))))
+    under, window, gap_db = float(cfg.get('underDb', 18)), cfg.get('window', [-20, -16]), float(cfg.get('gapDb', 11))
+    gap_min, max_lift, ceil_db = float(cfg.get('gapMin', 0.6)), float(cfg.get('maxLift', 8)), float(cfg.get('ceilDb', 6))
+    regs = [(a, b) for a, b in regions if b - a > 0.05]
+    # Voice level: per region, gated like BS.1770 (absolute -70, relative -10), then the median.
+    lv_r = []
+    for a, b in regs:
+        p = kv[hop(a):hop(b)]
+        p = p[p > 10 ** ((-70 + 0.691) / 10)]
+        if p.size > 50:
+            rel_gate = 10 ** ((lufs(p) - 10 + 0.691) / 10)
+            lv_r.append(lufs(p[p > rel_gate]))
+    if not lv_r:
+        return np.ones(n), {'skipped': 'no voice'}
+    lv = float(np.median(lv_r))
+    # The bed under each speech region (only where a bed really plays, and steadily: not a fade).
+    rel = []
+    for a, b in regs:
+        if b - a < 1.5:
+            rel.append(None)
+            continue
+        p = kb[hop(a + 0.1):hop(b)]
+        half = len(p) // 2
+        lb = lufs(p)
+        steady = half > 10 and abs(lufs(p[:half]) - lufs(p[half:])) < 10
+        rel.append(lb - lv if lb > lv - 45 and steady else None)
+    known = [r for r in rel if r is not None]
+    if not known:
+        return np.ones(n), {'skipped': 'no bed under speech', 'voiceLUFS': round(lv, 1)}
+    base = max(-10.0, min(20.0, -under - float(np.median(known))))
+    corr = []
+    for r in rel:
+        if r is None:
+            corr.append(0.0)
+            continue
+        x = r + base
+        corr.append(window[1] - x if x > window[1] else (min(4.0, window[0] - x) if x < window[0] else 0.0))
+    # Correction curve: each region's value over the region, interpolated across the gaps, smoothed 0.2 s.
+    g = np.zeros(H)
+    t_hops = np.arange(H) * HOP
+    xs, ys = [], []
+    for (a, b), c in zip(regs, corr):
+        xs += [a, b]
+        ys += [c, c]
+    if xs:
+        g += np.interp(t_hops, xs, ys)
+    k = max(1, int(0.2 / HOP))
+    g = np.convolve(g, np.ones(k) / k, mode='same') + base
+    # Lift in the real pauses.
+    lift = np.zeros(H)
+    lifted = []
+    bounds = [(-1e9, -1e9)] + regs + [(1e9, 1e9)]
+    for (pa, pb), (na, nb) in zip(bounds[:-1], bounds[1:]):
+        g0, g1 = max(0.0, pb), min(n / sr, na)
+        if g1 - g0 < gap_min or pb < 0 or na > n / sr:
+            continue  # only pauses between speech (before the first word / after the last: no voice to sit under)
+        c0, c1 = hop(g0 + 0.12), hop(g1 - 0.12)
+        if c1 - c0 < 20:
+            c0, c1 = hop((g0 + g1) / 2 - 0.1), hop((g0 + g1) / 2 + 0.1)
+        seg = kb[c0:c1] * 10 ** (g[c0:c1] / 10)
+        lg = lufs(seg)
+        if lg < lv - 50:
+            continue  # nothing plays here: silence stays silence
+        want = max(0.0, min(max_lift, (lv - gap_db) - lg))
+        # ceiling on 100 ms peaks (pips, stings): never above voice - ceilDb
+        w = max(1, int(0.1 / HOP))
+        p100 = np.convolve(seg, np.ones(w) / w, mode='valid') if len(seg) >= w else seg
+        peak = -0.691 + 10 * math.log10(max(1e-14, float(np.max(p100))))
+        want = max(0.0, min(want, (lv - ceil_db) - peak))
+        if want < 0.5:
+            continue
+        up, down, s0, s1 = 0.3, 0.25, g0 + 0.10, g1 - 0.08
+        T = s1 - s0
+        scale = min(1.0, T / (up + down))
+        u, d = up * scale, down * scale
+        x = t_hops[hop(s0):hop(s1)]
+        env = np.minimum(raised((x - s0) / max(u, 1e-3)), raised((s1 - x) / max(d, 1e-3)))
+        lift[hop(s0):hop(s0) + len(env)] = np.maximum(lift[hop(s0):hop(s0) + len(env)], want * scale * env)
+        lifted.append(round(want * scale, 1))
+    g_db = g + lift
+    # Measure the result on the same grid: bed vs voice under speech and in the pauses.
+    kb2 = kb * 10 ** (g_db / 10)
+    after, gaps_after = [], []
+    for (a, b), r in zip(regs, rel):
+        if r is not None:
+            after.append(lufs(kb2[hop(a + 0.1):hop(b)]) - lv)
+    for (pa, pb), (na, nb) in zip(bounds[:-1], bounds[1:]):
+        g0, g1 = max(0.0, pb), min(n / sr, na)
+        if g1 - g0 >= gap_min and pb >= 0 and na <= n / sr:
+            lg = lufs(kb2[hop(g0 + 0.2):hop(g1 - 0.1)])
+            if lg > lv - 50:
+                gaps_after.append(lg - lv)
+    q = lambda v, p: round(float(np.percentile(v, p)), 1) if v else None
+    report = {
+        'voiceLUFS': round(lv, 1), 'baseGainDb': round(base, 1), 'targetUnderDb': -under, 'window': window,
+        'underSpeech': {'regions': len(after), 'median': q(after, 50), 'p10': q(after, 10), 'p90': q(after, 90),
+                        'outsideWindow': int(sum(1 for v in after if v < window[0] - 0.5 or v > window[1] + 0.5))},
+        'pauses': {'lifted': len(lifted), 'medianLiftDb': q(lifted, 50), 'withBed': len(gaps_after), 'median': q(gaps_after, 50), 'p90': q(gaps_after, 90)},
+    }
+    t_s = (np.arange(H) + 0.5) * HOP
+    return 10 ** (np.interp(np.arange(n) / sr, t_s, g_db) / 20), report
+
+
+def room_tone(n, sr, windows, level_db, fade=0.5):
+    """Studio air under the studio segments (open to end card), so a pause is never digital silence:
+    band-limited pink noise, decorrelated L/R, `level_db` dBFS RMS, faded in and out over `fade` s."""
+    wins = [(max(0.0, a), min(n / sr, b)) for a, b in windows if min(n / sr, b) - max(0.0, a) > 0.5]
+    if not wins:
+        return None
+    dur = n / sr + 0.5
+
+    def noise(seed):
+        p = subprocess.run([FFMPEG, '-v', 'error', '-f', 'lavfi', '-i', f'anoisesrc=color=pink:seed={seed}:sample_rate={sr}:duration={dur:.3f}:amplitude=0.5',
+                            '-af', 'highpass=f=90,lowpass=f=4500', '-f', 'f64le', '-ac', '1', '-'], capture_output=True, check=True)
+        x = np.frombuffer(p.stdout, dtype='<f8')[:n]
+        return np.pad(x, (0, n - len(x)))
+    tone = np.stack([noise(7), noise(19)], axis=1)
+    tone *= 10 ** (level_db / 20) / max(1e-9, math.sqrt(float(np.mean(np.square(tone)))))
+    env = np.zeros(n)
+    for a, b in wins:
+        s0, s1 = int(a * sr), int(b * sr)
+        env[s0:s1] = 1.0
+        f = min(int(fade * sr), (s1 - s0) // 2)
+        env[s0:s0 + f] = np.minimum(env[s0:s0 + f], raised(np.arange(f) / f))
+        env[s1 - f:s1] = np.minimum(env[s1 - f:s1], raised((f - np.arange(f)) / f))
+    return tone * env[:, None]
+
+
+def silent_runs(y, sr, windows, floor_db=-70.0, min_len=0.25):
+    """Runs longer than `min_len` s where the mix is below `floor_db` dBFS (10 ms RMS) inside `windows`."""
+    h = int(0.01 * sr)
+    mono = y.mean(axis=1)
+    m = len(mono) // h
+    lv = 10 * np.log10(np.mean(np.square(mono[:m * h]).reshape(m, h), axis=1) + 1e-20)
+    out = []
+    for a, b in windows:
+        i, e = int(max(0, a) / 0.01), int(min(m * 0.01, b) / 0.01)
+        run = None
+        for k in range(i, e):
+            if lv[k] < floor_db:
+                run = k if run is None else run
+            elif run is not None:
+                if (k - run) * 0.01 > min_len:
+                    out.append([round(run * 0.01, 2), round(k * 0.01, 2)])
+                run = None
+        if run is not None and (e - run) * 0.01 > min_len:
+            out.append([round(run * 0.01, 2), round(e * 0.01, 2)])
+    return out
+
+
 def true_peak_limit(y, sr, ceiling_db, lookahead=0.004, release=0.12):
     """Look-ahead limiter on 4x-oversampled peaks; touches only the moments that overshoot."""
     ceiling = 10 ** (ceiling_db / 20)
@@ -262,17 +458,29 @@ def main():
         placed += 1
     report['voiceClips'] = placed
 
+    regions = man.get('speech', [])
+    rider = man.get('bedRider')
+    if rider:
+        # 2'. The bed rider levels the (engine-ducked) bed against the real voice, in place of
+        # the fixed extra duck below: under speech -18 LU, risen in the real pauses.
+        ref = voice + web_speech if web_speech is not None else voice
+        gain, report['bedRider'] = ride_bed(beds, ref, sr, regions, rider)
+        beds *= gain[:, None]
+        if dry is not None:
+            dry *= gain[:, None]
+        regions_duck = []
+    else:
+        regions_duck = regions
     # 2. Extra bed duck under speech: at least `extraDuckDb`, and deeper where the
     # engine's own duck is shallow, so the total is >= `minDuckDb` everywhere.
-    regions = man.get('speech', [])
     extra = float(man.get('extraDuckDb', 0))
     min_duck = float(man.get('minDuckDb', 16))
     depths = []
-    for a, b in regions:
+    for a, b in regions_duck:
         e = engine_duck(beds, dry, sr, a, b)
         need = -(min_duck + (e if e is not None else 0.0))  # e is negative (dB the engine already ducked)
         depths.append(max(-24.0, min(extra, need)))
-    g = duck_curve(n, sr, regions, depths, float(man.get('duckAttack', 0.12)),
+    g = duck_curve(n, sr, regions_duck, depths, float(man.get('duckAttack', 0.12)),
                    float(man.get('duckHold', 0.35)), float(man.get('duckRelease', 0.7)))
     beds *= g[:, None]
 
@@ -290,7 +498,7 @@ def main():
         bd = rms_db(beds[s0:s1])
         if v > -45 and bd > -75:
             rels.append(bd - v)
-    target_rel = man.get('bedUnderVoiceDb')
+    target_rel = None if rider else man.get('bedUnderVoiceDb')
     level = {'regions': len(rels)}
     if rels and target_rel is not None:
         auto = max(-6.0, min(9.0, float(target_rel) - float(np.median(rels))))
@@ -338,6 +546,20 @@ def main():
     report['quiet'] = quiet
 
     mix = web + beds + voice[:, None]
+    studio = man.get('studio') or []
+    rt = man.get('roomTone')
+    if rt and studio:
+        tone = room_tone(n, sr, studio, float(rt.get('db', -58)), float(rt.get('fade', 0.5)))
+        if tone is not None:
+            mix += tone
+            report['roomTone'] = {'db': float(rt.get('db', -58)), 'windows': [[round(a, 2), round(b, 2)] for a, b in studio]}
+    # Fades: 10 ms in (no click on the first sample), `fadeOut` s out at the end of the recording.
+    fi = min(n, int(0.01 * sr))
+    mix[:fi] *= np.linspace(0, 1, fi)[:, None]
+    fo = min(n, int(float(man.get('fadeOut', 0) or 0) * sr))
+    if fo > 1:
+        mix[n - fo:] *= (0.5 + 0.5 * np.cos(np.pi * np.arange(fo) / (fo - 1)))[:, None]
+        report['fadeOut'] = round(fo / sr, 2)
     write_wav_f32(os.path.join(stems_dir, 'voice.wav'), voice, sr)
     write_wav_f32(os.path.join(stems_dir, 'webaudio.wav'), web, sr)
     if web_speech is not None:
@@ -374,6 +596,9 @@ def main():
             gain_db += target - final['I']
     report['final'] = final
     report['aac'] = out_aac
+    if studio:
+        runs = silent_runs(y, sr, studio)
+        report['silentRuns'] = {'floorDb': -70, 'minSeconds': 0.25, 'count': len(runs), 'runs': runs[:20]}
     print(json.dumps(report))
 
 
