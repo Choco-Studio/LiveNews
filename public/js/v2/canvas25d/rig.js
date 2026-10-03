@@ -91,31 +91,45 @@ const TMP = [0, 0, 0, 0, 0];
 const TMP0 = [0, 0, 0, 0, 0];
 const FINGER_LAG = 0.04; // s: the fingers follow the hand
 const SETTLE_OVERLAP = 0.4; // s: a longer overlap between two arm gestures is an interruption
-const INTERRUPT_FADE = 0.12; // s: the interrupting gesture takes over this fast (it starts from the pose)
+// s: the interrupting gesture takes over over this long (it starts from the pose, and the smooth weight
+// keeps the hand's velocity continuous; 0.12 s made a 6 px/frame change of speed on a mid-stroke cut)
+const INTERRUPT_FADE = 0.26;
+
+/** Do two definitions drive the same arm (near or far)? Only then can one interrupt the other. */
+const sharesArm = (a, b) => (a.armN && b.armN) || (a.armF && b.armF);
 
 function endOf(g, d) {
   return g.t0 + d.dur / rateOf(g);
 }
 
-/** Is gesture i interrupted by a later ARM gesture (overlap > SETTLE_OVERLAP)? Returns that start time or Infinity. */
-function interruptAt(list, i, d) {
-  if (!d.arm) return Infinity;
+/**
+ * Is gesture i interrupted by a later gesture on the same arm (overlap > SETTLE_OVERLAP)? Returns the
+ * interrupter's definition (its start in INT.t0) or null. A gesture of the other arm only layers on
+ * top: a far-hand beat never yanks the near hand back from the glasses.
+ */
+const INT = { t0: Infinity };
+function interrupter(list, i, d) {
+  INT.t0 = Infinity;
+  if (!d.arm) return null;
   const end = endOf(list[i], d);
   for (let j = i + 1; j < list.length; j++) {
     const g = list[j];
     if (g.t0 >= end - SETTLE_OVERLAP) break;
     const dj = defOf(g);
-    if (dj && dj.arm) return g.t0;
+    if (dj && dj.arm && sharesArm(d, dj)) {
+      INT.t0 = g.t0;
+      return dj;
+    }
   }
-  return Infinity;
+  return null;
 }
 
-/** The previous ARM gesture still running at g.t0 with more than a settle's overlap, or -1. */
-function interruptedIndex(list, i) {
+/** The previous gesture on the same arm(s) still running at g.t0 with more than a settle's overlap, or -1. */
+function interruptedIndex(list, i, d) {
   const g = list[i];
   for (let j = i - 1; j >= 0; j--) {
     const dj = defOf(list[j]);
-    if (!dj || !dj.arm) continue;
+    if (!dj || !dj.arm || !sharesArm(d, dj)) continue;
     if (endOf(list[j], dj) - g.t0 > SETTLE_OVERLAP) return j;
     return -1;
   }
@@ -176,7 +190,8 @@ function fromTime(g, d, from) {
     if (ch.ch !== 'wrist' && ch.ch !== 'wristF') continue;
     const v = evalTrack(ch.keys, d.apex, TMPW);
     const f = from[ch.ch];
-    dist = Math.max(dist, Math.hypot(v[0] - f[0], v[1] - f[1], v[2] - f[2]));
+    const ex = v[0] - f[0], ey = v[1] - f[1], ez = v[2] - f[2];
+    dist = Math.max(dist, Math.sqrt(ex * ex + ey * ey + ez * ez));
   }
   g._fromT = Math.max(0.15, d.apex, 0.25 + dist / 40);
   g._fromTFor = from;
@@ -191,18 +206,20 @@ function applyGestureRange(c, list, upto, t, mode) {
     const d = defOf(g);
     if (!d) continue;
     if (mode === MODE_ARM && !d.arm) continue;
-    const ii = d.arm ? interruptedIndex(list, i) : -1;
+    const ii = d.arm ? interruptedIndex(list, i, d) : -1;
     const w = gestureWeight(list, i, d, t, ii >= 0);
     if (w <= 0) continue;
     const rate = rateOf(g);
     const lt = (t - g.t0) * rate;
     const amp = g.amp == null ? 1 : clamp(g.amp, 0.5, 1);
     // an interrupted gesture hands its head/body motion over to the interrupter
-    const cut = interruptAt(list, i, d);
-    // (its arm channels too: once the interrupter has taken over, the old gesture must not come back
-    // when the new one ends)
+    const by = interrupter(list, i, d);
+    const cut = INT.t0;
+    // (and the channels of the arm(s) the interrupter drives: once it has taken over, the old gesture
+    // must not come back when the new one ends; the other arm finishes its own motion)
     const wAdd = cut === Infinity ? w : w * (1 - smooth((t - cut) / 0.3));
     const wArm = cut === Infinity ? w : w * (1 - smooth((t - cut - INTERRUPT_FADE) / 0.3));
+    const takeN = by ? by.armN : false, takeF = by ? by.armF : false;
     const from = ii >= 0 && mode !== MODE_LAG ? fromPose(list, i) : null;
     // the offset from the interrupted pose decays by the apex, or later when the hand has far to go
     const decay = from ? 1 - smooth(lt / fromTime(g, d, from)) : 0;
@@ -212,6 +229,11 @@ function applyGestureRange(c, list, upto, t, mode) {
       if (mode === MODE_LAG ? !ch.lag : mode === MODE_ARM ? !ch.override : false) continue;
       const tt = ch.finger ? Math.max(0, lt - FINGER_LAG) : lt;
       if (ch.override) {
+        // the arm the interrupter takes over fades; the other one keeps this gesture's weight
+        let wa = !by ? w : (ch.far ? takeF : ch.ch === 'hold' || ch.ch === 'tilt' ? takeN || takeF : takeN) ? wArm : w;
+        // the glasses reach moves the solved wrist (not the wrist channel the interrupter starts from):
+        // let it go slowly, or the hand would drop from the face in a few frames
+        if (by && ch.ch === 'reach' && takeN) wa = w * (1 - smooth((t - cut) / 0.7));
         const dst = c[ch.ch];
         if (ch.arr) {
           const v = evalTrack(ch.keys, tt, TMP);
@@ -223,11 +245,11 @@ function applyGestureRange(c, list, upto, t, mode) {
             const r = ch.rest, k2 = ch.ch[0] === 'w' ? amp : 0.5 + amp * 0.5;
             for (let k = 0; k < v.length; k++) v[k] = r[k] + (v[k] - r[k]) * k2;
           }
-          for (let k = 0; k < dst.length; k++) dst[k] += (v[k] - dst[k]) * wArm;
+          for (let k = 0; k < dst.length; k++) dst[k] += (v[k] - dst[k]) * wa;
         } else {
           let v = evalTrack(ch.keys, tt);
           if (from) v += (from[ch.ch] - ch.start) * decay;
-          c[ch.ch] += (v - c[ch.ch]) * wArm;
+          c[ch.ch] += (v - c[ch.ch]) * wa;
         }
       } else {
         c[ch.ch] += (evalTrack(ch.keys, tt) - ch.rest) * wAdd * amp;
@@ -299,7 +321,7 @@ export function evaluateLag(L, perf, t, c = newChannels()) {
 
 function ik(S, T, L1, L2, pole, E, Wt) {
   let dx = T[0] - S[0], dy = T[1] - S[1], dz = T[2] - S[2];
-  let d = Math.hypot(dx, dy, dz) || 1e-6;
+  let d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-6;
   const maxD = (L1 + L2) * 0.995, minD = Math.abs(L1 - L2) + 0.5;
   const dc = clamp(d, minD, maxD);
   dx /= d;
@@ -314,7 +336,7 @@ function ik(S, T, L1, L2, pole, E, Wt) {
   // pole direction made perpendicular to the shoulder→wrist axis
   const pd = pole[0] * dx + pole[1] * dy + pole[2] * dz;
   let px = pole[0] - dx * pd, py = pole[1] - dy * pd, pz = pole[2] - dz * pd;
-  const pl = Math.hypot(px, py, pz) || 1;
+  const pl = Math.sqrt(px * px + py * py + pz * pz) || 1;
   px /= pl;
   py /= pl;
   pz /= pl;
@@ -406,11 +428,11 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
     TW[1] = arm.shoulder[1] + w[1] * armScale + lift * 0.6;
     TW[2] = w[2] * armScale;
     const d = pass === 0 ? c.dir : c.dirF;
-    const dl = Math.hypot(d[0], d[1], d[2]) || 1;
+    const dl = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) || 1;
     arm.handDir[0] = (d[0] * m) / dl;
     arm.handDir[1] = d[1] / dl;
     arm.handDir[2] = d[2] / dl;
-    if (pass === 0 && reach > 0.001) reachGlasses(L, sk, arm, reach);
+    if (pass === 0 && reach > 0.001) reachGlasses(L, sk, arm, reach, sideKey);
     const pole = pass === 0 ? c.pole : c.poleF;
     PW[0] = pole[0] * m;
     PW[1] = pole[1];
@@ -425,8 +447,11 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
   return sk;
 }
 
-/** Move the wrist target (TW) so the index fingertip lands on the glasses bridge (glasses.js anchor). */
-function reachGlasses(L, sk, arm, reach) {
+/**
+ * Move the wrist target (TW) so the thumb-index pinch lands on the outer corner of the glasses frame on
+ * the arm's own side (glasses.js glassesAnchor 'templeL' / 'templeR'): the hand stays beside the face.
+ */
+function reachGlasses(L, sk, arm, reach, sideKey) {
   const h = sk.head;
   BODY_HEAD.L = L;
   BODY_HEAD.cx = L.headAt[0] + h.x;
@@ -436,9 +461,9 @@ function reachGlasses(L, sk, arm, reach) {
   BODY_HEAD.sr = Math.sin(h.roll);
   BODY_HEAD.yaw = h.yaw;
   BODY_HEAD.pitch = h.pitch;
-  glassesAnchor(BODY_HEAD, 'bridge', ANCHOR);
-  // the fingertip sits ~0.92 hand lengths along the hand direction from the wrist, in front of the face
-  const H = L.arm.hand * 0.92;
+  glassesAnchor(BODY_HEAD, sideKey === 'R' ? 'templeR' : 'templeL', ANCHOR);
+  // the pinch (thumb tip on index tip) sits ~0.8 hand lengths along the hand direction from the wrist
+  const H = L.arm.hand * 0.8;
   const ax = ANCHOR[0] - arm.handDir[0] * H, ay = ANCHOR[1] - arm.handDir[1] * H, az = 7.5 - arm.handDir[2] * H;
   TW[0] += (ax - TW[0]) * reach;
   TW[1] += (ay - TW[1]) * reach;

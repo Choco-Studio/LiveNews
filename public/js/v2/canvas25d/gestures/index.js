@@ -80,11 +80,25 @@ export const LAG_CHANNELS = new Set(['yaw', 'roll', 'hx', 'bx', 'pitch', 'hy', '
 /** Every gesture by name: { dur, desc, stroke, apex, hold, tracks, variants?, forN? }. */
 export const GESTURES = {};
 
+// The desk top under the wrists (partner space, Paco's proportions: REST.wrist sits on it). An
+// anticipation that presses the hand down never sinks it through the desk: keys below DESK_PRESS are
+// compressed to a shallow press with a little forward slide along the top (the approved gestures stay
+// inside their motion-baseline tolerances).
+const DESK_PRESS = 20.0;
+function deskPress(v) {
+  if (v[1] <= DESK_PRESS) return v;
+  const ex = v[1] - DESK_PRESS;
+  return [v[0], DESK_PRESS + ex * 0.25, v[2] + ex * 0.35];
+}
+
 /** Resolve 'R' keys and precompute the channel list the rig walks every frame (no Object.entries per frame). */
 export function prepareDef(g) {
   if (g._ch) return g;
   for (const [ch, keys] of Object.entries(g.tracks)) {
-    for (const k of keys) if (k[1] === 'R') k[1] = REST[ch];
+    for (const k of keys) {
+      if (k[1] === 'R') k[1] = REST[ch];
+      else if ((ch === 'wrist' || ch === 'wristF') && Array.isArray(k[1])) k[1] = deskPress(k[1]);
+    }
   }
   g._ch = Object.entries(g.tracks).map(([ch, keys]) => ({
     ch,
@@ -94,6 +108,7 @@ export function prepareDef(g) {
     lag: LAG_CHANNELS.has(ch),
     rest: REST[ch],
     arr: Array.isArray(REST[ch]),
+    far: ch.endsWith('F'), // a far-arm channel (wristF, dirF, curlF...)
     start: Array.isArray(keys[0][1]) ? keys[0][1].slice() : keys[0][1],
   }));
   g.arm = g._ch.some((c) => c.override);

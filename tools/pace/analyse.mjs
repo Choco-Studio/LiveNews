@@ -228,6 +228,20 @@ function analyseProgramme(t, prog, shots, env) {
       seen.push(s);
     }
     mine = seen;
+  } else {
+    // no Stage traces (older recordings): on the v2 path a director re-set from one wide to another (a focus-only
+    // hand-over) keeps the same two-shot camera, so count it as one shot, as the viewer saw it
+    const seen = [];
+    for (const s of mine) {
+      const prev = seen[seen.length - 1];
+      if (prev && s.shot === 'wide' && prev.shot === 'wide') {
+        prev.dur += s.dur;
+        prev.recuts = (prev.recuts || 0) + 1;
+        continue;
+      }
+      seen.push(s);
+    }
+    mine = seen;
   }
   for (const s of mine) {
     const c = cuts.find((x) => Math.abs(x.t - s.at) < 0.25 && x.shot === s.shot) || cuts.find((x) => x.t >= s.at - 0.02 && x.t < s.at + (s.dur || 0) && x.shot === s.shot);

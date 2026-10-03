@@ -145,6 +145,16 @@ function buildShow(epIn, presenters, voice) {
     lastCut = at;
   };
   const framings = { close: {}, wide: null }; // the last studio framings on air (the max-hold guard's targets)
+  // as LiveDirection.holdCue: before a speaker's first single, the single the episode's plans give them
+  const planned = {};
+  const opens = []; // each segment's opening cue (the guard never runs into an identical one)
+  for (let j = 0; j < ep.segments.length; j++) {
+    const pj = planSegment(ep, j, { presenters, gapAfter: gapOf });
+    opens.push(cuesFromPlan(pj, { hasImg: true, rundown: ep.rundown })?.[0] || null);
+    for (const e of pj.events) {
+      if (e.kind === 'shot' && e.framing && e.framing !== 'ots' && e.shot === 'close' && !(e.focus in planned)) planned[e.focus] = e.framing;
+    }
+  }
   const note = (c) => {
     if (!c.framing || c.guard) return;
     if (c.shot === 'close' && c.framing !== 'ots') framings.close[c.focus] = c.framing;
@@ -222,7 +232,7 @@ function buildShow(epIn, presenters, voice) {
       // the max-hold guard on a long studio intro (MONEY MINUTE's wide)
       for (let si = 1; si < sentAt.length && onAir; si++) {
         if (introCues.some((c) => c.k > 0 && c.sentence === si) || sentAt[si] < onAir.t) continue;
-        const g = holdCut(plan, si, { shot: onAir.shot, framing: onAir.framing, focus: onAir.focus, held: sentAt[si] - onAir.t }, { programId: ep.program?.id, gap: GAP, cues: introCues, closeFraming: framings.close[seg.anchor] ?? null, wideFraming: framings.wide });
+        const g = holdCut(plan, si, { shot: onAir.shot, framing: onAir.framing, focus: onAir.focus, held: sentAt[si] - onAir.t }, { programId: ep.program?.id, gap: GAP, cues: introCues, closeFraming: framings.close[seg.anchor] ?? planned[seg.anchor] ?? null, wideFraming: framings.wide, nextOpen: opens[i + 1] });
         if (g) {
           cut(sentAt[si], g.shot, { ...base, focus: g.focus, framing: g.framing, cue: g.k, guard: true });
           onAir = { ...g, t: sentAt[si] };
@@ -273,7 +283,7 @@ function buildShow(epIn, presenters, voice) {
           k++;
         }
         if (planned || si === 0 || !onAir || tS < onAir.t) continue;
-        const g = holdCut(plan, si, { shot: onAir.shot, framing: onAir.framing, focus: onAir.focus, held: tS - onAir.t }, { programId: ep.program?.id, gap: GAP, cues, closeFraming: framings.close[seg.anchor] ?? cues.find((c) => c.shot === 'close' && c.focus === seg.anchor && c.framing && c.framing !== 'ots')?.framing ?? null, wideFraming: framings.wide });
+        const g = holdCut(plan, si, { shot: onAir.shot, framing: onAir.framing, focus: onAir.focus, held: tS - onAir.t }, { programId: ep.program?.id, gap: GAP, cues, closeFraming: cues.find((c) => c.shot === 'close' && c.focus === seg.anchor && c.framing && c.framing !== 'ots')?.framing ?? framings.close[seg.anchor] ?? planned[seg.anchor] ?? null, wideFraming: framings.wide, nextOpen: opens[i + 1] });
         if (g) apply(g, tS);
       }
       while (k < timed.length) apply(timed[k].c, timed[k++].at);

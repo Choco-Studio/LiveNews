@@ -178,7 +178,7 @@ function restArmL(L) {
   REST_ARM.wrist[0] = -T.shoulderJoint[0] + w[0] * k;
   REST_ARM.wrist[1] = T.shoulderJoint[1] + w[1] * k;
   REST_ARM.wrist[2] = w[2] * k;
-  const dl = Math.hypot(d[0], d[1], d[2]) || 1;
+  const dl = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) || 1;
   REST_ARM.handDir[0] = d[0] / dl;
   REST_ARM.handDir[1] = d[1] / dl;
   REST_ARM.handDir[2] = d[2] / dl;
@@ -197,7 +197,7 @@ function penFrame(g, out) {
   out[1] = W[1] + f[1] * H * 0.42 + t[1] * H * 0.16 + n[1] * H * 0.12;
   out[2] = W[2] + f[2] * H * 0.42 + t[2] * H * 0.16 + n[2] * H * 0.12;
   const dx = f[0] * 0.8 + t[0] * 0.52 - n[0] * 0.25, dy = f[1] * 0.8 + t[1] * 0.52 - n[1] * 0.25, dz = f[2] * 0.8 + t[2] * 0.52 - n[2] * 0.25;
-  const dl = Math.hypot(dx, dy, dz) || 1;
+  const dl = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
   out[3] = dx / dl;
   out[4] = dy / dl;
   out[5] = dz / dl;
@@ -214,14 +214,14 @@ function drawPen(buf, L, sk, s, g, z, M) {
   handGeometry(L, rest, -1, HG_REST);
   penFrame(HG_REST, PEN_DESK);
   // 0 while the hand rests (idle shifts included), 1 once it is well clear of the desk
-  const dw = Math.hypot(arm.wrist[0] - rest.wrist[0], arm.wrist[1] - rest.wrist[1], arm.wrist[2] - rest.wrist[2]);
+  const dw = Math.sqrt((arm.wrist[0] - rest.wrist[0]) ** 2 + (arm.wrist[1] - rest.wrist[1]) ** 2 + (arm.wrist[2] - rest.wrist[2]) ** 2);
   let u = clamp((dw - 3) / 2.5, 0, 1);
   u = u * u * (3 - 2 * u);
   const cxp = PEN_HAND[0] + (PEN_DESK[0] - PEN_HAND[0]) * u;
   const cyp = Math.min(PEN_HAND[1] + (PEN_DESK[1] - PEN_HAND[1]) * u, DESK_Y);
   const czp = PEN_HAND[2] + (PEN_DESK[2] - PEN_HAND[2]) * u;
   let dx = PEN_HAND[3] + (PEN_DESK[3] - PEN_HAND[3]) * u, dy = PEN_HAND[4] + (PEN_DESK[4] - PEN_HAND[4]) * u, dz = PEN_HAND[5] + (PEN_DESK[5] - PEN_HAND[5]) * u;
-  const dl = Math.hypot(dx, dy, dz) || 1;
+  const dl = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
   dx /= dl;
   dy /= dl;
   dz /= dl;

@@ -15,6 +15,7 @@ export const CHIN = [0.32, 0.22, 0.7, 0.8, 0.86];
 export const GRIP = [0.3, 0.3, 0.34, 0.38, 0.44]; // holding the edge of the papers
 export const PEN = [0.42, 0.5, 0.64, 0.72, 0.78];
 export const FLAT = [0.12, 0.04, 0.03, 0.05, 0.08]; // a calm open hand (offer, palms)
+export const PINCH = [0.42, 0.4, 0.78, 0.84, 0.88]; // thumb and index meeting (the glasses' temple corner)
 
 /** Count shapes: n fingers up, in the order index, middle, ring, pinky, thumb. */
 export const COUNT = [
@@ -42,4 +43,5 @@ export const SHAPES = {
   grip: { curl: GRIP, spread: 0.05, facing: 0, dir: [0.1, 0.2, 1] },
   pen: { curl: PEN, spread: 0.1, facing: -0.8, dir: [-0.7, 0.2, 0.7] },
   offer: { curl: FLAT, spread: 0.3, facing: 0.35, sup: 1, dir: [0.8, 0.1, 0.55] },
+  pinch: { curl: PINCH, spread: 0.06, facing: -0.4, dir: [-0.34, -0.9, 0.26] },
 };

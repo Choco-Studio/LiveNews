@@ -495,7 +495,7 @@ export function drawHead(buf, L, m, head, s) {
       z[i] = cz;
     }
   }
-  if (S.tier) cleanTones(buf, mt, x0, y0, x1, y1, S.tier === 2 ? 3 : 2);
+  if (S.tier) cleanTones(buf, mt, x0, y0, x1, y1, S.tier === 2 ? 4 : 2);
 }
 
 // cleanTones scratch: a visit stamp per buffer pixel and a flood-fill stack (no allocation per frame)

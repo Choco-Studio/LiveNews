@@ -1126,6 +1126,7 @@ const ARP_D = 'D5:0.5@0.32 A4:0.5@0.22 F#5:0.5@0.28 A4:0.5@0.2 E5:0.5@0.3 A4:0.5
 const ARP_B = 'D5:0.5@0.3 F#4:0.5@0.2 B4:0.5@0.26 F#4:0.5@0.2 C#5:0.5@0.28 F#4:0.5@0.2 A4:0.5@0.24 F#4:0.5@0.2';
 const ARP_G = 'D5:0.5@0.3 G4:0.5@0.2 B4:0.5@0.26 G4:0.5@0.2 F#5:0.5@0.3 G4:0.5@0.2 A4:0.5@0.24 G4:0.5@0.2';
 const ARP_A = 'E5:0.5@0.3 A4:0.5@0.2 C#5:0.5@0.26 A4:0.5@0.2 D5:0.5@0.3 A4:0.5@0.2 E5:0.5@0.28 A4:0.5@0.2';
+const WARM_INFO = { line: -1, speaking: false, duration: 0 };
 export default {
   id: 'cloudbrella',
   brand: 'CLOUDBRELLA',
@@ -1172,6 +1173,10 @@ export default {
       },
       { drums: tune('R:14', 'K:2@0.22 K:2@0.18 K:2@0.22 K:2@0.18 K:2@0.22 K:2@0.18 K:2@0.22 K:2@0.18 K:2@0.22 K:1@0.2 X:1@0.12', 'R:10') },
     ],
+  },
+  /** One idle-time bake step before the spot airs (director.prewarm); true when done. */
+  warm() {
+    return warmUp(SHOTS, -1, WARM_INFO);
   },
   draw(ctx, t, dt, info) {
     warmUp(SHOTS, dt, info);

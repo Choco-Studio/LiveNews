@@ -63,6 +63,28 @@ function mapG(head, out) {
   return out;
 }
 
+// the foreshortening of each lens (index 0 = side -1, 1 = side +1): screen x of its centre and
+// its squash (face.js narrows the far eye the same way); written by lensSquash()
+const LENS_CX = new Float64Array(2), LENS_SQ = new Float64Array(2);
+const LENS = { cx: 0, sq: 1 };
+
+/** Foreshortening of the lens on `side` for this head (fills LENS and the per-side arrays). */
+function lensSquash(head, L, side) {
+  const R = rim(L, side);
+  const turn = Math.sin(head.yaw || 0) * side;
+  LENS.sq = clamp(1 - Math.max(0, -turn) * 0.55, 0.55, 1);
+  GI[0] = R.cx;
+  GI[1] = (R.top + R.bot) / 2;
+  GI[2] = PROTRUDE;
+  mapG(head, PT);
+  LENS.cx = PT[0];
+  LENS_CX[side > 0 ? 1 : 0] = LENS.cx;
+  LENS_SQ[side > 0 ? 1 : 0] = LENS.sq;
+  return R;
+}
+/** A screen x of the lens on `side`, foreshortened like the lens. */
+const squashX = (side, x) => LENS_CX[side > 0 ? 1 : 0] + (x - LENS_CX[side > 0 ? 1 : 0]) * LENS_SQ[side > 0 ? 1 : 0];
+
 // rim geometry of one lens (units), written into one reused object by rim()
 const RIM = { cx: 0, rw: 0, top: 0, bot: 0 };
 /** Rim geometry of one lens (units): centre, half width, top and bottom (the shared RIM object). */
@@ -139,7 +161,9 @@ export function drawGlasses(buf, L, head, f, s) {
   }
   const shape = style === 'round' ? ROUND : RECT;
   for (let side = -1; side <= 1; side += 2) {
-    const R = rim(L, side);
+    // the lens on the side turned away foreshortens around its centre, exactly as face.js
+    // narrows the eye behind it (else its outer rim runs past the cheek into the hair)
+    const R = lensSquash(head, L, side);
     const cy = (R.top + R.bot) / 2, hh = (R.bot - R.top) / 2;
     const n = shape.length;
     for (let k = 0; k < n; k++) {
@@ -147,7 +171,7 @@ export function drawGlasses(buf, L, head, f, s) {
       GI[1] = cy + shape[k][1] * hh;
       GI[2] = PROTRUDE;
       mapG(head, PT);
-      PX[k] = PT[0];
+      PX[k] = LENS.cx + (PT[0] - LENS.cx) * LENS.sq;
       PY[k] = PT[1];
     }
     buf.part(gb + G_GLASSES + (side > 0 ? 1 : 0), 14, false);
@@ -169,18 +193,18 @@ export function drawGlasses(buf, L, head, f, s) {
       GI[1] = R.top;
       GI[2] = PROTRUDE;
       mapG(head, PT);
-      buf.plot(Math.round(PT[0]), Math.round(PT[1]), m.hi, 1);
+      buf.plot(Math.round(LENS.cx + (PT[0] - LENS.cx) * LENS.sq), Math.round(PT[1]), m.hi, 1);
       GI[0] = R.cx - R.rw * 0.25;
       GI[1] = R.top;
       GI[2] = PROTRUDE;
       mapG(head, PT);
-      buf.plot(Math.round(PT[0]), Math.round(PT[1]), m.hi, 1);
+      buf.plot(Math.round(LENS.cx + (PT[0] - LENS.cx) * LENS.sq), Math.round(PT[1]), m.hi, 1);
       // one small glint on the lens, top-left, clear of the iris (never a glare over the eye)
       GI[0] = R.cx - R.rw * 0.66;
       GI[1] = R.top + hh * 0.42;
       GI[2] = PROTRUDE;
       mapG(head, PT);
-      buf.plot(Math.round(PT[0]) + 1, Math.round(PT[1]) + 1, m.glare, 1);
+      buf.plot(Math.round(LENS.cx + (PT[0] - LENS.cx) * LENS.sq) + 1, Math.round(PT[1]) + 1, m.glare, 1);
     }
     // temple arm: from the hinge back toward the ear, while it stays on the head
     const hinge = side * (Math.abs(R.cx) + R.rw);
@@ -188,7 +212,7 @@ export function drawGlasses(buf, L, head, f, s) {
     GI[1] = R.top + 0.35;
     GI[2] = PROTRUDE;
     mapG(head, PT);
-    const hx = PT[0], hy = PT[1];
+    const hx = squashX(side, PT[0]), hy = PT[1];
     const turn = Math.sin(head.yaw || 0) * side;
     const back = clamp(0.6 + turn * 3.5, 0, 2.2); // the arm shows more on the side turned away from us
     if (back > 0.2) {
@@ -206,12 +230,13 @@ export function drawGlasses(buf, L, head, f, s) {
   GI[1] = by;
   GI[2] = PROTRUDE;
   mapG(head, PT);
-  const ax = PT[0], ay = PT[1];
+  const ax = squashX(-1, PT[0]), ay = PT[1];
   const Rr = rim(L, 1);
   GI[0] = Rr.cx - Rr.rw;
   GI[1] = by;
   GI[2] = PROTRUDE;
   mapG(head, PT);
+  PT[0] = squashX(1, PT[0]);
   buf.part(gb + G_GLASSES, 14, false);
   seg(buf, Math.round(ax) | 0, Math.round(ay) | 0, Math.round(PT[0]) | 0, Math.round(PT[1]) | 0, m.base);
   buf.part(g0, z0, c0);
@@ -227,8 +252,13 @@ export function glassesAnchor(head, which = 'bridge', out = [0, 0]) {
   if (!L.eyes) return head.toScreenInto ? head.toScreenInto(0, 0, out) : Object.assign(out, head.toScreen(0, 0));
   if (which === 'templeL' || which === 'templeR') {
     const side = which === 'templeL' ? -1 : 1;
-    const R = rim(L, side);
-    return mapG(head, side * (Math.abs(R.cx) + R.rw), R.top + 0.35, PROTRUDE, out);
+    const R = lensSquash(head, L, side);
+    GI[0] = side * (Math.abs(R.cx) + R.rw);
+    GI[1] = R.top + 0.35;
+    GI[2] = PROTRUDE;
+    mapG(head, out);
+    out[0] = squashX(side, out[0]); // the hinge of a foreshortened lens, as drawn
+    return out;
   }
   GI[0] = 0;
   GI[1] = L.eyes.y - L.eyes.h * 0.2;

@@ -1124,3 +1124,185 @@ test('no per-pixel garbage: once optimised, head skin + face + glasses allocate 
   walk(profile.head);
   assert.ok(mine / N < 1536, `${(mine / N).toFixed(0)} bytes per frame allocated in head.js / face.js / glasses.js (was ~260 KB in the skin alone)`);
 });
+
+// ---------------------------------------------------------------------------
+// Fix round 1 (critics r1): short lines, variety over time, one look per segment, interest
+// with the real shot plan, blink rate. Real offline episodes (the repo's v2 fixtures) re-seeded.
+
+function fixtureEpisodes(programs) {
+  const root = new URL('./fixtures/', import.meta.url);
+  const out = [];
+  for (const f of fs.readdirSync(new URL('v2-episodes/', root))) out.push(JSON.parse(fs.readFileSync(new URL('v2-episodes/' + f, root), 'utf8')));
+  for (const f of fs.readdirSync(root)) if (/^v2-camera-.*\.json$/.test(f)) out.push(JSON.parse(fs.readFileSync(new URL(f, root), 'utf8')));
+  return out.filter((ep) => !programs || programs.includes(ep.program?.id));
+}
+function* reseeded(eps, seeds) {
+  for (const base of eps) {
+    for (let k = 0; k < seeds; k++) {
+      const ep = clone(base);
+      ep.id = (base.id || 'ep') + '-s' + k;
+      yield ep;
+    }
+  }
+}
+
+test('short chat lines (< 5.4 s): speaker and listener each gaze at the partner ≤ 60 % of the line (no stare through the exchange)', async () => {
+  const { planSegment } = await import('../public/js/v2/canvas25d/direction/index.js');
+  let n = 0;
+  for (const ep of reseeded(fixtureEpisodes(DUOS), 6)) {
+    const N = ep.segments.length;
+    for (let i = 0; i < N; i++) {
+      const { ctx, events } = planSegment(ep, i, { gapAfter: i + 1 < N ? 0.9 : null });
+      if (!ctx?.valid || !ctx.duo || ctx.type !== 'chat' || ctx.duration >= RULES.shortLine || ctx.duration < 1.5) continue;
+      const D = ctx.duration;
+      for (const slot of [ctx.speaker, ...ctx.listeners]) {
+        const share = events.filter((e) => e.kind === 'look' && e.slot === slot && e.target === 'partner').reduce((s, l) => s + inTurn(l, D), 0) / D;
+        assert.ok(share <= RULES.shortShare + 0.02, `${ep.id} #${i} ${slot === ctx.speaker ? 'speaker' : 'listener'} gaze ${(share * 100).toFixed(0)} % of a ${D.toFixed(1)} s line`);
+      }
+      n++;
+    }
+  }
+  assert.ok(n >= 30, `${n} short chat lines checked`);
+});
+
+test('turn-start variety over a long show: some story turns vary (later glance / notes / none), never the first, never UNIT-8, TECH BYTES keeps a glance in the first second', async () => {
+  const { planSegment } = await import('../public/js/v2/canvas25d/direction/index.js');
+  const seen = { late: 0, notes: 0, skip: 0, turn: 0 };
+  for (const ep of reseeded(fixtureEpisodes(DUOS), 8)) {
+    const N = ep.segments.length;
+    let firstTurn = true;
+    for (let i = 0; i < N; i++) {
+      const { ctx, events } = planSegment(ep, i, { gapAfter: i + 1 < N ? 0.9 : null });
+      if (!ctx?.valid || !ctx.duo || !ctx.turnStart) continue;
+      for (const slot of ctx.listeners) {
+        const v = turnVariety(ctx, slot);
+        if (firstTurn || ctx.cast[slot] === 'unit8' || ctx.type !== 'story' || ctx.grave) assert.equal(v, null, `${ep.id} #${i}: no variety here`);
+        if (ctx.programId === 'tech-bytes') assert.ok(v === null || v === 'late', `${ep.id} #${i}: TECH BYTES keeps a glance in the first second (${v})`);
+        if (v === 'late') {
+          const g = events.find((e) => e.kind === 'look' && e.slot === slot && e.why === 'turn-late');
+          if (g) assert.ok(g.at + 1e-6 >= RULES.lateStart[0] && g.at <= 1 && g.dur <= RULES.lateHold[1] + 1e-6, `${ep.id} #${i} late glance ${g.at}+${g.dur}`);
+        }
+        seen[v || 'turn']++;
+      }
+      firstTurn = false;
+    }
+  }
+  const varied = seen.late + seen.notes + seen.skip;
+  assert.ok(varied >= 3, `varied turn starts: ${JSON.stringify(seen)}`);
+  assert.ok(varied / (varied + seen.turn) <= 0.3, `most turn starts keep the approved glance: ${JSON.stringify(seen)}`);
+});
+
+test('TECH BYTES (§4 item 6): each listener makes at most one partner look per segment (a separate dry-line glance replaces the turn glance)', async () => {
+  const { planSegment } = await import('../public/js/v2/canvas25d/direction/index.js');
+  let segs = 0;
+  for (const ep of reseeded(fixtureEpisodes(['tech-bytes']), 8)) {
+    const N = ep.segments.length;
+    for (let i = 0; i < N; i++) {
+      const { ctx, events } = planSegment(ep, i, { gapAfter: i + 1 < N ? 0.9 : null });
+      if (!ctx?.valid || !ctx.duo) continue;
+      for (const slot of ctx.listeners) {
+        const lk = events.filter((e) => e.kind === 'look' && e.slot === slot && e.target === 'partner' && e.at < ctx.duration);
+        assert.ok(lk.length <= 1, `${ep.id} #${i}: ${lk.map((l) => l.why).join(', ')}`);
+      }
+      segs++;
+    }
+  }
+  assert.ok(segs >= 40, `${segs} segments`);
+});
+
+test('interest airs with the real shot plan: a reaction or an interest-lifted glance only where the listener is in frame; never grave, never on UNIT-8 lines, never on a dry line', async () => {
+  const { planSegment } = await import('../public/js/v2/canvas25d/direction/index.js');
+  let duo = 0, aired = 0;
+  for (const ep of reseeded(fixtureEpisodes(DUOS), 8)) {
+    const N = ep.segments.length;
+    for (let i = 0; i < N; i++) {
+      const { ctx, events } = planSegment(ep, i, { gapAfter: i + 1 < N ? 0.9 : null });
+      if (!ctx?.valid || !ctx.duo) continue;
+      duo++;
+      for (const e of events) {
+        if (e.kind !== 'look' || !ctx.listeners.includes(e.slot)) continue;
+        const reaction = e.target === 'interest';
+        const lifted = e.target === 'partner' && e.style === 'interest' && /^turn/.test(e.why);
+        if (!reaction && !lifted) continue;
+        aired++;
+        assert.ok(!ctx.grave, `${ep.id} #${i}: never on a grave line`);
+        assert.ok(ctx.cast[e.slot] !== 'unit8', 'never by UNIT-8');
+        assert.ok(!(ctx.speakerId === 'unit8' && ctx.type === 'chat'), 'never on UNIT-8 literal lines');
+        if (lifted) assert.ok(!(ctx.programId === 'tech-bytes' && ctx.dryLine), 'never on a dry line');
+        if (reaction) {
+          let cur = ctx.shots[0];
+          for (const s of ctx.shots) if (s.at <= e.at + 1e-6) cur = s;
+          assert.ok(cur.shot === 'wide' || cur.framing === 'two' || (cur.shot === 'close' && cur.focus === e.slot), `${ep.id} #${i}: the listener is in frame (${cur.shot}/${cur.framing})`);
+        }
+      }
+    }
+  }
+  assert.ok(aired >= Math.max(3, duo / 60), `interest aired ${aired} times in ${duo} duo segments`);
+});
+
+test('blinks: a listener through a whole WORLD NOW conversation blinks 12-17 times a minute (more reads as nervous)', async () => {
+  const { buildConversation } = await import('../public/js/v2/canvas25d/labs/face.js');
+  const { actor } = await import('../public/js/v2/canvas25d/scene.js');
+  const { poseAt } = await import('../public/js/v2/canvas25d/rig.js');
+  const c = buildConversation(EPISODES['world-now']);
+  for (const [slot, id] of [['B', 'lola'], ['A', 'paco']]) {
+    const a = actor(id, { side: slot === 'A' ? 1 : -1, seed: slot === 'A' ? 31 : 77, look: c.perfs[slot].look, speech: liveSpeech(c.audio, slot) });
+    let n = 0, was = false;
+    for (let t = 0; t < c.end; t += 1 / 60) {
+      const b = poseAt(a, t).face.blink > 0.5;
+      if (b && !was) n++;
+      was = b;
+    }
+    const perMin = (n / c.end) * 60;
+    assert.ok(perMin >= 12 && perMin <= 17, `${id}: ${perMin.toFixed(1)} blinks a minute over ${c.end.toFixed(0)} s`);
+  }
+});
+
+test('skin at partner yaw: no shade island of ≤ 4 px inside lit skin (a mole or a scar on the cheek) and no lit island in the shade, 6 presenters, both seats, s 2.7 / 3.4 / 4', async () => {
+  const { actor, parts, frame, drawActors } = await import('../public/js/v2/canvas25d/scene.js');
+  const { GROUPS } = await import('../public/js/v2/canvas25d/character.js');
+  const W = 384, H = 216;
+  const seen = new Uint8Array(W * H);
+  const bad = [];
+  for (const id of ['paco', 'lola', 'max', 'ada', 'penny', 'sam']) {
+    for (const s of [2.7, 3.4, 4]) {
+      for (const side of [1, -1]) {
+        for (const t of [1.2, 2.6]) {
+          const a = actor(id, { side, seed: 5, emotions: [], look: [{ t0: 0.6, t1: 4.3 }] });
+          frame.clear(0xff302020);
+          const hd = drawActors(t, [{ actor: a, x: 192, y: Math.round(108 + 14 * s), s }])[0];
+          const skin = a.look._mats.skin, g = (hd.gb || 0) + GROUPS.head;
+          seen.fill(0);
+          for (let p = 0; p < W * H; p++) {
+            if (seen[p] || parts.mat[p] !== skin || parts.grp[p] !== g || parts.tone[p] === 0) continue;
+            const tone = parts.tone[p];
+            const stack = [p], comp = [];
+            seen[p] = 1;
+            let enclosed = true, other = -1;
+            while (stack.length) {
+              const q = stack.pop();
+              comp.push(q);
+              const x = q % W, y = (q / W) | 0;
+              for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                const r = (y + dy) * W + x + dx;
+                if (parts.mat[r] !== skin || parts.grp[r] !== g || parts.tone[r] === 0) {
+                  enclosed = false;
+                  continue;
+                }
+                if (parts.tone[r] === tone) {
+                  if (!seen[r]) {
+                    seen[r] = 1;
+                    stack.push(r);
+                  }
+                } else if (other < 0) other = parts.tone[r];
+                else if (other !== parts.tone[r]) enclosed = false;
+              }
+            }
+            if (enclosed && comp.length <= 4 && other >= 0) bad.push(`${id} s${s} side${side} t${t}: ${comp.length} px of tone ${tone} in ${other} at (${(((comp[0] % W) - hd.cx) / s).toFixed(1)}, ${((((comp[0] / W) | 0) - hd.cy) / s).toFixed(1)}) u`);
+          }
+        }
+      }
+    }
+  }
+  assert.deepEqual(bad, []);
+});

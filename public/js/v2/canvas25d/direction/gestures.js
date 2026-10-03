@@ -207,7 +207,7 @@ const HEAD_GAP = 3.5; // s between two planned head statements of one speaker (s
 // lowest screen row a gesture's hand may reach at its apex in a single (6 px above the lower third's tag
 // row at y 166, where two caption lines also start) and in wider shots (6 px above the ticker band)
 const HAND_FLOOR = 160, HAND_FLOOR_WIDE = 190, WRIST_FLOOR = 166;
-const SINGLE_SCALE = 2.6; // presenter scale from which a framing counts as a single
+const SINGLE_SCALE = 2.2; // presenter scale from which a framing counts as a single (the over-the-shoulder 2.41 too)
 const CPS = 14.5; // chars per second to estimate segment lengths from the episode summary
 /**
  * Identity of a gesture for the no-repeat rule: its family (variants that read alike on screen share
@@ -546,16 +546,20 @@ class SegmentPlan {
     // the viewer must see the hands: an arm gesture's apex hand inside the framing of its shot
     if (arm && !this.visible(ev, d)) return why(ev, 'not-visible');
     // never the same gesture twice in a row (name and variant), whatever planned it
+    // (for an arm gesture: nor the arm gestures around it, a nod in between does not make it new)
     const key = keyOf(ev);
-    let before = null, after = null;
+    let before = null, after = null, bArm = null, aArm = null;
     for (const p of this.events) {
       if (p.at <= ev.at && (!before || p.at > before.at)) before = p;
       if (p.at > ev.at && (!after || p.at < after.at)) after = p;
+      if (arm && p.arm && p.at <= ev.at && (!bArm || p.at > bArm.at)) bArm = p;
+      if (arm && p.arm && p.at > ev.at && (!aArm || p.at < aArm.at)) aArm = p;
     }
-    if ((before && keyOf(before) === key) || (after && keyOf(after) === key)) return why(ev, 'c51');
+    if ((before && keyOf(before) === key) || (after && keyOf(after) === key)) return why(ev, 'repeat');
+    if ((bArm && keyOf(bArm) === key) || (aArm && keyOf(aArm) === key)) return why(ev, 'repeat');
     // ...nor as the first arm gesture of a turn when the presenter's previous turn ended on it
-    if (arm && this.avoidFirst === key && !this.events.some((p) => p.arm && p.at < ev.at)) return why(ev, 'c53');
-    if (ev.name === 'steeple' && R.B.steeplePerStory && this.steeples >= R.B.steeplePerStory) return why(ev, 'c54');
+    if (arm && this.avoidFirst === key && !this.events.some((p) => p.arm && p.at < ev.at)) return why(ev, 'repeat-turn');
+    if (ev.name === 'steeple' && R.B.steeplePerStory && this.steeples >= R.B.steeplePerStory) return why(ev, 'steeple-story');
     return true;
   }
 
@@ -683,9 +687,10 @@ function previousTurns(ctx) {
   const me = ctx.seg.anchor;
   let elapsed = 0; // s from the start of segment j to this segment's first word
   let marked = Infinity, arm = Infinity, fam = null, usedM = 0, usedB = 0, first = true;
-  // the presenter's last two turns (and the other presenter's lines between them, estimated from the
-  // summary: their exact timelines are not needed and would cost a context each)
-  for (let j = ctx.index - 1, own = 0; j >= 0 && own < 2; j--) {
+  // the presenter's recent turns, back to the last one with an arm gesture (at most four) and at least
+  // 12 s (the other presenter's lines between them are estimated from the summary: their exact
+  // timelines are not needed and would cost a context each)
+  for (let j = ctx.index - 1, own = 0; j >= 0 && own < 4 && (fam === null || elapsed <= 12); j--) {
     if (segs[j]?.anchor !== me) {
       elapsed += (segs[j]?.chars || 0) / CPS + 0.7;
       continue;
@@ -709,7 +714,6 @@ function previousTurns(ctx) {
       if (e.arm && (!last || e.at > last.at)) last = e;
     }
     if (last && fam === null) fam = familyOf(last);
-    if (fam !== null && elapsed > 12) break;
   }
   return { marked, arm, fam, usedM, usedB };
 }
@@ -1124,10 +1128,15 @@ function cutAt(ctx, t) {
   return s;
 }
 
-/** Framing of a cut: its own, else the camera planner's for that cut (planSegment strips it), else a guess. */
+/**
+ * Framing of a cut: its own (planSegment passes it since w2-integ fix r1), else the camera planner's for
+ * that cut (older contexts strip it), else a guess from the legacy shot.
+ */
 function framingOfCut(ctx, cut) {
-  if (cut.framing !== undefined) return cut.framing;
-  for (const e of cutsOf(ctx)) if (Math.abs(e.at - cut.at) < 0.002 && e.shot === cut.shot) return e.framing;
+  if (cut.framing != null) return cut.framing;
+  if (cut.framing === undefined) {
+    for (const e of cutsOf(ctx)) if (Math.abs(e.at - cut.at) < 0.002 && e.shot === cut.shot && e.framing != null) return e.framing;
+  }
   return cut.shot === 'wide' ? 'wide' : cut.shot === 'close' ? (ctx.duo ? 'mcu' : 'solo-mcu') : null;
 }
 

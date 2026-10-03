@@ -25,18 +25,27 @@
 //   - `look.handStyle === 'robot'` (UNIT-8): the same skeleton in steel, each
 //     phalanx a separate segment with a dark joint line, a palm seam, plain
 //     knuckle pins; no nails, creases or lights (cosmos.md UNIT-8 table).
-// Sleeves are tapered tubes with an elbow fold, a slightly flared hem and a
-// flat-ended shirt cuff that overlaps the wrist, so the hand comes OUT of
-// the sleeve instead of being stuck on top of it.
+// Sleeves taper from the biceps to the hem (about a third narrower), a bent
+// arm gets a blunt corner at the outer elbow, fold creases at the inner crease
+// and a pull line up the upper arm; the shirt cuff comes out from under the
+// sleeve, so the hand comes OUT of the sleeve instead of being stuck on it.
+// Finish passes keep clean clusters: no lone detail, line or highlight pixel,
+// separations only between fingers at least 2 px wide (a closed hand below the
+// close-up scale reads as one mass), knuckles as a ridge on a closed hand.
 //
 // Draw order and groups inside drawArm (z is the arm's base depth from
 // character.js; each arm owns z .. z+3):
-//   sleeve (ga, z) → wrist skin (gh, z+1) → cuff (gc, z+2) → hand (gh, z+3)
-// Only one hand group is used: the inner details are painted here, so the
-// other hand groups (gh+1..gh+5) and the spare 28-29 stay free.
+//   wrist skin (gh, z) → cuff (gc, z+1) → sleeve (ga, z+2; its cap down to the
+//   armpit in gh+1, joined to the jacket) → hand (gh, z+3)
+// The sleeve is drawn over the cuff, so the hem is the sleeve's open edge (an
+// arc), never a ring around the wrist. Groups used per arm: ga, gc, gh and
+// gh+1 (the sleeve cap); gh+2..gh+5 and the spare 28-29 stay free.
+// A hand against the presenter's own face, ears or neck keeps a continuous
+// outline and casts a 1-2 px shadow on the skin below-right of it (key light
+// upper left), so it never melts into the same skin ramp.
 //
-// No allocation per frame in the pixel loops: scratch buffers are module
-// level and sized for the largest close-up.
+// No allocation per frame: scratch buffers are module level and sized for the
+// largest close-up; the hot loops use Math.sqrt (no Math.hypot) and no closures.
 import { P } from '../../palette.js';
 import { TILT, clamp } from './space.js';
 import { material, toneN, MAT, LIGHT } from './pixbuf.js';
@@ -88,7 +97,7 @@ const L2X = LX / L2L, L2Y = LY / L2L;
 // Small vector helpers on caller-owned arrays (no allocation)
 
 function norm3(v) {
-  const l = Math.hypot(v[0], v[1], v[2]) || 1;
+  const l = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) || 1;
   v[0] /= l;
   v[1] /= l;
   v[2] /= l;
@@ -143,7 +152,7 @@ export function handGeometry(L, arm, side, g) {
   REF[0] = -f[0] * f[2];
   REF[1] = -f[1] * f[2];
   REF[2] = 1 - f[2] * f[2];
-  const rl = Math.hypot(REF[0], REF[1], REF[2]);
+  const rl = Math.sqrt(REF[0] * REF[0] + REF[1] * REF[1] + REF[2] * REF[2]);
   if (rl < 0.35) {
     // "up" (0, -1, 0) made perpendicular to f, mixed in as f turns toward the lens
     const k = (0.35 - rl) / 0.35;
@@ -164,7 +173,7 @@ export function handGeometry(L, arm, side, g) {
   WV[0] -= REF[0] * k;
   WV[1] -= REF[1] * k;
   WV[2] -= REF[2] * k;
-  if (Math.hypot(WV[0], WV[1], WV[2]) < 1e-3) {
+  if (Math.sqrt(WV[0] * WV[0] + WV[1] * WV[1] + WV[2] * WV[2]) < 1e-3) {
     cross3(f, REF, WV);
     WV[0] *= side;
     WV[1] *= side;
@@ -318,9 +327,9 @@ const SPAN = new Float64Array(8);
 const EDGE_IDX = new Int32Array(4096);
 let edgeN = 0;
 
-function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0, collect = false, splitU = -1, splitG = 0) {
+function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0, collect = false, splitU = -1, splitG = 0, endK = 1) {
   const dx = bx - ax, dy = by - ay;
-  const len = Math.hypot(dx, dy);
+  const len = Math.sqrt(dx * dx + dy * dy);
   const R = Math.max(ra, rb);
   const ux = len > 1e-6 ? dx / len : 1, uy = len > 1e-6 ? dy / len : 0;
   // oriented box corners
@@ -377,12 +386,18 @@ function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0
     for (let x = xs; x < xe; x++) {
       if (clip && y >= clipY[x]) continue;
       const cx = x + 0.5;
-      let u = cx * dxi + uRow;
-      u = u < 0 ? 0 : u > 1 ? 1 : u;
+      const uRaw = cx * dxi + uRow;
+      const u = uRaw < 0 ? 0 : uRaw > 1 ? 1 : uRaw;
       const r = ra + dr * u;
       const ex = cx - ax - dx * u, ey = ry - dy * u;
-      const d2 = ex * ex + ey * ey;
+      let d2 = ex * ex + ey * ey;
       const r2 = r * r;
+      // a flattened end (endK > 1): past the end the along-axis distance counts endK times, so the
+      // cap is a shallow ellipse (a sleeve opening seen from the front), not a dome
+      if (endK > 1 && uRaw > 1) {
+        const al = ex * ux + ey * uy;
+        d2 += al * al * (endK * endK - 1);
+      }
       if (d2 > r2) continue;
       const i = row + x;
       mat[i] = m;
@@ -407,7 +422,7 @@ const LGX = LIGHT[0], LGY = LIGHT[1], LGZ2 = LIGHT[2] * LIGHT[2];
 const QUAD = new Float64Array(12);
 function cuffQuad(buf, ax, ay, bx, by, ra, rb, m) {
   const dx = bx - ax, dy = by - ay;
-  const len = Math.hypot(dx, dy) || 1e-6;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1e-6;
   const ux = dx / len, uy = dy / len;
   const nx = -uy, ny = ux;
   // rounded start (hidden under the sleeve), flat end
@@ -456,12 +471,11 @@ export function drawArm(buf, L, m, arm, side, toS, s, ga, gc, gh, z) {
   // upper arm and forearm in one group from just below the shoulder point: the round start of the
   // upper arm against the jacket draws the armhole seam (an arc from the shoulder top to the armpit)
   const ux = exp - sxp, uy = eyp - syp;
-  const ul = Math.hypot(ux, uy) || 1;
+  const ul = Math.sqrt(ux * ux + uy * uy) || 1;
   const capK = Math.min(0.32, (A.rUpper * 1.1 * s) / ul);
   const cx0 = sxp + ux * capK, cy0 = syp + uy * capK;
   const jacketG = ga - (ga % GROUPS_PER_ACTOR) + GROUPS.jacket;
   shoulderCap(buf, sxp, syp, cx0, cy0, A.rUpper * s, m.sleeve, jacketG);
-  buf.part(ga, z, false);
   edgeN = 0;
   const rimOn = s >= 1.6;
   // The sleeve cap (the upper arm down to the armpit) is its own group joined to the jacket and to the
@@ -474,18 +488,14 @@ export function drawArm(buf, L, m, arm, side, toS, s, ga, gc, gh, z) {
   buf.joinGroups(gTop, ga);
   const capLen = ul * (1 - capK);
   const splitU = clamp((SEAM_DOWN * rU - capK * ul) / (capLen || 1), 0, 0.6);
-  capsuleFast(buf, cx0, cy0, exp, eyp, A.rUpper * 0.99 * s, A.rElbow * s, m.sleeve, 0, Math.max(0.22, splitU), rimOn, splitU, gTop);
-  if (s >= 1.9) armSeam(buf, sxp, syp, ux / ul, uy / ul, B, rU, side, gTop, jacketG, hm.sleeveD);
   const fx = wxp - exp, fy = wyp - eyp;
-  const fl = Math.hypot(fx, fy) || 1;
+  const fl = Math.sqrt(fx * fx + fy * fy) || 1;
   const cuffLen = Math.min(fl * 0.4, 1.3 * s); // shirt cuff showing past the jacket sleeve
   const hemX = wxp - (fx / fl) * cuffLen, hemY = wyp - (fy / fl) * cuffLen;
-  capsuleFast(buf, exp, eyp, hemX, hemY, A.rElbow * s, A.rWrist * 1.12 * s, m.sleeve, 0, 0, rimOn);
-  if (s >= 1.6) sleeveFolds(buf, L, hm, arm, sxp, syp, exp, eyp, hemX, hemY, s, ga);
-  if (rimOn) sleeveRim(buf, ga, m.sleeve, hm.rim);
 
-  // ---- wrist skin, under the cuff (same group as the hand: no line between them)
-  buf.part(gh, z + 1, false);
+  // ---- wrist skin and the shirt cuff FIRST, under the sleeve: the jacket sleeve overhangs the cuff, so
+  // the hem reads as the sleeve's open edge (one arc), never as a closed ring around the wrist
+  buf.part(gh, z, false);
   const hd = arm.handDir;
   const H = A.hand;
   const wx2 = px(B, arm.wrist[0] + hd[0] * H * 0.1, arm.wrist[1] + hd[1] * H * 0.1, arm.wrist[2] + hd[2] * H * 0.1);
@@ -493,11 +503,20 @@ export function drawArm(buf, L, m, arm, side, toS, s, ga, gc, gh, z) {
   const rw = Math.max(0.6, A.rWrist * 0.78 * s);
   if (hm.robot) capsuleFast(buf, hemX, hemY, wx2, wy2, rw * 0.8, rw * 0.8, hm.skin, 1);
   else capsuleFast(buf, hemX, hemY, wx2, wy2, rw, rw * 0.92, hm.skin);
-
-  // ---- shirt cuff over the wrist
-  buf.part(gc, z + 2, false);
+  buf.part(gc, z + 1, false);
   if (s < 1.2) capsuleFast(buf, hemX, hemY, wxp, wyp, A.rWrist * 0.98 * s, A.rWrist * 0.9 * s, m.cuff);
   else cuffQuad(buf, hemX, hemY, wxp, wyp, A.rWrist * 1.02 * s, A.rWrist * 0.95 * s, m.cuff);
+
+  // ---- the sleeve over them: upper arm and forearm tapering from the biceps to the hem (a suit sleeve
+  // narrows by a third), a corner at the outer elbow when the arm bends, folds at the inner crease
+  buf.part(ga, z + 2, false);
+  capsuleFast(buf, cx0, cy0, exp, eyp, A.rUpper * 0.99 * s, A.rElbow * s, m.sleeve, 0, Math.max(0.22, splitU), rimOn, splitU, gTop);
+  if (s >= 1.9) armSeam(buf, sxp, syp, ux / ul, uy / ul, B, rU, side, gTop, jacketG, hm.sleeveD);
+  capsuleFast(buf, exp, eyp, hemX, hemY, A.rElbow * s, A.rWrist * 1.04 * s, m.sleeve, 0, 0, rimOn, -1, 0, s >= 1.2 ? 2.4 : 1);
+  const bend = elbowBend(arm);
+  if (s >= 1.6 && bend > 1.0) elbowCorner(buf, exp, eyp, -ux / ul, -uy / ul, fx / fl, fy / fl, A.rElbow * s, m.sleeve, ga, clamp((bend - 1.0) / 0.8, 0, 1));
+  if (s >= 1.6) sleeveFolds(buf, L, hm, arm, sxp, syp, exp, eyp, hemX, hemY, s, ga, bend);
+  if (rimOn) sleeveRim(buf, ga, m.sleeve, hm.rim);
 
   // ---- the hand
   handGeometry(L, arm, side, HG);
@@ -551,20 +570,83 @@ function armSeam(buf, sx, sy, ux, uy, B, rU, side, gTop, jacketG, mD) {
  * (1-2 short dark creases) and a lit point on the outside; a soft crease near
  * the hem at close-up scales. Painted with the jacket's exact colours.
  */
-function sleeveFolds(buf, L, hm, arm, sx, sy, ex, ey, hx, hy, s, ga) {
+/** How far the elbow bends (rad, 0 = a straight arm), from the 3D bones. */
+function elbowBend(arm) {
   S3[0] = arm.shoulder[0] - arm.elbow[0];
   S3[1] = arm.shoulder[1] - arm.elbow[1];
   S3[2] = arm.shoulder[2] - arm.elbow[2];
   E3[0] = arm.wrist[0] - arm.elbow[0];
   E3[1] = arm.wrist[1] - arm.elbow[1];
   E3[2] = arm.wrist[2] - arm.elbow[2];
-  const c = dot3(S3, E3) / ((Math.hypot(S3[0], S3[1], S3[2]) * Math.hypot(E3[0], E3[1], E3[2])) || 1);
-  const bend = Math.PI - Math.acos(clamp(c, -1, 1)); // 0 = straight
+  const c = dot3(S3, E3) / (Math.sqrt(dot3(S3, S3) * dot3(E3, E3)) || 1);
+  return Math.PI - Math.acos(clamp(c, -1, 1));
+}
+
+/**
+ * The outer elbow of a bent sleeve: the fabric is pulled into a blunt corner over the joint, not a round
+ * cap (two capsules meeting read as a sausage). A miter wedge between the two tubes' outer edges, filled
+ * only where the sleeve is not drawn yet, its point `k` (0..1, with the bend) beyond the circle.
+ */
+const ELB = new Float64Array(8);
+function elbowCorner(buf, ex, ey, ux, uy, vx, vy, r, m, g, k) {
+  // u: elbow → shoulder, v: elbow → wrist (unit, screen); their sum points into the crook
+  let ox = -(ux + vx), oy = -(uy + vy);
+  const ol = Math.sqrt(ox * ox + oy * oy);
+  if (ol < 0.15) return; // nearly straight on screen
+  ox /= ol;
+  oy /= ol;
+  // the tube normals on the outer side
+  let ax = -uy, ay = ux;
+  if (ax * ox + ay * oy < 0) {
+    ax = -ax;
+    ay = -ay;
+  }
+  let bx = -vy, by = vx;
+  if (bx * ox + by * oy < 0) {
+    bx = -bx;
+    by = -by;
+  }
+  const tip = r * (1 + 0.24 * k);
+  ELB[0] = ex + ax * r;
+  ELB[1] = ey + ay * r;
+  ELB[2] = ex + ox * tip;
+  ELB[3] = ey + oy * tip;
+  ELB[4] = ex + bx * r;
+  ELB[5] = ey + by * r;
+  const x0 = Math.max(1, Math.floor(Math.min(ex, ELB[0], ELB[2], ELB[4]))), x1 = Math.min(buf.w - 1, Math.ceil(Math.max(ex, ELB[0], ELB[2], ELB[4])) + 1);
+  const y0 = Math.max(1, Math.floor(Math.min(ey, ELB[1], ELB[3], ELB[5]))), y1 = Math.min(buf.h - 1, Math.ceil(Math.max(ey, ELB[1], ELB[3], ELB[5])) + 1);
+  const { mat, tone, grp, z } = buf;
+  const W = buf.w, cz = buf.cz;
+  for (let y = y0; y < y1; y++) {
+    const cy = y + 0.5;
+    for (let x = x0; x < x1; x++) {
+      const i = y * W + x;
+      if (mat[i] && grp[i] === g) continue; // the tubes are already shaded here
+      const cx = x + 0.5;
+      if (!inTri(cx, cy, ex, ey, ELB[0], ELB[1], ELB[2], ELB[3]) && !inTri(cx, cy, ex, ey, ELB[2], ELB[3], ELB[4], ELB[5])) continue;
+      mat[i] = m;
+      // the rim of a tube: lit facing the key, shade away from it
+      const nx = cx - ex, ny = cy - ey, nl = Math.sqrt(nx * nx + ny * ny) || 1;
+      tone[i] = toneN(m, (nx / nl) * 0.92, (ny / nl) * 0.92);
+      grp[i] = g;
+      z[i] = cz;
+    }
+  }
+  buf._touch(x0, y0, x1, y1);
+}
+function inTri(px0, py0, ax, ay, bx, by, cx, cy) {
+  const d1 = (px0 - bx) * (ay - by) - (ax - bx) * (py0 - by);
+  const d2 = (px0 - cx) * (by - cy) - (bx - cx) * (py0 - cy);
+  const d3 = (px0 - ax) * (cy - ay) - (cx - ax) * (py0 - ay);
+  return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+}
+
+function sleeveFolds(buf, L, hm, arm, sx, sy, ex, ey, hx, hy, s, ga, bend) {
   const ux = sx - ex, uy = sy - ey, vx = hx - ex, vy = hy - ey;
-  const ul = Math.hypot(ux, uy) || 1, vl = Math.hypot(vx, vy) || 1;
+  const ul = Math.sqrt(ux * ux + uy * uy) || 1, vl = Math.sqrt(vx * vx + vy * vy) || 1;
   // inner side of the elbow on screen: between the two bones
   let ix = ux / ul + vx / vl, iy = uy / ul + vy / vl;
-  const il = Math.hypot(ix, iy);
+  const il = Math.sqrt(ix * ix + iy * iy);
   const r = L.arm.rElbow * s;
   if (bend > 0.45 && il > 0.2) {
     ix /= il;
@@ -579,10 +661,11 @@ function sleeveFolds(buf, L, hm, arm, sx, sy, ex, ey, hx, hy, s, ga) {
       const bx = ax + (vx / vl) * lenK - ix * off, by = ay + (vy / vl) * lenK - iy * off;
       paintLine(buf, ax, ay, bx, by, hm.sleeveD, 3, ga);
     }
-    // the outer elbow catches the key light when it points up/left
-    if (s >= 2.7) {
-      const ox = Math.round(ex - ix * (r - 0.8)), oy = Math.round(ey - iy * (r - 0.8));
-      if (-ix * L2X - iy * L2Y > 0.2) buf.paint(ox, oy, hm.sleeveD, 0, ga);
+    // a pull line: the fabric drawn from the crook up the upper arm toward its outer side (bent arms only)
+    if (s >= 2.2 && bend > 1.0) {
+      const ax = ex + ix * (r - 0.6), ay = ey + iy * (r - 0.6);
+      const L1 = r * (1.1 + 0.5 * k);
+      paintLine(buf, ax + (ux / ul) * r * 0.5, ay + (uy / ul) * r * 0.5, ax + (ux / ul) * L1 - ix * r * 0.55, ay + (uy / ul) * L1 - iy * r * 0.55, hm.sleeveD, 2, ga);
     }
   }
   // a soft crease where the forearm sleeve bunches above the hem
@@ -683,6 +766,7 @@ const TN = new Int8Array(LW * LH); // tone 0..3; 4 = line; 8+ = detail (decal to
 const UU = new Float32Array(LW * LH); // position along the bone 0..1
 const VV = new Float32Array(LW * LH); // signed offset across the bone, -1..1
 const LV = new Float32Array(LW * LH); // light value before it becomes a tone (form + silhouette passes)
+const BT = new Int8Array(LW * LH); // the form tone of each pixel before lines and details (the clean-up reverts to it)
 const P2 = new Float64Array(20 * 3); // projected joints: x, y, depth
 const HULL_IN = new Float64Array(PALM_N * 4 + 4 + 16);
 const HULL = new Float64Array(PALM_N * 4 + 8 + 16);
@@ -766,6 +850,9 @@ function rasterHand(buf, L, hm, g, B, s, gh, z) {
   HI_T = lod >= 3 ? 1.12 : lod === 2 ? 1.2 : 9;
   // per-finger tube shading only where a finger is wide enough to carry it
   BONE_GAIN = lod <= 1 ? 0.3 : lod === 2 ? 0.55 : 0.75;
+  // a closed hand (fingers held together: steeple, grip, fist) below the close-up scale is shaded as one
+  // mass: per-finger tube shading would stack into stripes along the fingers
+  if (g.spread < 0.3 && lod <= 2) BONE_GAIN *= 0.4;
   BIAS_GAIN = lod <= 1 ? 0.5 : 1;
   ROBOT_JOINTS = hm.robot && s >= 2.2;
   const robot = hm.robot;
@@ -799,22 +886,52 @@ function rasterHand(buf, L, hm, g, B, s, gh, z) {
   // (lit upper-left edge, shaded lower-right edge), so small hands read as a mass, not as stripes
   formTones(lod);
   // ---- finish
-  if (lod >= 1) separations(g, robot, lod);
+  if (lod >= 1) separations(g, robot, lod, s);
   if (lod >= 1 && !robot) contactShadow();
   if (lod >= 2) details(g, B, s, lod, robot, back);
+  // ---- clean clusters (owner 17:50 "no noise"): no lone detail, line or highlight pixel survives, and a
+  // separation broken into dashes is joined into one line
+  if (lod >= 1) cleanClusters();
 
   // ---- write into the PartBuffer
   const W = buf.w;
   const { mat, tone, grp, z: zbuf } = buf;
   const mSkin = hm.skin, mLine = hm.line, mDet = hm.detail;
+  // the face, ears and neck of this presenter: a hand over them must not melt into the same skin ramp
+  const gb = gh - (gh % GROUPS_PER_ACTOR);
+  const gHead = gb + GROUPS.head, gEars = gb + GROUPS.ears, gNeck = gb + GROUPS.neck;
+  let overSkin = false;
   let tx0 = LW, ty0 = LH, tx1 = 0, ty1 = 0;
   for (let j = 0; j < bh; j++) {
     const o = j * LW;
     const row = (by0 + j) * W + bx0;
     for (let i = 0; i < bw; i++) {
       if (OWN[o + i] < 0) continue;
-      const v = TN[o + i];
+      let v = TN[o + i];
       const k = row + i;
+      // against skin (over it, or next to it), the hand's silhouette is a continuous outline (detail
+      // pixels included): the same skin ramp must never let the fingers melt into the face or neck
+      if (!hm.robot) {
+        const kk = o + i;
+        const edge = i === 0 || j === 0 || i === bw - 1 || j === bh - 1 || OWN[kk - 1] < 0 || OWN[kk + 1] < 0 || OWN[kk - LW] < 0 || OWN[kk + LW] < 0;
+        if (mat[k] && (grp[k] === gHead || grp[k] === gEars || grp[k] === gNeck)) {
+          overSkin = true;
+          if (edge) v = 4;
+        } else if (edge && v !== 4) {
+          for (let q = 0; q < 4; q++) {
+            // only the sides where the hand ends (a hand pixel there is not written yet: skin under it)
+            const inside = q === 0 ? i > 0 && OWN[kk - 1] >= 0 : q === 1 ? i < bw - 1 && OWN[kk + 1] >= 0 : q === 2 ? j > 0 && OWN[kk - LW] >= 0 : j < bh - 1 && OWN[kk + LW] >= 0;
+            if (inside) continue;
+            const nk = q === 0 ? k - 1 : q === 1 ? k + 1 : q === 2 ? k - W : k + W;
+            const g2 = grp[nk];
+            if (mat[nk] && (g2 === gHead || g2 === gEars || g2 === gNeck)) {
+              v = 4;
+              overSkin = true;
+              break;
+            }
+          }
+        }
+      }
       if (v === 4) {
         mat[k] = mLine;
         tone[k] = 0;
@@ -834,6 +951,40 @@ function rasterHand(buf, L, hm, g, B, s, gh, z) {
     }
   }
   if (tx1 >= tx0) buf._touch(bx0 + tx0, by0 + ty0, bx0 + tx1 + 1, by0 + ty1 + 1);
+  // the hand's shadow on the face: the key light is upper left, so the skin just right of and below the
+  // hand turns one step darker (two pixels deep in the close-ups): it separates the hand from the face
+  if (overSkin) faceShadow(buf, gh, gHead, gEars, gNeck, s >= 2.7 ? 2 : 1);
+}
+
+/** Darken skin of the head groups next to (right of / below) this hand's pixels (each pixel once). */
+let STAMP = new Uint32Array(384 * 216);
+let stampId = 0;
+function faceShadow(buf, gh, gHead, gEars, gNeck, depth) {
+  const W = buf.w;
+  const { mat, tone, grp } = buf;
+  const flags = MAT.flags;
+  if (STAMP.length < W * buf.h) STAMP = new Uint32Array(W * buf.h); // a bigger lab buffer: once
+  stampId = (stampId + 1) >>> 0 || 1;
+  for (let j = 0; j < bh; j++) {
+    const o = j * LW;
+    for (let i = 0; i < bw; i++) {
+      if (OWN[o + i] < 0) continue;
+      for (let d = 1; d <= depth; d++) {
+        for (let q = 0; q < 3; q++) {
+          // right, below, below-right (the second ring only on the diagonal: a soft edge, not a slab)
+          if (d === 2 && q !== 2) continue;
+          const x = bx0 + i + (q === 1 ? 0 : d), y = by0 + j + (q === 0 ? 0 : d);
+          if (x >= W - 1 || y >= buf.h - 1) continue;
+          const k = y * W + x;
+          const g = grp[k];
+          if (!mat[k] || g === gh || (g !== gHead && g !== gEars && g !== gNeck) || flags[mat[k]] & 1 || STAMP[k] === stampId) continue;
+          if (d === 2 && tone[k] >= 2) continue;
+          STAMP[k] = stampId;
+          tone[k] = Math.min(3, tone[k] + 1);
+        }
+      }
+    }
+  }
 }
 
 /** Shading bias per bone end joint from the bone's visible face normal (curled phalanges turn away from the key). */
@@ -855,7 +1006,8 @@ function boneShades(g) {
         TMP2[1] = -TMP2[1];
         TMP2[2] = -TMP2[2];
       }
-      SEGSHADE[fi * 4 + k + 1] = (dot3(TMP2, L3) - 0.45) * 0.55;
+      // (curled phalanges turn from the key, but stay a soft shade: a rounded mass, not a dark hole)
+      SEGSHADE[fi * 4 + k + 1] = Math.max(-0.42, (dot3(TMP2, L3) - 0.45) * 0.55);
     }
   }
   // thumb: its pad faces roughly between t and n
@@ -920,16 +1072,11 @@ function formTones(lod) {
       const lf = i > 0 ? OWN[k - 1] : -1, u = j > 0 ? OWN[k - LW] : -1;
       if (lf < 0 || u < 0) l += lit;
       let tn = toneOfL(l);
-      // a highlight belongs on an edge that faces the key light (nothing, or a part further back, to
-      // its left or above): inside a form it reads as a scratch across the palm, so it drops to the base
-      if (tn === 0) {
-        const a = OWN[k], zk = ZB[k] - 0.3;
-        const kl = k - 1, ku = k - LW;
-        const edgeL = lf < 0 || (OWN[kl] !== a && ZB[kl] < zk);
-        const edgeU = u < 0 || (OWN[ku] !== a && ZB[ku] < zk);
-        if (!edgeL && !edgeU) tn = 1;
-      }
+      // a highlight belongs on the hand's own silhouette where it faces the key light: inside a form (or
+      // along every finger's edge) it reads as a scratch or a comb of dashes, so it drops to the base
+      if (tn === 0 && lf >= 0 && u >= 0) tn = 1;
       TN[k] = tn;
+      BT[k] = tn;
     }
   }
 }
@@ -993,6 +1140,11 @@ function rasterBone(a, b, ra, rb, own, seg, bias, s) {
   }
 }
 
+/** z of (a − o) × (b − o) for hull points o, a of `out` and the point (bx, by) (module level: no closure per call). */
+function cross2(out, o, a, bx, by) {
+  return (out[a * 2] - out[o * 2]) * (by - out[o * 2 + 1]) - (out[a * 2 + 1] - out[o * 2 + 1]) * (bx - out[o * 2]);
+}
+
 /** Convex hull (monotone chain) of n 2D points in `inp` into `out`; returns the vertex count (CCW in screen space). */
 function hullOf(inp, n, out) {
   for (let i = 0; i < n; i++) ORDER[i] = i;
@@ -1008,10 +1160,9 @@ function hullOf(inp, n, out) {
     ORDER[j + 1] = v;
   }
   let k = 0;
-  const cross = (o, a, bx, by) => (out[a * 2] - out[o * 2]) * (by - out[o * 2 + 1]) - (out[a * 2 + 1] - out[o * 2 + 1]) * (bx - out[o * 2]);
   for (let i = 0; i < n; i++) {
     const x = inp[ORDER[i] * 2], y = inp[ORDER[i] * 2 + 1];
-    while (k >= 2 && cross(k - 2, k - 1, x, y) <= 0) k--;
+    while (k >= 2 && cross2(out, k - 2, k - 1, x, y) <= 0) k--;
     out[k * 2] = x;
     out[k * 2 + 1] = y;
     k++;
@@ -1019,7 +1170,7 @@ function hullOf(inp, n, out) {
   const lower = k + 1;
   for (let i = n - 2; i >= 0; i--) {
     const x = inp[ORDER[i] * 2], y = inp[ORDER[i] * 2 + 1];
-    while (k >= lower && cross(k - 2, k - 1, x, y) <= 0) k--;
+    while (k >= lower && cross2(out, k - 2, k - 1, x, y) <= 0) k--;
     out[k * 2] = x;
     out[k * 2 + 1] = y;
     k++;
@@ -1061,7 +1212,7 @@ function rasterPalm(g, B, s, hn, lod) {
     const e2 = e + 1 === hn ? 0 : e + 1;
     const ax = HULL[e * 2], ay = HULL[e * 2 + 1];
     const ex = HULL[e2 * 2] - ax, ey = HULL[e2 * 2 + 1] - ay;
-    const el = Math.hypot(ex, ey) || 1;
+    const el = Math.sqrt(ex * ex + ey * ey) || 1;
     // inside distance d = nx * x + ny * y + c
     const nx = (-orient * ey) / el, ny = (orient * ex) / el;
     EDGE[e * 4] = nx;
@@ -1076,7 +1227,9 @@ function rasterPalm(g, B, s, hn, lod) {
   const x0 = Math.max(0, Math.floor(minX) - bx0), x1 = Math.min(bw, Math.ceil(maxX) + 1 - bx0);
   const y0 = Math.max(0, Math.floor(minY) - by0), y1 = Math.min(bh, Math.ceil(maxY) + 1 - by0);
   const ew = lod >= 2 ? 1.6 : 1.05; // edge band width (px)
-  const base = 0.32 + lFace * 0.55;
+  // the plate's face: from its normal, but never the deep tone (a palm turned from the key is in soft
+  // shade, not a black wedge: the palm-side point read as a dark triangle)
+  const base = Math.max(0.1, 0.32 + lFace * 0.55);
   // Per row: the span inside the convex hull (from the edge equations, its two ends checked with the
   // exact per-pixel test), then each edge visits only the pixels of its edge band. Same result as
   // testing every edge at every pixel, at a fraction of the cost.
@@ -1152,8 +1305,13 @@ function insideHull(cx, cy, hn) {
  * the thumb's free bones against the palm, curled fingers lying over the palm.
  * The line goes on the pixel BEHIND (or on the right/lower one at equal depth).
  */
-function separations(g, robot, lod) {
+function separations(g, robot, lod, s) {
   const curl = g.curl;
+  // finger widths in px at this scale (a separation needs two fingers at least 2 px wide on either side,
+  // or the hand turns into 1 px skin / 1 px line stripes), and whether the hand is closed (fingers held
+  // together: a steeple, a fist, a grip read as one mass with its silhouette, not as a comb)
+  for (let f = 0; f < 4; f++) FW[f] = 2 * FR[f] * g.H * s;
+  SEP_CLOSED = g.spread < 0.3 && lod < 3;
   for (let j = 0; j < bh; j++) {
     const o = j * LW;
     for (let i = 0; i < bw; i++) {
@@ -1168,7 +1326,9 @@ function separations(g, robot, lod) {
         if (b < 0) continue;
         if (a === b) {
           // robot (UNIT-8): two segments per finger, a 1 px joint between proximal and middle bones
+          // (the thumb too, between its two free bones: UNIT-8's thumb is segmented like its fingers)
           if (ROBOT_JOINTS && a > 1 && SEG[k] !== SEG[kk] && SEG[k] + SEG[kk] === 1) TN[SEG[k] > SEG[kk] ? k : kk] = 4;
+          else if (ROBOT_JOINTS && a === 1 && SEG[k] !== SEG[kk] && SEG[k] + SEG[kk] === 3) TN[SEG[k] > SEG[kk] ? k : kk] = 4;
           continue;
         }
         if (!needsLine(a, b, k, kk, curl, lod)) continue;
@@ -1210,12 +1370,19 @@ function needsLine(a, b, k, kk, curl, lod) {
   if (a === 0 && ROBOT_JOINTS && b >= 2) return true; // the robot's knuckle joint between plate and finger
   if (a === 0) {
     if (b === 1) return SEG[kk] >= 1; // the thumb's metacarpal melts into the palm (thenar)
-    return curl[b - 1] >= 0.45 && SEG[kk] >= 1; // a curled finger over the palm
+    // a curled finger over the palm (one fold line around the curled mass, wide enough to carry it)
+    return curl[b - 1] >= 0.45 && SEG[kk] >= 1 && FW[b - 2] >= 2;
   }
   if (a === 1) return SEG[k] >= 1 || lod >= 2;
-  // two fingers: only where both are past the webbing
+  // two fingers: both at least 2 px wide, and only where they really part (an open hand, or the close-up
+  // scale); two curled fingers side by side are one mass
+  if (FW[a - 2] < 2 || FW[b - 2] < 2) return false;
+  if (SEP_CLOSED) return false;
+  if (curl[a - 1] >= 0.45 && curl[b - 1] >= 0.45) return false;
   return SEG[k] + SEG[kk] >= 1 || UU[k] + UU[kk] > 0.7;
 }
+const FW = new Float64Array(4); // finger widths in px for the current hand
+let SEP_CLOSED = false;
 
 /** The key light comes from the upper left: a palm pixel just below-right of a finger in front of it is in shadow. */
 function contactShadow() {
@@ -1226,7 +1393,7 @@ function contactShadow() {
       if (OWN[k] !== 0 || TN[k] === 4) continue;
       const up = k - LW - 1;
       const ou = OWN[up];
-      if (ou > 0 && ZB[up] > ZB[k] + 0.25 && TN[k] < 2) TN[k] = 2;
+      if (ou > 0 && ZB[up] > ZB[k] + 0.25 && TN[k] < 2) TN[k] = BT[k] = 2;
     }
   }
 }
@@ -1245,33 +1412,37 @@ function details(g, B, s, lod, robot, back) {
       if (robot) continue;
       if (a >= 2) {
         const c = curl[a - 1];
-        // nails: on the back view, the end of an extended finger
-        if (back && sg === 2 && c < 0.6 && u > 0.42 && Math.abs(v) < 0.62) TN[k] = 8 + (u > 0.9 && lod < 3 ? 1 : 0);
-        // PIP crease across an extended finger (both sides of the hand)
-        // (a short tick in the middle of the finger, never a rung across it)
-        else if (lod >= 3 && sg === 1 && u < 0.12 && c < 0.5 && Math.abs(v) < 0.38 && TN[k] < 2) TN[k] = 8 + 2;
+        // nails: on the back view, the end of an extended finger wide enough to carry a 2 px nail
+        // (no PIP creases: at these sizes they were 1 px specks across every finger)
+        if (back && sg === 2 && c < 0.6 && u > 0.42 && Math.abs(v) < 0.62 && FW[a - 2] * TAPER[3] >= 2.6) TN[k] = 8 + (u > 0.9 && lod < 3 ? 1 : 0);
       } else if (a === 1) {
         if (back && sg === 2 && u > 0.45 && Math.abs(v) < 0.6 && curl[0] < 0.6) TN[k] = 8;
       }
     }
   }
-  // ---- knuckles on the back of the hand: a lit pixel and its shadow, bigger on a fist
+  // ---- knuckles on the back of the hand: on a closed hand one continuous ridge across the four knuckles
+  // (a lit row and the shade row under it); on an open hand at the close-up scale a 2 px arc per knuckle
   if (back) {
+    let lx = -1, ly = -1;
     for (let fi = 0; fi < 4; fi++) {
-      const c = curl[fi + 1];
-      if (c < 0.3 && lod < 3) continue;
       const q = fi * 4;
       // the top of the knuckle: the joint pushed to the back of the hand
       const r = R[q];
       const x3 = J[q * 3] - g.n[0] * r, y3 = J[q * 3 + 1] - g.n[1] * r, z3 = J[q * 3 + 2] - g.n[2] * r;
       const X = Math.floor(px(B, x3, y3, z3)) - bx0, Y = Math.floor(py(B, x3, y3, z3)) - by0;
-      setDetail(X, Y, 0, z3 - 0.6);
-      if (c >= 0.55) setDetail(X + 1, Y + 1, 2, z3 - 1.2);
+      // the ridge runs between neighbouring curled fingers only (a pointing hand's index stays smooth)
+      if (curl[fi + 1] >= 0.55) {
+        if (lx >= 0) ridge(lx, ly, X, Y);
+        lx = X;
+        ly = Y;
+      } else {
+        lx = -1;
+        if (lod >= 3 && FW[fi] >= 2.6) {
+          setDetail(X, Y, 0, z3 - 0.6);
+          setDetail(X + 1, Y, 0, z3 - 0.6);
+        }
+      }
     }
-    // wrist bone (ulnar side)
-    const W = g.W, t = g.t, f = g.f, H = g.H;
-    const x3 = W[0] - t[0] * H * 0.16 + f[0] * H * 0.04, y3 = W[1] - t[1] * H * 0.16 + f[1] * H * 0.04, z3 = W[2] - t[2] * H * 0.16 + f[2] * H * 0.04;
-    setDetail(Math.floor(px(B, x3, y3, z3)) - bx0, Math.floor(py(B, x3, y3, z3)) - by0, 0, -1e9, 0);
   } else if (!robot) {
     // wrist crease across the heel of the palm, then the thenar crease at the largest scales
     creaseLine(g, B, -0.15, 0.07, 0.14, 0.06);
@@ -1300,6 +1471,71 @@ function setDetail(X, Y, tone, minDepth, onlyOwn = -1) {
   if (onlyOwn >= 0 && OWN[k] !== onlyOwn) return;
   if (ZB[k] < minDepth) return;
   TN[k] = 8 + tone;
+}
+
+/** The knuckle ridge of a closed hand: a lit line between two knuckle tops and a shade line under it. */
+function ridge(x0, y0, x1, y1) {
+  const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
+  for (let q = 0; q <= n; q++) {
+    const X = Math.round(x0 + ((x1 - x0) * q) / n), Y = Math.round(y0 + ((y1 - y0) * q) / n);
+    ridgePx(X, Y, 0);
+    ridgePx(X, Y + 1, 2);
+  }
+}
+function ridgePx(X, Y, tone) {
+  if (X < 1 || Y < 1 || X >= bw - 1 || Y >= bh - 1) return;
+  const k = Y * LW + X;
+  // inside the hand only (never on its silhouette, which keeps the outline) and not over a line
+  if (OWN[k] < 0 || TN[k] === 4 || OWN[k - 1] < 0 || OWN[k + 1] < 0 || OWN[k - LW] < 0 || OWN[k + LW] < 0) return;
+  if (tone === 2 && TN[k] === 8) return; // the lit row wins where the ridge doubles back
+  TN[k] = 8 + tone;
+}
+
+/**
+ * Clusters, not specks: join 1 px gaps in a separation line, then revert every line, detail or
+ * highlight pixel that has no 8-neighbour of its own kind to the pixel's form tone.
+ */
+function cleanClusters() {
+  // 1. bridge one-pixel gaps between line pixels (along a row, a column or a diagonal), inside the hand
+  for (let j = 1; j < bh - 1; j++) {
+    const o = j * LW;
+    for (let i = 1; i < bw - 1; i++) {
+      const k = o + i;
+      if (OWN[k] < 0 || TN[k] === 4) continue;
+      if (OWN[k - 1] < 0 || OWN[k + 1] < 0 || OWN[k - LW] < 0 || OWN[k + LW] < 0) continue;
+      if ((TN[k - 1] === 4 && TN[k + 1] === 4) || (TN[k - LW] === 4 && TN[k + LW] === 4) || (TN[k - LW - 1] === 4 && TN[k + LW + 1] === 4) || (TN[k - LW + 1] === 4 && TN[k + LW - 1] === 4)) TN[k] = 5; // 5 = bridged (counted as a line below)
+    }
+  }
+  for (let j = 0; j < bh; j++) {
+    const o = j * LW;
+    for (let i = 0; i < bw; i++) if (TN[o + i] === 5) TN[o + i] = 4;
+  }
+  // 2. lone pixels go back to their form tone (a highlight to the base)
+  for (let j = 0; j < bh; j++) {
+    const o = j * LW;
+    for (let i = 0; i < bw; i++) {
+      const k = o + i;
+      if (OWN[k] < 0) continue;
+      const v = TN[k];
+      if (v !== 4 && v < 8 && v !== 0) continue;
+      let same = false;
+      for (let dy = -1; dy <= 1 && !same; dy++) {
+        const jj = j + dy;
+        if (jj < 0 || jj >= bh) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const ii = i + dx;
+          if (ii < 0 || ii >= bw) continue;
+          const kk = k + dy * LW + dx;
+          if (OWN[kk] >= 0 && TN[kk] === v) {
+            same = true;
+            break;
+          }
+        }
+      }
+      if (!same) TN[k] = v === 0 ? 1 : BT[k] === 0 ? 1 : BT[k];
+    }
+  }
 }
 
 /** A crease drawn on the palm plate between two palm-plane points [lateral, along] (fractions of H). */

@@ -50,10 +50,35 @@ const HEAD_HALF = 10; // px at scale 1: half a head plus its hair, from the seat
 const STYLE_IDS = ['world-now', 'tech-bytes', 'cosmos', 'money-minute', 'news-60'];
 
 /**
- * Bake every programme's set ahead of air (StageHost calls it once at boot, in idle time): SET's
- * warmSets() (wall light, wall tables, logo plate, raster loops; idempotent), else one warmSet per id.
+ * Bake every programme's set ahead of air (StageHost calls it once at boot, in idle time). With SET's
+ * warmStep(budgetMs) (w2-set fix r1) the warm-up runs in 4 ms slices, one per idle callback, until it
+ * is done (one warmSets() call could block 150+ ms at boot); else SET's warmSets() (idempotent), else
+ * one warmSet per id. Without an idle scheduler (tests) everything is baked at once.
  */
-export function warmSets(idle = (fn) => fn()) {
+export function warmSets(idle = null) {
+  if (typeof SETM.warmStep === 'function') {
+    if (!idle) {
+      try {
+        SETM.warmStep(Infinity);
+      } catch {
+        /* the first frame of each programme bakes it instead */
+      }
+      return;
+    }
+    let slices = 0;
+    const step = () => {
+      let r = null;
+      try {
+        r = SETM.warmStep(4);
+      } catch {
+        return; // set.js bakes synchronously on first use anyway
+      }
+      if (!r?.done && ++slices < 2000) idle(step);
+    };
+    idle(step);
+    return;
+  }
+  idle ||= (fn) => fn();
   const ids = typeof SETM.warmSets === 'function' ? [null] : STYLE_IDS;
   for (const id of ids) {
     idle(() => {

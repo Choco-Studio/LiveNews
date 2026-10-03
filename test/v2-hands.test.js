@@ -11,12 +11,15 @@ import { GESTURES, APPROVED, defOf, rateOf, durOf } from '../public/js/v2/canvas
 import { poseAt } from '../public/js/v2/canvas25d/rig.js';
 import { actor } from '../public/js/v2/canvas25d/scene.js';
 import { TILT } from '../public/js/v2/canvas25d/space.js';
-import { PartBuffer, Frame } from '../public/js/v2/canvas25d/pixbuf.js';
-import { drawArm } from '../public/js/v2/canvas25d/hands.js';
+import { PartBuffer, Frame, MAT } from '../public/js/v2/canvas25d/pixbuf.js';
+import { drawArm, drawHand } from '../public/js/v2/canvas25d/hands.js';
+import { drawCharacter, GROUPS } from '../public/js/v2/canvas25d/character.js';
+import { SHAPES } from '../public/js/v2/canvas25d/gestures/shapes.js';
+import { paceFor } from '../public/js/pace.js';
 import { matsOf } from '../public/js/v2/canvas25d/cast/base.js';
 import { LOOKS, PRESENTER_IDS } from '../public/js/v2/canvas25d/cast/index.js';
 import { planSegment } from '../public/js/v2/canvas25d/direction/index.js';
-import { planGestures, CONFIG_POLICY, BIBLE, countFromText, episodePlan, familyOf } from '../public/js/v2/canvas25d/direction/gestures.js';
+import { planGestures, CONFIG_POLICY, BIBLE, countFromText, episodePlan, familyOf, gestureVisible } from '../public/js/v2/canvas25d/direction/gestures.js';
 import { segmentContext } from '../public/js/v2/canvas25d/direction/context.js';
 
 const BASE = JSON.parse(fs.readFileSync(new URL('./fixtures/v2-motion-baseline.json', import.meta.url), 'utf8'));
@@ -370,7 +373,8 @@ test('timing: anchored to a stressed word (stroke 0.2-0.3 s before, apex ±0.1 s
           const d = defOf(e), rate = rateOf(e);
           for (const c of ctx.shots) assert.ok(!(e.at >= c.at - 1e-9 && e.at < c.at + ctx.cutGuard - 1e-9), `${pid} ${e.name} starts ${e.at} in the guard of the cut at ${c.at}`);
           if (e.name === 'papers') {
-            assert.ok(e.at >= ctx.duration, 'papers after the last word');
+            // after the last word (at most overlapping its last syllable when the hold is short)
+            assert.ok(e.at >= ctx.duration - 0.15 - 1e-9, 'papers after the last word');
             continue;
           }
           const w = ctx.words.find((x) => x.char === e.word);
@@ -462,7 +466,7 @@ test('MONEY MINUTE §5 item 14: allowed only, ≤ 1 per sentence and 2 per story
         if (e.name === 'papers') {
           papers++;
           assert.equal(ctx.type, 'outro');
-          assert.ok(e.at >= ctx.duration);
+          assert.ok(e.at >= ctx.duration - 0.15 - 1e-9, 'papers after the sign-off (the 0.6 s hold may start it in the last syllable)');
           continue;
         }
         if (e.name === 'lean_in') leanIns++;
@@ -675,3 +679,203 @@ test('the idle hands settle into new poses (pure, seeded, calm) and yield to ges
   const noIdle = actor('paco', { side: 1, seed: 11, gestures: g, armIdle: false });
   assert.equal(at(withIdle, 50.8), at(noIdle, 50.8));
 });
+
+// ---------------------------------------------------------------------------
+// fix round 1: restraint (pace.js), visibility, the sign-off papers, blends, hands craft
+
+test('restraint (owner 22:50 note 6, pace.js): per presenter, marked gestures and beats within the budget, minGap between statements, air between arm movements, hands mostly at rest', () => {
+  for (const pid of PROGRAMMES) {
+    const G = paceFor(pid).gestures;
+    for (const ep of episodes(pid, 8)) {
+      const per = {};
+      let t = 0;
+      for (const res of planEpisode(ep)) {
+        const { ctx } = res;
+        const p = (per[ctx.speaker] ||= { speech: 0, marked: [], beats: 0, arm: [], busy: 0 });
+        p.speech += ctx.duration;
+        for (const e of gesturesOf(res)) {
+          const d = defOf(e);
+          if (!d.arm || e.name === 'papers') continue;
+          const abs = t + e.at;
+          if (e.beat) p.beats++;
+          else p.marked.push(abs);
+          p.arm.push(abs);
+          p.busy += durOf(e);
+        }
+        t += ctx.duration + (ctx.gapAfter ?? 0.7);
+      }
+      for (const [slot, p] of Object.entries(per)) {
+        const min = p.speech / 60;
+        assert.ok(p.marked.length <= Math.ceil(G.perMin * min) + 1, `${pid} ${slot}: ${p.marked.length} marked gestures in ${p.speech.toFixed(0)} s (budget ${G.perMin}/min)`);
+        assert.ok(p.beats <= Math.ceil(G.beatsPerMin * min) + 1, `${pid} ${slot}: ${p.beats} beats in ${p.speech.toFixed(0)} s`);
+        p.marked.sort((a, b) => a - b);
+        p.arm.sort((a, b) => a - b);
+        for (let i = 1; i < p.marked.length; i++) assert.ok(p.marked[i] - p.marked[i - 1] >= G.minGap - 0.05, `${pid} ${slot}: statements ${(p.marked[i] - p.marked[i - 1]).toFixed(2)} s apart (minGap ${G.minGap})`);
+        for (let i = 1; i < p.arm.length; i++) assert.ok(p.arm[i] - p.arm[i - 1] >= 2.6 - 0.05, `${pid} ${slot}: arm movements ${(p.arm[i] - p.arm[i - 1]).toFixed(2)} s apart`);
+        assert.ok(p.busy <= (1 - G.rest) * (p.speech + 30) + 1e-6, `${pid} ${slot}: hands busy ${p.busy.toFixed(1)} s of ${p.speech.toFixed(0)} s`);
+      }
+    }
+  }
+});
+
+test('visibility: every planned arm gesture lands where the viewer sees the hands; desk-level beats never in a head-and-shoulders single', () => {
+  const desk = new Set(['raise_hand:beat', 'raise_hand:beat2', 'raise_hand:offer', 'raise_hand:turn', 'raise_hand:settle', 'raise_hand:tick', 'steeple:press', 'shrug:small']);
+  let singles = 0;
+  for (const pid of PROGRAMMES) {
+    for (const ep of episodes(pid, 6)) {
+      for (const res of planEpisode(ep)) {
+        const { ctx } = res;
+        for (const e of gesturesOf(res)) {
+          if (!defOf(e).arm || e.name === 'papers') continue;
+          assert.ok(gestureVisible(ctx, e), `${pid} ${e.name}:${e.variant || ''} at ${e.at} is not visible in its shot`);
+          let cut = null;
+          for (const c of ctx.shots) if (c.at <= e.apexAt) cut = c;
+          if (cut && cut.shot === 'close') {
+            singles++;
+            const v = e.variant ? `${e.name}:${e.variant.replace(/_far$/, '')}` : e.name;
+            assert.ok(!desk.has(v), `${pid}: desk-level ${v} planned in a single`);
+          }
+        }
+      }
+    }
+  }
+  assert.ok(singles > 0, 'some gestures do land in singles (face and chest level)');
+  // a writer's steeple cue in a WORLD NOW single: replaced by a gesture that reads there, or dropped
+  const ep = JSON.parse(JSON.stringify(FIX['world-now']));
+  const i = ep.segments.findIndex((sg) => sg.type === 'story');
+  ep.segments[i].cues = [{ char: 0, slot: null, action: 'steeple' }];
+  const res = planSegment(ep, i, { presenters: CHANNEL.presenters });
+  for (const e of gesturesOf(res)) if (defOf(e).arm) assert.ok(gestureVisible(res.ctx, e), `${e.name} visible`);
+});
+
+test('sign-off papers fit the hold (pace.js holds.signoff): the tap inside the hold, the stack flat again before the stinger', () => {
+  for (const pid of ['world-now', 'money-minute', 'news-60']) {
+    const hold = paceFor(pid).holds.signoff;
+    let found = 0;
+    for (const ep of episodes(pid, 6)) {
+      for (const res of planEpisode(ep)) {
+        const e = gesturesOf(res).find((x) => x.name === 'papers');
+        if (!e) continue;
+        found++;
+        const { ctx } = res;
+        const d = defOf(e), rate = rateOf(e);
+        assert.equal(e.variant, 'signoff', `${pid}: the short squaring (the full 2.4 s one never fits a ${hold} s hold)`);
+        assert.ok(e.at + d.apex / rate <= ctx.duration + hold - 0.1 + 2e-3, `${pid}: tap at ${(e.at + d.apex / rate - ctx.duration).toFixed(2)} s after the last word (hold ${hold})`);
+        // the stack is flat (tilt 0) by the end of the hold + 0.05 s
+        const tilt = d.tracks.tilt;
+        let flat = 0;
+        for (let k = 0; k < tilt.length; k++) if (tilt[k][1] > 0.02) flat = tilt[k + 1][0];
+        assert.ok(e.at + flat / rate <= ctx.duration + hold + 0.05 + 2e-3, `${pid}: stack flat at ${(e.at + flat / rate - ctx.duration).toFixed(2)} s`);
+        if (pid === 'world-now') assert.ok(e.at + durOf(e) <= ctx.duration + hold + 2e-3, 'WORLD NOW: the whole squaring inside the 1.5 s hold');
+      }
+    }
+    if (pid !== 'news-60') assert.ok(found > 0, `${pid}: papers planned on some sign-offs`);
+  }
+});
+
+test('blends of every aired pair: settle overlaps within the no-pop limits; interruptions (runtime delays only) within the documented exemption', () => {
+  const AIRED = [['nod'], ['lean_in'], ['steeple'], ['steeple', 'press'], ['steeple', 'tap'], ['raise_hand'], ['raise_hand', 'beat'], ['raise_hand', 'beat2'], ['raise_hand', 'offer'], ['raise_hand', 'box'], ['raise_hand', 'lift_far'], ['raise_hand', 'turn'], ['raise_hand', 'settle'], ['point_screen'], ['point_partner', 'after_you'], ['shrug', 'small'], ['papers', 'signoff'], ['count'], ['chin'], ['glasses'], ['shake_head']];
+  const run = (id, a, b, t0b) => {
+    const ea = { name: a[0], variant: a[1], t0: 0.4 }, eb = { name: b[0], variant: b[1], t0: t0b(durOf(ea)) };
+    const ac = actor(id, { side: 1, seed: 5, gestures: [ea, eb] });
+    const frames = [];
+    for (let t = 0; t < eb.t0 + durOf(eb) + 0.6; t += DT) {
+      const sk = poseAt(ac, t);
+      frames.push({ wristL: [...sk.arms.L.wrist], wristR: [...sk.arms.R.wrist] });
+    }
+    return popNumbers(frames);
+  };
+  // the planner's rules: two statements may overlap by a settle (≤ 0.3 s); a beat keeps 0.2 s of air
+  const BEATS = new Set(['beat', 'beat2', 'offer', 'box', 'lift_far', 'turn', 'settle', 'press', 'tap', 'small', 'signoff']);
+  for (const id of ['paco', 'unit8']) {
+    for (const a of AIRED) for (const b of AIRED) {
+      const beat = BEATS.has(a[1]) || BEATS.has(b[1]);
+      for (const ov of beat ? [-0.2] : [0.15, 0.3]) {
+        const { maxStep, maxJerk } = run(id, a, b, (d) => 0.4 + d - ov);
+        assert.ok(maxStep <= 14 && maxJerk <= 4.5, `${id} ${a.join(':')} > ${b.join(':')} overlap ${ov}: step ${maxStep.toFixed(2)} change ${maxJerk.toFixed(2)}`);
+      }
+      const { maxStep, maxJerk } = run(id, a, b, (d) => 0.4 + d - 0.6);
+      assert.ok(maxStep <= 14 && maxJerk <= 6, `${id} ${a.join(':')} > ${b.join(':')} interruption: step ${maxStep.toFixed(2)} change ${maxJerk.toFixed(2)}`);
+    }
+  }
+});
+
+test('idle finger tap: the same whether the presenter speaks or listens (no pop when the stage flips perf.listen at a turn)', () => {
+  for (const seed of [3, 11, 23, 41, 77]) {
+    const a = actor('lola', { side: -1, seed });
+    const b = actor('lola', { side: -1, seed, listen: true });
+    for (let t = 0; t < 90; t += 0.37) {
+      const ca = poseAt(a, t).arms.L.hand.curl[1], cb = poseAt(b, t).arms.L.hand.curl[1];
+      const ra = poseAt(a, t).arms.R.hand.curl[1], rb = poseAt(b, t).arms.R.hand.curl[1];
+      assert.ok(Math.abs(ca - cb) < 1e-9 && Math.abs(ra - rb) < 1e-9, `seed ${seed} t ${t.toFixed(2)}: index curl differs by listen`);
+    }
+  }
+});
+
+test('per-episode plans are keyed by the episode object: two episodes sharing an id but not their segments get their own budgets', () => {
+  const a = JSON.parse(JSON.stringify(FIX['money-minute']));
+  const b = JSON.parse(JSON.stringify(FIX['money-minute']));
+  b.segments = b.segments.slice(0, 3);
+  const pa = episodePlan(segmentContext(a, 0, {})), pb = episodePlan(segmentContext(b, 0, {}));
+  assert.notEqual(pa, pb);
+  assert.equal(Object.keys(pb.quota).length, 3);
+  assert.equal(Object.keys(pa.quota).length, a.segments.length);
+});
+
+test('far-hand beats drive the far arm only, mirroring the near-hand beat exactly', () => {
+  for (const v of ['beat', 'offer', 'lift', 'turn', 'settle', 'tick']) {
+    const near = defOf({ name: 'raise_hand', variant: v }), far = defOf({ name: 'raise_hand', variant: `${v}_far` });
+    assert.ok(near.armN && !near.armF, `${v} is near-handed`);
+    assert.ok(far.armF && !far.armN, `${v}_far drives the far arm`);
+    assert.equal(far.dur, near.dur);
+    assert.equal(familyOf({ name: 'raise_hand', variant: `${v}_far` }), familyOf({ name: 'raise_hand', variant: v }));
+    const fn = sample({ name: 'raise_hand', variant: v }), ff = sample({ name: 'raise_hand', variant: `${v}_far` });
+    const reach = (fr, k, i) => Math.max(...fr.map((f) => Math.hypot(...f[k].map((x, q) => x - f[i][q]))));
+    assert.ok(Math.abs(reach(fn, 'wristR', 'idleR') - reach(ff, 'wristL', 'idleL')) < 1e-6, `${v}: mirrored reach`);
+  }
+});
+
+test('hands craft: clean clusters (no lone line or detail pixel) at every scale; a hand over the face keeps a continuous outline', () => {
+  const buf = new PartBuffer(160, 160);
+  for (const id of ['paco', 'lola', 'max']) {
+    const L = LOOKS[id], m = matsOf(L);
+    for (const [name, sh] of Object.entries(SHAPES)) {
+      for (const facing of [sh.facing, -sh.facing]) {
+        for (const s of [1.37, 2.15, 3.4]) {
+          buf.clear();
+          const arm = { wrist: [0, 0, 0], handDir: sh.dir ? [...sh.dir] : [0.05, -1, 0.12], hand: { curl: [...sh.curl], spread: sh.spread, facing, sup: sh.sup || 0 } };
+          const toS = (x, y, z = 0) => [80 + x * s, 100 + (y + z * TILT) * s];
+          drawHand(buf, L, m, arm, 1, toS, s, 13, 20);
+          const W = buf.w;
+          for (let i = W; i < buf.mat.length - W; i++) {
+            const mt = buf.mat[i];
+            if (!mt || !(MAT.flags[mt] & 1)) continue; // decal = lines and painted details
+            let mates = 0;
+            for (const d of [-W - 1, -W, -W + 1, -1, 1, W - 1, W, W + 1]) if (buf.mat[i + d] === mt && buf.tone[i + d] === buf.tone[i]) mates++;
+            assert.ok(mates > 0, `${id} ${name} facing ${facing} s ${s}: lone detail pixel at ${i % W},${Math.floor(i / W)}`);
+          }
+        }
+      }
+    }
+  }
+  // the chin: every hand pixel touching the face is outline
+  for (const id of ['paco', 'lola', 'max']) {
+    const L = LOOKS[id];
+    const a = actor(id, { side: 1, seed: 11, gestures: [{ name: 'chin', t0: 0 }] });
+    const sk = poseAt(a, 1.0);
+    const b2 = new PartBuffer();
+    drawCharacter(b2, L, sk, { x: 192, y: 60, s: 3.4, gb: 0, clip: false });
+    const W = b2.w, line = MAT.flags;
+    let touching = 0;
+    for (let i = W; i < b2.mat.length - W; i++) {
+      const g = b2.grp[i];
+      if (!b2.mat[i] || (g !== GROUPS.handA && g !== GROUPS.handB)) continue;
+      const nearFace = [-1, 1, -W, W].some((d) => b2.mat[i + d] && (b2.grp[i + d] === GROUPS.head || b2.grp[i + d] === GROUPS.neck));
+      if (!nearFace) continue;
+      touching++;
+      assert.ok(line[b2.mat[i]] & 1 && MAT.ramp[b2.mat[i] * 4] === MAT.ramp[b2.mat[i] * 4 + 3], `${id}: hand pixel against the face is not outline`);
+    }
+    assert.ok(touching > 0, `${id}: the chin hand touches the face`);
+  }
+});
+

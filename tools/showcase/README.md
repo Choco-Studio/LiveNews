@@ -67,6 +67,12 @@ The page clock runs faster than real time when nothing needs synthesis (a 209 s 
 recording will reach (`--count` + 1), and step 2 makes sure their voices are rendered (otherwise the
 harness voices those lines itself, with the same casting, and the clock waits for Kokoro).
 
+What it costs: the 452.8 s two-programme show (`showcase-test-4-two-programmes.mp4`) took 43 min on a
+4-core box that a dozen other jobs were also using (load average 15-36): picture 4 min, WebAudio render
+13 min, beds 20 min (two renders: the bed and a speech-free copy that measures the duck; they now start
+together, which helps only when cores are free), mix 2 min, 5x encode 4 min. A 90 s show takes 3-5 min.
+The renders run at about real time on an idle box.
+
 ## How it works
 
 1. **Deterministic picture.** Playwright's fake clock is installed *paused* (`clock.install` then

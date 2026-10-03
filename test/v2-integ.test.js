@@ -1106,8 +1106,11 @@ test('direction: an over-the-shoulder without a picture, map or figure is droppe
   assert.deepEqual(none.map((c) => c.framing), ['single'], 'no wall content: the ots is dropped');
   const withPic = cuesFromPlan(plan, { hasImg: true });
   assert.deepEqual(withPic.map((c) => c.framing), ['single', 'ots'], 'a picture on the wall: the ots plays');
+  // what the wall shows is SET's call per programme: TECH BYTES walls show only a picture, WORLD NOW also a map
   seg.location = { place: 'X', lat: 1, lon: 2 };
-  assert.deepEqual(cuesFromPlan(plan, { hasImg: false }).map((c) => c.framing), ['single', 'ots'], 'a map on the wall');
+  assert.deepEqual(cuesFromPlan(plan, { hasImg: false }).map((c) => c.framing), ['single'], 'TECH BYTES: a place alone is no wall content');
+  const wn = { ...plan, ctx: { ...ctx, programId: 'world-now' } };
+  assert.deepEqual(cuesFromPlan(wn, { hasImg: false }).map((c) => c.framing), ['single', 'ots'], 'WORLD NOW: the locator map is on the wall');
   delete seg.location;
   const opening = { ctx, events: [{ ...plan.events[1], char: 0, at: 0 }] };
   assert.deepEqual(cuesFromPlan(opening, { hasImg: false }).map((c) => [c.shot, c.framing]), [['close', null]], 'an opening ots plays as the default single');
@@ -1312,4 +1315,36 @@ test('composited: every arm gesture planned on a studio shot of the five fixture
   }
   assert.deepEqual(hidden, [], 'gestures played under the graphics');
   assert.ok(seen >= 8, `enough planned arm gestures to judge (${seen})`);
+});
+
+test('watchdog: ?perf=1 reports the renderer frame interval p95 too (report only, no decision)', () => {
+  const lines = [];
+  const w = new PerfWatchdog({ log: () => {}, info: (m) => lines.push(m), report: true });
+  for (let k = 0; k < 60 * 25; k++) {
+    const t = k / 60;
+    w.interval(k % 10 === 0 ? 50 : 16.7); // one long frame in ten
+    w.sample(t, 2);
+  }
+  const line = lines.find((l) => /frame interval p95/.test(l));
+  assert.ok(line, lines.join('\n'));
+  assert.match(line, /frame interval p95 50 ms/);
+  assert.equal(w.level, 0, 'the interval never changes the detail level');
+  const quiet = new PerfWatchdog({ log: () => {}, info: () => {}, report: false });
+  quiet.interval(30);
+  assert.equal(quiet.ivCount, 0, 'nothing kept without ?perf=1');
+});
+
+test('Stage: warmSets bakes the sets in short idle slices until SET reports done (never one long block)', async () => {
+  const { warmSets } = await import('../public/js/v2/canvas25d/runtime/stage.js');
+  const SETM = await import('../public/js/v2/canvas25d/studio/set.js');
+  const queue = [];
+  warmSets((fn) => queue.push(fn));
+  let slices = 0;
+  while (queue.length && slices < 5000) {
+    queue.shift()();
+    slices++;
+  }
+  assert.equal(queue.length, 0, 'the slices stop by themselves');
+  if (typeof SETM.warmStep === 'function') assert.equal(SETM.warmStep(0).done, true, 'every programme baked');
+  warmSets(); // no scheduler (tests): at once, no throw
 });

@@ -91,6 +91,7 @@ const MIN_SAMPLES = 90; // frames a window needs before it decides
 const GAP = 0.25; // s: the most one gap between two v2 frames adds to the on-air clock
 const N = 8192; // ring size: 120 s at 60 fps fits
 const BINS = 400; // histogram: 0.1 ms bins up to 40 ms (+ overflow)
+const IV_BINS = 200; // frame interval histogram: 1 ms bins up to 200 ms (+ overflow)
 
 export class PerfWatchdog {
   constructor({ log = null, info = log, report = false } = {}) {
@@ -110,6 +111,17 @@ export class PerfWatchdog {
     this.last = { p50: 0, p95: 0, count: 0 };
     this.clock = 0; // on-air time of the v2 shot (s): the windows' time base
     this.lastT = null; // renderer time of the previous sample
+    // ?perf=1 only: the renderer's frame interval (every shot, graphics and overlays included), so a
+    // report shows total-frame overload the Stage's own time cannot see. Report only: no decision uses it.
+    this.ivHist = new Uint32Array(IV_BINS + 1);
+    this.ivCount = 0;
+  }
+
+  /** Renderer frame interval (ms) for the ?perf=1 report (1 ms bins, reset at each report). */
+  interval(ms) {
+    if (!this.report || !(ms >= 0)) return;
+    this.ivHist[Math.min(IV_BINS, Math.floor(ms))]++;
+    this.ivCount++;
   }
 
   /**
@@ -130,8 +142,11 @@ export class PerfWatchdog {
     if (this.report && wall >= this.nextReport) {
       if (this.nextReport) {
         const r = this.percentiles(wall, 10);
-        this.info?.(`v2 perf p50 ${r.p50.toFixed(2)} ms, p95 ${r.p95.toFixed(2)} ms over the last ${r.count} studio frames (level ${this.level})`);
+        const iv = this.ivCount ? `; frame interval p95 ${Math.floor(rank(this.ivHist, this.ivCount * 0.95) * 10)} ms over ${this.ivCount} frames` : '';
+        this.info?.(`v2 perf p50 ${r.p50.toFixed(2)} ms, p95 ${r.p95.toFixed(2)} ms over the last ${r.count} studio frames (level ${this.level})${iv}`);
       }
+      this.ivHist.fill(0);
+      this.ivCount = 0;
       this.nextReport = wall + 10;
     }
     if (t < this.nextEval || !this.decide) return null;

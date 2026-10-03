@@ -72,6 +72,8 @@ export class StageHost {
 
   /** One renderer frame. Returns true when the v2 studio shot was drawn. */
   frame(ctx, t, scene) {
+    if (this.lastFrame !== undefined) this.watch.interval((t - this.lastFrame) * 1000); // ?perf=1 report only
+    this.lastFrame = t;
     this.t = t;
     const key = episodeKey(scene);
     if (key !== this.key) {

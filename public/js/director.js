@@ -135,12 +135,13 @@ export class Director {
     this.voices.refreshAds(); // advert voice-overs (fetched while the ident runs)
     s.lowerThird = null;
     s.subtitle = null;
+    const ads = pickAds(item.ads || 1, this.recentAds);
+    this.prewarm(ads, item.filler ? 0 : 1.2); // baked while the ident holds still, not on the spot's first frames
     if (!item.filler) {
       // Cues are scheduled at the stinger's start to be heard on the shot change they belong to.
       await this.stinger(() => this.setShot('ident', { card: null }), (cut) => this.audio.sfx('jingle', { startAt: cut }));
       await sleep(CHANNEL.breaks.ident * 1000 - STINGER_DURATION * 500);
     }
-    const ads = pickAds(item.ads || 1, this.recentAds);
     for (const ad of ads) {
       // Play history; pickAds() prefers unseen ads, then the least recently played.
       this.recentAds = [...this.recentAds, ad.id].slice(-24);
@@ -162,6 +163,29 @@ export class Director {
       await this.blackCut('promo', { card }, (cut) => this.audio.sfx('promo', { programId: item.next.id, startAt: cut })); // the signature left hanging in the next programme's key
       await sleep(CHANNEL.breaks.promo * 1000);
     }
+  }
+
+  /**
+   * Bake the picked spots' static art in idle time before they air (each ad's
+   * optional warm(): one pass per idle slot, true when done), so the first
+   * frames of a spot never stall on a bake. Browser only; errors are logged.
+   */
+  prewarm(ads, delay = 0) {
+    if (typeof document === 'undefined') return;
+    const list = ads.filter((ad) => typeof ad.warm === 'function');
+    if (!list.length) return;
+    const idle = typeof requestIdleCallback === 'function' ? (fn) => requestIdleCallback(fn, { timeout: 400 }) : (fn) => setTimeout(fn, 30);
+    let i = 0;
+    const step = () => {
+      try {
+        while (i < list.length && list[i].warm()) i++;
+      } catch (err) {
+        console.warn('[director] prewarm', err);
+        return;
+      }
+      if (i < list.length) idle(step);
+    };
+    setTimeout(() => idle(step), delay * 1000);
   }
 
   /**
@@ -323,7 +347,7 @@ export class Director {
       const index = episode.segments.indexOf(seg);
       switch (seg.type) {
         case 'intro':
-          await this.playIntro(seg);
+          await this.playIntro(seg, episode.segments[index + 1]);
           break;
         case 'story':
           await this.playStory(seg);
@@ -356,7 +380,7 @@ export class Director {
   }
 
   /** Cold open: the headlines play as a montage under the presenter's intro. */
-  async playIntro(seg) {
+  async playIntro(seg, next = null) {
     const v2intro = this.v2?.intro?.(seg); // v2: montage cut on the spoken teaser, greeting on its planned shot
     if (v2intro) return v2intro;
     const s = this.scene;
@@ -378,7 +402,9 @@ export class Director {
     await speech;
     const minimum = frames * MONTAGE_FRAME - (now() - started);
     if (minimum > 0) await sleep(minimum * 1000);
-    this.setShot('wide', { focus: seg.anchor, wall: { mode: 'logo' }, card: null });
+    // PACE (owner 20:40): a story cuts straight from the montage's last frame (or its breaking stinger covers it); a
+    // studio wide set here would air for just the after-intro pause, a flash before the next shot
+    if (next?.type !== 'story') this.setShot('wide', { focus: seg.anchor, wall: { mode: 'logo' }, card: null });
   }
 
   /**

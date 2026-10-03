@@ -120,3 +120,38 @@ describe('mock: COSMOS DESK, UNIT-8 as a character, not a tic', () => {
     if (handover(first) && handover(second)) assert.notEqual(handover(first), handover(second));
   });
 });
+
+describe('mock: edge cases found on the offline rotation', () => {
+  const MONEY = { id: 'money-minute', title: 'MONEY MINUTE', stories: 2, maxChats: 0, intro: 'frame' };
+  const SOLO = { A: { id: 'penny', name: 'Penny Sterling' } };
+  test('the summary\'s own first sentence opens even when it starts "The central bank..." (nothing comes before it)', async () => {
+    const stories = [
+      st('cb', 'Central bank holds interest rates steady at 3.5 percent', 'The central bank has kept interest rates unchanged at 3.5 percent. Policymakers said inflation is easing but they want more evidence before cutting.', { category: 'business' }),
+      st('oil', 'Oil prices slide as global demand cools', 'Oil prices fell for a third day as traders expect weaker demand this winter. Brent crude dropped 2 percent.', { category: 'business' }),
+    ];
+    const seg = storySegs(await write(stories, MONEY, SOLO)).find((s) => s.storyId === 'cb');
+    assert.match(spoken(seg.text), /^The central bank has kept interest rates unchanged/);
+  });
+  test('"in Brazil and Vietnam" is a list: the place is never pulled out of it', async () => {
+    const WORLD = { id: 'world-now', title: 'WORLD NOW', stories: 4, maxChats: 0, intro: 'frame', features: ['roundup'], roundup: { opener: 'Now, around the world.', min: 2, max: 3 } };
+    const stories = [
+      st('l', 'Hurricane cuts power to a million homes in Mexico', 'A hurricane has cut power to about one million homes in Mexico. Repair crews are waiting.'),
+      st('c', 'Coffee futures reach a ten-year high after poor harvests', 'Coffee prices have climbed to their highest level in ten years after poor harvests in Brazil and Vietnam. Roasters warn shop prices may rise.', { category: 'business' }),
+      st('k', 'Kenya switches on its largest solar farm near Nairobi', 'A solar farm north of Nairobi has started supplying power to the national grid.'),
+      st('v', 'Venice raises its sea barriers in a test', 'Venice has raised its sea barriers for a test ahead of the autumn high tides.'),
+    ];
+    for (const seg of storySegs(await write(stories, WORLD))) assert.ok(!/harvests and Vietnam/.test(seg.text), seg.text);
+  });
+  test('a headline ending without a full stop does not make the next word look like a name ("Still to come: astronauts...")', async () => {
+    const COSMOS = { id: 'cosmos', title: 'COSMOS DESK', stories: 3, maxChats: 0, intro: 'teaser', features: ['lighter'] };
+    const stories = [
+      st('a', 'Rocket launches a probe to study the Sun', 'A rocket has launched a probe to study the Sun.', { category: 'science' }),
+      st('b', 'Rover finds layered rocks on Mars', 'A rover has found layered rocks on Mars.', { category: 'science' }),
+      st('t', 'Astronauts grow tomatoes on the space station', 'Astronauts on the International Space Station have harvested tomatoes grown in a small greenhouse.', { category: 'science' }),
+    ];
+    const script = await write(stories, COSMOS, COSMOS_CAST);
+    const lighter = storySegs(script).find((s) => s.feature === 'lighter');
+    if (lighter?.storyId === 't') assert.match(spoken(lighter.text), /And finally: astronauts/);
+    assert.ok(!/(?:coming up|Later in the programme|And later): Astronauts/.test(spoken(script.segments[0].text)), script.segments[0].text);
+  });
+});

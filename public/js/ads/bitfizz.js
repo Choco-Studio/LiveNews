@@ -17,9 +17,9 @@
 //                  drifting; the lights come up, a softbox sweep travels round. VO "BitFizz Reserve."
 //  6 20.8 SLATE    bottle left (the racks behind it), gold lock-up right, legal on the bar.
 import {
-  P, W, H, R, A, oval, poly, ring, disc, line, cached, lazy, play, key, tween, prog, smooth, lerp, clamp,
+  P, W, H, R, A, oval, poly, ring, disc, cached, lazy, play, key, tween, prog, smooth, lerp, clamp,
   type, trackIn, fadeUp, rule, smallPrint, gradient, vignette, letterbox, beam, contact, glintStar,
-  lathe, ovalRing, bubbles, motes, hash01, clipRect, warmUp, tune, bayer,
+  lathe, latheMirror, ovalRing, bubbles, motes, hash01, clipRect, warmUp, tune, bayer,
 } from './kit.js';
 
 const { round, sin, cos, PI, max, abs, floor, sqrt } = Math;
@@ -31,9 +31,13 @@ const AMBER = [P.black, P.maroon, P.brown, P.tanShade, P.orange, P.yellow];
 const GILT = [P.black, P.brown, P.tanShade, P.yellow, P.cream];
 const CRYSTAL = [P.maroon, P.brown, P.tanShade, P.cream];
 
-/** Radii from keys into a reused array, scaled by k (no allocation). */
+/** Radii from keys into a reused array, scaled by k (no allocation; skipped when unchanged). */
 function fill(out, h, keys, k) {
+  if (out.fillH === h && out.fillK === k && out.fillKeys === keys) return out;
   for (let j = 0; j < h; j++) out[j] = key(j / max(1, h - 1), keys) * k;
+  out.fillH = h;
+  out.fillK = k;
+  out.fillKeys = keys;
   return out;
 }
 
@@ -109,16 +113,25 @@ function labelText(ctx, cx, top, big, light) {
 
 const LAB = { cv: null, top: 0, h: 0, turn: 0.5 };
 const GLASS = { top: 0, edge: 1.4, wall: 0.9, edgeColor: P.tanShade };
-const BODY_O = { rows: 0, ramp: AMBER, ambient: 0.1, glass: GLASS, label: LAB, stripes: STRIPES, rim: RIM, key: 1, seam: 0.5 };
-const STOP_O = { rows: 0, ramp: GILT, ambient: 0.14, stripes: STOP_STRIPES, rim: RIM, key: 1, seam: 0.5 };
+// clustered flat bands on the product (seam ~0): a checker dither across the amber read as noise
+const BODY_O = { rows: 0, ramp: AMBER, ambient: 0.1, glass: GLASS, label: LAB, stripes: STRIPES, rim: RIM, key: 1, seam: 0.1, tilt: 0.05 };
+const STOP_O = { rows: 0, ramp: GILT, ambient: 0.14, stripes: STOP_STRIPES, rim: RIM, key: 1, seam: 0.1, tilt: 0.05 };
 
 /**
  * Bottle standing on y = bottom, axis at cx, at scale k. tex: the label texture
  * (built for the nominal radius); sweep: x of the moving softbox (-1.3..1.3) or null.
  */
-const BO = { turn: 0.5, keyK: 1, rimK: 0.95, sweep: null, text: 0, big: true }; // pooled options
+const BO = { turn: 0.5, keyK: 1, rimK: 0.95, sweep: null, text: 0, big: true, mirror: null }; // pooled options
+// mirror: { axis, alpha, x, y, w, h } draws each pass's reflection (clipped) right after it
+const MIRROR = { axis: 0, alpha: 0.14, x: 0, y: 0, w: 0, h: 0 };
+function reflect(ctx, m) {
+  if (!m) return;
+  clipRect(ctx, m.x, m.y, m.w, m.h);
+  latheMirror(ctx, m.axis, m.alpha);
+  ctx.restore();
+}
 function bottle(ctx, cx, bottom, k, tex, o) {
-  const { turn, keyK, rimK, sweep, text, big } = o;
+  const { turn, keyK, rimK, sweep, text, big, mirror } = o;
   const bh = round(BODY_H * k);
   const sh = round(STOP_H * k);
   const top = bottom - bh - sh;
@@ -127,6 +140,7 @@ function bottle(ctx, cx, bottom, k, tex, o) {
   STOP_O.key = keyK;
   STOP_O.rim = RIM_DYN;
   lathe(ctx, cx, top, fill(STOP, sh, STOP_KEYS, k), STOP_O);
+  reflect(ctx, mirror);
   GLASS.top = round(bh * 0.2);
   LAB.cv = tex;
   LAB.top = round(bh * 0.42);
@@ -140,6 +154,7 @@ function bottle(ctx, cx, bottom, k, tex, o) {
     BODY_O.stripes = SWEEP;
   } else BODY_O.stripes = STRIPES;
   lathe(ctx, cx, top + sh, fill(PROF, bh, BODY_KEYS, k), BODY_O);
+  reflect(ctx, mirror);
   if (text > 0) labelText(ctx, cx, top + sh + LAB.top, big, text);
   return top;
 }
@@ -298,17 +313,25 @@ const hallBack = lazy(() =>
   }),
 );
 
-// Bottle ends (bottles lie on their sides, bases toward us): hand-pixelled
-// variants. Keys: k black, m maroon, b brown, t tan shade, o orange, c cream.
+// Bottle ends (bottles lie on their sides, bases toward us): dark glass, hand-
+// pixelled. The base is a near-black disc; only its rim on the side facing the
+// window (upper left) catches light, the punt in its middle shows as a darker
+// hollow with one glint off-centre. Variants: plain, a stronger rim, dusty (a
+// grey bloom on the glass), sunk deeper in the rack (barely there), and one
+// lying the other way with its foil capsule toward us. Keys: k black, m maroon,
+// b brown, t tan shade, o highlight, c cream, d dust (slate), . clear.
 const ENDS_NEAR = [
-  ['...kkkkk...', '..kmmmmmk..', '.kmbbtbbmk.', 'kmbtmmmbbmk', 'kmbmkkkmbmk', 'kmbmkkkmbmk', 'kmbmkkkmbmk', 'kmbbmmmbbmk', '.kmbbbbbmk.', '..kmmmmmk..', '...kkkkk...'],
-  ['...kkkkk...', '..kmmmmmk..', '.kmbtbbbmk.', 'kmbbbmmmbmk', 'kmbbmkkkmmk', 'kmbbmkkkmmk', 'kmbbbmmmbmk', 'kmbbbbbbbmk', '.kmbbbbbmk.', '..kmmmmmk..', '...kkkkk...'],
-  ['...kkkkk...', '..kbbbbbk..', '.kbtttttbk.', 'kbttoootbbk', 'kbtobbbotbk', 'kbtobkbotbk', 'kbtobbbotbk', 'kbttoootbbk', '.kbtttttbk.', '..kbbbbbk..', '...kkkkk...'],
+  ['...kkkkk...', '..kmbbmkk..', '.kmbmkkkkk.', 'kmbmkkkkkkk', 'kbmkkkkkkkk', 'kbmkkokkkmk', 'kmkkkkkkkmk', 'kkkkkkkkmmk', '.kkkkkkmmk.', '..kkkmmkk..', '...kkkkk...'],
+  ['...kkkkk...', '..ktbbmkk..', '.ktbmkkkkk.', 'ktbkkkkkkkk', 'kbmkkkkkkkk', 'kbkkkokkkkk', 'kmkkkkkkkmk', 'kkkkkkkkmmk', '.kkkkkkmmk.', '..kkkmmkk..', '...kkkkk...'],
+  ['...kkkkk...', '..kmbdmkk..', '.kmbdkdkkk.', 'kmbkkdkdkkk', 'kbkdkkkkdkk', 'kbkkdkkdkkk', 'kmkkkkdkkmk', 'kkdkkkkkmmk', '.kkkdkkmmk.', '..kkkmmkk..', '...kkkkk...'],
+  ['...........', '...kkkkk...', '..kmmkkkk..', '.kmkkkkkkk.', '.kmkkkkkkk.', '.kkkkkkkkk.', '.kkkkkkkmk.', '..kkkkkmk..', '...kkkkk...', '...........', '...........'],
+  ['...........', '...........', '....kkk....', '...kbtbk...', '..kbtobbk..', '..kbbbbmk..', '..kbbbmmk..', '...kmmmk...', '....kkk....', '...........', '...........'],
+  ['...kkkkk...', '..kmmkkkk..', '.kmbkkkkkk.', 'kmbkkkkkkkk', 'kmkkkkkkkkk', 'kmkkkkkkkkk', 'kkkkkkokkkk', 'kkkkkkkkkmk', '.kkkkkkkmk.', '..kkkkmmk..', '...kkkkk...'],
 ];
-const ENDS_FAR = [['.mmm.', 'mbbbm', 'mbkbm', 'mbbbm', '.mmm.'], ['.mmm.', 'mtbbm', 'mbkbm', 'mmbbm', '.mmm.'], ['.bbb.', 'bttob', 'btkob', 'bttob', '.bbb.']];
-const DARK_KEY = { k: P.black, m: P.maroon, b: P.brown, t: P.tanShade, o: P.tanShade, c: P.cream };
-// in the beam: one step warmer, the glass rim catches the light
-const LIT_KEY = { k: P.maroon, m: P.brown, b: P.tanShade, t: P.orange, o: P.yellow, c: P.cream };
+const ENDS_FAR = [['.kkk.', 'kbkkk', 'bkkkk', 'kkkmk', '.kkk.'], ['.kkk.', 'ktkkk', 'tkokk', 'kkkkk', '.kmk.'], ['.....', '.kkk.', '.mkk.', '.kkk.', '.....'], ['.kkk.', 'kmkkk', 'mkkkk', 'kkkkk', '.kkk.']];
+const DARK_KEY = { k: P.black, m: P.maroon, b: P.brown, t: P.brown, o: P.maroon, c: P.tanShade, d: P.ink };
+// in the beam: one step warmer, the rim and the punt glint catch the light
+const LIT_KEY = { k: P.black, m: P.maroon, b: P.tanShade, t: P.orange, o: P.cream, c: P.cream, d: P.slate };
 function stamp(c, rows, x, y, keys) {
   for (let j = 0; j < rows.length; j++) {
     const row = rows[j];
@@ -346,10 +369,10 @@ function paintRack(c, x, y, w, h, near, seed, lit) {
       const bx = ox + i * pitchX;
       const hsh = hash01(i + j * 31, seed + 9);
       if (hsh < 0.08) continue; // one already drunk
-      // bottles do not line up perfectly: some sit a pixel deeper or higher
+      // bottles do not line up perfectly: some sit a pixel deeper or higher, some further back in the dark
       const dy = hash01(i + j * 17, seed + 3) < 0.25 ? 1 : 0;
-      stamp(c, ends[floor(hash01(i * 7 + j, seed + 5) * ends.length)], bx, yy + dy, keys);
-      if (lit && near && hsh > 0.7) R(c, bx + 2, yy + dy + 2, 1, 1, P.cream); // a glint on the rim
+      const deep = hash01(i * 3 + j * 11, seed + 6) < 0.18;
+      stamp(c, ends[floor(hash01(i * 7 + j, seed + 5) * ends.length)], bx + (hash01(i + j, seed + 8) < 0.2 ? 1 : 0), yy + dy, deep ? DARK_KEY : keys);
     }
     if (near && j % 2 === 0) {
       // a vintage tag tied to the rail, and dust along it
@@ -362,10 +385,10 @@ function paintRack(c, x, y, w, h, near, seed, lit) {
   }
 }
 
-const hallRacks = lazy(() => cached('bf-hall-racks2', CW, H, (c) => { for (let k = 0; k < 9; k++) paintRack(c, 150 + k * 58, 74, 46, 96, false, k + 1, false); }));
-const hallRacksLit = lazy(() => cached('bf-hall-racks2-lit', CW, H, (c) => { for (let k = 0; k < 9; k++) paintRack(c, 150 + k * 58, 74, 46, 96, false, k + 1, true); }));
-const hallNear = lazy(() => cached('bf-hall-near2', 150, H, (c) => { paintRack(c, 4, 26, 142, 170, true, 77, false); for (let y = 40; y < 180; y += 9) R(c, 8, y, 1, 2, P.black); }));
-const hallNearLit = lazy(() => cached('bf-hall-near2-lit', 150, H, (c) => paintRack(c, 4, 26, 142, 170, true, 77, true)));
+const hallRacks = lazy(() => cached('bf-hall-racks4', CW, H, (c) => { for (let k = 0; k < 9; k++) paintRack(c, 150 + k * 58, 74, 46, 96, false, k + 1, false); }));
+const hallRacksLit = lazy(() => cached('bf-hall-racks4-lit', CW, H, (c) => { for (let k = 0; k < 9; k++) paintRack(c, 150 + k * 58, 74, 46, 96, false, k + 1, true); }));
+const hallNear = lazy(() => cached('bf-hall-near4', 150, H, (c) => { paintRack(c, 4, 26, 142, 170, true, 77, false); for (let y = 40; y < 180; y += 9) R(c, 8, y, 1, 2, P.black); }));
+const hallNearLit = lazy(() => cached('bf-hall-near4-lit', 150, H, (c) => paintRack(c, 4, 26, 142, 170, true, 77, true)));
 // Set dressing on the hall floor, between the racks and the camera: a pallet with
 // two shipping crates (unlit, and lit for the part that stands in the beam).
 function paintCrate(c, x, y, w, h, lit) {
@@ -568,15 +591,25 @@ const T_STRIPES = [[-0.64, 0.05, P.cream, 0.04, 0.5], [-0.64, 0.03, P.cream, 0.6
 const CUTS = { cv: null, top: 0, h: 0, turn: 0.3 };
 const TUMBLER_O = { rows: 0, ramp: AMBER, ambient: 0.16, glass: TGLASS, stripes: T_STRIPES, label: CUTS, rim: RIM, tilt: 0.2, seam: 0.5 };
 const BASE_O = { rows: 0, ramp: CRYSTAL, ambient: 0.3, stripes: T_STRIPES, rim: false, tilt: 0.2, seam: 0.12 }; // clean bands, no dither noise
+// The cutter's wheel never lands twice in the same place: two families of
+// diagonals at uneven spacings, so the facets differ in size; the lines warm
+// toward the top of the band, and a glint sits only on some crossings high on
+// the band, where the key strikes the facet edges (no regular fishnet).
+const CUT_A = [0, 12, 22, 35, 46, 57, 71, 82, 95, 104, 117, 130, 141, 153, 166, 177, 188, 201, 212];
+const CUT_B = [5, 16, 29, 39, 52, 63, 75, 88, 99, 112, 122, 135, 147, 158, 170, 183, 193, 206, 215];
 const cutsTex = lazy(() =>
-  cached('bf-cuts', 220, 28, function paintCuts(c) {
-    // a band of diamond cuts: two families of diagonals, brighter where they cross
+  cached('bf-cuts2', 220, 28, function paintCuts(c) {
+    const a = new Uint8Array(220);
+    const b = new Uint8Array(220);
+    for (const v of CUT_A) a[v] = 1;
+    for (const v of CUT_B) b[v] = 1;
     for (let y = 0; y < 28; y++) {
       for (let x = 0; x < 220; x++) {
-        const a = (x + y) % 14 === 0;
-        const b = (x - y + 280) % 14 === 0;
-        if (a && b) R(c, x, y, 1, 1, P.cream);
-        else if (a || b) R(c, x, y, 1, 1, y < 3 || y > 24 ? P.brown : P.tanShade);
+        const ia = a[(x + y) % 220];
+        const ib = b[(x - y + 440) % 220];
+        if (!ia && !ib) continue;
+        if (ia && ib) R(c, x, y, 1, 1, y < 14 && hash01(x, y + 3) < 0.6 ? P.cream : P.tanShade);
+        else R(c, x, y, 1, 1, y < 3 || y > 24 ? P.brown : y < 12 ? P.tanShade : P.brown);
       }
     }
     R(c, 0, 0, 220, 1, P.tanShade);
@@ -587,56 +620,69 @@ const ICE = [[0, 0], [0, 0], [0, 0], [0, 0]];
 const ICE_L = [[0, 0], [0, 0], [0, 0], [0, 0]];
 const ICE_R = [[0, 0], [0, 0], [0, 0], [0, 0]];
 const ICE_CHIP = [[0, 0], [0, 0], [0, 0]];
-function edge(ctx, p0, p1, col) {
-  line(ctx, p0[0], p0[1], p1[0], p1[1], col);
+/** A run of pixels along p0 -> p1 from share t0 to t1 of its length (a broken edge, not a wire). */
+function edgeRun(c, p0, p1, t0, t1, col) {
+  const n = Math.ceil(Math.hypot(p1[0] - p0[0], p1[1] - p0[1]));
+  for (let i = Math.round(n * t0); i <= Math.round(n * t1); i++) R(c, p0[0] + ((p1[0] - p0[0]) * i) / n, p0[1] + ((p1[1] - p0[1]) * i) / n, 1, 1, col);
 }
 /**
- * A hand-chipped cube: a top face with one chipped facet, a lit face toward the
- * key (left) and an amber face that refracts the whisky (right); only the edges
- * that face the key catch it. strong: above the surface; else seen through it.
+ * A hand-chipped cube, baked once (it turns too slowly to need more than one
+ * pose): a top face with one chipped facet, a lit face toward the key (left) and
+ * an amber face that refracts the whisky (right). No outline: only short runs of
+ * the edges nearest the key catch it, brightest at the lit corner, plus a frost
+ * of fractures inside and a refracted amber streak. Art origin = cube centre at
+ * (ICE_OX, ICE_OY); drawn strong above the surface, at half alpha below it.
  */
-function iceCube(ctx, x, y, s, a, strong) {
-  for (let k = 0; k < 4; k++) {
-    const ang = a + (k * PI) / 2 + (hash01(k, 5) - 0.5) * 0.22;
-    const rr = s * (0.92 + hash01(k, 6) * 0.16);
-    ICE[k][0] = x + cos(ang) * rr;
-    ICE[k][1] = y + sin(ang) * rr * 0.42;
-  }
-  // the lowest corner faces the camera; side faces hang below the two front edges
-  let f = 0;
-  for (let k = 1; k < 4; k++) if (ICE[k][1] > ICE[f][1]) f = k;
-  const l = ICE[(f + 1) % 4];
-  const rr = ICE[(f + 3) % 4];
-  const c = ICE[f];
-  const back = ICE[(f + 2) % 4];
-  const d = s * 1.05;
-  ICE_L[0][0] = l[0]; ICE_L[0][1] = l[1]; ICE_L[1][0] = c[0]; ICE_L[1][1] = c[1];
-  ICE_L[2][0] = c[0]; ICE_L[2][1] = c[1] + d; ICE_L[3][0] = l[0]; ICE_L[3][1] = l[1] + d * 0.9;
-  ICE_R[0][0] = c[0]; ICE_R[0][1] = c[1]; ICE_R[1][0] = rr[0]; ICE_R[1][1] = rr[1];
-  ICE_R[2][0] = rr[0]; ICE_R[2][1] = rr[1] + d * 0.95; ICE_R[3][0] = c[0]; ICE_R[3][1] = c[1] + d;
-  // the chip: a facet knocked off the corner nearest the key light
-  const lft = l[0] < rr[0] ? l : rr;
-  ICE_CHIP[0][0] = lft[0]; ICE_CHIP[0][1] = lft[1];
-  ICE_CHIP[1][0] = lft[0] + (back[0] - lft[0]) * 0.45; ICE_CHIP[1][1] = lft[1] + (back[1] - lft[1]) * 0.45;
-  ICE_CHIP[2][0] = lft[0] + (c[0] - lft[0]) * 0.4; ICE_CHIP[2][1] = lft[1] + (c[1] - lft[1]) * 0.4;
-  const k = strong ? 1 : 0.5;
-  const lit = l[0] < rr[0] ? ICE_L : ICE_R;
-  const dark = lit === ICE_L ? ICE_R : ICE_L;
-  poly(ctx, dark, A(P.orange, 0.3 * k)); // refracting the amber
-  poly(ctx, lit, A(P.cream, 0.34 * k));
-  poly(ctx, ICE, A(P.cream, 0.3 * k)); // the top face takes the warm light
-  poly(ctx, ICE_CHIP, A(P.white, 0.4 * k));
-  // edges: lit where they face the key, quiet elsewhere
-  const hi = A(P.white, 0.85 * k);
-  const lo = A(P.cream, 0.32 * k);
-  edge(ctx, back, lft, hi);
-  edge(ctx, lft, c, hi);
-  edge(ctx, c, lft === l ? rr : l, lo);
-  edge(ctx, lft === l ? rr : l, back, lo);
-  R(ctx, c[0], c[1], 1, round(d), A(P.white, 0.5 * k));
-  // a fracture inside, catching a little light
-  line(ctx, x - s * 0.25, y + s * 0.55, x + s * 0.15, y + s * 0.9, A(P.cream, 0.3 * k));
-}
+const ICE_OX = 20;
+const ICE_OY = 12;
+const iceArt = lazy(() =>
+  cached('bf-ice2', 40, 36, (c) => {
+    const s = 15;
+    const x = ICE_OX;
+    const y = ICE_OY;
+    const a = 0.42;
+    for (let k = 0; k < 4; k++) {
+      const ang = a + (k * PI) / 2 + (hash01(k, 5) - 0.5) * 0.22;
+      const rr = s * (0.92 + hash01(k, 6) * 0.16);
+      ICE[k][0] = x + cos(ang) * rr;
+      ICE[k][1] = y + sin(ang) * rr * 0.42;
+    }
+    let f = 0;
+    for (let k = 1; k < 4; k++) if (ICE[k][1] > ICE[f][1]) f = k;
+    const l = ICE[(f + 1) % 4];
+    const rr = ICE[(f + 3) % 4];
+    const cn = ICE[f];
+    const back = ICE[(f + 2) % 4];
+    const d = s * 1.05;
+    ICE_L[0][0] = l[0]; ICE_L[0][1] = l[1]; ICE_L[1][0] = cn[0]; ICE_L[1][1] = cn[1];
+    ICE_L[2][0] = cn[0]; ICE_L[2][1] = cn[1] + d; ICE_L[3][0] = l[0]; ICE_L[3][1] = l[1] + d * 0.9;
+    ICE_R[0][0] = cn[0]; ICE_R[0][1] = cn[1]; ICE_R[1][0] = rr[0]; ICE_R[1][1] = rr[1];
+    ICE_R[2][0] = rr[0]; ICE_R[2][1] = rr[1] + d * 0.95; ICE_R[3][0] = cn[0]; ICE_R[3][1] = cn[1] + d;
+    const lft = l[0] < rr[0] ? l : rr;
+    const rgt = lft === l ? rr : l;
+    ICE_CHIP[0][0] = lft[0]; ICE_CHIP[0][1] = lft[1];
+    ICE_CHIP[1][0] = lft[0] + (back[0] - lft[0]) * 0.45; ICE_CHIP[1][1] = lft[1] + (back[1] - lft[1]) * 0.45;
+    ICE_CHIP[2][0] = lft[0] + (cn[0] - lft[0]) * 0.4; ICE_CHIP[2][1] = lft[1] + (cn[1] - lft[1]) * 0.4;
+    const lit = lft === l ? ICE_L : ICE_R;
+    const dark = lit === ICE_L ? ICE_R : ICE_L;
+    poly(c, dark, A(P.orange, 0.3)); // refracting the amber
+    poly(c, lit, A(P.cream, 0.3));
+    poly(c, ICE, A(P.cream, 0.28)); // the top face takes the warm light
+    poly(c, ICE_CHIP, A(P.white, 0.36));
+    // short lit runs on the edges nearest the key, longest at the lit corner
+    edgeRun(c, lft, back, 0, 0.45, A(P.white, 0.75));
+    edgeRun(c, lft, cn, 0, 0.6, A(P.white, 0.7));
+    edgeRun(c, cn, rgt, 0.2, 0.42, A(P.cream, 0.35));
+    edgeRun(c, cn, [cn[0], cn[1] + d], 0.1, 0.5, A(P.white, 0.45));
+    R(c, lft[0], lft[1], 2, 1, A(P.white, 0.9)); // the glint where the chip meets the light
+    // fractures inside: a jagged crack and a frosted cluster where it starts
+    const cr = [[x - 6, y + 6], [x - 3, y + 8], [x - 4, y + 11], [x, y + 13]];
+    for (let i = 0; i + 1 < cr.length; i++) edgeRun(c, cr[i], cr[i + 1], 0, 1, A(P.cream, 0.32));
+    for (let i = 0; i < 7; i++) R(c, x - 8 + floor(hash01(i, 91) * 5), y + 4 + floor(hash01(i, 92) * 4), 1, 1, A(P.white, 0.3));
+    // a streak of the whisky refracted through the far face
+    edgeRun(c, [rgt[0] - 3, rgt[1] + 3], [cn[0] + 3, cn[1] + d - 4], 0.15, 0.8, A(P.yellow, 0.35));
+  }),
+);
 
 /** The bottle's neck tilted into the top of frame, mid-pour: dark glass, gilt collar (solid bands). */
 const NECK = [[0, 0], [0, 0], [0, 0], [0, 0]];
@@ -704,20 +750,18 @@ function shotPour(ctx, lt) {
   CUTS.turn = 0.3 + lt * 0.01;
   fill(TPROF, tubeH, TUMBLER_KEYS, k);
   fill(BPROF, baseH, BASE_KEYS, k);
-  // its reflection in the polished bar
-  clipRect(ctx, 0, bottom + 1, W, H - bottom);
-  ctx.save();
-  ctx.globalAlpha = 0.16;
-  ctx.translate(0, 2 * bottom + 2 * round(0.2 * r0));
-  ctx.scale(1, -1);
-  lathe(ctx, cx, top, TPROF, TUMBLER_O);
-  lathe(ctx, cx, top + tubeH, BPROF, BASE_O);
-  ctx.restore();
-  ctx.restore();
   contact(ctx, cx, bottom + round(6 * k), round(r0 * 1.02), 0.5);
+  // the glass, and its reflection in the polished bar (each pass mirrored, not re-lit)
+  const axis = bottom + round(0.2 * r0);
   lathe(ctx, cx, top, TPROF, TUMBLER_O);
+  clipRect(ctx, 0, bottom + 1, W, H - bottom);
+  latheMirror(ctx, axis, 0.16);
+  ctx.restore();
   BASE_O.rows = baseH;
   lathe(ctx, cx, top + tubeH, BPROF, BASE_O);
+  clipRect(ctx, 0, bottom + 1, W, H - bottom);
+  latheMirror(ctx, axis, 0.16);
+  ctx.restore();
   // liquid surface, seen from slightly above
   const lr = TPROF[levelRow] - 1;
   const ly = top + levelRow + round(0.1 * lr);
@@ -733,10 +777,11 @@ function shotPour(ctx, lt) {
   const ix = cx - round(8 * k);
   const iy = ly - round(6 * k) + round(sin(lt * 1.6) * 1);
   clipRect(ctx, 0, 0, W, ly);
-  iceCube(ctx, ix, iy, 15 * k, 0.35 + lt * 0.03, true);
+  ctx.drawImage(iceArt(), ix - ICE_OX, iy - ICE_OY);
   ctx.restore();
   clipRect(ctx, 0, ly, W, H - ly);
-  iceCube(ctx, ix, iy, 15 * k, 0.35 + lt * 0.03, false);
+  ctx.globalAlpha = 0.5; // seen through the amber
+  ctx.drawImage(iceArt(), ix - ICE_OX, iy - ICE_OY);
   ctx.restore();
   // rising bubbles inside the liquid
   bubbles(ctx, lt, { x: cx - round(lr * 0.75), y: ly + 3, w: round(lr * 1.5), h: max(4, top + tubeH - ly - 5), n: 18, seed: 12, rise: 10, size: 2, color: P.yellow, hi: P.cream });
@@ -775,10 +820,11 @@ function shotPour(ctx, lt) {
 // --- 4. NOSE -----------------------------------------------------------------------
 // A man in his forties in profile, facing left into the lamp's warm key, lifts
 // the glass from his chest to just under his nose, closes his eyes as it
-// arrives and breathes in. Head and hand are hand-pixelled sprites (ASCII rows
-// below, baked once); the jacket is painted at bake time; the arm is two sleeves
-// solved each frame so the elbow swings forward as the glass comes up. The head
-// is 70 px from crown to chin (a medium close-up of an adult, about 1/7 of his height).
+// arrives and breathes in. His bust (head, neck, collar, jacket) and his hand
+// are hand-pixelled sprites (ASCII rows below, baked once); the arm is two cloth
+// textures laid along the upper arm and the forearm each frame, the elbow leading
+// the glass forward and up. The head is 70 px from crown to chin (a medium
+// close-up of an adult, about 1/7 of his height).
 
 // The room behind him, out of focus: walnut panelling warmed by a table lamp
 // at the left (the lamp that keys his face), a heavy curtain, and a tall
@@ -791,7 +837,7 @@ const MULL_Y = 94; // the transom
 const LAMP_X = 36;
 const LAMP_Y = 132; // top of the shade
 const lounge = lazy(() =>
-  cached('bf-lounge', W, H, (c) => {
+  cached('bf-lounge2', W, H, (c) => {
     c.drawImage(gradient('bf-lounge-wall', W, H, { cx: LAMP_X + 4, cy: LAMP_Y - 10, rx: 260, ry: 190, ramp: [P.black, P.maroon, P.brown], gamma: 2.0, seam: 0.45 }), 0, 0);
     // panelling: raised fields with a bevel lit from the lamp side, dark stiles between
     for (let px = 6; px < WIN_X - 30; px += 62) {
@@ -879,6 +925,24 @@ const lounge = lazy(() =>
     }
     R(c, LAMP_X - 1, LAMP_Y + 17, 2, 22, P.tanShade); // the brass stem
     R(c, LAMP_X - 1, LAMP_Y + 17, 1, 22, P.cream);
+    // the side table it stands on: a dark walnut top whose front edge catches the
+    // lamp (brightest under it, falling off to the sides), the apron in shadow below
+    const TY = LAMP_Y + 39;
+    R(c, 6, TY, 62, 22, P.black);
+    for (let x = 6; x < 68; x++) {
+      const d = abs(x - LAMP_X) / 31;
+      R(c, x, TY, 1, 1, d < 0.35 ? P.tanShade : d < 0.7 ? P.brown : P.maroon);
+      R(c, x, TY + 1, 1, 1, A(P.brown, 0.5 * (1 - d)));
+    }
+    R(c, 6, TY + 3, 62, 1, A(P.maroon, 0.6)); // the apron's top moulding
+    R(c, 9, TY + 4, 3, 18, A(P.maroon, 0.5)); // a leg, just lit on its lamp side
+    R(c, 62, TY + 4, 3, 18, A(P.maroon, 0.35));
+    // the pool the shade throws on the table top, and the brass foot in it
+    oval(c, LAMP_X, TY - 1, 20, 2, A(P.cream, 0.08));
+    oval(c, LAMP_X, TY - 1, 11, 1, A(P.cream, 0.1));
+    R(c, LAMP_X - 5, TY - 2, 11, 2, P.brown);
+    R(c, LAMP_X - 4, TY - 3, 9, 1, P.tanShade);
+    R(c, LAMP_X - 3, TY - 3, 3, 1, P.cream);
   }),
 );
 // a few drops run down the glass, stick-slip, each in its own pane
@@ -918,112 +982,174 @@ function paintRows(c, rows, ox, oy) {
   }
 }
 
-// His head and neck in profile, facing left, hand-pixelled (70 x 102; crown y 0,
-// chin y 70, nose tip x 3). Key light warm from the front-left, a cool rim from
-// the window behind him; hair combed back in clumps, a touch of grey at the temple.
-const HEAD = [
-  '.................................tbbbmbbbb............................',
-  '...........................bbbbtttbbbmbbbbbbbbbb......................',
-  '........................tbbtttttbbbbbbbbbbbbbbbbbbb...................',
-  '.....................ttttttbbbbbbbbbbbbbbbbbbbbbbbbbbb................',
-  '....................ttbbbbbbbbbbbbbmmbbbbbbbbbbbbbbbbbb...............',
-  '..................tttbbbbbbbbbbbbmmbbbbtttbbttbbbbbbbbbEE.............',
-  '.................bbbbbbbbbbmmmmmmbbbbbbbbbttttttttbbbbbbbE............',
-  '...............bbbbbbbbmmmmttttbbbbbbbbbbbbbbbbbbbttbbbbbbEE..........',
-  '..............bbbbbbbmmmtttbbbbbbbbbbbbbbbbbbbbbbbbtttbbbbbbE.........',
-  '.............bbbbbbbttttbbbbbbbbbbbbbttbbbbbbbbbbbbbbbbbbbbbbE........',
-  '.............bbbbbbttbbbbbbbbbbbbbbtttttttbbbbbmmbbbbbbbbbbbbbE.......',
-  '............bbbbbttbbbbbbbbmmbbbbbbbbbbbbtttttttmmmbbbbbbbbbbbbE......',
-  '............bbbbttbbbbbbmmmtbbbbbbbbbbbbbbbbbbbbttmmbbbbbbbmmbbE......',
-  '...........kbbbbtbbbbbmmttttbbbbbbbbbbbbbbbbbbbbbbmmmmbbbbbbmbbbE.....',
-  '..........kknsbttbbbmmtttbbbbbbbbbbbmmmmmbbbbbbbbbmmmmmmmmmmKKKbE.....',
-  '..........kkknnnsbbmmttbbbbbbbbbbbbbtttttmmmmmmbbmmmmmmmmmmmmKKKbE....',
-  '..........kkknnnnnsmtbbbbbbbbbbbbbttbbbbbttttbbbmmmmmmmmmmmmmKKKbE....',
-  '.........kkkknnnnnnnsbbbbbbbbbbbttbbbbbbbbbbbbbbbKmmmmmmmmmmmmKKKmE...',
-  '.........kckknnnnnnnssbbbbbbbbbbbbbbbbbbbbbbbbbbmmmmmmmmmmmmmtKKKmE...',
-  '.........kckkknnnnnnnnssttbbbbbbbbbbmmmmbbbbbbbbmmbbmmmmmmmmmtKKKmE...',
-  '.........kckkknnnnnnnnnssbbbbbbbbbbbbbbbbbbbbbbbmmmbmmmmmmmmmtKKKKbE..',
-  '.........kkkkknnnnnnnnnnssbbbmmmmmmbbmmmbmmmmbbbmmmmmmmmmmmmmmKKKKbE..',
-  '.........kkkknnnnnnnnssssstbbmbbbbbmmmmmmmmmmbbmmmmmmmmmmmmmmmmKKKbE..',
-  '.........kkkknnnnnnnnssssstbbmbmmmmmmmmmmmmmmmbmmmmmmmmmmmmmmmKKKKbE..',
-  '.........kkkknnnnnnnnsssssstbmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmKKKKbE..',
-  '.........kkkknnnnnnnnnssssstbmmmmmmmmmmmmmmmmmKKmmmmmmmmmmmmmmmKKKKbE.',
-  '........kkkkknnnnnnnnnnssssstmmmmmmbbmmmmmmmmmKKmmmmmmmmmmmmmmmKKKKmE.',
-  '........kkkkknnnnnnnnnnnssssstmmmmmbmmmmmmbbmmKKKmmmmmmmmmmmmmmKKKKmE.',
-  '........kkkkkknnnnnnnnnnssssstmmmmmbmmmmmmmbKKKKKmmmmmmmmmmmmmmKKKKmE.',
-  '.........kknnnbbbbbbnnnnsssssstmmmmmmmmmmmmbKKsnnsmmmmmmmmmmmmmmKKKmE.',
-  '.........kktmmmmmmmbbnnnnsssssstmmmmbmmmmmmbsnkkknsmmmmmmmmmmmmmKKKmE.',
-  '..........knmmmbssssnnnnnnsssssstmmmmmmmmmmsnktttknsmmmmmmmmmmmmKKKmE.',
-  '..........knstttsnnnnnnnnnnssssssstmmmmmmmsnktnnttnnsmmmmmmmmmmmKKKmE.',
-  '..........knsnnnsnnnnnnnnnnnssssssstbbmmmmsnkttnntnstmmmmmmmmmmmKKKmE.',
-  '..........kbKKmmbsnnnnnnnnnnssssssstbbmmmmsnnsttntnstmmmmmmmmmmmKKKmE.',
-  '.........kknbcsbnnnnnnnnnnnnnssssssstmmmmmsnnsbtnntnsmmmmmmmmmmKKKLE..',
-  '........kkknsnnnnnnnnnnnnnnnnnssssssstmmmmtnsbbtnntnsmmmmmmmmmKKKKLE..',
-  '.......kkkkknnnnnnnnnnnnnnnnnnssssssstmmmmtnnsbbtntnsmmmmmmmmKKKKKLE..',
-  '.......kcknnnkkkkkknnnnnnnnnnnssssssstmmmmtnsbmbtntnstmmmmmmmKKKKKLE..',
-  '......kcknnnnkkkkkkkknnnnnnnnnnssssssstbmmtknbmmbntnstmmmmmmmKKKKKLE..',
-  '.....kcknnnnkkkkkkkkkknnnnnnnnnssssssstmmstknbmmbntnstmmmmmmmKKKKKLE..',
-  '.....kcknnnnkkkkkkkkkknnnnnnnnnssssssstmmstknbmbtntnstmmmmmmmKKKKKLE..',
-  '....kkknnnnnkkkkkkkkknnnnnnnnnnnsssssstmmstnsbbtnntnstmmmmmmKKKKKLE...',
-  '....kkknnnssnkkkkkkknnnnnnnnnnnnsssssstmmstssbtnntnsttmmmmmmKKKKKLE...',
-  '...kckknnnnsnkkkkkknnnnnnnnnnnnnsssssstmsstbtnntnstttmmmmmmmKKKKKLE...',
-  '...kkknnnnnsskkkkknnnnnnnnnnnnnnssssssssstttsnnsnnsttmmmmmmmKKKKKLE...',
-  '...knnnnnnnsnnnnnnnnnnnnnnnnnnnnsssssssssttssnknnsttbmmmmmmKKKKKLE....',
-  '....tsmbsssnsnnnnnnnnnnnnnsssssssssssssssttssnnnsttbbmmmmmmKKKKKLE....',
-  '.....tttsnnnsnnnnnnnnnnssssssssssssssssssttstsnsttbbbmmmmmmKKKKKLE....',
-  '........snnnnsnnnnnnnnnssssssssssssssssssttstssttbbbbmmmmmKKKKKLE.....',
-  '........nnnnnsnnnnnnnnnssssssssssssssssstttttttbbbbbmKKKKKKKKKKLE.....',
-  '........knnnnsnnnnnnnnnsssssssssssssssssstttttttbbbbKKKKKKKKKKLE......',
-  '........knnnnsnnnnnnnnnsssssssssssssssssstttttttbbbbKKKKKKKKKKmE......',
-  '........ssnnnsnnnnnnnnnsssssssssssssssssstttttttbbbbbKKKKKKKKLE.......',
-  '........sssnntnnnnnnnnnsssssssssssssssssstttttttbbbbbKmmKKKKKLE.......',
-  '.........bbbttnnnnnnnnnnssssssssssssssssstttttttbbbbbmKKKKKKLE........',
-  '.........kknsnnnnnnnnnnnnssssssssssssssssttttttttbbbbbKKKKKKLE........',
-  '........kcknnnnnnnnnnnnnnnsssssssssssssssttttttttbbbbbKKKKKmE.........',
-  '.........nsnnnnnnnnnnnnnnnsssssssssssssssttttttttbbbbbbKLLmE..........',
-  '..........ssnnnnnnnnnnnnnnssssssssssssttttttmmmtbbbbbbbmEEE...........',
-  '...........snnnnnnnnnnnnnssssssssssssttttttmmbbbbbbbbbmE..............',
-  '...........kknnnnnnnnnnnssssssssssstttttbbmmbbbbbbbbbbmE..............',
-  '...........kknnnnnnnnnnssssssssssssttttbbbmmbbbbbbbbbbmE..............',
-  '..........kkknnnnnnnnnsssssssssssstttbbbmmbbbbbbbbbbbbmE..............',
-  '..........kcknnnnnnnnsssssssssssstttbbbmmbbbbbbbbbbbbbmE..............',
-  '..........kkknnnnnnnssssssssssstttbbbmmbbbbbbbbbbbbbbbmE..............',
-  '..........kkknnnnnnsssssssssstttbbbmmbbbbbbbbbbbbbbbbbmE..............',
-  '..........kkknnnnnssssssssstttbbbmmbbbbbbbbbbbbbbbbbbbmE..............',
-  '...........knnnnnsssssssstttbbbmmbbbbbbbbbbbbbbbbbbbbbmE..............',
-  '............nssssstttttbbbbbmmbbbbbbbbbbbbbbbbbbbbbbbbmE..............',
-  '..............tttttbbbbbmmmbbbbbbbbbbbbbbbbbbbbbbbbbbbmE..............',
-  '....................bmmmmmmmmmmbbbbbbbbbbbbbbbbbbbbbbbmE..............',
-  '....................bmmmmmmbbbbbbbbbbbbbbbbbbbbbbbbbbbmE..............',
-  '.....................tbmbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbmE..............',
-  '.....................stbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbmE..............',
-  '....................sstbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbmE..............',
-  '....................nstbbbbbbbbbtbbbbbbbbbbbbbbbbbbbbbmE..............',
-  '...................nnstbbbbbbbbbtbbbbbbbbbbbbbbbbbbbbbbmE.............',
-  '...................snstbbbbbbbbtbbbbbbbbbbbbbbbbbbbbbbbmE.............',
-  '....................sstbbbbbbbtbbbbbbbbbbbbbbbbbbbbbbbbmE.............',
-  '....................sstbbbbbbtbbbbbbbbbbbbbbbbbbbbbbbbmmEE............',
-  '....................sstbbbbbtbbbbbbbbbbbbbbbbbbbmmFFEEEEEEE...........',
-  '.....................stbbbbtbbbbbbbbbbbbbbbmmFFFFFFFEEEEEEE...........',
-  '.....................stbbbbtbbbbbbbbbbmmFFFFFFFFFFFFEEEEEEE...........',
-  '....................sstbbbtbbbbbbbmmVVVVFFFFFFFFFFFFEEEEEEE...........',
-  '....................sstbbtbbmmVVVVVVVVVVFFFFFFFFFFFFEEEEEEE...........',
-  '....................stbmmVVVVVVVVVVVVVVVFFFFFFFFFFFFEEEEEEE...........',
-  '...................ssVVVVcccVVVVVVVVVVVVFFFFFFFFFFFFEEEEEEEE..........',
-  '...................sscccccccVVVVVVVVVVVVFFFFFFFFFFFFEEEEEEEE..........',
-  '...................sscccccccVVVVVVVVVVVVFFFFFFFFFFFFEEEEEEEE..........',
-  '...................sscccccccVVVVVVVVVVVVFFFFFFFFFFFFEEEEEEmE..........',
-  '...................sscccccccVVVVVVVVVVVVFFFFFbbbbbbmmmmmmmmE..........',
-  '.....................sccccccVVVVVVVVVVVVFttttbbbbbbmmmmmmmE...........',
-  '......................ccccccVVVVVVVVVttttttttbbbbbbmmmE...............',
-  '......................ccccccVVVVVV....................................',
-  '.......................cccccVVVVV.....................................',
-  '.......................cccccVVVV......................................',
-  '........................ccccVV........................................',
-  '........................ccccVV........................................',
-  '.........................cccV.........................................',
-  '.........................ccc..........................................',
-  '..........................cc..........................................',
+// His bust in profile, facing left, hand-pixelled (92 x 158; crown y 0, chin
+// y 70, nose tip x 3). Key light warm from the lamp at the front-left, a cool rim
+// from the window behind him. Hair combed back in clumps; the neck in the jaw's
+// shadow on the skin ramp (the muscle from behind the ear to the throat a soft
+// step, its belly catching the lamp); the white collar rolling round the neck,
+// lit at the front and under the jacket collar at the back; a burgundy tie knot;
+// the charcoal jacket: a lapel with pick stitching and the shadow it casts, the
+// chest plane warm from the lamp, a pocket square, the shoulder line and the
+// back rimmed by the window, and folds as tapered wedges (no ruled lines).
+const BUST = [
+  '.................................tbbbmbbbb',
+  '...........................bbbbtttbbbmbbbbbbbbbb',
+  '........................tbbtttttbbbbbbbbbbbbbbbbbbb',
+  '.....................ttttttbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+  '....................ttbbbbbbbbbbbbbmmbbbbbbbbbbbbbbbbbb',
+  '..................tttbbbbbbbbbbbbmmbbbbtttbbttbbbbbbbbbEE',
+  '.................bbbbbbbbbbmmmmmmbbbbbbbbbttttttttbbbbbbbE',
+  '...............bbbbbbbbmmmmttttbbbbbbbbbbbbbbbbbbbttbbbbbbEE',
+  '..............bbbbbbbmmmtttbbbbbbbbbbbbbbbbbbbbbbbbtttbbbbbbE',
+  '.............bbbbbbbttttbbbbbbbbbbbbbttbbbbbbbbbbbbbbbbbbbbbbE',
+  '.............bbbbbbttbbbbbbbbbbbbbbtttttttbbbbbmmbbbbbbbbbbbbbE',
+  '............bbbbbttbbbbbbbbmmbbbbbbbbbbbbtttttttmmmbbbbbbbbbbbbE',
+  '............bbbbttbbbbbbmmmtbbbbbbbbbbbbbbbbbbbbttmmbbbbbbbmmbbE',
+  '...........kbbbbtbbbbbmmttttbbbbbbbbbbbbbbbbbbbbbbmmmmbbbbbbmbbbE',
+  '..........kknsbttbbbmmtttbbbbbbbbbbbmmmmmbbbbbbbbbmmmmmmmmmmKKKbE',
+  '..........kkknnnsbbmmttbbbbbbbbbbbbbtttttmmmmmmbbmmmmmmmmmmmmKKKbE',
+  '..........kkknnnnnsmtbbbbbbbbbbbbbttbbbbbttttbbbmmmmmmmmmmmmmKKKbE',
+  '.........kkkknnnnnnnsbbbbbbbbbbbttbbbbbbbbbbbbbbbKmmmmmmmmmmmmKKKmE',
+  '.........kckknnnnnnnssbbbbbbbbbbbbbbbbbbbbbbbbbbmmmmmmmmmmmmmtKKKmE',
+  '.........kckkknnnnnnnnssttbbbbbbbbbbmmmmbbbbbbbbmmbbmmmmmmmmmtKKKmE',
+  '.........kckkknnnnnnnnnssbbbbbbbbbbbbbbbbbbbbbbbmmmbmmmmmmmmmtKKKKbE',
+  '.........kkkkknnnnnnnnnnssbbbmmmmmmbbmmmbmmmmbbbmmmmmmmmmmmmmmKKKKbE',
+  '.........kkkknnnnnnnnssssstbbmbbbbbmmmmmmmmmmbbmmmmmmmmmmmmmmmmKKKbE',
+  '.........kkkknnnnnnnnssssstbbmbmmmmmmmmmmmmmmmbmmmmmmmmmmmmmmmKKKKbE',
+  '.........kkkknnnnnnnnsssssstbmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmKKKKbE',
+  '.........kkkknnnnnnnnnssssstbmmmmmmmmmmmmmmmmmKKmmmmmmmmmmmmmmmKKKKbE',
+  '........kkkkknnnnnnnnnnssssstmmmmmmbbmmmmmmmmmKKmmmmmmmmmmmmmmmKKKKmE',
+  '........kkkkknnnnnnnnnnnssssstmmmmmbmmmmmmbbmmKKKmmmmmmmmmmmmmmKKKKmE',
+  '........kkkkkknnnnnnnnnnssssstmmmmmbmmmmmmmbKKKKKmmmmmmmmmmmmmmKKKKmE',
+  '.........kknnnbbbbbbnnnnsssssstmmmmmmmmmmmmbKKsnnsmmmmmmmmmmmmmmKKKmE',
+  '.........kktmmmmmmmbbnnnnsssssstmmmmbmmmmmmbsnkkknsmmmmmmmmmmmmmKKKmE',
+  '..........knmmmbssssnnnnnnsssssstmmmmmmmmmmsnktttknsmmmmmmmmmmmmKKKmE',
+  '..........knstttsnnnnnnnnnnssssssstmmmmmmmsnktnnttnnsmmmmmmmmmmmKKKmE',
+  '..........knsnnnsnnnnnnnnnnnssssssstbbmmmmsnkttnntnstmmmmmmmmmmmKKKmE',
+  '..........kbKKmmbsnnnnnnnnnnssssssstbbmmmmsnnsttntnstmmmmmmmmmmmKKKmE',
+  '.........kknbcsbnnnnnnnnnnnnnssssssstmmmmmsnnsbtnntnsmmmmmmmmmmKKKLE',
+  '........kkknsnnnnnnnnnnnnnnnnnssssssstmmmmtnsbbtnntnsmmmmmmmmmKKKKLE',
+  '.......kkkkknnnnnnnnnnnnnnnnnnssssssstmmmmtnnsbbtntnsmmmmmmmmKKKKKLE',
+  '.......kcknnnkkkkkknnnnnnnnnnnssssssstmmmmtnsbmbtntnstmmmmmmmKKKKKLE',
+  '......kcknnnnkkkkkkkknnnnnnnnnnssssssstbmmtknbmmbntnstmmmmmmmKKKKKLE',
+  '.....kcknnnnkkkkkkkkkknnnnnnnnnssssssstmmstknbmmbntnstmmmmmmmKKKKKLE',
+  '.....kcknnnnkkkkkkkkkknnnnnnnnnssssssstmmstknbmbtntnstmmmmmmmKKKKKLE',
+  '....kkknnnnnkkkkkkkkknnnnnnnnnnnsssssstmmstnsbbtnntnstmmmmmmKKKKKLE',
+  '....kkknnnssnkkkkkkknnnnnnnnnnnnsssssstmmstssbtnntnsttmmmmmmKKKKKLE',
+  '...kckknnnnsnkkkkkknnnnnnnnnnnnnsssssstmsstbtnntnstttmmmmmmmKKKKKLE',
+  '...kkknnnnnsskkkkknnnnnnnnnnnnnnssssssssstttsnnsnnsttmmmmmmmKKKKKLE',
+  '...knnnnnnnsnnnnnnnnnnnnnnnnnnnnsssssssssttssnknnsttbmmmmmmKKKKKLE',
+  '....tsmbsssnsnnnnnnnnnnnnnsssssssssssssssttssnnnsttbbmmmmmmKKKKKLE',
+  '.....tttsnnnsnnnnnnnnnnssssssssssssssssssttstsnsttbbbmmmmmmKKKKKLE',
+  '........snnnnsnnnnnnnnnssssssssssssssssssttstssttbbbbmmmmmKKKKKLE',
+  '........nnnnnsnnnnnnnnnssssssssssssssssstttttttbbbbbmKKKKKKKKKKLE',
+  '........knnnnsnnnnnnnnnsssssssssssssssssstttttttbbbbKKKKKKKKKKLE',
+  '........knnnnsnnnnnnnnnsssssssssssssssssstttttttbbbbKKKKKKKKKKmE',
+  '........ssnnnsnnnnnnnnnsssssssssssssssssstttttttbbbbbKKKKKKKKLE',
+  '........sssnntnnnnnnnnnsssssssssssssssssstttttttbbbbbKmmKKKKKLE',
+  '.........bbbttnnnnnnnnnnssssssssssssssssstttttttbbbbbmKKKKKKLE',
+  '.........kknsnnnnnnnnnnnnssssssssssssssssttttttttbbbbbKKKKKKLE',
+  '........kcknnnnnnnnnnnnnnnsssssssssssssssttttttttbbbbbKKKKKmE',
+  '.........nsnnnnnnnnnnnnnnnsssssssssssssssttttttttbbbbbbKLLmE',
+  '..........ssnnnnnnnnnnnnnnssssssssssssttttttbbttttttbbE',
+  '...........snnnnnnnnnnnnnssssssssssssttttttbbtttttttbbE',
+  '...........kknnnnnnnnnnnssssssssssstttttbbbbtttttttttbbE',
+  '...........kknnnnnnnnnnssssssssssssttttbbbbbsttttttttbbE',
+  '..........kkknnnnnnnnnsssssssssssstttbbbbbtttttttttttbbE',
+  '..........kcknnnnnnnnsssssssssssstttbbbbbbtttttttttttbbE',
+  '..........kkknnnnnnnssssssssssstttbbbbbbttttttttttttttbbE',
+  '..........kkknnnnnnsssssssssstttbbbbbbbtttttttttttttttbbb',
+  '..........kkknnnnnssssssssstttbbbbbbbtttttttttttttttttbbb',
+  '...........knnnnnsssssssstttbbbbbbbtttttttttttttttttttbbb',
+  '............nssssstttttbbbbbbbsbbttttsstttttttttttttttbbb',
+  '..............tttttbbbbbbbssbbbttttsnstttttttttttttttttbbb',
+  '....................bbbsbbbbtttttssnsttttttttttttttttttbbb',
+  '....................bbbbbbtttttsssnstttttttttttttttttttbbb',
+  '....................bbbbbtttsssssnsttttttttttttttttttttbbb',
+  '....................ttttssssssssnnttttttttttttttttttttttbbb',
+  '....................tttsssssssssstttttttttttttttttttttttbbb',
+  '....................nnssssssssssttttttttttttttttttttttttbbb',
+  '...................nnsssssssssstttttttttttttttttttttttttbbb',
+  '...................nnsssssssssttttttttttttttttttttttttttbbb.V',
+  '....................nnsssssssstttttttttttttttttttttttttVVVVVF',
+  '....................nnssssssstttttttttttttttttttttVVVVVFFFFFE',
+  '....................nnsssssstttttttttttttttttccVVVFFFFFFFFFFL',
+  '....................nnssssstttttttttttttcccccFFFFFFFFFFEEEEEL',
+  '....................nnsssstttttttttcccccVFFFFFFFFFEEEEELLLLLF',
+  '....................nnssstttttcccccVVVVVVFFFFLLLLEIIILLIIIILLE',
+  '....................nttttWWWWcVVVVVVVVVVVFFLLIIIIIKKKKKIIIIILLE',
+  '....................tWWWWccccVVVVVVVVVVVVLLIIKKKKKKKKKKKIIIIILLE',
+  '...................VWccccccccVVVVVVVVVVLLIIKKKKKKKKKKKKKIIIIILLL',
+  '...................ccccccccccVVVVVVVVLLKKKKKKKKKKKKKKKKKKIIIIILLE',
+  '...................ccccccccccVVVVVVLLKKKKKKKKKKKKKKKKKKKKKIIIIILLE',
+  '...................ccccccccccVVVVVLKKKKKKKKKKKKKKKKKKKKKKKKIIIIILLE',
+  '..................mbcccccccccVVVKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIILLE',
+  '.................mbtcccccccccVKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIILEE',
+  '.................mbbcccccccVIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIILLE',
+  '.................mmbccccccVIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIIILLE',
+  '..................mmccccVIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIKIIIIIILLE',
+  '..................mKcccVIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIKKIIIIIILEE',
+  '...................mcVEIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIIILLE',
+  '...................LIIIIIIIIIIKKLLKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIIIILLE',
+  '....................LIIIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIIIILLE',
+  '...................LIIIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIIIILLE',
+  '...................LIEIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIIIILLL',
+  '...................LIIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIIIILLE',
+  '...................LIIIIIIIIKKIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIIIILLE',
+  '..................LIIIIIIIIKKIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKIIIILLL',
+  '..................LIEIIIIIIKKIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIKIIIIILLE',
+  '..................LIIIIIIIKKIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIKIIIIILLL',
+  '..................LIIIIIIIKKIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIIILLE',
+  '.................LIIIIIIIKKIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIKIIIIILLL',
+  '.................LIEIIIIIKKIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIILLE',
+  '.................LIIIIIIIKKIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIIILLE',
+  '.................LIIIIIIKKIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIILLL',
+  '.................LIIIIIIKKIIIIFKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIILLE',
+  '.................LIEIIIKKIIIIFVVKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIILLE',
+  '................LIIIIIIKKIIIILKKLKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIIILLE',
+  '................LIIIIIIKKIILLLLLKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIILLL',
+  '................LIIIIIKKIIIIIKKKLLLLKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKLIIIIILLE',
+  '................LIEIIIKKIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKLIIIIILLE',
+  '................LIIIIIKKIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIKKKKKKKKKLKIIIIILLE',
+  '................LIIIIKKIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIKKKKKKKKKKLIIIIILLL',
+  '................LIIIIKKIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIKKKKKKKKKKLIIIIILLL',
+  '...............LIEIIIKKIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIKKKKKKKKKKLIIIIILLL',
+  '...............LIIIIKKIIIIIKKKKKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKLIIIIILLL',
+  '...............LIIIIKKIIIIIKKKKKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKIKKKKKKKKKKKLIIIIILLL',
+  '...............LIIIIKKIIIIIKKKKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKIKKKKKKKKKKKLIIIIILLL',
+  '...............LIEIKKIIIIIIKKKKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKLIIIIILLL',
+  '...............LIIIKKIIIIIKKKKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKIIIKKKKKKKKKKLIIIIILLL',
+  '...............LIIIKKIIIIIKKKKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKLIIIIILLL',
+  '...............LIIKKmIIIIIKKKKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKLKIIIIILLL',
+  '...............LIIKKmIIIIIKKKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKLLIIIIILLL',
+  '...............LIIKKmIIIIIKKKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKLIIIIILLL',
+  '...............LIKKmIIIIIKKKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKLIIIIILLL',
+  '...............LIKKIIIIIIKKKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKLIIIIIILL',
+  '..............LIIKKIIIIIKKKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKLIIIIIILL',
+  '..............LIKKIIIIIIKKKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKLIIIIIILL',
+  '..............LIKKIIIIIIKKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKLIIIIIILL',
+  '..............LIKIIIIIIIKKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKLIIIIIILL',
+  '..............LIKIIIIIIIKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKLIIIIIILL',
+  '..............IIIIIIIIIIKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKKLIIIIIILL',
+  '..............IIIIIIIIIKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IILIIIIIIKKKKKKKKIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIKmIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIKKKKKKKKKKKKKKIIIIIILL',
+  '..............IIIIIIIIKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKIIIIIILL',
 ];
 
 // The eye in its states, over the head (open / half / shut): [x, y, pixels]
@@ -1042,55 +1168,9 @@ function eye(ctx, ox, oy, state) {
   }
 }
 
-// The jacket (charcoal, warm key on the front of the chest and the shoulder,
-// cool rim on the back), the shirt and a dark tie in the V of the collar.
 const BUST_W = 92;
 const BUST_H = 158;
-const JACKET = [[21, 95], [19, 104], [16, 116], [14, 128], [14, 142], [15, 158], [86, 158], [85, 140], [83, 124], [79, 110], [73, 99], [66, 91], [60, 86], [52, 89], [44, 91], [36, 93], [28, 96]];
-const LAPEL = [[22, 97], [30, 99], [27, 110], [23, 122], [19, 134], [16, 134], [17, 120], [19, 107]];
-function inPoly(pts, x, y) {
-  let inside = false;
-  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-    const xi = pts[i][0];
-    const yi = pts[i][1];
-    const xj = pts[j][0];
-    const yj = pts[j][1];
-    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
-}
-const bustArt = lazy(() =>
-  cached('bf-man', BUST_W, BUST_H, (c) => {
-    for (let y = 84; y < BUST_H; y++) {
-      for (let x = 0; x < BUST_W; x++) {
-        if (!inPoly(JACKET, x + 0.5, y + 0.5)) continue;
-        const edgeR = !inPoly(JACKET, x + 1.5, y + 0.5);
-        const edgeR2 = !inPoly(JACKET, x + 2.5, y + 0.5);
-        const top = !inPoly(JACKET, x + 0.5, y - 0.5) || !inPoly(JACKET, x + 0.5, y - 1.5);
-        let col = P.black;
-        // the front of the chest and the top of the shoulder face the lamp
-        if (x < 30 && y < 140) col = P.ink;
-        if (top && x < 70) col = x < 40 ? P.slate : P.ink;
-        if (inPoly(LAPEL, x + 0.5, y + 0.5)) col = !inPoly(LAPEL, x - 0.5, y + 0.5) ? P.slate : P.ink;
-        // a fold where the raised arm pulls the cloth, from the shoulder toward the chest
-        const fx = 52 - (y - 100) * 0.55;
-        if (y > 102 && y < 150 && abs(x - fx) < 0.6) col = P.black;
-        if (y > 102 && y < 150 && abs(x - fx + 1) < 0.6 && col === P.black) col = P.ink;
-        // the window behind him rims the back
-        if (edgeR) col = y < 120 ? P.steel : P.slate;
-        else if (edgeR2 && y < 112) col = P.slate;
-        R(c, x, y, 1, 1, col);
-      }
-    }
-    // the shirt and the tie in the V between the collar and the lapel
-    for (let y = 92; y < 118; y++) {
-      const x0 = round(21 - (y - 92) * 0.18);
-      R(c, x0, y, 2, 1, y < 100 ? P.cream : P.silver);
-      R(c, x0 - 1, y, 1, 1, y < 112 ? P.maroon : P.black);
-    }
-    paintRows(c, HEAD, 0, 0);
-  }),
-);
+const bustArt = lazy(() => cached('bf-man3', BUST_W, BUST_H, (c) => paintRows(c, BUST, 0, 0)));
 
 // His left hand round the tumbler, back to camera: fingers wrap the front of the
 // glass (staggered, creased, knuckles catching the key), the thumb up its back
@@ -1100,39 +1180,39 @@ const HAND = [
   '..........................................',
   '..........................................',
   '..........................................',
-  '..........................................',
-  '........................kks...............',
-  '.......................kccns..............',
-  '.......................kkcnst.............',
-  '........................knnnst............',
-  '....nkkkkkkkkk..........stttsst...........',
-  '..skkkkkkkkkkckkkkkknnnnnknnnsst..........',
-  '..snnnnsnnnnnkkkkknnnnnnnnnnnnsst.........',
-  '...sssstsssssskkknnnnnnnnnnnnnsst.........',
-  '...tbbbbbbtttskknnnnnnnnnnnnnnsst.........',
-  '.nkkkkkkkkkkkknnnnnnnnnnnnnnnnsst.........',
-  'skkkkkkkkkkkkcnnnnnnnnnnnnnnnnssst........',
-  'snnnnnsnnnnnnknnnnnnnnnnnnnnnsssst........',
-  'snnnnnsnnnnnnnnnnnnnnnnnnnnnssssst........',
-  '.sssssssssssssnnnnnnnnnnnnnssssssst.......',
-  '..bbbbbbbbtttsnnnnnnnnnnnnsssssssst.......',
-  '..nkkkkkkkkkkknnnnnnnnnnnssssssssstt......',
-  '.skkkkkkkkkkcknnnnnnnnnnsssssssssttt......',
-  '.snnnnsnnnnnknnnnnnnnnnssssssssstttt......',
-  '.ssssstssssssnnnnnnnnnssssssssstttttt.....',
-  '...tbbbbbbttsnnnnnnnnsssssssssttttttt.....',
-  '....nkkkkkkkknnnnnnnssssssssstttttttt.....',
-  '...sknnnnnnnknnnnnnssssssssstttttttttt....',
-  '....sssstsssstsnnnsssssssssstttttttttt....',
-  '.....ttttttttttttssssssssttttttttttttt....',
-  '..................ttttttsssssttttttttttt..',
-  '......................ttttsssssssstttttt..',
+  '.........................kks..............',
+  '........................kccns.............',
+  '........................kcknst............',
+  '........................kknnst............',
+  '.......................tknnnsst...........',
+  '....nkkkkkkkkkckkknnnnntnnnnsst...........',
+  '..knnnnnsnnnnkkkknnnnnnnntnnssst..........',
+  '..snnnnnsnnnnnkknkknnnnnnntnsssst.........',
+  '...sssstsssssnnnnnnkkknnnnnnnssssst.......',
+  '..tbbbbbbbttsnnnnnnnnnkknnnnnsssssst......',
+  '.nkkkkkkkkkkkkcnnnnnnnnnnnnnnnssssst......',
+  'knnnnnnsnnnnnkknnnnnnnnnnnnnnssssssst.....',
+  'snnnnnnsnnnnnnnnkknnnnnnnnnsssssssst......',
+  '.ssssssstsssssnnnnkkknnnnnnssssssssst.....',
+  '..bbbbbbbbbttsnnnnnnnkknnsssssssssstt.....',
+  '..nkkkkkkkkkkcknnnnnnnnnnssssssssssttt....',
+  '.knnnnnsnnnnnkknnnnnnnnnsssssssssstttt....',
+  '.snnnnnsnnnnnnnnnnnnnnssssssssssttttt.....',
+  '..sssssstsssssnnnnnnnsssssssssstttttt.....',
+  '...tbbbbbbbbttsnnnnnssssssssstttttttt.....',
+  '....nkkkkkkkkcnnnnsssssssssttttttttt......',
+  '...knnnnsnnnnkknnssssssssstttttttttt......',
+  '....ssssstsssssssssssssssttttttttttt......',
+  '.....tttttttttttsssssssstttttttttttt......',
+  '..............bbbttttttttttttttttttttt....',
+  '..................bbbbttttttttttttttt.....',
+  '.......................bbbbbttttttt.......',
   '..........................................',
   '..........................................',
 ];
 const HAND_GX = 14; // glass axis in the hand sprite
 const HAND_RIM = 1; // rim row (the hand holds the lower glass; his little finger tucks under the base)
-const handArt = lazy(() => cached('bf-hand2', 42, 33, (c) => paintRows(c, HAND, 0, 0)));
+const handArt = lazy(() => cached('bf-hand4', 42, 33, (c) => paintRows(c, HAND, 0, 0)));
 
 // The rocks glass in his hand (same cut crystal as the pour, smaller).
 const SMALL_KEYS = [[0, 13.5], [0.86, 12.6], [1, 12.6]];
@@ -1142,70 +1222,129 @@ const SMALL_GLASS = { top: 0, edge: 1, wall: 1, edgeColor: P.tanShade };
 const SMALL_O = { rows: 0, ramp: AMBER, ambient: 0.25, glass: SMALL_GLASS, label: SMALL_CUTS, stripes: [[-0.55, 0.07, P.cream]], rim: RIM, tilt: 0.2, seam: 0.5 };
 const GLASS_H = 25;
 
-// The arm: two sleeves from the shoulder through the elbow to the cuff, solved
-// each frame (two-bone IK, elbow down) so the elbow swings forward naturally as
-// the glass comes up. Charcoal cloth: the lit upper edge, a cool rim underneath.
-const UPPER = 72;
-const FORE = 72;
-const ARM = { ex: 0, ey: 0 };
-function elbow(sx, sy, wx, wy) {
-  const dx = wx - sx;
-  const dy = wy - sy;
-  const d = Math.min(UPPER + FORE - 0.5, Math.hypot(dx, dy));
-  const a = (UPPER * UPPER - FORE * FORE + d * d) / (2 * d);
-  const h = sqrt(max(0, UPPER * UPPER - a * a));
-  const ux = dx / d;
-  const uy = dy / d;
-  ARM.ex = sx + ux * a + uy * h;
-  ARM.ey = sy + uy * a - ux * h;
-  return ARM;
+// The arm: two sleeves of charcoal cloth, painted once as straight textures and
+// laid along the upper arm and the forearm every frame (sampled per pixel, one
+// texel per pixel along the bone, so nothing stretches). Across each sleeve: the
+// edge facing the lamp catches it, a warm plane, a black core, the window's cool
+// rim; folds run round the arm as lit ridges over dark troughs and break the rim
+// and the lit edge, so no edge is a ruled line. The upper sleeve has a rounded
+// head at the shoulder, the forearm ends in the white shirt cuff at the wrist.
+const pk = (hex) => (255 << 24) | (parseInt(hex.slice(5, 7), 16) << 16) | (parseInt(hex.slice(3, 5), 16) << 8) | parseInt(hex.slice(1, 3), 16);
+/**
+ * A w x h sleeve texture (column 0 faces the lamp). folds: [row, slope, curve,
+ * width, amount, x0, x1]: a fold line row + slope*col + curve*(x-0.5)^2*w across
+ * x0..x1 of the width. cap: rows of a rounded end at the top; cuff: rows of cuff
+ * at the bottom (narrower than the sleeve).
+ */
+function sleeveTex(w, h, folds, cap = 0, cuffRows = 0) {
+  const px = new Int32Array(w * h);
+  const ink = {};
+  for (const ch of 'KILEcVF') ink[ch] = pk(PIX[ch]);
+  const smooth01 = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+  for (let r = 0; r < h; r++) {
+    for (let c = 0; c < w; c++) {
+      const x = (c + 0.5) / w;
+      let ch = '';
+      if (cap && r < cap && ((x - 0.5) * 2) ** 2 + ((cap - r - 0.5) / cap) ** 2 > 1) continue; // the rounded sleeve head
+      if (cuffRows && r >= h - cuffRows) {
+        if (abs(x - 0.47) > 0.33) continue;
+        const cx = (x - 0.14) / 0.66;
+        ch = r === h - cuffRows ? 'E' : cx < 0.3 ? 'c' : cx < 0.75 ? 'V' : 'F';
+      } else {
+        const th = (x - 0.5) * PI; // the surface normal across the cylinder
+        const lamp = max(0, cos(th + 1.1)) ** 3.2;
+        const rim = max(0, cos(th - 1.45)) ** 14 * (0.78 + 0.3 * sin(r * 0.19 + 1.3));
+        let v = 0.31 * lamp + 0.7 * rim + 0.05 + (x < 1.6 / w ? 0.16 : 0); // the lamp-side silhouette catches grazing light
+        for (let k = 0; k < folds.length; k++) {
+          const f = folds[k];
+          const d = (r - (f[0] + f[1] * c + f[2] * (x - 0.5) ** 2 * w)) / f[3];
+          const env = smooth01((x - f[5]) / 0.15) * smooth01((f[6] - x) / 0.15);
+          v += f[4] * (env * 0.2 * Math.exp(-((d + 0.55) ** 2) * 4) * (0.3 + lamp) - (0.35 + 0.65 * env) * 0.22 * Math.exp(-((d - 0.4) ** 2) * 3));
+        }
+        if (cuffRows && r === h - cuffRows - 1) v -= 0.25; // the hem
+        // neutral charcoal (a warm step here read as a brown stripe down the sleeve)
+        ch = v < 0.13 ? 'K' : v < 0.27 ? 'I' : v < 0.4 ? (x < 0.5 ? 'I' : 'L') : v < 0.6 ? 'L' : 'E';
+      }
+      px[r * w + c] = ink[ch];
+    }
+  }
+  return { w, h, px };
 }
-const SLEEVE = [[0, 0], [0, 0], [0, 0], [0, 0]];
-const SL = { ax: 0, ay: 0, bx: 0, by: 0, nx: 0, ny: 0, w0: 0, w1: 0 }; // pooled sleeve frame
-/** One band along the sleeve, between offsets o0..o1 (start) and i0..i1 (end) across its width. */
-function sleeveBand(ctx, o0, o1, i0, i1, col) {
-  const { ax, ay, bx, by, nx, ny, w0, w1 } = SL;
-  SLEEVE[0][0] = ax + nx * w0 * o0; SLEEVE[0][1] = ay + ny * w0 * o0;
-  SLEEVE[1][0] = ax + nx * w0 * o1; SLEEVE[1][1] = ay + ny * w0 * o1;
-  SLEEVE[2][0] = bx + nx * w1 * i1; SLEEVE[2][1] = by + ny * w1 * i1;
-  SLEEVE[3][0] = bx + nx * w1 * i0; SLEEVE[3][1] = by + ny * w1 * i0;
-  poly(ctx, SLEEVE, col);
-}
-/** A tapered sleeve from (ax, ay) w0 wide to (bx, by) w1 wide, lit on the side facing up-left. */
-function sleeve(ctx, ax, ay, bx, by, w0, w1) {
+const UPPER_CAP = 12;
+const upperTex = lazy(() => sleeveTex(26, 112, [[22, 0.15, 0.6, 3.2, 0.7, 0.05, 0.75], [44, -0.2, 0.5, 3.5, 0.9, 0.1, 0.9], [62, 0.35, -0.4, 3, 0.7, 0, 0.6], [80, -0.3, 0.6, 3.6, 1, 0.05, 0.95], [98, 0.3, 0.3, 3.2, 0.8, 0.1, 0.9]], UPPER_CAP));
+const foreTex = lazy(() => sleeveTex(22, 96, [[18, 0.5, 0, 3, 1, 0, 0.85], [30, -0.4, 0.3, 3.2, 0.9, 0.1, 0.95], [46, 0.3, 0.2, 2.6, 0.6, 0.05, 0.7], [72, -0.35, 0.4, 2.8, 0.8, 0, 0.8], [84, 0.45, 0, 2.2, 0.9, 0.1, 0.9]], 0, 4));
+
+const BONE_N = 136;
+let BONE = null; // pooled scratch canvas + pixels (made on first use)
+/**
+ * Lay a sleeve texture along the bone a -> b: half widths h0 at a and h1 at b, a
+ * slight bow toward the lamp side. anchor 0 puts texture row 0 `cap` px before a
+ * (the rounded head over the shoulder); anchor 1 puts its last row at b (the cuff
+ * at the wrist). Column 0 goes on the -n side (n = the bone's right-hand normal).
+ */
+function bone(ctx, tex, ax, ay, bx, by, h0, h1, bow, anchor, cap) {
   const len = Math.hypot(bx - ax, by - ay) || 1;
-  SL.ax = ax; SL.ay = ay; SL.bx = bx; SL.by = by; SL.w0 = w0; SL.w1 = w1;
-  SL.nx = (by - ay) / len; // normal (to the right of the a->b direction)
-  SL.ny = -(bx - ax) / len;
-  sleeveBand(ctx, -0.5, 0.5, -0.5, 0.5, P.black);
-  // the side whose normal points up-left faces the lamp
-  const lit = SL.nx * -0.8 + SL.ny * -0.6 > 0 ? 1 : -1;
-  sleeveBand(ctx, 0.5 * lit, 0.3 * lit, 0.5 * lit, 0.3 * lit, P.ink);
-  sleeveBand(ctx, 0.5 * lit, 0.42 * lit, 0.5 * lit, 0.42 * lit, P.slate);
-  sleeveBand(ctx, -0.5 * lit, -0.44 * lit, -0.5 * lit, -0.44 * lit, P.slate); // the window's cool rim
+  const dx = (bx - ax) / len;
+  const dy = (by - ay) / len;
+  const nx = dy;
+  const ny = -dx;
+  const m = max(h0, h1) + abs(bow) + cap + 1;
+  const x0 = max(0, floor(Math.min(ax, bx) - m));
+  const y0 = max(0, floor(Math.min(ay, by) - m));
+  const bw = Math.min(BONE_N, Math.min(W, Math.ceil(max(ax, bx) + m)) - x0);
+  const bh = Math.min(BONE_N, Math.min(H - BAR, Math.ceil(max(ay, by) + m)) - y0);
+  if (bw <= 0 || bh <= 0) return;
+  if (!BONE) {
+    const cv = document.createElement('canvas');
+    cv.width = BONE_N;
+    cv.height = BONE_N;
+    const c = cv.getContext('2d');
+    const img = c.createImageData(BONE_N, BONE_N);
+    BONE = { cv, c, img, px: new Int32Array(img.data.buffer) };
+  }
+  const out = BONE.px;
+  const tp = tex.px;
+  const tw = tex.w;
+  const th = tex.h;
+  for (let j = 0; j < bh; j++) {
+    const qy = y0 + j + 0.5 - ay;
+    for (let i = 0; i < bw; i++) {
+      const qx = x0 + i + 0.5 - ax;
+      const u = qx * dx + qy * dy;
+      let val = 0;
+      if (u <= len && u >= -cap) {
+        const t = u <= 0 ? 0 : u / len;
+        const hw = h0 + (h1 - h0) * t;
+        const v = qx * nx + qy * ny - bow * sin(PI * t);
+        if (v > -hw && v < hw) {
+          let row = anchor === 0 ? floor(u + cap) : th - 1 - floor(len - u);
+          row = row < 0 ? 0 : row >= th ? th - 1 : row;
+          const col = floor((v / hw + 1) * 0.5 * tw);
+          val = tp[row * tw + (col < 0 ? 0 : col >= tw ? tw - 1 : col)];
+        }
+      }
+      out[j * BONE_N + i] = val;
+    }
+  }
+  BONE.c.putImageData(BONE.img, 0, 0, 0, 0, bw, bh);
+  ctx.drawImage(BONE.cv, 0, 0, bw, bh, x0, y0, bw, bh);
 }
 
-/** The shirt cuff showing past the sleeve: a short white band across the forearm. */
-function cuff(ctx, ax, ay, bx, by, w) {
-  const len = Math.hypot(bx - ax, by - ay) || 1;
-  SL.ax = ax; SL.ay = ay; SL.bx = bx; SL.by = by; SL.w0 = w; SL.w1 = w;
-  SL.nx = (by - ay) / len;
-  SL.ny = -(bx - ax) / len;
-  const lit = SL.nx * -0.8 + SL.ny * -0.6 > 0 ? 1 : -1;
-  sleeveBand(ctx, -0.5, 0.5, -0.5, 0.5, P.silver);
-  sleeveBand(ctx, 0.5 * lit, 0.05 * lit, 0.5 * lit, 0.05 * lit, P.cream);
-  sleeveBand(ctx, -0.5 * lit, -0.3 * lit, -0.5 * lit, -0.3 * lit, P.fog);
-}
-
-// Timing (shot length 4.2 s; it opens through a dip to black): the glass comes up
-// from his chest to under his nose, his eyes close as it arrives, he breathes in.
+// Timing (shot length 4.2 s; it opens through a short dip to black): the glass
+// comes up from his chest to under his nose, his eyes close as it arrives, he
+// breathes in. The elbow leads the hand by a beat (it lifts first, the glass
+// follows) and swings forward on a slight arc; it stays under the frame line.
 const INHALE = [[0, 0], [2.45, 0], [3.0, -1, 'inOut'], [3.8, -1], [4.3, 0, 'inOut']];
 const BUST_X = 204; // screen x of the sprite's left edge (nose tip at +3)
 const BUST_Y = 38; // screen y of the crown
-const SHOULDER_X = 254;
-const SHOULDER_Y = 134;
+const SHOULDER_X = 254; // the shoulder joint, under the jacket's shoulder line
+const SHOULDER_Y = 142;
+const ELBOW0_X = 284; // the elbow at rest, down at his side (below the frame)
+const ELBOW0_Y = 226;
+const ELBOW1_X = 210; // the elbow raised, forward under the glass
+const ELBOW1_Y = 202;
 const REST_X = 206; // glass axis at rest, in front of his chest
-const REST_Y = 151; // rim at rest
+const REST_Y = 149; // rim at rest
 const UP_X = 195; // glass axis under his nose (the tip hangs over the rim)
 const UP_Y = 89; // rim just under the nostril
 
@@ -1228,9 +1367,12 @@ function shotNose(ctx, lt) {
   // his nose from below it (the wrist bends as the glass comes up)
   const wx = hx + lerp(37, 31, gp);
   const wy = hy + lerp(27, 30, gp);
-  const e = elbow(SHOULDER_X, SHOULDER_Y + breath, wx, wy);
-  sleeve(ctx, SHOULDER_X, SHOULDER_Y + breath, e.ex, e.ey, 24, 22);
-  // the glass, then the hand round it, then the forearm and the shirt cuff over the wrist
+  const ge = smooth(prog(lt, 0.42, 1.92));
+  const ex = lerp(ELBOW0_X, ELBOW1_X, ge);
+  const ey = lerp(ELBOW0_Y, ELBOW1_Y, ge) + sin(ge * PI) * 5 + breath;
+  // upper sleeve from the shoulder (its rounded head over the joint) to the elbow
+  bone(ctx, upperTex(), SHOULDER_X, SHOULDER_Y + breath, ex, ey, 12.5, 11, -1, 0, UPPER_CAP);
+  // the glass, then the hand round it, then the forearm with the cuff over the wrist
   SMALL_GLASS.top = 4; // a generous pour over ice: the amber shows above his fingers
   SMALL_O.rows = GLASS_H;
   SMALL_CUTS.cv = cutsTex();
@@ -1239,19 +1381,16 @@ function shotNose(ctx, lt) {
   lathe(ctx, gx, gy, fill(SPROF, GLASS_H, SMALL_KEYS, 1), SMALL_O);
   ovalRing(ctx, gx, gy + 2, 13, 3, A(P.cream, 0.55));
   ctx.drawImage(handArt(), hx, hy);
-  const fl = Math.hypot(wx - e.ex, wy - e.ey) || 1;
-  const ux = (wx - e.ex) / fl;
-  const uy = (wy - e.ey) / fl;
-  sleeve(ctx, e.ex, e.ey, wx - ux * 3, wy - uy * 3, 22, 18);
-  cuff(ctx, wx - ux * 3.5, wy - uy * 3.5, wx + ux * 0.5, wy + uy * 0.5, 15);
+  const fl = Math.hypot(wx - ex, wy - ey) || 1;
+  bone(ctx, foreTex(), ex, ey, wx + ((wx - ex) / fl) * 0.5, wy + ((wy - ey) / fl) * 0.5, 10.5, 8.5, 1.2, 1, 0);
   vignette(ctx, 0.55);
-  // tasting notes in the space he faces, on the voice
+  // tasting notes in the space he faces, each as it is said ("Oak. Caramel... Dial-up." from 14.0 s)
   const tx = 104;
-  fadeUp(ctx, 'TASTING NOTES', tx, 62, lt - 0.4, { face: 'micro', color: P.cream, track: 2, align: 'center', dur: 0.9 });
-  rule(ctx, tx, 72, 40, (lt - 0.6) / 0.9, P.tanShade);
-  fadeUp(ctx, 'OAK', tx, 82, lt - 0.7, { face: 'serif', color: P.cream, track: 3, align: 'center', dur: 0.8 });
-  fadeUp(ctx, 'CARAMEL', tx, 100, lt - 1.4, { face: 'serif', color: P.cream, track: 3, align: 'center', dur: 0.8 });
-  fadeUp(ctx, 'DIAL-UP', tx, 118, lt - 2.6, { face: 'serif', color: GOLD, track: 3, align: 'center', dur: 1.0 });
+  fadeUp(ctx, 'TASTING NOTES', tx, 62, lt - 0.3, { face: 'micro', color: P.cream, track: 2, align: 'center', dur: 0.6 });
+  rule(ctx, tx, 72, 40, (lt - 0.4) / 0.6, P.tanShade);
+  fadeUp(ctx, 'OAK', tx, 82, lt - 0.62, { face: 'serif', color: P.cream, track: 3, align: 'center', dur: 0.5 });
+  fadeUp(ctx, 'CARAMEL', tx, 100, lt - 1.12, { face: 'serif', color: P.cream, track: 3, align: 'center', dur: 0.55 });
+  fadeUp(ctx, 'DIAL-UP', tx, 118, lt - 1.92, { face: 'serif', color: GOLD, track: 3, align: 'center', dur: 0.6 });
 }
 
 // --- 5. HERO -----------------------------------------------------------------------
@@ -1355,21 +1494,19 @@ function shotHero(ctx, lt) {
   BO.keyK = 0.22 + 0.78 * up;
   BO.sweep = lt > 1.2 && lt < 2.7 ? tween(lt, 1.2, 2.7, -1.3, 1.3, 'inOut') : null;
   BO.big = true;
-  // its reflection in the polished stone
-  clipRect(ctx, 192 - prx, base, prx * 2, pry + 1);
-  ctx.save();
-  ctx.globalAlpha = 0.14;
-  ctx.translate(0, 2 * (base + 2));
-  ctx.scale(1, -1);
-  BO.rimK = 0;
-  BO.text = 0;
-  bottle(ctx, 192, base + 2, k, texHero(), BO);
-  ctx.restore();
-  ctx.restore();
   contact(ctx, 192, base + 1, round(36 * k), 0.5);
+  // the bottle, each pass mirrored into the polished stone of the plinth top
+  MIRROR.axis = base + 2;
+  MIRROR.alpha = 0.14;
+  MIRROR.x = 192 - prx;
+  MIRROR.y = base;
+  MIRROR.w = prx * 2;
+  MIRROR.h = pry + 1;
+  BO.mirror = MIRROR;
   BO.rimK = 0.95 * up;
   BO.text = 0.2 + 0.8 * up;
   bottle(ctx, 192, base + 2, k, texHero(), BO);
+  BO.mirror = null;
   glintStar(ctx, 188, base + 2 - round((BODY_H + STOP_H) * k) + 3, (lt - 2.55) / 0.8, P.white);
   vignette(ctx, 0.65);
 }
@@ -1401,13 +1538,14 @@ function shotSlate(ctx, lt) {
   const top = bottle(ctx, 112, 172, 0.8, texSlate(), BO);
   glintStar(ctx, 109, top + 3, (lt - 2.0) / 0.9, P.white);
   vignette(ctx, 0.5);
-  // the lock-up, right third
+  // the lock-up, right third: every line in within ~0.9 s of the cut (in over
+  // 0.35 s, staggered by 0.1 s, travel <= 6 px), then still for ~2.9 s but for the glint
   const x = 270;
-  trackIn(ctx, 'BITFIZZ', x, 50, lt - 0.1, { face: 'serif', color: GOLD, track: 3, from: 9, dur: 1.6, scale: 2 });
-  fadeUp(ctx, 'RESERVE', x + 2, 80, lt - 0.6, { face: 'thin', color: P.cream, track: 7, align: 'center', dur: 0.9 });
-  rule(ctx, x, 97, 110, (lt - 0.9) / 0.9, P.yellow, { alpha: 0.7 });
-  fadeUp(ctx, 'UNCOMPRESSED.', x, 105, lt - 0.4, { face: 'serif', color: P.cream, track: 3, align: 'center', dur: 1.0 });
-  fadeUp(ctx, 'AGED 12 YEARS IN A SERVER FARM', x, 124, lt - 1.2, { face: 'micro', color: P.cream, track: 1, align: 'center', dur: 0.9 });
+  trackIn(ctx, 'BITFIZZ', x, 50, lt - 0.1, { face: 'serif', color: GOLD, track: 3, from: 6, dur: 0.5, scale: 2 });
+  fadeUp(ctx, 'RESERVE', x + 2, 80, lt - 0.25, { face: 'thin', color: P.cream, track: 7, align: 'center', dur: 0.35 });
+  rule(ctx, x, 97, 110, (lt - 0.35) / 0.35, P.yellow, { alpha: 0.7 });
+  fadeUp(ctx, 'UNCOMPRESSED.', x, 105, lt - 0.45, { face: 'serif', color: P.cream, track: 3, align: 'center', dur: 0.35 });
+  fadeUp(ctx, 'AGED 12 YEARS IN A SERVER FARM', x, 124, lt - 0.55, { face: 'micro', color: P.cream, track: 1, align: 'center', dur: 0.35 });
 }
 
 // --- the whole spot ---------------------------------------------------------------
@@ -1416,19 +1554,21 @@ const SLATE_AT = 20.83;
 /** Letterbox and the legal line on the bottom bar are part of the film. */
 function frame(ctx, dt) {
   letterbox(ctx, 1, BAR);
-  if (dt > SLATE_AT + 0.2) smallPrint(ctx, LEGAL, W / 2, H - BAR + 8, W - 40, { color: P.fog, lt: dt - SLATE_AT - 0.2, dur: 0.5 });
+  // from the cut: full after 0.4 s, so 3.4 s fully legible before 24.6 s (11 words x 0.3 s = 3.3 s)
+  if (dt > SLATE_AT) smallPrint(ctx, LEGAL, W / 2, H - BAR + 8, W - 40, { color: P.fog, lt: dt - SLATE_AT, dur: 0.4 });
 }
 
 // Cuts on the beat grid (72 bpm: a beat is 0.833 s). Ordered dissolves only
-// between shots with nothing written on screen; dips to black into the
-// portrait, the hero and the slate (channel-and-breaks §5.5).
+// between shots with nothing written on screen; a short dip into the portrait,
+// the long dip into the hero (the band is silent there, the brand chord lands
+// with the lights), then a straight cut on the beat to the pack shot.
 const SHOTS = [
   { at: 0, draw: shotMacro },
   { at: 4.17, draw: shotCellar, wipe: 'dither', wd: 0.8 },
   { at: 8.33, draw: shotPour, wipe: 'dither', wd: 0.8 },
-  { at: 13.33, draw: shotNose, wipe: 'black', wd: 0.8, hold: 0.1 },
-  { at: 17.5, draw: shotHero, wipe: 'black', wd: 0.9, hold: 0.3 },
-  { at: SLATE_AT, draw: shotSlate, wipe: 'black', wd: 0.5, hold: 0.1 },
+  { at: 13.33, draw: shotNose, wipe: 'black', wd: 0.6, hold: 0.05 },
+  { at: 17.5, draw: shotHero, wipe: 'black', wd: 0.75, hold: 0.25 },
+  { at: SLATE_AT, draw: shotSlate },
 ];
 
 // Lounge jazz at 72 bpm in D minor: soft sine chords, a walking bass, a sparse
@@ -1439,6 +1579,7 @@ const SHOTS = [
 // the looping bed never restarts inside the spot (26.7 s of music for 24.6 s).
 const EP = { wave: 'sine', a: 0.004, d: 0.9, s: 0.12, r: 0.5, vib: false };
 const PADI = { wave: 'sine', a: 0.35, d: 1.2, s: 0.75, r: 0.9, vib: [6, 4.5, 0.3] };
+const WARM_INFO = { line: -1, speaking: false, duration: 0 };
 export default {
   id: 'bitfizz-cola',
   brand: 'BITFIZZ RESERVE',
@@ -1449,7 +1590,7 @@ export default {
     { at: 0.8, text: 'Some things cannot be rushed.' },
     { at: 4.5, text: 'Aged twelve years in a decommissioned server farm.' },
     { at: 8.8, text: 'Over ice, hand-chipped by a retired sysadmin.' },
-    { at: 13.8, text: 'Oak. Caramel... Dial-up.' },
+    { at: 14.0, text: 'Oak. Caramel... Dial-up.' },
     { at: 18.4, text: 'BitFizz Reserve.' },
   ],
   tune: {
@@ -1494,6 +1635,10 @@ export default {
         ),
       },
     ],
+  },
+  /** One idle-time bake step before the spot airs (director.prewarm); true when done. */
+  warm() {
+    return warmUp(SHOTS, -1, WARM_INFO);
   },
   draw(ctx, t, dt, info) {
     warmUp(SHOTS, dt, info);

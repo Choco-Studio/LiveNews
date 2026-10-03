@@ -11,8 +11,9 @@
 // ImageData or JSON per frame.
 //
 // LEGACY (kept exported for older ads; do not use for new work, the channel is
-// for adults): the cartoon people hero/person/faceCU, kinetic/words/slogan/
-// bubble, badge, sunburst/ripples, jump/squashArt/wobble and endSlate.
+// for adults): the cartoon people hero/person/faceCU, kinetic/words, badge and
+// wobble. sunburst/ripples, slogan, bubble, jump/squashArt and endSlate (and the
+// polar tables behind them) were deleted: nothing imported them.
 //
 // AN AD MODULE default-exports { id, brand, duration, voice, script:[{at,text}],
 // tune, draw(ctx, t, dt, info) } and usually draws with play(ctx, dt, info, SHOTS)
@@ -30,10 +31,10 @@
 // MOTION: key(t, [[t0, v0], [t1, v1, ease], ...]) keyframe track (numbers or arrays,
 //   ease names in EASE or functions); tween(t, t0, t1, a, b, ease); spring(x),
 //   wobble(t, t0, amp, hz, damp) damped jiggle after an impact; easeInBack (anticipation),
-//   easeOutBack (overshoot), easeInOutBack, easeOutElastic, smooth; jump(t, t0, o) ->
-//   { y, sx, sy } hop with crouch, stretch and landing squash; squashArt(ctx, art, cx,
-//   by, sx, sy) draws cached art scaled about its bottom centre; blink(t, seed),
-//   breath(t, period, amp) idle life.
+//   easeOutBack (overshoot), easeInOutBack, easeOutElastic, smooth; blink(t, seed),
+//   breath(t, period, amp) idle life. (The cartoon helpers sunburst, ripples, slogan,
+//   bubble, squashArt, jump and endSlate were removed on 2026-10-03: no spot used them
+//   and they belong to the children's-show look the owner banned.)
 // LIMBS: armPose(name), poseLerp(a, b, p) and poseAt(t, keys) tween hero() arm poses
 //   with preserved bone lengths (arcs, not straight lines); pass the result as armL/armR.
 // CAMERA: key() for x/y, withCam(ctx, x, y, fn) integer pan, par(x, depth) parallax,
@@ -42,13 +43,10 @@
 //   for slow push-ins redraw art natively bigger, e.g. faceCU size or canFront scale).
 // TYPE: kinetic(ctx, s, x, y, lt, { style: 'pop'|'drop'|'slide'|'stamp'|'wave'|'type' }),
 //   words(ctx, s, x, y, lt, { per }) word-by-word, micro(ctx, s, x, y, o) 3x5 micro font,
-//   microWidth(s), bigText, para, bubble, slogan, finePrint (micro font legal strip).
+//   microWidth(s), bigText, para, finePrint (micro font legal strip).
 // PRODUCT: cylinder(ctx, label, cx, y, r, turn, o) 2.5D turntable of a label texture,
 //   spotlight(ctx, cx, floorY, o), badge(ctx, cx, cy, r, p, o) starburst sticker,
 //   glint(ctx, art, x, y, p) light sweep, glow, sparkle, shadow.
-// END SLATE: endSlate(ctx, lt, { bg, product, mark, sub, tagline, tag, url, pill,
-//   legal }) the shared layout and timing (logo 0.15 s, tagline 0.9 s, url 1.4 s,
-//   legal 1.6 s, a light sweep every 3.5 s).
 // BRAND: wordmark(str, style) cached custom lettering + drawMark; lazy(fn) memoises a
 //   factory so `const MARK = lazy(() => wordmark(...))` costs nothing per frame.
 // MUSIC: tune(...parts), rep(s, n) build tune strings (format in audio.js).
@@ -167,26 +165,6 @@ export function key(v, keys) {
 /** a -> b between t0 and t1 with an easing (name or function). */
 export const tween = (v, t0, t1, a, b, ease = 'inOut') => a + (b - a) * easeFn(ease)((v - t0) / (t1 - t0 || 1));
 
-/**
- * A hop starting at t0 (feet leave the ground): 0.12 s crouch before it, a
- * parabolic flight of `dur` seconds with stretch, and a squash that springs back
- * after landing. Returns { y (<= 0 is up), sx, sy } to feed squashArt().
- */
-export function jump(v, t0, { dur = 0.5, height = 20, crouch = 0.12, squash = 0.22 } = {}) {
-  const lt = v - t0;
-  if (lt < -crouch) return { y: 0, sx: 1, sy: 1 };
-  if (lt < 0) {
-    const p = smooth((lt + crouch) / crouch);
-    return { y: 0, sx: 1 + squash * 0.7 * p, sy: 1 - squash * p };
-  }
-  if (lt < dur) {
-    const p = lt / dur;
-    const st = 0.18 * (1 - Math.sin(p * PI)); // stretched when fast (take-off, landing)
-    return { y: -4 * height * p * (1 - p), sx: 1 - st * 0.5, sy: 1 + st };
-  }
-  const s = wobble(v, t0 + dur, squash, 3, 7);
-  return { y: 0, sx: 1 + s * 0.8, sy: 1 - s };
-}
 
 /** Typewriter: first n characters after `lt` seconds at `cps`. */
 export const typed = (s, lt, cps = 20) => s.slice(0, max(0, floor(lt * cps)));
@@ -436,102 +414,6 @@ export function particles(ctx, dt, { seed = 1, n = 20, x = 0, y = 0, w = W, h = 
 /** Soft drop shadow under things. */
 export function shadow(ctx, cx, y, rx, a = 0.35) {
   oval(ctx, cx, y, rx, max(1, round(rx / 5)), A(P.black, a));
-}
-
-// ---------------------------------------------------------------------------
-// Full-screen per-pixel patterns (sunburst, ripples). The polar table of a
-// centre is compact (angle in 1/4096 turns, distance in 1/8 px) and each pattern
-// keeps its own canvas, re-rendered only when its phase moves by a whole step,
-// so most frames are a single drawImage.
-
-const POLAR = new Map();
-function polar(cx, cy) {
-  const key = cx * 4096 + cy;
-  let t = POLAR.get(key);
-  if (!t) {
-    const ang = new Uint16Array(W * H);
-    const dist = new Uint16Array(W * H);
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        const dx = x + 0.5 - cx;
-        const dy = y + 0.5 - cy;
-        ang[y * W + x] = floor(((Math.atan2(dy, dx) / (2 * PI) + 1) % 1) * 4096) & 4095;
-        dist[y * W + x] = min(65535, round(sqrt(dx * dx + dy * dy) * 8));
-      }
-    }
-    t = { ang, dist };
-    if (POLAR.size >= 6) POLAR.delete(POLAR.keys().next().value);
-    POLAR.set(key, t);
-  }
-  return t;
-}
-const U32 = new Map();
-function u32(hex) {
-  let v = U32.get(hex);
-  if (v === undefined) {
-    const n = parseInt(hex.slice(1), 16);
-    v = ((255 << 24) | ((n & 255) << 16) | (n & 0xff00) | (n >> 16)) >>> 0;
-    U32.set(hex, v);
-  }
-  return v;
-}
-const PATTERNS = new Map();
-function patternBuf(key) {
-  let e = PATTERNS.get(key);
-  if (!e) {
-    const cv = document.createElement('canvas');
-    cv.width = W;
-    cv.height = H;
-    const c = cv.getContext('2d');
-    const img = c.createImageData(W, H);
-    e = { cv, c, img, u32: new Uint32Array(img.data.buffer), step: NaN };
-    if (PATTERNS.size >= 6) PATTERNS.delete(PATTERNS.keys().next().value);
-    PATTERNS.set(key, e);
-  }
-  return e;
-}
-
-/** Rotating sunburst filling the whole frame. `turn` in revolutions. */
-export function sunburst(ctx, cx, cy, turn, rays, c1, c2) {
-  cx = round(cx);
-  cy = round(cy);
-  const e = patternBuf(`sb|${cx}|${cy}|${rays}|${c1}|${c2}`);
-  // the pattern repeats every 1/rays turn; 48 steps per repeat is smooth at the edges
-  const step = floor((((turn * rays) % 1) + 1) % 1 * 48);
-  if (step !== e.step) {
-    e.step = step;
-    const { ang } = polar(cx, cy);
-    const a = u32(c1);
-    const b = u32(c2);
-    const buf = e.u32;
-    const off = round((step / 48 / rays) * 4096);
-    const k = rays * 2;
-    for (let i = 0; i < buf.length; i++) buf[i] = ((((ang[i] + off) & 4095) * k) >> 12) & 1 ? a : b;
-    e.c.putImageData(e.img, 0, 0);
-  }
-  ctx.drawImage(e.cv, 0, 0);
-}
-
-/** Concentric rings cycling through colours; phase in ring widths. */
-export function ripples(ctx, cx, cy, phase, width, colors) {
-  cx = round(cx);
-  cy = round(cy);
-  const n = colors.length;
-  const e = patternBuf(`rp|${cx}|${cy}|${width}|${colors.join()}`);
-  // whole-pixel steps of the ring position
-  const period = n * width;
-  const step = ((round(phase * width) % period) + period) % period;
-  if (step !== e.step) {
-    e.step = step;
-    const { dist } = polar(cx, cy);
-    const cs = colors.map(u32);
-    const buf = e.u32;
-    const w8 = width * 8;
-    const off = step * 8;
-    for (let i = 0; i < buf.length; i++) buf[i] = cs[floor((dist[i] + period * 8 * 64 - off) / w8) % n];
-    e.c.putImageData(e.img, 0, 0);
-  }
-  ctx.drawImage(e.cv, 0, 0);
 }
 
 /** Pooled full-frame scratch canvases (transitions, zooms); index = nesting slot. */
@@ -795,55 +677,7 @@ export function words(ctx, s, x, y, lt, { per = 0.22, scale = 2, color = P.white
   return L.total;
 }
 
-/** Slogan on a ribbon; types in. Returns the ribbon's bottom y. */
-export function slogan(ctx, s, cx, y, lt, { scale = 2, color = P.white, bg = P.red, edge = P.darkRed, cps = 26, maxW = W - 40 } = {}) {
-  const lines = wrapL(s, maxW, scale);
-  const lh = 10 * scale;
-  let w = 0;
-  for (const l of lines) w = max(w, measureText(l, scale));
-  w += 8 * scale;
-  const h = lines.length * lh + 2 * scale;
-  const open = easeOut(prog(lt, 0, 0.25));
-  const ww = round(w * open);
-  const x = round(cx - ww / 2);
-  if (ww < 4) return y + h;
-  // ribbon tails
-  R(ctx, x - 6, y + 4, 8, h - 2, edge);
-  R(ctx, x + ww - 2, y + 4, 8, h - 2, edge);
-  R(ctx, x - 6, y + 4 + h - 2, 2, 2, A(P.black, 0.3));
-  rrect(ctx, x, y, ww, h, bg, 1);
-  R(ctx, x, y + h - 2, ww, 2, edge);
-  let budget = max(0, floor((lt - 0.2) * cps));
-  lines.forEach((ln, i) => {
-    const part = ln.slice(0, budget);
-    budget -= ln.length;
-    if (part) text(ctx, part, cx - measureText(ln, scale) / 2, y + 3 * scale - 1 + i * lh, { color, scale, shadow: edge });
-  });
-  return y + h;
-}
 
-/** Speech bubble with wrapped text. tail: 'down' | 'up' | 'left' | 'right' | null */
-export function bubble(ctx, x, y, w, s, { tail = 'down', tx = null, fill = P.white, border = P.black, color = P.black, scale = 1, lh = 10, pad = 4 } = {}) {
-  const lines = wrapL(s, w - pad * 2, scale);
-  const h = lines.length * lh * scale + pad * 2 - (lh - 7) * scale;
-  x = round(x);
-  y = round(y);
-  panel(ctx, x, y, w, h, fill, border, 2);
-  const t0 = round(tx ?? x + w / 2);
-  if (tail === 'down') {
-    for (let i = 0; i < 5; i++) {
-      R(ctx, t0 - 1, y + h - 1 + i, 6 - i + 1, 1, border);
-      R(ctx, t0, y + h - 1 + i, max(0, 5 - i - 1), 1, fill);
-    }
-  } else if (tail === 'up') {
-    for (let i = 0; i < 5; i++) {
-      R(ctx, t0 - 1, y - i, 6 - i + 1, 1, border);
-      R(ctx, t0, y - i + 1, max(0, 5 - i - 1), 1, fill);
-    }
-  }
-  lines.forEach((ln, i) => text(ctx, ln, x + w / 2, y + pad + i * lh * scale, { color, scale, align: 'center' }));
-  return h;
-}
 
 /** Save + clip to a pixel-stepped disc; the caller must ctx.restore(). */
 export function clipCircle(ctx, cx, cy, rad) {
@@ -2364,13 +2198,6 @@ export function urlPill(ctx, s, cx, y, { bg = P.black, color = P.white, border =
   return text(ctx, s, cx, y + 3, { color, align: 'center' });
 }
 
-/** Draw cached art scaled about its bottom centre (cx, by): squash & stretch. */
-export function squashArt(ctx, art, cx, by, sx = 1, sy = 1) {
-  const w = max(1, round(art.width * sx));
-  const h = max(1, round(art.height * sy));
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(art, round(cx - w / 2), round(by - h), w, h);
-}
 
 // ---------------------------------------------------------------------------
 // Product hero furniture
@@ -2428,39 +2255,6 @@ export function badge(ctx, cx, cy, r, s, { n = 14, fill = P.yellow, outline = P.
 // break feels like one channel. Product left (drawn by the ad), wordmark
 // top right, tagline ribbon, URL pill and micro-font legal line.
 
-/**
- * o: { bg(ctx, lt), product(ctx, lt), mark: wordmark | () => wordmark, markX, markY,
- *      sub: wordmark | fn (second lettering under the mark), subY, line: text under the mark,
- *      lineColor, lineY, tagline, tag: { bg, edge, color }, tagX, tagY, url, pill: { bg, border, color },
- *      urlX, urlY, legal, legalColor, legalBg }
- * Timing: mark letters 0.15-0.85 s, sub 0.7 s, line 0.95 s, tagline 1.0 s, url 1.5 s,
- * legal 1.7 s, light sweep across the mark every 3.5 s.
- */
-export function endSlate(ctx, lt, o = {}) {
-  const { markX = 262, markY = 30, subY = null, lineY = null, tagX = W / 2, tagY = 146, urlX = tagX, urlY = 172 } = o;
-  o.bg?.(ctx, lt);
-  o.product?.(ctx, lt);
-  let below = markY;
-  if (o.mark) {
-    const mk = typeof o.mark === 'function' ? o.mark() : o.mark;
-    const x0 = drawMark(ctx, mk, markX, markY, { reveal: prog(lt, 0.15, 0.85), drop: 34 });
-    if (lt > 1.2) glint(ctx, mk.cv, x0 - mk.ox, markY - mk.oy, ((lt - 1.2) % 3.5) / 0.7, { width: 6 });
-    below = markY + mk.h + mk.depth + 6;
-  }
-  if (o.sub && lt > 0.7) {
-    const sb = typeof o.sub === 'function' ? o.sub() : o.sub;
-    const sy = subY ?? below;
-    drawMark(ctx, sb, markX, sy - round((1 - easeOutBack(prog(lt, 0.7, 1.0), 2.2)) * 10));
-    below = sy + sb.h + sb.depth + 6;
-  }
-  if (o.line && lt > 0.95) micro(ctx, o.line, markX, lineY ?? below + 2, { color: o.lineColor || P.white, align: 'center' });
-  if (o.tagline && lt > 1.0) slogan(ctx, o.tagline, tagX, tagY, lt - 1.0, { scale: 2, ...(o.tag || {}) });
-  if (o.url && lt > 1.5) {
-    const p = easeOutBack(prog(lt, 1.5, 1.75), 2.5);
-    urlPill(ctx, o.url, urlX, urlY + round((1 - p) * 8), o.pill || {});
-  }
-  if (o.legal) finePrint(ctx, o.legal, { lt: lt - 1.7, color: o.legalColor || P.fog, bg: o.legalBg === undefined ? P.black : o.legalBg });
-}
 
 // ---------------------------------------------------------------------------
 // Close-up faces (push-ins): the same chibi characters drawn natively large.
@@ -2745,12 +2539,15 @@ export function shadeOf(hex, k = 0.6) {
   }
   return v;
 }
+// Packed ABGR pixels are kept as SIGNED int32 (Int32Array, `| 0`): an unsigned
+// value above 2^31 is a heap number in V8, so writing one per pixel in the lathe
+// made ~100 KB of garbage a frame. Alpha tests still use `t >>> 24`.
 const U32P = new Map();
 function pack(hex) {
   let v = U32P.get(hex);
   if (v === undefined) {
     const [r, g, b] = rgb(hex);
-    v = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+    v = (255 << 24) | (b << 16) | (g << 8) | r;
     U32P.set(hex, v);
   }
   return v;
@@ -2759,7 +2556,7 @@ const RAMPS = new WeakMap();
 function packRamp(ramp) {
   let v = RAMPS.get(ramp);
   if (!v) {
-    v = Uint32Array.from(ramp.map(pack));
+    v = Int32Array.from(ramp.map(pack));
     RAMPS.set(ramp, v);
   }
   return v;
@@ -3334,7 +3131,7 @@ function latheBuf() {
     // CPU-backed: putImageData becomes a copy instead of a GPU upload per call
     const c = cv.getContext('2d', { willReadFrequently: true });
     const img = c.createImageData(S, S);
-    LATHE = { cv, c, img, u32: new Uint32Array(img.data.buffer), S };
+    LATHE = { cv, c, img, u32: new Int32Array(img.data.buffer), S }; // signed packed pixels (see pack)
   }
   return LATHE;
 }
@@ -3343,7 +3140,7 @@ function texOf(cv) {
   let t = TEX.get(cv);
   if (!t) {
     const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height);
-    t = { w: cv.width, h: cv.height, u32: new Uint32Array(d.data.buffer) };
+    t = { w: cv.width, h: cv.height, u32: new Int32Array(d.data.buffer) };
     TEX.set(cv, t);
   }
   return t;
@@ -3358,7 +3155,7 @@ function darkOf(u) {
   }
   return v;
 }
-const STRIPE_C = new Uint32Array(16);
+const STRIPE_C = new Int32Array(16);
 const L_KEY = [-0.55, -0.45, 0.7];
 const L_RIM = [0.85, -0.25, -0.45];
 
@@ -3541,6 +3338,27 @@ export function lathe(ctx, cx, y, prof, o = {}) {
   if (o.alpha != null) ctx.globalAlpha = a0 * o.alpha;
   ctx.drawImage(B.cv, 0, 0, bw, bh, round(ox), round(y), bw, bh);
   ctx.globalAlpha = a0;
+  LAST.x = round(ox);
+  LAST.y = round(y);
+  LAST.w = bw;
+  LAST.h = bh;
+}
+const LAST = { x: 0, y: 0, w: 0, h: 0 }; // where the latest lathe() went
+
+/**
+ * Its reflection: the latest lathe() result again, mirrored about the horizontal
+ * line y = axis, at `alpha` (a polished bar or stone). Call it right after the
+ * lathe() it mirrors, inside the caller's clip; it costs one drawImage instead
+ * of a second per-pixel lathe pass.
+ */
+export function latheMirror(ctx, axis, alpha = 0.15) {
+  if (!LATHE || !LAST.w) return;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.translate(0, 2 * axis);
+  ctx.scale(1, -1);
+  ctx.drawImage(LATHE.cv, 0, 0, LAST.w, LAST.h, LAST.x, LAST.y, LAST.w, LAST.h);
+  ctx.restore();
 }
 
 /** Fill `out` (or a new Float32Array) with radii from [[t, r], ...] keys over h rows (smooth). */
@@ -3628,10 +3446,13 @@ const WARMED = new WeakSet(); // shot lists fully baked
  * hidden scratch canvas, until every shot is baked; this does not depend on
  * the frame rate (a slow page simply takes more of the spot's first shot to
  * finish). Every cached canvas, gradient and type line then exists before its
- * shot comes on air. After that it is one WeakSet lookup per frame.
+ * shot comes on air. After that it is one WeakSet lookup per frame. Returns
+ * true once everything is baked. An ad may also expose `warm() { return
+ * warmUp(SHOTS, -1, info); }` so the director bakes it in idle time before its
+ * cut (dt -1: no shot is on air yet), one pass per call.
  */
 export function warmUp(shots, dt, info = null, slot = 5) {
-  if (WARMED.has(shots)) return;
+  if (WARMED.has(shots)) return true;
   for (let i = 0; i < shots.length; i++) {
     const s = shots[i];
     const done = WARM.get(s) || 0;
@@ -3645,7 +3466,8 @@ export function warmUp(shots, dt, info = null, slot = 5) {
     const b = scratch(slot);
     const lt = done === 0 ? 1 : 3;
     s.draw(b.c, lt, info, s.at + lt);
-    return;
+    return false;
   }
   WARMED.add(shots);
+  return true;
 }

@@ -231,13 +231,20 @@ function lowerFirstWord(text, info) {
   if (!m || m[1] === 'I') return text;
   const word = m[1];
   if (lookupPlace(word) || /^[A-Z][a-z]+[A-Z]/.test(word)) return text;
-  const story = `${info.s.title} ${info.s.summary || ''}`;
+  // the headline ends a sentence of its own: "...space station. Astronauts on..." is not a name mid-sentence
+  const story = `${String(info.s.title).replace(/[.!?]*$/, '.')} ${info.s.summary || ''}`;
   const lower = new RegExp(`(?<![\\p{L}])${word.toLowerCase()}(?![\\p{L}])`, 'u').test(story);
   // A name is written with its capital in the middle of a sentence somewhere in the story; a common word is not.
   const midSentence = new RegExp(`[\\p{Ll},;:]\\s+${word}(?![\\p{L}])`, 'u').test(story);
   return lower || COMMON_START.test(text) || !midSentence ? word.toLowerCase() + text.slice(word.length) : text;
 }
 const PRONOUN_START = /^(?:It|Its|They|Their|This|These|Those|He|She|His|Her)\b/;
+/**
+ * Can this summary sentence open a story or a round-up item? The summary's first sentence can (unless it
+ * opens on a pronoun: "The central bank has kept rates..." is how the outlet itself starts); a later one
+ * only when it does not lean on the sentence before it ("The canal authority says...").
+ */
+const selfStanding = (info, t) => (info.sentences.indexOf(t) === 0 ? !PRONOUN_START.test(t) : !leansOnPrevious(t));
 /** Content words of `sentence` that `title` does not have (what a restating sentence adds). */
 function newWords(sentence, title) {
   const t = contentWords(title);
@@ -651,7 +658,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     const names = [e.name, ...e.aliases, ...(country ? [country.name, ...country.aliases] : [])].filter((x) => x.length > 2);
     for (const name of names.sort((a, b) => b.length - a.length)) {
       const bare = name.replace(/^the /i, '');
-      const re = new RegExp(`\\s(?:in|across) ((?:the )?${bare.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?=\\s+[a-z]|,\\s+[a-z]|[.!?]?$)`, 'u');
+      const re = new RegExp(`\\s(?:in|across) ((?:the )?${bare.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?!\\s+(?:and|or|nor)\\b)(?=\\s+[a-z]|,\\s+[a-z]|[.!?]?$)`, 'u');
       const m = re.exec(sentence);
       if (!m) continue;
       const rest = (sentence.slice(0, m.index) + sentence.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim();
@@ -752,7 +759,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       const tells = (t, j) => j === 0 || newWords(s.title, t) <= contentWords(s.title).length - 2;
       let line = null;
       for (const [j, t] of info.sentences.entries()) {
-        if (used.has(t) || leansOnPrevious(t) || !tells(t, j)) continue;
+        if (used.has(t) || !selfStanding(info, t) || !tells(t, j)) continue;
         const forms = [early(t) ? t : null, movePlaceFront(t, info), placeFirst(t, info, limit)];
         const form = forms.find((f) => f && early(f) && wordCount(f) <= maxW && wordCount(f) >= minW - 4);
         if (form) {
@@ -790,18 +797,18 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // whenever that stands on its own ("Researchers at a battery firm say..."), not with headline-ese
       // ("Smartphone battery breakthrough promises a week of use."). The headline opens only when the summary
       // cannot ("It says the service...").
-      const skipHeadline = first && (leadAfterIntro || restates(first, s.title) || (!leansOnPrevious(first) && wordCount(first) >= 6));
+      const skipHeadline = first && (leadAfterIntro || restates(first, s.title) || (selfStanding(info, first) && wordCount(first) >= 6));
       let opener = s.title;
       if (skipHeadline) {
         // Never a pronoun as the first word of a story: the opener must say who or what.
-        opener = (leadAfterIntro && (pickSentence((t) => !echoes(t) && !leansOnPrevious(t)))) || null;
+        opener = (leadAfterIntro && (pickSentence((t) => !echoes(t) && selfStanding(info, t)))) || null;
         if (!opener && reserved) {
           // Nothing else to open with: the catch's sentence opens the story, and there is no catch.
           used.delete(reserved);
           reserved = null;
           opener = pickSentence((t) => !echoes(t));
         }
-        opener ||= pickSentence((t) => !leansOnPrevious(t)) || pickSentence(() => true) || s.title;
+        opener ||= pickSentence((t) => selfStanding(info, t)) || pickSentence(() => true) || s.title;
       }
       const cue = isNumber ? '[count] ' : info.grave ? '[lean_in] ' : s.image ? '[point_screen] ' : choose(['[raise_hand] ', '[lean_in] ', ''], key);
       let figureLine = null;

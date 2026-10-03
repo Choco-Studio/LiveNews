@@ -258,7 +258,7 @@ test('a break has one stinger (into the ident), then 0.3 s of black and silence 
  * arguments, out-of-range alpha and missing images. Canvases created by the
  * ads (cached art, scratch buffers) get their own fake contexts.
  */
-function fakeCanvasWorld() {
+function fakeCanvasWorld(onCall = null) {
   const issues = [];
   let depth = 0;
   let where = '';
@@ -281,6 +281,7 @@ function fakeCanvasWorld() {
         if (p === 'measureText') return () => ({ width: 10 });
         if (p === 'createPattern' || p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
         return (...args) => {
+          onCall?.(p, args);
           for (const a of args) if (typeof a === 'number' && !Number.isFinite(a)) note(`${String(p)} got ${a}`);
           if (p === 'drawImage' && (!args[0] || !args[0].width || !args[0].height)) note('drawImage of an empty image');
         };
@@ -325,6 +326,34 @@ test('every ad draws its whole spot without errors, bad numbers or unbalanced sa
     globalThis.document = prevDoc;
   }
   assert.deepEqual(world.issues, [], world.issues.join('\n'));
+});
+
+test('BitFizz pour and hero are locked off: no prop changes size or place within its shot (owner 22:50)', () => {
+  // every lathe pass (and its mirrored reflection) is one 9-argument drawImage from
+  // the pooled 512 px lathe buffer; its destination rectangle is the prop's silhouette box
+  const rects = [];
+  const world = fakeCanvasWorld((p, args) => {
+    if (p === 'drawImage' && args.length === 9 && args[0]?.width === 512) rects.push(args.slice(5).join(','));
+  });
+  const prevDoc = globalThis.document;
+  globalThis.document = world.doc;
+  try {
+    const ad = ADS.find((a) => a.id === 'bitfizz-cola');
+    const ctx = world.makeCtx({ width: 384, height: 216 });
+    for (let i = 0; i < 64 && !ad.warm(); i++); // bake every shot first, so only the shot on air draws
+    const at = (t) => {
+      rects.length = 0;
+      ad.draw(ctx, t, t, { line: -1, speaking: false, duration: ad.duration });
+      return rects.slice();
+    };
+    for (const [name, times] of [['pour', [9.3, 10.4, 11.6, 12.9]], ['hero', [18.6, 19.6, 20.6]]]) { // after each shot's transition in
+      const first = at(times[0]);
+      assert.ok(first.length >= 2, `${name}: the props are drawn (${first.length} lathe passes)`);
+      for (const t of times.slice(1)) assert.deepEqual(at(t), first, `${name} at ${t} s: same boxes as at ${times[0]} s`);
+    }
+  } finally {
+    globalThis.document = prevDoc;
+  }
 });
 
 test('kit display faces have every capital, digit and common mark', () => {

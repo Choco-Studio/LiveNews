@@ -7,7 +7,111 @@ This document is the PACE stream's record: how the channel's rhythm is measured,
 `public/js/pace.js`), the numbers before and after, what still limits programme length, and what wave 3 should reuse.
 
 <!-- TABLES:BEGIN -->
-(filled from the recordings, see section 4)
+## 0. Before / after at a glance (recorded, v2 path, server Kokoro voices)
+
+BEFORE = `before-3prog.mp4` (tree at e3ae339, 22:48, before the pace stream), AFTER = `after-3prog.mp4` (this round). Both
+recorded with `tools/showcase/record-show.mjs --v2 --start open --until next-open+20 --count 3` on the offline demo
+(fixture feeds, mock writer, `VOICE_ENGINE=kokoro`), analysed with `tools/pace/analyse.mjs`, tabled with
+`tools/pace/compare.mjs`. Shots are counted as the viewer saw them (a focus-only re-set of the same wide two-shot is not a
+cut). "—" = not measurable in that build (the BEFORE build has no pace traces: no strap wipe-in instant, ticker pushes or
+fired gestures) or no such pause in that episode. Pauses are measured from the voice stems (voiced offset → onset).
+
+### WORLD NOW
+
+| measure | before | after | target |
+| --- | --- | --- | --- |
+| length (s) | 122.97 | 230.80 | 480-600 |
+| stories | 8 | 14 | — |
+| shortest shot (s) | 4.32 | 4.13 | ≥ 4 |
+| shot p10 (s) | 5.04 | 5.42 | — |
+| shot median (s) | 5.75 | 6.84 | 5-7 |
+| shots under 4 s | 0 | 0 | 0 |
+| cuts per minute | 8.11 | 7.70 | ≤ 8 |
+| same framing twice | 0 | 0 | 0 |
+| shortest map (s) | 4.32 | 5.25 | ≥ 5 |
+| pause between segments, median (s) | 0.48 | 0.84 | 0.7-1.5 |
+| hand-over pause (s) | 0.48 | 0.86 | 0.85 |
+| story-to-story pause (s) | — | — | 1 |
+| chat turn pause (s) | 0.48 | 0.50 | 0.5 |
+| block pause (s) | 0.48 | 1.28 | 1.3 |
+| before And finally (s) | 0.46 | 1.22 | 1.2 |
+| open → first word (s) | 0.12 | 0.62 | 0.5 |
+| last word → end card (s) | 0.76 | 1.95 | 1.5 + 0.4 |
+| strap in after the cut (s) | — | 1 | 1 |
+| shortest ticker item (s) | — | 6.87 | ≥ 6 |
+| shortest caption (s) | 1.57 | 1.60 | ≥ 1.2 |
+| marked gestures / min talking (max presenter) | — | 4.58 | ≤ 5 |
+| same gesture twice in a row | — | 2 | 0 |
+| music cue calls / min | 10.25 | 7.28 | ≤ 1.5 bed changes |
+| voice gaps > 1.5 s (not cards) | 0 | 0 | 0 |
+
+### TECH BYTES
+
+| measure | before | after | target |
+| --- | --- | --- | --- |
+| length (s) | 85.30 | 164.30 | 360-480 |
+| stories | 4 | 10 | — |
+| shortest shot (s) | 4.86 | 4.84 | ≥ 4 |
+| shot p10 (s) | 5.13 | 5.44 | — |
+| shot median (s) | 5.99 | 7.79 | 4.5-6.5 |
+| shots under 4 s | 0 | 0 | 0 |
+| cuts per minute | 6.98 | 6.53 | ≤ 9 |
+| same framing twice | 0 | 0 | 0 |
+| shortest map (s) | — | 5.24 | ≥ 5 |
+| pause between segments, median (s) | 0.50 | 0.70 | 0.7-1.5 |
+| hand-over pause (s) | 0.52 | 0.69 | 0.7 |
+| story-to-story pause (s) | — | — | 0.9 |
+| chat turn pause (s) | 0.48 | 0.44 | 0.42 |
+| block pause (s) | — | 1.06 | 1.15 |
+| before And finally (s) | 0.46 | 0.96 | 1 |
+| open → first word (s) | 0.11 | 0.61 | 0.5 |
+| last word → end card (s) | 0.76 | 1.48 | 1 + 0.4 |
+| strap in after the cut (s) | — | 1 | 1 |
+| shortest ticker item (s) | — | 6.90 | ≥ 6 |
+| shortest caption (s) | 1.23 | 1.37 | ≥ 1.2 |
+| marked gestures / min talking (max presenter) | — | 7.74 | ≤ 6 |
+| same gesture twice in a row | — | 4 | 0 |
+| music cue calls / min | 11.25 | 8.40 | ≤ 2 bed changes |
+| voice gaps > 1.5 s (not cards) | 0 | 0 | 0 |
+
+### NEWS IN 60
+
+| measure | before | after | target |
+| --- | --- | --- | --- |
+| length (s) | 59.57 | 72.03 | 60-120 |
+| stories | 6 | 6 | — |
+| shortest shot (s) | 4.19 | 4.44 | ≥ 4 |
+| shot p10 (s) | 4.28 | 4.82 | — |
+| shot median (s) | 5.88 | 6.08 | 4-6 |
+| shots under 4 s | 0 | 0 | 0 |
+| cuts per minute | 9.33 | 8.36 | ≤ 10 |
+| same framing twice | 0 | 0 | 0 |
+| shortest map (s) | 5.18 | 5.39 | ≥ 4 |
+| pause between segments, median (s) | 0.48 | 0.78 | 0.7-1.5 |
+| hand-over pause (s) | — | — | 0.75 |
+| story-to-story pause (s) | 0.48 | 0.76 | 0.75 |
+| chat turn pause (s) | — | — | 0.5 |
+| block pause (s) | 0.49 | 0.90 | 0.9 |
+| before And finally (s) | — | — | 1.2 |
+| open → first word (s) | 0.13 | 0.43 | 0.3 |
+| last word → end card (s) | 0.74 | 1.45 | 1 + 0.4 |
+| strap in after the cut (s) | — | 1 | 1 |
+| shortest ticker item (s) | — | — | ≥ 6 |
+| shortest caption (s) | 0.90 | 0.90 | ≥ 1.2 |
+| marked gestures / min talking (max presenter) | — | 1.06 | ≤ 2 |
+| same gesture twice in a row | — | 0 | 0 |
+| music cue calls / min | 17.12 | 14.16 | ≤ 1.2 bed changes |
+| voice gaps > 1.5 s (not cards) | 1 | 1 | 0 |
+
+Reading the tables: the programmes now breathe (every pause was ~0.48 s; now hand-overs ~0.7-0.86 s, blocks ~1.1-1.3 s,
+"And finally" ~1.0-1.2 s, the open ~0.6 s before the first word, the sign-off ~1.5-1.95 s on the wide before the end card),
+graphics are paced (strap 1 s after the cut, ticker items ≥ 6.9 s), cuts slowed slightly (8.1 → 7.7 per minute in WORLD
+NOW), and the programmes doubled in length with more stories (WORLD NOW 123 → 231 s, TECH BYTES 85 → 164 s) — still far
+from the 6-10 minute targets for the reason in section 6.2. Still off target, owned by other teams: TECH BYTES marked
+gestures 7.7/min with 4 immediate repeats (w2-hands is adopting `gestureBudget`), music cue calls 7-14 per minute (the
+showcase recorder now reports bed changes against `paceFor(id).music`: BEFORE WORLD NOW 5 bed changes in 119 s, shortest
+bed 11 s against 25), one NEWS IN 60 caption page at 0.9 s, NEWS IN 60's 1.2-1.7 s pause after the intro (the intro shot's
+hold, intended).
 <!-- TABLES:END -->
 
 ## 1. What a viewer now sees
@@ -17,8 +121,10 @@ This document is the PACE stream's record: how the channel's rhythm is measured,
   a hand-over breathes about 0.8 s, a chat turn 0.4-0.5 s, a block boundary (after the round-up, after "Still to come")
   1.2-1.3 s, "And finally" gets its 1.0-1.2 s beat, the sign-off holds 1.5 s on the wide before the end card. A few percent
   of seeded variation per episode keeps the rhythm from sounding mechanical.
-- **No shot under 4 s.** Short "flash" shots (2.5-3.6 s wides before a cut, the studio flashing between headline montage and
-  breaking card) are gone: the cut cooldown is 4 s (COSMOS 4.5 s), cuts run at 7-8 per minute (NEWS IN 60 about 10).
+- **No shot under 4 s, fewer cuts.** The cut cooldown is now 4 s everywhere (COSMOS 4.5 s) in the v2 runtime and the
+  legacy director (it was 3 s), the legacy headline frame floor 3.8 s (was 2.6 s). On the v2 path the planner already kept
+  visible shots ≥ 4 s before this round (measured: 0 under 4 s before and after once focus-only re-sets are merged); cuts
+  went from 8.1 to 7.7 per minute in WORLD NOW and the shot median from 5.8 to 6.8 s.
 - **The open breathes.** The first word now comes 0.5 s after the cut from the open (COSMOS 0.7, NEWS IN 60 0.3), not 0.1 s.
 - **Graphics are readable.** The strap enters 1.0 s after the cut; ticker items hold at least 6 s (3 words 6.45 s, 7 words
   8.2 s, 11 words 10 s), captions page at most 15 characters per second and never shorter than 1.4 s, a long strap pages
@@ -119,7 +225,15 @@ Helpers: `gapAfter(episode, i)` (the pause after a segment, seeded ± 8 %), `gap
 
 Recorded on the v2 path (`?v2=1`) with the server's Kokoro voices, offline fixture feeds, mock writer. BEFORE = the tree at
 commit e3ae339 (22:48, before the pace stream), AFTER = this round. The tables are generated by `tools/pace/compare.mjs`
-and pasted at the top of this file.
+and pasted at the top of this file (section 0); `public/lab/pace.html?view=measured&programme=world-now` draws the same two
+recordings as strips (shots, who speaks, every pause green when it is the profile's, red when rushed).
+
+The default path (no `?v2`, the legacy director, still the channel's default until v2 ships) was checked in the real
+offline channel with `tools/pace/trace.mjs` (no `--v2`): WORLD NOW and TECH BYTES air with the same pauses (hand-over
+0.79 / 0.64 s, block 1.25 / 1.07 s, before "And finally" 1.17 / 0.85 s, open → first word 0.6 s, sign-off 1.9 / 1.4 s),
+3.8 s headline frames (was 2.6 s), strap 1 s after the cut, ticker ≥ 6.9 s. This round also removed the default path's
+studio flash after the headline montage (montage → wide 1.0 s → breaking stinger; montage → wide 0.54 s → first story):
+the story now cuts straight from the montage's last frame (owner 20:40, item 2).
 
 ## 5. Variety against monotony
 
@@ -153,11 +267,11 @@ pace gaps:
 
 | | before (stories) | after (stories) | target |
 | --- | --- | --- | --- |
-| WORLD NOW | 113-128 s (8) | 201-224 s (14) | 480-600 s |
-| TECH BYTES | 87 s (4) | 157 s (10) | 360-480 s |
-| COSMOS | 86 s (3) | 181 s (8) | 360-480 s |
-| MONEY MINUTE | 64 s (3) | 116 s (7) | 240-360 s |
-| NEWS IN 60 | 64-67 s (6) | 59-70 s (5-6) | 60-120 s |
+| WORLD NOW | 113-128 s (8) | 210-231 s (14) | 480-600 s |
+| TECH BYTES | 87 s (4) | 168 s (10) | 360-480 s |
+| COSMOS | 86 s (3) | 203 s (8) | 360-480 s |
+| MONEY MINUTE | 64 s (3) | 129 s (7) | 240-360 s |
+| NEWS IN 60 | 64-67 s (6) | 68-71 s (6) | 60-120 s |
 
 (Both columns estimated with the same speech rates and the same pace pauses, so they compare content only; BEFORE = the
 tree at e3ae339 with this simulator copied in.)
@@ -170,24 +284,44 @@ Two caps were found:
    similar. One story is then 10-20 s of speech, whatever the writer does without inventing. Doubling the stories doubled
    the programmes; reaching 8-10 minutes honestly needs deeper copy per story: article text (the first 4-6 paragraphs of
    the article page the desk already fetches for pictures), `content:encoded` wire copy, or the wave-3 research step.
-   Requested from editorial-2 (deeper fixture items) and recorded for wave 3.
+   Editorial-2 answered both: the desk now fills past the per-outlet cap when a section has few outlets, and 24 fixture
+   summaries got 1-2 more factual sentences (the "after" column above includes both). The rest is for wave 3.
 
 ### 6.3 Production ahead of air
 
-The voice stage waits up to 90 s (config `budgetSeconds`), then the episode is queued and late clips attach when ready;
-a segment still without a clip at air time falls back to the browser voice (graceful, never a stall). Measured on this
-machine (4 cores shared by ~15 agents, load 23-30): Kokoro synthesised 56 s of NEWS IN 60 speech in 313 s (0.18x real time);
-on an idle machine the same stage ran 1.15x real time (115 s of TECH BYTES speech in 100 s). With QUEUE_SIZE episodes
-produced ahead and breaks between programmes, 1.15x keeps the queue ahead for the rotation's mean (about 0.55 s of
-speech per second of air); under heavy load the fallback voice is what keeps it on air. The analyser's `--server-log`
-prints both lines per episode.
+The write stage is instant offline (mock: 0.1-1 s per episode; `simulate.mjs` prints it). The voice stage is the budget:
+it waits up to 90 s (config `budgetSeconds`), then the episode is queued and late clips attach as they finish; a segment
+still without its clip at air time falls back to the browser voice (graceful, never a stall). Measured from the server logs
+of these recordings (`analyse.mjs --server-log`):
 
-## 7. Still open (other teams' files)
+| episode (AFTER) | speech | synthesis wall time | speech / synthesis |
+| --- | --- | --- | --- |
+| WORLD NOW, 14 stories (11 of 19 clips cached) | 203 s | 347 s | 0.59x |
+| TECH BYTES, 10 stories (7 of 16 cached) | 145 s | 737 s | 0.20x |
+| NEWS IN 60 (5 of 8 cached) | 57 s | 727 s | 0.08x |
+| COSMOS, 8 stories (4 of 15 cached) | 173 s | 1144 s | 0.15x |
 
-- **Gestures** (w2-hands): planned/fired marked gestures exceed the budget in lively programmes (TECH BYTES 7.4-8.6/min
-  against 6, two immediate repeats); `gestureBudget()` is ready to cap them per turn.
-- **Music cues** (showcase / music): 8-14 cue calls per minute; bed changes should follow `music` (block boundaries only).
-- **Length** (editorial-2 / wave 3): source depth, above.
+This machine is 4 cores shared by ~15 agents and several Kokoro servers (load 23-30); earlier in the day, on a quieter
+machine, the same stage ran at 1.15x real time (115 s of TECH BYTES speech in 100 s). The rotation needs about 0.55 s of
+speech per second of air (programmes + breaks), so ≥ 1x synthesis keeps a QUEUE_SIZE 2-4 queue ahead indefinitely; under
+heavy load the queue drains and the browser-voice fallback keeps the channel on air. For longer programmes (wave 3) the
+budget must become per block: synthesise block N+1 while block N airs.
+
+## 7. Still open (other teams' files unless noted)
+
+- **Gestures** (w2-hands, adopting `gestureBudget()` now): on air TECH BYTES still had 6.7-7.7 marked gestures per minute
+  of talking against 6 and up to 4 immediate repeats; WORLD NOW 4.6/min (within 5) with one repeat.
+- **Music** (music / showcase): 7-14 cue calls per minute; the recorder now reports bed changes against `music` (BEFORE WORLD
+  NOW 2.5 changes/min, shortest bed 11 s against 25): the bed engine's cue sheet should change beds only at block boundaries.
+- **Length** (editorial-2 / wave 3): source depth (section 6.2); WORLD NOW ~4 min, TECH BYTES ~3 min offline today.
+- **TECH BYTES singles** (w2-camera): two-sentence stories without a map or photo hold one single for 10-12 s (median shot
+  7.8 s against 4.5-6.5): `splitLongSingles` needs a sentence start ≥ 4.5 s from both ends, which short second sentences
+  rarely give. Lowering `singleSoft` alone changed nothing (tried 8.5 s, reverted).
+- **Captions**: a one-word sentence ("Respectfully.") pages for 0.9 s on the director's clock (graphics hold it 1.4 s on
+  screen by `CHANNEL.captions.minPage`).
+- **Default path only** (director.js, pace): a story's last beat delayed by the 4 s cooldown can air for 2-2.5 s before the
+  next segment (once per programme in the trace).
+- **Production under load**: synthesis ran at 0.08-0.59x real time on this shared machine; the fallback voice covers it.
 
 ## 8. For wave 3 (20-30 minute rolling programmes)
 
