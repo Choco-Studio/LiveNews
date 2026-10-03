@@ -26,7 +26,8 @@
 //                             by the channel through WebAudio and captured with it), Kokoro here for anything
 //                             spoken through speechSynthesis; harness: adds voices=browser, so every line is
 //                             spoken through the fake speechSynthesis and synthesised here with the channel's casting
-//   --v2                      adds v2=1 (the wave-2 presenters/studio, opt-in during the wave)
+//   --v2                      adds v2=1 (the v2 presenters/studio: the channel's default anyway)
+//   --v1                      adds v2=0 (the old renderer)
 //   --out file.mp4            output (work files go to <out>.work/, kept with --keep)
 //   --seconds N               recording length (with --until: the maximum)
 //   --start now|open|break|endcard   begin at the next programme open / break / end card (default now)
@@ -114,6 +115,7 @@ const url = (() => {
   const u = new URL(opts.url || `http://127.0.0.1:${opts.port}/?autostart=1&voice=tts`);
   if (opts.voices === 'harness') u.searchParams.set('voices', 'browser');
   if (opts.v2) u.searchParams.set('v2', '1');
+  if (opts.v1) u.searchParams.set('v2', '0');
   return u.toString();
 })();
 if (opts.voices && !['auto', 'harness'].includes(opts.voices)) {

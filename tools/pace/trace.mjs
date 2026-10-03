@@ -18,7 +18,7 @@
 // showcase page-init.js), so the timing is the recorder's; lines spoken through
 // speechSynthesis use the page-init estimate (no Kokoro here).
 //
-// Options: --port N | --url URL, --v2, --start now|open|break, --until next-open+S|break-end+S|episode-end+S,
+// Options: --port N | --url URL, --v2 (the default anyway), --v1 (the old renderer), --start now|open|break, --until next-open+S|break-end+S|episode-end+S,
 //   --count N, --seconds N (max), --max-wait N, --skip N, --fps 15 (clock step), --sheet-every 12,
 //   --cols 6, --out prefix (writes <prefix>-timeline.json, <prefix>-sheet.png, <prefix>-tiles/)
 
@@ -53,6 +53,7 @@ const untilMatch = typeof opts.until === 'string' ? /^(next-open|break-end|episo
 const url = (() => {
   const u = new URL(opts.url || `http://127.0.0.1:${opts.port}/?autostart=1&voice=tts`);
   if (opts.v2) u.searchParams.set('v2', '1');
+  if (opts.v1) u.searchParams.set('v2', '0');
   return u.toString();
 })();
 const say = (...a) => console.log('[trace]', ...a);

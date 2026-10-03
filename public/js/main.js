@@ -8,9 +8,9 @@ canvas.width = W;
 canvas.height = H;
 
 const audio = new AudioEngine({ lang: 'en' });
-// Wave 2 presenters/studio: opt-in during the parallel wave (?v2=1); ?v2=0 (or false/off/no) is an explicit off.
-// ?perf=1 logs the v2 shot's p50/p95 every 10 s.
-const v2 = params.has('v2') ? !/^(0|false|off|no)$/i.test(params.get('v2').trim()) : false;
+// The v2 presenters and studio are the channel's default (owner, 3 Oct); ?v2=0 (or false/off/no) airs the old
+// renderer. ?perf=1 logs the v2 shot's p50/p95 every 10 s.
+const v2 = params.has('v2') ? !/^(0|false|off|no)$/i.test(params.get('v2').trim()) : true;
 const renderer = new Renderer(canvas, audio, { v2, perf: params.get('perf') === '1' });
 
 const channel = await fetch('/api/channel')

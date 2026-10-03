@@ -61,7 +61,7 @@ headline frame was 2.9 s; it is now 3.9 s. The WORLD NOW round-up was 40 s of ma
 a row, with a picture between them.
 
 <!-- DEFAULT-PATH:BEGIN -->
-Default path (the legacy director, still the channel default), same server, `trace.mjs --count 5` without --v2, final code (04:30):
+Default path at the time (the legacy director; since 3 Oct the old renderer is `?v2=0` and v2 is the default), same server, `trace.mjs --count 5` without --v2, final code (04:30):
 
 | programme | length (target) | shots min / median | cuts/min (max) | over max | map share / map run / same order run | after intro | first word | montage frames | And finally ends on |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -349,7 +349,7 @@ No visible shot under 4 s and no identical framing twice in a row in any program
 (COSMOS the slowest pauses and first word, NEWS IN 60 the briskest). Marked gestures fell after w2-hands adopted
 `gestureBudget` (TECH BYTES 7.7 → 3.9 per minute of talking); two immediate repeats remain in WORLD NOW / TECH BYTES.
 
-The default path (no `?v2`, the legacy director, still the channel's default until v2 ships) was checked in the real
+The legacy path (then the default; since 3 Oct `?v2=0`, v2 being the default) was checked in the real
 offline channel with `tools/pace/trace.mjs` (no `--v2`): WORLD NOW and TECH BYTES air with the same pauses (hand-over
 0.79 / 0.64 s, block 1.25 / 1.07 s, before "And finally" 1.17 / 0.85 s, open → first word 0.6 s, sign-off 1.9 / 1.4 s),
 3.8 s headline frames (was 2.6 s), strap 1 s after the cut, ticker ≥ 6.9 s. This round also removed the default path's
