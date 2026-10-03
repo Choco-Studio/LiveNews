@@ -7,7 +7,7 @@
 // lead, no banter next to grave news...), whatever the writer was.
 import { parseCues, embedCues, describeActions, ACTIONS } from '../public/js/cues.js';
 import { isBreaking, plainTitle } from './news.js';
-import { claimGrounded, contentWords, groundQuote, headlineGrounded, inventedClaim, isGrave, leansOnPrevious, numbersGrounded, numbersIn, numberWordsIn, qualifierConflict, quotationsGrounded, sameWord, sourceQualifier } from './facts.js';
+import { claimGrounded, contentWords, groundQuote, headlineGrounded, inventedClaim, isGrave, leansOnPrevious, numbersGrounded, pointsBack, numbersIn, numberWordsIn, qualifierConflict, quotationsGrounded, sameWord, sourceQualifier } from './facts.js';
 import { findPlaces, lookupPlace, placeSupported, snapLocation } from './gazetteer.js';
 
 export const EMOTIONS = ['neutral', 'happy', 'serious', 'surprised', 'sad', 'thinking'];
@@ -630,17 +630,53 @@ export function shortHeadline(title, max = HEADLINE_MAX, { spoken = false } = {}
  */
 export function trimClause(sentence, max, min = 6) {
   const t = String(sentence).trim().replace(/[.!?]+$/, '');
-  const cuts = [...t.matchAll(/,\s+|\s+(?:where|which|while|after|as|but|and|with|whose|when|because|although|though|following|before)\s+/g)].map((m) => m.index).reverse();
-  for (const at of cuts) {
+  // (a bare "with" or "as" usually completes what comes before: "visible with binoculars", "served as a base")
+  const cuts = [...t.matchAll(/,\s+|\s+(?:where|which|while|after|as|but|and|whose|when|because|although|though|following|before)\s+/g)]
+    .filter((m) => m[0].trim() !== 'as' || asStartsClause(t.slice(m.index + m[0].length)))
+    .map((m) => ({ at: m.index, end: m.index + m[0].length, comma: m[0].trim() === ',' }))
+    .reverse();
+  for (const { at, end, comma } of cuts) {
     const head = t.slice(0, at).trim();
     const n = head.split(/\s+/).length;
     if (n > max || n < min) continue;
     if (/\b(?:a|an|the|of|to|in|on|at|for|from|by|with|and|or|than|its|their|his|her|this|that|says|said)$/i.test(head)) continue;
     // an attribution must keep what it attributes ("Rail operators in Japan say [...]" is never cut after "say")
     if (/\b(?:say|says|said|warn|warns|believe|believes|expect|expects)$/i.test(head)) continue;
+    // "...visible with binoculars just [after sunset]": an adverb belongs to the phrase that follows it
+    if (CUT_ADVERB.test(head)) continue;
+    // "off Queensland, Australia, say...": a place and the country it is in are one name
+    if (comma && /\p{Lu}[\p{L}'’.-]*$/u.test(head) && lookupPlace((t.slice(end).match(/^\p{Lu}[\p{L}'’.-]*(?: \p{Lu}[\p{L}'’.-]*)?/u) || [''])[0])) continue;
+    // the kept clause must still say something: a finite verb after its subject ("Scientists surveying a
+    // section of reef off Queensland" is no sentence)
+    // (a relative clause's verb is not the main clause's: "the bridge, which opened in 1960")
+    const main = head.replace(/,\s+(?:which|who|whose|where|when)\b[^,]*(?:,|$)/gi, ' ').replace(/\s+/g, ' ').trim();
+    if (!hasFiniteVerb(main)) continue;
+    // ...and what an attribution reports keeps its own verb ("Officials said the bridge[, which...]" is not one)
+    const reported = main.match(/\b(?:say|says|said|warn|warns|warned|believe|believes|expect|expects|think|thinks|reports?|reported|announced|confirmed|added)\s+(?:that\s+)?(\S.*)$/i);
+    if (reported && !hasFiniteVerb(`X ${reported[1]}`)) continue;
     return `${head}.`;
   }
   return null;
+}
+
+const CUT_ADVERB = /\b(?:just|shortly|soon|right|even|only|immediately|well|long|straight|directly|also|still|nearly|almost|about|around|roughly|some|already|yet|ever|too|very|so|much|far)$/i;
+const AUX_VERB = /^(?:is|are|was|were|be|been|has|have|had|will|would|can|could|may|might|must|should|shall|does|do|did|isn['’]t|aren['’]t|won['’]t|can['’]t)$/i;
+const PAST_FORM = /^(?:rose|fell|grew|took|made|hit|struck|began|won|lost|left|came|went|gave|saw|found|kept|became|brought|built|sold|paid|spent|set|put|ran|drew|flew|shook|said|told|held|met|led|sent|sank|broke|wrote|fought|caught|thought|sought|swept|slid|burnt|stood|chose|froze|ate|got|knew|meant|felt|heard|lay|laid|rang|sang|swam|threw|wore|woke|cut|shut|spread|hurt|cost|let|quit|split)$/i;
+const PLURAL_VERB = /^(?:say|warn|expect|believe|think|hope|plan|want|need|fear|estimate|agree|claim|argue|report|show|suggest|account|remain|continue|make|take|help|use|work|live|run|keep|face|reach|cover|carry|serve|hold|join|lead|grow|rise|fall|stay|stand|sit|come|go|get|give|see|find|know|call|ask|try|move|pay|meet|win|lose|open|close|start|begin|end|travel|stop|walk|wait|return|remain|form|look|mean|offer|provide|include|range|vary|differ)$/i;
+const NOT_VERB_AFTER = /^(?:a|an|the|of|in|on|at|for|from|by|with|to|into|its|their|his|her|our|this|that|these|those|some|many|several|few|new|old|\d[\d,.]*)$/i;
+/** Does a clause have a finite verb after its first word (an auxiliary, a past form, a present-tense verb)? */
+function hasFiniteVerb(clause) {
+  const words = String(clause).split(/\s+/).map((w) => w.replace(/^[^\p{L}]+|[^\p{L}'’-]+$/gu, '')).filter(Boolean);
+  for (let i = 1; i < words.length; i++) {
+    const w = words[i].toLowerCase();
+    if (AUX_VERB.test(w) || PAST_FORM.test(w)) return true;
+    if (/^\p{Lu}/u.test(words[i])) continue; // a name
+    const prev = words[i - 1].toLowerCase();
+    if (NOT_VERB_AFTER.test(prev) || /ing$/.test(prev)) continue;
+    if (PLURAL_VERB.test(w) || /^[a-z]{3,}ed$/.test(w)) return true;
+    if (/^[a-z]{2,}(?:[^s'’]s|ies)$/.test(w) && !/(?:ss|us|is|ous|ics|ings|ness|ies)$/.test(w.replace(/ies$/, 'y') + (w.endsWith('ies') ? '' : ''))) return true;
+  }
+  return false;
 }
 
 // The longest sentence each programme's bible allows (config `sentenceWords` overrides).
@@ -942,6 +978,48 @@ function fixHandovers(segs, presenters) {
   });
 }
 
+// ---------------------------------------------------------------- the story's opener
+
+// Lead-ins that come before a story's own first sentence: a pick-up, the feature lines, "Breaking news."
+const LEAD_IN = /^(?:breaking news[.:]?|our number of the day:[^.]*\.|now,? around the world[^.]*\.|around the world[^.]*\.|(?:first|now to|over to) [^.]{1,40}\.)$/i;
+const OPENER_PREFIX = /^(?:and finally[:,]?\s*|a developing story[:,]?\s*|breaking news[:.]?\s*)/i;
+/** Index of a text's first content sentence (after pick-ups and feature lead-ins), or -1. */
+function openerIndex(parts) {
+  return parts.findIndex((p) => {
+    const t = stripTags(p);
+    return t && !PICKUP.test(t) && !(LEAD_IN.test(t) && t.split(/\s+/).length <= 8);
+  });
+}
+
+/**
+ * Keep a story's opener whole. When the writer's first sentence was dropped (a figure or a name the source
+ * does not have) and what is left leans on it ("Researchers say adults and children walked there
+ * together.") or no longer tells the story (a grave story reduced to "Rescue teams are searching collapsed
+ * buildings."), or when the writer opened on such a sentence, the outlet's own first sentence opens the
+ * story instead (it is the source itself, still checked). Without one that stands, the story goes ('').
+ */
+function keepOpener(tagged, written, story, check) {
+  const parts = sentencesOf(tagged);
+  const at = openerIndex(parts);
+  if (at < 0) return tagged;
+  const opener = stripTags(parts[at]).replace(OPENER_PREFIX, '');
+  const before = sentencesOf(written);
+  const lost = stripTags(before[openerIndex(before)] || '') !== stripTags(parts[at]);
+  const title = contentWords(plainTitle(story.title));
+  const tells = (text) => contentWords(text).filter((w) => title.some((x) => sameWord(w, x))).length >= Math.min(2, title.length);
+  const kept = stripTags(parts.slice(at).join(' '));
+  const leans = pointsBack(opener);
+  if (!leans && !(lost && !tells(kept))) return tagged;
+  // the outlet's first sentence that stands on its own (the summary's first, unless it opens on a pronoun)
+  const standing = sentencesOf(String(story.summary || '')).filter((t, i) => (i === 0 ? !pointsBack(t) : !leansOnPrevious(t)));
+  const own = standing.find(tells) || (leans ? standing[0] : null);
+  const fixed = own ? check(own) : '';
+  // nothing to stand on: a sentence pointing at nothing never airs; a story that merely lost its news stays
+  if (!stripTags(fixed)) return leans ? '' : tagged;
+  parts.splice(at, 0, fixed);
+  return parts.join(' ');
+}
+
 // ---------------------------------------------------------------- the validator
 
 /**
@@ -986,7 +1064,9 @@ export function normalizeBulletin(
     const source = story ? sourceOf(story) : allSources;
     const emotion = pick(seg.emotion, EMOTIONS, 'neutral');
     const withCues = Array.isArray(seg.cues) && seg.cues.length ? embedCues(String(seg.text ?? ''), seg.cues) : seg.text;
-    const tagged = groundedText(clean(withCues, 2000), source, names, type, { outlets, people });
+    let tagged = groundedText(clean(withCues, 2000), source, names, type, { outlets, people });
+    // A story opens on a sentence that stands on its own: never on what is left after its opener was dropped.
+    if (story && stripTags(tagged)) tagged = keepOpener(tagged, clean(withCues, 2000), story, (t) => groundedText(t, source, names, type, { outlets, people }));
     if (!stripTags(tagged)) continue;
     const anchor = seg.anchor === 'B' && !solo ? 'B' : 'A';
     const d = { type, anchor, emotion, tagged, seg, story, source };

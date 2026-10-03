@@ -134,6 +134,7 @@ function drawTextured(buf, L, m, head, s, sk) {
     return HLT[i < 0 ? 0 : i >= HL_N ? HL_N - 1 : i];
   };
   const rMax = RV + lift + QUIFF.lobe * 1.3 + 0.1; // nothing of the crown reaches past this radius
+  const E = L.ears, earTop = E.y - E.h * 0.5, earBot = E.y + E.h * 0.5, earBack = E.w + 0.3;
   const x0 = head.cx - (RV + lift + 1.2) * s, x1 = head.cx + (RV + lift + 1.2) * s;
   const y0 = head.cy + (cyc - RV - lift - 1.4) * s, y1 = head.cy + 0.8 * s;
   const sheenLo = 1.3, sheenHi = 5.0; // along-strand window of the highlight strokes (units above the hairline)
@@ -154,7 +155,9 @@ function drawTextured(buf, L, m, head, s, sk) {
     let zone;
     let a = 0;
     if (y < sideTop) {
-      const r2 = fx * fx + dy * dy;
+      // the outline is centred on the skull (a turned head keeps its hair over the far side of the
+      // cranium); only the quiff's profile (its angle) turns with the features
+      const r2 = x * x + dy * dy;
       if (r2 > rMax * rMax) return -1;
       const r = Math.sqrt(r2);
       a = fastAtan2(fx, -dy);
@@ -166,8 +169,11 @@ function drawTextured(buf, L, m, head, s, sk) {
       // clipped close: a sliver over the skull down to the sideburn, nothing past the ear's top
       if (Math.abs(x) > hw + 0.35) return -1;
       const sideburn = Math.abs(x) > hw - 0.5 && y < -0.9;
-      if (!sideburn && Math.abs(x) < hw - 0.05 && y > hl) return -1;
-      if (y > H.craniumY + 0.5 && !sideburn) return -1;
+      // a turned head shows the back of the skull on the far side: short hair down to the ear's top
+      // there (and behind the ear), never bare skin
+      const back = yawX !== 0 && fx * yawX < 0 && (Math.abs(fx) > hw - 0.35 && y < earTop || Math.abs(fx) > hw + earBack && y < earBot);
+      if (!sideburn && !back && Math.abs(x) < hw - 0.05 && y > hl) return -1;
+      if (y > H.craniumY + 0.5 && !sideburn && !back) return -1;
       zone = 2;
     }
     // the face window: forehead open under the hairline

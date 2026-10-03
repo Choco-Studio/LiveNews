@@ -1061,3 +1061,52 @@ test('chest-level beats read as open hands, never a grab at the jacket: box and 
     assert.ok(inner1 - inner2 >= a.look.arm.hand * 0.4, `${id}: box hands ${(inner1 - inner2).toFixed(1)} u apart`);
   }
 });
+
+test('hand raster cache (perf, critics r2): an unchanged hand reuses its raster; a cached frame never differs from a fresh raster by more than the fresh raster moves per frame', () => {
+  const s = 3.4;
+  const toS = (x, y, z = 0) => [192 + x * s, 60 + (y + z * TILT) * s];
+  const a = actor('paco', { side: 1, seed: 5, papers: true, gestures: [{ name: 'raise_hand', variant: 'lift', t0: 1.2 }] });
+  const bust = actor('paco', { side: 1, seed: 9, papers: true, gestures: [{ name: 'count', t0: 0 }] });
+  const L = a.look, m = matsOf(L);
+  const b1 = new PartBuffer(), b2 = new PartBuffer();
+  const arms = (buf, sk) => {
+    drawArm(buf, L, m, sk.arms.L, -1, toS, s, 11, 12, 13, 20);
+    drawArm(buf, L, m, sk.arms.R, 1, toS, s, 20, 21, 22, 24);
+  };
+  // (clear() empties mat only: tone and group count where something is drawn)
+  const diff = (p, q) => {
+    let d = 0;
+    for (let i = 0; i < p.mat.length; i++) if (p.mat[i] !== q.mat[i] || (p.mat[i] && (p.tone[i] !== q.tone[i] || p.grp[i] !== q.grp[i]))) d++;
+    return d;
+  };
+  const prev = { mat: new Uint8Array(b2.mat.length), tone: new Uint8Array(b2.mat.length), grp: new Uint8Array(b2.mat.length) };
+  let worst = 0, total = 0, moved = 0;
+  const N = 180;
+  for (let f = 0; f < N; f++) {
+    const t = 0.5 + f / 60;
+    // in sequence (the cache may reuse the previous frame's raster)
+    b1.clear();
+    arms(b1, poseAt(a, t));
+    // after another pose of the same look (both slots miss: a fresh raster)
+    b2.clear();
+    arms(b2, poseAt(bust, 0.6));
+    b2.clear();
+    arms(b2, poseAt(a, t));
+    const d = diff(b1, b2);
+    worst = Math.max(worst, d);
+    total += d;
+    if (f) moved += diff(b2, prev);
+    prev.mat.set(b2.mat);
+    prev.tone.set(b2.tone);
+    prev.grp.set(b2.grp);
+  }
+  if (process.env.V2_HANDS_TABLE) console.log(`raster cache: worst ${worst} px, mean ${(total / N).toFixed(2)} px vs a fresh raster; the fresh raster itself changes ${(moved / (N - 1)).toFixed(2)} px per frame`);
+  assert.ok(total / N <= moved / (N - 1), 'the cache lags the truth by less than one frame of its own motion');
+  assert.ok(worst <= 24, `a cached frame differs from a fresh raster by ${worst} px`);
+  // the same instant twice: identical
+  b1.clear();
+  arms(b1, poseAt(a, 2.0));
+  b2.clear();
+  arms(b2, poseAt(a, 2.0));
+  assert.equal(diff(b1, b2), 0, 'same pose, same pixels');
+});

@@ -5,6 +5,8 @@
 // doubt, a graphic or a sentence is dropped rather than aired with something
 // the source never said.
 
+import { findPlaces, lookupPlace, placeSupported } from './gazetteer.js';
+
 // Grave news: no jokes, no light gestures, no "and finally" slot.
 // Natural disasters and accidents count as much as violence: a hurricane landfall is never the number of the day.
 export const GRAVE =
@@ -60,9 +62,17 @@ export const harmlessIncident = (text) => GRAVE.test(withoutLookalikes(text)) &&
 const PRONOUN_OPENING = /^(?:It|Its|They|Their|Them|This|These|Those|He|She|His|Her|Such)\b/;
 const DEFINITE_OPENING = /^The (?!(?:[a-z][\w-]*\s+)?of\s+\p{Lu})[a-z][\w-]*/u;
 const SAYS_THE = /^(?:[\p{L}'’-]+\s+){1,4}(?:say|says|said|believe|believes|expect|expects|think|thinks|warn|warns)\s+(?:that\s+)?(?:the|its|their)\s+[a-z]/u;
+// "Adults and children walked there together": a "there" that points at a place said before (not the
+// existential "there is/are/were...").
+const THERE_DEIXIS = /(?<![\p{L}])(?<!\b(?:hello|hi|hey|out|over|up|down|in|from|here and|you)\s)there(?![\p{L}])(?!\s+(?:is|are|was|were|will|would|has|have|had|could|can|may|might|must|should|seems?|seemed|appears?|appeared|remains?|remained|used|isn['’]t|aren['’]t|wasn['’]t|weren['’]t)\b)(?!['’]s\b)/iu;
+/** Narrower: a sentence that points back at something said before (a pronoun opening, a "there"): it can never open a story. */
+export const pointsBack = (sentence) => {
+  const t = String(sentence ?? '').replace(/^(?:\s*\[[^\]]*\])+\s*/, '').trim();
+  return PRONOUN_OPENING.test(t) || THERE_DEIXIS.test(t.replace(/^There\b/, ''));
+};
 export const leansOnPrevious = (sentence) => {
   const t = String(sentence ?? '').replace(/^(?:\s*\[[^\]]*\])+\s*/, '').trim();
-  return PRONOUN_OPENING.test(t) || DEFINITE_OPENING.test(t) || SAYS_THE.test(t);
+  return PRONOUN_OPENING.test(t) || DEFINITE_OPENING.test(t) || SAYS_THE.test(t) || THERE_DEIXIS.test(t.replace(/^There\b/, ''));
 };
 
 const fold = (s) =>
@@ -190,6 +200,17 @@ export function numberWordsIn(text, { skipOne = true } = {}) {
 const NOUN_SKIP = new Set(
   'a an the of more than new extra additional other some about around nearly almost over under up to per cent percent and or in on at for from by with as its their his her this that these those million billion thousand trillion hundred bn mn tn year-old'.split(' ')
 );
+// A verb right after a figure means the figure counts nothing named after it: "magnitude 6.1 has hit",
+// "6.1 struck", "3 percent rose" (the house tense on air is the present perfect: "has hit", "was felt").
+const VERB_AFTER_FIGURE = new Set(
+  ('is are was were be been being has have had will would could can may might must should shall did does do ' +
+    'hit hits struck strikes rose rises fell falls won wins lost loses reached reaches topped tops passed passes crossed ' +
+    'crosses shook shakes rocked rocks jolted jolts came comes went goes made makes took takes remained remains stood ' +
+    'stands left leaves fell felt hit rattled rattles followed follows occurred occurs happened happens').split(' ')
+);
+// Words that name the same counted thing in different terms ("a 6.1 quake" for "an earthquake of magnitude 6.1").
+const SYNONYMS = [['quake', 'earthquake', 'tremor', 'magnitude'], ['people', 'persons', 'residents', 'inhabitants']];
+const synonyms = (a, b) => SYNONYMS.some((set) => set.includes(a) && set.includes(b));
 const wordsAround = (s, index, end, before, after) => {
   const head = fold(s.slice(Math.max(0, index - 60), index)).match(/[a-z][a-z'-]*/g) || [];
   const tail = fold(s.slice(end, end + 80)).match(/[a-z][a-z'-]*/g) || [];
@@ -197,11 +218,15 @@ const wordsAround = (s, index, end, before, after) => {
 };
 /** The thing a figure counts ("120 people" -> "people"), from the next few words of the same phrase. */
 function countedNoun(s, n) {
+  // "an earthquake of magnitude 6.1": the scale is named before the figure.
+  const before = fold(s.slice(Math.max(0, n.index - 24), n.index)).match(/\b(magnitude|index|score|rate)\s+(?:of\s+)?$/);
+  if (before) return before[1];
   const phrase = s.slice(n.end, n.end + 80).replace(/^(?:st|nd|rd|th)\b/i, '').split(/[,;:.!?()“”"]/)[0];
   const after = (fold(phrase).match(/[a-z][a-z'-]*/g) || []).slice(0, 4);
   for (const w of after) {
     const word = w.replace(/^-+/, '');
     if (!word || NOUN_SKIP.has(word) || CURRENCY_WORD_RE.test(word)) continue;
+    if (VERB_AFTER_FIGURE.has(word)) return null;
     return word;
   }
   return null;
@@ -251,11 +276,11 @@ function supports(c, s, claimText, sourceText) {
   // "three people were injured", "120 relief camps" does not support "120 people".
   const counted = countedNoun(sourceText, s);
   if (!counted || /(?:ed|ing)$/.test(counted)) return true;
-  if (sameWord(noun, counted)) return true;
+  if (sameWord(noun, counted) || synonyms(noun, counted)) return true;
   // Otherwise the noun must sit in the figure's own clause ("120 relief camps for 3,000 people": no; "120 villages
   // and 5 people died": the people belong to the 5, not to the 120).
   const { before, after } = clauseAround(sourceText, s.index, s.end, 3, 5);
-  return [...before, ...after].some((w) => sameWord(noun, w));
+  return [...before, ...after].some((w) => sameWord(noun, w) || synonyms(noun, w));
 }
 
 const CLAUSE_BREAK = /[,;:.!?()]|\b(?:and|but|while|whereas|as|or|after|before|when|with)\b/;
@@ -694,6 +719,8 @@ const SPEAKER_RES = [
 const CAUSE_RE = /\b(?:caused by|because of|because|due to|blamed (?:on|for)|blames?|triggered by|sparked by|following|after|amid)\s+(?:an?\s+|the\s+|a\s+series of\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)?)/gi;
 // "Engineers blamed sabotage for the closure": the thing blamed is a cause too.
 const BLAMED_RE = /\bblam(?:e|es|ed|ing)\s+(?:an?\s+|the\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)?)\s+for\b/gi;
+// "A cyberattack caused the outage": the subject of a causing verb is a cause.
+const CAUSED_RE = /(?:^|[,;]\s*|\b(?:an?|the)\s+)([a-z][\w-]*(?:\s+[a-z][\w-]*)?)\s+(?:caused|causes|triggered|triggers|sparked|sparks|set off|led to)\b/gi;
 // Time and duration a sentence asserts ("for weeks", "next week", "again", "tomorrow"): the source must say
 // it too, as it must say a figure. Each entry: the phrase, and the word(s) the source must contain.
 const TIME_RES = [
@@ -730,7 +757,7 @@ export function inventedClaim(sentence, source, { ignore = [] } = {}) {
   if (words.length >= 3 && fresh.length >= 2 && (words.length - fresh.length) / words.length <= 0.5) return 'not in the source';
   const judged = fresh.find((w) => ASSESSMENT.has(w));
   if (judged) return `assessment "${judged}"`;
-  for (const re of [CAUSE_RE, BLAMED_RE]) {
+  for (const re of [CAUSE_RE, BLAMED_RE, CAUSED_RE]) {
     for (const m of s.matchAll(re)) {
       const cause = contentWords(m[1]).filter((w) => !FRAME_WORDS.has(w));
       if (cause.length && !cause.every((w) => inSource(w, pool))) return `cause "${m[1]}"`;
@@ -748,6 +775,9 @@ export function inventedClaim(sentence, source, { ignore = [] } = {}) {
     const who = contentWords(m[1]).filter((w) => !FRAME_WORDS.has(w));
     if (who.length && !who.every((w) => inSource(w, pool))) return `speaker "${m[1].trim()}"`;
   }
+  // Places: a known place the source does not name (nor contain: "Wales" holds the United Kingdom) is a wrong
+  // place on air ("In France, storms have uncovered footprints" for a beach in Wales).
+  for (const h of findPlaces(s)) if (!placeSupported(h.text, src)) return `place "${h.text}"`;
   // Names: a title before a capitalised word, or two capitalised words in a row past the first word.
   const titled = s.match(TITLE_RE);
   if (titled && !foldedSource.includes(fold(titled[0]).trim().replace(/\.$/, ''))) return `title "${titled[0].trim()}"`;
@@ -757,6 +787,9 @@ export function inventedClaim(sentence, source, { ignore = [] } = {}) {
     if (foldedSource.includes(name)) continue;
     // a known place the source names (or a country of it) is not a new actor
     if (contentWords(name).every((w) => inSource(w, pool))) continue;
+    // "In the United Kingdom, ..." for a story the source places in Wales: the country of a place it names
+    const place = lookupPlace(m[1]);
+    if (place?.kind === 'country' && findPlaces(src).some((h) => h.entry === place || h.entry.country === place.name)) continue;
     return `name "${m[1]}"`;
   }
   return null;

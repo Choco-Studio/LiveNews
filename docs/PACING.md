@@ -184,11 +184,15 @@ keeps its own copy.
 | | WORLD NOW | TECH BYTES | COSMOS | MONEY MINUTE | NEWS IN 60 | why |
 | --- | --- | --- | --- | --- | --- | --- |
 | personality | measured | lively, never frantic | slow, contemplative | crisp | brisk but readable | bibles |
-| length target | 8-10 min | 6-8 | 6-8 | 4-6 | 1-2 | owner 23:10 |
+| length target | 8-10 min | 6-8 | 6-8 | 4-6 | 55-70 s | owner 23:10; news-60.md 55-65 s |
 | shortest shot / cut cooldown | 4 / 4 s | 4 / 4 | 4 / 4.5 | 4 / 4 | 4 / 4 | owner 18:52 |
 | shot median | 5-7 s | 4.5-6.5 | 6-9 | 5-7 | 4-6 | owner 18:52, cosmos.md |
 | cuts per minute (outside montages) | ≤ 8 | ≤ 9 | ≤ 7 | ≤ 8 | ≤ 10 | practice: 6-8 |
-| map / picture | 5-10 / 4-8 s | 5-9 / 4-8 | 4-6 / 6-10 | 4-7 / 4-8 | 4-8 / 4-8 | maps ≥ 5 s; cosmos.md |
+| map / picture | 5-10 / 4-8 s | 5-9 / 4-8 | 4-8.5 / 6-10 | 4-7 / 4-8 | 4-8 / 4-8 | maps ≥ 5 s; cosmos.md (see below) |
+| figure card | 4-8 s | 4-8 | 4-9 | 4-8 | 4-7 | read twice, never a dead frame |
+| studio shot at most | 15 s | 12 | 15 | 12 | 12 | static holds; owner 18:52 |
+| map cuts in a row / map share / single share | 2 / 33 % / 60 % | 2 / 30 % / 55 % | 2 / 33 % / 60 % | 2 / 33 % / 60 % | 2 / 33 % / 60 % | critic r1: 40 s of maps |
+| stories in a row with one beat order | 2 | 2 | 2 | 2 | 2 | variety |
 | story → story | 1.0 s | 0.9 | 1.3 | 0.85 | 0.75 | world-now.md 0.7 + air; news-60.md 0.7 |
 | hand-over (other presenter) | 0.85 | 0.7 | 1.05 | 0.85 | 0.75 | practice 0.5-0.9 |
 | chat turn | 0.5 | 0.42 | 0.6 | — | — | conversation, not a read |
@@ -197,36 +201,49 @@ keeps its own copy.
 | sign-off hold on the wide | 1.5 | 1.0 | 1.5 | 0.6 | 1.0 | world-now.md, news-60.md |
 | open → first word | 0.5 | 0.5 | 0.7 | 0.5 | 0.3 | world-now.md, news-60.md |
 | camera moves | ≤ 5, 40 s apart | ≤ 2 | 0 | 0 | 0 | bibles: COSMOS/MONEY/N60 locked off |
-| marked gestures / min of own speech | 5 | 6 | 3.5 | 3 | 2 | owner 22:50 (6): don't overuse |
+| marked gestures / min of own speech | 2.5-5 | 3-6 | 1.8-3.5 | 1.5-3 | 1-2 | owner 22:50 (6) don't overuse; 20:40 not too few |
+| a gesture name again within / at segment start | last 3 / ≤ 60 % | same | same | same | same | owner 20:40: repetitive |
+| listener nods / min of listening | 1-6 | 1.5-7 | 0.6-4 | — | — | alive, never a nodding dog |
 | minimum gap between two marked gestures | 5.5 s | 4.5 | 6 | 6 | 8 | cosmos.md ≤ 1 per 6 s |
 | hands at rest (share of speech) | 62 % | 55 % | 72 % | 70 % | 75 % | adult anchor restraint |
 | listener reaction gap | 8 s | 7 | 10 | 8 | 8 | owner 17:47: brief, motivated |
 | music bed held at least | 25 s | 20 | 35 | 30 | 50 | beds change at block boundaries only |
 
-Channel furniture (`CHANNEL`): stinger 0.8 s (cards.js), ident 4.0 s, promo 5.5 s, black between break elements 0.3 s
-(ads/index.js BREAK_BLACK, tested equal), standby retry 6 s and 1.5 s after a playout error;
-ticker push 0.4 + 4.7 + 0.45 s/word, 6-14 s per item; strap in 0.35 s, text 0.1 s later, flip 0.3 s, out 0.25 s, page
-5.5 s; captions 15 cps, page ≥ 1.4 s, linger 0.6 s; programme tag 8 s within 15 s of the open; reading speed for every
-"readable twice" hold 3 words/s; `TRANSITIONS` gives each transition type its duration and easing (cut, stinger cut at
-half time, strap in/out/flip, wall wipe, map zoom, pin pan, ticker push, COSMOS dip).
+COSMOS maps: the bible says 4-6 s, but with the owner's 4 s floor and COSMOS's 4.5 s cooldown a map can only hand back to the
+reader when 8 s remain, so a map that runs 6-8 s cannot be split; the planner cuts at 4-6 s whenever a sentence start (or a
+phrase word) allows, and the table's ceiling is 8.5 s so the analyser flags only the avoidable ones.
 
-Helpers: `gapAfter(episode, i)` (the pause after a segment, seeded ± 8 %), `gapKind`, `readTwice`, `tickerHold`,
-`factHold`, `cutAllowed` / `cutWait` (cooldown), `isRepeat` (identical framing / same full-screen type limits),
-`gestureBudget(id, seconds, { grave })`, `listenerRules(id)`, `estimateAir(episode)`, `paceTrace(ev)`.
+Channel furniture (`CHANNEL`): stinger 0.8 s (cards.js), ident 4.0 s, promo 5.5 s, black between break elements 0.3 s
+(ads/index.js BREAK_BLACK, tested equal), break cadence (at least 420 s of programme between commercial breaks, ads at most
+15 % of an hour: `breaks.minProgrammeBetween`, `breaks.maxAdShare`, for server/station.js — requested), standby retry 6 s and
+1.5 s after a playout error;
+ticker push 0.4 + 4.7 + 0.45 s/word, 6-14 s per item; strap in 0.35 s, text 0.1 s later, flip 0.3 s, out 0.25 s, page
+5.5 s; captions page at the voice (target 15 cps; measured on air: some pages run 17-20 cps when a sentence is spoken
+fast, see section 7), page ≥ 1.4 s, linger 0.6 s; programme tag 8 s within 15 s of the open; reading speed for every
+"readable twice" hold 3 words/s; `TRANSITIONS` keeps only the transitions whose numbers reach the screen (stinger cut at
+half time, strap in/out/flip, ticker push).
+
+Helpers: `gapAfter(episode, i)` (the pause after a segment, seeded ± 8 %), `gapKind` (a block boundary only after a
+"Still to come" chat line or a flagged segment, never ordinary copy), `readTwice`, `tickerHold`, `factHold`, `shotMax`
+(the top of every shot window), `cutAllowed` / `cutWait` (cooldown), `isRepeat` (identical framing / same full-screen type
+limits), `gestureBudget(id, seconds, { grave })`, `listenerRules(id)`, `estimateAir(episode)`, `paceTrace(ev)`.
 
 ### Who reads it
 
 | consumer | what it takes from pace.js |
 | --- | --- |
-| `public/js/director.js` | pause after every segment (`gapAfter` minus the 0.18 s the playout adds), strap cleared in a block pause, sign-off hold, end card, breaking card, ident, promo, montage frame floor, the first line a breath after the open, cut cooldown (legacy path), strap entry 1 s after the cut, programme tag window |
-| `v2 runtime/direction.js` | cut cooldown, stinger, the per-segment pause the plans are timed against, the intro's breath |
+| `public/js/director.js` | pause after every segment (`gapAfter`, minus the voice start-up only when a voice plays), strap cleared in a block pause, sign-off hold (its cue under the hold), end card, breaking card, ident, promo, the voice-paced montage floor, the first line a breath after the open; default path: `cutWait` cooldown (the story's opening cut too), `isRepeat`, `shotMax`-style maxima per shot with a seeded relief, `mapRun`, And finally never on a map, strap entry 1 s after the real cut |
+| `v2 runtime/direction.js` | cut cooldown, stinger, the per-segment pause the plans are timed against, the intro's breath, the max-hold guard's maxima (`maxHold` = `shotMax`) |
 | `v2 direction/context.js` | `gapAfter` may be a per-segment function (one per episode) |
-| `v2 direction/shots.js` | minimum shot, headline beat floor, per-programme studio max, single split, picture / map windows, sign-off hold |
+| `v2 direction/shots.js` | minimum shot, headline beat floor (the last frame too), per-programme studio max, single split, picture / map windows, `factHold`, `shotMax` (capMax: maps, pictures, cards never planned past their maximum), `mapRun` in round-ups, sign-off hold |
 | `v2 runtime/stage.js` | trace lines only (cuts, fired gestures/looks) |
-| `graphics/strap.js, ticker.js, captions.js, index.js` | every in/out/dwell timing (`STRAP_TIMING`, `TICKER_TIMING`, `CAPTION_TIMING`, `PROGRAM_TAG` are now pace values) |
+| `graphics/strap.js, ticker.js, captions.js, index.js` | every in/out/dwell timing (`STRAP_TIMING`, `TICKER_TIMING`, `CAPTION_TIMING`, `PROGRAM_TAG` are pace values; a ticker item holds `tickerHold(words)`) |
 | `config/channel.json` | `targetSeconds` mirrors `length.target` (tested), read by the writer prompt and the mock |
-| w2-hands / w2-face (requested) | `gestureBudget`, `listenerRules` |
-| music / showcase (requested) | `music.minBed`, `changeOn: 'block'`, `maxChangesPerMin` |
+| `ads/index.js` | `BREAK_BLACK.duration` = `CHANNEL.breaks.blackGap` (tested equal; ads-1 owns the file) |
+| w2-hands (adopted `gestureBudget`; requested `floor`, `vocabWindow`, `startShareMax`) | gesture planner |
+| w2-face (requested) | `listenerRules`, `listener.nodsPerMin` |
+| editorial-2 (requested) | `breaks.minProgrammeBetween`, `breaks.maxAdShare` (station.js), a voice budget scaled with `estimateAir` |
+| music / showcase (requested; the recorder reports bed changes against it) | `music.minBed`, `changeOn: 'block'`, `maxChangesPerMin` |
 
 ## 4. Before and after
 

@@ -109,7 +109,7 @@ function haloBox(head, pad, yFrom = HALO.cy - HALO.up) {
  * tone (tanShade) would leave most of the face one value, so the base pixels on the planes that face
  * the key (upper-left front of the head) become the lit tone (tan), keeping one base pixel next to
  * every shadow so the features never get a halo. In the wide (two tones) the whole face steps up
- * one tone, except the chin's underside: lit side tan, shade side tanShade.
+ * one tone, the chin's underside too: lit side tan, shade side tanShade.
  */
 function drawWarmHead(buf, L, m, head, s) {
   drawHead(buf, L, m, head, s);
@@ -142,7 +142,9 @@ function drawWarmHead(buf, L, m, head, s) {
       const dx = x + 0.5 - head.cx;
       const lx = dx * kx + dy * ky, ly = -dx * ky + dy * kx;
       if (tr === 0) {
-        if (ly < chinY) T[i] = t - 1;
+        // the whole face one tone up, the chin's underside included: at 1 px a brown row under the mouth
+        // plus the jaw line read as a goatee in the COSMOS wide (owner channel check)
+        T[i] = t - 1;
         continue;
       }
       if (t !== 1 || ly > chinY) continue;
@@ -172,6 +174,18 @@ function drawWarmHead(buf, L, m, head, s) {
       if (T[i - w] >= 2 && M[i - w] === mt) continue;
       if (T[i + w] >= 2 && M[i + w] === mt) continue;
       T[i] = 0;
+    }
+  }
+  if (tr === 0) {
+    // the wide: the neck (drawn before the head, in the chin's shadow: tone 2) one tone up as well; on
+    // this ramp a brown neck between the jaw line and the neckline read as a dark goatee at 1 px
+    const gn = head.gb + GROUPS.neck;
+    const ny1 = Math.min(buf.h - 2, Math.ceil(head.cy + (H.chinY + 8) * s));
+    for (let y = y0; y < ny1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const i = y * w + x;
+        if (M[i] === mt && Gr[i] === gn && T[i] === 2) T[i] = 1;
+      }
     }
   }
 }

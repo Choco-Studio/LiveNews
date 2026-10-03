@@ -226,7 +226,8 @@ const PROGRAMMES = {
     open: { firstWord: 0.3 }, // news-60.md: first word 0.3 s after the cut
     gaps: { story: 0.75, handover: 0.75, roundupItem: 0.75, afterIntro: 0.6, beforeOutro: 0.7, block: 0.9, jitter: 0.05 }, // news-60.md 0.7 s between items
     holds: { signoff: 1.0, endcard: 2.6 }, // news-60.md: hold 1 s after the last word
-    shots: { median: [4, 6], studioMax: 12, singleSoft: 9, picture: [4, 8], map: [4, 8], factMax: 7, cutsPerMinMax: 10 },
+    // news-60.md: ONE map for the round-up, its 2-3 items as pin pans (a run of map shots by design, ~15 s of 60)
+    shots: { median: [4, 6], studioMax: 12, singleSoft: 9, picture: [4, 8], map: [4, 8], factMax: 7, cutsPerMinMax: 10, mapRun: 3, share: { map: 0.45, single: 0.6 } },
     moves: { max: 0, minGap: Infinity },
     gestures: { perMin: 2, minGap: 8, beatsPerMin: 5, rest: 0.75, grave: 1, floor: 1, floorGrave: 0.4 },
     listener: { nodsPerMin: [0, 6] }, // solo: no listener

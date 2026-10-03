@@ -332,7 +332,7 @@ describe('normalizeBulletin: field validation', () => {
   });
 
   test('clips long text to 520 characters, preferably at a sentence end', () => {
-    const text = Array.from({ length: 30 }, (_, i) => `This is filler sentence ${'abcdefghijklmnopqrstuvwxyzABCD'[i]} for the script.`).join(' ');
+    const text = Array.from({ length: 30 }, (_, i) => `Filler sentence ${'abcdefghijklmnopqrstuvwxyzABCD'[i]} is here for the script.`).join(' ');
     const s = storyOf({ text });
     assert.ok(text.length > 520);
     assert.ok(s.text.length <= 520, `length ${s.text.length}`);
@@ -1299,14 +1299,14 @@ describe('normalizeBulletin: numbers in the spoken text', () => {
   });
 
   test('scales, words and decimals are understood, and cues keep their place', () => {
-    const [, story] = spoken([storySeg('n1', { text: 'It cost €300m. [B:nod] Some 40 thousand passengers a day. Twelve stops.' })]);
-    assert.equal(story.text, 'It cost €300m. Some 40 thousand passengers a day.', '"Twelve" is a number the source never states');
-    assert.deepEqual(story.cues, [{ char: 14, slot: 'B', action: 'nod' }]);
+    const [, story] = spoken([storySeg('n1', { text: 'The route cost €300m. [B:nod] Some 40 thousand passengers a day. Twelve stops.' })]);
+    assert.equal(story.text, 'The route cost €300m. Some 40 thousand passengers a day.', '"Twelve" is a number the source never states');
+    assert.deepEqual(story.cues, [{ char: 21, slot: 'B', action: 'nod' }]);
   });
 
   test('scale, percent, currency and the thing counted must match the source', () => {
     const one = (text) => spoken([storySeg('n1', { text: `${text} The tram opens.` })])[1].text;
-    assert.equal(one('It cost 300 million euros.'), 'It cost 300 million euros. The tram opens.');
+    assert.equal(one('The route cost 300 million euros.'), 'The route cost 300 million euros. The tram opens.');
     assert.equal(one('It cost 300 billion euros.'), 'The tram opens.', 'million is not billion');
     assert.equal(one('It cost 300 million dollars.'), 'The tram opens.', 'euros are not dollars');
     assert.equal(one('Fares rose 40 percent.'), 'The tram opens.', 'a percentage the source never gives');

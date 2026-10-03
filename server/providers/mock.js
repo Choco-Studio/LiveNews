@@ -684,11 +684,18 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     const e = info.loc.entry;
     let where = spokenPlace(e);
     if (at >= 0) {
+      // The sentence names the place further on: its own "in <place>" phrase moves to the front ("In Wales,
+      // storms have uncovered footprints...").
+      const moved = movePlaceFront(sentence, info);
+      if (moved && wordCount(moved) <= maxWords) return moved;
       if (e.kind === 'country' || !e.country) return sentence;
       const country = lookupPlace(e.country);
       // the country's own name already there: nothing to add ("Greek islands" is not "Greece": "In Greece, ...")
       const namesCountry = country && [country.name, ...country.aliases].some((n) => new RegExp(`(?<![\\p{L}])${n.replace(/^the /i, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u').test(sentence));
       if (!country || namesCountry) return sentence;
+      // A parent country the story never names is not said on air ("In the United Kingdom," for a beach in Wales).
+      const story = `${info.s.title} ${info.s.summary || ''}`;
+      if (![country.name, ...country.aliases].some((n) => new RegExp(`(?<![\\p{L}])${n.replace(/^the /i, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u').test(story))) return sentence;
       where = spokenPlace(country);
     }
     // "On the Reykjanes peninsula", "On Crete": islands and peninsulas take "on"

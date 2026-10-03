@@ -521,7 +521,11 @@ export class Director {
     // (a number of the day that opens on its card outside WORLD NOW puts the card between: no repeat to avoid)
     const asSeen = (shot, focus) => ({ shot, focus: shot === 'wide' ? null : focus });
     const onCard = seg.feature === 'number' && !!seg.fact && s.program?.id !== 'world-now' && s.shot !== 'fact';
-    if (!onCard && isRepeat(s.program?.id, [asSeen(s.shot, s.focus)], asSeen(anchorShot, seg.anchor))) anchorShot = anchorShot === 'close' ? 'wide' : 'close';
+    let swapped = false;
+    if (!onCard && isRepeat(s.program?.id, [asSeen(s.shot, s.focus)], asSeen(anchorShot, seg.anchor))) {
+      anchorShot = anchorShot === 'close' ? 'wide' : 'close';
+      swapped = true;
+    }
     // a round-up item opens on its map (the v2 planner's map to map), but after shots.mapRun maps in a row an item
     // shows its picture, else its reader in vision (never a 40 s run of one shot type)
     if ((seg.feature === 'roundup' || seg.roundup) && seg.location) return [(this.mapRun || 0) < pace(s).shots.mapRun ? 'map' : hasImg ? 'full' : anchorShot];
@@ -537,6 +541,12 @@ export class Director {
     }
     // outside WORLD NOW it opens on its card (tech-bytes / cosmos / money-minute .md), unless a card is already on air
     if (number && s.program?.id !== 'world-now' && s.shot !== 'fact') beats.unshift(...beats.splice(beats.indexOf('fact'), 1));
+    // a wide forced by the close on air that the chats / sign-off would carry on (one 20 s wide): the story opens on its
+    // picture or map instead, then its presenter's close (the close on air is a shot away: no jump)
+    if (swapped && anchorShot === 'wide' && this.wideTail(segs.indexOf(seg)) > 0) {
+      const v = beats.findIndex((b) => b === 'full' || b === 'map');
+      if (v > 0) beats.splice(0, 1, beats.splice(v, 1)[0], 'close');
+    }
     // And finally ends on its picture or its presenter, never on a map
     if ((seg.feature === 'lighter' || /^\W*and finally\b/i.test(String(seg.text || ''))) && hasImg && beats.indexOf('map') > beats.indexOf('full')) {
       beats.splice(beats.indexOf('map'), 1);
@@ -577,8 +587,12 @@ export class Director {
     const beats = this.storyBeats(seg, hasImg).slice(0, Math.max(1, Math.min(lines.length, Math.floor((est + after) / Math.max(P.shots.cooldown, P.shots.median[0])))));
     const finallyStory = seg.feature === 'lighter' || /^\W*and finally\b/i.test(String(seg.text || ''));
     // And finally never ends on a map: the map hands back to the presenter when a sentence is left for it, else it goes
+    // (by the estimate: the return must air the minimum plus the late-beat margin, else the map is not taken at all)
     if (finallyStory && beats.length > 1 && beats[beats.length - 1] === 'map') {
-      if (lines.length > beats.length && Math.floor((est + after) / Math.max(P.shots.cooldown, P.shots.median[0])) > beats.length) beats.push(beats[0]);
+      const at = (k) => ((starts[k] ?? chars) / chars) * est; // when sentence k starts
+      const back = beats.length; // the return sentence
+      const fits = lines.length > back && est + after - at(back) >= P.shots.min + 1 && at(back) - at(back - 1) >= P.shots.min;
+      if (fits) beats.push(beats[0]);
       else beats.pop();
     }
     const wall = hasImg ? { mode: 'image', storyId: seg.storyId } : { mode: 'source', source: seg.source, category: seg.category || 'general' };
@@ -620,7 +634,15 @@ export class Director {
     const maxOf = (shot) => (shot === 'fact' ? P.shots.factMax : shot === 'full' ? P.shots.picture[1] : shot === 'map' ? P.shots.map[1] : STUDIO.has(shot) ? P.shots.studioMax : Infinity);
     // what replaces a shot past its maximum: a card, picture or map gives way to the presenter, a studio shot to the
     // other studio shot (the default path has no MCU-L: a solo show's other studio shot is its wide)
-    const relief = (shot) => (!STUDIO.has(shot) ? anchorShot : shot === 'close' ? 'wide' : 'close');
+    // (a wide that the chats / sign-off after this story would carry on is no relief: it only moves the long hold; the
+    // story's picture is, else its map unless it is And finally, else nothing: critic r1, a 19.8 s wide)
+    // `run`: the air (s) the relief would take from its cut to the next segment's cut
+    const relief = (shot, run = 0) => {
+      if (!STUDIO.has(shot)) return anchorShot;
+      const tail = shot === 'close' ? this.wideTail(index) : 0;
+      if (shot === 'wide' || tail <= 0 || run + tail <= P.shots.studioMax + 0.5) return shot === 'close' ? 'wide' : 'close';
+      return (hasImg && 'full') || (seg.location && !finallyStory && 'map') || null;
+    };
     const apply = (beat) => {
       this.setShot(beat, { focus: seg.anchor, storyId: seg.storyId, wall, card: cardFor(beat) });
       // max hold: when this shot would run past its maximum before the next segment's cut (at the voice's estimated
@@ -634,8 +656,9 @@ export class Director {
       const total = own + tail;
       const max = maxOf(beat);
       if (total > max + 0.5 && own >= 2 * P.shots.cooldown) {
-        const at = tail > 0 ? Math.max(P.shots.cooldown, Math.min(max - 0.5, own - P.shots.min)) : Math.max(P.shots.cooldown, Math.min(max - 0.5, total / 2));
-        watch = setTimeout(() => s.shotSince === since && s.shot === beat && cutTo(-1, relief(beat)), at * 1000);
+        const at = tail > 0 ? Math.max(P.shots.cooldown, Math.min(max - 0.5, own - P.shots.min - 0.5)) : Math.max(P.shots.cooldown, Math.min(max - 0.5, total / 2));
+        const r = relief(beat, own - at);
+        if (r) watch = setTimeout(() => s.shotSince === since && s.shot === beat && cutTo(-1, r), at * 1000);
       }
     };
     // the opening cut waits for the cooldown when a studio shot is on air (the voice starts over it); a later beat is
@@ -646,7 +669,9 @@ export class Director {
       const held = this.onAir();
       const MIN_SHOT = P.shots.cooldown;
       const wait = (i === 0 && !STUDIO.has(s.shot)) || i < 0 ? 0 : cutWait(s.program?.id, now() - held, now()); // pace.js cooldown
-      if (i > 0 && left() - wait < P.shots.min) return 0;
+      // (1 s of margin: the voice's real length is only estimated until it has spoken a while; a later beat that might
+      // air under the minimum is better dropped: critic r1, a 3.2 s picture at a story's end)
+      if (i > 0 && left() - wait < P.shots.min + 1) return 0;
       if (wait > 0.05) {
         opening = i === 0;
         pending = setTimeout(() => ((opening = false), apply(beat)), wait * 1000);
@@ -657,8 +682,9 @@ export class Director {
     const guard = (i) => {
       const held = this.onAir();
       const rest = left();
-      if (held < P.shots.cooldown || rest < P.shots.cooldown || held + rest <= maxOf(s.shot) + 0.5) return;
-      cutTo(i, relief(s.shot));
+      if (held < P.shots.cooldown || rest < P.shots.cooldown + 1 || held + rest <= maxOf(s.shot) + 0.5) return;
+      const r = relief(s.shot, rest);
+      if (r) cutTo(i, r);
     };
     let sentence = 0;
     // Between stories the director simply cuts; the stinger is kept for opens, breaks and breaking news.

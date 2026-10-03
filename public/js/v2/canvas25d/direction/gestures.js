@@ -1180,11 +1180,19 @@ function fillStory(P, ctx, R, max = null) {
   let k = 0;
   for (const wi of starts) {
     let placed = null;
+    const pic = pictureFollows(ctx, W[wi].t + 0.5);
+    const fits = (name) => !(name === 'point_screen' && !pic) && !(name === 'count' && !/\d|\bone\b|\btwo\b|\bthree\b|\bfirst\b|,/.test(ctx.sentences[sentenceOf(ctx, W[wi].char)].text));
+    const opts = (name) => ({ spill: true, variant: name === 'shrug' ? 'small' : undefined });
+    // the wall about to show the story is the most motivated thing to open a hand toward
+    if (pic && pool.includes('point_screen')) placed = P.placeNear('point_screen', W[wi].char, opts('point_screen'));
+    // the seeded order as written first (its variety), then the first fitting one with a stand-in that reads
     for (let tries = 0; tries < order.length && !placed; tries++) {
       const name = order[(k + tries) % order.length];
-      if (name === 'point_screen' && !pictureFollows(ctx, W[wi].t + 0.5)) continue;
-      if (name === 'count' && !/\d|\bone\b|\btwo\b|\bthree\b|\bfirst\b|,/.test(ctx.sentences[sentenceOf(ctx, W[wi].char)].text)) continue;
-      placed = P.placeVisible(name, W[wi].char, { spill: true, variant: name === 'shrug' ? 'small' : undefined }, { head: false });
+      if (fits(name)) placed = P.placeNear(name, W[wi].char, opts(name));
+    }
+    for (let tries = 0; tries < order.length && !placed; tries++) {
+      const name = order[(k + tries) % order.length];
+      if (fits(name)) placed = P.placeVisible(name, W[wi].char, opts(name), { head: false });
     }
     if (placed) k++;
   }
@@ -1466,6 +1474,13 @@ function pictureFollows(ctx, t) {
   for (const c of ctx.shots || []) if ((c.shot === 'full' || c.shot === 'map') && c.at >= t - 0.2 && c.at - t <= 1.5) return true;
   // COSMOS: the wall carries the picture or map in the studio shot
   if (ctx.programId === 'cosmos' && (ctx.hasImage || ctx.seg.location)) return true;
+  // the framings that compose the speaker against the wall (camera.js: mcu-l / mcu-r keep the wall
+  // content in the other third, ots looks past the shoulder at it) while it shows the story's picture or map
+  if (ctx.hasImage || ctx.seg.location) {
+    const cut = cutAt(ctx, t);
+    const f = cut && !HIDDEN.has(cut.shot) ? framingOfCut(ctx, cut) : null;
+    if (f === 'ots' || f === 'mcu-l' || f === 'mcu-r') return true;
+  }
   return false;
 }
 
