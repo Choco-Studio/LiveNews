@@ -8,6 +8,7 @@ import { GOOD_WIDTH, feedCandidates, pageCandidates, rankPictures } from './pict
 import { guardedFetch, readCapped } from './net.js';
 import { degreesApart, findPlaces, locate, lookupPlace } from './gazetteer.js';
 import { onBeat } from './topics.js';
+import { sameWord } from './facts.js';
 
 export { extractImage, isUsableImage } from './pictures.js';
 
@@ -471,7 +472,8 @@ const INCIDENT_KINDS = [
   ['violence', /^(?:attacks?|attacked|assault|shootings?|shot|gunman|gunmen|gunfire|stabbings?|stabbed|bombs?|bombings?|bombed|explosions?|blasts?|airstrikes?)$/],
   ['theft', /^(?:robbery|robberies|robbed|heist|theft|thefts|stolen|burglary|looting)$/],
   ['fraud', /^(?:fraud|scam|scams|scheme|embezzlement|bribery|corruption|laundering)$/],
-  ['fire', /^(?:fires?|blaze|wildfires?|burning)$/],
+  ['wildfire', /^(?:wildfires?|bushfires?)$/],
+  ['fire', /^(?:fires?|blaze|burning|arson)$/],
   ['flood', /^(?:floods?|flooding|flooded)$/],
   ['quake', /^(?:earthquakes?|quake|tremor|aftershocks?)$/],
   ['storm', /^(?:storms?|hurricanes?|typhoons?|cyclones?|tornado(?:es)?)$/],
@@ -491,14 +493,51 @@ const kindsOf = (kw) => {
   for (const w of kw) for (const [kind, re] of INCIDENT_KINDS) if (re.test(w)) out.add(kind);
   return out;
 };
-const disjoint = (a, b) => a.size > 0 && b.size > 0 && ![...a].some((x) => b.has(x));
+const KIND_WORD = (w) => INCIDENT_KINDS.some(([, re]) => re.test(w));
+// Kinds one event can carry under two names: a hurricane floods, a wildfire is a fire.
+const KIND_FAMILY = { storm: 'weather', flood: 'weather', wildfire: 'wildfire', fire: 'wildfire' };
+const family = (k) => KIND_FAMILY[k] || k;
+const sharedKinds = (a, b) => [...a].filter((k) => [...b].some((x) => family(x) === family(k)));
+const disjoint = (a, b) => a.size > 0 && b.size > 0 && !sharedKinds(a, b).length;
+// Rare physical events: two reports of an earthquake, a storm, a flood, an eruption or a wildfire in the same place
+// within a day and a half are one event; a fire, an opening, an arrest or a fraud in a big city are not.
+const PHYSICAL = new Set(['quake', 'storm', 'flood', 'eruption', 'wildfire']);
+// Decisions one place takes once ("Norway raises rates"): the same decision in the same place is one event.
+const DECISIONS = new Set(['raise', 'lower', 'hold']);
+// Opposite outcomes are two reports of different things ("court jails..." / "court frees...").
+const OPPOSITES = [
+  [/^(?:jails?|jailed|convicts?|convicted|sentences?|sentenced|guilty)$/, /^(?:frees?|freed|acquits?|acquitted|clears?|cleared|releases?|released)$/],
+  [/^(?:wins?|won|victory)$/, /^(?:loses?|lost|defeat|defeated)$/],
+  [/^(?:approves?|approved|backs|passes|passed|upholds?|upheld)$/, /^(?:rejects?|rejected|blocks?|blocked|vetoes|vetoed|overturns?|overturned)$/],
+  [/^(?:rises?|rose|climbs?|climbed|jumps?|jumped|gains?|gained|soars?|soared|surges?|surged)$/, /^(?:falls?|fell|drops?|dropped|slides?|slid|slumps?|slumped|plunges?|plunged|sinks?|sank)$/],
+  [/^(?:opens?|opened|reopens?|reopened)$/, /^(?:closes?|closed|shuts?)$/],
+  [/^(?:arrives?|arrived|lands?|landed)$/, /^(?:departs?|departed|leaves)$/],
+];
+const opposite = (a, b) => OPPOSITES.some(([x, y]) => {
+  const ax = [...a].some((w) => x.test(w));
+  const ay = [...a].some((w) => y.test(w));
+  const bx = [...b].some((w) => x.test(w));
+  const by = [...b].some((w) => y.test(w));
+  return (ax && !ay && by && !bx) || (ay && !ax && bx && !by);
+});
+// "Earthquake drill held at Chile schools" is not the earthquake; "second storm forms" is another storm.
+const FRAME_SHIFT = /\b(?:drills?|exercises?|anniversary|memorial|commemorat\w*|remember\w*|rehearsals?|simulations?|years? (?:after|since|on))\b/i;
+const ANOTHER = /\b(?:second|another|third|fresh|new)\s+(?:storm|quake|earthquake|eruption|fire|wildfire|flood|hurricane|typhoon|cyclone|tornado|attack|blast|outbreak|strike)\b/i;
+// Words that name who acts, not what happened: two reports that share only these are about different things
+// ("London mayor opens new cycle lane" / "London mayor launches knife-crime review").
+const ROLE_WORDS = new Set(
+  ('police judge judges court courts mayor minister ministers government officials official president governor council councils ministry ' +
+    'authorities authority prosecutors prosecutor union unions company companies firm firms central bank banks chief chiefs leader leaders ' +
+    'spokesman spokeswoman agency army military state city country man woman men women residents group groups team teams boss').split(' ')
+);
 // Words two unrelated reports from one place easily share ("Paris metro strike" / "Paris museum strike"):
 // a picture is lent on a shared subject (tram, coral, reef), never on one of these alone.
 const GENERIC_WORDS = new Set(
   ('strike strikes protest protests record records plans plan deal talks vote votes election elections prices price rates rate ' +
     'workers staff thousands people city cities country government officials police court state national local world global ' +
     'opens opened closes closed rises rise falls fall cuts high low year month week day night first second third report reports ' +
-    'warns warning calls call asks says hits hit makes make gets takes faces start starts ends end business market markets').split(' ')
+    'warns warning calls call asks says hits hit makes make gets takes faces start starts ends end business market markets ' +
+    'shows show signs sign parts part sets set back again near big top major former latest still now amid').split(' ')
 );
 const CAUSE_PHRASE = /\b(?:after|over|following|because of|due to)\s+(.+)$/i;
 /** The content words of a headline's "after ..." phrase ("after engine fire" -> engine, fire). */
@@ -514,6 +553,12 @@ const jaccard = (a, b) => {
 const sharedCount = (a, b) => {
   let n = 0;
   for (const w of a) if (b.has(w)) n++;
+  return n;
+};
+/** Words of `a` that `b` has too, inflections allowed ("recovers" ~ "recovery"), among those `keep` accepts. */
+const softShared = (a, b, keep = () => true) => {
+  let n = 0;
+  for (const w of a) if (keep(w) && (b.has(w) || [...b].some((x) => keep(x) && sameWord(w, x)))) n++;
   return n;
 };
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms).unref?.());
@@ -752,61 +797,103 @@ export class NewsDesk {
     if (!s.ev || s.ev.title !== s.title) {
       const placeWords = new Set(findPlaces(s.title || '').flatMap((h) => [...keywords(h.text)]));
       const names = namesOf(s.title);
+      const topic = new Set([...s.kw].filter((w) => !placeWords.has(w)));
       s.ev = {
         title: s.title,
         names,
         // names that are not places: a storm, a person, a company, a product
         people: new Set([...names].filter((n) => !placeWords.has(n) && !lookupPlace(n))),
-        topic: new Set([...s.kw].filter((w) => !placeWords.has(w))),
+        topic,
+        // what happened, without the place, who acted, the kind of event and the filler words
+        subject: new Set([...topic].filter((w) => !GENERIC_WORDS.has(w) && !ROLE_WORDS.has(w) && !KIND_WORD(w) && !/^\d/.test(w))),
         kinds: kindsOf(s.kw),
         cause: causeOf(s.title),
+        frame: FRAME_SHIFT.test(s.title || ''),
+        another: ANOTHER.test(s.title || ''),
       };
     }
     return s.ev;
   }
 
   /**
-   * Same event: enough shared keywords, and nothing that tells them apart (places that disagree, from the
-   * headline or the summary's first sentence; names, incidents or causes that differ). Used to cluster
-   * reports, count outlets, keep one report per event in a programme and cover the others with it.
+   * Same event: nothing tells them apart (places that disagree, from the headline or the summary's first
+   * sentence; names, incidents, causes or outcomes that differ; a drill, an anniversary, "a second storm"),
+   * and something ties them together: a shared name that is not a place ("Hurricane Elena"), the same rare
+   * physical event in the same place (an earthquake in Japan, a wildfire near Marseille), the same decision
+   * in the same place ("Norway raises rates"), or two words of what happened ("tram line", "coral reef")
+   * besides the place, who acted and filler. Used to cluster reports, count outlets, keep one report per
+   * event in a programme and cover the others with it.
    */
   sameStory(a, b) {
     const ea = this.eventFacts(a);
     const eb = this.eventFacts(b);
-    if (!sameEvent(a.kw, b.kw)) return false;
-    if (placesAgree(this.whereOf(a), this.whereOf(b)) === false) return false;
+    const agree = placesAgree(this.whereOf(a), this.whereOf(b));
+    if (agree === false) return false;
     // each names someone or somewhere the other does not, and they share no name: two events
     const onlyA = [...ea.names].filter((n) => !eb.names.has(n));
     const onlyB = [...eb.names].filter((n) => !ea.names.has(n));
     if (onlyA.length && onlyB.length && sharedCount(ea.names, eb.names) === 0) return false;
     if (disjoint(ea.kinds, eb.kinds)) return false;
     if (ea.cause.size >= 2 && eb.cause.size >= 2 && sharedCount(ea.cause, eb.cause) === 0) return false;
-    return true;
+    if (opposite(a.kw, b.kw) || ea.frame !== eb.frame || ea.another || eb.another) return false;
+    const kinds = sharedKinds(ea.kinds, eb.kinds);
+    if (sharedCount(ea.people, eb.people) > 0 && sameEvent(a.kw, b.kw)) return true;
+    if (agree === true && kinds.some((k) => PHYSICAL.has(family(k)) || PHYSICAL.has(k))) return true;
+    if (agree === true && kinds.some((k) => DECISIONS.has(k)) && softShared(ea.topic, eb.topic, (w) => !KIND_WORD(w) && !ROLE_WORDS.has(w)) >= 1) return true;
+    return sameEvent(a.kw, b.kw) && softShared(ea.subject, eb.subject) >= 2;
   }
 
   /**
-   * Stricter, for lending a picture (a wrong picture on air is worse than none): the same event AND the
-   * same place, known on both sides (or a shared name that is not a place: "Hurricane Elena"), and the
-   * headlines say the same thing (a quarter of their non-place words, at least two) or share that name.
+   * Stricter, for lending a picture (a wrong picture on air is worse than none): the same event AND either
+   * a shared name that is not a place, or a known place on both sides that agrees, with the same rare
+   * physical event or decision, or most of what happened in common (two shared subject words covering
+   * two thirds of the shorter headline's, or half of both): "Fire at London warehouse" never lends to
+   * "London flat fire".
    */
   samePictureEvent(a, b) {
     if (!this.sameStory(a, b)) return false;
     const ea = this.eventFacts(a);
     const eb = this.eventFacts(b);
-    const named = sharedCount(ea.people, eb.people) > 0;
     const agree = placesAgree(this.whereOf(a), this.whereOf(b));
-    const neither = !this.whereOf(a) && !this.whereOf(b);
-    if (!agree && !(neither && named) && !(agree === null && named)) return false;
+    if (sharedCount(ea.people, eb.people) > 0) return true;
+    if (agree !== true) return false;
     if (ea.cause.size && eb.cause.size && sharedCount(ea.cause, eb.cause) === 0) return false;
-    const topical = sharedCount(ea.topic, eb.topic) >= 2 && jaccard(ea.topic, eb.topic) >= 0.25;
-    if (named || (agree === true && topical)) return true;
-    // One precise place (a city, a region: not just a country) and the same incident or the same subject:
-    // "Iceland volcano erupts again on the Reykjanes peninsula" / "lava fountains light up the Reykjanes sky".
-    const [pa, pb] = [this.whereOf(a), this.whereOf(b)];
-    const precise = agree === true && pa.kind !== 'country' && pb.kind !== 'country';
-    const sameKind = [...ea.kinds].some((k) => eb.kinds.has(k));
-    const subject = [...ea.topic].some((w) => eb.topic.has(w) && w.length >= 4 && !GENERIC_WORDS.has(w));
-    return precise && (sameKind || subject);
+    const kinds = sharedKinds(ea.kinds, eb.kinds);
+    if (kinds.some((k) => PHYSICAL.has(k) || PHYSICAL.has(family(k)) || DECISIONS.has(k))) return true;
+    const shared = softShared(ea.subject, eb.subject);
+    const small = Math.min(ea.subject.size, eb.subject.size) || 1;
+    return shared >= 2 && (shared / small >= 2 / 3 || shared / (ea.subject.size + eb.subject.size - shared || 1) >= 0.5);
+  }
+
+  /** Stories that share a keyword with `s` (through the keyword index), excluding `s`. */
+  related(s) {
+    const index = this.keywordIndex();
+    const seen = new Set();
+    this.eventFacts(s);
+    for (const w of s.kw) {
+      const bucket = index.get(w);
+      // a word on very many headlines ("record", "new") says nothing about the event
+      if (!bucket || bucket.length > 200) continue;
+      for (const o of bucket) if (o !== s) seen.add(o);
+    }
+    return seen;
+  }
+
+  /** The keyword index of the desk (word -> stories), rebuilt when the desk changed. */
+  keywordIndex() {
+    if (this.kwIndex && this.kwIndexSize === this.stories.size && !this.kwIndexDirty) return this.kwIndex;
+    const index = new Map();
+    for (const s of this.stories.values()) {
+      this.eventFacts(s);
+      for (const w of s.kw) {
+        if (!index.has(w)) index.set(w, []);
+        index.get(w).push(s);
+      }
+    }
+    this.kwIndex = index;
+    this.kwIndexSize = this.stories.size;
+    this.kwIndexDirty = false;
+    return index;
   }
 
   /**
@@ -815,26 +902,19 @@ export class NewsDesk {
    * the whole desk (thousands of stories cost milliseconds, not seconds).
    */
   updateTrending() {
-    const list = [...this.stories.values()];
-    const index = new Map();
-    for (const s of list) {
-      this.eventFacts(s);
-      for (const w of s.kw) {
-        if (!index.has(w)) index.set(w, []);
-        index.get(w).push(s);
-      }
-    }
-    for (const s of list) {
+    this.kwIndexDirty = true;
+    const index = this.keywordIndex();
+    for (const s of this.stories.values()) {
       const seen = new Map();
       for (const w of s.kw) {
         const bucket = index.get(w);
-        // a word on very many headlines ("record", "new") says nothing about the event
         if (!bucket || bucket.length > 200) continue;
-        for (const o of bucket) if (o !== s) seen.set(o, (seen.get(o) || 0) + 1);
+        for (const o of bucket) if (o !== s && o.source !== s.source) seen.set(o, (seen.get(o) || 0) + 1);
       }
       const sources = new Set([s.source]);
       for (const [o, shared] of seen) {
-        if (shared >= 2 && !sources.has(o.source) && this.sameStory(s, o)) sources.add(o.source);
+        // one shared word is enough only for an earthquake, a storm... in the same place (sameStory decides)
+        if (!sources.has(o.source) && (shared >= 2 || (s.ev.kinds.size && o.ev.kinds.size)) && this.sameStory(s, o)) sources.add(o.source);
       }
       s.outlets = sources.size;
     }
