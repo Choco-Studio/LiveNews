@@ -585,9 +585,9 @@ export class Director {
       const rate = span > 2.5 && done > 30 ? done / span : chars / Math.max(0.5, est);
       return Math.max(0, (chars - done) / rate - (now() - sentAt)) + after;
     };
-    // (beats spaced by the middle of the profile's median band: the cooldown is a floor, not the rhythm; owner 18:52
-    // median 5-7 s; measured: the band's lower bound cut COSMOS 8.7 and NEWS IN 60 10.5 times a minute)
-    const spacing = Math.max(P.shots.cooldown, (P.shots.median[0] + P.shots.median[1]) / 2);
+    // (beats spaced by the median band's lower bound: the cooldown is a floor, not the rhythm; owner 18:52 median 5-7 s.
+    // The band's middle was tried: it dropped the map of every short COSMOS story, so the lower bound stays)
+    const spacing = Math.max(P.shots.cooldown, P.shots.median[0]);
     const beats = this.storyBeats(seg, hasImg).slice(0, Math.max(1, Math.min(lines.length, Math.floor((est + after) / spacing))));
     const finallyStory = seg.feature === 'lighter' || /^\W*and finally\b/i.test(String(seg.text || ''));
     // And finally never ends on a map: the map hands back to the presenter when a sentence is left for it, else it goes

@@ -112,6 +112,14 @@ export class ImageCache {
     return p;
   }
 
+  /** Drop what is cached for story `id` (a retry after a passing error fetches again). */
+  forget(id) {
+    this.cache.delete(id);
+    this.keys.delete(id);
+    this.sources.delete(id);
+    this.failedAt.delete(id);
+  }
+
   async firstUsable(list) {
     if (!list.length) throw new Error('invalid URL');
     let last = null;

@@ -20,7 +20,12 @@
 //                                   favourite detail) is moved to the first planned
 //                                   shot that shows the listener (montage, maps and
 //                                   the speaker's own single hide it), 0.25 s after
-//                                   that cut, when it comes within 15 s
+//                                   that cut, when it comes within the turn's glance
+//                                   window (15 s; 4.5 s in a story). FACES' planner
+//                                   now places its glances this way itself, so this
+//                                   step only acts on what it left hidden: the
+//                                   default glance after a planner failure, or a
+//                                   story glance FACES moved past 4.5 s (dropped)
 // Each planner runs inside try/catch: a planner bug costs that planner's events
 // for the segment (logged once per distinct message), never the segment. If the
 // behaviour planner fails, the owner-approved turn-start glance is still added.
@@ -58,7 +63,7 @@ function run(where, fn, ctx, errors) {
 export function defaultGlance(ctx) {
   if (!ctx.duo || !ctx.turnStart) return [];
   const dur = Math.min(3.2, Math.max(0.8, ctx.duration - 0.6));
-  return ctx.listeners.map((slot) => ({ kind: 'look', slot, target: 'partner', char: 0, at: 0.25, dur, src: 'default' }));
+  return ctx.listeners.map((slot) => ({ kind: 'look', slot, target: 'partner', char: 0, at: 0.25, dur, src: 'default', why: 'turn' }));
 }
 
 const NOD_GAP = 2.5; // s: two nods of one slot closer than this are one nod
@@ -112,7 +117,9 @@ export function arbitrate(events, ctx) {
 
 const LEGACY = new Set(['wide', 'close', 'full', 'map', 'fact', 'montage']);
 const WIDE_FRAMINGS = new Set(['wide', 'two', 'solo-wide']);
-export const GLANCE_WINDOW = 15; // s after the turn start a hidden turn glance may move to
+export const GLANCE_WINDOW = 15; // s after the turn start a hidden turn glance may move to (intros, chats)
+export const STORY_GLANCE_WINDOW = 4.5; // ... in a story turn (owner: "only at the start"; runtime/cueclock.js STORY_WINDOW)
+const TURN_GLANCE = /^turn(?!-notes)/; // FACES' 'turn-notes' is a look at the notes, not at the partner
 export const GLANCE_AFTER_CUT = 0.25; // s after the cut that shows the listener (the approved demo's delay)
 const GLANCE_MIN = 0.8; // s: a shorter glance is not worth moving
 const LOOK_GAP = 0.4; // s between two looks of one slot
@@ -156,13 +163,20 @@ export function onScreenGlances(events, ctx) {
   const shots = ctx?.shots;
   if (!ctx?.duo || !Array.isArray(shots) || !shots.length || !Array.isArray(events)) return events;
   let moved = false;
+  const window = ctx.type === 'story' ? STORY_GLANCE_WINDOW : GLANCE_WINDOW;
+  let drop = null;
   for (const e of events) {
-    if (e.kind !== 'look' || e.slot === ctx.speaker || !/^turn/.test(e.why || '')) continue;
+    if (e.kind !== 'look' || e.slot === ctx.speaker || (e.target ?? 'partner') !== 'partner' || !TURN_GLANCE.test(e.why || '')) continue;
+    // a story glance already placed past the window (it would read as a random look): not made
+    if (e.at > window + GLANCE_AFTER_CUT + 1e-6) {
+      (drop ||= new Set()).add(e);
+      continue;
+    }
     const i = shotIndexAt(shots, e.at);
     if (i >= 0 && shotShows(shots[i], e.slot)) continue;
     let j = i + 1;
     while (j < shots.length && !(shots[j].at > e.at && shotShows(shots[j], e.slot))) j++;
-    if (j >= shots.length || shots[j].at > GLANCE_WINDOW) continue;
+    if (j >= shots.length || shots[j].at > window) continue;
     const at = shots[j].at + GLANCE_AFTER_CUT;
     let end = Math.min(at + (e.dur > 0 ? e.dur : 1.5), (ctx.duration || 0) - EYES_BACK);
     let clash = false;
@@ -178,9 +192,10 @@ export function onScreenGlances(events, ctx) {
     e.onScreen = true; // moved here by INTEGRATION (debug, analysers)
     moved = true;
   }
-  if (!moved) return events;
+  if (!moved && !drop) return events;
   const ORDER = { shot: 0, emotion: 1, look: 2, gesture: 3 };
-  return events.slice().sort((a, b) => a.at - b.at || (ORDER[a.kind] ?? 9) - (ORDER[b.kind] ?? 9));
+  const out = drop ? events.filter((e) => !drop.has(e)) : events.slice();
+  return moved ? out.sort((a, b) => a.at - b.at || (ORDER[a.kind] ?? 9) - (ORDER[b.kind] ?? 9)) : out;
 }
 
 const PLANNERS = { shots: planShots, gestures: planGestures, behaviour: planBehaviour };

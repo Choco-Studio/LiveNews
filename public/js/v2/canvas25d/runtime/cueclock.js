@@ -260,8 +260,8 @@ export class CueClock {
 
   /**
    * A real cut that shows a listener: a turn glance the planner moved onto a later shot (it was
-   * hidden at the turn start) comes forward to AFTER_CUT s after this cut, within HOLD_MAX s of the
-   * speech start (the director cut to the two-shot earlier than planned).
+   * hidden at the turn start) comes forward to AFTER_CUT s after this cut, within the turn's glance
+   * window of the speech start (the director cut to the two-shot earlier than planned).
    */
   earlyGlances(ctx) {
     const T = this.lastCut;

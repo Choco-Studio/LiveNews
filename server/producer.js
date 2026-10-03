@@ -343,16 +343,24 @@ export class Producer {
    */
   async verifyPictures(stories) {
     let dropped = 0;
+    const passing = (e) => /timeout|timed out|abort|ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|network|socket|HTTP 5\d\d/i.test(String(e));
     const check = async (s) => {
+      let retried = false;
       for (let attempt = 0; attempt < 3 && s.image; attempt++) {
-        const entry = await this.images.get(s.id, s.images || [s.image]);
+        let entry = await this.images.get(s.id, s.images || [s.image]);
+        // a network error or a timeout is tried once more before the picture is given up (for half an hour)
+        if (entry.error && passing(entry.error) && !retried && typeof this.images.forget === 'function') {
+          retried = true;
+          this.images.forget(s.id);
+          entry = await this.images.get(s.id, s.images || [s.image]);
+        }
         if (!entry.error) return;
         dropped++;
         if (typeof this.news.pictureFailed !== 'function') {
           s.image = null;
           return;
         }
-        this.news.pictureFailed(s);
+        this.news.pictureFailed(s, { reason: entry.error });
       }
     };
     const budget = this.config.pictureVerifyMs ?? 12000;

@@ -53,6 +53,25 @@ headline frame was 2.9 s; it is now 3.9 s. The WORLD NOW round-up was 40 s of ma
 a row, with a picture between them.
 
 <!-- DEFAULT-PATH:BEGIN -->
+Default path (the legacy director, still the channel default), same server, `trace.mjs --count 5` without --v2, final code (04:30):
+
+| programme | length (target) | shots min / median | cuts/min (max) | over max | map share / map run / same order run | after intro | first word | montage frames | And finally ends on |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| WORLD NOW | 254 s (480-600) ✗ | 4.0 / 7.0 ✓ | 8.0 ✓ | wide 15.6 > 15 ✗ | 38% / 2 / 2 ✗ | 0.70 s | 0.61 s | 4.7 / 3.8 / 3.8 | single |
+| TECH BYTES | 175 s (360-480) ✗ | 4.0 / 5.7 ✓ | 9.0 ✓ | 0 ✓ | 10% / 1 / 1 ✓ | 0.63 s | 0.60 s | 4.7 / 4.6 / 3.8 | full |
+| NEWS IN 60 | 76 s (55-70) ✗ | 4.0 / 5.1 ✓ | 10.5 ✗ | 0 ✓ | 20% / 1 / 1 ✓ | 0.51 s | 0.40 s | none | — |
+| COSMOS DESK | 208 s (360-480) ✗ | 4.3 / 6.1 ✓ | 8.7 ✗ | wide 16.1 > 15 ✗ | 13% / 1 / 1 ✓ | 0.78 s | 0.80 s | 5.3 / 3.8 / 3.8 | single |
+| WORLD NOW | 230 s (480-600) ✗ | 4.0 / 6.4 ✓ | 8.8 ✗ | 0 ✓ | 29% / 2 / 1 ✓ | 0.72 s | 0.60 s | 3.8 / 3.8 / 4.4 | fact |
+
+(break load on this run: 5 breaks in 1255 s, ads 20 %)
+
+On the default path no shot is under 4 s in any programme. NEWS IN 60's pause after the intro is 0.51 s (it was 9.02 s, the
+blocker). TECH BYTES' And finally ends on its picture. The headline frames hold at least 3.8 s on the teased lines. Still
+over: WORLD NOW / COSMOS chats and the sign-off share one wide of 15.6-16.1 s (studioMax 15; the bibles keep both on the wide).
+The cut rate in NEWS IN 60 (10.5 against 10), COSMOS (8.7 against 7) and one WORLD NOW (8.8 against 8) comes from 4.0-4.5 s
+beats in the default path's per-sentence grammar. Spacing the beats by the median band's middle was tried: it dropped the
+map of every short COSMOS story, so it was reverted. The v2 path (the next default) cuts COSMOS 7.3 and NEWS IN 60 7.8-9.0
+times a minute.
 <!-- DEFAULT-PATH:END -->
 
 Break load, measured: 6 commercial breaks in 1144 s, ads 26 % of air. Programme air between breaks was 69-250 s, against

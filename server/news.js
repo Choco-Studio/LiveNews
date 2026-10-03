@@ -571,6 +571,8 @@ const softShared = (a, b, keep = () => true) => {
   return n;
 };
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms).unref?.());
+const FAILED_LASTING_MS = 24 * 3600_000;
+const FAILED_PASSING_MS = 30 * 60_000;
 
 /** Credits a list of ranked picture candidates carry, by URL ({ url: [credit, via] }), or null. */
 function creditsOf(list) {
@@ -647,7 +649,10 @@ export class NewsDesk {
     this.localImageRoots = new Set(); // folders of local feeds, whose pictures may be served
     this.placeholders = new Set(); // picture URLs an outlet puts on many unrelated stories (logos, share cards)
     this.pageImageUse = new Map(); // page picture URL -> ids of the stories that use it
-    this.failedPictures = new Set(); // picture URLs that would not download or were too small
+    // picture URLs that would not download or were not usable -> until when they are not tried again: a
+    // picture refused for what it is (HTTP 4xx, too small, not an image) for a day, a passing network error
+    // or a timeout for half an hour (the CDN may answer later)
+    this.failedPictures = new Map();
   }
 
   loadFeeds() {
@@ -986,14 +991,26 @@ export class NewsDesk {
    * (with its fallbacks) here and on the stories that borrowed it, and another
    * outlet's picture of the same event may stand in. True if one did.
    */
-  pictureFailed(story) {
+  pictureFailed(story, { reason = '', now = Date.now() } = {}) {
+    const lasting = /HTTP 4\d\d|too small|too large|shape|unreadable|not a picture|content type|invalid/i.test(String(reason));
+    const until = now + (lasting ? FAILED_LASTING_MS : FAILED_PASSING_MS);
     for (const url of story.images || (story.image ? [story.image] : [])) {
-      this.failedPictures.add(url);
-      if (this.failedPictures.size > 2000) this.failedPictures.delete(this.failedPictures.values().next().value);
+      this.failedPictures.delete(url);
+      this.failedPictures.set(url, until);
+      if (this.failedPictures.size > 2000) this.failedPictures.delete(this.failedPictures.keys().next().value);
     }
     forgetPicture(story);
     this.borrowPictures([story]);
     return !!story.image;
+  }
+
+  /** Is this picture URL one that failed lately (and must not be tried or lent yet)? */
+  failed(url, now = Date.now()) {
+    const until = this.failedPictures.get(url);
+    if (until === undefined) return false;
+    if (now < until) return true;
+    this.failedPictures.delete(url);
+    return false;
   }
 
   uncovered() {
