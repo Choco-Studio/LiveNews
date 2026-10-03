@@ -8,7 +8,9 @@ export const POINT = [0.75, 0.0, 0.92, 0.96, 0.98];
 export const FIST = [0.85, 0.95, 0.97, 0.98, 1];
 export const CUP = [0.2, 0.15, 0.12, 0.15, 0.2];
 export const UP = [0.04, -1, 0.12];
-export const RELAX = [0.35, 0.62, 0.66, 0.7, 0.74];
+// a relaxed hand: the thumb free, index and middle softly bent, ring and little finger tucked further (two
+// tiers that read as fingers; one even curl read as a crumpled scrap, critic r3)
+export const RELAX = [0.16, 0.42, 0.5, 0.72, 0.8];
 export const THUMB = [-0.1, 0.95, 0.97, 0.98, 1];
 export const STEEPLE = [0.22, 0.06, 0.08, 0.1, 0.16];
 export const CHIN = [0.32, 0.22, 0.7, 0.8, 0.86];

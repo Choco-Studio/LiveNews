@@ -1146,7 +1146,11 @@ test('glasses: the index fingertip sits on the hinge of the glasses (glassesAnch
         const tx = Math.round(xf.x) + (g.J[9] * cl - ly * sl + bx) * s;
         const ty = Math.round(xf.y) + (g.J[9] * sl + ly * cl + HIP + by + g.J[11] * TILT) * s;
         const anc = glassesAnchor(head, side > 0 ? 'templeR' : 'templeL', [0, 0]);
-        const err = Math.hypot(tx - anc[0], ty - anc[1]);
+        // critic r3: at the hinge the fingertip nudges the frame up (~1 px) and lets it settle: the aim is the
+        // hinge plus that push (c.reachY, body units)
+        const nudge = (a._c.reachY || 0) * a._c.reach * s;
+        if (lt === 0.9) assert.ok(nudge <= -0.6 * (s / 3.4), `side ${side} s ${s}: the push lifts ${(-nudge).toFixed(2)} px`);
+        const err = Math.hypot(tx - anc[0], ty - (anc[1] + nudge));
         assert.ok(err <= 1, `side ${side} s ${s} t ${lt}: fingertip ${err.toFixed(2)} px from the hinge`);
       }
     }

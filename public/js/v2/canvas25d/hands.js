@@ -1577,27 +1577,27 @@ function details(g, B, s, lod, robot, back) {
       }
     }
   }
-  // ---- knuckles on the back of the hand: on a closed hand one continuous ridge across the four knuckles
-  // (a lit row and the shade row under it); on an open hand at the close-up scale a 2 px arc per knuckle
+  // ---- knuckles on the back of the hand (critic r3: one continuous lit row across them read as a glove seam or a
+  // bracelet): each metacarpal head is its own small bump, a lit pixel on its top and a shade pixel under it,
+  // broken between the fingers; a closed finger's bump is 2 px wide where the finger is wide enough to carry it
   if (back) {
-    let lx = -1, ly = -1;
     for (let fi = 0; fi < 4; fi++) {
       const q = fi * 4;
       // the top of the knuckle: the joint pushed to the back of the hand
       const r = R[q];
       const x3 = J[q * 3] - g.n[0] * r, y3 = J[q * 3 + 1] - g.n[1] * r, z3 = J[q * 3 + 2] - g.n[2] * r;
       const X = Math.floor(px(B, x3, y3, z3)) - bx0, Y = Math.floor(py(B, x3, y3, z3)) - by0;
-      // the ridge runs between neighbouring curled fingers only (a pointing hand's index stays smooth)
       if (curl[fi + 1] >= 0.55) {
-        if (lx >= 0) ridge(lx, ly, X, Y);
-        lx = X;
-        ly = Y;
-      } else {
-        lx = -1;
-        if (lod >= 3 && FW[fi] >= 2.6) {
-          setDetail(X, Y, 0, z3 - 0.6);
-          setDetail(X + 1, Y, 0, z3 - 0.6);
+        if (FW[fi] < 2.2) continue;
+        ridgePx(X, Y, 0);
+        ridgePx(X, Y + 1, 2);
+        if (FW[fi] >= 3.2) {
+          ridgePx(X + 1, Y, 0);
+          ridgePx(X + 1, Y + 1, 2);
         }
+      } else if (lod >= 3 && FW[fi] >= 2.6) {
+        ridgePx(X, Y, 0);
+        ridgePx(X, Y + 1, 2);
       }
     }
   } else if (!robot) {
@@ -1630,15 +1630,7 @@ function setDetail(X, Y, tone, minDepth, onlyOwn = -1) {
   TN[k] = 8 + tone;
 }
 
-/** The knuckle ridge of a closed hand: a lit line between two knuckle tops and a shade line under it. */
-function ridge(x0, y0, x1, y1) {
-  const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
-  for (let q = 0; q <= n; q++) {
-    const X = Math.round(x0 + ((x1 - x0) * q) / n), Y = Math.round(y0 + ((y1 - y0) * q) / n);
-    ridgePx(X, Y, 0);
-    ridgePx(X, Y + 1, 2);
-  }
-}
+/** A knuckle pixel: inside the hand only (never on its silhouette, which keeps the outline), not over a line. */
 function ridgePx(X, Y, tone) {
   if (X < 1 || Y < 1 || X >= bw - 1 || Y >= bh - 1) return;
   const k = Y * LW + X;
@@ -1684,7 +1676,7 @@ function cleanClusters() {
           const ii = i + dx;
           if (ii < 0 || ii >= bw) continue;
           const kk = k + dy * LW + dx;
-          if (OWN[kk] >= 0 && TN[kk] === v) {
+          if (OWN[kk] >= 0 && (TN[kk] === v || (v >= 8 && TN[kk] >= 8))) {
             same = true;
             break;
           }
