@@ -163,3 +163,9 @@ public/js/pace.js single pacing table per programme, transitions/cooldowns/gestu
 4. UNIT-8 VOICE: robotic is fine but it sounds odd and annoying → softer robot treatment (less ring-mod/bitcrush/harshness,
    keep warmth and intelligibility, subtle vocoder tint). Deliver 3 A/B samples for the owner to choose.
 5. NEWS MAP (where stories happen): PERFECT — protect it, don't change it.
+
+6. (07:45) "Desde COSMOS el programa mejora una barbaridad." From COSMOS on (COSMOS + the 2nd WORLD NOW in canal-18min) everything
+   reads much better than the first WORLD NOW / TECH BYTES / NEWS IN 60. Since the 2nd WORLD NOW also improves, suspect a WARM-UP /
+   STATE effect, not the format: first-run planner memory (gestures/looks), caches (set/wall/faces/voices), pace budgets, page start.
+   Task: diff timelines of WORLD NOW #1 vs #2 (canal-largo-timeline.json) — gestures/min, shot lengths, look changes, voice gaps;
+   make the channel start "already warm" (pre-warm + seeded episode memory) so the first programme is as good as COSMOS.

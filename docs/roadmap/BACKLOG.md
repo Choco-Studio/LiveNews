@@ -24,3 +24,4 @@
 - [P1] Gesture timing on the right words (Nova as reference); fix first-episode under-use
 - [P1] UNIT-8 voice: softer robot treatment, 3 A/B samples for the owner
 - [keep] News locator map unchanged
+- [P0] First programmes weaker than COSMOS onward → compare WORLD NOW #1 vs #2 timelines; start the channel warm
