@@ -121,6 +121,7 @@ const DEFS = {
     bezel: { base: 'slate', top: 'steel', left: 'steel', soft: 'ink' },
     wallField: ['black', 'black'],
     wallMaxL: 40,
+    wallPicL: 50, // a story picture on the wall: the darkest room keeps it a little quieter
     values: { headZone: [0, 35], wall: 40, faceOver: 20, tintMax: 0.12 },
   },
   // "After the close": the home value range, warm practical pools outside the head

@@ -10,10 +10,10 @@
 //             MONEY MINUTE: the wordmark in fog over a 16 px darkGreen rule; NEWS IN 60: the
 //             dial in one of two static states (intro / outro), never ticking.
 //   picture   the story picture (scene.images `full`), area-averaged down to the wall's pixel
-//             size, cool-graded, toned (L* gain with a soft shoulder) to a mean L* ≤ 45 (≤ 40 in
-//             COSMOS) with at most 10 % of highlights, mapped to the wall palette; beside a head a
-//             4:3-16:9 box in the free area (never behind the head); TECH BYTES puts it on a 2 px
-//             black mat.
+//             size, toned (L* gain with a soft shoulder) to a mean L* ≤ 56 (≤ 50 in COSMOS) with
+//             its highlights rolled off, and quantised to its own palette with an ordered dither
+//             (the full-screen shot's look, owner 06:40); it covers the whole wall screen, the
+//             presenter in front of it (owner 07:40); TECH BYTES puts it on a 2 px black mat.
 //   map       the mini locator from scenes/worldmap.js (drawn into an offscreen canvas and
 //             copied only while it animates), or a static locator of our own.
 //   figure    a figure in the part of the wall away from the head.
@@ -757,112 +757,37 @@ function drawDial(b, cx, cy, r, phase, ts) {
 }
 
 // ---------------------------------------------------------------------------
-// Pictures: read once per image, then palette-mapped and dimmed per programme and size
+// Pictures: read once per image, then graded and quantised per programme and size
+//
+// Owner 06:40 / 07:40: "las imágenes se ven fatal, como si tuvieran el filtro mal puesto" and "las fotos
+// son más pequeñas que la pantalla que tiene detrás". A wall picture is the photo as the full-screen shot
+// shows it (pixelate.js: its own adaptive palette and an ordered dither), never forced onto the set's
+// fixed colours: only a little quieter, so the faces stay the brightest thing in frame (mean L* at most
+// the programme's picture ceiling, highlights rolled off under PIC_HI), its colours kept (the full shot's
+// 1.25x saturation given back to about the photo's own), and it covers the whole wall screen.
 
-// Palette colours a wall picture may use: nothing above fog (no white, cream or silver), no bright skin or orange
-// (faces stay the warmest thing in frame: a fire maps to rust / tan / darkRed), no programme accents or brand red
-// (they keep their meaning on set). A picture is CONTENT (ART_DIRECTION leaves wall content out of the set's colour
-// census), so a programme only drops a colour its bible forbids in every frame: TECH BYTES no purple (tech-bytes.md
-// §4 item 2: "no magenta or purple pixel in any frame") and COSMOS none either (its purple is the practicals'). A
-// dropped colour's pixels go to the neutral ramp at the same L*, never to the nearest other hue; MONEY MINUTE keeps
-// its forests and rice terraces green.
-// (darkRed, the brand red's shadow, stays off the wall too: a dimmed red reads as brown or maroon)
-const PICTURE_NAMES = ['black', 'ink', 'slate', 'steel', 'fog', 'maroon', 'rust', 'skinShade', 'tan', 'tanShade', 'brown', 'darkGreen', 'blue', 'navy', 'purple'];
-const PICTURE_DROP = { 'tech-bytes': ['purple'], cosmos: ['purple'] };
-/** Highlights (ART_DIRECTION values: "highlights ... on at most 10 % of the wall"): palette L* above this. */
-export const PIC_HI_L = 45;
-const PIC_HI_SHARE = 0.1;
-const COOL_A = 4, COOL_B = -16; // the wall's cool grade (CIE a*, b*): where the palette's neutral ramp sits
-// Hue fidelity: a pixel with more chroma than this (off the wall's neutral axis) may only land on a palette
-// colour within HUE_TOL of its own hue, or on the neutral ramp (a dimmed yellow never turns green, a dark glow
-// never maroon-purple, a lava line never steel)
-// (darkGreen, the palette's only green, takes only real greens: within 25° of its hue, so a saturated yellow
-// at Lab hue ~100° can never land on it)
-const HUE_CHROMA = 10, HUE_TOL = 45 * DEG, HUE_TOL_NARROW = { darkGreen: 25 * DEG };
-const WARM_H0 = 10 * DEG, WARM_H1 = 105 * DEG, WARM_C = 4.5; // warm hues (red-orange to yellow) off the neutral axis
-const COOL_GREYS = new Set(['ink', 'slate', 'steel', 'fog']);
-// Below this L* the chroma fades out (to none at DARK_L0): a dim glow is black or ink, not a ring of maroon
-const DARK_L1 = 28, DARK_L0 = 12;
-// The director's pixelate() lifts saturation 1.25x; the wall gives that back and more (the wall is dimmed and
-// cool, ART_DIRECTION: a picture never the hottest thing in frame)
-const PIC_CHROMA = 0.7;
-// The nearest-colour search through a lookup table on quantised Lab (L* 1, a*/b* 4 apart), filled lazily:
-// a picture costs one table read per pixel and pass instead of a search through the palette
-const LUT_A = 41, LUT_B = 41, LUT_L = 101;
-const PALS = new Map();
-function picturePalette(styleId) {
-  const key = PICTURE_DROP[styleId] ? styleId : '';
-  let pal = PALS.get(key);
-  if (pal) return pal;
-  const names = PICTURE_NAMES.filter((n) => !(PICTURE_DROP[key] || []).includes(n));
-  const lab = new Float32Array(names.length * 3), u32 = new Uint32Array(names.length), L = new Float32Array(names.length);
-  const hue = new Float32Array(names.length), chroma = new Uint8Array(names.length), tol = new Float32Array(names.length), cool = new Uint8Array(names.length);
-  names.forEach((n, i) => {
-    const c = C[n];
-    const q = labRGB(c & 255, (c >>> 8) & 255, (c >>> 16) & 255);
-    lab.set(q, i * 3);
-    u32[i] = c;
-    L[i] = LSTAR[n];
-    // hue and chroma off the wall's neutral axis (the palette's greys are blue-grey: ink, slate and steel
-    // sit within ~6 of (COOL_A, COOL_B), so they count as neutral)
-    const ra = q[1] - COOL_A, rb = q[2] - COOL_B;
-    hue[i] = Math.atan2(rb, ra);
-    chroma[i] = Math.hypot(ra, rb) > 8 ? 1 : 0;
-    tol[i] = HUE_TOL_NARROW[n] ?? HUE_TOL;
-    cool[i] = COOL_GREYS.has(n) ? 1 : 0;
-  });
-  pal = { key, names, lab, u32, L, hue, chroma, tol, cool, lut: new Uint8Array(LUT_L * LUT_A * LUT_B).fill(255) };
-  PALS.set(key, pal);
-  return pal;
+/** Mean L* ceiling of a wall picture (style.wallPicL overrides it: COSMOS keeps its room darker). */
+export const PIC_MEAN_L = 56;
+const PIC_KNEE = 70, PIC_HI = 88; // the tone curve's shoulder: highlights roll off, never clip to white
+const PIC_CHROMA = 0.9; // pixelate() lifted saturation 1.25x: about the photo's own colour
+const PIC_COLORS = 24, PIC_DITHER = 14; // the full shot's 24 colours; a finer dither at the wall's size
+const BAYER = Float32Array.from(B16, (v) => v / 16 - 0.5);
+
+// Lab → sRGB byte: linear light through a table (4096 steps) for the gamma
+const GAMMA_N = 4096, GAMMA = new Uint8Array(GAMMA_N + 1);
+for (let i = 0; i <= GAMMA_N; i++) {
+  const c = i / GAMMA_N;
+  GAMMA[i] = Math.round(255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055));
 }
-const angDiff = (a, b) => {
-  let d = Math.abs(a - b) % (2 * Math.PI);
-  return d > Math.PI ? 2 * Math.PI - d : d;
-};
-/** The palette colour nearest to (Lq, A, B) (CIE Lab, cool-graded), hue-gated: see HUE_CHROMA. */
-function nearestIn(pal, Lq, A, B) {
-  const ra = A - COOL_A, rb = B - COOL_B;
-  const qc = Math.hypot(ra, rb);
-  const gate = qc > HUE_CHROMA;
-  const qh = Math.atan2(rb, ra);
-  // the palette's greys are blue-greys (ink, slate, steel, fog): a warm colour (a fire's glow, a lamp,
-  // sunlit sand, skin) never lands on them, or a warm scene breaks into cold specks and halos (the lava
-  // line turned to steel, an ink ring round a glow); black stays (the warm darks' floor)
-  const warm = qc > WARM_C && qh > WARM_H0 && qh < WARM_H1;
-  let best = 0, bd = Infinity;
-  const lab = pal.lab;
-  for (let j = 0, q = 0; j < pal.u32.length; j++, q += 3) {
-    if (gate && pal.chroma[j] && angDiff(qh, pal.hue[j]) > pal.tol[j]) continue;
-    if (warm && (pal.cool[j] || (pal.chroma[j] && (pal.hue[j] < WARM_H0 - HUE_TOL || pal.hue[j] > WARM_H1)))) continue;
-    const dl = Lq - lab[q], da = A - lab[q + 1], db = B - lab[q + 2];
-    const d = dl * dl + da * da + db * db;
-    if (d < bd) {
-      bd = d;
-      best = j;
-    }
-  }
-  return best;
-}
-/** Fill the rows [l0, l1) of a palette's lookup table (warm-up). */
-function prefillLut(pal, l0, l1) {
-  for (let li = l0; li < l1; li++) {
-    for (let ai = 0; ai < LUT_A; ai++) {
-      for (let bi = 0; bi < LUT_B; bi++) {
-        const k = (li * LUT_A + ai) * LUT_B + bi;
-        if (pal.lut[k] === 255) pal.lut[k] = nearestIn(pal, li, ai * 4 - 80, bi * 4 - 80);
-      }
-    }
-  }
-}
-function lookup(pal, L, A, B) {
-  const li = L <= 0 ? 0 : L >= 100 ? 100 : Math.round(L);
-  let ai = Math.round((A + 80) * 0.25), bi = Math.round((B + 80) * 0.25);
-  ai = ai < 0 ? 0 : ai > 40 ? 40 : ai;
-  bi = bi < 0 ? 0 : bi > 40 ? 40 : bi;
-  const k = (li * LUT_A + ai) * LUT_B + bi;
-  let v = pal.lut[k];
-  if (v === 255) v = pal.lut[k] = nearestIn(pal, li, ai * 4 - 80, bi * 4 - 80);
-  return v;
+const finv = (t) => (t > 6 / 29 ? t * t * t : 3 * (6 / 29) * (6 / 29) * (t - 4 / 29));
+const gam = (v) => GAMMA[v <= 0 ? 0 : v >= 1 ? GAMMA_N : (v * GAMMA_N + 0.5) | 0];
+/** CIE Lab (D65) → sRGB bytes into out[o..o+2]. */
+function labToRGB(L, A, Bv, out, o) {
+  const fy = (L + 16) / 116, fx = fy + A / 500, fz = fy - Bv / 200;
+  const X = 0.95047 * finv(fx), Y = finv(fy), Z = 1.08883 * finv(fz);
+  out[o] = gam(3.2406 * X - 1.5372 * Y - 0.4986 * Z);
+  out[o + 1] = gam(-0.9689 * X + 1.8758 * Y + 0.0415 * Z);
+  out[o + 2] = gam(0.0557 * X - 0.204 * Y + 1.057 * Z);
 }
 
 function pixelsOf(img) {
@@ -1114,126 +1039,130 @@ function solveGain(n, nb, target, knee, hiL) {
 }
 
 /**
- * Map the filtered picture to palette pixels into out (pw*ph), dimmed to a mean L* ≤ maxL with at
- * most 10 % of it above L* 45 (ART_DIRECTION: wall mean ≤ 45, highlights on at most 10 % of it),
- * counted on the palette colours it lands on: a bright sky that lands on fog is pulled down (the
- * tone curve's shoulder lowered, the gain solved again) until both hold. Each pixel keeps its hue
- * (nearestIn's gate) and its chroma follows its light, fading out in the darks.
+ * Grade the filtered picture (PL / PA / PBv) into sRGB bytes RGB (n*3): the tone curve's gain solved on
+ * the histogram so the mean L* is at most maxL, highlights rolled off under PIC_HI, chroma following the
+ * light (a dimmed colour keeps its saturation and hue).
  */
-// per output pixel, computed once before the passes: its quarter-step L* bin and its warm floor (the
-// smallest chroma factor that keeps a warm pixel warm; 0 for the others)
-let MQ = new Uint16Array(0), MW = new Float32Array(0);
-function mapPicture(out, n, maxL, pal) {
+let MQ = new Uint16Array(0), RGB = new Uint8Array(0);
+function gradePicture(n, maxL) {
   HIST.fill(0);
-  if (MQ.length < n) {
-    MQ = new Uint16Array(n);
-    MW = new Float32Array(n);
-  }
+  if (MQ.length < n) MQ = new Uint16Array(n);
+  if (RGB.length < n * 3) RGB = new Uint8Array(n * 3);
   for (let i = 0; i < n; i++) {
     let q = Math.round(PL[i] * 4);
     q = q < 0 ? 0 : q > 400 ? 400 : q;
     MQ[i] = q;
     HIST[q]++;
-    const a0 = PA[i], b0 = PBv[i], c0 = Math.sqrt(a0 * a0 + b0 * b0);
-    let wf = 0;
-    if (c0 > 8) {
-      const h = Math.atan2(b0, a0);
-      if (h > WARM_H0 && h < WARM_H1) wf = (WARM_C + 0.6) / c0;
-    }
-    MW[i] = wf;
   }
   let nb = 0;
   for (let i = 0; i <= 400; i++) if (HIST[i]) HBINS[nb++] = i;
-  let hiL = maxL + 20, knee = maxL + 4, target = maxL;
-  // the highlight cap solved on the histogram first (a toned L* past ~49 lands on a palette colour
-  // above L* 45), so the per-pixel pass below usually runs once
-  for (let it = 0; it < 10; it++) {
-    const g = solveGain(n, nb, target, knee, hiL);
-    let hi = 0;
-    for (let k = 0; k < nb; k++) {
-      const q = HBINS[k];
-      if (toneL(q * 0.25 * g, knee, hiL) > 49) hi += HIST[q];
-    }
-    if (hi <= n * PIC_HI_SHARE * 0.9) break;
-    hiL -= 3;
-    knee = Math.min(knee, hiL - 8);
+  const g = solveGain(n, nb, maxL, PIC_KNEE, PIC_HI);
+  for (let k = 0; k < nb; k++) {
+    const q = HBINS[k];
+    TONE[q] = toneL(q * 0.25 * g, PIC_KNEE, PIC_HI);
   }
-  for (let pass = 0; pass < 10; pass++) {
-    const g = solveGain(n, nb, target, knee, hiL);
-    // the tone curve as a table on quarter steps of L* (no exp() per pixel)
-    for (let k = 0; k < nb; k++) {
-      const q = HBINS[k];
-      TONE[q] = toneL(q * 0.25 * g, knee, hiL);
-    }
-    let sum = 0, bright = 0;
-    for (let i = 0; i < n; i++) {
-      const L0 = PL[i];
-      const L = TONE[MQ[i]];
-      // chroma follows the light (a dimmed colour keeps its hue), quieter on the wall, and fades out in
-      // the darks; then the wall's cool balance: the palette's neutrals (black, ink, slate, steel, fog)
-      // sit at about a* +4, b* -16, so a grey in the picture lands on them
-      const dark = L >= DARK_L1 ? 1 : L <= DARK_L0 ? 0 : (L - DARK_L0) / (DARK_L1 - DARK_L0);
-      let cf = L0 > 0.5 ? (PIC_CHROMA * L * dark) / L0 : 0;
-      // a warm pixel stays warm through the fade (its darks go to maroon or black, never to the blue
-      // ink): its chroma is kept just over the warm threshold
-      if (cf < MW[i]) cf = MW[i];
-      const j = lookup(pal, L, PA[i] * cf + COOL_A, PBv[i] * cf + COOL_B);
-      out[i] = pal.u32[j];
-      sum += pal.L[j];
-      if (pal.L[j] > PIC_HI_L) bright++;
-    }
-    const meanOk = sum / n <= maxL + 0.25, brightOk = bright <= n * PIC_HI_SHARE;
-    if (meanOk && brightOk) break;
-    if (!brightOk) {
-      hiL -= 3;
-      knee = Math.min(knee, hiL - 8);
-    }
-    if (!meanOk) target -= 1;
+  for (let i = 0; i < n; i++) {
+    const L0 = PL[i], L = TONE[MQ[i]];
+    const cf = L0 > 0.5 ? (PIC_CHROMA * L) / L0 : 0;
+    labToRGB(L, PA[i] * cf, PBv[i] * cf, RGB, i * 3);
   }
 }
 
 /**
- * Clean clusters (the owner: no stray pixels): a lone pixel (no 4-neighbour of its colour) between close
- * tones, the leftover of the source's dither at a palette boundary, takes the colour most of its eight
- * neighbours share; a high-contrast single pixel (a star, a spark, a lamp) stays.
+ * The picture's own palette (k-means on the graded pixels, as pixelate.js does for the full shot):
+ * deterministic (the first centre is the middle sample, each next the farthest), so a picture maps the
+ * same way on every machine and every cut.
  */
-let ORPH = new Uint32Array(0);
-function cleanOrphans(px, w, h, pal) {
-  if (w < 3 || h < 3) return;
-  if (ORPH.length < w * h) ORPH = new Uint32Array(w * h);
-  const src = ORPH;
-  src.set(px.subarray(0, w * h));
-  const Lof = (c) => {
-    for (let j = 0; j < pal.u32.length; j++) if (pal.u32[j] === c) return pal.L[j];
-    return 0;
-  };
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const i = y * w + x, c = src[i];
-      const n0 = src[i - w], n1 = src[i - 1], n2 = src[i + 1], n3 = src[i + w];
-      if (n0 === c || n1 === c || n2 === c || n3 === c) continue;
-      // the colour most of the eight share is one of the four edge neighbours: count each among all eight
-      const d0 = src[i - w - 1], d1 = src[i - w + 1], d2 = src[i + w - 1], d3 = src[i + w + 1];
-      let best = 0, bn = 0;
-      for (let q = 0; q < 4; q++) {
-        const v = q === 0 ? n0 : q === 1 ? n1 : q === 2 ? n2 : n3;
-        const m = (n0 === v) + (n1 === v) + (n2 === v) + (n3 === v) + (d0 === v) + (d1 === v) + (d2 === v) + (d3 === v);
-        if (m > bn) {
-          bn = m;
-          best = v;
+const KC = new Float32Array(PIC_COLORS * 3), KS = new Float64Array(PIC_COLORS * 4);
+function picturePaletteOf(n, k) {
+  const step = Math.max(1, Math.floor(n / 3000));
+  const ns = Math.ceil(n / step);
+  const mid = Math.floor(ns / 2) * step * 3;
+  KC[0] = RGB[mid];
+  KC[1] = RGB[mid + 1];
+  KC[2] = RGB[mid + 2];
+  let kk = 1;
+  while (kk < k) {
+    let best = -1, bd = -1;
+    for (let i = 0; i < n; i += step * 7) {
+      const o = i * 3;
+      let d = Infinity;
+      for (let c = 0; c < kk; c++) {
+        const dr = RGB[o] - KC[c * 3], dg = RGB[o + 1] - KC[c * 3 + 1], db = RGB[o + 2] - KC[c * 3 + 2];
+        const e = dr * dr + dg * dg + db * db;
+        if (e < d) d = e;
+      }
+      if (d > bd) {
+        bd = d;
+        best = o;
+      }
+    }
+    if (best < 0 || bd <= 0) break; // fewer distinct colours than k
+    KC[kk * 3] = RGB[best];
+    KC[kk * 3 + 1] = RGB[best + 1];
+    KC[kk * 3 + 2] = RGB[best + 2];
+    kk++;
+  }
+  for (let it = 0; it < 8; it++) {
+    KS.fill(0, 0, kk * 4);
+    for (let i = 0; i < n; i += step) {
+      const o = i * 3;
+      let bi = 0, bd = Infinity;
+      for (let c = 0; c < kk; c++) {
+        const dr = RGB[o] - KC[c * 3], dg = RGB[o + 1] - KC[c * 3 + 1], db = RGB[o + 2] - KC[c * 3 + 2];
+        const e = dr * dr + dg * dg + db * db;
+        if (e < bd) {
+          bd = e;
+          bi = c;
         }
       }
-      if (bn >= 5 && Math.abs(Lof(c) - Lof(best)) < 16) px[i] = best;
+      KS[bi * 4] += RGB[o];
+      KS[bi * 4 + 1] += RGB[o + 1];
+      KS[bi * 4 + 2] += RGB[o + 2];
+      KS[bi * 4 + 3]++;
+    }
+    for (let c = 0; c < kk; c++) {
+      const m = KS[c * 4 + 3];
+      if (m) for (let j = 0; j < 3; j++) KC[c * 3 + j] = Math.round(KS[c * 4 + j] / m);
+    }
+  }
+  return kk;
+}
+
+/** Quantise the graded picture to its own palette with a 4x4 ordered dither into out (pw*ph u32). */
+function quantisePicture(out, pw, ph) {
+  const n = pw * ph;
+  const k = picturePaletteOf(n, PIC_COLORS);
+  const u32 = new Uint32Array(k);
+  for (let c = 0; c < k; c++) u32[c] = (0xff000000 | (KC[c * 3 + 2] << 16) | (KC[c * 3 + 1] << 8) | KC[c * 3]) >>> 0;
+  for (let y = 0; y < ph; y++) {
+    for (let x = 0; x < pw; x++) {
+      const i = y * pw + x, o = i * 3;
+      const t = BAYER[((y & 3) << 2) | (x & 3)] * PIC_DITHER;
+      const r = RGB[o] + t, g = RGB[o + 1] + t, b = RGB[o + 2] + t;
+      let bi = 0, bd = Infinity;
+      for (let c = 0; c < k; c++) {
+        const dr = r - KC[c * 3], dg = g - KC[c * 3 + 1], db = b - KC[c * 3 + 2];
+        // the eye's weights (pixelate.js): a dark blue step costs less than a green one
+        const e = dr * dr * 0.3 + dg * dg * 0.59 + db * db * 0.11;
+        if (e < bd) {
+          bd = e;
+          bi = c;
+        }
+      }
+      out[i] = u32[bi];
     }
   }
 }
 
-// filtered, palette-mapped pictures per (source, size, ceiling, crop), a few kept (a cut back to the
-// same shot finds its picture ready)
+/** The picture ceiling of a style (and one a little lower out of focus). */
+const picCeiling = (style, soft) => (style.wallPicL || PIC_MEAN_L) - (soft ? 5 : 0);
+
+// filtered, graded pictures per (source, size, ceiling, crop), a few kept (a cut back to the same shot
+// finds its picture ready)
 const PICS = new Map();
-function pictureAt(src, pw, ph, maxL, styleId = '', letter = false) {
-  const pal = picturePalette(styleId);
-  const key = `${src.id}|${pw}|${ph}|${maxL}|${pal.key}|${letter ? 1 : 0}`;
+function pictureAt(src, pw, ph, maxL, letter = false) {
+  const key = `${src.id}|${pw}|${ph}|${maxL}|${letter ? 1 : 0}`;
   let p = PICS.get(key);
   if (p) {
     PICS.delete(key);
@@ -1242,22 +1171,22 @@ function pictureAt(src, pw, ph, maxL, styleId = '', letter = false) {
   }
   p = { w: pw, h: ph, px: new Uint32Array(pw * ph) };
   filterPicture(src, pw, ph, letter);
-  mapPicture(p.px, pw * ph, maxL, pal);
-  cleanOrphans(p.px, pw, ph, pal);
+  gradePicture(pw * ph, maxL);
+  quantisePicture(p.px, pw, ph);
   PICS.set(key, p);
   if (PICS.size > 10) PICS.delete(PICS.keys().next().value);
   return p;
 }
 
 /**
- * A picture as the wall maps it at pw x ph (tests, labs): { px (palette u32), L, A, B (the filtered
- * source's CIE Lab per output pixel, before dimming) } or null.
+ * A picture as the wall shows it at pw x ph (tests, labs): { px (u32), L, A, B (the filtered source's
+ * CIE Lab per output pixel, before grading) } or null.
  */
 export function wallPicture(img, pw, ph, styleIn = null, letter = false) {
   const src = sourceOf(img);
   if (!src) return null;
   const style = resolveStyle(styleIn);
-  const p = pictureAt(src, pw, ph, (style.wallMaxL || 45) - 2, style.id, letter);
+  const p = pictureAt(src, pw, ph, picCeiling(style, false), letter);
   filterPicture(src, pw, ph, letter);
   const n = pw * ph;
   return { px: p.px, L: PL.slice(0, n), A: PA.slice(0, n), B: PBv.slice(0, n) };
@@ -1267,11 +1196,11 @@ export function wallPicture(img, pw, ph, styleIn = null, letter = false) {
  * Draw `src` covering pw x ph at (x0, y0). The picture is filtered at the size the wall had on the
  * cut (`fit`, from the frozen layout) and a slow camera move afterwards only resamples that one.
  */
-function drawPicture(b, src, x0, y0, pw, ph, maxL, fit = null, styleId = '', letter = false) {
+function drawPicture(b, src, x0, y0, pw, ph, maxL, fit = null, letter = false) {
   if (!src || pw <= 0 || ph <= 0) return;
   const fw = fit ? fit[0] : pw, fh = fit ? fit[1] : ph;
   const half = picHalf(fw, ENV.ts);
-  const p = pictureAt(src, half ? Math.ceil(fw / 2) : Math.max(1, fw), half ? Math.ceil(fh / 2) : Math.max(1, fh), maxL, styleId, letter);
+  const p = pictureAt(src, half ? Math.ceil(fw / 2) : Math.max(1, fw), half ? Math.ceil(fh / 2) : Math.max(1, fh), maxL, letter);
   if (half && p.w === Math.ceil(pw / 2) && p.h === Math.ceil(ph / 2)) blit2x(b, p, x0, y0, pw, ph);
   else if (p.w === pw && p.h === ph) blitSub(b, p, x0, y0);
   else resampleSub(b, p, x0, y0, pw, ph);
@@ -1774,11 +1703,11 @@ export function warmWallContent(req, styleIn, cam = null) {
       const { w, h } = wallSize(cam, k);
       const L = layoutOf({ solo: req.solo ?? style.solo }, { cam, wx0: o.x, wy0: o.y, k }, w, h);
       const m = mediaRect(L, { w, h }, wallTextScale(k));
-      const maxL = (style.wallMaxL || 45) - (cam.soft > 0.5 ? 6 : 2);
+      const maxL = picCeiling(style, cam.soft > 0.5);
       const mat = !m.framed && style.pictureMat ? Math.max(2, Math.round(style.pictureMat * k)) : 0;
       const pw = m.w - 2 * mat, ph = m.h - 2 * mat;
       const half = picHalf(pw, wallTextScale(k));
-      if (pw > 0 && ph > 0) pictureAt(src, half ? Math.ceil(pw / 2) : pw, half ? Math.ceil(ph / 2) : ph, maxL, style.id, !!m.letter);
+      if (pw > 0 && ph > 0) pictureAt(src, half ? Math.ceil(pw / 2) : pw, half ? Math.ceil(ph / 2) : ph, maxL, !!m.letter);
     }
   }
   for (const [t, font] of [[req.label, 'body'], [req.sub, 'micro'], [req.location?.place, 'micro']]) {
@@ -1814,7 +1743,9 @@ function mediaRect(L, b, ts, forMap = false) {
   m.behind = false;
   m.letter = false;
   m.dimRows = 0;
-  if (L.heads) {
+  // a picture covers the whole wall screen in every framing, the presenter in front of it (owner 07:40:
+  // "las fotos son más pequeñas que la pantalla que tiene detrás"); a map keeps its box beside the head
+  if (L.heads && forMap) {
     let area = 0;
     m.x = m.y = m.w = m.h = 0;
     m.framed = true;
@@ -1862,7 +1793,8 @@ function mediaRect(L, b, ts, forMap = false) {
   if (forMap && m.y < L.full.y0) m.y = L.full.y0;
   else if (m.y < L.full.y0) m.dimRows = L.full.y0 - m.y;
   m.w = bw(v);
-  m.h = Math.max(0, Math.min(v.y1, b.h - L.band) - m.y);
+  // a picture runs to the wall's foot (the solo dark band is for text and logos, not for a photo)
+  m.h = Math.max(0, Math.min(v.y1, forMap ? b.h - L.band : b.h) - m.y);
   m.framed = false;
   return m;
 }
@@ -1870,6 +1802,8 @@ function mediaRect(L, b, ts, forMap = false) {
 // one palette step darker, as u32 → u32 (the picture rows under the graphics' top row, the wall
 // behind a head in the solo wide)
 const DARKER32 = new Map(Object.keys(DARKER).map((n) => [C[n] >>> 0, C[DARKER[n]] >>> 0]));
+/** A picture's own colour one step darker: about the palette ramp's step (L* -12 at mid-tones). */
+const dim32 = (c) => (0xff000000 | (((((c >>> 16) & 255) * 0.66) | 0) << 16) | (((((c >>> 8) & 255) * 0.66) | 0) << 8) | (((c & 255) * 0.66) | 0)) >>> 0;
 function darkenRect(b, x0, y0, x1, y1, steps = 1) {
   x0 = Math.max(0, x0);
   y0 = Math.max(0, y0);
@@ -1879,7 +1813,7 @@ function darkenRect(b, x0, y0, x1, y1, steps = 1) {
   for (let y = y0; y < y1; y++) {
     for (let x = x0, i = y * b.w + x0; x < x1; x++, i++) {
       let c = px[i] >>> 0;
-      for (let k = 0; k < steps; k++) c = DARKER32.get(c) ?? c;
+      for (let k = 0; k < steps; k++) c = DARKER32.get(c) ?? dim32(c);
       px[i] = c;
     }
   }
@@ -1963,7 +1897,7 @@ function renderSpec(b, spec, style, env) {
   switch (spec.mode) {
     case 'picture': {
       const src = sourceOf(spec.image);
-      const maxL = (style.wallMaxL || 45) - (soft ? 6 : 2);
+      const maxL = picCeiling(style, soft);
       const m = mediaRect(L, b, ts);
       if (m.framed && m.w <= 0) {
         // a head fills the wall: no room for a readable picture, the story's kicker plate if it fits
@@ -1975,7 +1909,7 @@ function renderSpec(b, spec, style, env) {
       if (m.framed) {
         frameBox(b, m, style, env);
         if (!spec._picWH) spec._picWH = [m.w, m.h];
-        drawPicture(b, src, m.x, m.y, m.w, m.h, maxL, spec._picWH, style.id, m.letter);
+        drawPicture(b, src, m.x, m.y, m.w, m.h, maxL, spec._picWH, m.letter);
       } else {
         // the whole wall (TECH BYTES keeps its 2 px black mat inside the bezel), or the solo wide's
         // letterbox above the head, the field left flat around the head
@@ -1984,10 +1918,9 @@ function renderSpec(b, spec, style, env) {
         else rect(b, CLIP.x0, CLIP.y0, CLIP.x1, CLIP.y1, C.black);
         const pw = m.w - 2 * mat, ph = m.h - 2 * mat;
         if (!spec._picWH) spec._picWH = [pw, ph];
-        drawPicture(b, src, m.x + mat, m.y + mat, pw, ph, maxL, spec._picWH, style.id, m.letter);
+        drawPicture(b, src, m.x + mat, m.y + mat, pw, ph, maxL, spec._picWH, m.letter);
         // the rows under the graphics' top row: the picture continues, one step darker
         if (m.dimRows > 0) darkenRect(b, m.x, m.y, m.x + m.w, m.y + m.dimRows, 1);
-        darkBand(b, L.band, style, !m.letter || soft);
       }
       break;
     }
@@ -2549,17 +2482,14 @@ export function wallWarmTasks() {
   for (const R of [23, 24, 30, 34]) tasks.push(() => globeTable(R));
   for (const R of [12, 13]) tasks.push(() => (planetTable(R), ringTable(R, true)));
   for (const R of [18, 19, 20, 21, 23]) tasks.push(() => (planetTable(R), ringTable(R, 2)));
-  // the picture palettes' nearest-colour tables, 20 L* rows per task (a first picture then pays no search)
-  for (const id of ['', ...Object.keys(PICTURE_DROP)]) {
-    for (let l0 = 0; l0 < LUT_L; l0 += 20) tasks.push(() => prefillLut(picturePalette(id), l0, Math.min(LUT_L, l0 + 20)));
-  }
   // one dry run of the picture filter and mapper (the first real picture then runs optimised code)
   tasks.push(() => {
     const data = new Uint32Array(32 * 18).fill(0xff8a6a4a);
     for (let i = 0; i < data.length; i += 3) data[i] = 0xff20304a;
     const src = sourceOf({ width: 32, height: 18, data });
     filterPicture(src, 16, 9, true);
-    for (const id of ['', ...Object.keys(PICTURE_DROP)]) mapPicture(WARM_PIC, 16 * 9, 43, picturePalette(id));
+    gradePicture(16 * 9, PIC_MEAN_L);
+    quantisePicture(WARM_PIC, 16, 9);
   });
   tasks.push(() => {
     for (const s of [1, 2]) {

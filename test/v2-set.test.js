@@ -95,8 +95,16 @@ describe('palette only', () => {
       for (const framing of ['wide', 'single-a', 'mcu-r']) {
         for (const w of walls) {
           const px = shot({ programme, framing, ...w });
+          // a story picture keeps the photo's own colours (owner 06:40): only its wall is exempt
+          const r = w.wall === 'picture' ? wallRect(lab.cameraFor(framing, programme)) : null;
           let off = 0;
-          for (let i = 0; i < px.length; i++) if (!isPalette(px[i])) off++;
+          for (let i = 0; i < px.length; i++) {
+            if (r) {
+              const x = i % W, y = (i / W) | 0;
+              if (x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1) continue;
+            }
+            if (!isPalette(px[i])) off++;
+          }
           assert.equal(off, 0, `${programme} ${framing} ${w.wall}: ${off} off-palette pixels`);
         }
       }
@@ -246,12 +254,12 @@ describe('video wall', () => {
     assert.deepEqual(a.px, b.px, 'the intro dial does not change with time');
     assert.ok(c.y > a.y * 4, 'the outro lights every tick');
   });
-  test('the picture is dimmed to a wall mean L* ≤ 45 (≤ 40 in COSMOS) and TECH BYTES mats it', () => {
-    for (const [programme, max] of [['world-now', 45], ['cosmos', 40], ['tech-bytes', 45]]) {
+  test('the picture is toned to a wall mean L* ≤ 56 (≤ 50 in COSMOS) and TECH BYTES mats it', () => {
+    for (const [programme, max] of [['world-now', 56], ['cosmos', 50], ['tech-bytes', 56]]) {
       const px = shot({ programme, framing: 'wide', wall: 'picture', image: 'port' });
       const r = wallRect(lab.cameraFor('wide', programme));
       let sum = 0, n = 0;
-      for (let y = r.y0; y < r.y1; y++) for (let x = r.x0; x < r.x1; x++, n++) sum += LSTAR[nameOf(px[y * W + x])];
+      for (let y = r.y0; y < r.y1; y++) for (let x = r.x0; x < r.x1; x++, n++) sum += lstarRGB(px[y * W + x] & 255, (px[y * W + x] >>> 8) & 255, (px[y * W + x] >>> 16) & 255);
       assert.ok(sum / n <= max, `${programme} wall mean ${sum / n}`);
       if (programme === 'tech-bytes') for (let x = r.x0; x < r.x1; x++) assert.equal(px[r.y0 * W + x], C.black, 'mat');
     }
@@ -382,8 +390,8 @@ describe('round 3: wall plates inside their free area, clean tint clusters', () 
     const p = plateRectFor(lab.cameraFor('single-a', 'news-60'), 'WILDLIFE', 'BITPORT HERALD', 'news-60');
     assert.ok(p.x0 >= 8 && p.kicker === 'WILDLIFE' && p.sub === 'BITPORT HERALD');
   });
-  test('solo programmes: the wall\'s bottom band (16 px, 32 px where the wall is drawn at 2x) carries no content in any framing or wall mode', { skip: !CAMERA && 'camera.js unavailable (framings are CAMERA\'s)' }, () => {
-    const modes = [{ wall: 'idle' }, { wall: 'picture', image: 'port' }, { wall: 'plate' }, { wall: 'figure' }, { wall: 'map' }];
+  test('solo programmes: the wall\'s bottom band (16 px, 32 px where the wall is drawn at 2x) carries no text, logo or map in any framing (a story picture fills the screen to its foot, owner 07:40)', { skip: !CAMERA && 'camera.js unavailable (framings are CAMERA\'s)' }, () => {
+    const modes = [{ wall: 'idle' }, { wall: 'plate' }, { wall: 'figure' }, { wall: 'map' }];
     for (const programme of ['news-60', 'money-minute']) {
       for (const framing of ['wide', 'single-a', 'mcu-l', 'mcu-r']) {
         const r = wallRect(lab.cameraFor(framing, programme));
@@ -633,51 +641,37 @@ describe('fix round 1: layout, pictures, light (critics of round 3)', () => {
       }
     }
   });
-  test('pictures: a box beside a head keeps 6 px from it and stays under the graphics top row; a full wall continues under that row one step darker; the solo WIDE fills the wall behind the head', { skip: !CAMERA && 'camera.js unavailable (framings are CAMERA\'s)' }, () => {
+  test('pictures cover the whole wall screen in every framing, the presenter in front (owner 07:40); the rows under the graphics top row are darker, never a black letterbox', { skip: !CAMERA && 'camera.js unavailable (framings are CAMERA\'s)' }, () => {
     for (const programme of [...STYLE_IDS, 'weekend-review']) {
       for (const framing of lab.FRAMINGS) {
         const cam = lab.cameraFor(framing, programme === 'weekend-review' ? 'generic' : programme);
         const m = mediaRectFor(cam, programme);
-        if (m.x1 <= m.x0) continue; // no room: the plate shows instead
-        const what = `${programme} ${framing} media ${m.x0},${m.y0}-${m.x1},${m.y1}`;
-        if (!m.framed) continue; // the whole visible wall (checked on pixels below)
-        assert.ok(m.y0 >= 22, `${what} under the top row`);
-        for (const h of m.heads) assert.ok(m.x1 + 6 <= h.x0 || m.x0 >= h.x1 + 6 || m.y1 + 6 <= h.y0 || m.y0 >= h.y1 + 6, `${what} within 6 px of head ${JSON.stringify(h)}`);
+        const r = wallRect(cam);
+        const what = `${programme} ${framing} media ${m.x0},${m.y0}-${m.x1},${m.y1} wall ${r.x0},${r.y0}-${r.x1},${r.y1}`;
+        assert.equal(m.framed, false, `${what}: a box, not the whole wall`);
+        // the visible part of the wall, to its foot
+        assert.ok(m.x0 <= Math.max(0, r.x0) + 1 && m.x1 >= Math.min(W, r.x1) - 1, `${what}: not the wall's width`);
+        assert.ok(m.y1 >= Math.min(H, r.y1) - 1 && m.y0 <= Math.max(0, r.y0) + 1, `${what}: not the wall's height`);
       }
     }
-    // the solo WIDE (pictures on the WIDE, money-minute.md): a letterbox across the whole wall above the
-    // head (critics r2: never a postage stamp; critics r3: never behind the head), its bottom edge 6 px
-    // or more over the hair, and the wall round the head is the plain field
-    for (const programme of ['money-minute', 'news-60']) {
-      const cam = lab.cameraFor('wide', programme);
-      const m = mediaRectFor(cam, programme);
-      const r = wallRect(cam);
-      const h = m.heads[0];
-      assert.ok(!m.framed && m.x1 - m.x0 >= r.x1 - r.x0 - 2 && m.y1 - m.y0 >= 18, `${programme} ${JSON.stringify(m)}`);
-      assert.ok(m.y1 + 6 <= h.y0 + 1, `${programme}: letterbox bottom ${m.y1} vs head top ${h.y0}`);
-      // no picture pixel in the head box grown by 6 px: only the field there (presenters hidden)
-      for (const image of ['volcano', 'forest', 'port']) {
-        const px = shot({ programme, framing: 'wide', wall: 'picture', image, presenters: false });
-        const field = new Set([C.slate, C.ink, C.black]);
-        let bad = 0;
-        for (let y = Math.max(r.y0, h.y0 - 6); y < Math.min(r.y1, h.y1); y++) for (let x = Math.max(r.x0, h.x0 - 6); x < Math.min(r.x1, h.x1 + 6); x++) if (!field.has(px[y * W + x])) bad++;
-        assert.equal(bad, 0, `${programme} ${image}: ${bad} picture px within 6 px of the head`);
-      }
-    }
-    // a duo single's full-wall picture runs to the wall's top edge; its rows under the graphics' top
-    // row are one palette step darker (never brighter than steel there), no black letterbox
+    // a duo single's picture runs to the wall's top edge; its rows under the graphics' top row are darker
+    // than the picture just under them, and not a black letterbox
     const cam = lab.cameraFor('single-a', 'world-now');
     const r = wallRect(cam);
     const px = shot({ programme: 'world-now', framing: 'single-a', wall: 'picture', image: 'port' });
-    let dark = 0, black = 0, n = 0;
-    for (let y = Math.max(0, r.y0 + 2); y < 22; y++) for (let x = Math.max(0, r.x0 + 4); x < Math.min(W, r.x1 - 4); x++) {
-      const c = px[y * W + x];
-      n++;
-      if (LSTAR[nameOf(c)] <= LSTAR.steel + 0.1) dark++;
-      if (c === C.black) black++;
-    }
-    assert.ok(n > 0 && dark === n, `${dark}/${n} under the top row no brighter than steel`);
-    assert.ok(black < n * 0.5, `${black}/${n} black: a letterbox`);
+    const meanL = (y0, y1) => {
+      let sum = 0, n = 0, black = 0;
+      for (let y = y0; y < y1; y++) for (let x = Math.max(0, r.x0 + 4); x < Math.min(W, r.x1 - 4); x++) {
+        const c = px[y * W + x];
+        sum += lstarRGB(c & 255, (c >>> 8) & 255, (c >>> 16) & 255);
+        n++;
+        if (c === C.black) black++;
+      }
+      return { L: sum / n, black: black / n };
+    };
+    const top = meanL(Math.max(0, r.y0 + 2), 22), under = meanL(22, 36);
+    assert.ok(top.L < under.L - 3, `under the top row L* ${top.L.toFixed(1)} vs below ${under.L.toFixed(1)}`);
+    assert.ok(top.black < 0.5, `${(top.black * 100).toFixed(0)} % black: a letterbox`);
   });
   test('the wall field has no value transition beside a head: it is settled above every head top', { skip: !CAMERA && 'camera.js unavailable (framings are CAMERA\'s)' }, () => {
     for (const programme of [...STYLE_IDS, 'generic']) {
@@ -709,29 +703,29 @@ describe('fix round 1: layout, pictures, light (critics of round 3)', () => {
       }
     }
   });
-  test('wall pictures: area-averaged, a readable range of tones, mean and highlights under the ceiling', () => {
-    for (const [programme, framing, max] of [['world-now', 'wide', 45], ['world-now', 'single-a', 45], ['news-60', 'mcu-l', 45], ['cosmos', 'two', 40]]) {
+  test('wall pictures: the photo\'s own colours, a readable range of tones, mean under the ceiling, no clipped white (owner 06:40)', () => {
+    for (const [programme, framing, max] of [['world-now', 'wide', 56], ['world-now', 'single-a', 56], ['news-60', 'mcu-l', 56], ['cosmos', 'two', 50]]) {
       const px = shot({ programme, framing, wall: 'picture', image: 'port' });
       const m = mediaRectFor(lab.cameraFor(framing, programme), programme);
-      let sum = 0, n = 0, bright = 0;
-      const names = new Map();
-      for (let y = Math.max(0, m.y0); y < Math.min(H, m.y1); y++) for (let x = Math.max(0, m.x0); x < Math.min(W, m.x1); x++) {
-        const nm = nameOf(px[y * W + x]);
-        const L = LSTAR[nm];
+      let sum = 0, n = 0, hot = 0;
+      const colours = new Map();
+      // below the graphics' top row (those rows are dimmed on purpose)
+      for (let y = Math.max(22, m.y0); y < Math.min(H, m.y1); y++) for (let x = Math.max(0, m.x0); x < Math.min(W, m.x1); x++) {
+        const c = px[y * W + x];
+        const L = lstarRGB(c & 255, (c >>> 8) & 255, (c >>> 16) & 255);
         sum += L;
         n++;
-        if (L > 45) bright++; // ART_DIRECTION: highlights (above the wall's L* 45 ceiling) on at most 10 % of it
-        names.set(nm, (names.get(nm) || 0) + 1);
+        if (L > 92) hot++;
+        colours.set(c, (colours.get(c) || 0) + 1);
       }
       const what = `${programme} ${framing}`;
       assert.ok(n > 500, `${what}: ${n} picture px`);
-      assert.ok(sum / n <= max + 0.5, `${what} mean ${sum / n}`);
-      assert.ok(bright / n <= 0.1, `${what} highlights ${bright / n}`);
-      // a picture, not mush: at least five tones each covering 2 % of it, spanning 25 L* or more
-      const major = [...names].filter(([, c]) => c >= n * 0.02).map(([nm]) => LSTAR[nm]);
-      assert.ok(major.length >= 5, `${what}: ${major.length} tones`);
-      assert.ok(Math.max(...major) - Math.min(...major) >= 25, `${what}: tones span ${Math.max(...major) - Math.min(...major)} L*`);
-      for (const nm of names.keys()) assert.ok(!['red', 'cyan', 'magenta', 'yellow', 'green', 'orange', 'white', 'cream', 'silver'].includes(nm), `${what}: ${nm}`);
+      assert.ok(sum / n <= max + 1, `${what} mean ${sum / n}`);
+      assert.equal(hot, 0, `${what}: ${hot} px clipped near white`);
+      // a picture, not mush: at least eight colours each covering 1 % of it, spanning 35 L* or more
+      const major = [...colours].filter(([, k]) => k >= n * 0.01).map(([c]) => lstarRGB(c & 255, (c >>> 8) & 255, (c >>> 16) & 255));
+      assert.ok(major.length >= 8, `${what}: ${major.length} colours`);
+      assert.ok(Math.max(...major) - Math.min(...major) >= 35, `${what}: tones span ${Math.max(...major) - Math.min(...major)} L*`);
     }
   });
   test('INTEGRATION keeps one wall object and Object.assign()s each cut into it: no stale kicker, image or place', () => {
@@ -1041,7 +1035,7 @@ describe('fix round 3 (critics of fix round 2)', () => {
     }
   });
 
-  test('wall pictures keep their hues: no output pixel more than 90° off its source hue, no green out of a fire, MONEY keeps its forests green', () => {
+  test('wall pictures keep their hues: few output pixels more than 45° off their source hue, forests stay green, no green out of a fire', () => {
     const imgs = ['volcano', 'wildfire', 'forest', 'rice', 'port', 'reef', 'mars'];
     for (const style of ['world-now', 'money-minute', 'news-60', 'cosmos', 'tech-bytes']) {
       for (const name of imgs) {
@@ -1051,21 +1045,22 @@ describe('fix round 3 (critics of fix round 2)', () => {
         for (let i = 0; i < r.px.length; i++) {
           const c = r.px[i];
           const q = labRGB(c & 255, (c >>> 8) & 255, (c >>> 16) & 255);
-          const ra = q[1] - 4, rb = q[2] + 16; // the palette colour off the wall's (cool) neutral axis
-          const sc = Math.hypot(r.A[i], r.B[i]);
-          if (sc > 12 && Math.hypot(ra, rb) > 12) {
+          const sc = Math.hypot(r.A[i], r.B[i]), oc = Math.hypot(q[1], q[2]);
+          if (sc > 12 && oc > 8) {
             both++;
-            let d = Math.abs(Math.atan2(r.B[i], r.A[i]) - Math.atan2(rb, ra));
+            let d = Math.abs(Math.atan2(r.B[i], r.A[i]) - Math.atan2(q[2], q[1]));
             if (d > Math.PI) d = 2 * Math.PI - d;
-            if (d > Math.PI / 2) off++;
+            if (d > Math.PI / 4) off++;
           }
-          if (c === C.darkGreen) green++;
+          const ho = (Math.atan2(q[2], q[1]) * 180) / Math.PI;
+          if (oc > 8 && ho > 115 && ho < 200) green++;
           const h = (Math.atan2(r.B[i], r.A[i]) * 180) / Math.PI;
           if (sc > 10 && h > 115 && h < 200) srcGreen++;
         }
-        assert.ok(off <= both * 0.01, `${style} ${name}: ${off}/${both} pixels more than 90° off their hue`);
-        if (srcGreen === 0) assert.equal(green, 0, `${style} ${name}: ${green} darkGreen px from a picture with no green`);
-        if (name === 'forest' && style === 'money-minute') assert.ok(green > r.px.length * 0.05, `MONEY forest: green ${green}`);
+        // (the ordered dither moves a few pixels to a neighbouring palette colour at hue boundaries)
+        assert.ok(off <= both * 0.05, `${style} ${name}: ${off}/${both} pixels more than 45° off their hue`);
+        if (srcGreen === 0) assert.ok(green <= r.px.length * 0.01, `${style} ${name}: ${green} green px from a picture with no green`);
+        if (name === 'forest') assert.ok(green >= srcGreen * 0.6, `${style} forest: green ${green} of ${srcGreen}`);
       }
     }
   });
@@ -1111,12 +1106,15 @@ describe('fix round 3 (critics of fix round 2)', () => {
     }
   });
 
-  test('MONEY MINUTE and NEWS IN 60 solo wide: a story picture never sits behind the head', () => {
-    // (covered pixel by pixel in the round-1 picture test; here the layout for every fixture size)
+  test('MONEY MINUTE and NEWS IN 60: a story picture fills the wall screen behind the presenter (owner 07:40), to its foot', () => {
     for (const programme of ['money-minute', 'news-60']) {
-      const cam = lab.cameraFor('wide', programme);
-      const m = mediaRectFor(cam, programme);
-      for (const h of m.heads) assert.ok(m.y1 + 6 <= h.y0 + 1, `${programme}: picture bottom ${m.y1}, head top ${h.y0}`);
+      for (const framing of ['wide', 'mcu-l', 'mcu-r']) {
+        const cam = lab.cameraFor(framing, programme);
+        const m = mediaRectFor(cam, programme);
+        const r = wallRect(cam);
+        assert.ok(m.y1 >= Math.min(H, r.y1) - 1, `${programme} ${framing}: picture bottom ${m.y1}, wall foot ${r.y1}`);
+        assert.ok(m.x1 - m.x0 >= Math.min(W, r.x1) - Math.max(0, r.x0) - 2, `${programme} ${framing}: picture narrower than the wall`);
+      }
     }
   });
 
