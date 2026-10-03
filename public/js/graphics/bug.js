@@ -201,17 +201,31 @@ export function drawTopRow(ctx, t, v) {
 
 const AD_LABEL = 'ADVERTISEMENT';
 const AD_W = measureText(AD_LABEL, 1, 'micro') + 8;
-const AD_STYLE = Object.freeze({ color: P.silver, font: 'micro' });
+const AD_STYLE = Object.freeze({ color: P.white, font: 'micro' });
+const AD_LEFT_STYLE = Object.freeze({ color: P.silver, font: 'micro' });
+// the countdown's box is sized for "BACK IN 0:00" (digits change width: the box never jitters)
+const AD_LEFT_W = measureText('BACK IN 0:00', 1, 'micro') + 8;
 
-/** Small, quiet "ADVERTISEMENT" tag over commercials (wipes in with the ad). */
-export function drawAdTag(ctx, t, onAt) {
+/**
+ * The "ADVERTISEMENT" tag over commercials (wipes in with the ad) and, during a break, when the channel is
+ * back: "BACK IN 0:42" counting down (owner, 3 Oct: an advert must never be mistaken for a programme).
+ * `until` = the break's end on the render clock (seconds), or null.
+ */
+export function drawAdTag(ctx, t, onAt, until = null) {
   const p = clamp01((t - onAt - 0.2) / 0.3);
-  const vis = Math.round(AD_W * easeOut(p));
+  const left = Number.isFinite(until) ? until - t : null;
+  const w = AD_W + (left != null ? AD_LEFT_W : 0);
+  const vis = Math.round(w * easeOut(p));
   if (vis <= 0) return;
   clipStart(ctx, TOP.x, TOP.y, vis, 9);
   try {
     rect(ctx, TOP.x, TOP.y, AD_W, 9, P.black);
     drawText(ctx, AD_LABEL, TOP.x + 4, TOP.y + 2, AD_STYLE);
+    if (left != null) {
+      rect(ctx, TOP.x + AD_W, TOP.y, AD_LEFT_W, 9, P.ink);
+      const s = Math.max(0, Math.ceil(left));
+      drawText(ctx, `BACK IN ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, TOP.x + AD_W + 4, TOP.y + 2, AD_LEFT_STYLE);
+    }
   } finally {
     clipEnd(ctx);
   }

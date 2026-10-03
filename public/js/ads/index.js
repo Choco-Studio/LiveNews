@@ -15,6 +15,28 @@ import { P } from '../palette.js';
 export const ADS = [bitfizz, screechnet, safesector, grandbuffer, cloudbrella, hiresgym, corners, serene];
 
 /**
+ * The channel's continuity voice at the break bumper (owner, 3 Oct: "volvemos en 1 minuto"). Not an ad
+ * (never in ADS, never picked): its script holds every line the bumper may say, voiced by the server
+ * like an advert's lines (server/voice: loadAds adds it), so the director finds them by exact text.
+ */
+export const CONTINUITY = Object.freeze({
+  id: 'continuity',
+  voice: { gender: 'female', lang: 'en-GB' },
+  duration: 3.6,
+  script: Object.freeze([
+    Object.freeze({ at: 0.6, text: "We'll be right back." }),
+    Object.freeze({ at: 0.6, text: "We'll be back in a minute." }),
+    Object.freeze({ at: 0.6, text: "We'll be back in two minutes." }),
+  ]),
+});
+
+/** The continuity line for a break of `seconds` (one of CONTINUITY's lines). */
+export function continuityLine(seconds) {
+  const s = Number(seconds) || 0;
+  return s < 45 ? CONTINUITY.script[0].text : s < 90 ? CONTINUITY.script[1].text : CONTINUITY.script[2].text;
+}
+
+/**
  * The 0.3 s of black and silence between break elements (channel-and-breaks
  * §3.2: inside a break no stinger, just black). The director plays it as an
  * 'ad' shot so both renderers paint it and the ADVERTISEMENT tag stays up

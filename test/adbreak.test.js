@@ -5,7 +5,9 @@
 // and the commercial kit's faces and pure helpers.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ADS, pickAds, BREAK_BLACK } from '../public/js/ads/index.js';
+import { ADS, pickAds, BREAK_BLACK, CONTINUITY, continuityLine } from '../public/js/ads/index.js';
+import { breakLabel, clockLeft } from '../public/js/scenes/cards.js';
+import { CHANNEL } from '../public/js/pace.js';
 import { Director } from '../public/js/director.js';
 import { parseTune } from '../public/js/audio/tune.js';
 import * as K from '../public/js/ads/kit.js';
@@ -249,6 +251,57 @@ test('a break has one stinger (into the ident), then 0.3 s of black and silence 
   // the first ad's bed has stopped before the second ad's black ends (silence between them)
   const stops = log.filter((e) => e.k === 'bedStop');
   assert.ok(stops.length === 2 && stops[0].t <= after[3].t, 'the bed stops at the end of its ad');
+});
+
+// --- the break bumper (owner, 3 Oct: an advert must never be mistaken for a programme) ---------
+
+test('a break opens on the bumper ("BACK IN 1 MINUTE", the continuity voice) and the ADVERTISEMENT tag counts down to its end', async () => {
+  const spoken = [];
+  const audio = { setVoices() {}, sfx() {}, playTune: () => ({ stop() {} }), async speak(text, role) { spoken.push({ text, role }); } };
+  for (const filler of [false, true]) {
+    spoken.length = 0;
+    const director = new Director({ audio, channel: { name: 'T', slogan: '', presenters: {} } });
+    director.voices = { refreshAds() {}, prepareAd() {}, adLine: () => null };
+    const s = director.scene;
+    const seen = [];
+    director.playAd = async (ad) => {
+      seen.push({ ad: ad.id, adBreak: s.adBreak && { ...s.adBreak }, t: performance.now() / 1000 });
+      await new Promise((r) => setTimeout(r, 20));
+    };
+    let bumper = null;
+    const setShot = director.setShot.bind(director);
+    director.setShot = (shot, extra = {}) => {
+      setShot(shot, extra);
+      if (shot === 'ident') bumper = { card: extra.card, adBreak: s.adBreak && { ...s.adBreak }, t: performance.now() / 1000 };
+    };
+    await director.playBreak({ kind: 'break', id: 'b', filler, ads: 2, next: { id: 'tech-bytes', title: 'TECH BYTES', ready: true } });
+    assert.ok(bumper, `${filler ? 'filler' : 'break'}: the bumper airs`);
+    assert.equal(bumper.card.kind, 'break');
+    assert.equal(bumper.card.next, 'TECH BYTES');
+    // the promise is the whole break: the bumper, every spot after its black, the promo
+    const B = CHANNEL.breaks;
+    assert.ok(Math.abs(bumper.adBreak.total - bumper.card.seconds) < 1e-9);
+    assert.ok(bumper.card.seconds > B.ident + B.promo, `${bumper.card.seconds} s`);
+    assert.ok(Math.abs(bumper.adBreak.until - (bumper.t + bumper.card.seconds)) < 0.05, 'the countdown ends when the break does');
+    assert.equal(spoken.length, 1, 'the continuity line is said once, at the bumper');
+    assert.equal(spoken[0].text, continuityLine(bumper.card.seconds));
+    assert.ok(CONTINUITY.script.some((l) => l.text === spoken[0].text), 'a line the server voices');
+    // the tag's countdown is up through every spot, and gone after the break
+    assert.equal(seen.length, 2);
+    for (const x of seen) assert.ok(x.adBreak && x.adBreak.until > x.t, `${x.ad}: the tag counts down`);
+    assert.equal(s.adBreak, null, 'cleared after the break');
+  }
+});
+
+test('the bumper and the tag say the break\'s length plainly', () => {
+  assert.equal(breakLabel(30), 'BACK IN 30 SECONDS');
+  assert.equal(breakLabel(62), 'BACK IN 1 MINUTE');
+  assert.equal(breakLabel(130), 'BACK IN 2 MINUTES');
+  assert.equal(clockLeft(61.2), '1:02');
+  assert.equal(clockLeft(-3), '0:00');
+  assert.equal(continuityLine(30), "We'll be right back.");
+  assert.equal(continuityLine(70), "We'll be back in a minute.");
+  assert.equal(continuityLine(120), "We'll be back in two minutes.");
 });
 
 // --- every spot draws cleanly ----------------------------------------------------------

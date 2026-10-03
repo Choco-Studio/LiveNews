@@ -1240,6 +1240,81 @@ export function drawIdentCard(ctx, t, dt, opts = null) {
 }
 
 // ---------------------------------------------------------------------------
+// BREAK BUMPER (owner, 3 Oct: "se necesita algo que anuncie 'volvemos en 1 minuto' y entonces salgan los
+// anuncios; si no se puede confundir el anuncio con un programa"): the channel says it is going to a break
+// and when it will be back, before the first spot. The countdown carries on in the ADVERTISEMENT tag.
+
+/** On-screen promise for a break of `seconds` (the time until the next programme is back). */
+export function breakLabel(seconds) {
+  const s = Math.max(0, Math.round(Number(seconds) || 0));
+  if (s < 45) return `BACK IN ${Math.max(10, Math.round(s / 5) * 5)} SECONDS`;
+  if (s < 90) return 'BACK IN 1 MINUTE';
+  return `BACK IN ${Math.round(s / 60)} MINUTES`;
+}
+
+/** m:ss of a remaining time (never negative). */
+export function clockLeft(seconds) {
+  const s = Math.max(0, Math.ceil(Number(seconds) || 0));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/**
+ * The break bumper: the channel logo, "BACK IN 1 MINUTE" on a black plate with the accent bar, what comes
+ * after the break, and a rail that empties over the whole break. `left` = seconds until the programme is
+ * back (counts down live), `total` = the whole break.
+ */
+export function drawBreakBumper(ctx, t, dt, { left = 60, total = 60, label = '', next = '', accent = P.red } = {}) {
+  ctx.drawImage(END_FIELD(), 0, 0);
+  const LS = 2;
+  const ls = END_LOGO || (END_LOGO = measureLogo({ variant: 'full', scale: LS }));
+  const ly = 30;
+  const lp = seg(dt, 0.05, 0.4);
+  if (lp > 0) {
+    const off = Math.round((1 - easeOutQuint(lp)) * 8);
+    ctx.save();
+    try {
+      clipRect(ctx, 0, ly - 2, W, ls.h + 4);
+      drawLogo(ctx, W / 2, ly + off, { variant: 'full', scale: LS, align: 'center', t: null });
+    } finally {
+      ctx.restore();
+    }
+  }
+  const title = ellipsis(String(label || breakLabel(left)), W - 60, 2);
+  const tw = textW(title, 2);
+  const pw = tw + 24;
+  const px = (W - pw) >> 1;
+  const py = ly + ls.h + 14;
+  const pp = easeOutQuint(seg(dt, 0.25, 0.4));
+  if (pp > 0) {
+    const vis = plate(ctx, px, py, pw, 26, P.black, pp);
+    ctx.fillStyle = P.slate;
+    ctx.fillRect(px, py, vis, 1);
+    ctx.fillStyle = ACCENTS.has(accent) ? accent : P.red;
+    ctx.fillRect(px, py + 26, Math.round(pw * easeOutQuint(seg(dt, 0.4, 0.36))), 2);
+    ctx.save();
+    try {
+      clipRect(ctx, px, py + 1, vis, 25);
+      rise(ctx, title, px + 12, py + 6, seg(dt, 0.38, 0.3), S.white2);
+    } finally {
+      ctx.restore();
+    }
+  }
+  const l1 = next ? ellipsis(`AFTER THE BREAK: ${String(next).toUpperCase()}`, W - 60) : 'STAY WITH US';
+  rise(ctx, l1, W / 2, py + 40, seg(dt, 0.55, 0.3), S.whiteC);
+  rise(ctx, `ADVERTISEMENT BREAK  ${clockLeft(left)}`, W / 2, py + 52, seg(dt, 0.68, 0.3), S.silverC);
+  // the rail: the whole break, emptying as it runs (slate track, accent fill)
+  const RY = 188, RW = 160, rx = (W - RW) >> 1;
+  const share = total > 0 ? Math.max(0, Math.min(1, left / total)) : 0;
+  const rp = easeOutQuint(seg(dt, 0.5, 0.5));
+  if (rp > 0) {
+    ctx.fillStyle = P.slate;
+    ctx.fillRect(rx, RY, Math.round(RW * rp), 2);
+    ctx.fillStyle = ACCENTS.has(accent) ? accent : P.red;
+    ctx.fillRect(rx, RY, Math.round(RW * rp * share), 2);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // TITLE CARD (kept for compatibility: a plain programme title card)
 
 export function drawTitleCard(ctx, t, dt, { channel = 'GLOBIT 24', subtitle = '', date = '' } = {}) {

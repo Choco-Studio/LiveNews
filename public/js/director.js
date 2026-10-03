@@ -4,7 +4,7 @@
 import { pixelate, loadImage } from './pixelate.js';
 import { presenterName, setPresenters } from './cast.js';
 import { STINGER_DURATION } from './scenes/cards.js';
-import { pickAds, BREAK_BLACK } from './ads/index.js';
+import { pickAds, BREAK_BLACK, CONTINUITY, continuityLine } from './ads/index.js';
 import { splitSentences } from './audio/sentences.js';
 import { ACTIONS } from './cues.js';
 import { openFor } from './scenes/opens.js';
@@ -160,12 +160,32 @@ export class Director {
     s.lowerThird = null;
     s.subtitle = null;
     const ads = pickAds(item.ads || 1, this.recentAds);
-    this.prewarm(ads, item.filler ? 0 : 1.2); // baked while the ident holds still, not on the spot's first frames
-    if (!item.filler) {
+    this.prewarm(ads, 1.2); // baked while the bumper holds still, not on the spot's first frames
+    // The break bumper (owner, 3 Oct: an advert must never be mistaken for a programme): the channel says it
+    // is going to a break and when it is back ("BACK IN 1 MINUTE", the continuity voice), and the
+    // ADVERTISEMENT tag counts down to that through the spots. `total` = every spot after its black, then
+    // the promo; the bumper's own hold is added at its cut.
+    const B = CHANNEL.breaks;
+    const total = ads.reduce((a, ad) => a + B.blackGap + (Number(ad.duration) || 0), 0) + (item.next ? B.blackGap + B.promo : 0);
+    const card = { kind: 'break', seconds: B.ident + total, next: item.next?.title || '', theme: item.next?.theme || null };
+    try {
       // Cues are scheduled at the stinger's start to be heard on the shot change they belong to.
-      await this.stinger(() => this.setShot('ident', { card: null }), (cut) => this.audio.sfx('jingle', { startAt: cut }));
-      await sleep(CHANNEL.breaks.ident * 1000 - STINGER_DURATION * 500);
+      await this.stinger(() => {
+        s.adBreak = { until: now() + B.ident + total, total: B.ident + total };
+        this.setShot('ident', { card });
+      }, (cut) => this.audio.sfx('jingle', { startAt: cut }));
+      const line = continuityLine(B.ident + total);
+      const said = Promise.resolve(this.audio.speak?.(line, 'ad', { audio: this.voices.adLine(CONTINUITY, line) })).catch(() => {});
+      // the bumper holds its time, and the line is never cut off (at most 3 s past the hold)
+      await Promise.all([sleep(B.ident * 1000 - STINGER_DURATION * 500), Promise.race([said, sleep(B.ident * 1000 + 3000)])]);
+      await this.playSpots(ads, item);
+    } finally {
+      s.adBreak = null;
     }
+  }
+
+  /** The break's spots, each after its black, then the UP NEXT promo. */
+  async playSpots(ads, item) {
     for (const ad of ads) {
       // Play history; pickAds() prefers unseen ads, then the least recently played.
       this.recentAds = [...this.recentAds, ad.id].slice(-24);

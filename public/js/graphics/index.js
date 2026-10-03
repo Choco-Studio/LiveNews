@@ -436,7 +436,7 @@ export class Graphics {
   /** Draw the current state (no state changes). */
   render(ctx, t, scene) {
     const mode = this.mode;
-    if (mode === 'ad') return drawAdTag(ctx, t, this.adAt);
+    if (mode === 'ad') return drawAdTag(ctx, t, this.adAt, scene?.adBreak?.until ?? null);
     if (!ON.has(mode)) return;
     const program = mode === 'news' && scene.program?.title ? this.programTag(scene) : null;
     TOP_ROW.onAt = this.topAt;

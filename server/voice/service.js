@@ -67,7 +67,13 @@ export class VoiceService {
       createWorker ||
       ((opts) => new KokoroWorker({ ...opts, log }));
     this.loadSpeech = loadSpeech || (() => import(pathToFileURL(this.speechFile).href));
-    this.loadAds = loadAds || (async () => (await import(pathToFileURL(path.join(this.root, 'public', 'js', 'ads', 'index.js')).href)).ADS);
+    this.loadAds =
+      loadAds ||
+      (async () => {
+        const m = await import(pathToFileURL(path.join(this.root, 'public', 'js', 'ads', 'index.js')).href);
+        // the break bumper's continuity voice is voiced like an advert's script (never picked as an ad)
+        return m.CONTINUITY ? [...m.ADS, m.CONTINUITY] : m.ADS;
+      });
     this.cache = new VoiceCache({ dir: this.cfg.dir, maxBytes: this.cfg.maxBytes, log });
     // One lane per worker process (VOICE_WORKERS); lanes beyond the first start only when there is a queue.
     this.lanes = Array.from({ length: this.cfg.workers }, () => ({ worker: null, starting: null, busy: false }));

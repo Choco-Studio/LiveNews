@@ -167,6 +167,10 @@ export class Renderer {
       case 'endcard':
         return cards.drawEndCard(ctx, t, dt, { channel: program?.title || scene.channel.name, line1: card.line1 || 'STAY WITH US', line2: card.line2 || '', accent: THEME_ACCENT[program?.theme] || P.red });
       case 'ident':
+        if (card?.kind === 'break') {
+          const br = scene.adBreak;
+          return cards.drawBreakBumper(ctx, t, dt, { left: br ? br.until - t : card.seconds, total: br?.total || card.seconds, next: card.next, accent: THEME_ACCENT[card.theme] || P.red });
+        }
         return cards.drawIdentCard(ctx, t, dt);
       case 'promo':
         return cards.drawPromoCard(ctx, t, dt, card, presenterName);
