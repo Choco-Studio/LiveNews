@@ -122,7 +122,6 @@ function drawWarmHead(buf, L, m, head, s) {
   const w = buf.w, M = buf.mat, T = buf.tone, Gr = buf.grp;
   const kx = head.cr / s, ky = head.sr / s;
   const chinY = H.chinY + (head.jaw || 0) - 0.8;
-  const browY = L.brows.y - 0.7;
   // hand-placed lit planes (head-local units, feature space), shaped on the face's structure rather
   // than as discs: the forehead plane hugs the key-side brow ridge (its lower edge follows the brows and
   // dips between them toward the nose bridge, its top rounds off well below the hairline, its far edge
@@ -150,7 +149,7 @@ function drawWarmHead(buf, L, m, head, s) {
       const fx = lx - yawShift;
       let on = false;
       // forehead: between the brow ridge and a rounded top ~1.9 u above it, key side to the terminator
-      const yb = by - 0.4 + 0.55 * Math.exp(-(fx * fx) / 0.7) + 0.06 * (fx + ex) * (fx + ex) * (fx < 0 ? 1 : 0);
+      const yb = by - 0.5 + 0.6 * Math.exp(-(fx * fx) / 0.6) - 0.25 * Math.exp(-((fx + ex) * (fx + ex)) / 2.2);
       if (ly < yb && fx > -ex - 1.3 && fx < 0.9 + 0.35 * (ly - by)) {
         const u = (fx + 1.2) / 2.6;
         const top = yb - 1.9 * (1 - u * u * 0.55);
