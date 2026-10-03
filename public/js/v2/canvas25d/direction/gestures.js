@@ -1239,9 +1239,22 @@ function fillStory(P, ctx, R, max = null) {
   const W = ctx.words;
   const stressed = W.map((w, i) => (w.stressed ? i : -1)).filter((i) => i >= 0);
   if (!stressed.length) return;
+  // owner 07:40 ("faltan aplicarlos cuando es"): a filler lands on the word that carries its stretch (a figure, a
+  // name, the phrase's nuclear accent: the highest emphasis), the first in the opening ~40 % of the stressed
+  // words, the second in the closing half; among words of about the same weight the seeded draw picks one
   const starts = [];
-  if (want >= 1) starts.push(stressed[Math.min(stressed.length - 1, Math.floor(P.r() * Math.min(3, stressed.length)))]);
-  if (want >= 2) starts.push(stressed[Math.min(stressed.length - 1, Math.floor(stressed.length * (0.55 + P.r() * 0.3)))]);
+  const best = (lo, hi, r) => {
+    const span = stressed.slice(lo, Math.max(lo + 1, hi));
+    let top = -1;
+    for (const i of span) top = Math.max(top, W[i].emph || 0);
+    const near = span.filter((i) => (W[i].emph || 0) >= top - 0.05);
+    return near[Math.min(near.length - 1, Math.floor(r * near.length))];
+  };
+  if (want >= 1) starts.push(best(0, Math.ceil(stressed.length * 0.4), P.r()));
+  if (want >= 2) {
+    const wi = best(Math.floor(stressed.length * 0.5), stressed.length, P.r());
+    if (wi !== starts[0]) starts.push(wi);
+  }
   let k = 0;
   for (const wi of starts) {
     let placed = null;
