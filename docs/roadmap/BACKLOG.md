@@ -17,3 +17,10 @@
 - [P0] Wall pictures faithful (no palette/filter banding) — see OWNER_FEEDBACK 06:40 #1
 - [P0] Real photos on air: network allowlist or owner machine + image-search tool + real-photo demo — #2
 - [P1] Ad break bumpers in/out ("back in 60 seconds" + ADVERTISING tag + "we're back") — #3
+
+## Owner 07:40
+- [P0] Wall pictures fill the wall screen (cover-crop) — with the faithful-picture fix
+- [P1] WORLD WEATHER programme: real forecast + warnings data, world map by zones, walking presenter + tracking camera, warnings panel
+- [P1] Gesture timing on the right words (Nova as reference); fix first-episode under-use
+- [P1] UNIT-8 voice: softer robot treatment, 3 A/B samples for the owner
+- [keep] News locator map unchanged

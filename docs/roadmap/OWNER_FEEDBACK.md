@@ -145,3 +145,21 @@ public/js/pace.js single pacing table per programme, transitions/cooldowns/gestu
    el anuncio con un programa". Add: presenter out-line ("We'll be back in a minute") + break-in card "BACK IN 60 SECONDS · ADVERTISING"
    with countdown/ring sized to the actual break length; persistent "ADVERTISING" corner tag during ads; break-out card "WE'RE BACK"
    / next-programme sting. Channel on-screen language stays English unless owner says otherwise. Test: every break starts with the bumper.
+
+## 2026-10-03 07:40 (after canal-18min parts 1-4) — notes only, teams paused
+1. WEATHER STORY PICTURE TOO SMALL: on NEWS IN 60 (Sam, WEATHER strap) the photo is smaller than the wall screen behind him.
+   Wall pictures must FILL the wall screen (cover-crop with safe focus), not sit letterboxed inside it. Goes with 06:40 #1.
+2. NEW PROGRAMME — WORLD WEATHER, "algo realmente trabajado" (like Spanish TV weather, but world-wide and more general):
+   - longer slot (target 5-8 min); full world map, then zone by zone: temperature, rain, sun/cloud, wind, as icons + numbers;
+   - the presenter WALKS around the set and the CAMERA TRACKS with him while he points at and explains each region
+     (needs standing full-body rig, walk cycle, foot planting, camera dolly/follow, point-at-map gestures);
+   - a SECOND PANEL for warnings: hurricanes/typhoons (track + cone), heatwaves, floods, storms;
+   - data must be REAL: forecasts from a weather API (e.g. Open-Meteo, no key) and official warnings (NHC / JTWC / GDACS / national
+     services) — never invented; needs network access to those hosts. Warnings labelled with the source.
+   - Reuse the news-map style (owner likes it) for the weather map.
+3. GESTURES: improved; now they must happen AT THE RIGHT MOMENT (on the stressed word / when the line calls for it).
+   Nova (COSMOS, the human) does them well — use her timing as the reference. The SECOND episode uses gestures better than the FIRST
+   → investigate why the first episode of a run under-uses / mistimes gestures (warm-up, episode memory, planner budget).
+4. UNIT-8 VOICE: robotic is fine but it sounds odd and annoying → softer robot treatment (less ring-mod/bitcrush/harshness,
+   keep warmth and intelligibility, subtle vocoder tint). Deliver 3 A/B samples for the owner to choose.
+5. NEWS MAP (where stories happen): PERFECT — protect it, don't change it.
