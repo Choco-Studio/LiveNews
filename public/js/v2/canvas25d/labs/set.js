@@ -67,7 +67,7 @@ export const LAB = {
   lon: 36.82,
   figure: { value: '$82.40', label: 'BRENT CRUDE' },
   label: 'OIL MARKETS',
-  sub: 'REUTERS',
+  sub: 'LAGOS, NIGERIA', // a story plate carries the place under the kicker (the strap shows the source)
   since: 0,
   move: null,
   lod: 0,
@@ -132,14 +132,15 @@ function wallReq() {
   const cast = CASTS[prog] || CASTS.generic;
   const solo = !cast.B;
   switch (L.wall) {
+    // (story: true, as wallFromScene marks every story's wall: its plate is set in body 1x)
     case 'picture':
-      return { mode: 'picture', image: IMAGES.get(L.image) || null, label: L.label, sub: L.sub, solo };
+      return { mode: 'picture', image: IMAGES.get(L.image) || null, label: L.label, sub: L.sub, solo, story: true };
     case 'map':
-      return { mode: 'map', location: { place: L.place, lat: L.lat, lon: L.lon }, since: L.since, solo };
+      return { mode: 'map', location: { place: L.place, lat: L.lat, lon: L.lon }, since: L.since, solo, story: true };
     case 'figure':
-      return { mode: 'figure', figure: L.figure, solo };
+      return { mode: 'figure', figure: L.figure, solo, story: true };
     case 'plate':
-      return { mode: 'plate', label: L.label, sub: L.sub, solo };
+      return { mode: 'plate', label: L.label, sub: L.sub, solo, story: L.story ?? true };
     default:
       return { mode: 'idle', phase: L.phase, solo };
   }

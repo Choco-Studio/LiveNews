@@ -171,7 +171,9 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
   }
 
   const W = Math.max(3, Math.round(w));
-  const Hh = Math.max(2, Math.round(h));
+  // medium tier: two rows of eye under the lid line as soon as the eye is ~2.2 px tall (critic
+  // r2: one row under a lid line read as lowered, half-asleep listeners in the two-shot)
+  const Hh = Math.max(tier === 1 && h >= 2.2 ? 3 : 2, Math.round(h));
   const x0 = Math.round(cx - W / 2);
   const yTop = Math.round(cy - Hh / 2);
 
@@ -185,18 +187,24 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
     }
     const covered = open < 0.75 ? 1 : 0; // half-closed: the top eye row goes under the lid
     const lidY = yTop + covered;
+    EYT[side < 0 ? 0 : 1] = yTop; // the brows keep a skin row above the lid line (drawBrows)
     // a 3 px iris (iris, pupil, iris) on an odd eye and 2 px on an even one, so a
     // gaze at the lens is centred; the gaze moves it a pixel either way
     const iw = W % 2 ? 3 : 2;
     const ix = clamp(x0 + ((W - iw) >> 1) + Math.round(lx * 1.2), x0, x0 + W - iw);
     const px = iw === 3 ? ix + 1 : ix + (lx < 0 ? 0 : 1);
     for (let r = 1 + covered; r <= rows; r++) {
+      // a 2-row eye: the upper row in the lid's shadow (fog, the iris's darker colour), the lower
+      // row lit (silver toward the key, the iris colour round the pupil): an open, calm eye
+      const two = rows - covered >= 2;
+      const lower = r === rows;
       for (let i = 0; i < W; i++) {
         const x = x0 + i;
         let m = x < ix ? mt.silver : mt.fog;
-        if (x >= ix && x < ix + iw) m = x === px ? mt.pupil : mt.irisDark;
-        // the top row of a 2-row eye is in the lid's shadow
-        if (rows >= 2 && r === 1 + covered && m === mt.silver) m = mt.fog;
+        // (the upper row takes the iris colour when the darker one is the lash's: Lola's black
+        // under a black lid line read as a closed band)
+        if (x >= ix && x < ix + iw) m = two ? (lower ? (x === px ? mt.pupil : mt.iris) : mt.irisDark === mt.lash ? mt.iris : mt.irisDark) : x === px ? mt.pupil : mt.irisDark;
+        if (two && !lower && m === mt.silver) m = mt.fog;
         buf.plot(x, yTop + r, m, 1);
       }
     }
@@ -302,14 +310,23 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
   }
   // pupil: 1 px in a small eye (a 1x2 bar reads as a slit), 2x2 only in a large one
   const pn = W >= 11 ? 2 : 1;
-  const ppx = Math.round(icx - pn / 2), ppy = Math.round(icy - pn / 2);
+  const ppx = Math.round(icx - pn / 2);
+  let ppy = Math.round(icy - pn / 2);
+  // a two-row eye (s ~2.2-3): the pupil on the lower row, the upper row iris colour with the
+  // catchlight. A pupil right under the lash, over one row of colour, read as a lid half down
+  // (critic r2: every presenter looked drowsy at s 2.45-2.7 and alert at 3.2)
+  const kc = clamp(Math.round(icx) - x0 + 1, 0, n - 1);
+  const twoRow = EA[kc] > -9000 && EB[kc] - EA[kc] - 1 <= 2;
+  if (twoRow && pn === 1) ppy = EB[kc] - 1;
+  const rim = ir >= 2 && !twoRow; // a darker iris rim only where the iris is ≥ 4 px across and 3 rows tall
   for (let k = 0; k < n; k++) {
     const x = x0 - 1 + k;
     const o = EO[k], ao = Math.abs(o);
     if (EA[k] < -9000) continue;
     const yA = EA[k], yB = EB[k];
-    // crease above the lid (skin fold), stays while blinking
-    if (ao < 0.72 && W >= 6) deepen(buf, x, EC[k] - (heavy ? 2 : 1) - 1, sk);
+    // crease above the lid (skin fold), stays while blinking; not over a two-row eye, where
+    // it thickens the upper lid into a heavy, half-closed band
+    if (ao < 0.72 && W >= 6 && !twoRow) deepen(buf, x, EC[k] - (heavy ? 2 : 1) - 1, sk);
     if (blink > 0.82 || yB - yA < 1) {
       // closed: the lash line where the lids meet
       if (ao <= 1) buf.plot(x, EM[k], mt.lash, 1);
@@ -325,9 +342,10 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
       let m;
       if (dx * dx + dy * dy <= ir * ir) {
         if (x >= ppx && x < ppx + pn && y >= ppy && y < ppy + pn) m = mt.pupil;
-        // the iris's rim is a touch darker; under the lid only its edges are (a dark top row
-        // across the whole iris leaves one row of colour: a drowsy eye)
-        else if (y === yA + 1 ? Math.abs(dx) > ir * 0.45 : heavy && dy < 0 && Math.abs(dx) > ir - 0.6) m = mt.irisDark;
+        // the iris's rim is a touch darker, only on an iris 4 px wide or more and only at its
+        // edges (critic r2: a dark first row across a 3 px iris left one row of colour under a
+        // black lash: every presenter read drowsy at s 2.2-3)
+        else if (rim && (y === yA + 1 ? Math.abs(dx) > ir - 0.75 : heavy && dy < 0 && Math.abs(dx) > ir - 0.6)) m = mt.irisDark;
         else m = mt.iris;
       } else {
         // sclera: lit toward the key (left of the iris), cooler on the far side, under the lid and in the corners
@@ -346,11 +364,17 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
     // a smile: the cheek's fold under the lower lid (close-ups, s >= 3)
     if (cheek > 0.5 && W >= 8 && o > -0.15 && o < 0.75) deepen(buf, x, yB + 1, sk);
   }
-  // catchlight: one white pixel up and left on the iris (key light from camera-left)
+  // catchlight: one white pixel up and left on the iris (key light from camera-left), on an
+  // interior row of its column only: materials are keyed by colour, so a black lash IS the
+  // pupil material and a material test alone put the light on the lid line (critic r2)
   if (blink < 0.5) {
-    const gx = Math.round(icx - ir * 0.42 - 0.5), gy = Math.round(icy - ir * 0.42 - 0.5);
-    const i = gy * buf.w + gx;
-    if (gx > 0 && gy > 0 && gx < buf.w - 1 && gy < buf.h - 1 && (buf.mat[i] === mt.iris || buf.mat[i] === mt.irisDark || buf.mat[i] === mt.pupil)) buf.plot(gx, gy, mt.white, 1);
+    const gx = Math.round(icx - ir * 0.42 - 0.5);
+    const k = gx - (x0 - 1);
+    if (k >= 0 && k < n && EA[k] > -9000) {
+      const gy = Math.max(Math.round(icy - ir * 0.42 - 0.5), EA[k] + 1);
+      const i = gy * buf.w + gx;
+      if (gy < EB[k] && gx > 0 && gy > 0 && gx < buf.w - 1 && gy < buf.h - 1 && (buf.mat[i] === mt.iris || buf.mat[i] === mt.irisDark || buf.mat[i] === mt.pupil)) buf.plot(gx, gy, mt.white, 1);
+    }
   }
   if (E.bags) {
     // under-eye: a short soft fold below the outer half
@@ -370,6 +394,7 @@ function browY(B, raise, frown, u) {
 }
 
 const BU = [0, 0.3, 0.62, 0.86, 1];
+const EYT = new Int32Array(2); // medium tier: each eye's top row (drawEye), so the brows stay clear of it
 const BX = new Float64Array(5), BYS = new Float64Array(5);
 
 function drawBrows(buf, L, mt, sk, f, s, tier) {
@@ -394,6 +419,14 @@ function drawBrows(buf, L, mt, sk, f, s, tier) {
       mapF(xi + (xo - xi) * BU[k], browY(B, raise, frown, BU[k]));
       BX[k] = F.x;
       BYS[k] = F.y;
+    }
+    if (tier === 1) {
+      // medium: a skin row between the brow and the lid line (a brow on the lid reads as a heavy
+      // frown, critic r2): the whole stroke moves up as one, keeping its arch
+      let bottom = -9999;
+      for (let k = 0; k < 5; k++) bottom = Math.max(bottom, Math.round(BYS[k]));
+      const up = bottom - (EYT[side < 0 ? 0 : 1] - 2);
+      if (up > 0) for (let k = 0; k < 5; k++) BYS[k] -= up;
     }
     for (let k = 0; k < 4; k++) {
       let x0 = Math.round(BX[k]), y0 = Math.round(BYS[k]);

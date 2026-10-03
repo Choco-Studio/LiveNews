@@ -407,6 +407,7 @@
       "style": "The headlines in one minute, read by one calm presenter. One idea per story: the fact, then one detail and the attribution. No teasers, no signposts between stories, no banter. City first; on map items the place comes within the first three words.",
       "storyLength": "lead story 2 or 3 sentences, 32 to 38 words; every other story exactly 2 sentences, 25 to 28 words; round-up items exactly 1 sentence, 14 to 18 words; no sentence over 18 words",
       "headlineMax": 36,
+      "pictures": "every",
       "intro": "frame",
       "roundup": {
         "opener": "Around the world.",

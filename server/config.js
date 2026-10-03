@@ -63,6 +63,16 @@ export const config = {
   minNewStories: num('MIN_NEW_STORIES', 3),
   maxStoryAgeHours: num('MAX_STORY_AGE_HOURS', 36),
   feedRefreshMinutes: num('FEED_REFRESH_MINUTES', 10),
+  // Picture desk: time per episode to look for pictures on article pages (and other outlets' pages),
+  // and to download each picture once before air (one that fails is dropped or replaced)
+  pictureBudgetMs: num('PICTURE_BUDGET_MS', 6000),
+  pictureVerifyMs: num('PICTURE_VERIFY_MS', 12000),
+  // When the desk runs short of new stories, those aired longest ago come back in new bulletins:
+  // 'local' (default: the offline fixture desk only), 'all' (live feeds too, only stories aired at least
+  // RECYCLE_AFTER_HOURS ago), 'off'. Never a story of the last RECYCLE_GAP episodes.
+  recycle: ((v) => (['all', 'off', 'local'].includes(v) ? v : 'local'))(env('RECYCLE_STORIES', 'local').trim().toLowerCase()),
+  recycleAfterHours: num('RECYCLE_AFTER_HOURS', 4),
+  recycleGap: num('RECYCLE_GAP', 5),
   // News sources; FEEDS_FILE points elsewhere (e.g. config/feeds.fixture.json for offline demos)
   feedsFile: path.resolve(ROOT, env('FEEDS_FILE', path.join('config', 'feeds.json'))),
   dataDir: path.join(ROOT, 'data'),

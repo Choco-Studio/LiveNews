@@ -217,7 +217,7 @@ ${SEGMENT_SCHEMA(solo ? '"A"' : '"A" | "B"', headlineMax)}
 - Story "text": ${program.storyLength}.
 - Exactly one "story" segment per selected story, using the candidate ids exactly; do not include unselected candidates.
 ${solo ? '- There is a single presenter: always use "anchor": "A".' : '- Alternate presenters between stories (a round-up counts as one block).'}
-- "headline": a complete phrase of at most ${headlineMax} characters (drop "a", "an", "the" rather than cut a word); never end on a preposition or cut a figure from its unit.
+- "headline": a complete phrase of at most ${headlineMax} characters in headline style (present tense; "6m", "3%", "Canada, Mexico sign water deal"; drop "a", "an", "the" rather than cut a word), with every fact from the candidate itself; never end on a preposition or cut a figure from its unit.
 - Pictures: a candidate with "picture": true has a photograph the channel can show. Prefer such stories for the headlines and the main stories (a round-up item is shown on the map only), and give each of them at least three sentences: the director shows one shot per sentence (presenter, then the map, then the photograph), so a shorter story never reaches its picture.
 - "shot": "map" when the story happens in a specific place (the photograph, if any, follows the map), "full" when it has a picture and no place, "close" for important stories, "wide" otherwise.
 - "location": only when the story clearly happens in a specific city, region or country named in the candidate; give approximate coordinates of that place. Otherwise null.
@@ -407,7 +407,7 @@ const headWords = (text) => contentWords(text).filter((w) => !PREPOSITIONS.inclu
 function headlineCuts(t) {
   const all = headWords(t).length || 1;
   const out = new Map();
-  const places = findPlaces(t).map((p) => p.text);
+  const places = placesOfHeadline(t);
   const consider = (head, cutWord = '', clause = false, label = false) => {
     head = head.trim().replace(/[\s,;:–—-]+$/, '');
     if (!head || head === t || out.has(head)) return;
@@ -449,10 +449,98 @@ function headlineCuts(t) {
   return [...out.entries()].map(([text, v]) => ({ text, ...v }));
 }
 
+// ---------------------------------------------------------------- headline-ese
+// What a sub-editor does to a headline that does not fit, without changing what it says: figures in
+// headline form ("6 million" -> "6m", "one million" -> "1m", "percent" -> "%"), "X and Y sign" -> "X, Y
+// sign", the stock phrases ("makes landfall on" -> "hits", "signs an agreement on X" -> "in X deal",
+// "starts sending electricity" -> "goes live", "uncovers" -> "finds"), "Wildfire near Marseille" ->
+// "Marseille wildfire", "in coastal towns of Kerala" -> "in Kerala", "Norway's central bank raises" ->
+// "Norway raises". Used only when a headline is over its limit, and only on the outlet's own words.
+const NUMBER_WORD = { one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', ten: '10' };
+const HEADLINESE = [
+  [/\b(\d+(?:\.\d+)?) million\b/g, '$1m'],
+  [/\b(\d+(?:\.\d+)?) billion\b/g, '$1bn'],
+  [/\b(one|two|three|four|five|six|seven|eight|nine|ten) (million|billion)\b/gi, (m, n, u) => `${NUMBER_WORD[n.toLowerCase()]}${u.toLowerCase() === 'million' ? 'm' : 'bn'}`],
+  [/\b(\d+(?:\.\d+)?) ?(?:per ?cent|percent)\b/gi, '$1%'],
+  [/\b(\d+(?:\.\d+)?)[ -]kilomet(?:re|er)s?\b/gi, '$1km'],
+  [/^(\p{Lu}[\p{L}'’.-]+(?: \p{Lu}[\p{L}'’.-]+)?) and (\p{Lu}[\p{L}'’.-]+(?: \p{Lu}[\p{L}'’.-]+)?) (?=\p{Ll})/u, '$1, $2 '],
+  [/\b(sign|signs|agree|agrees|reach|reaches) (?:an? )?(?:agreement|deal) (?:on|over|for) (?:the )?(.+?)(?: (?:projects|plans|programmes|programs|schemes|measures))?$/i, (m, v, what) => `in ${what} deal`],
+  [/\b(?:an? )?agreement\b/gi, 'deal'],
+  [/\bmakes? landfall (?:on|in|near|over)\b/gi, 'hits'],
+  [/\b(?:starts?|begins?) (?:sending|supplying|generating|producing) (?:electricity|power)\b/gi, 'goes live'],
+  [/\bpower station\b/gi, 'power plant'],
+  [/\b(uncovers?|unearths?|discovers?)\b/gi, (m) => (/s$/i.test(m) ? 'finds' : 'find')],
+  [/\b(?:to )?evacuate\b/gi, (m) => (/^to /i.test(m) ? 'to flee' : 'flee')],
+  [/\b(new )?species of ([\p{Ll}-]+ [\p{Ll}-]+|[\p{Ll}-]+)\b/giu, (m, n, what) => `${n || ''}${what} species`],
+  [/\b(thousands|hundreds|dozens|[\d,.]+m?) (?:moved|taken|sent|evacuated) to\b/gi, '$1 in'],
+  [/\bshows? signs of (recovery|improvement)\b/gi, (m, w) => (w.toLowerCase() === 'recovery' ? 'recovering' : 'improving')],
+  [/\bin (?:the )?(?:[\p{Ll}-]+ ){0,2}(?:towns|villages|cities|parts|areas|regions|districts|suburbs|streets) of (\p{Lu}[\p{L}'’-]+(?: \p{Lu}[\p{L}'’-]+)?)/gu, 'in $1'],
+  [/^(\p{Lu}[\p{L}'’-]+)['’]s central bank (raises|cuts|holds|lowers|keeps|hikes)\b/u, '$1 $2'],
+  [/^(Study|Survey|Research|Report|Poll) (?:finds|shows|says|suggests|reveals)(?: that)? (?=\p{L})/u, '$1: '],
+  [/\binterest rates\b/gi, 'rates'],
+  [/\b(?:businesses|companies)\b/g, 'firms'],
+  [/\bcompany\b/g, 'firm'],
+  [/(?<=\S )(?:its|their) (?=\p{Ll})/gu, ''],
+  [/(?<=\S )now (?=\p{Ll}+s\b)/gu, ''],
+];
+
+/** The headline-ese form of a headline (only figures, stock phrases and word order change; see above). */
+export function headlinese(t) {
+  let out = HEADLINESE.reduce((x, [re, to]) => x.replace(re, to), String(t));
+  // "Wildfire near Marseille forces..." -> "Marseille wildfire forces...", "Telescope in Chile spots..." ->
+  // "Chile telescope spots...": a known place moves before its noun.
+  const near = out.match(/^(\p{Lu}\p{Ll}+(?: \p{Ll}+)?) (?:near|in|off|outside) (\p{Lu}[\p{L}'’-]+(?: \p{Lu}[\p{L}'’-]+)?) (?=\p{Ll})/u);
+  if (near && lookupPlace(near[2])) out = `${near[2]} ${near[1].toLowerCase()} ${out.slice(near[0].length)}`;
+  // "Rover finds layered rocks in an ancient lake bed on Mars" -> "... rocks on Mars": a middle phrase goes so the
+  // place at the end can stay.
+  const tail = out.match(/^(.*\S) ((?:on|in|at|near|off) (?:the )?(\p{Lu}[\p{L}'’-]+(?: \p{Lu}[\p{L}'’-]+)?))$/u);
+  if (tail && isPlaceName(tail[3])) {
+    const inner = tail[1].match(/^(.*?\S) (?:in|at|from|along|near|under|beneath|inside|across|within) (?:an? |the )?[\p{Ll}\d][^,]*$/u);
+    if (inner && headWords(inner[1]).length >= 3 && !danglingHeadline(inner[1])) out = `${inner[1]} ${tail[2]}`;
+  }
+  return out.replace(/\s+/g, ' ').trim();
+}
+
+// Places for headlines: the gazetteer's, and the sky's (a COSMOS strap without "on Mars" means nothing).
+const CELESTIAL = /(?<![\p{L}])(?:Mars|Venus|Jupiter|Saturn|Mercury|Neptune|Uranus|Pluto|the Moon|the Sun|Moon)(?![\p{L}])/gu;
+const isPlaceName = (name) => !!lookupPlace(name) || new RegExp(`^(?:${CELESTIAL.source})$`, 'u').test(name);
+const placesOfHeadline = (t) => [...findPlaces(t).map((p) => p.text), ...[...String(t).matchAll(CELESTIAL)].map((m) => m[0])];
+
+/** Never over the strap's hard limit: whole words from the start, never ending on a stop word or a cut figure. */
+function hardFit(t, max = LIMITS.headline) {
+  if (t.length <= max) return t;
+  const words = t.split(' ');
+  while (words.length > 3 && (words.join(' ').length > max || danglingHeadline(words.join(' ')) || ADVERB_END.test(words.join(' ')))) words.pop();
+  const out = words.join(' ').replace(/[\s,;:–—-]+$/, '');
+  return out.length <= max ? out : clipWords(out, max);
+}
+
 function shortenOnce(t, max, spoken) {
   // NEWS IN 60's house style (a limit of 40 or less): present tense, no articles, ever.
   const house = !spoken && max <= 40;
   if (house) t = compactOf(t, true);
+  if (t.length <= max) return t;
+  const plain = shortenPlain(t, max, spoken, house);
+  const keepsPlaces = (h) => placesOfHeadline(t).every((p) => h.includes(p.replace(/^the /, '')));
+  if (spoken) return plain;
+  if (plain.length <= max && keepsPlaces(plain)) return hardFit(plain);
+  if (plain.length <= max) {
+    // It fits but lost its place: headline-ese may keep it ("Rover finds layered rocks on Mars").
+    const ese = headlinese(t);
+    const alt = ese !== t ? shortenPlain(house ? compactOf(ese, true) : ese, max, spoken, house) : null;
+    return alt && alt.length <= max && keepsPlaces(alt) ? alt : plain;
+  }
+  // Still over: the same in headline-ese ("Canada, Mexico in clean water deal"), used when that fits (or, over
+  // the strap's hard limit, when it is shorter); otherwise the outlet's own words stay, as close as they were.
+  const ese = headlinese(t);
+  if (ese !== t) {
+    const alt = shortenPlain(house ? compactOf(ese, true) : ese, max, spoken, house);
+    if (alt.length <= max || (plain.length > LIMITS.headline && alt.length < plain.length)) return hardFit(alt);
+  }
+  return hardFit(plain);
+}
+
+function shortenPlain(t, max, spoken, house) {
   if (t.length <= max) return t;
   const cuts = headlineCuts(t).map((c) => (house ? { ...c, text: compactOf(c.text, true) } : c));
   const fits = (list) => list.filter((c) => c.text.length <= max).sort((a, b) => b.text.length - a.text.length)[0]?.text;
@@ -534,6 +622,28 @@ export function shortHeadline(title, max = HEADLINE_MAX, { spoken = false } = {}
   return t;
 }
 
+/**
+ * A sentence cut back to `max` words at its last clause boundary (", a record", " where the species...",
+ * ", after a case brought by..."), keeping at least `min` words; null when no clean cut fits.
+ */
+export function trimClause(sentence, max, min = 6) {
+  const t = String(sentence).trim().replace(/[.!?]+$/, '');
+  const cuts = [...t.matchAll(/,\s+|\s+(?:where|which|while|after|as|but|and|with|whose|when|because|although|though|following|before)\s+/g)].map((m) => m.index).reverse();
+  for (const at of cuts) {
+    const head = t.slice(0, at).trim();
+    const n = head.split(/\s+/).length;
+    if (n > max || n < min) continue;
+    if (/\b(?:a|an|the|of|to|in|on|at|for|from|by|with|and|or|than|its|their|his|her|this|that|says|said)$/i.test(head)) continue;
+    // an attribution must keep what it attributes ("Rail operators in Japan say [...]" is never cut after "say")
+    if (/\b(?:say|says|said|warn|warns|believe|believes|expect|expects)$/i.test(head)) continue;
+    return `${head}.`;
+  }
+  return null;
+}
+
+// The longest sentence each programme's bible allows (config `sentenceWords` overrides).
+export const SENTENCE_WORDS = { 'world-now': 20, 'news-60': 18, 'tech-bytes': 22, cosmos: 22, 'money-minute': 22 };
+
 const pick = (v, list, fallback) => (list.includes(v) ? v : fallback);
 
 function normalizeLocation(loc) {
@@ -553,7 +663,7 @@ function normalizeLocation(loc) {
 function groundedLocation(loc, source) {
   const l = normalizeLocation(loc);
   if (!l || !placeSupported(l.place, source)) return null;
-  return snapLocation(l);
+  return snapLocation(l, source);
 }
 
 function normalizeMap(list, source) {
@@ -930,6 +1040,22 @@ export function normalizeBulletin(
       units.splice(lighterLast ? units.length - 1 : units.length, 0, u);
     }
   }
+  // The number of the day is a light beat: never next to grave news. It moves to the nearest calm slot (never
+  // the lead, never inside the round-up, never after "and finally"); with none, it airs as an ordinary story.
+  const ni = units.findIndex((u) => u.story.feature === 'number');
+  if (ni > 0 && (units[ni - 1]?.story.heavy || units[ni + 1]?.story.heavy)) {
+    const [u] = units.splice(ni, 1);
+    const last = units.length - (units.at(-1)?.story.feature === 'lighter' ? 1 : 0);
+    const calm = (i) => !units[i - 1]?.story.heavy && !units[i]?.story.heavy && !(units[i - 1]?.story.feature === 'roundup' && units[i]?.story.feature === 'roundup');
+    let to = -1;
+    for (let d = 0; d <= units.length && to < 0; d++) for (const i of [ni + d, ni - d]) if (to < 0 && i >= 1 && i <= last && calm(i)) to = i;
+    if (to >= 0) units.splice(to, 0, u);
+    else {
+      units.splice(ni, 0, u);
+      u.story.feature = null;
+      u.story.tagged = sentencesOf(u.story.tagged).filter((p) => !(/\bnumber of the day\b/i.test(p) && stripTags(p).split(' ').length <= 8)).join(' ') || u.story.tagged;
+    }
+  }
   const storyList = units.map((u) => u.story);
   // One number of the day, spoken; "and finally" only last and never straight after grave news.
   let numberSeen = false;
@@ -986,6 +1112,9 @@ export function normalizeBulletin(
   // Phase 3: text rules across the episode.
   const all = [intro, ...body, outro].filter(Boolean);
   const introSentences = intro ? sentencesOf(intro.tagged).map(stripTags) : [];
+  // The bible's longest sentence (a couple of words of leeway for an attribution): a longer story sentence
+  // loses a trailing clause when it has one ("..., after a case brought by local residents over noise").
+  const sentenceMax = program ? program.sentenceWords ?? SENTENCE_WORDS[program.id] ?? null : null;
   let thanks = 0;
   let questions = 0;
   for (const d of all) {
@@ -993,8 +1122,15 @@ export function normalizeBulletin(
     let spoken = 0;
     const list = sentencesOf(d.tagged);
     for (const [index, sentence] of list.entries()) {
-      const plain = stripTags(sentence);
+      let plain = stripTags(sentence);
       let s = sentence;
+      if (sentenceMax && d.type === 'story' && plain.split(/\s+/).length > sentenceMax + 2) {
+        const cut = trimClause(s, sentenceMax + 2, 6);
+        if (cut) {
+          s = cut;
+          plain = stripTags(cut);
+        }
+      }
       // Stage directions on their own ride with the sentence before them.
       if (!plain) {
         if (out.length) out[out.length - 1] += ` ${sentence}`;

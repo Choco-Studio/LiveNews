@@ -15,8 +15,14 @@ import { fileURLToPath } from 'node:url';
 import { guardedFetch, readCapped } from './net.js';
 import { MIN_WIDTH, imageSize } from './pictures.js';
 
-const MAX_BYTES = 6_000_000;
+// One picture at most this big (a 1200 px news photo is 0.2-0.6 MB), and all of them together at most
+// MAX_TOTAL in memory (least recently used go first): a 24/7 box shares its memory with the voice workers.
+const MAX_BYTES = 3_000_000;
+const MAX_TOTAL = 64_000_000;
 const MAX_ENTRIES = 120;
+// More pixels than this freeze the on-air browser while it pixelates the picture (16000x16000 took 9.6 s):
+// the next, smaller candidate is used instead.
+const MAX_PIXELS = 16_000_000;
 const MAX_CANDIDATES = 4;
 // A failed fetch is remembered only briefly: a passing network error must not hide the picture for good.
 const ERROR_TTL_MS = 60_000;
@@ -28,6 +34,7 @@ function sniff(buf) {
   if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
   if (buf.length > 6 && buf.toString('latin1', 0, 4) === 'GIF8') return 'image/gif';
   if (buf.length > 12 && buf.toString('latin1', 0, 4) === 'RIFF' && buf.toString('latin1', 8, 12) === 'WEBP') return 'image/webp';
+  if (buf.length > 12 && buf.toString('latin1', 4, 8) === 'ftyp' && /^avi[fs]$/.test(buf.toString('latin1', 8, 12))) return 'image/avif';
   return '';
 }
 
@@ -37,6 +44,7 @@ export function badPictureSize(body) {
   if (!size) return null;
   if (size.w < MIN_WIDTH || size.h < 120) return `image too small (${size.w}x${size.h})`;
   if (size.w / size.h < 0.5 || size.w / size.h > 3.2) return `image shape not usable (${size.w}x${size.h})`;
+  if (size.w * size.h > MAX_PIXELS) return `image too large to show (${size.w}x${size.h})`;
   return null;
 }
 
@@ -87,7 +95,10 @@ export class ImageCache {
         this.keys.set(id, key);
         if (url) this.sources.set(id, url);
         else this.sources.delete(id);
-        while (this.cache.size > MAX_ENTRIES) {
+        let total = 0;
+        for (const e of this.cache.values()) total += e.body?.length || 0;
+        while (this.cache.size > MAX_ENTRIES || (total > MAX_TOTAL && this.cache.size > 1)) {
+          total -= this.cache.get(this.cache.keys().next().value)?.body?.length || 0;
           const oldest = this.cache.keys().next().value;
           this.cache.delete(oldest);
           this.keys.delete(oldest);
@@ -155,12 +166,16 @@ export class ImageCache {
       await cancel();
       throw new Error(`HTTP ${res.status}`);
     }
-    const type = (res.headers.get('content-type') || '').split(';')[0].trim();
-    if (!ALLOWED.test(type)) {
+    // The header only says what the server claims: the bytes decide (an HTML page sent as image/jpeg is refused,
+    // a real JPEG sent as application/octet-stream is a picture).
+    const claimed = (res.headers.get('content-type') || '').split(';')[0].trim();
+    if (!ALLOWED.test(claimed) && !/^(?:application\/octet-stream|binary\/octet-stream)?$/i.test(claimed)) {
       await cancel();
-      throw new Error(`content type not allowed: ${type}`);
+      throw new Error(`content type not allowed: ${claimed}`);
     }
     const body = await readCapped(res, MAX_BYTES, { tooLarge: 'image too large' });
+    const type = sniff(body);
+    if (!type) throw new Error(`not a picture (served as ${claimed || 'no type'})`);
     return { type, body };
   }
 }

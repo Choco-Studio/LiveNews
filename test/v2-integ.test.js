@@ -1348,3 +1348,36 @@ test('Stage: warmSets bakes the sets in short idle slices until SET reports done
   if (typeof SETM.warmStep === 'function') assert.equal(SETM.warmStep(0).done, true, 'every programme baked');
   warmSets(); // no scheduler (tests): at once, no throw
 });
+
+test('cue clock: a turn glance the planner moved onto a later wide fires on an earlier real cut that shows the listener', () => {
+  const plan = planOf(EP, 3, [{ kind: 'look', slot: 'B', target: 'partner', char: 0, at: 9.25, dur: 2, why: 'turn', onScreen: true }, { kind: 'look', slot: 'B', target: 'partner', char: 0, at: 9.25, dur: 2, why: 'dry' }]);
+  let seen = false;
+  const clock = new CueClock();
+  clock.perfs = { A: newPerf(), B: newPerf() };
+  clock.canSee = (slot) => slot !== 'B' || seen;
+  const log = run(clock, plan, 9, 22, () => null, (t) => {
+    if (t >= 10 && plan.speechStart == null) plan.speechStart = 10;
+    if (t >= 13 && !seen) {
+      seen = true; // the guard cut to the two-shot at 13 s, the plan said 19.25
+      clock.cut(t);
+    }
+  });
+  const turn = log.filter((l) => l.name === 'partner');
+  assert.ok(turn[0].t >= 13.25 - 1e-9 && turn[0].t <= 13.25 + DT + 1e-6, `the moved glance comes forward to the cut (${turn[0].t})`);
+  assert.ok(turn.length === 2 && turn[1].t >= 19.25 - 1e-9, 'other looks keep their time');
+});
+
+test('direction: the max-hold guard never extends a studio shot into an identical next opening, but always ends a long picture', () => {
+  const ep = episodeOf('world-now');
+  const i = ep.segments.findIndex((s) => s.type === 'story' && splitCount(s.text) >= 3);
+  const p = { ...planSegment(ep, i, {}), index: i };
+  const last = p.ctx.sentences.length - 1;
+  const remaining = p.ctx.duration + 0.6 - p.ctx.sentences[last].t0;
+  if (remaining < 4) return; // fixture too short to judge
+  const next = { shot: 'close', framing: 'mcu-l', focus: p.ctx.speaker };
+  const opts = { programId: 'world-now', gap: 0.6, cues: [], closeFraming: 'mcu-l', wideFraming: 'wide', nextOpen: next };
+  const pic = holdCut(p, last, { shot: 'full', framing: null, focus: p.ctx.speaker, held: 9 }, opts);
+  assert.ok(pic && pic.shot === 'close', 'a long picture goes back to the presenter even if the next story opens on the same single');
+  const nextWide = { shot: 'wide', framing: 'wide', focus: p.ctx.speaker };
+  assert.equal(holdCut(p, last, { shot: 'close', framing: 'mcu-l', focus: p.ctx.speaker, held: 14 }, { ...opts, nextOpen: nextWide }), null, 'a single → the wide the next segment opens on anyway: no cut');
+});

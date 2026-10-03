@@ -11,7 +11,12 @@ import { ROOT } from '../server/config.js';
 const KEYS = [
   'HOST',
   'FEEDS_FILE',
+  'PICTURE_BUDGET_MS',
+  'PICTURE_VERIFY_MS',
   'PORT',
+  'RECYCLE_AFTER_HOURS',
+  'RECYCLE_GAP',
+  'RECYCLE_STORIES',
   'PROVIDERS',
   'CODEX_BIN',
   'CODEX_MODEL',

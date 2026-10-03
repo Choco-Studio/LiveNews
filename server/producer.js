@@ -2,6 +2,11 @@ import { buildPrompt, buildReviewPrompt, extractJson, normalizeBulletin } from '
 import { castOf } from './channel.js';
 import { embedCues } from '../public/js/cues.js';
 import { onBeat } from './topics.js';
+import { pictureCredit } from './news.js';
+
+const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+/** Is the credit just the outlet itself ("Pixelburg Post" on Pixelburg Post's own picture)? */
+const ownCredit = (credit, outlet) => !credit || fold(credit) === fold(outlet) || fold(credit).startsWith(`${fold(outlet)} `);
 
 /**
  * The visual beats a story offers, in the order the desk suggests (`visuals`:
@@ -11,10 +16,11 @@ import { onBeat } from './topics.js';
  * full frame with a small locator map inset, rather than dropping either.
  * Round-up items stay on their map. Both fields are optional hints.
  */
-export function planVisuals(seg) {
+export function planVisuals(seg, { roundupPictures = false } = {}) {
   const visuals = [];
   if (seg.location) visuals.push('map');
-  if (seg.hasImage && !seg.roundup) visuals.push('picture');
+  // A round-up item stays on its map, except where the programme puts a picture on every item (NEWS IN 60).
+  if (seg.hasImage && (!seg.roundup || roundupPictures)) visuals.push('picture');
   if (!seg.roundup && (seg.fact || seg.numbers?.length)) visuals.push('fact');
   if (visuals.length) seg.visuals = visuals;
   else delete seg.visuals;
@@ -70,21 +76,58 @@ export class Producer {
     }
     const avoid = wanted.length ? (s) => (wanted.some((f) => f(s)) ? 0.5 : 1) : null;
     // Long programmes (pace: up to ~10 min) need a deeper pool than the default 12: at least 1.5 x their stories.
-    const pool = Math.max(this.config.candidatePool, Math.ceil((program.stories || 0) * 1.5));
-    return this.news.candidates(pool, { categories: program.categories, fill: true, ...(avoid ? { avoid } : {}), ...(program.beat ? { beat: program.beat } : {}) });
+    // A programme with a picture on every item (NEWS IN 60) looks a little deeper, for stories that have one.
+    const every = program.pictures === 'every';
+    const pool = Math.max(this.config.candidatePool ?? 12, Math.ceil((program.stories || 0) * (every ? 2.5 : 1.5)));
+    const list = this.news.candidates(pool, { categories: program.categories, fill: true, ...(avoid ? { avoid } : {}), ...(program.beat ? { beat: program.beat } : {}) });
+    if (!every) return list;
+    // Stories with a picture first (in the desk's order), then the rest as a fallback for the writer.
+    return [...list.filter((s) => s.image), ...list.filter((s) => !s.image)];
+  }
+
+  /**
+   * The fewest stories a programme airs with: its `minStories` (NEWS IN 60's
+   * timing.minStories), else half its stories, never under MIN_NEW_STORIES.
+   * A two-story WORLD NOW is not a programme: below its floor the slot is
+   * skipped (and never promised as "up next").
+   */
+  floorOf(program) {
+    const stories = Math.max(1, program?.stories || 1);
+    const want = program?.minStories ?? program?.timing?.minStories ?? Math.ceil(stories / 2);
+    return Math.min(stories, Math.max(this.config.minNewStories ?? 3, want));
+  }
+
+  /**
+   * select(), and when the desk comes up short of the programme's stories,
+   * stories aired longest ago come back first (NewsDesk.recycle): the
+   * offline slate (an all-local desk) always; live feeds only with
+   * config.recycle 'all', and then only stories aired at least
+   * config.recycleAfterHours ago. Never a story of the last few episodes.
+   */
+  stock(program, opts = {}) {
+    let list = this.select(program, opts);
+    const policy = this.config.recycle ?? 'local';
+    if (list.length >= (program.stories || 0) || typeof this.news.recycle !== 'function' || policy === 'off') return list;
+    if (policy !== 'all' && !this.news.localOnly) return list;
+    const pool = Math.max(this.config.candidatePool ?? 12, Math.ceil((program.stories || 0) * 1.5));
+    const minAgeMs = this.news.localOnly ? 0 : (this.config.recycleAfterHours ?? 4) * 3600_000;
+    const cats = program.categories || null;
+    const back = this.news.recycle((pool - list.length) * 2, { filter: (s) => !cats || cats.includes(s.category), gap: this.config.recycleGap ?? 5, minAgeMs });
+    if (back) list = this.select(program, opts);
+    return list;
   }
 
   canProduce(channel, programId) {
-    const program = channel.programs[programId];
-    return this.select(program).length >= Math.min(program.stories, this.config.minNewStories);
+    const program = { id: programId, ...channel.programs[programId] };
+    return this.stock(program).length >= this.floorOf(program);
   }
 
   async produce(channel, programId, { upcoming = [] } = {}) {
     const program = { id: programId, ...channel.programs[programId] };
     const cast = castOf(channel, programId);
     const presenters = Object.fromEntries(Object.entries(cast).map(([slot, id]) => [slot, { id, ...channel.presenters[id] }]));
-    const candidates = this.select(program, { upcoming: upcoming.map((id) => channel.programs[id]).filter(Boolean) });
-    if (candidates.length < Math.min(program.stories, this.config.minNewStories)) return null;
+    const candidates = this.stock(program, { upcoming: upcoming.map((id) => channel.programs[id]).filter(Boolean) });
+    if (candidates.length < this.floorOf(program)) return null;
 
     const ctx = { channelName: channel.name, program, presenters, cast, candidates, episode: null, provider: null, pipeline: [] };
     const started = Date.now();
@@ -227,25 +270,39 @@ export class Producer {
     return this.news.findPictures(ctx.candidates, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
   }
 
+
   async assets(ctx) {
     const stories = ctx.episode.storyIds.map((id) => this.news.get(id)).filter(Boolean);
     if (typeof this.news.findPictures === 'function') await this.news.findPictures(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
     else await Promise.all(stories.map((s) => this.news.resolveImage(s)));
     const verified = this.images ? await this.verifyPictures(stories) : null;
     const story = (id) => this.news.get(id);
+    // Every picture on air carries its credit (`imageCredit`, and `imageCreditVia`: media:credit | jsonld |
+    // site_name | outlet). Until the graphics draw "PHOTO: <credit>" from it, a picture that is not the
+    // outlet's own (lent by another outlet, or an agency's) also shows its credit where the source is
+    // already drawn (the strap plate, the montage card): "Bitport Herald / Photo: Pixelburg Post".
+    // `outlet` always keeps the outlet's own name for renderers that draw the credit themselves.
     const apply = (item) => {
       const s = story(item.storyId);
       item.hasImage = !!s?.image;
-      if (s?.image && s.imageCredit) item.imageCredit = s.imageCredit;
-      else delete item.imageCredit;
+      const outlet = item.outlet || item.source || s?.source || '';
+      if (outlet) item.outlet = outlet;
+      delete item.imageCredit;
+      delete item.imageCreditVia;
+      item.source = outlet;
+      if (!s?.image) return;
+      const c = pictureCredit(s, this.images?.sources?.get?.(s.id));
+      item.imageCredit = c.credit;
+      item.imageCreditVia = c.via;
+      if (!ownCredit(c.credit, outlet)) item.source = `${outlet} / Photo: ${c.credit}`;
     };
     for (const seg of ctx.episode.segments) {
       if (!seg.storyId) continue;
       apply(seg);
-      planVisuals(seg);
+      planVisuals(seg, { roundupPictures: ctx.program.pictures === 'every' });
     }
     for (const item of ctx.episode.rundown) apply(item);
-    const borrowed = stories.filter((s) => s.image && s.imageCredit).length;
+    const borrowed = stories.filter((s) => s.image && s.imageFrom).length;
     return { images: stories.filter((s) => s.image).length, ...(borrowed ? { borrowed } : {}), ...(verified || {}) };
   }
 

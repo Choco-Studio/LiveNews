@@ -137,9 +137,10 @@ describe('tint and accent censuses (wide, presenters hidden)', () => {
   test('MONEY MINUTE: saturated ≤ 10 % of set pixels, cream tint ≤ 8 %, darkGreen desk line', () => {
     const { cs } = setCensus('money-minute');
     assert.ok(share(cs, [...SATURATED]) <= 0.1, `saturated ${share(cs, [...SATURATED])}`);
-    // the warm room must read warm: a minimum as well as the bible's maximum
+    // the warm room reads warm through light, not blocks: the lamps' glows carry a sparse warm share
+    // (≥ 0.8 %), well under the bible's 8 % cap
     const tint = share(cs, styleFor('money-minute').tintNames);
-    assert.ok(tint >= 0.04 && tint <= 0.08, `tint ${tint}`);
+    assert.ok(tint >= 0.008 && tint <= 0.08, `tint ${tint}`);
     assert.ok(share(cs, ['darkGreen']) > 0 && share(cs, ['green']) === 0);
   });
   test('NEWS IN 60: yellow ≤ 1.5 %, saturated ≤ 6 %, cream tint ≤ 4 %', () => {
@@ -350,8 +351,11 @@ describe('video wall', () => {
   });
 });
 
+const CAMERA = lab.hasCamera();
 describe('round 3: wall plates inside their free area, clean tint clusters', () => {
-  test('a plate (kicker + source) stays inside the visible wall, clear of the graphics rows and every head', () => {
+  // the layouts depend on CAMERA's framings (camera.js, another stream's file): when it cannot load
+  // (mid-edit elsewhere), the lab's own presets are not the real framings, so these are skipped
+  test('a plate (kicker + source) stays inside the visible wall, clear of the graphics rows and every head', { skip: !CAMERA && 'camera.js unavailable (framings are CAMERA\'s)' }, () => {
     const texts = [['WILDLIFE', 'BITPORT HERALD'], ['NUMBER OF THE DAY', 'LEDGER LINE'], ['CONNECTIVITY', 'CIRCUIT WEEKLY'], ['A VERY LONG KICKER THAT CANNOT EVER FIT', 'AN EVEN LONGER SOURCE NAME FOR THE LINE']];
     let n = 0;
     for (const programme of [...PROGRAMS, 'generic']) {
@@ -374,20 +378,23 @@ describe('round 3: wall plates inside their free area, clean tint clusters', () 
     const p = plateRectFor(lab.cameraFor('single-a', 'news-60'), 'WILDLIFE', 'BITPORT HERALD', 'news-60');
     assert.ok(p.x0 >= 8 && p.kicker === 'WILDLIFE' && p.sub === 'BITPORT HERALD');
   });
-  test('solo programmes: the wall\'s bottom 16 px (wide scale) stay dark in every framing and wall mode', () => {
+  test('solo programmes: the wall\'s bottom band (16 px, 32 px where the wall is drawn at 2x) carries no content in any framing or wall mode', () => {
     const modes = [{ wall: 'idle' }, { wall: 'picture', image: 'port' }, { wall: 'plate' }, { wall: 'figure' }, { wall: 'map' }];
     for (const programme of ['news-60', 'money-minute']) {
       for (const framing of ['wide', 'single-a', 'mcu-l', 'mcu-r']) {
         const r = wallRect(lab.cameraFor(framing, programme));
-        const band = Math.round((16 / (1000 / SET.wallZ)) * r.k);
+        const band = 16 * (r.k < 1.25 ? 1 : 2);
         for (const m of modes) {
           const px = shot({ programme, framing, ...m });
+          const seen = new Set();
           for (let y = Math.max(0, r.y1 - band); y < Math.min(H, r.y1); y++) {
-            for (let x = Math.max(0, r.x0); x < Math.min(W, r.x1); x++) {
-              const c = px[y * W + x];
-              assert.ok(c === C.ink || c === C.black, `${programme} ${framing} ${m.wall}: ${nameOf(c)} at ${x},${y} (band ${band})`);
-            }
+            for (let x = Math.max(0, r.x0); x < Math.min(W, r.x1); x++) seen.add(px[y * W + x]);
           }
+          // one flat colour: the wall's own field (ink; MONEY MINUTE's slate), presenters excluded by
+          // shot() (presenters hidden)
+          assert.equal(seen.size, 1, `${programme} ${framing} ${m.wall}: ${[...seen].map(nameOf).join(',')} in the band ${band}`);
+          const c = [...seen][0];
+          assert.ok(c === C.ink || c === C.black || c === C.slate, `${programme} ${framing} ${m.wall}: band ${nameOf(c)}`);
         }
       }
     }
@@ -401,23 +408,34 @@ describe('round 3: wall plates inside their free area, clean tint clusters', () 
     }
     return false;
   };
-  test('a full tint is a flat cluster (no Bayer dot grid): MONEY MINUTE warm sconce washes', () => {
+  test('MONEY MINUTE warmth is light, not a block: no opaque warm 4x4 block on the back wall (critic r2)', () => {
     const px = shot({ programme: 'money-minute', framing: 'wide' });
-    assert.ok(blockOf(px, 'brown', 4), 'a 4x4 brown block in a MONEY MINUTE wash');
-    assert.ok(blockOf(px, 'tanShade', 2), 'a 2x2 tanShade block at a MONEY MINUTE sconce opening');
+    for (const name of ['brown', 'tanShade', 'maroon']) assert.ok(!blockOf(px, name, 4), `an opaque ${name} 4x4 block in the MONEY MINUTE wide`);
+    // and the warm share is there: the glows' warm Bayer around each lamp
+    const { cs } = setCensus('money-minute');
+    assert.ok(share(cs, ['brown', 'tanShade']) > 0.005);
   });
-  test('COSMOS: no coloured light on the set (the flank beams are gone): no purple, maroon or brown outside the wall', () => {
+  test('COSMOS: its colour is the purple practical pair only (no coloured wash on the walls); ≤ 12 %', () => {
     for (const framing of ['wide', 'two', 'single-a']) {
       const px = shot({ programme: 'cosmos', framing });
       const r = wallRect(lab.cameraFor(framing, 'cosmos'));
-      let n = 0;
+      const kf = (1000 * lab.cameraFor(framing, 'cosmos').zoom) / (SET.flatsZ - lab.cameraFor(framing, 'cosmos').z);
+      let n = 0, wash = 0;
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (x >= r.x0 - 4 && x < r.x1 + 4 && y >= r.y0 - 4 && y < r.y1 + 4) continue;
         const c = px[y * W + x];
-        if (c === C.purple || c === C.maroon || c === C.brown) n++;
+        if (c === C.maroon || c === C.brown) wash++;
+        if (c !== C.purple) continue;
+        n++;
+        // every purple pixel is on a practical strip of the set flats (world X ±214 at the flats' depth)
+        const X = lab.cameraFor(framing, 'cosmos').x + (x + 0.5 - 192) / kf;
+        if (Math.abs(Math.abs(X) - 214) > 4) wash++;
       }
-      assert.equal(n, 0, `${framing}: ${n} coloured set pixels`);
+      assert.equal(wash, 0, `${framing}: ${wash} coloured wash pixels`);
+      assert.ok(n / (W * H) <= 0.12);
     }
+    const { cs } = setCensus('cosmos');
+    assert.ok(share(cs, ['purple']) > 0, 'the purple practicals show in the wide');
   });
 });
 
@@ -611,20 +629,40 @@ describe('fix round 1: layout, pictures, light (critics of round 3)', () => {
       }
     }
   });
-  test('no picture or map pixel within 6 px of a head (the solo WIDE included), never under the graphics top row', () => {
+  test('pictures: a box beside a head keeps 6 px from it and stays under the graphics top row; a full wall continues under that row one step darker; the solo WIDE fills the wall behind the head', () => {
     for (const programme of [...STYLE_IDS, 'weekend-review']) {
       for (const framing of lab.FRAMINGS) {
         const cam = lab.cameraFor(framing, programme === 'weekend-review' ? 'generic' : programme);
         const m = mediaRectFor(cam, programme);
         if (m.x1 <= m.x0) continue; // no room: the plate shows instead
         const what = `${programme} ${framing} media ${m.x0},${m.y0}-${m.x1},${m.y1}`;
+        if (!m.framed) continue; // the whole visible wall (checked on pixels below)
         assert.ok(m.y0 >= 22, `${what} under the top row`);
         for (const h of m.heads) assert.ok(m.x1 + 6 <= h.x0 || m.x0 >= h.x1 + 6 || m.y1 + 6 <= h.y0 || m.y0 >= h.y1 + 6, `${what} within 6 px of head ${JSON.stringify(h)}`);
       }
     }
-    // the MONEY MINUTE solo wide (pictures on the WIDE): a box above Penny's head, not the wall behind it
-    const m = mediaRectFor(lab.cameraFor('wide', 'money-minute'), 'money-minute');
-    assert.ok(m.framed && m.x1 - m.x0 >= 32 && m.y1 - m.y0 >= 18, JSON.stringify(m));
+    // the solo WIDE (pictures on the WIDE, money-minute.md): the picture fills the wall above its dark
+    // band, the presenter's head occluding its lower centre (critics r2: never a postage stamp)
+    for (const programme of ['money-minute', 'news-60']) {
+      const cam = lab.cameraFor('wide', programme);
+      const m = mediaRectFor(cam, programme);
+      const r = wallRect(cam);
+      assert.ok(!m.framed && m.x1 - m.x0 >= r.x1 - r.x0 - 2 && m.y1 - m.y0 >= 40, `${programme} ${JSON.stringify(m)}`);
+    }
+    // a duo single's full-wall picture runs to the wall's top edge; its rows under the graphics' top
+    // row are one palette step darker (never brighter than steel there), no black letterbox
+    const cam = lab.cameraFor('single-a', 'world-now');
+    const r = wallRect(cam);
+    const px = shot({ programme: 'world-now', framing: 'single-a', wall: 'picture', image: 'port' });
+    let dark = 0, black = 0, n = 0;
+    for (let y = Math.max(0, r.y0 + 2); y < 22; y++) for (let x = Math.max(0, r.x0 + 4); x < Math.min(W, r.x1 - 4); x++) {
+      const c = px[y * W + x];
+      n++;
+      if (LSTAR[nameOf(c)] <= LSTAR.steel + 0.1) dark++;
+      if (c === C.black) black++;
+    }
+    assert.ok(n > 0 && dark === n, `${dark}/${n} under the top row no brighter than steel`);
+    assert.ok(black < n * 0.5, `${black}/${n} black: a letterbox`);
   });
   test('the wall field has no value transition beside a head: it is settled above every head top', () => {
     for (const programme of [...STYLE_IDS, 'generic']) {
@@ -667,7 +705,7 @@ describe('fix round 1: layout, pictures, light (critics of round 3)', () => {
         const L = LSTAR[nm];
         sum += L;
         n++;
-        if (L > max + 20.5) bright++;
+        if (L > 45) bright++; // ART_DIRECTION: highlights (above the wall's L* 45 ceiling) on at most 10 % of it
         names.set(nm, (names.get(nm) || 0) + 1);
       }
       const what = `${programme} ${framing}`;
@@ -732,23 +770,189 @@ describe('fix round 1: layout, pictures, light (critics of round 3)', () => {
     assert.equal(warmWallContent({ mode: 'picture', image: img, label: 'CHIPS' }, 'tech-bytes', lab.cameraFor('wide', 'tech-bytes')), true);
     assert.equal(warmWallContent(null, 'tech-bytes'), false);
   });
-  test('MONEY MINUTE sconces: each wash is centred on its fixture and warms the panel; none reaches the head zone', () => {
+  test('MONEY MINUTE lamps: a warm glow around each fixture, symmetric, beside the wall, never near Penny', () => {
     const px = shot({ programme: 'money-minute', framing: 'wide' });
+    const r = wallRect(lab.cameraFor('wide', 'money-minute'));
     const warm = new Set([C.brown, C.tanShade]);
-    let left = 0, right = 0, centre = 0, lx = 0, rx = 0;
+    let left = 0, right = 0, centre = 0, lx = 0, rx = 0, top = 0;
     for (let y = 0; y < 150; y++) for (let x = 0; x < W; x++) {
       if (!warm.has(px[y * W + x])) continue;
-      if (x < 140) { left++; lx += x; } else if (x >= 244) { right++; rx += x; } else centre++;
+      if (y < 24) top++;
+      if (x < r.x0 - 2) { left++; lx += x; } else if (x >= r.x1 + 2) { right++; rx += x; } else centre++;
     }
-    assert.ok(left > 600 && right > 600, `washes ${left} / ${right}`);
-    assert.equal(centre, 0, 'no warm light between x 140 and 244 (the wall and Penny)');
-    assert.ok(Math.abs(lx / left + rx / right - 384) <= 2, 'the washes are symmetric');
+    assert.ok(left > 80 && right > 80, `glows ${left} / ${right}`);
+    assert.equal(centre, 0, 'no warm light over the wall and Penny');
+    assert.equal(top, 0, 'no warm light in the graphics top row (y < 24)');
+    assert.ok(Math.abs(lx / left + rx / right - 384) <= 2, 'the glows are symmetric');
   });
+
   test('NEWS IN 60 wide dial: r ≥ 14 with legible ticks (the 12 o\'clock in yellow), static', () => {
     const px = shot({ programme: 'news-60', framing: 'wide', phase: 'outro' });
     const r = wallRect(lab.cameraFor('wide', 'news-60'));
     let x0 = W, x1 = -1;
     for (let y = r.y0; y < r.y1; y++) for (let x = r.x0; x < r.x1; x++) if (px[y * W + x] === C.yellow) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
     assert.ok(x1 - x0 + 1 >= 29, `dial ${x1 - x0 + 1} px across`);
+  });
+});
+
+describe('fix round 2 (critics of fix round 1)', () => {
+  const fixtures = fs.readdirSync(new URL('../config/fixtures/img/', import.meta.url)).filter((f) => f.endsWith('.png')).map((f) => f.replace('.png', ''));
+  const pics = fixtures.slice(0, 28);
+  for (const n of pics) lab.setImage(n, fixture(n));
+
+  test('COSMOS idle at 60 fps, two-shot and singles: cached = uncached on every frame (planet signature hashes whole colours)', () => {
+    for (const framing of ['two', 'single-a', 'mcu-r']) {
+      const cam = lab.cameraFor(framing, 'cosmos');
+      const style = styleFor('cosmos');
+      const run = (on) => {
+        setCacheEnabled(on);
+        resetWall();
+        const fr = new Frame(), clip = new Int16Array(W);
+        const out = [];
+        for (let i = 0; i < 660; i++) {
+          drawBackground(fr, cam, 200 + i / 60, { style, wall: { mode: 'idle' }, shotSince: 1 });
+          drawDesk(fr, cam, clip);
+          if (i % 3 === 0 || i > 600) out.push(Uint32Array.from(fr.px));
+        }
+        return out;
+      };
+      const a = run(false), b = run(true);
+      let bad = 0;
+      for (let i = 0; i < a.length; i++) {
+        let d = 0;
+        for (let k = 0; k < a[i].length; k++) if (a[i][k] !== b[i][k]) d++;
+        if (d) bad++;
+      }
+      assert.equal(bad, 0, `cosmos ${framing}: ${bad} of ${a.length} sampled frames differ cached vs uncached`);
+    }
+    setCacheEnabled(true);
+  });
+
+  test('wall pictures: at most 10 % above L* 45 on every fixture and programme (highlights, ART_DIRECTION values)', () => {
+    let checked = 0;
+    for (const [programme, framing] of [['world-now', 'wide'], ['tech-bytes', 'wide'], ['money-minute', 'wide'], ['cosmos', 'two'], ['news-60', 'mcu-l']]) {
+      const m = mediaRectFor(lab.cameraFor(framing, programme), programme);
+      for (const image of pics) {
+        const px = shot({ programme, framing, wall: 'picture', image });
+        let n = 0, hi = 0;
+        // the picture's area on the wall (as the cap is defined: a share of the wall picture)
+        for (let y = Math.max(0, m.y0); y < Math.min(H, m.y1); y++) for (let x = Math.max(0, m.x0); x < Math.min(W, m.x1); x++) {
+          const i = y * W + x;
+          n++;
+          if (LSTAR[nameOf(px[i])] > 45) hi++;
+        }
+        assert.ok(hi <= n * 0.1 + 1, `${programme} ${framing} ${image}: ${(100 * hi / n).toFixed(1)} % above L* 45`);
+        checked++;
+      }
+    }
+    assert.ok(checked >= 100);
+  });
+
+  test('wall pictures keep each bible\'s forbidden colours off the wall (TECH/COSMOS no purple or magenta; MONEY no green)', () => {
+    const forbid = { 'tech-bytes': ['purple', 'magenta', 'pink'], cosmos: ['purple', 'magenta', 'pink'], 'money-minute': ['green', 'darkGreen'] };
+    for (const [programme, names] of Object.entries(forbid)) {
+      const framing = programme === 'cosmos' ? 'two' : 'wide';
+      const m = mediaRectFor(lab.cameraFor(framing, programme), programme);
+      const cs = names.map((n) => C[n]);
+      for (const image of pics) {
+        const px = shot({ programme, framing, wall: 'picture', image });
+        let bad = 0;
+        for (let y = Math.max(0, m.y0); y < Math.min(H, m.y1); y++) for (let x = Math.max(0, m.x0); x < Math.min(W, m.x1); x++) if (cs.includes(px[y * W + x])) bad++;
+        // (MONEY MINUTE's darkGreen wordmark rule is idle content, never with a picture)
+        assert.equal(bad, 0, `${programme} ${image}: ${bad} forbidden pixels on the wall`);
+      }
+    }
+  });
+
+  test('MONEY MINUTE keeps the home value range: head ring ≥ WORLD NOW\'s minus 2 L* in every framing', { skip: !PRESENTERS && 'presenter modules unavailable' }, () => {
+    const ring = (programme, framing) => {
+      lab.set({ programme, framing, wall: 'idle', presenters: true });
+      lab.reset();
+      return lab.measure(10).headZone.mean;
+    };
+    const home = Math.min(ring('world-now', 'wide'), ring('world-now', 'single-a'), ring('world-now', 'mcu-r'));
+    for (const framing of ['wide', 'single-a', 'mcu-l', 'mcu-r', 'ots']) {
+      const v = ring('money-minute', framing);
+      assert.ok(v >= home - 2 && v <= 45, `money-minute ${framing}: ring ${v.toFixed(1)} vs home ${home.toFixed(1)}`);
+    }
+    lab.set({ presenters: false });
+  });
+
+  test('TECH BYTES: every presenter\'s face is ≥ 25 L* over the 12 px ring around the head (no Bayer through the head)', { skip: !PRESENTERS && 'presenter modules unavailable' }, () => {
+    for (const framing of ['two', 'single-a', 'single-b']) {
+      lab.set({ programme: 'tech-bytes', framing, wall: 'idle', presenters: true });
+      lab.reset();
+      const m = lab.measure(10);
+      for (const f of m.faces) assert.ok(f - m.headZone.mean >= 25, `tech-bytes ${framing}: face ${f.toFixed(1)} ring ${m.headZone.mean.toFixed(1)}`);
+    }
+    lab.set({ presenters: false });
+  });
+
+  test('desk lines under a slow push in the two-shot: each pixel changes at most once (no A→B→A flip-back)', () => {
+    for (const programme of ['world-now', 'cosmos']) {
+      lab.set({ programme, framing: 'two', wall: 'idle', presenters: false, cache: true, move: { type: 'push', amount: 0.04, delay: 0.5, dur: 5 } });
+      lab.reset();
+      const { cam } = lab.render(0);
+      const r = wallRect(cam);
+      let prev = null, flips = 0;
+      const lastVal = new Uint32Array(W * H), last = new Int32Array(W * H).fill(-999);
+      for (let i = 0; i < 300; i++) {
+        lab.render(i / 60);
+        const px = lab.frame.px;
+        if (prev) for (let k = 0; k < W * H; k++) {
+          if (px[k] === prev[k]) continue;
+          const x = k % W, y = (k / W) | 0;
+          const inWall = x >= r.x0 - 3 && x < r.x1 + 3 && y >= r.y0 - 3 && y < r.y1 + 3;
+          if (!inWall && y >= 150 && px[k] === lastVal[k] && i - last[k] <= 15) flips++;
+          lastVal[k] = prev[k];
+          last[k] = i;
+        }
+        prev = Uint32Array.from(px);
+      }
+      assert.ok(flips <= 20, `${programme} two-shot push: ${flips} desk flip-backs`);
+    }
+    lab.set({ move: null });
+  });
+
+  test('story plates carry what the strap does not: the kicker over the place, never the source; body 1x', () => {
+    const base = { program: { id: 'news-60' }, cast: { A: 'sam' }, images: new Map(), focus: 'A', framing: 'mcu-l' };
+    const seg = { type: 'story', storyId: 'n1', kicker: 'TRANSPORT', source: 'Bitport Herald', location: { place: 'NORWAY', lat: 60, lon: 10 } };
+    const w = wallFromScene({ ...base, storyId: 'n1', wall: { mode: 'source', source: 'Bitport Herald', category: 'world' }, lowerThird: { kicker: 'TRANSPORT' }, segPlan: { ctx: { seg, shots: [] } } });
+    assert.deepEqual([w.mode, w.label, w.sub, w.story], ['plate', 'TRANSPORT', 'NORWAY', true]);
+    assert.ok(!/BITPORT/i.test(`${w.label} ${w.sub}`), 'no source on the wall');
+    // a NUMBER OF THE DAY item shows its number (with the qualifier) unless the plan has it on a card
+    const nseg = { type: 'story', storyId: 'c2', kicker: 'NUMBER OF THE DAY', source: 'Circuit Weekly', numbers: [{ value: '160 MILLION', label: 'PASSENGERS', qualifier: 'MORE THAN' }] };
+    const cos = { program: { id: 'cosmos' }, cast: { A: 'nova', B: 'unit8' }, images: new Map(), focus: 'A', storyId: 'c2', wall: { mode: 'source', source: 'Circuit Weekly' } };
+    const f = wallFromScene({ ...cos, segPlan: { ctx: { seg: nseg, shots: [] } } });
+    assert.equal(f.mode, 'figure');
+    assert.deepEqual([f.figure.value, f.figure.pre], ['160 MILLION', 'MORE THAN']);
+    assert.equal(wallFromScene({ ...cos, segPlan: { ctx: { seg: nseg, shots: [{ shot: 'fact' }] } } }).mode, 'plate');
+    // a story plate is body 1x in a single (the strap is body 1x under it)
+    const p1 = plateRectFor(lab.cameraFor('single-a', 'news-60'), 'WATER', 'CANADA', 'news-60', true);
+    const p2 = plateRectFor(lab.cameraFor('single-a', 'news-60'), 'WATER', 'CANADA', 'news-60', false);
+    assert.equal(p1.ts, 1);
+    assert.equal(p2.ts, 2);
+  });
+
+  test('plate text breaks: balanced lines that never end on a preposition; a place is never cut mid-name', () => {
+    const cam = lab.cameraFor('single-a', 'world-now');
+    const p = plateRectFor(cam, 'PEACE TALKS RESUME IN GENEVA', '', 'world-now', true);
+    if (p && p.lines.length === 2) {
+      assert.ok(!/\b(IN|OF|TO|THE|A|AND|FOR|AT|ON)$/.test(p.lines[0]), `line 1 "${p.lines[0]}"`);
+      assert.ok(p.lines[1].split(' ').length >= 2, `orphan "${p.lines[1]}"`);
+    }
+    // wallFromScene passes the whole place; a plate that cannot fit it shows the name before the region
+    const w = plateRectFor(lab.cameraFor('wide', 'news-60'), 'AROUND THE WORLD', 'SAN FRANCISCO, CALIFORNIA', 'news-60', true);
+    if (w && w.sub) assert.ok(!/,$/.test(w.sub) && !/\bCALIF$/.test(w.sub), w.sub);
+  });
+
+  test('a story wall is never blank: when no plate fits, the programme idle shows', () => {
+    for (const programme of ['money-minute', 'news-60', 'world-now']) {
+      const px = shot({ programme, framing: 'ots', wall: 'plate', label: 'A KICKER FAR TOO LONG TO EVER FIT HERE', sub: '' });
+      const r = wallRect(lab.cameraFor('ots', programme));
+      const seen = new Set();
+      for (let y = Math.max(22, r.y0 + 2); y < Math.min(136, r.y1 - 2); y++) for (let x = Math.max(8, r.x0 + 2); x < Math.min(376, r.x1 - 2); x++) seen.add(px[y * W + x]);
+      assert.ok(seen.size >= 3, `${programme} ots: a blank wall (${seen.size} colours)`);
+    }
   });
 });

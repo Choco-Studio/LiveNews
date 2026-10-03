@@ -146,9 +146,9 @@ export function maxHold(shot, programId) {
  * the shot that replaces it can hold the cooldown too, return a cue back to the speaker's studio
  * shot: a map, picture or card → the speaker's single (`closeFraming`); a single → the wide
  * (`wideFraming`; not NEWS IN 60, whose bible keeps the wide for the intro and sign-off); a wide in
- * a story → the single (an intro's wide is the bible's and stays). Never on or just after a dry line, and never when the replacement would
- * run straight into an identical opening shot of the next segment (`nextOpen`: { shot, framing,
- * focus }), which would only make one longer hold of it. Null otherwise. Pure.
+ * a story → the single (an intro's wide is the bible's and stays). Never on or just after a dry line,
+ * and never from a studio shot into one that would run straight into an identical opening shot of the
+ * next segment (`nextOpen`: { shot, framing, focus }): that only makes one longer hold. Null otherwise. Pure.
  */
 export function holdCut(plan, si, onAir, { programId = null, gap = 0.6, cues = null, closeFraming = null, wideFraming = null, nextOpen = null, rate = 1 } = {}) {
   const ctx = plan?.ctx;
@@ -179,7 +179,9 @@ export function holdCut(plan, si, onAir, { programId = null, gap = 0.6, cues = n
     shot = 'close';
     framing = closeFraming;
   }
-  if (next === end && nextOpen && nextOpen.shot === shot && (nextOpen.framing ?? null) === (framing ?? null) && nextOpen.focus === ctx.speaker) return null;
+  // a studio shot that would only continue as the next segment's identical opening: no gain (a picture or map
+  // past its maximum still goes back to the presenter: the new story's strap changes that picture anyway)
+  if (STUDIO.has(onAir.shot) && next === end && nextOpen && nextOpen.shot === shot && (nextOpen.framing ?? null) === (framing ?? null) && nextOpen.focus === ctx.speaker) return null;
   return { k: 1000 + si, char: sent.start, at: t0, sentence: si, mid: false, shot, framing: framing ?? null, focus: ctx.speaker, move: null, card: null, minLen: null, beat: 'hold', guard: true };
 }
 

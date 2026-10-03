@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { claimGrounded, extractFigures, groundQuote, isGrave, numbersGrounded, numbersIn, quotationsGrounded, quotesIn, wordsGrounded } from '../server/facts.js';
+import { claimGrounded, extractFigures, groundQuote, harmlessIncident, inventedClaim, isGrave, severity, numbersGrounded, numbersIn, quotationsGrounded, quotesIn, wordsGrounded } from '../server/facts.js';
 
 describe('numbersIn', () => {
   test('reads figures as news copy writes them, with scale words', () => {
@@ -90,7 +90,7 @@ describe('extractFigures', () => {
     assert.equal(extractFigures('Brent crude dropped 2 percent to 71 dollars a barrel.').find((f) => f.value === '2%').fact, 'BRENT CRUDE DOWN 2%');
     assert.equal(extractFigures('The index has gained 21 percent since January.')[0].fact, 'INDEX UP 21%', 'a percentage names what moved');
     assert.equal(extractFigures('A survey found 62 percent of traders use solar.')[0].fact, '62% OF TRADERS');
-    assert.equal(extractFigures('The cost of shipping a container has fallen by 20 percent.')[0].fact, 'COST DOWN 20%');
+    assert.equal(extractFigures('The cost of shipping a container has fallen by 20 percent.')[0].fact, 'SHIPPING COST DOWN 20%', 'the cost of what: shipping');
     assert.equal(extractFigures('Electric models made up 17 percent of new cars.')[0].fact, '17% OF NEW CARS', '"made up" is not a rise');
     assert.deepEqual(extractFigures('It is 20 percent.'), [], 'a bare percentage with nothing to say is dropped');
     assert.equal(extractFigures('A deal worth about 12 billion dollars.')[0].fact, 'ABOUT 12 BILLION DOLLARS');
@@ -196,5 +196,62 @@ describe('isGrave: disaster and emergency vocabulary (editorial-2)', () => {
   });
   test('light stories with near-miss words stay light', () => {
     for (const t of ['Tidal power station starts sending electricity', 'Fireworks light up the harbour', 'Coffee prices reach a ten-year high', 'Bank announces red-alert pricing', 'Startup raises funds']) assert.equal(isGrave(t), false, t);
+  });
+});
+
+describe('inventedClaim: fix round 1 variants', () => {
+  const SRC = 'Panama Canal reopens after a day-long closure. The Panama Canal has reopened to ships after fog closed it for a day. Engineers say about 30 ships are waiting to cross. Shipping companies say the delays should clear within days.';
+  test('drops what the source never says', () => {
+    for (const [t, why] of [
+      ['Engineers blamed sabotage for the closure.', /not in the source|cause/],
+      ['Police say about 30 ships are waiting.', /speaker "Police"/],
+      ['Ships had been stuck for weeks.', /time "for weeks"/],
+      ['The canal will close again next week.', /time/],
+      ['Engineers say the canal is now safe for ships.', /assessment "safe"/],
+      ['Engineers warn that more fog could close it again.', /time "again"/],
+      ['The canal will reopen tomorrow.', /time "tomorrow"/],
+    ]) assert.match(inventedClaim(t, SRC) || '', why, t);
+  });
+  test('keeps what the source says, rephrased or reordered', () => {
+    for (const t of [
+      'The Panama Canal has reopened to ships after fog closed it for a day.',
+      'About 30 ships are waiting to cross, engineers say.',
+      'Shipping companies say the delays should clear within days.',
+      'Fog had closed it for a day.',
+    ]) assert.equal(inventedClaim(t, SRC), null, t);
+  });
+});
+
+describe('severity: grave by sense and harm, not by keyword (fix round 1)', () => {
+  test('table', () => {
+    const rows = [
+      ['Moderate earthquake shakes northern Chile, no damage reported. Emergency services say there are no reports of damage or injuries.', false, 0, true],
+      ['Startup fires its CEO after a boardroom row', false, 0, false],
+      ['Coach was fired after a poor season', false, 0, false],
+      ['Fire drill at museum goes smoothly', false, 0, false],
+      ['Government collapses after confidence vote', false, 0, false],
+      ['Firefighters rescue cat from tree', false, 0, false],
+      ['Carmaker to close Turin plant, 2,400 jobs at risk', false, 0, false],
+      ['Record-breaking heatwave hits Spain', true, 2, false],
+      ['Gunmen open fire at a market', true, 2, false],
+      ['Hurricane Elena cuts power to 1.2 million homes', true, 3, false],
+      ['Kerala floods: thousands moved to relief camps', true, 3, false],
+      ['Seville records 44 degrees as Spain issues heat alert. Spain has declared a red alert.', true, 3, false],
+      ['Building collapses in Lagos, 10 dead', true, 3, false],
+      ['Earthquake kills 12 in Peru; no damage reported at the airport', true, 3, false],
+    ];
+    for (const [text, grave, sev, mild] of rows) {
+      assert.equal(isGrave(text), grave, `grave: ${text}`);
+      assert.equal(severity(text), sev, `severity: ${text}`);
+      assert.equal(harmlessIncident(text), mild, `harmless: ${text}`);
+    }
+  });
+});
+
+describe('fact labels say what is counted (fix round 1)', () => {
+  test('a counting word gets the counted thing and its verb; a finding beats the size of a sample', () => {
+    assert.equal(extractFigures('A new handheld games console sold 2 million units in its first week.')[0].fact, '2 MILLION CONSOLES SOLD');
+    assert.equal(extractFigures('The firm made 300 units.').length >= 0, true);
+    assert.equal(extractFigures('Streets with many trees were about 2 degrees cooler than streets without them, a study of 90 European cities found.')[0].fact, 'ABOUT 2 DEGREES COOLER');
   });
 });

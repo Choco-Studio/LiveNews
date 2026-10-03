@@ -84,7 +84,7 @@ const COUNTRIES = [
   ['Uganda', 1.4, 32.3, null, [], ['Ugandan']],
   ['Tanzania', -6.4, 34.9, null, [], ['Tanzanian']],
   ['Rwanda', -1.9, 29.9, null, [], ['Rwandan']],
-  ['Democratic Republic of the Congo', -4.0, 21.8, 'DR CONGO', ['DR Congo', 'DRC'], ['Congolese']],
+  ['Democratic Republic of the Congo', -4.0, 21.8, 'DR CONGO', ['DR Congo', 'DRC', 'Congo'], ['Congolese']],
   ['Nigeria', 9.1, 8.7, null, [], ['Nigerian', 'Nigerians']],
   ['Ghana', 7.9, -1.0, null, [], ['Ghanaian']],
   ['Senegal', 14.5, -14.5, null, [], ['Senegalese']],
@@ -221,6 +221,12 @@ const CITIES = [
   ['Dar es Salaam', -6.79, 39.21, 'Tanzania'],
   ['Kigali', -1.95, 30.06, 'Rwanda'],
   ['Kinshasa', -4.44, 15.27, 'Democratic Republic of the Congo'],
+  ['Goma', -1.68, 29.22, 'Democratic Republic of the Congo'],
+  ['Mogadishu', 2.05, 45.32, 'Somalia'],
+  ['Odesa', 46.48, 30.73, 'Ukraine', ['Odessa']],
+  ['Kharkiv', 49.99, 36.23, 'Ukraine', ['Kharkov']],
+  ['Port-au-Prince', 18.54, -72.34, 'Haiti'],
+  ['Aleppo', 36.2, 37.16, 'Syria'],
   ['Lagos', 6.52, 3.38, 'Nigeria'],
   ['Abuja', 9.08, 7.4, 'Nigeria'],
   ['Accra', 5.6, -0.19, 'Ghana'],
@@ -350,6 +356,8 @@ const REGIONS = [
   ['Crete', 35.2, 24.9, 'Greece', []],
   ['Greek islands', 37.5, 25.0, 'Greece', []],
   ['California', 37.0, -119.5, 'United States', []],
+  ['Oregon', 44.0, -120.5, 'United States', []],
+  ['Western Norway', 60.6, 6.2, 'Norway', ['western Norway', 'west coast of Norway', "Norway's west coast", 'Norway’s west coast', 'Norwegian fjords']],
   ['Texas', 31.0, -99.0, 'United States', []],
   ['Florida', 28.0, -81.7, 'United States', []],
   ['Alaska', 64.0, -150.0, 'United States', []],
@@ -575,7 +583,7 @@ const snapRadius = (e) => (e.kind === 'city' ? 3 : e.kind === 'region' ? (e.broa
  * country ("SPRINGFIELD, USA") must at least be in that country, or it is
  * pinned (and labelled) at the country. Returns the location or null.
  */
-export function snapLocation(loc) {
+export function snapLocation(loc, source = null) {
   if (!loc) return null;
   const known = lookupPlace(loc.place);
   const nowhere = loc.lat === 0 && loc.lon === 0;
@@ -584,7 +592,15 @@ export function snapLocation(loc) {
     // the label names; a pin outside it is put on that country and the label says only what we know.
     const parts = String(loc.place).split(',').map((p) => p.trim()).filter(Boolean);
     const wider = parts.length > 1 ? lookupPlace(parts.at(-1)) : null;
-    if (!wider) return nowhere ? null : loc;
+    if (!wider) {
+      if (nowhere) return null;
+      // A "CITY, COUNTRY" label of which nothing is known ("GOMA, CONGO" before we knew either): the pin stays
+      // only inside a country the story names (given the text), else no pin rather than a dot in the wrong
+      // country. A single unknown name keeps its pin (nothing to check it against).
+      if (source === null || parts.length < 2) return loc;
+      const countries = new Set(findPlaces(source).map((h) => lookupPlace(h.entry.country || h.entry.name)).filter((e) => e && e.kind === 'country'));
+      return [...countries].some((c) => degreesApart(loc, c) <= snapRadius(c)) ? loc : null;
+    }
     if (nowhere || degreesApart(loc, wider) > snapRadius(wider)) return { place: wider.label, lat: wider.lat, lon: wider.lon };
     return loc;
   }

@@ -397,16 +397,19 @@ describe('pictures: the desk finds, filters and lends pictures', () => {
     assert.equal(borrower.imageCredit, 'Alpha');
   });
 
-  test('an own picture found on the article page replaces a borrowed one (and drops the credit)', async () => {
-    const donor = story('Alpha', 'Storm closes ports along the coast', { image: 'https://cdn.test/storm.jpg', imageWidth: 1200 });
-    const s = story('Beta', 'Storm closes ports along the northern coast');
+  test('an own picture found on the article page replaces a borrowed one (and the credit goes back to the outlet)', async () => {
+    // a picture is lent only when both reports say where (the same place): a wrong picture is worse than none
+    const donor = story('Alpha', 'Storm closes ports along the coast of Portugal', { image: 'https://cdn.test/storm.jpg', imageWidth: 1200 });
+    const s = story('Beta', 'Storm closes ports along the northern coast of Portugal');
     const d = desk([donor, s], routes({}));
     d.borrowPictures([s]);
     assert.equal(s.imageCredit, 'Alpha');
     d.fetch = routes({ [s.link]: page('<meta property="og:image" content="https://cdn.test/beta-storm.jpg"><meta property="og:image:width" content="1000">') });
     await d.findPictures([s]);
     assert.equal(s.image, 'https://cdn.test/beta-storm.jpg');
-    assert.equal(s.imageCredit, undefined);
+    assert.equal(s.imageCredit, 'Beta');
+    assert.equal(s.imageCreditVia, 'outlet');
+    assert.equal(s.imageFrom, undefined);
   });
 
   test('the same headline from two feeds: the kept report takes the other one\'s picture (a duplicate, credited)', async () => {
@@ -468,7 +471,12 @@ describe('pictures: the producer stamps what airs', () => {
     const [a, b, c] = ctx.episode.segments.slice(1, 4);
     assert.deepEqual([a.hasImage, b.hasImage, c.hasImage], [true, true, false]);
     assert.equal(b.imageCredit, 'Gamma');
-    assert.equal(a.imageCredit, undefined, 'its own picture: the strap already names the outlet');
+    assert.equal(b.source, 'Beta / Photo: Gamma', 'a lent picture shows its credit where the source is drawn');
+    assert.equal(b.outlet, 'Beta');
+    assert.equal(a.imageCredit, 'Alpha', 'every picture on air has a credit: its own outlet here');
+    assert.equal(a.imageCreditVia, 'outlet');
+    assert.equal(a.source, 'Alpha', 'its own picture: the strap already names the outlet');
+    assert.equal(c.imageCredit, undefined);
     assert.deepEqual(ctx.episode.rundown.map((r) => r.hasImage), [true, true, false]);
     assert.equal(ctx.episode.rundown[1].imageCredit, 'Gamma');
     assert.equal(note.images, 2);

@@ -149,19 +149,40 @@ function* bakeSteps(style) {
   if (!SCRATCH || SCRATCH.length < 2 * n) SCRATCH = new Float64Array(2 * n);
   const acc = SCRATCH.subarray(0, n), tv = SCRATCH.subarray(n, 2 * n);
   acc.fill(0);
+  // A pool: the classic soft ellipse, or (any of these options) a shaped light: `below` (its radius
+  // under the centre, as a share of ry: top-weighted), `flare` (narrower at the top, wider at the
+  // foot: a downlight's scallop), `edge` (a flat plateau with a soft edge this share of the radius
+  // wide: a narrow Bayer band instead of a dithered ring), `fade` (dimmer toward its foot)
   const addPools = (arr, pools) => {
     for (const p of pools) {
-      const xa = clampI(Math.floor(p.X - p.rx - TX0 - 1), txa, txb), xb = clampI(Math.ceil(p.X + p.rx - TX0 + 1), txa, txb);
-      const ya = clampI(Math.floor(p.Y - p.ry - TY0 - 1), tya, TH), yb = clampI(Math.ceil(p.Y + p.ry - TY0 + 1), tya, TH);
+      const below = p.below ?? 1, flare = p.flare || 0, edge = p.edge || 0, fade = p.fade || 0;
+      const shaped = below !== 1 || flare || edge || fade || p.ring;
+      const rxMax = p.rx * (1 + Math.abs(flare));
+      const xa = clampI(Math.floor(p.X - rxMax - TX0 - 1), txa, txb), xb = clampI(Math.ceil(p.X + rxMax - TX0 + 1), txa, txb);
+      const ya = clampI(Math.floor(p.Y - p.ry - TY0 - 1), tya, TH), yb = clampI(Math.ceil(p.Y + p.ry * below - TY0 + 1), tya, TH);
       for (let ty = ya; ty < yb; ty++) {
-        const dy = (TY0 + ty + 0.5 - p.Y) / p.ry;
+        const oy = TY0 + ty + 0.5 - p.Y;
+        const dy = oy / (oy > 0 ? p.ry * below : p.ry);
         const dy2 = dy * dy;
         if (dy2 >= 1) continue;
+        const irx = 1 / (p.rx * (1 + flare * dy));
+        const dim = fade && dy > 0 ? 1 - fade * smooth(dy) : 1;
         let i = (ty - tya) * lw + (xa - txa);
         for (let tx = xa; tx < xb; tx++, i++) {
-          const dx = (TX0 + tx + 0.5 - p.X) / p.rx;
+          const dx = (TX0 + tx + 0.5 - p.X) * irx;
           const d = dx * dx + dy2;
-          if (d < 1) arr[i] += p.amount * (1 - d) * (1 - d * 0.35);
+          if (d >= 1) continue;
+          if (p.ring) {
+            // a ring (tint pools): only between ring[0] and ring[1] of the radius, eased in and out
+            const r = Math.sqrt(d), [r0, r1] = p.ring;
+            if (r > r0 && r < r1) arr[i] += p.amount * Math.sin((Math.PI * (r - r0)) / (r1 - r0));
+            continue;
+          }
+          if (!shaped) arr[i] += p.amount * (1 - d) * (1 - d * 0.35);
+          else {
+            const r = Math.sqrt(d);
+            arr[i] += p.amount * dim * (edge ? smooth((1 - r) / edge) : (1 - d) * (1 - d * 0.35));
+          }
         }
       }
     }
@@ -201,7 +222,36 @@ function* bakeSteps(style) {
         if (!tints) continue;
         // warm wherever the wash is the light: the tint's Bayer edge sits low in the wash, where the
         // light is still ink (untinted), so the warm colour is one clean cluster with no specks
-        const hv = (v - sc.tintAt) / sc.tintBand + 0.5;
+        // (tintShare < 1 caps the warm share: the wash's heart is a mix of lit and warm pixels, never
+        // an opaque warm block)
+        const hv = Math.min(0.24 + 0.52 * (sc.tintShare ?? 1), (v - sc.tintAt) / sc.tintBand + 0.5);
+        if (hv > tv[i]) tv[i] = hv;
+      }
+    }
+  }
+  // glows: the light a wall lamp throws on its panel, a soft rounded oval brightest just above the
+  // shade (top-weighted: shorter below the centre), falling off smoothly (no cones, no bow-tie). Its
+  // warmth is a share of the style's tint colour in the lit part (g.tint at the heart, none past
+  // g.tintR of the radius): a sparse Bayer of warm pixels in the lit slate, never an opaque block
+  for (const g of style.glows || []) {
+    const below = g.below ?? 1;
+    const xa = clampI(Math.floor(g.X - g.rx - TX0 - 1), txa, txb), xb = clampI(Math.ceil(g.X + g.rx - TX0 + 1), txa, txb);
+    const ya = clampI(Math.floor(g.Y - g.ry - TY0 - 1), tya, TH), yb = clampI(Math.ceil(g.Y + g.ry * below - TY0 + 1), tya, TH);
+    for (let ty = ya; ty < yb; ty++) {
+      const oy = TY0 + ty + 0.5 - g.Y;
+      const dy = oy / (oy < 0 ? g.ry : g.ry * below);
+      const dy2 = dy * dy;
+      if (dy2 >= 1) continue;
+      let i = (ty - tya) * lw + (xa - txa);
+      for (let tx = xa; tx < xb; tx++, i++) {
+        const dx = (TX0 + tx + 0.5 - g.X) / g.rx;
+        const d2 = dx * dx + dy2;
+        if (d2 >= 1) continue;
+        const d = Math.sqrt(d2);
+        acc[i] += g.amount * (1 - smooth(d));
+        if (!tints || !g.tint) continue;
+        const share = g.tint * (1 - smooth(d / (g.tintR || 1)));
+        const hv = 0.24 + 0.52 * share;
         if (hv > tv[i]) tv[i] = hv;
       }
     }
@@ -362,7 +412,7 @@ function warmDraw(style, pass) {
   const cam = { x: 0, y: -60, z: 0, zoom: 1, hy: 52, soft: pass };
   const r = wallRect(cam, RECT2);
   renderWall(fr, cam, bakeWall(style), r.x0 - 3, r.y0 - 3, r.x1 + 3, r.y1 + 3, H);
-  drawWallDetails(fr, cam, style);
+  drawWallDetails(fr, cam, style, !!pass);
   drawFlats(fr, cam, style, !!pass);
   drawFloor(fr, cam, style);
   rasterDesk(fr, cam, WARM_CLIP, style.deskLine, style);
@@ -585,7 +635,7 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   }
   renderWall(fr, cam, baked, r.x0 - b - 1, r.y0 - b - 1, r.x1 + b + 1, r.y1 + b + 1, yFloor, xl, xr);
   if (pOn) p0 = lap(PROF, 'light', p0);
-  if (!soft) drawWallDetails(fr, cam, style);
+  drawWallDetails(fr, cam, style, soft);
   drawScreen(fr, r, b, style, soft, wall);
   if (pOn) p0 = lap(PROF, 'screen', p0);
   drawFlats(fr, cam, style, soft);
@@ -614,9 +664,21 @@ export function setProfile(on) {
   return out;
 }
 
-/** Seams and the one static ceiling line (in focus only). */
-function drawWallDetails(fr, cam, style) {
+/** Seams and the one static ceiling line (in focus only), the practicals (softened out of focus). */
+function drawWallDetails(fr, cam, style, soft = false) {
   const Zw = SET.wallZ;
+  if (soft) {
+    // out of focus only the practicals stay (a lamp's glow never shows without its lamp): the
+    // fixture as one soft bronze shape, its lit lips gone
+    if (style.practical === 'warm' && style.sconces) {
+      const Y = style.sconceY ?? -66;
+      for (const X of style.sconces) {
+        layerRect(fr, cam, Zw, X - 4.5, Y - 12, X + 4.5, Y + 12, C.maroon);
+        layerRect(fr, cam, Zw, X - 3, Y - 10, X + 3, Y + 10, C.brown);
+      }
+    }
+    return;
+  }
   // y 0-10: dark ceiling with one static grid line (ART_DIRECTION bands)
   layerHLine(fr, cam, Zw, -2000, 2000, -128, style.id === 'cosmos' || style.id === 'news-60' ? C.ink : C.slate);
   if (style.seams) {
@@ -636,12 +698,13 @@ function drawWallDetails(fr, cam, style) {
     // the warm pair: bronze wall sconces at the heart of their washes (styles.js scallops). A dark
     // back plate on the wall, an open-ended bronze shade lit from camera-left (tanShade, its shadow
     // side brown), and cream lips at both ends where the light leaves up and down
+    const Y = style.sconceY ?? -66;
     for (const X of style.sconces) {
-      layerRect(fr, cam, Zw, X - 5, -79, X + 5, -53, C.maroon);
-      layerRect(fr, cam, Zw, X - 3.5, -77, X + 3.5, -55, C.brown);
-      layerRect(fr, cam, Zw, X - 3.5, -77, X, -55, C.tanShade);
-      layerHLine(fr, cam, Zw, X - 3.5, X + 3.5, -77.2, C.cream);
-      layerHLine(fr, cam, Zw, X - 3.5, X + 3.5, -54.8, C.tan);
+      layerRect(fr, cam, Zw, X - 5, Y - 13, X + 5, Y + 13, C.maroon);
+      layerRect(fr, cam, Zw, X - 3.5, Y - 11, X + 3.5, Y + 11, C.brown);
+      layerRect(fr, cam, Zw, X - 3.5, Y - 11, X, Y + 11, C.tanShade);
+      layerHLine(fr, cam, Zw, X - 3.5, X + 3.5, Y - 11.2, C.cream);
+      layerHLine(fr, cam, Zw, X - 3.5, X + 3.5, Y + 11.2, C.tan);
     }
   }
 }
@@ -692,6 +755,10 @@ function drawFlats(fr, cam, style, soft) {
       layerRect(fr, cam, Zf, lx - 3, -104, lx + 3, -20, C.slate);
       layerRect(fr, cam, Zf, lx - 1.5, -100, lx + 1.5, -24, soft ? C.slate : C.steel);
       if (!soft) layerVLine(fr, cam, Zf, lx - 0.5, -96, -28, C.fog, 1);
+    } else if (style.practical === 'purple') {
+      // COSMOS: a dim purple strip in an ink housing (static, never brighter than slate)
+      layerRect(fr, cam, Zf, lx - 3, -104, lx + 3, -20, C.ink);
+      layerRect(fr, cam, Zf, lx - 1.5, -100, lx + 1.5, -24, C.purple);
     } else if (style.practical === 'off' || style.practical === 'warm') {
       // the strip is there but unlit
       layerRect(fr, cam, Zf, lx - 3, -104, lx + 3, -20, C.ink);
@@ -878,6 +945,26 @@ export function drawDesk(fr, cam, clipRows, accent) {
   }
 }
 
+const DSTEP = (2 * SET.deskHW) / DESK_N; // world X between two tessellation nodes
+/** Scale of the desk's front curve (dz = 0) or back edge (dz = deskDepth) at world X. */
+function deskK(cam, X, dz) {
+  const u = X / SET.deskHW;
+  return (F * cam.zoom) / (SET.deskFrontZ + SET.deskCurve * u * u + dz - cam.z);
+}
+/** The world X on a desk curve under the screen column centre cx (Newton from the guess X0). */
+function deskX(cam, cx, X, dz) {
+  const D = SET;
+  for (let it = 0; it < 3; it++) {
+    const k = deskK(cam, X, dz);
+    const f = 192 + (X - cam.x) * k - cx;
+    const dk = (-k * k * ((2 * D.deskCurve * X) / (D.deskHW * D.deskHW))) / (F * cam.zoom);
+    const step = f / (k + (X - cam.x) * dk);
+    X -= step;
+    if (step < 1e-7 && step > -1e-7) break;
+  }
+  return X;
+}
+
 function rasterDesk(fr, cam, clipRows, led, style) {
   const D = SET;
   for (let i = 0; i <= DESK_N; i++) {
@@ -924,21 +1011,27 @@ function rasterDesk(fr, cam, clipRows, led, style) {
     while (jf < DESK_N - 1 && DFX[jf + 1] <= cx) jf++;
     const inB = cx >= DBX[0] && cx <= DBX[DESK_N];
     const inF = cx >= DFX[0] && cx <= DFX[DESK_N];
+    // the edges' rows are exact (the tessellation only seeds a Newton solve for the world X under
+    // the column): a camera push then moves every desk line monotonically, one row step at a time,
+    // instead of letting the piecewise-linear error flip a row back and forth (two-shot push)
     const ub = inB ? (cx - DBX[jb]) / Math.max(1e-6, DBX[jb + 1] - DBX[jb]) : 0;
-    const yb = inB ? DBT[jb] + (DBT[jb + 1] - DBT[jb]) * ub : NaN;
+    const yb = inB ? cam.hy + (0 - cam.y) * deskK(cam, deskX(cam, cx, DSTEP * (jb + ub) - D.deskHW, D.deskDepth), D.deskDepth) : NaN;
     if (!inF) {
       if (inB) clipRows[x] = Math.max(0, Math.round(yb)); // beyond the front curve, over the top surface
       continue;
     }
     const uf = (cx - DFX[jf]) / Math.max(1e-6, DFX[jf + 1] - DFX[jf]);
-    const yt = DFT[jf] + (DFT[jf + 1] - DFT[jf]) * uf;
-    const ybot = DFB[jf] + (DFB[jf + 1] - DFB[jf]) * uf;
-    const turn = Math.abs(DNX[jf] + (DNX[jf + 1] - DNX[jf]) * uf);
-    // one curve for the desk's lines: the silver edge's row, and the back edge and the LED at whole
-    // row offsets from it that change slowly, so the three step together along the curve (rounded
-    // separately they stepped at different x and the edge read jagged)
+    const Xf = deskX(cam, cx, DSTEP * (jf + uf) - D.deskHW, 0);
+    const kfx = deskK(cam, Xf, 0);
+    const yt = cam.hy + (0 - cam.y) * kfx;
+    const ybot = cam.hy + (D.deskH - cam.y) * kfx;
+    const turn = Math.abs((2 * D.deskCurve * Xf) / (D.deskHW * D.deskHW));
+    // the silver edge's row, and the LED at a whole row offset from it that changes slowly, so the
+    // two step together along the curve; the back edge is its own exact curve against the floor (an
+    // offset from the edge's rounded row flipped back and forth under a push: the sum of two
+    // roundings is not monotone)
     const top1 = Math.round(yt);
-    const top0 = inB ? top1 - Math.max(0, Math.round(yt - Math.min(yb, yt))) : top1;
+    const top0 = inB ? Math.min(top1, Math.round(yb)) : top1;
     const bot = Math.min(fr.h, Math.round(ybot));
     clipRows[x] = Math.max(0, top0);
     // the curved ends turn away from the key: two flat facets, one and two steps darker

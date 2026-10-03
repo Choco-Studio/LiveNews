@@ -85,6 +85,8 @@ function validateEditorial(id, p) {
   };
   if (p.headlineMax !== undefined && !(Number.isInteger(p.headlineMax) && p.headlineMax >= 20 && p.headlineMax <= 80)) fail('has a "headlineMax" outside 20..80');
   if (p.intro !== undefined && !['headlines', 'teaser', 'frame'].includes(p.intro)) fail('has an unknown "intro" (headlines, teaser or frame)');
+  // Optional: "every" = a picture on every item (NEWS IN 60's bible): picture stories are preferred while the desk has them.
+  if (p.pictures !== undefined && !['every', 'prefer'].includes(p.pictures)) fail('has a "pictures" that is not "every" or "prefer"');
   // Optional: the topics a secondary section's stories must have to be on this programme's beat (server/topics.js).
   if (p.beat !== undefined) {
     if (!p.beat || typeof p.beat !== 'object' || Array.isArray(p.beat)) fail('has a "beat" that is not { section: [topics] }');

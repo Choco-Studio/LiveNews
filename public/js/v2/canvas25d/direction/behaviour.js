@@ -45,7 +45,11 @@
 //     glance); the dry-line glance is a sidelong look (style 'side': the eyes go, the
 //     head turns less); a listener on the wide may show INTEREST (a small brow lift and
 //     tilt, target 'interest', face only, no eye move) as the speaker lands the story's
-//     figure, at most once per turn, never on grave lines, never during another look.
+//     figure, at most once per turn, never on grave lines, never during another look. It
+//     needs the listener IN FRAME at that word (a reaction nobody sees is wasted), which
+//     today's shot grammar rarely gives (figures land on the speaker's single or a card):
+//     the variant that airs is the interest-lifted glance in banter ('interest' style on a
+//     turn / cont look).
 //   RESTRAINT  per listener and turn: one glance at the speaker (plus the dry-line
 //     glance and the toss exchange), gaze at the speaker ≤ 45 % of turns of 8 s or
 //     more and ≤ 4.0 s in shorter ones; ≥ 2.0 s between two looks of one slot.
@@ -53,12 +57,20 @@
 //     5.4 s gets ONE look from the speaker (banter: the reply look at its start; a named
 //     or asked hand-over: the toss look at its end) and the listener's glance stays
 //     within 60 % of the line: both look at each other as the line starts, then the lens.
-//   VARIETY OVER TIME  a story turn start whose listener already glanced less than 25 s
-//     earlier may (seeded, 30 %) vary: a later glance (0.45-0.9 s in, shorter), a look
-//     at the notes, or none (per programme, VARY); tosses and banter keep the approved
-//     glance (the hand-over's own look runs into the turn anyway).
+//   VARIETY OVER TIME  a story turn start (never the listener's first, never UNIT-8's,
+//     never grave) varies with p 0.3, and always when that listener's last 3 turn glances
+//     were the same move: a later glance (0.45-0.9 s in, shorter), a look at the notes, or
+//     none (per programme, VARY); tosses and banter keep the approved glance.
 //   ONE LOOK PER SEGMENT (TECH BYTES §4 item 6)  when a dry line gets its own sidelong
 //     glance, the listener's turn-start glance is dropped (the dry-line look is the one).
+//   ACROSS THE BOUNDARY (critic r2: head to the partner, back for 0.5 s, to the partner
+//     again)  a hand-over look (toss or by name) runs on into the partner's first words and
+//     the next turn carries it on as ONE look ('cont': from the first word, the whole within
+//     the approved 2.4-3.9 s hold, ≥ 1 s past the first word) instead of a fresh glance; every
+//     other look keeps ≥ 2 s from the slot's looks of the previous segment (carryLooks).
+//   ON SCREEN  a turn glance planned while the shot hides the listener moves to 0.25 s after
+//     the first planned cut that shows the listener (≤ 15 s), like INTEGRATION's
+//     onScreenGlances, but here, so the plan around it keeps its spacing (event `onScreen`).
 import { rng } from './context.js';
 
 const GAP = { 'money-minute': 1.2, 'news-60': 0.7 }; // the director's usual gap when ctx.gapAfter is unknown
@@ -91,10 +103,11 @@ export const RULES = Object.freeze({
   boundaryAfter: 8,
   shortLine: 5.4, // a line too short for a reply look, the lens and a toss look (1.9 + 2.0 + 1.5)
   shortShare: 0.6, // gaze at the partner in a short chat line ≤ 60 % of the line
-  varyWithin: 25, // a turn-start glance may vary when the same listener glanced < 25 s earlier
-  varyP: 0.3,
+  varyP: 0.3, // a story turn's glance varies (later / notes / none) with p 0.3 ...
+  varyEvery: 4, // ... and always when the listener's last 3 turn glances were the same move
   lateStart: [0.45, 0.9],
   lateHold: [1.6, 2.6],
+  contMin: 1.0, // a hand-over look carried on into the partner's turn stays ≥ 1 s past the first word
 });
 
 // Turn-start variety per programme (bibles): WORLD NOW may vary the glance into a later one,
@@ -111,12 +124,56 @@ const EYES_BACK = 0.1; // s the eyes need to reach the lens after a look ends
 /** The behaviour plan of one segment (pure, seeded). */
 export function planBehaviour(ctx) {
   if (!ctx || !ctx.seg || !Array.isArray(ctx.words)) return [];
+  return planCore(ctx, CARRY_DEPTH).events();
+}
+
+// The previous segment's looks reach into this one: a hand-over look runs on into the partner's
+// first words, and a look that ended just before the turn leaves the eyes there a moment ago. A
+// segment is planned alone (the cue clock asks for one at a time), so it re-plans its neighbour's
+// EYELINE looks (pure; those never depend on the shots, only nods and interest do, on their own
+// seeded streams) to keep the hand-over one continuous look and ≥ 2 s between two looks of a slot
+// across the boundary (critic r2: the head turned to the partner, back to the lens for 0.5 s and
+// to the partner again). The neighbour's own carry is planned to a fixed depth (deterministic,
+// a few planner runs per segment; only chains of very short lines reach further back).
+const CARRY_DEPTH = 3;
+
+function planCore(ctx, depth) {
   const style = STYLE[ctx.programId] || (ctx.duo ? STYLE['world-now'] : { solo: 'default' });
-  const r = rng((ctx.seed ^ 0x5bd1e995) >>> 0);
+  const seed = ctx.seed >>> 0;
+  const r = rng((seed ^ 0x5bd1e995) >>> 0);
+  // nods and interest read the shots: their own streams, so the eyelines never depend on them
+  const rr = { nod: rng((seed ^ 0x2c1b3c6d) >>> 0 || 1), interest: rng((seed ^ 0x297a2d39) >>> 0 || 1) };
   const plan = new Plan(ctx);
   if (!ctx.duo) planSolo(ctx, style, r, plan);
-  else planDuo(ctx, style, r, plan);
-  return plan.events();
+  else {
+    plan.ghosts = depth > 0 ? carryLooks(ctx, depth - 1) : {};
+    planDuo(ctx, style, r, plan, rr);
+  }
+  return plan;
+}
+
+/** The previous segment's eyeline looks per slot, on this segment's clock (at < 0: before the first word). */
+function carryLooks(ctx, depth) {
+  const out = {};
+  if (!(ctx.index > 0) || typeof ctx.contextAt !== 'function') return out;
+  let p = null;
+  try {
+    p = ctx.contextAt(ctx.index - 1);
+  } catch {
+    p = null;
+  }
+  if (!p || !p.valid || !p.duo || !p.seg || !Array.isArray(p.words) || !(p.duration > 0)) return out;
+  const off = p.duration + gapOf(p);
+  const prev = planCore(p, depth);
+  for (const [slot, list] of Object.entries(prev.looks)) {
+    for (const l of list) {
+      if (isReaction(l)) continue;
+      const end = l.at + l.dur - off;
+      if (end < -(RULES.lookGap + 1)) continue; // long gone
+      (out[slot] ||= []).push({ at: l.at - off, dur: l.dur, target: l.target, why: l.why });
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -125,6 +182,7 @@ class Plan {
   constructor(ctx) {
     this.ctx = ctx;
     this.looks = {}; // slot → [{ at, dur, target, ... }]
+    this.ghosts = {}; // slot → the previous segment's looks on this clock (never emitted)
     this.nods = [];
   }
 
@@ -132,12 +190,27 @@ class Plan {
     return (this.looks[slot] ||= []);
   }
 
-  /** Room for an eyeline look of `slot` over [at, at + dur]: ≥ 2 s from its other eyeline looks, clear of its reactions. */
+  /** The previous segment's partner look of `slot` that runs on into this turn (a hand-over), or null. */
+  running(slot) {
+    let best = null;
+    for (const g of this.ghosts[slot] || []) if (g.target === 'partner' && g.at < 0 && g.at + g.dur > 0.05 && (!best || g.at + g.dur > best.at + best.dur)) best = g;
+    return best;
+  }
+
+  /** End (this clock) of the previous segment's last look of `slot`, -Infinity if none. */
+  lastEnd(slot) {
+    let e = -Infinity;
+    for (const g of this.ghosts[slot] || []) e = Math.max(e, g.at + g.dur);
+    return e;
+  }
+
+  /** Room for an eyeline look of `slot` over [at, at + dur]: ≥ 2 s from its other eyeline looks (this segment's and the previous one's), clear of its reactions. */
   fits(slot, at, dur, gap = RULES.lookGap) {
     for (const l of this.list(slot)) {
       const g = isReaction(l) ? RULES.reactClear : gap;
       if (at < l.at + l.dur + g && l.at < at + dur + g) return false;
     }
+    for (const l of this.ghosts[slot] || []) if (at < l.at + l.dur + gap && l.at < at + dur + gap) return false;
     return true;
   }
 
@@ -171,6 +244,7 @@ class Plan {
           if (l.amt !== undefined && l.amt < 0.999) e.amt = round3(l.amt);
           if (l.style) e.style = l.style;
         }
+        if (l.onScreen) e.onScreen = true; // moved onto the first shot that shows the listener
         out.push(e);
       }
     }
@@ -250,7 +324,7 @@ function shotAt(ctx, t) {
 // ---------------------------------------------------------------------------
 // Duo programmes
 
-function planDuo(ctx, style, r, plan) {
+function planDuo(ctx, style, r, plan, rr) {
   const D = ctx.duration;
   if (!(D > 0)) return;
   const speaker = ctx.speaker;
@@ -272,7 +346,13 @@ function planDuo(ctx, style, r, plan) {
   // in banter every reply opens with the look (the eye contact of the exchange); otherwise seeded
   if (reply && (banter || r() < style.replyP || (cueAt !== null && cueAt < 2))) {
     const at = 0.05 + r() * 0.1;
-    plan.add(speaker, at, Math.min(RULES.replyMax, Math.max(0.9, D * 0.5), 1.2 + r() * 0.7), 'partner', { why: 'reply' });
+    let dur = Math.min(RULES.replyMax, Math.max(0.9, D * 0.5), 1.2 + r() * 0.7);
+    // met a toss and still looking: the reply look carries that look on (one look through the
+    // hand-over, the whole of it within the approved glance's hold), never a second turn
+    const run = plan.running(speaker);
+    if (run) dur = Math.max(0.7, Math.min(dur, RULES.glanceHold[1] - 0.4 + run.at - at));
+    // a look of its own a moment ago (the dry-line glance, the notes before its turn): no second one
+    if (run || plan.lastEnd(speaker) + RULES.lookGap <= at) plan.add(speaker, at, dur, 'partner', { why: run ? 'reply-cont' : 'reply' });
   } else if (cueAt !== null && cueAt < D - 2.5 && D > 3) {
     // the writer's look_partner cue for the speaker: one brief look where it was written
     const at = Math.max(0, cueAt - 0.15);
@@ -280,7 +360,7 @@ function planDuo(ctx, style, r, plan) {
   }
   if (toss) {
     const at = Math.max(0.3, D - 1.15 - r() * 0.25);
-    const end = D + gap + 0.55; // runs on into the partner's answer, where it merges
+    const end = D + gap + 0.9; // runs on into the partner's answer, where its 'cont' look carries it on
     const list = plan.list(speaker);
     const prev = list.filter((l) => l.target === 'partner').pop();
     if (prev && at < prev.at + prev.dur + RULES.lookGap) {
@@ -297,8 +377,12 @@ function planDuo(ctx, style, r, plan) {
       // across the whole line); the partner's answer opens with its own look
     } else if (plan.fits(speaker, at, end - at)) plan.add(speaker, at, end - at, 'partner', { why: 'toss' });
   } else if (ctx.handover && (ctx.type === 'chat' || nextSeg?.type === 'chat') && D > 2.5 && r() < 0.5) {
+    // the hand-over look runs on into the partner's first words like a toss (critic r2: ending
+    // 0.3 s into the gap, it made the head come back to the lens and turn again at the partner's
+    // turn); the next segment carries it on as its 'cont' look and keeps the whole within the hold
     const at = D - 0.9 - r() * 0.2;
-    if (plan.fits(speaker, at, D - at)) plan.add(speaker, at, D - at + 0.3, 'partner', { why: 'handover' });
+    const end = D + gap + 0.9; // slack for a longer pause on air: the partner's 'cont' look takes over at its first word
+    if (plan.fits(speaker, at, D - at)) plan.add(speaker, at, end - at, 'partner', { why: 'handover' });
   }
   // a short chat line: the speaker's own gaze at the partner stays within 60 % of it too
   if (short) trimGaze(plan, speaker, D, RULES.shortShare * D);
@@ -318,8 +402,8 @@ function planDuo(ctx, style, r, plan) {
         dur = hold(r, RULES.glanceHold);
         if (ctx.grave) dur = Math.min(dur, 2.4 + r() * 0.6); // grave: a shorter, quieter glance
       }
-      // over a long show the same move at every hand-over turns mechanical: a story turn whose
-      // listener glanced less than 25 s ago may vary (episode-level, seeded; see turnVariety)
+      // over a long show the same move at every hand-over turns mechanical: some story turns
+      // vary (episode-level running budget, seeded; see turnVariety)
       const vary = robot ? null : turnVariety(ctx, slot);
       if (vary === 'late') {
         at = between(r, RULES.lateStart);
@@ -331,12 +415,31 @@ function planDuo(ctx, style, r, plan) {
       if (short) dur = Math.min(dur, RULES.shortShare * D - at);
       // never the same move twice: half the glances are the full approved turn, the others a little smaller
       const amt = r() < 0.5 ? 1 : between(r, RULES.glanceAmt);
-      if (vary === 'notes') {
+      const run = plan.running(slot);
+      if (run) {
+        // the hand-over look of its own last line is still on (it tossed or handed over by name):
+        // the eyes stay with the new speaker over the first words and then come back, ONE look
+        // through the hand-over whose whole stays within the approved hold (never back to the lens
+        // for half a second and round again: critic r2)
+        const whole = robot ? between(r, RULES.robotHold) : Math.min(dur, RULES.glanceHold[1]);
+        let end = Math.max(RULES.contMin, whole + run.at);
+        end = Math.min(end, RULES.backBy - EYES_BACK, D - EYES_BACK, short ? RULES.shortShare * D : Infinity);
+        if (end > 0.3) glance = plan.add(slot, 0, end, 'partner', { why: 'cont' });
+        // answered in banter on the wide: now and then the held look takes the answer with interest
+        if (glance && ctx.type === 'chat' && !ctx.grave && !robot && !speakerRobot && !(style.dry && ctx.dryLine) && style.interestP && r() < style.interestP * 0.6) glance.style = 'interest';
+      } else if (vary === 'notes') {
         const nd = between(r, [0.7, 1.1]);
-        const n0 = 0.4 + r() * 0.4;
-        if (n0 + nd < D - 0.3) plan.add(slot, n0, nd, 'notes', { why: 'turn-notes' });
+        const n0 = Math.max(0.4 + r() * 0.4, plan.lastEnd(slot) + RULES.lookGap);
+        if (n0 + nd < D - 0.3 && n0 < 2) onScreen(ctx, plan, slot, plan.add(slot, n0, nd, 'notes', { why: 'turn-notes' }), gap, nextSeg);
       } else if (vary !== 'skip' && dur > 0.5) {
-        glance = plan.add(slot, at, dur, 'partner', { why: vary === 'late' ? 'turn-late' : 'turn', amt });
+        // a look of its own ended a moment before the turn (its reply look, a short line's last
+        // look): the glance waits for the 2 s between two looks, or is not made (≤ 1 s into the turn)
+        const wait = plan.lastEnd(slot) + RULES.lookGap + 0.01;
+        if (wait > at) {
+          dur -= wait - at;
+          at = wait;
+        }
+        if (at <= RULES.glanceStart[1] + 0.65 && dur > 0.5) glance = onScreen(ctx, plan, slot, plan.add(slot, at, dur, 'partner', { why: vary === 'late' ? 'turn-late' : 'turn', amt }), gap, nextSeg);
         // banter on the wide (both in frame): now and then the glance meets the line with
         // interest, a small brow lift for its first second (variety; never grave, never
         // during UNIT-8's literal lines, never on a dry line: the deadpan needs a straight face)
@@ -353,7 +456,7 @@ function planDuo(ctx, style, r, plan) {
           // close to the turn-start glance: one look that covers both, still back before the line ends
           const end = Math.min(Math.max(glance.at + glance.dur, d0 + 0.7), d1, glance.at + cap);
           glance.dur = end - glance.at;
-          glance.why = 'turn+dry';
+          glance.why = glance.why === 'cont' ? 'cont+dry' : 'turn+dry';
         } else {
           // one look per segment (tech-bytes.md §4 item 6): the dry-line glance replaces the turn's
           if (glance) {
@@ -384,7 +487,7 @@ function planDuo(ctx, style, r, plan) {
           if (meetStyle.style && D <= 3.5 && !prev.style) prev.style = meetStyle.style; // a short question: the brows go up as the look meets it
         } else {
           // keep both apart: shorten the earlier glance (≥ 1.2 s) and meet the toss later
-          const room = Math.min(m0 - RULES.lookGap - prev.at, cap - (D - m0) - 0.05);
+          const room = Math.min(m0 - RULES.lookGap - 0.01 - prev.at, cap - (D - m0) - 0.05);
           if (room >= 1.2) {
             prev.dur = room;
             plan.add(slot, m0, mEnd - m0, 'partner', { why: 'toss-meet', ...meetStyle });
@@ -403,7 +506,9 @@ function planDuo(ctx, style, r, plan) {
     // the next speaker glances at its notes just before its own turn (no toss)
     if (ctx.handover && ctx.nextSpeaker === slot && !tossLook && D >= 6 && r() < style.prepP) {
       const dur = between(r, [0.7, 1.1]);
-      const at = D - 0.55 - dur - r() * 0.5;
+      // its own line may open with a look at the partner (a chat reply): the notes end ≥ 2 s before it
+      const lead = nextSeg?.type === 'chat' ? Math.max(0.55, RULES.lookGap + 0.15 - gap) : 0.55;
+      const at = D - lead - dur - r() * 0.5;
       if (at > 1.5 && plan.fits(slot, at, dur)) plan.add(slot, at, dur, 'notes', { why: 'prep' });
     }
     // a story boundary (the same speaker goes on with a new story): the wall changed (a picture
@@ -421,8 +526,8 @@ function planDuo(ctx, style, r, plan) {
         if (plan.fits(slot, at, dur)) plan.add(slot, at, dur, 'notes', { why: 'between' });
       }
     }
-    planNod(ctx, style, r, plan, slot, robot);
-    planInterest(ctx, style, r, plan, slot, robot);
+    planNod(ctx, style, rr.nod, plan, slot, robot);
+    planInterest(ctx, style, rr.interest, plan, slot, robot);
   }
 
   // ---- between stories: the speaker who carries on glances at the notes in the gap
@@ -438,9 +543,9 @@ const VARIETY = new WeakMap(); // episode summary → Map(segment index → 'lat
 /**
  * Turn-start variety for this segment's listener, decided for the whole episode at once
  * (a pure function of the episode summary and its seed, memoised; no runtime state): a
- * story turn start whose listener already made a turn-start glance less than 25 s earlier
- * (estimated at 15 chars/s plus 0.9 s gaps) varies with p 0.3, among the programme's VARY
- * kinds; 'skip' only on turns of ~8 s or more. Never UNIT-8, never a grave story.
+ * story turn start varies with p 0.3 (never the listener's first turn), and always after
+ * three turn glances of that listener in a row with the plain move, among the programme's
+ * VARY kinds; 'skip' only on turns of ~8 s or more. Never UNIT-8, never a grave story.
  */
 export function turnVariety(ctx, slot) {
   const kinds = VARY[ctx.programId];
@@ -457,26 +562,31 @@ export function turnVariety(ctx, slot) {
 
 function varietyPlan(ep, cast, kinds) {
   const out = new Map();
-  const last = {}; // listener slot → estimated time of its last turn-start glance
+  const run = {}; // listener slot → turn glances in a row with the same approved move
   const segs = ep.segments;
-  let t = 0;
-  for (let i = 0; i < segs.length; i++) {
+  // the intro's glance (the greeting, owner 17:47) is every listener's first
+  if (segs[0]?.anchor) for (const slot of Object.keys(cast)) if (slot !== segs[0].anchor) run[slot] = 1;
+  for (let i = 1; i < segs.length; i++) {
     const s = segs[i], prev = segs[i - 1];
-    if (prev && s.anchor && prev.anchor && s.anchor !== prev.anchor) {
-      const lis = prev.anchor; // a duo: this turn's listener is the previous speaker
-      const robot = ROBOT.has(cast[lis]);
-      let v = null;
-      if (!robot && s.type === 'story' && !s.grave && last[lis] !== undefined && t - last[lis] < RULES.varyWithin) {
-        const r = rng((((ep.seed >>> 0) ^ Math.imul(i + 1, 0x9e3779b1)) >>> 0) || 1);
-        if (r() < RULES.varyP) {
-          v = kinds[Math.floor(r() * kinds.length) % kinds.length];
-          if (v === 'skip' && s.chars / 15 < 8) v = kinds.includes('notes') ? 'notes' : 'late';
-        }
+    if (!s.anchor || !prev.anchor || s.anchor === prev.anchor) continue;
+    const lis = prev.anchor; // a duo: this turn's listener is the previous speaker
+    if (ROBOT.has(cast[lis])) continue; // UNIT-8's look is the format
+    const n = run[lis] || 0;
+    let v = null;
+    if (s.type === 'story' && !s.grave && n >= 1) {
+      // a running budget, not a time window (critic r2: alternating 12-15 s turns put the same
+      // listener's glances ~28 s apart, so every story turn opened with the identical move): seeded
+      // p 0.3, and the 4th story turn in a row with the plain glance always varies
+      const r = rng((((ep.seed >>> 0) ^ Math.imul(i + 1, 0x9e3779b1)) >>> 0) || 1);
+      if (n >= RULES.varyEvery - 1 || r() < RULES.varyP) {
+        v = kinds[Math.floor(r() * kinds.length) % kinds.length];
+        if (v === 'skip' && s.chars / 15 < 8) v = kinds.includes('notes') ? 'notes' : 'late';
       }
-      if (v) out.set(i, v);
-      if (!robot && v !== 'notes' && v !== 'skip') last[lis] = t;
     }
-    t += s.chars / 15 + 0.9;
+    if (v) {
+      out.set(i, v);
+      run[lis] = 0;
+    } else run[lis] = n + 1;
   }
   return out;
 }
@@ -507,6 +617,43 @@ function boundaryOk(ctx, prevSeg) {
   if (ru && ru.index > 0) return false;
   const prevChars = ctx.episode?.segments?.[ctx.index - 1]?.chars ?? (prevSeg?.text ? prevSeg.text.length : 0);
   return prevChars / 15 >= RULES.boundaryAfter; // ~15 chars/s of speech
+}
+
+// The turn glance where the viewer can see it (owner 17:47; INTEGRATION's request): planned while
+// the shot hides the listener (the headline montage, a map, the speaker's single), it moves to
+// 0.25 s after the first later planned cut that shows the listener, within 15 s of the turn start,
+// the way direction/index.js onScreenGlances would, but here, so the rest of the plan (the notes
+// before its own turn, the toss) keeps ≥ 2 s from it, and so it ends early enough for the slot's
+// first look of the next segment (critic r2: a moved glance 0.4 s from the notes look). A glance
+// that cannot fit there is not made (it would have been spent off screen); with no such cut it
+// stays (the cue clock holds a hidden turn glance for a real cut).
+const SHOW_LEGACY = new Set(['wide', 'close', 'full', 'map', 'fact', 'montage']);
+const SHOW_WIDE = new Set(['wide', 'two', 'solo-wide']);
+const MOVE = { window: 15, afterCut: 0.25, min: 0.8 };
+
+function shows(s, slot) {
+  const legacy = SHOW_LEGACY.has(s.shot) ? s.shot : SHOW_WIDE.has(s.framing || s.shot) ? 'wide' : 'close';
+  if (legacy === 'wide') return true;
+  return legacy === 'close' && s.focus === slot && s.framing !== 'ots';
+}
+
+function onScreen(ctx, plan, slot, look, gap, nextSeg) {
+  const shots = ctx.shots;
+  if (!look || !Array.isArray(shots) || !shots.length) return look;
+  let i = -1;
+  for (let k = 0; k < shots.length && shots[k].at <= look.at + 1e-6; k++) i = k;
+  if (i >= 0 && shows(shots[i], slot)) return look;
+  let j = i + 1;
+  while (j < shots.length && !(shots[j].at > look.at && shows(shots[j], slot))) j++;
+  if (j >= shots.length || shots[j].at > MOVE.window) return look; // nothing to move to: it stays
+  const list = plan.list(slot);
+  list.splice(list.indexOf(look), 1);
+  const at = shots[j].at + MOVE.afterCut;
+  let end = Math.min(at + look.dur, ctx.duration - EYES_BACK);
+  // ≥ 2 s before the slot's first look of the next segment (a reply look opens its line at ~0.1 s)
+  if (nextSeg) end = Math.min(end, ctx.duration + gap + 0.1 - RULES.lookGap);
+  if (end - at < MOVE.min || !plan.fits(slot, at, end - at)) return null;
+  return plan.add(slot, at, end - at, look.target, { why: look.why, amt: look.amt, onScreen: true });
 }
 
 /** Is the listener `slot` in frame at time t? (unknown shots: yes; the wide / two-shot; a single on the listener) */
@@ -648,10 +795,12 @@ function planSolo(ctx, style, r, plan) {
     if (dur >= 0.45) plan.add(slot, at, dur, 'notes', { why: 'gap' });
   } else if (style.solo === 'news60') {
     if (gap < 0.6 || D < 7.5) return;
-    // the eyes drop as the last word ends and are back before the next item
-    const at = Math.max(0, D - 0.2 - r() * 0.05);
+    // the eyes drop once the last word has ended (never during it: critic r2) and are back on the
+    // lens ≥ 0.15 s before the next item's first word: in NEWS IN 60's 0.7-0.8 s gaps a quick dip
+    // of the eyes (0.35-0.5 s), the brisk read of the format
+    const at = D + 0.02 + r() * 0.04;
     const dur = Math.min(RULES.notes[1], D + gap - 0.15 - EYES_BACK - 0.02 - at);
-    if (dur >= 0.5) plan.add(slot, at, dur, 'notes', { why: 'gap' });
+    if (dur >= 0.35) plan.add(slot, at, dur, 'notes', { why: 'gap' });
   } else if (gap >= 0.75 && D >= 7.5 && r() < 0.7) {
     const at = D + 0.05 + r() * 0.2;
     const dur = Math.min(RULES.notes[1], D + gap - 0.15 - EYES_BACK - at);

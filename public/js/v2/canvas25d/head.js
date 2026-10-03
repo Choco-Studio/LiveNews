@@ -193,7 +193,9 @@ function bumpsOf(L) {
   pair(ex, B.y + 0.6, 1.9, 0.75, 0.42); // brow ridge over each eye
   pair(ex - 0.2, ey - 0.1, 1.55, 1.0, -0.55); // eye socket, deepest toward the nose
   pair(ex + 1.0, ey + 2.5, 1.8, 1.1, 0.42); // cheekbone (broad and low: never a lit island on the shade side)
-  pair(H.cheekHW - 1.7, M.y - 0.7, 1.3, 1.5, -0.3); // the hollow under the cheekbone, toward the jaw
+  // the hollow under the cheekbone: a long, shallow plane down toward the jaw (a round dip here made
+  // a lobed blob in the shade, critic r2: 'a bruise or a stubble patch')
+  pair(H.cheekHW - 1.45, M.y - 0.2, 1.05, 2.4, -0.22);
   pair(H.cheekHW - 0.9, ey - 1.8, 1.0, 1.5, -0.32); // temple
   pair(nw * 0.55, N.y1 - 0.1, 0.48, 0.42, 0.3); // nose wings
   out.push([0, N.y1 - 0.45, 0.72 * nw, 0.7, N.big ? 0.5 : 0.4]); // nose tip
@@ -309,8 +311,13 @@ function faceMap(L) {
     else if (y > H.cheekY) vy = 0.1 + 0.22 * ((y - H.cheekY) / (H.chinY - H.cheekY));
     if (y > H.chinY - 1.1) vy += (y - (H.chinY - 1.1)) * 1.5;
     const q = profileQ(L, y);
-    // the jaw's turn: below the mouth line, the last unit inside the outline
-    const jawK = clamp((y - (M.y - 1.2)) / 1.6, 0, 1);
+    // the shade-side plane's strength and width along the face (see dk below): it fades in under
+    // the cheekbone, is widest at the hollow (just above the mouth line), narrower along the jaw
+    const by0 = L.eyes.y + 1.9, by1 = M.y - 1.4;
+    const bk = clamp((y - by0) / Math.max(0.5, by1 - by0), 0, 1);
+    const bandK = bk * bk * (3 - 2 * bk) * (y > H.chinY - 0.4 ? clamp((H.chinY + 0.6 - y) / 1, 0, 1) : 1);
+    const hollow = Math.exp(-((y - (M.y - 0.9)) * (y - (M.y - 0.9))) / 2.2);
+    const bandW = 0.8 + 0.75 * hollow;
     for (let i = 0; i < nw; i++) {
       const x = x0 + i * STEP;
       // the cross-section is not a half-cylinder: a broad front plane that turns more
@@ -332,15 +339,13 @@ function faceMap(L) {
       nz[c] = az / n;
       const ex = Math.abs(x);
       let d = 0;
-      // the hollow under the cheekbone, toward the jaw
-      {
-        const dx = (ex - (H.cheekHW - 1.9)) / 1.25, dy = (y - (M.y - 1.1)) / 1.35;
-        d += 0.3 * Math.exp(-(dx * dx + dy * dy));
-      }
-      // the jaw's turn under the cheek: a band just inside the outline
-      if (jawK > 0) {
-        const e = (hw - ex) / 0.85;
-        d += 0.32 * jawK * Math.exp(-e * e);
+      // ONE plane on the shade side: the hollow under the cheekbone and the jaw's turn as a
+      // single band inside the outline, wider under the cheekbone and narrowing to the chin
+      // (critic r2: a round hollow plus a separate jaw band made lobed, stair-stepped blobs
+      // that read as a bruise or stubble)
+      if (bandK > 0) {
+        const e = (hw - ex) / bandW;
+        d += 0.33 * bandK * Math.exp(-e * e);
       }
       // the nose wing and the side of the tip
       {

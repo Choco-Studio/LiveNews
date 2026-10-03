@@ -71,7 +71,7 @@ const noNetwork = async (url) => {
 };
 
 function makeDesk({ stories = [], fetchImpl = noNetwork, feeds } = {}) {
-  const desk = new NewsDesk({ log: silentLogger, fetchImpl });
+  const desk = new NewsDesk({ log: silentLogger, fetchImpl, lookup: async () => [{ address: '93.184.216.34', family: 4 }] });
   for (const s of stories) desk.stories.set(s.id, s);
   if (feeds) desk.loadFeeds = () => feeds;
   return desk;
@@ -1414,7 +1414,7 @@ describe('NewsDesk.deskView', () => {
     desk.covered.set('a', now);
     const view = desk.deskView(80, now);
     assert.deepEqual(view.map((v) => v.id), ['b', 'a']);
-    assert.deepEqual(Object.keys(view[0]).sort(), ['breaking', 'category', 'covered', 'hasImage', 'id', 'imageCredit', 'imageVia', 'live', 'outlets', 'score', 'source', 'title']);
+    assert.deepEqual(Object.keys(view[0]).sort(), ['breaking', 'category', 'covered', 'hasImage', 'id', 'imageCredit', 'imageCreditVia', 'imageVia', 'live', 'outlets', 'score', 'source', 'title']);
     assert.equal(view[0].breaking, true);
     assert.equal(view[0].hasImage, true);
     assert.equal(view[1].covered, true);

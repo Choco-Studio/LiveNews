@@ -42,8 +42,12 @@ const unescapeAttr = (s) => String(s).replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, e
 const TRACKER_HOST = /(?:^|\.)(?:doubleclick\.net|feedburner\.com|feedsportal\.com|imrworldwide\.com|scorecardresearch\.com|quantserve\.com|pixel\.[a-z.]+|stats\.[a-z.]+|analytics\.[a-z.]+|gravatar\.com|google-analytics\.com|googletagmanager\.com|facebook\.com|addthis\.com|sharethis\.com|chartbeat\.(?:com|net)|parsely\.com|outbrain\.com|taboola\.com)$/i;
 const TRACKER_FILE = /(?:^|[/_.-])(?:pixel|1x1|spacer|blank|transparent|clear|trans|beacon|tracking|tracker)\.(?:gif|png|jpe?g|webp)$/i;
 const TRACKER_PATH = /\/(?:stats?|track|tracking|beacon|pixel|b\/ss|ad[sx]?)\/|\/1x1[/._]/i;
-// Words that name a logo, a placeholder or a generic share card rather than a news picture.
-const JUNK_WORD = /(?:^|[\W_])(?:logos?|placeholders?|default|fallback|blank|spacer|avatars?|icons?|favicons?|sprites?|badges?|buttons?|watermark|masthead|wordmark|apple-touch|no-?image|noimage|missing|generic|share-?default|social-?default|og-?default|site-?image|brand-?image|header-?image)(?:[\W_]|$)/i;
+// Words that name a logo, a placeholder or a generic share card rather than a news picture, anywhere in the
+// file name ("site-logo-dark.png", "placeholder_16x9.jpg").
+const JUNK_WORD = /(?:^|[\W_])(?:logos?|placeholders?|fallback|blank|spacer|favicons?|sprites?|watermark|masthead|wordmark|apple-touch|no-?image|noimage|share-?default|default-?(?:share|image|thumb(?:nail)?|og|social)|social-?default|og-?default|site-?image|brand-?image|header-?image)(?:[\W_]|$)/i;
+// Words that are junk only as the WHOLE name ("default.jpg", "icon-512.png", "avatar_2.jpg"): inside a news
+// slug they are ordinary words ("missing-hiker-found-alive.jpg", "icon-of-the-seas-docks.jpg").
+const JUNK_STEM = /^(?:default|missing|generic|avatars?|icons?|badges?|buttons?|user|profile)(?:[-_ .]?(?:\d{1,4}(?:x\d{1,4})?|small|large|big|dark|light|white|black|square|sq))*$/i;
 const BAD_FORMAT = /\.(?:svg|svgz|gif|ico|bmp|tiff?)(?:[?#]|$)/i;
 
 /** Why a picture URL (and what is known of its size) must not air, or null when it may. */
@@ -62,7 +66,8 @@ export function rejectReason(url, { w = 0, h = 0, local = false } = {}) {
   const dir = decodeURIComponent(u.pathname.split('/').slice(-2, -1)[0] || '').toLowerCase();
   if (BAD_FORMAT.test(u.pathname)) return 'format';
   if (!local && (TRACKER_HOST.test(u.hostname) || TRACKER_FILE.test(u.pathname) || TRACKER_PATH.test(u.pathname))) return 'tracker';
-  if (JUNK_WORD.test(file) || /^(?:logos?|icons?|avatars?|placeholders?|sprites?|badges?)$/.test(dir)) return 'logo';
+  const stem = file.replace(/\.[a-z0-9]{2,5}$/i, '');
+  if (JUNK_WORD.test(file) || JUNK_STEM.test(stem) || /^(?:logos?|icons?|avatars?|placeholders?|sprites?|badges?|buttons?)$/.test(dir)) return 'logo';
   if (w && w < MIN_WIDTH) return 'small';
   if (h && h < 120) return 'small';
   if (w && h && (w / h < 0.5 || w / h > 3.2)) return 'shape';
@@ -214,16 +219,46 @@ export function largestSrcset(srcset) {
 /** <img>/<source> pictures inside an item's HTML (linear scan, bounded tags). */
 function htmlPictures(html, push) {
   const s = String(html || '').slice(0, 200_000);
-  for (const m of s.matchAll(/<(img|source)\b[^>]{0,2000}>/gi)) {
-    const a = attrsOf(m[0]);
+  const lower = s.toLowerCase();
+  // indexOf scan (a tag with no ">" within 2000 characters is skipped): linear on hostile input
+  let at = 0;
+  for (let found = 0; found < 50; ) {
+    const i = lower.indexOf('<', at);
+    if (i < 0) break;
+    at = i + 1;
+    const name = lower.startsWith('<img', i) ? 'img' : lower.startsWith('<source', i) ? 'source' : null;
+    if (!name || !/[\s/>]/.test(lower[i + name.length + 1] || '')) continue;
+    const gt = s.indexOf('>', i);
+    if (gt < 0) break;
+    if (gt - i > 2000) continue;
+    at = gt + 1;
+    found++;
+    const a = attrsOf(s.slice(i, gt + 1));
     const set = largestSrcset(a.srcset || a['data-srcset']);
     if (set) push(set.url, { w: set.w || Number(a.width) || 0, h: set.w ? 0 : Number(a.height) || 0, via: 'inline' });
     const src = a['data-src'] || a['data-original'] || a['data-lazy-src'] || a.src;
-    if (src && m[1].toLowerCase() === 'img') push(src, { w: Number(a.width) || 0, h: Number(a.height) || 0, via: 'inline' });
+    if (src && name === 'img') push(src, { w: Number(a.width) || 0, h: Number(a.height) || 0, via: 'inline' });
   }
 }
 
 const text = (v) => (v === undefined || v === null ? '' : typeof v === 'object' ? text(Array.isArray(v) ? v[0] : v['#text']) : String(v));
+
+/**
+ * A picture credit as the source writes it ("© Jane Doe/Agency", "Photo: Reuters"), cleaned for a
+ * credit line: markup, the copyright sign and "Photo:"-style labels go; a URL or an empty credit is none.
+ */
+export function cleanCredit(raw) {
+  let t = String(raw ?? '')
+    .replace(/<[^>]{0,200}>/g, ' ')
+    .replace(/&(?:copy|#169);/gi, '©')
+    .replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  t = t.replace(/^(?:(?:photo(?:graph)?|image|picture|pic|credit|copyright|foto)s?\s*(?:by|credit)?\s*[:/-]?\s*|©\s*|\(c\)\s*)+/i, '').replace(/^\d{4}\s+/, '').trim();
+  if (!t || /https?:|www\.|\.(?:com|org|net)\b/i.test(t) || !/\p{L}/u.test(t)) return null;
+  if (t.length > 40) t = t.slice(0, 41).replace(/\s+\S*$/, '').replace(/[\s,;/|-]+$/, '');
+  return t || null;
+}
 
 /**
  * Every picture a feed item offers, as [{ url, w, h, via, local }] (unranked).
@@ -232,20 +267,24 @@ const text = (v) => (v === undefined || v === null ? '' : typeof v === 'object' 
  */
 export function feedCandidates(item, { link = null, baseDir = null } = {}) {
   const out = [];
-  const push = (ref, { w = 0, h = 0, via }) => {
+  const push = (ref, { w = 0, h = 0, via, credit = null }) => {
     const r = resolveRef(ref, { base: link, baseDir });
-    if (r) out.push({ url: r.url, local: r.local, w: Number(w) || 0, h: Number(h) || 0, via });
+    if (r) out.push({ url: r.url, local: r.local, w: Number(w) || 0, h: Number(h) || 0, via, ...(credit ? { credit, creditVia: 'media:credit' } : {}) });
   };
-  const media = (nodes, via) => {
+  // Media RSS credits: on the picture itself, on its media:group, or on the item.
+  const creditOf = (node) => cleanCredit(text(node?.['media:credit']) || text(node?.['media:copyright']));
+  const itemCredit = creditOf(item) || asArray(item['media:group']).map(creditOf).find(Boolean) || null;
+  const media = (nodes, via, inherited = itemCredit) => {
     for (const node of asArray(nodes)) {
       if (!node || typeof node !== 'object') continue;
       const url = node['@_url'] || node['@_href'];
       const kind = `${node['@_type'] || ''} ${node['@_medium'] || ''}`.trim();
+      const credit = creditOf(node) || inherited;
       // A video or audio item may still carry a poster frame (its media:thumbnail children).
       const isImage = via === 'thumbnail' || (kind ? /image/i.test(kind) : !/\.(?:mp4|m3u8|mp3|m4a|webm|mov|ogg)(?:[?#]|$)/i.test(url || ''));
-      if (url && isImage) push(url, { w: node['@_width'], h: node['@_height'], via });
-      if (node['media:content']) media(node['media:content'], 'media');
-      if (node['media:thumbnail']) media(node['media:thumbnail'], 'thumbnail');
+      if (url && isImage) push(url, { w: node['@_width'], h: node['@_height'], via, credit });
+      if (node['media:content']) media(node['media:content'], 'media', credit);
+      if (node['media:thumbnail']) media(node['media:thumbnail'], 'thumbnail', credit);
     }
   };
   media(item['media:content'], 'media');
@@ -288,6 +327,9 @@ function jsonLdImages(doc, push) {
   };
   walk(doc, 0);
   const byId = new Map(nodes.filter((n) => typeof n['@id'] === 'string').map((n) => [n['@id'], n]));
+  const nameOf = (x) => (typeof x === 'string' ? x : x && typeof x === 'object' ? (typeof x.name === 'string' ? x.name : Array.isArray(x) ? nameOf(x[0]) : '') : '');
+  // An ImageObject's own credit: creditText, else its copyright holder, else its author (a name, not a URL).
+  const creditOf = (v) => cleanCredit(typeof v.creditText === 'string' ? v.creditText : nameOf(v.copyrightHolder) || nameOf(v.author));
   const add = (img, depth = 0) => {
     for (const v of asArray(img).slice(0, 6)) {
       if (typeof v === 'string') {
@@ -297,7 +339,7 @@ function jsonLdImages(doc, push) {
         const ref = !v.url && !v.contentUrl && typeof v['@id'] === 'string' ? byId.get(v['@id']) : null;
         if (ref && depth < 2) add(ref, depth + 1);
         const url = v.url || v.contentUrl;
-        if (typeof url === 'string') push(url, { w: Number(v.width?.value ?? v.width) || 0, h: Number(v.height?.value ?? v.height) || 0, via: 'jsonld' });
+        if (typeof url === 'string') push(url, { w: Number(v.width?.value ?? v.width) || 0, h: Number(v.height?.value ?? v.height) || 0, via: 'jsonld', credit: creditOf(v) });
       }
     }
   };
@@ -317,20 +359,22 @@ function jsonLdImages(doc, push) {
  * own feeds (relative references stay inside that folder).
  */
 export function pageCandidates(html, pageUrl, { baseDir = null, from = null } = {}) {
-  const s = String(html || '').slice(0, 800_000);
+  const s = String(html || '').slice(0, PAGE_SCAN);
   const out = [];
-  const push = (ref, { w = 0, h = 0, via }) => {
+  const push = (ref, { w = 0, h = 0, via, credit = null }) => {
     const r = resolveRef(ref, { base: pageUrl, baseDir, from });
-    if (r) out.push({ url: r.url, local: r.local, w: Number(w) || 0, h: Number(h) || 0, via });
+    if (r) out.push({ url: r.url, local: r.local, w: Number(w) || 0, h: Number(h) || 0, via, ...(credit ? { credit, creditVia: 'jsonld' } : {}) });
   };
   let amp = null;
   let og = null;
-  for (const m of s.matchAll(/<meta\b[^>]{0,1500}>/gi)) {
-    const a = attrsOf(m[0]);
+  let site = null;
+  for (const tag of boundedTags(s, '<meta')) {
+    const a = attrsOf(tag);
     const key = (a.property || a.name || a.itemprop || '').toLowerCase();
     const content = a.content;
     if (!content) continue;
-    if (key === 'og:image' || key === 'og:image:url' || key === 'og:image:secure_url') {
+    if (key === 'og:site_name') site ||= cleanCredit(content);
+    else if (key === 'og:image' || key === 'og:image:url' || key === 'og:image:secure_url') {
       if (og && og.url === content) continue;
       og = { url: content, w: 0, h: 0 };
       push(content, { via: 'og' });
@@ -340,26 +384,59 @@ export function pageCandidates(html, pageUrl, { baseDir = null, from = null } = 
     else if (key === 'image' && a.itemprop) push(content, { via: 'itemprop' });
     else if (key === 'thumbnail' || key === 'parsely-image-url' || key === 'sailthru.image.full') push(content, { via: 'meta' });
   }
-  for (const m of s.matchAll(/<link\b[^>]{0,1500}>/gi)) {
-    const a = attrsOf(m[0]);
+  for (const tag of boundedTags(s, '<link')) {
+    const a = attrsOf(tag);
     const rel = (a.rel || '').toLowerCase();
     if (rel === 'image_src' && a.href) push(a.href, { via: 'image_src' });
     if (rel === 'amphtml' && a.href && !amp && !baseDir) amp = resolveRef(a.href, { base: pageUrl })?.url || null;
   }
   // JSON-LD blocks: found with indexOf (linear), parsed defensively.
+  const lower = s.toLowerCase();
   let at = 0;
   for (let n = 0; n < 12; n++) {
-    const open = s.slice(at).search(/<script\b[^>]{0,300}application\/ld\+json[^>]{0,300}>/i);
-    if (open < 0) break;
-    const start = s.indexOf('>', at + open) + 1;
-    const end = s.indexOf('</script>', start);
+    const tagAt = lower.indexOf('application/ld+json', at);
+    if (tagAt < 0) break;
+    const start = s.indexOf('>', tagAt) + 1;
+    const end = lower.indexOf('</script>', start);
     if (start <= 0 || end < 0) break;
     try {
       jsonLdImages(JSON.parse(s.slice(start, Math.min(end, start + 200_000))), push);
     } catch {}
     at = end + 9;
   }
+  // A picture with no credit of its own is credited to the site that published it (og:site_name).
+  if (site) for (const c of out) if (!c.credit) Object.assign(c, { credit: site, creditVia: 'site_name' });
   return { candidates: out, amp: amp && /^https?:\/\//i.test(amp) ? amp : null };
+}
+
+// Article pages are scanned up to here: every <meta>/<link> a CMS writes sits in the head.
+const PAGE_SCAN = 300_000;
+const MAX_TAG = 1500;
+/**
+ * The `<meta ...>` (or `<link ...>`) tags of a page, found with indexOf: a tag with no ">" within
+ * MAX_TAG characters is skipped, so a hostile page of "<meta " repeated costs one pass, not a regex
+ * retried at every position (it was 2 s of CPU for 780 KB). At most 400 tags.
+ */
+function* boundedTags(s, open) {
+  const lower = s.toLowerCase();
+  let at = 0;
+  for (let n = 0; n < 400; n++) {
+    const i = lower.indexOf(open, at);
+    if (i < 0) return;
+    const after = lower[i + open.length];
+    if (after && !/[\s/>]/.test(after)) {
+      at = i + open.length;
+      continue;
+    }
+    const gt = s.indexOf('>', i);
+    if (gt < 0) return;
+    if (gt - i > MAX_TAG) {
+      at = i + open.length;
+      continue;
+    }
+    yield s.slice(i, gt + 1);
+    at = gt + 1;
+  }
 }
 
 // ---------------------------------------------------------------- ranking
@@ -399,10 +476,11 @@ export function rankPictures(candidates) {
     const reason = rejectReason(c.url, { w, h, local: c.local });
     if (reason) continue;
     const order = list.length;
+    const credit = c.credit ? { credit: c.credit, creditVia: c.creditVia } : {};
     if (!c.local) {
-      for (const up of upgradeUrl(c.url)) list.push({ url: up.url, w: up.w, via: c.via, local: false, order: order - 0.5, upgraded: true });
+      for (const up of upgradeUrl(c.url)) list.push({ url: up.url, w: up.w, via: c.via, local: false, order: order - 0.5, upgraded: true, ...credit });
     }
-    list.push({ url: c.url, w: w || DEFAULT_WIDTH[c.via] || 400, known: !!w, via: c.via, local: !!c.local, order });
+    list.push({ url: c.url, w: w || DEFAULT_WIDTH[c.via] || 400, known: !!w, via: c.via, local: !!c.local, order, ...credit });
   }
   const score = (c) => Math.min(c.w, MAX_RANK_WIDTH) + (c.w >= GOOD_WIDTH ? 10_000 : 0);
   list.sort((a, b) => score(b) - score(a) || a.order - b.order);
@@ -410,7 +488,7 @@ export function rankPictures(candidates) {
   for (const c of list) {
     if (seen.has(c.url)) continue;
     seen.add(c.url);
-    out.push({ url: c.url, w: c.w, via: c.via, local: c.local, ...(c.upgraded ? { upgraded: true } : {}) });
+    out.push({ url: c.url, w: c.w, via: c.via, local: c.local, ...(c.upgraded ? { upgraded: true } : {}), ...(c.credit ? { credit: c.credit, creditVia: c.creditVia } : {}) });
     if (out.length >= MAX_CANDIDATES) break;
   }
   return out;

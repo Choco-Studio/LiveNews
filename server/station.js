@@ -1,5 +1,20 @@
 import { loadChannel, publicChannel } from './channel.js';
 import { isBreaking } from './news.js';
+import { publicError } from './usage.js';
+
+/** A feed's status as the public may see it: ok and item count, or a short reason (the detail is in the log). */
+function publicFeedStatus(feeds) {
+  const reason = (e) => {
+    const m = String(e || '');
+    if (/^HTTP \d{3}$/.test(m)) return m;
+    if (/ENOENT|no such file/i.test(m)) return 'feed file not found';
+    if (/timeout|timed out|abort/i.test(m)) return 'timeout';
+    if (/ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|network|socket|refused/i.test(m)) return 'unreachable';
+    if (/xml|parse|tag/i.test(m)) return 'not a feed';
+    return publicError(m) === 'internal error' ? 'error' : publicError(m).slice(0, 60);
+  };
+  return Object.fromEntries(Object.entries(feeds || {}).map(([name, f]) => [name, f?.ok ? { ok: true, items: f.items } : { ok: false, error: reason(f?.error) }]));
+}
 
 /**
  * Master control: keeps finished episodes ready ahead of air, follows the
@@ -101,11 +116,21 @@ export class Station {
     return p ? { id: programId, title: p.title, tagline: p.tagline, theme: p.theme, presenters: p.presenters } : null;
   }
 
-  /** What comes after the current break, as far as we know. */
+  /**
+   * What comes after the current break, as far as we know: the next ready
+   * episode, the one in production, else the next slot of the rotation that
+   * can really be made (a slot short of news is skipped, so it is never
+   * promised). Null when nothing can be made right now: no promise at all.
+   */
   upNext(channel) {
     if (this.queue.length) return { ...this.programMeta(channel, this.queue[0].program.id), ready: true };
-    const id = this.producing || channel.rotation[this.rotationIndex % channel.rotation.length];
-    return { ...this.programMeta(channel, id), ready: false };
+    if (this.producing) return { ...this.programMeta(channel, this.producing), ready: false };
+    const rotation = channel.rotation;
+    for (let k = 0; k < rotation.length; k++) {
+      const id = rotation[(this.rotationIndex + k) % rotation.length];
+      if (typeof this.producer.canProduce !== 'function' || this.producer.canProduce(channel, id)) return { ...this.programMeta(channel, id), ready: false };
+    }
+    return null;
   }
 
   schedule() {
@@ -184,10 +209,10 @@ export class Station {
       queue: this.queue.map((e) => e.program.title),
       producing: this.producing ? this.channel().programs[this.producing]?.title : null,
       aired: this.history.length,
-      lastError: this.lastError,
+      lastError: this.lastError ? publicError(this.lastError) : null,
       stories: this.news.stories.size,
       uncovered: this.news.uncovered().length,
-      feeds: this.news.feedStatus,
+      feeds: publicFeedStatus(this.news.feedStatus),
       lastRefresh: this.news.lastRefresh ? new Date(this.news.lastRefresh).toISOString() : null,
       providers: this.chain.status(),
     };

@@ -786,7 +786,7 @@ describe('Producer with the real NewsDesk, ProviderChain and mock provider', () 
   });
 
   test('covers what it airs, offers what it passed over, and does not air the same story twice', async () => {
-    const desk = makeRealDesk();
+    const desk = makeRealDesk(16); // two WORLD NOWs of at least their floor (7 stories) each
     const producer = makeRealProducer(desk);
     const first = await producer.produce(realChannel, 'world-now');
     const second = await producer.produce(realChannel, 'world-now');
@@ -809,8 +809,10 @@ describe('Producer with the real NewsDesk, ProviderChain and mock provider', () 
     add('c', 'CBC', 'Tech giant announces record quarterly profit', 14);
     desk.updateTrending();
     const producer = makeRealProducer(desk, { reviewPass: false });
+    // four events: a short WORLD NOW (its floor is half its stories)
+    const channel = { ...realChannel, programs: { ...realChannel.programs, 'world-now': { ...realChannel.programs['world-now'], stories: 4 } } };
 
-    const episode = await producer.produce(realChannel, 'world-now');
+    const episode = await producer.produce(channel, 'world-now');
 
     assert.equal(episode.storyIds.filter((id) => id === 'q1' || id === 'q2').length, 1, 'only one of the two reports is aired');
     assert.ok(desk.covered.has('q1') && desk.covered.has('q2'), 'both reports are covered');

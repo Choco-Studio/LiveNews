@@ -16,7 +16,8 @@ import { publicChannel } from '../server/channel.js';
 // feeds, article pages and images from memory. No network is touched.
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PNG = Buffer.from('iVBORw0KGgo=', 'base64');
+// A PNG header with a real size (640x360): the image server reads the bytes, not the Content-Type.
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAoAAAAFoCAIAAAAAAAAA', 'base64');
 
 const STUB_FETCH = `
 import fs from 'node:fs';
@@ -176,7 +177,7 @@ describe('server/index.js: HTTP API of a running channel', () => {
     const { status, json } = await app.request('/api/desk');
     assert.equal(status, 200);
     assert.ok(Array.isArray(json) && json.length > 10 && json.length <= 80);
-    assert.deepEqual(Object.keys(json[0]).sort(), ['breaking', 'category', 'covered', 'hasImage', 'id', 'imageCredit', 'imageVia', 'live', 'outlets', 'score', 'source', 'title']);
+    assert.deepEqual(Object.keys(json[0]).sort(), ['breaking', 'category', 'covered', 'hasImage', 'id', 'imageCredit', 'imageCreditVia', 'imageVia', 'live', 'outlets', 'score', 'source', 'title']);
     assert.ok(json.every((s, i) => i === 0 || json[i - 1].score >= s.score));
     assert.equal((await app.request('/api/status')).json.aired, 0);
   });

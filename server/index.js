@@ -86,11 +86,14 @@ async function serveImage(res, id) {
 }
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+// The Host a loopback request names must be a loopback name too: a DNS-rebinding page in the browser that runs
+// OBS reaches 127.0.0.1 under its own host name, and must not read upcoming scripts.
+const LOCAL_HOST = /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?$/i;
 // Dev views answer on loopback only (or with DEV_ENDPOINTS=1). Behind a same-host reverse proxy every request
 // arrives from loopback, so a forwarded request is never trusted as local.
 const devAllowed = (req) =>
   /^(1|true|yes|on)$/i.test(process.env.DEV_ENDPOINTS || '') ||
-  (LOOPBACK.has(req.socket.remoteAddress) && !req.headers['x-forwarded-for'] && !req.headers.forwarded && !req.headers['x-real-ip']);
+  (LOOPBACK.has(req.socket.remoteAddress) && LOCAL_HOST.test(req.headers.host || '') && !req.headers['x-forwarded-for'] && !req.headers.forwarded && !req.headers['x-real-ip']);
 // A manual refresh re-reads every feed: at most one every 30 s, and only from where the dev views are allowed.
 const REFRESH_MIN_MS = 30_000;
 let lastManualRefresh = 0;

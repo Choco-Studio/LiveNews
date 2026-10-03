@@ -76,9 +76,12 @@ const DEFS = {
     cove: { slate: 2.0, y0: -128, y1: -96 },
     top: { y0: -136, y1: -119, to: 0 },
     sides: { x0: 180, x1: 262 },
+    // one soft pool from above behind each head: its steel heart sits above the hair (centre Y -106,
+    // y ~13 in the wide, tall: light from above) and its Bayer edge clear of the head, so the cove's flat slate is all the
+    // head ring sees (Max's darker skin keeps 25+ L* over it)
     pools: [
-      { X: -104, Y: -70, rx: 56, ry: 68, amount: 0.78 },
-      { X: 104, Y: -70, rx: 56, ry: 68, amount: 0.78 },
+      { X: -104, Y: -106, rx: 50, ry: 62, amount: 0.95 },
+      { X: 104, Y: -106, rx: 50, ry: 62, amount: 0.95 },
     ],
     poolMax: 3.0, // a pool centre is at most steel
     glow: 0.15,
@@ -108,7 +111,10 @@ const DEFS = {
     tintNames: ['purple', 'maroon'],
     tintMax: 0.12,
     glow: 0.2,
-    practical: 'off',
+    // its own colour, in the one place ART_DIRECTION allows a set colour besides the accent line: the
+    // symmetric pair of practicals, here two dim purple strips on the flats (a gel'd uplight seen
+    // edge-on: an ink housing, a purple core, no glow, no wash on the wall)
+    practical: 'purple',
     bezel: { base: 'slate', top: 'steel', left: 'steel', soft: 'ink' },
     wallField: ['black', 'black'],
     wallMaxL: 40,
@@ -123,24 +129,32 @@ const DEFS = {
     wallIdle: 'wordmark',
     solo: true,
     base: 1.0,
-    // the warm room: a pair of bronze sconces centred on the slate panels either side of the wall,
-    // each washing its panel up and down (a wall-washer's scallop, narrow at the fixture and fanning
-    // out); the wash IS the panel's light, warm where it is brightest (slate → brown, steel →
-    // tanShade, ink stays ink), so the fixtures visibly light the room and never reach the head zone
-    pools: [{ X: 0, Y: -6, rx: 120, ry: 44, amount: 0.55 }],
-    scallops: [
-      { X: -142, Y: -66, gap: 11, up: 62, down: 54, w0: 7, spread: 0.95, amount: 2.05, tintAt: 0.1, tintBand: 0.2 },
-      { X: 142, Y: -66, gap: 11, up: 62, down: 54, w0: 7, spread: 0.95, amount: 2.05, tintAt: 0.1, tintBand: 0.2 },
+    // the home seat light (WORLD NOW's pool, centred on the solo seat): a slate plateau around the
+    // video wall and Penny, so the room keeps the home value range in every framing
+    pools: [{ X: 0, Y: -64, rx: 150, ry: 104, amount: 1.05 }],
+    // the warm room: a pair of bronze sconces centred on the panels either side of the wall. Each
+    // washes its panel up and down (a wall-washer's scallop, brightest just outside the shade and
+    // fading), lifting ink to slate; the warmth is the light's colour, a share of brown in the lit
+    // slate fading to none (never an opaque warm block), and a broad low warm haze (ink → maroon,
+    // the same value) that carries the room's warmth to the edges of the close shots
+    glows: [
+      { X: -112, Y: -66, rx: 40, ry: 35, below: 0.85, amount: 1.75, tint: 0.5, tintR: 1 },
+      { X: 112, Y: -66, rx: 40, ry: 35, below: 0.85, amount: 1.75, tint: 0.5, tintR: 1 },
     ],
-    sconces: [-142, 142], // set.js drawWallDetails draws the fixtures here
+    sconceY: -55,
+    sconces: [-112, 112], // set.js drawWallDetails draws the fixtures here
     tintPools: [],
-    tints: { steel: 'tanShade', slate: 'brown' },
+    tints: { slate: 'brown', steel: 'tanShade' },
     tintNames: ['maroon', 'brown', 'cream', 'tanShade'],
     tintMax: 0.08,
     tintMin: 0.04, // the warm room must read warm (critic: 0.4 % read as WORLD NOW with two candles)
     practical: 'warm',
     sides: { x0: 214, x1: 270 },
-    wallField: ['ink', 'ink'],
+    // the solo seat is always in front of the wall, so the wall's field IS the head-zone ground: a
+    // flat slate field (the home value range around Penny's head, as WORLD NOW's slate pools), with
+    // the bible's 12 px Bayer falloff from ink under the top bezel
+    wallField: ['slate', 'slate'],
+    wallTop: 'ink',
     values: { face: [55, 73], headZone: [18, 45], wall: 45, saturatedMax: 0.1, tintMax: 0.08 },
   },
   // One step darker: black and ink with a Bayer falloff to slate behind the head; yellow only on
@@ -151,10 +165,15 @@ const DEFS = {
     deskLineName: 'yellow',
     wallIdle: 'dial',
     solo: true,
-    // a flat black wall and one pool from above around the seat: ink falling off through a Bayer
-    // band to black, slate at its heart behind the head (the presenter alone in the light)
+    // a flat black wall and one downlight from above on the seat: a flat ink scallop, narrower at
+    // the top and widening to its foot, a narrow Bayer edge (no dithered ring around the wall), the
+    // foot fading back to black (the presenter alone in the light)
     base: 0.1,
-    pools: [{ X: 0, Y: -56, rx: 168, ry: 104, amount: 1.5 }],
+    pools: [
+      { X: 0, Y: -84, rx: 112, ry: 98, below: 1.1, flare: 0.32, edge: 0.2, fade: 0.55, amount: 1.05 },
+      // brighter near its source: an ink → slate lift at the top of the beam, above the wall
+      { X: 0, Y: -124, rx: 64, ry: 26, edge: 0.6, amount: 0.62 },
+    ],
     poolMax: 2.0, // never brighter than slate around the head
     tintPools: [],
     tints: null, // the cream tint (≤ 4 %) is left out: orange or cream next to yellow reads as candy
@@ -179,7 +198,7 @@ function build(id) {
   s.deskLine = C[s.deskLineName];
   s.bezel = { ...BASE.bezel, ...(def.bezel || {}) };
   s.values = Object.freeze({ ...s.values });
-  for (const k of ['pools', 'tintPools', 'scallops']) s[k] = Object.freeze((s[k] || []).map((p) => Object.freeze({ ...p })));
+  for (const k of ['pools', 'tintPools', 'scallops', 'glows']) s[k] = Object.freeze((s[k] || []).map((p) => Object.freeze({ ...p })));
   // the bake key: styles with identical light share one baked texture
   s.bakeKey = DEFS[id] ? id : 'world-now';
   return Object.freeze(s);

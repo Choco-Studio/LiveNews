@@ -28,7 +28,9 @@
 //     spent off screen: due while the shot on air does not show that listener
 //     (canSee(slot), from the Stage), it is held and fires 0.25 s after the next
 //     real cut that shows the listener, if that comes within 15 s and before the
-//     speech ends; otherwise it is dropped;
+//     speech ends; otherwise it is dropped. A glance the planner moved onto a
+//     later shot (ev.onScreen) fires 0.25 s after an EARLIER real cut that shows
+//     the listener (the director's max-hold guard, a stinger delay) within 15 s;
 //   - after the speech ends, unfired events planned up to 2.5 s past the end
 //     keep their offset from the end; later ones are dropped (ANALYSIS bug 9);
 //     interrupted speech (N key, stop) drops everything still pending;
@@ -64,6 +66,7 @@ export class CueClock {
     // (slot) => does the shot on air show that presenter? Set by the Stage; null = always
     this.canSee = null;
     this.lastCut = -Infinity;
+    this.cutSeen = -Infinity; // the last cut the moved turn glances were checked against
     this.lastTick = -Infinity; // renderer time of the previous tick (stall detection)
     this.reset();
   }
@@ -140,6 +143,10 @@ export class CueClock {
     this.track(t, fr, ctx, gap);
     if (this.ended === null && plan.speechEnd != null) this.end(plan.speechEnd, ctx);
     const entries = this.entries;
+    if (this.lastCut !== this.cutSeen) {
+      this.cutSeen = this.lastCut;
+      this.earlyGlances(ctx);
+    }
     const guard = Number.isFinite(ctx.cutGuard) ? ctx.cutGuard : 0.5;
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
@@ -226,6 +233,24 @@ export class CueClock {
           e.dueAt = T + Math.max(0, late);
         }
       }
+    }
+  }
+
+  /**
+   * A real cut that shows a listener: a turn glance the planner moved onto a later shot (it was
+   * hidden at the turn start) comes forward to AFTER_CUT s after this cut, within HOLD_MAX s of the
+   * speech start (the director cut to the two-shot earlier than planned).
+   */
+  earlyGlances(ctx) {
+    const T = this.lastCut;
+    if (!this.canSee || this.started === null || T < this.started || T - this.started > HOLD_MAX) return;
+    for (const e of this.entries) {
+      const ev = e.ev;
+      if (e.state === W_DONE || e.state === W_HELD || !ev.onScreen || ev.kind !== 'look' || ev.slot === ctx.speaker || !TURN.test(ev.why || '')) continue;
+      if (e.state === W_DUE && e.dueAt <= T + AFTER_CUT) continue;
+      if (!this.canSee(ev.slot)) continue;
+      e.state = W_DUE;
+      e.dueAt = T + AFTER_CUT;
     }
   }
 

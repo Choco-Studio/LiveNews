@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { ImageCache } from '../server/images.js';
+import { ImageCache, badPictureSize } from '../server/images.js';
 
 // ---------------------------------------------------------------- helpers
 
@@ -25,13 +25,25 @@ const imageResponse = (body = PNG, headers = {}, status = 200) =>
   new Response(body, { status, headers: { 'content-type': 'image/png', ...headers } });
 
 const URL_A = 'https://img.test/a.png';
+// Fake hosts resolve to a public address: the tests never depend on the machine's DNS (a slow lookup is refused).
+const publicLookup = async () => [{ address: '93.184.216.34', family: 4 }];
+/** A PNG of `w` x `h` pixels (a real IHDR), padded to `size` bytes. */
+const pngOf = (w, h, size = 33) => {
+  const b = Buffer.alloc(Math.max(33, size));
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0);
+  b.writeUInt32BE(13, 8);
+  b.write('IHDR', 12, 'latin1');
+  b.writeUInt32BE(w, 16);
+  b.writeUInt32BE(h, 20);
+  return b;
+};
 
 // ---------------------------------------------------------------- ImageCache
 
 describe('ImageCache', () => {
   test('downloads an image and returns its type and bytes', async () => {
     const fetchImpl = makeFetch();
-    const entry = await new ImageCache({ fetchImpl }).get('s1', URL_A);
+    const entry = await new ImageCache({ lookup: publicLookup, fetchImpl }).get('s1', URL_A);
     assert.equal(entry.type, 'image/png');
     assert.ok(Buffer.isBuffer(entry.body));
     assert.deepEqual(entry.body, PNG);
@@ -40,7 +52,7 @@ describe('ImageCache', () => {
 
   test('requests the URL with a bot user agent, an image Accept header and a timeout; redirects are followed by hand', async () => {
     const fetchImpl = makeFetch();
-    await new ImageCache({ fetchImpl }).get('s1', URL_A);
+    await new ImageCache({ lookup: publicLookup, fetchImpl }).get('s1', URL_A);
     const [{ url, init }] = fetchImpl.calls;
     assert.equal(url, URL_A);
     assert.equal(init.redirect, 'manual', 'each hop is checked against private addresses');
@@ -51,7 +63,7 @@ describe('ImageCache', () => {
 
   test('keeps what it downloaded: the same story id is served from memory', async () => {
     const fetchImpl = makeFetch();
-    const cache = new ImageCache({ fetchImpl });
+    const cache = new ImageCache({ lookup: publicLookup, fetchImpl });
     const first = await cache.get('s1', URL_A);
     const second = await cache.get('s1', URL_A);
     assert.equal(second, first);
@@ -65,7 +77,7 @@ describe('ImageCache', () => {
       await gate;
       return imageResponse();
     });
-    const cache = new ImageCache({ fetchImpl });
+    const cache = new ImageCache({ lookup: publicLookup, fetchImpl });
 
     const pending = [cache.get('s1', URL_A), cache.get('s1', URL_A), cache.get('s1', URL_A)];
     release();
@@ -79,14 +91,22 @@ describe('ImageCache', () => {
 
   test('different story ids are downloaded separately', async () => {
     const fetchImpl = makeFetch();
-    const cache = new ImageCache({ fetchImpl });
+    const cache = new ImageCache({ lookup: publicLookup, fetchImpl });
     await cache.get('s1', 'https://img.test/1.png');
     await cache.get('s2', 'https://img.test/2.png');
     assert.deepEqual(fetchImpl.calls.map((c) => c.url), ['https://img.test/1.png', 'https://img.test/2.png']);
   });
 
+  // The bytes decide what a picture is (fix round 1): the header only has to be an image type or octet-stream.
+  const MAGIC = {
+    'image/jpeg': Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46]),
+    'image/png': PNG,
+    'image/webp': Buffer.concat([Buffer.from('RIFF\0\0\0\0WEBPVP8 ', 'latin1'), Buffer.alloc(4)]),
+    'image/gif': Buffer.from('GIF89a\0\0\0\0', 'latin1'),
+    'image/avif': Buffer.concat([Buffer.from([0, 0, 0, 0x1c]), Buffer.from('ftypavif', 'latin1'), Buffer.alloc(4)]),
+  };
   test('accepts jpeg, png, webp, gif and avif, ignoring parameters such as a charset', async () => {
-    const cache = new ImageCache({ fetchImpl: makeFetch((url) => imageResponse(PNG, { 'content-type': url.split('?')[1] })) });
+    const cache = new ImageCache({ lookup: publicLookup, fetchImpl: makeFetch((url) => imageResponse(MAGIC[url.split('?')[1].split(';')[0].toLowerCase()], { 'content-type': url.split('?')[1] })) });
     for (const type of ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']) {
       const entry = await cache.get(type, `https://img.test/x?${type}`);
       assert.equal(entry.error, undefined, type);
@@ -97,11 +117,28 @@ describe('ImageCache', () => {
     assert.equal(withParams.type, 'image/jpeg');
   });
 
+  test('the bytes decide: a PNG labelled JPEG is a PNG, a JPEG sent as octet-stream is a picture, an HTML page labelled JPEG is not', async () => {
+    const serve = { mislabelled: [PNG, 'image/jpeg'], octet: [MAGIC['image/jpeg'], 'application/octet-stream'], html: [Buffer.from('<!doctype html><html>'), 'image/jpeg'] };
+    const cache = new ImageCache({ lookup: publicLookup, fetchImpl: makeFetch((url) => imageResponse(serve[url.split('?')[1]][0], { 'content-type': serve[url.split('?')[1]][1] })) });
+    assert.equal((await cache.get('a', 'https://img.test/x?mislabelled')).type, 'image/png');
+    assert.equal((await cache.get('b', 'https://img.test/x?octet')).type, 'image/jpeg');
+    assert.match((await cache.get('c', 'https://img.test/x?html')).error, /not a picture/);
+  });
+
+  test('a picture with more pixels than the on-air browser can pixelate quickly is skipped for the next candidate', () => {
+    const png = (w, h) => pngOf(w, h);
+    assert.match(badPictureSize(png(16000, 16000)), /too large/);
+    assert.match(badPictureSize(png(5000, 4000)), /too large/);
+    assert.equal(badPictureSize(png(4000, 3000)), null);
+    assert.match(badPictureSize(png(150, 100)), /too small/);
+  });
+
   test('refuses anything that is not an allowed image type (html, svg, json, no type at all)', async () => {
-    const cache = new ImageCache({ fetchImpl: makeFetch((url) => new Response('<html>', { headers: url.endsWith('?none') ? {} : { 'content-type': url.split('?')[1] } })) });
+    const cache = new ImageCache({ lookup: publicLookup, fetchImpl: makeFetch((url) => new Response('<html>', { headers: url.endsWith('?none') ? {} : { 'content-type': url.split('?')[1] } })) });
     for (const type of ['text/html', 'image/svg+xml', 'application/json', 'image/tiff', 'none']) {
       const entry = await cache.get(type, `https://img.test/x?${type}`);
-      assert.match(entry.error, /^content type not allowed: /, type);
+      // no type of its own (the runtime calls a string body text/plain): refused either way
+      assert.match(entry.error, type === 'none' ? /^(?:not a picture|content type not allowed)/ : /^content type not allowed: /, type);
       assert.equal(entry.body, undefined);
     }
     assert.equal((await cache.get('html', 'https://img.test/x?text/html')).error, 'content type not allowed: text/html');
@@ -109,7 +146,7 @@ describe('ImageCache', () => {
 
   test('only http(s) URLs are ever requested', async () => {
     const fetchImpl = makeFetch();
-    const cache = new ImageCache({ fetchImpl });
+    const cache = new ImageCache({ lookup: publicLookup, fetchImpl });
     for (const [i, url] of ['file:///etc/passwd', 'javascript:alert(1)', 'ftp://img.test/a.png', 'data:image/png;base64,AAAA', '//img.test/a.png', '/relative.png', '', undefined].entries()) {
       assert.deepEqual(await cache.get(`bad${i}`, url), { error: 'invalid URL' }, String(url));
     }
@@ -118,7 +155,7 @@ describe('ImageCache', () => {
   });
 
   test('HTTP errors become { error } entries instead of throwing', async () => {
-    const cache = new ImageCache({ fetchImpl: makeFetch(() => new Response('nope', { status: 404 })) });
+    const cache = new ImageCache({ lookup: publicLookup, fetchImpl: makeFetch(() => new Response('nope', { status: 404 })) });
     assert.deepEqual(await cache.get('s1', URL_A), { error: 'HTTP 404' });
   });
 
@@ -131,20 +168,31 @@ describe('ImageCache', () => {
     assert.deepEqual(await cache.get('s1', URL_A), { error: 'connect ECONNRESET' });
   });
 
-  test('refuses images over 6 MB, by Content-Length or by what actually arrives', async () => {
-    const declared = new ImageCache({ fetchImpl: makeFetch(() => imageResponse(PNG, { 'content-length': '6000001' })) });
+  test('refuses images over 3 MB, by Content-Length or by what actually arrives', async () => {
+    const declared = new ImageCache({ lookup: publicLookup, fetchImpl: makeFetch(() => imageResponse(PNG, { 'content-length': '3000001' })) });
     assert.deepEqual(await declared.get('s1', URL_A), { error: 'image too large' });
 
-    const actual = new ImageCache({ fetchImpl: makeFetch(() => imageResponse(Buffer.alloc(6_000_001))) });
+    const actual = new ImageCache({ lookup: publicLookup, fetchImpl: makeFetch(() => imageResponse(Buffer.alloc(3_000_001))) });
     assert.deepEqual(await actual.get('s1', URL_A), { error: 'image too large' });
 
-    const fits = new ImageCache({ fetchImpl: makeFetch(() => imageResponse(Buffer.alloc(6_000_000), { 'content-length': '6000000' })) });
-    assert.equal((await fits.get('s1', URL_A)).body.length, 6_000_000);
+    const big = pngOf(1200, 800, 3_000_000);
+    const fits = new ImageCache({ lookup: publicLookup, fetchImpl: makeFetch(() => imageResponse(big, { 'content-length': '3000000' })) });
+    assert.equal((await fits.get('s1', URL_A)).body.length, 3_000_000);
+  });
+
+  test('all pictures together stay within a memory budget: the least recently used go first', async () => {
+    const big = pngOf(1200, 800, 2_900_000);
+    const cache = new ImageCache({ lookup: publicLookup, fetchImpl: makeFetch(() => imageResponse(big)) });
+    for (let i = 0; i < 40; i++) await cache.get(`s${i}`, `https://img.test/p${i}.png`);
+    let total = 0;
+    for (const e of cache.cache.values()) total += e.body?.length || 0;
+    assert.ok(total <= 64_000_000, `${total} bytes cached`);
+    assert.ok(cache.cache.has('s39') && !cache.cache.has('s0'));
   });
 
   test('failures are remembered too: a broken image is not downloaded again', async () => {
     const fetchImpl = makeFetch(() => new Response('nope', { status: 503 }));
-    const cache = new ImageCache({ fetchImpl });
+    const cache = new ImageCache({ lookup: publicLookup, fetchImpl });
     const first = await cache.get('s1', URL_A);
     const second = await cache.get('s1', URL_A);
     assert.deepEqual(second, { error: 'HTTP 503' });
@@ -154,7 +202,7 @@ describe('ImageCache', () => {
 
   test('keeps the 120 most recently used images and forgets the rest', async () => {
     const fetchImpl = makeFetch();
-    const cache = new ImageCache({ fetchImpl });
+    const cache = new ImageCache({ lookup: publicLookup, fetchImpl });
     const url = (i) => `https://img.test/${i}.png`;
 
     for (let i = 0; i < 120; i++) await cache.get(`id${i}`, url(i));
@@ -193,7 +241,7 @@ describe('ImageCache: local pictures', () => {
     const fetchImpl = makeFetch(() => {
       throw new Error('no network expected');
     });
-    const entry = await new ImageCache({ fetchImpl, localRoots: () => [dir] }).get('s1', url(dir, 'ok.png'));
+    const entry = await new ImageCache({ lookup: publicLookup, fetchImpl, localRoots: () => [dir] }).get('s1', url(dir, 'ok.png'));
     assert.equal(entry.type, 'image/png');
     assert.deepEqual(entry.body, PNG);
     assert.equal(fetchImpl.calls.length, 0);
@@ -231,7 +279,7 @@ describe('ImageCache: hardening (round 1)', () => {
       calls++;
       return calls === 1 ? new Response('no', { status: 503 }) : new Response(PNG, { headers: { 'content-type': 'image/png' } });
     };
-    const cache = new ImageCache({ fetchImpl, log: quiet, now: () => clock });
+    const cache = new ImageCache({ lookup: publicLookup, fetchImpl, log: quiet, now: () => clock });
     assert.deepEqual(await cache.get('s1', 'https://img.test/a.png'), { error: 'HTTP 503' });
     clock = 30_000;
     assert.deepEqual(await cache.get('s1', 'https://img.test/a.png'), { error: 'HTTP 503' });

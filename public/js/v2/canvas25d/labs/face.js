@@ -414,10 +414,18 @@ export function buildConversation(episode, { start = 1.0, presenters = {}, gapOf
   const items = [];
   let t = start;
   const n = episode.segments.length;
+  // one gap function for the whole episode (like the runtime's pace gaps): every segment's
+  // context, and the neighbours the planners read (the hand-over look carried across), see the
+  // same pauses
+  const gapAt = (k) => {
+    if (!(k + 1 < n)) return null;
+    const seg = episode.segments[k];
+    return gapOf ? gapOf(seg, k) : episode.segments[k + 1].type === 'chat' && seg.type === 'chat' ? 0.6 : GAP[programId] ?? 0.9;
+  };
   for (let i = 0; i < n; i++) {
     const seg = episode.segments[i];
-    const gap = gapOf ? gapOf(seg, i) : i + 1 < n && episode.segments[i + 1].type === 'chat' && seg.type === 'chat' ? 0.6 : GAP[programId] ?? 0.9;
-    const plan = planSegment(episode, i, { presenters, gapAfter: i + 1 < n ? gap : null });
+    const gap = gapAt(i) ?? (GAP[programId] ?? 0.9);
+    const plan = planSegment(episode, i, { presenters, gapAfter: gapAt });
     const ctx = plan.ctx;
     const speaker = ctx?.speaker || seg.anchor;
     items.push({ slot: speaker, text: seg.text, t0: t, words: seg.audio?.words || null });

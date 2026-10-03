@@ -13,7 +13,46 @@ export const GRAVE =
 export const LIGHT =
   /\bAI\b|robot|\bchips?\b|phone|\bapps?\b|software|\bspace\b|nasa|planet|science|scientist|discover|study finds|telescope|\bgames?\b|record|festival|zoo|panda|penguin|dinosaur|fossil|museum|trees?\b|garden|bicycle|bike|tram|train|music|chocolate|coffee|parrot|whale|dolphin|stars?\b|comet|moon|reef|coral|tortoises?|leopards?|mangroves?|tomatoes|drones/i;
 
-export const isGrave = (text) => GRAVE.test(String(text ?? ''));
+// Words that look grave but are not, in these senses: a startup "fires its CEO", a manager "was fired", a
+// "fire drill", a government or a deal that "collapses".
+const NOT_GRAVE_SENSES = [
+  /\bfire[sd]?\s+(?:its|his|her|their|the|a|an|two|three|several|hundreds of|thousands of)\s+(?:[\w-]+\s+){0,2}(?:ceo|chief\w*|boss|coach|manager|staff|workers|employees|director|head|executive|minister|adviser|advisor|founder|chairman|chairwoman|editor|players?)\b/gi,
+  /\b(?:was|were|been|be|is|are|got|get|gets|getting)\s+fired\b/gi,
+  /\bfire\s+(?:drills?|alarm tests?|exercises?|safety)\b/gi,
+  /\b(?:government|coalition|talks|deal|negotiations|prices?|shares|stocks?|market|currency|company|firm|bank|league|plan|bid)\s+collaps\w*/gi,
+];
+// What says a grave-sounding event harmed no one ("Moderate earthquake shakes northern Chile, no damage reported").
+const HARM_NEGATED = /\b(?:no (?:reports? of )?(?:damage|injuries|injured|casualties|deaths|victims)(?:\s+(?:or|and|nor)\s+(?:damage|injuries|injured|casualties|deaths|victims))?|no one (?:was )?(?:hurt|injured|killed)|nobody (?:was )?(?:hurt|injured|killed)|without (?:injuries|casualties)|false alarm|(?:a|the) drill\b)/gi;
+// What says people were harmed or are at risk: it raises the severity of grave news.
+const HARM = /\b(?:dead|deaths?|died|die|killed|kills|injur\w*|hurt|evacuat\w*|displaced|missing|homeless|without (?:power|electricity|water)|(?:cuts?|knocks? out|cut) (?:power|electricity)|blackouts?|casualt\w*|victims?|life-threatening|red alert|state of emergency|shelters?|relief camps?)\b/i;
+const withoutLookalikes = (text) => NOT_GRAVE_SENSES.reduce((t, re) => t.replace(re, ' '), String(text ?? ''));
+
+/**
+ * Grave news? A grave word in its grave sense ("Startup fires its CEO" is
+ * not), unless the opening says nobody was harmed and nothing says anyone
+ * was ("...earthquake shakes northern Chile, no damage reported").
+ */
+export function isGrave(text) {
+  const t = withoutLookalikes(text);
+  if (!GRAVE.test(t)) return false;
+  const opening = t.slice(0, 320);
+  HARM_NEGATED.lastIndex = 0;
+  if (HARM_NEGATED.test(opening) && !HARM.test(t.replace(HARM_NEGATED, ' '))) return false;
+  return true;
+}
+
+/**
+ * How grave a story is, for the running order and the tone: 0 not grave,
+ * 2 grave, 3 grave with people harmed or at risk (deaths, injuries,
+ * evacuations, homes without power, a red alert, a state of emergency).
+ */
+export function severity(text) {
+  if (!isGrave(text)) return 0;
+  return HARM.test(withoutLookalikes(text).replace(HARM_NEGATED, ' ')) ? 3 : 2;
+}
+
+/** A grave-sounding story whose opening says nobody was harmed: sober news, never grave, never light. */
+export const harmlessIncident = (text) => GRAVE.test(withoutLookalikes(text)) && !isGrave(text);
 
 // A sentence that leans on the one before it: a pronoun ("It runs along the river."), or a definite common
 // noun that points back ("The canal authority says...", "Astronomers say the shadow will cross..."). Such a
@@ -470,17 +509,42 @@ function subjectBefore(s, index) {
   const clause = s.slice(clauseStart + 1, index).trim();
   const words = clause.split(/\s+/).filter(Boolean);
   const out = [];
-  for (const raw of words) {
+  for (const [k, raw] of words.entries()) {
     const w = raw.replace(/[^A-Za-z'’-]/g, '');
     const lw = w.toLowerCase().replace(/['’]s$/, '');
     if (!w) break;
     if (SUBJECT_SKIP.has(lw)) continue;
+    if (lw === 'of' && out.length === 1) {
+      // "the cost of shipping" -> SHIPPING COST: the noun after "of" says what the head is the cost of
+      const next = (words[k + 1] || '').replace(/[^A-Za-z-]/g, '').toLowerCase();
+      if (next && !SUBJECT_SKIP.has(next) && !LABEL_STOP.has(next) && !AUX.has(next) && next.length > 2) out.unshift(next);
+      break;
+    }
     if (AUX.has(lw) || LABEL_STOP.has(lw) || /ed$/.test(lw) || IRREGULAR_PAST.has(lw) || DOWN_BEFORE.test(`${lw} `) || UP_BEFORE.test(`${lw} `)) break;
     out.push(lw.replace(/['’]s$/, ''));
     if (out.length >= 2) break;
   }
   // "Tokyo's main stock index" -> keep the head noun, not the owner
   return out.length ? out.join(' ').toUpperCase() : null;
+}
+
+// A label that is only a counting word says nothing ("2 MILLION UNITS"): the thing counted and its verb do.
+const COUNT_ONLY = /^(?:UNITS?|ITEMS?|COPIES|PIECES|TIMES|PIECES)$/;
+const COUNT_VERB = /\b(sold|shipped|delivered|made|built|produced|downloaded|registered|bought|ordered|installed|streamed)\s+(?:about\s+|nearly\s+|more than\s+|over\s+|some\s+|almost\s+)?$/i;
+// A figure that is a finding ("2 degrees cooler") beats the size of a sample ("a study of 90 cities").
+const COMPARATIVE = /\b(?:cooler|warmer|hotter|colder|higher|lower|faster|slower|cheaper|dearer|bigger|smaller|longer|shorter|fewer|less|more)\b/i;
+const SAMPLE_BEFORE = /\b(?:study|survey|analysis|sample|review|poll|census) of\s+(?:about\s+|nearly\s+|more than\s+|some\s+)?$/i;
+const plural = (w) => (/(?:s|x|ch|sh)$/.test(w) ? w : /[^aeiou]y$/.test(w) ? `${w.slice(0, -1)}ies` : `${w}s`);
+
+/** "A new games console sold 2 million units" -> "CONSOLES SOLD"; null when the counted thing is not clear. */
+function countedLabel(s, index) {
+  const before = s.slice(Math.max(0, index - 80), index);
+  const verb = before.match(COUNT_VERB);
+  if (!verb) return null;
+  // the noun right before the verb is what was counted ("a new handheld games console sold" -> console)
+  const noun = (before.slice(0, verb.index).trim().split(/\s+/).pop() || '').replace(/[^A-Za-z-]/g, '').toLowerCase();
+  if (!noun || noun.length < 3 || LABEL_STOP.has(noun) || SUBJECT_SKIP.has(noun) || AUX.has(noun)) return null;
+  return `${plural(noun)} ${verb[1]}`.toUpperCase();
 }
 
 const TIME_UNIT = /^(?:DAYS?|HOURS?|MINUTES?|SECONDS?|WEEKS?|MONTHS?|YEARS?|DECADES?)$/;
@@ -581,8 +645,17 @@ export function extractFigures(text, max = 3) {
       figures.push({ value: `${value} ${labelText}`.slice(0, 12), label: subject, fact: [subject, qualifier, value, labelText].filter(Boolean).join(' '), said: `${q ? `${q} ` : ''}${n.raw}${label.length ? ` ${label.join(' ')}` : ''}`, score: 2, index: n.index, ...(qualifier ? { qualifier } : {}) });
       continue;
     }
+    // "2 MILLION UNITS": the counted thing and its verb instead ("2 MILLION CONSOLES SOLD"), or no card
+    if (!n.percent && !n.currency && COUNT_ONLY.test(labelText)) {
+      const counted = countedLabel(s, n.index);
+      if (!counted) continue;
+      labelText = counted;
+      core = [direction, `${value} ${counted}`].filter(Boolean).join(' ');
+    }
     const fact = [qualifier, core].filter(Boolean).join(' ');
     let score = 1;
+    if (COMPARATIVE.test(labelText)) score += 2.5;
+    if (SAMPLE_BEFORE.test(lowBefore)) score -= 1.5;
     if (n.value >= 1000 || n.unit) score += 2;
     if (n.percent || n.currency) score += 1.5;
     if (label.length || (n.percent && labelText)) score += 1;
@@ -610,13 +683,26 @@ const FRAME_WORDS = new Set(
 // A title that names a person or office ("President X", "Minister Y").
 const TITLE_RE = /\b(?:President|Prime Minister|Minister|Chancellor|Governor|Mayor|Senator|General|King|Queen|Prince|Princess|Pope|Judge|Justice|Secretary|Ambassador|Commissioner|Chief Executive|Chairman|Chairwoman|Director|Professor|Dr|Sheikh|Sultan|Emperor|Premier)\.?\s+(?=\p{Lu})/u;
 // "..., the mayor said" / "Ana Silva says" / "according to the ministry".
+// Speaker verbs, singular and plural ("the mayor says", "police say", "engineers warn", "officials believe").
+const SAY_VERB = '(?:said|says|say|told|tells|tell|added|adds|warned|warns|warn|insisted|insists|insist|confirmed|confirms|confirm|explained|explains|explain|believe|believes|believed|expect|expects|expected|claim|claims|claimed|blame|blames|blamed|estimate|estimates|estimated|announced|announces|announce|reported|reports|report)';
 const SPEAKER_RES = [
-  /(?:^|[,;]\s*)((?:the |an? )?[a-z][a-z' -]{2,40}?|\p{Lu}[\p{L}'’.-]+(?: \p{Lu}[\p{L}'’.-]+){0,3})\s+(?:said|says|told|added|warned|insisted|confirmed|explained)\b/u,
+  new RegExp(`(?:^|[,;]\\s*)((?:the |an? )?[a-z][a-z' -]{2,40}?|\\p{Lu}[\\p{L}'’.-]+(?: \\p{Lu}[\\p{L}'’.-]+){0,3})\\s+${SAY_VERB}\\b`, 'u'),
   /\b(?:said|says|added|warned)\s+((?:the |an? )[a-z][a-z' -]{2,30}?|\p{Lu}[\p{L}'’.-]+(?: \p{Lu}[\p{L}'’.-]+){0,3})(?=[.,;]|$)/u,
   /\baccording to\s+((?:the |an? )?[\p{L}][\p{L}' -]{2,40}?)(?=[.,;]|$)/u,
 ];
-// What a sentence blames: "caused by X", "after an X", "due to X", "blamed on X".
-const CAUSE_RE = /\b(?:caused by|because of|due to|blamed (?:on|for)|blames?|triggered by|sparked by|following|after|amid)\s+(?:an?\s+|the\s+|a\s+series of\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)?)/gi;
+// What a sentence blames: "caused by X", "after an X", "due to X", "blamed on X", "because X".
+const CAUSE_RE = /\b(?:caused by|because of|because|due to|blamed (?:on|for)|blames?|triggered by|sparked by|following|after|amid)\s+(?:an?\s+|the\s+|a\s+series of\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)?)/gi;
+// "Engineers blamed sabotage for the closure": the thing blamed is a cause too.
+const BLAMED_RE = /\bblam(?:e|es|ed|ing)\s+(?:an?\s+|the\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)?)\s+for\b/gi;
+// Time and duration a sentence asserts ("for weeks", "next week", "again", "tomorrow"): the source must say
+// it too, as it must say a figure. Each entry: the phrase, and the word(s) the source must contain.
+const TIME_RES = [
+  [/\b(?:for|over|in|within|after)\s+(?:the\s+)?(?:past\s+|last\s+|next\s+|coming\s+)?(?:several\s+|many\s+|a\s+few\s+|few\s+|an?\s+|one\s+|two\s+|three\s+|\d+\s+)?(hours?|days?|weeks?|months?|years?|decades?)\b/gi, (m) => m[1].replace(/s$/, '')],
+  [/\b(next|last|this|coming)\s+(week|weekend|month|year|spring|summer|autumn|winter|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi, (m) => `${m[1]} ${m[2]}`],
+  [/\b(again|tomorrow|tonight|yesterday|permanently|temporarily|for good|indefinitely|soon)\b/gi, (m) => m[1]],
+];
+// Judgements a source must make itself: a writer never declares a place safe or an act deliberate.
+const ASSESSMENT = new Set('safe unsafe dangerous secure stable unstable contained resolved deliberate deliberately accidental accidentally intentional intentionally sabotage unprecedented historic catastrophic devastating'.split(' '));
 
 const inSource = (word, pool) => pool.some((p) => sameWord(base(word), p));
 
@@ -640,10 +726,21 @@ export function inventedClaim(sentence, source, { ignore = [] } = {}) {
   const foldedSource = fold(src);
   const words = contentWords(s).filter((w) => !FRAME_WORDS.has(w) && !/^\d/.test(w));
   const fresh = words.filter((w) => !inSource(w, pool));
-  if (words.length >= 3 && fresh.length >= 2 && (words.length - fresh.length) / words.length < 0.5) return 'not in the source';
-  for (const m of s.matchAll(CAUSE_RE)) {
-    const cause = contentWords(m[1]).filter((w) => !FRAME_WORDS.has(w));
-    if (cause.length && !cause.every((w) => inSource(w, pool))) return `cause "${m[1]}"`;
+  // Half or more of its words are new: it says something else than the source.
+  if (words.length >= 3 && fresh.length >= 2 && (words.length - fresh.length) / words.length <= 0.5) return 'not in the source';
+  const judged = fresh.find((w) => ASSESSMENT.has(w));
+  if (judged) return `assessment "${judged}"`;
+  for (const re of [CAUSE_RE, BLAMED_RE]) {
+    for (const m of s.matchAll(re)) {
+      const cause = contentWords(m[1]).filter((w) => !FRAME_WORDS.has(w));
+      if (cause.length && !cause.every((w) => inSource(w, pool))) return `cause "${m[1]}"`;
+    }
+  }
+  for (const [re, key] of TIME_RES) {
+    for (const m of s.matchAll(re)) {
+      const want = key(m).toLowerCase();
+      if (!new RegExp(`\\b${want.replace(/\s+/g, '\\s+')}`, 'i').test(foldedSource)) return `time "${m[0]}"`;
+    }
   }
   for (const re of SPEAKER_RES) {
     const m = s.match(re);

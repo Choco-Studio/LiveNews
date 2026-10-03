@@ -304,8 +304,8 @@ describe('normalizeBulletin: field validation', () => {
   test('a headline cut mid-phrase, too long to cut cleanly, or not supported by the source falls back to the outlet\'s title', () => {
     const stories = [makeStory('s1', { title: 'Study finds city trees cut summer temperatures by 2 degrees', summary: 'Streets with many trees were about 2 degrees cooler.' })];
     const hl = (headline) => normalize([storySeg('s1', { headline })], { stories }).segments[1].headline;
-    // the outlet's title (59 characters, over the strap's 56) loses its trailing phrase cleanly
-    const own = 'Study finds city trees cut summer temperatures';
+    // the outlet's title (59 characters, over the strap's 56) loses its trailing phrase cleanly, in headline-ese
+    const own = 'Study: city trees cut summer temperatures';
     assert.equal(hl('Study finds city trees cut temperatures by 2'), own, 'a figure cut off from its unit');
     assert.equal(hl('Study finds city trees cut summer temperatures in'), own, 'ends on a preposition');
     assert.equal(hl('Trees kill heatwave victims in Paris'), own, 'a claim the source does not make');
@@ -317,8 +317,8 @@ describe('normalizeBulletin: field validation', () => {
   test('the outlet\'s title is shortened only at clean points, and kept whole (for the graphics to wrap) otherwise', () => {
     const titleOf = (title) => normalize([storySeg('s1', { headline: '' })], { stories: [makeStory('s1', { title })] }).segments[1].headline;
     assert.equal(titleOf('Coffee futures reach a ten-year high after poor harvests'), 'Coffee futures reach a ten-year high', 'a cut that fits keeps its articles');
-    assert.equal(titleOf('Kerala floods: thousands moved to relief camps as heavy rain continues'), 'Kerala floods: thousands moved to relief camps');
-    assert.equal(titleOf('Data centre near Reykjavik runs on wind and geothermal power'), 'Data centre near Reykjavik runs on wind and geothermal power', 'no clean cut: kept whole');
+    assert.equal(titleOf('Kerala floods: thousands moved to relief camps as heavy rain continues'), 'Kerala floods: thousands in relief camps');
+    assert.equal(titleOf('Data centre near Reykjavik runs on wind and geothermal power'), 'Reykjavik data centre runs on wind and geothermal power', 'no clean cut, over the strap\'s 56: headline-ese brings it under');
     assert.equal(titleOf('Peru archaeologists uncover a 3,000-year-old temple in the Andes'), 'Peru archaeologists uncover a 3,000-year-old temple', 'no articles dropped when it still does not fit');
     assert.equal(titleOf('BREAKING: Panama Canal reopens after a day-long closure'), 'Panama Canal reopens after a day-long closure', 'no BREAKING marker on the strap');
     assert.equal(titleOf('Climate talks in Nairobi – live'), 'Climate talks in Nairobi');
@@ -1179,22 +1179,34 @@ describe('normalizeBulletin: recurring features', () => {
   };
   const feat = (segments, opts) => normalize(segments, { stories: FEAT, opts }).segments.filter((s) => s.type === 'story');
 
+  test('the number of the day never sits next to grave news: it moves to the nearest calm slot, or airs as a plain story', () => {
+    const num = () => storySeg('f1', { feature: 'number', numbers: [{ value: '40,000', label: 'passengers a day' }], text: 'Lisbon has opened a tram line that will carry 40,000 passengers a day.' });
+    const moved = feat([storySeg('f5', { emotion: 'serious' }), num(), storySeg('f3'), storySeg('f6', { feature: 'lighter', emotion: 'happy' })]);
+    assert.deepEqual(moved.map((s) => s.storyId), ['f5', 'f3', 'f1', 'f6']);
+    assert.equal(moved[2].feature, 'number');
+    const none = feat([storySeg('f5', { emotion: 'serious' }), num(), storySeg('f3', { emotion: 'serious' })]);
+    assert.deepEqual(none.map((s) => s.storyId), ['f5', 'f1', 'f3']);
+    assert.ok(!('feature' in none[1]), 'no calm slot: an ordinary story');
+    assert.doesNotMatch(none[1].text, /number of the day/i);
+  });
+
   test('a round-up is a run of 2-4 consecutive stories with a place: each gets its position, a map shot and the kicker', () => {
+    // the lead (a fire with three injured) is grave: the number of the day waits until after the round-up
     const segs = feat([
-      storySeg('f5', { emotion: 'serious' }),
+      storySeg('f5', { emotion: 'neutral' }),
       storySeg('f1', { feature: 'number', numbers: [{ value: '40,000', label: 'passengers a day' }], text: 'Lisbon has opened a tram line that will carry 40,000 passengers a day.' }),
       storySeg('f2', { feature: 'roundup', location: LOC.f2, shot: 'wide', numbers: [{ value: '300,000', label: 'homes' }], text: 'A solar farm near Nairobi can light 300,000 homes. A second sentence.' }),
       storySeg('f3', { feature: 'roundup', location: LOC.f3 }),
       storySeg('f4', { feature: 'roundup', location: LOC.f4, kicker: 'HISTORY' }),
       storySeg('f6', { feature: 'lighter', emotion: 'happy' }),
     ]);
-    assert.deepEqual(segs.map((s) => s.feature ?? null), [null, 'number', 'roundup', 'roundup', 'roundup', 'lighter']);
-    assert.deepEqual(segs.slice(2, 5).map((s) => s.roundup), [{ index: 0, count: 3 }, { index: 1, count: 3 }, { index: 2, count: 3 }]);
-    assert.deepEqual(segs.slice(2, 5).map((s) => s.shot), ['map', 'map', 'map']);
-    assert.deepEqual(segs.slice(1).map((s) => s.kicker), ['NUMBER OF THE DAY', 'AROUND THE WORLD', 'AROUND THE WORLD', 'AROUND THE WORLD', 'AND FINALLY']);
-    assert.equal(segs[2].text, 'Now, around the world in 30 seconds. A solar farm near Nairobi can light 300,000 homes.', 'a round-up item is one sentence, and the first one gets the title the writer left out');
-    assert.ok(!('numbers' in segs[2]) && segs[2].fact === null, 'no fact cards inside the round-up');
-    assert.match(segs[1].text, /^Our number of the day: 40,000\. Lisbon has opened/, 'the lead-in is added when the writer left it out');
+    assert.deepEqual(segs.map((s) => s.feature ?? null), [null, 'roundup', 'roundup', 'roundup', 'number', 'lighter']);
+    assert.deepEqual(segs.slice(1, 4).map((s) => s.roundup), [{ index: 0, count: 3 }, { index: 1, count: 3 }, { index: 2, count: 3 }]);
+    assert.deepEqual(segs.slice(1, 4).map((s) => s.shot), ['map', 'map', 'map']);
+    assert.deepEqual(segs.slice(1).map((s) => s.kicker), ['AROUND THE WORLD', 'AROUND THE WORLD', 'AROUND THE WORLD', 'NUMBER OF THE DAY', 'AND FINALLY']);
+    assert.equal(segs[1].text, 'Now, around the world in 30 seconds. A solar farm near Nairobi can light 300,000 homes.', 'a round-up item is one sentence, and the first one gets the title the writer left out');
+    assert.ok(!('numbers' in segs[1]) && segs[1].fact === null, 'no fact cards inside the round-up');
+    assert.match(segs[4].text, /^Our number of the day: 40,000\. Lisbon has opened/, 'the lead-in is added when the writer left it out');
     assert.match(segs[5].text, /^And finally: /);
   });
 
@@ -1529,6 +1541,20 @@ describe('normalizeBulletin: invented claims, outlet names, qualifiers (editoria
     assert.equal(one({ text }).text, 'The Panama Canal has reopened after fog closed it for a day. Engineers say about 30 ships are waiting.');
   });
 
+  test('fix round 1 variants: a blamed cause, a swapped plural speaker, an invented duration, future event or judgement are dropped', () => {
+    const text = [
+      'The Panama Canal has reopened after fog closed it for a day.',
+      'Engineers blamed sabotage for the closure.',
+      'Police say about 30 ships are waiting.',
+      'Ships had been stuck for weeks.',
+      'The canal will close again next week.',
+      'Engineers say the canal is now safe for ships.',
+      'Engineers say about 30 ships are waiting.',
+      'The backlog should clear soon, engineers say.',
+    ].join(' ');
+    assert.equal(one({ text }).text, 'The Panama Canal has reopened after fog closed it for a day. Engineers say about 30 ships are waiting. The backlog should clear soon, engineers say.');
+  });
+
   test('outlets with digits in their names keep their attribution ("France 24", "Channel 4 News", "ABC7")', () => {
     for (const source of ['France 24', 'Channel 4 News', 'ABC7']) {
       const st = makeStory('p1', { title: 'Paris opens a new tram line', summary: 'Paris has opened a new tram line. The city says it will cut traffic.', source });
@@ -1601,10 +1627,10 @@ describe('shortHeadline: grammatical, meaningful and stable (editorial r2)', asy
   test('a trailing phrase goes before the headline is kept whole; a label gives way to its clause only with the place', () => {
     assert.equal(shortHeadline('Lagos shops switch to solar power to cut fuel costs', 45), 'Lagos shops switch to solar power');
     assert.equal(shortHeadline('North Sea wind farm starts supplying power to 1.2 million homes', 45), 'North Sea wind farm starts supplying power');
-    assert.equal(shortHeadline('Small businesses get a new online tool to file taxes', 45), 'Small businesses get a new online tool to file taxes', 'the tool needs its purpose');
-    assert.equal(shortHeadline('Mexico City closes its historic centre to cars on Sundays', 45), 'Mexico City closes its historic centre to cars', '"to cars" completes "closes"');
+    assert.equal(shortHeadline('Small businesses get a new online tool to file taxes', 45), 'Small firms get new online tool to file taxes', 'the tool keeps its purpose; headline-ese makes it fit');
+    assert.equal(shortHeadline('Mexico City closes its historic centre to cars on Sundays', 45), 'Mexico City closes historic centre to cars', '"to cars" completes "closes"');
     assert.equal(shortHeadline('Iceland volcano: lava fountains light up the Reykjanes sky', 45), 'Lava fountains light up the Reykjanes sky');
-    assert.equal(shortHeadline('Kerala floods: thousands moved to relief camps as heavy rain continues', 45), 'Kerala floods: thousands moved to relief camps');
+    assert.equal(shortHeadline('Kerala floods: thousands moved to relief camps as heavy rain continues', 45), 'Kerala floods: thousands in relief camps');
   });
 
   test('NEWS IN 60 house style (36): present tense, no articles', () => {

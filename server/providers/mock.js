@@ -9,9 +9,9 @@
 // from the story ids, so the same news always makes the same episode.
 
 import { isBreaking, plainTitle } from '../news.js';
-import { GRAVE, LIGHT, contentWords, extractFigures, leansOnPrevious, numbersIn, quotesIn } from '../facts.js';
+import { LIGHT, contentWords, extractFigures, harmlessIncident, isGrave, leansOnPrevious, numbersIn, quotesIn, severity } from '../facts.js';
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
-import { shortHeadline } from '../writer.js';
+import { SENTENCE_WORDS, shortHeadline, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
 
 const DEATHS = /\b(?:dead|deaths?|die[sd]|killed|killings?|victims?|mourn\w*|funeral)\b/i;
@@ -299,7 +299,9 @@ function study(story) {
   const title = plainTitle(story.title) || story.title;
   const s = { ...story, title };
   const text = `${title} ${s.summary || ''}`;
-  const grave = GRAVE.test(text);
+  // Grave by severity, not by a keyword: "fires its CEO" is not, "an earthquake, no damage reported" is sober news.
+  const grave = isGrave(text);
+  const mild = harmlessIncident(text);
   const loc = locate(title, s.summary || '');
   const precise = loc && !loc.entry.broad ? loc : null;
   // A fact card is a whole beat on screen: only figures worth one ("3 YEARS" is not).
@@ -312,8 +314,11 @@ function study(story) {
     breaking: isBreaking(story.title),
     live: !!story.live,
     grave,
-    // hard news that is not grave: money, strikes, courts, rates, closures (it leads before a curiosity)
-    hard: !grave && SOBER.test(text),
+    // hard news that is not grave: money, strikes, courts, rates, closures (it leads before a curiosity); an
+    // incident that harmed no one counts here too, a little lower
+    hard: !grave && (SOBER.test(text) || mild),
+    mild,
+    severity: severity(text),
     sad: grave && DEATHS.test(text),
     light,
     curious: light && (LIGHTER.test(title) || CURIOUS.test(title)),
@@ -384,10 +389,11 @@ function runningOrder(infos, n, program) {
   let roundup = [];
   if (want) {
     const countries = new Set([lead.country]);
-    const located = pool.filter((i) => i.loc && !i.breaking && !i.live);
+    // a round-up item is told in one summary sentence: a story with none that fits stays a main story
+    const located = pool.filter((i) => i.loc && !i.breaking && !i.live && i.roundupFit !== false);
     // One map sentence is for the smaller stories: a picture, a second outlet or people at risk make a story a
     // main one (it gets its photo beat and its full telling); the round-up takes the rest first.
-    const weight = (i) => (i.s.image ? 2 : 0) + ((i.s.outlets || 1) > 1 ? 2 : 0) + (i.grave ? 1.5 : 0);
+    const weight = (i) => (i.s.image && program?.pictures !== 'every' ? 2 : 0) + ((i.s.outlets || 1) > 1 ? 2 : 0) + (i.grave ? 1.5 : 0);
     for (const i of [...located].sort((a, b) => weight(a) - weight(b))) {
       if (roundup.length >= want) break;
       if (countries.has(i.country)) continue;
@@ -420,7 +426,32 @@ function runningOrder(infos, n, program) {
   const order = [lead, ...before, ...roundup, ...after];
   if (number && program?.numberSlot === 'last') order.push(number);
   if (lighter) order.push(lighter);
+  // The number of the day is a light beat: never between grave stories (hurricane, 40,000 tram rides, wildfire).
+  if (number && !placeLight(order, number, roundup, lighter)) number = null;
   return { order, roundup, lighter, number };
+}
+
+/**
+ * Move a light feature in `order` to the nearest slot (never the lead, never inside the round-up, never after
+ * "and finally") with no grave story either side. False when there is no such slot: it airs where it is, as
+ * an ordinary story.
+ */
+function placeLight(order, item, roundup, lighter) {
+  const at = order.indexOf(item);
+  const grave = (x) => !!x?.grave;
+  const fits = (list, i) => !grave(list[i - 1]) && !grave(list[i]) && !(roundup.includes(list[i - 1]) && roundup.includes(list[i]));
+  if (fits(order.filter((x) => x !== item), at)) return true;
+  const rest = order.filter((x) => x !== item);
+  const last = rest.length - (lighter && rest.at(-1) === lighter ? 1 : 0);
+  for (let d = 1; d <= rest.length; d++) {
+    for (const i of [at + d, at - d]) {
+      if (i < 1 || i > last || !fits(rest, i)) continue;
+      rest.splice(i, 0, item);
+      order.splice(0, order.length, ...rest);
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -429,7 +460,8 @@ function runningOrder(infos, n, program) {
  * harmed or at risk, money, strikes, courts, rates) moves a story up and a curiosity moves it down, a second
  * outlet and a picture breaking ties. A record year for punctual trains never leads over a heat alert.
  */
-const newsValue = (i, k) => k / 2 - (i.grave ? 2.2 : 0) - (i.hard ? 1 : 0) + (i.curious ? 1.2 : i.light ? 0.3 : 0) - ((i.s.outlets || 1) > 1 ? 0.8 : 0) - (i.s.image ? 0.3 : 0);
+const newsValue = (i, k) =>
+  k / 2 - (i.severity >= 3 ? 3 : i.grave ? 2.2 : 0) - (i.hard ? 1 : 0) + (i.mild ? 0.7 : 0) + (i.curious ? 1.2 : i.light ? 0.3 : 0) - ((i.s.outlets || 1) > 1 ? 0.8 : 0) - (i.s.image ? 0.3 : 0);
 
 /** The lead: the biggest news among the first six stories of the desk (never a live page when there is news). */
 function takeLead(pool) {
@@ -460,7 +492,7 @@ function bestMain(pool) {
   let bestScore = Infinity;
   for (let k = 0; k < Math.min(3, pool.length); k++) {
     const i = pool[k];
-    const score = k - (i.s.image ? 1.2 : 0) - ((i.s.outlets || 1) > 1 ? 1 : 0) - (i.grave ? 1.3 : 0) - (i.hard ? 0.5 : 0) + (i.curious ? 0.5 : 0) + (i.live ? 9 : 0);
+    const score = k - (i.s.image ? 1.2 : 0) - ((i.s.outlets || 1) > 1 ? 1 : 0) - (i.severity >= 3 ? 1.6 : i.grave ? 1.3 : 0) - (i.hard ? 0.5 : 0) + (i.mild ? 0.4 : 0) + (i.curious ? 0.5 : 0) + (i.live ? 9 : 0);
     if (score < bestScore) {
       bestScore = score;
       best = k;
@@ -498,8 +530,7 @@ const OPENERS = [
   { id: 'according', words: 3, fn: (t, src) => (lcFirst(t) ? `According to ${src}, ${unstop(lcFirst(t))}.` : null) },
   { id: 'that', words: 3, fn: (t, src) => (lcFirst(t) ? `${src} reports that ${unstop(lcFirst(t))}.` : null) },
 ];
-// The longest sentence a programme's bible allows (config `sentenceWords`), and where the place must come.
-const SENTENCE_WORDS = { 'world-now': 20, 'news-60': 18, 'tech-bytes': 22, cosmos: 22, 'money-minute': 22 };
+// Where the place must come (the longest sentence a programme allows is writer.js SENTENCE_WORDS).
 const PLACE_WITHIN = { 'world-now': 6, 'news-60': 3, 'money-minute': 4 };
 
 function writeEpisode({ stories, channelName, program, presenters, count, now, recent }) {
@@ -514,8 +545,28 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
   const all = stories.map(study).filter((i) => !i.live || i.sentences.length);
   // Live pages only when there is nothing else.
   const fresh = all.filter((i) => !i.live);
-  const pool = fresh.length >= Math.min(all.length, count ?? program?.stories ?? 5) ? fresh : all;
+  let pool = fresh.length >= Math.min(all.length, count ?? program?.stories ?? 5) ? fresh : all;
+  // A picture on every item (NEWS IN 60's bible): after the top story, the stories with a picture come first, and
+  // among them those whose headline fits the programme's strap; the others only when the desk has no more.
+  if (program?.pictures === 'every' && pool.length > 1) {
+    const top = pool.find((i) => i.breaking) || pool[0];
+    const max = program.headlineMax || 45;
+    const rank = (i) => (i.s.image ? 0 : 2) + (shortHeadline(i.s.title, max).length <= max ? 0 : 1);
+    pool = [top, ...pool.filter((i) => i !== top).map((i, k) => ({ i, k })).sort((a, b) => rank(a.i) - rank(b.i) || a.k - b.k).map(({ i }) => i)];
+    // the running order is built from exactly those stories (the round-up must not reach past them)
+    pool = pool.slice(0, Math.max(1, count ?? program?.stories ?? 5));
+  }
   const n = Math.min(pool.length, count ?? program?.stories ?? 5);
+  // Which stories have a summary sentence a round-up item can be (its length, standing on its own)
+  const [rMin, rMax] = quick ? [14, 18] : [12, 20];
+  for (const i of pool) {
+    i.roundupFit = i.sentences.some((t, j) => {
+      if (!(j === 0 ? !PRONOUN_START.test(t) : !leansOnPrevious(t))) return false;
+      if (j > 0 && newWords(i.s.title, t) > contentWords(i.s.title).length - 2) return false;
+      const x = wordCount(t) <= rMax ? t : trimClause(t, rMax, rMin - 4);
+      return !!x && wordCount(x) >= rMin - 4;
+    });
+  }
   const { order, roundup, lighter, number } = runningOrder(pool, n, program);
   const seed = order.map((i) => i.s.id).join('|') + pid;
   const nameOf = (slot) => firstName(presenters[slot]);
@@ -757,20 +808,34 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // a later detail ("In Paris, the city says shade can make streets cooler"). The place comes first as
       // written, moved to the front ("In Sweden, a recycling plant has started...") or put there.
       const tells = (t, j) => j === 0 || newWords(s.title, t) <= contentWords(s.title).length - 2;
+      // A sentence a little over the item's length loses a trailing clause (", a record", "where the species..."),
+      // never its subject or verb.
+      const sized = (t) => (wordCount(t) <= maxW ? t : trimClause(t, maxW, minW - 4));
       let line = null;
-      for (const [j, t] of info.sentences.entries()) {
-        if (used.has(t) || !selfStanding(info, t) || !tells(t, j)) continue;
-        const forms = [early(t) ? t : null, movePlaceFront(t, info), placeFirst(t, info, limit)];
-        const form = forms.find((f) => f && early(f) && wordCount(f) <= maxW && wordCount(f) >= minW - 4);
-        if (form) {
-          used.add(t);
-          line = form;
-          break;
+      let fromHeadline = false;
+      for (const pass of [0, 1]) {
+        for (const [j, t0] of info.sentences.entries()) {
+          if (line || used.has(t0) || !selfStanding(info, t0) || !tells(t0, j)) continue;
+          const t = sized(t0);
+          if (!t) continue;
+          // pass 0: the place within the first words, as written, moved to the front or put there;
+          // pass 1: the sentence as written, its place named by the lead-in ("Now to Brazil.")
+          const forms = pass === 0 ? [early(t) ? t : null, movePlaceFront(t, info), placeFirst(t, info, limit)] : [t];
+          const form = forms.find((f) => f && (pass === 1 || early(f)) && wordCount(f) <= maxW && wordCount(f) >= minW - 4);
+          if (form) {
+            used.add(t0);
+            line = form;
+          }
         }
       }
-      if (!line) line = early(s.title) ? s.title : movePlaceFront(s.title, info) || placeFirst(s.title, info, limit);
+      if (!line) {
+        // Only when the summary has no sentence to tell it with: the headline, never with "In X," put in front of a
+        // subject that is not there ("In Brazil, coffee futures reach...") nor a "Now to X." before it.
+        fromHeadline = true;
+        line = early(s.title) ? s.title : movePlaceFront(s.title, info) || s.title;
+      }
       const lead = idx === 0 ? program?.roundup?.opener || 'Now, around the world in 30 seconds.' : '';
-      const where = early(line) ? '' : `${idx === 0 ? 'First, ' : 'Now to '}${spokenPlace(info.loc.entry)}.`;
+      const where = early(line) || fromHeadline ? '' : `${idx === 0 ? 'First, ' : 'Now to '}${spokenPlace(info.loc.entry)}.`;
       const item = [asSentence(line)];
       if (wordCount(line) + 2 + wordCount(s.source) <= maxW) attribute(item, info, key);
       parts.push(...[`${idx === 0 ? '[point_screen] ' : ''}${lead}`.trim(), where].filter(Boolean), ...item);
@@ -822,6 +887,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         parts.push(`${cue}Our number of the day: ${spokenValue(f)}.`);
       }
       const body = [];
+      if (opener && wordCount(opener) > maxWords + 1) opener = trimClause(opener, maxWords + 1, 8) || opener;
       let line = asSentence(isNumber || isLighter ? opener : placeFirst(opener, info));
       if (info.breaking) line = `Breaking news. ${line}`;
       else if (info.live) line = `A developing story: ${line}`;
@@ -838,12 +904,19 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       const budget = quick ? (k === 0 ? 41 : 31) - (wordCount(s.source) + 1) : Infinity;
       const maxDetails = quick ? 2 : isNumber ? (figureLine ? 0 : 1) : Math.min(cap, Math.max(k === 0 ? 2 : 1, visuals, longForm ? 2 : 0));
       let details = 0;
-      for (const t of info.sentences) {
-        if (details >= maxDetails || used.has(t) || echoes(t)) continue;
-        if (/^(?:It|They|This|These)\b/.test(t) && WHY.test(t)) continue; // "It says..." with no subject reads as a label
+      // People at risk: the warning and the advice come before the colour ("a red alert... asked people to avoid
+      // going out" before "some schools have moved lessons").
+      const ADVICE = /\b(?:alerts?|warn\w*|advis\w*|asked (?:people|residents)|urged|told (?:people|residents)|stay indoors|avoid|evacuat\w*|shelters?)\b/i;
+      const detailOrder = info.grave || info.hard ? [...info.sentences].sort((a, b) => Number(ADVICE.test(b)) - Number(ADVICE.test(a))) : info.sentences;
+      for (const t0 of detailOrder) {
+        if (details >= maxDetails || used.has(t0) || echoes(t0)) continue;
+        if (/^(?:It|They|This|These)\b/.test(t0) && WHY.test(t0)) continue; // "It says..." with no subject reads as a label
+        // over the programme's sentence length: a trailing clause goes, or the sentence is left out
+        const t = wordCount(t0) <= maxWords ? t0 : trimClause(t0, maxWords, 8);
+        if (!t) continue;
         if (wordCount([...parts, ...body].join(' ')) + wordCount(t) > budget) continue;
         body.push(t);
-        used.add(t);
+        used.add(t0);
         details++;
       }
       const quoteFits = info.quote?.by && !quick && ![...used].some((l) => l.includes(info.quote.text.slice(0, 20)));
@@ -989,3 +1062,4 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
 }
 
 const PICKUP_LINE = /^(?:thanks|thank you)(?: very much)?,? [A-Z][\w'’-]*(?: [A-Z][\w'’-]*)?\.$/i;
+

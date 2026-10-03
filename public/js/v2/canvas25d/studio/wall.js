@@ -37,7 +37,9 @@ import { resolveStyle } from './styles.js';
 
 const B16 = Uint8Array.from([0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]);
 const WIDE_K = F / SET.wallZ; // px per unit of the wall in the wide shot (0.714)
-const BAND_U = 16 / WIDE_K; // the solo dark band: 16 px in the wide
+// the solo dark band (ART_DIRECTION: the solo wall's bottom 16 px stay dark, no text or logo): 16 px
+// in the wide, 32 px where the wall's content is drawn at 2x (singles)
+const BAND_PX = 16;
 const MARGIN = 6; // px kept between wall text and a head
 const WIPE = 0.3;
 const MODES = new Set(['idle', 'picture', 'map', 'figure', 'plate']);
@@ -91,7 +93,7 @@ const plot = (b, x, y, c) => {
 const HEADS = [];
 for (let i = 0; i < 3; i++) HEADS.push({ x0: 0, y0: 0, x1: 0, y1: 0, on: false });
 const box4 = () => ({ x0: 0, y0: 0, x1: 0, y1: 0 });
-const LAYOUT = { heads: 0, top: box4(), left: box4(), right: box4(), full: box4(), vis: box4(), band: 0, sx0: 0, sy0: 0, k: 1, headTop: Infinity, headCx: 0 };
+const LAYOUT = { heads: 0, top: box4(), left: box4(), right: box4(), full: box4(), vis: box4(), band: 0, sx0: 0, sy0: 0, k: 1, headTop: Infinity, headCx: 0, wideSolo: false };
 // the screen area wall text and emblems may use: clear of the graphics top row (y 8-21) and above
 // the caption band (y 136), so nothing on the wall sits under the graphics
 const USABLE = { x0: 8, y0: 22, x1: 376, y1: 136 };
@@ -103,7 +105,7 @@ const clampN = (v, a, b) => (v < a ? a : v > b ? b : v);
  * and usable, minus the solo dark band, split around the heads (grown by MARGIN) that overlap it.
  */
 function computeLayout(L, cam, solo, wx0, wy0, w, h, k) {
-  L.band = solo ? Math.round(BAND_U * k) : 0;
+  L.band = solo ? BAND_PX * wallTextScale(k) : 0;
   L.sx0 = wx0;
   L.sy0 = wy0;
   L.k = k;
@@ -154,6 +156,10 @@ function computeLayout(L, cam, solo, wx0, wy0, w, h, k) {
   set4(L.top, vx0, vy0, vx1, Math.max(vy0, Math.min(yb, topY)));
   set4(L.left, vx0, vy0, Math.max(vx0, Math.min(vx1, lx)), yb);
   set4(L.right, Math.min(vx1, Math.max(vx0, rx)), vy0, vx1, yb);
+  // the solo WIDE: one head in front of the lower middle of a wall it barely covers (narrower than
+  // 40 % of the visible wall, its top in the lower two thirds of it): the picture fills the wall
+  L.wideSolo = n === 1 && HEADS[0].x1 - HEADS[0].x0 <= 0.4 * (vx1 - vx0) && HEADS[0].y0 >= vy0 + 0.33 * (yb - vy0);
+  if (n) set4(L.hb || (L.hb = box4()), HEADS[0].x0, HEADS[0].y0, HEADS[0].x1, HEADS[0].y1);
   return L;
 }
 
@@ -168,11 +174,13 @@ function layoutOf(spec, env, w, h) {
     computeLayout(L, env.cam, spec.solo, env.wx0, env.wy0, w, h, env.k);
     const u = 1 / env.k;
     const cp = (b) => ({ x0: b.x0 * u, y0: b.y0 * u, x1: b.x1 * u, y1: b.y1 * u });
-    F = spec._lay = { heads: L.heads, band: L.band * u, top: cp(L.top), left: cp(L.left), right: cp(L.right), full: cp(L.full), vis: cp(L.vis), sx0: L.sx0, sy0: L.sy0, headTop: L.headTop * u, headCx: L.headCx * u };
+    F = spec._lay = { heads: L.heads, band: L.band * u, top: cp(L.top), left: cp(L.left), right: cp(L.right), full: cp(L.full), vis: cp(L.vis), sx0: L.sx0, sy0: L.sy0, headTop: L.headTop * u, headCx: L.headCx * u, wideSolo: L.wideSolo, hb: L.heads ? cp(HEADS[0]) : null };
   }
   const k = env.k;
   const sc = (src, dst) => set4(dst, Math.round(src.x0 * k), Math.round(src.y0 * k), Math.round(src.x1 * k), Math.round(src.y1 * k));
   L.heads = F.heads;
+  L.wideSolo = F.wideSolo;
+  if (F.hb) set4(L.hb || (L.hb = box4()), Math.round(F.hb.x0 * k), Math.round(F.hb.y0 * k), Math.round(F.hb.x1 * k), Math.round(F.hb.y1 * k));
   L.headTop = F.headTop * k;
   L.headCx = F.headCx * k;
   L.band = Math.round(F.band * k);
@@ -294,8 +302,10 @@ function topFalloff(b, c, rows) {
 /** The solo dark band at the wall's bottom: the field's own darkest colour (never lighter than the field). */
 function darkBand(b, band, style, soft) {
   if (band <= 0) return;
+  // the field's own bottom colour as fillField draws it (no value step behind the presenter's neck),
+  // navy dropping to ink
   const n = style.wallField[1];
-  rect(b, 0, b.h - band, b.w, b.h, C[n] === C.navy ? C.ink : soft && LSTAR[n] > LSTAR.ink ? C[DARKER[n]] : C[n]);
+  rect(b, 0, b.h - band, b.w, b.h, C[n] === C.navy ? C.ink : soft && LSTAR[n] > LSTAR.slate ? C[DARKER[n]] : C[n]);
 }
 
 // ---------------------------------------------------------------------------
@@ -518,16 +528,23 @@ function planetTable(R) {
   if (T) return T;
   const RR = R + 0.5;
   const S = Math.ceil(RR) * 2 + 1, c = (S - 1) / 2;
+  // the disc as a clean pixel circle (inside when the pixel centre is within R + 0.35: no lone
+  // corner pixels on the limb), and its rim: the disc pixels with a 4-neighbour outside it
+  const inDisc = (x, y) => {
+    const dx = x - c, dy = y - c;
+    return dx * dx + dy * dy <= (R + 0.35) * (R + 0.35);
+  };
   const n = [];
   for (let y = 0; y < S; y++) {
     for (let x = 0; x < S; x++) {
+      if (!inDisc(x, y)) continue;
       const dx = x - c, dy = y - c;
-      if (dx * dx + dy * dy > RR * RR) continue;
       const nx = dx / RR, ny = dy / RR;
       const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
       // latitude for the bands, with the planet's axis tipped 18° toward camera-right
       const lat = Math.asin(Math.max(-1, Math.min(1, ny * Math.cos(0.31) - nx * Math.sin(0.31))));
-      n.push(y * S + x, nx, ny, nz, lat);
+      const rim = !inDisc(x - 1, y) || !inDisc(x + 1, y) || !inDisc(x, y - 1) || !inDisc(x, y + 1) ? 1 : 0;
+      n.push(y * S + x, nx, ny, nz, lat, rim);
     }
   }
   T = { R, S, c, n: Float32Array.from(n) };
@@ -612,20 +629,22 @@ function drawPlanet(b, cx, cy, R, az, dim = false) {
   const ox = Math.round(cx) - c, oy = Math.round(cy) - c;
   drawRing(b, cx, cy, R, false, dim);
   let hash = 0;
-  for (let i = 0; i < n.length; i += 5) {
-    const idx = n[i], nx = n[i + 1], ny = n[i + 2], nz = n[i + 3], lat = n[i + 4];
+  for (let i = 0; i < n.length; i += 6) {
+    const idx = n[i], nx = n[i + 1], ny = n[i + 2], nz = n[i + 3], lat = n[i + 4], rim = n[i + 5];
     const d = nx * lx + ny * ly + nz * lz;
     let col;
     if (d > 0.07) {
       const band = Math.floor((lat / Math.PI + 0.5) * 9) % 2;
-      // the lit side's falloff, and limb darkening on the outer rim: one step down
-      col = d < 0.2 || nx * nx + ny * ny > 0.8 ? (band ? P.fb : P.fa) : band ? P.b : P.a;
+      // the lit side's falloff, and limb darkening as a clean 1 px rim: one step down
+      col = d < 0.2 || rim ? (band ? P.fb : P.fa) : band ? P.b : P.a;
     } else if (d > -0.06) col = P.term; // one intermediate tone at the terminator
     else if (d > -0.42) col = P.shade;
     else col = P.night;
     const x = idx % S, y = (idx / S) | 0;
     plot(b, ox + x, oy + y, col);
-    if (col !== P.night) hash = (hash * 31 + idx * 3 + (col & 7)) | 0;
+    // the whole colour goes into the signature (two palette colours can share their low bits, and a
+    // change between them must still bump the wall's version, or the background cache keeps it)
+    if (col !== P.night) hash = (Math.imul(hash, 31) + idx * 3 + col) | 0;
   }
   drawRing(b, cx, cy, R, true, dim);
   return hash;
@@ -682,18 +701,69 @@ function drawDial(b, cx, cy, r, phase, ts) {
 
 // Palette colours a wall picture may use: nothing above fog (no white, cream or silver), no bright skin or orange
 // (faces stay the warmest thing in frame: a fire maps to rust / tan / darkRed), no programme accents or brand red
-// (they keep their meaning on set). The 32-colour palette has no further dark greens or blues to add.
+// (they keep their meaning on set). Per programme, the colours its bible keeps for the set are left out too:
+// TECH BYTES and COSMOS no purple (tech-bytes.md §4 item 2: no magenta or purple pixel in any frame; COSMOS's
+// purple is its scenery tint), MONEY MINUTE no green (money-minute.md §5: green only on the tag plate, desk
+// line, card rule and open line); those pixels fall to navy, slate or ink.
 const PICTURE_NAMES = ['black', 'ink', 'slate', 'steel', 'fog', 'darkRed', 'maroon', 'rust', 'skinShade', 'tan', 'tanShade', 'brown', 'darkGreen', 'blue', 'navy', 'purple'];
-const PIC_LAB = new Float32Array(PICTURE_NAMES.length * 3);
-const PIC_U32 = new Uint32Array(PICTURE_NAMES.length);
-const PIC_L = new Float32Array(PICTURE_NAMES.length);
-PICTURE_NAMES.forEach((n, i) => {
-  const c = C[n];
-  const lab = labRGB(c & 255, (c >>> 8) & 255, (c >>> 16) & 255);
-  PIC_LAB.set(lab, i * 3);
-  PIC_U32[i] = c;
-  PIC_L[i] = LSTAR[n];
-});
+const PICTURE_DROP = { 'tech-bytes': ['purple'], cosmos: ['purple'], 'money-minute': ['darkGreen'] };
+/** Highlights (ART_DIRECTION values: "highlights ... on at most 10 % of the wall"): palette L* above this. */
+export const PIC_HI_L = 45;
+const PIC_HI_SHARE = 0.1;
+// The nearest-colour search through a lookup table on quantised Lab (L* 1, a*/b* 4 apart), filled lazily:
+// a picture costs one table read per pixel and pass instead of a search through the palette
+const LUT_A = 41, LUT_B = 41, LUT_L = 101;
+const PALS = new Map();
+function picturePalette(styleId) {
+  const key = PICTURE_DROP[styleId] ? styleId : '';
+  let pal = PALS.get(key);
+  if (pal) return pal;
+  const names = PICTURE_NAMES.filter((n) => !(PICTURE_DROP[key] || []).includes(n));
+  const lab = new Float32Array(names.length * 3), u32 = new Uint32Array(names.length), L = new Float32Array(names.length);
+  names.forEach((n, i) => {
+    const c = C[n];
+    lab.set(labRGB(c & 255, (c >>> 8) & 255, (c >>> 16) & 255), i * 3);
+    u32[i] = c;
+    L[i] = LSTAR[n];
+  });
+  pal = { key, names, lab, u32, L, lut: new Uint8Array(LUT_L * LUT_A * LUT_B).fill(255) };
+  PALS.set(key, pal);
+  return pal;
+}
+function nearestIn(pal, Lq, A, B) {
+  let best = 0, bd = Infinity;
+  const lab = pal.lab;
+  for (let j = 0, q = 0; j < pal.u32.length; j++, q += 3) {
+    const dl = Lq - lab[q], da = A - lab[q + 1], db = B - lab[q + 2];
+    const d = dl * dl + da * da + db * db;
+    if (d < bd) {
+      bd = d;
+      best = j;
+    }
+  }
+  return best;
+}
+/** Fill the rows [l0, l1) of a palette's lookup table (warm-up). */
+function prefillLut(pal, l0, l1) {
+  for (let li = l0; li < l1; li++) {
+    for (let ai = 0; ai < LUT_A; ai++) {
+      for (let bi = 0; bi < LUT_B; bi++) {
+        const k = (li * LUT_A + ai) * LUT_B + bi;
+        if (pal.lut[k] === 255) pal.lut[k] = nearestIn(pal, li, ai * 4 - 80, bi * 4 - 80);
+      }
+    }
+  }
+}
+function lookup(pal, L, A, B) {
+  const li = L <= 0 ? 0 : L >= 100 ? 100 : Math.round(L);
+  let ai = Math.round((A + 80) * 0.25), bi = Math.round((B + 80) * 0.25);
+  ai = ai < 0 ? 0 : ai > 40 ? 40 : ai;
+  bi = bi < 0 ? 0 : bi > 40 ? 40 : bi;
+  const k = (li * LUT_A + ai) * LUT_B + bi;
+  let v = pal.lut[k];
+  if (v === 255) v = pal.lut[k] = nearestIn(pal, li, ai * 4 - 80, bi * 4 - 80);
+  return v;
+}
 const SRC = new WeakMap();
 let srcSerial = 0;
 const COOL_A = 4, COOL_B = -16; // the wall's cool grade (CIE a*, b*): where the palette's neutral ramp sits
@@ -809,71 +879,74 @@ function toneL(x, knee, hiL) {
   return knee + r * (1 - Math.exp(-(x - knee) / r));
 }
 
-/**
- * Map the filtered picture to palette pixels into out (pw*ph), dimmed to a mean L* ≤ maxL with at
- * most 10 % of it brighter than maxL + 20 (palette steps included: a bright sky that lands on fog is
- * pulled down until it holds).
- */
-function mapPicture(out, n, maxL) {
-  const hiCap = maxL + 22.5;
-  let hiL = maxL + 20, knee = maxL + 4;
-  // the gain: the largest that keeps the toned mean under the ceiling (binary search on L* alone)
+// histogram of the filtered picture's L* (quarter steps): the gain is solved on it, not per pixel
+const HIST = new Float64Array(401), TONE = new Float32Array(401);
+
+/** The largest gain whose toned mean stays at or under `target` (binary search on the histogram). */
+function solveGain(n, target, knee, hiL) {
   const meanAt = (g) => {
     let sum = 0;
-    for (let i = 0; i < n; i++) sum += toneL(PL[i] * g, knee, hiL);
+    for (let i = 0; i <= 400; i++) if (HIST[i]) sum += HIST[i] * toneL(i * 0.25 * g, knee, hiL);
     return sum / n;
   };
-  let g = 1;
-  if (meanAt(1) > maxL) {
-    let lo = 0.05, hi = 1;
-    for (let it = 0; it < 12; it++) {
-      const mid = (lo + hi) / 2;
-      if (meanAt(mid) <= maxL) lo = mid;
-      else hi = mid;
-    }
-    g = lo;
+  if (meanAt(1) <= target) return 1;
+  let lo = 0.05, hi = 1;
+  for (let it = 0; it < 14; it++) {
+    const mid = (lo + hi) / 2;
+    if (meanAt(mid) <= target) lo = mid;
+    else hi = mid;
   }
-  const np = PICTURE_NAMES.length;
-  for (let pass = 0; pass < 6; pass++) {
+  return lo;
+}
+
+/**
+ * Map the filtered picture to palette pixels into out (pw*ph), dimmed to a mean L* ≤ maxL with at
+ * most 10 % of it above L* 45 (ART_DIRECTION: wall mean ≤ 45, highlights on at most 10 % of it),
+ * counted on the palette colours it lands on: a bright sky that lands on fog is pulled down (the
+ * tone curve's shoulder lowered, the gain solved again) until both hold.
+ */
+function mapPicture(out, n, maxL, pal) {
+  HIST.fill(0);
+  for (let i = 0; i < n; i++) {
+    const q = Math.round(PL[i] * 4);
+    HIST[q < 0 ? 0 : q > 400 ? 400 : q]++;
+  }
+  let hiL = maxL + 20, knee = maxL + 4, target = maxL;
+  for (let pass = 0; pass < 10; pass++) {
+    const g = solveGain(n, target, knee, hiL);
+    // the tone curve as a table on quarter steps of L* (no exp() per pixel)
+    for (let q = 0; q <= 400; q++) TONE[q] = toneL(q * 0.25 * g, knee, hiL);
     let sum = 0, bright = 0;
     for (let i = 0; i < n; i++) {
       const L0 = PL[i];
-      const L = toneL(L0 * g, knee, hiL);
+      const q = Math.round(L0 * 4);
+      const L = TONE[q < 0 ? 0 : q > 400 ? 400 : q];
       // chroma follows the light (a dimmed colour stays the same hue), a touch quieter on the wall;
       // then the wall's cool balance: the palette's neutrals (black, ink, slate, steel, fog) sit at
       // about a* +4, b* -16, so a grey in the picture is moved there and lands on them (left neutral
       // it was nearer maroon and brown, and the picture turned to brown mush)
       const cf = L0 > 0.5 ? (0.9 * L) / L0 : 0;
-      const A = PA[i] * cf + COOL_A, B = PB[i] * cf + COOL_B;
-      let best = 0, bd = Infinity;
-      for (let j = 0, q = 0; j < np; j++, q += 3) {
-        const dl = L - PIC_LAB[q], da = A - PIC_LAB[q + 1], db = B - PIC_LAB[q + 2];
-        const d = dl * dl + da * da + db * db;
-        if (d < bd) {
-          bd = d;
-          best = j;
-        }
-      }
-      out[i] = PIC_U32[best];
-      sum += PIC_L[best];
-      if (PIC_L[best] > hiCap) bright++;
+      const j = lookup(pal, L, PA[i] * cf + COOL_A, PB[i] * cf + COOL_B);
+      out[i] = pal.u32[j];
+      sum += pal.L[j];
+      if (pal.L[j] > PIC_HI_L) bright++;
     }
-    // the palette steps can land a little brighter than the curve: tighten until both hold
-    const meanOk = sum / n <= maxL + 0.25, brightOk = bright <= n * 0.1;
+    const meanOk = sum / n <= maxL + 0.25, brightOk = bright <= n * PIC_HI_SHARE;
     if (meanOk && brightOk) break;
-    if (!meanOk) g *= 0.94;
     if (!brightOk) {
-      hiL -= 4;
+      hiL -= 3;
       knee = Math.min(knee, hiL - 8);
     }
+    if (!meanOk) target -= 1;
   }
 }
 
 // filtered, palette-mapped pictures per (source, size, ceiling), a few kept (a cut back to the
 // same shot finds its picture ready)
 const PICS = new Map();
-function pictureAt(src, pw, ph, maxL) {
-  const key = `${src.id}|${pw}|${ph}|${maxL}`;
+function pictureAt(src, pw, ph, maxL, styleId = '') {
+  const pal = picturePalette(styleId);
+  const key = `${src.id}|${pw}|${ph}|${maxL}|${pal.key}`;
   let p = PICS.get(key);
   if (p) {
     PICS.delete(key);
@@ -882,7 +955,7 @@ function pictureAt(src, pw, ph, maxL) {
   }
   p = { w: pw, h: ph, px: new Uint32Array(pw * ph) };
   filterPicture(src, pw, ph);
-  mapPicture(p.px, pw * ph, maxL);
+  mapPicture(p.px, pw * ph, maxL, pal);
   PICS.set(key, p);
   if (PICS.size > 10) PICS.delete(PICS.keys().next().value);
   return p;
@@ -892,10 +965,10 @@ function pictureAt(src, pw, ph, maxL) {
  * Draw `src` covering pw x ph at (x0, y0). The picture is filtered at the size the wall had on the
  * cut (`fit`, from the frozen layout) and a slow camera move afterwards only resamples that one.
  */
-function drawPicture(b, src, x0, y0, pw, ph, maxL, fit = null) {
+function drawPicture(b, src, x0, y0, pw, ph, maxL, fit = null, styleId = '') {
   if (!src || pw <= 0 || ph <= 0) return;
   const fw = fit ? fit[0] : pw, fh = fit ? fit[1] : ph;
-  const p = pictureAt(src, Math.max(1, fw), Math.max(1, fh), maxL);
+  const p = pictureAt(src, Math.max(1, fw), Math.max(1, fh), maxL, styleId);
   if (p.w === pw && p.h === ph) blitSub(b, p, x0, y0);
   else resampleSub(b, p, x0, y0, pw, ph);
 }
@@ -995,8 +1068,9 @@ function drawStaticLocator(b, spec, style, ts) {
 }
 
 function placeTab(b, text0, style, ts) {
-  // the place cut at words to the tab's room (never stamped past its plate)
-  const text = fitLine(text0, b.w - 8 * ts, 'micro', ts) || String(text0).split(/[\s,]+/)[0];
+  // the whole place, or the name before its region ("NAIROBI, KENYA" → "NAIROBI"); never a cut word
+  const text = fitPlace(text0, b.w - 8 * ts, 'micro', ts);
+  if (!text) return;
   const tw = Math.min(b.w - 4 * ts, textWidth(text, 'micro', ts));
   const th = capHeight('micro', ts) + 4 * ts;
   rect(b, 0, 0, tw + 6 * ts, th, C.black);
@@ -1013,27 +1087,39 @@ function splitFigure(fig) {
   if (typeof fig === 'object') {
     const value = String(fig.value ?? fig.text ?? '').trim();
     const label = String(fig.label ?? fig.rest ?? fig.unit ?? '').trim();
-    return value ? { value, label } : null;
+    return value ? { value, label, pre: String(fig.pre ?? fig.qualifier ?? '').trim() } : null;
   }
   const s = String(fig).trim();
   if (!s) return null;
   const m = NUM_RE.exec(s);
-  if (m) return { value: m[1].trim(), label: m[2].trim() };
+  if (m) return { value: m[1].trim(), label: m[2].trim(), pre: '' };
   const words = s.split(/\s+/);
-  return { value: words[0], label: words.slice(1).join(' ') };
+  return { value: words[0], label: words.slice(1).join(' '), pre: '' };
 }
 
-/** Cut a line at word boundaries to fit maxW px. */
+/** Cut a line at word boundaries to fit maxW px (never ending on a comma, dash or colon). */
 function fitLine(text, maxW, font, scale) {
   let s = String(text || '').trim();
   if (textWidth(s, font, scale) <= maxW) return s;
   const words = s.split(/\s+/);
   while (words.length > 1) {
     words.pop();
-    s = words.join(' ');
-    if (textWidth(s, font, scale) <= maxW) return s;
+    s = words.join(' ').replace(/[\s,;:\-–—]+$/, '');
+    if (s && textWidth(s, font, scale) <= maxW) return s;
   }
   return '';
+}
+
+/**
+ * A place name for a tab or a plate line: the whole name when it fits, else the part before its
+ * first comma ("SAN FRANCISCO, CALIFORNIA" → "SAN FRANCISCO"), else '' (never a name cut mid-way).
+ */
+function fitPlace(text, maxW, font, scale) {
+  const s = String(text || '').trim();
+  if (!s) return '';
+  if (textWidth(s, font, scale) <= maxW) return s;
+  const head = s.split(',')[0].trim();
+  return head && textWidth(head, font, scale) <= maxW ? head : '';
 }
 
 /** Does a w x h block fit in one of the layout's free boxes? */
@@ -1050,8 +1136,11 @@ function drawFigureBlock(b, L, fig, style, ts, money) {
   const vw = textWidth(value, 'body', vs), vh = capHeight('body', vs);
   const label = fig.label ? fitLine(fig.label, b.w - 4, 'micro', 1) : '';
   const lw = label ? textWidth(label, 'micro', 1) : 0, lh = label ? capHeight('micro', 1) + 3 : 0;
+  // a qualifier ("ABOUT", "MORE THAN") in micro above the value: the figure is never shown bare
+  const pre = fig.pre ? fitLine(fig.pre, b.w - 4, 'micro', 1) : '';
+  const pw = pre ? textWidth(pre, 'micro', 1) : 0, ph = pre ? capHeight('micro', 1) + 3 : 0;
   const ruleH = 1, gap = 3;
-  const needW = Math.max(vw, lw), needH = ruleH + gap + vh + lh;
+  const needW = Math.max(vw, lw, pw), needH = ruleH + gap + ph + vh + lh;
   let box = pickBox(L, needW + 4, needH + 4);
   if (money) box = clampScreen(box, L, 24, 176, 120);
   // centred in its box, but never past the box's edges (a bezel, a head or the frame edge)
@@ -1060,8 +1149,9 @@ function drawFigureBlock(b, L, fig, style, ts, money) {
   const top = Math.round(box.y0 + Math.max(2, (bh(box) - needH) * 0.42));
   const accent = style.id === 'money-minute' ? C.darkGreen : C[style.accentName];
   rect(b, cx - Math.round(needW / 2), top, cx - Math.round(needW / 2) + Math.min(needW, 16), top + ruleH, accent);
-  stampText(b.px, b.w, b.h, value, cx, top + ruleH + gap, C.white, 'body', vs, 'center');
-  if (label) stampText(b.px, b.w, b.h, label, cx, top + ruleH + gap + vh + 3, C.fog, 'micro', 1, 'center');
+  if (pre) stampText(b.px, b.w, b.h, pre, cx, top + ruleH + gap, C.fog, 'micro', 1, 'center');
+  stampText(b.px, b.w, b.h, value, cx, top + ruleH + gap + ph, C.white, 'body', vs, 'center');
+  if (label) stampText(b.px, b.w, b.h, label, cx, top + ruleH + gap + ph + vh + 3, C.fog, 'micro', 1, 'center');
 }
 
 /** MONEY MINUTE MCU-R: the figure panel stays inside screen x 24-176 and above y 120. */
@@ -1071,26 +1161,34 @@ function clampScreen(box, L, sx0, sx1, sy1) {
   return bw(CLAMP) > 8 && bh(CLAMP) > 8 ? CLAMP : box;
 }
 
+// A line never ends on these (articles, prepositions, conjunctions, possessives): "PEACE TALKS
+// RESUME IN / GENEVA" breaks as "PEACE TALKS / RESUME IN GENEVA" (the graphics' phrase rule)
+const WEAK_END = new Set('A AN THE OF TO IN ON AT BY FOR FROM WITH INTO OVER UNDER ABOUT AND OR BUT NOR ITS HIS HER THEIR OUR PER THAN VIA AS AFTER BEFORE DURING SINCE UNTIL ACROSS AGAINST BETWEEN AMONG AROUND NEAR WITHOUT WITHIN AMID'.split(' '));
+
 /**
- * The words of `text` in at most `max` lines of at most maxW px each (greedy), or null when it
- * needs more lines or one word alone is wider than maxW.
+ * The words of `text` in at most `max` lines of at most maxW px each, or null when it needs more
+ * lines or one word alone is wider than maxW. Two lines are balanced (the split with the shortest
+ * longer line), and a line never ends on an article, a preposition or a conjunction when another
+ * split fits.
  */
 function wrapWords(text, maxW, font, scale, max) {
   const words = String(text || '').trim().split(/\s+/).filter(Boolean);
-  const lines = [];
-  let cur = '';
-  for (const wd of words) {
-    const next = cur ? `${cur} ${wd}` : wd;
-    if (textWidth(next, font, scale) <= maxW) {
-      cur = next;
-      continue;
+  if (!words.length) return [];
+  const one = words.join(' ');
+  if (textWidth(one, font, scale) <= maxW) return [one];
+  if (max < 2 || words.length < 2) return null;
+  let best = null, cost = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).join(' '), b = words.slice(i).join(' ');
+    const wa = textWidth(a, font, scale), wb = textWidth(b, font, scale);
+    if (wa > maxW || wb > maxW) continue;
+    const c = Math.max(wa, wb) + (WEAK_END.has(words[i - 1].replace(/[^A-Z]/gi, '').toUpperCase()) ? 1000 : 0);
+    if (c < cost) {
+      cost = c;
+      best = [a, b];
     }
-    if (!cur || textWidth(wd, font, scale) > maxW) return null;
-    lines.push(cur);
-    cur = wd;
   }
-  if (cur) lines.push(cur);
-  return lines.length <= max ? lines : null;
+  return best;
 }
 
 /** Size of a plate (rule, kicker lines, source line) at text scale ts. */
@@ -1123,11 +1221,13 @@ function layoutPlate(L, label0, sub0, ts0) {
   const tries = [];
   for (const s of ts0 > 1 ? [ts0, 1] : [1]) tries.push([s, 1, true], [s, 2, true]);
   if (sub0) tries.push([1, 1, false], [1, 2, false]);
+  // last: the place alone (a kicker too long for any free box still leaves the story's place)
+  if (sub0 && label0) tries.push([1, 0, true]);
   for (const [ts, n, withSub] of tries) {
     for (const box of boxes) {
       const maxW = bw(box) - 4;
       if (maxW < 8) continue;
-      const lines = label0 ? wrapWords(label0, maxW, 'body', ts, n) : [];
+      const lines = label0 && n > 0 ? wrapWords(label0, maxW, 'body', ts, n) : [];
       if (!lines || (n === 2 && lines.length < 2)) continue;
       let sub = '';
       if (withSub && sub0) {
@@ -1148,8 +1248,8 @@ function layoutPlate(L, label0, sub0, ts0) {
 }
 
 function drawPlate(b, L, spec, style, ts0) {
-  const P = layoutPlate(L, spec.label || '', spec.sub || '', ts0);
-  if (!P) return;
+  const P = layoutPlate(L, spec.label || '', spec.sub || '', plateScale(spec, ts0));
+  if (!P) return false;
   const { ts, lines, sub, x0, top, w: needW, kh } = P;
   const accent = style.id === 'money-minute' ? C.darkGreen : C[style.accentName];
   rect(b, x0, top, x0 + Math.min(needW, 12 * ts), top + ts, accent);
@@ -1159,19 +1259,27 @@ function drawPlate(b, L, spec, style, ts0) {
     y += kh + 3 * ts;
   }
   if (sub) stampText(b.px, b.w, b.h, sub, x0, lines.length ? y : top + 4 * ts, C.fog, 'micro', ts, 'left');
+  return true;
 }
+
+/**
+ * A story's plate is set in body 1x at every framing (the strap under it carries the headline in body
+ * 1x: ART_DIRECTION §4, two type levels per screen); a plate asked for explicitly (scene.wall
+ * { mode: 'plate' }, the lab) keeps the wall's text scale.
+ */
+const plateScale = (spec, ts) => (spec.story ? 1 : ts);
 
 /**
  * The plate's rectangle in SCREEN px for a camera (as laid out on a cut), plus the head boxes it must
  * keep clear of: { x0, y0, x1, y1, ts, kicker, sub, heads: [{ x0, y0, x1, y1 }] } or null (tests, labs).
  */
-export function plateRectFor(cam, label, sub, styleIn) {
+export function plateRectFor(cam, label, sub, styleIn, story = false) {
   const style = resolveStyle(styleIn);
   const k = kAt(cam, SET.wallZ);
   const o = wallOrigin(cam);
   const { w, h } = wallSize(cam, k);
   const L = computeLayout(LAYOUT, cam, style.solo, o.x, o.y, w, h, k);
-  const P = layoutPlate(L, label || '', sub || '', wallTextScale(k));
+  const P = layoutPlate(L, label || '', sub || '', story ? 1 : wallTextScale(k));
   if (!P) return null;
   const heads = [];
   for (let i = 0; i < L.heads; i++) {
@@ -1223,7 +1331,7 @@ export function warmWallContent(req, styleIn, cam = null) {
       const m = mediaRect(L, { w, h }, wallTextScale(k));
       const maxL = (style.wallMaxL || 45) - (cam.soft > 0.5 ? 6 : 2);
       const mat = !m.framed && style.pictureMat ? Math.max(2, Math.round(style.pictureMat * k)) : 0;
-      if (m.w - 2 * mat > 0 && m.h - 2 * mat > 0) pictureAt(src, m.w - 2 * mat, m.h - 2 * mat, maxL);
+      if (m.w - 2 * mat > 0 && m.h - 2 * mat > 0) pictureAt(src, m.w - 2 * mat, m.h - 2 * mat, maxL, style.id);
     }
   }
   for (const [t, font] of [[req.label, 'body'], [req.sub, 'micro'], [req.location?.place, 'micro']]) {
@@ -1237,26 +1345,35 @@ export function warmWallContent(req, styleIn, cam = null) {
 // ---------------------------------------------------------------------------
 // Pictures and maps: where they go on the wall
 
-const MEDIA = { x: 0, y: 0, w: 0, h: 0, framed: false };
+const MEDIA = { x: 0, y: 0, w: 0, h: 0, framed: false, behind: false, dimRows: 0 };
 const MEDIA_MIN_W = 32, MEDIA_MIN_H = 18; // screen px: a picture smaller than this does not read (its plate shows)
+export const MAP_MIN_W = 80; // a locator narrower than this says nothing (its place plate shows instead)
 /**
- * The rectangle a picture or a map takes: the visible wall when no head is in front of it (the
- * wide, the two-shot, a single that sees the wall beside the head); otherwise the largest picture
- * box (4:3 to 16:9) that a free area beside or above the head holds (news-60.md: the MCU-L picture
- * box), top-aligned, and in the band above a head pushed to the side away from it. It never falls
- * back to the wall behind a head: when no free area holds a readable box, m.w is 0 (field only).
+ * The rectangle a picture or a map takes:
+ *   - no head in front of the wall (the duo wide, two-shot, a single that sees the wall beside the
+ *     head): the visible wall. A picture runs up to the wall's top edge, its rows under the graphics'
+ *     top row (y 8-21: bug, programme tag, clock) one palette step darker (m.dimRows), so the wall
+ *     never shows a black letterbox above it; a map starts below that row (its place tab rides on
+ *     its top edge);
+ *   - the solo WIDE (one small head in front of the wall's lower middle): a picture fills the wall
+ *     above its dark band and the head occludes its lower centre, as on any studio wide (m.behind);
+ *   - otherwise the largest picture box (4:3 to 16:9; up to 3.5:1 in the band above a head) that a
+ *     free area beside or above the head holds (news-60.md: the MCU-L picture box), top-aligned, and
+ *     above a head pushed to the side away from it. m.w is 0 when no free area holds a readable box.
  */
-function mediaRect(L, b, ts) {
+function mediaRect(L, b, ts, forMap = false) {
   const m = MEDIA;
+  m.behind = false;
+  m.dimRows = 0;
   if (L.heads) {
     let area = 0;
     m.x = m.y = m.w = m.h = 0;
     m.framed = true;
     for (const bx of [L.left, L.right, L.top]) {
       // beside a head: 4:3 to 16:9 with a 2 px pad (the box already keeps 6 px from the head); in the
-      // band above it (the solo WIDE, money-minute.md "pictures on the WIDE") up to 2:1 with a 1 px pad
+      // band above it up to a 3.5:1 letterbox with a 1 px pad, centred away from the head
       const top = bx === L.top;
-      const pad = top ? ts : 2 * ts, amax = top ? 2 : 1.78;
+      const pad = top ? ts : 2 * ts, amax = top && !forMap ? 3.5 : 1.78;
       const aw = bw(bx) - 2 * pad, ah = bh(bx) - 2 * pad;
       if (aw <= 0 || ah <= 0) continue;
       let w = aw, h = ah;
@@ -1270,21 +1387,39 @@ function mediaRect(L, b, ts) {
       if (top) {
         // above the head: lean away from it (left when it is centred, the MCU-R side)
         const mid = (bx.x0 + bx.x1) / 2;
-        m.x = L.headCx >= mid - 1 ? bx.x0 + pad : bx.x1 - pad - w;
+        m.x = w >= aw - 1 ? bx.x0 + pad : L.headCx >= mid - 1 ? bx.x0 + pad : bx.x1 - pad - w;
       } else m.x = Math.round(bx.x0 + (bw(bx) - w) / 2);
     }
-    return m;
+    if (forMap || !L.wideSolo || m.w >= 0.75 * bw(L.full)) return m;
+    m.behind = true;
   }
   const v = L.vis;
   m.x = v.x0;
   m.y = v.y0;
-  // the graphics' top row (y 8-21, kept plain for the bug, programme tag and clock) is never under a
-  // picture: it starts below it
-  if (m.y < L.full.y0) m.y = L.full.y0;
+  if (forMap && m.y < L.full.y0) m.y = L.full.y0;
+  else if (m.y < L.full.y0) m.dimRows = L.full.y0 - m.y;
   m.w = bw(v);
   m.h = Math.max(0, Math.min(v.y1, b.h - L.band) - m.y);
   m.framed = false;
   return m;
+}
+
+// one palette step darker, as u32 → u32 (the picture rows under the graphics' top row, the wall
+// behind a head in the solo wide)
+const DARKER32 = new Map(Object.keys(DARKER).map((n) => [C[n] >>> 0, C[DARKER[n]] >>> 0]));
+function darkenRect(b, x0, y0, x1, y1, steps = 1) {
+  x0 = Math.max(0, x0);
+  y0 = Math.max(0, y0);
+  x1 = Math.min(b.w, x1);
+  y1 = Math.min(b.h, y1);
+  const px = b.px;
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0, i = y * b.w + x0; x < x1; x++, i++) {
+      let c = px[i] >>> 0;
+      for (let k = 0; k < steps; k++) c = DARKER32.get(c) ?? c;
+      px[i] = c;
+    }
+  }
 }
 
 /** The frame of a picture box: news-60 a 1 px steel line, TECH BYTES its black mat, others 1 px black. */
@@ -1358,40 +1493,44 @@ function renderSpec(b, spec, style, env) {
       const m = mediaRect(L, b, ts);
       if (m.framed && m.w <= 0) {
         // a head fills the wall: no room for a readable picture, the story's kicker plate if it fits
-        drawPlate(b, L, spec, style, ts);
+        // (else the programme's idle: the wall is never left blank on a story)
+        if (!drawPlate(b, L, spec, style, ts)) sig = drawIdle(b, L, spec, style, env);
         darkBand(b, L.band, style, soft);
         break;
       }
       if (m.framed) {
         frameBox(b, m, style, env);
         if (!spec._picWH) spec._picWH = [m.w, m.h];
-        drawPicture(b, src, m.x, m.y, m.w, m.h, maxL, spec._picWH);
+        drawPicture(b, src, m.x, m.y, m.w, m.h, maxL, spec._picWH, style.id);
       } else {
         // the whole wall: TECH BYTES keeps its 2 px black mat inside the bezel
         const mat = style.pictureMat ? Math.max(2, Math.round(style.pictureMat * env.k)) : 0;
         rect(b, CLIP.x0, CLIP.y0, CLIP.x1, CLIP.y1, C.black);
         const pw = m.w - 2 * mat, ph = m.h - 2 * mat;
         if (!spec._picWH) spec._picWH = [pw, ph];
-        drawPicture(b, src, m.x + mat, m.y + mat, pw, ph, maxL, spec._picWH);
+        drawPicture(b, src, m.x + mat, m.y + mat, pw, ph, maxL, spec._picWH, style.id);
+        // the rows under the graphics' top row: the picture continues, one step darker
+        if (m.dimRows > 0) darkenRect(b, m.x, m.y, m.x + m.w, m.y + m.dimRows, 1);
         darkBand(b, L.band, style, true);
       }
       break;
     }
     case 'map': {
       const dt = Math.max(0, env.t - spec.since);
-      const m = mediaRect(L, b, ts);
-      if (m.framed && m.w <= 0) {
-        // no room for a locator beside the head: the place as a plate
-        PLATE_SPEC.label = spec.location?.place || spec.label || '';
-        PLATE_SPEC.sub = spec.location?.place ? '' : spec.sub || '';
-        drawPlate(b, L, PLATE_SPEC, style, ts);
+      const m = mediaRect(L, b, ts, true);
+      if (m.framed && m.w < MAP_MIN_W * Math.min(2, ts)) {
+        // no room for a readable locator beside the head (the solo wide: a stamp-sized map says
+        // nothing): the place as a plate, with the story's kicker over it
+        PLATE_SPEC.label = spec.label || '';
+        PLATE_SPEC.sub = spec.location?.place || spec.sub || '';
+        PLATE_SPEC.story = !!spec.story;
+        if (!PLATE_SPEC.label) {
+          PLATE_SPEC.label = PLATE_SPEC.sub;
+          PLATE_SPEC.sub = '';
+        }
+        if (!drawPlate(b, L, PLATE_SPEC, style, ts)) sig = drawIdle(b, L, spec, style, env);
         darkBand(b, L.band, style, soft);
         break;
-      }
-      if (!m.framed && m.y < L.full.y0 && L.full.y0 < m.y + m.h - 24) {
-        // the locator's place tab rides on its top edge: keep that edge under the graphics top row
-        m.h -= L.full.y0 - m.y;
-        m.y = L.full.y0;
       }
       // the map renders at the size it had at the cut (worldmap.js keeps buffers per size), and a
       // slow camera move resamples it instead of asking for a new size every frame.
@@ -1425,7 +1564,8 @@ function renderSpec(b, spec, style, env) {
       if (!(spec._mapDone && SUB.w === spec._mapWH[0] && SUB.h === spec._mapWH[1] && SUB.owner === spec)) {
         SUB.size(spec._mapWH[0], spec._mapWH[1]);
         SUB.owner = spec;
-        if (drawMiniMap(SUB, spec, style, env.t, Math.min(dt, end))) spec._mapDone = dt >= end;
+        const mdt = env.lod >= 1 ? end : Math.min(dt, end);
+        if (drawMiniMap(SUB, spec, style, env.t, mdt)) spec._mapDone = mdt >= end;
         else {
           drawStaticLocator(SUB, spec, style, Math.max(1, ts / (spec._mapSc || 1)));
           spec._mapDone = true;
@@ -1446,7 +1586,7 @@ function renderSpec(b, spec, style, env) {
       break;
     }
     case 'plate':
-      drawPlate(b, L, spec, style, ts);
+      if (!drawPlate(b, L, spec, style, ts)) sig = drawIdle(b, L, spec, style, env);
       darkBand(b, L.band, style, soft);
       break;
     default:
@@ -1456,7 +1596,7 @@ function renderSpec(b, spec, style, env) {
   return sig;
 }
 
-const PLATE_SPEC = { label: '', sub: '' };
+const PLATE_SPEC = { label: '', sub: '', story: false };
 
 function drawIdle(b, L, spec, style, env) {
   const { cs, ts, soft } = env;
@@ -1474,7 +1614,9 @@ function drawIdle(b, L, spec, style, env) {
     case 'planet': {
       // larger than in the wide (two-shot, singles): one ramp step darker, and in singles a smaller
       // planet (its ring about the head's width) in the far part of the free side, away from the head
-      const dim = cs > 1.15;
+      // one ramp step darker at every size (cosmos.md: "so it never competes with faces"; the bible's
+      // tan bands, L* 61, were brighter than Nova's face, L* 56, in the wide)
+      const dim = true;
       const R = Math.max(5, Math.round((ts > 1 ? 8.5 : 12) * cs));
       for (const s of STARS) {
         const x = Math.round(s.u * env.k), y = Math.round(s.v * env.k);
@@ -1493,13 +1635,17 @@ function drawIdle(b, L, spec, style, env) {
       return drawPlanet(b, cx, cy, R, az, dim);
     }
     case 'wordmark': {
-      topFalloff(b, C.slate, Math.round(12 * cs));
+      // the Bayer falloff in the wall's top 12 px (money-minute.md), into the field from the colour
+      // under the bezel; the wordmark starts 2 px below it, so no checker touches a letter
+      // (ending above the highest head top: no value step beside a head)
+      const fall = Math.max(0, Math.min(Math.round(12 * cs), Math.floor(L.headTop)));
+      topFalloff(b, C[style.wallTop || 'slate'], fall);
       const text = 'MONEY MINUTE';
       const ws = ts > 1 && !fitsSomewhere(L, textWidth(text, 'body', ts) + 4, 14 * ts) ? 1 : ts;
       const tw = textWidth(text, 'body', ws), th = capHeight('body', ws);
       const box = pickBox(L, tw + 4, th + 8 * ws, false);
       const cx = Math.round((box.x0 + box.x1) / 2);
-      const top = Math.round(box.y0 + Math.max(3 * ws, (bh(box) - th - 6 * ws) * 0.4));
+      const top = Math.max(fall + 2, Math.round(box.y0 + Math.max(3 * ws, (bh(box) - th - 6 * ws) * 0.4)));
       stampText(b.px, b.w, b.h, text, cx, top, C.fog, 'body', ws, 'center');
       rect(b, cx - 8 * ws, top + th + 4 * ws, cx + 8 * ws, top + th + 5 * ws, C.darkGreen);
       return 0;
@@ -1543,11 +1689,13 @@ function clockOf(spec, style, env) {
     if (!MAPFN || MAP_FAILED) return 0; // our static locator does not animate
     const dt = env.t - spec.since;
     const end = MAP_ANIM[style.id] || MAP_ANIM.default;
-    if (!(dt < end)) return -1; // settled: one last frame, then still
-    // the locator re-renders at 15 fps (10 at lod 1): drawWorldMap plus the canvas read-back costs
+    // settled: one last frame, then still. Under load (lod ≥ 1, the watchdog's call) the locator
+    // skips its fly-in and shows the settled frame at once: one render instead of ~40
+    if (!(dt < end) || env.lod >= 1) return -1;
+    // the locator re-renders at 15 fps: drawWorldMap plus the canvas read-back costs
     // 1.5-2.5 ms of CPU a render, and on a dimmed 104 px wall (or a half-size one shown at 2x) the
     // fly-in's eased zoom moves about a pixel per render; the settled frame is then kept
-    const rate = env.lod >= 1 ? 10 : 15;
+    const rate = 15;
     return Math.max(0, Math.floor(dt * rate));
   }
   if (spec.mode !== 'idle') return 0;
@@ -1584,7 +1732,7 @@ const S = {
   result: { buf: null, version: 0, w: 0, h: 0 },
 };
 
-const IN = { mode: 'idle', image: null, location: null, figure: null, label: '', sub: '', phase: 'intro', focus: '', solo: false, since: 0 };
+const IN = { mode: 'idle', image: null, location: null, figure: null, label: '', sub: '', phase: 'intro', focus: '', solo: false, since: 0, story: false };
 
 function readSpec(req, style, t) {
   const r = req || {};
@@ -1605,6 +1753,7 @@ function readSpec(req, style, t) {
   IN.focus = r.focus || '';
   IN.solo = r.solo ?? style.solo;
   IN.since = Number.isFinite(r.since) ? r.since : NaN;
+  IN.story = !!r.story;
   return IN;
 }
 
@@ -1619,24 +1768,26 @@ function sameSpec(a, b) {
     a.sub === b.sub &&
     (a.mode !== 'idle' || a.phase === b.phase) &&
     a.solo === b.solo &&
+    a.story === b.story &&
     (a.mode !== 'map' || Number.isNaN(b.since) || a.since === b.since)
   );
 }
 const sameLoc = (a, b) => a === b || (!!a && !!b && a.lat === b.lat && a.lon === b.lon && a.place === b.place);
-const sameFig = (a, b) => a === b || (!!a && !!b && typeof a === 'object' && typeof b === 'object' && a.value === b.value && a.label === b.label);
+const sameFig = (a, b) => a === b || (!!a && !!b && typeof a === 'object' && typeof b === 'object' && a.value === b.value && a.label === b.label && (a.pre || '') === (b.pre || ''));
 
 function copySpec(src, t) {
   return {
     mode: src.mode,
     image: src.image,
     location: src.location ? { lat: Number(src.location.lat), lon: Number(src.location.lon), place: src.location.place || '' } : null,
-    figure: src.figure && typeof src.figure === 'object' ? { value: src.figure.value, label: src.figure.label } : src.figure,
+    figure: src.figure && typeof src.figure === 'object' ? { value: src.figure.value, label: src.figure.label, pre: src.figure.pre || src.figure.qualifier || '' } : src.figure,
     label: src.label,
     sub: src.sub,
     phase: src.phase,
     focus: src.focus,
     solo: src.solo,
     since: Number.isNaN(src.since) ? t : src.since,
+    story: src.story,
   };
 }
 
@@ -1846,14 +1997,18 @@ export function resetWall() {
 export function wallWarmTasks() {
   const tasks = [() => landMask()];
   for (const R of [23, 24, 30, 34]) tasks.push(() => globeTable(R));
-  for (const R of [12, 13]) tasks.push(() => (planetTable(R), ringTable(R, false)));
+  for (const R of [12, 13]) tasks.push(() => (planetTable(R), ringTable(R, true)));
   for (const R of [18, 19, 20, 21, 23]) tasks.push(() => (planetTable(R), ringTable(R, true)));
+  // the picture palettes' nearest-colour tables, 20 L* rows per task (a first picture then pays no search)
+  for (const id of ['', ...Object.keys(PICTURE_DROP)]) {
+    for (let l0 = 0; l0 < LUT_L; l0 += 20) tasks.push(() => prefillLut(picturePalette(id), l0, Math.min(LUT_L, l0 + 20)));
+  }
   // one dry run of the picture filter and mapper (the first real picture then runs optimised code)
   tasks.push(() => {
     const src = { w: 32, h: 18, u32: new Uint32Array(32 * 18).fill(0xff8a6a4a), id: -1 };
     for (let i = 0; i < src.u32.length; i += 3) src.u32[i] = 0xff20304a;
     filterPicture(src, 16, 9);
-    mapPicture(WARM_PIC, 16 * 9, 43);
+    for (const id of ['', ...Object.keys(PICTURE_DROP)]) mapPicture(WARM_PIC, 16 * 9, 43, picturePalette(id));
   });
   tasks.push(() => {
     for (const s of [1, 2]) {
@@ -1890,7 +2045,7 @@ export function drawWallContent(fr, x0, y0, x1, y1, k, t, soft) {
 const LEGACY = new Buf();
 const LEGACY_SPEC = { mode: 'idle', phase: 'intro', solo: false };
 
-const FROM = { wall: null, img: null, seg: null, kicker: null, framing: null, styleId: null, phase: '', focus: '', solo: undefined, out: null };
+const FROM = { wall: null, img: null, seg: null, shots: null, kicker: null, framing: null, styleId: null, phase: '', focus: '', solo: undefined, out: null };
 
 /** What a story's wall shows, in order of preference, per programme (docs/programmes/*.md "Set and light"). */
 const STORY_WALL = {
@@ -1908,13 +2063,16 @@ const KICKER_CATS = { general: '', world: 'WORLD', tech: 'TECHNOLOGY', science: 
  * a static scene returns the same object every frame):
  *   - intro, chats, outro (legacy wall 'logo' / 'rundown'): the programme's idle (NEWS IN 60: the
  *     dial's outro state in the outro);
- *   - a story: the picture (scene.images.get(storyId)) when it has one, else per programme the
- *     locator map (seg.location), the figure (seg.numbers[0] / seg.fact) or the kicker plate
- *     (seg.kicker, category or source, with the source on the micro line);
+ *   - a story: the picture (scene.images.get(storyId)) when it has one; a NUMBER OF THE DAY item's
+ *     figure (seg.numbers[0]) unless the plan already shows it on a card; else per programme the
+ *     locator map (seg.location), the figure (seg.numbers[0] / seg.fact) or the kicker plate;
  *   - MONEY MINUTE's MCU-R (scene.framing 'mcu-r'): the figure panel, unless the story's plan
- *     already shows the figure on a card (then the kicker), money-minute.md §3.5;
+ *     already shows the figure on a card (then the kicker plate), money-minute.md §3.5;
  *   - a new-style scene.wall ({ mode: 'idle'|'picture'|'map'|'figure'|'plate', ... }) passes through.
- * The current segment is read from scene.segPlan.ctx.seg (INTEGRATION) when it is the story on air.
+ * The plate carries what the strap below it does not: the kicker (the bibles' "kicker plate") over
+ * the story's PLACE, never the source (the strap's tag and the ticker show the outlet already), and a
+ * story's plate is set in body 1x (`story: true`). The current segment is read from
+ * scene.segPlan.ctx.seg (INTEGRATION) when it is the story on air.
  */
 export function wallFromScene(scene, styleIn) {
   const style = resolveStyle(styleIn ?? scene?.program?.id);
@@ -1923,20 +2081,24 @@ export function wallFromScene(scene, styleIn) {
   const ctxSeg = scene?.segPlan?.ctx?.seg || null;
   const seg = ctxSeg && (ctxSeg.type !== 'story' || sid == null || ctxSeg.storyId === sid) ? ctxSeg : null;
   const img = sid != null ? scene.images?.get?.(sid) || null : null;
-  const kicker = scene?.lowerThird?.kicker || seg?.kicker || null;
+  // the segment on air first (at a story's first cut the strap may still hold the last story's tag)
+  const kicker = seg?.kicker || scene?.lowerThird?.kicker || null;
   const type = seg?.type || (w?.mode === 'logo' || w?.mode === 'rundown' ? 'idle' : 'story');
   const phase = type === 'outro' || w?.phase === 'outro' ? 'outro' : 'intro';
   const focus = scene?.focus || '';
   const solo = scene?.cast ? !scene.cast.B : undefined;
   const framing = scene?.framing || null;
+  const shots = scene?.segPlan?.ctx?.shots || null;
   const F2 = FROM;
-  if (F2.out && F2.wall === w && F2.img === img && F2.seg === seg && F2.kicker === kicker && F2.framing === framing && F2.styleId === style.id && F2.phase === phase && F2.focus === focus && F2.solo === solo) return F2.out;
+  if (F2.out && F2.wall === w && F2.img === img && F2.seg === seg && F2.shots === shots && F2.kicker === kicker && F2.framing === framing && F2.styleId === style.id && F2.phase === phase && F2.focus === focus && F2.solo === solo) return F2.out;
   let out;
   const mode = w?.mode;
-  // the story's kicker plate: what a picture, map or figure falls back to when it cannot show
+  // the story's plate (what a picture, map or figure falls back to when it cannot show): the kicker
+  // over the place; the source only when the story has neither (world-now.md: "the source card")
   const label0 = kicker || (w?.category && KICKER_CATS[w.category] !== undefined ? KICKER_CATS[w.category] : w?.category || seg?.category || '') || '';
+  const place = String(seg?.location?.place || '').trim();
   const source0 = w?.source || seg?.source || '';
-  const plate = { mode: 'plate', label: label0 || source0, sub: label0 ? source0 : '' };
+  const plate = { mode: 'plate', label: label0 || place || source0, sub: label0 ? place : '', story: true };
   if (mode === 'idle' || mode === 'picture' || mode === 'map' || mode === 'figure' || mode === 'plate') {
     out = { ...w };
     if (mode === 'picture' && !out.image) out.image = img;
@@ -1944,13 +2106,15 @@ export function wallFromScene(scene, styleIn) {
     out = { mode: 'idle' };
   } else {
     const loc = seg?.location;
-    const fig = seg?.numbers?.[0] || seg?.fact || null;
+    const fig = figureOf(seg?.numbers?.[0]) || seg?.fact || null;
+    const carded = (shots || []).some((s) => s.shot === 'fact');
+    const numberOfDay = /NUMBER OF THE DAY/i.test(label0);
     if (style.id === 'money-minute' && framing === 'mcu-r') {
-      const carded = (scene?.segPlan?.ctx?.shots || []).some((s) => s.shot === 'fact');
       out = fig && !carded ? { mode: 'figure', figure: fig } : plate;
     } else {
       out = null;
-      for (const m of STORY_WALL[style.id] || STORY_WALL.default) {
+      const order = STORY_WALL[style.id] || STORY_WALL.default;
+      for (const m of numberOfDay && !carded ? ['picture', 'figure', ...order] : order) {
         if (m === 'picture' && img && (mode === 'image' || mode === 'picture' || !mode)) out = { mode: 'picture', image: img };
         else if (m === 'map' && loc && Number.isFinite(Number(loc.lat)) && Number.isFinite(Number(loc.lon))) out = { mode: 'map', location: loc };
         else if (m === 'figure' && fig) out = { mode: 'figure', figure: fig };
@@ -1959,6 +2123,7 @@ export function wallFromScene(scene, styleIn) {
       }
       if (!out) out = { mode: 'idle' };
     }
+    out.story = true;
   }
   // every field, every time: INTEGRATION keeps one wall object and Object.assign()s this into it per
   // cut, so a field left out would carry the previous story's kicker, image or place into this one
@@ -1973,10 +2138,19 @@ export function wallFromScene(scene, styleIn) {
     out.label = out.label || '';
     out.sub = out.sub || '';
   }
+  out.story = !!out.story;
   out.phase = phase;
   out.focus = focus;
   out.solo = solo;
   if (w && Number.isFinite(w.since)) out.since = w.since;
-  Object.assign(F2, { wall: w, img, seg, kicker, framing, styleId: style.id, phase, focus, solo, out });
+  Object.assign(F2, { wall: w, img, seg, shots, kicker, framing, styleId: style.id, phase, focus, solo, out });
   return out;
+}
+
+/** A seg.numbers entry as a wall figure: the qualifier ("ABOUT", "MORE THAN") rides above the value. */
+function figureOf(n) {
+  if (!n || typeof n !== 'object') return n || null;
+  const value = String(n.value ?? '').trim();
+  if (!value) return null;
+  return { value, label: String(n.label ?? '').trim(), pre: String(n.qualifier ?? '').trim() };
 }

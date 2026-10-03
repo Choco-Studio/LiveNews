@@ -142,3 +142,36 @@ describe('net: feed links never reach the machine itself', () => {
     await assert.rejects(desk.fetchText('gopher://a.test/'), /not an http/);
   });
 });
+
+describe('net: fix round 1 (critic probes)', () => {
+  test('the operator\'s public feed host cannot redirect to this machine; a redirect on the same private host still works', async () => {
+    const asked = [];
+    const fetchImpl = async (url) => {
+      asked.push(url);
+      if (url === 'https://feeds.example.com/rss.xml') return new Response(null, { status: 302, headers: { location: 'http://127.0.0.1:8524/api/next' } });
+      if (url === 'http://192.168.1.20/feed.xml') return new Response(null, { status: 301, headers: { location: '/feed2.xml' } });
+      return new Response('<rss/>', { status: 200 });
+    };
+    await assert.rejects(guardedFetch(fetchImpl, 'https://feeds.example.com/rss.xml', { allowPrivate: true, lookup: publicDns }), /private|local/);
+    assert.deepEqual(asked, ['https://feeds.example.com/rss.xml'], 'the loopback hop was never requested');
+    const { url } = await guardedFetch(fetchImpl, 'http://192.168.1.20/feed.xml', { allowPrivate: true, lookup: publicDns });
+    assert.equal(url, 'http://192.168.1.20/feed2.xml');
+  });
+
+  test('"localhost." with a trailing dot is localhost', async () => {
+    await assert.rejects(assertPublicUrl('http://localhost./api/next', { lookup: async () => { throw new Error('no dns'); } }), /local/);
+  });
+
+  test('IPv4 carried inside IPv6 (NAT64, 6to4, IPv4-compatible) and site-local addresses are private', () => {
+    for (const ip of ['64:ff9b::7f00:1', '64:ff9b::127.0.0.1', '2002:7f00:1::', '2002:a00:7::1', '::127.0.0.1', '::7f00:1', 'fec0::1']) assert.equal(isPrivateAddress(ip), true, ip);
+    for (const ip of ['64:ff9b::5db8:d822', '2002:5db8:d822::1', '2606:4700::1111']) assert.equal(isPrivateAddress(ip), false, ip);
+  });
+
+  test('a lookup that times out is refused (slow-first-answer trick), unless an egress proxy resolves names', async () => {
+    const slow = async () => { throw Object.assign(new Error('dns timeout'), { code: 'ETIMEOUT' }); };
+    await assert.rejects(assertPublicUrl('https://news.example.com/a', { lookup: slow, proxied: false }), /timed out/);
+    await assert.doesNotReject(assertPublicUrl('https://news.example.com/a', { lookup: slow, proxied: true }));
+    // a name that does not exist fails the request itself: nothing to refuse
+    await assert.doesNotReject(assertPublicUrl('https://news.example.com/a', { lookup: async () => { throw Object.assign(new Error('ENOTFOUND'), { code: 'ENOTFOUND' }); }, proxied: false }));
+  });
+});

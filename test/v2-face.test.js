@@ -89,10 +89,22 @@ test('applyListen has no cyclic nod any more (the fixed 5.2 s nod was mechanical
 test('duo turn starts: each listener glances 0.20-0.35 s after the first word, holds 2.4-3.9 s, back by 4.5 s or the end of the turn', () => {
   let checked = 0;
   for (const id of DUOS) {
-    for (const { ctx, events } of planAll(EPISODES[id])) {
+    const all = planAll(EPISODES[id]);
+    for (const { ctx, events } of all) {
       if (!ctx.turnStart) continue;
       for (const slot of ctx.listeners) {
         const vary = ctx.cast[slot] === 'unit8' ? null : turnVariety(ctx, slot);
+        // its own hand-over look still on (a toss or a look by name ran into this turn): the turn's
+        // glance is that look carried on from the first word, ≥ 1 s past it (or to the end of a short line)
+        const cont = looksOf(events, slot).find((l) => /^cont/.test(l.why));
+        if (cont) {
+          assert.equal(cont.at, 0, `${id} #${ctx.index}: a carried-on look starts with the turn`);
+          const shortLine = ctx.type === 'chat' && ctx.duration < RULES.shortLine ? RULES.shortShare * ctx.duration : Infinity;
+          assert.ok(cont.dur >= Math.min(RULES.contMin, ctx.duration - 0.1, shortLine) - 1e-3 && cont.at + cont.dur <= Math.min(RULES.backBy, ctx.duration) - 0.1 + 1e-6, `${id} #${ctx.index}: cont ${cont.dur}`);
+          assert.ok(!looksOf(events, slot).some((l) => /^turn/.test(l.why)), `${id} #${ctx.index}: no fresh glance on top of a carried-on look`);
+          checked++;
+          continue;
+        }
         const g = looksOf(events, slot).find((l) => /^turn/.test(l.why));
         if (vary === 'skip') {
           assert.ok(!g || g.target !== 'partner', `${id} #${ctx.index}: a skipped turn glance`);
@@ -109,7 +121,13 @@ test('duo turn starts: each listener glances 0.20-0.35 s after the first word, h
         assert.ok(g, `${id} #${ctx.index}: a turn-start glance for ${slot}`);
         assert.equal(g.target, 'partner');
         const win = vary === 'late' ? RULES.lateStart : RULES.glanceStart;
-        assert.ok(g.at >= win[0] - 1e-6 && g.at <= win[1] + 1e-6, `${id} #${ctx.index} start ${g.at} (${vary || 'approved'})`);
+        // a look of its own ended a moment before this turn (a reply look in banter): the glance waits
+        // for the 2 s between two looks of a slot, ≤ 1 s into the turn
+        const prev = all[ctx.index - 1];
+        const prevEnd = prev ? Math.max(-Infinity, ...looksOf(prev.events, slot).map((l) => l.at + l.dur - prev.ctx.duration - (GAP[id] ?? 0.9))) : -Infinity;
+        const late = prevEnd + RULES.lookGap > win[0];
+        if (late) assert.ok(g.at >= prevEnd + RULES.lookGap - 1e-3 && g.at <= RULES.glanceStart[1] + 0.65 + 1e-6, `${id} #${ctx.index} delayed start ${g.at} (previous look ended at ${prevEnd.toFixed(2)})`);
+        else assert.ok(g.at >= win[0] - 1e-6 && g.at <= win[1] + 1e-6, `${id} #${ctx.index} start ${g.at} (${vary || 'approved'})`);
         if (g.why !== 'turn') continue; // later, merged with a toss or a dry line: checked below
         const robot = ctx.cast[slot] === 'unit8';
         const end = g.at + g.dur;
@@ -209,7 +227,7 @@ test('COSMOS: UNIT-8 looks at Nova at the start of her turn for ~1.5 s, eased an
   let seen = 0;
   for (const { ctx, events } of plans) {
     if (!ctx.turnStart || ctx.speakerId !== 'nova') continue;
-    const g = looksOf(events, 'B').find((l) => /^turn/.test(l.why));
+    const g = looksOf(events, 'B').find((l) => /^(turn|cont)/.test(l.why));
     assert.ok(g, `#${ctx.index}: UNIT-8 glance`);
     assert.equal(g.style, 'mech');
     assert.ok(g.amt > 0 && g.amt < 1);
@@ -1222,7 +1240,7 @@ test('interest airs with the real shot plan: a reaction or an interest-lifted gl
       for (const e of events) {
         if (e.kind !== 'look' || !ctx.listeners.includes(e.slot)) continue;
         const reaction = e.target === 'interest';
-        const lifted = e.target === 'partner' && e.style === 'interest' && /^turn/.test(e.why);
+        const lifted = e.target === 'partner' && e.style === 'interest' && /^(turn|cont)/.test(e.why);
         if (!reaction && !lifted) continue;
         aired++;
         assert.ok(!ctx.grave, `${ep.id} #${i}: never on a grave line`);
@@ -1305,4 +1323,227 @@ test('skin at partner yaw: no shade island of ≤ 4 px inside lit skin (a mole o
     }
   }
   assert.deepEqual(bad, []);
+});
+
+// ---------------------------------------------------------------------------
+// Fix round 2 (critics r2): the hand-over is one look (no ping-pong across segments), spacing on
+// the whole timeline after the on-screen move, NEWS IN 60 notes after the last word, a variety
+// budget over long shows, the turn glance placed on screen by the planner
+
+/** Partner looks of one slot over a whole conversation (lab clock), overlaps merged. */
+function mergedLooks(cv, slot, target = 'partner') {
+  const L = [];
+  for (const s of cv.segs) for (const e of s.events) if (e.kind === 'look' && e.slot === slot && (e.target || 'partner') === target) L.push({ t0: s.start + e.at, t1: s.start + e.at + e.dur, whys: [e.why] });
+  L.sort((a, b) => a.t0 - b.t0);
+  const m = [];
+  for (const l of L) {
+    const last = m[m.length - 1];
+    if (last && l.t0 <= last.t1 + 1e-6) {
+      last.t1 = Math.max(last.t1, l.t1);
+      last.whys.push(...l.whys);
+    } else m.push({ ...l });
+  }
+  return m;
+}
+
+test('whole conversations: two partner looks of one slot are ≥ 2 s apart after merging, across segment boundaries too; no look of any target within 1.2 s of another; no merged look past 4.4 s (3 duo fixtures × 40 seeds)', async () => {
+  const { buildConversation } = await import('../public/js/v2/canvas25d/labs/face.js');
+  let pairs = 0, merged = 0, carried = 0;
+  const bad = [];
+  for (const id of DUOS) {
+    for (let k = 0; k < 40; k++) {
+      const ep = clone(EPISODES[id]);
+      ep.id += 'x' + k;
+      const cv = buildConversation(ep, {});
+      for (const slot of cv.slots) {
+        const m = mergedLooks(cv, slot);
+        for (let i = 0; i < m.length; i++) {
+          if (m[i].t1 - m[i].t0 > 4.4) bad.push(`${ep.id} ${slot} a ${(m[i].t1 - m[i].t0).toFixed(2)} s look (${m[i].whys.join('>')})`);
+          if (m[i].whys.some((w) => /^cont/.test(w))) carried++;
+          if (!i) continue;
+          pairs++;
+          const gap = m[i].t0 - m[i - 1].t1;
+          if (gap < RULES.lookGap - 5e-3) bad.push(`${ep.id} ${slot} ${gap.toFixed(2)} s between ${m[i - 1].whys.at(-1)} and ${m[i].whys[0]}`);
+        }
+        merged += m.length;
+        // any eyeline: a different look never follows within 1.2 s (the eyes would barely settle)
+        const all = [];
+        for (const s of cv.segs) for (const e of s.events) if (e.kind === 'look' && e.slot === slot && !REACTIONS.has(e.target)) all.push({ t0: s.start + e.at, t1: s.start + e.at + e.dur, target: e.target || 'partner', why: e.why });
+        all.sort((a, b) => a.t0 - b.t0);
+        for (let i = 1; i < all.length; i++) {
+          const a = all[i - 1], b = all[i];
+          if (b.t0 <= a.t1 + 1e-6 && a.target === b.target) continue; // one merged look
+          if (b.t0 - a.t1 < 1.2) bad.push(`${ep.id} ${slot} ${a.target}/${a.why} → ${b.target}/${b.why} ${(b.t0 - a.t1).toFixed(2)} s`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(bad.slice(0, 12), []);
+  assert.ok(pairs > 400 && merged > 600, `${pairs} pairs, ${merged} looks`);
+  assert.ok(carried >= 40, `hand-over looks carried on into the next turn: ${carried}`);
+});
+
+test('a hand-over look runs on into the partner\'s turn, and that turn carries it on from the first word (one look, the whole within the approved hold)', async () => {
+  const { buildConversation } = await import('../public/js/v2/canvas25d/labs/face.js');
+  let n = 0;
+  for (const id of DUOS) {
+    for (let k = 0; k < 20; k++) {
+      const ep = clone(EPISODES[id]);
+      ep.id += 'h' + k;
+      const cv = buildConversation(ep, {});
+      for (let j = 1; j < cv.segs.length; j++) {
+        const prev = cv.segs[j - 1], cur = cv.segs[j];
+        if (!cur.ctx?.turnStart) continue;
+        const slot = prev.speaker;
+        const ho = prev.events.find((e) => e.kind === 'look' && e.slot === slot && /handover|toss/.test(e.why || '') && prev.start + e.at + e.dur > cur.start + 0.05);
+        if (!ho) continue;
+        const cont = cur.events.find((e) => e.kind === 'look' && e.slot === slot && /^cont/.test(e.why || ''));
+        assert.ok(cont, `${ep.id} #${j}: the ${ho.why} look of ${slot} is carried on`);
+        assert.equal(cont.at, 0);
+        assert.ok(!cur.events.some((e) => e.kind === 'look' && e.slot === slot && /^turn/.test(e.why || '')), `${ep.id} #${j}: no fresh turn glance on top`);
+        const whole = cur.start + cont.at + cont.dur - (prev.start + ho.at);
+        const robot = ep.cast[slot] === 'unit8';
+        // the whole look stays within the approved hold, unless the hand-over itself already took
+        // most of it (then it lasts just ≥ 1 s into the new turn)
+        const floor = cur.start + RULES.contMin - (prev.start + ho.at);
+        if (!robot) assert.ok(whole <= Math.max(RULES.glanceHold[1], floor) + 0.05, `${ep.id} #${j}: the whole hand-over look ${whole.toFixed(2)} s`);
+        n++;
+      }
+    }
+  }
+  assert.ok(n >= 30, `${n} hand-overs checked`);
+});
+
+test('the planned segment (after arbitrate and the on-screen move): ≥ 2 s between two looks of one slot; a moved turn glance is marked onScreen and lands 0.25 s after a cut that shows the listener', async () => {
+  const { planSegment, shotShows } = await import('../public/js/v2/canvas25d/direction/index.js');
+  let moved = 0;
+  const bad = [];
+  for (const ep of reseeded(fixtureEpisodes(DUOS), 12)) {
+    const N = ep.segments.length;
+    for (let i = 0; i < N; i++) {
+      const { ctx, events } = planSegment(ep, i, { gapAfter: i + 1 < N ? 0.9 : null });
+      if (!ctx?.valid || !ctx.duo) continue;
+      for (const slot of Object.keys(ctx.cast)) {
+        const looks = looksOf(events, slot).sort((a, b) => a.at - b.at);
+        for (let k = 1; k < looks.length; k++) {
+          const gap = looks[k].at - (looks[k - 1].at + looks[k - 1].dur);
+          if (gap < RULES.lookGap - 5e-3) bad.push(`${ep.id} #${i} ${slot} ${gap.toFixed(2)} s (${looks[k - 1].why} → ${looks[k].why})`);
+        }
+      }
+      for (const e of events) {
+        if (e.kind !== 'look' || !e.onScreen) continue;
+        moved++;
+        const cut = ctx.shots.find((s) => Math.abs(s.at + 0.25 - e.at) < 2e-3);
+        assert.ok(cut && shotShows(cut, e.slot), `${ep.id} #${i}: moved onto a cut that shows ${e.slot}`);
+        assert.ok(e.at + e.dur <= ctx.duration - 0.1 + 1e-6, 'back before the line ends');
+      }
+    }
+  }
+  assert.deepEqual(bad.slice(0, 10), []);
+  assert.ok(moved >= 10, `${moved} glances moved on screen`);
+});
+
+test('NEWS IN 60: the eyes drop only after the last word has ended, and are back on the lens ≥ 0.15 s before the next item', () => {
+  const ep = EPISODES['news-60'];
+  let n = 0;
+  for (const gap of [0.7, 0.75, 0.8]) {
+    for (let i = 0; i < ep.segments.length - 1; i++) {
+      const ctx = segmentContext(ep, i, { gapAfter: gap });
+      for (const e of planBehaviour(ctx)) {
+        assert.ok(e.at >= ctx.duration - 1e-6, `#${i}: notes at ${e.at}, last word ends ${ctx.duration.toFixed(2)}`);
+        assert.ok(e.at + e.dur + 0.1 <= ctx.duration + gap - 0.15 + 1e-6, `#${i}: back before the next item`);
+        assert.ok(e.dur >= 0.35 - 1e-6);
+        n++;
+      }
+    }
+  }
+  assert.ok(n >= 3, `${n} notes glances`);
+});
+
+test('variety budget: over a long alternating duo no listener opens 4 story turns in a row with the same plain glance, and most turns keep the approved one', async () => {
+  const { planSegment } = await import('../public/js/v2/canvas25d/direction/index.js');
+  const base = clone(EPISODES['world-now']);
+  const stories = base.segments.filter((s) => s.type === 'story' && !s.breaking && s.emotion !== 'serious' && s.emotion !== 'sad');
+  let varied = 0, plain = 0;
+  for (let k = 0; k < 10; k++) {
+    const ep = clone(base);
+    ep.id += 'v' + k;
+    // 16 alternating story turns (a long WORLD NOW: Paco, Lola, Paco, ...)
+    ep.segments = [base.segments[0], ...Array.from({ length: 16 }, (_, i) => ({ ...clone(stories[i % stories.length]), anchor: i % 2 ? 'B' : 'A' }))];
+    const N = ep.segments.length;
+    const run = {};
+    for (let i = 1; i < N; i++) {
+      const { ctx, events } = planSegment(ep, i, { gapAfter: i + 1 < N ? 1.0 : null });
+      if (!ctx.turnStart) continue;
+      const slot = ctx.listeners[0];
+      const g = events.find((e) => e.kind === 'look' && e.slot === slot && /^(turn|cont)/.test(e.why || ''));
+      const isPlain = !!g && g.why === 'turn';
+      if (isPlain) plain++;
+      else varied++;
+      run[slot] = isPlain ? (run[slot] || 0) + 1 : 0;
+      assert.ok(run[slot] <= 3, `${ep.id} #${i}: ${slot} glanced the same way ${run[slot]} story turns in a row`);
+    }
+  }
+  assert.ok(varied >= 20 && plain > varied, `varied ${varied}, plain ${plain}`);
+});
+
+test('close-up eyes at s 2.2-3 (critic r2: drowsy at 2.45-2.7): the catchlight sits on an interior row (never on the lash line), ≥ 2 iris-colour pixels per open eye, a pupil on the lower row of a two-row eye; medium eyes from ~2.2 px tall get two rows', async () => {
+  const { PartBuffer } = await import('../public/js/v2/canvas25d/pixbuf.js');
+  const { actor } = await import('../public/js/v2/canvas25d/scene.js');
+  const { poseAt } = await import('../public/js/v2/canvas25d/rig.js');
+  const { drawCharacter } = await import('../public/js/v2/canvas25d/character.js');
+  const { P } = await import('../public/js/palette.js');
+  const bad = [];
+  let eyes = 0;
+  for (const id of ['lola', 'max', 'penny', 'nova', 'ada', 'sam', 'paco']) {
+    for (const s of [2.2, 2.45, 2.7, 3.0]) {
+      for (const dx of [0, 0.37]) {
+        const buf = new PartBuffer();
+        const a = actor(id, { side: 1, seed: 5 });
+        const sk = poseAt(a, 0.3);
+        sk.face.blink = 0;
+        const L = a.look, E = L.eyes;
+        const head = drawCharacter(buf, L, sk, { x: 192 + dx, y: 150 + dx, s, gb: 0 });
+        const white = decal(P.white), lash = decal(E.lash || P.black), iris = decal(E.iris[0]);
+        for (const side of [-1, 1]) {
+          const ex = head.cx + side * E.x * s, ey = head.cy + E.y * s;
+          let nIris = 0, nWhite = 0;
+          for (let y = Math.round(ey - 4); y <= Math.round(ey + 4); y++) {
+            for (let x = Math.round(ex - E.w * s * 0.6); x <= Math.round(ex + E.w * s * 0.6); x++) {
+              const m = buf.mat[y * buf.w + x];
+              if (m === iris) nIris++;
+              if (m === white) {
+                nWhite++;
+                const up = buf.mat[(y - 1) * buf.w + x];
+                // (a lens glint of the glasses may sit over the lash line)
+                if (up !== lash && up !== iris && up !== decal(E.iris[1]) && !(L.glasses && up === decal(P.fog))) bad.push(`${id} s ${s} side ${side}: catchlight at ${x},${y} is not under the lash or iris`);
+              }
+            }
+          }
+          eyes++;
+          if (nIris < 2) bad.push(`${id} s ${s} side ${side}: ${nIris} iris-colour pixels`);
+          if (nWhite > 1) bad.push(`${id} s ${s} side ${side}: ${nWhite} white pixels`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(bad, []);
+  assert.ok(eyes >= 100);
+  // medium: an eye ~2.2 px tall or more shows two rows under the lid line (the iris on both)
+  const buf = new PartBuffer();
+  const a = actor('lola', { side: 1, seed: 5 });
+  const sk = poseAt(a, 0.3);
+  sk.face.blink = 0;
+  const s = 1.7;
+  const head = drawCharacter(buf, a.look, sk, { x: 192, y: 150, s, gb: 0 });
+  const E = a.look.eyes;
+  const ex = Math.round(head.cx - E.x * s);
+  const rows = new Set();
+  for (let y = Math.round(head.cy + E.y * s) - 3; y <= Math.round(head.cy + E.y * s) + 3; y++) {
+    for (let x = ex - 3; x <= ex + 3; x++) {
+      const m = buf.mat[y * buf.w + x];
+      if (m === decal(E.iris[0]) || (decal(E.iris[1]) !== decal(E.lash) && m === decal(E.iris[1])) || m === decal(P.fog) || m === decal(P.silver)) rows.add(y);
+    }
+  }
+  assert.equal(rows.size, 2, `medium eye rows under the lid: ${[...rows]}`);
 });

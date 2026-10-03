@@ -512,15 +512,23 @@ describe('Station playout: episodes and commercial breaks', () => {
     assert.equal(items[1].ads, 2);
   });
 
-  test('filler breaks announce the programme in production as "not ready", or the next in the rotation', async () => {
+  test('filler breaks announce the next slot that can really be made, "not ready", and promise nothing when none can', async () => {
     const { station, producer, channel } = makeStation();
-    producer.unavailable.add('alpha').add('bravo').add('charlie');
+    producer.unavailable.add('alpha').add('charlie');
     station.queue.push(makeEpisode(channel, 'charlie'));
     const [, brk, filler] = walk(station, 3);
 
-    // nothing in production: the next slot of the rotation (index 0 -> alpha), not ready
-    assert.deepEqual(brk.next, metaOf(channel, 'alpha', false));
-    assert.deepEqual(filler.next, metaOf(channel, 'alpha', false));
+    // nothing in production: alpha (rotation index 0) is short of news, so the promise is bravo, not ready
+    assert.deepEqual(brk.next, metaOf(channel, 'bravo', false));
+    assert.deepEqual(filler.next, metaOf(channel, 'bravo', false));
+
+    // nothing at all can be made: no "UP NEXT" that would never air
+    const dry = makeStation();
+    dry.producer.unavailable.add('alpha').add('bravo').add('charlie');
+    dry.station.queue.push(makeEpisode(dry.channel, 'charlie'));
+    const [, brk2, filler2] = walk(dry.station, 3);
+    assert.equal(brk2.next, null);
+    assert.equal(filler2.next, null);
   });
 
   test('a break during a production announces that programme, not ready yet', async () => {

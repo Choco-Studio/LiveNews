@@ -6,7 +6,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { config, ROOT } from './config.js';
 import { GOOD_WIDTH, feedCandidates, pageCandidates, rankPictures } from './pictures.js';
 import { guardedFetch, readCapped } from './net.js';
-import { locate, lookupPlace } from './gazetteer.js';
+import { degreesApart, findPlaces, locate, lookupPlace } from './gazetteer.js';
 import { onBeat } from './topics.js';
 
 export { extractImage, isUsableImage } from './pictures.js';
@@ -242,25 +242,39 @@ export const storyId = (key) => 's' + crypto.createHash('sha1').update(key).dige
  * `baseDir` is given only for local feeds from the operator's list: their
  * stories may carry pictures stored next to the feed file.
  */
+// A feed lists its newest items first; nothing on air needs more than this many of one feed's items (a
+// hostile or mis-sized feed of 12,000 items would otherwise flood the desk).
+export const MAX_FEED_ITEMS = 150;
+// Stories the desk holds at most (a few hundred is a busy day for a full feed list).
+export const MAX_DESK = 3000;
+// Characters that never belong on air: controls, bidi overrides, zero-width marks, soft hyphens, emoji and
+// pictographs (the bitmap font draws them as gaps and the voice spells them).
+const UNSPEAKABLE = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\ufe0e\ufe0f]|\p{Extended_Pictographic}|[\u{1f1e6}-\u{1f1ff}\u{1f3fb}-\u{1f3ff}]/gu;
+// "[wave]"-style tokens in feed text would be read as stage directions by the writer's cue parser.
+const CUE_TOKEN = /\[[A-Za-z]{1,8}(?::[A-Za-z_]{1,16})?\]/g;
+/** Feed text made safe for the strap and the voice. */
+export const onAirText = (s) => String(s ?? '').replace(UNSPEAKABLE, ' ').replace(CUE_TOKEN, ' ').replace(/\s+/g, ' ').trim();
+
 export function parseFeed(xml, feed, { baseDir = null, now = Date.now() } = {}) {
   const doc = parser.parse(xml);
   const items = doc?.rss?.channel?.item ?? doc?.feed?.entry ?? doc?.['rdf:RDF']?.item ?? [];
   const stories = [];
-  for (const [index, item] of asArray(items).entries()) {
+  for (const [index, item] of asArray(items).slice(0, MAX_FEED_ITEMS).entries()) {
     // Raw text is capped before any cleaning: a title needs a line, a summary a few paragraphs.
-    const title = plainSpaces(cleanHtml(text(item.title).slice(0, 2000))).slice(0, 300);
+    const title = onAirText(plainSpaces(cleanHtml(text(item.title).slice(0, 2000)))).slice(0, 300);
     const link = itemLink(item);
-    if (!title || !link) continue;
+    if (!title || !/\p{L}/u.test(title) || !link) continue;
     const rawSummary = text(item.description) || text(item.summary) || text(item['content:encoded']) || text(item.content);
-    const summary = stripBoilerplate(cleanHtml(rawSummary.slice(0, MAX_RAW_HTML))).slice(0, 900);
+    const summary = onAirText(stripBoilerplate(cleanHtml(rawSummary.slice(0, MAX_RAW_HTML)))).slice(0, 900);
     const dateStr = text(item.pubDate) || text(item.published) || text(item.updated) || text(item['dc:date']);
     // Undated items: "now", one second older per position (feeds list the newest first),
     // so the desk ranks them the same way on every run.
     const published = Date.parse(dateStr) || now - index * 1000;
     const pictures = itemPictures(item, { baseDir, link });
+    const credits = creditsOf(pictures);
     // A local feed's item may link to a local article page (offline fixtures), inside the feed's folder.
     const page = baseDir ? localPage(link, baseDir) : null;
-    stories.push({
+    const story = {
       id: storyId(link.replace(/[?#].*$/, '')),
       title,
       summary,
@@ -272,10 +286,13 @@ export function parseFeed(xml, feed, { baseDir = null, now = Date.now() } = {}) 
       image: pictures[0]?.url || null,
       ...(pictures.length ? { imageWidth: pictures[0].w, imageVia: `feed:${pictures[0].via}` } : {}),
       ...(pictures.length > 1 ? { images: pictures.map((p) => p.url) } : {}),
+      ...(credits ? { imageCredits: credits } : {}),
       ...(page ? { page } : {}),
       ...(baseDir ? { local: true } : {}),
       ...(isLiveBlog(title) ? { live: true } : {}),
-    });
+    };
+    stampCredit(story);
+    stories.push(story);
   }
   return stories;
 }
@@ -337,24 +354,162 @@ export function interestScore(s, now = Date.now()) {
   const passedOver = 0.6 ** (s.offered || 0);
   // What the outlet itself calls breaking news tops the desk; rolling live pages sink (no clear news line).
   const urgency = isBreaking(s.title) ? 3 : s.live ? 0.5 : 1;
-  return recency * trend * (s.weight || 1) * image * substance * passedOver * urgency;
+  // A story back on a closed desk (NewsDesk.recycle) sinks a little, by a different amount each time round,
+  // so the next bulletin is not the last one again in the same order.
+  const rerun = s.recycled ? 0.6 + 0.3 * ((storyHash(`${s.id}#${s.recycled}`) % 1000) / 1000) : 1;
+  return recency * trend * (s.weight || 1) * image * substance * passedOver * urgency * rerun;
+}
+
+function storyHash(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return h >>> 0;
 }
 
 /** A programme's own beat counts for more: its first category weighs 1.5x the others. */
 export const PRIMARY_CATEGORY_WEIGHT = 1.5;
 
-// Two reports are only treated as the same event when they do not name places in different countries:
-// "Tokyo stocks close at a record high" and "New York stocks close at a record high" are two stories.
-const countryOf = (title) => {
-  const loc = locate(title, '');
-  return loc && !loc.entry.broad ? loc.entry.country || loc.entry.name : null;
+// ---------------------------------------------------------------- same event?
+// Two reports are one event only when nothing says otherwise: they name no places that disagree ("Tokyo
+// stocks close at a record high" / "New York stocks..."; "Storm hits Florida coast" / "...Texas coast"), the
+// place coming from the headline or else the summary's first sentence ("Central bank raises interest rates
+// unexpectedly" is Brazil's when the summary says so); no names that disagree ("new iPhone" / "new iPad");
+// no incidents of different kinds ("London bridge attack" / "London fraud scheme"; a recall / a factory
+// opening; rates held / rates raised); no different causes ("after engine fire" / "after window blows out").
+
+const firstSentenceOf = (text) => String(text || '').split(/(?<=[.!?])\s+(?=[A-Z0-9"“])/)[0].slice(0, 300);
+
+/** The place a report is about: the headline's most precise place, else the summary's first sentence's (or null). */
+function storyPlace(s) {
+  const head = locate(s.title || '', '');
+  if (head && !head.entry.broad) {
+    // "Kenya ..." with "near Nairobi" in the first sentence: the city, inside the country the headline names
+    const deeper = head.entry.kind === 'country' ? locate(s.title || '', firstSentenceOf(s.summary)) : null;
+    return deeper && !deeper.entry.broad ? deeper.entry : head.entry;
+  }
+  const body = locate('', firstSentenceOf(s.summary));
+  return body && !body.entry.broad ? body.entry : null;
+}
+
+/** Do two places agree? true / false, or null when one is unknown. A country holds its cities and regions. */
+export function placesAgree(a, b) {
+  if (!a || !b) return null;
+  if (a === b) return true;
+  const ca = a.country || a.name;
+  const cb = b.country || b.name;
+  if (ca !== cb) return false;
+  if (a.kind === 'country' || b.kind === 'country') return true;
+  // Two places inside one country: the same spot (a city and the region around it), not two states or cities.
+  return degreesApart(a, b) <= (a.kind === 'city' && b.kind === 'city' ? 1 : 5);
+}
+
+const foldWord = (w) => w.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+/**
+ * Names in a headline: capitalised words past the first ("Hurricane Elena ... Yucatán" -> elena, yucatan),
+ * possessives folded. Empty for a headline in Title Case or capitals (every word is capitalised there).
+ */
+export function namesOf(title) {
+  const words = String(title || '').split(/\s+/).map((w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').replace(/['’]s$/u, '')).filter(Boolean);
+  const long = words.filter((w) => w.length > 3);
+  if (long.length >= 3 && long.filter((w) => /^\p{Lu}/u.test(w)).length / long.length >= 0.8) return new Set();
+  const out = new Set();
+  words.forEach((w, i) => {
+    if (i > 0 && w.length >= 2 && /\p{Lu}/u.test(w)) out.add(foldWord(w));
+  });
+  return out;
+}
+
+// Kinds of incident and decision: two reports whose headlines name different kinds are two events.
+const INCIDENT_KINDS = [
+  ['violence', /^(?:attacks?|attacked|assault|shootings?|shot|gunman|gunmen|gunfire|stabbings?|stabbed|bombs?|bombings?|bombed|explosions?|blasts?|airstrikes?)$/],
+  ['theft', /^(?:robbery|robberies|robbed|heist|theft|thefts|stolen|burglary|looting)$/],
+  ['fraud', /^(?:fraud|scam|scams|scheme|embezzlement|bribery|corruption|laundering)$/],
+  ['fire', /^(?:fires?|blaze|wildfires?|burning)$/],
+  ['flood', /^(?:floods?|flooding|flooded)$/],
+  ['quake', /^(?:earthquakes?|quake|tremor|aftershocks?)$/],
+  ['storm', /^(?:storms?|hurricanes?|typhoons?|cyclones?|tornado(?:es)?)$/],
+  ['eruption', /^(?:volcano(?:es)?|volcanic|erupts?|erupted|eruptions?|lava)$/],
+  ['crash', /^(?:crash|crashes|crashed|collision|derail(?:s|ed|ment)?|capsized?)$/],
+  ['recall', /^(?:recalls?|recalled)$/],
+  ['launch', /^(?:opens|opened|unveils|unveiled|launches|launched)$/],
+  ['closure', /^(?:closes|closed|closure|shuts|shut)$/],
+  ['raise', /^(?:raises|raised|hikes|hiked|lifts|increases)$/],
+  ['lower', /^(?:cuts|lowers|lowered|slashes|reduces)$/],
+  ['hold', /^(?:holds|held|keeps|pauses|freezes)$/],
+  ['approve', /^(?:announces|approves|approved|backs|passes|signs)$/],
+  ['reject', /^(?:rejects|rejected|scraps|blocks|vetoes|withdraws)$/],
+];
+const kindsOf = (kw) => {
+  const out = new Set();
+  for (const w of kw) for (const [kind, re] of INCIDENT_KINDS) if (re.test(w)) out.add(kind);
+  return out;
+};
+const disjoint = (a, b) => a.size > 0 && b.size > 0 && ![...a].some((x) => b.has(x));
+// Words two unrelated reports from one place easily share ("Paris metro strike" / "Paris museum strike"):
+// a picture is lent on a shared subject (tram, coral, reef), never on one of these alone.
+const GENERIC_WORDS = new Set(
+  ('strike strikes protest protests record records plans plan deal talks vote votes election elections prices price rates rate ' +
+    'workers staff thousands people city cities country government officials police court state national local world global ' +
+    'opens opened closes closed rises rise falls fall cuts high low year month week day night first second third report reports ' +
+    'warns warning calls call asks says hits hit makes make gets takes faces start starts ends end business market markets').split(' ')
+);
+const CAUSE_PHRASE = /\b(?:after|over|following|because of|due to)\s+(.+)$/i;
+/** The content words of a headline's "after ..." phrase ("after engine fire" -> engine, fire). */
+const causeOf = (title) => {
+  const m = String(title || '').match(CAUSE_PHRASE);
+  return m ? keywords(m[1]) : new Set();
 };
 const jaccard = (a, b) => {
   let shared = 0;
   for (const w of a) if (b.has(w)) shared++;
   return shared / (a.size + b.size - shared || 1);
 };
+const sharedCount = (a, b) => {
+  let n = 0;
+  for (const w of a) if (b.has(w)) n++;
+  return n;
+};
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms).unref?.());
+
+/** Credits a list of ranked picture candidates carry, by URL ({ url: [credit, via] }), or null. */
+function creditsOf(list) {
+  const out = {};
+  for (const c of list) if (c.credit) out[c.url] = [c.credit, c.creditVia];
+  return Object.keys(out).length ? out : null;
+}
+
+/**
+ * Who a picture is credited to (every picture on air has a credit): the
+ * credit the feed or the page gives for that very picture (media:credit,
+ * JSON-LD creditText / copyrightHolder / author, og:site_name), else the
+ * outlet whose picture it is (the lender, for a borrowed one). `url` is the
+ * rendition really served, when known. Returns { credit, via }.
+ */
+export function pictureCredit(s, url = s?.image) {
+  if (!s?.image) return null;
+  const own = url && url !== s.image ? s.imageCredits?.[url] : null;
+  if (own) return { credit: own[0], via: own[1] };
+  if (s.imageCredit) return { credit: s.imageCredit, via: s.imageCreditVia || 'outlet' };
+  return creditNow(s);
+}
+
+function creditNow(s) {
+  const c = s.imageCredits?.[s.image];
+  if (c) return { credit: c[0], via: c[1] };
+  return { credit: s.imageLender || s.source, via: 'outlet' };
+}
+
+function stampCredit(s) {
+  const c = s.image ? creditNow(s) : null;
+  if (c) {
+    s.imageCredit = c.credit;
+    s.imageCreditVia = c.via;
+  } else {
+    delete s.imageCredit;
+    delete s.imageCreditVia;
+  }
+}
 
 /** Copy a picture from one report to another, crediting the outlet whose picture it is. */
 function lendPicture(from, to, { linked = true } = {}) {
@@ -362,15 +517,17 @@ function lendPicture(from, to, { linked = true } = {}) {
   to.imageWidth = from.imageWidth;
   if (from.images) to.images = [...from.images];
   else delete to.images;
+  if (from.imageCredits) to.imageCredits = { ...from.imageCredits };
+  else delete to.imageCredits;
   to.imageVia = linked ? 'cluster' : 'duplicate';
-  if (from.source !== to.source) to.imageCredit = from.source;
-  else delete to.imageCredit;
+  to.imageLender = from.imageLender || from.source;
   if (linked) to.imageFrom = from.id;
+  stampCredit(to);
 }
 
 function forgetPicture(s) {
   s.image = null;
-  for (const k of ['images', 'imageWidth', 'imageVia', 'imageCredit', 'imageFrom']) delete s[k];
+  for (const k of ['images', 'imageWidth', 'imageVia', 'imageCredit', 'imageCreditVia', 'imageCredits', 'imageLender', 'imageFrom']) delete s[k];
 }
 
 export class NewsDesk {
@@ -380,6 +537,11 @@ export class NewsDesk {
     this.lookup = lookup; // DNS for the private-address guard (tests inject one)
     this.stories = new Map(); // id -> story
     this.covered = new Map(); // id -> timestamp when it was used in a bulletin
+    // Recycling (a closed desk: the offline slate, or a quiet night with `recycle: 'all'`) brings back the
+    // stories aired longest ago, never those of the last few episodes: each markCovered() call is one episode.
+    this.coverSeq = 0;
+    this.coveredSeq = new Map(); // id -> coverSeq of the episode that covered it
+    this.localOnly = false; // every feed of the operator's list is a local file (offline demo)
     this.lastRefresh = 0;
     this.feedStatus = {};
     this.localImageRoots = new Set(); // folders of local feeds, whose pictures may be served
@@ -428,6 +590,7 @@ export class NewsDesk {
 
   async refresh() {
     const feeds = this.loadFeeds();
+    this.localOnly = feeds.length > 0 && feeds.every((f) => !!localFeedPath(f.url));
     const startedAt = Date.now();
     const results = await Promise.allSettled(
       feeds.map(async (feed) => {
@@ -445,7 +608,7 @@ export class NewsDesk {
     results.forEach((r, i) => {
       const feed = feeds[i];
       if (r.status === 'rejected') {
-        this.feedStatus[feed.name] = { ok: false, error: String(r.reason?.message || r.reason) };
+        this.feedStatus[feed.name] = { ok: false, error: String(r.reason?.message || r.reason).slice(0, 200) };
         this.log.warn?.(`[news] ${feed.name}: ${r.reason?.message || r.reason}`);
         return;
       }
@@ -466,12 +629,19 @@ export class NewsDesk {
         added++;
       }
     });
-    // Forget stale stories
+    // Forget stale stories, and keep the desk to MAX_DESK stories (the oldest go first)
     for (const [id, s] of this.stories) {
       if (now - s.published > maxAge) this.stories.delete(id);
     }
+    if (this.stories.size > MAX_DESK) {
+      const oldest = [...this.stories.values()].sort((a, b) => a.published - b.published).slice(0, this.stories.size - MAX_DESK);
+      for (const s of oldest) this.stories.delete(s.id);
+    }
     for (const [id, t] of this.covered) {
-      if (now - t > maxAge * 2) this.covered.delete(id);
+      if (now - t > maxAge * 2) {
+        this.covered.delete(id);
+        this.coveredSeq.delete(id);
+      }
     }
     for (const [url, list] of this.pageImageUse) if (!list.some((id) => this.stories.has(id))) this.pageImageUse.delete(url);
     this.updateTrending();
@@ -493,7 +663,7 @@ export class NewsDesk {
     const marked = [];
     for (const [url, list] of uses) {
       if (this.placeholders.has(url)) continue;
-      if (list.length >= 3 || (list.length === 2 && !this.samePictureEvent(list[0], list[1]))) {
+      if (list.length >= 3 || (list.length === 2 && !this.sameStory(list[0], list[1]))) {
         this.markPlaceholder(url);
         marked.push(url);
       }
@@ -519,38 +689,106 @@ export class NewsDesk {
       s.image = list[0];
       if (list.length > 1) s.images = list;
       else delete s.images;
+      stampCredit(s);
     }
     return true;
   }
 
-  /** The country a story's headline names, cached on the story (null: none, or only a region like "Europe"). */
+  /** The gazetteer place a story is about (headline, else the summary's first sentence), cached; null when none. */
   whereOf(s) {
-    if (s.where === undefined) s.where = countryOf(s.title || '');
+    if (s.where === undefined) s.where = storyPlace(s);
     return s.where;
   }
 
-  /** Same event: enough shared keywords, and no places in two different countries. */
+  /** What the same-event tests read from a story, cached on it. */
+  eventFacts(s) {
+    s.kw ??= keywords(s.title || '');
+    if (!s.ev || s.ev.title !== s.title) {
+      const placeWords = new Set(findPlaces(s.title || '').flatMap((h) => [...keywords(h.text)]));
+      const names = namesOf(s.title);
+      s.ev = {
+        title: s.title,
+        names,
+        // names that are not places: a storm, a person, a company, a product
+        people: new Set([...names].filter((n) => !placeWords.has(n) && !lookupPlace(n))),
+        topic: new Set([...s.kw].filter((w) => !placeWords.has(w))),
+        kinds: kindsOf(s.kw),
+        cause: causeOf(s.title),
+      };
+    }
+    return s.ev;
+  }
+
+  /**
+   * Same event: enough shared keywords, and nothing that tells them apart (places that disagree, from the
+   * headline or the summary's first sentence; names, incidents or causes that differ). Used to cluster
+   * reports, count outlets, keep one report per event in a programme and cover the others with it.
+   */
   sameStory(a, b) {
-    a.kw ??= keywords(a.title);
-    b.kw ??= keywords(b.title);
+    const ea = this.eventFacts(a);
+    const eb = this.eventFacts(b);
     if (!sameEvent(a.kw, b.kw)) return false;
-    const [wa, wb] = [this.whereOf(a), this.whereOf(b)];
-    return !(wa && wb && wa !== wb);
+    if (placesAgree(this.whereOf(a), this.whereOf(b)) === false) return false;
+    // each names someone or somewhere the other does not, and they share no name: two events
+    const onlyA = [...ea.names].filter((n) => !eb.names.has(n));
+    const onlyB = [...eb.names].filter((n) => !ea.names.has(n));
+    if (onlyA.length && onlyB.length && sharedCount(ea.names, eb.names) === 0) return false;
+    if (disjoint(ea.kinds, eb.kinds)) return false;
+    if (ea.cause.size >= 2 && eb.cause.size >= 2 && sharedCount(ea.cause, eb.cause) === 0) return false;
+    return true;
   }
 
-  /** Stricter, for lending a picture: a wrong picture on air is worse than none. */
+  /**
+   * Stricter, for lending a picture (a wrong picture on air is worse than none): the same event AND the
+   * same place, known on both sides (or a shared name that is not a place: "Hurricane Elena"), and the
+   * headlines say the same thing (a quarter of their non-place words, at least two) or share that name.
+   */
   samePictureEvent(a, b) {
-    return this.sameStory(a, b) && jaccard(a.kw, b.kw) >= 0.25;
+    if (!this.sameStory(a, b)) return false;
+    const ea = this.eventFacts(a);
+    const eb = this.eventFacts(b);
+    const named = sharedCount(ea.people, eb.people) > 0;
+    const agree = placesAgree(this.whereOf(a), this.whereOf(b));
+    const neither = !this.whereOf(a) && !this.whereOf(b);
+    if (!agree && !(neither && named) && !(agree === null && named)) return false;
+    if (ea.cause.size && eb.cause.size && sharedCount(ea.cause, eb.cause) === 0) return false;
+    const topical = sharedCount(ea.topic, eb.topic) >= 2 && jaccard(ea.topic, eb.topic) >= 0.25;
+    if (named || (agree === true && topical)) return true;
+    // One precise place (a city, a region: not just a country) and the same incident or the same subject:
+    // "Iceland volcano erupts again on the Reykjanes peninsula" / "lava fountains light up the Reykjanes sky".
+    const [pa, pb] = [this.whereOf(a), this.whereOf(b)];
+    const precise = agree === true && pa.kind !== 'country' && pb.kind !== 'country';
+    const sameKind = [...ea.kinds].some((k) => eb.kinds.has(k));
+    const subject = [...ea.topic].some((w) => eb.topic.has(w) && w.length >= 4 && !GENERIC_WORDS.has(w));
+    return precise && (sameKind || subject);
   }
 
-  /** Count how many distinct outlets are reporting each story's event. */
+  /**
+   * Count how many distinct outlets are reporting each story's event. Only stories sharing two keywords
+   * can be the same event, so each story is compared with those found through a keyword index, not with
+   * the whole desk (thousands of stories cost milliseconds, not seconds).
+   */
   updateTrending() {
     const list = [...this.stories.values()];
-    for (const s of list) s.kw ??= keywords(s.title);
+    const index = new Map();
     for (const s of list) {
+      this.eventFacts(s);
+      for (const w of s.kw) {
+        if (!index.has(w)) index.set(w, []);
+        index.get(w).push(s);
+      }
+    }
+    for (const s of list) {
+      const seen = new Map();
+      for (const w of s.kw) {
+        const bucket = index.get(w);
+        // a word on very many headlines ("record", "new") says nothing about the event
+        if (!bucket || bucket.length > 200) continue;
+        for (const o of bucket) if (o !== s) seen.set(o, (seen.get(o) || 0) + 1);
+      }
       const sources = new Set([s.source]);
-      for (const o of list) {
-        if (o !== s && !sources.has(o.source) && this.sameStory(s, o)) sources.add(o.source);
+      for (const [o, shared] of seen) {
+        if (shared >= 2 && !sources.has(o.source) && this.sameStory(s, o)) sources.add(o.source);
       }
       s.outlets = sources.size;
     }
@@ -646,15 +884,20 @@ export class NewsDesk {
     return this.candidates(count);
   }
 
-  /** Mark stories as aired, plus other outlets' reports of the same events. */
+  /** Mark stories as aired, plus other outlets' reports of the same events (one call = one episode). */
   markCovered(ids) {
     const now = Date.now();
-    for (const id of ids) {
+    const seq = ++this.coverSeq;
+    const cover = (id) => {
       this.covered.set(id, now);
+      this.coveredSeq.set(id, seq);
+    };
+    for (const id of ids) {
+      cover(id);
       const aired = this.stories.get(id);
       if (!aired) continue;
       for (const s of this.stories.values()) {
-        if (!this.covered.has(s.id) && s !== aired && this.sameStory(aired, s)) this.covered.set(s.id, now);
+        if (!this.covered.has(s.id) && s !== aired && this.sameStory(aired, s)) cover(s.id);
       }
     }
   }
@@ -666,8 +909,45 @@ export class NewsDesk {
       const s = this.stories.get(id);
       if (!s) continue;
       s.offered = (s.offered || 0) + 1;
-      if (s.offered >= 3) this.covered.set(id, now);
+      if (s.offered >= 3) {
+        this.covered.set(id, now);
+        this.coveredSeq.set(id, this.coverSeq);
+      }
     }
+  }
+
+  /**
+   * Bring back up to `count` covered stories (those `filter` accepts), the ones
+   * aired longest ago first, never one aired in the last `gap` episodes nor
+   * less than `minAgeMs` ago. A closed desk (the offline slate) would
+   * otherwise run dry after one rotation and air replays for ever; a real
+   * 24/7 channel re-runs its stories too, in new bulletins. Returns how many
+   * came back.
+   */
+  recycle(count, { filter = null, gap = 5, minAgeMs = 0, now = Date.now() } = {}) {
+    if (!(count > 0)) return 0;
+    const list = [];
+    for (const [id, at] of this.covered) {
+      const s = this.stories.get(id);
+      if (!s || (filter && !filter(s)) || now - at < minAgeMs) continue;
+      const seq = this.coveredSeq.get(id) ?? 0;
+      if (this.coverSeq - seq < gap) continue;
+      list.push({ s, at, seq });
+    }
+    list.sort((a, b) => a.seq - b.seq || a.at - b.at);
+    const back = list.slice(0, count);
+    for (const { s } of back) {
+      this.covered.delete(s.id);
+      this.coveredSeq.delete(s.id);
+      s.offered = 0;
+      s.recycled = (s.recycled || 0) + 1;
+      // A re-run is not breaking news any more: the outlet's marker goes (the strap, the lead rule, the alert).
+      if (isBreaking(s.title)) {
+        s.title = plainTitle(s.title);
+        s.kw = undefined;
+      }
+    }
+    return back.length;
   }
 
   get(id) {
@@ -686,9 +966,10 @@ export class NewsDesk {
         source: s.source,
         category: s.category,
         hasImage: !!s.image,
-        // where the picture was found (feed:media, page:og, cluster...) and whose it is when borrowed
+        // where the picture was found (feed:media, page:og, cluster...), who it is credited to and why
         imageVia: s.image ? s.imageVia || 'feed' : null,
-        imageCredit: s.image ? s.imageCredit || null : null,
+        imageCredit: s.image ? pictureCredit(s).credit : null,
+        imageCreditVia: s.image ? pictureCredit(s).via : null,
         outlets: s.outlets || 1,
         covered: this.covered.has(s.id),
         breaking: isBreaking(s.title),
@@ -735,7 +1016,11 @@ export class NewsDesk {
     story.imageChecked = true;
     try {
       const found = story.local ? await this.localPagePictures(story) : await this.pagePictures(story.link);
-      const own = story.image && !story.imageFrom ? (story.images || [story.image]).map((url, i) => ({ url, w: i === 0 ? story.imageWidth || 0 : 0, via: 'feed', local: /^file:/i.test(url) })) : [];
+      const ownCredits = story.imageCredits || {};
+      const own =
+        story.image && !story.imageFrom
+          ? (story.images || [story.image]).map((url, i) => ({ url, w: i === 0 ? story.imageWidth || 0 : 0, via: 'feed', local: /^file:/i.test(url), ...(ownCredits[url] ? { credit: ownCredits[url][0], creditVia: ownCredits[url][1] } : {}) }))
+          : [];
       const ranked = rankPictures([...found.filter((c) => !c.local || story.local), ...own]).filter((c) => !this.placeholders.has(c.url));
       const best = ranked[0];
       if (best && best.via !== 'feed' && (!own.length || best.w > (story.imageWidth || 0))) {
@@ -744,6 +1029,9 @@ export class NewsDesk {
         story.imageWidth = best.w;
         story.imageVia = `page:${best.via}`;
         if (ranked.length > 1) story.images = ranked.map((c) => c.url);
+        const credits = creditsOf(ranked);
+        if (credits) story.imageCredits = credits;
+        stampCredit(story);
         this.notePagePicture(story, best.url);
       }
     } catch (err) {
@@ -754,7 +1042,7 @@ export class NewsDesk {
 
   notePagePicture(story, url) {
     const ids = (this.pageImageUse.get(url) || []).filter((id) => id !== story.id && this.stories.has(id));
-    const clash = ids.map((id) => this.stories.get(id)).filter((o) => o.source === story.source && !this.samePictureEvent(o, story));
+    const clash = ids.map((id) => this.stories.get(id)).filter((o) => o.source === story.source && !this.sameStory(o, story));
     this.pageImageUse.set(url, [...ids, story.id]);
     if (!clash.length) return;
     this.markPlaceholder(url);
