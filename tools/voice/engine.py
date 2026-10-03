@@ -507,7 +507,7 @@ class VoiceEngine:
 
         tone = None if req.get('tone') is False else self.tone_for(parts)
         effect = req.get('effect') or None
-        if effect not in (None, 'none', 'robot'):
+        if effect not in (None, 'none') and effect not in dsp.ROBOT_PRESETS:
             raise ValueError(f'unknown effect {effect!r}')
         chain = req.get('chain') if isinstance(req.get('chain'), dict) else None
         if req.get('raw'):

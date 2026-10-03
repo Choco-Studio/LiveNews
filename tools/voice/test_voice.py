@@ -172,6 +172,16 @@ class ChainTest(unittest.TestCase):
         self.assertAlmostEqual(loudness.integrated_loudness(y, SR), -16.0, delta=0.3)
         self.assertLessEqual(loudness.true_peak(y), -1.9)
 
+    def test_softer_robot_presets_keep_targets(self):
+        # owner 3 Oct: three softer machines for UNIT-8 (casting.json "effect"); each keeps the delivery targets
+        x = speechlike(3.0)
+        for name in ('robot-soft', 'robot-cabin', 'robot-warm'):
+            self.assertIn(name, dsp.ROBOT_PRESETS)
+            y, _ = dsp.broadcast(x, SR, effect=name)
+            self.assertTrue(np.all(np.isfinite(y)), name)
+            self.assertAlmostEqual(loudness.integrated_loudness(y, SR), -16.0, delta=0.3, msg=name)
+            self.assertLessEqual(loudness.true_peak(y), -1.9, name)
+
     def test_limiter_never_overshoots(self):
         x = speechlike(2.0) * 3.0
         y = dsp.limit(x, SR, -2.0)

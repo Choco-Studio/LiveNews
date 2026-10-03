@@ -26,7 +26,7 @@ def main(argv=None):
     ap.add_argument('--out', help='output file (.ogg, .wav, .m4a, .webm, .mp3, .flac)')
     ap.add_argument('--speed', type=float, help='0.5-2.0 (default: preset or 1.0)')
     ap.add_argument('--lang', help='en-us or en-gb (default: from the voice)')
-    ap.add_argument('--effect', choices=['none', 'robot'], help='character effect')
+    ap.add_argument('--effect', choices=['none', 'robot', 'robot-soft', 'robot-cabin', 'robot-warm'], help='character effect')
     ap.add_argument('--phrases', help='JSON list of {text, pauseAfter} to synthesise phrase by phrase')
     ap.add_argument('--raw', action='store_true', help='skip the broadcast chain (for comparisons)')
     ap.add_argument('--no-tone', action='store_true', help='skip the per-voice tonal match')

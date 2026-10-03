@@ -105,7 +105,8 @@ export function planPhrases(text, { speech, persona, personaId, lang, seg, minRe
 export function segmentRequest(seg, { presenterId, presenter, casting, presets = {}, speech = null }) {
   const cast = castFor(presenterId, presenter, casting);
   const speed = Number(cast.speed) || 1;
-  const robot = cast.effect === 'robot';
+  // 'robot' or one of its softer variants (tools/voice/dsp.py ROBOT_PRESETS; owner 3 Oct)
+  const robot = /^robot(-(soft|cabin|warm))?$/.test(cast.effect || '') ? cast.effect : null;
   const lang = String(cast.lang || presenter?.voice?.lang || 'en-us').toLowerCase();
   const persona = speech?.PERSONAS?.[presenterId] ? presenterId : presenter ? { ...presenter, id: presenterId } : 'default';
   let phrases = null;
@@ -121,7 +122,7 @@ export function segmentRequest(seg, { presenterId, presenter, casting, presets =
   } catch {
     phrases = null; // the worker's own sentence planner takes over
   }
-  const req = { text: seg.text, voice: cast.voice, speed, lang, effect: robot ? 'robot' : 'none' };
+  const req = { text: seg.text, voice: cast.voice, speed, lang, effect: robot || 'none' };
   if (cast.pauses && typeof cast.pauses === 'object') req.pauses = cast.pauses;
   const preset = presets[presenterId];
   if (preset?.chain && preset.voice === cast.voice) req.chain = preset.chain;

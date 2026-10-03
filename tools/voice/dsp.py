@@ -529,6 +529,20 @@ ROBOT = {
     'high_machine': 0.30,
     'comb_ms': 2.7, 'comb_g': 0.22,   # short metallic body
     'crush_mix': 0.04, 'crush_bits': 8, 'crush_hz': 9000,
+    'band': None,        # optional (highpass, lowpass) in Hz after the machine layer
+}
+
+# Owner, 3 Oct: UNIT-8's voice is robotic, fine, but "odd and annoying". The classic effect (a 100 Hz
+# monotone buzz under 85 % of the low band, a metal comb and a bit-crush edge) is kept as 'robot';
+# three softer machines for the owner to choose from (casting.json "effect"):
+ROBOT_PRESETS = {
+    'robot': ROBOT,
+    # A: mostly the voice itself with a gentle machine sheen (its own pitch heard, no buzz, no crush)
+    'robot-soft': {**ROBOT, 'f0': 110.0, 'low_machine': 0.45, 'high_machine': 0.12, 'comb_ms': 2.2, 'comb_g': 0.12, 'crush_mix': 0.0, 'band': (120.0, 7500.0)},
+    # B: a speaker in a small metal housing: light machine layer, a tight resonance, intercom bandwidth
+    'robot-cabin': {**ROBOT, 'f0': 115.0, 'low_machine': 0.35, 'high_machine': 0.10, 'comb_ms': 1.6, 'comb_g': 0.18, 'crush_mix': 0.0, 'band': (220.0, 5500.0)},
+    # C: clearly synthetic but smooth: a higher, calmer monotone, faint body, no digital edge
+    'robot-warm': {**ROBOT, 'f0': 122.0, 'low_machine': 0.68, 'high_machine': 0.20, 'comb_ms': 3.0, 'comb_g': 0.08, 'crush_mix': 0.0, 'band': (110.0, 6500.0)},
 }
 
 
@@ -560,6 +574,9 @@ def robot(x, sr, **params):
         crushed = fft_filter(crushed, lambda f: biquad_response(
             [biquad('highpass', 1500, sr), biquad('lowpass', 6000, sr)], f, sr), sr, pad=0.02)
         y = y + p['crush_mix'] * crushed
+    if p.get('band'):
+        lo, hi = p['band']
+        return fft_filter(y, lambda f: biquad_response([biquad('highpass', lo, sr, q=0.6), biquad('lowpass', hi, sr, q=0.6)], f, sr), sr, pad=0.05)
     return fft_filter(y, lambda f: biquad_response([biquad('highpass', 110, sr, q=0.6)], f, sr), sr, pad=0.05)
 
 
@@ -591,8 +608,8 @@ def broadcast(x, sr, tone=None, effect=None, overrides=None):
     y = equalise(x, sr, o, tone)
     y, boom_cut, chest_cut = low_end(y, sr, o)
     y, air_added = air_restore(y, sr, o)
-    if effect == 'robot':
-        y = robot(y, sr)
+    if effect in ROBOT_PRESETS:
+        y = robot(y, sr, **ROBOT_PRESETS[effect])
     # Work at a known level so thresholds mean the same for every voice
     lufs = integrated_loudness(y, sr)
     if math.isfinite(lufs):
