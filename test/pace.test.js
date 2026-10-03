@@ -443,7 +443,8 @@ test('pace: default path: every shot holds the minimum, the montage follows the 
     const body = log.seen.filter((x) => !['open', 'endcard', 'start'].includes(x.shot));
     for (const x of body) {
       const tag = `${label} ${x.shot}/${x.focus} @${(x.t - log.seen[0].t).toFixed(1)} ${x.len.toFixed(2)} s`;
-      if (x.shot === 'montage') assert.ok(x.len >= P.holds.montage - 0.05, `${tag}: a headline frame under the floor`);
+      // a headline frame follows its voice (owner 22:50): it never flashes (1.2 s), and only the last one is held
+      if (x.shot === 'montage') assert.ok(x.len >= 1.2 - 0.05, `${tag}: a headline frame flashed`);
       else if (x.shot !== 'breakingCard') assert.ok(x.len >= P.shots.min - 0.05, `${tag}: under the minimum shot`);
       // maxima (the solo intro wide and the chats' wide are the bibles'; a one-sentence story cannot be split)
       const max = x.shot === 'fact' ? P.shots.factMax : x.shot === 'full' ? P.shots.picture[1] : x.shot === 'map' ? P.shots.map[1] : P.shots.studioMax;

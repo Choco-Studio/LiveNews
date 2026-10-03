@@ -172,8 +172,14 @@ export class Renderer {
         return cards.drawPromoCard(ctx, t, dt, card, presenterName);
       case 'montage': {
         const item = scene.rundown[card.index] || {};
-        const pic = scene.images.get(item.storyId);
-        return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, image: pic?.card || null, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
+        // the frame's backdrop is decided in its first 0.4 s and then kept (a picture that arrives later never
+        // pops in under the headline): the story's picture, else its place on the map (owner 22:50: never a
+        // black frame), else the montage's world field
+        if (card.pic === undefined || (card.pic === null && dt < 0.4)) card.pic = scene.images.get(item.storyId)?.card || (dt < 0.4 ? null : false);
+        const loc = item.location;
+        const map = !card.pic && Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon);
+        if (map) drawWorldMap(ctx, t, dt, { lat: loc.lat, lon: loc.lon, place: '', label: false, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
+        return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, image: card.pic || null, backdrop: map ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
       }
       case 'breakingCard':
         return cards.drawBreakingCard(ctx, t, dt, { headline: card.headline, source: card.source });

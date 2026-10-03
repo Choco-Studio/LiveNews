@@ -185,13 +185,14 @@ function categoryLabel(name) {
 const MONTAGE_FIELD = lazyBackdrop({ key: 'montage', colors: [P.black, P.ink], cx: 290, cy: 60, reach: 280, texture: (d, level) => worldDots(d, (x, y) => level(x, y) * 2) });
 
 let TOP_STORIES_W = 0;
-export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline = '', source = '', category = 'general', image = null, accent = null, programId = '' } = {}) {
+export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline = '', source = '', category = 'general', image = null, backdrop = null, accent = null, programId = '' } = {}) {
   const acc = accentFor(programId, accent);
   if (!TOP_STORIES_W) TOP_STORIES_W = measureText('TOP STORIES', 1, 'micro');
   if (image) {
     ctx.drawImage(image, 0, 0);
     ctx.drawImage(shade(96, 200, 0.85), 0, 0); // photos get a stepped shade; the field is already dark there
-  } else ctx.drawImage(MONTAGE_FIELD(), 0, 0);
+  } else if (backdrop === 'map') ctx.drawImage(shade(96, 200, 0.85), 0, 0); // the caller drew the story's place
+  else ctx.drawImage(MONTAGE_FIELD(), 0, 0);
 
   // TOP STORIES tag and pips under the bug, micro white on ink (brand red stays with the bug, LIVE
   // and BREAKING): it wipes in on the first frame only and stays put across the cuts

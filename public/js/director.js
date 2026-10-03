@@ -11,6 +11,8 @@ import { openFor } from './scenes/opens.js';
 import { VoicePlayer } from './voice/player.js';
 import { paceFor, gapAfter, CHANNEL, paceTrace, cutWait, isRepeat } from './pace.js';
 
+// a headline frame is never shorter than this, so a short teaser line still cuts with its voice
+const MONTAGE_FLASH = 1.2;
 const now = () => performance.now() / 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const frame = () => new Promise((r) => setTimeout(r, 0));
@@ -258,6 +260,9 @@ export class Director {
 
   async prepareImages(episode) {
     const ids = episode.rundown.filter((r) => r.hasImage && !this.images.has(r.storyId)).map((r) => r.storyId);
+    // the headlines the intro teases first: the montage shows them a few seconds after the open (owner 22:50)
+    const teased = new Set((episode.segments?.find((sg) => sg.type === 'intro')?.teases || []).filter(Boolean));
+    ids.sort((a, b) => (teased.has(b) ? 1 : 0) - (teased.has(a) ? 1 : 0));
     for (const id of ids) {
       try {
         const img = await loadImage(`/api/img/${id}`);
@@ -447,7 +452,9 @@ export class Director {
     const cut = (apply) => {
       clearTimeout(pending);
       pending = null;
-      const wait = P.holds.montage - (now() - s.shotSince);
+      // the frame follows the voice (owner 22:50: "la foto anterior porque el audio se adelanta"): a cut waits
+      // only so long as to never flash a frame (MONTAGE_FLASH), not for the full headline floor
+      const wait = Math.min(P.holds.montage, MONTAGE_FLASH) - (now() - s.shotSince);
       if (wait > 0.02) pending = setTimeout(() => ((pending = null), apply()), wait * 1000);
       else apply();
     };

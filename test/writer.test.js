@@ -683,6 +683,17 @@ describe('normalizeBulletin: structure', () => {
     );
   });
 
+  test('a rundown item carries its story\'s place (the montage\'s map when the picture is not ready)', () => {
+    const loc = { place: 'LAGOS, NIGERIA', lat: 6.45, lon: 3.39 };
+    const stories = [makeStory('s1', { title: 'Port strike in Lagos', summary: 'Dock workers in Lagos, Nigeria, walked out on Monday.' }), makeStory('s2')];
+    const b = normalize([storySeg('s1', { location: loc, text: 'Dock workers in Lagos walked out on Monday.' }), storySeg('s2')], { stories });
+    const seg = b.segments.find((s) => s.storyId === 's1');
+    assert.ok(seg?.location, 'the place is kept on the segment');
+    const r1 = b.rundown.find((r) => r.storyId === 's1');
+    assert.deepEqual(r1.location, { place: seg.location.place, lat: seg.location.lat, lon: seg.location.lon });
+    assert.equal(b.rundown.find((r) => r.storyId === 's2').location, undefined);
+  });
+
   test('the bulletin has exactly title, segments, rundown and storyIds', () => {
     assert.deepEqual(Object.keys(normalize([storySeg('s1')])).sort(), ['rundown', 'segments', 'storyIds', 'title']);
   });

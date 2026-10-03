@@ -191,6 +191,16 @@ test('the first montage frame shows its accent bar on the very first frame after
   assert.ok(log.some((l) => l.startsWith('F#e43b44')), 'the red accent is drawn at dt = 1/60');
 });
 
+test('a montage frame without its picture over the story\'s map draws only the legibility shade, never the dark world field (owner 22:50)', () => {
+  const o = { index: 1, total: 3, headline: 'Storm closes ports', source: 'BBC', category: 'world', programId: 'world-now' };
+  const field = draws((ctx) => cards.drawHeadlineFrame(ctx, 0, 1, o));
+  const map = draws((ctx) => cards.drawHeadlineFrame(ctx, 0, 1, { ...o, backdrop: 'map' }));
+  const images = (log) => log.filter((l) => l.startsWith('D'));
+  // the field and the shade are both one image; over the map only the shade is drawn
+  assert.equal(images(map).length, images(field).length);
+  assert.notDeepEqual(images(map)[0], images(field)[0], 'the map frame does not draw the world field');
+});
+
 test('the UP NEXT promo is a still card: the lock-up holds, and odd presenter data never throws', () => {
   const card = { label: 'UP NEXT', footer: 'AFTER THE BREAK', next: { id: 'news-60', title: 'NEWS IN 60', tagline: 'THE HEADLINES IN A MINUTE', presenters: ['sam'] } };
   const a = draws((ctx) => cards.drawPromoCard(ctx, 0, 1.0, card)).join('\n');

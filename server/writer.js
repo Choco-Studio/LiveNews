@@ -1394,7 +1394,16 @@ export function normalizeBulletin(
 
   const rundown = finalBody
     .filter((s) => s.type === 'story')
-    .map((s) => ({ storyId: s.storyId, headline: s.headline, source: s.source, category: s.category, hasImage: s.hasImage, ...(s.kicker ? { kicker: s.kicker } : {}) }));
+    .map((s) => ({
+      storyId: s.storyId,
+      headline: s.headline,
+      source: s.source,
+      category: s.category,
+      hasImage: s.hasImage,
+      ...(s.kicker ? { kicker: s.kicker } : {}),
+      // the montage frame's map when its picture is not ready (owner 22:50: never a black frame)
+      ...(Number.isFinite(s.location?.lat) && Number.isFinite(s.location?.lon) ? { location: { place: s.location.place || '', lat: s.location.lat, lon: s.location.lon } } : {}),
+    }));
   // Which rundown story each sentence of the FINAL intro is about (one entry per sentence, null for the
   // greeting), so the montage can cut on it: inferred from the words, whatever the writer was (every
   // provider, after every dropped sentence and the reordering above). A writer's own list is not trusted.
