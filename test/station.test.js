@@ -969,6 +969,7 @@ describe('Station.status and publicChannel', () => {
       queue: ['BRAVO TECH', 'CHARLIE MONEY'],
       producing: null,
       aired: 1,
+      airedTotal: 1,
       lastError: null,
       stories: 2,
       uncovered: 1,

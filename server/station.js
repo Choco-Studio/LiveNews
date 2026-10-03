@@ -228,6 +228,7 @@ export class Station {
     const item = this.advance();
     if (!item) return null;
     this.history.push(item);
+    this.airedTotal = (this.airedTotal || 0) + 1; // the history keeps the last 30; this counts them all
     if (this.history.length > 30) this.history.shift();
     this.emit('schedule', this.schedule());
     return item;
@@ -242,6 +243,7 @@ export class Station {
       queue: this.queue.map((e) => e.program.title),
       producing: this.producing ? this.channel().programs[this.producing]?.title : null,
       aired: this.history.length,
+      airedTotal: this.airedTotal || 0,
       lastError: this.lastError ? publicError(this.lastError) : null,
       stories: this.news.stories.size,
       uncovered: this.news.uncovered().length,

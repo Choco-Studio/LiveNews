@@ -106,7 +106,7 @@ while (Date.now() < end && !crashed) {
     long: soak ? soak.long - lastLong : null,
     queue: Array.isArray(st?.queue) ? st.queue.length : null,
     producing: st?.producing ?? null,
-    aired: st?.aired ?? null,
+    aired: st?.airedTotal ?? st?.aired ?? null,
     serverError: st?.lastError ? String(st.lastError.message || st.lastError).slice(0, 120) : null,
     errors: errors.length,
   };
