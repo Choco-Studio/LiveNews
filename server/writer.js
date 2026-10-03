@@ -65,7 +65,9 @@ function lengthRule(program, n) {
   const t = program.targetSeconds;
   if (!Array.isArray(t) || t.length !== 2) return '';
   const span = (s) => (s % 60 ? `${(s / 60).toFixed(1).replace(/\.0$/, '')}` : String(s / 60));
-  return `\n- On air this programme runs about ${span(t[0])} to ${span(t[1])} minutes. Reach it with the ${n} stories and their depth (each main story with its key fact, its context and its figure or quote where the summary has them${program.maxChats ? ', and a short exchange between the presenters where allowed' : ''}), never by padding, repeating or slowing down. A thin summary makes a short story.`;
+  // a programme under two minutes says its running time in seconds (NEWS IN 60: "55 to 70 seconds", not "0.9 to 1.2 minutes")
+  const runs = t[1] < 120 ? `${t[0]} to ${t[1]} seconds` : `${span(t[0])} to ${span(t[1])} minutes`;
+  return `\n- On air this programme runs about ${runs}. Reach it with the ${n} stories and their depth (each main story with its key fact, its context and its figure or quote where the summary has them${program.maxChats ? ', and a short exchange between the presenters where allowed' : ''}), never by padding, repeating or slowing down. A thin summary makes a short story.`;
 }
 
 function chatRule(program, solo) {
@@ -1305,8 +1307,11 @@ function applyRoundup(body, program, { solo = false } = {}) {
         if (index > 0) lead = lead.filter((p) => !isTitle(p));
         else if (!lead.some(isTitle)) lead = [program?.roundup?.opener || ROUNDUP_OPENER, ...lead];
         s.tagged = [...lead, ...rest.slice(0, 1)].join(' ');
-        if (!timed) s.tagged = s.tagged.replace(/\baround the world in (?:30|60) seconds\b/gi, 'around the world');
       });
+      // PACE: "in 30 seconds" only when the run really is about that long (its words at 2.75 a second, 0.7 s between
+      // items); a five-item run airs ~40 s (critic: a false promise on air)
+      const runAir = items.reduce((a, s) => a + stripTags(s.tagged).split(' ').length, 0) / 2.75 + (items.length - 1) * 0.7;
+      if (!timed || runAir > 32) for (const s of items) s.tagged = s.tagged.replace(/\baround the world in (?:30|60) seconds\b/gi, 'around the world');
     } else
       items.forEach((s) => {
         drop(s);

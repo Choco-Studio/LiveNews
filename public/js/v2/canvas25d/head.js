@@ -115,21 +115,37 @@ export function wrapX() {
 /** The jaw never drops more than this many screen pixels (calm speech at every scale). */
 export const JAW_MAX_PX = 2;
 
+// headFrame() hands out frames from a small ring (no object per call: critic r2). A frame is
+// read within the frame it is drawn in (character.js, the Stage's inset, the labs); 32 slots
+// keep it valid for many actors and draws after that.
+const RING = [];
+let ringAt = 0;
+
 export function headFrame(L, sk, toS, s) {
   const h = sk.head;
   const [hx, hy] = toS(L.headAt[0] + h.x, L.headAt[1] + h.y);
-  // units; capped so the chin travels at most JAW_MAX_PX on screen
-  return new HeadFrame(L, hx, hy, s, h.roll, h.yaw, h.pitch, Math.max(0, Math.min(sk.face.jaw || 0, JAW_MAX_PX / s)));
+  // units; capped so the chin travels at most JAW_MAX_PX on screen; none in the wide (s < 1.35),
+  // where a dropping chin is a 1 px jump of the whole jaw line (critic r2: Paco's 'talk' at s 1)
+  const jaw = s < 1.35 ? 0 : Math.max(0, Math.min(sk.face.jaw || 0, JAW_MAX_PX / s));
+  let f = RING[ringAt];
+  if (f) f.set(L, hx, hy, s, h.roll, h.yaw, h.pitch, jaw);
+  else f = RING[ringAt] = new HeadFrame(L, hx, hy, s, h.roll, h.yaw, h.pitch, jaw);
+  ringAt = (ringAt + 1) & 31;
+  return f;
 }
 
 /**
  * The head frame: fields L, cx, cy, s, roll, cr, sr, yaw, pitch, jaw (and gb, set by
- * the caller); methods on the prototype (one object per call, no closures):
+ * the caller); methods on the prototype (no closures; frames come from a ring, see headFrame):
  * toScreen/toLocal keep their [x, y] return value because cast files destructure it
  * (CONTRACTS "head frame"); the Into variants write a caller-owned 2-element array.
  */
 class HeadFrame {
   constructor(L, hx, hy, s, roll, yaw, pitch, jaw) {
+    this.set(L, hx, hy, s, roll, yaw, pitch, jaw);
+  }
+
+  set(L, hx, hy, s, roll, yaw, pitch, jaw) {
     this.L = L;
     // snap the head origin so a still head is a still picture
     this.cx = Math.round(hx);
@@ -142,6 +158,7 @@ class HeadFrame {
     this.pitch = pitch;
     this.jaw = jaw;
     this.gb = 0;
+    return this;
   }
 
   toScreen(x, y) {

@@ -393,6 +393,15 @@ function browY(B, raise, frown, u) {
   return B.y - raise * (0.7 + 0.3 * u) - B.arch * Math.sin(Math.min(1, u * 1.35) * Math.PI) * (1 + Math.max(0, raise) * 0.4) + frown * 0.6 * (1 - u) * (1 - u) + Math.max(0, u - 0.7) * 1.2;
 }
 
+// The brow's point at u (BR[2]) for raise BR[0] / frown BR[1], mapped to the screen (F.x, F.y):
+// doubles go through a scratch array, so the per-frame brow pass boxes no numbers (critic r2)
+const BR = new Float64Array(5); // raise, frown, u, inner x, outer x
+function browAt(B) {
+  const raise = BR[0], frown = BR[1], u = BR[2], xi = BR[3], xo = BR[4];
+  const y = B.y - raise * (0.7 + 0.3 * u) - B.arch * Math.sin(Math.min(1, u * 1.35) * Math.PI) * (1 + Math.max(0, raise) * 0.4) + frown * 0.6 * (1 - u) * (1 - u) + Math.max(0, u - 0.7) * 1.2;
+  mapF(xi + (xo - xi) * u, y);
+}
+
 const BU = [0, 0.3, 0.62, 0.86, 1];
 const EYT = new Int32Array(2); // medium tier: each eye's top row (drawEye), so the brows stay clear of it
 const BX = new Float64Array(5), BYS = new Float64Array(5);
@@ -405,6 +414,10 @@ function drawBrows(buf, L, mt, sk, f, s, tier) {
     const frown = f.browIn || 0; // + inner ends down (serious), - inner ends up (worried)
     const xi = side * (E.x - B.len * 0.48);
     const xo = side * (E.x + B.len * 0.52);
+    BR[0] = raise;
+    BR[1] = frown;
+    BR[3] = xi;
+    BR[4] = xo;
     if (tier === 0) {
       // wide: one straight 1 px stroke (an arch at this size only makes stairs)
       mapF(xi + (xo - xi) * 0.05, browY(B, raise, frown, 0.3));
@@ -416,7 +429,8 @@ function drawBrows(buf, L, mt, sk, f, s, tier) {
     }
     // a connected polyline through the head, arch and tail; thickness tapers along it
     for (let k = 0; k < 5; k++) {
-      mapF(xi + (xo - xi) * BU[k], browY(B, raise, frown, BU[k]));
+      BR[2] = BU[k];
+      browAt(B);
       BX[k] = F.x;
       BYS[k] = F.y;
     }
@@ -590,9 +604,21 @@ function drawMouth(buf, L, mt, sk, head, f, s, tier) {
   if (tier === 0) {
     // wide: a short deep line; a maroon middle while the jaw is open. A smile never
     // bends the line into a U (at 1 px per unit that reads as an emoticon): its
-    // corners soften to the shade tone instead.
+    // corners soften to the shade tone instead. Under a mustache the line keeps to the
+    // mustache's flat middle (its drooping ends reach the mouth row and painted over the
+    // corners, leaving a stray mustache pixel beside the open mouth: critic r2)
     const isOpen = open > 0.35 && !press;
-    const a = round > 0.5 ? xl + 1 : xl, b = round > 0.5 ? xr - 1 : xr;
+    let a = round > 0.5 ? xl + 1 : xl, b = round > 0.5 ? xr - 1 : xr;
+    if (L.mustache) {
+      MS[0] = -Math.min(hw, L.mustache.w * 0.5 * 0.55);
+      const ma = mxS();
+      MS[0] = -MS[0];
+      const mb = mxS() + 1;
+      if (mb - ma >= 2) {
+        a = Math.max(a, ma);
+        b = Math.min(b, mb);
+      }
+    }
     for (let x = a; x < Math.max(a + 1, b); x++) {
       const edge = x === a || x === b - 1;
       buf.plot(x, y0, isOpen && !edge ? mt.inner : sk, edge && lift > 0 ? 2 : 3);

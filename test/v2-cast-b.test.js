@@ -346,7 +346,9 @@ test('UNIT-8 reads as an instrument: a housing wider than tall, about a human he
   const { px, head } = render(unit8, 3.4, 0.3);
   const s = 3.4;
   let lit = 0;
-  for (let y = Math.round(head.cy + 0.5 * s); y < Math.round(head.cy + VISOR.bot * s) - 1; y++) for (let x = Math.round(head.cx - VISOR.hw * s) + 2; x < Math.round(head.cx + VISOR.hw * s) - 2; x++) {
+  // the glass only: inside the bezel's chamfered corners (the recess's lit lower lip steps in there)
+  const inset = Math.ceil(VISOR.rc * s) + 2;
+  for (let y = Math.round(head.cy + 0.5 * s); y < Math.round(head.cy + VISOR.bot * s) - 1; y++) for (let x = Math.round(head.cx - VISOR.hw * s) + inset; x < Math.round(head.cx + VISOR.hw * s) - inset; x++) {
     const c = px[y * W + x];
     if (c === C.silver || c === C.white || c === C.fog || c === C.steel) lit++;
   }

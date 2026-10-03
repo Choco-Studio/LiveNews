@@ -39,7 +39,7 @@ export const ada = defineLook({
   skinLine: P.brown,
   // near-black hair: a black body, ink where it turns to the key, slate in the sheen, steel only as a specular
   hair: { style: 'straight', ramp: [P.steel, P.slate, P.ink, P.black], line: P.black },
-  glasses: { style: 'rect', ramp: [P.slate, P.ink, P.black, P.black] },
+  glasses: { style: 'rect', ramp: [P.steel, P.slate, P.ink, P.black] }, // fine dark frames, a step off black so they never read as a mask
   earrings: P.silver,
   torso: { neckHW: 2.9, shoulderTop: 3.0, shoulderHW: 17.9, sideHW: 16.7, bottom: 46, vDepth: 14, shoulderJoint: [15.5, 7.0] },
   outfit: 'turtleneck',
@@ -128,11 +128,14 @@ function drawStraight(buf, L, m, head, s, sk) {
       outerW = R;
     } else if (x < 0) {
       // long side: outer edge flares a little toward the ends, inner edge follows the cheek and the jaw
-      const outer = H.R + 1.1 + k * 0.45 + k * k * 0.35;
+      // the ends turn in a little toward the neck over the last 2.5 u (the cut rests on the shoulder)
+      const turn = Math.max(0, y - (END - 2.6));
+      const outer = H.R + 1.1 + k * 0.45 + k * k * 0.35 - turn * turn * 0.16;
       const inner = y < H.chinY - 1.2 ? Math.max(0.5, hw - 0.45) : Math.max(2.4, chin12 - 0.45 - (y - H.chinY + 1.2) * 0.12);
-      // the blunt cut steps a little strand by strand (deterministic), a touch longer at the front
-      const sid = Math.floor((outer + x) / 1.3);
-      const endY = END + 0.5 - (-x - inner) * 0.08 + (hashInt(sid, 5) - 0.5) * (tr === 2 ? 0.7 : 0.3);
+      // the cut is angled, longer at the front (by the face) than at the back, and steps strand by
+      // strand (deterministic) into soft points
+      const sid = Math.floor((outer + x) / (tr === 2 ? 0.9 : 1.3));
+      const endY = END + 0.6 - (-x - inner) * 0.42 + (hashInt(sid, 5) - 0.5) * (tr === 2 ? 1.0 : 0.4);
       if (-x <= outer && -x >= inner && y <= endY) zone = 2;
       else if (y < H.chinY - 1.2 && -x < inner && y < -0.5 && -x > hw - 1.0) zone = 2;
       if (zone) {
@@ -160,12 +163,18 @@ function drawStraight(buf, L, m, head, s, sk) {
     if (zone === 1) {
       const r = outerW - depth;
       const l = (-0.55 * x - 0.72 * dy) / Math.max(1, r) - 0.18 * (depth / outerW);
-      // near-black: the lit crown is ink (its strokes lift it to slate, steel at their core), the rest black
+      // near-black: the crown is ink where it faces the key, black elsewhere; across the upper left the
+      // hair's sheen band (where the strands turn to the key) sits a step up in slate and carries the
+      // strokes, so the dark mass reads as glossy hair and never as a helmet
       form = l > -0.25 ? 2 : 3;
-      ST.spec = tr === 2 && l > 0.5;
+      const bandLo = 0.72 * RV + (fx < 0 ? 0 : 0.4), bandHi = 1.5 * RV;
+      if (tr > 0 && l > -0.02 && along > bandLo && along < bandHi && depth > px1 * 1.2) form = 1;
+      ST.spec = tr === 2 && l > 0.42;
     } else if (zone === 2) {
       const q = depth / outerW; // 0 outer edge → 1 face side
       form = q < 0.72 ? 2 : 3;
+      // the outer face of the long side catches the key at the cheekbone: a slate sheen strip with strokes
+      if (tr > 0 && q > px1 / outerW && q < 0.62 && dy > 0.4 && dy < 7.8 - (0.62 - q) * 2) form = 1;
       ST.spec = false;
       if (y > END - 1.0) form = Math.min(3, form + 1); // the blunt ends sit in shadow
     } else {
@@ -190,7 +199,7 @@ function drawStraight(buf, L, m, head, s, sk) {
     if (zone === 1 && fx < PART && y > fringe - 1.5 * px1 && Math.abs(x) < hw) return Math.max(form, 2);
     // sheen windows: on the crown where it turns to the key; on the long side its outer face, above the jaw
     ST.sw = zone === 2 ? swPanel : swCrown;
-    ST.skip = zone === 2 ? 0 : 0.25; // every clump of the long side carries its sheen stroke
+    ST.skip = zone === 2 ? 0 : 0.12; // (nearly) every clump in a sheen band carries its stroke
     // separations: long strokes broken rarely (short dashes on the crown would read as stitching)
     ST.gap = zone === 2 ? 3.2 : 7.5;
     ST.sepOn = zone === 2 ? 0.55 : 0.82;
@@ -217,9 +226,10 @@ function drawStraight(buf, L, m, head, s, sk) {
     if (depth < px1 && t > form) t = form;
     return t;
   });
-  // the rim: continuous silver arcs over the crown (never single pixels on the outline's steps)
+  // the rim: a hair light on the upper right of the crown only, continuous arcs (a silver line over the
+  // whole dome outlined dark hair like a helmet)
   const g = buf.g;
-  rimRuns(buf, g, g, x0, x1, y0, head.cy + (cyc + 1) * s, rimDecal(), tr === 1 ? 2 : 3);
+  rimRuns(buf, g, g, head.cx - 0.5 * s, x1, y0, head.cy + (cyc + 1) * s, rimDecal(), tr === 1 ? 2 : 3);
 }
 
 const rimDecal = () => material('cast-b:rim', { ramp: [P.silver], line: P.ink, decal: true });

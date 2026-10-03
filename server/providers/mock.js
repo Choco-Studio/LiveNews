@@ -847,7 +847,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // TECH BYTES: the lead keeps one summary sentence back for THE CATCH (chosen first, so the opener cannot take it).
       // PACE (long programmes): main stories may keep one back too, for a short analysis exchange after them
       // (TECH BYTES: another CATCH question, never the same one twice; WORLD NOW: the partner adds it).
-      const deep = longForm && !isNumber && !isLighter && !info.grave && !info.breaking && !info.live && exchanges < 3 && info.sentences.length >= (k === 0 ? 4 : 3);
+      const deep = longForm && !isNumber && !isLighter && !info.grave && !info.breaking && !info.live && exchanges < 3 && info.sentences.length >= 3; // the lead too with 3 (critic: no analysis exchange aired)
       const catchFor = pid === 'tech-bytes' && (k === 0 || deep) && !info.grave ? CATCH.find((c) => !asked.has(c) && info.sentences.some((t) => c.test.test(t))) : null;
       let reserved = catchFor ? info.sentences.find((t) => catchFor.test.test(t)) : null;
       if (!reserved && pid === 'world-now' && deep) reserved = [...info.sentences].reverse().find((t, j) => j < info.sentences.length - 1 && !PRONOUN_START.test(t) && !/[“”"]/.test(t) && wordCount(t) >= 6) || null;

@@ -165,3 +165,20 @@ describe('mock: running order by news value', () => {
     assert.deepEqual(order(script), ['lead', 'strike', 'museum']);
   });
 });
+
+describe('running order by severity, not by keyword (fix round 1)', () => {
+  test('an earthquake that harmed no one does not lead over hospitals under pressure or a court ruling', async () => {
+    const mk = (id, title, summary, extra = {}) => story(id, 'Outlet ' + id, { title, summary, category: 'world', ...extra });
+    const stories = [
+      mk('q', 'Moderate earthquake shakes northern Chile, no damage reported', 'A magnitude 5.8 earthquake shook northern Chile on Tuesday. Emergency services say there are no reports of damage or injuries.', { published: NOW - 1000 }),
+      mk('d', 'Dublin hospitals under pressure as flu cases rise', 'Hospitals in Dublin say their emergency departments are under severe pressure after a rise in flu cases. Health officials say 600 patients were waiting for a bed.', { published: NOW - 2000 }),
+      mk('a', 'Court orders Amsterdam airport to cut night flights', 'A court in the Netherlands has ordered Amsterdam’s main airport to cut night flights by a third. The airport says it will appeal.', { published: NOW - 3000 }),
+      mk('m', 'Museum opens a new wing in Cairo', 'A museum in Cairo has opened a new wing for ancient boats. Visitors can see two boats.', { published: NOW - 4000 }),
+    ];
+    const mock = createMockProvider();
+    const out = extractJson((await mock.generate({ stories, program: { id: 'test', title: 'TEST', categories: ['world'], stories: 4 }, presenters: { A: { name: 'Ann Anchor' } }, count: 4, channelName: 'X' })).text);
+    const order = out.segments.filter((s) => s.type === 'story').map((s) => s.storyId);
+    assert.notEqual(order[0], 'q', `the lead: ${order.join(',')}`);
+    assert.ok(order.indexOf('q') > order.indexOf('d'), order.join(','));
+  });
+});

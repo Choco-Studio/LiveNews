@@ -328,3 +328,68 @@ test('pace analyser: production lines from a server log', () => {
   assert.deepEqual(r.ready, [{ title: 'WORLD NOW', id: 'ab12', ready: 84.3, stories: 9 }]);
   assert.equal(r.voice[0].ratio, 1.29);
 });
+
+// ---------------------------------------------------------------- the default-path director on a fake clock
+// tools/pace/fakeplay.mjs plays whole fixture episodes through the real Director with timers and performance.now() on
+// a virtual clock and a speech stub (15 characters per second, 0.3 s between sentences), logging what airs.
+import { playDefault } from '../tools/pace/fakeplay.mjs';
+
+const CAMERA_EPISODES = ['world-now-3', 'world-now-5', 'tech-bytes-3', 'tech-bytes-4', 'cosmos-3', 'cosmos-4', 'money-minute-1', 'money-minute-2', 'news-60-1', 'news-60-3', 'news-60-5'].map((n) => JSON.parse(fs.readFileSync(new URL(`./fixtures/v2-camera-${n}.json`, import.meta.url), 'utf8')));
+const DEFAULT_PATH_EPISODES = [...fixtures, ...CAMERA_EPISODES];
+
+test('pace: default path: no silence after the intro (voice-paced montage), the profile\'s pause after every segment', async () => {
+  for (const ep of DEFAULT_PATH_EPISODES) {
+    const P = paceFor(ep.program.id);
+    const log = await playDefault(ep);
+    const label = `${ep.program.id} ${ep.id}`;
+    assert.equal(log.says.length, ep.segments.length, `${label}: every segment spoken`);
+    // the blocker: NEWS IN 60 held 3 x 3.8 s of headline frames over a 2.7 s greeting (9 s of silence)
+    const afterIntro = log.says[1].on - log.says[0].off;
+    const card = ep.segments[1].breaking ? CHANNEL.stinger + P.holds.breakingCard : 0; // a breaking lead's stinger and card (with its sound)
+    assert.ok(afterIntro <= P.gaps.afterIntro * (1 + P.gaps.jitter) + card + 0.3, `${label}: ${afterIntro.toFixed(2)} s of silence after the intro`);
+    // the open breathes before the first word
+    const open = log.shots.find((x) => x.shot === 'open');
+    const firstWord = log.says[0].on - (open.t + (P.open.firstWord >= 0 ? 0 : 0));
+    assert.ok(firstWord > P.open.firstWord, `${label}: first word ${firstWord.toFixed(2)} s after the open`);
+    // every other pause is the profile's (mute: no voice start-up latency is subtracted), except across a breaking card
+    for (let i = 0; i + 1 < ep.segments.length; i++) {
+      if (ep.segments[i + 1].breaking) continue;
+      const got = log.says[i + 1].on - log.says[i].off;
+      const want = gapAfter(ep, i).gap;
+      assert.ok(Math.abs(got - want) < 0.03, `${label} seg ${i}: pause ${got.toFixed(3)} s, profile ${want} s`);
+    }
+  }
+});
+
+test('pace: default path: every shot holds the minimum, the montage follows the teasers, no studio flash, cut rate and maxima kept', async () => {
+  for (const ep of DEFAULT_PATH_EPISODES) {
+    const P = paceFor(ep.program.id);
+    const log = await playDefault(ep);
+    const label = `${ep.program.id} ${ep.id}`;
+    const body = log.seen.filter((x) => !['open', 'endcard', 'start'].includes(x.shot));
+    for (const x of body) {
+      const tag = `${label} ${x.shot}/${x.focus} @${(x.t - log.seen[0].t).toFixed(1)} ${x.len.toFixed(2)} s`;
+      if (x.shot === 'montage') assert.ok(x.len >= P.holds.montage - 0.05, `${tag}: a headline frame under the floor`);
+      else if (x.shot !== 'breakingCard') assert.ok(x.len >= P.shots.min - 0.05, `${tag}: under the minimum shot`);
+      // maxima (the solo intro wide and the chats' wide are the bibles'; a one-sentence story cannot be split)
+      const max = x.shot === 'fact' ? P.shots.factMax : x.shot === 'full' ? P.shots.picture[1] : x.shot === 'map' ? P.shots.map[1] : P.shots.studioMax;
+      if (x.shot !== 'montage' && x.shot !== 'breakingCard') assert.ok(x.len <= max + 4.5, `${tag}: far over its maximum ${max} s`);
+    }
+    // never two identical studio framings in a row (a jump cut on the same presenter)
+    for (let i = 1; i < body.length; i++) assert.ok(!(body[i].shot === 'close' && body[i - 1].shot === 'close' && body[i].focus === body[i - 1].focus), `${label}: close on ${body[i].focus} twice in a row @${i}`);
+    // cut rate outside the montage
+    const edit = body.filter((x) => x.shot !== 'montage' && x.shot !== 'breakingCard');
+    const span = edit.reduce((a, x) => a + x.len, 0);
+    const perMin = ((edit.length - 1) * 60) / span;
+    assert.ok(perMin <= P.shots.cutsPerMinMax + 0.5, `${label}: ${perMin.toFixed(1)} cuts/min`);
+    // the montage: one frame per teased line at most, none without a teaser (NEWS IN 60's greeting-only intro)
+    const frames = body.filter((x) => x.shot === 'montage').length;
+    if (!Array.isArray(ep.segments[0].teases)) assert.equal(frames, 0, `${label}: a montage without teasers`);
+    else assert.ok(frames <= ep.segments[0].teases.length, `${label}: ${frames} frames for ${ep.segments[0].teases.length} teasers`);
+    // the sign-off cue plays in the hold, after the last word and before the stinger to the end card
+    const outro = log.sfx.find((x) => x.name === 'outro');
+    const lastOff = log.says[log.says.length - 1].off;
+    const end = log.shots.find((x) => x.shot === 'endcard');
+    assert.ok(outro && outro.startAt >= lastOff + 0.1 && outro.startAt < end.t, `${label}: sign-off cue at ${outro?.startAt}`);
+  }
+});

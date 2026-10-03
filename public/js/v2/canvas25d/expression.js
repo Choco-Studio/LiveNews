@@ -40,8 +40,20 @@ export function applyEmotion(c, perf, t, persona) {
     cur = EMOTIONS[emos[i].name] || EMOTIONS.neutral;
     k = smooth((t - emos[i].t0) / 0.45);
   }
-  for (const key of FACE_KEYS) c[key] += (prev[key] || 0) + ((cur[key] || 0) - (prev[key] || 0)) * k;
-  c.smile += persona.smile; // a pleasant resting face per persona
+  // one field at a time (a keyed loop c[key] += ... boxed a number per key per frame: critic r2)
+  c.brow += mixKey(prev.brow, cur.brow, k);
+  c.browIn += mixKey(prev.browIn, cur.browIn, k);
+  c.smile += mixKey(prev.smile, cur.smile, k) + persona.smile; // + a pleasant resting face per persona
+  c.squint += mixKey(prev.squint, cur.squint, k);
+  c.lid += mixKey(prev.lid, cur.lid, k);
+  c.wide += mixKey(prev.wide, cur.wide, k);
+  c.lookX += mixKey(prev.lookX, cur.lookX, k);
+  c.lookY += mixKey(prev.lookY, cur.lookY, k);
+}
+
+function mixKey(a, b, k) {
+  const x = a || 0;
+  return x + ((b || 0) - x) * k;
 }
 
 /**

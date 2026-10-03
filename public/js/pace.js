@@ -29,8 +29,11 @@ export const CHANNEL = Object.freeze({
   // the shot changes under it at half time
   stinger: 0.8,
   // breaks (channel-and-breaks.md 3.2/4.2): ident on air from its stinger's cut; inside the break 0.3 s of black and
-  // silence then a hard cut between elements (no stinger between two commercials: ads/index.js BREAK_BLACK); UP NEXT promo
-  breaks: Object.freeze({ ident: 4.0, blackGap: 0.3, promo: 5.5 }),
+  // silence then a hard cut between elements (no stinger between two commercials: ads/index.js BREAK_BLACK); UP NEXT promo.
+  // Cadence (24/7: no ad fatigue, owner 18:52): at least `minProgrammeBetween` s of programme between two commercial
+  // breaks (a short programme inside that window is joined to the next one by the UP NEXT promo and its stinger only),
+  // commercials at most `maxAdShare` of an hour of air (server/station.js decides: request in CONTRACTS)
+  breaks: Object.freeze({ ident: 4.0, blackGap: 0.3, promo: 5.5, minProgrammeBetween: 420, maxAdShare: 0.15 }),
   // master control unreachable: the standby card retries every `retry` s; after a playout error the director waits
   // `afterError` s before the next item (never a tight loop)
   standby: Object.freeze({ retry: 6, afterError: 1.5 }),
@@ -87,16 +90,26 @@ export const TRANSITIONS = Object.freeze({
  *   holds     signoff (last word → stinger), endcard, breakingCard, montage (headline beat floor)
  *   shots     min (no cut faster), cooldown (after a cut, no new cut), median [lo, hi] target,
  *             studioMax, singleSoft (split a single beyond this), picture [min, max], map [min, max],
- *             factMin, cutsPerMinMax (outside montages), sameFramingRun (identical framings in a
+ *             factMin / factMax (a full-screen figure card: readable twice, never a dead hold),
+ *             cutsPerMinMax (outside montages), sameFramingRun (identical framings in a
  *             row allowed: 1 = never twice), sameTypeRun (same full-screen type in a row, round-ups
- *             excepted), staticMax (a studio hold longer than this needs a move or a reaction)
+ *             excepted), mapRun (map cuts in a row, round-ups included: pin flights count),
+ *             share { map, single } (most of the programme body one shot type may take),
+ *             patternRun (stories in a row with the same beat order), tossEvery (about one
+ *             hand-over in this many opens on the two-shot), staticMax (a studio hold longer than
+ *             this needs a move or a reaction)
  *   moves     camera moves: max per episode, minGap between two, minDur, maxAmount (scale)
  *   strap     inAfterCut, minOnAir, outAtBlock (clear it in a block pause of at least this)
  *   gestures  speaker budget: perMin (marked gestures per minute of own speech), minGap between two
  *             marked gestures, perSentence, beatsPerMin (tiny beats), rest (share of speech with
- *             hands at rest), grave (perMin on grave stories), repeat (same gesture twice in a row)
+ *             hands at rest), grave (perMin on grave stories), repeat (same gesture twice in a row);
+ *             and the floor against stiffness (owner 20:40 "few gestures, repetitive"): floor (marked
+ *             gestures per minute of own speech on light / neutral turns, at least), floorGrave,
+ *             vocabWindow (a marked gesture's name never repeats within that presenter's last N),
+ *             startShareMax (share of segments whose first marked gesture lands in their first 2 s)
  *   listener  reactions of the presenter who is not speaking: nodsPerTurn, nodGap, glanceGap,
- *             reactionGap (any visible reaction), maxGazeShare
+ *             reactionGap (any visible reaction), maxGazeShare, nodsPerMin [min, max] per minute
+ *             of listening (alive, never a nodding dog)
  *   music     bed rules: minBed (a bed plays at least this long), changeOn ('block' | 'segment'),
  *             fadeIn / fadeOut, maxChangesPerMin, dryAfterGrave
  */
@@ -129,15 +142,20 @@ const BASE = {
     picture: [4, 8],
     map: [5, 10], // a map with its slow pin move may carry a whole short story (BBC holds 8-12 s)
     factMin: 4,
+    factMax: 8, // a figure card read twice (≤ 6 words ≈ 4.6 s) plus room; past it the frame is dead
     cutsPerMinMax: 8,
     sameFramingRun: 1,
     sameTypeRun: 2,
+    mapRun: 2,
+    share: { map: 0.33, single: 0.6 },
+    patternRun: 2,
+    tossEvery: 3,
     staticMax: 12,
   },
   moves: { max: 4, minGap: 30, minDur: 4, maxAmount: 0.04 },
   strap: { inAfterCut: 1.0, minOnAir: 4, outAtBlock: 1.1 },
-  gestures: { perMin: 5, minGap: 5, perSentence: 1, beatsPerMin: 8, rest: 0.6, grave: 2, repeat: false },
-  listener: { nodsPerTurn: 1, nodGap: 6, glanceGap: 2.0, reactionGap: 8, maxGazeShare: 0.45 },
+  gestures: { perMin: 5, minGap: 5, perSentence: 1, beatsPerMin: 8, rest: 0.6, grave: 2, repeat: false, floor: 2.5, floorGrave: 1, vocabWindow: 3, startShareMax: 0.6 },
+  listener: { nodsPerTurn: 1, nodGap: 6, glanceGap: 2.0, reactionGap: 8, maxGazeShare: 0.45, nodsPerMin: [1, 6] },
   music: { minBed: 25, changeOn: 'block', fadeIn: 1.2, fadeOut: 1.8, maxChangesPerMin: 1.5, dryAfterGrave: true },
 };
 
@@ -167,10 +185,10 @@ const PROGRAMMES = {
     },
     gaps: { story: 0.9, handover: 0.7, chatTurn: 0.42, intoChat: 0.55, outOfChat: 0.75, beforeFinally: 1.0, block: 1.15 }, // tech-bytes.md 0.8 s before And finally
     holds: { signoff: 1.0, endcard: 3.0 },
-    shots: { median: [4.5, 6.5], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [5, 9], cutsPerMinMax: 9 },
+    shots: { median: [4.5, 6.5], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [5, 9], cutsPerMinMax: 9, share: { map: 0.3, single: 0.55 } },
     moves: { max: 2, minGap: 60 }, // THE CATCH push (the bible's only move), one per exchange
-    gestures: { perMin: 6, minGap: 4.5, beatsPerMin: 9, rest: 0.55, grave: 2 },
-    listener: { reactionGap: 7 },
+    gestures: { perMin: 6, minGap: 4.5, beatsPerMin: 9, rest: 0.55, grave: 2, floor: 3 },
+    listener: { reactionGap: 7, nodsPerMin: [1.5, 7] },
     music: { minBed: 20, maxChangesPerMin: 2 },
   },
   cosmos: {
@@ -182,10 +200,13 @@ const PROGRAMMES = {
     open: { firstWord: 0.7 },
     gaps: { story: 1.3, handover: 1.05, chatTurn: 0.6, intoChat: 0.8, outOfChat: 1.0, beforeFinally: 1.3, afterIntro: 0.9, beforeOutro: 1.15, block: 1.6 },
     holds: { signoff: 1.5, endcard: 3.5 }, // contemplative: the wide lingers after the last word, then the dip
-    shots: { min: 4.0, cooldown: 4.5, median: [6, 9], studioMax: 15, singleSoft: 11, picture: [6, 10], map: [4, 6], cutsPerMinMax: 7, staticMax: 14 }, // cosmos.md: 4 s everywhere, maps 4-6 s, pictures 6-10 s
+    // cosmos.md: 4 s everywhere, maps 4-6 s, pictures 6-10 s. The map's ceiling is 8.5 s, not the bible's 6: with the
+    // owner's 4 s floor and COSMOS' 4.5 s cut cooldown a map can only give way to the reader when 4 + 4.5 s remain, so
+    // a shorter map that runs past 6 s cannot be split (the planner cuts it at 4-6 s whenever it can)
+    shots: { min: 4.0, cooldown: 4.5, median: [6, 9], studioMax: 15, singleSoft: 11, picture: [6, 10], map: [4, 8.5], factMax: 9, cutsPerMinMax: 7, staticMax: 14 },
     moves: { max: 0, minGap: Infinity }, // cosmos.md: the set camera never moves; only pictures pan
-    gestures: { perMin: 3.5, minGap: 6, beatsPerMin: 5, rest: 0.72, grave: 1.5 }, // cosmos.md: <= 1 per 6 s
-    listener: { reactionGap: 10, nodGap: 8 },
+    gestures: { perMin: 3.5, minGap: 6, beatsPerMin: 5, rest: 0.72, grave: 1.5, floor: 1.8, floorGrave: 0.6 }, // cosmos.md: <= 1 per 6 s
+    listener: { reactionGap: 10, nodGap: 8, nodsPerMin: [0.6, 4] },
     music: { minBed: 35, fadeIn: 2.0, fadeOut: 2.6, maxChangesPerMin: 1 },
   },
   'money-minute': {
@@ -198,18 +219,20 @@ const PROGRAMMES = {
     holds: { signoff: 0.6, endcard: 3.0 },
     shots: { median: [5, 7], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [4, 7], cutsPerMinMax: 8 },
     moves: { max: 0, minGap: Infinity }, // money-minute.md: the camera never moves
-    gestures: { perMin: 3, minGap: 6, beatsPerMin: 6, rest: 0.7, grave: 1.5 },
+    gestures: { perMin: 3, minGap: 6, beatsPerMin: 6, rest: 0.7, grave: 1.5, floor: 1.5, floorGrave: 0.5 },
     music: { minBed: 30, maxChangesPerMin: 1 },
   },
   'news-60': {
     label: 'brisk but readable',
-    length: { target: [60, 120], blocks: ['intro', 'lead', 'items', 'roundup', 'items', 'picture-hold', 'signoff'] },
+    // news-60.md: 55-65 s of air ("NEWS IN 60"); up to 70 s when the six items run long, never two minutes
+    length: { target: [55, 70], blocks: ['intro', 'lead', 'items', 'roundup', 'items', 'picture-hold', 'signoff'] },
     open: { firstWord: 0.3 }, // news-60.md: first word 0.3 s after the cut
     gaps: { story: 0.75, handover: 0.75, roundupItem: 0.75, afterIntro: 0.6, beforeOutro: 0.7, block: 0.9, jitter: 0.05 }, // news-60.md 0.7 s between items
     holds: { signoff: 1.0, endcard: 2.6 }, // news-60.md: hold 1 s after the last word
-    shots: { median: [4, 6], studioMax: 12, singleSoft: 9, picture: [4, 8], map: [4, 8], cutsPerMinMax: 10 },
+    shots: { median: [4, 6], studioMax: 12, singleSoft: 9, picture: [4, 8], map: [4, 8], factMax: 7, cutsPerMinMax: 10 },
     moves: { max: 0, minGap: Infinity },
-    gestures: { perMin: 2, minGap: 8, beatsPerMin: 5, rest: 0.75, grave: 1 },
+    gestures: { perMin: 2, minGap: 8, beatsPerMin: 5, rest: 0.75, grave: 1, floor: 1, floorGrave: 0.4 },
+    listener: { nodsPerMin: [0, 6] }, // solo: no listener
     music: { minBed: 50, maxChangesPerMin: 1.2 },
   },
 };
@@ -258,7 +281,10 @@ function unit(str) {
 const isStory = (s) => s?.type === 'story';
 const inRoundup = (s) => isStory(s) && (s.feature === 'roundup' || !!s.roundup);
 const isFinally = (s) => isStory(s) && (s.feature === 'lighter' || /^\W*and finally\b/i.test(String(s.text || '')));
-const STILL_TO_COME = /\b(still to come|coming up|after (?:this|the break)|later in the programme)\b/i;
+// a signpost that closes a block: the mock's / writer's "Still to come: ..." line (a chat segment or a segment the
+// writer flags), never ordinary copy such as "shares fell after this announcement" or "a record is coming up"
+const SIGNPOST = /^\W*(?:\[[^\]]*\]\s*)*(?:still to come|coming up (?:after|later|next)|after the break|later in the programme)\b/i;
+const isSignpost = (s) => !!s && (s.signpost === true || (s.type === 'chat' && SIGNPOST.test(String(s.text || ''))));
 
 /**
  * Which pause sits between two segments: the gap's NAME in the profile.
@@ -268,7 +294,7 @@ export function gapKind(prev, next) {
   if (!prev || !next) return 'story';
   if (next.type === 'outro') return 'beforeOutro';
   if (prev.type === 'intro') return 'afterIntro';
-  if (STILL_TO_COME.test(String(prev.text || ''))) return 'block'; // a signpost closes a block
+  if (isSignpost(prev)) return 'block'; // a signpost closes a block
   if (next.type === 'chat' && prev.type === 'chat') return 'chatTurn';
   if (next.type === 'chat') return 'intoChat';
   if (prev.type === 'chat') return isFinally(next) ? 'beforeFinally' : 'outOfChat';
@@ -313,9 +339,25 @@ export function tickerHold(words) {
   return Math.min(T.maxHold, Math.max(T.minHold, T.push + T.base + T.perWord * Math.max(0, words | 0)));
 }
 
-/** A full-screen fact/number card hold: readable twice, never under the programme's factMin. */
+/**
+ * A full-screen fact/number card hold: readable twice, never under the programme's factMin nor
+ * over its factMax (past it the card is a dead frame: the reader comes back).
+ */
 export function factHold(text, programId) {
-  return readTwice(text, { min: paceFor(programId).shots.factMin, pad: 0.8 });
+  const S = paceFor(programId).shots;
+  return Math.min(S.factMax, readTwice(text, { min: S.factMin, pad: 0.8 }));
+}
+
+/**
+ * The longest a shot may hold on air (s): maps their window, pictures the picture window, figure
+ * cards factMax, studio shots studioMax. (The v2 max-hold guard and the analyser use the same rule.)
+ */
+export function shotMax(programId, shot) {
+  const S = paceFor(programId).shots;
+  if (shot === 'map') return S.map[1];
+  if (shot === 'full') return S.picture[1];
+  if (shot === 'fact') return S.factMax;
+  return S.studioMax;
 }
 
 /**
@@ -375,8 +417,8 @@ export function listenerRules(programId) {
 /**
  * Estimated air time (s) of an episode under its profile: speech (recorded
  * durations, else words at `wpm`) + the profile's gaps + open, holds, end card.
- * Used by the analyser, tests and the mock to check a script against
- * `length.target` before air.
+ * The offline writer (server/providers/mock.js) budgets its optional depth blocks
+ * with it against `length.target`; tools/pace/simulate.mjs and the tests use it too.
  */
 export function estimateAir(episode, { wpm = 165, open = 4.0 } = {}) {
   const segs = episode?.segments || [];

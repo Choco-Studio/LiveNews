@@ -27,14 +27,22 @@ export function wobble(t, seed) {
   return 0.5 * Math.sin(t * 1.13 + seed * 1.7) + 0.3 * Math.sin(t * 2.31 + seed * 2.9) + 0.2 * Math.sin(t * 3.77 + seed * 4.3);
 }
 
-const SCHEDULES = new Map();
+// The last few timetables, matched by value (seed and the persona's blink numbers): no key
+// string per call and no growth over a 24/7 run (critic r2: a Map keyed by a template string
+// built every frame kept one ~16 KB timetable per episode and presenter, forever)
+const CACHE_N = 16;
+const CACHE = new Array(CACHE_N).fill(null);
+let cacheAt = 0;
 const SPAN = 900; // s covered by one timetable; later times wrap (t mod SPAN)
 /** Blink and saccade timetables for a seed, generated once for 15 minutes (applyIdle wraps t). */
 export function schedule(seed, persona) {
   const doubles = persona.doubleBlink ?? 0.12;
-  const key = `${seed}|${persona.blinkMin}|${persona.blinkMax}|${doubles}`;
-  let s = SCHEDULES.get(key);
-  if (s) return s;
+  const bmin = persona.blinkMin, bmax = persona.blinkMax;
+  for (let i = 0; i < CACHE_N; i++) {
+    const c = CACHE[i];
+    if (c !== null && c.seed === seed && c.bmin === bmin && c.bmax === bmax && c.doubles === doubles) return c;
+  }
+  let s;
   const rnd = mulberry(seed * 7919 + 13);
   const blinks = [];
   let t = 0.6 + rnd() * 1.5;
@@ -56,8 +64,9 @@ export function schedule(seed, persona) {
     x = (rnd() - 0.5) * (big ? 1.1 : 0.45);
     y = (rnd() - 0.5) * (big ? 0.6 : 0.25);
   }
-  s = { blinks, sacc };
-  SCHEDULES.set(key, s);
+  s = { blinks, sacc, seed, bmin, bmax, doubles };
+  CACHE[cacheAt] = s;
+  cacheAt = (cacheAt + 1) % CACHE_N;
   return s;
 }
 

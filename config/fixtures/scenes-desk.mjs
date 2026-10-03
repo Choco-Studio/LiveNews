@@ -182,10 +182,11 @@ export const DESK_SCENES = {
     const bh = 470;
     c.rect(bx - 16, by - 16, bw + 32, bh + 32, '#5c5e66');
     c.rect(bx - 16, by - 16, bw + 32, 4, '#8a8c94');
-    c.paintBox(bx, by, bx + bw, by + bh, (px, py) => [mix(hex('#e83a9a'), hex('#2a0c26'), clamp01((py - by) / bh) ** 0.8), 1]);
-    c.rect(bx, by, bw, 30, '#ffd8f4');
-    for (let lx = bx + 8; lx < bx + bw - 8; lx += 18) c.rect(lx, by + 8, 10, 12, pickOf(r, ['#ff2a8a', '#ff6ad0', '#ff4aa0', '#9a6aff']));
-    c.glow(bx + bw / 2, by + 24, 460, '#ff3aa0', 0.32);
+    // the grow light is pink, but the back wall it falls on is a dull grey-violet: the light, not the paint
+    c.paintBox(bx, by, bx + bw, by + bh, (px, py) => [mix(hex('#8a5a7c'), hex('#1a1220'), clamp01((py - by) / bh) ** 0.8), 1]);
+    c.rect(bx, by, bw, 30, '#e8d0e0');
+    for (let lx = bx + 8; lx < bx + bw - 8; lx += 18) c.rect(lx, by + 8, 10, 12, pickOf(r, ['#d85a9a', '#e08ac0', '#c86aa0', '#9a7ad0']));
+    c.glow(bx + bw / 2, by + 24, 460, '#d86aa8', 0.2);
     // stems first, then three depths of serrated leaves (back ones darker), then the fruit
     const leafTone = ramp([[0, '#06120a'], [0.45, '#1e4a22'], [0.75, '#5a8a3a'], [1, '#f0b0e0']]);
     for (let p = 0; p < 4; p++) {
@@ -496,9 +497,10 @@ export const DESK_SCENES = {
       const ry = rx * (0.45 + 0.4 * persp);
       const turn = ([x, y]) => [fx + (x - fx) * Math.cos(a) - (y - fy) * Math.sin(a), fy + (x - fx) * Math.sin(a) + (y - fy) * Math.cos(a)];
       const outline = blob(fx, fy, rx, ry * 2, 565 + i, 0.06, 30).map(([x, y]) => [x + (y < fy ? (fy - y) * 0.1 : 0) * (i % 2 ? 1 : -1), y]).map(turn);
-      c.poly(outline.map(([x, y]) => [x, y - 5 * persp]), '#e0d8c6', 0.85); // the far rim, catching the light
-      c.poly(outline, '#241c16');
-      c.poly(outline.map(([x, y]) => [fx + (x - fx) * 0.84, fy + (y - fy) * 0.84 + 3 * persp]), '#3c322a');
+      // high contrast on purpose: the trail must still read on the studio wall, a tenth of this size
+      c.poly(outline.map(([x, y]) => [x, y - 5 * persp]), '#ece4d2', 0.95); // the far rim, catching the light
+      c.poly(outline, '#1a1410');
+      c.poly(outline.map(([x, y]) => [fx + (x - fx) * 0.84, fy + (y - fy) * 0.84 + 3 * persp]), '#2e261e');
       c.poly(blob(fx, fy + ry * 0.9, rx * 0.62, ry * 0.75, 575 + i, 0.1, 18).map(turn), '#9aa2ac', 0.9);
       c.poly(blob(fx - rx * 0.1, fy + ry * 0.75, rx * 0.22, ry * 0.18, 585 + i, 0.1, 12).map(turn), '#aab0b6', 0.5);
       for (let k = 0; k < 5; k++) {
@@ -1275,7 +1277,7 @@ export const DESK_SCENES = {
 
 export const DESK_GRADES = {
   research: { saturation: 0.72, tint: 0.14 },
-  greenhouse: { saturation: 0.8, tint: 0.08, vignette: 0.42 },
+  greenhouse: { saturation: 0.52, tint: 0.14, vignette: 0.42 },
   bees: { saturation: 0.75, tint: 0.1, vignette: 0.3 },
   tortoise: { saturation: 0.68, tint: 0.16 },
   footprints: { saturation: 0.6, tint: 0.16 },

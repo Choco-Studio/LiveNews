@@ -43,10 +43,24 @@
 // gesture twice in a row. Structural moments (greeting and sign-off nods, NEWS IN 60's allocation,
 // the sign-off papers) are outside the budget.
 //
+// Variety on air (owner 20:40 "repetitive", critics r2): the programme remembers the marked arm
+// gestures that aired before this segment, whoever performed them (the plan of the previous segment
+// carries that memory forward): never the same family twice in a row on air, nor within 45 s, and the
+// full palm-out raise_hand at most once per presenter per episode. A statement that cannot air as
+// written gives way to a variant of the same action that reads in the shot (steeple → steeple:tap,
+// raise_hand → raise_hand:lift / box), then to a seeded rotation of chest-level options, then to a head
+// beat (nod / lean_in), never to the same gesture again.
+// Meaning (critics r2): gestures that carry a meaning need it in the text: shake_head only near a
+// negation, contrast or doubt, shrug only on uncertainty or a question, glasses only on the question
+// (tech-bytes.md "before her question"); chin while speaking is a brief touch (the long thinking pose
+// only on a question or into the pause after the last word).
+//
 // Visibility (owner 20:40 / critics): a gesture is only worth performing where the viewer sees the
 // hands. At planning time every arm gesture's apex hand is projected through the framing of the
 // shot it lands in (camera.js framing + placeActor): in head-and-shoulders singles the hands must
-// stay above the lower third (HAND_FLOOR), so desk-level beats are skipped there and a cue gesture
+// stay above the lower third (HAND_FLOOR) and, where the subtitle can run (graphics/layout.js CAPTION:
+// centred, one 12 px line ending 6 px above the strap, rows 148-160), above the caption too (critic r2:
+// a palm-up lift landed behind the caption), so desk-level beats are skipped there and a cue gesture
 // that would not read is replaced by an allowed face- or chest-level one (raise_hand, count, chin,
 // glasses, point_screen when a picture follows), or dropped. No unexplained shoulder bobs.
 import { GESTURES, defOf, rateOf } from '../gestures/index.js';
@@ -144,6 +158,9 @@ export const BIBLE = {
     defaultsOnly: ['nod'], // the speaker's nod is only the intro/outro default
     grave: ['nod', 'steeple'],
     cap: { max: 2, ada: 1 },
+    // §3.5 "Ada 1, Max 2 per segment" caps the cue-level gestures; the owner's 20:40 delivery beats come
+    // on top but are capped too: at most ONE beat per segment beyond the cap (Ada ≤ 2 arm movements, Max ≤ 3)
+    capBeats: 1,
     lead: [0.2, 0.3],
     variants: { ada: { shake_head: 'slow' } },
     storyCount: [1, 2],
@@ -207,6 +224,11 @@ const HEAD_GAP = 3.5; // s between two planned head statements of one speaker (s
 // lowest screen row a gesture's hand may reach at its apex in a single (6 px above the lower third's tag
 // row at y 166, where two caption lines also start) and in wider shots (6 px above the ticker band)
 const HAND_FLOOR = 160, HAND_FLOOR_WIDE = 190, WRIST_FLOOR = 166;
+// the caption box over a strap (graphics/layout.js: STRAP.tagY 166 - gap 6 = bottom 160, one 12 px line
+// while a strap is up; centred, at most 264 + 2·5 px wide): a hand centre in its columns must clear its
+// top by 4 px (the hand is about 24 px long in a single: two thirds of it then show above the box)
+const CAPTION_BOX = { x0: 55, x1: 329, top: 148 };
+const CAPTION_CLEAR = 4;
 const SINGLE_SCALE = 2.2; // presenter scale from which a framing counts as a single (the over-the-shoulder 2.41 too)
 const CPS = 14.5; // chars per second to estimate segment lengths from the episode summary
 /**
@@ -236,6 +258,13 @@ const keyOf = familyOf;
 /** Legacy shots in which the presenter is not in vision: a gesture's apex never lands there. */
 const HIDDEN = new Set(['full', 'map', 'fact', 'montage', 'card', 'numbers', 'quote', 'number', 'headlines']);
 const GRAVE_AMP = [0.6, 0.7];
+const RAISE_CAP = 1; // the full palm-out raise_hand: per presenter per episode
+const REPEAT_GAP = 45; // s: one marked family never twice within this on air, whoever performs it
+const MEMORY_SPAN = 60; // s of aired marked gestures the programme remembers
+const MIN_BEAT_PX = 2; // a beat that moves less than this on screen is not worth a slot (nor the budget)
+// meaning in the text: a head shake near a negation, contrast or doubt; a shrug on uncertainty or a question
+const NEGATION = /\b(not|no|never|nothing|nobody|none|neither|nor|without|despite|still|yet|but|however|denied|denies|deny|refused|refuses|rejected|unclear|cannot|hardly|failed|fails|unlikely|doubts?|sceptic\w*|skeptic\w*)\b|n't\b/gi;
+const UNCERTAIN = /\b(maybe|perhaps|unclear|uncertain|unknown|possibly|might|remains? to be seen|who knows|hard to say|not sure|depends|anyone's guess|open question)\b|\?/gi;
 
 // ---------------------------------------------------------------------------
 // Rules for one segment
@@ -427,7 +456,9 @@ class SegmentPlan {
     this.busy = 0; // s of budgeted arm movement placed (the hands' rest share)
     this.budget = null;
     this.prev = NO_PREV;
+    this.mem = MEM0; // what aired before this segment (programmeMemory)
     this.vis = new Map();
+    this.fails = new Set(); // rejection tags of the last placeNear (placeVisible reads them)
   }
 
   /** The pace budget of this turn (pace.js), within the episode's per-presenter bucket. */
@@ -479,6 +510,12 @@ class SegmentPlan {
     const variant = opts.variant || R.variants[name];
     if (variant && GESTURES[name].variants?.[variant]) ev.variant = variant;
     if (name === 'count') ev.n = opts.n ?? countFromText(ctx.seg.text, w.char, ctx.sentences[sentenceOf(ctx, w.char)].end);
+    // chin while speaking: a brief touch; the long thinking pose only on the question or held into the pause
+    if (name === 'chin' && !opts.variant) {
+      const full = GESTURES.chin;
+      const q = ctx.question && sentenceOf(ctx, w.char) === sentenceOf(ctx, ctx.question.char);
+      if (!q && w.t + (full.hold - full.apex) < ctx.duration - 0.2) ev.variant = 'touch';
+    }
     let amp = opts.amp ?? R.amp;
     if (ctx.grave) amp = GRAVE_AMP[0] + (GRAVE_AMP[1] - GRAVE_AMP[0]) * this.r();
     if (amp < 1) ev.amp = Math.round(amp * 100) / 100;
@@ -510,8 +547,10 @@ class SegmentPlan {
     }
     // the apex must be seen: not under a picture, map or card
     if (ctx.shots && ctx.shots.length && HIDDEN.has(shotAt(ctx, ev.apexAt))) return why(ev, 'hidden-shot');
-    // a gesture may run a little into the pause after the segment, not into the next one
-    if (ev.at + ev.dur > ctx.duration + (ctx.gapAfter ?? 0.8) + 0.4) return why(ev, 'runs-over');
+    // a gesture may run a little into the pause after the segment, not into the next one; at a hand-over
+    // its release may settle while the partner starts (the speaker's own next gesture is a turn away)
+    const over = ctx.duration + (ctx.gapAfter ?? 0.8);
+    if (ev.at + ev.dur > over + (ctx.handover ? 1.0 : 0.4) || ev.at + d.hold / rateOf(ev) > over + 0.4) return why(ev, 'runs-over');
     // never two gestures at once (a settle overlap is fine); a beat also leaves a little air around it
     const air = ev.beat ? -BEAT_AIR : SETTLE;
     for (const p of this.events) if (ev.at < p.at + p.dur - air && p.at < ev.at + ev.dur - air) return why(ev, 'overlap');
@@ -526,6 +565,18 @@ class SegmentPlan {
       if (ev.at < (this.ep.armMinAt[ctx.index] || 0)) return why(ev, 'cosmos-episode');
     }
     if (!opts.free && this.count >= R.cap) return why(ev, 'cap');
+    // TECH BYTES: arm movements per segment, beats included, at most the cap + capBeats
+    if (opts.beat && arm && R.B.capBeats != null) {
+      let n = 0;
+      for (const p of this.events) if (p.arm && p.name !== 'papers') n++;
+      if (n >= R.cap + R.B.capBeats) return why(ev, 'cap-beat');
+    }
+    // meaning: a head shake, a shrug or the glasses need their words
+    if (!semanticOk(ctx, ev)) return why(ev, 'meaning');
+    // a beat must move enough to be seen in its shot (else it is not worth a slot nor the budget)
+    if (opts.beat && arm && beatPx(ctx, ev, d) < MIN_BEAT_PX) return why(ev, 'too-small');
+    // variety on air: the programme's memory of marked arm gestures (both presenters)
+    if (arm && !opts.beat && (!opts.free || opts.statement) && !this.fresh(ev)) return false;
     // pace.js budget: marked gestures and beats per turn, minGap between statements, ARM_GAP between any
     // two arm movements of this speaker (also across the previous turns), the hands' rest share
     const B = this.budget;
@@ -563,6 +614,29 @@ class SegmentPlan {
     return true;
   }
 
+  /**
+   * A marked arm gesture is new on air: not the family of the last marked gesture that aired (either
+   * presenter, this segment or the memory), not the same family within REPEAT_GAP s, and the full
+   * palm-out raise_hand at most RAISE_CAP times per presenter per episode.
+   */
+  fresh(ev) {
+    const fam = keyOf(ev);
+    const mem = this.mem;
+    if (fam === 'raise_hand') {
+      let n = mem.raised[this.ctx.speaker] || 0;
+      for (const p of this.events) if (p.aired && keyOf(p) === 'raise_hand') n++;
+      if (n >= RAISE_CAP) return why(ev, 'raise-cap');
+    }
+    let last = null;
+    for (const p of this.events) if (p.aired && p.at <= ev.at && (!last || p.at > last.at)) last = p;
+    const prevFam = last ? keyOf(last) : mem.recent.length ? mem.recent[mem.recent.length - 1].fam : null;
+    if (prevFam === fam) return why(ev, 'repeat-air');
+    const abs = mem.t0 + ev.at;
+    for (const r of mem.recent) if (r.fam === fam && abs - r.abs < REPEAT_GAP) return why(ev, 'repeat-45');
+    for (const p of this.events) if (p.aired && keyOf(p) === fam && Math.abs(p.at - ev.at) < REPEAT_GAP) return why(ev, 'repeat-45');
+    return true;
+  }
+
   /** handsVisible, memoised per definition, shot and amp step (the planner tries many words). */
   visible(ev, d) {
     const cut = cutAt(this.ctx, ev.apexAt);
@@ -580,6 +654,9 @@ class SegmentPlan {
     ev.arm = d.arm;
     ev.budgeted = !opts.free || !!opts.beat;
     ev.marked = !opts.free && !opts.beat && d.arm; // pace.js "marked": arm strokes on meaningful words
+    // what the programme's variety memory keeps: marked strokes and the bible's own statement moments
+    // outside the budget (the glasses on the question)
+    ev.aired = ev.marked || (!!opts.statement && d.arm);
     this.events.push(ev);
     const si = sentenceOf(this.ctx, ev.word);
     if (d.arm) this.sentArm.set(si, (this.sentArm.get(si) || 0) + 1);
@@ -610,6 +687,13 @@ class SegmentPlan {
       if (!opts.spill && W[i].char >= S.end) break;
       if (W[i].stressed) tried.push(i);
     }
+    // `early`: the first content word of the sentence part comes first (the glasses touch as the question starts)
+    if (opts.early) {
+      // (in order: the first one late enough to leave room for the reach wins)
+      const early = [];
+      for (let i = wordAt(ctx, char); i < W.length && W[i].char < S.end; i++) if (W[i].char >= char && W[i].content && !tried.includes(i)) early.push(i);
+      tried.unshift(...early);
+    }
     // no stressed word left: the content word nearest after the cue
     if (!tried.length) {
       for (let i = wordAt(ctx, char); i < W.length && W[i].char < S.end; i++) if (W[i].content) {
@@ -617,43 +701,99 @@ class SegmentPlan {
         break;
       }
     }
+    this.fails.clear();
+    FAILS.set = this.fails;
     for (const wi of tried) {
       const ev = this.tryAt(name, wi, opts);
-      if (ev) return this.commit(ev, opts);
+      if (ev) {
+        FAILS.set = null;
+        return this.commit(ev, opts);
+      }
     }
+    FAILS.set = null;
     return null;
   }
 
   /**
-   * A statement gesture (the writer's cue, a filler) that the viewer would not see in this shot gives
-   * way to an allowed face- or chest-level one on the same words; nothing when none reads either.
+   * A statement gesture (the writer's cue, a filler) that cannot air as written (the viewer would not see
+   * it in this shot, or it would repeat what just aired) gives way, on the same words, to a variant of the
+   * same action that reads there (steeple → steeple:tap...), then to a seeded rotation of the allowed
+   * chest-level statements, then (`head`) to a head beat; nothing when none fits.
    */
-  placeVisible(name, char, opts = {}) {
+  placeVisible(name, char, opts = {}, { head = true } = {}) {
     const ev = this.placeNear(name, char, opts);
     if (ev || !defOf({ name, variant: opts.variant })?.arm) return ev;
-    for (const alt of FACE_LEVEL) {
-      if (alt === name) continue;
-      const a = this.admit(alt);
-      if (a !== alt) continue;
-      if (alt === 'point_screen' && !pictureFollows(this.ctx, this.ctx.timeAt(char) + 0.6)) continue;
-      if (alt === 'count' && !/\d|\b(one|two|three|four|five|first|second|third)\b|,/i.test(this.ctx.sentences[sentenceOf(this.ctx, char)].text)) continue;
-      const e = this.placeNear(alt, char, { ...opts, variant: undefined });
+    const why0 = new Set(this.fails);
+    const sentence = this.ctx.sentences[sentenceOf(this.ctx, char)];
+    for (const [alt, variant] of this.alternatives(name, sentence, char)) {
+      const e = this.placeNear(alt, char, { ...opts, variant });
       if (e) return e;
+      for (const f of this.fails) why0.add(f);
+    }
+    // the words still deserve a beat of the head when the hands could not show or would only repeat
+    if (head && (why0.has('not-visible') || why0.has('repeat-air') || why0.has('repeat-45') || why0.has('raise-cap'))) {
+      for (const h of ['nod', 'lean_in']) {
+        if (this.admit(h) !== h) continue;
+        if (h === 'lean_in' && this.R.B.leanInPerEpisode && this.ep.leanIn !== this.ctx.index) continue;
+        const e = this.placeNear(h, char, { ...opts, variant: h === 'nod' ? this.R.variants.nod || 'single' : undefined });
+        if (e) return e;
+      }
     }
     return null;
+  }
+
+  /** Substitutes for `name` on this sentence: its own readable variants first, then a seeded chest-level rotation. */
+  alternatives(name, sentence, char) {
+    const out = [];
+    const ok = (alt, variant) => {
+      if (this.admit(alt) !== alt) return false;
+      if (variant && !GESTURES[alt].variants?.[variant]) return false;
+      if (alt === 'point_screen' && !pictureFollows(this.ctx, this.ctx.timeAt(char) + 0.6)) return false;
+      if (alt === 'count' && !NUMBERISH.test(sentence.text || '')) return false;
+      return !out.some(([a, v]) => a === alt && v === variant);
+    };
+    for (const v of SAME_ACTION[name] || []) if (ok(name, v)) out.push([name, v]);
+    const r = rng((hashSeed(`${this.ctx.episodeId}|${this.ctx.index}|${char}|alt`) ^ this.ctx.episodeSeed) >>> 0);
+    const rot = CHEST.slice();
+    for (let i = rot.length - 1; i > 0; i--) {
+      const j = Math.floor(r() * (i + 1));
+      [rot[i], rot[j]] = [rot[j], rot[i]];
+    }
+    for (const [alt, v] of rot) if (!(alt === name && v == null) && ok(alt, v)) out.push([alt, v]);
+    return out;
   }
 }
 
 /** Debug hook for tools (labs, stats): rejection reasons of the last plans when DEBUG.on. */
-export const DEBUG = { on: false, log: [] };
+// errors: planner faults that were contained (a neighbour plan, the camera API), counted and logged once
+export const DEBUG = { on: false, log: [], errors: 0 };
+const FAILS = { set: null };
 function why(ev, tag) {
+  if (FAILS.set) FAILS.set.add(tag);
   if (DEBUG.on && DEBUG.log.length < 5000) DEBUG.log.push(`${ev.name}:${ev.variant || ''} ${ev.at.toFixed(2)} ${tag}`);
   return false;
 }
+const LOGGED = new Set();
+function fault(where, err) {
+  DEBUG.errors++;
+  const msg = `${where}: ${err?.message || err}`;
+  if (LOGGED.has(msg)) return;
+  if (LOGGED.size > 100) LOGGED.clear();
+  LOGGED.add(msg);
+  try {
+    console.warn(`[v2 gestures] ${msg}`);
+  } catch {
+    /* no console */
+  }
+}
 
-/** Statement gestures whose hands read in a head-and-shoulders single (in order of preference). */
-const FACE_LEVEL = ['raise_hand', 'count', 'chin', 'glasses', 'point_screen'];
+/** Readable variants of the same action, tried first when a statement cannot air as written. */
+const SAME_ACTION = { steeple: ['tap'], raise_hand: ['lift', 'box'], point_screen: ['open'], chin: ['touch'] };
+/** Statements whose hands read in a head-and-shoulders single (chest and face level), rotated per sentence. */
+const CHEST = [['steeple', 'tap'], ['raise_hand', 'lift'], ['raise_hand', 'box'], ['raise_hand', null], ['point_screen', 'open'], ['count', null], ['chin', 'touch']];
+const NUMBERISH = /\d|\b(one|two|three|four|five|first|second|third)\b|,/i;
 const NO_PREV = Object.freeze({ marked: Infinity, arm: Infinity, fam: null, usedM: 0, usedB: 0 });
+const MEM0 = Object.freeze({ t0: 0, recent: Object.freeze([]), raised: Object.freeze({}) });
 
 // ---------------------------------------------------------------------------
 
@@ -672,13 +812,50 @@ function turnOf(c) {
     cc.shots = cutsOf(c);
     const P = planInternal(cc).P;
     out = P
-      ? { evs: P.events, usedM: (P.prev.usedM ?? 0) + P.marked, usedB: (P.prev.usedB ?? 0) + P.beats }
-      : { evs: [], usedM: null, usedB: null };
-  } catch {
+      ? { evs: P.events, usedM: (P.prev.usedM ?? 0) + P.marked, usedB: (P.prev.usedB ?? 0) + P.beats, mem: memoryAfter(P) }
+      : { evs: [], usedM: null, usedB: null, mem: carryMemory(c) };
+  } catch (err) {
+    fault('neighbour plan', err);
     out = null;
   }
   TURN.set(c, out);
   return out;
+}
+
+// The programme's memory of what aired (owner 20:40 "repetitive"; critics r2: both anchors ending up on
+// the same raise_hand back to back). Each segment's plan carries forward the marked arm gestures of the
+// last MEMORY_SPAN s, whoever performed them, with their time on the episode clock, and how many full
+// raise_hands each presenter has used; the next segment reads it from its predecessor's plan (one
+// neighbour, memoised), so the whole running order is remembered at the cost of one plan per segment.
+function memoryBefore(ctx) {
+  if (!(ctx.index > 0) || typeof ctx.contextAt !== 'function') return MEM0;
+  const c = ctx.contextAt(ctx.index - 1);
+  if (!c || !c.valid) return MEM0;
+  const t = turnOf(c);
+  if (!t || !t.mem) return MEM0;
+  return { t0: t.mem.t0 + c.duration + (c.gapAfter ?? 0.7), recent: t.mem.recent, raised: t.mem.raised };
+}
+
+/** The memory at the end of a planned segment: what came before plus its own marked arm gestures. */
+function memoryAfter(P) {
+  const m = P.mem;
+  const end = m.t0 + P.ctx.duration;
+  // the last MEMORY_SPAN s, and always the latest one (never the same family twice in a row on air)
+  const recent = m.recent.filter((r, i) => end - r.abs <= MEMORY_SPAN || i === m.recent.length - 1);
+  let raised = m.raised;
+  for (const e of P.events.slice().sort((a, b) => a.at - b.at)) {
+    if (!e.aired) continue;
+    const fam = familyOf(e);
+    recent.push({ fam, abs: m.t0 + e.at, slot: e.slot });
+    if (fam === 'raise_hand') raised = { ...raised, [e.slot]: (raised[e.slot] || 0) + 1 };
+  }
+  return { t0: m.t0, recent, raised };
+}
+
+/** A segment with no plan of its own (no words, invalid) passes the memory on unchanged. */
+function carryMemory(c) {
+  const m = memoryBefore(c);
+  return { t0: m.t0, recent: m.recent, raised: m.raised };
 }
 
 function previousTurns(ctx) {
@@ -749,6 +926,7 @@ function planInternal(ctx) {
   const P = new SegmentPlan(ctx, R);
   P.ep = episodePlan(ctx);
   P.prev = previousTurns(ctx);
+  P.mem = memoryBefore(ctx);
   P.avoidFirst = P.prev.fam;
   P.setBudget(P.ep);
   const B = R.B;
@@ -793,7 +971,8 @@ function planInternal(ctx) {
   }
 
   // ---- TECH BYTES / COSMOS: a presenter who wears glasses may touch them as her question starts
-  if (ctx.question && R.speaker.includes('glasses') && P.admit('glasses') && P.r() < 0.7) P.placeNear('glasses', ctx.question.char, {});
+  // (the bible's own moment, like the greeting: outside the pace budget, inside the variety memory)
+  if (ctx.question && R.speaker.includes('glasses') && P.admit('glasses') && P.r() < 0.7) P.placeNear('glasses', ctx.question.char, { early: true, free: true, statement: true });
 
   // ---- sign-off: a nod on the last stressed word, then the papers in the hold
   if (ctx.type === 'outro') {
@@ -814,9 +993,12 @@ function planInternal(ctx) {
   // ---- chat and AND FINALLY: a dry shrug or head shake on the dry line, now and then
   const lighter = ctx.feature === 'lighter';
   if ((ctx.type === 'chat' || lighter) && B.chat && ctx.dryLine && P.r() < 0.55) {
-    const pick = B.chat[Math.floor(P.r() * B.chat.length)];
-    const name = P.admit(pick);
-    if (name) P.placeNear(name, ctx.dryLine.char, { variant: name === 'shrug' ? 'small' : undefined });
+    // the one whose meaning the dry line carries (a head shake needs a negation, a shrug some doubt)
+    const k = Math.floor(P.r() * B.chat.length);
+    for (let q = 0; q < B.chat.length; q++) {
+      const name = P.admit(B.chat[(k + q) % B.chat.length]);
+      if (name && P.placeNear(name, ctx.dryLine.char, { variant: name === 'shrug' ? 'small' : undefined })) break;
+    }
   }
 
   // ---- stories: seeded fillers from the programme's pool, 1-2 per story
@@ -839,7 +1021,8 @@ const CONTRAST = /\b(but|however|yet|although|though|instead|despite|except|wher
 const SCALE = /\b(all|every|whole|entire|across|nationwide|worldwide|record|biggest|largest|most|millions?|billions?|thousands?|everyone|everywhere)\b/i;
 const STEADY = /\b(still|steady|steadily|unchanged|remains?|remained|calm|for now|so far|held|holds|stable|flat)\b/i;
 const LIST = /\b(first|second|third|also|another|both|either|plus)\b|,[^,]+,/i;
-const FAR_OK = new Set(['raise_hand:beat', 'raise_hand:offer', 'raise_hand:turn', 'raise_hand:settle', 'raise_hand:tick', 'raise_hand:lift']);
+// beats the far hand may take (the desk-level tick and settle of the far hand hardly show in any shot)
+const FAR_OK = new Set(['raise_hand:beat', 'raise_hand:offer', 'raise_hand:turn', 'raise_hand:lift']);
 
 /** The speaker's beat settings in this programme ({ density, variants }) or null. */
 export function beatConfig(R, id) {
@@ -961,7 +1144,8 @@ function fillStory(P, ctx, R, max = null) {
   if (want <= 0) return;
   let pool = (B.story || R.speaker).filter((n) => P.admit(n));
   if (B.story && P.admit('point_screen') && R.speaker.includes('point_screen')) pool.push('point_screen');
-  if (!B.story) pool = R.speaker.filter((n) => P.admit(n) && n !== 'papers');
+  // the glasses belong to the question (planned there), never a filler
+  if (!B.story) pool = R.speaker.filter((n) => P.admit(n) && n !== 'papers' && n !== 'glasses');
   if (B.leanInPerEpisode && P.ep.leanIn !== ctx.index) pool = pool.filter((n) => n !== 'lean_in');
   if (!pool.length) return;
   // seeded preference order; the first choice differs from the same presenter's previous turn
@@ -985,7 +1169,7 @@ function fillStory(P, ctx, R, max = null) {
       const name = order[(k + tries) % order.length];
       if (name === 'point_screen' && !pictureFollows(ctx, W[wi].t + 0.5)) continue;
       if (name === 'count' && !/\d|\bone\b|\btwo\b|\bthree\b|\bfirst\b|,/.test(ctx.sentences[sentenceOf(ctx, W[wi].char)].text)) continue;
-      placed = P.placeNear(name, W[wi].char, { spill: true, variant: name === 'shrug' ? 'small' : undefined });
+      placed = P.placeVisible(name, W[wi].char, { spill: true, variant: name === 'shrug' ? 'small' : undefined }, { head: false });
     }
     if (placed) k++;
   }
@@ -1165,18 +1349,92 @@ function handsVisible(ctx, ev, d) {
   let cam;
   try {
     cam = cameraFraming(name, { cast: ctx.cast, focus: cut.focus || ctx.speaker, programId: ctx.programId, solo });
-  } catch {
+  } catch (err) {
+    fault('camera framing', err); // fail open on air (the gesture plays), but never silently
     return true;
   }
   const X = solo ? SET.seatX.solo ?? 0 : SET.seatX[ctx.speaker === 'B' ? 'B' : 'A'];
   const p = placeActor(cam, X);
   const b = handBand(L, d, ev);
-  const floor = p.s >= SINGLE_SCALE ? HAND_FLOOR : HAND_FLOOR_WIDE;
-  if (p.y + b.bottom * p.s > floor || p.y + b.top * p.s < 12) return false;
-  if (p.s >= SINGLE_SCALE && p.y + b.wrist * p.s > WRIST_FLOOR) return false;
+  const single = p.s >= SINGLE_SCALE;
   const m = solo ? 1 : SIDE[ctx.speaker] ?? 1;
   const xa = p.x + Math.min(b.x0 * m, b.x1 * m) * p.s, xb = p.x + Math.max(b.x0 * m, b.x1 * m) * p.s;
+  let floor = single ? HAND_FLOOR : HAND_FLOOR_WIDE;
+  // in a single the subtitle's columns (the hand's half-width either side of its centre counts)
+  if (single && xb + 6 >= CAPTION_BOX.x0 && xa - 6 <= CAPTION_BOX.x1) floor = CAPTION_BOX.top - CAPTION_CLEAR;
+  if (p.y + b.bottom * p.s > floor || p.y + b.top * p.s < 12) return false;
+  if (single && p.y + b.wrist * p.s > WRIST_FLOOR) return false;
   return xa >= 8 && xb <= 376;
+}
+
+/** Do the words carry this gesture's meaning (head shake: negation / contrast / doubt; shrug: uncertainty; glasses: the question)? */
+function semanticOk(ctx, ev) {
+  const name = ev.name;
+  if (name !== 'shake_head' && name !== 'shrug' && name !== 'glasses') return true;
+  const si = sentenceOf(ctx, ev.word);
+  if (name === 'glasses') return !!ctx.question && si === sentenceOf(ctx, ctx.question.char);
+  const sent = ctx.sentences[si];
+  const text = sent.text || ctx.seg.text.slice(sent.start, sent.end);
+  const re = name === 'shake_head' ? NEGATION : UNCERTAIN;
+  re.lastIndex = 0;
+  let m;
+  // the anchor word at or just after the cue word (a question mark carries the whole sentence)
+  while ((m = re.exec(text))) {
+    if (m[0] === '?') return true;
+    const at = sent.start + m.index;
+    if (at <= ev.word + 2 && ev.word - at <= 32) return true;
+  }
+  return false;
+}
+
+// how far a beat's hand moves, in body units as the oblique camera sees them (wrist travel, and the
+// fingers' share of a curl change), per definition; and the presenter's scale in the shot at its apex
+const MOTION = new WeakMap();
+function motionOf(d, L) {
+  let m = MOTION.get(d);
+  if (m !== undefined) return m;
+  const k = (L.arm.upper + L.arm.fore) / 37;
+  m = 0;
+  for (const ch of d._ch) {
+    if (ch.ch === 'wrist' || ch.ch === 'wristF') {
+      const r = ch.rest;
+      for (const key of ch.keys) {
+        const v = key[1];
+        const dx = (v[0] - r[0]) * k, dy = (v[1] - r[1] + (v[2] - r[2]) * TILT) * k;
+        m = Math.max(m, Math.sqrt(dx * dx + dy * dy));
+      }
+    } else if (ch.ch === 'curl' || ch.ch === 'curlF') {
+      // a finger curling on the desk moves mostly in depth: about half its length on screen per unit of curl
+      const r = ch.rest;
+      for (const key of ch.keys) for (let q = 1; q < 5; q++) m = Math.max(m, Math.abs(key[1][q] - r[q]) * L.arm.hand * 0.43 * 0.5);
+    }
+  }
+  MOTION.set(d, m);
+  return m;
+}
+function beatPx(ctx, ev, d) {
+  const L = lookFor(ctx.speakerId);
+  if (!L || !ctx.shots || !ctx.shots.length) return Infinity;
+  const s = scaleAt(ctx, ev.apexAt);
+  if (s == null) return Infinity;
+  const amp = ev.amp == null ? 1 : Math.max(0.5, Math.min(1, ev.amp));
+  return motionOf(d, L) * amp * s;
+}
+/** The speaker's presenter scale in the shot on air at time t (null when unknown). */
+function scaleAt(ctx, t) {
+  const cut = cutAt(ctx, t);
+  if (!cut || HIDDEN.has(cut.shot)) return null;
+  const name = framingOfCut(ctx, cut);
+  if (!name) return null;
+  try {
+    const solo = !ctx.duo;
+    const cam = cameraFraming(name, { cast: ctx.cast, focus: cut.focus || ctx.speaker, programId: ctx.programId, solo });
+    const X = solo ? SET.seatX.solo ?? 0 : SET.seatX[ctx.speaker === 'B' ? 'B' : 'A'];
+    return placeActor(cam, X).s;
+  } catch (err) {
+    fault('camera framing', err);
+    return null;
+  }
 }
 
 /** The legacy shot in view at time t (from planShots' cuts), or null. */

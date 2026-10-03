@@ -106,11 +106,15 @@ function gestureView(t) {
   const X = seat === -1 ? SET.seatX.B : SET.seatX.A;
   const pl = placeActor(cam, X);
   drawActors(t, [{ actor: a, ...pl }], state.bg === 'set' && setMod ? clipRows : null);
-  // focus for the zoom: the near hand (toward the partner)
+  setFocus(a, pl, seat, state.gesture);
+}
+
+/** Zoom window: the gesturing hand (focus 'hand') or a still window on the upper body. */
+function setFocus(a, pl, seat, gesture) {
   const sk = a._sk;
   const near = seat === 1 ? sk.arms.R : sk.arms.L;
   const far = seat === 1 ? sk.arms.L : sk.arms.R;
-  const useFar = (GESTURES[state.gesture]?.focus || 'near') === 'far';
+  const useFar = (GESTURES[gesture]?.focus || 'near') === 'far';
   if (state.focus === 'hand') {
     const w = useFar ? far.wrist : near.wrist;
     focus.x = pl.x + (w[0] + sk.body.x) * pl.s;
@@ -118,7 +122,7 @@ function gestureView(t) {
   } else {
     // a still window on the upper body (a moving window would hide the motion)
     focus.x = pl.x + (seat === 1 ? 6 : -6) * pl.s;
-    const faceWork = /^(chin|facepalm|glasses|nod|shake_head|laugh|look_partner|lean_in)$/.test(state.gesture);
+    const faceWork = /^(chin|facepalm|glasses|nod|shake_head|laugh|look_partner|lean_in)$/.test(gesture);
     focus.y = pl.y + (state.focusY ?? (faceWork ? 0 : 14)) * pl.s;
   }
 }
@@ -183,7 +187,10 @@ function blendView(t) {
   if (GESTURES[state.blendWith]) list.push({ name: state.blendWith, t0: 0.3 + state.blendAt });
   const a = actorFor(state.presenter, seat, list);
   const X = seat === -1 ? SET.seatX.B : SET.seatX.A;
-  drawActors(t, [{ actor: a, ...placeActor(cam, X) }], state.bg === 'set' && setMod ? clipRows : null);
+  const pl = placeActor(cam, X);
+  drawActors(t, [{ actor: a, ...pl }], state.bg === 'set' && setMod ? clipRows : null);
+  // the zoom follows this view too (it kept the previous view's window: a stale crop of the background)
+  setFocus(a, pl, seat, state.gesture);
 }
 
 // ---------------------------------------------------------------------------

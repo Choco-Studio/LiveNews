@@ -10,16 +10,17 @@ import { ACTIONS } from '../public/js/cues.js';
 import { GESTURES, APPROVED, defOf, rateOf, durOf } from '../public/js/v2/canvas25d/gestures/index.js';
 import { poseAt } from '../public/js/v2/canvas25d/rig.js';
 import { actor } from '../public/js/v2/canvas25d/scene.js';
-import { TILT } from '../public/js/v2/canvas25d/space.js';
+import { TILT, HIP } from '../public/js/v2/canvas25d/space.js';
 import { PartBuffer, Frame, MAT } from '../public/js/v2/canvas25d/pixbuf.js';
-import { drawArm, drawHand } from '../public/js/v2/canvas25d/hands.js';
+import { drawArm, drawHand, handGeometry, newHandGeometry } from '../public/js/v2/canvas25d/hands.js';
+import { glassesAnchor } from '../public/js/v2/canvas25d/glasses.js';
 import { drawCharacter, GROUPS } from '../public/js/v2/canvas25d/character.js';
 import { SHAPES } from '../public/js/v2/canvas25d/gestures/shapes.js';
 import { paceFor } from '../public/js/pace.js';
 import { matsOf } from '../public/js/v2/canvas25d/cast/base.js';
 import { LOOKS, PRESENTER_IDS } from '../public/js/v2/canvas25d/cast/index.js';
 import { planSegment } from '../public/js/v2/canvas25d/direction/index.js';
-import { planGestures, CONFIG_POLICY, BIBLE, countFromText, episodePlan, familyOf, gestureVisible } from '../public/js/v2/canvas25d/direction/gestures.js';
+import { planGestures, CONFIG_POLICY, BIBLE, countFromText, episodePlan, familyOf, gestureVisible, DEBUG } from '../public/js/v2/canvas25d/direction/gestures.js';
 import { segmentContext } from '../public/js/v2/canvas25d/direction/context.js';
 
 const BASE = JSON.parse(fs.readFileSync(new URL('./fixtures/v2-motion-baseline.json', import.meta.url), 'utf8'));
@@ -774,7 +775,7 @@ test('sign-off papers fit the hold (pace.js holds.signoff): the tap inside the h
 });
 
 test('blends of every aired pair: settle overlaps within the no-pop limits; interruptions (runtime delays only) within the documented exemption', () => {
-  const AIRED = [['nod'], ['lean_in'], ['steeple'], ['steeple', 'press'], ['steeple', 'tap'], ['raise_hand'], ['raise_hand', 'beat'], ['raise_hand', 'beat2'], ['raise_hand', 'offer'], ['raise_hand', 'box'], ['raise_hand', 'lift_far'], ['raise_hand', 'turn'], ['raise_hand', 'settle'], ['point_screen'], ['point_partner', 'after_you'], ['shrug', 'small'], ['papers', 'signoff'], ['count'], ['chin'], ['glasses'], ['shake_head']];
+  const AIRED = [['nod'], ['lean_in'], ['steeple'], ['steeple', 'press'], ['steeple', 'tap'], ['raise_hand'], ['raise_hand', 'beat'], ['raise_hand', 'beat2'], ['raise_hand', 'offer'], ['raise_hand', 'box'], ['raise_hand', 'lift'], ['raise_hand', 'lift_far'], ['chin', 'touch'], ['raise_hand', 'turn'], ['raise_hand', 'settle'], ['point_screen'], ['point_partner', 'after_you'], ['shrug', 'small'], ['papers', 'signoff'], ['count'], ['chin'], ['glasses'], ['shake_head']];
   const run = (id, a, b, t0b) => {
     const ea = { name: a[0], variant: a[1], t0: 0.4 }, eb = { name: b[0], variant: b[1], t0: t0b(durOf(ea)) };
     const ac = actor(id, { side: 1, seed: 5, gestures: [ea, eb] });
@@ -786,7 +787,7 @@ test('blends of every aired pair: settle overlaps within the no-pop limits; inte
     return popNumbers(frames);
   };
   // the planner's rules: two statements may overlap by a settle (≤ 0.3 s); a beat keeps 0.2 s of air
-  const BEATS = new Set(['beat', 'beat2', 'offer', 'box', 'lift_far', 'turn', 'settle', 'press', 'tap', 'small', 'signoff']);
+  const BEATS = new Set(['beat', 'beat2', 'offer', 'box', 'lift', 'lift_far', 'turn', 'settle', 'press', 'tap', 'small', 'signoff']);
   for (const id of ['paco', 'unit8']) {
     for (const a of AIRED) for (const b of AIRED) {
       const beat = BEATS.has(a[1]) || BEATS.has(b[1]);
@@ -879,3 +880,184 @@ test('hands craft: clean clusters (no lone line or detail pixel) at every scale;
   }
 });
 
+
+// ---------------------------------------------------------------------------
+// fix round 2: variety on air, meaning, the glasses touch, the chin while speaking, TECH BYTES caps
+
+/** Marked arm gestures of a whole episode in air order (both presenters): { fam, t, slot, e }. */
+function airedMarked(ep) {
+  const out = [];
+  let t = 0;
+  for (const res of planEpisode(ep)) {
+    for (const e of featuredOf(res)) if (defOf(e).arm && e.name !== 'papers') out.push({ fam: familyOf(e), t: t + e.at, slot: res.ctx.speaker, e, ctx: res.ctx });
+    t += res.ctx.duration + (res.ctx.gapAfter ?? 0.7);
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+
+test('variety on air (critics r2): no marked family twice in a row or within 45 s programme-wide, palm-out raise_hand once per presenter, WORLD NOW not one move', () => {
+  for (const pid of PROGRAMMES) {
+    let pairs = 0, same = 0, raises = 0, total = 0;
+    const fams = new Set();
+    for (const ep of episodes(pid, 12)) {
+      const air = airedMarked(ep);
+      const perSlot = {};
+      for (let i = 0; i < air.length; i++) {
+        const a = air[i];
+        total++;
+        fams.add(a.fam);
+        if (a.fam === 'raise_hand') {
+          raises++;
+          perSlot[a.slot] = (perSlot[a.slot] || 0) + 1;
+          assert.ok(perSlot[a.slot] <= 1, `${pid} ${ep.id}: palm-out raise_hand twice by ${a.slot}`);
+        }
+        if (i > 0) {
+          pairs++;
+          if (air[i - 1].fam === a.fam) same++;
+        }
+        for (let j = 0; j < i; j++) if (air[j].fam === a.fam) assert.ok(a.t - air[j].t >= 45 - 1e-6, `${pid} ${ep.id}: ${a.fam} again after ${(a.t - air[j].t).toFixed(1)} s`);
+      }
+    }
+    if (process.env.V2_HANDS_TABLE) console.log(`${pid}: ${total} marked arm gestures, ${fams.size} families, consecutive same ${same}/${pairs}, palm-out raise ${raises}`);
+    if (pairs) assert.ok(same / pairs <= 0.2, `${pid}: ${same}/${pairs} consecutive repeats on air`);
+    if (pid === 'world-now') {
+      assert.ok(raises / total <= 0.4, `world-now: raise_hand ${raises} of ${total} marked gestures`);
+      assert.ok(fams.size >= 4, `world-now: only ${[...fams].join(', ')}`);
+    }
+  }
+});
+
+test('meaning (critics r2): head shakes need a negation, contrast or doubt, shrugs uncertainty or a question, glasses the question', () => {
+  const NEG = /\b(not|no|never|nothing|nobody|none|neither|nor|without|despite|still|yet|but|however|denied|denies|deny|refused|refuses|rejected|unclear|cannot|hardly|failed|fails|unlikely|doubts?|sceptic\w*|skeptic\w*)\b|n't\b/i;
+  const UNC = /\b(maybe|perhaps|unclear|uncertain|unknown|possibly|might|remains? to be seen|who knows|hard to say|not sure|depends|anyone's guess|open question)\b|\?/i;
+  let seen = 0;
+  for (const pid of ['world-now', 'tech-bytes', 'cosmos']) {
+    for (const res of ALL_SEGS(pid, 10)) {
+      const { ctx } = res;
+      for (const e of gesturesOf(res)) {
+        if (!['shake_head', 'shrug', 'glasses'].includes(e.name)) continue;
+        seen++;
+        const si = ctx.sentences.findIndex((x) => e.word < x.end);
+        const sent = ctx.sentences[si < 0 ? ctx.sentences.length - 1 : si];
+        const text = sent.text || ctx.seg.text.slice(sent.start, sent.end);
+        if (e.name === 'shake_head') assert.ok(NEG.test(text), `${pid}: shake_head on "${text}"`);
+        if (e.name === 'shrug') assert.ok(UNC.test(text), `${pid}: shrug on "${text}"`);
+        if (e.name === 'glasses') {
+          assert.ok(ctx.question, `${pid}: glasses without a question`);
+          assert.equal(ctx.sentences.findIndex((x) => ctx.question.char < x.end), si, `${pid}: glasses outside the question`);
+        }
+      }
+    }
+  }
+  assert.ok(seen > 0, 'the semantic gestures still air where the words carry them');
+});
+
+test('the chin while speaking is a brief touch; the long thinking pose only on a question or into the pause', () => {
+  const touch = defOf({ name: 'chin', variant: 'touch' });
+  assert.ok(touch.hold - touch.apex <= 0.9, `touch holds ${(touch.hold - touch.apex).toFixed(2)} s`);
+  let n = 0;
+  for (const pid of ['tech-bytes', 'cosmos']) {
+    for (const res of ALL_SEGS(pid, 10)) {
+      const { ctx } = res;
+      for (const e of gesturesOf(res).filter((x) => x.name === 'chin')) {
+        n++;
+        if (e.variant === 'touch') continue;
+        const d = defOf(e);
+        const q = ctx.question && ctx.sentences.findIndex((x) => ctx.question.char < x.end) === ctx.sentences.findIndex((x) => e.word < x.end);
+        assert.ok(q || e.at + d.hold / rateOf(e) >= ctx.duration - 0.25, `${pid}: the full chin held through the read at ${e.at}`);
+      }
+    }
+  }
+  assert.ok(n > 0, 'chin still airs');
+});
+
+test('TECH BYTES: arm movements per segment, beats included, stay within the cap plus one beat (Ada ≤ 2, Max ≤ 3)', () => {
+  const B = BIBLE['tech-bytes'];
+  for (const res of ALL_SEGS('tech-bytes', 12)) {
+    const id = res.ctx.speakerId;
+    const arms = gesturesOf(res).filter((e) => defOf(e).arm && e.name !== 'papers');
+    assert.ok(arms.length <= B.cap[id] + B.capBeats, `${id}: ${arms.length} arm movements in one segment`);
+    assert.ok(arms.filter((e) => !e.beat).length <= B.cap[id], `${id}: cue-level cap`);
+  }
+});
+
+test('beats move enough to be seen (≥ 2 px in their shot); the far hand never takes the desk-level tick or settle', () => {
+  for (const pid of ['world-now', 'tech-bytes', 'cosmos']) {
+    for (const res of ALL_SEGS(pid, 8)) {
+      for (const e of beatsOf(res)) assert.ok(!/^(tick|settle)_far$/.test(e.variant || ''), `${pid}: far-hand ${e.variant}`);
+    }
+  }
+});
+
+test('contained planner faults are counted and stay at 0 over the fixtures', () => {
+  DEBUG.errors = 0;
+  for (const pid of PROGRAMMES) for (const ep of episodes(pid, 4)) planEpisode(ep);
+  assert.equal(DEBUG.errors, 0);
+});
+
+test('glasses: the index fingertip sits on the hinge of the glasses (glassesAnchor) within 1 px at s 2.15 and 3.4, eyes open', () => {
+  const buf = new PartBuffer();
+  const g = newHandGeometry();
+  for (const side of [1, -1]) {
+    for (const s of [2.15, 3.4]) {
+      const a = actor('ada', { side, seed: 11, gestures: [{ name: 'glasses', t0: 0.3 }] });
+      for (const lt of [0.8, 0.9, 1.0, 1.1]) {
+        const sk = poseAt(a, 0.3 + lt);
+        const xf = { x: 192, y: 70, s, gb: 0, clip: false };
+        buf.clear();
+        const head = drawCharacter(buf, a.look, sk, xf);
+        const key = side > 0 ? 'R' : 'L';
+        handGeometry(a.look, sk.arms[key], key === 'R' ? 1 : -1, g);
+        // character.js toS (lean about the hip, oblique depth)
+        const cl = Math.cos(sk.body.lean), sl = Math.sin(sk.body.lean);
+        const bx = Math.round(sk.body.x * s) / s, by = Math.round(sk.body.y * s) / s;
+        const ly = g.J[10] - HIP;
+        const tx = Math.round(xf.x) + (g.J[9] * cl - ly * sl + bx) * s;
+        const ty = Math.round(xf.y) + (g.J[9] * sl + ly * cl + HIP + by + g.J[11] * TILT) * s;
+        const anc = glassesAnchor(head, side > 0 ? 'templeR' : 'templeL', [0, 0]);
+        const err = Math.hypot(tx - anc[0], ty - anc[1]);
+        assert.ok(err <= 1, `side ${side} s ${s} t ${lt}: fingertip ${err.toFixed(2)} px from the hinge`);
+      }
+    }
+  }
+  // no blink while the fingertip is at the hinge (a blink there reads as rubbing an eye)
+  for (const seed of [1, 2, 3, 5, 8, 13, 21, 34]) {
+    for (let t0 = 0.3; t0 < 9; t0 += 0.7) {
+      const a = actor('ada', { side: 1, seed, gestures: [{ name: 'glasses', t0 }] });
+      for (const lt of [0.75, 0.9, 1.05]) {
+        const c = poseAt(a, t0 + lt) && a._c;
+        assert.ok(c.blink < 0.05, `seed ${seed} t0 ${t0.toFixed(1)}: blink ${c.blink.toFixed(2)} at the hinge`);
+      }
+    }
+  }
+});
+
+test('chest-level beats read as open hands, never a grab at the jacket: box and lift fingers extended, box palms facing', () => {
+  for (const v of ['box', 'lift']) {
+    const d = defOf({ name: 'raise_hand', variant: v });
+    for (const ch of ['curl', 'curlF']) {
+      const tr = d.tracks[ch];
+      if (!tr) continue;
+      const k = tr.find((x) => Math.abs(x[0] - d.apex) < 0.1 && Array.isArray(x[1]));
+      assert.ok(k, `${v} ${ch} has a key at the apex`);
+      assert.ok(Math.max(...k[1]) <= 0.25, `${v}: curl ${k[1]}`);
+    }
+  }
+  const box = defOf({ name: 'raise_hand', variant: 'box' });
+  const f = box.tracks.facing.find((x) => Math.abs(x[0] - box.apex) < 0.25);
+  assert.ok(Math.abs(f[1]) <= 0.15, 'box palms face each other');
+  // the box hands stay apart (a hand-width or more between the fingertips at the apex, both looks' extremes)
+  for (const id of ['paco', 'lola']) {
+    const a = actor(id, { side: 1, seed: 3, gestures: [{ name: 'raise_hand', variant: 'box', t0: 0.3 }] });
+    const sk = poseAt(a, 0.3 + box.apex + 0.1);
+    const g1 = newHandGeometry(), g2 = newHandGeometry();
+    handGeometry(a.look, sk.arms.R, 1, g1);
+    handGeometry(a.look, sk.arms.L, -1, g2);
+    let inner1 = Infinity, inner2 = -Infinity;
+    for (let j = 0; j < 20; j++) {
+      inner1 = Math.min(inner1, g1.J[j * 3]);
+      inner2 = Math.max(inner2, g2.J[j * 3]);
+    }
+    assert.ok(inner1 - inner2 >= a.look.arm.hand * 0.4, `${id}: box hands ${(inner1 - inner2).toFixed(1)} u apart`);
+  }
+});

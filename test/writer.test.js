@@ -1723,3 +1723,15 @@ describe('buildPrompt: untrusted candidates and qualifiers (editorial r2)', () =
     assert.match(r, /untrusted feed text/);
   });
 });
+
+describe('normalizeBulletin: the bible\'s sentence length (fix round 1)', () => {
+  test('a WORLD NOW story sentence far over 20 words loses its trailing clause; one that cannot be cut stays', () => {
+    const st = makeStory('a1', {
+      title: 'Court orders Amsterdam airport to cut night flights',
+      summary: 'A court in the Netherlands has ordered Amsterdam’s main airport to cut night flights by a third from next year, after a case brought by local residents over noise. The airport says it will appeal.',
+    });
+    const text = 'A court in the Netherlands has ordered Amsterdam’s main airport to cut night flights by a third from next year, after a case brought by local residents over noise. The airport says it will appeal.';
+    const seg = normalizeBulletin({ title: 'x', segments: [{ type: 'intro', text: 'Hello.' }, { type: 'story', storyId: 'a1', text }, { type: 'outro', text: 'Bye.' }] }, [st], { program: { id: 'world-now' } }).segments[1];
+    assert.equal(seg.text, 'A court in the Netherlands has ordered Amsterdam’s main airport to cut night flights by a third from next year. The airport says it will appeal.');
+  });
+});

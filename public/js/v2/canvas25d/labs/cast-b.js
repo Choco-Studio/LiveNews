@@ -3,6 +3,7 @@
 //   window.__lab.render(t)     draw the instant t (seconds; in 'lineup' t picks the scale)
 //   window.__lab.set({ mode, presenter, seat, scale, level, pair, zoom, focus, emotion, gesture })
 //     mode      'lineup'   Paco + the four at s 1 / 1.37 / 2.15 / 3.4 (t = 0..3), one column each
+//                          (`ids` replaces the list, e.g. ['paco', 'sam', 'max'] to compare silhouettes)
 //               'turnaround' head yaw sweeping -0.6 .. 0.6 rad (4 s period)
 //               'idle'     idle loop (breathing, sway, blinks / UNIT-8's dim)
 //               'talk'     a line per presenter (UNIT-8's indicator in sync with the timeline;
@@ -47,7 +48,7 @@ const PERSONA_GESTURES = {
 };
 const PAIRS = { tech: ['max', 'ada'], cosmos: ['nova', 'unit8'] };
 
-const state = { mode: 'lineup', presenter: 'unit8', seat: null, scale: 3.4, level: null, pair: 'cosmos', zoom: 1, focus: 'head', emotion: null, gesture: null, k: 4 };
+const state = { mode: 'lineup', ids: null, presenter: 'unit8', seat: null, scale: 3.4, level: null, pair: 'cosmos', zoom: 1, focus: 'head', emotion: null, gesture: null, k: 4 };
 
 // ---------------------------------------------------------------------------
 // Actors (rebuilt only when the inputs change; all pure in t)
@@ -149,10 +150,11 @@ const COMP = new Uint32Array(384 * 216);
 function lineup(t) {
   const si = Math.max(0, Math.min(SCALES.length - 1, Math.round(t)));
   const s = SCALES[si];
-  const colW = Math.floor(384 / LINEUP.length);
+  const ids = state.ids || LINEUP;
+  const colW = Math.floor(384 / ids.length);
   COMP.fill(C.ink);
   const neckY = si < 2 ? 150 : si === 2 ? 128 : 112;
-  LINEUP.forEach((id, n) => {
+  ids.forEach((id, n) => {
     frame.clear(C.ink);
     const x = colW * n + (colW >> 1) + 1;
     drawCast(0, [item(0, idleActor(id), x, neckY, s)]);

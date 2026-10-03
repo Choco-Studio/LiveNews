@@ -20,6 +20,23 @@ const FULL = { w: 416, h: 234 }; // full screen with room for a slow pan
 // Every on-air timing (shot holds, pauses between segments, card holds) comes from the
 // programme's pace profile (pace.js: one table for the whole channel, owner 23:10).
 const pace = (scene) => paceFor(scene.program?.id);
+const STUDIO = new Set(['wide', 'close']);
+// A segment's air before its voice runs (characters per second, sentence pauses included): the engine's
+// estimated timeline speaks ~15 chars/s; a recorded clip gives its own length.
+const CPS_EST = 14.5;
+// The greeting ends an intro's headlines (the v2 planner's rule, direction/shots.js GREETING_RE).
+const GREETING = /^(good (morning|afternoon|evening)|hello|welcome|this is|i'm|i am|and i'm)\b|\bwelcome to\b/i;
+
+/** Leading intro sentences that tease a story (seg.teases, editorial; else the ones before the greeting). */
+function teaserLines(seg, lines) {
+  const teases = Array.isArray(seg.teases) ? seg.teases : null;
+  let n = 0;
+  while (n < lines.length && !GREETING.test(lines[n].trim()) && !(teases && !teases[n])) n++;
+  return n === lines.length ? Math.max(0, n - 1) : n; // no greeting found: the last line is it
+}
+
+/** Seconds a segment should air, before its voice runs (recorded length, else its characters). */
+const estimateSeg = (seg) => (Number.isFinite(seg?.audio?.duration) ? seg.audio.duration : String(seg?.text || '').length / CPS_EST);
 
 export class Director {
   constructor({ audio, channel, v2 = false }) {
@@ -67,6 +84,8 @@ export class Director {
     const changed = restart || s.shot !== shot || (extra.focus && extra.focus !== s.focus) || ('storyId' in extra && extra.storyId !== s.storyId) || (this.v2 && 'framing' in extra && (extra.framing ?? null) !== (s.framing ?? null)); // v2: a new framing (single → ots) is a cut
     Object.assign(s, extra);
     if (changed) {
+      this.mapRun = shot === 'map' ? (this.mapRun || 0) + 1 : 0; // PACE: map cuts in a row (shots.mapRun)
+      if (!(shot === 'wide' && s.shot === 'wide')) this.seenSince = now(); // PACE: a focus re-set of the wide is no visible cut
       s.shot = shot;
       s.shotSince = now();
       if (shot === 'full') s.panDir = Math.random() < 0.5 ? 1 : -1;
@@ -317,6 +336,7 @@ export class Director {
 
   async playEpisode(episode) {
     const s = this.scene;
+    this.episode = episode; // PACE: the pause after each segment and the look-ahead of chats need the running order
     this.voices.episode(episode); // warm up the first recorded voices while the open plays
     const imagesReady = this.prepareImages(episode);
     // Each programme has its own opening titles and theme tune. The tune starts
@@ -352,30 +372,43 @@ export class Director {
         case 'story':
           await this.playStory(seg);
           break;
-        case 'chat':
+        case 'chat': {
           s.lowerThird = null;
-          this.setShot('wide', { focus: seg.anchor, wall: { mode: 'logo' }, card: null });
+          // v2: the plan's own opening shot now (no default wide on air while a late clip is looked up);
+          // default path: the wide, or the speaker's close when one wide would pass the studio maximum
+          const op = this.v2 ? this.v2Opening(seg, index) : null;
+          if (op) this.setShot(op.shot, { focus: op.focus, wall: { mode: 'logo' }, card: null, framing: op.framing, cameraMove: op.move });
+          else this.setShot(this.v2 ? 'wide' : this.chatShot(seg, index), { focus: seg.anchor, wall: { mode: 'logo' }, card: null });
           await this.say(seg);
           break;
-        case 'outro':
+        }
+        case 'outro': {
           s.lowerThird = null;
-          this.setShot(s.cast.B ? 'wide' : 'close', { focus: seg.anchor, wall: { mode: 'logo' }, storyId: null, card: null });
+          const op = this.v2 ? this.v2Opening(seg, index) : null;
+          if (op) this.setShot(op.shot, { focus: op.focus, wall: { mode: 'logo' }, storyId: null, card: null, framing: op.framing, cameraMove: op.move });
+          else this.setShot('wide', { focus: seg.anchor, wall: { mode: 'logo' }, storyId: null, card: null }); // the bibles' sign-off WIDE (solo too: money-minute.md, news-60.md)
           await this.say(seg);
+          // world-now.md: the sign-off holds on the wide with the programme's sign-off cue under it (the brass 3→1),
+          // then the stinger to the end card; the cue starts 0.15 s after the last word (a sting never overlaps
+          // speech), so the hold is never dead air
+          this.audio.sfx('outro', { programId: s.program?.id, startAt: performance.now() + 150 });
           await sleep(pace(s).holds.signoff * 1000); // the sign-off's hold on the wide (world-now.md 1.5 s)
           await this.stinger(() => {
             this.setShot('endcard', { card: { line1: 'STAY WITH US', line2: `${this.channel.name} · LIVE 24 HOURS` } });
-            this.audio.sfx('outro', { programId: s.program?.id, startAt: performance.now() });
           });
           await sleep(pace(s).holds.endcard * 1000);
           continue;
+        }
         default:
           break;
       }
       // Air between segments (owner 18:52): the pace profile's pause for this pair (story, hand-over,
-      // chat turn, block, before And finally...), minus the silence the playout adds by itself.
+      // chat turn, block, before And finally...), minus the silence the playout adds by itself (a voice
+      // engine start-up: only when a voice plays, not in mute / blips)
       const { kind, gap } = gapAfter(episode, index);
       if (gap >= pace(s).strap.outAtBlock && kind !== 'signoff') s.lowerThird = null; // a block pause clears the strap
-      await sleep(Math.max(60, (gap - CHANNEL.voiceLatency) * 1000));
+      const latency = this.audio?.mode === 'tts' ? CHANNEL.voiceLatency : 0;
+      await sleep(Math.max(60, (gap - latency) * 1000));
     }
   }
 
@@ -384,27 +417,83 @@ export class Director {
     const v2intro = this.v2?.intro?.(seg); // v2: montage cut on the spoken teaser, greeting on its planned shot
     if (v2intro) return v2intro;
     const s = this.scene;
-    const frames = Math.min(3, s.rundown.length);
+    const P = pace(s);
+    // PACE (critics r1): the montage is voice-paced (owner 20:40 (1)): one frame per TEASED line (seg.teases, else the
+    // lines before the greeting), cut on its line's first word and held at least holds.montage (readable twice; a cut
+    // the line reaches sooner waits for it), the greeting on the wide. No teaser (NEWS IN 60's "This is NEWS IN 60.
+    // I'm Sam Night.") means no montage, and nothing ever holds a headline frame over silence.
+    const frames = Math.min(3, teaserLines(seg, splitSentences(seg.text)), s.rundown.length);
     if (frames < 2) {
       this.setShot('wide', { focus: seg.anchor, wall: { mode: 'rundown' } });
+      await sleep(P.open.firstWord * 1000); // the first line a breath after the open
       return this.say(seg);
     }
-    this.setShot('montage', { focus: seg.anchor, storyId: null, card: { index: 0 } });
-    const started = now();
-    const MONTAGE_FRAME = pace(s).holds.montage; // a headline frame holds long enough to read twice
-    let done = false;
-    const speech = sleep(pace(s).open.firstWord * 1000).then(() => this.say(seg)).then(() => (done = true)); // the first line after a breath
-    for (let i = 1; i < frames || !done; i++) {
-      await sleep(MONTAGE_FRAME * 1000);
-      if (i < frames) this.setShot('montage', { card: { index: i } });
-      else if (!done) await speech;
+    const cardOf = (k) => {
+      const id = Array.isArray(seg.teases) ? seg.teases[k] : null;
+      const at = id ? s.rundown.findIndex((r) => r?.storyId === id) : -1;
+      return at >= 0 ? at : k;
+    };
+    this.setShot('montage', { focus: seg.anchor, storyId: null, card: { index: cardOf(0) } });
+    let pending = null;
+    let greeted = false;
+    const cut = (apply) => {
+      clearTimeout(pending);
+      pending = null;
+      const wait = P.holds.montage - (now() - s.shotSince);
+      if (wait > 0.02) pending = setTimeout(() => ((pending = null), apply()), wait * 1000);
+      else apply();
+    };
+    await sleep(P.open.firstWord * 1000); // the first line a breath after the open
+    await this.say(seg, (i) => {
+      if (i > 0 && i < frames) cut(() => this.setShot('montage', { card: { index: cardOf(i) } }));
+      else if (i === frames) cut(() => ((greeted = true), this.setShot('wide', { focus: seg.anchor, wall: { mode: 'logo' }, card: null })));
+    });
+    // a greeting too short for the last frame's floor stays on the montage: the story cuts straight from it (or its
+    // breaking stinger covers it); a studio wide set now would air for just the after-intro pause (owner 20:40 (2))
+    clearTimeout(pending);
+    if (!greeted && next?.type !== 'story') this.setShot('wide', { focus: seg.anchor, wall: { mode: 'logo' }, card: null });
+  }
+
+  /** Default path: seconds the shot on air has been seen (a focus re-set of the wide is no cut: it keeps counting). */
+  onAir() {
+    const s = this.scene;
+    const since = s.shot === 'wide' && Number.isFinite(this.seenSince) ? Math.min(this.seenSince, s.shotSince) : s.shotSince;
+    return now() - since;
+  }
+
+  /**
+   * v2 path: the opening shot the plan gives a chat or the sign-off, set by the director at once (the
+   * plan's cue 0 then finds it on air): no default framing flashes while a late clip is looked up.
+   */
+  v2Opening(seg, index) {
+    try {
+      const e = this.v2?.planAt?.(index)?.events?.find((x) => x.kind === 'shot');
+      if (e && STUDIO.has(e.shot)) return { shot: e.shot, framing: e.framing ?? null, focus: e.focus && e.focus in (this.scene.cast || {}) ? e.focus : seg.anchor, move: e.move ?? null };
+    } catch {
+      /* the director's own wide */
     }
-    await speech;
-    const minimum = frames * MONTAGE_FRAME - (now() - started);
-    if (minimum > 0) await sleep(minimum * 1000);
-    // PACE (owner 20:40): a story cuts straight from the montage's last frame (or its breaking stinger covers it); a
-    // studio wide set here would air for just the after-intro pause, a flash before the next shot
-    if (next?.type !== 'story') this.setShot('wide', { focus: seg.anchor, wall: { mode: 'logo' }, card: null });
+    return null;
+  }
+
+  /**
+   * Default path: a chat plays on the wide, unless the wide (with the chats and the sign-off that
+   * follow it on the same wide) would pass the programme's studio maximum: then this line goes on
+   * the speaker's close when it can hold the minimum shot (and the wide on air has held the cooldown).
+   */
+  chatShot(seg, index) {
+    const s = this.scene;
+    if (!s.cast?.B) return 'close';
+    const P = pace(s);
+    const segs = this.episode?.segments || [];
+    const gap = (j) => (j < segs.length - 1 ? gapAfter(this.episode, j).gap : P.holds.signoff);
+    const onWide = s.shot === 'wide';
+    const held = onWide ? this.onAir() : 0;
+    let run = held + estimateSeg(seg) + gap(index);
+    for (let j = index + 1; j < segs.length && (segs[j].type === 'chat' || segs[j].type === 'outro'); j++) run += estimateSeg(segs[j]) + gap(j);
+    if (run <= P.shots.studioMax + 0.5) return 'wide';
+    const alone = estimateSeg(seg) + gap(index) >= P.shots.min;
+    const sameClose = s.shot === 'close' && s.focus === seg.anchor; // never the close already on air (a jump)
+    return alone && !sameClose && (!onWide || held >= P.shots.cooldown) ? 'close' : 'wide';
   }
 
   /**
@@ -412,23 +501,73 @@ export class Director {
    * the picture and the key-fact card, as the story allows.
    */
   storyBeats(seg, hasImg) {
-    const anchorShot = seg.shot === 'wide' && this.scene.cast.B ? 'wide' : 'close';
+    const s = this.scene;
+    let anchorShot = seg.shot === 'wide' && s.cast.B ? 'wide' : 'close';
+    // a story the chats follow stays off the wide: the exchange (and the sign-off) take it fresh, never one 25 s wide
+    const segs = this.episode?.segments || [];
+    if (anchorShot === 'wide' && segs[segs.indexOf(seg) + 1]?.type === 'chat') anchorShot = 'close';
+    // PACE (critics r1): a story change is always a visible cut: never the wide already on air (a focus re-set of the
+    // wide shows nothing new), never the same presenter's close again (a jump cut)
+    if (s.shot === anchorShot && (anchorShot === 'wide' || s.focus === seg.anchor)) anchorShot = anchorShot === 'close' ? 'wide' : 'close';
+    // a round-up item opens on its map (the v2 planner's map to map), but after shots.mapRun maps in a row an item
+    // shows its picture, else its reader in vision (never a 40 s run of one shot type)
+    if ((seg.feature === 'roundup' || seg.roundup) && seg.location) return [(this.mapRun || 0) < pace(s).shots.mapRun ? 'map' : hasImg ? 'full' : anchorShot];
+    const number = seg.feature === 'number' && !!seg.fact;
     const beats = [anchorShot];
+    if (number) beats.push('fact'); // the number of the day shows its card early (the v2 plans)
     if (seg.location) beats.push('map');
     if (hasImg) beats.push('full');
-    if (seg.fact) beats.push('fact');
+    if (seg.fact && !number) beats.push('fact');
     if (seg.shot === 'full' && hasImg && beats[1] !== 'full') {
       beats.splice(beats.indexOf('full'), 1);
       beats.splice(1, 0, 'full');
+    }
+    // outside WORLD NOW it opens on its card (tech-bytes / cosmos / money-minute .md), unless a card is already on air
+    if (number && s.program?.id !== 'world-now' && s.shot !== 'fact') beats.unshift(...beats.splice(beats.indexOf('fact'), 1));
+    // And finally ends on its picture or its presenter, never on a map
+    if ((seg.feature === 'lighter' || /^\W*and finally\b/i.test(String(seg.text || ''))) && hasImg && beats.indexOf('map') > beats.indexOf('full')) {
+      beats.splice(beats.indexOf('map'), 1);
+      beats.splice(1, 0, 'map');
     }
     return beats;
   }
 
   async playStory(seg) {
     const s = this.scene;
+    const P = pace(s);
     const hasImg = !!this.images.get(seg.storyId);
-    const sentences = splitSentences(seg.text).length;
-    const beats = this.storyBeats(seg, hasImg).slice(0, Math.max(1, sentences));
+    const lines = splitSentences(seg.text);
+    // PACE (critics r1): the pause before the next segment's cut, the segment's estimated air (re-estimated from the
+    // voice's own pace at every sentence) and at most one beat per cooldown of it
+    const index = this.episode?.segments?.indexOf(seg) ?? -1;
+    const after = index >= 0 ? gapAfter(this.episode, index).gap : P.gaps.story;
+    const starts = [];
+    let chars = 0;
+    for (const l of lines) {
+      starts.push(chars);
+      chars += l.length + 1;
+    }
+    const est = estimateSeg(seg);
+    let spoke = null; // when sentence 0 started
+    let sentAt = null; // when the sentence on air started
+    // seconds until the next segment's cut, from now: the sentences left at the voice's own pace so far, less what
+    // the sentence on air has already spoken (a cut the cooldown delayed comes in mid-sentence)
+    const left = () => {
+      if (spoke == null) return est + after;
+      const done = starts[sentence] ?? chars;
+      const span = sentAt - spoke;
+      // (a short first sentence and its pause say little about the pace: the voice's own rate only past 2.5 s / 30 chars)
+      const rate = span > 2.5 && done > 30 ? done / span : chars / Math.max(0.5, est);
+      return Math.max(0, (chars - done) / rate - (now() - sentAt)) + after;
+    };
+    // (beats spaced by the median's lower bound: the cooldown is a floor, not the rhythm; owner 18:52 median 5-7 s)
+    const beats = this.storyBeats(seg, hasImg).slice(0, Math.max(1, Math.min(lines.length, Math.floor((est + after) / Math.max(P.shots.cooldown, P.shots.median[0])))));
+    const finallyStory = seg.feature === 'lighter' || /^\W*and finally\b/i.test(String(seg.text || ''));
+    // And finally never ends on a map: the map hands back to the presenter when a sentence is left for it, else it goes
+    if (finallyStory && beats.length > 1 && beats[beats.length - 1] === 'map') {
+      if (lines.length > beats.length && Math.floor((est + after) / Math.max(P.shots.cooldown, P.shots.median[0])) > beats.length) beats.push(beats[0]);
+      else beats.pop();
+    }
     const wall = hasImg ? { mode: 'image', storyId: seg.storyId } : { mode: 'source', source: seg.source, category: seg.category || 'general' };
 
     if (seg.breaking) {
@@ -439,29 +578,75 @@ export class Director {
       await sleep(pace(s).holds.breakingCard * 1000); // the card is on air for at most 3 s (stinger tail + hold): a calm colour change, not a show
     }
     let pending = null;
+    let opening = false; // default path: the opening cut still waits for the cooldown (later beats wait for it)
+    let watch = null; // default path: the max-hold timer of the shot on air
     // v2: shots come from the plan's cues (cue.k > 0 arrive through shotFor at their sentence or word)
     const v2cues = this.v2?.shots(seg, hasImg, (cue) => shotFor(cue.k, cue)) || null;
+    const cardFor = (beat) =>
+      beat === 'map'
+        ? { ...seg.location }
+        : beat === 'fact'
+          ? { fact: seg.fact, label: /\d/.test(seg.fact) ? 'BY THE NUMBERS' : 'KEY FACT', source: seg.source }
+          : null;
     const shotFor = (i, cue = null) => {
-      const beat = cue ? cue.shot : beats[Math.min(i, beats.length - 1)];
-      const card =
-        beat === 'map'
-          ? { ...seg.location }
-          : beat === 'fact'
-            ? { fact: seg.fact, label: /\d/.test(seg.fact) ? 'BY THE NUMBERS' : 'KEY FACT', source: seg.source }
-            : null;
-      const apply = () => this.setShot(beat, { focus: cue?.focus || seg.anchor, storyId: seg.storyId, wall, card, ...(cue && { framing: cue.framing, cameraMove: cue.move }) });
+      if (!cue) return cutTo(i, beats[Math.min(i, beats.length - 1)]);
+      const beat = cue.shot;
+      const apply = () => this.setShot(beat, { focus: cue.focus || seg.anchor, storyId: seg.storyId, wall, card: cardFor(beat), framing: cue.framing, cameraMove: cue.move });
       // Hold every shot for at least the profile's minimum before cutting away (cut cooldown).
       clearTimeout(pending);
       const held = now() - s.shotSince;
-      const MIN_SHOT = pace(s).shots.cooldown;
+      const MIN_SHOT = P.shots.cooldown;
       if (i === 0 || held >= MIN_SHOT) apply();
       else pending = setTimeout(apply, (MIN_SHOT - held) * 1000);
+      return 0;
     };
+    // ---- default path (PACE, critics r1)
+    const anchorShot = STUDIO.has(beats[0]) ? beats[0] : seg.shot === 'wide' && s.cast.B ? 'wide' : 'close';
+    const maxOf = (shot) => (shot === 'fact' ? P.shots.factMax : shot === 'full' ? P.shots.picture[1] : shot === 'map' ? P.shots.map[1] : STUDIO.has(shot) ? P.shots.studioMax : Infinity);
+    // what replaces a shot past its maximum: a card, picture or map gives way to the presenter, a studio shot to the
+    // other studio shot (the default path has no MCU-L: a solo show's other studio shot is its wide)
+    const relief = (shot) => (!STUDIO.has(shot) ? anchorShot : shot === 'close' ? 'wide' : 'close');
+    const apply = (beat) => {
+      this.setShot(beat, { focus: seg.anchor, storyId: seg.storyId, wall, card: cardFor(beat) });
+      // max hold: when this shot would run past its maximum before the next segment's cut (at the voice's estimated
+      // pace), it gives way at the middle of its run, both parts at least the cooldown (a timer: mid-sentence if need be)
+      clearTimeout(watch);
+      const since = s.shotSince;
+      const total = left();
+      const max = maxOf(beat);
+      if (total > max + 0.5 && total >= 2 * P.shots.cooldown) {
+        const at = Math.max(P.shots.cooldown, Math.min(max - 0.5, total / 2));
+        watch = setTimeout(() => s.shotSince === since && s.shot === beat && cutTo(-1, relief(beat)), at * 1000);
+      }
+    };
+    // the opening cut waits for the cooldown when a studio shot is on air (the voice starts over it); a later beat is
+    // taken only when it can air the minimum shot before the next segment's cut, else it is dropped (no 2 s beat at a
+    // story's end); i = -1: the max-hold relief (its timer already checked the room)
+    const cutTo = (i, beat) => {
+      clearTimeout(pending);
+      const held = this.onAir();
+      const MIN_SHOT = P.shots.cooldown;
+      const wait = i === 0 ? (STUDIO.has(s.shot) ? MIN_SHOT - held : 0) : i < 0 ? 0 : Math.max(0, MIN_SHOT - held);
+      if (i > 0 && left() - wait < P.shots.min) return 0;
+      if (wait > 0.05) {
+        opening = i === 0;
+        pending = setTimeout(() => ((opening = false), apply(beat)), wait * 1000);
+      } else apply(beat);
+      return Math.max(0, wait);
+    };
+    // at a sentence start with no beat of its own: a shot that has drifted past its maximum (a slower voice) gives way
+    const guard = (i) => {
+      const held = this.onAir();
+      const rest = left();
+      if (held < P.shots.cooldown || rest < P.shots.cooldown || held + rest <= maxOf(s.shot) + 0.5) return;
+      cutTo(i, relief(s.shot));
+    };
+    let sentence = 0;
     // Between stories the director simply cuts; the stinger is kept for opens, breaks and breaking news.
     const presenter = s.cast[seg.anchor];
     const showName = !this.introduced?.has(presenter);
     this.introduced?.add(presenter);
-    shotFor(0, v2cues?.[0]);
+    const delay = shotFor(0, v2cues?.[0]);
     s.lowerThird = {
       headline: seg.headline,
       source: seg.source || '',
@@ -470,10 +655,18 @@ export class Director {
       breaking: seg.breaking,
       kicker: seg.kicker, // editorial's topic label for the strap tag (graphics request)
       category: seg.category,
-      since: now() + pace(s).strap.inAfterCut, // ART_DIRECTION §5: the strap enters about 1 s after the cut
+      since: now() + delay + pace(s).strap.inAfterCut, // ART_DIRECTION §5: the strap enters about 1 s after the (real) cut
     };
     paceTrace({ k: 'strap', at: s.lowerThird.since * 1000 }); // analyser: when the strap really wipes in
-    await this.say(seg, (i) => i > 0 && !v2cues && shotFor(i));
+    await this.say(seg, (i) => {
+      sentence = i;
+      sentAt = now();
+      if (i === 0) spoke = now();
+      if (i === 0 || v2cues || opening) return;
+      if (i < beats.length && beats[i] !== s.shot) shotFor(i);
+      else guard(i);
+    });
+    clearTimeout(watch);
     clearTimeout(pending);
   }
 }

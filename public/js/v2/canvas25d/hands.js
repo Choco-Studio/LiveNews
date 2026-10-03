@@ -312,6 +312,9 @@ function handMats(L, m) {
     line: robot ? material(`${L.id}:handLine`, { ramp: [jointColour], decal: true }) : material(`${L.id}:handLine`, { ramp: [L.skinLine], decal: true }),
     sleeveD: material(`${L.id}:sleeveD`, { ramp: L.jacket.ramp, decal: true }),
     rim: material('hands:rim', { ramp: [P.silver], decal: true }),
+    // the sleeve without the side rim, for silhouette pixels that face down (the underside of a forearm
+    // is away from the key light: the generic right-edge rim would dot it, one lit pixel per step)
+    sleeveNoRim: material(`${L.id}:sleeveNoRim`, { ramp: L.jacket.ramp, line: L.jacket.line, th: [0.94, 0.12, -0.4] }),
   };
   MATS.set(L, h);
   return h;
@@ -326,6 +329,9 @@ const SPAN = new Float64Array(8);
 // silhouette pixels of the sleeve facing up / right, collected while rasterising (for the rim pass)
 const EDGE_IDX = new Int32Array(4096);
 let edgeN = 0;
+// silhouette pixels facing down and to the right (the underside of a forearm), for underRim
+const DOWN_IDX = new Int32Array(4096);
+let downN = 0;
 
 function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0, collect = false, splitU = -1, splitG = 0, endK = 1) {
   const dx = bx - ax, dy = by - ay;
@@ -409,7 +415,10 @@ function capsuleFast(buf, ax, ay, bx, by, ra, rb, m, toneBias = 0, flatStart = 0
       // the start of an upper arm under the shoulder stays flat-lit: no dome highlight on the cap
       if (flatK && u < flatStart && tt < 1) tt = 1;
       tone[i] = tt < 0 ? 0 : tt > 3 ? 3 : tt;
-      if (collect && d2 > (r - 1.5) * (r - 1.5) && (ey < 0 || ex > 0) && edgeN < EDGE_IDX.length) EDGE_IDX[edgeN++] = i;
+      if (collect && d2 > (r - 1.5) * (r - 1.5)) {
+        if ((ey < 0 || ex > 0) && edgeN < EDGE_IDX.length) EDGE_IDX[edgeN++] = i;
+        if (ey > 0 && ex >= 0 && downN < DOWN_IDX.length) DOWN_IDX[downN++] = i;
+      }
       // the start of the bone may belong to another group (the sleeve cap, seamless with the jacket)
       grp[i] = u < splitU ? splitG : g;
       z[i] = cz;
@@ -477,6 +486,7 @@ export function drawArm(buf, L, m, arm, side, toS, s, ga, gc, gh, z) {
   const jacketG = ga - (ga % GROUPS_PER_ACTOR) + GROUPS.jacket;
   shoulderCap(buf, sxp, syp, cx0, cy0, A.rUpper * s, m.sleeve, jacketG);
   edgeN = 0;
+  downN = 0;
   const rimOn = s >= 1.6;
   // The sleeve cap (the upper arm down to the armpit) is its own group joined to the jacket and to the
   // rest of the sleeve: no inner line where it lies over the torso, so the round start of the capsule
@@ -516,7 +526,10 @@ export function drawArm(buf, L, m, arm, side, toS, s, ga, gc, gh, z) {
   const bend = elbowBend(arm);
   if (s >= 1.6 && bend > 1.0) elbowCorner(buf, exp, eyp, -ux / ul, -uy / ul, fx / fl, fy / fl, A.rElbow * s, m.sleeve, ga, clamp((bend - 1.0) / 0.8, 0, 1));
   if (s >= 1.6) sleeveFolds(buf, L, hm, arm, sxp, syp, exp, eyp, hemX, hemY, s, ga, bend);
-  if (rimOn) sleeveRim(buf, ga, m.sleeve, hm.rim);
+  if (rimOn) {
+    underRim(buf, ga, gTop, m.sleeve, hm.sleeveNoRim);
+    sleeveRim(buf, ga, m.sleeve, hm.rim);
+  }
 
   // ---- the hand
   handGeometry(L, arm, side, HG);
@@ -733,6 +746,22 @@ function sleeveRim(buf, g, mSleeve, mRim) {
   }
 }
 
+/**
+ * No rim on the underside: a sleeve silhouette pixel with nothing to its right AND nothing below faces
+ * down-right, away from the key (upper left); the material's side rim would light it, and along a
+ * sloping forearm that is one silver pixel per step, a dotted line. Those pixels take the same sleeve
+ * tone without the rim (critic r2: rim only on the up- and right-facing silhouette).
+ */
+function underRim(buf, g, gTop, mSleeve, mNoRim) {
+  const W = buf.w;
+  const { mat, grp } = buf;
+  for (let q = 0; q < downN; q++) {
+    const i = DOWN_IDX[q];
+    if (mat[i] !== mSleeve || (grp[i] !== g && grp[i] !== gTop)) continue;
+    if (!mat[i + 1] && !mat[i + W]) mat[i] = mNoRim;
+  }
+}
+
 /** Integer line painted only over pixels of group g (fabric creases). */
 function paintLine(buf, ax, ay, bx, by, m, tone, g) {
   let x0 = Math.round(ax), y0 = Math.round(ay);
@@ -887,6 +916,8 @@ function rasterHand(buf, L, hm, g, B, s, gh, z) {
   formTones(lod);
   // ---- finish
   if (lod >= 1) separations(g, robot, lod, s);
+  // the medium shot's closed hands (resting, gripping): finger rhythm from notches in the contour
+  if (lod === 1 && s >= 1.9 && !robot && SEP_CLOSED) fingerNotches();
   if (lod >= 1 && !robot) contactShadow();
   if (lod >= 2) details(g, B, s, lod, robot, back);
   // ---- clean clusters (owner 17:50 "no noise"): no lone detail, line or highlight pixel survives, and a
@@ -1383,6 +1414,42 @@ function needsLine(a, b, k, kk, curl, lod) {
 }
 const FW = new Float64Array(4); // finger widths in px for the current hand
 let SEP_CLOSED = false;
+
+/**
+ * Finger rhythm on a closed hand at the medium scale (critic r2: at 2-2.7 px per unit the resting hands
+ * read as mittens): no full separation lines (a closed hand is one mass), but where two neighbouring
+ * fingers meet, the pixel of the finger BEHIND turns one shade darker (sel-out in the skin's own shade),
+ * and deep skin where the boundary reaches the silhouette, a small notch in the contour, so the
+ * fingertips and knuckles read as a row of bumps.
+ */
+function fingerNotches() {
+  for (let j = 1; j < bh - 1; j++) {
+    const o = j * LW;
+    for (let i = 1; i < bw - 1; i++) {
+      const k = o + i;
+      const a = OWN[k];
+      if (a < 2 || TN[k] === 4 || TN[k] >= 8) continue;
+      for (let q = 0; q < 2; q++) {
+        const nb = q === 0 ? k + 1 : k + LW;
+        const b = OWN[nb];
+        if (b < 2 || b === a || TN[nb] === 4 || TN[nb] >= 8) continue;
+        // not where they leave the back of the hand (the knuckle end of the proximal bones)
+        if (SEG[k] + SEG[nb] < 1 && UU[k] + UU[nb] < 0.5) continue;
+        const behind = Math.abs(ZB[k] - ZB[nb]) < 0.35 ? nb : ZB[k] < ZB[nb] ? k : nb;
+        const sil = OWN[behind - 1] < 0 || OWN[behind + 1] < 0 || OWN[behind - LW] < 0 || OWN[behind + LW] < 0;
+        TN[behind] = sil ? 7 : 6;
+      }
+    }
+  }
+  for (let j = 0; j < bh; j++) {
+    const o = j * LW;
+    for (let i = 0; i < bw; i++) {
+      const k = o + i;
+      if (TN[k] === 6) TN[k] = 8 + 2;
+      else if (TN[k] === 7) TN[k] = 8 + 3;
+    }
+  }
+}
 
 /** The key light comes from the upper left: a palm pixel just below-right of a finger in front of it is in shadow. */
 function contactShadow() {

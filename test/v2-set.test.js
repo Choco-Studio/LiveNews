@@ -378,7 +378,7 @@ describe('round 3: wall plates inside their free area, clean tint clusters', () 
     const p = plateRectFor(lab.cameraFor('single-a', 'news-60'), 'WILDLIFE', 'BITPORT HERALD', 'news-60');
     assert.ok(p.x0 >= 8 && p.kicker === 'WILDLIFE' && p.sub === 'BITPORT HERALD');
   });
-  test('solo programmes: the wall\'s bottom band (16 px, 32 px where the wall is drawn at 2x) carries no content in any framing or wall mode', () => {
+  test('solo programmes: the wall\'s bottom band (16 px, 32 px where the wall is drawn at 2x) carries no content in any framing or wall mode', { skip: !CAMERA && 'camera.js unavailable (framings are CAMERA\'s)' }, () => {
     const modes = [{ wall: 'idle' }, { wall: 'picture', image: 'port' }, { wall: 'plate' }, { wall: 'figure' }, { wall: 'map' }];
     for (const programme of ['news-60', 'money-minute']) {
       for (const framing of ['wide', 'single-a', 'mcu-l', 'mcu-r']) {
@@ -609,7 +609,7 @@ describe('tools/measure-frame.mjs', () => {
 
 describe('fix round 1: layout, pictures, light (critics of round 3)', () => {
   const SOLO_FRAMINGS = ['wide', 'single-a', 'solo', 'mcu-l', 'mcu-r', 'ots'];
-  test('every kicker of up to 18 characters gets a plate in every solo framing and every duo single', () => {
+  test('every kicker of up to 18 characters gets a plate in every solo framing and every duo single', { skip: !CAMERA && 'camera.js unavailable (framings are CAMERA\'s)' }, () => {
     const kickers = ['MARKETS', 'VOLCANO', 'TECHNOLOGY', 'HEALTH CARE', 'ENERGY PRICES', 'CLIMATE TALKS', 'HOUSING MARKET',
       'INTEREST RATES', 'INFRASTRUCTURE', 'TRADE AGREEMENT', 'SPACE EXPLORATION', 'EUROPEAN ELECTIONS', 'MARS SAMPLE RETURN'];
     const cases = [];
@@ -629,7 +629,7 @@ describe('fix round 1: layout, pictures, light (critics of round 3)', () => {
       }
     }
   });
-  test('pictures: a box beside a head keeps 6 px from it and stays under the graphics top row; a full wall continues under that row one step darker; the solo WIDE fills the wall behind the head', () => {
+  test('pictures: a box beside a head keeps 6 px from it and stays under the graphics top row; a full wall continues under that row one step darker; the solo WIDE fills the wall behind the head', { skip: !CAMERA && 'camera.js unavailable (framings are CAMERA\'s)' }, () => {
     for (const programme of [...STYLE_IDS, 'weekend-review']) {
       for (const framing of lab.FRAMINGS) {
         const cam = lab.cameraFor(framing, programme === 'weekend-review' ? 'generic' : programme);
@@ -664,7 +664,7 @@ describe('fix round 1: layout, pictures, light (critics of round 3)', () => {
     assert.ok(n > 0 && dark === n, `${dark}/${n} under the top row no brighter than steel`);
     assert.ok(black < n * 0.5, `${black}/${n} black: a letterbox`);
   });
-  test('the wall field has no value transition beside a head: it is settled above every head top', () => {
+  test('the wall field has no value transition beside a head: it is settled above every head top', { skip: !CAMERA && 'camera.js unavailable (framings are CAMERA\'s)' }, () => {
     for (const programme of [...STYLE_IDS, 'generic']) {
       for (const framing of lab.FRAMINGS) {
         const cam = lab.cameraFor(framing, programme);

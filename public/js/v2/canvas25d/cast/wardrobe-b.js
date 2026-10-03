@@ -272,9 +272,11 @@ export function blob(buf, m, cx, cy, r, wob, ph, bias = 0, sph = null, hi = true
       }
       // explicit cluster tones: a lit crescent toward the key, the body, a shaded far side
       const lit = -0.6 * nx - 0.8 * ny;
-      let t = (lit > 0.55 && d2 > 0.25 ? (hi ? 0 : 1) : lit < -0.35 ? 2 : 1) + bias;
-      // the crease where this clump tucks under its neighbour (far side, outer ring)
-      if (d2 > 0.6 && dx + dy * 0.8 > rr * 0.3) t = 3;
+      let t = (lit > 0.5 && d2 > 0.2 ? (hi ? 0 : 1) : lit < -0.3 ? 2 : 1) + bias;
+      // the crease where this clump tucks under its neighbour: a crescent on the far side's outer ring
+      // that thickens toward the lower right (never a hairline crack)
+      const far = (dx + dy * 0.8) / rr;
+      if (far > 0.25 && d2 > 0.62 - far * 0.22) t = 3;
       const i = y * w + x;
       mat[i] = m;
       tn[i] = t < 0 ? 0 : t > 3 ? 3 : t;
@@ -371,6 +373,11 @@ function clothTone(o, opts = {}) {
   const topY = toS(0, T.shoulderTop)[1];
   const litEdge = opts.litEdge ?? -0.8, shadeEdge = opts.shadeEdge ?? 0.58, deepEdge = opts.deepEdge ?? 0.9;
   const chest = (opts.chest ?? 1) && s >= 1.35; // the widening lit plane needs room to read
+  const deep = s >= 1.35; // in the wide the outline is the deep edge
+  // above the armpit the far side's shade narrows to nothing: the far shoulder is a lit, rounded form
+  // (a deep band there showed as a black wedge between the shoulder and the sleeve)
+  const capTop = 0.6, armpit = T.shoulderJoint[1] + 3.2 - T.shoulderTop;
+  const capK = 1 / Math.max(1, armpit - capTop);
   return (x, y) => {
     const nx = (x + 0.5 - c[0]) / halfW;
     const top = (y + 0.5 - topY) / s; // units below the shoulder line
@@ -381,8 +388,11 @@ function clothTone(o, opts = {}) {
     // the lit strip on the key side is widest across the upper chest and narrows toward the waist
     const lit = litEdge + (chest ? 0.16 * (1 - k) * (1 - k) : 0) + 0.04 * k;
     if (nx < lit) return 0;
-    if (nx < shadeEdge - 0.1 * k) return 1;
-    if (nx < deepEdge - 0.05 * k) return 2;
+    let fc = (top - capTop) * capK;
+    fc = fc < 0 ? 0 : fc > 1 ? 1 : fc * fc * (3 - 2 * fc);
+    const se = shadeEdge - 0.1 * k + (1 - fc) * (1.06 - shadeEdge);
+    if (nx < se) return 1;
+    if (!deep || nx < deepEdge - 0.05 * k + (1 - fc) * (1.1 - deepEdge)) return 2;
     return 3;
   };
 }
@@ -504,7 +514,7 @@ function knitBlazer(o) {
   }
   if (t === 2) {
     // shoulder seams (soft shoulders, no padding) and a patch pocket on the far chest
-    for (const side of [-1, 1]) bodyPaint(o, [[side * (nk + 5.4), 0.6], [side * (T.shoulderHW * 0.84), T.shoulderTop + 0.9]], m.jacket, side < 0 ? 1 : 3, gJ);
+    for (const side of [-1, 1]) bodyPaint(o, [[side * (nk + 5.4), 0.6], [side * (T.shoulderHW * 0.84), T.shoulderTop + 0.9]], m.jacket, side < 0 ? 1 : 2, gJ);
     const px0 = T.shoulderHW * 0.36, py0 = 8.6, pw = 4.6, ph = 3.9;
     bodyPaint(o, [[px0, py0], [px0 + pw, py0]], m.jacket, 0, gJ); // the pocket's top edge catches the key
     bodyPaint(o, [[px0, py0 + 0.4], [px0 + pw, py0 + 0.4]], m.jacket, 3, gJ, 0);
@@ -530,7 +540,7 @@ function turtleneck(o) {
   drape(o, m.jacket, gJ, t, 1);
   if (t === 2) {
     // set-in shoulder seams of a fitted knit
-    for (const side of [-1, 1]) bodyPaint(o, [[side * (nk + 3.6), 1.0], [side * (T.shoulderHW * 0.86), T.shoulderTop + 1.4]], m.jacket, side < 0 ? 1 : 3, gJ);
+    for (const side of [-1, 1]) bodyPaint(o, [[side * (nk + 3.6), 1.0], [side * (T.shoulderHW * 0.86), T.shoulderTop + 1.4]], m.jacket, side < 0 ? 1 : 2, gJ);
   }
   shoulderRim(o, T, gJ);
   // ---- the roll collar: a soft knit tube up the neck, folded over once: the roll bulges a little at the
@@ -634,7 +644,7 @@ function cardigan(o) {
   const gJ = gb + G.jacket;
   drape(o, m.jacket, gJ, t, 1);
   if (t === 2) {
-    for (const side of [-1, 1]) bodyPaint(o, [[side * (T.shoulderHW * 0.7), T.shoulderTop * 0.6], [side * (T.shoulderHW * 0.93), T.shoulderTop + 3.0]], m.jacket, side < 0 ? 1 : 3, gJ);
+    for (const side of [-1, 1]) bodyPaint(o, [[side * (T.shoulderHW * 0.7), T.shoulderTop * 0.6], [side * (T.shoulderHW * 0.93), T.shoulderTop + 3.0]], m.jacket, side < 0 ? 1 : 2, gJ);
   }
   shoulderRim(o, T, gJ);
   if (L.necklace) drawChain(o, L.necklace, t);
@@ -663,12 +673,12 @@ function drawChain(o, [hi, lo], t) {
 // ---------------------------------------------------------------------------
 // UNIT-8: neck column, graphite shell, articulated shoulder caps, the plain chest plate
 
-/** Rounded rectangle (body units) as a polygon with the torso's shoulder lift: corners rt (top) / rb (bottom). */
+/** Plate (body units) as a polygon with the torso's shoulder lift: 45° chamfered corners rt (top) / rb (bottom). */
 function roundedPlate(o, lift, x0, x1t, x1b, y0, y1, rt, rb) {
   const out = [];
   const arc = (cx, cy, r, a0, a1) => {
-    for (let k = 0; k <= 4; k++) {
-      const a = a0 + ((a1 - a0) * k) / 4;
+    for (let k = 0; k <= 1; k++) {
+      const a = a0 + (a1 - a0) * k;
       const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
       out.push(...o.toS(x, lift(x < 0 ? -1 : 1, y)));
     }

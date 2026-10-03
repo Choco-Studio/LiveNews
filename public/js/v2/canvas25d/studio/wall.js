@@ -1192,13 +1192,13 @@ function wrapWords(text, maxW, font, scale, max) {
 }
 
 /** Size of a plate (rule, kicker lines, source line) at text scale ts. */
-function plateSize(lines, sub, ts) {
+function plateSize(lines, sub, ts, gap = 3 * ts) {
   let w = 0;
   for (const l of lines) w = Math.max(w, textWidth(l, 'body', ts));
   if (sub) w = Math.max(w, textWidth(sub, 'micro', ts));
   const kh = capHeight('body', ts), n = lines.length;
-  const sh = sub ? capHeight('micro', ts) + 3 * ts : 0;
-  return { w, h: ts + 3 * ts + n * kh + Math.max(0, n - 1) * 3 * ts + sh, kh };
+  const sh = sub ? capHeight('micro', ts) + gap : 0;
+  return { w, h: ts + gap + n * kh + Math.max(0, n - 1) * gap + sh, kh };
 }
 
 /** The free boxes in the order a plate or a block tries them: the wider side first, the top band, the other side. */
@@ -1221,9 +1221,12 @@ function layoutPlate(L, label0, sub0, ts0) {
   const tries = [];
   for (const s of ts0 > 1 ? [ts0, 1] : [1]) tries.push([s, 1, true], [s, 2, true]);
   if (sub0) tries.push([1, 1, false], [1, 2, false]);
-  // last: the place alone (a kicker too long for any free box still leaves the story's place)
+  // then the two lines set 2 px apart (the solo wide's band above the head is 24 px tall), and last
+  // the place alone (a kicker too long for any free box still leaves the story's place)
+  if (label0) tries.push([1, 2, false, 2]);
   if (sub0 && label0) tries.push([1, 0, true]);
-  for (const [ts, n, withSub] of tries) {
+  for (const [ts, n, withSub, gap0] of tries) {
+    const gap = gap0 ?? 3 * ts;
     for (const box of boxes) {
       const maxW = bw(box) - 4;
       if (maxW < 8) continue;
@@ -1236,12 +1239,12 @@ function layoutPlate(L, label0, sub0, ts0) {
         if (!sub) continue;
       }
       if (!lines.length && !sub) continue;
-      const z = plateSize(lines, sub, ts);
+      const z = plateSize(lines, sub, ts, gap);
       if (z.w + 4 > bw(box) || z.h + 4 > bh(box)) continue;
       const cx = Math.round((box.x0 + box.x1) / 2);
       const top = Math.round(box.y0 + Math.max(2, (bh(box) - z.h) * 0.42));
       const x0 = Math.max(box.x0 + 2, Math.min(box.x1 - 2 - z.w, cx - Math.round(z.w / 2)));
-      return { ts, lines, sub, x0, top, w: z.w, h: z.h, kh: z.kh };
+      return { ts, lines, sub, x0, top, w: z.w, h: z.h, kh: z.kh, gap };
     }
   }
   return null;
@@ -1250,15 +1253,15 @@ function layoutPlate(L, label0, sub0, ts0) {
 function drawPlate(b, L, spec, style, ts0) {
   const P = layoutPlate(L, spec.label || '', spec.sub || '', plateScale(spec, ts0));
   if (!P) return false;
-  const { ts, lines, sub, x0, top, w: needW, kh } = P;
+  const { ts, lines, sub, x0, top, w: needW, kh, gap } = P;
   const accent = style.id === 'money-minute' ? C.darkGreen : C[style.accentName];
   rect(b, x0, top, x0 + Math.min(needW, 12 * ts), top + ts, accent);
-  let y = top + 4 * ts;
+  let y = top + ts + gap;
   for (const l of lines) {
     stampText(b.px, b.w, b.h, l, x0, y, C.silver, 'body', ts, 'left');
-    y += kh + 3 * ts;
+    y += kh + gap;
   }
-  if (sub) stampText(b.px, b.w, b.h, sub, x0, lines.length ? y : top + 4 * ts, C.fog, 'micro', ts, 'left');
+  if (sub) stampText(b.px, b.w, b.h, sub, x0, lines.length ? y : top + ts + gap, C.fog, 'micro', ts, 'left');
   return true;
 }
 

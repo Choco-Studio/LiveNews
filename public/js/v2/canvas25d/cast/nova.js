@@ -31,6 +31,7 @@ export const nova = defineLook({
   mouth: { y: 5.95, w: 3.7, lip: P.maroon, lipHi: P.tan, upper: P.tanShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   ears: { y: -0.1, h: 2.8, w: 1.0 },
   skin: [P.tan, P.tanShade, P.brown, P.maroon],
+  skinLift: 0.4, // FACES: the lit planes reach further round a deep skin (the far side stays in shade)
   skinLine: P.maroon,
   hair: { style: 'coily', ramp: [P.brown, P.maroon, P.black, P.black], line: P.black },
   necklace: [P.silver, P.fog],
@@ -121,9 +122,17 @@ function drawWarmHead(buf, L, m, head, s) {
   const w = buf.w, M = buf.mat, T = buf.tone, Gr = buf.grp;
   const kx = head.cr / s, ky = head.sr / s;
   const chinY = H.chinY + (head.jaw || 0) - 0.8;
-  const midY = (H.top + H.chinY) * 0.5, halfH = (H.chinY - H.top) * 0.5;
-  const browY = L.brows.y - 0.7, cheekY0 = L.eyes.y + 0.6, cheekY1 = L.mouth.y + 0.4;
-  const chinY0 = L.mouth.y + 1.9;
+  const browY = L.brows.y - 0.7;
+  // hand-placed lit planes (head-local units, feature space), shaped on the face's structure rather
+  // than as discs: the forehead plane hugs the key-side brow ridge (its lower edge follows the brows and
+  // dips between them toward the nose bridge, its top rounds off well below the hairline, its far edge
+  // is the terminator slanting away), the cheekbone is a crescent under the lit eye that follows the
+  // orbit, and a small plane sits on the front of the chin. Painted only over the base tone, so they
+  // keep FACES' shading
+  const ex = L.eyes.x, ey = L.eyes.y;
+  const by = L.brows.y;
+  const chY = L.mouth.y + 2.1;
+  const yawShift = Math.sin(head.yaw || 0) * H.R * 0.75; // the planes ride the turn with the features
   for (let y = y0; y < y1; y++) {
     const dy = y + 0.5 - head.cy;
     for (let x = x0; x < x1; x++) {
@@ -137,22 +146,27 @@ function drawWarmHead(buf, L, m, head, s) {
         if (ly < chinY) T[i] = t - 1;
         continue;
       }
-      if (t !== 1) continue;
-      // the head as a soft ellipsoid lit by the key (upper front, camera-left)
-      const hw = Math.max(1, hwAt(L, ly));
-      const nx = clamp(lx / (hw + 0.8), -1, 1), ny = clamp((ly - midY) / (halfH + 1.5), -1, 1);
-      const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
-      const l = -0.42 * nx - 0.5 * ny + 0.76 * nz;
-      if (l < 0.6 || ly > chinY) continue;
-      // hand-placed planes, not a lit disc: the forehead above the brows, the cheekbone under the lit
-      // eye (outside the nose), the front of the chin
-      // (the forehead plane narrows toward the far side: its lower edge rises there, and it needs more light)
-      const forehead = ly < browY - Math.max(0, lx) * 0.16 && (lx < 0 || l > 0.72);
-      // the lit side of the cheek: a soft band along the face's contour where it turns to the key
-      const band = 1.9 - 0.9 * Math.abs((ly - (cheekY0 + cheekY1) * 0.5) / ((cheekY1 - cheekY0) * 0.5));
-      const cheek = ly > cheekY0 && ly < cheekY1 && lx < -hw + band;
-      const chin = ly > chinY0 && Math.abs(lx) < 1.7 && lx < 0.6;
-      if (!forehead && !cheek && !chin) continue;
+      if (t !== 1 || ly > chinY) continue;
+      const fx = lx - yawShift;
+      let on = false;
+      // forehead: between the brow ridge and a rounded top ~1.9 u above it, key side to the terminator
+      const yb = by - 0.4 + 0.55 * Math.exp(-(fx * fx) / 0.7) + 0.06 * (fx + ex) * (fx + ex) * (fx < 0 ? 1 : 0);
+      if (ly < yb && fx > -ex - 1.3 && fx < 0.9 + 0.35 * (ly - by)) {
+        const u = (fx + 1.2) / 2.6;
+        const top = yb - 1.9 * (1 - u * u * 0.55);
+        if (ly > top) on = true;
+      }
+      // cheekbone: a crescent under the lit eye, thickest below its centre, following the orbit
+      if (!on && fx < -ex + 1.6 && fx > -ex - 2.2) {
+        const q = fx + ex;
+        const yu = ey + 1.25 + 0.13 * q * q;
+        const v = (q + 0.25) / 1.95;
+        const yl = yu + 0.95 * (1 - v * v);
+        if (ly > yu && ly < yl) on = true;
+      }
+      // chin: a small plane on its front, left of centre
+      if (!on && ly > chY - 0.4 && ly < chY + 0.35 && fx > -1.2 + (ly - chY) * 0.6 && fx < 0.35) on = true;
+      if (!on) continue;
       // keep a base pixel beside every shadow tone (no lit rim around the eyes, nose or mouth)
       if (T[i - 1] >= 2 && M[i - 1] === mt) continue;
       if (T[i + 1] >= 2 && M[i + 1] === mt) continue;
@@ -188,7 +202,8 @@ function drawCoils(buf, L, m, head, s, sk) {
   const tr = tier(s);
   const yawX = Math.sin(head.yaw) * H.R * 0.75;
   const pitchShift = Math.sin(head.pitch) * 2.0;
-  const hairline = (fx) => H.top + 4.55 + pitchShift + fx * fx * 0.012 + 0.2 * HL_WAVE[clampIdx(fx)];
+  // a rounded face window: the hair comes down at the temples (never a straight cap edge)
+  const hairline = (fx) => H.top + 4.2 + pitchShift + fx * fx * 0.055 + 0.2 * HL_WAVE[clampIdx(fx)];
   // a face window: open forehead and cheeks, hair down the sides to the jaw
   const inFace = (x, y) => {
     const fx = x - yawX;
@@ -258,7 +273,9 @@ function drawCoils(buf, L, m, head, s, sk) {
     const g = buf.g;
     const [bx0, by0, bx1, by1] = haloBox(head, 1);
     const yLimit = head.cy + (HALO.cy - HALO.up * 0.45) * s;
-    rimRuns(buf, g, g, bx0, bx1, by0, by1, rimDecal(), tr === 1 ? 2 : 3, (x, y) => y < yLimit);
+    // only from just left of centre rightwards: the hair light comes from the upper right (a rim over the
+    // whole crown would outline the curls like a cap)
+    rimRuns(buf, g, g, head.cx - 1.5 * s, bx1, by0, by1, rimDecal(), tr === 1 ? 2 : 3, (x, y) => y < yLimit);
   }
 }
 

@@ -51,7 +51,8 @@ import { applyLook, applyListen } from './behaviour.js';
 import { applyIdle } from './idle.js';
 import { applySpeech } from './speech.js';
 import { glassesAnchor } from './glasses.js';
-import { clamp, smooth } from './space.js';
+import { handGeometry, newHandGeometry } from './hands.js';
+import { clamp, smooth, TILT } from './space.js';
 
 export { evalTrack } from './tracks.js';
 export { EMOTIONS } from './expression.js';
@@ -286,6 +287,9 @@ export function evaluate(L, perf, t, c = newChannels()) {
   applyIdle(c, persona, perf, t, seed, gestLook); // 5
   const fr = applySpeech(c, persona, perf, t); // 6
   if (!fr.speaking && perf.listen) applyListen(c, perf, t, seed);
+  // a hand at the glasses: the eyes stay open while the fingertip is at the hinge (a blink there reads as
+  // rubbing an eye); a blink already under way fades out with the reach instead of snapping open
+  if (c.reach > 0.001) c.blink *= 1 - smooth(c.reach * 4);
   c.face = c; // face params live on the channel object
   // the script stack on the desk travels with the channels, so every solve path (with or without the
   // follow-through pass) draws it: a detail-level switch never makes the papers pop
@@ -432,25 +436,33 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
     arm.handDir[0] = (d[0] * m) / dl;
     arm.handDir[1] = d[1] / dl;
     arm.handDir[2] = d[2] / dl;
+    // the hand's shape before the reach: the glasses reach places the real fingertips (hands.js geometry)
+    const cu = pass === 0 ? c.curl : c.curlF;
+    for (let q = 0; q < 5; q++) arm.hand.curl[q] = clamp(cu[q], -0.15, 1);
+    arm.hand.spread = pass === 0 ? c.spread : c.spreadF;
+    arm.hand.facing = pass === 0 ? c.facing : c.facingF;
+    arm.hand.sup = clamp(pass === 0 ? c.sup : c.supF, 0, 1);
     if (pass === 0 && reach > 0.001) reachGlasses(L, sk, arm, reach, sideKey);
     const pole = pass === 0 ? c.pole : c.poleF;
     PW[0] = pole[0] * m;
     PW[1] = pole[1];
     PW[2] = pole[2];
     ik(arm.shoulder, TW, A.upper, A.fore, PW, arm.elbow, arm.wrist);
-    const cu = pass === 0 ? c.curl : c.curlF;
-    for (let q = 0; q < 5; q++) arm.hand.curl[q] = clamp(cu[q], -0.15, 1);
-    arm.hand.spread = pass === 0 ? c.spread : c.spreadF;
-    arm.hand.facing = pass === 0 ? c.facing : c.facingF;
-    arm.hand.sup = clamp(pass === 0 ? c.sup : c.supF, 0, 1);
   }
   return sk;
 }
 
 /**
- * Move the wrist target (TW) so the thumb-index pinch lands on the outer corner of the glasses frame on
- * the arm's own side (glasses.js glassesAnchor 'templeL' / 'templeR'): the hand stays beside the face.
+ * Move the wrist target (TW) so the index fingertip of the pinch lands on the hinge of the glasses on the
+ * arm's own side (glasses.js glassesAnchor 'templeL' / 'templeR': the outer TOP corner of the lens, as
+ * drawn), the thumb under the temple arm beside the eye: the hand stays beside the face, never on the lens
+ * or the cheek. The fingertip comes from the same hand skeleton hands.js draws (handGeometry at a zero
+ * wrist, for this frame's hand direction and shape), so the touch is exact at every scale; the oblique
+ * camera turns depth into height, so the tip's depth (REACH_Z, in front of the face) is part of the aim.
  */
+const RG = newHandGeometry();
+const RARM = { wrist: [0, 0, 0], handDir: null, hand: null };
+const REACH_Z = 7.5; // body units: the fingertip's depth, in front of the face plane
 function reachGlasses(L, sk, arm, reach, sideKey) {
   const h = sk.head;
   BODY_HEAD.L = L;
@@ -462,9 +474,14 @@ function reachGlasses(L, sk, arm, reach, sideKey) {
   BODY_HEAD.yaw = h.yaw;
   BODY_HEAD.pitch = h.pitch;
   glassesAnchor(BODY_HEAD, sideKey === 'R' ? 'templeR' : 'templeL', ANCHOR);
-  // the pinch (thumb tip on index tip) sits ~0.8 hand lengths along the hand direction from the wrist
-  const H = L.arm.hand * 0.8;
-  const ax = ANCHOR[0] - arm.handDir[0] * H, ay = ANCHOR[1] - arm.handDir[1] * H, az = 7.5 - arm.handDir[2] * H;
+  RARM.handDir = arm.handDir;
+  RARM.hand = arm.hand;
+  handGeometry(L, RARM, sideKey === 'R' ? 1 : -1, RG);
+  // index fingertip (joint 3) relative to the wrist; the screen sees (x, y + z·TILT)
+  const J = RG.J;
+  const ax = ANCHOR[0] - J[9];
+  const az = REACH_Z - J[11];
+  const ay = ANCHOR[1] - J[10] - REACH_Z * TILT;
   TW[0] += (ax - TW[0]) * reach;
   TW[1] += (ay - TW[1]) * reach;
   TW[2] += (az - TW[2]) * reach;

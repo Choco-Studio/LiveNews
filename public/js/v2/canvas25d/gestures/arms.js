@@ -95,7 +95,7 @@ export const ARMS = {
     hold: 0.94,
     focus: 'near',
     tracks: {
-      wrist: [[0, 'R'], [0.16, [-7.4, 20.05, 11.86]], [0.44, [-6.0, 11.5, 17.0]], [0.53, [-5.9, 10.9, 17.3]], [0.66, [-6.0, 11.3, 17.2], 's'], [0.94, [-6.0, 11.4, 17.2], 's'], [1.2, [-6.4, 19.7, 13.88]], [1.4, 'R', 's']],
+      wrist: [[0, 'R'], [0.16, [-7.4, 20.05, 11.86]], [0.44, [-3.4, 6.0, 17.4]], [0.53, [-3.2, 5.2, 17.7]], [0.66, [-3.3, 5.7, 17.6], 's'], [0.94, [-3.3, 5.8, 17.6], 's'], [1.2, [-6.4, 19.7, 13.88]], [1.4, 'R', 's']],
       dir: [[0, 'R'], [0.22, [-0.7, 0.2, 0.6]], [0.5, [-0.55, 0.05, 0.82]], [0.6, [-0.5, 0.0, 0.85], 's'], [0.98, [-0.5, 0.0, 0.85], 's'], [1.26, [-0.75, 0.15, 0.6]], [1.4, 'R']],
       curl: [[0, 'R'], [0.28, FIST], [0.5, THUMB, 's'], [1.0, THUMB, 's'], [1.28, 'R']],
       facing: [[0, 'R'], [0.4, -1, 's'], [1.0, -1, 's'], [1.3, 'R']],
@@ -278,12 +278,13 @@ export const ARMS = {
     tracks: {
       // a thumb-and-index pinch at the outer corner of the frame on the near side (never a hand across
       // the nose and mouth: the face stays readable), the wrist low and outside the cheek; `reach` lets
-      // the rig put the pinch exactly on glasses.js glassesAnchor(head, 'templeL' | 'templeR'); the frame
-      // is nudged up once (the apex) and the hand goes back down calmly
-      // (the authored path stays on the near side of the face, where the reach puts the hand: rising and
-      // falling it never crosses the mouth)
-      wrist: [[0, 'R'], [0.2, [-6.2, 19.4, 12.6]], [0.42, [-6.8, 6.0, 10.4]], [0.62, [-6.7, -7.6, 8.2]], [0.72, [-6.6, -10.4, 7.7]], [0.86, [-6.6, -10.1, 7.75], 's'], [0.96, [-6.6, -10.6, 7.7]], [1.12, [-6.6, -10.3, 7.75], 's'], [1.42, [-6.8, -2.0, 9.4]], [1.66, [-6.8, 12.6, 11.8]], [1.9, 'R', 's']],
-      dir: [[0, 'R'], [0.26, [-0.6, 0.05, 0.78]], [0.5, [-0.5, -0.6, 0.62]], [0.74, [-0.5, -0.84, 0.2], 's'], [1.16, [-0.5, -0.84, 0.2], 's'], [1.48, [-0.55, -0.4, 0.7]], [1.72, [-0.75, 0.15, 0.62]], [1.9, 'R']],
+      // the rig put the index fingertip exactly on the hinge, glasses.js glassesAnchor(head, 'templeL' |
+      // 'templeR'), the thumb under the temple arm; the hold is brief and the hand goes back down calmly
+      // (the authored path stays outside the near cheek, where the reach puts the wrist, so blending the
+      // reach in and out never slides the hand across the face; the release goes outward and down along
+      // the jaw line with the fingers turning up, never over the mouth)
+      wrist: [[0, 'R'], [0.2, [-6.0, 19.4, 12.6]], [0.42, [-5.4, 6.0, 10.4]], [0.62, [-4.9, -7.6, 8.2]], [0.72, [-4.7, -10.4, 7.7]], [0.86, [-4.6, -10.1, 7.75], 's'], [0.96, [-4.6, -10.6, 7.7]], [1.12, [-4.6, -10.3, 7.75], 's'], [1.42, [-3.4, -1.6, 9.6]], [1.66, [-5.2, 12.6, 11.8]], [1.9, 'R', 's']],
+      dir: [[0, 'R'], [0.26, [-0.6, 0.05, 0.78]], [0.5, [-0.5, -0.6, 0.62]], [0.74, [-0.5, -0.84, 0.2], 's'], [1.16, [-0.5, -0.84, 0.2], 's'], [1.46, [-0.08, -0.78, 0.6]], [1.72, [-0.75, 0.15, 0.62]], [1.9, 'R']],
       curl: [[0, 'R'], [0.4, [0.4, 0.34, 0.6, 0.7, 0.75]], [0.7, PINCH, 's'], [1.16, PINCH, 's'], [1.64, 'R']],
       facing: [[0, 'R'], [0.6, -0.4, 's'], [1.16, -0.4, 's'], [1.64, 'R']],
       spread: [[0, 'R'], [0.7, 0.06], [1.16, 0.06], [1.64, 'R']],
@@ -330,6 +331,31 @@ ARMS.papers.variants = {
       lookY: [[0, 0], [0.2, 0.42], [0.66, 0.38], [0.96, 0], [1.24, 0]],
       shN: [[0, 0], [0.3, 0.1], [0.46, -0.1], [0.56, 0.04], [1.24, 0]],
       shF: [[0, 0], [0.3, 0.1], [0.46, -0.1], [0.56, 0.04], [1.24, 0]],
+    },
+  },
+};
+
+// The chin touch while speaking (critic r2: a thinking pose held through the read stalls the delivery and
+// reads as a listener's pose): the hand meets the jaw on the stressed word, rests there about half a
+// second and leaves while the sentence goes on. The full `chin` (1.1 s at the chin) is kept for a
+// question or for the pause after the last word, where the planner may still choose it.
+ARMS.chin.variants = {
+  touch: {
+    dur: 1.76,
+    stroke: 0.22,
+    apex: 0.6,
+    hold: 1.14,
+    tracks: {
+      wrist: [[0, 'R'], [0.2, [-6.8, 19.95, 12.38]], [0.5, [-15.8, -2.6, 9.6]], [0.6, [-16.9, -4.6, 9.1]], [0.74, [-16.6, -4.1, 9.2], 's'], [1.14, [-16.6, -4.2, 9.2], 's'], [1.46, [-9.6, 12.4, 12.0]], [1.76, 'R', 's']],
+      dir: [[0, 'R'], [0.26, [-0.6, -0.2, 0.7]], [0.56, [-0.15, -0.95, 0.2]], [0.68, [-0.1, -0.98, 0.15]], [0.8, [-0.12, -0.97, 0.17], 's'], [1.18, [-0.12, -0.97, 0.17], 's'], [1.5, [-0.6, -0.1, 0.72]], [1.76, 'R']],
+      curl: [[0, 'R'], [0.34, RELAXED], [0.62, CHIN, 's'], [1.18, CHIN, 's'], [1.56, 'R']],
+      facing: [[0, 'R'], [0.48, -0.9, 's'], [1.18, -0.9, 's'], [1.56, 'R']],
+      pole: [[0, 'R'], [0.48, [0.5, 1, 0.3]], [1.18, [0.5, 1, 0.3]], [1.76, 'R']],
+      shN: [[0, 0], [0.2, 0.2], [0.6, -0.6], [1.14, -0.5], [1.5, 0.05], [1.76, 0]],
+      pitch: [[0, 0], [0.6, 0.035], [1.14, 0.03], [1.76, 0]],
+      roll: [[0, 0], [0.6, 0.025], [1.14, 0.02], [1.76, 0]],
+      browIn: [[0, 0], [0.6, 0.24], [1.14, 0.2], [1.76, 0]],
+      lean: [[0, 0], [0.6, 0.008], [1.14, 0.008], [1.76, 0]],
     },
   },
 };

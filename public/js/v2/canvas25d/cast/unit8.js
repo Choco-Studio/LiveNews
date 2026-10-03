@@ -37,9 +37,9 @@ import { LOOK, tier } from './wardrobe-b.js';
 
 // Head-local design (units; 1 u = 1 px in the wide). Wide: housing 18 x 15, visor 13 x 8.
 // About a human head's area but wider than tall: it reads as a sensor housing, never a big-headed mascot.
-// The outline is a superellipse (power 5 on the crown, 4 below: flat faces, tight machined corners).
-export const CASE = { hw: 9.0, top: -7.6, bot: 7.2, taper: 0.12, pTop: 5, pBot: 4 };
-export const VISOR = { hw: 6.1, top: -3.35, bot: 3.65, rc: 1.2, taper: 0.07 };
+// The outline is a box with 45° chamfers (small on the crown, larger toward the chin): machined, not rounded.
+export const CASE = { hw: 9.0, top: -7.6, bot: 7.2, taper: 0.1, chamferTop: 1.7, chamferBot: 2.6 };
+export const VISOR = { hw: 6.1, top: -3.35, bot: 3.65, rc: 1.0, taper: 0.07 };
 export const MODULE = { y0: -2.9, y1: 2.6, out: 1.05, inset: 0.8, r: 0.55 }; // flush side sensor modules
 export const SEAM = { crown: -5.35, chin: 5.45 };
 export const EYE = { x: 3.4, y: -0.85, share: 0.12 };
@@ -50,7 +50,7 @@ export const unit8 = defineLook({
   name: 'UNIT-8',
   head: { top: CASE.top, craniumY: -2, R: CASE.hw, cheekY: 2, cheekHW: CASE.hw, chinY: CASE.bot, chinHW: 8.4, jawPow: 4 },
   headAt: [0, -12.5],
-  neck: { hw: 2.6 },
+  neck: { hw: 2.15 }, // a slim machined column: the head reads as a mounted instrument
   // face proportions other modules may read (glassesAnchor, framing); the face itself is drawn here
   eyes: { y: EYE.y, x: EYE.x, w: 2.2, h: 0.6, iris: [P.silver, P.silver], lash: P.silver, lashes: false, bags: false },
   brows: { y: -3.5, len: 2, thick: 0.3, color: P.steel, arch: 0 },
@@ -149,42 +149,37 @@ function drawCasing(buf, L, m, head, s) {
   const seams = tr >= 1;
   const screws = tr === 2 && s >= 2.6;
   const scY = SEAM.crown - 1.15, scY2 = SEAM.chin + 1.05;
+  // the housing: a machined box with 45° chamfered corners (small on the crown, larger toward the
+  // chin, where the sides draw in), never a rounded TV shape; first-order distance to the outline and
+  // the face it belongs to give the bevel's normal
+  const cT = CASE.chamferTop, cB = CASE.chamferBot;
+  const R2 = Math.SQRT1_2;
   buf.shape(x0, y0, x1, y1, m.casing, (px, py) => {
     const x = (px - cx) / s, y = (py - cy) / s;
-    const top = y < 0;
-    const a = caseHW(y), b = top ? -CASE.top : CASE.bot;
-    const u = x / a, v = y / b;
-    const au = u < 0 ? -u : u, av = v < 0 ? -v : v;
-    const u2 = au * au, v2 = av * av;
-    // superellipse |u|^p + |v|^p ≤ 1 (p 5 on the crown, 4 below), and its gradient for the bevel normal
-    let F, gx, gy;
-    if (top) {
-      const u4 = u2 * u2, v4 = v2 * v2;
-      F = u4 * au + v4 * av;
-      gx = (5 * u4) / a;
-      gy = (5 * v4) / b;
-    } else {
-      const u3 = u2 * au, v3 = v2 * av;
-      F = u3 * au + v3 * av;
-      gx = (4 * u3) / a;
-      gy = (4 * v3) / b;
-    }
-    if (F > 1) return -1;
-    if (u < 0) gx = -gx;
-    if (v < 0) gy = -gy;
-    const g = Math.sqrt(gx * gx + gy * gy) || 1e-6;
-    const d = (1 - F) / g; // first-order distance to the outline (units)
+    const a = caseHW(y);
+    const ax = x < 0 ? -x : x;
+    const dSide = a - ax, dTop = y - CASE.top, dBot = CASE.bot - y;
+    if (dSide < 0 || dTop < 0 || dBot < 0) return -1;
+    const dCT = (dTop + dSide - cT) * R2, dCB = (dBot + dSide - cB) * R2;
+    if (dCT < 0 || dCB < 0) return -1;
+    // the nearest face of the box and its outward normal
+    let d = dSide, nx = x < 0 ? -1 : 1, ny = 0;
+    if (dTop < d) { d = dTop; nx = 0; ny = -1; }
+    if (dBot < d) { d = dBot; nx = 0; ny = 1; }
+    if (dCT < d) { d = dCT; nx = (x < 0 ? -1 : 1) * R2; ny = -R2; }
+    if (dCB < d) { d = dCB; nx = (x < 0 ? -1 : 1) * R2; ny = R2; }
+    const u = x / CASE.hw;
     let t;
     if (d < bev) {
-      // the bevel: a plane tilted toward its edge, lit by the key from the upper left
-      const nx = gx / g, ny = gy / g;
+      // the bevel: a plane tilted toward its edge, lit by the key from the upper left (the
+      // specular on the crown and the upper-left chamfer and side, the lower right in shade)
       const l = -0.6 * nx - 0.8 * ny;
-      // the specular sits on the upper-left: the left bevel and the crown bevel's left third
-      t = l > 0.5 && (nx < -0.35 || u < -0.35) ? 0 : l > -0.12 ? 1 : l > -0.6 ? 2 : 3;
+      t = l > 0.55 ? 0 : l > 0.05 ? 1 : l > -0.5 ? 2 : 3;
     } else {
-      // the front plate: flat, turning a step darker toward the lower right
-      t = -0.42 * u - 0.3 * v > -0.3 ? 1 : 2;
+      // the front plate: flat, a step darker toward the lower right
+      t = -0.42 * u - 0.3 * (y / CASE.bot) > -0.3 ? 1 : 2;
     }
+    const au = u < 0 ? -u : u;
     if (seams) {
       // seams: a dark groove; at close-up the groove's lower wall catches the key as a 1 px lit lip
       const dc = y - SEAM.crown, dn = y - SEAM.chin;
@@ -255,9 +250,9 @@ function drawVisor(buf, L, head, f, s) {
           VMASK[(j + 1) * VW + i + 1] = 0;
           continue;
         }
-        const dx = Math.max(0, Math.abs(i + 0.5 - W / 2) - (hwj - rc));
-        const dy = Math.max(0, Math.abs(j + 0.5 - H / 2) - (H / 2 - rc));
-        inside = dx * dx + dy * dy <= rc * rc ? 1 : 0;
+        // chamfered corners (45°), like the housing: a machined window, not a rounded screen
+        const ex = hwj - Math.abs(i + 0.5 - W / 2), ey = H / 2 - Math.abs(j + 0.5 - H / 2);
+        inside = ex + ey >= rc ? 1 : 0;
       }
       VMASK[(j + 1) * VW + i + 1] = inside;
     }

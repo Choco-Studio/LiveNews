@@ -160,13 +160,58 @@ const LIVE_RES = [
 export const isLiveBlog = (title) => LIVE_RES.some((re) => re.test(String(title ?? '')));
 
 // Short words that stay in capitals when a shouting headline is sentence-cased.
-const ACRONYMS = new Set('US UK UN EU AI NASA NATO WHO IMF ECB BBC CNN ABC NBC CBS NPR FBI CIA NHS GDP CEO UAE DRC IPO EV EVS COP OPEC G7 G20 TV USA UFO VR AR IT 5G 4G'.split(' '));
+const ACRONYMS = new Set('US UK UN EU AI NASA NATO WHO IMF ECB BBC CNN ABC NBC CBS NPR FBI CIA NHS GDP CEO UAE DRC IPO EV EVS COP OPEC G7 G20 TV USA UFO VR AR IT 5G 4G FIFA UEFA IAEA OECD ASEAN UNHCR UNICEF UNESCO NOAA'.split(' '));
+
+// Ordinary short words of headlines: in a headline written in capitals, a 2-4 letter word NOT on this list is
+// taken for an acronym and keeps its capitals ("NASA AND ESA LAUNCH..." keeps ESA); letter-digit codes (Q3, G7,
+// COP29, 5G) always do.
+const COMMON_SHORT = new Set(
+  ('a an and are as at be but by do for from go has had have he her him his how if in into is it its me my no not now of off on ' +
+    'one or our out over own say says see she so than that the then they this to too two up us was way we were what when who why ' +
+    'will with you all any age ago aid air arm art ask bad bag ban bar bay bed bet bid big bit box boy bus buy can car cat cut day ' +
+    'die dog dry due ear eat end era eye far fat fed few fit fly fog fun gap gas get gun guy hit hot ice ill ink jam jet job joy key ' +
+    'kid kit lab law lay leg let lie lot low mad man map men mix mob mud net new nil oil old pay pet pin pit pop pot put rag ran rat ' +
+    'raw red rid rig row run sad sat saw sea set six sky son spa spy sun tax tea ten tie tip toe ton top toy try van via vow war wet ' +
+    'win won yes yet zoo able also area army away baby back ball band bank base bear beat been best bill bird blow blue boat body ' +
+    'bomb bond book boom boss both bowl bulk burn busy call calm came camp card care case cash cast cell chef chip city clan club ' +
+    'coal coat code cold come cook cool cops copy core cost crew crop cuts dark data date dead deal dear debt deep deny desk diet ' +
+    'dish does done door down draw drop drug dust duty each earn ease east easy edge else even ever exam exit face fact fail fair ' +
+    'fall fame farm fast fate fear feed feel fees feet fell felt file fill film find fine fire firm fish five flag flat flee fled ' +
+    'flew flow food foot ford form four free from fuel full fund gain game gate gave gear gift girl give glad goal goes gold golf ' +
+    'gone good grew grid grow gulf hail hair half hall halt hand hang hard harm hate have head heal hear heat held hell help here ' +
+    'hero hide high hike hill hire hits hold hole home hope host hour huge hunt hurt idea iron item jail jobs join joke jump jury ' +
+    'just keen keep kept kick kill kind king knew know lack lady laid lake land lane last late lead leak left less life lift like ' +
+    'line link list live load loan lock long look lord lose loss lost loud love luck made mail main make male many mark mass mayor ' +
+    'meal mean meat meet menu mild mile milk mind mine miss mode mood moon more most move much must name navy near neck need news ' +
+    'next nice nine none norm nose note nuts odds okay once only onto open oral over pace pack page paid pain pair palm park part ' +
+    'pass past path peak pick pier pile pill pink plan play plea plot plus poll pool poor port pose post pour pray prey pull pure ' +
+    'push race rail rain rank rare rate read real rear rely rent rest rice rich ride ring rise risk road rock role roll roof room ' +
+    'root rose rule rush safe said sail sale salt same sand save scan seal seat seed seek seem seen self sell send sent ship shop ' +
+    'shot show shut sick side sign silk sing sink site size skin slip slow snow soft soil sold sole some song soon sort soul spot ' +
+    'star stay step stop such suit sure swap take tale talk tall tank tape task team tech tell tend term test text than them then ' +
+    'they thin this tide tied ties till time tiny tips told toll tone took tool tops torn tour town toys tram tree trip true tube ' +
+    'tune turn twin type unit upon used user vast very vice view visa void vote wage wait wake walk wall want ward warm warn wash ' +
+    'wave ways weak wear week well went were west what when whom wide wife wild will wind wine wing wins wire wise wish with wolf ' +
+    'wood word wore work worn yard year your zero zone act add aim ant ape arc ash ate awe axe bat bee beg bin bow bud bug bun cab ' +
+    'cap cow cry cub cue cup dam den dew dig dim dip doc dot dub dug duo dye egg ego elf elm eve fan fax fee fig fin fix flu foe fox ' +
+    'fry fur gag gel gem gig gin god got gum gut hat hay hen hop hub hue hug hut icy inn ion ivy jaw jog jug kin lap lid lip log ' +
+    'mat mop mug nab nap nod nor nun nut oak oar oat odd opt orb ore owe owl pad pal pan paw pea pen pie pig ply pod pro pub pun ' +
+    'pup ram rap ray rib rim rip rob rod rot rub rug rum rye sag sap sew sip sir sit ski sob sow soy sub sue sum tab tag tan tap ' +
+    'tar tin tow tub tug urn use vet wag web wig wit woe wok yak yam zip').split(' ')
+);
+const LETTER_DIGIT = /^(?:[A-Z]{1,4}\d{1,4}[A-Z]?|\d{1,3}[A-Z]{1,2})$/;
 
 /** "THOUSANDS FLEE AS WILDFIRE SPREADS NEAR LOS ANGELES" -> "Thousands flee as wildfire spreads near Los Angeles". */
 export function sentenceCase(title) {
   const t = String(title ?? '');
   const letters = t.replace(/[^A-Za-z]/g, '');
   if (letters.length < 8 || letters !== letters.toUpperCase()) return t;
+  // acronyms and codes as the outlet wrote them, before everything goes to lower case
+  const kept = new Set();
+  for (const w of t.match(/[A-Z0-9]+/g) || []) {
+    // a guess only for 2-3 letters (4-letter acronyms come from the ACRONYMS list: "RAID", "FANS" are words)
+    if (LETTER_DIGIT.test(w) || (/^[A-Z]{2,3}$/.test(w) && !COMMON_SHORT.has(w.toLowerCase()) && !lookupPlace(w))) kept.add(w);
+  }
   const words = t.toLowerCase().split(/(\s+)/);
   // Place names keep their capitals (the gazetteer knows them; longest first, up to 3 words).
   for (let i = 0; i < words.length; i += 2) {
@@ -182,7 +227,8 @@ export function sentenceCase(title) {
     }
   }
   return words
-    .map((w, i) => (i % 2 ? w : w.replace(/[\p{L}\d]+/gu, (x) => (ACRONYMS.has(x.toUpperCase()) ? x.toUpperCase() : x))))
+    // a word the place pass capitalised ("Los" of Los Angeles) stays as it is
+    .map((w, i) => (i % 2 ? w : w.replace(/[\p{L}\d]+/gu, (x) => (ACRONYMS.has(x.toUpperCase()) ? x.toUpperCase() : /^\p{Lu}/u.test(x) ? x : kept.has(x.toUpperCase()) ? x.toUpperCase() : x))))
     .join('')
     .replace(/^[^\p{L}]*\p{Ll}/u, (c) => c.toUpperCase());
 }

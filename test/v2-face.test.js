@@ -983,7 +983,7 @@ function lipOnsets(clips, thr) {
           break;
         }
       }
-      res.push({ word: word.slice(0, 12), off });
+      res.push({ word: word.slice(0, 12), off, first: k === 0 });
     }
   }
   return res;
@@ -1044,13 +1044,21 @@ test('lip sync through the real AudioEngine (16 recorded clips): with the voice 
   assert.ok(cl.length >= 40 && cl.every((d) => d >= 40 - STEP_MS), `m/b/p closures: ${cl.length}, shortest ${Math.min(...cl)} ms`);
 });
 
-test('lip sync through the real AudioEngine without the voice field (the engine as it is today): no regression', async () => {
+test('lip sync through the real AudioEngine without the voice field (the engine as it is today): measured honestly at the same visible threshold, below the ±40 ms bar until AUDIO sends `voice`', async () => {
   const clips = await realEngineMouths(false);
-  const on = lipOnsets(clips, 0.08);
+  // the same threshold as the with-voice test (0.15, the first interior row at s ≥ 3.2; critic r2:
+  // measuring 'today' at 0.08 made the engine look compliant)
+  const on = lipOnsets(clips, 0.15);
   const good = on.filter((o) => o.off !== null && Math.abs(o.off) <= 40).length;
   const cl = closuresOf(clips);
-  if (process.env.FACE_LIP_DEBUG) console.log('real engine, no voice', JSON.stringify({ onsets: on, good, closures: cl.length, ag: lipAgreement(clips) }));
-  assert.ok(good / on.length >= 0.8, `${good} of ${on.length} onsets within ±40 ms`);
+  const ag = lipAgreement(clips);
+  if (process.env.FACE_LIP_DEBUG) console.log('real engine, no voice', JSON.stringify({ onsets: on, good, closures: cl.length, ag }));
+  // today: 33 of 41 (80 %); the first word of a clip opens with its timeline (no pause gate), so the
+  // clip-start delays of ~150 ms are gone; the rest (the timeline running ahead of or behind the
+  // recording after comma pauses, 3.8 s of voice behind shut lips over 16 clips) needs `voice`
+  assert.ok(good / on.length >= 0.78, `${good} of ${on.length} onsets within ±40 ms`);
+  const starts = on.filter((o) => o.first && o.off !== null);
+  assert.ok(starts.filter((o) => o.off > 40).length <= 1, `clip-first words opening late: ${starts.filter((o) => o.off > 40).map((o) => `${o.word} ${Math.round(o.off)}`).join(', ')}`);
   assert.ok(cl.length >= 40 && cl.every((d) => d >= 40 - STEP_MS), `m/b/p closures: ${cl.length}, shortest ${Math.min(...cl)} ms`);
 });
 
@@ -1546,4 +1554,42 @@ test('close-up eyes at s 2.2-3 (critic r2: drowsy at 2.45-2.7): the catchlight s
     }
   }
   assert.equal(rows.size, 2, `medium eye rows under the lid: ${[...rows]}`);
+});
+
+test('the whole face path per head and frame (rig layers idle / expression / speech / visemes / behaviour + head, face, glasses), once optimised: a bounded, small allocation (sampled heap profile; critic r2)', async () => {
+  const { Session } = await import('node:inspector/promises');
+  const { PartBuffer } = await import('../public/js/v2/canvas25d/pixbuf.js');
+  const { actor } = await import('../public/js/v2/canvas25d/scene.js');
+  const { poseAt } = await import('../public/js/v2/canvas25d/rig.js');
+  const { drawCharacter } = await import('../public/js/v2/canvas25d/character.js');
+  const fx = JSON.parse(fs.readFileSync(new URL('./fixtures/v2-face-voiced.json', import.meta.url), 'utf8'));
+  const seg = fx.segments[8];
+  const res = {};
+  for (const [id, s] of [['paco', 4.2], ['ada', 1.0]]) {
+    const audio = timelineAudio([{ slot: 'A', text: seg.text, t0: 0.5, words: seg.words, levels: seg.levels }]);
+    const a = actor(id, { side: 1, seed: 9, speech: liveSpeech(audio, 'A'), look: [{ t0: 1.0, t1: 3.8 }], emotions: [{ t0: 0, name: 'neutral' }, { t0: 2, name: 'happy' }] });
+    const buf = new PartBuffer();
+    const run = (i) => {
+      buf.clear();
+      const sk = poseAt(a, 0.5 + (i % 600) / 60);
+      drawCharacter(buf, a.look, sk, { x: 192, y: 150, s, gb: 0 });
+    };
+    for (let i = 0; i < 3000; i++) run(i);
+    const ses = new Session();
+    ses.connect();
+    await ses.post('HeapProfiler.startSampling', { samplingInterval: 128, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true });
+    const N = 1500;
+    for (let i = 0; i < N; i++) run(3000 + i);
+    const { profile } = await ses.post('HeapProfiler.stopSampling');
+    ses.disconnect();
+    let mine = 0;
+    const walk = (n) => {
+      if (/canvas25d\/(head|face|glasses|expression|idle|behaviour|speech|visemes)\.js$/.test(n.callFrame.url)) mine += n.selfSize;
+      for (const c of n.children) walk(c);
+    };
+    walk(profile.head);
+    res[`${id}@${s}`] = Math.round(mine / N);
+  }
+  if (process.env.FACE_ALLOC_DEBUG) console.log('face path bytes/frame', JSON.stringify(res));
+  for (const [k, v] of Object.entries(res)) assert.ok(v < 3072, `${k}: ${v} bytes per frame in the face path (${JSON.stringify(res)})`);
 });

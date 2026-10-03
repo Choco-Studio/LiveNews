@@ -1487,3 +1487,16 @@ describe('editorial-2 r3: Guardian live patterns and shouting headlines', () => 
     for (const t of ['NEW YORK', 'IN NEW YORK CITY', 'TO SAN FRANCISCO', '!!! LOS ANGELES !!!']) assert.doesNotThrow(() => sentenceCase(t), t);
   });
 });
+
+describe('sentenceCase keeps acronyms and codes it does not know (fix round 1)', () => {
+  test('ESA, Q3, COP29 stay; ordinary short words and places do not shout', async () => {
+    const { sentenceCase } = await import('../server/news.js');
+    assert.equal(sentenceCase('NASA AND ESA LAUNCH JOINT MISSION'), 'NASA and ESA launch joint mission');
+    assert.equal(sentenceCase('UK GDP SHRINKS IN Q3'), 'UK GDP shrinks in Q3');
+    assert.equal(sentenceCase('G7 LEADERS MEET AT COP29'), 'G7 leaders meet at COP29');
+    assert.equal(sentenceCase('WHO WARNS OF CHOLERA IN DRC'), 'WHO warns of cholera in DRC');
+    assert.equal(sentenceCase('OIL PRICES FALL AS DEMAND COOLS'), 'Oil prices fall as demand cools');
+    assert.equal(sentenceCase('MAN HELD AFTER BANK RAID IN ROME'), 'Man held after bank raid in Rome');
+    assert.equal(sentenceCase('THOUSANDS FLEE AS WILDFIRE SPREADS NEAR LOS ANGELES'), 'Thousands flee as wildfire spreads near Los Angeles');
+  });
+});

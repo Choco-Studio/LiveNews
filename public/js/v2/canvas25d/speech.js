@@ -82,13 +82,14 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
   const raw = {};
   const fr = blankFrame(slot);
   let lastT = null;
-  let wasPause = false, wasSpeaking = false, lastSentence = -1;
+  let wasPause = false, wasSpeaking = false, lastSentence = -1, opened = false;
   let shown = 'rest', shownAt = -1e9, lastShape = 'rest', lastShapeAt = -1e9;
   const reset = () => {
     Object.assign(fr, blankFrame(slot));
     wasPause = false;
     wasSpeaking = false;
     lastSentence = -1;
+    opened = false;
     shown = 'rest';
     shownAt = -1e9;
     lastShape = 'rest';
@@ -148,13 +149,17 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
         const floor = 0.16 * smooth((voice - 0.2) / 0.2);
         if (fr.level < floor) fr.level = floor;
       }
-    } else if (fr.viseme === 'rest' && fr.next !== 'rest') {
-      // no loudness from the engine: out of a pause the lips part with the sound, not with
-      // the timeline's blend into the first vowel (with recorded voices that blend can lead
-      // the recorded word by up to ~0.1 s): while the shape is still mostly 'rest', the
-      // opening grows with the blend
+    } else if (fr.viseme === 'rest' && fr.next !== 'rest' && opened) {
+      // no loudness from the engine: out of a comma or sentence pause the lips part with the
+      // sound, not with the timeline's blend into the first vowel (with recorded voices that
+      // blend can lead the recorded word by up to ~0.1 s): while the shape is still mostly
+      // 'rest', the opening grows with the blend. Not before the first word of the speech has
+      // opened the lips: the engine starts the clip and its timeline together, and the gate
+      // only made the first word open ~150 ms late (critic r2)
       fr.level *= fr.mix * fr.mix;
     }
+    if (!fr.speaking) opened = false;
+    else if (fr.level > 0.12) opened = true;
     fr.env = ease(fr.env, fr.level, 0.03, 0.12, dt);
     // the jaw (chin outline) moves with the phrase, not with every syllable: a chin
     // that bobs a pixel per syllable reads as chattering at this resolution
