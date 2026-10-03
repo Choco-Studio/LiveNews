@@ -27,6 +27,16 @@ const bareCredit = (c) => {
  */
 export function sourceWithCredit(outlet, credit) {
   if (!credit || ownCredit(credit, outlet)) return outlet;
+  // a FILE photo from the image search ("FILE · Jane Doe · CC BY-SA") always says so on air: the source plate
+  // may drop the author and the licence, never the word FILE (a viewer must not take it for the event)
+  const file = /^FILE\s*·\s*/i.exec(String(credit));
+  if (file) {
+    const [author = '', licence = ''] = String(credit).slice(file[0].length).split(/\s*·\s*/);
+    for (const line of [`${outlet} / File: ${author} · ${licence}`, `${outlet} / File: ${author}`, `${outlet} / File photo`]) if (author && line.length <= SOURCE_MAX) return line;
+    const tail = ' / File photo';
+    if (`${outlet}${tail}`.length <= SOURCE_MAX) return `${outlet}${tail}`;
+    return `${String(outlet).slice(0, SOURCE_MAX - tail.length).replace(/\s+\S*$/, '')}${tail}`;
+  }
   for (const c of [credit, shortCredit(credit), bareCredit(credit)]) {
     const line = `${outlet} / Photo: ${c}`;
     if (c && line.length <= SOURCE_MAX) return line;
@@ -35,6 +45,11 @@ export function sourceWithCredit(outlet, credit) {
 }
 /** "PHOTO: <CREDIT>" in capitals, whole words, at most CREDIT_LINE_MAX characters (null when it cannot fit). */
 export function creditLine(credit) {
+  // a FILE photo: "FILE: JANE DOE · CC BY-SA", else "FILE: JANE DOE", else "FILE PHOTO"
+  if (/^FILE\s*·/i.test(String(credit))) {
+    const [, author = '', licence = ''] = String(credit).split(/\s*·\s*/);
+    for (const line of [`FILE: ${author} · ${licence}`, `FILE: ${author}`, 'FILE PHOTO']) if (line.length <= CREDIT_LINE_MAX && !/: $/.test(line)) return line.toUpperCase();
+  }
   for (const c of [credit, shortCredit(credit), bareCredit(credit)]) {
     const line = `PHOTO: ${String(c || '').toUpperCase()}`;
     if (c && line.length <= CREDIT_LINE_MAX) return line;

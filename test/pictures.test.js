@@ -299,7 +299,7 @@ describe('pictures: the desk finds, filters and lends pictures', () => {
     assert.equal(s.image, 'https://cdn.test/glacier.jpg');
     assert.equal(s.imageVia, 'page:og');
     assert.equal(s.imageWidth, 1600);
-    assert.deepEqual(out, { pictures: 1, of: 1, found: 1, borrowed: 0 });
+    assert.deepEqual(out, { pictures: 1, of: 1, found: 1, borrowed: 0, searched: 0 });
   });
 
   test('a small feed picture (< 640 px) is replaced by the page picture when that is wider', async () => {

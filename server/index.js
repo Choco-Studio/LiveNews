@@ -10,6 +10,7 @@ import { UsageTracker } from './usage.js';
 import { Station } from './station.js';
 import { Producer } from './producer.js';
 import { createVoiceService } from './voice/index.js';
+import { ImageSearch } from './imagesearch.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const MIME = {
@@ -24,6 +25,8 @@ const MIME = {
 
 const usage = new UsageTracker(config.dataDir);
 const newsDesk = new NewsDesk();
+// Real photos for stories still without one: a FILE photo of the story's place (Wikimedia Commons by default)
+newsDesk.imageSearch = new ImageSearch(config.imageSearch);
 // Pictures of local (offline fixture) feeds are served from their own folders only.
 const images = new ImageCache({ localRoots: () => newsDesk.localImageRoots });
 const chain = new ProviderChain(createProviders(config), usage);
@@ -123,6 +126,14 @@ const server = http.createServer(async (req, res) => {
     }
     // Recorded voices: /api/voice/<id>.ogg|.json (content-addressed clips), /api/voice/ads, /api/voice/status.
     if (req.method === 'GET' && url.pathname.startsWith('/api/voice/') && voice.handle(req, res, url.pathname)) return;
+    // The orchestrator's picture tool: free-licensed file photos for a query (operator / orchestrator only)
+    if (req.method === 'GET' && url.pathname === '/api/tools/image-search') {
+      if (!devAllowed(req)) return sendJson(res, 404, { error: 'not found' });
+      const q = String(url.searchParams.get('q') || '').slice(0, 120);
+      if (!q.trim()) return sendJson(res, 400, { error: 'q is required' });
+      if (!newsDesk.imageSearch.enabled) return sendJson(res, 503, { error: 'image search is off (IMAGE_SEARCH)' });
+      return sendJson(res, 200, { query: q, results: (await newsDesk.imageSearch.search(q)).slice(0, 8) });
+    }
     const img = url.pathname.match(/^\/api\/img\/(s[0-9a-f]{10})$/);
     if (req.method === 'GET' && img) return await serveImage(res, img[1]);
     if (req.method === 'POST' && url.pathname === '/api/refresh') {

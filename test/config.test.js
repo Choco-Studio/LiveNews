@@ -44,6 +44,10 @@ const KEYS = [
   'VOICE_WORKERS',
   'VOICE_BUDGET_S',
   'VOICE_FIRST_BUDGET_S',
+  'IMAGE_SEARCH',
+  'GOOGLE_CSE_KEY',
+  'GOOGLE_CSE_CX',
+  'BING_IMAGE_KEY',
   'VOICE_CACHE_MB',
 ];
 
@@ -177,6 +181,14 @@ describe('config from the environment', () => {
     for (const value of ['browser', 'tts', 'off', 'none']) assert.equal((await loadConfig({ VOICE_ENGINE: value })).voice.engine, 'browser', value);
     const tuned = (await loadConfig({ KOKORO_DIR: '/models', KOKORO_THREADS: '2', VOICE_BUDGET_S: '30', VOICE_CACHE_MB: 'lots' })).voice;
     assert.deepEqual([tuned.kokoroDir, tuned.threads, tuned.budgetSeconds, tuned.cacheMb], ['/models', 2, 30, 300]);
+  });
+
+  test('image search: Wikimedia Commons by default; google / bing listed with their keys; off turns it off', async () => {
+    assert.deepEqual((await loadConfig()).imageSearch.providers, ['commons']);
+    assert.deepEqual((await loadConfig({ IMAGE_SEARCH: 'Commons, google bing nonsense' })).imageSearch.providers, ['commons', 'google', 'bing']);
+    assert.deepEqual((await loadConfig({ IMAGE_SEARCH: 'off' })).imageSearch.providers, []);
+    const keyed = (await loadConfig({ GOOGLE_CSE_KEY: 'k', GOOGLE_CSE_CX: 'c', BING_IMAGE_KEY: 'b' })).imageSearch;
+    assert.deepEqual([keyed.google, keyed.bing], [{ key: 'k', cx: 'c' }, { key: 'b' }]);
   });
 
   test('CODEX_EXTRA_ARGS is split on whitespace', async () => {

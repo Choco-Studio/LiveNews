@@ -1331,12 +1331,40 @@ export class NewsDesk {
     }
     await run(siblings.slice(0, 8));
     this.borrowPictures(stories);
+    // Still without a picture: a FILE photo of the story's place from the image search (owner 22:40: on air only
+    // real photos found on the web), within what is left of the budget. Never for the offline fixture desk.
+    if (this.imageSearch?.enabled) {
+      const left = stories.filter((s) => !s.image && !s.local && !(s.imageSearched && Date.now() - s.imageSearched < 3600_000)).slice(0, 6);
+      const remaining = deadline - Date.now();
+      if (left.length && remaining > 300) await Promise.race([Promise.all(left.map((s) => this.searchPicture(s))), wait(remaining)]);
+    }
     const withPicture = stories.filter((s) => s.image);
     return {
       pictures: withPicture.length,
       of: stories.length,
       found: withPicture.filter((s) => !had.has(s.id) && String(s.imageVia).startsWith('page:')).length,
       borrowed: withPicture.filter((s) => s.imageFrom).length,
+      searched: withPicture.filter((s) => s.imageKind === 'file').length,
     };
+  }
+
+  /** A FILE photo of a story's place from the image search (server/imagesearch.js), credited as such. */
+  async searchPicture(s) {
+    s.imageSearched = Date.now();
+    let p = null;
+    try {
+      p = await this.imageSearch.find(s);
+    } catch (err) {
+      this.log.warn?.(`[images] search for ${s.id} failed (${err.message})`);
+    }
+    if (!p || s.image) return;
+    s.image = p.url;
+    s.imageWidth = p.width;
+    s.imageVia = p.via;
+    s.imageKind = 'file';
+    s.imageCredit = p.credit;
+    s.imageCreditVia = 'search';
+    s.imageLicense = p.license;
+    if (p.page) s.imagePage = p.page;
   }
 }

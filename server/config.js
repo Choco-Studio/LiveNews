@@ -107,4 +107,12 @@ export const config = {
     cacheMb: num('VOICE_CACHE_MB', 300),
     dir: path.join(ROOT, 'data', 'voice'),
   },
+  // Image search for stories still without a picture (owner 22:40: on air only REAL photos found on the
+  // web): a FILE photo of the story's place. 'commons' (Wikimedia Commons, no key, free licences) by
+  // default; add 'google' / 'bing' with their keys (comma-separated list); 'off' turns it off.
+  imageSearch: {
+    providers: ((v) => (v === 'off' || v === 'none' ? [] : v.split(/[\s,]+/).filter((p) => ['commons', 'google', 'bing'].includes(p))))(env('IMAGE_SEARCH', 'commons').trim().toLowerCase()),
+    google: { key: env('GOOGLE_CSE_KEY', ''), cx: env('GOOGLE_CSE_CX', '') },
+    bing: { key: env('BING_IMAGE_KEY', '') },
+  },
 };
