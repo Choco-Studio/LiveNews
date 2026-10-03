@@ -34,7 +34,7 @@
 //   window.__lab.hands(name, { slot, framing })  hand pixels seen above the graphics at a gesture's apex
 import { Stage, STUDIO_SHOTS } from '../runtime/stage.js';
 import { planSegment } from '../direction/index.js';
-import { cuesFromPlan, holdCut, guardMarks } from '../runtime/direction.js';
+import { cuesFromPlan, holdCut, guardMarks, pickupOpening } from '../runtime/direction.js';
 import { gestureVisibility } from '../runtime/visibility.js';
 import { Graphics } from '../../../graphics/index.js';
 import { paceFor, gapAfter as paceGap, CHANNEL } from '../../../pace.js';
@@ -253,7 +253,10 @@ function buildShow(epIn, presenters, voice) {
       t = end + GAP;
       continue;
     }
-    const cues = cuesFromPlan(plan, { hasImg });
+    let cues = cuesFromPlan(plan, { hasImg });
+    // LiveDirection.shots: a short pickup stays on the studio shot on air (the director keeps it), its card at its line
+    const prevShot = shots[shots.length - 1];
+    if (cues && story && prevShot && studio(prevShot.shot)) cues = pickupOpening(cues, plan, { programId: ep.program?.id, gap: GAP });
     if (!cues) cut(segStart, story ? 'close' : 'wide', base);
     else {
       // cues in time order with the guard's cues at sentence starts that have no planned cut
@@ -266,6 +269,10 @@ function buildShow(epIn, presenters, voice) {
       let onAir = null;
       let k = 0;
       const apply = (c, at0) => {
+        if (c.k === 0 && c.keep && prevShot && studio(prevShot.shot)) {
+          onAir = { shot: prevShot.shot, framing: prevShot.framing, focus: prevShot.focus, t: prevShot.t };
+          return;
+        }
         let at = at0;
         if (c.k > 0 && at - lastCut < MIN_SHOT) at = lastCut + MIN_SHOT;
         if (c.k > 0 && at > speechEnd) return;

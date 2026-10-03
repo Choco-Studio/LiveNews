@@ -1,0 +1,895 @@
+{
+ "kind": "episode",
+ "id": "emurwfzmc0",
+ "createdAt": "2026-10-03T04:36:00.660Z",
+ "program": {
+  "id": "world-now",
+  "title": "WORLD NOW",
+  "tagline": "THE STORIES SHAPING OUR WORLD",
+  "theme": "world"
+ },
+ "cast": {
+  "A": "paco",
+  "B": "lola"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "pictures",
+   "ms": 10,
+   "pictures": 21,
+   "of": 21,
+   "found": 3,
+   "borrowed": 2
+  },
+  {
+   "stage": "write",
+   "ms": 522,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 2,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 13,
+   "images": 14,
+   "borrowed": 2,
+   "verified": 14
+  }
+ ],
+ "title": "WORLD NOW (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "serious",
+   "text": "Hurricane Elena makes landfall on Mexico\u2019s Yucat\u00e1n coast. Panama Canal reopens after a day-long closure. Wildfire near Marseille forces thousands to evacuate. Good morning, and welcome to WORLD NOW. I'm Paco Pixel, with Lola Byte.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "emotion": "serious"
+    },
+    {
+     "char": 198,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 230,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s4507c2ca71",
+    "s2802a9375b",
+    "sb477dc52fd",
+    null,
+    null
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "serious",
+   "text": "Hurricane Elena has made landfall near Canc\u00fan with winds of 180 kilometres per hour, according to Pixelburg Post. Mexico\u2019s civil protection agency says about 1.2 million homes are without power and 40,000 people have gone to shelters. \u201cThis is a life-threatening situation,\u201d the agency said.",
+   "cues": [],
+   "storyId": "s4507c2ca71",
+   "headline": "Hurricane Elena hits Mexico\u2019s Yucat\u00e1n coast",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "YUCAT\u00c1N PENINSULA, MEXICO",
+    "lat": 20,
+    "lon": -88.8
+   },
+   "fact": "ABOUT 1.2 MILLION HOMES",
+   "source": "Pixelburg Post / Photo: Pixel Wire",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "WEATHER",
+   "numbers": [
+    {
+     "value": "1.2 MILLION",
+     "label": "HOMES",
+     "qualifier": "ABOUT"
+    },
+    {
+     "value": "40,000",
+     "label": "PEOPLE"
+    },
+    {
+     "value": "180",
+     "label": "KILOMETRES PER HOUR"
+    }
+   ],
+   "quote": {
+    "text": "This is a life-threatening situation",
+    "by": "the agency"
+   },
+   "map": [
+    {
+     "place": "YUCAT\u00c1N PENINSULA, MEXICO",
+     "lat": 20,
+     "lon": -88.8
+    },
+    {
+     "place": "CANC\u00daN, MEXICO",
+     "lat": 21.16,
+     "lon": -86.85
+    }
+   ],
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixel Wire Agency",
+   "imageCreditVia": "media:credit",
+   "imageCreditLine": "PHOTO: PIXEL WIRE AGENCY",
+   "visuals": [
+    "map",
+    "picture",
+    "fact"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "The Panama Canal has reopened to ships after fog closed it for a day, Ledger Line reports. The canal authority says about 30 ships are waiting to cross. Shipping companies say the delays should clear within days.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "point_screen"
+    },
+    {
+     "char": 152,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s2802a9375b",
+   "headline": "Panama Canal reopens after a day-long closure",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "PANAMA",
+    "lat": 8.5,
+    "lon": -80.8
+   },
+   "fact": "ABOUT 30 SHIPS",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": true,
+   "kicker": "TRADE",
+   "breakingNote": true,
+   "numbers": [
+    {
+     "value": "30",
+     "label": "SHIPS",
+     "qualifier": "ABOUT"
+    }
+   ],
+   "outlet": "Ledger Line",
+   "imageCredit": "Ledger Line",
+   "imageCreditVia": "site_name",
+   "imageCreditLine": "PHOTO: LEDGER LINE",
+   "visuals": [
+    "map",
+    "picture",
+    "fact"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "serious",
+   "text": "Firefighters are battling a wildfire on a pine ridge north of Marseille. About 3,000 residents have been moved from three villages, local officials say, and a motorway has been closed. Water-bombing planes are flying over the ridge, according to Bitport Herald.",
+   "cues": [],
+   "storyId": "sb477dc52fd",
+   "headline": "Marseille wildfire forces thousands to flee",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "MARSEILLE, FRANCE",
+    "lat": 43.3,
+    "lon": 5.37
+   },
+   "fact": "ABOUT 3,000 RESIDENTS",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "WILDFIRE",
+   "numbers": [
+    {
+     "value": "3,000",
+     "label": "RESIDENTS",
+     "qualifier": "ABOUT"
+    }
+   ],
+   "outlet": "Bitport Herald",
+   "imageCredit": "Bitport Herald",
+   "imageCreditVia": "site_name",
+   "imageCreditLine": "PHOTO: BITPORT HERALD",
+   "visuals": [
+    "map",
+    "picture",
+    "fact"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "In Iceland, a fissure eruption has started again on the Reykjanes peninsula, Pixelburg Post reports. Scientists say lava is flowing away from nearby towns and flights are not affected. It is the latest in a series of eruptions in the area since 2021.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "point_screen"
+    },
+    {
+     "char": 184,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s5fb454f418",
+   "headline": "Iceland volcano erupts again",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "REYKJANES PENINSULA, ICELAND",
+    "lat": 63.9,
+    "lon": -22.3
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "VOLCANO",
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: PIXELBURG POST",
+   "visuals": [
+    "map",
+    "picture"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "serious",
+   "text": "Heavy monsoon rain has flooded streets in several coastal towns in Kerala, India. Local authorities have opened 120 relief camps and closed schools for two days. Forecasters expect more heavy rain over the next three days, according to Pixelburg Post.",
+   "cues": [],
+   "storyId": "sf3de112064",
+   "headline": "Heavy rain floods streets in Kerala",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "KERALA, INDIA",
+    "lat": 10.5,
+    "lon": 76.3
+   },
+   "fact": "120 RELIEF CAMPS",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "WEATHER",
+   "numbers": [
+    {
+     "value": "120",
+     "label": "RELIEF CAMPS"
+    }
+   ],
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "site_name",
+   "imageCreditLine": "PHOTO: PIXELBURG POST",
+   "visuals": [
+    "map",
+    "picture",
+    "fact"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Norway\u2019s central bank has unexpectedly raised its main interest rate to 4.75 percent. Most economists had expected no change, Bitport Herald reports. Mortgage rates are expected to follow within weeks.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "point_screen"
+    },
+    {
+     "char": 149,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s301a11c2f9",
+   "headline": "Norway raises interest rates",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "NORWAY",
+    "lat": 61,
+    "lon": 8.5
+   },
+   "fact": null,
+   "source": "Bitport Herald / Photo: Ledger Line",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "ECONOMY",
+   "outlet": "Bitport Herald",
+   "imageCredit": "Ledger Line",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: LEDGER LINE",
+   "visuals": [
+    "map",
+    "picture"
+   ]
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Still to come: coral recovers on parts of the Great Barrier Reef off Queensland, and our number of the day.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Our number of the day: 40,000. Lisbon has opened a new tram line along the Tagus river, according to Pixelburg Post. The city says the 9 kilometre route will carry 40,000 passengers a day and cut car traffic in the old town. As the mayor put it: \u201cThis line will change how people move around the old town.\u201d",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "steeple"
+    },
+    {
+     "char": 224,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "sf2538c295c",
+   "headline": "Lisbon opens a new riverside tram line",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "LISBON, PORTUGAL",
+    "lat": 38.72,
+    "lon": -9.14
+   },
+   "fact": "40,000 PASSENGERS A DAY",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "40,000",
+     "label": "PASSENGERS A DAY"
+    }
+   ],
+   "quote": {
+    "text": "This line will change how people move around the old town",
+    "by": "the mayor"
+   },
+   "feature": "number",
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: PIXELBURG POST",
+   "visuals": [
+    "map",
+    "picture",
+    "fact"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "A carmaker says it will close its plant near Turin by the end of next year. Unions say 2,400 jobs are at risk.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "point_screen"
+    },
+    {
+     "char": 110,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s0457dc50f4",
+   "headline": "Carmaker to close Turin plant",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "TURIN, ITALY",
+    "lat": 45.07,
+    "lon": 7.69
+   },
+   "fact": "2,400 JOBS",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": true,
+   "kicker": "JOBS",
+   "numbers": [
+    {
+     "value": "2,400",
+     "label": "JOBS"
+    }
+   ],
+   "outlet": "Ledger Line",
+   "imageCredit": "Ledger Line",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: LEDGER LINE",
+   "visuals": [
+    "map",
+    "picture",
+    "fact"
+   ],
+   "locator": true
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Now, around the world. In Kenya, a solar farm north of Nairobi has started supplying power to the national grid.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "point_screen"
+    }
+   ],
+   "storyId": "sfe6d14dab8",
+   "headline": "Kenya switches on its largest solar farm",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "NAIROBI, KENYA",
+    "lat": -1.29,
+    "lon": 36.82
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 0,
+    "count": 5
+   },
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: PIXELBURG POST",
+   "visuals": [
+    "map"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Archaeologists in Peru say they have found the remains of a temple about 3,000 years old in the northern Andes.",
+   "cues": [],
+   "storyId": "sdca7dc7be2",
+   "headline": "Peru archaeologists uncover a 3,000-year-old temple",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "NORTHERN ANDES",
+    "lat": -6,
+    "lon": -77.5
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 1,
+    "count": 5
+   },
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "site_name",
+   "imageCreditLine": "PHOTO: PIXELBURG POST",
+   "visuals": [
+    "map"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Rail operators in Japan say their bullet trains ran with an average delay of under one minute last year.",
+   "cues": [],
+   "storyId": "s945f1dfc87",
+   "headline": "Japan's bullet trains mark a record year",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "TOKYO, JAPAN",
+    "lat": 35.68,
+    "lon": 139.69
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 2,
+    "count": 5
+   },
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: PIXELBURG POST",
+   "visuals": [
+    "map"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "The city of Paris has announced plans to plant 170,000 trees by 2030 to cool the city in summer.",
+   "cues": [],
+   "storyId": "s7cf5417e48",
+   "headline": "Paris unveils plans to plant 170,000 trees",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "PARIS, FRANCE",
+    "lat": 48.86,
+    "lon": 2.35
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 3,
+    "count": 5
+   },
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: PIXELBURG POST",
+   "visuals": [
+    "map"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Now to the Greek islands. Strong winds have forced ferry operators to cancel sailings between Athens and several Greek islands, Pixelburg Post reports.",
+   "cues": [],
+   "storyId": "s37b7d2972c",
+   "headline": "Storm forces ferry cancellations",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "GREEK ISLANDS, GREECE",
+    "lat": 37.5,
+    "lon": 25
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 4,
+    "count": 5
+   },
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: PIXELBURG POST",
+   "visuals": [
+    "map"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "And finally: scientists say coral cover has grown on parts of the Great Barrier Reef for a second year. \u201cThe reef is showing it can bounce back when it gets a break,\u201d a lead researcher said. Researchers warn that another hot summer could undo the gains.",
+   "cues": [
+    {
+     "char": 190,
+     "slot": "A",
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "s9efe8cbd21",
+   "headline": "Coral recovers on parts of Great Barrier Reef",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "GREAT BARRIER REEF, AUSTRALIA",
+    "lat": -18.3,
+    "lon": 147.7
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AND FINALLY",
+   "quote": {
+    "text": "The reef is showing it can bounce back when it gets a break",
+    "by": "a lead researcher"
+   },
+   "map": [
+    {
+     "place": "GREAT BARRIER REEF, AUSTRALIA",
+     "lat": -18.3,
+     "lon": 147.7
+    },
+    {
+     "place": "QUEENSLAND, AUSTRALIA",
+     "lat": -22,
+     "lon": 145
+    }
+   ],
+   "feature": "lighter",
+   "outlet": "Bitport Herald",
+   "imageCredit": "Starfield Journal",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: STARFIELD JOURNAL",
+   "visuals": [
+    "map",
+    "picture"
+   ]
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "One more reason to keep an eye on Great Barrier Reef.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "Noted, and filed.",
+   "cues": []
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's WORLD NOW. From Lola Byte and from me, thank you for watching. Stay with us on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 17,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s4507c2ca71",
+   "headline": "Hurricane Elena hits Mexico\u2019s Yucat\u00e1n coast",
+   "source": "Pixelburg Post / Photo: Pixel Wire",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "WEATHER",
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixel Wire Agency",
+   "imageCreditVia": "media:credit",
+   "imageCreditLine": "PHOTO: PIXEL WIRE AGENCY"
+  },
+  {
+   "storyId": "s2802a9375b",
+   "headline": "Panama Canal reopens after a day-long closure",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": true,
+   "kicker": "TRADE",
+   "outlet": "Ledger Line",
+   "imageCredit": "Ledger Line",
+   "imageCreditVia": "site_name",
+   "imageCreditLine": "PHOTO: LEDGER LINE"
+  },
+  {
+   "storyId": "sb477dc52fd",
+   "headline": "Marseille wildfire forces thousands to flee",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "WILDFIRE",
+   "outlet": "Bitport Herald",
+   "imageCredit": "Bitport Herald",
+   "imageCreditVia": "site_name",
+   "imageCreditLine": "PHOTO: BITPORT HERALD"
+  },
+  {
+   "storyId": "s5fb454f418",
+   "headline": "Iceland volcano erupts again",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "VOLCANO",
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: PIXELBURG POST"
+  },
+  {
+   "storyId": "sf3de112064",
+   "headline": "Heavy rain floods streets in Kerala",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "WEATHER",
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "site_name",
+   "imageCreditLine": "PHOTO: PIXELBURG POST"
+  },
+  {
+   "storyId": "s301a11c2f9",
+   "headline": "Norway raises interest rates",
+   "source": "Bitport Herald / Photo: Ledger Line",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "ECONOMY",
+   "outlet": "Bitport Herald",
+   "imageCredit": "Ledger Line",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: LEDGER LINE"
+  },
+  {
+   "storyId": "sf2538c295c",
+   "headline": "Lisbon opens a new riverside tram line",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "NUMBER OF THE DAY",
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: PIXELBURG POST"
+  },
+  {
+   "storyId": "s0457dc50f4",
+   "headline": "Carmaker to close Turin plant",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": true,
+   "kicker": "JOBS",
+   "outlet": "Ledger Line",
+   "imageCredit": "Ledger Line",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: LEDGER LINE"
+  },
+  {
+   "storyId": "sfe6d14dab8",
+   "headline": "Kenya switches on its largest solar farm",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: PIXELBURG POST"
+  },
+  {
+   "storyId": "sdca7dc7be2",
+   "headline": "Peru archaeologists uncover a 3,000-year-old temple",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "site_name",
+   "imageCreditLine": "PHOTO: PIXELBURG POST"
+  },
+  {
+   "storyId": "s945f1dfc87",
+   "headline": "Japan's bullet trains mark a record year",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: PIXELBURG POST"
+  },
+  {
+   "storyId": "s7cf5417e48",
+   "headline": "Paris unveils plans to plant 170,000 trees",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: PIXELBURG POST"
+  },
+  {
+   "storyId": "s37b7d2972c",
+   "headline": "Storm forces ferry cancellations",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "outlet": "Pixelburg Post",
+   "imageCredit": "Pixelburg Post",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: PIXELBURG POST"
+  },
+  {
+   "storyId": "s9efe8cbd21",
+   "headline": "Coral recovers on parts of Great Barrier Reef",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AND FINALLY",
+   "outlet": "Bitport Herald",
+   "imageCredit": "Starfield Journal",
+   "imageCreditVia": "outlet",
+   "imageCreditLine": "PHOTO: STARFIELD JOURNAL"
+  }
+ ],
+ "storyIds": [
+  "s4507c2ca71",
+  "s2802a9375b",
+  "sb477dc52fd",
+  "s5fb454f418",
+  "sf3de112064",
+  "s301a11c2f9",
+  "sf2538c295c",
+  "s0457dc50f4",
+  "sfe6d14dab8",
+  "sdca7dc7be2",
+  "s945f1dfc87",
+  "s7cf5417e48",
+  "s37b7d2972c",
+  "s9efe8cbd21"
+ ]
+}

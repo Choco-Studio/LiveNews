@@ -35,10 +35,19 @@
 // guardMarks(), fired by speak() marks), never within 1.5 s before a dry line.
 // An intro that the guard took off its wide comes back to the wide for the
 // greeting (the bibles' greeting wide) when both parts hold the cooldown.
+// WALL WARM-UP (SET request; critic r2: the first frame of a cut to a wall with new
+// content cost 87-225 ms, up to 1 s on a loaded box): the studio cues of the segment
+// on air and of the next one are known ahead, so each one's wall content (picture
+// filtered at its size in that framing, plate text masks) is prepared with SET's
+// warmWallContent() in idle time, one cue per idle callback; the cut then costs
+// 3-5 ms. Every idle task of this module waits while a break element (ad, ident,
+// promo) is on air, so it never competes with an ad's first frames.
 // Every public method is guarded: a throw is logged once and returns the neutral
 // value (null), so the director's own beats carry on (never freeze).
 import { planSegment } from '../direction/index.js';
-import { wallFromScene } from '../studio/set.js';
+import * as SETM from '../studio/set.js';
+import * as CAM from '../camera.js';
+import { defaultFraming } from './stage.js';
 // the Stage's module graph loads with this one: once the director's v2 side is ready, so is the
 // Renderer's (studio.js imports host.js itself; this only removes the start-up race)
 import './host.js';
@@ -113,6 +122,7 @@ const SHOWS = new Set(['picture', 'map', 'figure']);
  * picture, place or figure counts.
  */
 function wallContent(seg, hasImg, programId) {
+  const wallFromScene = SETM.wallFromScene;
   try {
     if (typeof wallFromScene === 'function') {
       const sid = seg.storyId ?? null;
@@ -229,6 +239,46 @@ export function guardMarks(plan, skip = []) {
   return out;
 }
 
+// a short partner pickup at a story's start ("Thanks, Ada."): heard on the studio shot on air, not over a card
+const PICKUP = /^(thanks|thank you)\b/i;
+const CARD_SHOTS = new Set(['fact', 'full', 'map']);
+
+/** The shortest a card / picture / map should hold on air (s, pace.js). */
+function minHold(shot, programId) {
+  const S = paceFor(programId).shots;
+  if (shot === 'map') return S.map[0];
+  if (shot === 'full') return S.picture[0];
+  if (shot === 'fact') return S.factMin ?? S.min;
+  return S.min;
+}
+
+/**
+ * A story that opens on a card, picture or map with a short partner pickup ("Thanks, Ada." ≤ 4 words) as
+ * its first sentence: the pickup stays on the studio shot on air (cue 0 `keep`: the director makes no cut)
+ * and the card moves to the next sentence, where its own line starts (critic r2: the card was on air 1.6 s
+ * before its line, the pickup heard over a graphic). Only when the card still holds its minimum there and no
+ * other cut is planned at that sentence. Returns new cues (renumbered) or the same array. Pure.
+ */
+export function pickupOpening(cues, plan, { programId = null, gap = 0.6 } = {}) {
+  const ctx = plan?.ctx;
+  if (!Array.isArray(cues) || !cues.length || !ctx || ctx.type !== 'story') return cues;
+  const c0 = cues[0];
+  const ss = ctx.sentences || [];
+  if (!CARD_SHOTS.has(c0.shot) || ss.length < 2 || !Number.isFinite(ss[1].t0)) return cues;
+  const first = String(ss[0].text ?? ctx.seg?.text?.slice(0, ss[1].start) ?? '').trim();
+  if (!PICKUP.test(first) || first.split(/\s+/).length > 4) return cues;
+  if (cues.some((c) => c.k > 0 && !c.mid && c.sentence === 1)) return cues;
+  const t1 = ss[1].t0;
+  let next = (ctx.duration || 0) + gap;
+  for (const c of cues) if (c.k > 0 && Number.isFinite(c.at) && c.at > t1 + 0.05 && c.at < next) next = c.at;
+  if (next - t1 < minHold(c0.shot, programId)) return cues;
+  const close = cues.find((c) => c.shot === 'close' && c.focus === ctx.speaker && c.framing && c.framing !== 'ots')?.framing ?? null;
+  const out = [{ k: 0, char: 0, at: 0, sentence: 0, mid: false, shot: 'close', framing: close, focus: ctx.speaker, move: null, card: null, minLen: null, beat: 'pickup', keep: true }];
+  out.push({ ...c0, k: 1, char: ss[1].start, at: t1, sentence: 1, mid: false });
+  for (const c of cues.slice(1)) out.push({ ...c, k: out.length });
+  return out;
+}
+
 /** Rundown index of the story a headline sentence teases (event storyId, seg.teases, else the planner's card). */
 function montageCard(e, seg, si, rundown, out) {
   const list = Array.isArray(rundown) ? rundown : [];
@@ -263,6 +313,10 @@ function guarded(where, fn, fallback = null) {
 }
 
 const NONE = {}; // replan key: no recording
+const NO_PRESENTERS = Object.freeze({}); // one object: context.js memoises neighbours per presenters object
+// break elements: v2 idle work (plans, wall warm-up) waits while one is on air (critic r2: freezes at an ad's first frame)
+const BUSY_SHOTS = new Set(['ad', 'ident', 'promo']);
+const BUSY_RETRY = 750; // ms
 const WARM = { id: 'warm-up', program: { id: 'world-now' }, cast: { A: 'paco', B: 'lola' }, segments: [{ type: 'story', anchor: 'A', text: 'Good evening. Floods have forced 40,000 people from their homes in southern Brazil.', cues: [] }] };
 
 export class LiveDirection {
@@ -277,7 +331,19 @@ export class LiveDirection {
     this.replans = new WeakMap(); // seg -> { key, plan } made for the voice that really plays
     this.story = null; // { seg, cues, handler } registered by playStory
     this.framings = { close: {}, wide: null }; // the last studio framings applied (max-hold guard targets)
-    this.idle = typeof requestIdleCallback === 'function' ? (fn) => requestIdleCallback(fn, { timeout: 1500 }) : (fn) => setTimeout(fn, 30);
+    // the scheduler (tests and labs replace `schedule` / `retry`)
+    this.schedule = typeof requestIdleCallback === 'function' ? (fn) => requestIdleCallback(fn, { timeout: 1500 }) : (fn) => setTimeout(fn, 30);
+    this.retry = (fn) => setTimeout(fn, BUSY_RETRY);
+    // idle work never runs while a break element is on air (it waits for the programme)
+    this.idle = (fn) =>
+      this.schedule(() => {
+        if (BUSY_SHOTS.has(this.scene.shot)) this.retry(() => this.idle(fn));
+        else guarded('idle', fn);
+      });
+    this.wallQueue = []; // { seg, i, cue, hasImg } waiting for warmWallContent
+    this.wallKeys = new Set(); // what this episode already warmed
+    this.wallBusy = false;
+    this.wallStats = { warmed: 0, skipped: 0, ms: 0 };
     // the first plan of a session warms the text model and lexicon (~100-200 ms): do it now,
     // on the start card, so no programme open ever pays for it
     this.idle(() => planSegment(WARM, 0, {}));
@@ -298,7 +364,87 @@ export class LiveDirection {
     // the pause after each segment, as the director will hold it (one function per episode: contextAt memo)
     const ep2 = this.ep;
     this.gapFn = ep2 ? (i) => paceGap(ep2, i).gap : GAP_AFTER;
+    this.wallQueue.length = 0;
+    this.wallKeys.clear();
     this.warm(this.ep, 0);
+    this.warmWalls(1); // the first story's walls while the open and the intro play (its plan comes from the idle chain)
+  }
+
+  /**
+   * Queue the studio cues of segment i (only those after `fromK`) for the wall warm-up. The plan is made in
+   * idle time if it is not ready; a cue whose wall needs nothing (idle wall, chats) costs one wallFromScene().
+   */
+  warmWalls(i, fromK = -1) {
+    const ep = this.ep;
+    if (!ep || !(i >= 0) || i >= ep.segments.length || typeof SETM.warmWallContent !== 'function') return;
+    this.idle(() => {
+      if (this.ep !== ep) return;
+      const seg = ep.segments[i];
+      const p = this.planAt(i);
+      if (!p || !seg) return;
+      const hasImg = !!this.director.images?.get?.(seg.storyId);
+      const cues = cuesFromPlan(p, { hasImg }) || [];
+      for (const cue of cues) {
+        if (cue.k <= fromK || !STUDIO.has(cue.shot)) continue;
+        const key = `${i}|${cue.k}|${hasImg ? 1 : 0}`;
+        if (this.wallKeys.has(key)) continue;
+        this.wallKeys.add(key);
+        this.wallQueue.push({ seg, i, plan: p, cue, hasImg, ep });
+      }
+      this.pumpWalls();
+    });
+  }
+
+  /** Warm the next queued wall, one per idle callback. */
+  pumpWalls() {
+    if (this.wallBusy || !this.wallQueue.length) return;
+    this.wallBusy = true;
+    this.idle(() => {
+      this.wallBusy = false;
+      const item = this.wallQueue.shift();
+      if (item && item.ep === this.ep) this.warmWall(item);
+      this.pumpWalls();
+    });
+  }
+
+  /** SET's warmWallContent for one studio cue: the wall the Stage will latch on that cut, at that framing's size. */
+  warmWall({ seg, plan, cue, hasImg }) {
+    const t0 = performance.now();
+    const programId = this.scene.program?.id || this.ep?.program?.id || 'world-now';
+    const cast = this.ep?.cast || this.scene.cast || {};
+    const solo = !(cast.A && cast.B);
+    const story = seg.type === 'story';
+    const images = this.director.images;
+    const scene = {
+      program: { id: programId },
+      storyId: story ? seg.storyId : null,
+      images,
+      wall: story ? (hasImg ? { mode: 'image', storyId: seg.storyId } : { mode: 'source', source: seg.source || '', category: seg.category || 'general' }) : { mode: 'logo' },
+      segPlan: plan,
+      framing: cue.framing,
+      focus: cue.focus,
+      cast,
+      lowerThird: story ? { kicker: seg.kicker, category: seg.category } : null,
+    };
+    let style = programId;
+    try {
+      style = SETM.styleFor?.(programId) || programId;
+    } catch {
+      /* the id resolves in SET */
+    }
+    const req = SETM.wallFromScene?.(scene, style);
+    if (!req || req.mode === 'idle') {
+      this.wallStats.skipped++;
+      return;
+    }
+    // the camera the Stage will frame for this cue (stage.js onCut: inset singles of a solo show sit on side +1)
+    const inset = cue.shot === 'close' && req.mode === 'picture' && cue.framing !== 'ots';
+    const framing = cue.framing || defaultFraming(cue.shot, solo, inset);
+    const focus = cue.focus in cast ? cue.focus : 'A';
+    const cam = typeof CAM.framing === 'function' ? CAM.framing(framing, { framing, cast, focus, solo, side: solo && inset ? 1 : undefined, programId, move: null }) : null;
+    SETM.warmWallContent(req, style, cam || null);
+    this.wallStats.warmed++;
+    this.wallStats.ms += performance.now() - t0;
   }
 
   warm(ep, i) {
@@ -317,22 +463,35 @@ export class LiveDirection {
     let p = this.plans.get(seg);
     if (p) return p;
     const t0 = performance.now();
-    const res = planSegment(this.ep, i, { presenters: this.channel?.presenters || {}, gapAfter: this.gapFn ?? GAP_AFTER });
+    const res = planSegment(this.ep, i, { presenters: this.channel?.presenters || NO_PRESENTERS, gapAfter: this.gapFn ?? GAP_AFTER });
     p = { id: `${this.ep.id}:${i}`, index: i, ctx: res.ctx, events: res.events, errors: res.errors, voice: null, speechStart: null, speechEnd: null, ms: performance.now() - t0 };
     this.plans.set(seg, p);
     return p;
   }
 
-  /** Plan segment i again for the voice that will actually play (recorded words, or none). */
+  /**
+   * Plan segment i again for the voice that will actually play (recorded words, or none). The same
+   * episode object is planned with the segment's audio swapped for the call (restored in finally): the
+   * neighbours' memoised contexts and HANDS' running-order memory are reused, so a late segment of a
+   * 19-segment episode costs one segment's plan, not a re-plan of every segment before it (critic r2:
+   * 64-188 ms on the say() path at load 17).
+   */
   replan(i, recorded) {
     const seg = this.ep.segments[i];
     const key = recorded || NONE;
     const hit = this.replans.get(seg);
     if (hit && hit.key === key) return hit.plan;
-    const segments = this.ep.segments.slice();
-    segments[i] = { ...seg, audio: recorded || undefined };
     const t0 = performance.now();
-    const res = planSegment({ ...this.ep, segments }, i, { presenters: this.channel?.presenters || {}, gapAfter: this.gapFn ?? GAP_AFTER });
+    const had = Object.prototype.hasOwnProperty.call(seg, 'audio');
+    const saved = seg.audio;
+    let res;
+    try {
+      seg.audio = recorded || undefined;
+      res = planSegment(this.ep, i, { presenters: this.channel?.presenters || NO_PRESENTERS, gapAfter: this.gapFn ?? GAP_AFTER });
+    } finally {
+      if (had) seg.audio = saved;
+      else delete seg.audio;
+    }
     const plan = { id: `${this.ep.id}:${i}`, index: i, ctx: res.ctx, events: res.events, errors: res.errors, voice: null, speechStart: null, speechEnd: null, ms: performance.now() - t0 };
     this.replans.set(seg, { key, plan });
     return plan;
@@ -353,7 +512,9 @@ export class LiveDirection {
   shots0(seg, hasImg, handler) {
     const i = this.indexOf(seg);
     const p = i >= 0 ? this.planAt(i) : null;
-    const cues = p ? cuesFromPlan(p, { hasImg }) : null;
+    let cues = p ? cuesFromPlan(p, { hasImg }) : null;
+    // a pickup ("Thanks, Ada.") stays on the studio shot on air; its card comes with its own line
+    if (cues && STUDIO.has(this.scene.shot)) cues = pickupOpening(cues, p, { programId: this.scene.program?.id, gap: typeof this.gapFn === 'function' ? this.gapFn(i) : GAP_AFTER });
     this.story = cues ? { seg, cues, handler } : null;
     return cues;
   }
@@ -439,6 +600,9 @@ export class LiveDirection {
       }
     };
     if (!story && cues?.[0]) fireCue(cues[0]);
+    // wall warm-up: this segment's later studio cuts, then the next segment's (its picture may have loaded since)
+    this.warmWalls(i, 0);
+    this.warmWalls(i + 1);
     const mids = cues ? cues.filter((c) => c.k > 0 && c.mid) : [];
     // the max-hold guard's phrase boundaries (a cut inside a sentence when no sentence start can split a long shot)
     const gm = guardMarks(p, mids.map((c) => c.char));
@@ -477,6 +641,7 @@ export class LiveDirection {
         p.speechEnd = now();
         for (const id of timers) clearTimeout(id);
         if (this.story?.seg === seg) this.story = null;
+        this.warmWalls(i + 1); // again, in the pause: a picture that loaded during this segment (cheap when done)
       },
     };
   }

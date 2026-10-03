@@ -425,10 +425,23 @@ function build() {
     e.re = names.length ? new RegExp(`(?<![\\p{L}\\p{N}])(?:${names.map(escapeRe).join('|')})(?![\\p{L}\\p{N}])`, 'gu') : null;
     e.demonymRe = e.demonyms.length ? new RegExp(`(?<![\\p{L}\\p{N}])(?:${e.demonyms.map(escapeRe).join('|')})(?![\\p{L}\\p{N}])`, 'u') : null;
   }
-  return { entries, byName };
+  // Each entry under the first run of letters of each name it matches ("New" for New York, "Port" for
+  // Port-au-Prince): findPlaces tries only the entries whose first word the text contains, not all of them
+  // (a desk of thousands of headlines is read in milliseconds, not seconds).
+  const byFirst = new Map();
+  entries.forEach((e, i) => (e.ord = i));
+  for (const e of entries) {
+    if (!e.re) continue;
+    const names = [e.name, ...e.aliases].filter((n) => !(e.amb && n === e.name));
+    for (const first of new Set(names.map((n) => (n.match(/\p{L}+/u) || [''])[0]).filter(Boolean))) {
+      if (!byFirst.has(first)) byFirst.set(first, []);
+      byFirst.get(first).push(e);
+    }
+  }
+  return { entries, byName, byFirst };
 }
 
-const { entries: ENTRIES, byName: BY_NAME } = build();
+const { entries: ENTRIES, byName: BY_NAME, byFirst: BY_FIRST } = build();
 
 // Place names that are also common first names: "Israel Adesanya", "Sydney Sweeney",
 // "Santiago Abascal", "Paris Hilton". Followed by a capitalised word that is not a
@@ -476,7 +489,10 @@ export function lookupPlace(name) {
 export function findPlaces(text) {
   const s = String(text ?? '');
   const hits = [];
-  for (const e of ENTRIES) {
+  const candidates = new Set();
+  for (const w of s.match(/\p{L}+/gu) || []) for (const e of BY_FIRST.get(w) || []) candidates.add(e);
+  // in the gazetteer's own order, as before the index (two entries of the same name: the first one wins)
+  for (const e of [...candidates].sort((a, b) => a.ord - b.ord)) {
     if (!e.re) continue;
     e.re.lastIndex = 0;
     for (const m of s.matchAll(e.re)) hits.push({ entry: e, index: m.index, end: m.index + m[0].length, text: m[0] });

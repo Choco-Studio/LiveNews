@@ -8,6 +8,43 @@ const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g,
 /** Is the credit just the outlet itself ("Pixelburg Post" on Pixelburg Post's own picture)? */
 const ownCredit = (credit, outlet) => !credit || fold(credit) === fold(outlet) || fold(credit).startsWith(`${fold(outlet)} `);
 
+// The source plate on the strap and on the headline montage card holds about 36 characters: the stop-gap credit
+// ("Outlet / Photo: Credit") must fit it whole, never cut mid-word with an ellipsis.
+export const SOURCE_MAX = 36;
+// The credit line graphics may draw as is ("PHOTO: PIXEL WIRE AGENCY"), in the micro font under a picture.
+export const CREDIT_LINE_MAX = 28;
+/** The credit's first part: "Getty Images/AFP via Getty Images" -> "Getty Images"; "Jane Doe, Reuters" -> "Jane Doe". */
+const shortCredit = (c) => String(c).split(/\s*(?:\/|\bvia\b|,|;|\|)\s*/i)[0].trim();
+/** ...and without a trailing generic word ("Pixel Wire Agency" -> "Pixel Wire"), when a name is left. */
+const bareCredit = (c) => {
+  const t = shortCredit(c).replace(/\s+(?:agency|images|photos?|pictures|press|news|service|services|collective|library|archive)$/i, '').trim();
+  return t.split(/\s+/).length >= 1 && t.length >= 3 ? t : shortCredit(c);
+};
+/**
+ * What the source plate says for a picture another outlet or an agency took: "Outlet / Photo: Credit" when it
+ * fits, else with the credit's first part, else the outlet alone (the credit stays in `imageCredit`, and in
+ * `imageCreditLine` for graphics that draw it on the picture).
+ */
+export function sourceWithCredit(outlet, credit) {
+  if (!credit || ownCredit(credit, outlet)) return outlet;
+  for (const c of [credit, shortCredit(credit), bareCredit(credit)]) {
+    const line = `${outlet} / Photo: ${c}`;
+    if (c && line.length <= SOURCE_MAX) return line;
+  }
+  return outlet;
+}
+/** "PHOTO: <CREDIT>" in capitals, whole words, at most CREDIT_LINE_MAX characters (null when it cannot fit). */
+export function creditLine(credit) {
+  for (const c of [credit, shortCredit(credit), bareCredit(credit)]) {
+    const line = `PHOTO: ${String(c || '').toUpperCase()}`;
+    if (c && line.length <= CREDIT_LINE_MAX) return line;
+  }
+  const words = `PHOTO: ${shortCredit(credit).toUpperCase()}`.split(' ');
+  while (words.length > 2 && words.join(' ').length > CREDIT_LINE_MAX) words.pop();
+  const line = words.join(' ');
+  return words.length > 1 && line.length <= CREDIT_LINE_MAX ? line : null;
+}
+
 /**
  * The visual beats a story offers, in the order the desk suggests (`visuals`:
  * the map when it names a place, then its picture, then its figure card), and
@@ -111,14 +148,19 @@ export class Producer {
   stock(program, opts = {}) {
     let list = this.select(program, opts);
     const policy = this.config.recycle ?? 'local';
-    if (list.length >= (program.stories || 0) || typeof this.news.recycle !== 'function' || policy === 'off') return list;
+    // A programme with a picture on every item (NEWS IN 60) counts only the stories that have one.
+    const every = program.pictures === 'every';
+    const usable = (l) => (every ? l.filter((s) => s.image) : l);
+    const want = program.stories || 0;
+    if (usable(list).length >= want || typeof this.news.recycle !== 'function' || policy === 'off') return list;
     if (policy !== 'all' && !this.news.localOnly) return list;
-    const pool = Math.max(this.config.candidatePool ?? 12, Math.ceil((program.stories || 0) * 1.5));
+    const pool = Math.max(this.config.candidatePool ?? 12, Math.ceil(want * 1.5));
     const minAgeMs = this.news.localOnly ? 0 : (this.config.recycleAfterHours ?? 4) * 3600_000;
     const cats = program.categories || null;
-    // only stories the programme could air: its sections, on its beat (no coral reef on TECH BYTES)
-    const fits = (s) => (!cats || cats.includes(s.category)) && (!program.beat || onBeat(s, program.beat));
-    const back = this.news.recycle((pool - list.length) * 2, { filter: fits, gap: this.config.recycleGap ?? 5, minAgeMs });
+    // only stories the programme could air: its sections, on its beat (no coral reef on TECH BYTES), with a
+    // picture where every item has one
+    const fits = (s) => (!cats || cats.includes(s.category)) && (!program.beat || onBeat(s, program.beat)) && (!every || !!s.image);
+    const back = this.news.recycle((pool - usable(list).length) * 2, { filter: fits, gap: this.config.recycleGap ?? 6, minAgeMs });
     if (back) list = this.select(program, opts);
     return list;
   }
@@ -318,12 +360,17 @@ export class Producer {
       if (outlet) item.outlet = outlet;
       delete item.imageCredit;
       delete item.imageCreditVia;
+      delete item.imageCreditLine;
       item.source = outlet;
       if (!s?.image) return;
       const c = pictureCredit(s, this.images?.sources?.get?.(s.id));
       item.imageCredit = c.credit;
       item.imageCreditVia = c.via;
-      if (!ownCredit(c.credit, outlet)) item.source = `${outlet} / Photo: ${c.credit}`;
+      const line = creditLine(c.credit);
+      if (line) item.imageCreditLine = line;
+      // The stop-gap rides on the source only on segments and rundown items whose picture is shown; it never
+      // runs past the plate (SOURCE_MAX), and a credit that cannot fit stays in imageCredit only.
+      item.source = sourceWithCredit(outlet, c.credit);
     };
     for (const seg of ctx.episode.segments) {
       if (!seg.storyId) continue;

@@ -14,6 +14,7 @@ const KEYS = [
   'PICTURE_BUDGET_MS',
   'PICTURE_VERIFY_MS',
   'PORT',
+  'RECENT_LINES_HOURS',
   'RECYCLE_AFTER_HOURS',
   'RECYCLE_GAP',
   'RECYCLE_STORIES',
@@ -198,9 +199,20 @@ describe('.env.example', () => {
       .map((m) => [m[1], m[2]])
   );
 
+  test('(fix r2) numbers outside their range fall back to the default with a warning', async () => {
+    const c = await loadConfig({ RECYCLE_GAP: '-5', PICTURE_BUDGET_MS: '-1', RECYCLE_AFTER_HOURS: '-3', RECENT_LINES_HOURS: '1000' });
+    assert.equal(c.recycleGap, 6);
+    assert.equal(c.pictureBudgetMs, 6000);
+    assert.equal(c.recycleAfterHours, 4);
+    assert.equal(c.recentLinesHours, 6);
+    const ok = await loadConfig({ RECYCLE_GAP: '8', PICTURE_BUDGET_MS: '2500' });
+    assert.equal(ok.recycleGap, 8);
+    assert.equal(ok.pictureBudgetMs, 2500);
+  });
+
   test('documents every environment variable that server/config.js reads', () => {
     const source = fs.readFileSync(path.join(REPO, 'server', 'config.js'), 'utf8');
-    const used = [...source.matchAll(/\b(?:env|num)\('([A-Z0-9_]+)'/g)].map((m) => m[1]);
+    const used = [...source.matchAll(/\b(?:env|num|bounded)\('([A-Z0-9_]+)'/g)].map((m) => m[1]);
     assert.deepEqual([...used].sort(), [...KEYS].sort(), 'the list of variables in this test is out of date');
     for (const key of used) assert.ok(key in example, `${key} is missing from .env.example`);
   });

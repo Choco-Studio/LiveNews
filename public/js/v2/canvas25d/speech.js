@@ -46,6 +46,7 @@ function blankFrame(slot) {
   return {
     slot, speaking: false, level: 0, voice: -1, viseme: 'rest', next: 'rest', mix: 0, accent: 0, pause: false,
     sentenceIndex: -1, wordIndex: -1, charIndex: -1, emph: 0, env: 0, jawEnv: 0, act: 0, pauseAt: FAR, sentAt: FAR, endAt: FAR, startAt: FAR,
+    pausePrev: FAR, endPrev: FAR, ohold: 0,
   };
 }
 
@@ -63,7 +64,7 @@ export function sampleSpeech(sp, t) {
   // a built timeline is pure in t: derive the slow signals from its span
   fr.env = fr.level;
   fr.act = sp ? smooth((t - sp.t0 + 0.05) / 0.3) * (1 - smooth((t - sp.t1) / 0.6)) : 0;
-  fr.pauseAt = fr.sentAt = FAR;
+  fr.pauseAt = fr.sentAt = fr.pausePrev = fr.endPrev = FAR;
   fr.endAt = sp && t >= sp.t1 ? sp.t1 : FAR;
   return fr;
 }
@@ -166,9 +167,17 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
     fr.jawEnv = ease(fr.jawEnv, fr.speaking ? fr.level : 0, 0.07, 0.22, dt);
     fr.emph = ease(fr.emph, fr.accent, 0.09, 0.42, dt);
     fr.act = ease(fr.act, fr.speaking ? 1 : 0, 0.25, 0.6, dt);
-    if (fr.pause && !wasPause) fr.pauseAt = t;
+    // (the previous pause / end too: idle.js keeps an event blink's place in the timetable until
+    // two newer events have happened, so forgetting one never resurrects a blink mid-curve)
+    if (fr.pause && !wasPause) {
+      fr.pausePrev = fr.pauseAt;
+      fr.pauseAt = t;
+    }
     if (fr.speaking && !wasSpeaking) fr.startAt = t;
-    if (!fr.speaking && wasSpeaking) fr.endAt = t;
+    if (!fr.speaking && wasSpeaking) {
+      fr.endPrev = fr.endAt;
+      fr.endAt = t;
+    }
     if (fr.speaking && wasSpeaking && fr.sentenceIndex !== lastSentence) fr.sentAt = t;
     wasPause = fr.pause;
     wasSpeaking = fr.speaking;

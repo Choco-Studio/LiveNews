@@ -4,8 +4,9 @@
 //   breathing, weight shift, head micro-motion;
 //   blinks: a seeded timetable 2-6 s apart (some doubles), plus the blinks
 //     people make with big gaze shifts (most look starts, some returns), at
-//     sentence ends and in some comma pauses; an event blink replaces a
-//     scheduled one close to it, so the eyes never flutter;
+//     sentence ends and in some comma pauses; an event blink takes the place of
+//     a scheduled one close to it, and never cancels a blink already running,
+//     so the eyes never flutter or pop;
 //   saccades: quick (45 ms) jumps between fixations. Talking to the lens the
 //     fixations stay close to it (reading the autocue); listening they wander
 //     a little more; a look or a gesture that drives the eyes damps them.
@@ -89,12 +90,35 @@ export function eventHash(x, seed) {
 
 const FAR = -1e9;
 
-// an event blink is remembered this long: the timetable's next blink after it is dropped
-const EVENT_MEMORY = 2.5;
+// Event blinks (gaze shifts, sentence ends, comma pauses) and the timetable (critic r3: an event
+// that arrived while a blink was half closed cancelled it, and the lids jumped 0.78 → 0.07 in one
+// frame before closing again). The rules, pop-free by construction:
+//   - a look's blinks are known ahead (planned looks are on perf.look before they start); the
+//     speech's only once they happen (endAt / pauseAt, and the previous of each);
+//   - an event blink never starts within 0.6 s after another (no flutter; a look event wins over a
+//     speech event 0.6 s either side of it), and a running one is never replaced;
+//   - a look shorter than 1 s blinks at most once (its start), never at its return too;
+//   - a timetable blink b gives way to an event blink in [b - 2.5, b] (one took its place a moment
+//     ago) or in [b + 0.23, b + 1.2] (one follows soon); an event that starts while b runs leaves b
+//     alone (the two curves merge into one slightly longer blink).
+const EVENT_MEMORY = 2.5; // s an event blink keeps the timetable's next blink away
+const FOLLOW = [0.23, 1.2]; // a timetable blink this long before an event blink gives way
+const NO_FLUTTER = 0.6; // s between two event blinks at least
+const MEM = 3.6, AHEAD = FOLLOW[1] + 0.1; // the window of events that can matter at t
+const EVN = 32;
+const EV = new Float64Array(EVN), EK = new Uint8Array(EVN), EF = new Uint8Array(EVN);
+let nEv = 0;
 
-/** Start time of the latest event blink in the last EVENT_MEMORY s (look shifts, sentence ends, comma pauses), or FAR. */
-function eventBlink(perf, fr, t, seed) {
-  let tb = FAR;
+function pushEv(e, kind, t) {
+  if (nEv >= EVN || e < t - MEM || e > t + (kind ? 0 : AHEAD)) return;
+  EV[nEv] = e;
+  EK[nEv] = kind;
+  nEv++;
+}
+
+/** Collect the candidate event blinks around t into EV (sorted), with EF[i] = 1 for the ones that blink. */
+function eventBlinks(perf, fr, t, seed) {
+  nEv = 0;
   const looks = perf.look;
   if (looks) {
     for (let i = 0; i < looks.length; i++) {
@@ -102,15 +126,58 @@ function eventBlink(perf, fr, t, seed) {
       if (lk.target === 'camera' || lk.target === 'interest' || lk.style === 'mech') continue; // eyeline shifts only
       // big gaze shifts often carry a blink as the eyes start to move; a few returns too
       // (rates tuned so the whole face blinks ~14-16 times a minute: more reads as nervous)
-      if (t >= lk.t0 && t - lk.t0 < EVENT_MEMORY && eventHash(lk.t0, seed) < 0.4 && lk.t0 + 0.03 > tb) tb = lk.t0 + 0.03;
-      if (t >= lk.t1 && t - lk.t1 < EVENT_MEMORY && eventHash(lk.t1, seed + 1) < 0.2 && lk.t1 > tb) tb = lk.t1;
+      if (eventHash(lk.t0, seed) < 0.4) pushEv(lk.t0 + 0.03, 0, t);
+      if (lk.t1 - lk.t0 >= 1 && eventHash(lk.t1, seed + 1) < 0.2) pushEv(lk.t1, 0, t);
     }
   }
   if (fr) {
-    if (t - fr.endAt < EVENT_MEMORY && t >= fr.endAt && eventHash(fr.endAt, seed + 2) < 0.4 && fr.endAt + 0.05 > tb) tb = fr.endAt + 0.05;
-    if (t - fr.pauseAt < EVENT_MEMORY && t >= fr.pauseAt && eventHash(fr.pauseAt, seed + 3) < 0.15 && fr.pauseAt + 0.03 > tb) tb = fr.pauseAt + 0.03;
+    const ea = fr.endAt, eb = fr.endPrev ?? FAR, pa = fr.pauseAt, pb = fr.pausePrev ?? FAR;
+    if (ea > FAR && ea <= t && eventHash(ea, seed + 2) < 0.4) pushEv(ea + 0.05, 1, t);
+    if (eb > FAR && eventHash(eb, seed + 2) < 0.4) pushEv(eb + 0.05, 1, t);
+    if (pa > FAR && pa <= t && eventHash(pa, seed + 3) < 0.15) pushEv(pa + 0.03, 1, t);
+    if (pb > FAR && eventHash(pb, seed + 3) < 0.15) pushEv(pb + 0.03, 1, t);
   }
-  return tb;
+  // insertion sort (a handful of entries)
+  for (let i = 1; i < nEv; i++) {
+    const e = EV[i], k = EK[i];
+    let j = i - 1;
+    while (j >= 0 && EV[j] > e) {
+      EV[j + 1] = EV[j];
+      EK[j + 1] = EK[j];
+      j--;
+    }
+    EV[j + 1] = e;
+    EK[j + 1] = k;
+  }
+  // look events: none within NO_FLUTTER after another look event
+  for (let i = 0; i < nEv; i++) {
+    if (EK[i]) continue;
+    let ok = 1;
+    for (let j = i - 1; j >= 0 && EV[j] > EV[i] - NO_FLUTTER; j--) if (!EK[j] && EV[j] < EV[i]) ok = 0;
+    EF[i] = ok;
+  }
+  // speech events: clear of the look blinks either side and of an earlier speech event
+  for (let i = 0; i < nEv; i++) {
+    if (!EK[i]) continue;
+    let ok = 1;
+    for (let j = 0; j < nEv && ok; j++) {
+      if (j === i) continue;
+      const d = EV[i] - EV[j];
+      if (!EK[j] && EF[j] && d > -NO_FLUTTER && d < NO_FLUTTER) ok = 0;
+      else if (EK[j] && d > 0 && d < NO_FLUTTER) ok = 0;
+    }
+    EF[i] = ok;
+  }
+}
+
+/** Does the timetable blink at b give way to an event blink (EV / EF from eventBlinks)? */
+function givesWay(b) {
+  for (let i = 0; i < nEv; i++) {
+    if (!EF[i]) continue;
+    const d = EV[i] - b;
+    if ((d >= -EVENT_MEMORY && d <= 0) || (d >= FOLLOW[0] && d <= FOLLOW[1])) return true;
+  }
+  return false;
 }
 
 /** Eyelid closure 0..1 for a blink that started dt seconds ago: fast close, short hold, slower open. */
@@ -140,17 +207,18 @@ export function applyIdle(c, persona, perf, t, seed, gestLook) {
   const sch = schedule(seed, p);
   const fr = perf.speech ? sampleSpeech(perf.speech, t) : null;
   const act = fr ? fr.act || 0 : 0;
-  // blinks: the timetable, unless an event blink sits within 1.2 s before it or 2.5 s after
-  // an event blink (the event blink took its place: about one blink every 4 s overall)
-  const tb = eventBlink(perf, fr, t, seed);
+  // blinks: the event blinks (gaze shifts, sentence ends, comma pauses), and the timetable where
+  // no event blink took its place (about one blink every 4 s overall); see eventBlinks
+  eventBlinks(perf, fr, t, seed);
+  let blink = 0;
+  for (let i = 0; i < nEv; i++) if (EF[i] && EV[i] <= t && t - EV[i] < 0.25) blink = Math.max(blink, blinkCurve(t - EV[i]));
   // the timetables cover SPAN s; later instants wrap (a blink or a fixation may be cut at the seam once every 15 min)
   const tw = t >= 0 && t < SPAN ? t : ((t % SPAN) + SPAN) % SPAN;
   const off = t - tw;
   const bi = upperBound(sch.blinks, tw);
-  let blink = tb > FAR ? blinkCurve(t - tb) : 0;
   for (let q = Math.max(0, bi - 1); q <= bi && q >= 0; q++) {
     const b = sch.blinks[q] + off;
-    if (tb > FAR && b > tb - 1.2 && b < tb + EVENT_MEMORY) continue;
+    if (t - b >= 0.25 || givesWay(b)) continue;
     blink = Math.max(blink, blinkCurve(t - b));
   }
   c.blink = blink;

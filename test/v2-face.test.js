@@ -100,7 +100,9 @@ test('duo turn starts: each listener glances 0.20-0.35 s after the first word, h
         if (cont) {
           assert.equal(cont.at, 0, `${id} #${ctx.index}: a carried-on look starts with the turn`);
           const shortLine = ctx.type === 'chat' && ctx.duration < RULES.shortLine ? RULES.shortShare * ctx.duration : Infinity;
-          assert.ok(cont.dur >= Math.min(RULES.contMin, ctx.duration - 0.1, shortLine) - 1e-3 && cont.at + cont.dur <= Math.min(RULES.backBy, ctx.duration) - 0.1 + 1e-6, `${id} #${ctx.index}: cont ${cont.dur}`);
+          // (carried on through this short line's toss back: it meets the toss and runs into the answer)
+          const endMax = /\+toss/.test(cont.why) ? ctx.duration + (GAP[id] ?? 0.9) + 0.6 : Math.min(RULES.backBy, ctx.duration) - 0.1;
+          assert.ok(cont.dur >= Math.min(RULES.contMin, ctx.duration - 0.1, shortLine) - 1e-3 && cont.at + cont.dur <= endMax + 1e-6, `${id} #${ctx.index}: cont ${cont.dur}`);
           assert.ok(!looksOf(events, slot).some((l) => /^turn/.test(l.why)), `${id} #${ctx.index}: no fresh glance on top of a carried-on look`);
           checked++;
           continue;
@@ -116,8 +118,14 @@ test('duo turn starts: each listener glances 0.20-0.35 s after the first word, h
         }
         // (a dry line with its own glance replaces the turn's in TECH BYTES: checked in the dry-line test)
         if (!g && events.some((e) => e.kind === 'look' && e.slot === slot && e.why === 'dry')) continue;
-        // a line under 2 s: the turn glance and the toss meet are one look, early in the line
-        if (!g && ctx.duration < 2 && looksOf(events, slot).some((l) => l.why === 'toss-meet' && l.at <= 0.6)) continue;
+        // a short chat line that hands over (critic r3: the glance at its start, cut to 60 % of the line,
+        // crossed the speaker's toss look): the listener's one look meets the toss instead
+        if (!g && ctx.type === 'chat' && ctx.duration < RULES.shortLine && looksOf(events, ctx.speaker).some((l) => /toss/.test(l.why))) {
+          const meet = looksOf(events, slot).find((l) => /toss/.test(l.why));
+          assert.ok(meet, `${id} #${ctx.index}: ${slot} meets the toss of a short line`);
+          checked++;
+          continue;
+        }
         assert.ok(g, `${id} #${ctx.index}: a turn-start glance for ${slot}`);
         assert.equal(g.target, 'partner');
         const win = vary === 'late' ? RULES.lateStart : RULES.glanceStart;
@@ -1182,7 +1190,9 @@ test('short chat lines (< 5.4 s): speaker and listener each gaze at the partner 
       if (!ctx?.valid || !ctx.duo || ctx.type !== 'chat' || ctx.duration >= RULES.shortLine || ctx.duration < 1.5) continue;
       const D = ctx.duration;
       for (const slot of [ctx.speaker, ...ctx.listeners]) {
-        const share = events.filter((e) => e.kind === 'look' && e.slot === slot && e.target === 'partner').reduce((s, l) => s + inTurn(l, D), 0) / D;
+        // (a look carried on from the listener's own toss through this line's toss back is the
+        // exchange itself, one look ≤ RULES.exchangeMax: checked in the whole-conversation test)
+        const share = events.filter((e) => e.kind === 'look' && e.slot === slot && e.target === 'partner' && e.why !== 'cont+toss').reduce((s, l) => s + inTurn(l, D), 0) / D;
         assert.ok(share <= RULES.shortShare + 0.02, `${ep.id} #${i} ${slot === ctx.speaker ? 'speaker' : 'listener'} gaze ${(share * 100).toFixed(0)} % of a ${D.toFixed(1)} s line`);
       }
       n++;
@@ -1414,7 +1424,9 @@ test('a hand-over look runs on into the partner\'s turn, and that turn carries i
         // the whole look stays within the approved hold, unless the hand-over itself already took
         // most of it (then it lasts just ≥ 1 s into the new turn)
         const floor = cur.start + RULES.contMin - (prev.start + ho.at);
-        if (!robot) assert.ok(whole <= Math.max(RULES.glanceHold[1], floor) + 0.05, `${ep.id} #${j}: the whole hand-over look ${whole.toFixed(2)} s`);
+        // (carried on through a short line's toss back, the exchange: ≤ RULES.exchangeMax)
+        const max = /\+toss/.test(cont.why) ? RULES.exchangeMax : RULES.glanceHold[1];
+        if (!robot) assert.ok(whole <= Math.max(max, floor) + 0.05, `${ep.id} #${j}: the whole hand-over look ${whole.toFixed(2)} s`);
         n++;
       }
     }
@@ -1592,4 +1604,121 @@ test('the whole face path per head and frame (rig layers idle / expression / spe
   }
   if (process.env.FACE_ALLOC_DEBUG) console.log('face path bytes/frame', JSON.stringify(res));
   for (const [k, v] of Object.entries(res)) assert.ok(v < 3072, `${k}: ${v} bytes per frame in the face path (${JSON.stringify(res)})`);
+});
+
+// ---------------------------------------------------------------------------
+// Fix round 3 (critics r3)
+
+/** Merged partner looks of a slot with the styles of the looks in them (absolute times). */
+function mergedStyled(cv, slot) {
+  const raw = [];
+  for (const s of cv.segs) for (const e of s.events) if (e.kind === 'look' && e.slot === slot && (e.target || 'partner') === 'partner') raw.push({ t0: s.start + e.at, t1: s.start + e.at + e.dur, style: e.style || null, why: e.why });
+  raw.sort((a, b) => a.t0 - b.t0);
+  const m = [];
+  for (const l of raw) {
+    const last = m[m.length - 1];
+    if (last && l.t0 <= last.t1) {
+      last.t1 = Math.max(last.t1, l.t1);
+      last.styles.push(l.style);
+      last.whys.push(l.why);
+    } else m.push({ t0: l.t0, t1: l.t1, styles: [l.style], whys: [l.why] });
+  }
+  return m;
+}
+
+test('short banter lines (critic r3 blocker): no full-head partner look under 1.4 s, and every toss look is met by the partner for ≥ 0.8 s (3 duo fixtures × 40 seeds)', async () => {
+  const { buildConversation } = await import('../public/js/v2/canvas25d/labs/face.js');
+  const bad = [];
+  let tosses = 0, looks = 0;
+  for (const id of DUOS) {
+    for (let k = 0; k < 40; k++) {
+      const ep = clone(EPISODES[id]);
+      ep.id += 'x' + k;
+      const cv = buildConversation(ep, {});
+      for (const slot of cv.slots) {
+        if (ep.cast[slot] === 'unit8') continue; // its look is a mechanical 1 px shift by design
+        for (const l of mergedStyled(cv, slot)) {
+          looks++;
+          const full = l.styles.some((st) => st !== 'side');
+          if (full && l.t1 - l.t0 < RULES.sideBelow - 1e-3) bad.push(`${ep.id} ${slot} full-head look ${(l.t1 - l.t0).toFixed(2)} s (${l.whys.join('>')})`);
+        }
+      }
+      const abs = {};
+      for (const s of cv.segs) for (const e of s.events) if (e.kind === 'look' && (e.target || 'partner') === 'partner') (abs[e.slot] ||= []).push({ t0: s.start + e.at, t1: s.start + e.at + e.dur });
+      for (const s of cv.segs) {
+        for (const e of s.events) {
+          if (e.kind !== 'look' || e.slot !== s.speaker || !/toss/.test(e.why || '')) continue;
+          tosses++;
+          const t0 = s.start + e.at, t1 = t0 + e.dur;
+          const other = cv.slots.find((x) => x !== s.speaker);
+          let ov = 0;
+          for (const l of abs[other] || []) ov += Math.max(0, Math.min(t1, l.t1) - Math.max(t0, l.t0));
+          if (ov < 0.8) bad.push(`${ep.id} #${s.i} toss ${t0.toFixed(2)}-${t1.toFixed(2)} met for ${ov.toFixed(2)} s`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(bad.slice(0, 10), []);
+  assert.ok(tosses >= 100 && looks >= 500, `${tosses} tosses, ${looks} merged looks`);
+});
+
+test('applyLook: a short partner look is eye-led (the head turns ≤ 45 % of the approved glance), a look carried on from an earlier one keeps the whole turn', () => {
+  const peak = (look, from, to) => {
+    let m = 0;
+    for (let t = from; t <= to; t += 1 / 60) {
+      const c = { lookX: 0, lookY: 0, lid: 0, yaw: 0, pitch: 0, lean: 0, hx: 0, hy: 0, smile: 0, brow: 0, browIn: 0, roll: 0 };
+      applyLook(c, { side: 1, look }, t, 0);
+      m = Math.max(m, c.yaw);
+    }
+    return m;
+  };
+  const full = peak([{ t0: 0, t1: 3.7 }], 0, 4.5);
+  const short = peak([{ t0: 0, t1: 0.8 }], 0, 1.5);
+  assert.ok(full > 0.39, `full ${full}`);
+  assert.ok(short <= 0.45 * full, `a 0.8 s look turns the head ${short.toFixed(3)} rad (full ${full.toFixed(3)})`);
+  // a 'cont' look (1 s) that starts inside a running hand-over look: one look, the whole turn
+  const carried = peak([{ t0: 0, t1: 2.4 }, { t0: 2.0, t1: 3.0 }], 2.0, 3.6);
+  assert.ok(carried > 0.39, `carried ${carried}`);
+  // a later look never changes the head of one already running (no pop)
+  const c1 = { lookX: 0, lookY: 0, lid: 0, yaw: 0, pitch: 0, lean: 0, hx: 0, hy: 0, smile: 0, brow: 0, browIn: 0, roll: 0 };
+  const c2 = { ...c1 };
+  applyLook(c1, { side: 1, look: [{ t0: 0, t1: 1.0 }] }, 0.5, 0);
+  applyLook(c2, { side: 1, look: [{ t0: 0, t1: 1.0 }, { t0: 0.8, t1: 3.0 }] }, 0.5, 0);
+  assert.equal(c1.yaw, c2.yaw);
+});
+
+test('blinks never pop (|Δ| ≤ 0.5 per 1/60 s frame) and a look under 1 s blinks at most once, over the five fixtures', async () => {
+  const { buildConversation } = await import('../public/js/v2/canvas25d/labs/face.js');
+  const { actor } = await import('../public/js/v2/canvas25d/scene.js');
+  const { poseAt } = await import('../public/js/v2/canvas25d/rig.js');
+  const { hashSeed } = await import('../public/js/v2/canvas25d/direction/context.js');
+  const bad = [];
+  let frames = 0;
+  for (const id of [...DUOS, ...SOLOS]) {
+    for (let k = 0; k < 2; k++) {
+      const ep = clone(EPISODES[id]);
+      if (k) ep.id += 'b' + k;
+      const data = buildConversation(ep, {});
+      const duo = data.slots.length > 1;
+      for (const slot of data.slots) {
+        const p = data.perfs[slot];
+        const a = actor(ep.cast[slot], { side: duo ? (slot === 'A' ? 1 : -1) : 0, seed: hashSeed(`${ep.id}${slot}`) % 997, emotions: p.emotions, look: p.look, gestures: p.gestures, listen: true, speech: liveSpeech(data.audio, slot) });
+        let prev = 0, closes = [];
+        for (let t = 0; t < data.end; t += 1 / 60) {
+          frames++;
+          const b = poseAt(a, t).face.blink || 0;
+          if (Math.abs(b - prev) > 0.5) bad.push(`${ep.id} ${slot} t=${t.toFixed(3)} ${prev.toFixed(2)}→${b.toFixed(2)}`);
+          if (b > 0.6 && prev <= 0.6) closes.push(t);
+          prev = b;
+        }
+        for (const l of p.look) {
+          if (l.t1 - l.t0 >= 1 || l.style === 'mech' || l.target === 'camera' || l.target === 'interest') continue;
+          const n = closes.filter((c) => c >= l.t0 && c <= l.t1 + 0.2).length;
+          if (n > 1 && !closes.some((c, i) => i && c - closes[i - 1] < 0.4 && c >= l.t0 && c <= l.t1 + 0.2)) bad.push(`${ep.id} ${slot} ${n} blinks in a ${(l.t1 - l.t0).toFixed(2)} s look`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(bad.slice(0, 8), []);
+  assert.ok(frames > 30000, `${frames} frames`);
 });

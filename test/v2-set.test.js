@@ -37,6 +37,8 @@ function fixture(name) {
 }
 lab.setImage('port', fixture('port'));
 lab.setImage('chip', fixture('chip'));
+lab.setImage('volcano', fixture('volcano'));
+lab.setImage('forest', fixture('forest'));
 
 function shot(o, t = 10) {
   lab.set({ presenters: false, wall: 'idle', phase: 'intro', ...o });
@@ -137,10 +139,10 @@ describe('tint and accent censuses (wide, presenters hidden)', () => {
   test('MONEY MINUTE: saturated ≤ 10 % of set pixels, cream tint ≤ 8 %, darkGreen desk line', () => {
     const { cs } = setCensus('money-minute');
     assert.ok(share(cs, [...SATURATED]) <= 0.1, `saturated ${share(cs, [...SATURATED])}`);
-    // the warm room reads warm through light, not blocks: the lamps' glows carry a sparse warm share
-    // (≥ 0.8 %), well under the bible's 8 % cap
+    // the warm room's warmth is its bronze lamps (critics r3: no warm dots or warm blocks on the wall,
+    // the lamps' light on the panels neutral): present, and far under the bible's 8 % cap
     const tint = share(cs, styleFor('money-minute').tintNames);
-    assert.ok(tint >= 0.008 && tint <= 0.08, `tint ${tint}`);
+    assert.ok(tint >= 0.001 && tint <= 0.08, `tint ${tint}`);
     assert.ok(share(cs, ['darkGreen']) > 0 && share(cs, ['green']) === 0);
   });
   test('NEWS IN 60: yellow ≤ 1.5 %, saturated ≤ 6 %, cream tint ≤ 4 %', () => {
@@ -229,7 +231,7 @@ describe('video wall', () => {
       names.add(n);
       if (n === 'darkGreen') rule++;
     }
-    assert.equal(rule, 16);
+    assert.equal(rule, 32, 'the 16 px rule, 2 px tall');
     for (const n of names) assert.ok(['ink', 'slate', 'darkGreen', 'fog'].includes(n), n);
   });
   test('NEWS IN 60 dial: two static states, never ticking', () => {
@@ -340,7 +342,9 @@ describe('video wall', () => {
     const seg = (o) => ({ segPlan: { ctx: { seg: { type: 'story', ...o } } } });
     assert.equal(wallFromScene({ ...base, program: { id: 'world-now' }, wall: { mode: 'image', storyId: 's1' }, storyId: 's1', ...seg({ storyId: 's1' }) }).mode, 'picture');
     assert.equal(wallFromScene({ ...base, program: { id: 'world-now' }, wall: { mode: 'source', source: 'BBC' }, storyId: 's2', ...seg({ storyId: 's2', location: { place: 'LIMA', lat: -12, lon: -77 } }) }).mode, 'map');
-    assert.equal(wallFromScene({ ...base, program: { id: 'cosmos' }, wall: { mode: 'source', source: 'NASA' }, storyId: 's3', ...seg({ storyId: 's3', location: { lat: 1, lon: 2 } }) }).mode, 'plate');
+    // a story with neither a picture nor a place: nothing for a plate beyond the strap, the idle art
+    assert.equal(wallFromScene({ ...base, program: { id: 'cosmos' }, wall: { mode: 'source', source: 'NASA' }, storyId: 's3', ...seg({ storyId: 's3', location: { lat: 1, lon: 2 } }) }).mode, 'idle');
+    assert.equal(wallFromScene({ ...base, program: { id: 'cosmos' }, wall: { mode: 'source', source: 'NASA' }, storyId: 's5', ...seg({ storyId: 's5', kicker: 'MARS', location: { place: 'GALE CRATER', lat: 1, lon: 2 } }) }).mode, 'plate');
     const money = wallFromScene({ program: { id: 'money-minute' }, cast: { A: 'penny' }, framing: 'mcu-r', wall: { mode: 'source', source: 'FT' }, storyId: 's4', segPlan: { ctx: { seg: { type: 'story', storyId: 's4', numbers: [{ value: '$82', label: 'OIL' }], kicker: 'OIL' }, shots: [] } } });
     assert.equal(money.mode, 'figure');
     assert.equal(money.solo, true);
@@ -411,9 +415,9 @@ describe('round 3: wall plates inside their free area, clean tint clusters', () 
   test('MONEY MINUTE warmth is light, not a block: no opaque warm 4x4 block on the back wall (critic r2)', () => {
     const px = shot({ programme: 'money-minute', framing: 'wide' });
     for (const name of ['brown', 'tanShade', 'maroon']) assert.ok(!blockOf(px, name, 4), `an opaque ${name} 4x4 block in the MONEY MINUTE wide`);
-    // and the warm share is there: the glows' warm Bayer around each lamp
+    // and no warm pixel anywhere on the wall but the two fixtures (no sprinkled warm Bayer)
     const { cs } = setCensus('money-minute');
-    assert.ok(share(cs, ['brown', 'tanShade']) > 0.005);
+    assert.ok(share(cs, ['brown', 'tanShade']) > 0.0005);
   });
   test('COSMOS: its colour is the purple practical pair only (no coloured wash on the walls); ≤ 12 %', () => {
     for (const framing of ['wide', 'two', 'single-a']) {
@@ -641,13 +645,24 @@ describe('fix round 1: layout, pictures, light (critics of round 3)', () => {
         for (const h of m.heads) assert.ok(m.x1 + 6 <= h.x0 || m.x0 >= h.x1 + 6 || m.y1 + 6 <= h.y0 || m.y0 >= h.y1 + 6, `${what} within 6 px of head ${JSON.stringify(h)}`);
       }
     }
-    // the solo WIDE (pictures on the WIDE, money-minute.md): the picture fills the wall above its dark
-    // band, the presenter's head occluding its lower centre (critics r2: never a postage stamp)
+    // the solo WIDE (pictures on the WIDE, money-minute.md): a letterbox across the whole wall above the
+    // head (critics r2: never a postage stamp; critics r3: never behind the head), its bottom edge 6 px
+    // or more over the hair, and the wall round the head is the plain field
     for (const programme of ['money-minute', 'news-60']) {
       const cam = lab.cameraFor('wide', programme);
       const m = mediaRectFor(cam, programme);
       const r = wallRect(cam);
-      assert.ok(!m.framed && m.x1 - m.x0 >= r.x1 - r.x0 - 2 && m.y1 - m.y0 >= 40, `${programme} ${JSON.stringify(m)}`);
+      const h = m.heads[0];
+      assert.ok(!m.framed && m.x1 - m.x0 >= r.x1 - r.x0 - 2 && m.y1 - m.y0 >= 18, `${programme} ${JSON.stringify(m)}`);
+      assert.ok(m.y1 + 6 <= h.y0 + 1, `${programme}: letterbox bottom ${m.y1} vs head top ${h.y0}`);
+      // no picture pixel in the head box grown by 6 px: only the field there (presenters hidden)
+      for (const image of ['volcano', 'forest', 'port']) {
+        const px = shot({ programme, framing: 'wide', wall: 'picture', image, presenters: false });
+        const field = new Set([C.slate, C.ink, C.black]);
+        let bad = 0;
+        for (let y = Math.max(r.y0, h.y0 - 6); y < Math.min(r.y1, h.y1); y++) for (let x = Math.max(r.x0, h.x0 - 6); x < Math.min(r.x1, h.x1 + 6); x++) if (!field.has(px[y * W + x])) bad++;
+        assert.equal(bad, 0, `${programme} ${image}: ${bad} picture px within 6 px of the head`);
+      }
     }
     // a duo single's full-wall picture runs to the wall's top edge; its rows under the graphics' top
     // row are one palette step darker (never brighter than steel there), no black letterbox
@@ -723,12 +738,13 @@ describe('fix round 1: layout, pictures, light (critics of round 3)', () => {
     const wall = { mode: 'idle', image: null, location: null, figure: null, label: null, since: 0, focus: 'A', solo: false };
     const images = new Map([['s2', { full: { width: 2, height: 2, data: new Uint8ClampedArray(16) } }]]);
     const scene = (seg, extra = {}) => ({ program: { id: 'world-now' }, storyId: seg.storyId, images, cast: { A: 'paco', B: 'lola' }, segPlan: { ctx: { seg } }, wall: { mode: 'image' }, ...extra });
-    Object.assign(wall, wallFromScene(scene({ type: 'story', storyId: 's1', kicker: 'OIL MARKETS', source: 'REUTERS' }), 'world-now'));
+    Object.assign(wall, wallFromScene(scene({ type: 'story', storyId: 's1', kicker: 'OIL MARKETS', source: 'REUTERS', location: { place: 'LAGOS' } }), 'world-now'));
     assert.equal(wall.mode, 'plate');
-    assert.equal(wall.label, 'OIL MARKETS');
-    Object.assign(wall, wallFromScene(scene({ type: 'story', storyId: 's2', kicker: 'VOLCANO', source: 'AP' }), 'world-now'));
+    assert.deepEqual([wall.label, wall.sub], ['OIL MARKETS', 'LAGOS']);
+    Object.assign(wall, wallFromScene(scene({ type: 'story', storyId: 's2', kicker: 'VOLCANO', source: 'AP', location: { place: 'ICELAND' } }), 'world-now'));
     assert.equal(wall.mode, 'picture');
-    assert.equal(wall.label, 'VOLCANO', 'the picture carries its own kicker as its fallback plate');
+    assert.equal(wall.label, 'VOLCANO', 'the picture carries its own kicker and place as its fallback plate');
+    assert.equal(wall.sub, 'ICELAND');
     Object.assign(wall, wallFromScene(scene({ type: 'story', storyId: 's3', location: { place: 'NAIROBI', lat: -1.3, lon: 36.8 } }), 'world-now'));
     assert.equal(wall.mode, 'map');
     assert.equal(wall.image, null);
@@ -770,20 +786,30 @@ describe('fix round 1: layout, pictures, light (critics of round 3)', () => {
     assert.equal(warmWallContent({ mode: 'picture', image: img, label: 'CHIPS' }, 'tech-bytes', lab.cameraFor('wide', 'tech-bytes')), true);
     assert.equal(warmWallContent(null, 'tech-bytes'), false);
   });
-  test('MONEY MINUTE lamps: a warm glow around each fixture, symmetric, beside the wall, never near Penny', () => {
+  test('MONEY MINUTE lamps: two compact hand-pixelled bronze fixtures, symmetric, beside the wall, never near Penny; their light neutral', () => {
     const px = shot({ programme: 'money-minute', framing: 'wide' });
     const r = wallRect(lab.cameraFor('wide', 'money-minute'));
-    const warm = new Set([C.brown, C.tanShade]);
-    let left = 0, right = 0, centre = 0, lx = 0, rx = 0, top = 0;
+    const warm = new Set([C.maroon, C.brown, C.tanShade, C.tan, C.cream]);
+    const box = [[W, H, -1, -1], [W, H, -1, -1]];
+    let centre = 0, top = 0, cream = 0, silver = 0;
     for (let y = 0; y < 150; y++) for (let x = 0; x < W; x++) {
-      if (!warm.has(px[y * W + x])) continue;
+      const c = px[y * W + x];
+      if (c === C.silver && x < r.x0 - 4) silver++;
+      if (!warm.has(c)) continue;
+      if (c === C.cream) cream++;
       if (y < 24) top++;
-      if (x < r.x0 - 2) { left++; lx += x; } else if (x >= r.x1 + 2) { right++; rx += x; } else centre++;
+      const b = x < r.x0 - 2 ? box[0] : x >= r.x1 + 2 ? box[1] : null;
+      if (!b) { centre++; continue; }
+      b[0] = Math.min(b[0], x); b[1] = Math.min(b[1], y); b[2] = Math.max(b[2], x); b[3] = Math.max(b[3], y);
     }
-    assert.ok(left > 80 && right > 80, `glows ${left} / ${right}`);
-    assert.equal(centre, 0, 'no warm light over the wall and Penny');
-    assert.equal(top, 0, 'no warm light in the graphics top row (y < 24)');
-    assert.ok(Math.abs(lx / left + rx / right - 384) <= 2, 'the glows are symmetric');
+    assert.equal(centre, 0, 'no warm pixel over the wall and Penny');
+    assert.equal(top, 0, 'nothing warm in the graphics top row (y < 24)');
+    for (const b of box) {
+      // all the warmth is the fixture itself: one compact cluster per lamp (the light is neutral)
+      assert.ok(b[2] >= b[0] && b[2] - b[0] + 1 <= 8 && b[3] - b[1] + 1 <= 14, `fixture box ${b}`);
+    }
+    assert.ok(Math.abs(box[0][0] + box[1][2] - 383) <= 1, 'the lamps are symmetric');
+    assert.ok(cream >= 8 && silver >= 4, `lit lips ${cream}, silver highlight ${silver}`);
   });
 
   test('NEWS IN 60 wide dial: r ≥ 14 with legible ticks (the 12 o\'clock in yellow), static', () => {
@@ -848,8 +874,9 @@ describe('fix round 2 (critics of fix round 1)', () => {
     assert.ok(checked >= 100);
   });
 
-  test('wall pictures keep each bible\'s forbidden colours off the wall (TECH/COSMOS no purple or magenta; MONEY no green)', () => {
-    const forbid = { 'tech-bytes': ['purple', 'magenta', 'pink'], cosmos: ['purple', 'magenta', 'pink'], 'money-minute': ['green', 'darkGreen'] };
+  test('wall pictures keep each bible\'s forbidden colours off the wall (TECH/COSMOS no purple or magenta; never brand red)', () => {
+    // (a picture is content: MONEY MINUTE keeps its greens, critics r3; nobody gets red, the brand's)
+    const forbid = { 'tech-bytes': ['purple', 'magenta', 'pink', 'red', 'darkRed'], cosmos: ['purple', 'magenta', 'pink', 'red', 'darkRed'], 'money-minute': ['red', 'darkRed', 'green'] };
     for (const [programme, names] of Object.entries(forbid)) {
       const framing = programme === 'cosmos' ? 'two' : 'wide';
       const m = mediaRectFor(lab.cameraFor(framing, programme), programme);
@@ -926,7 +953,9 @@ describe('fix round 2 (critics of fix round 1)', () => {
     const f = wallFromScene({ ...cos, segPlan: { ctx: { seg: nseg, shots: [] } } });
     assert.equal(f.mode, 'figure');
     assert.deepEqual([f.figure.value, f.figure.pre], ['160 MILLION', 'MORE THAN']);
-    assert.equal(wallFromScene({ ...cos, segPlan: { ctx: { seg: nseg, shots: [{ shot: 'fact' }] } } }).mode, 'plate');
+    // carded: the feature label is a segue, never wall content on its own: the idle art
+    const carded = wallFromScene({ ...cos, segPlan: { ctx: { seg: nseg, shots: [{ shot: 'fact' }] } } });
+    assert.deepEqual([carded.mode, carded.label], ['idle', '']);
     // a story plate is body 1x in a single (the strap is body 1x under it)
     const p1 = plateRectFor(lab.cameraFor('single-a', 'news-60'), 'WATER', 'CANADA', 'news-60', true);
     const p2 = plateRectFor(lab.cameraFor('single-a', 'news-60'), 'WATER', 'CANADA', 'news-60', false);
@@ -948,8 +977,12 @@ describe('fix round 2 (critics of fix round 1)', () => {
 
   test('a story wall is never blank: when no plate fits, the programme idle shows', () => {
     for (const programme of ['money-minute', 'news-60', 'world-now']) {
-      const px = shot({ programme, framing: 'ots', wall: 'plate', label: 'A KICKER FAR TOO LONG TO EVER FIT HERE', sub: '' });
-      const r = wallRect(lab.cameraFor('ots', programme));
+      const label = 'A KICKER FAR TOO LONG TO EVER FIT HERE';
+      const px = shot({ programme, framing: 'ots', wall: 'plate', label, sub: '' });
+      const cam = lab.cameraFor('ots', programme);
+      const r = wallRect(cam);
+      // (node draws no text: when the plate fits, its layout says so; when it does not, the idle shows)
+      if (plateRectFor(cam, label, '', programme, true)) continue;
       const seen = new Set();
       for (let y = Math.max(22, r.y0 + 2); y < Math.min(136, r.y1 - 2); y++) for (let x = Math.max(8, r.x0 + 2); x < Math.min(376, r.x1 - 2); x++) seen.add(px[y * W + x]);
       assert.ok(seen.size >= 3, `${programme} ots: a blank wall (${seen.size} colours)`);

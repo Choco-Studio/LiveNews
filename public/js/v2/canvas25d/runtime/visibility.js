@@ -18,12 +18,26 @@ import { Stage } from './stage.js';
 import { frame, parts } from '../scene.js';
 import { GROUPS_PER_ACTOR } from '../character.js';
 import { GESTURES } from '../gestures/index.js';
+// the graphics package's own geometry (read-only): the bands follow it if graphics moves a strap or the ticker
+import { W as GW, STRAP, TICKER, CAPTION } from '../../../graphics/layout.js';
 
-/** Graphics over a studio shot during a story (graphics/layout.js): x0, y0, x1, y1 (exclusive). */
+const band = (name, x0, y0, x1, y1) => Object.freeze({ name, x0, y0, x1, y1 });
+const capX0 = Math.round((GW - CAPTION.maxW) / 2), capX1 = capX0 + CAPTION.maxW;
+
+/**
+ * Graphics over a studio shot during a story, from graphics/layout.js: x0, y0, x1, y1 (exclusive).
+ * The caption is one line above the strap (CAPTION.bottomStrap), the strap is STRAP, the ticker TICKER.
+ */
 export const STORY_BANDS = Object.freeze([
-  Object.freeze({ name: 'caption', x0: 60, y0: 148, x1: 324, y1: 160 }), // one caption line above the strap
-  Object.freeze({ name: 'strap', x0: 19, y0: 166, x1: 365, y1: 194 }),
-  Object.freeze({ name: 'ticker', x0: 0, y0: 202, x1: 384, y1: 216 }),
+  band('caption', capX0, CAPTION.bottomStrap - CAPTION.pitch, capX1, CAPTION.bottomStrap),
+  band('strap', STRAP.x, STRAP.tagY, STRAP.right, STRAP.bottom),
+  band('ticker', 0, TICKER.y, GW, TICKER.y + TICKER.h),
+]);
+
+/** Before the strap is in (its first second) or without one (chats): two caption lines over the ticker. */
+export const FREE_BANDS = Object.freeze([
+  band('caption', capX0, CAPTION.bottomFree - 2 * CAPTION.pitch, capX1, CAPTION.bottomFree),
+  band('ticker', 0, TICKER.y, GW, TICKER.y + TICKER.h),
 ]);
 
 /** Is pixel (x, y) under one of the bands? */

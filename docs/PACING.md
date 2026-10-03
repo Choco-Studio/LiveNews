@@ -30,8 +30,10 @@ What changed on air:
   at a sentence start, else on a word that opens a phrase (a `mid` cue). Round-ups break after two maps (the item's picture,
   else its reader). And finally ends on its picture or presenter. A two-sentence single over `singleSoft` splits on a comma.
   The last headline frame holds 3.8 s: the greeting starts under it and the wide cuts on its first phrase word. A COSMOS chat
-  run under 4 s gets the story's last phrase on the wide. The MONEY MINUTE intro over 12 s reads its teasers on the MCU-R
-  and its greeting on the wide. The private `factHold` is gone. The runtime guard's card maximum is `factMax`.
+  run under 4 s gets the story's last phrase on the wide. The private `factHold` is gone. The runtime guard's
+  card maximum is `factMax`. The MONEY MINUTE intro stays on the wide throughout, as money-minute.md §3.5 says (14-20 s
+  against studioMax 12). A split was tried and reverted: the camera test and INTEGRATION's intro guard follow the bible. The
+  orchestrator should settle it.
 - **v2 runtime.** The NEWS IN 60 intro no longer waits for the wide's 4 s. The story's voice starts after the 0.6 s pause,
   and its opening cut waits for the cooldown. The sign-off cue starts under the hold, 0.15 s after the last word.
 - **Editorial (length and beat keys only).** "Around the world in 30 seconds" is said only when the run is about that long. The
@@ -474,6 +476,12 @@ Reuse:
 - `estimateAir(episode)` to budget a block's air time before it is written / voiced, and `length.target` per block.
 - `gestureBudget` / `listenerRules` for guests and experts (a guest's turn is a long speech: the per-minute budget scales).
 - `tools/pace/trace.mjs` + `analyse.mjs` + `compare.mjs` as the acceptance harness for long programmes (the tracer runs
-  ~3x real time, so a 30-minute programme traces in about 10 minutes).
+  ~3-5x real time, so a 30-minute programme traces in 6-10 minutes); the analyser already checks both ends of every shot
+  window, variety (map share, beat-order runs), gesture floor and vocabulary, listener nods, live-mix silence, the break
+  load and the browser-voice fallback share, so a rolling programme is accepted on the same rows.
+- `tools/pace/fakeplay.mjs`: the real director on a fake clock (no browser): a programme's whole shot list and pauses in
+  milliseconds, for unit tests of any new segment kind.
+- `shotMax` / `factHold` / `cutWait` / `isRepeat` / `mapRun` / `share` as the camera rules a block planner must keep, and
+  `CHANNEL.breaks.minProgrammeBetween` / `maxAdShare` for the break scheduler of a rolling channel.
 - The production measurement: synthesis rate vs air; with 20-30 minute programmes the voice budget must become per block
   (synthesise block N+1 while N airs), not per episode.

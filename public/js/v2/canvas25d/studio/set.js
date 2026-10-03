@@ -8,6 +8,8 @@
 //   wallRect(cam), wallFromScene(scene, style), setCacheEnabled(on), bgStats(), warmSet(id)
 //   warmStep(budgetMs) one idle slice of the warm-up; warmSets() all of it at once
 //   warmWallContent(wallReq, style, cam) a shot's picture / text prepared before its cut
+//   prepareImage(imageRecord)   a story picture read once ahead of its cut (wallFromScene also queues
+//                               every picture in scene.images for idle-time preparation by itself)
 // The old forms drawBackground(frame, cam, t) / drawDesk(frame, cam, clipRows, C.red)
 // stay valid (public/lab/cast.html): they draw the current style (home look).
 //
@@ -30,9 +32,9 @@ import { C, Frame } from '../pixbuf.js';
 import { drawLogo, measureLogo } from '../../../logo.js';
 import { F, SET, kAt, sxOf, syOf } from './geometry.js';
 import { resolveStyle, styleFor, setStyle, currentStyle, STYLE_IDS } from './styles.js';
-import { updateWall, drawWallContent, wallFromScene, wallVersionOf, wallWarmTasks, warmWallContent } from './wall.js';
+import { updateWall, drawWallContent, wallFromScene, wallVersionOf, wallWarmTasks, warmWallContent, prepareImage } from './wall.js';
 
-export { SET, setStyle, styleFor, wallFromScene, drawWallContent, warmWallContent };
+export { SET, setStyle, styleFor, wallFromScene, drawWallContent, warmWallContent, prepareImage };
 
 const W = 384, H = 216;
 // Bayer 4x4 as integers 0..15 (the same matrix as pixbuf.js): a pixel takes the upper
@@ -206,7 +208,8 @@ function* bakeSteps(style) {
       const dist = Math.max(0, Math.abs(dy) - gap);
       const reachY = dy < 0 ? sc.up : sc.down;
       if (dist >= reachY) continue;
-      const hw = sc.w0 + sc.spread * dist;
+      // a scallop, not a triangle: the beam's sides curve out (parabolic) from the opening
+      const hw = sc.w0 + sc.spread * (sc.edge ? Math.sqrt(dist * reachY) : dist);
       let i = (ty - tya) * lw + (xa - txa);
       for (let tx = xa; tx < xb; tx++, i++) {
         const ox = TX0 + tx + 0.5 - sc.X;
@@ -215,9 +218,11 @@ function* bakeSteps(style) {
         // a wall-washer: brightest at the opening, holding, then fading with distance (an S-curve:
         // clean flat steps with short Bayer bands); the distance is measured on a slight ellipse, so
         // the far end of each cone is a rounded scallop, not a cut straight across
-        const d = Math.hypot(dist, 0.55 * ox) / reachY;
+        const d = Math.hypot(dist, (sc.round ?? 0.55) * ox) / reachY;
         if (d >= 1) continue;
-        const v = (1 - smooth(d)) * (1 - dx * dx);
+        // (sc.edge: a flat plateau of light with a narrow soft edge round the cone, so the panel shows
+        // clean flat steps and only a short Bayer band, not a cone of dither)
+        const v = sc.edge ? smooth((1 - d) / sc.edge) * smooth((1 - Math.abs(dx)) / sc.edge) : (1 - smooth(d)) * (1 - dx * dx);
         acc[i] += sc.amount * v;
         if (!tints) continue;
         // warm wherever the wash is the light: the tint's Bayer edge sits low in the wash, where the
@@ -668,15 +673,9 @@ export function setProfile(on) {
 function drawWallDetails(fr, cam, style, soft = false) {
   const Zw = SET.wallZ;
   if (soft) {
-    // out of focus only the practicals stay (a lamp's glow never shows without its lamp): the
-    // fixture as one soft bronze shape, its lit lips gone
-    if (style.practical === 'warm' && style.sconces) {
-      const Y = style.sconceY ?? -66;
-      for (const X of style.sconces) {
-        layerRect(fr, cam, Zw, X - 4.5, Y - 12, X + 4.5, Y + 12, C.maroon);
-        layerRect(fr, cam, Zw, X - 3, Y - 10, X + 3, Y + 10, C.brown);
-      }
-    }
+    // out of focus only the practicals stay (a lamp's light never shows without its lamp): the
+    // fixture softened, its lit lips and highlight gone
+    if (style.practical === 'warm' && style.sconces) for (const X of style.sconces) drawSconce(fr, cam, X, style.sconceY ?? -55, true);
     return;
   }
   // y 0-10: dark ceiling with one static grid line (ART_DIRECTION bands)
@@ -695,16 +694,74 @@ function drawWallDetails(fr, cam, style, soft = false) {
       layerVLine(fr, cam, Zw, X, -104, 21, C.steel, 2.8);
     }
   } else if (style.practical === 'warm' && style.sconces) {
-    // the warm pair: bronze wall sconces at the heart of their washes (styles.js scallops). A dark
-    // back plate on the wall, an open-ended bronze shade lit from camera-left (tanShade, its shadow
-    // side brown), and cream lips at both ends where the light leaves up and down
-    const Y = style.sconceY ?? -66;
-    for (const X of style.sconces) {
-      layerRect(fr, cam, Zw, X - 5, Y - 13, X + 5, Y + 13, C.maroon);
-      layerRect(fr, cam, Zw, X - 3.5, Y - 11, X + 3.5, Y + 11, C.brown);
-      layerRect(fr, cam, Zw, X - 3.5, Y - 11, X, Y + 11, C.tanShade);
-      layerHLine(fr, cam, Zw, X - 3.5, X + 3.5, Y - 11.2, C.cream);
-      layerHLine(fr, cam, Zw, X - 3.5, X + 3.5, Y + 11.2, C.tan);
+    // the warm pair: hand-pixelled bronze up/down sconces at the heart of their neutral scallops
+    // (styles.js); the warmth is in the fixture and its two hot cores, never sprinkled on the wall
+    for (const X of style.sconces) drawSconce(fr, cam, X, style.sconceY ?? -55, false);
+  }
+}
+
+// MONEY MINUTE's bronze up/down sconce, hand-pixelled (two levels of detail: the wide, and the close
+// shots). A tapered drum lit from camera-left: a 1 px silver highlight on its left edge, a three-tone
+// bronze ramp (tan, tanShade, brown, maroon), a cream lip at the top opening, a tan one at the bottom and
+// the short stem of its wall plate under it. Its light on the panel is styles.js's neutral scallop (a warm
+// heart in the beam was tried: at the beam's size any warm cluster reads as an opaque brown shape).
+//   k black, m maroon, b brown, n tanShade, t tan, c cream, s silver
+const SCONCE = {
+  small: {
+    shade: 5.5, // the shade's centre row (the fixture's world Y)
+    rows: [
+      '.ccccc.',
+      '.stnbm.',
+      '.stnbm.',
+      '.stnbm.',
+      'stnnbbm',
+      'stnnbbm',
+      'stnnbbm',
+      'stnbbbm',
+      'stnbbbm',
+      'kttttbk',
+      '..kmk..',
+      '..kmk..',
+    ],
+  },
+  large: {
+    shade: 7.5,
+    rows: [
+      '..cccccccccc..',
+      '..sttttnnnbm..',
+      '..sttnnnnbbm..',
+      '..sttnnnnbbm..',
+      '.sttnnnnnbbbm.',
+      '.sttnnnnbbbbm.',
+      '.stnnnnnbbbbm.',
+      '.stnnnnnbbbbm.',
+      'sttnnnnnbbbbmk',
+      'stnnnnnbbbbbmk',
+      'stnnnnnbbbbbmk',
+      'kttttttttttbmk',
+      '...kmmmmmmk...',
+      '....kmmmmk....',
+    ],
+  },
+};
+const SCONCE_C = { k: 'black', m: 'maroon', b: 'brown', n: 'tanShade', t: 'tan', c: 'cream', s: 'silver' };
+// out of focus: lower contrast, no highlight, no lit lips
+const SCONCE_SOFT = { k: 'maroon', m: 'maroon', b: 'brown', n: 'brown', t: 'tanShade', c: 'tan', s: 'tanShade' };
+const SCONCE_W = 9.8; // the fixture's width in world units (7 px in the wide)
+function drawSconce(fr, cam, X, Y, soft) {
+  const k = kAt(cam, SET.wallZ);
+  const spr = k < 1.1 ? SCONCE.small : SCONCE.large;
+  const w = spr.rows[0].length;
+  const sc = k < 1.1 ? 1 : Math.max(1, Math.round((k * SCONCE_W) / w));
+  const map = soft ? SCONCE_SOFT : SCONCE_C;
+  const x0 = Math.round(sxOf(cam, k, X) - (w * sc) / 2);
+  const y0 = Math.round(syOf(cam, k, Y) - (spr.shade + 0.5) * sc);
+  for (let j = 0; j < spr.rows.length; j++) {
+    const row = spr.rows[j];
+    for (let i = 0; i < w; i++) {
+      const ch = row[i];
+      if (ch === '.') continue;
+      fr.span(x0 + i * sc, y0 + j * sc, x0 + (i + 1) * sc, y0 + (j + 1) * sc, C[map[ch]]);
     }
   }
 }

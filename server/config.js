@@ -25,6 +25,15 @@ const num = (key, fallback) => {
   const n = Number(env(key, fallback));
   return Number.isFinite(n) ? n : fallback;
 };
+// Numbers with a sensible range: a value outside it (RECYCLE_GAP=-5, PICTURE_BUDGET_MS=-1) falls back to the
+// default, with a warning at start-up, rather than silently turning a feature off or inside out.
+export const configWarnings = [];
+const bounded = (key, fallback, min, max) => {
+  const n = num(key, fallback);
+  if (n >= min && n <= max) return n;
+  configWarnings.push(`${key}=${process.env[key]} is outside ${min}..${max}; using ${fallback}`);
+  return fallback;
+};
 
 export const config = {
   host: env('HOST', '127.0.0.1'),
@@ -65,14 +74,16 @@ export const config = {
   feedRefreshMinutes: num('FEED_REFRESH_MINUTES', 10),
   // Picture desk: time per episode to look for pictures on article pages (and other outlets' pages),
   // and to download each picture once before air (one that fails is dropped or replaced)
-  pictureBudgetMs: num('PICTURE_BUDGET_MS', 6000),
-  pictureVerifyMs: num('PICTURE_VERIFY_MS', 12000),
+  pictureBudgetMs: bounded('PICTURE_BUDGET_MS', 6000, 0, 120000),
+  pictureVerifyMs: bounded('PICTURE_VERIFY_MS', 12000, 0, 120000),
   // When the desk runs short of new stories, those aired longest ago come back in new bulletins:
   // 'local' (default: the offline fixture desk only), 'all' (live feeds too, only stories aired at least
   // RECYCLE_AFTER_HOURS ago), 'off'. Never a story of the last RECYCLE_GAP episodes.
   recycle: ((v) => (['all', 'off', 'local'].includes(v) ? v : 'local'))(env('RECYCLE_STORIES', 'local').trim().toLowerCase()),
-  recycleAfterHours: num('RECYCLE_AFTER_HOURS', 4),
-  recycleGap: num('RECYCLE_GAP', 5),
+  recycleAfterHours: bounded('RECYCLE_AFTER_HOURS', 4, 0, 168),
+  recycleGap: bounded('RECYCLE_GAP', 6, 1, 50),
+  // The station's memory of presenter lines and features aired (no line twice within it)
+  recentLinesHours: bounded('RECENT_LINES_HOURS', 6, 0, 48),
   // News sources; FEEDS_FILE points elsewhere (e.g. config/feeds.fixture.json for offline demos)
   feedsFile: path.resolve(ROOT, env('FEEDS_FILE', path.join('config', 'feeds.json'))),
   dataDir: path.join(ROOT, 'data'),

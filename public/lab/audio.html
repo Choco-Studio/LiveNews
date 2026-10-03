@@ -271,8 +271,9 @@
         const rel = [...acc].map((v) => 10 * Math.log10(v / (all || 1) + 1e-30));
         return { octaves: rel, b24: rel[5], b48: rel[6], b8: rel[7] };
       }
-      const inBand = (v, [lo, hi]) => v >= lo && v <= hi;
-      const bandsOk = (b) => inBand(b.b24, BAND_TARGET.b24) && inBand(b.b48, BAND_TARGET.b48) && inBand(b.b8, BAND_TARGET.b8);
+      const BAND_TOL = 1.5; // dB outside a window still counted as near
+      const inBand = (v, [lo, hi], tol = 0) => v >= lo - tol && v <= hi + tol;
+      const bandsOk = (b, tol = 0) => inBand(b.b24, BAND_TARGET.b24, tol) && inBand(b.b48, BAND_TARGET.b48, tol) && inBand(b.b8, BAND_TARGET.b8, tol);
 
       const cache = new Map();
       async function analyse(item) {
@@ -352,7 +353,7 @@
         micro('PEAK', 116, y, P.steel);
         micro(`${db(L.peakDb)} DBFS`, 116, y + 8, ok(L.peakDb < -1));
         micro('2-4K/4-8K/>8K', 170, y, P.steel);
-        micro(`${db(a.bands.b24, 0)}/${db(a.bands.b48, 0)}/${db(a.bands.b8, 0)} DB`, 170, y + 8, ok(bandsOk(a.bands)));
+        micro(`${db(a.bands.b24, 0)}/${db(a.bands.b48, 0)}/${db(a.bands.b8, 0)} DB`, 170, y + 8, bandsOk(a.bands) ? P.green : bandsOk(a.bands, BAND_TOL) ? P.yellow : P.red);
         micro('ENV STEP', 238, y, P.steel);
         micro(`${(probe.worst * 100).toFixed(2)}%`, 238, y + 8, ok(probe.worst <= 0.03));
         micro('CLICKS', 284, y, P.steel);
@@ -704,8 +705,8 @@
           }
           y += 36;
         }
-        micro(`TARGET ${VOICE_LUFS} LUFS: THE HOUSE VOICE LEVEL (TOOLS/VOICE/DSP.PY)`, 6, 199, P.fog);
-        micro('NO SYSTEM VOICE: TTS SPEAKS SILENTLY (LIPS + CAPTIONS)', 6, 207, P.fog);
+        micro(`TARGET ${VOICE_LUFS} LUFS: THE HOUSE VOICE LEVEL (TOOLS/VOICE/DSP.PY)`, 6, 203, P.fog);
+        micro('NO SYSTEM VOICE: TTS SPEAKS SILENTLY (LIPS + CAPTIONS)', 6, 210, P.fog);
       }
 
       function drawSignature() {
@@ -1049,23 +1050,26 @@
         }
         rows.forEach((r, i) => {
           const y = y0 + i * rh;
-          const ad = r.item.id.startsWith('ad-');
+          const ad = !network.includes(r); // ad beds and the stinger: shown, not judged
           micro(r.item.label.replace(/^OPEN /, '').replace(/^UP NEXT /, '').slice(0, 24), 4, y, ad ? P.steel : P.fog);
           for (const [, key, x0] of cols) {
             const v = r.bands[key];
             const ok = inBand(v, BAND_TARGET[key]);
+            const near = inBand(v, BAND_TARGET[key], BAND_TOL);
+            const c = ad ? (near ? P.steel : P.darkRed) : ok ? P.green : near ? P.yellow : P.red;
             rect(x0, y + 2, pw, 1, '#1d2033');
-            rect(xv(x0, v) - 1, y + 1, 3, 3, ok ? (ad ? P.steel : P.green) : ad ? P.darkRed : P.red);
-            micro(db(v, 0), x0 + pw + 2, y, ok ? P.steel : ad ? P.darkRed : P.red);
+            rect(xv(x0, v) - 1, y + 1, 3, 3, c);
+            micro(db(v, 0), x0 + pw + 2, y, ok || ad ? P.steel : c);
           }
         });
-        const count = (key) => network.filter((r) => inBand(r.bands[key], BAND_TARGET[key])).length;
+        const count = (key, tol = 0) => network.filter((r) => inBand(r.bands[key], BAND_TARGET[key], tol)).length;
         const all = network.filter((r) => bandsOk(r.bands)).length;
+        const near = network.filter((r) => bandsOk(r.bands, BAND_TOL)).length;
         const n = network.length;
         const yb = y0 + rows.length * rh + 3;
-        micro(`NETWORK OPENS AND CUES IN TARGET: ${all}/${n}   2-4K ${count('b24')}/${n}  4-8K ${count('b48')}/${n}  >8K ${count('b8')}/${n}   (STINGER: NO PITCH, NOT JUDGED)`, 4, yb, all >= n - 2 ? P.green : P.red);
-        micro('GREY ROWS: AD BEDS (ADS STREAMS) FOR REFERENCE. SHELF -3 DB AT 8 KHZ ON THE TUNES BUS', 4, yb + 8, P.fog);
-        stats.bands = { inTarget: all, of: n, b24: count('b24'), b48: count('b48'), b8: count('b8'),
+        micro(`NETWORK OPENS + CUES: ${all}/${n} IN ALL 3 WINDOWS, ${near}/${n} WITHIN ${BAND_TOL} DB (YELLOW)   PER BAND ${count('b24')} / ${count('b48')} / ${count('b8')}`, 4, yb, near === n ? P.green : P.red);
+        micro('GREY: AD BEDS (ADS STREAMS), FOR REFERENCE. STINGER (NO PITCH) NOT JUDGED. BUS SHELF -3 DB AT 8 KHZ', 4, yb + 8, P.fog);
+        stats.bands = { inTarget: all, near, of: n, b24: count('b24'), b48: count('b48'), b8: count('b8'),
           rows: Object.fromEntries(rows.map((r) => [r.item.id, { b24: +r.bands.b24.toFixed(1), b48: +r.bands.b48.toFixed(1), b8: +r.bands.b8.toFixed(1) }])) };
       }
 
@@ -1173,24 +1177,33 @@
         const ads = TUNES.filter((t) => t.id.startsWith('ad-'));
         stats.latency = { cues: {}, ads: {} };
         let y = 18;
-        micro('SYNCED CUES ASKED FOR NOW: FIRST 150 MS HEARD VS ON TIME (DB)', 4, y, P.steel);
+        micro('CUES ASKED FOR NOW: BEAT-0 ATTACK VS ON TIME (DB)', 4, y, P.steel);
         micro('GRACE', 250, y, P.steel);
-        micro('OLD RULE', 300, y, P.steel);
+        micro('30 MS RULE', 296, y, P.steel);
         y += 8;
         let worstCue = 0;
+        // Only the events on beat 0 (each track once), so later beats cannot mask what is lost.
+        const beat0 = (tune) => {
+          const song = asSong(tune);
+          return { ...song, tracks: song.tracks.map((t) => ({ ...t, beats: song.beats, events: t.events.filter((e) => e.at < 1e-6) })) };
+        };
         for (const item of cues) {
-          const seconds = 1.2;
-          const on = await renderTune(item.tune, { seconds, startAt: 0.05 });
-          const now = await renderTune(item.tune, { seconds, startAt: -LAT, grace: LAT + 0.03 });
-          const old = await renderTune(item.tune, { seconds, startAt: -LAT, grace: 0.03 });
-          const ref = rmsDb(on.buffer, 0.05, 0.2);
-          const dNew = rmsDb(now.buffer, 0.006, 0.156) - ref;
-          const dOld = rmsDb(old.buffer, 0.006, 0.156) - ref;
+          const seconds = 1.6;
+          const song = beat0(item.tune);
+          // raw: no master dynamics (the compressor's start-up in a fresh offline
+          // context would colour renders whose onsets are at different times).
+          const on = await renderTune(song, { seconds, startAt: 0.05, normalise: false, raw: true });
+          const now = await renderTune(song, { seconds, startAt: -LAT, grace: LAT + 0.03, normalise: false, raw: true });
+          const old = await renderTune(song, { seconds, startAt: -LAT, grace: 0.03, normalise: false, raw: true });
+          // The attack: the first 100 ms of each (a late beat 0 sounds at once, 6 ms in).
+          const ref = rmsDb(on.buffer, 0.05, 0.15);
+          const dNew = Math.max(-60, rmsDb(now.buffer, 0.006, 0.106) - ref);
+          const dOld = Math.max(-60, rmsDb(old.buffer, 0.006, 0.106) - ref);
           worstCue = Math.min(worstCue, dNew);
           stats.latency.cues[item.id] = { grace: +dNew.toFixed(1), oldRule: +dOld.toFixed(1) };
           micro(item.label.slice(0, 30), 8, y, P.fog);
-          micro(`${dNew >= 0 ? '+' : ''}${dNew.toFixed(1)}`, 250, y, Math.abs(dNew) <= 2 ? P.green : P.red);
-          micro(`${dOld >= 0 ? '+' : ''}${dOld.toFixed(1)}`, 300, y, Math.abs(dOld) <= 2 ? P.steel : P.orange);
+          micro(`${dNew >= 0 ? '+' : ''}${dNew.toFixed(1)}`, 250, y, dNew >= -2 ? P.green : P.red); // + : a swell started late ramps faster
+          micro(`${dOld >= 0 ? '+' : ''}${dOld.toFixed(1)}`, 296, y, Math.abs(dOld) <= 2 ? P.steel : P.orange);
           y += 6;
         }
         y += 3;
@@ -1200,8 +1213,8 @@
         for (const item of ads) {
           const seconds = 2.2;
           const late = 0.42;
-          const on = await renderTune(item.tune, { seconds, loop: true, volume: 0.45, startAt: 0.05 });
-          const lt = await renderTune(item.tune, { seconds, loop: true, volume: 0.45, startAt: -late + 0.05, grace: LAT + 0.03 });
+          const on = await renderTune(item.tune, { seconds, loop: true, volume: 0.45, startAt: 0.05, raw: true });
+          const lt = await renderTune(item.tune, { seconds, loop: true, volume: 0.45, startAt: -late + 0.05, grace: LAT + 0.03, raw: true });
           const d = rmsDb(lt.buffer, 0.05, 1.05) - rmsDb(on.buffer, 0.05 + late, 1.05 + late);
           worstAd = Math.min(worstAd, d);
           stats.latency.ads[item.id] = +d.toFixed(1);
@@ -1209,7 +1222,7 @@
           micro(`${d >= 0 ? '+' : ''}${d.toFixed(1)}`, 250, y, Math.abs(d) <= 2 ? P.green : P.red);
           y += 6;
         }
-        micro(`WORST: CUE ${worstCue.toFixed(1)} DB, AD BED ${worstAd.toFixed(1)} DB (ORANGE = WHAT THE OLD 30 MS RULE LOST)`, 4, 208, worstCue >= -2 && worstAd >= -2 ? P.green : P.red);
+        micro(`WORST: CUE ${worstCue.toFixed(1)} DB, AD BED ${worstAd.toFixed(1)} DB (ORANGE: LOST WITH ONLY 30 MS OF GRACE)`, 4, 208, worstCue >= -2 && worstAd >= -2 ? P.green : P.red);
         stats.latency.worstCue = worstCue;
         stats.latency.worstAd = worstAd;
       }

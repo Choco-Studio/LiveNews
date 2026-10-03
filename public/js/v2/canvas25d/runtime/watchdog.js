@@ -96,6 +96,7 @@ const FALL_P50 = 8; // ms: ...only when the median frame is slow too (not preemp
 const FALL_SHARE = 0.35; // ...and the Stage is this share of the page's frame interval (not a starved page)
 const OK_P95 = 8; // ms: recover a level
 const HOLD_LOG = 120; // s of on-air time between two 'staying on v2' lines
+const SLOW = 33; // ms: a v2 frame that drops at least one 60 Hz frame on its own (?perf=1 report)
 const STEP_WINDOW = 30; // s
 const OK_WINDOW = 120; // s
 const MIN_SAMPLES = 90; // frames a window needs before it decides
@@ -135,6 +136,10 @@ export class PerfWatchdog {
     this.ivWin = new Uint32Array(IV_BINS + 1);
     this.nextHoldLog = 0;
     this.held = 0; // fallbacks the Stage-cost rule declined (stats, tests)
+    // ?perf=1: the worst v2 frame and the slow ones (> SLOW ms) of each report period: a cut frame that
+    // hitches is < 1 % of frames, so p95 never shows it (critic r2)
+    this.repMax = 0;
+    this.repSlow = 0;
   }
 
   /** Renderer frame interval (ms) at renderer time `wall` (s): the starved-page check, and the ?perf=1 report. */
@@ -179,14 +184,20 @@ export class PerfWatchdog {
     this.ms[i] = ms;
     this.n++;
     if (this.levelSince === -Infinity) this.levelSince = t;
+    if (this.report) {
+      if (ms > this.repMax) this.repMax = ms;
+      if (ms > SLOW) this.repSlow++;
+    }
     if (this.report && wall >= this.nextReport) {
       if (this.nextReport) {
         const r = this.percentiles(wall, 10);
         const iv = this.ivCount ? `; frame interval p95 ${Math.floor(rank(this.ivHist, this.ivCount * 0.95) * 10)} ms over ${this.ivCount} frames` : '';
-        this.info?.(`v2 perf p50 ${r.p50.toFixed(2)} ms, p95 ${r.p95.toFixed(2)} ms over the last ${r.count} studio frames (level ${this.level})${iv}`);
+        this.info?.(`v2 perf p50 ${r.p50.toFixed(2)} ms, p95 ${r.p95.toFixed(2)} ms, max ${this.repMax.toFixed(1)} ms, ${this.repSlow} over ${SLOW} ms, over the last ${r.count} studio frames (level ${this.level})${iv}`);
       }
       this.ivHist.fill(0);
       this.ivCount = 0;
+      this.repMax = 0;
+      this.repSlow = 0;
       this.nextReport = wall + 10;
     }
     if (t < this.nextEval || !this.decide) return null;

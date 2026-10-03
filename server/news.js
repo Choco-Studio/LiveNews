@@ -302,21 +302,42 @@ const CUE_TOKEN = /\[[A-Za-z]{1,8}(?::[A-Za-z_]{1,16})?\]/g;
 /** Feed text made safe for the strap and the voice. */
 export const onAirText = (s) => String(s ?? '').replace(UNSPEAKABLE, ' ').replace(CUE_TOKEN, ' ').replace(/\s+/g, ' ').trim();
 
-export function parseFeed(xml, feed, { baseDir = null, now = Date.now() } = {}) {
+export function parseFeed(xml, feed, { baseDir = null, now = Date.now(), log = null } = {}) {
   const doc = parser.parse(xml);
   const items = doc?.rss?.channel?.item ?? doc?.feed?.entry ?? doc?.['rdf:RDF']?.item ?? [];
   const stories = [];
+  let broken = 0;
   for (const [index, item] of asArray(items).slice(0, MAX_FEED_ITEMS).entries()) {
+    // One malformed item (a bad escape in a picture URL, a strange structure) drops only itself, never the feed.
+    try {
+      const story = parseItem(item, index, feed, { baseDir, now });
+      if (story) stories.push(story);
+    } catch (err) {
+      broken++;
+      if (broken <= 3) log?.warn?.(`[news] ${feed?.name}: item ${index} skipped: ${String(err?.message || err).slice(0, 120)}`);
+    }
+  }
+  return stories;
+}
+
+// A date this far ahead is a broken clock or a hostile feed: the item counts as undated.
+const FUTURE_SLACK_MS = 24 * 3600_000;
+
+function parseItem(item, index, feed, { baseDir, now }) {
+  {
     // Raw text is capped before any cleaning: a title needs a line, a summary a few paragraphs.
     const title = onAirText(plainSpaces(cleanHtml(text(item.title).slice(0, 2000)))).slice(0, 300);
     const link = itemLink(item);
-    if (!title || !/\p{L}/u.test(title) || !link) continue;
+    if (!title || !/\p{L}/u.test(title) || !link) return null;
     const rawSummary = text(item.description) || text(item.summary) || text(item['content:encoded']) || text(item.content);
     const summary = onAirText(stripBoilerplate(cleanHtml(rawSummary.slice(0, MAX_RAW_HTML)))).slice(0, 900);
     const dateStr = text(item.pubDate) || text(item.published) || text(item.updated) || text(item['dc:date']);
     // Undated items: "now", one second older per position (feeds list the newest first),
-    // so the desk ranks them the same way on every run.
-    const published = Date.parse(dateStr) || now - index * 1000;
+    // so the desk ranks them the same way on every run. A date in the future is never later than now (it
+    // would top the ticker and never expire); more than a day ahead, the item counts as undated.
+    const parsed = Date.parse(dateStr);
+    const dated = Number.isFinite(parsed) && parsed <= now + FUTURE_SLACK_MS;
+    const published = dated ? Math.min(parsed, now) : now - index * 1000;
     const pictures = itemPictures(item, { baseDir, link });
     const credits = creditsOf(pictures);
     // A local feed's item may link to a local article page (offline fixtures), inside the feed's folder.
@@ -337,11 +358,11 @@ export function parseFeed(xml, feed, { baseDir = null, now = Date.now() } = {}) 
       ...(page ? { page } : {}),
       ...(baseDir ? { local: true } : {}),
       ...(isLiveBlog(title) ? { live: true } : {}),
+      ...(dated ? {} : { undated: true }),
     };
     stampCredit(story);
-    stories.push(story);
+    return story;
   }
-  return stories;
 }
 
 const plainSpaces = (s) => s.replace(/\s+/g, ' ').trim();
@@ -498,8 +519,14 @@ const KIND_WORD = (w) => INCIDENT_KINDS.some(([, re]) => re.test(w));
 const KIND_FAMILY = { storm: 'weather', flood: 'weather', wildfire: 'wildfire', fire: 'wildfire' };
 const family = (k) => KIND_FAMILY[k] || k;
 const sharedKinds = (a, b) => [...a].filter((k) => [...b].some((x) => family(x) === family(k)));
-// The same rare physical event on both sides (a hurricane that floods counts; a wildfire and a house fire do not).
-const physicalPair = (a, b) => [...a].some((k) => PHYSICAL.has(k) && [...b].some((x) => PHYSICAL.has(x) && family(x) === family(k)));
+// The same rare physical event on both sides (a hurricane that floods counts; a wildfire and a house fire do not),
+// from each story's cached `phys` (the families of its physical kinds); the same decision from `decide`.
+const meets = (a, b) => {
+  for (const x of a) if (b.has(x)) return true;
+  return false;
+};
+const physicalPair = (ea, eb) => meets(ea.phys, eb.phys);
+const sameDecision = (ea, eb) => meets(ea.decide, eb.decide);
 const disjoint = (a, b) => a.size > 0 && b.size > 0 && !sharedKinds(a, b).length;
 // Rare physical events: two reports of an earthquake, a storm, a flood, an eruption or a wildfire in the same place
 // within a day and a half are one event; a fire, an opening, an arrest or a fraud in a big city are not.
@@ -515,11 +542,19 @@ const OPPOSITES = [
   [/^(?:opens?|opened|reopens?|reopened)$/, /^(?:closes?|closed|shuts?)$/],
   [/^(?:arrives?|arrived|lands?|landed)$/, /^(?:departs?|departed|leaves)$/],
 ];
-const opposite = (a, b) => OPPOSITES.some(([x, y]) => {
-  const ax = [...a].some((w) => x.test(w));
-  const ay = [...a].some((w) => y.test(w));
-  const bx = [...b].some((w) => x.test(w));
-  const by = [...b].some((w) => y.test(w));
+/** Which side of each opposite pair a headline's words take: a set of "0x", "0y", "1x"... (cached per story). */
+const sidesOf = (kw) => {
+  const out = new Set();
+  OPPOSITES.forEach(([x, y], i) => {
+    for (const w of kw) {
+      if (x.test(w)) out.add(`${i}x`);
+      if (y.test(w)) out.add(`${i}y`);
+    }
+  });
+  return out;
+};
+const opposite = (a, b) => OPPOSITES.some((_, i) => {
+  const [ax, ay, bx, by] = [a.has(`${i}x`), a.has(`${i}y`), b.has(`${i}x`), b.has(`${i}y`)];
   return (ax && !ay && by && !bx) || (ay && !ax && bx && !by);
 });
 // "Earthquake drill held at Chile schools" is not the earthquake; "second storm forms" is another storm.
@@ -703,7 +738,7 @@ export class NewsDesk {
         const file = localFeedPath(feed.url);
         const baseDir = file ? path.dirname(file) : null;
         if (baseDir) this.localImageRoots.add(baseDir);
-        return parseFeed(xml, feed, { baseDir, now: startedAt });
+        return parseFeed(xml, feed, { baseDir, now: startedAt, log: this.log });
       })
     );
     const maxAge = config.maxStoryAgeHours * 3600_000;
@@ -721,7 +756,13 @@ export class NewsDesk {
       const fresh = r.value.filter((s) => now - s.published <= maxAge);
       this.dropPlaceholders(fresh);
       for (const s of fresh) {
-        if (this.stories.has(s.id)) continue;
+        if (this.stories.has(s.id)) {
+          // An undated item its feed still lists is still current: it keeps the age of this reading, so the
+          // offline slate (no dates at all) never ages out all at once every 36 hours and leaves the desk empty.
+          const kept = this.stories.get(s.id);
+          if (kept.undated && s.undated) kept.published = s.published;
+          continue;
+        }
         const key = normalizeTitleKey(s.title);
         if (key && titleKeys.has(key)) {
           // Same headline from another feed: the first report stays, and takes this one's picture if it has none.
@@ -768,7 +809,10 @@ export class NewsDesk {
     const marked = [];
     for (const [url, list] of uses) {
       if (this.placeholders.has(url)) continue;
-      if (list.length >= 3 || (list.length === 2 && !this.sameStory(list[0], list[1]))) {
+      // a card on several items about different events; three reports of one developing story that share their
+      // lead photo (a live page and its follow-ups) keep it
+      const unrelated = list.some((a, i) => list.some((b, j) => j > i && !this.sameStory(a, b)));
+      if (list.length >= 2 && unrelated) {
         this.markPlaceholder(url);
         marked.push(url);
       }
@@ -825,7 +869,10 @@ export class NewsDesk {
         cause: causeOf(s.title),
         frame: FRAME_SHIFT.test(s.title || ''),
         another: ANOTHER.test(s.title || ''),
+        sides: sidesOf(s.kw),
       };
+      s.ev.phys = new Set([...s.ev.kinds].filter((k) => PHYSICAL.has(k)).map(family));
+      s.ev.decide = new Set([...s.ev.kinds].filter((k) => DECISIONS.has(k)));
     }
     return s.ev;
   }
@@ -842,7 +889,12 @@ export class NewsDesk {
   sameStory(a, b) {
     const ea = this.eventFacts(a);
     const eb = this.eventFacts(b);
+    // cheap first: without two shared keywords only two kinds of event (a quake in Tokyo, a rate rise in Norway)
+    // can still be one event
+    const words = sameEvent(a.kw, b.kw);
+    if (!words && !physicalPair(ea, eb) && !sameDecision(ea, eb)) return false;
     const agree = placesAgree(this.whereOf(a), this.whereOf(b));
+    if (!words && agree !== true) return false;
     if (agree === false) return false;
     // each names someone or somewhere the other does not, and they share no name: two events
     const onlyA = [...ea.names].filter((n) => !eb.names.has(n));
@@ -850,14 +902,14 @@ export class NewsDesk {
     if (onlyA.length && onlyB.length && sharedCount(ea.names, eb.names) === 0) return false;
     if (disjoint(ea.kinds, eb.kinds)) return false;
     if (ea.cause.size >= 2 && eb.cause.size >= 2 && sharedCount(ea.cause, eb.cause) === 0) return false;
-    if (opposite(a.kw, b.kw) || ea.frame !== eb.frame || ea.another || eb.another) return false;
+    if (opposite(ea.sides, eb.sides) || ea.frame !== eb.frame || ea.another || eb.another) return false;
     const kinds = sharedKinds(ea.kinds, eb.kinds);
     // names say who or where, not what happened: "Pittsburgh" in both is no shared subject
     const notName = (w) => !ea.names.has(w) && !eb.names.has(w);
     const subject = softShared(ea.subject, eb.subject, notName);
     if (sharedCount(ea.people, eb.people) > 0 && sameEvent(a.kw, b.kw) && (kinds.length || subject >= 1)) return true;
-    if (agree === true && physicalPair(ea.kinds, eb.kinds)) return true;
-    if (agree === true && kinds.some((k) => DECISIONS.has(k)) && softShared(ea.topic, eb.topic, (w) => !KIND_WORD(w) && !ROLE_WORDS.has(w) && notName(w)) >= 1) return true;
+    if (agree === true && physicalPair(ea, eb)) return true;
+    if (agree === true && sameDecision(ea, eb) && softShared(ea.topic, eb.topic, (w) => !KIND_WORD(w) && !ROLE_WORDS.has(w) && notName(w)) >= 1) return true;
     if (!sameEvent(a.kw, b.kw)) return false;
     if (subject >= 2) return true;
     // one specific word of what happened is enough in the same city or region ("Lisbon opens a new riverside
@@ -883,8 +935,7 @@ export class NewsDesk {
     if (sharedCount(ea.people, eb.people) > 0) return true;
     if (agree !== true) return false;
     if (ea.cause.size && eb.cause.size && sharedCount(ea.cause, eb.cause) === 0) return false;
-    const kinds = sharedKinds(ea.kinds, eb.kinds);
-    if (physicalPair(ea.kinds, eb.kinds) || kinds.some((k) => DECISIONS.has(k))) return true;
+    if (physicalPair(ea, eb) || sameDecision(ea, eb)) return true;
     const notName = (w) => !ea.names.has(w) && !eb.names.has(w);
     const sa = new Set([...ea.subject].filter(notName));
     const sb = new Set([...eb.subject].filter(notName));
@@ -899,17 +950,22 @@ export class NewsDesk {
     return [...s.kw, ...[...ev.kinds].map((k) => `#${family(k)}`)];
   }
 
-  /** Stories that share an index key with `s` (a keyword or a kind of event), excluding `s`. */
+  /**
+   * Stories that could be the same event as `s`: those sharing two index keys with it (keywords or kinds of
+   * event), or one key and the same physical event or decision (sameStory then decides). Excludes `s`.
+   */
   related(s) {
     const index = this.keywordIndex();
-    const seen = new Set();
+    const shared = new Map();
     for (const w of this.keysOf(s)) {
       const bucket = index.get(w);
       // a word on very many headlines ("record", "new") says nothing about the event
       if (!bucket || bucket.length > 200) continue;
-      for (const o of bucket) if (o !== s) seen.add(o);
+      for (const o of bucket) if (o !== s) shared.set(o, (shared.get(o) || 0) + 1);
     }
-    return seen;
+    const out = new Set();
+    for (const [o, n] of shared) if (n >= 2 || physicalPair(s.ev, o.ev) || sameDecision(s.ev, o.ev)) out.add(o);
+    return out;
   }
 
   /** The keyword index of the desk (key -> stories), rebuilt when the desk changed. */
@@ -946,8 +1002,8 @@ export class NewsDesk {
       }
       const sources = new Set([s.source]);
       for (const [o, shared] of seen) {
-        // one shared key is enough only for an earthquake, a storm... in the same place (sameStory decides)
-        if (sources.has(o.source) || (shared < 2 && !(s.ev.kinds.size && o.ev.kinds.size))) continue;
+        // one shared key is enough only for an earthquake, a storm... or a rate decision (sameStory decides)
+        if (sources.has(o.source) || (shared < 2 && !physicalPair(s.ev, o.ev) && !sameDecision(s.ev, o.ev))) continue;
         this.comparisons++;
         if (this.sameStory(s, o)) sources.add(o.source);
       }
@@ -1101,7 +1157,7 @@ export class NewsDesk {
    * 24/7 channel re-runs its stories too, in new bulletins. Returns how many
    * came back.
    */
-  recycle(count, { filter = null, gap = 5, minAgeMs = 0, now = Date.now() } = {}) {
+  recycle(count, { filter = null, gap = 6, minAgeMs = 0, now = Date.now() } = {}) {
     if (!(count > 0)) return 0;
     const list = [];
     for (const [id, at] of this.covered) {

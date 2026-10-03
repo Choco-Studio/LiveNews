@@ -73,8 +73,11 @@ function expandV6(s) {
 }
 
 const LOCAL_NAMES = /(?:^|\.)(?:localhost|local|internal|intranet|lan|home\.arpa|localdomain)$/i;
-// Behind an egress proxy the machine may not resolve names itself: then the proxy decides.
-const behindProxy = () => !!(process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy);
+// Behind an egress proxy the machine may not resolve names itself: then the proxy decides. Node's fetch uses
+// the proxy variables only with NODE_USE_ENV_PROXY=1: a variable set for other tools proves nothing (and would
+// switch the slow-lookup refusal off for requests that do resolve names here).
+export const behindProxy = () =>
+  /^(?:1|true|yes|on)$/i.test(process.env.NODE_USE_ENV_PROXY || '') && !!(process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy);
 
 /**
  * Throws unless `url` is http(s) to a public host. A literal address is checked

@@ -920,22 +920,6 @@ const insideDry = (ctx, t) => !!ctx.dryLine && t >= ctx.dryLine.t0 - 0.05 && t <
 function moneyMinute(ctx, tl) {
   const me = ctx.speaker;
   const seg = ctx.seg;
-  if (ctx.type === 'intro' && tl.end > SHOT_STYLES['money-minute'].shotMax) {
-    // PACE (owner 18:52 over money-minute.md §3.5 "WIDE throughout"; settles INTEGRATION's request): an intro longer than
-    // the studio maximum reads its teasers on the MCU-R and the greeting on the wide (both ≥ MIN_SHOT); a teaser run that
-    // is itself over the maximum opens on the wide and cuts to the MCU-R at the teaser nearest its middle
-    const { greet } = splitIntro(ctx, 3);
-    const b = tl.bounds.find((x) => x.i === greet && !x.blocked);
-    if (b && b.t >= MIN_SHOT && tl.end - b.t >= MIN_SHOT) {
-      const out = [ev(ctx, 0, 0, 'close', 'mcu-r', me, 'teaser'), ev(ctx, b.t, b.char, 'wide', 'wide', me, 'greeting')];
-      if (b.t > SHOT_STYLES['money-minute'].shotMax) {
-        let m = null;
-        for (const x of tl.bounds) if (!x.blocked && x.t >= MIN_SHOT && b.t - x.t >= MIN_SHOT && (!m || Math.abs(x.t - b.t / 2) < Math.abs(m.t - b.t / 2))) m = x;
-        if (m) out.splice(0, 1, ev(ctx, 0, 0, 'wide', 'wide', me, 'teaser'), ev(ctx, m.t, m.char, 'close', 'mcu-r', me, 'teaser'));
-      }
-      return out;
-    }
-  }
   if (ctx.type !== 'story') return [ev(ctx, 0, 0, 'wide', 'wide', me, ctx.type === 'outro' ? 'signoff' : ctx.type === 'intro' ? 'greeting' : 'wide')];
   const plan = moneyStoryPlan(ctx, tl);
   return plan.map((p) => {

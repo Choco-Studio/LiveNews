@@ -129,25 +129,22 @@ const DEFS = {
     wallIdle: 'wordmark',
     solo: true,
     base: 1.0,
-    // the home seat light (WORLD NOW's pool, centred on the solo seat): a slate plateau around the
-    // video wall and Penny, so the room keeps the home value range in every framing
-    pools: [{ X: 0, Y: -64, rx: 150, ry: 104, amount: 1.05 }],
-    // the warm room: a pair of bronze sconces centred on the panels either side of the wall. Each
-    // washes its panel up and down (a wall-washer's scallop, brightest just outside the shade and
-    // fading), lifting ink to slate; the warmth is the light's colour, a share of brown in the lit
-    // slate fading to none (never an opaque warm block), and a broad low warm haze (ink → maroon,
-    // the same value) that carries the room's warmth to the edges of the close shots
-    glows: [
-      { X: -112, Y: -66, rx: 40, ry: 35, below: 0.85, amount: 1.75, tint: 0.5, tintR: 1 },
-      { X: 112, Y: -66, rx: 40, ry: 35, below: 0.85, amount: 1.75, tint: 0.5, tintR: 1 },
-    ],
+    // the home seat light (WORLD NOW's pool, centred on the solo seat): a flat slate plateau around the
+    // video wall, Penny and both lamps, with a narrow Bayer edge (one clean outline, not a lumpy cloud
+    // where the lamps' light met its falloff)
+    pools: [{ X: 0, Y: -64, rx: 178, ry: 110, edge: 0.14, amount: 1.05 }],
+    // the warm room: a pair of hand-pixelled bronze up/down sconces centred on the panels either side
+    // of the wall (set.js drawSconce). Their light on the panel is NEUTRAL (ART_DIRECTION: Bayer only
+    // between adjacent ramp steps): a scallop up and one down from each shade's openings, slate lifted
+    // to steel near the lamp, fanning out and fading with a rounded end. The warmth is the fixture's
+    // own bronze, tan and cream (no warm dots or warm blocks on the wall)
+    scallops: [-112, 112].map((X) => ({ X, Y: -55, gap: 6, up: 42, down: 28, w0: 4, spread: 0.42, edge: 0.32, round: 1.3, amount: 1.0 })),
     sconceY: -55,
     sconces: [-112, 112], // set.js drawWallDetails draws the fixtures here
     tintPools: [],
-    tints: { slate: 'brown', steel: 'tanShade' },
-    tintNames: ['maroon', 'brown', 'cream', 'tanShade'],
+    tints: null,
+    tintNames: ['maroon', 'brown', 'cream', 'tanShade', 'tan'],
     tintMax: 0.08,
-    tintMin: 0.04, // the warm room must read warm (critic: 0.4 % read as WORLD NOW with two candles)
     practical: 'warm',
     sides: { x0: 214, x1: 270 },
     // the solo seat is always in front of the wall, so the wall's field IS the head-zone ground: a

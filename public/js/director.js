@@ -620,6 +620,7 @@ export class Director {
           : null;
     const shotFor = (i, cue = null) => {
       if (!cue) return cutTo(i, beats[Math.min(i, beats.length - 1)]);
+      if (i === 0 && cue.keep && STUDIO.has(s.shot)) return 0; // v2: a short pickup ("Thanks, Ada.") stays on the studio shot on air; the card comes with its line
       const beat = cue.shot;
       const apply = () => this.setShot(beat, { focus: cue.focus || seg.anchor, storyId: seg.storyId, wall, card: cardFor(beat), framing: cue.framing, cameraMove: cue.move });
       // Hold every shot for at least the profile's minimum before cutting away (cut cooldown); the opening cut too when

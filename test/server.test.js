@@ -412,6 +412,12 @@ describe('server/index.js: HTTP API of a running channel', () => {
       assert.ok(res.status >= 400 && res.status < 600, String(res.status));
       assert.equal((await app.request('/api/channel')).status, 200);
     });
+
+    test('(fix r2) a NUL in the path is a 400, not a 500 with a stack trace', async () => {
+      const res = await app.request('/%00');
+      assert.equal(res.status, 400);
+      assert.equal((await app.request('/js/%00.js')).status, 400);
+    });
   });
 });
 
@@ -437,6 +443,12 @@ describe('server/index.js: bound to 0.0.0.0, reached from a non-loopback address
     assert.equal((await app.request('/api/queue', { base })).status, 404);
     assert.equal((await app.request('/api/refresh', { base, method: 'POST' })).status, 404);
     assert.equal((await app.request('/api/desk')).status, 200, 'loopback still sees them');
+    // (fix r2) the public status keeps the queue and the feeds; provider usage and errors are the operator's
+    const pub = await app.request('/api/status', { base });
+    assert.equal(pub.status, 200);
+    assert.ok(Array.isArray(pub.json.queue));
+    assert.equal(pub.json.usage, undefined);
+    assert.ok((await app.request('/api/status')).json.usage, 'loopback still sees the usage');
   });
 });
 

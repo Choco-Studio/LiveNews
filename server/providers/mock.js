@@ -63,7 +63,7 @@ const WORLD_PAIRS = {
   ],
   'GREEN CITIES': [
     ['[nod] Quietly, that is the kind of thing that changes a city.', 'Quietly is how most good things happen.'],
-    ['[nod] I approve. From a shaded bench, ideally.', 'Noted. We will find you one.'],
+    ['[nod] I approve. From a shaded bench, ideally.', 'We will find you one.'],
   ],
   OCEANS: [['[nod] Good to hear the sea is having a better day than most of us.', 'Low bar. But we will take it.']],
   any: [
@@ -144,14 +144,14 @@ const TECH_BUTTONS = {
 const UNIT8_LINES = {
   ASTRONOMY: [
     'I will keep one sensor pointed upwards, Dr Reyes. For the record.',
-    '[nod] Noted. I have adjusted my sense of scale.',
+    '[nod] I have adjusted my sense of scale.',
     'I have recalculated how small we are, Dr Reyes. The result is consistent.',
     '[nod] Logged. I find the distances reassuring.',
   ],
   any: [
     '[nod] Logged under good news, Dr Reyes. The file is short. I am glad to add to it.',
     'I have no further data, Dr Reyes. I find I do not mind.',
-    '[nod] Noted. My circuits remain calm. This is how I express enthusiasm.',
+    '[nod] My circuits remain calm. This is how I express enthusiasm.',
     '[nod] Filed. Cross-referenced. Quietly appreciated.',
     '[nod] A satisfying result. I have saved it twice.',
     'I have flagged that one as hopeful, Dr Reyes. It is a new category.',
@@ -159,10 +159,10 @@ const UNIT8_LINES = {
 };
 UNIT8_LINES.SPACE = UNIT8_LINES.ASTRONOMY;
 // UNIT-8 after the lead, when the lead has no figure to repeat.
-const UNIT8_NOTED = ['[nod] Logged, Dr Reyes.', '[nod] Noted. Filed under remarkable.', '[nod] Recorded. I will be thinking about that one.', '[nod] Understood, Dr Reyes. Logged.'];
+const UNIT8_NOTED = ['[nod] Logged, Dr Reyes.', '[nod] Filed under remarkable.', '[nod] Recorded. I will be thinking about that one.', '[nod] Understood, Dr Reyes. Logged.', '[nod] Entered in the record. With a small flag.'];
 const NOVA_THANKS = ['Thank you, UNIT-8.', 'Precise as ever, UNIT-8.', 'Noted, UNIT-8. Thank you.', 'Thank you. Exactly right, UNIT-8.', '[nod] Quite so, UNIT-8.'];
 // The tail of UNIT-8's restatement ("40,000. Logged."): one shape per episode, rotated across episodes.
-const UNIT8_RESTATE = ['Logged.', 'Stored, Dr Reyes.', 'I have checked it twice.', 'That is now on file.', 'Confirmed.', 'Recorded, with interest.', 'Noted. I will not forget it.'];
+const UNIT8_RESTATE = ['Logged.', 'Stored, Dr Reyes.', 'I have checked it twice.', 'That is now on file.', 'Confirmed.', 'Recorded, with interest.', 'I will not forget it.'];
 // Nova hands the number of the day to UNIT-8 (it is his story), not in the same words every time.
 const NOVA_TO_NUMBER = [
   '[look_partner] Thank you, UNIT-8. Our number of the day is yours.',
@@ -176,11 +176,11 @@ const CHATS = {
   paco: ['[nod] Well. Not a sentence I expected to read tonight.', '[nod] File that under good news. We do have some.', '[nod] I shall allow it.'],
   lola: ['[chin] Not what I expected when I came in this morning.', '[nod] Some good news, for once.', '[nod] I will take that.'],
   max: ['[nod] Clever. Quietly, properly clever.', '[look_partner] I did not see that one coming.', '[nod] Engineers, doing engineer things.'],
-  ada: ['[nod] Fair enough. That one I like.', '[chin] Noted. I will want to see how that plays out.', '[shrug] Cautiously impressed.'],
+  ada: ['[nod] Fair enough. That one I like.', '[chin] I will want to see how that plays out.', '[shrug] Cautiously impressed.'],
   nova: ['[chin] Every answer comes with a new question attached. That is the job.', '[steeple] Science at its best: patient, careful and slightly stubborn.', '[nod] Lovely work.'],
   unit8: UNIT8_LINES.any,
   penny: ['[nod] Worth keeping an eye on.', '[nod] One to watch.'],
-  sam: ['[nod] Quick one, but worth knowing.', '[nod] Noted.'],
+  sam: ['[nod] Quick one, but worth knowing.', '[nod] Worth a second look.'],
 };
 const GENERIC_CHATS = ['[nod] Remarkable. Moving on.', '[chin] Something to think about.', '[nod] Well, there we are.', '[nod] Interesting times.'];
 
@@ -588,6 +588,11 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     const max = program.headlineMax || 45;
     const rank = (i) => (i.s.image ? 0 : 2) + (shortHeadline(i.s.title, max).length <= max ? 0 : 1);
     pool = [top, ...pool.filter((i) => i !== top).map((i, k) => ({ i, k })).sort((a, b) => rank(a.i) - rank(b.i) || a.k - b.k).map(({ i }) => i)];
+    // Fewer items, every one with its picture, rather than a full minute with items the screen cannot show: the
+    // stories without one only when there are not enough with one for the programme's floor.
+    const pictured = pool.filter((i) => i.s.image);
+    const floor = program?.timing?.minStories ?? program?.minStories ?? 5;
+    if (pictured.length >= floor) pool = pictured;
     // the running order is built from exactly those stories (the round-up must not reach past them)
     pool = pool.slice(0, Math.max(1, count ?? program?.stories ?? 5));
   }

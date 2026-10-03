@@ -12,7 +12,7 @@ import { CueClock, prunePerf, TAIL, HOLD_MAX, AFTER_CUT } from '../public/js/v2/
 import { FallbackPolicy, PerfWatchdog, BACKOFF } from '../public/js/v2/canvas25d/runtime/watchdog.js';
 import { StageHost } from '../public/js/v2/canvas25d/runtime/host.js';
 import { Stage, castSeats, episodeKey, defaultFraming } from '../public/js/v2/canvas25d/runtime/stage.js';
-import { cuesFromPlan, legacyShot, LiveDirection, holdCut, maxHold, guardMarks } from '../public/js/v2/canvas25d/runtime/direction.js';
+import { cuesFromPlan, legacyShot, LiveDirection, holdCut, maxHold, guardMarks, pickupOpening } from '../public/js/v2/canvas25d/runtime/direction.js';
 import { paceFor, gapAfter as paceGap } from '../public/js/pace.js';
 import { LOOKS } from '../public/js/v2/canvas25d/cast/index.js';
 
@@ -1162,6 +1162,47 @@ test('cue clock: a turn glance due while its listener is off screen waits for th
   assert.equal(log3.length, 1);
 });
 
+test('cue clock: a story turn glance fires only in the first 4.5 s of the turn; a notes look at the turn is never held', () => {
+  // critic r2: held story glances released by a max-hold cut at +7.3 s / +8.1 s read as random looks
+  const story = planOf(EP, 1, [{ kind: 'look', slot: 'A', target: 'partner', char: 0, at: 0.25, dur: 2, why: 'turn' }, { kind: 'look', slot: 'A', target: 'notes', char: 0, at: 0.4, dur: 0.9, why: 'turn-notes' }]);
+  assert.equal(story.ctx.type, 'story');
+  const late = (cutAt) => {
+    let seen = false;
+    const c = new CueClock();
+    c.perfs = { A: newPerf(), B: newPerf() };
+    c.canSee = (slot) => slot !== 'A' || seen;
+    const p = planOf(EP, 1, story.events);
+    const log = run(c, p, 9, 10 + 9, () => null, (t) => {
+      if (t >= 10 && p.speechStart == null) p.speechStart = 10;
+      if (t >= cutAt && !seen) {
+        seen = true;
+        c.cut(t);
+      }
+    });
+    return { log, c };
+  };
+  const early = late(13); // a cut that shows the listener 3 s into the turn: the glance fires
+  assert.ok(early.log.some((l) => l.name === 'partner' && l.t >= 13.25 - 1e-9 && l.t < 13.3), JSON.stringify(early.log));
+  assert.ok(early.log.some((l) => l.name === 'notes' && l.t < 10.7), "FACES' turn-notes look is not held for the viewer");
+  const tooLate = late(17.5); // 7.5 s into the turn: dropped
+  assert.ok(!tooLate.log.some((l) => l.name === 'partner'), 'a story glance never fires past 4.5 s into the turn');
+  assert.equal(tooLate.c.stats.held, 1);
+  // a chat (or intro) keeps the 15 s window: the greeting wide can be the listener's first appearance
+  const chat = planOf(EP, 3, [{ kind: 'look', slot: 'B', target: 'partner', char: 0, at: 0.25, dur: 3, why: 'turn' }]);
+  let seen = false;
+  const c = new CueClock();
+  c.perfs = { A: newPerf(), B: newPerf() };
+  c.canSee = (slot) => slot !== 'B' || seen;
+  const log = run(c, chat, 9, 22, () => null, (t) => {
+    if (t >= 10 && chat.speechStart == null) chat.speechStart = 10;
+    if (t >= 18 && !seen) {
+      seen = true;
+      c.cut(t);
+    }
+  });
+  assert.ok(log.some((l) => l.name === 'partner' && l.t >= 18.25 - 1e-9), 'chat: released 8 s in');
+});
+
 test('Stage: inView per slot: singles hide the partner, two-shots show both, maps nobody; turn glances wait for it', () => {
   const ep = episodeOf('world-now');
   const st = new Stage({ audio: fakeAudio(), channel: { presenters: {} }, idle: null });
@@ -1362,6 +1403,129 @@ test('direction: with no sentence start to split it, a long single cuts at a phr
   assert.equal(shots[1].mid, true, 'a cut inside the sentence (speech mark)');
 });
 
+test('direction: the walls of the coming studio cuts are warmed in idle time, one per callback, never during a break', () => {
+  // critic r2 / SET request: a cut to a wall with new content cost 87-225 ms cold (up to 1 s on air), 3-5 ms warmed
+  const ep = clone(episodeOf('tech-bytes'));
+  const story = ep.segments.findIndex((x, i) => i > 0 && x.type === 'story');
+  const seg = ep.segments[story];
+  const px = new Uint32Array(64 * 36);
+  for (let k = 0; k < px.length; k++) px[k] = 0xff000000 | ((k * 2654435761) >>> 8);
+  const images = new Map([[seg.storyId, { full: { px, w: 64, h: 36 } }]]);
+  const scene = { shot: 'open', program: ep.program, cast: ep.cast, rundown: ep.rundown || [] };
+  const director = { scene, images, setShot(shot, extra = {}) { Object.assign(scene, extra, { shot, shotSince: 1 }); }, say: () => Promise.resolve() };
+  const live = new LiveDirection({ director, channel: { presenters: {} }, audio: { mode: 'mute' } });
+  const queue = [];
+  const later = [];
+  live.schedule = (fn) => queue.push(fn);
+  live.retry = (fn) => later.push(fn);
+  const drain = (max = 400) => {
+    let n = 0;
+    while (queue.length && n++ < max) queue.shift()();
+    return n;
+  };
+  live.episode(ep);
+  scene.shot = 'ad'; // a break element on air: nothing runs, everything waits
+  drain();
+  assert.equal(live.wallStats.warmed + live.wallStats.skipped, 0, 'no idle work during an ad');
+  assert.ok(later.length > 0);
+  scene.shot = 'close';
+  while (later.length) later.shift()();
+  // each idle callback warms at most one wall
+  let calls = 0;
+  let maxPer = 0;
+  while (queue.length && calls < 400) {
+    const before = live.wallStats.warmed + live.wallStats.skipped;
+    queue.shift()();
+    calls++;
+    maxPer = Math.max(maxPer, live.wallStats.warmed + live.wallStats.skipped - before);
+  }
+  assert.ok(maxPer <= 1, `one wall per idle callback (${maxPer})`);
+  const cues = cuesFromPlan(live.planAt(story), { hasImg: true }).filter((c) => c.shot === 'wide' || c.shot === 'close');
+  assert.ok(cues.length >= 1);
+  assert.ok(live.wallStats.warmed + live.wallStats.skipped >= cues.length, JSON.stringify(live.wallStats));
+  assert.ok(live.wallStats.warmed >= 1, `the story's picture wall is prepared: ${JSON.stringify(live.wallStats)}`);
+  // once warmed, the same walls are not queued again for this episode
+  const n0 = live.wallStats.warmed + live.wallStats.skipped;
+  live.warmWalls(story);
+  drain();
+  assert.equal(live.wallStats.warmed + live.wallStats.skipped, n0);
+});
+
+test('long episode (19 segments, current offline fields): every segment plans in order; a late recorded replan costs one segment', () => {
+  // critic r2: the five fixtures are 5-12 segments from 17:13; the channel now airs 16-19 with visuals, locator, credits
+  const ep = episodeOf('world-now-long');
+  assert.ok(ep.segments.length >= 16, `${ep.segments.length} segments`);
+  const scene = { shot: 'open', program: ep.program, cast: ep.cast, rundown: ep.rundown || [] };
+  const director = { scene, images: new Map(), setShot(shot, extra = {}) { Object.assign(scene, extra, { shot, shotSince: 1 }); }, say: () => Promise.resolve() };
+  const live = new LiveDirection({ director, channel: { presenters: {} }, audio: { mode: 'mute' } });
+  live.schedule = () => {}; // no idle chain here: planned in order below
+  live.episode(ep);
+  for (let i = 0; i < ep.segments.length; i++) {
+    const p = live.planAt(i);
+    assert.ok(p && p.ctx, `segment ${i} planned`);
+    assert.deepEqual(p.errors, [], `segment ${i} (${ep.segments[i].type}) planned without a planner error`);
+    for (let k = 1; k < p.events.length; k++) assert.ok(p.events[k].at >= p.events[k - 1].at, `segment ${i} events sorted`);
+  }
+  // a recorded voice that arrived late for a segment near the end: replanned on the same episode (memoised neighbours)
+  const k = ep.segments.length - 3;
+  const seg = ep.segments[k];
+  const words = [...seg.text.matchAll(/\S+/g)].map((m, j) => ({ t: 0.15 + j * 0.31, char: m.index, len: m[0].length }));
+  const best = (fn) => Math.min(...[0, 1, 2].map(() => {
+    const a = performance.now();
+    fn();
+    return performance.now() - a;
+  }));
+  const rec = { url: 'x', duration: words.at(-1).t + 0.5, words };
+  let n = 0;
+  const replan = best(() => {
+    live.replans = new WeakMap();
+    const p = live.replan(k, { ...rec, n: n++ });
+    assert.equal(p.ctx.timing, 'recorded');
+  });
+  assert.equal(seg.audio, undefined, 'the segment is left as it was (audio restored)');
+  // the old way: a fresh episode object re-plans every neighbour before it
+  const fresh = best(() => planSegment({ ...ep, segments: ep.segments.map((x, j) => (j === k ? { ...x, audio: rec } : { ...x })) }, k, { presenters: {}, gapAfter: live.gapFn }));
+  assert.ok(replan < fresh * 0.6 || replan < 15, `replan ${replan.toFixed(1)} ms vs fresh ${fresh.toFixed(1)} ms`);
+});
+
+test('direction: a short pickup before a card stays on the studio shot on air; the card comes with its own line', () => {
+  // critic r2: TECH BYTES "Thanks, Ada." heard over the number-of-the-day card, the card 1.6 s before its line
+  const ep = {
+    id: 'tb-pickup',
+    program: { id: 'tech-bytes', theme: 'tech' },
+    cast: { A: 'max', B: 'ada' },
+    segments: [
+      { type: 'story', anchor: 'B', emotion: 'neutral', storyId: 'p0', text: 'A chipmaker has unveiled a laptop processor with all-day battery life. The first machines arrive in spring.', cues: [] },
+      { type: 'story', anchor: 'A', emotion: 'neutral', storyId: 'p1', kicker: 'NUMBER OF THE DAY', feature: 'number', fact: 'ABOUT 1,500 DOLLARS', numbers: [{ value: '1,500', label: 'DOLLARS', qualifier: 'ABOUT' }], text: 'Thanks, Ada. Our number of the day: about 1,500 dollars. From Circuit Weekly: A home robot that folds laundry goes on sale next month for about 1,500 dollars. Early reviewers say it is slow but careful. It needs about four minutes per shirt.', cues: [] },
+    ],
+  };
+  const p = { ...planSegment(ep, 1, {}), index: 1 };
+  const cues = cuesFromPlan(p, { hasImg: false });
+  assert.equal(cues[0].shot, 'fact', 'the planner opens on the card');
+  const out = pickupOpening(cues, p, { programId: 'tech-bytes', gap: 0.6 });
+  assert.equal(out[0].keep, true, 'the pickup keeps the shot on air');
+  assert.equal(out[0].shot, 'close');
+  assert.equal(out[1].shot, 'fact');
+  assert.equal(out[1].sentence, 1, 'the card cuts at "Our number of the day"');
+  assert.ok(Math.abs(out[1].at - p.ctx.sentences[1].t0) < 1e-9);
+  assert.deepEqual(out.map((c) => c.k), out.map((_, j) => j));
+  // a long first sentence is no pickup; a story without a card opening is left alone
+  const long = { ...p, ctx: { ...p.ctx, sentences: [{ ...p.ctx.sentences[0], text: 'Thanks, Ada, and what a week it has been.' }, ...p.ctx.sentences.slice(1)] } };
+  assert.equal(pickupOpening(cues, long, { programId: 'tech-bytes' }), cues);
+  const p0 = { ...planSegment(ep, 0, {}), index: 0 };
+  const c0 = cuesFromPlan(p0, { hasImg: false });
+  assert.equal(pickupOpening(c0, p0, { programId: 'tech-bytes' }), c0);
+  // LiveDirection: only when a studio shot is on air (the director keeps it); after a map the card opens as planned
+  const scene = { shot: 'close', focus: 'B', program: ep.program, cast: ep.cast };
+  const director = { scene, images: new Map(), setShot() {}, say: () => Promise.resolve() };
+  const live = new LiveDirection({ director, channel: { presenters: {} }, audio: { mode: 'mute' } });
+  live.schedule = () => {};
+  live.episode(ep);
+  assert.equal(live.shots(ep.segments[1], false, () => {})[0].keep, true);
+  scene.shot = 'map';
+  assert.equal(live.shots(ep.segments[1], false, () => {})[0].shot, 'fact');
+});
+
 const splitCount = (text) => (String(text).match(/[.!?](\s|$)/g) || []).length;
 
 test('director: with v2 a new framing of the same shot restarts the shot clock; without v2 setShot is unchanged', async () => {
@@ -1507,6 +1671,7 @@ test('watchdog: ?perf=1 reports the renderer frame interval p95 too (report only
   const line = lines.find((l) => /frame interval p95/.test(l));
   assert.ok(line, lines.join('\n'));
   assert.match(line, /frame interval p95 50 ms/);
+  assert.match(line, /max 2\.0 ms, 0 over 33 ms/, 'the worst frame and the slow-frame count (cut hitches p95 cannot see)');
   assert.equal(w.level, 0, 'the interval never changes the detail level');
   const quiet = new PerfWatchdog({ log: () => {}, info: () => {}, report: false });
   quiet.interval(30, 1);

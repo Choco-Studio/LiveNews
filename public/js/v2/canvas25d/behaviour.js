@@ -19,6 +19,12 @@
 //                   'side' is a sidelong glance (the eyes go, the head turns 40 %);
 //                   style 'interest' adds the interest brow lift for the first ~1.5 s
 //                   of the look (meeting the partner's question)
+//                   A short look is eye-led (critic r3: a 0.6-1.0 s look with the full
+//                   0.4 rad head turn read as a flick): the head follows a partner or
+//                   wall look by clamp((len - 0.2) / 1.4, 0.35, 1), len = the look's
+//                   length from the start of the same-target looks it continues (a
+//                   look that starts inside an earlier one is part of it, so a carried
+//                   hand-over keeps the full turn; later arrivals never change it)
 //                   Overlapping looks never add up: each target takes the
 //                   strongest of its looks and several targets share one budget,
 //                   so a look planned across a segment boundary merges cleanly.
@@ -58,6 +64,26 @@ function weights(lk, t, out) {
 
 const W2 = [0, 0];
 
+/**
+ * How much of the head turn a partner / wall look gets: its length from the start of the
+ * same-target looks it continues (each starts no later than it and still runs at its start;
+ * two passes cover a chain), ≥ 1.6 s the whole turn, shorter ones eye-led down to 35 %.
+ * Only earlier-starting looks count, so a look appended later (the next segment's) never
+ * changes a look already running: no pop.
+ */
+function headShare(list, i, lk) {
+  let s0 = lk.t0;
+  for (let pass = 0; pass < 2; pass++) {
+    for (let j = 0; j < list.length; j++) {
+      const o = list[j];
+      if (j === i || o.t0 >= s0 || o.t1 + 0.05 < s0 || (o.target || 'partner') !== (lk.target || 'partner') || o.style === 'mech') continue;
+      s0 = o.t0;
+    }
+  }
+  const k = (lk.t1 - s0 - 0.2) / 1.4;
+  return k >= 1 ? 1 : k <= 0.35 ? 0.35 : k;
+}
+
 /** Layer 4. Returns the updated eye-drive weight (max of `gestLook` and the looks). */
 export function applyLook(c, perf, t, gestLook) {
   const list = perf.look;
@@ -93,7 +119,8 @@ export function applyLook(c, perf, t, gestLook) {
       c.brow += re[0] * w;
       c.browIn += re[1] * w;
     }
-    const head = lk.style === 'side' ? 0.4 : 1; // a sidelong glance: the eyes go, the head barely follows
+    // a sidelong glance: the eyes go, the head barely follows; a short look is eye-led too
+    const head = lk.style === 'side' ? 0.4 : k === 0 || k === 3 ? headShare(list, i, lk) : 1;
     if (W2[0] * amt > WE[k]) WE[k] = W2[0] * amt;
     if (W2[1] * amt * head > WH[k]) WH[k] = W2[1] * amt * head;
     if (k === 3 && perf.side === 0) SG[3] = (perf.seed ?? 0) & 1 ? 1 : -1;

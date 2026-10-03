@@ -484,6 +484,7 @@ const HEADLINESE = [
   [/\bin (?:the )?(?:[\p{Ll}-]+ ){0,2}(?:towns|villages|cities|parts|areas|regions|districts|suburbs|streets) of (\p{Lu}[\p{L}'’-]+(?: \p{Lu}[\p{L}'’-]+)?)/gu, 'in $1'],
   [/^(\p{Lu}[\p{L}'’-]+)['’]s central bank (raises|cuts|holds|lowers|keeps|hikes)\b/u, '$1 $2'],
   [/^(Study|Survey|Research|Report|Poll) (?:finds|shows|says|suggests|reveals)(?: that)? (?=\p{L})/u, '$1: '],
+  [/\bto be (visible|seen|open|closed|ready|available)\b/gi, '$1'],
   [/\binterest rates\b/gi, 'rates'],
   [/\b(?:businesses|companies)\b/g, 'firms'],
   [/\bcompany\b/g, 'firm'],
@@ -520,6 +521,32 @@ function hardFit(t, max = LIMITS.headline) {
   while (words.length > 3 && (words.join(' ').length > max || danglingHeadline(words.join(' ')) || ADVERB_END.test(words.join(' ')))) words.pop();
   const out = words.join(' ').replace(/[\s,;:–—-]+$/, '');
   return out.length <= max ? out : clipWords(out, max);
+}
+
+// Words a strap can lose last of all, when nothing else makes it fit: descriptive modifiers ("a new wing for
+// ancient wooden boats", "a sharp fall"), and a hype noun before its verb ("battery breakthrough promises").
+const DROPPABLE = ['new', 'latest', 'brand-new', 'surprise', 'dramatic', 'record-breaking', 'breakthrough', 'big', 'major', 'huge', 'giant', 'vast', 'small', 'sharp', 'wooden', 'historic', 'ancient'];
+
+/**
+ * The last resort for a strap still over the limit: articles go, then the droppable modifiers from the end
+ * backwards, one at a time, until it fits; never the subject's first word, never leaving fewer than three
+ * content words or a dangling end. The headline-ese form (uncover -> find) is tried first.
+ */
+function squeeze(t, max) {
+  let out = compactOf(t, true);
+  const ese = compactOf(headlinese(out), true);
+  if (ese.length < out.length && headWords(ese).length >= 3 && !danglingHeadline(ese)) out = ese;
+  const words = out.split(' ');
+  // the least informative first ("new" before "ancient"), never the first word nor the last
+  for (const drop of DROPPABLE) {
+    if (words.join(' ').length <= max) break;
+    const i = words.findIndex((w, k) => k > 0 && k < words.length - 1 && w.toLowerCase() === drop);
+    if (i < 0) continue;
+    const text = [...words.slice(0, i), ...words.slice(i + 1)].join(' ');
+    if (headWords(text).length < 3 || danglingHeadline(text)) continue;
+    words.splice(i, 1);
+  }
+  return words.join(' ').replace(/^\p{Ll}/u, (c) => c.toUpperCase());
 }
 
 function shortenOnce(t, max, spoken) {
@@ -619,12 +646,18 @@ export function shortHeadline(title, max = HEADLINE_MAX, { spoken = false } = {}
     return t;
   };
   const start = clean(plainTitle(title), 200).replace(/[\s.!?;:,]+$/, '');
-  const t = settle(start, limit);
+  let t = settle(start, limit);
   // A tight limit (NEWS IN 60's 36) never gives a longer headline than the usual one would: when nothing fits
   // it, the usual cut, in the programme's own style, is the better miss.
   if (limit < HEADLINE_MAX && t.length > limit) {
     const alt = settle(settle(start, HEADLINE_MAX), limit);
-    if (alt.length < t.length) return alt;
+    if (alt.length < t.length) t = alt;
+  }
+  // Still over: the last squeeze (articles, then descriptive modifiers), kept only if it is stable (a second
+  // pass must change nothing).
+  if (!spoken && t.length > limit) {
+    const sq = squeeze(t, limit);
+    if (sq.length < t.length && settle(sq, limit) === sq) t = sq;
   }
   return t;
 }

@@ -77,9 +77,18 @@ describe('hostile feeds and pages', () => {
     assert.equal(stories.length, MAX_FEED_ITEMS);
     const d = new NewsDesk({ log: quiet });
     for (let i = 0; i < 3000; i++) d.stories.set(`s${i}`, story(`s${i}`, `Outlet ${i % 9}`, `Headline ${i} on subject ${i % 211} and theme ${i % 97}`));
-    const t0 = Date.now();
+    // (fix r2) counted, not timed: on a loaded machine the clock says nothing; the number of same-event tests
+    // says whether the desk compares each story with a few candidates (keyword index) or with the whole desk
     d.updateTrending();
-    assert.ok(Date.now() - t0 < 3000, `trending on 3000 stories took ${Date.now() - t0} ms`);
+    assert.ok(d.comparisons < 3000 * 20, `trending ran ${d.comparisons} same-event tests for 3000 stories`);
+    let calls = 0;
+    const sameStory = d.sameStory.bind(d);
+    d.sameStory = (a, b) => (calls++, sameStory(a, b));
+    for (const s of [...d.stories.values()].slice(0, 1500)) s.image = `https://cdn.test/${s.id}.jpg`;
+    d.borrowPictures();
+    assert.ok(calls < 3000 * 20, `lending ran ${calls} same-event tests for 1500 stories without a picture`);
+    d.markCovered([...d.stories.keys()].slice(0, 10));
+    assert.ok(calls < 3000 * 21, 'covering an episode compares its stories with their candidates only');
   });
 
   test('a page of unclosed <meta / <link / <img tags is scanned in one linear pass', () => {

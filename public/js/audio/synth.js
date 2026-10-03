@@ -195,7 +195,7 @@ export function buildBuses(ctx, { volume = 0.8, raw = false, ducker = null, beds
   reverb.buffer = b.ir;
   const dark = ctx.createBiquadFilter();
   dark.type = 'lowpass';
-  dark.frequency.value = 5500;
+  dark.frequency.value = 7500;
   dark.Q.value = 0.5;
   reverb.connect(dark).connect(tunes);
   const speech = ctx.createGain();
@@ -378,7 +378,7 @@ export class TunePlayer {
       delay.delayTime.value = Math.min(1.5, song.echo.beats * this.spb);
       const lp = ctx.createBiquadFilter();
       lp.type = 'lowpass';
-      lp.frequency.value = 4500;
+      lp.frequency.value = 6000;
       const fb = ctx.createGain();
       fb.gain.value = song.echo.feedback;
       input.connect(delay).connect(lp).connect(fb).connect(delay);
@@ -469,8 +469,8 @@ export class TunePlayer {
       const v = g.value;
       g.cancelScheduledValues(when);
       g.setValueAtTime(v, when);
-      g.setTargetAtTime(0, when, fade / 4);
-      g.setValueAtTime(v * Math.exp(-4), when + fade);
+      g.setTargetAtTime(0, when, fade / 3);
+      g.setValueAtTime(v * Math.exp(-3), when + fade);
       g.linearRampToValueAtTime(0, when + fade + 0.03);
     } catch { /* ignore */ }
     for (const src of this.live) {
@@ -661,10 +661,10 @@ export class TunePlayer {
         break;
       case 'h':
         // Band-limited (5-9 kHz) and soft: a brushed hat, not a sizzle.
-        voice(noise(true, 1.6), [filt('highpass', 5000), filt('lowpass', 9000)], level * 0.36, 0.0015, 0.014, 0.06);
+        voice(noise(true, 1.6), [filt('highpass', 5000), filt('lowpass', 11000)], level * 0.36, 0.0015, 0.014, 0.06);
         break;
       case 'o':
-        voice(noise(true, 1.6), [filt('highpass', 4800), filt('lowpass', 8500)], level * 0.32, 0.003, 0.09, 0.36);
+        voice(noise(true, 1.6), [filt('highpass', 4800), filt('lowpass', 10500)], level * 0.32, 0.003, 0.09, 0.36);
         break;
       case 'c':
         voice(noise(false, 1), [filt('highpass', 3800), filt('lowpass', 9000)], level * 0.45, 0.003, 0.32, 1.5);

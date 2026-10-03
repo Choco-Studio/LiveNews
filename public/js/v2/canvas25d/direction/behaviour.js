@@ -108,6 +108,9 @@ export const RULES = Object.freeze({
   lateStart: [0.45, 0.9],
   lateHold: [1.6, 2.6],
   contMin: 1.0, // a hand-over look carried on into the partner's turn stays ≥ 1 s past the first word
+  minFull: 1.6, // a turn glance kept apart from a toss meet stays ≥ 1.6 s (shorter, the full head turn is a flick)
+  sideBelow: 1.4, // a partner look shorter than this (merged) is eye-led: style 'side', the head turns 40 %
+  exchangeMax: 4.3, // a carried look that runs on through a short line's toss: the whole ≤ 4.3 s
 });
 
 // Turn-start variety per programme (bibles): WORLD NOW may vary the glance into a later one,
@@ -170,7 +173,8 @@ function carryLooks(ctx, depth) {
       if (isReaction(l)) continue;
       const end = l.at + l.dur - off;
       if (end < -(RULES.lookGap + 1)) continue; // long gone
-      (out[slot] ||= []).push({ at: l.at - off, dur: l.dur, target: l.target, why: l.why });
+      // origin: where a carried chain of looks really began (a 'cont' continues an earlier look)
+      (out[slot] ||= []).push({ at: l.at - off, dur: l.dur, target: l.target, why: l.why, origin: (l.origin ?? l.at) - off });
     }
   }
   return out;
@@ -309,6 +313,23 @@ export function isToss(ctx) {
   return /\?["'’”)]*\s*$/.test(last.text) && words <= 14;
 }
 
+/**
+ * The partner's next line is a short chat line that hands straight back (a question or a name):
+ * an optional hand-over look into it would make one look of the whole exchange, longer than the
+ * approved hold, or a toss the partner can no longer meet (critic r3); the partner's question
+ * turns this presenter anyway (its toss-meet).
+ */
+function tossBack(ctx) {
+  if (typeof ctx.contextAt !== 'function') return false;
+  let n = null;
+  try {
+    n = ctx.contextAt(ctx.index + 1);
+  } catch {
+    n = null;
+  }
+  return !!(n && n.valid && n.duo && n.type === 'chat' && n.duration < RULES.shortLine && isToss(n));
+}
+
 /** Shot (legacy name) planned at time t, or null when the camera plan is unknown. */
 function shotAt(ctx, t) {
   const shots = ctx.shots;
@@ -350,9 +371,16 @@ function planDuo(ctx, style, r, plan, rr) {
     // met a toss and still looking: the reply look carries that look on (one look through the
     // hand-over, the whole of it within the approved glance's hold), never a second turn
     const run = plan.running(speaker);
-    if (run) dur = Math.max(0.7, Math.min(dur, RULES.glanceHold[1] - 0.4 + run.at - at));
+    if (run) {
+      const origin = run.origin ?? run.at;
+      dur = Math.min(dur, RULES.glanceHold[1] - 0.4 + origin - at);
+      // the carried look already took most of the hold: at most 0.7 s more, the whole within the
+      // exchange (a look carried through a short line's toss), and none when it still runs anyway
+      if (dur < 0.7) dur = Math.min(0.7, RULES.exchangeMax + origin - at);
+      if (at + dur <= run.at + run.dur + 0.05) dur = 0;
+    }
     // a look of its own a moment ago (the dry-line glance, the notes before its turn): no second one
-    if (run || plan.lastEnd(speaker) + RULES.lookGap <= at) plan.add(speaker, at, dur, 'partner', { why: run ? 'reply-cont' : 'reply' });
+    if (run ? dur > 0.2 : plan.lastEnd(speaker) + RULES.lookGap <= at) plan.add(speaker, at, dur, 'partner', run ? { why: 'reply-cont', origin: run.origin ?? run.at } : { why: 'reply' });
   } else if (cueAt !== null && cueAt < D - 2.5 && D > 3) {
     // the writer's look_partner cue for the speaker: one brief look where it was written
     const at = Math.max(0, cueAt - 0.15);
@@ -376,7 +404,7 @@ function planDuo(ctx, style, r, plan, rr) {
       // banter: the reply look is the one look (merging it with the toss read as a stare
       // across the whole line); the partner's answer opens with its own look
     } else if (plan.fits(speaker, at, end - at)) plan.add(speaker, at, end - at, 'partner', { why: 'toss' });
-  } else if (ctx.handover && (ctx.type === 'chat' || nextSeg?.type === 'chat') && D > 2.5 && r() < 0.5) {
+  } else if (ctx.handover && (ctx.type === 'chat' || nextSeg?.type === 'chat') && D > 2.5 && r() < 0.5 && !tossBack(ctx)) {
     // the hand-over look runs on into the partner's first words like a toss (critic r2: ending
     // 0.3 s into the gap, it made the head come back to the lens and turn again at the partner's
     // turn); the next segment carries it on as its 'cont' look and keeps the whole within the hold
@@ -422,9 +450,10 @@ function planDuo(ctx, style, r, plan, rr) {
         // through the hand-over whose whole stays within the approved hold (never back to the lens
         // for half a second and round again: critic r2)
         const whole = robot ? between(r, RULES.robotHold) : Math.min(dur, RULES.glanceHold[1]);
-        let end = Math.max(RULES.contMin, whole + run.at);
+        const origin = run.origin ?? run.at;
+        let end = Math.max(RULES.contMin, whole + origin);
         end = Math.min(end, RULES.backBy - EYES_BACK, D - EYES_BACK, short ? RULES.shortShare * D : Infinity);
-        if (end > 0.3) glance = plan.add(slot, 0, end, 'partner', { why: 'cont' });
+        if (end > 0.3) glance = plan.add(slot, 0, end, 'partner', { why: 'cont', origin });
         // answered in banter on the wide: now and then the held look takes the answer with interest
         if (glance && ctx.type === 'chat' && !ctx.grave && !robot && !speakerRobot && !(style.dry && ctx.dryLine) && style.interestP && r() < style.interestP * 0.6) glance.style = 'interest';
       } else if (vary === 'notes') {
@@ -454,9 +483,13 @@ function planDuo(ctx, style, r, plan, rr) {
       if (d1 - d0 >= 0.7) {
         if (glance && d0 < glance.at + glance.dur + RULES.lookGap) {
           // close to the turn-start glance: one look that covers both, still back before the line ends
-          const end = Math.min(Math.max(glance.at + glance.dur, d0 + 0.7), d1, glance.at + cap);
-          glance.dur = end - glance.at;
-          glance.why = glance.why === 'cont' ? 'cont+dry' : 'turn+dry';
+          // (a carried look keeps its whole within the approved hold: then the carried look is the one)
+          const whole = glance.why === 'cont' ? (glance.origin ?? 0) + RULES.glanceHold[1] : Infinity;
+          const end = Math.min(Math.max(glance.at + glance.dur, d0 + 0.7), d1, glance.at + cap, whole);
+          if (end > glance.at + glance.dur) {
+            glance.dur = end - glance.at;
+            glance.why = glance.why === 'cont' ? 'cont+dry' : 'turn+dry';
+          }
         } else {
           // one look per segment (tech-bytes.md §4 item 6): the dry-line glance replaces the turn's
           if (glance) {
@@ -475,21 +508,25 @@ function planDuo(ctx, style, r, plan, rr) {
       const m0 = Math.max(tossLook.at, D - 1.4) + 0.12 + r() * 0.13;
       const mEnd = D + gap + 0.6;
       const prev = plan.list(slot).filter((l) => l.target === 'partner').pop();
-      if (prev && m0 < prev.at + prev.dur + RULES.lookGap) {
+      if (short) {
+        // a short chat line that hands over (critic r3 blocker): the glance at its start, cut to
+        // 60 % of the line, was a head flick that ended just as the speaker's toss look began, so
+        // the two heads passed each other and the answer went to the lens. ONE look instead: the
+        // partner meets the toss (and keeps it into its answer, where its reply look carries it on)
+        meetShort(plan, slot, prev, m0, mEnd, D, robot, meetStyle);
+      } else if (prev && m0 < prev.at + prev.dur + RULES.lookGap) {
         // merge with the earlier glance when the turn is short enough for one look
         const merged = D - prev.at;
-        if (short) {
-          // a short chat line: no second look and no merge into a stare; the glance at its
-          // start was the look (the toss is met as the partner's own answer opens with a look)
-        } else if (merged <= cap) {
+        if (merged <= cap) {
           prev.dur = mEnd - prev.at;
           prev.why += '+toss';
           if (meetStyle.style && D <= 3.5 && !prev.style) prev.style = meetStyle.style; // a short question: the brows go up as the look meets it
         } else {
-          // keep both apart: shorten the earlier glance (≥ 1.2 s) and meet the toss later
+          // keep both apart: shorten the earlier glance (≥ 1.6 s: a shorter one with the full head
+          // turn reads as a flick, critic r3) and meet the toss later
           const room = Math.min(m0 - RULES.lookGap - 0.01 - prev.at, cap - (D - m0) - 0.05);
-          if (room >= 1.2) {
-            prev.dur = room;
+          if (room >= RULES.minFull) {
+            prev.dur = Math.min(prev.dur, room);
             plan.add(slot, m0, mEnd - m0, 'partner', { why: 'toss-meet', ...meetStyle });
           } else {
             // one look again, starting late enough to respect the cap
@@ -500,6 +537,11 @@ function planDuo(ctx, style, r, plan, rr) {
         }
       } else if (plan.fits(slot, m0, 0.1, RULES.lookGap)) {
         plan.add(slot, m0, mEnd - m0, 'partner', { why: 'toss-meet', ...meetStyle });
+      } else {
+        // the previous segment's look ended less than 2 s before the toss: meet it as soon as the
+        // spacing allows, while the speaker still looks (never a missed toss)
+        const at = plan.lastEnd(slot) + RULES.lookGap + 0.01;
+        if (at < D - 0.2 && plan.fits(slot, at, mEnd - at)) plan.add(slot, at, mEnd - at, 'partner', { why: 'toss-meet', ...meetStyle });
       }
     }
     trimGaze(plan, slot, D, short ? Math.min(cap, RULES.shortShare * D) : cap);
@@ -535,6 +577,30 @@ function planDuo(ctx, style, r, plan, rr) {
     const at = D + 0.05 + r() * 0.15;
     const dur = Math.min(RULES.notes[1], gap - 0.3 - EYES_BACK + 0.05);
     if (dur >= RULES.notes[0] && plan.fits(speaker, at, dur)) plan.add(speaker, at, dur, 'notes', { why: 'gap' });
+  }
+  eyeLed(ctx, plan);
+}
+
+/**
+ * Short looks are eye-led (critic r3: a 0.5-1.0 s partner look with the full 0.4 rad head turn,
+ * in over 0.38 s and back over 0.42 s, read as a twitchy double-take): a partner look whose merged
+ * span (with the slot's overlapping partner looks, the previous segment's included) is shorter than
+ * RULES.sideBelow becomes a sidelong look (style 'side': the eyes go, the head turns 40 %).
+ * behaviour.js applyLook scales the head by the look's length on top, as a safety net.
+ */
+function eyeLed(ctx, plan) {
+  for (const [slot, list] of Object.entries(plan.looks)) {
+    if (ROBOT.has(ctx.cast[slot])) continue; // UNIT-8's look is its own (mechanical, 1 px)
+    const ghosts = plan.ghosts[slot] || [];
+    for (const l of list) {
+      if (l.target !== 'partner' || l.style === 'side') continue;
+      let a = l.at, b = l.at + l.dur;
+      for (let pass = 0; pass < 2; pass++) {
+        for (const o of list) if (o !== l && o.target === 'partner' && o.at <= b + 0.05 && o.at + o.dur >= a - 0.05) (a = Math.min(a, o.at)), (b = Math.max(b, o.at + o.dur));
+        for (const o of ghosts) if (o.target === 'partner' && o.at <= b + 0.05 && o.at + o.dur >= a - 0.05) (a = Math.min(a, o.at)), (b = Math.max(b, o.at + o.dur));
+      }
+      if (b - a < RULES.sideBelow) l.style = 'side';
+    }
   }
 }
 
@@ -591,9 +657,51 @@ function varietyPlan(ep, cast, kinds) {
   return out;
 }
 
-/** Gaze at the speaker within the turn ≤ cap: trim the latest partner look's in-turn part. */
+/**
+ * A short chat line that hands over (critic r3 blocker): the listener's ONE look meets the
+ * speaker's toss look. The glance at the line's start goes (cut to 60 % of a ~2 s line it ended
+ * as the toss began: the heads crossed and the toss was never met); a look the listener carries on
+ * from its own hand-over ('cont') runs on through the toss when the whole stays within
+ * RULES.exchangeMax (one look through a quick exchange); otherwise the meet starts just after the
+ * toss look, or as soon as the 2 s between two looks allows, while the speaker still looks.
+ */
+function meetShort(plan, slot, prev, m0, mEnd, D, robot, meetStyle) {
+  const list = plan.list(slot);
+  const run = plan.running(slot);
+  const carried = prev && /^cont/.test(prev.why) ? prev : null;
+  if (carried) {
+    const start = carried.origin ?? (run ? Math.min(run.at, carried.at) : carried.at);
+    if (mEnd - start <= RULES.exchangeMax) {
+      carried.dur = mEnd - carried.at;
+      carried.why += '+toss';
+      carried.keep = true; // the exchange: not trimmed to 60 % of the line
+      return;
+    }
+  }
+  if (prev) list.splice(list.indexOf(prev), 1);
+  let at = m0;
+  if (!plan.fits(slot, at, mEnd - at)) at = Math.max(at, plan.lastEnd(slot) + RULES.lookGap + 0.01);
+  if (at < D - 0.15 && plan.fits(slot, at, mEnd - at)) {
+    plan.add(slot, at, mEnd - at, 'partner', { why: 'toss-meet', ...(robot ? {} : meetStyle) });
+    return;
+  }
+  // no room for a separate meet (the carried look ended a moment ago): the carried look runs on
+  // as far as the exchange allows, so the toss is still met
+  if (carried) {
+    const start = carried.origin ?? (run ? Math.min(run.at, carried.at) : carried.at);
+    const end = Math.min(mEnd, start + RULES.exchangeMax);
+    if (end > D - 0.6) {
+      carried.dur = end - carried.at;
+      carried.why += '+toss';
+      carried.keep = true;
+      list.push(carried);
+    } else list.push(carried); // keep the carried look as it was
+  }
+}
+
+/** Gaze at the speaker within the turn ≤ cap: trim the latest partner look's in-turn part (an exchange look is kept). */
 function trimGaze(plan, slot, D, cap) {
-  const looks = plan.list(slot).filter((l) => l.target === 'partner');
+  const looks = plan.list(slot).filter((l) => l.target === 'partner' && !l.keep);
   let total = 0;
   for (const l of looks) total += Math.max(0, Math.min(D, l.at + l.dur) - l.at);
   if (total <= cap + 1e-6) return;

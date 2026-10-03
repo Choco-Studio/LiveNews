@@ -1,7 +1,8 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { config, ROOT } from './config.js';
+import { config, configWarnings, ROOT } from './config.js';
+import { findPlaces } from './gazetteer.js';
 import { NewsDesk } from './news.js';
 import { ImageCache } from './images.js';
 import { createProviders, ProviderChain } from './providers/index.js';
@@ -44,6 +45,8 @@ function serveStatic(req, res, pathname) {
   } catch {
     return sendJson(res, 400, { error: 'bad request' });
   }
+  // a NUL in a path is a client's mistake (or a probe), never a file: 400, not a 500 with a stack trace
+  if (rel.includes('\0')) return sendJson(res, 400, { error: 'bad request' });
   const file = path.resolve(PUBLIC, rel);
   if (!file.startsWith(PUBLIC + path.sep)) return sendJson(res, 403, { error: 'forbidden' });
   fs.readFile(file, (err, body) => {
@@ -107,7 +110,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/events') return serveEvents(req, res);
     if (req.method === 'GET' && url.pathname === '/api/status') {
-      return sendJson(res, 200, { ...station.status(), usage: usage.summary(), schedule: station.schedule() });
+      // provider usage (calls, tokens, the last provider error) is for the operator, from where dev views are allowed
+      return sendJson(res, 200, { ...station.status(), ...(devAllowed(req) ? { usage: usage.summary() } : {}), schedule: station.schedule() });
     }
     if (req.method === 'GET' && url.pathname === '/api/channel') return sendJson(res, 200, station.publicChannel());
     if (req.method === 'GET' && url.pathname === '/api/schedule') return sendJson(res, 200, station.schedule());
@@ -143,12 +147,20 @@ async function loop() {
   await station.fill();
 }
 
+// A 24/7 daemon logs what slipped through and keeps serving: one unexpected rejection or throw in a background
+// path (a refresh, a fill, a voice job) must not take the channel off the air.
+process.on('unhandledRejection', (err) => console.error('[server] unhandled rejection:', err));
+process.on('uncaughtException', (err) => console.error('[server] uncaught exception:', err));
+for (const w of configWarnings) console.warn(`[config] ${w}`);
+// The gazetteer builds its place index on first use (about a second): done before the first request and refresh.
+findPlaces('Warm-up in London');
+
 server.listen(config.port, config.host, () => {
   console.log(`📺 ${station.publicChannel().name} on air at http://${config.host}:${config.port}`);
   // The mock writes but never reviews: say so rather than promise an editor that is not there.
   const editor = chain.providers.some((p) => p.reviews !== false);
   const review = !config.reviewPass ? '' : editor ? ' (with editorial review pass)' : ' (review pass: no AI editor configured)';
   console.log(`   AI providers: ${config.providers.join(' → ')}${review}`);
-  loop();
+  loop().catch((e) => console.error(e));
   setInterval(() => loop().catch((e) => console.error(e)), 60_000);
 });

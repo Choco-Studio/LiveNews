@@ -335,10 +335,12 @@ describe('normalizeBulletin: field validation', () => {
     assert.equal(titleOf('Coffee futures reach a ten-year high after poor harvests'), 'Coffee futures reach a ten-year high', 'a cut that fits keeps its articles');
     assert.equal(titleOf('Kerala floods: thousands moved to relief camps as heavy rain continues'), 'Kerala floods: thousands in relief camps');
     assert.equal(titleOf('Data centre near Reykjavik runs on wind and geothermal power'), 'Reykjavik data centre runs on wind and geothermal power', 'no clean cut, over the strap\'s 56: headline-ese brings it under');
-    assert.equal(titleOf('Peru archaeologists uncover a 3,000-year-old temple in the Andes'), 'Peru archaeologists uncover a 3,000-year-old temple', 'no articles dropped when it still does not fit');
+    // (fix r2, critic: straps still ran long) nothing else fits: the last squeeze drops the articles and says it in headline-ese
+    assert.equal(titleOf('Peru archaeologists uncover a 3,000-year-old temple in the Andes'), 'Peru archaeologists find 3,000-year-old temple');
     assert.equal(titleOf('BREAKING: Panama Canal reopens after a day-long closure'), 'Panama Canal reopens after a day-long closure', 'no BREAKING marker on the strap');
     assert.equal(titleOf('Climate talks in Nairobi – live'), 'Climate talks in Nairobi');
-    assert.equal(titleOf('Smartphone battery breakthrough promises a week of use'), 'Smartphone battery breakthrough promises a week of use', '"a week" keeps its article');
+    assert.equal(titleOf('Smartphone battery breakthrough promises a week of use'), 'Smartphone battery promises a week of use', '"a week" keeps its article; the hype noun goes last of all');
+    assert.equal(titleOf('Cairo museum opens a new wing for ancient wooden boats'), 'Cairo museum opens wing for ancient boats', 'the least informative modifiers go first');
   });
 
   test('a programme may set a tighter headline limit (headlineMax)', () => {

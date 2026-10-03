@@ -27,7 +27,7 @@ import { clamp } from '../space.js';
 import { headHW } from '../head.js';
 import { GROUPS } from '../character.js';
 import { registerOutfit, torsoFrame } from './outfit.js';
-import { rimMat, rimTopRight } from './kit-a.js';
+import { rimMat } from './kit-a.js';
 
 export const LOOK = GROUPS.look ?? 40; // first look-owned group id
 export const tier = (s) => (s < 1.35 ? 0 : s < 2.2 ? 1 : 2);
@@ -420,14 +420,33 @@ function drape(o, mat, group, t, soft = 0) {
   }
 }
 
-/** A continuous 1 px silver rim along the screen-right shoulder of group gJ (the resolve rim is dotted there). */
+/**
+ * A continuous 1 px silver rim along the screen-right shoulder of group gJ. Every pixel of the
+ * group with nothing above it or nothing to its right gets the rim, inside the shoulder span, so
+ * the line stays unbroken down the steep steps of a sloping shoulder (a column-top rim leaves
+ * dashes there). Nothing in front (hair, head, collar) means no rim: occluders keep it off.
+ */
 function shoulderRim(o, T, gJ) {
   if (o.s < 1.35) return;
+  const { buf } = o;
   const [ax] = o.toS(T.neckHW + 1.5, 0);
   const [bx] = o.toS(T.shoulderHW + 1, 0);
   const [, ty] = o.toS(0, -3);
-  const [, by] = o.toS(0, T.shoulderTop + 8);
-  rimTopRight(o.buf, gJ, ax, bx, ty, by, rimMat(P.silver), Math.max(2, Math.round(o.s * 1.6)));
+  const [, by] = o.toS(0, T.shoulderTop + 6.5);
+  const w = buf.w, M = buf.mat, Gr = buf.grp;
+  const x0 = Math.max(1, Math.round(ax)), x1 = Math.min(w - 2, Math.round(bx));
+  const y0 = Math.max(1, Math.round(ty)), y1 = Math.min(buf.h - 2, Math.round(by));
+  const rim = rimMat(P.silver);
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const i = y * w + x;
+      if (!M[i] || Gr[i] !== gJ || M[i] === rim) continue;
+      if (!M[i - w] || !M[i + 1]) {
+        M[i] = rim;
+        buf.tone[i] = 0;
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -671,44 +690,34 @@ function drawChain(o, [hi, lo], t) {
 }
 
 // ---------------------------------------------------------------------------
-// UNIT-8: neck column, graphite shell, articulated shoulder caps, the plain chest plate
-
-/** Plate (body units) as a polygon with the torso's shoulder lift: 45° chamfered corners rt (top) / rb (bottom). */
-function roundedPlate(o, lift, x0, x1t, x1b, y0, y1, rt, rb) {
-  const out = [];
-  const arc = (cx, cy, r, a0, a1) => {
-    for (let k = 0; k <= 1; k++) {
-      const a = a0 + (a1 - a0) * k;
-      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
-      out.push(...o.toS(x, lift(x < 0 ? -1 : 1, y)));
-    }
-  };
-  const P2 = Math.PI / 2;
-  arc(-x1t + rt, y0 + rt, rt, Math.PI, Math.PI + P2); // top left
-  arc(x1t - rt, y0 + rt, rt, -P2, 0); // top right
-  arc(x1b - rb, y1 - rb, rb, 0, P2); // bottom right
-  arc(-x1b + rb, y1 - rb, rb, P2, Math.PI); // bottom left
-  return out;
-}
+// UNIT-8: the turret collar (pan bearing), graphite shell, articulated shoulder caps, the chest panel
 
 function chassis(o) {
   const { buf, L, m, s, gb, G, clip } = o;
   const F = torsoFrame(o);
   const { T, lift, outline } = F;
   const t = tier(s);
-  const nk = T.neckHW;
   const c0 = o.toS(0, 0);
-  // ---- neck column: a machined cylinder with two grooves (rings), lit on the key side
+  // ---- the turret collar: a short broad drum under the pod (62 % of its width) that flares into a
+  // flange on the shell; lit on the key side; the bearing gap under the head is in its shadow
   buf.part(gb + LOOK + 5, 5, clip);
-  const neckHW = L.neck.hw;
-  const col = bodyPoly(o, lift, [[-neckHW, -6.2], [neckHW, -6.2], [neckHW + 0.3, 0.5], [-neckHW - 0.3, 0.5]]);
-  const g1 = o.toS(0, -4.2)[1], g2 = o.toS(0, -2.0)[1];
-  buf.poly(col, m.joint, (x, y) => {
+  const hw = L.neck.hw;
+  const headBot = L.headAt[1] + L.head.chinY; // body units
+  const fl = hw + 1.0;
+  const col = bodyPoly(o, lift, [
+    [-hw, headBot - 0.6], [hw, headBot - 0.6], [hw, -1.5], [fl, -0.4], [fl, 0.9], [-fl, 0.9], [-fl, -0.4], [-hw, -1.5],
+  ]);
+  const gapY = o.toS(0, headBot + 0.55)[1], grooveY = o.toS(0, headBot + 2.5)[1], flY = o.toS(0, -1.5)[1];
+  const mc = m.collar;
+  buf.poly(col, mc, (x, y) => {
     const yy = y + 0.5;
-    if (t >= 1 && (Math.abs(yy - g1) < 0.5 || Math.abs(yy - g2) < 0.5)) return 3;
-    if (t === 2 && (Math.abs(yy - g1 - 1) < 0.5 || Math.abs(yy - g2 - 1) < 0.5) && x + 0.5 < c0[0]) return 0; // the ring's lit lower lip
-    const nx = (x + 0.5 - c0[0]) / (neckHW * s);
-    return nx < -0.5 ? 0 : nx < 0.35 ? 1 : 2;
+    const nx = (x + 0.5 - c0[0]) / ((yy > flY ? fl : hw) * s);
+    if (t === 0) return nx < -0.15 ? 1 : 2; // the wide: two tones, no detail
+    if (yy < gapY) return 3; // the bearing gap: the pod's shadow
+    if (Math.abs(yy - grooveY) < 0.5) return 3;
+    if (t === 2 && Math.abs(yy - grooveY - 1) < 0.5 && nx < 0.2) return 0; // the groove's lit lower lip
+    if (yy > flY && yy < flY + 1 && nx < 0.3) return 0; // the flange's top edge catches the key
+    return nx < -0.55 ? 0 : nx < 0.38 ? 1 : nx < 0.8 ? 2 : 3;
   });
   // ---- shell: graphite, lit strip on the key side, the far third in shade
   buf.part(gb + G.jacket, 8, clip);
@@ -716,6 +725,24 @@ function chassis(o) {
   for (const [x, y] of outline) body.push(x, y);
   buf.poly(body, m.jacket, clothTone(o, { litEdge: -0.78, shadeEdge: 0.5, deepEdge: 0.86 }));
   const gJ = gb + G.jacket;
+  if (t >= 1) {
+    // the chest panel: the upper chest is one plate whose lower seam runs across the shell from
+    // flank to flank, bowing down a little at the centre (it follows the shell's curve; no U-shaped
+    // plate outline); the plate's lower edge catches the key as the 1 px silver seam on the lit side
+    // (cosmos.md: a plain plate with a 1 px silver seam, no lights, no meter)
+    const sw = T.sideHW + 1;
+    const seam = [];
+    for (let i = 0; i <= 12; i++) {
+      const x = -sw + (2 * sw * i) / 12;
+      const k = x / sw;
+      seam.push([x, 15.2 + 0.9 * (1 - k * k)]);
+    }
+    bodyPaint(o, seam, m.jacket, 3, gJ);
+    const hiSeam = decal(P.silver);
+    const lit = [];
+    for (const [x, y] of seam) if (x > -T.sideHW * 0.8 && x < -T.sideHW * 0.08) lit.push([x, y - 1 / s]);
+    bodyPaint(o, lit, hiSeam, 1, gJ);
+  }
   if (t === 2) {
     // abdomen (close-ups): two flexible segments under the chest, a dark seam with its lower lip lit
     // on the key side, stopping short of the flanks so they never read as stripes
@@ -724,30 +751,6 @@ function chassis(o) {
       bodyPaint(o, [[-T.sideHW * 0.72, y + 1 / s], [-T.sideHW * 0.25, y + 1 / s]], m.jacket, 0, gJ);
     }
   }
-  // collar ring where the neck meets the shell: a flat steel ring, lit on its upper-left
-  buf.part(gb + LOOK + 6, 9, clip);
-  const ring = bodyPoly(o, lift, [[-(nk + 1.3), -1.5], [nk + 1.3, -1.5], [nk + 1.8, 0.4], [nk * 0.7, 1.7], [-nk * 0.7, 1.7], [-(nk + 1.8), 0.4]]);
-  const ry = o.toS(0, -1.5)[1];
-  buf.poly(ring, m.plate, (x, y) => {
-    if (t >= 1 && y + 0.5 - ry < 1 && x + 0.5 < c0[0] + nk * 0.3 * s) return 0;
-    return x + 0.5 < c0[0] - nk * 0.5 * s ? 1 : x + 0.5 < c0[0] + nk * 0.6 * s ? 2 : 3;
-  });
-  // ---- the chest plate: plain, raised, a 1 px silver seam along its top (cosmos.md: no lights, no meter)
-  buf.part(gb + LOOK + 4, 9, clip);
-  const top = 5.4, bot = 19.6, hwT = 8.6, hwB = 7.2;
-  const plate = roundedPlate(o, lift, 0, hwT, hwB, top, bot, 1.6, 2.6);
-  const pc = o.toS(0, (top + bot) / 2);
-  buf.poly(plate, m.plate, (x) => {
-    const nx = (x + 0.5 - pc[0]) / (hwT * s);
-    return nx < -0.84 ? 0 : nx < 0.62 ? 1 : 2;
-  });
-  if (t >= 1) {
-    const seam = decal(P.silver);
-    const gP = gb + LOOK + 4;
-    const a = o.toS(-hwT + 1.6, lift(-1, top)), b = o.toS(hwT - 1.6, lift(1, top));
-    const y = Math.round(a[1]) + 1;
-    for (let x = Math.round(a[0]) + 1; x < Math.round(b[0]); x++) buf.paint(x, y, seam, 1, gP);
-  }
   // ---- shoulder caps: articulated plates over each shoulder joint (a 1 px edge on the shell),
   // lit along the top on the key side, a pivot fastener at close-up
   if (t >= 1) {
@@ -755,9 +758,9 @@ function chassis(o) {
     const gC = gb + LOOK + 7;
     for (const side of [-1, 1]) {
       const cap = bodyPoly(o, lift, [
-        [side * (T.shoulderHW * 0.58), T.shoulderTop * 0.5], [side * (T.shoulderHW * 0.84), T.shoulderTop - 0.1], [side * (T.shoulderHW * 0.97), T.shoulderTop + 1.6],
+        [side * (T.shoulderHW * 0.6), T.shoulderTop * 0.5], [side * (T.shoulderHW * 0.84), T.shoulderTop - 0.1], [side * (T.shoulderHW * 0.97), T.shoulderTop + 1.6],
         [side * (T.shoulderHW * 1.01), T.shoulderTop + 4.4], [side * (T.shoulderHW * 0.97), T.shoulderTop + 7.0], [side * (T.shoulderHW * 0.8), T.shoulderTop + 6.0],
-        [side * (T.shoulderHW * 0.62), T.shoulderTop + 3.0],
+        [side * (T.shoulderHW * 0.64), T.shoulderTop + 3.0],
       ]);
       const ct = o.toS(0, T.shoulderTop)[1];
       buf.poly(cap, m.jacket, (x, y) => {

@@ -10,11 +10,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NewsDesk } from '../server/news.js';
-import { Producer } from '../server/producer.js';
+import { Producer, SOURCE_MAX, sourceWithCredit } from '../server/producer.js';
 import { Station } from '../server/station.js';
 import { ProviderChain } from '../server/providers/index.js';
 import { createMockProvider } from '../server/providers/mock.js';
 import { loadChannel } from '../server/channel.js';
+import { onBeat } from '../server/topics.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const silent = { info() {}, warn() {}, error() {} };
@@ -76,6 +77,29 @@ test('offline: four rotations, every slot produced with at least its floor, no r
   const heads = (e) => e.rundown.map((r) => r.headline).join('|');
   const same = channel.rotation.filter((_, i) => heads(episodes[i]) === heads(episodes[i + channel.rotation.length])).length;
   assert.ok(same <= 1, `${same} programmes repeated their running order one rotation later`);
+
+  // (fix r2) 24/7 variety: no presenter line (chat, button, signpost) airs twice in four rotations
+  const lines = new Map();
+  for (const [n, e] of episodes.entries())
+    for (const seg of e.segments.filter((x) => x.type === 'chat'))
+      for (const line of seg.text.split(/(?<=[.!?])\s+/).filter(Boolean)) {
+        assert.ok(!lines.has(line), `"${line}" aired in episodes ${lines.get(line) + 1} and ${n + 1}`);
+        lines.set(line, n);
+      }
+  // (fix r2) two outlets' reports of one event never air within six slots of each other (no "second year" then
+  // "third year" of the same reef in back-to-back programmes)
+  const aired = [];
+  for (const [n, e] of episodes.entries())
+    for (const id of e.storyIds) {
+      const s = desk.get(id);
+      for (const o of aired) if (n - o.n <= 6 && o.s.id !== id && desk.sameStory(o.s, s)) assert.fail(`same event within ${n - o.n} slots: ${o.s.title} // ${s.title}`);
+      aired.push({ n, s });
+    }
+  // (fix r2) NEWS IN 60 puts a picture on every item while the desk holds pictured stories (it always does offline)
+  for (const e of episodes.filter((x) => x.program.id === 'news-60')) assert.ok(e.segments.filter((x) => x.type === 'story').every((x) => x.hasImage), `${e.id}: an item without a picture`);
+  // (fix r2) programme beats hold on re-runs too: TECH BYTES takes science only on its tech-adjacent topics
+  for (const e of episodes.filter((x) => channel.programs[x.program.id].beat))
+    for (const id of e.storyIds) assert.ok(onBeat(desk.get(id), channel.programs[e.program.id].beat), `${e.program.title}: ${desk.get(id).title} is off its beat`);
 });
 
 test('recycle: oldest first, never a story of the last `gap` episodes, and a re-run is not breaking news', () => {
@@ -130,7 +154,10 @@ test('every picture on air carries a credit; a picture that is not the outlet’
       assert.ok(['media:credit', 'jsonld', 'site_name', 'outlet'].includes(item.imageCreditVia), item.imageCreditVia);
       if (item.imageCredit !== item.outlet) {
         lent++;
-        assert.equal(item.source, `${item.outlet} / Photo: ${item.imageCredit}`);
+        // (fix r2) the stop-gap fits the source plate whole (the credit's first part when the whole one does not)
+        assert.equal(item.source, sourceWithCredit(item.outlet, item.imageCredit));
+        assert.ok(item.source.length <= SOURCE_MAX, item.source);
+        assert.match(item.imageCreditLine || '', /^PHOTO: /);
       } else assert.equal(item.source, item.outlet);
     }
   }

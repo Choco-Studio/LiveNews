@@ -80,12 +80,15 @@ export function motif(tonic, colour, beat = 0, { scale = 1, colourBeats = 1.5, o
 
 // Lead voices: each programme carries the motif on its own instrument.
 const LEAD = {
-  softPulse: { wave: 'pulse25', preset: 'pulse25', a: 0.022, vib: [10, 5.2, 0.35], cutoff: 6000 }, // the channel, generic
-  darkPulse: { wave: 'pulse25', preset: 'pulse25', a: 0.015, cutoff: 4000 }, // NEWS IN 60
-  glass: { wave: 'pulse12', preset: 'pulse12', a: 0.006, d: 0.3, s: 0.45, r: 0.2, cutoff: 4500, fenv: [2, 0.12] }, // ident, promo
-  techPluck: { wave: 'pulse12', preset: 'pluck', a: 0.003, d: 0.32, s: 0.32, r: 0.14, cutoff: 3200, fenv: [2.4, 0.09] }, // TECH BYTES
-  epiano: { wave: 'pulse50', preset: 'keys', a: 0.005, d: 0.6, s: 0.3, r: 0.22, cutoff: 3000, fenv: [1.8, 0.18] }, // MONEY MINUTE
+  softPulse: { wave: 'pulse25', preset: 'pulse25', a: 0.022, vib: [10, 5.2, 0.35], cutoff: 2700, fenv: [3, 0.1] }, // the channel, generic
+  darkPulse: { wave: 'pulse25', preset: 'pulse25', a: 0.015, cutoff: 3300, fenv: [2.4, 0.1] }, // NEWS IN 60
+  glass: { wave: 'pulse12', preset: 'pulse12', a: 0.006, d: 0.3, s: 0.45, r: 0.2, cutoff: 2700, fenv: [3.4, 0.07] }, // ident, promo
+  techPluck: { wave: 'pulse12', preset: 'pluck', a: 0.003, d: 0.32, s: 0.32, r: 0.14, cutoff: 3300, fenv: [3, 0.07] }, // TECH BYTES
+  epiano: { wave: 'pulse50', preset: 'keys', a: 0.005, d: 0.6, s: 0.3, r: 0.22, cutoff: 3200, fenv: [2.6, 0.12] }, // MONEY MINUTE
   tick: { wave: 'pulse25', preset: 'pluck', a: 0.003, d: 0.08, s: 0, r: 0.05, cutoff: 1800, fenv: false },
+  halo: { wave: 'pulse12', preset: 'pulse12', a: 0.03, d: 0.4, s: 0.5, r: 0.3, vib: [8, 4.8, 0.3], cutoff: 5000, fenv: [2, 0.2] }, // COSMOS shimmer above the triangle
+  horn: { wave: 'pulse25', preset: 'brass', cutoff: 3400, fenv: [3, 0.16] }, // the brass octave that carries the melody
+  strings: { wave: 'pulse12', preset: 'pad', a: 0.12, d: 0.6, s: 0.85, r: 0.5, vib: [10, 5.2, 0.25], legato: 1, cutoff: 6500 }, // high strings on WORLD NOW's hit
 };
 
 // The button on the cut: a short low-mid stab over the felt thump, so the
@@ -120,15 +123,16 @@ const OPENS = {
           // Low brass for weight, the octave above carries the melody (it is
           // what laptop and phone speakers reproduce).
           { kind: 'lead', inst: 'brass', notes: part(lead, total), gain: 0.85 },
-          { kind: 'lead', inst: 'brass', notes: part([...motif(k, COLOURS.home, m0, { vel: 0.85 }), [H, [k - 3, k + 2, k + 4], total - H, 0.62]], total), gain: 0.85, pan: 0.18, echo: 0.3 },
+          { kind: 'lead', inst: LEAD.horn, notes: part([...motif(k, COLOURS.home, m0, { vel: 0.85 }), [H, [k - 3, k + 2, k + 4], total - H, 0.62]], total), gain: 0.85, pan: 0.18, echo: 0.3 },
+          { kind: 'harmony', inst: LEAD.strings, notes: part([[m0 + 2.5, [k + 9, k + 14], 1.5, 0.45], [H, [k + 12, k + 16, k + 21], total - H, 0.55]], total), gain: 0.55, pan: 0.3 },
           { kind: 'harmony', inst: 'pad', notes: part([
             [0, [k - 3, k, k + 4, k + 7], m0 + 1, 0.55], // Bm7 over the D pedal
             [m0 + 1, [k - 7, k - 3, k, k + 4], 1.5, 0.62], // Gmaj9
             [m0 + 2.5, [k - 5, k, k + 7], 1.5, 0.66], // open fifth: the colour decides
             [H, [k - 12, k - 5, k + 2, k + 4, k + 7], total - H, 0.8], // D add9
           ], total), pan: -0.2 },
-          { kind: 'bass', inst: 'timpani', notes: part([...roll, [m0, k - 24, 2.5, 0.65], [m0 + 2.5, k - 24, 1.5, 0.75], [H, k - 24, C - H], [C, k - 24, 1.5, 0.7]], total) },
-          { kind: 'bass', inst: 'tri', notes: part([[m0, k - 24, 2.4, 0.75], [m0 + 2.5, k - 24, 1.4, 0.8], [H, k - 24, total - H, 0.85]], total), gain: 0.6 },
+          { kind: 'bass', inst: 'timpani', notes: part([...roll, [m0, k - 24, 2.5, 0.65], [m0 + 2.5, k - 24, 1.5, 0.75], [H, k - 24, C - H], [C, k - 24, 1.5, 0.7]], total), gain: 0.75 },
+          { kind: 'bass', inst: 'tri', notes: part([[m0, k - 24, 2.4, 0.75], [m0 + 2.5, k - 24, 1.4, 0.8], [H, k - 24, total - H, 0.85]], total), gain: 0.42 },
           stab('brass', [k - 12, k - 5], C, total, 0.6, 0.8),
           { drums: drums([[H, 'F', 0.7], [C, 'F', 0.6]], total) },
           { drums: drums([[C, 'T', 0.4]], total) },
@@ -156,7 +160,7 @@ const OPENS = {
         echo: { amount: 1, beats: 0.75, feedback: 0.34 },
         fadeOut: 0.8,
         tracks: [
-          { kind: 'lead', inst: LEAD.techPluck, notes: part(motif(k - 12, COLOURS.tech, m0), total), gain: 1.1, echo: 0.45 },
+          { kind: 'lead', inst: LEAD.techPluck, notes: part(motif(k, COLOURS.tech, m0), total), gain: 1.1, echo: 0.45 },
           { kind: 'harmony', inst: { wave: 'pulse25', preset: 'pulse25', a: 0.004, d: 0.2, s: 0.35, r: 0.12, cutoff: 2600, vib: false }, notes: part(arp, total), gain: 0.45, pan: 0.3, echo: 0.55 },
           { kind: 'harmony', inst: 'pad', notes: part([
             [0, [k - 12, k - 9, k - 5, k - 2, k + 2], m0 + 1, 0.55], // Am9
@@ -164,7 +168,7 @@ const OPENS = {
             [m0 + 2.5, [k - 12, k - 5], 1.5, 0.6], // open fifth under the b7
             [H, [k - 12, k - 9, k - 3, k + 2, k - 5], total - H, 0.75], // Am6/9
           ], total), pan: -0.2 },
-          { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, m0 + 1], [m0 + 1, k - 31, 1.5, 0.9], [m0 + 2.5, k - 24, 1.5], [H, k - 24, total - H]], total) },
+          { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, m0 + 1], [m0 + 1, k - 31, 1.5, 0.9], [m0 + 2.5, k - 24, 1.5], [H, k - 24, total - H]], total), gain: 0.45 },
           stab('pluck', [k - 12, k - 5, k], C, total, 0.7),
           { drums: drums([[0, 'K', 0.5], [2, 'S', 0.3], [4, 'K', 0.45], [H, 'K', 0.65], [C, 'F', 0.55]], total) },
           { drums: drums([[C, 'T', 0.45]], total) },
@@ -189,15 +193,15 @@ const OPENS = {
         echo: { amount: 1.3, beats: 0.75, feedback: 0.45 },
         fadeOut: 1.2,
         tracks: [
-          { kind: 'lead', inst: 'softtri', notes: part(motif(k, COLOURS.cosmos, m0, { colourBeats: 1.5 }), total), gain: 1.1 },
-          { kind: 'lead', inst: 'sine', notes: part(motif(k + 12, COLOURS.cosmos, m0, { vel: 0.45 }), total), gain: 0.38, echo: 0.5, pan: -0.25 },
-          { kind: 'harmony', inst: 'bell', notes: part([[0, k + 19, 1, 0.34], [m0 + 2, k + 14, 1, 0.28], [m0 + 3, k + 18, 1, 0.3], [H, k + 19, 2, 0.32]], total), gain: 0.5, echo: 0.65, pan: 0.35 },
+          { kind: 'lead', inst: 'softtri', notes: part(motif(k, COLOURS.cosmos, m0, { colourBeats: 1.5 }), total), gain: 0.95 },
+          { kind: 'lead', inst: LEAD.halo, notes: part(motif(k + 12, COLOURS.cosmos, m0, { vel: 0.55 }), total), gain: 0.8, echo: 0.6, pan: -0.25 },
+          { kind: 'harmony', inst: 'bell', notes: part([[0, k + 19, 1, 0.4], [m0 + 2, k + 14, 1, 0.34], [m0 + 3, k + 18, 1, 0.36], [H, k + 19, 2, 0.45]], total), gain: 1.2, echo: 0.65, pan: 0.35 },
           { kind: 'harmony', inst: 'pad', notes: part([
             [0, [k - 12, k - 5, k - 1, k + 4], m0 + 2.5, 0.55], // Emaj7
             [m0 + 2.5, [k - 10, k - 6, k - 3, k + 2], 1.5, 0.6], // F#/E: the lydian II
             [H, [k - 12, k - 5, k - 1, k + 2, k + 6], total - H, 0.75], // Emaj9#11
           ], total), pan: 0.15 },
-          { kind: 'bass', inst: 'sine', notes: part([[0, k - 24, H, 0.75], [H, k - 24, total - H, 0.85]], total) },
+          { kind: 'bass', inst: 'sine', notes: part([[0, k - 24, H, 0.75], [H, k - 24, total - H, 0.85]], total), gain: 0.65 },
           stab('pluck', [k - 12, k - 5, k - 1], C, total, 0.6, 0.8),
           { drums: drums([[H, 'F', 0.5], [C, 'F', 0.45]], total) },
           { drums: drums([[C, 'T', 0.4]], total) },
@@ -237,7 +241,7 @@ const OPENS = {
           { kind: 'harmony', inst: 'keys', notes: part([
             [1.5, ch.fmaj9.slice(1), 0.4, 0.45], [3.5, ch.bbmaj9.slice(1), 0.4, 0.45], [5.5, ch.c6sus.slice(1), 0.4, 0.42], [H, ch.f69, 1.5, 0.5],
           ], total), pan: 0.25, echo: 0.2 },
-          { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, 2], [2, k - 27, 1.5], [3.5, k - 31, 1], [m0 + 2.5, k - 24, 1.5], [H, k - 24, total - H]], total) },
+          { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, 2], [2, k - 27, 1.5], [3.5, k - 31, 1], [m0 + 2.5, k - 24, 1.5], [H, k - 24, total - H]], total), gain: 0.55 },
           stab('keys', [k - 12, ...ch.f69.slice(0, 3)], C, total, 0.7, 1),
           { drums: drums([...range(0, H, 0.5).map((b) => [b, 'H', 0.14]), [H, 'F', 0.7], [C, 'F', 0.55]], total) },
           { drums: drums([[C, 'T', 0.42]], total) },
@@ -272,7 +276,7 @@ const OPENS = {
             [H, [k - 12, k - 8, k - 5, k + 2], total - H, 0.62],
           ], total), pan: -0.18 },
           { kind: 'lead', inst: 'bell', notes: part([[H, [k, k + 4, k + 7, k + 14], total - H, 0.6]], total), gain: 0.5, echo: 0.3, pan: 0.15 },
-          { kind: 'bass', inst: { wave: 'tri', preset: 'tri', s: 0.4, d: 0.12 }, notes: part([...range(0, H, 1).map((b) => [b, k - 24, 0.4, 0.75]), [H, k - 24, total - H, 0.85]], total) },
+          { kind: 'bass', inst: { wave: 'tri', preset: 'tri', s: 0.4, d: 0.12 }, notes: part([...range(0, H, 1).map((b) => [b, k - 24, 0.4, 0.75]), [H, k - 24, total - H, 0.85]], total), gain: 0.7 },
           stab(LEAD.tick, [k - 12, k - 5], C, total, 0.75, 0.9),
           { drums: drums([[H, 'K', 0.6], [C, 'F', 0.55]], total) },
           { drums: drums([[C, 'T', 0.4]], total) },
@@ -298,14 +302,15 @@ const GENERIC = {
       echo: { amount: 0.7, beats: 0.75, feedback: 0.26 },
       fadeOut: 0.8,
       tracks: [
-        { kind: 'lead', inst: LEAD.softPulse, notes: part([...motif(k, COLOURS.home, m0), [H, k, total - H, 0.85]], total) },
+        { kind: 'lead', inst: { ...LEAD.softPulse, cutoff: 3400 }, notes: part([...motif(k, COLOURS.home, m0), [H, k, total - H, 0.85]], total) },
         { kind: 'harmony', inst: 'pad', notes: part([
           [0, [k - 8, k - 5, k + 2, k + 4], m0 + 1, 0.55], // Cadd9
           [m0 + 1, [k - 10, k - 7, k - 3, k + 4], 1.5, 0.6], // Dm9 over C
           [m0 + 2.5, [k - 7, k - 3, k, k + 4], 1.5, 0.62], // Fmaj7 over C
           [H, [k - 12, k - 3, k + 2, k + 4, k + 7], total - H, 0.75], // C6/9
         ], total) },
-        { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, H], [H, k - 24, total - H]], total) },
+        { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, H], [H, k - 24, total - H]], total), gain: 0.5 },
+        { kind: 'harmony', inst: 'bell', notes: part([[H, [k + 7, k + 14, k + 16], total - H, 0.45]], total), gain: 0.8, echo: 0.4, pan: 0.2 },
         stab('pluck', [k - 12, k - 5, k], C, total, 0.65),
         { drums: drums([[H, 'F', 0.65], [C, 'F', 0.55]], total) },
         { drums: drums([[C, 'T', 0.4]], total) },
@@ -332,8 +337,9 @@ export function themeFor(programId, { duration = 4 } = {}) {
   const tune = def.build.call({ tempo }, H, C);
   return {
     ...tune,
-    // Opens play at director volume 0.6 (+1 dB): the trim puts them level with the voice.
-    loudness: (tune.loudness ?? 0) - 1,
+    // Opens play at director volume 0.6 (+1 dB): the trim puts them level with
+    // the voice (-16 LUFS on air; the model reads opens ~0.6 LU low, measured).
+    loudness: (tune.loudness ?? 0) - 1.6,
     meta: { programId: OPENS[programId] ? programId : 'generic', motif: MOTIF, colour: COLOUR_OF[programId] ?? 'home', key: midiToName(def.key), bpm: tempo, hitAt: lockAt, cutAt: dur },
   };
 }
@@ -377,7 +383,7 @@ function buildIdent(night) {
       { kind: 'lead', inst: LEAD.glass, notes: part(motif(k, null, 0), total), gain: 0.9, echo: 0.6 },
       { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 7, k - 3, k, k + 4], 1.5, 0.5], [1.5, [k - 5, k, k + 2, k + 4], total - 1.5, 0.58]], total), pan: -0.2 },
       { kind: 'harmony', inst: 'pluck', notes: part([[2.5, k + 4, 1, 0.42], [3.5, k + 7, 1, 0.36], [4.5, k + 2, 1, 0.34]].filter(([b]) => b < total - 0.5), total), gain: 0.7, pan: 0.25, echo: 0.4 },
-      { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, total, 0.7]], total), gain: 0.7 },
+      { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, total, 0.7]], total), gain: 0.5 },
     ],
     meta: { cue: 'ident', colour: 'home', key: 'D4', night },
   };
@@ -415,7 +421,7 @@ function buildBreaking(programId) {
     fadeOut: 0.6,
     tracks: [
       { kind: 'lead', inst: 'brass', notes: part([...motif(k, COLOURS.breaking, 0)], total), gain: 1.1 },
-      { kind: 'lead', inst: 'brass', notes: part(motif(k + 12, COLOURS.breaking, 0, { vel: 0.45 }), total), gain: 0.4, pan: 0.15 },
+      { kind: 'lead', inst: LEAD.horn, notes: part(motif(k + 12, COLOURS.breaking, 0, { vel: 0.6 }), total), gain: 0.85, pan: 0.15 },
       { kind: 'harmony', inst: 'pad', notes: part([[0, [k + 7, k + 12], 2.5, 0.55], [2.5, [k + 7, k + 12, k + 15], total - 2.5, 0.65]], total), pan: -0.15 },
       { kind: 'bass', inst: 'timpani', notes: part([[0, k - 12, 2.5, 0.8], [2.5, k - 12, 1.5, 0.7], [4, k - 12, 1.5, 0.55]], total) },
       { kind: 'bass', inst: 'tri', notes: part([[0, k - 12, total, 0.7]], total), gain: 0.55 },
@@ -439,9 +445,9 @@ function buildOutro(programId) {
       loudness: -2,
       fadeOut: 0.8,
       tracks: [
-        { kind: 'lead', inst: 'bell', notes: part([[0, [k, k + 4, k + 7, k + 14], 5, 0.6]], 6), gain: 0.7, echo: 0.4 },
+        { kind: 'lead', inst: 'bell', notes: part([[0, [k, k + 4, k + 7, k + 14], 5, 0.62]], 6), gain: 1.15, echo: 0.45 },
         { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 12, k - 8, k - 5, k + 2], 6, 0.55]], 6) },
-        { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, 6, 0.7]], 6), gain: 0.7 },
+        { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, 6, 0.7]], 6), gain: 0.35 },
       ],
       meta,
     };
@@ -460,7 +466,7 @@ function buildOutro(programId) {
         { kind: 'lead', inst: v.lead, notes: part([...motif(k, COLOURS.money, 1, { colourBeats: 1, vel: 0.8 }), [4.5, k, 1.5, 0.75]], total), gain: 0.9 },
         { kind: 'harmony', inst: 'keys', notes: part([[0, [k - 8, k - 3, k + 2, k + 7], 1.5, 0.5]], total), gain: 0.9 },
         { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 8, k - 3, k + 2, k + 7], total, 0.55]], total), pan: -0.2 },
-        { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, total]], total) },
+        { kind: 'bass', inst: 'tri', notes: part([[0, k - 24, total]], total), gain: 0.55 },
         { drums: drums([[0, 'F', 0.6]], total) },
       ],
       meta,
@@ -479,10 +485,15 @@ function buildOutro(programId) {
   const tracks = [
     { kind: 'lead', inst: v.lead, notes: part(lead, total), gain: id === 'world-now' ? 1.05 : 1 },
     { kind: 'harmony', inst: 'pad', notes: part([[0, [k - 7, k - 3, k, k + 4], 1.5, 0.5], [1.5, [k - 5, k, k + 2], 2, 0.55], [3.5, padHome, 2, 0.62]], total), pan: -0.2 },
-    { kind: 'bass', inst: id === 'world-now' ? 'timpani' : 'tri', notes: part(id === 'world-now' ? [[0, pedal, 3.5, 0.55], [3.5, pedal, 2, 0.7]] : [[0, pedal, total, 0.7]], total), gain: id === 'world-now' ? 1 : 0.7 },
+    { kind: 'bass', inst: id === 'world-now' ? 'timpani' : 'tri', notes: part(id === 'world-now' ? [[0, pedal, 3.5, 0.55], [3.5, pedal, 2, 0.7]] : [[0, pedal, total, 0.7]], total), gain: id === 'world-now' ? 0.8 : 0.5 },
   ];
   if (id === 'tech-bytes') tracks.push({ kind: 'harmony', inst: 'pluck', notes: part([[3.5, k - 5, 0.5, 0.5], [4, k, 1.5, 0.55]], total), gain: 0.8, pan: 0.25 });
-  if (id === 'cosmos') tracks.push({ kind: 'harmony', inst: 'bell', notes: part([[4, k + 19, 1.5, 0.28]], total), gain: 0.45, echo: 0.6, pan: 0.3 });
+  if (id === 'cosmos') {
+    tracks.push({ kind: 'harmony', inst: 'bell', notes: part([[4, k + 19, 1.5, 0.42]], total), gain: 0.9, echo: 0.6, pan: 0.3 });
+    tracks.push({ kind: 'lead', inst: LEAD.halo, notes: part(lead.map(([bb, m, d, vv]) => [bb, m + 12, d, vv * 0.55]), total), gain: 0.65, echo: 0.5, pan: -0.25 });
+  }
+  // WORLD NOW: the low brass is doubled an octave up on the brighter horn (the melody small speakers carry).
+  if (id === 'world-now') tracks.push({ kind: 'lead', inst: LEAD.horn, notes: part(lead.map(([bb, m, d, vv]) => [bb, m + 12, d, vv * 0.7]), total), gain: 0.6, pan: 0.18, echo: 0.3 });
   return {
     bpm: id === 'cosmos' ? 84 : id === 'tech-bytes' ? 104 : 96,
     room: id === 'cosmos' ? 0.4 : 0.3,
@@ -514,7 +525,7 @@ function buildPromo(programId) {
     tracks: [
       { kind: 'lead', inst: LEAD.glass, notes: part(motif(k, null, 1.4).slice(0, 3).map(([b, m, d, v], i) => [b, m, i === 2 ? 3 : d, v]), total), gain: 0.9, echo: 0.6 },
       { kind: 'harmony', inst: 'pad', notes: part([[0, iv, total, 0.5]], total), pan: -0.2 },
-      { kind: 'bass', inst: 'tri', notes: part([[0, k - 19, total, 0.55]], total), gain: 0.6 },
+      { kind: 'bass', inst: 'tri', notes: part([[0, k - 19, total, 0.55]], total), gain: 0.45 },
     ],
     meta: { cue: 'promo', colour: 'next', key: midiToName(k), programId: id },
   };
