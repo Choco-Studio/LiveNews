@@ -77,31 +77,55 @@ export class Standing {
    * Resolve the figure into this.frame (clear elsewhere). walk: the step phase in radians (null = standing,
    * feet together under the hips). Returns the head frame (head.js) for eyelines.
    */
-  render(t, { x, y, s, walk = null }) {
+  render(t, { x, y, s, walk = null, feet = null, shift = 0 }) {
     const buf = this.buf;
     const m = this.materials();
     const sk = poseAt(this.actor, t);
-    const stepping = walk != null && Number.isFinite(walk);
-    const bob = stepping ? -LEG.bob * Math.abs(Math.sin(walk)) : 0;
-    const ox = Math.round(x), oy = Math.round(y + bob * s);
     const bx = sk.body.x, by = sk.body.y;
+    // the legs: planted feet (feet: [{ x, lift }, { x, lift }], screen px, left then right foot) or the old
+    // phase-driven side-step (walk); the torso sits `shift` cm over one foot (weight)
+    const tx = x + shift * s; // the torso's screen x
+    let legs;
+    let drop = 0;
+    if (feet) {
+      const L = LEG.ankleY - LEG.hipY; // hip to ankle, straight
+      // the body comes down as the feet open (a leg is only so long): the more open leg sets the hip height
+      let minV = L;
+      const raw = feet.map((f, i) => {
+        const side = i === 0 ? -1 : 1;
+        const fx = (f.x - tx) / s - bx; // body units
+        const dx = fx - side * LEG.hipX;
+        minV = Math.min(minV, Math.sqrt(Math.max(1, L * L - dx * dx)));
+        return { side, fx, lift: Math.max(0, f.lift || 0) };
+      });
+      drop = L - minV;
+      legs = raw.map((r, i) => ({ side: r.side, g: i === 0 ? G_LEG_L : G_LEG_R, foot: r.fx, up: r.lift }));
+    } else {
+      const stepping = walk != null && Number.isFinite(walk);
+      drop = stepping ? -LEG.bob * Math.abs(Math.sin(walk)) : 0;
+      // legs: a side-step (one foot opens while the other stays, then they swap)
+      const open = stepping ? Math.sin(walk) * LEG.stride : 0;
+      const lift = stepping ? Math.max(0, Math.cos(walk)) * 1.6 : 0;
+      legs = [
+        { side: -1, g: G_LEG_L, foot: -LEG.hipX - 0.3 + Math.min(0, open), up: open < 0 ? lift : 0 },
+        { side: 1, g: G_LEG_R, foot: LEG.hipX + 0.3 + Math.max(0, open), up: open > 0 ? lift : 0 },
+      ];
+    }
+    const ox = Math.round(tx), oy = Math.round(y + drop * s);
     const X = (u) => ox + (u + bx) * s;
     const Y = (v) => oy + (v + by) * s;
     buf.clear();
-    // legs: a side-step (one foot opens while the other stays, then they swap)
-    const open = stepping ? Math.sin(walk) * LEG.stride : 0;
-    const lift = stepping ? Math.max(0, Math.cos(walk)) * 1.6 : 0;
-    const legs = [
-      { side: -1, g: G_LEG_L, foot: -LEG.hipX - 0.3 + Math.min(0, open), up: open < 0 ? lift : 0 },
-      { side: 1, g: G_LEG_R, foot: LEG.hipX + 0.3 + Math.max(0, open), up: open > 0 ? lift : 0 },
-    ];
     for (const leg of legs) {
       const hx = leg.side * LEG.hipX;
-      const kx = (hx + leg.foot) / 2 + leg.side * 0.3;
-      const ky = LEG.kneeY - leg.up * 0.5;
-      const ay = LEG.ankleY - leg.up;
+      const ay = LEG.ankleY - (feet ? drop : 0) - leg.up;
+      // a leg shorter than its length bends at the knee: the knee comes out a little and up
+      const reachY = ay - LEG.hipY, reachX = leg.foot - hx;
+      const bend = feet ? Math.sqrt(Math.max(0, (LEG.ankleY - LEG.hipY) ** 2 - reachX * reachX - reachY * reachY)) : 0;
+      const kxb = (hx + leg.foot) / 2 + leg.side * (0.3 + bend * 0.18);
+      const ky = LEG.hipY + reachY * 0.52 - leg.up * 0.3;
       buf.part(leg.g, 1, false);
       // one tapered trouser leg: lit edge toward camera-left, the far edge in shade, a pressed crease
+      const kx = kxb;
       const pts = [X(hx - LEG.thigh), Y(LEG.hipY), X(hx + LEG.thigh), Y(LEG.hipY), X(kx + LEG.knee), Y(ky), X(leg.foot + LEG.ankle), Y(ay), X(leg.foot - LEG.ankle), Y(ay), X(kx - LEG.knee), Y(ky)];
       const crease = s >= 2;
       buf.poly(pts, m.trousers, (px, py) => {

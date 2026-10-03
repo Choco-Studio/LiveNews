@@ -52,11 +52,46 @@ function climate(lat) {
 const STEP = 2; // degrees per grid cell
 const GW = 360 / STEP + 1, GH = 180 / STEP + 1;
 
+/** A 1-degree grid (server/weatherfield.js: base64 int8, half degrees, rows north to south) as a field. */
+export function gridField(grid, day = 'today') {
+  const b64 = grid?.[day];
+  const w = grid?.w | 0, h = grid?.h | 0;
+  if (typeof b64 !== 'string' || w < 2 || h < 2) return null;
+  let bin;
+  try {
+    bin = atob(b64);
+  } catch {
+    return null;
+  }
+  if (bin.length !== w * h) return null;
+  const scale = Number(grid.scale) || 0.5, lat0 = Number(grid.lat0) || 89.5, lon0 = Number(grid.lon0) || -179.5, step = Number(grid.step) || 1;
+  const f = new Float32Array(w * h);
+  for (let i = 0; i < f.length; i++) f[i] = ((bin.charCodeAt(i) << 24) >> 24) * scale;
+  const at = (lat, lon) => {
+    const v = Math.max(0, Math.min(h - 1.0001, (lat0 - lat) / step));
+    let u = ((lon - lon0) / step) % w;
+    if (u < 0) u += w;
+    const i0 = Math.floor(u), j0 = Math.floor(v);
+    const i1 = (i0 + 1) % w, j1 = Math.min(h - 1, j0 + 1);
+    const fu = u - i0, fv = v - j0;
+    const a = f[j0 * w + i0], b = f[j0 * w + i1], c = f[j1 * w + i0], d = f[j1 * w + i1];
+    return (a * (1 - fu) + b * fu) * (1 - fv) + (c * (1 - fu) + d * fu) * fv;
+  };
+  const tint = (lat, lon, x, y) => {
+    const p = rampPos(at(lat, lon));
+    const i = Math.min(RAMP.length - 2, Math.floor(p));
+    return p - i > B4[((y & 3) << 2) | (x & 3)] ? PACKED[i + 1] : PACKED[i];
+  };
+  return { at, tint, day, n: w * h, source: grid.source || null };
+}
+
 /**
- * The field of `day` ('today' | 'tomorrow') highs over the cities given ({ lat, lon, today: { max }, tomorrow }).
- * Cities without that day are left out.
+ * The field of `day` ('today' | 'tomorrow') highs: the server's heat map when the report has one (real
+ * temperatures at many places, `grid`), else interpolated from the cities given ({ lat, lon, today: { max } }).
  */
-export function temperatureField(cities, day = 'today') {
+export function temperatureField(cities, day = 'today', heat = null) {
+  const g = heat ? gridField(heat, day) : null;
+  if (g) return g;
   const pts = [];
   for (const c of cities || []) {
     const v = c?.[day]?.max;

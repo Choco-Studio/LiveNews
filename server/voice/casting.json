@@ -39,13 +39,13 @@
  },
  "nova": {
   "voice": "af_nova:0.55+af_alloy:0.25+af_kore:0.2",
-  "speed": 0.81,
+  "speed": 0.89,
   "lang": "en-us",
   "pauses": {
-   "comma": 0.18,
-   "sentence": 0.35
+   "comma": 0.16,
+   "sentence": 0.32
   },
-  "notes": "Astrophysicist, warm and precise: af_nova with 25% af_alloy and 20% af_kore. Lowest, darkest female voice of the cast (median F0 ~155 Hz), best recogniser score of the Nova takes, 4.7 st under Lola so the two American women never blur. COSMOS pace 145 wpm with the bible's pauses; the words themselves stay above 150 wpm on her copy."
+  "notes": "Astrophysicist, warm and precise: af_nova with 25% af_alloy and 20% af_kore. Lowest, darkest female voice of the cast (median F0 ~155 Hz), best recogniser score of the Nova takes, 4.7 st under Lola so the two American women never blur. COSMOS pace 145 wpm with the bible's pauses; the words themselves stay above 150 wpm on her copy. Owner 3 Oct: 10% faster (speed 0.81 -> 0.89, pauses 10% shorter)."
  },
  "unit8": {
   "voice": "am_echo:0.7+am_fenrir:0.3",

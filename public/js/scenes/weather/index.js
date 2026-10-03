@@ -18,12 +18,15 @@ import { temperatureField, tempColor, RAMP } from './field.js';
 import { drawIcon, drawCyclone } from './icons.js';
 import { Standing } from '../../v2/canvas25d/runtime/standing.js';
 import { liveSpeech } from '../../v2/canvas25d/speech.js';
+import { Presenter } from './presenter.js';
 
 const W = 384, H = 216;
-export const WALK = 2.1; // s: from one mark to the next (the camera moves with him)
+export const WALK = 2.1; // s: the camera's move when he does not walk (his walk sets it otherwise)
 const SCALE = 1.2; // the presenter: px per cm (head to mid-shin in frame)
 const NECK_Y = 60;
 const MARK = { left: 66, right: 318, centre: 92 };
+// how far he may step from his mark toward the map while he talks (screen px), on each side
+const ROOM = { left: [44, 112], right: [272, 340] };
 const WORLD = { lat: 14, lon: 12, zoom: 1.12 };
 const AREA = { top: 30, bottom: 172 }; // the map's free band (under the top row, over the strap and captions)
 const DEG = Math.PI / 180;
@@ -55,13 +58,17 @@ const ST = {
   speechFor: null,
   pointed: null,
   facing: 1,
+  presenter: null,
+  moveDur: WALK,
+  pending: null, // a point waiting for the end of a step: { id, at }
+  presented: false,
 };
 
 function fieldFor(data, day) {
   let f = ST.fields.get(day);
   if (!f) {
     const cities = data.zones.flatMap((z) => z.cities);
-    ST.fields.set(day, (f = temperatureField(cities, day)));
+    ST.fields.set(day, (f = temperatureField(cities, day, data.field)));
   }
   return f;
 }
@@ -298,6 +305,7 @@ export function drawWeather(ctx, t, scene, audio) {
     ST.px = ST.pFrom = ST.pTo = ST.lastX = MARK.left;
     ST.panel = ST.panelFrom = ST.panelTo = 0;
     ST.epoch = t;
+    ST.presenter?.place(MARK.left);
   }
   // the presenter (once per programme's cast)
   const id = scene.cast?.A || 'sam';
@@ -307,6 +315,12 @@ export function drawWeather(ctx, t, scene, audio) {
   }
   const st = ST.standing;
   const perf = st.actor.perf;
+  if (!ST.presenter || ST.presenter.st !== st) {
+    ST.presenter = new Presenter(st, { scale: SCALE, neckY: NECK_Y, seed: 7 });
+    ST.presenter.place(MARK.left);
+  }
+  const pr = ST.presenter;
+  const rt = t - ST.epoch; // the rig's clock
   if (ST.speechFor !== audio) {
     perf.speech = audio && typeof audio.speechFrame === 'function' ? liveSpeech(audio, 'A', (rt) => (rt + ST.epoch) * 1000) : null;
     ST.speechFor = audio;
@@ -318,8 +332,6 @@ export function drawWeather(ctx, t, scene, audio) {
     const tgt = targetOf(data, seg, index);
     ST.from = { ...ST.view };
     ST.to = tgt.view;
-    ST.pFrom = ST.px;
-    ST.pTo = tgt.mark;
     ST.panelFrom = ST.panel;
     ST.panelTo = tgt.panel;
     ST.moveAt = Number.isFinite(W8.since) ? W8.since : t;
@@ -327,11 +339,17 @@ export function drawWeather(ctx, t, scene, audio) {
     ST.seg = seg;
     // he faces the map while he speaks: the map is on the side away from his mark
     ST.facing = tgt.mark > W / 2 ? -1 : 1;
-    perf.side = ST.facing;
-    perf.gestures = [];
+    // he walks to his mark (side-steps, planted feet); the camera travels with him over the same time
+    const walk = pr.walkTo(tgt.mark, ST.moveAt - ST.epoch);
+    ST.moveDur = Math.max(1.4, walk || WALK);
+    if (!walk) perf.side = ST.facing;
     ST.pointed = null;
+    ST.pending = null;
+    ST.presented = false;
   }
-  const k = ease((t - ST.moveAt) / WALK);
+  pr.update(rt);
+  ST.px = pr.x;
+  const k = ease((t - ST.moveAt) / ST.moveDur);
   const tgt = ST.target;
   // the camera: the map view (a long hop pulls out a little on the way, like the locator's pans)
   const hop = Math.hypot(wrap(ST.to.lon - ST.from.lon) * 0.6, ST.to.lat - ST.from.lat);
@@ -339,13 +357,7 @@ export function drawWeather(ctx, t, scene, audio) {
   const zoom = Math.exp(lerp(Math.log(ST.from.zoom), Math.log(ST.to.zoom), k)) * (1 - dip);
   ST.view = { lat: lerp(ST.from.lat, ST.to.lat, k), lon: ST.from.lon + wrap(ST.to.lon - ST.from.lon) * k, zoom };
   ST.panel = lerp(ST.panelFrom, ST.panelTo, k);
-  ST.px = lerp(ST.pFrom, ST.pTo, k);
-  // the step phase follows the distance walked (a side-step every ~26 px of travel)
-  const moved = Math.abs(ST.px - ST.lastX);
-  ST.lastX = ST.px;
-  ST.walked += moved;
-  const walking = k > 0 && k < 1 && Math.abs(ST.pTo - ST.pFrom) > 4;
-  const phase = walking ? (ST.walked / 26) * Math.PI : null;
+  const walking = pr.walking;
 
   // the wall: the map (the camera's view of it)
   const pan = 0;
@@ -358,23 +370,40 @@ export function drawWeather(ctx, t, scene, audio) {
   const hotId = W8.hot && since >= 0 && since < 2.6 ? W8.hot : null;
   const hotK = hotId ? Math.min(1, (t - W8.hotAt) / 0.25) : 0;
   const named = new Set((seg.marks || []).map((m) => m.city));
-  const zoneIds = tgt.zone && k > 0.55 ? new Set(tgt.zone.cities.map((c) => c.id)) : null;
+  const zoneView = tgt.zone && k > 0.55;
+  const zoneIds = zoneView ? new Set(tgt.zone.cities.map((c) => c.id)) : null;
   let hotXY = null;
+  const where = new Map(); // city id -> screen position (for his points)
   if (v && !tgt.warning) {
     const sx = v.s * v.kx;
     const list = [];
     for (const z of data.zones) {
       for (const c of z.cities) {
-        if (zoneIds ? !zoneIds.has(c.id) : !named.has(c.id)) continue;
+        if (zoneIds && !zoneIds.has(c.id)) continue;
         const x = W / 2 + wrap(c.lon - v.clon) * sx - pan;
         const y = H / 2 + (v.clat - c.lat) * v.s;
         if (x < 6 || x > W - 6 || y < AREA.top - 4 || y > AREA.bottom + 12) continue;
+        where.set(c.id, { x, y });
         list.push({ c, x: Math.round(x), y: Math.round(y) });
       }
     }
+    // the world: every city that has room (the named ones and the day's extremes first, then the rest),
+    // symbol and temperature, no names; a zone: all its cities with their names
+    let shown = list;
+    if (!zoneIds) {
+      const ext = new Set(Object.values(data.extremes || {}).filter(Boolean).map((e) => e.id));
+      const rank = (it) => (it.c.id === hotId ? 0 : named.has(it.c.id) ? 1 : ext.has(it.c.id) ? 2 : 3);
+      const order = [...list].sort((a, b) => rank(a) - rank(b));
+      shown = [];
+      for (const it of order) {
+        if (Math.abs(it.x - ST.px) < 26 && it.y > NECK_Y - 30) continue; // not under the presenter
+        if (shown.some((o) => Math.abs(o.x - it.x) < 34 && Math.abs(o.y - it.y) < 15)) continue;
+        shown.push(it);
+      }
+    }
     // the named city last (on top), northern cities first (their labels go right / down)
-    list.sort((a, b) => (a.c.id === hotId) - (b.c.id === hotId) || a.y - b.y);
-    list.forEach((it, i) => {
+    shown.sort((a, b) => (a.c.id === hotId) - (b.c.id === hotId) || a.y - b.y);
+    shown.forEach((it, i) => {
       const hot = it.c.id === hotId;
       const r = drawCity(ctx, t, it.c, it.x, it.y, day, { names: !!zoneIds, hot, hotK, phase: i * 0.37 });
       if (hot && r) hotXY = r;
@@ -393,20 +422,36 @@ export function drawWeather(ctx, t, scene, audio) {
     hotXY = { x, y };
   }
   drawWarningPanel(ctx, t, ST.panel, warn, data);
-  // the presenter points at the city the voice has just named (on the side of the map); at the storm once he
-  // has reached his mark beside it
-  const pointKey = hotId ? `${hotId}:${W8.hotAt}` : tgt.warning && k >= 1 ? `storm:${tgt.warning.id}` : null;
-  if (pointKey && ST.pointed !== pointKey && !walking) {
-    ST.pointed = pointKey;
-    const rt = t - ST.epoch;
-    const last = perf.gestures[perf.gestures.length - 1];
-    // not on top of the last point (a 2.1 s gesture), and never more than one in four seconds
-    if (!last || rt - last.t0 > 4) {
-      if (hotXY) perf.side = hotXY.x < ST.px ? -1 : 1;
-      perf.gestures = [...perf.gestures.slice(-3), { name: 'point_screen', t0: rt }];
-    }
+  // the presenter: a point at the city the voice has just named, aimed at it; a step toward it first when it
+  // is far across the map and he has room; an open hand to the zone when he arrives with no city yet named;
+  // the storm once he has reached his mark beside it
+  const room = ST.facing > 0 ? ROOM.left : ROOM.right;
+  if (hotId && ST.pointed !== `${hotId}:${W8.hotAt}`) {
+    ST.pointed = `${hotId}:${W8.hotAt}`;
+    const p = where.get(hotId) || hotXY;
+    if (p && !walking) {
+      if (Math.abs(p.x - pr.x) > 170 && rt - pr.lastGesture > 2.3 && pr.stepToward(p.x, rt, room[0], room[1])) ST.pending = { id: hotId, at: W8.hotAt };
+      else pr.pointAt(p.x, p.y, rt);
+    } else if (p) ST.pending = { id: hotId, at: W8.hotAt };
   }
-  st.draw(ctx, t - ST.epoch, { x: ST.px, y: NECK_Y, s: SCALE, walk: phase });
+  if (ST.pending && !pr.walking) {
+    const p = ST.pending.id === 'storm' ? hotXY : where.get(ST.pending.id);
+    // still worth it while the city is lit (or the storm on the wall)
+    if (p && (ST.pending.id === 'storm' || t - ST.pending.at < 2.2)) pr.pointAt(p.x, p.y, rt);
+    ST.pending = null;
+  }
+  if (tgt.warning && k >= 1 && ST.pointed !== `storm:${tgt.warning.id}` && hotXY) {
+    ST.pointed = `storm:${tgt.warning.id}`;
+    if (!pr.pointAt(hotXY.x, hotXY.y, rt)) ST.pending = { id: 'storm' };
+  }
+  if (!ST.presented && !walking && k >= 1 && (seg.kind === 'zone' || seg.kind === 'tomorrow')) {
+    ST.presented = true;
+    // an open hand to the map, unless a city is about to be named anyway (its point comes then)
+    const first = (seg.marks || [])[0];
+    const soon = first && first.char / 15 - (t - ST.moveAt) < 1.6;
+    if (!hotId && !soon) pr.present(rt, ST.facing);
+  }
+  pr.draw(ctx, rt);
 
   // the graphics of the weather centre: the zone tab, the scale, the source
   const title = seg.kind === 'zone' && tgt.zone ? tgt.zone.name : seg.kind === 'warning' ? 'WARNINGS' : seg.kind === 'tomorrow' ? 'TOMORROW' : 'WORLD WEATHER';

@@ -13,6 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './config.js';
+import { FieldDesk } from './weatherfield.js';
 
 const DAY_MS = 86_400_000;
 export const OPEN_METEO = 'https://api.open-meteo.com/v1/forecast';
@@ -279,7 +280,7 @@ export class WeatherDesk {
    *                 fixture while the news desk is the offline fixture desk, `offline()`, else live)
    * @param o.warnings 'gdacs' | 'off'
    */
-  constructor({ source = 'open-meteo', offline = () => false, warnings = 'gdacs', fetchImpl = globalThis.fetch, fixtureFile = FIXTURE, ttlMs = 30 * 60_000, timeoutMs = 12_000, log = console, now = () => Date.now() } = {}) {
+  constructor({ source = 'open-meteo', offline = () => false, warnings = 'gdacs', fetchImpl = globalThis.fetch, fixtureFile = FIXTURE, ttlMs = 30 * 60_000, timeoutMs = 12_000, field = true, fieldTtlMs = 3 * 3600_000, log = console, now = () => Date.now() } = {}) {
     this.mode = source;
     this.offline = offline;
     this.warningsSource = warnings;
@@ -293,6 +294,8 @@ export class WeatherDesk {
     this.inflight = null;
     this.lastError = null;
     this.failedAt = null;
+    // the heat map: real temperatures at many places (server/weatherfield.js), tied to the cities
+    this.fields = field ? new FieldDesk({ source: () => this.source, fetchImpl, ttlMs: fieldTtlMs, log, now }) : null;
   }
 
   /** The source in use now ('auto' follows the news desk: offline fixture desk -> fixture data). */
@@ -327,6 +330,8 @@ export class WeatherDesk {
   async load() {
     try {
       const report = this.source === 'fixture' ? this.fromFixture() : await this.fromNetwork();
+      // the heat map never holds the forecast back: without it the map is coloured from the cities alone
+      if (report && this.fields) report.field = await this.fields.field(report);
       if (report) {
         this.cached = { at: this.now(), report };
         this.lastError = null;

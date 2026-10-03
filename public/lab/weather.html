@@ -99,7 +99,8 @@
         live = false;
         clock = null;
         document.getElementById('gfx').checked = gfx;
-        const base = 1000 + index * 100;
+        // the clock only moves forward (the presenter's steps are planned on it)
+        const base = (window.__labBase = (window.__labBase || 1000) + 100);
         if (from != null) {
           setSeg(from, base - 20);
           drawWeather(ctx, base - 1, scene, null);

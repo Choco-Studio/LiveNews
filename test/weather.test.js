@@ -249,3 +249,110 @@ describe('the weather centre (client)', () => {
     assert.ok(iconPixels('storm', 0).includes(P.yellow) && !iconPixels('storm', 3).includes(P.yellow));
   });
 });
+
+describe('the heat map: real temperatures at many places (round 2)', async () => {
+  const { decodeField, encodeField, sampleField, spread, tieToCities, gridPoints, gridUrl, parseGrid, FieldDesk, FW, FH } = await import('../server/weatherfield.js');
+  const { gridField } = await import('../public/js/scenes/weather/field.js');
+
+  test('the sample places cover the land (a point every 5 degrees), in batches of one request each', () => {
+    const pts = gridPoints();
+    assert.ok(pts.length > 600 && pts.length < 1000, `${pts.length} places`);
+    assert.ok(pts.some((p) => Math.abs(p.lat - 40) < 3 && Math.abs(p.lon + 4) < 3), 'Spain is sampled');
+    assert.ok(!pts.some((p) => Math.abs(p.lat) < 5 && p.lon > -150 && p.lon < -100), 'the open Pacific is not');
+    const u = new URL(gridUrl(pts.slice(0, 120)));
+    assert.equal(u.searchParams.get('latitude').split(',').length, 120);
+    assert.equal(u.searchParams.get('daily'), 'temperature_2m_max');
+  });
+
+  test('the field: spread from places, encoded in half degrees, tied to the cities on screen', () => {
+    const f = spread([{ lat: 40, lon: -4, v: 30 }, { lat: 60, lon: 30, v: 5 }]);
+    assert.ok(Math.abs(sampleField(f, 40, -4) - 30) < 1.5);
+    assert.ok(Math.abs(sampleField(f, 60, 30) - 5) < 1.5);
+    const back = decodeField(encodeField(f));
+    assert.equal(back.length, FW * FH);
+    assert.ok(Math.abs(back[1000] - f[1000]) <= 0.25);
+    const tied = tieToCities(f, [{ lat: 40, lon: -4, today: { max: 24 } }], 'today');
+    assert.ok(Math.abs(sampleField(tied, 40, -4) - 24) < 1, 'the colour under a chip agrees with the chip');
+  });
+
+  test('offline: the ERA-Interim field (real reanalysis) tied to the forecast; the client reads the same grid', async () => {
+    const r = await fixtureReport();
+    assert.match(r.field.source, /ERA-INTERIM/);
+    const f = decodeField(r.field.today);
+    // the real structure stays: the Tibetan plateau colder than the plain of India, the Sahara hot, Greenland frozen
+    assert.ok(sampleField(f, 33, 88) < sampleField(f, 26, 80) - 10);
+    assert.ok(sampleField(f, 23, 10) > 25);
+    assert.ok(sampleField(f, 72, -40) < -5);
+    const madrid = r.zones.flatMap((z) => z.cities).find((c) => c.id === 'madrid');
+    assert.ok(Math.abs(sampleField(f, madrid.lat, madrid.lon) - madrid.today.max) < 1);
+    const g = gridField(r.field, 'today');
+    assert.ok(Math.abs(g.at(madrid.lat, madrid.lon) - madrid.today.max) < 1);
+    assert.equal(gridField({ today: 'nope', w: 360, h: 180 }, 'today'), null);
+    const ep = writeWeather(r, { seed: 'x' });
+    assert.equal(ep.weather.field, r.field, 'the episode carries the heat map');
+  });
+
+  test('live: every batch asked, answers matched by position, a field of daily highs; too few answers is no field', async () => {
+    const pts = gridPoints();
+    let calls = 0;
+    const fetchImpl = async (url) => {
+      calls++;
+      const q = new URL(url).searchParams;
+      const la = q.get('latitude').split(',').map(Number), lo = q.get('longitude').split(',').map(Number);
+      return { ok: true, text: async () => JSON.stringify(la.map((v, i) => ({ latitude: v, longitude: lo[i], daily: { time: ['a', 'b'], temperature_2m_max: [30 - Math.abs(v) * 0.5, 29 - Math.abs(v) * 0.5] } }))) };
+    };
+    const desk = new FieldDesk({ source: 'open-meteo', fetchImpl, log: quiet });
+    const out = await desk.field({ zones: [] });
+    assert.equal(calls, Math.ceil(pts.length / 120));
+    assert.equal(out.source, 'OPEN-METEO');
+    assert.equal(out.kind, 'daily-max');
+    assert.ok(Math.abs(sampleField(decodeField(out.today), 0, 20) - 29) < 1.5); // the places nearby say 28.75
+    await desk.field({ zones: [] });
+    assert.equal(calls, Math.ceil(pts.length / 120), 'cached for hours (the free tier budget)');
+    const half = new FieldDesk({ source: 'open-meteo', fetchImpl: async (url) => ({ ok: true, text: async () => '[]' }), log: quiet });
+    assert.equal(await half.field({ zones: [] }), null);
+    assert.deepEqual(parseGrid([{ latitude: 10, longitude: 10, daily: { temperature_2m_max: [20, 21] } }], [{ lat: 40, lon: 40 }]), []);
+  });
+});
+
+describe('the weather presenter (round 2): planted steps, aimed points', async () => {
+  const { Standing } = await import('../public/js/v2/canvas25d/runtime/standing.js');
+  const { Presenter, aimedPoint } = await import('../public/js/scenes/weather/presenter.js');
+  const { evaluate } = await import('../public/js/v2/canvas25d/rig.js');
+  const { lookFor } = await import('../public/js/v2/canvas25d/cast/index.js');
+
+  test('a walk is side-steps that end with the feet together around the mark, never wide apart', () => {
+    const p = new Presenter(new Standing('sam'), { scale: 1.2 });
+    p.place(66);
+    const dur = p.walkTo(318, 10);
+    assert.ok(dur > 1.5 && dur < 5, `${dur}`);
+    let widest = 0;
+    for (let t = 10; t <= 10 + dur + 0.2; t += 1 / 60) {
+      p.update(t);
+      widest = Math.max(widest, Math.abs(p.feet[1].x - p.feet[0].x));
+    }
+    assert.ok(widest < 64, `feet at most ${widest} px apart`);
+    assert.ok(Math.abs((p.feet[0].x + p.feet[1].x) / 2 - 318) < 1);
+    assert.ok(Math.abs(p.feet[1].x - p.feet[0].x - 22.6) < 1, 'standing stance');
+    // a new walk before the last one ends still arrives closed
+    p.walkTo(66, 20);
+    p.update(20.7);
+    const d2 = p.walkTo(200, 20.7);
+    for (let t = 20.7; t <= 20.7 + d2 + 0.2; t += 1 / 60) p.update(t);
+    assert.ok(Math.abs(p.feet[1].x - p.feet[0].x - 22.6) < 1);
+  });
+
+  test('a point aims the hand at the target: right, down, left, with the nearer arm', () => {
+    const L = lookFor('sam');
+    const wrist = (dx, dy) => evaluate(L, { side: 1, gestures: [{ name: aimedPoint(dx, dy), t0: 0 }], emotions: [], look: [] }, 0.9).wrist;
+    const flat = wrist(130, 0), low = wrist(130, 60);
+    assert.ok(flat[0] > 25 && Math.abs(flat[1]) < 3, flat.join());
+    assert.ok(low[1] > 8, 'lower target, lower hand');
+    const p = new Presenter(new Standing('sam'), { scale: 1.2, neckY: 60 });
+    p.place(300);
+    assert.ok(p.pointAt(100, 120, 1));
+    assert.equal(p.perf.side, -1, 'a target on the left: the left arm');
+    assert.equal(p.pointAt(100, 120, 2), false, 'not on top of the last gesture');
+    assert.ok(p.pointAt(100, 120, 3.5));
+  });
+});

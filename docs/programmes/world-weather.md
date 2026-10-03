@@ -10,6 +10,10 @@ The world's weather in about five minutes, presented by Sam Night standing at a 
 - **Warnings: GDACS** (`www.gdacs.org`, the UN/EC Global Disaster Alert and Coordination System).
   - Covers weather hazards on orange or red alert: tropical cyclones, floods, droughts and wildfires.
   - Uses GDACS's official names, levels and wind figures. Earthquakes and volcanoes are not weather and are left out.
+- **Heat map (round 2, owner: "colores reales, un script que saque la temperatura de muchos sitios"):** the land's colours come from real temperatures sampled at many places, not from the 44 cities (`server/weatherfield.js`).
+  - Live: Open-Meteo's high for today and tomorrow at the 841 land points of `config/weather-grid.json` (a point every 5 degrees, `tools/weather/make-grid.mjs`), in batches of 120, every 3 hours (the free tier's daily budget), spread onto a 1-degree grid.
+  - Offline: the ERA-Interim reanalysis (ECMWF), the October mean of 2 m temperature on a 1-degree grid (`config/fixtures/weather-field.json`, built by `tools/weather/make-demo-field.py` from NCAR's GeoCAT example data). It is real data, but a monthly mean.
+  - Either way the field is then tied to the forecast's cities, so the colour under a chip agrees with the chip.
 - **Offline:** `WEATHER=auto` uses the demo data in `config/fixtures/weather.json` while the news desk runs on the fixture feeds.
   - The screen says **DEMO DATA · NOT A REAL FORECAST**.
   - The demo's storm, ORLA, is fictional.
@@ -58,6 +62,13 @@ Phrasing varies with the date and the edition, and no turn of phrase is repeated
   - the source (DATA: OPEN-METEO · GDACS, or DEMO DATA) at the foot of the map;
   - the channel's bug, clock and captions as on every programme;
   - the ticker shows one calm UP NEXT plate.
+- **The presenter moves (round 2, `scenes/weather/presenter.js`):**
+  - Side-steps along the wall with planted feet: the lead foot steps out, the weight goes over it, the other closes. The body dips as the feet open and sways over the foot that carries it.
+  - The head turns toward where he is going.
+  - The weight shifts between his feet now and then while he talks.
+  - A step toward a city far across his zone before he points at it.
+- **The presenter points at the city itself:** the point is aimed on the line from his shoulder to the city on the wall, with the nearer arm. The eyes lead, the head follows, the arm rises with a little overshoot and holds, the look comes back to the lens while the hand stays. A zone starts with an open hand offered to the map.
+- **Symbols are always on the map:** on the world views, every city that has room shows its symbol and temperature (the named ones and the day's extremes first).
 - **The presenter stands** (`v2/canvas25d/runtime/standing.js`).
   - The rig's upper body is drawn with the rest of the suit: the jacket's skirt in the jacket's own group, trouser legs lit from camera-left, and shoes.
   - Framed head to mid-shin.

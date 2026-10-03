@@ -323,6 +323,7 @@ export function writeWeather(report, { presenter = { name: 'Sam Night' }, channe
       source: report.source,
       zones: report.zones.map((z) => ({ id: z.id, name: z.name, cities: z.cities.map(({ id, name: n, lat, lon, today, tomorrow, now }) => ({ id, name: n, lat, lon, today, tomorrow, now })) })),
       warnings: report.warnings,
+      field: report.field || null, // the heat map (server/weatherfield.js): real temperatures at many places
     },
   };
 }
