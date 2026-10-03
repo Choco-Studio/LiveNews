@@ -17,6 +17,20 @@ function publicFeedStatus(feeds) {
 }
 
 /**
+ * Expected air time of an episode in seconds: each segment's recorded voice, or its words at 2.75 a second (pace.js
+ * estimateAir), a short pause between segments and the open and close. Rough, but it only decides whether a programme ran long enough to earn a full break.
+ */
+export function episodeAir(ep) {
+  const segs = Array.isArray(ep?.segments) ? ep.segments : [];
+  let t = 12; // open, sign-off and end card
+  for (const seg of segs) {
+    const d = Number(seg?.audio?.duration);
+    t += Number.isFinite(d) && d > 0 ? d : String(seg?.text || '').split(/\s+/).filter(Boolean).length / 2.75;
+  }
+  return t + 0.6 * Math.max(0, segs.length - 1);
+}
+
+/**
  * Master control: keeps finished episodes ready ahead of air, follows the
  * programme rotation, and puts commercial breaks between programmes. Breaks
  * are elastic: while the next episode is still in production the break is
@@ -148,14 +162,33 @@ export class Station {
   }
 
   breakItem(channel, { filler = false } = {}) {
-    const { adsPerBreak = 2 } = channel.breaks || {};
+    const { adsPerBreak = 2, minProgrammeBetween = 0 } = channel.breaks || {};
+    // Break cadence (pace: CHANNEL.breaks.minProgrammeBetween): a programme that ends within that much programme air of
+    // the last commercial break goes on with a LIGHT break: one spot and the UP NEXT promo (`light: true`; a director
+    // that honours it may play the promo alone). NEWS IN 60 is no longer sandwiched between two full breaks.
+    const light = !filler && minProgrammeBetween > 0 && this.airSinceBreak() < minProgrammeBetween;
     return {
       kind: 'break',
       id: `k${Date.now().toString(36)}${(this.seq++).toString(36)}`,
       filler,
-      ads: filler ? 1 : adsPerBreak,
+      ads: filler || light ? 1 : adsPerBreak,
+      ...(light ? { light: true } : {}),
       next: this.upNext(channel),
     };
+  }
+
+  /** Seconds of programme air since the last commercial break (a light break does not count as one). */
+  airSinceBreak() {
+    let air = 0;
+    for (let i = this.history.length - 1; i >= 0; i--) {
+      const h = this.history[i];
+      if (h.kind === 'break') {
+        if (!h.light) break;
+        continue;
+      }
+      air += episodeAir(h);
+    }
+    return air;
   }
 
   /** Decide the next item on air. Returns null only when there is nothing at all to show. */

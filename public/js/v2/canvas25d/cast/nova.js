@@ -88,7 +88,7 @@ for (let i = 0; i < SC_N; i++) {
   const a = (i / SC_N) * 2 * Math.PI - Math.PI;
   SCALLOP[i] = 0.04 * Math.cos(a * 11) + 0.018 * Math.cos(a * 7 + 1.3);
   const lower = Math.sin(a); // a = atan2(v, u): > 0 below the centre line
-  SCALLOP0[i] = (0.1 * Math.cos(a * 10 + 0.4) + 0.025 * Math.cos(a * 4 + 2.1)) * clamp(1 - (lower - 0.25) / 0.5, 0, 1);
+  SCALLOP0[i] = (0.1 * Math.cos(a * 10 + 0.4) + 0.025 * Math.cos(a * 4 + 2.1)) * clamp(1 - (lower - 0.25) / 0.5, 0, 1) * (0.55 + 0.45 * Math.abs(Math.cos(a)));
 }
 
 /** Signed "inside" of the halo outline at (x, y): > 0 inside. Scalloped by the outer clusters. */
@@ -268,12 +268,12 @@ function drawCoils(buf, L, m, head, s, sk) {
     if (tr === 0) {
       // wide: the scalloped shape (no clusters: they would be noise at 1 px), and on the upper left a
       // few single lit coil tops on a coarse jittered lattice, well inside the outline
-      if (l > 0.45 && v > 0.14) {
+      if (l > 0.3 && v > 0.1) {
         const gx = Math.floor((x + 40) / 3.3), gy = Math.floor((y + 40) / 3.1);
         const h = hash(gx, gy);
-        if (h < 0.55) {
+        if (h < 0.7) {
           const qx = (gx + 0.3 + 0.4 * h) * 3.3 - 40, qy = (gy + 0.3 + 0.4 * hash(gy, gx)) * 3.1 - 40;
-          if (Math.abs(x - qx) < 0.5 / s && Math.abs(y - qy) < 0.5 / s) return 0;
+          if (x - qx >= -1 / s && x - qx < 1 / s && Math.abs(y - qy) < 0.5 / s) return 0; // a 2 px coil top (a lone pixel would be cleaned up)
         }
       }
       return l > -0.2 ? 1 : l > -0.75 ? 2 : 3;

@@ -888,7 +888,17 @@ for (let i = 0; i < 256; i++) {
   const c = i / 255;
   LIN8[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
-const fLab = (t) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
+// CIE Lab's f(t) through a table (cube roots are the filter's cost): exact below the knee, linearly
+// interpolated on 4096 steps above it (error < 1e-5)
+const FL_N = 4096, FL_MAX = 1.25, FL = new Float32Array(FL_N + 2);
+for (let i = 0; i <= FL_N + 1; i++) FL[i] = Math.cbrt((i * FL_MAX) / FL_N);
+const fLab = (t) => {
+  if (t <= 216 / 24389) return (24389 / 27 * t + 16) / 116;
+  const x = (t * FL_N) / FL_MAX;
+  if (x >= FL_N) return Math.cbrt(t);
+  const i = x | 0;
+  return FL[i] + (FL[i + 1] - FL[i]) * (x - i);
+};
 
 /**
  * A picture record (`full` preferred: the director's 416x234), prepared once: its pixels read (the one
@@ -1075,8 +1085,8 @@ function filterPicture(src, pw, ph, letter = false) {
  */
 function toneL(x, knee, hiL) {
   if (x <= knee) return x;
-  const r = hiL - knee;
-  return knee + r * (1 - Math.exp(-(x - knee) / r));
+  const r = hiL - knee, u = (x - knee) / r;
+  return knee + (r * u) / (1 + u); // a rational shoulder (no exp(): the gain is solved on it many times)
 }
 
 // histogram of the filtered picture's L* (quarter steps): the gain is solved on it, not per pixel
@@ -1110,15 +1120,44 @@ function solveGain(n, nb, target, knee, hiL) {
  * tone curve's shoulder lowered, the gain solved again) until both hold. Each pixel keeps its hue
  * (nearestIn's gate) and its chroma follows its light, fading out in the darks.
  */
+// per output pixel, computed once before the passes: its quarter-step L* bin and its warm floor (the
+// smallest chroma factor that keeps a warm pixel warm; 0 for the others)
+let MQ = new Uint16Array(0), MW = new Float32Array(0);
 function mapPicture(out, n, maxL, pal) {
   HIST.fill(0);
+  if (MQ.length < n) {
+    MQ = new Uint16Array(n);
+    MW = new Float32Array(n);
+  }
   for (let i = 0; i < n; i++) {
-    const q = Math.round(PL[i] * 4);
-    HIST[q < 0 ? 0 : q > 400 ? 400 : q]++;
+    let q = Math.round(PL[i] * 4);
+    q = q < 0 ? 0 : q > 400 ? 400 : q;
+    MQ[i] = q;
+    HIST[q]++;
+    const a0 = PA[i], b0 = PBv[i], c0 = Math.sqrt(a0 * a0 + b0 * b0);
+    let wf = 0;
+    if (c0 > 8) {
+      const h = Math.atan2(b0, a0);
+      if (h > WARM_H0 && h < WARM_H1) wf = (WARM_C + 0.6) / c0;
+    }
+    MW[i] = wf;
   }
   let nb = 0;
   for (let i = 0; i <= 400; i++) if (HIST[i]) HBINS[nb++] = i;
   let hiL = maxL + 20, knee = maxL + 4, target = maxL;
+  // the highlight cap solved on the histogram first (a toned L* past ~49 lands on a palette colour
+  // above L* 45), so the per-pixel pass below usually runs once
+  for (let it = 0; it < 10; it++) {
+    const g = solveGain(n, nb, target, knee, hiL);
+    let hi = 0;
+    for (let k = 0; k < nb; k++) {
+      const q = HBINS[k];
+      if (toneL(q * 0.25 * g, knee, hiL) > 49) hi += HIST[q];
+    }
+    if (hi <= n * PIC_HI_SHARE * 0.9) break;
+    hiL -= 3;
+    knee = Math.min(knee, hiL - 8);
+  }
   for (let pass = 0; pass < 10; pass++) {
     const g = solveGain(n, nb, target, knee, hiL);
     // the tone curve as a table on quarter steps of L* (no exp() per pixel)
@@ -1129,8 +1168,7 @@ function mapPicture(out, n, maxL, pal) {
     let sum = 0, bright = 0;
     for (let i = 0; i < n; i++) {
       const L0 = PL[i];
-      const q = Math.round(L0 * 4);
-      const L = TONE[q < 0 ? 0 : q > 400 ? 400 : q];
+      const L = TONE[MQ[i]];
       // chroma follows the light (a dimmed colour keeps its hue), quieter on the wall, and fades out in
       // the darks; then the wall's cool balance: the palette's neutrals (black, ink, slate, steel, fog)
       // sit at about a* +4, b* -16, so a grey in the picture lands on them
@@ -1138,12 +1176,8 @@ function mapPicture(out, n, maxL, pal) {
       let cf = L0 > 0.5 ? (PIC_CHROMA * L * dark) / L0 : 0;
       // a warm pixel stays warm through the fade (its darks go to maroon or black, never to the blue
       // ink): its chroma is kept just over the warm threshold
-      const a0 = PA[i], b0 = PBv[i], c0 = Math.hypot(a0, b0);
-      if (c0 > 8 && c0 * cf < WARM_C + 0.6) {
-        const h = Math.atan2(b0, a0);
-        if (h > WARM_H0 && h < WARM_H1) cf = (WARM_C + 0.6) / c0;
-      }
-      const j = lookup(pal, L, a0 * cf + COOL_A, b0 * cf + COOL_B);
+      if (cf < MW[i]) cf = MW[i];
+      const j = lookup(pal, L, PA[i] * cf + COOL_A, PBv[i] * cf + COOL_B);
       out[i] = pal.u32[j];
       sum += pal.L[j];
       if (pal.L[j] > PIC_HI_L) bright++;
@@ -1164,7 +1198,6 @@ function mapPicture(out, n, maxL, pal) {
  * neighbours share; a high-contrast single pixel (a star, a spark, a lamp) stays.
  */
 let ORPH = new Uint32Array(0);
-const NB_C = new Uint32Array(8), NB_N = new Uint8Array(8);
 function cleanOrphans(px, w, h, pal) {
   if (w < 3 || h < 3) return;
   if (ORPH.length < w * h) ORPH = new Uint32Array(w * h);
@@ -1177,20 +1210,20 @@ function cleanOrphans(px, w, h, pal) {
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const i = y * w + x, c = src[i];
-      if (src[i - 1] === c || src[i + 1] === c || src[i - w] === c || src[i + w] === c) continue;
-      let k = 0;
-      for (const o of [-w - 1, -w, -w + 1, -1, 1, w - 1, w, w + 1]) {
-        const n = src[i + o];
-        let j = 0;
-        while (j < k && NB_C[j] !== n) j++;
-        if (j === k) {
-          NB_C[k] = n;
-          NB_N[k++] = 1;
-        } else NB_N[j]++;
+      const n0 = src[i - w], n1 = src[i - 1], n2 = src[i + 1], n3 = src[i + w];
+      if (n0 === c || n1 === c || n2 === c || n3 === c) continue;
+      // the colour most of the eight share is one of the four edge neighbours: count each among all eight
+      const d0 = src[i - w - 1], d1 = src[i - w + 1], d2 = src[i + w - 1], d3 = src[i + w + 1];
+      let best = 0, bn = 0;
+      for (let q = 0; q < 4; q++) {
+        const v = q === 0 ? n0 : q === 1 ? n1 : q === 2 ? n2 : n3;
+        const m = (n0 === v) + (n1 === v) + (n2 === v) + (n3 === v) + (d0 === v) + (d1 === v) + (d2 === v) + (d3 === v);
+        if (m > bn) {
+          bn = m;
+          best = v;
+        }
       }
-      let best = 0;
-      for (let j = 1; j < k; j++) if (NB_N[j] > NB_N[best]) best = j;
-      if (NB_N[best] >= 5 && Math.abs(Lof(c) - Lof(NB_C[best])) < 16) px[i] = NB_C[best];
+      if (bn >= 5 && Math.abs(Lof(c) - Lof(best)) < 16) px[i] = best;
     }
   }
 }
@@ -1237,10 +1270,18 @@ export function wallPicture(img, pw, ph, styleIn = null, letter = false) {
 function drawPicture(b, src, x0, y0, pw, ph, maxL, fit = null, styleId = '', letter = false) {
   if (!src || pw <= 0 || ph <= 0) return;
   const fw = fit ? fit[0] : pw, fh = fit ? fit[1] : ph;
-  const p = pictureAt(src, Math.max(1, fw), Math.max(1, fh), maxL, styleId, letter);
-  if (p.w === pw && p.h === ph) blitSub(b, p, x0, y0);
+  const half = picHalf(fw, ENV.ts);
+  const p = pictureAt(src, half ? Math.ceil(fw / 2) : Math.max(1, fw), half ? Math.ceil(fh / 2) : Math.max(1, fh), maxL, styleId, letter);
+  if (half && p.w === Math.ceil(pw / 2) && p.h === Math.ceil(ph / 2)) blit2x(b, p, x0, y0, pw, ph);
+  else if (p.w === pw && p.h === ph) blitSub(b, p, x0, y0);
   else resampleSub(b, p, x0, y0, pw, ph);
 }
+/**
+ * Where the wall's content is drawn at 2x (singles, over-the-shoulder: its text, emblems and maps), a
+ * picture is too: mapped at half size and shown at exactly 2x, the wall's own pixel seen closer (and a
+ * quarter of the cost of a cut).
+ */
+const picHalf = (fw, ts) => ts > 1 && fw >= 64;
 
 // ---------------------------------------------------------------------------
 // Map: the opens' mini locator when available, our static locator otherwise
@@ -1735,7 +1776,9 @@ export function warmWallContent(req, styleIn, cam = null) {
       const m = mediaRect(L, { w, h }, wallTextScale(k));
       const maxL = (style.wallMaxL || 45) - (cam.soft > 0.5 ? 6 : 2);
       const mat = !m.framed && style.pictureMat ? Math.max(2, Math.round(style.pictureMat * k)) : 0;
-      if (m.w - 2 * mat > 0 && m.h - 2 * mat > 0) pictureAt(src, m.w - 2 * mat, m.h - 2 * mat, maxL, style.id, !!m.letter);
+      const pw = m.w - 2 * mat, ph = m.h - 2 * mat;
+      const half = picHalf(pw, wallTextScale(k));
+      if (pw > 0 && ph > 0) pictureAt(src, half ? Math.ceil(pw / 2) : pw, half ? Math.ceil(ph / 2) : ph, maxL, style.id, !!m.letter);
     }
   }
   for (const [t, font] of [[req.label, 'body'], [req.sub, 'micro'], [req.location?.place, 'micro']]) {
@@ -2029,17 +2072,22 @@ function renderSpec(b, spec, style, env) {
  * brightest are steel, the rest slate); out of focus the faint ones go.
  */
 function drawStars(b, env, soft) {
-  const close = env.ts > 1;
+  const close = env.k >= CLOSE_K;
   for (const s of STARS) {
     if (soft && s.c === 'steel') continue;
     const x = Math.round(s.u * env.k), y = Math.round(s.v * env.k);
-    const c = close ? (s.c === 'silver' ? C.steel : C.slate) : soft ? C[DARKER[s.c]] : C[s.c];
+    // the wide: the brightest fog, the rest steel (never silver: a star is not a highlight); closer in,
+    // a step darker again
+    const c = close ? (s.c === 'silver' ? C.steel : C.slate) : s.c === 'silver' ? C.fog : soft ? C.slate : C.steel;
     plot(b, x, y, c);
   }
 }
+// the wall drawn larger than ~1.25x the wide (the two-shot, singles): Nova's face there is a step darker
+// than in the wide (L* ~44), so COSMOS's stars and ring drop a step
+const CLOSE_K = 0.9;
 
 // the emblem an idle drew (wall-local px): its centre column and bottom row, for the place caption
-const IDLE = { cx: 0, bot: 0 };
+const IDLE = { cx: 0, cy: 0, hw: 0, bot: 0 };
 
 /**
  * The programme's idle art, in the free box that suits it, positioned on the box's unrounded edges
@@ -2060,9 +2108,11 @@ function drawIdle(b, L, spec, style, env, caption = '') {
       const f = fbox(L, box), fh = f.y1 - f.y0 - reserve;
       const cx = Math.round((f.x0 + f.x1) / 2);
       // in the wall's upper half (tech-bytes.md §3.4), clear of the top edge
-      const cy = Math.round(f.y0 + Math.max(15 * ts, Math.min(fh * 0.36, fh - 14 * ts)));
+      const cy = Math.round(f.y0 + Math.max((reserve ? 13 : 15) * ts + 1, Math.min(fh * 0.36, fh - 14 * ts)));
       drawChip(b, cx, cy, ts);
       IDLE.cx = cx;
+      IDLE.cy = cy;
+      IDLE.hw = 13 * ts;
       IDLE.bot = cy + 13 * ts;
       break;
     }
@@ -2081,8 +2131,10 @@ function drawIdle(b, L, spec, style, env, caption = '') {
       }
       const cy = f.y0 + Math.max(R + 3, Math.min(fh * 0.45, fh - R - 3));
       const az = env.lod >= 2 ? env.frozenAz : planetAzimuth(env.t);
-      sig = drawPlanet(b, cx, cy, R, az, ts > 1 ? 2 : 1);
+      sig = drawPlanet(b, cx, cy, R, az, env.k >= CLOSE_K ? 2 : 1);
       IDLE.cx = Math.round(cx);
+      IDLE.cy = Math.round(cy);
+      IDLE.hw = Math.ceil(2 * R);
       IDLE.bot = Math.round(cy) + R + 1;
       break;
     }
@@ -2103,6 +2155,8 @@ function drawIdle(b, L, spec, style, env, caption = '') {
       // the 16 px rule, 2 px tall so it reads at 1x on the slate field
       rect(b, cx - 8 * ws, top + th + 4 * ws, cx + 8 * ws, top + th + 4 * ws + 2, C.darkGreen);
       IDLE.cx = cx;
+      IDLE.cy = top + Math.round(th / 2);
+      IDLE.hw = Math.ceil(tw / 2);
       IDLE.bot = top + th + 4 * ws + 2;
       break;
     }
@@ -2125,6 +2179,8 @@ function drawIdle(b, L, spec, style, env, caption = '') {
       const cx = Math.round((f.x0 + f.x1) / 2), cy = Math.round(f.y0 + (fh - 2 * rr) / 2 + rr);
       drawDial(b, cx, cy, rr, spec.phase, ts);
       IDLE.cx = cx;
+      IDLE.cy = cy;
+      IDLE.hw = rr + 1;
       IDLE.bot = cy + rr + 1;
       break;
     }
@@ -2133,22 +2189,42 @@ function drawIdle(b, L, spec, style, env, caption = '') {
       const R = Math.max(6, Math.round(23 * cs));
       box = pickBox(L, 2 * R + 4, 2 * R + 4 + reserve, false);
       const f = fbox(L, box), fh = f.y1 - f.y0 - reserve;
-      const Rf = Math.max(6, Math.min(R, Math.floor(Math.min(bw(box), bh(box) - reserve) / 2) - 2));
+      // (sized on the box's unrounded edges too: a push never toggles the globe a pixel up and down)
+      const Rf = Math.max(6, Math.min(R, Math.floor(Math.min(f.x1 - f.x0, fh) / 2) - 2));
       const cx = (f.x0 + f.x1) / 2;
       const cy = f.y0 + fh / 2;
       const lam = globeLam(env.t, env.lod, env.frozenLam);
       sig = drawGlobe(b, cx, cy, Rf, lam, true);
       IDLE.cx = Math.round(cx);
+      IDLE.cy = Math.round(cy);
+      IDLE.hw = Rf + 2;
       IDLE.bot = Math.round(cy) + Rf + 2;
     }
   }
   if (caption) {
     const text = fitPlace(caption, bw(box) - 4, 'micro', 1);
-    const y = IDLE.bot + 3;
-    if (text && y + mh <= box.y1 - 1) {
+    const y = IDLE.bot + 2;
+    const side = box.x1 - 2 - (IDLE.cx + IDLE.hw + 6);
+    const t3 = fitPlace(caption, side, 'micro', 1);
+    if (text && y + mh <= box.y1) {
       const tw = textWidth(text, 'micro', 1);
       const x = Math.max(box.x0 + 2, Math.min(box.x1 - 2 - tw, Math.round(IDLE.cx - tw / 2)));
       stampText(b.px, b.w, b.h, text, x, y, C.fog, 'micro', 1);
+    } else if (!L.heads && t3) {
+      // no room under the emblem (a single's short visible wall): beside it, on its centre line
+      stampText(b.px, b.w, b.h, t3, IDLE.cx + IDLE.hw + 6, IDLE.cy - Math.floor(mh / 2), C.fog, 'micro', 1);
+    } else if (L.heads) {
+      // no room under the emblem (the solo wide's band above the head): beside the head, below the
+      // emblem, in the wider free side
+      for (const sb of bw(L.left) >= bw(L.right) ? [L.left, L.right] : [L.right, L.left]) {
+        const t2 = fitPlace(caption, bw(sb) - 4, 'micro', 1);
+        const y0 = Math.max(sb.y0 + 2, IDLE.bot + 4);
+        if (!t2 || y0 + mh > sb.y1 - 2) continue;
+        const tw = textWidth(t2, 'micro', 1);
+        const fb = fbox(L, sb);
+        stampText(b.px, b.w, b.h, t2, Math.round((fb.x0 + fb.x1 - tw) / 2), Math.round(y0 + Math.min(4, (sb.y1 - 2 - mh - y0) * 0.3)), C.fog, 'micro', 1);
+        break;
+      }
     }
   }
   return sig;

@@ -4,7 +4,7 @@
 //
 //   render(t)                 draw the instant t into scene.frame; returns { cam, heads }
 //   set({ programme, framing, wall, presenters, cache, phase, image, place, lat, lon,
-//         figure, label, sub, since, move, lod })
+//         figure, label, sub, since, move, lod, wipe })   (wipe/noCut: the change wipes, no cut)
 //   profile(n)                ms per frame: bg uncached worst case (moving camera, animating
 //                             wall), bg cached, desk, actors — per the current programme/framing
 //   FRAMINGS, WALLS, CASTS    the lab's vocabularies
@@ -197,8 +197,9 @@ export function set(o = {}) {
   if ('cache' in o) setCacheEnabled(o.cache);
   const after = `${LAB.programme}|${LAB.framing}|${LAB.wall}|${LAB.image}|${LAB.place}`;
   // a lab change is a cut: the wall shows the new state at once
-  // (noCut: true changes the wall in the same shot, as a director update without a cut: it wipes)
-  if (!o.noCut && (before !== after || 'figure' in o || 'phase' in o)) LAB.shotSince = (LAB.shotSince || 0) + 1;
+  // (noCut: true, or wipe: true, changes the wall in the same shot, as a director update without a
+  // cut: it wipes over 0.3 s, so a contact sheet can show the wipe)
+  if (!o.noCut && !o.wipe && (before !== after || 'figure' in o || 'phase' in o)) LAB.shotSince = (LAB.shotSince || 0) + 1;
   return { ...LAB };
 }
 

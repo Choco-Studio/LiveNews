@@ -50,6 +50,7 @@ import { P } from '../../palette.js';
 import { TILT, clamp } from './space.js';
 import { material, toneN, MAT, LIGHT } from './pixbuf.js';
 import { GROUPS, GROUPS_PER_ACTOR } from './character.js'; // read at draw time only (character.js imports this module)
+import { camRef, rollAxis, pronationOf, palmNormal } from './gestures/orient.js';
 
 export { drawProps } from './props.js';
 
@@ -129,8 +130,6 @@ export function newHandGeometry() {
 }
 
 const TMP = [0, 0, 0], TMP2 = [0, 0, 0], REF = [0, 0, 0], WV = [0, 0, 0];
-// half-width of the soft pronation side (D·WV): narrow, so authored poses keep their palm side
-const SOFT_D = 0.18;
 
 /**
  * Build the 3D hand of a solved arm.
@@ -149,42 +148,33 @@ export function handGeometry(L, arm, side, g) {
   f[1] = arm.handDir[1];
   f[2] = arm.handDir[2];
   norm3(f);
-  // REF: the direction "most toward the camera" perpendicular to f (the palm faces it at facing = 1);
-  // when the hand points at the lens it blends toward "up" so it never flips
-  REF[0] = -f[0] * f[2];
-  REF[1] = -f[1] * f[2];
-  REF[2] = 1 - f[2] * f[2];
-  const rl = Math.sqrt(REF[0] * REF[0] + REF[1] * REF[1] + REF[2] * REF[2]);
-  if (rl < 0.35) {
-    // "up" (0, -1, 0) made perpendicular to f, mixed in as f turns toward the lens
-    const k = (0.35 - rl) / 0.35;
-    REF[0] += f[0] * f[1] * k;
-    REF[1] += (f[1] * f[1] - 1) * k;
-    REF[2] += f[2] * f[1] * k;
-  }
-  norm3(REF);
-  // WV: the axis the palm turns toward as it leaves the camera, f × REF (unit: f and REF are perpendicular unit
-  // vectors), on the side of natural pronation D = (−0.35·side, 1, 0) (down and a little outward). The side is
-  // a SOFT sign: where the hand's screen direction runs along D (or it points at the lens) the hard sign flipped
-  // the palm through 180° in one frame (critic r3: the lift / point_screen flutter); there the roll now turns
-  // continuously through the nearer pole instead.
-  cross3(f, REF, WV);
-  norm3(WV);
-  const sgD = clamp((WV[1] - side * 0.35 * WV[0]) / SOFT_D, -1, 1);
+  // the authored palm normal (gestures/orient.js): camera-relative `facing`, turning toward the gesture's
+  // pronation side `pro` (rig.js: baked per gesture, continuous) or, for a caller that passes none, the
+  // per-frame side of natural pronation (down and a little outward)
   const facing = clamp(hd.facing, -1, 1);
   const sup = clamp(hd.sup || 0, 0, 1);
-  // roll from the camera reference: acos(facing) on the pronation side (sup 0) or the supination side (sup 1).
-  // A change of side turns through the NEARER pole: through "palm to camera" while the palm faces the lens,
-  // through "back to camera" while the back does (a sup switch at facing −1 is no motion at all, where the old
-  // a·(1 − 2·sup) rolled the hand a full turn through palm-out in 0.14 s)
-  const sgn = sgD * (1 - 2 * sup);
-  const a = Math.acos(facing);
-  const th = facing >= 0 ? a * sgn : Math.PI - (Math.PI - a) * sgn;
-  const ct = Math.cos(th), st = Math.sin(th);
-  n[0] = REF[0] * ct + WV[0] * st;
-  n[1] = REF[1] * ct + WV[1] * st;
-  n[2] = REF[2] * ct + WV[2] * st;
-  norm3(n);
+  let pro = hd.pro;
+  if (pro == null) pro = pronationOf(rollAxis(f, camRef(f, REF), WV), side);
+  palmNormal(f, facing, sup, clamp(pro, -1, 1), n, REF, WV);
+  // a gesture that sweeps the hand across the front carries its palm direction in `palm` instead (baked
+  // by gestures/index.js: the apex palm transported along the sweep without twist; palm ⟂ f): no camera
+  // pole, no roll while the fingers swing past the lens
+  const pw = hd.palmW > 0 ? Math.min(1, hd.palmW) : 0;
+  if (pw > 0) {
+    const P = hd.palm;
+    const k = P[0] * f[0] + P[1] * f[1] + P[2] * f[2];
+    TMP2[0] = P[0] - f[0] * k;
+    TMP2[1] = P[1] - f[1] * k;
+    TMP2[2] = P[2] - f[2] * k;
+    const pl = Math.sqrt(TMP2[0] * TMP2[0] + TMP2[1] * TMP2[1] + TMP2[2] * TMP2[2]);
+    if (pl > 1e-4) {
+      n[0] += (TMP2[0] / pl - n[0]) * pw;
+      n[1] += (TMP2[1] / pl - n[1]) * pw;
+      n[2] += (TMP2[2] / pl - n[2]) * pw;
+      // (re-orthogonalise against f: the blend of two vectors perpendicular to f stays perpendicular, up to rounding)
+      norm3(n);
+    }
+  }
   cross3(f, n, t);
   t[0] *= side;
   t[1] *= side;

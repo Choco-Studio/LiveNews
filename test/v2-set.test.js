@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import { C, Frame } from '../public/js/v2/canvas25d/pixbuf.js';
 import { styleFor, setStyle, STYLE_IDS, currentStyle } from '../public/js/v2/canvas25d/studio/styles.js';
 import { drawBackground, drawDesk, setCacheEnabled, invalidateSet, wallRect, wallFromScene } from '../public/js/v2/canvas25d/studio/set.js';
-import { resetWall, wallShown, planetAzimuth, plateRectFor, mediaRectFor, warmWallContent, updateWall } from '../public/js/v2/canvas25d/studio/wall.js';
-import { LSTAR, lstarRGB, nameOf, isPalette, census, share, SATURATED } from '../public/js/v2/canvas25d/studio/color.js';
+import { resetWall, wallShown, planetAzimuth, plateRectFor, mediaRectFor, figureRectFor, warmWallContent, updateWall, wallPicture, prepareImage } from '../public/js/v2/canvas25d/studio/wall.js';
+import { LSTAR, lstarRGB, nameOf, isPalette, census, share, SATURATED, labRGB } from '../public/js/v2/canvas25d/studio/color.js';
 import { SET } from '../public/js/v2/canvas25d/studio/geometry.js';
 import * as lab from '../public/js/v2/canvas25d/labs/set.js';
 import * as setMod from '../public/js/v2/canvas25d/studio/set.js';
@@ -987,5 +987,146 @@ describe('fix round 2 (critics of fix round 1)', () => {
       for (let y = Math.max(22, r.y0 + 2); y < Math.min(136, r.y1 - 2); y++) for (let x = Math.max(8, r.x0 + 2); x < Math.min(376, r.x1 - 2); x++) seen.add(px[y * W + x]);
       assert.ok(seen.size >= 3, `${programme} ots: a blank wall (${seen.size} colours)`);
     }
+  });
+});
+
+describe('fix round 3 (critics of fix round 2)', () => {
+  test('a wall figure is never shortened or clipped: every realistic value shows whole inside its free box, or not at all', { skip: !CAMERA && 'camera.js unavailable (framings are CAMERA\'s)' }, () => {
+    const values = ['$1.2 BILLION', '3.4 MILLION', '40,000 A DAY', '1.5 TRILLION', '12,400 KM', '82%', '$82.40', '5.2 MAGNITUDE', '1,200 PEOPLE', '$1,234,567', '12,400,000'];
+    let shown = 0, n = 0;
+    for (const programme of [...STYLE_IDS, 'generic']) {
+      const solo = ['money-minute', 'news-60'].includes(programme);
+      for (const framing of lab.FRAMINGS) {
+        if (solo && framing === 'single-b') continue;
+        const cam = lab.cameraFor(framing, programme);
+        for (const value of values) {
+          n++;
+          const r = figureRectFor(cam, { value, label: 'FUNDING ROUND', pre: 'ABOUT' }, programme === 'generic' ? 'weekend-review' : programme);
+          if (!r) continue; // (then the story's plate or the idle shows: never a cut number)
+          shown++;
+          const what = `${programme} ${framing} "${value}"`;
+          assert.equal(r.lines.join(' '), value, `${what}: shown as "${r.lines.join(' / ')}"`);
+          assert.ok(r.x0 >= r.box.x0 && r.x1 <= r.box.x1 && r.y0 >= r.box.y0 && r.y1 <= r.box.y1, `${what}: outside its free box`);
+          assert.ok(r.x0 >= Math.max(r.wall.x0, 8) && r.x1 <= Math.min(r.wall.x1, 376) && r.y0 >= Math.max(r.wall.y0, 22) && r.y1 <= Math.min(r.wall.y1, 136), `${what}: outside the visible wall`);
+          for (const h of r.heads) assert.ok(r.x1 + 6 <= h.x0 || r.x0 >= h.x1 + 6 || r.y1 + 6 <= h.y0 || r.y0 >= h.y1 + 6, `${what}: within 6 px of a head`);
+          if (programme === 'money-minute' && framing === 'mcu-r') assert.ok(r.x0 >= 24 && r.x1 <= 176 && r.y1 <= 120, `${what}: outside the MCU-R panel`);
+        }
+      }
+    }
+    assert.ok(shown >= n * 0.8, `${shown}/${n} figures shown`);
+  });
+
+  test('story walls carry nothing the strap already says: no lone kicker, tag, source or feature label', () => {
+    const progs = ['world-now', 'tech-bytes', 'cosmos', 'money-minute', 'news-60'];
+    const cases = [
+      { kicker: 'GADGETS' },
+      { kicker: 'AND FINALLY', location: { place: 'TOKYO, JAPAN' } },
+      { kicker: 'NUMBER OF THE DAY', location: { place: 'TOKYO, JAPAN' } },
+      { kicker: 'AROUND THE WORLD' },
+      { kicker: 'ELECTIONS', location: { place: 'ATHENS, GREECE' } },
+      { category: 'tech', source: 'Circuit Weekly' },
+    ];
+    for (const id of progs) {
+      for (const c of cases) {
+        for (const framing of [null, 'mcu-r', 'single']) {
+          const seg = { type: 'story', storyId: 'x', source: 'Circuit Weekly', ...c };
+          const w = wallFromScene({ program: { id }, cast: id === 'money-minute' || id === 'news-60' ? { A: 'sam' } : { A: 'paco', B: 'lola' }, images: new Map(), storyId: 'x', framing, wall: { mode: 'source', source: 'Circuit Weekly' }, lowerThird: { kicker: c.kicker || 'TECHNOLOGY' }, segPlan: { ctx: { seg, shots: [] } } });
+          const what = `${id} ${framing} ${JSON.stringify(c)} → ${w.mode} "${w.label}" / "${w.sub}"`;
+          assert.ok(!/CIRCUIT/i.test(`${w.label} ${w.sub}`), `${what}: the source`);
+          assert.ok(!/^(AND FINALLY|NUMBER OF THE DAY|AROUND THE WORLD)$/.test(w.label), `${what}: a feature label`);
+          // a word equal to the strap's tag only with something new under it (the place) or a figure
+          if (w.label && (w.label === c.kicker || w.label === 'TECHNOLOGY')) assert.ok(w.sub || w.figure, what);
+        }
+      }
+    }
+  });
+
+  test('wall pictures keep their hues: no output pixel more than 90° off its source hue, no green out of a fire, MONEY keeps its forests green', () => {
+    const imgs = ['volcano', 'wildfire', 'forest', 'rice', 'port', 'reef', 'mars'];
+    for (const style of ['world-now', 'money-minute', 'news-60', 'cosmos', 'tech-bytes']) {
+      for (const name of imgs) {
+        const img = fixture(name);
+        const r = wallPicture(img, 146, 63, style);
+        let off = 0, both = 0, green = 0, srcGreen = 0;
+        for (let i = 0; i < r.px.length; i++) {
+          const c = r.px[i];
+          const q = labRGB(c & 255, (c >>> 8) & 255, (c >>> 16) & 255);
+          const ra = q[1] - 4, rb = q[2] + 16; // the palette colour off the wall's (cool) neutral axis
+          const sc = Math.hypot(r.A[i], r.B[i]);
+          if (sc > 12 && Math.hypot(ra, rb) > 12) {
+            both++;
+            let d = Math.abs(Math.atan2(r.B[i], r.A[i]) - Math.atan2(rb, ra));
+            if (d > Math.PI) d = 2 * Math.PI - d;
+            if (d > Math.PI / 2) off++;
+          }
+          if (c === C.darkGreen) green++;
+          const h = (Math.atan2(r.B[i], r.A[i]) * 180) / Math.PI;
+          if (sc > 10 && h > 115 && h < 200) srcGreen++;
+        }
+        assert.ok(off <= both * 0.01, `${style} ${name}: ${off}/${both} pixels more than 90° off their hue`);
+        if (srcGreen === 0) assert.equal(green, 0, `${style} ${name}: ${green} darkGreen px from a picture with no green`);
+        if (name === 'forest' && style === 'money-minute') assert.ok(green > r.px.length * 0.05, `MONEY forest: green ${green}`);
+      }
+    }
+  });
+
+  test('a plate or a figure never bobs under a slow push: its pixels move one way (no A→B→A flip-back)', () => {
+    for (const [programme, framing, wall] of [['money-minute', 'mcu-r', 'plate'], ['money-minute', 'mcu-r', 'figure'], ['world-now', 'single-a', 'plate'], ['tech-bytes', 'single-a', 'plate']]) {
+      lab.set({ programme, framing, wall, label: 'OIL MARKETS', sub: 'LAGOS, NIGERIA', figure: { value: '$82.40', label: 'BRENT CRUDE' }, presenters: false, cache: true, move: { type: 'push', amount: 0.04, delay: 0.5, dur: 5 } });
+      lab.reset();
+      const { cam } = lab.render(0);
+      const r = wallRect(cam);
+      let prev = null, flips = 0;
+      const lastVal = new Uint32Array(W * H), last = new Int32Array(W * H).fill(-999);
+      for (let i = 0; i < 360; i++) {
+        lab.render(i / 60);
+        const px = lab.frame.px;
+        if (prev) {
+          for (let k = 0; k < W * H; k++) {
+            if (px[k] === prev[k]) continue;
+            const x = k % W, y = (k / W) | 0;
+            if (x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1 && px[k] === lastVal[k] && i - last[k] <= 15) flips++;
+            lastVal[k] = prev[k];
+            last[k] = i;
+          }
+        }
+        prev = Uint32Array.from(px);
+      }
+      assert.equal(flips, 0, `${programme} ${framing} ${wall}: ${flips} flip-backs on the wall`);
+    }
+    lab.set({ move: null });
+  });
+
+  test('COSMOS two-shot and singles: nothing on the wall brighter than Nova\'s face', { skip: !PRESENTERS && 'presenter modules unavailable' }, () => {
+    for (const framing of ['two', 'single-a']) {
+      lab.set({ programme: 'cosmos', framing, wall: 'idle', presenters: true });
+      lab.reset();
+      const m = lab.measure(10);
+      const face = Math.min(...m.faces);
+      const { cam } = lab.render(10);
+      const r = wallRect(cam);
+      let bright = 0;
+      for (let y = Math.max(0, r.y0); y < Math.min(H, r.y1); y++) for (let x = Math.max(0, r.x0); x < Math.min(W, r.x1); x++) if (LSTAR[nameOf(lab.frame.px[y * W + x])] > face + 0.5) bright++;
+      assert.equal(bright, 0, `cosmos ${framing}: ${bright} wall px brighter than the face (${face.toFixed(1)})`);
+    }
+  });
+
+  test('MONEY MINUTE and NEWS IN 60 solo wide: a story picture never sits behind the head', () => {
+    // (covered pixel by pixel in the round-1 picture test; here the layout for every fixture size)
+    for (const programme of ['money-minute', 'news-60']) {
+      const cam = lab.cameraFor('wide', programme);
+      const m = mediaRectFor(cam, programme);
+      for (const h of m.heads) assert.ok(m.y1 + 6 <= h.y0 + 1, `${programme}: picture bottom ${m.y1}, head top ${h.y0}`);
+    }
+  });
+
+  test('prepareImage reads a picture once; the cut then only filters and maps it', () => {
+    const img = fixture('rice');
+    assert.equal(prepareImage(img), true);
+    assert.equal(prepareImage(img), true);
+    assert.equal(prepareImage(null), false);
+    // wallFromScene queues every picture of scene.images for that preparation by itself
+    const images = new Map([['a', fixture('mars')], ['b', fixture('reef')]]);
+    assert.doesNotThrow(() => wallFromScene({ program: { id: 'world-now' }, cast: { A: 'paco', B: 'lola' }, images, storyId: 'a', wall: { mode: 'image' }, segPlan: { ctx: { seg: { type: 'story', storyId: 'a' } } } }));
   });
 });

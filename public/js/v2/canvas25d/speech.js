@@ -30,7 +30,7 @@ const MIN_HOLD = 0.042; // s a dominant mouth shape is held at least
 const MBP_LEAD = 1 / 60; // a lip closure may cut that hold short by one 60 Hz frame (it is the shape that must show)
 const RISE = 15; // per s: the opening rises at most 0.25 per 60 Hz frame (shut to half open over ~2 frames, never in one)
 const OHOLD = 0.08; // s the visible opening is held (ohold)
-const PREROLL = 90; // steps of 1/60 s replayed after a jump: 1.5 s, longer than the slowest envelope's memory
+const PREROLL = 180; // steps of 1/60 s replayed after a jump: 3 s, five times the slowest envelope's memory (act, 0.6 s)
 
 /** Smooth non-repeating drift in -1..1 (same recipe as idle.js wobble; kept here to avoid an import cycle). */
 function wobble(t, seed) {
@@ -53,7 +53,7 @@ function blankFrame(slot) {
   return {
     slot, speaking: false, level: 0, voice: -1, viseme: 'rest', next: 'rest', mix: 0, accent: 0, pause: false,
     sentenceIndex: -1, wordIndex: -1, charIndex: -1, emph: 0, env: 0, jawEnv: 0, act: 0, pauseAt: FAR, sentAt: FAR, endAt: FAR, startAt: FAR,
-    pausePrev: FAR, endPrev: FAR, ohold: 0,
+    pausePrev: FAR, endPrev: FAR, ohold: 0, vquiet: false,
   };
 }
 
@@ -87,9 +87,9 @@ export function sampleSpeech(sp, t) {
  * the same instant from several layers and the follow-through pose asks for an
  * earlier one: both get the current frame) into a reused object, and keeps the
  * envelopes as state. A jump (first frame, a seek, a lab capture out of order)
- * pre-rolls 1.5 s at 60 Hz from a quiet state (longer than the slowest envelope's
- * memory: act releases over 0.6 s), so an instant renders (nearly) the same whatever
- * came before it.
+ * pre-rolls 3 s on the 60 Hz grid from a quiet state (five times the slowest
+ * envelope's memory: act releases over 0.6 s), so an instant renders the same as in
+ * a 60 fps walk through it, within ~1 % of that envelope (critic r3).
  */
 export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
   const raw = {};
@@ -97,10 +97,13 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
   let lastT = null;
   let wasPause = false, wasSpeaking = false, lastSentence = -1, opened = false;
   let shown = 'rest', shownAt = -1e9, lastShape = 'rest', lastShapeAt = -1e9;
-  let lastLevel = 0, oholdAt = -1e9;
+  let lastLevel = 0, oholdAt = -1e9, vRef = 0, vRefAt = -1e9, vTrend = 0;
   const reset = () => {
     lastLevel = 0;
     oholdAt = -1e9;
+    vRef = 0;
+    vRefAt = -1e9;
+    vTrend = 0;
     Object.assign(fr, blankFrame(slot));
     wasPause = false;
     wasSpeaking = false;
@@ -149,6 +152,17 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
     // part early) or rest while the voice is still sounding (the lips shut under sound)
     const voice = typeof raw.voice === 'number' && raw.voice >= 0 ? raw.voice : -1;
     fr.voice = voice;
+    // the voice's trend over ~15 ms (the engine caches its loudness for 8 ms): the engine smooths
+    // it with a 60 ms release, so a falling voice under 0.15 is already a pause in the recording
+    if (voice < 0) {
+      vTrend = 0;
+      vRefAt = -1e9;
+    } else if (t - vRefAt >= 0.015) {
+      vTrend = vRefAt > -1e8 ? voice - vRef : 0;
+      vRef = voice;
+      vRefAt = t;
+    }
+    fr.vquiet = voice >= 0 && voice < 0.15 && vTrend < 0;
     if (voice >= 0) {
       // silence closes the mouth; the opening returns with the sound (smoothstep 0.03..0.3)
       const g = voice <= 0.03 ? 0 : voice >= 0.3 ? 1 : smooth((voice - 0.03) / 0.27);
@@ -161,8 +175,11 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
       // until another shape has shown (else the lips part, shut in the pause and part again)
       // (a murmur is short: after 0.1 s an audible voice is the next word, not the m)
       const murmur = lastShape === 'MBP' && t - lastShapeAt < 0.1 && (fr.viseme === 'rest' || fr.viseme === 'MBP') && (fr.next === 'rest' || fr.mix < 0.5);
-      if (!pressing && !murmur && voice > 0.2) {
-        const floor = 0.16 * smooth((voice - 0.2) / 0.2);
+      // (a rising voice reaches the visible parting sooner, so a word's first sound is seen
+      // with it; a falling one lets go sooner, so the lips close in the pause after it)
+      const rising = vTrend > 0;
+      if (!pressing && !murmur && voice > (rising ? 0.1 : 0.2)) {
+        const floor = 0.16 * (rising ? smooth((voice - 0.1) / 0.18) : smooth((voice - 0.2) / 0.2));
         if (fr.level < floor) fr.level = floor;
       }
     } else if (fr.viseme === 'rest' && fr.next !== 'rest' && opened) {
@@ -176,19 +193,22 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
     }
     // the opening never jumps from shut to half open in one frame (critic r3: 21 % of the onsets
     // rose 0.1 → 0.5 in under 25 ms); closing is free (a lip closure is instant)
+    // (the envelopes below keep the unlimited level: env is UNIT-8's indicator, 30 ms attack)
+    const level = fr.level;
     if (fr.level > lastLevel + RISE * dt) fr.level = lastLevel + RISE * dt;
     lastLevel = fr.level;
-    // the visible opening, held for OHOLD after its last peak (see ohold in the header)
-    if (fr.level >= fr.ohold || t - oholdAt > OHOLD) {
+    // the visible opening, held for OHOLD after its last peak (see ohold in the header); not
+    // into a pause (the recording fell silent): there the lips close with the sound
+    if (fr.level >= fr.ohold || t - oholdAt > OHOLD || fr.vquiet) {
       fr.ohold = fr.level;
       oholdAt = t;
     }
     if (!fr.speaking) opened = false;
     else if (fr.level > 0.12) opened = true;
-    fr.env = ease(fr.env, fr.level, 0.03, 0.12, dt);
+    fr.env = ease(fr.env, level, 0.03, 0.12, dt);
     // the jaw (chin outline) moves with the phrase, not with every syllable: a chin
     // that bobs a pixel per syllable reads as chattering at this resolution
-    fr.jawEnv = ease(fr.jawEnv, fr.speaking ? fr.level : 0, 0.07, 0.22, dt);
+    fr.jawEnv = ease(fr.jawEnv, fr.speaking ? level : 0, 0.07, 0.22, dt);
     fr.emph = ease(fr.emph, fr.accent, 0.09, 0.42, dt);
     fr.act = ease(fr.act, fr.speaking ? 1 : 0, 0.25, 0.6, dt);
     // (the previous pause / end too: idle.js keeps an event blink's place in the timetable until
@@ -214,9 +234,18 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
       if (t === lastT) return fr;
       if (lastT !== null && t < lastT && lastT - t < 0.5) return fr; // follow-through pose: same frame
       if (lastT === null || t < lastT || t - lastT > 0.5) {
+        // on the 60 Hz grid (a 60 fps walk samples the same instants, so the shape holds and
+        // the held opening decide alike), then the instant itself
         reset();
-        for (let k = PREROLL; k >= 1; k--) step(t - k / 60, 1 / 60);
-        step(t, 1 / 60);
+        const g = Math.floor(t * 60);
+        let prev = (g - PREROLL - 1) / 60;
+        for (let k = PREROLL; k >= 0; k--) {
+          const tk = (g - k) / 60;
+          if (tk >= t) break;
+          step(tk, tk - prev);
+          prev = tk;
+        }
+        step(t, Math.max(1e-4, t - prev));
       } else step(t, t - lastT);
       lastT = t;
       return fr;

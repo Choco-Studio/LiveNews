@@ -1530,6 +1530,34 @@ test('direction: a short pickup before a card stays on the studio shot on air; t
   assert.equal(live.shots(ep.segments[1], false, () => {})[0].shot, 'fact');
 });
 
+test('direction: the air between segments is measured per pace gap kind (speechEnd -> next speechStart)', () => {
+  const ep = clone(episodeOf('world-now'));
+  const scene = { shot: 'wide', program: ep.program, cast: ep.cast, rundown: ep.rundown || [] };
+  const director = { scene, images: new Map(), setShot() {}, say: () => Promise.resolve() };
+  const live = new LiveDirection({ director, channel: { presenters: {} }, audio: { mode: 'mute' } });
+  live.schedule = () => {};
+  live.episode(ep);
+  const a = live.begin(ep.segments[1]);
+  a.sentence(0);
+  a.end();
+  const until = performance.now() + 30;
+  while (performance.now() < until) {
+    /* 30 ms of air */
+  }
+  const b = live.begin(ep.segments[2]);
+  b.sentence(0);
+  const st = live.airStats();
+  const kind = paceGap(ep, 1).kind;
+  assert.ok(st[kind], JSON.stringify(st));
+  assert.equal(st[kind].n, 1);
+  assert.ok(st[kind].mean >= 0.025 && st[kind].mean < 1, `${st[kind].mean}`);
+  assert.equal(st[kind].target, paceGap(ep, 1).gap);
+  // a segment that does not follow the last one spoken (a skip, a new episode) is not counted
+  const c = live.begin(ep.segments[4]);
+  c.sentence(0);
+  assert.equal(Object.values(live.airStats()).reduce((n, v) => n + v.n, 0), 1);
+});
+
 const splitCount = (text) => (String(text).match(/[.!?](\s|$)/g) || []).length;
 
 test('director: with v2 a new framing of the same shot restarts the shot clock; without v2 setShot is unchanged', async () => {

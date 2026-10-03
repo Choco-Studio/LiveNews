@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Station } from '../server/station.js';
+import { Station, episodeAir } from '../server/station.js';
 import { NewsDesk } from '../server/news.js';
 import { Producer } from '../server/producer.js';
 import { ProviderChain } from '../server/providers/index.js';
@@ -400,6 +400,29 @@ describe('Station playout: episodes and commercial breaks', () => {
     const bare = makeStation({ channel: makeChannel({ breaks: null }) });
     await bare.station.fill();
     assert.equal(walk(bare.station, 2)[1].ads, 2);
+  });
+
+  test('(editorial-2 fix r2) break cadence: a full break only after minProgrammeBetween s of programme air, light ones between', async () => {
+    const probe = makeStation();
+    await probe.station.fill();
+    const one = episodeAir(walk(probe.station, 1)[0]);
+    assert.ok(one > 0);
+    // about two and a half episodes of programme air between full breaks
+    const { station } = makeStation({ channel: makeChannel({ breaks: { adsPerBreak: 2, maxExtraAds: 3, minProgrammeBetween: Math.round(one * 2.5) } }) });
+    await station.fill();
+    const items = [];
+    let afterId;
+    for (let i = 0; i < 12; i++) {
+      const item = station.next(afterId);
+      items.push(item);
+      afterId = item.id;
+      await settle(station);
+    }
+    const breaks = items.filter((i) => i.kind === 'break' && !i.filler);
+    assert.ok(breaks.some((b) => b.light) && breaks.some((b) => !b.light), 'both kinds of break air');
+    for (const b of breaks) assert.equal(b.ads, b.light ? 1 : 2, 'a light break carries one spot and the UP NEXT promo');
+    assert.ok(breaks.every((b) => b.next), 'every break still says what is next');
+    assert.equal(items[1].light, true, 'one episode is not enough programme air for a full break');
   });
 
   test('after a break comes the next ready episode, in rotation order, and the cycle repeats', async () => {
@@ -1037,10 +1060,20 @@ describe('Station with the real Producer, NewsDesk and mock provider', () => {
     assert.deepEqual(episodes.map((e) => e.program.id), channel.rotation.slice(0, 7), 'a whole turn of the rotation');
     const stories = episodes.flatMap((e) => e.storyIds);
     assert.equal(new Set(stories).size, stories.length, 'no story is aired twice');
-    for (const brk of items.filter((i) => i.kind === 'break')) {
-      assert.equal(brk.filler, false);
-      assert.equal(brk.ads, channel.breaks.adsPerBreak);
-      assert.ok(channel.programs[brk.next.id], 'a break always says what is next');
+    // (editorial-2 fix r2, pace's break cadence) a full commercial break only after minProgrammeBetween seconds of
+    // programme air since the last one; before that a light break (one spot and the UP NEXT promo)
+    let air = 0;
+    for (const item of items) {
+      if (item.kind === 'episode') {
+        air += episodeAir(item);
+        continue;
+      }
+      assert.equal(item.filler, false);
+      const light = air < channel.breaks.minProgrammeBetween;
+      assert.equal(!!item.light, light, `${Math.round(air)} s of programme air since the last commercial break`);
+      assert.equal(item.ads, light ? 1 : channel.breaks.adsPerBreak);
+      assert.ok(channel.programs[item.next.id], 'a break always says what is next');
+      if (!light) air = 0;
     }
   });
 

@@ -45,6 +45,34 @@ export function headHW(H, y, jaw = 0) {
   return hw;
 }
 
+/**
+ * headHW for n rows from y0 every `step`, written into `out` (void: the per-frame half-width
+ * table boxed one heap number per row through headHW's return when it was not inlined,
+ * ~6 KB per head and frame in some V8 states; critic r3).
+ */
+function fillHW(H, y0, step, jaw, out, n) {
+  const R = H.R, cy = H.craniumY, ky = H.cheekY, chw = H.cheekHW, jp = H.jawPow, ip = 1 / jp, chinY = H.chinY + jaw, cz = H.chinHW;
+  for (let i = 0; i < n; i++) {
+    const y = y0 + i * step;
+    let hw;
+    if (y < cy) {
+      const d = y - cy, v = R * R - d * d;
+      hw = v > 0 ? Math.sqrt(v) : -1;
+    } else if (y < ky) hw = R + ((chw - R) * (y - cy)) / (ky - cy);
+    else if (y > chinY) hw = -1;
+    else {
+      const u = (y - ky) / (chinY - ky);
+      hw = chw * Math.pow(Math.max(0, 1 - Math.pow(u, jp)), ip);
+      if (u > 0.74) {
+        const k = (u - 0.74) / 0.26;
+        const chin = cz * Math.sqrt(Math.max(0, 1 - k * k * k * 0.9));
+        if (chin > hw) hw = chin;
+      }
+    }
+    out[i] = hw;
+  }
+}
+
 /** Feature-space x → head-local x after a yaw turn (features ride on the head's curve). */
 export function faceX(H, x, y, yaw, protrude = 0) {
   if (!yaw) return x;
@@ -486,7 +514,7 @@ export function drawHead(buf, L, m, head, s) {
   // half-width per 0.05 u of head-local y (with the jaw), so the pixel loop never calls pow
   S.lutY0 = H.top - 0.5;
   const n = Math.min(HW_LUT.length, Math.ceil((H.chinY + S.jaw + 0.5 - S.lutY0) * 20) + 1);
-  for (let i = 0; i < n; i++) HW_LUT[i] = headHW(H, S.lutY0 + i / 20, S.jaw);
+  fillHW(H, S.lutY0, 1 / 20, S.jaw, HW_LUT, n);
   S.lutN = n;
   // a tight box: the head's own extents (plus the jaw's 3/4 shift), rotated by the roll
   const hx = (Math.max(H.R, H.cheekHW) + 1.5) * s, top = (H.top - 0.4) * s, bot = (H.chinY + S.jaw + 0.6) * s;

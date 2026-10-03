@@ -18,7 +18,8 @@
 // and the sheen; the close-up adds separations and a steel specular.
 import { P } from '../../../palette.js';
 import { decal, material } from '../pixbuf.js';
-import { headHW } from '../head.js';
+import { headHW, faceX } from '../head.js';
+import { GROUPS } from '../character.js';
 import { drawGlasses } from '../glasses.js';
 import { clamp } from '../space.js';
 import { defineLook, SKIN_LIGHT } from './base.js';
@@ -52,6 +53,7 @@ export const ada = defineLook({
   persona: { sway: 0.5, headMotion: 0.75, blinkMin: 2.8, blinkMax: 6.2, energy: 0.8, smile: 0.05 },
   mats: {
     collar: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black, rim: P.silver }, // the roll of the same knit
+    collarFlat: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black }, // the wide: no rim stripe down the neck column
     // the hair without the resolve rim (it would dot the stepped outline); drawStraight paints it as arcs
     strands: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black, th: [0.62, 0.08, -0.42] },
   },
@@ -69,18 +71,22 @@ function drawHairBack(buf, L, m, head, s, sk) {
   const H = L.head;
   const lag = sk.hairLag || 0;
   const cyc = H.craniumY - 0.3;
+  // the wide: only behind the ear, never below the lobe, in ink (a black 2 x 2 pocket between the jaw and
+  // the neck read as a hole in the cheek at 1 px)
+  const wide = s < 1.35;
+  const yMax = wide ? L.ears.y + L.ears.h * 0.5 : END - 0.4;
   const x0 = head.cx - 1 * s, x1 = head.cx + (H.R + 2.2) * s;
   const y0 = head.cy + (H.craniumY - 1) * s, y1 = head.cy + (END + 1) * s;
   buf.shape(x0, y0, x1, y1, m.hairBack, (px, py) => {
     local(head, px, py, LC);
     const y = LC[1];
-    if (y < cyc || y > END - 0.4) return -1;
+    if (y < cyc || y > yMax) return -1;
     const k = clamp((y - 2) / (END - 2), 0, 1);
     const x = LC[0] - lag * k * k;
     if (x < 0) return -1;
     const jaw = hwAt(L, Math.min(y, H.chinY - 0.5));
     const hw = y < H.craniumY + 1 ? H.R + 0.6 : Math.min(jaw + 0.55, H.R + 0.4) - Math.max(0, y - H.chinY) * 0.08;
-    return x > hw ? -1 : 3;
+    return x > hw ? -1 : wide ? 2 : 3;
   });
 }
 
@@ -114,7 +120,7 @@ function drawStraight(buf, L, m, head, s, sk) {
     const dy = y - cyc;
     // ---- the outline: the crown with more volume on the big side of the part, a slight dip at the
     // part itself; the long side a panel that hugs the cheek, then rests out on the shoulder
-    let zone = 0, depth = 0, along = 0, outerW = 1;
+    let zone = 0, depth = 0, along = 0, outerW = 1, clumpK = 0, clumpW = 0;
     if (dy < 0) {
       const r = Math.sqrt(x * x + dy * dy);
       const a = fastAtan2(-x, -dy); // 0 at the top, + toward screen-left (the big side), - toward the tucked side
@@ -127,21 +133,32 @@ function drawStraight(buf, L, m, head, s, sk) {
       along = (a + 0.35) * RV; // measured from the part toward the big side
       outerW = R;
     } else if (x < 0) {
-      // long side: outer edge flares a little toward the ends, inner edge follows the cheek and the jaw
-      // the ends turn in a little toward the neck over the last 2.5 u (the cut rests on the shoulder)
+      // long side: outer edge flares a little toward the ends, drawing in slightly under the jaw (the hair
+      // falls past the jaw line before it rests out on the shoulder); inner edge follows the cheek and the
+      // jaw; the ends turn in a little toward the neck over the last 2.5 u
       const turn = Math.max(0, y - (END - 2.6));
-      const outer = H.R + 1.1 + k * 0.45 + k * k * 0.35 - turn * turn * 0.16;
+      const jy = y - (H.chinY + 0.6);
+      const cy1 = y - 1.2; // the curtain bends out over the cheekbone, draws in under the jaw, flares at the ends
+      const outer = H.R + 1.1 + 0.45 * Math.exp(-(cy1 * cy1) / 5) + k * 0.45 + k * k * 0.35 - turn * turn * 0.16 - 0.4 * Math.exp(-(jy * jy) / 3.2);
       const inner = y < H.chinY - 1.2 ? Math.max(0.5, hw - 0.45) : Math.max(2.4, chin12 - 0.45 - (y - H.chinY + 1.2) * 0.12);
-      // the cut is angled, longer at the front (by the face) than at the back, and steps strand by
-      // strand (deterministic) into soft points
-      const sid = Math.floor((outer + x) / (tr === 2 ? 0.9 : 1.3));
-      const endY = END + 0.6 - (-x - inner) * 0.42 + (hashInt(sid, 5) - 0.5) * (tr === 2 ? 1.0 : 0.4);
+      // the panel falls in 3-4 clumps (by depth in from the outer edge); the cut is angled, longer at the
+      // front (by the face), and each clump ends in its own soft, rounded point (strand by strand, never
+      // a stair of square steps)
+      // clumps as bands across the panel (by the fraction of its width), so they follow its outline and fan
+      // out as it widens below the jaw
+      const nC = tr === 2 ? 3.6 : 2.6;
+      const dd = outer + x;
+      const qq = clamp(dd / Math.max(0.8, outer - inner), 0, 0.999) * nC;
+      const kc = Math.floor(qq), wc = qq - kc;
+      const endY = END + 0.6 - (-x - inner) * 0.42 + (hashInt(kc, 5) - 0.5) * (tr === 0 ? 0.4 : 1.1) - (2 * wc - 1) * (2 * wc - 1) * (tr === 0 ? 0.3 : 0.75);
       if (-x <= outer && -x >= inner && y <= endY) zone = 2;
       else if (y < H.chinY - 1.2 && -x < inner && y < -0.5 && -x > hw - 1.0) zone = 2;
       if (zone) {
-        depth = outer + x; // from the outer edge inward
+        depth = dd; // from the outer edge inward
         along = PI2 * RV + 0.35 * RV + dy;
         outerW = Math.max(0.8, outer - inner);
+        clumpK = kc;
+        clumpW = wc;
       }
     } else if (y < earTop + 0.6) {
       const outer = H.R + 0.85 - Math.max(0, dy) * 0.2;
@@ -173,16 +190,16 @@ function drawStraight(buf, L, m, head, s, sk) {
     } else if (zone === 2) {
       const q = depth / outerW; // 0 outer edge → 1 face side
       form = q < 0.72 ? 2 : 3;
-      // the sheen of a straight curtain runs ACROSS the strands: a band at the cheekbone where the hair
-      // bends out over it, its lower edge broken into strand points (one per narrow clump), never a
-      // vertical stripe down the panel
-      if (tr > 0 && q > px1 / outerW && q < 0.84) {
-        const cwB = tr === 2 ? 0.85 : 1.3;
-        const kc = Math.floor(depth / cwB);
-        const wc = depth / cwB - kc;
-        const top = 3.4 + (hashInt(kc, 13) - 0.5) * 0.9 + q * 0.5;
-        const bot = 6.1 + (hashInt(kc, 17) - 0.5) * 1.7 - Math.abs(wc - 0.5) * 1.6 + q * 0.5;
-        if (dy > top && dy < bot) form = 1;
+      if (tr > 0) {
+        // the clumps: each rounded toward the key, its outer part ink and its inner part (where it tucks
+        // under the next) black, so the curtain reads as 3-4 clumps falling side by side
+        const hk = hashInt(clumpK, 23);
+        form = q > 0.9 ? 3 : clumpW < 0.5 + 0.12 * hk || depth < px1 * 1.5 ? 2 : 3;
+        // the sheen of a straight curtain runs ACROSS the strands: a band at the cheekbone where the hair
+        // bends out over it, crossing every clump at the same height as one staggered dash per clump
+        // (2-4 px long, inside the clump), never a lone wedge or a vertical stripe
+        const top = 3.5 + (hk - 0.5) * 0.7, len = (3 + Math.floor(hashInt(clumpK, 17) * 1.99)) * px1 + 0.25; // ≥ 3 px: never a speck
+        if (q < 0.86 && clumpW > 0.1 && clumpW < 0.5 && dy > top && dy < top + len) form = 1;
       }
       ST.spec = false;
       if (y > END - 1.0) form = Math.min(3, form + 1); // the blunt ends sit in shadow
@@ -229,7 +246,7 @@ function drawStraight(buf, L, m, head, s, sk) {
       ST.lo = -0.45 * RV;
       ST.hi = -0.05 * RV;
     }
-    let t = strandTone(form, depth, along, ST);
+    let t = zone === 2 && tr > 0 ? form : strandTone(form, depth, along, ST);
     if (zone === 2 && t === 1 && depth / outerW > 0.62) t = 2; // no sheen next to the face
     // keep the outer edge clean for the rim: no separations or specks in the outermost pixel
     if (depth < px1 && t > form) t = form;
@@ -243,20 +260,57 @@ function drawStraight(buf, L, m, head, s, sk) {
 
 const rimDecal = () => material('cast-b:rim', { ramp: [P.silver], line: P.ink, decal: true });
 
-// Glasses (FACES' drawGlasses), then the stud on the tucked-side ear.
+// Glasses (FACES' drawGlasses), clipped to the head and hair; in the wide the top bar of each lens;
+// then the stud on the tucked-side ear.
+const SAVE = new Uint8Array(160 * 48); // background mask of the eye band before the glasses (reused)
 function drawOver(buf, L, m, head, s, sk) {
+  const H = L.head, E = L.eyes;
+  // the eye band's box (screen px), roll ignored: the far lens at a glance must not stick out past the
+  // silhouette (FACES' lens foreshortening leaves a few px over the background), so lens pixels that
+  // land where nothing was drawn are taken back out
+  const bx0 = Math.max(1, Math.floor(head.cx - (H.R + 2.5) * s)), by0 = Math.max(1, Math.floor(head.cy + (E.y - 2.6) * s));
+  const bw = Math.min(160, Math.ceil((2 * H.R + 5) * s) + 1, buf.w - 1 - bx0), bh = Math.min(48, Math.ceil(5 * s) + 1, buf.h - 1 - by0);
+  for (let j = 0; j < bh; j++) for (let i = 0; i < bw; i++) SAVE[j * 160 + i] = buf.mat[(by0 + j) * buf.w + bx0 + i] ? 1 : 0;
   drawGlasses(buf, L, head, sk.face, s);
+  const g0 = head.gb + GROUPS.glasses, g1 = head.gb + GROUPS.glassesEnd;
+  for (let j = 0; j < bh; j++) {
+    for (let i = 0; i < bw; i++) {
+      const k = (by0 + j) * buf.w + bx0 + i;
+      if (!SAVE[j * 160 + i] && buf.mat[k] && buf.grp[k] >= g0 && buf.grp[k] <= g1) buf.mat[k] = 0;
+    }
+  }
+  if (s < 1.35) wideFrames(buf, L, m, head);
   if (!L.earrings || s < 1.2) return;
-  const H = L.head, E = L.ears;
+  const EA = L.ears;
   const turn = Math.sin(head.yaw);
   if (turn > 0.35) return; // the ear has slipped behind the skull
-  const hw = headHW(H, E.y, 0);
-  screen(head, hw + 0.15 - Math.max(0, turn) * 2.4, E.y + E.h * 0.38, SC);
+  const hw = headHW(H, EA.y, 0);
+  screen(head, hw + 0.15 - Math.max(0, turn) * 2.4, EA.y + EA.h * 0.38, SC);
   const cx = Math.round(SC[0]), cy = Math.round(SC[1]);
   const a = decal(L.earrings), b = decal(P.fog);
   buf.plot(cx, cy, a, 1);
   if (s >= 2.6) {
     buf.plot(cx, cy + 1, b, 1);
     buf.plot(cx + 1, cy, b, 1);
+  }
+}
+
+/**
+ * The wide: FACES draws the hinges and the bridge; the top bar of each lens (one slate row over the eye,
+ * on bare skin only, so it never thickens the brow) makes them read as glasses at 1 px per unit.
+ */
+function wideFrames(buf, L, m, head) {
+  const H = L.head, E = L.eyes;
+  const bar = decal(P.slate);
+  const yaw = head.yaw || 0;
+  for (const side of [-1, 1]) {
+    const fx = faceX(H, side * E.x, E.y, yaw, 0.4);
+    screen(head, fx, E.y, SC);
+    const ex = Math.round(SC[0] - 1), ey = Math.round(SC[1] - 0.5); // the 2 px eye's left pixel and row (as glasses.js)
+    const y = ey - 1;
+    for (let x = ex - 1; x <= ex + 2; x++) {
+      const i = y * buf.w + x;
+      if (buf.mat[i] === m.skin && buf.grp[i] === head.gb + GROUPS.head) buf.plot(x, y, bar, 1);
+    }
   }
 }

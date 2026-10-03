@@ -350,7 +350,7 @@ function ik(S, T, L1, L2, pole, E, Wt) {
 }
 
 function newSkeleton() {
-  const arm = () => ({ shoulder: [0, 0, 0], elbow: [0, 0, 0], wrist: [0, 0, 0], handDir: [0, 0, 1], hand: { curl: [0, 0, 0, 0, 0], spread: 0, facing: -1, sup: 0 } });
+  const arm = () => ({ shoulder: [0, 0, 0], elbow: [0, 0, 0], wrist: [0, 0, 0], handDir: [0, 0, 1], hand: { curl: [0, 0, 0, 0, 0], spread: 0, facing: -1, sup: 0, pro: 1, palm: [0, -1, 0], palmW: 0 } });
   return {
     body: { x: 0, y: 0, lean: 0, breathe: 0 },
     shoulder: { L: 0, R: 0 },
@@ -442,6 +442,13 @@ export function solve(L, c, side, sk = newSkeleton(), lagC = null) {
     arm.hand.spread = pass === 0 ? c.spread : c.spreadF;
     arm.hand.facing = pass === 0 ? c.facing : c.facingF;
     arm.hand.sup = clamp(pass === 0 ? c.sup : c.supF, 0, 1);
+    // the palm's turning side (gestures/orient.js), partner space → screen space: the mirror flips it
+    arm.hand.pro = (pass === 0 ? c.pro : c.proF) * m;
+    const pv = pass === 0 ? c.palm : c.palmF;
+    arm.hand.palm[0] = pv[0] * m;
+    arm.hand.palm[1] = pv[1];
+    arm.hand.palm[2] = pv[2];
+    arm.hand.palmW = clamp(pass === 0 ? c.palmW : c.palmWF, 0, 1);
     if (pass === 0 && reach > 0.001) reachGlasses(L, sk, arm, reach, sideKey);
     const pole = pass === 0 ? c.pole : c.poleF;
     PW[0] = pole[0] * m;

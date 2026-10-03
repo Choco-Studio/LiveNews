@@ -1422,6 +1422,20 @@ describe('NewsDesk.deskView', () => {
     assert.equal(view[1].covered, true);
     assert.equal(desk.deskView(1, now).length, 1);
   });
+
+  test('(editorial-2 fix r2) an undated item and a broken clock are marked for the editor', () => {
+    const now = Date.now();
+    const desk = makeDesk({
+      stories: [
+        { id: 'u', title: 'Undated story', summary: 'x'.repeat(100), source: 'A', category: 'world', weight: 1, published: now, image: null, undated: true },
+        { id: 'f', title: 'Story from the future', summary: 'x'.repeat(100), source: 'B', category: 'world', weight: 1, published: now - 12 * 3600_000, image: null, brokenDate: true },
+      ],
+    });
+    const byId = Object.fromEntries(desk.deskView(80, now).map((v) => [v.id, v]));
+    assert.equal(byId.u.undated, true);
+    assert.equal(byId.f.brokenDate, true);
+    assert.equal('brokenDate' in byId.u, false);
+  });
 });
 
 describe('news: editorial fixes (round 1)', () => {

@@ -73,6 +73,16 @@ export function validateChannel(ch) {
   for (const [id, who] of Object.entries(ch.presenters)) {
     if (who.role !== undefined && typeof who.role !== 'string') throw new Error(`presenter "${id}" has a "role" that is not text`);
   }
+  const b = ch.breaks;
+  if (b !== undefined) {
+    if (!b || typeof b !== 'object' || Array.isArray(b)) throw new Error('channel "breaks" is not an object');
+    const whole = (k, lo, hi) => b[k] === undefined || (Number.isInteger(b[k]) && b[k] >= lo && b[k] <= hi);
+    if (!whole('adsPerBreak', 1, 10)) throw new Error('channel "breaks.adsPerBreak" is not a whole number 1..10');
+    if (!whole('maxExtraAds', 0, 50)) throw new Error('channel "breaks.maxExtraAds" is not a whole number 0..50');
+    if (!(b.minProgrammeBetween === undefined || (typeof b.minProgrammeBetween === 'number' && b.minProgrammeBetween >= 0 && b.minProgrammeBetween <= 3600))) {
+      throw new Error('channel "breaks.minProgrammeBetween" is not 0..3600 seconds');
+    }
+  }
 }
 
 const isList = (v) => Array.isArray(v) && v.every((x) => typeof x === 'string');

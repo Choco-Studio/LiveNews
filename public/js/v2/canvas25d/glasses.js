@@ -48,9 +48,13 @@ const GI = new Float64Array(3);
  * Head-space point GI (units) → screen, through the head's curve, with pitch. Writes `out`.
  * Allocation-free (the wrap goes through head.js WRAP, the projection is inline).
  */
+// head-space y offset of the frame while drawGlasses runs: the glasses touch lifts it 1 px
+// (f.glassesLift, expression.js); 0 otherwise, so glassesAnchor() is never shifted
+let LIFT = 0;
+
 function mapG(head, out) {
   wrapBegin(head.L.head);
-  const yy = GI[1] + Math.sin(head.pitch || 0) * 2.0;
+  const yy = GI[1] + LIFT + Math.sin(head.pitch || 0) * 2.0;
   WRAP[0] = GI[0];
   WRAP[1] = yy;
   WRAP[2] = head.yaw || 0;
@@ -138,6 +142,7 @@ export function drawGlasses(buf, L, head, f, s) {
   const style = L.glasses.style || 'rect';
   const tier = s < 1.35 ? 0 : s < 2.2 ? 1 : 2;
   const E = L.eyes;
+  LIFT = (f && f.glassesLift >= 0.5 ? -1 : 0) / s;
   buf.part(gb + G_GLASSES, 14, false);
   if (tier === 0) {
     // wide: the outer hinge of each rim and the bridge, in the frame's lit colour and
@@ -157,6 +162,7 @@ export function drawGlasses(buf, L, head, f, s) {
     mapG(head, PT);
     buf.plot(Math.round(PT[0]), Math.round(PT[1] - 0.5), m.hi, 1);
     buf.part(g0, z0, c0);
+    LIFT = 0;
     return;
   }
   const shape = style === 'round' ? ROUND : RECT;
@@ -240,6 +246,7 @@ export function drawGlasses(buf, L, head, f, s) {
   buf.part(gb + G_GLASSES, 14, false);
   seg(buf, Math.round(ax) | 0, Math.round(ay) | 0, Math.round(PT[0]) | 0, Math.round(PT[1]) | 0, m.base);
   buf.part(g0, z0, c0);
+  LIFT = 0;
 }
 
 /**

@@ -386,7 +386,7 @@ test('mouthParams: the opening follows level, the width goes to mwide (not the e
   const d = { ...c, wide: 0 };
   mouthParams({ viseme: 'EE', next: 'EE', mix: 0, level: 0.4 }, d);
   assert.equal(solveFace(d, {}, 1).wide, 0, 'speech never widens the eyes');
-  assert.deepEqual(Object.keys(FACE_REST).sort(), ['level', 'mwide', 't']);
+  assert.deepEqual(Object.keys(FACE_REST).sort(), ['glassesLift', 'level', 'mwide', 'ohold', 't']);
 });
 
 function lipRun(name, dt = 0.001) {
@@ -943,12 +943,17 @@ async function realEngineMouths(withVoice) {
         const fr = sampleSpeech(src, performance.now() / 1000);
         mouthParams(fr, f, 1);
         const press = f.press > 0.5 && fr.speaking;
-        out.push({ t: performance.now(), open: f.open, vis: press ? 0 : Math.max(f.open, f.ohold || 0), press });
+        out.push({ t: performance.now(), open: f.open, vis: press ? 0 : Math.max(f.open, f.ohold || 0), press, speaking: fr.speaking, shown: fr.mix > 0.5 ? fr.next : fr.viseme });
         await advance(STEP_MS);
       }
       e.stop();
       await advance(50);
-      await Promise.race([run, advance(500)]);
+      // wait for the run to end in small steps (a raced advance(500) kept running in the
+      // background and jumped the virtual clock ~150 ms into the next clip: an artefact the
+      // critics' scripts measured as a late first word)
+      let done = false;
+      run.then(() => (done = true), () => (done = true));
+      for (let i = 0; i < 50 && !done; i++) await advance(10);
       assert.ok(first !== null, `the engine played "${seg.text.slice(0, 30)}"`);
       clips.push({ seg, perf0: first - words[0].t * 1000, lv, out });
     }
@@ -992,7 +997,7 @@ function lipOnsets(clips, thr) {
  * syllables, and the engine's 60 ms loudness release, are not pauses).
  */
 function lipAgreement(clips) {
-  let shut = 0, run = 0, longest = 0, openQuiet = 0;
+  let shut = 0, run = 0, longest = 0, openQuiet = 0, voiced = 0;
   for (const { seg, perf0, lv, out } of clips) {
     const rate = seg.levels.rate;
     const at = (i) => (i < 0 || i >= lv.length ? 0 : lv[i]);
@@ -1001,6 +1006,7 @@ function lipAgreement(clips) {
       const x = ((o.t - perf0) / 1000) * rate, i = Math.floor(x);
       const v = Math.min(1, Math.max(0, (at(i) + (at(i + 1) - at(i)) * (x - i) - 0.2) / 0.75));
       // shut = what every tier draws as a shut mouth (face.js VIS_OPEN 0.12 on the held opening)
+      if (v > 0.35) voiced += STEP_MS;
       if (v > 0.35 && (o.vis ?? o.open) <= 0.12 && !o.press) {
         shut += STEP_MS;
         run += STEP_MS;
@@ -1010,7 +1016,7 @@ function lipAgreement(clips) {
       if (quiet >= 100 && (o.vis ?? o.open) > 0.15 && x > 0 && x < seg.duration * rate) openQuiet += STEP_MS;
     }
   }
-  return { shut, longest, openQuiet };
+  return { shut, longest, openQuiet, voiced };
 }
 
 function closuresOf(clips) {
@@ -1028,7 +1034,7 @@ function closuresOf(clips) {
   return out;
 }
 
-test('lip sync through the shipped AudioEngine (16 recorded clips, speechFrame `voice`): ≥ 95 % of visible onsets within ±40 ms at every tier, voice behind shut lips ≤ 600 ms', async () => {
+test('lip sync through the shipped AudioEngine (16 recorded clips, speechFrame `voice`): ≥ 95 % of visible onsets within ±40 ms at every tier, voice behind visibly shut lips ≤ 1.5 % of the voiced time, no shape switch under 40 ms (a lip closure one frame early)', async () => {
   const clips = await realEngineMouths(true);
   // 0.12 = the opening every tier draws as open (face.js VIS_OPEN; the pixel test below proves it)
   const on = lipOnsets(clips, 0.12);
@@ -1039,9 +1045,29 @@ test('lip sync through the shipped AudioEngine (16 recorded clips, speechFrame `
   assert.ok(on.length >= 25, `${on.length} onsets measured`);
   // critic r3: the gap must never silently return, so the bar is the brief's own (≥ 95 %)
   assert.ok(good / on.length >= 0.95, `${good} of ${on.length} onsets within ±40 ms: ${on.filter((o) => o.off === null || Math.abs(o.off) > 40).map((o) => `${o.word} ${o.off === null ? 'none' : Math.round(o.off)}`).join(', ')}`);
-  assert.ok(ag.shut <= 600 && ag.longest <= 160, `audible voice behind shut lips: ${ag.shut} ms in all, longest ${ag.longest} ms`);
+  // (shut = what every tier draws as shut, at 0.12; the residue is the first ~15-20 ms of a word,
+  // while the engine's loudness rises: 0.7 % of the voiced time, critic r3 measured 69-72 % at the
+  // wide / two-shot / medium tiers before the tiers shared one visible threshold)
+  assert.ok(ag.shut <= 0.015 * ag.voiced && ag.longest <= 160, `audible voice behind shut lips: ${ag.shut} ms of ${ag.voiced} voiced, longest ${ag.longest} ms`);
   assert.ok(ag.openQuiet <= 150, `open lips in silence: ${ag.openQuiet} ms`);
   assert.ok(cl.length >= 40 && cl.every((d) => d >= 40 - STEP_MS), `m/b/p closures: ${cl.length}, shortest ${Math.min(...cl)} ms`);
+  // the displayed shape dwells ≥ 40 ms; only a lip closure may cut it short, by one 60 Hz frame
+  const fast = [];
+  for (const c of clips) {
+    let last = null, lastT = 0;
+    for (const o of c.out) {
+      if (!o.speaking) {
+        last = null;
+        continue;
+      }
+      if (o.shown === last) continue;
+      const min = o.shown === 'MBP' ? 40 - 1000 / 60 : 40;
+      if (last !== null && o.t - lastT < min - STEP_MS) fast.push(`${last}→${o.shown} ${Math.round(o.t - lastT)} ms`);
+      last = o.shown;
+      lastT = o.t;
+    }
+  }
+  assert.deepEqual(fast.slice(0, 6), []);
 });
 
 test('lip sync through the real AudioEngine with the loudness forced off (voice -1: the fallback for a clip without loudness): the timeline alone, measured at the same visible threshold', async () => {
@@ -1525,8 +1551,10 @@ test('close-up eyes at s 2.2-3 (critic r2: drowsy at 2.45-2.7): the catchlight s
               if (m === white) {
                 nWhite++;
                 const up = buf.mat[(y - 1) * buf.w + x];
-                // (a lens glint of the glasses may sit over the lash line)
-                if (up !== lash && up !== iris && up !== decal(E.iris[1]) && !(L.glasses && up === decal(P.fog))) bad.push(`${id} s ${s} side ${side}: catchlight at ${x},${y} is not under the lash or iris`);
+                // (a lens glint of the glasses may sit over the lash line; toward the inner corner
+                // the upper lid is the skin's own deep fold instead of lash, critic r3)
+                const fold = up === L._mats.skin && buf.tone[(y - 1) * buf.w + x] >= 2;
+                if (up !== lash && up !== iris && up !== decal(E.iris[1]) && !fold && !(L.glasses && up === decal(P.fog))) bad.push(`${id} s ${s} side ${side}: catchlight at ${x},${y} is not under the lash or iris`);
               }
             }
           }
@@ -1567,7 +1595,9 @@ test('the whole face path per head and frame (rig layers idle / expression / spe
   const fx = JSON.parse(fs.readFileSync(new URL('./fixtures/v2-face-voiced.json', import.meta.url), 'utf8'));
   const seg = fx.segments[8];
   const res = {};
-  for (const [id, s] of [['paco', 4.2], ['ada', 1.0]]) {
+  // five presenters in one process (critic r3: after other heads ran, V8 stopped inlining the
+  // half-width table's helper and Lola's frames boxed ~6 KB; two actors could pass by JIT luck)
+  for (const [id, s] of [['paco', 4.2], ['ada', 1.0], ['lola', 2.7], ['max', 4.2], ['nova', 2.7], ['lola', 4.2]]) {
     const audio = timelineAudio([{ slot: 'A', text: seg.text, t0: 0.5, words: seg.words, levels: seg.levels }]);
     const a = actor(id, { side: 1, seed: 9, speech: liveSpeech(audio, 'A'), look: [{ t0: 1.0, t1: 3.8 }], emotions: [{ t0: 0, name: 'neutral' }, { t0: 2, name: 'happy' }] });
     const buf = new PartBuffer();
@@ -1711,4 +1741,69 @@ test('blinks never pop (|Δ| ≤ 0.5 per 1/60 s frame) and a look under 1 s blin
   }
   assert.deepEqual(bad.slice(0, 8), []);
   assert.ok(frames > 30000, `${frames} frames`);
+});
+
+test('every tier draws the first opening of the mouth at the same level (critic r3: the wide / two-shot / medium mouths opened only above 0.36-0.38 and looked shut for ~70 % of the voiced time)', async () => {
+  const { actor, drawActors, frame } = await import('../public/js/v2/canvas25d/scene.js');
+  const { singleCam, placeActor } = await import('../public/js/v2/canvas25d/camera.js');
+  const { SET } = await import('../public/js/v2/canvas25d/studio/geometry.js');
+  const grab = (id, K, L) => {
+    const slot = ['lola', 'ada', 'nova', 'penny'].includes(id) ? 'B' : 'A';
+    const sp = { frame: () => ({ speaking: true, level: L, viseme: 'AH', next: 'AH', mix: 0, accent: 0, pause: false, sentenceIndex: 0, wordIndex: 0, charIndex: 0, emph: 0, env: L, jawEnv: 0, act: 1, voice: -1 }) };
+    const a = actor(id, { side: slot === 'B' ? -1 : 1, seed: 23, speech: sp, gain: 1, emotions: [{ t0: -10, name: 'neutral' }] });
+    const h = drawActors(0.3, [{ actor: a, ...placeActor(singleCam(slot, K), slot === 'B' ? SET.seatX.B : SET.seatX.A) }])[0];
+    const my = Math.round(h.cy + a.look.mouth.y * h.s), x0 = h.cx - 12, y0 = my - 6;
+    const px = [];
+    for (let y = 0; y < 14; y++) for (let x = 0; x < 24; x++) px.push(frame.px[(y0 + y) * 384 + x0 + x]);
+    return { px, s: h.s };
+  };
+  const res = [];
+  for (const K of [1.0, 1.4, 2.0, 2.6, 3.4, 4.4]) {
+    for (const id of ['paco', 'lola', 'max', 'ada']) {
+      const base = grab(id, K, 0);
+      let thr = null;
+      for (let L = 0.02; L <= 1.0001; L += 0.02) {
+        if (grab(id, K, L).px.some((p, i) => p !== base.px[i])) {
+          thr = L;
+          break;
+        }
+      }
+      res.push(`${id}@${base.s.toFixed(2)}:${thr === null ? 'never' : thr.toFixed(2)}`);
+      assert.ok(thr !== null && thr <= 0.13 + 1e-9, `the mouth of ${id} at s ${base.s.toFixed(2)} first opens at ${thr} (${res.join(' ')})`);
+    }
+  }
+});
+
+test('listener reactions where the viewer sees the listener (critic r3: the A seat never nodded on air): nods land on any shot that shows the listener (wide, two-shot, its own single), and with the same shots both seats nod alike', async () => {
+  const seen = (shots, t, slot) => {
+    let cur = shots[0];
+    for (const s of shots) if (s.at <= t + 1e-6) cur = s;
+    const legacy = ['wide', 'close', 'full', 'map', 'fact', 'montage'].includes(cur.shot) ? cur.shot : 'close';
+    return legacy === 'wide' || (legacy === 'close' && cur.focus === slot && cur.framing !== 'ots');
+  };
+  const rate = { A: [0, 0], B: [0, 0] };
+  let half = 0;
+  for (const ep of reseeded(fixtureEpisodes(DUOS), 6)) {
+    const N = ep.segments.length;
+    for (let i = 0; i < N; i++) {
+      const base = segmentContext(ep, i, { gapAfter: i + 1 < N ? 0.9 : null });
+      if (!base.valid || !base.duo || base.duration < 4) continue;
+      const lis = base.listeners[0];
+      // (1) the listener's own single for the second half of the turn only: nods only there
+      const ctx1 = { ...base, shots: [{ at: 0, shot: 'close', framing: 'mcu-l', focus: base.speaker }, { at: base.duration / 2, shot: 'close', framing: 'mcu-r', focus: lis }] };
+      for (const e of planBehaviour(ctx1)) {
+        if (e.kind !== 'gesture' || e.slot !== lis) continue;
+        assert.ok(seen(ctx1.shots, e.at, lis) && seen(ctx1.shots, e.at + 0.6, lis), `${ep.id} #${i}: a nod at ${e.at} off screen`);
+        half++;
+      }
+      // (2) the same two-shot for both seats: per-seat nod rate per minute of listening
+      const ctx2 = { ...base, shots: [{ at: 0, shot: 'wide', framing: 'two', focus: base.speaker }] };
+      const n = planBehaviour(ctx2).filter((e) => e.kind === 'gesture' && e.slot === lis).length;
+      rate[lis][0] += n;
+      rate[lis][1] += base.duration / 60;
+    }
+  }
+  const a = rate.A[0] / rate.A[1], b = rate.B[0] / rate.B[1];
+  assert.ok(half >= 10, `${half} nods on the listener's own single`);
+  assert.ok(a > 0 && b > 0 && a / b <= 2 && b / a <= 2, `nods per minute of listening on a two-shot: A ${a.toFixed(2)}, B ${b.toFixed(2)}`);
 });

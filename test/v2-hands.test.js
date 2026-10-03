@@ -142,6 +142,60 @@ test('no pops: wrist step and step-to-step change for every gesture, variant and
   }
 });
 
+// critic r3: the wrist path was smooth while the HAND fluttered (raise_hand:lift turned through four unrelated
+// shapes in 0.1 s; point_screen spun 34° in one frame as a ring-shaped fist at the lens). The whole hand frame
+// (finger axis + palm normal) is now measured at 60 fps. Limit: 15° per frame (the approved raise_hand already
+// turns its hand 8.9° per frame on the stroke and point_screen's approved 0.36 s stroke needs ~14°: a lower limit
+// would retime the owner-approved strokes).
+const HAND_TURN_MAX = 15;
+function handTurns(ev, side, dt = 1 / 60) {
+  const a = actor('paco', { side, seed: 11, gestures: [{ t0: T0, ...ev }] });
+  const dur = durOf({ t0: T0, ...ev });
+  const G = { L: newHandGeometry(), R: newHandGeometry() };
+  const prev = { L: null, R: null };
+  let frame = 0, dir = 0, at = 0;
+  for (let t = 0; t <= T0 + dur + 0.2 + 1e-9; t += dt) {
+    const sk = poseAt(a, t);
+    for (const sd of ['L', 'R']) {
+      const g = handGeometry(a.look, sk.arms[sd], sd === 'R' ? 1 : -1, G[sd]);
+      const cur = [...g.f, ...g.n, ...g.t];
+      const p = prev[sd];
+      if (p) {
+        const df = cur[0] * p[0] + cur[1] * p[1] + cur[2] * p[2];
+        const dn = cur[3] * p[3] + cur[4] * p[4] + cur[5] * p[5];
+        const dtt = cur[6] * p[6] + cur[7] * p[7] + cur[8] * p[8];
+        const rot = (Math.acos(Math.max(-1, Math.min(1, (df + dn + dtt - 1) / 2))) * 180) / Math.PI;
+        const turn = (Math.acos(Math.max(-1, Math.min(1, df))) * 180) / Math.PI;
+        if (rot > frame) {
+          frame = rot;
+          at = t - T0;
+        }
+        dir = Math.max(dir, turn);
+      }
+      prev[sd] = cur;
+    }
+  }
+  return { frame, dir, at };
+}
+
+test('hand orientation is continuous (critic r3): the hand frame turns ≤ 15° per 1/60 s frame in every gesture, variant and count, both seats', () => {
+  const rows = [];
+  for (const e of allEvents()) {
+    for (const side of [1, -1]) {
+      const r = handTurns(e, side);
+      rows.push([label(e), side, r]);
+      assert.ok(r.frame <= HAND_TURN_MAX, `${label(e)} seat ${side}: the hand turns ${r.frame.toFixed(1)}° in one frame at ${r.at.toFixed(2)} s`);
+      assert.ok(r.dir <= HAND_TURN_MAX, `${label(e)} seat ${side}: the finger axis turns ${r.dir.toFixed(1)}° in one frame`);
+    }
+  }
+  if (process.env.V2_HANDS_TABLE) {
+    rows.sort((a, b) => b[2].frame - a[2].frame);
+    console.log('hand turn per frame (deg): ' + rows.slice(0, 12).map(([n, s, r]) => `${n}${s < 0 ? ' B' : ''} ${r.frame.toFixed(1)}/${r.dir.toFixed(1)}`).join(', '));
+  }
+  // and the sweeps the critic named carry a twist-free palm through the lens direction
+  for (const ev of [{ name: 'raise_hand', variant: 'lift' }, { name: 'point_screen' }, { name: 'shrug' }]) assert.ok(defOf(ev)._ch.some((c) => c.ch === 'palm' || c.ch === 'palmF'), `${label(ev)} carries a palm track`);
+});
+
 test('no pops in blends: an interruption mid-gesture, gesture-to-gesture overlaps, speed variants', () => {
   const cases = [
     [{ name: 'raise_hand', t0: 0.3 }, { name: 'point_screen', t0: 1.1 }],
@@ -1046,8 +1100,30 @@ test('chest-level beats read as open hands, never a grab at the jacket: box and 
     }
   }
   const box = defOf({ name: 'raise_hand', variant: 'box' });
-  const f = box.tracks.facing.find((x) => Math.abs(x[0] - box.apex) < 0.25);
-  assert.ok(Math.abs(f[1]) <= 0.15, 'box palms face each other');
+  // critic r3: the palms face each other AND turn ~40° to the lens (edge-on, the hands were 2-3 px slivers at the
+  // lapels), and the hands sit outside the lapels: ≥ 4 px wide at s 3.18, centres clear of the lapel edge
+  const pk = box.tracks.palm.find((x) => Math.abs(x[0] - box.apex) < 0.2 && Array.isArray(x[1]));
+  assert.ok(pk && pk[1][0] < -0.5 && pk[1][2] > 0.45, `box palms face in and to the lens: ${pk && pk[1]}`);
+  for (const id of PRESENTER_IDS) {
+    const a = actor(id, { side: 1, seed: 3, gestures: [{ name: 'raise_hand', variant: 'box', t0: 0.3 }] });
+    const sk = poseAt(a, 0.3 + box.apex + 0.1);
+    const T = a.look.torso;
+    for (const [sd, side] of [['R', 1], ['L', -1]]) {
+      const g = handGeometry(a.look, sk.arms[sd], side, newHandGeometry());
+      let x0 = Infinity, x1 = -Infinity, cx = 0;
+      for (let j = 0; j < 20; j++) {
+        const x = g.J[j * 3];
+        x0 = Math.min(x0, x);
+        x1 = Math.max(x1, x);
+        cx += x / 20;
+      }
+      assert.ok((x1 - x0) * 3.18 >= 4, `${id} ${sd}: box hand ${((x1 - x0) * 3.18).toFixed(1)} px wide at s 3.18`);
+      // the lapel's outer edge at the notch is collar + lapel width (outfit.js lapelSpec, ≤ 9.8 u ≈ 0.47 of the
+      // shoulder half-width); the hand centre keeps 3 px (at s 3.18) outside it
+      const edge = 0.47 * T.shoulderHW + 3 / 3.18;
+      assert.ok(Math.abs(cx) >= edge, `${id} ${sd}: box hand centre ${Math.abs(cx).toFixed(1)} u from the midline, lapel edge + 3 px ${edge.toFixed(1)}`);
+    }
+  }
   // the box hands stay apart (a hand-width or more between the fingertips at the apex, both looks' extremes)
   for (const id of ['paco', 'lola']) {
     const a = actor(id, { side: 1, seed: 3, gestures: [{ name: 'raise_hand', variant: 'box', t0: 0.3 }] });

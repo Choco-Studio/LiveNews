@@ -155,6 +155,7 @@ class Run {
 
 const RELEASE_MS = 130; // an interrupted mouth closes over this long
 const LOOKAHEAD = 1.6; // seconds of music scheduled ahead (timers may be throttled)
+const LOOKAHEAD_MAX = 4; // ... and at most this far after the main thread has stalled
 const PENDING_MAX = 8; // tunes kept waiting for a locked context (newest win)
 const DUCK_LEAD = 120; // ms between ducking the music and the first sound of a voice
 const SPEED_KEY = 'globit24.ttsSpeed'; // learned TTS pace per voice, kept across sessions
@@ -183,6 +184,8 @@ export class AudioEngine {
   #players = new Set(); // live tune handles
   #pending = new Set(); // tunes waiting for the context to start
   #pump = 0;
+  #pumpAt = -1; // context time of the last pump tick
+  #lookahead = LOOKAHEAD;
   #lang;
   #all = []; // every installed voice
   #voices = []; // the ones in the engine's language
@@ -1159,7 +1162,7 @@ export class AudioEngine {
         player = new TunePlayer(ctx, this.#buses, song, { volume, loop, duckDb: opts?.duckDb, grace: this.#latency() + 0.03 });
         const t0 = startAt !== null ? this.#contextTimeHeardAt(startAt) : ctx.currentTime + 0.05;
         player.start(t0);
-        player.scheduleUntil(ctx.currentTime + LOOKAHEAD);
+        player.scheduleUntil(ctx.currentTime + this.#lookahead);
         if (!loop) player.endAt = t0 + player.passSec + 1.2;
         this.#players.add(player);
         this.#startPump();
@@ -1204,13 +1207,20 @@ export class AudioEngine {
 
   #startPump() {
     if (this.#pump) return;
+    this.#pumpAt = -1;
     this.#pump = setInterval(() => {
       const ctx = this.#ctx;
       if (!ctx) return;
       const now = ctx.currentTime;
+      // A main thread that stalled (a heavy first frame, a busy OBS host)
+      // left the tunes unscheduled for that long: look further ahead for a
+      // while, so the next stall does not drop notes. Eases back to 1.6 s.
+      const gap = this.#pumpAt >= 0 ? now - this.#pumpAt : 0;
+      this.#pumpAt = now;
+      this.#lookahead = gap > 0.5 ? Math.min(LOOKAHEAD_MAX, Math.max(this.#lookahead, LOOKAHEAD + gap)) : Math.max(LOOKAHEAD, this.#lookahead - 0.02);
       for (const p of [...this.#players]) {
         try {
-          p.scheduleUntil(now + LOOKAHEAD);
+          p.scheduleUntil(now + this.#lookahead);
           if (p.endAt && now > p.endAt) {
             this.#players.delete(p);
             p.stop(now, 0.3);

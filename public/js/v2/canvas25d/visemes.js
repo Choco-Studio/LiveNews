@@ -258,15 +258,17 @@ export function mouthParams(fr, face, gain = 1) {
   const level = Number.isFinite(fr.level) ? fr.level : shape;
   face.open = Math.max(0, Math.min(1, level * gain));
   // "th" is quiet (low loudness) but the tongue shows between parted teeth: never a closed line
-  // (with a recorded voice, scaled by the same loudness gate as the opening, speech.js: the engine's
-  // timeline can reach the "th" before the recording does, and the tongue showed ~60 ms ahead of
-  // the word while the voice was still silent; critic r3)
-  if (fr.speaking) {
+  // (a quiet "th" opening a word shows its tongue even while the recorded voice is still near
+  // silent; when the engine's timeline reaches it a little early the lips part ~60 ms before the
+  // sound, which reads far better than a mouth that opens late: audio leading the picture shows
+  // from ~45 ms, the picture leading the audio only past ~125 ms, ITU-R BT.1359)
+  // Not while the recorded voice is still dying away into a pause (speech.js vquiet: the engine's
+  // timeline reached the "th" ~60-140 ms before the recording did, and the lips never closed in a
+  // 160 ms comma pause, critic r3): it shows once the word's own sound starts to rise.
+  if (fr.speaking && !fr.vquiet) {
     const th = (fr.viseme === 'TH' ? 1 - k : 0) + (fr.next === 'TH' ? k : 0);
-    const v = typeof fr.voice === 'number' && fr.voice >= 0 ? fr.voice : -1;
-    const g = v < 0 ? 1 : v <= 0.03 ? 0 : v >= 0.3 ? 1 : ((v - 0.03) / 0.27) * ((v - 0.03) / 0.27) * (3 - 2 * ((v - 0.03) / 0.27));
     // (at least the first visible row of the interior, 0.16, so the word visibly starts on its "th")
-    if (th > 0.5 && g > 0) face.open = Math.max(face.open, Math.min(1, (0.16 + 0.24 * (th - 0.5)) * gain * g));
+    if (th > 0.5) face.open = Math.max(face.open, Math.min(1, (0.16 + 0.24 * (th - 0.5)) * gain));
   }
   // a pressed m/b/p wins over the blend while the lips meet (also on the way into one)
   if ((fr.viseme === 'MBP' && k < 0.65) || (fr.next === 'MBP' && k > 0.45)) {

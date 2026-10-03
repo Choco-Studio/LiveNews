@@ -236,14 +236,20 @@ def ride_bed(beds, ref, sr, regions, cfg):
     under, window, gap_db = float(cfg.get('underDb', 18)), cfg.get('window', [-20, -16]), float(cfg.get('gapDb', 11))
     gap_min, max_lift, ceil_db = float(cfg.get('gapMin', 0.6)), float(cfg.get('maxLift', 8)), float(cfg.get('ceilDb', 6))
     regs = [(a, b) for a, b in regions if b - a > 0.05]
-    # Voice level: per region, gated like BS.1770 (absolute -70, relative -10), then the median.
+    # Voice level: per region, BS.1770 integrated loudness (400 ms blocks, 75 % overlap, gated at
+    # -70 LUFS and 10 LU under the ungated mean), then the median over regions: the level a loudness
+    # meter reads for the speech, so 'N LU under the voice' matches short-term measurements of the stems.
     lv_r = []
+    blk, stp = int(round(0.4 / HOP)), int(round(0.1 / HOP))
     for a, b in regs:
         p = kv[hop(a):hop(b)]
-        p = p[p > 10 ** ((-70 + 0.691) / 10)]
-        if p.size > 50:
-            rel_gate = 10 ** ((lufs(p) - 10 + 0.691) / 10)
-            lv_r.append(lufs(p[p > rel_gate]))
+        if p.size < blk + stp:
+            continue
+        blocks = np.array([float(np.mean(p[i:i + blk])) for i in range(0, p.size - blk + 1, stp)])
+        blocks = blocks[blocks > 10 ** ((-70 + 0.691) / 10)]
+        if blocks.size:
+            rel_gate = 10 ** ((lufs(blocks) - 10 + 0.691) / 10)
+            lv_r.append(lufs(blocks[blocks > rel_gate]))
     if not lv_r:
         return np.ones(n), {'skipped': 'no voice'}
     lv = float(np.median(lv_r))

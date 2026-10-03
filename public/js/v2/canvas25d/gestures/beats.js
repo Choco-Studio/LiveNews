@@ -130,21 +130,26 @@ export const BEATS = {
       hold: 0.94,
       focus: 'both',
       tracks: {
-        // both open hands come up in front of the body (well clear of the jacket: forward, wrists outside
-        // the lapel line), palms facing each other a little over a hand-width apart, fingers up and toward
-        // the lens, thumbs on top: they hold the shape of "the whole thing" in the air and set it down a
-        // touch on the word; never a grab at the lapels (the oblique camera sees depth as height, so the
-        // wrists sit forward and only chest-high, which an MCU keeps above the lower third)
-        wrist: [[0, 'R'], [0.1, [-5.9, 19.7, 13.4]], [0.3, [-6.5, 8.0, 16.6]], [0.46, [-6.3, -2.5, 18.6]], [0.56, [-6.35, -1.8, 18.7]], [0.68, [-6.32, -2.2, 18.66], 's'], [0.94, [-6.32, -2.05, 18.6], 's'], [1.24, [-6.2, 13.6, 15.6]], [1.5, 'R', 's']],
-        wristF: [[0, 'R'], [0.12, [5.9, 19.7, 13.4]], [0.32, [6.5, 8.0, 16.6]], [0.48, [6.3, -2.5, 18.6]], [0.58, [6.35, -1.8, 18.7]], [0.7, [6.32, -2.2, 18.66], 's'], [0.96, [6.32, -2.05, 18.6], 's'], [1.26, [6.2, 13.6, 15.6]], [1.5, 'R', 's']],
-        dir: [[0, 'R'], [0.18, [-0.66, -0.1, 0.74]], [0.38, [-0.02, -0.6, 0.8]], [0.54, [0.04, -0.66, 0.75]], [0.62, [0.04, -0.61, 0.79]], [0.74, [0.04, -0.64, 0.77], 's'], [1.0, [0.04, -0.64, 0.77], 's'], [1.3, [-0.72, 0.1, 0.66]], [1.5, 'R']],
-        dirF: [[0, 'R'], [0.2, [0.66, -0.1, 0.74]], [0.4, [0.02, -0.6, 0.8]], [0.56, [-0.04, -0.66, 0.75]], [0.64, [-0.04, -0.61, 0.79]], [0.76, [-0.04, -0.64, 0.77], 's'], [1.02, [-0.04, -0.64, 0.77], 's'], [1.32, [0.72, 0.1, 0.66]], [1.5, 'R']],
+        // both open hands come up in front of the body, WIDE (over the sleeves, outside the lapels: critic r3, at
+        // the lapel line they read as a grab at the jacket), the palms facing each other and turned about 40°
+        // to the lens so the palm and four fingers read (thumbs up), and set "the whole thing" down a touch
+        // on the word; never a grab (the oblique camera sees depth as height: the wrists sit forward, chest-high)
+        wrist: [[0, 'R'], [0.1, [-5.9, 19.7, 13.4]], [0.3, [-4.4, 7.6, 16.4]], [0.46, [-2.3, -3.0, 18.0]], [0.56, [-2.2, -2.2, 18.1]], [0.68, [-2.24, -2.6, 18.06], 's'], [0.94, [-2.24, -2.46, 18.0], 's'], [1.24, [-4.4, 13.0, 15.6]], [1.5, 'R', 's']],
+        wristF: [[0, 'R'], [0.12, [5.9, 19.7, 13.4]], [0.32, [4.4, 7.6, 16.4]], [0.48, [2.3, -3.0, 18.0]], [0.58, [2.2, -2.2, 18.1]], [0.7, [2.24, -2.6, 18.06], 's'], [0.96, [2.24, -2.46, 18.0], 's'], [1.26, [4.4, 13.0, 15.6]], [1.5, 'R', 's']],
+        dir: [[0, 'R'], [0.18, [-0.62, -0.12, 0.76]], [0.38, [-0.05, -0.62, 0.78]], [0.54, [0.06, -0.72, 0.69]], [0.62, [0.06, -0.67, 0.74]], [0.74, [0.06, -0.7, 0.71], 's'], [1.0, [0.06, -0.7, 0.71], 's'], [1.3, [-0.72, 0.1, 0.66]], [1.5, 'R']],
+        dirF: [[0, 'R'], [0.2, [0.62, -0.12, 0.76]], [0.4, [0.05, -0.62, 0.78]], [0.56, [-0.06, -0.72, 0.69]], [0.64, [-0.06, -0.67, 0.74]], [0.76, [-0.06, -0.7, 0.71], 's'], [1.02, [-0.06, -0.7, 0.71], 's'], [1.32, [0.72, 0.1, 0.66]], [1.5, 'R']],
         curl: [[0, 'R'], [0.3, LOOSE], [0.56, BOX, 's'], [1.0, BOX, 's'], [1.32, 'R']],
         curlF: [[0, 'R'], [0.32, LOOSE], [0.58, BOX, 's'], [1.02, BOX, 's'], [1.34, 'R']],
-        facing: [[0, 'R'], [0.36, 0.05, 's'], [1.02, 0.05, 's'], [1.32, 'R']],
-        facingF: [[0, 'R'], [0.38, 0.05, 's'], [1.04, 0.05, 's'], [1.34, 'R']],
-        spread: [[0, 'R'], [0.5, 0.1], [1.0, 0.1], [1.32, 'R']],
-        spreadF: [[0, 'R'], [0.52, 0.1], [1.02, 0.1], [1.34, 'R']],
+        facing: [[0, 'R'], [0.36, 0.4, 's'], [1.02, 0.4, 's'], [1.32, 'R']],
+        facingF: [[0, 'R'], [0.38, 0.4, 's'], [1.04, 0.4, 's'], [1.34, 'R']],
+        // the palms: toward each other and about 40° to the lens (the camera-relative facing has its pole right
+        // where these hands point, so the palm direction is held explicitly)
+        palm: [[0, 'R'], [0.46, [-0.74, -0.08, 0.67]], [1.0, [-0.74, -0.08, 0.67]], [1.5, 'R']],
+        palmF: [[0, 'R'], [0.48, [0.74, -0.08, 0.67]], [1.02, [0.74, -0.08, 0.67]], [1.5, 'R']],
+        palmW: [[0, 0], [0.06, 1, 's'], [1.44, 1, 's'], [1.5, 0]],
+        palmWF: [[0, 0], [0.06, 1, 's'], [1.44, 1, 's'], [1.5, 0]],
+        spread: [[0, 'R'], [0.5, 0.12], [1.0, 0.1], [1.32, 'R']],
+        spreadF: [[0, 'R'], [0.52, 0.12], [1.02, 0.1], [1.34, 'R']],
         pole: [[0, 'R'], [0.4, [0.9, 1, -0.3]], [1.0, [0.9, 1, -0.3]], [1.5, 'R']],
         poleF: [[0, 'R'], [0.42, [-0.9, 1, -0.3]], [1.02, [-0.9, 1, -0.3]], [1.5, 'R']],
         shN: [[0, 0], [0.1, 0.1], [0.38, -0.3], [0.58, -0.2], [0.94, -0.22], [1.28, 0.03], [1.5, 0]],
@@ -159,6 +164,7 @@ export const BEATS = {
       apex: 0.58,
       hold: 0.96,
       focus: 'near',
+      transport: [0.24, 1.28],
       tracks: {
         // a small palm-up lift: the hand leaves the desk and opens outward beside the body at chest-to-
         // shoulder height (well clear of the jacket and the lapel: critic r2, a palm on the chest read as
@@ -304,6 +310,9 @@ export const BEATS = {
         curl: [[0, 'R'], [0.4, SOFT], [0.64, FLAT, 's'], [1.3, FLAT, 's'], [1.66, 'R']],
         facing: [[0, 'R'], [0.3, 0.9], [0.52, 0.5, 's'], [1.3, 0.5, 's'], [1.46, 0.9], [1.66, 'R']],
         sup: [[0, 0], [0.28, 0, 's'], [0.44, 1, 's'], [1.36, 1, 's'], [1.5, 0, 's'], [1.9, 0]],
+        // the palm offered up and to the lens toward the wall (no roll as the hand sweeps past the lens)
+        palm: [[0, 'R'], [0.54, [-0.2, -0.6, 0.78]], [1.3, [-0.2, -0.6, 0.78]], [1.9, 'R']],
+        palmW: [[0, 0], [0.06, 1, 's'], [1.84, 1, 's'], [1.9, 0]],
         spread: [[0, 'R'], [0.62, 0.3], [1.28, 0.28], [1.66, 'R']],
         pole: [[0, 'R'], [0.5, [0.7, 1, -0.4]], [1.3, [0.7, 1, -0.4]], [1.9, 'R']],
         shN: [[0, 0], [0.2, 0.2], [0.58, -0.5], [1.26, -0.4], [1.66, 0.06], [1.9, 0]],

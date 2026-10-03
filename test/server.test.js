@@ -9,6 +9,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { storyId } from '../server/news.js';
 import { publicChannel } from '../server/channel.js';
+import { episodeAir } from '../server/station.js';
 
 // End-to-end: the real server/index.js runs as a child process, from a throw-away
 // copy of the project (so its data/usage.json is not the project's), with the mock
@@ -289,7 +290,10 @@ describe('server/index.js: HTTP API of a running channel', () => {
       assert.equal(res.status, 200);
       assert.equal(breakItem.kind, 'break');
       assert.equal(breakItem.filler, false);
-      assert.equal(breakItem.ads, real.breaks.adsPerBreak);
+      // break cadence: a full commercial break only after minProgrammeBetween s of programme air, else a light one
+      const light = episodeAir(first) < (real.breaks.minProgrammeBetween ?? 0);
+      assert.equal(!!breakItem.light, light);
+      assert.equal(breakItem.ads, light ? 1 : real.breaks.adsPerBreak);
       assert.equal(breakItem.next.id, real.rotation[1]);
       assert.equal(breakItem.next.ready, true);
     });

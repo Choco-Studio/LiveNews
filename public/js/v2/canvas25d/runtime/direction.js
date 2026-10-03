@@ -145,6 +145,7 @@ const HOLD_SHOTS = new Set(['wide', 'close', 'map', 'full', 'fact']);
 const HOLD_MARGIN = 1.0;
 const DRY_HOLD = 1.2; // s: never cut on a dry line or this soon after it (tech-bytes.md)
 const DRY_LEAD = 1.5; // s: a phrase-boundary cut lands at least this long before a dry line (it reads on a settled shot)
+const MARK_MARGIN = 1.0; // s more than the cooldown a phrase-boundary cut must leave its replacement (planned time)
 // the greeting that ends an intro's headlines (director.js / direction/shots.js GREETING_RE)
 const GREETING = /^(good (morning|afternoon|evening)|hello|welcome|this is|i'm|i am|and i'm)\b|\bwelcome to\b/i;
 
@@ -186,7 +187,9 @@ export function holdCut(plan, si, onAir, { programId = null, gap = 0.6, cues = n
   for (const c of cues || []) if (c.k > 0 && Number.isFinite(c.at) && c.at > t0 + 0.05 && c.at < next) next = c.at;
   // the planned time left, at the pace the voice really runs (`rate` = elapsed on air / planned)
   const remaining = (next - t0) * (rate > 0 ? rate : 1);
-  if (remaining < S.cooldown) return null; // the replacement would be short: the planned cut comes soon anyway
+  // the replacement would be short: the planned cut comes soon anyway (a phrase cut keeps 1 s more: it falls late in a
+  // sentence, where a voice that runs ahead of its plan leaves the new shot under the minimum; seen at load 30: 1.8 s)
+  if (remaining < S.cooldown + (point ? MARK_MARGIN : 0)) return null;
   // the greeting of an intro the guard took off its wide: back to the wide (both parts hold the cooldown)
   const greeting = !point && ctx.type === 'intro' && onAir.shot === 'close' && GREETING.test(String(sent.text ?? ctx.seg?.text?.slice(sent.start) ?? '').trim());
   if (greeting) return { k: 1000 + si, char, at: t0, sentence: si, mid: false, shot: 'wide', framing: wideFraming ?? null, focus: ctx.speaker, move: null, card: null, minLen: null, beat: 'greeting', guard: true };
@@ -323,6 +326,7 @@ const NO_PRESENTERS = Object.freeze({}); // one object: context.js memoises neig
 // break elements: v2 idle work (plans, wall warm-up) waits while one is on air (critic r2: freezes at an ad's first frame)
 const BUSY_SHOTS = new Set(['ad', 'ident', 'promo']);
 const BUSY_RETRY = 750; // ms
+const AIR_EVERY = 10; // segments between two ?perf=1 'air between segments' lines
 const WARM = { id: 'warm-up', program: { id: 'world-now' }, cast: { A: 'paco', B: 'lola' }, segments: [{ type: 'story', anchor: 'A', text: 'Good evening. Floods have forced 40,000 people from their homes in southern Brazil.', cues: [] }] };
 
 export class LiveDirection {
@@ -353,6 +357,12 @@ export class LiveDirection {
     this.wallKeys = new Set(); // what this episode already warmed
     this.wallBusy = false;
     this.wallStats = { warmed: 0, skipped: 0, ms: 0 };
+    // ?perf=1: the air between segments as aired (speechEnd → next speechStart) per pace gap kind, against the
+    // profile's pause (critic r2: 0.3-2 s over the profile); logged every AIR_EVERY segments, airStats() for tools
+    this.perf = /[?&]perf=1(&|$)/.test(globalThis.location?.search || '');
+    this.air = new Map(); // kind -> { n, sum, max, target }
+    this.airNotes = 0;
+    this.lastSpoken = null; // { ep, index, end }
     // the first plan of a session warms the text model and lexicon (~100-200 ms): do it now,
     // on the start card, so no programme open ever pays for it
     this.idle(() => planSegment(WARM, 0, {}));
@@ -632,7 +642,11 @@ export class LiveDirection {
           }
         : null,
       sentence: (si) => {
-        if (si === 0 && p.speechStart == null) p.speechStart = now();
+        if (si === 0 && p.speechStart == null) {
+          p.speechStart = now();
+          const prev = this.lastSpoken;
+          if (prev && prev.ep === this.ep && prev.index === i - 1 && prev.end != null) this.noteAir(i - 1, p.speechStart - prev.end);
+        }
         let planned = false;
         if (cues) {
           for (const c of cues) {
@@ -650,11 +664,40 @@ export class LiveDirection {
       },
       end: () => {
         p.speechEnd = now();
+        this.lastSpoken = { ep: this.ep, index: i, end: p.speechEnd };
         for (const id of timers) clearTimeout(id);
         if (this.story?.seg === seg) this.story = null;
         this.warmWalls(i + 1); // again, in the pause: a picture that loaded during this segment (cheap when done)
       },
     };
+  }
+
+  /** The air after segment i as aired (s), against the pace profile's pause for that gap kind. */
+  noteAir(i, air) {
+    if (!(air >= 0) || air > 30) return;
+    const g = this.ep ? paceGap(this.ep, i) : null;
+    const kind = g?.kind || 'gap';
+    let a = this.air.get(kind);
+    if (!a) this.air.set(kind, (a = { n: 0, sum: 0, max: 0, target: g?.gap ?? GAP_AFTER }));
+    a.n++;
+    a.sum += air;
+    if (air > a.max) a.max = air;
+    if (this.perf && ++this.airNotes % AIR_EVERY === 0) {
+      const parts = [];
+      for (const [k, v] of this.air) parts.push(`${k} ${(v.sum / v.n).toFixed(2)} s (profile ${v.target.toFixed(2)}, max ${v.max.toFixed(2)}, n ${v.n})`);
+      try {
+        console.info(`[v2] air between segments: ${parts.join('; ')}`);
+      } catch {
+        /* no console */
+      }
+    }
+  }
+
+  /** { kind: { mean, max, n, target } } of the air between segments so far (tools, soak checks). */
+  airStats() {
+    const out = {};
+    for (const [k, v] of this.air) out[k] = { mean: v.sum / v.n, max: v.max, n: v.n, target: v.target };
+    return out;
   }
 
   /** Remember the studio framings applied in this episode (the max-hold guard cuts back to them). */

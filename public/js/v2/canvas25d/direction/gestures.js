@@ -247,6 +247,8 @@ const FAMILY = {
   'shake_head:slow': 'shake_head',
   'point_screen:open': 'point_screen',
   'point_partner:after_you': 'point_partner',
+  // (critic r3: a hand to the jaw is a hand to the jaw, brief or held: Ada's chin and chin touch aired back to back)
+  'chin:touch': 'chin',
 };
 export const familyOf = (e) => {
   // a beat with the far hand reads as the same beat
@@ -262,6 +264,9 @@ const RAISE_CAP = 1; // the full palm-out raise_hand: per presenter per episode
 const REPEAT_GAP = 45; // s: one marked family never twice within this on air, whoever performs it
 const MEMORY_SPAN = 60; // s of aired marked gestures the programme remembers
 const MIN_BEAT_PX = 2; // a beat that moves less than this on screen is not worth a slot (nor the budget)
+// per presenter per episode: the wall point at most twice (the second time the open hand), a third wall
+// reference is left to the eyeline (critic r3: Lola pointed at the wall at 41, 105 and 151 s)
+const FAMILY_CAP = { point_screen: 2 };
 // meaning in the text: a head shake near a negation, contrast or doubt; a shrug on uncertainty or a question
 const NEGATION = /\b(not|no|never|nothing|nobody|none|neither|nor|without|despite|still|yet|but|however|denied|denies|deny|refused|refuses|rejected|unclear|cannot|hardly|failed|fails|unlikely|doubts?|sceptic\w*|skeptic\w*)\b|n't\b/gi;
 const UNCERTAIN = /\b(maybe|perhaps|unclear|uncertain|unknown|possibly|might|remains? to be seen|who knows|hard to say|not sure|depends|anyone's guess|open question)\b|\?/gi;
@@ -594,6 +599,11 @@ class SegmentPlan {
         if (this.busy + ev.dur > B.busy) return why(ev, 'rest-share');
       }
     }
+    // the vocabulary (pace.js gestures.vocabWindow, critic r3): by NAME, the way the viewer reads it (a hand rising
+    // is a hand rising, box, lift or beat), never the same gesture as the presenter's neighbouring one, and a
+    // statement's name not within the presenter's last vocabWindow gestures, across turns (nods are the
+    // newsreader's default and do not count)
+    if (ev.name !== 'nod' && !this.nameOk(ev, !opts.beat && ev.name !== 'papers')) return false;
     // the viewer must see the hands: an arm gesture's apex hand inside the framing of its shot
     if (arm && !this.visible(ev, d)) return why(ev, 'not-visible');
     // never the same gesture twice in a row (name and variant), whatever planned it
@@ -627,6 +637,14 @@ class SegmentPlan {
       for (const p of this.events) if (p.aired && keyOf(p) === 'raise_hand') n++;
       if (n >= RAISE_CAP) return why(ev, 'raise-cap');
     }
+    const cap = FAMILY_CAP[fam];
+    if (cap) {
+      let n = (mem.counts || {})[`${this.ctx.speaker}|${fam}`] || 0;
+      for (const p of this.events) if (p.aired && keyOf(p) === fam) n++;
+      if (n >= cap) return why(ev, 'family-cap');
+      // the second wall reference is the open hand, not the index again
+      if (fam === 'point_screen' && n >= 1 && !ev.variant) return why(ev, 'family-second');
+    }
     let last = null;
     for (const p of this.events) if (p.aired && p.at <= ev.at && (!last || p.at > last.at)) last = p;
     const prevFam = last ? keyOf(last) : mem.recent.length ? mem.recent[mem.recent.length - 1].fam : null;
@@ -634,6 +652,27 @@ class SegmentPlan {
     const abs = mem.t0 + ev.at;
     for (const r of mem.recent) if (r.fam === fam && abs - r.abs < REPEAT_GAP) return why(ev, 'repeat-45');
     for (const p of this.events) if (p.aired && keyOf(p) === fam && Math.abs(p.at - ev.at) < REPEAT_GAP) return why(ev, 'repeat-45');
+    return true;
+  }
+
+  /**
+   * The presenter's sequence of non-nod gestures (the previous turns' tail, then this segment's in time
+   * order) with `ev` inserted: its neighbours never share its name; a statement never shares its name with
+   * the vocabWindow gestures before it, nor with a later statement that has it inside its own window.
+   */
+  nameOk(ev, statement) {
+    const W = paceFor(this.R.pid).gestures.vocabWindow || 3;
+    const seq = this.prev.names.slice();
+    const mine = this.events.filter((p) => p.kind === 'gesture' && p.name !== 'nod').sort((a, b) => a.at - b.at);
+    let idx = seq.length;
+    for (const p of mine) {
+      if (p.at <= ev.at) idx++;
+      seq.push({ name: p.name, marked: !p.beat && p.name !== 'papers' });
+    }
+    seq.splice(idx, 0, { name: ev.name, marked: statement });
+    if (seq[idx - 1]?.name === ev.name || seq[idx + 1]?.name === ev.name) return why(ev, 'repeat-name');
+    for (let j = Math.max(0, idx - W); j < idx; j++) if (statement && seq[j].name === ev.name) return why(ev, 'name-window');
+    for (let j = idx + 1; j <= idx + W && j < seq.length; j++) if (seq[j].marked && seq[j].name === ev.name) return why(ev, 'name-window');
     return true;
   }
 
@@ -731,7 +770,7 @@ class SegmentPlan {
       for (const f of this.fails) why0.add(f);
     }
     // the words still deserve a beat of the head when the hands could not show or would only repeat
-    if (head && (why0.has('not-visible') || why0.has('repeat-air') || why0.has('repeat-45') || why0.has('raise-cap'))) {
+    if (head && ['not-visible', 'repeat-air', 'repeat-45', 'raise-cap', 'family-cap', 'repeat-name', 'name-window'].some((f) => why0.has(f))) {
       for (const h of ['nod', 'lean_in']) {
         if (this.admit(h) !== h) continue;
         if (h === 'lean_in' && this.R.B.leanInPerEpisode && this.ep.leanIn !== this.ctx.index) continue;
@@ -795,8 +834,8 @@ const SAME_ACTION = { steeple: ['tap'], raise_hand: ['lift', 'box'], point_scree
 // (the full palm-out raise_hand is not in the rotation: alternatives() offers it last)
 const CHEST = [['steeple', 'tap'], ['raise_hand', 'lift'], ['raise_hand', 'box'], ['point_screen', 'open'], ['count', null], ['chin', 'touch']];
 const NUMBERISH = /\d|\b(one|two|three|four|five|first|second|third)\b|,/i;
-const NO_PREV = Object.freeze({ marked: Infinity, arm: Infinity, fam: null, usedM: 0, usedB: 0 });
-const MEM0 = Object.freeze({ t0: 0, recent: Object.freeze([]), raised: Object.freeze({}) });
+const NO_PREV = Object.freeze({ marked: Infinity, arm: Infinity, fam: null, usedM: 0, usedB: 0, names: Object.freeze([]) });
+const MEM0 = Object.freeze({ t0: 0, recent: Object.freeze([]), raised: Object.freeze({}), counts: Object.freeze({}) });
 
 // ---------------------------------------------------------------------------
 
@@ -836,7 +875,7 @@ function memoryBefore(ctx) {
   if (!c || !c.valid) return MEM0;
   const t = turnOf(c);
   if (!t || !t.mem) return MEM0;
-  return { t0: t.mem.t0 + c.duration + (c.gapAfter ?? 0.7), recent: t.mem.recent, raised: t.mem.raised };
+  return { t0: t.mem.t0 + c.duration + (c.gapAfter ?? 0.7), recent: t.mem.recent, raised: t.mem.raised, counts: t.mem.counts };
 }
 
 /** The memory at the end of a planned segment: what came before plus its own marked arm gestures. */
@@ -845,20 +884,21 @@ function memoryAfter(P) {
   const end = m.t0 + P.ctx.duration;
   // the last MEMORY_SPAN s, and always the latest one (never the same family twice in a row on air)
   const recent = m.recent.filter((r, i) => end - r.abs <= MEMORY_SPAN || i === m.recent.length - 1);
-  let raised = m.raised;
+  let raised = m.raised, counts = m.counts;
   for (const e of P.events.slice().sort((a, b) => a.at - b.at)) {
     if (!e.aired) continue;
     const fam = familyOf(e);
     recent.push({ fam, abs: m.t0 + e.at, slot: e.slot });
     if (fam === 'raise_hand') raised = { ...raised, [e.slot]: (raised[e.slot] || 0) + 1 };
+    if (FAMILY_CAP[fam]) counts = { ...counts, [`${e.slot}|${fam}`]: (counts[`${e.slot}|${fam}`] || 0) + 1 };
   }
-  return { t0: m.t0, recent, raised };
+  return { t0: m.t0, recent, raised, counts };
 }
 
 /** A segment with no plan of its own (no words, invalid) passes the memory on unchanged. */
 function carryMemory(c) {
   const m = memoryBefore(c);
-  return { t0: m.t0, recent: m.recent, raised: m.raised };
+  return { t0: m.t0, recent: m.recent, raised: m.raised, counts: m.counts };
 }
 
 function previousTurns(ctx) {
@@ -867,10 +907,13 @@ function previousTurns(ctx) {
   const me = ctx.seg.anchor;
   let elapsed = 0; // s from the start of segment j to this segment's first word
   let marked = Infinity, arm = Infinity, fam = null, usedM = 0, usedB = 0, first = true;
+  // the presenter's last non-nod gesture names, newest first (pace.js vocabWindow)
+  const names = [];
+  const W = paceFor(ctx.programId).gestures.vocabWindow || 3;
   // the presenter's recent turns, back to the last one with an arm gesture (at most four) and at least
   // 12 s (the other presenter's lines between them are estimated from the summary: their exact
-  // timelines are not needed and would cost a context each)
-  for (let j = ctx.index - 1, own = 0; j >= 0 && own < 4 && (fam === null || elapsed <= 12); j--) {
+  // timelines are not needed and would cost a context each), and far enough for the vocabulary window
+  for (let j = ctx.index - 1, own = 0; j >= 0 && (own < 4 ? fam === null || elapsed <= 12 || names.length < W : own < 10 && names.length < W); j--) {
     if (segs[j]?.anchor !== me) {
       elapsed += (segs[j]?.chars || 0) / CPS + 0.7;
       continue;
@@ -894,8 +937,13 @@ function previousTurns(ctx) {
       if (e.arm && (!last || e.at > last.at)) last = e;
     }
     if (last && fam === null) fam = familyOf(last);
+    if (names.length < W) {
+      const own2 = t.evs.filter((e) => e.kind === 'gesture' && e.name !== 'nod').sort((a, b) => b.at - a.at);
+      for (const e of own2) if (names.length < W) names.push({ name: e.name, marked: !e.beat && e.name !== 'papers' });
+    }
   }
-  return { marked, arm, fam, usedM, usedB };
+  // (oldest first, like the segment's own sequence)
+  return { marked, arm, fam, usedM, usedB, names: names.reverse() };
 }
 
 // the cuts of a segment as planSegment hands them to the planners, with their framing

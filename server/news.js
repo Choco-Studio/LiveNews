@@ -1222,6 +1222,8 @@ export class NewsDesk {
         covered: this.covered.has(s.id),
         breaking: isBreaking(s.title),
         live: !!s.live,
+        ...(s.undated ? { undated: true } : {}),
+        ...(s.brokenDate ? { brokenDate: true } : {}),
         score: Math.round(score * 1000) / 1000,
       }));
   }

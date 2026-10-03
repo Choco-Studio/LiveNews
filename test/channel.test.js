@@ -91,6 +91,14 @@ describe('validateChannel', () => {
     assert.doesNotThrow(() => validateChannel(channel));
   });
 
+  test('(editorial-2 fix r2) "breaks" values are checked: whole ad counts, a cadence in seconds', () => {
+    assert.doesNotThrow(() => validateChannel({ ...makeChannel(), breaks: { adsPerBreak: 2, maxExtraAds: 6, minProgrammeBetween: 420 } }));
+    assert.throws(() => validateChannel({ ...makeChannel(), breaks: { adsPerBreak: 0 } }), /adsPerBreak/);
+    assert.throws(() => validateChannel({ ...makeChannel(), breaks: { maxExtraAds: 2.5 } }), /maxExtraAds/);
+    assert.throws(() => validateChannel({ ...makeChannel(), breaks: { minProgrammeBetween: -1 } }), /minProgrammeBetween/);
+    assert.throws(() => validateChannel({ ...makeChannel(), breaks: [] }), /breaks/);
+  });
+
   test('rejects a channel without presenters, programs or a non-empty rotation', () => {
     const message = /channel\.json needs presenters, programs and a non-empty rotation/;
     assert.throws(() => validateChannel(null), message);

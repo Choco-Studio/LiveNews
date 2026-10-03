@@ -52,6 +52,10 @@ export const ARMS = {
       // the palm turns to the camera, then up toward the partner (sup switches only near facing 1)
       facing: [[0, 'R'], [0.3, 0.92], [0.5, 0.4, 's'], [1.1, 0.4, 's'], [1.28, 0.92], [1.48, 'R']],
       sup: [[0, 0], [0.26, 0, 's'], [0.4, 1, 's'], [1.18, 1, 's'], [1.32, 0, 's'], [1.6, 0]],
+      // the open palm turns up toward the partner and a little to the lens (critic r3: the camera-relative facing
+      // left it palm-down, and rolled it as the hand swept past the lens on the way out and back)
+      palm: [[0, 'R'], [0.52, [-0.25, -0.75, 0.6]], [1.1, [-0.25, -0.75, 0.6]], [1.6, 'R']],
+      palmW: [[0, 0], [0.06, 1, 's'], [1.54, 1, 's'], [1.6, 0]],
       spread: [[0, 'R'], [0.6, 0.25], [1.1, 0.22], [1.45, 'R']],
       pole: [[0, 'R'], [0.5, [0.8, 0.9, -0.2]], [1.1, [0.8, 0.9, -0.2]], [1.6, 'R']],
       yaw: [[0, 0], [0.2, -0.01], [0.55, 0.12], [1.1, 0.1], [1.5, 0]],
@@ -75,6 +79,9 @@ export const ARMS = {
           curl: [[0, 'R'], [0.55, FLAT, 's'], [1.0, FLAT, 's'], [1.36, 'R']],
           facing: [[0, 'R'], [0.26, 0.92], [0.46, 0.25, 's'], [1.04, 0.25, 's'], [1.2, 0.92], [1.4, 'R']],
           sup: [[0, 0], [0.22, 0, 's'], [0.34, 1, 's'], [1.1, 1, 's'], [1.24, 0, 's'], [1.5, 0]],
+          // an open palm offered up toward the partner (was palm-down: a "calm down" rather than "after you")
+          palm: [[0, 'R'], [0.48, [-0.25, -0.8, 0.55]], [1.02, [-0.25, -0.8, 0.55]], [1.5, 'R']],
+          palmW: [[0, 0], [0.06, 1, 's'], [1.44, 1, 's'], [1.5, 0]],
           spread: [[0, 'R'], [0.55, 0.3], [1.0, 0.28], [1.36, 'R']],
           pole: [[0, 'R'], [0.5, [0.7, 1, -0.3]], [1.0, [0.7, 1, -0.3]], [1.5, 'R']],
           roll: [[0, 0], [0.5, -0.035], [1.0, -0.03], [1.5, 0]],
@@ -253,6 +260,12 @@ export const ARMS = {
       curlF: [[0, 'R'], [0.4, [0.2, 0.2, 0.22, 0.26, 0.3]], [0.58, GRIP, 's'], [1.94, GRIP, 's'], [2.2, 'R']],
       facing: [[0, 'R'], [0.46, 0.0, 's'], [1.96, 0.0, 's'], [2.3, 'R']],
       facingF: [[0, 'R'], [0.46, 0.0, 's'], [1.96, 0.0, 's'], [2.3, 'R']],
+      // the palms face each other across the stack the whole time, flat or standing (critic r3: the camera-
+      // relative facing turned them outward once the stack stood up, the hands passing the lens direction)
+      palm: [[0, 'R'], [0.46, [-1, 0, 0]], [1.96, [-1, 0, 0]], [2.4, 'R']],
+      palmF: [[0, 'R'], [0.46, [1, 0, 0]], [1.96, [1, 0, 0]], [2.4, 'R']],
+      palmW: [[0, 0], [0.08, 1, 's'], [2.32, 1, 's'], [2.4, 0]],
+      palmWF: [[0, 0], [0.08, 1, 's'], [2.32, 1, 's'], [2.4, 0]],
       spread: [[0, 'R'], [0.5, 0.05], [1.9, 0.05], [2.3, 'R']],
       spreadF: [[0, 'R'], [0.5, 0.05], [1.9, 0.05], [2.3, 'R']],
       pole: [[0, 'R'], [0.5, [0.9, 0.8, -0.4]], [1.9, [0.9, 0.8, -0.4]], [2.4, 'R']],
@@ -320,6 +333,11 @@ ARMS.papers.variants = {
       curlF: [[0, 'R'], [0.26, [0.2, 0.18, 0.2, 0.24, 0.28]], [0.36, GRIP, 's'], [0.84, GRIP, 's'], [1.08, 'R']],
       facing: [[0, 'R'], [0.3, 0.0, 's'], [0.86, 0.0, 's'], [1.1, 'R']],
       facingF: [[0, 'R'], [0.3, 0.0, 's'], [0.86, 0.0, 's'], [1.1, 'R']],
+      // palms facing each other across the stack (the camera-relative facing had them outward, backs to the paper)
+      palm: [[0, 'R'], [0.3, [-1, 0, 0]], [0.86, [-1, 0, 0]], [1.24, 'R']],
+      palmF: [[0, 'R'], [0.3, [1, 0, 0]], [0.86, [1, 0, 0]], [1.24, 'R']],
+      palmW: [[0, 0], [0.06, 1, 's'], [1.18, 1, 's'], [1.24, 0]],
+      palmWF: [[0, 0], [0.06, 1, 's'], [1.18, 1, 's'], [1.24, 0]],
       spread: [[0, 'R'], [0.32, 0.04], [0.84, 0.04], [1.1, 'R']],
       spreadF: [[0, 'R'], [0.32, 0.04], [0.84, 0.04], [1.1, 'R']],
       pole: [[0, 'R'], [0.3, [0.9, 0.8, -0.4]], [0.84, [0.9, 0.8, -0.4]], [1.24, 'R']],

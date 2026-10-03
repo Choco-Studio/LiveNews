@@ -129,6 +129,10 @@ function wallVisible(cam) {
   return x1 > x0 && y1 > y0 ? (x1 - x0) * (y1 - y0) : 0;
 }
 
+// the warm-up's offscreen studio frame: its own idle wall and options (the Stage's wall latch is never touched)
+const WARM_WALL = { mode: 'idle', image: null, location: null, figure: null, label: '', sub: '', since: -1, focus: 'A', solo: false };
+const WARM_OPTS = { style: null, wall: WARM_WALL, shotSince: -1, lod: 0, cut: true };
+
 const REST_FRAME = Object.freeze({ slot: null, speaking: false, level: 0, viseme: 'rest', next: 'rest', mix: 0, wordIndex: -1, charIndex: -1, sentenceIndex: -1, accent: 0, pause: false });
 
 function sameCamera(a, b) {
@@ -370,6 +374,23 @@ export class Stage {
         drawActors(1, this.vis, null);
       }
       this.vis.length = 0;
+      // then the episode's first studio picture once, offscreen (the open's wide: set raster at that camera, desk, the
+      // idle wall's layout, actors at wide scale), never presented: the first frame after the open costs a few ms instead
+      // of 135-145 ms (fix r2, measured on the real channel at load ~20). A scratch idle wall: the Stage's own wall latch
+      // is untouched, and the real first frame's wall (a later `since`) is an instant switch in SET.
+      const framing = defaultFraming('wide', this.solo, false);
+      const cam = typeof CAM.framing === 'function' ? CAM.framing(framing, { framing, cast: this.cast, focus: this.actors[0]?.slot || 'A', solo: this.solo, side: undefined, programId: this.programId, move: null }) : null;
+      if (cam) {
+        WARM_WALL.solo = this.solo;
+        WARM_WALL.focus = this.solo ? 'solo' : 'A';
+        const o = WARM_OPTS;
+        o.wall = WARM_WALL;
+        o.shotSince = -1;
+        o.lod = 0;
+        o.cut = true;
+        this.drawStudio(cam, this.epoch, o);
+        this.vis.length = 0;
+      }
     } catch (err) {
       this.log(`warm-up: ${err?.message || err}`);
     }

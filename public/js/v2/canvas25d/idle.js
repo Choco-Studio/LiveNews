@@ -56,14 +56,16 @@ export function schedule(seed, persona) {
   }
   const sacc = [];
   t = 0;
-  let x = 0, y = 0;
+  let x = 0, y = 0, big = false;
   while (t < SPAN) {
     sacc.push(t, x, y);
-    t += 0.5 + rnd() * 1.9;
-    // mostly small fixations near the lens, sometimes a slightly bigger glance
-    const big = rnd() < 0.18;
-    x = (rnd() - 0.5) * (big ? 1.1 : 0.45);
-    y = (rnd() - 0.5) * (big ? 0.6 : 0.25);
+    // a bigger fixation is held ≤ 1.2 s (critic r3: a 2.4 s side-eye at ±0.55 read as an
+    // unmotivated look; only planned looks go far off the lens)
+    t += big ? 0.5 + rnd() * 0.7 : 0.5 + rnd() * 1.9;
+    // mostly small fixations near the lens, sometimes a slightly bigger glance (≤ ±0.35)
+    big = rnd() < 0.18;
+    x = (rnd() - 0.5) * (big ? 0.7 : 0.45);
+    y = (rnd() - 0.5) * (big ? 0.5 : 0.25);
   }
   s = { blinks, sacc, seed, bmin, bmax, doubles };
   CACHE[cacheAt] = s;
@@ -231,7 +233,9 @@ export function applyIdle(c, persona, perf, t, seed, gestLook) {
     const u = smooth((t - t0) / 0.045);
     const sx = px + (sch.sacc[si * 3 + 1] - px) * u, sy = py + (sch.sacc[si * 3 + 2] - py) * u;
     const damp = (1 - 0.55 * act) * (1 - gestLook * 0.85);
-    c.lookX += sx * damp;
+    // toward the partner only a little (lookX is in partner space): a wandering fixation that
+    // lands on the co-presenter reads as a side-eye; only planned looks go there
+    c.lookX += (sx > 0 && perf.side ? sx * 0.4 : sx) * damp;
     c.lookY += sy * damp;
   }
 }

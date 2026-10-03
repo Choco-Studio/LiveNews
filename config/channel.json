@@ -471,6 +471,7 @@
   ],
   "breaks": {
     "adsPerBreak": 2,
-    "maxExtraAds": 6
+    "maxExtraAds": 6,
+    "minProgrammeBetween": 420
   }
 }

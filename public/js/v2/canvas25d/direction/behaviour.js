@@ -72,6 +72,7 @@
 //     the first planned cut that shows the listener (≤ 15 s), like INTEGRATION's
 //     onScreenGlances, but here, so the plan around it keeps its spacing (event `onScreen`).
 import { rng } from './context.js';
+import { listenerRules } from '../../../pace.js';
 
 const GAP = { 'money-minute': 1.2, 'news-60': 0.7 }; // the director's usual gap when ctx.gapAfter is unknown
 const STYLE = {
@@ -330,16 +331,19 @@ function tossBack(ctx) {
   return !!(n && n.valid && n.duo && n.type === 'chat' && n.duration < RULES.shortLine && isToss(n));
 }
 
-/** Shot (legacy name) planned at time t, or null when the camera plan is unknown. */
-function shotAt(ctx, t) {
+/**
+ * Can the viewer see `slot` at time t? Unknown shots: yes. A wide, a two-shot or a solo wide
+ * show both; a single (not an over-the-shoulder) only its focus (shows(), as for the glance).
+ */
+function seenAt(ctx, t, slot) {
   const shots = ctx.shots;
-  if (!Array.isArray(shots) || !shots.length) return null;
-  let cur = null;
+  if (!Array.isArray(shots) || !shots.length) return true;
+  let cur = shots[0];
   for (const s of shots) {
     if (s.at > t + 1e-6) break;
-    cur = s.shot;
+    cur = s;
   }
-  return cur || shots[0].shot;
+  return shows(cur, slot);
 }
 
 // ---------------------------------------------------------------------------
@@ -417,9 +421,10 @@ function planDuo(ctx, style, r, plan, rr) {
   const speakerLooks = plan.list(speaker);
 
   // ---- listeners
+  const LR = listenerOf(ctx.programId);
   for (const slot of ctx.listeners) {
     const robot = ROBOT.has(ctx.cast[slot]);
-    const cap = D >= 8 ? RULES.gazeShare * D : RULES.gazeShort;
+    const cap = D >= 8 ? Math.min(RULES.gazeShare, LR.maxGazeShare ?? RULES.gazeShare) * D : RULES.gazeShort;
     const tossLook = speakerLooks.find((l) => /toss/.test(l.why));
     let glance = null;
     if (ctx.turnStart) {
@@ -568,8 +573,8 @@ function planDuo(ctx, style, r, plan, rr) {
         if (plan.fits(slot, at, dur)) plan.add(slot, at, dur, 'notes', { why: 'between' });
       }
     }
-    planNod(ctx, style, rr.nod, plan, slot, robot);
-    planInterest(ctx, style, rr.interest, plan, slot, robot);
+    planNod(ctx, style, rr.nod, plan, slot, robot, LR);
+    planInterest(ctx, style, rr.interest, plan, slot, robot, LR);
   }
 
   // ---- between stories: the speaker who carries on glances at the notes in the gap
@@ -601,6 +606,15 @@ function eyeLed(ctx, plan) {
       }
       if (b - a < RULES.sideBelow) l.style = 'side';
     }
+  }
+}
+
+/** pace.js listener rules for a programme (reactionGap, maxGazeShare, nodsPerMin...); {} if pace fails. */
+function listenerOf(programId) {
+  try {
+    return listenerRules(programId) || {};
+  } catch {
+    return {};
   }
 }
 
@@ -764,18 +778,6 @@ function onScreen(ctx, plan, slot, look, gap, nextSeg) {
   return plan.add(slot, at, end - at, look.target, { why: look.why, amt: look.amt, onScreen: true });
 }
 
-/** Is the listener `slot` in frame at time t? (unknown shots: yes; the wide / two-shot; a single on the listener) */
-function inFrame(ctx, t, slot) {
-  const shots = ctx.shots;
-  if (!Array.isArray(shots) || !shots.length) return true;
-  let cur = shots[0];
-  for (const s of shots) {
-    if (s.at > t + 1e-6) break;
-    cur = s;
-  }
-  return cur.shot === 'wide' || cur.framing === 'two' || (cur.shot === 'close' && cur.focus === slot && cur.framing !== 'ots');
-}
-
 /**
  * INTEREST: a listener in frame lifts its brows a little and tilts its head (face only)
  * as the speaker lands the story's figure (ctx.figures), or, in a chat line on the wide
@@ -783,7 +785,7 @@ function inFrame(ctx, t, slot) {
  * At most once per turn; never on grave lines, never by UNIT-8, never inside another look
  * of that listener, never on UNIT-8's literal lines (the straight face), never into a dry line.
  */
-function planInterest(ctx, style, r, plan, slot, robot) {
+function planInterest(ctx, style, r, plan, slot, robot, LR) {
   if (robot || ctx.grave || !style.interestP) return;
   if (ROBOT.has(ctx.speakerId) && ctx.type === 'chat') return; // the straight face for UNIT-8's literal lines
   if (r() >= style.interestP) return;
@@ -805,8 +807,10 @@ function planInterest(ctx, style, r, plan, slot, robot) {
     const dur = between(r, RULES.interest);
     if (at < 0.6 || at + dur > D + 0.4) continue;
     if (dry && at + dur > dry.t0 - 0.2) continue;
-    if (!inFrame(ctx, at, slot)) continue;
+    if (!seenAt(ctx, at, slot)) continue;
     if (!plan.clear(slot, at, dur)) continue;
+    // two visible reactions of one listener keep pace's reactionGap apart (a nod and a brow lift)
+    if (plan.nods.some((n) => n.slot === slot && Math.abs(n.at - at) < (LR.reactionGap ?? 0))) continue;
     plan.add(slot, at, dur, 'interest', { why: 'interest' });
     return;
   }
@@ -826,7 +830,7 @@ function greetingNameAt(ctx, slot) {
   return last && at >= last.start ? at : -1;
 }
 
-function planNod(ctx, style, r, plan, slot, robot) {
+function planNod(ctx, style, r, plan, slot, robot, LR) {
   if (ctx.grave) return; // never on grave lines
   let hint = (Array.isArray(ctx.seg.cues) ? ctx.seg.cues : []).find((c) => c && c.action === 'nod' && c.slot === slot);
   // the greeting nod (world-now.md: once per presenter): named in the intro, the co-presenter
@@ -836,10 +840,13 @@ function planNod(ctx, style, r, plan, slot, robot) {
   const greeting = named >= 0 && !!hint && Math.abs(hint.char - named) < 24;
   // the straight face: nobody nods along to UNIT-8's literal lines unless the writer asks
   if (!hint && ROBOT.has(ctx.speakerId) && ctx.type === 'chat') return;
-  // the greeting nod is part of the format (once per presenter), not a chance reaction
-  const p = greeting ? 1 : hint ? style.hintNodP : style.nodP;
-  if (r() >= p) return;
+  // the greeting nod is part of the format (once per presenter), not a chance reaction; otherwise
+  // pace's listener.nodsPerMin [min, max] per minute of listening bounds the chance per turn
   const D = ctx.duration;
+  const rate = Array.isArray(LR.nodsPerMin) ? LR.nodsPerMin : null;
+  let p = greeting ? 1 : hint ? style.hintNodP : style.nodP;
+  if (!greeting && rate) p = Math.min(Math.max(p, (rate[0] * 1.25 * D) / 60), Math.max(0.05, (rate[1] * D) / 60), 1);
+  if (r() >= p) return;
   const looks = plan.list(slot);
   const dry = ctx.dryLine;
   const ok = (w) => {
@@ -847,8 +854,10 @@ function planNod(ctx, style, r, plan, slot, robot) {
     if (dry && w.t >= dry.t0 - 0.3) return false; // a deadpan line needs a straight face
     const at = w.t + 0.05;
     for (const l of looks) if (at >= l.at - 0.3 && at < l.at + RULES.nodAfterLook) return false;
-    const shot = shotAt(ctx, at);
-    return shot === null || shot === 'wide';
+    // where the viewer sees the listener (critic r3: only the wide counted, so the A seat, rarely
+    // on the wide while its partner speaks, never nodded on air): any shot that shows it, the whole
+    // nod inside it (~0.6 s)
+    return seenAt(ctx, at, slot) && seenAt(ctx, at + 0.6, slot);
   };
   // the hinted word itself (a name at the very end of the turn included): the nod lands where the
   // writer put it, and may run on into the gap; otherwise the nearest stressed word to the hint
@@ -859,8 +868,7 @@ function planNod(ctx, style, r, plan, slot, robot) {
     if (hw && hw.content && (hw.stressed || greeting) && hw.t >= 1.2 && hw.t <= D + 0.05 && (!dry || hw.t < dry.t0 - 0.3)) {
       const at = hw.t + 0.05;
       const clearOfLooks = looks.every((l) => !(at >= l.at - 0.3 && at < l.at + RULES.nodAfterLook));
-      const shot = shotAt(ctx, at);
-      if (clearOfLooks && (shot === null || shot === 'wide')) w = hw;
+      if (clearOfLooks && seenAt(ctx, at, slot) && seenAt(ctx, at + 0.6, slot)) w = hw;
     }
   }
   const cands = w ? [w] : ctx.words.filter(ok);
