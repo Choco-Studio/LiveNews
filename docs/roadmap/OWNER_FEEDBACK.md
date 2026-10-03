@@ -169,3 +169,5 @@ public/js/pace.js single pacing table per programme, transitions/cooldowns/gestu
    STATE effect, not the format: first-run planner memory (gestures/looks), caches (set/wall/faces/voices), pace budgets, page start.
    Task: diff timelines of WORLD NOW #1 vs #2 (canal-largo-timeline.json) — gestures/min, shot lengths, look changes, voice gaps;
    make the channel start "already warm" (pre-warm + seeded episode memory) so the first programme is as good as COSMOS.
+   Checked 07:50: canal-18min ran ONE code version end to end (v2 runtime imported at page start ~05:51, ES modules load once per page;
+   server code fixed at start). So the COSMOS-onward improvement is NOT newer code → warm-up/state or format effect. Owner suspected new code.
