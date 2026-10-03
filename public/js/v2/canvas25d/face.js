@@ -30,7 +30,7 @@
 // m/b/p press the lips shut; blends happen upstream (speechFrame mix).
 import { P } from '../../palette.js';
 import { decal } from './pixbuf.js';
-import { faceX } from './head.js';
+import { WRAP, wrapBegin, wrapX } from './head.js';
 import { clamp } from './space.js';
 
 // headHW / faceX / decal moved to head.js and pixbuf.js; re-exported for older imports.
@@ -52,6 +52,9 @@ function matsFor(L) {
     fog: decal(P.fog),
     iris: decal(E.iris[0]),
     irisDark: decal(E.iris[1]),
+    // wide shots: the iris row under the lash (the darker of the two iris colours
+    // would merge with the lash into a hole; the lighter one alone reads as a stare)
+    irisW: decal(E.irisWide || E.iris[0]),
     pupil: decal(P.black),
     brow: decal(B.color),
     lip: decal(M.lip),
@@ -71,7 +74,12 @@ function matsFor(L) {
 const F = { H: null, cx: 0, cy: 0, s: 1, cr: 1, sr: 0, yaw: 0, pitch: 0, x: 0, y: 0 };
 function mapF(x, y, protrude = 0) {
   const yy = y + F.pitch;
-  const fx = faceX(F.H, x, yy, F.yaw, protrude);
+  WRAP[0] = x;
+  WRAP[1] = yy;
+  WRAP[2] = F.yaw;
+  WRAP[3] = protrude;
+  wrapX();
+  const fx = WRAP[4];
   F.x = F.cx + F.s * (fx * F.cr - yy * F.sr);
   F.y = F.cy + F.s * (fx * F.sr + yy * F.cr);
 }
@@ -92,6 +100,7 @@ function deepen(buf, x, y, sk, min = 2) {
  */
 export function drawFace(buf, L, head, f, s) {
   F.H = L.head;
+  wrapBegin(L.head);
   F.cx = head.cx;
   F.cy = head.cy;
   F.s = s;
@@ -112,7 +121,7 @@ export function drawFace(buf, L, head, f, s) {
     const squash = clamp(1 - Math.max(0, -turn) * 0.55, 0.55, 1);
     drawEye(buf, L, mt, sk, F.x, F.y, E.w * s * squash, E.h * s, f, side, tier, open);
   }
-  if (tier === 2) browSheen(buf, L, sk, s); // before the brows, so a raised brow paints over it
+  if (tier === 2) browSheen(buf, L, sk, f, s); // before the brows
   drawBrows(buf, L, mt, sk, f, s, tier);
   drawNose(buf, L, sk, s, tier);
   drawMouth(buf, L, mt, sk, head, f, s, tier);
@@ -134,24 +143,29 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
   const lx = clamp(f.lookX || 0, -1, 1), ly = clamp(f.lookY || 0, -1, 1);
 
   if (tier === 0) {
-    // wide: a 2 px dash. At rest both pixels are the lash colour (an eye at the
-    // lens, never cross-eyed); a clear sideways gaze shows a lit pixel and the
-    // pupil on the gaze side; closed lids are skin shade.
+    // wide: 2 px wide and two rows tall when open (the lash over the iris), so the eye
+    // reads as open at 1x (a flat dash reads as closed or looking down); a clear sideways
+    // gaze turns the lower pixel away from the gaze into sclera; a heavy or half-closed
+    // lid leaves the lash row only; closed lids are one row of skin shade.
     const x = Math.round(cx - 1), y = Math.round(cy - 0.5);
     if (open < 0.4) {
-      buf.plot(x, y, sk, 2);
-      buf.plot(x + 1, y, sk, 2);
+      buf.plot(x, y + 1, sk, 2);
+      buf.plot(x + 1, y + 1, sk, 2);
       return;
     }
+    buf.plot(x, y, mt.lash, 1);
+    buf.plot(x + 1, y, mt.lash, 1);
+    if (open < 0.75 || ly > 0.5) return;
+    const iris = mt.irisW;
     if (lx > 0.45) {
-      buf.plot(x, y, mt.fog, 1);
-      buf.plot(x + 1, y, mt.pupil, 1);
+      buf.plot(x, y + 1, mt.fog, 1);
+      buf.plot(x + 1, y + 1, iris, 1);
     } else if (lx < -0.45) {
-      buf.plot(x, y, mt.pupil, 1);
-      buf.plot(x + 1, y, mt.fog, 1);
+      buf.plot(x, y + 1, iris, 1);
+      buf.plot(x + 1, y + 1, mt.fog, 1);
     } else {
-      buf.plot(x, y, mt.lash, 1);
-      buf.plot(x + 1, y, mt.lash, 1);
+      buf.plot(x, y + 1, iris, 1);
+      buf.plot(x + 1, y + 1, iris, 1);
     }
     return;
   }
@@ -229,16 +243,66 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
     EC[k] = Math.round(cy + up);
     EM[k] = Math.round(cy + (up + (lo - up) * 0.62));
   }
-  // no column below both neighbours (lower lid) or above both (upper lid)
-  for (let k = 1; k < n - 1; k++) {
-    if (EB[k] < -9000 || EB[k - 1] < -9000 || EB[k + 1] < -9000) continue;
-    const mb = Math.max(EB[k - 1], EB[k + 1]);
-    if (EB[k] > mb) EB[k] = mb;
-    const ma = Math.min(EA[k - 1], EA[k + 1]);
-    if (EA[k] < ma) EA[k] = ma;
+  // the lids are smooth: a lower-lid dip narrower than 3 columns is filled (an opening:
+  // the row minimum over each column's neighbourhood, then the maximum of those), and no
+  // upper-lid column rises above both its neighbours
+  for (let k = 0; k < n; k++) {
+    let m = EB[k];
+    if (m < -9000) {
+      ET[k] = m;
+      continue;
+    }
+    if (k > 0 && EB[k - 1] > -9000 && EB[k - 1] < m) m = EB[k - 1];
+    if (k < n - 1 && EB[k + 1] > -9000 && EB[k + 1] < m) m = EB[k + 1];
+    ET[k] = m;
   }
-  // pupil: 1 px in a small iris (a 1x2 bar reads as a slit), 2x2 in a large one
-  const pw = ir >= 2.4 ? 1.0 : 0.5;
+  for (let k = 0; k < n; k++) {
+    if (EB[k] < -9000) continue;
+    let m = ET[k];
+    if (k > 0 && ET[k - 1] > m) m = ET[k - 1];
+    if (k < n - 1 && ET[k + 1] > m) m = ET[k + 1];
+    if (m < EB[k]) EB[k] = m;
+  }
+  // the same for the upper lid (a peak narrower than 3 columns is filled)
+  for (let k = 0; k < n; k++) {
+    let m = EA[k];
+    if (m < -9000) {
+      ET[k] = m;
+      continue;
+    }
+    if (k > 0 && EA[k - 1] > -9000 && EA[k - 1] > m) m = EA[k - 1];
+    if (k < n - 1 && EA[k + 1] > -9000 && EA[k + 1] > m) m = EA[k + 1];
+    ET[k] = m;
+  }
+  for (let k = 0; k < n; k++) {
+    if (EA[k] < -9000) continue;
+    let m = ET[k];
+    if (k > 0 && ET[k - 1] > -9000 && ET[k - 1] < m) m = ET[k - 1];
+    if (k < n - 1 && ET[k + 1] > -9000 && ET[k + 1] < m) m = ET[k + 1];
+    if (m > EA[k]) EA[k] = m;
+  }
+  // the eye's bottom interior row spans at least half its width: a short bottom row holds
+  // only iris and hangs under the eye like a drop
+  for (let pass = 0; pass < 2; pass++) {
+    let mb = -9999, cnt = 0;
+    for (let k = 0; k < n; k++) if (EB[k] > -9000 && Math.abs(EO[k]) <= 1 && EB[k] - EA[k] > 2) mb = Math.max(mb, EB[k]);
+    if (mb < -9000) break;
+    for (let k = 0; k < n; k++) if (EB[k] === mb && Math.abs(EO[k]) <= 1) cnt++;
+    if (cnt * 2 >= W) break;
+    for (let k = 0; k < n; k++) if (EB[k] === mb) EB[k] = mb - 1;
+  }
+  // and the top interior row: a lash peak over fewer than half the columns comes down a row
+  for (let pass = 0; pass < 2; pass++) {
+    let ma = 9999, cnt = 0;
+    for (let k = 0; k < n; k++) if (EA[k] > -9000 && Math.abs(EO[k]) <= 1 && EB[k] - EA[k] > 2) ma = Math.min(ma, EA[k]);
+    if (ma > 9000) break;
+    for (let k = 0; k < n; k++) if (EA[k] === ma && Math.abs(EO[k]) <= 1) cnt++;
+    if (cnt * 2 >= W) break;
+    for (let k = 0; k < n; k++) if (EA[k] === ma) EA[k] = ma + 1;
+  }
+  // pupil: 1 px in a small eye (a 1x2 bar reads as a slit), 2x2 only in a large one
+  const pn = W >= 11 ? 2 : 1;
+  const ppx = Math.round(icx - pn / 2), ppy = Math.round(icy - pn / 2);
   for (let k = 0; k < n; k++) {
     const x = x0 - 1 + k;
     const o = EO[k], ao = Math.abs(o);
@@ -260,10 +324,10 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
       const dx = x + 0.5 - icx, dy = y + 0.5 - icy;
       let m;
       if (dx * dx + dy * dy <= ir * ir) {
-        if (Math.abs(dx) <= pw && Math.abs(dy) <= pw) m = mt.pupil;
+        if (x >= ppx && x < ppx + pn && y >= ppy && y < ppy + pn) m = mt.pupil;
         // the iris's rim is a touch darker; under the lid only its edges are (a dark top row
         // across the whole iris leaves one row of colour: a drowsy eye)
-        else if (y === yA + 1 ? Math.abs(dx) > ir * 0.45 : heavy && (dy < -ir * 0.55 || Math.abs(dx) > ir - 0.7)) m = mt.irisDark;
+        else if (y === yA + 1 ? Math.abs(dx) > ir * 0.45 : heavy && dy < 0 && Math.abs(dx) > ir - 0.6) m = mt.irisDark;
         else m = mt.iris;
       } else {
         // sclera: lit toward the key (left of the iris), cooler on the far side, under the lid and in the corners
@@ -295,7 +359,7 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
   }
 }
 // per-column scratch for the close-up eye (lid rows, crease, closed line, corner coordinate)
-const EA = new Int32Array(64), EB = new Int32Array(64), EC = new Int32Array(64), EM = new Int32Array(64), EO = new Float64Array(64);
+const EA = new Int32Array(64), EB = new Int32Array(64), ET = new Int32Array(64), EC = new Int32Array(64), EM = new Int32Array(64), EO = new Float64Array(64);
 
 // ---------------------------------------------------------------------------
 // Brows: tapered strokes on the brow ridge (head at the inner end, soft tail)
@@ -374,6 +438,7 @@ function drawNose(buf, L, sk, s, tier) {
     mapF(-N.w * 0.36, N.y1 + 0.1, 0.7);
     buf.plot(Math.round(F.x), Math.round(F.y), sk, 2);
     ridgeLight(buf, L, sk, s);
+    bridgeShade(buf, L, sk, s);
   } else {
     // medium: the tip's shadow on the far side
     mapF(N.w * 0.1, N.y1 + 0.35, 0.9);
@@ -398,15 +463,42 @@ function ridgeLight(buf, L, sk, s) {
 }
 
 /**
+ * Close-ups: the shadow side of the nose bridge, a 1 px line one tone darker down the far
+ * flank, from below the eyes to the wing. With the ridge light it gives the nose a fixed
+ * bridge (lit flank, ridge, shaded flank) that never depends on the light term. As the head
+ * turns toward the key the far flank faces the light, so the line shortens from the top
+ * (whole pixels, monotone with the turn) and is gone at a strong turn.
+ */
+function bridgeShade(buf, L, sk, s) {
+  const N = L.nose, E = L.eyes;
+  const skin = L._mats.skin;
+  const y0 = (E.y + N.y1) * 0.5 + 0.2, y1 = N.y1 - 0.45;
+  const full = Math.max(2, Math.round((y1 - y0) * s));
+  const k = clamp((F.yaw + 0.35) / 0.25, 0, 1);
+  const n = Math.round(full * k);
+  if (n < 1) return;
+  mapF(N.w * 0.46, y1, 0.8);
+  const x = Math.round(F.x), yb = Math.round(F.y);
+  for (let j = 0; j < n; j++) {
+    const y = yb - j;
+    if (x < 1 || y < 1 || x >= buf.w - 1 || y >= buf.h - 1) continue;
+    if (buf.mat[y * buf.w + x] !== skin) continue;
+    deepen(buf, x, y, sk);
+  }
+}
+
+/**
  * Close-ups: the forehead's sheen, a short lozenge just above the key-side brow,
  * toward the centre (never under the hairline: there it reads as a bald patch).
  * Fixed shape per scale, placed with faceX; only on lit bare skin (hair drawn later covers it).
  */
-function browSheen(buf, L, sk, s) {
+function browSheen(buf, L, sk, f, s) {
   const B = L.brows, E = L.eyes;
   const skin = L._mats.skin;
   const wa = Math.max(3, Math.round(E.x * 0.6 * s));
-  mapF(-E.x * 0.42, B.y - 1.2);
+  // it rides on the key-side brow (a lifted brow lifts the skin above it), so the brow
+  // never eats into it and its shape stays the same while the presenter talks
+  mapF(-E.x * 0.42, browY(B, f.browL || 0, f.browIn || 0, 0.3) - 1.2);
   const cx = Math.round(F.x - wa / 2), cy = Math.round(F.y);
   // two rows: the upper one shorter and set toward the centre (the brow ridge's curve)
   for (let i = 0; i < wa; i++) litPlot(buf, cx + i, cy, sk, skin, 1);
@@ -425,22 +517,30 @@ function litPlot(buf, x, y, sk, skin, maxTone) {
 // Mouth
 
 const MX = { y: 0 };
-/** Screen column of the mouth at feature x (units): each corner rides the head's curve on its own. */
-function mx(fx, y) {
-  mapF(fx, y, 0.6);
+// mouth scratch: MS[0] = the feature x (units) for mxS(), the half width for rowS()
+const MS = new Float64Array(1);
+let mouthY = 0; // the mouth's feature-space row (L.mouth.y), set by drawMouth
+/** Screen column of the mouth at feature x MS[0] (units): each corner rides the head's curve on its own. */
+function mxS() {
+  mapF(MS[0], mouthY, 0.6);
   MX.y = F.y;
   return Math.round(F.x);
 }
 
-/** Paint a row between two feature-space x positions (exclusive right end). */
-function row(buf, fx0, fx1, yUnits, py, m, tone = 1) {
-  const a = mx(fx0, yUnits), b = mx(fx1, yUnits);
-  for (let x = a; x < b; x++) buf.plot(x, py, m, tone);
+/** Paint a row of the mouth between -MS[0] and MS[0] (units; exclusive right end) on screen row py. */
+function rowS(buf, py, m) {
+  const hw = MS[0];
+  MS[0] = -hw;
+  const a = mxS();
+  MS[0] = hw;
+  const b = mxS();
+  for (let x = a; x < b; x++) buf.plot(x, py, m, 1);
   return b - a;
 }
 
 function drawMouth(buf, L, mt, sk, head, f, s, tier) {
   const M = L.mouth;
+  mouthY = M.y;
   const open = clamp(f.open || 0, 0, 1);
   const round = clamp(f.round || 0, 0, 1);
   const mw = clamp(f.mwide ?? 0, -1, 1);
@@ -448,10 +548,11 @@ function drawMouth(buf, L, mt, sk, head, f, s, tier) {
   const press = (f.press || 0) > 0.5;
   const tuck = (f.tuck || 0) > 0.5;
   const hw = (M.w / 2) * (1 + mw * 0.16) * (1 - round * 0.3); // half width, units
-  mx(0, M.y);
+  MS[0] = 0;
+  mxS();
   const y0 = Math.round(MX.y);
   const lift = smile > 0.3 ? 1 : smile < -0.25 ? -1 : 0;
-  const xl = mx(-hw, M.y), xr = mx(hw, M.y); // corners, xr exclusive
+  const xl = ((MS[0] = -hw), mxS()), xr = ((MS[0] = hw), mxS()); // corners, xr exclusive
 
   if (tier === 0) {
     // wide: a short deep line; a maroon middle while the jaw is open. A smile never
@@ -477,15 +578,18 @@ function drawMouth(buf, L, mt, sk, head, f, s, tier) {
       else buf.plot(x, y0, mt.lip, 1);
     }
     if (rows > 0) {
-      row(buf, -hw * 0.7, hw * 0.7, M.y, y0 + 1, mt.inner);
-      row(buf, -hw * 0.5, hw * 0.5, M.y, y0 + 2, mt.lipHi);
+      MS[0] = hw * 0.7;
+      rowS(buf, y0 + 1, mt.inner);
+      MS[0] = hw * 0.5;
+      rowS(buf, y0 + 2, mt.lipHi);
     }
     return;
   }
 
   // ---- close-up
   // upper lip: a darker plane (it faces down, away from the key)
-  row(buf, -hw * (round > 0.5 ? 0.8 : 0.66), hw * (round > 0.5 ? 0.8 : 0.66), M.y, y0 - 1, mt.upper);
+  MS[0] = hw * (round > 0.5 ? 0.8 : 0.66);
+  rowS(buf, y0 - 1, mt.upper);
   const loW = hw * (round > 0.5 ? 0.72 : 0.56);
   if (rows === 0) {
     // closed (or pressed for m/b/p): the lip line, corners shaped by the smile
@@ -498,8 +602,9 @@ function drawMouth(buf, L, mt, sk, head, f, s, tier) {
       else buf.plot(x, y0, sk, 3);
     }
     // lower lip: lit from above; pressed lips roll in and darken
-    row(buf, -loW * (press ? 0.8 : 1), loW * (press ? 0.8 : 1), M.y, y0 + 1, press ? mt.upper : mt.lipHi);
-    const a2 = mx(-loW * 0.7, M.y), b2 = mx(loW * 0.7, M.y);
+    MS[0] = loW * (press ? 0.8 : 1);
+    rowS(buf, y0 + 1, press ? mt.upper : mt.lipHi);
+    const a2 = ((MS[0] = -loW * 0.7), mxS()), b2 = ((MS[0] = loW * 0.7), mxS());
     if (b2 - a2 >= 2) for (let x = a2; x < b2; x++) deepen(buf, x, y0 + 2, sk); // never a lone dot under the lip
     smileLines(buf, L, sk, smile, s);
     return;
@@ -517,20 +622,27 @@ function drawMouth(buf, L, mt, sk, head, f, s, tier) {
     // the interior narrows toward the corners and at its top and bottom rows
     const edgeRow = rows >= 2 && (r === rows || (rows === 3 && r === 1));
     const iw = hw * (0.78 - (edgeRow ? 0.16 : 0) - round * 0.12);
-    const a = mx(-iw, M.y), b = mx(iw, M.y);
+    const a = ((MS[0] = -iw), mxS()), b = ((MS[0] = iw), mxS());
     for (let x = a; x < b; x++) buf.plot(x, y0 + r, mt.inner, 1);
     buf.plot(a - 1, y0 + r, mt.lip, 1);
     buf.plot(b, y0 + r, mt.lip, 1);
     if (r === 1 && (tuck || teeth)) {
       // f/v: the upper teeth rest on the lower lip; otherwise a short band of upper teeth
       const k = tuck ? 0.7 : rows >= 2 ? 0.48 : f.teeth > 0.8 ? 0.3 : 0;
-      if (k > 0) row(buf, -iw * k, iw * k, M.y, y0 + 1, mt.teeth);
+      if (k > 0) {
+        MS[0] = iw * k;
+        rowS(buf, y0 + 1, mt.teeth);
+      }
     }
-    if (tongue && r === rows) row(buf, -iw * 0.45, iw * 0.45, M.y, y0 + r, mt.tongue);
+    if (tongue && r === rows) {
+      MS[0] = iw * 0.45;
+      rowS(buf, y0 + r, mt.tongue);
+    }
   }
   const yl = y0 + rows + 1;
-  row(buf, -loW * (tuck ? 0.8 : 1), loW * (tuck ? 0.8 : 1), M.y, yl, tuck ? mt.upper : mt.lipHi);
-  const a3 = mx(-loW * 0.7, M.y), b3 = mx(loW * 0.7, M.y);
+  MS[0] = loW * (tuck ? 0.8 : 1);
+  rowS(buf, yl, tuck ? mt.upper : mt.lipHi);
+  const a3 = ((MS[0] = -loW * 0.7), mxS()), b3 = ((MS[0] = loW * 0.7), mxS());
   if (b3 - a3 >= 2) for (let x = a3; x < b3; x++) deepen(buf, x, yl + 1, sk);
   smileLines(buf, L, sk, smile, s);
 }

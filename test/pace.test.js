@@ -26,6 +26,7 @@ import {
   wordCount,
 } from '../public/js/pace.js';
 import { STINGER_DURATION } from '../public/js/scenes/cards.js';
+import { BREAK_BLACK } from '../public/js/ads/index.js';
 import { STRAP_TIMING } from '../public/js/graphics/strap.js';
 import { TICKER_TIMING, makeEntry } from '../public/js/graphics/ticker.js';
 import { CAPTION_TIMING } from '../public/js/graphics/captions.js';
@@ -97,6 +98,7 @@ test('pace: config/channel.json targetSeconds mirrors each profile\'s length tar
 
 test('pace: the consumers read the one table (no private copies of the timings)', () => {
   assert.equal(CHANNEL.stinger, STINGER_DURATION, 'stinger = cards.js STINGER_DURATION');
+  assert.equal(CHANNEL.breaks.blackGap, BREAK_BLACK.duration, 'black between break elements = ads/index.js BREAK_BLACK');
   assert.equal(TRANSITIONS.stinger.dur, STINGER_DURATION);
   assert.equal(STRAP_TIMING, CHANNEL.strap);
   assert.equal(TICKER_TIMING, CHANNEL.ticker);
@@ -117,6 +119,8 @@ test('pace: the consumers read the one table (no private copies of the timings)'
   const director = src('../public/js/director.js');
   assert.match(director, /from '\.\/pace\.js'/);
   assert.doesNotMatch(director, /const MIN_SHOT = 3|const MONTAGE_FRAME = 2\.6|sleep\(3200\)|sleep\(4200\)|sleep\(2600\)|sleep\(3000\)/);
+  // no millisecond literal left in any director wait: every hold comes from the profile or CHANNEL
+  assert.doesNotMatch(director, /sleep\(\d+\)/, 'a numeric sleep() in director.js');
   const live = src('../public/js/v2/canvas25d/runtime/direction.js');
   assert.match(live, /pace\.js/);
   assert.doesNotMatch(live, /const MIN_SHOT = 3;/);
@@ -260,4 +264,67 @@ test('pace: planned gestures on the fixtures stay inside the budget (hands mostl
       if (p.listenerNodsPerMin != null) assert.ok(p.listenerNodsPerMin <= 60 / listenerRules(e.program.id).nodGap, `${e.program.id} ${slot}: listener nods ${p.listenerNodsPerMin}/min`);
     }
   }
+});
+
+// ---------------------------------------------------------------- the analyser (tools/pace/analyse.mjs)
+import { analyseTimeline, summary, production } from '../tools/pace/analyse.mjs';
+
+/** A tiny recorder timeline: open, montage, three studio shots (one invisible re-set), a map, end card, ident. */
+function miniTimeline() {
+  const ev = [];
+  const cast = { A: 'paco', B: 'lola' };
+  ev.push({ ev: 'playEpisode', phase: 'start', t: -0.5, programId: 'world-now', title: 'WORLD NOW', episodeId: 'x1', cast, segments: [{ type: 'intro' }, { type: 'story' }, { type: 'story' }, { type: 'outro' }] });
+  const shot = (t, s, extra = {}) => ev.push({ ev: 'shot', t, at: t, shot: s, programId: 'world-now', ...extra });
+  const cut = (t, s, framing, focus) => ev.push({ ev: 'pace', k: 'cut', t: t + 0.02, shot: s, framing, focus });
+  const say = (t0, t1, type, anchor, text) => {
+    ev.push({ ev: 'say', phase: 'start', t: t0, type, anchor, text });
+    ev.push({ ev: 'clip', t: t0, at: t0 + 0.05, duration: t1 - t0 - 0.05 });
+    ev.push({ ev: 'say', phase: 'end', t: t1, ref: t0 });
+  };
+  shot(0, 'open');
+  shot(4, 'montage', { card: { index: 0 } });
+  say(4.5, 12, 'intro', 'A', 'Headlines. Good evening, I am Paco.');
+  shot(12.6, 'close', { focus: 'A' });
+  cut(12.6, 'close', 'single', 'A');
+  say(12.6, 30, 'story', 'A', 'A story with several sentences that runs for a while on the single and then the map.');
+  shot(20, 'map', { card: { kind: 'map' } });
+  cut(20, 'map', null, 'A');
+  shot(30.9, 'wide', { focus: 'B' });
+  cut(30.9, 'wide', 'two', 'B');
+  say(30.9, 40, 'story', 'B', 'The second story, read by Lola on the two-shot.');
+  shot(40.8, 'wide', { focus: 'A' }); // focus-only re-set on the same camera: no cut trace
+  say(40.8, 46, 'outro', 'A', 'That is WORLD NOW.');
+  ev.push({ ev: 'strap', t: 12.6, headline: 'A STORY' });
+  ev.push({ ev: 'pace', k: 'strap', t: 12.6, at: 13.6 });
+  shot(48, 'endcard');
+  shot(51.5, 'ident');
+  return { meta: { seconds: 60 }, events: ev, speech: [], music: [] };
+}
+
+test('pace analyser: visible shots only, pauses by kind, strap wipe-in from the trace', () => {
+  const r = analyseTimeline(miniTimeline());
+  assert.equal(r.programmes.length, 1);
+  const p = r.programmes[0];
+  assert.equal(p.programId, 'world-now');
+  // the focus-only re-set at 40.8 s is not a cut: the two-shot runs 30.9 → 48 s
+  assert.equal(p.shots.under, 0);
+  assert.equal(p.dwell.wide.n, 1);
+  assert.ok(Math.abs(p.dwell.wide.max - 17.1) < 0.01, `wide ${p.dwell.wide.max}`);
+  assert.ok(Math.abs(p.dwell.map.min - 10.9) < 0.01);
+  // pauses: intro → story = afterIntro, A → B = handover, story → outro = beforeOutro
+  assert.deepEqual(p.gapList.map((g) => g.kind), ['afterIntro', 'handover', 'beforeOutro']);
+  assert.ok(Math.abs(p.gaps.handover.median - 0.95) < 0.01);
+  assert.ok(Math.abs(p.strap.inDelay.median - 1.0) < 0.01, 'the strap wipes in 1 s after the cut');
+  assert.ok(Math.abs(p.openToFirstWord - 0.55) < 0.01);
+  const s = summary(p);
+  assert.equal(s.programme, 'WORLD NOW');
+  assert.equal(s.under4, 0);
+  assert.equal(s.length, 51.5);
+});
+
+test('pace analyser: production lines from a server log', () => {
+  const log = '[producer] WORLD NOW ab12 ready in 84.3 s (pictures → write:mock → voice), 9 stories\n[voice] WORLD NOW: 14/14 clips (2 cached), 155 s of speech in 120 s\n';
+  const r = production(log);
+  assert.deepEqual(r.ready, [{ title: 'WORLD NOW', id: 'ab12', ready: 84.3, stories: 9 }]);
+  assert.equal(r.voice[0].ratio, 1.29);
 });

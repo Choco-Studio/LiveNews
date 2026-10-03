@@ -147,8 +147,9 @@ harness voices those lines itself, with the same casting, and the clock waits fo
 7. **File check** (`check-av.py`, run on the finished MP4, independent of the recorder's own report).
    Decodes the picture back to native 384x216 (the 5x encode is nearest-neighbour) and the AAC
    through ffmpeg (edit list applied, so encoder priming counts) and measures: the audio offset of
-   the MP4 against `mix.wav` by cross-correlation; for every stinger the first frame the wipe
-   changes, the whoosh onset (on the WebAudio stem; reported as masked when other channel sounds are
+   the MP4 against `mix.wav` by cross-correlation; for every stinger the wipe's first frame (a
+   change that enters from the picture's border and keeps growing, so a presenter turning at the
+   desk just before it is not taken for the wipe), the whoosh onset (on the WebAudio stem; reported as masked when other channel sounds are
    already loud, e.g. over the end-card theme), the frame of the cut (the timeline's next shot,
    confirmed by the changed pixels) and the thump (steepest rise in the mix); for every caption the
    frame its block rolls in (white glyphs counted in the caption column) and the voice onset after it

@@ -97,19 +97,15 @@ const DEFS = {
     accentName: 'magenta',
     deskLineName: 'magenta',
     wallIdle: 'planet',
-    // a flat black wall (no dithered "dark grey") and an ink pool behind each seat with a Bayer edge;
-    // on the flanks, outside the head zones, a pair of downlights grazes the wall from the ceiling:
-    // a soft ink beam with a hard-edged purple core (palette swap ink → purple), one clean cluster of
-    // coloured light each, never purple specks on black
+    // a flat black wall (no dithered "dark grey") and one ink pool from above behind each seat with a
+    // Bayer edge: the darkest room, lit only where the presenters sit. No purple scenery tint (the
+    // bible allows up to 12 %, it does not ask for it): every coloured light tried on the flanks or
+    // the wall's foot read as a club or a sunset; the magenta desk line is the programme's colour
     base: 0.1,
     pools: duoPools(1.08, 96, 74),
     tintPools: [],
-    scallops: [
-      { X: -166, Y: -126, up: 1, down: 110, w0: 2, spread: 0.2, beam: true, amount: 1.05, tint: 1.25 },
-      { X: 166, Y: -126, up: 1, down: 110, w0: 2, spread: 0.2, beam: true, amount: 1.05, tint: 1.25 },
-    ],
-    tints: { slate: 'purple', ink: 'purple' },
-    tintNames: ['purple'],
+    tints: null,
+    tintNames: ['purple', 'maroon'],
     tintMax: 0.12,
     glow: 0.2,
     practical: 'off',
@@ -127,23 +123,21 @@ const DEFS = {
     wallIdle: 'wordmark',
     solo: true,
     base: 1.0,
-    pools: [
-      { X: -132, Y: -72, rx: 74, ry: 96, amount: 0.8 },
-      { X: 132, Y: -72, rx: 74, ry: 96, amount: 0.8 },
-      { X: 0, Y: -6, rx: 150, ry: 46, amount: 0.55 },
-    ],
-    // the pair of sconces at X ±196 washes the panels up and down in cream (palette swap: slate →
-    // brown, ink → maroon), narrow at the fixture and fanning out, never reaching the head zones
-    // (a wall-washer's scallop: a lift into slate shaped like the beam, warm only in its core: the
-    // ink around it stays ink, so the wash never reads as specks or a flame)
+    // the warm room: a pair of bronze sconces centred on the slate panels either side of the wall,
+    // each washing its panel up and down (a wall-washer's scallop, narrow at the fixture and fanning
+    // out); the wash IS the panel's light, warm where it is brightest (slate → brown, steel →
+    // tanShade, ink stays ink), so the fixtures visibly light the room and never reach the head zone
+    pools: [{ X: 0, Y: -6, rx: 120, ry: 44, amount: 0.55 }],
     scallops: [
-      { X: -196, Y: -66, up: 76, down: 54, w0: 4, spread: 0.6, amount: 0.92, hard: 0.64 },
-      { X: 196, Y: -66, up: 76, down: 54, w0: 4, spread: 0.6, amount: 0.92, hard: 0.64 },
+      { X: -142, Y: -66, gap: 11, up: 62, down: 54, w0: 7, spread: 0.95, amount: 2.05, tintAt: 0.1, tintBand: 0.2 },
+      { X: 142, Y: -66, gap: 11, up: 62, down: 54, w0: 7, spread: 0.95, amount: 2.05, tintAt: 0.1, tintBand: 0.2 },
     ],
+    sconces: [-142, 142], // set.js drawWallDetails draws the fixtures here
     tintPools: [],
     tints: { steel: 'tanShade', slate: 'brown' },
     tintNames: ['maroon', 'brown', 'cream', 'tanShade'],
     tintMax: 0.08,
+    tintMin: 0.04, // the warm room must read warm (critic: 0.4 % read as WORLD NOW with two candles)
     practical: 'warm',
     sides: { x0: 214, x1: 270 },
     wallField: ['ink', 'ink'],

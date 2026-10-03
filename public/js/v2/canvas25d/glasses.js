@@ -25,7 +25,7 @@
 // `glasses` gesture for looks without them.
 import { P } from '../../palette.js';
 import { decal } from './pixbuf.js';
-import { faceX } from './head.js';
+import { WRAP, wrapBegin, wrapX } from './head.js';
 import { clamp } from './space.js';
 
 const G_GLASSES = 56; // character.js GROUPS.glasses (56-59 reserved for FACES)
@@ -42,24 +42,41 @@ function matsFor(L) {
   return m;
 }
 
-/** Head-space point (units) → screen, through the head's curve, with pitch. Writes `out`. */
-function mapG(head, x, y, protrude, out) {
-  const H = head.L.head;
-  const yy = y + Math.sin(head.pitch || 0) * 2.0;
-  const fx = faceX(H, x, yy, head.yaw || 0, protrude);
-  return head.toScreenInto ? head.toScreenInto(fx, yy, out) : Object.assign(out, head.toScreen(fx, yy));
+// mapG input (units): [0] x, [1] y, [2] protrude (scratch, so the call passes no doubles)
+const GI = new Float64Array(3);
+/**
+ * Head-space point GI (units) → screen, through the head's curve, with pitch. Writes `out`.
+ * Allocation-free (the wrap goes through head.js WRAP, the projection is inline).
+ */
+function mapG(head, out) {
+  wrapBegin(head.L.head);
+  const yy = GI[1] + Math.sin(head.pitch || 0) * 2.0;
+  WRAP[0] = GI[0];
+  WRAP[1] = yy;
+  WRAP[2] = head.yaw || 0;
+  WRAP[3] = GI[2];
+  wrapX();
+  const fx = WRAP[4];
+  if (head.cr === undefined) return head.toScreenInto ? head.toScreenInto(fx, yy, out) : Object.assign(out, head.toScreen(fx, yy));
+  out[0] = head.cx + head.s * (fx * head.cr - yy * head.sr);
+  out[1] = head.cy + head.s * (fx * head.sr + yy * head.cr);
+  return out;
 }
 
-/** Rim geometry of one lens (units): centre, half width, top and bottom. */
+// rim geometry of one lens (units), written into one reused object by rim()
+const RIM = { cx: 0, rw: 0, top: 0, bot: 0 };
+/** Rim geometry of one lens (units): centre, half width, top and bottom (the shared RIM object). */
 function rim(L, side) {
   const E = L.eyes;
-  const rw = E.w * 0.5 + 0.6;
-  return { cx: side * E.x, rw, top: E.y - E.h * 0.5 - 0.65, bot: E.y + E.h * 0.5 + 0.85 };
+  RIM.rw = E.w * 0.5 + 0.6;
+  RIM.cx = side * E.x;
+  RIM.top = E.y - E.h * 0.5 - 0.65;
+  RIM.bot = E.y + E.h * 0.5 + 0.85;
+  return RIM;
 }
 
-function seg(buf, ax, ay, bx, by, m) {
-  let x0 = Math.round(ax), y0 = Math.round(ay);
-  const x1 = Math.round(bx), y1 = Math.round(by);
+/** A 1 px line between integer pixels (callers round: doubles passed to a call are boxed). */
+function seg(buf, x0, y0, x1, y1, m) {
   const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
   const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
   let err = dx + dy;
@@ -105,11 +122,17 @@ export function drawGlasses(buf, L, head, f, s) {
     // with skin between them and the eyes: a dark pixel on both sides of each 2 px
     // eye joined by a dark bridge reads as a blindfold at 1 px per unit
     for (let side = -1; side <= 1; side += 2) {
-      mapG(head, side * E.x, E.y, PROTRUDE, PT);
+      GI[0] = side * E.x;
+      GI[1] = E.y;
+      GI[2] = PROTRUDE;
+      mapG(head, PT);
       const x = Math.round(PT[0] - 1), y = Math.round(PT[1] - 0.5);
       buf.plot(side < 0 ? x - 1 : x + 2, y, m.hi, 1);
     }
-    mapG(head, 0, E.y - 0.2, PROTRUDE + 0.4, PT);
+    GI[0] = 0;
+    GI[1] = E.y - 0.2;
+    GI[2] = PROTRUDE + 0.4;
+    mapG(head, PT);
     buf.plot(Math.round(PT[0]), Math.round(PT[1] - 0.5), m.hi, 1);
     buf.part(g0, z0, c0);
     return;
@@ -120,7 +143,10 @@ export function drawGlasses(buf, L, head, f, s) {
     const cy = (R.top + R.bot) / 2, hh = (R.bot - R.top) / 2;
     const n = shape.length;
     for (let k = 0; k < n; k++) {
-      mapG(head, R.cx + shape[k][0] * R.rw, cy + shape[k][1] * hh, PROTRUDE, PT);
+      GI[0] = R.cx + shape[k][0] * R.rw;
+      GI[1] = cy + shape[k][1] * hh;
+      GI[2] = PROTRUDE;
+      mapG(head, PT);
       PX[k] = PT[0];
       PY[k] = PT[1];
     }
@@ -133,39 +159,61 @@ export function drawGlasses(buf, L, head, f, s) {
       // the upper edge faces the key light; the lower and far edges sit in shade
       const upper = vk <= -0.55 && vj <= -0.55;
       const mtl = upper ? m.base : m.shade;
-      seg(buf, PX[k], PY[k], PX[j], PY[j], mtl);
+      seg(buf, Math.round(PX[k]) | 0, Math.round(PY[k]) | 0, Math.round(PX[j]) | 0, Math.round(PY[j]) | 0, mtl);
       // the browline: half-rims and rectangular frames carry a heavier top bar in close-ups
-      if (upper && tier === 2 && s >= 3.2 && style !== 'round') seg(buf, PX[k], PY[k] + 1, PX[j], PY[j] + 1, m.base);
+      if (upper && tier === 2 && s >= 3.2 && style !== 'round') seg(buf, Math.round(PX[k]) | 0, Math.round(PY[k] + 1) | 0, Math.round(PX[j]) | 0, Math.round(PY[j] + 1) | 0, m.base);
     }
     if (tier === 2) {
       // a lit edge on the upper-left of the rim (specular, key from camera-left)
-      mapG(head, R.cx - R.rw * 0.55, R.top, PROTRUDE, PT);
+      GI[0] = R.cx - R.rw * 0.55;
+      GI[1] = R.top;
+      GI[2] = PROTRUDE;
+      mapG(head, PT);
       buf.plot(Math.round(PT[0]), Math.round(PT[1]), m.hi, 1);
-      mapG(head, R.cx - R.rw * 0.25, R.top, PROTRUDE, PT);
+      GI[0] = R.cx - R.rw * 0.25;
+      GI[1] = R.top;
+      GI[2] = PROTRUDE;
+      mapG(head, PT);
       buf.plot(Math.round(PT[0]), Math.round(PT[1]), m.hi, 1);
       // one small glint on the lens, top-left, clear of the iris (never a glare over the eye)
-      mapG(head, R.cx - R.rw * 0.66, R.top + hh * 0.42, PROTRUDE, PT);
+      GI[0] = R.cx - R.rw * 0.66;
+      GI[1] = R.top + hh * 0.42;
+      GI[2] = PROTRUDE;
+      mapG(head, PT);
       buf.plot(Math.round(PT[0]) + 1, Math.round(PT[1]) + 1, m.glare, 1);
     }
     // temple arm: from the hinge back toward the ear, while it stays on the head
     const hinge = side * (Math.abs(R.cx) + R.rw);
-    mapG(head, hinge, R.top + 0.35, PROTRUDE, PT);
+    GI[0] = hinge;
+    GI[1] = R.top + 0.35;
+    GI[2] = PROTRUDE;
+    mapG(head, PT);
     const hx = PT[0], hy = PT[1];
     const turn = Math.sin(head.yaw || 0) * side;
     const back = clamp(0.6 + turn * 3.5, 0, 2.2); // the arm shows more on the side turned away from us
     if (back > 0.2) {
-      mapG(head, hinge + side * back, R.top + 0.5, 0, PT);
-      seg(buf, hx, hy, PT[0], PT[1], m.shade);
+      GI[0] = hinge + side * back;
+      GI[1] = R.top + 0.5;
+      GI[2] = 0;
+      mapG(head, PT);
+      seg(buf, Math.round(hx) | 0, Math.round(hy) | 0, Math.round(PT[0]) | 0, Math.round(PT[1]) | 0, m.shade);
     }
   }
   // the bridge, between the inner rims at eye level
-  const Rl = rim(L, -1), Rr = rim(L, 1);
   const by = L.eyes.y - L.eyes.h * 0.2;
-  mapG(head, Rl.cx + Rl.rw, by, PROTRUDE, PT);
+  const Rl = rim(L, -1);
+  GI[0] = Rl.cx + Rl.rw;
+  GI[1] = by;
+  GI[2] = PROTRUDE;
+  mapG(head, PT);
   const ax = PT[0], ay = PT[1];
-  mapG(head, Rr.cx - Rr.rw, by, PROTRUDE, PT);
+  const Rr = rim(L, 1);
+  GI[0] = Rr.cx - Rr.rw;
+  GI[1] = by;
+  GI[2] = PROTRUDE;
+  mapG(head, PT);
   buf.part(gb + G_GLASSES, 14, false);
-  seg(buf, ax, ay, PT[0], PT[1], m.base);
+  seg(buf, Math.round(ax) | 0, Math.round(ay) | 0, Math.round(PT[0]) | 0, Math.round(PT[1]) | 0, m.base);
   buf.part(g0, z0, c0);
 }
 
@@ -182,5 +230,8 @@ export function glassesAnchor(head, which = 'bridge', out = [0, 0]) {
     const R = rim(L, side);
     return mapG(head, side * (Math.abs(R.cx) + R.rw), R.top + 0.35, PROTRUDE, out);
   }
-  return mapG(head, 0, L.eyes.y - L.eyes.h * 0.2, PROTRUDE + 0.4, out);
+  GI[0] = 0;
+  GI[1] = L.eyes.y - L.eyes.h * 0.2;
+  GI[2] = PROTRUDE + 0.4;
+  return mapG(head, out);
 }

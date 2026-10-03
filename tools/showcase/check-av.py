@@ -180,9 +180,12 @@ def main():
     rep['stingerOnsetRef'] = 'webaudio stem' if ew is not ea else 'mix'
 
     def changed(fr):
-        """Pixels that change between consecutive frames (|delta| > 24 on any channel)."""
-        d = np.abs(np.diff(fr.astype(np.int16), axis=0)).max(axis=3)
-        return (d > 24).sum(axis=(1, 2))  # [k]: frame f0+k -> f0+k+1
+        """Pixels that change between consecutive frames (|delta| > 24 on any channel),
+        and whether the change touches the picture's border (a wipe enters from an
+        edge; presenters moving at the desk do not)."""
+        d = np.abs(np.diff(fr.astype(np.int16), axis=0)).max(axis=3) > 24
+        edge = d[:, :, :2].any(axis=(1, 2)) | d[:, :, -2:].any(axis=(1, 2)) | d[:, :2, :].any(axis=(1, 2)) | d[:, -2:, :].any(axis=(1, 2))
+        return d.sum(axis=(1, 2)), edge  # [k]: frame f0+k -> f0+k+1
 
     # 2. Stingers: the wipe's first frame (picture) vs the whoosh onset (sound);
     # the shot change under the wipe (the timeline's next shot, confirmed in the
@@ -194,10 +197,16 @@ def main():
         fr, f0 = frames(mp4, fps, f0, int(1.5 * fps), scale)
         if len(fr) < 4:
             continue
-        c = changed(fr)
+        c, edge = changed(fr)
         pre = c[: max(3, int(0.3 * fps))]
         thr = max(150, 3 * float(np.median(pre)))
-        first = next((k + 1 for k in range(len(c)) if (f0 + k + 1) / fps >= at - 0.05 and c[k] > thr), None)
+        # The wipe's first frame: a change that enters from the border and keeps
+        # growing (the next two frames both change more than the threshold). A
+        # presenter's turn or blink before it is small, central and does not grow.
+        first = next((k + 1 for k in range(len(c) - 2) if (f0 + k + 1) / fps >= at - 0.1 and edge[k] and c[k] >= 4
+                      and c[k + 1] > thr and c[k + 2] > thr), None)
+        if first is None:  # no clean edge entry (a dissolve, a full-frame flash): the first big change
+            first = next((k + 1 for k in range(len(c)) if (f0 + k + 1) / fps >= at - 0.05 and c[k] > thr), None)
         wipe_t = (f0 + first) / fps if first is not None else None
         nxt = next((x for x in shots if at + 0.05 < (x.get('at') if x.get('at') is not None else x['t']) <= at + 1.0), None)
         cut_tl = (nxt.get('at') if nxt.get('at') is not None else nxt['t']) if nxt else None

@@ -9,6 +9,8 @@ import { drawText, measureText, fontMetrics } from '../../../font.js';
 
 const MASKS = new Map();
 const LIMIT = 256;
+// one scratch canvas for every mask (a new DOM canvas per string cost ~1 ms each, more under load)
+let CV = null, CTX = null;
 
 /**
  * 1-bit mask of a text line: { w, h, top, mask } where `top` is the number of rows above
@@ -25,10 +27,20 @@ export function textMask(text, font = 'body', scale = 1) {
       const m = fontMetrics(font);
       const w = Math.max(1, Math.ceil(measureText(s, scale, font)) + scale);
       const h = (m.lineHeight + 1) * scale;
-      const c = document.createElement('canvas');
-      c.width = w;
-      c.height = h;
-      const ctx = c.getContext('2d', { willReadFrequently: true });
+      if (!CV) {
+        CV = document.createElement('canvas');
+        CV.width = 256;
+        CV.height = 32;
+        CTX = CV.getContext('2d', { willReadFrequently: true });
+      }
+      if (CV.width < w || CV.height < h) {
+        // grow only (a resize resets the context state, so it is fetched again)
+        CV.width = Math.max(CV.width, w);
+        CV.height = Math.max(CV.height, h);
+        CTX = CV.getContext('2d', { willReadFrequently: true });
+      }
+      const ctx = CTX;
+      ctx.clearRect(0, 0, w, h);
       drawText(ctx, s, 0, m.ascent * scale, { color: '#ffffff', scale, font });
       const d = ctx.getImageData(0, 0, w, h).data;
       const mask = new Uint8Array(w * h);

@@ -44,7 +44,7 @@ function ease(v, target, up, down, dt) {
 
 function blankFrame(slot) {
   return {
-    slot, speaking: false, level: 0, viseme: 'rest', next: 'rest', mix: 0, accent: 0, pause: false,
+    slot, speaking: false, level: 0, voice: -1, viseme: 'rest', next: 'rest', mix: 0, accent: 0, pause: false,
     sentenceIndex: -1, wordIndex: -1, charIndex: -1, emph: 0, env: 0, jawEnv: 0, act: 0, pauseAt: FAR, sentAt: FAR, endAt: FAR, startAt: FAR,
   };
 }
@@ -83,7 +83,7 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
   const fr = blankFrame(slot);
   let lastT = null;
   let wasPause = false, wasSpeaking = false, lastSentence = -1;
-  let shown = 'rest', shownAt = -1e9;
+  let shown = 'rest', shownAt = -1e9, lastShape = 'rest', lastShapeAt = -1e9;
   const reset = () => {
     Object.assign(fr, blankFrame(slot));
     wasPause = false;
@@ -91,8 +91,11 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
     lastSentence = -1;
     shown = 'rest';
     shownAt = -1e9;
+    lastShape = 'rest';
+    lastShapeAt = -1e9;
   };
   const step = (t, dt) => {
+    raw.voice = -1; // an engine without the loudness field leaves it alone
     audio.speechFrame(toNow(t), slot, raw);
     fr.speaking = !!raw.speaking;
     fr.level = raw.level || 0;
@@ -107,6 +110,10 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
     // the dominant shape never changes again within MIN_HOLD of its last change
     // (lip closures excepted): fast phones blend, they do not flicker
     const dom = fr.mix > 0.5 ? fr.next : fr.viseme;
+    if (dom !== 'rest') {
+      lastShape = dom;
+      lastShapeAt = t;
+    }
     if (dom !== shown) {
       if (t - shownAt >= MIN_HOLD || dom === 'MBP' || !fr.speaking) {
         shown = dom;
@@ -118,10 +125,36 @@ export function liveSpeech(audio, slot, toNow = (t) => t * 1000) {
         fr.mix = 0;
       }
     }
-    // out of a pause the lips part with the sound, not with the timeline's blend into the
-    // first vowel (with recorded voices that blend can lead the recorded word by up to
-    // ~0.1 s): while the shape is still mostly 'rest', the opening grows with the blend
-    if (fr.viseme === 'rest' && fr.next !== 'rest') fr.level *= fr.mix * fr.mix;
+    // the recorded voice gates the mouth when the engine sends its loudness (`voice`,
+    // 0..1, CONTRACTS request to the audio stream; absent or < 0 without a recording):
+    // the engine's timeline only re-anchors when a recorded word is reached, so after a
+    // comma it can run into the next word while the recording is still silent (the lips
+    // part early) or rest while the voice is still sounding (the lips shut under sound)
+    const voice = typeof raw.voice === 'number' && raw.voice >= 0 ? raw.voice : -1;
+    fr.voice = voice;
+    if (voice >= 0) {
+      // silence closes the mouth; the opening returns with the sound (smoothstep 0.03..0.3)
+      const g = voice <= 0.03 ? 0 : voice >= 0.3 ? 1 : smooth((voice - 0.03) / 0.27);
+      fr.level *= g;
+      // audible voice never sits behind closed lips (m/b/p excepted), also when the
+      // engine's sentence timeline has already ended while the recording still sounds:
+      // a small parting, eased in with the loudness so it never pops
+      const pressing = fr.viseme === 'MBP' ? fr.mix < 0.65 : fr.next === 'MBP' && fr.mix > 0.45;
+      // the murmur after a word-final m/b/p is made with the lips still closed: no floor
+      // until another shape has shown (else the lips part, shut in the pause and part again)
+      // (a murmur is short: after 0.1 s an audible voice is the next word, not the m)
+      const murmur = lastShape === 'MBP' && t - lastShapeAt < 0.1 && (fr.viseme === 'rest' || fr.viseme === 'MBP') && (fr.next === 'rest' || fr.mix < 0.5);
+      if (!pressing && !murmur && voice > 0.2) {
+        const floor = 0.16 * smooth((voice - 0.2) / 0.2);
+        if (fr.level < floor) fr.level = floor;
+      }
+    } else if (fr.viseme === 'rest' && fr.next !== 'rest') {
+      // no loudness from the engine: out of a pause the lips part with the sound, not with
+      // the timeline's blend into the first vowel (with recorded voices that blend can lead
+      // the recorded word by up to ~0.1 s): while the shape is still mostly 'rest', the
+      // opening grows with the blend
+      fr.level *= fr.mix * fr.mix;
+    }
     fr.env = ease(fr.env, fr.level, 0.03, 0.12, dt);
     // the jaw (chin outline) moves with the phrase, not with every syllable: a chin
     // that bobs a pixel per syllable reads as chattering at this resolution

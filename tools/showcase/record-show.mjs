@@ -583,8 +583,8 @@ const mux = spawnSync('ffmpeg', [
   '-v', 'error', '-y', '-i', videoPath, '-i', manifest.aac, '-map', '0:v', '-map', '1:a',
   '-vf', `scale=iw*${opts.scale}:ih*${opts.scale}:flags=neighbor`,
   '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', String(opts.preset || 'veryfast'),
-  // -t, not -shortest: -shortest stops at the end of the first stream to run
-  // out in the interleaver and dropped the last 3 video frames of a 90 s show.
+  // -t, not -shortest: with -shortest the frames still queued in x264's
+  // lookahead/B-frames when the audio ends were dropped (2697 of 2700 frames).
   '-c:a', 'copy', '-t', seconds.toFixed(4), '-movflags', '+faststart', OUT,
 ], { encoding: 'utf8', maxBuffer: 16 << 20 });
 if (mux.status !== 0) throw new Error(`encode/mux failed: ${mux.stderr}`);
@@ -631,7 +631,7 @@ const tiles = sheetTiles.map((tile) => {
   return {
     png: tile.png,
     label: `${mm}  ${s?.shot ?? '?'}${s?.programId ? ` · ${s.programId}` : ''}${s?.card?.ad ? ` · ${s.card.ad}` : ''}`,
-    sub: sp ? `${sp.who}: "${sp.text}"` : '(no voice)',
+    sub: sp ? (sp.text ? `${sp.who}: "${sp.text}"` : sp.who) : '(no voice)', // ads carry no captions
   };
 });
 const sheetPage = await context.newPage();

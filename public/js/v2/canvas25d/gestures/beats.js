@@ -14,12 +14,24 @@
 //   raise_hand:offer  the near palm turns up and opens toward the lens ("but")
 //   steeple:press     the hands meet low over the desk, fingertips press on the word
 //   point_screen:open an open hand toward the wall instead of an index ("as you can see")
+//   raise_hand:box    both hands come up to the chest, palms facing, and frame the point (reads in
+//                     an MCU: the hands stay above the lower third)
+//   raise_hand:turn   the near hand turns from palm-down to palm-up low over the desk ("on the
+//                     other hand"), moving a little outward on the word
+//   raise_hand:settle the near hand lifts a little and settles flat on the desk on the word
+//   raise_hand:tick   the near index lifts and taps the desk once (the smallest beat)
+//   steeple:tap       a steeple at chest height, the fingertips part and meet twice
+//   <variant>_far     the one-handed beats with the far hand (mirrored at registration, see
+//                     gestures/index.js FAR_BEATS): the planner picks the hand per instance
 //
 // Timing fields follow the planner's contract (gestures/index.js): the stroke
 // starts 0.2-0.3 s before the stressed word, the apex (the ictus) lands on it,
 // the release back to rest takes ≥ 0.4 s. Hand keys trail the wrist by ~60 ms
 // (follow-through), the rig adds 40 ms of finger lag on top.
 import { FLAT, STEEPLE } from './shapes.js';
+
+/** One-handed beats that also exist as `<variant>_far` (the far hand; gestures/index.js mirrors them). */
+export const FAR_BEATS = { raise_hand: ['beat', 'offer', 'turn', 'settle', 'tick'] };
 
 // fingers loosely extended, the way a hand leaves the desk to make a point
 const LOOSE = [0.24, 0.16, 0.2, 0.26, 0.32];
@@ -28,6 +40,8 @@ const BEAT = [0.26, 0.2, 0.24, 0.3, 0.36];
 // the offering palm: open, the fingers a touch bent, the little finger more (never a flat board)
 const OFFER = [0.1, 0.08, 0.1, 0.16, 0.24];
 const SOFT = [0.3, 0.3, 0.34, 0.4, 0.46];
+// the framing hands of `box`: fingers together, a little bent (an open box, never a karate chop)
+const BOX = [0.2, 0.1, 0.12, 0.16, 0.22];
 
 export const BEATS = {
   raise_hand: {
@@ -102,8 +116,117 @@ export const BEATS = {
         smile: [[0, 0], [0.5, 0.06], [1.1, 0.05], [1.56, 0]],
       },
     },
+    box: {
+      dur: 1.46,
+      stroke: 0.24,
+      apex: 0.54,
+      hold: 0.9,
+      focus: 'both',
+      tracks: {
+        // both hands rise to the chest, palms facing each other a shoulder-width apart, and come down
+        // a touch on the word ("the whole thing"); high enough to read in an MCU
+        wrist: [[0, 'R'], [0.1, [-5.9, 19.7, 13.35]], [0.28, [-8.6, 9.4, 14.6]], [0.44, [-10.2, 2.0, 15.2]], [0.54, [-10.3, 3.1, 15.3]], [0.66, [-10.25, 2.6, 15.25], 's'], [0.9, [-10.25, 2.8, 15.2], 's'], [1.2, [-7.6, 15.2, 14.2]], [1.46, 'R', 's']],
+        wristF: [[0, 'R'], [0.12, [5.9, 19.7, 13.35]], [0.3, [8.6, 9.4, 14.6]], [0.46, [10.2, 2.0, 15.2]], [0.56, [10.3, 3.1, 15.3]], [0.68, [10.25, 2.6, 15.25], 's'], [0.92, [10.25, 2.8, 15.2], 's'], [1.22, [7.6, 15.2, 14.2]], [1.46, 'R', 's']],
+        dir: [[0, 'R'], [0.18, [-0.7, -0.1, 0.7]], [0.36, [-0.2, -0.8, 0.56]], [0.52, [-0.06, -0.86, 0.5]], [0.6, [-0.05, -0.82, 0.56]], [0.72, [-0.05, -0.85, 0.52], 's'], [0.96, [-0.05, -0.85, 0.52], 's'], [1.26, [-0.72, 0.1, 0.66]], [1.46, 'R']],
+        dirF: [[0, 'R'], [0.2, [0.7, -0.1, 0.7]], [0.38, [0.2, -0.8, 0.56]], [0.54, [0.06, -0.86, 0.5]], [0.62, [0.05, -0.82, 0.56]], [0.74, [0.05, -0.85, 0.52], 's'], [0.98, [0.05, -0.85, 0.52], 's'], [1.28, [0.72, 0.1, 0.66]], [1.46, 'R']],
+        curl: [[0, 'R'], [0.3, LOOSE], [0.56, BOX, 's'], [0.96, BOX, 's'], [1.3, 'R']],
+        curlF: [[0, 'R'], [0.32, LOOSE], [0.58, BOX, 's'], [0.98, BOX, 's'], [1.32, 'R']],
+        facing: [[0, 'R'], [0.34, 0, 's'], [1.0, 0, 's'], [1.3, 'R']],
+        facingF: [[0, 'R'], [0.36, 0, 's'], [1.02, 0, 's'], [1.32, 'R']],
+        spread: [[0, 'R'], [0.5, 0.1], [0.98, 0.1], [1.3, 'R']],
+        spreadF: [[0, 'R'], [0.52, 0.1], [1.0, 0.1], [1.32, 'R']],
+        pole: [[0, 'R'], [0.4, [0.85, 1, -0.4]], [0.98, [0.85, 1, -0.4]], [1.46, 'R']],
+        poleF: [[0, 'R'], [0.42, [-0.85, 1, -0.4]], [1.0, [-0.85, 1, -0.4]], [1.46, 'R']],
+        shN: [[0, 0], [0.1, 0.1], [0.36, -0.36], [0.56, -0.24], [0.92, -0.26], [1.26, 0.03], [1.46, 0]],
+        shF: [[0, 0], [0.12, 0.1], [0.38, -0.36], [0.58, -0.24], [0.94, -0.26], [1.28, 0.03], [1.46, 0]],
+        pitch: [[0, 0], [0.3, -0.012], [0.56, 0.03], [0.8, 0.008], [1.46, 0]],
+        brow: [[0, 0], [0.38, 0.24], [0.66, 0.16], [1.3, 0]],
+      },
+    },
+    turn: {
+      dur: 1.44,
+      stroke: 0.24,
+      apex: 0.52,
+      hold: 0.92,
+      focus: 'near',
+      tracks: {
+        // palm-down off the desk, then the forearm turns the palm up as the hand moves out on the word
+        // (supination while the back of the hand faces the lens: no flip through palm-out)
+        wrist: [[0, 'R'], [0.1, [-5.75, 19.6, 13.4]], [0.3, [-5.3, 15.4, 15.4]], [0.44, [-3.9, 14.5, 16.0]], [0.52, [-3.4, 14.2, 16.2]], [0.64, [-3.55, 14.4, 16.15], 's'], [0.92, [-3.6, 14.5, 16.1], 's'], [1.2, [-5.2, 18.0, 14.4]], [1.44, 'R', 's']],
+        dir: [[0, 'R'], [0.2, [-0.74, 0.08, 0.66]], [0.4, [-0.5, -0.06, 0.86]], [0.56, [-0.36, -0.1, 0.92]], [0.68, [-0.38, -0.08, 0.92], 's'], [0.96, [-0.38, -0.08, 0.92], 's'], [1.24, [-0.75, 0.15, 0.62]], [1.44, 'R']],
+        curl: [[0, 'R'], [0.3, BEAT], [0.56, OFFER, 's'], [0.96, OFFER, 's'], [1.28, 'R']],
+        sup: [[0, 0], [0.1, 0, 's'], [0.24, 1, 's'], [1.26, 1, 's'], [1.38, 0, 's'], [1.44, 0]],
+        facing: [[0, 'R'], [0.3, -1, 's'], [0.48, -0.1], [0.58, 0.08, 's'], [0.96, 0.06, 's'], [1.24, -1, 's'], [1.44, 'R']],
+        spread: [[0, 'R'], [0.56, 0.16], [0.96, 0.14], [1.28, 'R']],
+        pole: [[0, 'R'], [0.38, [0.7, 1, -0.55]], [0.96, [0.7, 1, -0.55]], [1.44, 'R']],
+        shN: [[0, 0], [0.12, 0.08], [0.4, -0.22], [0.92, -0.16], [1.28, 0.03], [1.44, 0]],
+        roll: [[0, 0], [0.52, -0.018], [0.92, -0.014], [1.44, 0]],
+        pitch: [[0, 0], [0.3, -0.008], [0.54, 0.018], [1.44, 0]],
+        brow: [[0, 0], [0.4, 0.2], [0.7, 0.16], [1.3, 0]],
+      },
+    },
+    settle: {
+      dur: 1.3,
+      stroke: 0.14,
+      apex: 0.42,
+      hold: 0.78,
+      focus: 'near',
+      tracks: {
+        // the hand lifts a little off the desk and settles flat on it on the word, fingers spreading
+        // as they meet the desk: "steady", "for now", "still"
+        wrist: [[0, 'R'], [0.14, [-5.85, 18.1, 13.8]], [0.32, [-6.05, 18.7, 14.1]], [0.42, [-6.1, 19.3, 14.15]], [0.54, [-6.1, 19.22, 14.15], 's'], [0.78, [-6.1, 19.3, 14.15], 's'], [1.04, [-5.8, 19.1, 13.8]], [1.3, 'R', 's']],
+        dir: [[0, 'R'], [0.2, [-0.78, 0.0, 0.62]], [0.44, [-0.74, 0.06, 0.67]], [0.56, [-0.74, 0.08, 0.66], 's'], [0.82, [-0.74, 0.08, 0.66], 's'], [1.1, [-0.78, 0.11, 0.6]], [1.3, 'R']],
+        curl: [[0, 'R'], [0.2, LOOSE], [0.46, FLAT, 's'], [0.82, FLAT, 's'], [1.14, 'R']],
+        spread: [[0, 'R'], [0.3, 0.1], [0.48, 0.3], [0.82, 0.26], [1.14, 'R']],
+        pole: [[0, 'R'], [0.3, [0.6, 0.95, -0.6]], [0.82, [0.6, 0.95, -0.6]], [1.3, 'R']],
+        shN: [[0, 0], [0.14, -0.14], [0.42, 0.06], [0.6, 0.02], [1.3, 0]],
+        pitch: [[0, 0], [0.42, 0.022], [0.8, 0.01], [1.3, 0]],
+      },
+    },
+    tick: {
+      dur: 1.1,
+      stroke: 0.14,
+      apex: 0.42,
+      hold: 0.62,
+      focus: 'near',
+      tracks: {
+        // the hand stays on the desk; the index lifts and taps once on the word
+        wrist: [[0, 'R'], [0.16, [-5.65, 18.85, 13.6]], [0.42, [-5.62, 19.3, 13.55]], [0.62, [-5.62, 19.3, 13.55], 's'], [1.1, 'R', 's']],
+        curl: [[0, 'R'], [0.24, [0.3, 0.02, 0.4, 0.46, 0.52], 's'], [0.42, [0.3, 0.5, 0.44, 0.48, 0.54]], [0.54, [0.3, 0.4, 0.44, 0.48, 0.54], 's'], [0.66, [0.3, 0.42, 0.45, 0.49, 0.55], 's'], [1.1, 'R']],
+        shN: [[0, 0], [0.18, -0.06], [0.42, 0.03], [1.1, 0]],
+        pitch: [[0, 0], [0.42, 0.016], [0.7, 0.004], [1.1, 0]],
+      },
+    },
   },
   steeple: {
+    // fingertips together in front of the chest (an MCU sees it), parting and meeting twice on the
+    // word: a thinking beat for the analysts (Ada, Nova), never a prayer
+    tap: {
+      dur: 1.7,
+      stroke: 0.22,
+      apex: 0.56,
+      hold: 1.12,
+      focus: 'both',
+      tracks: {
+        wrist: [[0, 'R'], [0.12, [-6.2, 19.85, 13.6]], [0.34, [-9.6, 6.4, 15.6]], [0.46, [-10.7, 2.1, 16.1]], [0.56, [-10.75, 2.6, 16.2]], [0.7, [-10.72, 2.35, 16.18], 's'], [1.12, [-10.7, 2.5, 16.2], 's'], [1.44, [-7.4, 15.6, 14.6]], [1.7, 'R', 's']],
+        wristF: [[0, 'R'], [0.14, [6.2, 19.85, 13.6]], [0.36, [9.6, 6.4, 15.6]], [0.48, [10.7, 2.1, 16.1]], [0.58, [10.75, 2.6, 16.2]], [0.72, [10.72, 2.35, 16.18], 's'], [1.14, [10.7, 2.5, 16.2], 's'], [1.46, [7.4, 15.6, 14.6]], [1.7, 'R', 's']],
+        dir: [[0, 'R'], [0.18, [-0.7, 0.05, 0.7]], [0.42, [-0.4, -0.78, 0.48]], [0.6, [-0.38, -0.82, 0.42]], [0.74, [-0.38, -0.8, 0.44], 's'], [1.16, [-0.38, -0.8, 0.44], 's'], [1.5, [-0.75, 0.15, 0.62]], [1.7, 'R']],
+        dirF: [[0, 'R'], [0.2, [0.7, 0.05, 0.7]], [0.44, [0.4, -0.78, 0.48]], [0.62, [0.38, -0.82, 0.42]], [0.76, [0.38, -0.8, 0.44], 's'], [1.18, [0.38, -0.8, 0.44], 's'], [1.52, [0.75, 0.15, 0.62]], [1.7, 'R']],
+        curl: [[0, 'R'], [0.32, SOFT], [0.6, STEEPLE, 's'], [1.16, STEEPLE, 's'], [1.5, 'R']],
+        curlF: [[0, 'R'], [0.34, SOFT], [0.62, STEEPLE, 's'], [1.18, STEEPLE, 's'], [1.52, 'R']],
+        facing: [[0, 'R'], [0.4, -0.3, 's'], [1.18, -0.3, 's'], [1.5, 'R']],
+        facingF: [[0, 'R'], [0.42, -0.3, 's'], [1.2, -0.3, 's'], [1.52, 'R']],
+        // the fingertips part and meet twice, the second time smaller
+        spread: [[0, 'R'], [0.56, 0.2, 's'], [0.68, 0.34], [0.8, 0.2, 's'], [0.9, 0.3], [1.0, 0.2, 's'], [1.5, 'R']],
+        spreadF: [[0, 'R'], [0.58, 0.2, 's'], [0.7, 0.34], [0.82, 0.2, 's'], [0.92, 0.3], [1.02, 0.2, 's'], [1.52, 'R']],
+        pole: [[0, 'R'], [0.42, [0.75, 1, -0.3]], [1.16, [0.75, 1, -0.3]], [1.7, 'R']],
+        poleF: [[0, 'R'], [0.44, [-0.75, 1, -0.3]], [1.18, [-0.75, 1, -0.3]], [1.7, 'R']],
+        shN: [[0, 0], [0.14, 0.1], [0.5, -0.28], [1.14, -0.22], [1.5, 0.03], [1.7, 0]],
+        shF: [[0, 0], [0.16, 0.1], [0.52, -0.28], [1.16, -0.22], [1.52, 0.03], [1.7, 0]],
+        pitch: [[0, 0], [0.56, 0.03], [1.1, 0.02], [1.7, 0]],
+        browIn: [[0, 0], [0.56, 0.16], [1.1, 0.12], [1.7, 0]],
+      },
+    },
     press: {
       dur: 1.76,
       stroke: 0.26,

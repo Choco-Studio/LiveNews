@@ -27,6 +27,11 @@
 // waits for a stinger on screen to finish. scene.shot keeps the legacy names
 // (wide/close/full/map/fact) the graphics, music hooks and old renderer know;
 // the framing travels in scene.framing (CONTRACTS "framings never reach graphics").
+// MAX HOLD (pace maxima on air, holdCut()): at a sentence start with no planned
+// cut, a story or intro shot that would otherwise run past its pace maximum
+// (map, picture, fact card, studio single) gives way to the speaker's studio shot.
+// Every public method is guarded: a throw is logged once and returns the neutral
+// value (null), so the director's own beats carry on (never freeze).
 import { planSegment } from '../direction/index.js';
 // the Stage's module graph loads with this one: once the director's v2 side is ready, so is the
 // Renderer's (studio.js imports host.js itself; this only removes the start-up race)
@@ -72,7 +77,13 @@ export function cuesFromPlan(plan, { hasImg = true, rundown = null } = {}) {
     if (shot === 'map' && !(seg.location && Number.isFinite(seg.location.lat))) continue;
     if (shot === 'fact' && !seg.fact) continue; // the director's fact card needs seg.fact
     const focus = e.focus && e.focus in ctx.cast ? e.focus : ctx.speaker;
-    const framing = shot === 'montage' ? null : (e.framing ?? null);
+    let framing = shot === 'montage' ? null : (e.framing ?? null);
+    // over-the-shoulder exists to show the wall: without a picture, a map or a figure it would frame
+    // an empty wall with a small plate; a later one is dropped (no near jump-cut), an opening one plays as a single
+    if (framing === 'ots' && !wallContent(seg, hasImg)) {
+      if (out.length) continue;
+      framing = null;
+    }
     const char = Number.isFinite(e.char) ? Math.max(0, e.char) : 0;
     const ss = ctx.sentences || [];
     let si = 0;
@@ -81,9 +92,66 @@ export function cuesFromPlan(plan, { hasImg = true, rundown = null } = {}) {
     const prev = out[out.length - 1];
     if (prev && prev.shot === shot && prev.framing === framing && prev.focus === focus && prev.card === card && !e.move) continue;
     const mid = out.length > 0 && Math.abs(char - (ss[si]?.start ?? 0)) > 2;
-    out.push({ k: out.length, char, at: e.at, sentence: si, mid, shot, framing, focus, move: e.move ?? null, card, minLen: Number.isFinite(e.minLen) ? e.minLen : null });
+    out.push({ k: out.length, char, at: e.at, sentence: si, mid, shot, framing, focus, move: e.move ?? null, card, minLen: Number.isFinite(e.minLen) ? e.minLen : null, beat: e.beat ?? null });
   }
   return out.length ? out : null;
+}
+
+/** Does the story give the studio wall something to show (a loaded picture, a map, a figure)? */
+function wallContent(seg, hasImg) {
+  return !!hasImg || !!(seg.location && Number.isFinite(seg.location.lat)) || !!seg.fact || (Array.isArray(seg.numbers) && seg.numbers.length > 0);
+}
+
+// ---------------------------------------------------------------------------
+// max hold: the pace maxima on air
+
+const HOLD_SHOTS = new Set(['wide', 'close', 'map', 'full', 'fact']);
+const HOLD_TOL = 0.5; // s over a maximum that is not worth a cut
+const DRY_HOLD = 1.2; // s: never cut on a dry line or this soon after it (tech-bytes.md)
+
+/** The longest a shot may hold on air (s, pace.js): maps their window, pictures and fact cards the picture window, studio shots studioMax. */
+export function maxHold(shot, programId) {
+  const S = paceFor(programId).shots;
+  if (shot === 'map') return S.map[1];
+  if (shot === 'full' || shot === 'fact') return S.picture[1];
+  return S.studioMax;
+}
+
+/**
+ * Max-hold guard. At the start of sentence `si` of a story or intro (no planned cut there), the
+ * shot on air (`onAir` = { shot, framing, focus, held: s since its cut }) would run past its pace
+ * maximum before the next planned cut (or the end of the segment): if it has held the cooldown and
+ * the shot that replaces it can hold the cooldown too, return a cue back to the speaker's studio
+ * shot: a map, picture or card → the speaker's single (`closeFraming`); a single → the wide
+ * (`wideFraming`; not NEWS IN 60, whose bible keeps the wide for the intro and sign-off); a wide in
+ * a story → the single. Never on or just after a dry line. Null otherwise. Pure.
+ */
+export function holdCut(plan, si, onAir, { programId = null, gap = 0.6, cues = null, closeFraming = null, wideFraming = null } = {}) {
+  const ctx = plan?.ctx;
+  if (!ctx || !onAir || !HOLD_SHOTS.has(onAir.shot) || !(si > 0)) return null;
+  if (ctx.type !== 'story' && ctx.type !== 'intro') return null;
+  const S = paceFor(programId).shots;
+  if (!(onAir.held >= S.cooldown)) return null;
+  const sent = ctx.sentences?.[si];
+  if (!sent || !Number.isFinite(sent.t0)) return null;
+  const t0 = sent.t0;
+  const dry = ctx.dryLine;
+  if (dry && t0 >= dry.t0 - 0.05 && t0 <= dry.t1 + DRY_HOLD) return null;
+  let next = (ctx.duration || 0) + (Number.isFinite(gap) ? gap : 0.6);
+  for (const c of cues || []) if (c.k > 0 && Number.isFinite(c.at) && c.at > t0 + 0.05 && c.at < next) next = c.at;
+  const remaining = next - t0;
+  if (remaining < S.cooldown) return null; // the replacement would be short: the planned cut comes soon anyway
+  if (onAir.held + remaining <= maxHold(onAir.shot, programId) + HOLD_TOL) return null;
+  let shot, framing;
+  if (onAir.shot === 'close') {
+    if (programId === 'news-60') return null;
+    shot = 'wide';
+    framing = wideFraming;
+  } else {
+    shot = 'close';
+    framing = closeFraming;
+  }
+  return { k: 1000 + si, char: sent.start, at: t0, sentence: si, mid: false, shot, framing: framing ?? null, focus: ctx.speaker, move: null, card: null, minLen: null, beat: 'hold', guard: true };
 }
 
 /** Rundown index of the story a headline sentence teases (event storyId, seg.teases, else the planner's card). */
@@ -94,6 +162,29 @@ function montageCard(e, seg, si, rundown, out) {
   if (at >= 0) return at;
   const k = Number.isInteger(e.card) ? e.card : out.filter((c) => c.shot === 'montage').length;
   return list.length ? Math.min(Math.max(0, k), list.length - 1) : Math.max(0, k);
+}
+
+const LOGGED = new Set();
+function logOnce(where, err) {
+  const msg = `${where}: ${err?.message || err}`;
+  if (LOGGED.has(msg)) return;
+  LOGGED.add(msg);
+  if (LOGGED.size > 100) LOGGED.clear();
+  try {
+    console.warn(`[v2 direction] ${msg}`);
+  } catch {
+    /* no console */
+  }
+}
+
+/** Run fn; a throw is logged once and gives `fallback` (the director's own beats then carry on). */
+function guarded(where, fn, fallback = null) {
+  try {
+    return fn();
+  } catch (err) {
+    logOnce(where, err);
+    return fallback;
+  }
 }
 
 const NONE = {}; // replan key: no recording
@@ -110,6 +201,7 @@ export class LiveDirection {
     this.plans = new WeakMap();
     this.replans = new WeakMap(); // seg -> { key, plan } made for the voice that really plays
     this.story = null; // { seg, cues, handler } registered by playStory
+    this.framings = { close: {}, wide: null }; // the last studio framings applied (max-hold guard targets)
     this.idle = typeof requestIdleCallback === 'function' ? (fn) => requestIdleCallback(fn, { timeout: 1500 }) : (fn) => setTimeout(fn, 30);
     // the first plan of a session warms the text model and lexicon (~100-200 ms): do it now,
     // on the start card, so no programme open ever pays for it
@@ -118,7 +210,12 @@ export class LiveDirection {
 
   /** A new episode is on air: remember it and plan its segments in idle time. */
   episode(ep) {
+    guarded('episode', () => this.episode0(ep));
+  }
+
+  episode0(ep) {
     this.ep = ep && Array.isArray(ep.segments) ? ep : null;
+    this.framings = { close: {}, wide: null };
     this.scene.episode = this.ep;
     this.scene.presenters = this.channel?.presenters || null; // the Stage's looks for ids without a design
     this.scene.segPlan = null;
@@ -175,6 +272,10 @@ export class LiveDirection {
    * applies a later cue with the director's card/wall/MIN_SHOT logic.
    */
   shots(seg, hasImg, handler) {
+    return guarded('shots', () => this.shots0(seg, hasImg, handler));
+  }
+
+  shots0(seg, hasImg, handler) {
     const i = this.indexOf(seg);
     const p = i >= 0 ? this.planAt(i) : null;
     const cues = p ? cuesFromPlan(p, { hasImg }) : null;
@@ -190,15 +291,24 @@ export class LiveDirection {
    * (the director's own montage then).
    */
   intro(seg) {
+    return guarded('intro', () => this.intro0(seg));
+  }
+
+  intro0(seg) {
     const i = this.indexOf(seg);
     const p = i >= 0 ? this.planAt(i) : null;
     const cues = p ? cuesFromPlan(p, { rundown: this.scene.rundown }) : null;
     if (!cues) return null;
+    // a headline montage needs at least two stories to show (the director's own rule): else its plain intro
+    if (cues.some((c) => c.shot === 'montage') && !((this.scene.rundown?.length || 0) >= 2)) return null;
     let last = null;
     const apply = (cue) => {
       last = cue;
       if (cue.shot === 'montage') this.director.setShot('montage', { focus: seg.anchor, storyId: null, card: { index: cue.card } });
-      else this.director.setShot(cue.shot, { focus: cue.focus, storyId: null, wall: { mode: 'logo' }, card: null, framing: cue.framing, cameraMove: cue.move });
+      else {
+        this.director.setShot(cue.shot, { focus: cue.focus, storyId: null, wall: { mode: 'logo' }, card: null, framing: cue.framing, cameraMove: cue.move });
+        this.noteFraming(cue);
+      }
     };
     this.story = { seg, cues, handler: apply };
     apply(cues[0]);
@@ -217,6 +327,19 @@ export class LiveDirection {
    * Returns the handle for speak() and onSentence.
    */
   begin(seg, recorded = undefined) {
+    const h = guarded('begin', () => this.begin0(seg, recorded));
+    if (!h) return null;
+    // the handle's calls are guarded too: speak() and onSentence never see a v2 throw
+    const { speak } = h;
+    return {
+      plan: h.plan,
+      speak: speak ? { marks: speak.marks, onMark: (j) => guarded('mark', () => speak.onMark(j)) } : null,
+      sentence: (si) => guarded('sentence', () => h.sentence(si)),
+      end: () => guarded('end', () => h.end()),
+    };
+  }
+
+  begin0(seg, recorded) {
     const i = this.indexOf(seg);
     let p = i >= 0 ? this.planAt(i) : null;
     if (!p) return null;
@@ -232,8 +355,11 @@ export class LiveDirection {
     const fireCue = (cue) => {
       const st = this.scene.stinger;
       const left = st ? st.start + STINGER - now() : 0;
-      if (left > 0) timers.push(setTimeout(() => fireCue(cue), left * 1000 + 20));
-      else apply(cue);
+      if (left > 0) timers.push(setTimeout(() => guarded('cue', () => fireCue(cue)), left * 1000 + 20));
+      else {
+        apply(cue);
+        if (story) this.noteFraming(cue);
+      }
     };
     if (!story && cues?.[0]) fireCue(cues[0]);
     const mids = cues ? cues.filter((c) => c.k > 0 && c.mid) : [];
@@ -242,7 +368,20 @@ export class LiveDirection {
       speak: mids.length ? { marks: mids.map((c) => c.char), onMark: (j) => mids[j] && fireCue(mids[j]) } : null,
       sentence: (si) => {
         if (si === 0 && p.speechStart == null) p.speechStart = now();
-        if (cues) for (const c of cues) if (c.k > 0 && !c.mid && c.sentence === si) fireCue(c);
+        let planned = false;
+        if (cues) {
+          for (const c of cues) {
+            if (c.k > 0 && !c.mid && c.sentence === si) {
+              fireCue(c);
+              planned = true;
+            }
+          }
+        }
+        // no planned cut here: a shot running past its pace maximum gives way to the speaker's studio shot
+        if (!planned && si > 0) {
+          const g = this.holdCue(p, si, cues);
+          if (g) fireCue(g);
+        }
       },
       end: () => {
         p.speechEnd = now();
@@ -252,8 +391,49 @@ export class LiveDirection {
     };
   }
 
+  /** Remember the studio framings applied in this episode (the max-hold guard cuts back to them). */
+  noteFraming(cue) {
+    if (!cue || !cue.framing || cue.guard) return;
+    if (cue.shot === 'close' && cue.framing !== 'ots') this.framings.close[cue.focus] = cue.framing;
+    else if (cue.shot === 'wide') this.framings.wide = cue.framing;
+  }
+
+  /** The max-hold guard's cue at sentence `si` of plan `p` (holdCut with the shot on air), or null. */
+  holdCue(p, si, cues) {
+    const s = this.scene;
+    if (s.stinger || !Number.isFinite(s.shotSince)) return null;
+    const ctx = p.ctx;
+    const speaker = ctx?.speaker;
+    // the speaker's framings: this segment's planned ones first, else the last ones on air
+    let closeFraming = this.framings.close[speaker] ?? null;
+    let wideFraming = this.framings.wide;
+    for (const c of cues || []) {
+      if (c.shot === 'close' && c.focus === speaker && c.framing && c.framing !== 'ots') closeFraming = c.framing;
+      if (c.shot === 'wide' && c.framing) wideFraming = c.framing;
+    }
+    // nothing on air yet for this speaker (an intro): the single the episode's plans give them
+    if (!closeFraming) {
+      for (const seg of this.ep?.segments || []) {
+        const ev = this.plans.get(seg)?.events || [];
+        const e = ev.find((x) => x.kind === 'shot' && x.focus === speaker && x.framing && legacyShot(x.shot, x.framing) === 'close' && x.framing !== 'ots');
+        if (e) {
+          closeFraming = e.framing;
+          break;
+        }
+      }
+    }
+    const i = p.index;
+    const gap = typeof this.gapFn === 'function' ? this.gapFn(i) : GAP_AFTER;
+    const onAir = { shot: s.shot, framing: s.framing ?? null, focus: s.focus, held: now() - s.shotSince };
+    return holdCut(p, si, onAir, { programId: s.program?.id, gap, cues, closeFraming, wideFraming });
+  }
+
   /** Default cue handler: studio cuts only, MIN_SHOT holds (chats, outros, intros without a montage). */
   studioCut(cue, held = false) {
+    guarded('studioCut', () => this.studioCut0(cue, held));
+  }
+
+  studioCut0(cue, held = false) {
     const s = this.scene;
     if (!STUDIO.has(s.shot) || !STUDIO.has(cue.shot)) return;
     const wait = cue.k > 0 && !held ? minShot(s) - (now() - (s.shotSince || 0)) : 0;
@@ -264,6 +444,7 @@ export class LiveDirection {
     }
     const reframe = s.shot === cue.shot && s.focus === cue.focus && (s.framing ?? null) !== cue.framing;
     this.director.setShot(cue.shot, { focus: cue.focus, framing: cue.framing, cameraMove: cue.move });
-    if (reframe) s.shotSince = now(); // a new framing of the same shot is a cut too
+    if (reframe) s.shotSince = now(); // a new framing of the same shot is a cut too (director.setShot does it as well)
+    this.noteFraming(cue);
   }
 }

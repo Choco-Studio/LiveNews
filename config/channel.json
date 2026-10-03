@@ -104,7 +104,7 @@
         "world",
         "business"
       ],
-      "stories": 10,
+      "stories": 14,
       "maxChats": 6,
       "targetSeconds": [480, 600],
       "features": [
@@ -120,7 +120,7 @@
       "roundup": {
         "opener": "Now, around the world in 30 seconds.",
         "min": 2,
-        "max": 4,
+        "max": 5,
         "words": "12 to 20",
         "reader": "B"
       },
@@ -192,7 +192,7 @@
         "tech",
         "science"
       ],
-      "stories": 8,
+      "stories": 10,
       "maxChats": 7,
       "targetSeconds": [360, 480],
       "features": [
@@ -276,7 +276,7 @@
       "beat": {
         "tech": ["SPACE", "ASTRONOMY", "CLIMATE", "OCEANS", "WILDLIFE", "HEALTH", "HISTORY", "VOLCANO", "EARTHQUAKE", "WEATHER"]
       },
-      "stories": 7,
+      "stories": 8,
       "maxChats": 6,
       "targetSeconds": [360, 480],
       "features": [
@@ -343,7 +343,7 @@
       "categories": [
         "business"
       ],
-      "stories": 6,
+      "stories": 7,
       "maxChats": 0,
       "targetSeconds": [240, 360],
       "features": [

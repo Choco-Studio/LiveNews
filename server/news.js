@@ -613,8 +613,10 @@ export class NewsDesk {
    * is a function giving each story its factor.
    * `beat` keeps a section's stories only on the programme's topics
    * ({ tech: ['SPACE', ...] }: COSMOS takes a rocket, not a games console).
+   * `fill` lets the per-outlet cap give way when the pool would otherwise
+   * come up short (a long programme on a section with one or two outlets).
    */
-  candidates(count, { perSource = 3, categories = null, now = Date.now(), avoid = null, beat = null } = {}) {
+  candidates(count, { perSource = 3, categories = null, now = Date.now(), avoid = null, beat = null, fill = false } = {}) {
     const primary = categories && categories.length > 1 ? categories[0] : null;
     const ranked = this.uncovered()
       .filter((s) => !categories || categories.includes(s.category))
@@ -622,9 +624,9 @@ export class NewsDesk {
       .sort((a, b) => b.score - a.score);
     const picked = [];
     const perSourceCount = new Map();
-    // Variety of outlets first; then, when a section has only one or two outlets (a niche beat, a small
-    // feed list, the offline demo), the rest of the pool from them rather than a programme starved of stories.
-    for (const capped of [true, false]) {
+    // Variety of outlets first; then, with `fill`, when a section has only one or two outlets (a niche beat, a
+    // small feed list, the offline demo), the rest of the pool from them rather than a programme starved of stories.
+    for (const capped of fill ? [true, false] : [true]) {
       for (const { s } of ranked) {
         if (picked.length >= count) break;
         if (picked.includes(s) || (capped && (perSourceCount.get(s.source) || 0) >= perSource)) continue;

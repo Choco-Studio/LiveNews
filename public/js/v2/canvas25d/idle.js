@@ -80,7 +80,10 @@ export function eventHash(x, seed) {
 
 const FAR = -1e9;
 
-/** Start time of the latest event blink at t (look shifts, sentence ends, comma pauses), or FAR. */
+// an event blink is remembered this long: the timetable's next blink after it is dropped
+const EVENT_MEMORY = 2.5;
+
+/** Start time of the latest event blink in the last EVENT_MEMORY s (look shifts, sentence ends, comma pauses), or FAR. */
 function eventBlink(perf, fr, t, seed) {
   let tb = FAR;
   const looks = perf.look;
@@ -88,14 +91,15 @@ function eventBlink(perf, fr, t, seed) {
     for (let i = 0; i < looks.length; i++) {
       const lk = looks[i];
       if (lk.target === 'camera' || lk.target === 'interest' || lk.style === 'mech') continue; // eyeline shifts only
-      // most big gaze shifts carry a blink as the eyes start to move; some returns too
-      if (t >= lk.t0 && t - lk.t0 < 0.3 && eventHash(lk.t0, seed) < 0.7 && lk.t0 + 0.03 > tb) tb = lk.t0 + 0.03;
-      if (t >= lk.t1 && t - lk.t1 < 0.3 && eventHash(lk.t1, seed + 1) < 0.35 && lk.t1 > tb) tb = lk.t1;
+      // big gaze shifts often carry a blink as the eyes start to move; a few returns too
+      // (rates tuned so the whole face blinks ~14-16 times a minute: more reads as nervous)
+      if (t >= lk.t0 && t - lk.t0 < EVENT_MEMORY && eventHash(lk.t0, seed) < 0.4 && lk.t0 + 0.03 > tb) tb = lk.t0 + 0.03;
+      if (t >= lk.t1 && t - lk.t1 < EVENT_MEMORY && eventHash(lk.t1, seed + 1) < 0.2 && lk.t1 > tb) tb = lk.t1;
     }
   }
   if (fr) {
-    if (t - fr.endAt < 0.3 && t >= fr.endAt && eventHash(fr.endAt, seed + 2) < 0.5 && fr.endAt + 0.05 > tb) tb = fr.endAt + 0.05;
-    if (t - fr.pauseAt < 0.3 && t >= fr.pauseAt && eventHash(fr.pauseAt, seed + 3) < 0.3 && fr.pauseAt + 0.03 > tb) tb = fr.pauseAt + 0.03;
+    if (t - fr.endAt < EVENT_MEMORY && t >= fr.endAt && eventHash(fr.endAt, seed + 2) < 0.4 && fr.endAt + 0.05 > tb) tb = fr.endAt + 0.05;
+    if (t - fr.pauseAt < EVENT_MEMORY && t >= fr.pauseAt && eventHash(fr.pauseAt, seed + 3) < 0.15 && fr.pauseAt + 0.03 > tb) tb = fr.pauseAt + 0.03;
   }
   return tb;
 }
@@ -127,7 +131,8 @@ export function applyIdle(c, persona, perf, t, seed, gestLook) {
   const sch = schedule(seed, p);
   const fr = perf.speech ? sampleSpeech(perf.speech, t) : null;
   const act = fr ? fr.act || 0 : 0;
-  // blinks: the timetable, unless an event blink sits within 1.2 s of it (about one blink every 3-4 s overall)
+  // blinks: the timetable, unless an event blink sits within 1.2 s before it or 2.5 s after
+  // an event blink (the event blink took its place: about one blink every 4 s overall)
   const tb = eventBlink(perf, fr, t, seed);
   // the timetables cover SPAN s; later instants wrap (a blink or a fixation may be cut at the seam once every 15 min)
   const tw = t >= 0 && t < SPAN ? t : ((t % SPAN) + SPAN) % SPAN;
@@ -136,7 +141,7 @@ export function applyIdle(c, persona, perf, t, seed, gestLook) {
   let blink = tb > FAR ? blinkCurve(t - tb) : 0;
   for (let q = Math.max(0, bi - 1); q <= bi && q >= 0; q++) {
     const b = sch.blinks[q] + off;
-    if (tb > FAR && Math.abs(b - tb) < 1.2) continue;
+    if (tb > FAR && b > tb - 1.2 && b < tb + EVENT_MEMORY) continue;
     blink = Math.max(blink, blinkCurve(t - b));
   }
   c.blink = blink;

@@ -23,7 +23,7 @@
 <canvas id="screen" width="384" height="216"></canvas>
 <div class="bar">
   <select id="programme"></select>
-  <select id="view"><option value="rhythm">rhythm: before / after</option><option value="profile">pace profiles</option></select>
+  <select id="view"><option value="rhythm">rhythm: before / after</option><option value="profile">pace profiles</option><option value="measured">measured on air: before / after</option></select>
   <button id="play">play</button>
   <input id="t" type="range" min="0" max="300" step="0.05" value="0">
   <span id="tv">0.00 s</span>
@@ -142,7 +142,8 @@
     before.ticks = tickerTimes(before.items, before.total, LEGACY.ticker);
     after.ticks = tickerTimes(after.items, after.total, (w) => CHANNEL.ticker.push + CHANNEL.ticker.base + CHANNEL.ticker.perWord * w);
     model = { ep, P, before, after, sb: stats(before, P), sa: stats(after, P), span: Math.max(before.total, after.total) };
-    $('t').max = String(Math.ceil(model.span));
+    const mspan = Math.max(MEASURED.before[opts.programme]?.length || 0, MEASURED.after[opts.programme]?.length || 0);
+    $('t').max = String(Math.ceil(opts.view === 'measured' && mspan ? mspan : model.span));
   }
 
   // ------------------------------------------------------------------ drawing
@@ -293,9 +294,94 @@
     text(`TICKER >= ${CHANNEL.ticker.minHold}S A ITEM · STRAP PAGE ${CHANNEL.strap.page}S · CAPTION PAGE >= ${CHANNEL.captions.minPage}S · STINGER ${CHANNEL.stinger}S`, 6, 205, P.steel, 'micro');
   }
 
+  // Measured on air (tools/pace/strips.mjs writes this block from two recordings' analyser JSON).
+  /* MEASURED:BEGIN (tools/pace/strips.mjs) */ const MEASURED = {"before":{"world-now":{"length":128.92,"stories":8,"strip":{"shots":[[0,4,"open",null],[4,3.84,"montage",null],[7.84,4.09,"montage",null],[11.94,3.34,"montage",null],[15.27,5.6,"wide",null],[20.87,3,"breakingCard",null],[23.87,7.65,"close",null],[31.53,4.04,"map",null],[35.56,6.75,"close",null],[42.31,5.37,"map",null],[47.68,4.88,"close",null],[52.57,5.62,"fact",null],[58.18,7.48,"map",null],[65.66,5.28,"full",null],[70.94,10.92,"map",null],[81.86,5.93,"map",null],[87.79,5.46,"map",null],[93.25,6.62,"map",null],[99.87,6.44,"close",null],[106.31,4.32,"map",null],[110.63,3.6,"wide",null],[114.23,2.48,"wide",null],[116.71,8.11,"wide",null],[124.81,4.11,"endcard",null]],"says":[[4.12,20.17,"A","intro"],[23.99,35.26,"A","story"],[35.68,47.39,"B","story"],[47.81,70.64,"A","story"],[71.06,81.56,"B","story"],[81.98,87.49,"B","story"],[87.91,92.95,"B","story"],[93.37,99.57,"B","story"],[99.99,110.33,"B","story"],[110.74,113.93,"A","chat"],[114.35,116.41,"B","chat"],[116.83,124.11,"A","outro"]],"gaps":[[20.17,3.82,"breakingCard",0.75],[35.26,0.42,"handover",0.85],[47.39,0.42,"handover",0.85],[70.64,0.42,"block",1.3],[81.56,0.42,"roundupItem",0.65],[87.49,0.42,"roundupItem",0.65],[92.95,0.42,"roundupItem",0.65],[99.57,0.42,"beforeFinally",1.2],[110.33,0.42,"intoChat",0.65],[113.93,0.42,"chatTurn",0.5],[116.41,0.42,"beforeOutro",0.95]]},"summary":{"programme":"WORLD NOW","partial":false,"length":128.92,"stories":8,"shotMin":2.48,"shotMedian":5.61,"shotP10":3.91,"cutsPerMin":9.31,"under4":2,"sameFraming":0,"mapMin":4.04,"handover":0.42,"story":null,"chatTurn":0.42,"block":0.42,"beforeFinally":0.42,"allPausesMedian":0.42,"openToFirstWord":0.12,"lastWordToEndcard":0.7,"strapIn":null,"tickerMin":null,"captionMin":1.57,"gesturesPerMin":null,"gestureRepeats":null,"musicPerMin":9.77,"voiceGapsOver1_5":0,"statics":0},"file":"v2-canal-1-timeline.json"}},"after":{"world-now":{"length":178.4,"stories":9,"strip":{"shots":[[0,4,"open","wide"],[4,4.28,"montage","wide"],[8.28,4.93,"montage","wide"],[13.21,3.3,"montage","wide"],[16.5,5.85,"wide","wide"],[22.35,3,"breakingCard","wide"],[25.35,10.12,"close","mcu-l"],[35.48,9.89,"close","mcu-r"],[45.37,10.25,"map","wide"],[55.62,8.83,"close","mcu-l"],[64.45,7.44,"fact","wide"],[71.89,5.62,"map","wide"],[77.51,7.4,"close","mcu-r"],[84.91,11.49,"map","wide"],[96.4,6.42,"close","mcu-l"],[102.83,5.25,"map","wide"],[108.07,4.82,"full","wide"],[112.89,6.03,"wide","wide"],[118.92,10.76,"map","wide"],[129.68,5.28,"map","wide"],[134.95,7.54,"map","wide"],[142.49,6.55,"close","mcu-r"],[149.04,9.4,"map","wide"],[158.44,6.6,"wide","two"],[165.03,9.3,"wide","wide"],[174.34,4.06,"endcard","wide"]],"says":[[4.62,21.39,"A","intro"],[25.47,34.8,"A","story"],[35.6,54.91,"B","story"],[55.74,76.9,"A","story"],[77.63,95.76,"B","story"],[96.52,112.4,"A","story"],[113.01,117.8,"A","chat"],[119.04,129.2,"B","story"],[129.8,134.51,"B","story"],[135.07,141.51,"B","story"],[142.61,157.96,"B","story"],[158.56,161.74,"A","chat"],[162.15,164.2,"B","chat"],[165.15,172.44,"A","outro"]],"gaps":[[21.39,4.08,"breakingCard",0.75],[34.8,0.8,"handover",0.85],[54.91,0.83,"handover",0.85],[76.9,0.73,"handover",0.85],[95.76,0.76,"handover",0.85],[112.4,0.61,"intoChat",0.65],[117.8,1.24,"block",1.3],[129.2,0.6,"roundupItem",0.65],[134.51,0.57,"roundupItem",0.65],[141.51,1.1,"beforeFinally",1.2],[157.96,0.6,"intoChat",0.65],[161.74,0.4,"chatTurn",0.5],[164.2,0.95,"beforeOutro",0.95]]},"summary":{"programme":"WORLD NOW","partial":false,"length":178.4,"stories":9,"shotMin":4.82,"shotMedian":7.42,"shotP10":5.27,"cutsPerMin":7.22,"under4":0,"sameFraming":0,"mapMin":5.25,"handover":0.78,"story":null,"chatTurn":0.4,"block":1.24,"beforeFinally":1.1,"allPausesMedian":0.75,"openToFirstWord":0.62,"lastWordToEndcard":1.9,"strapIn":1,"tickerMin":6.9,"captionMin":1.61,"gesturesPerMin":4.59,"gestureRepeats":1,"musicPerMin":7.74,"voiceGapsOver1_5":0,"statics":0},"file":"a1-timeline.json"},"tech-bytes":{"length":132.19,"stories":6,"strip":{"shots":[[0,4,"open","wide"],[4,5.03,"montage","wide"],[9.03,3.99,"montage","wide"],[13.02,8.81,"wide","wide"],[21.83,7.13,"close","single"],[28.96,4.83,"full","wide"],[33.79,6.17,"wide","wide"],[39.96,4.96,"close","single"],[44.92,5.27,"full","wide"],[50.18,5.84,"close","single"],[56.02,9.55,"close","single"],[65.58,4.28,"full","wide"],[69.86,4.36,"close","single"],[74.21,4.21,"wide","wide"],[78.42,6.2,"close","single"],[84.63,7.51,"full","wide"],[92.13,12.45,"close","single"],[104.59,11.92,"close","single"],[116.51,11.82,"wide","wide"],[128.33,3.86,"endcard","wide"]],"says":[[4.62,21.3,"A","intro"],[21.95,33.45,"A","story"],[33.91,36.04,"B","chat"],[36.38,39.39,"A","chat"],[40.08,55.5,"B","story"],[56.14,73.83,"A","story"],[74.33,77.52,"A","chat"],[78.54,91.64,"B","story"],[92.25,103.79,"A","story"],[104.71,116.14,"B","story"],[116.63,119.03,"A","chat"],[119.88,126.93,"A","outro"]],"gaps":[[21.3,0.65,"afterIntro",0.75],[33.44,0.46,"intoChat",0.55],[36.05,0.34,"chatTurn",0.42],[39.38,0.69,"outOfChat",0.75],[55.51,0.64,"handover",0.7],[73.82,0.5,"intoChat",0.55],[77.51,1.03,"block",1.15],[91.64,0.61,"handover",0.7],[103.78,0.92,"beforeFinally",1],[116.14,0.49,"intoChat",0.55],[119.02,0.85,"beforeOutro",0.95]]},"summary":{"programme":"TECH BYTES","partial":false,"length":132.19,"stories":6,"shotMin":4.21,"shotMedian":6.19,"shotP10":4.32,"cutsPerMin":7.81,"under4":0,"sameFraming":0,"mapMin":null,"handover":0.63,"story":null,"chatTurn":0.34,"block":1.03,"beforeFinally":0.92,"allPausesMedian":0.64,"openToFirstWord":0.62,"lastWordToEndcard":1.4,"strapIn":1,"tickerMin":6.9,"captionMin":0.87,"gesturesPerMin":8.55,"gestureRepeats":2,"musicPerMin":8.62,"voiceGapsOver1_5":0,"statics":0},"file":"a1-timeline.json"},"news-60":{"length":74.17,"stories":6,"strip":{"shots":[[0,4,"open","solo-wide"],[4,4.42,"wide","wide"],[8.42,5.39,"close","mcu-l"],[13.81,5.58,"full","solo-wide"],[19.4,5.49,"close","mcu-l"],[24.89,5.43,"full","solo-wide"],[30.32,6.43,"close","mcu-l"],[36.75,6.66,"map","solo-wide"],[43.41,4.54,"map","solo-wide"],[47.94,5.57,"map","solo-wide"],[53.52,6.98,"close","mcu-l"],[60.5,5.33,"full","solo-wide"],[65.83,4.89,"wide","wide"],[70.73,3.44,"endcard","solo-wide"]],"says":[[4.42,7.32,"A","intro"],[8.54,24.33,"A","story"],[25.01,35.99,"A","story"],[36.87,42.82,"A","story"],[43.53,47.37,"A","story"],[48.07,52.82,"A","story"],[53.64,65.32,"A","story"],[65.95,69.33,"A","outro"]],"gaps":[[7.32,1.22,"afterIntro",0.6],[24.33,0.68,"story",0.75],[35.99,0.88,"block",0.9],[42.82,0.7,"roundupItem",0.75],[47.37,0.7,"roundupItem",0.75],[52.82,0.81,"block",0.9],[65.31,0.63,"beforeOutro",0.7]]},"summary":{"programme":"NEWS IN 60","partial":false,"length":74.17,"stories":6,"shotMin":4.42,"shotMedian":5.46,"shotP10":4.57,"cutsPerMin":9.89,"under4":0,"sameFraming":0,"mapMin":4.54,"handover":null,"story":0.68,"chatTurn":null,"block":0.85,"beforeFinally":null,"allPausesMedian":0.7,"openToFirstWord":0.42,"lastWordToEndcard":1.4,"strapIn":1,"tickerMin":null,"captionMin":0.94,"gesturesPerMin":1.01,"gestureRepeats":0,"musicPerMin":13.75,"voiceGapsOver1_5":0,"statics":0},"file":"a1-timeline.json"}},"made":"2026-10-02T23:58"}; /* MEASURED:END */
+
+  function measuredLane(m, y, label, t, scale, P0) {
+    const px = (s) => X0 + s * scale;
+    text(label, 4, y, P.fog, 'micro');
+    if (!m?.strip) {
+      text('NOT RECORDED', X0, y + 10, P.steel, 'micro');
+      return;
+    }
+    const NOT_BODY = new Set(['open', 'endcard']);
+    for (const [at, dur, shot, framing] of m.strip.shots) {
+      const x0 = Math.round(px(at));
+      const x1 = Math.round(px(at + dur));
+      rect(x0, y + 8, x1 - x0, 11, SHOT_COLOR[shot] || (NOT_BODY.has(shot) ? P.ink : shot === 'breakingCard' ? P.red : P.slate));
+      if (framing === 'two' || framing === 'solo-wide') rect(x0, y + 8, x1 - x0, 1, P.fog);
+      rect(x0, y + 8, 1, 11, P.black);
+      if (!NOT_BODY.has(shot) && shot !== 'montage' && shot !== 'breakingCard' && dur < P0.shots.min - 0.05) {
+        rect(x0, y + 7, x1 - x0, 1, P.red);
+        rect(x0, y + 19, x1 - x0, 1, P.red);
+      }
+    }
+    const rows = { A: y + 23, B: y + 28 };
+    rect(X0, rows.A, XW, 3, P.black);
+    rect(X0, rows.B, XW, 3, P.black);
+    for (const [on, off, who] of m.strip.says) rect(px(on), rows[who] ?? rows.A, Math.max(1, (off - on) * scale), 3, who === 'B' ? P.cream : P.silver);
+    for (const [at, gap, kind, target] of m.strip.gaps) {
+      if (kind === 'breakingCard') continue;
+      rect(px(at), y + 33, Math.max(1, gap * scale), 2, gap >= (target || 0.5) * 0.75 ? P.green : P.red);
+    }
+    rect(Math.round(px(Math.min(t, m.length))), y + 6, 1, 31, t <= m.length ? P.white : P.steel);
+    if (t > m.length) text('OFF AIR', Math.min(W - 40, Math.round(px(m.length)) + 3), y + 9, P.steel, 'micro');
+  }
+
+  function measuredReadout(m, y, label, P0) {
+    text(label, 4, y, P.fog, 'micro');
+    const s = m?.summary;
+    if (!s) return;
+    const flag = (ok) => (ok ? P.green : P.red);
+    text(`LEN ${Math.round(s.length)}S`, 46, y, P.silver, 'micro');
+    text(`${s.stories} STORIES`, 84, y, P.fog, 'micro');
+    text(`SHOT MIN ${f1(s.shotMin)}`, 130, y, flag(s.under4 === 0), 'micro');
+    text(`MED ${f1(s.shotMedian)}`, 186, y, flag(s.shotMedian >= P0.shots.median[0] - 0.5), 'micro');
+    text(`CUTS ${f1(s.cutsPerMin)}/MIN`, 220, y, flag(s.cutsPerMin <= P0.shots.cutsPerMinMax), 'micro');
+    text(`PAUSE MED ${s.allPausesMedian == null ? '-' : s.allPausesMedian.toFixed(2)}S`, 280, y, flag((s.allPausesMedian ?? 0) >= 0.6), 'micro');
+    text(`FIRST WORD ${s.openToFirstWord == null ? '-' : s.openToFirstWord.toFixed(2)}S`, 46, y + 8, flag((s.openToFirstWord ?? 0) >= P0.open.firstWord * 0.6), 'micro');
+    text(`HAND-OVER ${s.handover == null ? '-' : s.handover.toFixed(2)}S`, 130, y + 8, s.handover == null ? P.fog : flag(s.handover >= P0.gaps.handover * 0.75), 'micro');
+    text(`SIGN-OFF ${s.lastWordToEndcard == null ? '-' : s.lastWordToEndcard.toFixed(2)}S`, 220, y + 8, P.fog, 'micro');
+  }
+
+  function drawMeasured(t) {
+    rect(0, 0, W, 216, P.black);
+    const id = opts.programme;
+    const P0 = paceFor(id);
+    const b = MEASURED.before[id];
+    const a = MEASURED.after[id];
+    text('PACE', 4, 4, P.white);
+    rect(4, 13, measureText('PACE'), 1, P.red);
+    text(TITLES[id] || id.toUpperCase(), 40, 4, P.silver);
+    text('MEASURED ON AIR', 42 + measureText(TITLES[id] || '') + 6, 6, P.fog, 'micro');
+    text(`T ${t.toFixed(1)}S`, W - 4 - measureText(`T ${t.toFixed(1)}S`, 1, 'micro'), 6, P.fog, 'micro');
+    rect(4, 17, W - 8, 1, P.ink);
+    const span = Math.max(30, b?.length || 0, a?.length || 0);
+    const scale = XW / span;
+    measuredLane(b, 24, 'BEFORE', t, scale, P0);
+    measuredLane(a, 69, 'AFTER', t, scale, P0);
+    for (let s = 0; s <= span; s += 10) rect(X0 + s * scale, 110, 1, s % 60 === 0 ? 3 : 1, P.steel);
+    text('10 S TICKS', 4, 115, P.steel, 'micro');
+    let lx = 52;
+    for (const [k, c] of [['WIDE', P.steel], ['SINGLE', P.slate], ['PICTURE', P.tan], ['MAP', P.navy], ['CARD', P.darkRed], ['HEADLINES', P.purple], ['AIR OK', P.green], ['RUSHED', P.red]]) {
+      rect(lx, 116, 5, 4, c);
+      text(k, lx + 7, 115, P.fog, 'micro');
+      lx += measureText(k, 1, 'micro') + 11;
+    }
+    rect(4, 124, W - 8, 1, P.ink);
+    measuredReadout(b, 130, 'BEFORE', P0);
+    measuredReadout(a, 152, 'AFTER', P0);
+    rect(4, 172, W - 8, 1, P.ink);
+    text(`TARGET  SHOT >= ${P0.shots.min}S  MEDIAN ${P0.shots.median.join('-')}S  <= ${P0.shots.cutsPerMinMax} CUTS/MIN  HAND-OVER ${P0.gaps.handover}S  FIRST WORD ${P0.open.firstWord}S`, 4, 178, P.fog, 'micro');
+    text('?V2=1, KOKORO VOICES; SHOTS AS THE VIEWER SAW THEM (FOCUS-ONLY RE-SETS MERGED)', 4, 188, P.steel, 'micro');
+    text(`${(b?.file || '-').toUpperCase().slice(0, 40)}  VS  ${(a?.file || '-').toUpperCase().slice(0, 40)}`, 4, 197, P.steel, 'micro');
+    if (MEASURED.made) text(`MEASURED ${MEASURED.made.replace('T', ' ')}  ·  TOOLS/PACE/STRIPS.MJS`, 4, 206, P.steel, 'micro');
+  }
+
   function render(t = 0) {
     if (!model) return;
     if (opts.view === 'profile') drawProfiles();
+    else if (opts.view === 'measured') drawMeasured(Math.max(0, t));
     else drawRhythm(Math.max(0, t));
     $('tv').textContent = `${t.toFixed(2)} s`;
   }

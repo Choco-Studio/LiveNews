@@ -9,9 +9,11 @@
 //             starfield and a still ringed planet whose light swings ±35° on a 90 s sine;
 //             MONEY MINUTE: the wordmark in fog over a 16 px darkGreen rule; NEWS IN 60: the
 //             dial in one of two static states (intro / outro), never ticking.
-//   picture   the story picture (scene.images `full`), resampled at the wall's pixel size,
-//             mapped to the palette and dimmed to a mean L* ≤ 45 (≤ 40 in COSMOS);
-//             TECH BYTES puts it on a 2 px black mat.
+//   picture   the story picture (scene.images `full`), area-averaged down to the wall's pixel
+//             size, cool-graded, toned (L* gain with a soft shoulder) to a mean L* ≤ 45 (≤ 40 in
+//             COSMOS) with at most 10 % of highlights, mapped to the wall palette; beside a head a
+//             4:3-16:9 box in the free area (never behind the head); TECH BYTES puts it on a 2 px
+//             black mat.
 //   map       the mini locator from scenes/worldmap.js (drawn into an offscreen canvas and
 //             copied only while it animates), or a static locator of our own.
 //   figure    a figure in the part of the wall away from the head.
@@ -21,14 +23,16 @@
 // away from every head.
 //
 //   updateWall(req, style, w, h, k, t, cam, opts, lod) → { buf, version }   (set.js)
-//   wallFromScene(scene, style)   legacy director state → wall request
+//   wallFromScene(scene, style)   director state → wall request (every field, every time)
+//   warmWallContent(req, style, cam)   prepare a picture / text masks before the cut
+//   plateRectFor(cam, label, sub, style), mediaRectFor(cam, style)   layouts (tests, labs)
 //   drawWallContent(fr, x0, y0, x1, y1, k, t, soft)   the old call: the idle at a rectangle
 import { C } from '../pixbuf.js';
 import { P } from '../../../palette.js';
 import { LAND } from '../../../scenes/worlddata.js';
 import { F, SET, kAt, sxOf, syOf } from './geometry.js';
-import { LSTAR, nearestName, nameOf, DARKER, lstarOf } from './color.js';
-import { stampText, textWidth, capHeight } from './text.js';
+import { LSTAR, DARKER, labRGB } from './color.js';
+import { stampText, textWidth, capHeight, textMask } from './text.js';
 import { resolveStyle } from './styles.js';
 
 const B16 = Uint8Array.from([0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]);
@@ -479,8 +483,10 @@ function drawChip(b, cx, cy, s) {
   R(-6, -5, -5, 5, C.black);
   R(-5, 4, 6, 5, C.slate);
   // cells: two rows of three, one dark (static: never animated)
+  // (at 2x and more each cell keeps a 1 px ink gap, so no lit block reaches the 4x4 of a face patch)
   const cells = [[-4, -3], [-1, -3], [2, -3], [-4, 1], [2, 1]];
-  for (const [x, y] of cells) R(x, y, x + 2, y + 2, C.cyan);
+  const g = s > 1 ? 1 : 0;
+  for (const [x, y] of cells) rect(b, cx + x * s, cy + y * s, cx + (x + 2) * s - g, cy + (y + 2) * s - g, C.cyan);
   R(-1, 1, 1, 3, C.slate);
   // pin 1 marker: one steel pixel in the body's corner
   R(-8, -8, -7, -7, C.steel);
@@ -533,13 +539,25 @@ function planetTable(R) {
 /** Light azimuth (radians from the lens toward camera-left) at time t: 55° ± 35° on a 90 s sine. */
 export const planetAzimuth = (t) => (55 + 35 * Math.sin((2 * Math.PI * t) / 90)) * DEG;
 
+// The planet's colours, bright to dark, hue-shifted toward purple in the shadow (cosmos.md "Video wall
+// at idle"): in the wide the bible's own (lit bands tan / tanShade, ring steel and fog with a 1 px
+// silver lit edge); wherever the planet is drawn larger than in the wide (the two-shot, singles: Nova's
+// face is L* 46 there) one ramp step darker (lit bands tanShade / brown, ring slate and steel with a
+// fog edge), so no part of it is brighter than the face beside it.
+const PLANET_RAMPS = [
+  { a: C.tan, b: C.tanShade, fa: C.tanShade, fb: C.brown, term: C.brown, shade: C.ink, night: C.black, ring: C.steel, band: C.fog, edge: C.silver, gap: C.slate },
+  { a: C.tanShade, b: C.brown, fa: C.brown, fb: C.maroon, term: C.maroon, shade: C.ink, night: C.black, ring: C.slate, band: C.steel, edge: C.fog, gap: C.ink },
+];
+
 // The ring never changes (only the planet's light swings): its back and front halves are built once
 // per radius as pixel lists, so the per-frame redraw of the planet costs only its disc.
 const RING_TABLES = new Map();
-function ringTable(R) {
-  let T = RING_TABLES.get(R);
+function ringTable(R, dim) {
+  const key = R * 2 + (dim ? 1 : 0);
+  let T = RING_TABLES.get(key);
   if (T) return T;
-  // a tilted annulus: steel with a fog band, a 1 px silver lit edge on the near (lower) rim
+  const P = PLANET_RAMPS[dim ? 1 : 0];
+  // a tilted annulus: the ring colour with a lighter band, a 1 px lit edge on the near (lower) rim
   const a0 = R * 1.42, a1 = R * 1.95, fl = 0.3, tilt = -0.31;
   const ct = Math.cos(tilt), st = Math.sin(tilt);
   // bounding box of the rotated ellipse (semi-axes a1 and a1·fl)
@@ -555,21 +573,21 @@ function ringTable(R) {
       const front = ry > 0;
       if (!front && x * x + y * y < R2) continue; // hidden behind the planet
       const u = (Math.sqrt(d2) - a0) / (a1 - a0);
-      let col = u > 0.45 && u < 0.7 ? C.fog : C.steel;
-      if (u > 0.9 && ry > 0) col = C.silver;
-      if (u < 0.12) col = C.slate; // the gap's shadowed inner edge
+      let col = u > 0.45 && u < 0.7 ? P.band : P.ring;
+      if (u > 0.9 && ry > 0) col = P.edge;
+      if (u < 0.12) col = P.gap; // the gap's shadowed inner edge
       lists[front ? 1 : 0].push(x, y, col);
     }
   }
   const pack = (l) => ({ xy: Int16Array.from(l.filter((_, i) => i % 3 !== 2)), col: Uint32Array.from(l.filter((_, i) => i % 3 === 2)) });
   T = { back: pack(lists[0]), front: pack(lists[1]) };
   if (RING_TABLES.size > 24) RING_TABLES.clear();
-  RING_TABLES.set(R, T);
+  RING_TABLES.set(key, T);
   return T;
 }
 
-function drawRing(b, cx, cy, R, front) {
-  const T = ringTable(R)[front ? 'front' : 'back'];
+function drawRing(b, cx, cy, R, front, dim) {
+  const T = ringTable(R, dim)[front ? 'front' : 'back'];
   const icx = Math.round(cx), icy = Math.round(cy);
   const { xy, col } = T;
   const w = b.w, h = b.h, px = b.px;
@@ -579,30 +597,37 @@ function drawRing(b, cx, cy, R, front) {
   }
 }
 
-function drawPlanet(b, cx, cy, R, az) {
+function drawPlanet(b, cx, cy, R, az, dim = false) {
   const T = planetTable(R);
   const { S, c, n } = T;
+  const P = PLANET_RAMPS[dim ? 1 : 0];
+  // the key from above and a little in front of the planet: the terminator stays a curve through the
+  // whole swing (at 90° of azimuth a light from the exact side would cut the disc with a straight line)
   const el = 18 * DEG;
-  const lx = -Math.sin(az) * Math.cos(el), ly = -Math.sin(el), lz = Math.cos(az) * Math.cos(el);
+  let lx = -Math.sin(az) * Math.cos(el), ly = -Math.sin(el), lz = Math.cos(az) * Math.cos(el) + 0.35;
+  const ln = Math.hypot(lx, ly, lz);
+  lx /= ln;
+  ly /= ln;
+  lz /= ln;
   const ox = Math.round(cx) - c, oy = Math.round(cy) - c;
-  drawRing(b, cx, cy, R, false);
+  drawRing(b, cx, cy, R, false, dim);
   let hash = 0;
   for (let i = 0; i < n.length; i += 5) {
     const idx = n[i], nx = n[i + 1], ny = n[i + 2], nz = n[i + 3], lat = n[i + 4];
     const d = nx * lx + ny * ly + nz * lz;
     let col;
     if (d > 0.07) {
-      const band = Math.floor((lat / Math.PI + 0.5) * 9);
-      col = band % 2 ? C.tanShade : C.tan;
-      if (d < 0.2) col = band % 2 ? C.brown : C.tanShade; // the lit side's falloff, one step down
-    } else if (d > -0.06) col = C.brown; // one intermediate tone at the terminator
-    else if (d > -0.42) col = C.ink;
-    else col = C.black;
+      const band = Math.floor((lat / Math.PI + 0.5) * 9) % 2;
+      // the lit side's falloff, and limb darkening on the outer rim: one step down
+      col = d < 0.2 || nx * nx + ny * ny > 0.8 ? (band ? P.fb : P.fa) : band ? P.b : P.a;
+    } else if (d > -0.06) col = P.term; // one intermediate tone at the terminator
+    else if (d > -0.42) col = P.shade;
+    else col = P.night;
     const x = idx % S, y = (idx / S) | 0;
     plot(b, ox + x, oy + y, col);
-    if (col === C.brown || col === C.tanShade) hash = (hash * 31 + idx * 3 + (col === C.brown ? 1 : 2)) | 0;
+    if (col !== P.night) hash = (hash * 31 + idx * 3 + (col & 7)) | 0;
   }
-  drawRing(b, cx, cy, R, true);
+  drawRing(b, cx, cy, R, true, dim);
   return hash;
 }
 
@@ -613,25 +638,21 @@ function drawDial(b, cx, cy, r, phase, ts) {
   const all = phase === 'outro';
   const ccx = Math.round(cx), ccy = Math.round(cy);
   if (r < 19) {
-    // Below r 19 the 60 ticks would fall closer than 2 px and merge: draw what they merge into, a
-    // clean 1 px ring (one octant mirrored eight ways, so it is exactly symmetric), with the four
-    // quarter ticks 2 px inward; the 12 o'clock tick is yellow in both states, the ring lights in
-    // the outro. A ring, never spokes: at this size spokes read as a sunburst.
-    const ring = all ? C.yellow : C.slate;
-    for (let a = 0; a <= 45; a += 0.5) {
-      const dx = Math.round(r * Math.sin(a * DEG)), dy = Math.round(r * Math.cos(a * DEG));
-      for (const [px, py] of [[dx, dy], [dy, dx]]) {
-        plot(b, ccx + px, ccy - py, ring);
-        plot(b, ccx - px, ccy - py, ring);
-        plot(b, ccx + px, ccy + py, ring);
-        plot(b, ccx - px, ccy + py, ring);
+    // Below r 19 the 60 ticks would fall closer than 2 px and merge: the twelve five-second ticks
+    // alone (about 7 px apart at r 14), 2 px long, the four quarters 3 px; placed for one quadrant
+    // and mirrored, so the dial is exactly symmetric. The 12 o'clock tick is yellow in both states,
+    // every tick in the outro.
+    for (let i = 0; i <= 3; i++) {
+      const a = i * 30 * DEG;
+      const len = i % 3 === 0 ? 3 : 2;
+      for (let q = 0; q < len; q++) {
+        const rr = r - q;
+        const dx = Math.round(rr * Math.sin(a)), dy = Math.round(rr * Math.cos(a));
+        for (const [sx, sy, idx] of [[1, -1, i], [-1, -1, 12 - i], [1, 1, 6 - i], [-1, 1, 6 + i]]) {
+          const tick = ((idx % 12) + 12) % 12;
+          plot(b, ccx + sx * dx, ccy + sy * dy, all || tick === 0 ? C.yellow : C.slate);
+        }
       }
-    }
-    for (let q = 0; q < 3; q++) {
-      plot(b, ccx, ccy - r + q, C.yellow);
-      plot(b, ccx, ccy + r - q, ring);
-      plot(b, ccx - r + q, ccy, ring);
-      plot(b, ccx + r - q, ccy, ring);
     }
   } else {
     // 60 ticks placed for one quadrant and mirrored, so the dial is exactly symmetric
@@ -650,9 +671,9 @@ function drawDial(b, cx, cy, r, phase, ts) {
       }
     }
   }
-  // "60" in the lower half of the dial (centred in a small one, clear of the ticks)
+  // "60" in the lower half of a large dial; centred in a small one, at least 2 px inside the ticks
   const ns = r >= 30 ? Math.max(1, ts) : 1;
-  const ny = r >= 14 ? ccy + Math.round(r * 0.28) : ccy - Math.floor(capHeight('body', ns) / 2);
+  const ny = r >= 19 ? ccy + Math.round(r * 0.28) : ccy - Math.floor(capHeight('body', ns) / 2);
   stampText(b.px, b.w, b.h, '60', ccx + 1, ny, C.yellow, 'body', ns, 'center');
 }
 
@@ -661,9 +682,21 @@ function drawDial(b, cx, cy, r, phase, ts) {
 
 // Palette colours a wall picture may use: nothing above fog (no white, cream or silver), no bright skin or orange
 // (faces stay the warmest thing in frame: a fire maps to rust / tan / darkRed), no programme accents or brand red
-// (they keep their meaning on set).
-const PICTURE_NAMES = new Set(['black', 'ink', 'slate', 'steel', 'fog', 'darkRed', 'maroon', 'rust', 'skinShade', 'tan', 'tanShade', 'brown', 'darkGreen', 'blue', 'navy', 'purple']);
+// (they keep their meaning on set). The 32-colour palette has no further dark greens or blues to add.
+const PICTURE_NAMES = ['black', 'ink', 'slate', 'steel', 'fog', 'darkRed', 'maroon', 'rust', 'skinShade', 'tan', 'tanShade', 'brown', 'darkGreen', 'blue', 'navy', 'purple'];
+const PIC_LAB = new Float32Array(PICTURE_NAMES.length * 3);
+const PIC_U32 = new Uint32Array(PICTURE_NAMES.length);
+const PIC_L = new Float32Array(PICTURE_NAMES.length);
+PICTURE_NAMES.forEach((n, i) => {
+  const c = C[n];
+  const lab = labRGB(c & 255, (c >>> 8) & 255, (c >>> 16) & 255);
+  PIC_LAB.set(lab, i * 3);
+  PIC_U32[i] = c;
+  PIC_L[i] = LSTAR[n];
+});
 const SRC = new WeakMap();
+let srcSerial = 0;
+const COOL_A = 4, COOL_B = -16; // the wall's cool grade (CIE a*, b*): where the palette's neutral ramp sits
 
 function pixelsOf(img) {
   if (!img) return null;
@@ -682,86 +715,43 @@ function pixelsOf(img) {
   return null;
 }
 
-/** Index an image once: { w, h, idx (Uint16), rgb [r,g,b,...], hist }. Colours are bucketed to 5 bits. */
+/** The pixels of a picture record (`full` preferred: the director's 416x234), read once: { w, h, u32, id }. */
 function sourceOf(img) {
   const key = img && (img.full || img.small || img);
   if (!key || typeof key !== 'object') return null;
   let s = SRC.get(key);
   if (s) return s;
   const p = pixelsOf(img);
-  if (!p) return null;
-  const n = p.w * p.h;
-  const idx = new Uint16Array(n);
-  const map = new Map();
-  const rgb = [];
-  const hist = [];
-  for (let i = 0; i < n; i++) {
-    const c = p.u32[i];
-    const k = ((c >>> 3) & 31) | (((c >>> 11) & 31) << 5) | (((c >>> 19) & 31) << 10);
-    let j = map.get(k);
-    if (j === undefined) {
-      j = rgb.length / 3;
-      map.set(k, j);
-      rgb.push(c & 255, (c >>> 8) & 255, (c >>> 16) & 255);
-      hist.push(0);
-    }
-    idx[i] = j;
-    hist[j]++;
-  }
-  s = { w: p.w, h: p.h, idx, rgb, hist, maps: new Map() };
+  if (!p || !p.w || !p.h) return null;
+  s = { w: p.w, h: p.h, u32: p.u32, id: ++srcSerial };
   SRC.set(key, s);
   return s;
 }
 
-const lin = (v) => {
-  const c = v / 255;
-  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-};
-const unlin = (v) => Math.round(255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055));
+// sRGB byte → linear light, and the CIE Lab of a linear colour (D65)
+const LIN8 = new Float32Array(256);
+for (let i = 0; i < 256; i++) {
+  const c = i / 255;
+  LIN8[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+const fLab = (t) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
+
+// scratch for one filtered picture (Lab per output pixel), grown as needed
+let PL = new Float32Array(0), PA = PL, PB = PL;
+const PX0 = new Int32Array(1024), PX1 = new Int32Array(1024);
 
 /**
- * Colour table (source colour → palette u32), dimmed in linear light until the picture's mean L*
- * is at most maxL and at most 6 % of it is brighter than L* 55 (ART_DIRECTION: wall average ≤ 45,
- * highlights on at most 10 % of the wall; 55, below the faces' 55-73, so a fire or a sunlit sky on
- * the wall never competes with the presenter's face beside it).
+ * Area-average the cover-fit crop of `src` down to pw x ph (each output pixel is the mean, in linear
+ * light, of every source pixel under it: the director's dithered 416x234 picture becomes clean
+ * tones instead of aliased speckle) into PL / PA / PB (CIE Lab).
  */
-const BRIGHT_L = 55;
-function pictureMap(src, maxL) {
-  let m = src.maps.get(maxL);
-  if (m) return m;
-  const nc = src.hist.length;
-  const tab = new Uint32Array(nc);
-  const total = src.hist.reduce((a, b) => a + b, 0) || 1;
-  const build = (f) => {
-    let sum = 0, bright = 0;
-    for (let j = 0; j < nc; j++) {
-      const r = unlin(lin(src.rgb[j * 3]) * f), g = unlin(lin(src.rgb[j * 3 + 1]) * f), b2 = unlin(lin(src.rgb[j * 3 + 2]) * f);
-      const name = nearestName(r, g, b2, PICTURE_NAMES);
-      tab[j] = C[name];
-      sum += LSTAR[name] * src.hist[j];
-      if (LSTAR[name] > BRIGHT_L) bright += src.hist[j];
-    }
-    return sum / total <= maxL && bright / total <= 0.06;
-  };
-  if (!build(1)) {
-    let lo = 0.04, hi = 1;
-    for (let it = 0; it < 10; it++) {
-      const mid = (lo + hi) / 2;
-      if (build(mid)) lo = mid;
-      else hi = mid;
-    }
-    build(lo);
+function filterPicture(src, pw, ph) {
+  const n = pw * ph;
+  if (PL.length < n) {
+    PL = new Float32Array(n);
+    PA = new Float32Array(n);
+    PB = new Float32Array(n);
   }
-  m = tab;
-  if (src.maps.size > 8) src.maps.clear();
-  src.maps.set(maxL, m);
-  return m;
-}
-
-function drawPicture(b, src, x0, y0, pw, ph, maxL) {
-  if (!src || pw <= 0 || ph <= 0) return;
-  const tab = pictureMap(src, maxL);
-  // cover-fit crop of the source, nearest sampling at the wall's pixel size
   const sa = src.w / src.h, da = pw / ph;
   let cw = src.w, ch = src.h, cx = 0, cy = 0;
   if (sa > da) {
@@ -771,19 +761,143 @@ function drawPicture(b, src, x0, y0, pw, ph, maxL) {
     ch = src.w / da;
     cy = (src.h - ch) * 0.4;
   }
-  const { idx } = src;
+  for (let x = 0; x < pw && x < 1024; x++) {
+    const a = Math.min(src.w - 1, Math.floor(cx + (x * cw) / pw));
+    PX0[x] = a;
+    PX1[x] = Math.max(a + 1, Math.min(src.w, Math.floor(cx + ((x + 1) * cw) / pw)));
+  }
+  const u32 = src.u32, sw = src.w;
   for (let y = 0; y < ph; y++) {
-    const yy = y0 + y;
-    if (yy < 0 || yy >= b.h) continue;
-    const sy = Math.min(src.h - 1, Math.floor(cy + ((y + 0.5) * ch) / ph)) * src.w;
-    const row = yy * b.w;
+    const ya = Math.min(src.h - 1, Math.floor(cy + (y * ch) / ph));
+    const yb = Math.max(ya + 1, Math.min(src.h, Math.floor(cy + ((y + 1) * ch) / ph)));
     for (let x = 0; x < pw; x++) {
-      const xx = x0 + x;
-      if (xx < 0 || xx >= b.w) continue;
-      const sx = Math.min(src.w - 1, Math.floor(cx + ((x + 0.5) * cw) / pw));
-      b.px[row + xx] = tab[idx[sy + sx]];
+      const xa = PX0[x], xb = PX1[x];
+      let r = 0, g = 0, bl = 0;
+      for (let sy = ya; sy < yb; sy++) {
+        const row = sy * sw;
+        for (let sx = xa; sx < xb; sx++) {
+          const c = u32[row + sx];
+          r += LIN8[c & 255];
+          g += LIN8[(c >>> 8) & 255];
+          bl += LIN8[(c >>> 16) & 255];
+        }
+      }
+      const inv = 1 / ((yb - ya) * (xb - xa));
+      r *= inv;
+      g *= inv;
+      bl *= inv;
+      const fx = fLab((0.4124 * r + 0.3576 * g + 0.1805 * bl) / 0.95047);
+      const fy = fLab(0.2126 * r + 0.7152 * g + 0.0722 * bl);
+      const fz = fLab((0.0193 * r + 0.1192 * g + 0.9505 * bl) / 1.08883);
+      const i = y * pw + x;
+      PL[i] = 116 * fy - 16;
+      PA[i] = 500 * (fx - fy);
+      PB[i] = 200 * (fy - fz);
     }
   }
+}
+
+/**
+ * The wall's tone curve: a gain on L* with a soft shoulder that never passes `hiL`, so the picture
+ * keeps its local contrast (shadows and mid-tones stay apart) while its mean comes down to the
+ * wall's ceiling and its highlights stay under the faces (ART_DIRECTION: wall mean ≤ 45, highlights
+ * on at most 10 % of it).
+ */
+function toneL(x, knee, hiL) {
+  if (x <= knee) return x;
+  const r = hiL - knee;
+  return knee + r * (1 - Math.exp(-(x - knee) / r));
+}
+
+/**
+ * Map the filtered picture to palette pixels into out (pw*ph), dimmed to a mean L* ≤ maxL with at
+ * most 10 % of it brighter than maxL + 20 (palette steps included: a bright sky that lands on fog is
+ * pulled down until it holds).
+ */
+function mapPicture(out, n, maxL) {
+  const hiCap = maxL + 22.5;
+  let hiL = maxL + 20, knee = maxL + 4;
+  // the gain: the largest that keeps the toned mean under the ceiling (binary search on L* alone)
+  const meanAt = (g) => {
+    let sum = 0;
+    for (let i = 0; i < n; i++) sum += toneL(PL[i] * g, knee, hiL);
+    return sum / n;
+  };
+  let g = 1;
+  if (meanAt(1) > maxL) {
+    let lo = 0.05, hi = 1;
+    for (let it = 0; it < 12; it++) {
+      const mid = (lo + hi) / 2;
+      if (meanAt(mid) <= maxL) lo = mid;
+      else hi = mid;
+    }
+    g = lo;
+  }
+  const np = PICTURE_NAMES.length;
+  for (let pass = 0; pass < 6; pass++) {
+    let sum = 0, bright = 0;
+    for (let i = 0; i < n; i++) {
+      const L0 = PL[i];
+      const L = toneL(L0 * g, knee, hiL);
+      // chroma follows the light (a dimmed colour stays the same hue), a touch quieter on the wall;
+      // then the wall's cool balance: the palette's neutrals (black, ink, slate, steel, fog) sit at
+      // about a* +4, b* -16, so a grey in the picture is moved there and lands on them (left neutral
+      // it was nearer maroon and brown, and the picture turned to brown mush)
+      const cf = L0 > 0.5 ? (0.9 * L) / L0 : 0;
+      const A = PA[i] * cf + COOL_A, B = PB[i] * cf + COOL_B;
+      let best = 0, bd = Infinity;
+      for (let j = 0, q = 0; j < np; j++, q += 3) {
+        const dl = L - PIC_LAB[q], da = A - PIC_LAB[q + 1], db = B - PIC_LAB[q + 2];
+        const d = dl * dl + da * da + db * db;
+        if (d < bd) {
+          bd = d;
+          best = j;
+        }
+      }
+      out[i] = PIC_U32[best];
+      sum += PIC_L[best];
+      if (PIC_L[best] > hiCap) bright++;
+    }
+    // the palette steps can land a little brighter than the curve: tighten until both hold
+    const meanOk = sum / n <= maxL + 0.25, brightOk = bright <= n * 0.1;
+    if (meanOk && brightOk) break;
+    if (!meanOk) g *= 0.94;
+    if (!brightOk) {
+      hiL -= 4;
+      knee = Math.min(knee, hiL - 8);
+    }
+  }
+}
+
+// filtered, palette-mapped pictures per (source, size, ceiling), a few kept (a cut back to the
+// same shot finds its picture ready)
+const PICS = new Map();
+function pictureAt(src, pw, ph, maxL) {
+  const key = `${src.id}|${pw}|${ph}|${maxL}`;
+  let p = PICS.get(key);
+  if (p) {
+    PICS.delete(key);
+    PICS.set(key, p);
+    return p;
+  }
+  p = { w: pw, h: ph, px: new Uint32Array(pw * ph) };
+  filterPicture(src, pw, ph);
+  mapPicture(p.px, pw * ph, maxL);
+  PICS.set(key, p);
+  if (PICS.size > 10) PICS.delete(PICS.keys().next().value);
+  return p;
+}
+
+/**
+ * Draw `src` covering pw x ph at (x0, y0). The picture is filtered at the size the wall had on the
+ * cut (`fit`, from the frozen layout) and a slow camera move afterwards only resamples that one.
+ */
+function drawPicture(b, src, x0, y0, pw, ph, maxL, fit = null) {
+  if (!src || pw <= 0 || ph <= 0) return;
+  const fw = fit ? fit[0] : pw, fh = fit ? fit[1] : ph;
+  const p = pictureAt(src, Math.max(1, fw), Math.max(1, fh), maxL);
+  if (p.w === pw && p.h === ph) blitSub(b, p, x0, y0);
+  else resampleSub(b, p, x0, y0, pw, ph);
 }
 
 // ---------------------------------------------------------------------------
@@ -880,7 +994,9 @@ function drawStaticLocator(b, spec, style, ts) {
   if (loc.place) placeTab(b, loc.place, style, ts);
 }
 
-function placeTab(b, text, style, ts) {
+function placeTab(b, text0, style, ts) {
+  // the place cut at words to the tab's room (never stamped past its plate)
+  const text = fitLine(text0, b.w - 8 * ts, 'micro', ts) || String(text0).split(/[\s,]+/)[0];
   const tw = Math.min(b.w - 4 * ts, textWidth(text, 'micro', ts));
   const th = capHeight('micro', ts) + 4 * ts;
   rect(b, 0, 0, tw + 6 * ts, th, C.black);
@@ -1053,7 +1169,7 @@ export function plateRectFor(cam, label, sub, styleIn) {
   const style = resolveStyle(styleIn);
   const k = kAt(cam, SET.wallZ);
   const o = wallOrigin(cam);
-  const w = Math.round((SET.screen.x1 - SET.screen.x0) * k), h = Math.round((SET.screen.y1 - SET.screen.y0) * k);
+  const { w, h } = wallSize(cam, k);
   const L = computeLayout(LAYOUT, cam, style.solo, o.x, o.y, w, h, k);
   const P = layoutPlate(L, label || '', sub || '', wallTextScale(k));
   if (!P) return null;
@@ -1073,7 +1189,7 @@ export function mediaRectFor(cam, styleIn) {
   const style = resolveStyle(styleIn);
   const k = kAt(cam, SET.wallZ);
   const o = wallOrigin(cam);
-  const w = Math.round((SET.screen.x1 - SET.screen.x0) * k), h = Math.round((SET.screen.y1 - SET.screen.y0) * k);
+  const { w, h } = wallSize(cam, k);
   const L = computeLayout(LAYOUT, cam, style.solo, o.x, o.y, w, h, k);
   const m = mediaRect(L, { w, h }, wallTextScale(k));
   const heads = [];
@@ -1084,11 +1200,45 @@ export function mediaRectFor(cam, styleIn) {
   return { x0: m.x + o.x, y0: m.y + o.y, x1: m.x + m.w + o.x, y1: m.y + m.h + o.y, framed: m.framed, heads, wall: { x0: o.x, y0: o.y, x1: o.x + w, y1: o.y + h } };
 }
 
+/**
+ * Prepare a wall request's content ahead of its cut, so the cut frame pays nothing for it (INTEGRATION
+ * calls it from idle time when the next shot is known, or as soon as a story's image record arrives):
+ * reads the picture's pixels once and, given the shot's camera, filters and maps it at the size it
+ * will have there; builds the text masks of the kicker and source plate. Cheap when already done.
+ * Returns true when the request had something to prepare.
+ */
+export function warmWallContent(req, styleIn, cam = null) {
+  if (!req) return false;
+  const style = resolveStyle(styleIn);
+  let did = false;
+  const src = req.image ? sourceOf(req.image) : null;
+  if (src) {
+    did = true;
+    if (cam) {
+      // the same layout path as the cut frame's (layoutOf rounds through wall units), so the size matches
+      const k = kAt(cam, SET.wallZ);
+      const o = wallOrigin(cam);
+      const { w, h } = wallSize(cam, k);
+      const L = layoutOf({ solo: req.solo ?? style.solo }, { cam, wx0: o.x, wy0: o.y, k }, w, h);
+      const m = mediaRect(L, { w, h }, wallTextScale(k));
+      const maxL = (style.wallMaxL || 45) - (cam.soft > 0.5 ? 6 : 2);
+      const mat = !m.framed && style.pictureMat ? Math.max(2, Math.round(style.pictureMat * k)) : 0;
+      if (m.w - 2 * mat > 0 && m.h - 2 * mat > 0) pictureAt(src, m.w - 2 * mat, m.h - 2 * mat, maxL);
+    }
+  }
+  for (const [t, font] of [[req.label, 'body'], [req.sub, 'micro'], [req.location?.place, 'micro']]) {
+    if (!t) continue;
+    did = true;
+    for (const sc of [1, 2]) textMask(String(t), font, sc);
+  }
+  return did;
+}
+
 // ---------------------------------------------------------------------------
 // Pictures and maps: where they go on the wall
 
 const MEDIA = { x: 0, y: 0, w: 0, h: 0, framed: false };
-const MEDIA_MIN_W = 34, MEDIA_MIN_H = 20; // wide px: a picture smaller than this does not read (the field shows)
+const MEDIA_MIN_W = 32, MEDIA_MIN_H = 18; // screen px: a picture smaller than this does not read (its plate shows)
 /**
  * The rectangle a picture or a map takes: the visible wall when no head is in front of it (the
  * wide, the two-shot, a single that sees the wall beside the head); otherwise the largest picture
@@ -1099,22 +1249,25 @@ const MEDIA_MIN_W = 34, MEDIA_MIN_H = 20; // wide px: a picture smaller than thi
 function mediaRect(L, b, ts) {
   const m = MEDIA;
   if (L.heads) {
-    const pad = 2 * ts;
     let area = 0;
     m.x = m.y = m.w = m.h = 0;
     m.framed = true;
     for (const bx of [L.left, L.right, L.top]) {
+      // beside a head: 4:3 to 16:9 with a 2 px pad (the box already keeps 6 px from the head); in the
+      // band above it (the solo WIDE, money-minute.md "pictures on the WIDE") up to 2:1 with a 1 px pad
+      const top = bx === L.top;
+      const pad = top ? ts : 2 * ts, amax = top ? 2 : 1.78;
       const aw = bw(bx) - 2 * pad, ah = bh(bx) - 2 * pad;
       if (aw <= 0 || ah <= 0) continue;
       let w = aw, h = ah;
-      if (aw > ah * 1.78) w = Math.floor(ah * 1.78);
+      if (aw > ah * amax) w = Math.floor(ah * amax);
       else if (aw < ah * 1.33) h = Math.floor(aw / 1.33);
-      if (w < MEDIA_MIN_W * ts || h < MEDIA_MIN_H * ts || w * h <= area) continue;
+      if (w < MEDIA_MIN_W || h < MEDIA_MIN_H || w * h <= area) continue;
       area = w * h;
       m.w = w;
       m.h = h;
       m.y = bx.y0 + pad;
-      if (bx === L.top) {
+      if (top) {
         // above the head: lean away from it (left when it is centred, the MCU-R side)
         const mid = (bx.x0 + bx.x1) / 2;
         m.x = L.headCx >= mid - 1 ? bx.x0 + pad : bx.x1 - pad - w;
@@ -1125,8 +1278,9 @@ function mediaRect(L, b, ts) {
   const v = L.vis;
   m.x = v.x0;
   m.y = v.y0;
-  // in singles the graphics' top row (y 8-21) covers the top of the frame: the picture starts under it
-  if (ts > 1 && m.y < L.full.y0) m.y = L.full.y0;
+  // the graphics' top row (y 8-21, kept plain for the bug, programme tag and clock) is never under a
+  // picture: it starts below it
+  if (m.y < L.full.y0) m.y = L.full.y0;
   m.w = bw(v);
   m.h = Math.max(0, Math.min(v.y1, b.h - L.band) - m.y);
   m.framed = false;
@@ -1210,12 +1364,15 @@ function renderSpec(b, spec, style, env) {
       }
       if (m.framed) {
         frameBox(b, m, style, env);
-        drawPicture(b, src, m.x, m.y, m.w, m.h, maxL);
+        if (!spec._picWH) spec._picWH = [m.w, m.h];
+        drawPicture(b, src, m.x, m.y, m.w, m.h, maxL, spec._picWH);
       } else {
         // the whole wall: TECH BYTES keeps its 2 px black mat inside the bezel
         const mat = style.pictureMat ? Math.max(2, Math.round(style.pictureMat * env.k)) : 0;
         rect(b, CLIP.x0, CLIP.y0, CLIP.x1, CLIP.y1, C.black);
-        drawPicture(b, src, m.x + mat, m.y + mat, m.w - 2 * mat, m.h - 2 * mat, maxL);
+        const pw = m.w - 2 * mat, ph = m.h - 2 * mat;
+        if (!spec._picWH) spec._picWH = [pw, ph];
+        drawPicture(b, src, m.x + mat, m.y + mat, pw, ph, maxL, spec._picWH);
         darkBand(b, L.band, style, true);
       }
       break;
@@ -1243,9 +1400,12 @@ function renderSpec(b, spec, style, env) {
       // (two-shot, over-the-shoulder) gets the locator as a framed inset of about that size, centred:
       // drawWorldMap's cost is per pixel (about 0.7 ms per frame at 104x63 while it flies in).
       if (!spec._mapWH) {
-        const sc = env.ts > 1 && m.w >= 120 ? 2 : 1;
+        // the locator fills the wall, never an inset box: at the wall's own size up to 1.4x its
+        // designed area (the two-shot, at 1x like the rest of its wall), else rendered at half size and
+        // shown at exactly 2x (singles, where the wall's text is 2x too; over-the-shoulder)
+        const sc = m.w >= 120 && (env.ts > 1 || m.w * m.h > MAP_MAX_AREA * 1.4) ? 2 : 1;
         const area = (m.w / sc) * (m.h / sc);
-        spec._mapFit = sc === 1 && area > MAP_MAX_AREA ? Math.sqrt(MAP_MAX_AREA / area) : 1;
+        spec._mapFit = area > MAP_MAX_AREA * 1.4 ? Math.sqrt(MAP_MAX_AREA / area) : 1;
         spec._mapSc = sc;
         spec._mapWH = [Math.max(8, Math.ceil((m.w * spec._mapFit) / sc)), Math.max(8, Math.ceil((m.h * spec._mapFit) / sc))];
       }
@@ -1312,17 +1472,25 @@ function drawIdle(b, L, spec, style, env) {
       return 0;
     }
     case 'planet': {
-      const R = Math.max(5, Math.round(12 * cs));
+      // larger than in the wide (two-shot, singles): one ramp step darker, and in singles a smaller
+      // planet (its ring about the head's width) in the far part of the free side, away from the head
+      const dim = cs > 1.15;
+      const R = Math.max(5, Math.round((ts > 1 ? 8.5 : 12) * cs));
       for (const s of STARS) {
         const x = Math.round(s.u * env.k), y = Math.round(s.v * env.k);
         if (soft && s.c === 'steel') continue;
         plot(b, x, y, soft ? C[DARKER[s.c]] : C[s.c]);
       }
-      const box = pickBox(L, 4 * R, 2.4 * R, false);
-      const cx = (box.x0 + box.x1) / 2 + R * 0.2;
-      const cy = box.y0 + Math.max(R + 3, Math.min(bh(box) * 0.48, bh(box) - R - 3));
+      const box = pickBox(L, 4.2 * R, 2.6 * R, ts > 1);
+      let cx = (box.x0 + box.x1) / 2 + R * 0.2;
+      if (L.heads && ts > 1) {
+        // the far third of the box from the head, the ring kept inside it
+        const away = L.headCx < (box.x0 + box.x1) / 2 ? 1 : -1;
+        cx = Math.max(box.x0 + 2.1 * R, Math.min(box.x1 - 2.1 * R, cx + away * bw(box) * 0.18));
+      }
+      const cy = box.y0 + Math.max(R + 3, Math.min(bh(box) * 0.45, bh(box) - R - 3));
       const az = env.lod >= 2 ? env.frozenAz : planetAzimuth(env.t);
-      return drawPlanet(b, cx, cy, R, az);
+      return drawPlanet(b, cx, cy, R, az, dim);
     }
     case 'wordmark': {
       topFalloff(b, C.slate, Math.round(12 * cs));
@@ -1337,7 +1505,19 @@ function drawIdle(b, L, spec, style, env) {
       return 0;
     }
     case 'dial': {
-      const box = pickBox(L, 24 * ts, 24 * ts, false);
+      // the free box that holds the largest dial (the wide: the third beside Sam's head, r 14, not
+      // the short band above it)
+      let box = L.full;
+      if (L.heads) {
+        let best = -1;
+        for (const bx of [L.top, L.left, L.right]) {
+          const m = Math.min(bw(bx), bh(bx));
+          if (m > best) {
+            best = m;
+            box = bx;
+          }
+        }
+      }
       const r = Math.max(8, Math.floor((Math.min(bw(box), bh(box)) - 6) / 2));
       const rr = Math.min(r, Math.round(22 * cs));
       const cx = Math.round((box.x0 + box.x1) / 2), cy = Math.round(box.y0 + (bh(box) - 2 * rr) / 2 + rr);
@@ -1364,9 +1544,10 @@ function clockOf(spec, style, env) {
     const dt = env.t - spec.since;
     const end = MAP_ANIM[style.id] || MAP_ANIM.default;
     if (!(dt < end)) return -1; // settled: one last frame, then still
-    // the locator re-renders at 30 fps (15 at lod 1): drawWorldMap costs ~0.6 ms a frame, and on a
-    // dimmed 104 px wall the fly-in's zoom steps stay far below a pixel's worth of motion per frame
-    const rate = env.lod >= 1 ? 15 : 30;
+    // the locator re-renders at 15 fps (10 at lod 1): drawWorldMap plus the canvas read-back costs
+    // 1.5-2.5 ms of CPU a render, and on a dimmed 104 px wall (or a half-size one shown at 2x) the
+    // fly-in's eased zoom moves about a pixel per render; the settled frame is then kept
+    const rate = env.lod >= 1 ? 10 : 15;
     return Math.max(0, Math.floor(dt * rate));
   }
   if (spec.mode !== 'idle') return 0;
@@ -1553,8 +1734,8 @@ export function updateWall(req, styleIn, w, h, k, t, cam, opts, lod = 0) {
   const cut = isCut(cam, opts, style, t);
   if (cut) {
     // a new shot re-lays the wall out for its framing
-    if (S.shown) S.shown._lay = S.shown._mapWH = S.shown._mapDone = null;
-    if (S.next) S.next._lay = S.next._mapWH = S.next._mapDone = null;
+    if (S.shown) S.shown._lay = S.shown._mapWH = S.shown._mapDone = S.shown._picWH = null;
+    if (S.next) S.next._lay = S.next._mapWH = S.next._mapDone = S.next._picWH = null;
     S.aKey.cam = S.bKey.cam = NaN;
   }
   let changed = false;
@@ -1623,6 +1804,15 @@ function swapBuffers() {
   S.bKey = k;
 }
 
+/** The wall buffer's size in px for a camera, exactly as set.js wallRect rounds it. */
+const WSIZE = { w: 0, h: 0 };
+function wallSize(cam, k) {
+  const S = SET.screen;
+  WSIZE.w = Math.round(sxOf(cam, k, S.x1)) - Math.round(sxOf(cam, k, S.x0));
+  WSIZE.h = Math.round(syOf(cam, k, S.y1)) - Math.round(syOf(cam, k, S.y0));
+  return WSIZE;
+}
+
 const ORIGIN = { x: 0, y: 0, yf: 0 };
 function wallOrigin(cam) {
   const k = kAt(cam, SET.wallZ);
@@ -1649,21 +1839,37 @@ export function resetWall() {
 // ---------------------------------------------------------------------------
 // Warm-up: the costly tables, built before the first frame that needs them (set.js warmSets)
 
-/** Decode the land mask and build the globe / planet tables of the wide and two-shot sizes, and the idle text. */
+/**
+ * The wall's warm-up as small tasks (set.js warmStep): the land mask, the globe and planet tables of
+ * the sizes the framings use, and the idle text masks.
+ */
+export function wallWarmTasks() {
+  const tasks = [() => landMask()];
+  for (const R of [23, 24, 30, 34]) tasks.push(() => globeTable(R));
+  for (const R of [12, 13]) tasks.push(() => (planetTable(R), ringTable(R, false)));
+  for (const R of [18, 19, 20, 21, 23]) tasks.push(() => (planetTable(R), ringTable(R, true)));
+  // one dry run of the picture filter and mapper (the first real picture then runs optimised code)
+  tasks.push(() => {
+    const src = { w: 32, h: 18, u32: new Uint32Array(32 * 18).fill(0xff8a6a4a), id: -1 };
+    for (let i = 0; i < src.u32.length; i += 3) src.u32[i] = 0xff20304a;
+    filterPicture(src, 16, 9);
+    mapPicture(WARM_PIC, 16 * 9, 43);
+  });
+  tasks.push(() => {
+    for (const s of [1, 2]) {
+      textWidth('MONEY MINUTE', 'body', s);
+      stampText(WARM_PX, 1, 1, 'MONEY MINUTE', 0, 0, 0, 'body', s);
+      stampText(WARM_PX, 1, 1, '60', 0, 0, 0, 'body', s);
+    }
+  });
+  return tasks;
+}
+/** The whole wall warm-up at once. */
 export function warmWall() {
-  landMask();
-  for (const R of [23, 24, 30]) globeTable(R);
-  for (const R of [12, 13, 16]) {
-    planetTable(R);
-    ringTable(R);
-  }
-  for (const s of [1, 2]) {
-    textWidth('MONEY MINUTE', 'body', s);
-    stampText(WARM_PX, 1, 1, 'MONEY MINUTE', 0, 0, 0, 'body', s);
-    stampText(WARM_PX, 1, 1, '60', 0, 0, 0, 'body', s);
-  }
+  for (const fn of wallWarmTasks()) fn();
 }
 const WARM_PX = new Uint32Array(1);
+const WARM_PIC = new Uint32Array(16 * 9);
 
 // ---------------------------------------------------------------------------
 // Legacy entry points

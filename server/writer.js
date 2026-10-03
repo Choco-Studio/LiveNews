@@ -7,7 +7,7 @@
 // lead, no banter next to grave news...), whatever the writer was.
 import { parseCues, embedCues, describeActions, ACTIONS } from '../public/js/cues.js';
 import { isBreaking, plainTitle } from './news.js';
-import { claimGrounded, contentWords, groundQuote, headlineGrounded, inventedClaim, isGrave, numbersGrounded, numbersIn, numberWordsIn, qualifierConflict, quotationsGrounded, sameWord, sourceQualifier } from './facts.js';
+import { claimGrounded, contentWords, groundQuote, headlineGrounded, inventedClaim, isGrave, leansOnPrevious, numbersGrounded, numbersIn, numberWordsIn, qualifierConflict, quotationsGrounded, sameWord, sourceQualifier } from './facts.js';
 import { findPlaces, lookupPlace, placeSupported, snapLocation } from './gazetteer.js';
 
 export const EMOTIONS = ['neutral', 'happy', 'serious', 'surprised', 'sad', 'thinking'];
@@ -370,8 +370,12 @@ function toCut(words, i) {
   if (/^(?:the|a|an|its|their|his|her|our)$/i.test(next) || /^\p{Lu}/u.test(next) || /[^s]s$/i.test(next)) return false;
   // "switch to solar power to cut fuel costs": a purpose clause after a complete head ("to" + a verb we know:
   // "moved to relief camps" is a place, not a purpose).
+  // "Court orders Amsterdam airport [to cut night flights]": a verb that takes an object and an infinitive
+  // a few words back needs the "to ..." (without it the headline says something else).
+  if (words.slice(Math.max(1, i - 4), i - 1).some((w) => OBJECT_VERB.test(w))) return false;
   return PURPOSE_VERB.test(next) && !INFINITIVE_HEAD.test(words[i - 1] || '');
 }
+const OBJECT_VERB = /^(?:orders?|ordered|asks?|asked|urges?|urged|forces?|forced|allows?|allowed|tells?|told|requires?|required|lets|helps?|helped|pushes|pushed|pressures?|pressured|persuades?|persuaded|invites?|invited|encourages?|encouraged|wants?|wanted|expects?|expected|warns?|warned|calls?|called|bans|banned|permits?|permitted|obliges?|obliged|compels?|compelled)$/i;
 
 // Headline style drops articles; `hard` also drops them after a preposition ("on parts of Great Barrier Reef"),
 // except in fixed phrases ("in a month", "a week of use").
@@ -480,7 +484,9 @@ function shortenOnce(t, max, spoken) {
       if (t.length <= LIMITS.headline) return null;
       const ok = cuts.filter((c) => c.share >= 0.5 && c.place);
       const under = (list) => list.filter((x) => x !== t && x.length <= LIMITS.headline).sort((a, b) => b.length - a.length)[0];
-      return under(ok.map((c) => c.text)) || (spoken ? null : under([...compacted(ok).map((c) => c.text), compact, hard]));
+      // Still no room for its place: a cut that keeps most of the story without it (the map names the place).
+      const placeless = cuts.filter((c) => c.share >= 0.6 && !c.place);
+      return under(ok.map((c) => c.text)) || (spoken ? null : under([...compacted(ok).map((c) => c.text), compact, hard])) || under(placeless.map((c) => c.text));
     },
   ];
   for (const tier of tiers) {
@@ -506,12 +512,24 @@ function shortenOnce(t, max, spoken) {
  * The result is stable: shortening it again changes nothing.
  */
 export function shortHeadline(title, max = HEADLINE_MAX, { spoken = false } = {}) {
-  let t = clean(plainTitle(title), 200).replace(/[\s.!?;:,]+$/, '');
+  const limit = max || HEADLINE_MAX;
   // Shortened until nothing changes, so a second pass (the validator re-shortening a writer's headline) is a no-op.
-  for (let i = 0; i < 4; i++) {
-    const next = shortenOnce(t, max || HEADLINE_MAX, spoken);
-    if (next === t) break;
-    t = next;
+  const settle = (text, m) => {
+    let t = text;
+    for (let i = 0; i < 4; i++) {
+      const next = shortenOnce(t, m, spoken);
+      if (next === t) break;
+      t = next;
+    }
+    return t;
+  };
+  const start = clean(plainTitle(title), 200).replace(/[\s.!?;:,]+$/, '');
+  const t = settle(start, limit);
+  // A tight limit (NEWS IN 60's 36) never gives a longer headline than the usual one would: when nothing fits
+  // it, the usual cut, in the programme's own style, is the better miss.
+  if (limit < HEADLINE_MAX && t.length > limit) {
+    const alt = settle(settle(start, HEADLINE_MAX), limit);
+    if (alt.length < t.length) return alt;
   }
   return t;
 }
@@ -973,7 +991,8 @@ export function normalizeBulletin(
   for (const d of all) {
     const out = [];
     let spoken = 0;
-    for (const sentence of sentencesOf(d.tagged)) {
+    const list = sentencesOf(d.tagged);
+    for (const [index, sentence] of list.entries()) {
       const plain = stripTags(sentence);
       let s = sentence;
       // Stage directions on their own ride with the sentence before them.
@@ -996,7 +1015,10 @@ export function normalizeBulletin(
       const outlet = new Set(contentWords(d.story?.source || ''));
       // Against the intro's cold-open line the bar is lower: "A chipmaker has unveiled a new laptop processor"
       // after "Chipmaker unveils laptop processor" is the same news said twice.
-      if (out.map(stripTags).some((o) => repeats(plain, o, outlet)) || againstIntro.some((o) => repeats(plain, o, outlet, 0.7))) continue;
+      // A restatement the next sentence leans on stays ("The Panama Canal has reopened." before "The canal
+      // authority says 30 ships are waiting."): without it the lead would point at nothing.
+      const leanedOn = leansOnPrevious(stripTags(list[index + 1] || ''));
+      if (out.map(stripTags).some((o) => repeats(plain, o, outlet)) || (!leanedOn && againstIntro.some((o) => repeats(plain, o, outlet, 0.7)))) continue;
       out.push(s);
       spoken++;
     }

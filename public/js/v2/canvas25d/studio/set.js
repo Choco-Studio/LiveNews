@@ -6,6 +6,8 @@
 //   drawBackground(fr, cam, t, { style, wall, cut, shotSince, lod } = {})
 //   drawDesk(fr, cam, clipRows, accentOrStyle)
 //   wallRect(cam), wallFromScene(scene, style), setCacheEnabled(on), bgStats(), warmSet(id)
+//   warmStep(budgetMs) one idle slice of the warm-up; warmSets() all of it at once
+//   warmWallContent(wallReq, style, cam) a shot's picture / text prepared before its cut
 // The old forms drawBackground(frame, cam, t) / drawDesk(frame, cam, clipRows, C.red)
 // stay valid (public/lab/cast.html): they draw the current style (home look).
 //
@@ -28,9 +30,9 @@ import { C, Frame } from '../pixbuf.js';
 import { drawLogo, measureLogo } from '../../../logo.js';
 import { F, SET, kAt, sxOf, syOf } from './geometry.js';
 import { resolveStyle, styleFor, setStyle, currentStyle, STYLE_IDS } from './styles.js';
-import { updateWall, drawWallContent, wallFromScene, wallVersionOf, warmWall } from './wall.js';
+import { updateWall, drawWallContent, wallFromScene, wallVersionOf, wallWarmTasks, warmWallContent } from './wall.js';
 
-export { SET, setStyle, styleFor, wallFromScene, drawWallContent };
+export { SET, setStyle, styleFor, wallFromScene, drawWallContent, warmWallContent };
 
 const W = 384, H = 216;
 // Bayer 4x4 as integers 0..15 (the same matrix as pixbuf.js): a pixel takes the upper
@@ -91,8 +93,35 @@ const BAKED = new Map();
  * light, every pixel stays a palette colour, and the render is still one read per pixel.
  */
 function bakeWall(style) {
-  let b = BAKED.get(style.bakeKey);
+  const b = BAKED.get(style.bakeKey);
   if (b) return b;
+  // a bake already under way (warmStep) is finished first: the bakes share their scratch buffers
+  if (BAKING.gen && BAKING.key !== style.bakeKey) finishBaking();
+  if (!BAKING.gen) {
+    BAKING.key = style.bakeKey;
+    BAKING.gen = bakeSteps(style);
+  }
+  finishBaking();
+  return BAKED.get(style.bakeKey);
+}
+// the bake in progress (at most one): a generator that yields every few dozen texture rows, so the
+// warm-up can spread a bake over idle slices (warmStep) while a first use still bakes it at once
+const BAKING = { key: '', gen: null };
+function finishBaking() {
+  while (BAKING.gen && !BAKING.gen.next().done);
+  BAKING.gen = null;
+}
+/** Advance the bake in progress by one slice; true when it has finished. */
+function stepBaking() {
+  if (!BAKING.gen) return true;
+  if (BAKING.gen.next().done) {
+    BAKING.gen = null;
+    return true;
+  }
+  return false;
+}
+
+function* bakeSteps(style) {
   const lo = new Uint32Array(16), hi = new Uint32Array(16), tlo = new Uint32Array(16), thi = new Uint32Array(16);
   const tints = style.tints ? Object.entries(style.tints).map(([f, to]) => [C[f], C[to]]) : null;
   const tint = (c) => {
@@ -111,7 +140,8 @@ function bakeWall(style) {
   // (black), so only this window is computed (about a third of the texture). Pools and tints are
   // accumulated over their own bounding boxes, then one pass applies the shaping in the same order
   // as the light model: base + cove + pools + bezel spill, pool ceiling, lower-wall fall, ceiling,
-  // sides. ~3 ms per style instead of ~100 ms, so a programme change never stalls a frame.
+  // sides. About 15-25 ms of CPU per style on a quiet machine (more under load): warmStep() spreads
+  // it over idle slices, and a first use bakes it at once.
   const clampI = (v, a, z) => (v < a ? a : v > z ? z : v);
   const txa = clampI(Math.floor(-sd.x1 - TX0 - 1), 0, TW), txb = clampI(Math.ceil(sd.x1 - TX0 + 1), 0, TW);
   const tya = tp.to === 0 ? clampI(Math.floor(tp.y0 - TY0 - 1), 0, TH) : 0;
@@ -144,46 +174,39 @@ function bakeWall(style) {
   // scallops: the up/down wash of a wall sconce, narrow at the fixture and fanning out with distance,
   // brightest next to it; they add light, and warmth when the style has tints
   for (const sc of style.scallops || []) {
+    // the light leaves the shade's open ends (sc.gap above and below its centre): two cones as wide
+    // as the shade at the opening, fanning out and fading with the distance from it
+    const gap = sc.gap || 0;
     const reach = Math.max(sc.up, sc.down), hwMax = sc.w0 + sc.spread * reach;
     const xa = clampI(Math.floor(sc.X - hwMax - TX0 - 1), txa, txb), xb = clampI(Math.ceil(sc.X + hwMax - TX0 + 1), txa, txb);
-    const ya = clampI(Math.floor(sc.Y - sc.up - TY0 - 1), tya, TH), yb = clampI(Math.ceil(sc.Y + sc.down - TY0 + 1), tya, TH);
+    const ya = clampI(Math.floor(sc.Y - gap - sc.up - TY0 - 1), tya, TH), yb = clampI(Math.ceil(sc.Y + gap + sc.down - TY0 + 1), tya, TH);
     for (let ty = ya; ty < yb; ty++) {
       const dy = TY0 + ty + 0.5 - sc.Y;
-      const d = Math.abs(dy) / (dy < 0 ? sc.up : sc.down);
-      if (d >= 1) continue;
-      const hw = sc.w0 + sc.spread * Math.abs(dy);
+      const dist = Math.max(0, Math.abs(dy) - gap);
+      const reachY = dy < 0 ? sc.up : sc.down;
+      if (dist >= reachY) continue;
+      const hw = sc.w0 + sc.spread * dist;
       let i = (ty - tya) * lw + (xa - txa);
-      if (sc.beam) {
-        // a beam grazing the wall from a ceiling fixture: straight diverging edges (flat across with a
-        // 1-2 px edge), its light fading only along its length; the tint fades sooner, so its Bayer
-        // band falls on lit (ink) pixels: tint ↔ ink, never tint specks on black
-        const lightAlong = 1 - smooth((d - 0.35) / 0.65), tintAlong = 1 - smooth((d - 0.12) / 0.55);
-        for (let tx = xa; tx < xb; tx++, i++) {
-          const ax = Math.abs(TX0 + tx + 0.5 - sc.X) / hw;
-          if (ax >= 1) continue;
-          const across = Math.min(1, (1 - ax) / 0.2);
-          acc[i] += sc.amount * across * lightAlong;
-          if (tints) tv[i] = Math.max(tv[i], sc.tint * across * tintAlong);
-        }
-        continue;
-      }
-      // a wall-washer: brightest at the fixture, fading with distance
-      const fall = (1 - d) * (1 - 0.5 * d);
       for (let tx = xa; tx < xb; tx++, i++) {
-        const dx = (TX0 + tx + 0.5 - sc.X) / hw;
+        const ox = TX0 + tx + 0.5 - sc.X;
+        const dx = ox / hw;
         if (dx <= -1 || dx >= 1) continue;
-        const v = fall * (1 - dx * dx);
+        // a wall-washer: brightest at the opening, holding, then fading with distance (an S-curve:
+        // clean flat steps with short Bayer bands); the distance is measured on a slight ellipse, so
+        // the far end of each cone is a rounded scallop, not a cut straight across
+        const d = Math.hypot(dist, 0.55 * ox) / reachY;
+        if (d >= 1) continue;
+        const v = (1 - smooth(d)) * (1 - dx * dx);
         acc[i] += sc.amount * v;
         if (!tints) continue;
-        if (sc.hard) {
-          // a hard-edged warm (or coloured) core: flat inside v > hard with a 1-2 px Bayer edge, so the
-          // tint is one clean cluster in the beam, never specks scattered over the soft halo
-          const hv = (v - sc.hard) / 0.08 + 0.5;
-          if (hv > tv[i]) tv[i] = hv;
-        } else tv[i] += sc.tint * v;
+        // warm wherever the wash is the light: the tint's Bayer edge sits low in the wash, where the
+        // light is still ink (untinted), so the warm colour is one clean cluster with no specks
+        const hv = (v - sc.tintAt) / sc.tintBand + 0.5;
+        if (hv > tv[i]) tv[i] = hv;
       }
     }
   }
+  yield;
   // per-column side falloff
   if (!SIDE || SIDE.length < TW) SIDE = new Float64Array(TW);
   for (let tx = txa; tx < txb; tx++) {
@@ -191,8 +214,9 @@ function bakeWall(style) {
     SIDE[tx] = ax > sd.x0 ? 1 - smooth((ax - sd.x0) / (sd.x1 - sd.x0)) : 1;
   }
   const glow = style.glow, pm = style.poolMax, hasPm = pm !== undefined, top = RAMP.length - 1.01;
-  const lowCap = style.lowCap ?? 0.6; // the light the lower wall falls back to (COSMOS keeps its horizon glow)
+  const lowCap = style.lowCap ?? 0.6; // the light the lower wall falls back to
   for (let ty = tya; ty < TH; ty++) {
+    if (((ty - tya) & 31) === 31) yield;
     const Y = TY0 + ty + 0.5;
     let rowBase = style.base;
     if (cove) rowBase += (cove.slate - style.base) * smooth((Y - cove.y0) / (cove.y1 - cove.y0));
@@ -224,23 +248,33 @@ function bakeWall(style) {
       if (pos > top) pos = top;
       // clean clusters: flat ramp steps with the Bayer only in the band between them (a pixel
       // artist's posterised gradient), instead of dither over the whole pool
-      const q = Math.round(posterise(pos) * 16);
+      // a Bayer share within 2/16 of either end snaps to the flat step: a share of 1-2 cells in 16
+      // prints isolated orphan pixels (the owner: no stray pixels), so bands stay clean clusters
+      let q = Math.round(posterise(pos) * 16);
+      const qs = q & 15;
+      if (qs <= 2) q -= qs;
+      else if (qs >= 14) q += 16 - qs;
+      if (q > 16 * (RAMP.length - 1) - 1) q = 16 * (RAMP.length - 1) - 1;
       // 0..16 (bits 8-12): 16 tints every Bayer cell, so a full tint is a flat cluster, not a dot grid
-      const tq = tints ? Math.min(16, Math.round(band(tv[i]) * 16)) : 0;
+      let tq = tints ? Math.min(16, Math.round(band(tv[i]) * 16)) : 0;
+      if (tq <= 2) tq = 0;
+      else if (tq >= 14) tq = 16;
       tex[row + tx] = (tq << 8) | ((q >> 4) << 4) | (q & 15);
     }
   }
   // per texel: where its run of identical texels ends on its row (the render fills a whole run of a
   // flat ramp step with one native fill, and loops only over dithered runs)
+  yield;
   const end = new Uint16Array(TW * TH);
-  for (let ty = 0; ty < TH; ty++) {
+  // the rows above the live window are black end to end: one run each
+  end.fill(TW, 0, tya * TW);
+  for (let ty = tya; ty < TH; ty++) {
+    if (((ty - tya) & 63) === 63) yield;
     const row = ty * TW;
     end[row + TW - 1] = TW;
     for (let tx = TW - 2; tx >= 0; tx--) end[row + tx] = tex[row + tx + 1] === tex[row + tx] ? end[row + tx + 1] : tx + 1;
   }
-  b = { tex, end, lo, hi, tlo, thi };
-  BAKED.set(style.bakeKey, b);
-  return b;
+  BAKED.set(style.bakeKey, { tex, end, lo, hi, tlo, thi });
 }
 let SCRATCH = null, SIDE = null;
 
@@ -250,65 +284,105 @@ export function warmSet(id) {
 }
 
 /**
- * Pre-bake every programme's set NOW, synchronously: the baked wall light of each style, the wall's
- * land mask and globe / planet tables, and the desk logo plate (DOM only). Idempotent and cheap
- * after the first call (~10-20 ms in all on a laptop). The browser also runs it by itself in
- * small idle slices right after this module loads, and drawBackground still bakes synchronously
- * on first use, so a frame is never presented without its set (owner, 21:05). Returns
+ * The warm-up as a list of small tasks: each programme's bake (in slices), the wall's tables (land
+ * mask, globes, planets, idle text), the desk logo plate (DOM only) and one dry run of the raster
+ * loops per programme (so the first frame on air runs optimised code, not the JIT's first pass).
+ */
+function warmPlan(ids) {
+  const plan = [];
+  for (const id of ids) plan.push({ style: resolveStyle(id) });
+  for (const fn of wallWarmTasks()) plan.push({ fn });
+  plan.push({ fn: () => { for (let s = 1; s <= 3; s++) logoPixels(s); } });
+  for (const id of ids) for (const pass of [0, 1]) plan.push({ fn: () => warmDraw(resolveStyle(id), pass) });
+  return plan;
+}
+const WARM = { plan: null, i: 0, ids: '' };
+
+/**
+ * One slice of the warm-up: runs warm-up tasks (a bake advances by a few dozen texture rows per
+ * task) until about `budgetMs` have passed, at least one. Returns { done, left, ms }. Call it from
+ * idle time (requestIdleCallback) until done; it is what this module runs by itself after loading.
+ */
+export function warmStep(budgetMs = 4, ids = STYLE_IDS) {
+  const t0 = now();
+  const key = ids.join(',');
+  if (!WARM.plan || WARM.ids !== key) {
+    WARM.plan = warmPlan(ids);
+    WARM.i = 0;
+    WARM.ids = key;
+  }
+  const plan = WARM.plan;
+  while (WARM.i < plan.length) {
+    const task = plan[WARM.i];
+    if (task.style) {
+      const k = task.style.bakeKey;
+      if (BAKED.has(k)) {
+        WARM.i++;
+        continue;
+      }
+      if (BAKING.gen && BAKING.key !== k) finishBaking();
+      if (!BAKING.gen) {
+        BAKING.key = k;
+        BAKING.gen = bakeSteps(task.style);
+      }
+      if (stepBaking()) WARM.i++;
+    } else {
+      task.fn();
+      WARM.i++;
+    }
+    if (now() - t0 >= budgetMs) break;
+  }
+  return { done: WARM.i >= plan.length, left: plan.length - WARM.i, ms: now() - t0 };
+}
+
+/**
+ * Pre-bake every programme's set NOW, synchronously (warmStep without a budget): the baked wall
+ * light of each style, the wall's tables, the desk logo plate and the raster loops' first run.
+ * Idempotent and free after the first call. The first call costs about 150-250 ms of CPU in all
+ * (each bake 15-45 ms, the land mask and tables ~20 ms, the dry runs ~40 ms; more under load), so
+ * prefer calling warmStep(budget) from idle slots. drawBackground still bakes synchronously on
+ * first use, so a frame is never presented without its set (owner, 21:05). Returns
  * { ms, baked: [bakeKey...] }.
  */
 export function warmSets(ids = STYLE_IDS) {
-  const a = typeof performance !== 'undefined' ? performance.now() : Date.now();
-  for (const id of ids) bakeWall(resolveStyle(id));
-  warmWall();
-  for (let s = 1; s <= 3; s++) logoPixels(s);
-  warmDraw(ids);
-  const b = typeof performance !== 'undefined' ? performance.now() : Date.now();
-  return { ms: b - a, baked: [...BAKED.keys()] };
+  const a = now();
+  while (!warmStep(Infinity, ids).done);
+  return { ms: now() - a, baked: [...BAKED.keys()] };
 }
+
 /**
- * Run the set's raster loops once per style into a scratch frame (wide camera, nothing cached, no
+ * Run the set's raster loops once for a style into a scratch frame (wide camera, nothing cached, no
  * wall state touched), so the first frame on air runs optimised code instead of paying the JIT.
  */
-let warmed = false;
-function warmDraw(ids) {
-  if (warmed) return;
-  warmed = true;
-  const fr = new Frame();
-  const cam = { x: 0, y: -60, z: 0, zoom: 1, hy: 52, soft: 0 };
-  const clip = new Int16Array(W);
-  for (let pass = 0; pass < 2; pass++) {
-    for (const id of ids) {
-      const style = resolveStyle(id);
-      cam.soft = pass;
-      const r = wallRect(cam, RECT2);
-      renderWall(fr, cam, bakeWall(style), r.x0 - 3, r.y0 - 3, r.x1 + 3, r.y1 + 3, H);
-      drawWallDetails(fr, cam, style);
-      drawFlats(fr, cam, style, !!pass);
-      drawFloor(fr, cam, style);
-      rasterDesk(fr, cam, clip, style.deskLine, style);
-    }
-  }
+let WARM_FR = null;
+const WARM_CLIP = new Int16Array(W);
+function warmDraw(style, pass) {
+  if (!WARM_FR) WARM_FR = new Frame();
+  const fr = WARM_FR;
+  const cam = { x: 0, y: -60, z: 0, zoom: 1, hy: 52, soft: pass };
+  const r = wallRect(cam, RECT2);
+  renderWall(fr, cam, bakeWall(style), r.x0 - 3, r.y0 - 3, r.x1 + 3, r.y1 + 3, H);
+  drawWallDetails(fr, cam, style);
+  drawFlats(fr, cam, style, !!pass);
+  drawFloor(fr, cam, style);
+  rasterDesk(fr, cam, WARM_CLIP, style.deskLine, style);
 }
 
 /** Is a programme's set baked (labs, tests, the integrator's warm-up check)? */
 export const setReady = (id) => BAKED.has(resolveStyle(id).bakeKey);
 
 // The home look is baked as the module loads (every first frame of a lab or of the channel needs it);
-// the other programmes follow in idle slices in the browser, one per slice.
+// the rest of the warm-up follows by itself in the browser, in slices of about 4 ms every 30 ms.
 bakeWall(styleFor('world-now'));
 if (typeof document !== 'undefined' && typeof setTimeout === 'function') {
-  const queue = [...STYLE_IDS];
   const step = () => {
-    const id = queue.shift();
-    if (!id) return;
+    let done = true;
     try {
-      if (id === 'world-now') warmWall();
-      bakeWall(styleFor(id));
+      done = warmStep(4).done;
     } catch {
       /* first use bakes it */
     }
-    setTimeout(step, 30);
+    if (!done) setTimeout(step, 30);
   };
   setTimeout(step, 30);
 }
@@ -558,18 +632,16 @@ function drawWallDetails(fr, cam, style) {
       layerVLine(fr, cam, Zw, X + sx * 2.1, -104, 21, C.ink, 1.4);
       layerVLine(fr, cam, Zw, X, -104, 21, C.steel, 2.8);
     }
-  } else if (style.practical === 'warm') {
-    // the warm pair: slim bronze sconces (a darker back plate, the housing lit from camera-left, a
-    // 1 px cream diffuser slot and the lit lips where the light leaves up and down); their washes
-    // are baked into the wall light (styles.js scallops)
-    for (const sx of [-1, 1]) {
-      const X = sx * 196;
-      layerRect(fr, cam, Zw, X - 3.6, -76, X + 3.6, -56, C.maroon);
-      layerRect(fr, cam, Zw, X - 2.2, -78, X + 2.2, -54, C.brown);
-      layerRect(fr, cam, Zw, X - 2.2, -78, X - 0.8, -54, C.tanShade);
-      layerRect(fr, cam, Zw, X - 0.7, -74, X + 0.7, -58, C.cream);
-      layerHLine(fr, cam, Zw, X - 2.2, X + 2.2, -78.4, C.tan);
-      layerHLine(fr, cam, Zw, X - 2.2, X + 2.2, -53.6, C.tanShade);
+  } else if (style.practical === 'warm' && style.sconces) {
+    // the warm pair: bronze wall sconces at the heart of their washes (styles.js scallops). A dark
+    // back plate on the wall, an open-ended bronze shade lit from camera-left (tanShade, its shadow
+    // side brown), and cream lips at both ends where the light leaves up and down
+    for (const X of style.sconces) {
+      layerRect(fr, cam, Zw, X - 5, -79, X + 5, -53, C.maroon);
+      layerRect(fr, cam, Zw, X - 3.5, -77, X + 3.5, -55, C.brown);
+      layerRect(fr, cam, Zw, X - 3.5, -77, X, -55, C.tanShade);
+      layerHLine(fr, cam, Zw, X - 3.5, X + 3.5, -77.2, C.cream);
+      layerHLine(fr, cam, Zw, X - 3.5, X + 3.5, -54.8, C.tan);
     }
   }
 }
@@ -615,14 +687,15 @@ function drawFlats(fr, cam, style, soft) {
     layerVLine(fr, cam, Zf, inner + sx * 2, -400, SET.floorY, C.ink, 2);
     const lx = sx * 214;
     if (style.practical === 'cool') {
-      // a tall frosted strip: slate housing, fog core, a silver line when in focus (static, no glow)
-      layerRect(fr, cam, Zf, lx - 3, -190, lx + 3, -20, C.slate);
-      layerRect(fr, cam, Zf, lx - 1.5, -184, lx + 1.5, -26, soft ? C.steel : C.fog);
-      if (!soft) layerVLine(fr, cam, Zf, lx - 0.5, -176, -34, C.silver, 1);
+      // a frosted strip below the dark ceiling band (it starts at y ~15 in the wide): slate housing, a
+      // steel core and a 1 px fog line when in focus (static, no glow, never brighter than the faces)
+      layerRect(fr, cam, Zf, lx - 3, -104, lx + 3, -20, C.slate);
+      layerRect(fr, cam, Zf, lx - 1.5, -100, lx + 1.5, -24, soft ? C.slate : C.steel);
+      if (!soft) layerVLine(fr, cam, Zf, lx - 0.5, -96, -28, C.fog, 1);
     } else if (style.practical === 'off' || style.practical === 'warm') {
       // the strip is there but unlit
-      layerRect(fr, cam, Zf, lx - 3, -190, lx + 3, -20, C.ink);
-      layerRect(fr, cam, Zf, lx - 1.5, -184, lx + 1.5, -26, C.black);
+      layerRect(fr, cam, Zf, lx - 3, -104, lx + 3, -20, C.ink);
+      layerRect(fr, cam, Zf, lx - 1.5, -100, lx + 1.5, -24, C.black);
     }
   }
 }
@@ -826,7 +899,9 @@ function rasterDesk(fr, cam, clipRows, led, style) {
   const topC = C[style.deskTop] || C.slate;
   const tech = style.deskTop === 'steel';
   // the front panel: ink over a darker lower band (TECH BYTES' plinth: slate over ink)
-  const panelHi = tech ? C.slate : C.ink, panelLo = tech ? C.ink : C.black;
+  // (the plinth's lit face ends at the reveal, above y 150 in the wide: below it the lower panel is
+  // black like every other desk, so the graphics zone stays the darkest)
+  const panelHi = tech ? C.slate : C.ink, panelLo = C.black;
   const refName = REFLECT[nameOfLed(led)];
   const refC = refName ? C[refName] : 0;
   // the front's module joints: 1 px recessed seams at fixed world X, found on the front curve
@@ -859,15 +934,18 @@ function rasterDesk(fr, cam, clipRows, led, style) {
     const yt = DFT[jf] + (DFT[jf + 1] - DFT[jf]) * uf;
     const ybot = DFB[jf] + (DFB[jf + 1] - DFB[jf]) * uf;
     const turn = Math.abs(DNX[jf] + (DNX[jf + 1] - DNX[jf]) * uf);
-    const top0 = inB ? Math.round(Math.min(yb, yt)) : Math.round(yt);
+    // one curve for the desk's lines: the silver edge's row, and the back edge and the LED at whole
+    // row offsets from it that change slowly, so the three step together along the curve (rounded
+    // separately they stepped at different x and the edge read jagged)
     const top1 = Math.round(yt);
+    const top0 = inB ? top1 - Math.max(0, Math.round(yt - Math.min(yb, yt))) : top1;
     const bot = Math.min(fr.h, Math.round(ybot));
     clipRows[x] = Math.max(0, top0);
     // the curved ends turn away from the key: two flat facets, one and two steps darker
     const facet = turn > 0.78 ? 2 : turn > 0.46 ? 1 : 0;
     const kz = (ybot - yt) / D.deskH;
     // row boundaries on the panel (world Y → screen row, pixel-centre rule)
-    const ledRow = Math.round(yt + LED_Y * kz); // exactly 1 px per column, wherever the curve puts it
+    const ledRow = top1 + Math.max(1, Math.round(LED_Y * kz)); // exactly 1 px per column, under the edge
     const rSplit = Math.ceil(yt + PANEL_SPLIT * kz - 0.5), rKick = Math.ceil(yt + (D.deskH - 8) * kz - 0.5);
     const cTop = facetDim(topC, facet, topC), cFascia = facetDim(C.slate, facet, topC);
     const cHi = facetDim(panelHi, facet, topC), cLo = facetDim(panelLo, facet, topC), cKick = C.black;

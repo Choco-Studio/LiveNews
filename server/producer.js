@@ -71,7 +71,7 @@ export class Producer {
     const avoid = wanted.length ? (s) => (wanted.some((f) => f(s)) ? 0.5 : 1) : null;
     // Long programmes (pace: up to ~10 min) need a deeper pool than the default 12: at least 1.5 x their stories.
     const pool = Math.max(this.config.candidatePool, Math.ceil((program.stories || 0) * 1.5));
-    return this.news.candidates(pool, { categories: program.categories, ...(avoid ? { avoid } : {}), ...(program.beat ? { beat: program.beat } : {}) });
+    return this.news.candidates(pool, { categories: program.categories, fill: true, ...(avoid ? { avoid } : {}), ...(program.beat ? { beat: program.beat } : {}) });
   }
 
   canProduce(channel, programId) {

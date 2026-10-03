@@ -24,6 +24,11 @@
 //   - CUT GUARD against ACTUAL cuts (cut(T), the Stage reports every real cut):
 //     a gesture due in [T, T + cutGuard) is shifted to T + cutGuard if that
 //     moves it by <= 0.3 s, otherwise dropped; nods, looks and emotions are exempt;
+//   - the listener's TURN GLANCE (a look whose why starts with 'turn') is never
+//     spent off screen: due while the shot on air does not show that listener
+//     (canSee(slot), from the Stage), it is held and fires 0.25 s after the next
+//     real cut that shows the listener, if that comes within 15 s and before the
+//     speech ends; otherwise it is dropped;
 //   - after the speech ends, unfired events planned up to 2.5 s past the end
 //     keep their offset from the end; later ones are dropped (ANALYSIS bug 9);
 //     interrupted speech (N key, stop) drops everything still pending;
@@ -41,8 +46,11 @@ const DRIFT = 0.75; // s of sentence-start drift that turns a recorded plan to t
 const STALL = 0.1; // s between two ticks beyond which a sentence start's timing is not trusted
 const EXEMPT = new Set(['nod']);
 const KINDS = new Set(['gesture', 'look', 'emotion']);
+export const HOLD_MAX = 15; // s a held turn glance may wait for a shot that shows the listener
+export const AFTER_CUT = 0.25; // s after that cut it fires (the approved glance's delay)
+const TURN = /^turn/;
 
-const W_WAIT = 0, W_DUE = 1, W_DONE = 2;
+const W_WAIT = 0, W_DUE = 1, W_DONE = 2, W_HELD = 3;
 
 export class CueClock {
   /** @param opts { log?: (msg) => void, onFire?: (event, slot, t) => void } */
@@ -52,7 +60,9 @@ export class CueClock {
     this.log = log;
     this.onFire = onFire;
     this.entries = [];
-    this.stats = { fired: 0, shifted: 0, dropped: 0, cleared: 0 };
+    this.stats = { fired: 0, shifted: 0, dropped: 0, cleared: 0, held: 0, released: 0 };
+    // (slot) => does the shot on air show that presenter? Set by the Stage; null = always
+    this.canSee = null;
     this.lastCut = -Infinity;
     this.lastTick = -Infinity; // renderer time of the previous tick (stall detection)
     this.reset();
@@ -134,6 +144,7 @@ export class CueClock {
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
       if (e.state === W_DONE) continue;
+      if (e.state === W_HELD && !this.release(e, t)) continue;
       if (e.state === W_WAIT && !this.schedule(e, t, ctx)) continue;
       if (t < e.dueAt) continue;
       // cut guard: no gesture starts in the first `guard` s of a shot
@@ -147,6 +158,13 @@ export class CueClock {
           e.state = W_DONE;
           this.stats.dropped++;
         }
+        continue;
+      }
+      // the listener's turn glance waits for a shot that shows the listener
+      if (ev.kind === 'look' && this.canSee && ev.slot !== ctx.speaker && TURN.test(ev.why || '') && !this.canSee(ev.slot)) {
+        e.state = W_HELD;
+        e.heldAt = t;
+        this.stats.held++;
         continue;
       }
       e.state = W_DONE;
@@ -209,6 +227,20 @@ export class CueClock {
         }
       }
     }
+  }
+
+  /** A held turn glance: due AFTER_CUT s after a later real cut that shows its slot; dropped when too late. */
+  release(e, t) {
+    if (this.ended !== null || t - e.heldAt > HOLD_MAX) {
+      e.state = W_DONE;
+      this.stats.dropped++;
+      return false;
+    }
+    if (!(this.lastCut > e.heldAt) || !this.canSee?.(e.ev.slot)) return false;
+    e.state = W_DUE;
+    e.dueAt = this.lastCut + AFTER_CUT;
+    this.stats.released++;
+    return true;
   }
 
   /** Decide when a waiting entry is due; returns true once it has a due time. */

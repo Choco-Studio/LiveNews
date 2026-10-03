@@ -151,11 +151,12 @@ export function quietIntervals(log, origin) {
  * stereo result in window.__beds (and window.__bedsDry: the same cues with no
  * speech, for measuring the duck). Returns a small summary.
  */
-export async function renderBedsInPage({ engine, cues, speech, seconds, sampleRate, dry, stories = 'soft' }) {
+export async function renderBedsInPage({ engine, cues, speech, seconds, sampleRate, dry, stories = 'soft', parallel = true }) {
   const sr = sampleRate;
   const len = Math.max(1, Math.ceil(seconds * sr));
   let version = engine;
   const run = async (withSpeech) => {
+    const tb = performance.now();
     const ctx = new OfflineAudioContext(2, len, sr);
     const out = ctx.createGain();
     out.connect(ctx.destination);
@@ -222,18 +223,19 @@ export async function renderBedsInPage({ engine, cues, speech, seconds, sampleRa
       } else music.speak(e.speak, e.t);
     }
     music.pump(seconds + 2);
+    const tr = performance.now();
     const buf = await ctx.startRendering();
-    return { L: buf.getChannelData(0), R: buf.getChannelData(1), log: music.log(), actions };
+    return { L: buf.getChannelData(0), R: buf.getChannelData(1), log: music.log(), actions, ms: { build: Math.round(tr - tb), render: Math.round(performance.now() - tr) } };
   };
-  const wet = await run(true);
+  // The dry render (no speech, for the duck measurement) is independent of the
+  // wet one: each OfflineAudioContext renders on its own thread, so both run at
+  // once (a long show's beds took 2 x 10 min one after the other).
+  const [wet, d] = parallel ? await Promise.all([run(true), dry ? run(false) : null]) : [await run(true), dry ? await run(false) : null];
   window.__beds = [wet.L, wet.R];
-  if (dry) {
-    const d = await run(false);
-    window.__bedsDry = [d.L, d.R];
-  }
+  if (d) window.__bedsDry = [d.L, d.R];
   let peak = 0;
   for (const ch of window.__beds) for (let i = 0; i < ch.length; i += 7) peak = Math.max(peak, Math.abs(ch[i]));
-  return { version, samples: len, peak, log: (wet.log || []).slice(-80), actions: wet.actions };
+  return { version, samples: len, peak, log: (wet.log || []).slice(-80), actions: wet.actions, ms: { wet: wet.ms, dry: d?.ms ?? null } };
 }
 
 /** Runs in the browser: base64 of a slice of window.__beds / __bedsDry channel `ch`. */

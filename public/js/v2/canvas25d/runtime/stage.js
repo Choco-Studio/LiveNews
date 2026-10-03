@@ -42,6 +42,7 @@ export const STUDIO_SHOTS = new Set(['wide', 'close']);
 const CLOCK_REBASE = 840; // s of rig time before the rig clock moves back (at the next cut)
 const PRUNE_EVERY = 2; // s
 const W = 384;
+const HEAD_HALF = 10; // px at scale 1: half a head plus its hair, from the seat's centre line
 
 // Every programme's set variant, baked ahead of air (warmSets): the owner's 21:05 blocker, never a
 // frame without the set. set.js bakes synchronously on first use anyway; warming moves that cost
@@ -173,6 +174,10 @@ export class Stage {
     this.lod = 0; // detail level from the watchdog (0..2)
     // PACE trace (no-op outside the showcase recorder): every gesture / look / emotion the rig performs
     this.clock = new CueClock({ log: (m) => this.log(m), onFire: (ev, slot) => paceTrace({ k: 'perf', kind: ev.kind, slot, name: ev.name || ev.target || null, why: ev.why || null }) });
+    // who the shot on air shows (per slot, measured at every cut): the cue clock holds a
+    // listener's turn glance until the viewer can see that listener
+    this.inView = {};
+    this.clock.canSee = (slot) => this.inView[slot] === true;
     this.key = null;
     this.actors = [];
     this.frames = {};
@@ -374,6 +379,7 @@ export class Stage {
     spec.move = scene.cameraMove || null;
     this.moveSince = moveStart(scene, t);
     this.base = this.frameCamera(spec, scene);
+    this.measureView(scene);
     // SET shows the picture on the wall itself: the inset box only when this framing hides the wall
     if (this.inset && typeof SETM.wallFromScene === 'function' && wallVisible(this.base) >= INSET_AREA) this.inset = null;
     // A "cut" to the identical picture (a chat hand-over on the same wide: new focus, same
@@ -392,6 +398,18 @@ export class Stage {
       }
     }
     wall.since = this.visibleSince;
+  }
+
+  /** inView[slot]: does this shot show that presenter's head whole (studio shots only)? Once per cut. */
+  measureView(scene) {
+    const studio = STUDIO_SHOTS.has(scene.shot) && !!this.base;
+    const k = studio ? kAt(this.base, SET.presenterZ) : 0;
+    const s = Math.max(0.5, Math.round(22 * k) / 22);
+    for (let i = 0; i < this.list.length; i++) {
+      const it = this.list[i];
+      const x = studio ? sxOf(this.base, k, it.X) : -1e9;
+      this.inView[it.slot] = studio && x - HEAD_HALF * s >= 0 && x + HEAD_HALF * s <= W;
+    }
   }
 
   frameCamera(spec, scene) {

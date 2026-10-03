@@ -44,7 +44,7 @@
 import { LIBRARY } from './library.js';
 import { ARMS } from './arms.js';
 import { HEADS } from './heads.js';
-import { BEATS } from './beats.js';
+import { BEATS, FAR_BEATS } from './beats.js';
 
 export const REST = {
   wrist: [-5.6, 19.3, 13.5],
@@ -159,6 +159,30 @@ export function registerVariants(defs) {
   }
 }
 
+// Mirroring a one-handed definition onto the far arm (partner space is symmetric: REST.wristF is
+// REST.wrist with x negated, and so on): near/far channels swap, x components and the sideways head
+// channels change sign. Used for the `<variant>_far` beats, so the planner can pick the hand per
+// instance with nothing but the variant name (the runtime's cue clock forwards name/variant/n/amp/speed).
+const SWAP = { wrist: 'wristF', wristF: 'wrist', dir: 'dirF', dirF: 'dir', curl: 'curlF', curlF: 'curl', spread: 'spreadF', spreadF: 'spread', facing: 'facingF', facingF: 'facing', sup: 'supF', supF: 'sup', pole: 'poleF', poleF: 'pole', shN: 'shF', shF: 'shN' };
+const NEG_X = new Set(['wrist', 'wristF', 'dir', 'dirF', 'pole', 'poleF']);
+const NEG = new Set(['yaw', 'roll', 'hx', 'bx', 'lookX']);
+
+/** A fresh definition: `d` performed with the other arm (timing fields kept). */
+export function mirrorDef(d) {
+  const tracks = {};
+  for (const [ch, keys] of Object.entries(d.tracks)) {
+    if (ch === 'reach') continue; // the glasses reach is the near hand's own
+    tracks[SWAP[ch] || ch] = keys.map((k) => {
+      let v = k[1] === 'R' ? REST[ch] : k[1];
+      if (NEG_X.has(ch)) v = [-v[0], v[1], v[2]];
+      else if (NEG.has(ch)) v = -v;
+      else if (Array.isArray(v)) v = v.slice();
+      return k.length > 2 ? [k[0], v, k[2]] : [k[0], v];
+    });
+  }
+  return { dur: d.dur, stroke: d.stroke, apex: d.apex, hold: d.hold, focus: d.focus === 'near' ? 'far' : d.focus, tracks };
+}
+
 /**
  * The definition an event plays: its variant when the gesture has one by that name, the
  * count-specific definition when `n` is given, else the base definition (null for unknown names).
@@ -190,6 +214,8 @@ registerGestures(LIBRARY);
 registerGestures(ARMS);
 registerGestures(HEADS);
 registerVariants(BEATS);
+// the far-hand versions of the one-handed beats (`beat_far`, `offer_far`, ...)
+registerVariants(Object.fromEntries(Object.entries(FAR_BEATS).map(([name, list]) => [name, Object.fromEntries(list.map((v) => [`${v}_far`, mirrorDef(GESTURES[name].variants[v])]))])));
 
 /** The 7 gestures in the order the rig demo performs them. */
 export const DEMO_SEQUENCE = ['raise_hand', 'wave', 'point_screen', 'nod', 'look_partner', 'shrug', 'count'];

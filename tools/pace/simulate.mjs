@@ -11,7 +11,9 @@
 //
 // --pool sets the producer's candidate pool (CANDIDATE_POOL; the server default 12
 // caps how many stories a long programme can choose from); --channel tries another line-up
-// (a copy of config/channel.json) without touching the shared one.
+// (a copy of config/channel.json) without touching the shared one; --per-source N lifts the desk's
+// per-outlet cap on candidates (3: five offline outlets give WORLD NOW at most 9 stories) to measure
+// what a scaled cap would air.
 
 import fs from 'node:fs';
 
@@ -35,6 +37,11 @@ const pool = Number(arg('pool', config.candidatePool));
 const channel = arg('channel') ? loadChannel(arg('channel')) : loadChannel();
 const desk = new NewsDesk({ log: quiet });
 await desk.refresh();
+if (arg('per-source')) {
+  const cands = desk.candidates.bind(desk);
+  const per = Number(arg('per-source'));
+  desk.candidates = (n, o = {}) => cands(n, { ...o, perSource: per });
+}
 const chain = new ProviderChain([createMockProvider()], { record() {} }, { log: quiet });
 const producer = new Producer({ config: { ...config, candidatePool: pool, reviewPass: false }, newsDesk: desk, chain, log: quiet });
 

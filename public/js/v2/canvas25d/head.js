@@ -63,6 +63,53 @@ export function faceInverse(H, x, y, yaw) {
 }
 
 // ---------------------------------------------------------------------------
+// Allocation-free faceX for per-frame feature drawing (face.js, glasses.js).
+// Doubles passed to (or returned from) a call that is not inlined are boxed as heap
+// numbers, so the per-frame callers pass their inputs and read the result through
+// WRAP: [0] x, [1] y, [2] yaw, [3] protrude (in), [4] the wrapped x (out). The head's
+// half-width comes from a table per head shape (built once; faceX uses jaw 0).
+
+export const WRAP = new Float64Array(5);
+const WRAP_STEP = 0.02;
+const WRAP_LUTS = new WeakMap();
+let wrapH = null, wrapLut = null;
+
+/** Select the head shape (L.head) for the next wrapX() calls. */
+export function wrapBegin(H) {
+  if (wrapH === H) return;
+  let lut = WRAP_LUTS.get(H);
+  if (!lut) {
+    const n = Math.ceil((H.chinY - 0.5 - (H.top + 1)) / WRAP_STEP) + 2;
+    lut = new Float32Array(Math.max(2, n));
+    for (let i = 0; i < lut.length; i++) lut[i] = Math.max(1, headHW(H, Math.min(H.chinY - 0.5, H.top + 1 + i * WRAP_STEP), 0));
+    WRAP_LUTS.set(H, lut);
+  }
+  wrapH = H;
+  wrapLut = lut;
+}
+
+/** faceX(H, WRAP[0], WRAP[1], WRAP[2], WRAP[3]) → WRAP[4], for the head chosen by wrapBegin. */
+export function wrapX() {
+  const x = WRAP[0], yaw = WRAP[2];
+  if (!yaw) {
+    WRAP[4] = x;
+    return;
+  }
+  const H = wrapH, y = WRAP[1];
+  let i = Math.round((y - (H.top + 1)) / WRAP_STEP);
+  if (i < 0) i = 0;
+  else if (i >= wrapLut.length) i = wrapLut.length - 1;
+  const hw = wrapLut[i];
+  let r = x / hw;
+  if (r < -0.99) r = -0.99;
+  else if (r > 0.99) r = 0.99;
+  const a = Math.asin(r) + yaw;
+  let jy = (y - H.cheekY) / (H.chinY - H.cheekY);
+  jy = jy < 0 ? 0 : jy > 1 ? 1 : jy;
+  WRAP[4] = hw * Math.sin(a) + Math.sin(yaw) * (WRAP[3] + 1.3 * jy);
+}
+
+// ---------------------------------------------------------------------------
 // Head frame: head-local units → screen, with roll; yaw/pitch handled by faceX
 
 /** The jaw never drops more than this many screen pixels (calm speech at every scale). */
@@ -71,44 +118,55 @@ export const JAW_MAX_PX = 2;
 export function headFrame(L, sk, toS, s) {
   const h = sk.head;
   const [hx, hy] = toS(L.headAt[0] + h.x, L.headAt[1] + h.y);
-  const roll = h.roll;
-  const cr = Math.cos(roll), sr = Math.sin(roll);
-  // snap the head origin so a still head is a still picture
-  const cx = Math.round(hx), cy = Math.round(hy);
-  return {
-    L,
-    cx,
-    cy,
-    s,
-    roll,
-    cr,
-    sr,
-    yaw: h.yaw,
-    pitch: h.pitch,
-    // units; capped so the chin travels at most JAW_MAX_PX on screen
-    jaw: Math.max(0, Math.min(sk.face.jaw || 0, JAW_MAX_PX / s)),
-    toScreen(x, y) {
-      return [cx + s * (x * cr - y * sr), cy + s * (x * sr + y * cr)];
-    },
-    toLocal(px, py) {
-      const dx = px - cx, dy = py - cy;
-      return [(dx * cr + dy * sr) / s, (-dx * sr + dy * cr) / s];
-    },
-    // Allocation-free variants for per-pixel loops (same maths; `out` is a
-    // caller-owned 2-element array). toScreen/toLocal keep their [x, y] return
-    // value because cast files destructure it (CONTRACTS "head frame").
-    toScreenInto(x, y, out) {
-      out[0] = cx + s * (x * cr - y * sr);
-      out[1] = cy + s * (x * sr + y * cr);
-      return out;
-    },
-    toLocalInto(px, py, out) {
-      const dx = px - cx, dy = py - cy;
-      out[0] = (dx * cr + dy * sr) / s;
-      out[1] = (-dx * sr + dy * cr) / s;
-      return out;
-    },
-  };
+  // units; capped so the chin travels at most JAW_MAX_PX on screen
+  return new HeadFrame(L, hx, hy, s, h.roll, h.yaw, h.pitch, Math.max(0, Math.min(sk.face.jaw || 0, JAW_MAX_PX / s)));
+}
+
+/**
+ * The head frame: fields L, cx, cy, s, roll, cr, sr, yaw, pitch, jaw (and gb, set by
+ * the caller); methods on the prototype (one object per call, no closures):
+ * toScreen/toLocal keep their [x, y] return value because cast files destructure it
+ * (CONTRACTS "head frame"); the Into variants write a caller-owned 2-element array.
+ */
+class HeadFrame {
+  constructor(L, hx, hy, s, roll, yaw, pitch, jaw) {
+    this.L = L;
+    // snap the head origin so a still head is a still picture
+    this.cx = Math.round(hx);
+    this.cy = Math.round(hy);
+    this.s = s;
+    this.roll = roll;
+    this.cr = Math.cos(roll);
+    this.sr = Math.sin(roll);
+    this.yaw = yaw;
+    this.pitch = pitch;
+    this.jaw = jaw;
+    this.gb = 0;
+  }
+
+  toScreen(x, y) {
+    const s = this.s;
+    return [this.cx + s * (x * this.cr - y * this.sr), this.cy + s * (x * this.sr + y * this.cr)];
+  }
+
+  toLocal(px, py) {
+    const dx = px - this.cx, dy = py - this.cy;
+    return [(dx * this.cr + dy * this.sr) / this.s, (-dx * this.sr + dy * this.cr) / this.s];
+  }
+
+  toScreenInto(x, y, out) {
+    const s = this.s;
+    out[0] = this.cx + s * (x * this.cr - y * this.sr);
+    out[1] = this.cy + s * (x * this.sr + y * this.cr);
+    return out;
+  }
+
+  toLocalInto(px, py, out) {
+    const dx = px - this.cx, dy = py - this.cy;
+    out[0] = (dx * this.cr + dy * this.sr) / this.s;
+    out[1] = (-dx * this.sr + dy * this.cr) / this.s;
+    return out;
+  }
 }
 
 /** Screen-pixel box that holds the head plus `pad` units (for implicit shapes). */

@@ -4,7 +4,7 @@
 import { pixelate, loadImage } from './pixelate.js';
 import { presenterName, setPresenters } from './cast.js';
 import { STINGER_DURATION } from './scenes/cards.js';
-import { pickAds } from './ads/index.js';
+import { pickAds, BREAK_BLACK } from './ads/index.js';
 import { splitSentences } from './audio/sentences.js';
 import { ACTIONS } from './cues.js';
 import { openFor } from './scenes/opens.js';
@@ -64,7 +64,7 @@ export class Director {
     // Every ad and every montage frame is a new clip even when the shot name
     // repeats, so its clock must restart (or it opens mid-way, at its end slate).
     const restart = shot === 'ad' || shot === 'montage';
-    const changed = restart || s.shot !== shot || (extra.focus && extra.focus !== s.focus) || ('storyId' in extra && extra.storyId !== s.storyId);
+    const changed = restart || s.shot !== shot || (extra.focus && extra.focus !== s.focus) || ('storyId' in extra && extra.storyId !== s.storyId) || (this.v2 && 'framing' in extra && (extra.framing ?? null) !== (s.framing ?? null)); // v2: a new framing (single → ots) is a cut
     Object.assign(s, extra);
     if (changed) {
       s.shot = shot;
@@ -114,7 +114,7 @@ export class Director {
       }
       if (!item) {
         this.setShot('standby', { lowerThird: null, subtitle: null, card: null });
-        await sleep(6000);
+        await sleep(CHANNEL.standby.retry * 1000);
         continue;
       }
       lastId = item.id;
@@ -123,7 +123,7 @@ export class Director {
         else await this.playEpisode(item);
       } catch (err) {
         console.error('[director]', err);
-        await sleep(1500);
+        await sleep(CHANNEL.standby.afterError * 1000);
       }
     }
   }
@@ -147,30 +147,47 @@ export class Director {
       // The music bed starts on the cut with the picture (its first chord included).
       let bed = null;
       try {
-        await this.stinger(() => this.setShot('ad', { card: { ad, line: -1 } }), (cut) => (bed = this.audio.playTune?.(ad.tune, { loop: true, volume: 0.45, startAt: cut })));
+        await this.blackCut('ad', { card: { ad, line: -1 } }, (cut) => (bed = this.audio.playTune?.(ad.tune, { loop: true, volume: 0.45, startAt: cut })));
         await this.playAd(ad, bed);
       } finally {
         bed?.stop?.();
       }
     }
     if (item.next) {
-      await this.stinger(() => {
-        this.setShot('promo', {
-          card: {
-            next: item.next,
-            label: item.next.ready ? 'UP NEXT' : 'COMING UP',
-            footer: item.next.ready ? 'AFTER THE BREAK' : 'STAY WITH US',
-          },
-        });
-      }, (cut) => this.audio.sfx('promo', { programId: item.next.id, startAt: cut })); // the signature left hanging in the next programme's key
-      await sleep(CHANNEL.breaks.promo * 1000 - STINGER_DURATION * 500);
+      const card = {
+        next: item.next,
+        label: item.next.ready ? 'UP NEXT' : 'COMING UP',
+        footer: item.next.ready ? 'AFTER THE BREAK' : 'STAY WITH US',
+      };
+      await this.blackCut('promo', { card }, (cut) => this.audio.sfx('promo', { programId: item.next.id, startAt: cut })); // the signature left hanging in the next programme's key
+      await sleep(CHANNEL.breaks.promo * 1000);
     }
+  }
+
+  /**
+   * Inside a break: 0.3 s of black and silence, then a hard cut to `shot`
+   * (channel-and-breaks §3.2/§4.2: no stinger between break elements, so no
+   * network logo between two commercials). `cue(cutMs)` schedules the next
+   * element's sound to be heard on the cut; the picture clock is pinned to the
+   * same instant, so a late timer never leaves the picture behind its bed.
+   */
+  async blackCut(shot, extra, cue = null) {
+    this.setShot('ad', { card: { ad: BREAK_BLACK, line: -1 } });
+    const cut = now() + BREAK_BLACK.duration;
+    try {
+      cue?.(cut * 1000);
+    } catch (err) {
+      console.warn('[director] cue', err);
+    }
+    await sleep(BREAK_BLACK.duration * 1000);
+    this.setShot(shot, extra);
+    this.scene.shotSince = Math.min(this.scene.shotSince, cut);
   }
 
   async playAd(ad, bed = null) {
     const s = this.scene;
-    // The ad's picture clock started at the stinger's cut (setShot), 0.4 s before
-    // this runs: voice-over lines and the bed follow that clock, not this call.
+    // The ad's picture clock started at the cut out of the black (blackCut pins
+    // shotSince to it): voice-over lines and the bed follow that clock, not this call.
     const started = s.shot === 'ad' && Number.isFinite(s.shotSince) ? s.shotSince : now();
     this.audio.setVoices?.({ ad: ad.voice });
     this.voices.prepareAd(ad);

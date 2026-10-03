@@ -8,9 +8,9 @@ canvas.width = W;
 canvas.height = H;
 
 const audio = new AudioEngine({ lang: 'en' });
-// Wave 2 presenters/studio: opt-in during the parallel wave (?v2=1); ?v2=0 is an explicit off.
+// Wave 2 presenters/studio: opt-in during the parallel wave (?v2=1); ?v2=0 (or false/off/no) is an explicit off.
 // ?perf=1 logs the v2 shot's p50/p95 every 10 s.
-const v2 = params.has('v2') ? params.get('v2') !== '0' : false;
+const v2 = params.has('v2') ? !/^(0|false|off|no)$/i.test(params.get('v2').trim()) : false;
 const renderer = new Renderer(canvas, audio, { v2, perf: params.get('perf') === '1' });
 
 const channel = await fetch('/api/channel')

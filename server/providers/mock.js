@@ -9,14 +9,14 @@
 // from the story ids, so the same news always makes the same episode.
 
 import { isBreaking, plainTitle } from '../news.js';
-import { GRAVE, LIGHT, contentWords, extractFigures, numbersIn, quotesIn } from '../facts.js';
+import { GRAVE, LIGHT, contentWords, extractFigures, leansOnPrevious, numbersIn, quotesIn } from '../facts.js';
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
 import { shortHeadline } from '../writer.js';
 import { topicOf } from '../topics.js';
 
 const DEATHS = /\b(?:dead|deaths?|die[sd]|killed|killings?|victims?|mourn\w*|funeral)\b/i;
 // Not grave, but not something to smile about either.
-const SOBER = /\b(?:volcan\w*|erupt\w*|storms?|strikes?|protests?|elections?|courts?|police|cancel\w*|closures?|bans?|shortages?|prices|inflation|recession|stocks?|shares|markets?|rates?)\b/i;
+const SOBER = /\b(?:volcan\w*|erupt\w*|storms?|strikes?|protests?|elections?|courts?|police|cancel\w*|closures?|bans?|shortages?|prices|inflation|recession|stocks?|shares|markets?|rates?|alerts?|jobs? at risk|job (?:cuts|losses)|lay-?offs?|redundanc\w*|rulings?|under pressure|flu|waiting lists?)\b/i;
 // The best "and finally" material: curiosities, animals, culture, the sky.
 const LIGHTER = /\b(?:zoo|pandas?|leopards?|tortoises?|penguins?|whales?|dolphins?|bees|parrots?|birds?|festival|museum|tomatoes|chocolate|coffee|trees|gardens?|reef|coral|footprints|dinosaurs?|fossils?|comet|eclipse|drones|telescope|stars|moon|music|art|mushroom)\b/i;
 const CURIOUS = /\b(?:discover\w*|uncover\w*|rare|unexpected|surpris\w*|new species|first time|glowing)\b/i;
@@ -151,7 +151,16 @@ const UNIT8_LINES = {
 UNIT8_LINES.SPACE = UNIT8_LINES.ASTRONOMY;
 // UNIT-8 after the lead, when the lead has no figure to repeat.
 const UNIT8_NOTED = ['[nod] Logged, Dr Reyes.', '[nod] Noted. Filed under remarkable.', '[nod] Recorded. I will be thinking about that one.', '[nod] Understood, Dr Reyes. Logged.'];
-const NOVA_THANKS = ['Thank you, UNIT-8.', 'Precise as ever, UNIT-8.', 'Noted, UNIT-8. Thank you.'];
+const NOVA_THANKS = ['Thank you, UNIT-8.', 'Precise as ever, UNIT-8.', 'Noted, UNIT-8. Thank you.', 'Thank you. Exactly right, UNIT-8.', '[nod] Quite so, UNIT-8.'];
+// The tail of UNIT-8's restatement ("40,000. Logged."): one shape per episode, rotated across episodes.
+const UNIT8_RESTATE = ['Logged.', 'Stored, Dr Reyes.', 'I have checked it twice.', 'That is now on file.', 'Confirmed.', 'Recorded, with interest.', 'Noted. I will not forget it.'];
+// Nova hands the number of the day to UNIT-8 (it is his story), not in the same words every time.
+const NOVA_TO_NUMBER = [
+  '[look_partner] Thank you, UNIT-8. Our number of the day is yours.',
+  '[look_partner] UNIT-8, our number of the day.',
+  '[look_partner] And UNIT-8 has our number of the day.',
+  '[look_partner] Over to UNIT-8 for our number of the day.',
+];
 
 // Programmes without a chat policy: a short dry reaction after a light story.
 const CHATS = {
@@ -388,6 +397,9 @@ function runningOrder(infos, n, program) {
   }
   // Round-up places nobody filled become main stories.
   while (mains.length + roundup.length < slots && pool.length) mains.push(bestMain(pool));
+  // The main stories air in order of news value (people at risk before a museum wing), the desk's order breaking ties.
+  const rank = new Map(infos.map((x, k) => [x, k]));
+  mains.sort((a, b) => newsValue(a, rank.get(a)) - newsValue(b, rank.get(b)) || rank.get(a) - rank.get(b));
   // Where the number of the day goes: second, last, or among the main stories (never the lead).
   let middle = [...mains];
   if (number) {
@@ -405,17 +417,18 @@ function runningOrder(infos, n, program) {
 }
 
 /**
- * News value of a story at desk rank `k` (lower is bigger news): the desk's order, where hard news (people
+ * News value of a story at desk rank `k` (lower is bigger news): the desk's order (close scores make close
+ * ranks, so two places count as one point), where hard news (people
  * harmed or at risk, money, strikes, courts, rates) moves a story up and a curiosity moves it down, a second
  * outlet and a picture breaking ties. A record year for punctual trains never leads over a heat alert.
  */
-const newsValue = (i, k) => k - (i.grave ? 1.6 : 0) - (i.hard ? 1 : 0) + (i.curious ? 1.6 : i.light ? 1 : 0) - ((i.s.outlets || 1) > 1 ? 0.8 : 0) - (i.s.image ? 0.3 : 0);
+const newsValue = (i, k) => k / 2 - (i.grave ? 2.2 : 0) - (i.hard ? 1 : 0) + (i.curious ? 1.2 : i.light ? 0.3 : 0) - ((i.s.outlets || 1) > 1 ? 0.8 : 0) - (i.s.image ? 0.3 : 0);
 
-/** The lead: the biggest news among the first five stories of the desk (never a live page when there is news). */
+/** The lead: the biggest news among the first six stories of the desk (never a live page when there is news). */
 function takeLead(pool) {
   let best = -1;
   let bestValue = Infinity;
-  for (let k = 0, seen = 0; k < pool.length && seen < 5; k++) {
+  for (let k = 0, seen = 0; k < pool.length && seen < 6; k++) {
     if (pool[k].live) continue;
     seen++;
     const v = newsValue(pool[k], k);
@@ -516,6 +529,8 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     let a = solo || block % 2 === 0 ? 'A' : 'B';
     if (!solo && reader && (roundup.includes(info) || info === lighter)) a = reader;
     if (!solo && pid === 'cosmos' && info === number) a = 'B'; // the number is UNIT-8's moment
+    // ...and "And finally" is Nova's, so that UNIT-8's literal reply answers her, not himself
+    if (!solo && pid === 'cosmos' && info === lighter) a = presenters.B?.id === 'unit8' ? 'A' : presenters.A?.id === 'unit8' ? 'B' : a;
     anchors.push(a);
   });
 
@@ -568,6 +583,8 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
   // mid-programme "Still to come" signpost
   const longForm = Array.isArray(program?.targetSeconds) && program.targetSeconds[0] >= 240;
   let exchanges = 0;
+  let unitRestates = 0; // COSMOS: UNIT-8's restatements so far, and the shapes they took
+  const unitShapes = new Set();
   const asked = new Set();
   const midIndex = longForm && order.length >= 6 ? midStory(order, roundup, lighter, number) : -1;
   let thanked = 0;
@@ -611,12 +628,38 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     if (at >= 0) {
       if (e.kind === 'country' || !e.country) return sentence;
       const country = lookupPlace(e.country);
-      if (!country || placeAt(sentence, { loc: { entry: country } }) >= 0) return sentence;
+      // the country's own name already there: nothing to add ("Greek islands" is not "Greece": "In Greece, ...")
+      const namesCountry = country && [country.name, ...country.aliases].some((n) => new RegExp(`(?<![\\p{L}])${n.replace(/^the /i, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u').test(sentence));
+      if (!country || namesCountry) return sentence;
       where = spokenPlace(country);
     }
     // "On the Reykjanes peninsula", "On Crete": islands and peninsulas take "on"
     const on = /\b(?:peninsula|island|isle)\b/i.test(where) || (e.kind === 'region' && /^(?:Crete|Sicily|Sardinia|Corsica|Cyprus|Bali|Java|Borneo|Tasmania|Hokkaido|Greenland)$/.test(e.name));
     return `${on ? 'On' : 'In'} ${where}, ${lc}`;
+  };
+
+  /**
+   * "A recycling plant in Sweden has started recovering gold." -> "In Sweden, a recycling plant has started
+   * recovering gold.": the sentence's own "in <place>" phrase moved to the front, only where taking it out
+   * leaves a whole sentence (the phrase sits before a verb or at the end, not inside "Wellington, New Zealand,").
+   * Null when the sentence has no such phrase or cannot start with "In X,".
+   */
+  const movePlaceFront = (sentence, info) => {
+    if (!info.loc) return null;
+    const e = info.loc.entry;
+    const country = e.country ? lookupPlace(e.country) : null;
+    const names = [e.name, ...e.aliases, ...(country ? [country.name, ...country.aliases] : [])].filter((x) => x.length > 2);
+    for (const name of names.sort((a, b) => b.length - a.length)) {
+      const bare = name.replace(/^the /i, '');
+      const re = new RegExp(`\\s(?:in|across) ((?:the )?${bare.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?=\\s+[a-z]|,\\s+[a-z]|[.!?]?$)`, 'u');
+      const m = re.exec(sentence);
+      if (!m) continue;
+      const rest = (sentence.slice(0, m.index) + sentence.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim();
+      const lc = lcFirst(rest);
+      if (!lc || wordCount(rest) < 4) return null;
+      return `In ${m[1]}, ${lc}`;
+    }
+    return null;
   };
 
   /**
@@ -696,23 +739,29 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // only if the credit fits. The summary's words are preferred to the headline, which is already on the strap.
       const idx = roundup.indexOf(info);
       const [minW, maxW] = quick ? [14, 18] : [12, 20];
+      // The place within the item's first words (NEWS IN 60: three, its bible; the others: five).
+      const limit = quick ? 3 : 5;
       const early = (t) => {
         const at = placeAt(t, info);
-        return at >= 0 && at < 3;
+        return at >= 0 && at < limit;
       };
-      // In the summary's order, so the item says the news (its first sentence) rather than a later detail: a
-      // sentence whose place comes early as written, or once moved to the front ("In Spain, temperatures...").
+      // The item must say the news: the summary's first sentence, or one that shares two words with the
+      // headline; never a sentence that leans on another ("In Sweden, the company wants to process..."), nor
+      // a later detail ("In Paris, the city says shade can make streets cooler"). The place comes first as
+      // written, moved to the front ("In Sweden, a recycling plant has started...") or put there.
+      const tells = (t, j) => j === 0 || newWords(s.title, t) <= contentWords(s.title).length - 2;
       let line = null;
-      for (const t of info.sentences) {
-        if (used.has(t)) continue;
-        const form = early(t) ? t : placeFirst(t, info, 3);
-        if (early(form) && wordCount(form) <= maxW && wordCount(t) >= minW - 4) {
+      for (const [j, t] of info.sentences.entries()) {
+        if (used.has(t) || leansOnPrevious(t) || !tells(t, j)) continue;
+        const forms = [early(t) ? t : null, movePlaceFront(t, info), placeFirst(t, info, limit)];
+        const form = forms.find((f) => f && early(f) && wordCount(f) <= maxW && wordCount(f) >= minW - 4);
+        if (form) {
           used.add(t);
           line = form;
           break;
         }
       }
-      if (!line) line = early(s.title) ? s.title : placeFirst(s.title, info, 3);
+      if (!line) line = early(s.title) ? s.title : movePlaceFront(s.title, info) || placeFirst(s.title, info, limit);
       const lead = idx === 0 ? program?.roundup?.opener || 'Now, around the world in 30 seconds.' : '';
       const where = early(line) ? '' : `${idx === 0 ? 'First, ' : 'Now to '}${spokenPlace(info.loc.entry)}.`;
       const item = [asSentence(line)];
@@ -734,20 +783,25 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // After the intro has read its headline, the lead goes on with the next fact: a sentence that only
       // restates the headline (fewer than three words of its own) is never its opener, nor read later.
       // A sentence the next one leans on ("It runs along the river.") stays: it holds the antecedent.
-      const leansOn = (t) => PRONOUN_START.test(info.sentences[info.sentences.indexOf(t) + 1] || '');
+      // ("The canal authority says...", "Astronomers say the shadow will cross..." lean on it just the same).
+      const leansOn = (t) => leansOnPrevious(info.sentences[info.sentences.indexOf(t) + 1] || '');
       const echoes = (t) => leadAfterIntro && restates(t, s.title) && newWords(t, s.title) < 3 && !leansOn(t);
-      const skipHeadline = first && (leadAfterIntro || restates(first, s.title));
+      // The headline is on the strap: a story is told in sentences, so it opens with the summary's first one
+      // whenever that stands on its own ("Researchers at a battery firm say..."), not with headline-ese
+      // ("Smartphone battery breakthrough promises a week of use."). The headline opens only when the summary
+      // cannot ("It says the service...").
+      const skipHeadline = first && (leadAfterIntro || restates(first, s.title) || (!leansOnPrevious(first) && wordCount(first) >= 6));
       let opener = s.title;
       if (skipHeadline) {
         // Never a pronoun as the first word of a story: the opener must say who or what.
-        opener = (leadAfterIntro && (pickSentence((t) => !echoes(t) && !PRONOUN_START.test(t)))) || null;
+        opener = (leadAfterIntro && (pickSentence((t) => !echoes(t) && !leansOnPrevious(t)))) || null;
         if (!opener && reserved) {
           // Nothing else to open with: the catch's sentence opens the story, and there is no catch.
           used.delete(reserved);
           reserved = null;
           opener = pickSentence((t) => !echoes(t));
         }
-        opener ||= pickSentence(() => true) || s.title;
+        opener ||= pickSentence((t) => !leansOnPrevious(t)) || pickSentence(() => true) || s.title;
       }
       const cue = isNumber ? '[count] ' : info.grave ? '[lean_in] ' : s.image ? '[point_screen] ' : choose(['[raise_hand] ', '[lean_in] ', ''], key);
       let figureLine = null;
@@ -834,14 +888,20 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
             const sp = partner;
             const kind = PRODUCT_KICKERS.has(info.kicker) ? 'product' : 'science';
             planned.push({ anchor: sp, text: pickLine(TECH_BUTTONS[kind][idOf(sp)] || GENERIC_CHATS, `${key}~btn`, info) });
-          } else if (pid === 'cosmos' && (slot === 'lead' || (slot === 'story' && longForm && !isNumber && (info.figures.length || info.loc)))) {
+          } else if (pid === 'cosmos' && anchor !== (idOf('B') === 'unit8' ? 'B' : partner) && (slot === 'lead' || (slot === 'story' && longForm && !isNumber && unitRestates < 2 && (info.figures.length || info.loc)))) {
+            // UNIT-8's restatement: after the lead, and after one more story at most (a robot repeating every
+            // figure is a tic, not a character); each time in a different shape.
             const unit = idOf('B') === 'unit8' ? 'B' : partner;
             const f = info.figures.find((x) => parts.join(' ').includes(numbersIn(x.said)[0]?.raw || x.value) && !x.age);
             // UNIT-8 repeats the exact figure, else the place: only what was just said.
             const restated = f ? f.said.replace(/^(?:about|around|nearly|almost|some|more than|over|up to|at least) /i, '').replace(/^\w/, (c) => c.toUpperCase()) : info.loc ? spokenPlace(info.loc.entry).replace(/^\w/, (ch) => ch.toUpperCase()) : null;
-            planned.push({ anchor: unit, text: restated ? `[nod] ${restated}. ${choose(['Noted.', 'Logged.', 'Recorded.'], `${key}~u8n`)}` : pickLine(UNIT8_NOTED, `${key}~u8`, info) });
-            planned.push({ anchor: other(unit), text: next === number ? `[look_partner] Thank you, UNIT-8. Our number of the day is yours.` : pickLine(NOVA_THANKS, `${key}~nt`, info) });
-          } else if (pid === 'cosmos' && slot === 'lighter') {
+            const shapes = UNIT8_RESTATE.filter((x) => !unitShapes.has(x));
+            const shape = shapes.length ? pickLine(shapes, `${key}~u8n`, info) : UNIT8_RESTATE[0];
+            unitShapes.add(shape);
+            unitRestates++;
+            planned.push({ anchor: unit, text: restated ? `[nod] ${restated}. ${shape}` : pickLine(UNIT8_NOTED, `${key}~u8`, info) });
+            planned.push({ anchor: other(unit), text: next === number ? pickLine(NOVA_TO_NUMBER, `${key}~nn`, info) : pickLine(NOVA_THANKS, `${key}~nt`, info) });
+          } else if (pid === 'cosmos' && slot === 'lighter' && anchor !== (idOf('B') === 'unit8' ? 'B' : partner)) {
             const unit = idOf('B') === 'unit8' ? 'B' : partner;
             planned.push({ anchor: unit, text: pickLine(UNIT8_LINES[info.kicker] || UNIT8_LINES.any, `${key}~u8`, info) });
           }
@@ -851,8 +911,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       }
     }
     // PACE: the mid-programme signpost, read by the story's own presenter to camera (a block boundary follows)
-    if (info.signpost && chatOk && policy?.after?.includes(slot)) planned.unshift({ anchor, text: `[nod] ${info.signpost}` });
-    const chatsHere = planned.slice(0, maxChats - chats);
+    // after the story's own chat lines (the reaction belongs to the story; the signpost closes the block)
+    const signpost = info.signpost && chatOk && policy?.after?.includes(slot) && maxChats - chats > 0 ? { anchor, text: `[nod] ${info.signpost}` } : null;
+    const chatsHere = [...planned.slice(0, maxChats - chats - (signpost ? 1 : 0)), ...(signpost ? [signpost] : [])];
 
     // ---- hand-over: a toss to the partner who reads next, sometimes (never next to grave news).
     const nextAnchor = anchors[k + 1];

@@ -362,10 +362,20 @@ describe('normalizeBulletin: field validation', () => {
   test('the lead does not repeat the intro\'s line about it word for word', () => {
     const stories = [makeStory('s1', { title: 'Lisbon opens a new riverside tram line', summary: 'Lisbon has opened a new tram line along the river.' })];
     const b = normalize(
-      [otherSeg('intro', { text: 'Lisbon opens a new riverside tram line. Hello.' }), storySeg('s1', { text: 'Lisbon opens a new riverside tram line, BBC News reports. It runs along the river.' })],
-      { stories }
+      [otherSeg('intro', { text: 'Lisbon opens a new riverside tram line. Hello.' }), storySeg('s1', { text: 'Lisbon opens a new riverside tram line, BBC News reports. Trams will run every five minutes along the river.' })],
+      { stories: [makeStory('s1', { title: 'Lisbon opens a new riverside tram line', summary: 'Lisbon has opened a new tram line along the river. Trams will run every five minutes along the river.' })] }
     );
-    assert.equal(b.segments[1].text, 'It runs along the river.');
+    assert.equal(b.segments[1].text, 'Trams will run every five minutes along the river.');
+  });
+
+  test('...but a restatement the next sentence leans on stays: the lead never opens on a word that points at nothing', () => {
+    const stories = [makeStory('s1', { title: 'Lisbon opens a new riverside tram line', summary: 'Lisbon has opened a new tram line along the river. The city says it will carry 40,000 passengers.' })];
+    for (const next of ['It runs along the river.', 'The city says it will carry 40,000 passengers.']) {
+      const b = normalize([otherSeg('intro', { text: 'Lisbon opens a new riverside tram line. Hello.' }), storySeg('s1', { text: `Lisbon opens a new riverside tram line, BBC News reports. ${next}` })], {
+        stories: next.startsWith('It') ? [makeStory('s1', { title: 'Lisbon opens a new riverside tram line', summary: 'Lisbon has opened a new tram line along the river. It runs along the river.' })] : stories,
+      });
+      assert.equal(b.segments[1].text, `Lisbon opens a new riverside tram line, BBC News reports. ${next}`);
+    }
   });
 
   test('leaves short text untouched', () => {

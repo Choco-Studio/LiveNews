@@ -15,6 +15,17 @@ export const LIGHT =
 
 export const isGrave = (text) => GRAVE.test(String(text ?? ''));
 
+// A sentence that leans on the one before it: a pronoun ("It runs along the river."), or a definite common
+// noun that points back ("The canal authority says...", "Astronomers say the shadow will cross..."). Such a
+// sentence never opens a story or a round-up item, and the sentence it leans on is never dropped before it.
+const PRONOUN_OPENING = /^(?:It|Its|They|Their|Them|This|These|Those|He|She|His|Her|Such)\b/;
+const DEFINITE_OPENING = /^The (?!(?:[a-z][\w-]*\s+)?of\s+\p{Lu})[a-z][\w-]*/u;
+const SAYS_THE = /^(?:[\p{L}'’-]+\s+){1,4}(?:say|says|said|believe|believes|expect|expects|think|thinks|warn|warns)\s+(?:that\s+)?(?:the|its|their)\s+[a-z]/u;
+export const leansOnPrevious = (sentence) => {
+  const t = String(sentence ?? '').replace(/^(?:\s*\[[^\]]*\])+\s*/, '').trim();
+  return PRONOUN_OPENING.test(t) || DEFINITE_OPENING.test(t) || SAYS_THE.test(t);
+};
+
 const fold = (s) =>
   String(s ?? '')
     .normalize('NFD')

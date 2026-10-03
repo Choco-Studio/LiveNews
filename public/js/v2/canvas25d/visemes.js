@@ -260,7 +260,8 @@ export function mouthParams(fr, face, gain = 1) {
   // "th" is quiet (low loudness) but the tongue shows between parted teeth: never a closed line
   if (fr.speaking) {
     const th = (fr.viseme === 'TH' ? 1 - k : 0) + (fr.next === 'TH' ? k : 0);
-    if (th > 0.5) face.open = Math.max(face.open, Math.min(1, 0.48 * (th - 0.5) * gain));
+    // (at least the first visible row of the interior, 0.16, so the word visibly starts on its "th")
+    if (th > 0.5) face.open = Math.max(face.open, Math.min(1, (0.16 + 0.24 * (th - 0.5)) * gain));
   }
   // a pressed m/b/p wins over the blend while the lips meet (also on the way into one)
   if ((fr.viseme === 'MBP' && k < 0.65) || (fr.next === 'MBP' && k > 0.45)) {

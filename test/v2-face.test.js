@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { segmentContext } from '../public/js/v2/canvas25d/direction/context.js';
-import { planBehaviour, RULES, REACTIONS, isToss } from '../public/js/v2/canvas25d/direction/behaviour.js';
+import { planBehaviour, RULES, REACTIONS, isToss, turnVariety } from '../public/js/v2/canvas25d/direction/behaviour.js';
 import { EPISODES, SAMPLES, timelineAudio } from '../public/js/v2/canvas25d/labs/face.js';
 import { liveSpeech, sampleSpeech } from '../public/js/v2/canvas25d/speech.js';
 import { mouthParams, buildSpeech } from '../public/js/v2/canvas25d/visemes.js';
@@ -92,11 +92,25 @@ test('duo turn starts: each listener glances 0.20-0.35 s after the first word, h
     for (const { ctx, events } of planAll(EPISODES[id])) {
       if (!ctx.turnStart) continue;
       for (const slot of ctx.listeners) {
+        const vary = ctx.cast[slot] === 'unit8' ? null : turnVariety(ctx, slot);
         const g = looksOf(events, slot).find((l) => /^turn/.test(l.why));
+        if (vary === 'skip') {
+          assert.ok(!g || g.target !== 'partner', `${id} #${ctx.index}: a skipped turn glance`);
+          continue;
+        }
+        if (vary === 'notes') {
+          assert.ok(g && g.target === 'notes' && g.why === 'turn-notes', `${id} #${ctx.index}: the notes instead of the glance`);
+          continue;
+        }
+        // (a dry line with its own glance replaces the turn's in TECH BYTES: checked in the dry-line test)
+        if (!g && events.some((e) => e.kind === 'look' && e.slot === slot && e.why === 'dry')) continue;
+        // a line under 2 s: the turn glance and the toss meet are one look, early in the line
+        if (!g && ctx.duration < 2 && looksOf(events, slot).some((l) => l.why === 'toss-meet' && l.at <= 0.6)) continue;
         assert.ok(g, `${id} #${ctx.index}: a turn-start glance for ${slot}`);
         assert.equal(g.target, 'partner');
-        assert.ok(g.at >= RULES.glanceStart[0] && g.at <= RULES.glanceStart[1], `${id} #${ctx.index} start ${g.at}`);
-        if (g.why !== 'turn') continue; // merged with a toss or a dry line: checked below
+        const win = vary === 'late' ? RULES.lateStart : RULES.glanceStart;
+        assert.ok(g.at >= win[0] - 1e-6 && g.at <= win[1] + 1e-6, `${id} #${ctx.index} start ${g.at} (${vary || 'approved'})`);
+        if (g.why !== 'turn') continue; // later, merged with a toss or a dry line: checked below
         const robot = ctx.cast[slot] === 'unit8';
         const end = g.at + g.dur;
         assert.ok(end + 0.1 <= Math.min(RULES.backBy, ctx.duration) + 1e-6, `${id} #${ctx.index} back by ${end}`);
@@ -694,7 +708,7 @@ test('wide shots: a smile never bends the mouth into a U; glasses never make a d
 
 const VOICED = JSON.parse(fs.readFileSync(new URL('./fixtures/v2-face-voiced.json', import.meta.url), 'utf8')).segments;
 
-test('lip sync on 16 real Kokoro clips: openings after pauses within ±40 ms of the recorded word, m/b/p closures ≥ 40 ms, no shape held < 40 ms', () => {
+test('lip sync on the lab stand-in (16 real Kokoro clips, optimistic timing): openings after real pauses within ±40 ms, m/b/p closures ≥ 40 ms, no shape held < 40 ms', () => {
   let onsets = 0, closures = 0;
   for (const seg of VOICED) {
     const T0 = 0.5, lead = seg.words[0][0];
@@ -711,6 +725,10 @@ test('lip sync on 16 real Kokoro clips: openings after pauses within ±40 ms of 
       const prevText = k ? seg.text.slice(seg.words[k - 1][1], ch) : '.';
       const word = seg.text.slice(ch).toLowerCase();
       if (!/[,.;:?!]\s*$/.test(prevText) || /^[mbpfvw]/.test(word)) continue; // after a pause, open-lip start
+      const lv = decodeLevels(seg.levels.values);
+      let sil = 0;
+      for (let q = Math.round(wt * seg.levels.rate) - 1; q >= 0 && lv[q] < 0.22; q--) sil++;
+      if (k > 0 && (sil * 1000) / seg.levels.rate < 60) continue; // no real pause (20-40 ms): the lips rightly stay parted
       const ts = T0 + (wt - lead);
       const i0 = out.findIndex((o) => o.t >= ts - 0.2);
       let onset = null;
@@ -741,6 +759,281 @@ test('lip sync on 16 real Kokoro clips: openings after pauses within ±40 ms of 
     }
   }
   assert.ok(onsets >= 30 && closures >= 40, `${onsets} onsets, ${closures} closures`);
+});
+
+// ---------------------------------------------------------------------------
+// Lip sync through the REAL AudioEngine (public/js/audio.js, read only) with a fake
+// WebAudio context and a virtual clock (performance.now and setTimeout driven by the
+// test, so it is deterministic and immune to machine load). The engine is causal: it
+// re-anchors its clock only when a recorded word is reached and eases the correction,
+// which the lab stand-in does not reproduce (critic r1). The proposed speechFrame field
+// `voice` (the recorded clip's smoothed loudness, CONTRACTS request to the audio
+// stream) is emulated exactly as Run.loudness() computes it from the clip's envelope.
+
+class FakeParam {
+  constructor(value = 0) { this.value = value; }
+  setValueAtTime(v) { this.value = v; return this; }
+  linearRampToValueAtTime() { return this; }
+  exponentialRampToValueAtTime() { return this; }
+  setTargetAtTime() { return this; }
+  cancelScheduledValues() { return this; }
+  cancelAndHoldAtTime() { return this; }
+}
+const FAKE_PARAMS = new Set(['gain', 'frequency', 'detune', 'Q', 'pan', 'delayTime', 'playbackRate', 'offset', 'threshold', 'knee', 'ratio', 'attack', 'release']);
+function fakeNode(ctx) {
+  const params = {};
+  const base = {
+    connect(x) { return x; }, disconnect() {}, start() {}, stop() {}, setPeriodicWave() {},
+    getFloatTimeDomainData(a) { a.fill(0.05); }, onended: null, buffer: null, fftSize: 2048,
+  };
+  return new Proxy(base, {
+    get(t, k) {
+      if (k in t) return t[k];
+      if (FAKE_PARAMS.has(k)) return (params[k] ??= new FakeParam({ gain: 1, frequency: 440, Q: 1, playbackRate: 1, offset: 1 }[k] ?? 0));
+      return undefined;
+    },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+}
+class FakeAudioContext {
+  constructor() {
+    this.t0 = performance.now();
+    this.sampleRate = 48000;
+    this.state = 'running';
+    this.outputLatency = 0.02;
+    this.baseLatency = 0.01;
+    this.destination = fakeNode(this);
+  }
+  get currentTime() { return (performance.now() - this.t0) / 1000; }
+  createGain() { return fakeNode(this); }
+  createOscillator() { return fakeNode(this); }
+  createBiquadFilter() { return fakeNode(this); }
+  createDynamicsCompressor() { return fakeNode(this); }
+  createWaveShaper() { return fakeNode(this); }
+  createConvolver() { return fakeNode(this); }
+  createStereoPanner() { return fakeNode(this); }
+  createDelay() { return fakeNode(this); }
+  createConstantSource() { return fakeNode(this); }
+  createBufferSource() { return fakeNode(this); }
+  createAnalyser() { return fakeNode(this); }
+  createPeriodicWave() { return {}; }
+  createBuffer(ch, n, sr) {
+    const data = Array.from({ length: ch }, () => new Float32Array(n));
+    return { numberOfChannels: ch, length: n, sampleRate: sr, duration: n / sr, getChannelData: (i) => data[i] };
+  }
+  resume() { this.state = 'running'; return Promise.resolve(); }
+  addEventListener() {}
+  getOutputTimestamp() { return { contextTime: this.currentTime - this.outputLatency, performanceTime: performance.now() }; }
+}
+
+/** Run fn({ advance }) on a virtual clock; everything is restored afterwards. */
+async function withVirtualClock(fn) {
+  const perf = globalThis.performance;
+  const own = Object.getOwnPropertyDescriptor(perf, 'now');
+  const { setTimeout: st, clearTimeout: ct, setImmediate: si, AudioContext: AC } = globalThis;
+  let vnow = 5000, seq = 0;
+  const timers = [];
+  Object.defineProperty(perf, 'now', { value: () => vnow, configurable: true, writable: true });
+  globalThis.setTimeout = (cb, ms = 0, ...a) => {
+    const id = ++seq;
+    timers.push({ id, at: vnow + Math.max(0, Number(ms) || 0), cb, a });
+    return id;
+  };
+  globalThis.clearTimeout = (id) => {
+    const i = timers.findIndex((x) => x.id === id);
+    if (i >= 0) timers.splice(i, 1);
+  };
+  globalThis.AudioContext = FakeAudioContext;
+  const flush = async () => {
+    for (let i = 0; i < 6; i++) await new Promise((r) => si(r));
+  };
+  const advance = async (ms) => {
+    const end = vnow + ms;
+    for (;;) {
+      timers.sort((a, b) => a.at - b.at);
+      const n = timers[0];
+      if (!n || n.at > end) break;
+      vnow = Math.max(vnow, n.at);
+      timers.shift();
+      n.cb(...n.a);
+      await flush();
+    }
+    vnow = end;
+    await flush();
+  };
+  try {
+    return await fn({ advance });
+  } finally {
+    if (own) Object.defineProperty(perf, 'now', own);
+    else delete perf.now;
+    globalThis.setTimeout = st;
+    globalThis.clearTimeout = ct;
+    if (AC === undefined) delete globalThis.AudioContext;
+    else globalThis.AudioContext = AC;
+  }
+}
+
+const decodeLevels = (s) => (typeof s === 'string' ? Array.from(s, (c) => (c.charCodeAt(0) - 48) / 74) : s.map(Number));
+const STEP_MS = 2;
+
+/**
+ * Play every recorded clip through the real AudioEngine and sample the face's mouth
+ * every STEP_MS of virtual time. withVoice adds the proposed `voice` field.
+ * Returns per clip { seg, perf0, lv, out: [{ t (ms), open, press }] }.
+ */
+async function realEngineMouths(withVoice) {
+  return withVirtualClock(async ({ advance }) => {
+    const { AudioEngine } = await import('../public/js/audio.js');
+    const e = new AudioEngine();
+    await e.unlock();
+    let voice = null;
+    if (withVoice) {
+      const orig = e.speechFrame.bind(e);
+      e.speechFrame = (now, slot, out, opts) => {
+        const f = orig(now, slot, out, opts);
+        if (!voice) {
+          f.voice = -1;
+          return f;
+        }
+        const l = voice;
+        if (now - l.at >= 8) {
+          const x = ((now - l.perf0) / 1000) * l.rate, i = Math.floor(x), v = l.values;
+          const a = i >= 0 && i < v.length ? v[i] : 0, b = i + 1 >= 0 && i + 1 < v.length ? v[i + 1] : 0;
+          const target = Math.min(1, Math.max(0, (a + (b - a) * (x - i) - 0.2) / 0.75));
+          const dt = l.at < 0 ? 1000 : Math.max(0, now - l.at);
+          l.value += (target - l.value) * (1 - Math.exp(-dt / (target > l.value ? 25 : 60)));
+          l.at = now;
+        }
+        f.voice = l.value;
+        return f;
+      };
+    }
+    const clips = [];
+    for (const seg of VOICED) {
+      const words = seg.words.map(([t, char]) => ({ t, char }));
+      const lv = decodeLevels(seg.levels.values);
+      const buffer = e.context.createBuffer(1, Math.round(48000 * (seg.duration + 0.2)), 48000);
+      const src = liveSpeech(e, 'A', (t) => t * 1000);
+      let first = null;
+      const run = e.speak(seg.text, 'A', {
+        audio: { buffer, words, levels: { rate: seg.levels.rate, values: lv } },
+        onSentence: (s, i) => {
+          if (i !== 0) return;
+          first = performance.now();
+          voice = { perf0: first - words[0].t * 1000, rate: seg.levels.rate, values: lv, value: 0, at: -1 };
+        },
+      });
+      const f = {}, out = [];
+      const t0 = performance.now();
+      while (performance.now() - t0 < (seg.duration + 1.2) * 1000) {
+        const fr = sampleSpeech(src, performance.now() / 1000);
+        mouthParams(fr, f, 1);
+        out.push({ t: performance.now(), open: f.open, press: f.press > 0.5 && fr.speaking });
+        await advance(STEP_MS);
+      }
+      e.stop();
+      voice = null;
+      await advance(50);
+      await Promise.race([run, advance(500)]);
+      assert.ok(first !== null, `the engine played "${seg.text.slice(0, 30)}"`);
+      clips.push({ seg, perf0: first - words[0].t * 1000, lv, out });
+    }
+    return clips;
+  });
+}
+
+/** Onsets after real pauses (≥ 60 ms of recorded silence) of open-lip words, at an opening threshold. */
+function lipOnsets(clips, thr) {
+  const res = [];
+  for (const { seg, perf0, lv, out } of clips) {
+    const rate = seg.levels.rate;
+    for (let k = 0; k < seg.words.length; k++) {
+      const [wt, ch] = seg.words[k];
+      const prevText = k ? seg.text.slice(seg.words[k - 1][1], ch) : '.';
+      const word = seg.text.slice(ch).toLowerCase();
+      if (!/[,.;:?!]\s*$/.test(prevText) || /^[mbpfvw]/.test(word)) continue;
+      let sil = 0;
+      for (let q = Math.round(wt * rate) - 1; q >= 0 && lv[q] < 0.22; q--) sil++;
+      if (k > 0 && (sil * 1000) / rate < 60) continue; // no real pause: the lips rightly stay parted
+      const ts = perf0 + wt * 1000;
+      let off = null;
+      for (let i = 1; i < out.length; i++) {
+        if (out[i].t < ts - 200) continue;
+        if (out[i].t > ts + 250) break;
+        if (out[i].open >= thr && out[i - 1].open < thr) {
+          off = out[i].t - ts;
+          break;
+        }
+      }
+      res.push({ word: word.slice(0, 12), off });
+    }
+  }
+  return res;
+}
+
+/**
+ * Mouth / voice agreement: ms of audible voice behind shut lips (presses excepted), and ms
+ * of open lips in a real pause (the recording silent for ≥ 100 ms: the dips between
+ * syllables, and the engine's 60 ms loudness release, are not pauses).
+ */
+function lipAgreement(clips) {
+  let shut = 0, run = 0, longest = 0, openQuiet = 0;
+  for (const { seg, perf0, lv, out } of clips) {
+    const rate = seg.levels.rate;
+    const at = (i) => (i < 0 || i >= lv.length ? 0 : lv[i]);
+    let quiet = 0;
+    for (const o of out) {
+      const x = ((o.t - perf0) / 1000) * rate, i = Math.floor(x);
+      const v = Math.min(1, Math.max(0, (at(i) + (at(i + 1) - at(i)) * (x - i) - 0.2) / 0.75));
+      if (v > 0.35 && o.open < 0.05 && !o.press) {
+        shut += STEP_MS;
+        run += STEP_MS;
+        longest = Math.max(longest, run);
+      } else run = 0;
+      quiet = v < 0.05 ? quiet + STEP_MS : 0;
+      if (quiet >= 100 && o.open > 0.15 && x > 0 && x < seg.duration * rate) openQuiet += STEP_MS;
+    }
+  }
+  return { shut, longest, openQuiet };
+}
+
+function closuresOf(clips) {
+  const out = [];
+  for (const c of clips) {
+    let start = null;
+    for (const o of c.out) {
+      if (o.press && start === null) start = o.t;
+      else if (!o.press && start !== null) {
+        out.push(o.t - start);
+        start = null;
+      }
+    }
+  }
+  return out;
+}
+
+test('lip sync through the real AudioEngine (16 recorded clips): with the voice loudness, ≥ 90 % of visible onsets within ±40 ms, no voice behind shut lips', async () => {
+  const clips = await realEngineMouths(true);
+  const on = lipOnsets(clips, 0.15); // 0.15 = the first interior row at s ≥ 3.2
+  const good = on.filter((o) => o.off !== null && Math.abs(o.off) <= 40).length;
+  const ag = lipAgreement(clips);
+  const cl = closuresOf(clips);
+  if (process.env.FACE_LIP_DEBUG) console.log('real engine + voice', JSON.stringify({ onsets: on, good, ag, closures: cl.length, minClosure: Math.min(...cl) }));
+  assert.ok(on.length >= 25, `${on.length} onsets measured`);
+  assert.ok(good / on.length >= 0.9, `${good} of ${on.length} onsets within ±40 ms: ${on.filter((o) => o.off === null || Math.abs(o.off) > 40).map((o) => `${o.word} ${o.off === null ? 'none' : Math.round(o.off)}`).join(', ')}`);
+  assert.ok(ag.shut <= 600 && ag.longest <= 160, `audible voice behind shut lips: ${ag.shut} ms in all, longest ${ag.longest} ms`);
+  assert.ok(ag.openQuiet <= 100, `open lips in silence: ${ag.openQuiet} ms`);
+  assert.ok(cl.length >= 40 && cl.every((d) => d >= 40 - STEP_MS), `m/b/p closures: ${cl.length}, shortest ${Math.min(...cl)} ms`);
+});
+
+test('lip sync through the real AudioEngine without the voice field (the engine as it is today): no regression', async () => {
+  const clips = await realEngineMouths(false);
+  const on = lipOnsets(clips, 0.08);
+  const good = on.filter((o) => o.off !== null && Math.abs(o.off) <= 40).length;
+  const cl = closuresOf(clips);
+  if (process.env.FACE_LIP_DEBUG) console.log('real engine, no voice', JSON.stringify({ onsets: on, good, closures: cl.length, ag: lipAgreement(clips) }));
+  assert.ok(good / on.length >= 0.8, `${good} of ${on.length} onsets within ±40 ms`);
+  assert.ok(cl.length >= 40 && cl.every((d) => d >= 40 - STEP_MS), `m/b/p closures: ${cl.length}, shortest ${Math.min(...cl)} ms`);
 });
 
 test('greeting nod (world-now.md: once per presenter): the co-presenter named in the intro nods on its own name', () => {
@@ -788,4 +1081,46 @@ test('skin: the forehead highlight is a short sheen above the key-side brow in c
       }
     }
   }
+});
+
+test('no per-pixel garbage: once optimised, head skin + face + glasses allocate < 1.5 KB per close-up frame (sampled heap profile)', async () => {
+  const { Session } = await import('node:inspector/promises');
+  const { PartBuffer } = await import('../public/js/v2/canvas25d/pixbuf.js');
+  const { actor } = await import('../public/js/v2/canvas25d/scene.js');
+  const { poseAt } = await import('../public/js/v2/canvas25d/rig.js');
+  const { drawHead } = await import('../public/js/v2/canvas25d/head.js');
+  const { drawFace } = await import('../public/js/v2/canvas25d/face.js');
+  const { matsOf } = await import('../public/js/v2/canvas25d/cast/base.js');
+  const s = 4.4, buf = new PartBuffer();
+  const a = actor('ada', { side: 1, seed: 5, look: [{ t0: 1, t1: 3.5 }] });
+  const L = a.look, mats = matsOf(L);
+  const poses = [];
+  for (let i = 0; i < 240; i++) poses.push(poseAt(a, 0.5 + i / 60));
+  const heads = poses.map((sk) => {
+    const h = headFrame(L, sk, (x, y) => [192 + x * s, 120 + y * s], s);
+    h.gb = 0;
+    return h;
+  });
+  const frame = (i) => {
+    const k = i % 240;
+    buf.clear();
+    drawHead(buf, L, mats, heads[k], s);
+    drawFace(buf, L, heads[k], poses[k].face, s);
+    drawGlasses(buf, L, heads[k], poses[k].face, s);
+  };
+  for (let i = 0; i < 3000; i++) frame(i); // let TurboFan optimise (unoptimised code boxes every double)
+  const ses = new Session();
+  ses.connect();
+  await ses.post('HeapProfiler.startSampling', { samplingInterval: 128, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true });
+  const N = 2000;
+  for (let i = 0; i < N; i++) frame(i);
+  const { profile } = await ses.post('HeapProfiler.stopSampling');
+  ses.disconnect();
+  let mine = 0;
+  const walk = (n) => {
+    if (/canvas25d\/(head|face|glasses)\.js$/.test(n.callFrame.url)) mine += n.selfSize;
+    for (const c of n.children) walk(c);
+  };
+  walk(profile.head);
+  assert.ok(mine / N < 1536, `${(mine / N).toFixed(0)} bytes per frame allocated in head.js / face.js / glasses.js (was ~260 KB in the skin alone)`);
 });

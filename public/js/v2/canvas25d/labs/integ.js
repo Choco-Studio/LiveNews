@@ -8,10 +8,15 @@
 // (runtime/stage.js, cueclock.js), CAMERA's framings, SET's studio, the rig and
 // the looks. Only the director's timers and the AudioEngine are simulated:
 //   - the director: open 4 s, the intro on its plan as LiveDirection.intro plays
-//     it (headline frames at each teaser sentence, the greeting's studio shot, the
-//     last shot's minLen), one segment after the other with the director's gaps,
-//     shot cues at sentence starts (or the char's time inside a sentence) with
-//     MIN_SHOT, the end card after the outro;
+//     it (a breath, headline frames at each teaser sentence, the greeting's studio
+//     shot, the last shot's minLen), one segment after the other with the pace
+//     profile's pause after each one (pace.js gapAfter, as the director holds it),
+//     shot cues at sentence starts (or the char's time inside a sentence) with the
+//     pace cooldown, the max-hold guard (holdCut) at sentence starts without a
+//     planned cut, the sign-off hold and the end card after the outro;
+//   - the graphics: the real package (graphics/index.js: top row, strap, captions,
+//     ticker) over every frame (`graphics: false` to see the bare picture), so a
+//     capture shows what the viewer sees, hands under the strap included;
 //   - the voice: audio/visemes.js buildTimeline per sentence (what the engine
 //     plays in mute and blips) with the engine's pauses; `voice: 'recorded'`
 //     also gives every segment seg.audio.words from the same timeline (lead 0.18 s),
@@ -20,15 +25,19 @@
 // T's segment (continuing incrementally when T moves forward in the same
 // segment), so a frame depends only on T and the settings.
 //
-//   window.__lab.set({ programme, voice: 'mute'|'recorded', guides, hud })
+//   window.__lab.set({ programme, voice: 'mute'|'recorded', guides, hud, graphics })
 //   window.__lab.render(T)          draw instant T (s from the start of the episode)
 //   window.__lab.timeline()         { duration, segments: [...], shots: [...] } (capture planning)
 //   window.__lab.perf({ frames, runs })   v2 shot ms p50/p95 (min over runs) on this programme
 //   window.__lab.baseline({ runs })       ms of a fixed reference workload (same-session ratio)
 //   window.__lab.state()            the scene, the plan and the clock stats at the last render
+//   window.__lab.hands(name, { slot, framing })  hand pixels seen above the graphics at a gesture's apex
 import { Stage, STUDIO_SHOTS } from '../runtime/stage.js';
 import { planSegment } from '../direction/index.js';
-import { cuesFromPlan } from '../runtime/direction.js';
+import { cuesFromPlan, holdCut } from '../runtime/direction.js';
+import { gestureVisibility } from '../runtime/visibility.js';
+import { Graphics } from '../../../graphics/index.js';
+import { paceFor, gapAfter as paceGap, CHANNEL } from '../../../pace.js';
 import { buildTimeline, sampleTimeline, wordAtChar } from '../../../audio/visemes.js';
 import { splitSentences } from '../../../audio/sentences.js';
 import { drawText } from '../../../font.js';
@@ -36,12 +45,8 @@ import { P } from '../../../palette.js';
 
 const FPS = 60;
 const OPEN = 4; // s
-const GAP_AFTER = 0.3; // s between segments (director)
-const MIN_SHOT = 3;
-const MONTAGE_FRAME = 2.6;
-const BREAKING = 3.4; // stinger + card hold
-const ENDCARD = 3.3;
 const LEAD = 0.18; // s of silence before the first word in a recorded file
+const FIXED_NOW = Date.UTC(2026, 9, 2, 19, 30); // the graphics' London clock, fixed for captures
 
 /** The engine's pause after a sentence in mute/blips (audio.js gapAfter). */
 function pauseAfter(sentence) {
@@ -127,11 +132,23 @@ function buildShow(epIn, presenters, voice) {
     card.getContext('2d').drawImage(full, -16, -9);
     images.set(r.storyId, { small: picture(r.storyId, 104, 62), full, card });
   }
+  // the director's timings, from the programme's pace profile (pace.js), as on air
+  const P = paceFor(ep.program?.id);
+  const MIN_SHOT = P.shots.cooldown;
+  const MONTAGE_FRAME = P.holds.montage;
+  const BREAKING = CHANNEL.stinger / 2 + P.holds.breakingCard; // stinger's second half + the card's hold
+  const gapOf = (i) => paceGap(ep, i).gap;
   let t = 0;
   let lastCut = -Infinity;
   const cut = (at, shot, extra = {}) => {
     shots.push({ t: at, shot, framing: null, focus: 'A', move: null, storyId: null, wall: 'logo', ...extra });
     lastCut = at;
+  };
+  const framings = { close: {}, wide: null }; // the last studio framings on air (the max-hold guard's targets)
+  const note = (c) => {
+    if (!c.framing || c.guard) return;
+    if (c.shot === 'close' && c.framing !== 'ots') framings.close[c.focus] = c.framing;
+    else if (c.shot === 'wide') framings.wide = c.framing;
   };
   cut(0, 'open');
   t = OPEN;
@@ -162,10 +179,13 @@ function buildShow(epIn, presenters, voice) {
       cut(t, 'breakingCard', { storyId: seg.storyId });
       t += BREAKING;
     }
-    const res = planSegment(ep, i, { presenters, gapAfter: GAP_AFTER });
+    const res = planSegment(ep, i, { presenters, gapAfter: gapOf });
     const plan = { id: `${ep.id}:${i}`, index: i, ctx: res.ctx, events: res.events, errors: res.errors, voice, speechStart: null, speechEnd: null };
+    const GAP = gapOf(i);
     const segStart = t;
-    const speechStart = segStart + (voice === 'recorded' ? 0.12 : 0.05);
+    // LiveDirection.intro: the first line comes a breath after the cut from the open
+    const breath = seg.type === 'intro' ? P.open.firstWord : 0;
+    const speechStart = segStart + breath + (voice === 'recorded' ? 0.12 : 0.05);
     const sentAt = [];
     let st = speechStart;
     tls.forEach((tl, k) => {
@@ -187,51 +207,86 @@ function buildShow(epIn, presenters, voice) {
     // the v2 intro (LiveDirection.intro): every cue of the plan at its sentence's first word, montage
     // frames on the story each sentence teases, no MIN_SHOT hold (voice-paced), no cut back at the end
     const introCues = seg.type === 'intro' ? cuesFromPlan(plan, { rundown: ep.rundown }) : null;
-    if (introCues) {
+    if (introCues && (introCues.every((c) => c.shot !== 'montage') || (ep.rundown || []).length >= 2)) {
       let hold = 0;
+      let onAir = null;
       for (const c of introCues) {
         const at = c.k === 0 ? segStart : c.mid ? timeOfChar(c.char) : sentAt[c.sentence] ?? segStart;
         if (c.k > 0 && at > speechEnd) continue;
         if (c.shot === 'montage') cut(at, 'montage', { ...base, card: c.card, storyId: null });
         else cut(at, c.shot, { ...base, focus: c.focus, framing: c.framing, move: c.move, cue: c.k });
+        note(c);
+        onAir = { ...c, t: at };
         hold = Math.min(2, (c.minLen || 0) - (speechEnd - at));
       }
-      segs.push({ i, seg, plan, segStart, speechStart, speechEnd, sentAt, tls });
-      t = speechEnd + Math.max(0, hold) + GAP_AFTER;
+      // the max-hold guard on a long studio intro (MONEY MINUTE's wide)
+      for (let si = 1; si < sentAt.length && onAir; si++) {
+        if (introCues.some((c) => c.k > 0 && c.sentence === si) || sentAt[si] < onAir.t) continue;
+        const g = holdCut(plan, si, { shot: onAir.shot, framing: onAir.framing, focus: onAir.focus, held: sentAt[si] - onAir.t }, { programId: ep.program?.id, gap: GAP, cues: introCues, closeFraming: framings.close[seg.anchor] ?? null, wideFraming: framings.wide });
+        if (g) {
+          cut(sentAt[si], g.shot, { ...base, focus: g.focus, framing: g.framing, cue: g.k, guard: true });
+          onAir = { ...g, t: sentAt[si] };
+          hold = 0;
+        }
+      }
+      segs.push({ i, seg, plan, segStart, speechStart, speechEnd, sentAt, tls, sentences });
+      t = speechEnd + Math.max(0, hold) + GAP;
       continue;
     }
     if (seg.type === 'intro' && (ep.rundown || []).length >= 2) {
       const frames = Math.min(3, ep.rundown.length);
       for (let f = 0; f < frames; f++) cut(segStart + f * MONTAGE_FRAME, 'montage', { ...base, card: f });
       const end = Math.max(speechEnd, segStart + frames * MONTAGE_FRAME);
-      segs.push({ i, seg, plan, segStart, speechStart, speechEnd, sentAt, tls });
+      segs.push({ i, seg, plan, segStart, speechStart, speechEnd, sentAt, tls, sentences });
       cut(end, 'wide', { ...base });
-      t = end + GAP_AFTER;
+      t = end + GAP;
       continue;
     }
     const cues = cuesFromPlan(plan, { hasImg });
     if (!cues) cut(segStart, story ? 'close' : 'wide', base);
     else {
+      // cues in time order with the guard's cues at sentence starts that have no planned cut
+      const timed = [];
       for (const c of cues) {
         if (!story && !studio(c.shot)) continue;
-        let at = c.k === 0 ? segStart : c.mid ? timeOfChar(c.char) : sentAt[c.sentence] ?? segStart;
-        if (c.k > 0 && at - lastCut < MIN_SHOT) at = lastCut + MIN_SHOT;
-        if (c.k > 0 && at > speechEnd) continue;
-        if (c.k === 0 && !story && !studio(shots[shots.length - 1]?.shot)) {
-          // chats and outros open on the director's studio shot
-        }
-        cut(at, c.shot, { ...base, focus: c.focus, framing: c.framing, move: c.move, cue: c.k });
+        timed.push({ c, at: c.k === 0 ? segStart : c.mid ? timeOfChar(c.char) : sentAt[c.sentence] ?? segStart });
       }
+      timed.sort((a, b) => a.at - b.at || a.c.k - b.c.k);
+      let onAir = null;
+      let k = 0;
+      const apply = (c, at0) => {
+        let at = at0;
+        if (c.k > 0 && at - lastCut < MIN_SHOT) at = lastCut + MIN_SHOT;
+        if (c.k > 0 && at > speechEnd) return;
+        if (onAir && c.k > 0 && onAir.shot === c.shot && (onAir.framing ?? null) === (c.framing ?? null) && onAir.focus === c.focus && !c.move) return;
+        cut(at, c.shot, { ...base, focus: c.focus, framing: c.framing, move: c.move, cue: c.k, guard: !!c.guard });
+        note(c);
+        onAir = { ...c, t: at };
+      };
+      for (let si = 0; si < Math.max(1, sentAt.length); si++) {
+        const tS = si === 0 ? segStart : sentAt[si];
+        const next = si + 1 < sentAt.length ? sentAt[si + 1] : Infinity;
+        let planned = false;
+        while (k < timed.length && timed[k].at < next - 1e-9) {
+          if (!timed[k].c.mid && timed[k].c.sentence === si) planned = true;
+          apply(timed[k].c, timed[k].at);
+          k++;
+        }
+        if (planned || si === 0 || !onAir || tS < onAir.t) continue;
+        const g = holdCut(plan, si, { shot: onAir.shot, framing: onAir.framing, focus: onAir.focus, held: tS - onAir.t }, { programId: ep.program?.id, gap: GAP, cues, closeFraming: framings.close[seg.anchor] ?? cues.find((c) => c.shot === 'close' && c.focus === seg.anchor && c.framing && c.framing !== 'ots')?.framing ?? null, wideFraming: framings.wide });
+        if (g) apply(g, tS);
+      }
+      while (k < timed.length) apply(timed[k].c, timed[k++].at);
     }
-    segs.push({ i, seg, plan, segStart, speechStart, speechEnd, sentAt, tls });
-    t = speechEnd + GAP_AFTER;
+    segs.push({ i, seg, plan, segStart, speechStart, speechEnd, sentAt, tls, sentences });
+    t = speechEnd + GAP;
     if (seg.type === 'outro') {
       cut(t, 'endcard');
-      t += ENDCARD;
+      t += P.holds.endcard;
     }
   }
   shots.sort((a, b) => a.t - b.t);
-  return { ep, segs, shots, images, duration: t };
+  return { ep, segs, shots, images, duration: t, strapIn: P.strap.inAfterCut, tagWindow: CHANNEL.programTag.window };
 }
 
 /** A fake AudioEngine for the Stage: the simulated voice's speechFrame. */
@@ -323,10 +378,15 @@ function guides(ctx) {
 export function createIntegLab(canvas, { episodes = EPISODES, presenters = PRESENTERS } = {}) {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
-  const opts = { programme: 'world-now', voice: 'mute', guides: false, hud: false, zoom: null };
+  const opts = { programme: 'world-now', voice: 'mute', guides: false, hud: false, zoom: null, graphics: true };
   let show = null;
   let stage = null;
   let audio = null;
+  let gfx = null;
+  let curT = 0;
+  const gfxOut = {};
+  // the graphics read the engine's current speech frame (captions follow the voice)
+  const gfxAudio = { speechFrame: () => audio.speechFrame(curT * 1000, segAt(show, curT)?.seg.anchor || 'A', gfxOut) };
   let simT = -1;
   let simFrom = -1;
   let scene = null;
@@ -344,7 +404,8 @@ export function createIntegLab(canvas, { episodes = EPISODES, presenters = PRESE
       s.plan.speechStart = null;
       s.plan.speechEnd = null;
     }
-    scene = { episode: show.ep, program: show.ep.program, cast: show.ep.cast, shot: 'open', shotSince: 0, focus: 'A', framing: null, cameraMove: null, storyId: null, wall: { mode: 'logo' }, anchors: {}, images: show.images, segPlan: null, stinger: null };
+    scene = { episode: show.ep, program: show.ep.program, cast: show.ep.cast, shot: 'open', shotSince: 0, focus: 'A', framing: null, cameraMove: null, storyId: null, wall: { mode: 'logo' }, anchors: {}, images: show.images, segPlan: null, stinger: null, rundown: show.ep.rundown || [], ticker: (show.ep.rundown || []).map((r) => ({ source: r.source, text: r.headline })), lowerThird: null, subtitle: null, subtitles: true, programTagUntil: OPEN + show.tagWindow };
+    gfx = new Graphics({ audio: gfxAudio, now: () => FIXED_NOW });
     shotIx = -1;
     simFrom = from;
     simT = from - 1 / FPS;
@@ -370,6 +431,20 @@ export function createIntegLab(canvas, { episodes = EPISODES, presenters = PRESE
       scene.segPlan = s.plan;
       if (t >= s.speechStart && s.plan.speechStart == null) s.plan.speechStart = s.speechStart;
       if (t >= s.speechEnd && s.plan.speechEnd == null) s.plan.speechEnd = s.speechEnd;
+      // the director's graphics state: the story strap (1 s after the cut), the caption of the sentence on air
+      const seg = s.seg;
+      if (seg.type === 'story') {
+        if (scene.lowerThird?.ref !== seg) {
+          const id = show.ep.cast[seg.anchor];
+          scene.lowerThird = { ref: seg, headline: seg.headline, source: seg.source || '', anchorName: PRESENTERS[id]?.name || '', showName: false, breaking: !!seg.breaking, kicker: seg.kicker, category: seg.category, since: s.segStart + show.strapIn };
+        }
+      } else scene.lowerThird = null;
+      let k = -1;
+      if (t >= s.speechStart && t < s.speechEnd) {
+        k = 0;
+        while (k + 1 < s.sentAt.length && s.sentAt[k + 1] <= t) k++;
+      }
+      scene.subtitle = k >= 0 ? s.sentences?.[k] ?? null : null;
       const emo = s.seg.emotion || 'neutral';
       for (const slot of Object.keys(show.ep.cast)) {
         scene.anchors[slot] = { emotion: slot === s.seg.anchor ? emo : emo === 'happy' ? 'happy' : emo === 'serious' || emo === 'sad' ? 'serious' : 'neutral' };
@@ -387,6 +462,10 @@ export function createIntegLab(canvas, { episodes = EPISODES, presenters = PRESE
       const t = simFrom + k / FPS;
       direct(t);
       stage.frame(null, t, scene, false);
+      if (opts.graphics) {
+        curT = t;
+        gfx.update(t, scene);
+      }
     }
     simT = simFrom + (n - 1) / FPS;
   }
@@ -401,6 +480,10 @@ export function createIntegLab(canvas, { episodes = EPISODES, presenters = PRESE
     const ok = stage.frame(ctx, T, scene, studio);
     simT = T;
     if (!studio || !ok) slate(ctx, show.shots[shotIx] || { shot: scene.shot }, show, segAt(show, T));
+    if (opts.graphics) {
+      curT = T;
+      gfx.draw(ctx, T, scene);
+    }
     if (opts.zoom) zoomInto(ctx, opts.zoom);
     if (opts.guides) guides(ctx);
     if (opts.hud) {
@@ -414,10 +497,15 @@ export function createIntegLab(canvas, { episodes = EPISODES, presenters = PRESE
   return {
     render,
     set(o = {}) {
-      const before = `${opts.programme}|${opts.voice}`;
+      const before = `${opts.programme}|${opts.voice}|${opts.graphics}`;
       Object.assign(opts, o);
-      if (`${opts.programme}|${opts.voice}` !== before || !show) rebuild();
+      if (`${opts.programme}|${opts.voice}|${opts.graphics}` !== before || !show) rebuild();
       return { ...opts };
+    },
+    /** Hand pixels seen above the graphics at a gesture's apex in a framing (runtime/visibility.js). */
+    hands(name, { slot = 'A', framing = 'single', shot = 'close', variant = null } = {}) {
+      if (!show) rebuild();
+      return gestureVisibility({ ep: show.ep, slot, framing, shot, gesture: { name, variant } });
     },
     timeline() {
       if (!show) rebuild();

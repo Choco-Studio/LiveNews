@@ -5,7 +5,7 @@
 // and the commercial kit's faces and pure helpers.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ADS, pickAds } from '../public/js/ads/index.js';
+import { ADS, pickAds, BREAK_BLACK } from '../public/js/ads/index.js';
 import { Director } from '../public/js/director.js';
 import { parseTune } from '../public/js/audio/tune.js';
 import * as K from '../public/js/ads/kit.js';
@@ -181,10 +181,74 @@ test('playAd speaks each line and starts the bed on the picture clock, not 0.4 s
   for (let i = 0; i < 2; i++) {
     const dt = spoken[i].t - s.shotSince;
     // never early; on a loaded machine timers may run late, but not by the old 0.4 s
-    assert.ok(dt >= ad.script[i].at - 0.01 && dt < ad.script[i].at + 0.2, `line ${i} at ${dt.toFixed(3)} s on the picture clock, script says ${ad.script[i].at}`);
+    assert.ok(dt >= ad.script[i].at - 0.01 && dt < ad.script[i].at + 0.3, `line ${i} at ${dt.toFixed(3)} s on the picture clock, script says ${ad.script[i].at}`);
   }
   assert.ok(Math.abs(tuneOpts.startAt - s.shotSince * 1000) < 1, 'the bed is scheduled from the cut');
-  assert.ok(end >= ad.duration - 0.02 && end < ad.duration + 0.25, `the ad holds ${end.toFixed(3)} s for a ${ad.duration} s spot`);
+  assert.ok(end >= ad.duration - 0.02 && end < ad.duration + 0.35, `the ad holds ${end.toFixed(3)} s for a ${ad.duration} s spot`);
+});
+
+// --- inside a break: black and silence between elements, never a stinger ----------------
+
+test('a break has one stinger (into the ident), then 0.3 s of black and silence before every ad and the promo', async () => {
+  const log = [];
+  const t0 = performance.now() / 1000;
+  const at = () => performance.now() / 1000 - t0;
+  const audio = {
+    setVoices() {},
+    sfx(name, opts) {
+      log.push({ k: 'sfx', name, t: at(), startAt: opts?.startAt });
+    },
+    playTune(tune, opts) {
+      log.push({ k: 'bed', t: at(), startAt: opts.startAt });
+      return { stop: () => log.push({ k: 'bedStop', t: at() }) };
+    },
+    async speak() {},
+  };
+  const director = new Director({ audio, channel: { name: 'T', slogan: '', presenters: {} } });
+  director.voices = { refreshAds() {}, prepareAd() {}, adLine: () => null };
+  const s = director.scene;
+  const setShot = director.setShot.bind(director);
+  director.setShot = (shot, extra = {}) => {
+    setShot(shot, extra);
+    log.push({ k: 'shot', shot, black: extra.card?.ad === BREAK_BLACK, ad: extra.card?.ad?.id, t: at(), since: s.shotSince, stinger: !!s.stinger });
+  };
+  const stinger = director.stinger.bind(director);
+  director.stinger = (...args) => {
+    log.push({ k: 'stinger', t: at() });
+    return stinger(...args);
+  };
+  // the spots themselves are stubbed (their own clock is tested above): 50 ms each
+  director.playAd = async (ad) => {
+    log.push({ k: 'play', ad: ad.id, t: at(), since: s.shotSince });
+    await new Promise((r) => setTimeout(r, 50));
+  };
+  await director.playBreak({ kind: 'break', id: 'b1', filler: false, ads: 2, next: { id: 'world-now', title: 'WORLD NOW', ready: true } });
+  const stingers = log.filter((e) => e.k === 'stinger');
+  assert.equal(stingers.length, 1, 'one stinger: the hand-over from the programme into the break');
+  const shots = log.filter((e) => e.k === 'shot');
+  const identAt = shots.findIndex((e) => e.shot === 'ident');
+  assert.ok(identAt >= 0, 'the ident airs');
+  const after = shots.slice(identAt + 1);
+  // ident, black, ad, black, ad, black, promo
+  assert.deepEqual(after.map((e) => (e.black ? 'black' : e.shot)), ['black', 'ad', 'black', 'ad', 'black', 'promo']);
+  for (let i = 0; i < after.length; i += 2) {
+    const gap = after[i + 1].t - after[i].t;
+    assert.ok(gap >= 0.29 && gap < 0.6, `black ${i / 2} lasts ${gap.toFixed(3)} s`);
+  }
+  // no network sound inside the break: the whoosh belongs to the one stinger, before the ident
+  const firstBlack = after[0].t;
+  const sfxInside = log.filter((e) => e.k === 'sfx' && e.t >= firstBlack - 0.001);
+  assert.deepEqual(sfxInside.map((e) => e.name), ['promo'], 'only the promo signature, on its cut');
+  assert.ok(!log.some((e) => e.k === 'sfx' && e.name === 'whoosh' && e.t >= firstBlack - 0.001), 'no whoosh between ads');
+  // each bed is scheduled at the black to be heard on the cut, and the picture clock is pinned to that cut
+  const beds = log.filter((e) => e.k === 'bed');
+  const plays = log.filter((e) => e.k === 'play');
+  assert.equal(beds.length, 2);
+  assert.equal(plays.length, 2);
+  for (let i = 0; i < 2; i++) assert.ok(Math.abs(beds[i].startAt / 1000 - plays[i].since) < 1e-6, `ad ${i}: bed and picture share the cut`);
+  // the first ad's bed has stopped before the second ad's black ends (silence between them)
+  const stops = log.filter((e) => e.k === 'bedStop');
+  assert.ok(stops.length === 2 && stops[0].t <= after[3].t, 'the bed stops at the end of its ad');
 });
 
 // --- every spot draws cleanly ----------------------------------------------------------

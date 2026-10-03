@@ -18,6 +18,7 @@ import { Canvas, blob, encodePng, hex, mix, noise1, noise2, ramp, rng } from './
 import { H, W, clamp01, clouds, groundShadow, haze, pickOf, reflect, smooth, sparkle, tree } from './kit.mjs';
 import { NEWS_GRADES, NEWS_SCENES } from './scenes-news.mjs';
 import { MORE_GRADES, MORE_SCENES } from './scenes-more.mjs';
+import { DESK_GRADES, DESK_SCENES } from './scenes-desk.mjs';
 
 const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'img');
 
@@ -790,12 +791,12 @@ const GRADES = {
   tram: { saturation: 0.8, tint: 0.14 },
 };
 
-Object.assign(SCENES, NEWS_SCENES, MORE_SCENES);
-Object.assign(GRADES, NEWS_GRADES, MORE_GRADES);
+Object.assign(SCENES, NEWS_SCENES, MORE_SCENES, DESK_SCENES);
+Object.assign(GRADES, NEWS_GRADES, MORE_GRADES, DESK_GRADES);
 
 // Smaller renditions some fixture feeds offer next to (or instead of) the full picture, the way real feeds
 // list a thumbnail in media:group or media:thumbnail: the picture desk must find and prefer the large one.
-export const THUMBS = ['wildfire', 'factory', 'hurricane', 'temple'];
+export const THUMBS = ['wildfire', 'factory', 'hurricane', 'temple', 'research', 'bees'];
 
 /** Paint one scene at full size, graded, before downsampling. */
 export function paintCanvas(name, seed = 1) {

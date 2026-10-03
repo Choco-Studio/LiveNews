@@ -28,11 +28,12 @@ export const CHANNEL = Object.freeze({
   // the channel stinger (scenes/cards.js STINGER_DURATION; test/pace.test.js keeps them equal):
   // the shot changes under it at half time
   stinger: 0.8,
-  // breaks (channel-and-breaks.md 4.2): ident hold after its stinger, black between elements,
-  // UP NEXT promo, holding slide
-  breaks: Object.freeze({ ident: 4.0, blackGap: 0.3, promo: 5.5, holding: 3.0, afterAd: 0.4 }),
-  // before a programme's first frame on a cold start (the start card), so the open never lands mid-load
-  coldStart: 1.0,
+  // breaks (channel-and-breaks.md 3.2/4.2): ident on air from its stinger's cut; inside the break 0.3 s of black and
+  // silence then a hard cut between elements (no stinger between two commercials: ads/index.js BREAK_BLACK); UP NEXT promo
+  breaks: Object.freeze({ ident: 4.0, blackGap: 0.3, promo: 5.5 }),
+  // master control unreachable: the standby card retries every `retry` s; after a playout error the director waits
+  // `afterError` s before the next item (never a tight loop)
+  standby: Object.freeze({ retry: 6, afterError: 1.5 }),
   // ticker flipper (ART_DIRECTION: 1.5 s + 0.4 s per word; owner 18:52: held longer, gentle; brief: >= 6 s per
   // item): push + base + perWord x words gives 6.45 s for 3 words, 8.2 s for 7, 10.0 s for 11 (pages split longer text)
   ticker: Object.freeze({ push: 0.4, base: 4.7, perWord: 0.45, minHold: 6.0, maxHold: 14, bandIn: 0.35, bandDelay: 0.15, bandOut: 0.25 }),
@@ -83,8 +84,7 @@ export const TRANSITIONS = Object.freeze({
  *             (one chat line to the next), intoChat / outOfChat, roundupItem, beforeFinally,
  *             afterIntro, beforeOutro, block (between editorial blocks: after a round-up, a
  *             "still to come"), afterBreakingCard; `jitter` = seeded ± share of each pause
- *   holds     signoff (last word → stinger), endcard, breakingCard, montage (headline beat floor),
- *             montageTail (after the last teased line, before the greeting's wide)
+ *   holds     signoff (last word → stinger), endcard, breakingCard, montage (headline beat floor)
  *   shots     min (no cut faster), cooldown (after a cut, no new cut), median [lo, hi] target,
  *             studioMax, singleSoft (split a single beyond this), picture [min, max], map [min, max],
  *             factMin, cutsPerMinMax (outside montages), sameFramingRun (identical framings in a
@@ -119,7 +119,7 @@ const BASE = {
     afterBreakingCard: 0.35,
     jitter: 0.08,
   },
-  holds: { signoff: 1.5, endcard: 3.2, breakingCard: 2.6, montage: 3.8, montageTail: 0.4 },
+  holds: { signoff: 1.5, endcard: 3.2, breakingCard: 2.6, montage: 3.8 },
   shots: {
     min: 4.0,
     cooldown: 4.0,
@@ -127,7 +127,7 @@ const BASE = {
     studioMax: 15,
     singleSoft: 11,
     picture: [4, 8],
-    map: [5, 7.5],
+    map: [5, 10], // a map with its slow pin move may carry a whole short story (BBC holds 8-12 s)
     factMin: 4,
     cutsPerMinMax: 8,
     sameFramingRun: 1,
@@ -154,7 +154,7 @@ const PROGRAMMES = {
     open: { firstWord: 0.5 }, // world-now.md: first word 0.5 s after the cut
     gaps: { story: 1.0, handover: 0.85, beforeFinally: 1.2, roundupItem: 0.65 }, // world-now.md: 0.7 s between stories, 1.0 s before And finally
     holds: { signoff: 1.5, endcard: 3.2 },
-    shots: { median: [5, 7], studioMax: 15, singleSoft: 11, picture: [4, 8], map: [5, 7.5] },
+    shots: { median: [5, 7], studioMax: 15, singleSoft: 11, picture: [4, 8], map: [5, 10] },
     moves: { max: 5, minGap: 40 },
     gestures: { perMin: 5, minGap: 5.5, beatsPerMin: 7, rest: 0.62, grave: 2 },
     listener: { reactionGap: 8 },
@@ -167,7 +167,7 @@ const PROGRAMMES = {
     },
     gaps: { story: 0.9, handover: 0.7, chatTurn: 0.42, intoChat: 0.55, outOfChat: 0.75, beforeFinally: 1.0, block: 1.15 }, // tech-bytes.md 0.8 s before And finally
     holds: { signoff: 1.0, endcard: 3.0 },
-    shots: { median: [4.5, 6.5], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [5, 7], cutsPerMinMax: 9 },
+    shots: { median: [4.5, 6.5], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [5, 9], cutsPerMinMax: 9 },
     moves: { max: 2, minGap: 60 }, // THE CATCH push (the bible's only move), one per exchange
     gestures: { perMin: 6, minGap: 4.5, beatsPerMin: 9, rest: 0.55, grave: 2 },
     listener: { reactionGap: 7 },

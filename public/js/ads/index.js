@@ -10,8 +10,25 @@ import cloudbrella from './cloudbrella.js';
 import hiresgym from './hiresgym.js';
 import corners from './corners.js';
 import serene from './serene.js';
+import { P } from '../palette.js';
 
 export const ADS = [bitfizz, screechnet, safesector, grandbuffer, cloudbrella, hiresgym, corners, serene];
+
+/**
+ * The 0.3 s of black and silence between break elements (channel-and-breaks
+ * §3.2: inside a break no stinger, just black). The director plays it as an
+ * 'ad' shot so both renderers paint it and the ADVERTISEMENT tag stays up
+ * through the break; it is not an ad (never in ADS, never picked).
+ */
+export const BREAK_BLACK = Object.freeze({
+  id: 'black',
+  black: true,
+  duration: 0.3,
+  draw(ctx) {
+    ctx.fillStyle = P.black; // the palette's black, the same as every spot's letterbox and fade
+    ctx.fillRect(0, 0, 384, 216);
+  },
+});
 
 /**
  * `count` distinct ads for a break. Ads never seen in `recentIds` (the play

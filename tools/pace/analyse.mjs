@@ -26,20 +26,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { paceFor, gapKind, wordCount, CHANNEL } from '../../public/js/pace.js';
 
-// ------------------------------------------------------------------ options
-const argv = process.argv.slice(2);
-const files = [];
-const opt = { audio: true, quiet: false };
-for (let i = 0; i < argv.length; i++) {
-  const a = argv[i];
-  if (a === '--md') opt.md = argv[++i];
-  else if (a === '--json') opt.json = argv[++i];
-  else if (a === '--server-log') opt.serverLog = argv[++i];
-  else if (a === '--no-audio') opt.audio = false;
-  else if (a === '--quiet') opt.quiet = true;
-  else files.push(a);
-}
-
 // ------------------------------------------------------------------ stats
 const r2 = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : null);
 function quant(arr, q) {
@@ -205,10 +191,12 @@ function breaksOf(t, shots) {
     const t1 = end ? end.t : null;
     const inside = shots.filter((s) => s.at >= b.t - 0.01 && (t1 == null || s.at < t1));
     const ident = inside.find((s) => s.shot === 'ident');
-    const ads = inside.filter((s) => s.shot === 'ad').map((s) => ({ ad: s.card?.ad, dur: r2(s.dur) }));
+    const ads = inside.filter((s) => s.shot === 'ad' && s.card?.ad !== 'black').map((s) => ({ ad: s.card?.ad, dur: r2(s.dur) }));
+    // the black between break elements (ads/index.js BREAK_BLACK; pace CHANNEL.breaks.blackGap)
+    const blacks = inside.filter((s) => s.shot === 'ad' && s.card?.ad === 'black').map((s) => r2(s.dur));
     const promo = inside.find((s) => s.shot === 'promo');
     const stingers = t.events.filter((e) => e.ev === 'stinger' && e.at >= b.t - 0.01 && (t1 == null || e.at < t1)).length;
-    out.push({ at: r2(b.t), filler: !!b.filler, length: t1 != null ? r2(t1 - b.t) : null, ident: ident ? r2(ident.dur) : null, ads, promo: promo ? r2(t1 != null ? t1 - promo.at : promo.dur) : null, stingers });
+    out.push({ at: r2(b.t), filler: !!b.filler, length: t1 != null ? r2(t1 - b.t) : null, ident: ident ? r2(ident.dur) : null, ads, blacks, promo: promo ? r2(t1 != null ? t1 - promo.at : promo.dur) : null, stingers });
   }
   return out;
 }
@@ -221,10 +209,26 @@ function analyseProgramme(t, prog, shots, env) {
   const inSpan = (x) => x >= t0 - 1e-3 && x < t1 - 1e-3;
   const ev = t.events.filter((e) => inSpan(e.t));
   const pace = ev.filter((e) => e.ev === 'pace');
-  const mine = shots.filter((s) => inSpan(s.at));
+  let mine = shots.filter((s) => inSpan(s.at)).map((s) => ({ ...s }));
   for (const s of mine) if (s.dur == null || s.at + s.dur > t1) s.dur = t1 - s.at;
   // framings / moves from the pace traces (the Stage logs each cut it sees)
   const cuts = pace.filter((e) => e.k === 'cut');
+  // What the viewer sees: with the Stage's cut traces, a studio shot the director re-set on the same
+  // camera (a focus-only hand-over on the wide two-shot) is no cut; it extends the shot on air.
+  if (cuts.length) {
+    const seen = [];
+    for (const s of mine) {
+      const prev = seen[seen.length - 1];
+      const visible = cuts.some((c) => Math.abs(c.t - s.at) < 0.35);
+      if (prev && STUDIO.has(s.shot) && STUDIO.has(prev.shot) && !visible) {
+        prev.dur += s.dur;
+        prev.recuts = (prev.recuts || 0) + 1;
+        continue;
+      }
+      seen.push(s);
+    }
+    mine = seen;
+  }
   for (const s of mine) {
     const c = cuts.find((x) => Math.abs(x.t - s.at) < 0.25 && x.shot === s.shot) || cuts.find((x) => x.t >= s.at - 0.02 && x.t < s.at + (s.dur || 0) && x.shot === s.shot);
     if (c) {
@@ -325,12 +329,17 @@ function analyseProgramme(t, prog, shots, env) {
     cur = e.headline ? e : null;
   }
   if (cur) strapOn.push(bodyEnd - cur.t);
-  const strapDelay = straps
+  // the strap is SET with the story; it wipes in at lowerThird.since (the director's pace trace `at`)
+  const strapTraces = pace.filter((e) => e.k === 'strap' && Number.isFinite(e.at));
+  // without the director's trace the wipe-in instant is unknown (the strap is set before it enters)
+  const strapDelay = (strapTraces.length ? straps : [])
     .filter((e) => e.headline)
     .map((e) => {
       const story = [...says].reverse().find((s) => s.t <= e.t + 0.05);
       const cut = [...mine].reverse().find((s) => s.at <= e.t + 0.05);
-      return story && cut ? e.t - Math.max(cut.at, story.t) : null;
+      const tr = strapTraces.find((x) => Math.abs(x.t - e.t) < 0.3);
+      const inAt = tr ? tr.at : e.t;
+      return story && cut ? inAt - Math.max(cut.at, story.t) : null;
     })
     .filter(Number.isFinite);
 
@@ -428,7 +437,7 @@ function analyseProgramme(t, prog, shots, env) {
     stories: (ep.segments || []).filter((s) => s.type === 'story').length,
     chats: (ep.segments || []).filter((s) => s.type === 'chat').length,
     speech: r2(says.reduce((a, s) => a + Math.max(0, s.off - s.on), 0)),
-    shots: { ...stats(durs), cutsPerMin: r2(((bodyNoMontage.length - 1) * 60) / editTime), under: under.length, underList: under.slice(0, 12), sameFraming: repeats.length, sameFramingList: repeats.slice(0, 8), worstTypeRun: worstRun, framings: [...new Set(bodyNoMontage.map((s) => s.framing).filter(Boolean))] },
+    shots: { ...stats(durs), cutsPerMin: r2((Math.max(0, bodyNoMontage.length - 1) * 60) / editTime), under: under.length, underList: under.slice(0, 12), sameFraming: repeats.length, sameFramingList: repeats.slice(0, 8), worstTypeRun: worstRun, framings: [...new Set(bodyNoMontage.map((s) => s.framing).filter(Boolean))] },
     dwell,
     moves: cuts.length ? { n: moves.length, perMin: r2((moves.length * 60) / Math.max(1, length)), minGap: moveGaps.length ? r2(Math.min(...moveGaps)) : null, list: moves.map((m) => ({ at: r2(m.t), move: m.move, amount: m.amount ?? null })) } : null,
     captions: { ...stats(caps.map((c) => c.dur)), cps: stats(caps.map((c) => c.cps)), over17cps: caps.filter((c) => c.cps > 17).length },
@@ -448,6 +457,12 @@ function analyseProgramme(t, prog, shots, env) {
     voiceGapsOver1_5: voiceGaps,
     deadAir: dead,
     audioMeasured: !!env,
+    // the programme as the viewer saw it, relative to the open (public/lab/pace.html 'measured' view)
+    strip: {
+      shots: mine.map((x) => [r2(x.at - t0), r2(x.dur), x.shot, x.framing ?? null]),
+      says: says.map((x) => [r2(x.on - t0), r2(x.off - t0), x.anchor, x.type]),
+      gaps: gaps.map((x) => [r2(x.at - t0), x.gap, x.kind, x.target]),
+    },
   };
   report.checks = checks(report, P, lo, hi);
   return report;
@@ -521,9 +536,16 @@ function mdProgramme(r) {
 }
 
 // ------------------------------------------------------------------ main
-function analyseFile(file) {
-  const t = loadTimeline(file);
+/** Analyse a parsed timeline (the recorder's or tools/pace/trace.mjs'). env: voice envelope (+ env.mix) or null. */
+export function analyseTimeline(t, { env = null } = {}) {
+  t.events = (t.events || []).slice().sort((a, b) => a.t - b.t);
   const shots = shotsOf(t.events);
+  const progs = programmesOf(t, shots).map((p) => analyseProgramme(t, p, shots, env));
+  return { meta: t.meta, programmes: progs, breaks: breaksOf(t, shots) };
+}
+
+function analyseFile(file, opt) {
+  const t = loadTimeline(file);
   let env = null;
   if (opt.audio) {
     const work = file.replace(/-timeline\.json$/, '.work');
@@ -539,14 +561,12 @@ function analyseFile(file) {
       if (!opt.quiet) console.warn(`[pace] audio skipped: ${err.message}`);
     }
   }
-  const progs = programmesOf(t, shots).map((p) => analyseProgramme(t, p, shots, env));
-  return { file, meta: t.meta, programmes: progs, breaks: breaksOf(t, shots) };
+  return { file, ...analyseTimeline(t, { env }) };
 }
 
 /** "[voice] WORLD NOW: 12/12 clips (2 cached), 108 s of speech in 84 s" + "[producer] ... ready in 84.3 s" */
-function production(logFile) {
+export function production(text) {
   const out = [];
-  const text = fs.readFileSync(logFile, 'utf8');
   for (const m of text.matchAll(/\[voice\] (.+?): (\d+)\/(\d+) clips(?: \((\d+) cached\))?, (\d+(?:\.\d+)?) s of speech in (\d+(?:\.\d+)?) s/g)) {
     out.push({ title: m[1], clips: +m[2], of: +m[3], cached: +(m[4] || 0), speech: +m[5], synth: +m[6], ratio: r2(+m[5] / +m[6]) });
   }
@@ -554,31 +574,86 @@ function production(logFile) {
   return { voice: out, ready };
 }
 
-if (!files.length) {
-  console.error('usage: node tools/pace/analyse.mjs show-timeline.json [...] [--md out.md] [--json out.json] [--server-log log] [--no-audio]');
-  process.exit(1);
+/** One programme's headline numbers, for before/after tables (docs/PACING.md). */
+export function summary(p) {
+  const g = (k) => p.gaps[k]?.median ?? null;
+  const pr = p.presenters ? Object.values(p.presenters) : [];
+  return {
+    programme: p.title,
+    partial: !!p.partial,
+    length: p.length,
+    stories: p.stories,
+    shotMin: p.shots.min ?? null,
+    shotMedian: p.shots.median ?? null,
+    shotP10: p.shots.p10 ?? null,
+    cutsPerMin: p.shots.cutsPerMin,
+    under4: p.shots.under,
+    sameFraming: p.shots.sameFraming,
+    mapMin: p.dwell.map?.min ?? null,
+    handover: g('handover'),
+    story: g('story'),
+    chatTurn: g('chatTurn'),
+    block: g('block'),
+    beforeFinally: g('beforeFinally'),
+    allPausesMedian: (() => {
+      const all = p.gapList.filter((x) => x.kind !== 'breakingCard').map((x) => x.gap);
+      return all.length ? r2(quant(all, 0.5)) : null;
+    })(),
+    openToFirstWord: p.openToFirstWord,
+    lastWordToEndcard: p.lastWordToEndcard,
+    strapIn: p.strap.inDelay.median ?? null,
+    tickerMin: p.ticker?.min ?? null,
+    captionMin: p.captions.min ?? null,
+    gesturesPerMin: pr.length ? r2(Math.max(...pr.map((x) => x.gesturesPerMinTalking ?? 0))) : null,
+    gestureRepeats: pr.length ? pr.reduce((a, x) => a + x.immediateRepeats, 0) : null,
+    musicPerMin: p.music.perMin,
+    voiceGapsOver1_5: p.voiceGapsOver1_5.length,
+    statics: p.statics.filter((x) => x.alive === false).length,
+  };
 }
-const results = files.map(analyseFile);
-if (opt.serverLog) for (const r of results) r.production = production(opt.serverLog);
-const md = [];
-for (const r of results) {
-  md.push(`## ${path.basename(r.file)}`);
-  md.push('');
-  for (const p of r.programmes) md.push(mdProgramme(p));
-  if (r.breaks.length) {
-    md.push('| break | length | ident | ads | promo | stingers |');
-    md.push('| --- | --- | --- | --- | --- | --- |');
-    for (const b of r.breaks) md.push(`| @${fmt(b.at, 0)}${b.filler ? ' filler' : ''} | ${fmt(b.length)} | ${fmt(b.ident)} | ${b.ads.map((a) => `${a.ad} ${fmt(a.dur)}`).join(', ')} | ${fmt(b.promo)} | ${b.stingers} |`);
-    md.push('');
+
+function cli() {
+  const argv = process.argv.slice(2);
+  const files = [];
+  const opt = { audio: true, quiet: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--md') opt.md = argv[++i];
+    else if (a === '--json') opt.json = argv[++i];
+    else if (a === '--server-log') opt.serverLog = argv[++i];
+    else if (a === '--no-audio') opt.audio = false;
+    else if (a === '--quiet') opt.quiet = true;
+    else files.push(a);
   }
-  if (r.production) {
-    md.push('| production | speech | synthesis | speech/synth |');
-    md.push('| --- | --- | --- | --- |');
-    for (const v of r.production.voice) md.push(`| ${v.title} (${v.clips}/${v.of} clips, ${v.cached} cached) | ${v.speech} s | ${v.synth} s | ${v.ratio}x |`);
-    md.push('');
+  if (!files.length) {
+    console.error('usage: node tools/pace/analyse.mjs show-timeline.json [...] [--md out.md] [--json out.json] [--server-log log] [--no-audio]');
+    process.exit(1);
   }
+  const results = files.map((f) => analyseFile(f, opt));
+  if (opt.serverLog) for (const r of results) r.production = production(fs.readFileSync(opt.serverLog, 'utf8'));
+  const md = [];
+  for (const r of results) {
+    md.push(`## ${path.basename(r.file)}`);
+    md.push('');
+    for (const p of r.programmes) md.push(mdProgramme(p));
+    if (r.breaks.length) {
+      md.push('| break | length | ident | ads | black between | promo | stingers |');
+      md.push('| --- | --- | --- | --- | --- | --- | --- |');
+      for (const b of r.breaks) md.push(`| @${fmt(b.at, 0)}${b.filler ? ' filler' : ''} | ${fmt(b.length)} | ${fmt(b.ident)} | ${b.ads.map((a) => `${a.ad} ${fmt(a.dur)}`).join(', ')} | ${b.blacks.length ? b.blacks.map((x) => fmt(x, 2)).join(', ') : '—'} | ${fmt(b.promo)} | ${b.stingers} |`);
+      md.push('');
+    }
+    if (r.production) {
+      md.push('| production | speech | synthesis | speech/synth |');
+      md.push('| --- | --- | --- | --- |');
+      for (const v of r.production.voice) md.push(`| ${v.title} (${v.clips}/${v.of} clips, ${v.cached} cached) | ${v.speech} s | ${v.synth} s | ${v.ratio}x |`);
+      for (const v of r.production.ready) md.push(`| ${v.title} ${v.id} ready (write + pictures + voice budget) | ${v.stories} stories | ${v.ready} s | |`);
+      md.push('');
+    }
+  }
+  const mdText = md.join('\n');
+  if (opt.md) fs.writeFileSync(opt.md, mdText);
+  if (opt.json) fs.writeFileSync(opt.json, JSON.stringify(results.map((r) => ({ ...r, summaries: r.programmes.map(summary) })), null, 1));
+  if (!opt.quiet) console.log(mdText);
 }
-const mdText = md.join('\n');
-if (opt.md) fs.writeFileSync(opt.md, mdText);
-if (opt.json) fs.writeFileSync(opt.json, JSON.stringify(results, null, 1));
-if (!opt.quiet) console.log(mdText);
+
+if (import.meta.url === `file://${process.argv[1]}`) cli();

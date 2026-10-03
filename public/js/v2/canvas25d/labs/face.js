@@ -150,7 +150,7 @@ function timelineMs(s, x) {
   return (l.tt + (x - l.at) / (s.pace || 1)) * 1000;
 }
 
-/** The clip's loudness at file time x, mapped as AudioEngine.loudness() maps the envelope. */
+/** The clip's raw loudness at file time x, mapped as AudioEngine.loudness() maps the envelope. */
 function loudAt(levels, x) {
   if (!levels) return 1;
   const vals = levels.values;
@@ -161,11 +161,34 @@ function loudAt(levels, x) {
   return Math.min(1, Math.max(0, (v - 0.2) / 0.75));
 }
 
+/**
+ * The loudness as AudioEngine.loudness() reports it at file time x: the mapped envelope
+ * through the engine's one-pole smoothing (25 ms to open, 60 ms to close). The engine keeps
+ * that filter as state; here it is re-run over the last 0.3 s, so any instant is pure in x.
+ */
+function smoothLoudAt(levels, x) {
+  if (!levels) return 1;
+  let v = 0;
+  for (let k = 60; k >= 0; k--) {
+    const target = loudAt(levels, x - k * 0.005);
+    v += (target - v) * (1 - Math.exp(-5 / (target > v ? 25 : 60)));
+  }
+  return v;
+}
+
 const SCRATCH = {};
 
 /**
- * A stand-in for the AudioEngine's mouth: { speechFrame(nowMs, slot, out?), runs, end }.
+ * A stand-in for the AudioEngine's mouth (labs and tests): { speechFrame(nowMs, slot, out?), runs, end }.
  * items: [{ slot, text, t0 (s, first word), words?, levels?, lang?, rate? }]
+ * It samples the audio stream's own timelines (buildTimeline / sampleTimeline) and maps the
+ * loudness like the engine (smoothed; `level` = timeline level x min(1, 0.25 + 0.9 x loudness)),
+ * and sends the proposed `voice` field (the smoothed loudness while a recording plays, else -1;
+ * CONTRACTS request to the audio stream). One difference, on purpose: the engine re-anchors its
+ * clock only when a recorded word is reached and eases the correction, while this stand-in
+ * interpolates between the recorded words (it knows the next anchor in advance), so its timing
+ * is OPTIMISTIC. Lip-sync acceptance is measured through the real AudioEngine
+ * (test/v2-face.test.js "real AudioEngine"), never through this stand-in.
  */
 export function timelineAudio(items) {
   const runs = items.map(buildRun);
@@ -178,6 +201,7 @@ export function timelineAudio(items) {
       f.slot = slot ?? null;
       f.speaking = false;
       f.level = 0;
+      f.voice = -1;
       f.viseme = 'rest';
       f.next = 'rest';
       f.mix = 0;
@@ -190,12 +214,15 @@ export function timelineAudio(items) {
       for (const r of runs) {
         if (r.slot !== slot) continue;
         const x = t - r.fileStart;
+        const playing = r.levels && x >= 0 && x <= r.end - r.fileStart + 0.3;
+        const loud = playing ? smoothLoudAt(r.levels, x) : 0;
+        if (playing) f.voice = loud;
         for (let i = 0; i < r.sents.length; i++) {
           const s = r.sents[i];
           if (x < s.begin - 0.07 || x > s.end + 0.07) continue;
           const sm = sampleTimeline(s.tl, timelineMs(s, x), SCRATCH);
           f.speaking = sm.speaking;
-          f.level = Math.max(0, Math.min(1, r.levels ? sm.level * Math.min(1, 0.25 + loudAt(r.levels, x) * 0.9) : sm.level));
+          f.level = Math.max(0, Math.min(1, r.levels ? sm.level * Math.min(1, 0.25 + loud * 0.9) : sm.level));
           f.viseme = sm.viseme;
           f.next = sm.next;
           f.mix = sm.mix;
@@ -206,6 +233,7 @@ export function timelineAudio(items) {
           f.sentenceIndex = i;
           return f;
         }
+        if (playing) return f;
       }
       return f;
     },

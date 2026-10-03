@@ -40,14 +40,15 @@
     <script type="module">
       // Ads lab: renders any registered ad at any instant t (deterministic),
       // or a break of two ads back to back the way director.js plays them
-      // (stinger, the shot changes at its midpoint, every ad starts at dt = 0 and its
-      // voice-over and bed run on that picture clock, as director.playAd does).
+      // (0.3 s of black and silence before each ad and after the last, no stinger
+      // inside a break; every ad starts at dt = 0 on the cut and its voice-over and
+      // bed run on that picture clock, as director.blackCut/playAd do).
       // 'specimen' shows the kit's display faces, 'kit' the premium helpers.
       //   window.__lab.set({ ad: 'bitfizz-cola', mode: 'single'|'break'|'specimen'|'kit', second: 'cloudbrella', subs: true, zoom: [x, y, s] })
       //   ?zoom=x,y,s shows the 384/s x 216/s crop at (x, y) blown up s times (nearest neighbour) to judge pixels
       //   window.__lab.render(t)     window.__lab.duration()     window.__lab.perf()
       //   window.__audio.render({ ad, seconds })  -> the ad's tune rendered offline (tools/render-audio.mjs)
-      import { ADS } from '../js/ads/index.js';
+      import { ADS, BREAK_BLACK } from '../js/ads/index.js';
       import * as K from '../js/ads/kit.js';
       import { drawText } from '../js/font.js';
       import { renderTune } from '../js/audio/synth.js';
@@ -87,32 +88,18 @@
         const b = state.second ? byId(state.second) : ADS[(ADS.indexOf(a) + 1) % ADS.length];
         return [a, b];
       };
-      // The channel stinger lives in cards.js, which pulls in the opens; load it
-      // lazily so a broken in-progress scene elsewhere never takes the ads lab down.
-      let drawStinger = null;
-      let STINGER_DURATION = 0.8;
-      import('../js/scenes/cards.js')
-        .then((m) => {
-          drawStinger = m.drawStinger;
-          STINGER_DURATION = m.STINGER_DURATION;
-          half = STINGER_DURATION / 2;
-        })
-        .catch((err) => console.warn('[lab] stinger unavailable:', err.message));
-      let half = STINGER_DURATION / 2;
-
-      /** What is on screen at break time T: [ad, dt] (or null) plus a stinger progress. */
+      /** What is on screen at break time T: [ad, dt], or null for the black between elements. */
       function breakAt(T) {
         const [a, b] = pair();
-        const a0 = half;
+        const gap = BREAK_BLACK.duration;
+        const a0 = gap;
         const a1 = a0 + holdOf(a);
-        const b0 = a1 + half;
+        const b0 = a1 + gap;
         const b1 = b0 + holdOf(b);
         let on = null;
-        if (T >= a0 && T < b0) on = [a, T - a0];
-        else if (T >= b0 && T < b1 + half) on = [b, T - b0];
-        let sting = -1;
-        for (const s of [0, a1, b1]) if (T >= s && T < s + STINGER_DURATION) sting = (T - s) / STINGER_DURATION;
-        return { on, sting, total: b1 + STINGER_DURATION };
+        if (T >= a0 && T < a1) on = [a, T - a0];
+        else if (T >= b0 && T < b1) on = [b, T - b0];
+        return { on, total: b1 + gap };
       }
 
       // --- type specimen ---------------------------------------------------
@@ -185,10 +172,8 @@
         }
         let ad = null;
         let dt = t;
-        let sting = -1;
         if (state.mode === 'break') {
           const b = breakAt(t);
-          sting = b.sting;
           if (b.on) [ad, dt] = b.on;
         } else ad = byId(state.ad);
         let info = null;
@@ -199,13 +184,12 @@
           dst.save();
           ad.draw(dst, t, dt, info);
           dst.restore();
-        }
+        } else BREAK_BLACK.draw(dst); // the black between break elements
         if (z) {
           const [zx, zy, zs] = z;
           ctx.imageSmoothingEnabled = false;
           ctx.drawImage(off, zx, zy, 384 / zs, 216 / zs, 0, 0, 384, 216);
         }
-        if (sting >= 0 && drawStinger) drawStinger(ctx, t, sting, { channel: 'GLOBIT 24' });
         const vo = ad && info.line >= 0 ? ad.script[info.line].text : '';
         if (state.subs && vo) {
           ctx.fillStyle = 'rgba(0,0,0,0.7)';

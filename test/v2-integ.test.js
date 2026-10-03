@@ -7,12 +7,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { segmentContext, hashSeed } from '../public/js/v2/canvas25d/direction/context.js';
-import { planSegment, arbitrate, defaultGlance } from '../public/js/v2/canvas25d/direction/index.js';
-import { CueClock, prunePerf, TAIL } from '../public/js/v2/canvas25d/runtime/cueclock.js';
+import { planSegment, arbitrate, defaultGlance, onScreenGlances, shotShows, GLANCE_AFTER_CUT } from '../public/js/v2/canvas25d/direction/index.js';
+import { CueClock, prunePerf, TAIL, HOLD_MAX, AFTER_CUT } from '../public/js/v2/canvas25d/runtime/cueclock.js';
 import { FallbackPolicy, PerfWatchdog, BACKOFF } from '../public/js/v2/canvas25d/runtime/watchdog.js';
 import { StageHost } from '../public/js/v2/canvas25d/runtime/host.js';
 import { Stage, castSeats, episodeKey, defaultFraming } from '../public/js/v2/canvas25d/runtime/stage.js';
-import { cuesFromPlan, legacyShot, LiveDirection } from '../public/js/v2/canvas25d/runtime/direction.js';
+import { cuesFromPlan, legacyShot, LiveDirection, holdCut, maxHold } from '../public/js/v2/canvas25d/runtime/direction.js';
+import { paceFor, gapAfter as paceGap } from '../public/js/pace.js';
 import { LOOKS } from '../public/js/v2/canvas25d/cast/index.js';
 
 const FIX = new URL('./fixtures/v2-episodes/', import.meta.url);
@@ -982,4 +983,333 @@ test('context: contextAt gives the neighbour segments of the same episode (memoi
   assert.equal(c.contextAt(-1), null);
   assert.equal(c.contextAt(ep.segments.length), null);
   assert.equal(segmentContext(null, 0).contextAt(0), null, 'malformed episode: no neighbour, no throw');
+});
+
+// ---------------------------------------------------------------------------
+// fix round 1 (critics): the glance on screen, reframes are cuts, pace maxima on air, ots needs
+// wall content, guarded hooks, the default path's v2 modules
+
+test('planSegment: the listener turn glance of a duo intro lands on the first shot that shows the listener', () => {
+  let checked = 0;
+  for (const id of ['world-now', 'tech-bytes', 'cosmos']) {
+    const ep = episodeOf(id);
+    const { ctx, events } = planSegment(ep, 0, {});
+    assert.ok(ctx.duo && ctx.shots.length, id);
+    const listener = ctx.listeners[0];
+    // the planned shots carry their framing now (additive: glances and gesture visibility read it)
+    assert.ok(ctx.shots.every((s) => 'framing' in s), `${id}: ctx.shots framing`);
+    const first = ctx.shots.find((s) => shotShows(s, listener));
+    assert.ok(first, `${id}: a shot that shows the listener (the greeting wide)`);
+    const look = events.find((e) => e.kind === 'look' && e.slot === listener && /^turn/.test(e.why || ''));
+    assert.ok(look, `${id}: the listener's turn glance is planned`);
+    assert.ok(look.at >= first.at && look.at <= first.at + 1, `${id}: glance at ${look.at} s, first shot showing ${listener} at ${first.at} s`);
+    assert.ok(Math.abs(look.at - (first.at + GLANCE_AFTER_CUT)) < 0.01 || first.at === 0, `${id}: 0.25 s after the cut`);
+    assert.ok(look.at + look.dur <= ctx.duration, `${id}: back before the line ends`);
+    // nothing else of that slot overlaps it
+    for (const o of events) if (o !== look && o.kind === 'look' && o.slot === listener) assert.ok(o.at >= look.at + look.dur || o.at + o.dur <= look.at, `${id}: no overlapping look`);
+    checked++;
+  }
+  assert.equal(checked, 3);
+  // a chat that opens on the wide keeps the glance where FACES put it (0.2-0.35 s into the turn)
+  const tb = episodeOf('tech-bytes');
+  const i = tb.segments.findIndex((s, k) => k > 0 && s.type === 'chat');
+  const chat = planSegment(tb, i, {});
+  const g = chat.events.find((e) => e.kind === 'look' && e.slot !== chat.ctx.speaker && /^turn/.test(e.why || ''));
+  if (g) assert.ok(g.at < 1 && !g.onScreen, `chat glance stays at ${g.at}`);
+  // pure rule: hidden glance with no visible shot within 15 s stays put; with one, it moves
+  const ctx = { duo: true, speaker: 'A', duration: 30, words: [{ t: 0, char: 0 }, { t: 20, char: 100 }], shots: [{ at: 0, shot: 'close', framing: 'single', focus: 'A' }, { at: 20, shot: 'wide', framing: 'wide', focus: 'A' }] };
+  const late = [{ kind: 'look', slot: 'B', why: 'turn', at: 0.3, dur: 3, char: 0 }];
+  assert.equal(onScreenGlances(late, ctx)[0].at, 0.3, 'beyond the 15 s window: unchanged');
+  ctx.shots[1].at = 9;
+  const moved = onScreenGlances([{ kind: 'look', slot: 'B', why: 'turn', at: 0.3, dur: 3, char: 0 }], ctx)[0];
+  assert.equal(moved.at, 9.25);
+  assert.equal(moved.dur, 3);
+  // the listener's own single (a reaction shot) shows the listener: nothing moves
+  ctx.shots[0] = { at: 0, shot: 'close', framing: 'single', focus: 'B' };
+  assert.equal(onScreenGlances([{ kind: 'look', slot: 'B', why: 'turn', at: 0.3, dur: 3, char: 0 }], ctx)[0].at, 0.3);
+});
+
+test('cue clock: a turn glance due while its listener is off screen waits for the cut that shows the listener', () => {
+  const plan = planOf(EP, 3, [{ kind: 'look', slot: 'B', target: 'partner', char: 0, at: 0.25, dur: 3, why: 'turn' }, { kind: 'look', slot: 'B', target: 'notes', char: 0, at: 0.3, dur: 1, why: 'prep' }]);
+  let seen = false;
+  const clock = new CueClock();
+  clock.perfs = { A: newPerf(), B: newPerf() };
+  clock.canSee = (slot) => slot !== 'B' || seen;
+  const log = run(clock, plan, 9, 16, () => null, (t) => {
+    if (t >= 10 && plan.speechStart == null) plan.speechStart = 10;
+    if (t >= 13 && !seen) {
+      seen = true; // a cut to the two-shot
+      clock.cut(t);
+    }
+  });
+  const turn = log.find((l) => l.name === 'partner');
+  assert.ok(turn, 'the glance fires');
+  assert.ok(turn.t >= 13 + AFTER_CUT - 1e-9 && turn.t <= 13 + AFTER_CUT + DT + 1e-6, `0.25 s after the cut that shows the listener (${turn.t})`);
+  assert.ok(log.find((l) => l.name === 'notes').t < 11.5, 'other looks are not held');
+  assert.equal(clock.stats.held, 1);
+  assert.equal(clock.stats.released, 1);
+  // never shown: dropped after HOLD_MAX, and at the end of the speech at the latest
+  const plan2 = planOf(EP, 3, [{ kind: 'look', slot: 'B', target: 'partner', char: 0, at: 0.25, dur: 3, why: 'turn+dry' }]);
+  const c2 = new CueClock();
+  c2.perfs = { A: newPerf(), B: newPerf() };
+  c2.canSee = (slot) => slot !== 'B';
+  const log2 = run(c2, plan2, 9, 10 + HOLD_MAX + 2, () => null, (t) => {
+    if (t >= 10 && plan2.speechStart == null) plan2.speechStart = 10;
+    if (t >= 10 + HOLD_MAX + 1) c2.cut(t);
+  });
+  assert.equal(log2.length, 0);
+  assert.equal(c2.stats.dropped, 1);
+  // without a visibility source (tests, labs without a Stage) nothing is held
+  const c3 = new CueClock();
+  c3.perfs = { A: newPerf(), B: newPerf() };
+  const plan3 = planOf(EP, 3, plan2.events);
+  const log3 = run(c3, plan3, 9, 12, () => null, (t) => t >= 10 && plan3.speechStart == null && (plan3.speechStart = 10));
+  assert.equal(log3.length, 1);
+});
+
+test('Stage: inView per slot: singles hide the partner, two-shots show both, maps nobody; turn glances wait for it', () => {
+  const ep = episodeOf('world-now');
+  const st = new Stage({ audio: fakeAudio(), channel: { presenters: {} }, idle: null });
+  const scene = sceneOf(ep, { shot: 'close', framing: 'mcu-l', focus: 'A', shotSince: 1 });
+  st.update(1, scene);
+  assert.deepEqual({ ...st.inView }, { A: true, B: false });
+  assert.equal(st.clock.canSee('B'), false);
+  Object.assign(scene, { shot: 'wide', framing: 'two', shotSince: 2 });
+  st.update(2, scene);
+  assert.deepEqual({ ...st.inView }, { A: true, B: true });
+  Object.assign(scene, { shot: 'wide', framing: 'wide', shotSince: 3 });
+  st.update(3, scene);
+  assert.deepEqual({ ...st.inView }, { A: true, B: true });
+  Object.assign(scene, { shot: 'map', framing: null, shotSince: 4 });
+  st.update(4, scene);
+  assert.deepEqual({ ...st.inView }, { A: false, B: false });
+  Object.assign(scene, { shot: 'close', framing: 'mcu-r', focus: 'B', shotSince: 5 });
+  st.update(5, scene);
+  assert.deepEqual({ ...st.inView }, { A: false, B: true });
+  const solo = new Stage({ audio: fakeAudio(), channel: { presenters: {} }, idle: null });
+  solo.update(1, sceneOf(episodeOf('news-60'), { shot: 'close', framing: 'mcu-l', focus: 'A', shotSince: 1 }));
+  assert.deepEqual({ ...solo.inView }, { A: true });
+});
+
+test('direction: an over-the-shoulder without a picture, map or figure is dropped (or opens as a single)', () => {
+  const ep = clone(episodeOf('tech-bytes'));
+  const seg = ep.segments.find((s) => s.type === 'story');
+  for (const k of ['location', 'fact', 'numbers']) delete seg[k];
+  const i = ep.segments.indexOf(seg);
+  const ctx = segmentContext(ep, i, {});
+  const at1 = ctx.sentences[1]?.t0 ?? 2;
+  const plan = { ctx, events: [
+    { kind: 'shot', shot: 'close', framing: 'single', focus: seg.anchor, char: 0, at: 0 },
+    { kind: 'shot', shot: 'close', framing: 'ots', focus: seg.anchor, char: ctx.sentences[1]?.start ?? 20, at: at1 },
+  ] };
+  const none = cuesFromPlan(plan, { hasImg: false });
+  assert.deepEqual(none.map((c) => c.framing), ['single'], 'no wall content: the ots is dropped');
+  const withPic = cuesFromPlan(plan, { hasImg: true });
+  assert.deepEqual(withPic.map((c) => c.framing), ['single', 'ots'], 'a picture on the wall: the ots plays');
+  seg.location = { place: 'X', lat: 1, lon: 2 };
+  assert.deepEqual(cuesFromPlan(plan, { hasImg: false }).map((c) => c.framing), ['single', 'ots'], 'a map on the wall');
+  delete seg.location;
+  const opening = { ctx, events: [{ ...plan.events[1], char: 0, at: 0 }] };
+  assert.deepEqual(cuesFromPlan(opening, { hasImg: false }).map((c) => [c.shot, c.framing]), [['close', null]], 'an opening ots plays as the default single');
+});
+
+test('direction: the max-hold guard returns to the speaker\'s studio shot before a beat runs past its pace maximum', () => {
+  const ep = episodeOf('world-now');
+  const i = ep.segments.findIndex((s) => s.type === 'story' && splitCount(s.text) >= 3);
+  const p = { ...planSegment(ep, i, {}), index: i };
+  const ctx = p.ctx;
+  const S = paceFor('world-now').shots;
+  const last = ctx.sentences.length - 1;
+  const t0 = ctx.sentences[last].t0;
+  const remaining = ctx.duration + 0.6 - t0;
+  // a map that has held long enough and would run past 10 s: back to the speaker's single
+  const longMap = { shot: 'map', framing: null, focus: ctx.speaker, held: Math.max(S.cooldown, maxHold('map', 'world-now') - remaining + 1) };
+  const g = holdCut(p, last, longMap, { programId: 'world-now', gap: 0.6, cues: [], closeFraming: 'mcu-l' });
+  if (remaining >= S.cooldown) {
+    assert.ok(g, 'a cue back to the studio');
+    assert.equal(g.shot, 'close');
+    assert.equal(g.framing, 'mcu-l');
+    assert.equal(g.focus, ctx.speaker);
+    assert.equal(g.char, ctx.sentences[last].start, 'on the sentence start');
+    assert.equal(g.mid, false);
+    assert.ok(g.k > 0 && g.guard);
+  }
+  // within its maximum, before the cooldown, on sentence 0, outside stories and intros: nothing
+  assert.equal(holdCut(p, last, { ...longMap, held: 1 }, { programId: 'world-now', cues: [] }), null, 'before the cooldown');
+  assert.equal(holdCut(p, last, { ...longMap, held: S.cooldown }, { programId: 'world-now', gap: 0, cues: [{ k: 2, at: t0 + 0.5 }] }), null, 'a planned cut comes soon');
+  assert.equal(holdCut(p, 0, longMap, { programId: 'world-now', cues: [] }), null, 'sentence 0 belongs to the segment cut');
+  assert.equal(holdCut({ ctx: { ...ctx, type: 'chat' } }, last, longMap, { programId: 'world-now', cues: [] }), null, 'chats stay on their wide');
+  assert.equal(holdCut(p, last, { ...longMap, shot: 'montage' }, { programId: 'world-now', cues: [] }), null);
+  // a single past studioMax goes to the wide, except in NEWS IN 60 (wide only for intro and sign-off)
+  const longSingle = { shot: 'close', framing: 'mcu-l', focus: ctx.speaker, held: S.studioMax };
+  const w = holdCut(p, last, longSingle, { programId: 'world-now', gap: 0.6, cues: [], wideFraming: 'wide' });
+  if (remaining >= S.cooldown) assert.deepEqual([w.shot, w.framing], ['wide', 'wide']);
+  assert.equal(holdCut(p, last, longSingle, { programId: 'news-60', gap: 0.6, cues: [] }), null);
+  // never on a dry line or just after it
+  const dry = { ...p, ctx: { ...ctx, dryLine: { t0: t0 - 0.2, t1: t0 + 2 } } };
+  assert.equal(holdCut(dry, last, longMap, { programId: 'world-now', cues: [] }), null);
+});
+
+test('direction: on the five fixture episodes the guard leaves no story beat past its pace maximum where a sentence start could split it', () => {
+  for (const id of PROGRAMMES) {
+    const ep = episodeOf(id);
+    const S = paceFor(id).shots;
+    for (let i = 0; i < ep.segments.length; i++) {
+      const seg = ep.segments[i];
+      if (seg.type !== 'story') continue;
+      const gap = paceGap(ep, i).gap;
+      const p = { ...planSegment(ep, i, { gapAfter: (j) => paceGap(ep, j).gap }), index: i };
+      const cues = cuesFromPlan(p, { hasImg: !!seg.hasImage }) || [];
+      const ss = p.ctx.sentences;
+      let onAir = { ...(cues[0] || { shot: 'close', framing: null, focus: seg.anchor }), t: 0 };
+      const shots = [onAir];
+      for (let si = 1; si < ss.length; si++) {
+        const t = ss[si].t0;
+        const planned = cues.find((c) => c.k > 0 && c.sentence === si && !c.mid);
+        const next = planned || holdCut(p, si, { shot: onAir.shot, framing: onAir.framing, focus: onAir.focus, held: t - onAir.t }, { programId: id, gap, cues });
+        if (next && t - onAir.t >= S.cooldown - 1e-6) shots.push((onAir = { ...next, t }));
+      }
+      const end = p.ctx.duration + gap;
+      for (let k = 0; k < shots.length; k++) {
+        const a = shots[k];
+        const len = (shots[k + 1]?.t ?? end) - a.t;
+        if (len <= maxHold(a.shot, id) + 0.5 || !['map', 'full', 'fact', 'close', 'wide'].includes(a.shot)) continue;
+        // over its maximum: no sentence start inside it could have taken a cut that holds the cooldown both sides
+        const splittable = ss.some((s) => s.t0 - a.t >= S.cooldown && (shots[k + 1]?.t ?? end) - s.t0 >= S.cooldown && !(p.ctx.dryLine && s.t0 >= p.ctx.dryLine.t0 - 0.05 && s.t0 <= p.ctx.dryLine.t1 + 1.2) && !(a.shot === 'close' && id === 'news-60'));
+        assert.ok(!splittable, `${id} seg ${i}: ${a.shot} holds ${len.toFixed(1)} s (max ${maxHold(a.shot, id)})`);
+      }
+    }
+  }
+});
+
+const splitCount = (text) => (String(text).match(/[.!?](\s|$)/g) || []).length;
+
+test('director: with v2 a new framing of the same shot restarts the shot clock; without v2 setShot is unchanged', async () => {
+  const { Director } = await import('../public/js/director.js');
+  const channel = { name: 'T', slogan: '', presenters: {} };
+  const old = new Director({ audio: {}, channel });
+  old.setShot('close', { focus: 'A', storyId: 's1' });
+  old.scene.shotSince = 5;
+  old.setShot('close', { focus: 'A', storyId: 's1', framing: 'ots' });
+  assert.equal(old.scene.shotSince, 5, 'v2 off: exactly as before (framing is not looked at)');
+  const d = new Director({ audio: {}, channel });
+  d.v2 = { episode() {} }; // what LiveDirection looks like to setShot
+  d.setShot('close', { focus: 'A', storyId: 's1', framing: 'single' });
+  d.scene.shotSince = 5;
+  d.setShot('close', { focus: 'A', storyId: 's1', framing: 'single' });
+  assert.equal(d.scene.shotSince, 5, 'same framing: no cut');
+  d.setShot('close', { focus: 'A', storyId: 's1', framing: 'ots' });
+  assert.ok(d.scene.shotSince > 5, 'single → ots is a cut: the shot clock restarts');
+  const since = d.scene.shotSince;
+  d.setShot('close', { focus: 'A', storyId: 's1' });
+  assert.equal(d.scene.shotSince, since, 'a call without a framing does not count as a reframe');
+});
+
+test('direction: every LiveDirection hook is guarded; a throwing planner never rejects say()', async () => {
+  const { Director } = await import('../public/js/director.js');
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const spoken = [];
+    const audio = { mode: 'mute', setVoices() {}, async speak(text, slot, o) { spoken.push(text); o?.onSentence?.(text, 0); } };
+    const d = new Director({ audio, channel: { name: 'T', slogan: '', presenters: {} } });
+    const live = new LiveDirection({ director: d, channel: { presenters: {} }, audio });
+    d.v2 = live;
+    d.setCast(EP);
+    live.planAt = () => {
+      throw new Error('planner exploded');
+    };
+    assert.equal(live.begin(EP.segments[1]), null);
+    assert.equal(live.shots(EP.segments[1], true, () => {}), null);
+    assert.equal(live.intro(EP.segments[0]), null);
+    live.episode({ segments: 7 }); // malformed: no throw
+    await d.say(EP.segments[3]); // the director's own beats carry on
+    assert.equal(spoken.length, 1);
+    // a handle whose cue handler throws: onSentence and end() never see it
+    delete live.planAt;
+    live.episode(EP);
+    const h = live.begin(EP.segments[3]);
+    assert.ok(h);
+    live.studioCut = () => {
+      throw new Error('cut exploded');
+    };
+    live.holdCue = () => ({ k: 99, shot: 'close' }); // every later sentence start applies a cue
+    h.sentence(0);
+    h.sentence(1);
+    h.end();
+    assert.equal(live.begin(EP.segments[3]), null, 'an opening cue that throws: no handle, no throw');
+  } finally {
+    console.warn = warn;
+  }
+});
+
+test('direction: a headline montage needs two stories in the rundown (else the director\'s plain intro)', () => {
+  const ep = clone(episodeOf('world-now'));
+  const director = { scene: { shot: 'open', focus: 'A', shotSince: 0, stinger: null, framing: null, rundown: [] }, setShot() {}, say: () => Promise.resolve() };
+  const live = new LiveDirection({ director, channel: { presenters: {} }, audio: { mode: 'mute' } });
+  live.episode(ep);
+  assert.equal(live.intro(ep.segments[0]), null, 'empty rundown');
+  director.scene.rundown = ep.rundown.slice(0, 1);
+  assert.equal(live.intro(ep.segments[0]), null, 'one story');
+});
+
+test('default path: the v2 modules the ads load (pixbuf, cast/index) keep their API; the default page never reaches the v2 runtime', async () => {
+  const pix = await import('../public/js/v2/canvas25d/pixbuf.js');
+  const fr = new pix.Frame();
+  assert.ok(fr.px instanceof Uint32Array && fr.image && fr.image.data, 'Frame: px + image');
+  assert.equal(typeof fr.clear, 'function');
+  fr.clear(0);
+  const pb = new pix.PartBuffer();
+  for (const k of ['clear', 'resolve', 'part']) assert.equal(typeof pb[k], 'function', `PartBuffer.${k}`);
+  assert.ok(pb.clipY instanceof Int16Array || ArrayBuffer.isView(pb.clipY), 'PartBuffer.clipY');
+  pb.clear();
+  assert.ok('bx0' in pb && 'bx1' in pb && 'by0' in pb && 'by1' in pb, 'PartBuffer bounds');
+  pb.resolve(fr);
+  const { LOOKS: looks, lookFor } = await import('../public/js/v2/canvas25d/cast/index.js');
+  for (const id of ['paco', 'lola', 'max', 'ada', 'nova', 'unit8', 'penny', 'sam']) assert.ok(looks[id] && looks[id].parts, `LOOKS.${id}`);
+  assert.equal(typeof lookFor, 'function');
+  // the default page's module graph: main.js and its static imports, plus the modules the ads load
+  // lazily (ads/cine.js), never reach the v2 runtime, direction, studio, camera or scene
+  const root = new URL('../public/js/', import.meta.url);
+  const seen = new Set();
+  const lazy = new Set();
+  const walk = (url) => {
+    if (seen.has(url.href)) return;
+    seen.add(url.href);
+    const src = fs.readFileSync(url, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    for (const m of src.matchAll(/^\s*(?:import|export)\s[^'";]*?from\s*['"]([^'"]+)['"]|^\s*import\s*['"]([^'"]+)['"]/gm)) walk(new URL(m[1] || m[2], url));
+    if (url.pathname.endsWith('/ads/cine.js')) for (const m of src.matchAll(/import\(\s*['"]([^'"]+)['"]\s*\)/g)) lazy.add(new URL(m[1], url).href);
+  };
+  walk(new URL('main.js', root));
+  for (const href of lazy) walk(new URL(href));
+  const bad = [...seen].filter((h) => /\/v2\/canvas25d\/(runtime|direction|studio)\/|\/v2\/canvas25d\/(camera|scene)\.js$/.test(h));
+  assert.deepEqual(bad, [], 'v2-only modules on the default path');
+  assert.ok([...seen].some((h) => h.endsWith('/v2/canvas25d/pixbuf.js')), 'the walk sees the lazy rig of the ads');
+});
+
+test('composited: every arm gesture planned on a studio shot of the five fixtures is seen above the graphics', async () => {
+  const { gestureVisibility } = await import('../public/js/v2/canvas25d/runtime/visibility.js');
+  const NON_ARM = new Set(['nod', 'shake_head', 'look_partner', 'laugh', 'wow', 'lean_in']);
+  let seen = 0;
+  const hidden = [];
+  for (const id of PROGRAMMES) {
+    const ep = episodeOf(id);
+    for (let i = 0; i < ep.segments.length; i++) {
+      const { ctx, events } = planSegment(ep, i, {});
+      for (const e of events) {
+        if (e.kind !== 'gesture' || NON_ARM.has(e.name)) continue;
+        let sh = null;
+        for (const s of ctx.shots) if (s.at <= e.at + 1e-6) sh = s;
+        const shot = sh ? legacyShot(sh.shot, sh.framing) : 'close';
+        if (shot !== 'wide' && shot !== 'close') continue; // full-screen beats: not in vision (HANDS keeps apexes out of them)
+        const framing = sh?.framing || (shot === 'wide' ? (ctx.duo ? 'wide' : 'solo-wide') : ctx.duo ? 'single' : 'mcu');
+        const r = gestureVisibility({ ep, slot: e.slot, framing, shot, gesture: e });
+        // the hand's apex above the caption line (y 148) and a real part of the hands outside caption, strap and ticker
+        if (r.handTop !== null && r.handTop < 148 && r.handsSeen >= 60) seen++;
+        else hidden.push(`${id} seg ${i} ${e.slot} ${e.name}${e.variant ? `:${e.variant}` : ''} on ${shot}/${framing}: top ${r.handTop}, ${r.handsSeen}/${r.hands} px seen`);
+      }
+    }
+  }
+  assert.deepEqual(hidden, [], 'gestures played under the graphics');
+  assert.ok(seen >= 8, `enough planned arm gestures to judge (${seen})`);
 });

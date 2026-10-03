@@ -7,7 +7,9 @@
 // a slightly different, comfortable position (closer together, apart, one hand
 // on the edge of the script, forward on the forearms...), sliding over the
 // desk with a small lift, fingers following ~60 ms later; now and then the
-// index finger lifts and taps the desk twice (more often while listening).
+// index finger lifts and taps the desk twice. The tap does not depend on
+// perf.listen (the stage flips it at every turn, so a tap in flight would pop;
+// and the owner wants listeners almost still, 22:50 note 6).
 //
 // Pure in t (seeded by perf.seed), allocation-free, O(1) per evaluation:
 // time is cut into slots of P seconds; slot k holds one pose drawn from a hash
@@ -128,14 +130,14 @@ function addArm(w, a, b, e, lift, wt) {
   w[2] += (a[2] + (b[2] - a[2]) * e) * wt;
 }
 
-/** Now and then the near index finger lifts and taps twice (more often while listening). */
+/** Now and then the near index finger lifts and taps twice (same odds speaking or listening: no pop at a turn). */
 function applyTap(c, perf, seed, T, t, wt = 1) {
   if (T.robot) return;
   const P2 = T.P * 0.5;
   const tt = t - T.phase - P2 * 0.5;
   const k = Math.floor(tt / P2);
   if (k < 1) return;
-  if (h01(seed, k, 5) > (perf.listen ? 0.32 : 0.14)) return;
+  if (h01(seed, k, 5) > 0.14) return;
   const u = tt - k * P2 - P2 * (0.2 + 0.5 * h01(seed, k, 6));
   if (u <= 0 || u >= 0.72) return;
   let own = wt;

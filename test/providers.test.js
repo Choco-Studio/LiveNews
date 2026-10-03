@@ -553,9 +553,11 @@ describe('mock provider', () => {
     const said = spoken(intro.text);
     assert.equal(
       said,
-      "New robot learns to cook. Also coming up: NASA telescope spots a new planet. Later in the programme: scientists discover a talking parrot. This is TECH BYTES. I'm Max Circuit, with Ada Volt."
+      "New robot learns to cook. Also coming up: NASA telescope spots a new planet. Later in the programme: software update fixes the app. This is TECH BYTES. I'm Max Circuit, with Ada Volt."
     );
-    assert.deepEqual(intro.teases, ['l1', 'l2', 'l3'], 'which story each sentence is about');
+    // running order by news value: the curiosity (a talking parrot) sinks below the software update
+    assert.deepEqual(storySegs(script).map((x) => x.storyId), ['l1', 'l2', 'l4', 'l3']);
+    assert.deepEqual(intro.teases, ['l1', 'l2', 'l4'], 'which story each sentence is about');
     assert.ok(!intro.text.includes('[wave]'), 'a news channel nods, it does not wave');
     assert.ok(intro.text.includes('[B:nod]'), 'the co-presenter acknowledges the introduction');
   });
@@ -591,7 +593,8 @@ describe('mock provider', () => {
     }
     const generic = (await raw({ stories: lightStories, program: { ...PROGRAM, id: 'other', title: 'OTHER' } })).segments.at(-1);
     assert.ok(generic.text.includes('[wave]'), 'a programme without its own sign-off keeps the old wave');
-    const graveLast = (await raw({ stories: [lightStories[0], stories[0]], count: 2, program: { ...PROGRAM, id: 'other' } })).segments.at(-1);
+    // a breaking story leads, so the grave one airs last (grave news otherwise leads on news value)
+    const graveLast = (await raw({ stories: [stories[3], stories[0]], count: 2, program: { ...PROGRAM, id: 'other' } })).segments.at(-1);
     assert.ok(!graveLast.text.includes('[wave]'), graveLast.text);
   });
 
@@ -690,8 +693,18 @@ describe('mock provider', () => {
   test('adds a chat after light stories, but never after the last story, a grave one, or right before a grave one', async () => {
     assert.deepEqual(kinds(await raw({ stories })), ['intro', 'story', 'story', 'story', 'chat', 'story', 'outro']);
     assert.deepEqual(kinds(await raw({ stories: lightStories, program: { ...PROGRAM, maxChats: 9 } })), ['intro', 'story', 'chat', 'story', 'chat', 'story', 'chat', 'story', 'outro']);
+    // grave news leads on news value: no chat after it; the chat after the next light story is allowed
     const beforeGrave = [lightStories[0], stories[0], lightStories[1]];
-    assert.deepEqual(kinds(await raw({ stories: beforeGrave, count: 3, program: { ...PROGRAM, maxChats: 9 } })), ['intro', 'story', 'story', 'story', 'outro']);
+    const script = await raw({ stories: beforeGrave, count: 3, program: { ...PROGRAM, maxChats: 9 } });
+    assert.deepEqual(storySegs(script).map((x) => x.storyId), ['s1', 'l1', 'l2']);
+    assert.deepEqual(kinds(script), ['intro', 'story', 'story', 'chat', 'story', 'outro']);
+    // a breaking story keeps the lead, so the grave one sits in the middle: no chat on either side of it
+    const middle = await raw({ stories: [stories[3], lightStories[0], stories[0], lightStories[1]], count: 4, program: { ...PROGRAM, maxChats: 9 } });
+    const segsM = middle.segments;
+    segsM.forEach((seg, i) => {
+      if (seg.type !== 'chat') return;
+      for (const near of [segsM[i - 1], segsM[i + 1]]) assert.ok(near?.storyId !== 's1', `no chat next to the grave story: ${kinds(middle)}`);
+    });
   });
 
   test('the chat is spoken by the presenter who did not read the story, in their own voice', async () => {
@@ -727,7 +740,8 @@ describe('mock provider', () => {
     assert.ok(words(quick[0].text) <= 40, `lead: ${words(quick[0].text)} words`);
     for (const x of quick.slice(1)) assert.ok(words(x.text) <= 32, `${words(x.text)} words: ${x.text}`);
     const full = storySegs(await raw({ stories: long }));
-    assert.ok(words(full[0].text) > words(quick[0].text));
+    const total = (list) => list.reduce((n, x) => n + words(x.text), 0) / list.length;
+    assert.ok(total(full) > total(quick), 'other programmes say more per story');
   });
 
   test('works with a single story whose summary is empty: the headline, attributed', async () => {

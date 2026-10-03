@@ -31,10 +31,33 @@
 // overlap (beyond a settle), and grave stories get small, slow nods and
 // steeples only (amp 0.6-0.7). Per-episode budgets (NEWS IN 60: 2; MONEY
 // MINUTE: one lean_in; greeting nods) are a pure function of ctx.episode and
-// ctx.episodeSeed, memoised by episode id.
+// ctx.episodeSeed, memoised per episode object.
+//
+// Restraint (owner 22:50 note 6 "don't overuse them"; pace.js, one pacing table): each presenter's
+// MARKED gestures (arm strokes and statements on meaningful words: the writer's cues, the fillers,
+// the hand-over) and tiny BEATS have separate budgets from paceFor(programme).gestures: a per-episode
+// token bucket per presenter at `perMin` / `beatsPerMin` of their own speech (grave segments at the
+// `grave` rate, no beats), capped per turn by gestureBudget(programme, seconds); two marked gestures
+// of one speaker start at least `minGap` s apart and any two arm gestures (beats too) at least
+// ARM_GAP, across segments as well; the hands rest at least `rest` of the speech; never the same
+// gesture twice in a row. Structural moments (greeting and sign-off nods, NEWS IN 60's allocation,
+// the sign-off papers) are outside the budget.
+//
+// Visibility (owner 20:40 / critics): a gesture is only worth performing where the viewer sees the
+// hands. At planning time every arm gesture's apex hand is projected through the framing of the
+// shot it lands in (camera.js framing + placeActor): in head-and-shoulders singles the hands must
+// stay above the lower third (HAND_FLOOR), so desk-level beats are skipped there and a cue gesture
+// that would not read is replaced by an allowed face- or chest-level one (raise_hand, count, chin,
+// glasses, point_screen when a picture follows), or dropped. No unexplained shoulder bobs.
 import { GESTURES, defOf, rateOf } from '../gestures/index.js';
 import { rng, hashSeed } from './context.js';
 import { lookFor } from '../cast/index.js';
+import { framing as cameraFraming, placeActor } from '../camera.js';
+import { SET } from '../studio/geometry.js';
+import { evalTrack } from '../tracks.js';
+import { TILT } from '../space.js';
+import { planShots } from './shots.js';
+import { paceFor, gestureBudget, CHANNEL } from '../../../pace.js';
 
 /** config/channel.json programs.<id>.gestures, mirrored for the client (test/v2-hands.test.js checks parity). */
 export const CONFIG_POLICY = {
@@ -107,7 +130,10 @@ export const BIBLE = {
     handover: true,
     signoffPapers: true,
     storyCount: [1, 2],
-    beats: { density: { story: 0.62, chat: 0.4, intro: 0.3 }, variants: ['raise_hand:beat', 'raise_hand:offer', 'raise_hand:beat2', 'steeple:press'] },
+    beats: {
+      density: { story: 0.62, chat: 0.4, intro: 0.3 },
+      variants: ['raise_hand:beat', 'raise_hand:offer', 'raise_hand:beat2', 'steeple:press', 'raise_hand:box', 'raise_hand:settle', 'raise_hand:tick', 'raise_hand:turn'],
+    },
   },
   'tech-bytes': {
     speaker: {
@@ -122,8 +148,8 @@ export const BIBLE = {
     variants: { ada: { shake_head: 'slow' } },
     storyCount: [1, 2],
     beats: {
-      max: { density: { story: 0.68, chat: 0.45, intro: 0.3 }, variants: ['raise_hand:beat', 'raise_hand:offer', 'raise_hand:beat2'] },
-      ada: { density: { story: 0.4, chat: 0.3 }, variants: ['steeple:press', 'shrug:small'] },
+      max: { density: { story: 0.68, chat: 0.45, intro: 0.3 }, variants: ['raise_hand:beat', 'raise_hand:offer', 'raise_hand:beat2', 'raise_hand:box', 'raise_hand:tick', 'raise_hand:turn'] },
+      ada: { density: { story: 0.4, chat: 0.3 }, variants: ['steeple:press', 'shrug:small', 'steeple:tap'] },
     },
   },
   cosmos: {
@@ -140,7 +166,7 @@ export const BIBLE = {
     amp: { unit8: 0.85 },
     storyCount: [1, 1],
     // Nova only; armSpacing (6 s per presenter) still holds for every arm movement
-    beats: { nova: { density: { story: 0.5, chat: 0.3 }, variants: ['raise_hand:beat', 'steeple:press'] } },
+    beats: { nova: { density: { story: 0.5, chat: 0.3 }, variants: ['raise_hand:beat', 'steeple:press', 'raise_hand:box', 'raise_hand:settle', 'steeple:tap'] } },
   },
   'money-minute': {
     speaker: ['nod', 'steeple', 'lean_in', 'papers'],
@@ -172,14 +198,24 @@ export const BIBLE = {
   },
 };
 
-const SETTLE = 0.35; // s two gestures may overlap while the first one settles
+// s two gestures may overlap while the first one settles (≤ 0.3, so a cut-guard shift of the runtime
+// can never turn a settle into an interruption, rig.js SETTLE_OVERLAP 0.4)
+const SETTLE = 0.3;
 const BEAT_AIR = 0.2; // s of stillness a beat keeps from the gestures around it
+const ARM_GAP_MIN = 2.6; // s: two arm gestures of one speaker (beats included) start at least this far apart
+// lowest screen row a gesture's hand may reach at its apex in a single (6 px above the lower third's tag
+// row at y 166, where two caption lines also start) and in wider shots (6 px above the ticker band)
+const HAND_FLOOR = 160, HAND_FLOOR_WIDE = 190, WRIST_FLOOR = 166;
+const SINGLE_SCALE = 2.6; // presenter scale from which a framing counts as a single
+const CPS = 14.5; // chars per second to estimate segment lengths from the episode summary
 /**
  * Identity of a gesture for the no-repeat rule: its family (variants that read alike on screen share
  * one: a steeple and a steeple press, a one- and a two-handed beat, every nod).
  */
 const FAMILY = {
   'steeple:press': 'steeple',
+  'steeple:tap': 'steeple',
+  'raise_hand:turn': 'raise_hand:offer',
   'raise_hand:beat2': 'raise_hand:beat',
   'raise_hand:two': 'raise_hand',
   'nod:single': 'nod',
@@ -190,7 +226,9 @@ const FAMILY = {
   'point_partner:after_you': 'point_partner',
 };
 export const familyOf = (e) => {
-  const k = e.variant ? `${e.name}:${e.variant}` : e.name;
+  // a beat with the far hand reads as the same beat
+  const v = e.variant && e.variant.endsWith('_far') ? e.variant.slice(0, -4) : e.variant;
+  const k = v ? `${e.name}:${v}` : e.name;
   return FAMILY[k] || k;
 };
 const keyOf = familyOf;
@@ -258,7 +296,9 @@ function whereOf(ctx) {
 // ---------------------------------------------------------------------------
 // Per-episode allocation (pure in ctx.episode + ctx.episodeSeed, memoised)
 
-const EPISODE_PLANS = new Map();
+// memo: episode summary object (context.js memoises it per episode object) → Map(programme|seed → plan),
+// so two episodes that share an id never share a plan
+const EPISODE_PLANS = new WeakMap();
 
 /**
  * Budgets that span segments, decided once per episode from its summary:
@@ -266,15 +306,23 @@ const EPISODE_PLANS = new Map();
  *   leanIn     the segment that may carry MONEY MINUTE's single lean_in
  *   n60        NEWS IN 60's two gestures: { [index]: name }
  *   armMinAt[i] COSMOS: earliest arm gesture in segment i (6 s per presenter across segments)
+ *   quota[i]   { marked, beats, cumMarked, cumBeats }: the presenter's pace budget (pace.js
+ *              gestures.perMin / beatsPerMin per minute of their own speech; grave: gestures.grave, no
+ *              beats) as a token bucket over their segments in running order: cum* = what the
+ *              presenter may have used by the end of segment i (the planner subtracts what their
+ *              earlier turns really used, so a montage-covered intro hands its tokens on), so many
+ *              short turns cannot add up to more than the rate allows
  */
 export function episodePlan(ctx) {
   const ep = ctx.episode;
-  const key = `${ep.id}|${ctx.programId}|${ctx.episodeSeed}`;
-  const hit = EPISODE_PLANS.get(key);
+  const key = `${ctx.programId}|${ctx.episodeSeed}`;
+  let byKey = EPISODE_PLANS.get(ep);
+  if (!byKey) EPISODE_PLANS.set(ep, (byKey = new Map()));
+  const hit = byKey.get(key);
   if (hit) return hit;
   const segs = ep.segments || [];
   const r = rng((ctx.episodeSeed ^ 0x6a09e667) >>> 0);
-  const plan = { greet: {}, leanIn: -1, n60: {}, armMinAt: {} };
+  const plan = { greet: {}, leanIn: -1, n60: {}, armMinAt: {}, quota: {} };
   // greetings: each presenter's first segment if it is part of the opening (intro, or a turn right after it)
   const seen = new Set();
   segs.forEach((s, i) => {
@@ -310,8 +358,19 @@ export function episodePlan(ctx) {
     lastEnd[s.anchor] = t + dur;
     t += dur + 0.5;
   });
-  if (EPISODE_PLANS.size > 64) EPISODE_PLANS.clear();
-  EPISODE_PLANS.set(key, plan);
+  // pace budget: token buckets per presenter (marked at perMin, grave at the grave rate; beats at
+  // beatsPerMin, none when grave); a segment may use what its own speech adds to the bucket
+  const G = paceFor(ctx.programId).gestures;
+  const acc = {};
+  segs.forEach((s, i) => {
+    const a = (acc[s.anchor] ||= { m: 0.35, b: 0.5 }); // phases: the first long turn gets its first gesture
+    const min = (s.chars || 0) / CPS / 60;
+    const m0 = a.m, b0 = a.b;
+    a.m += (s.grave ? G.grave : G.perMin) * min;
+    if (!s.grave) a.b += G.beatsPerMin * min;
+    plan.quota[i] = { marked: Math.floor(a.m) - Math.floor(m0), beats: Math.floor(a.b) - Math.floor(b0), cumMarked: Math.floor(a.m), cumBeats: Math.floor(a.b) };
+  });
+  byKey.set(key, plan);
   return plan;
 }
 
@@ -362,6 +421,32 @@ class SegmentPlan {
     this.sentAny = new Map();
     this.count = 0;
     this.steeples = 0;
+    this.marked = 0; // budgeted statement gestures placed
+    this.beats = 0;
+    this.busy = 0; // s of budgeted arm movement placed (the hands' rest share)
+    this.budget = null;
+    this.prev = NO_PREV;
+    this.vis = new Map();
+  }
+
+  /** The pace budget of this turn (pace.js), within the episode's per-presenter bucket. */
+  setBudget(ep) {
+    const { ctx, R } = this;
+    const G = paceFor(R.pid).gestures;
+    const gb = gestureBudget(R.pid, ctx.duration, { grave: ctx.grave });
+    const q = ep.quota[ctx.index];
+    // the bucket: what this presenter may have used by the end of this segment, minus what their earlier
+    // turns used (exact when their plans are known, else their own quotas); never more than one turn allows
+    const left = (cum, used, own) => (cum == null ? own : Math.max(0, cum - (used ?? cum - own)));
+    const m = q ? left(q.cumMarked, this.prev.usedM, q.marked) : gb.marked;
+    const b = q ? left(q.cumBeats, this.prev.usedB, q.beats) : gb.beats;
+    this.budget = {
+      marked: Math.min(gb.marked, m),
+      beats: ctx.grave ? 0 : Math.min(gb.beats, b),
+      minGap: G.minGap,
+      armGap: Math.max(ARM_GAP_MIN, G.minGap * 0.55),
+      busy: (1 - G.rest) * (ctx.duration + (ctx.gapAfter ?? 0.6)),
+    };
   }
 
   lead() {
@@ -416,29 +501,47 @@ class SegmentPlan {
   check(ev, d, opts) {
     const { ctx, R } = this;
     const arm = d.arm;
+    const budgeted = !opts.free || opts.beat; // statements and beats; structural nods and papers are not
     // cut guard: no start inside the first cutGuard s of a shot, and no cut before the apex
     for (const c of ctx.shots || []) {
-      if (ev.at >= c.at && ev.at < c.at + ctx.cutGuard) return false;
-      if (c.at > ev.at && c.at < ev.apexAt + 0.1) return false;
+      if (ev.at >= c.at && ev.at < c.at + ctx.cutGuard) return why(ev, 'cut-guard');
+      if (c.at > ev.at && c.at < ev.apexAt + 0.1) return why(ev, 'cut-before-apex');
     }
     // the apex must be seen: not under a picture, map or card
-    if (ctx.shots && ctx.shots.length && HIDDEN.has(shotAt(ctx, ev.apexAt))) return false;
+    if (ctx.shots && ctx.shots.length && HIDDEN.has(shotAt(ctx, ev.apexAt))) return why(ev, 'hidden-shot');
     // a gesture may run a little into the pause after the segment, not into the next one
-    if (ev.at + ev.dur > ctx.duration + (ctx.gapAfter ?? 0.8) + 0.4) return false;
+    if (ev.at + ev.dur > ctx.duration + (ctx.gapAfter ?? 0.8) + 0.4) return why(ev, 'runs-over');
     // never two gestures at once (a settle overlap is fine); a beat also leaves a little air around it
     const air = ev.beat ? -BEAT_AIR : SETTLE;
-    for (const p of this.events) if (ev.at < p.at + p.dur - air && p.at < ev.at + ev.dur - air) return false;
+    for (const p of this.events) if (ev.at < p.at + p.dur - air && p.at < ev.at + ev.dur - air) return why(ev, 'overlap');
     const si = sentenceOf(ctx, ev.word);
-    if (arm && (this.sentArm.get(si) || 0) >= 1) return false;
-    if (R.B.perSentence && (this.sentAny.get(si) || 0) >= R.B.perSentence) return false;
+    if (arm && (this.sentArm.get(si) || 0) >= 1) return why(ev, 'sentence-arm');
+    if (R.B.perSentence && (this.sentAny.get(si) || 0) >= R.B.perSentence) return why(ev, 'sentence-any');
     // figures land on still arms (MONEY MINUTE)
-    if (R.B.figureGuard) for (const f of ctx.figures || []) if (Math.abs(f.t - ev.apexAt) <= R.B.figureGuard) return false;
+    if (R.B.figureGuard) for (const f of ctx.figures || []) if (Math.abs(f.t - ev.apexAt) <= R.B.figureGuard) return why(ev, 'figure');
     // COSMOS: one arm gesture per 6 s per presenter (inside the segment, and the episode estimate)
     if (arm && R.B.armSpacing) {
-      for (const p of this.events) if (p.arm && Math.abs(p.at - ev.at) < R.B.armSpacing) return false;
-      if (ev.at < (this.ep.armMinAt[ctx.index] || 0)) return false;
+      for (const p of this.events) if (p.arm && Math.abs(p.at - ev.at) < R.B.armSpacing) return why(ev, 'cosmos-6s');
+      if (ev.at < (this.ep.armMinAt[ctx.index] || 0)) return why(ev, 'cosmos-episode');
     }
-    if (!opts.free && this.count >= R.cap) return false;
+    if (!opts.free && this.count >= R.cap) return why(ev, 'cap');
+    // pace.js budget: marked gestures and beats per turn, minGap between statements, ARM_GAP between any
+    // two arm movements of this speaker (also across the previous turns), the hands' rest share
+    const B = this.budget;
+    if (B && budgeted) {
+      if (opts.beat ? this.beats >= B.beats : this.marked >= B.marked) return why(ev, 'budget');
+      if (!opts.beat) {
+        if (ev.at + this.prev.marked < B.minGap) return why(ev, 'min-gap-prev');
+        for (const p of this.events) if (p.marked && Math.abs(p.at - ev.at) < B.minGap) return why(ev, 'min-gap');
+      }
+      if (arm) {
+        if (ev.at + this.prev.arm < B.armGap) return why(ev, 'arm-gap-prev');
+        for (const p of this.events) if (p.arm && p.budgeted && Math.abs(p.at - ev.at) < B.armGap) return why(ev, 'arm-gap');
+        if (this.busy + ev.dur > B.busy) return why(ev, 'rest-share');
+      }
+    }
+    // the viewer must see the hands: an arm gesture's apex hand inside the framing of its shot
+    if (arm && !this.visible(ev, d)) return why(ev, 'not-visible');
     // never the same gesture twice in a row (name and variant), whatever planned it
     const key = keyOf(ev);
     let before = null, after = null;
@@ -446,16 +549,30 @@ class SegmentPlan {
       if (p.at <= ev.at && (!before || p.at > before.at)) before = p;
       if (p.at > ev.at && (!after || p.at < after.at)) after = p;
     }
-    if ((before && keyOf(before) === key) || (after && keyOf(after) === key)) return false;
+    if ((before && keyOf(before) === key) || (after && keyOf(after) === key)) return why(ev, 'c51');
     // ...nor as the first arm gesture of a turn when the presenter's previous turn ended on it
-    if (arm && this.avoidFirst === key && !this.events.some((p) => p.arm && p.at < ev.at)) return false;
-    if (ev.name === 'steeple' && R.B.steeplePerStory && this.steeples >= R.B.steeplePerStory) return false;
+    if (arm && this.avoidFirst === key && !this.events.some((p) => p.arm && p.at < ev.at)) return why(ev, 'c53');
+    if (ev.name === 'steeple' && R.B.steeplePerStory && this.steeples >= R.B.steeplePerStory) return why(ev, 'c54');
     return true;
   }
 
-  commit(ev) {
+  /** handsVisible, memoised per definition, shot and amp step (the planner tries many words). */
+  visible(ev, d) {
+    const cut = cutAt(this.ctx, ev.apexAt);
+    const ak = ev.amp == null ? 10 : Math.round(Math.max(0.5, Math.min(1, ev.amp)) * 10);
+    let byD = this.vis.get(d);
+    if (!byD) this.vis.set(d, (byD = new Map()));
+    const key = (cut ? this.ctx.shots.indexOf(cut) + 1 : 0) * 16 + ak;
+    let v = byD.get(key);
+    if (v === undefined) byD.set(key, (v = handsVisible(this.ctx, ev, d)));
+    return v;
+  }
+
+  commit(ev, opts = {}) {
     const d = defOf(ev);
     ev.arm = d.arm;
+    ev.budgeted = !opts.free || !!opts.beat;
+    ev.marked = !opts.free && !opts.beat;
     this.events.push(ev);
     const si = sentenceOf(this.ctx, ev.word);
     if (d.arm) this.sentArm.set(si, (this.sentArm.get(si) || 0) + 1);
@@ -465,6 +582,9 @@ class SegmentPlan {
       this.count++;
       if (ev.name === 'steeple') this.steeples++;
     }
+    if (ev.marked) this.marked++;
+    if (opts.beat) this.beats++;
+    if (ev.budgeted && d.arm) this.busy += ev.dur;
     return ev;
   }
 
@@ -492,43 +612,124 @@ class SegmentPlan {
     }
     for (const wi of tried) {
       const ev = this.tryAt(name, wi, opts);
-      if (ev) return this.commit(ev);
+      if (ev) return this.commit(ev, opts);
+    }
+    return null;
+  }
+
+  /**
+   * A statement gesture (the writer's cue, a filler) that the viewer would not see in this shot gives
+   * way to an allowed face- or chest-level one on the same words; nothing when none reads either.
+   */
+  placeVisible(name, char, opts = {}) {
+    const ev = this.placeNear(name, char, opts);
+    if (ev || !defOf({ name, variant: opts.variant })?.arm) return ev;
+    for (const alt of FACE_LEVEL) {
+      if (alt === name) continue;
+      const a = this.admit(alt);
+      if (a !== alt) continue;
+      if (alt === 'point_screen' && !pictureFollows(this.ctx, this.ctx.timeAt(char) + 0.6)) continue;
+      if (alt === 'count' && !/\d|\b(one|two|three|four|five|first|second|third)\b|,/i.test(this.ctx.sentences[sentenceOf(this.ctx, char)].text)) continue;
+      const e = this.placeNear(alt, char, { ...opts, variant: undefined });
+      if (e) return e;
     }
     return null;
   }
 }
 
+/** Debug hook for tools (labs, stats): rejection reasons of the last plans when DEBUG.on. */
+export const DEBUG = { on: false, log: [] };
+function why(ev, tag) {
+  if (DEBUG.on && DEBUG.log.length < 5000) DEBUG.log.push(`${ev.name}:${ev.variant || ''} ${ev.at.toFixed(2)} ${tag}`);
+  return false;
+}
+
+/** Statement gestures whose hands read in a head-and-shoulders single (in order of preference). */
+const FACE_LEVEL = ['raise_hand', 'count', 'chin', 'glasses', 'point_screen'];
+const NO_PREV = Object.freeze({ marked: Infinity, arm: Infinity, fam: null, usedM: 0, usedB: 0 });
+
 // ---------------------------------------------------------------------------
 
-// The family of the last arm gesture each turn ends on, from a plan of that turn made without the
-// camera's cuts (a pure function of the episode, memoised per neighbour context object): the next
-// turn of the same presenter does not open on it (owner 20:40: never the same gesture twice in a row).
-const TURN_END = new WeakMap();
-function previousTurnEnd(ctx) {
-  if (typeof ctx.contextAt !== 'function') return null;
-  const segs = ctx.episode.segments || [];
-  let j = ctx.index - 1;
-  while (j >= 0 && segs[j]?.anchor !== ctx.seg.anchor) j--;
-  if (j < 0) return null;
-  const c = ctx.contextAt(j);
-  if (!c || !c.valid) return null;
-  if (TURN_END.has(c)) return TURN_END.get(c);
-  TURN_END.set(c, null); // guard: a turn never depends on itself
-  let fam = null;
+// What the previous turns of the same presenter left behind, from their own plans (with the camera's
+// cuts, so they are the plans that air): the family of the last arm gesture (the next turn never
+// opens on it: owner 20:40 "never the same gesture twice in a row") and how long before this
+// segment's first word their last statement and their last arm movement started (pace.js minGap and
+// ARM_GAP hold across segments). Pure functions of the episode, memoised per neighbour context object.
+const TURN = new WeakMap(); // neighbour context → { evs, dur, gap } | null
+function turnOf(c) {
+  if (TURN.has(c)) return TURN.get(c);
+  TURN.set(c, null); // guard: a turn never depends on itself
+  let out = null;
   try {
-    const evs = planGestures(c).filter((e) => e.kind === 'gesture' && defOf(e)?.arm);
-    if (evs.length) fam = familyOf(evs[evs.length - 1]);
+    const cc = Object.create(c); // the shared neighbour context stays read-only
+    cc.shots = cutsOf(c);
+    const P = planInternal(cc).P;
+    out = P
+      ? { evs: P.events, usedM: (P.prev.usedM ?? 0) + P.marked, usedB: (P.prev.usedB ?? 0) + P.beats }
+      : { evs: [], usedM: null, usedB: null };
   } catch {
-    fam = null;
+    out = null;
   }
-  TURN_END.set(c, fam);
-  return fam;
+  TURN.set(c, out);
+  return out;
+}
+
+function previousTurns(ctx) {
+  if (typeof ctx.contextAt !== 'function') return NO_PREV;
+  const segs = ctx.episode.segments || [];
+  const me = ctx.seg.anchor;
+  let elapsed = 0; // s from the start of segment j to this segment's first word
+  let marked = Infinity, arm = Infinity, fam = null, usedM = 0, usedB = 0, first = true;
+  // the presenter's last two turns (and the other presenter's lines between them, estimated from the
+  // summary: their exact timelines are not needed and would cost a context each)
+  for (let j = ctx.index - 1, own = 0; j >= 0 && own < 2; j--) {
+    if (segs[j]?.anchor !== me) {
+      elapsed += (segs[j]?.chars || 0) / CPS + 0.7;
+      continue;
+    }
+    const c = ctx.contextAt(j);
+    if (!c || !c.valid) break;
+    own++;
+    elapsed += c.duration + (c.gapAfter ?? 0.7);
+    const t = turnOf(c);
+    if (first) {
+      // what this presenter used so far (the most recent turn carries the running total)
+      usedM = t ? t.usedM : null;
+      usedB = t ? t.usedB : null;
+      first = false;
+    }
+    if (!t) continue;
+    let last = null;
+    for (const e of t.evs) {
+      if (e.marked) marked = Math.min(marked, elapsed - e.at);
+      if (e.arm && e.budgeted) arm = Math.min(arm, elapsed - e.at);
+      if (e.arm && (!last || e.at > last.at)) last = e;
+    }
+    if (last && fam === null) fam = familyOf(last);
+    if (fam !== null && elapsed > 12) break;
+  }
+  return { marked, arm, fam, usedM, usedB };
+}
+
+// the cuts of a segment as planSegment hands them to the planners, with their framing
+const CUTS = new WeakMap();
+function cutsOf(c) {
+  let v = CUTS.get(c);
+  if (!v) {
+    v = planShots(c).filter((e) => e.kind === 'shot').map((e) => ({ at: e.at, char: e.char, shot: e.shot, focus: e.focus, framing: e.framing ?? null }));
+    CUTS.set(c, v);
+  }
+  return v;
 }
 
 /** @returns planned gesture and emotion events for the speaker (emotions for any slot) */
 export function planGestures(ctx) {
+  return planInternal(ctx).out;
+}
+
+function planInternal(ctx) {
   const out = [];
-  if (!ctx || !ctx.seg) return out;
+  if (!ctx || !ctx.seg) return { out, P: null };
   const cues = Array.isArray(ctx.seg.cues) ? ctx.seg.cues : [];
   // the writer's emotion cues change the face of whoever they name
   for (const cue of cues) {
@@ -536,11 +737,13 @@ export function planGestures(ctx) {
     const slot = cue.slot && cue.slot in ctx.cast ? cue.slot : ctx.speaker;
     out.push({ kind: 'emotion', slot, name: cue.emotion, char: cue.char, at: Math.max(0, ctx.timeAt(cue.char) - 0.25) });
   }
-  if (!ctx.valid || !ctx.words || !ctx.words.length || !ctx.speaker) return out;
+  if (!ctx.valid || !ctx.words || !ctx.words.length || !ctx.speaker) return { out, P: null };
   const R = rulesFor(ctx);
   const P = new SegmentPlan(ctx, R);
   P.ep = episodePlan(ctx);
-  P.avoidFirst = previousTurnEnd(ctx);
+  P.prev = previousTurns(ctx);
+  P.avoidFirst = P.prev.fam;
+  P.setBudget(P.ep);
   const B = R.B;
   const text = ctx.seg.text;
   const where = whereOf(ctx);
@@ -555,7 +758,7 @@ export function planGestures(ctx) {
       if (ok) placeFirst(P, ok, { free: true });
     }
     if ((Array.isArray(want) ? want : [want]).includes('papers') && P.admit('papers', { structural: true })) papersAfter(P);
-    return out.concat(finish(P));
+    return { out: out.concat(finish(P)), P };
   }
 
   // ---- greeting nod (the presenter's first turn in the opening)
@@ -579,7 +782,7 @@ export function planGestures(ctx) {
     if (name === 'nod' && greeted) continue; // one greeting nod, not two
     if (name === 'point_screen' && !pictureFollows(ctx, ctx.timeAt(cue.char) + 0.6)) continue;
     if (name === 'lean_in' && B.leanInPerEpisode && P.ep.leanIn !== ctx.index) continue;
-    P.placeNear(name, cue.char, {});
+    P.placeVisible(name, cue.char, {});
   }
 
   // ---- TECH BYTES / COSMOS: a presenter who wears glasses may touch them as her question starts
@@ -618,15 +821,18 @@ export function planGestures(ctx) {
   // ---- owner 20:40: small motivated beats on most other sentences of light and neutral segments
   addBeats(P, ctx, R);
 
-  return out.concat(finish(P));
+  return { out: out.concat(finish(P)), P };
 }
 
 // ---------------------------------------------------------------------------
 // Beats (owner 20:40: "few gestures, repetitive" → motivated gestures on most sentences of light and
 // neutral stories, rotated, never twice in a row, adult and restrained; grave: none)
 
-const CONTRAST = /\b(but|however|yet|although|though|still|instead|despite|except)\b/i;
+const CONTRAST = /\b(but|however|yet|although|though|instead|despite|except|whereas|meanwhile)\b/i;
 const SCALE = /\b(all|every|whole|entire|across|nationwide|worldwide|record|biggest|largest|most|millions?|billions?|thousands?|everyone|everywhere)\b/i;
+const STEADY = /\b(still|steady|steadily|unchanged|remains?|remained|calm|for now|so far|held|holds|stable|flat)\b/i;
+const LIST = /\b(first|second|third|also|another|both|either|plus)\b|,[^,]+,/i;
+const FAR_OK = new Set(['raise_hand:beat', 'raise_hand:offer', 'raise_hand:turn', 'raise_hand:settle', 'raise_hand:tick']);
 
 /** The speaker's beat settings in this programme ({ density, variants }) or null. */
 export function beatConfig(R, id) {
@@ -687,7 +893,7 @@ function addBeats(P, ctx, R) {
   const base = sentenceOffset(ctx);
   for (let si = 0; si < S.length; si++) {
     const sent = S[si];
-    const roll = r(), pickAmp = r(), pickSpeed = r();
+    const roll = r(), pickAmp = r(), pickSpeed = r(), pickHand = r();
     if ((P.sentArm.get(si) || 0) >= 1) continue;
     if (sent.t1 - sent.t0 < 1.3 || roll > density) continue;
     // anchor candidates: the sentence's stressed words, the most emphatic first
@@ -698,9 +904,19 @@ function addBeats(P, ctx, R) {
     // motivated choices first (a contrast opens the palm, scale frames it with both hands), then the rotation
     const prefs = [];
     const text = sent.text || ctx.seg.text.slice(sent.start, sent.end);
-    const mC = CONTRAST.exec(text), mS = SCALE.exec(text);
-    if (mC && pool.includes('raise_hand:offer')) prefs.push(['raise_hand:offer', sent.start + mC.index]);
-    if (mS && pool.includes('raise_hand:beat2')) prefs.push(['raise_hand:beat2', sent.start + mS.index]);
+    const mC = CONTRAST.exec(text), mS = SCALE.exec(text), mT = STEADY.exec(text), mL = LIST.exec(text);
+    const want = (v, m) => {
+      if (m && pool.includes(v)) prefs.push([v, sent.start + m.index]);
+    };
+    // a contrast opens or turns the palm, scale frames it with both hands, an enumeration ticks, a
+    // "still / unchanged" settles the hand on the desk; the order inside each pair rotates per sentence
+    const alt = (base + si) & 1;
+    want(alt ? 'raise_hand:turn' : 'raise_hand:offer', mC);
+    want(alt ? 'raise_hand:offer' : 'raise_hand:turn', mC);
+    want(alt ? 'raise_hand:box' : 'raise_hand:beat2', mS);
+    want(alt ? 'raise_hand:beat2' : 'raise_hand:box', mS);
+    want('raise_hand:tick', mL);
+    want('raise_hand:settle', mT);
     if (/\?\s*$/.test(text) && pool.includes('shrug:small')) prefs.push(['shrug:small', sent.start]);
     const rot = beatAt(ctx, pool, base + si);
     prefs.push([rot, -1]);
@@ -708,13 +924,17 @@ function addBeats(P, ctx, R) {
     const amp = Math.round((0.82 + 0.18 * pickAmp) * (R.amp < 1 ? R.amp : 1) * 100) / 100;
     const speed = [0.92, 1, 1.08][Math.floor(pickSpeed * 3)];
     let done = false;
+    // a third of the one-handed beats use the far hand (a presenter has two hands)
+    const far = pickHand < 0.34;
     for (const [v, from] of prefs) {
-      const [name, variant] = v.split(':');
+      const [name, v0] = v.split(':');
+      const variant = far && FAR_OK.has(v) ? `${v0}_far` : v0;
       const order = from < 0 ? cands : cands.filter((i) => W[i].char >= from).concat(cands.filter((i) => W[i].char < from));
       for (const wi of order) {
-        const ev = P.tryAt(name, wi, { variant, amp, speed, free: true, beat: true });
+        const opts = { variant, amp, speed, free: true, beat: true };
+        const ev = P.tryAt(name, wi, opts);
         if (ev) {
-          P.commit(ev);
+          P.commit(ev, opts);
           done = true;
           break;
         }
@@ -786,24 +1006,165 @@ function placeFirst(P, name, opts) {
   return P.placeNear(name, 0, { ...opts, spill: true });
 }
 
-/** papers in the hold after the last word (the sign-off's wide). */
+/**
+ * The sign-off papers in the hold after the last word (WORLD NOW 1.5 s, NEWS IN 60 1.0 s, MONEY MINUTE
+ * 0.6 s: pace.js holds.signoff, or ctx.gapAfter when the director says). The full stand-and-square
+ * (2.4 s) only when it fits the hold; otherwise the short `signoff` squaring: its tap lands at least
+ * 0.1 s before the hold ends and the stack is flat again before the stinger, so the cut never catches
+ * it in the air. It may start in the last syllable (≤ 0.15 s before the last word ends) when the hold
+ * is short; nothing when even that cannot complete.
+ */
 function papersAfter(P) {
   const { ctx } = P;
+  const hold = Number.isFinite(ctx.gapAfter) ? ctx.gapAfter : paceFor(P.R.pid).holds.signoff;
   const ev = { kind: 'gesture', slot: ctx.speaker, name: 'papers', char: ctx.seg.text.length };
-  const d = defOf(ev);
   const amp = P.R.amp < 1 ? P.R.amp : null;
   if (amp) ev.amp = amp;
-  ev.at = Math.max(0, ctx.duration + 0.15);
-  ev.apexAt = ev.at + d.apex / rateOf(ev);
-  ev.word = ctx.seg.text.length;
-  ev.dur = d.dur / rateOf(ev);
+  const full = defOf(ev);
+  if (0.15 + full.dur / rateOf(ev) > hold) ev.variant = 'signoff';
+  const d = defOf(ev);
+  const rate = rateOf(ev);
+  const apex = d.apex / rate, flat = flatAfter(d) / rate;
+  ev.dur = d.dur / rate;
+  // as soon after the last word as the hold allows (0.12 s of breath), earlier when the hold is short
+  ev.at = Math.min(ctx.duration + 0.12, ctx.duration + hold - 0.1 - apex);
   // no gesture may still be running, and no cut may land in its first moments
   for (const p of P.events) if (p.at + p.dur - SETTLE > ev.at) ev.at = p.at + p.dur - SETTLE;
   for (const c of ctx.shots || []) if (ev.at >= c.at && ev.at < c.at + ctx.cutGuard) ev.at = c.at + ctx.cutGuard;
-  ev.apexAt = ev.at + d.apex / rateOf(ev);
+  if (ev.at < ctx.duration - 0.15) ev.at = ctx.duration - 0.15;
+  // the tap inside the hold, the stack down before the stinger: else it cannot air
+  if (ev.at + apex > ctx.duration + hold - 0.1 + 1e-9 || ev.at + flat > ctx.duration + hold + 0.05 + 1e-9) return null;
+  if (d === full && ev.at + ev.dur > ctx.duration + hold + 1e-9) return null;
+  ev.apexAt = ev.at + apex;
+  ev.word = ctx.seg.text.length;
   ev.arm = true;
   P.events.push(ev);
   P.count++;
+  return ev;
+}
+
+/** s from t0 until the papers stack is flat on the desk for good (its tilt track's last raised key). */
+function flatAfter(d) {
+  const tr = d.tracks.tilt;
+  if (!tr) return 0;
+  let t = 0;
+  for (let k = 0; k < tr.length; k++) if (tr[k][1] > 0.02) t = tr[k + 1] ? tr[k + 1][0] : tr[k][0];
+  return t;
+}
+
+// ---------------------------------------------------------------------------
+// Visibility: where does the hand land on screen in the shot of the apex?
+
+const BANDS = new WeakMap(); // look → Map(definition → [band per amp step 5..10])
+const TV = [0, 0, 0], TD = [0, 0, 0];
+
+/**
+ * The speaker's hands between the apex and the hold of a gesture, in body units below the neck base as
+ * the oblique camera sees them (y + z·TILT): the highest and lowest hand centres, the lowest wrist, and
+ * the x range (screen-right positive for a presenter whose partner is on the right). From the tracks
+ * and the look's proportions (rig.js solve), never from a render.
+ */
+function handBand(L, d, ev) {
+  // amp in tenths: the band moves less than a pixel between steps
+  const step = ev.amp == null ? 10 : Math.round(Math.max(0.5, Math.min(1, ev.amp)) * 10);
+  const amp = step / 10;
+  let byL = BANDS.get(L);
+  if (!byL) BANDS.set(L, (byL = new Map()));
+  let arr = byL.get(d);
+  if (!arr) byL.set(d, (arr = []));
+  let b = arr[step];
+  if (b) return b;
+  const A = L.arm, T = L.torso;
+  const k = (A.upper + A.fore) / 37;
+  b = { top: Infinity, bottom: -Infinity, wrist: -Infinity, x0: Infinity, x1: -Infinity };
+  const reach = d._ch.some((c) => c.ch === 'reach');
+  for (const ch of d._ch) {
+    if (ch.ch !== 'wrist' && ch.ch !== 'wristF') continue;
+    const far = ch.ch === 'wristF';
+    const dch = d._ch.find((c) => c.ch === (far ? 'dirF' : 'dir'));
+    const sx = far ? -T.shoulderJoint[0] : T.shoulderJoint[0];
+    for (let q = 0; q <= 2; q++) {
+      const t = d.apex + ((d.hold - d.apex) * q) / 2;
+      const w = evalTrack(ch.keys, t, TV);
+      const r = ch.rest;
+      const wx = r[0] + (w[0] - r[0]) * amp, wy = r[1] + (w[1] - r[1]) * amp, wz = r[2] + (w[2] - r[2]) * amp;
+      let dx = -0.8, dy = 0.12, dz = 0.58;
+      if (dch) {
+        const v = evalTrack(dch.keys, t, TD), rr = dch.rest, k2 = 0.5 + amp * 0.5;
+        dx = rr[0] + (v[0] - rr[0]) * k2;
+        dy = rr[1] + (v[1] - rr[1]) * k2;
+        dz = rr[2] + (v[2] - rr[2]) * k2;
+      }
+      const dl = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+      let x = sx + wx * k, y = T.shoulderJoint[1] + wy * k + wz * k * TILT;
+      if (reach && !far) {
+        // the glasses reach puts the hand at the face (rig.js reachGlasses)
+        x = L.headAt[0] + 2;
+        y = L.headAt[1] + 4;
+      }
+      const cy = y + ((dy + dz * TILT) / dl) * A.hand * 0.5, cx = x + (dx / dl) * A.hand * 0.5;
+      b.top = Math.min(b.top, cy);
+      b.bottom = Math.max(b.bottom, cy);
+      b.wrist = Math.max(b.wrist, y);
+      b.x0 = Math.min(b.x0, cx);
+      b.x1 = Math.max(b.x1, cx);
+    }
+  }
+  arr[step] = b;
+  return b;
+}
+
+/** The shot in view at time t: the cut object (with its framing when known) or null. */
+function cutAt(ctx, t) {
+  let s = null;
+  for (const c of ctx.shots || []) if (c.at <= t) s = c;
+  return s;
+}
+
+/** Framing of a cut: its own, else the camera planner's for that cut (planSegment strips it), else a guess. */
+function framingOfCut(ctx, cut) {
+  if (cut.framing !== undefined) return cut.framing;
+  for (const e of cutsOf(ctx)) if (Math.abs(e.at - cut.at) < 0.002 && e.shot === cut.shot) return e.framing;
+  return cut.shot === 'wide' ? 'wide' : cut.shot === 'close' ? (ctx.duo ? 'mcu' : 'solo-mcu') : null;
+}
+
+/** Tests and tools: would the viewer see this planned gesture's hands ({ name, variant?, n?, amp?, apexAt })? */
+export function gestureVisible(ctx, ev) {
+  const d = defOf(ev);
+  return !d || !d.arm || handsVisible(ctx, ev, d);
+}
+/** Tests and tools: the hand band of a gesture for a look (body units below the neck, see handBand). */
+export const handBandOf = (L, ev) => handBand(L, defOf(ev), ev);
+
+const SIDE = { A: 1, B: -1 };
+/** Is the speaker's apex hand of this gesture inside the shot that is on air at its apex? */
+function handsVisible(ctx, ev, d) {
+  if (!ctx.shots || !ctx.shots.length) return true; // no camera plan (labs, tests): nothing to check
+  const cut = cutAt(ctx, ev.apexAt);
+  if (!cut) return true;
+  if (HIDDEN.has(cut.shot)) return false;
+  const name = framingOfCut(ctx, cut);
+  if (!name) return false;
+  const solo = !ctx.duo;
+  // a single on the other presenter does not show the speaker's hands
+  if (!solo && cut.focus && cut.focus !== ctx.speaker && name !== 'wide' && name !== 'two') return false;
+  const L = lookFor(ctx.speakerId);
+  if (!L) return true;
+  let cam;
+  try {
+    cam = cameraFraming(name, { cast: ctx.cast, focus: cut.focus || ctx.speaker, programId: ctx.programId, solo });
+  } catch {
+    return true;
+  }
+  const X = solo ? SET.seatX.solo ?? 0 : SET.seatX[ctx.speaker === 'B' ? 'B' : 'A'];
+  const p = placeActor(cam, X);
+  const b = handBand(L, d, ev);
+  const floor = p.s >= SINGLE_SCALE ? HAND_FLOOR : HAND_FLOOR_WIDE;
+  if (p.y + b.bottom * p.s > floor || p.y + b.top * p.s < 12) return false;
+  if (p.s >= SINGLE_SCALE && p.y + b.wrist * p.s > WRIST_FLOOR) return false;
+  const m = solo ? 1 : SIDE[ctx.speaker] ?? 1;
+  const xa = p.x + Math.min(b.x0 * m, b.x1 * m) * p.s, xb = p.x + Math.max(b.x0 * m, b.x1 * m) * p.s;
+  return xa >= 8 && xb <= 376;
 }
 
 /** The legacy shot in view at time t (from planShots' cuts), or null. */

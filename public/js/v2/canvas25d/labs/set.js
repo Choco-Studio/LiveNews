@@ -368,7 +368,8 @@ export function measure(t = 10) {
   }
   const wall = stats(px, (i) => !mask[i] && inWall(i));
   const set = stats(px, (i) => !mask[i] && !inWall(i));
-  // studio 4x4 patches brighter than the face mean (presenters excluded)
+  // studio 4x4 patches brighter than the face mean (presenters excluded, and the desk's red logo
+  // plate: a network brand block, like the bug, not studio light)
   const faceMean = faces.length ? Math.min(...faces) : 100;
   let patches = 0;
   for (let y = 0; y + 4 <= H; y += 2) {
@@ -376,7 +377,7 @@ export function measure(t = 10) {
       let ok = true;
       for (let j = 0; j < 4 && ok; j++) for (let i = 0; i < 4 && ok; i++) {
         const q = (y + j) * W + x + i;
-        if (mask[q] || lstarOf(px[q]) <= faceMean) ok = false;
+        if (mask[q] || px[q] === C.red || px[q] === C.darkRed || lstarOf(px[q]) <= faceMean) ok = false;
       }
       if (ok) patches++;
     }
