@@ -350,11 +350,8 @@ function drawBeard(buf, L, m, head, s) {
         if (tr === 0) continue; // the wide: the cheeks stay clean skin (the face box stays bright)
         const st0 = T8[i];
         let tt = st0 + 1;
-        if (tr === 2) {
-          const len0 = 2 + ((ch * 3) | 0);
-          const h0 = hashInt(col * 131 + Math.floor((y * s + ch * 7) / len0), 29);
-          if (h0 < 0.3) tt = st0; // broken: skin shows between the strands
-        }
+        // (one even step down, never broken into strands here: skin specks left between strands read as
+        // moles and blotches on the cheek at close-ups, critic r3 / owner 22:50 'Max looks different')
         if (y < cheekLine + px1) tt = st0; // the top edge thins into the skin
         T8[i] = tt > 3 ? 3 : tt;
         continue;

@@ -1578,8 +1578,9 @@ function details(g, B, s, lod, robot, back) {
     }
   }
   // ---- knuckles on the back of the hand (critic r3: one continuous lit row across them read as a glove seam or a
-  // bracelet): each metacarpal head is its own small bump, a lit pixel on its top and a shade pixel under it,
-  // broken between the fingers; a closed finger's bump is 2 px wide where the finger is wide enough to carry it
+  // bracelet): each metacarpal head is its own small bump, 2 px wide (a lit pair on its top, a shade pair under
+  // it: a 1 px lit dot is a lone speck), broken between the fingers; a pixel the silhouette refuses leaves its
+  // mate alone, and cleanClusters() takes that one out
   if (back) {
     for (let fi = 0; fi < 4; fi++) {
       const q = fi * 4;
@@ -1587,17 +1588,11 @@ function details(g, B, s, lod, robot, back) {
       const r = R[q];
       const x3 = J[q * 3] - g.n[0] * r, y3 = J[q * 3 + 1] - g.n[1] * r, z3 = J[q * 3 + 2] - g.n[2] * r;
       const X = Math.floor(px(B, x3, y3, z3)) - bx0, Y = Math.floor(py(B, x3, y3, z3)) - by0;
-      if (curl[fi + 1] >= 0.55) {
-        if (FW[fi] < 2.2) continue;
+      if (curl[fi + 1] >= 0.55 ? FW[fi] >= 2.2 : lod >= 3 && FW[fi] >= 2.6) {
         ridgePx(X, Y, 0);
+        ridgePx(X + 1, Y, 0);
         ridgePx(X, Y + 1, 2);
-        if (FW[fi] >= 3.2) {
-          ridgePx(X + 1, Y, 0);
-          ridgePx(X + 1, Y + 1, 2);
-        }
-      } else if (lod >= 3 && FW[fi] >= 2.6) {
-        ridgePx(X, Y, 0);
-        ridgePx(X, Y + 1, 2);
+        ridgePx(X + 1, Y + 1, 2);
       }
     }
   } else if (!robot) {
@@ -1676,7 +1671,7 @@ function cleanClusters() {
           const ii = i + dx;
           if (ii < 0 || ii >= bw) continue;
           const kk = k + dy * LW + dx;
-          if (OWN[kk] >= 0 && (TN[kk] === v || (v >= 8 && TN[kk] >= 8))) {
+          if (OWN[kk] >= 0 && TN[kk] === v) {
             same = true;
             break;
           }

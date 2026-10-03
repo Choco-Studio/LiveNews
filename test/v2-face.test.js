@@ -1553,7 +1553,8 @@ test('close-up eyes at s 2.2-3 (critic r2: drowsy at 2.45-2.7): the catchlight s
                 const up = buf.mat[(y - 1) * buf.w + x];
                 // (a lens glint of the glasses may sit over the lash line; toward the inner corner
                 // the upper lid is the skin's own deep fold instead of lash, critic r3)
-                const fold = up === L._mats.skin && buf.tone[(y - 1) * buf.w + x] >= 2;
+                // (the fold is drawn in the skin's deep material, skinD, or in skin at a deep tone)
+                const fold = (up === L._mats.skin || (L._mats.skinD && up === L._mats.skinD)) && buf.tone[(y - 1) * buf.w + x] >= 2;
                 if (up !== lash && up !== iris && up !== decal(E.iris[1]) && !fold && !(L.glasses && up === decal(P.fog))) bad.push(`${id} s ${s} side ${side}: catchlight at ${x},${y} is not under the lash or iris`);
               }
             }
