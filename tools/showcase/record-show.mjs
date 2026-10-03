@@ -116,6 +116,8 @@ const url = (() => {
   if (opts.voices === 'harness') u.searchParams.set('voices', 'browser');
   if (opts.v2) u.searchParams.set('v2', '1');
   if (opts.v1) u.searchParams.set('v2', '0');
+  // the recorder renders the beds itself from the timeline (lib/music.mjs): the page's live beds stay off
+  u.searchParams.set('beds', '0');
   return u.toString();
 })();
 if (opts.voices && !['auto', 'harness'].includes(opts.voices)) {

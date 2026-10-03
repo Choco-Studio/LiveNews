@@ -1,6 +1,6 @@
 # GLOBIT 24 — lista de todo lo que hay que corregir o modificar
 
-Estado (3 oct, 09:30): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a falta de algo tuyo. Ordenado por prioridad. Detalle en OWNER_FEEDBACK.md, BACKLOG.md, WAVE3.md y STATUS.md.
+Estado (3 oct, 14:30): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a falta de algo tuyo. Ordenado por prioridad. Detalle en OWNER_FEEDBACK.md, BACKLOG.md, WAVE3.md y STATUS.md.
 
 ## A. Prioridad máxima (lo que más se nota)
 1. 🟡 **Fotos reales en antena.** (Código hecho: buscador Wikimedia/Google/Bing, foto de archivo marcada FILE. Falta abrir la red para probarlo de verdad.) Nada dibujado al aire. Hace falta abrir el acceso a las webs de noticias e imágenes (o usar tu ordenador), un buscador de fotos (Wikimedia Commons por defecto; Google o Bing con clave opcional) y una demo grabada con fotos reales.
@@ -20,7 +20,7 @@ Estado (3 oct, 09:30): trabajando punto por punto. ✅ = hecho y subido; 🟡 = 
 13. 🟡 Manos: detalles pendientes (golpecito al juntar dedos, deslizar gafas, nudillos, mano relajada) y rendimiento.
 
 ## C. Voces
-14. Siguiente nivel: risas suaves, respiraciones y pausas naturales, sin exagerar. Grabar una prueba A/B para que elijas.
+14. 🟡 Siguiente nivel: risas suaves, respiraciones y pausas naturales, sin exagerar. (Respiraciones hechas: una respiración suave, unos 30 dB por debajo de la voz, en las pausas largas antes de una frase larga; nunca en UNIT-8. Hay muestra antes/después. Las risas esperan a la decisión 7.)
 15. ✅ UNIT-8: voz de robot más suave (elegiste la A, ya puesta).
 
 ## D. Programas, contenido y ritmo
@@ -60,7 +60,7 @@ Estado (3 oct, 09:30): trabajando punto por punto. ✅ = hecho y subido; 🟡 = 
 31. La música de los anuncios debe bajar bajo la voz.
 
 ## G. Música y sonido
-32. Música de fondo suave por programa y momento (equipo de música en cola).
+32. ✅ Música de fondo suave por programa y momento. (Ahora suena también en el canal en directo, no solo en los vídeos grabados: cambia con cada programa y momento, baja sola bajo la voz, calla en las noticias graves y deja paso a la sintonía y a los anuncios. Se apaga con `?beds=0`.)
 
 ## H. Tiempo real y 24/7
 33. 🟡 Prueba larga: 2 h seguidas en tiempo real con voces reales (3 oct): 60 fps de mediana (mínimo 57), memoria estable (22→26 MB), 0 errores, el servidor siempre con programas preparados por delante. Las 6 h necesitan tu ordenador: aquí un proceso en segundo plano dura como mucho 2 h (`tools/soak.mjs`).

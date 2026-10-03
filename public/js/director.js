@@ -9,6 +9,7 @@ import { splitSentences } from './audio/sentences.js';
 import { ACTIONS } from './cues.js';
 import { openFor } from './scenes/opens.js';
 import { VoicePlayer } from './voice/player.js';
+import { LiveMusic, SHOT_KIND } from './music/live.js';
 import { paceFor, gapAfter, CHANNEL, paceTrace, cutWait, isRepeat } from './pace.js';
 
 // a headline frame is never shorter than this, so a short teaser line still cuts with its voice
@@ -41,8 +42,12 @@ function teaserLines(seg, lines) {
 const estimateSeg = (seg) => (Number.isFinite(seg?.audio?.duration) ? seg.audio.duration : String(seg?.text || '').length / CPS_EST);
 
 export class Director {
-  constructor({ audio, channel, v2 = false }) {
+  constructor({ audio, channel, v2 = false, music = true }) {
     this.audio = audio;
+    // soft music beds under the programmes, ducked under every voice (owner 17:05); ?beds=0 turns them off
+    this.music = new LiveMusic(audio, { enabled: music });
+    this.musicSeg = 0;
+    this.musicInStory = false;
     this.channel = channel;
     setPresenters(channel.presenters);
     this.images = new Map(); // storyId -> { small, full, card }
@@ -92,7 +97,54 @@ export class Director {
       s.shotSince = now();
       if (shot === 'full') s.panDir = Math.random() < 0.5 ? 1 : -1;
       if (this.v2 && !('framing' in extra)) s.framing = s.cameraMove = null; // v2: a framing belongs to the cue that set it
+      this.musicShot(shot, extra);
     }
+  }
+
+  /** The music's view of a cut (the recorder's music track, tools/showcase/lib/music.mjs, made live). */
+  musicShot(shot, extra) {
+    const m = this.music;
+    if (shot === 'endcard') m.cue('endcard');
+    else if (shot === 'standby') m.cue('standby', { programId: 'channel' });
+    else if (shot === 'promo') m.cue('upNext', { programId: 'channel', next: extra.card?.next ?? null, seconds: 4.2 });
+    else if (shot === 'ad' && extra.card?.ad && !extra.card.ad.black) m.cue('ad', { programId: 'channel' });
+    else if (this.musicInStory && SHOT_KIND[shot]) m.cue('shot', { kind: SHOT_KIND[shot] });
+  }
+
+  /** The music's moment for a segment that starts speaking now (and its sentence-level beats). */
+  musicSegment(seg) {
+    const m = this.music;
+    const emotion = seg.emotion || 'neutral';
+    const grave = emotion === 'serious' || emotion === 'sad';
+    const segment = ++this.musicSeg;
+    this.musicInStory = seg.type === 'story';
+    if (seg.type === 'intro') {
+      if (this.scene.program?.id === 'cosmos') m.cue('coldOpen', { segment });
+      else {
+        const lines = Math.min(3, teaserLines(seg, splitSentences(seg.text)));
+        if (lines) m.cue('headlines', { line: 0, lines, segment });
+        return (i) => {
+          if (i > 0 && i < lines) m.cue('headlines', { line: i, lines, segment });
+          else if (i === lines && lines) m.cue('greeting', { segment: ++this.musicSeg });
+          if (i < lines) m.cue('pip', { line: i, lines });
+        };
+      }
+    } else if (seg.type === 'story') {
+      m.cue('item');
+      const heavy = grave || Boolean(seg.breaking);
+      const moment = heavy ? 'story' : seg.feature === 'roundup' ? 'roundup' : seg.feature === 'lighter' ? 'finally' : seg.feature === 'number' ? 'number' : 'story';
+      m.cue(moment, { emotion, grave, breaking: Boolean(seg.breaking), segment });
+    } else if (seg.type === 'chat') m.cue('chat', { emotion, grave, segment });
+    else if (seg.type === 'outro') m.cue('outro', { emotion, segment });
+    return null;
+  }
+
+  /** After a segment's last word. */
+  musicSegmentEnd(seg) {
+    const m = this.music;
+    if (seg.type === 'intro') m.cue('introEnd');
+    else if (seg.type === 'outro') m.cue('signoffEnd');
+    else if (seg.type === 'story' && seg.feature === 'lighter') m.cue('featureEnd');
   }
 
   /**
@@ -156,6 +208,8 @@ export class Director {
 
   async playBreak(item) {
     const s = this.scene;
+    this.musicInStory = false;
+    this.music.cue('silence', { programId: 'channel' }); // the bumper's jingle and the spots carry their own music
     this.voices.refreshAds(); // advert voice-overs (fetched while the ident runs)
     s.lowerThird = null;
     s.subtitle = null;
@@ -351,11 +405,13 @@ export class Director {
     const recorded = await (ahead ?? this.voices.audioFor(seg));
     const v2 = this.v2?.begin(seg, recorded ?? null); // v2: scene.segPlan (timed for the voice that plays) + its shot cues
     const v2marks = v2?.speak?.marks || []; // v2 cuts that fall inside a sentence
+    const musicSentence = this.musicSegment(seg);
     await this.audio.speak(seg.text, seg.anchor, {
       audio: recorded, // recorded voice from the server, when the episode has one (voice contract)
       onSentence: (sentence, i) => {
         s.subtitle = sentence;
         v2?.sentence(i);
+        musicSentence?.(i);
         onSentence?.(i);
       },
       marks: [...cues.map((cue) => cue.char), ...v2marks],
@@ -363,11 +419,17 @@ export class Director {
     });
     v2?.end();
     s.subtitle = null;
+    this.musicSegmentEnd(seg);
   }
 
   async playEpisode(episode) {
     const s = this.scene;
     this.episode = episode; // PACE: the pause after each segment and the look-ahead of chats need the running order
+    // the music: the open plays its own theme; the beds follow the programme's segments
+    this.music.setProgram(episode.program?.id);
+    this.musicSeg = 0;
+    this.musicInStory = false;
+    this.music.cue('open');
     this.voices.episode(episode); // warm up the first recorded voices while the open plays
     const imagesReady = this.prepareImages(episode);
     // Each programme has its own opening titles and theme tune. The tune starts
