@@ -219,13 +219,14 @@ The owner asked for each programme to have its own studio. The network's archite
 | --- | --- | --- |
 | WORLD NOW | Two floor-to-ceiling glass bays on the city at night. Each has a banded sky, the city's glow at the horizon, a hazy far skyline and near towers with lit windows. The left bay has the Moon and a spire; the right bay has a TV tower. Both have thin clouds and two reflection strokes on the glass. Over the screen: a bar of world clocks (NYC, LON, TYO, SYD). | The home desk |
 | TECH BYTES | A black display cabinet each side with four backlit niches. Each niche has a cyan LED strip, the light falling down the back panel, a glass shelf and one hand-pixelled product: headphones, a gamepad, a retro handheld, a camera, a VR headset, a joystick, a drone, a little UNIT-8. | Steel plinth |
-| COSMOS DESK | A planetarium wall: a quiet starfield and a star chart's dotted grid. Orion, the Big Dipper and Cassiopeia are drawn as star charts: crosses, purple lines, names in micro type. Over the screen: the Moon's eight phases. No coloured wash. | Dark front with silver stars |
-| MONEY MINUTE | A private bank after the close: a dark-wood dado with raised panels, a bull and a bear in bronze relief on framed plaques with brass name plates, and the bronze sconces. Along the top: an LED ticker of the programme's beats, with no prices. | Wood with broken-run grain |
+| COSMOS DESK | A planetarium set: two portrait LED panels either side of the wall play star charts: a quiet starfield, a dotted grid, and Orion, the Big Dipper and Cassiopeia (crosses, purple lines, names in micro type). Over the screen: the Moon's eight phases. No coloured wash or light on the flanks. | Dark front with silver stars |
+| MONEY MINUTE | A business set after the close: a slatted wood wall washed from a light in its rail; a bull and a bear etched into two edge-lit glass panels on standoffs (green LED in the foot), facing each other; the bronze sconces. Along the top: an LED ticker of the programme's beats, with no prices. | Wood with broken-run grain |
 | NEWS IN 60 | A broadcast studio clock on the left: sixty second-LEDs, the first quarter lit yellow, "60" at its heart. The rundown board on the right: five numbered beats, the one on air marked in yellow. The room stays under the 1.5 % yellow cap. | A thin yellow band |
 
 Each piece was redrawn until it read clearly in the wide and in every framing that shows it (owner, 4 Oct: "solo pasa al siguiente cuando tu autocrítica pase del 9.5"):
 - text is shown whole or not at all where a framing or the flats would cut it;
-- the set shows no figures it did not report: no invented prices, no fake index values.
+- the set shows no figures it did not report: no invented prices, no fake index values;
+- it must still read as a TV set, not a room (owner, 4 Oct: "que siga pareciendo un plató"). The dressing therefore uses studio hardware, as real sets do: LED panels and bands, edge-lit glass, backlit niches, slat walls washed by hidden light, a studio clock, a rundown monitor. Painted murals, framed pictures and office panelling are out.
 
 The rules still hold, and `test/v2-set.test.js` checks them:
 - every pixel is a palette colour;

@@ -9,12 +9,12 @@
 //                 cyan LED strip, the light down the back panel, a glass shelf), one hand-pixelled product in
 //                 each (headphones, a gamepad, a retro handheld, a camera | a VR headset, a joystick, a drone,
 //                 a little UNIT-8)
-//   COSMOS DESK   a planetarium: a quiet starfield and a star chart's dotted grid on the black wall, Orion,
-//                 the Big Dipper and Cassiopeia as star charts (crosses, purple lines, names in micro type),
+//   COSMOS DESK   a planetarium set: two portrait LED panels play star charts (a quiet starfield, a dotted
+//                 grid, Orion | the Big Dipper and Cassiopeia: crosses, purple lines, names in micro type),
 //                 the Moon's eight phases over the screen, a dark desk front with stars
-//   MONEY MINUTE  a private bank after the close: a dark-wood dado with raised panels, a bull and a bear in
-//                 bronze relief on framed plaques (brass name plates), an LED ticker of the programme's beats
-//                 (no prices), the bronze sconces of the style, a wood front with broken-run grain
+//   MONEY MINUTE  a business set after the close: a slatted wood wall washed from its rail, a bull and a bear
+//                 etched in two edge-lit glass panels on standoffs, an LED ticker of the programme's beats (no
+//                 prices), the bronze sconces of the style, a wood front with broken-run grain
 //   NEWS IN 60    a flash studio: a broadcast studio clock (sixty second-LEDs, the first quarter lit yellow,
 //                 "60" at its heart) on the left, the rundown board (RUNDOWN, five numbered beats, the one on
 //                 air marked yellow) on the right, a thin yellow band on the desk
@@ -610,13 +610,12 @@ function techBytes(fr, cam, style, soft) {
   displayCabinet(fr, cam, 1, soft);
 }
 
-// --------------------------------------------------------------------------- COSMOS: the planetarium wall
-// The darkest room becomes a planetarium: a quiet starfield on the black wall beside the pools, two
-// constellations drawn as star charts (Orion on the left; the Big Dipper and Cassiopeia on the right),
-// their stars as small crosses joined by thin purple lines that stop short of each star, each named in
-// micro type; and over the screen, the Moon's eight phases in a row. No coloured wash (cosmos.md: a purple
-// light on the flanks reads as a club), nothing behind a head, every star at or under the faces' value
-// but the few brightest.
+// --------------------------------------------------------------------------- COSMOS: the planetarium set
+// The darkest room, dressed as a science set: two portrait LED panels either side of the wall play star
+// charts (a quiet starfield and a chart's dotted grid on their black screens; Orion on the left, the Big
+// Dipper and Cassiopeia on the right, stars as small crosses joined by thin purple lines that stop short of
+// each star, each named in micro type), and over the screen a strip of the Moon's eight phases. No coloured
+// wash or light on the flanks (cosmos.md: it reads as a club), nothing behind a head.
 // [name, x, y, mag] in chart units (x right, y down), mag 1 (brightest) .. 3; lines as index pairs
 const ORION = {
   name: 'ORION',
@@ -635,8 +634,8 @@ const CASSIOPEIA = {
 };
 // where each chart sits on the wall (world units: its origin, units per chart unit, the label's offset)
 const CHARTS = [
-  { c: ORION, X: -206, Y: -96, u: 1.05, label: [-6, 82] },
-  { c: DIPPER, X: 167, Y: -98, u: 1.25, label: [2, 22] },
+  { c: ORION, X: -204, Y: -100, u: 1.05, label: [-6, 82] },
+  { c: DIPPER, X: 162, Y: -98, u: 1.25, label: [2, 22] },
   { c: CASSIOPEIA, X: 172, Y: -48, u: 1.25, label: [-2, 23] },
 ];
 
@@ -707,22 +706,35 @@ function constellation(fr, cam, ch, soft) {
 
 const FLATS_X = 196; // the set flats' inner edge (set.js FLAT_X, world X at SET.flatsZ)
 
-function starfield(fr, cam, soft) {
-  // faint background stars beside the pools (|X| 140-300) and in the band over the screen: mostly slate and
-  // steel, a few fog, a very few silver; deterministic
+// the two portrait LED panels the charts play on (world units: X0, Y0, X1, Y1), either side of the wall
+const SKY_PANELS = [[-228, -126, -150, -2], [150, -126, 228, -2]];
+/** A portrait LED panel: an ink bezel lit along its top and left edges, the black screen inside. */
+function skyPanel(fr, cam, [X0, Y0, X1, Y1], soft) {
   const k = kAt(cam, SET.wallZ);
-  const r = rng(41);
-  for (let n = 0; n < 230; n++) {
-    const top = r() < 0.18;
-    const X = top ? -130 + r() * 260 : (r() < 0.5 ? -1 : 1) * (140 + r() * 160);
-    const Y = top ? -134 + r() * 20 : -130 + r() * 132;
-    const v = r();
-    if (soft && v < 0.85) continue;
-    const x = Math.round(sxOf(cam, k, X)), y = Math.round(syOf(cam, k, Y));
-    if (x < 0 || x >= W || y < 0 || y >= H) continue;
-    if (fr.px[y * W + x] !== C.black) continue; // only on the black wall, never on a pool's edge
-    fr.px[y * W + x] = v > 0.97 ? C.silver : v > 0.85 ? C.fog : v > 0.45 ? C.steel : C.slate;
+  const b = 3;
+  rectW(fr, cam, X0 - b, Y0 - b, X1 + b, Y1 + b, C.ink);
+  if (!soft) {
+    rectW(fr, cam, X0 - b, Y0 - b, X1 + b, Y0 - b + 1.4, C.slate);
+    rectW(fr, cam, X0 - b, Y0 - b, X0 - b + 1.4, Y1 + b, C.slate);
   }
+  rectW(fr, cam, X0, Y0, X1, Y1, C.black);
+  void k;
+}
+function starfield(fr, cam, soft) {
+  // faint stars on the panels' screens: mostly slate and steel, a few fog, a very few silver; deterministic
+  const k = kAt(cam, SET.wallZ);
+  SKY_PANELS.forEach(([X0, Y0, X1, Y1], n) => {
+    const r = rng(41 + n * 7);
+    for (let i = 0; i < 95; i++) {
+      const X = X0 + 2 + r() * (X1 - X0 - 4), Y = Y0 + 2 + r() * (Y1 - Y0 - 4);
+      const v = r();
+      if (soft && v < 0.85) continue;
+      const x = Math.round(sxOf(cam, k, X)), y = Math.round(syOf(cam, k, Y));
+      if (x < 0 || x >= W || y < 0 || y >= H) continue;
+      if (fr.px[y * W + x] !== C.black) continue;
+      fr.px[y * W + x] = v > 0.97 ? C.silver : v > 0.85 ? C.fog : v > 0.45 ? C.steel : C.slate;
+    }
+  });
 }
 
 // the Moon's phases over the screen: 7 px discs (whole-pixel scale), lit limb silver, dark side ink with a
@@ -771,35 +783,34 @@ function chartGrid(fr, cam, soft) {
   if (soft) return;
   const k = kAt(cam, SET.wallZ);
   const px = fr.px;
-  const dot = (X, Y) => {
-    const x = Math.round(sxOf(cam, k, X)), y = Math.round(syOf(cam, k, Y));
-    if (x < 0 || x >= W || y < 0 || y >= H || ((x + y) & 1)) return;
-    if (px[y * W + x] === C.black) px[y * W + x] = C.ink;
-  };
-  for (const sx of [-1, 1]) {
-    // parallels: arcs bowing down, centred on the screen
-    for (const Y0 of [-112, -62, -14]) for (let X = 146; X <= 300; X += 0.5) dot(sx * X, Y0 + (X - 146) * (X - 146) * 0.0016);
-    // meridians: lines converging toward a pole above the frame
-    for (const X0 of [160, 200, 240]) for (let Y = -134; Y <= 10; Y += 0.5) dot(sx * (X0 + (Y + 134) * (X0 - 150) * 0.0026), Y);
+  for (const [X0, Y0, X1, Y1] of SKY_PANELS) {
+    const sx = X0 < 0 ? -1 : 1;
+    const dot = (X, Y) => {
+      if (X < X0 + 1 || X > X1 - 1 || Y < Y0 + 1 || Y > Y1 - 1) return;
+      const x = Math.round(sxOf(cam, k, X)), y = Math.round(syOf(cam, k, Y));
+      if (x < 0 || x >= W || y < 0 || y >= H || ((x + y) & 1)) return;
+      if (px[y * W + x] === C.black) px[y * W + x] = C.ink;
+    };
+    // parallels bowing down, meridians converging toward a pole above the panel
+    for (const P0 of [-104, -62, -20]) for (let X = 150; X <= 228; X += 0.5) dot(sx * X, P0 + (X - 150) * (X - 150) * 0.0022);
+    for (const M0 of [164, 196]) for (let Y = Y0; Y <= Y1; Y += 0.5) dot(sx * (M0 + (Y - Y0) * (M0 - 140) * 0.0024), Y);
   }
 }
 
 function cosmos(fr, cam, style, soft) {
+  for (const r of SKY_PANELS) skyPanel(fr, cam, r, soft);
   starfield(fr, cam, soft);
   chartGrid(fr, cam, soft);
-  for (const ch of CHARTS) {
-    if (ch.X > 0) constellation(fr, cam, ch, soft);
-    else constellation(fr, cam, ch, soft);
-  }
+  for (const ch of CHARTS) constellation(fr, cam, ch, soft);
   moonPhases(fr, cam, soft);
 }
 
-// --------------------------------------------------------------------------- MONEY MINUTE: the private bank
-// A panelled room after the close: a dark-wood dado with raised panels and a chair rail along the foot of
-// the wall; a bull and a bear in bronze relief on dark plaques either side, facing each other across the
-// screen (the market's two moods, no figures); an LED ticker band along the top of the wall with the
-// programme's beats in green micro type (no prices: the channel never shows a figure it did not report).
-// The bronze sconces of the style stay between them.
+// --------------------------------------------------------------------------- MONEY MINUTE: the business set
+// A business-news set after the close (CNBC and Bloomberg sets: LED bands, edge-lit glass, warm wood
+// slats): a slatted wood wall along the foot, washed from a light hidden in its top rail; a bull and a bear
+// etched into two edge-lit glass panels on standoffs either side, facing each other across the screen (the
+// market's two moods, no figures); an LED ticker band along the top of the wall with the programme's beats
+// (no prices: the channel never shows a figure it did not report). The bronze sconces of the style stay.
 
 /** Rasterise a shape list (ellipses and capsules in local units) into a mask, then emboss it in bronze. */
 // (the Charging Bull's build: a small round rump, a massive shoulder, the head down, short thick horns
@@ -832,20 +843,15 @@ function inShape(sh, x, y) {
   const dx = x - (ax + vx * t), dy = y - (ay + vy * t);
   return dx * dx + dy * dy <= r * r;
 }
-function relief(fr, cam, shapes, X, Y, unit, flip, soft) {
-  // local box 30 x 16; (X, Y) the box's centre on the wall; one local unit = `unit` world units
-  const k = kAt(cam, SET.wallZ);
-  const pxu = unit * k; // pixels per local unit
+/** The shape list's mask at `pxu` pixels per local unit (30 x 16 box): 2 near side, 1 a far leg only. */
+function shapeMask(shapes, pxu, flip) {
   const w = Math.ceil(30 * pxu), h = Math.ceil(16 * pxu);
-  const x0 = Math.round(sxOf(cam, k, X) - w / 2), y0 = Math.round(syOf(cam, k, Y) - h / 2);
   const mask = new Uint8Array((w + 2) * (h + 2));
-  const at = (i, j) => mask[(j + 1) * (w + 2) + (i + 1)];
   for (let j = 0; j < h; j++) {
     for (let i = 0; i < w; i++) {
       let lx = (i + 0.5) / pxu;
       if (flip) lx = 30 - lx;
       const ly = (j + 0.5) / pxu;
-      // 2 for the near side, 1 where only a far leg is (one step darker, so the legs read in pairs)
       let v = 0;
       for (const sh of shapes) {
         if (!inShape(sh, lx, ly)) continue;
@@ -855,91 +861,102 @@ function relief(fr, cam, shapes, X, Y, unit, flip, soft) {
       mask[(j + 1) * (w + 2) + (i + 1)] = v;
     }
   }
+  return { w, h, at: (i, j) => mask[(j + 1) * (w + 2) + (i + 1)] };
+}
+
+/**
+ * An edge-lit glass panel on four standoffs with the animal etched in it: the glass dark, its edges catching
+ * the light, the LED in its foot green (the programme's colour); the etching frosted (a slate and steel
+ * checker) with a fog outline where the light catches its edge; the name etched under it.
+ */
+function etchedPanel(fr, cam, X, Y, shapes, flip, name, soft) {
+  const k = kAt(cam, SET.wallZ);
+  const PW = 72, PH = 56;
+  const x0 = Math.round(sxOf(cam, k, X - PW / 2)), x1 = Math.round(sxOf(cam, k, X + PW / 2));
+  const y0 = Math.round(syOf(cam, k, Y - PH / 2)), y1 = Math.round(syOf(cam, k, Y + PH / 2));
+  if (x1 <= 0 || x0 >= W || y1 <= 0 || y0 >= H) return;
   const px = fr.px;
-  for (let j = 0; j < h; j++) {
-    for (let i = 0; i < w; i++) {
-      if (!at(i, j)) continue;
-      const x = x0 + i, y = y0 + j;
-      if (x < 0 || x >= W || y < 0 || y >= H) continue;
-      let c = at(i, j) === 1 ? C.tanShade : C.tan;
-      if (soft) c = C.tanShade;
-      else {
-        // embossed: lit from the top-left (cream where the edge faces the light), shadowed bottom-right
-        const tl = !at(i - 1, j) || !at(i, j - 1);
-        const br = !at(i + 1, j) || !at(i, j + 1);
-        const br2 = !at(i + 1, j + 1);
-        const far = at(i, j) === 1;
-        if (br) c = C.brown;
-        else if (tl) c = far ? C.tan : C.cream;
-        else if (br2) c = far ? C.brown : C.tanShade;
-      }
+  const set = (x, y, c) => {
+    if (x >= 0 && x < W && y >= 0 && y < H) px[y * W + x] = c;
+  };
+  // its shadow on the wall (offset down-right: the panel stands off the wall), the glass, its edges
+  const sh = Math.max(1, Math.round(1.6 * k));
+  fr.span(x0 + sh, y0 + sh, x1 + sh, y1 + sh, C.black);
+  fr.span(x0, y0, x1, y1, soft ? C.black : C.ink);
+  if (soft) return;
+  fr.span(x0, y0, x1, y0 + 1, C.slate); // the top edge
+  fr.span(x0, y0, x0 + 1, y1, C.slate); // the left edge, toward the light
+  fr.span(x1 - 1, y0, x1, y1, C.black);
+  fr.span(x0, y1 - 1, x1, y1, C.green); // the LED in the foot
+  fr.span(x0 + 1, y1 - 2, x1 - 1, y1 - 1, C.darkGreen); // its light just above it in the glass
+  // a faint sheen across the glass: one diagonal stroke, slate on ink
+  for (let y = y0 + 2; y < y1 - 3; y++) {
+    const x = x0 + 3 + Math.round((y1 - y) * 0.9);
+    if (x > x0 + 1 && x < x1 - 2 && (y & 1) === 0) set(x, y, C.slate);
+  }
+  // standoffs at the corners
+  const inset = Math.max(2, Math.round(3 * k));
+  for (const [sx, sy] of [[x0 + inset, y0 + inset], [x1 - 1 - inset, y0 + inset], [x0 + inset, y1 - 2 - inset], [x1 - 1 - inset, y1 - 2 - inset]]) set(sx, sy, C.fog);
+  // the etching
+  const pxu = 1.95 * k;
+  const m = shapeMask(shapes, pxu, flip);
+  const ex = Math.round(sxOf(cam, k, X) - m.w / 2), ey = Math.round(syOf(cam, k, Y - 6) - m.h / 2);
+  for (let j = 0; j < m.h; j++) {
+    for (let i = 0; i < m.w; i++) {
+      const v = m.at(i, j);
+      if (!v) continue;
+      const edge = !m.at(i - 1, j) || !m.at(i + 1, j) || !m.at(i, j - 1) || !m.at(i, j + 1);
+      const x = ex + i, y = ey + j;
+      let c;
+      if (edge) c = v === 2 ? C.fog : C.steel;
+      else c = v === 2 ? (((x + y) & 1) ? C.steel : C.slate) : C.slate;
+      set(x, y, c);
+    }
+  }
+  for (const s0 of shapes) {
+    if (s0[0] !== 'x') continue;
+    const i = Math.floor((flip ? 30 - s0[1] : s0[1]) * pxu), j = Math.floor(s0[2] * pxu);
+    if (m.at(i, j)) set(ex + i, ey + j, C.ink);
+  }
+  // the name, etched small under the animal
+  const g = textPixels(name, 'micro');
+  const s = Math.max(1, Math.round(k * 1.25));
+  const tx = Math.round(sxOf(cam, k, X) - (g.width * s) / 2), ty = y1 - 3 - 6 * s;
+  for (const [gx, gy] of g.pixels) for (let jj = 0; jj < s; jj++) for (let ii = 0; ii < s; ii++) set(tx + gx * s + ii, ty + gy * s + jj, C.steel);
+}
+
+// the slat wall along the foot: vertical wood slats with shadow gaps, washed from a light hidden in the
+// rail on top (the slats' tops lit, falling off down the wall); out of focus the wood keeps its own value
+// (brown, a step over the jackets' maroon: Penny stays clear of it)
+const SLATS = { top: -16, foot: 30 };
+function slatWall(fr, cam, soft) {
+  const k = kAt(cam, SET.wallZ);
+  const yr = Math.round(syOf(cam, k, SLATS.top)), yf = Math.min(H, Math.round(syOf(cam, k, SLATS.foot)));
+  if (yr >= H || yf <= 0) return;
+  const px = fr.px;
+  // the rail: a black shadow line over the slats
+  const rail = Math.max(2, Math.round(2.4 * k));
+  fr.span(0, yr - rail, W, yr, C.black);
+  // the slats on a whole-pixel rhythm anchored on the wall (they step with the camera, never alias):
+  // slats `pitch - 1` px wide, 1 px shadow gaps; the light from the rail: a tan lip, tanShade fading to
+  // brown down the wall (dark wood: the faces and hands stay the warmest, lightest things on the set)
+  const pitch = Math.max(4, Math.round(5 * k));
+  const ox = Math.round(sxOf(cam, k, 0));
+  const wash = Math.max(4, Math.round(12 * k));
+  for (let y = Math.max(0, yr); y < yf; y++) {
+    const d = y - yr;
+    for (let x = 0; x < W; x++) {
+      const gap = ((((x - ox) % pitch) + pitch) % pitch) === pitch - 1;
+      let c;
+      if (soft) c = gap ? (d < wash * 0.5 ? C.brown : C.maroon) : d < wash * 0.5 ? C.tanShade : C.brown;
+      else if (gap) c = C.maroon;
+      else if (d === 0) c = C.tan;
+      else if (d < wash * 0.4) c = C.tanShade;
+      else if (d < wash) c = (d - wash * 0.4) / (wash * 0.6) > bayer(x, y) ? C.brown : C.tanShade;
+      else c = C.brown;
       px[y * W + x] = c;
     }
   }
-  if (soft) return;
-  for (const sh of shapes) {
-    if (sh[0] !== 'x') continue;
-    const i = Math.floor((flip ? 30 - sh[1] : sh[1]) * pxu), j = Math.floor(sh[2] * pxu);
-    const x = x0 + i, y = y0 + j;
-    if (x >= 0 && x < W && y >= 0 && y < H && at(i, j)) px[y * W + x] = C.brown;
-  }
-}
-function plaque(fr, cam, X, Y, shapes, flip, soft) {
-  // a dark plaque with a bevelled bronze frame, the animal in relief on it
-  const PW = 70, PH = 44;
-  rectW(fr, cam, X - PW / 2 - 2, Y - PH / 2 - 2, X + PW / 2 + 2, Y + PH / 2 + 2, soft ? C.maroon : C.brown);
-  if (!soft) {
-    rectW(fr, cam, X - PW / 2 - 2, Y - PH / 2 - 2, X + PW / 2 + 2, Y - PH / 2 - 0.8, C.tan);
-    rectW(fr, cam, X - PW / 2 - 2, Y - PH / 2 - 2, X - PW / 2 - 0.8, Y + PH / 2 + 2, C.tanShade);
-  }
-  rectW(fr, cam, X - PW / 2, Y - PH / 2, X + PW / 2, Y + PH / 2, C.black);
-  rectW(fr, cam, X - PW / 2 + 1.3, Y - PH / 2 + 1.3, X + PW / 2 - 1.3, Y + PH / 2 - 1.3, soft ? C.black : C.ink);
-  relief(fr, cam, shapes, X, Y + 1, 1.95, flip, soft);
-  if (soft) return;
-  // a small brass plate under the frame with its name
-  const k = kAt(cam, SET.wallZ);
-  const s = Math.max(1, Math.round(k * 1.25));
-  const g = textPixels(flip ? 'BEAR' : 'BULL', 'micro');
-  const pw = (g.width + 6) * s, ph = (5 + 3) * s;
-  const cx = Math.round(sxOf(cam, k, X)), py = Math.round(syOf(cam, k, Y + PH / 2 + 4));
-  const x0 = cx - (pw >> 1);
-  fr.span(x0, py, x0 + pw, py + ph, C.tanShade);
-  fr.span(x0, py, x0 + pw, py + s, C.tan);
-  fr.span(x0, py + ph - s, x0 + pw, py + ph, C.brown);
-  for (const [gx, gy] of g.pixels) fr.span(x0 + (3 + gx) * s, py + (2 + gy) * s, x0 + (4 + gx) * s, py + (3 + gy) * s, C.maroon);
-}
-
-// the dado: raised panels between stiles, a chair rail on top, all in the dark-wood ramp
-const DADO = { top: -16, foot: 30, panel: 38, stile: 6 };
-function dado(fr, cam, soft) {
-  const k = kAt(cam, SET.wallZ);
-  const T = DADO.top;
-  // out of focus the wood keeps its own value (brown, a step over the jackets' maroon: Penny stays clear of it)
-  rectW(fr, cam, -400, T, 400, DADO.foot, C.brown);
-  // the chair rail: a lit top, its body, a shadow under it
-  rectW(fr, cam, -400, T - 4, 400, T, C.tanShade);
-  if (!soft) {
-    rectW(fr, cam, -400, T - 4, 400, T - 2.8, C.tan);
-    rectW(fr, cam, -400, T, 400, T + 1.4, C.maroon);
-  }
-  const pitch = DADO.panel + DADO.stile;
-  if (soft) {
-    // out of focus only the stiles' grooves remain, as soft seams
-    for (let X = -400 + DADO.stile; X < 400; X += pitch) {
-      rectW(fr, cam, X - 1, T + 3, X + 1, DADO.foot, C.maroon);
-      rectW(fr, cam, X + DADO.panel - 1, T + 3, X + DADO.panel + 1, DADO.foot, C.maroon);
-    }
-    return;
-  }
-  // raised panels: lit top and left bevels, shadowed bottom and right, the field one step darker
-  for (let X = -400 + DADO.stile; X < 400; X += pitch) {
-    const Y0 = T + 4, Y1 = DADO.foot - 2;
-    rectW(fr, cam, X, Y0, X + DADO.panel, Y1, C.maroon); // the groove round the panel
-    rectW(fr, cam, X + 1.4, Y0 + 1.4, X + DADO.panel - 1.4, Y1 - 1.4, C.brown);
-    rectW(fr, cam, X + 1.4, Y0 + 1.4, X + DADO.panel - 1.4, Y0 + 2.6, C.tanShade); // top bevel, lit
-    rectW(fr, cam, X + 1.4, Y0 + 1.4, X + 2.6, Y1 - 1.4, C.tanShade); // left bevel, lit
-  }
-  void k;
 }
 
 // the LED ticker band along the top of the wall: the programme's beats in green micro type, dots between
@@ -980,9 +997,9 @@ function ticker(fr, cam, soft) {
 }
 
 function moneyMinute(fr, cam, style, soft) {
-  dado(fr, cam, soft);
-  plaque(fr, cam, -190, -82, BULL, false, soft); // the bull faces right, toward the screen
-  plaque(fr, cam, 190, -82, BEAR, true, soft); // the bear faces left
+  slatWall(fr, cam, soft);
+  etchedPanel(fr, cam, -190, -80, BULL, false, 'BULL', soft); // the bull faces right, toward the screen
+  etchedPanel(fr, cam, 190, -80, BEAR, true, 'BEAR', soft); // the bear faces left
   ticker(fr, cam, soft);
 }
 
