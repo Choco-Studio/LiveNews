@@ -17,7 +17,7 @@ const ACCENTS = {
   featureEnd: new Set(['tech-bytes']),
   introEnd: new Set(['money-minute']),
 };
-export const SHOT_KIND = { map: 'map', full: 'picture', fact: 'presenter', close: 'presenter', wide: 'presenter' };
+export const SHOT_KIND = { map: 'map', full: 'picture', fact: 'presenter', close: 'presenter', wide: 'presenter', broll: 'picture', location: 'presenter', twoway: 'presenter' };
 
 export class LiveMusic {
   /**

@@ -204,6 +204,15 @@ export class Renderer {
         return drawWorldMap(ctx, t, dt, { lat: card.lat, lon: card.lon, place: card.place, accent: THEME_ACCENT[program?.theme], programId: program?.id, from: card.from, pins: card.pins, duration: card.duration, follow: true });
       case 'ad':
         return card.ad?.draw(ctx, t, dt, { line: card.line ?? -1, speaking: this.audio.isSpeaking('ad'), duration: card.ad.duration });
+      case 'broll': {
+        // a correspondent's piece over the place: its footage in the channel's pixel style at 2x (footage/deck.js),
+        // else the story's own picture with the slow pan, else the map
+        const f = card.footage ? scene.footageDeck?.frame(card.footage, 'full', t) : null;
+        if (f) return this.drawFootage(ctx, f);
+        if (img?.full) return this.drawPan(ctx, img.full, dt, scene.panDir);
+        if (scene.remote && Number.isFinite(scene.remote.lat)) return drawWorldMap(ctx, t, dt, { lat: scene.remote.lat, lon: scene.remote.lon, place: scene.remote.place, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
+        break;
+      }
       case 'full':
         if (img?.full) {
           // slow Ken Burns pan across a native-resolution pixel-art photo
@@ -241,6 +250,32 @@ export class Renderer {
     // wide (and fallbacks)
     this.drawStudio(this.sctx, t, scene);
     ctx.drawImage(this.stage, 0, 0);
+  }
+
+  /** A footage frame (192x108 palette pixels) at exactly 2x. */
+  drawFootage(ctx, f) {
+    if (!this.footCanvas || this.footCanvas.width !== f.w || this.footCanvas.height !== f.h) {
+      this.footCanvas = document.createElement('canvas');
+      this.footCanvas.width = f.w;
+      this.footCanvas.height = f.h;
+      this.footCtx = this.footCanvas.getContext('2d');
+      this.footImage = this.footCtx.createImageData(f.w, f.h);
+      this.footPx = new Uint32Array(this.footImage.data.buffer);
+    }
+    this.footPx.set(f.px);
+    this.footCtx.putImageData(this.footImage, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(this.footCanvas, 0, 0, W, H);
+  }
+
+  /** A slow pan across a native-resolution pixel-art photo (the full shot's Ken Burns). */
+  drawPan(ctx, pic, dt, dir) {
+    const maxX = pic.width - W;
+    const maxY = pic.height - H;
+    const p = easeOut(Math.min(1, dt / 16));
+    const ox = Math.round(maxX * (dir > 0 ? p : 1 - p));
+    const oy = Math.round(maxY * (dir > 0 ? 1 - p : p));
+    ctx.drawImage(pic, -ox, -oy);
   }
 
   /** Channel ident between programmes and breaks. */

@@ -17,10 +17,10 @@
 //     as a fault). That episode is then aired whole by the old renderer before the
 //     backoff counts (retry after 1, 2, 4, 8 more episodes).
 // `?perf=1` logs p50/p95 of the v2 shot every 10 s.
-import { Stage, STUDIO_SHOTS, episodeKey, warmSets } from './stage.js';
+import { Stage, STUDIO_SHOTS, REMOTE_SHOTS, episodeKey, warmSets } from './stage.js';
 import { FallbackPolicy, PerfWatchdog, LEVEL_MAX } from './watchdog.js';
 
-export { STUDIO_SHOTS };
+export { STUDIO_SHOTS, REMOTE_SHOTS };
 
 const nowMs = () => performance.now();
 // full-screen channel shots: the old renderer may take over under them (no presenter on screen)
@@ -100,7 +100,7 @@ export class StageHost {
     if (this.pendingDrop && this.stage && SWAP_SHOTS.has(scene.shot)) this.perfDrop(key);
     const stage = this.stage;
     if (!stage) return false;
-    const draw = STUDIO_SHOTS.has(scene.shot);
+    const draw = STUDIO_SHOTS.has(scene.shot) || REMOTE_SHOTS.has(scene.shot);
     const a = draw ? this.now() : 0;
     const ok = stage.frame(ctx, t, scene, draw);
     if (!ok || this.stage !== stage) return false;

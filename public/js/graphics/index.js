@@ -21,6 +21,14 @@ import { StrapState, STRAP_TIMING, strapContent, strapReadTime, categoryLabel, d
 import { CaptionState, drawCaptions } from './captions.js';
 import { TickerState, makeEntries, makeFigureEntry, makeNextEntry, drawTicker } from './ticker.js';
 import { CHANNEL } from '../pace.js';
+import { drawLinkGraphics } from './remote.js';
+
+const foldWords = (x) => String(x || '').toLowerCase().replace(/[“”"‘’']/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+/** Does a caption read the quote on screen (its first five words)? */
+function sameWords(caption, quote) {
+  const head = foldWords(quote).split(' ').slice(0, 5).join(' ');
+  return head.length >= 12 && foldWords(caption).includes(head);
+}
 
 /** Which graphics sit on top of each shot ('news' all, 'bug' no strap/captions, 'ad', none). */
 export const OVERLAYS = {
@@ -31,6 +39,9 @@ export const OVERLAYS = {
   fact: 'news',
   montage: 'news',
   weather: 'news', // WORLD WEATHER's weather centre (scenes/weather)
+  location: 'news', // a correspondent link (graphics/remote.js): the correspondent before the place
+  twoway: 'news', // the presenter and the correspondent side by side
+  broll: 'news', // the place's footage (or the story's picture) under the correspondent's voice
   breakingCard: 'bug',
   ad: 'ad',
 };
@@ -194,6 +205,8 @@ export class Graphics {
 
     let text = mode === 'news' && scene.subtitles !== false && typeof scene.subtitle === 'string' ? scene.subtitle : null;
     if (text && this.repeatsOnAir(text, scene)) text = null;
+    // the quote card already shows the words being read (IN THEIR WORDS): no caption saying them twice
+    if (text && scene.shot === 'fact' && scene.card?.quote?.text && sameWords(text, scene.card.quote.text)) text = null;
     const frame = text && this.audio?.speechFrame ? this.safeFrame() : null;
     // while a strap is up the caption shows one line at a time: the bottom third stays light
     const perPage = !top && this.strapUp() ? 1 : 2;
@@ -448,6 +461,7 @@ export class Graphics {
     TOP_ROW.programOut = this.tagOut;
     TOP_ROW.clock = zoneTime(STUDIO_TZ, this.now()).label;
     drawTopRow(ctx, t, TOP_ROW);
+    if (mode === 'news' && scene.remote) drawLinkGraphics(ctx, t, scene, this.accentOf(scene));
     if (mode === 'news') {
       drawStrap(ctx, t, this.strap);
       drawCaptions(ctx, t, this.captions, this.captionPlace(t, scene));

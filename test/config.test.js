@@ -10,6 +10,9 @@ import { ROOT } from '../server/config.js';
 
 const KEYS = [
   'HOST',
+  'FOOTAGE',
+  'FOOTAGE_BUDGET_MS',
+  'FOOTAGE_CACHE_MB',
   'FEEDS_FILE',
   'PICTURE_BUDGET_MS',
   'PICTURE_VERIFY_MS',

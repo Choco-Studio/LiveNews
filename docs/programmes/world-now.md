@@ -199,6 +199,76 @@ This replaces the writer's current cold open ("gripping line, greeting, teaser" 
 | No gazetteer time zone for a place | No local-time line under the map label. |
 | A segment's speech is shorter than 3 s | The shot holds in silence up to 3 s, for at most 0.9 s of hold, rather than cutting early *(our rule)*. |
 
+### Format round 1 (owner 4 Oct): correspondent links, footage, IN THEIR WORDS
+
+Owner, 4 Oct: *"Como queremos hacerlos más largos no puede solo ser cambiar de presentador en presentador con una noticia cada uno. Hay que añadir algo. Por ejemplo en las partes en directo cargar vídeos, pixelarlos con nuestro estilo y poner un reportero hablando sobre ello."* This round gives WORLD NOW the furniture of a real world bulletin. It supersedes the 8-story budget above. The programme now runs 9–10 minutes (`targetSeconds` [540, 600], within the owner's 10-minute ceiling of 23:10) and carries 14 stories.
+
+**Running order today**
+
+| # | Block | What airs |
+|---|---|---|
+| 1 | Open, headlines, greeting | as above |
+| 2 | Lead | Paco reads it and hands over to a correspondent: **LINK 1** |
+| 3 | Main stories | presenters alternate; IN THEIR WORDS on a sourced quote |
+| 4 | "Still to come" | Lola, to camera (closes the block) |
+| 5 | Main stories | including **LINK 2**: another desk, at least `LINK_GAP` (4) stories after the first |
+| 6 | Number of the day, Around the world, And finally, chat, sign-off | as above |
+
+**A correspondent link** (`server/correspondents.js`; the writer's `cross` becomes these segments in `normalizeBulletin`)
+
+| Segment | Speaker | Shots (director `playCross`) |
+|---|---|---|
+| `story` with `link: 'R1'` | the story's presenter | the story's beats; its last sentence, the **hand-over** ("Our Europe correspondent Rhea Raster has more."), on the TWO-WAY |
+| `cross` `piece` | the correspondent (slot `R1`/`R2`) | LOCATION for the first line, then B-ROLL (the place's footage, else the story's picture, else its map), then LOCATION again for a last line long enough to carry a shot |
+| `cross` `ask` | the presenter | TWO-WAY ("Rhea, what happens next?" when the answer is about what comes next, else "what else do we know?") |
+| `cross` `answer` | the correspondent | TWO-WAY for its first sentence (the ask is too short to cut away from), LOCATION from its second |
+| `cross` `thanks` | the presenter | stays on the shot on air; the next segment cuts back to the studio |
+
+Every line of a link is a fact of that story's source (`groundedText`, as for any story sentence). The correspondent **never claims to be at the scene**: `presenceClaim()` drops "here in", "behind me", "on the ground", "I'm standing", "I've seen", "told me", "live from". There is no LIVE label on a correspondent (wave 3 §3.6). The channel's own LIVE bug stays, because the channel is live. Links are never on the number of the day, a round-up item or And finally. A link on a grave story keeps the sober tone, shows no footage, and puts the correspondent before the desk backdrop.
+
+**The correspondents** (fictional, recurring; `config/channel.json` presenters with a `desk`; looks in `public/js/v2/canvas25d/cast/correspondents.js`; voices measured against the cast in `server/voice/casting.json`)
+
+| | Desk (strap label by the place) | Look | Voice |
+|---|---|---|---|
+| Rhea Raster | EUROPE / AFRICA DESK | black hair in a sleek low chignon, warm brown skin, black jacket, white top | bf_lily + 25% bf_emma, en-GB |
+| Vic Vector | AMERICAS DESK | short black crop, deep brown skin, steel-blue jacket, open white collar | am_eric + 30% am_onyx, en-US |
+| Mika Voxel | ASIA-PACIFIC / MIDDLE EAST DESK | sleek black bob, light warm skin, pale grey blazer, black top | af_aoede, en-US |
+
+All three wear an earpiece with its clear tube running into the collar, and a small lapel microphone. The desk is chosen by the country of the place (`deskOf`); coordinates decide only when no country is known. Each correspondent appears at most once per programme while another desk can take a story.
+
+**LOCATION.** The correspondent is in a medium close-up on the left third (`REMOTE`: neck at 124,122, s 3.6; the hands rest below the frame). Behind them is one of two backdrops:
+- **the place's footage:** a FILE clip from Wikimedia Commons in the pixel style (below), graded "back" (flatter and darker), so the person stays the brightest thing;
+- **the desk backdrop:** used on a grave story or while no footage is ready. It is a dark field with a soft wash from above (never a halo round the head) and the region's dotted map, with a pulsing pin on the place.
+
+**TWO-WAY.** Two 16:9 boxes, 176×99 at y 44, framed in fog with an accent rule under each, on a quiet ink hatch:
+- the left box holds the presenter's single, its studio wall at rest (a plate cut by the box edge would show half a word);
+- the right box holds the correspondent before their backdrop;
+- each box is labelled in its corner: the studio's city (LONDON) and the place.
+
+**Footage** (`server/footage.js` → `/api/vid/<id>.webm` → `public/js/footage/`)
+- **What a clip may show:** the place only, never the event. The query is the place's own name; a peninsula or a region films as its country.
+- **What is rejected:** clips whose title names an event, a person speaking, a production or a map. There is never footage on a grave story.
+- **The clip itself:** free licences only, a 240p/360p VP9 transcode of a few megabytes, downloaded once, credited **FILE · author · licence** on air.
+- **Limits:** Commons is polite-use: one request at a time, 2 s apart, honouring `Retry-After` on a 429 (a minute at least). Answers are cached by place for a day, across restarts.
+- **Pixel style:** 192×108 shown at exactly 2x, 12 frames a second (the stepped motion of pixel animation). The grade is pixelate.js's (saturation 1.25, contrast 1.12). The palette is the shot's own (16 colours, k-means): kept for the whole shot and replaced only at a cut in the footage, so pans never flicker. Dithering is 4×4 Bayer, fixed to the screen.
+- **What never airs:** the opening titles (a clip starts a fifth in), a title card or a fade to black (skipped), the closing credits (it turns back first).
+- **Fallbacks:** offline (the fixture feeds) the desk is off, and links show the story's picture or map.
+
+**Graphics of a link** (`graphics/remote.js`)
+- the correspondent's name and desk in the lower third for the first 5.5 s of their first picture, then the story's headline again;
+- the place under the clock (a dateline: the story's place);
+- FILE with the clip's credit whenever footage is on screen;
+- the two-way's corner labels.
+
+**IN THEIR WORDS.** When a story sentence reads the quote its source carries (`seg.quote`, grounded by the validator), that sentence goes to the quote card:
+- the words, an accent quotation mark and the attribution in micro type;
+- it takes the place of the cut planned for that sentence (it never adds one: the cut rate holds) and only with room to air the 4 s minimum;
+- the caption does not repeat the words on the card.
+
+It is enabled per programme by the pace profile's `shots.quoteCard` (WORLD NOW only for now).
+
+**Pace.** Between the parts of a link the gap is `link` (0.4 s): a two-way keeps its turns close. Every shot of a link still airs the 4 s floor. A sentence too short to carry a shot of its own stays on the shot before it (`sentenceSeconds`, from the recorded word times).
+
 ### Set and light: the home look
 
 - **Dressing:** WORLD NOW is the home look, so there is no extra tint ("none or navy ≤ 10%", ART_DIRECTION §3 re-dressing table). It is not darker than other programmes; COSMOS is the one-step-darker show.

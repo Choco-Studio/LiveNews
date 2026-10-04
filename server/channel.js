@@ -4,6 +4,7 @@ import { ROOT } from './config.js';
 import { FEATURES } from './writer.js';
 import { ACTIONS } from '../public/js/cues.js';
 import { TOPIC_NAMES } from './topics.js';
+import { DESKS } from './correspondents.js';
 
 const FILE = path.join(ROOT, 'config', 'channel.json');
 
@@ -71,10 +72,20 @@ export function validateChannel(ch) {
       }
     }
     if (p.chemistry !== undefined && typeof p.chemistry !== 'string') throw new Error(`programme "${id}" has a "chemistry" that is not text`);
+    // Optional: the correspondents a programme hands stories to (server/correspondents.js), and how many links it airs.
+    if (p.correspondents !== undefined) {
+      if (!isList(p.correspondents)) throw new Error(`programme "${id}" has "correspondents" that are not a list of presenter ids`);
+      for (const who of p.correspondents) {
+        if (!ch.presenters[who]) throw new Error(`programme "${id}" references unknown correspondent "${who}"`);
+        if (!DESKS[ch.presenters[who].desk]) throw new Error(`correspondent "${who}" has no known "desk" (${Object.keys(DESKS).join(', ')})`);
+      }
+    }
+    if (p.crosses !== undefined && !(Number.isInteger(p.crosses) && p.crosses >= 0 && p.crosses <= 3)) throw new Error(`programme "${id}" has a "crosses" outside 0..3`);
     validateEditorial(id, p);
   }
   for (const [id, who] of Object.entries(ch.presenters)) {
     if (who.role !== undefined && typeof who.role !== 'string') throw new Error(`presenter "${id}" has a "role" that is not text`);
+    if (who.desk !== undefined && !DESKS[who.desk]) throw new Error(`presenter "${id}" has an unknown "desk" (${Object.keys(DESKS).join(', ')})`);
   }
   const b = ch.breaks;
   if (b !== undefined) {
@@ -175,7 +186,7 @@ export function castOf(channel, programId) {
 /** Public view of the channel for the browser (no prompt-only fields). */
 export function publicChannel(channel) {
   const presenters = Object.fromEntries(
-    Object.entries(channel.presenters).map(([id, p]) => [id, { name: p.name, voice: p.voice, ...(p.role ? { role: p.role } : {}) }])
+    Object.entries(channel.presenters).map(([id, p]) => [id, { name: p.name, voice: p.voice, ...(p.role ? { role: p.role } : {}), ...(p.desk ? { desk: p.desk } : {}) }])
   );
   const programs = Object.fromEntries(
     Object.entries(channel.programs).map(([id, p]) => [

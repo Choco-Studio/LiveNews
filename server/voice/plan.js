@@ -11,7 +11,7 @@ import crypto from 'node:crypto';
 export const RECIPE = 4; // 4: soft breaths in sentence pauses (tools/voice/dsp.py breath_into, owner 3 Oct)
 
 // Segments a presenter reads aloud.
-export const SPOKEN = new Set(['intro', 'story', 'chat', 'outro', 'weather']); // weather: WORLD WEATHER (server/weatherwriter.js)
+export const SPOKEN = new Set(['intro', 'story', 'chat', 'outro', 'weather', 'cross']); // weather: WORLD WEATHER (server/weatherwriter.js); cross: a correspondent link (server/correspondents.js)
 
 // Clip ids: 'v' + 20 hex characters of the request hash (safe in URLs and file names).
 export const ID_RE = /^v[0-9a-f]{20}$/;

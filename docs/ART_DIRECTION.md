@@ -266,3 +266,18 @@ The presenters' wardrobe (same round) gives each presenter a signature colour:
 - Sam: camel-gold tie and a pocket square.
 - UNIT-8: a magenta status light on the antenna tip.
 
+
+## Correspondents and moving pictures (WORLD NOW format round 1, 4 Oct)
+
+Owner, 4 Oct: *"cargar vídeos, pixelarlos con nuestro estilo y poner un reportero hablando sobre ello"*. The full rules are in `docs/programmes/world-now.md` ("Format round 1"); what follows is what they mean for the look.
+
+**Footage in the pixel style** (`public/js/footage/`)
+- **Size and motion:** a clip is shown at 192×108, exactly 2x, so its pixel is the wall's pixel seen in a single, never a smooth video. It steps at 12 frames a second: the stepped motion reads as pixel animation, never as broadcast video.
+- **Colour:** the grade is the full photo shot's (saturation 1.25, contrast 1.12). Each shot of the clip gets its own 16-colour palette, kept until the footage cuts, so a pan never flickers. The 4×4 Bayer dither is fixed to the screen, so a still building keeps its pattern while the camera moves.
+- **Behind a person** the same clip is graded flatter and darker ("back": saturation 0.85, contrast 0.86, ×0.64 light), so the correspondent's face stays the brightest, warmest thing (§3).
+- **Labelling:** FILE and the clip's credit are on screen whenever footage is. It shows the place, never the event.
+
+**The correspondent's shots** (`studio/remote.js`)
+- **LOCATION:** a medium close-up on the left third, the hands below the frame, on the place's footage or the desk backdrop. The desk backdrop is a dark field with a wash from above, flat bands with a narrow dithered seam (a noisy field would hide the map's dot grid), and the region's land as a 3 px dot grid (fog near the place, then steel, then slate) with a pulsing accent pin.
+- **TWO-WAY:** two framed 16:9 boxes on a black field with a quiet ink hatch. The studio wall in the presenter's box is at rest: a plate or a map cut by the box's edge would break "set text is whole or not at all".
+- **What says "correspondent" at 1x:** an earpiece with its clear tube running down the neck into the collar (silver and fog, 1 px, from s 2), and a lapel microphone on a silver clip. No hand-held microphone and no flag: they are at their desk's camera, not "on the ground".

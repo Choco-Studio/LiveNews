@@ -11,6 +11,7 @@ import { openFor } from './scenes/opens.js';
 import { VoicePlayer } from './voice/player.js';
 import { LiveMusic, SHOT_KIND } from './music/live.js';
 import { paceFor, gapAfter, CHANNEL, paceTrace, cutWait, isRepeat } from './pace.js';
+import { FootageDeck } from './footage/deck.js';
 
 // a headline frame is never shorter than this, so a short teaser line still cuts with its voice
 const MONTAGE_FLASH = 1.2;
@@ -24,6 +25,8 @@ const FULL = { w: 416, h: 234 }; // full screen with room for a slow pan
 // programme's pace profile (pace.js: one table for the whole channel, owner 23:10).
 const pace = (scene) => paceFor(scene.program?.id);
 const STUDIO = new Set(['wide', 'close']);
+const LINK_SHOTS = new Set(['location', 'twoway', 'broll']); // a correspondent link's shots (playCross)
+const NAME_STRAP = 5.5; // s the correspondent's name strap stays up on their first picture
 // A segment's air before its voice runs (characters per second, sentence pauses included): the engine's
 // estimated timeline speaks ~15 chars/s; a recorded clip gives its own length.
 const CPS_EST = 14.5;
@@ -36,6 +39,30 @@ function teaserLines(seg, lines) {
   let n = 0;
   while (n < lines.length && !GREETING.test(lines[n].trim()) && !(teases && !teases[n])) n++;
   return n === lines.length ? Math.max(0, n - 1) : n; // no greeting found: the last line is it
+}
+
+/**
+ * Seconds sentence i of a segment airs: from its first recorded word to the next sentence's (seg.audio.words, by
+ * character), else its characters at the estimated pace.
+ */
+function sentenceSeconds(seg, lines, i) {
+  const words = seg?.audio?.words;
+  let at = 0;
+  for (let k = 0; k < i; k++) at += lines[k].length + 1;
+  const end = at + lines[i].length + 1;
+  if (Array.isArray(words) && words.length) {
+    const t0 = words.find((w) => w.char >= at)?.t;
+    const t1 = words.find((w) => w.char >= end)?.t ?? seg.audio.duration;
+    if (Number.isFinite(t0) && Number.isFinite(t1)) return t1 - t0;
+  }
+  return lines[i].length / CPS_EST;
+}
+
+/** Does a spoken sentence read this quote (its first words, quotation marks and case aside)? */
+function quoteIn(line, quote) {
+  const fold = (x) => String(x || '').toLowerCase().replace(/[“”"‘’']/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const head = fold(quote).split(' ').slice(0, 5).join(' ');
+  return head.length >= 12 && fold(line).includes(head);
 }
 
 /** Seconds a segment should air, before its voice runs (recorded length, else its characters). */
@@ -75,7 +102,19 @@ export class Director {
       card: null,
       stinger: null,
       panDir: 1,
+      // a correspondent link (playCross): who and where ({ slot, id, lat, lon, grave, footage, place, desk }),
+      // the deck of the place's footage, the name super and the FILE credit the graphics draw
+      remote: null,
+      footageDeck: null,
+      nameSuper: null,
+      fileCredit: null,
     };
+    try {
+      this.footage = typeof document !== 'undefined' ? new FootageDeck() : null;
+    } catch {
+      this.footage = null;
+    }
+    this.scene.footageDeck = this.footage;
     // Wave 2 (?v2=1): live direction for the v2 Stage (segment plans, speech clock, v2 shot
     // cues; v2/canvas25d/runtime/direction.js). Loaded only when asked: with this.v2 null
     // every method below behaves exactly as before.
@@ -90,6 +129,8 @@ export class Director {
     const restart = shot === 'ad' || shot === 'montage';
     const changed = restart || s.shot !== shot || (extra.focus && extra.focus !== s.focus) || ('storyId' in extra && extra.storyId !== s.storyId) || (this.v2 && 'framing' in extra && (extra.framing ?? null) !== (s.framing ?? null)); // v2: a new framing (single → ots) is a cut
     Object.assign(s, extra);
+    // a cut away from a correspondent link's shots (back to the studio, a card, a stinger) ends the link on screen
+    if (changed && s.remote && !LINK_SHOTS.has(shot) && s.linkDone) this.clearLink();
     if (changed) {
       this.mapRun = shot === 'map' ? (this.mapRun || 0) + 1 : 0; // PACE: map cuts in a row (shots.mapRun)
       if (!(shot === 'wide' && s.shot === 'wide')) this.seenSince = now(); // PACE: a focus re-set of the wide is no visible cut
@@ -117,7 +158,8 @@ export class Director {
     const emotion = seg.emotion || 'neutral';
     const grave = emotion === 'serious' || emotion === 'sad';
     const segment = ++this.musicSeg;
-    this.musicInStory = seg.type === 'story';
+    // a correspondent link is part of its story: the story's bed carries on under it, shot cues included
+    this.musicInStory = seg.type === 'story' || seg.type === 'cross';
     if (seg.type === 'intro') {
       if (this.scene.program?.id === 'cosmos') m.cue('coldOpen', { segment });
       else {
@@ -333,6 +375,132 @@ export class Director {
 
   // --- programmes ------------------------------------------------------------
 
+  /** Load the links' footage ahead of air (the clips are a few megabytes; the deck keeps the last few). */
+  prepareFootage(episode) {
+    if (!this.footage) return;
+    const seen = new Set();
+    for (const seg of episode.segments || []) {
+      const f = seg.type === 'cross' && !seg.grave ? seg.footage : null;
+      if (f?.id && !seen.has(f.id)) {
+        seen.add(f.id);
+        this.footage.prepare(f);
+      }
+    }
+  }
+
+  /** The correspondent slot of a link segment (R1, R2): its own anchor, else the one the episode gives its reporter. */
+  linkSlot(seg) {
+    if (/^R\d$/.test(seg.anchor || '')) return seg.anchor;
+    for (const [slot, id] of Object.entries(this.episode?.correspondents || {})) if (id === seg.reporter) return slot;
+    return null;
+  }
+
+  /** What the Stage needs of the link on air (scene.remote). */
+  remoteOf(seg) {
+    const slot = this.linkSlot(seg);
+    if (!slot) return null;
+    const footage = !seg.grave && seg.footage?.id && this.footage ? seg.footage : null;
+    return {
+      slot,
+      id: seg.reporter,
+      lat: seg.location?.lat,
+      lon: seg.location?.lon,
+      grave: !!seg.grave,
+      footage: footage?.id || null,
+      credit: footage?.credit || null,
+      place: seg.place || '',
+      desk: seg.desk || '',
+      name: presenterName(seg.reporter),
+    };
+  }
+
+  /**
+   * One part of a correspondent link (server/correspondents.js): the piece (the correspondent on LOCATION, the
+   * middle of it over the place's footage, full screen: BROLL), the presenter's prompt and the thanks (the
+   * TWO-WAY), the answer (LOCATION). Cuts on sentence starts, every shot held at least the cooldown. The name
+   * super comes up with the correspondent's first shot; FILE and the clip's credit sit on footage.
+   */
+  async playCross(seg) {
+    const s = this.scene;
+    const P = pace(s);
+    const remote = this.remoteOf(seg);
+    if (!remote) return this.say(seg); // a link without its correspondent (an old client's episode): just the voice
+    s.remote = remote;
+    s.linkDone = false;
+    const lines = splitSentences(seg.text);
+    const deck = this.footage;
+    const footage = remote.footage && deck?.ready(remote.footage);
+    const hasImg = !!this.images.get(seg.storyId)?.full;
+    // the piece's middle goes to pictures: the place's footage, else the story's own picture, else the place on
+    // the map (studio.js draws the B-roll shot from whichever there is): never a correspondent held for a minute
+    const broll = footage || hasImg || Number.isFinite(remote.lat);
+    // every shot of a link airs the programme's minimum (owner 24/7 floor: 4 s): a sentence too short to carry a
+    // shot of its own stays on the shot before it (by the recorded voice's word times, else the characters)
+    const minShot = P.shots.min + 0.3;
+    const lastLong = lines.length >= 3 && sentenceSeconds(seg, lines, lines.length - 1) >= minShot;
+    const plan = (i) => {
+      // the prompt and the thanks: the two-way (the thanks stays on whatever the answer left on air)
+      if (seg.part === 'ask') return 'twoway';
+      if (seg.part === 'thanks') return s.shot === 'location' || s.shot === 'twoway' ? s.shot : 'twoway';
+      // the answer starts in the two-way the prompt opened (a cut after a two-second prompt would break the
+      // floor) and goes to the correspondent from its second sentence
+      if (seg.part === 'answer') return i === 0 ? 'twoway' : 'location';
+      // the piece: the correspondent, then pictures, then the correspondent again for a last line long enough
+      if (lines.length < 2 || !broll) return 'location';
+      if (i === 0) return 'location';
+      if (i === lines.length - 1 && lastLong) return 'location';
+      return 'broll';
+    };
+    let pending = null;
+    const cut = (shot) => {
+      clearTimeout(pending);
+      const apply = () => {
+        // FILE and the clip's credit whenever the place's footage is on screen (B-roll, or behind the correspondent)
+        s.fileCredit = footage && (shot === 'broll' || shot === 'location') ? remote.credit : null;
+        this.setShot(shot, { focus: shot === 'twoway' ? seg.anchor : remote.slot, storyId: seg.storyId, card: { footage: footage ? remote.footage : null }, framing: null, cameraMove: null });
+        // the correspondent's name and desk in the lower third with their first picture of the link (as broadcasters
+        // do), then the story's headline again
+        if (shot === 'location' && !s.nameSuper) {
+          s.nameSuper = { name: remote.name, role: remote.desk, since: now() };
+          s.lowerThird = { headline: remote.name.toUpperCase(), source: this.channel.name || '', anchorName: remote.name, showName: false, breaking: false, kicker: remote.desk, category: seg.category, since: now() + P.strap.inAfterCut * 0.5 };
+          clearTimeout(this.linkStrap);
+          this.linkStrap = setTimeout(() => {
+            if (s.remote === remote) s.lowerThird = { ...story, since: now() };
+          }, NAME_STRAP * 1000);
+        }
+      };
+      if (s.shot === shot) return;
+      const wait = STUDIO.has(s.shot) || s.shot === 'twoway' || s.shot === 'location' || s.shot === 'broll' ? cutWait(s.program?.id, s.shotSince, now()) : 0;
+      if (wait > 0.05) pending = setTimeout(apply, wait * 1000);
+      else apply();
+    };
+    const story = { headline: seg.headline, source: seg.source || '', anchorName: remote.name, showName: false, breaking: false, kicker: seg.kicker, category: seg.category };
+    // the story's strap carries on through the link (its name strap aside: see cut)
+    if (!s.nameSuper || s.lowerThird?.headline === seg.headline) s.lowerThird = { ...story, since: s.lowerThird?.headline === seg.headline ? s.lowerThird.since : now() + P.strap.inAfterCut };
+    cut(plan(0));
+    await this.say(seg, (i) => {
+      if (i > 0) cut(plan(i));
+    });
+    clearTimeout(pending);
+  }
+
+  /**
+   * After a link's last part: the link stays on screen until the next segment cuts away from it (the shot on
+   * air still shows the correspondent), then setShot clears it.
+   */
+  endLink() {
+    this.scene.linkDone = true;
+    clearTimeout(this.linkStrap);
+  }
+
+  clearLink() {
+    const s = this.scene;
+    s.remote = null;
+    s.nameSuper = null;
+    s.fileCredit = null;
+    s.linkDone = false;
+  }
+
   async prepareImages(episode) {
     const ids = episode.rundown.filter((r) => r.hasImage && !this.images.has(r.storyId)).map((r) => r.storyId);
     // the headlines the intro teases first: the montage shows them a few seconds after the open (owner 22:50)
@@ -364,6 +532,11 @@ export class Director {
     s.anchors = Object.fromEntries(Object.keys(episode.cast).map((slot) => [slot, { emotion: 'neutral' }]));
     const voices = {};
     for (const [slot, id] of Object.entries(episode.cast)) voices[slot] = this.channel.presenters[id]?.voice;
+    // the correspondents of the episode's links speak in their own slots (R1, R2): the browser voice's profile
+    for (const [slot, id] of Object.entries(episode.correspondents || {})) {
+      voices[slot] = this.channel.presenters[id]?.voice;
+      s.anchors[slot] = { emotion: 'neutral' };
+    }
     this.audio.setVoices?.(voices);
     this.v2?.episode(episode); // v2: scene.episode; every segment is planned in idle time
   }
@@ -392,7 +565,7 @@ export class Director {
     const s = this.scene;
     s.anchors[seg.anchor] = { emotion: seg.emotion };
     for (const slot of Object.keys(s.cast)) {
-      if (slot === seg.anchor) continue;
+      if (slot === seg.anchor || seg.type === 'cross') continue;
       s.anchors[slot] = { emotion: seg.emotion === 'happy' ? 'happy' : seg.emotion === 'serious' || seg.emotion === 'sad' ? 'serious' : 'neutral' };
     }
     // Gestures fire when the voice reaches their character (the engine's
@@ -405,7 +578,8 @@ export class Director {
     this.voiceAhead = null;
     const recorded = await (ahead ?? this.voices.audioFor(seg));
     // v2: scene.segPlan (timed for the voice that plays) + its shot cues; the weather centre directs itself
-    const v2 = seg.type === 'weather' ? null : this.v2?.begin(seg, recorded ?? null);
+    // (a correspondent link directs itself: playCross; the v2 planner knows the studio's presenters only)
+    const v2 = seg.type === 'weather' || seg.type === 'cross' ? null : this.v2?.begin(seg, recorded ?? null);
     const v2marks = v2?.speak?.marks || []; // v2 cuts that fall inside a sentence
     const more = Array.isArray(extra?.marks) && typeof extra.onMark === 'function' ? extra.marks : []; // the caller's own marks
     const musicSentence = this.musicSegment(seg);
@@ -439,6 +613,7 @@ export class Director {
     this.music.cue('open');
     this.voices.episode(episode); // warm up the first recorded voices while the open plays
     const imagesReady = this.prepareImages(episode);
+    this.prepareFootage(episode);
     // Each programme has its own opening titles and theme tune. The tune starts
     // on the open's own clock (the shot change, dt = 0), so its final chord
     // lands on the title lock-up and its button on the cut, `duration` later.
@@ -470,6 +645,10 @@ export class Director {
           break;
         case 'story':
           await this.playStory(seg);
+          break;
+        case 'cross':
+          await this.playCross(seg);
+          if (episode.segments[index + 1]?.type !== 'cross') this.endLink();
           break;
         case 'weather': {
           await this.playWeather(seg, index);
@@ -756,7 +935,40 @@ export class Director {
         : beat === 'fact'
           ? { fact: seg.fact, label: /\d/.test(seg.fact) ? 'BY THE NUMBERS' : 'KEY FACT', source: seg.source }
           : null;
+    // a story handed to a correspondent (seg.link): its last sentence, the hand-over, goes to the TWO-WAY, and no
+    // planned beat cuts away from it
+    const link = seg.link ? this.episode?.segments?.[index + 1] : null;
+    let thrown = false;
+    const throwTo = () => {
+      const remote = link?.type === 'cross' ? this.remoteOf(link) : null;
+      if (!remote) return;
+      thrown = true;
+      clearTimeout(pending);
+      clearTimeout(watch);
+      s.remote = remote;
+      s.linkDone = false;
+      const go = () => this.setShot('twoway', { focus: seg.anchor, storyId: seg.storyId, card: null, framing: null, cameraMove: null });
+      const wait = cutWait(s.program?.id, s.shotSince, now());
+      if (wait > 0.05) pending = setTimeout(go, wait * 1000);
+      else go();
+    };
+    // IN THEIR WORDS (pace profile shots.quoteCard): the sentence that reads a quote the story's source carries
+    // (seg.quote, grounded by the validator) goes to the quote card, held the minimum like any beat
+    const quoteAt = P.shots.quoteCard && seg.quote?.text && !seg.roundup ? lines.findIndex((l, k) => k > 0 && quoteIn(l, seg.quote.text)) : -1;
+    const cutQuote = () => {
+      const wait = cutWait(s.program?.id, s.shotSince, now());
+      // only with room for the card to air the minimum before the next segment's cut (as any later beat)
+      if (left() - wait < P.shots.min + 1) return false;
+      clearTimeout(pending);
+      const go = () => this.setShot('fact', { focus: seg.anchor, storyId: seg.storyId, wall, card: { quote: seg.quote, source: seg.source, headline: seg.headline } });
+      if (wait > 0.05) pending = setTimeout(go, wait * 1000);
+      else go();
+      return true;
+    };
     const shotFor = (i, cue = null) => {
+      if (thrown) return 0;
+      // the quote's sentence belongs to the quote card, whatever beat the plan had for it
+      if (cue && quoteAt > 0 && cue.sentence === quoteAt && !cue.mid && cutQuote()) return 0;
       if (!cue) return cutTo(i, beats[Math.min(i, beats.length - 1)]);
       if (i === 0 && cue.keep && STUDIO.has(s.shot)) return 0; // v2: a short pickup ("Thanks, Ada.") stays on the studio shot on air; the card comes with its line
       const beat = cue.shot;
@@ -807,6 +1019,7 @@ export class Director {
     // taken only when it can air the minimum shot before the next segment's cut, else it is dropped (no 2 s beat at a
     // story's end); i = -1: the max-hold relief (its timer already checked the room)
     const cutTo = (i, beat) => {
+      if (thrown) return 0;
       clearTimeout(pending);
       const held = this.onAir();
       const MIN_SHOT = P.shots.cooldown;
@@ -849,6 +1062,9 @@ export class Director {
       sentence = i;
       sentAt = now();
       if (i === 0) spoke = now();
+      if (link && i > 0 && i === lines.length - 1) return throwTo();
+      // (the quote card takes the place of a planned cut, never adds one: the programme's cut rate holds)
+      if (i > 0 && i === quoteAt && !v2cues && i < beats.length && beats[i] !== s.shot && cutQuote()) return;
       if (i === 0 || v2cues || opening) return;
       if (i < beats.length && beats[i] !== s.shot) shotFor(i);
       else guard(i);

@@ -74,6 +74,45 @@
   "lang": "en-us",
   "notes": "Relaxed rolling-news anchor: am_michael with 25% am_onyx. Lowest, darkest voice of the cast (median F0 ~109 Hz), steady, friendly; ~3 st under Max. NEWS IN 60 pace 175 wpm (speed ~1.19: Michael articulates slowly, so this does not sound rushed); urgency comes from the cuts, never from the voice."
  },
+ "rhea": {
+  "voice": "bf_lily:0.75+bf_emma:0.25",
+  "speed": 1.02,
+  "lang": "en-gb",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "Europe & Africa correspondent (WORLD NOW links, owner 4 Oct): bf_lily with 25% bf_emma for clarity (Emma alone is Ada's base). Measured on the link test copy (40-band mel cepstrum, coefficients 1-12): nearest Penny 73.4, Max 75.4, Ada 80.7, more than the cast's own closest pair (Nova-continuity 60.3, Lola-Nova 67.3); median F0 ~194 Hz, pitch IQR 5.7 st (a livelier melody than Ada's 3.1). Blends with af_aoede or bf_isabella drifted to Lola/Penny (51-66) and were dropped. WORLD NOW pause set."
+ },
+ "vic": {
+  "voice": "am_eric:0.7+am_onyx:0.3",
+  "speed": 1.06,
+  "lang": "en-us",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "Americas correspondent (WORLD NOW links, owner 4 Oct): am_eric with 30% am_onyx (Sam has 25% onyx, but Sam is >79 away). Nearest voices on the link test copy: Nova 69.1 (another gender), continuity 72.5, Penny 78.9; every male presenter further (Paco, whom he follows in a two-way, >79). Median F0 ~130 Hz, IQR 4.8 st. am_liam/am_adam blends sat on Paco (53-63) and were dropped. WORLD NOW pause set."
+ },
+ "mika": {
+  "voice": "af_aoede",
+  "speed": 1.0,
+  "lang": "en-us",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "Asia & Middle East correspondent (WORLD NOW links, owner 4 Oct): af_aoede alone, the best-graded Kokoro voice no presenter used. Nearest on the link test copy: Nova 72.3 (+2.6 st), Lola 81.9 (-1.6 st). Every blend with af_river/af_jessica pulled it onto Lola (40-48), so it stays pure. Median F0 ~179 Hz, IQR 4.4 st. WORLD NOW pause set."
+ },
  "continuity": {
   "voice": "bm_fable",
   "speed": 1.1,

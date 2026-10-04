@@ -89,6 +89,42 @@
         "rate": 1.08
       },
       "role": "Anchor"
+    },
+    "rhea": {
+      "name": "Rhea Raster",
+      "personality": "the channel's Europe and Africa correspondent: precise and composed, explains what a story means for the people in it, never dramatic",
+      "voice": {
+        "gender": "female",
+        "lang": "en-GB",
+        "pitch": 1.02,
+        "rate": 1.02
+      },
+      "role": "Europe & Africa correspondent",
+      "desk": "europe-africa"
+    },
+    "vic": {
+      "name": "Vic Vector",
+      "personality": "the channel's Americas correspondent: brisk and clear, good at the one detail that makes a story concrete, quietly wry off the grave stories",
+      "voice": {
+        "gender": "male",
+        "lang": "en-US",
+        "pitch": 0.98,
+        "rate": 1.04
+      },
+      "role": "Americas correspondent",
+      "desk": "americas"
+    },
+    "mika": {
+      "name": "Mika Voxel",
+      "personality": "the channel's Asia and Middle East correspondent: calm, exact and warm, gives the context a viewer far away needs",
+      "voice": {
+        "gender": "female",
+        "lang": "en-US",
+        "pitch": 1.04,
+        "rate": 1.02
+      },
+      "role": "Asia & Middle East correspondent",
+      "desk": "asia-mideast"
     }
   },
   "programs": {
@@ -106,13 +142,13 @@
       ],
       "stories": 14,
       "maxChats": 6,
-      "targetSeconds": [480, 600],
+      "targetSeconds": [540, 600],
       "features": [
         "roundup",
         "number",
         "lighter"
       ],
-      "style": "Flagship world news bulletin. Lead with the biggest global story, told with authority; a breaking story always leads. Five to seven main stories, one of which may be the number of the day (after the lead and a main story Lola may add one more detail from the same summary in a short, sober exchange), then 'Around the world' for quick items with a clear place, read by Lola, and 'And finally' a lighter story to close. Plain public-broadcaster English, declarative sentences, at most 20 words each. No humour in the headlines, the lead, the main stories or the round-up: the wit lives only in 'And finally', the chat straight after it and the sign-off.",
+      "style": "Flagship world news bulletin. Lead with the biggest global story, told with authority; a breaking story always leads. Five to seven main stories, one of which may be the number of the day (after the lead and a main story Lola may add one more detail from the same summary in a short, sober exchange), then 'Around the world' for quick items with a clear place, read by Lola, and 'And finally' a lighter story to close. The lead and one later main story are handed to the channel's correspondent for their region (Rhea Raster, Vic Vector, Mika Voxel), who report them from the facts of the sources. Plain public-broadcaster English, declarative sentences, at most 20 words each. No humour in the headlines, the lead, the main stories or the round-up: the wit lives only in 'And finally', the chat straight after it and the sign-off.",
       "storyLength": "lead 3 to 5 sentences, max 520 characters; other stories 2 to 4 sentences, max 450 characters; round-up items exactly 1 sentence of 12 to 20 words; at most 20 words per sentence",
       "chemistry": "Paco is the steady veteran with a bone-dry one-liner; Lola brings warmth, curiosity and the human angle, reads the story with the clearest human angle, the round-up and And finally, and now and then deflates Paco's dryness with a plain fact or a wry understatement. Paco tosses with her name and a full stop (\"Lola.\"); she says \"Thanks, Paco\" at most once. Never banter around grave stories.",
       "headlineMax": 45,
@@ -124,6 +160,8 @@
         "words": "12 to 20",
         "reader": "B"
       },
+      "correspondents": ["rhea", "vic", "mika"],
+      "crosses": 2,
       "numberSlot": "main",
       "chats": {
         "after": [

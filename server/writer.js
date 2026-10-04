@@ -9,6 +9,7 @@ import { parseCues, embedCues, describeActions, ACTIONS } from '../public/js/cue
 import { isBreaking, plainTitle } from './news.js';
 import { claimGrounded, contentWords, groundQuote, headlineGrounded, inventedClaim, isGrave, leansOnPrevious, notForFeatures, numbersGrounded, pointsBack, severity, numbersIn, numberWordsIn, qualifierConflict, quotationsGrounded, sameWord, sourceQualifier } from './facts.js';
 import { findPlaces, lookupPlace, placeSupported, snapLocation } from './gazetteer.js';
+import { askLine, deskOf, presenceClaim, thanksLine, throwLine } from './correspondents.js';
 
 export const EMOTIONS = ['neutral', 'happy', 'serious', 'surprised', 'sad', 'thinking'];
 export const SHOTS = ['wide', 'close', 'full', 'map'];
@@ -70,6 +71,18 @@ function lengthRule(program, n) {
   return `\n- On air this programme runs about ${runs}. Reach it with the ${n} stories and their depth (each main story with its key fact, its context and its figure or quote where the summary or the article has them; a story with an article can carry three to five sentences of its facts${program.maxChats ? ', and a short exchange between the presenters where allowed' : ''}), never by padding, repeating or slowing down. A thin summary without an article makes a short story.`;
 }
 
+/**
+ * Correspondent links (server/correspondents.js): which stories go to the channel's correspondents and how
+ * their lines are written. Empty when the programme has none.
+ */
+function crossRule(program) {
+  const n = program.crosses || 0;
+  if (!n || !Array.isArray(program.correspondents) || !program.correspondents.length) return '';
+  const ask = 'one short question (the one question a programme without questions still asks: a two-way is a conversation), e.g. "What happens next?"';
+  return `
+- Correspondent links: up to ${n} stories (the lead and one main story at least ${LINK_GAP} stories later, each with an article and a specific place in its candidate; never the number of the day, a round-up item or "And finally") are taken by the channel's correspondent for that region. For each, add "cross": the story "text" is then only the presenter's introduction (two sentences: the most striking fact, then the attribution), and the correspondent carries the rest. "piece": 3 or 4 sentences in the correspondent's words (the detail, the context, what the sources say comes next), each a fact from that candidate; "ask": the presenter's prompt to the correspondent, ${ask}, at most 10 words, no name and no new fact; "answer": 1 or 2 more sentences of that candidate's facts. The channel adds the hand-over and the thanks with the correspondent's name: never write them. The correspondent is NOT at the scene and never says so: no "here", "behind me", "on the ground", "I'm standing", "I've seen", "told me", "live"; they attribute ("officials say", "according to the BBC"). Same accuracy rules: nothing that is not in that candidate.`;
+}
+
 function chatRule(program, solo) {
   if (solo || !program.maxChats) return '- No "chat" segments.';
   const after = program.chats?.after;
@@ -92,7 +105,9 @@ function allowedActions(program) {
   return [...names];
 }
 
-const SEGMENT_SCHEMA = (slots, headlineMax) => `{
+const CROSS_SCHEMA = `,
+     "cross": {"piece": "the correspondent's report, 3 or 4 sentences", "ask": "the presenter's short prompt to the correspondent", "answer": "1 or 2 sentences"} | null`;
+const SEGMENT_SCHEMA = (slots, headlineMax, crosses = false) => `{
   "title": "short episode title",
   "segments": [
     {"type": "intro", "anchor": "A", "emotion": "neutral", "text": "the intro (see MAKE IT WORTH WATCHING)"},
@@ -105,7 +120,7 @@ const SEGMENT_SCHEMA = (slots, headlineMax) => `{
      "numbers": [{"value": "40,000", "label": "PASSENGERS A DAY", "qualifier": "ABOUT|MORE THAN|NEARLY|UP TO|AT LEAST|LESS THAN" | null}] | null,
      "quote": {"text": "exact words quoted in the summary", "by": "speaker named in the summary" | null} | null,
      "map": [{"place": "COUNTRY", "lat": 0.0, "lon": 0.0}] | null,
-     "feature": "number|roundup|lighter" | null},
+     "feature": "number|roundup|lighter" | null${crosses ? CROSS_SCHEMA : ''}},
     {"type": "chat", "anchor": ${slots}, "emotion": "...", "text": "one or two sentence reaction or hand-over"},
     {"type": "outro", "anchor": "A", "emotion": "neutral", "text": "brief sign-off"}
   ]
@@ -186,7 +201,7 @@ TONE
 
 MAKE IT WORTH WATCHING
 ${introRule(program, solo, names)}
-- The lead story must not repeat the intro's line about it: continue from it with the next fact.${lengthRule(program, n)}
+- The lead story must not repeat the intro's line about it: continue from it with the next fact.${lengthRule(program, n)}${crossRule(program)}
 - Each story opens with its most striking fact, then attribution, then one or two details. Vary the openings and the attribution; never start two stories the same way. Never say the same sentence or the same figure twice in a row.
 - Rhythm for the voice: one idea per sentence; mix short and medium sentences, with the odd three-to-five-word sentence for punch. No parentheses, no strings of numbers, no stacked clauses. Write figures as digits with their unit ("40,000 passengers") and say "percent".${
     solo
@@ -225,7 +240,7 @@ STAGE DIRECTIONS (make the presenters move naturally)
 
 OUTPUT FORMAT
 Reply with ONLY a valid JSON object, no text before or after, shaped like this:
-${SEGMENT_SCHEMA(solo ? '"A"' : '"A" | "B"', headlineMax)}
+${SEGMENT_SCHEMA(solo ? '"A"' : '"A" | "B"', headlineMax, !!crossRule(program))}
 - Story "text": ${program.storyLength}.
 - Exactly one "story" segment per selected story, using the candidate ids exactly; do not include unselected candidates.
 ${solo ? '- There is a single presenter: always use "anchor": "A".' : '- Alternate presenters between stories (a round-up counts as one block).'}
@@ -257,7 +272,8 @@ Check every story segment against its SOURCE (matched by storyId):
 - Headlines: a complete phrase of at most ${program.headlineMax || HEADLINE_MAX} characters; rewrite any that is cut mid-phrase.
 - Fix tone problems (no jokes near grave stories) and anything hard to read aloud. A breaking story leads; the number of the day is never the lead.
 - Keep the bracketed stage directions such as [nod] or [B:nod] (they are not read aloud); remove only ones that are inappropriate for the tone.
-- Keep the same JSON structure (including "kicker" and "feature"), segment order, presenters and storyIds. Do not add new stories.
+- A story's "cross" (a correspondent's piece, the presenter's prompt and the answer) follows the same rules: every sentence supported by that story's source, and the correspondent never claims to be at the scene ("here", "behind me", "on the ground", "I've seen"); remove a sentence that does.
+- Keep the same JSON structure (including "kicker" and "feature", and any "cross"), segment order, presenters and storyIds. Do not add new stories.
 
 ${ACCURACY}
 
@@ -1077,7 +1093,7 @@ function keepOpener(tagged, written, story, check) {
 export function normalizeBulletin(
   raw,
   stories,
-  { channelName = 'LIVENEWS', maxStories = Infinity, maxChats = 3, solo = false, features = FEATURES, ownNames = [], program = null, presenters = null, recent = null } = {}
+  { channelName = 'LIVENEWS', maxStories = Infinity, maxChats = 3, solo = false, features = FEATURES, ownNames = [], program = null, presenters = null, recent = null, correspondents = [] } = {}
 ) {
   const names = [channelName, ...ownNames];
   const byId = new Map(stories.map((s) => [s.id, s]));
@@ -1127,6 +1143,7 @@ export function normalizeBulletin(
       d.quote = quote ? groundQuote(quote, story.body ? `${story.summary || ''} ${story.body}` : story.summary) : null;
       d.map = normalizeMap(seg.map, source);
       d.kicker = normalizeKicker(seg.kicker, source);
+      d.cross = correspondents.length && program?.crosses ? groundCross(seg.cross, source, (t) => groundedText(t, source, names.concat(correspondents.map((c) => c.name)), 'story', { outlets, people })) : null;
       let feature = pick(seg.feature, allowed, null);
       // Breaking news is never a feature; grave news can be a round-up item, never the number or the lighter;
       // nor can a harmless quake, a closure or job losses be the number of the day.
@@ -1397,6 +1414,8 @@ export function normalizeBulletin(
     cues: [{ char: 0, slot: null, action: gestureDefault('outro') }],
   };
   while (finalBody.length && finalBody[0].type === 'chat') finalBody.shift();
+  // Correspondent links: the chosen stories hand over to the channel's correspondent for their region.
+  const linked = correspondents.length && program?.crosses ? expandCrosses(finalBody, drafts, { program, correspondents, solo }) : {};
 
   const rundown = finalBody
     .filter((s) => s.type === 'story')
@@ -1425,7 +1444,172 @@ export function normalizeBulletin(
     segments: [introSeg, ...finalBody, outroSeg],
     rundown,
     storyIds: finalBody.filter((s) => s.type === 'story').map((s) => s.storyId),
+    ...(Object.keys(linked).length ? { correspondents: linked } : {}),
   };
+}
+
+// ---------------------------------------------------------------- correspondent links
+
+const CROSS_LIMIT = { piece: 4, answer: 2, askWords: 12 };
+// stories between two links (the second one comes after the mid-programme "still to come", not straight after the first)
+export const LINK_GAP = 4;
+
+/**
+ * A writer's `cross` for one story, checked line by line: every sentence of the piece and of the answer
+ * grounded in that story's source (`grounded`: the story check of groundedText), none claiming the speaker
+ * is at the scene, none a question; the presenter's prompt short, without a figure or a name. Returns
+ * { piece: [sentences], ask: string | null, answer: [sentences] } or null when fewer than two piece
+ * sentences stand.
+ */
+function groundCross(raw, source, grounded) {
+  if (!raw || typeof raw !== 'object') return null;
+  const lines = (v, max) =>
+    sentencesOf(clean(v, 900))
+      .map((x) => x.trim())
+      .filter((x) => {
+        const plain = stripTags(x);
+        return plain && !/\?/.test(plain) && !presenceClaim(plain) && !!grounded(x);
+      })
+      .slice(0, max);
+  const piece = lines(raw.piece, CROSS_LIMIT.piece);
+  if (piece.length < 2) return null;
+  const answer = lines(raw.answer, CROSS_LIMIT.answer);
+  // the prompt: the writer's words without a leading name (the channel adds the correspondent's)
+  let ask = stripTags(clean(raw.ask, 120)).replace(/^[A-Z][\w'’-]*,\s*/, '');
+  if (!ask || /\d/.test(ask) || ask.split(/\s+/).length > CROSS_LIMIT.askWords || presenceClaim(ask) || sentencesOf(ask).length > 1) ask = null;
+  else ask = ask[0].toLowerCase() + ask.slice(1);
+  return { piece, ask, answer };
+}
+
+// A chat line that adds one more detail of the story (the long programmes' analysis exchange).
+const ANALYSIS_LEAD = /^(?:\[[^\]]*\]\s*)*(?:and one detail worth adding|worth adding|and the context here|one more line from the report|and this matters too)\b/i;
+// A story's own words a link may not repeat (the piece goes on from the presenter's introduction).
+const crossRepeats = (line, said) => said.some((o) => repeats(stripTags(line), stripTags(o), new Set()));
+
+/**
+ * Hand the chosen stories to the correspondents: after each, the correspondent's piece, the presenter's
+ * prompt, the answer and the thanks, as `cross` segments (in place, in `body`). A story qualifies with a
+ * writer's cross that stood its check, a location, a desk the programme's correspondents cover, and no
+ * feature (never the number of the day, a round-up item or "And finally"); at most `program.crosses`, the
+ * running order deciding, each correspondent once while another desk has a qualifying story. The story
+ * loses a toss at its end and gains the hand-over. A cross that finds no correspondent gives its first
+ * sentences back to the story, so the depth the writer moved into it is not lost.
+ * Returns the correspondents' voice slots: { R1: id, R2: id }.
+ */
+function expandCrosses(body, drafts, { program, correspondents, solo }) {
+  const byId = new Map(drafts.filter((d) => d.type === 'story').map((d) => [d.story.id, d]));
+  const max = Math.min(program.crosses || 0, 3);
+  const candidates = [];
+  let n = 0;
+  body.forEach((seg, i) => {
+    if (seg.type !== 'story') return;
+    const k = n++; // the story's place in the running order
+    const d = byId.get(seg.storyId);
+    if (!d?.cross) return;
+    const desk = !seg.feature && seg.location ? deskOf(seg.location) : null;
+    const c = desk && correspondents.find((x) => x.desk === desk.desk);
+    candidates.push({ seg, i, k, d, desk, c });
+  });
+  // links are spread out (never two within LINK_GAP stories: a programme of links is presenter after correspondent
+  // again), each correspondent once while another desk can take a story; then the running order
+  const chosen = [];
+  for (const pass of [true, false]) {
+    for (const x of candidates) {
+      if (chosen.length >= max || !x.c || chosen.includes(x)) continue;
+      if (chosen.some((y) => Math.abs(y.k - x.k) < LINK_GAP)) continue;
+      if (pass && chosen.some((y) => y.c.id === x.c.id)) continue;
+      chosen.push(x);
+    }
+  }
+  const seed = body.filter((s) => s.type === 'story').map((s) => s.storyId).join('|');
+  // the rest give their first sentences back to the story they came from
+  for (const x of candidates) {
+    if (chosen.includes(x)) continue;
+    const said = sentencesOf(x.seg.text);
+    const extra = x.d.cross.piece.filter((t) => !crossRepeats(t, said)).slice(0, 2).map(stripTags);
+    if (extra.length) x.seg.text = clip(`${x.seg.text} ${extra.join(' ')}`, LIMITS.text);
+  }
+  // insert from the last, so the earlier indexes hold
+  chosen.sort((a, b) => b.i - a.i);
+  const order = [...chosen].sort((a, b) => a.i - b.i);
+  const slots = Object.fromEntries(order.map((x, k) => [`R${k + 1}`, x.c.id]));
+  for (const x of chosen) {
+    const slot = `R${order.indexOf(x) + 1}`;
+    const { seg, d, desk, c } = x;
+    const key = `${seed}~${seg.storyId}`;
+    // the presenter's introduction: no toss to the other presenter at its end, then the hand-over
+    const said = sentencesOf(seg.text);
+    if (said.length > 1 && /^[A-Z][\w'’-]*(?: [A-Z][\w'’-]*)?[.?]$/.test(stripTags(said.at(-1)))) said.pop();
+    seg.text = `${said.join(' ')} ${throwLine(c, desk, key)}`;
+    seg.link = slot;
+    // no line twice: not the presenter's, not another of the piece's
+    const piece = [];
+    for (const t of d.cross.piece) if (!crossRepeats(t, [...said, ...piece])) piece.push(t);
+    if (piece.length < 2) {
+      piece.length = 0;
+      for (const t of d.cross.piece) if (!crossRepeats(t, piece)) piece.push(t);
+    }
+    const answer = d.cross.answer.filter((t) => !crossRepeats(t, [...said, ...piece]));
+    // a piece of three with nothing left to answer keeps two and answers with its last line
+    if (!answer.length && piece.length >= 3) answer.push(piece.pop());
+    const ask = d.cross.ask ? `${c.first}, ${d.cross.ask}` : askLine(c, key, answer.map(stripTags).join(' '));
+    const shared = {
+      storyId: seg.storyId,
+      headline: seg.headline,
+      location: seg.location,
+      source: seg.source,
+      category: seg.category,
+      hasImage: seg.hasImage,
+      reporter: c.id,
+      desk: desk.label,
+      place: String(seg.location.place || '').split(',')[0].trim().toUpperCase(),
+      ...(seg.kicker ? { kicker: seg.kicker } : {}),
+      // a grave story's link shows no footage of the place (server/footage.js) and keeps a sober backdrop
+      ...(d.heavy ? { grave: true } : {}),
+    };
+    const emotion = seg.emotion === 'happy' ? 'neutral' : seg.emotion;
+    const part = (name, anchor, text) => ({ type: 'cross', part: name, anchor, emotion, text: clip(text, LIMITS.text), cues: [], ...shared });
+    const parts = [part('piece', slot, piece.map(stripTags).join(' '))];
+    if (answer.length) {
+      parts.push(part('ask', seg.anchor, ask));
+      parts.push(part('answer', slot, answer.map(stripTags).join(' ')));
+    }
+    parts.push(part('thanks', seg.anchor, thanksLine(c, desk, key)));
+    // an analysis line after the story would only say again what the correspondent just said
+    const link = [...said, ...piece, ...answer];
+    for (let j = x.i + 1; body[j]?.type === 'chat'; ) {
+      if (ANALYSIS_LEAD.test(body[j].text) || sentencesOf(body[j].text).some((t) => crossRepeats(t, link))) body.splice(j, 1);
+      else j++;
+    }
+    body.splice(x.i + 1, 0, ...parts);
+  }
+  return slots;
+}
+
+/**
+ * The script the standards editor reads (producer review): each link folded back into its story's
+ * `cross` (and the hand-over taken off the story's text), so a second pass through the validator
+ * rebuilds it exactly as the first did.
+ */
+export function collapseCrosses(segments) {
+  const out = [];
+  for (const seg of segments) {
+    if (seg.type !== 'cross') {
+      out.push(seg.type === 'story' && seg.link ? { ...seg } : seg);
+      continue;
+    }
+    const story = [...out].reverse().find((x) => x.type === 'story' && x.storyId === seg.storyId);
+    if (!story) continue;
+    if (story.link) {
+      const said = sentencesOf(story.text);
+      if (said.length > 1) story.text = said.slice(0, -1).join(' ');
+      delete story.link;
+      story.cross = { piece: '', ask: '', answer: '' };
+    }
+    if (seg.part === 'piece' || seg.part === 'answer') story.cross[seg.part] = seg.text;
+    else if (seg.part === 'ask') story.cross.ask = seg.text;
+  }
+  return out;
 }
 
 /**

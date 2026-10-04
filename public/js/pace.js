@@ -127,6 +127,7 @@ const BASE = {
     beforeOutro: 0.95,
     block: 1.3,
     afterBreakingCard: 0.35,
+    link: 0.4, // between the parts of a correspondent link (the hand-over, the piece, the prompt, the answer, the thanks)
     jitter: 0.08,
   },
   holds: { signoff: 1.5, endcard: 3.2, breakingCard: 2.6, montage: 3.8 },
@@ -160,16 +161,18 @@ const BASE = {
 const PROGRAMMES = {
   'world-now': {
     label: 'measured',
-    // 8-10 minutes: headlines, greeting, a strong lead with its analysis exchange, the main
-    // stories, a mid-programme "still to come", the round-up, a feature, And finally, a chat
+    // 9-10 minutes (owner 4 Oct: longer, and not presenter after presenter; within the owner's 10-minute ceiling of
+    // 23:10): headlines, greeting, a strong lead
+    // handed to a correspondent (the link: piece over the place's footage, a prompt, the answer), the main stories,
+    // a mid-programme "still to come", a second link to another desk, the round-up, a feature, And finally, a chat
     length: {
-      target: [480, 600],
-      blocks: ['headlines', 'greeting', 'lead', 'analysis', 'main', 'still-to-come', 'main', 'roundup', 'feature', 'finally', 'chat', 'signoff'],
+      target: [540, 600],
+      blocks: ['headlines', 'greeting', 'lead', 'link', 'main', 'still-to-come', 'main', 'link', 'roundup', 'feature', 'finally', 'chat', 'signoff'],
     },
     open: { firstWord: 0.5 }, // world-now.md: first word 0.5 s after the cut
     gaps: { story: 1.0, handover: 0.85, beforeFinally: 1.2, roundupItem: 0.65 }, // world-now.md: 0.7 s between stories, 1.0 s before And finally
     holds: { signoff: 1.5, endcard: 3.2 },
-    shots: { median: [5, 7], studioMax: 15, singleSoft: 11, picture: [4, 8], map: [5, 10] },
+    shots: { median: [5, 7], studioMax: 15, singleSoft: 11, picture: [4, 8], map: [5, 10], quoteCard: true }, // quoteCard: IN THEIR WORDS on a story's sourced quote
     moves: { max: 5, minGap: 40 },
     gestures: { perMin: 5, minGap: 5.5, beatsPerMin: 7, rest: 0.62, grave: 2 },
     listener: { reactionGap: 8 },
@@ -303,6 +306,7 @@ export function gapKind(prev, next) {
   if (!prev || !next) return 'story';
   if (next.type === 'outro') return 'beforeOutro';
   if (prev.type === 'intro') return 'afterIntro';
+  if (next.type === 'cross') return 'link'; // a correspondent link: the two-way keeps its turns close
   if (isSignpost(prev)) return 'block'; // a signpost closes a block
   if (next.type === 'chat' && prev.type === 'chat') return 'chatTurn';
   if (next.type === 'chat') return 'intoChat';

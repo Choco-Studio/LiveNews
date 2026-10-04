@@ -35,9 +35,16 @@ import { P } from '../../../palette.js';
 import { THEME_ACCENT } from '../../../cast.js';
 import { CueClock, prunePerf, shiftPerf } from './cueclock.js';
 import { paceTrace } from '../../../pace.js';
+import { drawBackdrop, REMOTE, TWOWAY, cropInto, composeTwoWay } from '../studio/remote.js';
 
 /** Legacy shot names the Stage draws (framings travel in scene.framing). */
 export const STUDIO_SHOTS = new Set(['wide', 'close']);
+/**
+ * The correspondent's shots (studio/remote.js), also the Stage's: LOCATION (the correspondent before the place)
+ * and TWO-WAY (the presenter and the correspondent side by side). scene.remote = { slot, id, lat, lon, grave,
+ * footage } names who and where; scene.footageDeck gives the place's footage frames.
+ */
+export const REMOTE_SHOTS = new Set(['location', 'twoway']);
 
 const CLOCK_REBASE = 840; // s of rig time before the rig clock moves back (at the next cut)
 const PRUNE_EVERY = 2; // s
@@ -239,6 +246,12 @@ export class Stage {
     this.nextPrune = 0;
     this.speaker = null;
     this.prof = null;
+    // the correspondent of the link on air (scene.remote): { key, slot, id, actor, perf, emotion }
+    this.remote = null;
+    this.remoteList = [{ actor: null, x: REMOTE.x, y: REMOTE.y, s: REMOTE.s, clip: false }];
+    this.backdrop = { kind: 'desk', frame: null, lat: 20, lon: 0, accent: this.accent, footage: null };
+    this.studioBox = new Uint32Array(TWOWAY.w * TWOWAY.h);
+    this.remoteBox = new Uint32Array(TWOWAY.w * TWOWAY.h);
   }
 
   setChannel(channel) {
@@ -281,6 +294,7 @@ export class Stage {
         this.frames[slot] = audio.speechFrame(t * 1000, slot, this.frames[slot] || {}) || REST_FRAME;
       }
     }
+    this.updateRemote(t, scene);
     const plan = scene.segPlan ?? null;
     const own = plan && (!plan.ctx || !scene.episode?.id || plan.ctx.episodeId === scene.episode.id);
     this.clock.load(own ? plan : null, t);
@@ -293,6 +307,7 @@ export class Stage {
     // who speaks: the voice, else the plan's speaker while its speech runs
     let speaker = null;
     for (let i = 0; i < this.actors.length; i++) if (this.frames[this.actors[i].slot]?.speaking) speaker = this.actors[i].slot;
+    if (this.remote && this.frames[this.remote.slot]?.speaking) speaker = this.remote.slot;
     if (!speaker && plan?.ctx && plan.speechStart != null && plan.speechEnd == null) speaker = plan.ctx.speaker;
     this.speaker = speaker;
     const rt = t - this.epoch;
@@ -305,11 +320,117 @@ export class Stage {
       }
       a.perf.listen = this.actors.length > 1 && speaker !== null && a.slot !== speaker;
     }
+    const rm = this.remote;
+    if (rm) {
+      const emo = scene.anchors?.[rm.slot]?.emotion || 'neutral';
+      if (emo !== rm.emotion) {
+        rm.emotion = emo;
+        rm.perf.emotions.push({ t0: rt, name: emo });
+      }
+      rm.perf.listen = speaker !== null && speaker !== rm.slot;
+    }
     this.clock.tick(t, own && plan.ctx ? this.frames[plan.ctx.speaker] || null : null);
     if (t >= this.nextPrune) {
       this.nextPrune = t + PRUNE_EVERY;
       for (let i = 0; i < this.actors.length; i++) prunePerf(this.actors[i].perf, rt);
+      if (rm) prunePerf(rm.perf, rt);
     }
+  }
+
+  /**
+   * The link's correspondent (scene.remote): built once per link (their own seed, their own rig clock as the
+   * presenters'), their mouth sampled every frame like a presenter's. A link that ends drops them.
+   */
+  updateRemote(t, scene) {
+    const r = scene.remote;
+    const key = r?.id && r.slot ? `${r.slot}|${r.id}` : null;
+    if (!key) {
+      this.remote = null;
+      return;
+    }
+    if (this.remote?.key !== key) {
+      const epId = scene.episode?.id ?? this.key;
+      const perf = { side: 0, seed: hashSeed(`${epId}${r.slot}`), gestures: [], emotions: [], look: [], speech: liveSpeech(this.proxy, r.slot), listen: false, gain: 1 };
+      const presenters = scene.presenters || this.presenters || {};
+      this.remote = { key, slot: r.slot, id: r.id, actor: makeActor(r.id, perf, presenters[r.id]), perf, emotion: null };
+      this.remoteList[0].actor = this.remote.actor;
+      this.frames[r.slot] ||= {};
+    }
+    const audio = this.audio;
+    if (audio && typeof audio.speechFrame === 'function') this.frames[r.slot] = audio.speechFrame(t * 1000, r.slot, this.frames[r.slot] || {}) || REST_FRAME;
+  }
+
+  /**
+   * A cut to a correspondent's shot: the backdrop is decided now and kept for the shot (the place's footage
+   * when the deck has a frame of it and the story is not grave, else the desk); the two-way frames the link's
+   * presenter in their single, to be cropped into the left box.
+   */
+  remoteCut(scene) {
+    const r = scene.remote || {};
+    const bd = this.backdrop;
+    const id = r.footage || null;
+    const deck = scene.footageDeck;
+    bd.footage = !r.grave && id && deck?.ready?.(id) ? id : null;
+    bd.kind = bd.footage ? 'footage' : 'desk';
+    bd.lat = Number.isFinite(r.lat) ? r.lat : 20;
+    bd.lon = Number.isFinite(r.lon) ? r.lon : 0;
+    bd.accent = this.accent;
+    this.base = null;
+    if (scene.shot === 'twoway') {
+      // the studio behind the presenter in their box: the wall at rest (a plate or a map cut by the box's edge
+      // would show a word in half: set text is whole or not there)
+      this.wall.mode = 'idle';
+      this.wall.image = this.wall.location = this.wall.figure = null;
+      this.wall.label = null;
+      this.wall.since = scene.shotSince ?? 0;
+      const focus = scene.focus in this.cast ? scene.focus : this.actors[0]?.slot || 'A';
+      const spec = this.spec;
+      spec.framing = this.solo ? 'mcu' : focus === 'B' ? 'mcu-r' : 'mcu-l';
+      spec.cast = this.cast;
+      spec.focus = focus;
+      spec.solo = this.solo;
+      spec.side = undefined;
+      spec.programId = this.programId;
+      spec.move = null;
+      this.base = this.frameCamera(spec, scene);
+    }
+  }
+
+  /** The correspondent before their backdrop into the frame (the location shot, and the two-way's right box). */
+  drawRemote(t, scene) {
+    const bd = this.backdrop;
+    bd.frame = bd.kind === 'footage' ? scene.footageDeck?.frame?.(bd.footage, 'back', t) || null : null;
+    drawBackdrop(frame.px, bd.frame ? bd : { kind: 'desk', lat: bd.lat, lon: bd.lon, accent: bd.accent }, t);
+    if (!this.remote) return null;
+    return drawActors(t - this.epoch, this.remoteList, null)[0] || null;
+  }
+
+  renderRemote(ctx, t, scene) {
+    if (scene.shot === 'location') {
+      this.drawRemote(t, scene);
+      frame.present(ctx);
+      return;
+    }
+    // two-way: the presenter's single and the correspondent, each cropped round the head into a box
+    const o = this.bgOpts;
+    o.shotSince = this.visibleSince;
+    o.lod = this.lod;
+    const cam = this.base || CAM.makeCamera();
+    const heads = this.drawStudio(cam, t, o);
+    o.cut = false;
+    let hx = 120, hy = 70;
+    for (let i = 0; i < this.vis.length; i++) {
+      if (this.vis[i].slot === this.spec.focus && heads[i]) {
+        hx = heads[i].cx;
+        hy = heads[i].cy;
+      }
+    }
+    const dy = TWOWAY.h / 2 - TWOWAY.headY;
+    cropInto(frame.px, hx + TWOWAY.w / 2 - TWOWAY.headX, hy + dy, this.studioBox, TWOWAY.w, TWOWAY.h);
+    const rh = this.drawRemote(t, scene);
+    cropInto(frame.px, (rh?.cx ?? REMOTE.headX) + TWOWAY.w / 2 - TWOWAY.headX, (rh?.cy ?? 70) + dy, this.remoteBox, TWOWAY.w, TWOWAY.h);
+    composeTwoWay(frame.px, this.studioBox, this.remoteBox, this.accent);
+    frame.present(ctx);
   }
 
   build(scene, t, key) {
@@ -406,6 +527,17 @@ export class Stage {
     this.cutFraming = scene.framing ?? null;
     this.cutAt = t;
     const plan = scene.segPlan ?? null;
+    if (REMOTE_SHOTS.has(scene.shot)) {
+      // a correspondent's shot: its own backdrop and camera; the studio wall keeps its latch for the way back
+      this.remoteCut(scene);
+      this.inset = null;
+      this.measureView(scene);
+      this.clock.cut(t);
+      paceTrace({ k: 'cut', shot: scene.shot, framing: null, focus: scene.focus, move: null, amount: null }); // PACE trace
+      this.visibleSince = scene.shotSince ?? t;
+      this.bgOpts.cut = true;
+      return;
+    }
     const wall = this.wall;
     if (typeof SETM.wallFromScene === 'function') {
       const w = SETM.wallFromScene(scene, this.style || this.programId);
@@ -475,6 +607,7 @@ export class Stage {
   // --- picture ---------------------------------------------------------------
 
   render(ctx, t, scene) {
+    if (REMOTE_SHOTS.has(scene.shot)) return this.renderRemote(ctx, t, scene);
     const spec = this.spec;
     let cam = this.base || CAM.makeCamera();
     if (spec.move && typeof CAM.cameraAt === 'function') cam = CAM.cameraAt(spec, t - this.moveSince, this.camOut) || cam;

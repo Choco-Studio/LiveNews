@@ -1,5 +1,5 @@
 {
-  "_note": "Voice-over artists for the commercials (ids = ad module ids in public/js/ads/). Kokoro blends kept apart from the presenters' voices (server/voice/casting.json) so an advert never sounds like the newsreader who just handed over. 'default' covers ads added later: picked by the ad's own voice.gender and voice.lang. speed is the Kokoro speed; every line must fit the gap before the ad's next script line (checked when the server renders them).",
+  "_note": "Voice-over artists for the commercials (ids = ad module ids in public/js/ads/). Kokoro blends kept apart from the presenters' voices (server/voice/casting.json) so an advert never sounds like the newsreader who just handed over. 'default' covers ads added later: picked by the ad's own voice.gender and voice.lang. speed is the Kokoro speed; every line must fit the gap before the ad's next script line (checked when the server renders them). 4 Oct: the correspondents (Rhea bf_lily+bf_emma, Vic am_eric+am_onyx, Mika af_aoede) took three of the free voices; the defaults moved off them (male-us am_liam+am_onyx: 62 from Vic, >86 from the presenters; female-us af_sky+af_river: >71 from everyone, Nova 56 before).",
   "bitfizz-cola": {
     "voice": "bm_fable:0.7+am_onyx:0.3",
     "speed": 0.9,
@@ -13,10 +13,10 @@
     "notes": "Film-trailer narrator, deep and earnest, read with British phonemes."
   },
   "safesector": {
-    "voice": "bf_lily:0.7+bf_alice:0.3",
+    "voice": "bf_alice",
     "speed": 0.92,
     "lang": "en-gb",
-    "notes": "Sombre insurance-ad woman: soft, sincere, unhurried."
+    "notes": "Sombre insurance-ad woman: soft, sincere, unhurried. Owner 4 Oct round: bf_lily became Rhea Raster's voice (WORLD NOW correspondent), so the ad is pure bf_alice (measured: >84 from every presenter, 56 from Rhea, who airs only inside WORLD NOW's links)."
   },
   "grand-buffer": {
     "voice": "bm_fable:0.6+bm_lewis:0.4",
@@ -49,9 +49,25 @@
     "notes": "Hushed luxury-travel narrator."
   },
   "default": {
-    "male-gb": { "voice": "bm_daniel:0.6+bm_fable:0.4", "speed": 0.92, "lang": "en-gb" },
-    "female-gb": { "voice": "bf_lily:0.6+bf_alice:0.4", "speed": 0.92, "lang": "en-gb" },
-    "male-us": { "voice": "am_eric:0.6+am_onyx:0.4", "speed": 0.92, "lang": "en-us" },
-    "female-us": { "voice": "af_sky:0.6+af_aoede:0.4", "speed": 0.95, "lang": "en-us" }
+    "male-gb": {
+      "voice": "bm_daniel:0.6+bm_fable:0.4",
+      "speed": 0.92,
+      "lang": "en-gb"
+    },
+    "female-gb": {
+      "voice": "bf_alice",
+      "speed": 0.92,
+      "lang": "en-gb"
+    },
+    "male-us": {
+      "voice": "am_liam:0.6+am_onyx:0.4",
+      "speed": 0.92,
+      "lang": "en-us"
+    },
+    "female-us": {
+      "voice": "af_sky:0.6+af_river:0.4",
+      "speed": 0.95,
+      "lang": "en-us"
+    }
   }
 }

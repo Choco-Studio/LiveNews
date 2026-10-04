@@ -13,6 +13,7 @@ import { createVoiceService } from './voice/index.js';
 import { ImageSearch } from './imagesearch.js';
 import { WeatherDesk } from './weather.js';
 import { writeWeather } from './weatherwriter.js';
+import { FootageDesk } from './footage.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const MIME = {
@@ -47,7 +48,13 @@ const weather = new WeatherDesk({
   fieldRetryMs: 65_000,
   fieldWaitMs: 2_000,
 });
-const producer = new Producer({ config, newsDesk, chain, voice, images, weather });
+// Footage of the correspondent links' places (server/footage.js): on with live feeds, off on the offline fixture feeds
+const footage = new FootageDesk({
+  dir: config.footage.dir,
+  maxCacheBytes: config.footage.cacheMb * 1024 * 1024,
+  enabled: config.footage.mode === 'on' || (config.footage.mode === 'auto' && !/feeds\.fixture\.json$/.test(config.feedsFile)),
+});
+const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage });
 const station = new Station({ config, newsDesk, producer, chain });
 
 function sendJson(res, status, body) {
@@ -105,6 +112,27 @@ async function serveImage(res, id) {
   res.end(entry.body);
 }
 
+/** A kept footage clip (/api/vid/<id>.webm), with byte ranges: the client seeks to the clip's start. */
+function serveFootage(req, res, id) {
+  const file = footage.file(id);
+  if (!file) return sendJson(res, 404, { error: 'no footage' });
+  const size = fs.statSync(file).size;
+  const head = { 'content-type': 'video/webm', 'accept-ranges': 'bytes', 'cache-control': 'public, max-age=86400', 'x-content-type-options': 'nosniff' };
+  const m = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ''));
+  if (m && (m[1] || m[2])) {
+    let start = m[1] ? Number(m[1]) : Math.max(0, size - Number(m[2]));
+    let end = m[1] && m[2] ? Math.min(size - 1, Number(m[2])) : size - 1;
+    if (!(start <= end && start < size)) {
+      res.writeHead(416, { 'content-range': `bytes */${size}` });
+      return res.end();
+    }
+    res.writeHead(206, { ...head, 'content-range': `bytes ${start}-${end}/${size}`, 'content-length': end - start + 1 });
+    return fs.createReadStream(file, { start, end }).pipe(res);
+  }
+  res.writeHead(200, { ...head, 'content-length': size });
+  fs.createReadStream(file).pipe(res);
+}
+
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 // The Host a loopback request names must be a loopback name too: a DNS-rebinding page in the browser that runs
 // OBS reaches 127.0.0.1 under its own host name, and must not read upcoming scripts.
@@ -150,6 +178,8 @@ const server = http.createServer(async (req, res) => {
     }
     const img = url.pathname.match(/^\/api\/img\/(s[0-9a-f]{10})$/);
     if (req.method === 'GET' && img) return await serveImage(res, img[1]);
+    const vid = url.pathname.match(/^\/api\/vid\/(f[0-9a-f]{16})\.webm$/);
+    if (req.method === 'GET' && vid) return serveFootage(req, res, vid[1]);
     // WORLD WEATHER's data and the script it gives (lab/weather.html, dev views only)
     if (req.method === 'GET' && url.pathname === '/api/tools/weather') {
       if (!devAllowed(req)) return sendJson(res, 404, { error: 'not found' });

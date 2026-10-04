@@ -12,8 +12,9 @@ import { isTranscriptLine } from '../transcript.js';
 import { isBreaking, plainTitle } from '../news.js';
 import { LIGHT, contentWords, extractFigures, harmlessIncident, isGrave, leansOnPrevious, notForFeatures, numbersIn, quotesIn, severity } from '../facts.js';
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
-import { SENTENCE_WORDS, shortHeadline, trimClause } from '../writer.js';
+import { LINK_GAP, SENTENCE_WORDS, shortHeadline, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
+import { AHEAD, deskOf } from '../correspondents.js';
 
 const DEATHS = /\b(?:dead|deaths?|die[sd]|killed|killings?|victims?|mourn\w*|funeral)\b/i;
 // Not grave, but not something to smile about either.
@@ -639,6 +640,26 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     anchors.push(a);
   });
 
+  // Correspondent links (server/correspondents.js): the lead and one more main story with a place and an article
+  // deep enough for a report (an opener and a detail for the presenter, two or three sentences for the piece, one
+  // for the answer), each desk once while another can take one. The validator hands them to the correspondents.
+  const links = new Set();
+  if (program?.crosses && Array.isArray(program.correspondents) && program.correspondents.length && !solo) {
+    const linkable = (info) => !roundup.includes(info) && info !== number && info !== lighter && !!info.loc && !info.live && info.sentences.filter((t) => wordCount(t) <= maxWords + 6).length >= 5;
+    const desks = new Set();
+    const deskKey = (info) => deskOf({ place: info.loc.place, lat: info.loc.lat, lon: info.loc.lon })?.desk || null;
+    for (const pass of [0, 1]) {
+      for (const info of order) {
+        if (links.size >= program.crosses || links.has(info) || !linkable(info)) continue;
+        // spread out as the validator wants them (LINK_GAP stories apart)
+        if ([...links].some((x) => Math.abs(order.indexOf(x) - order.indexOf(info)) < LINK_GAP)) continue;
+        if (pass === 0 && desks.has(deskKey(info))) continue;
+        links.add(info);
+        desks.add(deskKey(info));
+      }
+    }
+  }
+
   const segments = [];
   const tease = [];
   // ---- intro
@@ -903,7 +924,8 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // TECH BYTES: the lead keeps one summary sentence back for THE CATCH (chosen first, so the opener cannot take it).
       // PACE (long programmes): main stories may keep one back too, for a short analysis exchange after them
       // (TECH BYTES: another CATCH question, never the same one twice; WORLD NOW: the partner adds it).
-      const deep = longForm && !isNumber && !isLighter && !info.grave && !info.breaking && !info.live && exchanges < 3 && info.sentences.length >= 3; // the lead too with 3 (critic: no analysis exchange aired)
+      const linked = links.has(info);
+      const deep = !linked && longForm && !isNumber && !isLighter && !info.grave && !info.breaking && !info.live && exchanges < 3 && info.sentences.length >= 3; // the lead too with 3 (critic: no analysis exchange aired)
       const catchFor = pid === 'tech-bytes' && (k === 0 || deep) && !info.grave ? CATCH.find((c) => !asked.has(c) && info.sentences.some((t) => c.test.test(t))) : null;
       let reserved = catchFor ? info.sentences.find((t) => catchFor.test.test(t)) : null;
       if (!reserved && pid === 'world-now' && deep) reserved = [...info.sentences].reverse().find((t, j) => j < info.sentences.length - 1 && !PRONOUN_START.test(t) && !/[“”"]/.test(t) && wordCount(t) >= 6) || null;
@@ -963,7 +985,8 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // NEWS IN 60 counts the credit ("..., Ledger Line reports.") inside its word budget.
       const budget = quick ? (k === 0 ? 41 : 31) - (wordCount(s.source) + 1) : Infinity;
       const depth = deepRead ? cap : longForm ? 2 : 0;
-      const maxDetails = quick ? 2 : isNumber ? (figureLine ? 0 : 1) : Math.min(cap, Math.max(k === 0 ? 2 : 1, visuals, depth));
+      // a linked story: the presenter's introduction is the opener and one detail; the correspondent tells the rest
+      const maxDetails = linked ? 1 : quick ? 2 : isNumber ? (figureLine ? 0 : 1) : Math.min(cap, Math.max(k === 0 ? 2 : 1, visuals, depth));
       let details = 0;
       // People at risk: the warning and the advice come before the colour ("a red alert... asked people to avoid
       // going out" before "some schools have moved lessons").
@@ -980,7 +1003,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         used.add(t0);
         details++;
       }
-      const quoteFits = info.quote?.by && !quick && ![...used].some((l) => l.includes(info.quote.text.slice(0, 20)));
+      const quoteFits = !linked && info.quote?.by && !quick && ![...used].some((l) => l.includes(info.quote.text.slice(0, 20)));
       if (quoteFits && [...parts, ...body].join(' ').length + info.quote.text.length < 420) body.push(`As ${lowerArticle(info.quote.by)} put it: “${unstop(info.quote.text)}.”`);
       attribute(body, info, key, { allowOpener: !isNumber && !isLighter && !info.breaking && !info.live && ['tech-bytes', 'cosmos', 'money-minute'].includes(pid) && !(pickup && k === 0), prefer: quick ? 'last' : null });
       // The co-presenter reacts on the first detail (or on the opener when there is none).
@@ -1003,6 +1026,21 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
           break;
         }
       }
+      if (linked) {
+        // the correspondent's lines: the story's remaining sentences in order, the first standing on its own (it
+        // follows the hand-over, so never "It says..."), each within the programme's sentence length
+        const rest = info.sentences
+          .filter((t) => !used.has(t) && !echoes(t))
+          .map((t) => (wordCount(t) <= maxWords ? t : trimClause(t, maxWords, 8)))
+          .filter(Boolean);
+        // what comes next goes last (the answer to "what happens next?"), the rest in the story's order
+        rest.sort((a, b) => Number(AHEAD.test(a)) - Number(AHEAD.test(b)));
+        const lead = rest.findIndex((t) => !PRONOUN_START.test(t));
+        if (lead > 0) rest.unshift(...rest.splice(lead, 1));
+        const nPiece = Math.min(3, rest.length - 1);
+        if (nPiece >= 2 && lead >= 0) info.cross = { piece: rest.slice(0, nPiece).map(asSentence).join(' '), ask: null, answer: rest.slice(nPiece, nPiece + (rest.length >= 6 ? 2 : 1)).map(asSentence).join(' ') };
+        else if (rest.length === 2 && lead >= 0) info.cross = { piece: rest.map(asSentence).join(' '), ask: null, answer: '' };
+      }
       if (reserved && catchFor) {
         info.catchAnswer = { line: reserved, q: catchFor.q };
         asked.add(catchFor);
@@ -1013,7 +1051,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     // ---- chats that follow this story
     const next = order[k + 1];
     const slot = k === 0 ? 'lead' : isLighter ? 'lighter' : 'story';
-    const chatOk = !solo && !info.grave && !(next && next.grave) && chats < maxChats && !(inRoundup && next && roundup.includes(next));
+    const chatOk = !solo && !info.grave && !(next && next.grave) && chats < maxChats && !(inRoundup && next && roundup.includes(next)) && !info.cross;
     const planned = [];
     if (chatOk) {
       if (policy) {
@@ -1072,7 +1110,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
 
     // ---- hand-over: a toss to the partner who reads next, sometimes (never next to grave news).
     const nextAnchor = anchors[k + 1];
-    const tossOk = !solo && !pickup && next && nextAnchor !== anchor && !chatsHere.length && !info.grave && !next.grave && pid !== 'tech-bytes' && !(inRoundup && roundup.includes(next));
+    const tossOk = !solo && !pickup && next && nextAnchor !== anchor && !chatsHere.length && !info.grave && !next.grave && pid !== 'tech-bytes' && !(inRoundup && roundup.includes(next)) && !info.cross;
     if (tossOk && tosses < 2 && !segments.at(-1)?.text?.includes('[look_partner] ') && hash(`${key}>`) % 3 === 0) {
       tosses++;
       const toss = program?.toss ? program.toss.replace('{name}', nameOf(nextAnchor)) : choose([`${nameOf(nextAnchor)}?`, `Over to you, ${nameOf(nextAnchor)}.`], key);
@@ -1098,6 +1136,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     if (!inRoundup && info.figures.length) story.numbers = info.figures.map(({ value, label, qualifier }) => ({ value, label, ...(qualifier ? { qualifier } : {}) }));
     if (!inRoundup && info.quote) story.quote = { text: info.quote.text, by: info.quote.by };
     if (!inRoundup && info.places.length >= 2) story.map = info.places.map(({ place, lat, lon }) => ({ place, lat, lon }));
+    if (info.cross) story.cross = info.cross;
     if (inRoundup) story.feature = 'roundup';
     else if (isNumber) story.feature = 'number';
     else if (isLighter) story.feature = 'lighter';

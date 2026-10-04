@@ -1,4 +1,5 @@
-import { buildPrompt, buildReviewPrompt, extractJson, normalizeBulletin } from './writer.js';
+import { buildPrompt, buildReviewPrompt, collapseCrosses, extractJson, normalizeBulletin } from './writer.js';
+import { rosterOf } from './correspondents.js';
 import { castOf } from './channel.js';
 import { embedCues } from '../public/js/cues.js';
 import { onBeat } from './topics.js';
@@ -88,8 +89,9 @@ export function planVisuals(seg, { roundupPictures = false } = {}) {
  * (extra fact checks, better images, server-side voices...) slot in here.
  */
 export class Producer {
-  constructor({ config, newsDesk, chain, voice = null, images = null, weather = null, log = console }) {
+  constructor({ config, newsDesk, chain, voice = null, images = null, weather = null, footage = null, log = console }) {
     this.config = config;
+    this.footageDesk = footage; // server/footage FootageDesk: moving pictures of a correspondent link's place, optional
     this.news = newsDesk;
     this.weather = weather; // server/weather WeatherDesk: WORLD WEATHER's data (kind 'weather' programmes)
     // news episodes produced since the last weather programme: the weather never airs twice in a row (a news
@@ -114,6 +116,8 @@ export class Producer {
       { name: 'review', run: (ctx) => this.review(ctx), enabled: () => this.config.reviewPass },
       { name: 'fit', run: (ctx) => this.fit(ctx), enabled: (ctx) => !!ctx.program.timing },
       { name: 'assets', run: (ctx) => this.assets(ctx) },
+      // Footage of each correspondent link's place (FILE clips the client pixelates); never fails the episode.
+      { name: 'footage', run: (ctx) => this.footage(ctx), enabled: (ctx) => !!this.footageDesk?.enabled && !!ctx.episode?.segments?.some((s) => s.type === 'cross') },
       // Presenter voices synthesised ahead of air; never fails the episode (late or missing clips air with browser voices).
       { name: 'voice', run: (ctx) => this.voice.voiceEpisode(ctx).catch((err) => ({ voice: 'browser', error: err.message })), enabled: () => !!this.voice?.enabled },
     ];
@@ -199,7 +203,9 @@ export class Producer {
     const candidates = this.stock(program, { upcoming: upcoming.map((id) => channel.programs[id]).filter(Boolean) });
     if (candidates.length < this.floorOf(program)) return null;
 
-    const ctx = { channelName: channel.name, program, presenters, cast, candidates, episode: null, provider: null, pipeline: [] };
+    // the programme's correspondents (links: server/correspondents.js), voiced in the slots the writer gives them
+    const correspondents = rosterOf(program, channel.presenters);
+    const ctx = { channelName: channel.name, program, presenters, cast, candidates, episode: null, provider: null, pipeline: [], correspondents, channelPresenters: channel.presenters };
     const started = Date.now();
     try {
       for (const stage of this.stages) {
@@ -288,7 +294,17 @@ export class Producer {
         presenters: ctx.presenters,
         // names that may legitimately contain numbers ("NEWS IN 60", "UNIT-8")
         ownNames: [ctx.program.title, ...Object.values(ctx.presenters).map((p) => p.name)],
+        correspondents: ctx.correspondents || [],
       });
+  }
+
+  /** The correspondents' voice slots of the episode in production (R1, R2: episode.correspondents) as presenters. */
+  castCorrespondents(ctx) {
+    for (const k of Object.keys(ctx.presenters)) if (/^R\d$/.test(k)) delete ctx.presenters[k];
+    for (const [slot, id] of Object.entries(ctx.episode?.correspondents || {})) {
+      const p = ctx.channelPresenters?.[id];
+      if (p) ctx.presenters[slot] = { id, ...p };
+    }
   }
 
   /** Keep the chat lines of an episode (sentence by sentence, plain text) in the station's memory of what aired. */
@@ -330,6 +346,7 @@ export class Producer {
     );
     ctx.episode = value;
     ctx.provider = provider;
+    this.castCorrespondents(ctx);
     return { provider };
   }
 
@@ -338,7 +355,8 @@ export class Producer {
     const stories = ctx.episode.storyIds.map((id) => this.news.get(id)).filter(Boolean);
     const script = {
       title: ctx.episode.title,
-      segments: ctx.episode.segments.map(({ source, category, hasImage, cues, ...seg }) => ({ ...seg, text: embedCues(seg.text, cues) })),
+      // a correspondent link reads as its story's `cross`, as the writer gave it (the validator rebuilds the link)
+      segments: collapseCrosses(ctx.episode.segments).map(({ source, category, hasImage, cues, ...seg }) => ({ ...seg, text: embedCues(seg.text, cues || []) })),
     };
     const prompt = buildReviewPrompt({ channelName: ctx.channelName, program: ctx.program, script, stories });
     try {
@@ -348,6 +366,7 @@ export class Producer {
       );
       // The editor may drop a story it cannot stand behind, never add one.
       ctx.episode = value;
+      this.castCorrespondents(ctx);
       return { provider, reviewed: true };
     } catch (err) {
       // Without an AI editor (offline demo: the mock only writes) nothing is checked, and the pipeline says so.
@@ -439,11 +458,34 @@ export class Producer {
     for (const seg of ctx.episode.segments) {
       if (!seg.storyId) continue;
       apply(seg);
-      planVisuals(seg, { roundupPictures: ctx.program.pictures === 'every' });
+      // a correspondent link shows the pictures of its place (the director's own plan), not the story's beats
+      if (seg.type !== 'cross') planVisuals(seg, { roundupPictures: ctx.program.pictures === 'every' });
     }
     for (const item of ctx.episode.rundown) apply(item);
     const borrowed = stories.filter((s) => s.image && s.imageFrom).length;
     return { images: stories.filter((s) => s.image).length, ...(borrowed ? { borrowed } : {}), ...(verified || {}) };
+  }
+
+  /**
+   * Footage for the correspondent links: one clip of each linked story's place (never for a grave story),
+   * attached to every segment of that link as `footage` { id, credit, duration, width, height, start }.
+   * Within a budget: a link whose clip is not ready airs with its pictures (the client falls back).
+   */
+  async footage(ctx) {
+    const links = new Map();
+    for (const seg of ctx.episode.segments) if (seg.type === 'cross' && !links.has(seg.storyId)) links.set(seg.storyId, seg);
+    let found = 0;
+    const jobs = [...links.values()].map(async (seg) => {
+      const clip = await this.footageDesk.find(seg.location, { grave: !!seg.grave }).catch(() => null);
+      if (!clip) return;
+      found++;
+      const footage = { id: clip.id, credit: clip.credit, duration: clip.duration, width: clip.width, height: clip.height, start: clip.start };
+      for (const s of ctx.episode.segments) if (s.type === 'cross' && s.storyId === seg.storyId) s.footage = footage;
+    });
+    let timer;
+    await Promise.race([Promise.all(jobs), new Promise((resolve) => (timer = setTimeout(resolve, this.config.footage?.budgetMs ?? 20000)))]);
+    clearTimeout(timer);
+    return { links: links.size, footage: found };
   }
 
   /**

@@ -1193,6 +1193,10 @@ export const PERSONAS = {
   unit8: { id: 'unit8', lang: 'en-US', speed: 1.0, pause: 1.0, variation: 0, even: true, quantize: 0.1, desc: 'even and precise' },
   penny: { id: 'penny', lang: 'en-GB', speed: 1.03, pause: 1.0, variation: 0.7, numbers: 0.95, desc: 'numbers first, figures read with care' },
   sam: { id: 'sam', lang: 'en-US', speed: 1.1, pause: 0.84, variation: 1.0, desc: 'fast and friendly rolling news' },
+  // the correspondents (WORLD NOW links, server/correspondents.js)
+  rhea: { id: 'rhea', lang: 'en-GB', speed: 1.0, pause: 1.0, variation: 0.85, desc: 'composed correspondent, clear full stops' },
+  vic: { id: 'vic', lang: 'en-US', speed: 1.04, pause: 0.92, variation: 1.0, desc: 'brisk and concrete' },
+  mika: { id: 'mika', lang: 'en-US', speed: 1.0, pause: 1.02, variation: 0.9, desc: 'calm and exact' },
   default: { id: 'default', speed: 1, pause: 1, variation: 0.8 },
 };
 
@@ -1216,6 +1220,7 @@ const SEGMENT_PROSODY = {
   number: { speed: 0.97, pause: 1.05, end: 0.6, lead: 0.08 },
   lighter: { speed: 1.02, pause: 1, end: 0.6, lead: 0.04 },
   ad: { speed: 1.04, pause: 0.85, end: 0.3, lead: 0 },
+  cross: { speed: 1.01, pause: 0.95, end: 0.35, lead: 0 }, // a correspondent link: a two-way keeps its turns close
   default: { speed: 1, pause: 1, end: 0.55, lead: 0.04 },
 };
 

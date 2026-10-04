@@ -116,6 +116,14 @@ export const config = {
     warnings: env('WEATHER_WARNINGS', 'gdacs').trim().toLowerCase() === 'off' ? 'off' : 'gdacs',
     ttlMinutes: bounded('WEATHER_TTL_MIN', 30, 5, 360),
   },
+  // Footage of a correspondent link's place (server/footage.js): Wikimedia Commons clips, FILE-credited, kept in
+  // data/footage. 'auto' = on while the desk reads live feeds (off on the offline fixture feeds), 'on', 'off'.
+  footage: {
+    mode: ((v) => (['auto', 'on', 'off'].includes(v) ? v : 'auto'))(env('FOOTAGE', 'auto').trim().toLowerCase()),
+    budgetMs: bounded('FOOTAGE_BUDGET_MS', 20000, 0, 120000),
+    cacheMb: bounded('FOOTAGE_CACHE_MB', 400, 20, 5000),
+    dir: path.join(ROOT, 'data', 'footage'),
+  },
   // Image search for stories still without a picture (owner 22:40: on air only REAL photos found on the
   // web): a FILE photo of the story's place. 'commons' (Wikimedia Commons, no key, free licences) by
   // default; add 'google' / 'bing' with their keys (comma-separated list); 'off' turns it off.

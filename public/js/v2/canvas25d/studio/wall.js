@@ -401,7 +401,7 @@ function landMask() {
   LANDMASK = m;
   return m;
 }
-const isLand = (lat, lon) => {
+export const isLand = (lat, lon) => {
   const u = Math.floor(((lon / 360 + 0.5) % 1 + 1) % 1 * LMW);
   const v = Math.max(0, Math.min(LMH - 1, Math.floor((0.5 - lat / 180) * LMH)));
   return landMask()[v * LMW + u] === 1;
