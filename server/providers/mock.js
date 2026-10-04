@@ -1176,7 +1176,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // A place opens on the map, and the picture follows it; a picture alone is shown full screen.
       shot: info.loc ? 'map' : s.image ? 'full' : solo ? 'close' : 'wide',
       breaking: info.breaking,
-      location: info.loc ? { place: info.loc.place, lat: info.loc.lat, lon: info.loc.lon } : null,
+      location: info.loc ? { place: info.loc.place, lat: info.loc.lat, lon: info.loc.lon, ...(info.loc.entry?.kind === 'country' ? { scope: 'country' } : {}) } : null,
       fact: inRoundup ? null : info.figures[0]?.fact || null,
       kicker: info.kicker,
     };

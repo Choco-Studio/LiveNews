@@ -194,7 +194,7 @@ export class Renderer {
         if (f) this.drawFootage(ctx, f);
         const loc = item.location;
         const map = !card.pic && !f && Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon);
-        if (map) drawWorldMap(ctx, t, dt, { lat: loc.lat, lon: loc.lon, place: '', label: false, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
+        if (map) drawWorldMap(ctx, t, dt, { lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
         return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, image: card.pic || null, backdrop: map || f ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
       }
       case 'tease': {
@@ -209,7 +209,7 @@ export class Renderer {
         if (card.pic === undefined || (card.pic === null && dt < 0.4)) card.pic = scene.images.get(item.storyId)?.card || (dt < 0.4 ? null : false);
         const loc = item.location;
         const map = !card.pic && Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon);
-        if (map) drawWorldMap(ctx, t, dt, { lat: loc.lat, lon: loc.lon, place: '', label: false, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
+        if (map) drawWorldMap(ctx, t, dt, { lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
         return cards.drawHeadlineFrame(ctx, t, dt, { headline: item.headline, source: item.source, category: item.category, image: card.pic || null, backdrop: map ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme], tag: 'STILL TO COME', pips: false, tagIn: true });
       }
       case 'breakingCard':
@@ -220,7 +220,7 @@ export class Renderer {
         if (WEATHER) return WEATHER.drawWeather(ctx, t, scene, this.audio);
         return drawWorldMap(ctx, t, dt, {}); // the idle world until the weather centre has loaded
       case 'map':
-        return drawWorldMap(ctx, t, dt, { lat: card.lat, lon: card.lon, place: card.place, accent: THEME_ACCENT[program?.theme], programId: program?.id, from: card.from, pins: card.pins, duration: card.duration, follow: true });
+        return drawWorldMap(ctx, t, dt, { lat: card.lat, lon: card.lon, scope: card.scope, place: card.place, accent: THEME_ACCENT[program?.theme], programId: program?.id, from: card.from, pins: card.pins, duration: card.duration, follow: true });
       case 'ad':
         return card.ad?.draw(ctx, t, dt, { line: card.line ?? -1, speaking: this.audio.isSpeaking('ad'), duration: card.ad.duration });
       case 'broll': {
@@ -229,7 +229,7 @@ export class Renderer {
         const f = card.footage ? scene.footageDeck?.frame(card.footage, 'full', t) : null;
         if (f) return this.drawFootage(ctx, f);
         if (img?.full) return this.drawPan(ctx, img.full, dt, scene.panDir);
-        if (scene.remote && Number.isFinite(scene.remote.lat)) return drawWorldMap(ctx, t, dt, { lat: scene.remote.lat, lon: scene.remote.lon, place: scene.remote.place, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
+        if (scene.remote && Number.isFinite(scene.remote.lat)) return drawWorldMap(ctx, t, dt, { lat: scene.remote.lat, lon: scene.remote.lon, scope: scene.remote.scope, place: scene.remote.place, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
         break;
       }
       case 'full':

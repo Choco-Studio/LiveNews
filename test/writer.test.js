@@ -1456,7 +1456,7 @@ describe('normalizeBulletin: programme rules (config/channel.json)', () => {
 
   test('a known country with a wrong pin is put back (any kind of place, not only cities)', () => {
     const seg = run([storySeg('g2', { location: { place: 'CHILE', lat: 10, lon: 10 }, shot: 'map', emotion: 'sad' })], null).segments[1];
-    assert.deepEqual(seg.location, { place: 'CHILE', lat: -35.7, lon: -71.5 });
+    assert.deepEqual(seg.location, { place: 'CHILE', lat: -35.7, lon: -71.5, scope: 'country' });
   });
 
   test('gestures: only the programme\'s list, remapped, a grave subset and a cap per segment; defaults nod instead of wave', () => {
@@ -1617,7 +1617,7 @@ describe('normalizeBulletin: invented claims, outlet names, qualifiers (editoria
   test('a wrong pin for an unknown city in a known country is put on that country', () => {
     const st = makeStory('k1', { title: 'Port city in Panama opens a ferry terminal', summary: 'A new ferry terminal has opened in Colon, Panama.' });
     const s = normalize([storySeg('k1', { text: 'A new ferry terminal has opened in Colon, Panama.', shot: 'map', location: { place: 'COLON, PANAMA', lat: 40, lon: -3 } })], { stories: [st] }).segments[1];
-    assert.deepEqual(s.location, { place: 'PANAMA', lat: 8.5, lon: -80.8 });
+    assert.deepEqual(s.location, { place: 'PANAMA', lat: 8.5, lon: -80.8, scope: 'country' });
   });
 });
 

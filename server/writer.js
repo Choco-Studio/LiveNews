@@ -839,7 +839,9 @@ function normalizeLocation(loc) {
 function groundedLocation(loc, source) {
   const l = normalizeLocation(loc);
   if (!l || !placeSupported(l.place, source)) return null;
-  return snapLocation(l, source);
+  const snapped = snapLocation(l, source);
+  // a whole country: the map names it without a pin (its middle is not where anything happened)
+  return snapped && lookupPlace(snapped.place)?.kind === 'country' ? { ...snapped, scope: 'country' } : snapped;
 }
 
 function normalizeMap(list, source) {
@@ -1537,7 +1539,7 @@ export function normalizeBulletin(
       hasImage: s.hasImage,
       ...(s.kicker ? { kicker: s.kicker } : {}),
       // the montage frame's map when its picture is not ready (owner 22:50: never a black frame)
-      ...(Number.isFinite(s.location?.lat) && Number.isFinite(s.location?.lon) ? { location: { place: s.location.place || '', lat: s.location.lat, lon: s.location.lon } } : {}),
+      ...(Number.isFinite(s.location?.lat) && Number.isFinite(s.location?.lon) ? { location: { place: s.location.place || '', lat: s.location.lat, lon: s.location.lon, ...(s.location.scope ? { scope: s.location.scope } : {}) } } : {}),
     }));
   // Which rundown story each sentence of the FINAL intro is about (one entry per sentence, null for the
   // greeting), so the montage can cut on it: inferred from the words, whatever the writer was (every

@@ -309,6 +309,11 @@ The fixture feeds are clean; the live feeds are not. WORLD NOW was run on the re
 - **One event, many stories.** Brazil's election came from about 20 reports. Stories sharing two people now cluster, as do reports of one country's election (the country read from names and demonyms: "the Brazilian president"). "Polls close" is no closure. The programme carries Brazil once.
 - **Lines that are not news.** A promo for another outlet's interview ("…commentator Douglas Herbert shares further insights", "…speaks to analyst X about…"), an outlet's standing disclaimer ("NPR does not offer or accept money for coverage"), a bare quotation with no speaker, an opener whose "also" leans on a paragraph the viewer never heard, and a detail that tells again what the story already said.
 
+**Places.**
+- A story is placed where it happened, not in the country that acted. "US withdraws all B-1 bombers from British military base RAF Fairford" was pinned to the middle of the USA and handed to the Americas desk.
+- The gazetteer knows the US states and a few territories ("off the coast of Massachusetts", Bermuda, Puerto Rico).
+- A place that is only a whole country carries `scope: 'country'`: the map names it over its middle, with no pin and no coordinates. A pin in Kansas once stood for "off the US coast".
+
 **Length.** The fallback writer now gives grave stories depth too, reads up to nine sentences of an article and splits instead of dropping. On real news WORLD NOW runs about 830 words, roughly six minutes, against the 9–10 the LLM writer is asked for. The fallback writes no more than the reporting supports: no padding.
 
 ### Set and light: the home look

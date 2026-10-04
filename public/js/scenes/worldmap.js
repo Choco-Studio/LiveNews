@@ -1195,6 +1195,7 @@ export function drawWorldMap(ctx, t, dt, opts = {}) {
   const T = timingFor(o.programId, Number(o.duration));
   const acc = ACCENTS.has(o.accent) ? o.accent : P.red;
   const pins = hasTarget && Array.isArray(o.pins) && o.pins.length ? o.pins : null;
+  const country = o.scope === 'country' && !pins; // a whole country: named, never pinned
 
   // where the move starts: an explicit previous pin, the previous map shot (follow), or the world
   let from = null;
@@ -1239,11 +1240,12 @@ export function drawWorldMap(ctx, t, dt, opts = {}) {
       rt.pinN++;
     }
   }
-  if (viewChanged || phase !== rt.phase || minute !== rt.minute || rt.acc !== acc || rt.sig !== sig) {
+  if (viewChanged || phase !== rt.phase || minute !== rt.minute || rt.acc !== acc || rt.sig !== sig || rt.country !== country) {
     rt.phase = phase;
     rt.minute = minute;
     rt.acc = acc;
     rt.sig = sig;
+    rt.country = country;
     composeFrame(rt, view, ms, mini, view.idle);
     if (view.idle) drawIdleMarker(rt, view, mini);
     else {
@@ -1252,7 +1254,7 @@ export function drawWorldMap(ctx, t, dt, opts = {}) {
         if (!from) drawReticle(rt, cx, cy, dt / T.fly, mini);
       } else {
         drawExtraPins(rt, view, pins, tm, acc, mini);
-        drawMarker(rt, cx, cy, tm, acc, mini);
+        if (!country) drawMarker(rt, cx, cy, tm, acc, mini); // a whole country has no pin
       }
     }
     rt.cctx.putImageData(rt.img, 0, 0);
@@ -1267,7 +1269,7 @@ export function drawWorldMap(ctx, t, dt, opts = {}) {
     return;
   }
   if (!label) return;
-  const box = drawLabel(rt, ctx, x, y, cx, cy, place, lat, lon, tm - T.label, acc);
+  const box = drawLabel(rt, ctx, x, y, cx, cy, place, lat, lon, tm - T.label, acc, country);
   if (box && tm >= T.context) drawContext(rt, ctx, x, y, view, cx, cy, box, place, tm - T.context, pins, lat, lon);
 }
 
@@ -1392,15 +1394,16 @@ function coordText(lat, lon) {
 }
 
 /** Place label layout (cached per place): name at 2x in up to two lines, an accent rule, coordinates in micro. */
-function labelLayout(place, lat, lon) {
-  return cached(`label|${place}|${lat.toFixed(2)}|${lon.toFixed(2)}`, () => {
+function labelLayout(place, lat, lon, country = false) {
+  return cached(`label|${place}|${lat.toFixed(2)}|${lon.toFixed(2)}|${country ? 'c' : 'p'}`, () => {
     let scale = 2;
     let lines = wrapLines(place, 150, 2, 3);
     if (lines.length > 2) {
       scale = 1;
       lines = wrapLines(place, 150, 1, 3);
     }
-    const coords = coordText(lat, lon);
+    // (a whole country: no coordinates, its middle is not where anything happened)
+    const coords = country ? '' : coordText(lat, lon);
     let nameW = 0;
     for (const l of lines) nameW = Math.max(nameW, measureText(l, scale));
     const tw = Math.max(nameW, measureText(coords, 1, 'micro'));
@@ -1408,7 +1411,7 @@ function labelLayout(place, lat, lon) {
     const gap = scale === 2 ? 4 : 3;
     const bw = tw + 14;
     const nameH = lines.length * lineH + (lines.length - 1) * gap;
-    const bh = 6 + nameH + 3 + 1 + 3 + 5 + 5;
+    const bh = 6 + nameH + 3 + 1 + (coords ? 3 + 5 + 5 : 5);
     return { scale, lines, coords, bw, bh, lineH, gap, nameW, nameH };
   });
 }
@@ -1564,12 +1567,13 @@ function pinConflict(others, n, cx, cy, bx, by, bw, bh, right, vert) {
  * and the coordinates in micro type, joined to the marker by a 1 px silver leader. It wipes out
  * from the marker side, then the text rises in.
  */
-function drawLabel(rt, ctx, ox, oy, cx, cy, place, lat, lon, tl, acc) {
+function drawLabel(rt, ctx, ox, oy, cx, cy, place, lat, lon, tl, acc, country = false) {
   if (tl < 0) return null;
   let L = rt.labelFor;
-  if (!L || L.place !== place || L.lat !== lat || L.lon !== lon || L.cx !== cx || L.cy !== cy || L.sig !== rt.sig) {
-    L = { ...labelLayout(place, lat, lon), place, lat, lon, cx, cy, sig: rt.sig, box: { x: 0, y: 0, w: 0, h: 0 }, pos: null };
-    L.pos = placeLabel(rt, cx, cy, L.bw, L.bh, undefined, rt.pinXY, rt.pinN);
+  if (!L || L.place !== place || L.lat !== lat || L.lon !== lon || L.cx !== cx || L.cy !== cy || L.sig !== rt.sig || L.country !== country) {
+    L = { ...labelLayout(place, lat, lon, country), place, lat, lon, cx, cy, country, sig: rt.sig, box: { x: 0, y: 0, w: 0, h: 0 }, pos: null };
+    // a whole country: its name over its middle, no pin to lead to
+    L.pos = country ? { x: clamp(Math.round(cx - L.bw / 2), 13, rt.w - L.bw - 13), y: clamp(Math.round(cy - L.bh / 2), 30, rt.h - L.bh - 50), right: true, vert: 0 } : placeLabel(rt, cx, cy, L.bw, L.bh, undefined, rt.pinXY, rt.pinN);
     rt.labelFor = L;
   }
   const { x: bx, y: by, right, vert } = L.pos;
@@ -1579,9 +1583,11 @@ function drawLabel(rt, ctx, ox, oy, cx, cy, place, lat, lon, tl, acc) {
   const ly = clamp(cy, by + 3, by + L.bh - 4);
   const near = right ? bx : bx + L.bw;
   const start = right ? cx + 4 : cx - 4;
-  const lead = Math.min(1, e * 3);
+  const lead = country ? 0 : Math.min(1, e * 3);
   ctx.fillStyle = P.silver;
-  if (vert) {
+  if (country) {
+    // no leader: nothing is pinned
+  } else if (vert) {
     const y0 = vert > 0 ? cy + 4 : by + L.bh;
     const len = Math.round((vert > 0 ? by - cy - 4 : cy - 4 - (by + L.bh)) * lead);
     if (len > 0) ctx.fillRect(ox + cx, oy + (vert > 0 ? y0 : cy - 3 - len), 1, len);
@@ -1620,7 +1626,7 @@ function drawLabel(rt, ctx, ox, oy, cx, cy, place, lat, lon, tl, acc) {
       const ry = oy + by + 6 + L.nameH + 3;
       ctx.fillStyle = acc;
       ctx.fillRect(tx, ry, Math.round(L.nameW * easeOutQuint(clamp((tl - 0.2) / 0.3, 0, 1))), 1);
-      drawText(ctx, L.coords, tx, ry + 4, MICRO_FOG);
+      if (L.coords) drawText(ctx, L.coords, tx, ry + 4, MICRO_FOG);
     } finally {
       ctx.restore();
     }

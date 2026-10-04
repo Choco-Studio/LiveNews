@@ -120,8 +120,10 @@ describe('gazetteer: false positives and wrong pins (round 1)', () => {
   });
 
   test('"New Mexico", "Washington state" and the Thanksgiving turkey are not Mexico, the capital or the country', () => {
-    assert.equal(locate('New Mexico governor resigns'), null);
-    assert.equal(locate('Washington state wildfire spreads'), null);
+    // (the US states are in the gazetteer now: each is its own state, never Mexico nor the capital)
+    assert.equal(locate('New Mexico governor resigns')?.place, 'NEW MEXICO, USA');
+    assert.equal(locate('Washington state wildfire spreads')?.place, 'WASHINGTON STATE, USA');
+    assert.equal(locate('Medical plane vanishes off the coast of Massachusetts')?.place, 'MASSACHUSETTS, USA');
     assert.equal(locate('Turkey prices rise ahead of Thanksgiving'), null);
     assert.equal(locate('New York stocks close at a record high')?.place, 'NEW YORK, USA');
     assert.equal(locate('Turkey and Greece sign a deal')?.place, 'TURKEY');

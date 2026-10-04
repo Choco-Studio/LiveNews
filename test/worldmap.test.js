@@ -212,3 +212,24 @@ test('follow mode decides per shot: a place shown again after a gap flies in fro
     delete globalThis.document;
   }
 });
+
+test('a whole country is named, never pinned: no marker in the map’s pixels (a pin in Kansas once stood for "off the US coast")', () => {
+  const doc = fakeDoc();
+  globalThis.document = doc;
+  try {
+    warmMapData();
+    const target = doc.make().getContext('2d');
+    const red = (o) => {
+      target.drawn = null;
+      drawWorldMap(target, 200, 3, { lat: 39.8, lon: -98.6, place: 'USA', ...o, now: Date.UTC(2026, 9, 2, 17, 42) });
+      const d = target.drawn.last.data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i] === 0xe4 && d[i + 1] === 0x3b && d[i + 2] === 0x44) n++;
+      return n;
+    };
+    assert.ok(red({}) > 0, 'a place has its pin (the programme accent)');
+    assert.equal(red({ scope: 'country' }), 0, 'a country has none');
+  } finally {
+    delete globalThis.document;
+  }
+});

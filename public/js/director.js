@@ -391,6 +391,7 @@ export class Director {
       id: seg.reporter,
       lat: seg.location?.lat,
       lon: seg.location?.lon,
+      scope: seg.location?.scope || null,
       grave: !!seg.grave,
       footage: footage?.id || null,
       credit: footage?.credit || null,
