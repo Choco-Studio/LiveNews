@@ -226,6 +226,12 @@ The owner asked for each programme to have its own studio. The network's archite
 Each piece was redrawn until it read clearly in the wide and in every framing that shows it (owner, 4 Oct: "solo pasa al siguiente cuando tu autocrítica pase del 9.5"):
 - text is shown whole or not at all where a framing or the flats would cut it;
 - the set shows no figures it did not report: no invented prices, no fake index values;
+- every set carries its colour in light lines, as real studios do (owner, 4 Oct: "básate en reales y dale identidad"; references from Wikimedia Commons: Seven News's fascia band, Bloomberg London's rings and columns, CNBC Singapore's lit desk, the London Stock Exchange studio's etched glass). Each set has a cove along the top, ribbons framing its feature and LED slits in the desk's seams:
+  - WORLD NOW: red;
+  - TECH BYTES: blue, its cyan kept for the niches; its name is on the set as "> TECH BYTES_";
+  - COSMOS: magenta, as lines only;
+  - NEWS IN 60: orange, beside its capped yellow;
+  - MONEY MINUTE: its green is the ticker's edge and the glass panels' feet.
 - it must still read as a TV set, not a room (owner, 4 Oct: "que siga pareciendo un plató"). The dressing therefore uses studio hardware, as real sets do: LED panels and bands, edge-lit glass, backlit niches, slat walls washed by hidden light, a studio clock, a rundown monitor. Painted murals, framed pictures and office panelling are out.
 
 The rules still hold, and `test/v2-set.test.js` checks them:
