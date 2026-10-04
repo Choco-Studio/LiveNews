@@ -1184,6 +1184,29 @@ function rasterDesk(fr, cam, clipRows, led, style) {
  * The programme's desk front pattern over the upper panel (dressing.js DESK_FRONTS): wood grain lines, a few
  * star points, or a band of the accent at the panel's foot. Above the reveal only (never in y >= 150).
  */
+// the wood front's grain rows: [fraction of the upper panel's height, dark figure]
+const GRAIN_ROWS = [[0.2, false], [0.36, true], [0.5, false], [0.68, false], [0.82, true]];
+const GRAIN_SEG = { dy: 0, gap: false };
+/** The grain run under screen column x in row g: its 1 px offset and whether x falls in a gap. */
+function grainSeg(x, g) {
+  // walk seeded segments along the row (lengths 10-40, gaps 2-9): deterministic per (row, x)
+  let pos = -((g * 17) % 23), n = 0;
+  for (;;) {
+    const h = Math.imul((n + 1) * 2654435761 ^ (g + 1) * 40503, 0x9e3779b1) >>> 0;
+    const len = 10 + (h % 31), gap = 2 + ((h >>> 8) % 8);
+    if (x < pos + len) {
+      GRAIN_SEG.dy = ((h >>> 16) % 3) - 1;
+      GRAIN_SEG.gap = x < pos;
+      return GRAIN_SEG;
+    }
+    pos += len + gap;
+    n++;
+    if (pos > x) {
+      GRAIN_SEG.gap = true;
+      return GRAIN_SEG;
+    }
+  }
+}
 function deskPattern(fr, cam, front, kc) {
   const px = fr.px;
   const W0 = fr.w;
@@ -1193,10 +1216,14 @@ function deskPattern(fr, cam, front, kc) {
     if (t < 0 || sp <= t) continue;
     const h = sp - t;
     if (front.pattern === 'grain') {
-      // three long grain lines that wander a pixel (a seeded wave along the desk)
-      for (const f of [0.28, 0.55, 0.8]) {
-        const y = t + Math.round(h * f + Math.sin(x * 0.11 + f * 9) * 0.8);
-        if (y > t && y < sp && y < 150) px[y * W0 + x] = grain;
+      // grain in broken runs: per row, straight segments of seeded length (10-40 px) that start and end
+      // apart, each a pixel up or down from the last; light grain (tanShade) and a darker figure (maroon)
+      for (let g = 0; g < GRAIN_ROWS.length; g++) {
+        const [f, dark] = GRAIN_ROWS[g];
+        const seg = grainSeg(x, g);
+        if (seg.gap) continue;
+        const y = t + Math.round(h * f) + seg.dy;
+        if (y > t && y < sp && y < 150) px[y * W0 + x] = dark ? C.maroon : grain;
       }
     } else if (front.pattern === 'stars') {
       const hsh = Math.imul(x * 2654435761, 1) >>> 0;

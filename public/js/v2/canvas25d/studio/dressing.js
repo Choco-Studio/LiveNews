@@ -12,8 +12,9 @@
 //   COSMOS DESK   a planetarium: a quiet starfield and a star chart's dotted grid on the black wall, Orion,
 //                 the Big Dipper and Cassiopeia as star charts (crosses, purple lines, names in micro type),
 //                 the Moon's eight phases over the screen, a dark desk front with stars
-//   MONEY MINUTE  a bank's trading room: wood panelling, two market boards (rows of green and red figures),
-//                 a candlestick chart, the bronze sconces of the style
+//   MONEY MINUTE  a private bank after the close: a dark-wood dado with raised panels, a bull and a bear in
+//                 bronze relief on framed plaques (brass name plates), an LED ticker of the programme's beats
+//                 (no prices), the bronze sconces of the style, a wood front with broken-run grain
 //   NEWS IN 60    a flash studio: a ring of sixty marks round the screen, a bank of small monitors each side,
 //                 yellow edge lines
 // Everything is drawn in world units on the back wall (Z = SET.wallZ), so the camera's moves and zooms carry
@@ -784,83 +785,196 @@ function cosmos(fr, cam, style, soft) {
   moonPhases(fr, cam, soft);
 }
 
-// --------------------------------------------------------------------------- MONEY MINUTE: trading room
-function wainscot(fr, cam, soft) {
-  // a dark wood dado across the lower wall (beside and behind the desk): brown panels, a tan rail on top,
-  // tanShade grooves between panels, maroon shadow under the rail
-  const Y0 = -46, Y1 = 4;
-  rectW(fr, cam, -340, Y0, 340, Y1, soft ? C.maroon : C.brown);
-  rectW(fr, cam, -340, Y0 - 3, 340, Y0, soft ? C.brown : C.tan);
-  rectW(fr, cam, -340, Y0, 340, Y0 + 1.6, C.maroon);
-  if (soft) return;
-  for (let X = -330; X <= 330; X += 44) {
-    rectW(fr, cam, X, Y0 + 6, X + 1.2, Y1, C.maroon);
-    rectW(fr, cam, X + 5, Y0 + 7, X + 39, Y0 + 8.2, C.tanShade);
+// --------------------------------------------------------------------------- MONEY MINUTE: the private bank
+// A panelled room after the close: a dark-wood dado with raised panels and a chair rail along the foot of
+// the wall; a bull and a bear in bronze relief on dark plaques either side, facing each other across the
+// screen (the market's two moods, no figures); an LED ticker band along the top of the wall with the
+// programme's beats in green micro type (no prices: the channel never shows a figure it did not report).
+// The bronze sconces of the style stay between them.
+
+/** Rasterise a shape list (ellipses and capsules in local units) into a mask, then emboss it in bronze. */
+// (the Charging Bull's build: a small round rump, a massive shoulder, the head down, short thick horns
+// curving forward, the tail lashing up; the bear: a long heavy body, the hump over the shoulders, the head
+// low, round ears, a tapering snout; 'x' marks the eye)
+const BULL = [
+  ['e', 7, 7.5, 4.5, 4.5], ['e', 13.5, 8, 8, 4.6], ['e', 19.5, 6.3, 5.5, 5.3], ['e', 21.5, 10, 4, 3.2],
+  ['e', 25.5, 10.4, 3, 2.6], ['e', 28, 11.6, 1.7, 1.6],
+  ['c', 24.6, 8, 26.4, 5.4, 0.95], ['c', 26.4, 5.4, 28.6, 4.8, 0.75],
+  ['c', 21, 12, 23.5, 15.3, 1.4], ['c', 18.5, 12, 17.8, 15.3, 1.35, 'far'], ['c', 6.5, 11, 4.6, 15.3, 1.4], ['c', 9.5, 11.5, 10, 15.3, 1.3, 'far'],
+  ['c', 3, 5.5, 1.6, 3, 0.6], ['c', 1.6, 3, 2.6, 0.9, 0.55], ['e', 3, 0.8, 1, 0.8],
+  ['x', 25.6, 9.4],
+];
+const BEAR = [
+  ['e', 14, 8.5, 10, 4.6], ['e', 19, 6.2, 5, 4.3], ['e', 6, 7.8, 4.6, 4.4],
+  ['e', 24.3, 8.6, 3.2, 2.8], ['e', 27.6, 9.6, 2.1, 1.4], ['e', 23.2, 5.9, 1, 1],
+  ['c', 20.5, 11, 21, 15.3, 1.8], ['c', 17, 11, 16.6, 15.3, 1.7, 'far'], ['c', 8, 11, 7.4, 15.3, 1.9], ['c', 11, 11, 11.4, 15.3, 1.6, 'far'],
+  ['e', 1.6, 6.8, 0.8, 0.8],
+  ['x', 25.2, 8.1],
+];
+function inShape(sh, x, y) {
+  if (sh[0] === 'x') return false;
+  if (sh[0] === 'e') {
+    const dx = (x - sh[1]) / sh[3], dy = (y - sh[2]) / sh[4];
+    return dx * dx + dy * dy <= 1;
   }
+  const [, ax, ay, bx, by, r] = sh;
+  const vx = bx - ax, vy = by - ay;
+  const t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy)));
+  const dx = x - (ax + vx * t), dy = y - (ay + vy * t);
+  return dx * dx + dy * dy <= r * r;
 }
-const GLYPH = { // 3x5 digits and a few letters for the boards (one cell = 1.3 units)
-  0: ['111', '101', '101', '101', '111'], 1: ['010', '110', '010', '010', '111'], 2: ['111', '001', '111', '100', '111'],
-  3: ['111', '001', '011', '001', '111'], 4: ['101', '101', '111', '001', '001'], 5: ['111', '100', '111', '001', '111'],
-  6: ['111', '100', '111', '101', '111'], 7: ['111', '001', '010', '010', '010'], 8: ['111', '101', '111', '101', '111'],
-  9: ['111', '101', '111', '001', '111'], '.': ['000', '000', '000', '000', '010'], '+': ['000', '010', '111', '010', '000'],
-  '-': ['000', '000', '111', '000', '000'], ' ': ['000', '000', '000', '000', '000'],
-};
-function textW(fr, cam, s, X, Y, c, cell = 1.3) {
-  let x = X;
-  for (const ch of s) {
-    const g = GLYPH[ch] || GLYPH[' '];
-    for (let j = 0; j < 5; j++) for (let i = 0; i < 3; i++) if (g[j][i] === '1') rectW(fr, cam, x + i * cell, Y + j * cell, x + (i + 1) * cell, Y + (j + 1) * cell, c);
-    x += cell * 4;
-  }
-}
-function marketBoard(fr, cam, sx, soft) {
-  const X0 = sx > 0 ? 160 : -300, X1 = sx > 0 ? 300 : -160;
-  const Y0 = -112, Y1 = -54;
-  rectW(fr, cam, X0 - 3, Y0 - 3, X1 + 3, Y1 + 3, C.slate);
-  rectW(fr, cam, X0, Y0, X1, Y1, C.black);
-  if (soft) return;
-  const r = rng(sx > 0 ? 53 : 59);
+function relief(fr, cam, shapes, X, Y, unit, flip, soft) {
+  // local box 30 x 16; (X, Y) the box's centre on the wall; one local unit = `unit` world units
   const k = kAt(cam, SET.wallZ);
-  // rows of figures: a name block (steel bars), the price, the change (green up, red down)
-  for (let Y = Y0 + 4, row = 0; Y < Y1 - 7; Y += 9, row++) {
-    const up = r() < 0.6;
-    rectW(fr, cam, X0 + 4, Y + 1, X0 + 4 + 10 + r() * 8, Y + 5, C.steel);
-    const price = (20 + r() * 900).toFixed(1);
-    if (k >= 0.62) {
-      textW(fr, cam, price, X0 + 34, Y, C.fog);
-      textW(fr, cam, `${up ? '+' : '-'}${(r() * 3).toFixed(1)}`, X0 + 82, Y, up ? C.green : C.red);
-    } else {
-      rectW(fr, cam, X0 + 34, Y + 1, X0 + 60, Y + 5, C.steel);
-      rectW(fr, cam, X0 + 82, Y + 1, X0 + 100, Y + 5, up ? C.green : C.red);
+  const pxu = unit * k; // pixels per local unit
+  const w = Math.ceil(30 * pxu), h = Math.ceil(16 * pxu);
+  const x0 = Math.round(sxOf(cam, k, X) - w / 2), y0 = Math.round(syOf(cam, k, Y) - h / 2);
+  const mask = new Uint8Array((w + 2) * (h + 2));
+  const at = (i, j) => mask[(j + 1) * (w + 2) + (i + 1)];
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) {
+      let lx = (i + 0.5) / pxu;
+      if (flip) lx = 30 - lx;
+      const ly = (j + 0.5) / pxu;
+      // 2 for the near side, 1 where only a far leg is (one step darker, so the legs read in pairs)
+      let v = 0;
+      for (const sh of shapes) {
+        if (!inShape(sh, lx, ly)) continue;
+        v = sh[6] === 'far' ? Math.max(v, 1) : 2;
+        if (v === 2) break;
+      }
+      mask[(j + 1) * (w + 2) + (i + 1)] = v;
     }
-    // a little arrow at the end
-    dotW(fr, cam, X1 - 8, Y + 3, up ? C.green : C.red, 2.4);
   }
-}
-function candles(fr, cam, X0, X1, Y0, Y1, soft) {
-  rectW(fr, cam, X0 - 2, Y0 - 2, X1 + 2, Y1 + 2, C.slate);
-  rectW(fr, cam, X0, Y0, X1, Y1, C.black);
+  const px = fr.px;
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) {
+      if (!at(i, j)) continue;
+      const x = x0 + i, y = y0 + j;
+      if (x < 0 || x >= W || y < 0 || y >= H) continue;
+      let c = at(i, j) === 1 ? C.tanShade : C.tan;
+      if (soft) c = C.tanShade;
+      else {
+        // embossed: lit from the top-left (cream where the edge faces the light), shadowed bottom-right
+        const tl = !at(i - 1, j) || !at(i, j - 1);
+        const br = !at(i + 1, j) || !at(i, j + 1);
+        const br2 = !at(i + 1, j + 1);
+        const far = at(i, j) === 1;
+        if (br) c = C.brown;
+        else if (tl) c = far ? C.tan : C.cream;
+        else if (br2) c = far ? C.brown : C.tanShade;
+      }
+      px[y * W + x] = c;
+    }
+  }
   if (soft) return;
-  const r = rng(Math.round(X0));
-  let v = (Y0 + Y1) / 2;
-  const n = Math.floor((X1 - X0 - 6) / 7);
-  for (let i = 0; i < n; i++) {
-    const X = X0 + 4 + i * 7;
-    const d = (r() - 0.45) * 9;
-    const a = v, b = Math.max(Y0 + 4, Math.min(Y1 - 4, v - d));
-    const up = b < a;
-    const hi = Math.min(a, b) - 1 - r() * 3, lo = Math.max(a, b) + 1 + r() * 3;
-    rectW(fr, cam, X + 1.6, hi, X + 2.4, lo, up ? C.darkGreen : C.darkRed);
-    rectW(fr, cam, X, Math.min(a, b), X + 4, Math.max(a, b) + 0.8, up ? C.green : C.red);
-    v = b;
+  for (const sh of shapes) {
+    if (sh[0] !== 'x') continue;
+    const i = Math.floor((flip ? 30 - sh[1] : sh[1]) * pxu), j = Math.floor(sh[2] * pxu);
+    const x = x0 + i, y = y0 + j;
+    if (x >= 0 && x < W && y >= 0 && y < H && at(i, j)) px[y * W + x] = C.brown;
   }
 }
+function plaque(fr, cam, X, Y, shapes, flip, soft) {
+  // a dark plaque with a bevelled bronze frame, the animal in relief on it
+  const PW = 70, PH = 44;
+  rectW(fr, cam, X - PW / 2 - 2, Y - PH / 2 - 2, X + PW / 2 + 2, Y + PH / 2 + 2, soft ? C.maroon : C.brown);
+  if (!soft) {
+    rectW(fr, cam, X - PW / 2 - 2, Y - PH / 2 - 2, X + PW / 2 + 2, Y - PH / 2 - 0.8, C.tan);
+    rectW(fr, cam, X - PW / 2 - 2, Y - PH / 2 - 2, X - PW / 2 - 0.8, Y + PH / 2 + 2, C.tanShade);
+  }
+  rectW(fr, cam, X - PW / 2, Y - PH / 2, X + PW / 2, Y + PH / 2, C.black);
+  rectW(fr, cam, X - PW / 2 + 1.3, Y - PH / 2 + 1.3, X + PW / 2 - 1.3, Y + PH / 2 - 1.3, soft ? C.black : C.ink);
+  relief(fr, cam, shapes, X, Y + 1, 1.95, flip, soft);
+  if (soft) return;
+  // a small brass plate under the frame with its name
+  const k = kAt(cam, SET.wallZ);
+  const s = Math.max(1, Math.round(k * 1.25));
+  const g = textPixels(flip ? 'BEAR' : 'BULL', 'micro');
+  const pw = (g.width + 6) * s, ph = (5 + 3) * s;
+  const cx = Math.round(sxOf(cam, k, X)), py = Math.round(syOf(cam, k, Y + PH / 2 + 4));
+  const x0 = cx - (pw >> 1);
+  fr.span(x0, py, x0 + pw, py + ph, C.tanShade);
+  fr.span(x0, py, x0 + pw, py + s, C.tan);
+  fr.span(x0, py + ph - s, x0 + pw, py + ph, C.brown);
+  for (const [gx, gy] of g.pixels) fr.span(x0 + (3 + gx) * s, py + (2 + gy) * s, x0 + (4 + gx) * s, py + (3 + gy) * s, C.maroon);
+}
+
+// the dado: raised panels between stiles, a chair rail on top, all in the dark-wood ramp
+const DADO = { top: -16, foot: 30, panel: 38, stile: 6 };
+function dado(fr, cam, soft) {
+  const k = kAt(cam, SET.wallZ);
+  const T = DADO.top;
+  // out of focus the wood keeps its own value (brown, a step over the jackets' maroon: Penny stays clear of it)
+  rectW(fr, cam, -400, T, 400, DADO.foot, C.brown);
+  // the chair rail: a lit top, its body, a shadow under it
+  rectW(fr, cam, -400, T - 4, 400, T, C.tanShade);
+  if (!soft) {
+    rectW(fr, cam, -400, T - 4, 400, T - 2.8, C.tan);
+    rectW(fr, cam, -400, T, 400, T + 1.4, C.maroon);
+  }
+  const pitch = DADO.panel + DADO.stile;
+  if (soft) {
+    // out of focus only the stiles' grooves remain, as soft seams
+    for (let X = -400 + DADO.stile; X < 400; X += pitch) {
+      rectW(fr, cam, X - 1, T + 3, X + 1, DADO.foot, C.maroon);
+      rectW(fr, cam, X + DADO.panel - 1, T + 3, X + DADO.panel + 1, DADO.foot, C.maroon);
+    }
+    return;
+  }
+  // raised panels: lit top and left bevels, shadowed bottom and right, the field one step darker
+  for (let X = -400 + DADO.stile; X < 400; X += pitch) {
+    const Y0 = T + 4, Y1 = DADO.foot - 2;
+    rectW(fr, cam, X, Y0, X + DADO.panel, Y1, C.maroon); // the groove round the panel
+    rectW(fr, cam, X + 1.4, Y0 + 1.4, X + DADO.panel - 1.4, Y1 - 1.4, C.brown);
+    rectW(fr, cam, X + 1.4, Y0 + 1.4, X + DADO.panel - 1.4, Y0 + 2.6, C.tanShade); // top bevel, lit
+    rectW(fr, cam, X + 1.4, Y0 + 1.4, X + 2.6, Y1 - 1.4, C.tanShade); // left bevel, lit
+  }
+  void k;
+}
+
+// the LED ticker band along the top of the wall: the programme's beats in green micro type, dots between
+const TICKER = 'MONEY MINUTE • MARKETS • CURRENCIES • COMMODITIES • ENERGY • TECH • ';
+const DOTS = new Set(); // the glyph columns of the dots in TICKER (filled on first use)
+function ticker(fr, cam, soft) {
+  if (soft) return;
+  const k = kAt(cam, SET.wallZ);
+  const s = Math.max(1, Math.round(k * 1.25));
+  const y0 = Math.round(syOf(cam, k, -133.5)), bh = 9 * s;
+  const x0 = Math.round(sxOf(cam, k, -300)), x1 = Math.round(sxOf(cam, k, 300));
+  if (y0 + bh <= 0 || y0 >= H) return;
+  fr.span(x0, y0, x1, y0 + bh, C.black);
+  fr.span(x0, y0 + bh, x1, y0 + bh + 1, C.ink);
+  const g = textPixels(TICKER, 'micro');
+  // the words in fog (the room is after the close: calm), the dots between them in the programme's green
+  if (!DOTS.size) {
+    let x = 0;
+    for (const ch of TICKER) {
+      const w = ch === ' ' ? 2 : textPixels(ch, 'micro').width + 1;
+      if (ch === '•') for (let i = 0; i < w - 1; i++) DOTS.add(x + i);
+      x += w;
+    }
+  }
+  const ty = y0 + Math.floor((bh - 5 * s) / 2);
+  const px = fr.px;
+  // the text runs from the left of the frame, repeated across (anchored on the wall so it moves with it)
+  const start = Math.round(sxOf(cam, k, -300));
+  for (let base = start; base < Math.min(W, x1); base += (g.width + 4) * s) {
+    for (const [gx, gy] of g.pixels) {
+      for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) {
+        const x = base + gx * s + i, y = ty + gy * s + j;
+        if (x < Math.max(0, x0) || x >= Math.min(W, x1) || y < 0 || y >= H) continue;
+        px[y * W + x] = DOTS.has(gx) ? C.green : C.fog;
+      }
+    }
+  }
+}
+
 function moneyMinute(fr, cam, style, soft) {
-  wainscot(fr, cam, soft);
-  marketBoard(fr, cam, -1, soft);
-  marketBoard(fr, cam, 1, soft);
-  candles(fr, cam, -300, -160, -44 + 0, -4, soft); // (in front of the panelling: two framed chart screens)
-  candles(fr, cam, 160, 300, -44, -4, soft);
+  dado(fr, cam, soft);
+  plaque(fr, cam, -190, -82, BULL, false, soft); // the bull faces right, toward the screen
+  plaque(fr, cam, 190, -82, BEAR, true, soft); // the bear faces left
+  ticker(fr, cam, soft);
 }
 
 // --------------------------------------------------------------------------- NEWS IN 60: the minute
