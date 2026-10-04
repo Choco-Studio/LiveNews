@@ -31,8 +31,16 @@ export const BLINK = {
   SLOW: 5, // a status LED: a long breath (on 2.6 s, off 0.4 s)
 };
 
+// the programme whose dressing drew the cached set (its drawers and desk sweep run only then: a bare set,
+// dressing off, stays still)
+let ARMED = '';
 export function liveReset() {
   PTS.n = 0;
+  ARMED = '';
+}
+/** The dressing of programme `id` drew the set: its live drawers may run over it. */
+export function liveArm(id) {
+  ARMED = id;
 }
 
 export function livePoint(x, y, on, off, kind, seed = 0) {
@@ -93,6 +101,7 @@ export function drawLive(fr, cam, t, style, clipRows, soft, wall = null) {
     px[o] = stateOf(PTS.kind[i], PTS.seed[i], t) ? PTS.on[i] : PTS.off[i];
   }
   // the desk line's sweep: a short hot run of light crossing the desk now and then, left to right
+  if (ARMED !== style.id) return;
   const sw = DESK_SWEEP[style.id];
   if (sw && !soft) {
     const u = (t % sw.every) / sw.cross;

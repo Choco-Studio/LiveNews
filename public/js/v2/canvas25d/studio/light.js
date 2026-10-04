@@ -48,10 +48,11 @@ const bay = (x, y) => (B4[((y & 3) << 2) | (x & 3)] + 0.5) / 16;
 
 /**
  * A horizontal LED line from x0 to x1 (exclusive) on row y: the core, then its glow on the surface: the halo
- * row next to it, then `reach` rows of the outer colour fading out in Bayer (glow: 'down' | 'up' | 'both').
+ * row next to it, then `reach` rows of the outer colour fading out in Bayer (solid: flat rows instead; glow:
+ * 'down' | 'up' | 'both').
  * `clip(x, y)` (optional) says where the glow may fall.
  */
-export function glowH(fr, x0, x1, y, ramp, { glow = 'both', reach = 2, halo = true, clip = null } = {}) {
+export function glowH(fr, x0, x1, y, ramp, { glow = 'both', reach = 2, halo = true, clip = null, solid = false } = {}) {
   x0 = Math.max(0, Math.round(x0));
   x1 = Math.min(W, Math.round(x1));
   if (x1 <= x0 || y < 0 || y >= H) return;
@@ -65,7 +66,7 @@ export function glowH(fr, x0, x1, y, ramp, { glow = 'both', reach = 2, halo = tr
       const share = isHalo ? 1 : 1 - (d - 1) / (reach + 1);
       for (let x = x0; x < x1; x++) {
         if (clip && !clip(x, yy)) continue;
-        if (!isHalo && share < 1 && bay(x, yy) >= share * 0.75) continue;
+        if (!isHalo && !solid && share < 1 && bay(x, yy) >= share * 0.75) continue;
         lift(fr, x, yy, isHalo ? ramp.halo : ramp.outer);
       }
     }
@@ -73,7 +74,7 @@ export function glowH(fr, x0, x1, y, ramp, { glow = 'both', reach = 2, halo = tr
 }
 
 /** A vertical LED line on column x from y0 to y1 (exclusive), its glow either side (side: -1 | 1 | 0 both). */
-export function glowV(fr, x, y0, y1, ramp, { side = 0, reach = 2, halo = true, clip = null } = {}) {
+export function glowV(fr, x, y0, y1, ramp, { side = 0, reach = 2, halo = true, clip = null, solid = false } = {}) {
   y0 = Math.max(0, Math.round(y0));
   y1 = Math.min(H, Math.round(y1));
   if (y1 <= y0 || x < 0 || x >= W) return;
@@ -87,7 +88,7 @@ export function glowV(fr, x, y0, y1, ramp, { side = 0, reach = 2, halo = true, c
       const share = isHalo ? 1 : 1 - (d - 1) / (reach + 1);
       for (let y = y0; y < y1; y++) {
         if (clip && !clip(xx, y)) continue;
-        if (!isHalo && share < 1 && bay(xx, y) >= share * 0.75) continue;
+        if (!isHalo && !solid && share < 1 && bay(xx, y) >= share * 0.75) continue;
         lift(fr, xx, y, isHalo ? ramp.halo : ramp.outer);
       }
     }

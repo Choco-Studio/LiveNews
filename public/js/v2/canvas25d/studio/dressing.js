@@ -28,9 +28,10 @@ import { C } from '../pixbuf.js';
 import { SET, kAt, sxOf, syOf } from './geometry.js';
 import { textPixels } from '../../../font.js';
 import { drawCity, GLASS_COL } from './city.js';
-import { DESK_SWEEP, livePoint, BLINK } from './live.js';
+import { DESK_SWEEP, livePoint, BLINK, liveArm } from './live.js';
 import { pcbWall } from './lab.js';
 import { drawSpace, SKY } from './space.js';
+import { moneyWall } from './money.js';
 import { glowH, glowV, RAMPS } from './light.js';
 
 const W = 384, H = 216;
@@ -208,10 +209,11 @@ function soffit(fr, cam, ramp, soft, Y = GLASS.top) {
   if (yc < 0 || yc >= H) return;
   const kf = kAt(cam, SET.flatsZ);
   const x0 = Math.max(0, Math.round(sxOf(cam, kf, -FLATS_X))), x1 = Math.min(W, Math.round(sxOf(cam, kf, FLATS_X)));
-  if (soft) glowH(fr, x0, x1, yc, ramp, { glow: 'both', reach: 3 });
+  // (flat rows: a Bayer fringe along the top of the frame reads as a dotted line)
+  if (soft) glowH(fr, x0, x1, yc, ramp, { glow: 'both', reach: 1, solid: true });
   else {
     fr.span(x0, yc - 1, x1, yc, C.ink);
-    glowH(fr, x0, x1, yc, ramp, { glow: 'down', reach: 3 });
+    glowH(fr, x0, x1, yc, ramp, { glow: 'down', reach: 1, solid: true });
   }
 }
 
@@ -256,11 +258,12 @@ function pillars(fr, cam, soft, ramp) {
     // the inlay: a vertical red line set into the face, its glow both sides (out of focus a wider soft bar)
     const xl = Math.round(sxOf(cam, kf, sx * (FLATS_X + 12)));
     const y0 = Math.round(syOf(cam, kf, -400)), y1 = Math.round(syOf(cam, kf, SET.floorY));
+    // (the halo only: a Bayer fringe on the black face reads as a dotted column)
     if (soft) {
       fr.span(xl - 1, y0, xl + 2, y1, ramp.halo);
-      glowV(fr, xl - 1, y0, y1, ramp, { reach: 3 });
-      glowV(fr, xl + 1, y0, y1, ramp, { reach: 3 });
-    } else glowV(fr, xl, y0, y1, ramp, { reach: 2 });
+      glowV(fr, xl - 1, y0, y1, ramp, { reach: 0 });
+      glowV(fr, xl + 1, y0, y1, ramp, { reach: 0 });
+    } else glowV(fr, xl, y0, y1, ramp, { reach: 0 });
   }
 }
 
@@ -661,201 +664,13 @@ function cosmos(fr, cam, style, soft) {
 }
 
 // --------------------------------------------------------------------------- MONEY MINUTE: the business set
-// A business-news set after the close (CNBC and Bloomberg sets: LED bands, edge-lit glass, warm wood
-// slats): a slatted wood wall along the foot, washed from a light hidden in its top rail; a bull and a bear
-// etched into two edge-lit glass panels on standoffs either side, facing each other across the screen (the
-// market's two moods, no figures); an LED ticker band along the top of the wall with the programme's beats
-// (no prices: the channel never shows a figure it did not report). The bronze sconces of the style stay.
-
-/** Rasterise a shape list (ellipses and capsules in local units) into a mask, then emboss it in bronze. */
-// (the Charging Bull's build: a small round rump, a massive shoulder, the head down, short thick horns
-// curving forward, the tail lashing up; the bear: a long heavy body, the hump over the shoulders, the head
-// low, round ears, a tapering snout; 'x' marks the eye)
-const BULL = [
-  ['e', 7, 7.5, 4.5, 4.5], ['e', 13.5, 8, 8, 4.6], ['e', 19.5, 6.3, 5.5, 5.3], ['e', 21.5, 10, 4, 3.2],
-  ['e', 25.5, 10.4, 3, 2.6], ['e', 28, 11.6, 1.7, 1.6],
-  ['c', 24.6, 8, 26.4, 5.4, 0.95], ['c', 26.4, 5.4, 28.6, 4.8, 0.75],
-  ['c', 21, 12, 23.5, 15.3, 1.4], ['c', 18.5, 12, 17.8, 15.3, 1.35, 'far'], ['c', 6.5, 11, 4.6, 15.3, 1.4], ['c', 9.5, 11.5, 10, 15.3, 1.3, 'far'],
-  ['c', 3, 5.5, 1.6, 3, 0.6], ['c', 1.6, 3, 2.6, 0.9, 0.55], ['e', 3, 0.8, 1, 0.8],
-  ['x', 25.6, 9.4],
-];
-const BEAR = [
-  ['e', 14, 8.5, 10, 4.6], ['e', 19, 6.2, 5, 4.3], ['e', 6, 7.8, 4.6, 4.4],
-  ['e', 24.3, 8.6, 3.2, 2.8], ['e', 27.6, 9.6, 2.1, 1.4], ['e', 23.2, 5.9, 1, 1],
-  ['c', 20.5, 11, 21, 15.3, 1.8], ['c', 17, 11, 16.6, 15.3, 1.7, 'far'], ['c', 8, 11, 7.4, 15.3, 1.9], ['c', 11, 11, 11.4, 15.3, 1.6, 'far'],
-  ['e', 1.6, 6.8, 0.8, 0.8],
-  ['x', 25.2, 8.1],
-];
-function inShape(sh, x, y) {
-  if (sh[0] === 'x') return false;
-  if (sh[0] === 'e') {
-    const dx = (x - sh[1]) / sh[3], dy = (y - sh[2]) / sh[4];
-    return dx * dx + dy * dy <= 1;
-  }
-  const [, ax, ay, bx, by, r] = sh;
-  const vx = bx - ax, vy = by - ay;
-  const t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy)));
-  const dx = x - (ax + vx * t), dy = y - (ay + vy * t);
-  return dx * dx + dy * dy <= r * r;
-}
-/** The shape list's mask at `pxu` pixels per local unit (30 x 16 box): 2 near side, 1 a far leg only. */
-function shapeMask(shapes, pxu, flip) {
-  const w = Math.ceil(30 * pxu), h = Math.ceil(16 * pxu);
-  const mask = new Uint8Array((w + 2) * (h + 2));
-  for (let j = 0; j < h; j++) {
-    for (let i = 0; i < w; i++) {
-      let lx = (i + 0.5) / pxu;
-      if (flip) lx = 30 - lx;
-      const ly = (j + 0.5) / pxu;
-      let v = 0;
-      for (const sh of shapes) {
-        if (!inShape(sh, lx, ly)) continue;
-        v = sh[6] === 'far' ? Math.max(v, 1) : 2;
-        if (v === 2) break;
-      }
-      mask[(j + 1) * (w + 2) + (i + 1)] = v;
-    }
-  }
-  return { w, h, at: (i, j) => mask[(j + 1) * (w + 2) + (i + 1)] };
-}
-
-/**
- * An edge-lit glass panel on four standoffs with the animal etched in it: the glass dark, its edges catching
- * the light, the LED in its foot green (the programme's colour); the etching frosted (a slate and steel
- * checker) with a fog outline where the light catches its edge; the name etched under it.
- */
-function etchedPanel(fr, cam, X, Y, shapes, flip, name, soft) {
-  const k = kAt(cam, SET.wallZ);
-  const PW = 72, PH = 56;
-  const x0 = Math.round(sxOf(cam, k, X - PW / 2)), x1 = Math.round(sxOf(cam, k, X + PW / 2));
-  const y0 = Math.round(syOf(cam, k, Y - PH / 2)), y1 = Math.round(syOf(cam, k, Y + PH / 2));
-  if (x1 <= 0 || x0 >= W || y1 <= 0 || y0 >= H) return;
-  const px = fr.px;
-  const set = (x, y, c) => {
-    if (x >= 0 && x < W && y >= 0 && y < H) px[y * W + x] = c;
-  };
-  // its shadow on the wall (offset down-right: the panel stands off the wall), the glass, its edges
-  const sh = Math.max(1, Math.round(1.6 * k));
-  fr.span(x0 + sh, y0 + sh, x1 + sh, y1 + sh, C.black);
-  fr.span(x0, y0, x1, y1, soft ? C.black : C.ink);
-  if (soft) return;
-  fr.span(x0, y0, x1, y0 + 1, C.slate); // the top edge
-  fr.span(x0, y0, x0 + 1, y1, C.slate); // the left edge, toward the light
-  fr.span(x1 - 1, y0, x1, y1, C.black);
-  fr.span(x0, y1 - 1, x1, y1, C.green); // the LED in the foot
-  fr.span(x0 + 1, y1 - 2, x1 - 1, y1 - 1, C.darkGreen); // its light just above it in the glass
-  // a faint sheen across the glass: one diagonal stroke, slate on ink
-  for (let y = y0 + 2; y < y1 - 3; y++) {
-    const x = x0 + 3 + Math.round((y1 - y) * 0.9);
-    if (x > x0 + 1 && x < x1 - 2 && (y & 1) === 0) set(x, y, C.slate);
-  }
-  // standoffs at the corners
-  const inset = Math.max(2, Math.round(3 * k));
-  for (const [sx, sy] of [[x0 + inset, y0 + inset], [x1 - 1 - inset, y0 + inset], [x0 + inset, y1 - 2 - inset], [x1 - 1 - inset, y1 - 2 - inset]]) set(sx, sy, C.fog);
-  // the etching
-  const pxu = 1.95 * k;
-  const m = shapeMask(shapes, pxu, flip);
-  const ex = Math.round(sxOf(cam, k, X) - m.w / 2), ey = Math.round(syOf(cam, k, Y - 6) - m.h / 2);
-  for (let j = 0; j < m.h; j++) {
-    for (let i = 0; i < m.w; i++) {
-      const v = m.at(i, j);
-      if (!v) continue;
-      const edge = !m.at(i - 1, j) || !m.at(i + 1, j) || !m.at(i, j - 1) || !m.at(i, j + 1);
-      const x = ex + i, y = ey + j;
-      let c;
-      if (edge) c = v === 2 ? C.fog : C.steel;
-      else c = v === 2 ? (((x + y) & 1) ? C.steel : C.slate) : C.slate;
-      set(x, y, c);
-    }
-  }
-  for (const s0 of shapes) {
-    if (s0[0] !== 'x') continue;
-    const i = Math.floor((flip ? 30 - s0[1] : s0[1]) * pxu), j = Math.floor(s0[2] * pxu);
-    if (m.at(i, j)) set(ex + i, ey + j, C.ink);
-  }
-  // the name, etched small under the animal
-  const g = textPixels(name, 'micro');
-  const s = Math.max(1, Math.round(k * 1.25));
-  const tx = Math.round(sxOf(cam, k, X) - (g.width * s) / 2), ty = y1 - 3 - 6 * s;
-  for (const [gx, gy] of g.pixels) for (let jj = 0; jj < s; jj++) for (let ii = 0; ii < s; ii++) set(tx + gx * s + ii, ty + gy * s + jj, C.steel);
-}
-
-// the slat wall along the foot: vertical wood slats with shadow gaps, washed from a light hidden in the
-// rail on top (the slats' tops lit, falling off down the wall); out of focus the wood keeps its own value
-// (brown, a step over the jackets' maroon: Penny stays clear of it)
-const SLATS = { top: -16, foot: 30 };
-function slatWall(fr, cam, soft) {
-  const k = kAt(cam, SET.wallZ);
-  const yr = Math.round(syOf(cam, k, SLATS.top)), yf = Math.min(H, Math.round(syOf(cam, k, SLATS.foot)));
-  if (yr >= H || yf <= 0) return;
-  const px = fr.px;
-  // the rail: a black shadow line over the slats
-  const rail = Math.max(2, Math.round(2.4 * k));
-  fr.span(0, yr - rail, W, yr, C.black);
-  // the slats on a whole-pixel rhythm anchored on the wall (they step with the camera, never alias):
-  // slats `pitch - 1` px wide, 1 px shadow gaps; the light from the rail: a tan lip, tanShade fading to
-  // brown down the wall (dark wood: the faces and hands stay the warmest, lightest things on the set)
-  const pitch = Math.max(4, Math.round(5 * k));
-  const ox = Math.round(sxOf(cam, k, 0));
-  const wash = Math.max(4, Math.round(12 * k));
-  for (let y = Math.max(0, yr); y < yf; y++) {
-    const d = y - yr;
-    for (let x = 0; x < W; x++) {
-      const gap = ((((x - ox) % pitch) + pitch) % pitch) === pitch - 1;
-      let c;
-      if (soft) c = gap ? (d < wash * 0.5 ? C.brown : C.maroon) : d < wash * 0.5 ? C.tanShade : C.brown;
-      else if (gap) c = C.maroon;
-      else if (d === 0) c = C.tan;
-      else if (d < wash * 0.4) c = C.tanShade;
-      else if (d < wash) c = (d - wash * 0.4) / (wash * 0.6) > bayer(x, y) ? C.brown : C.tanShade;
-      else c = C.brown;
-      px[y * W + x] = c;
-    }
-  }
-}
-
-// the LED ticker band along the top of the wall: the programme's beats in green micro type, dots between
-const TICKER = 'MONEY MINUTE • MARKETS • CURRENCIES • COMMODITIES • ENERGY • TECH • ';
-const DOTS = new Set(); // the glyph columns of the dots in TICKER (filled on first use)
-function ticker(fr, cam, soft) {
-  if (soft) return;
-  const k = kAt(cam, SET.wallZ);
-  const s = Math.max(1, Math.round(k * 1.25));
-  const y0 = Math.round(syOf(cam, k, -133.5)), bh = 9 * s;
-  const x0 = Math.round(sxOf(cam, k, -300)), x1 = Math.round(sxOf(cam, k, 300));
-  if (y0 + bh <= 0 || y0 >= H) return;
-  fr.span(x0, y0, x1, y0 + bh, C.black);
-  fr.span(x0, y0 + bh, x1, y0 + bh + 1, C.darkGreen); // the band's LED edge: the programme's green
-  const g = textPixels(TICKER, 'micro');
-  // the words in fog (the room is after the close: calm), the dots between them in the programme's green
-  if (!DOTS.size) {
-    let x = 0;
-    for (const ch of TICKER) {
-      const w = ch === ' ' ? 2 : textPixels(ch, 'micro').width + 1;
-      if (ch === '•') for (let i = 0; i < w - 1; i++) DOTS.add(x + i);
-      x += w;
-    }
-  }
-  const ty = y0 + Math.floor((bh - 5 * s) / 2);
-  const px = fr.px;
-  // the text runs from the left of the frame, repeated across (anchored on the wall so it moves with it)
-  const start = Math.round(sxOf(cam, k, -300));
-  for (let base = start; base < Math.min(W, x1); base += (g.width + 4) * s) {
-    for (const [gx, gy] of g.pixels) {
-      for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) {
-        const x = base + gx * s + i, y = ty + gy * s + j;
-        if (x < Math.max(0, x0) || x >= Math.min(W, x1) || y < 0 || y >= H) continue;
-        px[y * W + x] = DOTS.has(gx) ? C.green : C.fog;
-      }
-    }
-  }
-}
-
+// The panelled room after the close is money.js's (walnut panels, bronze sconces, the bull and the bear on the
+// ledge, the LED ticker along the soffit); here the hero screen's mount and the room's own warm cove.
 function moneyMinute(fr, cam, style, soft) {
-  slatWall(fr, cam, soft);
-  etchedPanel(fr, cam, -190, -80, BULL, false, 'BULL', soft); // the bull faces right, toward the screen
-  etchedPanel(fr, cam, 190, -80, BEAR, true, 'BEAR', soft); // the bear faces left
-  ticker(fr, cam, soft);
+  moneyWall(fr, cam, soft);
+  const S = SET.screen, m = 5;
+  rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y1 + m, C.black);
+  if (!soft) rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y0 - m + 1, C.ink);
 }
 
 // --------------------------------------------------------------------------- NEWS IN 60: the flash studio
@@ -973,13 +788,16 @@ export const FLATS = {
   'world-now': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.red),
   'tech-bytes': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.blue),
   cosmos: (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.magenta),
+  'money-minute': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.warm), // walnut columns, a brass inlay
 };
 
 /** The programme's dressing on the back wall (after the light, before the screen and the flats). */
 export function drawDressing(fr, cam, style, soft = false) {
   if (!DRESSING.on) return;
   const f = DRESS[style?.id];
-  if (f) f(fr, cam, style, soft);
+  if (!f) return;
+  f(fr, cam, style, soft);
+  liveArm(style.id); // what moves in it may move (live.js)
 }
 
 /**
@@ -993,6 +811,7 @@ export const DESK_FRONTS = {
   'tech-bytes': { hi: 'slate', lo: 'black', pattern: 'slits', slit: 'blue', glow: 'cyan', sheen: true, base: 'blue', zone: 'ink', slab: 2.4 },
   // the darkest desk: a starry black front under a slab, the magenta line's light on it, a magenta foot light
   cosmos: { hi: 'black', lo: 'black', pattern: 'stars', slit: 'magenta', glow: 'magenta', sheen: true, base: 'magenta', zone: 'black', slab: 2.4 },
-  'money-minute': { hi: 'brown', lo: 'black', pattern: 'grain', top: 'tanShade' }, // the lower panel black (graphics zone); no LED slits (lime on wood reads as neon)
+  // walnut under a slab, broken-run grain, a brass light at its foot (no LED slits: lime on wood reads as neon)
+  'money-minute': { hi: 'brown', lo: 'black', pattern: 'grain', top: 'tanShade', sheen: true, base: 'warm', zone: 'black', slab: 2.4 },
   'news-60': { hi: 'ink', lo: 'black', pattern: 'stripe', stripe: 'yellow', slit: 'orange' },
 };
