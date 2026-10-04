@@ -188,7 +188,7 @@ export function render(t = 0) {
     const list = actorsFor(prog).map(({ a, X }) => ({ actor: a, ...placeActor(cam, X) }));
     heads = SCENE.drawActors(t, list, clipRows);
   }
-  return { cam, heads };
+  return { cam, heads, clipRows };
 }
 
 export function set(o = {}) {

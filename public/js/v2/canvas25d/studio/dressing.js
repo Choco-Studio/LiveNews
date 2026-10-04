@@ -1,39 +1,36 @@
 // Set dressing: each programme's own studio (owner, 3 Oct: "haz una ronda de pulida para decorar los platós y
-// dejarlos bien; ahora mismo todos tienen los mismos"). The architecture stays the network's (the wall, the
-// hero screen, the desk and its red plate); what changes is what hangs on the wall around the screen and
-// beside the presenters, and the desk's front:
-//   WORLD NOW     a newsroom by night: two floor-to-ceiling glass bays on the city (a banded night sky, the
-//                 Moon, thin clouds, the glass's reflection, a hazy far skyline against the city's glow, near
-//                 towers with lit windows, a spire and a TV tower), a bar of world clocks over the screen
-//   TECH BYTES    a product lab after hours: a black display cabinet each side with four backlit niches (a
-//                 cyan LED strip, the light down the back panel, a glass shelf), one hand-pixelled product in
-//                 each (headphones, a gamepad, a retro handheld, a camera | a VR headset, a joystick, a drone,
-//                 a little UNIT-8)
-//   COSMOS DESK   a planetarium set: two portrait LED panels play star charts (a quiet starfield, a dotted
-//                 grid, Orion | the Big Dipper and Cassiopeia: crosses, purple lines, names in micro type),
-//                 the Moon's eight phases over the screen, a dark desk front with stars
+// dejarlos bien"; round 4, 4 Oct: "quiero platós realmente bien hechos. Puedes añadir animaciones"). The network's
+// architecture stays (the hero screen in its mount, the desk and its red plate, a soffit with an LED cove along
+// the top, pillars with light inlays either side); the back of the set is each programme's own world:
+//   WORLD NOW     floor-to-ceiling glass over the city by night (city.js), slim mullions, a bar of world clocks
+//                 over the screen; red light lines
+//   TECH BYTES    a circuit board (lab.js): the screen its chip, traces with data pulses, a light wall of tiles
+//                 behind each presenter, a display cabinet each side with four backlit niches and a product in
+//                 each; a terminal line with the show's name; blue light lines, the cyan desk line
+//   COSMOS DESK   a planetarium LED wall (space.js): the sky from orbit with the Earth's limb, the Milky Way, a
+//                 nebula, a crescent Moon, two constellations drawn over it, the Moon's phases over the screen;
+//                 magenta light lines, a starry desk front
 //   MONEY MINUTE  a business set after the close: a slatted wood wall washed from its rail, a bull and a bear
 //                 etched in two edge-lit glass panels on standoffs, an LED ticker of the programme's beats (no
 //                 prices), the bronze sconces of the style, a wood front with broken-run grain
 //   NEWS IN 60    a flash studio: a broadcast studio clock (sixty second-LEDs, the first quarter lit yellow,
 //                 "60" at its heart) on the left, the rundown board (RUNDOWN, five numbered beats, the one on
 //                 air marked yellow) on the right, a thin yellow band on the desk
-// Each set carries its colour in light lines, as real sets do (Seven News's blue fascia band, Bloomberg's
-// cyan rings, CNBC's lit desk slashes): a cove along the top, ribbons framing its feature, LED slits in the
-// desk's seams (WORLD NOW red, TECH BYTES blue, COSMOS magenta, NEWS IN 60 orange; MONEY MINUTE's green is its
-// ticker's edge and the glass panels' feet). TECH BYTES also carries its name on the set, a terminal line.
-// Everything is drawn in world units on the back wall (Z = SET.wallZ), so the camera's moves and zooms carry
-// it; every pixel is a palette colour; nothing sits behind a head (|X| >= 140 beside the seats, or above the
-// screen), nothing is brighter than the faces, and nothing moves (the background is cached).
+// Everything is drawn in world units (the back wall Z = SET.wallZ, the pillars SET.flatsZ, WORLD NOW's city its
+// own far plane), so the camera's moves and zooms carry it; every pixel is a palette colour; out of focus
+// (cam.soft) lights turn to bokeh. What moves (windows, beacons, pulses, stars, the cursor, the desk line's
+// sweep) is live.js's layer over the cached set: the dressing registers those pixels as it draws them.
 //
 //   drawDressing(fr, cam, style, soft)   on the wall, after the light and before the screen
-//   DESK_FRONTS[id]                      the desk front's panel colours and pattern (set.js rasterDesk)
+//   FLATS[id]                            the programme's pillars, instead of the network's black flats
+//   DESK_FRONTS[id]                      the desk front's panel colours, pattern and light (set.js rasterDesk)
 import { C } from '../pixbuf.js';
 import { SET, kAt, sxOf, syOf } from './geometry.js';
 import { textPixels } from '../../../font.js';
 import { drawCity, GLASS_COL } from './city.js';
 import { DESK_SWEEP, livePoint, BLINK } from './live.js';
 import { pcbWall } from './lab.js';
+import { drawSpace, SKY } from './space.js';
 import { glowH, glowV, RAMPS } from './light.js';
 
 const W = 384, H = 216;
@@ -519,17 +516,10 @@ function techBytes(fr, cam, style, soft) {
 }
 
 // --------------------------------------------------------------------------- COSMOS: the planetarium set
-// The darkest room, dressed as a science set: two portrait LED panels either side of the wall play star
-// charts (a quiet starfield and a chart's dotted grid on their black screens; Orion on the left, the Big
-// Dipper and Cassiopeia on the right, stars as small crosses joined by thin purple lines that stop short of
-// each star, each named in micro type), and over the screen a strip of the Moon's eight phases. No coloured
-// wash or light on the flanks (cosmos.md: it reads as a club), nothing behind a head.
+// The planetarium wall is space.js's; over it, as a planetarium draws them, two constellations (stars as small
+// crosses joined by thin purple lines that stop short of each star, each named in micro type, a name whole or
+// not at all), and over the screen a strip of the Moon's eight phases.
 // [name, x, y, mag] in chart units (x right, y down), mag 1 (brightest) .. 3; lines as index pairs
-const ORION = {
-  name: 'ORION',
-  stars: [['Betelgeuse', 0, 0, 1, 'orange'], ['Bellatrix', 30, 5, 2], ['Meissa', 15, -12, 3], ['Alnitak', 10, 38, 2], ['Alnilam', 16, 35, 2], ['Mintaka', 22, 32, 2], ['Saiph', 4, 70, 2], ['Rigel', 36, 64, 1, 'blue']],
-  lines: [[0, 2], [2, 1], [0, 3], [1, 5], [3, 4], [4, 5], [3, 6], [5, 7]],
-};
 const DIPPER = {
   name: 'URSA MAJOR',
   stars: [['Dubhe', 0, 0, 1], ['Merak', 2, 11, 2], ['Phecda', 15, 14, 2], ['Megrez', 16, 4, 3], ['Alioth', 27, 1, 2], ['Mizar', 37, -2, 2], ['Alkaid', 48, -8, 2]],
@@ -540,11 +530,10 @@ const CASSIOPEIA = {
   stars: [['Caph', 0, 0, 2], ['Schedar', 9, 9, 2], ['Navi', 19, 3, 2], ['Ruchbah', 28, 11, 2], ['Segin', 38, 4, 3]],
   lines: [[0, 1], [1, 2], [2, 3], [3, 4]],
 };
-// where each chart sits on the wall (world units: its origin, units per chart unit, the label's offset)
-const CHARTS = [
-  { c: ORION, X: -204, Y: -100, u: 1.05, label: [-6, 82] },
-  { c: DIPPER, X: 162, Y: -98, u: 1.25, label: [2, 22] },
-  { c: CASSIOPEIA, X: 172, Y: -48, u: 1.25, label: [-2, 23] },
+// round 4: over the planetarium wall, above the heads (the Big Dipper over UNIT-8, Cassiopeia over Nova)
+const SKY_CHARTS = [
+  { c: DIPPER, X: 94, Y: -104, u: 1.0, label: [14, 9] },
+  { c: CASSIOPEIA, X: -150, Y: -110, u: 1.0, label: [4, 15] },
 ];
 
 function starPx(fr, x, y, mag, tint, soft) {
@@ -604,43 +593,14 @@ function constellation(fr, cam, ch, soft) {
   const kf = kAt(cam, SET.flatsZ);
   const fl = Math.round(sxOf(cam, kf, -FLATS_X)), fr0 = Math.round(sxOf(cam, kf, FLATS_X));
   if (lx < Math.max(1, fl + 2) || lx + g.width * s > Math.min(W - 1, fr0 - 2) || ly < 1 || ly + g.cap * s > H - 1) return;
+  // nor under the graphics' top row (the bug on the left, the clock on the right: y < 24)
+  if (ly < 24 && (lx < 112 || lx + g.width * s > 272)) return;
   for (const [gx, gy] of g.pixels) {
     for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) {
       const x = lx + gx * s + i, y = ly + gy * s + j;
       if (x >= 0 && x < W && y >= 0 && y < H) fr.px[y * W + x] = C.steel;
     }
   }
-}
-
-// the two portrait LED panels the charts play on (world units: X0, Y0, X1, Y1), either side of the wall
-const SKY_PANELS = [[-228, -126, -150, -2], [150, -126, 228, -2]];
-/** A portrait LED panel: an ink bezel lit along its top and left edges, the black screen inside. */
-function skyPanel(fr, cam, [X0, Y0, X1, Y1], soft) {
-  const k = kAt(cam, SET.wallZ);
-  const b = 3;
-  rectW(fr, cam, X0 - b, Y0 - b, X1 + b, Y1 + b, C.ink);
-  if (!soft) {
-    rectW(fr, cam, X0 - b, Y0 - b, X1 + b, Y0 - b + 1.4, C.slate);
-    rectW(fr, cam, X0 - b, Y0 - b, X0 - b + 1.4, Y1 + b, C.slate);
-  }
-  rectW(fr, cam, X0, Y0, X1, Y1, C.black);
-  void k;
-}
-function starfield(fr, cam, soft) {
-  // faint stars on the panels' screens: mostly slate and steel, a few fog, a very few silver; deterministic
-  const k = kAt(cam, SET.wallZ);
-  SKY_PANELS.forEach(([X0, Y0, X1, Y1], n) => {
-    const r = rng(41 + n * 7);
-    for (let i = 0; i < 95; i++) {
-      const X = X0 + 2 + r() * (X1 - X0 - 4), Y = Y0 + 2 + r() * (Y1 - Y0 - 4);
-      const v = r();
-      if (soft && v < 0.85) continue;
-      const x = Math.round(sxOf(cam, k, X)), y = Math.round(syOf(cam, k, Y));
-      if (x < 0 || x >= W || y < 0 || y >= H) continue;
-      if (fr.px[y * W + x] !== C.black) continue;
-      fr.px[y * W + x] = v > 0.97 ? C.silver : v > 0.85 ? C.fog : v > 0.45 ? C.steel : C.slate;
-    }
-  });
 }
 
 // the Moon's phases over the screen: 7 px discs (whole-pixel scale), lit limb silver, dark side ink with a
@@ -683,37 +643,21 @@ function moonPhases(fr, cam, soft) {
   }
 }
 
-// a star chart's coordinate grid behind the constellations: two curved parallels and three meridians per
-// side, dotted ink on the black wall (in focus only)
-function chartGrid(fr, cam, soft) {
-  if (soft) return;
-  const k = kAt(cam, SET.wallZ);
-  const px = fr.px;
-  for (const [X0, Y0, X1, Y1] of SKY_PANELS) {
-    const sx = X0 < 0 ? -1 : 1;
-    const dot = (X, Y) => {
-      if (X < X0 + 1 || X > X1 - 1 || Y < Y0 + 1 || Y > Y1 - 1) return;
-      const x = Math.round(sxOf(cam, k, X)), y = Math.round(syOf(cam, k, Y));
-      if (x < 0 || x >= W || y < 0 || y >= H || ((x + y) & 1)) return;
-      if (px[y * W + x] === C.black) px[y * W + x] = C.ink;
-    };
-    // parallels bowing down, meridians converging toward a pole above the panel
-    for (const P0 of [-104, -62, -20]) for (let X = 150; X <= 228; X += 0.5) dot(sx * X, P0 + (X - 150) * (X - 150) * 0.0022);
-    for (const M0 of [164, 196]) for (let Y = Y0; Y <= Y1; Y += 0.5) dot(sx * (M0 + (Y - Y0) * (M0 - 140) * 0.0024), Y);
-  }
-}
-
 function cosmos(fr, cam, style, soft) {
-  for (const r of SKY_PANELS) skyPanel(fr, cam, r, soft);
-  // the programme's magenta as lines, never as a wash (cosmos.md): the cove at the top over the panels, an
-  // LED edge on each panel's side toward the screen, the desk's seams (DESK_FRONTS) answering the desk line
-  cove(fr, cam, C.magenta, C.purple, { soft, Y: -131.5 });
-  ribbon(fr, cam, SKY_PANELS[0][2] + 2.4, SKY_PANELS[0][1] - 3, SKY_PANELS[0][3] + 3, C.magenta, soft);
-  ribbon(fr, cam, SKY_PANELS[1][0] - 2.4, SKY_PANELS[1][1] - 3, SKY_PANELS[1][3] + 3, C.magenta, soft);
-  starfield(fr, cam, soft);
-  chartGrid(fr, cam, soft);
-  for (const ch of CHARTS) constellation(fr, cam, ch, soft);
+  // the planetarium wall (space.js): the sky from orbit across the whole back of the set
+  const k = kAt(cam, SET.wallZ);
+  drawSpace(fr, cam, {
+    x0: Math.round(sxOf(cam, k, -SKY.X)), x1: Math.round(sxOf(cam, k, SKY.X)),
+    y0: Math.round(syOf(cam, k, SKY.top)), y1: Math.round(syOf(cam, k, SET.floorY)),
+  }, soft);
+  // the planetarium's overlay: two constellations in thin purple lines with their names, over the heads
+  for (const ch of SKY_CHARTS) constellation(fr, cam, ch, soft);
+  // the hero screen in its black mount, the Moon's phases over it, the soffit's magenta cove
+  const S = SET.screen, m = 5;
+  rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y1 + m, C.black);
+  if (!soft) rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y0 - m + 1, C.ink);
   moonPhases(fr, cam, soft);
+  soffit(fr, cam, RAMPS.magenta, soft);
 }
 
 // --------------------------------------------------------------------------- MONEY MINUTE: the business set
@@ -1022,11 +966,13 @@ const DRESS = { 'world-now': worldNow, 'tech-bytes': techBytes, cosmos, 'money-m
 // the desk line's sweep of light (live.js): every 24 s a run of light crosses the desk in 2.6 s
 DESK_SWEEP['world-now'] = { line: C.red, hot: C.pink, every: 24, cross: 2.6 };
 DESK_SWEEP['tech-bytes'] = { line: C.cyan, hot: C.white, warm: C.silver, every: 18, cross: 2.2 };
+DESK_SWEEP.cosmos = { line: C.magenta, hot: C.pink, every: 30, cross: 3.2 };
 
 /** A programme's own set flats (pillars), drawn instead of the network's black flats (set.js drawFlats). */
 export const FLATS = {
   'world-now': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.red),
   'tech-bytes': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.blue),
+  cosmos: (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.magenta),
 };
 
 /** The programme's dressing on the back wall (after the light, before the screen and the flats). */
@@ -1045,7 +991,8 @@ export const DESK_FRONTS = {
   'world-now': { hi: 'black', lo: 'black', pattern: 'slits', slit: 'red', glow: 'red', sheen: true, base: 'red', zone: 'black', slab: 2.4 },
   // the steel plinth: a lit slab, the cyan line's light on its slate front, blue slits, a blue light at its foot
   'tech-bytes': { hi: 'slate', lo: 'black', pattern: 'slits', slit: 'blue', glow: 'cyan', sheen: true, base: 'blue', zone: 'ink', slab: 2.4 },
-  cosmos: { hi: 'ink', lo: 'black', pattern: 'stars', slit: 'magenta' },
+  // the darkest desk: a starry black front under a slab, the magenta line's light on it, a magenta foot light
+  cosmos: { hi: 'black', lo: 'black', pattern: 'stars', slit: 'magenta', glow: 'magenta', sheen: true, base: 'magenta', zone: 'black', slab: 2.4 },
   'money-minute': { hi: 'brown', lo: 'black', pattern: 'grain', top: 'tanShade' }, // the lower panel black (graphics zone); no LED slits (lime on wood reads as neon)
   'news-60': { hi: 'ink', lo: 'black', pattern: 'stripe', stripe: 'yellow', slit: 'orange' },
 };

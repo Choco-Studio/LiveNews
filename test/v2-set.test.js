@@ -936,13 +936,14 @@ describe('fix round 2 (critics of fix round 1)', () => {
       let prev = null, flips = 0;
       const lastVal = new Uint32Array(W * H), last = new Int32Array(W * H).fill(-999);
       for (let i = 0; i < 300; i++) {
-        lab.render(i / 60);
+        const { clipRows } = lab.render(i / 60);
         const px = lab.frame.px;
         if (prev) for (let k = 0; k < W * H; k++) {
           if (px[k] === prev[k]) continue;
           const x = k % W, y = (k / W) | 0;
           const inWall = x >= r.x0 - 3 && x < r.x1 + 3 && y >= r.y0 - 3 && y < r.y1 + 3;
-          if (!inWall && y >= 150 && px[k] === lastVal[k] && i - last[k] <= 15) flips++;
+          // the desk's own pixels (from its top edge down): the set behind it is the camera move's business
+          if (!inWall && y >= 150 && y >= clipRows[x] && px[k] === lastVal[k] && i - last[k] <= 15) flips++;
           lastVal[k] = prev[k];
           last[k] = i;
         }
@@ -1208,7 +1209,7 @@ describe('set dressing: each programme its own studio (owner polish round, 3 Oct
     };
     assert.ok(at('money-minute', 'brown') > 1500);
     // COSMOS: the front stays dark (no purple slab: cosmos.md, the magenta line the only accent) with stars
-    assert.ok(at('cosmos', 'silver') > 20 && at('cosmos', 'purple') === 0);
+    assert.ok(at('cosmos', 'silver') > 20 && at('cosmos', 'purple') <= 2 * W); // the magenta line's halo, never a slab
     assert.ok(at('news-60', 'yellow') > 200);
     for (const programme of PROGRAMS) assert.ok(at(programme, 'red') > 100, `${programme}: the GLOBIT 24 plate`);
   });
