@@ -129,6 +129,12 @@ function overlaps(x0, y0, x1, y1) {
   for (const b of BOX) if (x0 < b[2] && x1 > b[0] && y0 < b[3] && y1 > b[1]) return true;
   return false;
 }
+/** How many pixels of the box (x0, y0)-(x1, y1) are already taken. */
+function overlapArea(x0, y0, x1, y1) {
+  let a = 0;
+  for (const b of BOX) a += Math.max(0, Math.min(x1, b[2]) - Math.max(x0, b[0])) * Math.max(0, Math.min(y1, b[3]) - Math.max(y0, b[1]));
+  return a;
+}
 
 function chip(ctx, x, y, temp, hot) {
   const txt = `${temp}`;
@@ -163,15 +169,18 @@ function drawCity(ctx, t, c, x, y, day, { names, hot, hotK, phase }) {
   const tw = measureText(`${d.max}`) + 7;
   const nw = names ? measureText(c.name, 1, 'micro') : 0;
   const bw = Math.max(tw, nw);
-  const options = [[x + 8, y - 6], [x - 8 - bw, y - 6], [x - bw / 2, y + 7], [x - bw / 2, y - 20 - (names ? 7 : 0)]];
-  let lx = options[0][0], ly = options[0][1];
+  const options = [[x + 8, y - 6], [x - 8 - bw, y - 6], [x - bw / 2, y + 7], [x - bw / 2, y - 20 - (names ? 7 : 0)], [x + 8, y + 3], [x - 8 - bw, y + 3], [x + 8, y - 15], [x - 8 - bw, y - 15]];
+  // the first free place; when none is free, the one with the least overlap (never blindly the first)
+  let lx = options[0][0], ly = options[0][1], best = Infinity;
+  const bh = names ? 16 : 9;
   for (const [ox, oy] of options) {
-    const bh = names ? 16 : 9;
     if (ox < 4 || ox + bw > W - 4 || oy < AREA.top - 8 || oy + bh > AREA.bottom + 22) continue;
-    if (!overlaps(ox, oy, ox + bw, oy + bh)) {
+    const a = overlapArea(ox, oy, ox + bw, oy + bh);
+    if (a < best) {
+      best = a;
       lx = ox;
       ly = oy;
-      break;
+      if (a === 0) break;
     }
   }
   BOX.push([x - 8, y - 7, x + 8, y + 7], [lx, ly, lx + bw, ly + (names ? 16 : 9)]);
@@ -234,6 +243,13 @@ const LEVEL_COLOR = { red: P.red, orange: P.orange };
  * them; the storm itself turns on the wall, at its place on the map.
  */
 const PANEL = { w: 156, h: 136, y: 32 };
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+/** "2025-12-21T00:00:00" -> "21 DEC 2025" (GDACS's dates are UTC), or '' */
+function dayMonth(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  return m ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1] || ''} ${m[1]}` : '';
+}
+
 function drawWarningPanel(ctx, t, k, warn, data) {
   if (!warn || k <= 0) return;
   const pw = PANEL.w, ph = PANEL.h, py = PANEL.y;
@@ -269,7 +285,20 @@ function drawWarningPanel(ctx, t, k, warn, data) {
     line('MAX WINDS', P.fog, 'micro', 8);
     line(`${warn.wind} KM/H`, P.white, 'body', 14);
   }
-  line((warn.area || warn.country) ? (warn.area || warn.country).toUpperCase() : seaLabel(warn.lat, warn.lon), P.silver, 'micro', 9);
+  line((warn.area || warn.country) ? (warn.area || warn.country).toUpperCase() : seaLabel(warn.lat, warn.lon), P.silver, 'micro', 12);
+  // a hazard without winds (drought, flood, fire) shows what GDACS gives instead: how many countries, since when
+  if (!warn.wind) {
+    const n = warn.countries?.length || 0;
+    if (n > 1) {
+      line('COUNTRIES', P.fog, 'micro', 8);
+      line(`${n}`, P.white, 'body', 14);
+    }
+    const since = dayMonth(warn.from);
+    if (since) {
+      line('ACTIVE SINCE', P.fog, 'micro', 8);
+      line(since, P.white, 'body', 14);
+    }
+  }
   drawText(ctx, data.demo ? 'DEMO DATA' : 'SOURCE: GDACS', tx, py + ph - 10, { color: data.demo ? P.yellow : P.fog, font: 'micro' });
   // the alert level as a bar: orange two of three, red three of three
   const n = warn.level === 'red' ? 3 : 2;
@@ -366,6 +395,9 @@ export function drawWeather(ctx, t, scene, audio) {
   const v = drawWorldMap(ctx, t, 0, { x: -pan, y: 0, w: W, h: H, view: ST.view, tint: field.tint, tintKey: field });
   // the cities: in a zone view every city of the zone with names; on the world, the ones the segment names
   BOX.length = 0;
+  // the graphics drawn over the map later (the tab, the scale, the source) are claimed first, so no city's
+  // label slides under them (first live run: TORONTO under the source line)
+  for (const r of overlayRects(seg, tgt, data)) BOX.push(r);
   const since = t - (W8.hotAt || 0);
   const hotId = W8.hot && since >= 0 && since < 2.6 ? W8.hot : null;
   const hotK = hotId ? Math.min(1, (t - W8.hotAt) / 0.25) : 0;
@@ -401,8 +433,11 @@ export function drawWeather(ctx, t, scene, audio) {
         shown.push(it);
       }
     }
-    // the named city last (on top), northern cities first (their labels go right / down)
+    // the named city last (on top), northern cities first (their labels go right / down). Every symbol is
+    // claimed before any label is placed, so no label lands under a later city's symbol (first live run:
+    // Seoul's cloud over BEIJING, New York's over TORONTO)
     shown.sort((a, b) => (a.c.id === hotId) - (b.c.id === hotId) || a.y - b.y);
+    for (const it of shown) BOX.push([it.x - 8, it.y - 7, it.x + 8, it.y + 7]);
     shown.forEach((it, i) => {
       const hot = it.c.id === hotId;
       const r = drawCity(ctx, t, it.c, it.x, it.y, day, { names: !!zoneIds, hot, hotK, phase: i * 0.37 });
@@ -454,16 +489,36 @@ export function drawWeather(ctx, t, scene, audio) {
   pr.draw(ctx, rt);
 
   // the graphics of the weather centre: the zone tab, the scale, the source
+  const g = overlayLayout(seg, tgt, data);
+  drawTab(ctx, g.title, g.sub, seg.kind === 'warning' ? P.orange : ACCENT, g.tabX);
+  if (g.legendX != null) {
+    drawLegend(ctx, g.legendX, 24);
+    drawSource(ctx, data, g.sourceRight);
+  }
+}
+
+/** Where the weather centre's graphics go this frame: on the map's side, clear of the presenter, the bug and clock. */
+function overlayLayout(seg, tgt, data) {
   const title = seg.kind === 'zone' && tgt.zone ? tgt.zone.name : seg.kind === 'warning' ? 'WARNINGS' : seg.kind === 'tomorrow' ? 'TOMORROW' : 'WORLD WEATHER';
   const sub = seg.kind === 'tomorrow' ? 'HIGHS' : seg.kind === 'warning' ? 'GDACS ALERTS' : 'TODAY · HIGHS';
-  // on the map's side of the frame, clear of the presenter (and of the bug and the clock above)
   const mapLeft = ST.px > W / 2;
   const tabX = mapLeft ? 13 : 132;
-  drawTab(ctx, title, sub, seg.kind === 'warning' ? P.orange : ACCENT, tabX);
-  if (ST.panel < 0.5) {
-    drawLegend(ctx, mapLeft ? 250 - RAMP.length * 6 : W - 13 - RAMP.length * 6, 24);
-    drawSource(ctx, data, mapLeft ? 250 : W - 13);
+  const scale = ST.panel < 0.5;
+  return { title, sub, tabX, legendX: scale ? (mapLeft ? 250 - RAMP.length * 6 : W - 13 - RAMP.length * 6) : null, sourceRight: mapLeft ? 250 : W - 13, data };
+}
+
+/** The rectangles those graphics cover ([x0, y0, x1, y1]), for the city labels to avoid. */
+function overlayRects(seg, tgt, data) {
+  const g = overlayLayout(seg, tgt, data);
+  const tw = measureText(g.title) + 8 + (g.sub ? measureText(g.sub, 1, 'micro') + 6 : 0);
+  const out = [[g.tabX - 1, 23, g.tabX + tw + 1, 36]];
+  if (g.legendX != null) {
+    out.push([g.legendX - 3, 21, g.legendX + RAMP.length * 6 + 2, 38]);
+    const txt = data.demo ? 'DEMO DATA · NOT A REAL FORECAST' : `DATA: ${data.source}`;
+    const w = measureText(txt, 1, 'micro') + 6;
+    out.push([g.sourceRight - w - 1, 38, g.sourceRight + 1, 48]);
   }
+  return out;
 }
 
 export const __test = { targetOf, zoneView, ST };
