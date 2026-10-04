@@ -45,6 +45,8 @@ export const STUDIO_SHOTS = new Set(['wide', 'close']);
  * footage } names who and where; scene.footageDeck gives the place's footage frames.
  */
 export const REMOTE_SHOTS = new Set(['location', 'twoway']);
+// the correspondent's gestures (Stage.remoteGesture): the sets (null = none this sentence) and the least gap
+const REMOTE_GESTURE = { gap: 6, calm: ['count', 'nod', null, 'steeple', 'lean_in', null], grave: ['nod', 'steeple', null] };
 
 const CLOCK_REBASE = 840; // s of rig time before the rig clock moves back (at the next cut)
 const PRUNE_EVERY = 2; // s
@@ -352,12 +354,33 @@ export class Stage {
       const epId = scene.episode?.id ?? this.key;
       const perf = { side: 0, seed: hashSeed(`${epId}${r.slot}`), gestures: [], emotions: [], look: [], speech: liveSpeech(this.proxy, r.slot), listen: false, gain: 1 };
       const presenters = scene.presenters || this.presenters || {};
-      this.remote = { key, slot: r.slot, id: r.id, actor: makeActor(r.id, perf, presenters[r.id]), perf, emotion: null };
+      this.remote = { key, slot: r.slot, id: r.id, actor: makeActor(r.id, perf, presenters[r.id]), perf, emotion: null, sentence: -1, lastGesture: -Infinity };
       this.remoteList[0].actor = this.remote.actor;
       this.frames[r.slot] ||= {};
     }
     const audio = this.audio;
     if (audio && typeof audio.speechFrame === 'function') this.frames[r.slot] = audio.speechFrame(t * 1000, r.slot, this.frames[r.slot] || {}) || REST_FRAME;
+    this.remoteGesture(t, r);
+  }
+
+  /**
+   * The correspondent's hands (the v2 planner plans the studio's presenters only): a restrained gesture at the
+   * start of a sentence of theirs, from the second one, at most one per REMOTE_GESTURE.gap seconds, picked by
+   * the sentence (the same link always moves the same way); sober ones on a grave story. In the medium close-up
+   * the hands come up into the frame from the desk below it.
+   */
+  remoteGesture(t, r) {
+    const rm = this.remote;
+    const f = this.frames[r.slot];
+    if (!rm || !f?.speaking || !(f.sentenceIndex >= 0) || f.sentenceIndex === rm.sentence) return;
+    rm.sentence = f.sentenceIndex;
+    const rt = t - this.epoch;
+    if (f.sentenceIndex < 1 || rt - rm.lastGesture < REMOTE_GESTURE.gap) return;
+    const set = r.grave ? REMOTE_GESTURE.grave : REMOTE_GESTURE.calm;
+    const name = set[hashSeed(`${rm.key}|${r.footage || ''}|${f.sentenceIndex}`) % set.length];
+    if (!name) return;
+    rm.lastGesture = rt;
+    rm.perf.gestures.push({ name, t0: rt });
   }
 
   /**

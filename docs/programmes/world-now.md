@@ -234,7 +234,11 @@ Every line of a link is a fact of that story's source (`groundedText`, as for an
 | Vic Vector | AMERICAS DESK | short black crop, deep brown skin, steel-blue jacket, open white collar | am_eric + 30% am_onyx, en-US |
 | Mika Voxel | ASIA-PACIFIC / MIDDLE EAST DESK | sleek black bob, light warm skin, pale grey blazer, black top | af_aoede, en-US |
 
-All three wear an earpiece with its clear tube running into the collar, and a small lapel microphone. The desk is chosen by the country of the place (`deskOf`); coordinates decide only when no country is known. Each correspondent appears at most once per programme while another desk can take a story.
+All three wear an earpiece with its clear tube running into the collar, and a small lapel microphone. They move like correspondents, not like presenters at a desk:
+- a restrained gesture at the start of a sentence of theirs, from the second one, at most one every 6 s: counting the points on their fingers, steepled hands, a lean or a nod (only a nod or steepled hands on a grave story);
+- in the medium close-up the hands rise into the frame from below.
+
+The v2 planner plans the studio presenters only; this is the Stage's `remoteGesture`. The desk is chosen by the country of the place (`deskOf`); coordinates decide only when no country is known. Each correspondent appears at most once per programme while another desk can take a story.
 
 **LOCATION.** The correspondent is in a medium close-up on the left third (`REMOTE`: neck at 124,122, s 3.6; the hands rest below the frame). Behind them is one of two backdrops:
 - **the place's footage:** a FILE clip from Wikimedia Commons in the pixel style (below), graded "back" (flatter and darker), so the person stays the brightest thing;
