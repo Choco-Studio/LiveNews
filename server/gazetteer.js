@@ -530,8 +530,34 @@ export function locate(headline, summary = '') {
   };
   const head = findPlaces(headline);
   const body = findPlaces(summary);
-  const entry = pick(head, [...head, ...body]) || pick(body, body);
+  const entry = actedElsewhere(headline, summary, head, body) || pick(head, [...head, ...body]) || pick(body, body);
   return entry ? { place: entry.label, lat: entry.lat, lon: entry.lon, entry } : null;
+}
+
+// A country that opens a headline as its subject is who acted, not where it happened: "US withdraws all B-1 bombers
+// from British military base RAF Fairford" happened in Britain (real news, 4 Oct: the map pinned Kansas), "China
+// sends warships near Taiwan" near Taiwan. The place is the one after a locative word, in the headline (a name or
+// its people's adjective) or else in the summary; none, and the actor's country stays.
+const LOCATIVE = /\b(?:in|at|from|near|off|on|over|outside|inside|into|across|to|towards?)\s+(?:the\s+|a\s+|an\s+|its\s+)?$/i;
+const PEOPLE_PLACE = { british: 'Britain', french: 'France', german: 'Germany', italian: 'Italy', spanish: 'Spain', portuguese: 'Portugal', dutch: 'Netherlands', belgian: 'Belgium', irish: 'Ireland', polish: 'Poland', greek: 'Greece', swedish: 'Sweden', norwegian: 'Norway', danish: 'Denmark', finnish: 'Finland', austrian: 'Austria', swiss: 'Switzerland', ukrainian: 'Ukraine', russian: 'Russia', turkish: 'Turkey', israeli: 'Israel', iranian: 'Iran', iraqi: 'Iraq', syrian: 'Syria', lebanese: 'Lebanon', egyptian: 'Egypt', saudi: 'Saudi Arabia', chinese: 'China', japanese: 'Japan', korean: 'South Korea', taiwanese: 'Taiwan', indian: 'India', pakistani: 'Pakistan', afghan: 'Afghanistan', australian: 'Australia', canadian: 'Canada', mexican: 'Mexico', brazilian: 'Brazil', argentine: 'Argentina', venezuelan: 'Venezuela', colombian: 'Colombia', cuban: 'Cuba', nigerian: 'Nigeria', kenyan: 'Kenya', ethiopian: 'Ethiopia', somali: 'Somalia', sudanese: 'Sudan', libyan: 'Libya', yemeni: 'Yemen', qatari: 'Qatar', emirati: 'United Arab Emirates', filipino: 'Philippines', indonesian: 'Indonesia', vietnamese: 'Vietnam', thai: 'Thailand' };
+function actedElsewhere(headline, summary, head, body) {
+  const actor = head[0];
+  if (!actor || actor.index !== 0 || actor.entry.kind !== 'country') return null;
+  const other = (e) => e && e.label !== actor.entry.label && (e.country || e.name) !== actor.entry.name && !e.broad;
+  // "US Marine arrested for alleged murder of woman in Okinawa, Japan": a place after in / at / near / off in the
+  // headline is where it happened, whatever the opening country does
+  const where = head.find((h) => h !== actor && other(h.entry) && /\b(?:in|at|near|off|outside|inside)\s+(?:the\s+|a\s+|an\s+)?$/i.test(String(headline).slice(0, h.index)));
+  if (where) return where.entry;
+  // the country's name is followed by its verb ("US withdraws", "China sends"), not by more of a name
+  if (!/^\s+(?:to\s+)?[a-z]/.test(String(headline).slice(actor.text.length))) return null;
+  const after = (hits, text) => hits.find((h) => h !== actor && other(h.entry) && LOCATIVE.test(String(text).slice(0, h.index)))?.entry || null;
+  const fromHead = after(head, headline);
+  if (fromHead) return fromHead;
+  for (const m of String(headline).matchAll(/\b(?:in|at|from|near|off|on|over|outside|into|to)\s+(?:the\s+|a\s+|an\s+)?([A-Z][a-z]+)\b/g)) {
+    const e = PEOPLE_PLACE[m[1].toLowerCase()] ? lookupPlace(PEOPLE_PLACE[m[1].toLowerCase()]) : null;
+    if (other(e)) return e;
+  }
+  return after(body, summary);
 }
 
 /**

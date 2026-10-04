@@ -381,8 +381,12 @@ function asStartsClause(rest) {
 }
 
 /** A headline that ends in a stop word or a dangling figure was cut mid-phrase. */
+// "-ing" words that are nouns (a headline may end on them); any other last "-ing" is a verb left without what it
+// takes ("...march to Islamabad demanding [his release]", real news 4 Oct)
+const ING_NOUNS = /(?:^|\s)(?:building|buildings|meeting|meetings|funding|spending|housing|training|flooding|bombing|bombings|shooting|shootings|wedding|ceiling|morning|evening|king|spring|string|thing|things|ring|wing|ceasefire|beijing|kunming|nanjing|harbin|reading|warning|warnings|hearing|hearings|ruling|rulings|sentencing|landing|crossing|crossings|offering|setting|feeling|opening|closing|ending|beginning|painting|paintings|clothing|lightning|swimming|boxing|sailing|cycling|running|parking|shipping|mining|banking|lending|hiring|polling|voting|uprising|kidnapping|stabbing|killing|killings|looting|rioting|fighting|shelling|trafficking|smuggling|logging|fishing|farming|gaming|computing|streaming|printing|recycling|warming|cooling|heating|thinking|learning|pricing|rating|ranking|sibling|siblings|darling|everything|nothing|something|anything)$/i;
 export const danglingHeadline = (h) => {
   const t = String(h).trim();
+  if (/[a-z]{3,}ing$/i.test(t) && !ING_NOUNS.test(t)) return true;
   return STOP_END.test(t) || (/\b(?:by|of|to|up|down|at|in|from) \d[\d,.]*$/.test(t) && !/\b(?:19|20)\d\d$/.test(t));
 };
 

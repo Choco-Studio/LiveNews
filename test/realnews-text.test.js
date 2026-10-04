@@ -74,3 +74,18 @@ test('an article cut to length ends on a real sentence end, never on initials ("
   const a = extractArticle(html, { max: 230 });
   assert.ok(a && !/related to U\.S\.$/.test(a.text) && !/U\.S\.$/.test(a.text.trim()), a?.text);
 });
+
+test('a story is placed where it happened, not in the country that acted (the map once pinned Kansas for RAF Fairford)', async () => {
+  const { locate } = await import('../server/gazetteer.js');
+  const at = (h, s = '') => locate(h, s)?.place;
+  assert.equal(at('US withdraws all B-1 bombers from British military base RAF Fairford', "The Pentagon confirmed that all US B-1 bombers deployed to Britain's RAF Fairford had returned home."), 'UK');
+  assert.equal(at('US Marine arrested for alleged murder of woman in Okinawa, Japan'), 'OKINAWA, JAPAN');
+  assert.equal(at('China sends warships near Taiwan'), 'TAIWAN');
+  assert.equal(at('US Fed raises interest rates'), 'USA', 'no other place: the actor’s country stays');
+  assert.equal(at('Kenya switches on its largest solar farm near Nairobi'), 'NAIROBI, KENYA');
+});
+
+test('a shortened headline never ends on a verb that lost what it takes ("…to Islamabad demanding")', () => {
+  assert.equal(shortHeadline('Imran Khan’s party launches march to Islamabad demanding his release', 45), 'Imran Khan’s party launches march to Islamabad');
+  assert.equal(shortHeadline('Fire guts historic building', 45), 'Fire guts historic building', 'an -ing noun may end it');
+});
