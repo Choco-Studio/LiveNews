@@ -1015,10 +1015,11 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // PACE: a mid-programme signpost on the story at the middle of a long programme (a later story by its
       // short headline, never one with figures in it: those belong to their own story)
       if (k === midIndex) {
-        const later = order.slice(k + 1).filter((x) => !roundup.includes(x) && !x.grave && !/\d/.test(said(x)));
+        // (never the very next story: it is on air a breath later, nothing to come)
+        const later = order.slice(k + 2).filter((x) => !roundup.includes(x) && !x.grave && !/\d/.test(said(x)));
         // the "And finally" first, then the others: the first whose signpost has not aired lately
         for (const pickL of [...later.filter((x) => x === lighter), ...later.filter((x) => x !== lighter)]) {
-          const tail = number && order.indexOf(number) > k && pickL !== number ? ', and our number of the day' : '';
+          const tail = number && order.indexOf(number) > k + 1 && pickL !== number ? ', and our number of the day' : '';
           const line = `Still to come: ${lowerFirstWord(pickL === number ? 'our number of the day' : said(pickL), pickL)}${tail}.`;
           if (airedBefore(line, aired)) continue;
           info.signpost = line;

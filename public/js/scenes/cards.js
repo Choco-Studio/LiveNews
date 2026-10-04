@@ -184,10 +184,15 @@ function categoryLabel(name) {
 // one neutral field for every headline without a picture: the world in slate dots on ink
 const MONTAGE_FIELD = lazyBackdrop({ key: 'montage', colors: [P.black, P.ink], cx: 290, cy: 60, reach: 280, texture: (d, level) => worldDots(d, (x, y) => level(x, y) * 2) });
 
-let TOP_STORIES_W = 0;
-export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline = '', source = '', category = 'general', image = null, backdrop = null, accent = null, programId = '' } = {}) {
+const TAG_W = new Map(); // micro tag widths (TOP STORIES, STILL TO COME)
+const tagWidth = (tag) => TAG_W.get(tag) ?? (TAG_W.set(tag, measureText(tag, 1, 'micro')), TAG_W.get(tag));
+
+/**
+ * One headline frame. The montage's (tag TOP STORIES with its pips; the first frame comes out of the open), or
+ * STILL TO COME's single story (tag 'STILL TO COME', pips: false, tagIn: the tag wipes in after the cut).
+ */
+export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline = '', source = '', category = 'general', image = null, backdrop = null, accent = null, programId = '', tag = 'TOP STORIES', pips = true, tagIn = index === 0 } = {}) {
   const acc = accentFor(programId, accent);
-  if (!TOP_STORIES_W) TOP_STORIES_W = measureText('TOP STORIES', 1, 'micro');
   if (image) {
     ctx.drawImage(image, 0, 0);
     ctx.drawImage(shade(96, 200, 0.85), 0, 0); // photos get a stepped shade; the field is already dark there
@@ -196,17 +201,17 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
 
   // TOP STORIES tag and pips under the bug, micro white on ink (brand red stays with the bug, LIVE
   // and BREAKING): it wipes in on the first frame only and stays put across the cuts
-  const tagP = index === 0 ? easeOutQuint(seg(dt, 0.05, 0.35)) : 1;
-  const tagW = TOP_STORIES_W + 10;
+  const tagP = tagIn ? easeOutQuint(seg(dt, 0.05, 0.35)) : 1;
+  const tagW = tagWidth(tag) + 10;
   const n = clamp(Math.floor(total) || 1, 1, 12);
-  const pipsW = n * 11 + 4;
+  const pipsW = pips ? n * 11 + 4 : 0;
   ctx.save();
   try {
     clipRect(ctx, 13, 25, Math.round((tagW + pipsW) * tagP), 12);
     plate(ctx, 13, 25, tagW + pipsW, 11, P.ink);
     plate(ctx, 13, 25, 1, 11, P.slate);
-    drawText(ctx, 'TOP STORIES', 18, 28, S.microWhite);
-    for (let i = 0; i < n; i++) {
+    drawText(ctx, tag, 18, 28, S.microWhite);
+    for (let i = 0; pips && i < n; i++) {
       ctx.fillStyle = i === index ? P.white : i < index ? P.fog : P.slate;
       ctx.fillRect(13 + tagW + 4 + i * 11, 29, 9, 3);
     }
@@ -227,7 +232,8 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
   const sw = src ? textW(src) + 10 : 0;
   // the first frame comes straight out of the open's lock-up on the theme's last hit: its chip and
   // bar start at once (the cut never lands on an empty field), the words 0.1 s after the bar
-  const t0 = index === 0 ? -0.02 : 0.12; // the first frame after the cut already shows the wipe's leading edge
+  const first = index === 0 && pips; // the montage's first frame, straight out of the open
+  const t0 = first ? -0.02 : 0.12; // the first frame after the cut already shows the wipe's leading edge
   const cp = easeOutQuint(seg(dt, t0, 0.32));
   if (cp > 0) {
     ctx.save();
@@ -245,13 +251,144 @@ export function drawHeadlineFrame(ctx, t, dt, { index = 0, total = 1, headline =
     }
   }
   // accent rule grows down beside the headline
-  const bar = Math.round((blockH + 4) * easeOutQuint(seg(dt, index === 0 ? -0.02 : 0.18, 0.4)));
+  const bar = Math.round((blockH + 4) * easeOutQuint(seg(dt, first ? -0.02 : 0.18, 0.4)));
   if (bar > 0) {
     ctx.fillStyle = acc;
     ctx.fillRect(13, top - 2, 2, bar);
   }
   for (let i = 0; i < lay.lines.length; i++) {
-    rise(ctx, lay.lines[i], X0, top + i * lay.lh, seg(dt, (index === 0 ? 0.1 : 0.24) + i * 0.07, 0.34), lay.scale === 2 ? S.white2Shadow : S.whiteShadow);
+    rise(ctx, lay.lines[i], X0, top + i * lay.lh, seg(dt, (first ? 0.1 : 0.24) + i * 0.07, 0.34), lay.scale === 2 ? S.white2Shadow : S.whiteShadow);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// STILL TO COME, two stories (WORLD NOW's mid-programme signpost: director.js playStillToCome). One panel, no
+// cut: a tile for each story, both from the cut, the second dimmed until the presenter names it. Each tile: the story's picture pixelated at the tile's own size, else its place on
+// a dot map with a pin; its headline under it beside the programme accent. Captions sit at the top (y 46-72).
+
+export const TEASE_TILE = { w: 168, h: 84, y: 78, x: [19, 197] };
+const TEASE_FIELD = lazyBackdrop({ key: 'tease', colors: [P.black, P.ink], cx: 192, cy: 40, reach: 300, texture: (d, level) => worldDots(d, (x, y) => level(x, y)) });
+const TILE_MAPS = new Map(); // "lat,lon" -> the tile's dot map (baked once)
+const TEASE_DIM = rgba(P.black, 0.62); // the story not yet named
+
+/** A tile-sized dot map round a place (about 70 degrees across), the pin at its centre. */
+function tileMap(lat, lon) {
+  const key = `${lat.toFixed(1)},${lon.toFixed(1)}`;
+  let c = TILE_MAPS.get(key);
+  if (c) return c;
+  const { w, h } = TEASE_TILE;
+  c = mk(w, h);
+  const cx = c.getContext('2d');
+  const img = cx.createImageData(w, h);
+  const d = new Uint32Array(img.data.buffer);
+  const tex = globeTexture();
+  const ink = u32(P.ink), dot = u32(P.slate), near = u32(P.fog);
+  d.fill(ink);
+  const perDeg = 2.4;
+  for (let y = 1; y < h; y += 3)
+    for (let x = 1; x < w; x += 3) {
+      const la = lat - (y - h / 2) / perDeg, lo = lon + (x - w / 2) / perDeg;
+      if (la > 89 || la < -89) continue;
+      const row = clamp(Math.floor(((90 - la) / 180) * 256), 0, 255) * 512;
+      const col = ((Math.floor(((lo + 180) / 360) * 512) % 512) + 512) % 512;
+      if (!(tex[row + col] & 1)) continue;
+      d[y * w + x] = Math.hypot(x - w / 2, y - h / 2) < 22 ? near : dot;
+    }
+  cx.putImageData(img, 0, 0);
+  if (TILE_MAPS.size > 24) TILE_MAPS.delete(TILE_MAPS.keys().next().value);
+  TILE_MAPS.set(key, c);
+  return c;
+}
+
+/**
+ * items: [{ headline, category, image (tile-sized canvas) | null, lat, lon, place }]; shown: [s since each item
+ * was named (Infinity: not yet)]; dt: s since the cut.
+ */
+export function drawStillToCome(ctx, t, dt, { items = [], shown = [0, Infinity], accent = null, programId = '' } = {}) {
+  const acc = accentFor(programId, accent);
+  ctx.drawImage(TEASE_FIELD(), 0, 0);
+  const tagW = tagWidth('STILL TO COME') + 10;
+  ctx.save();
+  try {
+    clipRect(ctx, 13, 25, Math.round(tagW * easeOutQuint(seg(dt, 0.05, 0.35))), 12);
+    plate(ctx, 13, 25, tagW, 11, P.ink);
+    plate(ctx, 13, 25, 1, 11, P.slate);
+    drawText(ctx, 'STILL TO COME', 18, 28, S.microWhite);
+  } finally {
+    ctx.restore();
+  }
+  const { w, h, y } = TEASE_TILE;
+  for (let k = 0; k < 2; k++) {
+    const x = TEASE_TILE.x[k];
+    const item = items[k];
+    // the frame: a fog rule round the tile, from the cut
+    const fp = easeOutQuint(seg(dt, k * 0.08, 0.3));
+    if (fp <= 0 || !item) continue;
+    ctx.fillStyle = P.fog;
+    ctx.fillRect(x - 1, y - 1, Math.round((w + 2) * fp), 1);
+    ctx.fillRect(x - 1, y + h, Math.round((w + 2) * fp), 1);
+    if (fp >= 1) {
+      ctx.fillRect(x - 1, y, 1, h);
+      ctx.fillRect(x + w, y, 1, h);
+    }
+    ctx.fillStyle = P.black;
+    ctx.fillRect(x, y, Math.round(w * fp), h);
+    // both stories wipe in from the cut; the one not yet named waits dimmed (its picture under a shade, its
+    // headline in fog) and lights up, wiping left to right, as the voice reaches it
+    const wp = easeOutQuint(seg(dt, 0.05 + k * 0.12, 0.4));
+    const lit = k === 0 ? dt : shown[k];
+    const lp = lit >= 0 && lit !== Infinity ? easeOutQuint(seg(lit, 0, 0.35)) : 0;
+    if (wp > 0) {
+      ctx.save();
+      try {
+        clipRect(ctx, x, y, Math.round(w * wp), h);
+        if (item.image) ctx.drawImage(item.image, x, y);
+        else if (Number.isFinite(item.lat) && Number.isFinite(item.lon)) {
+          ctx.drawImage(tileMap(item.lat, item.lon), x, y);
+          ctx.fillStyle = P.white;
+          ctx.fillRect(x + w / 2 - 1, y + h / 2 - 1, 3, 3);
+          ctx.fillStyle = acc;
+          ctx.fillRect(x + w / 2 - 1, y + h / 2 + 3, 3, 1);
+          if (item.place) {
+            const pl = ellipsis(String(item.place).split(',')[0].toUpperCase(), w - 12, 1);
+            plate(ctx, x + 4, y + h - 13, measureText(pl, 1, 'micro') + 8, 9, P.ink);
+            drawText(ctx, pl, x + 8, y + h - 11, S.microSilver);
+          }
+        } else ctx.drawImage(TEASE_FIELD(), x, y, w, h, x, y, w, h);
+        const label = categoryLabel(item.category);
+        const cw = measureText(label, 1, 'micro') + 10;
+        plate(ctx, x, y, cw, 9, P.ink);
+        plate(ctx, x, y, 2, 9, acc);
+        drawText(ctx, label, x + 6, y + 2, S.microWhite);
+        if (lp < 1) {
+          const from = x + Math.round(w * lp);
+          ctx.fillStyle = TEASE_DIM;
+          ctx.fillRect(from, y, x + w - from, h);
+        }
+      } finally {
+        ctx.restore();
+      }
+    }
+    const lines = balanceLines(String(item.headline || ''), w - 6, 1, 2);
+    const bar = Math.round((lines.length * 11 - 2) * easeOutQuint(seg(lit, 0.15, 0.35)));
+    if (bar > 0) {
+      ctx.fillStyle = acc;
+      ctx.fillRect(x, y + h + 5, 2, bar);
+    }
+    for (let i = 0; i < lines.length; i++) {
+      const ly = y + h + 6 + i * 11;
+      const rp = seg(dt, 0.28 + k * 0.12 + i * 0.07, 0.34);
+      if (lp < 1) rise(ctx, lines[i], x + 6, ly, rp, S.fog);
+      if (lp > 0) {
+        ctx.save();
+        try {
+          clipRect(ctx, x, ly - 3, Math.round((w + 2) * lp), 12);
+          rise(ctx, lines[i], x + 6, ly, rp, S.whiteShadow);
+        } finally {
+          ctx.restore();
+        }
+      }
+    }
   }
 }
 

@@ -3,7 +3,7 @@
 // and keeps the channel running forever.
 import { pixelate, loadImage } from './pixelate.js';
 import { presenterName, setPresenters } from './cast.js';
-import { STINGER_DURATION } from './scenes/cards.js';
+import { STINGER_DURATION, TEASE_TILE } from './scenes/cards.js';
 import { pickAds, BREAK_BLACK, CONTINUITY, continuityLine } from './ads/index.js';
 import { splitSentences } from './audio/sentences.js';
 import { ACTIONS } from './cues.js';
@@ -481,6 +481,36 @@ export class Director {
   }
 
   /**
+   * A mid-programme signpost over STILL TO COME (pace shots.stillToCome; seg.stillToCome from the writer: the later
+   * stories it names, each with where its words start). One story: its headline frame; two: a panel of tiles, the
+   * second coming in as the voice names it. Only when the shot on air has held the floor (no wait on the cut)
+   * and the frame will hold it too before the next segment cuts back to the studio; returns false otherwise
+   * (the caller reads the line to camera as any chat).
+   */
+  async playStillToCome(seg, index) {
+    const s = this.scene;
+    const P = pace(s);
+    const items = seg.stillToCome.filter((x) => s.rundown?.some((r) => r.storyId === x.storyId)).slice(0, 2);
+    if (!items.length || cutWait(s.program?.id, s.shotSince, now()) > 0.05) return false;
+    const job = this.voiceAhead?.seg === seg ? this.voiceAhead.job : Promise.resolve(this.voices.audioFor(seg)).catch(() => null);
+    this.voiceAhead = { seg, job };
+    const recorded = await job;
+    const len = Number.isFinite(recorded?.duration) ? recorded.duration : (this.audio.sentenceTimes?.(seg.text, seg.anchor)?.end ?? seg.text.length / CPS_EST);
+    if (len + gapAfter(this.episode, index).gap < P.shots.min + 0.3) return false;
+    s.lowerThird = null;
+    const card = { items: items.map((x) => x.storyId), shown: [now(), Infinity] };
+    this.setShot('tease', { focus: seg.anchor, storyId: null, card, wall: { mode: 'logo' }, framing: null, cameraMove: null });
+    await this.say(seg, null, {
+      direct: true,
+      marks: items.slice(1).map((x) => x.char),
+      onMark: () => {
+        card.shown[1] = now();
+      },
+    });
+    return true;
+  }
+
+  /**
    * After a link's last part: the link stays on screen until the next segment cuts away from it (the shot on
    * air still shows the correspondent), then setShot clears it.
    */
@@ -502,6 +532,7 @@ export class Director {
     // the headlines the intro teases first: the montage shows them a few seconds after the open (owner 22:50)
     const teased = new Set((episode.segments?.find((sg) => sg.type === 'intro')?.teases || []).filter(Boolean));
     ids.sort((a, b) => (teased.has(b) ? 1 : 0) - (teased.has(a) ? 1 : 0));
+    const tiled = new Set((episode.segments || []).flatMap((sg) => (sg.stillToCome?.length > 1 ? sg.stillToCome.map((x) => x.storyId) : [])));
     for (const id of ids) {
       try {
         const img = await loadImage(`/api/img/${id}`);
@@ -513,7 +544,9 @@ export class Director {
         card.width = 384;
         card.height = 216;
         card.getContext('2d').drawImage(full, -16, -9);
-        this.images.set(id, { small, full, card });
+        // STILL TO COME's tile: the whole picture pixelated at the tile's own size (never a scaled-down card)
+        const tile = tiled.has(id) ? pixelate(img, TEASE_TILE.w, TEASE_TILE.h, { colors: 16 }) : null;
+        this.images.set(id, { small, full, card, tile });
       } catch (err) {
         console.warn('[director] image', id, err.message);
       }
@@ -574,8 +607,9 @@ export class Director {
     this.voiceAhead = null;
     const recorded = await (ahead ?? this.voices.audioFor(seg));
     // v2: scene.segPlan (timed for the voice that plays) + its shot cues; the weather centre directs itself
-    // (a correspondent link directs itself: playCross; the v2 planner knows the studio's presenters only)
-    const v2 = seg.type === 'weather' || seg.type === 'cross' ? null : this.v2?.begin(seg, recorded ?? null);
+    // (a correspondent link directs itself: playCross; the v2 planner knows the studio's presenters only; a caller
+    // directing its own shots says so: extra.direct)
+    const v2 = seg.type === 'weather' || seg.type === 'cross' || extra?.direct ? null : this.v2?.begin(seg, recorded ?? null);
     const v2marks = v2?.speak?.marks || []; // v2 cuts that fall inside a sentence
     const more = Array.isArray(extra?.marks) && typeof extra.onMark === 'function' ? extra.marks : []; // the caller's own marks
     const musicSentence = this.musicSegment(seg);
@@ -660,6 +694,8 @@ export class Director {
           continue;
         }
         case 'chat': {
+          // a mid-programme signpost over its stories: STILL TO COME (else read to camera as any chat)
+          if (seg.stillToCome?.length && pace(s).shots.stillToCome && (await this.playStillToCome(seg, index))) break;
           s.lowerThird = null;
           // v2: the plan's own opening shot now (no default wide on air while a late clip is looked up);
           // default path: the wide, or the speaker's close when one wide would pass the studio maximum

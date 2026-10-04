@@ -210,7 +210,7 @@ Owner, 4 Oct: *"Como queremos hacerlos más largos no puede solo ser cambiar de 
 | 1 | Open, headlines, greeting | as above |
 | 2 | Lead | Paco reads it and hands over to a correspondent: **LINK 1** |
 | 3 | Main stories | presenters alternate; IN THEIR WORDS on a sourced quote |
-| 4 | "Still to come" | Lola, to camera (closes the block) |
+| 4 | "Still to come" | Lola's line over **STILL TO COME**: the stories it names, in pictures (closes the block) |
 | 5 | Main stories | including **LINK 2**: another desk, at least `LINK_GAP` (4) stories after the first |
 | 6 | Number of the day, Around the world, And finally, chat, sign-off | as above |
 
@@ -219,9 +219,9 @@ Owner, 4 Oct: *"Como queremos hacerlos más largos no puede solo ser cambiar de 
 | Segment | Speaker | Shots (director `playCross`) |
 |---|---|---|
 | `story` with `link: 'R1'` | the story's presenter | the story's beats; its last sentence, the **hand-over** ("Our Europe correspondent Rhea Raster has more."), on the TWO-WAY |
-| `cross` `piece` | the correspondent (slot `R1`/`R2`) | LOCATION for the first line, then B-ROLL (the place's footage, else the story's picture, else its map), then LOCATION again for a last line long enough to carry a shot |
-| `cross` `ask` | the presenter | TWO-WAY ("Rhea, what happens next?" when the answer is about what comes next, else "what else do we know?") |
-| `cross` `answer` | the correspondent | TWO-WAY for its first sentence (the ask is too short to cut away from), LOCATION from its second |
+| `cross` `piece` | the correspondent (slot `R1`/`R2`) | LOCATION for the first line, then B-ROLL (the place's footage, else the story's picture, else its map), then LOCATION again for a last line long enough to carry a shot. When the hand-over's two-way has only just come up, the first line stays in it (the correspondent starts talking in the box) and the pictures follow: the live into tape |
+| `cross` `ask` | the presenter | TWO-WAY ("Rhea, what happens next?" when the answer is about what comes next, else "what else do we know?"); the piece's last shot is chosen so that this cut can come |
+| `cross` `answer` | the correspondent | TWO-WAY for its first sentence (the ask is too short to cut away from), LOCATION from its second when it can hold the floor before the studio; already on the correspondent, it stays |
 | `cross` `thanks` | the presenter | stays on the shot on air; the next segment cuts back to the studio |
 
 Every line of a link is a fact of that story's source (`groundedText`, as for any story sentence). The correspondent **never claims to be at the scene**: `presenceClaim()` drops "here in", "behind me", "on the ground", "I'm standing", "I've seen", "told me", "live from". There is no LIVE label on a correspondent (wave 3 §3.6). The channel's own LIVE bug stays, because the channel is live. Links are never on the number of the day, a round-up item or And finally. A link on a grave story keeps the sober tone, shows no footage, and puts the correspondent before the desk backdrop.
@@ -251,7 +251,8 @@ The v2 planner plans the studio presenters only; this is the Stage's `remoteGest
 
 **Footage** (`server/footage.js` → `/api/vid/<id>.webm` → `public/js/footage/`)
 - **What a clip may show:** the place only, never the event. The query is the place's own name; a peninsula or a region films as its country.
-- **What is rejected:** clips whose title names an event, a person speaking, a production or a map. There is never footage on a grave story.
+- **What is accepted:** only a clip whose title says it is a shot of a place (aerial, drone, street, harbour, skyline, old town, view... and the French, Spanish, Portuguese, German and Italian words Commons uploaders use; German compounds such as Hauptstraße). The place's name alone is not enough ("Germany 2019").
+- **What is rejected:** clips whose title names an event, a person speaking, a production or a map; any person by role or name ("President ... greets the Chancellor": a live search for Germany returned it), children, an occasion (a festival, a strike, a visit). There is never footage on a grave story.
 - **The clip itself:** free licences only, a 240p/360p VP9 transcode of a few megabytes, downloaded once, credited **FILE · author · licence** on air.
 - **Limits:** Commons is polite-use: one request at a time, 2 s apart, honouring `Retry-After` on a 429 (a minute at least). Answers are cached by place for a day, across restarts.
 - **Pixel style:** 192×108 shown at exactly 2x, 12 frames a second (the stepped motion of pixel animation). The grade is pixelate.js's (saturation 1.25, contrast 1.12). The palette is the shot's own (16 colours, k-means): kept for the whole shot and replaced only at a cut in the footage, so pans never flicker. Dithering is 4×4 Bayer, fixed to the screen.
@@ -271,7 +272,15 @@ The v2 planner plans the studio presenters only; this is the Stage's `remoteGest
 
 It is enabled per programme by the pace profile's `shots.quoteCard` (WORLD NOW only for now).
 
-**Pace.** Between the parts of a link the gap is `link` (0.4 s): a two-way keeps its turns close. Every shot of a link still airs the 4 s floor. A sentence too short to carry a shot of its own stays on the shot before it (`sentenceSeconds`, from the recorded word times).
+**Pace.** Between the parts of a link the gap is `link` (0.4 s): a two-way keeps its turns close. Every shot of a link still airs the 4 s floor. The shots of each part are planned before it airs (`public/js/linkplan.js`), from its sentence times: the recorded voice's words, else the audio engine's own timeline (`audio.sentenceTimes`). Every way of opening the wanted shots on sentence starts is played through; the plan closest to them wins, with every shot holding the floor, the next part's cut included. The studio's first cut after a link never waits, so that one is a hard limit; the correspondent's words never play over the studio. As aired (Rhea, Germany): two-way 7.4 s (the hand-over and her first line), pictures 7.9 s, two-way 7.8 s (the prompt, her answer, the thanks).
+
+### Format round 2: STILL TO COME
+
+**STILL TO COME.** The mid-programme signpost ("Still to come: ...", a presenter's line) shows the later stories it names. The writer finds them (`normalizeBulletin`: `seg.stillToCome`, at most two, each with where its words start). It never shows a grave story, nor one already aired, whatever the provider wrote. The director (`playStillToCome`, pace `shots.stillToCome`) cuts to it at the line's start:
+- **one story:** the montage's headline frame (its picture, else its place on the map) under a STILL TO COME tag, without the montage's pips;
+- **two stories:** one panel, no cut. A tile for each, 168×84, the picture pixelated at the tile's own size (never a scaled-down card), else the place on a dot map with a pin. Both come in from the cut. The second waits dimmed, its headline in fog, and lights up left to right as the voice names it.
+
+It airs only when the shot on air has held the floor and the frame will hold it too before the next story cuts back to the studio. Otherwise the line is read to camera as before. The captions go to the top (y 46–72), as over the montage. The mock no longer teases the very next story, nor adds "and our number of the day" when the number comes straight after.
 
 ### Set and light: the home look
 

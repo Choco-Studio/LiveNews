@@ -946,6 +946,8 @@ function applyGestures(cues, policy, ctx) {
 
 // ---------------------------------------------------------------- intro teases and hand-overs
 
+// A presenter's mid-programme signpost (its lead-in): "Still to come: ...", "Coming up: ...".
+const SIGNPOST = /^(?:still to come|also coming up|coming up|later in the programme|also ahead|still ahead|ahead)\s*[:,]\s*/i;
 // Words of an intro line that say nothing about which story it teases.
 const TEASE_SKIP = new Set('coming later programme program also tonight first next headlines welcome good evening morning afternoon hello join stay watching bulletin minute'.split(' '));
 const TEASE_PREFIX = /^((?:\[[^\]]*\]\s*)*(?:Breaking news[:.]\s*|Also coming up[:,]?\s*|Coming up[:,]?\s*|Also ahead[:,]?\s*|Also tonight[:,]?\s*|Still to come[:,]?\s*|Later in the programme[:,]?\s*|Later[:,]\s*|And later[:,]?\s*|And finally[:,]?\s*|First[:,]\s*)?)/i;
@@ -1438,6 +1440,32 @@ export function normalizeBulletin(
     const teases = inferTeases(sentencesOf(introSeg.text), list, names.concat(people));
     if (teases.some(Boolean)) introSeg.teases = teases;
   }
+  // A mid-programme signpost ("Still to come: ...", a presenter's own line): the later stories it names, at most
+  // two, each with where its words start, so the STILL TO COME frame can show them as they are said. Never a
+  // grave story (no picture tease of one), never one already aired.
+  const heavy = new Set(storyList.filter((d) => d.heavy).map((d) => d.story.id));
+  finalBody.forEach((sg, i) => {
+    if (sg.type !== 'chat') return;
+    const m = SIGNPOST.exec(sg.text);
+    if (!m) return;
+    const later = new Set(finalBody.slice(i + 1).filter((x) => x.type === 'story' && !heavy.has(x.storyId)).map((x) => x.storyId));
+    const list = teaseList.filter((st) => later.has(st.id));
+    const at = [];
+    const clauses = [];
+    const re = /,\s*(?:and|plus)\s+|;\s*|\s+and\s+(?=our number of the day)|[.!]\s*$/gi;
+    let from = m[0].length;
+    for (let k; (k = re.exec(sg.text)); ) {
+      if (k.index > from) [clauses.push(sg.text.slice(from, k.index)), at.push(from)];
+      from = k.index + k[0].length;
+    }
+    if (from < sg.text.length) [clauses.push(sg.text.slice(from)), at.push(from)];
+    const ids = inferTeases(clauses, list, names.concat(people));
+    const items = [];
+    ids.forEach((id, k) => {
+      if (id && !items.some((x) => x.storyId === id) && items.length < 2) items.push({ storyId: id, char: k === 0 ? 0 : at[k] });
+    });
+    if (items.length) sg.stillToCome = items;
+  });
 
   return {
     title: clean(raw?.title, LIMITS.title) || 'News bulletin',

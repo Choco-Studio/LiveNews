@@ -38,6 +38,7 @@ export const OVERLAYS = {
   map: 'news',
   fact: 'news',
   montage: 'news',
+  tease: 'news', // STILL TO COME (cards.js): the signpost's stories
   weather: 'news', // WORLD WEATHER's weather centre (scenes/weather)
   location: 'news', // a correspondent link (graphics/remote.js): the correspondent before the place
   twoway: 'news', // the presenter and the correspondent side by side
@@ -47,7 +48,7 @@ export const OVERLAYS = {
 };
 
 /** Shots whose full-screen graphic owns the bottom of the frame: captions go to the top, no strap. */
-export const CAPTIONS_TOP = new Set(['montage']);
+export const CAPTIONS_TOP = new Set(['montage', 'tease']);
 
 export const PROGRAM_TAG = CHANNEL.programTag; // programme name beside the bug after the open (PACE: pace.js)
 
@@ -293,6 +294,10 @@ export class Graphics {
     if (c && this.strap.outAt === null && c.headline) return c.headline;
     if (scene.shot === 'montage' && Array.isArray(scene.rundown)) {
       const r = scene.rundown[scene.card?.index ?? -1];
+      if (r?.headline) return r.headline;
+    }
+    if (scene.shot === 'tease' && Array.isArray(scene.rundown) && scene.card?.items?.length === 1) {
+      const r = scene.rundown.find((x) => x.storyId === scene.card.items[0]);
       if (r?.headline) return r.headline;
     }
     return null;

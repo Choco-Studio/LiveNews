@@ -172,7 +172,7 @@ const PROGRAMMES = {
     open: { firstWord: 0.5 }, // world-now.md: first word 0.5 s after the cut
     gaps: { story: 1.0, handover: 0.85, beforeFinally: 1.2, roundupItem: 0.65 }, // world-now.md: 0.7 s between stories, 1.0 s before And finally
     holds: { signoff: 1.5, endcard: 3.2 },
-    shots: { median: [5, 7], studioMax: 15, singleSoft: 11, picture: [4, 8], map: [5, 10], quoteCard: true }, // quoteCard: IN THEIR WORDS on a story's sourced quote
+    shots: { median: [5, 7], studioMax: 15, singleSoft: 11, picture: [4, 8], map: [5, 10], quoteCard: true, stillToCome: true }, // quoteCard: IN THEIR WORDS on a story's sourced quote; stillToCome: the signpost over its stories
     moves: { max: 5, minGap: 40 },
     gestures: { perMin: 5, minGap: 5.5, beatsPerMin: 7, rest: 0.62, grave: 2 },
     listener: { reactionGap: 8 },

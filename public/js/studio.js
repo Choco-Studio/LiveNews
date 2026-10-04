@@ -193,6 +193,21 @@ export class Renderer {
         if (map) drawWorldMap(ctx, t, dt, { lat: loc.lat, lon: loc.lon, place: '', label: false, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
         return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, image: card.pic || null, backdrop: map ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
       }
+      case 'tease': {
+        // STILL TO COME (director.js playStillToCome): one story as a headline frame (its picture, else its place on
+        // the map), two as a panel of tiles, the second as it is named
+        const items = (card.items || []).map((id) => scene.rundown.find((r) => r.storyId === id)).filter(Boolean);
+        if (items.length >= 2) {
+          const tiles = items.slice(0, 2).map((r) => ({ headline: r.headline, category: r.category, image: scene.images.get(r.storyId)?.tile || null, lat: r.location?.lat, lon: r.location?.lon, place: r.location?.place }));
+          return cards.drawStillToCome(ctx, t, dt, { items: tiles, shown: [0, t - (card.shown?.[1] ?? Infinity)], programId: program?.id, accent: THEME_ACCENT[program?.theme] });
+        }
+        const item = items[0] || {};
+        if (card.pic === undefined || (card.pic === null && dt < 0.4)) card.pic = scene.images.get(item.storyId)?.card || (dt < 0.4 ? null : false);
+        const loc = item.location;
+        const map = !card.pic && Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon);
+        if (map) drawWorldMap(ctx, t, dt, { lat: loc.lat, lon: loc.lon, place: '', label: false, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
+        return cards.drawHeadlineFrame(ctx, t, dt, { headline: item.headline, source: item.source, category: item.category, image: card.pic || null, backdrop: map ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme], tag: 'STILL TO COME', pips: false, tagIn: true });
+      }
       case 'breakingCard':
         return cards.drawBreakingCard(ctx, t, dt, { headline: card.headline, source: card.source });
       case 'fact':
