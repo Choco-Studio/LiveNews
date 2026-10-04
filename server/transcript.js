@@ -10,20 +10,34 @@
 // at the start of a sentence: hand-offs, greetings, sign-offs
 const OPENERS = /^["“'‘]?(?:here(?:'|’)?s|here is|over to|back to you|let(?:'|’)?s (?:go|cross|head|turn)\b|we (?:go|cross|turn|head)(?: now)?(?: live)? to\b|for more(?: on (?:this|that|the story))?,? (?:we|let(?:'|’)?s|here)|joining (?:us|me)\b|we(?:'|’)?re (?:now )?joined\b|thank you,|thanks,|you(?:'|’)?re watching\b|stay with us\b|welcome back\b|good (?:morning|afternoon|evening)(?:,| and| to)|i(?:'|’)?m [A-Z][a-z]+ [A-Z][a-z]+(?:,| and| in| with| for|\.|$))/i;
 // anywhere: a named person "with more", "joins us", "takes up the story", "has the details"
+// an outlet's promo for its own interview or analysis ("…commentator Douglas Herbert shares further insights",
+// "France 24's Gavin Lee speaks to Brazil analyst … about …"): it promises a guest our channel does not have
+const PROMO = /\b(?:shares|offers|gives|brings) (?:us )?(?:further |more |his |her |their |some )?(?:insights?|analysis|perspective|thoughts)\b|\bspeaks (?:to|with) [^.]{3,80}\babout\b|\b(?:editor|analyst|correspondent|commentator)(?: in chief)? [A-Z][a-z]+ [A-Z][a-z]+ explains\b/;
 const HANDOFFS = /\b(?:[A-Z][a-z]+ ){1,3}(?:is here |joins us |has the details|has more|takes up the story|reports(?: now)?(?: from [A-Z]| for us|\.|$))|\bwith (?:more|the latest|the details)(?: on| from)? (?:the situation|that|this|the story|what happened|the scene)\b|\bjoins us (?:now|live)\b/;
 
 /** Is this sentence a broadcast hand-off, greeting or sign-off rather than part of the story? */
 export function isTranscriptLine(sentence) {
   const s = String(sentence ?? '').trim();
   if (!s) return false;
-  return OPENERS.test(s) || HANDOFFS.test(s);
+  return OPENERS.test(s) || HANDOFFS.test(s) || PROMO.test(s);
+}
+
+/**
+ * A text's sentences with their trailing space (joined, they give the text back), split on . ! ? … but never
+ * inside a figure: "more than 158.7 million" split at its point once lost "more than 158." as a menu run, and
+ * "7 million Brazilians are eligible to vote" went to the writer (the BBC, 4 Oct).
+ */
+export function sentencePieces(text) {
+  const t = String(text ?? '');
+  const parts = t.replace(/(\d)\.(?=\d)/g, '$1\u2024').match(/[^.!?…]+(?:[.!?…]+["”'’)\]]*|$)\s*/g);
+  return parts ? parts.map((p) => p.replace(/\u2024/g, '.')) : null;
 }
 
 /** The text without its transcript sentences (sentences split on . ! ? followed by a space). */
 export function dropTranscriptLines(text) {
   const t = String(text ?? '');
   if (!t) return t;
-  const parts = t.match(/[^.!?…]+(?:[.!?…]+["”'’)]*|$)\s*/g);
+  const parts = sentencePieces(t);
   if (!parts) return t;
   const kept = parts.filter((p) => !isTranscriptLine(p));
   return kept.length === parts.length ? t : kept.join('').trim();
@@ -49,7 +63,7 @@ export function isNavRun(sentence) {
 export function dropPageFurniture(text) {
   const t = String(text ?? '');
   if (!t) return t;
-  const parts = t.match(/[^.!?…]+(?:[.!?…]+["”'’)\]]*|$)\s*/g);
+  const parts = sentencePieces(t);
   if (!parts) return t;
   const kept = parts.filter((p, i) => {
     const s = p.trim();

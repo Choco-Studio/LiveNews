@@ -42,6 +42,9 @@ const SAME = [
   [S('Marseille wildfire: thousands evacuate from hill villages'), S('Wildfire near Marseille forces thousands to evacuate')],
   [S('Iceland volcano erupts again on the Reykjanes peninsula'), S('Iceland volcano: lava fountains light up the Reykjanes sky')],
   [S('Earthquake strikes northern Japan'), S('Powerful earthquake hits northern Japan')],
+  // a report and an explainer of one election (the BBC, 4 Oct): the same two people in the same country
+  [S("Lula or Bolsonaro? Some Brazilian voters say they don't want either", "Brazil's election enters its final day of campaigning as Lula and Flávio Bolsonaro make their last pitches."), S('Lula and Bolsonaro face off in Brazil presidential race', 'Twelve candidates are on the ballot, but the race is centred on two rivals: President Luiz Inacio Lula da Silva and Flavio Bolsonaro.')],
+  [S('Polls close in Brazil as Lula and Flávio Bolsonaro remain neck and neck', 'If no candidate gets more than 50% of the vote, the election will go to a run-off on 25 October.'), S("What to know about Brazil's election as Lula and Flávio Bolsonaro face off", 'Polls suggest the election will be a closely run contest between the left-wing incumbent and his right-wing rival.')],
 ];
 
 describe('same event', () => {

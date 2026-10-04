@@ -10,7 +10,7 @@ import { extractArticle } from './article.js';
 import { guardedFetch, readCapped } from './net.js';
 import { degreesApart, findPlaces, locate, lookupPlace } from './gazetteer.js';
 import { onBeat } from './topics.js';
-import { sameWord } from './facts.js';
+import { sentencesIn, sameWord } from './facts.js';
 
 export { extractImage, isUsableImage } from './pictures.js';
 
@@ -454,7 +454,7 @@ export const PRIMARY_CATEGORY_WEIGHT = 1.5;
 // no incidents of different kinds ("London bridge attack" / "London fraud scheme"; a recall / a factory
 // opening; rates held / rates raised); no different causes ("after engine fire" / "after window blows out").
 
-const firstSentenceOf = (text) => String(text || '').split(/(?<=[.!?])\s+(?=[A-Z0-9"“])/)[0].slice(0, 300);
+const firstSentenceOf = (text) => (sentencesIn(String(text || ''))[0] || '').slice(0, 300);
 
 /** The place a report is about: the headline's most precise place, else the summary's first sentence's (or null). */
 function storyPlace(s) {
@@ -524,6 +524,32 @@ const kindsOf = (kw) => {
   return out;
 };
 const KIND_WORD = (w) => INCIDENT_KINDS.some(([, re]) => re.test(w));
+// capitalised words that name nobody (a question's or a second sentence's first word, a day, a month)
+const NOT_PEOPLE = new Set('some many most more here there this that these those what why how who when where which new first last next live latest breaking watch video analysis opinion explainer monday tuesday wednesday thursday friday saturday sunday january february march april may june july august september october november december'.split(' '));
+const ELECTION = /\b(?:elections?|electoral|polls? (?:close|closed|open|opened)|presidential (?:race|vote|runoff|run-off|candidates?)|run-?off|referendum|on the ballot|casting (?:their )?votes|votes? (?:count|counting|tally)|goes to the polls|go to the polls|head(?:s)? to the polls|seeks? (?:a )?(?:\w+ )?term)\b/i;
+// the people of a country, for the election rule ("the Brazilian president", "Brazilians began casting...")
+const DEMONYMS = { brazilian: 'Brazil', american: 'United States', british: 'United Kingdom', french: 'France', german: 'Germany', italian: 'Italy', spanish: 'Spain', portuguese: 'Portugal', mexican: 'Mexico', canadian: 'Canada', argentine: 'Argentina', argentinian: 'Argentina', chilean: 'Chile', colombian: 'Colombia', peruvian: 'Peru', venezuelan: 'Venezuela', bolivian: 'Bolivia', ecuadorian: 'Ecuador', chinese: 'China', japanese: 'Japan', korean: 'South Korea', indian: 'India', pakistani: 'Pakistan', bangladeshi: 'Bangladesh', indonesian: 'Indonesia', filipino: 'Philippines', thai: 'Thailand', vietnamese: 'Vietnam', australian: 'Australia', russian: 'Russia', ukrainian: 'Ukraine', polish: 'Poland', dutch: 'Netherlands', belgian: 'Belgium', swedish: 'Sweden', norwegian: 'Norway', danish: 'Denmark', finnish: 'Finland', greek: 'Greece', irish: 'Ireland', hungarian: 'Hungary', romanian: 'Romania', czech: 'Czech Republic', austrian: 'Austria', swiss: 'Switzerland', turkish: 'Turkey', israeli: 'Israel', iranian: 'Iran', iraqi: 'Iraq', syrian: 'Syria', lebanese: 'Lebanon', egyptian: 'Egypt', nigerian: 'Nigeria', kenyan: 'Kenya', ethiopian: 'Ethiopia', ghanaian: 'Ghana', moroccan: 'Morocco', algerian: 'Algeria', tunisian: 'Tunisia' };
+function countriesOf(text) {
+  const out = new Set(findPlaces(text).map((h) => h.entry?.country).filter(Boolean));
+  for (const m of String(text).matchAll(/\b([A-Z][a-z]+?)(?:s)?\b/g)) {
+    const c = DEMONYMS[m[1].toLowerCase()] || DEMONYMS[m[0].toLowerCase().replace(/s$/, '')];
+    if (c) out.add(c);
+  }
+  return out;
+}
+/** Two reports of one country's election: both about an election (title or first sentence) and a country in common. */
+function sameElection(a, b) {
+  const ta = `${a.title || ''}. ${firstSentenceOf(a.summary)}`;
+  const tb = `${b.title || ''}. ${firstSentenceOf(b.summary)}`;
+  if (!ELECTION.test(ta) || !ELECTION.test(tb)) return false;
+  const ca = countriesOf(ta);
+  return [...countriesOf(tb)].some((c) => ca.has(c));
+}
+// "Polls close in Brazil": an election, not a closure
+const pollsClose = (s, kinds) => {
+  if (kinds.has('closure') && /\bpolls?\s+(?:close|closed|closing|have closed)\b/i.test(`${s.title || ''} ${s.summary || ''}`)) kinds.delete('closure');
+  return kinds;
+};
 // Kinds one event can carry under two names: a hurricane floods, a wildfire is a fire.
 const KIND_FAMILY = { storm: 'weather', flood: 'weather', wildfire: 'wildfire', fire: 'wildfire' };
 const family = (k) => KIND_FAMILY[k] || k;
@@ -864,17 +890,21 @@ export class NewsDesk {
     if (!s.ev || s.ev.title !== s.title) {
       const placeWords = new Set(findPlaces(s.title || '').flatMap((h) => [...keywords(h.text)]));
       const names = namesOf(s.title);
+      // the title's first word is a name too when the summary writes it with a capital mid-sentence ("Lula and
+      // Bolsonaro face off..." / "...President Luiz Inacio Lula da Silva...")
+      const first = String(s.title || '').trim().split(/\s+/)[0]?.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '').replace(/['’]s$/u, '');
+      if (first && first.length >= 3 && /^\p{Lu}\p{Ll}/u.test(first) && new RegExp(`[\\p{Ll},;]\\s+${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'u').test(s.summary || '')) names.add(foldWord(first));
       const topic = new Set([...s.kw].filter((w) => !placeWords.has(w)));
       s.ev = {
         title: s.title,
         names,
         // names that are not places: a storm, a person, a company, a product (a name after "in", "near"... is
         // a place the gazetteer does not know: "Bridge collapses in Pittsburgh")
-        people: new Set([...names].filter((n) => !placeWords.has(n) && !lookupPlace(n) && !placeAfterPreposition(s.title, n))),
+        people: new Set([...names].filter((n) => !placeWords.has(n) && !NOT_PEOPLE.has(n) && !lookupPlace(n) && !placeAfterPreposition(s.title, n))),
         topic,
         // what happened, without the place, who acted, the kind of event and the filler words
         subject: new Set([...topic].filter((w) => !GENERIC_WORDS.has(w) && !ROLE_WORDS.has(w) && !KIND_WORD(w) && !/^\d/.test(w))),
-        kinds: kindsOf(s.kw),
+        kinds: pollsClose(s, kindsOf(s.kw)),
         cause: causeOf(s.title),
         frame: FRAME_SHIFT.test(s.title || ''),
         another: ANOTHER.test(s.title || ''),
@@ -898,6 +928,12 @@ export class NewsDesk {
   sameStory(a, b) {
     const ea = this.eventFacts(a);
     const eb = this.eventFacts(b);
+    // the same people ("Lula and Flávio Bolsonaro": a report, an explainer and a profile of one election, 4 Oct):
+    // one story, though the rest of the headlines share nothing (unless their places disagree)
+    if (sharedCount(ea.people, eb.people) >= 2 && placesAgree(this.whereOf(a), this.whereOf(b)) !== false) return true;
+    // a country's election: every report of its vote, its polls, its results or its candidates is one story for
+    // a programme (a report, a live page, a profile of the incumbent: Brazil, 4 Oct)
+    if (sameElection(a, b)) return true;
     // cheap first: without two shared keywords only two kinds of event (a quake in Tokyo, a rate rise in Norway)
     // can still be one event
     const words = sameEvent(a.kw, b.kw);

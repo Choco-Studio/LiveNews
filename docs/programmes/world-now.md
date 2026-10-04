@@ -299,6 +299,17 @@ As aired (Germany, the lead): presenter 7.5 s, WHAT WE KNOW 6.2 s, the two-way o
 
 The figure extractor no longer takes a duration describing a noun ("a 24-hour strike") as a figure, and stops a label at "lit" ("50 metres high lit up the sky").
 
+### Format round 2: the first run on real news
+
+The fixture feeds are clean; the live feeds are not. WORLD NOW was run on the real feeds (4 Oct, the fallback writer, the day of Brazil's election). These faults would have aired, and are fixed for every programme and every writer:
+- **A false figure.** The desk split "more than 158.7 million Brazilians" at its decimal point, took the first half for a site menu and dropped it, so "7 million Brazilians are eligible to vote" reached the writer. Sentences are now split by one shared rule (`facts.js sentencesIn`, and `transcript.js sentencePieces` for the desk's clean-up): never inside a figure, after a title or a month ("Dr.", "Sept."), or after initials ("U.S.") unless a sentence plainly starts again.
+- **Broken sentences.** "warned that the choice was between democracy [and barbarism]", "a bid for a “partial", "its decision to relocate was made", "pick lawmakers, senators", "how a citizen of Oman, an Arab country…", "the country's multiethnic". A sentence cut to length (`trimClause`) now keeps a pair, a quotation, a parenthesis and a list whole. It never leaves a clause it opened without its verb, a light passive, a span of time or an adjective without what follows, and never treats an opening phrase as the clause. Otherwise the sentence is not aired. A long sentence that joins two whole clauses is told as two sentences (`splitClauses`), the way a broadcast writer shortens.
+- **Cut articles and headlines.** An article cut to length ends on a real sentence end, never on "U.S.". A shortened headline is cut at a clause boundary first ("What to know about Brazil's election"). It never splits a name ("Lula and Flávio") or drops a particle ("face [off]").
+- **One event, many stories.** Brazil's election came from about 20 reports. Stories sharing two people now cluster, as do reports of one country's election (the country read from names and demonyms: "the Brazilian president"). "Polls close" is no closure. The programme carries Brazil once.
+- **Lines that are not news.** A promo for another outlet's interview ("…commentator Douglas Herbert shares further insights", "…speaks to analyst X about…"), an outlet's standing disclaimer ("NPR does not offer or accept money for coverage"), a bare quotation with no speaker, an opener whose "also" leans on a paragraph the viewer never heard, and a detail that tells again what the story already said.
+
+**Length.** The fallback writer now gives grave stories depth too, reads up to nine sentences of an article and splits instead of dropping. On real news WORLD NOW runs about 830 words, roughly six minutes, against the 9–10 the LLM writer is asked for. The fallback writes no more than the reporting supports: no padding.
+
 ### Set and light: the home look
 
 - **Dressing:** WORLD NOW is the home look, so there is no extra tint ("none or navy ≤ 10%", ART_DIRECTION §3 re-dressing table). It is not darker than other programmes; COSMOS is the one-step-darker show.

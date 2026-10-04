@@ -10,9 +10,9 @@
 
 import { isTranscriptLine } from '../transcript.js';
 import { isBreaking, plainTitle } from '../news.js';
-import { LIGHT, contentWords, extractFigures, harmlessIncident, isGrave, leansOnPrevious, notForFeatures, numbersIn, quotesIn, severity } from '../facts.js';
+import { ALSO_LEAN, LIGHT, contentWords, extractFigures, sentencesIn, harmlessIncident, isGrave, leansOnPrevious, notForFeatures, numbersIn, quotesIn, severity } from '../facts.js';
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
-import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, shortHeadline, trimClause } from '../writer.js';
+import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, shortHeadline, splitClauses, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
 import { AHEAD, deskOf } from '../correspondents.js';
 
@@ -28,7 +28,7 @@ const WHY =
 // The sentence already says who says it: no "X reports" on top.
 const OWN_ATTRIBUTION = /\b(?:says?|said|according to|reports?|reported|announced|told|officials|estimates?)\b/i;
 // Live pages: lines that point at the outlet's own coverage are not news.
-const LIVE_BOILERPLATE = /^(?:follow|read|watch|see) (?:the |our |all the )?(?:latest|live|updates)|\blive updates?\b|\bas it happened\b/i;
+const LIVE_BOILERPLATE = /^(?:follow|read|watch|see) (?:the |our |all the )?(?:latest|live|updates)|\blive updates?\b|\bas it happened\b|\bdoes not (?:offer|accept) (?:or accept )?money\b|\bfor coverage or interviews\b/i;
 
 // The strap's kicker is the story's topic (server/topics.js, shared with the desk's programme beats).
 
@@ -257,13 +257,9 @@ function chooseFresh(list, key, { recent = null, text = '' } = {}) {
 /** Has any sentence of this line aired in the station's memory? */
 const airedBefore = (line, recent) => !!recent && lineSentences(line).some((x) => recent.has(x));
 
-const sentencesOf = (s) =>
-  String(s || '')
-    .split(/(?<=[.!?])\s+(?=[A-Z0-9"“‘'])/)
-    .map((x) => x.trim())
-    .filter(Boolean);
+const sentencesOf = (s) => sentencesIn(String(s || '')).filter(Boolean); // never inside a figure, a title or initials
 const unstop = (t) => String(t).trim().replace(/[\s.!?:;,]+$/, '');
-const asSentence = (t) => `${unstop(t)}.`;
+const asSentence = (t) => (/[.!?…]["”'’)]$/.test(String(t).trim()) ? String(t).trim() : `${unstop(t)}.`); // '…real-time."' is already one
 const wordCount = (t) => String(t).replace(/\[[^\]]*\]/g, ' ').split(/\s+/).filter(Boolean).length;
 const firstName = (p) => String(p?.name || 'my colleague').replace(/^(?:Dr|Mr|Ms|Mrs|Prof)\.?\s+/i, '').split(/\s+/)[0];
 const lowerArticle = (by) => by.replace(/^(The|A|An) /, (m) => m.toLowerCase());
@@ -295,7 +291,7 @@ const PRONOUN_START = /^(?:It|Its|They|Their|This|These|Those|He|She|His|Her)\b/
  * opens on a pronoun: "The central bank has kept rates..." is how the outlet itself starts); a later one
  * only when it does not lean on the sentence before it ("The canal authority says...").
  */
-const selfStanding = (info, t) => (info.sentences.indexOf(t) === 0 ? !PRONOUN_START.test(t) : !leansOnPrevious(t));
+const selfStanding = (info, t) => (info.sentences.indexOf(t) === 0 ? !PRONOUN_START.test(t) && !ALSO_LEAN.test(t) : !leansOnPrevious(t));
 /** Content words of `sentence` that `title` does not have (what a restating sentence adds). */
 function newWords(sentence, title) {
   const t = contentWords(title);
@@ -359,10 +355,10 @@ function study(story) {
   const figures = extractFigures(s.summary || '').filter((f) => f.fact.length <= 40 && f.score >= 2);
   const fromSummary = sentencesOf(s.summary).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && unstop(x).toLowerCase() !== unstop(title).toLowerCase());
   // the story dossier (wave 3 §3.1): the article's own sentences after the summary's, never one the summary
-  // already says, at most 7 in all (depth for programmes of 8-10 minutes, never padding)
+  // already says, at most 9 in all (depth for programmes of 8-10 minutes, never padding)
   const seen = new Set(fromSummary.map((x) => unstop(x).toLowerCase()));
   const fromBody = s.body ? sentencesOf(s.body).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !seen.has(unstop(x).toLowerCase()) && unstop(x).toLowerCase() !== unstop(title).toLowerCase() && wordCount(x) >= 6 && wordCount(x) <= 34) : [];
-  const sentences = [...fromSummary, ...fromBody].slice(0, Math.max(7, fromSummary.length));
+  const sentences = [...fromSummary, ...fromBody].slice(0, Math.max(9, fromSummary.length));
   // Breaking news is never "light", whatever it is about.
   const light = !grave && !isBreaking(story.title) && LIGHT.test(title) && !SOBER.test(text);
   return {
@@ -1011,7 +1007,8 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // the story dossier (owner: programmes up to 10 minutes, with depth, never padding): in a long programme a
       // story whose article was read (more sentences than a feed summary gives) tells more of it: the lead five
       // details, a main story four (MONEY MINUTE three)
-      const deepRead = longForm && !info.grave && info.sentences.length >= 5;
+      // (grave news too: real bulletins give their biggest, gravest story the most time; its tone stays sober)
+      const deepRead = longForm && info.sentences.length >= 5;
       const cap = pid === 'money-minute' ? (deepRead ? 3 : 2) : deepRead ? (k === 0 ? 5 : 4) : 3;
       // NEWS IN 60 counts the credit ("..., Ledger Line reports.") inside its word budget.
       const budget = quick ? (k === 0 ? 41 : 31) - (wordCount(s.source) + 1) : Infinity;
@@ -1023,16 +1020,23 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // going out" before "some schools have moved lessons").
       const ADVICE = /\b(?:alerts?|warn\w*|advis\w*|asked (?:people|residents)|urged|told (?:people|residents)|stay indoors|avoid|evacuat\w*|shelters?)\b/i;
       const detailOrder = info.grave || info.hard ? [...info.sentences].sort((a, b) => Number(ADVICE.test(b)) - Number(ADVICE.test(a))) : info.sentences;
+      const said = () => [...parts, ...body].map((x) => x.replace(/\[[^\]]*\]/g, ' '));
       for (const t0 of detailOrder) {
         if (details >= maxDetails || used.has(t0) || echoes(t0)) continue;
+        // (a quotation alone, with nobody saying it: "“It is absolutely unforgivable.”")
+        if (/^["“‘']/.test(t0.trim()) && !/\b(?:said|says|told|added|according to|warned|wrote)\b/i.test(t0)) continue;
+        // (a sentence that tells again what an aired one said: most of its words, little new)
+        if (said().some((x) => restates(t0, x) && newWords(t0, x) < 4)) continue;
         if (/^(?:It|They|This|These)\b/.test(t0) && WHY.test(t0)) continue; // "It says..." with no subject reads as a label
-        // over the programme's sentence length: a trailing clause goes, or the sentence is left out
-        const t = wordCount(t0) <= maxWords ? t0 : trimClause(t0, maxWords, 8);
+        // over the programme's sentence length: told as two whole sentences when it joins two clauses, else a
+        // trailing clause goes, else the sentence is left out
+        const two = wordCount(t0) > maxWords && !quick ? splitClauses(t0, maxWords) : null;
+        const t = two ? two.join(' ') : wordCount(t0) <= maxWords ? t0 : trimClause(t0, maxWords, 8);
         if (!t) continue;
         if (wordCount([...parts, ...body].join(' ')) + wordCount(t) > budget) continue;
-        body.push(t);
+        body.push(...(two || [t]));
         used.add(t0);
-        details++;
+        details += two ? 2 : 1;
       }
       const quoteFits = !linked && info.quote?.by && !quick && ![...used].some((l) => l.includes(info.quote.text.slice(0, 20)));
       if (quoteFits && [...parts, ...body].join(' ').length + info.quote.text.length < 420) body.push(`As ${lowerArticle(info.quote.by)} put it: “${unstop(info.quote.text)}.”`);

@@ -73,10 +73,13 @@ const SAYS_THE = /^(?:[\p{L}'’-]+\s+){1,4}(?:say|says|said|believe|believes|ex
 // "Adults and children walked there together": a "there" that points at a place said before (not the
 // existential "there is/are/were...").
 const THERE_DEIXIS = /(?<![\p{L}])(?<!\b(?:hello|hi|hey|out|over|up|down|in|from|here and|you)\s)there(?![\p{L}])(?!\s+(?:is|are|was|were|will|would|has|have|had|could|can|may|might|must|should|seems?|seemed|appears?|appeared|remains?|remained|used|isn['’]t|aren['’]t|wasn['’]t|weren['’]t)\b)(?!['’]s\b)/iu;
-/** Narrower: a sentence that points back at something said before (a pronoun opening, a "there"): it can never open a story. */
+// "Shadow chancellor will also promise to scrap...": an "also" in a sentence's first clause adds to something the
+// viewer never heard (an outlet's second paragraph, used as its summary)
+export const ALSO_LEAN = /^[^,;:.]{0,80}\balso\b/i;
+/** Narrower: a sentence that points back at something said before (a pronoun opening, a "there", an "also"): it can never open a story. */
 export const pointsBack = (sentence) => {
   const t = String(sentence ?? '').replace(/^(?:\s*\[[^\]]*\])+\s*/, '').trim();
-  return PRONOUN_OPENING.test(t) || THERE_DEIXIS.test(t.replace(/^There\b/, ''));
+  return PRONOUN_OPENING.test(t) || THERE_DEIXIS.test(t.replace(/^There\b/, '')) || ALSO_LEAN.test(t);
 };
 export const leansOnPrevious = (sentence) => {
   const t = String(sentence ?? '').replace(/^(?:\s*\[[^\]]*\])+\s*/, '').trim();
@@ -126,6 +129,35 @@ const NUMBER_RE =
  * Every number in a text as { raw, value, scaled, index, end, percent,
  * currency ('dollar' | 'pound' | ... | null), unit (scale word) }.
  */
+// Abbreviations a full stop ends without ending the sentence ("the U.S. Marine", "Dr. Smith", "St. Louis").
+const TITLE_ABBR = /(?:^|[\s(“"'‘])(?:Mr|Mrs|Ms|Dr|St|Mt|No|Gen|Sen|Rep|Gov|Lt|Col|Capt|Sgt|Cpl|Prof|Jr|Sr|Inc|Ltd|Co|Corp|vs|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|approx|est)\.$/;
+const INITIALS = /(?:^|[\s(“"'‘])(?:\p{Lu}\.){2,}$/u;
+// after "U.S." a sentence does start again with one of these
+const OPENER = /^(?:The|A|An|It|Its|He|She|They|We|I|This|That|These|Those|There|In|On|At|By|For|But|And|However|Meanwhile|Officials|Police)\b/;
+
+/**
+ * A text's sentences: split after . ! ? … and a space before a capital, a digit or a quote, but never inside a
+ * figure ("158.7"), after a title or month ("Dr.", "Sept."), nor after initials ("U.S.") unless a sentence plainly
+ * starts again ("…in the U.S. The talks…"). Writer, fallback writer and desk all read sentences this way: "the
+ * U.S. Marine" once came apart into "arrested a U.S." and "Marine in the alleged robbery" (NPR, 4 Oct).
+ */
+export function sentencesIn(text) {
+  const t = String(text ?? '');
+  const out = [];
+  let start = 0;
+  const re = /([.!?…]+["”'’)\]]*)\s+(?=[\[“"'‘\p{Lu}\d])/gu;
+  for (let m; (m = re.exec(t)); ) {
+    const end = m.index + m[1].length;
+    const head = t.slice(start, end);
+    const next = t.slice(re.lastIndex);
+    if (m[1] === '.' && (TITLE_ABBR.test(head) || (INITIALS.test(head) && !OPENER.test(next)))) continue;
+    out.push(head.trim());
+    start = re.lastIndex;
+  }
+  if (start < t.length && t.slice(start).trim()) out.push(t.slice(start).trim());
+  return out;
+}
+
 export function numbersIn(text) {
   const s = String(text ?? '');
   const out = [];

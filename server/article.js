@@ -8,11 +8,12 @@
 // Linear scans only (pages are capped at 600 KB by the caller); never throws.
 
 import { dropTranscriptLines, dropPageFurniture } from './transcript.js';
+import { sentencesIn } from './facts.js';
 
 const MAX_TEXT = 2400;
 const MIN_PARA = 60; // characters: shorter runs are captions, bylines, buttons
 // boilerplate a paragraph must not be (anywhere in it for the short ones, at its start for the long ones)
-const BOILER = /\b(subscribe|subscription|sign up|newsletter|cookies?|privacy policy|terms of (use|service)|all rights reserved|follow us|read more|related (stories|articles|coverage)|advertisement|sponsored|share (this|on)|click here|download (our|the) app|copyright|©|getty images|reuters\/|ap photo|photograph:|image caption|watch:|listen:|most read|recommended)\b/i;
+const BOILER = /\b(does not (?:offer|accept) (?:or accept )?money|for coverage or interviews|editorial independence|subscribe|subscription|sign up|newsletter|cookies?|privacy policy|terms of (use|service)|all rights reserved|follow us|read more|related (stories|articles|coverage)|advertisement|sponsored|share (this|on)|click here|download (our|the) app|copyright|©|getty images|reuters\/|ap photo|photograph:|image caption|watch:|listen:|most read|recommended)\b/i;
 const SENTENCE = /[.!?]["'’”)]?\s*$/;
 
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ndash: '–', mdash: '—', lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', hellip: '…' };
@@ -93,12 +94,16 @@ function fit(paragraphs, max) {
       n += p.length + 1;
       continue;
     }
-    // the last paragraph cut at a sentence end
+    // the last paragraph cut at a sentence end: a real one ("...crime related to U.S. bases" never ends at "U.S.")
     const room = max - n - 1;
     if (room > MIN_PARA) {
-      const cut = p.slice(0, room);
-      const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('? '), cut.lastIndexOf('! '));
-      if (end > MIN_PARA) kept.push(cut.slice(0, end + 1));
+      let cut = '';
+      for (const sentence of sentencesIn(p)) {
+        const next = cut ? `${cut} ${sentence}` : sentence;
+        if (next.length > room) break;
+        cut = next;
+      }
+      if (cut.length > MIN_PARA) kept.push(cut);
     }
     break;
   }

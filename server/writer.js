@@ -7,7 +7,7 @@
 // lead, no banter next to grave news...), whatever the writer was.
 import { parseCues, embedCues, describeActions, ACTIONS } from '../public/js/cues.js';
 import { isBreaking, plainTitle } from './news.js';
-import { claimGrounded, contentWords, groundQuote, headlineGrounded, inventedClaim, isGrave, leansOnPrevious, notForFeatures, numbersGrounded, pointsBack, severity, numbersIn, numberWordsIn, qualifierConflict, quotationsGrounded, sameWord, sourceQualifier } from './facts.js';
+import { claimGrounded, contentWords, sentencesIn, groundQuote, headlineGrounded, inventedClaim, isGrave, leansOnPrevious, notForFeatures, numbersGrounded, pointsBack, severity, numbersIn, numberWordsIn, qualifierConflict, quotationsGrounded, sameWord, sourceQualifier } from './facts.js';
 import { findPlaces, lookupPlace, placeSupported, snapLocation } from './gazetteer.js';
 import { askLine, deskOf, presenceClaim, thanksLine, throwLine } from './correspondents.js';
 
@@ -482,6 +482,8 @@ function headlineCuts(t) {
     const words = head.text.split(' ');
     for (let i = words.length - 1; i >= 2 && words.length - i <= 7; i--) {
       const w = words[i];
+      // a last word with nothing after it is a particle, not a preposition ("face off", "step down")
+      if (i === words.length - 1 && TRAIL_PREP.test(w)) continue;
       if (TRAIL_PREP.test(w) || (TIME_START.test(w) && words.length - i <= 3) || (/^to$/i.test(w) && toCut(words, i))) consider(words.slice(0, i).join(' '), w, false, head.label);
     }
   }
@@ -549,8 +551,16 @@ const placesOfHeadline = (t) => [...findPlaces(t).map((p) => p.text), ...[...Str
 /** Never over the strap's hard limit: whole words from the start, never ending on a stop word or a cut figure. */
 function hardFit(t, max = LIMITS.headline) {
   if (t.length <= max) return t;
+  // a clause boundary first: "What to know about Brazil's election [as Lula and Flávio Bolsonaro face off]"
+  const bounds = [...t.matchAll(/,\s+|\s+(?:as|after|amid|while|with|following|despite|over|in|at)\s+/g)].map((m) => t.slice(0, m.index).trim()).filter((h) => h.length <= max && h.split(' ').length >= 3 && !danglingHeadline(h) && !ADVERB_END.test(h) && !unbalanced(h));
+  if (bounds.length) return bounds.sort((a, b) => b.length - a.length)[0];
   const words = t.split(' ');
-  while (words.length > 3 && (words.join(' ').length > max || danglingHeadline(words.join(' ')) || ADVERB_END.test(words.join(' ')))) words.pop();
+  const cap = (w) => /^\p{Lu}/u.test(w || '');
+  // word by word, never through a name ("Lula and Flávio [Bolsonaro]")
+  while (words.length > 3 && (words.join(' ').length > max || danglingHeadline(words.join(' ')) || ADVERB_END.test(words.join(' ')))) {
+    const w = words.pop();
+    while (words.length > 3 && cap(w) && cap(words[words.length - 1])) words.pop();
+  }
   const out = words.join(' ').replace(/[\s,;:–—-]+$/, '');
   return out.length <= max ? out : clipWords(out, max);
 }
@@ -695,6 +705,27 @@ export function shortHeadline(title, max = HEADLINE_MAX, { spoken = false } = {}
 }
 
 /**
+ * A long sentence told as two, the way a broadcast writer shortens: at ", and" / "; " / ", but" when both sides are
+ * whole clauses within `max` words ("Airports in Cancún have closed, and hotels have moved guests to inner rooms"
+ * -> two sentences). Null when no such split fits.
+ */
+export function splitClauses(sentence, max, min = 4) {
+  const t = String(sentence).trim().replace(/[.!?]+$/, '');
+  for (const m of t.matchAll(/(?:,\s+(and|but)|;\s*(?:and\s+|but\s+)?)\s*/gi)) {
+    const head = t.slice(0, m.index).trim();
+    let tail = t.slice(m.index + m[0].length).trim();
+    const nh = head.split(/\s+/).length;
+    const nt = tail.split(/\s+/).length;
+    if (nh > max || nt > max || nh < min || nt < min || unbalanced(head) || unbalanced(tail)) continue;
+    if (!hasFiniteVerb(head) || !hasFiniteVerb(tail.split(/\b(?:that|which|who|whom|whose|whether)\b/i)[0])) continue;
+    // the second must stand alone: no pronoun opening it without its noun nearby ("it", "they" read fine after the first)
+    if (m[1] && /^but$/i.test(m[1])) tail = `But ${tail}`;
+    return [`${head}.`, `${tail[0].toUpperCase()}${tail.slice(1)}.`];
+  }
+  return null;
+}
+
+/**
  * A sentence cut back to `max` words at its last clause boundary (", a record", " where the species...",
  * ", after a case brought by..."), keeping at least `min` words; null when no clean cut fits.
  */
@@ -709,6 +740,28 @@ export function trimClause(sentence, max, min = 6) {
     const head = t.slice(0, at).trim();
     const n = head.split(/\s+/).length;
     if (n > max || n < min) continue;
+    // never inside a quotation or a parenthesis ("a bid for a “partial[, progressive return to lessons”]")
+    if (unbalanced(head)) continue;
+    // "between democracy [and barbarism]": a pair is one phrase
+    if (/\bbetween\b(?![^]*\band\b)/i.test(head) && /^\s*and\b/i.test(t.slice(at))) continue;
+    // a cut at "and", "but", "while" or "as" keeps a whole clause only when a clause follows it ("Airports have
+    // closed, and hotels have moved guests"); before a noun ("democracy and barbarism") it would break a phrase
+    // (", and governors in an election that will..." is a list's last item: the verb after "that" is not its own)
+    const conj = (comma ? (t.slice(end).match(/^(and|or|but)\s+/i)?.[1] || ',') : t.slice(at, end).trim()).toLowerCase();
+    const rest = t.slice(end).replace(/^(?:and|or|but)\s+/i, '').split(/[,;:]|\b(?:that|which|who|whom|whose|whether)\b/i)[0];
+    if (['and', 'or', 'but', 'while', 'as'].includes(conj) && !hasFiniteVerb(rest)) continue; // (its first word is its subject)
+    // "pick lawmakers[, senators and governors]": a comma inside a list (an "and" soon after, no verb before it)
+    const item = comma ? t.slice(end).match(/^([^,;:]{1,40}?)\s(?:and|or)\s/i) : null;
+    if (item && item[1].trim().split(/\s+/).length <= 3 && !hasFiniteVerb(item[1])) continue; // (a list item is short)
+    // "Cvijanovic, Bosniak moderate leftist Denis Becirovic[ and ...]": a cut after a list's item (its last
+    // segment no verb of its own)
+    if (/^(?:and|or)$/.test(conj) && (head.match(/,/g) || []).length >= 1 && !hasFiniteVerb(head.slice(head.lastIndexOf(',') + 1).trim())) continue;
+    // "...members of the country's multiethnic [presidency]": an adjective left without its noun
+    if (/(?:\b(?:a|an|the|its|their|his|her|our|this|that)|['’]s)\s+[a-z]+(?:ic|al|ous|ive|ian|ish|ese|ent|ant|ary|ful|less|ed)$/i.test(head)) continue;
+    // "its decision to relocate was made [because of...]": a bare passive of a light verb says nothing alone
+    if (/\b(?:was|were|is|are|been|be)\s+(?:made|taken|done|given|reached)$/i.test(head)) continue;
+    // "...from a UK air base one week [after the arrests]": a span of time before "after" or "before" is theirs
+    if (/^(?:after|before|since|later)$/i.test(t.slice(at, end).trim()) && /\b(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|several|few|\d+)\s+(?:minutes?|hours?|days?|weeks?|months?|years?|decades?)$/i.test(head)) continue;
     if (/\b(?:a|an|the|of|to|in|on|at|for|from|by|with|and|or|than|its|their|his|her|this|that|says|said)$/i.test(head)) continue;
     // an attribution must keep what it attributes ("Rail operators in Japan say [...]" is never cut after "say")
     if (/\b(?:say|says|said|warn|warns|believe|believes|expect|expects)$/i.test(head)) continue;
@@ -719,8 +772,13 @@ export function trimClause(sentence, max, min = 6) {
     // the kept clause must still say something: a finite verb after its subject ("Scientists surveying a
     // section of reef off Queensland" is no sentence)
     // (a relative clause's verb is not the main clause's: "the bridge, which opened in 1960")
-    const main = head.replace(/,\s+(?:which|who|whose|where|when)\b[^,]*(?:,|$)/gi, ' ').replace(/\s+/g, ' ').trim();
+    // ("With counting nearly concluded, Serb nationalist Zeljka Cvijanovic": an opening phrase is not the clause)
+    const main = head.replace(/,\s+(?:which|who|whose|where|when)\b[^,]*(?:,|$)/gi, ' ').replace(/^(?:with|after|before|despite|amid|following|once|since)\s[^,]{1,60},\s*/i, '').replace(/\s+/g, ' ').trim();
     if (!hasFiniteVerb(main)) continue;
+    // ...and a clause it opens ("it remains unclear how a citizen of Oman[, an Arab country...]") keeps its own
+    // verb: an appositive after the subject is no verb of it
+    const open = head.match(/\b(?:how|why|whether|what|if|that)\s+(\S.*)$/i);
+    if (open && !hasFiniteVerb(open[1].replace(/,[^,]*$/, ''))) continue; // (its first word is its subject)
     // ...and what an attribution reports keeps its own verb ("Officials said the bridge[, which...]" is not one)
     const reported = main.match(/\b(?:say|says|said|warn|warns|warned|believe|believes|expect|expects|think|thinks|reports?|reported|announced|confirmed|added)\s+(?:that\s+)?(\S.*)$/i);
     if (reported && !hasFiniteVerb(`X ${reported[1]}`)) continue;
@@ -729,9 +787,15 @@ export function trimClause(sentence, max, min = 6) {
   return null;
 }
 
+/** Does a text leave a quotation or a parenthesis open (“ ” « » " counted, ( ))? */
+function unbalanced(text) {
+  const n = (re) => (String(text).match(re) || []).length;
+  return n(/[“«]/g) !== n(/[”»]/g) || n(/"/g) % 2 === 1 || n(/\(/g) !== n(/\)/g);
+}
+
 const CUT_ADVERB = /\b(?:just|shortly|soon|right|even|only|immediately|well|long|straight|directly|also|still|nearly|almost|about|around|roughly|some|already|yet|ever|too|very|so|much|far)$/i;
 const AUX_VERB = /^(?:is|are|was|were|be|been|has|have|had|will|would|can|could|may|might|must|should|shall|does|do|did|isn['’]t|aren['’]t|won['’]t|can['’]t)$/i;
-const PAST_FORM = /^(?:rose|fell|grew|took|made|hit|struck|began|won|lost|left|came|went|gave|saw|found|kept|became|brought|built|sold|paid|spent|set|put|ran|drew|flew|shook|said|told|held|met|led|sent|sank|broke|wrote|fought|caught|thought|sought|swept|slid|burnt|stood|chose|froze|ate|got|knew|meant|felt|heard|lay|laid|rang|sang|swam|threw|wore|woke|cut|shut|spread|hurt|cost|let|quit|split)$/i;
+const PAST_FORM = /^(?:burst|rose|fell|grew|took|made|hit|struck|began|won|lost|left|came|went|gave|saw|found|kept|became|brought|built|sold|paid|spent|set|put|ran|drew|flew|shook|said|told|held|met|led|sent|sank|broke|wrote|fought|caught|thought|sought|swept|slid|burnt|stood|chose|froze|ate|got|knew|meant|felt|heard|lay|laid|rang|sang|swam|threw|wore|woke|cut|shut|spread|hurt|cost|let|quit|split)$/i;
 const PLURAL_VERB = /^(?:say|warn|expect|believe|think|hope|plan|want|need|fear|estimate|agree|claim|argue|report|show|suggest|account|remain|continue|make|take|help|use|work|live|run|keep|face|reach|cover|carry|serve|hold|join|lead|grow|rise|fall|stay|stand|sit|come|go|get|give|see|find|know|call|ask|try|move|pay|meet|win|lose|open|close|start|begin|end|travel|stop|walk|wait|return|remain|form|look|mean|offer|provide|include|range|vary|differ)$/i;
 const NOT_VERB_AFTER = /^(?:a|an|the|of|in|on|at|for|from|by|with|to|into|its|their|his|her|our|this|that|these|those|some|many|several|few|new|old|\d[\d,.]*)$/i;
 /** Does a clause have a finite verb after its first word (an auxiliary, a past form, a present-tense verb)? */
@@ -856,7 +920,7 @@ function normalizeKicker(value, source) {
 
 // Sentences of a script text (cue tags may sit anywhere). Decimals such as
 // "7.1" do not split: a sentence ends at punctuation followed by a space.
-const sentencesOf = (text) => String(text).split(/(?<=[.!?…])\s+(?=[\["“'A-Z0-9])/).filter((x) => x.trim());
+const sentencesOf = (text) => sentencesIn(text); // never inside a figure, a title or initials (facts.js)
 const stripTags = (s) => String(s).replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Numbers that belong to the format, not to the news. In stories only the
