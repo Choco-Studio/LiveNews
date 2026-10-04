@@ -1184,7 +1184,7 @@ describe('set dressing: each programme its own studio (owner polish round, 3 Oct
       assert.ok(bright < W * H * 0.015, `${programme}: ${bright} bright dressing pixels`);
     }
   });
-  test('the desk fronts: wood for MONEY MINUTE, purple for COSMOS, a yellow band for NEWS IN 60; the plate stays red', () => {
+  test('the desk fronts: wood for MONEY MINUTE, a starry dark front for COSMOS, a yellow band for NEWS IN 60; the plate stays red', () => {
     const at = (programme, name) => {
       const px = wideOf(programme, true);
       let n = 0;
@@ -1192,7 +1192,8 @@ describe('set dressing: each programme its own studio (owner polish round, 3 Oct
       return n;
     };
     assert.ok(at('money-minute', 'brown') > 1500);
-    assert.ok(at('cosmos', 'purple') > 1500);
+    // COSMOS: the front stays dark (no purple slab: cosmos.md, the magenta line the only accent) with stars
+    assert.ok(at('cosmos', 'silver') > 20 && at('cosmos', 'purple') === 0);
     assert.ok(at('news-60', 'yellow') > 200);
     for (const programme of PROGRAMS) assert.ok(at(programme, 'red') > 100, `${programme}: the GLOBIT 24 plate`);
   });

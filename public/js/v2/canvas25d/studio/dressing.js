@@ -9,8 +9,9 @@
 //                 cyan LED strip, the light down the back panel, a glass shelf), one hand-pixelled product in
 //                 each (headphones, a gamepad, a retro handheld, a camera | a VR headset, a joystick, a drone,
 //                 a little UNIT-8)
-//   COSMOS DESK   an observatory: a starfield on the dark wall with a purple nebula, two portholes (the
-//                 Moon, a ringed planet), an orbit arc over the screen
+//   COSMOS DESK   a planetarium: a quiet starfield and a star chart's dotted grid on the black wall, Orion,
+//                 the Big Dipper and Cassiopeia as star charts (crosses, purple lines, names in micro type),
+//                 the Moon's eight phases over the screen, a dark desk front with stars
 //   MONEY MINUTE  a bank's trading room: wood panelling, two market boards (rows of green and red figures),
 //                 a candlestick chart, the bronze sconces of the style
 //   NEWS IN 60    a flash studio: a ring of sixty marks round the screen, a bank of small monitors each side,
@@ -599,85 +600,188 @@ function techBytes(fr, cam, style, soft) {
   displayCabinet(fr, cam, 1, soft);
 }
 
-// --------------------------------------------------------------------------- COSMOS: observatory
-function starfield(fr, cam, soft) {
-  const r = rng(41);
-  for (let n = 0; n < 260; n++) {
-    const sx = r() < 0.5 ? -1 : 1;
-    const X = sx * (146 + r() * 190), Y = -126 + r() * 122;
-    const v = r();
-    if (soft && v < 0.7) continue;
-    dotW(fr, cam, X, Y, v > 0.94 ? C.white : v > 0.75 ? C.silver : v > 0.4 ? C.fog : C.steel, v > 0.97 ? 1.6 : 1);
+// --------------------------------------------------------------------------- COSMOS: the planetarium wall
+// The darkest room becomes a planetarium: a quiet starfield on the black wall beside the pools, two
+// constellations drawn as star charts (Orion on the left; the Big Dipper and Cassiopeia on the right),
+// their stars as small crosses joined by thin purple lines that stop short of each star, each named in
+// micro type; and over the screen, the Moon's eight phases in a row. No coloured wash (cosmos.md: a purple
+// light on the flanks reads as a club), nothing behind a head, every star at or under the faces' value
+// but the few brightest.
+// [name, x, y, mag] in chart units (x right, y down), mag 1 (brightest) .. 3; lines as index pairs
+const ORION = {
+  name: 'ORION',
+  stars: [['Betelgeuse', 0, 0, 1, 'orange'], ['Bellatrix', 30, 5, 2], ['Meissa', 15, -12, 3], ['Alnitak', 10, 38, 2], ['Alnilam', 16, 35, 2], ['Mintaka', 22, 32, 2], ['Saiph', 4, 70, 2], ['Rigel', 36, 64, 1, 'blue']],
+  lines: [[0, 2], [2, 1], [0, 3], [1, 5], [3, 4], [4, 5], [3, 6], [5, 7]],
+};
+const DIPPER = {
+  name: 'URSA MAJOR',
+  stars: [['Dubhe', 0, 0, 1], ['Merak', 2, 11, 2], ['Phecda', 15, 14, 2], ['Megrez', 16, 4, 3], ['Alioth', 27, 1, 2], ['Mizar', 37, -2, 2], ['Alkaid', 48, -8, 2]],
+  lines: [[0, 1], [1, 2], [2, 3], [3, 0], [3, 4], [4, 5], [5, 6]],
+};
+const CASSIOPEIA = {
+  name: 'CASSIOPEIA',
+  stars: [['Caph', 0, 0, 2], ['Schedar', 9, 9, 2], ['Navi', 19, 3, 2], ['Ruchbah', 28, 11, 2], ['Segin', 38, 4, 3]],
+  lines: [[0, 1], [1, 2], [2, 3], [3, 4]],
+};
+// where each chart sits on the wall (world units: its origin, units per chart unit, the label's offset)
+const CHARTS = [
+  { c: ORION, X: -206, Y: -96, u: 1.05, label: [-6, 82] },
+  { c: DIPPER, X: 167, Y: -98, u: 1.25, label: [2, 22] },
+  { c: CASSIOPEIA, X: 172, Y: -48, u: 1.25, label: [-2, 23] },
+];
+
+function starPx(fr, x, y, mag, tint, soft) {
+  const px = fr.px;
+  const set = (X, Y, c) => {
+    if (X >= 0 && X < W && Y >= 0 && Y < H) px[Y * W + X] = c;
+  };
+  if (soft) {
+    set(x, y, mag === 1 ? C.fog : C.steel);
+    return;
+  }
+  const core = tint ? C[tint] : mag === 1 ? C.white : mag === 2 ? C.silver : C.fog;
+  set(x, y, core);
+  if (mag <= 2) {
+    // a small cross: the arms one step dimmer
+    const arm = tint === 'orange' ? C.tan : tint === 'blue' ? C.navy : mag === 1 ? C.silver : C.steel;
+    set(x - 1, y, arm);
+    set(x + 1, y, arm);
+    set(x, y - 1, arm);
+    set(x, y + 1, arm);
+    if (mag === 1) {
+      const tip = tint === 'orange' ? C.brown : tint === 'blue' ? C.slate : C.steel;
+      set(x - 2, y, tip);
+      set(x + 2, y, tip);
+      set(x, y - 2, tip);
+      set(x, y + 2, tip);
+    }
   }
 }
-function nebula(fr, cam, sx, soft) {
-  // a wisp: purple dithered over the wall's ink, its heart magenta (sparse)
+
+function chartLine(fr, ax, ay, bx, by, gapA, gapB, c) {
+  const n = Math.max(1, Math.ceil(Math.max(Math.abs(bx - ax), Math.abs(by - ay))));
+  const len = Math.hypot(bx - ax, by - ay);
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, d = t * len;
+    if (d < gapA || len - d < gapB) continue;
+    const x = Math.round(ax + (bx - ax) * t), y = Math.round(ay + (by - ay) * t);
+    if (x < 0 || x >= W || y < 0 || y >= H) continue;
+    const o = fr.px[y * W + x];
+    if (o === C.black || o === C.ink) fr.px[y * W + x] = c;
+  }
+}
+
+function constellation(fr, cam, ch, soft) {
   const k = kAt(cam, SET.wallZ);
-  const cx = sxOf(cam, k, sx * 250), cy = syOf(cam, k, -88);
-  const rx = 62 * k, ry = 26 * k;
-  for (let y = Math.max(0, Math.floor(cy - ry)); y < Math.min(H, Math.ceil(cy + ry)); y++) {
-    for (let x = Math.max(0, Math.floor(cx - rx)); x < Math.min(W, Math.ceil(cx + rx)); x++) {
-      const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry;
-      const tilt = dy + dx * 0.45 * sx;
-      const d = dx * dx + tilt * tilt * 1.6;
-      if (d >= 1) continue;
-      const v = (1 - d) * (soft ? 0.35 : 0.6);
-      if (v > bayer(x, y) + 0.12) fr.px[y * W + x] = v > 0.5 && !soft && bayer(x + 1, y) < 0.3 ? C.magenta : C.purple;
+  const P = ch.c.stars.map(([, x, y, mag, tint]) => [sxOf(cam, k, ch.X + x * ch.u), syOf(cam, k, ch.Y + y * ch.u), mag, tint]);
+  // the lines stop a pixel short of each star's cross (two pixels for the brightest)
+  const gap = (m) => (m === 1 ? 3 : 2) * Math.max(1, Math.round(k * 0.9));
+  if (!soft) for (const [a, b] of ch.c.lines) chartLine(fr, P[a][0], P[a][1], P[b][0], P[b][1], gap(P[a][2]), gap(P[b][2]), C.purple);
+  for (const [x, y, mag, tint] of P) starPx(fr, Math.round(x), Math.round(y), mag, tint, soft);
+  if (soft) return;
+  // its name in micro type, dim (slate), at whole-pixel scale
+  const g = textPixels(ch.c.name, 'micro');
+  const s = Math.max(1, Math.round(k * 1.1));
+  const lx = Math.round(sxOf(cam, k, ch.X + ch.label[0])), ly = Math.round(syOf(cam, k, ch.Y + ch.label[1]));
+  // a name is shown whole or not at all (a framing that cuts it, or the flats over it, drops it)
+  const kf = kAt(cam, SET.flatsZ);
+  const fl = Math.round(sxOf(cam, kf, -FLATS_X)), fr0 = Math.round(sxOf(cam, kf, FLATS_X));
+  if (lx < Math.max(1, fl + 2) || lx + g.width * s > Math.min(W - 1, fr0 - 2) || ly < 1 || ly + g.cap * s > H - 1) return;
+  for (const [gx, gy] of g.pixels) {
+    for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) {
+      const x = lx + gx * s + i, y = ly + gy * s + j;
+      if (x >= 0 && x < W && y >= 0 && y < H) fr.px[y * W + x] = C.steel;
     }
   }
 }
-function porthole(fr, cam, X, Y, body, soft) {
-  const R = 30;
-  // the brass-and-steel rim, its bolts, the glass with what it shows
-  discW(fr, cam, X, Y, R + 4, (dx, dy, d) => (d > 0.86 ? (dx + dy < -0.3 ? C.fog : C.steel) : 0));
-  discW(fr, cam, X, Y, R, () => C.black);
-  if (!soft) for (let a = 0; a < 8; a++) dotW(fr, cam, X + Math.cos((a * Math.PI) / 4) * (R + 2), Y + Math.sin((a * Math.PI) / 4) * (R + 2), C.slate, 1.4);
-  const r = rng(Math.round(X));
-  for (let n = 0; n < 20; n++) {
-    const a = r() * Math.PI * 2, rr = Math.sqrt(r()) * (R - 2);
-    dotW(fr, cam, X + Math.cos(a) * rr, Y + Math.sin(a) * rr, r() > 0.7 ? C.silver : C.steel, 1);
+
+const FLATS_X = 196; // the set flats' inner edge (set.js FLAT_X, world X at SET.flatsZ)
+
+function starfield(fr, cam, soft) {
+  // faint background stars beside the pools (|X| 140-300) and in the band over the screen: mostly slate and
+  // steel, a few fog, a very few silver; deterministic
+  const k = kAt(cam, SET.wallZ);
+  const r = rng(41);
+  for (let n = 0; n < 230; n++) {
+    const top = r() < 0.18;
+    const X = top ? -130 + r() * 260 : (r() < 0.5 ? -1 : 1) * (140 + r() * 160);
+    const Y = top ? -134 + r() * 20 : -130 + r() * 132;
+    const v = r();
+    if (soft && v < 0.85) continue;
+    const x = Math.round(sxOf(cam, k, X)), y = Math.round(syOf(cam, k, Y));
+    if (x < 0 || x >= W || y < 0 || y >= H) continue;
+    if (fr.px[y * W + x] !== C.black) continue; // only on the black wall, never on a pool's edge
+    fr.px[y * W + x] = v > 0.97 ? C.silver : v > 0.85 ? C.fog : v > 0.45 ? C.steel : C.slate;
   }
-  if (body === 'moon') {
-    // a crescent Moon, lit from the left, a crater or two
-    discW(fr, cam, X - 4, Y - 2, 13, (dx, dy, d) => {
-      const lit = (dx + 0.55) * (dx + 0.55) + dy * dy > 0.75 ? 0 : 1;
-      if (!lit) return 0;
-      return d > 0.8 ? C.fog : (dx + 0.2) * (dx + 0.2) + (dy - 0.3) * (dy - 0.3) < 0.04 ? C.fog : C.silver;
-    });
-  } else {
-    // a ringed planet: the ring behind, the body, the ring in front
-    const tilt = 0.32;
-    for (let a = 0; a < 64; a++) {
-      const t = (a / 64) * Math.PI * 2;
-      if (Math.sin(t) > 0) continue;
-      dotW(fr, cam, X + Math.cos(t) * 20, Y + Math.sin(t) * 20 * tilt, C.tan, 1);
-    }
-    discW(fr, cam, X, Y, 11, (dx, dy, d) => {
-      const band = Math.floor((dy + 1) * 3.5) % 2;
-      const shade = dx + dy * 0.4 > 0.35;
-      return shade ? (band ? C.brown : C.tanShade) : band ? C.tan : C.cream;
-    });
-    for (let a = 0; a < 64; a++) {
-      const t = (a / 64) * Math.PI * 2;
-      if (Math.sin(t) <= 0) continue;
-      dotW(fr, cam, X + Math.cos(t) * 20, Y + Math.sin(t) * 20 * tilt, C.cream, 1);
+}
+
+// the Moon's phases over the screen: 7 px discs (whole-pixel scale), lit limb silver, dark side ink with a
+// slate rim, the new Moon a slate ring
+function moonPhases(fr, cam, soft) {
+  if (soft) return;
+  const k = kAt(cam, SET.wallZ);
+  const s = Math.max(1, Math.round(k * 1.25));
+  const R = 3.5 * s;
+  const x0 = sxOf(cam, k, SET.screen.x0 + 6), x1 = sxOf(cam, k, SET.screen.x1 - 6);
+  const yc = Math.round(syOf(cam, k, -121.5));
+  const px = fr.px;
+  // a black strip behind the row (as wide as the screen's frame), its top edge ink
+  const b = Math.max(1, Math.round(2 * k));
+  const bx0 = Math.round(sxOf(cam, k, SET.screen.x0)) - b, bx1 = Math.round(sxOf(cam, k, SET.screen.x1)) + b;
+  const by0 = yc - Math.floor(R) - 1 - s, by1 = yc + Math.ceil(R) + 1 + s;
+  fr.span(bx0, by0, bx1, by1, C.black);
+  fr.span(bx0, by0, bx1, by0 + 1, C.ink);
+  for (let p = 0; p < 8; p++) {
+    const cx = Math.round(x0 + ((x1 - x0) * p) / 7);
+    // phase angle: 0 new, 0.5 full; the terminator's x (in radius units) for each row
+    // the terminator per phase, pushed toward the readable at 7 px (a true crescent is a 1 px sliver)
+    const waxing = p <= 4;
+    const t = [1, 0.35, 0, -0.45, -1, -0.45, 0, 0.35][p];
+    for (let j = 0; j < 7 * s; j++) {
+      for (let i = 0; i < 7 * s; i++) {
+        const dx = (i + 0.5 - R) / R, dy = (j + 0.5 - R) / R;
+        const d = dx * dx + dy * dy;
+        if (d > 1) continue;
+        const half = Math.sqrt(Math.max(0, 1 - dy * dy));
+        // lit if beyond the terminator on the lit side (waxing: the right side)
+        const u = waxing ? dx : -dx;
+        const lit = p === 0 ? false : u > t * half;
+        let c = lit ? (d > 0.62 && u < 0 ? C.fog : C.silver) : d > 0.55 ? C.slate : C.ink;
+        if (p === 0) c = d > 0.55 ? C.slate : C.black;
+        const X = cx - Math.floor(R) + i, Y = yc - Math.floor(R) + j;
+        if (X >= 0 && X < W && Y >= 0 && Y < H) px[Y * W + X] = c;
+      }
     }
   }
 }
+
+// a star chart's coordinate grid behind the constellations: two curved parallels and three meridians per
+// side, dotted ink on the black wall (in focus only)
+function chartGrid(fr, cam, soft) {
+  if (soft) return;
+  const k = kAt(cam, SET.wallZ);
+  const px = fr.px;
+  const dot = (X, Y) => {
+    const x = Math.round(sxOf(cam, k, X)), y = Math.round(syOf(cam, k, Y));
+    if (x < 0 || x >= W || y < 0 || y >= H || ((x + y) & 1)) return;
+    if (px[y * W + x] === C.black) px[y * W + x] = C.ink;
+  };
+  for (const sx of [-1, 1]) {
+    // parallels: arcs bowing down, centred on the screen
+    for (const Y0 of [-112, -62, -14]) for (let X = 146; X <= 300; X += 0.5) dot(sx * X, Y0 + (X - 146) * (X - 146) * 0.0016);
+    // meridians: lines converging toward a pole above the frame
+    for (const X0 of [160, 200, 240]) for (let Y = -134; Y <= 10; Y += 0.5) dot(sx * (X0 + (Y + 134) * (X0 - 150) * 0.0026), Y);
+  }
+}
+
 function cosmos(fr, cam, style, soft) {
   starfield(fr, cam, soft);
-  nebula(fr, cam, -1, soft);
-  nebula(fr, cam, 1, soft);
-  porthole(fr, cam, -212, -62, 'moon', soft);
-  porthole(fr, cam, 212, -62, 'planet', soft);
-  if (!soft) {
-    // an orbit arc over the screen with a small body on it
-    for (let a = 0; a <= 48; a++) {
-      const t = Math.PI + (a / 48) * Math.PI;
-      dotW(fr, cam, Math.cos(t) * 118, -102 + Math.sin(t) * 18, a % 2 ? C.purple : C.slate, 1);
-    }
-    dotW(fr, cam, Math.cos(Math.PI * 1.72) * 118, -102 + Math.sin(Math.PI * 1.72) * 18, C.magenta, 2.2);
+  chartGrid(fr, cam, soft);
+  for (const ch of CHARTS) {
+    if (ch.X > 0) constellation(fr, cam, ch, soft);
+    else constellation(fr, cam, ch, soft);
   }
+  moonPhases(fr, cam, soft);
 }
 
 // --------------------------------------------------------------------------- MONEY MINUTE: trading room
@@ -819,7 +923,7 @@ export function drawDressing(fr, cam, style, soft = false) {
 export const DESK_FRONTS = {
   'world-now': null, // the home desk
   'tech-bytes': null, // the steel plinth (set.js)
-  cosmos: { hi: 'purple', lo: 'black', pattern: 'stars' },
+  cosmos: { hi: 'ink', lo: 'black', pattern: 'stars' },
   'money-minute': { hi: 'brown', lo: 'black', pattern: 'grain', top: 'tanShade' }, // the lower panel black (graphics zone)
   'news-60': { hi: 'ink', lo: 'black', pattern: 'stripe', stripe: 'yellow' },
 };
