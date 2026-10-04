@@ -340,6 +340,35 @@ export function drawText(ctx, text, x, y, { color = '#ffffff', scale = 1, shadow
   return w;
 }
 
+/**
+ * The lit pixels of `text` at scale 1 for code that draws into a pixel frame (no canvas): { width, cap,
+ * pixels: [[x, y], ...] } with the cap line at y = 0. Memoised per font.
+ */
+const pixelMemo = { body: memo(400), micro: memo(400) };
+export function textPixels(text, font = 'micro') {
+  const f = fontOf(font);
+  const s = typeof text === 'string' ? text : String(text ?? '');
+  const hit = pixelMemo[f.id].get(s);
+  if (hit) return hit;
+  const norm = normalizeText(s);
+  const pixels = [];
+  let x = 0;
+  for (const ch of norm) {
+    if (ch === ' ') {
+      x += f.space;
+      continue;
+    }
+    const g = glyphFor(f, ch);
+    if (!g) {
+      x += f.unknown + 1;
+      continue;
+    }
+    for (const [px, py] of g.pixels) pixels.push([x + px, py]);
+    x += g.width + 1;
+  }
+  return pixelMemo[f.id].set(s, Object.freeze({ width: Math.max(0, x - 1), cap: f.cap, pixels }));
+}
+
 const wrapMemo = memo(1500);
 
 /**
