@@ -633,6 +633,64 @@ function drawStack(ctx, dt, o, rows, acc) {
   }
 }
 
+// WHAT WE KNOW (pace shots.known): a story's key points (the writer's seg.known, grounded) on the stack's black
+// panel: the kicker, then each point beside an accent square, one after another, at 2x when every point fits
+// on one line, else at 1x in up to two lines. Points are statements, never counted up or typed on.
+const KNOWN_LAYOUTS = layoutCache(40);
+function knownLayout(points, source) {
+  return KNOWN_LAYOUTS(points.join('|'), source, null, null, () => {
+    const PX = 40;
+    const PW = W - 2 * PX;
+    const tw = PW - 24 - 9; // the points' column
+    const big = points.every((p) => textW(p, 2) <= tw);
+    const scale = big ? 2 : 1;
+    const lh = big ? 18 : 11;
+    const items = points.map((p) => ({ lines: big ? [p] : balanceLines(p, tw, 1, 2) }));
+    const gap = big ? 9 : 8;
+    const src = srcText(source, PW - 24);
+    const top = 10 + 5 + 9;
+    let y = top;
+    for (const it of items) {
+      it.y = y;
+      y += it.lines.length * lh + gap;
+    }
+    const h = y - gap + (src ? 13 : 0) + 9;
+    const PY = clamp(Math.round(80 - h / 2), 28, SAFE_BOTTOM - h);
+    return { PX, PW, PH: h, PY, items, scale, lh, src, srcY: y - gap + 6 };
+  });
+}
+
+function drawKnown(ctx, dt, o, acc) {
+  const points = o.known.slice(0, 3).map((p) => String(p));
+  const L = knownLayout(points, o.source);
+  const vis = Math.round(L.PW * easeOutQuint(seg(dt, 0, 0.3)));
+  if (vis <= 0) return;
+  const tx = L.PX + 12;
+  const style = L.scale === 2 ? S.white2 : S.white;
+  ctx.save();
+  try {
+    clipRect(ctx, L.PX, L.PY, vis, L.PH);
+    ctx.fillStyle = P.black;
+    ctx.fillRect(L.PX, L.PY, L.PW, L.PH);
+    ctx.fillStyle = P.slate;
+    ctx.fillRect(L.PX, L.PY, L.PW, 1);
+    drawText(ctx, 'WHAT WE KNOW', tx, L.PY + 10, S.microFog);
+    for (let i = 0; i < L.items.length; i++) {
+      const it = L.items[i];
+      const y = L.PY + it.y;
+      const at = 0.3 + i * 0.45;
+      if (dt < at) continue;
+      // the accent square, then the point rising into place beside it
+      ctx.fillStyle = acc;
+      ctx.fillRect(tx, y + (L.scale === 2 ? 5 : 2), 3, 3);
+      for (let k = 0; k < it.lines.length; k++) rise(ctx, it.lines[k], tx + 9, y + k * L.lh, seg(dt, at + 0.05 + k * 0.07, 0.34), style);
+    }
+    if (L.src) drawText(ctx, L.src, tx, L.PY + L.srcY, S.microFog);
+  } finally {
+    ctx.restore();
+  }
+}
+
 // TECH BYTES ledger
 const LEDGER_PITCH = 24;
 const LEDGER_LAYOUTS = new WeakMap();
@@ -914,7 +972,7 @@ const FACT_STYLES = {
  */
 export function drawFactCard(ctx, t, dt, o = {}) {
   const opts = o || {};
-  if (!opts.fact && !(Array.isArray(opts.numbers) && opts.numbers.length) && opts.quote?.text) {
+  if (!opts.fact && !(Array.isArray(opts.numbers) && opts.numbers.length) && !(Array.isArray(opts.known) && opts.known.length) && opts.quote?.text) {
     QUOTE.text = opts.quote.text;
     QUOTE.by = opts.quote.by ?? null;
     QUOTE.image = opts.image ?? null;
@@ -924,6 +982,10 @@ export function drawFactCard(ctx, t, dt, o = {}) {
   }
   const style = typeof opts.programId === 'string' && Object.hasOwn(FACT_STYLES, opts.programId) ? FACT_STYLES[opts.programId] : RULE_STYLE;
   const acc = accentFor(opts.programId, opts.accent);
+  if (Array.isArray(opts.known) && opts.known.length >= 2) {
+    cardGround(ctx, dt, opts.image, factField);
+    return drawKnown(ctx, dt, opts, acc);
+  }
   const rows = rowsFor(opts.fact, opts.numbers);
   if (style.look === 'paper') {
     ctx.drawImage(inkField(), 0, 0);

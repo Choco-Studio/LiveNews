@@ -52,7 +52,7 @@
 // else a prediction from the episode summary (ctx.episode). Same answer from
 // every call: pure functions of the episode.
 import { rng } from './context.js';
-import { PACE, paceFor, factHold as paceFactHold, shotMax } from '../../../pace.js';
+import { PACE, paceFor, factHold as paceFactHold, factText, knownBoard, numbersBoard, shotMax } from '../../../pace.js';
 
 // PACE (public/js/pace.js): the channel's minimum shot and every per-programme shot window come from
 // the one pacing table; the numbers below that stay are this planner's own fallbacks for contexts
@@ -90,7 +90,10 @@ export function planShots(ctx) {
     return [ev(ctx, 0, 0, solo ? 'close' : 'wide', solo ? 'mcu' : 'wide', ctx?.speaker || 'A', 'fallback')];
   }
   const id = styleOf(ctx.programId);
-  const tl = timeline(ctx);
+  const whole = timeline(ctx);
+  // a story handed to a correspondent ends, for its plan, where the hand-over starts: the director takes that last
+  // sentence to the two-way (director.js throwTo), so no beat, cap or split may cut away just before it
+  const tl = ctx.type === 'story' && ctx.seg?.link && whole.bounds.length ? { ...whole, end: whole.bounds[whole.bounds.length - 1].t, bounds: whole.bounds.slice(0, -1) } : whole;
   let out;
   switch (id) {
     case 'tech-bytes':
@@ -569,7 +572,9 @@ function worldNow(ctx, tl) {
     single: storySingle(ctx),
     map: !!seg.location,
     picture: ctx.hasImage,
-    fact: seg.fact || seg.numbers?.[0]?.value ? factHold(seg, ctx.programId) : 0,
+    fact: seg.fact || seg.numbers?.[0]?.value || knownBoard(seg, ctx.programId) ? factHold(seg, ctx.programId) : 0,
+    board: !!(numbersBoard(seg, ctx.programId) || knownBoard(seg, ctx.programId)),
+    linked: !!seg.link,
     pictureFirst: seg.shot === 'full' && ctx.hasImage,
     pictureMax: S.pictureMax,
     mapMin: S.mapMin, // PACE: a map holds ≥ 5 s (pace.js world-now shots.map)
@@ -592,7 +597,7 @@ function worldNow(ctx, tl) {
 }
 
 /** The fact card's hold: read twice, within the programme's factMin..factMax (pace.js factHold; world-now.md words ÷ 3 + 2). */
-const factHold = (seg, id) => paceFactHold(seg.fact || seg.numbers?.[0]?.value || '', id);
+const factHold = (seg, id) => paceFactHold(factText(seg, id), id); // a BY THE NUMBERS board reads all its rows
 
 /** A short located story inside a run of located stories (round-up without the field). */
 function roundupLike(ctx) {
@@ -609,6 +614,7 @@ function roundupLike(ctx) {
  * the cutaways in order (each on whole sentences, ≥ MIN_SHOT), then back to the
  * single for the remaining sentences if they hold ≥ MIN_SHOT.
  */
+const BOARD_MIN = 5; // s: BY THE NUMBERS / WHAT WE KNOW read once
 function storyBeats(ctx, tl, o) {
   const me = ctx.speaker;
   const out = [ev(ctx, 0, 0, 'close', o.single, me, 'single')];
@@ -618,12 +624,18 @@ function storyBeats(ctx, tl, o) {
   if (o.pictureFirst && o.map) order.reverse();
   // PACE: And finally ends on its picture (or its presenter), never on a map
   if (o.finally && o.map && o.picture && order.indexOf('map') > order.indexOf('picture')) order.reverse();
-  // the Number of the day leads with its card; otherwise the card comes last
-  if (o.fact) (ctx.feature === 'number' ? order.unshift('fact') : order.push('fact'));
+  // the Number of the day leads with its card; a board (BY THE NUMBERS, WHAT WE KNOW) comes right after the map
+  // (first on a story handed to a correspondent: its last sentence is the hand-over); a single fact comes last
+  if (o.fact) {
+    if (ctx.feature === 'number' || (o.board && o.linked)) order.unshift('fact');
+    else if (o.board) order.splice(order.indexOf('map') + 1, 0, 'fact');
+    else order.push('fact');
+  }
   let cur = 0;
   let curMin = MIN_SHOT;
   for (const beat of order) {
-    const need = beat === 'fact' ? Math.max(MIN_SHOT, o.fact) : beat === 'picture' ? Math.max(MIN_SHOT, o.pictureMin || 0) : Math.max(MIN_SHOT, o.mapMin || 0);
+    // (a board's rows read once in 5 s: it airs with that room, and holds longer when there is more)
+    const need = beat === 'fact' ? Math.max(MIN_SHOT, o.board ? Math.min(o.fact, BOARD_MIN) : o.fact) : beat === 'picture' ? Math.max(MIN_SHOT, o.pictureMin || 0) : Math.max(MIN_SHOT, o.mapMin || 0);
     // world-now: the map cuts in on the first word of sentence 2 when the single has had its time
     const b = boundaryAfter(tl, cur + curMin, need);
     if (!b) break;

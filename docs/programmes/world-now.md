@@ -282,6 +282,22 @@ It is enabled per programme by the pace profile's `shots.quoteCard` (WORLD NOW o
 
 It airs only when the shot on air has held the floor and the frame will hold it too before the next story cuts back to the studio. Otherwise the line is read to camera as before. The captions go to the top (y 46–72), as over the montage. The mock no longer teases the very next story, nor adds "and our number of the day" when the number comes straight after.
 
+### Format round 2: the boards
+
+A story's card beat (pace `shots.numbers` and `shots.known`, WORLD NOW only for now) shows the richest of three things:
+1. **BY THE NUMBERS**, when it states two or three figures (`seg.numbers`; the writer keeps only spoken ones). These are the stack card's rows: figure at 2x, its qualifier in micro type above it, its words beside it. Never on the number of the day, which keeps its own card.
+2. **WHAT WE KNOW**, when the writer gave two or three key points (`seg.known`, programme `"boards": ["known"]`). The points sit on the same black panel, one after another, each beside an accent square: at 2x when every point fits on one line, else at 1x in up to two lines.
+   - Each point is held to a headline's standard (`headlineGrounded`: every content word, time span and figure is the source's), within 44 characters. No question, quote or invention ("The strike will last a month" is dropped).
+   - At finalize a point whose figure the presenter does not say is dropped. The set never shows a figure we did not report.
+   - The fallback writer takes them from the source's short clauses with the attribution taken off, only for hard news (the lead, a grave or breaking story, a hard-news topic). It never takes a clause that leans on another one ("than it expected").
+3. **The single fact card**, as before.
+
+**Where a board goes.** It comes right after the map; a single fact still comes last. On a story handed to a correspondent the board comes first, because the hand-over owns the last sentence. The plan of such a story ends where the hand-over starts, so no beat, cap or max-hold guard cuts back to the presenter just before the two-way. A board needs 5 s of room (read once) and holds longer when there is more.
+
+As aired (Germany, the lead): presenter 7.5 s, WHAT WE KNOW 6.2 s, the two-way on the hand-over 6.8 s, pictures 5.5 s, the two-way 7.1 s.
+
+The figure extractor no longer takes a duration describing a noun ("a 24-hour strike") as a figure, and stops a label at "lit" ("50 metres high lit up the sky").
+
 ### Set and light: the home look
 
 - **Dressing:** WORLD NOW is the home look, so there is no extra tint ("none or navy ≤ 10%", ART_DIRECTION §3 re-dressing table). It is not darker than other programmes; COSMOS is the one-step-darker show.

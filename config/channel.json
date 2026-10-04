@@ -162,6 +162,7 @@
       },
       "correspondents": ["rhea", "vic", "mika"],
       "crosses": 2,
+      "boards": ["known"],
       "numberSlot": "main",
       "chats": {
         "after": [

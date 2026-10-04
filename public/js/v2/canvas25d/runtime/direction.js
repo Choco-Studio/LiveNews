@@ -51,7 +51,7 @@ import { defaultFraming } from './stage.js';
 // the Stage's module graph loads with this one: once the director's v2 side is ready, so is the
 // Renderer's (studio.js imports host.js itself; this only removes the start-up race)
 import './host.js';
-import { paceFor, gapAfter as paceGap, CHANNEL, shotMax } from '../../../pace.js';
+import { paceFor, gapAfter as paceGap, CHANNEL, shotMax, knownBoard } from '../../../pace.js';
 
 const now = () => performance.now() / 1000;
 // PACE (public/js/pace.js, owner 23:10): the cut cooldown, the stinger and the pause after each
@@ -90,7 +90,7 @@ export function cuesFromPlan(plan, { hasImg = true, rundown = null } = {}) {
     if (shot === 'montage' ? !intro : !story && !STUDIO.has(shot)) continue;
     if (shot === 'full' && !hasImg) continue;
     if (shot === 'map' && !(seg.location && Number.isFinite(seg.location.lat))) continue;
-    if (shot === 'fact' && !seg.fact) continue; // the director's fact card needs seg.fact
+    if (shot === 'fact' && !seg.fact && !knownBoard(seg, ctx.programId)) continue; // the director's card needs seg.fact (or WHAT WE KNOW's points)
     const focus = e.focus && e.focus in ctx.cast ? e.focus : ctx.speaker;
     let framing = shot === 'montage' ? null : (e.framing ?? null);
     // over-the-shoulder exists to show the wall: without a picture, a map or a figure it would frame
@@ -182,7 +182,9 @@ export function holdCut(plan, si, onAir, { programId = null, gap = 0.6, cues = n
   if (!Number.isFinite(t0)) return null;
   const dry = ctx.dryLine;
   if (dry && t0 >= dry.t0 - (point ? DRY_LEAD : 0.05) && t0 <= dry.t1 + DRY_HOLD) return null;
-  const end = (ctx.duration || 0) + (Number.isFinite(gap) ? gap : 0.6);
+  // (a story handed to a correspondent: its last sentence, the hand-over, cuts to the two-way: director.js throwTo)
+  const throwAt = ctx.seg?.link && ctx.sentences?.length > 1 ? ctx.sentences[ctx.sentences.length - 1].t0 : null;
+  const end = Number.isFinite(throwAt) ? throwAt : (ctx.duration || 0) + (Number.isFinite(gap) ? gap : 0.6);
   let next = end;
   for (const c of cues || []) if (c.k > 0 && Number.isFinite(c.at) && c.at > t0 + 0.05 && c.at < next) next = c.at;
   // the planned time left, at the pace the voice really runs (`rate` = elapsed on air / planned)

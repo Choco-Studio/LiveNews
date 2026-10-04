@@ -83,6 +83,13 @@ function crossRule(program) {
 - Correspondent links: up to ${n} stories (the lead and one main story at least ${LINK_GAP} stories later, each with an article and a specific place in its candidate; never the number of the day, a round-up item or "And finally") are taken by the channel's correspondent for that region. For each, add "cross": the story "text" is then only the presenter's introduction (two sentences: the most striking fact, then the attribution), and the correspondent carries the rest. "piece": 3 or 4 sentences in the correspondent's words (the detail, the context, what the sources say comes next), each a fact from that candidate; "ask": the presenter's prompt to the correspondent, ${ask}, at most 10 words, no name and no new fact; "answer": 1 or 2 more sentences of that candidate's facts. The channel adds the hand-over and the thanks with the correspondent's name: never write them. The correspondent is NOT at the scene and never says so: no "here", "behind me", "on the ground", "I'm standing", "I've seen", "told me", "live"; they attribute ("officials say", "according to the BBC"). Same accuracy rules: nothing that is not in that candidate.`;
 }
 
+/** WHAT WE KNOW (programme "boards": ["known"]): the key points a big story's board shows. */
+function knownRule(program) {
+  if (!program?.boards?.includes('known')) return '';
+  return `
+- WHAT WE KNOW: for the lead and for any main story with several facts (never a round-up item, the number of the day or "And finally"), add "known": two or three key points shown on a board while the presenter reads, each a plain statement of that candidate's facts in at most ${KNOWN_MAX} characters ("About 1.2 million homes without power", "Airports in Cancún closed"). No question, no quote, no opinion; a figure only if the story text says it. Otherwise "known": null.`;
+}
+
 function chatRule(program, solo) {
   if (solo || !program.maxChats) return '- No "chat" segments.';
   const after = program.chats?.after;
@@ -107,7 +114,11 @@ function allowedActions(program) {
 
 const CROSS_SCHEMA = `,
      "cross": {"piece": "the correspondent's report, 3 or 4 sentences", "ask": "the presenter's short prompt to the correspondent", "answer": "1 or 2 sentences"} | null`;
-const SEGMENT_SCHEMA = (slots, headlineMax, crosses = false) => `{
+/** WHAT WE KNOW: the longest point a board shows (characters). */
+export const KNOWN_MAX = 44;
+const KNOWN_SCHEMA = `,
+     "known": ["one key point for the WHAT WE KNOW board, max ${'${KNOWN_MAX}'} characters"] | null`;
+const SEGMENT_SCHEMA = (slots, headlineMax, crosses = false, known = false) => `{
   "title": "short episode title",
   "segments": [
     {"type": "intro", "anchor": "A", "emotion": "neutral", "text": "the intro (see MAKE IT WORTH WATCHING)"},
@@ -120,7 +131,7 @@ const SEGMENT_SCHEMA = (slots, headlineMax, crosses = false) => `{
      "numbers": [{"value": "40,000", "label": "PASSENGERS A DAY", "qualifier": "ABOUT|MORE THAN|NEARLY|UP TO|AT LEAST|LESS THAN" | null}] | null,
      "quote": {"text": "exact words quoted in the summary", "by": "speaker named in the summary" | null} | null,
      "map": [{"place": "COUNTRY", "lat": 0.0, "lon": 0.0}] | null,
-     "feature": "number|roundup|lighter" | null${crosses ? CROSS_SCHEMA : ''}},
+     "feature": "number|roundup|lighter" | null${known ? KNOWN_SCHEMA : ''}${crosses ? CROSS_SCHEMA : ''}},
     {"type": "chat", "anchor": ${slots}, "emotion": "...", "text": "one or two sentence reaction or hand-over"},
     {"type": "outro", "anchor": "A", "emotion": "neutral", "text": "brief sign-off"}
   ]
@@ -201,7 +212,7 @@ TONE
 
 MAKE IT WORTH WATCHING
 ${introRule(program, solo, names)}
-- The lead story must not repeat the intro's line about it: continue from it with the next fact.${lengthRule(program, n)}${crossRule(program)}
+- The lead story must not repeat the intro's line about it: continue from it with the next fact.${lengthRule(program, n)}${crossRule(program)}${knownRule(program)}
 - Each story opens with its most striking fact, then attribution, then one or two details. Vary the openings and the attribution; never start two stories the same way. Never say the same sentence or the same figure twice in a row.
 - Rhythm for the voice: one idea per sentence; mix short and medium sentences, with the odd three-to-five-word sentence for punch. No parentheses, no strings of numbers, no stacked clauses. Write figures as digits with their unit ("40,000 passengers") and say "percent".${
     solo
@@ -240,7 +251,7 @@ STAGE DIRECTIONS (make the presenters move naturally)
 
 OUTPUT FORMAT
 Reply with ONLY a valid JSON object, no text before or after, shaped like this:
-${SEGMENT_SCHEMA(solo ? '"A"' : '"A" | "B"', headlineMax, !!crossRule(program))}
+${SEGMENT_SCHEMA(solo ? '"A"' : '"A" | "B"', headlineMax, !!crossRule(program), !!knownRule(program))}
 - Story "text": ${program.storyLength}.
 - Exactly one "story" segment per selected story, using the candidate ids exactly; do not include unselected candidates.
 ${solo ? '- There is a single presenter: always use "anchor": "A".' : '- Alternate presenters between stories (a round-up counts as one block).'}
@@ -273,7 +284,7 @@ Check every story segment against its SOURCE (matched by storyId):
 - Fix tone problems (no jokes near grave stories) and anything hard to read aloud. A breaking story leads; the number of the day is never the lead.
 - Keep the bracketed stage directions such as [nod] or [B:nod] (they are not read aloud); remove only ones that are inappropriate for the tone.
 - A story's "cross" (a correspondent's piece, the presenter's prompt and the answer) follows the same rules: every sentence supported by that story's source, and the correspondent never claims to be at the scene ("here", "behind me", "on the ground", "I've seen"); remove a sentence that does.
-- Keep the same JSON structure (including "kicker" and "feature", and any "cross"), segment order, presenters and storyIds. Do not add new stories.
+- Keep the same JSON structure (including "kicker" and "feature", and any "cross" or "known"), segment order, presenters and storyIds. Do not add new stories.
 
 ${ACCURACY}
 
@@ -784,6 +795,28 @@ function compactionOf(a, b) {
   return wa.length >= 2 && wa.length <= wb.length && wa.every((w, i) => w === wb[i]);
 }
 
+/**
+ * WHAT WE KNOW: two or three points the writer gave a story, each a plain statement its source supports as a
+ * headline must (every content word, time span and figure is the source's; no added actor or cause), never a question or a quote, within KNOWN_MAX characters; null when fewer than
+ * two survive. A point whose figure the presenter does not say is dropped again at finalize.
+ */
+function normalizeKnown(list, source, ignore = []) {
+  if (!Array.isArray(list)) return null;
+  const out = [];
+  for (const p of list) {
+    if (!textLike(p)) continue;
+    let t = clean(p, 80).replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').replace(/[.;:!,]+$/, '').trim();
+    if (!t || t.length > KNOWN_MAX || /[?“”"«»]/.test(t) || t.split(' ').length < 3) continue;
+    // a board point is held to a headline's standard: every content word, time span and figure is the source's
+    if (!headlineGrounded(t, source, { ignore }) || !numbersGrounded(t, source) || qualifierConflict(t, source) || inventedClaim(t, source, { ignore })) continue;
+    t = t[0].toUpperCase() + t.slice(1);
+    if (out.some((x) => x.toLowerCase() === t.toLowerCase())) continue;
+    out.push(t);
+    if (out.length === 3) break;
+  }
+  return out.length >= 2 ? out : null;
+}
+
 function normalizeNumbers(list, source) {
   if (!Array.isArray(list)) return null;
   const out = [];
@@ -1138,6 +1171,7 @@ export function normalizeBulletin(
       d.breaking = seg.breaking === true && (isBreaking(story.title) || /\bbreaking news\b/i.test(story.summary || ''));
       d.location = groundedLocation(seg.location, source);
       d.numbers = normalizeNumbers(seg.numbers, source);
+      d.known = program?.boards?.includes('known') ? normalizeKnown(seg.known, source, names.concat(outlets || [])) : null;
       let fact = clipWords(seg.fact, LIMITS.fact) || null;
       if (fact && !claimGrounded(fact, source)) fact = null;
       d.fact = fact;
@@ -1385,6 +1419,9 @@ export function normalizeBulletin(
     if (d.kicker) out.kicker = d.kicker;
     if (d.breakingNote) out.breakingNote = true;
     if (numbers?.length) out.numbers = numbers;
+    // WHAT WE KNOW: only points whose every figure the presenter says (the set never shows a figure we did not report)
+    const known = !inRoundup && d.feature !== 'number' && d.feature !== 'lighter' && d.known ? d.known.filter((k) => numbersIn(k).every((n) => mentionsValue(text, n.raw))) : null;
+    if (known?.length >= 2) out.known = known;
     if (d.quote && !inRoundup) out.quote = { text: clip(d.quote.text, LIMITS.quote), by: d.quote.by ? clipWords(d.quote.by, LIMITS.by) : null };
     if (d.map && !inRoundup) out.map = d.map;
     if (d.feature) out.feature = d.feature;

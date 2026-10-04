@@ -172,7 +172,7 @@ const PROGRAMMES = {
     open: { firstWord: 0.5 }, // world-now.md: first word 0.5 s after the cut
     gaps: { story: 1.0, handover: 0.85, beforeFinally: 1.2, roundupItem: 0.65 }, // world-now.md: 0.7 s between stories, 1.0 s before And finally
     holds: { signoff: 1.5, endcard: 3.2 },
-    shots: { median: [5, 7], studioMax: 15, singleSoft: 11, picture: [4, 8], map: [5, 10], quoteCard: true, stillToCome: true }, // quoteCard: IN THEIR WORDS on a story's sourced quote; stillToCome: the signpost over its stories
+    shots: { median: [5, 7], studioMax: 15, singleSoft: 11, picture: [4, 8], map: [5, 10], quoteCard: true, stillToCome: true, numbers: true, known: true }, // quoteCard: IN THEIR WORDS on a story's sourced quote; stillToCome: the signpost over its stories; numbers / known: BY THE NUMBERS and WHAT WE KNOW boards
     moves: { max: 5, minGap: 40 },
     gestures: { perMin: 5, minGap: 5.5, beatsPerMin: 7, rest: 0.62, grave: 2 },
     listener: { reactionGap: 8 },
@@ -350,6 +350,34 @@ export function readTwice(text, { min = 0, pad = 0.6 } = {}) {
 export function tickerHold(words) {
   const T = CHANNEL.ticker;
   return Math.min(T.maxHold, Math.max(T.minHold, T.push + T.base + T.perWord * Math.max(0, words | 0)));
+}
+
+/**
+ * BY THE NUMBERS (pace shots.numbers): a story's figures as a board when it states two or more (seg.numbers, each
+ * spoken: the writer keeps only those), at most three, one per value; null otherwise (its fact card as before),
+ * and on the number of the day.
+ */
+export function numbersBoard(seg, programId) {
+  if (!paceFor(programId).shots.numbers || !Array.isArray(seg?.numbers) || seg.feature === 'number') return null; // the number of the day keeps its own card
+  const seen = new Set();
+  const rows = seg.numbers.filter((n) => n?.value && n.label && !seen.has(n.value) && seen.add(n.value)).slice(0, 3);
+  return rows.length >= 2 ? rows : null;
+}
+
+/** WHAT WE KNOW (pace shots.known): a story's key points as a board (seg.known: two or three); null otherwise. */
+export function knownBoard(seg, programId) {
+  if (!paceFor(programId).shots.known || !Array.isArray(seg?.known)) return null;
+  const points = seg.known.filter((k) => typeof k === 'string' && k.trim()).slice(0, 3);
+  return points.length >= 2 ? points : null;
+}
+
+/** What a story's card shows, for its hold: the figures board's rows, else the known points, else the fact. */
+export function factText(seg, programId) {
+  const board = numbersBoard(seg, programId);
+  if (board) return board.map((n) => [n.qualifier, n.value, n.label].filter(Boolean).join(' ')).join(' ');
+  const known = knownBoard(seg, programId);
+  if (known) return known.join(' ');
+  return seg?.fact || seg?.numbers?.[0]?.value || '';
 }
 
 /**

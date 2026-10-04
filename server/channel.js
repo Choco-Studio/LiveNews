@@ -81,6 +81,8 @@ export function validateChannel(ch) {
       }
     }
     if (p.crosses !== undefined && !(Number.isInteger(p.crosses) && p.crosses >= 0 && p.crosses <= 3)) throw new Error(`programme "${id}" has a "crosses" outside 0..3`);
+    // Optional: the boards a programme's stories may carry (WHAT WE KNOW: the writer's "known" points).
+    if (p.boards !== undefined && !(isList(p.boards) && p.boards.every((b) => b === 'known'))) throw new Error(`programme "${id}" has "boards" other than ["known"]`);
     validateEditorial(id, p);
   }
   for (const [id, who] of Object.entries(ch.presenters)) {

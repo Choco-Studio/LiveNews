@@ -519,7 +519,7 @@ const LABEL_STOP = new Set(
   )
 );
 const MONTHS = /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i;
-const IRREGULAR_PAST = new Set('shook rose fell grew took made hit struck began won lost left came went gave saw found kept became brought built sold paid spent set put ran drew flew'.split(' '));
+const IRREGULAR_PAST = new Set('shook rose fell grew took made hit struck began won lost left came went gave saw found kept became brought built sold paid spent set put ran drew flew lit led met held told threw swept sank spread caught fought'.split(' '));
 const QUALIFIER_RE = /\b(about|around|nearly|almost|roughly|approximately|some|more than|over|up to|at least|less than|fewer than|under)\s+$/i;
 const QUALIFIER_LABEL = { some: 'ABOUT', roughly: 'ABOUT', approximately: 'ABOUT', around: 'ABOUT', over: 'MORE THAN', 'fewer than': 'LESS THAN', under: 'LESS THAN' };
 const DOWN_BEFORE = /\b(?:fell|fallen|falls?|dropped|drops?|down|cut|decreased|declined|slid|slipped|eased|lost|shed|shrank|shrunk|shrinks?|slumped|plunged|sank|fall of|drop of|decline of)\s+(?:by\s+)?$/;
@@ -617,6 +617,10 @@ export function extractFigures(text, max = 3) {
     const rest = s.slice(n.end);
     if (/^(?:st|nd|rd|th)\b/i.test(rest) || /^:\d/.test(rest)) continue; // ordinals, clock times
     const glued = /^-[A-Za-z]/.test(rest); // "3,000-year-old temple"
+    // "a 24-hour strike", "a 3-day festival": a duration describing a noun is no figure for a card (an age is
+    // kept: "3,000-year-old temple" is flagged below)
+    if (glued && /^-(?:minute|hour|day|week|month)\b/i.test(rest)) continue;
+    if (glued && /^-year\b(?!-old|s?\s+old)/i.test(rest)) continue;
     const tokens = (rest.match(/^[\s-]*([^.;:!?()]*)/)?.[1] || '').split(/\s+/).filter(Boolean);
     if (tokens[0] && MONTHS.test(tokens[0]) && n.value <= 31) continue; // "12 March"
     const label = [];

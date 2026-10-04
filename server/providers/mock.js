@@ -12,7 +12,7 @@ import { isTranscriptLine } from '../transcript.js';
 import { isBreaking, plainTitle } from '../news.js';
 import { LIGHT, contentWords, extractFigures, harmlessIncident, isGrave, leansOnPrevious, notForFeatures, numbersIn, quotesIn, severity } from '../facts.js';
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
-import { LINK_GAP, SENTENCE_WORDS, shortHeadline, trimClause } from '../writer.js';
+import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, shortHeadline, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
 import { AHEAD, deskOf } from '../correspondents.js';
 
@@ -89,6 +89,37 @@ const WORLD_PLACE_PAIRS = [
   ['[nod] {Place} has improved my evening.', 'It does not take much, Paco.'],
   ['[nod] One more reason to keep an eye on {place}.', 'Noted, and filed.'],
 ];
+
+/**
+ * WHAT WE KNOW (programme "boards": ["known"]): up to three key points from the source's own sentences, their
+ * short clauses with the attribution taken off ("X says about 1.2 million homes are without power and 40,000
+ * people have gone to shelters" -> two points). Never a quote, a question or a clause that leans on another
+ * ("it", "they"). The validator grounds them again, and drops a point whose figure the presenter does not say.
+ */
+const HARD_NEWS = new Set(['BUSINESS', 'CLIMATE', 'CONFLICT', 'EARTHQUAKE', 'ECONOMY', 'ELECTIONS', 'ENERGY', 'HEALTH', 'INDUSTRY', 'JOBS', 'JUSTICE', 'MARKETS', 'POLITICS', 'PROTESTS', 'TRADE', 'TRANSPORT', 'VOLCANO', 'WATER', 'WEATHER', 'WILDFIRE', 'WORLD']);
+export function knownPoints(sentences, max = 3) {
+  const out = [];
+  for (const raw of sentences) {
+    if (out.length >= max) break;
+    let t = String(raw).replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (/[“”"?«»]/.test(t)) continue;
+    t = t
+      .replace(/,\s*(?:according to [^,.]+|(?:the )?[\w’' -]{2,40}? (?:says|said|reports|reported))\.?$/i, '')
+      .replace(/^(?:according to [^,]+,\s*)/i, '')
+      .replace(/^[^,]{0,60}?\b(?:says|said|reports|reported|confirmed)\s+(?:that\s+)?/i, '');
+    for (const clause of t.split(/,\s*and\s+|;\s*|\s+and\s+(?=(?:about |more than |nearly |some |at least )?\d)/i)) {
+      let c = clause.replace(/[.!,;:]+$/, '').trim();
+      if (!c || /^(?:that|there|which|who|but|so|also)\b/i.test(c) || /\b(?:it|its|they|their|them|this|these|those|he|she|his|her)\b/i.test(c)) continue; // a point stands alone
+      const words = c.split(' ').length;
+      if (words < 3 || words > 9 || c.length > KNOWN_MAX) continue;
+      if (!/\b(?:is|are|was|were|has|have|had|will|can|could|may|[a-z]{3,}ed|[a-z]{3,}s)\b/.test(c)) continue; // a statement, not a noun phrase
+      c = c[0].toUpperCase() + c.slice(1);
+      if (!out.some((x) => x.toLowerCase() === c.toLowerCase())) out.push(c);
+      if (out.length >= max) break;
+    }
+  }
+  return out;
+}
 
 // WORLD NOW (long programmes): the partner adds one detail the story kept back, soberly (no question marks).
 const WORLD_ADD = ['[nod] And one detail worth adding:', '[nod] Worth adding:', '[look_partner] And the context here:', '[nod] One more line from the report:', '[nod] And this matters too:'];
@@ -1138,6 +1169,12 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     if (!inRoundup && info.quote) story.quote = { text: info.quote.text, by: info.quote.by };
     if (!inRoundup && info.places.length >= 2) story.map = info.places.map(({ place, lat, lon }) => ({ place, lat, lon }));
     if (info.cross) story.cross = info.cross;
+    // (news, not features: the lead, a grave or breaking story, or a hard-news topic; never history, culture,
+    // wildlife or a light one)
+    if (program?.boards?.includes('known') && !inRoundup && !isNumber && !isLighter && !quick && (k === 0 || info.grave || info.breaking || (HARD_NEWS.has(info.kicker) && !info.light && !info.curious))) {
+      const known = knownPoints(info.sentences);
+      if (known.length >= 2) story.known = known;
+    }
     if (inRoundup) story.feature = 'roundup';
     else if (isNumber) story.feature = 'number';
     else if (isLighter) story.feature = 'lighter';
