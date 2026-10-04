@@ -6,17 +6,19 @@
 //
 // In focus (wides): a banded night sky, a hazy far skyline, towers with lit windows on a pixel grid (office
 // floors in cool light, homes in warm), crowns, masts with red lights, a TV tower, and below the horizon the
-// avenues' sodium lamps. Out of focus (singles): the same city as bokeh — soft dark masses and discs of light.
+// avenues' sodium lamps. Out of focus (singles): the same city, its lights one step dimmer and its fine edges
+// gone (owner, 4 Oct: the city must read as a city behind the presenter, not as circles).
 //
 //   drawCity(fr, cam, box, soft)   box: screen rect {x0, y0, x1, y1} to fill (the glass)
 //   LIVE_DRAW['world-now']         a plane crossing the sky, cars on the avenues (live.js)
 import { C } from '../pixbuf.js';
 import { F } from './geometry.js';
 import { livePoint, BLINK, LIVE_DRAW } from './live.js';
-import { bokeh, RAMPS } from './light.js';
 
 const W = 384, H = 216;
-export const CITY = { Z: 3200, horizon: -56 };
+// horizon: the skyline's foot, a few units under the camera's eye height (the city is far enough to be at
+// infinity for the horizon: it stays at eye level in every framing, the head against the skyline's glow)
+export const CITY = { Z: 3200, horizon: 4 };
 
 function rng(seed) {
   let a = seed >>> 0 || 1;
@@ -67,32 +69,47 @@ function buildCity() {
   for (const l of LANDMARKS) if (l.crown !== 'tv') mid.push({ X0: l.X - l.w / 2, X1: l.X + l.w / 2, h: l.h, foot: 70, crown: l.crown, kind: l.kind, lit: 0.34, seed: 900 + mid.length, landmark: true });
   // draw back to front: shorter feet (farther) first
   mid.sort((a, b) => a.foot - b.foot);
-  return { far, mid, tv: LANDMARKS.find((l) => l.crown === 'tv') };
+  // the near blocks below the studio: their roofs below the horizon (`top` units under it), their walls running
+  // down out of the picture, the avenues' light showing in the gaps between them
+  const near = [];
+  for (let X = -1800; X < 1800; ) {
+    const w = 46 + r() * 70;
+    near.push({ X0: X, X1: X + w, top: 26 + r() * 70, kind: r() < 0.5 ? 'home' : 'office', lit: 0.1 + r() * 0.16, roof: r(), seed: 2000 + near.length });
+    X += w + (r() < 0.55 ? 14 + r() * 30 : 0);
+  }
+  near.sort((a, b) => a.top - b.top); // the farther (higher roofs) first
+  return { far, mid, near, tv: LANDMARKS.find((l) => l.crown === 'tv') };
 }
 const TOWN = buildCity();
 
+const MUTE = new Map([
+  ['yellow', 'tan'], ['orange', 'tanShade'], ['tan', 'tanShade'], ['tanShade', 'brown'], ['rust', 'brown'],
+  ['fog', 'steel'], ['silver', 'fog'], ['steel', 'slate'],
+].map(([a, b]) => [C[a] >>> 0, C[b]]));
 const WARM = [C.orange, C.tan, C.tan, C.yellow, C.tanShade];
 const COOL = [C.fog, C.steel, C.fog, C.silver];
 
 // --------------------------------------------------------------------------- projection on the city plane
-const P = { k: 1, cx: 0, cy: 0, hy: 0 };
+const P = { k: 1, cx: 0, cy: 0, hy: 0, hz: 0 };
 function plane(cam) {
   P.k = (F * cam.zoom) / (CITY.Z - cam.z);
   P.cx = cam.x;
   P.cy = cam.y;
   P.hy = cam.hy;
+  P.hz = cam.y + CITY.horizon;
   return P;
 }
 const sx = (X) => 192 + (X - P.cx) * P.k;
 const sy = (Y) => P.hy + (Y - P.cy) * P.k;
 /** Screen row of a height above the horizon. */
-const rowOf = (h) => sy(CITY.horizon - h);
+const rowOf = (h) => sy(P.hz - h);
 
 // sky by height above the horizon (city units): black, ink, the navy glow of the city near the horizon
 function skyColour(h, x, y, soft) {
-  // black high up, so the ink towers stand out against it; a short ink band, then the navy glow they rise from
+  // black high up, ink lower, then the navy glow of the city the towers rise from (the towers are black against
+  // the ink, ink against the glow: always a silhouette, in every framing)
   const band = soft ? 14 : 7;
-  const t1 = 58, t2 = 26;
+  const t1 = SKY_T1, t2 = SKY_T2;
   if (h > t1 + band) return C.black;
   if (h > t1 - band) return (t1 + band - h) / (2 * band) > bay(x, y) ? C.ink : C.black;
   if (h > t2 + band) return C.ink;
@@ -100,9 +117,10 @@ function skyColour(h, x, y, soft) {
   if (h > -6) return C.navy;
   // below the horizon the haze falls back to the ground's dark in a short band
   if (h > -6 - band) return (h + 6 + band) / band > bay(x, y) ? C.navy : C.ink;
-  // the city below: the haze of its light over the roofs
-  return C.ink;
+  // the city below: dark roofs (the near blocks stand ink on them)
+  return C.black;
 }
+const SKY_T1 = 88, SKY_T2 = 40;
 
 // --------------------------------------------------------------------------- drawing
 const STATE = { glassCol: new Uint8Array(W), box: { x0: 0, y0: 0, x1: 0, y1: 0 } };
@@ -129,6 +147,9 @@ export function drawCity(fr, cam, box, soft) {
   const put = (x, y, c) => {
     if (x >= xa && x < xb && y >= ya && y < yb) px[y * W + x] = c;
   };
+  // out of focus (singles) the city is the same city, its lights one step dimmer and its fine edges gone: a
+  // depth of field read through value, never discs of light
+  const m = soft ? (c) => MUTE.get(c >>> 0) ?? c : (c) => c;
   if (!soft) {
     // stars in the black top of the sky (steel, two fog)
     const r = rng(77);
@@ -147,9 +168,9 @@ export function drawCity(fr, cam, box, soft) {
   // own lights thinning out over the dark roofs nearer the studio
   const groundY0 = Math.max(ya, Math.ceil(yh + 1.5 * k));
   const ox = Math.round(sx(0));
-  if (!soft) {
+  {
     const lamp = (x, y, h) => {
-      if (x >= xa && x < xb && y >= groundY0 && y < yb && px[y * W + x] !== C.navy) px[y * W + x] = h < 0.22 ? C.yellow : h < 0.7 ? C.orange : h < 0.9 ? C.tan : C.fog;
+      if (x >= xa && x < xb && y >= groundY0 && y < yb && px[y * W + x] !== C.navy) px[y * W + x] = m(h < 0.22 ? C.yellow : h < 0.7 ? C.orange : h < 0.9 ? C.tan : C.fog);
     };
     for (let n = 1; n < 40; n++) {
       const d = 3.4 * Math.pow(n, 1.5);
@@ -184,26 +205,8 @@ export function drawCity(fr, cam, box, soft) {
       for (let x = xa; x < xb; x++) {
         if (px[row + x] !== C.black && px[row + x] !== C.ink) continue;
         const h = hash(x - ox, y - Math.round(yh), 5);
-        if (h < dens) px[row + x] = h < dens * 0.25 ? C.tan : h < dens * 0.6 ? C.tanShade : C.brown;
+        if (h < dens) px[row + x] = m(h < dens * 0.25 ? C.tan : h < dens * 0.6 ? C.tanShade : C.brown);
       }
-    }
-  } else {
-    // out of focus: discs of light, packed and small along the horizon, fewer and larger nearer the camera
-    const r = rng(91);
-    const bs = bokehScale(k);
-    const clip = (X, Y) => X >= xa && X < xb && Y >= groundY0 && Y < yb;
-    for (let n = 0; n < 520; n++) {
-      const X = -1100 + r() * 2200, d = 2 + Math.pow(r(), 2.1) * 280;
-      const x = sx(X), y = yh + d * k;
-      const h = r(), big = r();
-      if (x < xa - 8 || x >= xb + 8 || y < groundY0 - 6 || y >= yb + 8) continue;
-      const rad = Math.max(1.5, Math.min(5.5, (1.1 + d * 0.01 + big * 1.2) * bs));
-      // most discs dim (a defocused light spreads out), a few bright
-      const bright = big > 0.86;
-      if (h < 0.5) bokeh(fr, x, y, rad, RAMPS.orange, { fill: bright ? C.rust : C.brown, rim: bright ? C.orange : C.rust, clip });
-      else if (h < 0.75) bokeh(fr, x, y, rad, RAMPS.warm, { fill: bright ? C.tanShade : C.brown, rim: bright ? C.tan : C.tanShade, clip });
-      else if (h < 0.93) bokeh(fr, x, y, rad, RAMPS.cool, { fill: bright ? C.steel : C.slate, rim: bright ? C.fog : C.steel, clip });
-      else bokeh(fr, x, y, rad, RAMPS.red, { fill: C.maroon, rim: C.darkRed, clip });
     }
   }
   // the far skyline on the horizon: hazy slate blocks with a few dim lights (in focus); ink masses out of focus
@@ -214,20 +217,10 @@ export function drawCity(fr, cam, box, soft) {
     const y0 = Math.round(rowOf(b.h)), y1 = Math.min(yb, Math.round(rowOf(-3)));
     const c = soft ? C.ink : C.slate;
     for (let y = Math.max(ya, y0); y < y1; y++) px.fill(c, y * W + cx0, y * W + cx1);
-    if (soft) {
-      // its lights: a few small dim discs
-      const rad = Math.max(1.4, 1.2 * bokehScale(k));
-      for (let n = 0; n < 3; n++) {
-        if (hash(b.seed, n, 8) > 0.5) continue;
-        const x = sx(b.X0 + hash(b.seed, n, 9) * (b.X1 - b.X0)), y = rowOf(b.h * (0.2 + 0.7 * hash(b.seed, n, 10)));
-        bokeh(fr, x, y, rad, RAMPS.warm, { fill: C.brown, rim: C.tanShade, clip: (X, Y) => X >= xa && X < xb && Y >= ya && Y < yb });
-      }
-      continue;
-    }
-    if (x1 - 1 >= xa && x1 - 1 < xb) for (let y = Math.max(ya, y0); y < y1; y++) px[y * W + x1 - 1] = C.ink;
+    if (!soft && x1 - 1 >= xa && x1 - 1 < xb) for (let y = Math.max(ya, y0); y < y1; y++) px[y * W + x1 - 1] = C.ink;
     for (let y = y0 + 2; y < y1; y += 3) for (let x = x0 + 1; x < x1 - 1; x += 2) {
       const h = hash(b.seed, x - x0, y - y0);
-      if (h < 0.14) put(x, y, h < 0.03 ? C.tanShade : C.steel);
+      if (h < 0.14) put(x, y, soft ? C.slate : h < 0.03 ? C.tanShade : C.steel);
     }
   }
   // the TV tower far off: a shaft widening to its foot, the pod's lit ring, the mast and its light
@@ -235,39 +228,22 @@ export function drawCity(fr, cam, box, soft) {
   // the towers
   const pitchX = Math.max(2, Math.round(7 * k)), pitchY = Math.max(3, Math.round(10 * k));
   const ww = Math.max(1, Math.round(3 * k));
-  const scale = bokehScale(k);
   for (const b of TOWN.mid) {
     const x0 = Math.round(sx(b.X0)), x1 = Math.round(sx(b.X1));
     if (x1 <= xa || x0 >= xb || x1 - x0 < 2) continue;
     const y0 = Math.round(rowOf(b.h)), y1 = Math.min(yb, Math.round(rowOf(-b.foot)));
     if (y0 >= yb) continue;
-    // the towers stand ink against the sky (the city's glow lights the haze between them), their lit edge slate
-    const body = C.ink;
+    // the towers: ink in the glow near the horizon (its haze lights them), black above it against the ink sky;
+    // their lit edge slate
+    const yGlow = Math.floor(rowOf(SKY_T2));
+    const bodyAt = (y) => (y < yGlow ? C.black : C.ink);
     const cx0 = Math.max(xa, x0), cx1 = Math.min(xb, x1);
-    for (let y = Math.max(ya, y0); y < y1; y++) px.fill(body, y * W + cx0, y * W + cx1);
+    for (let y = Math.max(ya, y0); y < y1; y++) px.fill(bodyAt(y), y * W + cx0, y * W + cx1);
     const mid = (x0 + x1) >> 1;
-    const topY = crown(fr, put, b, x0, x1, y0, mid, body, soft, k);
-    if (soft) {
-      // its lights as bokeh: a coarse grid of the lit windows in city units (so a move never re-picks them), a disc each
-      const rad = Math.max(1.6, Math.min(4.5, 2.2 * scale));
-      const lights = b.kind === 'office' || b.kind === 'glass' ? RAMPS.cool : RAMPS.warm;
-      const cool = b.kind === 'office' || b.kind === 'glass';
-      const GX = 15, GY = 16, nc = Math.max(1, Math.floor((b.X1 - b.X0) / GX));
-      for (let r = 1; CITY.horizon - b.h + r * GY < CITY.horizon + b.foot; r++) {
-        const y = sy(CITY.horizon - b.h + r * GY);
-        if (y < ya - rad || y >= yb + rad) continue;
-        const share = b.kind === 'dark' ? 0.06 : b.kind === 'office' ? (hash(b.seed, r, 2) < 0.5 ? 0.7 : 0.1) : b.lit * 1.1;
-        for (let c = 0; c < nc; c++) {
-          if (hash(b.seed, c, r) > share) continue;
-          const x = sx(b.X0 + ((c + 0.5) * (b.X1 - b.X0)) / nc);
-          bokeh(fr, x, y, rad, lights, { fill: cool ? C.slate : C.brown, rim: cool ? C.steel : C.tanShade, clip: (X, Y) => X >= xa && X < xb && Y >= ya && Y < yb });
-        }
-      }
-      continue;
-    }
+    const topY = crown(fr, put, b, x0, x1, y0, mid, C.black, soft, k);
     // the edge toward the studio's light: a 1 px ink line; the far edge stays black
     const ex = x0;
-    if (ex >= xa && ex < xb) for (let y = Math.max(ya, topY); y < y1; y++) px[y * W + ex] = C.slate;
+    if (!soft && ex >= xa && ex < xb) for (let y = Math.max(ya, topY); y < y1; y++) px[y * W + ex] = C.slate;
     // windows on a pixel grid: offices floor by floor (whole floors lit or dark), homes window by window, a
     // dark block with a handful, a glass tower's lit strips running up its height
     const lights = b.kind === 'office' || b.kind === 'glass' ? COOL : WARM;
@@ -285,21 +261,49 @@ export function drawCity(fr, cam, box, soft) {
         else on = h < (floorOn ? b.lit : b.lit * 0.3);
         if (!on) {
           // a dark window now and then switches on (a light on the late shift)
-          if (h > 0.985 && ww === 1) livePoint(x, y, body, WARM[(row + col) % WARM.length], BLINK.WINDOW, hash(b.seed, col, row));
+          if (h > 0.985 && ww === 1) livePoint(x, y, bodyAt(y), WARM[(row + col) % WARM.length], BLINK.WINDOW, hash(b.seed, col, row));
           continue;
         }
-        const lc = b.kind === 'glass' ? (hash(b.seed, col, 6) < 0.5 ? C.steel : C.fog) : lights[Math.floor(hash(b.seed, row, col) * lights.length)];
+        const lc = m(b.kind === 'glass' ? (hash(b.seed, col, 6) < 0.5 ? C.steel : C.fog) : lights[Math.floor(hash(b.seed, row, col) * lights.length)]);
         // a glass tower's strip is continuous: the window and the row gap under it
         const hgt = b.kind === 'glass' ? pitchY : ww;
         for (let dy = 0; dy < hgt; dy++) for (let dx = 0; dx < ww; dx++) put(x + dx, y + dy, lc);
-        if (ww === 1 && b.kind !== 'glass' && h < 0.09) livePoint(x, y, lc, body, BLINK.WINDOW, hash(col, row, b.seed));
+        if (ww === 1 && b.kind !== 'glass' && h < 0.09) livePoint(x, y, lc, bodyAt(y), BLINK.WINDOW, hash(col, row, b.seed));
+      }
+    }
+  }
+  // the near blocks: ink walls, a lit roof edge and the odd rooftop box, windows on a coarser grid (nearer)
+  const npx = Math.max(2, Math.round(9 * k)), npy = Math.max(3, Math.round(12 * k)), nww = Math.max(1, Math.round(3.5 * k));
+  for (const b of TOWN.near) {
+    const x0 = Math.round(sx(b.X0)), x1 = Math.round(sx(b.X1));
+    if (x1 <= xa || x0 >= xb || x1 - x0 < 3) continue;
+    const y0 = Math.round(rowOf(-b.top));
+    if (y0 >= yb) continue;
+    const cx0 = Math.max(xa, x0), cx1 = Math.min(xb, x1);
+    for (let y = Math.max(ya, y0); y < yb; y++) px.fill(C.ink, y * W + cx0, y * W + cx1);
+    if (!soft) for (let x = cx0; x < cx1; x++) if (y0 >= ya && y0 < yb) px[y0 * W + x] = C.slate;
+    // a rooftop box (a plant room, a water tank)
+    if (b.roof < 0.6) {
+      const bw = Math.max(2, Math.round((x1 - x0) * 0.18)), bh = Math.max(1, Math.round(5 * k));
+      const bx = x0 + Math.round((x1 - x0) * (0.2 + 0.5 * b.roof));
+      for (let y = y0 - bh; y < y0; y++) for (let x = bx; x < bx + bw; x++) put(x, y, y === y0 - bh && !soft ? C.slate : C.ink);
+    }
+    let row = 0;
+    for (let y = y0 + Math.max(2, Math.round(4 * k)); y < yb - 1; y += npy, row++) {
+      const floorOn = hash(b.seed, row, 7) < (b.kind === 'office' ? 0.45 : 0.8);
+      let col = 0;
+      for (let x = x0 + 2; x + nww <= x1 - 1; x += npx, col++) {
+        const h = hash(b.seed, row, col + 11);
+        const on = b.kind === 'office' ? floorOn && h < 0.75 : h < (floorOn ? b.lit : b.lit * 0.3);
+        if (!on) continue;
+        const lc = m((b.kind === 'office' ? COOL : WARM)[Math.floor(hash(b.seed, row, col) * 4)]);
+        for (let dy = 0; dy < nww; dy++) for (let dx = 0; dx < nww; dx++) put(x + dx, y + dy, lc);
+        if (nww === 1 && h < 0.06) livePoint(x, y, lc, C.ink, BLINK.WINDOW, hash(col, row, b.seed));
       }
     }
   }
 }
 
-/** Bokeh grows with the shot's magnification (a wider aperture on a tighter shot). */
-const bokehScale = (k) => Math.max(1, Math.min(2.2, k * 2.4));
 
 /** A tower's crown; returns the screen row of the body's top. */
 function crown(fr, put, b, x0, x1, y0, mid, body, soft, k) {

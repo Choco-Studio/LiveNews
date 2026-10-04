@@ -3,14 +3,13 @@
 // running across it with its dark dust lanes, a nebula glowing in the far corner, a crescent Moon rising
 // beside the screen, and low down the Earth's limb, its thin blue atmosphere lit edge-on and the lights of its
 // night side. Over it, as a planetarium draws them, two constellations in thin purple lines with their names.
-// Out of focus (singles) the stars fade to a few soft points, the Milky Way and the limb to soft bands.
+// Out of focus (singles) the stars fade to a few dimmer points, the Milky Way and the limb to soft bands.
 //
 //   drawSpace(fr, cam, box, soft)   box: the wall's screen rect to fill
 //   LIVE_DRAW.cosmos                a satellite crossing, a meteor now and then (live.js; the stars twinkle)
 import { C } from '../pixbuf.js';
 import { SET, kAt, sxOf, syOf } from './geometry.js';
 import { livePoint, BLINK, LIVE_DRAW } from './live.js';
-import { bokeh, RAMPS } from './light.js';
 
 const W = 384, H = 216;
 const B4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
@@ -154,8 +153,8 @@ export function drawSpace(fr, cam, box, soft) {
     const x = Math.round(sxOf(cam, k, X) - 0.5), y = Math.round(syOf(cam, k, Y) - 0.5);
     if (!clip(x, y)) continue;
     if (soft) {
-      // out of focus only the brightest show, as small soft discs
-      if (mag >= 2) bokeh(fr, x + 0.5, y + 0.5, Math.max(1.5, 1.2 * k), tint === 'orange' ? RAMPS.warm : RAMPS.cool, { fill: tint === 'orange' ? C.brown : C.slate, rim: tint === 'orange' ? C.tanShade : C.steel, clip });
+      // out of focus the fainter stars drop out and the bright ones stay as dimmer points (never discs)
+      if (mag >= 2 && px[y * W + x] !== C.navy) px[y * W + x] = tint === 'orange' ? C.tanShade : mag === 3 ? C.fog : C.steel;
       continue;
     }
     const core = tint === 'orange' ? C.tan : tint === 'blue' ? C.blue : [C.slate, C.steel, C.fog, C.silver][mag];

@@ -230,7 +230,9 @@ describe('values with presenters drawn (bible acceptance lists)', { skip: !PRESE
   test('MONEY MINUTE: the home value range in the MCU (not darker than WORLD NOW)', () => {
     const money = m('money-minute', 'mcu-r'), world = m('world-now', 'single-a');
     assert.ok(money.headZone.mean >= 15 && money.headZone.mean <= 45);
-    assert.ok(Math.abs(money.headZone.mean - world.headZone.mean) < 10);
+    // not darker than WORLD NOW (round 4: WORLD NOW's single is the city at night behind the glass, MONEY MINUTE
+    // the lit screen behind Penny: the warm room may sit lighter)
+    assert.ok(money.headZone.mean >= world.headZone.mean - 2, `money ${money.headZone.mean} world ${world.headZone.mean}`);
   });
 });
 
