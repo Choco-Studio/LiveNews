@@ -315,21 +315,29 @@ function cityBay(fr, cam, sx, soft) {
     }
   }
   // the glass's frame: a black header beam with a lit lip, the jamb by the screen wall, slim mullions lit
-  // from camera-left
+  // from camera-left. Laid out in whole pixels from one rounded edge each (a width that rounds on its own
+  // would let a line drop out and pop back during a push)
   const beam = (X0, Y0, X1, Y1, c) => rectW(fr, cam, X0, Y0, X1, Y1, c);
   beam(XA - 3, BAY.top - 30, XB + 3, BAY.top, C.black);
-  const jamb = sx > 0 ? BAY.inner : -BAY.inner;
-  beam(Math.min(jamb, jamb - sx * 4), BAY.top, Math.max(jamb, jamb - sx * 4), BAY.bottom, C.black);
-  if (!soft) {
-    beam(XA - 3, BAY.top - 1.4, XB + 3, BAY.top, C.ink);
-    // the jamb's face toward the light
-    if (sx > 0) beam(jamb - 4, BAY.top, jamb - 2.6, BAY.bottom, C.slate);
-    else beam(jamb + 2.6, BAY.top, jamb + 4, BAY.bottom, C.ink);
+  if (!soft) beam(XA - 3, BAY.top - 1.4, XB + 3, BAY.top, C.ink);
+  const ys0 = Math.max(0, by0), ys1 = Math.min(H, by1);
+  const column = (x, w, c) => {
+    if (w > 0) fr.span(Math.max(0, x), ys0, Math.min(W, x + w), ys1, c);
+  };
+  // the jamb: 3 px (scaled) of black on the bay's inner edge, its face toward the light one pixel wide
+  const jw = Math.max(2, Math.round(3 * k));
+  if (sx > 0) {
+    column(bx0, jw, C.black);
+    if (!soft) column(bx0 - 1, 1, C.slate);
+  } else {
+    column(bx1 - jw, jw, C.black);
+    if (!soft) column(bx1, 1, C.ink);
   }
+  const mw = Math.max(1, Math.round(2.4 * k));
   for (const m of BAY.mullions) {
-    const X = sx * m;
-    beam(X - 1.2, BAY.top, X + 1.2, BAY.bottom, C.black);
-    if (!soft) beam(X - 1.2, BAY.top, X - 0.2, BAY.bottom, C.ink);
+    const x = Math.round(sxOf(cam, k, sx * m) - mw / 2);
+    column(x, mw, C.black);
+    if (!soft && mw >= 2) column(x, 1, C.ink);
   }
 }
 
