@@ -37,8 +37,9 @@ import { drawDressing, DESK_FRONTS, DRESSING, FLATS } from './dressing.js';
 import { drawLive, liveReset, setLive, LED_ROWS } from './live.js';
 import { RAMPS, litBy } from './light.js';
 import { drawSconce } from './sconce.js';
+import { skyPhase, framePhase, setSkyClock, setSkyHour } from './city.js';
 
-export { SET, setStyle, styleFor, wallFromScene, drawWallContent, warmWallContent, prepareImage, setLive };
+export { SET, setStyle, styleFor, wallFromScene, drawWallContent, warmWallContent, prepareImage, setLive, setSkyClock, setSkyHour };
 
 const W = 384, H = 216;
 // Bayer 4x4 as integers 0..15 (the same matrix as pixbuf.js): a pixel takes the upper
@@ -576,7 +577,7 @@ export function setDressing(on) {
 }
 
 const KEY = new Float64Array(10);
-function fillKey(cam, sSerial, wallVer, lod) {
+function fillKey(cam, sSerial, wallVer, lod, phase = 0) {
   KEY[0] = cam.x;
   KEY[1] = cam.y;
   KEY[2] = cam.z;
@@ -586,7 +587,7 @@ function fillKey(cam, sSerial, wallVer, lod) {
   KEY[6] = sSerial;
   KEY[7] = wallVer;
   KEY[8] = lod;
-  KEY[9] = 0;
+  KEY[9] = phase; // the sky's phase (WORLD NOW's city by the hour)
 }
 const sameKey = (a, b, n) => {
   for (let i = 0; i < n; i++) if (a[i] !== b[i]) return false;
@@ -615,7 +616,10 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   let p0 = pOn ? now() : 0;
   const wall = updateWall(opts.wall, style, r.x1 - r.x0, r.y1 - r.y0, r.k, t, cam, opts, lod);
   if (pOn) p0 = lap(PROF, 'wall', p0);
-  fillKey(cam, sSerial, wall.version, lod);
+  // the hour's phase, picked once per frame: WORLD NOW's city changes with it (other sets ignore it)
+  const phase = style.id === 'world-now' ? skyPhase() : 0;
+  framePhase(phase);
+  fillKey(cam, sSerial, wall.version, lod, phase);
   CACHE.frame = fr;
   if (CACHE.on && sameKey(KEY, CACHE.bgKey, 10)) {
     fr.px.set(CACHE.bg);

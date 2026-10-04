@@ -224,7 +224,7 @@ The network's architecture, shared by all five sets:
 
 | Programme | Back of the set (module) | Colour |
 | --- | --- | --- |
-| WORLD NOW | Floor-to-ceiling glass over a city by night (`city.js`), as at CNN New York or Sky News. The city is on its own far plane, so it moves less than the set in a move. It has a banded sky, a hazy far skyline, and towers with lit windows: office floors, homes, dark blocks and glass towers. There are crowns, masts with red lights and a TV tower. The horizon glow sits at head height, with the avenues' lamps below it. Over the screen: the world clocks. | red |
+| WORLD NOW | Floor-to-ceiling glass over the city (`city.js`), as at CNN New York or Sky News, painted in clean layers: a banded sky (stars at night, clouds by day, the sun low at dawn and at the golden hour), a hazy far skyline, a row of buildings in the glow, a few hero towers clear of the heads (spire, art-deco crown, sloped roof, aviation lights, a TV tower), then two nearer rows of buildings whose roofs we look down on, full of lit windows, the street grid and a river showing between them. The city is on its own far plane and its horizon stays at the camera's eye height, so the heads are against the skyline's glow in every framing. **By the hour** (London, the studio clock): night, dawn, day through the studio's tinted glass, the golden hour, the blue hour. Over the screen: the world clocks. | red |
 | TECH BYTES | A circuit board (`lab.js`). The screen is the chip, with pins. Copper traces bend at 45° out to pads and vias, buses run over the heads, and there are components and silkscreen marks. Behind each presenter is a light wall of square frosted tiles lit from above. A display cabinet each side has a product in each niche. Over the screen: the terminal line "> TECH BYTES_". | blue (cyan desk line) |
 | COSMOS DESK | A planetarium LED wall (`space.js`). It shows the sky from orbit: stars of every brightness, the Milky Way with its dust lanes, a nebula, a crescent Moon, and low down the Earth's limb with its thin lit atmosphere and the lights of its night side. The Big Dipper and Cassiopeia are drawn over it. Over the screen: the Moon's phases. | magenta |
 | MONEY MINUTE | A panelled room on the exchange after the close (`money.js`): walnut raised panels, a frieze, a brass dado rail with a ledge, and slats below. Bronze sconces wash the panels warm. A bronze Charging Bull and a bear stand on the ledge, each under its own spot. An LED ticker of the programme's beats runs along the soffit, with no prices. | warm brass (darkGreen desk line) |
@@ -239,10 +239,10 @@ The network's architecture, shared by all five sets:
 - Every desk line but MONEY MINUTE's: a slow sweep of light now and then.
 - The wall's own content keeps its rules: the NEWS IN 60 dial never ticks.
 
-**Out of focus** (singles, `cam.soft`): lights become bokeh, drawn by `light.js`:
-- the city as discs of light;
+**Out of focus** (singles, `cam.soft`):
+- the city is the same city, its lights a step dimmer and its fine edges gone (owner, 4 Oct: bokeh discs read as circles, not as a city);
 - the circuit as glowing lines;
-- the brightest stars and the Earth's limb as soft points and a soft band;
+- the brightest stars as dimmer points and the Earth's limb as a soft band;
 - the gallery's monitors as soft squares.
 
 **Rules**, checked by `test/v2-set.test.js`:

@@ -5,7 +5,7 @@ import { P } from './palette.js';
 import { drawText } from './font.js';
 import { drawAnchor, drawHands } from './anchors.js';
 import { W, H, DESK_Y, ANCHOR_X, ANCHOR_Y, drawSet, drawDesk, drawStripes } from './set.js';
-import { r, longDate, easeOut } from './util.js';
+import { r, longDate, easeOut, zoneTime, STUDIO_TZ } from './util.js';
 import { lookOf, portraitOf, presenterName, THEME_ACCENT } from './cast.js';
 import { drawCloseup } from './scenes/portraits.js';
 import { drawWorldMap } from './scenes/worldmap.js';
@@ -63,6 +63,11 @@ export class Renderer {
     // asked, so the default path never runs v2 code; any v2 failure falls back to the shots below.
     this.v2 = null;
     if (v2) import('./v2/canvas25d/runtime/host.js').then((m) => (this.v2 = new m.StageHost({ audio, perf })), (err) => console.warn('[v2] stage unavailable, old renderer on air', err));
+    // WORLD NOW's city follows the hour on the studio clock (London): night, dawn, day, golden hour, blue hour
+    if (v2) import('./v2/canvas25d/studio/set.js').then((s) => s.setSkyClock(() => {
+      const t = zoneTime(STUDIO_TZ);
+      return t.h + t.m / 60;
+    }), () => {});
   }
 
   anchorState(slot, t, scene) {

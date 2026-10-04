@@ -227,6 +227,17 @@ describe('values with presenters drawn (bible acceptance lists)', { skip: !PRESE
       assert.ok(r.set.yellow <= 0.015 && r.set.saturated <= 0.06);
     }
   });
+  test('WORLD NOW by the hour: every phase of the city keeps the faces readable (owner, 4 Oct: el cielo según la hora)', () => {
+    for (const [hour, name] of [[23, 'night'], [6.5, 'dawn'], [12, 'day'], [18, 'golden'], [20, 'blue hour']]) {
+      setMod.setSkyHour(hour);
+      for (const framing of ['wide', 'single-a']) {
+        const r = m('world-now', framing);
+        assert.ok(r.headZone.mean >= 12 && r.headZone.mean <= 45, `${name} ${framing}: zone ${r.headZone.mean}`);
+        for (const f of r.faces) assert.ok(f >= r.headZone.mean + 15, `${name} ${framing}: face ${f} zone ${r.headZone.mean}`);
+      }
+    }
+    setMod.setSkyHour(23);
+  });
   test('MONEY MINUTE: the home value range in the MCU (not darker than WORLD NOW)', () => {
     const money = m('money-minute', 'mcu-r'), world = m('world-now', 'single-a');
     assert.ok(money.headZone.mean >= 15 && money.headZone.mean <= 45);
@@ -634,7 +645,9 @@ describe('tools/measure-frame.mjs', () => {
     assert.deepEqual(back.px, px.map((c) => (c | 0xff000000) >>> 0));
     const z = measureZones(back.px, W, ZONES);
     assert.equal(z.frame.offPalette, 0);
-    assert.ok(z.headL.meanL >= 18 && z.headL.meanL <= 45);
+    // (the bible's 18-45 is checked with the presenters drawn, values test above; the bare frame behind them is
+    // WORLD NOW's city at night, a little darker where the presenter would stand)
+    assert.ok(z.headL.meanL >= 15 && z.headL.meanL <= 45, `head zone ${z.headL.meanL}`);
     // the graphics zone stays dark: black and ink, the desk's foot light (a line and its reflection) the one colour
     assert.ok(z.quiet.meanL <= 12, `quiet ${z.quiet.meanL}`);
     assert.ok((z.quiet.colours.black || 0) + (z.quiet.colours.ink || 0) >= 0.94, JSON.stringify(z.quiet.colours));
