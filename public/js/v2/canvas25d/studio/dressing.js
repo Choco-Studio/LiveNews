@@ -5,8 +5,10 @@
 //   WORLD NOW     a newsroom by night: two floor-to-ceiling glass bays on the city (a banded night sky, the
 //                 Moon, thin clouds, the glass's reflection, a hazy far skyline against the city's glow, near
 //                 towers with lit windows, a spire and a TV tower), a bar of world clocks over the screen
-//   TECH BYTES    a product lab after hours: hexagonal acoustic panels with cyan circuit traces and nodes,
-//                 floating shelves with gadgets (a robot, a drone, a headset, a controller, a phone)
+//   TECH BYTES    a product lab after hours: a black display cabinet each side with four backlit niches (a
+//                 cyan LED strip, the light down the back panel, a glass shelf), one hand-pixelled product in
+//                 each (headphones, a gamepad, a retro handheld, a camera | a VR headset, a joystick, a drone,
+//                 a little UNIT-8)
 //   COSMOS DESK   an observatory: a starfield on the dark wall with a purple nebula, two portholes (the
 //                 Moon, a ringed planet), an orbit arc over the screen
 //   MONEY MINUTE  a bank's trading room: wood panelling, two market boards (rows of green and red figures),
@@ -382,78 +384,219 @@ function worldNow(fr, cam, style, soft) {
   clockBar(fr, cam, soft);
 }
 
-// --------------------------------------------------------------------------- TECH BYTES: lab panels and shelves
-function hexPanel(fr, cam, sx, soft) {
-  const X0 = sx > 0 ? 150 : -310, X1 = sx > 0 ? 310 : -150;
-  const Y0 = -118, Y1 = -2;
-  const rad = 9, hx = rad * 1.5, hy = rad * Math.sqrt(3);
-  // hexagon outlines (slate on the wall) on a staggered grid
-  for (let i = 0, X = X0 + rad; X < X1 - rad * 0.6; i++, X += hx) {
-    for (let Y = Y0 + rad + (i & 1 ? hy / 2 : 0); Y < Y1 - rad * 0.6; Y += hy) {
-      for (let a = 0; a < 6; a++) {
-        const a0 = (a * Math.PI) / 3, a1 = ((a + 1) * Math.PI) / 3;
-        lineW(fr, cam, X + Math.cos(a0) * rad, Y + Math.sin(a0) * rad, X + Math.cos(a1) * rad, Y + Math.sin(a1) * rad, soft ? C.ink : C.slate);
+// --------------------------------------------------------------------------- TECH BYTES: the display wall
+// A product lab after hours: on each side, between the light and the softbox, a black display cabinet with
+// three backlit niches (a cyan LED strip along each top, the light falling down the back panel, a glass
+// shelf edge), each showing one product, hand-pixelled at the wide's pixel size (scaled by whole pixels in
+// tighter shots). Products, inner to outer rows: a gamepad, a retro handheld, a camera | a VR headset, a
+// drone, a little UNIT-8 figure.
+//   k black, i ink, s slate, t steel, f fog, v silver, w white, c cyan, b blue, n navy, r red, y yellow,
+//   g green, d darkGreen, m magenta, o orange, e darkRed (TECH BYTES never shows COSMOS's magenta or purple:
+//   the little UNIT-8's antenna light is red)
+const PC = { k: 'black', i: 'ink', s: 'slate', t: 'steel', f: 'fog', v: 'silver', w: 'white', c: 'cyan', b: 'blue', n: 'navy', r: 'red', e: 'darkRed', y: 'yellow', g: 'green', d: 'darkGreen', m: 'magenta', o: 'orange' };
+const PRODUCTS = {
+  headphones: [
+    '....kkkkkkk....',
+    '..kkfffffffkk..',
+    '.kft.......tsk.',
+    '.kt.........sk.',
+    'kt...........sk',
+    'kkkk.......kkkk',
+    'kwrek.....kwrek',
+    'krrek.....krrek',
+    'krrek.....krrek',
+    '.kkk.......kkk.',
+  ],
+  gamepad: [
+    '...kkkkkkkkkkk...',
+    '..kfffffffffffk..',
+    '.kftktttttttyttk.',
+    'kftkkkttttttbtrtk',
+    'kttktttsktttgttsk',
+    'kttttttkskttttssk',
+    'ksssskkkkkkksssk.',
+    '.kssk.......kssk.',
+    '..kk.........kk..',
+  ],
+  handheld: [
+    '.kkkkkkkkk.',
+    'kvvvvvvvvfk',
+    'kvkkkkkkkfk',
+    'kvkdgggdkfk',
+    'kvkgdddgkfk',
+    'kvkdddddkfk',
+    'kvkkkkkkkfk',
+    'kvvvvvvvvfk',
+    'kvkvvvvrvfk',
+    'kkkkvvrvvfk',
+    'kvkvvvvvvfk',
+    'kvvvvvssvfk',
+    'kffffffffsk',
+    '.kkkkkkkkk.',
+  ],
+  camera: [
+    '.....kkkkk.......',
+    '....kfffffk...kk.',
+    'kkkkkkkkkkkkkkrrk',
+    'kfffffkkkkkffffsk',
+    'ktttkkvvvvvkkttsk',
+    'ktttkvsnnnsvkttsk',
+    'ktttkvnbbwnvkttsk',
+    'ktttkvsnnnsvkttsk',
+    'ktttkkvvvvvkktssk',
+    'ksssssskkkssssssk',
+    '.kkkkkkkkkkkkkkk.',
+  ],
+  headset: [
+    '....kkkkkkkkk....',
+    '...k.........k...',
+    '..kkkkkkkkkkkkk..',
+    '.kvwvvvvvvvvvvfk.',
+    'kkvvvvvvvvvvvffkk',
+    'kkvvvvvvvvvvvffkk',
+    '.kvvvvvvvvvvvffk.',
+    '.kfffkkkkkkkfffk.',
+    '..kkk.......kkk..',
+  ],
+  joystick: [
+    '....kkk....',
+    '...krwrk...',
+    '...krrrk...',
+    '...kerek...',
+    '....kkk....',
+    '.....k.....',
+    '.....k.....',
+    '..kkkkkkk..',
+    '.kffffffffk',
+    'kttttttkrrk',
+    'ksssssssssk',
+    'kkkkkkkkkkk',
+  ],
+  drone: [
+    'fffff.......fffff',
+    '..k...........k..',
+    '..k...........k..',
+    '.kkkkkkfffkkkkkk.',
+    '......kttttk.....',
+    '......ktbctk.....',
+    '......kkkkkk.....',
+    '....k.......k....',
+    '...kk.......kk...',
+  ],
+  robot: [
+    '.....r.....',
+    '.....k.....',
+    '..kkkkkkk..',
+    '.kvvvvvvvk.',
+    'kvvvvvvvvfk',
+    'kvkkkkkkkfk',
+    'kvkwwkwwkfk',
+    'kvkkkkkkkfk',
+    'kvvvvvvvffk',
+    '.kkkkkkkkk.',
+    '..kttttfk..',
+    '.kttckttfk.',
+    'ktttttttffk',
+    'kkkkkkkkkkk',
+  ],
+};
+const CABINET = {
+  X0: 152,
+  X1: 207,
+  niches: [[-116, -88], [-84, -56], [-52, -24], [-20, 8]],
+  items: [['headphones', 'gamepad', 'handheld', 'camera'], ['headset', 'joystick', 'drone', 'robot']],
+};
+
+function spritePx(fr, rows, x, y, s, soft) {
+  const px = fr.px;
+  for (let j = 0; j < rows.length; j++) {
+    for (let i = 0; i < rows[j].length; i++) {
+      const ch = rows[j][i];
+      if (ch === '.') continue;
+      let c = C[PC[ch]];
+      if (soft) c = ch === 'k' || ch === 'i' ? C.ink : C.slate;
+      for (let dy = 0; dy < s; dy++) {
+        const Y = y + j * s + dy;
+        if (Y < 0 || Y >= H) continue;
+        for (let dx = 0; dx < s; dx++) {
+          const X = x + i * s + dx;
+          if (X >= 0 && X < W) px[Y * W + X] = c;
+        }
       }
     }
   }
-  if (soft) return;
-  // circuit traces: right-angled runs in blue ending on cyan nodes (a few, static)
-  const r = rng(sx > 0 ? 23 : 29);
-  for (let n = 0; n < 7; n++) {
-    let X = X0 + 8 + r() * (X1 - X0 - 16), Y = Y0 + 10 + r() * (Y1 - Y0 - 24);
-    const steps = 2 + Math.floor(r() * 3);
-    for (let s = 0; s < steps; s++) {
-      const horiz = s % 2 === 0;
-      const len = (r() < 0.5 ? -1 : 1) * (10 + r() * 26);
-      const X2 = horiz ? Math.max(X0 + 4, Math.min(X1 - 4, X + len)) : X, Y2 = horiz ? Y : Math.max(Y0 + 4, Math.min(Y1 - 6, Y + len));
-      lineW(fr, cam, X, Y, X2, Y2, C.blue);
-      X = X2;
-      Y = Y2;
-    }
-    dotW(fr, cam, X, Y, C.cyan, 2.4);
-  }
 }
 
-// gadget sprites, one character per world unit at 2.4 units per cell: k black, s slate, t steel, f fog, w white,
-// c cyan, r red, y yellow, b blue
-const GADGETS = {
-  robot: ['..ttt..', '.tfwft.', '.tcfct.', '..ttt..', '.sttts.', 'st.t.ts', '.t...t.'],
-  drone: ['t.....t', 'fff.fff', '..sts..', '.stcts.', '..s.s..'],
-  headset: ['.sssss.', 'stttttts', 'tbbcbbt', 'tbbbbbt', '.sssss.'],
-  pad: ['.sssss.', 'sttfttts', 'stsytrts', '.sssss.'],
-  phone: ['.kkk.', '.kck.', '.kbk.', '.kbk.', '.kkk.', 'sssss'],
-};
-const GC = { k: 'black', s: 'slate', t: 'steel', f: 'fog', w: 'white', c: 'cyan', r: 'red', y: 'yellow', b: 'blue' };
-function sprite(fr, cam, rows, X, Ybottom, cell, soft) {
-  const h = rows.length;
-  for (let j = 0; j < h; j++) {
-    const row = rows[j];
-    for (let i = 0; i < row.length; i++) {
-      const ch = row[i];
-      if (ch === '.') continue;
-      const c = soft ? (ch === 'c' || ch === 'w' || ch === 'f' ? C.steel : C.slate) : C[GC[ch]];
-      rectW(fr, cam, X + i * cell, Ybottom - (h - j) * cell, X + (i + 1) * cell, Ybottom - (h - j - 1) * cell, c);
-    }
+function displayCabinet(fr, cam, sx, soft) {
+  const k = kAt(cam, SET.wallZ);
+  const XA = sx > 0 ? CABINET.X0 : -CABINET.X1, XB = sx > 0 ? CABINET.X1 : -CABINET.X0;
+  const x0 = Math.round(sxOf(cam, k, XA)), x1 = Math.round(sxOf(cam, k, XB));
+  const yTop = Math.round(syOf(cam, k, CABINET.niches[0][0] - 4)), yBot = Math.round(syOf(cam, k, 30));
+  if (x1 <= 0 || x0 >= W || yBot <= 0 || yTop >= H) return;
+  // the cabinet: black, its top edge and the side toward the light caught by the studio's light
+  fr.span(x0, yTop, x1, yBot, C.black);
+  if (!soft) {
+    fr.span(x0, yTop, x1, yTop + 1, C.slate);
+    if (sx > 0) fr.span(x0, yTop, x0 + 1, yBot, C.slate);
+    else fr.span(x1 - 1, yTop, x1, yBot, C.ink);
   }
-}
-function shelves(fr, cam, sx, soft) {
-  const Xs = sx > 0 ? [196, 262] : [-262, -196];
-  const rows = [-64, -18];
-  const sets = sx > 0 ? [['robot', 'pad'], ['drone', 'phone']] : [['headset', 'phone'], ['pad', 'robot']];
-  rows.forEach((Y, ri) => {
-    const X0 = Math.min(...Xs) - 22, X1 = Math.max(...Xs) + 22;
-    // the shelf: a steel edge lit on top, its shadow under it
-    rectW(fr, cam, X0, Y, X1, Y + 2.5, soft ? C.slate : C.steel);
-    if (!soft) rectW(fr, cam, X0, Y, X1, Y + 0.8, C.fog);
-    rectW(fr, cam, X0 + 2, Y + 2.5, X1 - 2, Y + 5, C.black);
-    sets[ri].forEach((g, gi) => sprite(fr, cam, GADGETS[g], Xs[gi] - 8, Y, 2.4, soft));
+  const s = Math.max(1, Math.round(k * 1.4));
+  const inset = Math.max(2, Math.round(3 * k));
+  const px = fr.px;
+  CABINET.niches.forEach(([Y0, Y1], n) => {
+    const nx0 = x0 + inset, nx1 = x1 - inset;
+    const ny0 = Math.round(syOf(cam, k, Y0)), ny1 = Math.round(syOf(cam, k, Y1));
+    // the back panel, lit from the strip at the top: navy, a checker step, slate, a checker step, ink
+    // (rows in pixels, scaled with the zoom); its side edges a pixel darker
+    const r1 = Math.max(1, Math.round(1.4 * k)), step = Math.max(1, Math.round(1.4 * k)), r2 = Math.max(2, Math.round(4.2 * k));
+    for (let y = Math.max(0, ny0); y < Math.min(H, ny1); y++) {
+      const d = y - ny0 - 2; // below the strip and its housing
+      for (let x = Math.max(0, nx0); x < Math.min(W, nx1); x++) {
+        let c = C.ink;
+        if (!soft && d >= 0) {
+          const chk = (x + y) & 1;
+          if (d < r1) c = C.navy;
+          else if (d < r1 + step) c = chk ? C.navy : C.slate;
+          else if (d < r1 + step + r2) c = C.slate;
+          else if (d < r1 + 2 * step + r2) c = chk ? C.slate : C.ink;
+          if ((x === nx0 || x === nx1 - 1) && c !== C.ink) c = c === C.navy ? C.slate : C.ink;
+        }
+        px[y * W + x] = c;
+      }
+    }
+    if (ny1 <= 0 || ny0 >= H) return;
+    if (!soft) {
+      // the LED strip along the top (its end caps dark), its housing under it
+      const cap = Math.max(1, Math.round(2.8 * k));
+      fr.span(nx0, ny0, nx1, ny0 + 1, C.navy);
+      fr.span(nx0 + cap, ny0, nx1 - cap, ny0 + 1, C.cyan);
+      fr.span(nx0, ny0 + 1, nx1, ny0 + 2, C.navy);
+    }
+    // the glass shelf: a lit edge, its shadow
+    fr.span(nx0, ny1 - 2, nx1, ny1 - 1, soft ? C.slate : C.fog);
+    fr.span(nx0, ny1 - 1, nx1, ny1, C.slate);
+    // the product, centred on the shelf, a soft pool of the strip's light on the back panel behind it
+    const rows = PRODUCTS[CABINET.items[sx > 0 ? 1 : 0][n]];
+    const w = rows[0].length * s, h = rows.length * s;
+    const sxp = Math.round((nx0 + nx1 - w) / 2), syp = ny1 - 2 - h;
+    if (!soft) {
+      const cx = sxp + w / 2, cy = ny1 - 2 - h * 0.45, rx = w * 0.5 + 4 * s, ry = h * 0.55 + 3 * s;
+      for (let y = Math.max(ny0 + 2, Math.floor(cy - ry)); y < Math.min(ny1 - 2, Math.ceil(cy + ry)); y++) {
+        for (let x = Math.max(nx0 + 1, Math.floor(cx - rx)); x < Math.min(nx1 - 1, Math.ceil(cx + rx)); x++) {
+          const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry;
+          const v = 1 - (dx * dx + dy * dy);
+          if (v <= 0 || px[y * W + x] !== C.ink) continue;
+          if (v > 0.45 || v / 0.45 > bayer(x, y)) px[y * W + x] = C.slate;
+        }
+      }
+    }
+    spritePx(fr, rows, sxp, syp, s, soft);
   });
 }
+
 function techBytes(fr, cam, style, soft) {
-  hexPanel(fr, cam, -1, soft);
-  hexPanel(fr, cam, 1, soft);
-  shelves(fr, cam, -1, soft);
-  shelves(fr, cam, 1, soft);
+  displayCabinet(fr, cam, -1, soft);
+  displayCabinet(fr, cam, 1, soft);
 }
 
 // --------------------------------------------------------------------------- COSMOS: observatory
