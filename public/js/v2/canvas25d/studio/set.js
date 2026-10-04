@@ -33,9 +33,11 @@ import { drawLogo, measureLogo } from '../../../logo.js';
 import { F, SET, kAt, sxOf, syOf } from './geometry.js';
 import { resolveStyle, styleFor, setStyle, currentStyle, STYLE_IDS } from './styles.js';
 import { updateWall, drawWallContent, wallFromScene, wallVersionOf, wallWarmTasks, warmWallContent, prepareImage } from './wall.js';
-import { drawDressing, DESK_FRONTS, DRESSING } from './dressing.js';
+import { drawDressing, DESK_FRONTS, DRESSING, FLATS } from './dressing.js';
+import { drawLive, liveReset, setLive, LED_ROWS } from './live.js';
+import { RAMPS, litBy } from './light.js';
 
-export { SET, setStyle, styleFor, wallFromScene, drawWallContent, warmWallContent, prepareImage };
+export { SET, setStyle, styleFor, wallFromScene, drawWallContent, warmWallContent, prepareImage, setLive };
 
 const W = 384, H = 216;
 // Bayer 4x4 as integers 0..15 (the same matrix as pixbuf.js): a pixel takes the upper
@@ -529,6 +531,7 @@ const CACHE = {
   desk: new Uint32Array(W * H),
   deskKey: new Float64Array(12).fill(NaN),
   deskClip: new Int16Array(W),
+  deskLed: new Int16Array(W), // the desk LED's row per column of the cached composite (-1: none)
   hits: 0,
   misses: 0,
   patches: 0,
@@ -537,6 +540,7 @@ const CACHE = {
   // the last background drawn (for drawDesk's default style and its cache key)
   style: null,
   frame: null,
+  t: 0, // the time of the last background (the live layer's clock)
   deskReady: false,
   serial: 0,
 };
@@ -602,6 +606,7 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   const lod = opts.lod | 0;
   const soft = cam.soft > 0.5;
   CACHE.style = style;
+  CACHE.t = t;
   const sSerial = serialOf(style);
   // the wall content first: its version says whether its pixels changed this frame
   const r = wallRect(cam, RECT);
@@ -648,6 +653,7 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   renderWall(fr, cam, baked, r.x0 - b - 1, r.y0 - b - 1, r.x1 + b + 1, r.y1 + b + 1, yFloor, xl, xr);
   if (pOn) p0 = lap(PROF, 'light', p0);
   drawWallDetails(fr, cam, style, soft);
+  liveReset(); // the dressing registers its live pixels as it draws (live.js)
   drawDressing(fr, cam, style, soft); // the programme's own studio (dressing.js)
   drawScreen(fr, r, b, style, soft, wall);
   if (pOn) p0 = lap(PROF, 'screen', p0);
@@ -808,6 +814,10 @@ const FLAT_X = 196; // inner edge of the set flats (world X at SET.flatsZ)
 /** Set flats at mid depth with the programme's practicals (static, never blinking). */
 function drawFlats(fr, cam, style, soft) {
   if (!style.flats) return;
+  if (DRESSING.on && FLATS[style.id]) {
+    FLATS[style.id](fr, cam, style, soft);
+    return;
+  }
   const Zf = SET.flatsZ;
   for (const sx of [-1, 1]) {
     const inner = sx * FLAT_X, outer = sx * 2000;
@@ -938,6 +948,8 @@ const DESK_JOINTS = [-178, -104, 104, 178]; // world X of the front's module sea
 const JCOL = new Uint8Array(W);
 // per column, the desk front's panel rows (for the programme's front pattern): upper panel top, split, kick
 const PTOP = new Int16Array(W), PSPLIT = new Int16Array(W), PKICK = new Int16Array(W);
+// and the rows of its silver edge, LED, foot and the top surface's back edge, its facet (0 lit, 1, 2 turned away)
+const PEDGE = new Int16Array(W), PLED = new Int16Array(W), PBOT = new Int16Array(W), PBACK = new Int16Array(W), PFACET = new Uint8Array(W);
 const DFX = new Float32Array(DESK_N + 1), DFT = new Float32Array(DESK_N + 1), DFB = new Float32Array(DESK_N + 1);
 const DBX = new Float32Array(DESK_N + 1), DBT = new Float32Array(DESK_N + 1);
 const DNX = new Float32Array(DESK_N + 1);
@@ -992,11 +1004,14 @@ export function drawDesk(fr, cam, clipRows, accent) {
     if (same && CACHE.deskKey[10] === led && CACHE.deskKey[11] === serialOf(style)) {
       fr.px.set(CACHE.desk);
       clipRows.set(CACHE.deskClip);
+      LED_ROWS.set(CACHE.deskLed);
+      drawLive(fr, cam, CACHE.t, style, clipRows, cam.soft > 0.5, wallRect(cam, RECT2));
       return;
     }
   }
   const d0 = PROF.on ? now() : 0;
   rasterDesk(fr, cam, clipRows, led, style);
+  for (let x = 0; x < W; x++) LED_ROWS[x] = PTOP[x] < 0 || PFACET[x] === 2 ? -1 : PLED[x];
   if (PROF.on) lap(PROF, 'desk', d0);
   // is every desk column under the wall's bottom bezel? (then wall patches may go into the composite)
   const r = wallRect(cam, RECT2);
@@ -1006,10 +1021,13 @@ export function drawDesk(fr, cam, clipRows, accent) {
   if (deskKeyOk) {
     CACHE.desk.set(fr.px);
     CACHE.deskClip.set(clipRows);
+    CACHE.deskLed.set(LED_ROWS);
     CACHE.deskKey.set(KEY);
     CACHE.deskKey[10] = led;
     CACHE.deskKey[11] = serialOf(style);
   }
+  // what moves in the studio, over the cached set and under the presenters (live.js)
+  drawLive(fr, cam, CACHE.t, style, clipRows, cam.soft > 0.5, wallRect(cam, RECT2));
 }
 
 const DSTEP = (2 * SET.deskHW) / DESK_N; // world X between two tessellation nodes
@@ -1107,7 +1125,9 @@ function rasterDesk(fr, cam, clipRows, led, style) {
     const facet = turn > 0.78 ? 2 : turn > 0.46 ? 1 : 0;
     const kz = (ybot - yt) / D.deskH;
     // row boundaries on the panel (world Y → screen row, pixel-centre rule)
-    const ledRow = top1 + Math.max(1, Math.round(LED_Y * kz)); // exactly 1 px per column, under the edge
+    // (a front with a `slab`: a thicker top, its face lit, a shadow row under it, the LED set back under the slab)
+    const slab = front?.slab || 0;
+    const ledRow = top1 + Math.max(slab ? 3 : 1, Math.round((LED_Y + slab) * kz)); // exactly 1 px per column, under the edge
     const rSplit = Math.ceil(yt + PANEL_SPLIT * kz - 0.5), rKick = Math.ceil(yt + (D.deskH - 8) * kz - 0.5);
     const cTop = facetDim(topC, facet, topC), cFascia = facetDim(C.slate, facet, topC);
     const cHi = facetDim(panelHi, facet, topC), cLo = facetDim(panelLo, facet, topC), cKick = C.black;
@@ -1128,7 +1148,8 @@ function rasterDesk(fr, cam, clipRows, led, style) {
       y++;
       o += W0;
     }
-    for (e = Math.min(bot, ledRow); y < e; y++, o += W0) px[o] = cFascia;
+    for (e = Math.min(bot, slab ? ledRow - 1 : ledRow); y < e; y++, o += W0) px[o] = cFascia;
+    for (e = Math.min(bot, ledRow); y < e; y++, o += W0) px[o] = C.black; // the shadow under the slab
     if (y === ledRow && y < bot) {
       px[o] = led;
       y++;
@@ -1151,6 +1172,11 @@ function rasterDesk(fr, cam, clipRows, led, style) {
     PTOP[x] = ledRow + 1;
     PSPLIT[x] = Math.min(bot, rSplit);
     PKICK[x] = Math.min(bot, rKick);
+    PEDGE[x] = top1;
+    PLED[x] = ledRow;
+    PBOT[x] = bot;
+    PBACK[x] = Math.max(0, top0);
+    PFACET[x] = facet;
     // floor reflection of the LED line (a darker palette step, ≤ 30 %), never in the graphics zone
     if (refC) {
       const ry = Math.round(ybot + (D.deskH - LED_Y) * kz * 0.9);
@@ -1159,13 +1185,14 @@ function rasterDesk(fr, cam, clipRows, led, style) {
   }
   if (front) {
     if (front.pattern) deskPattern(fr, cam, front, kc);
+    deskLight(fr, cam, front, kc, topC, panelHi);
     // the graphics zone (y >= 150) keeps the network's plain dark panel whatever the programme's front
-    const hiC = C[front.hi], loC = C[front.lo];
+    const hiC = C[front.hi], loC = C[front.lo], zoneC = C[front.zone || 'ink'];
     for (let x = 0; x < W; x++) {
       if (PTOP[x] < 0) continue;
       for (let y = Math.max(150, PTOP[x]); y < Math.min(fr.h, PKICK[x]); y++) {
         const o = y * W + x;
-        if (px[o] === hiC || px[o] === loC) px[o] = C.ink;
+        if (px[o] === hiC || px[o] === loC) px[o] = zoneC;
       }
     }
   }
@@ -1178,6 +1205,75 @@ function rasterDesk(fr, cam, clipRows, led, style) {
   fr.span(ix0, iy0, ix0 + 1, iy1, C.darkRed);
   const ls = Math.max(1, Math.min(3, Math.floor(kc * 0.62)));
   blitLogo(fr, (pX0 + pX1) / 2, (pY0 + pY1) / 2 - 0.5 * kc, ls);
+}
+
+/**
+ * The desk as a lit object (round 4): the LED's light falling on the panel under it, the glossy panel lighter at
+ * its top with the studio's lights as soft vertical streaks, the screen's reflection on the top surface, and
+ * a light line at the desk's foot with its reflection on the glossy floor (front.glow / gloss / streaks /
+ * sheen / base).
+ */
+function deskLight(fr, cam, front, kc, topC, panelHi) {
+  const px = fr.px;
+  const glow = front.glow ? RAMPS[front.glow] : null, base = front.base ? RAMPS[front.base] : null;
+  const glossHi = front.gloss ? litBy(panelHi) : 0;
+  const wr = wallRect(cam, RECT2);
+  // streak columns: world X on the front curve → screen x
+  const streak = new Uint8Array(W);
+  for (const X of front.streaks || []) {
+    const u = X / SET.deskHW;
+    const kj = kAt(cam, SET.deskFrontZ + SET.deskCurve * u * u);
+    const c = sxOf(cam, kj, X), hw = Math.max(1, 2.2 * kj);
+    for (let x = Math.max(0, Math.floor(c - hw)); x < Math.min(W, Math.ceil(c + hw)); x++) streak[x] = Math.abs(x + 0.5 - c) < hw * 0.5 ? 2 : 1;
+  }
+  for (let x = 0; x < W; x++) {
+    if (PTOP[x] < 0) continue;
+    const led = PLED[x], sp = PSPLIT[x], bot = PBOT[x], f = PFACET[x];
+    const panel = (y) => px[y * W + x] === panelHi;
+    // the gloss: the panel one step lighter in its upper part, falling off in a short Bayer band
+    if (glossHi) {
+      const y0 = led + 1, n = sp - y0;
+      for (let y = y0; y < sp && y < 150; y++) {
+        if (!panel(y)) continue;
+        const t = (y - y0) / Math.max(1, n);
+        const st = streak[x];
+        const lim = st === 2 ? 0.95 : st === 1 ? 0.75 : 0.42;
+        if (t < lim - 0.16 || (t < lim && B16[((y & 3) << 2) | (x & 3)] / 16 > (t - lim + 0.16) / 0.16)) px[y * W + x] = f === 2 ? panelHi : glossHi;
+      }
+    }
+    // the LED's light on the panel under it: a halo row, then a Bayer fringe
+    if (glow && f < 2) {
+      for (let d = 1; d <= 3; d++) {
+        const y = led + d;
+        if (y >= sp || y >= 150) break;
+        const c = px[y * W + x];
+        if (c !== panelHi && c !== glossHi) continue;
+        if (d === 1) px[y * W + x] = glow.halo;
+        else if (B16[((y & 3) << 2) | (x & 3)] < (d === 2 ? 8 : 3)) px[y * W + x] = glow.outer;
+      }
+    }
+    // the screen's reflection on the glossy top surface (under the screen's columns, one row, ends dithered)
+    if (front.sheen && f === 0 && x >= wr.x0 && x < wr.x1) {
+      const yt = PBACK[x], ye = PEDGE[x];
+      if (ye - yt >= 3) {
+        const y = yt + ((ye - yt) >> 1);
+        const edge = Math.min(x - wr.x0, wr.x1 - 1 - x);
+        if (edge > 3 || B16[((y & 3) << 2) | (x & 3)] < edge * 4) px[y * W + x] = litBy(topC);
+      }
+    }
+    // the light line at the desk's foot and its reflection on the glossy floor below
+    if (base && bot < fr.h && f < 2) {
+      px[(bot - 1) * W + x] = base.core;
+      // (solid rows, no Bayer: under a camera move a dithered reflection would flicker)
+      for (let d = 0; d < 2; d++) {
+        const y = bot + d;
+        if (y >= fr.h) break;
+        const c = px[y * W + x];
+        if (c !== C.black && c !== C.ink) continue;
+        px[y * W + x] = d === 0 ? base.halo : base.outer;
+      }
+    }
+  }
 }
 
 /**

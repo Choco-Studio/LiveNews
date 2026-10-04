@@ -31,6 +31,9 @@
 import { C } from '../pixbuf.js';
 import { SET, kAt, sxOf, syOf } from './geometry.js';
 import { textPixels } from '../../../font.js';
+import { drawCity, GLASS_COL } from './city.js';
+import { DESK_SWEEP } from './live.js';
+import { glowH, glowV, RAMPS } from './light.js';
 
 const W = 384, H = 216;
 const FLATS_X = 196; // the set flats' inner edge (set.js FLAT_X, world X at SET.flatsZ)
@@ -86,265 +89,11 @@ function rng(seed) {
 const B4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 const bayer = (x, y) => (B4[((y & 3) << 2) | (x & 3)] + 0.5) / 16;
 
-// --------------------------------------------------------------------------- WORLD NOW: the city by night
-// Two floor-to-ceiling glass bays beside the screen wall (|X| 160 → behind the flats), a night skyline in
-// them, and a bar of world clocks over the screen. Drawn in pixel space from world anchors so the lit
-// windows sit on a crisp pixel grid at every zoom.
-const BAY = { inner: 160, outer: 300, top: -121, bottom: 34, horizon: -52, mullions: [203, 250] };
-const hash = (a, b, c = 0) => {
-  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35) ^ Math.imul(c + 0x27d4eb2f, 0x165667b1);
-  h ^= h >>> 15;
-  h = Math.imul(h, 0x2c1b3c6d);
-  h ^= h >>> 12;
-  return (h >>> 0) / 4294967296;
-};
-/** The skyline of one bay, in world units (deterministic): two layers, far (ink) and near (black). */
-function skyline(sx) {
-  const r = rng(sx > 0 ? 1907 : 1931);
-  const out = [];
-  const X0 = BAY.inner + 3, X1 = BAY.outer;
-  // far layer: blocks packed along the horizon, tops between -58 and -28 (hazy: slate against the glow)
-  for (let X = X0 - 2; X < X1; ) {
-    const w = 6 + Math.floor(r() * 10);
-    out.push({ far: true, X0: X, X1: X + w, top: -28 - Math.floor(r() * 30), seed: out.length });
-    X += w + (r() < 0.5 ? 2 + Math.floor(r() * 4) : 0); // gaps where the glow shows through
-  }
-  // the bay's landmark in the far distance: a TV tower in the right bay (its pod's lit ring, its light)
-  if (sx > 0) out.push({ tower: true, X: 222, top: -108, pod: -84, seed: out.length });
-  // near layer: towers with gaps, tops between -104 and -30; one landmark spire per bay
-  const landmark = sx > 0 ? 0.3 : 0.4; // where along the bay (0 inner .. 1 outer)
-  let placed = false;
-  const keep = sx > 0 ? [211, 229] : null; // the tower's gap: no near building in front of it
-  for (let X = X0 + 1 + r() * 3; X < X1; ) {
-    if (keep && X + 9 > keep[0] && X < keep[1]) {
-      X = keep[1];
-      continue;
-    }
-    const t = (X - X0) / (X1 - X0);
-    const spire = !placed && t >= landmark - 0.08;
-    let w = spire ? 15 : 9 + Math.floor(r() * 14);
-    if (keep && X < keep[0] && X + w > keep[0]) w = Math.max(6, keep[0] - X);
-    const top = spire ? -74 : -30 - Math.floor(r() * (r() < 0.35 ? 74 : 44));
-    const crown = spire ? 'spire' : r() < 0.25 ? 'antenna' : r() < 0.35 ? 'step' : 'flat';
-    out.push({ far: false, X0: X, X1: X + w, top, crown, seed: out.length, lit: 0.18 + r() * 0.2, cool: r() < 0.35 });
-    if (spire) placed = true;
-    X += w + (r() < 0.45 ? 3 + r() * 6 : 0);
-  }
-  return out;
-}
-const SKYLINE = { '-1': skyline(-1), 1: skyline(1) };
-const SKY_RAMP = [C.black, C.ink, C.navy];
-const WARM_LIGHTS = [C.orange, C.tan, C.tan, C.yellow, C.tanShade];
-const COOL_LIGHTS = [C.fog, C.steel, C.fog, C.steel];
-
-/** A TV tower far off: a slate shaft widening to its foot, a pod with a lit ring, a mast and its red light. */
-function tvTower(fr, cam, k, X, b, xa, xb, ya, yb, soft) {
-  const px = fr.px;
-  const set = (x, y, c) => {
-    if (x >= xa && x < xb && y >= ya && y < yb) px[y * W + x] = c;
-  };
-  const cx = Math.round(sxOf(cam, k, X));
-  const yTop = Math.round(syOf(cam, k, b.top)), yPod = Math.round(syOf(cam, k, b.pod)), yFoot = yb;
-  const sh = soft ? C.ink : C.slate;
-  // the shaft: 1 px under the pod, 2 px lower down, 3 px near the foot
-  for (let y = yPod; y < yFoot; y++) {
-    const u = (y - yPod) / Math.max(1, yFoot - yPod);
-    const hw = u < 0.35 ? 0 : u < 0.7 ? 1 : 1;
-    for (let dx = -hw; dx <= (u < 0.35 ? 0 : 1); dx++) set(cx + dx, y, sh);
-  }
-  // the pod: a lens 5-7 px wide, 3 px tall, its ring of windows lit
-  const pw = Math.max(2, Math.round(4.2 * k)), ph = Math.max(1, Math.round(2 * k));
-  for (let y = yPod - ph; y <= yPod + ph; y++) {
-    const w = y === yPod - ph || y === yPod + ph ? pw - 1 : pw;
-    for (let dx = -w; dx <= w; dx++) set(cx + dx, y, sh);
-  }
-  if (!soft) for (let dx = -pw + 1; dx <= pw - 1; dx += 2) set(cx + dx, yPod, C.orange);
-  // the mast and its light
-  for (let y = yTop; y < yPod - ph; y++) set(cx, y, sh);
-  if (!soft) set(cx, yTop - 1, C.red);
-}
-
-function cityBay(fr, cam, sx, soft) {
-  const k = kAt(cam, SET.wallZ);
-  const XA = sx > 0 ? BAY.inner : -BAY.outer, XB = sx > 0 ? BAY.outer : -BAY.inner;
-  const bx0 = Math.round(sxOf(cam, k, XA)), bx1 = Math.round(sxOf(cam, k, XB));
-  const by0 = Math.round(syOf(cam, k, BAY.top)), by1 = Math.round(syOf(cam, k, BAY.bottom));
-  const xa = Math.max(0, bx0), xb = Math.min(W, bx1), ya = Math.max(0, by0), yb = Math.min(H, by1);
-  if (xb <= xa || yb <= ya) return;
-  const px = fr.px;
-  // the night sky: black at the top of the glass, ink, then the city's navy glow down to the horizon
-  const yh = syOf(cam, k, BAY.horizon);
-  for (let y = ya; y < yb; y++) {
-    const t = Math.max(0, Math.min(1, (y - by0) / Math.max(1, yh - by0)));
-    // solid bands with short dithered steps between them (a long sparse dither reads as a mesh)
-    const v = Math.pow(t, 1.25) * (SKY_RAMP.length - 1) * (soft ? 0.7 : 1);
-    const i = Math.min(SKY_RAMP.length - 2, Math.floor(v)), f = Math.max(0, Math.min(1, (v - i - 0.5) / 0.28 + 0.5));
-    for (let x = xa; x < xb; x++) px[y * W + x] = f > bayer(x, y) ? SKY_RAMP[i + 1] : SKY_RAMP[i];
-  }
-  if (!soft) {
-    // a few stars in the dark top of the sky (steel, one fog), the Moon in the left bay
-    const sr = rng(sx > 0 ? 313 : 317);
-    for (let n = 0; n < 9; n++) {
-      const X = XA + 6 + sr() * (XB - XA - 12), Y = BAY.top + 4 + sr() * 40;
-      const x = Math.round(sxOf(cam, k, X)), y = Math.round(syOf(cam, k, Y));
-      if (x >= xa && x < xb && y >= ya && y < yb) px[y * W + x] = n === 3 ? C.fog : C.steel;
-    }
-    // thin night clouds lit from below by the city: ink streaks in the dark band, ends dithered
-    for (const [cX, cY, cW] of sx > 0 ? [[180, -113, 30], [206, -103, 22]] : [[-222, -114, 28], [-206, -104, 18]]) {
-      const cx0 = sxOf(cam, k, cX - cW / 2), cx1 = sxOf(cam, k, cX + cW / 2), cy = Math.round(syOf(cam, k, cY));
-      for (let row = 0; row < 2; row++) {
-        const y = cy + row;
-        if (y < ya || y >= yb) continue;
-        const inset = row === 0 ? 0.18 : 0;
-        for (let x = Math.max(xa, Math.floor(cx0)); x < Math.min(xb, Math.ceil(cx1)); x++) {
-          const u = (x + 0.5 - cx0) / (cx1 - cx0);
-          const edge = Math.min(u - inset, 1 - inset - u) / 0.22;
-          if (edge <= 0 || (edge < 1 && bayer(x, y) > edge)) continue;
-          if (px[y * W + x] === C.black) px[y * W + x] = C.ink;
-        }
-      }
-    }
-    if (sx < 0) {
-      // the Moon, nearly full: a silver disc, its limb and two maria in fog
-      const mx = sxOf(cam, k, -184), my = syOf(cam, k, -101), mr = Math.max(2.6, 4.8 * k);
-      for (let y = Math.floor(my - mr); y <= Math.ceil(my + mr); y++) {
-        for (let x = Math.floor(mx - mr); x <= Math.ceil(mx + mr); x++) {
-          if (x < xa || x >= xb || y < ya || y >= yb) continue;
-          const dx = (x + 0.5 - mx) / mr, dy = (y + 0.5 - my) / mr;
-          const d = dx * dx + dy * dy;
-          if (d > 1) continue;
-          const limb = d > 0.55 && dx + dy > 0.35;
-          const mare = (dx + 0.25) * (dx + 0.25) + (dy + 0.2) * (dy + 0.2) < 0.06 || (dx - 0.3) * (dx - 0.3) + (dy - 0.15) * (dy - 0.15) < 0.04;
-          px[y * W + x] = limb || mare ? C.fog : C.silver;
-        }
-      }
-    }
-    // the glass's reflection: two clean diagonal strokes one step up the sky ramp
-    const strokes = [[18, 2], [24, 1]];
-    for (let y = ya; y < yb; y++) {
-      const fy = (y - by0) / Math.max(1, by1 - by0);
-      if (fy > 0.42) break;
-      for (let x = xa; x < xb; x++) {
-        // anchored at the jamb by the screen wall, mirrored between the bays
-        const d = Math.round((sx > 0 ? x - bx0 : bx1 - 1 - x) * 0.7 + (y - by0));
-        for (const [o, w] of strokes) {
-          if (d < o || d >= o + w) continue;
-          // fade out toward the stroke's lower end
-          if (fy > 0.3 && bayer(x, y) < (fy - 0.3) / 0.12) continue;
-          const c = px[y * W + x];
-          if (c === C.black) px[y * W + x] = C.ink;
-          else if (c === C.ink) px[y * W + x] = C.slate;
-        }
-      }
-    }
-  }
-  // buildings
-  const pitchX = Math.max(2, Math.round(2.6 * k)), pitchY = Math.max(3, Math.round(4 * k));
-  const ww = Math.max(1, Math.round(1.1 * k));
-  for (const b of SKYLINE[sx]) {
-    if (b.tower) {
-      tvTower(fr, cam, k, sx * b.X, b, xa, xb, ya, yb, soft);
-      continue;
-    }
-    const X0 = sx > 0 ? b.X0 : -b.X1, X1 = sx > 0 ? b.X1 : -b.X0;
-    const x0 = Math.round(sxOf(cam, k, X0)), x1 = Math.round(sxOf(cam, k, X1));
-    const y0 = Math.round(syOf(cam, k, b.top));
-    const c = b.far ? (soft ? C.ink : C.slate) : C.black;
-    const cx0 = Math.max(xa, x0), cx1 = Math.min(xb, x1);
-    if (cx1 <= cx0) continue;
-    for (let y = Math.max(ya, y0); y < yb; y++) px.fill(c, y * W + cx0, y * W + cx1);
-    if (b.far) {
-      // a few dim lights in the far blocks, their shadow side a 1 px ink edge (the blocks part)
-      if (soft) continue;
-      const ex = sx > 0 ? x1 - 1 : x0;
-      if (ex >= xa && ex < xb) for (let y = Math.max(ya, y0); y < yb; y++) px[y * W + ex] = C.ink;
-      for (let y = y0 + 2; y < yb; y += pitchY) {
-        for (let x = x0 + 1; x < x1 - 1; x += pitchX) {
-          if (x < xa || x >= xb || y < ya) continue;
-          const h = hash(b.seed + 50 * sx, x - x0, y - y0);
-          if (h < 0.2) px[y * W + x] = h < 0.04 ? C.tanShade : C.steel;
-        }
-      }
-      continue;
-    }
-    const mid = (x0 + x1) >> 1;
-    const pset = (x, y, col) => {
-      if (x >= xa && x < xb && y >= ya && y < yb) px[y * W + x] = col;
-    };
-    // a mast reads against the black top of the sky as ink (lit from the city), elsewhere as black
-    const mast = (x, y) => {
-      if (x >= xa && x < xb && y >= ya && y < yb) px[y * W + x] = px[y * W + x] === C.black ? C.ink : C.black;
-    };
-    // crowns: a stepped top, an antenna with its red light, the landmark's spire
-    if (b.crown === 'step') {
-      const sw = Math.max(2, Math.round((x1 - x0) * 0.32)), sh = Math.max(2, Math.round(5 * k));
-      for (let y = y0 - sh; y < y0; y++) for (let x = mid - sw; x < mid + sw; x++) pset(x, y, c);
-    } else if (b.crown === 'antenna') {
-      const ah = Math.max(4, Math.round(10 * k));
-      for (let y = y0 - ah; y < y0; y++) mast(mid, y);
-      if (!soft) pset(mid, y0 - ah - 1, C.red);
-    } else if (b.crown === 'spire') {
-      // a tapering crown in three setbacks, then the mast and its light
-      const half = (x1 - x0) / 2;
-      let yy = y0;
-      for (const [frac, hgt] of [[0.7, 6], [0.45, 6], [0.22, 7]]) {
-        const hw = Math.max(1, Math.round(half * frac)), hh = Math.max(2, Math.round(hgt * k));
-        for (let y = yy - hh; y < yy; y++) {
-          for (let x = mid - hw; x < mid + hw; x++) pset(x, y, c);
-          if (!soft) pset(sx > 0 ? mid - hw : mid + hw - 1, y, C.slate);
-        }
-        yy -= hh;
-      }
-      const mh = Math.max(5, Math.round(16 * k));
-      for (let y = yy - mh; y < yy; y++) mast(mid, y);
-      if (!soft) pset(mid, yy - mh - 1, C.red);
-    }
-    // the edge that faces the screen catches the studio's glow: a 1 px slate line (in focus only)
-    if (!soft) {
-      const ex = sx > 0 ? x0 : x1 - 1;
-      for (let y = Math.max(ya, y0); y < yb; y++) if (ex >= xa && ex < xb) px[y * W + ex] = C.slate;
-    }
-    // lit windows on a pixel grid: floors on or off, a building warm or cool
-    const lights = b.cool ? COOL_LIGHTS : WARM_LIGHTS;
-    let row = 0;
-    for (let y = y0 + Math.max(2, Math.round(3 * k)); y < yb - 1; y += pitchY, row++) {
-      const floorOn = hash(b.seed + 97 * sx, row, 7) < 0.78;
-      let col = 0;
-      for (let x = x0 + 2; x + ww <= x1 - 1; x += pitchX, col++) {
-        const h = hash(b.seed + 97 * sx, row, col + 11);
-        if (h > (floorOn ? b.lit : b.lit * 0.25)) continue;
-        if (soft && h > b.lit * 0.5) continue;
-        const lc = soft ? C.tanShade : lights[Math.floor(hash(b.seed, row, col) * lights.length)];
-        for (let dy = 0; dy < ww; dy++) for (let dx = 0; dx < ww; dx++) pset(x + dx, y + dy, lc);
-      }
-    }
-  }
-  // the glass's frame: a black header beam with a lit lip, the jamb by the screen wall, slim mullions lit
-  // from camera-left. Laid out in whole pixels from one rounded edge each (a width that rounds on its own
-  // would let a line drop out and pop back during a push)
-  const beam = (X0, Y0, X1, Y1, c) => rectW(fr, cam, X0, Y0, X1, Y1, c);
-  beam(XA - 3, BAY.top - 30, XB + 3, BAY.top, C.black);
-  if (!soft) beam(XA - 3, BAY.top - 1.4, XB + 3, BAY.top, C.ink);
-  const ys0 = Math.max(0, by0), ys1 = Math.min(H, by1);
-  const column = (x, w, c) => {
-    if (w > 0) fr.span(Math.max(0, x), ys0, Math.min(W, x + w), ys1, c);
-  };
-  // the jamb: 3 px (scaled) of black on the bay's inner edge, its face toward the light one pixel wide
-  const jw = Math.max(2, Math.round(3 * k));
-  if (sx > 0) {
-    column(bx0, jw, C.black);
-    if (!soft) column(bx0 - 1, 1, C.slate);
-  } else {
-    column(bx1 - jw, jw, C.black);
-    if (!soft) column(bx1, 1, C.ink);
-  }
-  const mw = Math.max(1, Math.round(2.4 * k));
-  for (const m of BAY.mullions) {
-    const x = Math.round(sxOf(cam, k, sx * m) - mw / 2);
-    column(x, mw, C.black);
-    if (!soft && mw >= 2) column(x, 1, C.ink);
-  }
-}
+// --------------------------------------------------------------------------- WORLD NOW: the window on the world
+// The newsroom's back wall is glass, floor to ceiling, over the city by night (city.js), as at CNN New York or
+// Sky News: the hero screen hangs in front of it in a black mount, slim mullions divide the panes, a soffit
+// with the network's red cove runs along the top, and the set's pillars carry red light inlays.
+const GLASS = { X: 250, top: -127, mullions: [86, 158, 230] };
 
 // the world-clock bar over the screen: four small faces, each with its city's code (micro type)
 const CLOCKS = [['NYC', 7, 0], ['LON', 12, 0], ['TYO', 20, 0], ['SYD', 22, 0]];
@@ -425,13 +174,91 @@ function ribbon(fr, cam, X, Y0, Y1, c, soft) {
 }
 
 function worldNow(fr, cam, style, soft) {
-  cityBay(fr, cam, -1, soft);
-  cityBay(fr, cam, 1, soft);
+  const k = kAt(cam, SET.wallZ);
+  const box = {
+    x0: Math.round(sxOf(cam, k, -GLASS.X)), x1: Math.round(sxOf(cam, k, GLASS.X)),
+    y0: Math.round(syOf(cam, k, GLASS.top)), y1: Math.round(syOf(cam, k, SET.floorY)),
+  };
+  drawCity(fr, cam, box, soft);
+  // the glass: a faint reflection of the studio in each pane, two diagonal strokes one step up (in focus)
+  if (!soft) glassSheen(fr, cam, k, box);
+  // mullions: black, their face toward the key one pixel lighter; out of focus wider and ink
+  const mw = Math.max(1, Math.round((soft ? 3.4 : 2.4) * k));
+  for (const m of GLASS.mullions) for (const sx of [-1, 1]) {
+    const x = Math.round(sxOf(cam, k, sx * m) - mw / 2);
+    const ya = Math.max(0, box.y0), yb = Math.min(H, box.y1);
+    fr.span(x, ya, x + mw, yb, soft ? C.ink : C.black);
+    if (!soft && mw >= 2) fr.span(x, ya, x + 1, yb, C.ink);
+    for (let xx = Math.max(0, x - 1); xx < Math.min(W, x + mw + 1); xx++) GLASS_COL[xx] = 0;
+  }
+  // the hero screen's mount: a black frame round the bezel, so the screen reads as a solid object on the glass
+  const S = SET.screen, m = 5;
+  rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y1 + m, C.black);
+  if (!soft) rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y0 - m + 1, C.ink);
+  // a slim stem from the mount to the soffit (it hangs from the grid)
+  rectW(fr, cam, -2, GLASS.top - 4, 2, S.y0 - m, C.black);
   clockBar(fr, cam, soft);
-  // the network's red in light: the cove along the top, a ribbon down each bay's jamb
-  cove(fr, cam, C.red, C.darkRed, { soft });
-  ribbon(fr, cam, -BAY.inner + 0.5, BAY.top, BAY.bottom, C.red, soft);
-  ribbon(fr, cam, BAY.inner - 0.5, BAY.top, BAY.bottom, C.red, soft);
+  // the soffit along the top: black, its lip lit, the network's red cove under it throwing light down the glass
+  rectW(fr, cam, -2000, -400, 2000, GLASS.top, C.black);
+  const yc = Math.round(syOf(cam, k, GLASS.top));
+  if (yc >= 0 && yc < H) {
+    const kf = kAt(cam, SET.flatsZ);
+    const x0 = Math.max(0, Math.round(sxOf(cam, kf, -FLATS_X))), x1 = Math.min(W, Math.round(sxOf(cam, kf, FLATS_X)));
+    if (soft) glowH(fr, x0, x1, yc, RAMPS.red, { glow: 'both', reach: 3 });
+    else {
+      fr.span(x0, yc - 1, x1, yc, C.ink);
+      glowH(fr, x0, x1, yc, RAMPS.red, { glow: 'down', reach: 3 });
+    }
+  }
+}
+
+/** Two clean diagonal strokes per pane, one step up the ramp (the studio's lights on the glass). */
+function glassSheen(fr, cam, k, box) {
+  const px = fr.px;
+  const up = new Map([[C.black >>> 0, C.ink], [C.ink >>> 0, C.slate], [C.navy >>> 0, C.slate]]);
+  const panes = [];
+  const edges = [-GLASS.X, ...GLASS.mullions.map((m) => -m).reverse(), ...GLASS.mullions, GLASS.X];
+  for (let i = 0; i + 1 < edges.length; i++) if (Math.abs(edges[i] + edges[i + 1]) > 20) panes.push([edges[i], edges[i + 1]]);
+  const yTop = Math.max(0, box.y0), yEnd = Math.min(H, box.y0 + Math.round((box.y1 - box.y0) * 0.34));
+  for (const [A, B] of panes) {
+    const xa = Math.max(0, Math.round(sxOf(cam, k, A))), xb = Math.min(W, Math.round(sxOf(cam, k, B)));
+    const pw = xb - xa;
+    if (pw < 8) continue;
+    for (let y = yTop; y < yEnd; y++) {
+      const fy = (y - yTop) / Math.max(1, yEnd - yTop);
+      for (let x = xa; x < xb; x++) {
+        const d = (x - xa) - Math.round(pw * 0.32) + Math.round((y - yTop) * 0.9);
+        const inStroke = (d >= 0 && d < 3) || (d >= 6 && d < 7);
+        if (!inStroke) continue;
+        if (fy > 0.6 && bayer(x, y) < (fy - 0.6) / 0.4) continue;
+        const c = up.get(px[y * W + x] >>> 0);
+        if (c) px[y * W + x] = c;
+      }
+    }
+  }
+}
+
+/** WORLD NOW's pillars (the set flats): black columns with a red light inlay and its glow on their face. */
+function worldNowFlats(fr, cam, style, soft) {
+  const kf = kAt(cam, SET.flatsZ);
+  for (const sx of [-1, 1]) {
+    const inner = sx * FLATS_X;
+    const xi = Math.round(sxOf(cam, kf, inner));
+    const xo = sx > 0 ? W : 0;
+    fr.span(Math.min(xi, xo), 0, Math.max(xi, xo), H, C.black);
+    // the inner edge catches the studio light
+    const ew = Math.max(1, Math.round(1.6 * kf));
+    if (sx > 0) fr.span(xi, 0, xi + ew, H, soft ? C.ink : C.slate);
+    else fr.span(xi - ew, 0, xi, H, C.ink);
+    // the inlay: a vertical red line set into the face, its glow both sides (out of focus a wider soft bar)
+    const xl = Math.round(sxOf(cam, kf, sx * (FLATS_X + 12)));
+    const y0 = Math.round(syOf(cam, kf, -400)), y1 = Math.round(syOf(cam, kf, SET.floorY));
+    if (soft) {
+      fr.span(xl - 1, y0, xl + 2, y1, C.darkRed);
+      glowV(fr, xl - 1, y0, y1, RAMPS.red, { reach: 3 });
+      glowV(fr, xl + 1, y0, y1, RAMPS.red, { reach: 3 });
+    } else glowV(fr, xl, y0, y1, RAMPS.red, { reach: 2 });
+  }
 }
 
 // --------------------------------------------------------------------------- TECH BYTES: the display wall
@@ -1184,6 +1011,11 @@ function news60(fr, cam, style, soft) {
 export const DRESSING = { on: true };
 
 const DRESS = { 'world-now': worldNow, 'tech-bytes': techBytes, cosmos, 'money-minute': moneyMinute, 'news-60': news60 };
+// the desk line's sweep of light (live.js): every 24 s a run of light crosses the desk in 2.6 s
+DESK_SWEEP['world-now'] = { line: C.red, hot: C.pink, every: 24, cross: 2.6 };
+
+/** A programme's own set flats (pillars), drawn instead of the network's black flats (set.js drawFlats). */
+export const FLATS = { 'world-now': worldNowFlats };
 
 /** The programme's dressing on the back wall (after the light, before the screen and the flats). */
 export function drawDressing(fr, cam, style, soft = false) {
@@ -1197,7 +1029,8 @@ export function drawDressing(fr, cam, style, soft = false) {
  * 'grain' (wood: tanShade lines), 'stars' (silver points), 'stripe' (a band of the accent at the panel's foot).
  */
 export const DESK_FRONTS = {
-  'world-now': { hi: 'ink', lo: 'black', pattern: 'slits', slit: 'red' }, // the home desk, red LED slits in its seams
+  // the home desk: black glass, glossy, the red LED's light on its front, red slits in its seams, a red light at its foot
+  'world-now': { hi: 'black', lo: 'black', pattern: 'slits', slit: 'red', glow: 'red', gloss: true, sheen: true, base: 'red', zone: 'black', slab: 2.4 },
   'tech-bytes': { hi: 'slate', lo: 'black', pattern: 'slits', slit: 'blue' }, // the steel plinth, blue slits
   cosmos: { hi: 'ink', lo: 'black', pattern: 'stars', slit: 'magenta' },
   'money-minute': { hi: 'brown', lo: 'black', pattern: 'grain', top: 'tanShade' }, // the lower panel black (graphics zone); no LED slits (lime on wood reads as neon)

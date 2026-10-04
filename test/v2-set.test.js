@@ -7,6 +7,8 @@ import { drawBackground, drawDesk, setCacheEnabled, invalidateSet, wallRect, wal
 import { resetWall, wallShown, planetAzimuth, plateRectFor, mediaRectFor, figureRectFor, warmWallContent, updateWall, wallPicture, prepareImage } from '../public/js/v2/canvas25d/studio/wall.js';
 import { LSTAR, lstarRGB, nameOf, isPalette, census, share, SATURATED, labRGB } from '../public/js/v2/canvas25d/studio/color.js';
 import { SET } from '../public/js/v2/canvas25d/studio/geometry.js';
+import { DESK_FRONTS } from '../public/js/v2/canvas25d/studio/dressing.js';
+import { RAMPS } from '../public/js/v2/canvas25d/studio/light.js';
 import * as lab from '../public/js/v2/canvas25d/labs/set.js';
 import * as setMod from '../public/js/v2/canvas25d/studio/set.js';
 import { readPNG, writePNG, measure as measureZones, ZONES } from '../tools/measure-frame.mjs';
@@ -625,7 +627,9 @@ describe('tools/measure-frame.mjs', () => {
     const z = measureZones(back.px, W, ZONES);
     assert.equal(z.frame.offPalette, 0);
     assert.ok(z.headL.meanL >= 18 && z.headL.meanL <= 45);
-    assert.ok(z.quiet.maxL <= 19);
+    // the graphics zone stays dark: black and ink, the desk's foot light (a line and its reflection) the one colour
+    assert.ok(z.quiet.meanL <= 12, `quiet ${z.quiet.meanL}`);
+    assert.ok((z.quiet.colours.black || 0) + (z.quiet.colours.ink || 0) >= 0.94, JSON.stringify(z.quiet.colours));
   });
 });
 
@@ -923,6 +927,7 @@ describe('fix round 2 (critics of fix round 1)', () => {
   });
 
   test('desk lines under a slow push in the two-shot: each pixel changes at most once (no A→B→A flip-back)', () => {
+    setMod.setLive(false); // the camera's move alone (the studio's live layer moves on its own: windows, cars)
     for (const programme of ['world-now', 'cosmos']) {
       lab.set({ programme, framing: 'two', wall: 'idle', presenters: false, cache: true, move: { type: 'push', amount: 0.04, delay: 0.5, dur: 5 } });
       lab.reset();
@@ -945,6 +950,7 @@ describe('fix round 2 (critics of fix round 1)', () => {
       }
       assert.ok(flips <= 20, `${programme} two-shot push: ${flips} desk flip-backs`);
     }
+    setMod.setLive(true);
     lab.set({ move: null });
   });
 
@@ -1170,18 +1176,27 @@ describe('set dressing: each programme its own studio (owner polish round, 3 Oct
       const on = wideOf(programme, true), off = wideOf(programme, false);
       const cam = lab.cameraFor('wide', programme);
       const heads = plateRectFor(cam, 'X', 'Y', programme)?.heads || [];
-      let bright = 0;
+      let bright = 0, foot = 0;
+      // the desk's foot light (round 4): its line and its reflection on the floor are the only colour allowed in
+      // the graphics zone, a line, never a lit area
+      const base = DESK_FRONTS[programme]?.base ? RAMPS[DESK_FRONTS[programme].base] : null;
+      const footC = base ? [base.core, base.halo, base.outer] : [];
       for (let i = 0; i < on.length; i++) {
         if (!isPalette(on[i])) assert.fail(`${programme}: off-palette pixel at ${i % W},${(i / W) | 0}`);
         if (on[i] === off[i]) continue;
         const x = i % W, y = (i / W) | 0;
         // the graphics zone stays plain black / ink
+        if (y >= 150 && footC.includes(on[i])) {
+          foot++;
+          continue;
+        }
         assert.ok(y < 150 || on[i] === C.black || on[i] === C.ink, `${programme}: dressing in the graphics zone at ${x},${y}`);
         for (const h of heads) assert.ok(x < h.x0 - 2 || x >= h.x1 + 2 || y < h.y0 - 2 || y >= h.y1 + 2, `${programme}: dressing behind a head at ${x},${y}`);
         if (LSTAR[nameOf(on[i])] > 75) bright++;
       }
       // points of light (stars, lit windows, LEDs), never a bright area: under 1.5 % of the frame
       assert.ok(bright < W * H * 0.015, `${programme}: ${bright} bright dressing pixels`);
+      assert.ok(foot <= 4 * W, `${programme}: ${foot} foot-light pixels in the graphics zone`);
     }
   });
   test('the desk fronts: wood for MONEY MINUTE, a starry dark front for COSMOS, a yellow band for NEWS IN 60; the plate stays red', () => {
