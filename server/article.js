@@ -7,6 +7,8 @@
 //   extractArticle(html, { max }) -> { text, paragraphs, via } | null
 // Linear scans only (pages are capped at 600 KB by the caller); never throws.
 
+import { dropTranscriptLines, dropPageFurniture } from './transcript.js';
+
 const MAX_TEXT = 2400;
 const MIN_PARA = 60; // characters: shorter runs are captions, bylines, buttons
 // boilerplate a paragraph must not be (anywhere in it for the short ones, at its start for the long ones)
@@ -31,7 +33,8 @@ function goodParagraphs(list) {
   const out = [];
   const seen = new Set();
   for (const raw of list) {
-    const p = clean(raw);
+    // a video page's script: its hand-offs and greetings go, the reporting stays; so does page furniture
+    const p = dropPageFurniture(dropTranscriptLines(clean(raw)));
     if (p.length < MIN_PARA || !SENTENCE.test(p)) continue;
     if (BOILER.test(p.length < 200 ? p : p.slice(0, 80))) continue;
     const key = p.toLowerCase().slice(0, 80);

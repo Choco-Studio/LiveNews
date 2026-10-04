@@ -38,7 +38,12 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 
     Probado con datos reales (4 oct): 44 ciudades, avisos de GDACS y mapa de calor de 841 puntos. Arreglado con los datos reales: tormentas ya terminadas que seguían saliendo, listas de países cortadas, etiquetas pisadas y el límite de peticiones de Open-Meteo. Falta: las decisiones 8 y 12 (presentador del tiempo). Detalle en docs/programmes/world-weather.md.
 22. **Ritmo.** Transiciones, pausas entre bloques y tiempos de espera (el equipo de ritmo estaba a mitad).
-23. **Textos.** Comprobar el arreglo de las frases rotas de NEWS IN 60, que no se repita la misma noticia, más variedad 24/7, que no se cuele una foto de otra noticia y verificación de cifras.
+23. 🟡 **Textos.** Hecho (4 oct, con noticias reales):
+    - las frases de transcripción de los vídeos de los medios ("Here's Jennie Shin with more…", saludos, despedidas) ya no llegan al guion;
+    - el menú de páginas copiado en los resúmenes (la foto del día de la NASA) se descarta;
+    - etiquetas nuevas (CONFLICT, ELECTIONS, PROTESTS, POLITICS) y corregidas (los ataques de Yemen ya no salen como INDUSTRY).
+
+    Falta: comprobar el arreglo de las frases rotas de NEWS IN 60, que no se repita la misma noticia, más variedad 24/7, que no se cuele una foto de otra noticia y verificación de cifras.
 
 ## E. Plató, gráficos y cámara
 24. Plató:

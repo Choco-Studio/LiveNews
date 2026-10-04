@@ -1,3 +1,4 @@
+import { dropTranscriptLines, dropPageFurniture } from './transcript.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -334,7 +335,9 @@ function parseItem(item, index, feed, { baseDir, now }) {
     const link = itemLink(item);
     if (!title || !/\p{L}/u.test(title) || !link) return null;
     const rawSummary = text(item.description) || text(item.summary) || text(item['content:encoded']) || text(item.content);
-    const summary = onAirText(stripBoilerplate(cleanHtml(rawSummary.slice(0, MAX_RAW_HTML)))).slice(0, 900);
+    // (a broadcaster's own video script in its summary, "Here's Jennie Shin with more", hands over to no one here)
+    // (and page furniture a scraper left in it: a menu, a site's tagline, a teaser cut off with "[…]")
+    const summary = dropPageFurniture(dropTranscriptLines(onAirText(stripBoilerplate(cleanHtml(rawSummary.slice(0, MAX_RAW_HTML)))))).slice(0, 900);
     const dateStr = text(item.pubDate) || text(item.published) || text(item.updated) || text(item['dc:date']);
     // Undated items: "now", one second older per position (feeds list the newest first),
     // so the desk ranks them the same way on every run. A date in the future is never later than now (it

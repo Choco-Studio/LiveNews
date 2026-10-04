@@ -5,6 +5,14 @@
 // Most specific first, matched on the headline before the summary.
 
 export const TOPICS = [
+  // armed conflict first: a "rocket" or "satellite" in a war story is not SPACE, and military "strikes" are not
+  // a labour dispute (first live run, 4 Oct: "Yemen's Houthis claim attacks" went out as INDUSTRY)
+  [/\b(?:air ?strikes?|airstrikes?|missiles?|drone (?:attacks?|strikes?)|shelling|troops|soldiers|militants?|militias?|rebels?|insurgents?|fighters|fighting|clashes|offensive|ceasefire|invasion|warplanes?|bombard\w*|front ?line|war\b|military|armed forces|government forces|houthis?|(?<!heart |panic |cyber[- ]?|asthma )attacks?|(?:Russia|Russian|Ukraine|Ukrainian|Israel|Israeli|Iran|Iranian)\w* (?:hits?|strikes?|pounds?|shells?|targets?))\b/i, 'CONFLICT'],
+  [/\belections?\b|\bvot(?:e|es|ers|ing)\b|\bballots?\b|referendum|polling (?:stations?|day)/i, 'ELECTIONS'],
+  [/\bprotests?\b|protesters?|demonstrat(?:ion|ions|ors)\b/i, 'PROTESTS'],
+  // a strike is a labour dispute only with its workers, union or pay in the same sentence (ahead of the sector
+  // topics: a nurses' or a rail strike is the dispute)
+  [/\b(?:workers?|staff|employees|unions?|pay)\b[^.]{0,60}\bstrik(?:e|es|ing)\b|\bstrik(?:e|es|ing)\b[^.]{0,60}\b(?:workers?|staff|employees|unions?|pay)\b|walkouts?|\bwalk(?:s|ed|ing)? out\b|industrial action/i, 'INDUSTRY'],
   [/volcan|eruption|lava/i, 'VOLCANO'],
   [/earthquake|quake|tremor/i, 'EARTHQUAKE'],
   [/wildfire|bushfire|forest fire/i, 'WILDFIRE'],
@@ -22,12 +30,12 @@ export const TOPICS = [
   [/\btrees\b|city parks?|gardens?\b|green spaces?/i, 'GREEN CITIES'],
   [/\bstocks?\b|shares|index|markets?\b|investors/i, 'MARKETS'],
   [/inflation|prices|interest rates?|economy|growth|recession/i, 'ECONOMY'],
-  [/\btrade\b|exports?|imports?|tariffs?|shipping|port\b|canal/i, 'TRADE'],
+  [/\btrade\b|\bexports?\b|\bimports?\b|tariffs?|\bshipping\b|\bports?\b|\bcanal\b/i, 'TRADE'],
   [/\bjobs\b|unemployment|wages|workers/i, 'JOBS'],
   [/robot/i, 'ROBOTICS'],
   [/\bAI\b|artificial intelligence|chatbot/i, 'AI'],
   [/\bchips?\b|semiconductor|processor/i, 'CHIPS'],
-  [/smartphone|\bphones?\b|gadget|headset|wearable|earbuds|glasses/i, 'GADGETS'],
+  [/smartphone|\bphones?\b|gadget|headset|wearable|earbuds|glasses|\biPad|\biPhone|\bKindles?\b|\blaptops?\b|MacBook|Chromebook|\btablets?\b|e-readers?/i, 'GADGETS'],
   [/\bapps?\b|software|update|browser/i, 'SOFTWARE'],
   [/video games?|gaming|console/i, 'GAMING'],
   [/satellite/i, 'SPACE'],
@@ -36,7 +44,7 @@ export const TOPICS = [
   [/ocean|whales?|reef|coral|dolphins?|sea turtles?/i, 'OCEANS'],
   [/\b(?:cars?|diesel|petrol|electric vehicles?|EVs?|motoring|carmakers?)\b/i, 'MOTORING'],
   [/\bcourts?\b|judges?|ruling|lawsuit|trial\b/i, 'JUSTICE'],
-  [/\bstrikes?\b|walkout|unions?\b/i, 'INDUSTRY'],
+  [/\bparliament|\bminister|\bgovernment\b|\bsenate\b|\bcongress\b|lawmakers|\bprime minister|opposition leader|\bpolicies\b|\bparty leader|\bTories\b|\bLabour\b|\bRepublicans?\b|\bDemocrats?\b/i, 'POLITICS'],
 ];
 
 export const TOPIC_NAMES = [...new Set(TOPICS.map(([, k]) => k))];

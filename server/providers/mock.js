@@ -8,6 +8,7 @@
 // chats go, who reads the round-up. Everything is chosen deterministically
 // from the story ids, so the same news always makes the same episode.
 
+import { isTranscriptLine } from '../transcript.js';
 import { isBreaking, plainTitle } from '../news.js';
 import { LIGHT, contentWords, extractFigures, harmlessIncident, isGrave, leansOnPrevious, notForFeatures, numbersIn, quotesIn, severity } from '../facts.js';
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
@@ -324,11 +325,11 @@ function study(story) {
   const precise = loc && !loc.entry.broad ? loc : null;
   // A fact card is a whole beat on screen: only figures worth one ("3 YEARS" is not).
   const figures = extractFigures(s.summary || '').filter((f) => f.fact.length <= 40 && f.score >= 2);
-  const fromSummary = sentencesOf(s.summary).filter((x) => !LIVE_BOILERPLATE.test(x) && unstop(x).toLowerCase() !== unstop(title).toLowerCase());
+  const fromSummary = sentencesOf(s.summary).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && unstop(x).toLowerCase() !== unstop(title).toLowerCase());
   // the story dossier (wave 3 §3.1): the article's own sentences after the summary's, never one the summary
   // already says, at most 7 in all (depth for programmes of 8-10 minutes, never padding)
   const seen = new Set(fromSummary.map((x) => unstop(x).toLowerCase()));
-  const fromBody = s.body ? sentencesOf(s.body).filter((x) => !LIVE_BOILERPLATE.test(x) && !seen.has(unstop(x).toLowerCase()) && unstop(x).toLowerCase() !== unstop(title).toLowerCase() && wordCount(x) >= 6 && wordCount(x) <= 34) : [];
+  const fromBody = s.body ? sentencesOf(s.body).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !seen.has(unstop(x).toLowerCase()) && unstop(x).toLowerCase() !== unstop(title).toLowerCase() && wordCount(x) >= 6 && wordCount(x) <= 34) : [];
   const sentences = [...fromSummary, ...fromBody].slice(0, Math.max(7, fromSummary.length));
   // Breaking news is never "light", whatever it is about.
   const light = !grave && !isBreaking(story.title) && LIGHT.test(title) && !SOBER.test(text);
