@@ -90,7 +90,7 @@ describe('weather data', () => {
     assert.equal(r.demo, true);
     assert.equal(r.source, 'DEMO DATA');
     let t = 0;
-    const desk = new WeatherDesk({ source: 'open-meteo', fetchImpl: async () => { throw new Error('ENOTFOUND'); }, log: quiet, now: () => t });
+    const desk = new WeatherDesk({ source: 'open-meteo', fetchImpl: async () => { throw new Error('ENOTFOUND'); }, retryNetMs: 0, log: quiet, now: () => t });
     assert.equal(desk.usable(), true);
     assert.equal(await desk.report(), null);
     assert.match(desk.lastError, /ENOTFOUND/);
@@ -209,7 +209,7 @@ describe('the programme on the channel', () => {
     assert.equal(p.canProduce(ch, 'world-weather'), true, 'after three news programmes');
     const none = new Producer({ config: {}, newsDesk: {}, chain: null, weather: null, log: quiet });
     assert.equal(none.canProduce(ch, 'world-weather'), false);
-    const dead = new Producer({ config: {}, newsDesk: {}, chain: null, weather: new WeatherDesk({ source: 'open-meteo', fetchImpl: async () => { throw new Error('down'); }, log: quiet }), log: quiet });
+    const dead = new Producer({ config: {}, newsDesk: {}, chain: null, weather: new WeatherDesk({ source: 'open-meteo', fetchImpl: async () => { throw new Error('down'); }, retryNetMs: 0, log: quiet }), log: quiet });
     assert.equal(await dead.produce(ch, 'world-weather'), null);
   });
 });
@@ -312,6 +312,75 @@ describe('the heat map: real temperatures at many places (round 2)', async () =>
     const half = new FieldDesk({ source: 'open-meteo', fetchImpl: async (url) => ({ ok: true, text: async () => '[]' }), log: quiet });
     assert.equal(await half.field({ zones: [] }), null);
     assert.deepEqual(parseGrid([{ latitude: 10, longitude: 10, daily: { temperature_2m_max: [20, 21] } }], [{ lat: 40, lon: 40 }]), []);
+  });
+
+  test('live GDACS: an ended storm is not a warning; a list of countries is spoken and shown whole', async () => {
+    const { parseGdacs, placesOf } = await import('../server/weather.js');
+    const now = Date.parse('2026-10-04T10:00:00Z');
+    const ev = (type, todate, country, name = '') => ({ geometry: { type: 'Point', coordinates: [-108, 30.5] }, properties: { eventtype: type, alertlevel: 'red', todate, fromdate: '2026-09-21T00:00:00', country, name, severitydata: { severity: 200, severityunit: 'km/h' }, eventid: Math.round(Math.random() * 1e6) } });
+    const got = parseGdacs({ features: [
+      ev('TC', '2026-09-30T03:00:00', 'Mexico', 'Tropical Cyclone POLO-26'), // last advised 4 days ago: over
+      ev('TC', '2026-10-04T03:00:00', 'Mexico', 'Tropical Cyclone RAY-26'),
+      ev('DR', '2026-10-02T00:00:00', 'Austria, Bosnia & Herzegovina, Belgium, Belarus, Croatia'),
+    ] }, { now });
+    assert.deepEqual(got.map((w) => w.name || w.type), ['RAY', 'drought']);
+    const dr = got[1];
+    // many countries: named by the region at the event's point (here -108, 30.5: North America)
+    assert.equal(dr.country, 'parts of North America');
+    assert.equal(dr.area, 'North America');
+    assert.equal(placesOf('Austria, Belgium, Croatia, Czechia, Germany', 48.8, 13.7).country, 'parts of central Europe');
+    assert.equal(placesOf('Chile, Peru, Bolivia', -15, -70).country, 'Chile, Peru and Bolivia');
+    assert.deepEqual(placesOf('Chile, Peru'), { countries: ['Chile', 'Peru'], country: 'Chile and Peru', area: 'Chile · Peru' });
+    assert.equal(placesOf('').country, '');
+    const ep = writeWeather({ ...(await fixtureReport()), warnings: got }, { seed: 'w' });
+    const lines = ep.segments.filter((s) => s.kind === 'warning').map((s) => s.text);
+    assert.equal(lines.length, 2);
+    assert.match(lines[0], /^Now our weather warnings\./);
+    assert.doesNotMatch(lines[1], /Now our weather warnings/, 'the second warning follows on');
+    assert.match(lines[1], /Drought across parts of North America is on red alert/);
+    assert.doesNotMatch(lines.join(' '), /,\s+is on|&/);
+  });
+
+  test('the free tier: a 429 is asked again; the forecast never waits for the grid, which joins it when it lands', async () => {
+    const pts = gridPoints();
+    const answer = (url) => {
+      const q = new URL(url).searchParams;
+      const la = q.get('latitude').split(',').map(Number), lo = q.get('longitude').split(',').map(Number);
+      return JSON.stringify(la.map((v, i) => ({ latitude: v, longitude: lo[i], daily: { time: ['a', 'b'], temperature_2m_max: [25, 24] } })));
+    };
+    let calls = 0, refused = 0;
+    const flaky = async (url) => {
+      calls++;
+      if (calls === 2) {
+        refused++;
+        return { ok: false, status: 429, text: async () => 'too many' };
+      }
+      return { ok: true, status: 200, text: async () => answer(url) };
+    };
+    const desk = new FieldDesk({ source: 'open-meteo', fetchImpl: flaky, log: quiet });
+    assert.ok(await desk.field({ zones: [] }), 'the field arrives after the retry');
+    assert.equal(refused, 1);
+    assert.equal(calls, Math.ceil(pts.length / 120) + 1);
+    // the report does not wait (fieldWaitMs 0): no field at first, then the grid joins the cached report
+    const raw = JSON.parse(fs.readFileSync(new URL('../config/fixtures/weather.json', import.meta.url), 'utf8'));
+    let release;
+    const gate = new Promise((r) => (release = r));
+    const fetchImpl = async (url) => {
+      if (String(url).includes('gdacs')) return { ok: true, status: 200, text: async () => JSON.stringify(raw.warnings) };
+      if (String(url).includes('temperature_2m_max') && !String(url).includes('weather_code')) {
+        await gate;
+        return { ok: true, status: 200, text: async () => answer(url) };
+      }
+      return { ok: true, status: 200, text: async () => JSON.stringify(raw.forecast) };
+    };
+    const { WeatherDesk: Desk } = await import('../server/weather.js');
+    const wd = new Desk({ source: 'open-meteo', fetchImpl, fieldWaitMs: 0, log: quiet });
+    const first = await wd.report();
+    assert.ok(first && !first.field, 'the forecast airs without waiting for the grid');
+    release();
+    for (let i = 0; i < 50 && !wd.fields.ready(); i++) await new Promise((r) => setTimeout(r, 5));
+    const again = await wd.report();
+    assert.ok(again.field && again.field.source === 'OPEN-METEO', 'the grid joined the cached report');
   });
 });
 

@@ -269,7 +269,7 @@ function drawWarningPanel(ctx, t, k, warn, data) {
     line('MAX WINDS', P.fog, 'micro', 8);
     line(`${warn.wind} KM/H`, P.white, 'body', 14);
   }
-  line(warn.country ? warn.country.toUpperCase() : seaLabel(warn.lat, warn.lon), P.silver, 'micro', 9);
+  line((warn.area || warn.country) ? (warn.area || warn.country).toUpperCase() : seaLabel(warn.lat, warn.lon), P.silver, 'micro', 9);
   drawText(ctx, data.demo ? 'DEMO DATA' : 'SOURCE: GDACS', tx, py + ph - 10, { color: data.demo ? P.yellow : P.fog, font: 'micro' });
   // the alert level as a bar: orange two of three, red three of three
   const n = warn.level === 'red' ? 3 : 2;

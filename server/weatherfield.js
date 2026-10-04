@@ -163,11 +163,27 @@ export function parseGrid(json, batch) {
   return out;
 }
 
+/** A wait that never keeps the process alive on its own (the grid is fetched in the background). */
+const sleep = (ms) => new Promise((resolve) => {
+  if (!(ms > 0)) return resolve();
+  const t = setTimeout(resolve, ms);
+  t.unref?.();
+});
+
 export class FieldDesk {
   /** @param o.source 'open-meteo' | 'fixture' | 'off' (a function: the WeatherDesk's current source) */
-  constructor({ source = 'open-meteo', fetchImpl = globalThis.fetch, ttlMs = 3 * 3600_000, timeoutMs = 20_000, gridFile = GRID_FILE, demoFile = DEMO_FIELD, log = console, now = () => Date.now() } = {}) {
+  /**
+   * @param o.pauseMs  the wait between two batches (Open-Meteo's free tier counts every place as a call and
+   *                   allows 600 a minute: 120 places every 15 s stays under it; 0 in tests)
+   * @param o.retryMs  the wait before asking a batch again after an HTTP 429 (two more tries)
+   */
+  constructor({ source = 'open-meteo', fetchImpl = globalThis.fetch, ttlMs = 3 * 3600_000, timeoutMs = 12_000, pauseMs = 0, retryMs = 0, retryNetMs = 3_000, gridFile = GRID_FILE, demoFile = DEMO_FIELD, log = console, now = () => Date.now() } = {}) {
     this.sourceOf = typeof source === 'function' ? source : () => source;
     this.fetchImpl = fetchImpl;
+    this.pauseMs = pauseMs;
+    this.retryMs = retryMs;
+    this.retryNetMs = retryNetMs;
+    this.inflight = null;
     this.ttlMs = ttlMs;
     this.timeoutMs = timeoutMs;
     this.gridFile = gridFile;
@@ -178,25 +194,57 @@ export class FieldDesk {
     this.lastError = null;
   }
 
-  /** The heat map for a report (tied to its cities), or null (the client falls back to the cities alone). */
-  async field(report) {
+  /**
+   * The heat map for a report (tied to its cities), or null (the client falls back to the cities alone).
+   * `waitMs` caps how long the caller waits for a field still being fetched (the paced grid takes about two
+   * minutes): the fetch goes on in the background and `ready()` / `fieldFor()` hand it over when it lands.
+   */
+  async field(report, { waitMs = Infinity } = {}) {
     try {
-      const base = await this.base();
-      if (!base) return null;
-      const cities = (report?.zones || []).flatMap((z) => z.cities);
-      return {
-        today: encodeField(tieToCities(base.today, cities, 'today')),
-        tomorrow: encodeField(tieToCities(base.tomorrow, cities, 'tomorrow')),
-        w: FW, h: FH, lat0: LAT0, lon0: LON0, step: 1, scale: SCALE,
-        source: base.meta.source,
-        kind: base.meta.kind,
-        places: base.meta.places ?? null,
-      };
+      const fresh = this.freshBase();
+      if (fresh) return this.tie(fresh, report);
+      this.inflight ??= this.base().finally(() => (this.inflight = null));
+      const pending = this.inflight.catch((err) => {
+        this.lastError = err.message;
+        this.log.warn?.(`[weather] heat map: ${err.message}`);
+        return null;
+      });
+      const base = Number.isFinite(waitMs) ? await Promise.race([pending, sleep(waitMs).then(() => null)]) : await pending;
+      return base ? this.tie(base, report) : null;
     } catch (err) {
       this.lastError = err.message;
       this.log.warn?.(`[weather] heat map: ${err.message}`);
       return null;
     }
+  }
+
+  /** A cached base still within its time to live, or null. */
+  freshBase() {
+    const source = this.sourceOf();
+    return this.cached && this.cached.source === source && this.now() - this.cached.at < this.ttlMs ? this.cached : null;
+  }
+
+  /** Is a field ready to hand over without fetching? */
+  ready() {
+    return !!this.freshBase();
+  }
+
+  /** The field for a report from the cached base (no fetch), or null. */
+  fieldFor(report) {
+    const base = this.freshBase();
+    return base ? this.tie(base, report) : null;
+  }
+
+  tie(base, report) {
+    const cities = (report?.zones || []).flatMap((z) => z.cities);
+    return {
+      today: encodeField(tieToCities(base.today, cities, 'today')),
+      tomorrow: encodeField(tieToCities(base.tomorrow, cities, 'tomorrow')),
+      w: FW, h: FH, lat0: LAT0, lon0: LON0, step: 1, scale: SCALE,
+      source: base.meta.source,
+      kind: base.meta.kind,
+      places: base.meta.places ?? null,
+    };
   }
 
   async base() {
@@ -217,14 +265,30 @@ export class FieldDesk {
   }
 
   async getJson(url) {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), this.timeoutMs);
-    try {
-      const res = await this.fetchImpl(url, { signal: ctl.signal, headers: { accept: 'application/json', 'user-agent': 'GLOBIT24-weather/1.0' } });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return JSON.parse(await res.text());
-    } finally {
-      clearTimeout(timer);
+    for (let attempt = 0; ; attempt++) {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), this.timeoutMs);
+      let res;
+      try {
+        res = await this.fetchImpl(url, { signal: ctl.signal, headers: { accept: 'application/json', 'user-agent': 'GLOBIT24-weather/1.0' } });
+      } catch (err) {
+        // a dropped or hung connection is tried again (four tries), a few seconds later
+        clearTimeout(timer);
+        if (attempt >= 3) throw err;
+        await sleep(this.retryNetMs);
+        continue;
+      }
+      try {
+        // over the free tier's rate: wait and ask again (twice), as Open-Meteo asks
+        if (res.status === 429 && attempt < 2) {
+          await sleep(this.retryMs);
+          continue;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return JSON.parse(await res.text());
+      } finally {
+        clearTimeout(timer);
+      }
     }
   }
 
@@ -232,10 +296,20 @@ export class FieldDesk {
     const places = gridPoints(this.gridFile);
     if (!places.length) throw new Error('no sample places (config/weather-grid.json)');
     const got = [];
+    let lost = 0;
     for (let i = 0; i < places.length; i += BATCH) {
+      if (i > 0) await sleep(this.pauseMs);
       const batch = places.slice(i, i + BATCH);
-      got.push(...parseGrid(await this.getJson(gridUrl(batch)), batch));
+      // a batch that never answers is left out: the others still make a map (spread fills the gap), and
+      // fewer than 60 % of the places answering is no map at all (below)
+      try {
+        got.push(...parseGrid(await this.getJson(gridUrl(batch)), batch));
+      } catch (err) {
+        lost++;
+        this.log.warn?.(`[weather] heat map: a batch of ${batch.length} places failed (${err.message})`);
+      }
     }
+    if (lost && got.length) this.log.info?.(`[weather] heat map: ${got.length} of ${places.length} places (${lost} batch(es) lost)`);
     if (got.length < places.length * 0.6) throw new Error(`only ${got.length} of ${places.length} places answered`);
     const today = spread(got.map((p) => ({ lat: p.lat, lon: p.lon, v: p.today })));
     const tomorrow = spread(got.map((p) => ({ lat: p.lat, lon: p.lon, v: p.tomorrow ?? p.today })));

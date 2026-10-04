@@ -36,7 +36,17 @@ const chain = new ProviderChain(createProviders(config), usage);
 const voice = createVoiceService(config, { root: ROOT });
 // The ImageCache is shared: the producer verifies (and warms) each picture before air, the client reads it.
 // WORLD WEATHER's data: Open-Meteo + GDACS, or the demo data while the desk runs on the offline fixture feeds
-const weather = new WeatherDesk({ source: config.weather.source, offline: () => newsDesk.localOnly, warnings: config.weather.warnings, ttlMs: config.weather.ttlMinutes * 60_000 });
+const weather = new WeatherDesk({
+  source: config.weather.source,
+  offline: () => newsDesk.localOnly,
+  warnings: config.weather.warnings,
+  ttlMs: config.weather.ttlMinutes * 60_000,
+  // the heat map's grid within Open-Meteo's free tier: 120 places every 15 s, a minute's wait after a 429,
+  // and the forecast never waits more than 2 s for it (it joins the report when it lands)
+  fieldPauseMs: 15_000,
+  fieldRetryMs: 65_000,
+  fieldWaitMs: 2_000,
+});
 const producer = new Producer({ config, newsDesk, chain, voice, images, weather });
 const station = new Station({ config, newsDesk, producer, chain });
 

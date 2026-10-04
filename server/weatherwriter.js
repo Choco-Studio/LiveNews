@@ -191,17 +191,21 @@ export function seaOf(lat, lon) {
   return lat >= 0 ? 'open sea in the north' : 'open sea in the south';
 }
 
-function warningLine(w, pick) {
+function warningLine(w, pick, i = 0) {
   const L = new Line();
+  // the first warning opens the block and names the source in full; the next one follows on
+  const open = i === 0 ? 'Now our weather warnings. ' : pick(['Also on our watch list: ', 'And one more warning. ']);
+  const gdacs = i === 0 ? 'GDACS, the global disaster alert system' : 'GDACS';
   if (w.type === 'cyclone') {
     const name = w.name ? w.name[0] + w.name.slice(1).toLowerCase() : '';
     const where = w.country ? `near ${w.country}` : `over ${seaOf(w.lat, w.lon)}`;
-    L.add(`Now our weather warnings. Tropical Cyclone ${name} is ${where}, on ${w.level} alert from GDACS, the global disaster alert system`).stop();
+    L.add(`${open}Tropical Cyclone ${name} is ${where}, on ${w.level} alert from ${gdacs}`).stop();
     if (w.wind) L.add(`Its strongest winds are around ${w.wind} kilometres an hour`, w.cat?.cat ? `, which makes it a ${w.cat.name} storm` : `, a ${w.cat?.name || 'tropical storm'}`).stop();
     L.add(w.country ? 'If you are in its path, follow your national weather service and the local authorities' : pick(['It is over open water for now, and we will keep watching it', 'For now it is out at sea, and we will keep an eye on it'])).stop();
   } else {
     const what = { flood: 'Flooding', drought: 'Drought', wildfire: 'Wildfires' }[w.type] || 'A weather hazard';
-    L.add(`Now our weather warnings. ${what} ${w.country ? `in ${w.country} ` : ''}is on ${w.level} alert from GDACS, the global disaster alert system`).stop();
+    const where = w.country ? `${(w.countries?.length || 1) > 1 ? 'across' : 'in'} ${w.country} ` : '';
+    L.add(`${open}${what} ${where}is on ${w.level} alert from ${gdacs}`).stop();
     L.add('If you are in the area, follow the advice of the local authorities').stop();
   }
   return L.done();
@@ -308,7 +312,7 @@ export function writeWeather(report, { presenter = { name: 'Sam Night' }, channe
   const seg = (kind, line, extra = {}) => ({ type: 'weather', kind, anchor: 'A', emotion: 'neutral', text: line.text, marks: line.marks, cues: [], ...extra });
   const segments = [seg('intro', introLine(report, { name, title }, pick), { emotion: 'happy' })];
   for (const z of report.zones) segments.push(seg('zone', zoneLine(z, pick), { zone: z.id }));
-  for (const w of report.warnings.slice(0, 2)) segments.push(seg('warning', warningLine(w, pick), { warning: w.id, emotion: 'serious' }));
+  report.warnings.slice(0, 2).forEach((w, i) => segments.push(seg('warning', warningLine(w, pick, i), { warning: w.id, emotion: 'serious' })));
   segments.push(seg('tomorrow', tomorrowLine(report, pick)));
   segments.push(seg('outro', outroLine({ name, channelName }, pick), { emotion: 'happy' }));
   return {

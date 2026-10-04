@@ -156,12 +156,70 @@ export function parseOpenMeteo(json, cities = CITIES) {
 }
 
 // GDACS event types kept (weather), and how the presenter names them
+// maxAgeDays: how long after GDACS's last update an event still counts as current. A cyclone is advised
+// every 6 h, so a day and a half of silence means it is over (first live run, 4 Oct: POLO, last advised on
+// 30 Sep, still went out as "near Mexico, on red alert"); a drought is updated about monthly.
 const HAZARDS = {
-  TC: { type: 'cyclone', label: 'TROPICAL CYCLONE' },
-  FL: { type: 'flood', label: 'FLOOD WARNING' },
-  DR: { type: 'drought', label: 'DROUGHT' },
-  WF: { type: 'wildfire', label: 'WILDFIRE' },
+  TC: { type: 'cyclone', label: 'TROPICAL CYCLONE', maxAgeDays: 1.5 },
+  FL: { type: 'flood', label: 'FLOOD WARNING', maxAgeDays: 4 },
+  DR: { type: 'drought', label: 'DROUGHT', maxAgeDays: 21 },
+  WF: { type: 'wildfire', label: 'WILDFIRE', maxAgeDays: 4 },
 };
+
+/** A broad region for a point (a hazard spread over many countries is named by where it is). */
+export function regionOf(lat, lon) {
+  if (lat >= 35 && lat <= 72 && lon >= -25 && lon <= 45) return lat > 56 ? 'northern Europe' : lat < 44 ? 'southern Europe' : lon < 4 ? 'western Europe' : 'central Europe';
+  if (lat >= 7 && lat <= 26 && lon >= -118 && lon <= -58) return 'Central America and the Caribbean';
+  if (lat > 26 && lat <= 72 && lon >= -170 && lon <= -50) return 'North America';
+  if (lat >= -56 && lat < 12 && lon >= -82 && lon <= -34) return 'South America';
+  if (lat >= 12 && lat <= 42 && lon >= 34 && lon <= 63) return 'the Middle East';
+  if (lat >= -35 && lat <= 37 && lon >= -18 && lon <= 52) {
+    if (lat > 18) return 'North Africa';
+    if (lat < -12) return 'southern Africa';
+    if (lon < 12 && lat > 3) return 'West Africa';
+    return lon > 30 ? 'East Africa' : 'central Africa';
+  }
+  if (lat >= 5 && lat <= 37 && lon > 60 && lon <= 92) return 'South Asia';
+  if (lat >= 35 && lat <= 55 && lon > 46 && lon <= 90) return 'Central Asia';
+  if (lat > 50 && lon > 40) return 'Russia';
+  if (lat >= 18 && lat <= 54 && lon > 92 && lon <= 146) return 'East Asia';
+  if (lat >= -11 && lat < 23 && lon > 92 && lon <= 141) return 'Southeast Asia';
+  if (lat >= -50 && lat < -10 && lon >= 110 && lon <= 180) return 'Australia and New Zealand';
+  return '';
+}
+
+/**
+ * GDACS's country list in words: { countries, country, area }. `country` is for the voice, `area` for the
+ * panel. One or two countries are named ("Mexico", "Chile and Peru"), three are listed; more are named by the
+ * region at the event's point ("parts of central Europe" / "CENTRAL EUROPE": the first live run's drought
+ * covered 29 countries, and "Austria, Bosnia and Herzegovina and other countries" was GDACS's alphabet).
+ */
+export function placesOf(raw, lat = NaN, lon = NaN) {
+  const countries = String(raw ?? '')
+    .replace(/<[^>]*>/g, ' ')
+    .split(/[,;]/)
+    .map((c) => c.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .slice(0, 60);
+  const said = countries.map((c) => c.replace(/\s*&\s*/g, ' and '));
+  const region = countries.length > 3 ? regionOf(lat, lon) : '';
+  let country, area;
+  if (region) {
+    country = `parts of ${region}`;
+    area = region;
+  } else if (said.length <= 1) {
+    country = said[0] || '';
+    area = countries[0] || '';
+  } else if (said.length === 2) {
+    country = `${said[0]} and ${said[1]}`;
+    area = countries.join(' · ').length <= 24 ? countries.join(' · ') : `${countries[0]} +1`;
+  } else {
+    country = said.length === 3 ? `${said[0]}, ${said[1]} and ${said[2]}` : `${said[0]}, ${said[1]} and other countries`;
+    area = `${countries[0]} +${countries.length - 1}`;
+  }
+  return { countries, country, area };
+}
+
 const LEVELS = { red: 3, orange: 2 };
 
 /** A storm's category from its maximum sustained wind (km/h): Saffir-Simpson, as the agencies give it. */
@@ -180,7 +238,7 @@ const clean = (s, max = 80) => String(s ?? '').replace(/<[^>]*>/g, ' ').replace(
  * GDACS event list (GeoJSON FeatureCollection) -> weather warnings, most severe first: [{ id, type, label, name,
  * level, lat, lon, country, wind (km/h, cyclones), cat, from, to, source: 'GDACS' }]. Unknown shapes give [].
  */
-export function parseGdacs(json, { now = Date.now(), maxAgeDays = 10 } = {}) {
+export function parseGdacs(json, { now = Date.now(), maxAgeDays = null } = {}) {
   const feats = Array.isArray(json?.features) ? json.features : [];
   const out = [];
   for (const f of feats) {
@@ -192,7 +250,7 @@ export function parseGdacs(json, { now = Date.now(), maxAgeDays = 10 } = {}) {
     const lon = Number(coords?.[0]), lat = Number(coords?.[1]);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
     const to = Date.parse(p.todate || p.fromdate || '');
-    if (Number.isFinite(to) && now - to > maxAgeDays * DAY_MS) continue; // over and done
+    if (Number.isFinite(to) && now - to > (maxAgeDays ?? hz.maxAgeDays) * DAY_MS) continue; // over and done
     const sev = p.severitydata || {};
     const wind = hz.type === 'cyclone' && /km\/?h/i.test(String(sev.severityunit || 'km/h')) ? round(sev.severity) : null;
     // "Tropical Cyclone MILTON-24" -> MILTON; floods carry the country instead of a name
@@ -207,7 +265,7 @@ export function parseGdacs(json, { now = Date.now(), maxAgeDays = 10 } = {}) {
       level,
       lat: round1(lat),
       lon: round1(lon),
-      country: clean(p.country, 48),
+      ...placesOf(p.country, lat, lon),
       wind,
       cat: wind ? stormClass(wind) : null,
       from: p.fromdate || null,
@@ -280,7 +338,7 @@ export class WeatherDesk {
    *                 fixture while the news desk is the offline fixture desk, `offline()`, else live)
    * @param o.warnings 'gdacs' | 'off'
    */
-  constructor({ source = 'open-meteo', offline = () => false, warnings = 'gdacs', fetchImpl = globalThis.fetch, fixtureFile = FIXTURE, ttlMs = 30 * 60_000, timeoutMs = 12_000, field = true, fieldTtlMs = 3 * 3600_000, log = console, now = () => Date.now() } = {}) {
+  constructor({ source = 'open-meteo', offline = () => false, warnings = 'gdacs', fetchImpl = globalThis.fetch, fixtureFile = FIXTURE, ttlMs = 30 * 60_000, timeoutMs = 8_000, field = true, fieldTtlMs = 3 * 3600_000, fieldPauseMs = 0, fieldRetryMs = 0, fieldWaitMs = Infinity, retryNetMs = 3_000, log = console, now = () => Date.now() } = {}) {
     this.mode = source;
     this.offline = offline;
     this.warningsSource = warnings;
@@ -288,6 +346,7 @@ export class WeatherDesk {
     this.fixtureFile = fixtureFile;
     this.ttlMs = ttlMs;
     this.timeoutMs = timeoutMs;
+    this.retryNetMs = retryNetMs;
     this.log = log;
     this.now = now;
     this.cached = null; // { at, report }
@@ -295,7 +354,9 @@ export class WeatherDesk {
     this.lastError = null;
     this.failedAt = null;
     // the heat map: real temperatures at many places (server/weatherfield.js), tied to the cities
-    this.fields = field ? new FieldDesk({ source: () => this.source, fetchImpl, ttlMs: fieldTtlMs, log, now }) : null;
+    // (paced for the free tier on air: the grid lands in the background, never holding the forecast back)
+    this.fields = field ? new FieldDesk({ source: () => this.source, fetchImpl, ttlMs: fieldTtlMs, pauseMs: fieldPauseMs, retryMs: fieldRetryMs, log, now }) : null;
+    this.fieldWaitMs = fieldWaitMs;
   }
 
   /** The source in use now ('auto' follows the news desk: offline fixture desk -> fixture data). */
@@ -322,7 +383,12 @@ export class WeatherDesk {
   /** The latest report (refetched after ttl), or null when there is no data. Never throws. */
   async report() {
     if (!this.enabled) return null;
-    if (this.cached && this.now() - this.cached.at < this.ttlMs) return this.cached.report;
+    if (this.cached && this.now() - this.cached.at < this.ttlMs) {
+      // a heat map that landed after the report was made joins it
+      const r = this.cached.report;
+      if (!r.field && this.fields?.ready()) r.field = this.fields.fieldFor(r);
+      return r;
+    }
     this.inflight ??= this.load().finally(() => (this.inflight = null));
     return this.inflight;
   }
@@ -331,7 +397,7 @@ export class WeatherDesk {
     try {
       const report = this.source === 'fixture' ? this.fromFixture() : await this.fromNetwork();
       // the heat map never holds the forecast back: without it the map is coloured from the cities alone
-      if (report && this.fields) report.field = await this.fields.field(report);
+      if (report && this.fields) report.field = await this.fields.field(report, { waitMs: this.fieldWaitMs });
       if (report) {
         this.cached = { at: this.now(), report };
         this.lastError = null;
@@ -357,17 +423,31 @@ export class WeatherDesk {
     return buildReport(byCity, warnings, { at: raw.at || new Date(this.now()).toISOString(), demo: true });
   }
 
+  /**
+   * GET a JSON document: each try has its own timeout; a dropped or hung connection is tried again (three
+   * tries, 3 s apart: on the first live run about 4 in 10 connections to Open-Meteo hung), an HTTP error is not.
+   */
   async getJson(url) {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), this.timeoutMs);
-    try {
-      const res = await this.fetchImpl(url, { signal: ctl.signal, headers: { accept: 'application/json', 'user-agent': 'GLOBIT24-weather/1.0' } });
-      if (!res.ok) throw new Error(`${new URL(url).host} HTTP ${res.status}`);
-      const text = await res.text();
-      if (text.length > 4_000_000) throw new Error(`${new URL(url).host}: response too large`);
-      return JSON.parse(text);
-    } finally {
-      clearTimeout(timer);
+    for (let attempt = 0; ; attempt++) {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), this.timeoutMs);
+      let res;
+      try {
+        res = await this.fetchImpl(url, { signal: ctl.signal, headers: { accept: 'application/json', 'user-agent': 'GLOBIT24-weather/1.0' } });
+      } catch (err) {
+        clearTimeout(timer);
+        if (attempt >= 2) throw err;
+        await new Promise((r) => setTimeout(r, this.retryNetMs));
+        continue;
+      }
+      try {
+        if (!res.ok) throw new Error(`${new URL(url).host} HTTP ${res.status}`);
+        const text = await res.text();
+        if (text.length > 4_000_000) throw new Error(`${new URL(url).host}: response too large`);
+        return JSON.parse(text);
+      } finally {
+        clearTimeout(timer);
+      }
     }
   }
 
