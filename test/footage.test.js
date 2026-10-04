@@ -57,7 +57,14 @@ describe('what footage may show', () => {
     assert.ok(!usableFootage(clip('Marseille vs Lyon match highlights'), 'Marseille'), 'a production');
     assert.ok(!usableFootage(clip('Marseille street', { duration: 4 }), 'Marseille'), 'too short');
     assert.ok(!usableFootage(clip('Marseille street', { w: 1080, h: 1920, ders: [] }), 'Marseille'), 'portrait (no transcode either)');
-    const best = bestFootage([clip('Marseille 2019'), clip('Marseille aerial view'), clip('Marseille protest')], 'Marseille');
+    // a shot of the place, said in its title: never people, an occasion or just the place's name
+    assert.ok(!usableFootage(clip('President Trump Greets the Chancellor of the Federal Republic of Germany'), 'Germany'), 'people the story is not about');
+    assert.ok(!usableFootage(clip('Germany 2019'), 'Germany'), 'the name alone says nothing of the shot');
+    assert.ok(!usableFootage(clip('Berlin street', { description: 'Children playing in the street' }), 'Berlin'), 'never children');
+    assert.ok(!usableFootage(clip('Berlin street festival'), 'Berlin'), 'an occasion');
+    assert.ok(usableFootage(clip('Berlin street', { description: 'Visit our channel for more' }), 'Berlin'), 'an occasion word in the description is no person');
+    for (const [title, name] of [['Luftaufnahme Berlin', 'Berlin'], ['Vue aérienne de Marseille', 'Marseille'], ['Hauptstraße in Heidelberg', 'Heidelberg'], ['Kerala backwaters boat ride', 'Kerala']]) assert.ok(usableFootage(clip(title), name), title);
+    const best = bestFootage([clip('Marseille 2019'), clip('Marseille old town walk'), clip('Marseille aerial view'), clip('Marseille protest')], 'Marseille');
     assert.equal(best.title, 'Marseille aerial view', 'a good kind of shot first');
     assert.ok(FOOTAGE_LIMITS.maxBytes <= 16 * 1024 * 1024);
   });

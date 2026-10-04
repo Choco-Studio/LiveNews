@@ -418,6 +418,25 @@ export class AudioEngine {
     this.#voiceOff();
   }
 
+  /**
+   * When no recorded voice plays: seconds from speak()'s start to each sentence's first word, and the whole
+   * length, on the timelines and pauses the engine will use (silent and murmur exactly; a system voice keeps near
+   * it). The director plans a correspondent link's shots on them (linkplan.js).
+   */
+  sentenceTimes(text, anchor = 'A') {
+    const sentences = splitSentences(String(text ?? ''));
+    const mode = this.mode;
+    const starts = [];
+    let t = 0;
+    for (let i = 0; i < sentences.length; i++) {
+      starts.push(t);
+      t += (this.#timeline(anchor, sentences[i], { paced: mode !== 'tts' }).total + 40) / 1000;
+      if (i < sentences.length - 1) t += gapAfter(sentences[i], mode) / 1000;
+    }
+    return { starts, end: t };
+  }
+
+
   // Speech and every tune.
   stopAll() {
     this.stop();

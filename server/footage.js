@@ -31,8 +31,17 @@ const FREE_LICENCE = /^(cc0|public domain|pd\b|pd-|cc[ -]by(-sa)?(\s|$|-)\s*\d?)
 // what a clip of the place must not be
 const NOT_FOOTAGE =
   /\b(interview|lecture|speech|talk|talks|conference|presentation|press|trailer|teaser|game|games|match|goal|goals|highlights|song|music|musical|concert|dance|dancing|tutorial|how to|animation|animated|map|maps|webinar|podcast|ceremony|funeral|wedding|protest|protests|rally|march|parade|election|debate|campaign|commercial|advert|advertisement|documentary|film|movie|episode|news|report|tv|broadcast|cctv|dashcam|crash|accident|police|military|army|soldiers?|war|fire|fires|wildfire|flood|floods|flooding|storm|hurricane|typhoon|cyclone|earthquake|quake|tsunami|eruption|riot|attack|explosion|360|vr|3d|game ?play|minecraft|simulator|rendering|cgi|slideshow|screencast|logo|intro)\b/i;
-// what makes a good shot of a place
-const GOOD = /\b(aerial|drone|skyline|panorama|panoramic|street|streets|harbou?r|port|river|waterfront|promenade|square|city|centre|center|old town|view|views|timelapse|time-lapse|walk|walking|tram|boat|bridge|beach|coast|market)\b/i;
+// people and occasions: footage shows a place, never someone the story is not about (owner: the set never shows
+// figures the channel did not report), never a child, never an event filmed elsewhere. People are looked for in
+// the description too; occasions in the title only (descriptions say "visit our site", "official channel")
+const PEOPLE =
+  /\b(president|presidential|chancellor|ministers?|prime minister|king|queen|prince|princess|pope|mayor|governor|senator|ambassador|delegation|children|child|kids|baby|babies|pupils|victims?|refugees?|nude|naked|nudist|topless|trump|biden|obama|putin|merkel|scholz|macron)\b/i;
+const OCCASION =
+  /\b(greets?|meets?|meeting|visits?|visited|summit|signing|remarks|statement|briefing|address|addresses|award|awards|celebration|festival|carnival|demonstration|strike|vigil|memorial|portrait|selfie|vlog|unboxing|review|school|students|hospital|covid|pandemic|vaccine|government|officials?|parliament|congress|migrants?)\b/i;
+// what makes a shot of a place: a clip airs only when its title says it is one (in the languages Commons
+// uploaders title in most); matched without accents
+const GOOD =
+  /\b(aerial|drone|skyline|cityscape|panorama|panoramic|street|streets|downtown|harbou?r|port|river|riverside|waterfront|promenade|square|city|centre|center|old town|view|views|time-?lapse|time lapse|walk|walking|walkthrough|tram|boat|ferry|bridge|beach|coast|bay|market|landscape|countryside|village|town|scenery|mountains?|lake|canal|valley|island|flight over|flying over|fly ?over|overflight|vue|aerienne|ville|rue|plage|quai|vista|aerea|ciudad|calle|playa|puerto|centro|rua|cidade|praia|luftaufnahmen?|stadt|stra(?:ss|ß)e|hafen|altstadt|blick|aussicht|rundflug|zeitraffer|veduta|citta|strada|spiaggia|porto)\b/i;
 // transcodes the client can decode everywhere (VP9 first, small first: the pixel style needs 192x108)
 const DERIVATIVES = ['240p.vp9.webm', '360p.vp9.webm', '240p.webm', '360p.webm', '180p.vp9.webm', '480p.vp9.webm'];
 
@@ -108,13 +117,16 @@ export function usableFootage(c, name) {
   if (!(c.width >= FOOTAGE_LIMITS.minWidth) || !(c.height > 0) || c.width / c.height < FOOTAGE_LIMITS.aspect) return false;
   const text = `${c.title} ${c.description}`;
   if (NOT_FOOTAGE.test(c.title) || NOT_FOOTAGE.test(c.description)) return false;
+  if (PEOPLE.test(fold(text)) || OCCASION.test(fold(c.title))) return false;
+  // the title names a shot of a place ("Marseille par drone", "Vieux-Port de Marseille"), not just the place
+  if (!GOOD.test(fold(c.title)) && !/(?:stra(?:ss|ß)e|platz|ufer|brucke)\b/i.test(fold(c.title))) return false; // and German compounds (Hauptstraße, Alexanderplatz)
   return !!name && fold(text).includes(fold(name));
 }
 
-/** The best usable clip: a good kind of shot, then a middling length (20 s to 3 min), then the search order. */
+/** The best usable clip: from the air first, then a middling length (20 s to 3 min), then the search order. */
 export function bestFootage(list, name) {
   const usable = list.filter((c) => usableFootage(c, name));
-  const score = (c) => (GOOD.test(c.title) ? 2 : 0) + (c.duration >= 20 && c.duration <= 180 ? 1 : 0);
+  const score = (c) => (/\b(aerial|drone|skyline|panorama|luftaufnahmen?|aerienne|aerea)\b/i.test(fold(c.title)) ? 2 : 0) + (c.duration >= 20 && c.duration <= 180 ? 1 : 0);
   return usable.map((c, i) => ({ c, i, s: score(c) })).sort((a, b) => b.s - a.s || a.i - b.i)[0]?.c || null;
 }
 
