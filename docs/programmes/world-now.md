@@ -281,7 +281,7 @@ It is enabled per programme by the pace profile's `shots.quoteCard` (WORLD NOW o
 - **one story:** the montage's headline frame (its picture, else its place on the map) under a STILL TO COME tag, without the montage's pips;
 - **two stories:** one panel, no cut. A tile for each, 168×84, the picture pixelated at the tile's own size (never a scaled-down card), else the place on a dot map with a pin. Both come in from the cut. The second waits dimmed, its headline in fog, and lights up left to right as the voice names it.
 
-It airs only when the shot on air has held the floor and the frame will hold it too before the next story cuts back to the studio. Otherwise the line is read to camera as before. The captions go to the top (y 46–72), as over the montage. The mock no longer teases the very next story, nor adds "and our number of the day" when the number comes straight after.
+It airs only when the shot on air has held the floor and the frame will hold it too before the next story cuts back to the studio. Otherwise the line is read to camera as before. A signpost is no banter, so it also airs next to grave news, said soberly (no nod); the story it names is never a grave one. The captions go to the top (y 46–72), as over the montage. The mock no longer teases the very next story, nor adds "and our number of the day" when the number comes straight after.
 
 ### Format round 2: the boards
 
@@ -290,7 +290,8 @@ A story's card beat (pace `shots.numbers` and `shots.known`, WORLD NOW only for 
 2. **WHAT WE KNOW**, when the writer gave two or three key points (`seg.known`, programme `"boards": ["known"]`). The points sit on the same black panel, one after another, each beside an accent square: at 2x when every point fits on one line, else at 1x in up to two lines.
    - Each point is held to a headline's standard (`headlineGrounded`: every content word, time span and figure is the source's), within 44 characters. No question, quote or invention ("The strike will last a month" is dropped).
    - At finalize a point whose figure the presenter does not say is dropped. The set never shows a figure we did not report.
-   - The fallback writer takes them from the source's short clauses with the attribution taken off, only for hard news (the lead, a grave or breaking story, a hard-news topic). It never takes a clause that leans on another one ("than it expected").
+   - The fallback writer takes them from the source's short clauses, only for hard news (the lead, a grave or breaking story, a hard-news topic). Each needs a verb of its own and never leans on another clause ("than it expected").
+   - The attribution comes off a count ("the agency says about 1.2 million homes are without power") or a plain fact ("Nearby roads were closed, officials said"), never off a claim. "Geffray said the closures were a security precaution" keeps its speaker or stays off the board.
 3. **The single fact card**, as before.
 
 **Where a board goes.** It comes right after the map; a single fact still comes last. On a story handed to a correspondent the board comes first, because the hand-over owns the last sentence. The plan of such a story ends where the hand-over starts, so no beat, cap or max-hold guard cuts back to the presenter just before the two-way. A board needs 5 s of room (read once) and holds longer when there is more.

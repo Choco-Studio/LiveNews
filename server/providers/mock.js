@@ -12,7 +12,7 @@ import { isTranscriptLine } from '../transcript.js';
 import { isBreaking, plainTitle } from '../news.js';
 import { ALSO_LEAN, LIGHT, contentWords, extractFigures, sentencesIn, harmlessIncident, isGrave, leansOnPrevious, notForFeatures, numbersIn, quotesIn, severity } from '../facts.js';
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
-import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, shortHeadline, splitClauses, trimClause } from '../writer.js';
+import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, hasFiniteVerb, shortHeadline, splitClauses, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
 import { AHEAD, deskOf } from '../correspondents.js';
 
@@ -97,22 +97,31 @@ const WORLD_PLACE_PAIRS = [
  * ("it", "they"). The validator grounds them again, and drops a point whose figure the presenter does not say.
  */
 const HARD_NEWS = new Set(['BUSINESS', 'CLIMATE', 'CONFLICT', 'EARTHQUAKE', 'ECONOMY', 'ELECTIONS', 'ENERGY', 'HEALTH', 'INDUSTRY', 'JOBS', 'JUSTICE', 'MARKETS', 'POLITICS', 'PROTESTS', 'TRADE', 'TRANSPORT', 'VOLCANO', 'WATER', 'WEATHER', 'WILDFIRE', 'WORLD']);
+// a reason, a judgement or a forecast: someone's word, never the channel's
+const JUDGEMENT = /\b(?:precaution\w*|necessary|unnecessary|safe|unsafe|aim\w*|intend\w*|designed|because|protect\w*|justif\w*|legitima\w*|threat\w*|priorit\w*|responsib\w*|blam\w*|lies?|unfair|illegal|wrong|best|worst|must|should|needs?|will|would|could|may|might|expect\w*|believe\w*|plans?|planned|likely|fears?|feared|warn\w*|deliberate\w*)\b/i;
 export function knownPoints(sentences, max = 3) {
   const out = [];
   for (const raw of sentences) {
     if (out.length >= max) break;
     let t = String(raw).replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
     if (/[“”"?«»]/.test(t)) continue;
-    t = t
+    const stripped = t
       .replace(/,\s*(?:according to [^,.]+|(?:the )?[\w’' -]{2,40}? (?:says|said|reports|reported))\.?$/i, '')
       .replace(/^(?:according to [^,]+,\s*)/i, '')
       .replace(/^[^,]{0,60}?\b(?:says|said|reports|reported|confirmed)\s+(?:that\s+)?/i, '');
-    for (const clause of t.split(/,\s*and\s+|;\s*|\s+and\s+(?=(?:about |more than |nearly |some |at least )?\d)/i)) {
+    // attribution comes off a count ("the agency says about 1.2 million homes are without power"), never off a
+    // claim: "Geffray said the closures were a security precaution" is the minister's word, so it keeps it (or,
+    // too long for the board, is left out)
+    const attributed = stripped !== t;
+    const trailing = attributed && /,\s*(?:according to [^,.]+|(?:the )?[\w’' -]{2,40}? (?:says|said|reports|reported))\.?$/i.test(t);
+    for (const clause of stripped.split(/,\s*and\s+|;\s*|\s+and\s+(?=(?:about |more than |nearly |some |at least )?\d)/i)) {
       let c = clause.replace(/[.!,;:]+$/, '').trim();
+      // (a fact after ", officials said" stands without it: "Nearby roads were closed")
+      if (attributed && !/\d/.test(c) && !(trailing && !JUDGEMENT.test(c))) c = stripped.split(/,\s*and\s+|;\s*/).length === 1 ? t.replace(/[.!,;:]+$/, '').trim() : '';
       if (!c || /^(?:that|there|which|who|but|so|also)\b/i.test(c) || /\b(?:it|its|they|their|them|this|these|those|he|she|his|her)\b/i.test(c)) continue; // a point stands alone
       const words = c.split(' ').length;
       if (words < 3 || words > 9 || c.length > KNOWN_MAX) continue;
-      if (!/\b(?:is|are|was|were|has|have|had|will|can|could|may|[a-z]{3,}ed|[a-z]{3,}s)\b/.test(c)) continue; // a statement, not a noun phrase
+      if (/\s[–—-]\s/.test(c) || !hasFiniteVerb(c)) continue; // a statement with a verb of its own, not a noun phrase
       c = c[0].toUpperCase() + c.slice(1);
       if (!out.some((x) => x.toLowerCase() === c.toLowerCase())) out.push(c);
       if (out.length >= max) break;
@@ -126,9 +135,10 @@ const WORLD_ADD = ['[nod] And one detail worth adding:', '[nod] Worth adding:', 
 
 /** PACE: the story the mid-programme "Still to come" rides on: a main story near the middle of the running order. */
 function midStory(order, roundup, lighter, number) {
-  // the signpost airs as the reader's own short line after the story (a chat segment: the validator keeps
-  // chats, which may name any story of the episode, only away from grave news)
-  const ok = (i) => order[i] && !roundup.includes(order[i]) && order[i] !== lighter && order[i] !== number && !order[i].live && !order[i].grave && !order[i + 1]?.grave;
+  // the signpost airs as the reader's own short line after the story (a chat segment the validator keeps
+  // next to grave news too: it is no banter)
+  // (grave news around it is fine: "Still to come" is said soberly; the story it names is never a grave one)
+  const ok = (i) => order[i] && !roundup.includes(order[i]) && order[i] !== lighter && order[i] !== number && !order[i].live;
   const mid = Math.floor(order.length / 2) - 1;
   for (let d = 0; d < order.length; d++) for (const i of [mid - d, mid + d]) if (i >= 1 && i < order.length - 2 && ok(i)) return i;
   return -1;
@@ -1020,13 +1030,13 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // going out" before "some schools have moved lessons").
       const ADVICE = /\b(?:alerts?|warn\w*|advis\w*|asked (?:people|residents)|urged|told (?:people|residents)|stay indoors|avoid|evacuat\w*|shelters?)\b/i;
       const detailOrder = info.grave || info.hard ? [...info.sentences].sort((a, b) => Number(ADVICE.test(b)) - Number(ADVICE.test(a))) : info.sentences;
-      const said = () => [...parts, ...body].map((x) => x.replace(/\[[^\]]*\]/g, ' '));
+      const toldSoFar = () => [...parts, ...body].map((x) => x.replace(/\[[^\]]*\]/g, ' '));
       for (const t0 of detailOrder) {
         if (details >= maxDetails || used.has(t0) || echoes(t0)) continue;
         // (a quotation alone, with nobody saying it: "“It is absolutely unforgivable.”")
         if (/^["“‘']/.test(t0.trim()) && !/\b(?:said|says|told|added|according to|warned|wrote)\b/i.test(t0)) continue;
         // (a sentence that tells again what an aired one said: most of its words, little new)
-        if (said().some((x) => restates(t0, x) && newWords(t0, x) < 4)) continue;
+        if (toldSoFar().some((x) => restates(t0, x) && newWords(t0, x) < 4)) continue;
         if (/^(?:It|They|This|These)\b/.test(t0) && WHY.test(t0)) continue; // "It says..." with no subject reads as a label
         // over the programme's sentence length: told as two whole sentences when it joins two clauses, else a
         // trailing clause goes, else the sentence is left out
@@ -1141,7 +1151,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     }
     // PACE: the mid-programme signpost, read by the story's own presenter to camera (a block boundary follows)
     // after the story's own chat lines (the reaction belongs to the story; the signpost closes the block)
-    const signpost = info.signpost && chatOk && policy?.after?.includes(slot) && maxChats - chats > 0 ? { anchor, text: `[nod] ${info.signpost}` } : null;
+    // (a signpost is no banter: the reader's own sober line, after grave news too, never inside a round-up or a link)
+    const signOk = !solo && chats < maxChats && !inRoundup && !info.cross;
+    const signpost = info.signpost && signOk && policy?.after?.includes(slot) && maxChats - chats > 0 ? { anchor, text: info.grave || (next && next.grave) ? info.signpost : `[nod] ${info.signpost}` } : null;
     const chatsHere = [...planned.slice(0, maxChats - chats - (signpost ? 1 : 0)), ...(signpost ? [signpost] : [])];
 
     // ---- hand-over: a toss to the partner who reads next, sometimes (never next to grave news).

@@ -57,7 +57,10 @@ describe('WHAT WE KNOW points (writer)', () => {
   test('the fallback writer finds them in the source: short clauses, attribution off, nothing that leans on another line', () => {
     assert.deepEqual(knownPoints(["Mexico’s civil protection agency says about 1.2 million homes are without power and 40,000 people have gone to shelters."]), ['About 1.2 million homes are without power', '40,000 people have gone to shelters']);
     assert.deepEqual(knownPoints(['Prices are rising faster than it expected, the bank said.', '“This is serious,” the agency said.', 'Is it over?']), []);
-    assert.deepEqual(knownPoints(['Nearby roads were closed as a precaution, officials said.', 'Flights are not affected.']), ['Nearby roads were closed as a precaution', 'Flights are not affected']);
+    assert.deepEqual(knownPoints(['Nearby roads were closed, officials said.', 'Flights are not affected.']), ['Nearby roads were closed', 'Flights are not affected']);
+    // a claim keeps whose word it is, or stays off the board: never the minister's reason as the channel's fact
+    assert.deepEqual(knownPoints(['Geffray said the closures were a security precaution.', 'Nearby roads were closed as a precaution, officials said.']), []);
+    assert.deepEqual(knownPoints(['Unions say talks over pay have stalled.']), ['Unions say talks over pay have stalled']);
   });
 });
 

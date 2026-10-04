@@ -166,6 +166,8 @@ describe('the offline demo, end to end (fixture feeds -> desk -> mock writer -> 
       const text = `${src.title}. ${src.summary}`;
       for (const field of [s.fact, ...(s.numbers || []).map((n) => n.value)]) if (field) assert.ok(numbersGrounded(field, text), `${field} in ${s.storyId}`);
     }
+    // a signpost names its story by its headline, in one short line (once it read out a story's sentences)
+    for (const e of episodes) for (const s of e.segments.filter((x) => x.type === 'chat' && /^Still to come/i.test(x.text))) assert.ok(s.text.split(/\s+/).length <= 25 && !/[.!?],/.test(s.text), s.text);
     const ids = episodes.flatMap((e) => e.storyIds);
     assert.equal(new Set(ids).size, ids.length, 'no story airs twice in a rotation');
     for (const e of episodes) assert.equal(e.pipeline.find((p) => p.stage === 'review').reviewed, false);

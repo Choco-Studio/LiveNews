@@ -799,7 +799,7 @@ const PAST_FORM = /^(?:burst|rose|fell|grew|took|made|hit|struck|began|won|lost|
 const PLURAL_VERB = /^(?:say|warn|expect|believe|think|hope|plan|want|need|fear|estimate|agree|claim|argue|report|show|suggest|account|remain|continue|make|take|help|use|work|live|run|keep|face|reach|cover|carry|serve|hold|join|lead|grow|rise|fall|stay|stand|sit|come|go|get|give|see|find|know|call|ask|try|move|pay|meet|win|lose|open|close|start|begin|end|travel|stop|walk|wait|return|remain|form|look|mean|offer|provide|include|range|vary|differ)$/i;
 const NOT_VERB_AFTER = /^(?:a|an|the|of|in|on|at|for|from|by|with|to|into|its|their|his|her|our|this|that|these|those|some|many|several|few|new|old|\d[\d,.]*)$/i;
 /** Does a clause have a finite verb after its first word (an auxiliary, a past form, a present-tense verb)? */
-function hasFiniteVerb(clause) {
+export function hasFiniteVerb(clause) {
   const words = String(clause).split(/\s+/).map((w) => w.replace(/^[^\p{L}]+|[^\p{L}'’-]+$/gu, '')).filter(Boolean);
   for (let i = 1; i < words.length; i++) {
     const w = words[i].toLowerCase();
@@ -870,7 +870,9 @@ function normalizeKnown(list, source, ignore = []) {
   for (const p of list) {
     if (!textLike(p)) continue;
     let t = clean(p, 80).replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').replace(/[.;:!,]+$/, '').trim();
-    if (!t || t.length > KNOWN_MAX || /[?“”"«»]/.test(t) || t.split(' ').length < 3) continue;
+    if (!t || t.length > KNOWN_MAX || /[?“”"«»]/.test(t) || /\s[–—-]\s/.test(t) || t.split(' ').length < 3) continue;
+    // a statement, with a verb of its own ("Other complaints – early in the week" is none)
+    if (!hasFiniteVerb(t)) continue;
     // a board point is held to a headline's standard: every content word, time span and figure is the source's
     if (!headlineGrounded(t, source, { ignore }) || !numbersGrounded(t, source) || qualifierConflict(t, source) || inventedClaim(t, source, { ignore })) continue;
     t = t[0].toUpperCase() + t.slice(1);
@@ -1341,7 +1343,8 @@ export function normalizeBulletin(
   units.forEach((u, i) => {
     const next = units[i + 1]?.story;
     const slot = i === 0 ? 'lead' : u.story.feature === 'lighter' ? 'lighter' : 'story';
-    u.chats = u.chats.filter((c) => !u.story.heavy && !(next && next.heavy) && (!policy?.after || policy.after.includes(slot)));
+    // (a signpost, "Still to come: ...", is no banter: it stays next to grave news, said soberly)
+    u.chats = u.chats.filter((c) => (SIGNPOST.test(stripTags(c.tagged)) || (!u.story.heavy && !(next && next.heavy))) && (!policy?.after || policy.after.includes(slot)));
     const perSlot = policy?.max?.[slot];
     if (Number.isInteger(perSlot)) u.chats = u.chats.slice(0, perSlot);
     u.chats.forEach((c) => chatSlots.push({ c, u, slot }));
