@@ -1,9 +1,9 @@
 # GLOBIT 24 — lista de todo lo que hay que corregir o modificar
 
-Estado (3 oct, 14:30): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a falta de algo tuyo. Ordenado por prioridad. Detalle en OWNER_FEEDBACK.md, BACKLOG.md, WAVE3.md y STATUS.md.
+Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a falta de algo tuyo. Ordenado por prioridad. Detalle en OWNER_FEEDBACK.md, BACKLOG.md, WAVE3.md y STATUS.md.
 
 ## A. Prioridad máxima (lo que más se nota)
-1. 🟡 **Fotos reales en antena.** (Código hecho: buscador Wikimedia/Google/Bing, foto de archivo marcada FILE. Falta abrir la red para probarlo de verdad.) Nada dibujado al aire. Hace falta abrir el acceso a las webs de noticias e imágenes (o usar tu ordenador), un buscador de fotos (Wikimedia Commons por defecto; Google o Bing con clave opcional) y una demo grabada con fotos reales.
+1. ✅ **Fotos reales en antena.** (Probado con la red abierta el 4 oct: las 24 noticias de las dos primeras ediciones preparadas, WORLD NOW y TECH BYTES, salen con la foto de su medio y su crédito; titulares, pantalla completa y pantalla del plató.) Nada dibujado al aire. Hace falta abrir el acceso a las webs de noticias e imágenes (o usar tu ordenador), un buscador de fotos (Wikimedia Commons por defecto; Google o Bing con clave opcional) y una demo grabada con fotos reales.
 2. ✅ **Pantalla del plató.** Fotos fieles, sin franjas de color ni "filtro mal puesto", y llenando la pantalla entera (también en NEWS IN 60).
 3. ✅ **El canal arranca "en frío".** (El primer programa espera a tener todas sus voces.) Los primeros programas salen peores que desde COSMOS. Comparar los dos WORLD NOW del vídeo de 18 minutos y que el canal empiece ya "caliente".
 4. ✅ **Resumen de titulares.** (Sin foto: mapa del lugar; el corte va con la voz.) A veces sale en negro o con la foto anterior porque el audio se adelanta: arreglo robusto y una prueba automática.
@@ -29,14 +29,14 @@ Estado (3 oct, 14:30): trabajando punto por punto. ✅ = hecho y subido; 🟡 = 
 18. **Expertos del canal** (8 fijos, ficticios). Dan vida al programa y se ciñen a los hechos de la fuente.
 19. **Entrevistas reales "IN THEIR WORDS".** La persona aparece en la pantalla o en el plató diciendo solo palabras de declaraciones públicas, con la etiqueta RECREACIÓN. Nunca víctimas, menores, particulares ni noticias graves.
 20. **Invitados.** Personalización del personaje por IA y cara esculpida preparada con antelación.
-21. 🟡 **Nuevo programa WORLD WEATHER (≈5 min).** Hecho:
+21. ✅ **Nuevo programa WORLD WEATHER (≈5 min).** Hecho:
     - mapa del mundo (el mismo de las noticias) por 6 zonas, con la tierra coloreada por temperatura, iconos animados (sol, nubes, lluvia, tormenta, nieve, niebla) y la máxima de cada ciudad;
     - Sam de pie que camina de zona en zona con la cámara siguiéndole, y señala cada ciudad cuando la nombra;
     - segundo panel de avisos (huracán girando en el mapa, nivel de alerta, vientos, fuente);
     - datos reales de Open-Meteo y avisos oficiales de GDACS, citando la fuente; el guion sale solo de los datos (ninguna cifra inventada);
     - cabecera propia (sol y nube) y música suave.
 
-    Falta: abrir la red a api.open-meteo.com y gdacs.org para los datos reales (sin red se ven DATOS DE DEMOSTRACIÓN, marcados así en pantalla), y las decisiones 8 y 12 (presentador del tiempo). Detalle en docs/programmes/world-weather.md.
+    Probado con datos reales (4 oct): 44 ciudades, avisos de GDACS y mapa de calor de 841 puntos. Arreglado con los datos reales: tormentas ya terminadas que seguían saliendo, listas de países cortadas, etiquetas pisadas y el límite de peticiones de Open-Meteo. Falta: las decisiones 8 y 12 (presentador del tiempo). Detalle en docs/programmes/world-weather.md.
 22. **Ritmo.** Transiciones, pausas entre bloques y tiempos de espera (el equipo de ritmo estaba a mitad).
 23. **Textos.** Comprobar el arreglo de las frases rotas de NEWS IN 60, que no se repita la misma noticia, más variedad 24/7, que no se cuele una foto de otra noticia y verificación de cifras.
 
@@ -90,4 +90,4 @@ Estado (3 oct, 14:30): trabajando punto por punto. ✅ = hecho y subido; 🟡 = 
 10. Fin de semana: ¿resumen de la semana en la tercera parte de WORLD NOW?
 11. Idioma en pantalla: ¿inglés como ahora o español?
 12. Presentador del tiempo: ¿Sam o uno nuevo?
-13. Red: ¿abrir dominios en este entorno o pasamos a tu ordenador?
+13. ✅ Red: abierta en este entorno (4 oct).
