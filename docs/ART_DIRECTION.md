@@ -211,35 +211,51 @@ Solo shows alternate the single with pictures. NEWS IN 60 may cut at 3–6 s but
 - [ ] Show a name super on every story, or let headlines exceed about 45 characters.
 - [ ] Move the camera on the set.
 
-## Set dressing per programme (owner polish round, 3 Oct)
+## Set dressing per programme (round 4, 4 Oct)
 
-The owner asked for each programme to have its own studio. The network's architecture stays: the wall, the hero screen, the desk and the GLOBIT 24 red plate. On top of it, `public/js/v2/canvas25d/studio/dressing.js` hangs each programme's dressing on the back wall, beside the presenters, and changes the desk front:
+The owner rated round 3 at 5-5.5 ("Todavía no los veo a un buen nivel… Puedes añadir animaciones o lo que sea. Pero quiero platós realmente bien hechos"). Round 3 hung small decorations on a dark, flat wall; half the wide was black. Round 4 rebuilds the back of each set as its own world and makes the studio read as lit and alive.
 
-| Programme | Back wall | Desk front |
+The network's architecture, shared by all five sets:
+- the hero screen in a black mount;
+- a soffit along the top with the programme's LED cove, glowing down;
+- pillars at the sides (the set flats) with a light inlay in the programme's colour;
+- the desk as a lit object: a thicker top slab with a shadow under it, the LED line's light falling on the front, the screen's reflection on the top, and a light line at its foot with its reflection on the floor;
+- the GLOBIT 24 red plate.
+
+| Programme | Back of the set (module) | Colour |
 | --- | --- | --- |
-| WORLD NOW | Two floor-to-ceiling glass bays on the city at night. Each has a banded sky, the city's glow at the horizon, a hazy far skyline and near towers with lit windows. The left bay has the Moon and a spire; the right bay has a TV tower. Both have thin clouds and two reflection strokes on the glass. Over the screen: a bar of world clocks (NYC, LON, TYO, SYD). | The home desk |
-| TECH BYTES | A black display cabinet each side with four backlit niches. Each niche has a cyan LED strip, the light falling down the back panel, a glass shelf and one hand-pixelled product: headphones, a gamepad, a retro handheld, a camera, a VR headset, a joystick, a drone, a little UNIT-8. | Steel plinth |
-| COSMOS DESK | A planetarium set: two portrait LED panels either side of the wall play star charts: a quiet starfield, a dotted grid, and Orion, the Big Dipper and Cassiopeia (crosses, purple lines, names in micro type). Over the screen: the Moon's eight phases. No coloured wash or light on the flanks. | Dark front with silver stars |
-| MONEY MINUTE | A business set after the close: a slatted wood wall washed from a light in its rail; a bull and a bear etched into two edge-lit glass panels on standoffs (green LED in the foot), facing each other; the bronze sconces. Along the top: an LED ticker of the programme's beats, with no prices. | Wood with broken-run grain |
-| NEWS IN 60 | A broadcast studio clock on the left: sixty second-LEDs, the first quarter lit yellow, "60" at its heart. The rundown board on the right: five numbered beats, the one on air marked in yellow. The room stays under the 1.5 % yellow cap. | A thin yellow band |
+| WORLD NOW | Floor-to-ceiling glass over a city by night (`city.js`), as at CNN New York or Sky News. The city is on its own far plane, so it moves less than the set in a move. It has a banded sky, a hazy far skyline, and towers with lit windows: office floors, homes, dark blocks and glass towers. There are crowns, masts with red lights and a TV tower. The horizon glow sits at head height, with the avenues' lamps below it. Over the screen: the world clocks. | red |
+| TECH BYTES | A circuit board (`lab.js`). The screen is the chip, with pins. Copper traces bend at 45° out to pads and vias, buses run over the heads, and there are components and silkscreen marks. Behind each presenter is a light wall of square frosted tiles lit from above. A display cabinet each side has a product in each niche. Over the screen: the terminal line "> TECH BYTES_". | blue (cyan desk line) |
+| COSMOS DESK | A planetarium LED wall (`space.js`). It shows the sky from orbit: stars of every brightness, the Milky Way with its dust lanes, a nebula, a crescent Moon, and low down the Earth's limb with its thin lit atmosphere and the lights of its night side. The Big Dipper and Cassiopeia are drawn over it. Over the screen: the Moon's phases. | magenta |
+| MONEY MINUTE | A panelled room on the exchange after the close (`money.js`): walnut raised panels, a frieze, a brass dado rail with a ledge, and slats below. Bronze sconces wash the panels warm. A bronze Charging Bull and a bear stand on the ledge, each under its own spot. An LED ticker of the programme's beats runs along the soffit, with no prices. | warm brass (darkGreen desk line) |
+| NEWS IN 60 | A flash studio (`flash.js`): a black room with one clean downlight on the anchor. On the left, the studio clock; on the right, the rundown board. Between them and the screen is "the gallery": two blocks of small monitors with feeds (colour bars turned down, snow, a waveform, a feed with its tally, a map with its blip). | amber (yellow desk line) |
 
-Each piece was redrawn until it read clearly in the wide and in every framing that shows it (owner, 4 Oct: "solo pasa al siguiente cuando tu autocrítica pase del 9.5"):
-- text is shown whole or not at all where a framing or the flats would cut it;
-- the set shows no figures it did not report: no invented prices, no fake index values;
-- every set carries its colour in light lines, as real studios do (owner, 4 Oct: "básate en reales y dale identidad"; references from Wikimedia Commons: Seven News's fascia band, Bloomberg London's rings and columns, CNBC Singapore's lit desk, the London Stock Exchange studio's etched glass). Each set has a cove along the top, ribbons framing its feature and LED slits in the desk's seams:
-  - WORLD NOW: red;
-  - TECH BYTES: blue, its cyan kept for the niches; its name is on the set as "> TECH BYTES_";
-  - COSMOS: magenta, as lines only;
-  - NEWS IN 60: orange, beside its capped yellow;
-  - MONEY MINUTE: its green is the ticker's edge and the glass panels' feet.
-- it must still read as a TV set, not a room (owner, 4 Oct: "que siga pareciendo un plató"). The dressing therefore uses studio hardware, as real sets do: LED panels and bands, edge-lit glass, backlit niches, slat walls washed by hidden light, a studio clock, a rundown monitor. Painted murals, framed pictures and office panelling are out.
+**What moves** (`live.js`): a layer drawn every frame over the cached set and under the presenters. It costs a few hundred pixel writes.
+- WORLD NOW: windows switching on and off, aviation lights, a plane crossing, cars on the avenues.
+- TECH BYTES: data pulses along the traces; the cursor blinks.
+- COSMOS DESK: stars twinkle, a satellite crosses, a meteor now and then.
+- MONEY MINUTE: the ticker runs.
+- NEWS IN 60: the clock's ring of sixty LEDs fills as the minute runs; the snow and the waveform move; the tallies breathe.
+- Every desk line but MONEY MINUTE's: a slow sweep of light now and then.
+- The wall's own content keeps its rules: the NEWS IN 60 dial never ticks.
 
-The rules still hold, and `test/v2-set.test.js` checks them:
+**Out of focus** (singles, `cam.soft`): lights become bokeh, drawn by `light.js`:
+- the city as discs of light;
+- the circuit as glowing lines;
+- the brightest stars and the Earth's limb as soft points and a soft band;
+- the gallery's monitors as soft squares.
+
+**Rules**, checked by `test/v2-set.test.js`:
 - every pixel is a palette colour;
 - nothing is behind a head;
-- the graphics zone (y 150-216) stays plain black/ink;
-- only points of light (stars, windows, LEDs) are brighter than the faces;
-- nothing moves (the background is cached).
+- the values around the heads stay inside each bible's range;
+- no 4x4 patch is brighter than the NEWS IN 60 or COSMOS faces;
+- text is shown whole or not at all, and never under the graphics' top row;
+- the set shows no figure the channel did not report;
+- the graphics zone (y 150-216) is black and ink, except the desk's foot light (a line and its reflection, never an area);
+- camera moves never shimmer: nothing is re-picked per pixel under a move. Lights are fixed world points, adjacent towers share edges, and the reflections are flat rows;
+- the camera checks run with the live layer off (`setLive(false)`);
+- flat light shapes and flat light lines, not Bayer fringes (a dithered fringe on black reads as a dotted line).
 
 `setDressing(false)` shows the bare architecture, which the older census tests use.
 
