@@ -17,6 +17,11 @@ The world's weather in about five minutes, presented by Sam Night standing at a 
 - **Offline:** `WEATHER=auto` uses the demo data in `config/fixtures/weather.json` while the news desk runs on the fixture feeds.
   - The screen says **DEMO DATA · NOT A REAL FORECAST**.
   - The demo's storm, ORLA, is fictional.
+- **Live data notes (first run, 4 Oct):**
+  - GDACS keeps an event in its list after it ends. Each hazard therefore has its own limit after GDACS's last update: a cyclone 1.5 days (it is advised every 6 h), a flood or a fire 4 days, a drought 21 days.
+  - A hazard spread over more than three countries is named by the region at its point ("parts of central Europe"), never by GDACS's alphabetical list. The panel adds how many countries and since when.
+  - Open-Meteo's free tier counts every place as a call (600 a minute). The grid is paced at 120 places every 15 s and fetched in the background, so the forecast waits at most 2 s for it and the map joins the report when it lands. After a 429 the batch is asked again. A batch that never answers is left out.
+  - Hung or dropped connections are tried again, each try with its own timeout.
 - **A failed live fetch never falls back to the demo data.** There is no programme, and the slot is skipped and retried after 10 minutes. A report up to 3 hours old may still air.
 - **The script is written from the data alone** (`server/weatherwriter.js`).
   - Every figure said is a figure of the forecast, and every warning is GDACS's own (checked by `test/weather.test.js`).
@@ -87,5 +92,5 @@ Phrasing varies with the date and the edition, and no turn of phrase is repeated
 ## 5. Still open (owner's decisions)
 
 - **Decision 12:** the presenter is Sam Night by default; a dedicated weather presenter can be cast in `config/channel.json`.
-- **Decision 8:** live data needs the network open to `api.open-meteo.com` and `www.gdacs.org`.
+- **Decision 8 (network):** open since 4 Oct. The first live run is recorded in section 1 (live data notes).
 - **Decision 1:** duration and schedule. The programme airs once per rotation, after COSMOS.
