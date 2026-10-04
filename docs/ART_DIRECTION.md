@@ -217,11 +217,15 @@ The owner asked for each programme to have its own studio. The network's archite
 
 | Programme | Back wall | Desk front |
 | --- | --- | --- |
-| WORLD NOW | Two tall windows on a night city: lit windows, a red beacon, red sills. The world's clocks above them. | The home desk |
-| TECH BYTES | Hexagonal acoustic panels with cyan circuit traces. Shelves with gadgets. | Steel plinth |
-| COSMOS DESK | A starfield and a purple nebula. Two portholes: the Moon and a ringed planet. An orbit arc over the screen. | Purple panel with silver stars |
-| MONEY MINUTE | Wood panelling. Two market boards with green and red figures. Two candlestick charts. The bronze sconces. | Wood with grain lines |
-| NEWS IN 60 | Sixty marks round the screen, the first quarter yellow. A bank of small monitors each side, each with a steel strap; the top inner one carries a yellow tag (it is live). The room stays under the 1.5 % yellow cap. | A thin yellow band |
+| WORLD NOW | Two floor-to-ceiling glass bays on the city at night. Each has a banded sky, the city's glow at the horizon, a hazy far skyline and near towers with lit windows. The left bay has the Moon and a spire; the right bay has a TV tower. Both have thin clouds and two reflection strokes on the glass. Over the screen: a bar of world clocks (NYC, LON, TYO, SYD). | The home desk |
+| TECH BYTES | A black display cabinet each side with four backlit niches. Each niche has a cyan LED strip, the light falling down the back panel, a glass shelf and one hand-pixelled product: headphones, a gamepad, a retro handheld, a camera, a VR headset, a joystick, a drone, a little UNIT-8. | Steel plinth |
+| COSMOS DESK | A planetarium wall: a quiet starfield and a star chart's dotted grid. Orion, the Big Dipper and Cassiopeia are drawn as star charts: crosses, purple lines, names in micro type. Over the screen: the Moon's eight phases. No coloured wash. | Dark front with silver stars |
+| MONEY MINUTE | A private bank after the close: a dark-wood dado with raised panels, a bull and a bear in bronze relief on framed plaques with brass name plates, and the bronze sconces. Along the top: an LED ticker of the programme's beats, with no prices. | Wood with broken-run grain |
+| NEWS IN 60 | A broadcast studio clock on the left: sixty second-LEDs, the first quarter lit yellow, "60" at its heart. The rundown board on the right: five numbered beats, the one on air marked in yellow. The room stays under the 1.5 % yellow cap. | A thin yellow band |
+
+Each piece was redrawn until it read clearly in the wide and in every framing that shows it (owner, 4 Oct: "solo pasa al siguiente cuando tu autocrítica pase del 9.5"):
+- text is shown whole or not at all where a framing or the flats would cut it;
+- the set shows no figures it did not report: no invented prices, no fake index values.
 
 The rules still hold, and `test/v2-set.test.js` checks them:
 - every pixel is a palette colour;
