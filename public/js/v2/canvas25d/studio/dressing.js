@@ -32,7 +32,8 @@ import { C } from '../pixbuf.js';
 import { SET, kAt, sxOf, syOf } from './geometry.js';
 import { textPixels } from '../../../font.js';
 import { drawCity, GLASS_COL } from './city.js';
-import { DESK_SWEEP } from './live.js';
+import { DESK_SWEEP, livePoint, BLINK } from './live.js';
+import { pcbWall } from './lab.js';
 import { glowH, glowV, RAMPS } from './light.js';
 
 const W = 384, H = 216;
@@ -198,17 +199,22 @@ function worldNow(fr, cam, style, soft) {
   // a slim stem from the mount to the soffit (it hangs from the grid)
   rectW(fr, cam, -2, GLASS.top - 4, 2, S.y0 - m, C.black);
   clockBar(fr, cam, soft);
-  // the soffit along the top: black, its lip lit, the network's red cove under it throwing light down the glass
-  rectW(fr, cam, -2000, -400, 2000, GLASS.top, C.black);
-  const yc = Math.round(syOf(cam, k, GLASS.top));
-  if (yc >= 0 && yc < H) {
-    const kf = kAt(cam, SET.flatsZ);
-    const x0 = Math.max(0, Math.round(sxOf(cam, kf, -FLATS_X))), x1 = Math.min(W, Math.round(sxOf(cam, kf, FLATS_X)));
-    if (soft) glowH(fr, x0, x1, yc, RAMPS.red, { glow: 'both', reach: 3 });
-    else {
-      fr.span(x0, yc - 1, x1, yc, C.ink);
-      glowH(fr, x0, x1, yc, RAMPS.red, { glow: 'down', reach: 3 });
-    }
+  // the soffit along the top, the network's red cove under it throwing light down the glass
+  soffit(fr, cam, RAMPS.red, soft);
+}
+
+/** The soffit along the top of the set: black, its lip lit, the programme's LED cove under it glowing down. */
+function soffit(fr, cam, ramp, soft, Y = GLASS.top) {
+  const k = kAt(cam, SET.wallZ);
+  rectW(fr, cam, -2000, -400, 2000, Y, C.black);
+  const yc = Math.round(syOf(cam, k, Y));
+  if (yc < 0 || yc >= H) return;
+  const kf = kAt(cam, SET.flatsZ);
+  const x0 = Math.max(0, Math.round(sxOf(cam, kf, -FLATS_X))), x1 = Math.min(W, Math.round(sxOf(cam, kf, FLATS_X)));
+  if (soft) glowH(fr, x0, x1, yc, ramp, { glow: 'both', reach: 3 });
+  else {
+    fr.span(x0, yc - 1, x1, yc, C.ink);
+    glowH(fr, x0, x1, yc, ramp, { glow: 'down', reach: 3 });
   }
 }
 
@@ -238,8 +244,8 @@ function glassSheen(fr, cam, k, box) {
   }
 }
 
-/** WORLD NOW's pillars (the set flats): black columns with a red light inlay and its glow on their face. */
-function worldNowFlats(fr, cam, style, soft) {
+/** The set's pillars (the set flats): black columns with a light inlay of the programme's colour and its glow. */
+function pillars(fr, cam, soft, ramp) {
   const kf = kAt(cam, SET.flatsZ);
   for (const sx of [-1, 1]) {
     const inner = sx * FLATS_X;
@@ -254,10 +260,10 @@ function worldNowFlats(fr, cam, style, soft) {
     const xl = Math.round(sxOf(cam, kf, sx * (FLATS_X + 12)));
     const y0 = Math.round(syOf(cam, kf, -400)), y1 = Math.round(syOf(cam, kf, SET.floorY));
     if (soft) {
-      fr.span(xl - 1, y0, xl + 2, y1, C.darkRed);
-      glowV(fr, xl - 1, y0, y1, RAMPS.red, { reach: 3 });
-      glowV(fr, xl + 1, y0, y1, RAMPS.red, { reach: 3 });
-    } else glowV(fr, xl, y0, y1, RAMPS.red, { reach: 2 });
+      fr.span(xl - 1, y0, xl + 2, y1, ramp.halo);
+      glowV(fr, xl - 1, y0, y1, ramp, { reach: 3 });
+      glowV(fr, xl + 1, y0, y1, ramp, { reach: 3 });
+    } else glowV(fr, xl, y0, y1, ramp, { reach: 2 });
   }
 }
 
@@ -493,21 +499,23 @@ function headerStrip(fr, cam, runs, soft) {
   const ty = yc - Math.floor((5 * s) / 2);
   for (const [g, c, t] of glyphs) {
     const lead = t.startsWith(' ') ? 2 * s : 0;
-    for (const [gx, gy] of g.pixels) fr.span(x + lead + gx * s, ty + gy * s, x + lead + (gx + 1) * s, ty + (gy + 1) * s, c);
+    const blink = t === '_'; // a terminal cursor blinks (live.js)
+    for (const [gx, gy] of g.pixels) {
+      fr.span(x + lead + gx * s, ty + gy * s, x + lead + (gx + 1) * s, ty + (gy + 1) * s, c);
+      if (blink) for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) livePoint(x + lead + gx * s + i, ty + gy * s + j, c, C.black, BLINK.CURSOR);
+    }
     x += (widthOf(t, g) + 1) * s;
   }
 }
 
 function techBytes(fr, cam, style, soft) {
-  // the show's name in a terminal line over the screen: a prompt, the name, the cursor
+  // the set is a circuit board (lab.js): the screen its chip, traces out to the cabinets, pulses along them
+  pcbWall(fr, cam, soft);
+  // the show's name in a terminal line over the screen: a prompt, the name, the blinking cursor
   headerStrip(fr, cam, [['>', C.blue], [' TECH BYTES', C.fog], ['_', C.cyan]], soft);
   displayCabinet(fr, cam, -1, soft);
   displayCabinet(fr, cam, 1, soft);
-  // the lab's light lines in blue (the cyan stays in the niches: TECH BYTES' cyan is capped at 1 %): the cove
-  // along the top, a ribbon up each cabinet's edge toward the screen
-  cove(fr, cam, C.blue, C.navy, { soft });
-  ribbon(fr, cam, -CABINET.X0 + 0.5, CABINET.niches[0][0] - 4, 30, C.blue, soft);
-  ribbon(fr, cam, CABINET.X0 - 0.5, CABINET.niches[0][0] - 4, 30, C.blue, soft);
+  soffit(fr, cam, RAMPS.blue, soft);
 }
 
 // --------------------------------------------------------------------------- COSMOS: the planetarium set
@@ -1013,9 +1021,13 @@ export const DRESSING = { on: true };
 const DRESS = { 'world-now': worldNow, 'tech-bytes': techBytes, cosmos, 'money-minute': moneyMinute, 'news-60': news60 };
 // the desk line's sweep of light (live.js): every 24 s a run of light crosses the desk in 2.6 s
 DESK_SWEEP['world-now'] = { line: C.red, hot: C.pink, every: 24, cross: 2.6 };
+DESK_SWEEP['tech-bytes'] = { line: C.cyan, hot: C.white, warm: C.silver, every: 18, cross: 2.2 };
 
 /** A programme's own set flats (pillars), drawn instead of the network's black flats (set.js drawFlats). */
-export const FLATS = { 'world-now': worldNowFlats };
+export const FLATS = {
+  'world-now': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.red),
+  'tech-bytes': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.blue),
+};
 
 /** The programme's dressing on the back wall (after the light, before the screen and the flats). */
 export function drawDressing(fr, cam, style, soft = false) {
@@ -1030,8 +1042,9 @@ export function drawDressing(fr, cam, style, soft = false) {
  */
 export const DESK_FRONTS = {
   // the home desk: black glass, glossy, the red LED's light on its front, red slits in its seams, a red light at its foot
-  'world-now': { hi: 'black', lo: 'black', pattern: 'slits', slit: 'red', glow: 'red', gloss: true, sheen: true, base: 'red', zone: 'black', slab: 2.4 },
-  'tech-bytes': { hi: 'slate', lo: 'black', pattern: 'slits', slit: 'blue' }, // the steel plinth, blue slits
+  'world-now': { hi: 'black', lo: 'black', pattern: 'slits', slit: 'red', glow: 'red', sheen: true, base: 'red', zone: 'black', slab: 2.4 },
+  // the steel plinth: a lit slab, the cyan line's light on its slate front, blue slits, a blue light at its foot
+  'tech-bytes': { hi: 'slate', lo: 'black', pattern: 'slits', slit: 'blue', glow: 'cyan', sheen: true, base: 'blue', zone: 'ink', slab: 2.4 },
   cosmos: { hi: 'ink', lo: 'black', pattern: 'stars', slit: 'magenta' },
   'money-minute': { hi: 'brown', lo: 'black', pattern: 'grain', top: 'tanShade' }, // the lower panel black (graphics zone); no LED slits (lime on wood reads as neon)
   'news-60': { hi: 'ink', lo: 'black', pattern: 'stripe', stripe: 'yellow', slit: 'orange' },

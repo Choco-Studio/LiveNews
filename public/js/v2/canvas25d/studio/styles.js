@@ -89,7 +89,7 @@ const DEFS = {
     poolMax: 3.0, // a pool centre is at most steel
     glow: 0.15,
     seams: false,
-    flats: false,
+    flats: true, // round 4: pillars with blue inlays frame the board (dressing.js)
     practical: 'softbox',
     bezel: { base: 'slate', top: 'steel', left: 'steel', soft: 'slate' },
     deskTop: 'steel',
