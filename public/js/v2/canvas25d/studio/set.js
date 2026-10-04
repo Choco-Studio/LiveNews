@@ -1210,7 +1210,7 @@ function grainSeg(x, g) {
 function deskPattern(fr, cam, front, kc) {
   const px = fr.px;
   const W0 = fr.w;
-  const grain = C.tanShade, star = C.silver, stripe = C[front.stripe || 'yellow'];
+  const grain = C.tanShade, star = C.silver, stripe = C[front.stripe || 'yellow'], slit = C[front.slit || 'red'];
   for (let x = 0; x < W0; x++) {
     const t = PTOP[x], sp = PSPLIT[x];
     if (t < 0 || sp <= t) continue;
@@ -1237,6 +1237,9 @@ function deskPattern(fr, cam, front, kc) {
       const y0 = t + Math.max(1, Math.round(h * 0.3));
       for (let y = y0; y < y0 + bw; y++) if (y < sp && y < 150) px[y * W0 + x] = stripe;
     }
+    // an LED slit of the accent in each module seam of the upper panel (the set's ribbons, carried down
+    // into the desk), over any pattern
+    if (front.slit && JCOL[x] === 1) for (let y = t + 1; y < sp && y < 150; y++) px[y * W0 + x] = slit;
   }
 }
 

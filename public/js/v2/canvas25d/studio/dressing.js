@@ -18,6 +18,10 @@
 //   NEWS IN 60    a flash studio: a broadcast studio clock (sixty second-LEDs, the first quarter lit yellow,
 //                 "60" at its heart) on the left, the rundown board (RUNDOWN, five numbered beats, the one on
 //                 air marked yellow) on the right, a thin yellow band on the desk
+// Each set carries its colour in light lines, as real sets do (Seven News's blue fascia band, Bloomberg's
+// cyan rings, CNBC's lit desk slashes): a cove along the top, ribbons framing its feature, LED slits in the
+// desk's seams (WORLD NOW red, TECH BYTES blue, COSMOS magenta, NEWS IN 60 orange; MONEY MINUTE's green is its
+// ticker's edge and the glass panels' feet). TECH BYTES also carries its name on the set, a terminal line.
 // Everything is drawn in world units on the back wall (Z = SET.wallZ), so the camera's moves and zooms carry
 // it; every pixel is a palette colour; nothing sits behind a head (|X| >= 140 beside the seats, or above the
 // screen), nothing is brighter than the faces, and nothing moves (the background is cached).
@@ -29,6 +33,7 @@ import { SET, kAt, sxOf, syOf } from './geometry.js';
 import { textPixels } from '../../../font.js';
 
 const W = 384, H = 216;
+const FLATS_X = 196; // the set flats' inner edge (set.js FLAT_X, world X at SET.flatsZ)
 
 // --------------------------------------------------------------------------- helpers (world units → spans)
 function rectW(fr, cam, X0, Y0, X1, Y1, c, Z = SET.wallZ) {
@@ -389,10 +394,44 @@ function clockBar(fr, cam, soft) {
   });
 }
 
+/**
+ * The programme's LED cove along the top of the set (real sets carry their colour in light lines: Seven
+ * News's blue fascia band, Bloomberg's cyan rings): a 1 px line of the accent at the ceiling line, its glow a
+ * checker row under it, across the set between the flats. `dash` > 0 breaks it into segments (a light budget).
+ */
+function cove(fr, cam, c, glow, { Y = -128, dash = 0, soft = false } = {}) {
+  if (soft) return;
+  const k = kAt(cam, SET.wallZ);
+  const y = Math.round(syOf(cam, k, Y));
+  if (y < 0 || y >= H - 1) return;
+  const kf = kAt(cam, SET.flatsZ);
+  const x0 = Math.max(0, Math.round(sxOf(cam, kf, -FLATS_X))), x1 = Math.min(W, Math.round(sxOf(cam, kf, FLATS_X)));
+  const ox = Math.round(sxOf(cam, k, 0));
+  const px = fr.px;
+  for (let x = x0; x < x1; x++) {
+    if (dash && ((((x - ox) % dash) + dash) % dash) >= dash * 0.6) continue;
+    px[y * W + x] = c;
+    if (glow && ((x + y + 1) & 1)) px[(y + 1) * W + x] = glow;
+  }
+}
+/** A vertical LED ribbon of the accent at wall X (1 px, whole pixels), from Y0 to Y1. */
+function ribbon(fr, cam, X, Y0, Y1, c, soft) {
+  if (soft) return;
+  const k = kAt(cam, SET.wallZ);
+  const x = Math.round(sxOf(cam, k, X));
+  if (x < 0 || x >= W) return;
+  const y0 = Math.max(0, Math.round(syOf(cam, k, Y0))), y1 = Math.min(H, Math.round(syOf(cam, k, Y1)));
+  for (let y = y0; y < y1; y++) fr.px[y * W + x] = c;
+}
+
 function worldNow(fr, cam, style, soft) {
   cityBay(fr, cam, -1, soft);
   cityBay(fr, cam, 1, soft);
   clockBar(fr, cam, soft);
+  // the network's red in light: the cove along the top, a ribbon down each bay's jamb
+  cove(fr, cam, C.red, C.darkRed, { soft });
+  ribbon(fr, cam, -BAY.inner + 0.5, BAY.top, BAY.bottom, C.red, soft);
+  ribbon(fr, cam, BAY.inner - 0.5, BAY.top, BAY.bottom, C.red, soft);
 }
 
 // --------------------------------------------------------------------------- TECH BYTES: the display wall
@@ -605,9 +644,43 @@ function displayCabinet(fr, cam, sx, soft) {
   });
 }
 
+/**
+ * A lightbox strip over the screen (as WORLD NOW's clock bar): black, an ink top edge, a line of micro type
+ * centred in it from coloured runs [[text, colour], ...] (real sets carry the show's name on the set).
+ */
+function headerStrip(fr, cam, runs, soft) {
+  if (soft) return;
+  const k = kAt(cam, SET.wallZ);
+  const s = Math.max(1, Math.round(k * 1.25));
+  const b = Math.max(1, Math.round(2 * k));
+  const x0 = Math.round(sxOf(cam, k, SET.screen.x0)) - b, x1 = Math.round(sxOf(cam, k, SET.screen.x1)) + b;
+  const yc = Math.round(syOf(cam, k, -121));
+  const bh = 9 * s, y0 = yc - (bh >> 1);
+  if (y0 + bh <= 0 || y0 >= H) return;
+  fr.span(x0, y0, x1, y0 + bh, C.black);
+  fr.span(x0, y0, x1, y0 + 1, C.ink);
+  const glyphs = runs.map(([t, c]) => [textPixels(t, 'micro'), c, t]);
+  const widthOf = (t, g) => g.width + (t.endsWith(' ') ? 2 : 0) + (t.startsWith(' ') ? 2 : 0);
+  const total = glyphs.reduce((a, [g, , t]) => a + (widthOf(t, g) + 1) * s, 0) - s;
+  let x = Math.round((x0 + x1 - total) / 2);
+  const ty = yc - Math.floor((5 * s) / 2);
+  for (const [g, c, t] of glyphs) {
+    const lead = t.startsWith(' ') ? 2 * s : 0;
+    for (const [gx, gy] of g.pixels) fr.span(x + lead + gx * s, ty + gy * s, x + lead + (gx + 1) * s, ty + (gy + 1) * s, c);
+    x += (widthOf(t, g) + 1) * s;
+  }
+}
+
 function techBytes(fr, cam, style, soft) {
+  // the show's name in a terminal line over the screen: a prompt, the name, the cursor
+  headerStrip(fr, cam, [['>', C.blue], [' TECH BYTES', C.fog], ['_', C.cyan]], soft);
   displayCabinet(fr, cam, -1, soft);
   displayCabinet(fr, cam, 1, soft);
+  // the lab's light lines in blue (the cyan stays in the niches: TECH BYTES' cyan is capped at 1 %): the cove
+  // along the top, a ribbon up each cabinet's edge toward the screen
+  cove(fr, cam, C.blue, C.navy, { soft });
+  ribbon(fr, cam, -CABINET.X0 + 0.5, CABINET.niches[0][0] - 4, 30, C.blue, soft);
+  ribbon(fr, cam, CABINET.X0 - 0.5, CABINET.niches[0][0] - 4, 30, C.blue, soft);
 }
 
 // --------------------------------------------------------------------------- COSMOS: the planetarium set
@@ -704,8 +777,6 @@ function constellation(fr, cam, ch, soft) {
   }
 }
 
-const FLATS_X = 196; // the set flats' inner edge (set.js FLAT_X, world X at SET.flatsZ)
-
 // the two portrait LED panels the charts play on (world units: X0, Y0, X1, Y1), either side of the wall
 const SKY_PANELS = [[-228, -126, -150, -2], [150, -126, 228, -2]];
 /** A portrait LED panel: an ink bezel lit along its top and left edges, the black screen inside. */
@@ -799,6 +870,11 @@ function chartGrid(fr, cam, soft) {
 
 function cosmos(fr, cam, style, soft) {
   for (const r of SKY_PANELS) skyPanel(fr, cam, r, soft);
+  // the programme's magenta as lines, never as a wash (cosmos.md): the cove at the top over the panels, an
+  // LED edge on each panel's side toward the screen, the desk's seams (DESK_FRONTS) answering the desk line
+  cove(fr, cam, C.magenta, C.purple, { soft, Y: -131.5 });
+  ribbon(fr, cam, SKY_PANELS[0][2] + 2.4, SKY_PANELS[0][1] - 3, SKY_PANELS[0][3] + 3, C.magenta, soft);
+  ribbon(fr, cam, SKY_PANELS[1][0] - 2.4, SKY_PANELS[1][1] - 3, SKY_PANELS[1][3] + 3, C.magenta, soft);
   starfield(fr, cam, soft);
   chartGrid(fr, cam, soft);
   for (const ch of CHARTS) constellation(fr, cam, ch, soft);
@@ -970,7 +1046,7 @@ function ticker(fr, cam, soft) {
   const x0 = Math.round(sxOf(cam, k, -300)), x1 = Math.round(sxOf(cam, k, 300));
   if (y0 + bh <= 0 || y0 >= H) return;
   fr.span(x0, y0, x1, y0 + bh, C.black);
-  fr.span(x0, y0 + bh, x1, y0 + bh + 1, C.ink);
+  fr.span(x0, y0 + bh, x1, y0 + bh + 1, C.darkGreen); // the band's LED edge: the programme's green
   const g = textPixels(TICKER, 'micro');
   // the words in fog (the room is after the close: calm), the dots between them in the programme's green
   if (!DOTS.size) {
@@ -1093,6 +1169,12 @@ function rundownBoard(fr, cam, X0, Y0, X1, Y1, soft) {
 }
 
 function news60(fr, cam, style, soft) {
+  // the cove in orange, the yellow's warm neighbour (news-60.md allows orange up to 8 %; the yellow stays
+  // under its 1.5 % for the clock's lit quarter, the rundown and the desk), and a ribbon either side of the
+  // anchor's bay: the light lines frame the screen and Sam, the clock and the rundown hang outside them
+  cove(fr, cam, C.orange, C.brown, { soft });
+  ribbon(fr, cam, -128, -128, 30, C.orange, soft);
+  ribbon(fr, cam, 128, -128, 30, C.orange, soft);
   studioClock(fr, cam, -186, -72, soft);
   rundownBoard(fr, cam, 146, -112, 224, -34, soft);
 }
@@ -1115,9 +1197,9 @@ export function drawDressing(fr, cam, style, soft = false) {
  * 'grain' (wood: tanShade lines), 'stars' (silver points), 'stripe' (a band of the accent at the panel's foot).
  */
 export const DESK_FRONTS = {
-  'world-now': null, // the home desk
-  'tech-bytes': null, // the steel plinth (set.js)
-  cosmos: { hi: 'ink', lo: 'black', pattern: 'stars' },
-  'money-minute': { hi: 'brown', lo: 'black', pattern: 'grain', top: 'tanShade' }, // the lower panel black (graphics zone)
-  'news-60': { hi: 'ink', lo: 'black', pattern: 'stripe', stripe: 'yellow' },
+  'world-now': { hi: 'ink', lo: 'black', pattern: 'slits', slit: 'red' }, // the home desk, red LED slits in its seams
+  'tech-bytes': { hi: 'slate', lo: 'black', pattern: 'slits', slit: 'blue' }, // the steel plinth, blue slits
+  cosmos: { hi: 'ink', lo: 'black', pattern: 'stars', slit: 'magenta' },
+  'money-minute': { hi: 'brown', lo: 'black', pattern: 'grain', top: 'tanShade' }, // the lower panel black (graphics zone); no LED slits (lime on wood reads as neon)
+  'news-60': { hi: 'ink', lo: 'black', pattern: 'stripe', stripe: 'yellow', slit: 'orange' },
 };
