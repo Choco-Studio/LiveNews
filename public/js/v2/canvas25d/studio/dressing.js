@@ -32,6 +32,7 @@ import { DESK_SWEEP, livePoint, BLINK, liveArm } from './live.js';
 import { pcbWall } from './lab.js';
 import { drawSpace, SKY } from './space.js';
 import { moneyWall } from './money.js';
+import { flashWall, CLOCK } from './flash.js';
 import { glowH, glowV, RAMPS } from './light.js';
 
 const W = 384, H = 216;
@@ -763,16 +764,15 @@ function rundownBoard(fr, cam, X0, Y0, X1, Y1, soft) {
 }
 
 function news60(fr, cam, style, soft) {
-  // the cove in orange, the yellow's warm neighbour (news-60.md allows orange up to 8 %; the yellow stays
-  // under its 1.5 % for the clock's lit quarter, the rundown and the desk), and a ribbon either side of the
-  // anchor's bay: the light lines frame the screen and Sam, the clock and the rundown hang outside them
-  cove(fr, cam, C.orange, C.brown, { soft });
-  ribbon(fr, cam, -128, -128, 30, C.orange, soft);
-  ribbon(fr, cam, 128, -128, 30, C.orange, soft);
-  studioClock(fr, cam, -186, -72, soft);
+  // round 4: the flash room (flash.js): black, one clean downlight on the anchor, the gallery of monitors
+  flashWall(fr, cam, soft);
+  const S = SET.screen, m = 5;
+  rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y1 + m, C.black);
+  if (!soft) rectW(fr, cam, S.x0 - m, S.y0 - m, S.x1 + m, S.y0 - m + 1, C.ink);
+  studioClock(fr, cam, CLOCK.X, CLOCK.Y, soft);
   rundownBoard(fr, cam, 146, -112, 224, -34, soft);
+  soffit(fr, cam, RAMPS.amber, soft);
 }
-
 // --------------------------------------------------------------------------- entry points
 /** The dressing switch (tests of the bare architecture; labs): set.js setDressing() also clears its caches. */
 export const DRESSING = { on: true };
@@ -789,6 +789,7 @@ export const FLATS = {
   'tech-bytes': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.blue),
   cosmos: (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.magenta),
   'money-minute': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.warm), // walnut columns, a brass inlay
+  'news-60': (fr, cam, style, soft) => pillars(fr, cam, soft, RAMPS.amber),
 };
 
 /** The programme's dressing on the back wall (after the light, before the screen and the flats). */
@@ -813,5 +814,6 @@ export const DESK_FRONTS = {
   cosmos: { hi: 'black', lo: 'black', pattern: 'stars', slit: 'magenta', glow: 'magenta', sheen: true, base: 'magenta', zone: 'black', slab: 2.4 },
   // walnut under a slab, broken-run grain, a brass light at its foot (no LED slits: lime on wood reads as neon)
   'money-minute': { hi: 'brown', lo: 'black', pattern: 'grain', top: 'tanShade', sheen: true, base: 'warm', zone: 'black', slab: 2.4 },
-  'news-60': { hi: 'ink', lo: 'black', pattern: 'stripe', stripe: 'yellow', slit: 'orange' },
+  // black under a slab, the yellow band, orange slits, the line's light and an orange foot light
+  'news-60': { hi: 'ink', lo: 'black', pattern: 'stripe', stripe: 'yellow', slit: 'orange', glow: 'amber', sheen: true, base: 'amber', zone: 'black', slab: 2.4 },
 };

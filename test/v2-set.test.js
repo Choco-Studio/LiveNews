@@ -257,7 +257,13 @@ describe('video wall', () => {
       return { y, px };
     };
     const a = count('intro', 10), b = count('intro', 37.5), c = count('outro', 10);
-    assert.deepEqual(a.px, b.px, 'the intro dial does not change with time');
+    // the dial on the wall (the studio around it has its own clock, which does tick: live.js)
+    const dial = (px) => {
+      const out = [];
+      for (let yy = r.y0; yy < r.y1; yy++) for (let x = r.x0; x < r.x1; x++) out.push(px[yy * W + x]);
+      return out;
+    };
+    assert.deepEqual(dial(a.px), dial(b.px), 'the intro dial does not change with time');
     assert.ok(c.y > a.y * 4, 'the outro lights every tick');
   });
   test('the picture is toned to a wall mean L* ≤ 56 (≤ 50 in COSMOS) and TECH BYTES mats it', () => {

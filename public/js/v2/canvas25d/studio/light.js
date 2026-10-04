@@ -29,6 +29,7 @@ export const RAMPS = {
   cyan: { core: C.cyan, hot: C.white, halo: C.blue, outer: C.navy },
   magenta: { core: C.magenta, hot: C.pink, halo: C.purple, outer: C.purple },
   orange: { core: C.orange, hot: C.yellow, halo: C.rust, outer: C.brown },
+  amber: { core: C.orange, hot: C.yellow, halo: C.brown, outer: C.brown }, // an orange line on a dark set, its light brown
   yellow: { core: C.yellow, hot: C.cream, halo: C.orange, outer: C.brown },
   green: { core: C.green, hot: C.cream, halo: C.darkGreen, outer: C.darkGreen },
   warm: { core: C.tan, hot: C.cream, halo: C.tanShade, outer: C.brown },
