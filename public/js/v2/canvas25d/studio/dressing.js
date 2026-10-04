@@ -15,8 +15,9 @@
 //   MONEY MINUTE  a private bank after the close: a dark-wood dado with raised panels, a bull and a bear in
 //                 bronze relief on framed plaques (brass name plates), an LED ticker of the programme's beats
 //                 (no prices), the bronze sconces of the style, a wood front with broken-run grain
-//   NEWS IN 60    a flash studio: a ring of sixty marks round the screen, a bank of small monitors each side,
-//                 yellow edge lines
+//   NEWS IN 60    a flash studio: a broadcast studio clock (sixty second-LEDs, the first quarter lit yellow,
+//                 "60" at its heart) on the left, the rundown board (RUNDOWN, five numbered beats, the one on
+//                 air marked yellow) on the right, a thin yellow band on the desk
 // Everything is drawn in world units on the back wall (Z = SET.wallZ), so the camera's moves and zooms carry
 // it; every pixel is a palette colour; nothing sits behind a head (|X| >= 140 beside the seats, or above the
 // screen), nothing is brighter than the faces, and nothing moves (the background is cached).
@@ -977,44 +978,98 @@ function moneyMinute(fr, cam, style, soft) {
   ticker(fr, cam, soft);
 }
 
-// --------------------------------------------------------------------------- NEWS IN 60: the minute
-function minuteRing(fr, cam, soft) {
-  // sixty marks on an ellipse round the screen (every fifth longer); the first fifteen yellow
-  const cx = 0, cy = -66, rx = 112, ry = 62;
-  for (let i = 0; i < 60; i++) {
-    const a = -Math.PI / 2 + (i / 60) * Math.PI * 2;
-    const long = i % 5 === 0;
-    const r0 = long ? 0.9 : 0.94;
-    const c = soft ? C.slate : i < 15 ? C.yellow : long ? C.fog : C.steel;
-    lineW(fr, cam, cx + Math.cos(a) * rx * r0, cy + Math.sin(a) * ry * r0, cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, c);
-  }
-}
-function monitorBank(fr, cam, sx, soft) {
-  const X0 = sx > 0 ? 166 : -296;
-  const r = rng(sx > 0 ? 61 : 67);
-  for (let j = 0; j < 3; j++) {
-    for (let i = 0; i < 2; i++) {
-      const X = X0 + i * 66, Y = -114 + j * 38;
-      rectW(fr, cam, X - 2, Y - 2, X + 62, Y + 34, C.black);
-      rectW(fr, cam, X, Y, X + 60, Y + 32, soft ? C.ink : C.slate);
-      if (soft) continue;
-      // each a dim frame: a picture's bars (steel, ink) and a steel strap at its foot; the live one (the
-      // bank's top inner screen) carries a yellow tag, so the room's yellow stays under the bible's 1.5 %
-      for (let b = 0; b < 4; b++) {
-        const bh = 6 + r() * 14;
-        rectW(fr, cam, X + 4 + b * 13, Y + 26 - bh, X + 13 + b * 13, Y + 26, r() < 0.5 ? C.steel : C.ink);
-      }
-      const live = j === 0 && (sx > 0 ? i === 0 : i === 1);
-      rectW(fr, cam, X, Y + 27, X + 60, Y + 30, C.steel);
-      if (live) rectW(fr, cam, X, Y + 27, X + 24, Y + 30, C.yellow);
-      rectW(fr, cam, X + 2, Y + 28, X + 22, Y + 29, C.black);
+// --------------------------------------------------------------------------- NEWS IN 60: the flash studio
+// The minute, as a broadcast studio clock on the left: a black face in a bevelled ring, sixty second-LEDs
+// round it (the first quarter lit yellow, the rest unlit slate), twelve hour marks inside, "60" at its
+// heart. On the right, the rundown board: RUNDOWN in yellow, five numbered rows of the bulletin's beats, the
+// one on air marked with a yellow bar. Both sit beside the wall, clear of Sam in every framing (a close shot
+// never cuts them), and the room's yellow stays under the bible's 1.5 %.
+function studioClock(fr, cam, X, Y, soft) {
+  const k = kAt(cam, SET.wallZ);
+  // centred on a pixel corner, radii in whole pixels: the circles come out symmetric and even
+  const cx = Math.round(sxOf(cam, k, X)), cy = Math.round(syOf(cam, k, Y));
+  const R = Math.round(34 * k); // the LED ring's radius in pixels
+  const px = fr.px;
+  const set = (x, y, c) => {
+    if (x >= 0 && x < W && y >= 0 && y < H) px[y * W + x] = c;
+  };
+  // the housing: an ink ring with a slate bevel lit from the top-left, the black face inside
+  const RI = R + Math.max(2, Math.round(2 * k)), RO = RI + Math.max(2, Math.round(2.4 * k));
+  for (let y = Math.floor(cy - RO - 1); y <= Math.ceil(cy + RO + 1); y++) {
+    for (let x = Math.floor(cx - RO - 1); x <= Math.ceil(cx + RO + 1); x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy, d = Math.hypot(dx, dy);
+      if (d > RO) continue;
+      let c = C.black;
+      if (d > RI) c = soft ? C.ink : (dx + dy) / d < -0.5 ? C.slate : C.ink;
+      set(x, y, c);
     }
   }
+  if (soft) return;
+  // sixty second-LEDs, the first quarter lit (12 o'clock clockwise); a dot each, 2x2 when the zoom allows
+  const ds = Math.max(1, Math.round(1.4 * k));
+  for (let i = 0; i < 60; i++) {
+    const a = -Math.PI / 2 + (i / 60) * Math.PI * 2;
+    const x = Math.round(cx + Math.cos(a) * R - ds / 2), y = Math.round(cy + Math.sin(a) * R - ds / 2);
+    const c = i < 15 ? C.yellow : C.slate;
+    for (let j = 0; j < ds; j++) for (let q = 0; q < ds; q++) set(x + q, y + j, c);
+  }
+  // twelve hour marks inside (steel, the four quarters fog)
+  for (let h = 0; h < 12; h++) {
+    const a = -Math.PI / 2 + (h / 12) * Math.PI * 2;
+    const r0 = R - 5 * k, r1 = R - (h % 3 === 0 ? 10 : 8) * k;
+    const n = Math.max(1, Math.round(r0 - r1));
+    for (let t = 0; t <= n; t++) {
+      const r = r0 + ((r1 - r0) * t) / n;
+      set(Math.round(cx + Math.cos(a) * r - 0.5), Math.round(cy + Math.sin(a) * r - 0.5), h % 3 === 0 ? C.fog : C.steel);
+    }
+  }
+  // "60" at the heart, body type at whole-pixel scale
+  const g = textPixels('60', 'body');
+  const s = Math.max(1, Math.round(k * 1.25));
+  const tx = Math.round(cx - (g.width * s) / 2), ty = Math.round(cy - (g.cap * s) / 2);
+  for (const [gx, gy] of g.pixels) for (let j = 0; j < s; j++) for (let q = 0; q < s; q++) set(tx + gx * s + q, ty + gy * s + j, C.fog);
 }
+
+const RUNDOWN = ['WORLD', 'POLITICS', 'BUSINESS', 'SCIENCE', 'SPORT'];
+function rundownBoard(fr, cam, X0, Y0, X1, Y1, soft) {
+  const k = kAt(cam, SET.wallZ);
+  // the board: black with an ink frame, its top edge lit
+  rectW(fr, cam, X0 - 2.5, Y0 - 2.5, X1 + 2.5, Y1 + 2.5, C.ink);
+  if (!soft) rectW(fr, cam, X0 - 2.5, Y0 - 2.5, X1 + 2.5, Y0 - 1.3, C.slate);
+  rectW(fr, cam, X0, Y0, X1, Y1, C.black);
+  if (soft) return;
+  const s = Math.max(1, Math.round(k * 1.25));
+  const px = fr.px;
+  const text = (str, x, y, c) => {
+    const g = textPixels(str, 'micro');
+    for (const [gx, gy] of g.pixels) for (let j = 0; j < s; j++) for (let q = 0; q < s; q++) {
+      const X = x + gx * s + q, Y = y + gy * s + j;
+      if (X >= 0 && X < W && Y >= 0 && Y < H) px[Y * W + X] = c;
+    }
+    return g.width * s;
+  };
+  const bx0 = Math.round(sxOf(cam, k, X0)), by0 = Math.round(syOf(cam, k, Y0));
+  const bx1 = Math.round(sxOf(cam, k, X1)), by1 = Math.round(syOf(cam, k, Y1));
+  const pad = 3 * s;
+  // the header and its rule
+  text('RUNDOWN', bx0 + pad, by0 + pad, C.yellow);
+  const ry = by0 + pad + 5 * s + 2 * s;
+  fr.span(bx0 + pad, ry, bx1 - pad, ry + 1, C.slate);
+  // the rows
+  const rowH = Math.max(7 * s, Math.floor((by1 - ry - pad) / RUNDOWN.length));
+  RUNDOWN.forEach((name, i) => {
+    const y = ry + 3 * s + i * rowH;
+    if (y + 5 * s > by1 - 1) return;
+    const live = i === 0;
+    if (live) fr.span(bx0 + pad - 2 * s, y - s, bx0 + pad - s, y + 6 * s, C.yellow);
+    const nx = bx0 + pad + text(`0${i + 1}`, bx0 + pad, y, live ? C.fog : C.steel) + 3 * s;
+    text(name, nx, y, live ? C.silver : C.steel);
+  });
+}
+
 function news60(fr, cam, style, soft) {
-  minuteRing(fr, cam, soft);
-  monitorBank(fr, cam, -1, soft);
-  monitorBank(fr, cam, 1, soft);
+  studioClock(fr, cam, -186, -72, soft);
+  rundownBoard(fr, cam, 146, -112, 224, -34, soft);
 }
 
 // --------------------------------------------------------------------------- entry points
