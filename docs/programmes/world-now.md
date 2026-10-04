@@ -258,6 +258,7 @@ The v2 planner plans the studio presenters only; this is the Stage's `remoteGest
 - **Pixel style:** 192×108 shown at exactly 2x, 12 frames a second (the stepped motion of pixel animation). The grade is pixelate.js's (saturation 1.25, contrast 1.12). The palette is the shot's own (16 colours, k-means): kept for the whole shot and replaced only at a cut in the footage, so pans never flicker. Dithering is 4×4 Bayer, fixed to the screen.
 - **What never airs:** the opening titles (a clip starts a fifth in), a title card or a fade to black (skipped), the closing credits (it turns back first).
 - **Fallbacks:** offline (the fixture feeds) the desk is off, and links show the story's picture or map.
+- **The headline montage** (round 2): a teased story with no picture of its own shows its place's footage instead of the map (never a grave one), with FILE and the clip's credit under the clock. The links' clips are found first; the montage's are prepared first on the client, because they air seconds after the open. A clip counts as ready only once it stands at its start point, so the first picture on air is never its opening frame.
 
 **Graphics of a link** (`graphics/remote.js`)
 - the correspondent's name and desk in the lower third for the first 5.5 s of their first picture, then the story's headline again;

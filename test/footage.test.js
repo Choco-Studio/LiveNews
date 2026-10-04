@@ -180,3 +180,35 @@ describe('the pixel style of moving pictures (footage/pixel.js)', () => {
     assert.deepEqual([...out], [...pal.u32]);
   });
 });
+
+describe('which stories get footage (producer)', () => {
+  test('the links, and the montage’s teased stories with no picture of their own (never a grave one)', async () => {
+    const { Producer } = await import('../server/producer.js');
+    const asked = [];
+    const desk = { find: async (loc, { grave }) => (asked.push(loc.place), grave ? null : { id: `f${String(asked.length).padStart(16, '0')}`, credit: `FILE · ${loc.place} · CC0`, duration: 60, width: 426, height: 240, start: 12 }) };
+    const loc = (place) => ({ place, lat: 1, lon: 2 });
+    const episode = {
+      segments: [
+        { type: 'intro', teases: ['a', 'b', 'c', 'd', null] },
+        { type: 'story', storyId: 'a', emotion: 'neutral', text: 'Rail workers began a strike.', link: 'R1' },
+        { type: 'cross', part: 'piece', storyId: 'a', location: loc('GERMANY'), grave: false },
+        { type: 'cross', part: 'ask', storyId: 'a' },
+        { type: 'story', storyId: 'b', emotion: 'neutral', text: 'Lisbon opened a tram line.' },
+        { type: 'story', storyId: 'c', emotion: 'serious', text: 'A ferry fire killed two people.' },
+        { type: 'story', storyId: 'd', emotion: 'neutral', text: 'Coral recovers.' },
+      ],
+      rundown: [
+        { storyId: 'a', hasImage: true, location: loc('GERMANY') },
+        { storyId: 'b', hasImage: false, location: loc('LISBON, PORTUGAL') },
+        { storyId: 'c', hasImage: false, location: loc('CRETE, GREECE') },
+        { storyId: 'd', hasImage: true, location: loc('QUEENSLAND, AUSTRALIA') },
+      ],
+    };
+    const out = await Producer.prototype.footage.call({ footageDesk: desk, config: {} }, { episode });
+    assert.deepEqual(asked, ['GERMANY', 'LISBON, PORTUGAL'], 'the link first; never the grave story, never one with its own picture');
+    assert.deepEqual(out, { links: 1, footage: 1, montage: 1 });
+    assert.equal(episode.segments[2].footage.id, episode.segments[3].footage.id, 'every part of the link');
+    assert.match(episode.rundown[1].footage.credit, /^FILE · LISBON/);
+    assert.equal(episode.rundown[2].footage, undefined);
+  });
+});

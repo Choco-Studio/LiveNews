@@ -28,7 +28,7 @@ function fakeCtx() {
 }
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => fakeCtx() }) };
 
-const { drawLinkGraphics, LINK_SHOTS } = await import('../public/js/graphics/remote.js');
+const { drawLinkGraphics, drawFileCredit, LINK_SHOTS } = await import('../public/js/graphics/remote.js');
 const { OVERLAYS } = await import('../public/js/graphics/index.js');
 const { P } = await import('../public/js/palette.js');
 
@@ -67,4 +67,12 @@ test('nothing without a link, nor over a studio shot', () => {
     drawLinkGraphics(ctx, 1, scene, P.red);
     assert.equal(ctx.fills.length + ctx.images, 0, JSON.stringify(scene.shot));
   }
+});
+
+test('FILE and a clip’s credit (a link’s footage, a montage frame’s): under the clock, inside action-safe', () => {
+  const ctx = fakeCtx();
+  drawFileCredit(ctx, 'FILE · Sevenbell Production · CC BY');
+  assert.ok(ctx.fills.some((f) => f.c === P.black), 'the FILE tag');
+  assert.ok(ctx.fills.some((f) => f.c === P.ink), 'the credit plate');
+  assert.ok(ctx.fills.every((f) => f.y >= 21 && f.y + f.h <= 36 && f.x + f.w <= 384 - 13 + 1), JSON.stringify(ctx.fills));
 });

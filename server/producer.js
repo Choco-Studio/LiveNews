@@ -4,6 +4,7 @@ import { castOf } from './channel.js';
 import { embedCues } from '../public/js/cues.js';
 import { onBeat } from './topics.js';
 import { pictureCredit } from './news.js';
+import { isGrave } from './facts.js';
 import { writeWeather } from './weatherwriter.js';
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -472,20 +473,40 @@ export class Producer {
    * Within a budget: a link whose clip is not ready airs with its pictures (the client falls back).
    */
   async footage(ctx) {
+    const { segments, rundown = [] } = ctx.episode;
     const links = new Map();
-    for (const seg of ctx.episode.segments) if (seg.type === 'cross' && !links.has(seg.storyId)) links.set(seg.storyId, seg);
+    for (const seg of segments) if (seg.type === 'cross' && !links.has(seg.storyId)) links.set(seg.storyId, seg);
+    // the headline montage: a teased story with no picture of its own shows its place's footage instead of the
+    // map (never a grave story: the same rule as a link's)
+    const teased = new Set((segments.find((s) => s.type === 'intro')?.teases || []).filter(Boolean));
+    const grave = (id) => {
+      const st = segments.find((s) => s.type === 'story' && s.storyId === id);
+      return !st || st.emotion === 'serious' || st.emotion === 'sad' || isGrave(st.text);
+    };
+    const montage = rundown.filter((r) => teased.has(r.storyId) && !r.hasImage && r.location?.place && !grave(r.storyId));
+    const asFootage = (clip) => ({ id: clip.id, credit: clip.credit, duration: clip.duration, width: clip.width, height: clip.height, start: clip.start });
     let found = 0;
-    const jobs = [...links.values()].map(async (seg) => {
-      const clip = await this.footageDesk.find(seg.location, { grave: !!seg.grave }).catch(() => null);
-      if (!clip) return;
-      found++;
-      const footage = { id: clip.id, credit: clip.credit, duration: clip.duration, width: clip.width, height: clip.height, start: clip.start };
-      for (const s of ctx.episode.segments) if (s.type === 'cross' && s.storyId === seg.storyId) s.footage = footage;
-    });
+    let shown = 0;
+    // the links first (the desk asks Commons one request at a time), then the montage
+    const jobs = [
+      ...[...links.values()].map(async (seg) => {
+        const clip = await this.footageDesk.find(seg.location, { grave: !!seg.grave }).catch(() => null);
+        if (!clip) return;
+        found++;
+        const footage = asFootage(clip);
+        for (const s of segments) if (s.type === 'cross' && s.storyId === seg.storyId) s.footage = footage;
+      }),
+      ...montage.map(async (r) => {
+        const clip = await this.footageDesk.find(r.location, { grave: false }).catch(() => null);
+        if (!clip) return;
+        shown++;
+        r.footage = asFootage(clip);
+      }),
+    ];
     let timer;
     await Promise.race([Promise.all(jobs), new Promise((resolve) => (timer = setTimeout(resolve, this.config.footage?.budgetMs ?? 20000)))]);
     clearTimeout(timer);
-    return { links: links.size, footage: found };
+    return { links: links.size, footage: found, montage: shown };
   }
 
   /**

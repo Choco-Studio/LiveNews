@@ -26,6 +26,17 @@ function tagRight(ctx, text, right, y, accent, { micro = false } = {}) {
   return x;
 }
 
+/** FILE and a clip's credit, right-aligned under the clock at `y` (a link's footage, a montage frame's). */
+export function drawFileCredit(ctx, credit, y = TOP.y + TOP.h + 3) {
+  const right = W - TOP.x;
+  const x = tagRight(ctx, 'FILE', right, y, null);
+  const text = String(credit || '').replace(/^FILE\s*·\s*/i, '').toUpperCase();
+  if (!text) return;
+  const cw = measureText(text, 1, 'micro');
+  rect(ctx, x - cw - 7, y + 1, cw + 6, 9, P.ink);
+  drawText(ctx, text, x - cw - 4, y + 3, { color: P.fog, font: 'micro' });
+}
+
 /**
  * Everything a link adds over its shot. scene = { shot, remote, fileCredit }; accent = the
  * programme's accent. Called by graphics/index.js after the top row, before the strap and captions.
@@ -39,16 +50,7 @@ export function drawLinkGraphics(ctx, t, scene, accent = P.red) {
     tagRight(ctx, r.place, right, y, accent);
     y += 13;
   }
-  if (scene.fileCredit && scene.shot !== 'twoway') {
-    const x = tagRight(ctx, 'FILE', right, y, null);
-    // the clip's credit beside it, on its own small plate
-    const credit = String(scene.fileCredit).replace(/^FILE\s*·\s*/i, '').toUpperCase();
-    if (credit) {
-      const cw = measureText(credit, 1, 'micro');
-      rect(ctx, x - cw - 7, y + 1, cw + 6, 9, P.ink);
-      drawText(ctx, credit, x - cw - 4, y + 3, { color: P.fog, font: 'micro' });
-    }
-  }
+  if (scene.fileCredit && scene.shot !== 'twoway') drawFileCredit(ctx, scene.fileCredit, y); // the clip's credit beside it
   if (scene.shot === 'twoway') {
     for (const [bx, label] of [[TWO.left, STUDIO_CITY], [TWO.right, r.place || '']]) {
       if (!label) continue;

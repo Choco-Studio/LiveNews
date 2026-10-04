@@ -363,13 +363,15 @@ export class Director {
   prepareFootage(episode) {
     if (!this.footage) return;
     const seen = new Set();
-    for (const seg of episode.segments || []) {
-      const f = seg.type === 'cross' && !seg.grave ? seg.footage : null;
+    const want = (f) => {
       if (f?.id && !seen.has(f.id)) {
         seen.add(f.id);
         this.footage.prepare(f);
       }
-    }
+    };
+    // the headline montage's clips first (they air seconds after the open), then the links'
+    for (const r of episode.rundown || []) want(r.footage);
+    for (const seg of episode.segments || []) want(seg.type === 'cross' && !seg.grave ? seg.footage : null);
   }
 
   /** The correspondent slot of a link segment (R1, R2): its own anchor, else the one the episode gives its reporter. */

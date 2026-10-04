@@ -21,7 +21,7 @@ import { StrapState, STRAP_TIMING, strapContent, strapReadTime, categoryLabel, d
 import { CaptionState, drawCaptions } from './captions.js';
 import { TickerState, makeEntries, makeFigureEntry, makeNextEntry, drawTicker } from './ticker.js';
 import { CHANNEL } from '../pace.js';
-import { drawLinkGraphics } from './remote.js';
+import { drawLinkGraphics, drawFileCredit } from './remote.js';
 
 const foldWords = (x) => String(x || '').toLowerCase().replace(/[“”"‘’']/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 /** Does a caption read the quote on screen (its first five words)? */
@@ -467,6 +467,11 @@ export class Graphics {
     TOP_ROW.clock = zoneTime(STUDIO_TZ, this.now()).label;
     drawTopRow(ctx, t, TOP_ROW);
     if (mode === 'news' && scene.remote) drawLinkGraphics(ctx, t, scene, this.accentOf(scene));
+    // a montage frame over its place's footage (studio.js decides card.vid): FILE and the clip's credit
+    if (scene.shot === 'montage' && scene.card?.vid) {
+      const credit = scene.rundown?.[scene.card.index]?.footage?.credit;
+      if (credit) drawFileCredit(ctx, credit);
+    }
     if (mode === 'news') {
       drawStrap(ctx, t, this.strap);
       drawCaptions(ctx, t, this.captions, this.captionPlace(t, scene));

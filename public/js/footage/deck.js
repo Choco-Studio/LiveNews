@@ -64,8 +64,17 @@ export class FootageDeck {
     v.preload = 'auto';
     v.crossOrigin = 'anonymous';
     const clip = { id: footage.id, v, start: Math.max(0, Number(footage.start) || 0), state: 'loading', seeked: false, skips: 0, used: 0, out: {}, at: -1 };
+    // ready once it stands at its start: the first picture on air is never the clip's opening frame
     v.addEventListener('loadeddata', () => {
-      if (clip.state === 'loading') clip.state = 'ready';
+      if (clip.state !== 'loading') return;
+      if (clip.start > 0 && clip.start < (v.duration || Infinity) - 1) {
+        clip.seeked = true;
+        this.seek(clip, clip.start);
+        clip.state = 'seeking';
+      } else clip.state = 'ready';
+    });
+    v.addEventListener('seeked', () => {
+      if (clip.state === 'seeking') clip.state = 'ready';
     });
     v.addEventListener('error', () => (clip.state = 'failed'));
     v.src = `/api/vid/${footage.id}.webm`;
@@ -95,6 +104,7 @@ export class FootageDeck {
 
   ready(id) {
     const c = this.clips.get(id);
+    if (c?.state === 'seeking' && !c.v.seeking && c.v.readyState >= 2) c.state = 'ready'; // a 'seeked' that never came
     return !!c && c.state === 'ready' && c.v.readyState >= 2 && c.v.videoWidth > 0;
   }
 

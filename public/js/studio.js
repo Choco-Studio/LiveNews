@@ -188,10 +188,14 @@ export class Renderer {
         // pops in under the headline): the story's picture, else its place on the map (owner 22:50: never a
         // black frame), else the montage's world field
         if (card.pic === undefined || (card.pic === null && dt < 0.4)) card.pic = scene.images.get(item.storyId)?.card || (dt < 0.4 ? null : false);
+        // no picture: the place's footage (a FILE clip, graphics/remote.js credits it), when ready in the same first 0.4 s
+        if (!card.pic && (card.vid === undefined || (card.vid === null && dt < 0.4))) card.vid = item.footage?.id && scene.footageDeck?.ready(item.footage.id) ? item.footage.id : dt < 0.4 ? null : false;
+        const f = !card.pic && card.vid ? scene.footageDeck?.frame(card.vid, 'full', t) : null;
+        if (f) this.drawFootage(ctx, f);
         const loc = item.location;
-        const map = !card.pic && Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon);
+        const map = !card.pic && !f && Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon);
         if (map) drawWorldMap(ctx, t, dt, { lat: loc.lat, lon: loc.lon, place: '', label: false, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
-        return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, image: card.pic || null, backdrop: map ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
+        return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, image: card.pic || null, backdrop: map || f ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
       }
       case 'tease': {
         // STILL TO COME (director.js playStillToCome): one story as a headline frame (its picture, else its place on
