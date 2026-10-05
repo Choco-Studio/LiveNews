@@ -8,7 +8,10 @@
 import crypto from 'node:crypto';
 
 // Bump when the recipe below changes in a way that changes the audio.
-export const RECIPE = 4; // 4: soft breaths in sentence pauses (tools/voice/dsp.py breath_into, owner 3 Oct)
+export const RECIPE = 5; // 4: soft breaths in sentence pauses (owner 3 Oct); 5: breaths off (owner 5 Oct)
+
+// Breaths between sentences (tools/voice/dsp.py breath_into). Owner 5 Oct: no breaths (laughs stay).
+export const BREATHS = false;
 
 // Segments a presenter reads aloud.
 export const SPOKEN = new Set(['intro', 'story', 'chat', 'outro', 'weather', 'cross']); // weather: WORLD WEATHER (server/weatherwriter.js); cross: a correspondent link (server/correspondents.js)
@@ -122,7 +125,7 @@ export function segmentRequest(seg, { presenterId, presenter, casting, presets =
   } catch {
     phrases = null; // the worker's own sentence planner takes over
   }
-  const req = { text: seg.text, voice: cast.voice, speed, lang, effect: robot || 'none' };
+  const req = { text: seg.text, voice: cast.voice, speed, lang, effect: robot || 'none', breaths: BREATHS };
   if (cast.pauses && typeof cast.pauses === 'object') req.pauses = cast.pauses;
   const preset = presets[presenterId];
   if (preset?.chain && preset.voice === cast.voice) req.chain = preset.chain;
@@ -146,7 +149,7 @@ export function adLineRequest(text, { cast, speech = null }) {
   } catch {
     phrases = null;
   }
-  const req = { text, voice: cast.voice, speed, lang, effect: 'none' };
+  const req = { text, voice: cast.voice, speed, lang, effect: 'none', breaths: BREATHS };
   if (cast.pauses) req.pauses = cast.pauses;
   if (phrases) req.phrases = phrases.map((p) => ({ ...p, speedFactor: 1 }));
   return req;
