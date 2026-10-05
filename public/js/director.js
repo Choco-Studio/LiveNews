@@ -330,7 +330,9 @@ export class Director {
     }
     await sleep(BREAK_BLACK.duration * 1000);
     this.setShot(shot, extra);
-    this.scene.shotSince = Math.min(this.scene.shotSince, cut);
+    // the picture clock is the cut's, the bed's too: a timer firing late or (by a fraction of a millisecond) early
+    // never splits them
+    this.scene.shotSince = cut;
   }
 
   async playAd(ad, bed = null) {
