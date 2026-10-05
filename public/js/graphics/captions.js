@@ -6,22 +6,21 @@
 // stays light. A long sentence is split into pages at phrase boundaries
 // (graphics/breaks.js 'caption' style: an extra page is cheaper than a line
 // that cuts "the Great / Barrier Reef"), paced to the speech and never
-// stepping back, so no line is ever dropped; pages cut from one to the next
-// (never caught half-rolled) and the last one goes off after the speech. The block
+// stepping back, so no line is ever dropped; each page wipes in diagonally from the
+// bottom-left over the one it replaces, and the last one wipes off after the speech. The block
 // sits 6 px above the lower third or the ticker and moves smoothly when the
 // strap comes and goes; over full-screen graphics that own the bottom it moves
 // to the top.
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
-import { W, CAPTION } from './layout.js';
+import { W, CAPTION, easeInOut } from './layout.js';
 import { layoutText } from './breaks.js';
 import { CHANNEL } from '../pace.js';
 
 // PACE: page holds and timings from the one pacing table (pace.js CHANNEL.captions):
 //   cps (speech pace when nothing better is known, = audio.js mute pace), lead (chars: turn the page just
 //   before its first word), minPage (s a page stays up at least), grace (after the speech timeline stops),
-//   hold (caption lingers after speech; it then goes off at once), out (extra time the state keeps the
-//   caption before it is cleared); roll is no longer drawn: pages cut (owner 5 Oct)
+//   wipe (diagonal page change), hold (caption lingers after speech), out (its diagonal wipe off)
 export const CAPTION_TIMING = CHANNEL.captions;
 const C = CAPTION_TIMING;
 export const CAPTION_COLOR = P.white;
@@ -155,17 +154,83 @@ function drawBlock(ctx, lines, y0) {
   }
 }
 
+// Pages wipe in diagonally, from the bottom-left corner to the top-right (owner 5 Oct),
+// with the page they replace erased by the same front, so two pages never share a line.
+// The front is a pixel staircase (STEP px columns, rising 1 px for every SLOPE px across):
+// whole pixels, no soft edge. The last page leaves the same way after its hold.
+const STEP = 2;
+const SLOPE = 2;
+
+function blockSpan(lines) {
+  let w = 0;
+  for (const line of lines) w = Math.max(w, measureText(line));
+  return w + 2 * CAPTION.padX;
+}
+
+/** Clip to the part of the frame [L, R] x [T, B] the front has (`passed`) or has not yet reached. */
+function clipFront(ctx, L, R, T, B, d, passed) {
+  ctx.save();
+  ctx.beginPath();
+  for (let x = L; x < R; x += STEP) {
+    const up = Math.max(0, Math.min(B - T, Math.floor((d - (x - L)) / SLOPE)));
+    if (passed) {
+      if (up > 0) ctx.rect(x, B - up, STEP, up);
+    } else if (B - up > T) ctx.rect(x, T, STEP, B - up - T);
+  }
+  ctx.clip();
+}
+
 /**
  * Draw the caption block. `place` = { bottom } (anchored above something) or
- * { top } (anchored under the top row). Pages change by cutting, as broadcast
- * subtitles for scripted programmes do: a page is always whole on screen, never
- * a roll caught half-way (owner 5 Oct: a rolling one-line window over a strap
- * showed two half lines that read as text hidden behind the lower third).
+ * { top } (anchored under the top row).
  */
 export function drawCaptions(ctx, t, s, place) {
   if (!s.active) return;
-  // after the speech the caption lingers `hold` seconds, then goes off at once
-  if (s.clearAt !== null && t - s.clearAt >= C.hold) return;
-  const h = blockH(s.lines);
-  drawBlock(ctx, s.lines, place.top !== undefined ? place.top : place.bottom - h);
+  const atTop = place.top !== undefined;
+  const yOf = (lines) => (atTop ? place.top : place.bottom - blockH(lines));
+  let from = EMPTY;
+  let to = s.lines;
+  let k = 1;
+  if (s.clearAt !== null) {
+    // after the speech: hold, then wipe off
+    const p = (t - s.clearAt - C.hold) / C.out;
+    if (p >= 1) return;
+    if (p > 0) {
+      from = s.lines;
+      to = EMPTY;
+      k = easeInOut(p);
+    }
+  } else {
+    const p = (t - s.changeAt) / C.wipe;
+    if (p < 1) {
+      from = s.prevLines;
+      k = easeInOut(Math.max(0, p));
+    }
+  }
+  if (k >= 1) {
+    if (to.length) drawBlock(ctx, to, yOf(to));
+    return;
+  }
+  const span = Math.max(blockSpan(from), blockSpan(to));
+  const L = Math.floor(W / 2 - span / 2) - 1;
+  const R = L + span + 2;
+  const T = Math.min(from.length ? yOf(from) : Infinity, to.length ? yOf(to) : Infinity);
+  const B = Math.max(from.length ? yOf(from) + blockH(from) : -Infinity, to.length ? yOf(to) + blockH(to) : -Infinity);
+  const d = Math.round(k * (R - L + (B - T) * SLOPE));
+  if (from.length) {
+    clipFront(ctx, L, R, T, B, d, false);
+    try {
+      drawBlock(ctx, from, yOf(from));
+    } finally {
+      ctx.restore();
+    }
+  }
+  if (to.length) {
+    clipFront(ctx, L, R, T, B, d, true);
+    try {
+      drawBlock(ctx, to, yOf(to));
+    } finally {
+      ctx.restore();
+    }
+  }
 }

@@ -44,7 +44,7 @@ export const CHANNEL = Object.freeze({
   // name super 5 s; a long headline pages every `page` s: a page of ~7 words read twice)
   strap: Object.freeze({ in: 0.35, textDelay: 0.1, textRise: 0.3, flip: 0.3, out: 0.25, red: 0.45, name: 5, page: 5.5, breakingPage: 4.5 }),
   // captions follow the voice; a page is never shorter than minPage, lingers `hold` after speech
-  captions: Object.freeze({ cps: 15, lead: 4, minPage: 1.4, grace: 0.5, roll: 0.22, hold: 0.6, out: 0.22 }),
+  captions: Object.freeze({ cps: 15, lead: 4, minPage: 1.4, grace: 0.5, roll: 0.22, wipe: 0.3, hold: 0.6, out: 0.3 }),
   // programme name beside the bug after the open (ART_DIRECTION §4: about 8 s); `window` = the director's
   // cap after the open (the tag never comes back later in the programme)
   programTag: Object.freeze({ delay: 0.5, hold: 8, window: 15 }),

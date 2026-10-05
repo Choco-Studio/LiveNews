@@ -590,7 +590,7 @@ test('captions r2: white on black, and the caption goes off whole after its hold
   assert.equal(ctx.depth, 0);
 });
 
-test('captions: a page change over a strap cuts to whole lines (never two half lines in a roll window)', async () => {
+test('captions: a new page wipes in diagonally from the bottom-left, erasing the old one with the same front', async () => {
   const { drawCaptions, CAPTION_TIMING: CT } = await import('../public/js/graphics/captions.js');
   const { CAPTION } = await import('../public/js/graphics/layout.js');
   const s = new CaptionState();
@@ -598,28 +598,46 @@ test('captions: a page change over a strap cuts to whole lines (never two half l
   s.update(0, text, 0, null, 1); // a strap is up: one line per page
   const first = s.lines.slice();
   let t = 0;
-  while (s.lines === first || s.lines[0] === first[0]) {
+  while (s.lines[0] === first[0]) {
     t += 0.05;
     s.update(t, text, 0, null, 1);
     assert.ok(t < 20, 'the caption reaches a second page');
   }
+  const at = s.changeAt;
   const bottom = 160;
-  for (const dt of [0, CT.roll * 0.25, CT.roll * 0.5, CT.roll * 0.75]) {
+  const frame = (dt) => {
     const ctx = fakeCtx();
+    const clips = [];
+    let cur = null;
+    ctx.beginPath = () => (cur = []);
+    ctx.rect = (x, y, w, h) => cur.push({ x, y, w, h });
+    ctx.clip = () => clips.push(cur);
     const boxes = [];
     const fill = ctx.fillRect;
     ctx.fillRect = function (x, y, w, h) {
       if (this.fillStyle === P.black) boxes.push({ y, h });
       return fill.call(this, x, y, w, h);
     };
-    drawCaptions(ctx, t + dt, s, { bottom });
-    assert.equal(boxes.length, s.lines.length, 'only the new page is drawn');
-    for (const b of boxes) {
-      assert.equal(b.h, CAPTION.pitch);
-      assert.ok(b.y >= bottom - s.lines.length * CAPTION.pitch && b.y + b.h <= bottom, `line box at ${b.y} stays whole above ${bottom}`);
-    }
-    assert.equal(ctx.depth, 0, 'no clip window');
-  }
+    drawCaptions(ctx, at + dt, s, { bottom });
+    assert.equal(ctx.depth, 0, 'every clip is restored');
+    return { clips, boxes };
+  };
+  // mid-wipe: old and new are clipped by a whole-pixel staircase; the new page shows on the left first, from the bottom
+  const mid = frame(CT.wipe * 0.4);
+  assert.equal(mid.clips.length, 2, 'old page (not yet reached) and new page (passed)');
+  for (const r of mid.clips.flat()) assert.ok([r.x, r.y, r.w, r.h].every(Number.isInteger) && r.w === 2, 'staircase of 2 px columns');
+  const passed = mid.clips[1];
+  assert.ok(passed.length > 0);
+  const left = Math.min(...passed.map((r) => r.x));
+  const right = Math.max(...passed.map((r) => r.x));
+  const hOf = (x) => passed.find((r) => r.x === x).h;
+  assert.ok(hOf(left) >= hOf(right), 'the front rises towards the right: more of the left is revealed');
+  for (const r of passed) assert.equal(r.y + r.h, bottom, 'revealed from the bottom up');
+  // after the wipe: just the new page, whole, no clip
+  const done = frame(CT.wipe + 0.01);
+  assert.equal(done.clips.length, 0);
+  assert.equal(done.boxes.length, s.lines.length);
+  for (const bx of done.boxes) assert.ok(bx.h === CAPTION.pitch && bx.y + bx.h <= bottom);
 });
 
 test('graphics r2: a caption that only repeats the strap tag is not burnt in', () => {
