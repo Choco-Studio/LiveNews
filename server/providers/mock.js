@@ -21,6 +21,50 @@ const DEATHS = /\b(?:dead|deaths?|die[sd]|killed|killings?|victims?|mourn\w*|fun
 const SOBER = /\b(?:volcan\w*|erupt\w*|storms?|strikes?|protests?|elections?|courts?|police|cancel\w*|closures?|bans?|shortages?|prices|inflation|recession|stocks?|shares|markets?|rates?|alerts?|jobs? at risk|job (?:cuts|losses)|lay-?offs?|redundanc\w*|rulings?|under pressure|flu|waiting lists?)\b/i;
 // The best "and finally" material: curiosities, animals, culture, the sky.
 const LIGHTER = /\b(?:zoo|pandas?|leopards?|tortoises?|penguins?|whales?|dolphins?|bees|parrots?|birds?|festival|museum|tomatoes|chocolate|coffee|trees|gardens?|reef|coral|footprints|dinosaurs?|fossils?|comet|eclipse|drones|telescope|stars|moon|music|art|mushroom)\b/i;
+// A headline told as a spoken sentence, the way a broadcast writer turns one: its present-tense verb becomes the
+// present perfect ("The new Fitbit Edge leaks" -> "The new Fitbit Edge has leaked", "..., dies at 94" -> "..., has
+// died at 94") and a common-noun subject takes the article the outlet gives it ("Federal judge calls..." -> "A
+// federal judge has called...", from "A federal judge ruled..." in its summary). Only when the shape is plain: one
+// known headline verb after a subject of up to twelve words, no second verb after a comma ("..., says it..."), no
+// quotation or colon opening it, never a plural subject. Otherwise the headline as written.
+const HEADLINE_PERFECT = {
+  unveils: 'unveiled', launches: 'launched', leaks: 'leaked', dies: 'died', wins: 'won', calls: 'called', responds: 'responded',
+  disappears: 'disappeared', resigns: 'resigned', warns: 'warned', raises: 'raised', cuts: 'cut', buys: 'bought', sells: 'sold',
+  opens: 'opened', closes: 'closed', bans: 'banned', sues: 'sued', finds: 'found', reveals: 'revealed', announces: 'announced',
+  confirms: 'confirmed', approves: 'approved', rejects: 'rejected', blocks: 'blocked', fines: 'fined', delays: 'delayed',
+  pauses: 'paused', freezes: 'frozen', ends: 'ended', drops: 'dropped', adds: 'added', hits: 'hit', loses: 'lost',
+  builds: 'built', breaks: 'broken', shuts: 'shut', pulls: 'pulled', removes: 'removed', releases: 'released',
+  signs: 'signed', expands: 'expanded', acquires: 'acquired', invests: 'invested', joins: 'joined', leaves: 'left',
+  quits: 'quit', hires: 'hired', fires: 'fired', settles: 'settled',
+};
+export function spokenTitle(title, info) {
+  const t = String(title || '').trim().replace(/[.!]+$/, '');
+  if (!t || /^["“‘']|:|\?$/.test(t)) return t;
+  const words = t.split(/\s+/);
+  const key = (w) => w.toLowerCase().replace(/[^a-z]/g, '');
+  const i = words.findIndex((w, k) => k > 0 && HEADLINE_PERFECT[key(w)]);
+  if (i < 1 || i > 12) return t;
+  const rest = words.slice(i + 1).join(' ');
+  // a second verb after a comma ("Amazon responds to data center backlash, says it...") keeps the headline
+  const after = [...rest.matchAll(/,\s*([a-z]+)/g)].map((m) => m[1]);
+  if (after.some((w) => HEADLINE_PERFECT[w] || /^(?:says?|said)$/.test(w))) return t;
+  let subject = words.slice(0, i).join(' ');
+  const verb = `has ${HEADLINE_PERFECT[key(words[i])]}${words[i].match(/[,;]$/)?.[0] || ''}`;
+  if (!/^(?:The|A|An|This|Its|His|Her|Their)\b/.test(subject) && !/['’]s$/.test(words[0])) {
+    // a name stays as it is; a common noun takes the outlet's own article, else the headline stays
+    const text = `${info?.s?.summary || ''} ${info?.s?.body || ''}`;
+    const first = words[0].replace(/[^\p{L}-]/gu, '');
+    const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const det = text.match(new RegExp(`\\b(a|an|the)\\s+${esc(subject.toLowerCase())}\\b`, 'i'));
+    // a name: written with a capital mid-sentence by the outlet, shaped like one ("OpenAI", "NASA"), or a first and
+    // a last name ("Milt Windler, ...", "Jack Dorsey’s Bitchat")
+    const shaped = /\p{Lu}/u.test(first.slice(1));
+    const named = shaped || !!lookupPlace(first) || new RegExp(`[\\p{Ll},;]\\s+${esc(first)}\\b`, 'u').test(text) || (/^\p{Lu}/u.test(words[1] || '') && /^\p{Lu}\p{Ll}/u.test(first));
+    if (det) subject = `${det[1][0].toUpperCase()}${det[1].slice(1).toLowerCase()} ${shaped || named ? subject : subject[0].toLowerCase() + subject.slice(1)}`;
+    else if (!named) return t;
+  }
+  return `${subject} ${verb}${rest ? ` ${rest}` : ''}`;
+}
 // The outlet's own voice, outside quotation marks ("We don't know a ton about the Fitbit Edge", The Verge, 4 Oct):
 // never our presenters' words.
 const FIRST_PERSON = /\b(?:[Ww]e|[Ww]e['’](?:re|ve|ll|d)|[Oo]ur|us|I['’](?:m|ve|d|ll)|my|me)\b|(?:^|[^\w.])I (?=[a-z])/;
@@ -1020,7 +1064,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         // Only when the summary has no sentence to tell it with: the headline, never with "In X," put in front of a
         // subject that is not there ("In Brazil, coffee futures reach...") nor a "Now to X." before it.
         fromHeadline = true;
-        line = pictureItems || early(s.title) ? s.title : movePlaceFront(s.title, info) || s.title;
+        line = pictureItems ? spokenTitle(s.title, info) : early(s.title) ? s.title : movePlaceFront(s.title, info) || s.title;
       }
       const lead = idx === 0 ? program?.roundup?.opener || 'Now, around the world in 30 seconds.' : '';
       const where = pictureItems || early(line) || fromHeadline ? '' : `${idx === 0 ? 'First, ' : 'Now to '}${spokenPlace(info.loc.entry)}.`;
@@ -1056,7 +1100,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // ("Smartphone battery breakthrough promises a week of use."). The headline opens only when the summary
       // cannot ("It says the service...").
       const skipHeadline = first && (leadAfterIntro || restates(first, s.title) || (selfStanding(info, first) && wordCount(first) >= 6));
-      let opener = s.title;
+      let opener = spokenTitle(s.title, info);
       if (skipHeadline) {
         // Never a pronoun as the first word of a story: the opener must say who or what.
         opener = (leadAfterIntro && (pickSentence((t) => !echoes(t) && selfStanding(info, t)))) || null;
@@ -1066,7 +1110,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
           reserved = null;
           opener = pickSentence((t) => !echoes(t));
         }
-        opener ||= pickSentence((t) => selfStanding(info, t)) || pickSentence(() => true) || s.title;
+        opener ||= pickSentence((t) => selfStanding(info, t)) || pickSentence(() => true) || spokenTitle(s.title, info);
       }
       const cue = isNumber ? '[count] ' : info.grave ? '[lean_in] ' : s.image ? '[point_screen] ' : choose(['[raise_hand] ', '[lean_in] ', ''], key);
       let figureLine = null;

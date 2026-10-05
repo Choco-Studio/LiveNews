@@ -247,3 +247,14 @@ test('the number of the day is judged on what the story is, never a word deep in
   assert.notEqual(lost.feature, 'number');
   assert.ok(!/number of the day/i.test(lost.text), lost.text);
 });
+
+test('a headline opening a story is told as a sentence: present perfect, the outlet’s article; a plain shape only', async () => {
+  const { spokenTitle } = await import('../server/providers/mock.js');
+  const I = (summary, body = '') => ({ s: { summary, body } });
+  assert.equal(spokenTitle('The new Fitbit Edge leaks', I('')), 'The new Fitbit Edge has leaked');
+  assert.equal(spokenTitle('Milt Windler, NASA flight director who helped save Apollo 13, dies at 94', I('', 'Windler died on Thursday.')), 'Milt Windler, NASA flight director who helped save Apollo 13, has died at 94');
+  assert.equal(spokenTitle('Federal judge calls Flock ‘indiscriminate mass surveillance’', I('A federal judge ruled that a deputy violated her rights.')), 'A federal judge has called Flock ‘indiscriminate mass surveillance’');
+  assert.equal(spokenTitle('OpenAI safety employee resigns, claiming the company’s ‘culture is broken’', I('An OpenAI safety employee has resigned.')), 'An OpenAI safety employee has resigned, claiming the company’s ‘culture is broken’');
+  assert.equal(spokenTitle('Kenya opens its largest solar farm', I('Kenya has opened a solar farm.')), 'Kenya has opened its largest solar farm');
+  for (const t of ['Amazon responds to data center backlash, says it no longer uses NDAs', 'Scientists find water on a distant planet', 'Google froze its bug bounty program', 'Can AI fix it?', 'Federal judge calls Flock a threat']) assert.equal(spokenTitle(t, I('Someone said something.')), t, t);
+});
