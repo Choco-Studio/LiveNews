@@ -12,7 +12,7 @@ import { isTranscriptLine } from '../transcript.js';
 import { isBreaking, plainTitle } from '../news.js';
 import { ALSO_LEAN, LIGHT, contentWords, extractFigures, sentencesIn, harmlessIncident, isGrave, leansOnPrevious, notForFeatures, numbersIn, quotesIn, severity } from '../facts.js';
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
-import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, hasFiniteVerb, shortHeadline, splitClauses, trimClause } from '../writer.js';
+import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, hasFiniteVerb, headlineNames, shortHeadline, splitClauses, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
 import { AHEAD, deskOf } from '../correspondents.js';
 
@@ -21,6 +21,30 @@ const DEATHS = /\b(?:dead|deaths?|die[sd]|killed|killings?|victims?|mourn\w*|fun
 const SOBER = /\b(?:volcan\w*|erupt\w*|storms?|strikes?|protests?|elections?|courts?|police|cancel\w*|closures?|bans?|shortages?|prices|inflation|recession|stocks?|shares|markets?|rates?|alerts?|jobs? at risk|job (?:cuts|losses)|lay-?offs?|redundanc\w*|rulings?|under pressure|flu|waiting lists?)\b/i;
 // The best "and finally" material: curiosities, animals, culture, the sky.
 const LIGHTER = /\b(?:zoo|pandas?|leopards?|tortoises?|penguins?|whales?|dolphins?|bees|parrots?|birds?|festival|museum|tomatoes|chocolate|coffee|trees|gardens?|reef|coral|footprints|dinosaurs?|fossils?|comet|eclipse|drones|telescope|stars|moon|music|art|mushroom)\b/i;
+// The outlet's own voice, outside quotation marks ("We don't know a ton about the Fitbit Edge", The Verge, 4 Oct):
+// never our presenters' words.
+const FIRST_PERSON = /\b(?:[Ww]e|[Ww]e['’](?:re|ve|ll|d)|[Oo]ur|us|I['’](?:m|ve|d|ll)|my|me)\b|(?:^|[^\w.])I (?=[a-z])/;
+export const ownVoice = (t) => FIRST_PERSON.test(String(t).replace(/“[^”]*”|"[^"]*"/g, ' '));
+// A sentence that follows on in time ("He then served...", "The deputy then used...", "Later, ..."): told only
+// after the sentence it follows.
+// ("Realizing this, Windler...": a "this" before the first comma points back as much; so does "So it resorted to...",
+// whose "it" was the sentence before)
+const FOLLOWS_ON = /^(?:(?:then|later|afterwards|after that|subsequently),|(?:[\w’'-]+\s+){1,3}then\b|[^,]{0,30}\b(?:this|that)\s*,|(?:so|but|and|yet|still|instead|thus|hence)\s+(?:it|they|he|she|this|that|these|those)\b)/i;
+// Names a viewer has heard: a sentence that brings in a product or a person the story never introduced ("The Air
+// costs $99.99 and the Watch starts at $399.99", after a story about the Fitbit Edge) cannot answer a question.
+const NEW_NAME = /(?<=\S\s+)\p{Lu}[\p{L}’'-]+/gu;
+const introduced = (t, info) => (String(t).match(NEW_NAME) || []).every((n) => `${info.s.title} ${info.s.summary || ''}`.includes(n.replace(/['’]s$/u, '')));
+/**
+ * A sentence that can answer a question after its story: it may lean on the story just told ("The first laptops using
+ * it will go on sale in the spring"), never on a sentence the viewer did not hear ("So it...", "This means...", "He
+ * then..."), never names someone or something new, and quotes nobody without saying who.
+ */
+export const answerable = (t, info) =>
+  !FOLLOWS_ON.test(t) && !/^(?:This|These|Those|Such|That)\b/.test(t) && !asks(t) && !/\(/.test(t) && introduced(t, info) && !(/^["“‘']/.test(t.trim()) && !/\b(?:said|says|told|added|according to|warned|wrote)\b/i.test(t));
+// A question in the story's own voice (not inside a quotation): a feature's device, not a report.
+const asks = (t) => /\?["”’]?\s*$/.test(String(t).trim()) && !/^["“‘]/.test(String(t).trim());
+// News that is bad for someone, whatever the topic: a light topic's story said straight, not smiling.
+const DOWNBEAT = /\b(?:slop|broken|backlash|resign\w*|surveillance|lawsuits?|sues?|sued|fined?|fines|breach\w*|hack(?:ed|ers?|s)?|outages?|bans?|banned|scams?|fraud\w*|lay-?offs?|job cuts|froze|frozen|freez\w*|paus\w*|halt\w*|probes?|investigat\w*|warn\w*|risks?|threat\w*|fears?|concerns?|harass\w*|abus\w*|deepfakes?|misinformation|disinformation|overwhelm\w*|shut(?:s|ting)? down|delay\w*|recall\w*|vulnerab\w*|exploit\w*|stolen|theft|disappears|removed|pulled)\b/i;
 const CURIOUS = /\b(?:discover\w*|uncover\w*|rare|unexpected|surpris\w*|new species|first time|glowing)\b/i;
 // A summary sentence that says what follows from the news (a purpose or a consequence).
 const WHY =
@@ -152,9 +176,27 @@ const CATCH = [
   { test: /\b(?:but|however|only|not yet|still|although)\b/i, q: () => ['[steeple] So what is the catch?', '[chin] There is always a but. What is it here?', '[steeple] And the small print?'] },
   { test: /\b(?:using|uses|by (?:using|\w+ing)|works (?:by|without)|without an?)\b/i, q: () => ['[chin] How does it actually work?', '[chin] Walk me through how it works.', '[glasses] And the clever part is?'] },
 ];
-// The button after "And finally", by what kind of story it was: a product, or science.
-const PRODUCT_KICKERS = new Set(['GADGETS', 'ROBOTICS', 'CHIPS', 'GAMING', 'SOFTWARE', 'AI', 'CONNECTIVITY', 'MOTORING']);
+// The button after "And finally", by what kind of story it was: a thing you can hold, software (an AI, an app, a
+// game: nothing to take apart or buy; "I want to take it apart" once followed an AI cheating at StarCraft, 4 Oct),
+// or science.
+const PRODUCT_KICKERS = new Set(['GADGETS', 'ROBOTICS', 'CHIPS', 'CONNECTIVITY', 'MOTORING']);
+const SOFTWARE_KICKERS = new Set(['AI', 'SOFTWARE', 'GAMING']);
+const CHEAT = /\b(?:cheat\w*|broke the rules|breaking the rules|rule-breaking|gam(?:ed|ing) the system)\b/i;
 const TECH_BUTTONS = {
+  software: {
+    ada: [
+      '[chin] I would like to see the figures from someone who is not selling it.',
+      '[chin] Noted. I will be checking its work.',
+      '[shrug] Impressive. Also slightly worrying. Mostly impressive.',
+      { text: '[chin] Somebody is going to have to write that rule down more carefully.', needs: CHEAT },
+    ],
+    max: [
+      '[nod] Clever. Quietly, properly clever.',
+      '[shrug] Software with ambition. What could possibly go wrong.',
+      { text: '[raise_hand] For the record, I have never cheated at a game. Recently.', needs: CHEAT },
+      { text: '[nod] In fairness, it did find the quickest way to win.', needs: CHEAT },
+    ],
+  },
   product: {
     ada: [
       '[shrug] We will see how it holds up outside the press release.',
@@ -363,12 +405,15 @@ function study(story) {
   const precise = loc && !loc.entry.broad ? loc : null;
   // A fact card is a whole beat on screen: only figures worth one ("3 YEARS" is not).
   const figures = extractFigures(s.summary || '').filter((f) => f.fact.length <= 40 && f.score >= 2);
-  const fromSummary = sentencesOf(s.summary).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && unstop(x).toLowerCase() !== unstop(title).toLowerCase());
+  const fromSummary = sentencesOf(s.summary).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !ownVoice(x) && unstop(x).toLowerCase() !== unstop(title).toLowerCase());
   // the story dossier (wave 3 §3.1): the article's own sentences after the summary's, never one the summary
   // already says, at most 9 in all (depth for programmes of 8-10 minutes, never padding)
   const seen = new Set(fromSummary.map((x) => unstop(x).toLowerCase()));
-  const fromBody = s.body ? sentencesOf(s.body).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !seen.has(unstop(x).toLowerCase()) && unstop(x).toLowerCase() !== unstop(title).toLowerCase() && wordCount(x) >= 6 && wordCount(x) <= 34) : [];
+  const fromBody = s.body ? sentencesOf(s.body).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !ownVoice(x) && !seen.has(unstop(x).toLowerCase()) && unstop(x).toLowerCase() !== unstop(title).toLowerCase() && wordCount(x) >= 6 && wordCount(x) <= 34) : [];
   const sentences = [...fromSummary, ...fromBody].slice(0, Math.max(9, fromSummary.length));
+  // each sentence's predecessor as the outlet wrote it (a sentence that follows on is told only after it)
+  const raw = [...sentencesOf(s.summary), ...(s.body ? sentencesOf(s.body) : [])];
+  const prevOf = new Map(raw.map((x, i) => [x, raw[i - 1]]));
   // Breaking news is never "light", whatever it is about.
   const light = !grave && !isBreaking(story.title) && LIGHT.test(title) && !SOBER.test(text);
   return {
@@ -389,8 +434,12 @@ function study(story) {
     places: placesIn(text),
     figures,
     sentences,
-    quote: quotesIn(s.summary || '').find((q) => q.text.split(/\s+/).length >= 4) || null,
+    prevOf,
+    // (someone's words, whole: never an unattributed fragment like "...we were making history.", Ars Technica 4 Oct)
+    quote: quotesIn(s.summary || '').find((q) => q.by && q.text.split(/\s+/).length >= 4 && !/^(?:…|\.\.\.)/.test(q.text)) || null,
     kicker: kickerFor(s),
+    // the names the headline is about: a sentence cut to length keeps them
+    keep: headlineNames(title, `${s.summary || ''} ${s.body || ''}`),
     // never the number of the day: a quake that harmed no one, a closure, job losses
     noFeature: notForFeatures(text),
   };
@@ -647,7 +696,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     i.roundupFit = i.sentences.some((t, j) => {
       if (!(j === 0 ? !PRONOUN_START.test(t) : !leansOnPrevious(t))) return false;
       if (j > 0 && newWords(i.s.title, t) > contentWords(i.s.title).length - 2) return false;
-      const x = wordCount(t) <= rMax ? t : trimClause(t, rMax, rMin - 4);
+      const x = wordCount(t) <= rMax ? t : trimClause(t, rMax, rMin - 4, { keep: i.keep });
       return !!x && wordCount(x) >= rMin - 4;
     });
   }
@@ -924,7 +973,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       const tells = (t, j) => j === 0 || newWords(s.title, t) <= contentWords(s.title).length - 2;
       // A sentence a little over the item's length loses a trailing clause (", a record", "where the species..."),
       // never its subject or verb.
-      const sized = (t) => (wordCount(t) <= maxW ? t : trimClause(t, maxW, minW - 4));
+      const sized = (t) => (wordCount(t) <= maxW ? t : trimClause(t, maxW, minW - 4, { keep: info.keep }));
       let line = null;
       let fromHeadline = false;
       for (const pass of [0, 1]) {
@@ -963,9 +1012,10 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // (TECH BYTES: another CATCH question, never the same one twice; WORLD NOW: the partner adds it).
       const linked = links.has(info);
       const deep = !linked && longForm && !isNumber && !isLighter && !info.grave && !info.breaking && !info.live && exchanges < 3 && info.sentences.length >= 3; // the lead too with 3 (critic: no analysis exchange aired)
-      const catchFor = pid === 'tech-bytes' && (k === 0 || deep) && !info.grave ? CATCH.find((c) => !asked.has(c) && info.sentences.some((t) => c.test.test(t))) : null;
-      let reserved = catchFor ? info.sentences.find((t) => catchFor.test.test(t)) : null;
-      if (!reserved && pid === 'world-now' && deep) reserved = [...info.sentences].reverse().find((t, j) => j < info.sentences.length - 1 && !PRONOUN_START.test(t) && !/[“”"]/.test(t) && wordCount(t) >= 6) || null;
+      const fits = (c, t) => c.test.test(t) && answerable(t, info);
+      const catchFor = pid === 'tech-bytes' && (k === 0 || deep) && !info.grave ? CATCH.find((c) => !asked.has(c) && info.sentences.some((t) => fits(c, t))) : null;
+      let reserved = catchFor ? info.sentences.find((t) => fits(catchFor, t)) : null;
+      if (!reserved && pid === 'world-now' && deep) reserved = [...info.sentences].reverse().find((t, j) => j < info.sentences.length - 1 && !PRONOUN_START.test(t) && answerable(t, info) && wordCount(t) >= 6) || null;
       if (reserved) used.add(reserved);
       // After the intro has read its headline, the lead goes on with the next fact: a sentence that only
       // restates the headline (fewer than three words of its own) is never its opener, nor read later.
@@ -1002,7 +1052,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         parts.push(`${cue}Our number of the day: ${spokenValue(f)}.`);
       }
       const body = [];
-      if (opener && wordCount(opener) > maxWords + 1) opener = trimClause(opener, maxWords + 1, 8) || opener;
+      if (opener && wordCount(opener) > maxWords + 1) opener = trimClause(opener, maxWords + 1, 8, { keep: info.keep }) || opener;
       let line = asSentence(isNumber || isLighter ? opener : placeFirst(opener, info));
       if (info.breaking && k === 0) line = `Breaking news. ${line}`;
       else if (info.live) line = `A developing story: ${line}`;
@@ -1038,10 +1088,17 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         // (a sentence that tells again what an aired one said: most of its words, little new)
         if (toldSoFar().some((x) => restates(t0, x) && newWords(t0, x) < 4)) continue;
         if (/^(?:It|They|This|These)\b/.test(t0) && WHY.test(t0)) continue; // "It says..." with no subject reads as a label
+        // (a feature's rhetorical question, and the sentence that answers it: "What’s the best way to manage a
+        // forest? Australians have argued about this for decades." ScienceDaily, 4 Oct)
+        const at = info.sentences.indexOf(t0);
+        if (asks(t0) || (at > 0 && asks(info.sentences[at - 1]))) continue;
+        if (FOLLOWS_ON.test(t0) && !used.has(info.prevOf.get(t0))) continue;
+        // (spoken words have no brackets: "Each flight director chose a team name (at first colors)")
+        if (/\([^)]*\s[^)]*\)/.test(t0)) continue;
         // over the programme's sentence length: told as two whole sentences when it joins two clauses, else a
         // trailing clause goes, else the sentence is left out
         const two = wordCount(t0) > maxWords && !quick ? splitClauses(t0, maxWords) : null;
-        const t = two ? two.join(' ') : wordCount(t0) <= maxWords ? t0 : trimClause(t0, maxWords, 8);
+        const t = two ? two.join(' ') : wordCount(t0) <= maxWords ? t0 : trimClause(t0, maxWords, 8, { keep: info.keep });
         if (!t) continue;
         if (wordCount([...parts, ...body].join(' ')) + wordCount(t) > budget) continue;
         body.push(...(two || [t]));
@@ -1077,7 +1134,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         // follows the hand-over, so never "It says..."), each within the programme's sentence length
         const rest = info.sentences
           .filter((t) => !used.has(t) && !echoes(t))
-          .map((t) => (wordCount(t) <= maxWords ? t : trimClause(t, maxWords, 8)))
+          .map((t) => (wordCount(t) <= maxWords ? t : trimClause(t, maxWords, 8, { keep: info.keep })))
           .filter(Boolean);
         // what comes next goes last (the answer to "what happens next?"), the rest in the story's order
         rest.sort((a, b) => Number(AHEAD.test(a)) - Number(AHEAD.test(b)));
@@ -1120,7 +1177,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
             planned.push({ anchor: askB, text: pickLine(info.catchAnswer.q(nameOf(other(askB))), `${key}~catch`, info) }, { anchor: other(askB), text: `[lean_in] ${info.catchAnswer.line}` });
           } else if (pid === 'tech-bytes' && slot === 'lighter') {
             const sp = partner;
-            const kind = PRODUCT_KICKERS.has(info.kicker) ? 'product' : 'science';
+            const kind = PRODUCT_KICKERS.has(info.kicker) ? 'product' : SOFTWARE_KICKERS.has(info.kicker) ? 'software' : 'science';
             planned.push({ anchor: sp, text: pickLine(TECH_BUTTONS[kind][idOf(sp)] || GENERIC_CHATS, `${key}~btn`, info) });
           } else if (pid === 'cosmos' && anchor !== (idOf('B') === 'unit8' ? 'B' : partner) && (slot === 'lead' || (slot === 'story' && longForm && !isNumber && unitRestates < 2 && (info.figures.length || info.loc)))) {
             // UNIT-8's restatement: after the lead, and after one more story at most (a robot repeating every
@@ -1170,7 +1227,8 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       type: 'story',
       storyId: s.id,
       anchor,
-      emotion: info.sad ? 'sad' : info.grave ? 'serious' : isLighter ? (info.curious && CURIOUS.test(s.title) ? 'surprised' : 'happy') : info.light ? 'happy' : 'neutral',
+      // (a light topic is not good news in itself: "AI slop overwhelms bug bounty programmes" is said straight)
+      emotion: info.sad ? 'sad' : info.grave ? 'serious' : isLighter ? (info.curious && CURIOUS.test(s.title) ? 'surprised' : 'happy') : info.light && !DOWNBEAT.test(`${s.title} ${s.summary || ''}`) ? 'happy' : 'neutral',
       headline: shortHeadline(s.title, program?.headlineMax),
       text: parts.join(' '),
       // A place opens on the map, and the picture follows it; a picture alone is shown full screen.

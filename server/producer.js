@@ -421,7 +421,9 @@ export class Producer {
     // the story dossier: the article text of the candidates the writer is most likely to make main stories (wave 3
     // §3.1: depth for programmes of 8-10 minutes, never padding)
     if (typeof this.news.readArticles !== 'function') return pictures;
-    const articles = await this.news.readArticles(ctx.candidates, { budgetMs: this.config.articleBudgetMs ?? 6000, max: this.config.articleMax ?? 8 });
+    // (every candidate: a story the writer picks without its article is told from its headline alone, as TECH BYTES'
+    // ninth and tenth stories once were, 4 Oct)
+    const articles = await this.news.readArticles(ctx.candidates, { budgetMs: this.config.articleBudgetMs ?? 6000, max: this.config.articleMax ?? Math.max(8, ctx.candidates.length), concurrency: 6 });
     return { ...pictures, ...articles };
   }
 

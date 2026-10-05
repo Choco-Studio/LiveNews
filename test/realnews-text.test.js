@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { sentencesIn } from '../server/facts.js';
 import { dropPageFurniture, dropTranscriptLines, isTranscriptLine } from '../server/transcript.js';
 import { extractArticle } from '../server/article.js';
-import { trimClause, shortHeadline } from '../server/writer.js';
+import { trimClause, shortHeadline, headlineNames } from '../server/writer.js';
 
 // What the first real-news run of WORLD NOW round 2 aired wrong (4 Oct, the mock writer on the live feeds), each
 // case taken from the outlet's own text.
@@ -106,6 +106,7 @@ describe('TECH BYTES on real news', () => {
       'All hail electrification. But let’s talk about the hard part.',
       'TechCrunch Mobility: Reining in robotaxis',
       'Pixel 10 Pro review: the best camera on a phone',
+      'Can ‘super intelligence’ and a non-binding safety pact solve AI’s image problem?',
     ]) assert.ok(drop(t), t);
     for (const t of [
       'Lawmakers reach deal on budget',
@@ -118,6 +119,7 @@ describe('TECH BYTES on real news', () => {
       'Solar is now cheaper than coal in most of the world',
       'Federal judge calls Flock ‘indiscriminate mass surveillance’',
       'Jack Dorsey’s Bitchat disappears from app stores in India after government order',
+      '“Where is my son?” mother asks after ferry sinks',
     ]) assert.ok(!drop(t), t);
   });
 
@@ -150,7 +152,62 @@ describe('TECH BYTES on real news', () => {
   test('an attribution keeps what it attributes; a list item is no sentence', async () => {
     const { splitClauses } = await import('../server/writer.js');
     assert.equal(trimClause('On Friday, the bot was facing off against Pluto, but according to Kotaku, it couldn’t quite get an edge over its rival.', 12), null);
+    assert.equal(trimClause('He said heavy rain could overwhelm drainage systems and penetrate walls, causing damp and erosion, while repeated cycles of wetting and drying could crack the stone.', 22), 'He said heavy rain could overwhelm drainage systems and penetrate walls, causing damp and erosion.', 'never inside a pair of nouns ("wetting and drying")');
+    assert.equal(trimClause('He said heavy rain could overwhelm drainage systems and penetrate walls, causing damp and erosion, while repeated cycles of wetting, drying, freezing and thawing could harm stonework.', 22), 'He said heavy rain could overwhelm drainage systems and penetrate walls, causing damp and erosion.', 'never inside a longer list');
+    const flock = 'A federal judge ruled that a sheriff’s deputy violated a woman’s Fourth Amendment rights when using Flock to search for her license plate without a warrant.';
+    assert.equal(trimClause(flock, 20, 6, { keep: headlineNames('Federal judge calls Flock ‘indiscriminate mass surveillance’', flock) }), null, 'never the name the story is about');
+    assert.deepEqual(headlineNames('Google froze its open source bug bounty program due to a ‘significant rise’ in AI submissions', 'Blaming a rise in AI submissions, Google has paused its program.'), ['Google']);
+    assert.deepEqual(headlineNames('Milt Windler, NASA flight director who helped save Apollo 13, dies at 94'), ['Windler', 'NASA', 'Apollo']);
     assert.equal(splitClauses('There have been numerous incidents of robotaxis impeding traffic, driving into crime scenes, and interfering with first responders.', 12), null);
     assert.deepEqual(splitClauses('Washington announced new chip export controls on Monday, and Beijing responded with sanctions on Tuesday.', 12), ['Washington announced new chip export controls on Monday.', 'Beijing responded with sanctions on Tuesday.']);
   });
+});
+
+test('a strap is cut cleanly or goes up whole on its two lines, never as a scrap (TECH BYTES, 4 Oct)', () => {
+  const s = (t) => shortHeadline(t, 45);
+  const whole = (t, why) => assert.equal(s(t), t, why);
+  whole('Federal judge calls Flock ‘indiscriminate mass surveillance’', 'never inside a quotation, never "calls Flock" alone');
+  whole('Can ‘super intelligence’ and a non-binding safety pact solve AI’s image problem?', 'a question is asked whole');
+  whole('Spotify billionaire’s body scan startup has come to America', 'never a label without its verb');
+  assert.equal(s('Milt Windler, NASA flight director who helped save Apollo 13, dies at 94'), 'NASA flight director Milt Windler dies at 94', 'the appositive’s title before the name; an age is no cut figure');
+  assert.equal(s('Google froze its open source bug bounty program due to a ‘significant rise’ in AI submissions'), 'Google froze open source bug bounty program');
+  assert.ok(!/just delivered$/.test(s('Forgotten 30-year forest experiment just delivered a surprising result')));
+  assert.equal(s('Jack Dorsey’s Bitchat disappears from app stores in India after government order'), 'Jack Dorsey’s Bitchat disappears from app stores', 'never "Bitchat disappears" alone');
+  assert.equal(shortHeadline('Imran Khan’s party launches march to Islamabad demanding his release', 45), 'Imran Khan’s party launches march to Islamabad', 'a clean cut still comes');
+});
+
+test('an author’s bio card is not the story (TechCrunch, 4 Oct)', () => {
+  const story = '<p>As promised, President Donald Trump has announced the formation of a new task force, which he said will be led by his national intelligence director.</p><p>The task force will reportedly have 120 days to create a report on the risks and opportunities presented by AI.</p>';
+  for (const bio of [
+    '<p>Anthony Ha is TechCrunch&#8217;s weekend editor. Previously, he worked as a tech reporter at Adweek, a senior editor at VentureBeat, and vice president of content at a VC firm.</p>',
+    '<p>Jay Peters is a senior reporter at The Verge covering technology, gaming, and more.</p>',
+    '<p>You can contact or verify outreach from Anthony by emailing anthony.ha@techcrunch.com.</p>',
+    '<p>Get 50% off a second pass The Disrupt experience is meant to be shared. Get your pass and bring a colleague, partner, or peer at 50% off.</p>',
+  ]) {
+    const a = extractArticle(`<article>${story}${bio}</article>`);
+    assert.ok(a && /120 days/.test(a.text) && !/Previously|senior reporter|verify outreach|pass/.test(a.text), a?.text);
+  }
+  const news = '<p>Rob Nelson is the host of the station’s nightly news programme and asked the questions.</p>';
+  assert.ok(/Rob Nelson/.test(extractArticle(`<article>${story}${news}</article>`)?.text || ''), 'a person named in the story stays');
+});
+
+test('a podcast’s transcript is not read as an article; quoted words are no host talk', () => {
+  const intro = '<p>President Donald Trump hosted many of the biggest names in artificial intelligence this week, in part to announce a new name for it.</p>';
+  const talk = '<p>I’m wondering if any of you watched the press conference that happened afterwards, which there have been many memes about.</p><p>Sean O’Kane: How much time do you have? First off, sure, they had dinner, and then a luncheon days later.</p>';
+  assert.equal(extractArticle(`<article>${intro}${talk}</article>`), null);
+  const quotes = '<p>“I think we will win this case,” the company’s lawyer told reporters outside the court on Monday afternoon.</p><p>“I guess we will see,” the judge said before adjourning the hearing until next week in the capital.</p>';
+  assert.ok(extractArticle(`<article>${intro}${quotes}</article>`), 'quotations are the story');
+});
+
+test('the fallback writer never speaks in the outlet’s voice, and an answer stands on its own', async () => {
+  const { ownVoice, answerable } = await import('../server/providers/mock.js');
+  assert.ok(ownVoice('We don’t know a ton about the Fitbit Edge, but it appears to be a successor to the Charge line.'));
+  assert.ok(ownVoice('I think this is the best phone of the year.'));
+  assert.ok(!ownVoice('“We will appeal,” the company said.'), 'a quotation is someone’s words');
+  assert.ok(!ownVoice('The US trade office said tariffs would rise.'));
+  const info = { s: { title: 'The new Fitbit Edge leaks', summary: 'The Fitbit Edge appears to be a successor to the midrange Charge line.' } };
+  assert.ok(!answerable('The Air costs $99.99 and the Watch starts at $399.99, so the Edge would fall in the middle.', info), 'names the story never introduced');
+  assert.ok(!answerable('So it resorted to a tactic that is becoming common: it broke the rules.', info), 'follows on from a sentence not said');
+  assert.ok(!answerable('He then served as a flight director for all three crewed missions.', info));
+  assert.ok(answerable('The Edge will sell for about $150 when it launches next spring.', info));
 });

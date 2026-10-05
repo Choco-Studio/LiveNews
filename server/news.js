@@ -416,14 +416,15 @@ export function keywords(title) {
 // news, 4 Oct). A trade deal, an arms deal, a "deal on the budget" or "a great deal of" stays news, and so does
 // the first person inside a quotation ("'I'm not resigning,' says PM"). A list ("All the AI agents that can live in
 // your text messages"), a column ("...But let’s talk about the hard part.") and a newsletter ("TechCrunch Mobility:")
-// are no report either.
+// are no report either, nor is a question ("Can ‘super intelligence’ and a non-binding safety pact solve AI’s image
+// problem?" was a podcast; "Is the rally over?" an analysis).
 const SHOPPING = /\b(?:prime day|black friday|cyber monday|gift guides?|promo codes?|coupons?|discount codes?|on sale|price drops?|lowest price|best price (?:ever|yet)|best buys?)\b|\b(?:best|early|top|today['’]s|weekend|holiday|labor day|memorial day)\s+(?:[\w-]+\s+){0,3}deals\b|\bdeals? of the day\b|\b(?:fantastic|great|good|solid|rare) deal (?:at|for|on|right now)\b|\$\d[\d,.]*\s+off\b|\bcheaper (?:at|on) (?:Amazon|Best Buy|Walmart|Target)\b|\bcheaper than ever\b/i;
 const REVIEW = /\b(?:I['’](?:ve|m|d|ll)|I (?:tried|tested|used|love|loved|hate|bought|stuck|wore|played|spent|can['’]t stop)|my)\b|\b(?:hands-on|is perfect for|are perfect for|you should (?:buy|get)|should you (?:buy|get)|worth (?:buying|the (?:upgrade|money|price))|how to|tips for|let['’]s (?:talk|be honest|face it))\b|\breview(?::|\s+[-–—|]|$)|^all the\b|^[\w ]{2,20}\b(?:Mobility|Daily|Weekly|Briefing|Roundup|Recap|Newsletter|Week in Review):/i;
 // a quotation is someone else's words: "‘I'm not resigning,’ says PM", "“My country will not surrender”"
 const unquoted = (t) => t.replace(/[“"][^”"]*[”"]/g, ' ').replace(/(^|[\s:(])['‘].+?['’](?=[\s,.:;!?)]|$)/g, '$1');
 export const notNews = (s) => {
   const t = String(s?.title || '');
-  return SHOPPING.test(t) || REVIEW.test(unquoted(t));
+  return SHOPPING.test(t) || REVIEW.test(unquoted(t)) || /\?\s*$/.test(unquoted(t).trim());
 };
 
 /** Two headlines are about the same event if they share enough keywords. */
