@@ -171,3 +171,17 @@ public/js/pace.js single pacing table per programme, transitions/cooldowns/gestu
    make the channel start "already warm" (pre-warm + seeded episode memory) so the first programme is as good as COSMOS.
    Checked 07:50: canal-18min ran ONE code version end to end (v2 runtime imported at page start ~05:51, ES modules load once per page;
    server code fixed at start). So the COSMOS-onward improvement is NOT newer code → warm-up/state or format effect. Owner suspected new code.
+- 5 Oct (owner decisions, replace the open questions in LISTA "Decisiones"):
+  - SCHEDULE: build a real hourly schedule (parrilla por horas). More programmes are coming and NOT only news: the
+    schedule must support any kind of programme, not just bulletins.
+  - IN THEIR WORDS: yes. Politicians and heads of state ARE recreated (with the balance rule: no side gets more air).
+    Grave stories: still quote cards only unless the owner says otherwise (not answered; conservative default).
+  - EXPERTS: several fixed fictional experts; they MAY laugh in the chats.
+  - VOICES: breaths OFF. Laughs ON, and they must sound natural (light, motivated, never canned).
+  - DATA: "the best data": real markets, weather and space data; leave every integration fully prepared (keys in
+    .env.example, offline fixtures, tests), so it only needs the owner's keys.
+  - ON-SCREEN LANGUAGE: English.
+  - QUALITY BAR: the presenters need EXTREME polish. The weather presenter "walks oddly side-on": the way he moves and
+    explains the weather must be super natural and look natural. Work in critique loops and do not stop until an
+    extremely harsh critique scores above 9.7/10. Same bar for every presenter.
+  - Captions: the diagonal wipe (bottom-left to top-right) stays (commit 9e9fda1).

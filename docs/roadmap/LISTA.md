@@ -82,17 +82,17 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 - La mirada de la copresentadora al compañero solo al empezar a hablar.
 - COSMOS como referencia de nivel.
 
-## Decisiones que necesito de ti
-1. Duraciones y parrilla por horas (punto D16). ¿Mantener el nombre MONEY MINUTE?
-2. ¿Programa IN THEIR WORDS sí o no? Nombre, presentadora (propuesta: Lola) y frecuencia.
-3. Noticias graves: ¿recrear las declaraciones de cargos públicos o solo tarjetas con la cita (propuesta)?
-4. Políticos y jefes de Estado: ¿permitir recrearlos con regla de equilibrio (propuesta) o excluirlos al principio?
-5. Expertos: ¿8 como se propone? ¿Pueden reírse un poco en las charlas?
-6. Presupuesto de IA: unas 20-24 llamadas por hora con gpt6luna. ¿Edición ligera por la noche?
-7. Risas y respiraciones activadas por defecto tras la prueba A/B (COSMOS y UNIT-8 sin risas).
-8. ¿Datos reales de mercados, tiempo y espacio (necesitan red y claves) o solo las cifras de las noticias? El programa del tiempo los necesita.
-9. ¿Voces en tu ordenador para el canal 24/7?
-10. Fin de semana: ¿resumen de la semana en la tercera parte de WORLD NOW?
-11. Idioma en pantalla: ¿inglés como ahora o español?
-12. Presentador del tiempo: ¿Sam o uno nuevo?
+## Decisiones (respondidas el 5 oct)
+1. ✅ Parrilla por horas: sí, y preparada para programas que no son informativos.
+2. ✅ IN THEIR WORDS: sí.
+3. Noticias graves: sin respuesta; por ahora solo tarjetas con la cita.
+4. ✅ Políticos y jefes de Estado: se recrean (con regla de equilibrio).
+5. ✅ Expertos: varios; pueden reírse en las charlas.
+6. Presupuesto de IA: pendiente de medir con gpt-6-luna.
+7. ✅ Respiraciones NO; risas SÍ y naturales.
+8. ✅ Datos: los mejores (mercados, tiempo, espacio), todo preparado para poner las claves.
+9. Voces en tu ordenador: pendiente.
+10. Resumen semanal: pendiente.
+11. ✅ Idioma en pantalla: inglés.
+12. Presentador del tiempo: sin respuesta (sigue Sam); pulido extremo hasta nota > 9,7.
 13. ✅ Red: abierta en este entorno (4 oct).
