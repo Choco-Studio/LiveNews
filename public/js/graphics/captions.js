@@ -6,21 +6,22 @@
 // stays light. A long sentence is split into pages at phrase boundaries
 // (graphics/breaks.js 'caption' style: an extra page is cheaper than a line
 // that cuts "the Great / Barrier Reef"), paced to the speech and never
-// stepping back, so no line is ever dropped; pages roll up instead of popping
-// and the last one rolls down out of its window after the speech. The block
+// stepping back, so no line is ever dropped; pages cut from one to the next
+// (never caught half-rolled) and the last one goes off after the speech. The block
 // sits 6 px above the lower third or the ticker and moves smoothly when the
 // strap comes and goes; over full-screen graphics that own the bottom it moves
 // to the top.
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
-import { W, CAPTION, easeOut, easeIn, easeInOut, clipStart, clipEnd } from './layout.js';
+import { W, CAPTION } from './layout.js';
 import { layoutText } from './breaks.js';
 import { CHANNEL } from '../pace.js';
 
-// PACE: page holds and roll timings from the one pacing table (pace.js CHANNEL.captions):
+// PACE: page holds and timings from the one pacing table (pace.js CHANNEL.captions):
 //   cps (speech pace when nothing better is known, = audio.js mute pace), lead (chars: turn the page just
 //   before its first word), minPage (s a page stays up at least), grace (after the speech timeline stops),
-//   roll (page change), hold (caption lingers after speech), out (roll out, the same move as a page change)
+//   hold (caption lingers after speech; it then goes off at once), out (extra time the state keeps the
+//   caption before it is cleared); roll is no longer drawn: pages cut (owner 5 Oct)
 export const CAPTION_TIMING = CHANNEL.captions;
 const C = CAPTION_TIMING;
 export const CAPTION_COLOR = P.white;
@@ -156,28 +157,15 @@ function drawBlock(ctx, lines, y0) {
 
 /**
  * Draw the caption block. `place` = { bottom } (anchored above something) or
- * { top } (anchored under the top row).
+ * { top } (anchored under the top row). Pages change by cutting, as broadcast
+ * subtitles for scripted programmes do: a page is always whole on screen, never
+ * a roll caught half-way (owner 5 Oct: a rolling one-line window over a strap
+ * showed two half lines that read as text hidden behind the lower third).
  */
 export function drawCaptions(ctx, t, s, place) {
   if (!s.active) return;
-  const top0 = place.top !== undefined;
-  const k = easeOut((t - s.changeAt) / C.roll);
-  const newH = blockH(s.lines);
-  const oldH = k < 1 ? blockH(s.prevLines) : 0;
-  const boxH = Math.max(newH, oldH);
-  const bottom = top0 ? place.top + Math.round(easeInOut(k) * newH + (1 - easeInOut(k)) * oldH) : place.bottom;
-  const top = bottom - boxH;
-  // after the speech: roll out of the window (down when anchored below, up under the top row)
-  const out = s.clearAt === null ? 0 : easeIn((t - s.clearAt - C.hold) / C.out);
-  if (out >= 1) return;
-  const shift = Math.round(out * boxH) * (top0 ? -1 : 1);
-  // one uniform roll through the window: both blocks travel its full height, so
-  // the old page is out of sight before it is dropped even when it was taller
-  clipStart(ctx, 0, top, W, boxH);
-  try {
-    if (k < 1 && oldH) drawBlock(ctx, s.prevLines, bottom - oldH - Math.round(k * boxH) + shift);
-    drawBlock(ctx, s.lines, bottom - newH + Math.round((1 - k) * boxH) + shift);
-  } finally {
-    clipEnd(ctx);
-  }
+  // after the speech the caption lingers `hold` seconds, then goes off at once
+  if (s.clearAt !== null && t - s.clearAt >= C.hold) return;
+  const h = blockH(s.lines);
+  drawBlock(ctx, s.lines, place.top !== undefined ? place.top : place.bottom - h);
 }

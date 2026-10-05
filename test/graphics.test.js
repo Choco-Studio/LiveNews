@@ -572,7 +572,7 @@ test('captions r2: one line per page while a strap is up; a strap arriving mid-s
   assert.equal(s.page, s.pages.length - 1, 'the last line airs');
 });
 
-test('captions r2: white on black, and the caption leaves by rolling out (no alpha)', async () => {
+test('captions r2: white on black, and the caption goes off whole after its hold (no alpha, no roll)', async () => {
   const { CAPTION_COLOR, drawCaptions, CAPTION_TIMING: CT } = await import('../public/js/graphics/captions.js');
   assert.equal(CAPTION_COLOR, P.white);
   const s = new CaptionState();
@@ -588,6 +588,38 @@ test('captions r2: white on black, and the caption leaves by rolling out (no alp
   for (let t = 2; t < 2 + CT.hold + CT.out; t += 0.02) drawCaptions(ctx, t, s, { bottom: 196 });
   assert.ok(alphas.length > 0 && alphas.every((a) => a === 1));
   assert.equal(ctx.depth, 0);
+});
+
+test('captions: a page change over a strap cuts to whole lines (never two half lines in a roll window)', async () => {
+  const { drawCaptions, CAPTION_TIMING: CT } = await import('../public/js/graphics/captions.js');
+  const { CAPTION } = await import('../public/js/graphics/layout.js');
+  const s = new CaptionState();
+  const text = 'The storm weakened slightly as it moved inland over the Yucatan Peninsula, forecasters said on Sunday.';
+  s.update(0, text, 0, null, 1); // a strap is up: one line per page
+  const first = s.lines.slice();
+  let t = 0;
+  while (s.lines === first || s.lines[0] === first[0]) {
+    t += 0.05;
+    s.update(t, text, 0, null, 1);
+    assert.ok(t < 20, 'the caption reaches a second page');
+  }
+  const bottom = 160;
+  for (const dt of [0, CT.roll * 0.25, CT.roll * 0.5, CT.roll * 0.75]) {
+    const ctx = fakeCtx();
+    const boxes = [];
+    const fill = ctx.fillRect;
+    ctx.fillRect = function (x, y, w, h) {
+      if (this.fillStyle === P.black) boxes.push({ y, h });
+      return fill.call(this, x, y, w, h);
+    };
+    drawCaptions(ctx, t + dt, s, { bottom });
+    assert.equal(boxes.length, s.lines.length, 'only the new page is drawn');
+    for (const b of boxes) {
+      assert.equal(b.h, CAPTION.pitch);
+      assert.ok(b.y >= bottom - s.lines.length * CAPTION.pitch && b.y + b.h <= bottom, `line box at ${b.y} stays whole above ${bottom}`);
+    }
+    assert.equal(ctx.depth, 0, 'no clip window');
+  }
 });
 
 test('graphics r2: a caption that only repeats the strap tag is not burnt in', () => {
