@@ -71,7 +71,7 @@ describe('which board a story gets (pace.js)', () => {
     assert.equal(numbersBoard({ numbers: nums.slice(0, 1) }, 'world-now'), null);
     assert.equal(numbersBoard({ numbers: nums, feature: 'number' }, 'world-now'), null);
     assert.equal(numbersBoard({ numbers: [...nums, nums[0]] }, 'world-now').length, 2, 'one row per value');
-    assert.equal(numbersBoard({ numbers: nums }, 'cosmos'), null, 'only where the profile asks for it');
+    assert.equal(numbersBoard({ numbers: nums }, 'money-minute'), null, 'only where the profile asks for it');
   });
 
   test('the hold reads the whole board, within the card window', () => {

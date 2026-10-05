@@ -495,9 +495,9 @@ function capMax(ctx, tl, out) {
     let j = k + 1;
     while (j < out.length && out[j].shot === e.shot) j++;
     const t1 = j < out.length ? out[j].at : tl.end;
-    // (a QUICK BYTES item is one sentence over its own picture: it runs to the item's end, a little past the
-    // picture maximum, rather than cutting to the reader mid-sentence for its last words)
-    const max = shotMax(ctx.programId, e.shot) + (e.beat === 'roundup-picture' && ctx.seg?.roundup && styleOf(ctx.programId) === 'tech-bytes' ? 3 : 0);
+    // (a picture round-up item, QUICK BYTES or IN BRIEF, is one sentence over its own picture: it runs to the item's
+    // end, a little past the picture maximum, rather than cutting to the reader mid-sentence for its last words)
+    const max = shotMax(ctx.programId, e.shot) + (e.beat === 'roundup-picture' && ctx.seg?.roundup && !ctx.seg?.location ? 3 : 0);
     if (t1 - e.at <= max + 0.25) continue;
     // the run's last beat (a round-up pin after its world view) keeps its own MIN_SHOT too
     const lo = Math.max(e.at + Math.max(MIN_SHOT, lowOf[e.shot] || 0), out[j - 1].at + MIN_SHOT);
@@ -820,9 +820,16 @@ function cosmos(ctx, tl) {
   }
   if (ctx.type === 'chat') return [ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? chatFraming(ctx) : 'mcu', me, 'chat')];
   if (ctx.type === 'outro') return [ev(ctx, 0, 0, 'wide', 'wide', me, 'signoff')];
+  // IN BRIEF (config roundup.kind "pictures"): each item over its own picture
+  if (ctx.seg.roundup) return quickBytes(ctx);
   const single = storySingle(ctx);
   let out;
-  if (ctx.feature === 'number' && !ctx.isLead) {
+  // the format round: a story's board (BY THE NUMBERS on its stated figures, WHAT WE KNOW on hard news) after the
+  // map, in the generic beat order; the Reading stays the number of the day's own card
+  const board = ctx.feature !== 'number' && !!(numbersBoard(seg, ctx.programId) || knownBoard(seg, ctx.programId));
+  if (board) {
+    out = storyBeats(ctx, tl, { single, map: !!seg.location, picture: ctx.hasImage, fact: factHold(seg, ctx.programId), board: true, pictureMin: S.pictureMin, pictureMax: S.pictureMax, mapMin: S.mapMin, mapMax: S.mapMax, finally: isFinally(ctx) });
+  } else if (ctx.feature === 'number' && !ctx.isLead) {
     // the Reading on UNIT-8's first word; the single on sentence 2, no earlier than 4 s after the cut
     out = [ev(ctx, 0, 0, 'fact', null, me, 'number')];
     const b = readingSingle(ctx, tl);

@@ -205,7 +205,9 @@ const PROGRAMMES = {
     // cosmos.md: 4 s everywhere, maps 4-6 s, pictures 6-10 s. The map's ceiling is 8.5 s, not the bible's 6: with the
     // owner's 4 s floor and COSMOS' 4.5 s cut cooldown a map can only give way to the reader when 4 + 4.5 s remain, so
     // a shorter map that runs past 6 s cannot be split (the planner cuts it at 4-6 s whenever it can)
-    shots: { min: 4.0, cooldown: 4.5, median: [6, 9], studioMax: 15, singleSoft: 11, picture: [6, 10], map: [4, 8.5], factMax: 9, cutsPerMinMax: 7, staticMax: 14 },
+    // the format round (owner 4-5 Oct): STILL TO COME over its stories, BY THE NUMBERS and WHAT WE KNOW boards, IN
+    // THEIR WORDS on a sourced quote, and UNIT-8's definition card
+    shots: { min: 4.0, cooldown: 4.5, median: [6, 9], studioMax: 15, singleSoft: 11, picture: [6, 10], map: [4, 8.5], factMax: 9, cutsPerMinMax: 7, staticMax: 14, quoteCard: true, stillToCome: true, numbers: true, known: true, terms: true },
     moves: { max: 0, minGap: Infinity }, // cosmos.md: the set camera never moves; only pictures pan
     gestures: { perMin: 3.5, minGap: 6, beatsPerMin: 5, rest: 0.72, grave: 1.5, floor: 1.8, floorGrave: 0.6 }, // cosmos.md: <= 1 per 6 s
     listener: { reactionGap: 10, nodGap: 8, nodsPerMin: [0.6, 4] },

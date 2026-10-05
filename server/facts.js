@@ -23,6 +23,12 @@ const NOT_GRAVE_SENSES = [
   /\b(?:was|were|been|be|is|are|got|get|gets|getting)\s+fired\b/gi,
   /\bfire\s+(?:drills?|alarm tests?|exercises?|safety)\b/gi,
   /\b(?:government|coalition|talks|deal|negotiations|prices?|shares|stocks?|market|currency|company|firm|bank|league|plan|bid)\s+collaps\w*/gi,
+  // a launch ("Students blast off to US for Nasa robotics competition", BBC 5 Oct) and a good time
+  /\bblast(?:s|ed|ing)?[- ]off\b/gi,
+  /\b(?:had|have|has|having) a blast\b/gi,
+  // deep time: what happened millions of years ago is science, not grave news ("the mysterious Ordovician
+  // bombardment", "a mass extinction that devastated marine life" 370 million years ago, ScienceDaily 5 Oct)
+  /[^.!?]*\b(?:\d[\d,.]*\s+(?:million|billion)\s+years|(?:million|billion) years ago|prehistoric|dinosaurs?|fossil(?:s|ised|ized)?|Ordovician|Cambrian|Permian|Triassic|Jurassic|Cretaceous|ice age)\b[^.!?]*[.!?]?/gi,
 ];
 // What says a grave-sounding event harmed no one ("Moderate earthquake shakes northern Chile, no damage reported").
 const HARM_NEGATED = /\b(?:no (?:reports? of )?(?:damage|injuries|injured|casualties|deaths|victims)(?:\s+(?:or|and|nor)\s+(?:damage|injuries|injured|casualties|deaths|victims))?|no one (?:was )?(?:hurt|injured|killed)|nobody (?:was )?(?:hurt|injured|killed)|without (?:injuries|casualties)|false alarm|(?:a|the) drill\b)/gi;

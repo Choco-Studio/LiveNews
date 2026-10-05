@@ -837,6 +837,12 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     if (/(?:\b(?:a|an|the|its|their|his|her|our|this|that)|['’]s)\s+[a-z]+(?:ic|al|ous|ive|ian|ish|ese|ent|ant|ary|ful|less|ed)$/i.test(head)) continue;
     // "...but according to Kotaku[, it couldn't quite get an edge]": an attribution keeps what it attributes
     if (/\baccording to [^,;]{1,40}$|\b(?:but|and|or|so|yet|while)$/i.test(head)) continue;
+    // "...the Gold Rush Trail, where miners [and prospectors flocked to...]": a clause it opened still waits for its
+    // verb (a plural noun after "where" is its subject, not a verb)
+    if (/^\s*and\b/i.test(t.slice(at))) {
+      const open = head.match(/\b(?:where|when|while|as|because|although|though|if|which|who|that|whose)\s+((?:[\w’'-]+\s+){0,3}[\w’'-]+)$/i);
+      if (open && !open[1].split(/\s+/).some((w) => AUX_VERB.test(w) || PAST_FORM.test(w) || /^[a-z]{3,}ed$/i.test(w))) continue;
+    }
     // "its decision to relocate was made [because of...]": a bare passive of a light verb says nothing alone
     if (/\b(?:was|were|is|are|been|be)\s+(?:made|taken|done|given|reached)$/i.test(head)) continue;
     // "...from a UK air base one week [after the arrests]": a span of time before "after" or "before" is theirs

@@ -84,7 +84,7 @@ const introduced = (t, info) => (String(t).match(NEW_NAME) || []).every((n) => `
  * then..."), never names someone or something new, and quotes nobody without saying who.
  */
 export const answerable = (t, info) =>
-  !FOLLOWS_ON.test(t) && !/^(?:This|These|Those|Such|That)\b/.test(t) && !asks(t) && !/\(/.test(t) && introduced(t, info) && !(/^["“‘']/.test(t.trim()) && !/\b(?:said|says|told|added|according to|warned|wrote)\b/i.test(t));
+  !FOLLOWS_ON.test(t) && !/^(?:This|These|Those|Such|That|But|And|So|Yet|Still|However|Instead|Meanwhile)\b/.test(t) && !asks(t) && !/\(/.test(t) && introduced(t, info) && !(/^["“‘']/.test(t.trim()) && !/\b(?:said|says|told|added|according to|warned|wrote)\b/i.test(t));
 // A question in the story's own voice (not inside a quotation): a feature's device, not a report.
 const asks = (t) => /\?["”’]?\s*$/.test(String(t).trim()) && !/^["“‘]/.test(String(t).trim());
 // News that is bad for someone, whatever the topic: a light topic's story said straight, not smiling.
@@ -223,10 +223,23 @@ const CATCH = [
   // who it touches, when the story says who
   { test: /\b(?:users|customers|owners|drivers|patients|developers|consumers|subscribers|players|parents|families|small businesses|people who)\b/i, q: () => ['[chin] And who does this actually affect?', '[glasses] Who is this for, exactly?', '[chin] So who notices the difference?'] },
   // where the law stands, when a court, a regulator or a law is in it
-  { test: /\b(?:law|laws|ruling|ruled|court|judge|regulators?|unconstitutional|illegal|precedent|warrant)\b/i, q: () => ['[steeple] And where does the law stand?', '[steeple] And the legal position?', '[chin] So where does that leave the rules?'] },
+  // (a court or a regulator deciding, not a word: "beyond “specific rules or new laws,”" answers nothing)
+  { test: /\b(?:ruled|ruling|court|judge|unconstitutional|unlawful|illegal|precedent|warrant|regulators? (?:say|said|ruled|approved|fined|ordered))\b/i, q: () => ['[steeple] And where does the law stand?', '[steeple] And the legal position?', '[chin] So where does that leave the rules?'] },
   { test: /\b(?:using|uses|by (?:using|\w+ing)|works (?:by|without)|without an?)\b/i, q: () => ['[chin] How does it actually work?', '[chin] Walk me through how it works.', '[glasses] And the clever part is?'] },
   // the catch itself, last: a "but" is in most stories
   { test: /\b(?:but|however|only|not yet|still|although)\b/i, q: () => ['[steeple] So what is the catch?', '[chin] There is always a but. What is it here?', '[steeple] And the small print?'] },
+];
+// COSMOS DESK, UNIT-8 ASKS: the robot asks Dr Reyes the literal question a story leaves (how far, how long ago, how
+// big, how they know, what comes next, what it means) and she answers with the story's own sentence. Each type
+// once a programme; several phrasings for a 24/7 rotation; UNIT-8 is never rude, only exact.
+const ASK = [
+  { test: /\b\d[\d,.]*\s*(?:million |billion )?(?:light[- ]years?|kilomet(?:re|er)s?|km|miles|astronomical units?)\b/i, q: () => ['[chin] Dr Reyes, how far is that, exactly?', '[chin] And the distance, Dr Reyes?', '[nod] I require the distance, Dr Reyes.'] },
+  { test: /\b(?:\d[\d,.]*|a few|several|hundreds of|thousands of|millions of)\s+(?:million |billion |thousand )?years? (?:ago|old|earlier|later)\b/i, q: () => ['[chin] Dr Reyes, how long ago was that?', '[chin] And when, Dr Reyes?', '[nod] I would like the date, Dr Reyes.'] },
+  { test: /\b(?:times (?:the size|larger|bigger|heavier|wider|smaller)|diameter|kilomet(?:re|er)s? (?:wide|across|long)|(?:metres|meters) (?:tall|high|long|wide)|the size of)\b/i, q: () => ['[chin] How large, Dr Reyes?', '[nod] I require a sense of size, Dr Reyes.', '[chin] And how big is it?'] },
+  // (a method said, not just named: "the study team retained control over the analysis" answers nothing)
+  { test: /\b(?:measured|measurements? (?:of|from|show)|observations? (?:of|from|show)|observed|data from|samples? (?:taken|collected|from)|simulations? show|scans? (?:of|show)|using (?:a |the )?(?:telescope|satellite|probe|rover|scanner|microscope|spectrometer|radar|sensors?)|crystals? show|randomi[sz]ed|followed \d[\d,]* (?:people|adults|patients|participants))\b/i, q: () => ['[chin] How do they know, Dr Reyes?', '[chin] Dr Reyes, how was this measured?', '[nod] What is the evidence, Dr Reyes?'] },
+  { test: /\b(?:plans? to|(?:is|are) expected to|(?:is|are) set to|next (?:year|month|step)|will (?:launch|land|fly|return|begin|start)|the next mission)\b/i, q: () => ['[chin] What happens next, Dr Reyes?', '[nod] And next, Dr Reyes?', '[chin] Dr Reyes, what is the next step?'] },
+  { test: /\b(?:could|may|might) (?:help|explain|lead|point|mean|allow|make|change|reveal)\b/i, q: () => ['[chin] What does it mean, Dr Reyes?', '[chin] Dr Reyes, why does it matter?', '[nod] And the significance, Dr Reyes?'] },
 ];
 // The button after "And finally", by what kind of story it was: a thing you can hold, software (an AI, an app, a
 // game: nothing to take apart or buy; "I want to take it apart" once followed an AI cheating at StarCraft, 4 Oct),
@@ -395,7 +408,25 @@ const PRONOUN_START = /^(?:It|Its|They|Their|This|These|Those|He|She|His|Her)\b/
  * opens on a pronoun: "The central bank has kept rates..." is how the outlet itself starts); a later one
  * only when it does not lean on the sentence before it ("The canal authority says...").
  */
-const selfStanding = (info, t) => (info.sentences.indexOf(t) === 0 ? !PRONOUN_START.test(t) && !ALSO_LEAN.test(t) : !leansOnPrevious(t));
+// (a quotation never opens with nobody saying it: "“I want to be able to look at a rocket launch...” That’s how...")
+const SAID_BY = /\b(?:said|says|told|added|according to|warned|wrote|explained)\b/i;
+// (nor one that follows on: "So it’s only natural that Trump’s new task force is named...", TechCrunch 5 Oct)
+const selfStanding = (info, t) => !(/^["“‘]/.test(String(t).trim()) && !SAID_BY.test(t)) && !FOLLOWS_ON.test(String(t).trim()) && (info.sentences.indexOf(t) === 0 ? !PRONOUN_START.test(t) && !ALSO_LEAN.test(t) : !leansOnPrevious(t));
+/**
+ * Two sentences that say the same thing in other words: most of the shorter one's content words are in the
+ * other ("A UCLA study links faster brain aging to specific gut bacteria" / "A new UCLA study suggests that the
+ * pace of brain aging may be connected to bacteria in the gut", ScienceDaily 5 Oct).
+ */
+function sameSense(a, b) {
+  const stem = (w) => w.slice(0, 5);
+  const wa = new Set(contentWords(a).map(stem));
+  const wb = new Set(contentWords(b).map(stem));
+  const small = Math.min(wa.size, wb.size);
+  if (small < 4) return false;
+  let shared = 0;
+  for (const w of wa) if (wb.has(w)) shared++;
+  return shared >= 4 && shared / small >= 0.6;
+}
 /** Content words of `sentence` that `title` does not have (what a restating sentence adds). */
 function newWords(sentence, title) {
   const t = contentWords(title);
@@ -568,7 +599,10 @@ function runningOrder(infos, n, program, featured = new Set()) {
     // QUICK BYTES (TECH BYTES): stories with a picture of their own, each over it, any country, never grave
     const pictures = r.kind === 'pictures';
     // a round-up item is told in one summary sentence: a story with none that fits stays a main story
-    const located = pool.filter((i) => (pictures ? i.s.image && !i.grave : i.loc) && !i.breaking && !i.live && i.roundupFit !== false);
+    // (a picture round-up takes the stories that would be short anyway: one whose article was read keeps its full
+    // telling, or the round-up would shorten the programme it was meant to vary: COSMOS once lost three main stories
+    // to it, 5 Oct)
+    const located = pool.filter((i) => (pictures ? i.s.image && !i.grave && i.sentences.length < 5 : i.loc) && !i.breaking && !i.live && i.roundupFit !== false);
     // One map sentence is for the smaller stories: a picture, a second outlet or people at risk make a story a
     // main one (it gets its photo beat and its full telling); the round-up takes the rest first.
     // (QUICK BYTES: every item has its picture; the one with the most to tell stays a main story)
@@ -1086,7 +1120,10 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // (never before a grave story: no chat follows a story there, and the kept-back sentence would be lost)
       const quietAfter = !!order[k + 1]?.grave;
       const catchFor = pid === 'tech-bytes' && (k === 0 || deep) && !info.grave && !quietAfter ? CATCH.find((c) => !asked.has(c) && info.sentences.some((t) => fits(c, t))) : null;
-      let reserved = catchFor ? info.sentences.find((t) => fits(catchFor, t)) : null;
+      // COSMOS: UNIT-8 asks when Dr Reyes read the story (never after the lead, which has his restatement)
+      const unitSlot = idOf('B') === 'unit8' ? 'B' : idOf('A') === 'unit8' ? 'A' : null;
+      const askFor = pid === 'cosmos' && unitSlot && k > 0 && deep && !quietAfter && anchor !== unitSlot ? ASK.find((c) => !asked.has(c) && info.sentences.some((t) => fits(c, t))) : null;
+      let reserved = catchFor ? info.sentences.find((t) => fits(catchFor, t)) : askFor ? info.sentences.find((t) => fits(askFor, t)) : null;
       if (!reserved && pid === 'world-now' && deep && !quietAfter) reserved = [...info.sentences].reverse().find((t, j) => j < info.sentences.length - 1 && !PRONOUN_START.test(t) && answerable(t, info) && wordCount(t) >= 6) || null;
       if (reserved) used.add(reserved);
       // After the intro has read its headline, the lead goes on with the next fact: a sentence that only
@@ -1101,10 +1138,33 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // cannot ("It says the service...").
       const skipHeadline = first && (leadAfterIntro || restates(first, s.title) || (selfStanding(info, first) && wordCount(first) >= 6));
       let opener = spokenTitle(s.title, info);
-      if (skipHeadline) {
+      // the summary's first sentence cannot open ("It is hoped the prospective sale..."): a later one that tells the
+      // news and stands on its own opens instead of the headline ("Conservationists have said they are planning to
+      // buy a field to extend a "green lung"...", BBC 5 Oct); the one that leans follows it
+      // (and when the first sentence says a detail and a later one the news: "The Shropshire Astronomical Society plans to
+      // install the dome at Rodington village hall" before "A group of amateur astronomers have been given permission to
+      // set up a mini-observatory", BBC 5 Oct)
+      let chosen = false;
+      const titleShare = (t) => contentWords(t).filter((w) => contentWords(s.title).some((x) => x.slice(0, 5) === w.slice(0, 5))).length;
+      const detailFirst = !isNumber && !isLighter && first && titleShare(first) <= 1 && info.sentences.slice(1, 3).some((t) => titleShare(t) >= 3 && selfStanding(info, t));
+      if ((!skipHeadline && first && !selfStanding(info, first)) || detailFirst) {
+        // the sentence that tells most of the headline's news (its names first), never a bracketed aside ("Each flight
+        // director chose a team name (at first colors)" once opened an obituary)
+        const names = info.keep || [];
+        const score = (t) => titleShare(t) + names.filter((n) => t.includes(n)).length;
+        const tellsNews = (t) => selfStanding(info, t) && !echoes(t) && !/\(/.test(t) && wordCount(t) >= 8 && wordCount(t) <= maxWords + 2 && titleShare(t) >= 2;
+        const best = !isNumber && !isLighter ? info.sentences.filter((t) => !used.has(t) && tellsNews(t)).sort((a, b) => score(b) - score(a) || info.sentences.indexOf(a) - info.sentences.indexOf(b))[0] : null;
+        const alt = best ? pickSentence((t) => t === best) : null;
+        if (alt) opener = alt;
+        chosen = !!alt;
+      }
+      if (skipHeadline && !chosen) {
         // Never a pronoun as the first word of a story: the opener must say who or what.
         opener = (leadAfterIntro && (pickSentence((t) => !echoes(t) && selfStanding(info, t)))) || null;
-        if (!opener && reserved) {
+        // (the lead only: any other story opens on its first standing sentence below, and keeps its exchange; this
+        // once freed the kept-back sentence of every story that could open on its summary, so THE CATCH, UNIT-8 ASKS
+        // and WORLD NOW's added detail aired only where a headline opened)
+        if (leadAfterIntro && !opener && reserved) {
           // Nothing else to open with: the catch's sentence opens the story, and there is no catch.
           used.delete(reserved);
           reserved = null;
@@ -1158,7 +1218,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         // (a quotation alone, with nobody saying it: "“It is absolutely unforgivable.”")
         if (/^["“‘']/.test(t0.trim()) && !/\b(?:said|says|told|added|according to|warned|wrote)\b/i.test(t0)) continue;
         // (a sentence that tells again what an aired one said: most of its words, little new)
-        if (toldSoFar().some((x) => restates(t0, x) && newWords(t0, x) < 4)) continue;
+        if (toldSoFar().some((x) => (restates(t0, x) && newWords(t0, x) < 4) || sameSense(t0, x))) continue;
         if (/^(?:It|They|This|These)\b/.test(t0) && WHY.test(t0)) continue; // "It says..." with no subject reads as a label
         // (a feature's rhetorical question, and the sentence that answers it: "What’s the best way to manage a
         // forest? Australians have argued about this for decades." ScienceDaily, 4 Oct)
@@ -1219,6 +1279,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       if (reserved && catchFor) {
         info.catchAnswer = { line: reserved, q: catchFor.q };
         asked.add(catchFor);
+      } else if (reserved && askFor) {
+        info.askAnswer = { line: reserved, q: askFor.q };
+        asked.add(askFor);
       } else if (reserved) info.addLine = reserved;
       if (reserved) exchanges++;
     }
@@ -1251,6 +1314,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
             const sp = partner;
             const kind = PRODUCT_KICKERS.has(info.kicker) ? 'product' : SOFTWARE_KICKERS.has(info.kicker) ? 'software' : 'science';
             planned.push({ anchor: sp, text: pickLine(TECH_BUTTONS[kind][idOf(sp)] || GENERIC_CHATS, `${key}~btn`, info) });
+          } else if (pid === 'cosmos' && slot === 'story' && info.askAnswer) {
+            const unit = idOf('B') === 'unit8' ? 'B' : partner;
+            planned.push({ anchor: unit, text: pickLine(info.askAnswer.q(), `${key}~ask`, info) }, { anchor: other(unit), text: `[nod] ${info.askAnswer.line}` });
           } else if (pid === 'cosmos' && anchor !== (idOf('B') === 'unit8' ? 'B' : partner) && (slot === 'lead' || (slot === 'story' && longForm && !isNumber && unitRestates < 2 && (info.figures.length || info.loc)))) {
             // UNIT-8's restatement: after the lead, and after one more story at most (a robot repeating every
             // figure is a tic, not a character); each time in a different shape.

@@ -2538,7 +2538,7 @@ const STORY_WALL = {
   default: ['picture', 'map', 'figure', 'plate'],
 };
 // the writer's feature kickers (server/writer.js FEATURE_KICKERS): segue labels, never wall content
-const FEATURE_LABELS = new Set(['NUMBER OF THE DAY', 'AND FINALLY', 'AROUND THE WORLD', 'QUICK BYTES']);
+const FEATURE_LABELS = new Set(['NUMBER OF THE DAY', 'AND FINALLY', 'AROUND THE WORLD', 'QUICK BYTES', 'IN BRIEF']);
 const KICKER_CATS = { general: '', world: 'WORLD', tech: 'TECHNOLOGY', science: 'SCIENCE', business: 'BUSINESS', culture: 'CULTURE', sport: 'SPORT', health: 'HEALTH' };
 
 /**

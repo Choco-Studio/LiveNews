@@ -258,3 +258,15 @@ test('a headline opening a story is told as a sentence: present perfect, the out
   assert.equal(spokenTitle('Kenya opens its largest solar farm', I('Kenya has opened a solar farm.')), 'Kenya has opened its largest solar farm');
   for (const t of ['Amazon responds to data center backlash, says it no longer uses NDAs', 'Scientists find water on a distant planet', 'Google froze its bug bounty program', 'Can AI fix it?', 'Federal judge calls Flock a threat']) assert.equal(spokenTitle(t, I('Someone said something.')), t, t);
 });
+
+test('COSMOS on real news (5 Oct): a launch, deep time, a mission blog, a profile and NASA’s picture of the day', async () => {
+  const { isGrave } = await import('../server/facts.js');
+  const { notNews } = await import('../server/news.js');
+  assert.ok(!isGrave('Students blast off to US for Nasa robotics competition.'));
+  assert.ok(!isGrave('Zircon crystals show the Ames impact occurred about 370 million years ago, not part of the mysterious Ordovician bombardment.'));
+  assert.ok(isGrave('Israeli bombardment of the city continued overnight, killing 12 people.'), 'a bombardment today is grave');
+  for (const t of ['Curiosity Blog, Sols 5022-5028: Cashing in at Cache Creek', 'Mapping the Gaps in NASA’s Return to the Moon, featuring Richard Spolzino', 'APOD: 2026 October 4 – Supernumerary Rainbows']) assert.ok(notNews({ title: t }), t);
+  assert.ok(!notNews({ title: 'Blogger arrested in Vietnam' }));
+  assert.equal(trimClause('It also lies at the southern end of the 1860s Gold Rush Trail, where miners and prospectors flocked to this part of British Columbia in search of riches.', 16), 'It also lies at the southern end of the 1860s Gold Rush Trail.', 'never "where miners" cut from its verb');
+  assert.ok(isTranscriptLine('See the link here for more details on naming conventions on Mars.'));
+});

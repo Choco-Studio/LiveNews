@@ -402,6 +402,35 @@ The card sits on `P.black`. Coordinates are cap lines at 1x.
 - Count-ups, type-ons, a spinning globe behind a speaking head, or music under faces.
 - Kurzgesagt's bright palette, a second accent colour, or cyan on UNIT-8.
 
+### Format round (owner 4–5 Oct): longer, never presenter after presenter
+
+The owner's brief, as for TECH BYTES (`tech-bytes.md` §3.10): longer programmes that are more than one presenter after another. COSMOS DESK now carries up to 11 stories, and UNIT-8 does more than restate figures. Every line is still the source's, except UNIT-8's definitions, which are a fixed list of ours.
+
+**UNIT-8 ASKS.** After a main story Dr Reyes read (never the lead, which keeps his restatement), UNIT-8 asks the literal question it leaves, and she answers with one of the story's own sentences:
+- **The questions:** how far, how long ago, how big, how they know, what comes next, what it means.
+- **Each type once a programme**, in several phrasings: "Dr Reyes, why does it matter?" / "Researchers say its unusual sulfur-based chemistry could point toward cheaper and more practical ways to turn sunlight into clean fuel."
+- **A method is said, not just named.** "The study team retained control over the analysis" once answered "how was this measured?". Now the answer needs a measurement, an observation, a sample, a scan or a randomised trial.
+- **An answer stands on its own after the story.** It never opens on "But", "So" or "This", never names someone the story did not introduce, and is never kept back before a grave story.
+
+**UNIT-8 DEFINES** (`server/glossary.js`, set "science", programme `"terms": { "explainer": "unit8", "set": "science" }`). The science words a story used, read the way he reads a figure, logged and exact, with the definition card:
+- **The phrasing:** "Definition filed: the Hubble tension is the clash between two measures of how fast the universe expands."
+- **The terms:** about 40 (exoplanet, light year, black hole, Hubble tension, zircon, mass extinction, enzyme, microbiome, clinical trial, permafrost, El Niño...).
+- **No figure in a definition:** the set never shows one the channel did not report.
+- **The same placement rules as Ada's** (after a main story, never after grave news, at most two, never a definition heard lately). UNIT-8 may define right after his own story.
+
+**IN BRIEF** (`roundup.kind: "pictures"`, kicker IN BRIEF, read by UNIT-8). The science stories that would be short anyway (one whose article was read keeps its full telling), one sentence each over its own picture. It only airs when there are three such stories: on 5 Oct every science story had its article, so none did, and the programme kept its depth.
+
+**The boards, STILL TO COME, IN THEIR WORDS** air here too (pace `shots`). BY THE NUMBERS takes the stack panel; the Reading stays the number of the day's single figure on its ruler. WHAT WE KNOW covers hard science (health, climate; `"boards": ["known"]`). In the v2 planner a story with a board uses the generic beat order (board after the map).
+
+**The first run on real news** (5 Oct, the fallback writer on the live science feeds):
+- **A student robotics trip and a meteor crater read as serious.** "Blast off" counted as an explosion, and "the mysterious Ordovician bombardment" (370 million years ago) as a war. A launch and a good time are not grave; nor is anything said to have happened millions of years ago (deep time: fossils, dinosaurs, ice ages, the geological periods).
+- **Pages that are not news.** A rover's mission blog ("Curiosity Blog, Sols 5022-5028", written in "we" with its date glued on), a staff profile ("..., featuring Richard Spolzino"), NASA's picture of the day (APOD, a page of menus around one photo), and "See the link here for more details".
+- **Sentences.** "...the Gold Rush Trail, where miners[ and prospectors flocked...]" (a clause cut from its verb). "A UCLA study links faster brain aging to specific gut bacteria" followed by "A new UCLA study suggests that the pace of brain aging may be connected to bacteria in the gut" (the same thing twice). An "And finally" that opened on an unattributed quotation.
+- **Openers.** A story whose summary leans ("It is hoped the prospective sale...") or opens on a detail ("The Shropshire Astronomical Society plans to install the dome...") now opens on the sentence that tells most of the headline's news. That is "Conservationists have said they are planning to buy a field to extend a 'green lung'", or "A group of amateur astronomers have been given permission to set up a mini-observatory". It is never one that follows on ("So it's only natural..."), nor a bracketed aside.
+- **A fault every programme shared.** Only the lead was meant to give up its kept-back sentence when nothing else could open it, but every story that opened on its summary did too. So THE CATCH, UNIT-8 ASKS and WORLD NOW's added detail aired only where a headline opened.
+
+**Length.** On 5 Oct's real news (12 science stories on the desk) the programme carried about 760 words, near 5 min 10 s, against the 6–8 minutes the LLM writer is asked for. The fallback writes no more than the reporting supports.
+
 ## 4. Reconciling with the repo (who changes what)
 
 | Area | Repo today | This bible | Owner |

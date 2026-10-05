@@ -78,3 +78,16 @@ test('the explainer keeps the floor into her own story: its "Thanks, Max." goes,
   assert.equal(next.text, 'A new phone.');
   assert.deepEqual(next.cues, [{ char: 0, slot: null, action: 'nod' }]);
 });
+
+test('COSMOS DESK: the science set, defined by UNIT-8 in his own words; a tech term is not his', () => {
+  const cosmos = { id: 'cosmos', maxChats: 10, terms: { explainer: 'unit8', set: 'science' } };
+  const cast = { A: { id: 'nova' }, B: { id: 'unit8' } };
+  const segs = [story('a', 'Tiny magnetic fields may explain a problem in cosmology known as the Hubble tension.'), story('b', 'A new GPU and an open source tool.'), story('c', 'End.')];
+  const out = explainTerms(segs, { program: cosmos, presenters: cast }).segments.filter((s) => s.term);
+  assert.equal(out.length, 1, 'GPU and open source are TECH BYTES’ terms');
+  assert.equal(out[0].anchor, 'B');
+  assert.equal(out[0].term.term, 'HUBBLE TENSION');
+  assert.match(out[0].text, /^(?:Term logged|For the record, Dr Reyes|I have looked it up|Definition filed)/);
+  assert.deepEqual(termsIn('An exoplanet and an enzyme', 'science').map((g) => g.term), ['exoplanet', 'enzyme']);
+  assert.deepEqual(termsIn('An exoplanet and an enzyme', 'tech').map((g) => g.term), []);
+});

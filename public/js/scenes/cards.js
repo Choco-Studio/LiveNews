@@ -1038,7 +1038,8 @@ export function drawFactCard(ctx, t, dt, o = {}) {
     ctx.drawImage(inkField(), 0, 0);
     return drawPaper(ctx, dt, opts, rows);
   }
-  if (style.look === 'reading') {
+  // (COSMOS: the Reading is one figure on its ruler; a board of two or three, BY THE NUMBERS, takes the stack)
+  if (style.look === 'reading' && rows.length <= 1) {
     ctx.fillStyle = P.black;
     ctx.fillRect(0, 0, W, H);
     return drawReading(ctx, dt, opts, rows);

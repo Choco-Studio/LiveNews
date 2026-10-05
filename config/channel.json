@@ -333,10 +333,11 @@
       "beat": {
         "tech": ["SPACE", "ASTRONOMY", "CLIMATE", "OCEANS", "WILDLIFE", "HEALTH", "HISTORY", "VOLCANO", "EARTHQUAKE", "WEATHER"]
       },
-      "stories": 8,
-      "maxChats": 6,
+      "stories": 11,
+      "maxChats": 10,
       "targetSeconds": [360, 480],
       "features": [
+        "roundup",
         "number",
         "lighter"
       ],
@@ -345,6 +346,22 @@
       "chemistry": "Nova is the warm, precise explainer and calls him \"UNIT-8\"; UNIT-8 is the literal-minded robot who calls her \"Dr Reyes\", appreciates a stated figure and misreads a human idiom now and then, which Nova lets pass with a straight face.",
       "headlineMax": 45,
       "intro": "teaser",
+      "roundup": {
+        "kind": "pictures",
+        "kicker": "IN BRIEF",
+        "opener": "Now, the rest of the science news in brief.",
+        "min": 3,
+        "max": 4,
+        "words": "12 to 20",
+        "reader": "B"
+      },
+      "boards": [
+        "known"
+      ],
+      "terms": {
+        "explainer": "unit8",
+        "set": "science"
+      },
       "numberSlot": "second",
       "chats": {
         "after": [

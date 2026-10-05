@@ -102,7 +102,8 @@ describe('mock: COSMOS DESK, UNIT-8 as a character, not a tic', () => {
   test('restatements: at most two per episode, each in its own words, never about his own story; "And finally" is Nova\'s', async () => {
     const script = await write(science, COSMOS, COSMOS_CAST);
     const segs = script.segments;
-    const restates = segs.filter((s, i) => s.type === 'chat' && s.anchor === 'B' && segs[i - 1]?.type === 'story' && !/Still to come/.test(s.text) && s !== segs.at(-2));
+    // (UNIT-8 ASKS is a question, not a restatement)
+    const restates = segs.filter((s, i) => s.type === 'chat' && s.anchor === 'B' && segs[i - 1]?.type === 'story' && !/Still to come/.test(s.text) && !/\?\s*$/.test(s.text) && s !== segs.at(-2));
     assert.ok(restates.length >= 1 && restates.length <= 2, `${restates.length}: ${restates.map((r) => r.text).join(' | ')}`);
     const tails = restates.map((r) => spoken(r.text).split(/(?<=\.)\s+/).slice(1).join(' '));
     assert.equal(new Set(tails).size, tails.length, `the same shape twice: ${tails.join(' | ')}`);

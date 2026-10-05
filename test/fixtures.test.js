@@ -215,8 +215,10 @@ describe('the offline demo, end to end (fixture feeds -> desk -> mock writer -> 
         const slot = prev === stories[0] ? 'lead' : prev.feature === 'lighter' ? 'lighter' : 'story';
         if (after) assert.ok(after.includes(slot), `${e.program.title}: a chat after a ${slot} (allowed: ${after.join(', ')})`);
         // A chat adds no figure of its own; THE CATCH (TECH BYTES) answers with a sentence of the story itself.
-        const told = `${desk.get(prev.storyId).title}. ${desk.get(prev.storyId).summary}`;
-        const own = x.text.split(/(?<=[.!?])\s+/).filter((t) => /\d/.test(t)).every((t) => told.includes(t));
+        const told = `${desk.get(prev.storyId).title}. ${desk.get(prev.storyId).summary} ${desk.get(prev.storyId).body || ''}`;
+        // (WORLD NOW's added detail carries a lead-in: "One more line from the report: the reef stretches...")
+        const bare = (t) => t.replace(/^(?:\[[^\]]*\]\s*)*[^:]{0,40}:\s*/, '');
+        const own = x.text.split(/(?<=[.!?])\s+/).filter((t) => /\d/.test(t)).every((t) => told.includes(t) || told.toLowerCase().includes(bare(t).toLowerCase()));
         assert.ok(!/\d/.test(x.text) || e.program.id === 'cosmos' || own, `a chat states a figure: ${x.text}`);
       });
       if (e.program.id === 'world-now') {
