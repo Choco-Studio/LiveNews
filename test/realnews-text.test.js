@@ -89,3 +89,68 @@ test('a shortened headline never ends on a verb that lost what it takes ("…to 
   assert.equal(shortHeadline('Imran Khan’s party launches march to Islamabad demanding his release', 45), 'Imran Khan’s party launches march to Islamabad');
   assert.equal(shortHeadline('Fire guts historic building', 45), 'Fire guts historic building', 'an -ing noun may end it');
 });
+
+// What the first real-news run of TECH BYTES aired wrong (4 Oct, the mock writer on the live tech feeds).
+describe('TECH BYTES on real news', () => {
+  test('shopping, reviews, lists, columns and newsletters are not news', async () => {
+    const { notNews } = await import('../server/news.js');
+    const drop = (title) => notNews({ title });
+    for (const t of [
+      'The best early October Prime Day deals happening now',
+      'The AirPods Pro 3 are a fantastic deal at $179',
+      'The MacBook Air M5 is $200 off for the first time in months',
+      'The iPad Mini is slightly cheaper again during Prime Day',
+      'This toolless modular lever-action wallet is the coolest I’ve stuck to my phone',
+      'Prick’s theatrical industrial punk is perfect for spooky season',
+      'All the AI agents that can live in your text messages',
+      'All hail electrification. But let’s talk about the hard part.',
+      'TechCrunch Mobility: Reining in robotaxis',
+      'Pixel 10 Pro review: the best camera on a phone',
+    ]) assert.ok(drop(t), t);
+    for (const t of [
+      'Lawmakers reach deal on budget',
+      'Saudi Arabia signs biggest arms deal in history',
+      'Markets face a great deal of uncertainty',
+      'EU and Mercosur sign trade deal after 25 years',
+      "'I'm not resigning,' says PM",
+      '“My country will not surrender,” Zelensky says',
+      'Government launches review of NHS waiting lists',
+      'Solar is now cheaper than coal in most of the world',
+      'Federal judge calls Flock ‘indiscriminate mass surveillance’',
+      'Jack Dorsey’s Bitchat disappears from app stores in India after government order',
+    ]) assert.ok(!drop(t), t);
+  });
+
+  test('a sensitive subject is grave: no "And finally", no joke after it', async () => {
+    const { isGrave } = await import('../server/facts.js');
+    assert.ok(isGrave('NJ’s former Lt Gov is using AI to say he’s innocent of sexual harassment'));
+    assert.ok(isGrave('The report found he had harassed a staffer.'));
+    assert.ok(!isGrave('An AI couldn’t beat humans at StarCraft, so it decided to cheat'));
+  });
+
+  test('the feed’s cut sentence, a host’s talk and an editor’s query never reach a script', () => {
+    assert.equal(dropPageFurniture('He took a particularly odd tactic during an interview on NJ PBS. […] He told the host he had checked the report.'), 'He took a particularly odd tactic during an interview on NJ PBS. He told the host he had checked the report.');
+    assert.equal(dropPageFurniture('Caldwell is making the media rounds. He said the report […] was false. He told the host he had checked it.'), 'Caldwell is making the media rounds. He told the host he had checked it.');
+    assert.equal(dropPageFurniture('A rainbow arcs over the hills of Wales in a picture taken at dawn last spring by a local photographer. Supernumerary Rainbows over […]'), 'A rainbow arcs over the hills of Wales in a picture taken at dawn last spring by a local photographer.');
+    assert.equal(dropPageFurniture('Supernumerary Rainbows over […]'), 'Supernumerary Rainbows over […]', 'a lone fragment is all there is');
+    const tc = 'President Donald Trump hosted the biggest names in AI this week. We were talking about this last week, because this is something [Trump has] been hinting at. But now it is signed into an executive order.';
+    assert.equal(dropPageFurniture(tc), 'President Donald Trump hosted the biggest names in AI this week. But now it is signed into an executive order.');
+    assert.equal(dropPageFurniture('Officials counted dozens (hundreds?) of incidents last year. The city wants new rules.'), 'Officials counted dozens of incidents last year. The city wants new rules.');
+  });
+
+  test('an outlet’s podcast, newsletter and award promos are not the story', () => {
+    assert.ok(isTranscriptLine('Kirsten Korosec: Welcome back to the show, everyone.'));
+    assert.ok(isTranscriptLine('If you’re a TechCrunch All Access subscriber, you can read the full story.'));
+    assert.ok(isTranscriptLine('In this week’s episode, we dig into the robotaxi era.'));
+    assert.ok(isTranscriptLine('You can vote for us in the podcast awards and help us win.'));
+    assert.ok(!isTranscriptLine('Google said the bug bounty program was paused as of October 1.'));
+    assert.ok(!isTranscriptLine('Voters can vote early in most states.'));
+  });
+
+  test('an attribution keeps what it attributes; a list item is no sentence', async () => {
+    const { splitClauses } = await import('../server/writer.js');
+    assert.equal(trimClause('On Friday, the bot was facing off against Pluto, but according to Kotaku, it couldn’t quite get an edge over its rival.', 12), null);
+    assert.equal(splitClauses('There have been numerous incidents of robotaxis impeding traffic, driving into crime scenes, and interfering with first responders.', 12), null);
+    assert.deepEqual(splitClauses('Washington announced new chip export controls on Monday, and Beijing responded with sanctions on Tuesday.', 12), ['Washington announced new chip export controls on Monday.', 'Beijing responded with sanctions on Tuesday.']);
+  });
+});

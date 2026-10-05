@@ -12,7 +12,7 @@ const OPENERS = /^["“'‘]?(?:here(?:'|’)?s|here is|over to|back to you|let(
 // anywhere: a named person "with more", "joins us", "takes up the story", "has the details"
 // an outlet's promo for its own interview or analysis ("…commentator Douglas Herbert shares further insights",
 // "France 24's Gavin Lee speaks to Brazil analyst … about …"): it promises a guest our channel does not have
-const PROMO = /\b(?:shares|offers|gives|brings) (?:us )?(?:further |more |his |her |their |some )?(?:insights?|analysis|perspective|thoughts)\b|\bspeaks (?:to|with) [^.]{3,80}\babout\b|\b(?:editor|analyst|correspondent|commentator)(?: in chief)? [A-Z][a-z]+ [A-Z][a-z]+ explains\b/;
+const PROMO = /\b(?:help us win|vote (?:for us|to help us))\b|\b[Yy]ou can (?:vote|listen|watch|sign up|subscribe|get access)\b|^[A-Z][a-z]+ [A-Z][a-z]+: |\b[Ii]f you['’]re an? [\w ]{1,30}subscriber\b|\b[Ii]n this week['’]s episode\b|\b[Kk]eep reading\b|\b[Rr]ead (?:on|more) (?:for|to)\b|\b[Ll]isten (?:to (?:the )?(?:full )?(?:episode|podcast)|now)\b|\b[Ss]ubscribe (?:to|now|for)\b|\b[Oo]n (?:this week['’]s |today['’]s )?(?:episode of )?[A-Z][\w’']+(?: podcast)?, we (?:discussed|talked|spoke|dug)\b|\b(?:shares|offers|gives|brings) (?:us )?(?:further |more |his |her |their |some )?(?:insights?|analysis|perspective|thoughts)\b|\bspeaks (?:to|with) [^.]{3,80}\babout\b|\b(?:editor|analyst|correspondent|commentator)(?: in chief)? [A-Z][a-z]+ [A-Z][a-z]+ explains\b/;
 const HANDOFFS = /\b(?:[A-Z][a-z]+ ){1,3}(?:is here |joins us |has the details|has more|takes up the story|reports(?: now)?(?: from [A-Z]| for us|\.|$))|\bwith (?:more|the latest|the details)(?: on| from)? (?:the situation|that|this|the story|what happened|the scene)\b|\bjoins us (?:now|live)\b/;
 
 /** Is this sentence a broadcast hand-off, greeting or sign-off rather than part of the story? */
@@ -61,16 +61,22 @@ export function isNavRun(sentence) {
 
 /** A summary without page furniture: menu runs, standing taglines, a teaser cut off with "[…]" or "…". */
 export function dropPageFurniture(text) {
-  const t = String(text ?? '');
+  const t = String(text ?? '').replace(/\s*\([^()]{1,30}\?\)/g, '');
   if (!t) return t;
   const parts = sentencePieces(t);
   if (!parts) return t;
+  const CUT = /\[\s*(?:…|\.\.\.|&#8230;)\s*\]/;
   const kept = parts.filter((p, i) => {
     const s = p.trim();
     if (isNavRun(s) || TAGLINES.test(s)) return false;
-    // the last fragment cut off by the feed with a bracketed ellipsis ("… over […]"), after a sentence: a teaser
-    // (a lone fragment, or one ending in a plain "…", stays: it is all the summary there is)
-    if (i === parts.length - 1 && parts.length > 1 && /\[\s*(?:…|\.\.\.|&#8230;)\s*\]\s*$/.test(s) && s.split(/\s+/).length < 12) return false;
+    // "We were talking about this last week, because this is something [Trump has] been hinting at": a host's
+    // talk, with an editor's insertion (a podcast transcript on the outlet's page)
+    if (parts.length > 1 && (/^(?:We|We['’](?:re|ve))\s+(?:were|are|have|had|talked|discussed|spoke|asked|chatted)\b/.test(s) || /\[[A-Za-z][^\]]{0,30}\]/.test(s))) return false;
+    // a bracketed ellipsis is the feed's cut, never read: the teaser it ends ("Supernumerary Rainbows over […]"),
+    // the sentence it elides ("He said the report […] was false.", its rest included) or a bare "[…]" after a
+    // sentence ("…during an interview on NJ PBS. […]", The Verge, 4 Oct). A lone fragment stays: it is all the
+    // summary there is.
+    if (parts.length > 1 && (CUT.test(s) || (i > 0 && CUT.test(parts[i - 1]) && /^[a-z]/.test(s)))) return false;
     return true;
   });
   return kept.length === parts.length ? t : kept.join('').trim();

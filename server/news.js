@@ -410,6 +410,22 @@ export function keywords(title) {
   );
 }
 
+// Not news, whatever the feed files it under (a tech section is half shopping and reviews): deals and sales, and a
+// reviewer's first person or verdict. "The best early October Prime Day deals", "The AirPods Pro 3 are a fantastic
+// deal at $179", "This wallet is the coolest I've stuck to my phone", "...punk is perfect for spooky season" (real
+// news, 4 Oct). A trade deal, an arms deal, a "deal on the budget" or "a great deal of" stays news, and so does
+// the first person inside a quotation ("'I'm not resigning,' says PM"). A list ("All the AI agents that can live in
+// your text messages"), a column ("...But let’s talk about the hard part.") and a newsletter ("TechCrunch Mobility:")
+// are no report either.
+const SHOPPING = /\b(?:prime day|black friday|cyber monday|gift guides?|promo codes?|coupons?|discount codes?|on sale|price drops?|lowest price|best price (?:ever|yet)|best buys?)\b|\b(?:best|early|top|today['’]s|weekend|holiday|labor day|memorial day)\s+(?:[\w-]+\s+){0,3}deals\b|\bdeals? of the day\b|\b(?:fantastic|great|good|solid|rare) deal (?:at|for|on|right now)\b|\$\d[\d,.]*\s+off\b|\bcheaper (?:at|on) (?:Amazon|Best Buy|Walmart|Target)\b|\bcheaper than ever\b/i;
+const REVIEW = /\b(?:I['’](?:ve|m|d|ll)|I (?:tried|tested|used|love|loved|hate|bought|stuck|wore|played|spent|can['’]t stop)|my)\b|\b(?:hands-on|is perfect for|are perfect for|you should (?:buy|get)|should you (?:buy|get)|worth (?:buying|the (?:upgrade|money|price))|how to|tips for|let['’]s (?:talk|be honest|face it))\b|\breview(?::|\s+[-–—|]|$)|^all the\b|^[\w ]{2,20}\b(?:Mobility|Daily|Weekly|Briefing|Roundup|Recap|Newsletter|Week in Review):/i;
+// a quotation is someone else's words: "‘I'm not resigning,’ says PM", "“My country will not surrender”"
+const unquoted = (t) => t.replace(/[“"][^”"]*[”"]/g, ' ').replace(/(^|[\s:(])['‘].+?['’](?=[\s,.:;!?)]|$)/g, '$1');
+export const notNews = (s) => {
+  const t = String(s?.title || '');
+  return SHOPPING.test(t) || REVIEW.test(unquoted(t));
+};
+
 /** Two headlines are about the same event if they share enough keywords. */
 export function sameEvent(a, b) {
   let shared = 0;
@@ -1132,7 +1148,7 @@ export class NewsDesk {
   candidates(count, { perSource = 3, categories = null, now = Date.now(), avoid = null, beat = null, fill = false } = {}) {
     const primary = categories && categories.length > 1 ? categories[0] : null;
     const ranked = this.uncovered()
-      .filter((s) => !categories || categories.includes(s.category))
+      .filter((s) => (!categories || categories.includes(s.category)) && !notNews(s))
       .map((s) => ({ s, score: interestScore(s, now) * (s.category === primary ? PRIMARY_CATEGORY_WEIGHT : 1) * (typeof avoid === 'function' ? avoid(s) : avoid?.[s.category] ?? 1) }))
       .sort((a, b) => b.score - a.score);
     const picked = [];

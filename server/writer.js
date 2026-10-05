@@ -722,6 +722,9 @@ export function splitClauses(sentence, max, min = 4) {
     const nt = tail.split(/\s+/).length;
     if (nh > max || nt > max || nh < min || nt < min || unbalanced(head) || unbalanced(tail)) continue;
     if (!hasFiniteVerb(head) || !hasFiniteVerb(tail.split(/\b(?:that|which|who|whom|whose|whether)\b/i)[0])) continue;
+    // ("interfering with first responders" is no sentence: a clause starts with its subject)
+    // (a name may end in -ing: "and Beijing responded" splits)
+    if (/^[a-z]+ing\b/.test(tail) || /^(?:in|on|at|by|for|with|from|to|into|as|than|of|while|when|after|before|then|also)\b/i.test(tail)) continue;
     // the second must stand alone: no pronoun opening it without its noun nearby ("it", "they" read fine after the first)
     if (m[1] && /^but$/i.test(m[1])) tail = `But ${tail}`;
     return [`${head}.`, `${tail[0].toUpperCase()}${tail.slice(1)}.`];
@@ -762,6 +765,8 @@ export function trimClause(sentence, max, min = 6) {
     if (/^(?:and|or)$/.test(conj) && (head.match(/,/g) || []).length >= 1 && !hasFiniteVerb(head.slice(head.lastIndexOf(',') + 1).trim())) continue;
     // "...members of the country's multiethnic [presidency]": an adjective left without its noun
     if (/(?:\b(?:a|an|the|its|their|his|her|our|this|that)|['’]s)\s+[a-z]+(?:ic|al|ous|ive|ian|ish|ese|ent|ant|ary|ful|less|ed)$/i.test(head)) continue;
+    // "...but according to Kotaku[, it couldn't quite get an edge]": an attribution keeps what it attributes
+    if (/\baccording to [^,;]{1,40}$|\b(?:but|and|or|so|yet|while)$/i.test(head)) continue;
     // "its decision to relocate was made [because of...]": a bare passive of a light verb says nothing alone
     if (/\b(?:was|were|is|are|been|be)\s+(?:made|taken|done|given|reached)$/i.test(head)) continue;
     // "...from a UK air base one week [after the arrests]": a span of time before "after" or "before" is theirs
@@ -802,6 +807,7 @@ const AUX_VERB = /^(?:is|are|was|were|be|been|has|have|had|will|would|can|could|
 const PAST_FORM = /^(?:burst|rose|fell|grew|took|made|hit|struck|began|won|lost|left|came|went|gave|saw|found|kept|became|brought|built|sold|paid|spent|set|put|ran|drew|flew|shook|said|told|held|met|led|sent|sank|broke|wrote|fought|caught|thought|sought|swept|slid|burnt|stood|chose|froze|ate|got|knew|meant|felt|heard|lay|laid|rang|sang|swam|threw|wore|woke|cut|shut|spread|hurt|cost|let|quit|split)$/i;
 const PLURAL_VERB = /^(?:say|warn|expect|believe|think|hope|plan|want|need|fear|estimate|agree|claim|argue|report|show|suggest|account|remain|continue|make|take|help|use|work|live|run|keep|face|reach|cover|carry|serve|hold|join|lead|grow|rise|fall|stay|stand|sit|come|go|get|give|see|find|know|call|ask|try|move|pay|meet|win|lose|open|close|start|begin|end|travel|stop|walk|wait|return|remain|form|look|mean|offer|provide|include|range|vary|differ)$/i;
 const NOT_VERB_AFTER = /^(?:a|an|the|of|in|on|at|for|from|by|with|to|into|its|their|his|her|our|this|that|these|those|some|many|several|few|new|old|\d[\d,.]*)$/i;
+const PROPER_ING = /^(?:beijing|nanjing|chongqing|kunming|peking|jinping|boeing|reading|woking|ealing|epping|stirling|sterling|corning|kipling|bing|king|ming|viking)$/;
 /** Does a clause have a finite verb after its first word (an auxiliary, a past form, a present-tense verb)? */
 export function hasFiniteVerb(clause) {
   const words = String(clause).split(/\s+/).map((w) => w.replace(/^[^\p{L}]+|[^\p{L}'’-]+$/gu, '')).filter(Boolean);
@@ -810,7 +816,10 @@ export function hasFiniteVerb(clause) {
     if (AUX_VERB.test(w) || PAST_FORM.test(w)) return true;
     if (/^\p{Lu}/u.test(words[i])) continue; // a name
     const prev = words[i - 1].toLowerCase();
-    if (NOT_VERB_AFTER.test(prev) || /ing$/.test(prev)) continue;
+    // after a gerund ("Rising prices") the next word is its noun, after a name that ends in -ing ("Beijing
+    // responded", "Boeing reports") it may well be the verb
+    const gerund = /ing$/.test(prev) && !(/^\p{Lu}/u.test(words[i - 1]) && (i > 1 || PROPER_ING.test(prev)));
+    if (NOT_VERB_AFTER.test(prev) || gerund) continue;
     if (PLURAL_VERB.test(w) || /^[a-z]{3,}ed$/.test(w)) return true;
     if (/^[a-z]{2,}(?:[^s'’]s|ies)$/.test(w) && !/(?:ss|us|is|ous|ics|ings|ness|ies)$/.test(w.replace(/ies$/, 'y') + (w.endsWith('ies') ? '' : ''))) return true;
   }
