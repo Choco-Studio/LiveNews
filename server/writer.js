@@ -1446,8 +1446,13 @@ export function normalizeBulletin(
     const slot = i === 0 ? 'lead' : u.story.feature === 'lighter' ? 'lighter' : 'story';
     // (a signpost, "Still to come: ...", is no banter: it stays next to grave news, said soberly)
     u.chats = u.chats.filter((c) => (SIGNPOST.test(stripTags(c.tagged)) || (!u.story.heavy && !(next && next.heavy))) && (!policy?.after || policy.after.includes(slot)));
+    // (a signpost is no banter: the slot's cap counts the exchange, not "Still to come", which once lost its place
+    // to THE CATCH before it, TECH BYTES 5 Oct)
     const perSlot = policy?.max?.[slot];
-    if (Number.isInteger(perSlot)) u.chats = u.chats.slice(0, perSlot);
+    if (Number.isInteger(perSlot)) {
+      let banter = 0;
+      u.chats = u.chats.filter((c) => SIGNPOST.test(stripTags(c.tagged)) || banter++ < perSlot);
+    }
     u.chats.forEach((c) => chatSlots.push({ c, u, slot }));
   });
   const priority = policy?.after || null;

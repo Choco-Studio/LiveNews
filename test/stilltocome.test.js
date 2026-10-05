@@ -123,3 +123,28 @@ describe('the STILL TO COME frames (cards.js)', () => {
     assert.equal(one.depth, 0);
   });
 });
+
+test('a signpost after an exchange keeps its place: the slot’s chat cap counts the exchange, not the signpost', () => {
+  const TB = { id: 'tech-bytes', ...CHANNEL.programs['tech-bytes'] };
+  const MAXADA = { A: { id: 'max', ...CHANNEL.presenters.max }, B: { id: 'ada', ...CHANNEL.presenters.ada } };
+  const out = normalizeBulletin(
+    {
+      title: 'T',
+      segments: [
+        { type: 'intro', anchor: 'A', emotion: 'neutral', text: 'Hello.' },
+        seg('a1', 'A', 'Norway’s central bank has raised its main interest rate to 4.75 percent.'),
+        seg('a2', 'B', 'A carmaker says it will close its plant near Turin by the end of next year.'),
+        { type: 'chat', anchor: 'B', emotion: 'neutral', text: 'So what comes next?' },
+        { type: 'chat', anchor: 'A', emotion: 'neutral', text: 'A carmaker says it will close its plant near Turin by the end of next year.' },
+        { type: 'chat', anchor: 'B', emotion: 'neutral', text: 'Still to come: Lisbon opens a new tram line.' },
+        seg('a3', 'A', 'Lisbon has opened a new tram line along the Tagus river, with 40,000 riders a day.'),
+        seg('a5', 'B', 'And finally: scientists say coral cover has grown on parts of the Great Barrier Reef for a second year.', { feature: 'lighter' }),
+        { type: 'outro', anchor: 'A', emotion: 'neutral', text: "That's TECH BYTES." },
+      ],
+    },
+    STORIES,
+    { program: TB, presenters: MAXADA, maxStories: 13, maxChats: 7, features: ['lighter'] }
+  );
+  assert.ok(signpostOf(out), out.segments.map((s) => `${s.type}: ${s.text}`).join('\n'));
+  assert.equal(out.segments.filter((s) => s.type === 'chat').length, 3);
+});

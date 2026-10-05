@@ -222,3 +222,28 @@ test('a caption never pages on an abbreviation’s dot ("The now-former Lt. / go
   assert.ok(abbreviationDot('Lt.') && abbreviationDot('U.S.') && abbreviationDot('Dr.') && abbreviationDot('J.'));
   assert.ok(!abbreviationDot('home.') && !abbreviationDot('Lt'));
 });
+
+test('the number of the day is judged on what the story is, never a word deep in its article; a lost feature takes its label', async () => {
+  const { normalizeBulletin } = await import('../server/writer.js');
+  const { loadChannel } = await import('../server/channel.js');
+  const CH = loadChannel();
+  const TB = { id: 'tech-bytes', ...CH.programs['tech-bytes'] };
+  const P2 = { A: { id: 'max', ...CH.presenters.max }, B: { id: 'ada', ...CH.presenters.ada } };
+  const s = (id, title, summary, body = '') => ({ id, title, summary, body, source: 'ScienceDaily', category: 'science', image: null });
+  const stories = [
+    s('l1', 'Chipmaker unveils a laptop processor', 'A chipmaker has unveiled a processor that runs for 20 hours on a charge.'),
+    s('n1', 'Protective enzyme could help stop fatty liver', 'Scientists have identified an enzyme that may slow fatty liver disease, which affects an estimated 100 million Americans.', 'Unchecked, the condition can lead to scarring and liver cancer in some patients.'),
+    s('g1', 'Fire kills three at battery plant', 'A fire at a battery plant has killed three workers, officials said, as 100 people were evacuated.'),
+  ];
+  const run = (id, text) =>
+    normalizeBulletin(
+      { title: 'T', segments: [{ type: 'intro', anchor: 'A', emotion: 'neutral', text: 'Hello.' }, { type: 'story', storyId: 'l1', anchor: 'A', emotion: 'neutral', text: 'A chipmaker has unveiled a processor that runs for 20 hours on a charge.' }, { type: 'story', storyId: id, anchor: 'B', emotion: 'neutral', feature: 'number', numbers: [{ value: '100 million', label: 'Americans' }], text }, { type: 'outro', anchor: 'A', emotion: 'neutral', text: "That's TECH BYTES." }] },
+      stories,
+      { program: TB, presenters: P2, maxStories: 13, maxChats: 7, features: ['number'] }
+    ).segments.find((x) => x.storyId === id);
+  const kept = run('n1', 'Our number of the day: 100 million. Scientists have identified an enzyme that may slow fatty liver disease, which affects an estimated 100 million Americans.');
+  assert.equal(kept.feature, 'number', '"liver cancer" in the article does not make the story grave');
+  const lost = run('g1', 'Our number of the day: 100 million. A fire at a battery plant has killed three workers, officials said, as 100 people were evacuated.');
+  assert.notEqual(lost.feature, 'number');
+  assert.ok(!/number of the day/i.test(lost.text), lost.text);
+});

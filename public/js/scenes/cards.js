@@ -792,16 +792,21 @@ function drawLedgerText(ctx, dt, o, acc) {
 // ink: the kicker, the term at 2x with the accent rule wiping under it, then the plain words rising at 1x (two
 // balanced lines at most). The words are the glossary's, whole: never typed on, never cut.
 const TERM_LAYOUTS = layoutCache(20);
+const WHITE3 = Object.freeze({ color: P.white, scale: 3 });
+const SILVER2 = Object.freeze({ color: P.silver, scale: 2 });
 function termLayout(term, plain) {
   return TERM_LAYOUTS(term, plain, null, null, () => {
     const RW = W - 2 * X0;
-    const big = textW(term, 2) <= RW;
-    const T = big ? { lines: [term], scale: 2, lh: 18 } : { lines: balanceLines(term, RW, 1, 2), scale: 1, lh: 11 };
-    const words = balanceLines(plain, RW, 1, 2);
-    const h = 12 + T.lines.length * T.lh + 8 + words.length * 11;
-    const top = clamp(Math.round(80 - h / 2), 30, SAFE_BOTTOM - h);
+    // the term the biggest it fits on one line (3x, else 2x), else 1x in two; the plain words under it a step down
+    const T = textW(term, 3) <= RW ? { lines: [term], scale: 3, lh: 26 } : textW(term, 2) <= RW ? { lines: [term], scale: 2, lh: 18 } : { lines: balanceLines(term, RW, 1, 2), scale: 1, lh: 11 };
+    // the plain words at 2x in up to two lines when they fit (the card is read in a few seconds), else 1x
+    const P2 = layout(plain, RW, 2, 3);
+    const words = P2.lines;
+    const wl = P2.lh;
+    const h = 12 + T.lines.length * T.lh + 10 + words.length * wl;
+    const top = clamp(Math.round(84 - h / 2), 30, SAFE_BOTTOM - h);
     const ruleW = Math.min(RW, Math.max(...T.lines.map((l) => textW(l, T.scale))));
-    return { T, words, top, ruleW, ruleY: top + 12 + T.lines.length * T.lh + 1, wordsY: top + 12 + T.lines.length * T.lh + 8 };
+    return { T, words, wl, wordsStyle: P2.scale === 2 ? SILVER2 : S.white, top, ruleW, ruleY: top + 12 + T.lines.length * T.lh + 1, wordsY: top + 12 + T.lines.length * T.lh + 10 };
   });
 }
 
@@ -814,13 +819,13 @@ function drawTerm(ctx, dt, o, acc) {
   try {
     clipRect(ctx, X0, L.top - 2, Math.round(RW * enter), SAFE_BOTTOM - L.top + 2);
     drawText(ctx, 'IN PLAIN ENGLISH', X0, L.top, S.microFog);
-    for (let i = 0; i < L.T.lines.length; i++) drawText(ctx, L.T.lines[i], X0, L.top + 12 + i * L.T.lh, L.T.scale === 2 ? S.white2 : S.white);
+    for (let i = 0; i < L.T.lines.length; i++) drawText(ctx, L.T.lines[i], X0, L.top + 12 + i * L.T.lh, L.T.scale === 3 ? WHITE3 : L.T.scale === 2 ? S.white2 : S.white);
     const rw = Math.round(L.ruleW * easeOutQuint(seg(dt, 0.2, 0.3)));
     if (rw > 0) {
       ctx.fillStyle = acc;
       ctx.fillRect(X0, L.ruleY, rw, 1);
     }
-    for (let k = 0; k < L.words.length; k++) rise(ctx, L.words[k], X0, L.wordsY + k * 11, seg(dt, 0.45 + k * 0.08, 0.34), S.white);
+    for (let k = 0; k < L.words.length; k++) rise(ctx, L.words[k], X0, L.wordsY + k * L.wl, seg(dt, 0.45 + k * 0.08, 0.34), L.wordsStyle);
   } finally {
     ctx.restore();
   }

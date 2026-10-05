@@ -932,9 +932,13 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       }
     }
     const order = prefer === 'last' ? [...eligible].reverse() : [...eligible].sort((a, b) => a.words - b.words || a.i - b.i);
+    // (a story that already says "according to" once is not given a second: "...dies at 94, according to Ars
+    // Technica. Windler died on Thursday, ..., according to a brief notice posted online.")
+    const saysAccording = parts.some((p) => /\baccording to\b/i.test(p));
     for (let j = 0; j < TAILS.length; j++) {
       const t = TAILS[(offset + segments.length + j) % TAILS.length];
-      if (t.id === lastTail && TAILS.length > 1 && j === 0) continue;
+      if (t.id === lastTail && TAILS.length > 1 && j === 0 && !saysAccording) continue;
+      if (t.id === 'according-tail' && saysAccording) continue;
       const target = order.find((e) => fits(e.plain, t.words));
       if (!target) continue;
       // Cues ride at the end of a sentence: keep them after the credit.

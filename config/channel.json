@@ -234,8 +234,8 @@
       "beat": {
         "science": ["SPACE", "ENERGY", "AI", "ROBOTICS", "CHIPS", "GADGETS", "SOFTWARE", "CONNECTIVITY", "HEALTH", "MOTORING", "TRANSPORT", "CLIMATE"]
       },
-      "stories": 13,
-      "maxChats": 7,
+      "stories": 15,
+      "maxChats": 8,
       "targetSeconds": [360, 480],
       "features": [
         "roundup",

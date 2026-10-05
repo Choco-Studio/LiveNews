@@ -138,10 +138,10 @@ Everything else follows ART_DIRECTION unchanged. That includes the three static 
 
 ### 3.3 Structure (built live from feeds)
 
-**Superseded in part.** This section and its table describe the first, four-story format. Since the format round (owner 4–5 Oct) the programme carries 13 stories, QUICK BYTES, IN PLAIN ENGLISH and the boards: §3.10 is the running order now, and its numbers win where the two disagree.
+**Superseded in part.** This section and its table describe the first, four-story format. Since the format round (owner 4–5 Oct) the programme carries up to 15 stories, QUICK BYTES, IN PLAIN ENGLISH and the boards: §3.10 is the running order now, and its numbers win where the two disagree.
 
 **What the code already fixes (first format)**
-- **Story and chat counts:** `config/channel.json` set `stories: 4` and `maxChats: 4` (now 13 and 7, §3.10). The producer waits for at least 3 fresh candidates (`min(stories, MIN_NEW_STORIES = 3)`, `server/producer.js`, `server/config.js`). `normalizeBulletin` keeps at most 4 stories and 4 chats.
+- **Story and chat counts:** `config/channel.json` set `stories: 4` and `maxChats: 4` (now 15 and 8, §3.10). The producer waits for at least 3 fresh candidates (`min(stories, MIN_NEW_STORIES = 3)`, `server/producer.js`, `server/config.js`). `normalizeBulletin` keeps at most 4 stories and 4 chats.
 - **Features:** `number` and `lighter` are features of a story, not extra segments (`server/writer.js` `FEATURES`, `applyFeatures`). So NUMBER OF THE DAY is one of the 4 stories, and AND FINALLY is always the last story.
 - **No chat before the first story:** a chat placed there is deleted (`server/writer.js` line 423). So the cold open cannot hold a second voice.
 - **Opening order:** the director plays the open template, then the intro over the headline montage (2.6 s per headline), then cuts to the wide (`public/js/director.js` `playIntro`).
@@ -396,7 +396,7 @@ This is TECH BYTES' own device, as the red rule is WORLD NOW's and the centred "
 
 ### 3.10 Format round (owner 4–5 Oct): longer, never presenter after presenter
 
-The owner's brief: longer programmes that are more than one presenter reading one story after another. TECH BYTES now runs 13 stories in seven kinds of segment. Every line is still the source's, except IN PLAIN ENGLISH, whose definitions are a fixed list of ours (below).
+The owner's brief: longer programmes that are more than one presenter reading one story after another. TECH BYTES now runs up to 15 stories (as many as the desk has that are news) in seven kinds of segment. Every line is still the source's, except IN PLAIN ENGLISH, whose definitions are a fixed list of ours (below).
 
 **The running order** (fallback writer; the LLM writer is asked for the same in `style` and the feature rules)
 
@@ -410,8 +410,8 @@ The owner's brief: longer programmes that are more than one presenter reading on
 | 6 | IN PLAIN ENGLISH | Ada translates a story's jargon, card on screen (at most two) |
 | 7 | STILL TO COME | the mid-programme signpost over the story it names |
 | 8 | A second CATCH | another question type on a later main story |
-| 9 | QUICK BYTES | three or four one-sentence items, read by Ada over their own pictures |
-| 10 | AND FINALLY + button | Ada reads, Max's dry line |
+| 9 | QUICK BYTES | three or four one-sentence items over their own pictures, read by whoever's turn it is |
+| 10 | AND FINALLY + button | the other presenter reads, the first one's dry line |
 | 11 | Sign-off | Max on the wide |
 
 **THE CATCH.** Ada's question is chosen by what the story can answer, never the same type twice in one episode: the price, the timetable, what happens next (a plan, a deadline, an appeal: "So what comes next?" / "The task force will reportedly have 120 days to create a report..."), who it affects, where the law stands, how it works, and last "the catch" itself (a "but"). Max's answer is one source sentence of the programme's length that stands on its own after the story (`answerable` in `server/providers/mock.js`):
@@ -427,7 +427,7 @@ No catch sentence is kept back before a grave story (no chat follows a story the
 - **Where.** Right after a main story whose spoken text uses the term, when the next segment is a story: never after a grave story, the number, And finally or a round-up item, never where a chat already follows. Each term once, at most two per programme, within the chat budget. A definition heard in the hours of recent lines is not repeated.
 - **How it airs.** Ada's line in one of four phrasings (never the same twice in a programme): "AI slop, for the record: low-quality material churned out by AI." The director (pace `shots.terms`) cuts to the card for the whole line: IN PLAIN ENGLISH in micro type, the term at 2x with the cyan rule wiping under it, the plain words rising at 1x.
 
-**QUICK BYTES** (programme `roundup.kind: "pictures"`, kicker QUICK BYTES). The tech round-up: smaller stories that have a picture of their own, one sentence each, read by Ada over the picture from the first word ("Now, some quick bytes." runs under the first item; a 1.5 s cut to the reader would break the 4 s floor).
+**QUICK BYTES** (programme `roundup.kind: "pictures"`, kicker QUICK BYTES). The tech round-up: smaller stories that have a picture of their own, one sentence each, read over the picture from the first word by whoever's turn it is (a fixed reader once gave Ada seven segments in a row, with her definition and And finally) ("Now, some quick bytes." runs under the first item; a 1.5 s cut to the reader would break the 4 s floor).
 - No place needed and none named, unlike WORLD NOW's AROUND THE WORLD, which keeps its maps and one country per item.
 - Never a grave story, and hard news (a court ruling, a security flaw) keeps its full telling and its board.
 - An item is the news in our words: never a quotation leading it, never a name the item cannot introduce ("“This is a type of indiscriminate mass surveillance,” Hill wrote."). A story with no such sentence stays a main story.
@@ -446,7 +446,7 @@ No catch sentence is kept back before a grave story (no chat follows a story the
 - **Tone.** "AI slop overwhelms bug bounty programmes" was read smiling because AI is a "light" topic: bad news for someone is said straight. After an AI cheating at StarCraft, Max said "I want to take it apart": AI, apps and games get software buttons, not gadget ones.
 - **A story made grave by its article.** A task force story was judged grave because its article mentioned the "Undersecretary of War", and the CATCH before it was cut. Gravity is judged on the headline, the summary and what airs.
 
-**Length.** On real news the programme carries about 700–750 words: 4 min 41 s of speech with the neural voices. MEASURED_TOTAL That is under the 6–8 minutes the LLM writer is asked for, and within the owner's ceiling of ten. The fallback writes no more than the reporting supports: no padding.
+**Length.** On real news (5 Oct, 13 stories) the programme carried about 750 words: 4 min 52 s of speech with the neural voices, 5 min 16 s from the open to the end card, recorded with `tools/record.mjs`. With 15 stories the desk adds what it has that is news (an OpenAI resignation that day): about 840 words, near 5 min 45 s. That is under the 6–8 minutes the LLM writer is asked for, and within the owner's ceiling of ten. The fallback writes no more than the reporting supports: no padding.
 
 ## 4. Acceptance checklist (each with how it is checked)
 
