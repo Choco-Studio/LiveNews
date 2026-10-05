@@ -285,7 +285,7 @@ It airs only when the shot on air has held the floor and the frame will hold it 
 
 ### Format round 2: the boards
 
-A story's card beat (pace `shots.numbers` and `shots.known`, WORLD NOW only for now) shows the richest of three things:
+A story's card beat (pace `shots.numbers` and `shots.known`: WORLD NOW, and TECH BYTES since its format round, `tech-bytes.md` §3.10) shows the richest of three things:
 1. **BY THE NUMBERS**, when it states two or three figures (`seg.numbers`; the writer keeps only spoken ones). These are the stack card's rows: figure at 2x, its qualifier in micro type above it, its words beside it. Never on the number of the day, which keeps its own card.
 2. **WHAT WE KNOW**, when the writer gave two or three key points (`seg.known`, programme `"boards": ["known"]`). The points sit on the same black panel, one after another, each beside an accent square: at 2x when every point fits on one line, else at 1x in up to two lines.
    - Each point is held to a headline's standard (`headlineGrounded`: every content word, time span and figure is the source's), within 44 characters. No question, quote or invention ("The strike will last a month" is dropped).

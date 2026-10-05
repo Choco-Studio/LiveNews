@@ -42,7 +42,10 @@ function featureRules(program) {
         : 'Make it the second or third story.';
   return {
     number: `"number" (NUMBER OF THE DAY): one story whose summary states a striking figure. Open with the figure ("Our number of the day: 40,000.") and explain it in the words of the summary. Fill "numbers" for it. Only one per episode, never the lead story, never a grave or breaking story, never an age or a date. ${slot}`,
-    roundup: `"roundup" (AROUND THE WORLD): ${r.min || 2} to ${r.max || MAX_ROUNDUP} brief items, exactly one sentence each${r.words ? ` of ${r.words} words` : ''}, for stories that happen in a place named in their candidate, each in a different country. Write them as consecutive story segments with "feature": "roundup", "shot": "map" and a "location", all read by the same presenter. The first item opens the round-up ("${opener}"); each item names its place within its first words ("In Kenya, ..."). No chat inside it, no fact cards.`,
+    roundup:
+      r.kind === 'pictures'
+        ? `"roundup" (${r.kicker || 'QUICK BYTES'}): ${r.min || 2} to ${r.max || MAX_ROUNDUP} brief items, exactly one sentence each${r.words ? ` of ${r.words} words` : ''}, for smaller stories that have a picture of their own, none grave or breaking. Write them as consecutive story segments with "feature": "roundup" and "shot": "full", all read by the same presenter. The first item opens the round-up ("${opener}"). No chat inside it, no fact cards.`
+        : `"roundup" (AROUND THE WORLD): ${r.min || 2} to ${r.max || MAX_ROUNDUP} brief items, exactly one sentence each${r.words ? ` of ${r.words} words` : ''}, for stories that happen in a place named in their candidate, each in a different country. Write them as consecutive story segments with "feature": "roundup", "shot": "map" and a "location", all read by the same presenter. The first item opens the round-up ("${opener}"); each item names its place within its first words ("In Kenya, ..."). No chat inside it, no fact cards.`,
     lighter: '"lighter" (AND FINALLY): the last story is a lighter, human or curious one, introduced with "And finally". Never a grave story, and never straight after one.',
   };
 }
@@ -761,6 +764,9 @@ export function splitClauses(sentence, max, min = 4) {
     const nt = tail.split(/\s+/).length;
     if (nh > max || nt > max || nh < min || nt < min || unbalanced(head) || unbalanced(tail)) continue;
     if (!hasFiniteVerb(head) || !hasFiniteVerb(tail.split(/\b(?:that|which|who|whom|whose|whether)\b/i)[0])) continue;
+    // ("...preventing the inflammation, scarring[, and cell damage associated with...]": a list's last item, not a clause)
+    const lastItem = head.slice(head.lastIndexOf(',') + 1).trim();
+    if (m[1] && head.includes(',') && lastItem.split(/\s+/).length <= 3 && !hasFiniteVerb(`X ${lastItem}`)) continue;
     // ("interfering with first responders" is no sentence: a clause starts with its subject)
     // (a name may end in -ing: "and Beijing responded" splits)
     if (/^[a-z]+ing\b/.test(tail) || /^(?:in|on|at|by|for|with|from|to|into|as|than|of|while|when|after|before|then|also)\b/i.test(tail)) continue;
@@ -1319,7 +1325,10 @@ export function normalizeBulletin(
     const d = { type, anchor, emotion, tagged, seg, story, source };
     if (type === 'story') {
       used.add(story.id);
-      d.heavy = emotion === 'serious' || emotion === 'sad' || isGrave(source);
+      // grave by what the story is (its headline and summary) and what airs, never by a word deep in the article
+      // ("...Undersecretary of War for Research", a body read for depth, once made a task force story grave and cost
+      // THE CATCH before it, TECH BYTES 5 Oct)
+      d.heavy = emotion === 'serious' || emotion === 'sad' || isGrave(`${story.title}. ${story.summary || ''} ${stripTags(tagged)}`);
       d.breaking = seg.breaking === true && (isBreaking(story.title) || /\bbreaking news\b/i.test(story.summary || ''));
       d.location = groundedLocation(seg.location, source);
       d.numbers = normalizeNumbers(seg.numbers, source);
@@ -1336,9 +1345,15 @@ export function normalizeBulletin(
       // Breaking news is never a feature; grave news can be a round-up item, never the number or the lighter;
       // nor can a harmless quake, a closure or job losses be the number of the day.
       if (feature && (d.breaking || (d.heavy && feature !== 'roundup'))) feature = null;
-      if (feature && feature !== 'roundup' && notForFeatures(source)) feature = null;
+      // (judged like gravity: on the headline, the summary and what airs, never a word deep in the article: "liver
+      // cancer" in a fatty-liver enzyme story's article once cost it its NUMBER OF THE DAY card, TECH BYTES 5 Oct)
+      if (feature && feature !== 'roundup' && notForFeatures(`${story.title}. ${story.summary || ''} ${stripTags(tagged)}`)) feature = null;
+      // a feature the story lost takes its spoken label with it ("Our number of the day: 100 million.")
+      if (seg.feature === 'number' && feature !== 'number') d.tagged = sentencesOf(d.tagged).filter((p) => !(/\bnumber of the day\b/i.test(p) && stripTags(p).split(' ').length <= 8)).join(' ') || d.tagged;
       d.severity = severity(source);
-      if (feature === 'roundup' && !d.location) feature = null;
+      // (AROUND THE WORLD is told on maps: an item needs its place; QUICK BYTES over pictures: its own picture, and
+      // never a grave story, which is told in full)
+      if (feature === 'roundup' && (program?.roundup?.kind === 'pictures' ? !story.image || d.heavy : !d.location)) feature = null;
       d.feature = feature;
       // The headline: the writer's, if it is a complete phrase whose every word the source supports (no added
       // cause, actor or duration, no alarm word the outlet does not use); else the outlet's own, shortened
@@ -1453,7 +1468,7 @@ export function normalizeBulletin(
   }
   const body = units.flatMap((u) => [u.story, ...u.chats]);
   applyRoundup(body, program, { solo });
-  for (const s of storyList) if (s.feature) s.kicker = FEATURE_KICKERS[s.feature];
+  for (const s of storyList) if (s.feature) s.kicker = s.feature === 'roundup' && program?.roundup?.kicker ? program.roundup.kicker : FEATURE_KICKERS[s.feature];
   // The intro names its stories in running order; tosses and pick-ups fit who really reads next.
   const teaseList = storyList.map((d) => ({ id: d.story.id, text: sourceOf(d.story), feature: d.feature }));
   if (intro && program?.intro !== 'frame') intro.tagged = introInRundownOrder(intro.tagged, teaseList, names.concat(people));
@@ -1838,12 +1853,17 @@ export function collapseCrosses(segments) {
  */
 function applyRoundup(body, program, { solo = false } = {}) {
   const max = program?.roundup?.max || MAX_ROUNDUP;
+  const pictures = program?.roundup?.kind === 'pictures';
   const drop = (s) => (s.feature = null);
+  // AROUND THE WORLD: one item per country; QUICK BYTES (pictures): each its own story, so no two share a key
   const countryOf = (s) => {
+    if (pictures) return s.storyId || s.headline;
     const e = lookupPlace(s.location?.place || '');
     return e ? e.country || e.name : s.location?.place;
   };
-  const isTitle = (p) => /\baround the world\b/i.test(stripTags(p)) && stripTags(p).split(' ').length <= 9;
+  // the round-up's title line: its kicker's words ("Now, around the world in 30 seconds.", "Now, some quick bytes.")
+  const titleWords = new RegExp(`\\b${String(program?.roundup?.kicker || 'around the world').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim().replace(/\s+/g, '\\s+')}\\b`, 'i');
+  const isTitle = (p) => (titleWords.test(stripTags(p)) || /\baround the world\b/i.test(stripTags(p))) && stripTags(p).split(' ').length <= 9;
   const isLead = (p) => isTitle(p) || PICKUP.test(stripTags(p)) || (/^(?:First|Next|Now|To|Over to|And to finish)\b[^.]*\.$/.test(stripTags(p)) && stripTags(p).split(' ').length <= 6);
   // An item is a story only with a sentence of its own (not just "Now, around the world.").
   const hasStory = (s) => sentencesOf(s.tagged).some((p, i) => !(i < 3 && isLead(p)) && stripTags(p));
@@ -1866,7 +1886,7 @@ function applyRoundup(body, program, { solo = false } = {}) {
       const reader = !solo && ['A', 'B'].includes(program?.roundup?.reader) ? program.roundup.reader : items[0].anchor;
       items.forEach((s, index) => {
         s.roundup = { index, count: items.length };
-        s.shot = 'map';
+        s.shot = pictures ? 'full' : 'map';
         // one presenter reads the whole round-up
         s.anchor = reader;
         // One sentence per item: the title line (first item only) plus the item itself.

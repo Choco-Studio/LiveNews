@@ -138,8 +138,10 @@ Everything else follows ART_DIRECTION unchanged. That includes the three static 
 
 ### 3.3 Structure (built live from feeds)
 
-**What the code already fixes**
-- **Story and chat counts:** `config/channel.json` sets `stories: 4` and `maxChats: 4`. The producer waits for at least 3 fresh candidates (`min(stories, MIN_NEW_STORIES = 3)`, `server/producer.js`, `server/config.js`). `normalizeBulletin` keeps at most 4 stories and 4 chats.
+**Superseded in part.** This section and its table describe the first, four-story format. Since the format round (owner 4–5 Oct) the programme carries 13 stories, QUICK BYTES, IN PLAIN ENGLISH and the boards: §3.10 is the running order now, and its numbers win where the two disagree.
+
+**What the code already fixes (first format)**
+- **Story and chat counts:** `config/channel.json` set `stories: 4` and `maxChats: 4` (now 13 and 7, §3.10). The producer waits for at least 3 fresh candidates (`min(stories, MIN_NEW_STORIES = 3)`, `server/producer.js`, `server/config.js`). `normalizeBulletin` keeps at most 4 stories and 4 chats.
 - **Features:** `number` and `lighter` are features of a story, not extra segments (`server/writer.js` `FEATURES`, `applyFeatures`). So NUMBER OF THE DAY is one of the 4 stories, and AND FINALLY is always the last story.
 - **No chat before the first story:** a chat placed there is deleted (`server/writer.js` line 423). So the cold open cannot hold a second voice.
 - **Opening order:** the director plays the open template, then the intro over the headline montage (2.6 s per headline), then cuts to the wide (`public/js/director.js` `playIntro`).
@@ -391,6 +393,60 @@ This is TECH BYTES' own device, as the red rule is WORLD NOW's and the centred "
 - **Cute objects:** robots or objects with faces, emoji.
 - **Cheap comedy:** bouncy gestures, `laugh`, captions with exclamation marks, sound effects, sitcom zooms.
 - **Canned lines** repeated across episodes.
+
+### 3.10 Format round (owner 4–5 Oct): longer, never presenter after presenter
+
+The owner's brief: longer programmes that are more than one presenter reading one story after another. TECH BYTES now runs 13 stories in seven kinds of segment. Every line is still the source's, except IN PLAIN ENGLISH, whose definitions are a fixed list of ours (below).
+
+**The running order** (fallback writer; the LLM writer is asked for the same in `style` and the feature rules)
+
+| # | Segment | What it is |
+| --- | --- | --- |
+| 1 | Cold open | the lead's line over the montage, "Also coming up", "Later" (never "Still to come", which belongs to the signpost) |
+| 2 | Lead (Max) | 3–5 sentences, the article read for depth |
+| 3 | THE CATCH | Ada asks, Max answers from the story (the episode's one push-in) |
+| 4 | Main stories | 2–4 sentences each, alternating readers, with a board when the story has one |
+| 5 | NUMBER OF THE DAY | a main story opening on its ledger card |
+| 6 | IN PLAIN ENGLISH | Ada translates a story's jargon, card on screen (at most two) |
+| 7 | STILL TO COME | the mid-programme signpost over the story it names |
+| 8 | A second CATCH | another question type on a later main story |
+| 9 | QUICK BYTES | three or four one-sentence items, read by Ada over their own pictures |
+| 10 | AND FINALLY + button | Ada reads, Max's dry line |
+| 11 | Sign-off | Max on the wide |
+
+**THE CATCH.** Ada's question is chosen by what the story can answer, never the same type twice in one episode: the price, the timetable, what happens next (a plan, a deadline, an appeal: "So what comes next?" / "The task force will reportedly have 120 days to create a report..."), who it affects, where the law stands, how it works, and last "the catch" itself (a "but"). Max's answer is one source sentence of the programme's length that stands on its own after the story (`answerable` in `server/providers/mock.js`):
+- it may lean on the story just told ("The first laptops using it go on sale in the spring");
+- never on a sentence the viewer did not hear ("So it...", "This means...", "He then...");
+- never names a product or a person the story never introduced ("The Air costs $99.99 and the Watch...", after a story about the Fitbit Edge);
+- quotes nobody without saying who.
+
+No catch sentence is kept back before a grave story (no chat follows a story there, so it would be lost).
+
+**IN PLAIN ENGLISH** (`server/glossary.js`, producer stage `terms`, programme `"terms": { "explainer": "ada" }`). The bible's flat translation of jargon, now a segment:
+- **The words are ours, fixed.** About 35 terms ("bug bounty", "open source", "AI slop", "Fourth Amendment", "altimeter"...), each a noun phrase a line can carry after "is" and a card can show. They are general knowledge, never a claim about the story, so the model never writes them.
+- **Where.** Right after a main story whose spoken text uses the term, when the next segment is a story: never after a grave story, the number, And finally or a round-up item, never where a chat already follows. Each term once, at most two per programme, within the chat budget. A definition heard in the hours of recent lines is not repeated.
+- **How it airs.** Ada's line in one of four phrasings (never the same twice in a programme): "AI slop, for the record: low-quality material churned out by AI." The director (pace `shots.terms`) cuts to the card for the whole line: IN PLAIN ENGLISH in micro type, the term at 2x with the cyan rule wiping under it, the plain words rising at 1x.
+
+**QUICK BYTES** (programme `roundup.kind: "pictures"`, kicker QUICK BYTES). The tech round-up: smaller stories that have a picture of their own, one sentence each, read by Ada over the picture from the first word ("Now, some quick bytes." runs under the first item; a 1.5 s cut to the reader would break the 4 s floor).
+- No place needed and none named, unlike WORLD NOW's AROUND THE WORLD, which keeps its maps and one country per item.
+- Never a grave story, and hard news (a court ruling, a security flaw) keeps its full telling and its board.
+- An item is the news in our words: never a quotation leading it, never a name the item cannot introduce ("“This is a type of indiscriminate mass surveillance,” Hill wrote."). A story with no such sentence stays a main story.
+
+**The boards, STILL TO COME, IN THEIR WORDS.** The format-round graphics of WORLD NOW now air here too (pace `shots`): BY THE NUMBERS in the ledger style on two or three spoken figures, WHAT WE KNOW on hard news (`"boards": ["known"]`; on this programme every story is "light" by topic, so a security flaw or a court ruling gets its board), STILL TO COME over the story it names, and the quote card on a sourced quote. The v2 planner puts a board after the story's opening single; a lone figure stays in the words (no single fact card on this show).
+
+**New topics.** SECURITY (hacks, breaches, bug bounties, vulnerabilities) and PRIVACY (surveillance, facial recognition, licence-plate readers) come before AI in the topic list, and both count as hard news.
+
+**The first run on real news** (4–5 Oct, the fallback writer on the live tech feeds). These would have aired, and are fixed for every programme and writer:
+- **Not news on the desk.** Prime Day deals, a review in the first person, a list ("All the AI agents..."), a column ("...let's talk about the hard part"), a newsletter ("TechCrunch Mobility:"), and questions (a podcast, an analysis) no longer reach the candidates (`notNews`). A trade deal, "a great deal of" and a quoted first person stay news.
+- **A harassment case as the And finally**, with a joke after it. Harassment, abuse, assault, trafficking, suicide and the like are grave.
+- **Pages that are not the article.** A podcast transcript ("Sean O’Kane: How much time do you have?"), an author's bio card ("Anthony Ha is TechCrunch’s weekend editor. Previously..."), an event promo ("Get 50% off a second pass"), the feed's "[…]", a host's "We were talking about this last week" and an editor's "[Trump has]". Every candidate's article is now read, not the first eight.
+- **Straps cut into scraps.** "...program due", "Can ‘super intelligence’ and non-binding safety pact", "...calls Flock ‘indiscriminate mass", "...just delivered", "...startup has come". The strap holds two lines (about 60 characters each): a headline is cut cleanly or goes up whole, never inside a quotation (single marks counted), never on a verb without its object, an auxiliary or "due", never a label that lost its verb. "Milt Windler, NASA flight director who helped save Apollo 13, dies at 94" becomes "NASA flight director Milt Windler dies at 94".
+- **Sentences cut wrongly.** A cut keeps the names the headline is about ("...rights [when using Flock to search...]" is refused), lists (Oxford comma too) and pairs ("wetting and drying"), never strands a subject without its predicate, and takes an aside's dash with it. A list's last item after ", and" is no sentence of its own.
+- **Our voice, not the outlet's.** "We don't know a ton about..." (The Verge's "we"), a sentence that follows on from one not said ("He then served...", "So it resorted...", "Realizing this, ..."), a rhetorical question and a bracket read aloud are left out.
+- **Tone.** "AI slop overwhelms bug bounty programmes" was read smiling because AI is a "light" topic: bad news for someone is said straight. After an AI cheating at StarCraft, Max said "I want to take it apart": AI, apps and games get software buttons, not gadget ones.
+- **A story made grave by its article.** A task force story was judged grave because its article mentioned the "Undersecretary of War", and the CATCH before it was cut. Gravity is judged on the headline, the summary and what airs.
+
+**Length.** On real news the programme carries about 700–750 words: 4 min 41 s of speech with the neural voices. MEASURED_TOTAL That is under the 6–8 minutes the LLM writer is asked for, and within the owner's ceiling of ten. The fallback writes no more than the reporting supports: no padding.
 
 ## 4. Acceptance checklist (each with how it is checked)
 

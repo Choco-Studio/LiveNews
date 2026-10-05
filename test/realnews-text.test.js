@@ -211,3 +211,14 @@ test('the fallback writer never speaks in the outlet’s voice, and an answer st
   assert.ok(!answerable('He then served as a flight director for all three crewed missions.', info));
   assert.ok(answerable('The Edge will sell for about $150 when it launches next spring.', info));
 });
+
+test('a caption never pages on an abbreviation’s dot ("The now-former Lt. / governor", TECH BYTES 5 Oct)', async () => {
+  const { paginate } = await import('../public/js/graphics/captions.js');
+  for (const per of [1, 2]) {
+    const pages = paginate('The now-former Lt. governor has been making the media rounds trying to clear his name.', undefined, per).flatMap((p) => p.lines);
+    assert.ok(!pages.some((l) => /Lt\.$/.test(l)), JSON.stringify(pages));
+  }
+  const { abbreviationDot } = await import('../public/js/audio/sentences.js');
+  assert.ok(abbreviationDot('Lt.') && abbreviationDot('U.S.') && abbreviationDot('Dr.') && abbreviationDot('J.'));
+  assert.ok(!abbreviationDot('home.') && !abbreviationDot('Lt'));
+});

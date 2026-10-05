@@ -702,6 +702,13 @@ export class Director {
           // a mid-programme signpost over its stories: STILL TO COME (else read to camera as any chat)
           if (seg.stillToCome?.length && pace(s).shots.stillToCome && (await this.playStillToCome(seg, index))) break;
           s.lowerThird = null;
+          // IN PLAIN ENGLISH (server/glossary.js): the term and its plain words on the programme's card while the
+          // explainer says them (a voiced graphic, held for the whole line)
+          if (seg.term?.term && pace(s).shots.terms) {
+            this.setShot('fact', { focus: seg.anchor, wall: { mode: 'logo' }, storyId: seg.storyId ?? null, card: { term: seg.term } });
+            await this.say(seg, null, { direct: true });
+            break;
+          }
           // v2: the plan's own opening shot now (no default wide on air while a late clip is looked up);
           // default path: the wide, or the speaker's close when one wide would pass the studio maximum
           const op = this.v2 ? this.v2Opening(seg, index) : null;

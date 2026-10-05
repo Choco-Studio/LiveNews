@@ -185,7 +185,9 @@ const PROGRAMMES = {
     },
     gaps: { story: 0.9, handover: 0.7, chatTurn: 0.42, intoChat: 0.55, outOfChat: 0.75, beforeFinally: 1.0, block: 1.15 }, // tech-bytes.md 0.8 s before And finally
     holds: { signoff: 1.0, endcard: 3.0 },
-    shots: { median: [4.5, 6.5], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [5, 9], cutsPerMinMax: 9, share: { map: 0.3, single: 0.55 } },
+    // the format round (owner 4 Oct): STILL TO COME over its stories, BY THE NUMBERS and WHAT WE KNOW boards, IN
+    // THEIR WORDS on a sourced quote, and IN PLAIN ENGLISH while Ada translates a story's jargon
+    shots: { median: [4.5, 6.5], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [5, 9], cutsPerMinMax: 9, share: { map: 0.3, single: 0.55 }, quoteCard: true, stillToCome: true, numbers: true, known: true, terms: true },
     moves: { max: 2, minGap: 60 }, // THE CATCH push (the bible's only move), one per exchange
     gestures: { perMin: 6, minGap: 4.5, beatsPerMin: 9, rest: 0.55, grave: 2, floor: 3 },
     listener: { reactionGap: 7, nodsPerMin: [1.5, 7] },

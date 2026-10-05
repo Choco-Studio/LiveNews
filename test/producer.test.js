@@ -733,7 +733,9 @@ describe('Producer with the real NewsDesk, ProviderChain and mock provider', () 
       assert.ok(episode, 'enough stories were available');
       assert.equal(episode.program.id, programId);
       assert.equal(episode.provider, 'mock');
-      assert.deepEqual(stageNames(episode), program.timing ? ['pictures', 'write', 'review', 'fit', 'assets'] : ['pictures', 'write', 'review', 'assets']);
+      // (IN PLAIN ENGLISH runs after the writer on a programme with an explainer: TECH BYTES)
+      const terms = program.terms ? ['terms'] : [];
+      assert.deepEqual(stageNames(episode), program.timing ? ['pictures', 'write', 'review', ...terms, 'fit', 'assets'] : ['pictures', 'write', 'review', ...terms, 'assets']);
 
       const solo = program.presenters.length === 1;
       assert.deepEqual(Object.keys(episode.cast), solo ? ['A'] : ['A', 'B']);

@@ -234,10 +234,11 @@
       "beat": {
         "science": ["SPACE", "ENERGY", "AI", "ROBOTICS", "CHIPS", "GADGETS", "SOFTWARE", "CONNECTIVITY", "HEALTH", "MOTORING", "TRANSPORT", "CLIMATE"]
       },
-      "stories": 10,
+      "stories": 13,
       "maxChats": 7,
       "targetSeconds": [360, 480],
       "features": [
+        "roundup",
         "number",
         "lighter"
       ],
@@ -246,6 +247,20 @@
       "chemistry": "Max gets interested first; Ada raises an eyebrow and asks the question viewers are thinking, using only what the summary says, and Max answers. They needle each other like old colleagues, deadpan, never cute. A first-name toss only before a question; \"Thanks, Max\" or \"Thanks, Ada\" at most once.",
       "headlineMax": 45,
       "intro": "teaser",
+      "roundup": {
+        "kind": "pictures",
+        "kicker": "QUICK BYTES",
+        "opener": "Now, some quick bytes.",
+        "min": 3,
+        "max": 4,
+        "words": "12 to 20"
+      },
+      "boards": [
+        "known"
+      ],
+      "terms": {
+        "explainer": "ada"
+      },
       "numberSlot": "main",
       "chats": {
         "after": [

@@ -83,6 +83,8 @@ export function validateChannel(ch) {
     if (p.crosses !== undefined && !(Number.isInteger(p.crosses) && p.crosses >= 0 && p.crosses <= 3)) throw new Error(`programme "${id}" has a "crosses" outside 0..3`);
     // Optional: the boards a programme's stories may carry (WHAT WE KNOW: the writer's "known" points).
     if (p.boards !== undefined && !(isList(p.boards) && p.boards.every((b) => b === 'known'))) throw new Error(`programme "${id}" has "boards" other than ["known"]`);
+    // Optional: IN PLAIN ENGLISH (server/glossary.js): a presenter of the programme translates a story's jargon.
+    if (p.terms !== undefined && !(p.terms && typeof p.terms === 'object' && typeof p.terms.explainer === 'string' && (p.presenters || []).includes(p.terms.explainer))) throw new Error(`programme "${id}" has "terms" without one of its presenters as "explainer"`);
     validateEditorial(id, p);
   }
   for (const [id, who] of Object.entries(ch.presenters)) {
@@ -138,6 +140,10 @@ function validateEditorial(id, p) {
     if (r.words !== undefined && !(typeof r.words === 'string' ? /^\d{1,2}(?:\s*(?:to|-|–)\s*\d{1,2})?$/.test(r.words.trim()) : Number.isInteger(r.words) && r.words > 0)) fail('has round-up "words" that are not "12 to 20" or a number');
     if (r.reader !== undefined && !['A', 'B'].includes(r.reader)) fail('has a round-up "reader" that is not A or B');
     if (r.timed !== undefined && typeof r.timed !== 'boolean') fail('has a round-up "timed" that is not true/false');
+    // "places" (AROUND THE WORLD: one item per country, each on its map) or "pictures" (TECH BYTES' QUICK BYTES:
+    // stories with a picture of their own, each over it); the kicker names it on the strap
+    if (r.kind !== undefined && !['places', 'pictures'].includes(r.kind)) fail('has a round-up "kind" that is not "places" or "pictures"');
+    if (r.kicker !== undefined && !(typeof r.kicker === 'string' && /^[A-Z0-9 &'-]{3,24}$/.test(r.kicker))) fail('has a round-up "kicker" that is not 3-24 capitals');
   }
   if (p.chats !== undefined) {
     const c = p.chats;

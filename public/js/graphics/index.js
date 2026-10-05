@@ -208,6 +208,8 @@ export class Graphics {
     if (text && this.repeatsOnAir(text, scene)) text = null;
     // the quote card already shows the words being read (IN THEIR WORDS): no caption saying them twice
     if (text && scene.shot === 'fact' && scene.card?.quote?.text && sameWords(text, scene.card.quote.text)) text = null;
+    // ...nor IN PLAIN ENGLISH: its card is the term and its plain words, the line Ada reads over it
+    if (text && scene.shot === 'fact' && scene.card?.term?.term) text = null;
     const frame = text && this.audio?.speechFrame ? this.safeFrame() : null;
     // while a strap is up the caption shows one line at a time: the bottom third stays light
     const perPage = !top && this.strapUp() ? 1 : 2;

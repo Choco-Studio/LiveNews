@@ -788,6 +788,44 @@ function drawLedgerText(ctx, dt, o, acc) {
   }
 }
 
+// IN PLAIN ENGLISH (TECH BYTES, server/glossary.js): a story's jargon and Ada's flat translation, on the ledger's
+// ink: the kicker, the term at 2x with the accent rule wiping under it, then the plain words rising at 1x (two
+// balanced lines at most). The words are the glossary's, whole: never typed on, never cut.
+const TERM_LAYOUTS = layoutCache(20);
+function termLayout(term, plain) {
+  return TERM_LAYOUTS(term, plain, null, null, () => {
+    const RW = W - 2 * X0;
+    const big = textW(term, 2) <= RW;
+    const T = big ? { lines: [term], scale: 2, lh: 18 } : { lines: balanceLines(term, RW, 1, 2), scale: 1, lh: 11 };
+    const words = balanceLines(plain, RW, 1, 2);
+    const h = 12 + T.lines.length * T.lh + 8 + words.length * 11;
+    const top = clamp(Math.round(80 - h / 2), 30, SAFE_BOTTOM - h);
+    const ruleW = Math.min(RW, Math.max(...T.lines.map((l) => textW(l, T.scale))));
+    return { T, words, top, ruleW, ruleY: top + 12 + T.lines.length * T.lh + 1, wordsY: top + 12 + T.lines.length * T.lh + 8 };
+  });
+}
+
+function drawTerm(ctx, dt, o, acc) {
+  const L = termLayout(String(o.term), String(o.plain));
+  const enter = easeOutQuint(seg(dt, 0, 0.3));
+  if (enter <= 0) return;
+  const RW = W - 2 * X0;
+  ctx.save();
+  try {
+    clipRect(ctx, X0, L.top - 2, Math.round(RW * enter), SAFE_BOTTOM - L.top + 2);
+    drawText(ctx, 'IN PLAIN ENGLISH', X0, L.top, S.microFog);
+    for (let i = 0; i < L.T.lines.length; i++) drawText(ctx, L.T.lines[i], X0, L.top + 12 + i * L.T.lh, L.T.scale === 2 ? S.white2 : S.white);
+    const rw = Math.round(L.ruleW * easeOutQuint(seg(dt, 0.2, 0.3)));
+    if (rw > 0) {
+      ctx.fillStyle = acc;
+      ctx.fillRect(X0, L.ruleY, rw, 1);
+    }
+    for (let k = 0; k < L.words.length; k++) rise(ctx, L.words[k], X0, L.wordsY + k * 11, seg(dt, 0.45 + k * 0.08, 0.34), S.white);
+  } finally {
+    ctx.restore();
+  }
+}
+
 // COSMOS DESK: the Reading
 const RULER_LABELS = [[0, '1'], [3, '1K'], [6, '1M'], [9, '1BN'], [12, '1TN']];
 function drawReading(ctx, dt, o, rows) {
@@ -982,6 +1020,10 @@ export function drawFactCard(ctx, t, dt, o = {}) {
   }
   const style = typeof opts.programId === 'string' && Object.hasOwn(FACT_STYLES, opts.programId) ? FACT_STYLES[opts.programId] : RULE_STYLE;
   const acc = accentFor(opts.programId, opts.accent);
+  if (opts.term?.term && opts.term?.plain) {
+    cardGround(ctx, dt, null, inkField);
+    return drawTerm(ctx, dt, opts.term, acc);
+  }
   if (Array.isArray(opts.known) && opts.known.length >= 2) {
     cardGround(ctx, dt, opts.image, factField);
     return drawKnown(ctx, dt, opts, acc);

@@ -19,6 +19,14 @@ const NUM_ABBREV = new Set([
   'no', 'nos', 'fig', 'vol', 'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec',
 ]);
 
+/** Is this word's final dot an abbreviation's ("Lt.", "Dr.", "U.S.", "J."), not a sentence end? */
+export function abbreviationDot(raw) {
+  const w = String(raw ?? '').replace(/^[("'“‘«¿¡]+/, '');
+  if (!w.endsWith('.')) return false;
+  const bare = w.slice(0, -1);
+  return /^\p{L}$/u.test(bare) || /^(?:\p{L}\.)+\p{L}$/u.test(bare) || ABBREV.has(bare.toLowerCase());
+}
+
 function isBoundary(src, from, to, run) {
   // `to` is the index of the whitespace after the terminator run.
   const next = src[to + 1];

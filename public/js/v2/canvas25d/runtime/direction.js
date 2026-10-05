@@ -195,7 +195,9 @@ export function holdCut(plan, si, onAir, { programId = null, gap = 0.6, cues = n
   // the greeting of an intro the guard took off its wide: back to the wide (both parts hold the cooldown)
   const greeting = !point && ctx.type === 'intro' && onAir.shot === 'close' && GREETING.test(String(sent.text ?? ctx.seg?.text?.slice(sent.start) ?? '').trim());
   if (greeting) return { k: 1000 + si, char, at: t0, sentence: si, mid: false, shot: 'wide', framing: wideFraming ?? null, focus: ctx.speaker, move: null, card: null, minLen: null, beat: 'greeting', guard: true };
-  if (onAir.held + remaining <= maxHold(onAir.shot, programId) - HOLD_MARGIN) return null;
+  // (a QUICK BYTES item runs to its end over its own picture: shots.js capMax gives it the same 3 s)
+  const quick = onAir.shot === 'full' && ctx.seg?.roundup && programId === 'tech-bytes' ? 3 : 0;
+  if (onAir.held + remaining <= maxHold(onAir.shot, programId) + quick - HOLD_MARGIN) return null;
   let shot, framing;
   if (onAir.shot === 'close') {
     if (programId === 'news-60') return null;

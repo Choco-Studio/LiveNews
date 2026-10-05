@@ -120,7 +120,7 @@ const WORLD_PLACE_PAIRS = [
  * people have gone to shelters" -> two points). Never a quote, a question or a clause that leans on another
  * ("it", "they"). The validator grounds them again, and drops a point whose figure the presenter does not say.
  */
-const HARD_NEWS = new Set(['BUSINESS', 'CLIMATE', 'CONFLICT', 'EARTHQUAKE', 'ECONOMY', 'ELECTIONS', 'ENERGY', 'HEALTH', 'INDUSTRY', 'JOBS', 'JUSTICE', 'MARKETS', 'POLITICS', 'PROTESTS', 'TRADE', 'TRANSPORT', 'VOLCANO', 'WATER', 'WEATHER', 'WILDFIRE', 'WORLD']);
+const HARD_NEWS = new Set(['SECURITY', 'PRIVACY', 'BUSINESS', 'CLIMATE', 'CONFLICT', 'EARTHQUAKE', 'ECONOMY', 'ELECTIONS', 'ENERGY', 'HEALTH', 'INDUSTRY', 'JOBS', 'JUSTICE', 'MARKETS', 'POLITICS', 'PROTESTS', 'TRADE', 'TRANSPORT', 'VOLCANO', 'WATER', 'WEATHER', 'WILDFIRE', 'WORLD']);
 // a reason, a judgement or a forecast: someone's word, never the channel's
 const JUDGEMENT = /\b(?:precaution\w*|necessary|unnecessary|safe|unsafe|aim\w*|intend\w*|designed|because|protect\w*|justif\w*|legitima\w*|threat\w*|priorit\w*|responsib\w*|blam\w*|lies?|unfair|illegal|wrong|best|worst|must|should|needs?|will|would|could|may|might|expect\w*|believe\w*|plans?|planned|likely|fears?|feared|warn\w*|deliberate\w*)\b/i;
 export function knownPoints(sentences, max = 3) {
@@ -173,8 +173,16 @@ function midStory(order, roundup, lighter, number) {
 const CATCH = [
   { test: /\b(?:cost|price|priced|dollars|euros|pounds|\$|£|€)/i, q: (max) => [`[glasses] ${max}, the question everyone asks. What does it cost?`, '[glasses] And the price tag?', `[chin] ${max}, what will all this cost?`] },
   { test: /\b(?:next year|this year|later this year|next month|in the (?:spring|summer|autumn|winter)|on sale|go on sale|launch(?:es)? (?:in|next)|from next|by \d{4})\b/i, q: () => ['[chin] And when does it reach actual people?', '[chin] When can anyone actually use it?', '[glasses] And the timetable?'] },
-  { test: /\b(?:but|however|only|not yet|still|although)\b/i, q: () => ['[steeple] So what is the catch?', '[chin] There is always a but. What is it here?', '[steeple] And the small print?'] },
+  // what happens now: a deadline, a plan, an appeal ("The task force will reportedly have 120 days to create a report")
+  // (not any "will": "The line will carry 40,000 passengers a day" is the story's figure, not what comes next)
+  { test: /\b(?:plans? to|(?:is|are) expected to|(?:is|are) set to|will (?:now|next|then|decide|vote|rule|review|report|consider|appeal)|next (?:week|step|steps)|within \d+ (?:days|weeks|months)|(?:have|has) \d+ (?:days|weeks|months) to|deadline|appeal\w*)\b/i, q: () => ['[chin] And what happens now?', '[chin] So what comes next?', '[glasses] And from here?'] },
+  // who it touches, when the story says who
+  { test: /\b(?:users|customers|owners|drivers|patients|developers|consumers|subscribers|players|parents|families|small businesses|people who)\b/i, q: () => ['[chin] And who does this actually affect?', '[glasses] Who is this for, exactly?', '[chin] So who notices the difference?'] },
+  // where the law stands, when a court, a regulator or a law is in it
+  { test: /\b(?:law|laws|ruling|ruled|court|judge|regulators?|unconstitutional|illegal|precedent|warrant)\b/i, q: () => ['[steeple] And where does the law stand?', '[steeple] And the legal position?', '[chin] So where does that leave the rules?'] },
   { test: /\b(?:using|uses|by (?:using|\w+ing)|works (?:by|without)|without an?)\b/i, q: () => ['[chin] How does it actually work?', '[chin] Walk me through how it works.', '[glasses] And the clever part is?'] },
+  // the catch itself, last: a "but" is in most stories
+  { test: /\b(?:but|however|only|not yet|still|although)\b/i, q: () => ['[steeple] So what is the catch?', '[chin] There is always a but. What is it here?', '[steeple] And the small print?'] },
 ];
 // The button after "And finally", by what kind of story it was: a thing you can hold, software (an AI, an app, a
 // game: nothing to take apart or buy; "I want to take it apart" once followed an AI cheating at StarCraft, 4 Oct),
@@ -513,14 +521,18 @@ function runningOrder(infos, n, program, featured = new Set()) {
   let roundup = [];
   if (want) {
     const countries = new Set([lead.country]);
+    // QUICK BYTES (TECH BYTES): stories with a picture of their own, each over it, any country, never grave
+    const pictures = r.kind === 'pictures';
     // a round-up item is told in one summary sentence: a story with none that fits stays a main story
-    const located = pool.filter((i) => i.loc && !i.breaking && !i.live && i.roundupFit !== false);
+    const located = pool.filter((i) => (pictures ? i.s.image && !i.grave : i.loc) && !i.breaking && !i.live && i.roundupFit !== false);
     // One map sentence is for the smaller stories: a picture, a second outlet or people at risk make a story a
     // main one (it gets its photo beat and its full telling); the round-up takes the rest first.
-    const weight = (i) => (i.s.image && program?.pictures !== 'every' ? 2 : 0) + ((i.s.outlets || 1) > 1 ? 2 : 0) + (i.grave ? 1.5 : 0);
+    // (QUICK BYTES: every item has its picture; the one with the most to tell stays a main story)
+    // (QUICK BYTES: hard news, a court ruling or a security flaw, keeps its full telling and its board)
+    const weight = (i) => (i.s.image && program?.pictures !== 'every' && !pictures ? 2 : 0) + ((i.s.outlets || 1) > 1 ? 2 : 0) + (i.grave ? 1.5 : 0) + (pictures ? Math.min(3, i.sentences.length) * 0.3 + (HARD_NEWS.has(i.kicker) || i.hard ? 1.5 : 0) : 0);
     for (const i of [...located].sort((a, b) => weight(a) - weight(b))) {
       if (roundup.length >= want) break;
-      if (countries.has(i.country)) continue;
+      if (!pictures && countries.has(i.country)) continue;
       countries.add(i.country);
       roundup.push(i);
       pool.splice(pool.indexOf(i), 1);
@@ -695,6 +707,8 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
   for (const i of pool) {
     i.roundupFit = i.sentences.some((t, j) => {
       if (!(j === 0 ? !PRONOUN_START.test(t) : !leansOnPrevious(t))) return false;
+      // (the same as the item's own choice below: no quotation leading it, no name it cannot introduce)
+      if (/^["“‘]/.test(t.trim()) || !introduced(t, i)) return false;
       if (j > 0 && newWords(i.s.title, t) > contentWords(i.s.title).length - 2) return false;
       const x = wordCount(t) <= rMax ? t : trimClause(t, rMax, rMin - 4, { keep: i.keep });
       return !!x && wordCount(x) >= rMin - 4;
@@ -774,7 +788,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     const second = order[1];
     const third = order[2];
     const also = choose(['Also coming up:', 'Coming up:', 'Also ahead:'], `${seed}~also`);
-    const later = choose(['Later in the programme:', 'Later:', 'Still to come:'], `${seed}~later`);
+    // (a long programme says "Still to come" once, mid-programme: its intro says "Later")
+    const longIntro = Array.isArray(program?.targetSeconds) && program.targetSeconds[0] >= 240 && order.length >= 6;
+    const later = choose(longIntro ? ['Later in the programme:', 'Later:'] : ['Later in the programme:', 'Later:', 'Still to come:'], `${seed}~later`);
     if (second) {
       introParts.push(`[point_camera] ${also} ${featureTease(second) || lowerFirstWord(said(second), second)}.`);
       tease.push(second.s.id);
@@ -959,6 +975,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // One sentence per item (12 to 20 words; NEWS IN 60 14 to 18), the place in its first words, credited
       // only if the credit fits. The summary's words are preferred to the headline, which is already on the strap.
       const idx = roundup.indexOf(info);
+      const pictureItems = program?.roundup?.kind === 'pictures';
       const [minW, maxW] = quick ? [14, 18] : [12, 20];
       // The place within the item's first words (NEWS IN 60: three, its bible; the others: five).
       const limit = quick ? 3 : 5;
@@ -979,12 +996,16 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       for (const pass of [0, 1]) {
         for (const [j, t0] of info.sentences.entries()) {
           if (line || used.has(t0) || !selfStanding(info, t0) || !tells(t0, j)) continue;
+          // (an item is the news in our words: never a quotation leading it, never a name the item cannot
+          // introduce: "“This is a type of indiscriminate mass surveillance,” Hill wrote.")
+          if (/^["“‘]/.test(t0.trim()) || !introduced(t0, info)) continue;
           const t = sized(t0);
           if (!t) continue;
           // pass 0: the place within the first words, as written, moved to the front or put there;
           // pass 1: the sentence as written, its place named by the lead-in ("Now to Brazil.")
-          const forms = pass === 0 ? [early(t) ? t : null, movePlaceFront(t, info), placeFirst(t, info, limit)] : [t];
-          const form = forms.find((f) => f && (pass === 1 || early(f)) && wordCount(f) <= maxW && wordCount(f) >= minW - 4);
+          // (QUICK BYTES: no place to name, the sentence as written over its picture)
+          const forms = pictureItems ? [t] : pass === 0 ? [early(t) ? t : null, movePlaceFront(t, info), placeFirst(t, info, limit)] : [t];
+          const form = forms.find((f) => f && (pass === 1 || pictureItems || early(f)) && wordCount(f) <= maxW && wordCount(f) >= minW - 4);
           if (form) {
             used.add(t0);
             line = form;
@@ -995,10 +1016,10 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         // Only when the summary has no sentence to tell it with: the headline, never with "In X," put in front of a
         // subject that is not there ("In Brazil, coffee futures reach...") nor a "Now to X." before it.
         fromHeadline = true;
-        line = early(s.title) ? s.title : movePlaceFront(s.title, info) || s.title;
+        line = pictureItems || early(s.title) ? s.title : movePlaceFront(s.title, info) || s.title;
       }
       const lead = idx === 0 ? program?.roundup?.opener || 'Now, around the world in 30 seconds.' : '';
-      const where = early(line) || fromHeadline ? '' : `${idx === 0 ? 'First, ' : 'Now to '}${spokenPlace(info.loc.entry)}.`;
+      const where = pictureItems || early(line) || fromHeadline ? '' : `${idx === 0 ? 'First, ' : 'Now to '}${spokenPlace(info.loc.entry)}.`;
       const item = [asSentence(line)];
       if (wordCount(line) + 2 + wordCount(s.source) <= maxW) attribute(item, info, key);
       parts.push(...[`${idx === 0 ? '[point_screen] ' : ''}${lead}`.trim(), where].filter(Boolean), ...item);
@@ -1012,10 +1033,13 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // (TECH BYTES: another CATCH question, never the same one twice; WORLD NOW: the partner adds it).
       const linked = links.has(info);
       const deep = !linked && longForm && !isNumber && !isLighter && !info.grave && !info.breaking && !info.live && exchanges < 3 && info.sentences.length >= 3; // the lead too with 3 (critic: no analysis exchange aired)
-      const fits = (c, t) => c.test.test(t) && answerable(t, info);
-      const catchFor = pid === 'tech-bytes' && (k === 0 || deep) && !info.grave ? CATCH.find((c) => !asked.has(c) && info.sentences.some((t) => fits(c, t))) : null;
+      // (an answer is one spoken sentence of the programme's length: the validator trims stories, not chats)
+      const fits = (c, t) => c.test.test(t) && answerable(t, info) && wordCount(t) <= maxWords + 2;
+      // (never before a grave story: no chat follows a story there, and the kept-back sentence would be lost)
+      const quietAfter = !!order[k + 1]?.grave;
+      const catchFor = pid === 'tech-bytes' && (k === 0 || deep) && !info.grave && !quietAfter ? CATCH.find((c) => !asked.has(c) && info.sentences.some((t) => fits(c, t))) : null;
       let reserved = catchFor ? info.sentences.find((t) => fits(catchFor, t)) : null;
-      if (!reserved && pid === 'world-now' && deep) reserved = [...info.sentences].reverse().find((t, j) => j < info.sentences.length - 1 && !PRONOUN_START.test(t) && answerable(t, info) && wordCount(t) >= 6) || null;
+      if (!reserved && pid === 'world-now' && deep && !quietAfter) reserved = [...info.sentences].reverse().find((t, j) => j < info.sentences.length - 1 && !PRONOUN_START.test(t) && answerable(t, info) && wordCount(t) >= 6) || null;
       if (reserved) used.add(reserved);
       // After the intro has read its headline, the lead goes on with the next fact: a sentence that only
       // restates the headline (fewer than three words of its own) is never its opener, nor read later.
@@ -1244,8 +1268,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     if (!inRoundup && info.places.length >= 2) story.map = info.places.map(({ place, lat, lon }) => ({ place, lat, lon }));
     if (info.cross) story.cross = info.cross;
     // (news, not features: the lead, a grave or breaking story, or a hard-news topic; never history, culture,
-    // wildlife or a light one)
-    if (program?.boards?.includes('known') && !inRoundup && !isNumber && !isLighter && !quick && (k === 0 || info.grave || info.breaking || (HARD_NEWS.has(info.kicker) && !info.light && !info.curious))) {
+    // wildlife or a light one; on TECH BYTES every story is "light" by topic, so a security flaw or a court ruling
+    // there gets its board too)
+    if (program?.boards?.includes('known') && !inRoundup && !isNumber && !isLighter && !quick && (k === 0 || info.grave || info.breaking || (HARD_NEWS.has(info.kicker) && !info.curious && (!info.light || pid === 'tech-bytes')))) {
       const known = knownPoints(info.sentences);
       if (known.length >= 2) story.known = known;
     }

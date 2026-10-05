@@ -5,6 +5,7 @@ import { embedCues } from '../public/js/cues.js';
 import { onBeat } from './topics.js';
 import { pictureCredit } from './news.js';
 import { isGrave } from './facts.js';
+import { explainTerms } from './glossary.js';
 import { writeWeather } from './weatherwriter.js';
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -115,6 +116,9 @@ export class Producer {
       { name: 'pictures', run: (ctx) => this.pictures(ctx), enabled: () => typeof this.news.findPictures === 'function' },
       { name: 'write', run: (ctx) => this.write(ctx) },
       { name: 'review', run: (ctx) => this.review(ctx), enabled: () => this.config.reviewPass },
+      // IN PLAIN ENGLISH (server/glossary.js): the programme's explainer translates a story's jargon from our fixed
+      // glossary (never the model's words), a term once in the hours of recent lines
+      { name: 'terms', run: (ctx) => this.terms(ctx), enabled: (ctx) => !!ctx.program.terms && !!ctx.episode?.segments },
       { name: 'fit', run: (ctx) => this.fit(ctx), enabled: (ctx) => !!ctx.program.timing },
       { name: 'assets', run: (ctx) => this.assets(ctx) },
       // Footage of each correspondent link's place (FILE clips the client pixelates); never fails the episode.
@@ -306,6 +310,13 @@ export class Producer {
       const p = ctx.channelPresenters?.[id];
       if (p) ctx.presenters[slot] = { id, ...p };
     }
+  }
+
+  /** IN PLAIN ENGLISH lines after the stories that use a glossary term (server/glossary.js). */
+  terms(ctx) {
+    const { segments, terms } = explainTerms(ctx.episode.segments, { program: ctx.program, presenters: ctx.presenters, recent: this.recentText() });
+    ctx.episode.segments = segments;
+    return { terms };
   }
 
   /** Keep the chat lines of an episode (sentence by sentence, plain text) in the station's memory of what aired. */

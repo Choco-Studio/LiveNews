@@ -495,7 +495,9 @@ function capMax(ctx, tl, out) {
     let j = k + 1;
     while (j < out.length && out[j].shot === e.shot) j++;
     const t1 = j < out.length ? out[j].at : tl.end;
-    const max = shotMax(ctx.programId, e.shot);
+    // (a QUICK BYTES item is one sentence over its own picture: it runs to the item's end, a little past the
+    // picture maximum, rather than cutting to the reader mid-sentence for its last words)
+    const max = shotMax(ctx.programId, e.shot) + (e.beat === 'roundup-picture' && ctx.seg?.roundup && styleOf(ctx.programId) === 'tech-bytes' ? 3 : 0);
     if (t1 - e.at <= max + 0.25) continue;
     // the run's last beat (a round-up pin after its world view) keeps its own MIN_SHOT too
     const lo = Math.max(e.at + Math.max(MIN_SHOT, lowOf[e.shot] || 0), out[j - 1].at + MIN_SHOT);
@@ -754,11 +756,17 @@ function techBytes(ctx, tl) {
     chatLeadIn(ctx, tl, out);
     return out;
   }
+  // QUICK BYTES (config roundup.kind "pictures"): each item over its own picture
+  if (ctx.seg.roundup) return quickBytes(ctx);
+  // the format round (owner 4 Oct): a story's board (BY THE NUMBERS on its stated figures, WHAT WE KNOW on hard
+  // news) after its opening single; a lone figure stays in the words (no single fact card on this show)
+  const board = !!(numbersBoard(seg, ctx.programId) || knownBoard(seg, ctx.programId));
   const out = storyBeats(ctx, tl, {
     single: storySingle(ctx),
     map: !!seg.location && !ctx.hasImage,
     picture: ctx.hasImage,
-    fact: 0,
+    fact: board ? factHold(seg, ctx.programId) : 0,
+    board,
     pictureMin: S.pictureMin,
     pictureMax: S.pictureMax,
     mapMin: S.mapMin, // PACE: a map holds ≥ 5 s
@@ -769,6 +777,16 @@ function techBytes(ctx, tl) {
   splitLongSingles(ctx, tl, out, S.singleSoft);
   chatLeadIn(ctx, tl, out);
   return out;
+}
+
+/**
+ * QUICK BYTES: one sentence per item, read over the item's own picture from its first word (the title line
+ * "Now, some quick bytes." runs under the first one: a cut to the reader for 1.5 s would break the 4 s floor);
+ * the reader in vision only when a picture failed to load.
+ */
+function quickBytes(ctx) {
+  const me = ctx.speaker;
+  return [ctx.hasImage ? ev(ctx, 0, 0, 'full', null, me, 'roundup-picture') : ev(ctx, 0, 0, 'close', singleFraming(ctx), me, 'roundup-single')];
 }
 
 /** THE CATCH: the first chat after the lead where Ada (the analyst, seat B) asks. */

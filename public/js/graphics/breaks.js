@@ -6,6 +6,7 @@
 // lines of a page balanced. Nothing ever scrolls: text that does not fit is
 // shown as pages. Results are cached per text and width, and the graphics
 // keep the result on their state, so this never runs per frame.
+import { abbreviationDot } from '../audio/sentences.js';
 import { measureText } from '../font.js';
 
 const GAP = measureText('A B') - 2 * measureText('A'); // pixels between two words (4)
@@ -81,7 +82,9 @@ function tokenize(text) {
  */
 function boundary(a, b) {
   const last = a.raw[a.raw.length - 1];
-  if (last === '.' || last === '!' || last === '?' || last === '…') return 0;
+  // an abbreviation's dot ends nothing: "The now-former Lt. / governor" once paged a caption on "LT." (TECH BYTES 5 Oct)
+  const abbr = last === '.' && abbreviationDot(a.raw);
+  if (!abbr && (last === '.' || last === '!' || last === '?' || last === '…')) return 0;
   if (last === ',' || last === ';' || last === ':' || DASH.has(a.raw) || DASH.has(b.raw)) return 0.4;
   if (last === ')' || b.raw[0] === '(') return 0.7;
   let c = 1.2;
@@ -89,7 +92,7 @@ function boundary(a, b) {
   // worst ordinary break: compounds and adjective + noun pairs live there
   if (CLAUSE_START.has(b.bare)) c -= 0.6;
   else if (PHRASE_START.has(b.bare)) c -= 0.5;
-  if (WEAK_END.has(a.bare)) c += 2;
+  if (abbr || WEAK_END.has(a.bare)) c += 2;
   else if (SOFT_END.has(a.bare)) c += 0.6;
   if (AUX.has(b.bare)) c += 0.5;
   // a line that starts on a past-tense verb cuts the subject off it ("after fog / closed it")

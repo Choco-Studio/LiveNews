@@ -32,6 +32,10 @@ export const TOPICS = [
   [/inflation|prices|interest rates?|economy|growth|recession/i, 'ECONOMY'],
   [/\btrade\b|\bexports?\b|\bimports?\b|tariffs?|\bshipping\b|\bports?\b|\bcanal\b/i, 'TRADE'],
   [/\bjobs\b|unemployment|wages|workers/i, 'JOBS'],
+  // a security flaw, a hack or surveillance is the story, whatever the technology (an AI flood of bug reports is
+  // SECURITY, a licence-plate camera search PRIVACY: TECH BYTES, 4 Oct)
+  [/\b(?:hack(?:ed|ers?|ing)?|breach(?:es|ed)?|cyber ?attacks?|cybersecurity|ransomware|malware|spyware|phishing|bug bount(?:y|ies)|vulnerabilit(?:y|ies)|security flaws?|zero-day|data leaks?)\b/i, 'SECURITY'],
+  [/\b(?:surveillance|privacy|data protection|facial recognition|licen[sc]e plate (?:readers?|cameras?)|tracking (?:people|users))\b/i, 'PRIVACY'],
   [/robot/i, 'ROBOTICS'],
   [/\bAI\b|artificial intelligence|chatbot/i, 'AI'],
   [/\bchips?\b|semiconductor|processor/i, 'CHIPS'],

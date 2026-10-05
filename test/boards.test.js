@@ -49,7 +49,7 @@ describe('WHAT WE KNOW points (writer)', () => {
     const other = normalizeBulletin(
       { title: 'T', segments: [{ type: 'story', storyId: 'g1', anchor: 'A', emotion: 'neutral', headline: STORY.title, text: SOURCE, shot: 'wide', known: ['Unions say talks over pay have stalled', 'Stations across Germany were almost empty'] }] },
       [STORY],
-      { program: { id: 'tech-bytes', ...CHANNEL.programs['tech-bytes'] }, presenters: DUO }
+      { program: { id: 'money-minute', ...CHANNEL.programs['money-minute'] }, presenters: DUO }
     );
     assert.equal(other.segments.find((s) => s.storyId === 'g1').known, undefined, 'only a programme with the board');
   });
