@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lab · music beds (lo-fi newsroom)</title>
+    <style>
+      body { background: #101014; color: #c0cbdc; font: 12px/1.5 monospace; margin: 12px; }
+      #screen { width: 768px; height: 432px; image-rendering: pixelated; display: block; background: #000; }
+      .row { margin: 8px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      select, button { font: inherit; background: #1d1f2a; color: #e4e8f0; border: 1px solid #3a4466; padding: 3px 8px; cursor: pointer; }
+      button:hover { background: #262b44; }
+      button.on { background: #3e8948; border-color: #63c74d; }
+      #note, #log { color: #8b9bb4; }
+      #log { white-space: pre; max-height: 160px; overflow: auto; border-top: 1px solid #262b44; margin-top: 8px; padding-top: 4px; }
+      table { border-collapse: collapse; margin-top: 8px; }
+      td { border-bottom: 1px solid #262b44; padding: 2px 10px 2px 0; vertical-align: top; }
+      td:first-child { color: #feae34; white-space: nowrap; }
+      td:nth-child(2) { color: #e4e8f0; }
+    </style>
+  </head>
+  <body>
+    <canvas id="screen" width="384" height="216"></canvas>
+    <div class="row">
+      <label>programme <select id="prog"></select></label>
+      <label><input id="grave" type="checkbox" /> grave pad (default: silence)</label>
+      <label><input id="shared" type="checkbox" /> shared stings (audio.js plays breaking / promo / sign-off cues)</label>
+      <label>stories <select id="stories"><option value="off">silent (bibles)</option><option value="soft">soft bed (owner switch)</option><option value="drone">drone (Money)</option></select></label>
+      <button id="speak">hold to speak</button>
+      <button id="stop">stop</button>
+    </div>
+    <div class="row" id="moments"></div>
+    <div class="row" id="demos"></div>
+    <div id="note">
+      Composer "lofi" proposal for GLOBIT 24 background music, following docs/programmes/*.md. Live: click a moment (first
+      click unlocks audio); "hold to speak" plays a Kokoro test line and ducks the bed. Offline:
+      <code>window.__audio.render({ programme, moment, seconds, stem, timeline })</code> for tools/render-audio.mjs
+      (timelines: demo, demo-soft, world-now, tech-bytes, cosmos, money-minute, news-60, break, ident, sombre, standby; options
+      bedUnderStories, sharedStings, gravePad, open: false). Programme timelines start with the audio stream's real open theme.
+      Test voices (Kokoro through the channel's broadcast chain) are served from /__voice/ by the composer's own static server;
+      elsewhere a speech-shaped stand-in is used.
+    </div>
+    <table id="sheet"></table>
+    <div id="log"></div>
+    <script type="module">
+      // Lab for public/js/music/proposals/lofi: plays beds live and renders them offline.
+      import { LofiEngine } from '../js/music/proposals/lofi/engine.js';
+      import { LAYERS } from '../js/music/proposals/lofi/palettes.js';
+      import { CUE_SHEET } from '../js/music/proposals/lofi/cuesheet.js';
+      import { render, TIMELINES, CLIPS, speechRegions, setClipDurations, planOf } from '../js/music/proposals/lofi/render.js';
+      import { SIGNATURE, SIGNATURE_SEMITONES } from '../js/music/proposals/lofi/theory.js';
+
+      const $ = (id) => document.getElementById(id);
+      const params = new URLSearchParams(location.search);
+      const VOICE_BASE = params.get('voiceBase') || '/__voice/';
+      const manifest = fetch(`${VOICE_BASE}manifest.json`).then((r) => (r.ok ? r.json() : {})).then((m) => {
+        setClipDurations(Object.fromEntries(Object.entries(m).map(([k, v]) => [k, v.seconds])));
+      }).catch(() => {});
+
+      // Moments the director would cue, per programme (the cue sheet decides what each one does).
+      const MOMENTS = {
+        'world-now': [['headlines', { line: 0, lines: 3 }, 'headline 1 (Bm)'], ['pip', { line: 0, lines: 3 }, 'pip'], ['headlines', { line: 1, lines: 3 }, 'headline 2 (G)'],
+          ['headlines', { line: 2, lines: 3 }, 'headline 3 (D)'], ['greeting'], ['story', { emotion: 'neutral' }, 'story (light)'], ['story', { emotion: 'serious' }, 'story (grave)'], ['roundup'], ['finally'], ['chat'], ['outro'], ['signoffEnd', {}, 'sign-off brass'], ['breaking']],
+        'tech-bytes': [['coldOpen'], ['story'], ['story', { emotion: 'serious' }, 'story (grave)'], ['chat'], ['number'], ['numberSting'], ['finally'], ['featureEnd'], ['outro'], ['signoffEnd']],
+        cosmos: [['coldOpen'], ['story'], ['shot', { kind: 'picture' }, 'shot: picture'], ['shot', { kind: 'presenter' }, 'shot: presenter'], ['finally'], ['number', {}, 'the Reading'], ['greeting']],
+        'money-minute': [['headlines', {}, 'intro vamp'], ['introEnd'], ['story'], ['numberSting'], ['number', { tape: 'up' }, 'tape up'], ['number', { tape: 'down' }, 'tape down'],
+          ['number', { tape: 'mixed' }, 'tape mixed'], ['number', { tape: 'neutral' }, 'tape neutral'], ['outro'], ['signoffEnd'], ['endcard']],
+        'news-60': [['headlines', {}, 'bed'], ['item'], ['story', { grave: true }, 'grave item'], ['story', {}, 'item story'], ['signoffEnd', {}, 'sign-off bell']],
+        channel: [['bumper', { kind: 'cards' }, 'bumper cards'], ['bumper', { kind: 'ident' }, 'short ident'], ['bumper', { grave: true }, 'sombre ident'], ['holding'],
+          ['leadin', { programId: 'world-now' }, 'countdown'], ['leadin', { programId: 'news-60', sombre: true }, 'countdown sombre'], ['leadin', { programId: 'tech-bytes', hour: 14 }, 'ident film day'],
+          ['leadin', { programId: 'cosmos', hour: 23 }, 'ident film night'], ['upNext', { next: 'cosmos' }, 'up next'], ['replay'], ['standby'], ['cut'], ['silence']],
+      };
+      const LINES = { 'world-now': 'wn-hl1', 'tech-bytes': 'tb-lead', cosmos: 'co-story', 'money-minute': 'mm-lead', 'news-60': 'n6-item1', channel: 'ct-next-wn' };
+      for (const id of Object.keys(MOMENTS)) $('prog').append(new Option(id, id));
+      for (const [prog, moment, music] of CUE_SHEET) $('sheet').insertAdjacentHTML('beforeend', `<tr><td>${prog}</td><td>${moment}</td><td>${music}</td></tr>`);
+
+      let ctx = null;
+      let engine = null;
+      let timers = [];
+      const log = (msg) => {
+        $('log').textContent = `${(ctx?.currentTime ?? 0).toFixed(2).padStart(7)}  ${msg}\n` + $('log').textContent;
+      };
+
+      function ensure() {
+        if (!ctx) {
+          ctx = new AudioContext();
+          engine = new LofiEngine(ctx, ctx.destination, { gravePad: $('grave').checked, sharedStings: $('shared').checked, seed: 'lab' });
+          engine.start();
+        }
+        engine.gravePad = $('grave').checked;
+        engine.sharedStings = $('shared').checked;
+        engine.bedUnderStories = $('stories').value;
+        if (ctx.state !== 'running') ctx.resume();
+        return engine;
+      }
+
+      function drawMoments() {
+        $('moments').textContent = '';
+        for (const [m, extra, label] of MOMENTS[$('prog').value]) {
+          const b = document.createElement('button');
+          b.textContent = label || m;
+          b.onclick = () => {
+            const e = ensure();
+            e.cue(m, { programId: $('prog').value, ...(extra || {}) });
+            log(`cue ${m} ${JSON.stringify(extra || {})} -> ${e.log.at(-1)?.action} ${e.log.at(-1)?.detail}`);
+          };
+          $('moments').append(b);
+        }
+      }
+      $('prog').onchange = drawMoments;
+      drawMoments();
+
+      // Live voice: a Kokoro line through the context, ducking the bed while it plays.
+      const clipCache = new Map();
+      async function clip(key) {
+        if (!clipCache.has(key)) {
+          clipCache.set(key, fetch(`${VOICE_BASE}${key}.wav`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject())).then((b) => ctx.decodeAudioData(b)).catch(() => null));
+        }
+        return clipCache.get(key);
+      }
+      let speakingSrc = null;
+      $('speak').onpointerdown = async () => {
+        const e = ensure();
+        e.setSpeaking(true);
+        $('speak').classList.add('on');
+        const buf = await clip(LINES[$('prog').value]);
+        if (buf && e.speaking) {
+          speakingSrc = ctx.createBufferSource();
+          speakingSrc.buffer = buf;
+          speakingSrc.connect(ctx.destination);
+          speakingSrc.start();
+        }
+      };
+      const release = () => {
+        if (!engine?.speaking) return;
+        engine.setSpeaking(false);
+        $('speak').classList.remove('on');
+        try { speakingSrc?.stop(); } catch { /* ignore */ }
+        speakingSrc = null;
+      };
+      $('speak').onpointerup = release;
+      $('speak').onpointerleave = release;
+      $('stop').onclick = () => {
+        timers.forEach(clearTimeout);
+        timers = [];
+        engine?.stop(1);
+        log('stop');
+      };
+
+      // Demo timelines played live, in real time, with their voices.
+      for (const name of Object.keys(TIMELINES)) {
+        const b = document.createElement('button');
+        b.textContent = `play ${name}`;
+        b.onclick = async () => {
+          await manifest;
+          const e = ensure();
+          timers.forEach(clearTimeout);
+          timers = [];
+          const tl = planOf({ timeline: name });
+          if (tl.bedUnderStories) e.bedUnderStories = tl.bedUnderStories;
+          const lead = 0.3;
+          const t0 = ctx.currentTime + lead;
+          for (const [t, m, o] of tl.cues) timers.push(setTimeout(() => { e.cue(m, { programId: tl.programme, ...(o || {}) }); log(`cue ${m}`); }, (t + lead) * 1000));
+          for (const [a, z] of speechRegions(tl.voice)) {
+            timers.push(setTimeout(() => e.setSpeaking(true), (a + lead - 0.12) * 1000));
+            timers.push(setTimeout(() => e.setSpeaking(false), (z + lead) * 1000));
+          }
+          for (const [t, key] of tl.voice) {
+            const buf = await clip(key);
+            if (!buf) continue;
+            const s = ctx.createBufferSource();
+            s.buffer = buf;
+            s.connect(ctx.destination);
+            s.start(t0 + t);
+          }
+        };
+        $('demos').append(b);
+      }
+
+      // Pixel monitor: current song, bar/beat, layer levels, duck state.
+      const cv = $('screen');
+      const g = cv.getContext('2d');
+      const COLORS = { pad: '#5a6988', keys: '#feae34', bass: '#3e8948', kick: '#e43b44', snare: '#f77622', hat: '#c0cbdc', perc: '#8b9bb4', arp: '#2ce8f5', lead: '#fee761', tex: '#733e39' };
+      function draw() {
+        g.fillStyle = '#181425';
+        g.fillRect(0, 0, 384, 216);
+        g.fillStyle = '#262b44';
+        g.fillRect(0, 0, 384, 18);
+        g.fillStyle = '#feae34';
+        g.font = '8px monospace';
+        const bed = engine?.bed;
+        const head = engine?.headlineVoice;
+        g.fillText(bed ? `${bed.pal.title}  ${bed.pal.key}  ${bed.pal.bpm} BPM  · ${bed.current.name}` : head ? `WORLD NOW headlines · brass ${head.name}` : 'SILENCE', 6, 12);
+        if (bed && ctx) {
+          const beat = Math.floor((ctx.currentTime - bed.t0) / bed.spb);
+          for (let i = 0; i < 4; i++) {
+            g.fillStyle = beat >= 0 && beat % 4 === i ? '#fee761' : '#3a4466';
+            g.fillRect(300 + i * 18, 26, 14, 8);
+          }
+          g.fillStyle = '#8b9bb4';
+          g.fillText(`bar ${Math.max(0, Math.floor(beat / 4))}  bus ${bed.shot.gain.value.toFixed(2)}`, 300, 46);
+          LAYERS.forEach((name, i) => {
+            const v = bed.layer[name].gain.value;
+            const x = 12 + i * 27;
+            g.fillStyle = '#262b44';
+            g.fillRect(x, 60, 18, 120);
+            g.fillStyle = COLORS[name];
+            const h = Math.round(120 * Math.min(1, v));
+            g.fillRect(x, 180 - h, 18, h);
+            g.fillStyle = '#8b9bb4';
+            g.fillText(name, x - 2, 194);
+          });
+        }
+        g.fillStyle = engine?.speaking ? '#63c74d' : '#3a4466';
+        g.fillRect(300, 60, 72, 24);
+        g.fillStyle = '#181425';
+        g.fillText(engine?.speaking ? 'SPEAKING' : 'no speech', 306, 75);
+        requestAnimationFrame(draw);
+      }
+      draw();
+
+      // One network, one signature: warn if the audio stream's MOTIF and ours ever diverge.
+      import('../js/audio/themes.js').then(({ MOTIF }) => {
+        const ours = SIGNATURE.map((n, i) => [SIGNATURE_SEMITONES[i], n.len]);
+        const same = JSON.stringify(ours) === JSON.stringify(MOTIF.map(([s, l]) => [s, l]));
+        $('note').insertAdjacentHTML('beforeend', same ? '<br>Signature matches audio/themes.js MOTIF.' : '<br><b style="color:#e43b44">Signature differs from audio/themes.js MOTIF: update theory.js SIGNATURE.</b>');
+        if (!same) console.warn('[lofi] signature mismatch', ours, MOTIF);
+      }).catch(() => {});
+
+      window.__audio = {
+        render: async (opts = {}) => {
+          await manifest;
+          return render({ voiceBase: VOICE_BASE, ...opts });
+        },
+        timelines: Object.keys(TIMELINES),
+        clips: CLIPS,
+      };
+    </script>
+  </body>
+</html>

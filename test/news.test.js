@@ -1,13 +1,20 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { config } from '../server/config.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   NewsDesk,
   cleanHtml,
+  extractLocalImage,
+  localFeedPath,
   decodeEntities,
   extractImage,
   interestScore,
   isBreaking,
+  isLiveBlog,
   keywords,
   normalizeTitleKey,
   parseFeed,
@@ -64,7 +71,7 @@ const noNetwork = async (url) => {
 };
 
 function makeDesk({ stories = [], fetchImpl = noNetwork, feeds } = {}) {
-  const desk = new NewsDesk({ log: silentLogger, fetchImpl });
+  const desk = new NewsDesk({ log: silentLogger, fetchImpl, lookup: async () => [{ address: '93.184.216.34', family: 4 }] });
   for (const s of stories) desk.stories.set(s.id, s);
   if (feeds) desk.loadFeeds = () => feeds;
   return desk;
@@ -299,10 +306,6 @@ describe('parseFeed', () => {
 
   test(
     'does not cut a real sentence that happens to end with "read more" or "continue reading"',
-    {
-      todo:
-        'STILL BROKEN server/news.js:53 - the end-anchored /\\s*(?:Read more|Continue reading)\\s*\\.?$/i cannot tell the feed link from a sentence: "Experts say children should read more." is stored as "Experts say children should", "Please continue reading." as "Please"',
-    },
     () => {
       assert.equal(summaryOf('Experts say children should read more.'), 'Experts say children should read more.');
       assert.equal(summaryOf('Please continue reading.'), 'Please continue reading.');
@@ -311,10 +314,6 @@ describe('parseFeed', () => {
 
   test(
     'does not wipe a sentence that merely contains "the post ... appeared first on"',
-    {
-      todo:
-        'STILL BROKEN server/news.js:53 - /The post .{0,200}? appeared first on .{0,80}?\\./ is neither anchored nor limited to the end: "The post office said it appeared first on Monday that stamps rise." leaves an EMPTY summary',
-    },
     () => {
       assert.equal(summaryOf('The post office said it appeared first on Monday that stamps rise.'), 'The post office said it appeared first on Monday that stamps rise.');
     }
@@ -335,15 +334,17 @@ describe('parseFeed', () => {
     assert.deepEqual(stories.map((s) => [s.title, s.link]), [['With guid', 'https://example.com/guid']]);
   });
 
-  test('a missing or invalid date falls back to the current time', () => {
+  test('a missing or invalid date falls back to the current time, one second older per position (newest first)', () => {
     const before = Date.now();
     const xml = rssFeed(
       '<item><title>No date</title><link>https://example.com/nodate</link></item>',
       rssItem({ title: 'Broken date', link: 'https://example.com/baddate', pubDate: 'yesterday afternoon' })
     );
-    for (const s of parseFeed(xml, FEED)) {
-      assert.ok(s.published >= before && s.published <= Date.now() + 1000, `published=${s.published}`);
-    }
+    const [a, b] = parseFeed(xml, FEED);
+    assert.ok(a.published >= before && a.published <= Date.now() + 1000, `published=${a.published}`);
+    assert.equal(a.published - b.published, 1000);
+    const fixed = parseFeed(xml, FEED, { now: 5_000_000 });
+    assert.deepEqual(fixed.map((s) => s.published), [5_000_000, 4_999_000], 'a given "now" makes it deterministic');
   });
 
   test('returns [] for empty or non-feed documents', () => {
@@ -401,23 +402,24 @@ describe('extractImage', () => {
     const item = {
       'media:content': [
         { '@_url': 'https://img.test/logo.svg', '@_width': '2000' },
-        { '@_url': 'https://img.test/logo.svg?v=2', '@_width': '1500' },
-        { '@_url': 'https://img.test/photo.jpg', '@_width': '100' },
+        { '@_url': 'https://img.test/chart.svg?v=2', '@_width': '1500' },
+        { '@_url': 'https://img.test/photo.jpg', '@_width': '800' },
       ],
     };
     assert.equal(extractImage(item), 'https://img.test/photo.jpg');
   });
 
-  test('ignores URLs that are not http(s)', () => {
+  test('ignores URLs that are not http(s); a protocol-relative URL is read as https', () => {
     const item = {
       'media:content': [
         { '@_url': 'data:image/png;base64,AAAA', '@_width': '900' },
-        { '@_url': '//img.test/protocol-relative.jpg', '@_width': '800' },
         { '@_url': 'ftp://img.test/old.jpg', '@_width': '700' },
         { '@_url': '/relative/path.jpg', '@_width': '600' },
+        { '@_url': 'file:///etc/hosts.jpg', '@_width': '600' },
       ],
     };
     assert.equal(extractImage(item), null);
+    assert.equal(extractImage({ 'media:content': { '@_url': '//img.test/protocol-relative.jpg', '@_width': '800' } }), 'https://img.test/protocol-relative.jpg');
   });
 
   test('ignores tracking pixels and gifs', () => {
@@ -425,7 +427,7 @@ describe('extractImage', () => {
       'media:thumbnail': [
         { '@_url': 'http://secure-uk.imrworldwide.com/cgi-bin/m?ci=x', '@_width': '1' },
         { '@_url': 'https://img.test/spacer.gif', '@_width': '1' },
-        { '@_url': 'https://img.test/ok.jpg', '@_width': '10' },
+        { '@_url': 'https://img.test/ok.jpg', '@_width': '800' },
       ],
     };
     assert.equal(extractImage(item), 'https://img.test/ok.jpg');
@@ -442,8 +444,8 @@ describe('extractImage', () => {
   });
 
   test('falls back to <img> tags in content/description and decodes entities in the src', () => {
-    const item = { 'content:encoded': '<p><img class="x" src="https://img.test/a.jpg?w=1&amp;h=2"></p>' };
-    assert.equal(extractImage(item), 'https://img.test/a.jpg?w=1&h=2');
+    const item = { 'content:encoded': '<p><img class="x" src="https://img.test/a.jpg?a=1&amp;b=2"></p>' };
+    assert.equal(extractImage(item), 'https://img.test/a.jpg?a=1&b=2');
     assert.equal(extractImage({ summary: "<img src='https://img.test/single-quoted.jpg'>" }), 'https://img.test/single-quoted.jpg');
   });
 
@@ -567,9 +569,17 @@ describe('isBreaking', () => {
     assert.equal(isBreaking('BREAKING NEWS'), true);
   });
 
-  test('recognises "– live" and "live updates"', () => {
-    for (const title of ['Iran strikes – live', 'Iran strikes - live', 'Election night — live', 'Election night -live', 'Live updates: vote count under way', 'Live update: vote count under way', 'Vote count: live updates']) {
-      assert.equal(isBreaking(title), true, title);
+  test('live blogs ("– live", "live updates") are rolling coverage, not breaking news, but isLiveBlog() spots them', () => {
+    for (const title of ['Iran strikes – live', 'Iran strikes - live', 'Election night — live', 'Election night -live', 'Live updates: vote count under way', 'Live update: vote count under way', 'Vote count: live updates', 'Premier League – live', 'Live: storm reaches the coast']) {
+      assert.equal(isBreaking(title), false, title);
+      assert.equal(isLiveBlog(title), true, title);
+    }
+    assert.equal(isBreaking('BREAKING: storm hits the coast – live'), true, 'an explicit marker still wins');
+  });
+
+  test('isLiveBlog() ignores headlines that merely contain "live"', () => {
+    for (const title of ['Live music festival opens in Lisbon', 'Olive harvest begins early', 'Alive and well after ten days at sea', 'Long-lived trees found in Chile', 'Minister resigns', '', undefined]) {
+      assert.equal(isLiveBlog(title), false, String(title));
     }
   });
 
@@ -608,10 +618,6 @@ describe('isBreaking', () => {
 
   test(
     'does not mistake a headline that ENDS in "record-breaking" (or is all capitals) for breaking news',
-    {
-      todo:
-        'STILL BROKEN server/news.js:61 - /[,|–—-]\\s*breaking\\s*$/i also matches the hyphen of "-breaking": "The heatwave is record-breaking" and "Sales are record-breaking" are flagged; and /\\bBREAKING\\b/ (case-sensitive) matches "RECORD-BREAKING HEATWAVE HITS EUROPE" in an all-caps headline',
-    },
     () => {
       for (const title of ['The heatwave is record-breaking', 'Sales are record-breaking', 'The scenes were heart-breaking', 'RECORD-BREAKING HEATWAVE HITS EUROPE']) {
         assert.equal(isBreaking(title), false, title);
@@ -1061,11 +1067,13 @@ describe('NewsDesk.markCovered', () => {
     assert.equal(desk.covered.size, 4);
   });
 
-  test('does not touch the timestamp of a story that was already covered by an earlier event match', () => {
+  test('covers again a report of the same event that an earlier episode covered (fix r2: a re-run keeps its mates off the air)', () => {
     const desk = makeDesk({ stories: quakeStories() });
     desk.covered.set('q2', 1234);
+    desk.coveredSeq.set('q2', 0);
     desk.markCovered(['q1']);
-    assert.equal(desk.covered.get('q2'), 1234);
+    assert.ok(desk.covered.get('q2') > 1234, 'the mate is covered now');
+    assert.equal(desk.coveredSeq.get('q2'), desk.coverSeq, 'with this episode, so recycling waits the full gap for it too');
   });
 });
 
@@ -1330,5 +1338,181 @@ describe('NewsDesk.resolveImage', () => {
     assert.equal(await desk.resolveImage(story), null);
     assert.equal(fetchImpl.requested.length, 1);
     assert.equal(story.imageChecked, true);
+  });
+});
+
+// ---------------------------------------------------------------- local feeds: pictures shipped with offline fixtures
+
+describe('local feed pictures (offline fixtures only)', () => {
+  const item = (url) => ({ title: 't', 'media:content': { '@_url': url, '@_medium': 'image' } });
+
+  test('extractLocalImage resolves a relative picture path inside the feed folder, as a file: URL', () => {
+    const dir = path.join(os.tmpdir(), 'feeds');
+    assert.equal(extractLocalImage(item('img/a.png'), dir), pathToFileURL(path.join(dir, 'img', 'a.png')).href);
+    assert.equal(extractLocalImage({ enclosure: { '@_url': 'b.jpg', '@_type': 'image/jpeg' } }, dir), pathToFileURL(path.join(dir, 'b.jpg')).href);
+  });
+
+  test('it never escapes the folder, never takes absolute paths or URLs, and only picture files', () => {
+    const dir = path.join(os.tmpdir(), 'feeds');
+    for (const url of ['../secret.png', 'img/../../x.png', '/etc/passwd.png', 'file:///etc/a.png', 'https://img.test/a.png', 'img/a.svg', 'notes.txt', '\\\\server\\a.png']) {
+      assert.equal(extractLocalImage(item(url), dir), null, url);
+    }
+  });
+
+  test('parseFeed uses it only when told the feed is local, and marks those stories local', () => {
+    const xml = rssFeed('<item><title>Local</title><link>https://fixtures.test/1</link><description>Text.</description><media:content url="img/x.png" medium="image"/></item>');
+    const remote = parseFeed(xml, FEED)[0];
+    // A remote feed resolves a relative picture against the item's web page, never on the local disk.
+    assert.equal(remote.image, 'https://fixtures.test/img/x.png');
+    assert.ok(!('local' in remote));
+    const dir = path.join(os.tmpdir(), 'feeds');
+    const local = parseFeed(xml, FEED, { baseDir: dir })[0];
+    assert.equal(local.image, pathToFileURL(path.join(dir, 'img', 'x.png')).href);
+    assert.equal(local.local, true);
+  });
+
+  test('localFeedPath: repo-relative paths and file: URLs are local, web URLs are not', () => {
+    assert.ok(localFeedPath('config/fixtures/world.xml').endsWith(path.join('config', 'fixtures', 'world.xml')));
+    assert.equal(localFeedPath(pathToFileURL('/tmp/feed.xml').href), path.resolve('/tmp/feed.xml'));
+    assert.equal(localFeedPath('https://example.test/rss'), null);
+  });
+
+  test('refresh() remembers the folders of local feeds (the only places pictures may be served from)', async (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'livenews-local-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, 'feed.xml');
+    fs.writeFileSync(file, rssFeed('<item><title>A local story here</title><link>https://fixtures.test/a</link><description>Text.</description><media:content url="pic.png" medium="image"/></item>'));
+    const desk = makeDesk({ feeds: [{ name: 'Local', url: pathToFileURL(file).href, category: 'world' }] });
+    await desk.refresh();
+    assert.deepEqual([...desk.localImageRoots], [dir]);
+    const story = [...desk.stories.values()][0];
+    assert.equal(fileURLToPath(story.image), path.join(dir, 'pic.png'));
+  });
+
+  test('resolveImage never looks for an article page behind a local story', async () => {
+    const story = { id: 'l1', link: 'https://fixtures.globit.invalid/1', image: null, local: true };
+    assert.equal(await makeDesk({ fetchImpl: noNetwork }).resolveImage(story), null);
+  });
+});
+
+describe('parseFeed: live blogs', () => {
+  test('a live blog is flagged "live" (for the writer) but is not breaking news', () => {
+    const xml = rssFeed('<item><title>Election night – live</title><link>https://example.test/live</link><description>Updates.</description></item>');
+    const [s] = parseFeed(xml, FEED);
+    assert.equal(s.live, true);
+    assert.equal(isBreaking(s.title), false);
+  });
+});
+
+describe('NewsDesk.deskView', () => {
+  test('lists the most interesting stories first with what an editor needs to see, and nothing more', () => {
+    const now = Date.now();
+    const desk = makeDesk({
+      stories: [
+        { id: 'a', title: 'Old story', summary: 'x'.repeat(100), source: 'A', category: 'world', weight: 1, published: now - 20 * 3600_000, image: null },
+        { id: 'b', title: 'BREAKING: fresh story', summary: 'x'.repeat(100), source: 'B', category: 'tech', weight: 1, published: now, image: 'https://img.test/b.jpg', live: false },
+      ],
+    });
+    desk.covered.set('a', now);
+    const view = desk.deskView(80, now);
+    assert.deepEqual(view.map((v) => v.id), ['b', 'a']);
+    assert.deepEqual(Object.keys(view[0]).sort(), ['breaking', 'category', 'covered', 'hasImage', 'id', 'imageCredit', 'imageCreditVia', 'imageVia', 'live', 'outlets', 'score', 'source', 'title']);
+    assert.equal(view[0].breaking, true);
+    assert.equal(view[0].hasImage, true);
+    assert.equal(view[1].covered, true);
+    assert.equal(desk.deskView(1, now).length, 1);
+  });
+
+  test('(editorial-2 fix r2) an undated item and a broken clock are marked for the editor', () => {
+    const now = Date.now();
+    const desk = makeDesk({
+      stories: [
+        { id: 'u', title: 'Undated story', summary: 'x'.repeat(100), source: 'A', category: 'world', weight: 1, published: now, image: null, undated: true },
+        { id: 'f', title: 'Story from the future', summary: 'x'.repeat(100), source: 'B', category: 'world', weight: 1, published: now - 12 * 3600_000, image: null, brokenDate: true },
+      ],
+    });
+    const byId = Object.fromEntries(desk.deskView(80, now).map((v) => [v.id, v]));
+    assert.equal(byId.u.undated, true);
+    assert.equal(byId.f.brokenDate, true);
+    assert.equal('brokenDate' in byId.u, false);
+  });
+});
+
+describe('news: editorial fixes (round 1)', () => {
+  test('the WordPress boilerplate regex stays linear on hostile input (no ReDoS)', async () => {
+    const { stripBoilerplate } = await import('../server/news.js');
+    for (const tail of ['A'.repeat(200) + ' x', 'ABCDEFGHIJ'.repeat(40) + 'z more words', 'Big News Site '.repeat(60) + 'x']) {
+      const t0 = performance.now();
+      stripBoilerplate(`Real text. The post Some title appeared first on ${tail}`);
+      assert.ok(performance.now() - t0 < 50, `${(performance.now() - t0).toFixed(1)} ms`);
+    }
+    assert.equal(stripBoilerplate('Real story text. The post Big news appeared first on Example News Site.'), 'Real story text.');
+    assert.equal(stripBoilerplate('Real story text. The post Big news appeared first on example.com'), 'Real story text.');
+  });
+
+  test('breaking news tops the desk (x3); a live page sinks (x0.5)', () => {
+    const base = { published: 1000, outlets: 1, weight: 1, summary: 'x'.repeat(100) };
+    const plain = interestScore({ ...base, title: 'Canal reopens' }, 1000);
+    assert.equal(interestScore({ ...base, title: 'BREAKING: Canal reopens' }, 1000), plain * 3);
+    assert.equal(interestScore({ ...base, title: 'Talks – live', live: true }, 1000), plain * 0.5);
+  });
+
+  test('a programme\'s first category weighs 1.5x in its candidates', () => {
+    const desk = new NewsDesk({ log: { info() {}, warn() {} } });
+    const now = Date.now();
+    const add = (id, category, ageMin) => desk.stories.set(id, { id, title: `Story ${id} about ${category} things`, summary: 'x'.repeat(100), source: `Outlet ${id}`, category, weight: 1, published: now - ageMin * 60_000, kw: new Set([id, category]) });
+    add('t1', 'tech', 0);
+    add('s1', 'science', 30);
+    assert.deepEqual(desk.candidates(2, { categories: ['science', 'tech'], now }).map((s) => s.id), ['s1', 't1']);
+    assert.deepEqual(desk.candidates(2, { categories: ['tech', 'science'], now }).map((s) => s.id), ['t1', 's1']);
+  });
+
+  test('plainTitle strips the outlet\'s BREAKING and live markers', async () => {
+    const { plainTitle } = await import('../server/news.js');
+    assert.equal(plainTitle('BREAKING: Panama Canal reopens'), 'Panama Canal reopens');
+    assert.equal(plainTitle('Minister resigns – BREAKING'), 'Minister resigns');
+    assert.equal(plainTitle('Climate talks in Nairobi – live'), 'Climate talks in Nairobi');
+    assert.equal(plainTitle('Live updates: election night'), 'Election night');
+    assert.equal(plainTitle('Record-breaking heatwave hits Europe'), 'Record-breaking heatwave hits Europe');
+  });
+});
+
+describe('editorial-2 r3: Guardian live patterns and shouting headlines', () => {
+  test('the Guardian\'s live pages are spotted, and their markers never reach speech', async () => {
+    const { plainTitle } = await import('../server/news.js');
+    const cases = {
+      'UK inflation falls to 2.3% as energy bills ease – business live': 'UK inflation falls to 2.3% as energy bills ease',
+      'Politics live: PM faces questions on housing': 'Politics: PM faces questions on housing',
+      'Ukraine war live: talks resume in Geneva': 'Ukraine war: talks resume in Geneva',
+      'Election night – as it happened': 'Election night',
+    };
+    for (const [title, said] of Object.entries(cases)) {
+      assert.equal(isLiveBlog(title), true, title);
+      assert.equal(isBreaking(title), false, title);
+      assert.equal(plainTitle(title), said, title);
+    }
+    for (const title of ['Live music festival opens in Lisbon', 'Olive harvest: a record year', 'Deliver the goods, says union']) assert.equal(isLiveBlog(title), false, title);
+  });
+
+  test('sentenceCase keeps place names (also a two-word place at the very end) and acronyms, and never throws', async () => {
+    const { sentenceCase } = await import('../server/news.js');
+    assert.equal(sentenceCase('THOUSANDS FLEE AS WILDFIRE SPREADS NEAR LOS ANGELES'), 'Thousands flee as wildfire spreads near Los Angeles');
+    assert.equal(sentenceCase('FLOODS IN NEW ZEALAND'), 'Floods in New Zealand');
+    assert.equal(sentenceCase('UN SAYS AID REACHES SOUTH SUDAN'), 'UN says aid reaches South Sudan');
+    assert.equal(sentenceCase('Normal headline stays as written'), 'Normal headline stays as written');
+    for (const t of ['NEW YORK', 'IN NEW YORK CITY', 'TO SAN FRANCISCO', '!!! LOS ANGELES !!!']) assert.doesNotThrow(() => sentenceCase(t), t);
+  });
+});
+
+describe('sentenceCase keeps acronyms and codes it does not know (fix round 1)', () => {
+  test('ESA, Q3, COP29 stay; ordinary short words and places do not shout', async () => {
+    const { sentenceCase } = await import('../server/news.js');
+    assert.equal(sentenceCase('NASA AND ESA LAUNCH JOINT MISSION'), 'NASA and ESA launch joint mission');
+    assert.equal(sentenceCase('UK GDP SHRINKS IN Q3'), 'UK GDP shrinks in Q3');
+    assert.equal(sentenceCase('G7 LEADERS MEET AT COP29'), 'G7 leaders meet at COP29');
+    assert.equal(sentenceCase('WHO WARNS OF CHOLERA IN DRC'), 'WHO warns of cholera in DRC');
+    assert.equal(sentenceCase('OIL PRICES FALL AS DEMAND COOLS'), 'Oil prices fall as demand cools');
+    assert.equal(sentenceCase('MAN HELD AFTER BANK RAID IN ROME'), 'Man held after bank raid in Rome');
+    assert.equal(sentenceCase('THOUSANDS FLEE AS WILDFIRE SPREADS NEAR LOS ANGELES'), 'Thousands flee as wildfire spreads near Los Angeles');
   });
 });

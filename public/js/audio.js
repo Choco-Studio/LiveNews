@@ -1,312 +1,132 @@
 // Audio for the show. English by default; `new AudioEngine({ lang: 'es' })` uses
-// Spanish voices. Sentence-by-sentence Web Speech TTS, Animal Crossing style
-// "blips" through WebAudio, a silent mode that still moves the presenters' lips,
-// and chiptune jingles built from oscillators only. Nothing here may throw: a
-// missing API just means less sound, never a broken broadcast.
+// Spanish voices. Sentence-by-sentence Web Speech TTS (or a recorded neural
+// voice played through WebAudio), a low murmur for the "blips" mode, a silent
+// mode that still moves the presenters' lips, and the channel's music and
+// cues. Nothing here may throw: a missing API just means less sound, never a
+// broken broadcast.
+//
+// Pieces (public/js/audio/): visemes.js turns each sentence into a mouth
+// timeline (speechFrame), synth.js is the synth and mixer (ducking, dips,
+// limiter), tune.js the tune format, themes.js the channel's sonic identity,
+// voices.js the TTS voice choice and loudness.js the level plan and the model
+// that levels tunes from different authors.
+
+import { buildTimeline, sampleTimeline, sampleCalm, SpeechClock, wordAtChar } from './audio/visemes.js';
+import { splitSentences } from './audio/sentences.js';
+import { buildBuses, Ducker, TunePlayer, asSong, scheduleMurmur, bank } from './audio/synth.js';
+import { CUES, cueFor, themeFor, THEME_IDS } from './audio/themes.js';
+import { langPlan, normProfile, resolveVoices } from './audio/voices.js';
+import { WAVE_KINDS } from './audio/waves.js';
+import { estimateLoudness } from './audio/loudness.js';
+
+export { themeFor, cueFor, CUES, MOTIF } from './audio/themes.js';
+export { VISEMES } from './audio/visemes.js';
+export { splitSentences } from './audio/sentences.js';
 
 const MODES = ['tts', 'blips', 'mute'];
-const MAX_CHUNK = 180;
-const MIN_CHUNK = 12;
-const MUTE_CPS = 15; // characters per second when nothing is audible
-const BLIP_STEP = 1000 / 16; // ms per character in blips mode (~15 cps with the pauses)
-const GAP = { tts: 60, blips: 120, mute: 220 }; // ms of closed mouth between sentences
+const MUTE_CPS = 15; // characters per second a failed TTS sentence is squeezed into
+// Silence after a sentence, by how it ends (ms). A newsreader leaves ~0.4-0.6 s
+// after a full stop; TTS engines already add ~0.15-0.25 s of their own.
+function gapAfter(sentence, mode) {
+  const end = /([.!?…:;])["'’”»)\]]*\s*$/.exec(sentence)?.[1] ?? '';
+  const tts = mode === 'tts';
+  if (end === '?') return tts ? 220 : 480;
+  if (end === '…') return tts ? 300 : 560;
+  if (end === '.' || end === '!') return tts ? 180 : 430;
+  if (end === ':' || end === ';') return tts ? 120 : 300;
+  return tts ? 60 : 160; // a long sentence cut at a comma: keep going
+}
 
-// ---------------------------------------------------------------- sentences
-
-// Abbreviations whose dot does not end a sentence ("Dr. Smith", "EE. UU.").
-// Single letters ("U.S.", "e.g.", "J. K.") are handled separately.
-const ABBREV = new Set([
-  // English
-  'mr', 'mrs', 'ms', 'dr', 'prof', 'st', 'jr', 'sr', 'inc', 'ltd', 'co', 'corp', 'bros', 'gen', 'gov',
-  'sen', 'rep', 'lt', 'col', 'sgt', 'capt', 'cmdr', 'mt', 'ft', 'vs', 'dept', 'govt', 'approx',
-  // Spanish
-  'sra', 'srta', 'dra', 'ud', 'uds', 'vd', 'vds', 'sta', 'sto', 'ing', 'lic', 'gral', 'av', 'avda',
-  'pág', 'págs', 'núm', 'aprox', 'ee', 'cc', 'ej', 'tel', 'excmo', 'excma', 'ilmo', 'ilma', 'mons',
-]);
-// Only abbreviations when a number follows: "No. 5", "Oct. 12" (but "No. He left." splits).
-const NUM_ABBREV = new Set([
-  'no', 'nos', 'fig', 'vol', 'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec',
-]);
-
-function isBoundary(src, from, to, run) {
-  // `to` is the index of the whitespace after the terminator run.
-  const next = src[to + 1];
-  if (next && /\p{Ll}/u.test(next)) return false; // "U.S. officials", "bueno… vamos", '"Stop." he said'
-  if (run === '.') {
-    const word = /(\p{L}+)$/u.exec(src.slice(Math.max(0, from - 12), from))?.[1];
-    if (word) {
-      const w = word.toLowerCase();
-      if (word.length === 1 || ABBREV.has(w)) return false; // initials and dotted acronyms too
-      if (NUM_ABBREV.has(w) && /\d/.test(next ?? '')) return false;
-    }
+// Where each sentence starts in the text (the same rule the director uses).
+function sentenceStarts(text, sentences) {
+  const starts = [];
+  let from = 0;
+  for (const sentence of sentences) {
+    const at = text.indexOf(sentence.slice(0, 12), from);
+    starts.push(at >= 0 ? at : from);
+    from = (at >= 0 ? at : from) + sentence.length;
   }
-  return true;
+  return starts;
 }
-
-function cutLong(text) {
-  const out = [];
-  let rest = text;
-  while (rest.length > MAX_CHUNK) {
-    // The window leaves at least MIN_CHUNK chars for the tail so it is not a stub.
-    const win = rest.slice(0, Math.min(MAX_CHUNK + 1, rest.length - MIN_CHUNK));
-    let cut = Math.max(win.lastIndexOf(', '), win.lastIndexOf('; '), win.lastIndexOf(': ')) + 1;
-    if (cut < MAX_CHUNK * 0.4) cut = win.lastIndexOf(' ');
-    if (cut <= 0) cut = Math.min(MAX_CHUNK, win.length); // unbroken text: hard cut
-    out.push(rest.slice(0, cut).trim());
-    rest = rest.slice(cut).trim();
-  }
-  if (rest) out.push(rest);
-  return out;
-}
-
-// Splits English and Spanish text on . ! ? … (keeping the punctuation) without
-// breaking numbers ("6.1", "$1.2bn"), abbreviations ("Dr.", "U.S.", "EE. UU.") or
-// lower-case continuations; glues fragments shorter than 12 chars to their
-// neighbour and cuts anything over ~180 chars at a comma or space.
-export function splitSentences(text) {
-  const src = String(text ?? '').replace(/\s+/g, ' ').trim();
-  if (!src) return [];
-  const parts = [];
-  const re = /[.!?…]+["'’”»)\]]*(?=\s|$)/g;
-  let start = 0;
-  let m;
-  while ((m = re.exec(src))) {
-    const end = m.index + m[0].length;
-    if (end >= src.length) break;
-    if (!isBoundary(src, m.index, end, m[0])) continue;
-    parts.push(src.slice(start, end).trim());
-    start = end;
-  }
-  const tail = src.slice(start).trim();
-  if (tail) parts.push(tail);
-
-  const merged = [];
-  for (const p of parts) {
-    const prev = merged[merged.length - 1];
-    if (prev && p.length < MIN_CHUNK && prev.length + 1 + p.length <= MAX_CHUNK) {
-      merged[merged.length - 1] = `${prev} ${p}`;
-    } else {
-      merged.push(p);
-    }
-  }
-  if (merged.length > 1 && merged[0].length < MIN_CHUNK && merged[0].length + 1 + merged[1].length <= MAX_CHUNK) {
-    merged.splice(0, 2, `${merged[0]} ${merged[1]}`);
-  }
-  return merged.flatMap((p) => (p.length > MAX_CHUNK ? cutLong(p) : [p]));
-}
-
-// ------------------------------------------------------------------- voices
-
-// Name hints for the voice's gender, English and Spanish together (a voice list
-// only ever holds one language in practice). The first group matches as a
-// substring, the second only as a whole word so "Tom" does not hit "Tomás".
-const MALE_RE = new RegExp(
-  'jorge|pablo|alvaro|álvaro|diego|enrique|carlos|juan|raul|raúl|hombre|' +
-  '(?<!\\p{L})(?:male|eddy|reed|rocko|grandpa|alonso|tomás|tomas|miguel|ricardo|sergio|óscar|oscar|' +
-  'jesús|jesus|darío|dario|elías|elias|saúl|saul|teo|yago|pelayo|gerardo|cecilio|liberto|luciano|' +
-  'daniel|george|arthur|ryan|thomas|oliver|guy|christopher|eric|david|mark|alex|tom|aaron|evan|gordon|' +
-  'lee|rishi|james|brian|roger|steffan|davis|jason|tony|andrew|william|liam|connor|luke|noah|alfie|' +
-  'ethan|prabhat|mitchell|fred)(?!\\p{L})',
-  'iu',
-);
-const FEMALE_RE = new RegExp(
-  'helena|laura|lucia|lucía|elvira|monica|mónica|paulina|sabina|conchita|female|mujer|elena|dalia|' +
-  '(?<!\\p{L})(?:flo|sandy|shelley|grandma|marisol|lupe|paloma|abril|estrella|irene|laia|triana|' +
-  'vera|beatriz|candela|carlota|marina|nuria|renata|ximena|' +
-  'samantha|ava|allison|susan|serena|kate|libby|sonia|jenny|aria|michelle|hazel|zira|maisie|mia|emma|' +
-  'jane|sara|nancy|ana|amy|joanna|karen|moira|tessa|fiona|victoria|martha|nicky|catherine|natasha|' +
-  'neerja|clara|emily|leah|heather|zoe)(?!\\p{L})',
-  'iu',
-);
-// Robotic / novelty voices that macOS lists next to the real ones.
-const NOVELTY_RE = new RegExp(
-  '(?<!\\p{L})(?:albert|agnes|bad news|bahh|bells|boing|bubbles|bruce|cellos|deranged|good news|' +
-  'hysterical|jester|junior|kathy|organ|princess|ralph|superstar|trinoids|vicki|whisper|wobble|zarvox)(?!\\p{L})',
-  'iu',
-);
-
-// Regional variants to prefer, best first. A region in the engine option goes in front.
-const LANG_PREF = { en: ['en-gb', 'en-us'], es: ['es-es'] };
-
-function langPlan(option) {
-  const [head, region] = String(option || 'en').toLowerCase().split(/[-_]/);
-  const base = (head || '').replace(/[^a-z]/g, '') || 'en';
-  const pref = [...new Set([...(region ? [`${base}-${region}`] : []), ...(LANG_PREF[base] ?? [])])];
-  return { base, pref, match: new RegExp(`^${base}(?:[-_]|$)`, 'i') };
-}
-
-// Legacy macOS voices that sound robotic: what the 'robot' gender looks for.
-const ROBOT_RE = /(?<!\p{L})(?:zarvox|trinoids|fred|ralph|junior|albert|robot)(?!\p{L})/iu;
-
-const voiceName = (v) => String(v?.name ?? '');
-
-// 'male' | 'female' | null from the voice name alone.
-function voiceGender(v) {
-  const name = voiceName(v);
-  const male = MALE_RE.test(name);
-  const female = FEMALE_RE.test(name);
-  return male && !female ? 'male' : female && !male ? 'female' : null;
-}
-
-// Language variant first (en-GB, then en-US, then any en-*), gender hint second.
-function voiceScore(v, gender, pref) {
-  const rank = pref.indexOf(String(v.lang ?? '').toLowerCase().replace('_', '-'));
-  let s = rank >= 0 ? Math.max(10, 30 - rank * 10) : 10;
-  const name = voiceName(v);
-  const g = voiceGender(v);
-  const robotic = gender === 'robot' && ROBOT_RE.test(name);
-  if (gender === 'male' || gender === 'female') s += g === gender ? 50 : g ? -50 : 0;
-  else if (gender === 'robot') s += robotic ? 60 : g === 'male' ? 20 : 0;
-  if (gender !== 'robot' && /natural|neural/i.test(name)) s += 12; // Edge's neural voices beat the old SAPI ones
-  if (NOVELTY_RE.test(name) && !robotic) s -= 60;
-  return s;
-}
-
-// Best voice for a slot. Prefers voices of the right gender that no other slot
-// has taken yet, so two female presenters do not share one voice unless they must.
-function chooseVoice(pool, gender, pref, used) {
-  const scored = pool.map((v) => ({ v, s: voiceScore(v, gender, pref), g: voiceGender(v) }));
-  const fits = scored.filter((c) => !((gender === 'male' && c.g === 'female') || (gender === 'female' && c.g === 'male')));
-  const fresh = fits.filter((c) => !used.has(c.v));
-  const list = fresh.length ? fresh : fits.length ? fits : scored;
-  return list.reduce((best, c) => (c.s > best.s ? c : best)).v;
-}
-
-// ----------------------------------------------------------- voice profiles
-
-const GENDER_DEFAULTS = {
-  male: { pitch: 0.95, rate: 1.02 },
-  female: { pitch: 1.08, rate: 1.08 },
-  robot: { pitch: 0.5, rate: 1.15 },
-  neutral: { pitch: 1, rate: 1.05 },
-};
-
-const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
-const numOr = (v, fallback, lo, hi) => (v == null || v === '' || !Number.isFinite(Number(v)) ? fallback : clamp(Number(v), lo, hi));
-
-// Forgiving: { gender: 'male'|'female'|'robot', lang, pitch, rate } or just a gender string.
-function normProfile(p, explicit = true) {
-  const src = typeof p === 'string' ? { gender: p } : p ?? {};
-  const g = String(src.gender ?? '').trim().toLowerCase();
-  const gender = /^(f|w|girl)/.test(g) ? 'female' : /^(m|boy)/.test(g) ? 'male' : /^(r|bot|android)/.test(g) ? 'robot' : 'neutral';
-  const d = GENDER_DEFAULTS[gender];
-  return {
-    gender,
-    lang: typeof src.lang === 'string' && src.lang.trim() ? src.lang.trim() : null,
-    pitch: numOr(src.pitch, d.pitch, 0.1, 2),
-    rate: numOr(src.rate, d.rate, 0.5, 2),
-    explicit,
-  };
-}
-
-// Without a profile: 'A' is the male anchor, 'B' the female one, anything else a neutral announcer.
-const DEFAULT_PROFILES = new Map([['A', normProfile('male', false)], ['B', normProfile('female', false)]]);
-const NEUTRAL_PROFILE = normProfile('neutral', false);
-
-// Blip timbres per gender. Robots are low, flat, staccato and heavily filtered.
-const BLIP_KINDS = {
-  male: { base: 200, type: 'square', gain: 0.12, cut: 2600, vary: 0.16, flat: 0, len: 0.78 },
-  female: { base: 350, type: 'triangle', gain: 0.28, cut: 2600, vary: 0.16, flat: 0, len: 0.78 },
-  neutral: { base: 270, type: 'triangle', gain: 0.26, cut: 2600, vary: 0.16, flat: 0, len: 0.78 },
-  robot: { base: 130, type: 'square', gain: 0.13, cut: 1400, vary: 0.03, flat: 0.8, len: 0.55 },
-};
-
-function hash01(str) {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
-  return (h >>> 0) / 4294967296;
-}
-
-// Slots with their own profile get a pitch from it plus a small per-slot offset,
-// so two presenters of the same gender do not beep alike either.
-function blipFor(key, prof) {
-  const kind = BLIP_KINDS[prof.gender];
-  if (!prof.explicit && (key === 'A' || key === 'B')) return { ...kind };
-  const pitch = prof.gender === 'robot' ? 1 : clamp(prof.pitch, 0.6, 1.6);
-  return { ...kind, base: Math.max(90, kind.base * pitch * (1 + (hash01(key) - 0.5) * 0.14)) };
-}
-
-// -------------------------------------------------------------- mouth level
-
-// Web Speech exposes no audio, so fake plausible syllable flapping: two sines
-// around 9 and 12 Hz, a slow phrase envelope, noise, and a kick on every word.
-function synthLevel(run, now) {
-  const t = now / 1000 + run.phase;
-  const syl = 0.5 + 0.3 * Math.sin(t * 56.5) + 0.2 * Math.sin(t * 73.9 + 1.3);
-  const phrase = 0.8 + 0.2 * Math.sin(t * 14.5);
-  const kick = 0.35 * Math.exp(-Math.max(0, now - run.boundaryAt) / 120);
-  const attack = Math.min(1, (now - run.talkAt) / 90);
-  const v = (syl * phrase + (Math.random() - 0.5) * 0.22) * attack + kick;
-  return v < 0 ? 0 : v > 1 ? 1 : v;
-}
-
-// -------------------------------------------------------------------- blips
-
-// [letters, mouth openness, pitch ratio]: open vowels beep louder and lower.
-const VOWEL = new Map();
-for (const [chars, open, pitch] of [['aá', 1, 1], ['eé', 0.8, 1.12], ['ií', 0.6, 1.26], ['oó', 0.9, 0.94], ['uúü', 0.7, 0.84]]) {
-  for (const c of chars) VOWEL.set(c, { open, pitch });
-}
-const Y_VOWEL = { open: 0.6, pitch: 1.2 }; // "city", "my", "system"; not "yes" or "play"
-const isVowel = (c) => VOWEL.has(c?.toLowerCase());
-
-// Timeline for one sentence: vowels are beeps, consonants silent ticks, spaces
-// and punctuation pauses. Times are ms from the start of the sentence.
-function planBlips(sentence, blip) {
-  const beeps = [];
-  let t = 0;
-  let stop = false;
-  const chars = [...sentence];
-  for (let i = 0; i < chars.length; i++) {
-    const ch = chars[i];
-    const lc = ch.toLowerCase();
-    // A 'y' with no vowel next to it sounds like one.
-    const vowel = VOWEL.get(lc) ?? (lc === 'y' && !isVowel(chars[i - 1]) && !isVowel(chars[i + 1]) ? Y_VOWEL : undefined);
-    const long = /[.!?…]/.test(ch);
-    if (long || /[,;:]/.test(ch)) {
-      if (!stop) t += BLIP_STEP * (long ? 4 : 3); // "..." or "?!" count once
-      stop = true;
-      continue;
-    }
-    stop = false;
-    if (vowel) {
-      beeps.push({
-        at: t,
-        dur: BLIP_STEP * blip.len,
-        freq: blip.base * (1 + (vowel.pitch - 1) * (1 - blip.flat)) * (1 - blip.vary / 2 + Math.random() * blip.vary),
-        peak: 0.65 + 0.35 * vowel.open,
-      });
-      t += BLIP_STEP;
-    } else if (/[\s\-–—]/.test(ch)) {
-      t += BLIP_STEP * 0.8;
-    } else if (/[\p{L}\p{N}]/u.test(ch)) {
-      t += BLIP_STEP;
-    } // quotes, brackets and ¿¡ take no time
-  }
-  if (blip.flat < 0.5 && /\?[\s"'’”»)\]]*$/.test(sentence)) {
-    beeps.slice(-6).forEach((b, i) => { b.freq *= 1 + 0.05 * (i + 1); }); // questions rise
-  }
-  return { beeps, total: Math.max(t, 300) };
-}
-
-// ---------------------------------------------------------------------- run
 
 // State of one speak() call. `wakers` holds everything currently waiting
-// (timers, utterances) so stop() can release them all at once.
+// (timers, utterances) so stop() can release them all at once. The current
+// sentence's mouth timeline lives here too.
 class Run {
   constructor(key) {
     this.key = key; // voice slot: 'A', 'B', 'announcer', 'ad2'...
     this.cancelled = false;
-    this.talking = false; // tts / mute: mouth is flapping
-    this.talkAt = 0;
-    this.boundaryAt = -1e9;
-    this.phase = Math.random() * 6.28;
-    this.beeps = null; // blips: timeline of the current sentence
-    this.beepIdx = -1;
-    this.t0 = 0;
     this.reset = false;
     this.utter = null; // keeps the utterance alive: Chrome may GC it before onend
     this.wakers = new Set();
+    this.tl = null; // speech timeline of the sentence being said
+    this.clock = null; // tts / mute: wall clock -> timeline time
+    this.perf0 = null; // blips: performance.now() at which the first sound is heard
+    this.sentence = -1;
+    this.anchors = null; // recorded voice: [{ perf, w }] word starts still to apply
+    this.nextAnchor = 0;
+    this.loud = null; // recorded voice: analyser for the real loudness
+    this.marks = null; // [{ char (in text), sentence, rel, fired }]
+    this.markCursor = 0;
+  }
+
+  setTimeline(tl, clock, perf0 = null) {
+    this.tl = tl;
+    this.clock = clock;
+    this.perf0 = perf0;
+  }
+
+  clearTimeline() {
+    this.tl = null;
+    this.clock = null;
+    this.perf0 = null;
+    this.anchors = null;
+  }
+
+  // Recorded voice: smoothed loudness 0..1 of what is playing right now.
+  loudness(now) {
+    const l = this.loud;
+    if (!l) return 1;
+    if (!Number.isFinite(l.value)) l.value = 0;
+    if (now - l.at < 8) return l.value;
+    let target;
+    if (l.env) {
+      // The clip's own loudness envelope (voice service, 0..1 over the clip's
+      // top 40 dB, frame i at i/rate s): exact in any context, offline renders
+      // included, where an analyser reads silence. Mapped like the analyser.
+      const x = ((now - l.env.perf0) / 1000) * l.env.rate;
+      const i = Math.floor(x);
+      const vals = l.env.values;
+      const a = i >= 0 && i < vals.length ? Number(vals[i]) || 0 : 0;
+      const b = i + 1 >= 0 && i + 1 < vals.length ? Number(vals[i + 1]) || 0 : 0;
+      target = Math.min(1, Math.max(0, (a + (b - a) * (x - i) - 0.2) / 0.75));
+    } else {
+      l.analyser.getFloatTimeDomainData(l.data);
+      let sum = 0;
+      for (let i = 0; i < l.data.length; i++) {
+        const v = l.data[i];
+        if (Number.isFinite(v)) sum += v * v;
+      }
+      const dbv = 10 * Math.log10(sum / l.data.length + 1e-10);
+      target = Math.min(1, Math.max(0, (dbv + 48) / 30));
+    }
+    const dt = l.at < 0 ? 1000 : Math.max(0, now - l.at);
+    // Fast to open, a little slower to close, like a jaw.
+    l.value += (target - l.value) * (1 - Math.exp(-dt / (target > l.value ? 25 : 60)));
+    if (!Number.isFinite(l.value)) l.value = 0;
+    l.at = now;
+    return l.value;
+  }
+
+  timeAt(now) {
+    if (!this.tl) return null;
+    const a = this.anchors;
+    while (a && this.clock && this.nextAnchor < a.length && a[this.nextAnchor].perf <= now) {
+      const { w, perf } = a[this.nextAnchor++];
+      this.clock.anchorWord(w, perf);
+    }
+    if (this.clock) return this.clock.timeAt(now);
+    return this.perf0 === null ? null : now - this.perf0;
   }
 
   sleep(ms) {
@@ -328,96 +148,44 @@ class Run {
 
   cancel() {
     this.cancelled = true;
-    this.talking = false;
-    this.beeps = null;
+    this.clearTimeline();
     this.wake();
   }
 }
 
-// -------------------------------------------------------------------- tunes
+const RELEASE_MS = 130; // an interrupted mouth closes over this long
+const LOOKAHEAD = 1.6; // seconds of music scheduled ahead (timers may be throttled)
+const LOOKAHEAD_MAX = 4; // ... and at most this far after the main thread has stalled
+const PENDING_MAX = 8; // tunes kept waiting for a locked context (newest win)
+const DUCK_LEAD = 120; // ms between ducking the music and the first sound of a voice
+const SPEED_KEY = 'globit24.ttsSpeed'; // learned TTS pace per voice, kept across sessions
+const clamp01 = (x) => (x > 0 ? (x < 1 ? x : 1) : 0);
 
-// Tune data comes from other people's files, so parsing never throws: bad
-// tokens simply become rests and missing fields get defaults.
-//   { bpm, wave, notes: 'C5:1 E5:1 G5:2 R:1', bass: 'C3:2 G2:2', bassWave, drums: 'K:1 H:0.5 S:1' }
-const SEMITONE = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
-const NOTE_RE = /^([A-Ga-g])([#b♯♭]?)(-?\d)?$/;
-const REST_RE = /^(r|rest|-|_|\.)$/i;
-const DRUM_KEYS = { k: 'k', kick: 'k', bd: 'k', s: 's', snare: 's', sd: 's', h: 'h', hat: 'h', hh: 'h', o: 'h' };
-const WAVES = new Set(['square', 'triangle', 'sawtooth', 'sine']);
-const WAVE_GAIN = { square: 1, triangle: 1.4, sawtooth: 0.7, sine: 1.3 }; // evens out loudness
-const MAX_EVENTS = 1500;
-const TUNE_LOOKAHEAD = 2.5; // seconds of music scheduled ahead of the clock (timers may be throttled)
-const DUCK_LEVEL = 0.4; // music level while someone talks: 60% lower
-
-// Octave 4 when omitted: 'C' is middle C (MIDI 60).
-function noteToMidi(name) {
-  const m = NOTE_RE.exec(name);
-  if (!m) return null;
-  const accidental = m[2] === '#' || m[2] === '♯' ? 1 : m[2] ? -1 : 0;
-  return 12 * ((m[3] === undefined ? 4 : Number(m[3])) + 1) + SEMITONE[m[1].toLowerCase()] + accidental;
-}
-
-// Beats as '1', '0.5', '.5' or '1/2'.
-function parseBeats(text) {
-  const m = /^(\d*\.?\d+)(?:\/(\d*\.?\d+))?$/.exec(text ?? '');
-  const n = m ? Number(m[1]) / (m[2] ? Number(m[2]) : 1) : NaN;
-  return Number.isFinite(n) && n > 0 ? clamp(n, 0.0625, 64) : 1;
-}
-
-// 'C4+E4+G4:2' is a chord. Returns the events and the track length in beats.
-function parseTrack(src, drums = false) {
-  const text = Array.isArray(src) ? src.join(' ') : typeof src === 'string' ? src : '';
-  const events = [];
-  let at = 0;
-  for (const token of text.split(/[\s,|]+/)) {
-    if (!token || events.length >= MAX_EVENTS) continue;
-    const [name, dur] = token.split(':');
-    const len = parseBeats(dur);
-    if (drums) {
-      const drum = DRUM_KEYS[name.toLowerCase()];
-      if (drum) events.push({ at, dur: len, drum });
-    } else if (!REST_RE.test(name)) {
-      const midis = name.split('+').map(noteToMidi).filter((m) => m !== null);
-      if (midis.length) events.push({ at, dur: len, midis });
+function loadSpeeds() {
+  try {
+    const raw = globalThis.localStorage?.getItem(SPEED_KEY);
+    const obj = raw ? JSON.parse(raw) : null;
+    if (obj && typeof obj === 'object') {
+      return new Map(Object.entries(obj).filter(([, v]) => Number.isFinite(v) && v >= 0.5 && v <= 2).slice(0, 64));
     }
-    at += len;
-  }
-  return { events, beats: at };
-}
-
-function parseTune(tune) {
-  const t = typeof tune === 'string' ? { notes: tune } : tune;
-  if (!t || typeof t !== 'object') return null;
-  const get = (...keys) => keys.map((k) => t[k]).find((v) => v != null);
-  const wave = (v, fallback) => (WAVES.has(String(v).toLowerCase()) ? String(v).toLowerCase() : fallback);
-  const lead = wave(get('wave', 'waveform'), 'square');
-  const tracks = [
-    { kind: 'lead', wave: lead, ...parseTrack(get('notes', 'melody', 'lead')) },
-    { kind: 'bass', wave: wave(get('bassWave'), 'triangle'), ...parseTrack(get('bass')) },
-    { kind: 'drums', wave: lead, ...parseTrack(get('drums', 'percussion'), true) },
-  ].filter((track) => track.events.length);
-  if (!tracks.length) return null;
-  return {
-    bpm: clamp(Number(get('bpm', 'tempo')) || 120, 30, 400),
-    tracks,
-    beats: Math.max(...tracks.map((track) => track.beats)),
-  };
+  } catch { /* private window, blocked storage */ }
+  return new Map();
 }
 
 // ------------------------------------------------------------------- engine
 
-const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
-
 export class AudioEngine {
   #synth = null;
   #ctx = null;
-  #master = null;
-  #noiseBuf = null;
+  #buses = null;
+  #ducker = null;
   #volume = 0.8;
   #requested = 'tts';
-  #music = null; // bus for playTune(): ducked while someone talks
-  #ducked = false;
-  #tunes = new Set();
+  #players = new Set(); // live tune handles
+  #pending = new Set(); // tunes waiting for the context to start
+  #pump = 0;
+  #pumpAt = -1; // context time of the last pump tick
+  #lookahead = LOOKAHEAD;
   #lang;
   #all = []; // every installed voice
   #voices = []; // the ones in the engine's language
@@ -426,7 +194,18 @@ export class AudioEngine {
   #resolved = new Map(); // slot -> { voice, pitch, rate, lang, blip }
   #lastRefresh = 0;
   #primed = false;
+  #armed = null;
   #run = null;
+  #speed = loadSpeeds(); // voice name (or slot) -> learned TTS speed (timeline ms per wall ms)
+  #last = new Map(); // slot -> { at, viseme, level } last sampled mouth, for releases
+  #scratch = {};
+  #calmScratch = {};
+  #markScratch = {};
+  #levelFrame = {};
+  #voiceCache = new Map(); // url -> Promise<AudioBuffer> (decoded recorded voices)
+  #musicDuckDb = -20;
+  #warmed = false;
+  #lastResume = -Infinity;
 
   // `lang` picks the voice language ('en', 'es', or 'en-AU' to prefer a region).
   constructor(opts) {
@@ -452,8 +231,56 @@ export class AudioEngine {
     if (!Number.isFinite(n)) return;
     this.#volume = Math.min(1, Math.max(0, n));
     try {
-      this.#master?.gain.setTargetAtTime(this.#volume, this.#ctx.currentTime, 0.01);
+      this.#buses?.out.gain.setTargetAtTime(this.#volume, this.#ctx.currentTime, 0.01);
     } catch { /* no audio */ }
+  }
+
+  /** The AudioContext (null until unlock()); for other audio modules. */
+  get context() {
+    return this.#ctx;
+  }
+
+  /** Gain node for programme beds: routed to the master, ducked under speech (musicDuckDb). */
+  get musicBus() {
+    return this.#buses?.music ?? null;
+  }
+
+  /** Gain node every playTune() tune and cue plays into (each ducks itself); for taps and recorders. */
+  get tunesBus() {
+    return this.#buses?.tunes ?? null;
+  }
+
+  /** Gain node for voice audio played through WebAudio (not ducked, limited). */
+  get speechBus() {
+    return this.#buses?.speech ?? null;
+  }
+
+  /**
+   * How far beds on musicBus drop while a voice is heard, in dB (default -20;
+   * 0 = no duck, for a bed engine that ducks itself). Held 0.7 s after the
+   * last word, ~120 ms attack, ~500 ms release, plus a -6 dB dip at 2.8 kHz.
+   */
+  get musicDuckDb() {
+    return this.#musicDuckDb;
+  }
+
+  set musicDuckDb(db) {
+    const n = Number(db);
+    if (!Number.isFinite(n)) return;
+    this.#musicDuckDb = Math.max(-40, Math.min(0, n));
+    try {
+      if (this.#buses?.bedTarget) this.#ducker.retarget(this.#buses.bedTarget, 10 ** (this.#musicDuckDb / 20), this.#ctx.currentTime);
+    } catch { /* ignore */ }
+  }
+
+  /** True while anyone is speaking (between their sentences too), heard or not. */
+  get speaking() {
+    return Boolean(this.#run && !this.#run.cancelled);
+  }
+
+  /** True while a voice is actually heard (music is ducked for it). */
+  get voiced() {
+    return Boolean(this.#ducker?.speaking);
   }
 
   get ttsAvailable() {
@@ -462,17 +289,32 @@ export class AudioEngine {
     return this.#voices.length > 0;
   }
 
-  // The requested mode wins unless it is 'tts' without a voice for the language.
+  // The requested mode. 'tts' without any system voice plays recorded voices
+  // when a segment has one and otherwise speaks silently (lips + captions,
+  // like a muted broadcast) - never a fallback to beeps.
   get mode() {
-    return this.#requested === 'tts' && !this.ttsAvailable ? 'blips' : this.#requested;
+    return this.#requested;
+  }
+
+  /** The selectable modes, in V-key order. */
+  get modes() {
+    return [...MODES];
+  }
+
+  /** Human label of the current mode (main.js shows it on the V key). */
+  get modeLabel() {
+    if (this.#requested === 'tts') return this.ttsAvailable ? 'tts' : 'tts (no system voices: captions)';
+    return this.#requested === 'blips' ? 'blips (murmur)' : this.#requested;
   }
 
   setMode(mode) {
     if (!MODES.includes(mode)) return;
-    const before = this.mode;
+    const before = this.#requested;
     this.#requested = mode;
-    if (mode === 'mute') this.#stopTunes();
-    if (this.mode === before) return;
+    // Mute silences the output but keeps every tune running, so an ad's music
+    // comes back when sound is switched on again.
+    this.#applyMute();
+    if (mode === before) return;
     // Cut what is sounding now; a running speak() carries on with its next sentence.
     try {
       this.#synth?.cancel();
@@ -481,19 +323,25 @@ export class AudioEngine {
   }
 
   // Call from a user gesture. Everything async is bounded so it can never hang.
+  // Without one (autostart) it also listens for the first gesture and retries.
   async unlock() {
     let resumed = null;
     try {
       const ctx = this.#ensureContext();
       if (ctx) {
         this.#primeAudio(ctx);
-        if (ctx.state !== 'running') resumed = ctx.resume();
+        if (ctx.state !== 'running') {
+          this.#lastResume = performance.now();
+          resumed = ctx.resume();
+        }
+        this.#warm(ctx);
       }
       this.#primeSpeech();
     } catch { /* ignore */ }
     try {
       if (resumed) await Promise.race([resumed, new Promise((r) => setTimeout(r, 1000))]);
     } catch { /* ignore */ }
+    if (!this.#unlocked()) this.#armUnlock();
     try {
       await this.#loadVoices();
     } catch { /* ignore */ }
@@ -512,25 +360,82 @@ export class AudioEngine {
     this.#resolve();
   }
 
+  /** Which voice each slot got (for the control panel and the lab). */
+  voiceInfo() {
+    return [...this.#resolved].map(([slot, c]) => ({ slot, voice: c.voice?.name ?? null, lang: c.voice?.lang ?? c.lang, gender: c.gender, pitch: c.pitch, rate: c.rate }));
+  }
+
+  /**
+   * Start fetching and decoding a recorded voice now (e.g. the next segment's
+   * `audio.url`), so speak() can start it without a gap. Returns a promise
+   * (never rejects) resolving true when the buffer is ready.
+   */
+  preload(url) {
+    if (typeof url !== 'string' || !url) return Promise.resolve(false);
+    if (!this.#ctx) this.#ensureContext();
+    return this.#loadVoiceBuffer({ url }).then((b) => Boolean(b), () => false);
+  }
+
   // `anchor` is any slot key. Resolves when the text has been spoken or stop() ran.
+  // opts.onSentence(sentence, i) fires as each sentence starts. opts.audio is a
+  // recorded voice for the whole text: { url | buffer (AudioBuffer), words:
+  // [{ t: seconds, char: index into text }], levels?: { rate, values: [0..1] }
+  // (loudness envelope: the jaw follows it) }; it is played through WebAudio
+  // unless blips were asked for, and browser TTS is the fallback.
+  // opts.marks: [char offsets into text] and opts.onMark(i) fire when the
+  // voice reaches each offset (gestures on the right word, in every mode);
+  // marks after the last word fire when the speech ends.
   speak(text, anchor = 'A', opts = {}) {
     const onSentence = opts?.onSentence;
+    const audio = opts?.audio && typeof opts.audio === 'object' ? opts.audio : null;
     this.#stopSpeech();
-    const sentences = splitSentences(text);
+    const src = String(text ?? '');
+    const sentences = splitSentences(src);
     if (!sentences.length) {
-      this.#duck(false);
+      this.#voiceOff();
       return Promise.resolve();
     }
     const run = new Run(typeof anchor === 'string' && anchor ? anchor : 'A');
+    const starts = sentenceStarts(src, sentences);
+    if (Array.isArray(opts?.marks) && typeof opts.onMark === 'function') {
+      run.marks = opts.marks
+        .map((c, i) => ({ i, char: Number(c) }))
+        .filter((m) => Number.isFinite(m.char))
+        .sort((a, b) => a.char - b.char)
+        .map((m) => {
+          let s = 0;
+          while (s + 1 < starts.length && starts[s + 1] <= m.char) s++;
+          return { ...m, sentence: s, rel: m.char - starts[s], fired: false };
+        });
+      run.onMark = opts.onMark;
+    }
     this.#run = run;
-    this.#duck(true);
-    return this.#play(run, sentences, onSentence);
+    return this.#play(run, sentences, onSentence, audio ? { audio, text: src, starts } : null);
   }
 
   stop() {
     this.#stopSpeech();
-    this.#duck(false);
+    this.#voiceOff();
   }
+
+  /**
+   * When no recorded voice plays: seconds from speak()'s start to each sentence's first word, and the whole
+   * length, on the timelines and pauses the engine will use (silent and murmur exactly; a system voice keeps near
+   * it). The director plans a correspondent link's shots on them (linkplan.js).
+   */
+  sentenceTimes(text, anchor = 'A') {
+    const sentences = splitSentences(String(text ?? ''));
+    const mode = this.mode;
+    const starts = [];
+    let t = 0;
+    for (let i = 0; i < sentences.length; i++) {
+      starts.push(t);
+      t += (this.#timeline(anchor, sentences[i], { paced: mode !== 'tts' }).total + 40) / 1000;
+      if (i < sentences.length - 1) t += gapAfter(sentences[i], mode) / 1000;
+    }
+    return { starts, end: t };
+  }
+
 
   // Speech and every tune.
   stopAll() {
@@ -538,12 +443,87 @@ export class AudioEngine {
     this.#stopTunes();
   }
 
-  level(anchor) {
+  /**
+   * The mouth of `slot` (default: whoever is speaking) at `now`:
+   * { slot, speaking, level 0..1, viseme, next, mix 0..1, wordIndex, charIndex,
+   *   sentenceIndex, accent 0..1 (stressed syllable), pause (comma pause),
+   *   voice (smoothed loudness 0..1 of the recorded clip playing for that
+   *   slot, between sentences too; -1 when no recording plays) }.
+   * Visemes: rest MBP FV TH L EE AH OH OO WQ S. Works in tts, blips and mute.
+   * Pass `out` (any object) to have it filled instead of a new one allocated.
+   * `opts.calm`: the coarse stream for small faces - tongue shapes (TH, L, S)
+   * folded into their neighbours, every shape held >= 80 ms (lip closures
+   * excepted) and the jaw smoothed over ~100 ms (<= ~0.12 per 60 fps frame).
+   */
+  speechFrame(now = performance.now(), slot, out, opts) {
+    const calm = opts?.calm === true;
     const run = this.#run;
-    if (!run || run.cancelled || run.key !== anchor) return 0;
-    const now = performance.now();
-    if (run.beeps) return this.#blipLevel(run, now);
-    return run.talking ? synthLevel(run, now) : 0;
+    const key = slot ?? (run && !run.cancelled ? run.key : null);
+    const f = out && typeof out === 'object' ? out : {};
+    f.slot = key;
+    f.speaking = false;
+    f.level = 0;
+    f.viseme = 'rest';
+    f.next = 'rest';
+    f.mix = 0;
+    f.wordIndex = -1;
+    f.charIndex = -1;
+    f.sentenceIndex = -1;
+    f.accent = 0;
+    f.pause = false;
+    f.voice = -1;
+    if (key === null || key === undefined || !Number.isFinite(now)) return f;
+    const live = run && !run.cancelled && run.key === key ? run : null;
+    // A recorded clip is playing for this slot: its smoothed loudness 0..1,
+    // also between sentences (FACES opens the lips with the sound; -1 = none).
+    if (live && live.loud) f.voice = live.loudness(now);
+    const t = live ? live.timeAt(now) : null;
+    if (live && t !== null && Number.isFinite(t)) {
+      const s = sampleTimeline(live.tl, t, this.#scratch);
+      const c = calm ? sampleCalm(live.tl, t, this.#calmScratch) : s;
+      f.speaking = s.speaking;
+      // A recorded voice: the jaw also follows what is actually heard.
+      const level = live.loud ? c.level * Math.min(1, 0.25 + live.loudness(now) * 0.9) : c.level;
+      f.level = clamp01(level);
+      f.viseme = c.viseme;
+      f.next = c.next;
+      f.mix = clamp01(c.mix);
+      f.wordIndex = s.wordIndex;
+      f.charIndex = s.charIndex;
+      f.accent = clamp01(s.accent);
+      f.pause = s.pause;
+      f.sentenceIndex = live.sentence;
+      const shown = f.mix > 0.5 ? f.next : f.viseme;
+      const last = this.#last.get(key);
+      if (last) {
+        if (now >= last.at) {
+          last.at = now;
+          last.viseme = shown;
+          last.level = f.level;
+        }
+      } else this.#last.set(key, { at: now, viseme: shown, level: f.level });
+      return f;
+    }
+    // Interrupted (sentence ended early, stop(), mode change): close smoothly.
+    const last = this.#last.get(key);
+    if (!last) return f;
+    const since = Math.max(0, now - last.at);
+    if (since < RELEASE_MS && last.level > 0.01) {
+      const k = since / RELEASE_MS;
+      const ease = k * k * (3 - 2 * k);
+      f.viseme = last.viseme;
+      f.next = 'rest';
+      f.mix = ease;
+      f.level = clamp01(last.level * (1 - ease));
+      if (live) f.sentenceIndex = live.sentence;
+    }
+    return f;
+  }
+
+  // Mouth openness 0..1 for the existing presenters (studio.js); kept until the
+  // new face system reads speechFrame() directly.
+  level(anchor) {
+    return this.speechFrame(performance.now(), anchor, this.#levelFrame).level;
   }
 
   isSpeaking(anchor) {
@@ -551,24 +531,19 @@ export class AudioEngine {
     return Boolean(run && !run.cancelled && run.key === anchor);
   }
 
-  sfx(name) {
+  /**
+   * Channel cues: jingle/ident, stinger (whoosh), breaking, outro/signoff,
+   * promo/upnext, blip. opts: { programId (per-programme key and voicing for
+   * breaking/outro/promo), startAt (performance.now() ms at which the cue's
+   * first beat should be heard, e.g. the shot change it belongs to), hour }.
+   */
+  sfx(name, opts = {}) {
     try {
-      const ctx = this.#ctx;
-      if (!ctx || this.#requested === 'mute') return;
-      if (ctx.state !== 'running') {
-        Promise.resolve(ctx.resume()).catch(() => {});
-        return;
-      }
-      const t = ctx.currentTime + 0.02;
-      switch (name) {
-        case 'jingle': this.#jingle(t); break;
-        case 'outro': this.#outro(t); break;
-        case 'whoosh': this.#whoosh(t); break;
-        case 'breaking': this.#breaking(t); break;
-        case 'blip': this.#tone('square', 880, t, 0.05, 0.08, { to: 1320 }); break;
-        default: break;
-      }
+      if (name === 'blip') return this.#blip();
+      const cue = cueFor(name, opts?.programId, { hour: opts?.hour }) ?? CUES[name];
+      if (cue) this.playTune(cue, { volume: 0.5, startAt: opts?.startAt });
     } catch { /* never break the show over a sound effect */ }
+    return undefined;
   }
 
   // ---------------------------------------------------------------- speaking
@@ -583,9 +558,53 @@ export class AudioEngine {
     } catch { /* ignore */ }
   }
 
-  async #play(run, sentences, onSentence) {
+  // A voice is heard: duck the music (attack ~120 ms).
+  #voiceOn() {
     try {
+      if (this.#ctx && this.#ducker) this.#ducker.start(this.#ctx.currentTime);
+    } catch { /* ignore */ }
+  }
+
+  // The voice stopped: the duck is held 0.7 s before the music comes back.
+  #voiceOff() {
+    try {
+      if (this.#ctx && this.#ducker) this.#ducker.end(this.#ctx.currentTime);
+    } catch { /* ignore */ }
+  }
+
+  // Fire the marks the speech has reached (polled while a run has marks).
+  #pollMarks(run, final = false) {
+    const marks = run.marks;
+    if (!marks || run.markCursor >= marks.length) return;
+    let reached = -1;
+    let sentence = run.sentence;
+    if (final) sentence = Infinity;
+    else {
+      const t = run.timeAt(performance.now());
+      if (t === null) return;
+      const f = sampleTimeline(run.tl, t, this.#markScratch);
+      if (!f.speaking && t < 0) return;
+      reached = f.charIndex >= 0 ? f.charIndex : t > 0 ? Infinity : -1;
+    }
+    while (run.markCursor < marks.length) {
+      const m = marks[run.markCursor];
+      if (m.sentence < sentence || (m.sentence === sentence && m.rel <= reached)) {
+        run.markCursor++;
+        try {
+          run.onMark(m.i);
+        } catch (err) {
+          console.warn('[audio] onMark failed', err);
+        }
+      } else break;
+    }
+  }
+
+  async #play(run, sentences, onSentence, recorded = null) {
+    const poll = run.marks ? setInterval(() => !run.cancelled && this.#pollMarks(run), 25) : 0;
+    try {
+      if (recorded && this.#requested !== 'blips' && (await this.#playRecorded(run, recorded, sentences, onSentence))) return;
       for (let i = 0; i < sentences.length && !run.cancelled; i++) {
+        run.sentence = i;
         try {
           onSentence?.(sentences[i], i);
         } catch (err) {
@@ -594,60 +613,236 @@ export class AudioEngine {
         const mode = this.mode;
         if (mode === 'tts') await this.#sayTts(run, sentences[i]);
         else if (mode === 'blips') await this.#sayBlips(run, sentences[i]);
-        else await this.#sayMute(run, sentences[i]);
-        run.talking = false;
-        if (i < sentences.length - 1 && !run.cancelled) await run.sleep(GAP[mode]);
+        else await this.#saySilent(run, sentences[i]);
+        run.clearTimeline();
+        if (i < sentences.length - 1 && !run.cancelled) await run.sleep(gapAfter(sentences[i], mode));
       }
     } catch (err) {
       console.warn('[audio] speech failed', err);
     } finally {
+      clearInterval(poll);
+      // Reactions placed after the last word still play when speech ends.
+      if (!run.cancelled) this.#pollMarks(run, true);
       run.cancel();
       if (this.#run === run) {
         this.#run = null;
-        this.#duck(false);
+        this.#voiceOff();
       }
     }
   }
 
-  async #sayMute(run, sentence, ms = (sentence.length / MUTE_CPS) * 1000) {
-    run.talking = true;
-    run.talkAt = performance.now();
-    await run.sleep(Math.max(250, ms));
+  // ---------------------------------------------------------- recorded voice
+
+  // AudioBuffer for a recorded line (decoded once, a few kept), or null. The
+  // decode promise itself is cached, so a slow decode that outlives the 4 s
+  // wait still lands in the cache for the next time.
+  async #loadVoiceBuffer(audio) {
+    const ctx = this.#ctx;
+    if (!ctx) return null;
+    if (audio.buffer && typeof audio.buffer.getChannelData === 'function') return audio.buffer;
+    const url = typeof audio.url === 'string' ? audio.url : null;
+    if (!url) return null;
+    let job = this.#voiceCache.get(url);
+    if (!job) {
+      job = (async () => {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`voice ${res.status}`);
+        return ctx.decodeAudioData(await res.arrayBuffer());
+      })();
+      job.catch(() => this.#voiceCache.delete(url));
+      this.#voiceCache.set(url, job);
+      if (this.#voiceCache.size > 8) this.#voiceCache.delete(this.#voiceCache.keys().next().value);
+    }
+    let timer = 0;
+    try {
+      return await Promise.race([job, new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('voice timeout')), 4000); })]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // Plays a recorded voice for the whole text. Each sentence gets its own mouth
+  // timeline, anchored to the recording's word times, and the jaw also follows
+  // the real loudness. Returns false (nothing played) if the audio is unusable.
+  async #playRecorded(run, { audio, text, starts }, sentences, onSentence) {
+    const ctx = this.#ctx;
+    if (!ctx || !this.#buses || ctx.state !== 'running') return false;
+    let buffer = null;
+    try {
+      buffer = await this.#loadVoiceBuffer(audio);
+    } catch (err) {
+      console.warn('[audio] recorded voice unavailable, using TTS', err?.message ?? err);
+    }
+    if (!buffer || run.cancelled) return Boolean(run.cancelled);
+    const words = (Array.isArray(audio.words) ? audio.words : [])
+      .map((w) => ({ t: Number(w?.t) * 1000, char: Number(w?.char) }))
+      .filter((w) => Number.isFinite(w.t) && Number.isFinite(w.char))
+      .sort((a, b) => a.t - b.t);
+    const durMs = buffer.duration * 1000;
+    const plan = sentences.map((sentence, i) => {
+      const a = starts[i];
+      const b = i + 1 < starts.length ? starts[i + 1] : Infinity;
+      const tl = this.#timeline(run.key, sentence);
+      const mine = words.filter((w) => w.char >= a && w.char < b);
+      // Sentence start: its first recorded word, else proportional to the text.
+      const begin = mine.length ? mine[0].t : (a / Math.max(1, text.length)) * durMs;
+      // Several recorded words on one original token ("$2bn" -> "two billion
+      // dollars") step through that token's spoken words.
+      const anchors = [];
+      for (const w of mine) {
+        let wi = wordAtChar(tl, w.char - a);
+        const prev = anchors[anchors.length - 1];
+        if (prev && wi <= prev.w && tl.words[prev.w + 1] && tl.words[prev.w + 1].ci === tl.words[prev.w].ci) wi = prev.w + 1;
+        if (!prev || wi > prev.w) anchors.push({ at: w.t, w: wi });
+      }
+      // Sentence end: the last word plus the rest of the timeline at the pace
+      // the recording showed (the gap after it is silence, mouth at rest).
+      let end = begin + tl.total;
+      if (anchors.length >= 2) {
+        const f = anchors[0];
+        const l = anchors[anchors.length - 1];
+        const span = tl.words[l.w].t0 - tl.words[f.w].t0;
+        const pace = span > 50 ? Math.min(2, Math.max(0.5, (l.at - f.at) / span)) : 1;
+        end = l.at + (tl.total - tl.words[l.w].t0) * pace;
+      }
+      return { sentence, tl, begin, end, anchors };
+    });
+    for (let i = 0; i + 1 < plan.length; i++) plan[i].end = Math.min(plan[i].end, plan[i + 1].begin);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    src.connect(analyser);
+    analyser.connect(this.#buses.speech);
+    // The music's duck is settled when the first word arrives.
+    this.#voiceOn();
+    const t0 = ctx.currentTime + DUCK_LEAD / 1000;
+    const perf0 = this.#heardAt(t0);
+    const lv = audio.levels;
+    const env = lv && Array.isArray(lv.values) && lv.values.length && Number(lv.rate) > 0 ? { rate: Number(lv.rate), values: lv.values, perf0 } : null;
+    run.loud = { analyser, data: new Float32Array(analyser.fftSize), at: -1, value: 0, env };
+    let ended = false;
+    src.onended = () => {
+      ended = true;
+      run.wake();
+    };
+    src.start(t0);
+    const stopSource = () => {
+      try {
+        src.stop();
+      } catch { /* already stopped */ }
+    };
+    try {
+      for (let i = 0; i < plan.length && !run.cancelled && !ended; i++) {
+        const p = plan[i];
+        const startPerf = perf0 + p.begin;
+        // onSentence fires as the sentence's first recorded word is HEARD (output
+        // latency included): v2 planners use onSentence(0) as the speech start.
+        if (startPerf > performance.now()) await run.sleep(startPerf - performance.now());
+        if (run.cancelled || ended) break;
+        run.sentence = i;
+        try {
+          onSentence?.(p.sentence, i);
+        } catch (err) {
+          console.warn('[audio] onSentence failed', err);
+        }
+        const clock = new SpeechClock(p.tl, { speed: p.anchors.length ? 1 : p.tl.total / Math.max(200, p.end - p.begin), soft: false });
+        clock.start(startPerf);
+        run.setTimeline(p.tl, clock);
+        run.anchors = p.anchors.map((x) => ({ perf: perf0 + x.at, w: x.w }));
+        run.nextAnchor = 0;
+        const endPerf = perf0 + p.end;
+        while (!run.cancelled && !ended && performance.now() < endPerf - 1) await run.sleep(endPerf - performance.now());
+        run.clearTimeline(); // silence until the next sentence: the mouth rests
+        const next = i + 1 < plan.length ? perf0 + plan[i + 1].begin : perf0 + durMs + 40;
+        while (!run.cancelled && !ended && performance.now() < next - 1) await run.sleep(next - performance.now());
+      }
+      // Wait for the clip's `ended`, but never much past its length: a context
+      // that stops processing (suspended by the host, an offline recording)
+      // never fires it, and the show must go on.
+      const deadline = perf0 + durMs + 1500;
+      while (!run.cancelled && !ended && performance.now() < deadline) await run.sleep(Math.max(20, Math.min(perf0 + durMs + 300, deadline) - performance.now()));
+    } finally {
+      if (run.cancelled || !ended) stopSource();
+      run.clearTimeline();
+      run.loud = null;
+      setTimeout(() => {
+        try {
+          analyser.disconnect();
+          src.disconnect();
+        } catch { /* ignore */ }
+      }, 200);
+    }
+    return true;
+  }
+
+  // `paced`: no engine sets the pace (silent, murmur): keep half of the
+  // profile's rate offset, so the timeline stays at a broadcast 150-170 wpm.
+  #timeline(key, sentence, { paced = false } = {}) {
+    const cfg = this.#config(key);
+    const rate = paced ? 1 + (cfg.rate - 1) * 0.5 : cfg.rate;
+    return buildTimeline(sentence, { lang: cfg.voice?.lang || cfg.lang || this.#lang.base, rate });
+  }
+
+  // No sound: the mouth follows the timeline on the wall clock (mute, or tts
+  // with no system voice). `ms` squeezes it into the time left when a TTS
+  // engine failed mid-sentence.
+  async #saySilent(run, sentence, ms, tl = this.#timeline(run.key, sentence, { paced: true })) {
+    const speed = ms ? Math.min(2, Math.max(0.5, tl.total / Math.max(250, ms))) : 1;
+    const clock = new SpeechClock(tl, { speed, soft: false });
+    clock.start(performance.now());
+    run.setTimeline(tl, clock);
+    await run.sleep(tl.total / clock.speed + 40);
+  }
+
+  // Learned TTS speed for a voice: its own, else the mean of the voices
+  // learned so far (a new voice starts from the engine-wide pace).
+  #speedFor(voiceKey) {
+    const own = this.#speed.get(voiceKey);
+    if (own) return own;
+    if (!this.#speed.size) return 1;
+    let sum = 0;
+    for (const v of this.#speed.values()) sum += v;
+    return sum / this.#speed.size;
   }
 
   async #sayTts(run, sentence) {
     const synth = this.#synth;
     const Utter = globalThis.SpeechSynthesisUtterance;
-    if (!synth || !Utter) return this.#sayMute(run, sentence);
+    if (!synth || !Utter || !this.ttsAvailable) return this.#saySilent(run, sentence);
     if (!run.reset) {
       // Fresh start for every speak(); the short wait avoids Chrome swallowing
-      // an utterance queued right after cancel().
+      // an utterance queued right after cancel(). The music starts ducking now,
+      // so it has settled when the engine's first word arrives.
+      this.#voiceOn();
       run.reset = true;
       try {
         synth.cancel();
         if (synth.paused) synth.resume();
       } catch { /* ignore */ }
       await run.sleep(60);
-      if (run.cancelled || this.mode !== 'tts') return;
+      if (run.cancelled || this.mode !== 'tts') return undefined;
     }
     const cfg = this.#config(run.key);
+    const tl = this.#timeline(run.key, sentence);
+    const voiceKey = cfg.voice?.name ?? `slot:${run.key}`;
+    const clock = new SpeechClock(tl, { speed: this.#speedFor(voiceKey), soft: true });
+    run.setTimeline(tl, clock);
     const t0 = performance.now();
+    this.#voiceOn();
     const how = await new Promise((resolve) => {
       let settled = false;
       let timeout = 0;
       let startTimer = 0;
-      const u = new Utter(sentence);
+      // The engine says what a newsreader would: "$2bn" as "two billion dollars".
+      const u = new Utter(tl.spoken || sentence);
       u.lang = cfg.voice?.lang || cfg.lang;
       if (cfg.voice) u.voice = cfg.voice;
       u.pitch = cfg.pitch;
       u.rate = cfg.rate;
       u.volume = this.#volume;
       run.utter = u;
-      const begin = () => {
-        if (run.talking) return;
-        run.talking = true;
-        run.talkAt = performance.now();
-      };
+      const begin = () => clock.start(performance.now());
       const finish = (result) => {
         if (settled) return;
         settled = true;
@@ -661,8 +856,9 @@ export class AudioEngine {
       run.wakers.add(wake);
       u.onstart = begin;
       u.onboundary = (e) => {
-        begin();
-        if (!e.name || e.name === 'word') run.boundaryAt = performance.now();
+        if (e.name && e.name !== 'word') return;
+        // Word boundaries (offsets in the spoken text) re-synchronise the mouth.
+        clock.anchorSpoken(Number(e.charIndex) || 0, performance.now());
       };
       u.onend = () => finish('end');
       u.onerror = () => finish('error');
@@ -673,100 +869,110 @@ export class AudioEngine {
           synth.cancel();
         } catch { /* ignore */ }
         finish('timeout');
-      }, (sentence.length / 9 + 4) * 1000);
+      }, ((tl.spoken || sentence).length / 9 + 4) * 1000);
       try {
         synth.speak(u);
       } catch {
         finish('error');
       }
     });
-    run.talking = false;
-    if (how === 'cancel' || run.cancelled) return;
-    const elapsed = performance.now() - t0;
+    const end = performance.now();
+    clock.end(end);
+    if (how === 'end' && clock.started) this.#learnSpeed(voiceKey, tl, clock, end);
+    run.clearTimeline();
+    if (how === 'cancel' || run.cancelled) return undefined;
+    const elapsed = end - t0;
     if (how === 'error' || (how === 'end' && elapsed < sentence.length * 22)) {
       // Engine failed or "finished" implausibly fast (no output device?): keep the show's pace.
-      await this.#sayMute(run, sentence, (sentence.length / MUTE_CPS) * 1000 - elapsed);
+      await this.#saySilent(run, sentence, (sentence.length / MUTE_CPS) * 1000 - elapsed, tl);
     }
+    return undefined;
   }
 
-  async #sayBlips(run, sentence) {
-    const lead = 40;
-    const blip = this.#config(run.key).blip;
-    const plan = planBlips(sentence, blip);
-    run.t0 = performance.now() + lead;
-    run.beepIdx = -1;
-    run.beeps = plan.beeps;
-    const silence = this.#scheduleBlips(blip, plan, lead);
+  // The voice's real pace: from word boundaries when the engine sends them,
+  // else from how long the sentence took; kept per voice across sessions so
+  // voices without boundary events start right from the first sentence.
+  #learnSpeed(voiceKey, tl, clock, end) {
+    const prev = this.#speedFor(voiceKey);
+    let next = prev;
+    if (clock.boundaries >= 3) next = clock.speed;
+    else {
+      const took = end - clock.startR;
+      if (took > 400) next = prev + (tl.total / took - prev) * 0.5;
+    }
+    if (!Number.isFinite(next)) return;
+    this.#speed.set(voiceKey, Math.min(2, Math.max(0.5, next)));
+    if (this.#speed.size > 64) this.#speed.delete(this.#speed.keys().next().value);
     try {
-      await run.sleep(lead + plan.total);
+      globalThis.localStorage?.setItem(SPEED_KEY, JSON.stringify(Object.fromEntries(this.#speed)));
+    } catch { /* storage blocked */ }
+  }
+
+  // The "blips" mode: a soft murmur from the same timeline as the lips.
+  async #sayBlips(run, sentence) {
+    // The first sentence waits for the music's duck to settle; later ones
+    // follow straight on (the duck is held between sentences).
+    const lead = this.#ducker?.speaking ? 40 : DUCK_LEAD;
+    const cfg = this.#config(run.key);
+    const tl = this.#timeline(run.key, sentence, { paced: true });
+    const ctx = this.#ctx;
+    let perf0 = performance.now() + lead;
+    let silence = null;
+    if (ctx && this.#buses && ctx.state === 'running') {
+      try {
+        const t0 = ctx.currentTime + lead / 1000;
+        this.#voiceOn();
+        silence = scheduleMurmur(ctx, this.#buses.speech, cfg.blip, tl, t0);
+        perf0 = this.#heardAt(t0);
+      } catch { /* the mouth still moves */ }
+    }
+    run.setTimeline(tl, null, perf0);
+    try {
+      await run.sleep(perf0 - performance.now() + tl.total);
     } finally {
-      run.beeps = null;
       silence?.();
     }
   }
 
-  // Beeps are put on the AudioContext clock up front (one oscillator per
-  // sentence, gain automation per beep). The returned function cuts it short.
-  #scheduleBlips(blip, plan, lead) {
+  // Output + base latency (s): how late a sound asked for "now" is heard.
+  #latency() {
     const ctx = this.#ctx;
-    if (!ctx || !this.#master || ctx.state !== 'running') return null;
-    try {
-      const osc = ctx.createOscillator();
-      const lp = ctx.createBiquadFilter();
-      const g = ctx.createGain();
-      osc.type = blip.type;
-      osc.frequency.value = plan.beeps[0]?.freq ?? blip.base;
-      lp.type = 'lowpass';
-      lp.frequency.value = blip.cut;
-      g.gain.value = 0;
-      osc.connect(lp).connect(g).connect(this.#master);
-      const t0 = ctx.currentTime + lead / 1000;
-      for (const b of plan.beeps) {
-        const t = t0 + b.at / 1000;
-        const d = b.dur / 1000;
-        const v = blip.gain * b.peak;
-        osc.frequency.setValueAtTime(b.freq, t);
-        g.gain.setValueAtTime(0, t);
-        g.gain.linearRampToValueAtTime(v, t + 0.006);
-        g.gain.setValueAtTime(v, t + d - 0.012);
-        g.gain.linearRampToValueAtTime(0, t + d);
-      }
-      osc.start();
-      osc.stop(t0 + plan.total / 1000 + 0.05);
-      osc.onended = () => {
-        try {
-          osc.disconnect();
-          lp.disconnect();
-          g.disconnect();
-        } catch { /* ignore */ }
-      };
-      return () => {
-        try {
-          const now = ctx.currentTime;
-          g.gain.cancelScheduledValues(now);
-          g.gain.setTargetAtTime(0, now, 0.004);
-          osc.stop(now + 0.03);
-        } catch { /* already stopped */ }
-      };
-    } catch {
-      return null;
-    }
+    const l = (Number(ctx?.outputLatency) || 0) + (Number(ctx?.baseLatency) || 0);
+    return Number.isFinite(l) ? Math.min(0.4, Math.max(0, l)) : 0;
   }
 
-  // ~1 while a beep sounds, then a fast exponential fall. The index only moves
-  // forward, so each call is O(1) amortised.
-  #blipLevel(run, now) {
-    const beeps = run.beeps;
-    const t = now - run.t0;
-    if (t < 0) return 0;
-    let i = run.beepIdx;
-    while (i + 1 < beeps.length && beeps[i + 1].at <= t) i++;
-    run.beepIdx = i;
-    if (i < 0) return 0;
-    const b = beeps[i];
-    const end = b.at + b.dur;
-    const v = t <= end ? b.peak : b.peak * Math.exp(-(t - end) / 55);
-    return v < 0.02 ? 0 : v;
+  // performance.now() at which context time `t` reaches the listener's ears:
+  // the output timestamp when the browser gives a sane one, else the stated
+  // output + base latency.
+  #heardAt(t) {
+    const ctx = this.#ctx;
+    const now = performance.now();
+    const naive = now + (t - ctx.currentTime) * 1000;
+    let heard = naive + ((Number(ctx.outputLatency) || 0) + (Number(ctx.baseLatency) || 0)) * 1000;
+    try {
+      const ts = ctx.getOutputTimestamp?.();
+      if (ts && ts.performanceTime > 0 && ts.contextTime > 0) {
+        const v = ts.performanceTime + (t - ts.contextTime) * 1000;
+        if (v >= naive - 5 && v <= naive + 400) heard = v;
+      }
+    } catch { /* ignore */ }
+    return heard;
+  }
+
+  // Inverse of #heardAt: the context time whose sound is heard at
+  // performance.now() time `perf` (ms).
+  #contextTimeHeardAt(perf) {
+    const ctx = this.#ctx;
+    const naive = ctx.currentTime + (perf - performance.now()) / 1000;
+    let t = naive - ((Number(ctx.outputLatency) || 0) + (Number(ctx.baseLatency) || 0));
+    try {
+      const ts = ctx.getOutputTimestamp?.();
+      if (ts && ts.performanceTime > 0 && ts.contextTime > 0) {
+        const v = ts.contextTime + (perf - ts.performanceTime) / 1000;
+        if (v <= naive + 0.005 && v >= naive - 0.4) t = v;
+      }
+    } catch { /* ignore */ }
+    return t;
   }
 
   // ------------------------------------------------------------------ voices
@@ -796,46 +1002,8 @@ export class AudioEngine {
     return cfg;
   }
 
-  // Assigns a voice, pitch, rate and blip timbre to every known slot, in a fixed
-  // order (profiles, then A and B, then the rest) so assignments stay stable.
   #resolve() {
-    const used = new Map(); // voice -> slots using it
-    const out = new Map();
-    for (const key of new Set([...this.#profiles.keys(), 'A', 'B', ...this.#seen])) {
-      const prof = this.#profiles.get(key) ?? DEFAULT_PROFILES.get(key) ?? NEUTRAL_PROFILE;
-      // Profile language family first; if nothing is installed, the engine's language.
-      const plan = prof.lang ? langPlan(prof.lang) : this.#lang;
-      const family = this.#all.filter((v) => plan.match.test(String(v.lang ?? '')));
-      const pool = family.length ? family : this.#voices;
-      const voice = pool.length ? chooseVoice(pool, prof.gender, plan.pref, used) : null;
-      let pitch = prof.pitch;
-      if (voice) {
-        const g = voiceGender(voice);
-        if (prof.gender === 'male' && g === 'female') pitch *= 0.85;
-        else if (prof.gender === 'female' && g === 'male') pitch *= 1.2;
-        // Voice already taken by a slot of this gender (any slot, for neutral): nudge the pitch apart.
-        const taken = used.get(voice) ?? [];
-        const twins = prof.gender === 'neutral' ? taken.length : taken.filter((k) => out.get(k).gender === prof.gender).length;
-        if (twins) pitch *= twins % 2 ? 1.12 : 0.88;
-        used.set(voice, [...taken, key]);
-      }
-      out.set(key, {
-        gender: prof.gender,
-        voice,
-        pitch: clamp(pitch, 0.1, 2),
-        rate: prof.rate,
-        lang: prof.lang ?? plan.pref[0] ?? plan.base,
-        blip: blipFor(key, prof),
-      });
-    }
-    // Default anchors forced onto one voice: split them well apart by pitch.
-    const a = out.get('A');
-    const b = out.get('B');
-    if (!this.#profiles.has('A') && !this.#profiles.has('B') && a.voice && a.voice === b.voice) {
-      a.pitch = 0.85;
-      b.pitch = 1.2;
-    }
-    this.#resolved = out;
+    this.#resolved = resolveVoices({ all: this.#all, voices: this.#voices, profiles: this.#profiles, seen: this.#seen, lang: this.#lang });
   }
 
   // Voices load asynchronously in Chrome: wait for 'voiceschanged', at most 1.5 s.
@@ -874,25 +1042,72 @@ export class AudioEngine {
     const Ctor = globalThis.AudioContext || globalThis.webkitAudioContext;
     if (!Ctor) return null;
     try {
-      const ctx = new Ctor();
-      const master = ctx.createGain();
-      master.gain.value = this.#volume;
-      master.connect(ctx.destination);
-      const music = ctx.createGain();
-      music.gain.value = this.#ducked ? DUCK_LEVEL : 1;
-      music.connect(master);
-      // One second of white noise, shared by every hat / whoosh.
-      const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      const ctx = new Ctor({ latencyHint: 'playback' });
       this.#ctx = ctx;
-      this.#master = master;
-      this.#music = music;
-      this.#noiseBuf = buf;
+      this.#ducker = new Ducker();
+      this.#buses = buildBuses(ctx, { volume: this.#volume, ducker: this.#ducker, bedsDb: this.#musicDuckDb });
+      this.#applyMute();
+      ctx.addEventListener?.('statechange', () => this.#onState());
     } catch {
       this.#ctx = null;
+      this.#buses = null;
+      this.#ducker = null;
     }
     return this.#ctx;
+  }
+
+  // Build the expensive one-off tables (noise, room, wave tables, the speech
+  // normaliser, the loudness model of the opens) in idle slices right after
+  // unlock, one per tick, so nothing is computed during the first open.
+  #warm(ctx) {
+    if (this.#warmed) return;
+    this.#warmed = true;
+    const langs = [...new Set([this.#lang.pref[0] ?? this.#lang.base, 'en-GB', 'en-US'])];
+    const jobs = [
+      () => bank(ctx),
+      ...WAVE_KINDS.map((k) => () => bank(ctx).wave(k)),
+      ...langs.map((lang) => () => buildTimeline('Good evening, the IMF lent $2bn at 14:30.', { lang })),
+      ...THEME_IDS.map((id) => () => estimateLoudness(asSong(themeFor(id)))),
+      ...['ident', 'stinger', 'breaking', 'outro', 'promo'].map((n) => () => estimateLoudness(asSong(cueFor(n)))),
+    ];
+    const idle = globalThis.requestIdleCallback ? (fn) => globalThis.requestIdleCallback(fn, { timeout: 400 }) : (fn) => setTimeout(fn, 16);
+    const step = () => {
+      const job = jobs.shift();
+      if (!job) return;
+      try {
+        job();
+      } catch { /* warming is best effort */ }
+      idle(step);
+    };
+    idle(step);
+  }
+
+  #unlocked() {
+    const ctxOk = !this.#ctx || this.#ctx.state === 'running';
+    const gesture = globalThis.navigator?.userActivation;
+    return ctxOk && (gesture ? gesture.hasBeenActive : true);
+  }
+
+  // Autostart has no gesture to unlock audio with: wait for the first one
+  // (click, key, touch) and unlock then, as often as needed.
+  #armUnlock() {
+    const win = globalThis.window;
+    if (this.#armed || !win?.addEventListener) return;
+    const events = ['pointerdown', 'keydown', 'touchend', 'click'];
+    const handler = () => {
+      this.unlock();
+      if (this.#ctx?.state === 'running') {
+        for (const e of events) win.removeEventListener(e, handler, true);
+        this.#armed = null;
+      }
+    };
+    this.#armed = handler;
+    for (const e of events) win.addEventListener(e, handler, true);
+  }
+
+  #onState() {
+    if (this.#ctx?.state !== 'running') return;
+    for (const start of [...this.#pending]) start();
   }
 
   // iOS only unlocks audio after something plays inside the gesture.
@@ -904,248 +1119,175 @@ export class AudioEngine {
   }
 
   // Same for speech: a silent utterance inside the gesture unlocks later speak() calls.
+  // Outside a gesture (autostart) it would not count, so it waits for the real one.
   #primeSpeech() {
     const synth = this.#synth;
-    if (!synth || this.#primed) return;
+    if (!synth || this.#primed || synth.speaking || synth.pending) return;
+    const activation = globalThis.navigator?.userActivation;
+    if (activation && !activation.isActive) return;
     this.#primed = true;
     const u = new globalThis.SpeechSynthesisUtterance(' ');
     u.volume = 0;
     synth.speak(u);
   }
 
+  #applyMute() {
+    try {
+      const g = this.#buses?.mute.gain;
+      if (!g) return;
+      const now = this.#ctx.currentTime;
+      g.cancelScheduledValues(now);
+      g.setTargetAtTime(this.#requested === 'mute' ? 0 : 1, now, 0.015);
+    } catch { /* ignore */ }
+  }
+
   // ------------------------------------------------------------------ tunes
 
-  // Chiptune player for jingles and ad music. Notes are scheduled on the
-  // AudioContext clock a couple of seconds ahead, so loops are seamless even if
-  // timers lag. Shorter tracks repeat to fill the longest one.
+  /**
+   * Plays a tune (classic or rich format, see tune.js) on the tunes bus,
+   * levelled to the channel's level plan (loudness.js); `volume` 0.5 is the
+   * reference, at most +1 dB above it. opts: { loop, volume, duckDb (dB under
+   * a voice; default -18, -14 when looping, or the tune's own `duck`),
+   * startAt (performance.now() ms at which beat 0 should be HEARD: output
+   * latency is compensated, and a start already in the past skips in so the
+   * tune stays on the picture's clock) }. Returns { stop(), song } and never
+   * throws. If the context is still locked, a looping tune starts as soon as
+   * it unlocks.
+   */
   playTune(tune, opts = {}) {
-    const none = { stop() {} };
+    const none = { stop() {}, song: null };
     try {
-      const ctx = this.#ctx;
-      if (!ctx || !this.#music || this.#requested === 'mute') return none;
-      if (ctx.state !== 'running') {
-        Promise.resolve(ctx.resume()).catch(() => {});
-        return none;
-      }
-      const song = parseTune(tune);
-      if (!song) return none;
+      const ctx = this.#ensureContext();
+      const song = asSong(tune);
+      if (!ctx || !this.#buses || !song) return none;
       const loop = Boolean(opts?.loop);
-      const gain = ctx.createGain();
-      gain.gain.value = numOr(opts?.volume, 0.5, 0, 1);
-      gain.connect(this.#music);
-      const live = new Set();
-      const passSec = Math.max(0.05, (song.beats * 60) / song.bpm);
-      let next = ctx.currentTime + 0.05;
-      let timer = 0;
+      const volume = Number.isFinite(Number(opts?.volume)) ? Number(opts.volume) : 0.5;
+      const startAt = opts?.startAt != null && Number.isFinite(Number(opts.startAt)) ? Number(opts.startAt) : null;
+      let player = null;
       let stopped = false;
-
-      const stop = () => {
+      const asked = performance.now();
+      const begin = () => {
+        this.#pending.delete(begin);
         if (stopped) return;
-        stopped = true;
-        clearInterval(timer);
-        clearTimeout(timer);
-        this.#tunes.delete(handle);
-        const now = ctx.currentTime;
-        try {
-          gain.gain.cancelScheduledValues(now);
-          gain.gain.setValueAtTime(gain.gain.value, now);
-          gain.gain.linearRampToValueAtTime(0, now + 0.08);
-        } catch { /* ignore */ }
-        for (const rec of live) {
-          try {
-            rec.src.stop(now + 0.1);
-          } catch { /* not started or already stopped */ }
+        const now = performance.now();
+        // A one-shot that could not start in time would land out of sync:
+        // skip it (a synced one may skip in while most of it is still ahead).
+        if (!loop) {
+          if (startAt === null && now - asked > 400) return;
+          if (startAt !== null && now - startAt > Math.max(400, (60 / song.bpm) * song.beats * 1000 - 600)) return;
         }
-        setTimeout(() => {
-          try {
-            gain.disconnect();
-          } catch { /* ignore */ }
-        }, 300);
+        // A beat due inside the output latency cannot be heard on time: it plays
+        // at once, whole (grace), and everything after it lands on the clock.
+        player = new TunePlayer(ctx, this.#buses, song, { volume, loop, duckDb: opts?.duckDb, grace: this.#latency() + 0.03 });
+        const t0 = startAt !== null ? this.#contextTimeHeardAt(startAt) : ctx.currentTime + 0.05;
+        player.start(t0);
+        player.scheduleUntil(ctx.currentTime + this.#lookahead);
+        if (!loop) player.endAt = t0 + player.passSec + 1.2;
+        this.#players.add(player);
+        this.#startPump();
       };
-      const pump = () => {
-        try {
-          while (!stopped && next < ctx.currentTime + TUNE_LOOKAHEAD) {
-            this.#schedulePass(song, next, gain, live);
-            next += passSec;
-            if (!loop) {
-              timer = setTimeout(stop, (next - ctx.currentTime) * 1000 + 600); // let the tail ring out
-              return;
-            }
+      const handle = {
+        song,
+        stop: () => {
+          if (stopped) return;
+          stopped = true;
+          this.#pending.delete(begin);
+          if (player) {
+            this.#players.delete(player);
+            player.stop(ctx.currentTime);
           }
-        } catch {
-          stop();
-        }
+        },
       };
-      const handle = { stop };
-      this.#tunes.add(handle);
-      pump();
-      if (loop && !stopped) timer = setInterval(pump, 250);
+      if (ctx.state === 'running') begin();
+      else {
+        // While locked, keep only what could still start in time (a one-shot
+        // that has lost its moment is dropped) and at most the newest few.
+        const len = (60 / song.bpm) * song.beats * 1000;
+        begin.expires = loop ? Infinity : startAt === null ? asked + 400 : startAt + Math.max(400, len - 600);
+        const nowMs = performance.now();
+        for (const b of this.#pending) if (!(b.expires > nowMs)) this.#pending.delete(b);
+        this.#pending.add(begin);
+        while (this.#pending.size > PENDING_MAX) this.#pending.delete(this.#pending.values().next().value);
+        // Ask to resume inside a user gesture (anything else is refused with a
+        // console warning; the armed gesture listener resumes later), or at
+        // most every 10 s - an OBS source has no gestures but may autoplay.
+        const activation = globalThis.navigator?.userActivation;
+        const now = performance.now();
+        if (!activation || activation.isActive || now - this.#lastResume > 10000) {
+          this.#lastResume = now;
+          Promise.resolve(ctx.resume()).catch(() => {});
+        }
+      }
       return handle;
     } catch {
       return none;
     }
   }
 
-  #stopTunes() {
-    for (const tune of [...this.#tunes]) tune.stop();
-  }
-
-  // One pass of the song starting at `t`; each track tiles to the song length.
-  #schedulePass(song, t, dest, live) {
-    const sec = 60 / song.bpm;
-    let budget = 4000;
-    for (const track of song.tracks) {
-      for (let off = 0; off < song.beats - 1e-6; off += track.beats) {
-        for (const e of track.events) {
-          const at = off + e.at;
-          if (at >= song.beats - 1e-6) break;
-          if (--budget < 0) return;
-          const when = t + at * sec;
-          if (track.kind === 'drums') {
-            this.#drum(e.drum, when, dest, live);
-            continue;
+  #startPump() {
+    if (this.#pump) return;
+    this.#pumpAt = -1;
+    this.#pump = setInterval(() => {
+      const ctx = this.#ctx;
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      // A main thread that stalled (a heavy first frame, a busy OBS host)
+      // left the tunes unscheduled for that long: look further ahead for a
+      // while, so the next stall does not drop notes. Eases back to 1.6 s.
+      const gap = this.#pumpAt >= 0 ? now - this.#pumpAt : 0;
+      this.#pumpAt = now;
+      this.#lookahead = gap > 0.5 ? Math.min(LOOKAHEAD_MAX, Math.max(this.#lookahead, LOOKAHEAD + gap)) : Math.max(LOOKAHEAD, this.#lookahead - 0.02);
+      for (const p of [...this.#players]) {
+        try {
+          p.scheduleUntil(now + this.#lookahead);
+          if (p.endAt && now > p.endAt) {
+            this.#players.delete(p);
+            p.stop(now, 0.3);
           }
-          const dur = Math.min(e.dur, song.beats - at) * sec;
-          const gain = ((track.kind === 'bass' ? 0.2 : 0.15) * WAVE_GAIN[track.wave]) / Math.sqrt(e.midis.length);
-          for (const midi of e.midis) {
-            this.#tone(track.wave, hz(midi), when, Math.max(0.04, dur * 0.94), gain, {
-              release: Math.min(0.04, dur * 0.3), dest, live,
-            });
-          }
+        } catch {
+          this.#players.delete(p);
+          try {
+            p.stop(now);
+          } catch { /* ignore */ }
         }
       }
+      if (!this.#players.size) {
+        clearInterval(this.#pump);
+        this.#pump = 0;
+      }
+    }, 120);
+  }
+
+  #stopTunes() {
+    const now = this.#ctx?.currentTime ?? 0;
+    for (const p of [...this.#players]) {
+      try {
+        p.stop(now);
+      } catch { /* ignore */ }
     }
+    this.#players.clear();
+    this.#pending.clear();
   }
 
-  #drum(kind, t, dest, live) {
-    if (kind === 'k') {
-      this.#tone('sine', 160, t, 0.16, 0.5, { to: 42, attack: 0.002, release: 0.1, dest, live });
-    } else if (kind === 's') {
-      this.#noise(t, 0.14, 0.13, { from: 1800, dest, live });
-      this.#tone('triangle', 200, t, 0.08, 0.12, { to: 120, dest, live });
-    } else {
-      this.#noise(t, 0.045, 0.05, { dest, live });
-    }
-  }
-
-  // Music drops to 40% while anyone is talking and comes back slowly.
-  #duck(on) {
-    if (this.#ducked === on) return;
-    this.#ducked = on;
-    try {
-      const g = this.#music?.gain;
-      if (!g) return;
-      const now = this.#ctx.currentTime;
-      g.cancelScheduledValues(now);
-      g.setValueAtTime(g.value, now);
-      g.setTargetAtTime(on ? DUCK_LEVEL : 1, now, on ? 0.08 : 0.4);
-    } catch { /* ignore */ }
-  }
-
-  // ------------------------------------------------------------------- sfx
-
-  // One oscillator note: short attack, hold, release. `to` slides the pitch.
-  // `dest` defaults to the master bus; `live` collects nodes so a tune can cut them.
-  #tone(type, freq, t, dur, gain, { to = 0, attack = 0.004, release = 0.03, dest = null, live = null } = {}) {
+  // UI blip: a short soft rising tone.
+  #blip() {
     const ctx = this.#ctx;
+    if (!ctx || !this.#buses || ctx.state !== 'running') return;
+    const t = ctx.currentTime + 0.01;
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
-    const rec = { src: osc };
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, t);
-    if (to) osc.frequency.exponentialRampToValueAtTime(to, t + dur);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(660, t);
+    osc.frequency.exponentialRampToValueAtTime(880, t + 0.05);
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(gain, t + attack);
-    g.gain.setValueAtTime(gain, Math.max(t + attack, t + dur - release));
-    g.gain.linearRampToValueAtTime(0, t + dur);
-    osc.connect(g).connect(dest ?? this.#master);
+    g.gain.linearRampToValueAtTime(0.05, t + 0.006);
+    g.gain.linearRampToValueAtTime(0, t + 0.07);
+    osc.connect(g).connect(this.#buses.tunes);
     osc.start(t);
-    osc.stop(t + dur + 0.02);
-    live?.add(rec);
+    osc.stop(t + 0.08);
     osc.onended = () => {
-      live?.delete(rec);
       osc.disconnect();
       g.disconnect();
     };
-  }
-
-  // Filtered noise: a hi-hat when `hit`, a sweep when `swell`.
-  #noise(t, dur, gain, { type = 'highpass', from = 6500, to = 0, q = 0.7, swell = false, dest = null, live = null } = {}) {
-    const ctx = this.#ctx;
-    const src = ctx.createBufferSource();
-    const rec = { src };
-    const f = ctx.createBiquadFilter();
-    const g = ctx.createGain();
-    src.buffer = this.#noiseBuf;
-    f.type = type;
-    f.Q.value = q;
-    f.frequency.setValueAtTime(from, t);
-    if (to) f.frequency.exponentialRampToValueAtTime(to, t + dur);
-    if (swell) {
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.linearRampToValueAtTime(gain, t + dur * 0.4);
-      g.gain.linearRampToValueAtTime(0, t + dur);
-    } else {
-      g.gain.setValueAtTime(gain, t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    }
-    src.connect(f).connect(g).connect(dest ?? this.#master);
-    src.start(t, Math.random() * Math.max(0, this.#noiseBuf.duration - dur - 0.05));
-    src.stop(t + dur + 0.02);
-    live?.add(rec);
-    src.onended = () => {
-      live?.delete(rec);
-      src.disconnect();
-      f.disconnect();
-      g.disconnect();
-    };
-  }
-
-  // ~2.5 s news intro: rising C and G arpeggios (square), bass (triangle),
-  // off-beat hats, and a big C major chord with a crash on the last beat.
-  #jingle(t) {
-    const S = 0.12;
-    const lead = [
-      [0, 72, 1], [1, 76, 1], [2, 79, 1], [3, 84, 1], [4, 88, 2], [6, 84, 1], [7, 88, 1],
-      [8, 79, 1], [9, 83, 1], [10, 86, 1], [11, 91, 1], [12, 89, 2], [14, 86, 1], [15, 83, 1],
-    ];
-    const bass = [[0, 48, 2], [2, 48, 2], [4, 43, 2], [6, 48, 2], [8, 43, 2], [10, 43, 2], [12, 50, 2], [14, 43, 2]];
-    for (const [step, note, len] of lead) this.#tone('square', hz(note), t + step * S, len * S * 0.95, 0.09);
-    for (const [step, note, len] of bass) this.#tone('triangle', hz(note), t + step * S, len * S * 0.9, 0.22);
-    for (let i = 1; i < 16; i += 2) this.#noise(t + i * S, 0.04, 0.04);
-    const end = t + 16 * S;
-    for (const note of [60, 64, 67, 72, 76]) this.#tone('square', hz(note), end, 0.6, 0.05, { release: 0.35 });
-    this.#tone('triangle', hz(36), end, 0.65, 0.28, { release: 0.3 });
-    this.#noise(end, 0.5, 0.06, { from: 5000 });
-  }
-
-  // ~2 s calmer sign-off: soft descending line (triangle) landing on a chord.
-  #outro(t) {
-    const S = 0.14;
-    const lead = [[0, 88, 2], [2, 86, 2], [4, 84, 2], [6, 79, 2], [8, 76, 2]];
-    const bass = [[0, 48, 4], [4, 43, 4], [8, 43, 2]];
-    for (const [step, note, len] of lead) {
-      this.#tone('triangle', hz(note), t + step * S, len * S * 0.95, 0.2, { release: 0.08 });
-      this.#tone('square', hz(note - 12), t + step * S, len * S * 0.8, 0.025, { release: 0.08 });
-    }
-    for (const [step, note, len] of bass) this.#tone('triangle', hz(note), t + step * S, len * S * 0.9, 0.2);
-    const end = t + 10 * S;
-    for (const note of [60, 64, 67, 72]) this.#tone('square', hz(note), end, 0.7, 0.04, { release: 0.5 });
-    this.#tone('triangle', hz(48), end, 0.7, 0.22, { release: 0.45 });
-  }
-
-  // ~0.35 s noise sweep for shot transitions, kept quiet.
-  #whoosh(t) {
-    this.#noise(t, 0.35, 0.16, { type: 'bandpass', from: 300, to: 3200, q: 1.4, swell: true });
-  }
-
-  // ~1.2 s two-tone alert, eight notes alternating high / low with a pulsing bass.
-  #breaking(t) {
-    for (let i = 0; i < 8; i++) {
-      const at = t + i * 0.15;
-      this.#tone('square', i % 2 ? 740 : 988, at, 0.13, 0.1);
-      this.#tone('triangle', i % 2 ? 98 : 123, at, 0.13, 0.25);
-      this.#noise(at, 0.04, 0.04);
-    }
   }
 }

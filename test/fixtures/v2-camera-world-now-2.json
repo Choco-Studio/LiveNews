@@ -1,0 +1,450 @@
+{
+ "kind": "episode",
+ "id": "emur81bmw4",
+ "createdAt": "2026-10-02T17:12:45.608Z",
+ "program": {
+  "id": "world-now",
+  "title": "WORLD NOW",
+  "tagline": "THE STORIES SHAPING OUR WORLD",
+  "theme": "world"
+ },
+ "cast": {
+  "A": "paco",
+  "B": "lola"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "write",
+   "ms": 110,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 0,
+   "images": 2
+  }
+ ],
+ "title": "WORLD NOW (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Storm forces ferry cancellations across the Greek islands. Coffee futures reach a ten-year high after poor harvests. Bangkok airports handle a record 6 million passengers in a month. Good evening, and welcome to WORLD NOW. I'm Paco Pixel, with Lola Byte.",
+   "cues": [
+    {
+     "char": 222,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 254,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s37b7d2972c",
+    "s3ceb97f8cd",
+    "s13a2697df9"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Strong winds have forced ferry operators to cancel sailings between Athens and several Greek islands, Pixelburg Post reports. Coast guard officials expect services to resume on Friday.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "point_screen"
+    },
+    {
+     "char": 184,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s37b7d2972c",
+   "headline": "Storm forces ferry cancellations across the Greek islands",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "GREEK ISLANDS, GREECE",
+    "lat": 37.5,
+    "lon": 25
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "WEATHER",
+   "map": [
+    {
+     "place": "GREEK ISLANDS, GREECE",
+     "lat": 37.5,
+     "lon": 25
+    },
+    {
+     "place": "ATHENS, GREECE",
+     "lat": 37.98,
+     "lon": 23.73
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "According to Ledger Line, coffee prices have climbed to their highest level in ten years after poor harvests in Brazil and Vietnam. Roasters warn shop prices may rise early next year. Paco.",
+   "cues": [
+    {
+     "char": 183,
+     "slot": "A",
+     "action": "look_partner"
+    },
+    {
+     "char": 183,
+     "slot": null,
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "s3ceb97f8cd",
+   "headline": "Coffee futures reach ten-year high",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "BRAZIL",
+    "lat": -14.2,
+    "lon": -51.9
+   },
+   "fact": null,
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ECONOMY",
+   "map": [
+    {
+     "place": "BRAZIL",
+     "lat": -14.2,
+     "lon": -51.9
+    },
+    {
+     "place": "VIETNAM",
+     "lat": 14.1,
+     "lon": 108.3
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Our number of the day: 6 million. From Bitport Herald: Bangkok's airports handled a record 6 million passengers last month, officials said. Hotels in the city report an occupancy rate of 85 percent.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "steeple"
+    },
+    {
+     "char": 198,
+     "slot": "B",
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "s13a2697df9",
+   "headline": "Bangkok airports handle record 6 million passengers in a month",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "BANGKOK, THAILAND",
+    "lat": 13.76,
+    "lon": 100.5
+   },
+   "fact": "6 MILLION PASSENGERS",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "6 MILLION",
+     "label": "PASSENGERS"
+    }
+   ],
+   "feature": "number"
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Now, around the world in 30 seconds. Brazil's space agency says deforestation in the Amazon fell by 30 percent over the past twelve months.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "point_screen"
+    }
+   ],
+   "storyId": "s2060593b94",
+   "headline": "Brazil reports sharp fall in Amazon deforestation",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "AMAZON, BRAZIL",
+    "lat": -3.5,
+    "lon": -62
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 0,
+    "count": 4
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Peru archaeologists uncover a 3,000-year-old temple in the Andes.",
+   "cues": [],
+   "storyId": "s1efd7d5efb",
+   "headline": "Peru archaeologists uncover 3,000-year-old temple in the Andes",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "PERU",
+    "lat": -9.2,
+    "lon": -75
+   },
+   "fact": null,
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 1,
+    "count": 4
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "A tidal power station off the north coast of Scotland has started sending electricity to the grid, Bitport Herald reports.",
+   "cues": [],
+   "storyId": "s62f3faae49",
+   "headline": "Scotland's first tidal power station starts sending electricity",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "SCOTLAND",
+    "lat": 56.5,
+    "lon": -4.2
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 2,
+    "count": 4
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Stock markets in New York closed at a record high on Thursday, Ledger Line reports.",
+   "cues": [],
+   "storyId": "s49dd4b1b14",
+   "headline": "New York stocks close at a record high",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "NEW YORK, USA",
+    "lat": 40.71,
+    "lon": -74.01
+   },
+   "fact": null,
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD",
+   "feature": "roundup",
+   "roundup": {
+    "index": 3,
+    "count": 4
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "surprised",
+   "text": "And finally: According to Bitport Herald, rangers in Nepal have filmed a rare snow leopard with two cubs in the Himalayas. “It is a very hopeful sign for the species,” a park official said.",
+   "cues": [
+    {
+     "char": 189,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "sefb1f8c3c1",
+   "headline": "Rangers film rare snow leopard and two cubs in Nepal",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "NEPAL",
+    "lat": 28.4,
+    "lon": 84.1
+   },
+   "fact": null,
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AND FINALLY",
+   "quote": {
+    "text": "It is a very hopeful sign for the species",
+    "by": "a park official"
+   },
+   "map": [
+    {
+     "place": "NEPAL",
+     "lat": 28.4,
+     "lon": 84.1
+    },
+    {
+     "place": "HIMALAYAS",
+     "lat": 28,
+     "lon": 84
+    }
+   ],
+   "feature": "lighter"
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "Finally, some news nobody will complain about.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "Give it an hour.",
+   "cues": []
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's WORLD NOW. From Lola Byte and from me, thank you for watching. Stay with us on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 17,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s37b7d2972c",
+   "headline": "Storm forces ferry cancellations across the Greek islands",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "WEATHER"
+  },
+  {
+   "storyId": "s3ceb97f8cd",
+   "headline": "Coffee futures reach ten-year high",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ECONOMY"
+  },
+  {
+   "storyId": "s13a2697df9",
+   "headline": "Bangkok airports handle record 6 million passengers in a month",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY"
+  },
+  {
+   "storyId": "s2060593b94",
+   "headline": "Brazil reports sharp fall in Amazon deforestation",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": true,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s1efd7d5efb",
+   "headline": "Peru archaeologists uncover 3,000-year-old temple in the Andes",
+   "source": "Pixelburg Post",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s62f3faae49",
+   "headline": "Scotland's first tidal power station starts sending electricity",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "s49dd4b1b14",
+   "headline": "New York stocks close at a record high",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "AROUND THE WORLD"
+  },
+  {
+   "storyId": "sefb1f8c3c1",
+   "headline": "Rangers film rare snow leopard and two cubs in Nepal",
+   "source": "Bitport Herald",
+   "category": "world",
+   "hasImage": false,
+   "kicker": "AND FINALLY"
+  }
+ ],
+ "storyIds": [
+  "s37b7d2972c",
+  "s3ceb97f8cd",
+  "s13a2697df9",
+  "s2060593b94",
+  "s1efd7d5efb",
+  "s62f3faae49",
+  "s49dd4b1b14",
+  "sefb1f8c3c1"
+ ]
+}

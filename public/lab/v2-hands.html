@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hands Lab (v2)</title>
+<style>
+  :root { --bg: #181425; --fg: #c0cbdc; --ui: #262b44; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 monospace; }
+  #screen { display: block; width: 1152px; height: 648px; image-rendering: pixelated; background: #000; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--ui); align-items: center; }
+  button, select { background: #3a4466; color: #fff; border: 0; padding: 4px 8px; font: inherit; }
+</style>
+</head>
+<body>
+<!-- HANDS & GESTURES lab (w2-hands): gesture player, hand-shape sheet, blend test,
+     all-cast view and the gesture planner preview. window.__lab for tools/shoot.mjs. -->
+<canvas id="screen" width="384" height="216"></canvas>
+<div class="bar">
+  <select id="mode"></select>
+  <select id="presenter"></select>
+  <select id="seat"></select>
+  <select id="gesture"></select>
+  <select id="variant"></select>
+  <select id="n"></select>
+  <select id="scale"></select>
+  <select id="zoom"></select>
+  <button id="play">pause</button>
+</div>
+<script type="module" src="../js/v2/canvas25d/labs/hands.js"></script>
+</body>
+</html>

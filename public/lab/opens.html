@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lab · opens, cards, map</title>
+    <style>
+      body { background: #101014; color: #c0cbdc; font: 12px/1.5 monospace; margin: 12px; }
+      #screen { width: 1152px; height: 648px; image-rendering: pixelated; display: block; background: #000; }
+      #ui { margin: 8px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      input[type='range'] { width: 420px; }
+      select, button { font: inherit; }
+      #note { color: #8b9bb4; }
+    </style>
+  </head>
+  <body>
+    <canvas id="screen" width="384" height="216"></canvas>
+    <div id="ui">
+      <label>kind <select id="kind"></select></label>
+      <label>item <select id="item"></select></label>
+      <label>t <input id="t" type="range" min="0" max="6" step="0.01" value="0" /></label>
+      <span id="tv">0.00 s</span>
+      <label><input id="play" type="checkbox" /> play</label>
+    </div>
+    <div id="note">
+      Dev tool for the opens / cards / map area. Deterministic: window.__lab.render(t) draws instant t;
+      window.__lab.set({ kind, id, ... }) picks what to draw (kind = open | card | map | cut; cut = the open's last instants and the cut into the programme with the real graphics package). URL: ?kind=open&amp;id=world-now&amp;t=3.5
+    </div>
+    <script type="module">
+      // Lab for public/js/scenes/{opens,cards,worldmap}.js: every frame is a pure
+      // function of t (the graphics clock is frozen) so contact sheets are exact.
+      import { drawOpen, openFor } from '../js/scenes/opens.js';
+      import * as cards from '../js/scenes/cards.js';
+      import { drawWorldMap, warmMapData } from '../js/scenes/worldmap.js';
+      import { pixelate } from '../js/pixelate.js';
+      import { setNow } from '../js/gfx/clock.js';
+      import { P as PAL } from '../js/palette.js';
+      import { Graphics } from '../js/graphics/index.js';
+
+      // Friday 2 October 2026, 18:42:07 in London (17:42 UTC): a fixed clock for every frame.
+      const FIXED_NOW = Date.UTC(2026, 9, 2, 17, 42, 7);
+      setNow(FIXED_NOW);
+
+      const canvas = document.getElementById('screen');
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+
+      const PROGRAMS = {
+        'world-now': { title: 'WORLD NOW', tagline: 'THE STORIES SHAPING OUR WORLD', presenters: ['PACO PIXEL', 'LOLA BYTE'] },
+        'tech-bytes': { title: 'TECH BYTES', tagline: 'THE FUTURE, ONE BYTE AT A TIME', presenters: ['MAX CIRCUIT', 'ADA VOLT'] },
+        cosmos: { title: 'COSMOS DESK', tagline: 'SCIENCE, SPACE & OUR PLANET', presenters: ['DR NOVA REYES', 'UNIT-8'] },
+        'money-minute': { title: 'MONEY MINUTE', tagline: 'MARKETS & YOUR MONEY', presenters: ['PENNY STERLING'] },
+        'news-60': { title: 'NEWS IN 60', tagline: 'THE HEADLINES IN A MINUTE', presenters: ['SAM NIGHT'] },
+        'weekend-review': { title: 'WEEKEND REVIEW', tagline: 'THE WEEK THAT WAS', presenters: ['PACO PIXEL'] },
+      };
+
+      const PLACES = {
+        lisbon: { place: 'LISBON, PORTUGAL', lat: 38.72, lon: -9.14 },
+        nairobi: { place: 'NAIROBI, KENYA', lat: -1.29, lon: 36.82 },
+        reykjavik: { place: 'REYKJAVIK, ICELAND', lat: 64.15, lon: -21.94 },
+        tokyo: { place: 'TOKYO, JAPAN', lat: 35.68, lon: 139.69 },
+        'buenos-aires': { place: 'BUENOS AIRES, ARGENTINA', lat: -34.6, lon: -58.38 },
+        reykjanes: { place: 'REYKJANES PENINSULA, ICELAND', lat: 63.9, lon: -22.4 },
+        crete: { place: 'HERAKLION, CRETE', lat: 35.34, lon: 25.13 },
+        honolulu: { place: 'HONOLULU, HAWAII', lat: 21.31, lon: -157.86 },
+        suva: { place: 'SUVA, FIJI', lat: -18.14, lon: 178.44 },
+        longyearbyen: { place: 'LONGYEARBYEN, SVALBARD', lat: 78.22, lon: 15.65 },
+        mcmurdo: { place: 'MCMURDO STATION, ANTARCTICA', lat: -77.85, lon: 166.67 },
+        anchorage: { place: 'ANCHORAGE, ALASKA', lat: 61.22, lon: -149.9 },
+        singapore: { place: 'SINGAPORE', lat: 1.35, lon: 103.82 },
+        abidjan: { place: "ABIDJAN, CÔTE D'IVOIRE", lat: 5.36, lon: -4.01 },
+        'sao-paulo': { place: 'SÃO PAULO, BRAZIL', lat: -23.55, lon: -46.63 },
+      };
+
+      // A procedural "news photo" (street at dusk) run through the real pixelate pipeline.
+      let PHOTO = null;
+      function photo() {
+        if (PHOTO) return PHOTO;
+        const src = document.createElement('canvas');
+        src.width = 832;
+        src.height = 468;
+        const g = src.getContext('2d');
+        const sky = g.createLinearGradient(0, 0, 0, 300);
+        sky.addColorStop(0, '#20305a');
+        sky.addColorStop(0.6, '#c86a4a');
+        sky.addColorStop(1, '#f2b26a');
+        g.fillStyle = sky;
+        g.fillRect(0, 0, 832, 468);
+        g.fillStyle = '#ffd890';
+        g.beginPath();
+        g.arc(560, 250, 46, 0, Math.PI * 2);
+        g.fill();
+        let seed = 7;
+        const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+        for (let x = -20; x < 860; ) {
+          const w = 50 + rnd() * 90;
+          const h = 120 + rnd() * 230;
+          g.fillStyle = `hsl(${220 + rnd() * 20}, 25%, ${12 + rnd() * 10}%)`;
+          g.fillRect(x, 468 - 90 - h, w, h + 90);
+          g.fillStyle = 'rgba(255,214,140,0.85)';
+          for (let wy = 468 - 80 - h; wy < 468 - 110; wy += 18) for (let wx = x + 8; wx < x + w - 10; wx += 14) if (rnd() < 0.35) g.fillRect(wx, wy, 6, 9);
+          x += w + 4;
+        }
+        g.fillStyle = '#1a1a24';
+        g.fillRect(0, 400, 832, 68);
+        for (let i = 0; i < 40; i++) {
+          g.fillStyle = `hsl(${rnd() * 360}, 30%, ${18 + rnd() * 20}%)`;
+          const x = rnd() * 832;
+          g.fillRect(x, 360 + rnd() * 20, 14, 60);
+          g.beginPath();
+          g.arc(x + 7, 352 + rnd() * 20, 8, 0, Math.PI * 2);
+          g.fill();
+        }
+        const full = pixelate(src, 416, 234, { colors: 24 });
+        const card = document.createElement('canvas');
+        card.width = 384;
+        card.height = 216;
+        card.getContext('2d').drawImage(full, -16, -9);
+        PHOTO = { full, card };
+        return PHOTO;
+      }
+
+      const PROMO = { label: 'UP NEXT', footer: 'AFTER THE BREAK', next: { id: 'tech-bytes', title: 'TECH BYTES', tagline: 'THE FUTURE, ONE BYTE AT A TIME', theme: 'tech', presenters: ['max', 'ada'] } };
+      const PROMO_60 = { label: 'UP NEXT', footer: 'AFTER THE BREAK', next: { id: 'news-60', title: 'NEWS IN 60', tagline: 'THE HEADLINES IN A MINUTE', theme: 'flash', presenters: ['sam'] } };
+      const PROMO_LONG = { label: 'UP NEXT', footer: 'AFTER THE BREAK', next: { id: 'weekend-review', title: 'THE WEEKEND FOREIGN CORRESPONDENTS REVIEW', tagline: 'THE WEEK THAT WAS', theme: 'world', presenters: ['paco', 'lola'] } };
+      const PROMO_MONEY = { label: 'UP NEXT', footer: 'AFTER THE BREAK', next: { id: 'money-minute', title: 'MONEY MINUTE', tagline: 'MARKETS & YOUR MONEY', theme: 'money', presenters: ['penny'] } };
+      const PROMO_COMING = { label: 'COMING UP', footer: 'STAY WITH US', next: { id: 'cosmos', title: 'COSMOS DESK', tagline: 'SCIENCE, SPACE & OUR PLANET', theme: 'space', presenters: 'nova' } };
+      const NAMES = { max: 'MAX CIRCUIT', ada: 'ADA VOLT', sam: 'SAM NIGHT', paco: 'PACO PIXEL', lola: 'LOLA BYTE', penny: 'PENNY STERLING', nova: 'DR NOVA REYES' };
+      const N3 = [{ value: '40,000', label: 'PASSENGERS A DAY' }, { value: '$2.5BN', label: 'COST OF THE LINE' }, { value: '12 KM', label: 'OF NEW TUNNEL' }];
+      const N_BARS = [{ value: '3.1%', label: 'INFLATION' }, { value: '2.4%', label: 'INFLATION' }];
+      const N_ONE = [{ value: '1.2 MILLION', label: 'HOMES WITHOUT POWER' }];
+      const N_COSMOS = [{ value: '40,000', label: 'TONNES OF ICE PER SECOND' }];
+      const N_PCT = [{ value: '3.5%', label: 'RISE IN SEA SURFACE HEAT' }];
+      const N_MONEY = [{ value: '4.2%', label: 'BANK RATE' }];
+      const fact = (id, o) => (t) => cards.drawFactCard(ctx, 1000 + t, t, { ...o, programId: id });
+      const CARDS = {
+        'montage-photo': (t) => cards.drawHeadlineFrame(ctx, 1000 + t, t, { index: 0, total: 3, headline: 'Storm closes ports across the north as ferries cancel', source: 'BBC News', category: 'world', image: photo().card, programId: 'world-now' }),
+        'montage-2': (t) => cards.drawHeadlineFrame(ctx, 1000 + t, t, { index: 1, total: 3, headline: 'New chip promises week-long phone battery', source: 'The Verge', category: 'tech', image: null, programId: 'tech-bytes' }),
+        'montage-3': (t) => cards.drawHeadlineFrame(ctx, 1000 + t, t, { index: 2, total: 3, headline: 'Markets close higher after rate decision', source: 'Reuters', category: 'business', image: null, programId: 'money-minute' }),
+        'montage-culture': (t) => cards.drawHeadlineFrame(ctx, 1000 + t, t, { index: 1, total: 3, headline: 'Lost silent film found in a Lisbon attic', source: 'AP', category: 'culture', image: null, programId: 'world-now' }),
+        'fact-number': fact('world-now', { fact: '2,400 flights cancelled across Europe on Friday', label: 'BY THE NUMBERS', source: 'Reuters', image: photo().card }),
+        'fact-text': fact('world-now', { fact: 'The bridge was the longest of its kind when it opened', label: 'KEY FACT', source: 'AP', image: null }),
+        'fact-world': fact('world-now', { fact: '1.2 million homes without power', numbers: N_ONE, label: 'BY THE NUMBERS', source: 'Pixelburg Post' }),
+        'fact-60': fact('news-60', { fact: '2,400 flights cancelled across Europe on Friday', label: 'KEY FACT', source: 'Reuters' }),
+        'fact-tech': fact('tech-bytes', { fact: '40,000 passengers a day', numbers: [N3[0]], label: 'NUMBER OF THE DAY', source: 'Circuit Weekly' }),
+        'numbers-tech': (t) => cards.drawNumbersCard(ctx, 1000 + t, t, { numbers: N3, programId: 'tech-bytes', source: 'Bitport Herald' }),
+        'numbers-world': (t) => cards.drawNumbersCard(ctx, 1000 + t, t, { numbers: N3, programId: 'world-now', source: 'Pixelburg Post' }),
+        'fact-cosmos': fact('cosmos', { fact: '40,000 tonnes of ice per second', numbers: N_COSMOS, source: 'Starfield Journal' }),
+        'fact-cosmos-pct': fact('cosmos', { fact: '3.5% rise in sea surface heat', numbers: N_PCT, source: 'Starfield Journal' }),
+        'fact-paper': fact('money-minute', { fact: '4.2% bank rate', numbers: N_MONEY, headline: 'The bank holds rates for a third month', source: 'Ledger Line' }),
+        'fact-paper-bars': fact('money-minute', { fact: '2.4% inflation', numbers: N_BARS, headline: 'Inflation eases for the first time this year', source: 'Ledger Line' }),
+        // facts as the director sends them today (a fact string, often with a qualifier or no figure)
+        'fact-paper-text': fact('money-minute', { fact: 'RICE PRICES DOWN 8% ON THE YEAR', headline: 'Rice prices fall for a third month', source: 'Ledger Line' }),
+        'fact-paper-qualifier': fact('money-minute', { fact: 'ABOUT 1,500 DOLLARS A MONTH', headline: 'What a family spends on rent', source: 'Ledger Line' }),
+        'fact-paper-record': fact('money-minute', { fact: 'RECORD HIGH FOR COCOA', headline: 'Chocolate makers feel the squeeze', source: 'Ledger Line' }),
+        'fact-tech-qualifier': fact('tech-bytes', { fact: 'ABOUT 1,500 DOLLARS', source: 'Circuit Weekly' }),
+        'fact-tech-text': fact('tech-bytes', { fact: 'THE FIRST PHONE BUILT ENTIRELY FROM RECYCLED METAL', source: 'Circuit Weekly' }),
+        'fact-cosmos-qualifier': fact('cosmos', { fact: 'NEARLY 3 MILLION VISITORS', source: 'Starfield Journal' }),
+        'fact-cosmos-text': fact('cosmos', { fact: 'THE PROBE HAS LEFT THE SUN\'S WIND BEHIND', source: 'Starfield Journal' }),
+        'fact-world-qualifier': fact('world-now', { fact: 'MORE THAN 62% OF TRADERS', numbers: [{ value: '62%', qualifier: 'MORE THAN', label: 'OF TRADERS' }], label: 'BY THE NUMBERS', source: 'Pixelburg Post' }),
+        'numbers-world-qual': (t) => cards.drawNumbersCard(ctx, 1000 + t, t, { numbers: [{ value: '1.2 MILLION', qualifier: 'ABOUT', label: 'HOMES WITHOUT POWER' }, { value: '30', qualifier: 'UP TO', label: 'SHIPS HELD IN PORT' }], programId: 'world-now', source: 'Pixelburg Post' }),
+        'numbers-tech-qual': (t) => cards.drawNumbersCard(ctx, 1000 + t, t, { numbers: [{ value: '300,000', qualifier: 'ABOUT', label: 'HOMES CONNECTED' }, { value: '12 TONNES', qualifier: 'UP TO', label: 'COPPER RECOVERED' }], programId: 'tech-bytes', source: 'Bitport Herald' }),
+        'quote-world': (t) => cards.drawQuoteCard(ctx, 1000 + t, t, { text: 'We will rebuild every bridge the river took, and we will start on Monday', by: 'the mayor', programId: 'world-now', image: photo().card }),
+        'quote-tech': (t) => cards.drawQuoteCard(ctx, 1000 + t, t, { text: 'The battery is not the product. The week is the product', by: 'Ana Silva', programId: 'tech-bytes' }),
+        'quote-cosmos': (t) => cards.drawQuoteCard(ctx, 1000 + t, t, { text: 'It is the clearest view of a newborn star we have ever had', by: null, programId: 'cosmos' }),
+        breaking: (t) => cards.drawBreakingCard(ctx, 1000 + t, t, { headline: 'Earthquake of magnitude 6.1 strikes off the coast of Chile', source: 'Reuters' }),
+        end: (t) => cards.drawEndCard(ctx, 1000 + t, t, { channel: 'WORLD NOW', line1: 'STAY WITH US', line2: 'GLOBIT 24 · LIVE 24 HOURS' }),
+        standby: (t) => cards.drawStandby(ctx, 1000 + t, { channel: 'GLOBIT 24', message: 'PREPARING THE NEXT PROGRAMME' }),
+        start: (t) => cards.drawStartScreen(ctx, 1000 + t, { channel: 'GLOBIT 24', prompt: 'CLICK TO TUNE IN' }),
+        promo: (t) => cards.drawPromoCard(ctx, 1000 + t, t, PROMO, (id) => NAMES[id] || id),
+        'promo-60': (t) => cards.drawPromoCard(ctx, 1000 + t, t, PROMO_60, (id) => NAMES[id] || id),
+        'promo-long': (t) => cards.drawPromoCard(ctx, 1000 + t, t, PROMO_LONG, (id) => NAMES[id] || id),
+        ident: (t) => cards.drawIdentCard(ctx, 1000 + t, t),
+        'ident-dusk': (t) => cards.drawIdentCard(ctx, 1000 + t, t, { variant: 'dusk' }),
+        'ident-dawn': (t) => cards.drawIdentCard(ctx, 1000 + t, t, { variant: 'dawn' }),
+        'promo-money': (t) => cards.drawPromoCard(ctx, 1000 + t, t, PROMO_MONEY, (id) => NAMES[id] || id),
+        'promo-coming': (t) => cards.drawPromoCard(ctx, 1000 + t, t, PROMO_COMING, (id) => NAMES[id] || id),
+        stinger: (t) => {
+          cards.drawHeadlineFrame(ctx, 1000, 3, { index: 0, total: 3, headline: 'Storm closes ports across the north', source: 'BBC News', category: 'world', image: photo().card });
+          cards.drawStinger(ctx, 1000 + t, t / cards.STINGER_DURATION, { channel: 'GLOBIT 24' });
+        },
+        title: (t) => cards.drawTitleCard(ctx, 1000 + t, t, { channel: 'WORLD NOW', subtitle: 'THE STORIES SHAPING OUR WORLD', date: 'FRIDAY 2 OCTOBER' }),
+      };
+
+      const MAPS = {};
+      for (const [k, p] of Object.entries(PLACES)) {
+        MAPS[k] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...p, now: FIXED_NOW });
+        MAPS[`mini-${k}`] = (t) => {
+          ctx.fillStyle = '#262b44';
+          ctx.fillRect(0, 0, 384, 216);
+          drawWorldMap(ctx, 1000 + t, t, { ...p, x: 140, y: 18, w: 104, h: 62, mini: true, now: FIXED_NOW });
+        };
+      }
+      MAPS.idle = (t) => drawWorldMap(ctx, 1000 + t, t, { now: FIXED_NOW });
+      MAPS['lisbon-60'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...PLACES.lisbon, programId: 'news-60', accent: PAL.yellow, now: FIXED_NOW });
+      MAPS['tokyo-tech'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...PLACES.tokyo, programId: 'tech-bytes', accent: PAL.cyan, now: FIXED_NOW });
+      MAPS['short-nairobi'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...PLACES.nairobi, duration: 2.1, now: FIXED_NOW });
+      // a round-up: the camera pans pin to pin (from the previous place) instead of flying in again
+      MAPS['roundup-nairobi'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...PLACES.nairobi, from: PLACES.lisbon, now: FIXED_NOW });
+      MAPS['roundup-60'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...PLACES.crete, from: PLACES.lisbon, programId: 'news-60', accent: PAL.yellow, now: FIXED_NOW });
+      MAPS['roundup-tokyo'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...PLACES.tokyo, from: PLACES.nairobi, now: FIXED_NOW });
+      // a story naming two places: both marked, framed together
+      const SHANGHAI = { place: 'SHANGHAI, CHINA', lat: 31.23, lon: 121.47 };
+      const PINS = [{ place: 'ROTTERDAM', lat: 51.92, lon: 4.48 }];
+      MAPS['pins-shanghai'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...SHANGHAI, pins: PINS, now: FIXED_NOW });
+      const OTTAWA = { place: 'OTTAWA, CANADA', lat: 45.42, lon: -75.7 };
+      const PINS2 = [{ place: 'MEXICO CITY', lat: 19.43, lon: -99.13 }, { place: 'WASHINGTON', lat: 38.9, lon: -77.04 }];
+      MAPS['pins-ottawa'] = (t) => drawWorldMap(ctx, 1000 + t, t, { ...OTTAWA, pins: PINS2, now: FIXED_NOW });
+
+      const OPEN_IDS = Object.keys(PROGRAMS);
+      const OPEN_INFO = Object.fromEntries(OPEN_IDS.map((id) => [id, { ...PROGRAMS[id], date: 'FRIDAY 2 OCTOBER', channel: 'GLOBIT 24' }]));
+      const REPLAY_INFO = { ...OPEN_INFO['world-now'], replay: true };
+      const KINDS = {
+        open: {
+          ...Object.fromEntries(OPEN_IDS.map((id) => [id, (t) => drawOpen(ctx, t, t, id, OPEN_INFO[id])])),
+          'world-now-replay': (t) => drawOpen(ctx, t, t, 'world-now', REPLAY_INFO),
+        },
+        card: CARDS,
+        map: MAPS,
+        cut: { 'world-now-montage': cut('world-now', 'montage'), 'news-60-wide': cut('news-60', 'wide'), 'cosmos-montage': cut('cosmos', 'montage') },
+      };
+
+      // The cut from an open into the programme, with the real on-screen graphics package: the open ends
+      // on the graphics' own top row, so nothing may wipe in again at 4.0 s (t is seconds from the open).
+      const CUT_RUNDOWN = [
+        { storyId: 'a', headline: 'Storm closes ports across the north as ferries cancel', source: 'BBC News', category: 'world' },
+        { storyId: 'b', headline: 'New chip promises week-long phone battery', source: 'The Verge', category: 'tech' },
+      ];
+      function cut(id, after) {
+        const program = { id, title: PROGRAMS[id].title, tagline: PROGRAMS[id].tagline, theme: { 'world-now': 'world', 'tech-bytes': 'tech', cosmos: 'space', 'money-minute': 'money', 'news-60': 'flash' }[id] || 'world' };
+        const sceneAt = (t) => ({ shot: t < 4 ? 'open' : after, program, rundown: CUT_RUNDOWN, storyId: null, programTagUntil: 4 + 15, ticker: [], lowerThird: null, subtitle: null, replay: false });
+        return (t) => {
+          const g = new Graphics({ now: () => FIXED_NOW });
+          for (let k = 0; k < t; k += 1 / 30) g.update(k, sceneAt(k));
+          const scene = sceneAt(t);
+          g.update(t, scene);
+          if (t < 4) drawOpen(ctx, t, t, id, OPEN_INFO[id]);
+          else if (after === 'montage') cards.drawHeadlineFrame(ctx, t, t - 4, { index: 0, total: 2, ...CUT_RUNDOWN[0], programId: id });
+          else {
+            ctx.fillStyle = PAL.ink;
+            ctx.fillRect(0, 0, 384, 216);
+          }
+          g.render(ctx, t, scene);
+        };
+      }
+
+      const params = new URLSearchParams(location.search);
+      const state = { kind: params.get('kind') || 'open', id: params.get('id') || 'world-now', t: Number(params.get('t') || 0) };
+      const kindSel = document.getElementById('kind');
+      const itemSel = document.getElementById('item');
+      const tIn = document.getElementById('t');
+      const tv = document.getElementById('tv');
+      for (const k of Object.keys(KINDS)) kindSel.add(new Option(k, k));
+      function fillItems() {
+        itemSel.length = 0;
+        for (const id of Object.keys(KINDS[state.kind])) itemSel.add(new Option(id, id));
+        if (!KINDS[state.kind][state.id]) state.id = Object.keys(KINDS[state.kind])[0];
+        itemSel.value = state.id;
+        kindSel.value = state.kind;
+      }
+      function render(t, opts) {
+        if (opts) set(opts);
+        state.t = Number(t) || 0;
+        ctx.save();
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, 384, 216);
+        try {
+          KINDS[state.kind][state.id](state.t);
+        } catch (err) {
+          console.error(err);
+        }
+        ctx.restore();
+        tIn.value = state.t;
+        tv.textContent = `${state.t.toFixed(2)} s`;
+      }
+      function set(opts = {}) {
+        if (opts.kind && KINDS[opts.kind]) state.kind = opts.kind;
+        if (opts.id) state.id = opts.id;
+        fillItems();
+      }
+      kindSel.onchange = () => { state.kind = kindSel.value; fillItems(); render(state.t); };
+      itemSel.onchange = () => { state.id = itemSel.value; render(state.t); };
+      tIn.oninput = () => render(Number(tIn.value));
+      let last = 0;
+      function tick(ms) {
+        if (document.getElementById('play').checked) {
+          const d = last ? (ms - last) / 1000 : 0;
+          let nt = state.t + d;
+          const max = state.kind === 'open' ? openFor(state.id).duration + 0.6 : 6;
+          if (nt > max) nt = 0;
+          render(nt);
+        }
+        last = ms;
+        requestAnimationFrame(tick);
+      }
+      // ?still=1 (captures with --step): no real-time loop at all, only explicit renders
+      if (!params.has('still')) requestAnimationFrame(tick);
+      warmMapData(); // the map's data now, so the first captured frame is never the loading sea
+      fillItems();
+      render(state.t);
+      /** FNV-1a hash of the frame at t (to prove a lock-up holds still). */
+      function hash(t, opts) {
+        render(t, opts);
+        const d = ctx.getImageData(0, 0, 384, 216).data;
+        let h = 2166136261;
+        for (let i = 0; i < d.length; i += 4) h = Math.imul(h ^ (d[i] | (d[i + 1] << 8) | (d[i + 2] << 16)), 16777619);
+        return (h >>> 0).toString(16);
+      }
+      /** Every colour in the frame at t that is not in the channel palette (should be empty). */
+      function offPalette(t, opts) {
+        render(t, opts);
+        const pal = new Set(Object.values(PAL).map((h) => h.toLowerCase()));
+        const d = ctx.getImageData(0, 0, 384, 216).data;
+        const out = new Map();
+        for (let i = 0; i < d.length; i += 4) {
+          const hex = `#${[d[i], d[i + 1], d[i + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+          if (!pal.has(hex)) out.set(hex, (out.get(hex) || 0) + 1);
+        }
+        return [...out.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
+      }
+      window.__lab = { render, set, hash, offPalette, kinds: () => Object.fromEntries(Object.entries(KINDS).map(([k, v]) => [k, Object.keys(v)])), openFor };
+    </script>
+  </body>
+</html>

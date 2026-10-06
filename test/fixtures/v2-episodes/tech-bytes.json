@@ -1,0 +1,290 @@
+{
+ "kind": "episode",
+ "id": "emur828y11",
+ "createdAt": "2026-10-02T17:13:28.777Z",
+ "program": {
+  "id": "tech-bytes",
+  "title": "TECH BYTES",
+  "tagline": "THE FUTURE, ONE BYTE AT A TIME",
+  "theme": "tech"
+ },
+ "cast": {
+  "A": "max",
+  "B": "ada"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "write",
+   "ms": 18,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 0,
+   "images": 2
+  }
+ ],
+ "title": "TECH BYTES (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Chipmaker unveils a laptop processor with all-day battery life. Also coming up: Startup launches satellite internet service for farms. And later, our number of the day. This is TECH BYTES. I'm Max Circuit, with Ada Volt.",
+   "cues": [
+    {
+     "char": 63,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 188,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 220,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s6b65619146",
+    "s9c777c85c9",
+    "s73f99cbdf2"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "From Circuit Weekly: A chipmaker has unveiled a new laptop processor it says can run for 20 hours on a single charge.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "point_screen"
+    },
+    {
+     "char": 117,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s6b65619146",
+   "headline": "Chipmaker unveils laptop processor with all-day battery life",
+   "shot": "close",
+   "breaking": false,
+   "location": null,
+   "fact": "20 HOURS",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": true,
+   "kicker": "CHIPS",
+   "numbers": [
+    {
+     "value": "20",
+     "label": "HOURS"
+    }
+   ]
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "And when does it reach actual people?",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "chin"
+    }
+   ]
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "The first laptops using it will go on sale in the spring.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "lean_in"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Circuit Weekly reports that a startup has launched a satellite internet service designed for farms in remote areas. It says the service reaches speeds of 100 megabits per second.",
+   "cues": [
+    {
+     "char": 178,
+     "slot": "A",
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "s9c777c85c9",
+   "headline": "Startup launches satellite internet service for farms",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": "100 MEGABITS PER SECOND",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "CONNECTIVITY",
+   "numbers": [
+    {
+     "value": "100",
+     "label": "MEGABITS PER SECOND"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "Our number of the day: about 1,500 dollars. From Circuit Weekly: A home robotics company has shown a robot vacuum that can climb stairs using two small legs. It will cost about 1,500 dollars when it launches next year.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "count"
+    },
+    {
+     "char": 218,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s73f99cbdf2",
+   "headline": "Robot vacuum learns to climb stairs",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": "ABOUT 1,500 DOLLARS",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "1,500",
+     "label": "DOLLARS",
+     "qualifier": "ABOUT"
+    }
+   ],
+   "feature": "number"
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "And finally: Astronomers using a telescope in Chile have detected water vapour in the atmosphere of a planet 120 light years away, Starfield Journal reports. The planet is about twice the size of Earth.",
+   "cues": [
+    {
+     "char": 202,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s1c5a3cb80a",
+   "headline": "Telescope in Chile spots water vapour on a distant planet",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "CHILE",
+    "lat": -35.7,
+    "lon": -71.5
+   },
+   "fact": "120 LIGHT YEARS AWAY",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": true,
+   "kicker": "AND FINALLY",
+   "numbers": [
+    {
+     "value": "120",
+     "label": "LIGHT YEARS AWAY"
+    }
+   ],
+   "feature": "lighter"
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "Somewhere, a researcher is very pleased with themselves. Rightly.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "look_partner"
+    }
+   ]
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's TECH BYTES. From Ada Volt and from me, thanks for watching. More news around the clock on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 18,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s6b65619146",
+   "headline": "Chipmaker unveils laptop processor with all-day battery life",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": true,
+   "kicker": "CHIPS"
+  },
+  {
+   "storyId": "s9c777c85c9",
+   "headline": "Startup launches satellite internet service for farms",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "CONNECTIVITY"
+  },
+  {
+   "storyId": "s73f99cbdf2",
+   "headline": "Robot vacuum learns to climb stairs",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY"
+  },
+  {
+   "storyId": "s1c5a3cb80a",
+   "headline": "Telescope in Chile spots water vapour on a distant planet",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": true,
+   "kicker": "AND FINALLY"
+  }
+ ],
+ "storyIds": [
+  "s6b65619146",
+  "s9c777c85c9",
+  "s73f99cbdf2",
+  "s1c5a3cb80a"
+ ]
+}

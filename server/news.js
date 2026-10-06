@@ -1,7 +1,18 @@
+import { dropTranscriptLines, dropPageFurniture } from './transcript.js';
 import fs from 'node:fs';
+import path from 'node:path';
 import crypto from 'node:crypto';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { XMLParser } from 'fast-xml-parser';
-import { config } from './config.js';
+import { config, ROOT } from './config.js';
+import { GOOD_WIDTH, feedCandidates, pageCandidates, rankPictures } from './pictures.js';
+import { extractArticle } from './article.js';
+import { guardedFetch, readCapped } from './net.js';
+import { degreesApart, findPlaces, locate, lookupPlace } from './gazetteer.js';
+import { onBeat } from './topics.js';
+import { sentencesIn, sameWord } from './facts.js';
+
+export { extractImage, isUsableImage } from './pictures.js';
 
 const UA = 'Mozilla/5.0 (compatible; LiveNewsBot/0.1; +https://github.com/choco-studio/livenews)';
 const parser = new XMLParser({
@@ -37,70 +48,231 @@ export function decodeEntities(s) {
 }
 
 const BLOCK = '\u0001'; // marks HTML block ends while tags are stripped
+const BLOCK_TAG = /^<(?:br\s*\/?|\/p|\/li|\/h\d)\s*>$/i;
+// Nothing on air needs more than this much of an item's raw HTML.
+export const MAX_RAW_HTML = 20_000;
+
+/**
+ * Strip tags with one left-to-right pass (indexOf, no backtracking regex): a
+ * hostile item made of thousands of "<" can no longer stall the event loop.
+ * Comments and <script>/<style> bodies go; block ends become BLOCK marks; a
+ * "<" with no closing ">" is plain text, as before.
+ */
+function stripTags(html) {
+  const s = String(html);
+  const lower = s.toLowerCase();
+  let out = '';
+  let i = 0;
+  while (i < s.length) {
+    const lt = s.indexOf('<', i);
+    if (lt < 0 || lt === s.length - 1) {
+      out += s.slice(i);
+      break;
+    }
+    out += s.slice(i, lt);
+    if (s.startsWith('<!--', lt)) {
+      const end = s.indexOf('-->', lt + 4);
+      out += ' ';
+      i = end < 0 ? s.length : end + 3;
+      continue;
+    }
+    const raw = lower.slice(lt + 1, lt + 7);
+    const body = raw.startsWith('script') ? 'script' : raw.startsWith('style') ? 'style' : null;
+    if (body && /[\s>/]/.test(lower[lt + 1 + body.length] || '>')) {
+      const close = lower.indexOf(`</${body}`, lt);
+      const gt = close < 0 ? -1 : s.indexOf('>', close);
+      out += ' ';
+      i = gt < 0 ? s.length : gt + 1;
+      continue;
+    }
+    if (s[lt + 1] === '>') {
+      out += '<>';
+      i = lt + 2;
+      continue;
+    }
+    const gt = s.indexOf('>', lt + 1);
+    if (gt < 0) {
+      out += s.slice(lt);
+      break;
+    }
+    out += BLOCK_TAG.test(s.slice(lt, gt + 1)) ? BLOCK : ' ';
+    i = gt + 1;
+  }
+  return out;
+}
 
 export function cleanHtml(html) {
-  return decodeEntities(
-    String(html)
-      .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
-      .replace(/<!--[\s\S]*?-->/g, ' ')
-      .replace(/<br\s*\/?>|<\/p>|<\/li>|<\/h\d>/gi, BLOCK)
-      .replace(/<[^>]+>/g, ' ')
-  )
+  return decodeEntities(stripTags(String(html ?? '').slice(0, MAX_RAW_HTML)))
+    .replace(/[^\S\u0001]+/g, ' ')
     // block breaks become sentence breaks unless a sentence already ended
-    .replace(/([.!?…:;])?\s*\u0001[\s\u0001]*/g, (_, p) => (p ? `${p} ` : '. '))
+    .replace(/([.!?…:;])? ?\u0001[ \u0001]*/g, (_, p) => (p ? `${p} ` : '. '))
     .replace(/\s+/g, ' ')
     .replace(/^[.\s]+/, '')
     .trim();
 }
 
-// Feed boilerplate that is not part of the story
-const BOILERPLATE_RE = /\s*(?:Leer la noticia completa|Continue reading|Read more)\s*(?:\.{1,3}|…|»|→)?\s*$|(?<=[.!?])\s*Comments?\s*$|The post .{0,200}? appeared first on .{0,80}?\./gi;
+// Feed boilerplate that is not part of the story. Each pattern only matches a
+// trailing fragment that stands on its own (after a sentence end, or the
+// capitalised link text glued to the excerpt), so a real sentence such as
+// "Experts say children should read more." is never cut.
+const BOILERPLATE_RES = [
+  // "… Useful text. Read more…" / "Continue reading »" / "Leer la noticia completa."
+  /(?:^|(?<=[.!?…»"”':]))\s*(?:Leer la noticia completa|Continue reading|Read more)\s*(?:\.{1,3}|…|»|→)?\s*$/i,
+  // link text glued to the excerpt without a full stop: "… the end Read more »" (capitalised only)
+  /(?<=[a-z0-9,;)])\s+(?:Continue reading|Read more)\s*(?:\.{3}|…|»|→)?\s*$/,
+  /(?<=[.!?])\s*Comments?\s*$/i,
+  // WordPress: "The post <title> appeared first on <Site Name>." (site = capitalised words or a domain).
+  // Words of the site name are separated by mandatory spaces, so a long run of capitals can be
+  // split only one way: the regex stays linear on hostile input (no catastrophic backtracking).
+  /(?:^|(?<=[.!?…"”]))\s*The post .{1,200}? appeared first on (?:[A-Z0-9][\w.&'’-]*|[a-z0-9-]+(?:\.[a-z0-9-]+)+)(?: (?:[A-Z0-9][\w.&'’-]*|[a-z0-9-]+(?:\.[a-z0-9-]+)+)){0,5}\.?\s*$/,
+];
+// Feed summaries are capped before any regex runs: nothing on air needs more than the first few paragraphs.
+const MAX_SUMMARY_SCAN = 5000;
+export const stripBoilerplate = (summary) => BOILERPLATE_RES.reduce((s, re) => s.replace(re, ''), String(summary).slice(0, MAX_SUMMARY_SCAN)).trim();
 
 // Explicit breaking-news markers only ("Record-breaking heatwave" is not breaking news).
-const BREAKING_RES = [/^\s*breaking(?: news)?\s*[:|–—-]/i, /[,|–—-]\s*breaking\s*$/i, /\bBREAKING\b/, /[-–—]\s*live\b/i, /\blive updates?\b/i, /última hora/i];
-export const isBreaking = (title) => BREAKING_RES.some((re) => re.test(title));
+const BREAKING_START = /^\s*breaking(?: news)?\s*[:|–—-]/i;
+const BREAKING_END = /(?:,|\s[|–—-])\s*breaking\s*$/i; // the separator needs a space: "record-breaking" has none
+const BREAKING_WORD = /(?<![\w\-–—])BREAKING(?![\w\-–—])/; // the capitalised word, not part of a compound
+const BREAKING_LEAD = /^\s*BREAKING(?![\w\-–—])/;
+const ULTIMA_HORA = /última hora/i;
+// In a headline written in capitals, capitals say nothing: only a leading BREAKING counts.
+const shouting = (t) => {
+  const letters = t.replace(/[^A-Za-z]/g, '');
+  return letters.length >= 8 && letters === letters.toUpperCase();
+};
+export const isBreaking = (title) => {
+  const t = String(title ?? '');
+  if (BREAKING_START.test(t) || BREAKING_END.test(t) || ULTIMA_HORA.test(t)) return true;
+  return shouting(t) ? BREAKING_LEAD.test(t) : BREAKING_WORD.test(t);
+};
 
-const TRACKER_RE = /imrworldwide|doubleclick|feedburner|pixel|1x1|tracking|gravatar|\/stats?\b|\.gif(\?|$)/i;
+// Live blogs ("Election night – live", "Live updates: …") are rolling coverage,
+// not breaking news: The Guardian alone runs several a day, sport included. They
+// are flagged so the writer can call them developing stories, but they never
+// trigger the BREAKING banner.
+const LIVE_RES = [
+  /[-–—]\s*(?:[\w-]+\s+)?live\b(?![-'’])/i, // "Election night – live", "UK inflation – business live"
+  /\blive updates?\b/i,
+  /\blive blog\b/i,
+  /^\s*live\s*[:|]/i,
+  /(?:^|\s)\w+\s+live\s*:/i, // "Ukraine war live: …", "Politics live: …", "Middle East crisis live: …"
+  /\bas it happened\b/i,
+  /\blive!/i,
+];
+export const isLiveBlog = (title) => LIVE_RES.some((re) => re.test(String(title ?? '')));
 
-function isUsableImage(url) {
-  return typeof url === 'string' && /^https?:\/\//i.test(url) && !TRACKER_RE.test(url) && !/\.svg(\?|$)/i.test(url);
+// Short words that stay in capitals when a shouting headline is sentence-cased.
+const ACRONYMS = new Set('US UK UN EU AI NASA NATO WHO IMF ECB BBC CNN ABC NBC CBS NPR FBI CIA NHS GDP CEO UAE DRC IPO EV EVS COP OPEC G7 G20 TV USA UFO VR AR IT 5G 4G FIFA UEFA IAEA OECD ASEAN UNHCR UNICEF UNESCO NOAA'.split(' '));
+
+// Ordinary short words of headlines: in a headline written in capitals, a 2-4 letter word NOT on this list is
+// taken for an acronym and keeps its capitals ("NASA AND ESA LAUNCH..." keeps ESA); letter-digit codes (Q3, G7,
+// COP29, 5G) always do.
+const COMMON_SHORT = new Set(
+  ('a an and are as at be but by do for from go has had have he her him his how if in into is it its me my no not now of off on ' +
+    'one or our out over own say says see she so than that the then they this to too two up us was way we were what when who why ' +
+    'will with you all any age ago aid air arm art ask bad bag ban bar bay bed bet bid big bit box boy bus buy can car cat cut day ' +
+    'die dog dry due ear eat end era eye far fat fed few fit fly fog fun gap gas get gun guy hit hot ice ill ink jam jet job joy key ' +
+    'kid kit lab law lay leg let lie lot low mad man map men mix mob mud net new nil oil old pay pet pin pit pop pot put rag ran rat ' +
+    'raw red rid rig row run sad sat saw sea set six sky son spa spy sun tax tea ten tie tip toe ton top toy try van via vow war wet ' +
+    'win won yes yet zoo able also area army away baby back ball band bank base bear beat been best bill bird blow blue boat body ' +
+    'bomb bond book boom boss both bowl bulk burn busy call calm came camp card care case cash cast cell chef chip city clan club ' +
+    'coal coat code cold come cook cool cops copy core cost crew crop cuts dark data date dead deal dear debt deep deny desk diet ' +
+    'dish does done door down draw drop drug dust duty each earn ease east easy edge else even ever exam exit face fact fail fair ' +
+    'fall fame farm fast fate fear feed feel fees feet fell felt file fill film find fine fire firm fish five flag flat flee fled ' +
+    'flew flow food foot ford form four free from fuel full fund gain game gate gave gear gift girl give glad goal goes gold golf ' +
+    'gone good grew grid grow gulf hail hair half hall halt hand hang hard harm hate have head heal hear heat held hell help here ' +
+    'hero hide high hike hill hire hits hold hole home hope host hour huge hunt hurt idea iron item jail jobs join joke jump jury ' +
+    'just keen keep kept kick kill kind king knew know lack lady laid lake land lane last late lead leak left less life lift like ' +
+    'line link list live load loan lock long look lord lose loss lost loud love luck made mail main make male many mark mass mayor ' +
+    'meal mean meat meet menu mild mile milk mind mine miss mode mood moon more most move much must name navy near neck need news ' +
+    'next nice nine none norm nose note nuts odds okay once only onto open oral over pace pack page paid pain pair palm park part ' +
+    'pass past path peak pick pier pile pill pink plan play plea plot plus poll pool poor port pose post pour pray prey pull pure ' +
+    'push race rail rain rank rare rate read real rear rely rent rest rice rich ride ring rise risk road rock role roll roof room ' +
+    'root rose rule rush safe said sail sale salt same sand save scan seal seat seed seek seem seen self sell send sent ship shop ' +
+    'shot show shut sick side sign silk sing sink site size skin slip slow snow soft soil sold sole some song soon sort soul spot ' +
+    'star stay step stop such suit sure swap take tale talk tall tank tape task team tech tell tend term test text than them then ' +
+    'they thin this tide tied ties till time tiny tips told toll tone took tool tops torn tour town toys tram tree trip true tube ' +
+    'tune turn twin type unit upon used user vast very vice view visa void vote wage wait wake walk wall want ward warm warn wash ' +
+    'wave ways weak wear week well went were west what when whom wide wife wild will wind wine wing wins wire wise wish with wolf ' +
+    'wood word wore work worn yard year your zero zone act add aim ant ape arc ash ate awe axe bat bee beg bin bow bud bug bun cab ' +
+    'cap cow cry cub cue cup dam den dew dig dim dip doc dot dub dug duo dye egg ego elf elm eve fan fax fee fig fin fix flu foe fox ' +
+    'fry fur gag gel gem gig gin god got gum gut hat hay hen hop hub hue hug hut icy inn ion ivy jaw jog jug kin lap lid lip log ' +
+    'mat mop mug nab nap nod nor nun nut oak oar oat odd opt orb ore owe owl pad pal pan paw pea pen pie pig ply pod pro pub pun ' +
+    'pup ram rap ray rib rim rip rob rod rot rub rug rum rye sag sap sew sip sir sit ski sob sow soy sub sue sum tab tag tan tap ' +
+    'tar tin tow tub tug urn use vet wag web wig wit woe wok yak yam zip').split(' ')
+);
+const LETTER_DIGIT = /^(?:[A-Z]{1,4}\d{1,4}[A-Z]?|\d{1,3}[A-Z]{1,2})$/;
+
+/** "THOUSANDS FLEE AS WILDFIRE SPREADS NEAR LOS ANGELES" -> "Thousands flee as wildfire spreads near Los Angeles". */
+export function sentenceCase(title) {
+  const t = String(title ?? '');
+  const letters = t.replace(/[^A-Za-z]/g, '');
+  if (letters.length < 8 || letters !== letters.toUpperCase()) return t;
+  // acronyms and codes as the outlet wrote them, before everything goes to lower case
+  const kept = new Set();
+  for (const w of t.match(/[A-Z0-9]+/g) || []) {
+    // a guess only for 2-3 letters (4-letter acronyms come from the ACRONYMS list: "RAID", "FANS" are words)
+    if (LETTER_DIGIT.test(w) || (/^[A-Z]{2,3}$/.test(w) && !COMMON_SHORT.has(w.toLowerCase()) && !lookupPlace(w))) kept.add(w);
+  }
+  const words = t.toLowerCase().split(/(\s+)/);
+  // Place names keep their capitals (the gazetteer knows them; longest first, up to 3 words).
+  for (let i = 0; i < words.length; i += 2) {
+    for (let n = 5; n >= 1; n -= 2) {
+      const span = words.slice(i, i + n).join('');
+      const bare = span.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '').replace(/['’]s$/, '');
+      if (bare.length < 3) continue;
+      const e = lookupPlace(bare);
+      if (e && [e.name, ...e.aliases].some((a) => a.toLowerCase() === bare)) {
+        for (let k = i; k < Math.min(i + n, words.length); k += 2) words[k] = words[k].replace(/\p{L}+/gu, (w) => w[0].toUpperCase() + w.slice(1));
+        break;
+      }
+    }
+  }
+  return words
+    // a word the place pass capitalised ("Los" of Los Angeles) stays as it is
+    .map((w, i) => (i % 2 ? w : w.replace(/[\p{L}\d]+/gu, (x) => (ACRONYMS.has(x.toUpperCase()) ? x.toUpperCase() : /^\p{Lu}/u.test(x) ? x : kept.has(x.toUpperCase()) ? x.toUpperCase() : x))))
+    .join('')
+    .replace(/^[^\p{L}]*\p{Ll}/u, (c) => c.toUpperCase());
 }
 
-/** Pick the best image candidate from an RSS/Atom item. */
-export function extractImage(item) {
-  const candidates = [];
-  const pushMedia = (m) => {
-    for (const node of asArray(m)) {
-      const url = node?.['@_url'] || node?.['@_href'];
-      const type = node?.['@_type'] || node?.['@_medium'] || '';
-      if (url && (!type || /image/i.test(type))) {
-        candidates.push({ url, w: Number(node['@_width']) || 0 });
-      }
-      // media:group > media:content
-      if (node?.['media:content']) pushMedia(node['media:content']);
-      if (node?.['media:thumbnail']) pushMedia(node['media:thumbnail']);
-    }
-  };
-  pushMedia(item['media:content']);
-  pushMedia(item['media:group']);
-  pushMedia(item['media:thumbnail']);
-  for (const enc of asArray(item.enclosure)) {
-    if (/image/i.test(enc?.['@_type'] || '') || /\.(jpe?g|png|webp)(\?|$)/i.test(enc?.['@_url'] || '')) {
-      candidates.push({ url: enc['@_url'], w: 0 });
-    }
-  }
-  for (const link of asArray(item.link)) {
-    if (link?.['@_rel'] === 'enclosure' && /image/i.test(link?.['@_type'] || '')) {
-      candidates.push({ url: link['@_href'], w: 0 });
-    }
-  }
-  const html = [text(item['content:encoded']), text(item.content), text(item.description), text(item.summary)].join(' ');
-  for (const m of html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)) {
-    candidates.push({ url: decodeEntities(m[1]), w: 0 });
-  }
-  const usable = candidates.filter((c) => isUsableImage(c.url));
-  usable.sort((a, b) => b.w - a.w);
-  return usable[0]?.url || null;
+/** A headline as it is said on air: without the outlet's "BREAKING:" or "– live" markers (they belong to the strap). */
+export const plainTitle = (title) =>
+  sentenceCase(
+    String(title ?? '')
+      .replace(/^\s*breaking(?: news)?\s*[:|–—-]\s*/i, '')
+      .replace(/\s*(?:,|\s[|–—-])\s*breaking\s*$/i, '')
+      .replace(/^\s*live(?: updates)?\s*[:|]\s*/i, '')
+      .replace(/\s*[-–—]\s*(?:[\w-]+\s+)?live(?: updates| blog)?!?\s*$/i, '')
+      .replace(/\s*[-–—:]\s*as it happened\s*$/i, '')
+      .replace(/\s*[:|]\s*live updates?\s*$/i, '')
+      .replace(/^(\s*\w+)\s+live\s*:\s*/i, '$1: ')
+      .replace(/(\s\w+)\s+live\s*:\s*/i, '$1: ')
+      .replace(/\s*\blive!\s*/i, ' ')
+      .trim()
+  ).replace(/^\p{Ll}/u, (c) => c.toUpperCase());
+
+/**
+ * A picture shipped next to a LOCAL feed (offline demos and fixtures): a
+ * relative path in the item's media tags or HTML, resolved inside the feed's
+ * own folder. Remote feeds never get this.
+ */
+export function extractLocalImage(item, baseDir) {
+  return rankPictures(feedCandidates(item, { baseDir }).filter((c) => c.local))[0]?.url || null;
+}
+
+/** The pictures of a feed item, best first (file: URLs only for local feeds, inside their folder). */
+export function itemPictures(item, { baseDir = null, link = null } = {}) {
+  // Relative references of a remote feed resolve against the item's own web page.
+  const list = rankPictures(feedCandidates(item, { baseDir, link: !baseDir && /^https?:\/\//i.test(link || '') ? link : null }));
+  return baseDir ? list : list.filter((c) => !c.local);
+}
+
+/** The file behind a feed URL that points to the local disk, or null for a web feed. */
+export function localFeedPath(url) {
+  if (/^file:/i.test(url)) return fileURLToPath(url);
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) return path.resolve(ROOT, url);
+  return null;
 }
 
 function itemLink(item) {
@@ -114,20 +286,71 @@ function itemLink(item) {
 
 export const storyId = (key) => 's' + crypto.createHash('sha1').update(key).digest('hex').slice(0, 10);
 
-/** Normalize the parsed XML of an RSS 2.0 or Atom feed into story objects. */
-export function parseFeed(xml, feed) {
+/**
+ * Normalize the parsed XML of an RSS 2.0 or Atom feed into story objects.
+ * `baseDir` is given only for local feeds from the operator's list: their
+ * stories may carry pictures stored next to the feed file.
+ */
+// A feed lists its newest items first; nothing on air needs more than this many of one feed's items (a
+// hostile or mis-sized feed of 12,000 items would otherwise flood the desk).
+export const MAX_FEED_ITEMS = 150;
+// Stories the desk holds at most (a few hundred is a busy day for a full feed list).
+export const MAX_DESK = 3000;
+// Characters that never belong on air: controls, bidi overrides, zero-width marks, soft hyphens, emoji and
+// pictographs (the bitmap font draws them as gaps and the voice spells them).
+const UNSPEAKABLE = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\ufe0e\ufe0f]|\p{Extended_Pictographic}|[\u{1f1e6}-\u{1f1ff}\u{1f3fb}-\u{1f3ff}]/gu;
+// "[wave]"-style tokens in feed text would be read as stage directions by the writer's cue parser.
+const CUE_TOKEN = /\[[A-Za-z]{1,8}(?::[A-Za-z_]{1,16})?\]/g;
+/** Feed text made safe for the strap and the voice. */
+export const onAirText = (s) => String(s ?? '').replace(UNSPEAKABLE, ' ').replace(CUE_TOKEN, ' ').replace(/\s+/g, ' ').trim();
+
+export function parseFeed(xml, feed, { baseDir = null, now = Date.now(), log = null } = {}) {
   const doc = parser.parse(xml);
   const items = doc?.rss?.channel?.item ?? doc?.feed?.entry ?? doc?.['rdf:RDF']?.item ?? [];
   const stories = [];
-  for (const item of asArray(items)) {
-    const title = cleanHtml(text(item.title));
+  let broken = 0;
+  for (const [index, item] of asArray(items).slice(0, MAX_FEED_ITEMS).entries()) {
+    // One malformed item (a bad escape in a picture URL, a strange structure) drops only itself, never the feed.
+    try {
+      const story = parseItem(item, index, feed, { baseDir, now });
+      if (story) stories.push(story);
+    } catch (err) {
+      broken++;
+      if (broken <= 3) log?.warn?.(`[news] ${feed?.name}: item ${index} skipped: ${String(err?.message || err).slice(0, 120)}`);
+    }
+  }
+  return stories;
+}
+
+// A date a little ahead (a time-zone slip) is "now"; this far ahead it is a broken clock or a hostile feed: the
+// item is ranked as if it were half a day old (after every fresh story, out of the ticker's head) and expires
+// like any other, instead of topping the desk for ever.
+const FUTURE_SLACK_MS = 24 * 3600_000;
+const BROKEN_CLOCK_AGE_MS = 12 * 3600_000;
+
+function parseItem(item, index, feed, { baseDir, now }) {
+  {
+    // Raw text is capped before any cleaning: a title needs a line, a summary a few paragraphs.
+    const title = onAirText(plainSpaces(cleanHtml(text(item.title).slice(0, 2000)))).slice(0, 300);
     const link = itemLink(item);
-    if (!title || !link) continue;
+    if (!title || !/\p{L}/u.test(title) || !link) return null;
     const rawSummary = text(item.description) || text(item.summary) || text(item['content:encoded']) || text(item.content);
-    const summary = cleanHtml(rawSummary).replace(BOILERPLATE_RE, '').trim().slice(0, 900);
+    // (a broadcaster's own video script in its summary, "Here's Jennie Shin with more", hands over to no one here)
+    // (and page furniture a scraper left in it: a menu, a site's tagline, a teaser cut off with "[…]")
+    const summary = dropPageFurniture(dropTranscriptLines(onAirText(stripBoilerplate(cleanHtml(rawSummary.slice(0, MAX_RAW_HTML)))))).slice(0, 900);
     const dateStr = text(item.pubDate) || text(item.published) || text(item.updated) || text(item['dc:date']);
-    const published = Date.parse(dateStr) || Date.now();
-    stories.push({
+    // Undated items: "now", one second older per position (feeds list the newest first),
+    // so the desk ranks them the same way on every run. A date in the future is never later than now (it
+    // would top the ticker and never expire); more than a day ahead, the item counts as undated.
+    const parsed = Date.parse(dateStr);
+    const dated = Number.isFinite(parsed);
+    const broken = dated && parsed > now + FUTURE_SLACK_MS;
+    const published = !dated ? now - index * 1000 : broken ? now - BROKEN_CLOCK_AGE_MS - index * 1000 : Math.min(parsed, now);
+    const pictures = itemPictures(item, { baseDir, link });
+    const credits = creditsOf(pictures);
+    // A local feed's item may link to a local article page (offline fixtures), inside the feed's folder.
+    const page = baseDir ? localPage(link, baseDir) : null;
+    const story = {
       id: storyId(link.replace(/[?#].*$/, '')),
       title,
       summary,
@@ -136,10 +359,29 @@ export function parseFeed(xml, feed) {
       category: feed.category || 'general',
       weight: Number(feed.weight) || 1,
       published,
-      image: extractImage(item),
-    });
+      image: pictures[0]?.url || null,
+      ...(pictures.length ? { imageWidth: pictures[0].w, imageVia: `feed:${pictures[0].via}` } : {}),
+      ...(pictures.length > 1 ? { images: pictures.map((p) => p.url) } : {}),
+      ...(credits ? { imageCredits: credits } : {}),
+      ...(page ? { page } : {}),
+      ...(baseDir ? { local: true } : {}),
+      ...(isLiveBlog(title) ? { live: true } : {}),
+      ...(dated ? {} : { undated: true }),
+      ...(broken ? { brokenDate: true } : {}),
+    };
+    stampCredit(story);
+    return story;
   }
-  return stories;
+}
+
+const plainSpaces = (s) => s.replace(/\s+/g, ' ').trim();
+
+/** A local fixture article page: a relative .html path inside the feed's folder, as a file: URL. */
+function localPage(link, baseDir) {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(link) || !/\.html?$/i.test(link) || link.startsWith('/') || link.startsWith('\\')) return null;
+  const root = path.resolve(baseDir);
+  const file = path.resolve(root, link);
+  return file.startsWith(root + path.sep) ? pathToFileURL(file).href : null;
 }
 
 export function normalizeTitleKey(title) {
@@ -168,6 +410,25 @@ export function keywords(title) {
   );
 }
 
+// Not news, whatever the feed files it under (a tech section is half shopping and reviews): deals and sales, and a
+// reviewer's first person or verdict. "The best early October Prime Day deals", "The AirPods Pro 3 are a fantastic
+// deal at $179", "This wallet is the coolest I've stuck to my phone", "...punk is perfect for spooky season" (real
+// news, 4 Oct). A trade deal, an arms deal, a "deal on the budget" or "a great deal of" stays news, and so does
+// the first person inside a quotation ("'I'm not resigning,' says PM"). A list ("All the AI agents that can live in
+// your text messages"), a column ("...But let’s talk about the hard part.") and a newsletter ("TechCrunch Mobility:")
+// are no report either, nor is a mission's blog ("Curiosity Blog, Sols 5022-5028: ...") or a staff profile ("Mapping
+// the Gaps in NASA’s Return to the Moon, featuring Richard Spolzino", NASA 5 Oct), nor NASA's picture of the day
+// ("APOD: 2026 October 4 – Supernumerary Rainbows", a page of menus around one photo), nor a question ("Can ‘super intelligence’ and a non-binding safety pact solve AI’s image
+// problem?" was a podcast; "Is the rally over?" an analysis).
+const SHOPPING = /\b(?:prime day|black friday|cyber monday|gift guides?|promo codes?|coupons?|discount codes?|on sale|price drops?|lowest price|best price (?:ever|yet)|best buys?)\b|\b(?:best|early|top|today['’]s|weekend|holiday|labor day|memorial day)\s+(?:[\w-]+\s+){0,3}deals\b|\bdeals? of the day\b|\b(?:fantastic|great|good|solid|rare) deal (?:at|for|on|right now)\b|\$\d[\d,.]*\s+off\b|\bcheaper (?:at|on) (?:Amazon|Best Buy|Walmart|Target)\b|\bcheaper than ever\b/i;
+const REVIEW = /\b(?:I['’](?:ve|m|d|ll)|I (?:tried|tested|used|love|loved|hate|bought|stuck|wore|played|spent|can['’]t stop)|my)\b|\b(?:hands-on|is perfect for|are perfect for|you should (?:buy|get)|should you (?:buy|get)|worth (?:buying|the (?:upgrade|money|price))|how to|tips for|let['’]s (?:talk|be honest|face it))\b|\breview(?::|\s+[-–—|]|$)|^all the\b|^[\w ]{2,20}\b(?:Mobility|Daily|Weekly|Briefing|Roundup|Recap|Newsletter|Week in Review):|\bblog\b|\bsols? \d+|,\s*featuring\s+\p{Lu}|^APOD\b/iu;
+// a quotation is someone else's words: "‘I'm not resigning,’ says PM", "“My country will not surrender”"
+const unquoted = (t) => t.replace(/[“"][^”"]*[”"]/g, ' ').replace(/(^|[\s:(])['‘].+?['’](?=[\s,.:;!?)]|$)/g, '$1');
+export const notNews = (s) => {
+  const t = String(s?.title || '');
+  return SHOPPING.test(t) || REVIEW.test(unquoted(t)) || /\?\s*$/.test(unquoted(t).trim());
+};
+
 /** Two headlines are about the same event if they share enough keywords. */
 export function sameEvent(a, b) {
   let shared = 0;
@@ -187,88 +448,689 @@ export function interestScore(s, now = Date.now()) {
   const image = s.image ? 1.15 : 1;
   const substance = (s.summary || '').length > 80 ? 1 : 0.7;
   const passedOver = 0.6 ** (s.offered || 0);
-  return recency * trend * (s.weight || 1) * image * substance * passedOver;
+  // What the outlet itself calls breaking news tops the desk; rolling live pages sink (no clear news line).
+  const urgency = isBreaking(s.title) ? 3 : s.live ? 0.5 : 1;
+  // A story back on a closed desk (NewsDesk.recycle) sinks a little, by a different amount each time round,
+  // so the next bulletin is not the last one again in the same order.
+  const rerun = s.recycled ? 0.6 + 0.3 * ((storyHash(`${s.id}#${s.recycled}`) % 1000) / 1000) : 1;
+  return recency * trend * (s.weight || 1) * image * substance * passedOver * urgency * rerun;
+}
+
+function storyHash(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+/** A programme's own beat counts for more: its first category weighs 1.5x the others. */
+export const PRIMARY_CATEGORY_WEIGHT = 1.5;
+
+// ---------------------------------------------------------------- same event?
+// Two reports are one event only when nothing says otherwise: they name no places that disagree ("Tokyo
+// stocks close at a record high" / "New York stocks..."; "Storm hits Florida coast" / "...Texas coast"), the
+// place coming from the headline or else the summary's first sentence ("Central bank raises interest rates
+// unexpectedly" is Brazil's when the summary says so); no names that disagree ("new iPhone" / "new iPad");
+// no incidents of different kinds ("London bridge attack" / "London fraud scheme"; a recall / a factory
+// opening; rates held / rates raised); no different causes ("after engine fire" / "after window blows out").
+
+const firstSentenceOf = (text) => (sentencesIn(String(text || ''))[0] || '').slice(0, 300);
+
+/** The place a report is about: the headline's most precise place, else the summary's first sentence's (or null). */
+function storyPlace(s) {
+  const head = locate(s.title || '', '');
+  if (head && !head.entry.broad) {
+    // "Kenya ..." with "near Nairobi" in the first sentence: the city, inside the country the headline names
+    const deeper = head.entry.kind === 'country' ? locate(s.title || '', firstSentenceOf(s.summary)) : null;
+    return deeper && !deeper.entry.broad ? deeper.entry : head.entry;
+  }
+  const body = locate('', firstSentenceOf(s.summary));
+  return body && !body.entry.broad ? body.entry : null;
+}
+
+/** Do two places agree? true / false, or null when one is unknown. A country holds its cities and regions. */
+export function placesAgree(a, b) {
+  if (!a || !b) return null;
+  if (a === b) return true;
+  const ca = a.country || a.name;
+  const cb = b.country || b.name;
+  if (ca !== cb) return false;
+  if (a.kind === 'country' || b.kind === 'country') return true;
+  // Two places inside one country: the same spot (a city and the region around it), not two states or cities.
+  return degreesApart(a, b) <= (a.kind === 'city' && b.kind === 'city' ? 1 : 5);
+}
+
+const foldWord = (w) => w.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+/**
+ * Names in a headline: capitalised words past the first ("Hurricane Elena ... Yucatán" -> elena, yucatan),
+ * possessives folded. Empty for a headline in Title Case or capitals (every word is capitalised there).
+ */
+export function namesOf(title) {
+  const words = String(title || '').split(/\s+/).map((w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').replace(/['’]s$/u, '')).filter(Boolean);
+  const long = words.filter((w) => w.length > 3);
+  if (long.length >= 3 && long.filter((w) => /^\p{Lu}/u.test(w)).length / long.length >= 0.8) return new Set();
+  const out = new Set();
+  words.forEach((w, i) => {
+    if (i > 0 && w.length >= 2 && /\p{Lu}/u.test(w)) out.add(foldWord(w));
+  });
+  return out;
+}
+
+// Kinds of incident and decision: two reports whose headlines name different kinds are two events.
+const INCIDENT_KINDS = [
+  ['violence', /^(?:attacks?|attacked|assault|shootings?|shot|gunman|gunmen|gunfire|stabbings?|stabbed|bombs?|bombings?|bombed|explosions?|blasts?|airstrikes?)$/],
+  ['theft', /^(?:robbery|robberies|robbed|heist|theft|thefts|stolen|burglary|looting)$/],
+  ['fraud', /^(?:fraud|scam|scams|scheme|embezzlement|bribery|corruption|laundering)$/],
+  ['wildfire', /^(?:wildfires?|bushfires?)$/],
+  ['fire', /^(?:fires?|blaze|burning|arson)$/],
+  ['flood', /^(?:floods?|flooding|flooded)$/],
+  ['quake', /^(?:earthquakes?|quake|tremor|aftershocks?)$/],
+  ['storm', /^(?:storms?|hurricanes?|typhoons?|cyclones?|tornado(?:es)?)$/],
+  ['eruption', /^(?:volcano(?:es)?|volcanic|erupts?|erupted|eruptions?|lava)$/],
+  ['crash', /^(?:crash|crashes|crashed|collision|derail(?:s|ed|ment)?|capsized?)$/],
+  ['recall', /^(?:recalls?|recalled)$/],
+  ['launch', /^(?:opens|opened|unveils|unveiled|launches|launched)$/],
+  ['closure', /^(?:close|closes|closed|closure|closing|shuts|shut)$/],
+  ['raise', /^(?:raises|raised|hikes|hiked|lifts|increases)$/],
+  ['lower', /^(?:cuts|lowers|lowered|slashes|reduces)$/],
+  ['hold', /^(?:holds|held|keeps|pauses|freezes)$/],
+  ['approve', /^(?:announces|approves|approved|backs|passes|signs)$/],
+  ['reject', /^(?:rejects|rejected|scraps|blocks|vetoes|withdraws)$/],
+];
+const kindsOf = (kw) => {
+  const out = new Set();
+  for (const w of kw) for (const [kind, re] of INCIDENT_KINDS) if (re.test(w)) out.add(kind);
+  return out;
+};
+const KIND_WORD = (w) => INCIDENT_KINDS.some(([, re]) => re.test(w));
+// capitalised words that name nobody (a question's or a second sentence's first word, a day, a month)
+const NOT_PEOPLE = new Set('some many most more here there this that these those what why how who when where which new first last next live latest breaking watch video analysis opinion explainer monday tuesday wednesday thursday friday saturday sunday january february march april may june july august september october november december'.split(' '));
+const ELECTION = /\b(?:elections?|electoral|polls? (?:close|closed|open|opened)|presidential (?:race|vote|runoff|run-off|candidates?)|run-?off|referendum|on the ballot|casting (?:their )?votes|votes? (?:count|counting|tally)|goes to the polls|go to the polls|head(?:s)? to the polls|seeks? (?:a )?(?:\w+ )?term)\b/i;
+// the people of a country, for the election rule ("the Brazilian president", "Brazilians began casting...")
+const DEMONYMS = { brazilian: 'Brazil', american: 'United States', british: 'United Kingdom', french: 'France', german: 'Germany', italian: 'Italy', spanish: 'Spain', portuguese: 'Portugal', mexican: 'Mexico', canadian: 'Canada', argentine: 'Argentina', argentinian: 'Argentina', chilean: 'Chile', colombian: 'Colombia', peruvian: 'Peru', venezuelan: 'Venezuela', bolivian: 'Bolivia', ecuadorian: 'Ecuador', chinese: 'China', japanese: 'Japan', korean: 'South Korea', indian: 'India', pakistani: 'Pakistan', bangladeshi: 'Bangladesh', indonesian: 'Indonesia', filipino: 'Philippines', thai: 'Thailand', vietnamese: 'Vietnam', australian: 'Australia', russian: 'Russia', ukrainian: 'Ukraine', polish: 'Poland', dutch: 'Netherlands', belgian: 'Belgium', swedish: 'Sweden', norwegian: 'Norway', danish: 'Denmark', finnish: 'Finland', greek: 'Greece', irish: 'Ireland', hungarian: 'Hungary', romanian: 'Romania', czech: 'Czech Republic', austrian: 'Austria', swiss: 'Switzerland', turkish: 'Turkey', israeli: 'Israel', iranian: 'Iran', iraqi: 'Iraq', syrian: 'Syria', lebanese: 'Lebanon', egyptian: 'Egypt', nigerian: 'Nigeria', kenyan: 'Kenya', ethiopian: 'Ethiopia', ghanaian: 'Ghana', moroccan: 'Morocco', algerian: 'Algeria', tunisian: 'Tunisia' };
+function countriesOf(text) {
+  const out = new Set(findPlaces(text).map((h) => h.entry?.country).filter(Boolean));
+  for (const m of String(text).matchAll(/\b([A-Z][a-z]+?)(?:s)?\b/g)) {
+    const c = DEMONYMS[m[1].toLowerCase()] || DEMONYMS[m[0].toLowerCase().replace(/s$/, '')];
+    if (c) out.add(c);
+  }
+  return out;
+}
+/** Two reports of one country's election: both about an election (title or first sentence) and a country in common. */
+function sameElection(a, b) {
+  const ta = `${a.title || ''}. ${firstSentenceOf(a.summary)}`;
+  const tb = `${b.title || ''}. ${firstSentenceOf(b.summary)}`;
+  if (!ELECTION.test(ta) || !ELECTION.test(tb)) return false;
+  const ca = countriesOf(ta);
+  return [...countriesOf(tb)].some((c) => ca.has(c));
+}
+// "Polls close in Brazil": an election, not a closure
+const pollsClose = (s, kinds) => {
+  if (kinds.has('closure') && /\bpolls?\s+(?:close|closed|closing|have closed)\b/i.test(`${s.title || ''} ${s.summary || ''}`)) kinds.delete('closure');
+  return kinds;
+};
+// Kinds one event can carry under two names: a hurricane floods, a wildfire is a fire.
+const KIND_FAMILY = { storm: 'weather', flood: 'weather', wildfire: 'wildfire', fire: 'wildfire' };
+const family = (k) => KIND_FAMILY[k] || k;
+const sharedKinds = (a, b) => [...a].filter((k) => [...b].some((x) => family(x) === family(k)));
+// The same rare physical event on both sides (a hurricane that floods counts; a wildfire and a house fire do not),
+// from each story's cached `phys` (the families of its physical kinds); the same decision from `decide`.
+const meets = (a, b) => {
+  for (const x of a) if (b.has(x)) return true;
+  return false;
+};
+const physicalPair = (ea, eb) => meets(ea.phys, eb.phys);
+const sameDecision = (ea, eb) => meets(ea.decide, eb.decide);
+const disjoint = (a, b) => a.size > 0 && b.size > 0 && !sharedKinds(a, b).length;
+// Rare physical events: two reports of an earthquake, a storm, a flood, an eruption or a wildfire in the same place
+// within a day and a half are one event; a fire, an opening, an arrest or a fraud in a big city are not.
+const PHYSICAL = new Set(['quake', 'storm', 'flood', 'eruption', 'wildfire']);
+// Decisions one place takes once ("Norway raises rates"): the same decision in the same place is one event.
+const DECISIONS = new Set(['raise', 'lower', 'hold']);
+// Opposite outcomes are two reports of different things ("court jails..." / "court frees...").
+const OPPOSITES = [
+  [/^(?:jails?|jailed|convicts?|convicted|sentences?|sentenced|guilty)$/, /^(?:frees?|freed|acquits?|acquitted|clears?|cleared|releases?|released)$/],
+  [/^(?:wins?|won|victory)$/, /^(?:loses?|lost|defeat|defeated)$/],
+  [/^(?:approves?|approved|backs|passes|passed|upholds?|upheld)$/, /^(?:rejects?|rejected|blocks?|blocked|vetoes|vetoed|overturns?|overturned)$/],
+  [/^(?:rises?|rose|climbs?|climbed|jumps?|jumped|gains?|gained|soars?|soared|surges?|surged)$/, /^(?:falls?|fell|drops?|dropped|slides?|slid|slumps?|slumped|plunges?|plunged|sinks?|sank)$/],
+  [/^(?:opens?|opened|reopens?|reopened)$/, /^(?:closes?|closed|shuts?)$/],
+  [/^(?:arrives?|arrived|lands?|landed)$/, /^(?:departs?|departed|leaves)$/],
+];
+/** Which side of each opposite pair a headline's words take: a set of "0x", "0y", "1x"... (cached per story). */
+const sidesOf = (kw) => {
+  const out = new Set();
+  OPPOSITES.forEach(([x, y], i) => {
+    for (const w of kw) {
+      if (x.test(w)) out.add(`${i}x`);
+      if (y.test(w)) out.add(`${i}y`);
+    }
+  });
+  return out;
+};
+const opposite = (a, b) => OPPOSITES.some((_, i) => {
+  const [ax, ay, bx, by] = [a.has(`${i}x`), a.has(`${i}y`), b.has(`${i}x`), b.has(`${i}y`)];
+  return (ax && !ay && by && !bx) || (ay && !ax && bx && !by);
+});
+// "Earthquake drill held at Chile schools" is not the earthquake; "second storm forms" is another storm.
+const FRAME_SHIFT = /\b(?:drills?|exercises?|anniversary|memorial|commemorat\w*|remember\w*|rehearsals?|simulations?|years? (?:after|since|on))\b/i;
+const ANOTHER = /\b(?:second|another|third|fresh|new)\s+(?:storm|quake|earthquake|eruption|fire|wildfire|flood|hurricane|typhoon|cyclone|tornado|attack|blast|outbreak|strike)\b/i;
+// Words that name who acts, not what happened: two reports that share only these are about different things
+// ("London mayor opens new cycle lane" / "London mayor launches knife-crime review").
+const ROLE_WORDS = new Set(
+  ('police judge judges court courts mayor minister ministers government officials official president governor council councils ministry ' +
+    'authorities authority prosecutors prosecutor union unions company companies firm firms central bank banks chief chiefs leader leaders ' +
+    'spokesman spokeswoman agency army military state city country man woman men women residents group groups team teams boss').split(' ')
+);
+// Words two unrelated reports from one place easily share ("Paris metro strike" / "Paris museum strike"):
+// a picture is lent on a shared subject (tram, coral, reef), never on one of these alone.
+const GENERIC_WORDS = new Set(
+  ('strike strikes protest protests record records plans plan deal talks vote votes election elections prices price rates rate ' +
+    'workers staff thousands people city cities country government officials police court state national local world global ' +
+    'opens opened closes closed rises rise falls fall cuts high low year month week day night first second third report reports ' +
+    'warns warning calls call asks says hits hit makes make gets takes faces start starts ends end business market markets ' +
+    'shows show signs sign parts part sets set back again near big top major former latest still now amid threatens threaten ' +
+    'putting puts put risk move moves surprise unexpectedly arrest arrests arrested charged charges detains detained ' +
+    'questioned investigates investigation probe launches launch unveils injures injured injuries injuring kills killed killing ' +
+    'dead dies died hurt hurts wounded wounds leaves leave left evacuate evacuates evacuated evacuation flee flees fled').split(' ')
+);
+const CAUSE_PHRASE = /\b(?:after|over|following|because of|due to)\s+(.+)$/i;
+/** The content words of a headline's "after ..." phrase ("after engine fire" -> engine, fire). */
+const causeOf = (title) => {
+  const m = String(title || '').match(CAUSE_PHRASE);
+  return m ? keywords(m[1]) : new Set();
+};
+const jaccard = (a, b) => {
+  let shared = 0;
+  for (const w of a) if (b.has(w)) shared++;
+  return shared / (a.size + b.size - shared || 1);
+};
+const sharedCount = (a, b) => {
+  let n = 0;
+  for (const w of a) if (b.has(w)) n++;
+  return n;
+};
+/** Is `name` (folded) written right after a place preposition in the headline ("in Pittsburgh")? */
+const placeAfterPreposition = (title, name) =>
+  new RegExp(`\\b(?:in|at|near|off|outside|across|from|to)\\s+(?:the\\s+)?${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(foldWord(String(title || '')));
+
+/** Words of `a` that `b` has too, inflections allowed ("recovers" ~ "recovery"), among those `keep` accepts. */
+const softShared = (a, b, keep = () => true) => {
+  let n = 0;
+  for (const w of a) if (keep(w) && (b.has(w) || [...b].some((x) => keep(x) && sameWord(w, x)))) n++;
+  return n;
+};
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms).unref?.());
+const FAILED_LASTING_MS = 24 * 3600_000;
+const FAILED_PASSING_MS = 30 * 60_000;
+
+/** Credits a list of ranked picture candidates carry, by URL ({ url: [credit, via] }), or null. */
+function creditsOf(list) {
+  const out = {};
+  for (const c of list) if (c.credit) out[c.url] = [c.credit, c.creditVia];
+  return Object.keys(out).length ? out : null;
+}
+
+/**
+ * Who a picture is credited to (every picture on air has a credit): the
+ * credit the feed or the page gives for that very picture (media:credit,
+ * JSON-LD creditText / copyrightHolder / author, og:site_name), else the
+ * outlet whose picture it is (the lender, for a borrowed one). `url` is the
+ * rendition really served, when known. Returns { credit, via }.
+ */
+export function pictureCredit(s, url = s?.image) {
+  if (!s?.image) return null;
+  const own = url && url !== s.image ? s.imageCredits?.[url] : null;
+  if (own) return { credit: own[0], via: own[1] };
+  if (s.imageCredit) return { credit: s.imageCredit, via: s.imageCreditVia || 'outlet' };
+  return creditNow(s);
+}
+
+function creditNow(s) {
+  const c = s.imageCredits?.[s.image];
+  if (c) return { credit: c[0], via: c[1] };
+  return { credit: s.imageLender || s.source, via: 'outlet' };
+}
+
+function stampCredit(s) {
+  const c = s.image ? creditNow(s) : null;
+  if (c) {
+    s.imageCredit = c.credit;
+    s.imageCreditVia = c.via;
+  } else {
+    delete s.imageCredit;
+    delete s.imageCreditVia;
+  }
+}
+
+/** Copy a picture from one report to another, crediting the outlet whose picture it is. */
+function lendPicture(from, to, { linked = true } = {}) {
+  to.image = from.image;
+  to.imageWidth = from.imageWidth;
+  if (from.images) to.images = [...from.images];
+  else delete to.images;
+  if (from.imageCredits) to.imageCredits = { ...from.imageCredits };
+  else delete to.imageCredits;
+  to.imageVia = linked ? 'cluster' : 'duplicate';
+  to.imageLender = from.imageLender || from.source;
+  if (linked) to.imageFrom = from.id;
+  stampCredit(to);
+}
+
+function forgetPicture(s) {
+  s.image = null;
+  for (const k of ['images', 'imageWidth', 'imageVia', 'imageCredit', 'imageCreditVia', 'imageCredits', 'imageLender', 'imageFrom']) delete s[k];
 }
 
 export class NewsDesk {
-  constructor({ fetchImpl = fetch, log = console } = {}) {
+  constructor({ fetchImpl = fetch, log = console, lookup = null } = {}) {
     this.fetch = fetchImpl;
     this.log = log;
+    this.lookup = lookup; // DNS for the private-address guard (tests inject one)
     this.stories = new Map(); // id -> story
     this.covered = new Map(); // id -> timestamp when it was used in a bulletin
+    // Recycling (a closed desk: the offline slate, or a quiet night with `recycle: 'all'`) brings back the
+    // stories aired longest ago, never those of the last few episodes: each markCovered() call is one episode.
+    this.coverSeq = 0;
+    this.coveredSeq = new Map(); // id -> coverSeq of the episode that covered it
+    this.localOnly = false; // every feed of the operator's list is a local file (offline demo)
     this.lastRefresh = 0;
     this.feedStatus = {};
+    this.localImageRoots = new Set(); // folders of local feeds, whose pictures may be served
+    this.placeholders = new Set(); // picture URLs an outlet puts on many unrelated stories (logos, share cards)
+    this.pageImageUse = new Map(); // page picture URL -> ids of the stories that use it
+    // picture URLs that would not download or were not usable -> until when they are not tried again: a
+    // picture refused for what it is (HTTP 4xx, too small, not an image) for a day, a passing network error
+    // or a timeout for half an hour (the CDN may answer later)
+    this.failedPictures = new Map();
   }
 
   loadFeeds() {
     return JSON.parse(fs.readFileSync(config.feedsFile, 'utf8'));
   }
 
-  async fetchText(url, { timeoutMs = 10000, maxBytes = 3_000_000 } = {}) {
-    const res = await this.fetch(url, {
+  /**
+   * Feed XML. Feeds listed in the feeds file may also be local (offline demos
+   * and fixtures): a file: URL or a path relative to the repo. Only the
+   * operator's feed list gets this; links found inside feeds never do.
+   */
+  async readFeed(url) {
+    const file = localFeedPath(url);
+    if (file) return (await fs.promises.readFile(file)).subarray(0, 3_000_000).toString('utf8');
+    // The operator chose this URL: it may live on a private host (a local feed server).
+    return this.fetchText(url, { allowPrivate: true });
+  }
+
+  /**
+   * Text behind a URL, read as a stream and cut at `maxBytes`. Links found in
+   * feeds (article pages) never reach the machine itself or its private
+   * network, on any redirect hop; only the operator's feed list may.
+   */
+  async fetchText(url, { timeoutMs = 10000, maxBytes = 3_000_000, allowPrivate = false } = {}) {
+    if (!/^https?:\/\//i.test(url)) throw new Error(`not an http(s) URL: ${String(url).slice(0, 80)}`);
+    const { res } = await guardedFetch(this.fetch, url, {
+      timeoutMs,
+      allowPrivate,
       headers: { 'user-agent': UA, accept: '*/*' },
-      signal: AbortSignal.timeout(timeoutMs),
-      redirect: 'follow',
+      ...(this.lookup ? { lookup: this.lookup } : {}),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const buf = Buffer.from(await res.arrayBuffer());
-    return buf.subarray(0, maxBytes).toString('utf8');
+    if (!res.ok) {
+      try {
+        await res.body?.cancel?.();
+      } catch {}
+      throw new Error(`HTTP ${res.status}`);
+    }
+    return (await readCapped(res, maxBytes, { truncate: true })).toString('utf8');
   }
 
   async refresh() {
     const feeds = this.loadFeeds();
+    this.localOnly = feeds.length > 0 && feeds.every((f) => !!localFeedPath(f.url));
+    const startedAt = Date.now();
     const results = await Promise.allSettled(
       feeds.map(async (feed) => {
-        const xml = await this.fetchText(feed.url);
-        return parseFeed(xml, feed);
+        const xml = await this.readFeed(feed.url);
+        const file = localFeedPath(feed.url);
+        const baseDir = file ? path.dirname(file) : null;
+        if (baseDir) this.localImageRoots.add(baseDir);
+        return parseFeed(xml, feed, { baseDir, now: startedAt, log: this.log });
       })
     );
     const maxAge = config.maxStoryAgeHours * 3600_000;
     const now = Date.now();
-    const titleKeys = new Set([...this.stories.values()].map((s) => normalizeTitleKey(s.title)));
+    const titleKeys = new Map([...this.stories.values()].map((s) => [normalizeTitleKey(s.title), s]));
     let added = 0;
     results.forEach((r, i) => {
       const feed = feeds[i];
       if (r.status === 'rejected') {
-        this.feedStatus[feed.name] = { ok: false, error: String(r.reason?.message || r.reason) };
+        this.feedStatus[feed.name] = { ok: false, error: String(r.reason?.message || r.reason).slice(0, 200) };
         this.log.warn?.(`[news] ${feed.name}: ${r.reason?.message || r.reason}`);
         return;
       }
       this.feedStatus[feed.name] = { ok: true, items: r.value.length };
-      for (const s of r.value) {
-        if (now - s.published > maxAge) continue;
-        if (this.stories.has(s.id)) continue;
+      const fresh = r.value.filter((s) => now - s.published <= maxAge);
+      this.dropPlaceholders(fresh);
+      for (const s of fresh) {
+        if (this.stories.has(s.id)) {
+          // An undated item its feed still lists is still current: it keeps the age of this reading, so the
+          // offline slate (no dates at all) never ages out all at once every 36 hours and leaves the desk empty.
+          const kept = this.stories.get(s.id);
+          if (kept.undated && s.undated) kept.published = s.published;
+          continue;
+        }
         const key = normalizeTitleKey(s.title);
-        if (key && titleKeys.has(key)) continue; // same headline from another feed
-        titleKeys.add(key);
+        if (key && titleKeys.has(key)) {
+          // Same headline from another feed: the first report stays, and takes this one's picture if it has none.
+          const kept = titleKeys.get(key);
+          if (kept && !kept.image && s.image) lendPicture(s, kept, { linked: false });
+          continue;
+        }
+        titleKeys.set(key, s);
         this.stories.set(s.id, s);
         added++;
       }
     });
-    // Forget stale stories
+    // Forget stale stories, and keep the desk to MAX_DESK stories (the oldest go first)
     for (const [id, s] of this.stories) {
       if (now - s.published > maxAge) this.stories.delete(id);
     }
-    for (const [id, t] of this.covered) {
-      if (now - t > maxAge * 2) this.covered.delete(id);
+    if (this.stories.size > MAX_DESK) {
+      const oldest = [...this.stories.values()].sort((a, b) => a.published - b.published).slice(0, this.stories.size - MAX_DESK);
+      for (const s of oldest) this.stories.delete(s.id);
     }
+    for (const [id, t] of this.covered) {
+      if (now - t > maxAge * 2) {
+        this.covered.delete(id);
+        this.coveredSeq.delete(id);
+      }
+    }
+    for (const [url, list] of this.pageImageUse) if (!list.some((id) => this.stories.has(id))) this.pageImageUse.delete(url);
     this.updateTrending();
+    // Reports without a picture borrow one from another outlet's report of the same event.
+    this.borrowPictures();
     this.lastRefresh = now;
     this.log.info?.(`[news] ${added} new stories, ${this.stories.size} total`);
     return added;
   }
 
-  /** Count how many distinct outlets are reporting each story's event. */
+  /**
+   * Logos and generic share cards: a picture URL one outlet puts on three or
+   * more items of a feed, or on two items about different events, is not a
+   * news picture. It is remembered, and every story falls back to its next one.
+   */
+  dropPlaceholders(stories) {
+    const uses = new Map();
+    for (const s of stories) for (const url of new Set(s.images || (s.image ? [s.image] : []))) uses.set(url, [...(uses.get(url) || []), s]);
+    const marked = [];
+    for (const [url, list] of uses) {
+      if (this.placeholders.has(url)) continue;
+      // a card on several items about different events; three reports of one developing story that share their
+      // lead photo (a live page and its follow-ups) keep it
+      const unrelated = list.some((a, i) => list.some((b, j) => j > i && !this.sameStory(a, b)));
+      if (list.length >= 2 && unrelated) {
+        this.markPlaceholder(url);
+        marked.push(url);
+      }
+    }
+    for (const s of stories) this.withoutPlaceholders(s);
+    // A card that only now shows up on several items was also on stories already on the desk.
+    if (marked.length) for (const s of this.stories.values()) if (this.withoutPlaceholders(s)) this.borrowPictures([s]);
+  }
+
+  markPlaceholder(url) {
+    this.placeholders.add(url);
+    if (this.placeholders.size > 2000) this.placeholders.delete(this.placeholders.values().next().value);
+  }
+
+  /** Remove known placeholders from a story's pictures; true when its picture changed. */
+  withoutPlaceholders(s) {
+    const list = (s.images || (s.image ? [s.image] : [])).filter((u) => !this.placeholders.has(u));
+    const current = s.images || (s.image ? [s.image] : []);
+    if (list.length === current.length) return false;
+    if (!list.length) forgetPicture(s);
+    else {
+      if (s.image !== list[0]) s.imageWidth = 0;
+      s.image = list[0];
+      if (list.length > 1) s.images = list;
+      else delete s.images;
+      stampCredit(s);
+    }
+    return true;
+  }
+
+  /** The gazetteer place a story is about (headline, else the summary's first sentence), cached; null when none. */
+  whereOf(s) {
+    if (s.where === undefined) s.where = storyPlace(s);
+    return s.where;
+  }
+
+  /** What the same-event tests read from a story, cached on it. */
+  eventFacts(s) {
+    s.kw ??= keywords(s.title || '');
+    if (!s.ev || s.ev.title !== s.title) {
+      const placeWords = new Set(findPlaces(s.title || '').flatMap((h) => [...keywords(h.text)]));
+      const names = namesOf(s.title);
+      // the title's first word is a name too when the summary writes it with a capital mid-sentence ("Lula and
+      // Bolsonaro face off..." / "...President Luiz Inacio Lula da Silva...")
+      const first = String(s.title || '').trim().split(/\s+/)[0]?.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '').replace(/['’]s$/u, '');
+      if (first && first.length >= 3 && /^\p{Lu}\p{Ll}/u.test(first) && new RegExp(`[\\p{Ll},;]\\s+${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'u').test(s.summary || '')) names.add(foldWord(first));
+      const topic = new Set([...s.kw].filter((w) => !placeWords.has(w)));
+      s.ev = {
+        title: s.title,
+        names,
+        // names that are not places: a storm, a person, a company, a product (a name after "in", "near"... is
+        // a place the gazetteer does not know: "Bridge collapses in Pittsburgh")
+        people: new Set([...names].filter((n) => !placeWords.has(n) && !NOT_PEOPLE.has(n) && !lookupPlace(n) && !placeAfterPreposition(s.title, n))),
+        topic,
+        // what happened, without the place, who acted, the kind of event and the filler words
+        subject: new Set([...topic].filter((w) => !GENERIC_WORDS.has(w) && !ROLE_WORDS.has(w) && !KIND_WORD(w) && !/^\d/.test(w))),
+        kinds: pollsClose(s, kindsOf(s.kw)),
+        cause: causeOf(s.title),
+        frame: FRAME_SHIFT.test(s.title || ''),
+        another: ANOTHER.test(s.title || ''),
+        sides: sidesOf(s.kw),
+      };
+      s.ev.phys = new Set([...s.ev.kinds].filter((k) => PHYSICAL.has(k)).map(family));
+      s.ev.decide = new Set([...s.ev.kinds].filter((k) => DECISIONS.has(k)));
+    }
+    return s.ev;
+  }
+
+  /**
+   * Same event: nothing tells them apart (places that disagree, from the headline or the summary's first
+   * sentence; names, incidents, causes or outcomes that differ; a drill, an anniversary, "a second storm"),
+   * and something ties them together: a shared name that is not a place ("Hurricane Elena"), the same rare
+   * physical event in the same place (an earthquake in Japan, a wildfire near Marseille), the same decision
+   * in the same place ("Norway raises rates"), or two words of what happened ("tram line", "coral reef")
+   * besides the place, who acted and filler. Used to cluster reports, count outlets, keep one report per
+   * event in a programme and cover the others with it.
+   */
+  sameStory(a, b) {
+    const ea = this.eventFacts(a);
+    const eb = this.eventFacts(b);
+    // the same people ("Lula and Flávio Bolsonaro": a report, an explainer and a profile of one election, 4 Oct):
+    // one story, though the rest of the headlines share nothing (unless their places disagree)
+    if (sharedCount(ea.people, eb.people) >= 2 && placesAgree(this.whereOf(a), this.whereOf(b)) !== false) return true;
+    // a country's election: every report of its vote, its polls, its results or its candidates is one story for
+    // a programme (a report, a live page, a profile of the incumbent: Brazil, 4 Oct)
+    if (sameElection(a, b)) return true;
+    // cheap first: without two shared keywords only two kinds of event (a quake in Tokyo, a rate rise in Norway)
+    // can still be one event
+    const words = sameEvent(a.kw, b.kw);
+    if (!words && !physicalPair(ea, eb) && !sameDecision(ea, eb)) return false;
+    const agree = placesAgree(this.whereOf(a), this.whereOf(b));
+    if (!words && agree !== true) return false;
+    if (agree === false) return false;
+    // each names someone or somewhere the other does not, and they share no name: two events
+    const onlyA = [...ea.names].filter((n) => !eb.names.has(n));
+    const onlyB = [...eb.names].filter((n) => !ea.names.has(n));
+    if (onlyA.length && onlyB.length && sharedCount(ea.names, eb.names) === 0) return false;
+    if (disjoint(ea.kinds, eb.kinds)) return false;
+    if (ea.cause.size >= 2 && eb.cause.size >= 2 && sharedCount(ea.cause, eb.cause) === 0) return false;
+    if (opposite(ea.sides, eb.sides) || ea.frame !== eb.frame || ea.another || eb.another) return false;
+    const kinds = sharedKinds(ea.kinds, eb.kinds);
+    // names say who or where, not what happened: "Pittsburgh" in both is no shared subject
+    const notName = (w) => !ea.names.has(w) && !eb.names.has(w);
+    const subject = softShared(ea.subject, eb.subject, notName);
+    if (sharedCount(ea.people, eb.people) > 0 && sameEvent(a.kw, b.kw) && (kinds.length || subject >= 1)) return true;
+    if (agree === true && physicalPair(ea, eb)) return true;
+    if (agree === true && sameDecision(ea, eb) && softShared(ea.topic, eb.topic, (w) => !KIND_WORD(w) && !ROLE_WORDS.has(w) && notName(w)) >= 1) return true;
+    if (!sameEvent(a.kw, b.kw)) return false;
+    if (subject >= 2) return true;
+    // one specific word of what happened is enough in the same city or region ("Lisbon opens a new riverside
+    // tram line" / "Thousands ride Lisbon's new tram"; "Germany rail strike" / "Rail strike halts trains
+    // across Germany"), never on a country alone nor in a place nobody knows
+    const [pa, pb] = [this.whereOf(a), this.whereOf(b)];
+    const local = agree === true && (pa.kind !== 'country' || pb.kind !== 'country' || (pa === pb && softShared(ea.topic, eb.topic, (w) => GENERIC_WORDS.has(w) && !ROLE_WORDS.has(w)) >= 1));
+    return local && softShared(ea.subject, eb.subject, (w) => notName(w) && w.length >= 4) >= 1;
+  }
+
+  /**
+   * Stricter, for lending a picture (a wrong picture on air is worse than none): the same event AND either
+   * a shared name that is not a place, or a known place on both sides that agrees, with the same rare
+   * physical event or decision, or most of what happened in common (two shared subject words covering
+   * two thirds of the shorter headline's, or half of both): "Fire at London warehouse" never lends to
+   * "London flat fire".
+   */
+  samePictureEvent(a, b) {
+    if (!this.sameStory(a, b)) return false;
+    const ea = this.eventFacts(a);
+    const eb = this.eventFacts(b);
+    const agree = placesAgree(this.whereOf(a), this.whereOf(b));
+    if (sharedCount(ea.people, eb.people) > 0) return true;
+    if (agree !== true) return false;
+    if (ea.cause.size && eb.cause.size && sharedCount(ea.cause, eb.cause) === 0) return false;
+    if (physicalPair(ea, eb) || sameDecision(ea, eb)) return true;
+    const notName = (w) => !ea.names.has(w) && !eb.names.has(w);
+    const sa = new Set([...ea.subject].filter(notName));
+    const sb = new Set([...eb.subject].filter(notName));
+    const shared = softShared(sa, sb);
+    const small = Math.min(sa.size, sb.size) || 1;
+    return shared >= 2 && (shared / small >= 2 / 3 || shared / (sa.size + sb.size - shared || 1) >= 0.5);
+  }
+
+  /** The index keys of a story: its keywords, and its kinds of event ("#weather": "Quake hits Tokyo" meets "Earthquake strikes Japan"). */
+  keysOf(s) {
+    const ev = this.eventFacts(s);
+    return [...s.kw, ...[...ev.kinds].map((k) => `#${family(k)}`)];
+  }
+
+  /**
+   * Stories that could be the same event as `s`: those sharing two index keys with it (keywords or kinds of
+   * event), or one key and the same physical event or decision (sameStory then decides). Excludes `s`.
+   */
+  related(s) {
+    const index = this.keywordIndex();
+    const shared = new Map();
+    for (const w of this.keysOf(s)) {
+      const bucket = index.get(w);
+      // a word on very many headlines ("record", "new") says nothing about the event
+      if (!bucket || bucket.length > 200) continue;
+      for (const o of bucket) if (o !== s) shared.set(o, (shared.get(o) || 0) + 1);
+    }
+    const out = new Set();
+    for (const [o, n] of shared) if (n >= 2 || physicalPair(s.ev, o.ev) || sameDecision(s.ev, o.ev)) out.add(o);
+    return out;
+  }
+
+  /** The keyword index of the desk (key -> stories), rebuilt when the desk changed. */
+  keywordIndex() {
+    if (this.kwIndex && this.kwIndexSize === this.stories.size && !this.kwIndexDirty) return this.kwIndex;
+    const index = new Map();
+    for (const s of this.stories.values()) {
+      for (const w of this.keysOf(s)) {
+        if (!index.has(w)) index.set(w, []);
+        index.get(w).push(s);
+      }
+    }
+    this.kwIndex = index;
+    this.kwIndexSize = this.stories.size;
+    this.kwIndexDirty = false;
+    return index;
+  }
+
+  /**
+   * Count how many distinct outlets are reporting each story's event. Only stories sharing two keywords
+   * can be the same event, so each story is compared with those found through a keyword index, not with
+   * the whole desk (thousands of stories cost milliseconds, not seconds).
+   */
   updateTrending() {
-    const list = [...this.stories.values()];
-    for (const s of list) s.kw ??= keywords(s.title);
-    for (const s of list) {
+    this.kwIndexDirty = true;
+    const index = this.keywordIndex();
+    this.comparisons = 0; // same-event tests run (the desk's cost stays linear in practice: tests count them)
+    for (const s of this.stories.values()) {
+      const seen = new Map();
+      for (const w of this.keysOf(s)) {
+        const bucket = index.get(w);
+        if (!bucket || bucket.length > 200) continue;
+        for (const o of bucket) if (o !== s && o.source !== s.source) seen.set(o, (seen.get(o) || 0) + 1);
+      }
       const sources = new Set([s.source]);
-      for (const o of list) {
-        if (o !== s && !sources.has(o.source) && sameEvent(s.kw, o.kw)) sources.add(o.source);
+      for (const [o, shared] of seen) {
+        // one shared key is enough only for an earthquake, a storm... or a rate decision (sameStory decides)
+        if (sources.has(o.source) || (shared < 2 && !physicalPair(s.ev, o.ev) && !sameDecision(s.ev, o.ev))) continue;
+        this.comparisons++;
+        if (this.sameStory(s, o)) sources.add(o.source);
       }
       s.outlets = sources.size;
     }
+  }
+
+  /**
+   * Same-event cluster: a report with no picture of its own takes the picture
+   * of another outlet's report of the same event (the widest one), and records
+   * whose it is (`imageCredit`, `imageFrom`). A borrowed picture follows its
+   * donor: when the donor loses it, the borrower does too.
+   */
+  borrowPictures(targets = null) {
+    const donor = (o) => o.image && !o.imageFrom && o.imageVia !== 'duplicate' && !this.failed(o.image);
+    let lent = 0;
+    // each report is compared only with those sharing a keyword or a kind of event (the keyword index), not
+    // with the whole desk: a full desk of 3,000 stories costs milliseconds per refresh, not seconds
+    for (const s of targets || [...this.stories.values()]) {
+      if (s.imageFrom) {
+        const d = this.stories.get(s.imageFrom);
+        if (d && d.image === s.image && !this.failed(s.image)) continue;
+        forgetPicture(s);
+      }
+      if (s.image) continue;
+      let best = null;
+      for (const o of this.related(s)) {
+        if (!donor(o) || o.source === s.source || !this.samePictureEvent(s, o)) continue;
+        if (!best || (o.imageWidth || 0) > (best.imageWidth || 0)) best = o;
+      }
+      if (best) {
+        lendPicture(best, s);
+        lent++;
+      }
+    }
+    return lent;
+  }
+
+  /**
+   * A picture that would not download, or was too small: it is forgotten
+   * (with its fallbacks) here and on the stories that borrowed it, and another
+   * outlet's picture of the same event may stand in. True if one did.
+   */
+  pictureFailed(story, { reason = '', now = Date.now() } = {}) {
+    const lasting = /HTTP 4\d\d|too small|too large|shape|unreadable|not a picture|content type|invalid/i.test(String(reason));
+    const until = now + (lasting ? FAILED_LASTING_MS : FAILED_PASSING_MS);
+    for (const url of story.images || (story.image ? [story.image] : [])) {
+      this.failedPictures.delete(url);
+      this.failedPictures.set(url, until);
+      if (this.failedPictures.size > 2000) this.failedPictures.delete(this.failedPictures.keys().next().value);
+    }
+    forgetPicture(story);
+    this.borrowPictures([story]);
+    return !!story.image;
+  }
+
+  /** Is this picture URL one that failed lately (and must not be tried or lent yet)? */
+  failed(url, now = Date.now()) {
+    const until = this.failedPictures.get(url);
+    if (until === undefined) return false;
+    if (now < until) return true;
+    this.failedPictures.delete(url);
+    return false;
   }
 
   uncovered() {
@@ -278,23 +1140,37 @@ export class NewsDesk {
   /**
    * The most interesting uncovered stories, one per event, at most
    * `perSource` from the same outlet. The writer makes the final selection.
+   * `avoid` lowers categories another programme due soon will want as its
+   * own beat ({ science: 0.5 }: COSMOS airs next, leave it the science), or
+   * is a function giving each story its factor.
+   * `beat` keeps a section's stories only on the programme's topics
+   * ({ tech: ['SPACE', ...] }: COSMOS takes a rocket, not a games console).
+   * `fill` lets the per-outlet cap give way when the pool would otherwise
+   * come up short (a long programme on a section with one or two outlets).
    */
-  candidates(count, { perSource = 3, categories = null, now = Date.now() } = {}) {
+  candidates(count, { perSource = 3, categories = null, now = Date.now(), avoid = null, beat = null, fill = false } = {}) {
+    const primary = categories && categories.length > 1 ? categories[0] : null;
     const ranked = this.uncovered()
-      .filter((s) => !categories || categories.includes(s.category))
-      .map((s) => ({ s, score: interestScore(s, now) }))
+      .filter((s) => (!categories || categories.includes(s.category)) && !notNews(s))
+      .map((s) => ({ s, score: interestScore(s, now) * (s.category === primary ? PRIMARY_CATEGORY_WEIGHT : 1) * (typeof avoid === 'function' ? avoid(s) : avoid?.[s.category] ?? 1) }))
       .sort((a, b) => b.score - a.score);
     const picked = [];
     const perSourceCount = new Map();
-    for (const { s } of ranked) {
-      if (picked.length >= count) break;
-      if ((perSourceCount.get(s.source) || 0) >= perSource) continue;
-      s.kw ??= keywords(s.title);
-      if (picked.some((p) => sameEvent(p.kw, s.kw))) continue;
-      picked.push(s);
-      perSourceCount.set(s.source, (perSourceCount.get(s.source) || 0) + 1);
+    // Variety of outlets first; then, with `fill`, when a section has only one or two outlets (a niche beat, a
+    // small feed list, the offline demo), the rest of the pool from them rather than a programme starved of stories.
+    for (const capped of fill ? [true, false] : [true]) {
+      for (const { s } of ranked) {
+        if (picked.length >= count) break;
+        if (picked.includes(s) || (capped && (perSourceCount.get(s.source) || 0) >= perSource)) continue;
+        if (beat && !onBeat(s, beat)) continue;
+        if (picked.some((p) => this.sameStory(p, s))) continue;
+        picked.push(s);
+        perSourceCount.set(s.source, (perSourceCount.get(s.source) || 0) + 1);
+      }
     }
-    return picked;
+    // The second pass appended its stories after the first pass's: back into ranking order.
+    const rank = new Map(ranked.map(({ s }, i) => [s, i]));
+    return picked.sort((a, b) => rank.get(a) - rank.get(b));
   }
 
   /** Kept for compatibility: the top `count` candidates. */
@@ -302,18 +1178,24 @@ export class NewsDesk {
     return this.candidates(count);
   }
 
-  /** Mark stories as aired, plus other outlets' reports of the same events. */
+  /**
+   * Mark stories as aired, plus other outlets' reports of the same events (one call = one episode). A
+   * report of the same event that was covered before is covered again now: a re-run of one outlet's
+   * report must keep the other outlet's off the air for as long (no "second year" then "third year"
+   * of the same reef in back-to-back programmes).
+   */
   markCovered(ids) {
     const now = Date.now();
-    for (const id of ids) {
+    const seq = ++this.coverSeq;
+    const cover = (id) => {
       this.covered.set(id, now);
+      this.coveredSeq.set(id, seq);
+    };
+    for (const id of ids) {
+      cover(id);
       const aired = this.stories.get(id);
       if (!aired) continue;
-      aired.kw ??= keywords(aired.title);
-      for (const s of this.stories.values()) {
-        s.kw ??= keywords(s.title);
-        if (!this.covered.has(s.id) && sameEvent(aired.kw, s.kw)) this.covered.set(s.id, now);
-      }
+      for (const s of this.related(aired)) if (this.sameStory(aired, s)) cover(s.id);
     }
   }
 
@@ -324,28 +1206,263 @@ export class NewsDesk {
       const s = this.stories.get(id);
       if (!s) continue;
       s.offered = (s.offered || 0) + 1;
-      if (s.offered >= 3) this.covered.set(id, now);
+      if (s.offered >= 3) {
+        this.covered.set(id, now);
+        this.coveredSeq.set(id, this.coverSeq);
+      }
     }
+  }
+
+  /**
+   * Bring back up to `count` covered stories (those `filter` accepts), the ones
+   * aired longest ago first, never one aired in the last `gap` episodes nor
+   * less than `minAgeMs` ago. A closed desk (the offline slate) would
+   * otherwise run dry after one rotation and air replays for ever; a real
+   * 24/7 channel re-runs its stories too, in new bulletins. Returns how many
+   * came back.
+   */
+  recycle(count, { filter = null, gap = 6, minAgeMs = 0, now = Date.now() } = {}) {
+    if (!(count > 0)) return 0;
+    const list = [];
+    for (const [id, at] of this.covered) {
+      const s = this.stories.get(id);
+      if (!s || (filter && !filter(s)) || now - at < minAgeMs) continue;
+      const seq = this.coveredSeq.get(id) ?? 0;
+      if (this.coverSeq - seq < gap) continue;
+      list.push({ s, at, seq });
+    }
+    list.sort((a, b) => a.seq - b.seq || a.at - b.at || interestScore(b.s, now) - interestScore(a.s, now));
+    // One report per event comes back at a time (the first in that order), and none while another report of
+    // its event is on the desk or aired within `gap` episodes: two outlets' versions of one event never
+    // re-run in back-to-back programmes.
+    const back = [];
+    for (const entry of list) {
+      if (back.length >= count) break;
+      const mates = [...this.related(entry.s)].filter((o) => this.sameStory(entry.s, o));
+      const blocked = mates.some((o) => back.some((b) => b.s === o) || !this.covered.has(o.id) || this.coverSeq - (this.coveredSeq.get(o.id) ?? 0) < gap);
+      if (!blocked) back.push(entry);
+    }
+    for (const { s } of back) {
+      this.covered.delete(s.id);
+      this.coveredSeq.delete(s.id);
+      s.offered = 0;
+      s.recycled = (s.recycled || 0) + 1;
+      // A re-run is not breaking news any more: the outlet's marker goes (the strap, the lead rule, the alert).
+      if (isBreaking(s.title)) {
+        s.title = plainTitle(s.title);
+        s.kw = undefined;
+        this.kwIndexDirty = true;
+      }
+    }
+    return back.length;
   }
 
   get(id) {
     return this.stories.get(id);
   }
 
-  /** Try og:image / twitter:image from the article page when the feed has none. */
+  /** A compact view of the desk for dev tools: the most interesting stories first. */
+  deskView(limit = 80, now = Date.now()) {
+    return [...this.stories.values()]
+      .map((s) => ({ s, score: interestScore(s, now) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(({ s, score }) => ({
+        id: s.id,
+        title: s.title,
+        source: s.source,
+        category: s.category,
+        hasImage: !!s.image,
+        // where the picture was found (feed:media, page:og, cluster...), who it is credited to and why
+        imageVia: s.image ? s.imageVia || 'feed' : null,
+        imageCredit: s.image ? pictureCredit(s).credit : null,
+        imageCreditVia: s.image ? pictureCredit(s).via : null,
+        outlets: s.outlets || 1,
+        covered: this.covered.has(s.id),
+        breaking: isBreaking(s.title),
+        live: !!s.live,
+        ...(s.undated ? { undated: true } : {}),
+        ...(s.brokenDate ? { brokenDate: true } : {}),
+        score: Math.round(score * 1000) / 1000,
+      }));
+  }
+
+  /** Pictures an article page declares (og:image, twitter:image, JSON-LD, image_src; its AMP page if needed). */
+  async pagePictures(link) {
+    const html = await this.fetchText(link, { timeoutMs: 8000, maxBytes: 600_000 });
+    const { candidates, amp } = pageCandidates(html, link);
+    if (candidates.length || !amp) return candidates;
+    return pageCandidates(await this.fetchText(amp, { timeoutMs: 6000, maxBytes: 600_000 }), amp).candidates;
+  }
+
+  /** The same, for an offline fixture page: a local file inside the folder of one of the operator's local feeds. */
+  async localPagePictures(story) {
+    const { html, root, file } = await this.localPageHtml(story);
+    return pageCandidates(html, null, { baseDir: root, from: path.dirname(file) }).candidates;
+  }
+
+  /** An offline fixture page's html (at most 600 KB), only from inside the folder of one of the operator's local feeds. */
+  async localPageHtml(story) {
+    const file = path.resolve(fileURLToPath(story.page));
+    const root = [...this.localImageRoots].map((r) => path.resolve(r)).find((r) => file.startsWith(r + path.sep));
+    if (!root) throw new Error('page outside the local feed folders');
+    const handle = await fs.promises.open(file, 'r');
+    try {
+      const buf = Buffer.alloc(600_000);
+      const { bytesRead } = await handle.read(buf, 0, buf.length, 0);
+      return { html: buf.subarray(0, bytesRead).toString('utf8'), root, file };
+    } finally {
+      await handle.close();
+    }
+  }
+
+  /**
+   * The story dossier's text (wave 3 §3.1; owner: programmes up to 10 minutes, with depth): the article page's
+   * main text (server/article.js) for up to `max` of these stories, a few at a time, within `budgetMs`. Each
+   * story is read once (a page without article text is remembered too). The text lands in `story.body`, which
+   * the writer reads beside the summary and the validator checks facts against. Returns counts for the log.
+   */
+  async readArticles(stories, { budgetMs = 6000, max = 8, concurrency = 4 } = {}) {
+    const todo = stories.filter((s) => s && !s.bodyChecked && (s.local ? !!s.page : /^https?:\/\//i.test(s.link || ''))).slice(0, max);
+    const deadline = Date.now() + budgetMs;
+    let next = 0;
+    const worker = async () => {
+      while (next < todo.length && Date.now() < deadline) await this.readArticle(todo[next++]);
+    };
+    const left = deadline - Date.now();
+    if (todo.length && left > 0) await Promise.race([Promise.all(Array.from({ length: Math.min(concurrency, todo.length) }, worker)), wait(left)]);
+    return { articles: stories.filter((s) => s?.body).length, read: todo.filter((s) => s.body).length, of: todo.length };
+  }
+
+  async readArticle(s) {
+    s.bodyChecked = true;
+    try {
+      const html = s.local ? (await this.localPageHtml(s)).html : await this.fetchText(s.link, { timeoutMs: 8000, maxBytes: 600_000 });
+      const a = extractArticle(html);
+      if (a) {
+        s.body = a.text;
+        s.bodyVia = a.via;
+      }
+    } catch (err) {
+      if (!this.articleWarned) this.log.warn?.(`[news] article text ${s.source}: ${err.message}`);
+      this.articleWarned = true;
+    }
+  }
+
+  /**
+   * Look for a story's own picture on its article page when the feed gave none,
+   * or only a small one (< 640 px). Each story is tried once. An outlet's page
+   * picture that turns up on an unrelated story of the same outlet is a generic
+   * share card: it is dropped from both. Local fixture stories read their local page.
+   */
   async resolveImage(story) {
-    if (story.image || story.imageChecked) return story.image;
+    if (story.imageChecked) return story.image;
+    const small = story.image && story.imageWidth && story.imageWidth < GOOD_WIDTH && !story.imageFrom;
+    if (story.image && !story.imageFrom && !small) return story.image;
+    if (story.local && !story.page) return story.image;
+    if (!story.local && !/^https?:\/\//i.test(story.link || '')) return story.image;
     story.imageChecked = true;
     try {
-      const html = await this.fetchText(story.link, { timeoutMs: 8000, maxBytes: 400_000 });
-      const m =
-        html.match(/<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']/i) ||
-        html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:image|twitter:image)["']/i);
-      const url = m ? new URL(decodeEntities(m[1]), story.link).href : null;
-      if (isUsableImage(url)) story.image = url;
+      const found = story.local ? await this.localPagePictures(story) : await this.pagePictures(story.link);
+      const ownCredits = story.imageCredits || {};
+      const own =
+        story.image && !story.imageFrom
+          ? (story.images || [story.image]).map((url, i) => ({ url, w: i === 0 ? story.imageWidth || 0 : 0, via: 'feed', local: /^file:/i.test(url), ...(ownCredits[url] ? { credit: ownCredits[url][0], creditVia: ownCredits[url][1] } : {}) }))
+          : [];
+      const ranked = rankPictures([...found.filter((c) => !c.local || story.local), ...own]).filter((c) => !this.placeholders.has(c.url));
+      const best = ranked[0];
+      if (best && best.via !== 'feed' && (!own.length || best.w > (story.imageWidth || 0))) {
+        forgetPicture(story);
+        story.image = best.url;
+        story.imageWidth = best.w;
+        story.imageVia = `page:${best.via}`;
+        if (ranked.length > 1) story.images = ranked.map((c) => c.url);
+        const credits = creditsOf(ranked);
+        if (credits) story.imageCredits = credits;
+        stampCredit(story);
+        this.notePagePicture(story, best.url);
+      }
     } catch (err) {
-      this.log.warn?.(`[news] og:image ${story.source}: ${err.message}`);
+      this.log.warn?.(`[news] page picture ${story.source}: ${err.message}`);
     }
     return story.image;
+  }
+
+  notePagePicture(story, url) {
+    const ids = (this.pageImageUse.get(url) || []).filter((id) => id !== story.id && this.stories.has(id));
+    const clash = ids.map((id) => this.stories.get(id)).filter((o) => o.source === story.source && !this.sameStory(o, story));
+    this.pageImageUse.set(url, [...ids, story.id]);
+    if (!clash.length) return;
+    this.markPlaceholder(url);
+    for (const s of [story, ...clash]) this.withoutPlaceholders(s);
+  }
+
+  /**
+   * The picture desk for a set of stories (the candidates of an episode):
+   * article pages are read for those without a picture (and those with a small
+   * one), a few at a time, within `budgetMs`; then, for the stories still
+   * without one, the pages of other outlets' reports of the same event; then
+   * pictures are borrowed across the same-event cluster (credited). Late pages
+   * keep resolving in the background and help the next stage. Returns counts
+   * for the pipeline log.
+   */
+  async findPictures(stories, { budgetMs = 6000, concurrency = 4 } = {}) {
+    const had = new Set(stories.filter((s) => s.image).map((s) => s.id));
+    const needs = (s) => !s.imageChecked && (!s.image || s.imageFrom || (s.imageWidth && s.imageWidth < GOOD_WIDTH)) && !(s.local && !s.page) && (s.local || /^https?:\/\//i.test(s.link || ''));
+    const todo = stories.filter(needs).sort((a, b) => Number(!!a.image && !a.imageFrom) - Number(!!b.image && !b.imageFrom));
+    const deadline = Date.now() + budgetMs;
+    const run = async (list) => {
+      let next = 0;
+      const worker = async () => {
+        while (next < list.length && Date.now() < deadline) await this.resolveImage(list[next++]);
+      };
+      const left = deadline - Date.now();
+      if (list.length && left > 0) await Promise.race([Promise.all(Array.from({ length: Math.min(concurrency, list.length) }, worker)), wait(left)]);
+    };
+    await run(todo);
+    // Still without a picture of its own: another outlet's report of the same event may have one on its article
+    // page (the cluster lends pictures, not only from feeds). Those pages are read next, within the same budget.
+    const siblings = [];
+    for (const s of stories) {
+      if (s.image && !s.imageFrom) continue;
+      for (const o of this.related(s)) if (o.source !== s.source && !o.image && needs(o) && !siblings.includes(o) && !todo.includes(o) && this.samePictureEvent(s, o)) siblings.push(o);
+    }
+    await run(siblings.slice(0, 8));
+    this.borrowPictures(stories);
+    // Still without a picture: a FILE photo of the story's place from the image search (owner 22:40: on air only
+    // real photos found on the web), within what is left of the budget. Never for the offline fixture desk.
+    if (this.imageSearch?.enabled) {
+      const left = stories.filter((s) => !s.image && !s.local && !(s.imageSearched && Date.now() - s.imageSearched < 3600_000)).slice(0, 6);
+      const remaining = deadline - Date.now();
+      if (left.length && remaining > 300) await Promise.race([Promise.all(left.map((s) => this.searchPicture(s))), wait(remaining)]);
+    }
+    const withPicture = stories.filter((s) => s.image);
+    return {
+      pictures: withPicture.length,
+      of: stories.length,
+      found: withPicture.filter((s) => !had.has(s.id) && String(s.imageVia).startsWith('page:')).length,
+      borrowed: withPicture.filter((s) => s.imageFrom).length,
+      searched: withPicture.filter((s) => s.imageKind === 'file').length,
+    };
+  }
+
+  /** A FILE photo of a story's place from the image search (server/imagesearch.js), credited as such. */
+  async searchPicture(s) {
+    s.imageSearched = Date.now();
+    let p = null;
+    try {
+      p = await this.imageSearch.find(s);
+    } catch (err) {
+      this.log.warn?.(`[images] search for ${s.id} failed (${err.message})`);
+    }
+    if (!p || s.image) return;
+    s.image = p.url;
+    s.imageWidth = p.width;
+    s.imageVia = p.via;
+    s.imageKind = 'file';
+    s.imageCredit = p.credit;
+    s.imageCreditVia = 'search';
+    s.imageLicense = p.license;
+    if (p.page) s.imagePage = p.page;
   }
 }

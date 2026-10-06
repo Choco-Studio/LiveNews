@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Face Lab (v2)</title>
+<style>
+  :root { --bg: #181425; --fg: #c0cbdc; --ui: #262b44; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 monospace; }
+  #screen { display: block; width: 1152px; height: 648px; image-rendering: pixelated; background: #000; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--ui); align-items: center; }
+  button, select, input { background: #3a4466; color: #fff; border: 0; padding: 4px 8px; font: inherit; }
+  #t { width: 360px; }
+  #text { width: 420px; }
+</style>
+</head>
+<body>
+<!-- FACES stream lab: face sheets per LOD tier, lip sync (text or recorded
+     Kokoro samples) and conversations planned from real offline episodes.
+     window.__lab.render(t), window.__lab.set({ mode, tier, presenter,
+     presenters, emotion, text, sample, episode, cam, k, hud }); ?still=1 for captures. -->
+<canvas id="screen" width="384" height="216"></canvas>
+<div class="bar">
+  <select id="mode"><option>sheet</option><option>lipsync</option><option>strip</option><option>conversation</option></select>
+  <select id="tier"><option>wide</option><option>medium</option><option selected>close</option><option>xclose</option></select>
+  <select id="presenter"></select>
+  <select id="sample"><option value="">(text)</option><option>paco</option><option>lola</option><option>ada</option></select>
+  <select id="episode"></select>
+  <select id="cam"><option>auto</option><option>two</option><option>wide</option></select>
+  <button id="play">pause</button>
+  <input id="t" type="range" min="0" max="90" step="0.01" value="0">
+  <input id="text" value="Good evening. Markets moved sharply today, as the bank promised more support.">
+</div>
+<script type="module">
+import { createFaceLab, EPISODES } from '../js/v2/canvas25d/labs/face.js';
+import { drawText } from '../js/font.js';
+
+const $ = (id) => document.getElementById(id);
+const lab = createFaceLab($('screen'), { drawText });
+window.__lab = lab;
+for (const id of ['paco', 'lola', 'max', 'ada', 'nova', 'unit8', 'penny', 'sam']) $('presenter').add(new Option(id, id));
+for (const id of Object.keys(EPISODES)) $('episode').add(new Option(id, id));
+const sync = () => lab.set({ mode: $('mode').value, tier: $('tier').value, presenter: $('presenter').value, sample: $('sample').value || null, episode: $('episode').value, cam: $('cam').value, text: $('text').value });
+for (const id of ['mode', 'tier', 'presenter', 'sample', 'episode', 'cam', 'text']) $(id).onchange = () => { sync(); t0 = performance.now(); };
+
+const still = new URLSearchParams(location.search).has('still');
+let playing = !still;
+let t0 = performance.now();
+$('play').onclick = () => {
+  playing = !playing;
+  $('play').textContent = playing ? 'pause' : 'play';
+  t0 = performance.now() - Number($('t').value) * 1000;
+};
+$('t').oninput = () => {
+  playing = false;
+  $('play').textContent = 'play';
+  lab.render(Number($('t').value));
+};
+function loop() {
+  if (playing) {
+    const t = (performance.now() - t0) / 1000;
+    $('t').value = t % 90;
+    lab.render(t % 90);
+  }
+  requestAnimationFrame(loop);
+}
+lab.render(0);
+if (!still) loop();
+</script>
+</body>
+</html>

@@ -67,16 +67,39 @@ export function parseCues(text, { grave = false, maxCues = 4 } = {}) {
   return { text: final, cues: out.map((c) => ({ ...c, char: Math.min(c.char, final.length) })) };
 }
 
-/** Inverse of parseCues: put cues back into the text as bracket tags. */
+const WORD = /[\p{L}\p{M}\p{N}_]/u;
+const JOINER = /['’\-]/; // don't, well-known: one word
+
+/** True when offset `at` falls between two characters of the same word. */
+function insideWord(s, at) {
+  const a = s[at - 1];
+  const b = s[at];
+  if (WORD.test(a) && WORD.test(b)) return true;
+  if (JOINER.test(b) && WORD.test(a) && WORD.test(s[at + 1] || '')) return true;
+  if (JOINER.test(a) && WORD.test(b) && WORD.test(s[at - 2] || '')) return true;
+  return false;
+}
+
+/**
+ * Inverse of parseCues: put cues back into the text as bracket tags. Cues at the
+ * same offset keep their order (they fire in that order), and an offset inside a
+ * word moves to the end of that word, so a round trip never splits a word.
+ */
 export function embedCues(text, cues = []) {
-  const sorted = [...cues].filter((c) => c && (c.action || c.emotion)).sort((a, b) => b.char - a.char);
-  let out = String(text);
-  for (const c of sorted) {
-    const at = Math.max(0, Math.min(out.length, Number(c.char) || 0));
-    const tag = `[${c.slot ? `${c.slot}:` : ''}${c.action || c.emotion}]`;
-    out = `${out.slice(0, at)} ${tag} ${out.slice(at)}`;
+  const src = String(text);
+  const groups = new Map(); // offset -> tags in their original order
+  for (const c of cues) {
+    if (!c || !(c.action || c.emotion)) continue;
+    let at = Math.max(0, Math.min(src.length, Math.round(Number(c.char)) || 0));
+    while (at > 0 && at < src.length && insideWord(src, at)) at++;
+    if (!groups.has(at)) groups.set(at, []);
+    groups.get(at).push(`[${c.slot ? `${c.slot}:` : ''}${c.action || c.emotion}]`);
   }
-  return out.replace(/\s+/g, ' ').trim();
+  let out = src;
+  for (const at of [...groups.keys()].sort((a, b) => b - a)) {
+    out = `${out.slice(0, at)} ${groups.get(at).join(' ')} ${out.slice(at)}`;
+  }
+  return out.replace(/\s+/g, ' ').replace(/\] ([,.;:!?])/g, ']$1').trim();
 }
 
 /** Names and descriptions for the writer prompt. */

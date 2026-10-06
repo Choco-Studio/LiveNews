@@ -136,10 +136,6 @@ describe('embedCues', () => {
 
   test(
     'cues at the same offset keep their order',
-    {
-      todo:
-        'STILL BROKEN public/js/cues.js:72-78 - cues are inserted one by one at the same offset, so the LAST one ends up first: embedCues("One two", [nod@3, shrug@3]) gives "One [shrug] [nod] two" and a parse/embed/parse round trip swaps them (the gestures are fired in the wrong order)',
-    },
     () => {
       assert.equal(embedCues('One two three', [act('nod', 3), act('shrug', 3), act('wave', 7)]), 'One [nod] [shrug] two [wave] three');
       const { text, cues } = parseCues('One [nod][shrug] two');
@@ -216,15 +212,24 @@ describe('embedCues', () => {
 
   test(
     'a cue whose offset is inside a word does not split that word',
-    {
-      todo:
-        'STILL BROKEN public/js/cues.js:70-80 - embedCues() inserts " [tag] " at the raw offset, so a cue that parseCues() recorded inside a word ("Hel[nod]lo" -> char 3) comes back as "Hel lo" after the review round trip (very rare: only when the writer puts a cue in the middle of a word)',
-    },
     () => {
       const { text, cues } = parseCues('Hel[nod]lo there');
       assert.equal(parseCues(embedCues(text, cues)).text, text);
     }
   );
+});
+
+describe('embedCues keeps words whole across languages', () => {
+  for (const raw of ['Yucat[nod]án storm', "don[nod]'t panic", 'well[wave]-known fact', 'São [nod]Paulo', '12[nod]34 votes', 'Hello [wave], all']) {
+    test(`round trip: ${raw}`, () => {
+      const { text, cues } = parseCues(raw);
+      const embedded = embedCues(text, cues);
+      const back = parseCues(embedded);
+      assert.equal(back.text, text, embedded);
+      assert.deepEqual(back.cues.map((c) => c.action), cues.map((c) => c.action));
+      assert.ok(!/\s[,.;:!?]/.test(embedded), `no space before punctuation: ${embedded}`);
+    });
+  }
 });
 
 describe('the action vocabulary', () => {

@@ -1,0 +1,1153 @@
+// Shot planner (owner: CAMERA stream): the camera grammar of a segment,
+// decided at runtime from the live episode data and the programme's style
+// bible (docs/programmes/*.md, "Camera and directing"). Pure and seeded: the
+// same episode gives the same plan; nothing is written per story.
+//
+//   planShots(ctx) → [{ kind: 'shot', shot, framing, focus, char, at, move, beat, len, ... }]
+//     shot     the LEGACY name the graphics, the music hooks and the old renderer
+//              understand: 'wide' | 'close' | 'full' | 'map' | 'fact' | 'montage'
+//     framing  the v2 camera framing for studio shots (camera.js framing()):
+//              'wide' | 'two' | 'single' | 'close' | 'mcu-l' | 'mcu-r' | 'mcu' | 'ots';
+//              null for full-screen graphics (full, map, fact, montage)
+//     focus    the slot on screen (singles) or the speaker (two-shots)
+//     char/at  the cut: char offset in seg.text and seconds from the first word
+//              (ctx.timeAt); cuts sit on sentence starts or on a named word
+//     move     null | { type: 'push' | 'pull', amount, delay, dur } (camera.js
+//              cameraAt), timed from this event; only where the bible allows it
+//     beat     what the shot is for: 'single' 'wide' 'headline' 'map' 'picture'
+//              'fact' 'number' 'quote' 'roundup' 'pin' 'catch' 'alt' 'signoff'...
+//     len      planned length inside this segment (s, to the next event or the
+//              segment end + gap); informative
+//     extras   card (montage index), pins (multi-pin map), pan (s, map to map),
+//              beforeSpeech (s: MONEY MINUTE's number card cuts in the gap)
+//   ctx = direction/context.js segmentContext(); `at` = seconds from the first word
+//
+// Shared rules (owner, 18:52, over every bible number): no planned shot under
+// MIN_SHOT (≈ 4 s) except voice-paced headline beats; cuts only at sentence
+// starts (or the named word); never cut on a dry line or within 1.2 s after it.
+// Per programme (PLAN §9 digest, bibles win):
+//   WORLD NOW    single (speaker in the third nearer their seat: mcu-l / mcu-r)
+//                → map (2nd sentence) → picture ≤ 8 s → fact → single; round-up on
+//                the map (map to map on each item's first word); chats and the
+//                sign-off on the wide; moves: settling push ≤ 4 % on the greeting
+//                wide, 3-4 % push on the lead's opening single, pull-out ≤ 4 % on
+//                the sign-off wide ending in its hold; grave locked off
+//   TECH BYTES   close singles; picture 4-8 s; chats on the wide; THE CATCH (Ada's
+//                question on her close, push 0.5 %/s ≤ 3 %, Max's answer back to
+//                the wide); studio ≤ 12 s
+//   COSMOS       never moves; ≥ 4 s everywhere; single for sentence 1, map within
+//                ±0.3 s of the place name, picture 6-10 s, single for the last
+//                sentence; NUMBER OF THE DAY choreography (Reading on UNIT-8's first
+//                word, single on sentence 2 ≥ 4 s later)
+//   MONEY MINUTE never moves; WIDE / MCU-R / CARD / PIC / MAP (≤ 1 per episode);
+//                cuts inside inter-sentence pauses; the per-story plan
+//   NEWS IN 60   locked; WIDE only for intro/outro; lead MCU-L/FULL alternating;
+//                items one shot per sentence, MCU-L/FULL order seeded per item, Sam
+//                in vision in every item; one MAP for the round-up (pin pans 0.7 s)
+// Unknown programme ids use WORLD NOW rules.
+//
+// Neighbour segments: decisions that depend on the previous or next segment
+// (MONEY MINUTE's opening shot, the episode's single MAP, a chat run too short
+// for its own wide) use ctx.contextAt(j) when the context provides it (exact),
+// else a prediction from the episode summary (ctx.episode). Same answer from
+// every call: pure functions of the episode.
+import { rng } from './context.js';
+import { PACE, paceFor, factHold as paceFactHold, factText, knownBoard, numbersBoard, shotMax } from '../../../pace.js';
+
+// PACE (public/js/pace.js): the channel's minimum shot and every per-programme shot window come from
+// the one pacing table; the numbers below that stay are this planner's own fallbacks for contexts
+// without a director (tests, labs): on air ctx.gapAfter carries the director's real pause.
+export const MIN_SHOT = PACE.default.shots.min; // owner 18:52: no cut faster than ~4 s
+const TOL = 0.5; // bible beats may go this far under MIN_SHOT (THE CATCH close)
+const DEFAULT_GAP = 0.3; // the director's pause after a segment when ctx.gapAfter is unknown
+const DRY_HOLD = 1.2; // tech-bytes: never cut on a dry line, hold 1.2 s after it
+const CPS = 14.5; // chars per second to estimate a neighbour's length from the summary
+// headline beats are paced by the voice (world-now.md: line + 1.0 s gap, held ≥ 3.8 s);
+// the planner marks them with minLen (pace holds.montage) so the director can hold the gap
+const headlineMin = (ctx) => paceFor(ctx?.programId).holds.montage;
+
+/** Shot windows of a programme from the pace table (studio maxima, picture / map windows). */
+const fromPace = (id) => {
+  const S = PACE[id].shots;
+  return { studioMax: S.studioMax, singleSoft: S.singleSoft, pictureMin: S.picture[0], pictureMax: S.picture[1], mapMin: S.map[0], mapMax: S.map[1], signoffHold: PACE[id].holds.signoff };
+};
+
+/** Per-programme numbers (bibles; the owner's MIN_SHOT on top); timings from pace.js, grammar flags here. */
+export const SHOT_STYLES = {
+  'world-now': { ...fromPace('world-now'), moves: true },
+  'tech-bytes': { ...fromPace('tech-bytes'), catch: true },
+  cosmos: { ...fromPace('cosmos'), placeWindow: 0.3 },
+  // MONEY MINUTE and NEWS IN 60 keep their own per-story plans (no single splitting)
+  'money-minute': { ...fromPace('money-minute'), singleSoft: undefined, shotMax: PACE['money-minute'].shots.studioMax, numberGap: 1.2, pauseCuts: true },
+  'news-60': { ...fromPace('news-60'), singleSoft: undefined, fullMax: PACE['news-60'].shots.picture[1], fullHoldMax: 10.5 },
+};
+
+const styleOf = (id) => (SHOT_STYLES[id] ? id : 'world-now');
+
+export function planShots(ctx) {
+  if (!ctx || !ctx.valid || !Array.isArray(ctx.sentences)) {
+    const solo = !ctx?.duo;
+    return [ev(ctx, 0, 0, solo ? 'close' : 'wide', solo ? 'mcu' : 'wide', ctx?.speaker || 'A', 'fallback')];
+  }
+  const id = styleOf(ctx.programId);
+  const whole = timeline(ctx);
+  // a story handed to a correspondent ends, for its plan, where the hand-over starts: the director takes that last
+  // sentence to the two-way (director.js throwTo), so no beat, cap or split may cut away just before it
+  const tl = ctx.type === 'story' && ctx.seg?.link && whole.bounds.length ? { ...whole, end: whole.bounds[whole.bounds.length - 1].t, bounds: whole.bounds.slice(0, -1) } : whole;
+  let out;
+  switch (id) {
+    case 'tech-bytes':
+      out = techBytes(ctx, tl);
+      break;
+    case 'cosmos':
+      out = cosmos(ctx, tl);
+      break;
+    case 'money-minute':
+      out = moneyMinute(ctx, tl);
+      break;
+    case 'news-60':
+      out = news60(ctx, tl);
+      break;
+    default:
+      out = worldNow(ctx, tl);
+  }
+  if (!out.length) out.push(ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? 'wide' : 'mcu', ctx.speaker, 'fallback'));
+  out.sort((a, b) => a.at - b.at);
+  // PACE: no map, picture or figure card planned past its maximum (pace.js shotMax; critic r1: a 12.8 s number card);
+  // the single it hands back to is split like any other long single
+  if (ctx.type === 'story' && capMax(ctx, tl, out)) {
+    out.sort((a, b) => a.at - b.at);
+    if (SHOT_STYLES[id].singleSoft) splitLongSingles(ctx, tl, out, SHOT_STYLES[id].singleSoft);
+  }
+  for (let i = 0; i < out.length; i++) out[i].len = round3((i + 1 < out.length ? out[i + 1].at : tl.end) - out[i].at);
+  // the sign-off's hold before the end card that this plan assumed (the bible's, unless ctx.gapAfter says otherwise)
+  if (ctx.type === 'outro') out[out.length - 1].hold = round3(tl.gap);
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Timeline helpers
+
+const round3 = (v) => Math.round(v * 1000) / 1000;
+
+function ev(ctx, at, char, shot, framing, focus, beat, extra = null) {
+  const e = { kind: 'shot', shot, framing: framing || null, focus: focus || ctx?.speaker || 'A', char: Math.max(0, char | 0), at: round3(at), move: null, beat };
+  return extra ? Object.assign(e, extra) : e;
+}
+
+/** Sentence boundaries (cut candidates), the segment's end and the dry-line guard. */
+/** The director's hold after the sign-off before the end card (bibles), when ctx.gapAfter is unknown. */
+const SIGNOFF_HOLD = { 'world-now': 1.5, 'news-60': 1.0, cosmos: 0.6, 'tech-bytes': 0.3, 'money-minute': 0.3 };
+
+function timeline(ctx) {
+  const hold = ctx.type === 'outro' ? SIGNOFF_HOLD[styleOf(ctx.programId)] : DEFAULT_GAP;
+  const gap = Number.isFinite(ctx.gapAfter) ? ctx.gapAfter : hold;
+  const end = ctx.duration + gap;
+  const dry = ctx.dryLine;
+  const bounds = [];
+  for (let i = 1; i < ctx.sentences.length; i++) {
+    const s = ctx.sentences[i];
+    const t = s.t0;
+    // never cut on a dry line, nor within DRY_HOLD s after it
+    const blocked = !!dry && ((s.start >= dry.char && s.start < dry.end) || (t >= dry.t1 - 0.05 && t < dry.t1 + DRY_HOLD));
+    bounds.push({ i, t, char: s.start, blocked });
+  }
+  return { gap, end, bounds, n: ctx.sentences.length };
+}
+
+/** First open boundary at or after time `from`, leaving at least `room` s before the end. */
+function boundaryAfter(tl, from, room = 0) {
+  for (const b of tl.bounds) if (!b.blocked && b.t >= from - 1e-6 && tl.end - b.t >= room - 1e-6) return b;
+  return null;
+}
+
+/** Next open boundary after time t (any room). */
+function nextBoundary(tl, t) {
+  for (const b of tl.bounds) if (!b.blocked && b.t > t + 1e-6) return b;
+  return null;
+}
+
+/**
+ * The single a story opens on: the programme's single, or the over-the-shoulder
+ * wall framing when the previous segment was a story by the same presenter (so
+ * the story change is a visible cut, never a jump on the same framing).
+ */
+function storySingle(ctx) {
+  const base = singleFraming(ctx);
+  const id = styleOf(ctx.programId);
+  if (id === 'money-minute' || id === 'news-60') return base;
+  const segs = ctx.episode?.segments || [];
+  let run = 0;
+  for (let j = ctx.index - 1; j >= 0; j--) {
+    const p = segs[j];
+    if (p.type !== 'story' || p.anchor !== segs[ctx.index]?.anchor || p.roundup) break;
+    run++;
+  }
+  return run % 2 === 1 ? 'ots' : base;
+}
+
+/** Studio framing of a single for the speaker, per programme. */
+function singleFraming(ctx, slot = ctx.speaker) {
+  switch (styleOf(ctx.programId)) {
+    case 'tech-bytes':
+      return ctx.duo ? 'single' : 'mcu';
+    case 'money-minute':
+      return 'mcu-r';
+    case 'news-60':
+      return ctx.hasImage ? 'mcu-l' : 'mcu';
+    default:
+      if (!ctx.duo) return 'mcu';
+      return slot === 'B' ? 'mcu-r' : 'mcu-l';
+  }
+}
+
+/** Estimated length of segment j from the summary (or its exact context). */
+function segLength(ctx, j) {
+  const c = neighbour(ctx, j);
+  if (c) return c.duration;
+  const s = ctx.episode?.segments?.[j];
+  return s ? s.chars / CPS : 0;
+}
+
+/** Context of segment j when the runtime provides it (ctx.contextAt), else null. */
+function neighbour(ctx, j) {
+  if (typeof ctx.contextAt !== 'function') return null;
+  try {
+    const c = ctx.contextAt(j);
+    return c && c.valid ? c : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Length of the run of chat segments right after this one (they share one
+ * wide), including the sign-off when it follows on the wide; 0 if the next
+ * segment is not a chat.
+ */
+function chatRunAfter(ctx, gap) {
+  const segs = ctx.episode?.segments || [];
+  let t = 0;
+  let j = ctx.index + 1;
+  if (segs[j]?.type !== 'chat') return 0;
+  for (; j < segs.length && segs[j].type === 'chat'; j++) t += segLength(ctx, j) + gap;
+  // the sign-off shares the chats' two-shot unless the closing run splits (closingRun)
+  if (segs[j]?.type === 'outro' && ctx.duo && !closingRun(ctx)?.two) t += segLength(ctx, j) + gap;
+  return t;
+}
+
+const CLOSING_CAP = 11; // s: a closing exchange + sign-off on one two-shot no longer than this
+
+/**
+ * The closing run of a duo: the chats straight before the sign-off. They share
+ * one two-shot with the sign-off, unless together they pass CLOSING_CAP and
+ * each part holds MIN_SHOT: then the exchange plays on the tighter two-shot
+ * ('two', both presenters in frame, as the bibles' chats need) and the sign-off
+ * cuts back to the wide on its first word (a change of size of ~1.7x, never a
+ * jump). Pure: every segment of the episode gets the same answer.
+ * → { first, outro, two } | null
+ */
+function closingRun(ctx) {
+  if (!ctx.duo) return null;
+  const segs = ctx.episode?.segments || [];
+  let o = segs.length - 1;
+  while (o >= 0 && segs[o].type !== 'outro') o--;
+  if (o < 1) return null;
+  let first = o;
+  while (first > 0 && segs[first - 1].type === 'chat') first--;
+  if (first === o) return null;
+  let chats = 0;
+  for (let j = first; j < o; j++) chats += segLength(ctx, j) + DEFAULT_GAP;
+  const outro = segLength(ctx, o) + (SIGNOFF_HOLD[styleOf(ctx.programId)] ?? DEFAULT_GAP);
+  return { first, outro: o, two: chats >= MIN_SHOT && outro >= MIN_SHOT && chats + outro > CLOSING_CAP };
+}
+
+/** The two-shot a chat (or the lead-in to a closing chat run) plays on. */
+function chatFraming(ctx, index = ctx.index) {
+  const c = closingRun(ctx);
+  return c && c.two && index >= c.first - 1 && index < c.outro ? 'two' : 'wide';
+}
+
+/** Previous segment's type from the summary. */
+const prevType = (ctx) => ctx.episode?.segments?.[ctx.index - 1]?.type || null;
+
+/** Words in a string. */
+const words = (s) => String(s || '').trim().split(/\s+/).filter(Boolean).length;
+
+const GREETING_RE = /^(good (morning|afternoon|evening)|hello|welcome|this is|i'm|i am|and i'm)\b|\bwelcome to\b/;
+
+/**
+ * Intro: headline sentences (before the greeting) as montage beats cut on each
+ * line's first word, then the greeting. Returns { headlines: [sentence idx], greet }.
+ * With seg.teases (editorial: the rundown story each intro sentence is about) the
+ * teased sentences are the headlines; without it, the sentences before the greeting.
+ */
+function splitIntro(ctx, maxHeadlines) {
+  const n = ctx.sentences.length;
+  const teases = Array.isArray(ctx.seg.teases) ? ctx.seg.teases : null;
+  let greet = n;
+  for (let i = 0; i < n; i++) {
+    const t = ctx.sentences[i].text.trim().toLowerCase();
+    if (GREETING_RE.test(t) || (teases && !teases[i])) {
+      greet = i;
+      break;
+    }
+  }
+  if (greet === n) greet = Math.min(n - 1, maxHeadlines);
+  const headlines = [];
+  for (let i = 0; i < greet && headlines.length < maxHeadlines; i++) headlines.push(i);
+  return { headlines, greet };
+}
+
+/**
+ * The rundown card a teased sentence shows: the rundown index (= story order) of
+ * the story seg.teases names for it (owner 20:40: the montage follows the spoken
+ * teaser, every teased story gets its frame), else the k-th story.
+ */
+function teaseCard(ctx, si, k) {
+  const id = Array.isArray(ctx.seg.teases) ? ctx.seg.teases[si] : null;
+  if (id) {
+    const segs = ctx.episode?.segments || [];
+    for (let j = 0; j < segs.length; j++) {
+      if (segs[j].type !== 'story') continue;
+      const c = neighbour(ctx, j);
+      if (c && c.seg?.storyId === id) return { card: segs[j].storyIndex, storyId: id };
+    }
+    return { card: k, storyId: id };
+  }
+  return { card: k, storyId: null };
+}
+
+/**
+ * Montage beats for the intro (shot 'montage', card = rundown index, storyId),
+ * one per teased sentence and cut on its first word, then the wide for the greeting.
+ * `floor` (s): a frame must hold at least this long; the frames from the first one
+ * that cannot are read on the greeting's wide instead (the presenter teases in
+ * vision). Without a floor the beats are voice-paced (WORLD NOW headlines: the
+ * director holds minLen with the line's gap). A lone frame must hold MIN_SHOT.
+ */
+function introWithHeadlines(ctx, tl, maxHeadlines, { floor = 0, minFrames = 2, beat = 'headline', wideFraming = 'wide', maxWide = Infinity } = {}) {
+  const out = [];
+  const rundown = ctx.episode?.storyCount ?? 0;
+  const frames = Math.min(maxHeadlines, rundown);
+  const { headlines, greet } = frames >= 1 ? splitIntro(ctx, frames) : { headlines: [], greet: 0 };
+  const startOf = (k) => (k < headlines.length ? ctx.sentences[headlines[k]].t0 : ctx.sentences[greet]?.t0 ?? tl.end);
+  let keep = headlines.length;
+  if (floor > 0) for (let k = 0; k < headlines.length; k++) if (startOf(k + 1) - startOf(k) < floor - 1e-6) { keep = k; break; }
+  // the greeting's wide must hold MIN_SHOT: the last kept lines join it when it would not
+  while (keep > 0 && tl.end - startOf(keep) < MIN_SHOT) keep--;
+  if (keep < minFrames) keep = 0; // WORLD NOW: one headline alone is not a montage (the open cuts to the greeting)
+  if (keep === 1 && startOf(1) - startOf(0) < MIN_SHOT - 1e-6) keep = 0; // a lone card is a cold line: MIN_SHOT
+  for (let k = 0; k < keep; k++) {
+    const s = ctx.sentences[headlines[k]];
+    out.push(ev(ctx, s.t0, s.start, 'montage', null, ctx.speaker, k === 0 ? beat : 'headline', teaseCard(ctx, headlines[k], k)));
+  }
+  const g = keep < headlines.length ? ctx.sentences[headlines[keep]] : ctx.sentences[greet];
+  const first = out.length ? g : null;
+  if (!out.length && tl.end > maxWide) {
+    // no frame and a wide over the studio maximum: the teasers on the reader's single, the greeting (naming
+    // both) on the wide, when the greeting's sentence start leaves both ≥ MIN_SHOT
+    const b = tl.bounds.find((x) => x.i === greet && !x.blocked);
+    if (b && b.t >= MIN_SHOT && tl.end - b.t >= MIN_SHOT) return [ev(ctx, 0, 0, 'close', singleFraming(ctx), ctx.speaker, 'teaser'), ev(ctx, b.t, b.char, 'wide', ctx.duo ? wideFraming : 'wide', ctx.speaker, 'greeting')];
+  }
+  out.push(ev(ctx, first ? first.t0 : 0, first ? first.start : 0, 'wide', ctx.duo ? wideFraming : 'wide', ctx.speaker, 'greeting'));
+  for (const e of out) if (e.shot === 'montage') e.minLen = headlineMin(ctx);
+  // PACE: the last headline frame holds holds.montage (readable twice; critic r1: WORLD NOW's third frame aired 2.9 s):
+  // when its line is shorter, the greeting starts under the frame and the wide cuts on its first phrase word after
+  // the floor (a mid cue), when the wide still holds MIN_SHOT
+  const wide = out[out.length - 1];
+  const last = out.length > 1 ? out[out.length - 2] : null;
+  if (last && last.shot === 'montage' && wide.at - last.at < headlineMin(ctx) - 0.05) {
+    const lo = last.at + headlineMin(ctx);
+    const w = wordCut(ctx, lo, Math.min(lo + 2.5, tl.end - MIN_SHOT), 2, lo);
+    if (w) {
+      wide.at = round3(w.t);
+      wide.char = w.char;
+      wide.place = 'phrase';
+    }
+  }
+  return out;
+}
+
+/** A move that fills [start, end] of shot time (relative to its event), or null if under minDur. */
+function moveIn(type, amount, start, end, minDur = 4) {
+  const dur = end - start;
+  if (!(dur >= minDur)) return null;
+  return { type, amount: round3(amount), delay: round3(start), dur: round3(dur) };
+}
+
+/**
+ * Break any studio shot longer than `max` with an alternate studio framing at
+ * the boundary nearest its middle (both parts ≥ MIN_SHOT).
+ */
+function capStudio(ctx, tl, out, max, altOf) {
+  for (let k = 0; k < out.length; k++) {
+    const e = out[k];
+    if (!e.framing) continue;
+    const t1 = k + 1 < out.length ? out[k + 1].at : tl.end;
+    if (t1 - e.at <= max) continue;
+    const mid = (e.at + t1) / 2;
+    let best = null;
+    for (const b of tl.bounds) {
+      if (b.blocked || b.t - e.at < MIN_SHOT || t1 - b.t < MIN_SHOT) continue;
+      if (!best || Math.abs(b.t - mid) < Math.abs(best.t - mid)) best = b;
+    }
+    if (!best) continue;
+    const alt = altOf(e);
+    if (!alt) continue;
+    out.splice(k + 1, 0, ev(ctx, best.t, best.char, alt.shot, alt.framing, alt.focus || e.focus, 'alt'));
+    if (e.move) {
+      // a move must end 0.5 s before the new cut
+      const end = best.t - e.at - 0.5;
+      if (e.move.delay + e.move.dur > end) e.move = moveIn(e.move.type, e.move.amount, e.move.delay, end);
+    }
+  }
+  return out;
+}
+
+/** The other single of the same presenter: the over-the-shoulder wall framing ⇄ the programme's single. */
+function altSingle(ctx, e) {
+  if (!e.framing || e.framing === 'wide' || e.framing === 'two') return null;
+  return { shot: 'close', framing: e.framing === 'ots' ? singleFraming(ctx, e.focus) : 'ots', focus: e.focus };
+}
+
+const SPLIT_MIN = 4.5; // s: both halves of a split single
+
+/**
+ * Split a long single (over `soft` s) at the open sentence start nearest its
+ * middle, both parts ≥ SPLIT_MIN, onto the presenter's other single (ots ⇄
+ * single): a calm change of size and of the wall's share instead of one locked
+ * 14 s single (owner 18:52: median 5-7 s, variety against fatigue on a 24/7
+ * channel). Wides, full-screen beats and moving shots are left alone.
+ */
+function splitLongSingles(ctx, tl, out, soft) {
+  for (let k = 0; k < out.length; k++) {
+    const e = out[k];
+    if (e.shot !== 'close' || e.move || !altSingle(ctx, e)) continue;
+    const t1 = k + 1 < out.length ? out[k + 1].at : tl.end;
+    if (t1 - e.at <= soft) continue;
+    const mid = (e.at + t1) / 2;
+    let best = null;
+    for (const b of tl.bounds) {
+      if (b.blocked || b.t - e.at < SPLIT_MIN - 1e-6 || t1 - b.t < SPLIT_MIN - 1e-6) continue;
+      if (!best || Math.abs(b.t - mid) < Math.abs(best.t - mid)) best = b;
+    }
+    // PACE: no sentence start to split on (a two-sentence story): a phrase boundary inside the sentence (after a comma,
+    // colon or semicolon), both parts ≥ SPLIT_MIN (critic r1: TECH BYTES singles of 10-12 s)
+    // (not COSMOS: its long, still singles are the bible's, and its cut rate is capped at 7 a minute)
+    if (!best && styleOf(ctx.programId) !== 'cosmos') best = wordCut(ctx, e.at + SPLIT_MIN, t1 - SPLIT_MIN, 0, mid);
+    if (!best) continue;
+    const alt = altSingle(ctx, e);
+    out.splice(k + 1, 0, ev(ctx, best.t, best.char, alt.shot, alt.framing, alt.focus, 'alt', best.word ? { place: 'phrase' } : null));
+  }
+  return out;
+}
+
+/** And finally (the programme's lighter closer). */
+const isFinally = (ctx) => ctx.feature === 'lighter' || /^\W*and finally\b/i.test(String(ctx.seg?.text || ''));
+
+/**
+ * A cut inside a sentence (a `mid` cue: the runtime's speech marks fire it), on the word in [lo, hi] that opens a
+ * phrase: after a comma / colon / semicolon (rank 0), else after the phrase's accent (1), else after a content word
+ * (2); never between an article or preposition and its noun, never on or just after a dry line. Ranks above
+ * `maxRank` do not count; ties go to the word nearest `near` (else the latest). → { t, char, word: true } | null
+ */
+function wordCut(ctx, lo, hi, maxRank = 2, near = null) {
+  const W = ctx.words || [];
+  const text = String(ctx.seg?.text || '');
+  if (!(hi - lo >= -1e-6)) return null;
+  let best = null;
+  let bestRank = 9;
+  for (let k = 1; k < W.length; k++) {
+    const w = W[k];
+    const prev = W[k - 1];
+    if (!Number.isFinite(w.t) || w.t < lo - 1e-6) continue;
+    if (w.t > hi + 1e-6) break;
+    if (insideDry(ctx, w.t)) continue;
+    // a sentence's first word is a boundary cut, not a word cut
+    if ((ctx.sentences || []).some((x) => Math.abs(x.start - w.char) <= 2)) continue;
+    const rank = /[,:;]\s*$/.test(text.slice(Math.max(0, w.char - 3), w.char)) ? 0 : prev.stressed ? 1 : prev.content ? 2 : 3;
+    if (rank > maxRank) continue;
+    const better = rank < bestRank || (rank === bestRank && (near == null ? true : Math.abs(w.t - near) < Math.abs(best.t - near)));
+    if (better) {
+      best = w;
+      bestRank = rank;
+    }
+  }
+  return best ? { t: best.t, char: best.char, word: true } : null;
+}
+
+const CAPPED = { map: 'map', full: 'picture', fact: 'fact' };
+
+/**
+ * PACE maxima (pace.js shotMax): a map, picture or figure card planned past its maximum gives way to the speaker's
+ * single, at the latest sentence start that keeps both inside their windows, else on a phrase-boundary word (a
+ * mid-sentence cut, as any newsroom would make it). A run of the same full-screen shot (the round-up's world view
+ * and its pin) counts as one shot. Returns true when it changed the plan.
+ */
+function capMax(ctx, tl, out) {
+  const S = paceFor(ctx.programId).shots;
+  const lowOf = { map: S.map[0], full: S.picture[0], fact: S.factMin };
+  let changed = false;
+  for (let k = 0; k < out.length; k++) {
+    const e = out[k];
+    if (!CAPPED[e.shot] || (k > 0 && out[k - 1].shot === e.shot)) continue;
+    let j = k + 1;
+    while (j < out.length && out[j].shot === e.shot) j++;
+    const t1 = j < out.length ? out[j].at : tl.end;
+    // (a picture round-up item, QUICK BYTES or IN BRIEF, is one sentence over its own picture: it runs to the item's
+    // end, a little past the picture maximum, rather than cutting to the reader mid-sentence for its last words)
+    const max = shotMax(ctx.programId, e.shot) + (e.beat === 'roundup-picture' && ctx.seg?.roundup && !ctx.seg?.location ? 3 : 0);
+    if (t1 - e.at <= max + 0.25) continue;
+    // the run's last beat (a round-up pin after its world view) keeps its own MIN_SHOT too
+    const lo = Math.max(e.at + Math.max(MIN_SHOT, lowOf[e.shot] || 0), out[j - 1].at + MIN_SHOT);
+    const hi = Math.min(e.at + max, t1 - MIN_SHOT);
+    if (hi < lo - 1e-6) continue; // no cut keeps both parts in their windows: the runtime's guard is the net
+    let cut = null;
+    // MONEY MINUTE cuts only inside the pause before a sentence (money-minute.md §5.8); the others on a sentence start,
+    // else on a phrase word
+    const money = styleOf(ctx.programId) === 'money-minute';
+    for (const b of tl.bounds) if (!b.blocked && b.t >= lo - 1e-6 && b.t <= hi + 1e-6) cut = { t: money ? pauseCut(ctx, b.i) : b.t, char: b.char };
+    if (!money) cut ||= wordCut(ctx, lo, hi, 2, hi);
+    if (!cut) continue;
+    // back to the presenter's single on air before it (the programme's single when none)
+    let single = null;
+    for (let i = k - 1; i >= 0 && !single; i--) if (out[i].shot === 'close' && out[i].framing && out[i].framing !== 'ots') single = out[i].framing;
+    const framing = single || singleFraming(ctx);
+    // the planned return to the same single after the run is now this one (one shot, which splitLongSingles may split)
+    if (j < out.length && out[j].shot === 'close' && out[j].framing === framing && out[j].focus === ctx.speaker && !out[j].move) out.splice(j, 1);
+    // drop the run's later events that the new cut overtakes (a pin of the same map after it)
+    for (let i = j - 1; i > k; i--) if (out[i].at >= cut.t - 1e-6) out.splice(i, 1);
+    out.splice(k + 1, 0, ev(ctx, cut.t, cut.char, 'close', framing, ctx.speaker, 'single', { capped: CAPPED[e.shot], ...(cut.word ? { place: 'phrase' } : null) }));
+    changed = true;
+  }
+  return changed;
+}
+
+/**
+ * And finally never ends on a map (critic r1: it cut to a 10 s map before the chat): a map that would close the
+ * story hands back to the single when a sentence start (or a phrase word) leaves both ≥ their minimum, else it goes.
+ */
+function noMapEnd(ctx, tl, out) {
+  if (!isFinally(ctx) || out.length < 2 || out[out.length - 1].shot !== 'map') return;
+  const m = out[out.length - 1];
+  const S = paceFor(ctx.programId).shots;
+  const lo = m.at + Math.max(MIN_SHOT, S.map[0]);
+  const hi = tl.end - MIN_SHOT;
+  let cut = null;
+  for (const b of tl.bounds) if (!cut && !b.blocked && b.t >= lo - 1e-6 && b.t <= hi + 1e-6) cut = { t: b.t, char: b.char };
+  cut ||= wordCut(ctx, lo, hi, 2, lo);
+  let single = null;
+  for (let i = out.length - 2; i >= 0 && !single; i--) if (out[i].shot === 'close' && out[i].framing) single = out[i].framing;
+  if (cut) out.push(ev(ctx, cut.t, cut.char, 'close', single || singleFraming(ctx), ctx.speaker, 'single', cut.word ? { place: 'phrase' } : null));
+  else out.pop();
+}
+
+// ---------------------------------------------------------------------------
+// WORLD NOW
+
+function worldNow(ctx, tl) {
+  const S = SHOT_STYLES['world-now'];
+  const me = ctx.speaker;
+  const seg = ctx.seg;
+  if (ctx.type === 'intro') {
+    const out = introWithHeadlines(ctx, tl, 3);
+    const w = out[out.length - 1];
+    if (ctx.duo && !ctx.grave) w.move = moveIn('push', Math.min(0.04, 0.008 * (tl.end - w.at - 1)), 0.5, tl.end - w.at - 0.5);
+    return out;
+  }
+  if (ctx.type === 'chat') return [ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? chatFraming(ctx) : singleFraming(ctx), me, 'chat')];
+  if (ctx.type === 'outro') {
+    const e = ev(ctx, 0, 0, 'wide', 'wide', me, 'signoff');
+    // pull-out ≤ 4 %: from 0.5 s after the sign-off's first word (a cut from the closing
+    // two-shot, or the wide carrying on from the chats), ending 0.5 s before the end card
+    // inside the hold
+    const hold = Number.isFinite(ctx.gapAfter) ? ctx.gapAfter : S.signoffHold;
+    const start = 0.5;
+    const end = ctx.duration + hold - 0.5;
+    if (!ctx.grave) e.move = moveIn('pull', Math.min(0.04, 0.008 * (end - start)), start, end);
+    return [e];
+  }
+  // stories
+  if (ctx.seg.roundup || roundupLike(ctx)) return roundupMap(ctx, tl, 'world-now');
+  const out = storyBeats(ctx, tl, {
+    single: storySingle(ctx),
+    map: !!seg.location,
+    picture: ctx.hasImage,
+    fact: seg.fact || seg.numbers?.[0]?.value || knownBoard(seg, ctx.programId) ? factHold(seg, ctx.programId) : 0,
+    board: !!(numbersBoard(seg, ctx.programId) || knownBoard(seg, ctx.programId)),
+    linked: !!seg.link,
+    pictureFirst: seg.shot === 'full' && ctx.hasImage,
+    pictureMax: S.pictureMax,
+    mapMin: S.mapMin, // PACE: a map holds ≥ 5 s (pace.js world-now shots.map)
+    mapMax: S.mapMax,
+    mapOnSecond: true,
+    finally: isFinally(ctx),
+  });
+  noMapEnd(ctx, tl, out);
+  capStudio(ctx, tl, out, S.studioMax, (e) => altSingle(ctx, e));
+  splitLongSingles(ctx, tl, out, S.singleSoft);
+  chatLeadIn(ctx, tl, out);
+  // the 3-4 % push on the lead's opening single (never on grave stories)
+  if (ctx.isLead && !ctx.grave && out[0].framing) {
+    const t1 = out.length > 1 ? out[1].at : tl.end;
+    const end = t1 - out[0].at - 0.5;
+    const m = moveIn('push', Math.min(0.04, Math.max(0.03, 0.0075 * (end - 0.5))), 0.5, Math.min(end, 0.5 + 8));
+    if (m) out[0].move = m;
+  }
+  return out;
+}
+
+/** The fact card's hold: read twice, within the programme's factMin..factMax (pace.js factHold; world-now.md words ÷ 3 + 2). */
+const factHold = (seg, id) => paceFactHold(factText(seg, id), id); // a BY THE NUMBERS board reads all its rows
+
+/** A short located story inside a run of located stories (round-up without the field). */
+function roundupLike(ctx) {
+  const segs = ctx.episode?.segments || [];
+  const me = segs[ctx.index];
+  if (!me || me.type !== 'story' || !me.location || ctx.sentences.length > 2) return false;
+  const short = (s) => s && s.type === 'story' && s.location && !s.feature && s.chars <= 150;
+  if (!short(me) && !/around the world/i.test(ctx.seg.text)) return false;
+  return short(segs[ctx.index - 1]) || short(segs[ctx.index + 1]) || /^\W*(now,?\s*)?around the world/i.test(ctx.seg.text);
+}
+
+/**
+ * Generic story beats: single for sentence 1 (never cut away during it), then
+ * the cutaways in order (each on whole sentences, ≥ MIN_SHOT), then back to the
+ * single for the remaining sentences if they hold ≥ MIN_SHOT.
+ */
+const BOARD_MIN = 5; // s: BY THE NUMBERS / WHAT WE KNOW read once
+function storyBeats(ctx, tl, o) {
+  const me = ctx.speaker;
+  const out = [ev(ctx, 0, 0, 'close', o.single, me, 'single')];
+  const order = [];
+  if (o.map) order.push('map');
+  if (o.picture) order.push('picture');
+  if (o.pictureFirst && o.map) order.reverse();
+  // PACE: And finally ends on its picture (or its presenter), never on a map
+  if (o.finally && o.map && o.picture && order.indexOf('map') > order.indexOf('picture')) order.reverse();
+  // the Number of the day leads with its card; a board (BY THE NUMBERS, WHAT WE KNOW) comes right after the map
+  // (first on a story handed to a correspondent: its last sentence is the hand-over); a single fact comes last
+  if (o.fact) {
+    if (ctx.feature === 'number' || (o.board && o.linked)) order.unshift('fact');
+    else if (o.board) order.splice(order.indexOf('map') + 1, 0, 'fact');
+    else order.push('fact');
+  }
+  let cur = 0;
+  let curMin = MIN_SHOT;
+  for (const beat of order) {
+    // (a board's rows read once in 5 s: it airs with that room, and holds longer when there is more)
+    const need = beat === 'fact' ? Math.max(MIN_SHOT, o.board ? Math.min(o.fact, BOARD_MIN) : o.fact) : beat === 'picture' ? Math.max(MIN_SHOT, o.pictureMin || 0) : Math.max(MIN_SHOT, o.mapMin || 0);
+    // world-now: the map cuts in on the first word of sentence 2 when the single has had its time
+    const b = boundaryAfter(tl, cur + curMin, need);
+    if (!b) break;
+    out.push(ev(ctx, b.t, b.char, beat === 'picture' ? 'full' : beat, null, me, beat));
+    cur = b.t;
+    curMin = need;
+  }
+  // back to the single for what remains (whole sentences, ≥ MIN_SHOT)
+  if (out.length > 1) {
+    const b = boundaryAfter(tl, cur + curMin, MIN_SHOT);
+    if (b) out.push(ev(ctx, b.t, b.char, 'close', o.single, me, 'single'));
+  }
+  return out;
+}
+
+/**
+ * When the chats after this story are too short to hold their own wide
+ * (< MIN_SHOT together), the story's last sentence goes to the wide so the
+ * exchange plays on one wide (cosmos.md: the last AND FINALLY line with the reply).
+ */
+function chatLeadIn(ctx, tl, out, always = false) {
+  if (!ctx.duo) return;
+  const run = chatRunAfter(ctx, tl.gap);
+  if (!run || (run >= MIN_SHOT && !always)) return;
+  // cosmos.md cuts to the wide ON the last AND FINALLY line (always): the dry-line guard does not apply there
+  const last = tl.bounds.filter((b) => always || !b.blocked).pop();
+  let cut = null;
+  if (last) {
+    const prev = out.filter((e) => e.at <= last.t + 1e-6).pop();
+    if (prev && last.t - prev.at >= MIN_SHOT && tl.end - last.t + run >= MIN_SHOT) cut = { t: last.t, char: last.char };
+  }
+  // PACE (owner 4 s floor): no sentence start can take it and the chats alone are under MIN_SHOT: the wide comes in on a
+  // phrase word of the last sentence (critic r1: COSMOS chats on a 3.4 s wide of their own)
+  if (!cut && run < MIN_SHOT) {
+    const prev = out.reduce((a, e) => (e.at >= a.at ? e : a), out[0]);
+    if (prev) cut = wordCut(ctx, prev.at + MIN_SHOT, tl.end + run - MIN_SHOT, 2, prev.at + MIN_SHOT);
+  }
+  if (!cut) return;
+  // optional lead-ins never make the wide longer than the studio maximum
+  if (run >= MIN_SHOT && tl.end - cut.t + run > (SHOT_STYLES[styleOf(ctx.programId)].studioMax || 15)) return;
+  // drop planned cuts after it and put the wide on the last sentence
+  for (let k = out.length - 1; k >= 0; k--) if (out[k].at > cut.t - 1e-6) out.splice(k, 1);
+  out.push(ev(ctx, cut.t, cut.char, 'wide', chatFraming(ctx), ctx.speaker, 'wide', cut.word ? { place: 'phrase' } : null));
+}
+
+/** Round-up items on the map: title over the world view, map to map on each item's first word. */
+function roundupMap(ctx, tl, programme) {
+  const me = ctx.speaker;
+  const r = ctx.seg.roundup;
+  const index = r ? r.index : roundupIndex(ctx);
+  const out = [];
+  // PACE (shots.mapRun, critic r1: 40 s of maps): after mapRun map items in a row, an item shows its picture, else its
+  // reader in vision (the place is still read). NEWS IN 60 keeps its one map with pin pans (≤ 3 items, ~15 s).
+  const run = paceFor(ctx.programId).shots.mapRun;
+  if (programme !== 'news-60' && index > 0 && index % (run + 1) === run) {
+    return [ctx.hasImage ? ev(ctx, 0, 0, 'full', null, me, 'roundup-picture') : ev(ctx, 0, 0, 'close', singleFraming(ctx), me, 'roundup-single')];
+  }
+  if (index === 0) {
+    out.push(ev(ctx, 0, 0, 'map', null, me, 'roundup', { card: 'world' }));
+    // the title line (after a pickup such as "Thanks, Paco.") plays over the world view; item 1's place
+    // zooms in on the first word after it
+    const title = ctx.sentences.findIndex((s, k) => k < 3 && /around the world|world in/i.test(s.text));
+    const s = title >= 0 ? ctx.sentences[title + 1] : null;
+    if (s) out.push(ev(ctx, s.t0, s.start, 'map', null, me, 'pin', { zoom: true }));
+  } else out.push(ev(ctx, 0, 0, 'map', null, me, 'pin', { pan: programme === 'news-60' ? 0.7 : 0 }));
+  if (Array.isArray(ctx.seg.map) && ctx.seg.map.length > 1) out[out.length - 1].pins = true;
+  return out;
+}
+
+function roundupIndex(ctx) {
+  const segs = ctx.episode?.segments || [];
+  let k = 0;
+  for (let j = ctx.index - 1; j >= 0 && segs[j]?.type === 'story' && segs[j]?.location && segs[j]?.chars <= 150; j--) k++;
+  return k;
+}
+
+// ---------------------------------------------------------------------------
+// TECH BYTES
+
+function techBytes(ctx, tl) {
+  const S = SHOT_STYLES['tech-bytes'];
+  const me = ctx.speaker;
+  const seg = ctx.seg;
+  // the cold open over the montage (tech-bytes §3.5): frames only while each teased line holds the floor
+  if (ctx.type === 'intro') return introWithHeadlines(ctx, tl, 3, { floor: 3.0, minFrames: 1, maxWide: S.studioMax });
+  if (ctx.type === 'outro') return [ev(ctx, 0, 0, 'wide', 'wide', me, 'signoff')];
+  if (ctx.type === 'chat') {
+    if (isCatch(ctx)) {
+      const len = tl.end;
+      if (len >= MIN_SHOT - TOL) {
+        const e = ev(ctx, 0, 0, 'close', 'close', me, 'catch');
+        // the episode's only push: 0.3 s after the cut, 0.5 % of scale per second,
+        // eased, stopping 0.5 s before the shot ends, ≤ 3 %, none under 2 s
+        const dur = len - 0.3 - 0.5;
+        if (len >= 2 && dur > 0) e.move = { type: 'push', amount: round3(Math.min(0.03, 0.005 * dur)), delay: 0.3, dur: round3(dur) };
+        return [e];
+      }
+    }
+    return [ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? chatFraming(ctx) : 'mcu', me, 'chat')];
+  }
+  // stories: the number of the day opens on its card, then the close
+  if (ctx.feature === 'number' && !ctx.isLead) {
+    const out = [ev(ctx, 0, 0, 'fact', null, me, 'number')];
+    const b = boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
+    if (b) out.push(ev(ctx, b.t, b.char, 'close', singleFraming(ctx), me, 'single'));
+    if (ctx.hasImage && b) {
+      const p = boundaryAfter(tl, b.t + MIN_SHOT, S.pictureMin);
+      if (p) {
+        out.push(ev(ctx, p.t, p.char, 'full', null, me, 'picture'));
+        const back = boundaryAfter(tl, p.t + S.pictureMin, MIN_SHOT);
+        if (back) out.push(ev(ctx, back.t, back.char, 'close', singleFraming(ctx), me, 'single'));
+      }
+    }
+    capStudio(ctx, tl, out, S.studioMax, (e) => altSingle(ctx, e));
+    splitLongSingles(ctx, tl, out, S.singleSoft);
+    chatLeadIn(ctx, tl, out);
+    return out;
+  }
+  // QUICK BYTES (config roundup.kind "pictures"): each item over its own picture
+  if (ctx.seg.roundup) return quickBytes(ctx);
+  // the format round (owner 4 Oct): a story's board (BY THE NUMBERS on its stated figures, WHAT WE KNOW on hard
+  // news) after its opening single; a lone figure stays in the words (no single fact card on this show)
+  const board = !!(numbersBoard(seg, ctx.programId) || knownBoard(seg, ctx.programId));
+  const out = storyBeats(ctx, tl, {
+    single: storySingle(ctx),
+    map: !!seg.location && !ctx.hasImage,
+    picture: ctx.hasImage,
+    fact: board ? factHold(seg, ctx.programId) : 0,
+    board,
+    pictureMin: S.pictureMin,
+    pictureMax: S.pictureMax,
+    mapMin: S.mapMin, // PACE: a map holds ≥ 5 s
+    finally: isFinally(ctx),
+  });
+  noMapEnd(ctx, tl, out);
+  capStudio(ctx, tl, out, S.studioMax, (e) => altSingle(ctx, e));
+  splitLongSingles(ctx, tl, out, S.singleSoft);
+  chatLeadIn(ctx, tl, out);
+  return out;
+}
+
+/**
+ * QUICK BYTES: one sentence per item, read over the item's own picture from its first word (the title line
+ * "Now, some quick bytes." runs under the first one: a cut to the reader for 1.5 s would break the 4 s floor);
+ * the reader in vision only when a picture failed to load.
+ */
+function quickBytes(ctx) {
+  const me = ctx.speaker;
+  return [ctx.hasImage ? ev(ctx, 0, 0, 'full', null, me, 'roundup-picture') : ev(ctx, 0, 0, 'close', singleFraming(ctx), me, 'roundup-single')];
+}
+
+/** THE CATCH: the first chat after the lead where Ada (the analyst, seat B) asks. */
+export function isCatch(ctx) {
+  if (ctx.type !== 'chat') return false;
+  if (ctx.seg.catch === true || ctx.seg.feature === 'catch') return true;
+  if (!ctx.question) return false;
+  const ids = Object.values(ctx.cast || {});
+  const ada = ids.includes('ada') ? ctx.speakerId === 'ada' : ctx.speaker === 'B';
+  if (!ada) return false;
+  const segs = ctx.episode?.segments || [];
+  const lead = segs.findIndex((s) => s.type === 'story');
+  if (lead < 0 || ctx.index < lead) return false;
+  for (let j = lead + 1; j < segs.length; j++) {
+    if (segs[j].type === 'chat' && segs[j].anchor === ctx.speaker) return j === ctx.index;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// COSMOS DESK
+
+function cosmos(ctx, tl) {
+  const S = SHOT_STYLES.cosmos;
+  const me = ctx.speaker;
+  const seg = ctx.seg;
+  if (ctx.type === 'intro') {
+    // the cold line over the lead's picture (montage card of the teased lead), then each teased story
+    // on its frame while every frame holds 4 s; the rest (greeting, short teasers) on the wide
+    return introWithHeadlines(ctx, tl, 3, { floor: MIN_SHOT, minFrames: 1, beat: 'cold', maxWide: S.studioMax });
+  }
+  if (ctx.type === 'chat') return [ev(ctx, 0, 0, ctx.duo ? 'wide' : 'close', ctx.duo ? chatFraming(ctx) : 'mcu', me, 'chat')];
+  if (ctx.type === 'outro') return [ev(ctx, 0, 0, 'wide', 'wide', me, 'signoff')];
+  // IN BRIEF (config roundup.kind "pictures"): each item over its own picture
+  if (ctx.seg.roundup) return quickBytes(ctx);
+  const single = storySingle(ctx);
+  let out;
+  // the format round: a story's board (BY THE NUMBERS on its stated figures, WHAT WE KNOW on hard news) after the
+  // map, in the generic beat order; the Reading stays the number of the day's own card
+  const board = ctx.feature !== 'number' && !!(numbersBoard(seg, ctx.programId) || knownBoard(seg, ctx.programId));
+  if (board) {
+    out = storyBeats(ctx, tl, { single, map: !!seg.location, picture: ctx.hasImage, fact: factHold(seg, ctx.programId), board: true, pictureMin: S.pictureMin, pictureMax: S.pictureMax, mapMin: S.mapMin, mapMax: S.mapMax, finally: isFinally(ctx) });
+  } else if (ctx.feature === 'number' && !ctx.isLead) {
+    // the Reading on UNIT-8's first word; the single on sentence 2, no earlier than 4 s after the cut
+    out = [ev(ctx, 0, 0, 'fact', null, me, 'number')];
+    const b = readingSingle(ctx, tl);
+    if (b) {
+      out.push(ev(ctx, b.t, b.char, 'close', single, me, 'single', b.word ? { place: 'word' } : null));
+      if (ctx.hasImage) addPicture(ctx, tl, out, b.t, single, S);
+    }
+  } else {
+    out = [ev(ctx, 0, 0, 'close', single, me, 'single')];
+    // never cut away during sentence 1; ≥ 4 s
+    const s1end = ctx.sentences[1]?.t0 ?? tl.end;
+    let cur = 0;
+    if (seg.location) {
+      const m = mapOnPlace(ctx, tl, Math.max(MIN_SHOT, s1end));
+      if (m) {
+        out.push(ev(ctx, m.at, m.char, 'map', null, me, 'map', { place: m.how }));
+        cur = m.at;
+        // the map holds 4-6 s and gives way at a sentence start
+        const next = boundaryAfter(tl, cur + S.mapMin, MIN_SHOT);
+        if (next && ctx.hasImage) {
+          if (!addPicture(ctx, tl, out, cur, single, S, S.mapMin)) out.push(ev(ctx, next.t, next.char, 'close', single, me, 'single'));
+        } else if (next) out.push(ev(ctx, next.t, next.char, 'close', single, me, 'single'));
+      } else if (ctx.hasImage) addPicture(ctx, tl, out, 0, single, S);
+    } else if (ctx.hasImage) addPicture(ctx, tl, out, 0, single, S);
+  }
+  noMapEnd(ctx, tl, out);
+  capStudio(ctx, tl, out, S.studioMax, (e) => altSingle(ctx, e));
+  splitLongSingles(ctx, tl, out, S.singleSoft);
+  // cosmos.md: the wide carries the last AND FINALLY line and the idiom reply
+  chatLeadIn(ctx, tl, out, ctx.feature === 'lighter');
+  return out;
+}
+
+/**
+ * Where COSMOS cuts from the Reading to the reader's single (cosmos.md: "first word of sentence 2, no
+ * earlier than 4 s after the cut"; the voice's planned 1.5 s pause after the figure normally puts it
+ * there). Sentence 2's first word when it comes ≥ 4 s in; when the voice had no such pause (browser TTS,
+ * mute) the cut waits inside sentence 2 for the first word ≥ 4 s in, preferring one that opens a phrase
+ * (after a comma or colon, within 1.5 s); else a later sentence start. Both shots keep ≥ MIN_SHOT, so
+ * the reader is seen in his own story whenever it is long enough. → { t, char, word? } | null
+ */
+function readingSingle(ctx, tl) {
+  const s2 = ctx.sentences[1];
+  if (!s2) return null;
+  if (s2.t0 >= MIN_SHOT - 1e-6) return boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
+  const text = ctx.seg.text;
+  const W = ctx.words;
+  let best = null, bestRank = 9;
+  for (let k = 1; k < W.length; k++) {
+    const w = W[k], prev = W[k - 1];
+    if (w.char <= s2.start || w.char >= s2.end || w.t < MIN_SHOT - 1e-6 || tl.end - w.t < MIN_SHOT - 1e-6) continue;
+    if (w.t - MIN_SHOT > 2.0) break;
+    if (insideDry(ctx, w.t)) continue;
+    // a phrase boundary: punctuation, else right after the phrase's accent (its nuclear word), else after a
+    // content word (never between an article or preposition and its noun)
+    const rank = /[,:;]\s*$/.test(text.slice(Math.max(0, w.char - 3), w.char)) ? 0 : prev.stressed ? 1 : prev.content ? 2 : 3;
+    if (rank < bestRank) {
+      best = w;
+      bestRank = rank;
+      if (rank === 0) break;
+    }
+  }
+  if (best && bestRank < 3) return { t: best.t, char: best.char, word: true };
+  return boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
+}
+
+/** The picture (6-10 s) from the first sentence start ≥ MIN_SHOT after `from`, then back to the single. */
+function addPicture(ctx, tl, out, from, single, S, minBefore = MIN_SHOT) {
+  const p = boundaryAfter(tl, from + minBefore, S.pictureMin);
+  if (!p) return false;
+  out.push(ev(ctx, p.t, p.char, 'full', null, ctx.speaker, 'picture'));
+  // back to the single for the last sentence(s) when ≥ MIN_SHOT remain; prefer a cut inside 6-10 s
+  let back = null;
+  for (const b of tl.bounds) {
+    if (b.blocked || b.t - p.t < S.pictureMin - 1e-6 || tl.end - b.t < MIN_SHOT) continue;
+    back = b;
+    if (b.t - p.t <= S.pictureMax) break;
+  }
+  if (back && back.t - p.t <= S.pictureMax + 2) out.push(ev(ctx, back.t, back.char, 'close', single, ctx.speaker, 'single'));
+  return true;
+}
+
+/**
+ * The locator map cut within ±0.3 s of the spoken place name (any part of
+ * location.place or a map[] place), at or after `from`; if the name is only in
+ * sentence 1, the map takes the start of the next sentence.
+ */
+function mapOnPlace(ctx, tl, from) {
+  const text = ctx.seg.text;
+  const names = placeNames(ctx.seg);
+  const hits = [];
+  for (const name of names) {
+    const re = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    for (const m of text.matchAll(re)) hits.push(m.index);
+  }
+  hits.sort((a, b) => a - b);
+  for (const c of hits) {
+    const t = ctx.timeAt(c) - 0.1; // a touch before the name: the map lands as it is said
+    if (t < from - 1e-6 || tl.end - t < MIN_SHOT) continue;
+    if (insideDry(ctx, t)) continue;
+    return { at: t, char: c, how: 'name' };
+  }
+  const b = boundaryAfter(tl, from, MIN_SHOT);
+  return b ? { at: b.t, char: b.char, how: 'sentence' } : null;
+}
+
+function placeNames(seg) {
+  const out = new Set();
+  const add = (p) => {
+    for (const part of String(p || '').split(/[,/]/)) {
+      const n = part.trim();
+      if (n.length >= 3) out.add(n);
+    }
+  };
+  add(seg.location?.place);
+  for (const m of Array.isArray(seg.map) ? seg.map : []) add(m?.place);
+  return [...out];
+}
+
+const insideDry = (ctx, t) => !!ctx.dryLine && t >= ctx.dryLine.t0 - 0.05 && t < ctx.dryLine.t1 + DRY_HOLD;
+
+// ---------------------------------------------------------------------------
+// MONEY MINUTE (solo): the camera never moves; cuts inside inter-sentence pauses
+
+function moneyMinute(ctx, tl) {
+  const me = ctx.speaker;
+  const seg = ctx.seg;
+  if (ctx.type !== 'story') return [ev(ctx, 0, 0, 'wide', 'wide', me, ctx.type === 'outro' ? 'signoff' : ctx.type === 'intro' ? 'greeting' : 'wide')];
+  const plan = moneyStoryPlan(ctx, tl);
+  return plan.map((p) => {
+    if (p.boundary) return ev(ctx, pauseCut(ctx, p.boundary.i), p.boundary.char, p.shot, p.framing, me, p.beat);
+    return ev(ctx, p.at ?? 0, 0, p.shot, p.framing, me, p.beat, p.extra || null);
+  });
+}
+
+const MCU_R = { shot: 'close', framing: 'mcu-r', beat: 'mcu-r' };
+const WIDE_M = { shot: 'wide', framing: 'wide', beat: 'wide' };
+
+/**
+ * The per-story plan (money-minute.md §3.5). Story 1 opens on MCU-R; the number
+ * of the day opens on its CARD in the gap before the first word; every other
+ * story opens on the WIDE. That is the bible's "the studio shot the previous
+ * story did not end on" without looking back, because no story is allowed to
+ * end on the WIDE (a WIDE cutaway that cannot hand back to MCU-R is not taken).
+ * One cutaway (CARD preview/recap, PIC, MAP if the episode's map is unused, else
+ * the other studio shot) at the first sentence start after the opening has run
+ * MIN_SHOT; whole sentences (two when the first is short); back to MCU-R for
+ * the money line. Shots ≤ 12 s where sentence boundaries allow.
+ */
+function moneyStoryPlan(ctx, tl) {
+  const S = SHOT_STYLES['money-minute'];
+  const plan = [];
+  const hasCard = !!(ctx.seg.fact || ctx.seg.numbers?.length);
+  if (ctx.feature === 'number' && !ctx.isLead) {
+    plan.push({ shot: 'fact', framing: null, beat: 'number', at: 0, extra: { beforeSpeech: S.numberGap } });
+    // back to MCU-R at a sentence start once the card has run MIN_SHOT; else the card holds (≤ 12 s)
+    const b = boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
+    if (b && b.t <= S.shotMax) plan.push({ ...MCU_R, boundary: b });
+    return plan;
+  }
+  const open = ctx.isLead ? MCU_R : WIDE_M;
+  plan.push({ ...open, at: 0 });
+  let c = boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
+  if (!c) return plan;
+  const cut = cutaway(ctx, tl, c, hasCard, open);
+  if (!cut) return plan;
+  if (cut.after) {
+    c = boundaryAfter(tl, cut.after, MIN_SHOT);
+    if (!c) return plan;
+  }
+  const back = boundaryAfter(tl, c.t + MIN_SHOT, MIN_SHOT);
+  const returns = !!back && back.t - c.t <= S.shotMax;
+  if (cut.framing === 'wide' && !returns) {
+    // rule 5 for the lead: alternate only when the WIDE can hand back to MCU-R
+    return plan;
+  }
+  delete cut.after;
+  plan.push({ ...cut, boundary: c });
+  if (returns && cut.framing !== 'mcu-r') plan.push({ ...MCU_R, boundary: back });
+  return plan;
+}
+
+function otherStudio(shot) {
+  return shot && shot.framing === 'mcu-r' ? WIDE_M : MCU_R;
+}
+
+function cutaway(ctx, tl, c, hasCard, open) {
+  if (hasCard) {
+    // preview (figure spoken later, legible ≥ 0.3 s before it) or recap (figure already spoken)
+    return { shot: 'fact', framing: null, beat: cardKind(ctx, c) };
+  }
+  if (ctx.hasImage) return { shot: 'full', framing: null, beat: 'picture' };
+  if (ctx.seg.location && moneyMapStory(ctx) === ctx.index) return { shot: 'map', framing: null, beat: 'map' };
+  // otherwise the other studio shot (rule 5: once the opening has run 7 s)
+  return { ...otherStudio(open), beat: 'alt', after: 7 };
+}
+
+function cardKind(ctx, c) {
+  const figure = ctx.figures?.[0];
+  if (!figure) return 'card';
+  return figure.t - (c.t + 0.25) >= 0.3 ? 'card-preview' : 'card-recap';
+}
+
+/** The story that gets the episode's one MAP: the first located story whose plan reaches the map step. */
+function moneyMapStory(ctx) {
+  const segs = ctx.episode?.segments || [];
+  for (let j = 0; j < segs.length; j++) {
+    const s = segs[j];
+    if (s.type !== 'story' || !s.location || s.hasImage || (s.feature === 'number' && s.storyIndex > 0)) continue;
+    const c = j === ctx.index ? ctx : neighbour(ctx, j);
+    if (c && (c.seg.fact || c.seg.numbers?.length)) continue; // the CARD comes first there
+    return j;
+  }
+  return -1;
+}
+
+/**
+ * A cut inside the pause before sentence i: between the previous sentence's last
+ * word end (its start + its length at the sentence's own speed) and sentence i's
+ * first word; 0.12 s before the word when the pause allows.
+ */
+export function pauseCut(ctx, i) {
+  const s = ctx.sentences[i];
+  const next = s.t0;
+  const prev = ctx.sentences[i - 1];
+  const ws = ctx.words.filter((w) => w.char >= prev.start && w.char < prev.end);
+  if (ws.length < 2) return round3(Math.max(0, next - 0.12));
+  const first = ws[0], last = ws[ws.length - 1];
+  const spc = (last.t - first.t) / Math.max(1, last.char - first.char);
+  const lastEnd = last.t + Math.max(1, last.end - last.char) * spc;
+  const at = Math.max(lastEnd + 0.04, next - 0.12);
+  return round3(Math.min(at, next - 0.02));
+}
+
+// ---------------------------------------------------------------------------
+// NEWS IN 60 (solo)
+
+function news60(ctx, tl) {
+  const me = ctx.speaker;
+  if (ctx.type !== 'story') {
+    const e = ev(ctx, 0, 0, 'wide', 'wide', me, ctx.type === 'outro' ? 'signoff' : ctx.type === 'intro' ? 'greeting' : 'wide');
+    // the templated intro is ~3 s: ask the director to hold the WIDE to MIN_SHOT
+    if (tl.end < MIN_SHOT) e.minLen = MIN_SHOT;
+    return [e];
+  }
+  if (ctx.seg.roundup || roundupLike(ctx)) return roundupMap(ctx, tl, 'news-60');
+  const item = news60Item(ctx, tl, 0);
+  const out = item.map(({ b, kind }) => ev(ctx, b.t, b.char, kind === 'full' ? 'full' : kind === 'fact' ? 'fact' : 'close', kind === 'full' || kind === 'fact' ? null : kind, me, kind === 'full' ? 'picture' : kind));
+  const hold = Number(ctx.episode?.plan?.pictureHold) > 0 && isLastItem(ctx) && item[item.length - 1].kind === 'full';
+  if (hold) out[out.length - 1].hold = Number(ctx.episode.plan.pictureHold);
+  return out;
+}
+
+/**
+ * The shots of one NEWS IN 60 item: [{ b: { t, char }, kind: 'mcu-l' | 'mcu' | 'full' | 'fact' }].
+ * One shot per sentence, cut on its first word (a sentence under MIN_SHOT shares
+ * the next one's shot). With an image MCU-L and FULL alternate: the lead starts
+ * on MCU-L, other items in a seeded order, the item after the round-up on MCU-L,
+ * and with the picture hold the last item ends on FULL. Sam is in vision in
+ * every item, and every item change is a visible cut: an item never opens on the
+ * framing the previous item ended on.
+ */
+function news60Item(ctx, tl, depth) {
+  const starts = [{ t: 0, char: 0 }];
+  let cur = 0;
+  for (const b of tl.bounds) {
+    if (b.blocked || b.t - cur < MIN_SHOT - 1e-6 || tl.end - b.t < MIN_SHOT - 1e-6) continue;
+    starts.push(b);
+    cur = b.t;
+  }
+  const prevEnd = news60PrevEnd(ctx, depth);
+  if (!ctx.hasImage) {
+    // MCU for the whole item (the looser MCU-L when the previous item ended on the MCU); the lead may take its
+    // FACT; an item over the 12 s studio maximum changes framing at the sentence nearest its middle
+    const kind = prevEnd === 'mcu' ? 'mcu-l' : 'mcu';
+    const out = [{ b: starts[0], kind }];
+    if (ctx.isLead && (ctx.seg.fact || ctx.seg.numbers?.length) && starts.length > 1) out.push({ b: starts[1], kind: 'fact' });
+    else if (tl.end > SHOT_STYLES['news-60'].studioMax && starts.length > 1) {
+      const mid = tl.end / 2;
+      const b = starts.slice(1).reduce((m, x) => (Math.abs(x.t - mid) < Math.abs(m.t - mid) ? x : m));
+      out.push({ b, kind: kind === 'mcu' ? 'mcu-l' : 'mcu' });
+    }
+    return out;
+  }
+  if (starts.length === 1) return [{ b: starts[0], kind: prevEnd === 'mcu-l' ? 'mcu' : 'mcu-l' }];
+  const r = rng((ctx.episodeSeed ^ Math.imul(ctx.index + 1, 0x9e3779b1)) >>> 0);
+  let mcuFirst = ctx.isLead || afterRoundup(ctx) || r() < 0.5;
+  if (Number(ctx.episode?.plan?.pictureHold) > 0 && isLastItem(ctx)) mcuFirst = starts.length % 2 === 0; // end on FULL
+  if (mcuFirst && prevEnd === 'mcu-l') mcuFirst = false;
+  else if (!mcuFirst && prevEnd === 'full' && !ctx.isLead) mcuFirst = true;
+  return starts.map((b, k) => ({ b, kind: (k % 2 === 0) === mcuFirst ? 'mcu-l' : 'full' }));
+}
+
+/** What the previous NEWS IN 60 item ended on ('wide' after the intro, 'map' after the round-up). */
+function news60PrevEnd(ctx, depth) {
+  const segs = ctx.episode?.segments || [];
+  const j = ctx.index - 1;
+  const p = segs[j];
+  if (!p) return null;
+  if (p.type !== 'story') return 'wide';
+  if (p.roundup || (p.location && p.chars <= 150 && segs[j - 1]?.type === 'story' && segs[j - 1]?.location)) return 'map';
+  const c = depth < 8 ? neighbour(ctx, j) : null;
+  if (c) {
+    const item = news60Item(c, timeline(c), depth + 1);
+    return item[item.length - 1].kind;
+  }
+  // no neighbour context: predict from the summary (two shots for a two-sentence item)
+  if (!p.hasImage) return 'mcu';
+  return p.chars >= 150 ? 'full' : 'mcu-l';
+}
+
+function isLastItem(ctx) {
+  const segs = ctx.episode?.segments || [];
+  for (let j = ctx.index + 1; j < segs.length; j++) if (segs[j].type === 'story') return false;
+  return true;
+}
+
+function afterRoundup(ctx) {
+  const prev = ctx.episode?.segments?.[ctx.index - 1];
+  return !!prev && (!!prev.roundup || (prev.type === 'story' && prev.location && prev.chars <= 150));
+}

@@ -17,7 +17,8 @@ Un informativo en directo 24/7 generado por IA, hecho entero en pixel art. Un se
 
 - **Node.js 20 o superior**.
 - Un navegador moderno (Chrome o Edge recomendados para las voces `tts`).
-- Conexión a internet para descargar los feeds.
+- Conexión a internet para descargar los feeds, las fotos de las noticias y los datos de WORLD WEATHER (`api.open-meteo.com` y `www.gdacs.org`).
+  - Detrás de un proxy HTTPS (variable `HTTPS_PROXY`), arranca Node con `NODE_USE_ENV_PROXY=1` (Node 22.21 o superior). Sin esa variable, `fetch` no usa el proxy y las peticiones fallan.
 - Opcional, para que el guion lo escriba una IA (sin ello funciona en modo demo):
   - [Codex CLI](https://github.com/openai/codex) con sesión iniciada con un plan de ChatGPT, **o**
   - una clave de API de OpenAI y/o de DeepSeek.

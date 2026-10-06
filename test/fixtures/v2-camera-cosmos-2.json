@@ -1,0 +1,236 @@
+{
+ "kind": "episode",
+ "id": "emur82o39a",
+ "createdAt": "2026-10-02T17:13:48.405Z",
+ "program": {
+  "id": "cosmos",
+  "title": "COSMOS DESK",
+  "tagline": "SCIENCE, SPACE & OUR PLANET",
+  "theme": "space"
+ },
+ "cast": {
+  "A": "nova",
+  "B": "unit8"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "write",
+   "ms": 68,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 0,
+   "images": 0
+  }
+ ],
+ "title": "COSMOS DESK (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "New species of glowing mushroom found in Brazilian forest. Also coming up: our number of the day. And later: Comet will pass close enough to see with binoculars this week. This is COSMOS DESK. I'm Dr Nova Reyes, with UNIT-8.",
+   "cues": [
+    {
+     "char": 192,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 224,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s5fc50077e6",
+    "s81d71bbe9a",
+    "s29ea4efdc2"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "From Starfield Journal: Biologists have described a new species of glowing mushroom found in the Atlantic forest of Brazil. It emits a soft green light at night.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "lean_in"
+    },
+    {
+     "char": 161,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s5fc50077e6",
+   "headline": "New species of glowing mushroom found in Brazilian forest",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "BRAZIL",
+    "lat": -14.2,
+    "lon": -51.9
+   },
+   "fact": null,
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "WILDLIFE"
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Logged, Dr Reyes.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Thank you, UNIT-8. Our number of the day is yours.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "look_partner"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Our number of the day: 40,000. A recycling plant in Sweden says it can recover 1 kilogram of gold from 40,000 old phones. The company wants to process 2 million phones a year.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "count"
+    },
+    {
+     "char": 175,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s81d71bbe9a",
+   "headline": "Swedish recycling plant recovers gold from old phones",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "SWEDEN",
+    "lat": 62,
+    "lon": 15
+   },
+   "fact": "40,000 OLD PHONES",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "40,000",
+     "label": "OLD PHONES"
+    },
+    {
+     "value": "2 MILLION",
+     "label": "PHONES A YEAR"
+    }
+   ],
+   "feature": "number"
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "Thanks, UNIT-8. And finally: Starfield Journal reports that a comet discovered last year will pass close to Earth this week and should be visible with binoculars just after sunset.",
+   "cues": [
+    {
+     "char": 180,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s29ea4efdc2",
+   "headline": "Comet will pass close enough to see with binoculars this week",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "AND FINALLY",
+   "feature": "lighter"
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "I will keep one sensor pointed upwards, Dr Reyes. For the record.",
+   "cues": []
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's COSMOS DESK. From UNIT-8 and from me, thank you for watching. Stay with us on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 19,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s5fc50077e6",
+   "headline": "New species of glowing mushroom found in Brazilian forest",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "WILDLIFE"
+  },
+  {
+   "storyId": "s81d71bbe9a",
+   "headline": "Swedish recycling plant recovers gold from old phones",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY"
+  },
+  {
+   "storyId": "s29ea4efdc2",
+   "headline": "Comet will pass close enough to see with binoculars this week",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "AND FINALLY"
+  }
+ ],
+ "storyIds": [
+  "s5fc50077e6",
+  "s81d71bbe9a",
+  "s29ea4efdc2"
+ ]
+}

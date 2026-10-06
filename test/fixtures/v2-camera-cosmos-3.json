@@ -1,0 +1,243 @@
+{
+ "kind": "episode",
+ "id": "emurd7htr3",
+ "createdAt": "2026-10-02T19:37:31.647Z",
+ "program": {
+  "id": "cosmos",
+  "title": "COSMOS DESK",
+  "tagline": "SCIENCE, SPACE & OUR PLANET",
+  "theme": "space"
+ },
+ "cast": {
+  "A": "nova",
+  "B": "unit8"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "pictures",
+   "ms": 1,
+   "pictures": 0,
+   "of": 6,
+   "found": 0,
+   "borrowed": 0
+  },
+  {
+   "stage": "write",
+   "ms": 232,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 3,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 0,
+   "images": 0,
+   "verified": 0
+  }
+ ],
+ "title": "COSMOS DESK (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Study finds city trees cut summer temperatures by 2 degrees. Also coming up: our number of the day. And later: Open-source AI model runs on an ordinary laptop. This is COSMOS DESK. I'm Dr Nova Reyes, with UNIT-8.",
+   "cues": [
+    {
+     "char": 180,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 212,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "sbd2a6a32da",
+    "s29418f9aa5",
+    "sa475fbfbcd"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Researchers say parks also reduced heat-related illness. A study of 90 European cities found that streets with many trees were about 2 degrees cooler in summer.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "raise_hand"
+    },
+    {
+     "char": 160,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "sbd2a6a32da",
+   "headline": "Study finds city trees cut summer temperatures by 2 degrees",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": "90 EUROPEAN CITIES",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "GREEN CITIES",
+   "numbers": [
+    {
+     "value": "90",
+     "label": "EUROPEAN CITIES"
+    }
+   ]
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "90 European cities. Logged.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Thank you, UNIT-8. Our number of the day is yours.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "look_partner"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Our number of the day: 2 million. A new handheld games console sold 2 million units in its first week, its maker says. Shops in Tokyo reported long queues on launch day.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "count"
+    },
+    {
+     "char": 169,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s29418f9aa5",
+   "headline": "Handheld games console sells 2 million units in its first week",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "TOKYO, JAPAN",
+    "lat": 35.68,
+    "lon": 139.69
+   },
+   "fact": "2 MILLION UNITS",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "2 MILLION",
+     "label": "UNITS"
+    }
+   ],
+   "feature": "number"
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "Thanks, UNIT-8. And finally: Researchers have released an AI model small enough to run on an ordinary laptop, Circuit Weekly reports. They say it needs about 8 gigabytes of memory and works without an internet connection.",
+   "cues": [
+    {
+     "char": 221,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "sa475fbfbcd",
+   "headline": "Open-source AI model runs on an ordinary laptop",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AND FINALLY",
+   "feature": "lighter"
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "I have no further data, Dr Reyes. I find I do not mind.",
+   "cues": []
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's COSMOS DESK. From UNIT-8 and from me, thank you for watching. Stay with us on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 19,
+     "slot": null,
+     "action": "nod"
+    }
+   ]
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "sbd2a6a32da",
+   "headline": "Study finds city trees cut summer temperatures by 2 degrees",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": false,
+   "kicker": "GREEN CITIES"
+  },
+  {
+   "storyId": "s29418f9aa5",
+   "headline": "Handheld games console sells 2 million units in its first week",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY"
+  },
+  {
+   "storyId": "sa475fbfbcd",
+   "headline": "Open-source AI model runs on an ordinary laptop",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "AND FINALLY"
+  }
+ ],
+ "storyIds": [
+  "sbd2a6a32da",
+  "s29418f9aa5",
+  "sa475fbfbcd"
+ ]
+}

@@ -1,455 +1,922 @@
-// SCREECHNET: dial-up internet for families who miss the suspense.
-// "Fast as a fax." Grandma picks up the phone at 99%.
+// SCREECHNET — dial-up internet, shot as a nostalgic, cinematic short in a
+// 2.39:1 letterbox. Dusk, 1997: a suburban street with one upstairs window lit
+// by a CRT; over a teenager's shoulder, CONNECT; the modem's handshake scored
+// like a romantic serenade on a low beauty shot of its LEDs; his profile, eyes
+// closed, in the screen's light; downstairs his mother lifts the receiver and
+// listens, deadpan. NO CARRIER, held in silence; the end slate is the dial-up
+// dialog itself. "Some connections are worth the wait." Never slapstick.
+//
+// Every frame is a pure function of the ad clock: sets are baked once with
+// dithered light (cine.js); the teenager is a baked rim-lit silhouette; the
+// mother is drawn by the channel's presenter rig (cine.js castDraw) with a
+// cine.js figure as the fallback.
 import {
-  P, W, H, R, A, rrect, panel, disc, oval, ring, poly, line, dither, bands, sparkle, twinkle, particles, shadow,
-  ripples, spr, draw, stroke, cached, text, bigText, para, bubble, finePrint, slogan, play, hero, faceCU, prog, lerp, easeOut,
-  easeOutBack, wave, frame, shake, clipRect, starPts, mulberry32, wordmark, drawMark, glint, glow, urlPill, rep, tune,
-} from './kit.js';
+  P, W, H, clamp, lerp, prog, smooth, track, window01, hash, blinkAt, mix, bake, prewarm, lazy, shader, shadeSteps, soften, pool,
+  rect, line, begin, pt, fill, ellipse, capsule, film, vignette, vignetteArt, letterbox, thin, tracked, text, smallPrint, figure, bust,
+  profile, rimArt, castInit, castDraw, canvas,
+} from './cine.js';
 
-const DAD = { H: P.brown, h: P.tan, E: P.maroon, T: P.green, t: P.darkGreen, C: P.cream, X: P.green, P: P.slate, p: P.ink };
-const MUM = { S: P.tan, s: P.tanShade, H: P.rust, h: P.orange, E: P.brown, T: P.magenta, t: P.purple, C: P.white, X: P.magenta };
-const KID = { H: P.yellow, h: P.cream, E: P.tanShade, T: P.red, t: P.darkRed, C: P.red, X: P.red, P: P.navy };
-const GRAN = { H: P.silver, h: P.white, E: P.steel, T: P.purple, t: P.ink, C: P.white, X: P.purple, D: P.magenta, d: P.purple, B: P.maroon };
+const { round, floor, sin, cos, abs, min, max, PI, sqrt } = Math;
 
-// --- props -------------------------------------------------------------------
+// --- timing (75 bpm: 0.8 s a beat) ------------------------------------------------------
+const T_ROOM = 4.0;
+const T_MODEM = 8.0;
+const T_FACE = 11.6;
+const T_HALL = 15.2;
+const T_END = 19.0;
+const LOST_HOLD = 2.0; // NO CARRIER, in silence, before the dialog slate
+const DURATION = 25.0;
+const LB = 24; // letterbox bars (2.39:1)
+const SH_BEIGE = { d: mix(P.tan, P.fog, 0.5), f: 0.4, m: 1, side: 1 };
 
-const CAT_ROWS = [
-  '.O..............O.',
-  '.OO............OO.',
-  '.OOO..........OOO.',
-  '.ONOO........OONO.',
-  '.OOOOOOOOOOOOOOOO.',
-  'OOOOOoOOOOOOoOOOOO',
-  'OOOOOOoOOOOoOOOOOO',
-  'OOOGGKOOOOOOGGKOOO',
-  'OOOGGKOOOOOOGGKOOO',
-  'OOOOOOOOWWOOOOOOOO',
-  'OOOOOOOWNNWOOOOOOO',
-  'OOOOOOWWWWWWOOOOOO',
-  '.OOOOOOWKKWOOOOOO.',
-  '..OOOOOOOOOOOOOO..',
-  '...OOOOOOOOOOOO...',
-  '..OOOOOOOOOOOOOO..',
-  '.OOOoOOOOOOOOoOOO.',
-  '.OOOoOOOOOOOOoOOO.',
-  'OOOOOOOOOOOOOOOOOO',
-  'OOWWWOOOOOOOOWWWOO',
-];
-const swapRows = (rows, map) => rows.map((r, i) => map[i] ?? r);
-const CAT = spr(CAT_ROWS, -9, 0);
-const CAT_SCARED = spr(swapRows(CAT_ROWS, { 7: 'OOWWWKOOOOOOWWWKOO', 8: 'OOWWWKOOOOOOWWWKOO', 11: 'OOOOOOKKKKKKOOOOOO', 12: '.OOOOOKMMMMKOOOOO.' }), -9, 0);
-const CAT_SLEEP = spr(swapRows(CAT_ROWS, { 7: 'OOOOOOOOOOOOOOOOOO', 8: 'OOOKKKOOOOOOKKKOOO' }), -9, 0);
-const CAT_PAL = { K: P.black, O: P.orange, o: P.rust, W: P.white, N: P.pink, G: P.green, M: P.maroon };
+// --- palette -----------------------------------------------------------------------------
+const C = {
+  sky0: mix(P.black, P.purple, 0.35),
+  sky1: mix(P.purple, P.ink, 0.45),
+  sky2: mix(P.purple, P.maroon, 0.45),
+  sky3: mix(P.maroon, P.rust, 0.5),
+  sky4: mix(P.rust, P.orange, 0.35),
+  house: mix(P.black, P.purple, 0.18),
+  houseL: mix(P.black, P.purple, 0.32),
+  warm: mix(P.yellow, P.orange, 0.45),
+  warmD: mix(P.orange, P.maroon, 0.35),
+  crt: mix(P.blue, P.cyan, 0.35),
+  crtD: mix(P.navy, P.blue, 0.4),
+  crtL: mix(P.cyan, P.white, 0.45),
+  beige: mix(P.cream, P.fog, 0.35),
+  beigeD: mix(P.tan, P.fog, 0.5),
+  beigeDD: mix(P.tanShade, P.slate, 0.5),
+  led: mix(P.red, P.orange, 0.25),
+  ledOff: mix(P.maroon, P.black, 0.3),
+  amber: mix(P.yellow, P.orange, 0.3),
+  sodium: mix(P.orange, P.yellow, 0.35),
+  desk: mix(P.navy, P.black, 0.55),
+};
 
-function cat(ctx, x, gy, mood, lt) {
-  const sp = mood === 'scared' ? CAT_SCARED : mood === 'sleep' ? CAT_SLEEP : CAT;
-  if (mood === 'scared') {
-    const rot = lt * 3;
-    poly(ctx, starPts(x, gy - 10, 13, 18, 12, rot), P.black);
-    poly(ctx, starPts(x, gy - 10, 13, 17, 11, rot), P.orange);
+// --- S1: the street at dusk ---------------------------------------------------------------
+const S1W = 440;
+const HORIZON = 146;
+const streetSky = lazy(() =>
+  bake('sn-sky', S1W, H, function* paint(c) {
+    yield* shadeSteps(c, 0, 0, S1W, HORIZON + 4, [C.sky0, C.sky1, C.sky2, C.sky3, C.sky4], (x, y) => clamp((y - 18) / (HORIZON - 18)) ** 1.25 + 0.04 * sin(x * 0.012));
+    // a thin crescent moon
+    ellipse(c, 330, 46, 5, 5, mix(P.cream, P.fog, 0.3));
+    ellipse(c, 332, 45, 5, 5, C.sky1);
+    for (const [sx, sy] of [[60, 34], [140, 50], [250, 30], [400, 40]]) rect(c, sx, sy, 1, 1, mix(P.fog, C.sky1, 0.4));
+    // far rooftops and trees on the horizon
+    begin();
+    pt(0, HORIZON + 4);
+    for (let x = 0; x <= S1W; x += 8) pt(x, HORIZON - 6 - 6 * hash(x * 0.37) - (hash(x * 0.11) > 0.8 ? 8 : 0));
+    pt(S1W, HORIZON + 4);
+    fill(c, mix(C.house, C.sky2, 0.3));
+    // the ground between the houses: front gardens fading into the dusk
+    yield* shadeSteps(c, 0, HORIZON + 4, S1W, H - HORIZON - 4, [P.black, mix(P.black, C.house, 0.6), C.house], (x, y) => clamp(0.6 - (y - HORIZON) * 0.02));
+  }));
+
+/** One house silhouette: walls, gabled roof, chimney, aerial, windows. */
+function house(c, x, w, roof, wins, aerial = true) {
+  const wallTop = 118;
+  begin();
+  pt(x, 176);
+  pt(x, wallTop);
+  pt(x + w / 2, wallTop - roof);
+  pt(x + w, wallTop);
+  pt(x + w, 176);
+  fill(c, C.house, { d: mix(C.house, P.black, 0.5), f: 0.3, m: 1, side: 1 });
+  rect(c, x + w * 0.7, wallTop - roof * 0.75, 6, 14, C.house);
+  if (aerial) {
+    const ax = x + w * 0.3;
+    line(c, ax, wallTop - roof * 0.6, ax, wallTop - roof - 12, P.black);
+    line(c, ax - 7, wallTop - roof - 9, ax + 7, wallTop - roof - 9, P.black);
+    line(c, ax - 5, wallTop - roof - 5, ax + 5, wallTop - roof - 5, P.black);
   }
-  const wag = mood === 'sleep' ? 0 : wave(lt, 1.5, 2);
-  stroke(ctx, [[x + 7, gy - 2], [x + 14, gy - 4], [x + 15 + wag, gy - 12]], 3, P.orange, P.black);
-  draw(ctx, sp, x, gy - 20, CAT_PAL);
-}
-
-// Modem body art (cached, 136 x 48); origin = centre-top of the front face.
-const MX = 61;
-const MY = 15;
-const modemArt = () =>
-  cached('sn-modem', 136, 48, (c) => {
-    const cx = MX;
-    const cy = MY;
-    poly(c, [[cx - 61, cy - 1], [cx - 49, cy - 15], [cx + 73, cy - 15], [cx + 73, cy + 14], [cx + 60, cy + 29], [cx - 61, cy + 29]], P.black);
-    poly(c, [[cx - 60, cy], [cx - 48, cy - 14], [cx + 72, cy - 14], [cx + 60, cy]], P.white);
-    poly(c, [[cx + 60, cy], [cx + 72, cy - 14], [cx + 72, cy + 14], [cx + 60, cy + 28]], P.tan);
-    R(c, cx - 60, cy, 120, 28, P.cream);
-    R(c, cx - 60, cy, 120, 1, P.fog);
-    R(c, cx - 60, cy + 27, 120, 1, P.tan);
-    R(c, cx - 32, cy - 11, 68, 8, P.navy);
-    text(c, 'SCREECHNET', cx + 2, cy - 10, { color: P.yellow, align: 'center' });
-    R(c, cx - 55, cy + 5, 74, 8, P.ink);
-    text(c, 'DATA/FAX MODEM', cx - 55, cy + 17, { color: P.steel });
-    text(c, '56K', cx + 32, cy + 6, { color: P.red });
-    for (let x = cx + 46; x < cx + 57; x += 2) R(c, x, cy + 5, 1, 18, P.tan);
-    R(c, cx - 56, cy + 29, 8, 2, P.black);
-    R(c, cx + 48, cy + 29, 8, 2, P.black);
-  });
-
-/** Beige box modem; (cx, cy) = centre-top of the front face. */
-function modem(ctx, cx, cy, lt, screech = false, shine = -1) {
-  const [sx, sy] = screech ? shake(lt, 2, 7) : [0, 0];
-  cx += sx;
-  cy += sy;
-  ctx.drawImage(modemArt(), cx - MX, cy - MY);
-  if (shine >= 0) glint(ctx, modemArt(), cx - MX, cy - MY, shine, { width: 9, alpha: 0.6 });
-  const rand = mulberry32(Math.floor(lt * (screech ? 14 : 5)) + 3);
-  for (let i = 0; i < 6; i++) {
-    const lit = i === 0 || rand() < (screech ? 0.7 : 0.45);
-    const col = lit ? (screech ? (rand() < 0.5 ? P.red : P.yellow) : i < 2 ? P.green : P.red) : P.slate;
-    R(ctx, cx - 52 + i * 12, cy + 7, 6, 3, col);
-    if (lit) R(ctx, cx - 52 + i * 12, cy + 7, 2, 1, P.white);
+  for (const [wx, wy, kind] of wins) {
+    const col = kind === 'warm' ? mix(C.warm, C.warmD, 0.4) : kind === 'crt' ? C.crt : mix(C.house, P.ink, 0.6);
+    rect(c, x + wx, wy, 12, 10, col);
+    rect(c, x + wx + 5, wy, 2, 10, C.house);
+    if (kind === 'warm') rect(c, x + wx, wy + 8, 12, 2, C.warmD);
   }
 }
 
-/** Curly phone cord between two points. */
-function cord(ctx, x0, y0, x1, y1, c = P.black) {
-  const n = Math.max(8, Math.round(Math.hypot(x1 - x0, y1 - y0) / 2));
+const streetSet = lazy(() =>
+  bake('sn-street', S1W, H, function* paint(c) {
+    house(c, 10, 84, 30, [[14, 128, 'warm'], [58, 128, 'dark'], [14, 150, 'dark'], [58, 150, 'warm']]);
+    house(c, 118, 76, 26, [[12, 128, 'dark'], [50, 128, 'dark'], [30, 150, 'warm']], false);
+    house(c, 222, 92, 32, [[16, 126, 'crt'], [62, 126, 'dark'], [16, 150, 'dark'], [62, 150, 'warm']]);
+    house(c, 340, 86, 28, [[14, 128, 'warm'], [58, 128, 'dark'], [36, 150, 'dark']]);
+    // hedges and garden walls
+    for (let x = 0; x < S1W; x += 4) rect(c, x, 168 - floor(hash(x * 0.7) * 3), 4, 12, mix(C.house, P.darkGreen, 0.15));
+    // pavement and kerb, the road
+    yield* shadeSteps(c, 0, 178, S1W, H - 178, [P.black, mix(P.black, P.ink, 0.6), P.ink], (x, y) => clamp(0.3 + (y - 178) * 0.02));
+    rect(c, 0, 178, S1W, 1, mix(P.ink, P.slate, 0.4));
+    rect(c, 0, 190, S1W, 1, mix(P.ink, P.slate, 0.3));
+    // telephone pole and street lamps
+    rect(c, 204, 70, 3, 110, P.black);
+    rect(c, 194, 76, 23, 2, P.black);
+    rect(c, 196, 74, 1, 2, P.black);
+    rect(c, 214, 74, 1, 2, P.black);
+    for (const lx of [100, 380]) {
+      rect(c, lx, 104, 2, 76, P.black);
+      rect(c, lx - 6, 102, 8, 2, P.black);
+      rect(c, lx - 8, 104, 5, 2, mix(C.sodium, P.black, 0.6));
+    }
+  }));
+
+/** Wires: catenary curves from the pole to the houses (the phone line). */
+function wire(ctx, x0, y0, x1, y1, sag) {
+  ctx.fillStyle = P.black;
+  const n = max(2, floor(abs(x1 - x0) / 2));
   for (let i = 0; i <= n; i++) {
-    const p = i / n;
-    const sag = Math.sin(p * Math.PI) * 10;
-    const x = x0 + (x1 - x0) * p;
-    const y = y0 + (y1 - y0) * p + sag + (i % 2 ? 2 : -1);
-    R(ctx, x, y, 2, 2, c);
+    const u = i / n;
+    ctx.fillRect(round(lerp(x0, x1, u)), round(lerp(y0, y1, u) + sag * 4 * u * (1 - u)), 1, 1);
   }
 }
 
-/** Pixel cat portrait, the photo that takes all day to load (136 x 92). */
-const catPhoto = () =>
-  cached('sn-catphoto', 136, 92, (c) => {
-    bands(c, 0, 0, 136, 92, [P.blue, P.cyan, P.cream]);
-    oval(c, 68, 102, 46, 26, P.black);
-    oval(c, 68, 102, 45, 25, P.orange);
-    for (const s of [-1, 1]) {
-      poly(c, [[68 + s * 34, 44], [68 + s * 30, 8], [68 + s * 8, 26]], P.black);
-      poly(c, [[68 + s * 32, 42], [68 + s * 29, 11], [68 + s * 11, 27]], P.orange);
-      poly(c, [[68 + s * 27, 36], [68 + s * 27, 18], [68 + s * 16, 28]], P.pink);
+const lampPool = lazy(() => pool('sn-sodium', 40, 12, C.sodium, 5, 0.42));
+const lampHalo = lazy(() => pool('sn-sodium-halo', 10, 10, C.sodium, 4, 0.55));
+const K_STREET = [[0, 0], [4.6, 34, 'smooth']];
+const LAMPS = [[100, 1.0], [380, 1.5]];
+
+function shotStreet(ctx, lt) {
+  const camX = track(lt, K_STREET);
+  ctx.drawImage(streetSky(), -round(camX * 0.3), 0);
+  ctx.save();
+  ctx.translate(-round(camX), 0);
+  ctx.drawImage(streetSet(), 0, 0);
+  wire(ctx, 0, 84, 196, 76, 10);
+  wire(ctx, 0, 88, 196, 80, 12);
+  wire(ctx, 216, 76, S1W, 82, 9);
+  wire(ctx, 214, 80, 246, 112, 3); // the line into the hero house
+  // sodium lamps warm up one after the other, with a little hesitation
+  for (let i = 0; i < LAMPS.length; i++) {
+    const lx = LAMPS[i][0];
+    const k = lt - LAMPS[i][1];
+    const level = k < 0 ? 0 : k < 0.12 ? 0.6 : k < 0.2 ? 0.1 : smooth((k - 0.2) / 0.8);
+    if (level <= 0) continue;
+    ctx.globalAlpha = level;
+    ctx.drawImage(lampHalo(), lx - 15, 95);
+    ctx.drawImage(lampPool(), lx - 46, 172);
+    ctx.globalAlpha = 1;
+  }
+  // the CRT window breathes faintly
+  ctx.globalAlpha = 0.25 + 0.15 * sin(lt * 9.1) * sin(lt * 3.3);
+  rect(ctx, 238, 126, 12, 10, C.crtL);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  vignette(ctx, 0.6);
+  letterbox(ctx, LB);
+}
+
+// --- S2: the bedroom, over his shoulder, CONNECT ---------------------------------------------
+const MON = { x: 204, y: 62 };
+const roomSet = lazy(() =>
+  bake('sn-room', 400, H, function* paint(c) {
+    // dark wall lit by the screen (right of centre)
+    yield* shadeSteps(c, 0, 0, 400, 150, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.45), mix(P.navy, P.blue, 0.25)], (x, y) => {
+      const d = sqrt(((x - 250) / 210) ** 2 + ((y - 96) / 110) ** 2);
+      return clamp(1 - d) * 0.9 + 0.04;
+    });
+    // window with blinds at the left: dusk outside
+    yield* shadeSteps(c, 26, 34, 64, 70, [C.sky1, C.sky2, C.sky3], (x, y) => (y - 34) / 70);
+    for (let y = 36; y < 104; y += 4) rect(c, 26, y, 64, 2, mix(P.black, P.ink, 0.5));
+    rect(c, 22, 30, 72, 4, P.black);
+    rect(c, 22, 104, 72, 4, mix(P.black, P.ink, 0.4));
+    line(c, 86, 34, 86, 120, mix(P.ink, P.slate, 0.4)); // the blind's cord
+    // a poster (an abstract print, no real band) above the desk, catching the blue
+    rect(c, 112, 22, 46, 60, mix(P.ink, P.black, 0.25));
+    yield* shadeSteps(c, 114, 24, 42, 56, [mix(P.ink, P.purple, 0.35), mix(P.navy, P.purple, 0.35), mix(P.slate, P.navy, 0.3), mix(P.steel, P.navy, 0.35)], (x, y) => clamp(1 - sqrt(((x - 135) / 18) ** 2 + ((y - 46) / 18) ** 2)) * 0.9 + (y > 68 ? 0.1 : 0));
+    rect(c, 118, 70, 34, 2, mix(P.fog, P.navy, 0.55));
+    rect(c, 118, 74, 20, 1, mix(P.fog, P.navy, 0.6));
+    // a shelf on the right: books, cassettes, a small speaker
+    rect(c, 318, 92, 82, 3, mix(P.slate, P.black, 0.35));
+    rect(c, 318, 92, 82, 1, mix(P.steel, P.navy, 0.4));
+    let bx = 322;
+    let k = 0;
+    while (bx < 396) {
+      const bw = 3 + floor(hash(k * 3.3) * 4);
+      const bh = 16 + floor(hash(k * 5.1) * 12);
+      rect(c, bx, 92 - bh, bw, bh, [mix(P.ink, P.navy, 0.4), mix(P.slate, P.black, 0.3), mix(P.maroon, P.ink, 0.5), mix(P.darkGreen, P.ink, 0.6)][k % 4]);
+      rect(c, bx, 92 - bh, 1, bh, mix(P.steel, P.navy, 0.35));
+      bx += bw + 1;
+      k++;
     }
-    disc(c, 68, 52, 33, P.black);
-    disc(c, 68, 52, 32, P.orange);
-    for (const dx of [-8, 0, 8]) R(c, 68 + dx - 1, 21, 3, 10, P.rust);
-    for (const s of [-1, 1]) {
-      R(c, 68 + s * 30 - (s > 0 ? 6 : 0), 50, 6, 2, P.rust);
-      R(c, 68 + s * 30 - (s > 0 ? 5 : 0), 56, 5, 2, P.rust);
-      oval(c, 68 + s * 13, 48, 7, 8, P.black);
-      oval(c, 68 + s * 13, 48, 6, 7, P.green);
-      R(c, 68 + s * 13 - 1, 42, 3, 13, P.black);
-      R(c, 68 + s * 13 - 4, 44, 2, 2, P.white);
-      disc(c, 68 + s * 7, 66, 7, P.white);
+    rect(c, 360, 64, 18, 28, mix(P.black, P.ink, 0.4));
+    ellipse(c, 369, 74, 5, 5, mix(P.ink, P.slate, 0.4));
+    ellipse(c, 369, 85, 3, 3, mix(P.ink, P.slate, 0.4));
+    // a second poster high on the right
+    rect(c, 330, 18, 40, 38, mix(P.ink, P.black, 0.2));
+    rect(c, 333, 21, 34, 22, mix(P.maroon, P.ink, 0.5));
+    rect(c, 333, 46, 34, 2, mix(P.fog, P.ink, 0.6));
+    // desk: a scuffed laminate top catching the screen's light, its front edge
+    yield* shadeSteps(c, 0, 150, 400, H - 150, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.4), mix(P.navy, P.steel, 0.35)], (x, y) => {
+      const d = sqrt(((x - 250) / 170) ** 2 + ((y - 154) / 26) ** 2);
+      return clamp(clamp(1 - d) * 0.95 + 0.08 - (y > 186 ? 0.35 : 0));
+    });
+    rect(c, 0, 150, 400, 1, mix(P.navy, P.steel, 0.4));
+    rect(c, 0, 186, 400, 1, mix(P.navy, P.steel, 0.25));
+    // a CD tower beside the monitor: spines in the blue light
+    rect(c, 304, 96, 14, 54, mix(P.black, P.ink, 0.4));
+    for (let y = 98; y < 148; y += 2) rect(c, 306, y, 10, 1, (y >> 1) % 3 === 0 ? mix(P.steel, C.crt, 0.3) : mix(P.slate, P.ink, 0.4));
+    rect(c, 304, 96, 1, 54, mix(P.steel, C.crt, 0.3));
+    // desk clutter: a mug, a stack of floppy disks, a magazine
+    rect(c, 176, 140, 9, 10, mix(P.slate, P.ink, 0.3));
+    rect(c, 176, 140, 2, 10, mix(P.steel, C.crt, 0.25));
+    rect(c, 185, 143, 2, 4, mix(P.slate, P.ink, 0.3));
+    for (let i = 0; i < 4; i++) rect(c, 340 + (i & 1), 146 - i * 2, 16, 2, i % 2 ? P.black : mix(P.ink, P.slate, 0.4));
+    begin();
+    pt(150, 152);
+    pt(186, 151);
+    pt(190, 160);
+    pt(148, 162);
+    fill(c, mix(P.slate, P.navy, 0.35), { d: mix(P.ink, P.navy, 0.4), f: 0.1, m: 1, side: 1 });
+    // cables tumbling from the back of the desk
+    for (let i = 0; i < 4; i++) {
+      for (let y = 150; y < 186; y++) rect(c, 292 + i * 3 + round(sin(y * 0.15 + i * 1.7) * 2), y, 1, 1, P.black);
     }
-    poly(c, [[62, 58], [74, 58], [68, 64]], P.pink);
-    R(c, 67, 64, 2, 4, P.black);
-    R(c, 63, 68, 4, 1, P.black);
-    R(c, 69, 68, 4, 1, P.black);
-    for (const s of [-1, 1]) {
-      line(c, 68 + s * 12, 64, 68 + s * 40, 58, P.white);
-      line(c, 68 + s * 12, 67, 68 + s * 42, 67, P.white);
-      line(c, 68 + s * 12, 70, 68 + s * 38, 76, P.white);
+  }));
+
+/** The beige CRT monitor (screen drawn by the caller). */
+const monitorArt = lazy(() =>
+  bake('sn-monitor', 96, 84, (c) => {
+    begin();
+    pt(8, 4);
+    pt(80, 2);
+    pt(92, 8);
+    pt(92, 70);
+    pt(80, 76);
+    pt(8, 74);
+    fill(c, C.beige, { d: C.beigeD, f: 0.16, m: 1, dd: C.beigeDD, df: 0.06, side: 1 });
+    rect(c, 8, 4, 72, 1, mix(C.beige, P.white, 0.4));
+    rect(c, 16, 10, 58, 50, P.black); // screen recess
+    rect(c, 16, 10, 58, 1, C.beigeDD);
+    rect(c, 64, 64, 6, 2, C.beigeDD);
+    rect(c, 70, 64, 2, 2, mix(P.green, P.darkGreen, 0.5));
+    rect(c, 30, 76, 32, 4, C.beigeD);
+    rect(c, 24, 80, 44, 4, C.beigeDD);
+  }));
+const desktopArt = lazy(() => shader('sn-desktop', 58, 50, [P.navy, mix(P.navy, P.blue, 0.5), mix(P.blue, P.cyan, 0.25)], (x, y) => clamp(1 - sqrt(((x - 29) / 40) ** 2 + ((y - 24) / 34) ** 2))));
+const screenSpill = lazy(() => pool('sn-spill', 120, 70, C.crt, 6, 0.3));
+const CLICK = 1.8; // shot time of the click on CONNECT
+const K_PX = [[0.3, 0], [1.4, 1, 'inOut']];
+
+/** Screen content: desktop, the dial-up dialog, its CONNECT button. */
+function screenUI(ctx, x, y, w, h, lt) {
+  ctx.drawImage(desktopArt(), x, y);
+  const dx = x + 8;
+  const dy = y + 9;
+  rect(ctx, dx, dy, w - 16, h - 16, mix(P.fog, P.silver, 0.4));
+  rect(ctx, dx, dy, w - 16, 6, P.navy);
+  text(ctx, 'DIAL-UP', dx + 2, dy + 1, { color: P.white, font: 'micro' });
+  const dialling = lt > CLICK + 0.1;
+  text(ctx, dialling ? 'DIALLING...' : 'SCREECHNET', dx + 3, dy + 10, { color: P.ink, font: 'micro' });
+  const pressed = lt > CLICK && lt < CLICK + 0.2;
+  rect(ctx, dx + 10, dy + 20, 22, 7, pressed ? P.steel : mix(P.silver, P.white, 0.4));
+  rect(ctx, dx + 10, dy + 26, 22, 1, P.ink);
+  rect(ctx, dx + 31, dy + 20, 1, 7, P.ink);
+  text(ctx, 'OK', dx + 18, dy + 21 + (pressed ? 1 : 0), { color: P.ink, font: 'micro' });
+  // the pointer glides to the button
+  const q = track(lt, K_PX);
+  const px = lerp(x + w - 6, dx + 24, q);
+  const py = lerp(y + h - 6, dy + 24, q);
+  begin();
+  pt(px, py);
+  pt(px, py + 6);
+  pt(px + 2, py + 4);
+  pt(px + 4, py + 6);
+  fill(ctx, P.white);
+}
+
+// The teenager from behind: a baked silhouette (hood down, tousled hair, the
+// arm reaching to the mouse), rim-lit in the screen's blue exactly on its edge.
+const TEEN_W = 220;
+const TEEN_H = 140;
+const TEEN_BODY = mix(P.black, P.ink, 0.25);
+const teenArt = lazy(() =>
+  rimArt(
+    'sn-teen',
+    TEEN_W,
+    TEEN_H,
+    (c) => {
+      const hx = 70;
+      const hy = 30;
+      // shoulders and back of the hoodie, the hood bunched behind the neck
+      begin();
+      pt(8, TEEN_H);
+      pt(12, 92);
+      pt(24, 72);
+      pt(46, 62);
+      pt(62, 60);
+      pt(82, 60);
+      pt(100, 63);
+      pt(118, 72);
+      pt(130, 86);
+      pt(138, TEEN_H);
+      fill(c, TEEN_BODY);
+      ellipse(c, hx + 2, 64, 28, 11, mix(TEEN_BODY, P.ink, 0.25));
+      // neck
+      rect(c, hx - 10, 46, 22, 16, P.black);
+      // head: a skull outline with irregular tufts (many small ones, never two big "ears")
+      begin();
+      for (let i = 0; i <= 36; i++) {
+        const a = PI + (i / 36) * PI;
+        const tuft = 1.8 * sin(i * 2.9) + 1.3 * sin(i * 6.1 + 1) + (hash(i * 3.7) > 0.6 ? 1.6 : 0);
+        const r = 25 + max(0, tuft) * (a > PI * 1.1 && a < PI * 1.9 ? 1 : 0.4);
+        pt(hx + cos(a) * r * 0.9, hy + 2 + sin(a) * r);
+      }
+      pt(hx + 22, hy + 18);
+      pt(hx + 17, hy + 32);
+      pt(hx - 17, hy + 32);
+      pt(hx - 22, hy + 18);
+      fill(c, P.black);
+      // the right ear, a little lighter (it lets the screen through)
+      ellipse(c, hx + 22, hy + 16, 3, 6, mix(P.black, P.maroon, 0.45));
+      // the right arm: upper arm down from the shoulder, forearm out to the mouse
+      capsule(c, 116, 78, 156, 112, 12, 10, TEEN_BODY);
+      capsule(c, 156, 112, 210, 124, 10, 7, TEEN_BODY);
+      // hoodie seams and the hood's fold, faintly
+      line(c, 48, 76, 62, 100, mix(TEEN_BODY, P.slate, 0.25));
+      line(c, 96, 76, 84, 102, mix(TEEN_BODY, P.slate, 0.2));
+    },
+    { rim: mix(C.crt, C.crtL, 0.35), rim2: mix(C.crtD, P.ink, 0.35), dirs: [[1, 0], [0, -1], [1, -1]] },
+  ));
+const TEEN_X = 52;
+const TEEN_Y = 76;
+
+function shotRoom(ctx, lt) {
+  const camX = track(lt, [[0, 0], [4.0, 12, 'smooth']]);
+  ctx.drawImage(roomSet(), round(camX * 0.5), 0, W, 150, 0, 0, W, 150);
+  ctx.drawImage(roomSet(), round(camX * 0.8), 150, W, H - 150, 0, 150, W, H - 150);
+  ctx.save();
+  ctx.translate(-round(camX * 0.8), 0);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.drawImage(screenSpill(), 130, 56);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(monitorArt(), MON.x, MON.y);
+  screenUI(ctx, MON.x + 16, MON.y + 10, 58, 50, lt);
+  // modem and phone on the desk: the modem's LEDs wake after the click
+  rect(ctx, 236, 152, 50, 9, C.beige);
+  rect(ctx, 236, 152, 50, 1, mix(C.beige, P.white, 0.4));
+  rect(ctx, 236, 160, 50, 1, C.beigeDD);
+  for (let i = 0; i < 6; i++) rect(ctx, 242 + i * 6, 156, 2, 1, i < 2 || (lt > CLICK && (i === 3 || floor(lt * 8 + i) % 2 === 0)) ? C.led : C.ledOff);
+  // keyboard below the screen, catching its light
+  rect(ctx, 196, 162, 66, 6, C.beigeD);
+  rect(ctx, 196, 162, 66, 1, mix(C.beige, C.crtL, 0.3));
+  for (let r = 0; r < 2; r++) for (let k = 0; k < 15; k++) rect(ctx, 199 + k * 4 + r, 164 + r * 2, 2, 1, C.beigeDD);
+  // the mouse, under his hand
+  ellipse(ctx, 280, 172, 7, 4, C.beige, SH_BEIGE);
+  ctx.restore();
+  // him, in the foreground (moves a little faster: nearer the camera)
+  ctx.save();
+  ctx.translate(-round(camX * 1.3), 0);
+  const nod = round(track(lt, [[1.2, 0], [1.6, 1], [2.4, 0]]));
+  ctx.drawImage(teenArt(), TEEN_X, TEEN_Y + nod);
+  // his fingers on the mouse: the index finger presses at the click
+  const press = lt > CLICK && lt < CLICK + 0.18 ? 1 : 0;
+  ellipse(ctx, TEEN_X + 213, TEEN_Y + 123 + press, 5, 3, mix(P.brown, P.black, 0.5));
+  rect(ctx, TEEN_X + 211, TEEN_Y + 120 + press, 5, 1, mix(C.crt, C.crtL, 0.3));
+  ctx.restore();
+  vignette(ctx, 0.62);
+  letterbox(ctx, LB);
+}
+
+// --- S3: the modem sings (macro on the front panel) -------------------------------------------
+const LEDS = ['HS', 'AA', 'CD', 'OH', 'RD', 'SD', 'TR', 'MR'];
+// The modem's front panel in perspective: near end at the left, receding right.
+const PNL = { x0: -10, x1: 430, t0: 66, b0: 176, t1: 108, b1: 140 };
+const pnlTop = (x) => lerp(PNL.t0, PNL.t1, clamp((x - PNL.x0) / (PNL.x1 - PNL.x0)) ** 0.85);
+const pnlBot = (x) => lerp(PNL.b0, PNL.b1, clamp((x - PNL.x0) / (PNL.x1 - PNL.x0)) ** 0.85);
+const ledX = (i) => lerp(150, 392, (i / 7) ** 0.82);
+const ledY = (i) => lerp(pnlTop(ledX(i)), pnlBot(ledX(i)), 0.5);
+/** The brand plate, flat (warped onto the panel in perspective at bake time). */
+const plateArt = lazy(() =>
+  bake('sn-plate', 104, 56, (c) => {
+    thin(c, 'SCREECHNET', 0, 2, { color: mix(P.ink, C.beigeDD, 0.15), track: 2 });
+    thin(c, '56K', 0, 18, { color: mix(P.ink, C.beigeDD, 0.1), track: 1, scale: 2 });
+    text(c, 'DATA / FAX / VOICE', 0, 46, { color: mix(P.ink, C.beigeDD, 0.35), font: 'micro' });
+  }));
+const modemSet = lazy(() =>
+  bake('sn-modem', 430, H, function* paint(c) {
+    // darkness, a cool wash from the screen above-right
+    yield* shadeSteps(c, 0, 0, 430, H, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.5)], (x, y) => clamp(1 - sqrt(((x - 300) / 300) ** 2 + ((y + 30) / 190) ** 2)) * 0.85);
+    // the room far behind, out of focus: the monitor's glow and a shelf's edge
+    yield* shadeSteps(c, 230, 0, 200, 60, [mix(P.ink, P.navy, 0.5), mix(P.navy, P.blue, 0.4), mix(P.blue, C.crtL, 0.3)], (x, y) => {
+      const d = sqrt(((x - 330) / 70) ** 2 + ((y - 20) / 30) ** 2);
+      return d < 1 ? clamp(1 - d) * 0.9 : -1;
+    });
+    // top surface (catching the blue light), with vent slots receding
+    yield* shadeSteps(c, 0, 0, 430, H, [C.beigeDD, mix(C.beigeD, C.crt, 0.25), mix(C.beige, C.crtL, 0.3)], (x, y) => {
+      const top = pnlTop(x);
+      const back = top - lerp(30, 12, clamp(x / 430));
+      if (y < back || y >= top) return -1;
+      return clamp(0.3 + ((y - back) / (top - back)) * 0.5 - x * 0.0006);
+    });
+    for (let i = 0; i < 26; i++) {
+      const x = 30 + i * 15 * (1 - i * 0.012);
+      const top = pnlTop(x);
+      const back = top - lerp(30, 12, clamp(x / 430));
+      line(c, x, back + (top - back) * 0.3, x + 6 * (1 - i / 30), back + (top - back) * 0.3, C.beigeDD);
     }
+    // front panel: beige, lit from the top edge, falling into shadow to the right
+    yield* shadeSteps(c, 0, 0, 430, H, [mix(C.beigeDD, P.black, 0.45), mix(C.beigeDD, P.black, 0.15), C.beigeDD, mix(C.beigeDD, C.beigeD, 0.5), C.beigeD], (x, y) => {
+      const t = pnlTop(x);
+      const b = pnlBot(x);
+      if (y < t || y >= b) return -1;
+      const v = (y - t) / (b - t);
+      return clamp(0.95 - v * 0.2 - clamp((x - 140) / 280) * 0.75);
+    });
+    line(c, 0, pnlTop(0), 430, pnlTop(430), mix(C.beige, P.white, 0.35));
+    // LED window strip (recessed), perspective
+    yield* shadeSteps(c, 0, 0, 430, H, [mix(P.black, P.maroon, 0.35), mix(P.black, P.maroon, 0.15)], (x, y) => {
+      if (x < 136 || x > 404) return -1;
+      const mid = lerp(pnlTop(x), pnlBot(x), 0.5);
+      const hh = (pnlBot(x) - pnlTop(x)) * 0.17;
+      return y >= mid - hh && y < mid + hh ? 0.5 : -1;
+    });
+    LEDS.forEach((s2, i) => {
+      const x = ledX(i);
+      const y = lerp(pnlTop(x), pnlBot(x), 0.72);
+      if (i < 6) text(c, s2, x, y, { color: mix(P.ink, C.beigeDD, 0.25), font: 'micro', align: 'center' });
+    });
+    // the brand plate on the near end, warped column by column to the panel's perspective
+    const plate = plateArt();
+    for (let px = 0; px < 104; px++) {
+      const x = 22 + px;
+      const t = pnlTop(x);
+      const b = pnlBot(x);
+      const y0 = t + (b - t) * 0.2;
+      const y1 = t + (b - t) * 0.74;
+      c.drawImage(plate, px, 0, 1, 56, x, round(y0), 1, round(y1 - y0));
+    }
+    // the desk: dark, glossy enough to hold the LEDs' reflections
+    yield* shadeSteps(c, 0, 0, 430, H, [P.black, mix(P.black, P.ink, 0.6), P.ink], (x, y) => (y < pnlBot(x) ? -1 : clamp(0.55 - (y - pnlBot(x)) * 0.015 + (x / 430) * 0.2)));
+  }));
+const ledGlow = lazy(() => pool('sn-ledglow', 10, 8, C.led, 4, 0.55));
+
+/** Which LEDs are lit at time lt of the handshake (deterministic). */
+function ledOn(i, lt) {
+  const s2 = LEDS[i];
+  if (s2 === 'MR' || s2 === 'TR') return true;
+  if (s2 === 'OH') return lt > 0.15;
+  if (s2 === 'HS') return lt > 1.2;
+  if (s2 === 'AA') return false;
+  if (s2 === 'CD') return lt > 2.4;
+  if (s2 === 'RD' || s2 === 'SD') return lt > 1.4 && floor(lt * (s2 === 'RD' ? 11 : 7) + i) % 2 === 0;
+  return false;
+}
+
+function shotModem(ctx, lt) {
+  const camX = track(lt, [[0, 0], [3.6, 26, 'smooth']]);
+  ctx.drawImage(modemSet(), -round(camX), 0);
+  for (let i = 0; i < LEDS.length; i++) {
+    const x = ledX(i) - camX;
+    const y = ledY(i);
+    const sz = lerp(4, 2, i / 7);
+    const on = ledOn(i, lt);
+    rect(ctx, x - sz / 2, y - 1, sz, 2 + (i < 4 ? 1 : 0), on ? C.led : C.ledOff);
+    if (on) {
+      rect(ctx, x - sz / 2, y - 1, max(1, sz - 1), 1, mix(C.led, P.white, 0.5));
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.drawImage(ledGlow(), round(x - 10), round(y - 8));
+      ctx.globalCompositeOperation = 'source-over';
+      // reflection in the desk below the panel
+      ctx.globalAlpha = 0.35;
+      rect(ctx, x - sz / 2, pnlBot(x + camX) + 4 + (7 - i) * 0.6, sz, 1, C.led);
+      ctx.globalAlpha = 1;
+    }
+  }
+  vignette(ctx, 0.6);
+  letterbox(ctx, LB);
+}
+
+// --- S4: he closes his eyes and listens ----------------------------------------------------
+// the room behind him, from the side, far out of focus: the blinds' dusk, a poster, a shelf
+const faceBg = lazy(() =>
+  bake('sn-facebg', W, H, function* paint(c) {
+    yield* shadeSteps(c, 0, 0, W, H, [P.black, mix(P.black, P.ink, 0.6), P.ink, mix(P.ink, P.navy, 0.5), mix(P.navy, C.crt, 0.3)], (x, y) => clamp(1 - sqrt(((x - 430) / 300) ** 2 + ((y - 90) / 150) ** 2)) * 0.95);
+    yield* shadeSteps(c, 18, 40, 92, 96, [C.sky1, C.sky2, C.sky3, C.sky4], (x, y) => clamp((y - 40) / 110));
+    for (let y = 42; y < 136; y += 6) rect(c, 18, y, 92, 3, mix(P.black, P.ink, 0.45));
+    rect(c, 14, 36, 100, 4, P.black);
+    rect(c, 252, 30, 44, 58, mix(P.maroon, P.ink, 0.45));
+    rect(c, 256, 34, 36, 30, mix(P.purple, P.ink, 0.5));
+    rect(c, 300, 120, 84, 3, mix(P.slate, P.black, 0.3));
+    for (let i = 0; i < 12; i++) rect(c, 304 + i * 6, 96 + (i % 3) * 3, 5, 24 - (i % 3) * 3, [mix(P.ink, P.navy, 0.4), mix(P.maroon, P.ink, 0.5), mix(P.slate, P.black, 0.3)][i % 3]);
+    rect(c, 0, 176, W, H - 176, mix(P.black, P.ink, 0.4));
+    yield* soften(c, W, H, 5, { passes: 2 });
+  }));
+
+const FACE = {
+  x: 160,
+  y: 46,
+  hh: 92,
+  hair: 'messy',
+  eye: 0,
+  mouth: 0,
+  smile: 0,
+  light: mix(P.skin, P.silver, 0.45),
+  rimPx: 2,
+  pal: {
+    skin: mix(P.brown, P.tanShade, 0.35),
+    skinD: mix(P.maroon, P.black, 0.45),
+    hair: mix(P.black, P.maroon, 0.35),
+    hairD: P.black,
+    hairL: mix(P.maroon, C.crt, 0.3),
+    lip: mix(P.brown, P.black, 0.35),
+    eye: P.black,
+  },
+};
+const SH_HOOD = { d: P.black, f: 0.6, m: 1, side: -1 };
+const SH_HOODIE = { d: P.black, f: 0.55, m: 1, side: -1, l: mix(P.darkGreen, P.silver, 0.25), lf: 0, lm: 1 };
+const crtBand = lazy(() => pool('sn-crtband', 60, 18, C.crtL, 5, 0.16));
+
+function shotFace(ctx, lt) {
+  ctx.drawImage(faceBg(), -round(lt * 2), 0);
+  const f = FACE;
+  f.x = 160 - round(track(lt, [[0, 0], [3.6, 8, 'smooth']]));
+  f.y = 46 + round(sin(lt * 1.1) * 0.6);
+  // eyes close slowly on the swell; the smallest smile
+  f.eye = lt > 1.0 && lt < 3.2 ? 1 : blinkAt(lt, 5);
+  f.smile = lt > 1.8 ? 1 : 0;
+  profile(ctx, f);
+  // hoodie: hood bunched behind the neck, shoulders falling out of frame
+  const hx = f.x;
+  const hy = f.y + f.hh * 1.12;
+  const hood = mix(P.darkGreen, P.black, 0.72);
+  ellipse(ctx, hx - f.hh * 0.32, hy - f.hh * 0.08, f.hh * 0.34, f.hh * 0.24, hood, SH_HOOD);
+  begin();
+  pt(hx - f.hh * 1.1, 216);
+  pt(hx - f.hh * 0.7, hy + f.hh * 0.05);
+  pt(hx - f.hh * 0.1, hy - f.hh * 0.02);
+  pt(hx + f.hh * 0.3, hy + f.hh * 0.06);
+  pt(hx + f.hh * 0.62, hy + f.hh * 0.28);
+  pt(hx + f.hh * 0.8, 216);
+  fill(ctx, hood, SH_HOODIE);
+  line(ctx, hx + f.hh * 0.06, hy + f.hh * 0.06, hx + f.hh * 0.1, hy + f.hh * 0.42, mix(P.fog, P.ink, 0.5));
+  // the screen's light moves across his face as the picture on it changes
+  ctx.globalCompositeOperation = 'lighter';
+  for (let k = 0; k < 2; k++) {
+    const by = 40 + ((lt * 14 + k * 70) % 140);
+    ctx.drawImage(crtBand(), f.x + 6, round(by));
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  vignette(ctx, 0.7);
+  letterbox(ctx, LB);
+}
+
+// --- S5: downstairs, his mother lifts the receiver -----------------------------------------------
+const hallSet = lazy(() =>
+  bake('sn-hall', W, H, function* paint(c) {
+    yield* shadeSteps(c, 0, 0, W, 180, [P.black, mix(P.black, P.maroon, 0.55), P.maroon, mix(P.maroon, P.brown, 0.55), mix(P.brown, P.tanShade, 0.5)], (x, y) => {
+      const d = sqrt(((x - 110) / 190) ** 2 + ((y - 110) / 120) ** 2);
+      return clamp(1 - d) * 0.92 + 0.03 * ((x >> 3) & 1);
+    });
+    // a framed photo, a coat hook with a coat, the dado rail
+    rect(c, 40, 50, 30, 38, mix(P.brown, P.black, 0.3));
+    rect(c, 43, 53, 24, 32, mix(P.tan, P.maroon, 0.45));
+    rect(c, 312, 40, 3, 6, P.black);
+    begin();
+    pt(306, 46);
+    pt(320, 46);
+    pt(330, 70);
+    pt(336, 140);
+    pt(314, 136);
+    pt(290, 140);
+    pt(296, 70);
+    fill(c, mix(P.maroon, P.black, 0.55), { d: mix(P.maroon, P.black, 0.8), f: 0.4, m: 1, side: 1 });
+    rect(c, 0, 130, W, 2, mix(P.brown, P.black, 0.3));
+    rect(c, 0, 130, W, 1, mix(P.tanShade, P.brown, 0.5));
+    yield* shadeSteps(c, 0, 176, W, H - 176, [P.black, mix(P.black, P.maroon, 0.6), P.maroon], (x, y) => clamp(1 - sqrt(((x - 150) / 200) ** 2 + ((y - 180) / 40) ** 2)) * 0.8);
+    rect(c, 0, 176, W, 1, mix(P.brown, P.tanShade, 0.4));
+    // the staircase banister on the right
+    for (let i = 0; i < 6; i++) rect(c, 340 + i * 11, 60 + i * 13, 2, 120 - i * 13, P.black);
+    line(c, 336, 58, 400, 130, P.black);
+    // hall table, lamp, the telephone's base
+    rect(c, 60, 146, 70, 4, mix(P.brown, P.black, 0.3));
+    rect(c, 64, 150, 3, 28, mix(P.brown, P.black, 0.4));
+    rect(c, 122, 150, 3, 28, mix(P.brown, P.black, 0.4));
+    rect(c, 74, 116, 3, 30, mix(P.tanShade, P.yellow, 0.3));
+    begin();
+    pt(64, 116);
+    pt(68, 100);
+    pt(84, 100);
+    pt(88, 116);
+    fill(c, mix(P.cream, P.yellow, 0.3), { d: mix(P.tan, P.yellow, 0.2), f: 0.3, m: 1, side: 1 });
+    rect(c, 98, 140, 18, 6, C.beigeD);
+    yield* soften(c, W, H, 3, { passes: 2 });
+  }));
+const hallGlow = lazy(() => pool('sn-hallglow', 80, 64, P.yellow, 5, 0.18));
+
+// The mother on the presenter rig: a look made from the Penny rig (a soft
+// brown chignon, a plum cardigan over a cream top), close, no speech; she
+// hears the screech (surprise, briefly) and settles into a deadpan stare.
+const MUM = { actor: null, look: null };
+castInit((R) => {
+  const base = R.cast.LOOKS.penny;
+  const look = R.base.deriveLook(base, {
+    id: 'sn-mum',
+    name: 'Mum',
+    skin: R.base.SKIN_LIGHT,
+    hair: { style: 'chignon', ramp: [P.tan, P.tanShade, P.brown, P.maroon], line: P.maroon },
+    eyes: { ...base.eyes, iris: [P.brown, P.maroon] },
+    brows: { ...base.brows, color: P.brown },
+    outfit: 'cardigan',
+    jacket: { ramp: [mix(P.purple, P.fog, 0.45), mix(P.purple, P.slate, 0.4), mix(P.purple, P.black, 0.45), P.black], line: P.black },
+    shirt: { ramp: [P.silver, P.fog, P.steel, P.slate], line: P.slate },
+    pin: null,
+    pearls: null,
+    cuff: mix(P.purple, P.slate, 0.4),
+    props: [],
+    persona: { sway: 0.4, headMotion: 0.5, blinkMin: 2.4, blinkMax: 4.8, energy: 0.5, smile: 0.08 },
   });
-
-// --- brand -------------------------------------------------------------------
-
-const MARK = () => wordmark('SCREECHNET', {
-  h: 26, pen: 2, square: true, slant: 0.32, wide: 0.85, gap: 2,
-  fill: [P.white, P.yellow, P.yellow, P.orange, P.orange, P.rust],
-  outline: [[P.black, 2]], depth: 3, depthColor: P.navy,
+  MUM.look = look;
+  MUM.actor = {
+    id: look.id,
+    look,
+    perf: {
+      side: 0,
+      seed: 3,
+      gestures: [],
+      emotions: [{ t0: 0, name: 'neutral' }, { t0: 1.4, name: 'surprised' }, { t0: 2.5, name: 'serious' }],
+      look: [],
+      speech: null,
+    },
+  };
 });
 
-function soundWave(ctx, cx, y, w, lt, col) {
-  for (let i = 0; i < w; i++) {
-    const x = cx - w / 2 + i;
-    const amp = Math.sin((i / w) * Math.PI) * 4;
-    const v = Math.round(Math.sin(i * 0.9 - lt * 12) * amp * (0.6 + 0.4 * Math.sin(i * 0.23 + lt * 3)));
-    R(ctx, x, y + Math.min(0, v), 1, Math.abs(v) + 1, col);
+// fallback figure (cine.js) if the rig is unavailable
+const MUM_FB = figure({
+  hh: 46,
+  hair: 'bun',
+  garment: 'cardigan',
+  shoulders: 0.84,
+  pal: {
+    skin: mix(P.skin, P.tan, 0.3),
+    skinD: mix(P.skinShade, P.tanShade, 0.5),
+    hair: mix(P.brown, P.maroon, 0.4),
+    hairD: P.maroon,
+    hairL: mix(P.tanShade, P.brown, 0.4),
+    top: mix(P.purple, P.slate, 0.45),
+    topD: mix(P.purple, P.black, 0.6),
+    topL: mix(P.purple, P.fog, 0.35),
+    shirt: mix(P.cream, P.tan, 0.3),
+    shirtD: P.tan,
+    lip: mix(P.skinShade, P.darkRed, 0.3),
+  },
+});
+
+const HS = { body: C.beige, d: C.beigeD, l: mix(C.beige, P.white, 0.4) };
+const SH_HS = { d: C.beigeD, f: 0.35, m: 1, dd: C.beigeDD, df: 0.1, l: HS.l, lf: 0.15, lm: 1, side: 1 };
+const SH_SLEEVE = { d: mix(P.purple, P.black, 0.45), f: 0.4, m: 1, l: mix(P.purple, P.fog, 0.45), lf: 0.15, lm: 1, side: 1 };
+const SKIN = { base: P.skin, d: P.skinShade, dd: mix(P.skinShade, P.brown, 0.5), l: mix(P.skin, P.cream, 0.45) };
+const SH_FING = { d: SKIN.d, f: 0.35, m: 1, side: 1 };
+const HP = new Float64Array(2);
+function hp(ox, oy, ca, sa, lx, ly) {
+  HP[0] = ox + lx * ca - ly * sa;
+  HP[1] = oy + lx * sa + ly * ca;
+  return HP;
+}
+
+/**
+ * A 1990s handset held in a hand, the sleeve running down out of frame:
+ * earpiece at (ox, oy), the handset's axis rotated by `a` (0 = straight down
+ * the jaw towards the mouth), k = scale (px per handset unit, ~1.1 at 4 px/u).
+ */
+function handset(ctx, ox, oy, a, k) {
+  const ca = cos(a);
+  const sa = sin(a);
+  // sleeve: from below the frame up to the wrist under the handset's middle
+  hp(ox, oy, ca, sa, -10 * k, 30 * k);
+  const wx = HP[0];
+  const wy = HP[1];
+  begin();
+  pt(wx - 12 * k, wy + 6 * k);
+  pt(wx + 6 * k, wy + 2 * k);
+  pt(wx + 26 * k, 240);
+  pt(wx - 22 * k, 240);
+  fill(ctx, mix(P.purple, P.slate, 0.4), SH_SLEEVE);
+  // the knitted cuff turned back at the wrist, and two folds where the sleeve bunches
+  capsule(ctx, wx - 11 * k, wy + 7 * k, wx + 7 * k, wy + 3 * k, 2.6 * k, 2.6 * k, mix(P.purple, P.fog, 0.3), { d: mix(P.purple, P.slate, 0.5), f: 0.3, m: 1, side: 1 });
+  line(ctx, wx - 6 * k, wy + 18 * k, wx + 8 * k, wy + 34 * k, mix(P.purple, P.black, 0.5));
+  line(ctx, wx - 14 * k, wy + 26 * k, wx - 4 * k, wy + 44 * k, mix(P.purple, P.black, 0.5));
+  // the handset: earpiece cup, a slim neck, the mouthpiece cup
+  begin();
+  for (const [lx, ly] of [[-6, -5], [6, -5], [8, 4], [4, 10], [4, 34], [8, 40], [6, 48], [-6, 48], [-8, 40], [-4, 34], [-4, 10], [-8, 4]]) {
+    hp(ox, oy, ca, sa, lx * k, ly * k);
+    pt(HP[0], HP[1]);
+  }
+  fill(ctx, HS.body, SH_HS);
+  hp(ox, oy, ca, sa, -4 * k, -2 * k);
+  rect(ctx, HP[0], HP[1], max(2, round(6 * k)), 1, C.beigeDD); // the earpiece grille
+  // fingers wrapped round the neck (seen on the outer side), thumb along it
+  for (let i = 0; i < 4; i++) {
+    hp(ox, oy, ca, sa, -6 * k, (14 + i * 4.6) * k);
+    const x0 = HP[0];
+    const y0 = HP[1];
+    hp(ox, oy, ca, sa, 3 * k, (15 + i * 4.6) * k);
+    capsule(ctx, x0, y0, HP[0], HP[1], 2.4 * k + 0.6, 2.2 * k + 0.6, SKIN.dd);
+    capsule(ctx, x0, y0, HP[0], HP[1], 2.4 * k, 2.2 * k, SKIN.base, SH_FING);
+    rect(ctx, x0 - 1, y0 - 1, 1, 1, SKIN.l);
+  }
+  // the back of the hand, behind the fingers, meeting the sleeve
+  hp(ox, oy, ca, sa, -9 * k, 24 * k);
+  ellipse(ctx, HP[0], HP[1], 6 * k, 8 * k, SKIN.base, { d: SKIN.d, f: 0.35, m: 1, dd: SKIN.dd, df: 0.1, side: -1 });
+  // the curly cord from the mouthpiece, out of frame
+  hp(ox, oy, ca, sa, 0, 48 * k);
+  const cx0 = HP[0];
+  const cy0 = HP[1];
+  ctx.fillStyle = C.beigeD;
+  for (let i = 0; i < 40; i++) {
+    const u = i / 40;
+    ctx.fillRect(round(cx0 + u * 30 + sin(u * 50) * 2), round(cy0 + u * 60 + cos(u * 50) * 1.5), 1, 1);
   }
 }
 
-// --- shots -------------------------------------------------------------------
+const K_LIFT = [[0.2, 0], [1.4, 1, 'inOut']];
+const NECK_X = 214;
+const NECK_Y = 132;
+const MUM_S = 4.0;
 
-function livingRoom(ctx, cam) {
-  R(ctx, 0, 0, W, 146, P.slate);
-  dither(ctx, 0, 0, W, 146, P.steel, 'dots');
-  const b = Math.round(cam * 0.5);
-  R(ctx, 36 + b, 30, 44, 34, P.black);
-  R(ctx, 37 + b, 31, 42, 32, P.tan);
-  R(ctx, 40 + b, 34, 36, 26, P.navy);
-  poly(ctx, [[48 + b, 54], [58 + b, 38], [60 + b, 54]], P.white);
-  R(ctx, 44 + b, 54, 28, 3, P.brown);
-  R(ctx, 40 + b, 57, 36, 3, P.blue);
-  R(ctx, 338 + b, 58, 2, 88, P.black);
-  poly(ctx, [[326 + b, 58], [352 + b, 58], [346 + b, 38], [332 + b, 38]], P.yellow);
-  R(ctx, 326 + b, 58, 26, 1, P.orange);
-  disc(ctx, 339 + b, 64, 22, A(P.yellow, 0.12));
-  const s = Math.round(cam * 0.8);
-  rrect(ctx, 96 + s, 96, 210, 56, P.black, 3);
-  rrect(ctx, 97 + s, 97, 208, 54, P.rust, 3);
-  R(ctx, 99 + s, 99, 204, 2, P.orange);
-  R(ctx, 166 + s, 100, 1, 40, P.darkRed);
-  R(ctx, 236 + s, 100, 1, 40, P.darkRed);
-}
-
-function desktopFront(ctx, cam) {
-  const x = Math.round(cam);
-  R(ctx, 0, 140, W, 76, P.brown);
-  R(ctx, 0, 140, W, 2, P.tan);
-  R(ctx, 0, 142, W, 1, P.tanShade);
-  R(ctx, 140 + x, 146, 100, 14, P.black);
-  R(ctx, 141 + x, 147, 98, 12, P.silver);
-  for (let y = 149; y < 158; y += 3) for (let xx = 143; xx < 237; xx += 4) R(ctx, xx + x, y, 3, 2, P.white);
-  rrect(ctx, 262 + x, 146, 12, 16, P.black, 2);
-  rrect(ctx, 263 + x, 147, 10, 14, P.silver, 2);
-  R(ctx, 74 + x, 134, 16, 18, P.black);
-  R(ctx, 75 + x, 135, 14, 16, P.red);
-  R(ctx, 75 + x, 135, 14, 2, P.pink);
-  R(ctx, 302 + x, 144, 22, 20, P.yellow);
-  for (let y = 148; y < 162; y += 4) R(ctx, 305 + x, y, 16, 1, P.orange);
-}
-
-// 1. Establishing: the family, bored by instant pages.
-function shotTooFast(ctx, lt) {
-  const cam = -lt * 1.2;
-  livingRoom(ctx, cam);
-  const yawn = lt > 1.4 && lt < 2.8;
-  const ox = Math.round(cam * 0.8);
-  hero(ctx, 150 + ox, 140, { pal: DAD, glasses: true, eyes: 'sleepy', mouth: lt > 3.4 ? 'o' : 'flat', legs: 'none' });
-  hero(ctx, 200 + ox, 140, { pal: MUM, hair: 'bob', eyes: 'sleepy', mouth: 'flat', armL: 'mouth', legs: 'none' });
-  hero(ctx, 246 + ox, 140, { pal: KID, hair: 'spiky', small: true, eyes: yawn ? 'closed' : 'sleepy', mouth: yawn ? 'O' : 'flat', armL: yawn ? 'up' : 'down', armR: yawn ? 'up' : 'down', legs: 'none' });
-  desktopFront(ctx, cam);
-  panel(ctx, 96, 172, 192, 32, P.black, P.steel, 2);
-  text(ctx, 'PAGE LOADED IN 0.00001 S', 192, 177, { color: P.green, align: 'center' });
-  const n = Math.floor(lt * 7919) + 1024;
-  text(ctx, `PAGES VIEWED: ${n.toLocaleString('en-GB')}`, 192, 189, { color: P.white, align: 'center' });
-}
-
-// 2. Close-up: Dad, pages flickering in his glasses.
-function shotDad(ctx, lt) {
-  R(ctx, 0, 0, W, H, P.slate);
-  dither(ctx, 0, 0, W, H, P.steel, 'dots');
-  rrect(ctx, -10, 150, 404, 80, P.black, 3);
-  rrect(ctx, -10, 151, 404, 80, P.rust, 3);
-  R(ctx, 0, 153, W, 2, P.orange);
-  const asleep = lt > 1.5;
-  faceCU(ctx, 192, 112, 44, { pal: DAD, glasses: true, eyes: asleep ? 'closed' : 'sleepy', mouth: asleep ? 'o' : 'flat' });
-  const cols = [P.cyan, P.yellow, P.pink, P.green, P.white, P.orange];
-  const col = cols[Math.floor(lt * 6) % cols.length];
-  for (const sd of [-1, 1]) {
-    const x = 192 + sd * 17;
-    R(ctx, x - 9, 105, 17, 11, A(P.white, 0.35));
-    R(ctx, x - 9, 105, 17, 3, A(col, 0.75));
-    for (let k = 0; k < 3; k++) R(ctx, x - 7, 110 + k * 2, 8 + ((k * 5 + Math.floor(lt * 6)) % 6), 1, A(P.black, 0.35));
-  }
-  if (lt > 0.5) bubble(ctx, 262, 40, 76, 'BORING.', { tail: 'down', tx: 270, scale: 1 });
-  if (asleep) text(ctx, 'Z Z Z', 268, 96 - (Math.floor(lt * 3) % 3) * 2, { color: P.white });
-}
-
-// 3. Product hero: the modem rises, gleams... and screams.
-function shotModem(ctx, lt) {
-  const screech = lt > 2.0 && lt < 4.8;
-  // one steady change of mood when it screams (no strobing: photosensitivity)
-  bands(ctx, 0, 0, W, 150, screech ? [P.ink, P.purple, P.magenta] : [P.ink, P.navy, P.blue]);
-  if (!screech) glow(ctx, 198, 110, 90, P.cyan, 0.05, 5);
-  R(ctx, 0, 150, W, 66, P.brown);
-  R(ctx, 0, 150, W, 2, P.tan);
-  dither(ctx, 0, 152, W, 64, P.tanShade, 'hlines');
-  R(ctx, 30, 120, 16, 20, P.black);
-  R(ctx, 31, 121, 14, 18, P.cream);
-  R(ctx, 35, 126, 6, 6, P.steel);
-  const rise = easeOutBack(prog(lt, 0.1, 0.7), 1.5);
-  const my = Math.round(lerp(240, 118, rise));
-  cord(ctx, 38, 132, 132, my + 16);
-  if (screech) {
-    clipRect(ctx, 0, 24, W, 126);
-    for (let k = 0; k < 4; k++) {
-      const rr = Math.round(((lt * 70 + k * 30) % 120) + 30);
-      ring(ctx, 198, my + 10, rr, k % 2 ? P.yellow : P.cyan);
-      ring(ctx, 198, my + 10, rr + 1, k % 2 ? P.yellow : P.cyan);
-    }
-    ctx.restore();
-  }
-  shadow(ctx, 198, my + 30, 70, 0.4);
-  modem(ctx, 192, my, lt, screech, prog(lt, 0.75, 1.35));
-  if (!screech && lt > 0.8 && lt < 2.0) {
-    sparkle(ctx, 142, my - 12, [0, 1, 2, 3, 2, 1][Math.floor(lt * 10) % 6]);
-    sparkle(ctx, 258, my + 4, [0, 1, 2, 3, 2, 1][Math.floor(lt * 10 + 3) % 6]);
-    text(ctx, 'INTRODUCING...', 192, 50, { color: P.cyan, align: 'center' });
-  }
-  const jump = screech ? -Math.round(Math.abs(Math.sin((lt - 2.0) * 5)) * 18) : 0;
-  cat(ctx, 318, 150 + jump, screech ? 'scared' : lt > 4.8 ? 'sleep' : 'calm', lt);
-  if (screech && lt < 3.4) bigText(ctx, 'MROW!', 340, 112 + jump, { scale: 1, color: P.white, outline: P.black });
-  const words = [
-    [2.0, 'SKREEEE!', 96, 46, 3, P.yellow],
-    [2.5, 'KSSHHHH!', 290, 64, 2, P.cyan],
-    [3.0, 'BWONG-BWONG', 112, 84, 2, P.pink],
-    [3.5, 'DEE-DOO-DEE-DOO', 280, 34, 1, P.green],
-    [3.9, 'KRRRRRK', 214, 98, 2, P.orange],
-  ];
-  if (screech) {
-    for (const [at, str, x, y, sc, col] of words) {
-      if (lt < at) continue;
-      const [jx, jy] = shake(lt, 1, x);
-      bigText(ctx, str, x + jx, y + jy, { scale: sc, color: col, outline: P.black, ow: sc > 1 ? 2 : 1, align: 'center' });
-    }
-  }
-  if (lt > 4.8) text(ctx, 'CONNECTED AT 56,000 BPS', 192, 186, { color: P.green, align: 'center' });
-}
-
-// 4. Split screen: the photo loads, the family waits. And waits.
-function shotLoading(ctx, lt) {
-  R(ctx, 0, 0, W, H, P.ink);
-  rrect(ctx, 4, 24, 184, 160, P.black, 3);
-  rrect(ctx, 5, 25, 182, 158, P.cream, 3);
-  R(ctx, 13, 33, 166, 128, P.black);
-  R(ctx, 14, 34, 164, 126, P.navy);
-  const p = 0.99 * easeOut(prog(lt, 0.3, 4.4));
-  const rows = Math.floor(p * 92);
-  if (rows > 0) ctx.drawImage(catPhoto(), 0, 0, 136, rows, 28, 38, 136, rows);
-  if (rows < 92) R(ctx, 28, 38 + rows, 136, 1, P.white);
-  R(ctx, 28, 136, 136, 1, P.slate);
-  text(ctx, 'LOADING CAT PHOTO...', 28, 140, { color: P.white });
-  R(ctx, 28, 150, 100, 6, P.slate);
-  R(ctx, 28, 150, Math.round(100 * p), 6, P.green);
-  text(ctx, `${Math.floor(p * 100)}%`, 164, 150, { color: P.yellow, align: 'right' });
-  const left = ['2 MINUTES', '4 HOURS', '3 DAYS', '1 WEEK', '6 MINUTES', '2 YEARS'][frame(lt, 1.6, 6)];
-  text(ctx, `TIME LEFT: ${left}`, 96, 168, { color: P.slate, align: 'center' });
-  R(ctx, 192, 0, 4, H, P.black);
-  R(ctx, 196, 0, 188, 150, P.slate);
-  dither(ctx, 196, 0, 188, 150, P.steel, 'dots');
-  // calendar + clock
-  R(ctx, 336, 28, 34, 36, P.black);
-  R(ctx, 337, 29, 32, 34, P.white);
-  R(ctx, 337, 29, 32, 9, P.red);
-  text(ctx, 'DAY', 353, 30, { color: P.white, align: 'center' });
-  bigText(ctx, String(1 + Math.floor(lt * 2.6)), 353, 43, { scale: 2, color: P.black, outline: null, align: 'center' });
-  if (Math.floor(lt * 2.6 * 2) % 2) poly(ctx, [[337, 63], [369, 63], [369, 50]], P.silver);
-  disc(ctx, 232, 44, 13, P.black);
-  disc(ctx, 232, 44, 11, P.white);
-  const a = lt * 14;
-  for (let i = 1; i <= 9; i++) R(ctx, 232 + Math.round(Math.sin(a) * i), 44 - Math.round(Math.cos(a) * i), 1, 1, P.black);
-  for (let i = 1; i <= 6; i++) R(ctx, 232 + Math.round(Math.sin(a / 12) * i), 44 - Math.round(Math.cos(a / 12) * i), 1, 1, P.red);
-  const web = prog(lt, 1.5, 4.5);
-  if (web > 0) {
-    const n = Math.round(web * 22);
-    line(ctx, 383, 0, 383 - n, 0, P.silver);
-    line(ctx, 383, 0, 383, n, P.silver);
-    line(ctx, 383, 0, 383 - n, n, P.silver);
-    for (let k = 6; k < n; k += 6) line(ctx, 383 - k, 0, 383, k, P.fog);
-  }
-  const beard = Math.min(3, Math.floor(lt / 1.2));
-  hero(ctx, 232, 154, { pal: DAD, glasses: true, eyes: 'wide', mouth: 'wavy', legs: 'none', beard, look: -1 });
-  hero(ctx, 282, 154, { pal: MUM, hair: 'bob', eyes: 'wide', mouth: 'flat', armL: 'mouth', armR: 'mouth', legs: 'none', look: -1 });
-  hero(ctx, 330, 154, { pal: KID, hair: 'spiky', small: true, eyes: 'wide', mouth: 'o', legs: 'none', sweat: lt, look: -1 });
-  R(ctx, 196, 146, 188, 70, P.brown);
-  R(ctx, 196, 146, 188, 2, P.tan);
-  text(ctx, 'WAITING...', 290, 172, { color: P.cream, align: 'center' });
-  if (Math.floor(lt * 2) % 2) text(ctx, '...STILL WAITING', 290, 186, { color: P.tan, align: 'center' });
-}
-
-// 5. Grandma picks up the phone at 99%.
-function shotGranny(ctx, lt) {
-  R(ctx, 0, 0, 192, H, P.maroon);
-  for (let x = 6; x < 192; x += 16) R(ctx, x, 0, 6, 150, P.purple);
-  R(ctx, 0, 150, 192, 66, P.brown);
-  R(ctx, 0, 150, 192, 2, P.tan);
-  R(ctx, 118, 128, 50, 4, P.black);
-  R(ctx, 119, 129, 48, 2, P.tanShade);
-  R(ctx, 124, 132, 4, 22, P.black);
-  R(ctx, 158, 132, 4, 22, P.black);
-  rrect(ctx, 128, 116, 30, 13, P.black, 2);
-  rrect(ctx, 129, 117, 28, 11, P.cream, 2);
-  disc(ctx, 143, 122, 4, P.tan);
-  const reach = prog(lt, 0, 0.35);
-  const g = hero(ctx, 80, 182, { pal: GRAN, hair: 'bun', glasses: true, legs: 'skirt', eyes: 'open', mouth: lt > 0.5 ? 'open' : 'smile', armR: reach < 1 ? 'down' : 'ear', armL: 'hips', bob: reach < 1 ? 1 : 0 });
-  if (reach >= 1) {
-    const [hx, hy] = g.handR;
-    cord(ctx, hx + 2, hy + 6, 130, 124, P.ink);
-    R(ctx, hx - 2, hy - 7, 6, 16, P.black);
-    R(ctx, hx - 1, hy - 6, 4, 14, P.cream);
-    R(ctx, hx - 1, hy - 6, 4, 3, P.tan);
-    R(ctx, hx - 1, hy + 5, 4, 3, P.tan);
-  }
-  if (lt > 0.25 && lt < 0.9) bigText(ctx, 'CLICK', 150, 100, { scale: 1, color: P.yellow, outline: P.black });
-  if (lt > 0.6) bubble(ctx, 14, 30, 120, 'HELLO? WHO KEEPS SCREAMING ON MY PHONE LINE?', { tail: 'down', tx: 70 });
-  R(ctx, 192, 0, 4, H, P.black);
-  R(ctx, 196, 0, 188, H, P.slate);
-  rrect(ctx, 214, 22, 150, 76, P.black, 3);
-  rrect(ctx, 215, 23, 148, 74, P.cream, 3);
-  R(ctx, 221, 29, 136, 60, P.black);
-  const lost = lt > 0.5;
-  if (!lost) {
-    ctx.drawImage(catPhoto(), 0, 0, 136, 58, 221, 30, 136, 58);
-    text(ctx, '99%', 352, 80, { color: P.yellow, align: 'right' });
+function shotHall(ctx, lt) {
+  ctx.drawImage(hallSet(), -round(lt * 1.5), 0);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.drawImage(hallGlow(), 30 - round(lt * 1.5), 52);
+  ctx.globalCompositeOperation = 'source-over';
+  const lift = track(lt, K_LIFT);
+  const head = castDraw(ctx, MUM.actor, lt, NECK_X, NECK_Y, MUM_S, -1);
+  let ex;
+  let ey;
+  if (head) {
+    // the ear on the screen-left side, from the rig's head frame
+    const L = MUM.look;
+    ex = head.cx + (-(L.head.cheekHW || 6.5) - 0.6) * MUM_S;
+    ey = head.cy + (L.ears.y || 0) * MUM_S;
   } else {
-    if (Math.floor(lt * 4) % 2) bigText(ctx, 'NO CARRIER', 289, 46, { scale: 2, color: P.red, outline: null, align: 'center' });
-    text(ctx, 'CONNECTION LOST', 289, 70, { color: P.white, align: 'center' });
+    const m = MUM_FB;
+    m.x = NECK_X;
+    m.y = 40;
+    m.blink = blinkAt(lt, 2);
+    m.brow = lt > 1.5 && lt < 2.3 ? 1 : 0;
+    bust(ctx, m, 216);
+    ex = m.x - m.hh * 0.42;
+    ey = m.y + m.hh * 0.5;
   }
-  const [sx, sy] = lost ? shake(lt, 1, 4) : [0, 0];
-  const pose = lost ? 'up' : 'down';
-  hero(ctx, 232 + sx, 170 + sy, { pal: DAD, glasses: true, beard: 3, eyes: lost ? 'wide' : 'happy', mouth: lost ? 'O' : 'grin', armL: pose, armR: pose, legs: 'none' });
-  hero(ctx, 282 - sx, 170 + sy, { pal: MUM, hair: 'bob', eyes: lost ? 'wide' : 'happy', mouth: lost ? 'O' : 'grin', armL: lost ? 'up' : 'hold', armR: lost ? 'up' : 'hold', legs: 'none' });
-  hero(ctx, 330 + sx, 170 - sy, { pal: KID, hair: 'spiky', small: true, eyes: lost ? 'wide' : 'happy', mouth: lost ? 'O' : 'grin', armL: pose, armR: pose, legs: 'none' });
-  R(ctx, 196, 168, 188, 48, P.brown);
-  R(ctx, 196, 168, 188, 2, P.tan);
-  if (lost) bigText(ctx, 'NOOOOO!', 290, 184, { scale: 3, color: P.white, outline: P.black, ow: 2, depth: 2, depthColor: P.red, align: 'center' });
+  // the receiver rises from below the frame to her ear on an arc, turning upright
+  const ox = lerp(ex - 34, ex - 2, lift);
+  const oy = lerp(250, ey - 4, smooth(lift));
+  handset(ctx, ox, oy, lerp(-0.9, -0.28, lift), 1.15);
+  vignette(ctx, 0.55);
+  letterbox(ctx, LB);
 }
 
-// 6. End slate.
-function shotSlate(ctx, lt) {
-  ripples(ctx, 192, 124, lt * 1.2, 12, [P.navy, P.ink]);
-  R(ctx, 0, 140, W, 76, P.brown);
-  R(ctx, 0, 140, W, 2, P.tan);
-  dither(ctx, 0, 142, W, 74, P.tanShade, 'hlines');
-  shadow(ctx, 198, 140, 74, 0.45);
-  cord(ctx, 132, 124, 40, 144);
-  modem(ctx, 192, 110, lt, false, ((lt + 0.4) % 3.2) / 0.8);
-  cat(ctx, 156, 97, 'sleep', lt);
-  text(ctx, 'Z', 172, 86 - (Math.floor(lt * 2) % 3) * 2, { color: P.white });
-  const mk = MARK();
-  const x0 = drawMark(ctx, mk, 192, 26, { reveal: prog(lt, 0.1, 0.9), drop: 36 });
-  if (lt > 1.0) glint(ctx, mk.cv, x0 - mk.ox, 26 - mk.oy, ((lt - 1.0) % 3.4) / 0.7, { width: 6 });
-  if (lt > 0.9) soundWave(ctx, 192, 62, 200, lt, P.cyan);
-  if (lt > 1.1) text(ctx, 'DIAL-UP INTERNET  •  NOW 56K!', 192, 70, { color: P.white, align: 'center', shadow: P.black });
-  if (lt > 1.4) slogan(ctx, 'FAST AS A FAX.', 192, 150, lt - 1.4, { scale: 2, bg: P.red, edge: P.darkRed });
-  if (lt > 2.0) urlPill(ctx, 'SCREECHNET.BAUD', 192, 178, { bg: P.navy, border: P.yellow, color: P.yellow });
-  finePrint(ctx, 'SPEEDS UP TO 56K ON A GOOD TUESDAY. PLEASE ASK GRANDMA TO STAY OFF THE PHONE.', { lt: lt - 2.2 });
+// --- S6: NO CARRIER, held in silence; then the dial-up dialog is the slate ---------------------
+const crtFrame = lazy(() =>
+  bake('sn-crtframe', W, H, function* paint(c) {
+    rect(c, 0, 0, W, H, C.beigeD);
+    yield* shadeSteps(c, 0, 0, W, H, [C.beigeD, mix(C.beigeD, C.beige, 0.5)], (x, y) => 0.2 + 0.6 * (1 - y / H) - 0.3 * (x / W));
+    c.clearRect(40, 32, 304, 152);
+    rect(c, 38, 30, 308, 2, P.black);
+    rect(c, 38, 184, 308, 2, mix(C.beige, P.white, 0.3));
+  }));
+const glassArt = lazy(() =>
+  bake('sn-glass', 304, 152, (c) => {
+    // scanlines and a soft curved highlight on the glass (drawn over the screen)
+    c.fillStyle = P.black;
+    c.globalAlpha = 0.08;
+    for (let y = 1; y < 152; y += 2) c.fillRect(0, y, 304, 1);
+    // the glass bulges: its edges a touch darker than its middle
+    c.globalAlpha = 0.12;
+    c.fillRect(0, 0, 304, 3);
+    c.fillRect(0, 149, 304, 3);
+    c.fillRect(0, 0, 3, 152);
+    c.fillRect(301, 0, 3, 152);
+    c.globalAlpha = 1;
+  }));
+
+/** The handshake as a hairline: a quiet carrier, a burst, a carrier again. */
+function waveform(ctx, cx, y, w, p) {
+  const n = round(w * p);
+  ctx.fillStyle = C.amber;
+  for (let i = 0; i < n; i++) {
+    const u = i / w;
+    const burst = Math.exp(-(((u - 0.5) / 0.12) ** 2));
+    const v = sin(i * 0.9) * (1 + burst * 4) * (0.6 + 0.4 * sin(i * 0.31));
+    ctx.fillRect(round(cx - w / 2 + i), round(y + v), 1, 1);
+  }
 }
 
-const SCENES = [
-  { at: 0, draw: shotTooFast },
-  { at: 5.0, draw: shotDad, wipe: 'iris', wd: 0.4, cx: 150, cy: 120 },
-  { at: 7.4, draw: shotModem, wipe: 'bars', wd: 0.45 },
-  { at: 12.4, draw: shotLoading, wipe: 'push', wd: 0.5 },
-  { at: 17.0, draw: shotGranny, wipe: 'cut' },
-  { at: 20.0, draw: shotSlate, wipe: 'dissolve', wd: 0.5 },
+const LEGAL = 'Ends when anyone picks up the phone. Speeds up to 56K, down to emotional.';
+const DLG = { x: 74, y: 46, w: 236, h: 124 };
+
+function shotEnd(ctx, lt) {
+  // the screen: NO CARRIER on black, then the desktop and the dialog
+  const d = lt - LOST_HOLD;
+  if (d < 0.3) {
+    rect(ctx, 40, 32, 304, 152, mix(P.black, P.navy, 0.25));
+    text(ctx, 'NO CARRIER', 56, 52, { color: P.silver });
+    rect(ctx, 56, 64, 5, 7, P.silver);
+    if (d > 0) {
+      ctx.globalAlpha = smooth(d / 0.3);
+      rect(ctx, 40, 32, 304, 152, P.black);
+      ctx.globalAlpha = 1;
+    }
+  } else {
+    rect(ctx, 40, 32, 304, 152, mix(P.navy, P.darkGreen, 0.3));
+    const a = smooth((d - 0.3) / 0.4);
+    ctx.globalAlpha = a;
+    // the dialog window: title bar, wordmark, tagline, the URL, a CONNECT button
+    rect(ctx, DLG.x + 3, DLG.y + 3, DLG.w, DLG.h, P.black);
+    rect(ctx, DLG.x, DLG.y, DLG.w, DLG.h, mix(P.silver, P.fog, 0.35));
+    rect(ctx, DLG.x, DLG.y, DLG.w, 1, P.white);
+    rect(ctx, DLG.x, DLG.y, 1, DLG.h, P.white);
+    rect(ctx, DLG.x + DLG.w - 1, DLG.y, 1, DLG.h, P.steel);
+    rect(ctx, DLG.x, DLG.y + DLG.h - 1, DLG.w, 1, P.steel);
+    rect(ctx, DLG.x + 2, DLG.y + 2, DLG.w - 4, 9, P.navy);
+    text(ctx, 'SCREECHNET 56K', DLG.x + 5, DLG.y + 4, { color: P.white, font: 'micro' });
+    waveform(ctx, DLG.x + DLG.w / 2, DLG.y + 24, 96, smooth((d - 0.5) / 1.0));
+    thin(ctx, 'SCREECHNET', DLG.x + DLG.w / 2, DLG.y + 34, { color: P.ink, track: 2, scale: 2, align: 'center' });
+    tracked(ctx, 'SOME CONNECTIONS ARE WORTH THE WAIT.', DLG.x + DLG.w / 2, DLG.y + 66, { color: P.ink, track: 1, align: 'center' });
+    tracked(ctx, 'DIAL-UP INTERNET  ·  SCREECHNET.NET', DLG.x + DLG.w / 2, DLG.y + 82, { color: P.slate, font: 'micro', track: 1, align: 'center' });
+    const bx = DLG.x + DLG.w / 2 - 26;
+    const by = DLG.y + 96;
+    rect(ctx, bx, by, 52, 13, mix(P.silver, P.white, 0.4));
+    rect(ctx, bx, by + 12, 52, 1, P.ink);
+    rect(ctx, bx + 51, by, 1, 13, P.ink);
+    rect(ctx, bx + 2, by + 2, 48, 9, mix(P.silver, P.white, 0.6));
+    tracked(ctx, 'CONNECT', bx + 26, by + 3, { color: P.ink, font: 'micro', track: 1, align: 'center' });
+    ctx.globalAlpha = 1;
+  }
+  ctx.drawImage(glassArt(), 40, 32);
+  ctx.drawImage(crtFrame(), 0, 0);
+  vignette(ctx, 0.55);
+  letterbox(ctx, LB);
+  // the legal on the bottom bar from the first frame of the shot
+  smallPrint(ctx, LEGAL, H - LB + 8, { color: P.fog, a: smooth(lt / 0.5), maxW: 330 });
+}
+
+const SHOTS = [
+  { at: 0, draw: shotStreet, tr: 'black', td: 0.9 },
+  { at: T_ROOM, draw: shotRoom },
+  { at: T_MODEM, draw: shotModem },
+  { at: T_FACE, draw: shotFace },
+  { at: T_HALL, draw: shotHall },
+  { at: T_END, draw: shotEnd },
 ];
+
+// A soft 90s ballad on chip voices (75 bpm, D major). The handshake is the
+// serenade: an answer tone, the two-note "bong", a hiss of noise sweeps and a
+// flutter of data, then the ballad swells; a chord hangs while she listens; the
+// line drops at NO CARRIER (silence), and one soft cadence plays under the slate.
+const LEAD = { wave: 'pulse25', a: 0.03, d: 0.5, s: 0.55, r: 0.35, vib: [12, 5, 0.25] };
+const KEYS = { wave: 'triangle', a: 0.004, d: 1.2, s: 0, r: 0.6, vib: false };
+const PAD = { wave: 'sine', a: 0.4, d: 1, s: 0.8, r: 1.0, vib: [5, 4, 0.4], legato: 1 };
+
+// Everything this spot bakes, in shot order: prewarmed in idle-time slices so
+// no cut ever waits for a bake (see cine.js prewarm).
+const WARM = [streetSky, streetSet, lampPool, lampHalo, roomSet, monitorArt, desktopArt, screenSpill, teenArt, plateArt, modemSet, ledGlow, faceBg, crtBand, hallSet, hallGlow, crtFrame, glassArt, () => vignetteArt(0.6), () => vignetteArt(0.62), () => vignetteArt(0.7), () => vignetteArt(0.55)];
+prewarm(WARM, 7000);
 
 export default {
   id: 'screechnet',
   brand: 'SCREECHNET',
-  duration: 26,
-  voice: { gender: 'female', lang: 'en-GB', pitch: 1.0, rate: 1.0 },
+  duration: DURATION,
+  voice: { gender: 'male', lang: 'en-GB', pitch: 0.9, rate: 0.95 },
   script: [
-    { at: 0.6, text: 'Is your internet just too fast? Do you miss the... suspense?' },
-    { at: 7.6, text: 'Introducing ScreechNet. Dial-up, the way nature intended.' },
-    { at: 12.6, text: 'Enjoy every photo... one... line... at a time.' },
-    { at: 20.6, text: 'ScreechNet. Fast as a fax.' },
+    { at: 0.5, text: 'Nineteen ninety-seven.' },
+    { at: 2.6, text: 'Somewhere in the suburbs, a young man waits for the only voice that ever understood him.' },
+    { at: 10.0, text: 'Some call it noise. He calls it connection.' },
+    { at: 13.8, text: 'Fifty-six kilobits of pure feeling.' },
+    { at: 21.15, text: 'ScreechNet. Some connections are worth the wait.' },
   ],
-  // 120 bpm: lazy intro, modem chaos, ticking wait, then the brand sting
-  // resolves on C with the end slate at beat 40 (20 s).
+  // every track is 33 beats at 75 bpm (26.4 s, longer than the spot) and ends in rest
   tune: {
-    bpm: 120,
-    wave: 'triangle',
-    notes: tune(
-      'E4:2 G4:2 A4:4 G4:2 E4:2 D4:4',
-      rep('A5:0.25 E5:0.25', 8), 'C6:0.5 A5:0.5 F5:0.5 D5:0.5 B4:2',
-      'E4:1 R:1 E4:1 R:1 F4:1 R:1 F4:1 R:1 F#4:1 R:1 F#4:1 R:1 G4:1 G#4:1 A4:1 B4:1',
-      'E5:0.5 E5:0.5 G5:1 C6:2 R:0.5 G5:0.5 A5:0.5 G5:0.5 E5:0.5 D5:0.5 C5:3 R:2',
-    ),
-    bass: tune(
-      'A2:4 E2:4 F2:4 E2:4',
-      rep('A2:0.5', 8), 'D3:2 E3:2',
-      'E2:2 E2:2 F2:2 F2:2 F#2:2 F#2:2 G2:2 B2:2',
-      'C3:2 G2:2 F2:2 G2:2 C3:2 R:2',
-    ),
-    bassWave: 'square',
-    drums: tune(
-      rep('K:2 H:2', 4),
-      rep('S:0.25', 16), 'K:1 K:1 S:2',
-      rep('H:1', 16),
-      'K:1 S:1 K:1 S:1 K:1 S:1 K:1 S:1 K:2 R:2',
-    ),
+    bpm: 75,
+    room: 0.45,
+    echo: { beats: 0.75, feedback: 0.25 },
+    fadeOut: 1.2,
+    tracks: [
+      {
+        kind: 'lead',
+        inst: LEAD,
+        gain: 0.95,
+        notes: 'R:1 A4:1@0.45 F#4:0.5@0.4 E4:0.5@0.4 D4:1@0.45 R:0.5 B4:1@0.45 A4:0.5@0.4 F#4:1@0.4 D4:1@0.4 R:0.5 E4:0.5@0.4 F#4:0.5@0.4 G4:0.5@0.45 A4:1.5@0.5 R:0.5 A6:1@0.35 F#5:0.5@0.6 D5:0.5@0.55 D6:0.125@0.3 A5:0.125@0.3 F#5:0.125@0.3 A5:0.125@0.3 D6:0.125@0.3 A5:0.125@0.3 F#5:0.125@0.3 A5:0.125@0.3 F#5:1.5@0.7 E5:0.5@0.6 D5:1@0.65 A4:1@0.55 G4:0.5@0.55 B4:0.5@0.55 D5:1@0.6 A4:2.75@0.3 R:2.75 A4:0.5@0.4 F#5:1@0.5 E5:0.5@0.45 D5:2@0.45 R:2.5',
+      },
+      {
+        kind: 'harmony',
+        inst: KEYS,
+        gain: 0.78,
+        notes: 'D3:0.5@0.5 A3:0.5@0.4 C#4:0.5@0.4 F#4:0.5@0.4 D3:0.5@0.45 A3:0.5@0.4 C#4:0.5@0.4 F#4:0.5@0.4 B2:0.5@0.45 F#3:0.5@0.4 A3:0.5@0.4 D4:0.5@0.4 G2:0.5@0.45 D3:0.5@0.4 F#3:0.5@0.4 B3:0.5@0.4 E3:0.5@0.45 B3:0.5@0.4 D4:0.5@0.4 G4:0.5@0.4 A2:0.5@0.45 E3:0.5@0.4 G3:0.5@0.4 D4:0.5@0.4 A2+E3+A3:3@0.35 D3:0.5@0.5 A3:0.5@0.45 D4:0.5@0.45 F#4:0.5@0.45 F#2:0.5@0.5 C#3:0.5@0.45 F#3:0.5@0.45 A3:0.5@0.45 G2:0.5@0.5 D3:0.5@0.45 G3:0.5@0.45 B3:0.5@0.45 A2+E3+A3:2.75@0.3 R:2.75 G2:0.5@0.45 D3:0.5@0.4 F#3:0.5@0.4 B3:0.5@0.4 D3+F#3+A3+D4:2@0.45 R:2.5',
+      },
+      {
+        kind: 'harmony',
+        inst: PAD,
+        gain: 0.34,
+        notes: 'D3+F#3+A3+C#4:4@0.4 B2+D3+F#3+A3:2@0.4 G2+B2+D3+F#3:2@0.4 E3+G3+B3+D4:2@0.4 A2+D3+E3+G3:2@0.4 A2+E3+A3:3@0.45 D3+F#3+A3:2@0.55 F#2+A2+C#3:2@0.55 G2+B2+D3:2@0.55 A2+C#3+E3:2.75@0.4 R:2.75 G2+B2+D3+F#3:1@0.4 D3+F#3+A3:3@0.45 R:2.5',
+      },
+      { kind: 'bass', inst: 'tri', gain: 0.68, notes: 'D2:4 B1:2 G1:2 E2:2 A1:2 A1:3 D2:2 F#1:2 G1:2 A1:2.75 R:2.75 G1:1 D2:3 R:2.5' },
+      { drums: 'R:12 W:1@0.3 W:1@0.4 X:0.25@0.25 X:0.25@0.25 X:0.25@0.25 X:0.25@0.25 K:1@0.3 H:1@0.18 K:1@0.3 H:1@0.18 K:1@0.3 H:1@0.18 W:1@0.32 R:2.25 R:2.75 R:6' },
+    ],
   },
   draw(ctx, t, dt, info) {
-    play(ctx, dt, info, SCENES);
+    prewarm(WARM);
+    film(ctx, dt, info, SHOTS);
   },
 };

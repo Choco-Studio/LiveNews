@@ -1,0 +1,3 @@
+# Python bytecode from running the worker/tests
+__pycache__/
+*.pyc

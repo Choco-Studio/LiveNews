@@ -91,6 +91,14 @@ describe('validateChannel', () => {
     assert.doesNotThrow(() => validateChannel(channel));
   });
 
+  test('(editorial-2 fix r2) "breaks" values are checked: whole ad counts, a cadence in seconds', () => {
+    assert.doesNotThrow(() => validateChannel({ ...makeChannel(), breaks: { adsPerBreak: 2, maxExtraAds: 6, minProgrammeBetween: 420 } }));
+    assert.throws(() => validateChannel({ ...makeChannel(), breaks: { adsPerBreak: 0 } }), /adsPerBreak/);
+    assert.throws(() => validateChannel({ ...makeChannel(), breaks: { maxExtraAds: 2.5 } }), /maxExtraAds/);
+    assert.throws(() => validateChannel({ ...makeChannel(), breaks: { minProgrammeBetween: -1 } }), /minProgrammeBetween/);
+    assert.throws(() => validateChannel({ ...makeChannel(), breaks: [] }), /breaks/);
+  });
+
   test('rejects a channel without presenters, programs or a non-empty rotation', () => {
     const message = /channel\.json needs presenters, programs and a non-empty rotation/;
     assert.throws(() => validateChannel(null), message);
@@ -145,6 +153,10 @@ describe('validateChannel', () => {
 
   test('accepts any whole number of stories from 1 up', () => {
     for (const stories of [1, 2, 10, 25]) assert.doesNotThrow(() => validateChannel(withProgram('duo', { stories })), String(stories));
+    for (const targetSeconds of [[480, 600], [60, 60]]) assert.doesNotThrow(() => validateChannel(withProgram('duo', { targetSeconds })), String(targetSeconds));
+    for (const targetSeconds of [600, [600], [600, 480], [0, 60], ['1', '2']]) {
+      assert.throws(() => validateChannel(withProgram('duo', { targetSeconds })), /targetSeconds/, JSON.stringify(targetSeconds));
+    }
   });
 
   test('rejects a programme without a non-empty list of "categories"', () => {
@@ -152,6 +164,28 @@ describe('validateChannel', () => {
       assert.throws(() => validateChannel(withProgram('duo', { categories })), /programme "duo" needs a list of "categories"/, JSON.stringify(categories));
     }
     assert.doesNotThrow(() => validateChannel(withProgram('duo', { categories: ['world', 'business'] })));
+  });
+
+  test('"features" is optional; when present it is a list of known features (round-up, number of the day, and finally)', () => {
+    const ok = makeChannel();
+    ok.programs.duo.features = ['roundup', 'number', 'lighter'];
+    ok.programs.solo.features = [];
+    assert.doesNotThrow(() => validateChannel(ok));
+    const unknown = makeChannel();
+    unknown.programs.duo.features = ['roundup', 'weather'];
+    assert.throws(() => validateChannel(unknown), /programme "duo" has an unknown feature "weather"/);
+    const notList = makeChannel();
+    notList.programs.duo.features = 'roundup';
+    assert.throws(() => validateChannel(notList), /programme "duo" has "features" that are not a list/);
+  });
+
+  test('"chemistry" is optional text for the writer', () => {
+    const ok = makeChannel();
+    ok.programs.duo.chemistry = 'Ann is dry; Bob is warm.';
+    assert.doesNotThrow(() => validateChannel(ok));
+    const bad = makeChannel();
+    bad.programs.duo.chemistry = ['Ann', 'Bob'];
+    assert.throws(() => validateChannel(bad), /programme "duo" has a "chemistry" that is not text/);
   });
 
   test('"theme" and "maxChats" stay optional', () => {
@@ -228,6 +262,14 @@ describe('publicChannel', () => {
     for (const key of ['personality', 'style', 'storyLength', 'categories', 'maxChats', 'stories', 'breaks']) {
       assert.ok(!json.includes(`"${key}"`), `"${key}" leaked`);
     }
+  });
+
+  test('the writer-only "chemistry" and "features" of a programme do not leak either', () => {
+    const ch = makeChannel();
+    ch.programs.duo.chemistry = 'SECRET-CHEMISTRY';
+    ch.programs.duo.features = ['roundup'];
+    const json = JSON.stringify(publicChannel(ch));
+    assert.ok(!json.includes('SECRET') && !json.includes('"features"'), json);
   });
 
   test('does not leak anything from the real channel either', () => {
@@ -497,6 +539,8 @@ describe('config/channel.json', () => {
   const channel = loadChannel();
   const feedCategories = new Set(JSON.parse(fs.readFileSync(REAL_FEEDS_FILE, 'utf8')).map((f) => f.category));
   const programs = Object.entries(channel.programs);
+  // news programmes (a weather programme is written from the weather data: test/weather.test.js)
+  const news = programs.filter(([, p]) => p.kind !== 'weather');
 
   test('is a valid GLOBIT 24 channel line-up', () => {
     assert.doesNotThrow(() => validateChannel(channel));
@@ -515,11 +559,14 @@ describe('config/channel.json', () => {
   });
 
   test('every programme has what the writer and the producer need', () => {
-    for (const [id, p] of programs) {
+    for (const [id, p] of programs.filter(([, q]) => q.kind === 'weather')) {
+      for (const key of ['title', 'tagline', 'theme', 'style']) assert.ok(typeof p[key] === 'string' && p[key].trim(), `${id}.${key}`);
+    }
+    for (const [id, p] of news) {
       for (const key of ['title', 'tagline', 'theme', 'style', 'storyLength']) {
         assert.ok(typeof p[key] === 'string' && p[key].trim(), `${id}.${key}`);
       }
-      assert.ok(Number.isInteger(p.stories) && p.stories >= 1 && p.stories <= 10, `${id}.stories = ${p.stories}`);
+      assert.ok(Number.isInteger(p.stories) && p.stories >= 1 && p.stories <= 18, `${id}.stories = ${p.stories}`);
       assert.ok(Number.isInteger(p.maxChats) && p.maxChats >= 0, `${id}.maxChats = ${p.maxChats}`);
       assert.ok(Array.isArray(p.categories) && p.categories.length >= 1, `${id}.categories`);
     }
@@ -527,20 +574,21 @@ describe('config/channel.json', () => {
   });
 
   test('solo programmes have no chat segments (there is nobody to chat with)', () => {
-    for (const [id, p] of programs) {
+    for (const [id, p] of news) {
       if (p.presenters.length === 1) assert.equal(p.maxChats, 0, id);
     }
   });
 
   test('every programme airs at least once in the rotation, and every presenter hosts something', () => {
     for (const [id] of programs) assert.ok(channel.rotation.includes(id), `${id} is never scheduled`);
-    const hosts = new Set(programs.flatMap(([, p]) => p.presenters));
+    // a correspondent "hosts" the links of the programmes that hand stories to them (server/correspondents.js)
+    const hosts = new Set(programs.flatMap(([, p]) => [...p.presenters, ...(p.correspondents || [])]));
     for (const id of Object.keys(channel.presenters)) assert.ok(hosts.has(id), `${id} hosts nothing`);
   });
 
   test('programme categories exist in config/feeds.json, and every feed category is used by some programme', () => {
     const used = new Set();
-    for (const [id, p] of programs) {
+    for (const [id, p] of news) {
       for (const c of p.categories) {
         assert.ok(feedCategories.has(c), `${id} asks for category "${c}" that no feed provides`);
         used.add(c);
@@ -559,8 +607,77 @@ describe('config/channel.json', () => {
     }
   });
 
+  test('the programmes use the recurring features where they fit, and every duo has a chemistry note', () => {
+    assert.deepEqual([...channel.programs['world-now'].features].sort(), ['lighter', 'number', 'roundup']);
+    assert.ok(channel.programs['news-60'].features.includes('roundup'));
+    for (const [id, p] of programs) {
+      if (p.presenters.length === 2) assert.ok(typeof p.chemistry === 'string' && p.chemistry.length > 40, `${id}.chemistry`);
+    }
+  });
+
+  test('presenter personalities read as grown-up broadcasters (the owner: "not a children\'s programme")', () => {
+    for (const [id, p] of Object.entries(channel.presenters)) assert.doesNotMatch(p.personality, /\bpuns?\b|excitable|wacky|\bcute\b|bubbly/i, id);
+  });
+
   test('commercial breaks are configured', () => {
     assert.ok(Number.isInteger(channel.breaks.adsPerBreak) && channel.breaks.adsPerBreak >= 1);
     assert.ok(Number.isInteger(channel.breaks.maxExtraAds) && channel.breaks.maxExtraAds >= 0);
+  });
+});
+
+describe('validateChannel: optional editorial keys (style bibles)', () => {
+  const withProgram = (extra) => {
+    const ch = makeChannel();
+    Object.assign(ch.programs.duo, extra);
+    return ch;
+  };
+  test('accepts the keys the real channel uses', () => {
+    assert.doesNotThrow(() => validateChannel(JSON.parse(fs.readFileSync(REAL_CHANNEL_FILE, 'utf8'))));
+    assert.doesNotThrow(() =>
+      validateChannel(withProgram({ headlineMax: 45, intro: 'headlines', numberSlot: 'main', toss: '{name}.', noQuestions: true, thanksMax: 1, happyOnly: ['lighter'], roundup: { opener: 'Around the world.', min: 2, max: 3 }, chats: { after: ['lighter'] }, timing: { target: 60, wpm: 170 }, gestures: { allow: { ann: ['nod'] }, grave: ['nod'] } }))
+    );
+  });
+
+  test('rejects wrong types and unknown values with a clear message', () => {
+    for (const [extra, re] of [
+      [{ headlineMax: 5 }, /headlineMax/],
+      [{ intro: 'montage' }, /intro/],
+      [{ numberSlot: 'first' }, /numberSlot/],
+      [{ toss: 'Over to you.' }, /toss/],
+      [{ chats: { after: ['anywhere'] } }, /chats/],
+      [{ roundup: { max: 9 } }, /round-up "max"/],
+      [{ timing: { target: 60 } }, /timing/],
+      [{ gestures: { allow: 'nod' } }, /gestures "allow"/],
+    ]) assert.throws(() => validateChannel(withProgram(extra)), re, JSON.stringify(extra));
+  });
+
+  test('a typo in any rule is refused (hot reload keeps the last good file) instead of being silently ignored', () => {
+    for (const [extra, re] of [
+      [{ chats: { after: ['lead'], max: { lead: 'two' } } }, /chats "max"/],
+      [{ chats: { max: { anywhere: 1 } } }, /chats "max"/],
+      [{ gestures: { perSegment: 'two' } }, /perSegment/],
+      [{ gestures: { only: { lean_in: 'everywhere' } } }, /gestures "only"/],
+      [{ gestures: { map: { wave: 'nodd' } } }, /gestures "map"/],
+      [{ gestures: { perEpisode: -1 } }, /perEpisode/],
+      [{ gestures: { defaults: { intro: 'wavee' } } }, /defaults/],
+      [{ gestures: { allow: ['nod', 'jazz_hands'] } }, /unknown action \(jazz_hands\)/],
+      [{ gestures: { grave: ['nod', 'smirk'] } }, /unknown action/],
+      [{ roundup: { words: 'lots' } }, /round-up "words"/],
+      [{ roundup: { reader: 'C' } }, /round-up "reader"/],
+      [{ roundup: { min: 4, max: 3 } }, /"min" above/],
+      [{ timing: { target: 60, wpm: 170, accept: [65, 55] } }, /accept/],
+      [{ timing: { target: 60, wpm: 170, minStories: 0 } }, /minStories/],
+      [{ happyOnly: ['lighter', 'always'] }, /happyOnly/],
+      [{ maxChats: 'some' }, /maxChats/],
+    ]) assert.throws(() => validateChannel(withProgram(extra)), re, JSON.stringify(extra));
+  });
+
+  test('a presenter role reaches the public channel (for the strap: "NAME • ROLE")', () => {
+    const ch = makeChannel();
+    ch.presenters.ann.role = 'Anchor';
+    assert.equal(publicChannel(ch).presenters.ann.role, 'Anchor');
+    assert.ok(!('role' in publicChannel(ch).presenters.bob));
+    ch.presenters.bob.role = 7;
+    assert.throws(() => validateChannel(ch), /role/);
   });
 });

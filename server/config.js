@@ -25,6 +25,15 @@ const num = (key, fallback) => {
   const n = Number(env(key, fallback));
   return Number.isFinite(n) ? n : fallback;
 };
+// Numbers with a sensible range: a value outside it (RECYCLE_GAP=-5, PICTURE_BUDGET_MS=-1) falls back to the
+// default, with a warning at start-up, rather than silently turning a feature off or inside out.
+export const configWarnings = [];
+const bounded = (key, fallback, min, max) => {
+  const n = num(key, fallback);
+  if (n >= min && n <= max) return n;
+  configWarnings.push(`${key}=${process.env[key]} is outside ${min}..${max}; using ${fallback}`);
+  return fallback;
+};
 
 export const config = {
   host: env('HOST', '127.0.0.1'),
@@ -49,8 +58,15 @@ export const config = {
     model: env('DEEPSEEK_MODEL', 'deepseek-chat'),
     baseUrl: env('DEEPSEEK_BASE_URL', 'https://api.deepseek.com/v1'),
   },
+  // "inbox" provider: an external agent (or a person) answers the AI prompts through files in this folder
+  inbox: {
+    dir: path.resolve(ROOT, env('AI_INBOX_DIR', path.join('data', 'ai-inbox'))),
+    timeoutMs: num('AI_INBOX_TIMEOUT_MS', 1800000),
+  },
   // Episodes produced ahead of air
   queueSize: num('QUEUE_SIZE', 2),
+  // the rotation slot the channel starts at (a programme id: demos and recordings), else the first
+  rotationStart: env('ROTATION_START', '').trim(),
   // Stories offered to the writer, who picks the best for each programme
   candidatePool: num('CANDIDATE_POOL', 12),
   // Second AI pass: a standards editor checks each script against its sources
@@ -58,6 +74,62 @@ export const config = {
   minNewStories: num('MIN_NEW_STORIES', 3),
   maxStoryAgeHours: num('MAX_STORY_AGE_HOURS', 36),
   feedRefreshMinutes: num('FEED_REFRESH_MINUTES', 10),
-  feedsFile: path.join(ROOT, 'config', 'feeds.json'),
+  // Picture desk: time per episode to look for pictures on article pages (and other outlets' pages),
+  // and to download each picture once before air (one that fails is dropped or replaced)
+  pictureBudgetMs: bounded('PICTURE_BUDGET_MS', 6000, 0, 120000),
+  pictureVerifyMs: bounded('PICTURE_VERIFY_MS', 12000, 0, 120000),
+  // When the desk runs short of new stories, those aired longest ago come back in new bulletins:
+  // 'local' (default: the offline fixture desk only), 'all' (live feeds too, only stories aired at least
+  // RECYCLE_AFTER_HOURS ago), 'off'. Never a story of the last RECYCLE_GAP episodes.
+  recycle: ((v) => (['all', 'off', 'local'].includes(v) ? v : 'local'))(env('RECYCLE_STORIES', 'local').trim().toLowerCase()),
+  recycleAfterHours: bounded('RECYCLE_AFTER_HOURS', 4, 0, 168),
+  recycleGap: bounded('RECYCLE_GAP', 6, 1, 50),
+  // The station's memory of presenter lines and features aired (no line twice within it)
+  recentLinesHours: bounded('RECENT_LINES_HOURS', 6, 0, 48),
+  // News sources; FEEDS_FILE points elsewhere (e.g. config/feeds.fixture.json for offline demos)
+  feedsFile: path.resolve(ROOT, env('FEEDS_FILE', path.join('config', 'feeds.json'))),
   dataDir: path.join(ROOT, 'data'),
+  // Presenter voices: 'kokoro' synthesises every segment ahead of air with local neural voices
+  // (tools/voice, server/voice; .env.example turns it on); 'browser' (the default, or Kokoro missing)
+  // leaves it to the viewer's speechSynthesis. Off by default so a bare checkout never loads a model.
+  voice: {
+    engine: env('VOICE_ENGINE', 'browser').trim().toLowerCase() === 'kokoro' ? 'kokoro' : 'browser',
+    // Where kokoro-v1.0.onnx and voices-v1.0.bin live (empty: data/models, then ~/.cache/kokoro)
+    kokoroDir: env('KOKORO_DIR', ''),
+    // CPU threads for the voice model (0 = all), so OBS and the browser keep theirs
+    threads: num('KOKORO_THREADS', 0),
+    python: env('VOICE_PYTHON', 'python3'),
+    // Voice processes working in parallel (~0.6 GB each); 1 is plenty where Kokoro runs faster than real time
+    workers: num('VOICE_WORKERS', 1),
+    // Seconds an episode waits for its voices before it is queued anyway (late clips still air when ready)
+    budgetSeconds: num('VOICE_BUDGET_S', 90),
+    // The first episode after start waits for ALL its voices (up to this many seconds): nothing is on air
+    // yet, and a cold start must not air its first programme with half its clips missing (owner 07:45)
+    firstBudgetSeconds: num('VOICE_FIRST_BUDGET_S', 480),
+    cacheMb: num('VOICE_CACHE_MB', 300),
+    dir: path.join(ROOT, 'data', 'voice'),
+  },
+  // WORLD WEATHER's data (server/weather.js): 'auto' = Open-Meteo live, or the offline demo data (DEMO DATA on
+  // screen) while the news desk runs on the fixture feeds; 'open-meteo' | 'fixture' | 'off'. Warnings: GDACS.
+  weather: {
+    source: ((v) => (['auto', 'open-meteo', 'fixture', 'off'].includes(v) ? v : 'auto'))(env('WEATHER', 'auto').trim().toLowerCase()),
+    warnings: env('WEATHER_WARNINGS', 'gdacs').trim().toLowerCase() === 'off' ? 'off' : 'gdacs',
+    ttlMinutes: bounded('WEATHER_TTL_MIN', 30, 5, 360),
+  },
+  // Footage of a correspondent link's place (server/footage.js): Wikimedia Commons clips, FILE-credited, kept in
+  // data/footage. 'auto' = on while the desk reads live feeds (off on the offline fixture feeds), 'on', 'off'.
+  footage: {
+    mode: ((v) => (['auto', 'on', 'off'].includes(v) ? v : 'auto'))(env('FOOTAGE', 'auto').trim().toLowerCase()),
+    budgetMs: bounded('FOOTAGE_BUDGET_MS', 20000, 0, 120000),
+    cacheMb: bounded('FOOTAGE_CACHE_MB', 400, 20, 5000),
+    dir: path.join(ROOT, 'data', 'footage'),
+  },
+  // Image search for stories still without a picture (owner 22:40: on air only REAL photos found on the
+  // web): a FILE photo of the story's place. 'commons' (Wikimedia Commons, no key, free licences) by
+  // default; add 'google' / 'bing' with their keys (comma-separated list); 'off' turns it off.
+  imageSearch: {
+    providers: ((v) => (v === 'off' || v === 'none' ? [] : v.split(/[\s,]+/).filter((p) => ['commons', 'google', 'bing'].includes(p))))(env('IMAGE_SEARCH', 'commons').trim().toLowerCase()),
+    google: { key: env('GOOGLE_CSE_KEY', ''), cx: env('GOOGLE_CSE_CX', '') },
+    bing: { key: env('BING_IMAGE_KEY', '') },
+  },
 };

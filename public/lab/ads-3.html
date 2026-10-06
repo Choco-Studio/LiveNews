@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ads lab · ads-3</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; background: #12101c; color: #c0cbdc; font: 13px/1.4 ui-monospace, monospace; }
+      main { max-width: 1180px; margin: 0 auto; padding: 12px 16px; }
+      #screen { display: block; width: 1152px; max-width: 100%; aspect-ratio: 16 / 9; image-rendering: pixelated; background: #000; }
+      .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+      input[type='range'] { flex: 1; min-width: 200px; }
+      button, select { font: inherit; background: #262b44; color: #fff; border: 1px solid #5a6988; padding: 3px 9px; }
+      #vo { min-height: 2.8em; color: #feae34; }
+      #script { white-space: pre-wrap; color: #8b9bb4; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <canvas id="screen" width="384" height="216"></canvas>
+      <div class="row">
+        <select id="pick"></select>
+        <button id="play">play</button>
+        <button id="sound" title="Real-time playback with the jingle and the voice-over">play + sound</button>
+        <input id="scrub" type="range" min="0" max="25" step="0.02" value="0" />
+        <span id="clock">0.00 s</span>
+      </div>
+      <div id="vo"></div>
+      <div id="script"></div>
+    </main>
+    <script type="module">
+      // Lab for the ads-3 commercials: pick an ad and render any instant
+      // deterministically (window.__lab.render(t)) for tools/shoot.mjs, or play
+      // it in real time with its jingle and voice-over to check the sync.
+      import { ADS } from '../js/ads/index.js';
+      import * as C from '../js/ads/cine.js';
+
+      const params = new URLSearchParams(location.search);
+      const canvas = document.getElementById('screen');
+      const out = canvas.getContext('2d');
+      out.imageSmoothingEnabled = false;
+      // The ad draws into an offscreen frame; ?zoom=x,y,factor (or opts.zoom)
+      // magnifies a region of it with nearest-neighbour for detail checks.
+      const frame = document.createElement('canvas');
+      frame.width = 384;
+      frame.height = 216;
+      const ctx = frame.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      let zoom = params.get('zoom') ? params.get('zoom').split(',').map(Number) : null;
+      const $ = (id) => document.getElementById(id);
+      const MINE = ['safesector', 'screechnet', 'corners', 'serene'];
+      let ad = ADS.find((a) => a.id === (params.get('ad') || MINE[0])) || ADS[0];
+      let t = Number(params.get('t')) || 0;
+      let playing = false;
+      let audio = null;
+      let tuneHandle = null;
+      let last = 0;
+
+      // Rough speech length (en voices speak ~14 characters per second) so the
+      // lab can tell the ad which line is being spoken, like the director does.
+      const lineSpan = (line) => line.text.length / (14 * (ad.voice?.rate || 1));
+      function infoAt(time) {
+        let line = -1;
+        let speaking = false;
+        ad.script.forEach((ln, i) => {
+          if (time >= ln.at) {
+            line = time < ln.at + lineSpan(ln) ? i : -1;
+            speaking = line === i;
+          }
+        });
+        return { line, speaking, duration: ad.duration };
+      }
+
+      // Toolkit specimens (?spec=type|faces|figures): boards for checking
+      // cine.js type and figures in isolation; t animates them.
+      const SPEC = {
+        type(c, t) {
+          C.rect(c, 0, 0, 384, 216, C.P.black);
+          C.thin(c, 'SAFESECTOR SCREECHNET', 12, 10, { color: C.P.silver, track: 2 });
+          C.thin(c, 'CORNERS SERENE 0123456789', 12, 24, { color: C.P.cream, track: 2 });
+          C.thin(c, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ &.,-:/', 12, 38, { color: C.P.white, track: 1 });
+          C.thin(c, 'SERENE', 12, 56, { color: C.P.cream, style: 'didone', track: 4 });
+          C.thin(c, 'CORNERS', 120, 56, { color: C.P.yellow, style: 'didone', track: 3 });
+          C.thin(c, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 12, 72, { color: C.P.white, style: 'didone', track: 1 });
+          C.thin(c, 'SERENE', 12, 92, { color: C.P.cream, style: 'didone', track: 3, scale: 2 });
+          C.thin(c, 'SAFESECTOR', 160, 92, { color: C.P.silver, track: 2, scale: 2 });
+          C.tracked(c, 'LUNAR RETREATS · MARE SERENITATIS', 12, 128, { color: C.P.fog, font: 'micro', track: 2 });
+          C.tracked(c, 'BECAUSE EVERY KILOBYTE COUNTS.', 12, 140, { color: C.P.white, track: 1 });
+          C.superTitle(c, 'MARGARET HALE', 12, 160, t, { color: C.P.white, font: 'body', track: 1 });
+          C.smallPrint(c, 'COVER EXCLUDES DISKS USED AS COASTERS, DRINKS MATS OR SAVE ICONS. CLAIMS LIMITED TO 1.44 MB. SAFESECTOR IS NOT A REAL INSURER, WHICH IS THE FIRST THING WE WOULD WANT YOU TO KNOW.', 190, { color: C.P.fog });
+        },
+        faces(c, t) {
+          C.rect(c, 0, 0, 384, 216, C.P.ink);
+          const fs = SPEC._faces ||= [
+            C.figure({ hh: 30, hair: 'bob', garment: 'cardigan', glasses: C.P.tanShade, pal: { hair: C.P.silver, hairD: C.P.fog, hairL: C.P.white, top: C.P.navy, topD: C.P.ink, topL: C.P.steel } }),
+            C.figure({ hh: 30, hair: 'short', garment: 'jacket', tie: C.P.darkRed, shoulders: 1.0, pal: { skin: C.P.tan, skinD: C.P.tanShade, hair: C.P.black, hairD: C.P.black, hairL: C.P.ink, top: C.P.slate, topD: C.P.ink, topL: C.P.steel } }),
+            C.figure({ hh: 30, hair: 'messy', garment: 'hoodie', pal: { hair: C.P.maroon, hairD: C.P.black, hairL: C.P.brown, top: C.P.darkGreen, topD: C.P.black, topL: C.P.darkGreen } }),
+            C.figure({ hh: 30, hair: 'long', garment: 'dress', pal: { skin: C.P.tanShade, skinD: C.P.brown, hair: C.P.black, hairD: C.P.black, hairL: C.P.maroon, top: C.P.black, topD: C.P.black, topL: C.P.ink } }),
+          ];
+          fs.forEach((f, i) => {
+            f.x = 52 + i * 94;
+            f.y = 40;
+            f.blink = C.blinkAt(t, i + 1);
+            f.mouth = C.talkAt(t, i === 0);
+            f.turn = i === 1 ? 0.3 * Math.sin(t) : 0;
+            f.armL.a = 0.1; f.armL.e = 1.2; f.armR.a = 0.1; f.armR.e = i === 0 ? 0.3 + Math.sin(t) * 0.8 : 1.2;
+            f.armR.hand = i === 0 && Math.sin(t) > 0 ? 'open' : 'rest';
+            C.bust(c, f, 216);
+            C.arm(c, f, -1);
+            C.arm(c, f, 1);
+          });
+        },
+        figures(c, t) {
+          C.rect(c, 0, 0, 384, 216, C.P.slate);
+          C.rect(c, 0, 190, 384, 26, C.P.ink);
+          const ps = SPEC._figs ||= [
+            { hh: 26, pal: { ...C.DEFAULT_PAL, top: C.P.black, topD: C.P.black, topL: C.P.ink }, dress: true, hair: 'long', armL: { a: 0.1, e: 0.1 }, armR: { a: 0.2, e: 1.9 } },
+            { hh: 26, pal: { ...C.DEFAULT_PAL, top: C.P.navy, topD: C.P.ink, topL: C.P.steel, hair: C.P.black, hairD: C.P.black }, hair: 'short', armL: { a: 0.08, e: 0.05 }, armR: { a: 0.08, e: 0.05 } },
+            { hh: 16, pal: { ...C.DEFAULT_PAL, top: C.P.black, topD: C.P.black, hair: C.P.black, hairD: C.P.black, skin: C.P.ink, skinD: C.P.black }, silhouette: C.P.cyan, dress: true, hair: 'bob', armL: { a: 0.1, e: 0.1 }, armR: { a: 0.3, e: 2.2 } },
+          ];
+          ps.forEach((p, i) => {
+            p.x = 70 + i * 110;
+            p.gy = 200;
+            p.armR.e = i === 0 ? 1.6 + Math.sin(t) * 0.5 : p.armR.e;
+            C.standing(c, p);
+          });
+        },
+      };
+      let spec = params.get('spec');
+
+      function render(time, opts = {}) {
+        if (opts.spec !== undefined) spec = opts.spec;
+        if (spec && SPEC[spec]) {
+          t = Math.max(0, Number(time) || 0);
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          SPEC[spec](ctx, t);
+          out.clearRect(0, 0, 384, 216);
+          if (zoom) {
+            const [zx, zy, zf] = zoom;
+            out.drawImage(frame, zx, zy, 384 / zf, 216 / zf, 0, 0, 384, 216);
+          } else out.drawImage(frame, 0, 0);
+          return { spec };
+        }
+        if (opts.ad) set(opts.ad);
+        if (opts.zoom !== undefined) zoom = opts.zoom;
+        t = Math.max(0, Number(time) || 0);
+        const info = infoAt(t);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 1;
+        ctx.clearRect(0, 0, 384, 216);
+        ad.draw(ctx, t, t, info);
+        out.clearRect(0, 0, 384, 216);
+        if (zoom) {
+          const [zx, zy, zf] = zoom;
+          out.drawImage(frame, zx, zy, 384 / zf, 216 / zf, 0, 0, 384, 216);
+        } else out.drawImage(frame, 0, 0);
+        $('clock').textContent = `${t.toFixed(2)} s / ${ad.duration} s`;
+        $('scrub').value = String(t);
+        $('vo').textContent = info.line >= 0 ? `VO ${info.line + 1}: ${ad.script[info.line].text}` : '';
+        return info;
+      }
+
+      function set(id) {
+        const next = ADS.find((a) => a.id === id);
+        if (!next) throw new Error(`unknown ad ${id}`);
+        ad = next;
+        $('pick').value = ad.id;
+        $('scrub').max = String(ad.duration);
+        $('script').textContent = ad.script.map((l) => `${l.at.toFixed(1).padStart(5)}  ${l.text}`).join('\n');
+      }
+
+      function stopSound() {
+        try {
+          tuneHandle?.stop();
+          audio?.stop();
+        } catch { /* lab only */ }
+        tuneHandle = null;
+      }
+
+      function loop(now) {
+        if (playing) {
+          t += Math.min(0.1, (now - last) / 1000);
+          if (t >= ad.duration) {
+            t = ad.duration;
+            playing = false;
+            stopSound();
+          }
+          render(t);
+        }
+        last = now;
+        requestAnimationFrame(loop);
+      }
+
+      async function playWithSound() {
+        const { AudioEngine } = await import('../js/audio.js');
+        audio ||= new AudioEngine({ lang: 'en' });
+        await audio.unlock();
+        stopSound();
+        audio.setVoices?.({ ad: ad.voice });
+        tuneHandle = audio.playTune?.(ad.tune, { loop: false, volume: 0.45 });
+        t = 0;
+        playing = true;
+        const started = performance.now();
+        const id = ad.id;
+        for (const line of ad.script) {
+          const wait = line.at * 1000 - (performance.now() - started);
+          if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+          if (!playing || ad.id !== id) return;
+          await audio.speak(line.text, 'ad');
+        }
+      }
+
+      for (const a of ADS) $('pick').append(new Option(`${MINE.includes(a.id) ? '★ ' : ''}${a.brand || a.id} (${a.duration}s)`, a.id));
+      $('pick').onchange = () => {
+        set($('pick').value);
+        render(0);
+      };
+      $('scrub').oninput = () => {
+        playing = false;
+        render(Number($('scrub').value));
+      };
+      $('play').onclick = () => {
+        playing = !playing;
+        if (t >= ad.duration) t = 0;
+      };
+      $('sound').onclick = () => playWithSound().catch((e) => console.warn(e));
+      addEventListener('keydown', (e) => {
+        if (e.key === ' ') {
+          playing = !playing;
+          e.preventDefault();
+        } else if (e.key === 'ArrowRight') render(t + (e.shiftKey ? 1 : 1 / 25));
+        else if (e.key === 'ArrowLeft') render(t - (e.shiftKey ? 1 : 1 / 25));
+      });
+
+      set(ad.id);
+      render(t);
+      requestAnimationFrame(loop);
+      // Opacity check: every pixel of every frame must be painted (the studio
+      // never clears before an ad draws). The lab clears to transparent before
+      // each render, so any alpha < 255 is a hole. -> [{ t, n }] (empty = pass)
+      function opaque(id = ad.id, step = 0.25) {
+        set(id);
+        const holes = [];
+        for (let k = 0; k * step <= ad.duration + 1e-6; k++) {
+          const tt = k * step;
+          render(tt);
+          const d = ctx.getImageData(0, 0, 384, 216).data;
+          let n = 0;
+          for (let i = 3; i < d.length; i += 4) if (d[i] < 255) n++;
+          if (n) holes.push({ t: +tt.toFixed(2), n });
+        }
+        return holes;
+      }
+      // Frame cost of ad.draw over the spot (after one warm-up pass): { avg, p95, max, worstT } ms.
+      function perf(id = ad.id, step = 1 / 30) {
+        set(id);
+        for (let tt = 0; tt <= ad.duration; tt += 0.5) render(tt);
+        const ms = [];
+        let worstT = 0;
+        let worst = 0;
+        for (let tt = 0; tt <= ad.duration; tt += step) {
+          const info = infoAt(tt);
+          const t0 = performance.now();
+          ad.draw(ctx, tt, tt, info);
+          const d = performance.now() - t0;
+          ms.push(d);
+          if (d > worst) { worst = d; worstT = tt; }
+        }
+        ms.sort((a, b) => a - b);
+        const avg = ms.reduce((a, b) => a + b, 0) / ms.length;
+        return { avg: +avg.toFixed(2), p95: +ms[Math.floor(ms.length * 0.95)].toFixed(2), max: +worst.toFixed(2), worstT: +worstT.toFixed(2) };
+      }
+      window.__lab = { render, set, infoAt, opaque, perf, get ad() { return ad; } };
+      // Offline render of an ad's music bed for tools/render-audio.mjs:
+      //   --opts '{"ad":"serene"}' -> { sampleRate, channels } (looped like the director plays it)
+      window.__audio = {
+        async render({ ad: id = ad.id, seconds = null } = {}) {
+          const { renderTune } = await import('../js/audio/synth.js');
+          const a = ADS.find((x) => x.id === id) || ad;
+          const res = await renderTune(a.tune, { seconds: seconds ?? a.duration + 1, loop: true, volume: 0.45 });
+          if (!res) throw new Error('no OfflineAudioContext');
+          const b = res.buffer;
+          return { sampleRate: b.sampleRate, channels: [b.getChannelData(0), b.getChannelData(1)] };
+        },
+      };
+    </script>
+  </body>
+</html>

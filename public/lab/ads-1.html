@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lab · ads</title>
+    <style>
+      body { margin: 0; background: #181425; color: #c0cbdc; font: 12px/1.4 monospace; }
+      main { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; }
+      #screen { width: 1152px; height: 648px; image-rendering: pixelated; background: #000; }
+      .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      #t { width: 760px; }
+      #vo { min-height: 18px; color: #feae34; }
+      #lines { position: relative; width: 760px; height: 10px; background: #262b44; }
+      #lines i { position: absolute; top: 0; height: 10px; background: #0099db; opacity: 0.8; }
+      #lines b { position: absolute; top: 0; width: 1px; height: 10px; background: #e43b44; }
+      button, select { font: inherit; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <canvas id="screen" width="384" height="216"></canvas>
+      <div class="bar">
+        <select id="ad"></select>
+        <select id="mode">
+          <option value="single">single ad</option>
+          <option value="break">break (2 ads)</option>
+          <option value="specimen">type specimen</option>
+          <option value="kit">kit demo</option>
+        </select>
+        <button id="play">play</button>
+        <label><input type="checkbox" id="subs" /> VO line overlay</label>
+        <span id="clock">0.00</span>
+        <span id="perf"></span>
+      </div>
+      <input id="t" type="range" min="0" max="25" step="0.02" value="0" />
+      <div id="lines"></div>
+      <div id="vo"></div>
+    </main>
+    <script type="module">
+      // Ads lab: renders any registered ad at any instant t (deterministic),
+      // or a break of two ads back to back the way director.js plays them
+      // (0.3 s of black and silence before each ad and after the last, no stinger
+      // inside a break; every ad starts at dt = 0 on the cut and its voice-over and
+      // bed run on that picture clock, as director.blackCut/playAd do).
+      // 'specimen' shows the kit's display faces, 'kit' the premium helpers.
+      //   window.__lab.set({ ad: 'bitfizz-cola', mode: 'single'|'break'|'specimen'|'kit', second: 'cloudbrella', subs: true, zoom: [x, y, s] })
+      //   ?zoom=x,y,s shows the 384/s x 216/s crop at (x, y) blown up s times (nearest neighbour) to judge pixels
+      //   window.__lab.render(t)     window.__lab.duration()     window.__lab.perf()
+      //   window.__audio.render({ ad, seconds })  -> the ad's tune rendered offline (tools/render-audio.mjs)
+      import { ADS, BREAK_BLACK } from '../js/ads/index.js';
+      import * as K from '../js/ads/kit.js';
+      import { drawText } from '../js/font.js';
+      import { renderTune } from '../js/audio/synth.js';
+
+      const cv = document.getElementById('screen');
+      const ctx = cv.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      const $ = (id) => document.getElementById(id);
+      const params = new URLSearchParams(location.search);
+      const state = { ad: params.get('ad') || ADS[0].id, second: params.get('second') || null, mode: params.get('mode') || 'single', subs: params.has('subs'), zoom: params.get('zoom') ? params.get('zoom').split(',').map(Number) : null };
+      // zoom: the ad draws into an offscreen frame, a crop of it is scaled up on screen
+      const off = document.createElement('canvas');
+      off.width = 384;
+      off.height = 216;
+      const offCtx = off.getContext('2d');
+      offCtx.imageSmoothingEnabled = false;
+      const byId = (id) => ADS.find((a) => a.id === id) || ADS[0];
+
+      // Rough speech length so `info.speaking` is plausible (TTS ~14 chars/s).
+      const speechLen = (text, ad) => text.length / (14 * (ad.voice?.rate || 1));
+      function infoAt(ad, dt) {
+        let line = -1;
+        let speaking = false;
+        ad.script.forEach((l, i) => {
+          if (dt >= l.at) {
+            line = i;
+            speaking = dt < l.at + speechLen(l.text, ad);
+          }
+        });
+        if (line >= 0 && !speaking) line = -1;
+        return { line, speaking, duration: ad.duration };
+      }
+      // How long the director holds an ad: its duration, or longer if the voice overruns.
+      const holdOf = (ad) => Math.max(ad.duration, ...ad.script.map((l) => l.at + speechLen(l.text, ad)));
+      const pair = () => {
+        const a = byId(state.ad);
+        const b = state.second ? byId(state.second) : ADS[(ADS.indexOf(a) + 1) % ADS.length];
+        return [a, b];
+      };
+      /** What is on screen at break time T: [ad, dt], or null for the black between elements. */
+      function breakAt(T) {
+        const [a, b] = pair();
+        const gap = BREAK_BLACK.duration;
+        const a0 = gap;
+        const a1 = a0 + holdOf(a);
+        const b0 = a1 + gap;
+        const b1 = b0 + holdOf(b);
+        let on = null;
+        if (T >= a0 && T < a1) on = [a, T - a0];
+        else if (T >= b0 && T < b1) on = [b, T - b0];
+        return { on, total: b1 + gap };
+      }
+
+      // --- type specimen ---------------------------------------------------
+      const ABC = 'ABCDEFGHIJKLM';
+      const NOP = 'NOPQRSTUVWXYZ';
+      const NUM = '0123456789 .,:-/&?!%+()"º·';
+      function specimen(t) {
+        K.R(ctx, 0, 0, 384, 216, K.P.black);
+        const gold = [K.P.cream, K.P.yellow, K.P.yellow, K.P.orange];
+        let y = 6;
+        K.type(ctx, ABC, 8, y, { face: 'serif', color: K.P.white, track: 2 });
+        y += 16;
+        K.type(ctx, NOP, 8, y, { face: 'serif', color: K.P.white, track: 2 });
+        y += 16;
+        K.type(ctx, NUM, 8, y, { face: 'serif', color: K.P.white, track: 2 });
+        y += 18;
+        K.type(ctx, 'BITFIZZ RESERVE', 8, y, { face: 'serif', color: gold, track: 3 });
+        K.type(ctx, 'AGED 12 YEARS', 220, y, { face: 'serif', color: K.P.cream, track: 1 });
+        y += 20;
+        K.type(ctx, ABC + NOP, 8, y, { face: 'thin', color: K.P.white, track: 1 });
+        y += 14;
+        K.type(ctx, NUM, 8, y, { face: 'thin', color: K.P.white, track: 1 });
+        y += 14;
+        K.type(ctx, 'CLOUDBRELLA', 8, y, { face: 'thin', color: K.P.white, track: 4 });
+        K.type(ctx, 'ZERO-SYNC CANOPY', 180, y, { face: 'thin', color: K.P.silver, track: 2 });
+        y += 16;
+        K.type(ctx, 'BODY 5X7 TRACKED +2  THE QUICK BROWN FOX', 8, y, { face: 'body', color: K.P.silver, track: 2 });
+        y += 12;
+        K.type(ctx, 'MICRO 3X5 TRACKED +1  SMALL PRINT, LEGAL LINES', 8, y, { face: 'micro', color: K.P.fog, track: 1 });
+        y += 12;
+        K.type(ctx, 'SERIF X2', 8, y, { face: 'serif', color: gold, track: 2, scale: 2 });
+        K.trackIn(ctx, 'TRACKING IN', 290, y + 4, t % 3, { face: 'serif', color: K.P.cream, track: 2, from: 10, dur: 1.6 });
+        K.rule(ctx, 290, y + 20, 120, (t % 3) / 1.2, K.P.yellow);
+      }
+
+      // --- kit demo: backdrop, lathe, bubbles, motes, rim light -------------
+      const BOTTLE = K.profile(120, [[0, 7], [0.18, 7], [0.26, 9, 'inOut'], [0.36, 24, 'inOut'], [0.42, 26, 'out'], [0.96, 26], [1, 24, 'in']]);
+      const AMBER = [K.P.black, K.P.maroon, K.P.brown, K.P.rust, K.P.orange, K.P.yellow];
+      const STRIPES = [[-0.52, 0.07, K.P.cream], [0.66, 0.035, K.P.yellow]];
+      const LAYERS = [[K.P.yellow, 0, 0], [K.P.black, -1, 0]];
+      const head = (c, col, ox, oy) => K.poly(c, [[300 + ox, 60 + oy], [330 + ox, 62 + oy], [338 + ox, 90 + oy], [346 + ox, 100 + oy], [336 + ox, 104 + oy], [334 + ox, 130 + oy], [300 + ox, 150 + oy], [290 + ox, 100 + oy]], col);
+      function kitDemo(t) {
+        ctx.drawImage(K.gradient('lab-amber', 384, 216, { cx: 160, cy: 110, rx: 240, ry: 170, ramp: [K.P.black, K.P.maroon, K.P.brown], gamma: 1.4 }), 0, 0);
+        K.beam(ctx, 60, 0, 150, 216, 30, 120, { color: K.P.cream, alpha: 0.05 });
+        K.motes(ctx, t, { x: 40, y: 0, w: 160, h: 216, n: 40, color: K.P.cream });
+        K.contact(ctx, 160, 178, 40, 0.6);
+        K.lathe(ctx, 160, 58, BOTTLE, { ramp: AMBER, stripes: STRIPES, glass: { top: 46, edge: 1.5 }, ambient: 0.12 });
+        K.bubbles(ctx, t, { x: 140, y: 110, w: 40, h: 64, n: 22, color: K.P.yellow, hi: K.P.cream, size: 2, rise: 12 });
+        K.turntable(ctx, 160, 180, 50, 8, t * 0.1);
+        K.litShape(ctx, head, LAYERS);
+        K.vignette(ctx, 0.7);
+        K.letterbox(ctx, 1, 22);
+        K.trackIn(ctx, 'RESERVE', 270, 170, t, { face: 'serif', color: [K.P.cream, K.P.yellow, K.P.yellow, K.P.orange], track: 3, from: 12, dur: 2 });
+      }
+
+      let lastVo = '';
+      function render(t, opts = {}) {
+        if (opts && Object.keys(opts).length) set(opts, false);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, 384, 216);
+        if (state.mode === 'specimen') {
+          specimen(t);
+          return { mode: 'specimen' };
+        }
+        if (state.mode === 'kit') {
+          kitDemo(t);
+          return { mode: 'kit' };
+        }
+        let ad = null;
+        let dt = t;
+        if (state.mode === 'break') {
+          const b = breakAt(t);
+          if (b.on) [ad, dt] = b.on;
+        } else ad = byId(state.ad);
+        let info = null;
+        const z = state.zoom;
+        const dst = z ? offCtx : ctx;
+        if (ad) {
+          info = infoAt(ad, dt);
+          dst.save();
+          ad.draw(dst, t, dt, info);
+          dst.restore();
+        } else BREAK_BLACK.draw(dst); // the black between break elements
+        if (z) {
+          const [zx, zy, zs] = z;
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(off, zx, zy, 384 / zs, 216 / zs, 0, 0, 384, 216);
+        }
+        const vo = ad && info.line >= 0 ? ad.script[info.line].text : '';
+        if (state.subs && vo) {
+          ctx.fillStyle = 'rgba(0,0,0,0.7)';
+          ctx.fillRect(0, 0, 384, 11);
+          drawText(ctx, vo.slice(0, 62).toUpperCase(), 2, 2, { color: '#feae34' });
+        }
+        if (vo !== lastVo) $('vo').textContent = (lastVo = vo) ? `VO: ${vo}` : '';
+        $('clock').textContent = `${t.toFixed(2)}s${ad ? `  ${ad.id} dt=${dt.toFixed(2)}` : ''}`;
+        return { ad: ad?.id || null, dt, line: info?.line ?? -1 };
+      }
+
+      function duration() {
+        if (state.mode === 'specimen' || state.mode === 'kit') return 6;
+        return state.mode === 'break' ? breakAt(0).total : byId(state.ad).duration;
+      }
+
+      function drawLines() {
+        const el = $('lines');
+        el.innerHTML = '';
+        if (state.mode !== 'single') return;
+        const ad = byId(state.ad);
+        const k = 760 / ad.duration;
+        for (const l of ad.script) {
+          const i = document.createElement('i');
+          i.style.left = `${l.at * k}px`;
+          i.style.width = `${speechLen(l.text, ad) * k}px`;
+          i.title = l.text;
+          el.appendChild(i);
+        }
+      }
+
+      function set(o = {}, redraw = true) {
+        Object.assign(state, o);
+        $('ad').value = state.ad;
+        $('mode').value = state.mode;
+        $('subs').checked = state.subs;
+        $('t').max = duration().toFixed(2);
+        drawLines();
+        if (redraw) render(Number($('t').value));
+        return { ...state, duration: duration() };
+      }
+
+      /** Average and worst ms per frame over the whole ad (60 fps budget is 16.7 ms for everything). */
+      function perf(step = 1 / 30) {
+        const d = duration();
+        let worst = 0;
+        let sum = 0;
+        let n = 0;
+        for (let t = 0; t < d; t += step) {
+          const a = performance.now();
+          render(t);
+          const ms = performance.now() - a;
+          worst = Math.max(worst, ms);
+          sum += ms;
+          n++;
+        }
+        const out = { avg: +(sum / n).toFixed(3), worst: +worst.toFixed(2), frames: n };
+        $('perf').textContent = `avg ${out.avg} ms, worst ${out.worst} ms`;
+        return out;
+      }
+
+      for (const ad of ADS) $('ad').add(new Option(`${ad.id} (${ad.duration}s)`, ad.id));
+      $('ad').onchange = () => set({ ad: $('ad').value });
+      $('mode').onchange = () => set({ mode: $('mode').value });
+      $('subs').onchange = () => set({ subs: $('subs').checked });
+      $('t').oninput = () => render(Number($('t').value));
+      let playing = false;
+      $('play').onclick = () => {
+        playing = !playing;
+        $('play').textContent = playing ? 'pause' : 'play';
+        let last = performance.now();
+        const tick = (now) => {
+          if (!playing) return;
+          let t = Number($('t').value) + (now - last) / 1000;
+          last = now;
+          if (t > duration()) t = 0;
+          $('t').value = t;
+          render(t);
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      };
+
+      /** Offline render of an ad's tune (for tools/render-audio.mjs): { sampleRate, channels }. */
+      async function renderAudio({ ad = state.ad, seconds = null } = {}) {
+        const a = byId(ad);
+        const out = await renderTune(a.tune, { seconds: seconds ?? a.duration + 1, loop: true, volume: 0.45 });
+        if (!out) throw new Error('no OfflineAudioContext');
+        const b = out.buffer;
+        return { sampleRate: b.sampleRate, channels: [b.getChannelData(0), b.getChannelData(1)] };
+      }
+
+      window.__lab = { render, set, duration, perf, ads: ADS.map((a) => a.id) };
+      window.__audio = { render: renderAudio };
+      set({}, true);
+    </script>
+  </body>
+</html>

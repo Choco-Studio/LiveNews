@@ -1,0 +1,962 @@
+{
+ "kind": "episode",
+ "id": "emurd7mc35-rec",
+ "createdAt": "2026-10-02T19:37:37.491Z",
+ "program": {
+  "id": "money-minute",
+  "title": "MONEY MINUTE",
+  "tagline": "MARKETS & YOUR MONEY",
+  "theme": "money"
+ },
+ "cast": {
+  "A": "penny"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "pictures",
+   "ms": 2,
+   "pictures": 0,
+   "of": 3,
+   "found": 0,
+   "borrowed": 0
+  },
+  {
+   "stage": "write",
+   "ms": 47,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 0,
+   "images": 0,
+   "verified": 0
+  }
+ ],
+ "title": "MONEY MINUTE (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Chocolate makers warn of higher prices as cocoa stays expensive. Also coming up: Lagos shops switch to solar power to cut fuel costs. And later, our number of the day. This is MONEY MINUTE. I'm Penny Sterling.",
+   "cues": [
+    {
+     "char": 64,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 189,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s13ed823f35",
+    "s62cbd69778",
+    "s36101b743d"
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 9
+     },
+     {
+      "t": 0.731,
+      "char": 10,
+      "len": 6
+     },
+     {
+      "t": 1.118,
+      "char": 17,
+      "len": 4
+     },
+     {
+      "t": 1.393,
+      "char": 22,
+      "len": 2
+     },
+     {
+      "t": 1.559,
+      "char": 25,
+      "len": 6
+     },
+     {
+      "t": 1.945,
+      "char": 32,
+      "len": 6
+     },
+     {
+      "t": 2.331,
+      "char": 39,
+      "len": 2
+     },
+     {
+      "t": 2.496,
+      "char": 42,
+      "len": 5
+     },
+     {
+      "t": 2.827,
+      "char": 48,
+      "len": 5
+     },
+     {
+      "t": 3.158,
+      "char": 54,
+      "len": 9
+     },
+     {
+      "t": 4.159,
+      "char": 65,
+      "len": 4
+     },
+     {
+      "t": 4.502,
+      "char": 70,
+      "len": 6
+     },
+     {
+      "t": 4.981,
+      "char": 77,
+      "len": 2
+     },
+     {
+      "t": 5.187,
+      "char": 81,
+      "len": 5
+     },
+     {
+      "t": 5.598,
+      "char": 87,
+      "len": 5
+     },
+     {
+      "t": 6.008,
+      "char": 93,
+      "len": 6
+     },
+     {
+      "t": 6.488,
+      "char": 100,
+      "len": 2
+     },
+     {
+      "t": 6.693,
+      "char": 103,
+      "len": 5
+     },
+     {
+      "t": 7.104,
+      "char": 109,
+      "len": 5
+     },
+     {
+      "t": 7.515,
+      "char": 115,
+      "len": 2
+     },
+     {
+      "t": 7.72,
+      "char": 118,
+      "len": 3
+     },
+     {
+      "t": 7.994,
+      "char": 122,
+      "len": 4
+     },
+     {
+      "t": 8.337,
+      "char": 127,
+      "len": 5
+     },
+     {
+      "t": 9.198,
+      "char": 134,
+      "len": 3
+     },
+     {
+      "t": 9.506,
+      "char": 138,
+      "len": 5
+     },
+     {
+      "t": 9.97,
+      "char": 145,
+      "len": 3
+     },
+     {
+      "t": 10.279,
+      "char": 149,
+      "len": 6
+     },
+     {
+      "t": 10.819,
+      "char": 156,
+      "len": 2
+     },
+     {
+      "t": 11.051,
+      "char": 159,
+      "len": 3
+     },
+     {
+      "t": 11.359,
+      "char": 163,
+      "len": 3
+     },
+     {
+      "t": 12.118,
+      "char": 168,
+      "len": 4
+     },
+     {
+      "t": 12.454,
+      "char": 173,
+      "len": 2
+     },
+     {
+      "t": 12.656,
+      "char": 176,
+      "len": 5
+     },
+     {
+      "t": 13.059,
+      "char": 182,
+      "len": 6
+     },
+     {
+      "t": 13.98,
+      "char": 190,
+      "len": 3
+     },
+     {
+      "t": 14.203,
+      "char": 194,
+      "len": 5
+     },
+     {
+      "t": 14.537,
+      "char": 200,
+      "len": 8
+     }
+    ],
+    "duration": 15.339
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Cocoa has more than doubled in price in two years, Ledger Line reports. Several chocolate makers say they will raise prices again because cocoa remains near record levels.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "storyId": "s13ed823f35",
+   "headline": "Chocolate makers warn of higher prices",
+   "shot": "close",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ECONOMY",
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 5
+     },
+     {
+      "t": 0.573,
+      "char": 6,
+      "len": 3
+     },
+     {
+      "t": 0.835,
+      "char": 10,
+      "len": 4
+     },
+     {
+      "t": 1.163,
+      "char": 15,
+      "len": 4
+     },
+     {
+      "t": 1.491,
+      "char": 20,
+      "len": 7
+     },
+     {
+      "t": 2.015,
+      "char": 28,
+      "len": 2
+     },
+     {
+      "t": 2.212,
+      "char": 31,
+      "len": 5
+     },
+     {
+      "t": 2.605,
+      "char": 37,
+      "len": 2
+     },
+     {
+      "t": 2.802,
+      "char": 40,
+      "len": 3
+     },
+     {
+      "t": 3.064,
+      "char": 44,
+      "len": 5
+     },
+     {
+      "t": 3.457,
+      "char": 51,
+      "len": 6
+     },
+     {
+      "t": 3.916,
+      "char": 58,
+      "len": 4
+     },
+     {
+      "t": 4.244,
+      "char": 63,
+      "len": 7
+     },
+     {
+      "t": 5.218,
+      "char": 72,
+      "len": 7
+     },
+     {
+      "t": 5.646,
+      "char": 80,
+      "len": 9
+     },
+     {
+      "t": 6.181,
+      "char": 90,
+      "len": 6
+     },
+     {
+      "t": 6.555,
+      "char": 97,
+      "len": 3
+     },
+     {
+      "t": 6.769,
+      "char": 101,
+      "len": 4
+     },
+     {
+      "t": 7.036,
+      "char": 106,
+      "len": 4
+     },
+     {
+      "t": 7.304,
+      "char": 111,
+      "len": 5
+     },
+     {
+      "t": 7.625,
+      "char": 117,
+      "len": 6
+     },
+     {
+      "t": 7.999,
+      "char": 124,
+      "len": 5
+     },
+     {
+      "t": 8.32,
+      "char": 130,
+      "len": 7
+     },
+     {
+      "t": 8.748,
+      "char": 138,
+      "len": 5
+     },
+     {
+      "t": 9.069,
+      "char": 144,
+      "len": 7
+     },
+     {
+      "t": 9.496,
+      "char": 152,
+      "len": 4
+     },
+     {
+      "t": 9.764,
+      "char": 157,
+      "len": 6
+     },
+     {
+      "t": 10.138,
+      "char": 164,
+      "len": 6
+     }
+    ],
+    "duration": 10.812
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "In Nigeria, thousands of small shops in Lagos have switched to solar panels to cut fuel costs. A survey found 62 percent of traders now use solar for some of their power, according to Ledger Line.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "lean_in"
+    }
+   ],
+   "storyId": "s62cbd69778",
+   "headline": "Lagos shops switch to solar power to cut fuel costs",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "LAGOS, NIGERIA",
+    "lat": 6.52,
+    "lon": 3.38
+   },
+   "fact": "62% OF TRADERS",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ENERGY",
+   "numbers": [
+    {
+     "value": "62%",
+     "label": "OF TRADERS"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 2
+     },
+     {
+      "t": 0.374,
+      "char": 3,
+      "len": 7
+     },
+     {
+      "t": 0.89,
+      "char": 12,
+      "len": 9
+     },
+     {
+      "t": 1.535,
+      "char": 22,
+      "len": 2
+     },
+     {
+      "t": 1.728,
+      "char": 25,
+      "len": 5
+     },
+     {
+      "t": 2.115,
+      "char": 31,
+      "len": 5
+     },
+     {
+      "t": 2.503,
+      "char": 37,
+      "len": 2
+     },
+     {
+      "t": 2.696,
+      "char": 40,
+      "len": 5
+     },
+     {
+      "t": 3.083,
+      "char": 46,
+      "len": 4
+     },
+     {
+      "t": 3.406,
+      "char": 51,
+      "len": 8
+     },
+     {
+      "t": 3.986,
+      "char": 60,
+      "len": 2
+     },
+     {
+      "t": 4.18,
+      "char": 63,
+      "len": 5
+     },
+     {
+      "t": 4.567,
+      "char": 69,
+      "len": 6
+     },
+     {
+      "t": 5.019,
+      "char": 76,
+      "len": 2
+     },
+     {
+      "t": 5.212,
+      "char": 79,
+      "len": 3
+     },
+     {
+      "t": 5.47,
+      "char": 83,
+      "len": 4
+     },
+     {
+      "t": 5.793,
+      "char": 88,
+      "len": 5
+     },
+     {
+      "t": 6.63,
+      "char": 95,
+      "len": 1
+     },
+     {
+      "t": 6.764,
+      "char": 97,
+      "len": 6
+     },
+     {
+      "t": 7.234,
+      "char": 104,
+      "len": 5
+     },
+     {
+      "t": 7.636,
+      "char": 110,
+      "len": 2
+     },
+     {
+      "t": 7.837,
+      "char": 113,
+      "len": 7
+     },
+     {
+      "t": 8.374,
+      "char": 121,
+      "len": 2
+     },
+     {
+      "t": 8.575,
+      "char": 124,
+      "len": 7
+     },
+     {
+      "t": 9.111,
+      "char": 132,
+      "len": 3
+     },
+     {
+      "t": 9.379,
+      "char": 136,
+      "len": 3
+     },
+     {
+      "t": 9.648,
+      "char": 140,
+      "len": 5
+     },
+     {
+      "t": 10.05,
+      "char": 146,
+      "len": 3
+     },
+     {
+      "t": 10.318,
+      "char": 150,
+      "len": 4
+     },
+     {
+      "t": 10.654,
+      "char": 155,
+      "len": 2
+     },
+     {
+      "t": 10.855,
+      "char": 158,
+      "len": 5
+     },
+     {
+      "t": 11.257,
+      "char": 164,
+      "len": 5
+     },
+     {
+      "t": 11.659,
+      "char": 171,
+      "len": 9
+     },
+     {
+      "t": 12.33,
+      "char": 181,
+      "len": 2
+     },
+     {
+      "t": 12.531,
+      "char": 184,
+      "len": 6
+     },
+     {
+      "t": 13.001,
+      "char": 191,
+      "len": 4
+     }
+    ],
+    "duration": 13.636
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Our number of the day: 21 percent. Tokyo's main stock index closed at a record high, driven by shares of chipmakers. The index has gained 21 percent since January, Ledger Line reports.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "steeple"
+    }
+   ],
+   "storyId": "s36101b743d",
+   "headline": "Tokyo stocks close at a record high",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "TOKYO, JAPAN",
+    "lat": 35.68,
+    "lon": 139.69
+   },
+   "fact": "INDEX UP 21%",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "21%",
+     "label": "INDEX UP"
+    }
+   ],
+   "feature": "number",
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 3
+     },
+     {
+      "t": 0.479,
+      "char": 4,
+      "len": 6
+     },
+     {
+      "t": 1.004,
+      "char": 11,
+      "len": 2
+     },
+     {
+      "t": 1.228,
+      "char": 14,
+      "len": 3
+     },
+     {
+      "t": 1.528,
+      "char": 18,
+      "len": 3
+     },
+     {
+      "t": 1.827,
+      "char": 23,
+      "len": 2
+     },
+     {
+      "t": 2.052,
+      "char": 26,
+      "len": 7
+     },
+     {
+      "t": 3.101,
+      "char": 35,
+      "len": 7
+     },
+     {
+      "t": 3.595,
+      "char": 43,
+      "len": 4
+     },
+     {
+      "t": 3.904,
+      "char": 48,
+      "len": 5
+     },
+     {
+      "t": 4.274,
+      "char": 54,
+      "len": 5
+     },
+     {
+      "t": 4.645,
+      "char": 60,
+      "len": 6
+     },
+     {
+      "t": 5.077,
+      "char": 67,
+      "len": 2
+     },
+     {
+      "t": 5.262,
+      "char": 70,
+      "len": 1
+     },
+     {
+      "t": 5.386,
+      "char": 72,
+      "len": 6
+     },
+     {
+      "t": 5.818,
+      "char": 79,
+      "len": 4
+     },
+     {
+      "t": 6.127,
+      "char": 85,
+      "len": 6
+     },
+     {
+      "t": 6.559,
+      "char": 92,
+      "len": 2
+     },
+     {
+      "t": 6.745,
+      "char": 95,
+      "len": 6
+     },
+     {
+      "t": 7.177,
+      "char": 102,
+      "len": 2
+     },
+     {
+      "t": 7.362,
+      "char": 105,
+      "len": 10
+     },
+     {
+      "t": 8.492,
+      "char": 117,
+      "len": 3
+     },
+     {
+      "t": 8.727,
+      "char": 121,
+      "len": 5
+     },
+     {
+      "t": 9.08,
+      "char": 127,
+      "len": 3
+     },
+     {
+      "t": 9.315,
+      "char": 131,
+      "len": 6
+     },
+     {
+      "t": 9.727,
+      "char": 138,
+      "len": 2
+     },
+     {
+      "t": 9.904,
+      "char": 141,
+      "len": 7
+     },
+     {
+      "t": 10.374,
+      "char": 149,
+      "len": 5
+     },
+     {
+      "t": 10.727,
+      "char": 155,
+      "len": 7
+     },
+     {
+      "t": 11.198,
+      "char": 164,
+      "len": 6
+     },
+     {
+      "t": 11.609,
+      "char": 171,
+      "len": 4
+     },
+     {
+      "t": 11.904,
+      "char": 176,
+      "len": 7
+     }
+    ],
+    "duration": 12.674
+   }
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's your MONEY MINUTE. I'm Penny Sterling. Stay with us on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 72,
+     "slot": null,
+     "action": "papers"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 6
+     },
+     {
+      "t": 0.575,
+      "char": 7,
+      "len": 4
+     },
+     {
+      "t": 0.858,
+      "char": 12,
+      "len": 5
+     },
+     {
+      "t": 1.196,
+      "char": 18,
+      "len": 6
+     },
+     {
+      "t": 2.042,
+      "char": 26,
+      "len": 3
+     },
+     {
+      "t": 2.265,
+      "char": 30,
+      "len": 5
+     },
+     {
+      "t": 2.599,
+      "char": 36,
+      "len": 8
+     },
+     {
+      "t": 3.551,
+      "char": 46,
+      "len": 4
+     },
+     {
+      "t": 3.958,
+      "char": 51,
+      "len": 4
+     },
+     {
+      "t": 4.365,
+      "char": 56,
+      "len": 2
+     },
+     {
+      "t": 4.609,
+      "char": 59,
+      "len": 2
+     },
+     {
+      "t": 4.854,
+      "char": 62,
+      "len": 6
+     },
+     {
+      "t": 5.424,
+      "char": 69,
+      "len": 2
+     }
+    ],
+    "duration": 5.968
+   }
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s13ed823f35",
+   "headline": "Chocolate makers warn of higher prices",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ECONOMY"
+  },
+  {
+   "storyId": "s62cbd69778",
+   "headline": "Lagos shops switch to solar power to cut fuel costs",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ENERGY"
+  },
+  {
+   "storyId": "s36101b743d",
+   "headline": "Tokyo stocks close at a record high",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY"
+  }
+ ],
+ "storyIds": [
+  "s13ed823f35",
+  "s62cbd69778",
+  "s36101b743d"
+ ]
+}

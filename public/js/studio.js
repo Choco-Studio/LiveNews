@@ -1,11 +1,11 @@
 // Composes the broadcast: camera shots, full-screen scenes, the graphics
-// package (logo bug, world clocks, lower third, subtitles, ticker) and
+// package (graphics/index.js: bug, clock, lower third, captions, ticker) and
 // transitions. Everything is drawn at the native 384x216 pixel grid.
 import { P } from './palette.js';
-import { drawText, measureText, wrapText, LINE_HEIGHT } from './font.js';
+import { drawText } from './font.js';
 import { drawAnchor, drawHands } from './anchors.js';
 import { W, H, DESK_Y, ANCHOR_X, ANCHOR_Y, drawSet, drawDesk, drawStripes } from './set.js';
-import { r, zoneTime, longDate, easeOut } from './util.js';
+import { r, longDate, easeOut, zoneTime, STUDIO_TZ } from './util.js';
 import { lookOf, portraitOf, presenterName, THEME_ACCENT } from './cast.js';
 import { drawCloseup } from './scenes/portraits.js';
 import { drawWorldMap } from './scenes/worldmap.js';
@@ -13,22 +13,15 @@ import * as cards from './scenes/cards.js';
 import { drawOpen } from './scenes/opens.js';
 import { drawLogo, measureLogo } from './logo.js';
 import { ACTIONS } from './cues.js';
+import { Graphics } from './graphics/index.js';
+import { FrameGuard } from './graphics/guard.js';
+// WORLD WEATHER's weather centre (the standing presenter uses the v2 rig): loaded in the background at start-up
+let WEATHER = null;
+import('./scenes/weather/index.js').then((m) => (WEATHER = m), (err) => console.warn('[weather] scene unavailable', err));
 
 export { W, H };
 
 const SOLO_X = 192;
-
-// Which graphics sit on top of each shot
-const OVERLAYS = {
-  wide: 'news',
-  close: 'news',
-  full: 'news',
-  map: 'news',
-  fact: 'news',
-  montage: 'news',
-  breakingCard: 'bug',
-  ad: 'ad',
-};
 
 // Automatic body language when the script gives no stage directions:
 // [action, weight] pools for whoever is speaking or listening, by mood.
@@ -53,7 +46,7 @@ export function slotPositions(cast) {
 }
 
 export class Renderer {
-  constructor(canvas, audio) {
+  constructor(canvas, audio, { v2 = false, perf = false } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.ctx.imageSmoothingEnabled = false;
@@ -64,6 +57,17 @@ export class Renderer {
     this.sctx = this.stage.getContext('2d');
     this.sctx.imageSmoothingEnabled = false;
     this.anim = {};
+    this.graphics = new Graphics({ audio });
+    this.guard = new FrameGuard(); // a throwing shot shows a held frame / slate, never black
+    // Wave 2 (?v2=1): the v2 Stage draws the studio shots (runtime/host.js). Loaded only when
+    // asked, so the default path never runs v2 code; any v2 failure falls back to the shots below.
+    this.v2 = null;
+    if (v2) import('./v2/canvas25d/runtime/host.js').then((m) => (this.v2 = new m.StageHost({ audio, perf })), (err) => console.warn('[v2] stage unavailable, old renderer on air', err));
+    // WORLD NOW's city follows the hour on the studio clock (London): night, dawn, day, golden hour, blue hour
+    if (v2) import('./v2/canvas25d/studio/set.js').then((s) => s.setSkyClock(() => {
+      const t = zoneTime(STUDIO_TZ);
+      return t.h + t.m / 60;
+    }), () => {});
   }
 
   anchorState(slot, t, scene) {
@@ -146,6 +150,7 @@ export class Renderer {
   }
 
   drawShot(t, scene) {
+    if (this.v2?.frame(this.ctx, t, scene)) return; // v2 studio shot drawn (bookkeeping runs on every shot)
     const ctx = this.ctx;
     const dt = t - (scene.shotSince || 0);
     const img = scene.storyId ? scene.images.get(scene.storyId) : null;
@@ -163,28 +168,70 @@ export class Renderer {
           presenters: Object.values(scene.cast || {}).map(presenterName),
           date: longDate().toUpperCase(),
           channel: scene.channel.name,
+          replay: !!scene.replay,
         });
       case 'title':
         return cards.drawTitleCard(ctx, t, dt, { channel: program?.title || scene.channel.name, subtitle: program?.tagline || scene.channel.slogan, date: longDate().toUpperCase() });
       case 'endcard':
-        return cards.drawEndCard(ctx, t, dt, { channel: program?.title || scene.channel.name, line1: card.line1 || 'STAY WITH US', line2: card.line2 || '' });
+        return cards.drawEndCard(ctx, t, dt, { channel: program?.title || scene.channel.name, line1: card.line1 || 'STAY WITH US', line2: card.line2 || '', accent: THEME_ACCENT[program?.theme] || P.red });
       case 'ident':
-        return this.drawIdent(ctx, t, dt, scene);
+        if (card?.kind === 'break') {
+          const br = scene.adBreak;
+          return cards.drawBreakBumper(ctx, t, dt, { left: br ? br.until - t : card.seconds, total: br?.total || card.seconds, next: card.next, accent: THEME_ACCENT[card.theme] || P.red });
+        }
+        return cards.drawIdentCard(ctx, t, dt);
       case 'promo':
-        return this.drawPromo(ctx, t, dt, scene);
+        return cards.drawPromoCard(ctx, t, dt, card, presenterName);
       case 'montage': {
         const item = scene.rundown[card.index] || {};
-        const pic = scene.images.get(item.storyId);
-        return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, image: pic?.card || null });
+        // the frame's backdrop is decided in its first 0.4 s and then kept (a picture that arrives later never
+        // pops in under the headline): the story's picture, else its place on the map (owner 22:50: never a
+        // black frame), else the montage's world field
+        if (card.pic === undefined || (card.pic === null && dt < 0.4)) card.pic = scene.images.get(item.storyId)?.card || (dt < 0.4 ? null : false);
+        // no picture: the place's footage (a FILE clip, graphics/remote.js credits it), when ready in the same first 0.4 s
+        if (!card.pic && (card.vid === undefined || (card.vid === null && dt < 0.4))) card.vid = item.footage?.id && scene.footageDeck?.ready(item.footage.id) ? item.footage.id : dt < 0.4 ? null : false;
+        const f = !card.pic && card.vid ? scene.footageDeck?.frame(card.vid, 'full', t) : null;
+        if (f) this.drawFootage(ctx, f);
+        const loc = item.location;
+        const map = !card.pic && !f && Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon);
+        if (map) drawWorldMap(ctx, t, dt, { lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
+        return cards.drawHeadlineFrame(ctx, t, dt, { index: card.index, total: scene.rundown.length, headline: item.headline, source: item.source, category: item.category, image: card.pic || null, backdrop: map || f ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
+      }
+      case 'tease': {
+        // STILL TO COME (director.js playStillToCome): one story as a headline frame (its picture, else its place on
+        // the map), two as a panel of tiles, the second as it is named
+        const items = (card.items || []).map((id) => scene.rundown.find((r) => r.storyId === id)).filter(Boolean);
+        if (items.length >= 2) {
+          const tiles = items.slice(0, 2).map((r) => ({ headline: r.headline, category: r.category, image: scene.images.get(r.storyId)?.tile || null, lat: r.location?.lat, lon: r.location?.lon, place: r.location?.place }));
+          return cards.drawStillToCome(ctx, t, dt, { items: tiles, shown: [0, t - (card.shown?.[1] ?? Infinity)], programId: program?.id, accent: THEME_ACCENT[program?.theme] });
+        }
+        const item = items[0] || {};
+        if (card.pic === undefined || (card.pic === null && dt < 0.4)) card.pic = scene.images.get(item.storyId)?.card || (dt < 0.4 ? null : false);
+        const loc = item.location;
+        const map = !card.pic && Number.isFinite(loc?.lat) && Number.isFinite(loc?.lon);
+        if (map) drawWorldMap(ctx, t, dt, { lat: loc.lat, lon: loc.lon, scope: loc.scope, place: '', label: false, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
+        return cards.drawHeadlineFrame(ctx, t, dt, { headline: item.headline, source: item.source, category: item.category, image: card.pic || null, backdrop: map ? 'map' : null, programId: program?.id, accent: THEME_ACCENT[program?.theme], tag: 'STILL TO COME', pips: false, tagIn: true });
       }
       case 'breakingCard':
         return cards.drawBreakingCard(ctx, t, dt, { headline: card.headline, source: card.source });
       case 'fact':
-        return cards.drawFactCard(ctx, t, dt, { fact: card.fact, label: card.label, source: card.source, image: img?.card || null });
+        return cards.drawFactCard(ctx, t, dt, { fact: card.fact, label: card.label, source: card.source, image: img?.card || null, numbers: card.numbers, known: card.known, term: card.term, quote: card.quote, headline: card.headline || scene.lowerThird?.headline, programId: program?.id, accent: THEME_ACCENT[program?.theme] });
+      case 'weather':
+        if (WEATHER) return WEATHER.drawWeather(ctx, t, scene, this.audio);
+        return drawWorldMap(ctx, t, dt, {}); // the idle world until the weather centre has loaded
       case 'map':
-        return drawWorldMap(ctx, t, dt, { lat: card.lat, lon: card.lon, place: card.place });
+        return drawWorldMap(ctx, t, dt, { lat: card.lat, lon: card.lon, scope: card.scope, place: card.place, accent: THEME_ACCENT[program?.theme], programId: program?.id, from: card.from, pins: card.pins, duration: card.duration, follow: true });
       case 'ad':
         return card.ad?.draw(ctx, t, dt, { line: card.line ?? -1, speaking: this.audio.isSpeaking('ad'), duration: card.ad.duration });
+      case 'broll': {
+        // a correspondent's piece over the place: its footage in the channel's pixel style at 2x (footage/deck.js),
+        // else the story's own picture with the slow pan, else the map
+        const f = card.footage ? scene.footageDeck?.frame(card.footage, 'full', t) : null;
+        if (f) return this.drawFootage(ctx, f);
+        if (img?.full) return this.drawPan(ctx, img.full, dt, scene.panDir);
+        if (scene.remote && Number.isFinite(scene.remote.lat)) return drawWorldMap(ctx, t, dt, { lat: scene.remote.lat, lon: scene.remote.lon, scope: scene.remote.scope, place: scene.remote.place, accent: THEME_ACCENT[program?.theme], programId: program?.id, follow: true });
+        break;
+      }
       case 'full':
         if (img?.full) {
           // slow Ken Burns pan across a native-resolution pixel-art photo
@@ -222,6 +269,32 @@ export class Renderer {
     // wide (and fallbacks)
     this.drawStudio(this.sctx, t, scene);
     ctx.drawImage(this.stage, 0, 0);
+  }
+
+  /** A footage frame (192x108 palette pixels) at exactly 2x. */
+  drawFootage(ctx, f) {
+    if (!this.footCanvas || this.footCanvas.width !== f.w || this.footCanvas.height !== f.h) {
+      this.footCanvas = document.createElement('canvas');
+      this.footCanvas.width = f.w;
+      this.footCanvas.height = f.h;
+      this.footCtx = this.footCanvas.getContext('2d');
+      this.footImage = this.footCtx.createImageData(f.w, f.h);
+      this.footPx = new Uint32Array(this.footImage.data.buffer);
+    }
+    this.footPx.set(f.px);
+    this.footCtx.putImageData(this.footImage, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(this.footCanvas, 0, 0, W, H);
+  }
+
+  /** A slow pan across a native-resolution pixel-art photo (the full shot's Ken Burns). */
+  drawPan(ctx, pic, dt, dir) {
+    const maxX = pic.width - W;
+    const maxY = pic.height - H;
+    const p = easeOut(Math.min(1, dt / 16));
+    const ox = Math.round(maxX * (dir > 0 ? p : 1 - p));
+    const oy = Math.round(maxY * (dir > 0 ? 1 - p : p));
+    ctx.drawImage(pic, -ox, -oy);
   }
 
   /** Channel ident between programmes and breaks. */
@@ -265,166 +338,13 @@ export class Renderer {
     drawLogo(ctx, W - lw - 10, H - 24, { variant: 'bug', t });
   }
 
+  /** On-screen graphics (bug, clock, strap, captions, ticker): see graphics/index.js. */
   drawOverlays(t, scene) {
-    const mode = OVERLAYS[scene.shot];
-    if (!mode) {
-      this.ltState = null;
-      return;
-    }
-    const ctx = this.ctx;
-    const M = 13; // title-safe margin
-
-    if (mode === 'ad') {
-      r(ctx, M, 8, measureText('ADVERTISEMENT') + 8, 11, P.black);
-      drawText(ctx, 'ADVERTISEMENT', M + 4, 10, { color: P.fog });
-      return;
-    }
-
-    // Static logo bug, LIVE / REPLAY, and the programme name for a while after it starts
-    const bug = drawLogo(ctx, M, 8, { variant: 'bug' });
-    let x = M + bug.w + 2;
-    const live = scene.replay ? 'REPLAY' : 'LIVE';
-    const lw = measureText(live) + (scene.replay ? 8 : 14);
-    r(ctx, x, 8, lw, 13, scene.replay ? P.yellow : P.black);
-    if (!scene.replay) r(ctx, x + 4, 12, 4, 4, P.red);
-    drawText(ctx, live, x + (scene.replay ? 4 : 10), 11, { color: scene.replay ? P.black : P.white });
-    x += lw;
-    if (scene.program && mode === 'news' && t < (scene.programTagUntil || 0)) {
-      const pw = measureText(scene.program.title) + 8;
-      r(ctx, x, 8, pw, 13, THEME_ACCENT[scene.program.theme] || P.red);
-      drawText(ctx, scene.program.title, x + 4, 11, { color: scene.program.theme === 'flash' ? P.black : P.white });
-    }
-
-    // Studio clock (London)
-    const clock = zoneTime().label;
-    const cw = measureText(clock) + 10;
-    r(ctx, W - cw - M, 8, cw, 13, P.black);
-    drawText(ctx, clock, W - M - 5, 11, { color: P.white, align: 'right' });
-
-    if (mode === 'bug') return this.drawTicker(t, scene.ticker);
-
-    // Breaking banner: red tag, two pulses on entry, no continuous flashing
-    if (scene.breaking) {
-      const bt = t - scene.breaking.since;
-      if (bt < 22) {
-        const pulse = (bt > 0 && bt < 0.18) || (bt > 0.6 && bt < 0.78);
-        r(ctx, 0, 26, W, 14, P.darkRed);
-        r(ctx, 0, 26, 66, 14, pulse ? P.white : P.red);
-        drawText(ctx, 'BREAKING', 8, 30, { color: pulse ? P.red : P.white });
-        const text = `${scene.breaking.source.toUpperCase()}: ${scene.breaking.text}`;
-        const tw = measureText(text);
-        const tx = Math.round(W - ((bt * 40) % (tw + W)));
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(68, 26, W - 68, 14);
-        ctx.clip();
-        drawText(ctx, text, tx, 30, { color: P.white });
-        ctx.restore();
-      }
-    }
-
-    // Lower third: wipes in over 0.35 s (text 0.1 s later), out over 0.25 s
-    let subtitleBottom = 198;
-    const lt = this.lowerThirdState(t, scene.lowerThird);
-    if (lt) {
-      const { data, inP, outP } = lt;
-      const reveal = easeOut(inP) * (1 - easeOut(outP));
-      const barW = Math.round((W - 2 * M) * reveal);
-      const textOn = inP >= 1 && outP <= 0;
-      const accent = data.breaking ? P.red : THEME_ACCENT[scene.program?.theme] || P.blue;
-      const tag = data.breaking ? 'BREAKING' : data.source.toUpperCase();
-      const tagW = measureText(tag) + 10;
-      if (barW > 0) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(M, 160, barW, 40);
-        ctx.clip();
-        r(ctx, M, 166, tagW, 11, data.breaking ? P.red : P.navy);
-        if (textOn) drawText(ctx, tag, M + 5, 168, { color: P.white });
-        if (data.showName && t - data.since < 5) {
-          const nameW = measureText(data.anchorName) + 10;
-          r(ctx, M + tagW, 166, nameW, 11, P.black);
-          if (textOn) drawText(ctx, data.anchorName, M + tagW + 5, 168, { color: P.silver });
-        }
-        r(ctx, M, 177, W - 2 * M, 17, P.white);
-        r(ctx, M, 177, 3, 17, accent);
-        r(ctx, M, 194, W - 2 * M, 1, P.fog);
-        if (textOn) drawText(ctx, data.headline, M + 8, 182, { color: P.black });
-        ctx.restore();
-      }
-      subtitleBottom = 160;
-    }
-
-    // Subtitles
-    if (scene.subtitles && scene.subtitle) {
-      const lines = wrapText(scene.subtitle, W - 48).slice(-2);
-      const lh = LINE_HEIGHT - 1;
-      const boxH = lines.length * lh + 6;
-      const y0 = subtitleBottom - boxH;
-      const maxW = Math.max(...lines.map((l) => measureText(l)));
-      ctx.fillStyle = 'rgba(24,20,37,0.78)';
-      ctx.fillRect(Math.floor(W / 2 - maxW / 2 - 6), y0, maxW + 12, boxH);
-      lines.forEach((line, i) => drawText(ctx, line, W / 2, y0 + 5 + i * lh, { color: P.cream, align: 'center' }));
-    }
-
-    this.drawTicker(t, scene.ticker);
-  }
-
-  /** Tracks the lower third so it can animate out after the director clears it. */
-  lowerThirdState(t, current) {
-    const prev = this.ltState;
-    if (current) {
-      if (!prev || prev.data !== current) this.ltState = { data: current, out: null };
-      else if (prev.out !== null) this.ltState = { data: current, out: null };
-    } else if (prev && prev.out === null) {
-      prev.out = t;
-    }
-    const st = this.ltState;
-    if (!st) return null;
-    const outP = st.out === null ? 0 : (t - st.out) / 0.25;
-    if (outP >= 1) {
-      this.ltState = null;
-      return null;
-    }
-    const inP = Math.max(0, Math.min(1, (t - st.data.since) / 0.35));
-    // text appears 0.1 s after the bar has finished
-    return { data: st.data, inP: t - st.data.since >= 0.45 ? 1 : Math.min(inP, 0.999), outP };
-  }
-
-  /** BBC-style flipper: one headline at a time. */
-  drawTicker(t, items) {
-    const ctx = this.ctx;
-    const y = 202;
-    const label = 52;
-    r(ctx, 0, y, W, 14, P.ink);
-    r(ctx, 0, y, W, 1, P.steel);
-    if (items?.length) {
-      const SLOT = 6;
-      const i = Math.floor(t / SLOT) % items.length;
-      const dt = t % SLOT;
-      const it = items[i];
-      const src = `${it.source} ▸ `;
-      const sw = measureText(src);
-      const tw = sw + measureText(it.text);
-      const room = W - label - 12;
-      // long headlines glide left after a pause, short ones sit still
-      const shift = tw > room ? Math.round(Math.min(tw - room, Math.max(0, dt - 1.2) * 24)) : 0;
-      const enter = Math.round((1 - easeOut(dt / 0.3)) * 14);
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(label + 2, y + 1, W - label - 2, 13);
-      ctx.clip();
-      const x = label + 8 - shift;
-      drawText(ctx, src, x, y + 4 + enter, { color: P.yellow });
-      drawText(ctx, it.text, x + sw, y + 4 + enter, { color: P.white });
-      ctx.restore();
-    }
-    r(ctx, 0, y, label, 14, P.red);
-    drawText(ctx, 'LATEST', 7, y + 4, { color: P.white });
+    this.graphics.draw(this.ctx, t, scene);
   }
 
   render(t, scene) {
-    this.drawShot(t, scene);
+    this.guard.shot(this, t, scene); // drawShot, isolated: overlays and stinger always draw
     this.drawOverlays(t, scene);
     if (scene.stinger) {
       const p = (t - scene.stinger.start) / cards.STINGER_DURATION;

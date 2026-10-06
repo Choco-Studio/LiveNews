@@ -1,0 +1,1384 @@
+{
+ "kind": "episode",
+ "id": "emur81b8t1-rec",
+ "createdAt": "2026-10-02T17:12:45.101Z",
+ "program": {
+  "id": "tech-bytes",
+  "title": "TECH BYTES",
+  "tagline": "THE FUTURE, ONE BYTE AT A TIME",
+  "theme": "tech"
+ },
+ "cast": {
+  "A": "max",
+  "B": "ada"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "write",
+   "ms": 66,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 0,
+   "images": 2
+  }
+ ],
+ "title": "TECH BYTES (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Chipmaker unveils a laptop processor with all-day battery life. Also coming up: Startup launches satellite internet service for farms. And later, our number of the day. This is TECH BYTES. I'm Max Circuit, with Ada Volt.",
+   "cues": [
+    {
+     "char": 63,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 188,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 220,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s6b65619146",
+    "s9c777c85c9",
+    "s73f99cbdf2"
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 9
+     },
+     {
+      "t": 0.673,
+      "char": 10,
+      "len": 7
+     },
+     {
+      "t": 1.067,
+      "char": 18,
+      "len": 1
+     },
+     {
+      "t": 1.165,
+      "char": 20,
+      "len": 6
+     },
+     {
+      "t": 1.51,
+      "char": 27,
+      "len": 9
+     },
+     {
+      "t": 2.003,
+      "char": 37,
+      "len": 4
+     },
+     {
+      "t": 2.249,
+      "char": 42,
+      "len": 7
+     },
+     {
+      "t": 2.643,
+      "char": 50,
+      "len": 7
+     },
+     {
+      "t": 3.037,
+      "char": 58,
+      "len": 4
+     },
+     {
+      "t": 3.733,
+      "char": 64,
+      "len": 4
+     },
+     {
+      "t": 3.983,
+      "char": 69,
+      "len": 6
+     },
+     {
+      "t": 4.333,
+      "char": 76,
+      "len": 2
+     },
+     {
+      "t": 4.483,
+      "char": 80,
+      "len": 7
+     },
+     {
+      "t": 4.883,
+      "char": 88,
+      "len": 8
+     },
+     {
+      "t": 5.333,
+      "char": 97,
+      "len": 9
+     },
+     {
+      "t": 5.832,
+      "char": 107,
+      "len": 8
+     },
+     {
+      "t": 6.282,
+      "char": 116,
+      "len": 7
+     },
+     {
+      "t": 6.682,
+      "char": 124,
+      "len": 3
+     },
+     {
+      "t": 6.882,
+      "char": 128,
+      "len": 5
+     },
+     {
+      "t": 7.632,
+      "char": 135,
+      "len": 3
+     },
+     {
+      "t": 7.933,
+      "char": 139,
+      "len": 5
+     },
+     {
+      "t": 8.386,
+      "char": 146,
+      "len": 3
+     },
+     {
+      "t": 8.688,
+      "char": 150,
+      "len": 6
+     },
+     {
+      "t": 9.216,
+      "char": 157,
+      "len": 2
+     },
+     {
+      "t": 9.442,
+      "char": 160,
+      "len": 3
+     },
+     {
+      "t": 9.744,
+      "char": 164,
+      "len": 3
+     },
+     {
+      "t": 10.496,
+      "char": 169,
+      "len": 4
+     },
+     {
+      "t": 10.858,
+      "char": 174,
+      "len": 2
+     },
+     {
+      "t": 11.076,
+      "char": 177,
+      "len": 4
+     },
+     {
+      "t": 11.439,
+      "char": 182,
+      "len": 5
+     },
+     {
+      "t": 12.325,
+      "char": 189,
+      "len": 3
+     },
+     {
+      "t": 12.601,
+      "char": 193,
+      "len": 3
+     },
+     {
+      "t": 12.877,
+      "char": 197,
+      "len": 7
+     },
+     {
+      "t": 13.428,
+      "char": 206,
+      "len": 4
+     },
+     {
+      "t": 13.773,
+      "char": 211,
+      "len": 3
+     },
+     {
+      "t": 14.049,
+      "char": 215,
+      "len": 4
+     }
+    ],
+    "duration": 14.694
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "From Circuit Weekly: A chipmaker has unveiled a new laptop processor it says can run for 20 hours on a single charge.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "point_screen"
+    },
+    {
+     "char": 117,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s6b65619146",
+   "headline": "Chipmaker unveils laptop processor with all-day battery life",
+   "shot": "close",
+   "breaking": false,
+   "location": null,
+   "fact": "20 HOURS",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": true,
+   "kicker": "CHIPS",
+   "numbers": [
+    {
+     "value": "20",
+     "label": "HOURS"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 4
+     },
+     {
+      "t": 0.507,
+      "char": 5,
+      "len": 7
+     },
+     {
+      "t": 1.03,
+      "char": 13,
+      "len": 6
+     },
+     {
+      "t": 1.488,
+      "char": 21,
+      "len": 1
+     },
+     {
+      "t": 1.619,
+      "char": 23,
+      "len": 9
+     },
+     {
+      "t": 2.273,
+      "char": 33,
+      "len": 3
+     },
+     {
+      "t": 2.534,
+      "char": 37,
+      "len": 8
+     },
+     {
+      "t": 3.123,
+      "char": 46,
+      "len": 1
+     },
+     {
+      "t": 3.254,
+      "char": 48,
+      "len": 3
+     },
+     {
+      "t": 3.515,
+      "char": 52,
+      "len": 6
+     },
+     {
+      "t": 3.973,
+      "char": 59,
+      "len": 9
+     },
+     {
+      "t": 4.627,
+      "char": 69,
+      "len": 2
+     },
+     {
+      "t": 4.823,
+      "char": 72,
+      "len": 4
+     },
+     {
+      "t": 5.15,
+      "char": 77,
+      "len": 3
+     },
+     {
+      "t": 5.412,
+      "char": 81,
+      "len": 3
+     },
+     {
+      "t": 5.673,
+      "char": 85,
+      "len": 3
+     },
+     {
+      "t": 5.935,
+      "char": 89,
+      "len": 2
+     },
+     {
+      "t": 6.131,
+      "char": 92,
+      "len": 5
+     },
+     {
+      "t": 6.524,
+      "char": 98,
+      "len": 2
+     },
+     {
+      "t": 6.72,
+      "char": 101,
+      "len": 1
+     },
+     {
+      "t": 6.851,
+      "char": 103,
+      "len": 6
+     },
+     {
+      "t": 7.308,
+      "char": 110,
+      "len": 6
+     }
+    ],
+    "duration": 8.066
+   }
+  },
+  {
+   "type": "chat",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "And when does it reach actual people?",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "chin"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 3
+     },
+     {
+      "t": 0.454,
+      "char": 4,
+      "len": 4
+     },
+     {
+      "t": 0.795,
+      "char": 9,
+      "len": 4
+     },
+     {
+      "t": 1.137,
+      "char": 14,
+      "len": 2
+     },
+     {
+      "t": 1.342,
+      "char": 17,
+      "len": 5
+     },
+     {
+      "t": 1.753,
+      "char": 23,
+      "len": 6
+     },
+     {
+      "t": 2.231,
+      "char": 30,
+      "len": 6
+     }
+    ],
+    "duration": 3.01
+   }
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "The first laptops using it will go on sale in the spring.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "lean_in"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 3
+     },
+     {
+      "t": 0.47,
+      "char": 4,
+      "len": 5
+     },
+     {
+      "t": 0.906,
+      "char": 10,
+      "len": 7
+     },
+     {
+      "t": 1.487,
+      "char": 18,
+      "len": 5
+     },
+     {
+      "t": 1.922,
+      "char": 24,
+      "len": 2
+     },
+     {
+      "t": 2.14,
+      "char": 27,
+      "len": 4
+     },
+     {
+      "t": 2.503,
+      "char": 32,
+      "len": 2
+     },
+     {
+      "t": 2.721,
+      "char": 35,
+      "len": 2
+     },
+     {
+      "t": 2.939,
+      "char": 38,
+      "len": 4
+     },
+     {
+      "t": 3.302,
+      "char": 43,
+      "len": 2
+     },
+     {
+      "t": 3.519,
+      "char": 46,
+      "len": 3
+     },
+     {
+      "t": 3.81,
+      "char": 50,
+      "len": 6
+     }
+    ],
+    "duration": 4.618
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "neutral",
+   "text": "Circuit Weekly reports that a startup has launched a satellite internet service designed for farms in remote areas. It says the service reaches speeds of 100 megabits per second.",
+   "cues": [
+    {
+     "char": 178,
+     "slot": "A",
+     "action": "look_partner"
+    }
+   ],
+   "storyId": "s9c777c85c9",
+   "headline": "Startup launches satellite internet service for farms",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": "100 MEGABITS PER SECOND",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "CONNECTIVITY",
+   "numbers": [
+    {
+     "value": "100",
+     "label": "MEGABITS PER SECOND"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 7
+     },
+     {
+      "t": 0.633,
+      "char": 8,
+      "len": 6
+     },
+     {
+      "t": 1.029,
+      "char": 15,
+      "len": 7
+     },
+     {
+      "t": 1.481,
+      "char": 23,
+      "len": 4
+     },
+     {
+      "t": 1.764,
+      "char": 28,
+      "len": 1
+     },
+     {
+      "t": 1.877,
+      "char": 30,
+      "len": 7
+     },
+     {
+      "t": 2.33,
+      "char": 38,
+      "len": 3
+     },
+     {
+      "t": 2.556,
+      "char": 42,
+      "len": 8
+     },
+     {
+      "t": 3.065,
+      "char": 51,
+      "len": 1
+     },
+     {
+      "t": 3.178,
+      "char": 53,
+      "len": 9
+     },
+     {
+      "t": 3.744,
+      "char": 63,
+      "len": 8
+     },
+     {
+      "t": 4.253,
+      "char": 72,
+      "len": 7
+     },
+     {
+      "t": 4.706,
+      "char": 80,
+      "len": 8
+     },
+     {
+      "t": 5.215,
+      "char": 89,
+      "len": 3
+     },
+     {
+      "t": 5.441,
+      "char": 93,
+      "len": 5
+     },
+     {
+      "t": 5.781,
+      "char": 99,
+      "len": 2
+     },
+     {
+      "t": 5.951,
+      "char": 102,
+      "len": 6
+     },
+     {
+      "t": 6.347,
+      "char": 109,
+      "len": 5
+     },
+     {
+      "t": 7.136,
+      "char": 116,
+      "len": 2
+     },
+     {
+      "t": 7.328,
+      "char": 119,
+      "len": 4
+     },
+     {
+      "t": 7.649,
+      "char": 124,
+      "len": 3
+     },
+     {
+      "t": 7.906,
+      "char": 128,
+      "len": 7
+     },
+     {
+      "t": 8.419,
+      "char": 136,
+      "len": 7
+     },
+     {
+      "t": 8.932,
+      "char": 144,
+      "len": 6
+     },
+     {
+      "t": 9.38,
+      "char": 151,
+      "len": 2
+     },
+     {
+      "t": 9.573,
+      "char": 154,
+      "len": 3
+     },
+     {
+      "t": 9.829,
+      "char": 158,
+      "len": 8
+     },
+     {
+      "t": 10.407,
+      "char": 167,
+      "len": 3
+     },
+     {
+      "t": 10.663,
+      "char": 171,
+      "len": 6
+     }
+    ],
+    "duration": 11.412
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "Our number of the day: about 1,500 dollars. From Circuit Weekly: A home robotics company has shown a robot vacuum that can climb stairs using two small legs. It will cost about 1,500 dollars when it launches next year.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "count"
+    },
+    {
+     "char": 218,
+     "slot": "B",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s73f99cbdf2",
+   "headline": "Robot vacuum learns to climb stairs",
+   "shot": "wide",
+   "breaking": false,
+   "location": null,
+   "fact": "ABOUT 1,500 DOLLARS",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "1,500",
+     "label": "DOLLARS",
+     "qualifier": "ABOUT"
+    }
+   ],
+   "feature": "number",
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 3
+     },
+     {
+      "t": 0.443,
+      "char": 4,
+      "len": 6
+     },
+     {
+      "t": 0.902,
+      "char": 11,
+      "len": 2
+     },
+     {
+      "t": 1.1,
+      "char": 14,
+      "len": 3
+     },
+     {
+      "t": 1.362,
+      "char": 18,
+      "len": 3
+     },
+     {
+      "t": 1.625,
+      "char": 23,
+      "len": 5
+     },
+     {
+      "t": 2.019,
+      "char": 29,
+      "len": 5
+     },
+     {
+      "t": 2.413,
+      "char": 35,
+      "len": 7
+     },
+     {
+      "t": 3.389,
+      "char": 44,
+      "len": 4
+     },
+     {
+      "t": 3.697,
+      "char": 49,
+      "len": 7
+     },
+     {
+      "t": 4.189,
+      "char": 57,
+      "len": 6
+     },
+     {
+      "t": 4.62,
+      "char": 65,
+      "len": 1
+     },
+     {
+      "t": 4.743,
+      "char": 67,
+      "len": 4
+     },
+     {
+      "t": 5.051,
+      "char": 72,
+      "len": 8
+     },
+     {
+      "t": 5.605,
+      "char": 81,
+      "len": 7
+     },
+     {
+      "t": 6.098,
+      "char": 89,
+      "len": 3
+     },
+     {
+      "t": 6.344,
+      "char": 93,
+      "len": 5
+     },
+     {
+      "t": 6.714,
+      "char": 99,
+      "len": 1
+     },
+     {
+      "t": 6.837,
+      "char": 101,
+      "len": 5
+     },
+     {
+      "t": 7.206,
+      "char": 107,
+      "len": 6
+     },
+     {
+      "t": 7.637,
+      "char": 114,
+      "len": 4
+     },
+     {
+      "t": 7.945,
+      "char": 119,
+      "len": 3
+     },
+     {
+      "t": 8.192,
+      "char": 123,
+      "len": 5
+     },
+     {
+      "t": 8.561,
+      "char": 129,
+      "len": 6
+     },
+     {
+      "t": 8.992,
+      "char": 136,
+      "len": 5
+     },
+     {
+      "t": 9.362,
+      "char": 142,
+      "len": 3
+     },
+     {
+      "t": 9.608,
+      "char": 146,
+      "len": 5
+     },
+     {
+      "t": 9.977,
+      "char": 152,
+      "len": 4
+     },
+     {
+      "t": 10.735,
+      "char": 158,
+      "len": 2
+     },
+     {
+      "t": 10.925,
+      "char": 161,
+      "len": 4
+     },
+     {
+      "t": 11.241,
+      "char": 166,
+      "len": 4
+     },
+     {
+      "t": 11.557,
+      "char": 171,
+      "len": 5
+     },
+     {
+      "t": 11.936,
+      "char": 177,
+      "len": 5
+     },
+     {
+      "t": 12.316,
+      "char": 183,
+      "len": 7
+     },
+     {
+      "t": 12.821,
+      "char": 191,
+      "len": 4
+     },
+     {
+      "t": 13.137,
+      "char": 196,
+      "len": 2
+     },
+     {
+      "t": 13.327,
+      "char": 199,
+      "len": 8
+     },
+     {
+      "t": 13.896,
+      "char": 208,
+      "len": 4
+     },
+     {
+      "t": 14.212,
+      "char": 213,
+      "len": 4
+     }
+    ],
+    "duration": 14.828
+   }
+  },
+  {
+   "type": "story",
+   "anchor": "B",
+   "emotion": "happy",
+   "text": "And finally: Astronomers using a telescope in Chile have detected water vapour in the atmosphere of a planet 120 light years away, Starfield Journal reports. The planet is about twice the size of Earth.",
+   "cues": [
+    {
+     "char": 202,
+     "slot": "A",
+     "action": "nod"
+    }
+   ],
+   "storyId": "s1c5a3cb80a",
+   "headline": "Telescope in Chile spots water vapour on a distant planet",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "CHILE",
+    "lat": -35.7,
+    "lon": -71.5
+   },
+   "fact": "120 LIGHT YEARS AWAY",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": true,
+   "kicker": "AND FINALLY",
+   "numbers": [
+    {
+     "value": "120",
+     "label": "LIGHT YEARS AWAY"
+    }
+   ],
+   "feature": "lighter",
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 3
+     },
+     {
+      "t": 0.413,
+      "char": 4,
+      "len": 7
+     },
+     {
+      "t": 0.88,
+      "char": 13,
+      "len": 11
+     },
+     {
+      "t": 1.579,
+      "char": 25,
+      "len": 5
+     },
+     {
+      "t": 1.929,
+      "char": 31,
+      "len": 1
+     },
+     {
+      "t": 2.046,
+      "char": 33,
+      "len": 9
+     },
+     {
+      "t": 2.629,
+      "char": 43,
+      "len": 2
+     },
+     {
+      "t": 2.803,
+      "char": 46,
+      "len": 5
+     },
+     {
+      "t": 3.153,
+      "char": 52,
+      "len": 4
+     },
+     {
+      "t": 3.445,
+      "char": 57,
+      "len": 8
+     },
+     {
+      "t": 3.969,
+      "char": 66,
+      "len": 5
+     },
+     {
+      "t": 4.319,
+      "char": 72,
+      "len": 6
+     },
+     {
+      "t": 4.727,
+      "char": 79,
+      "len": 2
+     },
+     {
+      "t": 4.902,
+      "char": 82,
+      "len": 3
+     },
+     {
+      "t": 5.135,
+      "char": 86,
+      "len": 10
+     },
+     {
+      "t": 5.777,
+      "char": 97,
+      "len": 2
+     },
+     {
+      "t": 5.951,
+      "char": 100,
+      "len": 1
+     },
+     {
+      "t": 6.068,
+      "char": 102,
+      "len": 6
+     },
+     {
+      "t": 6.476,
+      "char": 109,
+      "len": 3
+     },
+     {
+      "t": 6.709,
+      "char": 113,
+      "len": 5
+     },
+     {
+      "t": 7.059,
+      "char": 119,
+      "len": 5
+     },
+     {
+      "t": 7.409,
+      "char": 125,
+      "len": 4
+     },
+     {
+      "t": 7.7,
+      "char": 131,
+      "len": 9
+     },
+     {
+      "t": 8.283,
+      "char": 141,
+      "len": 7
+     },
+     {
+      "t": 8.75,
+      "char": 149,
+      "len": 7
+     },
+     {
+      "t": 9.666,
+      "char": 158,
+      "len": 3
+     },
+     {
+      "t": 9.962,
+      "char": 162,
+      "len": 6
+     },
+     {
+      "t": 10.479,
+      "char": 169,
+      "len": 2
+     },
+     {
+      "t": 10.701,
+      "char": 172,
+      "len": 5
+     },
+     {
+      "t": 11.145,
+      "char": 178,
+      "len": 5
+     },
+     {
+      "t": 11.588,
+      "char": 184,
+      "len": 3
+     },
+     {
+      "t": 11.884,
+      "char": 188,
+      "len": 4
+     },
+     {
+      "t": 12.254,
+      "char": 193,
+      "len": 2
+     },
+     {
+      "t": 12.476,
+      "char": 196,
+      "len": 5
+     }
+    ],
+    "duration": 13.219
+   }
+  },
+  {
+   "type": "chat",
+   "anchor": "A",
+   "emotion": "happy",
+   "text": "Somewhere, a researcher is very pleased with themselves. Rightly.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "look_partner"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 9
+     },
+     {
+      "t": 0.682,
+      "char": 11,
+      "len": 1
+     },
+     {
+      "t": 0.782,
+      "char": 13,
+      "len": 10
+     },
+     {
+      "t": 1.334,
+      "char": 24,
+      "len": 2
+     },
+     {
+      "t": 1.484,
+      "char": 27,
+      "len": 4
+     },
+     {
+      "t": 1.735,
+      "char": 32,
+      "len": 7
+     },
+     {
+      "t": 2.136,
+      "char": 40,
+      "len": 4
+     },
+     {
+      "t": 2.387,
+      "char": 45,
+      "len": 10
+     },
+     {
+      "t": 3.389,
+      "char": 57,
+      "len": 7
+     }
+    ],
+    "duration": 4.033
+   }
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's TECH BYTES. From Ada Volt and from me, thanks for watching. More news around the clock on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 18,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "audio": {
+    "url": null,
+    "words": [
+     {
+      "t": 0.18,
+      "char": 0,
+      "len": 6
+     },
+     {
+      "t": 0.582,
+      "char": 7,
+      "len": 4
+     },
+     {
+      "t": 0.87,
+      "char": 12,
+      "len": 5
+     },
+     {
+      "t": 1.664,
+      "char": 19,
+      "len": 4
+     },
+     {
+      "t": 2.002,
+      "char": 24,
+      "len": 3
+     },
+     {
+      "t": 2.272,
+      "char": 28,
+      "len": 4
+     },
+     {
+      "t": 2.609,
+      "char": 33,
+      "len": 3
+     },
+     {
+      "t": 2.879,
+      "char": 37,
+      "len": 4
+     },
+     {
+      "t": 3.216,
+      "char": 42,
+      "len": 2
+     },
+     {
+      "t": 3.419,
+      "char": 46,
+      "len": 6
+     },
+     {
+      "t": 3.891,
+      "char": 53,
+      "len": 3
+     },
+     {
+      "t": 4.161,
+      "char": 57,
+      "len": 8
+     },
+     {
+      "t": 5.218,
+      "char": 67,
+      "len": 4
+     },
+     {
+      "t": 5.563,
+      "char": 72,
+      "len": 4
+     },
+     {
+      "t": 5.908,
+      "char": 77,
+      "len": 6
+     },
+     {
+      "t": 6.39,
+      "char": 84,
+      "len": 3
+     },
+     {
+      "t": 6.666,
+      "char": 88,
+      "len": 5
+     },
+     {
+      "t": 7.08,
+      "char": 94,
+      "len": 2
+     },
+     {
+      "t": 7.287,
+      "char": 97,
+      "len": 6
+     },
+     {
+      "t": 7.77,
+      "char": 104,
+      "len": 2
+     }
+    ],
+    "duration": 8.277
+   }
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s6b65619146",
+   "headline": "Chipmaker unveils laptop processor with all-day battery life",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": true,
+   "kicker": "CHIPS"
+  },
+  {
+   "storyId": "s9c777c85c9",
+   "headline": "Startup launches satellite internet service for farms",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "CONNECTIVITY"
+  },
+  {
+   "storyId": "s73f99cbdf2",
+   "headline": "Robot vacuum learns to climb stairs",
+   "source": "Circuit Weekly",
+   "category": "tech",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY"
+  },
+  {
+   "storyId": "s1c5a3cb80a",
+   "headline": "Telescope in Chile spots water vapour on a distant planet",
+   "source": "Starfield Journal",
+   "category": "science",
+   "hasImage": true,
+   "kicker": "AND FINALLY"
+  }
+ ],
+ "storyIds": [
+  "s6b65619146",
+  "s9c777c85c9",
+  "s73f99cbdf2",
+  "s1c5a3cb80a"
+ ]
+}

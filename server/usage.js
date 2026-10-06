@@ -48,7 +48,10 @@ export class UsageTracker {
         for (const k of Object.keys(m)) m[k] += p[k] || 0;
       }
     }
-    return { today: this.data.days[today] || {}, month: monthTotals, lastError: this.data.lastError };
+    // The summary is public (/api/status): an error says what kind of failure it was, never a file path or a
+    // program's internals (the full message stays in the server log and in data/usage.json).
+    const lastError = Object.fromEntries(Object.entries(this.data.lastError).map(([k, v]) => [k, { ...v, error: publicError(v?.error) }]));
+    return { today: this.data.days[today] || {}, month: monthTotals, lastError };
   }
 
   save() {
@@ -60,4 +63,12 @@ export class UsageTracker {
       /* non-fatal */
     }
   }
+}
+
+/** An error message fit for a public status page: short, no paths, no program internals. */
+export function publicError(message) {
+  const m = String(message ?? '').split('\n')[0].trim();
+  if (!m) return m;
+  if (/(?:^|[\s'"(])(?:\/|~\/|[A-Za-z]:\\)[\w.\-\\/]+/.test(m) || /\b(?:Cannot read propert\w*|is not a function|is not defined|is not iterable|Unexpected token|stack|ENOENT|EACCES)\b/.test(m)) return 'internal error';
+  return m.slice(0, 120);
 }

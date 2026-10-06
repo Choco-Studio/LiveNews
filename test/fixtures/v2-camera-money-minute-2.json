@@ -1,0 +1,202 @@
+{
+ "kind": "episode",
+ "id": "emurd7mc35",
+ "createdAt": "2026-10-02T19:37:37.491Z",
+ "program": {
+  "id": "money-minute",
+  "title": "MONEY MINUTE",
+  "tagline": "MARKETS & YOUR MONEY",
+  "theme": "money"
+ },
+ "cast": {
+  "A": "penny"
+ },
+ "provider": "mock",
+ "pipeline": [
+  {
+   "stage": "pictures",
+   "ms": 2,
+   "pictures": 0,
+   "of": 3,
+   "found": 0,
+   "borrowed": 0
+  },
+  {
+   "stage": "write",
+   "ms": 47,
+   "provider": "mock"
+  },
+  {
+   "stage": "review",
+   "ms": 1,
+   "reviewed": false,
+   "error": "no AI editor configured (the offline mock writes but cannot review)"
+  },
+  {
+   "stage": "assets",
+   "ms": 0,
+   "images": 0,
+   "verified": 0
+  }
+ ],
+ "title": "MONEY MINUTE (demo)",
+ "segments": [
+  {
+   "type": "intro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Chocolate makers warn of higher prices as cocoa stays expensive. Also coming up: Lagos shops switch to solar power to cut fuel costs. And later, our number of the day. This is MONEY MINUTE. I'm Penny Sterling.",
+   "cues": [
+    {
+     "char": 64,
+     "slot": null,
+     "action": "nod"
+    },
+    {
+     "char": 189,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "teases": [
+    "s13ed823f35",
+    "s62cbd69778",
+    "s36101b743d"
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Cocoa has more than doubled in price in two years, Ledger Line reports. Several chocolate makers say they will raise prices again because cocoa remains near record levels.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "nod"
+    }
+   ],
+   "storyId": "s13ed823f35",
+   "headline": "Chocolate makers warn of higher prices",
+   "shot": "close",
+   "breaking": false,
+   "location": null,
+   "fact": null,
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ECONOMY"
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "In Nigeria, thousands of small shops in Lagos have switched to solar panels to cut fuel costs. A survey found 62 percent of traders now use solar for some of their power, according to Ledger Line.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "lean_in"
+    }
+   ],
+   "storyId": "s62cbd69778",
+   "headline": "Lagos shops switch to solar power to cut fuel costs",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "LAGOS, NIGERIA",
+    "lat": 6.52,
+    "lon": 3.38
+   },
+   "fact": "62% OF TRADERS",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ENERGY",
+   "numbers": [
+    {
+     "value": "62%",
+     "label": "OF TRADERS"
+    }
+   ]
+  },
+  {
+   "type": "story",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "Our number of the day: 21 percent. Tokyo's main stock index closed at a record high, driven by shares of chipmakers. The index has gained 21 percent since January, Ledger Line reports.",
+   "cues": [
+    {
+     "char": 0,
+     "slot": null,
+     "action": "steeple"
+    }
+   ],
+   "storyId": "s36101b743d",
+   "headline": "Tokyo stocks close at a record high",
+   "shot": "map",
+   "breaking": false,
+   "location": {
+    "place": "TOKYO, JAPAN",
+    "lat": 35.68,
+    "lon": 139.69
+   },
+   "fact": "INDEX UP 21%",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY",
+   "numbers": [
+    {
+     "value": "21%",
+     "label": "INDEX UP"
+    }
+   ],
+   "feature": "number"
+  },
+  {
+   "type": "outro",
+   "anchor": "A",
+   "emotion": "neutral",
+   "text": "That's your MONEY MINUTE. I'm Penny Sterling. Stay with us on GLOBIT 24.",
+   "cues": [
+    {
+     "char": 72,
+     "slot": null,
+     "action": "papers"
+    }
+   ]
+  }
+ ],
+ "rundown": [
+  {
+   "storyId": "s13ed823f35",
+   "headline": "Chocolate makers warn of higher prices",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ECONOMY"
+  },
+  {
+   "storyId": "s62cbd69778",
+   "headline": "Lagos shops switch to solar power to cut fuel costs",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "ENERGY"
+  },
+  {
+   "storyId": "s36101b743d",
+   "headline": "Tokyo stocks close at a record high",
+   "source": "Ledger Line",
+   "category": "business",
+   "hasImage": false,
+   "kicker": "NUMBER OF THE DAY"
+  }
+ ],
+ "storyIds": [
+  "s13ed823f35",
+  "s62cbd69778",
+  "s36101b743d"
+ ]
+}

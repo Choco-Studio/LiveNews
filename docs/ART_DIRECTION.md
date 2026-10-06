@@ -109,12 +109,13 @@ What real newscasts do, and the rules for our 384x216 pixel-art studio. Written 
   | Area | Target |
   | --- | --- |
   | Head-zone background | 18–45 (ink to steel) |
-  | Wall average | ≤ 45; highlights up to 85 on at most 10% of the wall |
+  | Wall average | ≤ 45 for idles, plates and figures; a story picture ≤ 56 (COSMOS ≤ 50), highlights rolled off under 88 |
   | Faces | 55–73 (skin, tan) |
   | White | collars, eye glints, logo and text only |
   | Floor | ≤ 18; reflections ≤ 30 |
 
 - **The wall is dimmed and cool,** as real LED walls are balanced to camera. Its spill on the desk is at most 10–15% alpha and never reaches faces.
+- **Story pictures on the wall (owner, 3 Oct):** a picture shows the photo in its own colours, quantised to its own palette with an ordered dither (the full-screen shot's look), never forced onto the set palette or a cool grade; it covers the whole wall screen, the presenter in front of it.
 
 **Materials via limited dithering**
 - **Bayer 4x4 only,** mixing two adjacent ramp steps (black↔ink, ink↔slate, slate↔steel), and only for wall light falloff, wall glow and floor gradients.
@@ -209,3 +210,74 @@ Solo shows alternate the single with pictures. NEWS IN 60 may cut at 3–6 s but
 - [ ] Rotate clocks, blink the LIVE tag, or flash continuously.
 - [ ] Show a name super on every story, or let headlines exceed about 45 characters.
 - [ ] Move the camera on the set.
+
+## Set dressing per programme (round 4, 4 Oct)
+
+The owner rated round 3 at 5-5.5 ("Todavía no los veo a un buen nivel… Puedes añadir animaciones o lo que sea. Pero quiero platós realmente bien hechos"). Round 3 hung small decorations on a dark, flat wall; half the wide was black. Round 4 rebuilds the back of each set as its own world and makes the studio read as lit and alive.
+
+The network's architecture, shared by all five sets:
+- the hero screen in a black mount;
+- a soffit along the top with the programme's LED cove, glowing down;
+- pillars at the sides (the set flats) with a light inlay in the programme's colour;
+- the desk as a lit object: a thicker top slab with a shadow under it, the LED line's light falling on the front, the screen's reflection on the top, and a light line at its foot with its reflection on the floor;
+- the GLOBIT 24 red plate.
+
+| Programme | Back of the set (module) | Colour |
+| --- | --- | --- |
+| WORLD NOW | Floor-to-ceiling glass over the city (`city.js`), as at CNN New York or Sky News, painted in clean layers: a banded sky (stars at night, clouds by day, the sun low at dawn and at the golden hour), a hazy far skyline, a row of buildings in the glow, a few hero towers clear of the heads (spire, art-deco crown, sloped roof, aviation lights, a TV tower), then two nearer rows of buildings whose roofs we look down on, full of lit windows, the street grid and a river showing between them. The city is on its own far plane and its horizon stays at the camera's eye height, so the heads are against the skyline's glow in every framing. **By the hour** (London, the studio clock): night, dawn, day through the studio's tinted glass, the golden hour, the blue hour. Over the screen: the world clocks. | red |
+| TECH BYTES | A circuit board (`lab.js`). The screen is the chip, with pins. Copper traces bend at 45° out to pads and vias, buses run over the heads, and there are components and silkscreen marks. Behind each presenter is a light wall of square frosted tiles lit from above. A display cabinet each side has a product in each niche. Over the screen: the terminal line "> TECH BYTES_". | blue (cyan desk line) |
+| COSMOS DESK | A planetarium LED wall (`space.js`). It shows the sky from orbit: stars of every brightness, the Milky Way with its dust lanes, a nebula, a crescent Moon, and low down the Earth's limb with its thin lit atmosphere and the lights of its night side. The Big Dipper and Cassiopeia are drawn over it. Over the screen: the Moon's phases. | magenta |
+| MONEY MINUTE | A panelled room on the exchange after the close (`money.js`): walnut raised panels, a frieze, a brass dado rail with a ledge, and slats below. Bronze sconces wash the panels warm. A bronze Charging Bull and a bear stand on the ledge, each under its own spot. An LED ticker of the programme's beats runs along the soffit, with no prices. | warm brass (darkGreen desk line) |
+| NEWS IN 60 | A flash studio (`flash.js`): a black room with one clean downlight on the anchor. On the left, the studio clock; on the right, the rundown board. Between them and the screen is "the gallery": two blocks of small monitors with feeds (colour bars turned down, snow, a waveform, a feed with its tally, a map with its blip). | amber (yellow desk line) |
+
+**What moves** (`live.js`): a layer drawn every frame over the cached set and under the presenters. It costs a few hundred pixel writes.
+- WORLD NOW: windows switching on and off, aviation lights, a plane crossing, cars on the avenues.
+- TECH BYTES: data pulses along the traces; the cursor blinks.
+- COSMOS DESK: stars twinkle, a satellite crosses, a meteor now and then.
+- MONEY MINUTE: the ticker runs.
+- NEWS IN 60: the clock's ring of sixty LEDs fills as the minute runs; the snow and the waveform move; the tallies breathe.
+- Every desk line but MONEY MINUTE's: a slow sweep of light now and then.
+- The wall's own content keeps its rules: the NEWS IN 60 dial never ticks.
+
+**Out of focus** (singles, `cam.soft`):
+- the city is the same city, its lights a step dimmer and its fine edges gone (owner, 4 Oct: bokeh discs read as circles, not as a city);
+- the circuit as glowing lines;
+- the brightest stars as dimmer points and the Earth's limb as a soft band;
+- the gallery's monitors as soft squares.
+
+**Rules**, checked by `test/v2-set.test.js`:
+- every pixel is a palette colour;
+- nothing is behind a head;
+- the values around the heads stay inside each bible's range;
+- no 4x4 patch is brighter than the NEWS IN 60 or COSMOS faces;
+- text is shown whole or not at all, and never under the graphics' top row;
+- the set shows no figure the channel did not report;
+- the graphics zone (y 150-216) is black and ink, except the desk's foot light (a line and its reflection, never an area);
+- camera moves never shimmer: nothing is re-picked per pixel under a move. Lights are fixed world points, adjacent towers share edges, and the reflections are flat rows;
+- the camera checks run with the live layer off (`setLive(false)`);
+- flat light shapes and flat light lines, not Bayer fringes (a dithered fringe on black reads as a dotted line).
+
+`setDressing(false)` shows the bare architecture, which the older census tests use.
+
+The presenters' wardrobe (same round) gives each presenter a signature colour:
+- Penny: burgundy blazer.
+- Nova: plum cardigan.
+- Ada: bottle-green knit.
+- Sam: camel-gold tie and a pocket square.
+- UNIT-8: a magenta status light on the antenna tip.
+
+
+## Correspondents and moving pictures (WORLD NOW format round 1, 4 Oct)
+
+Owner, 4 Oct: *"cargar vídeos, pixelarlos con nuestro estilo y poner un reportero hablando sobre ello"*. The full rules are in `docs/programmes/world-now.md` ("Format round 1"); what follows is what they mean for the look.
+
+**Footage in the pixel style** (`public/js/footage/`)
+- **Size and motion:** a clip is shown at 192×108, exactly 2x, so its pixel is the wall's pixel seen in a single, never a smooth video. It steps at 12 frames a second: the stepped motion reads as pixel animation, never as broadcast video.
+- **Colour:** the grade is the full photo shot's (saturation 1.25, contrast 1.12). Each shot of the clip gets its own 16-colour palette, kept until the footage cuts, so a pan never flickers. The 4×4 Bayer dither is fixed to the screen, so a still building keeps its pattern while the camera moves.
+- **Behind a person** the same clip is graded flatter and darker ("back": saturation 0.85, contrast 0.86, ×0.64 light), so the correspondent's face stays the brightest, warmest thing (§3).
+- **Labelling:** FILE and the clip's credit are on screen whenever footage is. It shows the place, never the event.
+
+**The correspondent's shots** (`studio/remote.js`)
+- **LOCATION:** a medium close-up on the left third, the hands below the frame, on the place's footage or the desk backdrop. The desk backdrop is a dark field with a wash from above, flat bands with a narrow dithered seam (a noisy field would hide the map's dot grid), and the region's land as a 3 px dot grid (fog near the place, then steel, then slate) with a pulsing accent pin.
+- **TWO-WAY:** two framed 16:9 boxes on a black field with a quiet ink hatch. The studio wall in the presenter's box is at rest: a plate or a map cut by the box's edge would break "set text is whole or not at all".
+- **What says "correspondent" at 1x:** an earpiece with its clear tube running down the neck into the collar (silver and fog, 1 px, from s 2), and a lapel microphone on a silver clip. No hand-held microphone and no flag: they are at their desk's camera, not "on the ground".

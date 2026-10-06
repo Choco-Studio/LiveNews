@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lab · voices</title>
+    <style>
+      body { background: #101014; color: #c0cbdc; font: 12px/1.5 monospace; margin: 12px; }
+      #screen { width: 1152px; height: 648px; image-rendering: pixelated; display: block; background: #000; }
+      #ui { margin: 8px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      select, button { font: inherit; }
+      #note, pre { color: #8b9bb4; max-width: 1152px; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <canvas id="screen" width="384" height="216"></canvas>
+    <div id="ui">
+      <label>clip <select id="pick"></select></label>
+      <button id="play">play (click to unlock sound)</button>
+      <button id="all">play all</button>
+      <button id="stop">stop</button>
+      <label><input type="checkbox" id="browser" /> browser voice instead (A/B)</label>
+    </div>
+    <div id="note">
+      Dev tool for the neural voices (server/voice + public/js/voice/player.js). Lists every voiced segment of the
+      queued episodes (GET /api/queue, loopback only; nothing advances the channel) and every advert voice-over
+      (/api/voice/ads), and plays them through the channel's AudioEngine exactly as the director does: speech bus,
+      captions at the recorded word times, the jaw from the clip's loudness envelope. The monitor shows the envelope
+      with the playhead, the sentence with the word being said, the mouth (speechFrame level and viseme) and a white
+      sync mark (top right) lit for 2 frames at every recorded word onset, for A/V checks in recordings.
+      URL: ?autostart=1 plays everything in order; ?src=ads lists the adverts first; ?voices=browser compares with
+      the browser voice. window.__lab: list(), play(i), playAll(), stop(), state().
+    </div>
+    <pre id="out"></pre>
+    <script type="module">
+      import { P } from '../js/palette.js';
+      import { drawText, wrapLines, measureText } from '../js/font.js';
+      import { AudioEngine } from '../js/audio.js';
+      import { VoicePlayer, validAudio, levelAt, wordAt, forcedBrowser } from '../js/voice/player.js';
+
+      const W = 384;
+      const H = 216;
+      const canvas = document.getElementById('screen');
+      const ctx = canvas.getContext('2d');
+      const out = document.getElementById('out');
+      const params = new URLSearchParams(location.search);
+      const audio = new AudioEngine();
+      window.__recHook?.({ audio, director: null }); // tools/record.mjs instrumentation, when recording
+      let player = new VoicePlayer({ audio });
+
+      // ------------------------------------------------------------ clips
+      const clips = []; // { label, who, kind, text, audio, slot, voice }
+      async function getJson(url) {
+        try {
+          const res = await fetch(url);
+          return res.ok ? await res.json() : null;
+        } catch {
+          return null;
+        }
+      }
+      async function load() {
+        const [queue, channel, ads] = await Promise.all([getJson('/api/queue'), getJson('/api/channel'), getJson('/api/voice/ads')]);
+        const names = Object.fromEntries(Object.entries(channel?.presenters || {}).map(([id, p]) => [id, p.name]));
+        const segs = [];
+        for (const ep of Array.isArray(queue) ? queue : []) {
+          for (const seg of ep.segments || []) {
+            if (!seg.audio && !seg.voiceId) continue;
+            const id = ep.cast?.[seg.anchor];
+            segs.push({ label: `${ep.program?.title} · ${names[id] || id} · ${seg.type}${seg.feature ? `/${seg.feature}` : ''}`, who: names[id] || id, kind: ep.program?.title || '', text: seg.text, seg, slot: seg.anchor, voice: channel?.presenters?.[id]?.voice });
+          }
+        }
+        const adClips = [];
+        for (const [adId, lines] of Object.entries(ads || {})) {
+          for (const [text, a] of Object.entries(lines)) adClips.push({ label: `AD ${adId} · ${text.slice(0, 40)}`, who: adId.toUpperCase(), kind: 'COMMERCIAL', text, seg: { audio: a }, slot: 'ad', voice: null });
+        }
+        clips.push(...(params.get('src') === 'ads' ? [...adClips, ...segs] : [...segs, ...adClips]));
+        const pick = document.getElementById('pick');
+        pick.innerHTML = clips.map((c, i) => `<option value="${i}">${i}. ${c.label.replace(/</g, '&lt;')}</option>`).join('');
+        out.textContent = `${segs.length} voiced segments in the queue (${segs.filter((c) => c.seg.audio).length} rendered), ${adClips.length} advert lines`;
+      }
+
+      // ------------------------------------------------------------ playing
+      const st = { clip: null, a: null, perf0: null, sentence: '', playing: false, flashUntil: -1, lastWord: -1, frame: {} };
+      let stopAll = false;
+      async function play(i) {
+        const c = clips[i];
+        if (!c) return;
+        st.clip = c;
+        st.a = await player.audioFor(c.seg);
+        st.perf0 = null;
+        st.sentence = '';
+        st.lastWord = -1;
+        st.playing = true;
+        audio.setVoices({ [c.slot]: c.voice || {} });
+        const first = st.a?.words?.[0]?.t ?? 0;
+        await audio.speak(c.text, c.slot, {
+          audio: st.a,
+          onSentence: (s, k) => {
+            st.sentence = s;
+            // The first sentence starts as its first recorded word is heard: that fixes the clip's clock.
+            if (k === 0) st.perf0 = performance.now() - first * 1000;
+          },
+        });
+        st.playing = false;
+      }
+      async function playAll(from = 0) {
+        stopAll = false;
+        for (let i = from; i < clips.length && !stopAll; i++) {
+          document.getElementById('pick').value = String(i);
+          await play(i);
+          await new Promise((r) => setTimeout(r, 700));
+        }
+      }
+      const unlock = () => audio.unlock();
+      document.getElementById('play').onclick = async () => { await unlock(); play(Number(document.getElementById('pick').value)); };
+      document.getElementById('all').onclick = async () => { await unlock(); playAll(Number(document.getElementById('pick').value)); };
+      document.getElementById('stop').onclick = () => { stopAll = true; audio.stop(); };
+      const browserBox = document.getElementById('browser');
+      browserBox.checked = forcedBrowser();
+      browserBox.onchange = () => { player = new VoicePlayer({ audio, enabled: !browserBox.checked }); player.refreshAds(true); };
+
+      // ------------------------------------------------------------ drawing
+      function draw(now) {
+        ctx.fillStyle = P.black;
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(0, 0, W, 18);
+        drawText(ctx, 'VOICE MONITOR', 12, 6, { color: P.fog, font: 'micro' });
+        const c = st.clip;
+        if (!c) {
+          drawText(ctx, clips.length ? 'PICK A CLIP' : 'NO VOICED SEGMENTS YET', 12, 100, { color: P.steel });
+          return;
+        }
+        const a = st.a;
+        drawText(ctx, `${c.kind}`.toUpperCase(), W - 12, 6, { color: P.steel, font: 'micro', align: 'right' });
+        drawText(ctx, c.who.toUpperCase(), 12, 28, { color: P.white });
+        drawText(ctx, a ? `NEURAL VOICE · ${a.duration.toFixed(1)} S · ${a.words.length} WORDS` : 'BROWSER VOICE (NO CLIP)', 12, 42, { color: a ? P.fog : P.red, font: 'micro' });
+
+        const t = st.perf0 !== null ? (now - st.perf0) / 1000 : -1;
+        // envelope strip with the playhead
+        const X = 12;
+        const Y = 64;
+        const SW = W - 24;
+        const SH = 28;
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(X, Y, SW, SH);
+        if (a?.levels && a.duration > 0) {
+          for (let x = 0; x < SW; x++) {
+            const tt = (x / SW) * a.duration;
+            const v = levelAt(a.levels, tt);
+            const h = Math.max(1, Math.round(v * (SH - 4)));
+            ctx.fillStyle = tt <= t ? P.silver : P.slate;
+            ctx.fillRect(X + x, Y + ((SH - h) >> 1), 1, h);
+          }
+          for (const w of a.words) {
+            ctx.fillStyle = P.steel;
+            ctx.fillRect(X + Math.round((w.t / a.duration) * SW), Y + SH, 1, 2);
+          }
+          if (t >= 0 && t <= a.duration) {
+            ctx.fillStyle = P.red;
+            ctx.fillRect(X + Math.round((t / a.duration) * SW), Y - 2, 1, SH + 4);
+          }
+        }
+        // sentence with the word being said
+        const wi = a && t >= 0 ? wordAt(a.words, t) : -1;
+        const word = wi >= 0 ? a.words[wi] : null;
+        if (wi !== st.lastWord && wi >= 0) {
+          st.lastWord = wi;
+          st.flashUntil = now + 66;
+        }
+        const text = c.text;
+        const lines = wrapLines(text, W - 24);
+        let y = 104;
+        let off = 0;
+        for (const line of lines.slice(0, 5)) {
+          const at = text.indexOf(line, off);
+          for (const m of line.matchAll(/\S+\s*/g)) {
+            const abs = at + m.index;
+            const on = word && abs <= word.char && word.char < abs + m[0].length;
+            const said = word && abs < word.char;
+            drawText(ctx, m[0], 12 + widthOf(line.slice(0, m.index)), y, { color: on ? P.white : said ? P.silver : P.steel });
+          }
+          off = at + line.length;
+          y += 12;
+        }
+        // mouth: speechFrame level and viseme
+        const f = audio.speechFrame(now, c.slot, st.frame);
+        ctx.fillStyle = P.ink;
+        ctx.fillRect(12, 178, 120, 26);
+        ctx.fillStyle = P.skinShade;
+        const mh = Math.round(1 + f.level * 12);
+        ctx.fillRect(28, 191 - (mh >> 1), 24, mh);
+        drawText(ctx, `${f.viseme.toUpperCase()}${f.mix > 0.5 ? `>${f.next.toUpperCase()}` : ''}`, 62, 182, { color: P.fog, font: 'micro' });
+        drawText(ctx, `LEVEL ${f.level.toFixed(2)}`, 62, 192, { color: P.steel, font: 'micro' });
+        drawText(ctx, t >= 0 ? `${t.toFixed(2)} S` : '', W - 12, 192, { color: P.steel, font: 'micro', align: 'right' });
+        // sync mark: lit for two frames at every recorded word onset
+        if (now < st.flashUntil) {
+          ctx.fillStyle = P.white;
+          ctx.fillRect(W - 20, 24, 8, 8);
+        }
+      }
+      // Pixel-font widths of line prefixes, cached (no per-frame measuring).
+      const widths = new Map();
+      function widthOf(s) {
+        let w = widths.get(s);
+        if (w === undefined) {
+          w = measureText(s);
+          if (widths.size > 2000) widths.clear();
+          widths.set(s, w);
+        }
+        return w;
+      }
+      function loop() {
+        try {
+          draw(performance.now());
+        } catch (err) {
+          out.textContent = String(err.stack || err);
+        }
+        requestAnimationFrame(loop);
+      }
+      requestAnimationFrame(loop);
+
+      window.__lab = { list: () => clips.map((c) => c.label), play, playAll, stop: () => audio.stop(), state: () => ({ ...st, frame: { ...st.frame } }) };
+      await load();
+      await player.refreshAds();
+      if (params.get('autostart') === '1') {
+        await audio.unlock();
+        audio.setMode('tts');
+        playAll(Number(params.get('i') || 0));
+      }
+    </script>
+  </body>
+</html>
