@@ -99,6 +99,54 @@ const stab = (inst, chord, C, total, vel = 0.65, gain = 0.9) => ({ kind: 'harmon
 
 // ------------------------------------------------------------------ opens
 
+// COSMOS DESK's title sequence (opens/cues.js): the voyage. E lydian, no drums but felt. The deep
+// field is Emaj7 over a sine sub, a bell on each star the camera passes (three, with the long echo:
+// never more than four a bar); the planet's arrival is a felt thump and the pad opens to F#/E (the
+// lydian II, the colour #4 in the air); the sun bursting at the limb rings G#+D# high; day coming
+// round is a slow softtri rising through Emaj9; then the signature (softtri, halo an octave up) and
+// Emaj9#11 on the hit.
+function cosmosTitles(tempo, H, C) {
+  const k = 64; // E4
+  const Qc = SEQ_CUES.cosmos;
+  const q = H / Qc.hit;
+  const at = (b) => b * q;
+  const m0 = H - 4;
+  const total = C + 2.5;
+  const fly = at(Qc.flyby);
+  const pull = at(Qc.pull);
+  const burst = at(Qc.burst);
+  const glints = Qc.glints.map(at);
+  // day coming round: E, G#, B, D#, F# rising a beat apart (quiet), into the motif
+  const rise = [k - 12, k - 8, k - 5, k - 1, k + 2].map((m, i) => [pull + i * 0.5, m, 0.5, 0.32 + i * 0.04]);
+  return {
+    bpm: tempo,
+    room: 0.46,
+    echo: { amount: 1.3, beats: 0.75, feedback: 0.45 },
+    fadeOut: 1.2,
+    tracks: [
+      { kind: 'lead', inst: 'softtri', notes: part([...motif(k, COLOURS.cosmos, m0, { colourBeats: 1.5 }), [H, k + 7, C - H - 0.25, 0.8]], total), gain: 0.95 },
+      { kind: 'lead', inst: LEAD.halo, notes: part(motif(k + 12, COLOURS.cosmos, m0, { vel: 0.55 }), total), gain: 0.8, echo: 0.6, pan: -0.25 },
+      { kind: 'harmony', inst: 'softtri', notes: part(rise, total), gain: 0.55, echo: 0.6, pan: 0.2 },
+      { kind: 'harmony', inst: 'bell', notes: part([
+        [glints[0], k + 19, 1, 0.38], [glints[1], k + 23, 1, 0.36], [glints[2], k + 26, 1, 0.34], // the stars: B, D#, F#
+        [burst, [k + 20, k + 27], 1.5, 0.42], // the sun at the limb: G# and D#
+        [m0 + 2, k + 14, 1, 0.34], [m0 + 3, k + 18, 1, 0.36], [H, k + 19, 2, 0.45],
+      ], total), gain: 1.2, echo: 0.65, pan: 0.35 },
+      { kind: 'harmony', inst: 'pad', notes: part([
+        [0, [k - 12, k - 5, k - 1, k + 4], fly, 0.42], // Emaj7: the deep field
+        [fly, [k - 10, k - 6, k - 3, k + 2], pull - fly, 0.5], // F#/E: the planet (the lydian II)
+        [pull, [k - 12, k - 5, k - 1, k + 2, k + 4], m0 + 2.5 - pull, 0.55], // Emaj9: day comes round
+        [m0 + 2.5, [k - 10, k - 6, k - 3, k + 2], 1.5, 0.6], // F#/E
+        [H, [k - 12, k - 5, k - 1, k + 2, k + 6], total - H, 0.75], // Emaj9#11
+      ], total), pan: 0.15 },
+      { kind: 'bass', inst: 'sine', notes: part([[0, k - 24, fly, 0.6], [fly, k - 24, H - fly, 0.75], [H, k - 24, total - H, 0.85]], total), gain: 0.65 },
+      stab('pluck', [k - 12, k - 5, k - 1], C, total, 0.8, 1.4),
+      { drums: drums([[fly, 'F', 0.5], [H, 'F', 0.55], [C, 'F', 0.45]], total) },
+      { drums: drums([[C, 'T', 0.5]], total) },
+    ],
+  };
+}
+
 // TECH BYTES' title sequence (opens/cues.js): the run over the board, the crane, the boot. A dorian,
 // half-time. The pulse25 arpeggio (eighths, dotted echo, low-passed) is the data on the board, its
 // beat notes leaning on the signals leaving the camera; the wave fires on Am9's top; in the crane
@@ -306,7 +354,10 @@ const OPENS = {
   cosmos: {
     bpm: 82,
     key: 64,
+    // the title sequence (opens/cosmostitles.js) on its own grid
+    long: { bpm: SEQ_CUES.cosmos.bpm, maxDuration: 11 },
     build(H, C) {
+      if (H >= SEQ_CUES.cosmos.hit) return cosmosTitles(this.tempo, H, C);
       const k = 64; // E4
       const m0 = H - 4;
       const total = C + 2.5;

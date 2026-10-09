@@ -88,3 +88,37 @@ test('TECH BYTES: the run stays low, the crane lands straight overhead at one un
   assert.ok(tech.TECH_SEQ.revealAt >= cues.cueAt('tech-bytes', Q.land) - 1e-9);
   assert.ok(tech.TECH_SEQ.revealAt < cues.hitOf('tech-bytes') - 1.6);
 });
+
+test('COSMOS DESK: at centre stage the voyage\'s planet is the emblem\'s own pixels (no pop at the hand-over)', async () => {
+  const cosmos = await import('../public/js/scenes/opens/cosmos.js');
+  const ct = await import('../public/js/scenes/opens/cosmostitles.js');
+  const kit = await import('../public/js/scenes/opens/kit.js');
+  const PR = Math.round(cosmos.PR0 * kit.ZOOM);
+  const n = Math.hypot(...cosmos.L1);
+  const D = ct.cosmosPlanetPixels(192, 98, PR, cosmos.L1.map((v) => v / n));
+  // the emblem, settled, renders its planet into its own buffer
+  const ctx = fakeCanvas().getContext('2d');
+  cosmos.COSMOS.emblem(ctx, 2, 192, 98, kit.ZOOM);
+  const BW = 2 * Math.ceil(PR * cosmos.RING_OUT) + 5;
+  const BH = 2 * PR + 11;
+  const G = kit.frameBuffer('cosmos-planet', BW, BH).d;
+  const bx = BW >> 1;
+  const by = BH >> 1;
+  let drawn = 0;
+  let diff = 0;
+  for (let j = 0; j < BH; j++) {
+    for (let i = 0; i < BW; i++) {
+      const g = G[j * BW + i];
+      if (!g) continue;
+      drawn++;
+      if (D[(98 - by + j) * kit.W + (192 - bx + i)] !== g) diff++;
+    }
+  }
+  assert.ok(drawn > 2000, `the emblem drew its planet (${drawn} px)`);
+  assert.equal(diff, 0, `${diff} of ${drawn} pixels differ`);
+  // and the voyage arrives there: the planet at centre stage at the emblem's size from the settle on
+  const Q = cues.CUES.cosmos;
+  const p = ct.cosmosPlanet(Q.settle);
+  assert.deepEqual([p.cx, p.cy, p.R], [192, 98, PR]);
+  assert.ok(ct.COSMOS_SEQ.revealAt > cues.cueAt('cosmos', Q.settle));
+});

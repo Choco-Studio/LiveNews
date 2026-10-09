@@ -21,7 +21,7 @@ import { DURATION, TL, normInfo, lockupLayout, drawLockupStill, W, H } from './o
 import { WORLD_TITLES, drawWorldNowTitles, WN_DURATION, WN_HIT } from './opens/worldtitles.js';
 import { TECH_TITLES, drawTechTitles } from './opens/techtitles.js';
 import { durationOf, hitOf } from './opens/cues.js';
-import { COSMOS, drawCosmos } from './opens/cosmos.js';
+import { COSMOS_TITLES, drawCosmosTitles } from './opens/cosmostitles.js';
 import { MONEY, drawMoneyMinute } from './opens/money.js';
 import { FLASH, drawNews60 } from './opens/flash.js';
 import { GENERIC, drawGeneric } from './opens/generic.js';
@@ -34,7 +34,7 @@ const open = (fn, prog, tune, duration = DURATION, still = TL.still) => ({ durat
 export const OPENS = {
   'world-now': open(drawWorldNowTitles, WORLD_TITLES, TUNES['world-now'], WN_DURATION, WN_HIT),
   'tech-bytes': open(drawTechTitles, TECH_TITLES, TUNES['tech-bytes'], durationOf('tech-bytes'), hitOf('tech-bytes')),
-  cosmos: open(drawCosmos, COSMOS, TUNES.cosmos),
+  cosmos: open(drawCosmosTitles, COSMOS_TITLES, TUNES.cosmos, durationOf('cosmos'), hitOf('cosmos')),
   'money-minute': open(drawMoneyMinute, MONEY, TUNES['money-minute']),
   'news-60': open(drawNews60, FLASH, TUNES['news-60']),
   'world-weather': open(drawWorldWeather, WEATHER_OPEN, TUNES.generic),
@@ -126,7 +126,7 @@ export function drawProgrammeLockup(ctx, programId, info) {
 // timer slice (globe tables, sprites, backdrops), then one hidden lock-up frame of each open,
 // which also warms the top row and the text caches.
 if (HAS_DOM && typeof setTimeout === 'function') {
-  const progs = [WORLD_TITLES, TECH_TITLES, COSMOS, MONEY, FLASH, GENERIC];
+  const progs = [WORLD_TITLES, TECH_TITLES, COSMOS_TITLES, MONEY, FLASH, GENERIC];
   const jobs = [];
   for (const p of progs) jobs.push(p.background);
   for (const p of progs) if (p.warmJobs) jobs.push(...p.warmJobs());

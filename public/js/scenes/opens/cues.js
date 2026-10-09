@@ -13,6 +13,18 @@ export const CUES = Object.freeze({
     land: 10.75, // straight overhead: the board is the emblem's own frame
     hit: 15,
   }),
+  // COSMOS DESK: a voyage. Stars stream past through a magenta nebula; the ringed planet sweeps in
+  // huge and backlit, the sun bursting at its limb; the camera pulls back as day comes round onto it
+  // and the moon runs its orbit; it settles as the emblem itself
+  cosmos: Object.freeze({
+    bpm: 82,
+    glints: Object.freeze([0, 1, 2]), // stars flare as the camera passes them (the bells)
+    flyby: 3, // the planet's limb and rings sweep into frame
+    burst: 4.5, // the sun bursts at the limb
+    pull: 6, // the camera pulls back; day swings round onto the planet
+    settle: 9.5, // the emblem, settled at centre stage
+    hit: 12,
+  }),
 });
 
 /** Seconds of a beat on a programme's grid. */

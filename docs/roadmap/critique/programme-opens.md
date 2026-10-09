@@ -81,3 +81,52 @@ Nitpicks left:
 2. The kit's glide steps the chip sprite's size, as in every open.
 3. Far fog steps are dithered between neighbouring palette colours.
 4. The theme is judged on structure and measurements only.
+
+## COSMOS DESK
+
+### Round 1: score 8.0 (lowest: read at 1x)
+
+1. At the start the stars sat in a dense cluster at the vanishing point, so the opening read as a galaxy smudge.
+2. The flyby's planet was half lit by the emblem's first light (from the right), not backlit.
+3. The sun's burst was small.
+4. Close up, the planet was flat colour blocks.
+5. The nebula was faint at the start.
+
+### Round 2: score 9.0 (lowest: motion and timing)
+
+Fixed from round 1:
+- the stars are spread out at the start;
+- the flyby's sun sits behind the planet (a thin crescent) and swings round through L0 to the key light;
+- the burst is an eight-point star with a dithered glow;
+- the nebula is full from the cut.
+
+Defects:
+1. Day came round only once the planet had shrunk, so its close-up detail was never seen lit.
+2. The fine streaks read as squiggles.
+3. The rings changed colour all at once when the light crossed the side.
+
+### Round 3: score 9.5 (lowest: pixel craft)
+
+Fixed from round 2:
+- day comes round from the burst while the planet is still big;
+- the belts are broad with gentle waves;
+- the rings turn over through the screen's fixed matrix.
+
+Defects:
+1. The ringlets were set in screen pixels, so they slid as the ring scaled and flickered at 61,000 a second.
+
+### Round 4 (final): score 9.8
+
+Fixed from round 3:
+- the ringlets belong to the ring (radius in e), broad, fading before they are thinner than two pixels: flicker fell from 225,000 to 158,000 over the sequence.
+
+Evidence:
+- the hand-over to the package differs by 0 pixels (lab) and matches pixel for pixel in the unit test;
+- frames take 3.4 ms (median) and 10.7 ms (p95);
+- the theme measures -15.7 LUFS, 5.5 LU range.
+
+Nitpicks left:
+1. The deep field's stars stream gently (calm by design, at 82 BPM).
+2. The nebula's dithered edges crawl slightly as it drifts.
+3. The kit's glide steps the planet's size, as in every open.
+4. The theme is judged on structure and measurements only.

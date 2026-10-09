@@ -10,18 +10,18 @@ import { u32, clamp, seg, easeOut, easeOutQuint, easeInOut } from '../../gfx/ind
 import { mulberry32 } from '../../util.js';
 import { lazyBackdrop, frameBuffer, playOpen, CENTRE, ZOOM, W, H } from './kit.js';
 
-const PR0 = 19; // planet radius in the lock-up (x ZOOM at centre stage)
-const RING_IN = 1.36;
-const RING_OUT = 1.92;
-const RK = 0.24; // ring flattening (ry / rx)
-const TILT = -0.28; // right side higher
-const CTL = Math.cos(TILT);
-const STL = Math.sin(TILT);
+export const PR0 = 19; // planet radius in the lock-up (x ZOOM at centre stage)
+export const RING_IN = 1.36;
+export const RING_OUT = 1.92;
+export const RK = 0.24; // ring flattening (ry / rx)
+export const TILT = -0.28; // right side higher
+export const CTL = Math.cos(TILT);
+export const STL = Math.sin(TILT);
 
 // light bands and dark bands, each a ramp from night to full key light (shadows shift to maroon)
 const LIGHT_BAND = [P.black, P.maroon, P.tanShade, P.tan, P.cream];
 const DARK_BAND = [P.black, P.maroon, P.brown, P.tanShade, P.skinShade];
-const BANDS = [
+export const BANDS = [
   [-0.7, LIGHT_BAND],
   [-0.42, DARK_BAND],
   [0.36, LIGHT_BAND],
@@ -94,8 +94,8 @@ function geometry(PR) {
   return GEO;
 }
 
-const L0 = [0.95, 0.05, -0.32]; // sun behind and to the right: a thin crescent
-const L1 = [-0.56, 0.5, 0.66]; // the channel key light: upper left, in front
+export const L0 = [0.95, 0.05, -0.32]; // sun behind and to the right: a thin crescent
+export const L1 = [-0.56, 0.5, 0.66]; // the channel key light: upper left, in front
 const LV = [0, 0, 0];
 
 function renderPlanet(fb, G, light, ringP, power, rimP, shadowP) {
@@ -148,11 +148,11 @@ function lightAt(dt) {
 }
 
 // --- moon on its own orbit (wider and rounder than the rings)
-const ORX = 44;
-const ORY = 20;
-const TH1 = Math.PI - 0.5; // parks lower left, in front of the rings and well clear of the limb
-const TH0 = TH1 - Math.PI * 2 - 0.9; // a little over one orbit
-function orbitPt(th, k, out) {
+export const ORX = 44;
+export const ORY = 20;
+export const TH1 = Math.PI - 0.5; // parks lower left, in front of the rings and well clear of the limb
+export const TH0 = TH1 - Math.PI * 2 - 0.9; // a little over one orbit
+export function orbitPt(th, k, out) {
   const ex = Math.cos(th) * ORX * k;
   const ey = Math.sin(th) * ORY * k;
   out[0] = ex * CTL - ey * STL;
@@ -162,7 +162,7 @@ function orbitPt(th, k, out) {
 }
 const OP = [0, 0, 0];
 
-function drawMoon(ctx, x, y) {
+export function drawMoon(ctx, x, y) {
   ctx.fillStyle = P.fog;
   ctx.fillRect(x - 1, y - 2, 3, 5);
   ctx.fillRect(x - 2, y - 1, 5, 3);
@@ -218,18 +218,27 @@ function emblem(ctx, dt, x, y, k = 1) {
   moonAndTrail(ctx, dt, x, y, k, PR, true);
 }
 
-function starTexture(d, level) {
+/** The backdrop's stars: { x, y, c (0 steel .. 3 white), cross } (the lock-up area kept calm). */
+export function starList() {
   const rnd = mulberry32(4242);
-  const cols = [u32(P.steel), u32(P.fog), u32(P.silver), u32(P.white)];
+  const out = [];
   for (let i = 0; i < 150; i++) {
     const x = Math.floor(rnd() * W);
     const y = Math.floor(rnd() * H);
     const b = rnd();
-    // keep the lock-up area calm
     if (x > 120 && x < 330 && y > 74 && y < 150) continue;
-    const c = cols[b > 0.96 ? 3 : b > 0.82 ? 2 : b > 0.5 ? 1 : 0];
-    d[y * W + x] = c;
-    if (b > 0.985 && x > 0 && y > 0 && x < W - 1 && y < H - 1) {
+    out.push({ x, y, c: b > 0.96 ? 3 : b > 0.82 ? 2 : b > 0.5 ? 1 : 0, cross: b > 0.985 && x > 0 && y > 0 && x < W - 1 && y < H - 1 });
+  }
+  return out;
+}
+const STAR_COLS = () => [u32(P.steel), u32(P.fog), u32(P.silver), u32(P.white)];
+
+function starTexture(d, level) {
+  const cols = STAR_COLS();
+  for (const st of starList()) {
+    const { x, y } = st;
+    d[y * W + x] = cols[st.c];
+    if (st.cross) {
       d[y * W + x - 1] = cols[0];
       d[y * W + x + 1] = cols[0];
       d[(y - 1) * W + x] = cols[0];
