@@ -257,6 +257,10 @@ Nitpicks left:
 2. The climb inside the cloud deck is the plainest stretch.
 3. The p95 frame time is the highest of the sequences.
 
+### Polish round: the climb
+
+Fixed from nitpick 2: under the cloud deck the lower half of the frame was an empty gradient for about a second. More banks now pass there at every depth, pale as the camera climbs (their own seed, so the storm keeps its banks; the far ones stop short of the sea, so none shows over it after the breakout). Flicker over the sequence is 121,000, up from 105,000 with the extra moving edges and still under TECH BYTES' and COSMOS's 158,000. Frames take 5.4 ms (median) and 19.3 ms (p95).
+
 
 ## The themes, recomposed (owner, 9 Oct: "redo the intro music from scratch if you like it better")
 

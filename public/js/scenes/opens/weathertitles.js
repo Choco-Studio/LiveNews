@@ -88,21 +88,21 @@ function banks() {
   if (BANKS) return BANKS;
   const r = rng(29);
   const out = [];
-  const bank = (di, yw, x0, w, solid = 0) => {
+  const bank = (di, yw, x0, w, solid = 0, rand = r) => {
     const D = DEPTHS[di];
     const top = new Float32Array(w);
     const bot = new Float32Array(w);
     // heads along the bank, smaller to its ends
     for (let cx = 0; cx < w; ) {
       const env = Math.sin(Math.PI * clamp((cx + 4) / w, 0.05, 0.95));
-      const rr = (11 + r() * 17) * D.size * (0.4 + 0.6 * env);
+      const rr = (11 + rand() * 17) * D.size * (0.4 + 0.6 * env);
       for (let x = Math.max(0, Math.floor(cx - rr)); x < Math.min(w, Math.ceil(cx + rr)); x++) {
         const h = Math.sqrt(Math.max(0, rr * rr - (x - cx) ** 2)) - rr * 0.12;
         if (h > top[x]) top[x] = h;
       }
-      cx += rr * (0.9 + r() * 0.5);
+      cx += rr * (0.9 + rand() * 0.5);
     }
-    const thick = solid || (8 + r() * 10) * D.size;
+    const thick = solid || (8 + rand() * 10) * D.size;
     for (let x = 0; x < w; x++) {
       const e = Math.min(x, w - 1 - x) / (10 * D.size);
       bot[x] = top[x] > 0 ? (solid ? thick : thick * Math.min(1, Math.sqrt(Math.max(0, e)))) : -1; // the sea's base runs on
@@ -120,6 +120,17 @@ function banks() {
     if (di === 2) continue;
     for (let yw = TOP; yw < TOP + 70; yw += 12 / D.k + r() * 8) {
       for (let x = -60 - r() * 80; x < W + 60; x += 230 * D.size) bank(di, yw, x, Math.round((260 + r() * 120) * D.size), 150);
+    }
+  }
+  // the climb: more banks under the deck at every depth, passing pale below it as it comes down,
+  // so the lower frame never empties (their own seed: the storm's banks stay where they were; the
+  // far ones stop short of the sea, so none peeks over it after the breakout)
+  const r2 = rng(53);
+  for (let di = 0; di < 3; di++) {
+    const D = DEPTHS[di];
+    for (let yw = 40; yw < (di === 0 ? 200 : TOP - 6); yw += D.gap * (0.35 + 0.3 * r2())) {
+      const w = Math.round((120 + r2() * 200) * D.size);
+      bank(di, yw, -w * 0.3 + r2() * (W + w * 0.6), w, 0, r2);
     }
   }
   out.sort((p, q) => p.di - q.di || q.yw - p.yw); // far first; within a depth, the higher behind
