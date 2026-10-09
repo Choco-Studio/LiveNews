@@ -40,12 +40,15 @@ function fakeCanvas() {
 let opens;
 let cards;
 let WN_DURATION;
+let SEQ_CUES;
+let seqDuration;
 before(async () => {
   globalThis.document = { createElement: () => fakeCanvas() };
   const gfx = await import('../public/js/gfx/index.js');
   gfx.setNow(Date.UTC(2026, 9, 2, 17, 42, 7));
   opens = await import('../public/js/scenes/opens.js');
   ({ WN_DURATION } = await import('../public/js/scenes/opens/worldcues.js'));
+  ({ CUES: SEQ_CUES, durationOf: seqDuration } = await import('../public/js/scenes/opens/cues.js'));
   cards = await import('../public/js/scenes/cards.js');
 });
 
@@ -79,11 +82,12 @@ for (const id of Object.keys(INFO)) {
   });
 }
 
-test('every open is 4 s but WORLD NOW\'s title sequence; the hit is 0.8 s before every cut; one title column', () => {
+test('every open lasts 4 s but the title sequences (their cue sheets); the hit is 0.8 s before every cut; one title column', () => {
   const lay = {};
   for (const id of Object.keys(INFO)) {
     const o = opens.OPENS[id];
-    assert.equal(opens.openFor(id).duration, id === 'world-now' ? WN_DURATION : 4, id);
+    const long = id === 'world-now' ? WN_DURATION : SEQ_CUES[id] ? seqDuration(id) : 4;
+    assert.equal(opens.openFor(id).duration, long, id);
     if (o) assert.ok(Math.abs(o.duration - o.still - 0.8) < 1e-9, `${id}: the still lands 0.8 s before the cut`);
     lay[id] = opens.lockupFor(id, INFO[id]);
     const front = (opens.OPENS[id] || { prog: { front: true } }).prog.front;

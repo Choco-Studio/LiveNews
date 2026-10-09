@@ -20,6 +20,7 @@
 
 import { midiToName } from './tune.js';
 import { WN_CUES, WN_BPM } from '../scenes/opens/worldcues.js';
+import { CUES as SEQ_CUES } from '../scenes/opens/cues.js';
 
 /** The signature as semitones from the tonic and lengths in beats. */
 export const MOTIF = Object.freeze([[-5, 0.5], [0, 0.5], [2, 0.5], [7, 1]]);
@@ -97,6 +98,60 @@ const LEAD = {
 const stab = (inst, chord, C, total, vel = 0.65, gain = 0.9) => ({ kind: 'harmony', inst, notes: part([[C, chord, 0.5, vel]], total), gain });
 
 // ------------------------------------------------------------------ opens
+
+// TECH BYTES' title sequence (opens/cues.js): the run over the board, the crane, the boot. A dorian,
+// half-time. The pulse25 arpeggio (eighths, dotted echo, low-passed) is the data on the board, its
+// beat notes leaning on the signals leaving the camera; the wave fires on Am9's top; in the crane
+// the arpeggio climbs an octave over D9 (the dorian IV) as the camera rises; the techPluck states the
+// signature as the die boots and lands on Am6/9 with the lock-up. A soft kick and snare in half
+// time, a light hat in the run, nothing four-on-the-floor.
+function techTitles(tempo, H, C) {
+  const k = 69; // A4
+  const Qc = SEQ_CUES['tech-bytes'];
+  const q = H / Qc.hit;
+  const at = (b) => b * q;
+  const m0 = H - 4;
+  const total = C + 2;
+  const crane = at(Qc.crane);
+  const land = at(Qc.land);
+  const am9 = [k - 12, k - 9, k - 5, k - 2, k + 2, k - 2, k - 5, k - 9];
+  const d9 = [k - 7, k - 3, k, k + 3, k + 7, k + 3, k, k - 3];
+  const arp = range(0, H, 0.5).map((b, i) => {
+    const climb = b >= crane && b < m0;
+    const chord = climb || (b >= m0 + 1 && b < m0 + 2.5) ? d9 : am9;
+    // the climb: the pattern rises a step a beat through the crane (an octave by the landing)
+    const lift = climb ? Math.min(12, Math.round(((b - crane) / Math.max(1, land - crane)) * 12)) : 0;
+    const vel = 0.15 + 0.17 * Math.min(1, b / crane) + (i % 2 ? 0 : 0.06);
+    return [b, chord[i % 8] + lift, 0.5, Math.min(0.4, vel)];
+  });
+  const LEAD_IN = { wave: 'pulse25', preset: 'pulse25', a: 0.004, d: 0.2, s: 0.35, r: 0.12, cutoff: 1800, vib: false };
+  return {
+    bpm: tempo,
+    room: 0.18,
+    echo: { amount: 1, beats: 0.75, feedback: 0.34 },
+    fadeOut: 0.8,
+    tracks: [
+      { kind: 'lead', inst: LEAD.techPluck, notes: part([...motif(k, COLOURS.tech, m0), [H, k + 12, C - H - 0.25, 0.85]], total), gain: 1.1, echo: 0.45 },
+      { kind: 'harmony', inst: LEAD_IN, notes: part(arp, total), gain: 0.5, pan: 0.3, echo: 0.55 },
+      { kind: 'harmony', inst: 'pad', notes: part([
+        [0, [k - 12, k - 9, k - 5, k - 2, k + 2], at(4), 0.3], // Am9: the run, from quiet
+        [at(4), [k - 12, k - 9, k - 5, k - 2, k + 2], at(Qc.wave) - at(4), 0.38],
+        [at(Qc.wave), [k - 12, k - 9, k - 5, k - 2, k + 2], crane - at(Qc.wave), 0.48], // the wave
+        [crane, [k - 7, k - 5, k - 3, k + 3], m0 - crane, 0.56], // D9: the crane
+        [m0, [k - 12, k - 9, k - 5, k - 2, k + 2], 1, 0.55], // Am9: the boot
+        [m0 + 1, [k - 7, k - 5, k - 3, k + 3], 1.5, 0.6], // D9 (dorian IV)
+        [m0 + 2.5, [k - 12, k - 5], 1.5, 0.6], // open fifth under the b7
+        [H, [k - 12, k - 9, k - 3, k + 2, k - 5], total - H, 0.75], // Am6/9
+      ], total), pan: -0.2 },
+      { kind: 'bass', inst: { wave: 'tri', preset: 'tri', legato: 1 }, notes: part([[0, k - 24, 4, 0.8], [4, k - 24, 4, 0.85], [8, k - 24, crane - 8, 0.9], [crane, k - 31, m0 - crane, 0.9]], total), gain: 0.45 },
+      { kind: 'bass', inst: 'tri', notes: part([[m0, k - 24, 1], [m0 + 1, k - 31, 1.5, 0.9], [m0 + 2.5, k - 24, 1.5], [H, k - 24, total - H]], total), gain: 0.45 },
+      stab('pluck', [k - 12, k - 5, k], C, total, 0.8, 1.3),
+      { drums: drums([[0, 'K', 0.42], [2, 'S', 0.2], [4, 'K', 0.4], [6, 'S', 0.22], [at(Qc.wave), 'K', 0.5], [land, 'K', 0.45], [H, 'K', 0.65], [C, 'F', 0.55]], total) },
+      { drums: drums([[C, 'T', 0.55]], total) },
+      { drums: drums(range(at(2), crane, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.12 : 0.18]), total) },
+    ],
+  };
+}
 
 // WORLD NOW's title sequence (opens/worldcues.js): the same brass statement and final chord as the
 // short open, with ten seconds of build under the pictures. Night: four pips from London (B5,
@@ -212,7 +267,10 @@ const OPENS = {
   'tech-bytes': {
     bpm: 104,
     key: 69,
+    // the title sequence (opens/techtitles.js) on its own grid
+    long: { bpm: SEQ_CUES['tech-bytes'].bpm, maxDuration: 11 },
     build(H, C) {
+      if (H >= SEQ_CUES['tech-bytes'].hit) return techTitles(this.tempo, H, C);
       const k = 69; // A4
       const m0 = H - 4;
       const total = C + 2;

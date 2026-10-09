@@ -370,6 +370,20 @@ This is TECH BYTES' own device, as the red rule is WORLD NOW's and the centred "
 
 **Banned:** swooshes, glitches, modem sounds, typing, beeps, boings, saw leads and four-on-the-floor.
 
+### 3.7b The title sequence (owner, 9 Oct: as crafted as WORLD NOW's)
+
+9.45 s at 104 BPM on the cue sheet in `public/js/scenes/opens/cues.js`; the pictures (`opens/techtitles.js`) and the theme (`themes.js` `techTitles`) read the same beats.
+
+| Beats (s) | Pictures | Music |
+|---|---|---|
+| 0–7.5 (0–4.3) | A run low over a dark circuit board between two buses of traces (they jog at 45 degrees); a signal leaves under the camera on every beat and races to the horizon, lighting its trace; packages with silver legs and tall capacitors stand on the board; on beat 7 every trace fires at once and the side buses light as the wave passes | Am9 pad from quiet, a low-passed `pulse25` arpeggio in eighths with a dotted echo, soft kick and snare in half time, a light hat |
+| 7.5–10.75 (4.3–6.2) | The camera cranes up past the overhead height and settles onto it, straight over the processor; its traces light from the frame edges into its pins | D9 (the dorian IV); the arpeggio climbs an octave as the camera rises |
+| 10.75–12.1 (6.2–7.0) | Overhead the board is exactly the emblem's frame: the package's open takes over mid-build and the die boots | The `techPluck` states the signature |
+| 12.1–15 (7.0–8.65) | The package's reveal | Into Am6/9 on the hit |
+| 15–16.4 | Still for the cut | The button |
+
+The board is a plane drawn per pixel through a pinhole camera. Every trace is box-filtered by the pixel's footprint (and small features by the frame's motion as well), dithered on the screen's fixed matrix and darkened by distance in palette steps, so nothing strobes as it streams past. Overhead, the board shows one unit a pixel, and its middle is the emblem's own frame: the TECH backdrop computed where each pixel lands, the chip, and the traces with the package's own formula and clock. The hand-over is pixel-exact (tested in the lab). Banned sounds stay banned: no swooshes, glitches, beeps or four-on-the-floor.
+
 ### 3.8 Transitions
 
 - **Between shots and stories:** cuts throughout (ART_DIRECTION).

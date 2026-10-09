@@ -14,7 +14,7 @@ const BYTE = [1, 0, 1, 1, 0, 1, 0, 1]; // 0xB5, drawn as 4 x 2 cells
 
 /** Chip dimensions at size factor k (1 = lock-up), cached per 1/100 of k. */
 const DIMS = new Map();
-function dims(k) {
+export function dims(k) {
   const q = Math.round(k * 100);
   const hit = DIMS.get(q);
   if (hit) return hit;
@@ -49,7 +49,7 @@ function polyPix(verts) {
 
 /** Traces from every pin to the frame edge, for the chip at centre stage. */
 let TRACES = null;
-const traces = () => TRACES || (TRACES = buildTraces());
+export const traces = () => TRACES || (TRACES = buildTraces());
 const buildTraces = () => {
   const D = dims(ZOOM);
   const cx = CENTRE.x;
@@ -132,7 +132,7 @@ const chipSpriteK = memoFn(64, (key, D, k) => {
   p.rect(x0 + w, y0, 1, h, P.slate);
   return { cv: p.canvas(), S: S - 1 };
 });
-function chipSprite(k) {
+export function chipSprite(k) {
   const D = dims(k);
   return chipSpriteK(D.body * 10000 + D.pin * 100 + D.pinW, D, k);
 }
