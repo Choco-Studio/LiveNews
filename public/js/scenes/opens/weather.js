@@ -7,7 +7,7 @@ import { P } from '../../palette.js';
 import { seg, easeOutQuint, easeInOut } from '../../gfx/index.js';
 import { lazyBackdrop, playOpen, CENTRE, ZOOM } from './kit.js';
 
-const R = 12; // the sun's radius at k = 1
+export const R = 12; // the sun's radius at k = 1
 const EXTENT = 26; // right half-width at k = 1 (the cloud's right edge)
 
 function dot(ctx, x, y, c) {
@@ -16,8 +16,17 @@ function dot(ctx, x, y, c) {
 }
 
 function sun(ctx, dt, cx, cy, k) {
+  // rays: twelve, long and short in turn, turning a twelfth of a circle over the open
+  drawSun(ctx, cx, cy, k, easeOutQuint(seg(dt, 0.15, 0.6)), easeInOut(seg(dt, 0.45, 0.5)), (seg(dt, 0.45, 3.2) * Math.PI) / 6);
+}
+
+/**
+ * The sun at size k centred on (cx, cy) (fractional: it is drawn pixel by pixel from the true circle),
+ * grown to `grow` (0..1), its rays out to `rays` (0..1) and turned by `turn` radians. The open and
+ * WORLD WEATHER's title sequence both draw it.
+ */
+export function drawSun(ctx, cx, cy, k, grow, rays, turn) {
   const r = R * k;
-  const grow = easeOutQuint(seg(dt, 0.15, 0.6));
   if (grow <= 0) return;
   const rr = r * grow;
   const x0 = Math.floor(cx - rr - 1), x1 = Math.ceil(cx + rr + 1);
@@ -31,10 +40,7 @@ function sun(ctx, dt, cx, cy, k) {
       dot(ctx, x, y, d > rr - 1.2 ? P.orange : lit > 0.45 ? P.cream : P.yellow);
     }
   }
-  // rays: twelve, long and short in turn, turning a twelfth of a circle over the open
-  const rays = easeInOut(seg(dt, 0.45, 0.5));
   if (rays <= 0) return;
-  const turn = (seg(dt, 0.45, 3.2) * Math.PI) / 6;
   for (let i = 0; i < 12; i++) {
     const a = (i * Math.PI) / 6 + turn;
     const long = i % 2 === 0;
@@ -49,6 +55,10 @@ const PUFFS = [
   [15, -10, 8.5],
   [24, -5.5, 5.5],
 ];
+/** The cloud at size k from its anchor (the left end of its base); also WORLD WEATHER's title sequence's. */
+export function drawCloud(ctx, ax, ay, k) {
+  cloud(ctx, 0, ax, ay, k);
+}
 function cloud(ctx, dt, ax, ay, k) {
   const inside = (px, py) => {
     if (py > 0) return false;

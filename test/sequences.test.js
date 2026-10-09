@@ -181,3 +181,64 @@ test('MONEY MINUTE: the theme lands on the pictures (keys with the bursts of win
   assert.ok(!o.tune.swing);
   for (const t of song.tracks) for (const e of t.events) for (const m of e.midis ?? []) assert.ok(m <= 84, `note ${m} above C6`);
 });
+
+test('NEWS IN 60: as it lands, the close-up\'s stopwatch is the emblem\'s own drawing', async () => {
+  const nt = await import('../public/js/scenes/opens/newstitles.js');
+  const fl = await import('../public/js/scenes/opens/flash.js');
+  const kit = await import('../public/js/scenes/opens/kit.js');
+  const { u32 } = await import('../public/js/gfx/index.js');
+  const Q = cues.CUES['news-60'];
+  const beat = 60 / Q.bpm;
+  const t = 6.47 * beat; // just before the dial becomes the emblem's drawing (the hand between ticks)
+  const cam = nt.newsCamera(t / beat);
+  assert.ok(Math.abs(cam.s - Math.round(32 * kit.ZOOM)) < 0.05 && Math.abs(cam.fx) < 1e-3 && Math.abs(cam.fy) < 1e-3, 'at centre stage, at the emblem\'s size');
+  // the sequence's frame (its layer) against the emblem's own pixels for the same hand
+  const rec = [];
+  const ctx = fakeCanvas().getContext('2d');
+  nt.drawNewsTitles(ctx, t, INFO);
+  const D = kit.frameBuffer('news-titles', kit.W, kit.H).d;
+  const ectx = fakeCanvas().getContext('2d');
+  ectx.fillRect = function (x, y, w, h) { rec.push([x, y, w, h, this.fillStyle]); };
+  const lit = Math.floor(60 * cam.hand + 1e-6);
+  fl.drawDial(ectx, kit.CENTRE.x, kit.CENTRE.y, kit.ZOOM, 1, true, lit, false, null, cam.hand);
+  let n = 0;
+  let diff = 0;
+  const seen = new Set();
+  for (let i = rec.length - 1; i >= 0; i--) {
+    // the last rect drawn on a pixel is what shows
+    const [x, y, w, h, c] = rec[i];
+    for (let yy = y; yy < y + h; yy++) {
+      for (let xx = x; xx < x + w; xx++) {
+        const k = yy * kit.W + xx;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        n++;
+        if (D[k] !== u32(c)) diff++;
+      }
+    }
+  }
+  assert.ok(n > 400, `the emblem drew its bezel, ticks, crown and hand (${n} px)`);
+  assert.equal(diff, 0, `${diff} of ${n} pixels differ`);
+  // and the package takes over on the dial at rest, "60" lit, the hand at twelve
+  assert.ok(nt.NEWS_SEQ.revealAt > Q.sixty * beat);
+});
+
+test('NEWS IN 60: the hand passes a five-minute tick on every eighth, under the tock and the tick', () => {
+  const Q = cues.CUES['news-60'];
+  return import('../public/js/scenes/opens/newstitles.js').then((nt) => {
+    assert.equal(nt.newsCamera(Q.press).hand, 0, 'still until the pusher goes down');
+    for (let m = 1; m <= 12; m++) {
+      const b = Q.press + m / 2;
+      assert.ok(Math.abs(nt.newsCamera(b).hand * 60 - 5 * m) < 1e-9, `the ${5 * m} tick passes on beat ${b}`);
+    }
+    assert.equal(nt.newsCamera(Q.turn + 0.3).hand, 1, 'stopped at twelve');
+    // the theme: a tock on each beat of the turn, a tick off each, and nothing ticking after it stops
+    const song = tune.parseTune(opens.openFor('news-60').tune);
+    const bass = song.tracks.find((t) => t.kind === 'bass');
+    const ticks = song.tracks[1];
+    for (let b = Q.press; b <= Q.turn; b++) assert.ok(bass.events.some((e) => Math.abs(e.at - b) < 1e-6), `a tock on beat ${b}`);
+    for (let b = Q.press + 0.5; b < Q.turn; b++) assert.ok(ticks.events.some((e) => Math.abs(e.at - b) < 1e-6), `a tick on beat ${b}`);
+    assert.ok(!ticks.events.some((e) => e.at > Q.turn && e.at < 8), 'silence while "60" lights');
+    for (const e of ticks.events) assert.ok(e.at < Q.press || Math.abs((e.at % 1) - 0.5) < 1e-6, `ticks off the beat only (${e.at})`);
+  });
+});

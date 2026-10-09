@@ -172,3 +172,44 @@ Nitpicks left:
 2. The road's streaks are small at 1x.
 3. The theme is judged on structure and measurements only.
 
+## NEWS IN 60
+
+### Round 1: score 8.9 (lowest: pixel craft)
+
+1. A crash zoom moved the dial 40 px a frame. Eight instants a frame drew ghost copies of the bezel and the rules, as horizontal hatching.
+2. The adaptive blur (instants per pixel, endpoint checks, shared 2x2 blocks) drew stair-step structures where pixels were sampled differently.
+3. Frames took up to 55 ms.
+4. At the switch to the emblem's drawing, 338 px changed:
+   - the crown sat a row high;
+   - the bands' proportional sizes overrode the emblem's pixels at centre stage;
+   - the ticks were padded to four pixels;
+   - the rings were rasterised by distance, not as midpoint circles.
+5. The crown's sizes were rounded per frame, so its edge jumped back and forth during the push-in.
+6. The close-up's metal was flat grey.
+7. A crystal glare split the face along a hard radial edge.
+8. The pusher lost its modelling as soon as the camera moved.
+9. The slow push-in on the close-up made the knurling and the fifths crawl.
+10. The hand's blur trail stayed on to the settle, then vanished.
+
+### Round 2: score 9.8 (final)
+
+Fixed from round 1:
+- a smooth pull-back of a few pixels a frame, one crisp sample per pixel, and an analytic blur for the hand;
+- the bands grow from the emblem's own pixels;
+- within two pixels of centre stage, the emblem's rasterisation is emulated, so the seam carries only the hand's own motion (tested: 0 of 748 emblem pixels differ just before the switch);
+- the crown grows smoothly;
+- a polished convex bezel with a glint, a knurled cylinder pusher, ticks with lit and shaded edges;
+- only the finest detail goes while the camera moves;
+- the opening close-up is locked off;
+- the hand's blur thins away before the emblem.
+
+Evidence:
+- flicker fell from 86,000 to 47,000: under 200 px a frame on the still close-up and at rest, and the rest is the pull-back's own motion;
+- the hand-over to the package differs by 0 pixels (lab);
+- frames take 0.7 ms (median) and 8 ms (p95);
+- the theme measures -16.4 LUFS.
+
+Nitpicks left:
+1. The face is plain ink between the ticks, as on the emblem.
+2. The tick-tock is judged on structure and level measurements only (the off-beat tick sits 7 dB under the tock).
+

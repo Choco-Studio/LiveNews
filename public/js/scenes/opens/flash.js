@@ -9,7 +9,7 @@ import { P } from '../../palette.js';
 import { seg, easeInOut, easeInOutSine, ringPts, memoFn, Pix, discSpans } from '../../gfx/index.js';
 import { lazyBackdrop, playOpen, CENTRE, ZOOM } from './kit.js';
 
-const R0 = 32; // tick-ring radius in the lock-up (x ZOOM at centre stage); the bezel sits at R + 2
+export const R0 = 32; // tick-ring radius in the lock-up (x ZOOM at centre stage); the bezel sits at R + 2
 const TAU = Math.PI * 2;
 const SWEEP_T = 0.25;
 const SWEEP_DUR = 1.3;
@@ -159,12 +159,18 @@ function hand(ctx, x, y, a, len, tail) {
   }
 }
 
-function emblem(ctx, dt, x, y, k = 1) {
+/**
+ * The stopwatch at size k, centred on (x, y): the bezel drawn round to `bezel` (0..1) with the face
+ * opening behind it, the ticks (when `ticks`) lit up to `lit` of 60 (tick 0 too once `home`), "60"
+ * in `digits` (a colour, or null for none) and the hand at `hand` turns (null: no hand). The open
+ * and NEWS IN 60's title sequence both draw it.
+ */
+export function drawDial(ctx, x, y, k, bezel, ticks, lit, home, digits, handAt) {
   const R = Math.round(R0 * k);
   const D = dial(R);
   const B = D.B;
   // the bezel draws round clockwise from twelve
-  const bp = easeInOut(seg(dt, 0.1, 0.4));
+  const bp = bezel;
   if (bp <= 0) return;
   if (bp >= 1) ctx.drawImage(D.face, x - B, y - B);
   else {
@@ -209,36 +215,41 @@ function emblem(ctx, dt, x, y, k = 1) {
     ctx.fillRect(x - cw, top + ch - 1, cw * 2 + 1, 1);
   }
   // ticks come on just behind the closing bezel, then light up as the hand passes
-  if (dt > 0.42) {
-    const sp = sweep(dt);
-    const lit = sp >= 1 ? 60 : Math.floor(60 * sp + 1e-6);
+  if (ticks) {
     for (let i = 0; i < D.tx.length; i++) {
       const tk = D.tk[i];
       // only the twelve five-minute ticks light yellow; the minute ticks step slate -> steel
-      const on = tk < lit || (tk === 0 && sp >= 1);
+      const on = tk < lit || (tk === 0 && home);
       ctx.fillStyle = tk % 5 === 0 ? (on ? P.yellow : P.steel) : on ? P.steel : P.slate;
       ctx.fillRect(x + D.tx[i], y + D.ty[i], 1, 1);
     }
   }
-  // "60" lights in the lower half once the minute is complete: a three-step palette fade
-  // (slate, orange, yellow, a frame or two each), like an LCD coming on; never half drawn
-  const dp = dt - (SWEEP_T + SWEEP_DUR - 0.06);
-  if (dp > 0) {
+  if (digits) {
     const S = segs(k);
     const gap = Math.max(2, Math.round(2 * k));
     const dy = y + Math.round(5 * k);
-    const col = dp < 0.06 ? P.slate : dp < 0.12 ? P.orange : P.yellow;
-    digit(ctx, '6', x - S.dw - (gap >> 1) - 1, dy, col, S);
-    digit(ctx, '0', x + (gap >> 1) + 1, dy, col, S);
+    digit(ctx, '6', x - S.dw - (gap >> 1) - 1, dy, digits, S);
+    digit(ctx, '0', x + (gap >> 1) + 1, dy, digits, S);
   }
   // hand on top: silver with a white hub; its short tail stays above the digits
-  if (dt > 0.42) {
-    hand(ctx, x, y, sweep(dt), R - Math.round(5 * k), 2);
+  if (handAt != null) {
+    hand(ctx, x, y, handAt, R - Math.round(5 * k), 2);
     ctx.fillStyle = P.white;
     ctx.fillRect(x - 1, y - 1, 3, 3);
     ctx.fillStyle = P.steel;
     ctx.fillRect(x, y, 1, 1);
   }
+}
+
+function emblem(ctx, dt, x, y, k = 1) {
+  const bp = easeInOut(seg(dt, 0.1, 0.4));
+  const sp = sweep(dt);
+  const on = dt > 0.42;
+  // "60" lights in the lower half once the minute is complete: a three-step palette fade
+  // (slate, orange, yellow, a frame or two each), like an LCD coming on; never half drawn
+  const dp = dt - (SWEEP_T + SWEEP_DUR - 0.06);
+  const digits = dp > 0 ? (dp < 0.06 ? P.slate : dp < 0.12 ? P.orange : P.yellow) : null;
+  drawDial(ctx, x, y, k, bp, on, sp >= 1 ? 60 : Math.floor(60 * sp + 1e-6), sp >= 1, digits, on ? sp : null);
 }
 
 const background = lazyBackdrop({ key: 'flash', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230 });

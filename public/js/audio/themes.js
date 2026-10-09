@@ -209,6 +209,47 @@ function moneyTitles(tempo, H, C) {
   };
 }
 
+// NEWS IN 60's title sequence (opens/cues.js): the minute starts. G, 120 BPM. The pad (G add9) from
+// silence over the close-up; the pusher going down is one soft click; then the bed's tick-tock under
+// the hand's turn, a staccato tri on each beat and a low-passed tick off it, each the passing of a
+// five-minute tick; the hand stopping at twelve is the last tock, and "60" lights in the silence
+// after it. Then the signature on the low-passed pulse with its octave ("the minute starts") over
+// the tick-tock again, C/G and G sus2, and a Gadd9 bell chord with one soft kick on the hit.
+function newsTitles(tempo, H, C) {
+  const k = 67; // G4
+  const Qc = SEQ_CUES['news-60'];
+  const q = H / Qc.hit;
+  const at = (b) => b * q;
+  const m0 = H - 4;
+  const total = C + 1.5;
+  const press = at(Qc.press);
+  const turn = at(Qc.turn);
+  // the turn: tock on the beat (the tri), tick off it; then again under the signature
+  const tocks = [...range(press, turn + 0.01, 1), ...range(m0, H, 1)];
+  const ticks = [...range(press + 0.5, turn, 1), ...range(m0 + 0.5, H, 1)];
+  return {
+    bpm: tempo,
+    room: 0.14,
+    echo: { amount: 0.6, beats: 0.5, feedback: 0.24 },
+    fadeOut: 0.6,
+    tracks: [
+      { kind: 'lead', inst: LEAD.darkPulse, notes: part(motif(k - 12, COLOURS.sixty, m0, { colourBeats: 1.5 }), total), gain: 0.85 },
+      { kind: 'harmony', inst: LEAD.tick, notes: part([[press - 0.02, k + 5, 0.2, 0.42], ...ticks.map((b) => [b, k + 12, 0.25, 0.32])], total), gain: 0.55, pan: 0.22, echo: 0.3 },
+      { kind: 'harmony', inst: 'pad', notes: part([
+        [0, [k - 12, k - 8, k - 5, k + 2], m0 + 1.5, 0.45], // G add9, from silence
+        [m0 + 1.5, [k - 12, k - 7, k - 3, k], 1, 0.55], // C/G
+        [m0 + 2.5, [k - 12, k - 10, k - 5], 1.5, 0.55], // G sus2 under the octave
+        [H, [k - 12, k - 8, k - 5, k + 2], total - H, 0.62],
+      ], total), pan: -0.18 },
+      { kind: 'lead', inst: 'bell', notes: part([[H, [k, k + 4, k + 7, k + 14], total - H, 0.75]], total), gain: 0.6, echo: 0.3, pan: 0.15 },
+      { kind: 'bass', inst: { wave: 'tri', preset: 'tri', s: 0.4, d: 0.12 }, notes: part([...tocks.map((b, i) => [b, k - 24, 0.4, b === turn ? 0.85 : 0.7 + (i % 2 ? 0 : 0.05)]), [H, k - 24, total - H, 0.85]], total), gain: 0.7 },
+      stab(LEAD.tick, [k - 12, k - 5], C, total, 0.75, 0.9),
+      { drums: drums([[H, 'K', 0.72], [C, 'F', 0.55]], total) },
+      { drums: drums([[C, 'T', 0.4]], total) },
+    ],
+  };
+}
+
 // TECH BYTES' title sequence (opens/cues.js): the run over the board, the crane, the boot. A dorian,
 // half-time. The pulse25 arpeggio (eighths, dotted echo, low-passed) is the data on the board, its
 // beat notes leaning on the signals leaving the camera; the wave fires on Am9's top; in the crane
@@ -495,7 +536,10 @@ const OPENS = {
   'news-60': {
     bpm: 120,
     key: 67,
+    // the title sequence (opens/newstitles.js) on its own grid: under seven seconds, a minute's show
+    long: { bpm: SEQ_CUES['news-60'].bpm, maxDuration: 11, over: 4.5 },
     build(H, C) {
+      if (H >= SEQ_CUES['news-60'].hit) return newsTitles(this.tempo, H, C);
       const k = 67; // G4
       const m0 = H - 4;
       const total = C + 1.5;
@@ -563,13 +607,13 @@ const COLOUR_OF = { 'world-now': 'home', 'tech-bytes': 'tech', cosmos: 'cosmos',
 /**
  * Theme tune for a programme's open. The final chord lands on the title
  * lock-up (`duration - 0.8` s) and a soft felt/timpani button on the cut.
- * Opens last 2.5-8 s; WORLD NOW's title sequence runs to 11 s on its own grid.
+ * Opens last 2.5-8 s; the programmes' title sequences run to 11 s on their own grids.
  * Returns a tune with `meta: { programId, motif, colour, key, bpm, hitAt, cutAt }`.
  */
 export function themeFor(programId, { duration = 4 } = {}) {
   const def = OPENS[programId] ?? GENERIC;
-  // a programme with a long title sequence (WORLD NOW) has its own grid and length past 8 s
-  const long = def.long && Number(duration) > 8 ? def.long : null;
+  // a programme with a title sequence has its own grid and length past 8 s (NEWS IN 60's, past 4.5 s)
+  const long = def.long && Number(duration) > (def.long.over ?? 8) ? def.long : null;
   const dur = Math.min(long?.maxDuration ?? 8, Math.max(2.5, Number(duration) || 4));
   const lockAt = Math.max(2.2, dur - 0.8);
   // The hit on a whole or half beat, close to the programme's tempo.

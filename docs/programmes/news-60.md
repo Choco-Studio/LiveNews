@@ -358,6 +358,33 @@ Three different things share the name "flash" or "FLASH":
   - The 4-note signature (themes.js `MOTIF`) plays only in the open.
   - The **sign-off bell** is one Gadd9 bell chord (`FLASH`'s `final` chord) on the last word of the sign-off, while the dial shows complete. It is not the motif.
 
+### The title sequence (owner, 9 Oct: as crafted as WORLD NOW's)
+
+6.8 s at 120 BPM on the cue sheet in `public/js/scenes/opens/cues.js`, short for a one-minute show. The pictures (`opens/newstitles.js`) and the theme (`themes.js` `newsTitles`) read the same beats. The minute starts.
+
+| Beats (s) | Pictures | Music |
+|---|---|---|
+| 0–1 (0–0.5) | Locked off close on the top of the stopwatch: the knurled pusher over the polished bezel, the twelve o'clock tick, the needle's tip. The pusher goes down on beat 1. | G add9 from silence on the pad; one soft click as the pusher goes down |
+| 1–7 (0.5–3.5) | The hand sets off and makes one turn at an even pace: a five-minute tick passes on every eighth, and each tick lights as the hand passes. The camera pulls back from the pusher to the whole dial at centre stage. The hand stops dead at twelve. | The bed's tick-tock: a staccato tri on each beat, a low-passed tick off it. Each is the passing of a five-minute tick. The last tock is the stop. |
+| 7.5 (3.75) | "60" lights, as on the emblem (slate, orange, yellow) | Silence: the minute is done |
+| 8–12 (4–6) | The package's reveal (from 4.35 s) | The signature on the low-passed pulse with its octave ("the minute starts"), over the tick-tock, C/G and G sus2 |
+| 12–13.6 | Still for the cut | A Gadd9 bell chord and one soft kick on the hit, then the button |
+
+**The stopwatch is the emblem's own.** Every band of it (face, inner wall, bezel, ticks, hand, crown) is the emblem's pixels at centre stage and grows in proportion beyond it. Close up, it is a machined object:
+- a polished convex bezel with its glint;
+- a knurled pusher, modelled as a cylinder;
+- printed ticks with a lit edge and a shaded one;
+- the minute track's rules and fifths.
+
+The finest of that detail (rules, fifths, knurling) goes while the camera moves fast. Within two pixels of centre stage, the renderer uses the emblem's own rasterisation: midpoint rings, rounded tick points, and the hand walked with Bresenham. From the settle on, it is the emblem's drawing (`flash.js` `drawDial`), tested pixel for pixel.
+
+**Motion rules:**
+- The close-up holds still until the pusher goes down.
+- The pull-back never moves detail more than a few pixels a frame.
+- The hand's blur is the wedge it swept over two frames, thinned to its width, so it never lights a pixel for a single frame. It thins away before the dial reaches the emblem's size.
+
+No whooshes, sirens or counting digits; the only digits are the emblem's "60".
+
 ### Transitions
 - **Into the show:** the ident and open run as the channel does, then a hard cut on the downbeat into the intro [AD §4].
 - **Between items:** a cut, the strap text flip and the tick. Never a stinger, whoosh or wipe [AD §4].

@@ -38,6 +38,15 @@ export const CUES = Object.freeze({
     last: 11.5, // one window left: the bit
     hit: 18,
   }),
+  // NEWS IN 60: the minute starts. Close on the stopwatch's pusher, which goes down; the hand makes
+  // one turn (a five-minute tick on every eighth) as the camera pulls back to the dial; "60" lights
+  'news-60': Object.freeze({
+    bpm: 120,
+    press: 1, // the pusher goes down: the hand sets off
+    turn: 7, // the hand stops at twelve (six beats a turn: the fives on every eighth)
+    sixty: 7.5, // "60" lights
+    hit: 12,
+  }),
 });
 
 /** Seconds of a beat on a programme's grid. */
