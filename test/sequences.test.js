@@ -60,8 +60,10 @@ test('each sequence runs on its cue sheet: the open, the theme and the director 
     // the final chord on the hit, the button on the cut
     const spb = 60 / song.bpm;
     const starts = song.tracks.flatMap((t) => t.events.map((e) => Math.round(e.at * spb * 1000)));
-    assert.ok(starts.includes(Math.round(cues.hitOf(id) * 1000)), `${id}: a hit on the lock-up`);
-    assert.ok(starts.includes(Math.round(want * 1000)), `${id}: a button on the cut`);
+    // (note times are written to a thousandth of a beat: within 2 ms)
+    const near2 = (ms) => starts.some((v) => Math.abs(v - ms) <= 2);
+    assert.ok(near2(cues.hitOf(id) * 1000), `${id}: a hit on the lock-up`);
+    assert.ok(near2(want * 1000), `${id}: a button on the cut`);
   }
 });
 
@@ -241,4 +243,33 @@ test('NEWS IN 60: the hand passes a five-minute tick on every eighth, under the 
     assert.ok(!ticks.events.some((e) => e.at > Q.turn && e.at < 8), 'silence while "60" lights');
     for (const e of ticks.events) assert.ok(e.at < Q.press || Math.abs((e.at % 1) - 0.5) < 1e-6, `ticks off the beat only (${e.at})`);
   });
+});
+
+test('WORLD WEATHER: the sun and the last cloud stand where the emblem has them when the package takes over', async () => {
+  const wt = await import('../public/js/scenes/opens/weathertitles.js');
+  const kit = await import('../public/js/scenes/opens/kit.js');
+  const Q = cues.CUES['world-weather'];
+  const beat = 60 / Q.bpm;
+  const at = wt.WEATHER_SEQ.revealAt / beat;
+  assert.deepEqual([wt.WEATHER_SUN.x, wt.WEATHER_SUN.y], [kit.CENTRE.x - 6 * kit.ZOOM, kit.CENTRE.y - 5 * kit.ZOOM], 'the emblem\'s sun');
+  assert.deepEqual([wt.WEATHER_WISP.x, wt.WEATHER_WISP.y], [Math.round(kit.CENTRE.x - 7 * kit.ZOOM), Math.round(kit.CENTRE.y + 12 * kit.ZOOM)], 'the emblem\'s cloud');
+  const e = wt.weatherEmblem(at - 1e-6);
+  assert.equal(e.rays, 1, 'the rays are out');
+  assert.deepEqual([e.wisp.x, e.wisp.y], [wt.WEATHER_WISP.x, wt.WEATHER_WISP.y], 'the cloud has settled');
+  // the rays turn on the package's own clock: the same angle on both sides of the hand-over
+  assert.ok(Math.abs(e.turn - ((1.55 - 0.45) / 3.2) * (Math.PI / 6)) < 1e-6);
+  assert.ok(wt.WEATHER_SEQ.revealAt > Q.settle * beat, 'settled before the reveal');
+});
+
+test('WORLD WEATHER: through the cloud the camera rises at most 3 px a frame, and the sea is gone by the reveal', async () => {
+  const wt = await import('../public/js/scenes/opens/weathertitles.js');
+  const Q = cues.CUES['world-weather'];
+  const beat = 60 / Q.bpm;
+  const f = 1 / 30 / beat;
+  for (let b = 0; b < Q.breakout; b += f) {
+    const v = wt.weatherRise(b + f) - wt.weatherRise(b);
+    assert.ok(v >= 0 && v <= 3, `beat ${b.toFixed(2)}: ${v.toFixed(2)} px a frame`);
+  }
+  // the highest bank of the sea, at the slowest depth, is below the frame when the package takes over
+  assert.ok(wt.weatherSeaTop(wt.WEATHER_SEQ.revealAt / beat) > 216, 'no cloud left under the lock-up');
 });

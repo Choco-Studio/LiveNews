@@ -78,7 +78,34 @@ Phrasing varies with the date and the edition, and no turn of phrase is repeated
   - The rig's upper body is drawn with the rest of the suit: the jacket's skirt in the jacket's own group, trouser legs lit from camera-left, and shoes.
   - Framed head to mid-shin.
 - **Music:** WORLD NOW's light "and finally" song in its sparse arrangement under the forecast, and silence under the warnings.
-- **Open:** a sun with turning rays and a cloud that drifts in front of it, in the network's open package. The accent is blue.
+- **Open:** the title sequence below, ending on the network's open package: a sun with turning rays and a cloud that settles in front of it. The accent is blue.
+- **Open theme** (`themes.js` `'world-weather'`): C major, 88–96 BPM, its colour the major 7th (the open sky).
+  - The motif is on an airy pulse12 over Cmaj7, then Fmaj7/C.
+  - The colour (B) sounds over the C pedal and resolves to C on a Cmaj9 hit.
+  - Its breaking, sign-off and promo cues are in C too.
+
+### The title sequence (owner, 9 Oct: as crafted as WORLD NOW's)
+
+9.9 s at 92 BPM on the cue sheet in `public/js/scenes/opens/cues.js`. The pictures (`opens/weathertitles.js`) and the theme (`themes.js` `weatherTitles`) read the same beats: up through the weather.
+
+| Beats (s) | Pictures | Music |
+|---|---|---|
+| 0–4 (0–2.6) | Inside a storm, rising: banks of cumulus (rounded heads on flat bases) slide down past the camera in three depths, dark against the murk, their heads catching what light there is; rain slants through them. Lightning strikes on beat 2 (a forked bolt, the banks lit from within), and a distant sheet flickers high on the right on beat 3.5. | A minor under a timpani roll that swells into the strike; a timpani stroke on a felt thump for it, a softer one for the sheet |
+| 4–7 (2.6–4.6) | The rain stops; the banks pale as the camera climbs toward the cloud deck above, which comes down over the frame, light coming through it under the sun | Fmaj7, then G; a bell line rising as the cloud pales |
+| 7 (4.6) | The sky clears from the top down, and the sun comes up over the heads of the sea of cloud | Cmaj7, a felt thump, bells (B, E, G) |
+| 7–11.5 (4.6–7.5) | The sea falls away and the sky deepens to the night above the weather. The sun's rays come out. One cloud rises from the sea and settles in front of the sun: the emblem's. The bit pops from the sun's shoulder on the package's clock. | Cmaj9 over the C pedal, two bells as the cloud rises, then the signature on the airy pulse |
+| 11.5–14 (7.5–9.1) | The package's reveal | Into Cmaj9 on the hit |
+| 14–15.2 | Still for the cut | The button |
+
+**The sun and the last cloud are the emblem's own** (`weather.js` `drawSun` and `drawCloud`, drawn pixel by pixel at any centre). From the breakout on, they stand where the emblem has them, and the rays turn on the package's clock, so the hand-over never pops (tested; 0 px in the lab).
+
+**Motion rules:**
+- Through the cloud, the middle depth rises at most 3 px a frame (tested).
+- Each pixel samples a bank at its own fixed instant within the frame (its place in the screen's matrix), so it meets the bank's bands in order.
+- A bank's thin bands (its lit heads, its shadowed base) widen to twice its motion, so no edge lights a pixel for a single frame.
+- The rain steps 15 times a second.
+- Each flash steps down over a quarter second and never brightens again.
+
 
 ## 4. Configuration
 

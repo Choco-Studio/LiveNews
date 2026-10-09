@@ -464,7 +464,7 @@ describe('sonic identity', () => {
   const sounding = (song, b, kinds) => song.tracks.filter((t) => kinds.includes(t.kind)).flatMap((t) => t.events.filter((e) => e.at <= b + 1e-6 && e.at + e.dur > b + 1e-6).flatMap((e) => e.midis));
 
   test('every programme open states the signature, then its own colour note', () => {
-    const colour = { 'world-now': COLOURS.home, 'tech-bytes': COLOURS.tech, cosmos: COLOURS.cosmos, 'money-minute': COLOURS.money, 'news-60': COLOURS.sixty };
+    const colour = { 'world-now': COLOURS.home, 'tech-bytes': COLOURS.tech, cosmos: COLOURS.cosmos, 'money-minute': COLOURS.money, 'news-60': COLOURS.sixty, 'world-weather': COLOURS.weather };
     const keys = new Set();
     for (const id of THEME_IDS) {
       const notes = leadNotes(themeFor(id));
@@ -509,6 +509,7 @@ describe('sonic identity', () => {
     assert.ok(bpm('cosmos') >= 72 && bpm('cosmos') <= 88, `cosmos ${bpm('cosmos')}`);
     assert.ok(bpm('money-minute') >= 112 && bpm('money-minute') <= 116, `money ${bpm('money-minute')}`);
     assert.ok(Math.abs(bpm('news-60') - 120) <= 3, `news-60 ${bpm('news-60')}`);
+    assert.ok(bpm('world-weather') >= 88 && bpm('world-weather') <= 96, `weather ${bpm('world-weather')}`);
     assert.equal(IDENT.bpm, 100);
     assert.equal(IDENT_NIGHT.bpm, 88);
     assert.equal(cueFor('ident', null, { hour: 23 }).bpm, 88);

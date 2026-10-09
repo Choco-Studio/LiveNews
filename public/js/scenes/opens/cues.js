@@ -47,6 +47,18 @@ export const CUES = Object.freeze({
     sixty: 7.5, // "60" lights
     hit: 12,
   }),
+  // WORLD WEATHER: up through the weather. Inside a storm, rising, lightning; the cloud thins and
+  // pales; the camera breaks out over a sea of cloud into the sun; one cloud rises to it: the emblem
+  'world-weather': Object.freeze({
+    bpm: 92,
+    flash: 2, // lightning lights the storm from within
+    sheet: 3.5, // a distant sheet of it, high on the right
+    climb: 4, // the rain stops; the cloud pales as the camera climbs
+    breakout: 7, // the cloud tops rush past: the sea of cloud, the sun
+    wisp: 7.8, // one cloud rises from the sea...
+    settle: 10.6, // ...and settles in front of the sun
+    hit: 14,
+  }),
 });
 
 /** Seconds of a beat on a programme's grid. */

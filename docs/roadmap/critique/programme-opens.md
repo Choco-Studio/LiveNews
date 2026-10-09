@@ -213,3 +213,47 @@ Nitpicks left:
 1. The face is plain ink between the ticks, as on the emblem.
 2. The tick-tock is judged on structure and level measurements only (the off-beat tick sits 7 dB under the tock).
 
+## WORLD WEATHER
+
+### Round 1: score 8.4 (lowest: pixel craft)
+
+1. The clouds were a thresholded noise field: blotchy camouflage, not clouds.
+2. The sea of cloud was a grey blanket under a wavy line.
+3. The sun's glow was a hard cyan disc.
+4. The package's bit (out of the sun's shoulder at 0.9 s) was missing at the hand-over: 16 px.
+5. Banks slid 4–8 px a frame past 2 px rims and 1 px outlines: 768,000 A→B→A flickers.
+6. A sampled blur ranked a pixel's bands by share, so the picks swapped frame to frame; it hardly helped.
+7. The sea's solid bases covered the frame for a second, so all the banks were hidden.
+8. Blue sky showed below the sea's soft bases.
+9. Bank ends drew dark vertical seams.
+10. The sky came in as a screen-door dissolve.
+11. The storm was a light, empty slate with one flash.
+12. Frames took up to 36 ms.
+
+### Round 2: score 9.7 (final)
+
+Fixed from round 1:
+- illustrated banks of cumulus in three depths, sharing the emblem's language;
+- the sea is the cloud layer's own top banks;
+- a soft blue glow;
+- the bit pops on the package's clock;
+- motion at most 3 px a frame through the cloud, with each pixel sampling the bank at its own fixed instant;
+- bands at least twice the motion deep;
+- the sea only at the far and middle depths, with soft bases;
+- sky only over the sea;
+- shading only on the rims;
+- the sky clears from the top down;
+- a darker storm with a second, distant flash;
+- the falloffs are computed once.
+
+Evidence:
+- flicker fell to 105,000 over the sequence (TECH BYTES 158,000, COSMOS 158,000);
+- the hand-over differs by 0 pixels (lab);
+- frames take 5.3 ms (median) and 19 ms (p95);
+- the theme measures -16.6 LUFS.
+
+Nitpicks left:
+1. The banks' moving edges are dithered across a few pixels by the per-pixel sampling: in a still they look speckled, in motion they read as blur.
+2. The climb inside the cloud deck is the plainest stretch.
+3. The p95 frame time is the highest of the sequences.
+

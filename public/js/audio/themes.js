@@ -24,7 +24,7 @@ import { CUES as SEQ_CUES } from '../scenes/opens/cues.js';
 
 /** The signature as semitones from the tonic and lengths in beats. */
 export const MOTIF = Object.freeze([[-5, 0.5], [0, 0.5], [2, 0.5], [7, 1]]);
-export const COLOURS = Object.freeze({ home: 4, tech: 10, cosmos: 6, money: 9, sixty: 12, breaking: 3, next: 2 });
+export const COLOURS = Object.freeze({ home: 4, tech: 10, cosmos: 6, money: 9, sixty: 12, weather: 11, breaking: 3, next: 2 });
 
 const D4 = 62; // channel home key: D major
 
@@ -89,6 +89,7 @@ const LEAD = {
   epiano: { wave: 'pulse50', preset: 'keys', a: 0.005, d: 0.6, s: 0.3, r: 0.22, cutoff: 3200, fenv: [2.6, 0.12] }, // MONEY MINUTE
   tick: { wave: 'pulse25', preset: 'pluck', a: 0.003, d: 0.08, s: 0, r: 0.05, cutoff: 1800, fenv: false },
   halo: { wave: 'pulse12', preset: 'pulse12', a: 0.03, d: 0.4, s: 0.5, r: 0.3, vib: [8, 4.8, 0.3], cutoff: 5000, fenv: [2, 0.2] }, // COSMOS shimmer above the triangle
+  breeze: { wave: 'pulse12', preset: 'pulse12', a: 0.02, d: 0.35, s: 0.6, r: 0.28, vib: [9, 5, 0.25], cutoff: 3400, fenv: [2.2, 0.14] }, // WORLD WEATHER, airy
   horn: { wave: 'pulse25', preset: 'brass', cutoff: 3400, fenv: [3, 0.16] }, // the brass octave that carries the melody
   strings: { wave: 'pulse12', preset: 'pad', a: 0.12, d: 0.6, s: 0.85, r: 0.5, vib: [10, 5.2, 0.25], legato: 1, cutoff: 6500 }, // high strings on WORLD NOW's hit
 };
@@ -246,6 +247,59 @@ function newsTitles(tempo, H, C) {
       stab(LEAD.tick, [k - 12, k - 5], C, total, 0.75, 0.9),
       { drums: drums([[H, 'K', 0.72], [C, 'F', 0.55]], total) },
       { drums: drums([[C, 'T', 0.4]], total) },
+    ],
+  };
+}
+
+// WORLD WEATHER's title sequence (opens/cues.js): up through the weather. C major, the 7th as its
+// colour (the open sky). The storm is A minor under a timpani roll, the lightning a timpani stroke
+// on a felt thump with the roll swelling after it (the distant sheet, a softer stroke); the climb lifts through F and G, a bell line
+// rising as the cloud pales; the breakout is Cmaj7 with a felt thump and bells (the sun); the last
+// cloud rises over Cmaj9; then the signature on an airy pulse, its colour (B) over the C pedal,
+// resolving to C on the hit with Cmaj9.
+function weatherTitles(tempo, H, C) {
+  const k = 60; // C4
+  const Qc = SEQ_CUES['world-weather'];
+  const q = H / Qc.hit;
+  const at = (b) => b * q;
+  const m0 = H - 4;
+  const total = C + 2;
+  const flash = at(Qc.flash);
+  const sheet = at(Qc.sheet);
+  const climb = at(Qc.climb);
+  const out = at(Qc.breakout);
+  // the storm's roll: sixteenths on A, swelling into the strike and again after it
+  const roll = range(0, climb, 0.25).map((b) => [b, k - 27, 0.25, 0.2 + 0.25 * Math.exp(-Math.abs(b - flash - 0.75) / 0.9) + 0.08 * Math.min(1, b / 2)]);
+  // the climb: a bell line rising as the light comes through
+  const rise = [k + 4, k + 7, k + 9, k + 11, k + 12, k + 14].map((m, i) => [climb + i * 0.5, m, 0.5, 0.26 + i * 0.03]);
+  return {
+    bpm: tempo,
+    room: 0.36,
+    echo: { amount: 1, beats: 0.75, feedback: 0.38 },
+    fadeOut: 1,
+    tracks: [
+      { kind: 'lead', inst: LEAD.breeze, notes: part([...motif(k, COLOURS.weather, m0), [H, k + 12, C - H - 0.25, 0.85]], total), gain: 1 },
+      { kind: 'harmony', inst: 'bell', notes: part([
+        ...rise,
+        [out, [k + 11, k + 16, k + 19], 1.5, 0.42], // the sun: B, E, G
+        [at(Qc.wisp) + 1, k + 14, 1, 0.3], [at(Qc.wisp) + 2, k + 16, 1, 0.3],
+        [H, [k + 7, k + 14, k + 16], total - H, 0.45],
+      ], total), gain: 1, echo: 0.6, pan: 0.3 },
+      { kind: 'harmony', inst: 'pad', notes: part([
+        [0, [k - 15, k - 12, k - 8, k - 5], climb, 0.4], // Am7: the storm
+        [climb, [k - 7, k - 3, k, k + 4], 1.5, 0.44], // Fmaj7
+        [climb + 1.5, [k - 5, k - 1, k + 2, k + 5], out - climb - 1.5, 0.48], // G: up through the cloud
+        [out, [k - 12, k - 8, k - 5, k - 1], m0 - out, 0.56], // Cmaj7: above the weather
+        [m0, [k - 12, k - 8, k - 5, k - 1, k + 2], 1.5, 0.56], // Cmaj9
+        [m0 + 1.5, [k - 12, k - 7, k - 3, k + 4], 1, 0.58], // Fmaj7 over C
+        [m0 + 2.5, [k - 12, k - 5, k + 2], 1.5, 0.58], // C add9 under the colour
+        [H, [k - 12, k - 8, k - 5, k - 1, k + 2], total - H, 0.72], // Cmaj9
+      ], total), pan: -0.2 },
+      { kind: 'bass', inst: 'timpani', notes: part([...roll, [flash, k - 27, 1, 0.75], [sheet, k - 27, 1, 0.45], [out, k - 24, 1.5, 0.6], [H, k - 24, C - H, 0.6]], total), gain: 0.7 },
+      { kind: 'bass', inst: 'sine', notes: part([[0, k - 27, climb, 0.6], [climb, k - 31, 1.5, 0.65], [climb + 1.5, k - 29, out - climb - 1.5, 0.7], [out, k - 24, H - out, 0.75], [H, k - 24, total - H, 0.85]], total), gain: 0.6 },
+      stab('pluck', [k - 12, k - 5, k - 1], C, total, 0.75, 1.2),
+      { drums: drums([[flash, 'F', 0.6], [out, 'F', 0.55], [H, 'F', 0.65], [C, 'F', 0.5]], total) },
+      { drums: drums([[C, 'T', 0.42]], total) },
     ],
   };
 }
@@ -567,6 +621,40 @@ const OPENS = {
       };
     },
   },
+  // The skies over every continent, 88-96 BPM: C major, its 7th the colour (the open sky). The
+  // motif on an airy pulse over Cmaj7 -> Fmaj7/C, the B over the C pedal, resolving on a Cmaj9 hit.
+  'world-weather': {
+    bpm: 92,
+    key: 60,
+    // the title sequence (opens/weathertitles.js) on its own grid
+    long: { bpm: SEQ_CUES['world-weather'].bpm, maxDuration: 11 },
+    build(H, C) {
+      if (H >= SEQ_CUES['world-weather'].hit) return weatherTitles(this.tempo, H, C);
+      const k = 60; // C4
+      const m0 = H - 4;
+      const total = C + 2;
+      return {
+        bpm: this.tempo,
+        room: 0.3,
+        echo: { amount: 0.9, beats: 0.75, feedback: 0.34 },
+        fadeOut: 0.9,
+        tracks: [
+          { kind: 'lead', inst: LEAD.breeze, notes: part([...motif(k, COLOURS.weather, m0), [H, k + 12, C - H - 0.25, 0.85]], total), gain: 1 }, // 7 -> 8 on the hit
+          { kind: 'harmony', inst: 'pad', notes: part([
+            [0, [k - 12, k - 8, k - 5, k - 1], m0 + 1.5, 0.55], // Cmaj7
+            [m0 + 1.5, [k - 12, k - 7, k - 3, k + 4], 1, 0.58], // Fmaj7 over C
+            [m0 + 2.5, [k - 12, k - 5, k + 2], 1.5, 0.58], // C add9 under the colour
+            [H, [k - 12, k - 8, k - 5, k - 1, k + 2], total - H, 0.72], // Cmaj9
+          ], total), pan: -0.2 },
+          { kind: 'harmony', inst: 'bell', notes: part([[H, [k + 7, k + 14, k + 16], total - H, 0.45]], total), gain: 0.9, echo: 0.5, pan: 0.3 },
+          { kind: 'bass', inst: 'sine', notes: part([[0, k - 24, H, 0.75], [H, k - 24, total - H, 0.85]], total), gain: 0.6 },
+          stab('pluck', [k - 12, k - 5, k - 1], C, total, 0.75, 1.2),
+          { drums: drums([[H, 'F', 0.65], [C, 'F', 0.5]], total) },
+          { drums: drums([[C, 'T', 0.42]], total) },
+        ],
+      };
+    },
+  },
 };
 
 // Unknown programmes: the channel signature in C major, sober, all major:
@@ -602,7 +690,7 @@ const GENERIC = {
   },
 };
 
-const COLOUR_OF = { 'world-now': 'home', 'tech-bytes': 'tech', cosmos: 'cosmos', 'money-minute': 'money', 'news-60': 'sixty' };
+const COLOUR_OF = { 'world-now': 'home', 'tech-bytes': 'tech', cosmos: 'cosmos', 'money-minute': 'money', 'news-60': 'sixty', 'world-weather': 'weather' };
 
 /**
  * Theme tune for a programme's open. The final chord lands on the title
@@ -641,6 +729,7 @@ const VOICE = {
   cosmos: { key: 64, lead: 'softtri', pad: 'pad' },
   'money-minute': { key: 65, lead: LEAD.epiano, pad: 'pad' },
   'news-60': { key: 67, lead: LEAD.darkPulse, pad: 'pad' },
+  'world-weather': { key: 60, lead: LEAD.breeze, pad: 'pad' },
   channel: { key: D4, lead: LEAD.softPulse, pad: 'pad' },
 };
 const keyOf = (programId) => (VOICE[programId] ? programId : 'channel');
