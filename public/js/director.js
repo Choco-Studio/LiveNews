@@ -400,6 +400,8 @@ export class Director {
       place: seg.place || '',
       desk: seg.desk || '',
       name: presenterName(seg.reporter),
+      // an expert's analysis (server/experts.js): they join from their own studio, never from a place
+      ...(seg.kind === 'expert' ? { kind: 'expert', backdrop: seg.backdrop || 'neutral' } : {}),
     };
   }
 

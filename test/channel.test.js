@@ -585,8 +585,9 @@ describe('config/channel.json', () => {
 
   test('every programme airs at least once in the rotation, and every presenter hosts something', () => {
     for (const [id] of programs) assert.ok(channel.rotation.includes(id), `${id} is never scheduled`);
-    // a correspondent "hosts" the links of the programmes that hand stories to them (server/correspondents.js)
-    const hosts = new Set(programs.flatMap(([, p]) => [...p.presenters, ...(p.correspondents || [])]));
+    // a correspondent "hosts" the links of the programmes that hand stories to them (server/correspondents.js),
+    // an expert the analyses of the programmes that put stories to them (server/experts.js)
+    const hosts = new Set(programs.flatMap(([, p]) => [...p.presenters, ...(p.correspondents || []), ...(p.experts || [])]));
     for (const id of Object.keys(channel.presenters)) assert.ok(hosts.has(id), `${id} hosts nothing`);
   });
 

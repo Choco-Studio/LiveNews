@@ -125,6 +125,62 @@
       },
       "role": "Asia & Middle East correspondent",
       "desk": "asia-mideast"
+    },
+    "omar": {
+      "name": "Omar Ledger",
+      "personality": "the channel's Economics Editor: measured and plain-spoken, turns a figure into what it means for a household or a business, never alarmist",
+      "voice": { "gender": "male", "lang": "en-GB", "pitch": 0.94, "rate": 0.98 },
+      "role": "Economics Editor",
+      "expert": { "desk": "economics", "backdrop": "markets" }
+    },
+    "clara": {
+      "name": "Clara Meridian",
+      "personality": "the channel's Diplomatic Correspondent: calm, exact, explains who wants what and what the talks can and cannot do",
+      "voice": { "gender": "female", "lang": "en-GB", "pitch": 0.96, "rate": 0.98 },
+      "role": "Diplomatic Correspondent",
+      "expert": { "desk": "diplomacy", "backdrop": "bureau" }
+    },
+    "dev": {
+      "name": "Dev Isobar",
+      "personality": "the channel's Climate Correspondent: keen and clear, puts a weather or climate story in its longer picture without preaching",
+      "voice": { "gender": "male", "lang": "en-US", "pitch": 1.02, "rate": 1.02 },
+      "role": "Climate Correspondent",
+      "expert": { "desk": "climate", "backdrop": "field" }
+    },
+    "tomas": {
+      "name": "Dr Tomas Albedo",
+      "personality": "the channel's planetary scientist: warm, unhurried, a lifetime at the eyepiece, explains scale with a homely comparison",
+      "voice": { "gender": "male", "lang": "en-US", "pitch": 0.9, "rate": 0.94 },
+      "role": "Planetary Scientist",
+      "expert": { "desk": "planetary", "backdrop": "observatory" }
+    },
+    "june": {
+      "name": "June Kernel",
+      "personality": "the channel's security and hardware analyst: quick, precise, unimpressed by hype, says what a product or flaw really does",
+      "voice": { "gender": "female", "lang": "en-US", "pitch": 1.04, "rate": 1.04 },
+      "role": "Security & Hardware Analyst",
+      "expert": { "desk": "tech", "backdrop": "lab" }
+    },
+    "amara": {
+      "name": "Dr Amara Pulse",
+      "personality": "the channel's Health Correspondent: a doctor who explains risk in plain numbers, reassuring where the facts allow and frank where they do not",
+      "voice": { "gender": "female", "lang": "en-GB", "pitch": 0.98, "rate": 0.98 },
+      "role": "Health Correspondent",
+      "expert": { "desk": "health", "backdrop": "clinic" }
+    },
+    "leo": {
+      "name": "Leo Sepia",
+      "personality": "the channel's Culture Correspondent: lively and generous, the one who smiles on air, finds why a film, a find or a festival matters to people",
+      "voice": { "gender": "male", "lang": "en-GB", "pitch": 1.0, "rate": 1.04 },
+      "role": "Culture Correspondent",
+      "expert": { "desk": "culture", "backdrop": "gallery" }
+    },
+    "ines": {
+      "name": "Ines Clause",
+      "personality": "the channel's Legal Affairs Correspondent: careful and crisp, says what a court decided, what it did not, and what can happen next",
+      "voice": { "gender": "female", "lang": "en-US", "pitch": 0.98, "rate": 1.0 },
+      "role": "Legal Affairs Correspondent",
+      "expert": { "desk": "legal", "backdrop": "chambers" }
     }
   },
   "programs": {
@@ -162,6 +218,8 @@
       },
       "correspondents": ["rhea", "vic", "mika"],
       "crosses": 2,
+      "experts": ["omar", "clara", "dev", "amara", "leo", "ines"],
+      "analyses": 1,
       "boards": ["known"],
       "numberSlot": "main",
       "chats": {
@@ -227,6 +285,8 @@
         "max",
         "ada"
       ],
+      "experts": ["june"],
+      "analyses": 1,
       "categories": [
         "tech",
         "science"
@@ -326,6 +386,8 @@
         "nova",
         "unit8"
       ],
+      "experts": ["tomas", "dev"],
+      "analyses": 1,
       "categories": [
         "science",
         "tech"
@@ -414,6 +476,8 @@
       "presenters": [
         "penny"
       ],
+      "experts": ["omar"],
+      "analyses": 1,
       "categories": [
         "business"
       ],

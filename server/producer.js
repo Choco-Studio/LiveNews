@@ -1,5 +1,6 @@
 import { buildPrompt, buildReviewPrompt, collapseCrosses, extractJson, normalizeBulletin } from './writer.js';
 import { rosterOf } from './correspondents.js';
+import { expertsOf } from './experts.js';
 import { castOf } from './channel.js';
 import { embedCues } from '../public/js/cues.js';
 import { onBeat } from './topics.js';
@@ -210,7 +211,9 @@ export class Producer {
 
     // the programme's correspondents (links: server/correspondents.js), voiced in the slots the writer gives them
     const correspondents = rosterOf(program, channel.presenters);
-    const ctx = { channelName: channel.name, program, presenters, cast, candidates, episode: null, provider: null, pipeline: [], correspondents, channelPresenters: channel.presenters };
+    // ...and its experts (analyses: server/experts.js), voiced in the slots that follow the links'
+    const experts = expertsOf(program, channel.presenters);
+    const ctx = { channelName: channel.name, program, presenters, cast, candidates, episode: null, provider: null, pipeline: [], correspondents, experts, channelPresenters: channel.presenters };
     const started = Date.now();
     try {
       for (const stage of this.stages) {
@@ -300,10 +303,11 @@ export class Producer {
         // names that may legitimately contain numbers ("NEWS IN 60", "UNIT-8")
         ownNames: [ctx.program.title, ...Object.values(ctx.presenters).map((p) => p.name)],
         correspondents: ctx.correspondents || [],
+        experts: ctx.experts || [],
       });
   }
 
-  /** The correspondents' voice slots of the episode in production (R1, R2: episode.correspondents) as presenters. */
+  /** The correspondents' and experts' voice slots of the episode in production (R1, R2...: episode.correspondents) as presenters. */
   castCorrespondents(ctx) {
     for (const k of Object.keys(ctx.presenters)) if (/^R\d$/.test(k)) delete ctx.presenters[k];
     for (const [slot, id] of Object.entries(ctx.episode?.correspondents || {})) {
@@ -349,11 +353,11 @@ export class Producer {
 
   async write(ctx) {
     const recent = this.recentText();
-    const prompt = buildPrompt({ channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, stories: ctx.candidates, recentLines: recent.slice(-24) });
+    const prompt = buildPrompt({ channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, stories: ctx.candidates, recentLines: recent.slice(-24), experts: ctx.experts || [] });
     const { provider, value } = await this.chain.generate(
       // `recent`: lines aired lately, for writers that pick from their own repertoire (the offline mock);
       // `featured`: stories that were a feature lately (the same "And finally" does not come round every rotation).
-      { stage: 'write', prompt, stories: ctx.candidates, channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, count: ctx.program.stories, recent, featured: this.recentFeatures.map((x) => x.id) },
+      { stage: 'write', prompt, stories: ctx.candidates, channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, count: ctx.program.stories, recent, featured: this.recentFeatures.map((x) => x.id), experts: ctx.experts || [] },
       this.normalizer(ctx, ctx.candidates)
     );
     ctx.episode = value;

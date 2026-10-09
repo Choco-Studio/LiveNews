@@ -5,6 +5,7 @@ import { FEATURES } from './writer.js';
 import { ACTIONS } from '../public/js/cues.js';
 import { TOPIC_NAMES } from './topics.js';
 import { DESKS } from './correspondents.js';
+import { EXPERT_DESKS } from './experts.js';
 
 const FILE = path.join(ROOT, 'config', 'channel.json');
 
@@ -81,6 +82,15 @@ export function validateChannel(ch) {
       }
     }
     if (p.crosses !== undefined && !(Number.isInteger(p.crosses) && p.crosses >= 0 && p.crosses <= 3)) throw new Error(`programme "${id}" has a "crosses" outside 0..3`);
+    // Optional: the channel's experts a programme may put a story to (server/experts.js), and how many analyses it airs.
+    if (p.experts !== undefined) {
+      if (!isList(p.experts)) throw new Error(`programme "${id}" has "experts" that are not a list of presenter ids`);
+      for (const who of p.experts) {
+        if (!ch.presenters[who]) throw new Error(`programme "${id}" references unknown expert "${who}"`);
+        if (!EXPERT_DESKS[ch.presenters[who].expert?.desk]) throw new Error(`expert "${who}" has no known "expert.desk" (${Object.keys(EXPERT_DESKS).join(', ')})`);
+      }
+    }
+    if (p.analyses !== undefined && !(Number.isInteger(p.analyses) && p.analyses >= 0 && p.analyses <= 2)) throw new Error(`programme "${id}" has an "analyses" outside 0..2`);
     // Optional: the boards a programme's stories may carry (WHAT WE KNOW: the writer's "known" points).
     if (p.boards !== undefined && !(isList(p.boards) && p.boards.every((b) => b === 'known'))) throw new Error(`programme "${id}" has "boards" other than ["known"]`);
     // Optional: IN PLAIN ENGLISH (server/glossary.js): a presenter of the programme translates a story's jargon.
@@ -91,6 +101,7 @@ export function validateChannel(ch) {
   for (const [id, who] of Object.entries(ch.presenters)) {
     if (who.role !== undefined && typeof who.role !== 'string') throw new Error(`presenter "${id}" has a "role" that is not text`);
     if (who.desk !== undefined && !DESKS[who.desk]) throw new Error(`presenter "${id}" has an unknown "desk" (${Object.keys(DESKS).join(', ')})`);
+    if (who.expert !== undefined && !(who.expert && typeof who.expert === 'object' && EXPERT_DESKS[who.expert.desk] && typeof who.expert.backdrop === 'string')) throw new Error(`presenter "${id}" has an "expert" without a known desk and a backdrop`);
   }
   const b = ch.breaks;
   if (b !== undefined) {
@@ -195,7 +206,7 @@ export function castOf(channel, programId) {
 /** Public view of the channel for the browser (no prompt-only fields). */
 export function publicChannel(channel) {
   const presenters = Object.fromEntries(
-    Object.entries(channel.presenters).map(([id, p]) => [id, { name: p.name, voice: p.voice, ...(p.role ? { role: p.role } : {}), ...(p.desk ? { desk: p.desk } : {}) }])
+    Object.entries(channel.presenters).map(([id, p]) => [id, { name: p.name, voice: p.voice, ...(p.role ? { role: p.role } : {}), ...(p.desk ? { desk: p.desk } : {}), ...(p.expert ? { expert: { desk: p.expert.desk, backdrop: p.expert.backdrop } } : {}) }])
   );
   const programs = Object.fromEntries(
     Object.entries(channel.programs).map(([id, p]) => [

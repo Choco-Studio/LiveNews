@@ -15,6 +15,7 @@ import { locate, lookupPlace, placesIn } from '../gazetteer.js';
 import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, hasFiniteVerb, headlineNames, shortHeadline, splitClauses, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
 import { AHEAD, deskOf } from '../correspondents.js';
+import { expertFor } from '../experts.js';
 
 const DEATHS = /\b(?:dead|deaths?|die[sd]|killed|killings?|victims?|mourn\w*|funeral)\b/i;
 // Not grave, but not something to smile about either.
@@ -993,11 +994,11 @@ export function createMockProvider() {
     // It copies the feed text, so it has nothing to check: it never stands in for the editor.
     reviews: false,
     available: () => true,
-    async generate({ stage = 'write', script, stories, channelName, program, presenters = { A: { name: 'the presenter' } }, count, now, recent, featured }) {
+    async generate({ stage = 'write', script, stories, channelName, program, presenters = { A: { name: 'the presenter' } }, count, now, recent, featured, experts = [] }) {
       const usage = { input: 0, output: 0, cached: 0 };
       // Asked to review anyway (outside a ProviderChain): return the script untouched and say so.
       if (stage === 'review') return { text: JSON.stringify(script), usage, reviewed: false };
-      return { text: JSON.stringify(writeEpisode({ stories, channelName, program, presenters, count, now: now ?? new Date(), recent, featured })), usage };
+      return { text: JSON.stringify(writeEpisode({ stories, channelName, program, presenters, count, now: now ?? new Date(), recent, featured, experts })), usage };
     },
   };
 }
@@ -1015,7 +1016,7 @@ const OPENERS = [
 // Where the place must come (the longest sentence a programme allows is writer.js SENTENCE_WORDS).
 const PLACE_WITHIN = { 'world-now': 6, 'news-60': 3, 'money-minute': 4 };
 
-function writeEpisode({ stories, channelName, program, presenters, count, now, recent, featured }) {
+function writeEpisode({ stories, channelName, program, presenters, count, now, recent, featured, experts = [] }) {
   const title = program?.title || channelName;
   const solo = !presenters.B;
   const pid = program?.id || '';
@@ -1103,6 +1104,24 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         links.add(info);
         desks.add(deskKey(info));
       }
+    }
+  }
+
+  // The experts' analyses (server/experts.js): a main story of one expert's field, with sentences enough for the
+  // presenter's opener and a detail and two answers (three and a follow-up's with an article) (never a link, a feature, grave or
+  // breaking news), the strongest match first. The validator puts them to the expert.
+  const analysed = new Map();
+  if (program?.analyses && experts.length) {
+    const fits = (info) => !roundup.includes(info) && info !== number && info !== lighter && !links.has(info) && !info.grave && !info.breaking && !info.live && info.sentences.filter((t) => wordCount(t) <= maxWords + 6).length >= 4;
+    const scored = order
+      .filter(fits)
+      .map((info) => ({ info, m: expertFor({ title: info.s.title, summary: info.s.summary, category: info.s.category, kicker: info.kicker }, experts) }))
+      .filter((x) => x.m)
+      .sort((a, b) => b.m.score - a.m.score || order.indexOf(a.info) - order.indexOf(b.info));
+    for (const { info, m } of scored) {
+      if (analysed.size >= program.analyses) break;
+      if ([...analysed.values()].some((e) => e.id === m.expert.id)) continue;
+      analysed.set(info, m.expert);
     }
   }
 
@@ -1407,7 +1426,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // TECH BYTES: the lead keeps one summary sentence back for THE CATCH (chosen first, so the opener cannot take it).
       // PACE (long programmes): main stories may keep one back too, for a short analysis exchange after them
       // (TECH BYTES: another CATCH question, never the same one twice; WORLD NOW: the partner adds it).
-      const linked = links.has(info);
+      const linked = links.has(info) || analysed.has(info);
       const deep = !linked && longForm && !isNumber && !isLighter && !info.grave && !info.breaking && !info.live && exchanges < 3 && info.sentences.length >= 3; // the lead too with 3 (critic: no analysis exchange aired)
       // (an answer is one spoken sentence of the programme's length: the validator trims stories, not chats)
       const fits = (c, t) => c.test.test(t) && answerable(t, info) && wordCount(t) <= maxWords + 2;
@@ -1573,7 +1592,26 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
           break;
         }
       }
-      if (linked) {
+      if (analysed.has(info)) {
+        // the expert's answers: the story's remaining sentences in order (what comes next last, for the follow-up),
+        // the first standing on its own and framed as analysis ("The key detail is this: ..."), within the
+        // programme's sentence length
+        const rest = info.sentences
+          .filter((t) => !used.has(t) && !echoes(t))
+          .map((t) => (wordCount(t) <= maxWords ? t : trimClause(t, maxWords, 8, { keep: info.keep })))
+          .filter(Boolean);
+        rest.sort((a, b) => Number(AHEAD.test(a)) - Number(AHEAD.test(b)));
+        const lead = rest.findIndex((t) => !PRONOUN_START.test(t));
+        if (lead > 0) rest.unshift(...rest.splice(lead, 1));
+        // two answers at least; a third, and the follow-up's, when the article has them
+        const nAnswer = rest.length >= 5 ? 3 : 2;
+        if (rest.length >= 2 && lead >= 0) {
+          const frame = choose(['The key detail is this:', 'What stands out is this:', 'The context matters here:', 'Here is what matters:'], `${key}~frame`);
+          const answer = rest.slice(0, nAnswer).map(asSentence);
+          answer[0] = `${frame} ${answer[0]}`; // (a whole sentence after the colon keeps its capital: never "iceland's")
+          info.analysis = { expert: analysed.get(info).id, question: null, answer: answer.join(' '), follow: null, answer2: rest.slice(nAnswer, nAnswer + 2).map(asSentence).join(' ') };
+        }
+      } else if (linked) {
         // the correspondent's lines: the story's remaining sentences in order, the first standing on its own (it
         // follows the hand-over, so never "It says..."), each within the programme's sentence length
         const rest = info.sentences
@@ -1601,7 +1639,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     // ---- chats that follow this story
     const next = order[k + 1];
     const slot = k === 0 ? 'lead' : isLighter ? 'lighter' : 'story';
-    const chatOk = !solo && !info.grave && !(next && next.grave) && chats < maxChats && !(inRoundup && next && roundup.includes(next)) && !info.cross;
+    const chatOk = !solo && !info.grave && !(next && next.grave) && chats < maxChats && !(inRoundup && next && roundup.includes(next)) && !info.cross && !info.analysis;
     const planned = [];
     if (chatOk) {
       if (policy) {
@@ -1663,13 +1701,13 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     // PACE: the mid-programme signpost, read by the story's own presenter to camera (a block boundary follows)
     // after the story's own chat lines (the reaction belongs to the story; the signpost closes the block)
     // (a signpost is no banter: the reader's own sober line, after grave news too, never inside a round-up or a link)
-    const signOk = chats < maxChats && !inRoundup && !info.cross;
+    const signOk = chats < maxChats && !inRoundup && !info.cross && !info.analysis;
     const signpost = info.signpost && signOk && policy?.after?.includes(slot) && maxChats - chats > 0 ? { anchor, text: info.grave || (next && next.grave) ? info.signpost : `[nod] ${info.signpost}` } : null;
     const chatsHere = [...planned.slice(0, maxChats - chats - (signpost ? 1 : 0)), ...(signpost ? [signpost] : [])];
 
     // ---- hand-over: a toss to the partner who reads next, sometimes (never next to grave news).
     const nextAnchor = anchors[k + 1];
-    const tossOk = !solo && !pickup && next && nextAnchor !== anchor && !chatsHere.length && !info.grave && !next.grave && pid !== 'tech-bytes' && !(inRoundup && roundup.includes(next)) && !info.cross;
+    const tossOk = !solo && !pickup && next && nextAnchor !== anchor && !chatsHere.length && !info.grave && !next.grave && pid !== 'tech-bytes' && !(inRoundup && roundup.includes(next)) && !info.cross && !info.analysis;
     if (tossOk && tosses < 2 && !segments.at(-1)?.text?.includes('[look_partner] ') && hash(`${key}>`) % 3 === 0) {
       tosses++;
       const toss = program?.toss ? program.toss.replace('{name}', nameOf(nextAnchor)) : choose([`${nameOf(nextAnchor)}?`, `Over to you, ${nameOf(nextAnchor)}.`], key);
@@ -1703,6 +1741,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     if (!inRoundup && info.quote) story.quote = { text: info.quote.text, by: info.quote.by };
     if (!inRoundup && info.places.length >= 2) story.map = info.places.map(({ place, lat, lon }) => ({ place, lat, lon }));
     if (info.cross) story.cross = info.cross;
+    if (info.analysis) story.analysis = info.analysis;
     // (news, not features: the lead, a grave or breaking story, or a hard-news topic; never history, culture,
     // wildlife or a light one; on TECH BYTES every story is "light" by topic, so a security flaw or a court ruling
     // there gets its board too)

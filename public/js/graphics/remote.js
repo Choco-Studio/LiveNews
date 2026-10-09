@@ -6,6 +6,8 @@
 //                that anyone stands there)
 //   FILE         over the place's footage: FILE and the clip's credit (scene.fileCredit), as on any file picture
 //   box labels   in the two-way, the studio's city and the place, in each box's corner
+// An expert's analysis (server/experts.js) shows ANALYSIS where a link's place tag would be, and the expert's title
+// on their box: they join from their own studio, so there is no place and no FILE.
 import { P } from '../palette.js';
 import { drawText, measureText } from '../font.js';
 import { rect, TOP, W } from './layout.js';
@@ -46,13 +48,14 @@ export function drawLinkGraphics(ctx, t, scene, accent = P.red) {
   if (!r || !LINK_SHOTS.has(scene.shot)) return;
   const right = W - TOP.x;
   let y = TOP.y + TOP.h + 3;
-  if (scene.shot !== 'twoway' && r.place) {
-    tagRight(ctx, r.place, right, y, accent);
+  const expert = r.kind === 'expert';
+  if (scene.shot !== 'twoway' && (r.place || expert)) {
+    tagRight(ctx, expert ? 'ANALYSIS' : r.place, right, y, accent);
     y += 13;
   }
   if (scene.fileCredit && scene.shot !== 'twoway') drawFileCredit(ctx, scene.fileCredit, y); // the clip's credit beside it
   if (scene.shot === 'twoway') {
-    for (const [bx, label] of [[TWO.left, STUDIO_CITY], [TWO.right, r.place || '']]) {
+    for (const [bx, label] of [[TWO.left, STUDIO_CITY], [TWO.right, expert ? r.desk || '' : r.place || '']]) {
       if (!label) continue;
       const tw = measureText(label);
       const ly = TWO.y + TWO.h - 13;

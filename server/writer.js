@@ -10,6 +10,7 @@ import { isBreaking, plainTitle } from './news.js';
 import { claimGrounded, contentWords, sentencesIn, groundQuote, headlineGrounded, inventedClaim, isGrave, leansOnPrevious, notForFeatures, numbersGrounded, pointsBack, severity, numbersIn, numberWordsIn, qualifierConflict, quotationsGrounded, sameWord, sourceQualifier } from './facts.js';
 import { findPlaces, lookupPlace, placeSupported, snapLocation } from './gazetteer.js';
 import { askLine, deskOf, presenceClaim, thanksLine, throwLine } from './correspondents.js';
+import { EXPERT_DESKS, expertFor, introLine as expertIntro, questionLine as expertQuestion, followLine as expertFollow, thanksLine as expertThanks, expertKicker } from './experts.js';
 
 export const EMOTIONS = ['neutral', 'happy', 'serious', 'surprised', 'sad', 'thinking'];
 export const SHOTS = ['wide', 'close', 'full', 'map'];
@@ -86,6 +87,18 @@ function crossRule(program) {
 - Correspondent links: up to ${n} stories (the lead and one main story at least ${LINK_GAP} stories later, each with an article and a specific place in its candidate; never the number of the day, a round-up item or "And finally") are taken by the channel's correspondent for that region. For each, add "cross": the story "text" is then only the presenter's introduction (two sentences: the most striking fact, then the attribution), and the correspondent carries the rest. "piece": 3 or 4 sentences in the correspondent's words (the detail, the context, what the sources say comes next), each a fact from that candidate; "ask": the presenter's prompt to the correspondent, ${ask}, at most 10 words, no name and no new fact; "answer": 1 or 2 more sentences of that candidate's facts. The channel adds the hand-over and the thanks with the correspondent's name: never write them. The correspondent is NOT at the scene and never says so: no "here", "behind me", "on the ground", "I'm standing", "I've seen", "told me", "live"; they attribute ("officials say", "according to the BBC"). Same accuracy rules: nothing that is not in that candidate.`;
 }
 
+/**
+ * The experts' analyses (server/experts.js): which story is put to one of the channel's experts and how their lines
+ * are written. Empty when the programme has none.
+ */
+function analysisRule(program, experts = []) {
+  const n = program?.analyses || 0;
+  if (!n || !experts.length) return '';
+  const who = experts.map((e) => `"${e.id}": ${e.name}, ${e.role} (${EXPERT_DESKS[e.desk].covers})`).join('; ');
+  return `
+- The channel's experts: up to ${n} main story whose subject is one expert's field (never the number of the day, a round-up item, "And finally", a breaking or grave story, or a story given to a correspondent) is put to that expert after the presenter reads it. The experts: ${who}. For that story add "analysis": "expert": the expert's id; "question": the presenter's first question to the expert, at most 12 words, no name and no new fact (e.g. "What does this tell us about the economy?"); "answer": 2 or 3 sentences in the expert's words that explain the story (the key detail, the context, why it matters to people), each a fact from that candidate; "follow": a follow-up question, at most 10 words, no name and no new fact; "answer2": 1 or 2 more sentences of that candidate's facts (what comes next, when it says). The channel adds the introduction and the thanks with the expert's name: never write them. The expert explains, never reports: never at the scene, never "I've seen", "told me", "my sources", no opinion and no prediction the candidate does not make; they attribute ("officials say", "according to Reuters"). Same accuracy rules: nothing that is not in that candidate. Every other story: "analysis": null.`;
+}
+
 /** WHAT WE KNOW (programme "boards": ["known"]): the key points a big story's board shows. */
 function knownRule(program) {
   if (!program?.boards?.includes('known')) return '';
@@ -117,11 +130,13 @@ function allowedActions(program) {
 
 const CROSS_SCHEMA = `,
      "cross": {"piece": "the correspondent's report, 3 or 4 sentences", "ask": "the presenter's short prompt to the correspondent", "answer": "1 or 2 sentences"} | null`;
+const ANALYSIS_SCHEMA = `,
+     "analysis": {"expert": "<expert id>", "question": "the presenter's first question", "answer": "2 or 3 sentences", "follow": "a follow-up question", "answer2": "1 or 2 sentences"} | null`;
 /** WHAT WE KNOW: the longest point a board shows (characters). */
 export const KNOWN_MAX = 44;
 const KNOWN_SCHEMA = `,
      "known": ["one key point for the WHAT WE KNOW board, max ${'${KNOWN_MAX}'} characters"] | null`;
-const SEGMENT_SCHEMA = (slots, headlineMax, crosses = false, known = false) => `{
+const SEGMENT_SCHEMA = (slots, headlineMax, crosses = false, known = false, analyses = false) => `{
   "title": "short episode title",
   "segments": [
     {"type": "intro", "anchor": "A", "emotion": "neutral", "text": "the intro (see MAKE IT WORTH WATCHING)"},
@@ -134,7 +149,7 @@ const SEGMENT_SCHEMA = (slots, headlineMax, crosses = false, known = false) => `
      "numbers": [{"value": "40,000", "label": "PASSENGERS A DAY", "qualifier": "ABOUT|MORE THAN|NEARLY|UP TO|AT LEAST|LESS THAN" | null}] | null,
      "quote": {"text": "exact words quoted in the summary", "by": "speaker named in the summary" | null} | null,
      "map": [{"place": "COUNTRY", "lat": 0.0, "lon": 0.0}] | null,
-     "feature": "number|roundup|lighter" | null${known ? KNOWN_SCHEMA : ''}${crosses ? CROSS_SCHEMA : ''}},
+     "feature": "number|roundup|lighter" | null${known ? KNOWN_SCHEMA : ''}${crosses ? CROSS_SCHEMA : ''}${analyses ? ANALYSIS_SCHEMA : ''}},
     {"type": "chat", "anchor": ${slots}, "emotion": "...", "text": "one or two sentence reaction or hand-over"},
     {"type": "outro", "anchor": "A", "emotion": "neutral", "text": "brief sign-off"}
   ]
@@ -154,7 +169,7 @@ const ACCURACY = `ACCURACY RULES (mandatory)
  * @param program     programme definition from config/channel.json
  * @param presenters  { A: presenter, B?: presenter } with name + personality
  */
-export function buildPrompt({ channelName, program, presenters, stories, count, now = new Date(), recentLines = [] }) {
+export function buildPrompt({ channelName, program, presenters, stories, count, now = new Date(), recentLines = [], experts = [] }) {
   const when = now.toLocaleString('en-GB', {
     timeZone: 'UTC',
     weekday: 'long',
@@ -215,7 +230,7 @@ TONE
 
 MAKE IT WORTH WATCHING
 ${introRule(program, solo, names)}
-- The lead story must not repeat the intro's line about it: continue from it with the next fact.${lengthRule(program, n)}${crossRule(program)}${knownRule(program)}
+- The lead story must not repeat the intro's line about it: continue from it with the next fact.${lengthRule(program, n)}${crossRule(program)}${analysisRule(program, experts)}${knownRule(program)}
 - Each story opens with its most striking fact, then attribution, then one or two details. Vary the openings and the attribution; never start two stories the same way. Never say the same sentence or the same figure twice in a row.
 - Rhythm for the voice: one idea per sentence; mix short and medium sentences, with the odd three-to-five-word sentence for punch. No parentheses, no strings of numbers, no stacked clauses. Write figures as digits with their unit ("40,000 passengers") and say "percent".${
     solo
@@ -254,7 +269,7 @@ STAGE DIRECTIONS (make the presenters move naturally)
 
 OUTPUT FORMAT
 Reply with ONLY a valid JSON object, no text before or after, shaped like this:
-${SEGMENT_SCHEMA(solo ? '"A"' : '"A" | "B"', headlineMax, !!crossRule(program), !!knownRule(program))}
+${SEGMENT_SCHEMA(solo ? '"A"' : '"A" | "B"', headlineMax, !!crossRule(program), !!knownRule(program), !!analysisRule(program, experts))}
 - Story "text": ${program.storyLength}.
 - Exactly one "story" segment per selected story, using the candidate ids exactly; do not include unselected candidates.
 ${solo ? '- There is a single presenter: always use "anchor": "A".' : '- Alternate presenters between stories (a round-up counts as one block).'}
@@ -287,7 +302,8 @@ Check every story segment against its SOURCE (matched by storyId):
 - Fix tone problems (no jokes near grave stories) and anything hard to read aloud. A breaking story leads; the number of the day is never the lead.
 - Keep the bracketed stage directions such as [nod] or [B:nod] (they are not read aloud); remove only ones that are inappropriate for the tone.
 - A story's "cross" (a correspondent's piece, the presenter's prompt and the answer) follows the same rules: every sentence supported by that story's source, and the correspondent never claims to be at the scene ("here", "behind me", "on the ground", "I've seen"); remove a sentence that does.
-- Keep the same JSON structure (including "kicker" and "feature", and any "cross" or "known"), segment order, presenters and storyIds. Do not add new stories.
+- A story's "analysis" (an expert's answers to the presenter's questions) follows the same rules: every sentence supported by that story's source, explained and attributed, never a claim to have seen or spoken to anyone, no opinion or prediction the source does not make; remove a sentence that breaks them.
+- Keep the same JSON structure (including "kicker" and "feature", and any "cross", "analysis" or "known"), segment order, presenters and storyIds. Do not add new stories.
 
 ${ACCURACY}
 
@@ -1321,7 +1337,7 @@ function keepOpener(tagged, written, story, check) {
 export function normalizeBulletin(
   raw,
   stories,
-  { channelName = 'LIVENEWS', maxStories = Infinity, maxChats = 3, solo = false, features = FEATURES, ownNames = [], program = null, presenters = null, recent = null, correspondents = [] } = {}
+  { channelName = 'LIVENEWS', maxStories = Infinity, maxChats = 3, solo = false, features = FEATURES, ownNames = [], program = null, presenters = null, recent = null, correspondents = [], experts = [] } = {}
 ) {
   const names = [channelName, ...ownNames];
   const byId = new Map(stories.map((s) => [s.id, s]));
@@ -1379,6 +1395,7 @@ export function normalizeBulletin(
       d.map = normalizeMap(seg.map, source);
       d.kicker = normalizeKicker(seg.kicker, source);
       d.cross = correspondents.length && program?.crosses ? groundCross(seg.cross, source, (t) => groundedText(t, source, names.concat(correspondents.map((c) => c.name)), 'story', { outlets, people })) : null;
+      d.analysis = experts.length && program?.analyses ? groundAnalysis(seg.analysis, experts, (t) => groundedText(t, source, names.concat(experts.map((e) => e.name)), 'story', { outlets, people })) : null;
       let feature = pick(seg.feature, allowed, null);
       // Breaking news is never a feature; grave news can be a round-up item, never the number or the lighter;
       // nor can a harmless quake, a closure or job losses be the number of the day.
@@ -1666,6 +1683,8 @@ export function normalizeBulletin(
   while (finalBody.length && finalBody[0].type === 'chat') finalBody.shift();
   // Correspondent links: the chosen stories hand over to the channel's correspondent for their region.
   const linked = correspondents.length && program?.crosses ? expandCrosses(finalBody, drafts, { program, correspondents, solo }) : {};
+  // The experts' analyses: the chosen story is put to the channel's expert of its field (their slots follow the links').
+  if (experts.length && program?.analyses) Object.assign(linked, expandAnalyses(finalBody, drafts, { program, experts, stories: byId, first: Object.keys(linked).length + 1 }));
 
   const rundown = finalBody
     .filter((s) => s.type === 'story')
@@ -1862,6 +1881,120 @@ function expandCrosses(body, drafts, { program, correspondents, solo }) {
   return slots;
 }
 
+// ---------------------------------------------------------------- the experts' analyses
+
+const ANALYSIS_LIMIT = { answer: 3, answer2: 2, questionWords: 14 };
+
+/**
+ * An expert's analysis as the writer gave it, kept only where it stands: the expert one of the programme's,
+ * questions short with no figure or name of their own, every answer sentence grounded in the story's source with no
+ * question and no claim to have seen or spoken to anyone. Null when fewer than two answer sentences stand.
+ */
+function groundAnalysis(raw, experts, grounded) {
+  if (!raw || typeof raw !== 'object') return null;
+  const expert = experts.find((e) => e.id === String(raw.expert || '').trim().toLowerCase()) || null;
+  const lines = (v, max) =>
+    sentencesOf(clean(v, 900))
+      .map((x) => x.trim())
+      .filter((x) => {
+        const plain = stripTags(x);
+        return plain && !/\?/.test(plain) && !presenceClaim(plain) && !!grounded(x);
+      })
+      .slice(0, max);
+  const answer = lines(raw.answer, ANALYSIS_LIMIT.answer);
+  if (answer.length < 2) return null;
+  const answer2 = lines(raw.answer2, ANALYSIS_LIMIT.answer2);
+  // a question: the writer's words without a leading name (the channel adds the expert's), one sentence ending in "?"
+  const ask = (v) => {
+    let q = stripTags(clean(v, 120)).replace(/^(?:and\s+)?[A-Z][\w'’-]*,\s*/, '').trim();
+    if (!q || /\d/.test(q) || q.split(/\s+/).length > ANALYSIS_LIMIT.questionWords || presenceClaim(q) || sentencesOf(q).length > 1 || !q.endsWith('?')) return null;
+    return q[0].toLowerCase() + q.slice(1);
+  };
+  return { expert: expert?.id || null, question: ask(raw.question), answer, follow: ask(raw.follow), answer2 };
+}
+
+/**
+ * Put the chosen stories to the programme's experts: after each, the presenter introduces the expert and asks the
+ * first question (the story's last sentences), the expert answers (piece), the presenter follows up (ask), the
+ * expert answers again (answer) and is thanked: `cross` segments of kind 'expert', in place in `body`, like a
+ * correspondent link. A story qualifies with an analysis that stood its check, a field one of the programme's experts
+ * covers (the writer's choice, else the desk its words belong to), no feature, no breaking or grave news and no
+ * correspondent of its own; at most `program.analyses`, the strongest match first. Their voice slots follow the
+ * links' (R<first>, ...). Returns them: { R3: id }.
+ */
+function expandAnalyses(body, drafts, { program, experts, stories, first = 1 }) {
+  const byId = new Map(drafts.filter((d) => d.type === 'story').map((d) => [d.story.id, d]));
+  const max = Math.min(program.analyses || 0, 2);
+  const candidates = [];
+  body.forEach((seg, i) => {
+    if (seg.type !== 'story' || seg.link || seg.feature || seg.breaking) return;
+    const d = byId.get(seg.storyId);
+    if (!d?.analysis || d.heavy || seg.emotion === 'sad') return;
+    const story = stories.get(seg.storyId) || d.story;
+    const match = expertFor({ ...story, kicker: seg.kicker }, experts);
+    const chosen = experts.find((e) => e.id === d.analysis.expert);
+    // the writer's expert when the story is of their field (or nobody's in particular), else the field's own
+    const e = chosen && (!match || match.expert.id === chosen.id || expertFor({ ...story, kicker: seg.kicker }, [chosen])) ? chosen : match?.expert;
+    if (!e) return;
+    candidates.push({ seg, i, d, e, score: (match?.expert.id === e.id ? match.score : 1) + (i < 3 ? 0.5 : 0) });
+  });
+  const chosen = candidates.sort((a, b) => b.score - a.score || a.i - b.i).slice(0, max);
+  const slots = {};
+  const order = [...chosen].sort((a, b) => a.i - b.i);
+  order.forEach((x, k) => (slots[`R${first + k}`] = x.e.id));
+  for (const x of [...chosen].sort((a, b) => b.i - a.i)) {
+    const slot = `R${first + order.indexOf(x)}`;
+    const { seg, d, e } = x;
+    const key = `${seg.storyId}~${e.id}`;
+    // the presenter's introduction and first question end the story (no toss to the other presenter)
+    const said = sentencesOf(seg.text);
+    if (said.length > 1 && /^[A-Z][\w'’-]*(?: [A-Z][\w'’-]*)?[.?]$/.test(stripTags(said.at(-1)))) said.pop();
+    seg.text = `${said.join(' ')} ${expertIntro(e, key)} ${expertQuestion(e, key, d.analysis.question)}`;
+    seg.link = slot;
+    // no line twice: not the presenter's, not another of the answers'
+    const answer = [];
+    for (const t of d.analysis.answer) if (!crossRepeats(t, [...said, ...answer])) answer.push(t);
+    if (answer.length < 2) {
+      // the presenter read what the expert would say: their answers stand on what is left, else the story is not put
+      seg.text = said.join(' ');
+      delete seg.link;
+      delete slots[slot];
+      continue;
+    }
+    const answer2 = d.analysis.answer2.filter((t) => !crossRepeats(t, [...said, ...answer]));
+    const shared = {
+      storyId: seg.storyId,
+      headline: seg.headline,
+      ...(seg.location ? { location: seg.location } : {}),
+      source: seg.source,
+      category: seg.category,
+      hasImage: seg.hasImage,
+      reporter: e.id,
+      kind: 'expert',
+      desk: expertKicker(e),
+      backdrop: e.backdrop,
+      place: '',
+      ...(seg.kicker ? { kicker: seg.kicker } : {}),
+    };
+    const emotion = seg.emotion === 'happy' ? 'neutral' : seg.emotion;
+    const part = (name, anchor, text) => ({ type: 'cross', part: name, anchor, emotion, text: clip(text, LIMITS.text), cues: [], ...shared });
+    const parts = [part('piece', slot, answer.map(stripTags).join(' '))];
+    if (answer2.length) {
+      parts.push(part('ask', seg.anchor, d.analysis.follow ? `${e.first}, ${d.analysis.follow}` : expertFollow(e, key, answer2.map(stripTags).join(' '))));
+      parts.push(part('answer', slot, answer2.map(stripTags).join(' ')));
+    }
+    parts.push(part('thanks', seg.anchor, expertThanks(e, key)));
+    // an analysis chat after the story would only say again what the expert just said
+    const told = [...said, ...answer, ...answer2];
+    for (let j = x.i + 1; body[j]?.type === 'chat'; ) {
+      if (ANALYSIS_LEAD.test(body[j].text) || sentencesOf(body[j].text).some((t) => crossRepeats(t, told))) body.splice(j, 1);
+      else j++;
+    }
+    body.splice(x.i + 1, 0, ...parts);
+  }
+  return slots;
+}
+
 /**
  * The script the standards editor reads (producer review): each link folded back into its story's
  * `cross` (and the hand-over taken off the story's text), so a second pass through the validator
@@ -1876,6 +2009,20 @@ export function collapseCrosses(segments) {
     }
     const story = [...out].reverse().find((x) => x.type === 'story' && x.storyId === seg.storyId);
     if (!story) continue;
+    if (seg.kind === 'expert') {
+      // an expert's analysis: the story loses the introduction and the first question it ends on
+      if (story.link) {
+        const said = sentencesOf(story.text);
+        const q = said.length > 2 ? stripTags(said.at(-1)).replace(/^[A-Z][\w'’-]*,\s*/, '') : null;
+        if (said.length > 2) story.text = said.slice(0, -2).join(' ');
+        delete story.link;
+        story.analysis = { expert: seg.reporter, question: q, answer: '', follow: '', answer2: '' };
+      }
+      if (seg.part === 'piece') story.analysis.answer = seg.text;
+      else if (seg.part === 'answer') story.analysis.answer2 = seg.text;
+      else if (seg.part === 'ask') story.analysis.follow = stripTags(seg.text).replace(/^(?:and\s+)?[A-Z][\w'’-]*,\s*/, '').replace(/,\s*[A-Z][\w'’-]*\?$/, '?');
+      continue;
+    }
     if (story.link) {
       const said = sentencesOf(story.text);
       if (said.length > 1) story.text = said.slice(0, -1).join(' ');

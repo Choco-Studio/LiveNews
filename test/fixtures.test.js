@@ -222,8 +222,10 @@ describe('the offline demo, end to end (fixture feeds -> desk -> mock writer -> 
         assert.ok(!/\d/.test(x.text) || e.program.id === 'cosmos' || own, `a chat states a figure: ${x.text}`);
       });
       if (e.program.id === 'world-now') {
-        // the one question outside chats: the presenter's prompt to a correspondent (a two-way is a conversation)
-        assert.ok(!e.segments.some((x) => x.type !== 'chat' && !(x.type === 'cross' && x.part === 'ask') && /\?/.test(x.text)), 'WORLD NOW: no question marks outside chats and links');
+        // the questions outside chats: the presenter's prompt to a correspondent (a two-way is a conversation), and
+        // the question that ends a story put to an expert (the story's last sentence, the expert's first name first)
+        const toExpert = (x, i) => x.type === 'story' && x.link && e.segments[i + 1]?.kind === 'expert' && !/\?/.test(x.text.split(/(?<=[.!?])\s+/).slice(0, -1).join(' '));
+        assert.ok(!e.segments.some((x, i) => x.type !== 'chat' && !(x.type === 'cross' && x.part === 'ask') && !toExpert(x, i) && /\?/.test(x.text)), 'WORLD NOW: no question marks outside chats and links');
         assert.ok(!stories.some((x) => x.emotion === 'happy' && x.feature !== 'lighter'), 'WORLD NOW: no smiles outside And finally');
         assert.ok(e.segments.filter((x) => /\bThanks, \w+\./.test(x.text)).length <= 1);
       }
