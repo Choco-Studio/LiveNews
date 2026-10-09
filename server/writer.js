@@ -842,7 +842,12 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // "...refocus on the economy, an area[ where...]": an apposition that lost what defines it
     if (/,\s+(?:a|an|the)\s+[\w-]+$/i.test(head)) continue;
     // "While employers are within their rights to ask...[, recruiters have been...]": a subordinate clause alone
-    if (/^(?:While|Although|Though|Because|If|When|Whereas|Unless|Since|Whilst)\b/.test(head) && !/,\s/.test(head)) continue;
+    // ("But while Lunsford agreed with the method of execution[, he said...]", BBC 9 Oct: a conjunction before it too; and "If
+    // it goes ahead, and legal experts told the BBC it might not...": its comma leads to no main clause either)
+    if (/^(?:(?:But|And|Yet|So)\s+)?(?:While|Although|Though|Because|If|When|Whereas|Unless|Since|Whilst|Once)\b/i.test(head) && (!/,\s/.test(head) || /^[^,]*,\s*(?:and|or|but)\b/.test(head))) continue;
+    // "In what unions have billed as Act Four of the three-week movement[, thousands marched...]": a free relative's verb
+    // is its own, the main clause waits after the comma
+    if (/^(?:In|At|On|For|By|With|From|Under|During|After|Before|Amid|Despite|As)\s+what\b/.test(head) && !/,\s/.test(head)) continue;
     // "Previous research has found that when the brain appears older than expected[, that pattern can be...]": a
     // "that" clause opened on its own subordinate one waits for its main clause after the comma (ScienceDaily 5 Oct)
     if (comma && /\b(?:that|whether)\s+(?:when|if|while|whilst|because|although|though|once|unless|whenever|before|after|until|as soon as|even if|even though)\b[^,;:]*$/i.test(head)) continue;
@@ -860,8 +865,9 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // "its decision to relocate was made [because of...]": a bare passive of a light verb says nothing alone
     if (/\b(?:was|were|is|are|been|be)\s+(?:made|taken|done|given|reached)$/i.test(head)) continue;
     // "...from a UK air base one week [after the arrests]": a span of time before "after" or "before" is theirs
-    if (/^(?:after|before|since|later)$/i.test(t.slice(at, end).trim()) && /\b(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|several|few|\d+)\s+(?:minutes?|hours?|days?|weeks?|months?|years?|decades?)$/i.test(head)) continue;
-    if (/\b(?:a|an|the|of|to|in|on|at|for|from|by|with|and|or|than|its|their|his|her|this|that|says|said)$/i.test(head)) continue;
+    if (/^(?:after|before|since|later)$/i.test(t.slice(at, end).trim()) && /\b(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|several|few|\d+)\s+(?:minutes?|hours?|days?|weeks?|months?|years?|decades?)$|\b(?:moments|seconds|minutes|hours|days|weeks|months|years)$/i.test(head)) continue;
+    // (nor on a word that waits for what follows: "...until he finished his law degree, after[ which she...]", Ars 9 Oct)
+    if (/\b(?:a|an|the|of|to|in|on|at|for|from|by|with|and|or|than|its|their|his|her|this|that|says|said|after|before|since|until|while|because|although|though|when|where|which|who|whose|whom|as|if|about|into|onto|over|under|between|among|through|during|without|within|against|toward|towards|upon|via|per|like|including|despite|amid)$/i.test(head)) continue;
     // an attribution must keep what it attributes ("Rail operators in Japan say [...]" is never cut after "say")
     if (/\b(?:say|says|said|warn|warns|believe|believes|expect|expects)$/i.test(head)) continue;
     // "...visible with binoculars just [after sunset]": an adverb belongs to the phrase that follows it
@@ -901,7 +907,8 @@ function unbalanced(text) {
 
 const CUT_ADVERB = /\b(?:just|shortly|soon|right|even|only|immediately|well|long|straight|directly|also|still|nearly|almost|about|around|roughly|some|already|yet|ever|too|very|so|much|far)$/i;
 const AUX_VERB = /^(?:is|are|was|were|be|been|has|have|had|will|would|can|could|may|might|must|should|shall|does|do|did|isn['’]t|aren['’]t|won['’]t|can['’]t)$/i;
-const PAST_FORM = /^(?:burst|rose|fell|grew|took|made|hit|struck|began|won|lost|left|came|went|gave|saw|found|kept|became|brought|built|sold|paid|spent|set|put|ran|drew|flew|shook|said|told|held|met|led|sent|sank|broke|wrote|fought|caught|thought|sought|swept|slid|burnt|stood|chose|froze|ate|got|knew|meant|felt|heard|lay|laid|rang|sang|swam|threw|wore|woke|cut|shut|spread|hurt|cost|let|quit|split)$/i;
+// ("died", "fled": a short past form has fewer than three letters before its -ed, Ars Technica 9 Oct)
+const PAST_FORM = /^(?:died|fled|fed|bled|sped|dug|hung|spun|stuck|struck|swung|burst|rose|fell|grew|took|made|hit|struck|began|won|lost|left|came|went|gave|saw|found|kept|became|brought|built|sold|paid|spent|set|put|ran|drew|flew|shook|said|told|held|met|led|sent|sank|broke|wrote|fought|caught|thought|sought|swept|slid|burnt|stood|chose|froze|ate|got|knew|meant|felt|heard|lay|laid|rang|sang|swam|threw|wore|woke|cut|shut|spread|hurt|cost|let|quit|split)$/i;
 const PLURAL_VERB = /^(?:say|warn|expect|believe|think|hope|plan|want|need|fear|estimate|agree|claim|argue|report|show|suggest|account|remain|continue|make|take|help|use|work|live|run|keep|face|reach|cover|carry|serve|hold|join|lead|grow|rise|fall|stay|stand|sit|come|go|get|give|see|find|know|call|ask|try|move|pay|meet|win|lose|open|close|start|begin|end|travel|stop|walk|wait|return|remain|form|look|mean|offer|provide|include|range|vary|differ)$/i;
 // (a number word before a plural is its count, not a subject before a verb: "Six years ago")
 const NOT_VERB_AFTER = /^(?:a|an|the|of|in|on|at|for|from|by|with|to|into|its|their|his|her|our|this|that|these|those|some|many|several|few|new|old|\d[\d,.]*|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|hundred|thousand|million|billion|dozens|hundreds|thousands|millions|billions)$/i;

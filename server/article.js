@@ -13,7 +13,8 @@ import { sentencesIn } from './facts.js';
 const MAX_TEXT = 2400;
 const MIN_PARA = 60; // characters: shorter runs are captions, bylines, buttons
 // boilerplate a paragraph must not be (anywhere in it for the short ones, at its start for the long ones)
-const BOILER = /\b(does not (?:offer|accept) (?:or accept )?money|for coverage or interviews|editorial independence|subscribe|subscription|sign up|newsletter|cookies?|privacy policy|terms of (use|service)|all rights reserved|follow us|read more|related (stories|articles|coverage)|advertisement|sponsored|share (this|on)|click here|download (our|the) app|copyright|©|getty images|reuters\/|ap photo|photograph:|image caption|watch:|listen:|most read|recommended|bring a colleague|register (?:now|today)|early[- ]bird|(?:buy|get) (?:your )?tickets?|get (?:your|a) (?:second )?pass|\d+% off (?:a|your) (?:second )?(?:pass|ticket))\b/i;
+// (and an editor's note: "Update 10/08/2026 1:50pm ET: The article was updated to include a statement...", TechCrunch 9 Oct)
+const BOILER = /^Update[sd]?\b[^:]{0,40}:|\b(?:article|story|post) (?:was|has been) updated\b|\b(does not (?:offer|accept) (?:or accept )?money|for coverage or interviews|editorial independence|subscribe|subscription|sign up|newsletter|cookies?|privacy policy|terms of (use|service)|all rights reserved|follow us|read more|related (stories|articles|coverage)|advertisement|sponsored|share (this|on)|click here|download (our|the) app|copyright|©|getty images|reuters\/|ap photo|photograph:|image caption|watch:|listen:|most read|recommended|bring a colleague|register (?:now|today)|early[- ]bird|(?:buy|get) (?:your )?tickets?|get (?:your|a) (?:second )?pass|\d+% off (?:a|your) (?:second )?(?:pass|ticket))\b/i;
 // An author's bio card, kept in a <p> after the story: "Anthony Ha is TechCrunch’s weekend editor. Previously, he
 // worked as a tech reporter at Adweek..." (TechCrunch, 4 Oct). A name, "is", a role at an outlet, then the career.
 const ROLE = String.raw`(?:(?:a|an|the) )?(?:\p{Lu}[\p{L}&’'.]*(?: \p{Lu}[\p{L}&’'.]*){0,3}['’]s )?(?:[\p{Ll}-]+ ){0,3}(?:editor|reporter|writer|correspondent|journalist|columnist|contributor|producer)\b`;
@@ -44,7 +45,8 @@ function goodParagraphs(list) {
   const seen = new Set();
   for (const raw of list) {
     // a video page's script: its hand-offs and greetings go, the reporting stays; so does page furniture
-    const p = dropPageFurniture(dropTranscriptLines(clean(raw)));
+    // (invisible joiners are no letters: "Mikita \u2060Balesni", "U.S. \u2060Vice President", The Verge 9 Oct)
+    const p = dropPageFurniture(dropTranscriptLines(clean(raw).replace(/[\u00AD\u200B-\u200D\u2060\uFEFF]/g, '')));
     if (p.length < MIN_PARA || !SENTENCE.test(p)) continue;
     if (BOILER.test(p.length < 200 ? p : p.slice(0, 80)) || BIO.test(p)) continue;
     const key = p.toLowerCase().slice(0, 80);

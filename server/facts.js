@@ -11,7 +11,7 @@ import { findPlaces, lookupPlace, placeSupported } from './gazetteer.js';
 // once aired as TECH BYTES' "And finally", with a joke after it (real news, 4 Oct).
 // Natural disasters and accidents count as much as violence: a hurricane landfall is never the number of the day.
 export const GRAVE =
-  /\b(?:dead|deaths?|die[sd]?|dying|killed|killings?|kills?|war|wars|attacks?|victims?|murder\w*|shootings?|earthquakes?|fires?|wildfires?|blaze|crash\w*|violen\w*|injur\w*|bomb\w*|strikes? on|crisis|floods?|flooded|flooding|hostages?|famine|casualt\w*|missing|evacuat\w*|disaster\w*|tragedy|mourn\w*|funeral|cancer|outbreak|epidemic|pandemic|hurricanes?|typhoons?|cyclones?|tornado(?:es|s)?|tsunamis?|landslides?|mudslides?|avalanches?|droughts?|heatwaves?|heat waves?|collaps\w*|derail\w*|capsiz\w*|sinks|sank|sunk|sinking|drown\w*|cholera|landfall|life-threatening|storm surge|storm damage|damaged by (?:the )?(?:storm|flood|fire|quake|earthquake)|explosions?|blasts?|refugees?|displaced|shipwreck\w*|starvation|massacre\w*|genocide|ceasefire|airstrikes?|shelling|rescuers?|red alert|heat alert|extreme heat|state of emergency|sexual (?:harassment|assault|abuse|misconduct)|harass(?:ment|ed|ing)|rapes?|raped|abuse[ds]?|abusing|trafficking|suicides?|self-harm|overdoses?|stalking|domestic violence|child exploitation)\b/i;
+  /\b(?:dead|deaths?|die[sd]?|dying|killed|killings?|kills?|war|wars|attacks?|victims?|murder\w*|shootings?|shot dead|fatally|shot and (?:killed|wounded)|gunned down|gunman|gunmen|gunfire|stabb(?:ed|ing|ings)|earthquakes?|fires?|wildfires?|blaze|crash\w*|violen\w*|injur\w*|bomb\w*|strikes? on|crisis|floods?|flooded|flooding|hostages?|famine|casualt\w*|missing|evacuat\w*|disaster\w*|tragedy|mourn\w*|funeral|cancer|outbreak|epidemic|pandemic|hurricanes?|typhoons?|cyclones?|tornado(?:es|s)?|tsunamis?|landslides?|mudslides?|avalanches?|droughts?|heatwaves?|heat waves?|collaps\w*|derail\w*|capsiz\w*|sinks|sank|sunk|sinking|drown\w*|cholera|landfall|life-threatening|storm surge|storm damage|damaged by (?:the )?(?:storm|flood|fire|quake|earthquake)|explosions?|blasts?|refugees?|displaced|shipwreck\w*|starvation|massacre\w*|genocide|ceasefire|airstrikes?|shelling|rescuers?|red alert|heat alert|extreme heat|state of emergency|sexual (?:harassment|assault|abuse|misconduct)|harass(?:ment|ed|ing)|rapes?|raped|abuse[ds]?|abusing|trafficking|suicides?|self-harm|overdoses?|stalking|domestic violence|child exploitation)\b/i;
 // Lighter material: technology, science, curiosities.
 export const LIGHT =
   /\bAI\b|robot|\bchips?\b|phone|\bapps?\b|software|\bspace\b|nasa|planet|science|scientist|discover|study finds|telescope|\bgames?\b|record|festival|zoo|panda|penguin|dinosaur|fossil|museum|trees?\b|garden|bicycle|bike|tram|train|music|chocolate|coffee|parrot|whale|dolphin|stars?\b|comet|moon|reef|coral|tortoises?|leopards?|mangroves?|tomatoes|drones/i;
@@ -27,8 +27,9 @@ const NOT_GRAVE_SENSES = [
   // nearby dead cells" made a cell-biology discovery the sad lead, ScienceDaily 5 Oct; "immune attack")
   /\b(?:dead|dying)\s+(?:cells?|tissues?|skin|neurons?|bacteria|microbes|stars?|galax(?:y|ies)|planets?)\b/gi,
   /\bcell(?:ular)? death\b/gi,
-  /\b(?:kill|kills|killed|killing)\s+(?:cancer|tumou?rs?|bacteria|bacterial|viruses?|cells?|microbes|germs|pathogens|weeds|pests|parasites)\b/gi,
-  /\b(?:immune(?: system)?|antibody|T-cell)\s+attacks?\b|\battack(?:s|ed|ing)?\s+(?:cancer|tumou?rs?|cells|bacteria|viruses?|pathogens)\b/gi,
+  // ("allowing them to kill harmful microbes", "bacteria detect viral attacks", ScienceDaily 9 Oct)
+  /\b(?:kill|kills|killed|killing)\s+(?:(?:the|off|harmful|dangerous|infected|diseased|cancerous|resistant|drug-resistant|antibiotic-resistant|unwanted|invading)\s+){0,2}(?:cancer|tumou?rs?|bacteria|bacterial|viruses?|cells?|microbes|germs|pathogens|weeds|pests|parasites)\b/gi,
+  /\b(?:immune(?: system)?|antibody|T-cell|viral|virus|phage)\s+attacks?\b|\battack(?:s|ed|ing)?\s+(?:cancer|tumou?rs?|cells|bacteria|viruses?|pathogens)\b/gi,
   /\b(?:death of (?:a|the) (?:star|sun|galaxy)|stars? (?:die|dies|died|dying))\b/gi,
   // a launch ("Students blast off to US for Nasa robotics competition", BBC 5 Oct) and a good time
   /\bblast(?:s|ed|ing)?[- ]off\b/gi,
@@ -48,9 +49,12 @@ const withoutLookalikes = (text) => NOT_GRAVE_SENSES.reduce((t, re) => t.replace
  * not), unless the opening says nobody was harmed and nothing says anyone
  * was ("...earthquake shakes northern Chile, no damage reported").
  */
+// A death notice: "RIP Margaret Hamilton, whose code saved the Apollo 11 Moon landing" (Ars Technica 9 Oct); in capitals
+// only ("rip up the rulebook" is no obituary)
+const OBITUARY = /(?<![\p{L}])R\.?I\.?P\.?(?![\p{L}])|\b(?:[Pp]assed away|[Oo]bituary)\b/u;
 export function isGrave(text) {
   const t = withoutLookalikes(text);
-  if (!GRAVE.test(t)) return false;
+  if (!GRAVE.test(t) && !OBITUARY.test(t)) return false;
   const opening = t.slice(0, 320);
   HARM_NEGATED.lastIndex = 0;
   if (HARM_NEGATED.test(opening) && !HARM.test(t.replace(HARM_NEGATED, ' '))) return false;
@@ -165,6 +169,8 @@ export function sentencesIn(text) {
     const head = t.slice(start, end);
     const next = t.slice(re.lastIndex);
     if (m[1] === '.' && (TITLE_ABBR.test(head) || (INITIALS.test(head) && !OPENER.test(next)))) continue;
+    // "a news conference at 3:30 p.m. EDT, Thursday" (NASA 9 Oct): a clock's "a.m."/"p.m." before its time zone
+    if (m[1] === '.' && /\b[ap]\.m\.$/i.test(head) && /^(?:[ECMP][DS]T|ET|PT|CT|MT|BST|GMT|UTC|CET|CEST|local time)\b/.test(next)) continue;
     out.push(head.trim());
     start = re.lastIndex;
   }
@@ -509,7 +515,8 @@ export function quotesIn(text) {
 function speakerOf(s, start, end) {
   const after = s.slice(end, end + 80);
   const before = s.slice(Math.max(0, start - 80), start);
-  const NAME = "((?:[Tt]he|[Aa]n?) [a-z][a-z' -]{2,40}?|[A-Z][\\w'’.-]+(?: [A-Z][\\w'’.-]+){0,3})";
+  // (a common noun's phrase has one article: "a move the company says “will pave the way”" is said by the company, TechCrunch 9 Oct)
+  const NAME = "((?:[Tt]he|[Aa]n?) (?!(?:the|an?)\\b)[a-z][a-z'-]*(?: (?!(?:the|an?|says?|said|added)\\b)[a-z][a-z'-]*){0,4}|[A-Z][\\w'’.-]+(?: [A-Z][\\w'’.-]+){0,3})";
   const a1 = after.match(new RegExp(`^\\s*,?\\s*(?:said|says|added|told reporters)\\s+${NAME}(?=[.,;]|$)`));
   if (a1) return a1[1].trim();
   const a2 = after.match(new RegExp(`^\\s*,?\\s*${NAME}\\s+(?:said|says|added)\\b`));
@@ -667,6 +674,10 @@ export function extractFigures(text, max = 3) {
     // kept: "3,000-year-old temple" is flagged below)
     if (glued && /^-(?:minute|hour|day|week|month)\b/i.test(rest)) continue;
     if (glued && /^-year\b(?!-old|s?\s+old)/i.test(rest)) continue;
+    // a number in a name is no figure: "NASA’s SpaceX Crew-12 mission safely splashed down" once put "12 MISSION SAFELY"
+    // on a card (NASA 9 Oct); "Apollo 11", "Falcon 9", "Windows 11" (a capitalised word before it mid-sentence)
+    const head = s.slice(0, n.index);
+    if (!n.percent && !n.currency && !n.unit && (/\p{L}[-‐‑]$/u.test(head) || /[\p{Ll},;]\s+\p{Lu}[\p{L}’'-]*\s$/u.test(head))) continue;
     const tokens = (rest.match(/^[\s-]*([^.;:!?()]*)/)?.[1] || '').split(/\s+/).filter(Boolean);
     if (tokens[0] && MONTHS.test(tokens[0]) && n.value <= 31) continue; // "12 March"
     const label = [];
@@ -684,7 +695,8 @@ export function extractFigures(text, max = 3) {
         // "62 percent of traders", "17 percent of new cars"
         const third = (tokens[i + 2] || '').replace(/[^A-Za-z]/g, '').toLowerCase();
         const ends = /[,.;:!?]$/.test(tokens[i + 1] || '');
-        const describes = /^(?:new|all|young|older|small|large|local|rural|urban|adult|online|first-time)$/.test(next);
+        // ("approximately 80% of cosmic history": an adjective keeps its noun, Guardian 9 Oct)
+        const describes = /^(?:new|all|young|older|small|large|local|rural|urban|adult|online|first-time)$/.test(next) || /^[a-z]{3,}(?:ic|al|ous|ive|ian|ary|ful|less|ern|ese)$/.test(next);
         label.push('of', next, ...(describes && third && !ends && !LABEL_STOP.has(third) ? [third] : []));
         break;
       }

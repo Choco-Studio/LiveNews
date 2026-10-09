@@ -103,6 +103,7 @@ function stripTags(html) {
 
 export function cleanHtml(html) {
   return decodeEntities(stripTags(String(html ?? '').slice(0, MAX_RAW_HTML)))
+    .replace(/[\u00AD\u200B-\u200D\u2060\uFEFF]/g, '') // invisible joiners and soft hyphens
     .replace(/[^\S\u0001]+/g, ' ')
     // block breaks become sentence breaks unless a sentence already ended
     .replace(/([.!?…:;])? ?\u0001[ \u0001]*/g, (_, p) => (p ? `${p} ` : '. '))
@@ -429,9 +430,14 @@ const REVIEW = /\b(?:I['’](?:ve|m|d|ll)|I (?:tried|tested|used|love|loved|hate
 const BYLINED = /\s\|\s+\p{Lu}[\p{L}’'.-]*(?:\s+(?:\p{Lu}[\p{L}’'.-]*|and|de|van|von))*\s*$/u;
 // a quotation is someone else's words: "‘I'm not resigning,’ says PM", "“My country will not surrender”"
 const unquoted = (t) => t.replace(/[“"][^”"]*[”"]/g, ' ').replace(/(^|[\s:(])['‘].+?['’](?=[\s,.:;!?)]|$)/g, '$1');
+// a picture's caption is no report either ("The SpaceX Crew Dragon Freedom spacecraft is seen moments before splashing down
+// ... in this Oct. 8, 2026, photograph", NASA's image of the day, 9 Oct)
+// a newscast's page is several stories in one ("Trump says U.S. won't attack Iran before midterms. And, ICE agent shoots man", NPR 9 Oct)
+const NEWSCAST = /[.!?]\s+And,\s/;
+const CAPTION = /\b(?:is|are) (?:seen|pictured|shown)\b.{0,200}?\bin this\b.{0,40}?\b(?:photo(?:graph)?|image|picture)\b/i;
 export const notNews = (s) => {
   const t = String(s?.title || '');
-  return SHOPPING.test(t) || REVIEW.test(unquoted(t)) || BYLINED.test(t) || /\?\s*$/.test(unquoted(t).trim());
+  return SHOPPING.test(t) || REVIEW.test(unquoted(t)) || BYLINED.test(t) || /\?\s*$/.test(unquoted(t).trim()) || CAPTION.test(String(s?.summary || '')) || NEWSCAST.test(t);
 };
 
 /** Two headlines are about the same event if they share enough keywords. */
