@@ -65,7 +65,7 @@ The names, looks and voices are proposals until the owner approves them (WAVE3 Â
 
 ## 5. Studios (`public/js/v2/canvas25d/studio/experts.js`)
 
-One virtual set per desk, in the palette, with flat bands and dithered seams, and a lens falloff (one palette step darker at the edges). The space behind the head is calm and mid-dark; the desk's story sits on the right two thirds; there is no text anywhere. Each studio is built once into a cached layer, and a few pixels move on top of it, slowly. Live pixels take the falloff too, so a light at the edge is never brighter than its surroundings.
+One virtual set per desk, in the palette, with flat bands and dithered seams, and a lens falloff (one palette step darker at the edges). The space behind the head is calm and mid-dark; the desk's story sits on the right two thirds, below the top right corner where the clock and the ANALYSIS tag sit (nothing that matters above y 40 there); there is no text anywhere. Each studio is built once into a cached layer, and a few pixels move on top of it, slowly. Live pixels take the falloff too, so a light at the edge is never brighter than its surroundings.
 
 | Studio | The set | What moves |
 |---|---|---|
