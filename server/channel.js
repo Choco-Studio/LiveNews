@@ -85,7 +85,7 @@ export function validateChannel(ch) {
     if (p.boards !== undefined && !(isList(p.boards) && p.boards.every((b) => b === 'known'))) throw new Error(`programme "${id}" has "boards" other than ["known"]`);
     // Optional: IN PLAIN ENGLISH (server/glossary.js): a presenter of the programme translates a story's jargon.
     if (p.terms !== undefined && !(p.terms && typeof p.terms === 'object' && typeof p.terms.explainer === 'string' && (p.presenters || []).includes(p.terms.explainer))) throw new Error(`programme "${id}" has "terms" without one of its presenters as "explainer"`);
-    if (p.terms?.set !== undefined && !['tech', 'science'].includes(p.terms.set)) throw new Error(`programme "${id}" has a "terms" set other than "tech" or "science"`);
+    if (p.terms?.set !== undefined && !['tech', 'science', 'money'].includes(p.terms.set)) throw new Error(`programme "${id}" has a "terms" set other than "tech", "science" or "money"`);
     validateEditorial(id, p);
   }
   for (const [id, who] of Object.entries(ch.presenters)) {

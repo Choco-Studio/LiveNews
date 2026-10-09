@@ -449,6 +449,11 @@ The owner's brief, as for TECH BYTES (`tech-bytes.md` §3.10): longer programmes
 - **Grave or not.** Viral attacks and microbes killed are biology. A death notice ("RIP"), a shooting ("shot and wounded", "fatally", "gunman") and a stabbing are grave.
 - **The desk.** A picture's caption ("...is seen moments before splashing down... in this Oct. 8, 2026, photograph") and an hourly newscast's page ("Trump says U.S. won't attack Iran before midterms. And, ICE...") are not reports. A quotation is said by "the company", not by "a move the company". A second report of the same affair airs right after the first, not three stories later.
 
+**The voiced episode of 9 Oct** (6 min 30 s to the end card; the term cards, STILL TO COME and the number of the day's Reading all aired as planned):
+- **A 35-second single on UNIT-8.** A bacteria story's picture did not load in the browser, and the planner had counted on it to break the reader's single. The runtime now stands the studio's wide in for a picture that did not load (from the second shot on), so a single is never held past the studio maximum.
+- **CONFLICT on a biology story.** "Bacteria detect viral attacks" took the conflict kicker; a viral, virus or phage attack is biology.
+- **An opener that points back.** "CHIME can use this hydrogen signal to trace..." opened a story before the sentence that says what the signal is. A sentence with "this"/"these"/"those" before its first comma never opens one; "A Canadian radio telescope has detected the faint glow of hydrogen..." does.
+
 **Length.** On 5 Oct's real news (12 science stories on the desk) the programme carried about 820 words, near 5 min 30 s; voiced, the endcard came at 6 min 38 s, inside the 6–8 minutes the LLM writer is asked for. The fallback writes no more than the reporting supports.
 
 ## 4. Reconciling with the repo (who changes what)

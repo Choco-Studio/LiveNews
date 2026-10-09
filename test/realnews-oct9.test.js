@@ -170,3 +170,35 @@ describe('the fallback writer on real news (9 Oct)', () => {
     assert.equal(Math.abs(j - i), 1, ids.join(' '));
   });
 });
+
+describe('MONEY MINUTE format round (9 Oct)', () => {
+  const PENNY = { A: { id: 'penny', name: 'Penny Sterling' } };
+  const biz = (id, title, summary, body = '', extra = {}) => st(id, title, summary, body, { category: 'business', ...extra });
+  test('analysis, features and galleries are not reports; a report that explains is', () => {
+    for (const t of ['Aging bull: Why this 4-year-old stock-market rally still packs a punch', 'The new Darth Vader: how tech execs became the film villains of our age', 'New-build homes for first-time buyers in England – in pictures']) assert.ok(notNews({ title: t }), t);
+    for (const t of ['Ministers explore how to cut energy bills', 'Howard Marks warns on credit', 'Bank explains why rates rose']) assert.ok(!notNews({ title: t }), t);
+  });
+
+  test('Penny alone: one mid-programme signpost of her own, never an exchange', async () => {
+    const mm = { id: 'money-minute', ...loadChannel().programs['money-minute'] };
+    const titles = ['Oil prices slide as demand cools', 'Bank of Canada holds rates', 'Airline orders 100 new jets', 'UK inflation rises to 3.8 percent', 'Chocolate makers warn of higher prices', 'Copper hits a two-year high', 'Lagos shops switch to solar power', 'Tokyo stocks close at a record high', 'Rice prices ease in Asia'];
+    const stories = titles.map((t, k) => biz(`b${k}`, t, `${t.replace(/ as .*/, '')}, officials said on Thursday. Traders said the move was expected by most analysts in the market.`));
+    const script = await write(stories, mm, PENNY);
+    const chats = script.segments.filter((s) => s.type === 'chat');
+    assert.ok(chats.length <= 1, chats.map((c) => c.text).join(' | '));
+    assert.ok(chats.every((c) => c.anchor === 'A' && /^(?:\[[^\]]*\]\s*)?Still to come:/.test(c.text)), chats.map((c) => c.text).join(' | '));
+  });
+
+  test('a currency conversion and an outlet’s label never air; the number of the day’s card is the figure said', async () => {
+    const rev = biz('rev', 'What happened to OpenAI’s $20bn? Revenue scare rattles AI trade', 'US tech futures rebounded on Friday, a day after a report that OpenAI’s annualised revenue was $20 billion (€17.8bn) below earlier estimates helped send the Nasdaq down 1.25% and hit chipmakers.', '', { source: 'Euronews Business' });
+    const mm = { id: 'money-minute', ...loadChannel().programs['money-minute'], stories: 3 };
+    const script = await write([biz('l', 'Bank of Canada holds rates at 3.5 percent', 'The Bank of Canada has kept its main interest rate unchanged at 3.5 percent.'), biz('w', 'Exclusive: wastewater trade rakes in millions', 'Exclusive: Firms made more than £340m last year from processing industrial and commercial wastewater at sewage works.'), rev], mm, PENNY);
+    const text = script.segments.map((s) => spoken(s.text)).join(' ');
+    assert.ok(!/€17\.8bn|Exclusive:/.test(text), text);
+    const num = script.segments.find((s) => s.feature === 'number');
+    assert.ok(num, 'a number of the day');
+    assert.match(spoken(num.text), /^Our number of the day: \$20 billion\./);
+    assert.equal(num.numbers?.[0]?.value, '$20 BILLION');
+    assert.equal(num.numbers?.[0]?.label, 'BELOW ESTIMATES');
+  });
+});

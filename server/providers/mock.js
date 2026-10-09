@@ -414,14 +414,20 @@ const brokenQuote = (t) => {
   return curlyOpen !== curlyClose || straight % 2 === 1;
 };
 const FRAGMENT = /^(?:\d[\d,.]*\s+(?:from|of|to|in|at|on|by|for|and|or|with|than)\b|[a-z][a-z'’-]*[\s,.;:!?])/; // ("iPhone", "eBay" are names)
+// (a gallery's caption has no verb: "From a flat in a new urban village in London to a family-sized home in a rural village
+// in Norfolk.", Guardian 9 Oct)
+const VERBLESS = (t) => /^(?:From|Between|Among|Like|Unlike|Beyond)\b/.test(t) && !hasFiniteVerb(t);
 const sentencesOf = (s) =>
   sentencesIn(String(s || '').replace(/[\u00AD\u200B-\u200D\u2060\uFEFF]/g, ''))
     .filter(Boolean)
     .map((t) => t.replace(/\s*\((?=[A-Za-z&]*[A-Z][A-Za-z&]*[A-Z])[A-Za-z&]{2,8}\)(?=[\s,.;:!?]|$)/g, '').replace(/\s*\([a-z][a-z-]{2,20}\)(?=[\s,.;:!?]|$)/g, ''))
     // (a blockquote's ">" is page furniture: "> The outputs of this opt-in vulnerability scanner...", The Verge 9 Oct)
     .map((t) => t.replace(/^\s*>+\s*/, ''))
+    // (an outlet's label is no news: "Exclusive: Firms made more than £340m...", Guardian 9 Oct; nor is a currency
+    // conversion in brackets: "$20 billion (€17.8bn)", Euronews 9 Oct)
+    .map((t) => t.replace(/^(?:Exclusive|Revealed|Analysis|Opinion|Explainer|Watch|Live|Update|Breaking)\s*:\s*(?=\p{Lu})/u, '').replace(/\s*\((?:€|£|\$|US\$|A\$|C\$|¥)\s?[\d.,]+\s*(?:bn|m|k|billion|million|trillion|tn)?\)/g, ''))
     // (a quotation cut in two is no sentence: 'Way too close to comfort." Radars and telescopes...', Ars Technica 9 Oct)
-    .filter((t) => !FRAGMENT.test(t.trim()) && !brokenQuote(t)); // never inside a figure, a title or initials
+    .filter((t) => !FRAGMENT.test(t.trim()) && !brokenQuote(t) && !VERBLESS(t.trim())); // never inside a figure, a title or initials
 const unstop = (t) => String(t).trim().replace(/[\s.!?:;,]+$/, '');
 const asSentence = (t) => (/[.!?…]["”'’)]$/.test(String(t).trim()) ? String(t).trim() : `${unstop(t)}.`); // '…real-time."' is already one
 const wordCount = (t) => String(t).replace(/\[[^\]]*\]/g, ' ').split(/\s+/).filter(Boolean).length;
@@ -492,8 +498,12 @@ function introduceNames(t, told, info) {
   // (and one that opens the sentence: "Hasan fatally shot 13 unarmed US soldiers...", BBC 9 Oct, is said whole when the
   // article gives the whole name; a sentence that opens on a common word is left as it is)
   const lead = out.match(/^(\p{Lu}\p{Ll}[\p{Ll}’'-]+)\s+\p{Ll}/u)?.[1];
-  if (lead && !COMMON_START.test(out) && !NOT_A_NAME.has(lead) && !COMMON_PROPER.test(lead) && !lookupPlace(lead) && !told.includes(lead) && !info.s.title.includes(lead)) {
-    const source = `${info.s.summary || ''} ${info.s.body || ''}`;
+  const source0 = `${info.s.summary || ''} ${info.s.body || ''}`;
+  // (a common noun opening a sentence is no name: "Water companies in England..." once became "Yorkshire Water companies...",
+  // Guardian 9 Oct; a word the article also writes in lower case is a common word)
+  const common = lead && new RegExp(`(?<![\\p{L}])${lead.toLowerCase()}(?![\\p{L}])`, 'u').test(source0);
+  if (lead && !common && !COMMON_START.test(out) && !NOT_A_NAME.has(lead) && !COMMON_PROPER.test(lead) && !lookupPlace(lead) && !told.includes(lead) && !info.s.title.includes(lead)) {
+    const source = source0;
     const first = source.match(new RegExp(`(?<![\\p{L}])(\\p{Lu}\\p{Ll}[\\p{Ll}’'-]*)\\s+${lead}(?![\\p{L}])`, 'u'))?.[1];
     if (first && !NOT_A_NAME.has(first) && !lookupPlace(first) && !COMMON_START.test(first)) out = `${first} ${out}`;
   }
@@ -585,7 +595,10 @@ const leansOnHeadline = (info, t) => {
 // that points back: "She married her first husband, James Cox Hamilton, that same year", Ars Technica 9 Oct)
 const CONNECTIVE_START = /^(?:But|And|So|Yet|Still|However|Instead|Meanwhile|Also|Nevertheless|Nonetheless|Moreover|Besides|Plus|Then)\b/;
 const TIME_BACK = /\b(?:at the time\b(?! of)|(?:that|the) same (?:year|day|week|month|time|night|morning)|that (?:year|day|week|month|night|morning)|the following (?:year|day|week|month|morning)|later that (?:year|day|week|month|night))\b/i;
-const selfStanding = (info, t) => !(/^["“‘]/.test(String(t).trim()) && !SAID_BY.test(t)) && !FOLLOWS_ON.test(String(t).trim()) && !CONNECTIVE_START.test(String(t).trim()) && !TIME_BACK.test(t) && (info.sentences.indexOf(t) === 0 ? !PRONOUN_START.test(t) && !ALSO_LEAN.test(t) && !leansOnHeadline(info, t) : !leansOnPrevious(t));
+// (nor one that points back with "this" or "these" before its first comma: "CHIME can use this hydrogen signal to trace
+// how matter is spread...", ScienceDaily 9 Oct, before the sentence that says what the signal is)
+const POINTS_BACK = /^[^,;:]{0,60}?\b(?:this|these|those)\s+(?!(?:week|weekend|month|year|morning|afternoon|evening|summer|winter|spring|autumn|time|season|is|was|are|were)\b)[a-z]/i;
+const selfStanding = (info, t) => !(/^["“‘]/.test(String(t).trim()) && !SAID_BY.test(t)) && !FOLLOWS_ON.test(String(t).trim()) && !CONNECTIVE_START.test(String(t).trim()) && !TIME_BACK.test(t) && !POINTS_BACK.test(String(t).trim()) && (info.sentences.indexOf(t) === 0 ? !PRONOUN_START.test(t) && !ALSO_LEAN.test(t) && !leansOnHeadline(info, t) : !leansOnPrevious(t));
 /**
  * Two sentences that say the same thing in other words: most of the shorter one's content words are in the
  * other ("A UCLA study links faster brain aging to specific gut bacteria" / "A new UCLA study suggests that the
@@ -706,12 +719,15 @@ function study(story) {
   // A fact card is a whole beat on screen: only figures worth one ("3 YEARS" is not).
   // (and the headline's own figure, from the article sentence that gives it: "OpenAI’s revenue is reportedly $20 billion
   // less than previously projected" is the story's number, not the summary's earlier $70 billion, TechCrunch 9 Oct)
-  const titleRaws = numbersIn(title).filter((n) => !(Number.isInteger(n.value) && n.value >= 1900 && n.value <= 2100)).map((n) => n.raw);
-  const fromBodyFigures = titleRaws.length && s.body ? extractFigures(sentencesOf(s.body).filter((x) => titleRaws.some((r) => x.includes(r))).slice(0, 2).join(' ')) : [];
+  const titleNums = numbersIn(title).filter((n) => !(Number.isInteger(n.value) && n.value >= 1900 && n.value <= 2100));
+  const titleRaws = titleNums.map((n) => n.raw);
+  // ("$20bn" in the headline is "$20 billion" in the text: the same figure by its value)
+  const sameAsTitle = (f) => numbersIn(f.said).some((n) => titleNums.some((m) => m.scaled === n.scaled));
+  const fromBodyFigures = titleNums.length && s.body ? extractFigures(sentencesOf(s.body).filter((x) => numbersIn(x).some((n) => titleNums.some((m) => m.scaled === n.scaled))).slice(0, 2).join(' ')) : [];
   // (preferred only when the summary does not give the headline's figure itself)
-  const summaryFigures = extractFigures(s.summary || '');
-  const summaryHasIt = summaryFigures.some((f) => titleRaws.some((r) => f.said.includes(r)));
-  const figures = [...summaryFigures, ...(summaryHasIt ? [] : fromBodyFigures.map((f) => (titleRaws.some((r) => f.said.includes(r)) ? { ...f, inTitle: true } : f)))]
+  const summaryFigures = extractFigures(sentencesOf(s.summary).join(' '));
+  const summaryHasIt = summaryFigures.some(sameAsTitle);
+  const figures = [...summaryFigures.map((f) => (!summaryHasIt || !sameAsTitle(f) ? f : { ...f, inTitle: true })), ...(summaryHasIt ? [] : fromBodyFigures.map((f) => (sameAsTitle(f) ? { ...f, inTitle: true } : f)))]
     .filter((f, i, all) => f.fact.length <= 40 && f.score >= 2 && all.findIndex((g) => g.value === f.value) === i);
   const fromSummary = sentencesOf(s.summary).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !ownVoice(x) && unstop(x).toLowerCase() !== unstop(title).toLowerCase());
   // the story dossier (wave 3 §3.1): the article's own sentences after the summary's, never one the summary
@@ -778,7 +794,7 @@ function runningOrder(infos, n, program, featured = new Set()) {
   // before a canal reopening the outlet calls breaking news (which then plays second).
   const breaking = pool.find((i) => i.breaking) || null;
   const graver = breaking ? pool.slice(0, 6).find((i) => !i.breaking && !i.live && i.severity >= 3 && i.severity > breaking.severity) : null;
-  const lead = (graver && take((i) => i === graver)) || take((i) => i.breaking) || takeLead(pool) || take(() => true);
+  const lead = (graver && take((i) => i === graver)) || take((i) => i.breaking) || takeLead(pool, program) || take(() => true);
   if (!lead) return { order: [], roundup: [], lighter: null, number: null };
   let slots = n - 1;
   // A feature that ran lately (the station's memory) gives way to another story when one qualifies: the same
@@ -817,7 +833,7 @@ function runningOrder(infos, n, program, featured = new Set()) {
   const mains = [];
   // a breaking story that does not lead plays first after the lead
   if (breaking && breaking !== lead && pool.includes(breaking) && slots - want > 0) mains.push(take((i) => i === breaking));
-  while (mains.length < slots - want && pool.length) mains.push(bestMain(pool));
+  while (mains.length < slots - want && pool.length) mains.push(bestMain(pool, program));
   let roundup = [];
   if (want) {
     const countries = new Set([lead.country]);
@@ -832,7 +848,9 @@ function runningOrder(infos, n, program, featured = new Set()) {
     // main one (it gets its photo beat and its full telling); the round-up takes the rest first.
     // (QUICK BYTES: every item has its picture; the one with the most to tell stays a main story)
     // (QUICK BYTES: hard news, a court ruling or a security flaw, keeps its full telling and its board)
-    const weight = (i) => (i.s.image && program?.pictures !== 'every' && !pictures ? 2 : 0) + ((i.s.outlets || 1) > 1 ? 2 : 0) + (i.grave ? 1.5 : 0) + (pictures ? Math.min(3, i.sentences.length) * 0.3 + (HARD_NEWS.has(i.kicker) || i.hard ? 1.5 : 0) : 0);
+    // (a strap that cannot be cut to a tight limit cleanly weighs a little: NEWS IN 60's 36 characters)
+    const tight = program?.headlineMax && program.headlineMax < 40 ? program.headlineMax : 0;
+    const weight = (i) => (tight && shortHeadline(i.s.title, tight).length > tight ? 1.5 : 0) + (i.s.image && program?.pictures !== 'every' && !pictures ? 2 : 0) + ((i.s.outlets || 1) > 1 ? 2 : 0) + (i.grave ? 1.5 : 0) + (pictures ? Math.min(3, i.sentences.length) * 0.3 + (HARD_NEWS.has(i.kicker) || i.hard ? 1.5 : 0) : 0);
     for (const i of [...located].sort((a, b) => weight(a) - weight(b))) {
       if (roundup.length >= want) break;
       if (!pictures && countries.has(i.country)) continue;
@@ -848,7 +866,7 @@ function runningOrder(infos, n, program, featured = new Set()) {
     roundup.sort((a, b) => Number(b.grave) - Number(a.grave));
   }
   // Round-up places nobody filled become main stories.
-  while (mains.length + roundup.length < slots && pool.length) mains.push(bestMain(pool));
+  while (mains.length + roundup.length < slots && pool.length) mains.push(bestMain(pool, program));
   // The main stories air in order of news value (people at risk before a museum wing), the desk's order breaking ties.
   const rank = new Map(infos.map((x, k) => [x, k]));
   mains.sort((a, b) => Number(b.breaking) - Number(a.breaking) || newsValue(a, rank.get(a)) - newsValue(b, rank.get(b)) || rank.get(a) - rank.get(b));
@@ -919,13 +937,15 @@ const newsValue = (i, k) =>
   k / 2 - (i.severity >= 3 ? 3 : i.grave ? 2.2 : 0) - (i.hard ? 1 : 0) + (i.mild ? 0.7 : 0) + (i.curious ? 1.2 : i.light ? 0.3 : 0) - ((i.s.outlets || 1) > 1 ? 0.8 : 0) - (i.s.image ? 0.3 : 0);
 
 /** The lead: the biggest news among the first six stories of the desk (never a live page when there is news). */
-function takeLead(pool) {
+function takeLead(pool, program = null) {
   let best = -1;
   let bestValue = Infinity;
+  const tight = program?.headlineMax && program.headlineMax < 40 ? program.headlineMax : 0;
   for (let k = 0, seen = 0; k < pool.length && seen < 6; k++) {
     if (pool[k].live) continue;
     seen++;
-    const v = newsValue(pool[k], k);
+    // (NEWS IN 60's strap: a lead whose headline fits its 36 characters, all else equal)
+    const v = newsValue(pool[k], k) + (tight && shortHeadline(pool[k].s.title, tight).length > tight ? 1 : 0);
     if (v < bestValue) {
       bestValue = v;
       best = k;
@@ -942,12 +962,16 @@ const BEAT_OF_OTHERS = /^(?:science)$/;
  * order), where a picture, a second outlet or hard news (people harmed or at
  * risk) counts for about one place, and live pages come last.
  */
-function bestMain(pool) {
+function bestMain(pool, program = null) {
+  // (a tight strap, NEWS IN 60's 36 characters: a story whose headline cannot be cut to it cleanly gives way to one that
+  // can, all else equal)
+  const tight = program?.headlineMax && program.headlineMax < 40 ? program.headlineMax : 0;
   let best = 0;
   let bestScore = Infinity;
   for (let k = 0; k < Math.min(3, pool.length); k++) {
     const i = pool[k];
-    const score = k - (i.s.image ? 1.2 : 0) - ((i.s.outlets || 1) > 1 ? 1 : 0) - (i.severity >= 3 ? 1.6 : i.grave ? 1.3 : 0) - (i.hard ? 0.5 : 0) + (i.mild ? 0.4 : 0) + (i.curious ? 0.5 : 0) + (i.live ? 9 : 0);
+    // (a story whose article was read has depth to tell: a one-line summary is the weaker main story)
+    const score = k + (tight && shortHeadline(i.s.title, tight).length > tight ? 1.5 : 0) - (i.s.image ? 1.2 : 0) - (i.sentences.length >= 5 ? 0.8 : 0) - ((i.s.outlets || 1) > 1 ? 1 : 0) - (i.severity >= 3 ? 1.6 : i.grave ? 1.3 : 0) - (i.hard ? 0.5 : 0) + (i.mild ? 0.4 : 0) + (i.curious ? 0.5 : 0) + (i.live ? 9 : 0);
     if (score < bestScore) {
       bestScore = score;
       best = k;
@@ -1150,7 +1174,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
 
   // ---- stories
   let chats = 0;
-  const maxChats = solo ? 0 : program?.maxChats ?? 3;
+  // (a solo presenter has no exchanges; her only line between stories is the mid-programme signpost, where her
+  // programme's chat policy allows one: MONEY MINUTE's format round, 9 Oct)
+  const maxChats = solo ? (program?.chats ? Math.min(1, program?.maxChats ?? 0) : 0) : program?.maxChats ?? 3;
   // PACE: long programmes (config targetSeconds = pace.js length.target, 4 minutes or more) get analysis
   // exchanges after the lead and main stories (only where a summary has a sentence to spare) and one
   // mid-programme "Still to come" signpost
@@ -1635,7 +1661,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     // PACE: the mid-programme signpost, read by the story's own presenter to camera (a block boundary follows)
     // after the story's own chat lines (the reaction belongs to the story; the signpost closes the block)
     // (a signpost is no banter: the reader's own sober line, after grave news too, never inside a round-up or a link)
-    const signOk = !solo && chats < maxChats && !inRoundup && !info.cross;
+    const signOk = chats < maxChats && !inRoundup && !info.cross;
     const signpost = info.signpost && signOk && policy?.after?.includes(slot) && maxChats - chats > 0 ? { anchor, text: info.grave || (next && next.grave) ? info.signpost : `[nod] ${info.signpost}` } : null;
     const chatsHere = [...planned.slice(0, maxChats - chats - (signpost ? 1 : 0)), ...(signpost ? [signpost] : [])];
 
@@ -1667,6 +1693,8 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     if (isNumber) story.fact = bestFigure(info).fact;
     // (a person's age is no card: "28 YEAR-OLD MAN", NPR 9 Oct; deep time is)
     const cards = info.figures.filter((f) => !f.age || (numbersIn(f.said)[0]?.scaled || 0) >= 1000);
+    // (the number of the day's card shows the figure said: "$20 billion", not the story's "1.25%", Euronews 9 Oct)
+    if (isNumber) cards.sort((a, b) => Number(b === bestFigure(info)) - Number(a === bestFigure(info)));
     if (!inRoundup && cards.length) story.numbers = cards.map(({ value, label, qualifier }) => ({ value, label, ...(qualifier ? { qualifier } : {}) }));
     if (!inRoundup && info.quote) story.quote = { text: info.quote.text, by: info.quote.by };
     if (!inRoundup && info.places.length >= 2) story.map = info.places.map(({ place, lat, lon }) => ({ place, lat, lon }));

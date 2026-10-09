@@ -91,3 +91,18 @@ test('COSMOS DESK: the science set, defined by UNIT-8 in his own words; a tech t
   assert.deepEqual(termsIn('An exoplanet and an enzyme', 'science').map((g) => g.term), ['exoplanet', 'enzyme']);
   assert.deepEqual(termsIn('An exoplanet and an enzyme', 'tech').map((g) => g.term), []);
 });
+
+test('MONEY MINUTE: the money set, said by Penny to camera after her own story; no figure in a definition', () => {
+  const mm = { id: 'money-minute', maxChats: 3, terms: { explainer: 'penny', set: 'money' } };
+  const cast = { A: { id: 'penny' } };
+  for (const g of GLOSSARY.filter((x) => x.in?.includes('money'))) assert.ok(!/\d/.test(g.plain), `${g.term}: the card never shows a figure the channel did not report`);
+  const segs = [story('a', 'English football’s new watchdog will unveil details of its new funding levy.'), story('b', 'Core inflation rose while the central bank held rates.'), story('c', 'End.')];
+  const out = explainTerms(segs, { program: mm, presenters: cast }).segments.filter((s) => s.term);
+  assert.deepEqual(out.map((s) => s.term.term), ['LEVY', 'CORE INFLATION']);
+  assert.ok(out.every((s) => s.anchor === 'A'));
+  assert.match(out[0].text, /^(?:Levy, in plain English|A quick translation|If the term is new to you|The jargon, briefly)/);
+  assert.deepEqual(termsIn('A bull market and a new tariff', 'money').map((g) => g.term), ['bull market', 'tariff']);
+  assert.deepEqual(termsIn('A bull market and a new tariff', 'tech').map((g) => g.term), []);
+  const config = loadChannel().programs['money-minute'];
+  assert.deepEqual(config.terms, { explainer: 'penny', set: 'money' });
+});

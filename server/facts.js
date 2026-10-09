@@ -567,7 +567,7 @@ export function quotationsGrounded(text, source) {
 // ---------------------------------------------------------------- figures for the offline writer
 
 const LABEL_STOP = new Set(
-  'and or but of to by in on at for from with than that which who whom is are was were will would has have had said says say over past since during into after before while as its their his her this these those the about around nearly almost some when where if because until unless so yet once then there here now again also only even just still can could may might should must across through between against last next every each off away below above beneath'.split(
+  'and or but of to by in on at for from with than that which who whom is are was were will would has have had said says say over past since during into after before while as its their his her this these those the about around nearly almost some when where if because until unless so yet once then there here now again also only even just still can could may might should must across through between against last next every each off away below above beneath within without despite amid among beyond toward towards under upon via inside outside along'.split(
     ' '
   )
 );
@@ -681,7 +681,10 @@ export function extractFigures(text, max = 3) {
     const tokens = (rest.match(/^[\s-]*([^.;:!?()]*)/)?.[1] || '').split(/\s+/).filter(Boolean);
     if (tokens[0] && MONTHS.test(tokens[0]) && n.value <= 31) continue; // "12 March"
     const label = [];
-    for (let i = 0; i < tokens.length; i++) {
+    // "$20 billion below earlier estimates" (Euronews 9 Oct): a comparison with a forecast is the figure's label
+    const versus = rest.match(/^\s*(below|above|under|over|less than|more than|short of|ahead of)\s+(?:(?:the|earlier|previous|analysts['’]?|its|their|market)\s+){0,2}(estimates?|expectations?|forecasts?|expected|forecast|projected|predicted)\b/i);
+    if (versus && (n.currency || n.value >= 1000)) label.push(versus[1].split(/\s+/)[0] === 'less' || versus[1] === 'under' || versus[1] === 'short of' ? 'below' : versus[1].split(/\s+/)[0] === 'more' || versus[1] === 'over' || versus[1] === 'ahead of' ? 'above' : versus[1], /^estimate/i.test(versus[2]) ? 'estimates' : /^expect/i.test(versus[2]) ? 'expectations' : 'forecasts');
+    for (let i = label.length ? tokens.length : 0; i < tokens.length; i++) {
       const w = tokens[i];
       const word = w.replace(/[^A-Za-z'-]/g, '');
       if (!word) break;
@@ -721,7 +724,10 @@ export function extractFigures(text, max = 3) {
     if (n.percent && !labelText) {
       // A bare percentage says nothing: name what moved ("INDEX UP 21%"), or drop it.
       // Without a direction the subject may not be what the figure measures ("the central bank ... at 3.5 percent").
-      const subject = direction ? subjectBefore(s, n.index) : null;
+      // (the name right before the direction is what moved: "helped send the Nasdaq down 1.25%" is NASDAQ DOWN, not the
+      // clause's first noun, Euronews 9 Oct)
+      const near = before.match(/(?:^|\s)((?:\p{Lu}[\p{L}&’'-]*\s+){0,2}\p{Lu}[\p{L}&’'-]*)\s+(?:down|up|lower|higher)\s*(?:by\s+)?$/u)?.[1];
+      const subject = direction ? (near && !/^(?:The|A|An|It|Its)$/.test(near) ? near.toUpperCase() : subjectBefore(s, n.index)) : null;
       if (!direction) continue;
       labelText = [subject && subject.length <= 16 ? subject : '', direction].filter(Boolean).join(' ');
       core = `${labelText} ${value}`;

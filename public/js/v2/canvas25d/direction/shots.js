@@ -958,6 +958,8 @@ function moneyMinute(ctx, tl) {
   const me = ctx.speaker;
   const seg = ctx.seg;
   if (ctx.type !== 'story') return [ev(ctx, 0, 0, 'wide', 'wide', me, ctx.type === 'outro' ? 'signoff' : ctx.type === 'intro' ? 'greeting' : 'wide')];
+  // IN BRIEF (the format round, config roundup.kind "pictures"): each item over its own picture
+  if (ctx.seg.roundup) return quickBytes(ctx);
   const plan = moneyStoryPlan(ctx, tl);
   return plan.map((p) => {
     if (p.boundary) return ev(ctx, pauseCut(ctx, p.boundary.i), p.boundary.char, p.shot, p.framing, me, p.beat);
@@ -982,7 +984,8 @@ const WIDE_M = { shot: 'wide', framing: 'wide', beat: 'wide' };
 function moneyStoryPlan(ctx, tl) {
   const S = SHOT_STYLES['money-minute'];
   const plan = [];
-  const hasCard = !!(ctx.seg.fact || ctx.seg.numbers?.length);
+  // (WHAT WE KNOW is a card too: the format round's board on hard business news, pace shots.known)
+  const hasCard = !!(ctx.seg.fact || ctx.seg.numbers?.length || knownBoard(ctx.seg, ctx.programId));
   if (ctx.feature === 'number' && !ctx.isLead) {
     plan.push({ shot: 'fact', framing: null, beat: 'number', at: 0, extra: { beforeSpeech: S.numberGap } });
     // back to MCU-R at a sentence start once the card has run MIN_SHOT; else the card holds (≤ 12 s)

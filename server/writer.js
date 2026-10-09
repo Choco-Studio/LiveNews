@@ -416,6 +416,8 @@ const PURPOSE_VERB = /^(?:cut|save|help|boost|curb|fight|tackle|reduce|protect|e
 /** May the headline end before this "to"? Prepositional "to the/a/its/40..." or a purpose clause after a complete head. */
 function toCut(words, i) {
   const next = words[i + 1] || '';
+  // "up to 14 terminals" is one quantity: "German logistics group Rhenus plans up" once went on the strap (Euronews 9 Oct)
+  if (/^(?:up|down)$/i.test(words[i - 1] || '')) return false;
   // "power to 1.2 million homes": a quantity the head does not need.
   if (/^\d/.test(next)) return true;
   // "return to a Galápagos island", "closes its centre to cars": a complement, not a trailing phrase.
@@ -609,6 +611,7 @@ function hardFit(t, max = LIMITS.headline) {
 
 // Words a strap can lose last of all, when nothing else makes it fit: descriptive modifiers ("a new wing for
 // ancient wooden boats", "a sharp fall"), and a hype noun before its verb ("battery breakthrough promises").
+const COMPOUND_MODIFIER = /^[a-z]+-(?:efficient|friendly|based|powered|backed|led|owned|run|style|sized|size|scale|term|range|speed|level|free|proof|related|focused)$/;
 const DROPPABLE = ['new', 'latest', 'brand-new', 'surprise', 'dramatic', 'record-breaking', 'breakthrough', 'big', 'major', 'huge', 'giant', 'vast', 'small', 'sharp', 'wooden', 'historic', 'ancient'];
 
 /**
@@ -622,9 +625,11 @@ function squeeze(t, max) {
   if (ese.length < out.length && headWords(ese).length >= 3 && !danglingHeadline(ese)) out = ese;
   const words = out.split(' ');
   // the least informative first ("new" before "ancient"), never the first word nor the last
-  for (const drop of DROPPABLE) {
+  // (then a compound modifier, the strap's least informative words under a hard limit: "Airline orders 100
+  // [fuel-efficient] jets")
+  for (const drop of [...DROPPABLE, COMPOUND_MODIFIER]) {
     if (words.join(' ').length <= max) break;
-    const i = words.findIndex((w, k) => k > 0 && k < words.length - 1 && w.toLowerCase() === drop);
+    const i = words.findIndex((w, k) => k > 0 && k < words.length - 1 && (typeof drop === 'string' ? w.toLowerCase() === drop : drop.test(w) && /^[a-z]/.test(words[k + 1] || '')));
     if (i < 0) continue;
     const text = [...words.slice(0, i), ...words.slice(i + 1)].join(' ');
     if (headWords(text).length < 3 || danglingHeadline(text)) continue;
@@ -867,7 +872,9 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // "...from a UK air base one week [after the arrests]": a span of time before "after" or "before" is theirs
     if (/^(?:after|before|since|later)$/i.test(t.slice(at, end).trim()) && /\b(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|several|few|\d+)\s+(?:minutes?|hours?|days?|weeks?|months?|years?|decades?)$|\b(?:moments|seconds|minutes|hours|days|weeks|months|years)$/i.test(head)) continue;
     // (nor on a word that waits for what follows: "...until he finished his law degree, after[ which she...]", Ars 9 Oct)
-    if (/\b(?:a|an|the|of|to|in|on|at|for|from|by|with|and|or|than|its|their|his|her|this|that|says|said|after|before|since|until|while|because|although|though|when|where|which|who|whose|whom|as|if|about|into|onto|over|under|between|among|through|during|without|within|against|toward|towards|upon|via|per|like|including|despite|amid)$/i.test(head)) continue;
+    if (/\b(?:a|an|the|of|to|in|on|at|for|from|by|with|and|or|than|its|their|his|her|this|that|says|said|after|before|since|until|while|because|although|though|when|where|which|who|whose|whom|as|if|about|into|onto|over|under|between|among|through|during|without|within|against|toward|towards|upon|via|per|like|including|despite|amid|such)$/i.test(head)) continue;
+    // "...from processing industrial[ and commercial wastewater...]": an adjective pair is one phrase (Guardian 9 Oct)
+    if (/^\s*(?:and|or)\b/i.test(t.slice(at)) && /\b[a-z]{3,}(?:al|ic|ous|ive|ary|ent|ant|ful|less|ern|ese)$/i.test(head) && /^\s*(?:and|or)\s+[a-z]{3,}(?:al|ic|ous|ive|ary|ent|ant|ful|less|ern|ese)\b/i.test(t.slice(at))) continue;
     // an attribution must keep what it attributes ("Rail operators in Japan say [...]" is never cut after "say")
     if (/\b(?:say|says|said|warn|warns|believe|believes|expect|expects)$/i.test(head)) continue;
     // "...visible with binoculars just [after sunset]": an adverb belongs to the phrase that follows it

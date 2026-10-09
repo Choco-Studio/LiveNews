@@ -573,9 +573,13 @@ describe('config/channel.json', () => {
     assert.equal(new Set(programs.map(([, p]) => p.title)).size, programs.length, 'programme titles are unique');
   });
 
-  test('solo programmes have no chat segments (there is nobody to chat with)', () => {
+  test('solo programmes have no exchanges (there is nobody to chat with): only their presenter\'s own lines to camera', () => {
     for (const [id, p] of news) {
-      if (p.presenters.length === 1) assert.equal(p.maxChats, 0, id);
+      if (p.presenters.length !== 1 || !p.maxChats) continue;
+      // MONEY MINUTE's format round (9 Oct): the mid-programme signpost and IN PLAIN ENGLISH, both Penny's
+      assert.ok(p.chats?.after?.length, `${id}: a solo programme's lines need a chat policy`);
+      assert.equal(p.terms?.explainer, p.presenters[0], `${id}: the explainer is the presenter herself`);
+      assert.ok(p.maxChats <= 3, `${id}: a few lines, never a conversation`);
     }
   });
 

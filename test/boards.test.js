@@ -49,7 +49,7 @@ describe('WHAT WE KNOW points (writer)', () => {
     const other = normalizeBulletin(
       { title: 'T', segments: [{ type: 'story', storyId: 'g1', anchor: 'A', emotion: 'neutral', headline: STORY.title, text: SOURCE, shot: 'wide', known: ['Unions say talks over pay have stalled', 'Stations across Germany were almost empty'] }] },
       [STORY],
-      { program: { id: 'money-minute', ...CHANNEL.programs['money-minute'] }, presenters: DUO }
+      { program: { id: 'news-60', ...CHANNEL.programs['news-60'] }, presenters: DUO }
     );
     assert.equal(other.segments.find((s) => s.storyId === 'g1').known, undefined, 'only a programme with the board');
   });
@@ -71,7 +71,7 @@ describe('which board a story gets (pace.js)', () => {
     assert.equal(numbersBoard({ numbers: nums.slice(0, 1) }, 'world-now'), null);
     assert.equal(numbersBoard({ numbers: nums, feature: 'number' }, 'world-now'), null);
     assert.equal(numbersBoard({ numbers: [...nums, nums[0]] }, 'world-now').length, 2, 'one row per value');
-    assert.equal(numbersBoard({ numbers: nums }, 'money-minute'), null, 'only where the profile asks for it');
+    assert.equal(numbersBoard({ numbers: nums }, 'news-60'), null, 'only where the profile asks for it');
   });
 
   test('the hold reads the whole board, within the card window', () => {

@@ -384,6 +384,35 @@ The shared clock comes from CONTRACTS.md (opens): build 0–1.5 s, reveal 1.5–
 - `wow`, `thumbs_up`, `fist_pump`, `count` or `point_screen`;
 - a Bloomberg-style wall of numbers.
 
+### 3.12 Format round (owner 4 Oct, built 9 Oct): longer, never one story after another
+
+The owner's brief for every programme (`tech-bytes.md` §3.10, `cosmos.md` "Format round"): longer programmes that are more than one story after another. MONEY MINUTE is the one solo desk, so nothing here is a conversation: every new element is Penny's own line to camera or a graphic. It supersedes the one-minute structure of §3.2: the programme now runs 4–6 minutes (`targetSeconds [240, 360]`, `stories: 9`, `minStories: 4`).
+
+**The running order:** intro (lead headline, "Coming up", "Later"), the lead, main stories, IN PLAIN ENGLISH after a story that used the jargon, STILL TO COME mid-programme, more main stories, IN BRIEF when it forms, the number of the day last, the sign-off.
+
+**IN PLAIN ENGLISH** (`server/glossary.js`, set "money", `"terms": { "explainer": "penny", "set": "money" }`). The words of a markets page, said plainly by Penny right after the story that used them, with the definition card:
+- **The phrasings:** "Levy, in plain English: a charge collected for a particular purpose." / "A quick translation: a bull market is a long stretch of rising share prices." / "If the term is new to you, ..." / "The jargon, briefly: ...".
+- **The terms:** about 40 (inflation, core inflation, stagflation, interest rate, base rate, central bank, mortgage rate, bond yield, gilts, recession, GDP, budget and trade deficits, national debt, unemployment rate, cost of living, bull and bear markets, market rally, IPO, dividend, market value, valuation, annualised revenue, earnings season, tariff, sanctions, supply chain, quantitative easing, short selling, hedge fund, private equity, venture capital, windfall tax, levy, credit rating, liquidity, antitrust).
+- **Never a figure in a definition** (the card never shows one the channel did not report), **never advice**, at most two a programme, never after grave news, never a definition heard lately.
+
+**STILL TO COME for a solo presenter.** The mid-programme signpost is Penny's own line ("Still to come: contribution of high value residents discussed, and our number of the day."), with the STILL TO COME frame over the stories it names. A solo programme has no exchanges: its chat budget (`maxChats: 3`, `chats.after: ["story"]`) covers only this line and IN PLAIN ENGLISH.
+
+**IN BRIEF** (`roundup.kind: "pictures"`, opener "Now, the rest of the business news in brief."). The business stories that would be short anyway (one whose article was read keeps its full telling), one sentence each over its own picture. It airs only when three such stories have a picture.
+
+**The boards** (pace `shots`: `numbers`, `known`, `quoteCard`, `stillToCome`, `terms`). BY THE NUMBERS on a story's stated figures (business stories are figure-rich), WHAT WE KNOW on hard business news (`"boards": ["known"]`), IN THEIR WORDS on a sourced quote. The v2 planner counts a WHAT WE KNOW board as the story's card, and an IN BRIEF item plays over its picture from its first word. The camera still never moves.
+
+**The desk.** MarketWatch went: its pages gave no article text (paywall) and its top stories were advice, analysis and celebrity homes. Euronews Business and France 24 Business came in, both with article text. A headline that starts an analysis or a feature ("Aging bull: Why this 4-year-old stock-market rally still packs a punch", "The new Darth Vader: how tech execs became the film villains of our age") and a gallery ("– in pictures") are not reports; an outlet's label ("Revealed:", "Exclusive:") is not said.
+
+**The first runs on real news** (9 Oct, the fallback writer on the live business feeds; `test/realnews-oct9.test.js`):
+- **Strap.** "German logistics group Rhenus plans up" (a cut inside "up to 14 terminals"). A headline is never cut inside "up to"/"down to" a figure.
+- **Figures.** The number of the day said "$20 billion" while its card showed "1.25% OPENAI DOWN". The card now shows the figure said, "$20 BILLION BELOW ESTIMATES" (a comparison with a forecast is the figure's label), and what moved is the name right before the direction ("NASDAQ DOWN 1.25%"). A currency conversion in brackets ("(€17.8bn)") is not read; "UP TO 14 TERMINALS ALONG" lost its "along".
+- **Page text.** The BBC's screen-reader-only ", external" after every outside link ("...residency programme, external grants residential status") never reaches a script, nor does "Exclusive:" before a sentence.
+- **Cuts.** "...from processing industrial[ and commercial wastewater]" (an adjective pair is one phrase) and "...from sites such[ as...]" are refused.
+- **Names.** "Water companies in England..." once became "Yorkshire Water companies...": a word the article also writes in lower case is a common word, never a surname to complete.
+- **Depth.** A story whose article was read is preferred, all else equal, to a one-line summary.
+
+**Length.** On 9 Oct's real news (14 business stories on the desk, 11 with their article) the fallback wrote about 560 words, near 3 min 45 s at Penny's pace, under the 4–6 minutes the LLM writer is asked for: the business feeds give short summaries, and the fallback writes no more than the reporting supports.
+
 ## 4. Requests to other streams
 
 This bible may not edit `CONTRACTS.md`. These entries are worded to be copied into its "Requests" section as they stand.

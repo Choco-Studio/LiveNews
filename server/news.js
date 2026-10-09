@@ -242,6 +242,8 @@ export const plainTitle = (title) =>
   sentenceCase(
     String(title ?? '')
       .replace(/^\s*breaking(?: news)?\s*[:|–—-]\s*/i, '')
+      // (an outlet's label: "Revealed: the ‘black box’ wastewater trade...", "Exclusive: ...", Guardian 9 Oct)
+      .replace(/^\s*(?:exclusive|revealed|analysis|explainer|opinion|comment|watch|video|listen)\s*[:|]\s*/i, '')
       .replace(/\s*(?:,|\s[|–—-])\s*breaking\s*$/i, '')
       .replace(/^\s*live(?: updates)?\s*[:|]\s*/i, '')
       .replace(/\s*[-–—]\s*(?:[\w-]+\s+)?live(?: updates| blog)?!?\s*$/i, '')
@@ -420,11 +422,13 @@ export function keywords(title) {
 // are no report either, nor is a mission's blog ("Curiosity Blog, Sols 5022-5028: ...") or a staff profile ("Mapping
 // the Gaps in NASA’s Return to the Moon, featuring Richard Spolzino", NASA 5 Oct), nor NASA's picture of the day
 // ("APOD: 2026 October 4 – Supernumerary Rainbows", a page of menus around one photo), nor money advice ("Here’s
-// what investors need to watch", "These bond strategies can help you get a safe 5% return", MarketWatch 5 Oct), nor
+// what investors need to watch", "These bond strategies can help you get a safe 5% return", MarketWatch 5 Oct), nor an
+// analysis or a feature ("Aging bull: Why this 4-year-old stock-market rally still packs a punch", MarketWatch 9 Oct; "The
+// new Darth Vader: how tech execs became the film villains of our age", Guardian 9 Oct), nor a gallery ("... – in pictures"), nor
 // a question ("Can ‘super intelligence’ and a non-binding safety pact solve AI’s image
 // problem?" was a podcast; "Is the rally over?" an analysis).
 const SHOPPING = /\b(?:prime day|black friday|cyber monday|gift guides?|promo codes?|coupons?|discount codes?|on sale|price drops?|lowest price|best price (?:ever|yet)|best buys?)\b|\b(?:best|early|top|today['’]s|weekend|holiday|labor day|memorial day)\s+(?:[\w-]+\s+){0,3}deals\b|\bdeals? of the day\b|\b(?:fantastic|great|good|solid|rare) deal (?:at|for|on|right now)\b|\$\d[\d,.]*\s+off\b|\bcheaper (?:at|on) (?:Amazon|Best Buy|Walmart|Target)\b|\bcheaper than ever\b/i;
-const REVIEW = /\b(?:I['’](?:ve|m|d|ll)|I (?:tried|tested|used|love|loved|hate|bought|stuck|wore|played|spent|can['’]t stop)|my)\b|\b(?:hands-on|is perfect for|are perfect for|you should (?:buy|get)|should you (?:buy|get)|worth (?:buying|the (?:upgrade|money|price))|tips for|you (?:don['’]t|do not) have to|you should(?:n['’]t)?|let['’]s (?:talk|be honest|face it))\b|\breview(?::|\s+[-–—|]|$)|^all the\b|^how to\b|^[\w ]{2,20}\b(?:Mobility|Daily|Weekly|Briefing|Roundup|Recap|Newsletter|Week in Review):|\bblog\b|\bsols? \d+|,\s*featuring\s+\p{Lu}|^APOD\b|^the guardian view\b|\bhere['’]s (?:what|how|why)\b|\bcan help you\b|\bwhat (?:investors|you|savers|buyers) (?:need|should|want) to\b|\bam I\b/iu;
+const REVIEW = /\b(?:I['’](?:ve|m|d|ll)|I (?:tried|tested|used|love|loved|hate|bought|stuck|wore|played|spent|can['’]t stop)|my)\b|\b(?:hands-on|is perfect for|are perfect for|you should (?:buy|get)|should you (?:buy|get)|worth (?:buying|the (?:upgrade|money|price))|tips for|you (?:don['’]t|do not) have to|you should(?:n['’]t)?|let['’]s (?:talk|be honest|face it))\b|\breview(?::|\s+[-–—|]|$)|^all the\b|^how to\b|^[\w ]{2,20}\b(?:Mobility|Daily|Weekly|Briefing|Roundup|Recap|Newsletter|Week in Review):|\bblog\b|\bsols? \d+|,\s*featuring\s+\p{Lu}|^APOD\b|^the guardian view\b|(?:^|:\s*)(?:why|how)\b(?! to\b)|[–—-]\s*in pictures$|^in pictures\b|\bhere['’]s (?:what|how|why)\b|\bcan help you\b|\bwhat (?:investors|you|savers|buyers) (?:need|should|want) to\b|\bam I\b/iu;
 // a column, an editorial or a reader's letter, signed after a bar ("The demands of Welsh devolution are simple ... |
 // Will Hayward", "... | Letter", Guardian 5 Oct)
 const BYLINED = /\s\|\s+\p{Lu}[\p{L}’'.-]*(?:\s+(?:\p{Lu}[\p{L}’'.-]*|and|de|van|von))*\s*$/u;

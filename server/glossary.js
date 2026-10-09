@@ -3,8 +3,8 @@
 // The definitions are ours, general knowledge and never a claim about the story, so they are a fixed list the
 // model never writes: one line each, a noun phrase that reads after "means" and on a card.
 //
-// Two sets: "tech" (TECH BYTES, Ada) and "science" (COSMOS DESK, UNIT-8, who reads a definition the way he reads a
-// figure: literally). A programme names its set and its explainer: "terms": { "explainer": "ada", "set": "tech" }.
+// Three sets: "tech" (TECH BYTES, Ada), "science" (COSMOS DESK, UNIT-8, who reads a definition the way he reads a
+// figure: literally) and "money" (MONEY MINUTE, Penny, alone at the desk). A programme names its set and its explainer: "terms": { "explainer": "ada", "set": "tech" }.
 //
 //   explainTerms(segments, { program, presenters, recent, max }) -> the segments with up to `max` term lines
 //   termsIn(text, set) -> the glossary entries of a set a text uses, first mention first
@@ -82,6 +82,46 @@ export const GLOSSARY = [
   { term: 'photosynthesis', in: ['science'], match: /\bphotosynthesis\b/i, plain: 'how plants turn sunlight into food' },
   { term: 'biodiversity', in: ['science'], match: /\bbiodiversity\b/i, plain: 'the variety of living things in a place' },
   { term: 'radiocarbon dating', in: ['science'], match: /\bradiocarbon dat(?:ing|ed)\b/i, plain: 'working out an object’s age from its carbon' },
+  // MONEY MINUTE (Penny): the words of a markets page, said plainly; no figure in a definition (the set never shows one
+  // the channel did not report), never advice
+  { term: 'core inflation', in: ['money'], match: /\bcore inflation\b/i, plain: 'price rises leaving out food and energy' },
+  { term: 'inflation', in: ['money'], match: /\binflation\b/i, plain: 'the pace at which prices rise over time' },
+  { term: 'stagflation', in: ['money'], match: /\bstagflation\b/i, plain: 'high inflation while the economy stalls' },
+  { term: 'interest rate', in: ['money'], a: 'an', match: /\binterest rates?\b/i, plain: 'the price of borrowing money' },
+  { term: 'base rate', in: ['money'], a: 'the', match: /\bbase rate\b/i, plain: 'the Bank of England’s main interest rate' },
+  { term: 'central bank', in: ['money'], a: 'a', match: /\bcentral banks?\b/i, plain: 'the body that sets a country’s interest rates' },
+  { term: 'mortgage rate', in: ['money'], a: 'a', match: /\bmortgage rates?\b/i, plain: 'the interest charged on a home loan' },
+  { term: 'bond yield', in: ['money'], a: 'a', match: /\b(?:bond|gilt|treasury|Treasury) yields?\b/, plain: 'the return investors get for lending to a government or firm' },
+  { term: 'gilts', in: ['money'], match: /\bgilts\b/i, plain: 'bonds the UK government sells to borrow money' },
+  { term: 'recession', in: ['money'], a: 'a', match: /\brecessions?\b/i, plain: 'a spell in which the whole economy shrinks' },
+  { term: 'GDP', in: ['money'], match: /\bGDP\b/, plain: 'the total value of everything an economy produces' },
+  { term: 'budget deficit', in: ['money'], a: 'a', match: /\bbudget deficits?\b/i, plain: 'a government spending more than it takes in' },
+  { term: 'trade deficit', in: ['money'], a: 'a', match: /\btrade deficits?\b/i, plain: 'a country buying more from abroad than it sells' },
+  { term: 'national debt', in: ['money'], a: 'the', match: /\bnational debt\b/i, plain: 'everything a government owes' },
+  { term: 'unemployment rate', in: ['money'], a: 'the', match: /\bunemployment rate\b/i, plain: 'the share of people who want work but have none' },
+  { term: 'cost of living', in: ['money'], a: 'the', match: /\bcost[- ]of[- ]living\b/i, plain: 'what people pay for everyday essentials' },
+  { term: 'bull market', in: ['money'], a: 'a', match: /\bbull(?:ish)? markets?\b|\bbull runs?\b/i, plain: 'a long stretch of rising share prices' },
+  { term: 'bear market', in: ['money'], a: 'a', match: /\bbear markets?\b/i, plain: 'a long, deep slide in share prices' },
+  { term: 'market rally', in: ['money'], a: 'a', match: /\b(?:stock|share|market|stock-market) rall(?:y|ies)\b/i, plain: 'a run of rising prices after a fall or a pause' },
+  { term: 'IPO', in: ['money'], a: 'an', match: /\bIPOs?\b|\binitial public offerings?\b/i, plain: 'a company selling its shares to the public for the first time' },
+  { term: 'dividend', in: ['money'], a: 'a', match: /\bdividends?\b/i, plain: 'a share of a company’s profits paid to its shareholders' },
+  { term: 'market value', in: ['money'], a: 'the', match: /\bmarket (?:cap|capitali[sz]ation|value|valuation)\b/i, plain: 'what all of a company’s shares are worth together' },
+  { term: 'valuation', in: ['money'], a: 'a', match: /\bvaluations?\b/i, plain: 'what investors think a company is worth' },
+  { term: 'annualised revenue', in: ['money'], match: /\bannuali[sz]ed revenue\b|\brun[- ]rate\b/i, plain: 'a year’s sales, estimated from the latest months' },
+  { term: 'earnings season', in: ['money'], match: /\bearnings (?:season|reports?)\b/i, plain: 'the weeks when big companies report their profits' },
+  { term: 'tariff', in: ['money'], a: 'a', match: /\btariffs?\b/i, plain: 'a tax on goods brought in from abroad' },
+  { term: 'sanctions', in: ['money'], match: /\bsanctions\b/i, plain: 'penalties that limit trade with a country or a person' },
+  { term: 'supply chain', in: ['money'], a: 'a', match: /\bsupply chains?\b/i, plain: 'the network of firms that make and move a product' },
+  { term: 'quantitative easing', in: ['money'], match: /\bquantitative easing\b/i, plain: 'a central bank creating money to buy bonds' },
+  { term: 'short selling', in: ['money'], match: /\bshort[- ]sell(?:ing|ers?)\b/i, plain: 'betting that a share price will fall' },
+  { term: 'hedge fund', in: ['money'], a: 'a', match: /\bhedge funds?\b/i, plain: 'an investment fund that uses riskier strategies' },
+  { term: 'private equity', in: ['money'], match: /\bprivate equity\b/i, plain: 'investors who buy companies to rework and sell them' },
+  { term: 'venture capital', in: ['money'], match: /\bventure capital(?:ists?)?\b/i, plain: 'money invested in young companies for a stake in them' },
+  { term: 'windfall tax', in: ['money'], a: 'a', match: /\bwindfall tax(?:es)?\b/i, plain: 'a one-off tax on unexpectedly large profits' },
+  { term: 'levy', in: ['money'], a: 'a', match: /\blev(?:y|ies)\b/i, plain: 'a charge collected for a particular purpose' },
+  { term: 'credit rating', in: ['money'], a: 'a', match: /\bcredit ratings?\b/i, plain: 'a verdict on how likely a borrower is to pay back' },
+  { term: 'liquidity', in: ['money'], match: /\bliquidity\b/i, plain: 'how easily something can be turned into cash' },
+  { term: 'antitrust', in: ['money'], match: /\banti-?trust\b/i, plain: 'the rules that stop companies growing too powerful' },
 ];
 /** The set an entry belongs to (untagged entries are the first set, TECH BYTES' "tech"). */
 const setsOf = (g) => g.in || ['tech'];
@@ -107,6 +147,13 @@ const PHRASES = {
     (g) => ['chin', `For anyone wondering, ${named(g)} is ${g.plain}.`],
     (g) => ['glasses', `Translation, for the rest of us: ${named(g)} is ${g.plain}.`],
     (g) => ['nod', `${cap(g.term)}, for the record: ${g.plain}.`],
+  ],
+  // Penny (MONEY MINUTE, alone at the desk): to camera, calm, the term then its meaning; never a joke, never advice
+  penny: [
+    (g) => ['nod', `${cap(g.term)}, in plain English: ${g.plain}.`],
+    (g) => ['steeple', `A quick translation: ${named(g)} is ${g.plain}.`],
+    (g) => ['nod', `If the term is new to you, ${named(g)} is ${g.plain}.`],
+    (g) => ['steeple', `The jargon, briefly: ${named(g)} is ${g.plain}.`],
   ],
   unit8: [
     (g) => ['nod', `Term logged: ${g.term}. Meaning: ${g.plain}.`],

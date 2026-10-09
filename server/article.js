@@ -127,7 +127,9 @@ function fit(paragraphs, max) {
  */
 export function extractArticle(html, { max = MAX_TEXT } = {}) {
   try {
-    const page = String(html ?? '');
+    // (text only a screen reader hears is no sentence: the BBC's ", external" after every outside link once made "Jersey's
+    // high value residency programme, external grants residential status...", 9 Oct)
+    const page = String(html ?? '').replace(/<span\b[^>]*class="[^"]*\b(?:visually-hidden|visuallyhidden|sr-only|screen-reader-text|u-vh)\b[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '');
     if (!page) return null;
     const ld = jsonLdBody(page);
     if (ld) {

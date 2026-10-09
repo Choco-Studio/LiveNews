@@ -217,11 +217,13 @@ const PROGRAMMES = {
     label: 'crisp',
     length: {
       target: [240, 360],
-      blocks: ['intro', 'lead', 'main', 'markets', 'still-to-come', 'main', 'main', 'number', 'signoff'],
+      blocks: ['intro', 'lead', 'plain-english', 'main', 'still-to-come', 'main', 'in-brief', 'number', 'signoff'],
     },
     gaps: { story: 0.85, handover: 0.85, block: 1.1, beforeFinally: 1.2, beforeOutro: 0.85 }, // money-minute.md 0.8 s x 3, 1.2 s before the number
     holds: { signoff: 0.6, endcard: 3.0 },
-    shots: { median: [5, 7], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [4, 7], cutsPerMinMax: 8 },
+    // the format round (owner 4 Oct, 9 Oct for MONEY MINUTE): STILL TO COME over its stories, BY THE NUMBERS and WHAT WE
+    // KNOW boards, IN THEIR WORDS on a sourced quote, and IN PLAIN ENGLISH while Penny translates a story's jargon
+    shots: { median: [5, 7], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [4, 7], cutsPerMinMax: 8, quoteCard: true, stillToCome: true, numbers: true, known: true, terms: true },
     moves: { max: 0, minGap: Infinity }, // money-minute.md: the camera never moves
     gestures: { perMin: 3, minGap: 6, beatsPerMin: 6, rest: 0.7, grave: 1.5, floor: 1.5, floorGrave: 0.5 },
     music: { minBed: 30, maxChangesPerMin: 1 },

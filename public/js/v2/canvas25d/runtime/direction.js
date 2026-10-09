@@ -86,13 +86,20 @@ export function cuesFromPlan(plan, { hasImg = true, rundown = null } = {}) {
   const out = [];
   for (const e of plan.events) {
     if (e.kind !== 'shot') continue;
-    const shot = legacyShot(e.shot, e.framing);
+    let shot = legacyShot(e.shot, e.framing);
     if (shot === 'montage' ? !intro : !story && !STUDIO.has(shot)) continue;
-    if (shot === 'full' && !hasImg) continue;
+    // a picture that did not load: the studio's wide stands in for it (from the second shot on), so the reader's
+    // single around it is never held past the studio maximum (a 35 s single on UNIT-8 once, COSMOS 9 Oct)
+    let standIn = false;
+    if (shot === 'full' && !hasImg) {
+      if (!out.length || out[out.length - 1].shot === 'wide') continue;
+      shot = 'wide';
+      standIn = true;
+    }
     if (shot === 'map' && !(seg.location && Number.isFinite(seg.location.lat))) continue;
     if (shot === 'fact' && !seg.fact && !knownBoard(seg, ctx.programId)) continue; // the director's card needs seg.fact (or WHAT WE KNOW's points)
     const focus = e.focus && e.focus in ctx.cast ? e.focus : ctx.speaker;
-    let framing = shot === 'montage' ? null : (e.framing ?? null);
+    let framing = shot === 'montage' ? null : standIn ? 'wide' : (e.framing ?? null);
     // over-the-shoulder exists to show the wall: without a picture, a map or a figure it would frame
     // an empty wall with a small plate; a later one is dropped (no near jump-cut), an opening one plays as a single
     if (framing === 'ots' && !wallContent(seg, hasImg, ctx.programId)) {

@@ -417,12 +417,18 @@
       "categories": [
         "business"
       ],
-      "stories": 7,
-      "maxChats": 0,
+      "stories": 9,
+      "minStories": 4,
+      "maxChats": 3,
       "targetSeconds": [240, 360],
       "features": [
+        "roundup",
         "number"
       ],
+      "roundup": { "kind": "pictures", "kicker": "IN BRIEF", "opener": "Now, the rest of the business news in brief.", "min": 3, "max": 4, "words": "12 to 20" },
+      "boards": ["known"],
+      "terms": { "explainer": "penny", "set": "money" },
+      "chats": { "after": ["story"], "max": { "story": 1 } },
       "style": "Short business and economy round-up by a single presenter. Lead with the exact figure that matters, in the first or second sentence; one figure per sentence, two per story at most. What it means for people's money only when the summary says so; never advice. Direction verbs: rose, fell, held, edged up, slipped. Crisp, calm and clear; the number of the day closes the programme.",
       "storyLength": "lead 3 sentences, other stories 2 to 3 sentences, max 360 characters; the number of the day 1 or 2 sentences, max 200 characters; 8 to 22 words per sentence",
       "headlineMax": 45,

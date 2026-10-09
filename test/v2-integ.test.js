@@ -878,6 +878,13 @@ test('direction: legacy shot names, cues per sentence, beats the story cannot sh
   assert.ok(cues.every((c, i) => !i || c.char >= cues[i - 1].char));
   const noPic = cuesFromPlan(p, { hasImg: false });
   assert.ok(!noPic.some((c) => c.shot === 'full'));
+  // a picture that did not load: the wide stands in for it, never one single held through (COSMOS 9 Oct: 35 s on UNIT-8)
+  const seg = { type: 'story', storyId: 's1', anchor: 'B', text: 'One. Two. Three.' };
+  const ctx = { seg, cast: { A: 'nova', B: 'unit8' }, speaker: 'B', programId: 'cosmos', sentences: [{ start: 0 }, { start: 5 }, { start: 10 }] };
+  const ev = (shot, framing, char, at) => ({ kind: 'shot', shot, framing, focus: 'B', char, at });
+  const standIn = cuesFromPlan({ ctx, events: [ev('close', 'single', 0, 0), ev('full', null, 5, 9), ev('close', 'single', 10, 17)] }, { hasImg: false });
+  assert.deepEqual(standIn.map((c) => [c.shot, c.framing]), [['close', 'single'], ['wide', 'wide'], ['close', 'single']]);
+  assert.deepEqual(cuesFromPlan({ ctx, events: [ev('full', null, 0, 0), ev('close', 'single', 5, 9)] }, { hasImg: false }).map((c) => c.shot), ['close'], 'an opening picture is simply dropped');
   const chat = cuesFromPlan(planSegment(EP, 3, {}));
   assert.ok(chat.every((c) => c.shot === 'wide' || c.shot === 'close'));
 });
