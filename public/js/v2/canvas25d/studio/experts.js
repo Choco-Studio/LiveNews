@@ -287,7 +287,7 @@ function marketsLive(px, t, st) {
 
 // ------------------------------------------------------------------------------------------------ bureau
 
-const BUREAU = { map: [214, 22, 376, 118], stiles: [0, 76, 152, 228, 304, 380], dado: 146 };
+const BUREAU = { map: [204, 46, 360, 134], stiles: [0, 76, 152, 228, 304, 380], dado: 146 };
 
 function bureau(px, r, st) {
   bands(px, 0, 0, W, H, [C.brown, C.brown, C.maroon]);
@@ -338,12 +338,13 @@ function bureau(px, r, st) {
   }
   gilt(px, mx0, my0, mx1, my1, 4);
   // the picture light: a brass bar on two arms, its wash on the map's top
-  rect(px, 262, 12, 330, 15, C.orange);
-  rect(px, 262, 12, 330, 13, C.yellow);
-  rect(px, 262, 15, 330, 16, C.rust);
-  seg(px, 272, 16, 276, my0, C.rust);
-  seg(px, 320, 16, 316, my0, C.rust);
-  relight(px, 296, my0 + 2, 70, 26, 1.2, UP, (c) => c === C.cream || c === C.tan || c === C.tanShade);
+  const lc = (mx0 + mx1) / 2, ly = my0 - 9;
+  rect(px, lc - 34, ly, lc + 34, ly + 3, C.orange);
+  rect(px, lc - 34, ly, lc + 34, ly + 1, C.yellow);
+  rect(px, lc - 34, ly + 3, lc + 34, ly + 4, C.rust);
+  seg(px, lc - 24, ly + 4, lc - 20, my0, C.rust);
+  seg(px, lc + 24, ly + 4, lc + 20, my0, C.rust);
+  relight(px, lc, my0 + 2, 70, 26, 1.2, UP, (c) => c === C.cream || c === C.tan || c === C.tanShade);
   // the world's capitals as small pins (they glow in turn)
   st.pins = [];
   for (const [la, lo] of [[51.5, -0.1], [38.9, -77], [48.9, 2.35], [39.9, 116.4], [55.75, 37.6], [-15.8, -47.9], [28.6, 77.2], [-1.3, 36.8], [35.7, 139.7], [30.0, 31.2], [-35.3, 149.1], [19.4, -99.1]]) {
@@ -669,7 +670,7 @@ function labLive(px, t, st) {
 
 // ------------------------------------------------------------------------------------------------ clinic
 
-const CLINIC = { rail: 148, box: [236, 24, 364, 112], ecg: [288, 122, 356, 158] };
+const CLINIC = { rail: 148, box: [252, 40, 372, 126], ecg: [196, 96, 246, 128] };
 
 function clinic(px, r, st) {
   bands(px, 0, 0, W, CLINIC.rail, [C.fog, C.fog, C.steel]);
@@ -723,10 +724,11 @@ function clinic(px, r, st) {
     const d = ((x - sp + 10) / 13) ** 2 + ((y - fy0 - 50) / 13) ** 2;
     if (d < 1 && px[y * W + x] !== C.silver && px[y * W + x] !== C.fog && bayer(x, y) < 0.55) px[y * W + x] = C.slate;
   }
-  // the heart monitor on its arm: a black screen with a faint grid (the trace is live), a red heart light
+  // the heart monitor on a wall shelf: a black screen with a faint grid (the trace is live), a red heart light
   const [ex0, ey0, ex1, ey1] = CLINIC.ecg;
-  seg(px, ex0 - 6, ey0 + 18, ex0, ey0 + 18, C.slate);
-  rect(px, ex0 - 9, ey0 + 12, ex0 - 6, ey0 + 26, C.steel);
+  rect(px, ex0 - 4, ey1 + 1, ex1 + 4, ey1 + 3, C.silver);
+  rect(px, ex0 - 4, ey1 + 3, ex1 + 4, ey1 + 4, C.slate);
+  for (const bx of [ex0 + 2, ex1 - 4]) seg(px, bx, ey1 + 4, bx + 2, ey1 + 9, C.steel);
   frameRect(px, ex0, ey0, ex1, ey1, 2, C.slate, C.ink, C.black);
   rect(px, ex0 + 2, ey0 + 2, ex1 - 2, ey1 - 2, C.black);
   for (let y = ey0 + 6; y < ey1 - 2; y += 6) for (let x = ex0 + 4; x < ex1 - 2; x += 3) put(px, x, y, C.ink);
