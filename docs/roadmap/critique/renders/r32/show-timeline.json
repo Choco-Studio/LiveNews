@@ -1,0 +1,9093 @@
+{
+ "meta": {
+  "url": "http://127.0.0.1:8602/?autostart=1&voice=tts&beds=0",
+  "out": "C:\\Users\\movil\\PixelNews\\LiveNews\\docs\\roadmap\\critique\\renders\\r32\\show.mp4",
+  "fps": 30,
+  "seconds": 100,
+  "frames": 3000,
+  "sampleRate": 48000,
+  "start": "open",
+  "until": null,
+  "count": 1,
+  "raf": "frame",
+  "music": "lofi",
+  "stories": "soft",
+  "recordedAt": "2026-10-07T15:08:11.313Z",
+  "wallClockStart": "2026-10-07T15:02:49.104Z",
+  "voiceCache": "C:\\Users\\movil\\.cache\\globit-showcase\\voices",
+  "voicePresets": "C:\\Users\\movil\\PixelNews\\LiveNews\\server\\voice\\casting.json",
+  "realSeconds": 743.279
+ },
+ "speech": [
+  {
+   "id": 1,
+   "start": -420.052,
+   "end": -419.702,
+   "cut": null,
+   "called": -420.097,
+   "slot": null,
+   "presenter": null,
+   "ad": null,
+   "programId": null,
+   "emotion": null,
+   "voice": null,
+   "text": " ",
+   "cached": null,
+   "engine": null,
+   "volume": 0,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 2,
+   "start": -379.645,
+   "end": -375.6952,
+   "cut": null,
+   "called": -379.69,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "Chipmaker unveils a laptop processor with all-day battery life.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 3,
+   "start": -375.4702,
+   "end": -372.4608,
+   "cut": null,
+   "called": -375.5152,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "Also ahead: robot vacuum learns to climb stairs.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 4,
+   "start": -372.2358,
+   "end": -370.1668,
+   "cut": null,
+   "called": -372.2808,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "And later, our number of the day.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 5,
+   "start": -369.9418,
+   "end": -368.7506,
+   "cut": null,
+   "called": -369.9868,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "This is Tech Bytes.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 6,
+   "start": -368.5256,
+   "end": -366.582,
+   "cut": null,
+   "called": -368.5706,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "I'm Max Circuit, with Ada Volt.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 7,
+   "start": -365.91,
+   "end": -359.6404,
+   "cut": null,
+   "called": -365.955,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "A chipmaker has unveiled a new laptop processor it says can run for twenty hours on a single charge.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 8,
+   "start": -359.4154,
+   "end": -354.6505,
+   "cut": null,
+   "called": -359.4604,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "Independent reviewers have not yet tested the claim, Circuit Weekly reports.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 9,
+   "start": -354.1335,
+   "end": -351.6799,
+   "cut": null,
+   "called": -354.1785,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "And when does it reach actual people?",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 10,
+   "start": -351.3529,
+   "end": -347.7793,
+   "cut": null,
+   "called": -351.3979,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "The first laptops using it will go on sale in the spring.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 11,
+   "start": -347.1323,
+   "end": -341.0315,
+   "cut": null,
+   "called": -347.1773,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "A home robotics company has shown a robot vacuum that can climb stairs using two small legs.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 12,
+   "start": -340.8065,
+   "end": -333.5783,
+   "cut": null,
+   "called": -340.8515,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "It will cost about one thousand five hundred dollars when it launches next year, according to Circuit Weekly.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 13,
+   "start": -332.9723,
+   "end": -330.5899,
+   "cut": null,
+   "called": -333.0173,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "Our number of the day: thirty percent.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 14,
+   "start": -330.3649,
+   "end": -323.9072,
+   "cut": null,
+   "called": -330.4099,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "A data centre powered by wind and geothermal energy has opened near Rake-yavik, Circuit Weekly reports.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 15,
+   "start": -323.6822,
+   "end": -318.5412,
+   "cut": null,
+   "called": -323.7272,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "Its owners say it uses thirty percent less energy for cooling than a typical site.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 16,
+   "start": -317.9402,
+   "end": -310.2478,
+   "cut": null,
+   "called": -317.9852,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "A startup has launched a satellite internet service designed for farms in remote areas, according to Circuit Weekly.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 17,
+   "start": -310.0228,
+   "end": -305.3809,
+   "cut": null,
+   "called": -310.0678,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "It says the service reaches speeds of one hundred megabits per second.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 18,
+   "start": -304.7289,
+   "end": -300.6537,
+   "cut": null,
+   "called": -304.7739,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "Seoul has started testing self-driving buses on two night routes.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 19,
+   "start": -300.4287,
+   "end": -294.7861,
+   "cut": null,
+   "called": -300.4737,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "The city says the buses will help night workers get home when other transport has stopped.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 20,
+   "start": -294.5611,
+   "end": -290.047,
+   "cut": null,
+   "called": -294.6061,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "A safety driver stays on board during the trial, Circuit Weekly reports.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 21,
+   "start": -289.415,
+   "end": -288.6192,
+   "cut": null,
+   "called": -289.46,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "Thanks, Max.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 22,
+   "start": -288.3942,
+   "end": -282.5587,
+   "cut": null,
+   "called": -288.4392,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "Twenty delivery robots have started carrying parcels through two districts of Barcelona.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 23,
+   "start": -282.3337,
+   "end": -280.079,
+   "cut": null,
+   "called": -282.3787,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "The trial will run for six months.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 24,
+   "start": -279.854,
+   "end": -275.9416,
+   "cut": null,
+   "called": -279.899,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "The robots travel at walking pace and stop for pedestrians.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 25,
+   "start": -275.3466,
+   "end": -269.077,
+   "cut": null,
+   "called": -275.3916,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "Researchers at a battery firm say a new silicon design could let phones last a week between charges.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 26,
+   "start": -268.852,
+   "end": -265.0275,
+   "cut": null,
+   "called": -268.897,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "The company hopes to start production in twenty twenty-seven.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 27,
+   "start": -264.5955,
+   "end": -260.7711,
+   "cut": null,
+   "called": -264.6405,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "Still to come: medicine-carrying drones expand across Rwanda.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 28,
+   "start": -259.6771,
+   "end": -253.1784,
+   "cut": null,
+   "called": -259.7221,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "A new pair of earbuds can translate conversations in forty languages in real time, its maker says.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 29,
+   "start": -252.9534,
+   "end": -248.643,
+   "cut": null,
+   "called": -252.9984,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "Travel should not stop at the language barrier, the company said.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 30,
+   "start": -248.005,
+   "end": -242.9894,
+   "cut": null,
+   "called": -248.05,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "Researchers have released an AI model small enough to run on an ordinary laptop.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 31,
+   "start": -242.7644,
+   "end": -237.059,
+   "cut": null,
+   "called": -242.8094,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "They say it needs about eight gigabytes of memory and works without an internet connection.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 32,
+   "start": -236.406,
+   "end": -230.7031,
+   "cut": null,
+   "called": -236.451,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "A new handheld games console sold two million units in its first week, its maker says.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 33,
+   "start": -230.4781,
+   "end": -227.1625,
+   "cut": null,
+   "called": -230.5231,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "Shops in Tokyo reported long queues on launch day.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 34,
+   "start": -226.5655,
+   "end": -220.2959,
+   "cut": null,
+   "called": -226.6105,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "A recycling plant in Sweden says it can recover one kilogram of gold from forty thousand old phones.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 35,
+   "start": -220.0709,
+   "end": -216.6226,
+   "cut": null,
+   "called": -220.1159,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "The company wants to process two million phones a year.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 36,
+   "start": -215.5506,
+   "end": -214.0917,
+   "cut": null,
+   "called": -215.5956,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "Now, some quick bytes.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 37,
+   "start": -213.8667,
+   "end": -205.445,
+   "cut": null,
+   "called": -213.9117,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "A Mars rover has photographed layered rocks in what scientists believe was an ancient lake bed, according to Starfield Journal.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 38,
+   "start": -204.881,
+   "end": -196.5918,
+   "cut": null,
+   "called": -204.926,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "Astronauts on the International Space Station have harvested tomatoes grown in a small greenhouse, Starfield Journal reports.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 39,
+   "start": -196.0718,
+   "end": -190.7005,
+   "cut": null,
+   "called": -196.1168,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "A rocket has launched a probe that will study the Sun's poles for the first time.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 40,
+   "start": -189.7725,
+   "end": -183.1894,
+   "cut": null,
+   "called": -189.8175,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "And finally: drones now deliver medicine to four hundred health centres across Rwanda, the operator says.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 41,
+   "start": -182.9644,
+   "end": -178.2622,
+   "cut": null,
+   "called": -183.0094,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "The average flight takes about thirty minutes, according to Circuit Weekly.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 42,
+   "start": -178.0372,
+   "end": -175.1532,
+   "cut": null,
+   "called": -178.0822,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "Health workers order supplies by text message.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 43,
+   "start": -174.9282,
+   "end": -171.7934,
+   "cut": null,
+   "called": -174.9732,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "Blood and vaccines make up most of the deliveries.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 44,
+   "start": -171.3144,
+   "end": -169.2587,
+   "cut": null,
+   "called": -171.3594,
+   "slot": "B",
+   "presenter": "ada",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "happy",
+   "voice": null,
+   "text": "That is what patience buys you.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 45,
+   "start": -168.4237,
+   "end": -167.2952,
+   "cut": null,
+   "called": -168.4687,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "That's Tech Bytes.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 46,
+   "start": -167.0702,
+   "end": -164.1235,
+   "cut": null,
+   "called": -167.1152,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "From Ada Volt and from me, thanks for watching.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 47,
+   "start": -163.8985,
+   "end": -160.8264,
+   "cut": null,
+   "called": -163.9435,
+   "slot": "A",
+   "presenter": "max",
+   "ad": null,
+   "programId": "tech-bytes",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "More news around the clock on Globit twenty-four.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 48,
+   "start": -91.645,
+   "end": -90.2401,
+   "cut": null,
+   "called": -91.69,
+   "slot": "A",
+   "presenter": "sam",
+   "ad": null,
+   "programId": "news-60",
+   "emotion": "serious",
+   "voice": null,
+   "text": "This is News in sixty.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 49,
+   "start": -90.0151,
+   "end": -89.1211,
+   "cut": null,
+   "called": -90.0601,
+   "slot": "A",
+   "presenter": "sam",
+   "ad": null,
+   "programId": "news-60",
+   "emotion": "serious",
+   "voice": null,
+   "text": "I'm Sam Night.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 50,
+   "start": -88.5741,
+   "end": -82.1885,
+   "cut": null,
+   "called": -88.6191,
+   "slot": "A",
+   "presenter": "sam",
+   "ad": null,
+   "programId": "news-60",
+   "emotion": "serious",
+   "voice": null,
+   "text": "In Seville, temperatures reached forty-four degrees Celsius on Wednesday, the highest of the summer.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 51,
+   "start": -81.9635,
+   "end": -78.0682,
+   "cut": null,
+   "called": -82.0085,
+   "slot": "A",
+   "presenter": "sam",
+   "ad": null,
+   "programId": "news-60",
+   "emotion": "serious",
+   "voice": null,
+   "text": "Doctors advise drinking water often and staying in the shade.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 52,
+   "start": -77.8432,
+   "end": -72.9262,
+   "cut": null,
+   "called": -77.8882,
+   "slot": "A",
+   "presenter": "sam",
+   "ad": null,
+   "programId": "news-60",
+   "emotion": "serious",
+   "voice": null,
+   "text": "Some schools have moved lessons to the early morning, Bitport Herald reports.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 53,
+   "start": -72.2252,
+   "end": -67.3721,
+   "cut": null,
+   "called": -72.2702,
+   "slot": "A",
+   "presenter": "sam",
+   "ad": null,
+   "programId": "news-60",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "Oil prices fell for a third day as traders expect weaker demand this winter.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 54,
+   "start": -67.1471,
+   "end": -61.3999,
+   "cut": null,
+   "called": -67.1921,
+   "slot": "A",
+   "presenter": "sam",
+   "ad": null,
+   "programId": "news-60",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "Brent crude dropped two percent to seventy-one dollars a barrel, according to Ledger Line.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 55,
+   "start": -60.7019,
+   "end": -54.6994,
+   "cut": null,
+   "called": -60.7469,
+   "slot": "A",
+   "presenter": "sam",
+   "ad": null,
+   "programId": "news-60",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "An offshore wind farm in the North Sea has started supplying electricity, Ledger Line reports.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 56,
+   "start": -54.4744,
+   "end": -48.4718,
+   "cut": null,
+   "called": -54.5194,
+   "slot": "A",
+   "presenter": "sam",
+   "ad": null,
+   "programId": "news-60",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "The developer says its one hundred forty turbines can power about one point two million homes.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 57,
+   "start": -47.8188,
+   "end": -42.1356,
+   "cut": null,
+   "called": -47.8638,
+   "slot": "A",
+   "presenter": "sam",
+   "ad": null,
+   "programId": "news-60",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "A research ship has mapped fifty thousand square kilometres of sea floor near Antarctica.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 58,
+   "start": -41.9106,
+   "end": -36.1634,
+   "cut": null,
+   "called": -41.9556,
+   "slot": "A",
+   "presenter": "sam",
+   "ad": null,
+   "programId": "news-60",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "The maps reveal underwater canyons and an extinct volcano, according to Starfield Journal.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 59,
+   "start": -35.5124,
+   "end": -29.1906,
+   "cut": null,
+   "called": -35.5574,
+   "slot": "A",
+   "presenter": "sam",
+   "ad": null,
+   "programId": "news-60",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "Biologists have described a new species of glowing mushroom found in the Atlantic forest of Brazil.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 60,
+   "start": -28.9656,
+   "end": -24.8787,
+   "cut": null,
+   "called": -29.0106,
+   "slot": "A",
+   "presenter": "sam",
+   "ad": null,
+   "programId": "news-60",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "It emits a soft green light at night, Starfield Journal reports.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 61,
+   "start": -24.2647,
+   "end": -23.1153,
+   "cut": null,
+   "called": -24.3097,
+   "slot": "A",
+   "presenter": "sam",
+   "ad": null,
+   "programId": "news-60",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "That's the minute.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 62,
+   "start": -22.8903,
+   "end": -20.6553,
+   "cut": null,
+   "called": -22.9353,
+   "slot": "A",
+   "presenter": "sam",
+   "ad": null,
+   "programId": "news-60",
+   "emotion": "neutral",
+   "voice": null,
+   "text": "Stay with us on Globit twenty-four.",
+   "cached": null,
+   "engine": null,
+   "volume": 0.8,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 63,
+   "start": 24.972,
+   "end": 29.134,
+   "cut": null,
+   "called": 24.927,
+   "slot": "A",
+   "presenter": "nova",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "nova (casting.json)",
+   "text": "Solar eclipse to be visible across northern Spain next August.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "da62c548e0113bc2de63.wav"
+  },
+  {
+   "id": 64,
+   "start": 29.359,
+   "end": 31.982,
+   "cut": null,
+   "called": 29.314,
+   "slot": "A",
+   "presenter": "nova",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "nova (casting.json)",
+   "text": "Also coming up: our number of the day.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "0318b56f6226c340eda7.wav"
+  },
+  {
+   "id": 65,
+   "start": 32.207,
+   "end": 36.297,
+   "cut": null,
+   "called": 32.162,
+   "slot": "A",
+   "presenter": "nova",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "nova (casting.json)",
+   "text": "Later: bees use the sun as a compass even on cloudy days.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "6d68ed2902ce8dc1a6ab.wav"
+  },
+  {
+   "id": 66,
+   "start": 36.522,
+   "end": 38.46,
+   "cut": null,
+   "called": 36.477,
+   "slot": "A",
+   "presenter": "nova",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "nova (casting.json)",
+   "text": "This is Cosmos Desk.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "4a5d939cb6b56c0e8461.wav"
+  },
+  {
+   "id": 67,
+   "start": 38.685,
+   "end": 41.618,
+   "cut": null,
+   "called": 38.64,
+   "slot": "A",
+   "presenter": "nova",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "nova (casting.json)",
+   "text": "I'm Doctor Nova Rayess, with Unit Eight.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "7ffb8ade32910698d462.wav"
+  },
+  {
+   "id": 68,
+   "start": 42.475,
+   "end": 48.525,
+   "cut": null,
+   "called": 42.43,
+   "slot": "A",
+   "presenter": "nova",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "nova (casting.json)",
+   "text": "A total solar eclipse will be visible across northern Spain next August, Starfield Journal reports.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "3bf25c522c530d52e821.wav"
+  },
+  {
+   "id": 69,
+   "start": 48.75,
+   "end": 52.697,
+   "cut": null,
+   "called": 48.705,
+   "slot": "A",
+   "presenter": "nova",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "nova (casting.json)",
+   "text": "Astronomers say the shadow will cross Bilbao and Valencia.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "4c88a3f6022c17a3430f.wav"
+  },
+  {
+   "id": 70,
+   "start": 52.922,
+   "end": 57.52,
+   "cut": null,
+   "called": 52.877,
+   "slot": "A",
+   "presenter": "nova",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "nova (casting.json)",
+   "text": "Hotels along the path of the shadow report that many rooms are already booked.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "77de65be2795247d28cf.wav"
+  },
+  {
+   "id": 71,
+   "start": 58.248,
+   "end": 59.746,
+   "cut": null,
+   "called": 58.203,
+   "slot": "B",
+   "presenter": "unit8",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "unit8 (casting.json)",
+   "text": "Northern Spain.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "341def65eb1087744035.wav"
+  },
+  {
+   "id": 72,
+   "start": 59.971,
+   "end": 61.671,
+   "cut": null,
+   "called": 59.926,
+   "slot": "B",
+   "presenter": "unit8",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "unit8 (casting.json)",
+   "text": "I will not forget it.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "f0afe959a6c0ac5e872f.wav"
+  },
+  {
+   "id": 73,
+   "start": 62.243,
+   "end": 64.573,
+   "cut": null,
+   "called": 62.198,
+   "slot": "A",
+   "presenter": "nova",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "nova (casting.json)",
+   "text": "Unit Eight, our number of the day.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "ded302b4f12363954ab8.wav"
+  },
+  {
+   "id": 74,
+   "start": 65.442,
+   "end": 67.772,
+   "cut": null,
+   "called": 65.397,
+   "slot": "B",
+   "presenter": "unit8",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "unit8 (casting.json)",
+   "text": "Our number of the day: about two.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "058ae647c038c7638c63.wav"
+  },
+  {
+   "id": 75,
+   "start": 67.997,
+   "end": 75.104,
+   "cut": null,
+   "called": 67.952,
+   "slot": "B",
+   "presenter": "unit8",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "unit8 (casting.json)",
+   "text": "A study of ninety European cities found that streets with many trees were about two degrees cooler in summer.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "1ec2177bb56e9d6b19b1.wav"
+  },
+  {
+   "id": 76,
+   "start": 75.329,
+   "end": 79.432,
+   "cut": null,
+   "called": 75.284,
+   "slot": "B",
+   "presenter": "unit8",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "unit8 (casting.json)",
+   "text": "Researchers say parks also reduced heat-related illness.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "abad911b3eb962c44eb0.wav"
+  },
+  {
+   "id": 77,
+   "start": 80.389,
+   "end": 86.451,
+   "cut": null,
+   "called": 80.344,
+   "slot": "A",
+   "presenter": "nova",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "nova (casting.json)",
+   "text": "A new study shows honeybees can find the position of the sun through clouds using polarised light.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "993168042374de501c69.wav"
+  },
+  {
+   "id": 78,
+   "start": 86.676,
+   "end": 91.618,
+   "cut": null,
+   "called": 86.631,
+   "slot": "A",
+   "presenter": "nova",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "nova (casting.json)",
+   "text": "The finding explains how they navigate in poor weather, according to Starfield Journal.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "442a318e17f4e662849c.wav"
+  },
+  {
+   "id": 79,
+   "start": 92.512,
+   "end": 93.8,
+   "cut": null,
+   "called": 92.467,
+   "slot": "B",
+   "presenter": "unit8",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "unit8 (casting.json)",
+   "text": "Thanks, Nova.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "be5822db26d739e33b68.wav"
+  },
+  {
+   "id": 80,
+   "start": 94.025,
+   "end": 100.345,
+   "cut": null,
+   "called": 93.98,
+   "slot": "B",
+   "presenter": "unit8",
+   "ad": null,
+   "programId": "cosmos",
+   "emotion": "neutral",
+   "voice": "unit8 (casting.json)",
+   "text": "Storms have uncovered footprints left on a beach in Wales about seven thousand years ago.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "9f495f2188ae256337ec.wav"
+  }
+ ],
+ "recordedClips": [
+  {
+   "start": -419.13,
+   "end": -417.65749999999997,
+   "duration": 1.4725
+  },
+  {
+   "start": -414.871,
+   "end": -411.296,
+   "duration": 3.575
+  },
+  {
+   "start": -410.871,
+   "end": -407.6585,
+   "duration": 3.2125
+  },
+  {
+   "start": -406.471,
+   "end": -403.56850000000003,
+   "duration": 2.9025
+  },
+  {
+   "start": -402.771,
+   "end": -398.55350000000004,
+   "duration": 4.2175
+  },
+  {
+   "start": -398.4335,
+   "end": -394.38599999999997,
+   "duration": 4.0475
+  },
+  {
+   "start": -394.266,
+   "end": -390.456,
+   "duration": 3.81
+  },
+  {
+   "start": -155.03,
+   "end": -153.3075,
+   "duration": 1.7225
+  },
+  {
+   "start": -150.33,
+   "end": -148.6225,
+   "duration": 1.7075
+  },
+  {
+   "start": -146.53,
+   "end": -145.70250000000001,
+   "duration": 0.8275
+  },
+  {
+   "start": -142.73,
+   "end": -141.23,
+   "duration": 1.5
+  },
+  {
+   "start": -140.73,
+   "end": -138.8775,
+   "duration": 1.8525
+  },
+  {
+   "start": -131.13,
+   "end": -127.1925,
+   "duration": 3.9375
+  },
+  {
+   "start": -125.9725,
+   "end": -123.757375,
+   "duration": 2.215125
+  },
+  {
+   "start": -122.2725,
+   "end": -118.959875,
+   "duration": 3.312625
+  },
+  {
+   "start": -117.9725,
+   "end": -114.587375,
+   "duration": 3.385125
+  },
+  {
+   "start": -112.7725,
+   "end": -108.38499999999999,
+   "duration": 4.3875
+  },
+  {
+   "start": -108.265,
+   "end": -106.568,
+   "duration": 1.697
+  },
+  {
+   "start": -15.33,
+   "end": -13.8575,
+   "duration": 1.4725
+  },
+  {
+   "start": -10.93,
+   "end": -8.34,
+   "duration": 2.59
+  },
+  {
+   "start": -6.98,
+   "end": -2.8025,
+   "duration": 4.1775
+  },
+  {
+   "start": -2.6825,
+   "end": -1.0750000000000002,
+   "duration": 1.6075
+  },
+  {
+   "start": 0.07,
+   "end": 1.735,
+   "duration": 1.665
+  },
+  {
+   "start": 3.17,
+   "end": 5.58,
+   "duration": 2.41
+  },
+  {
+   "start": 6.37,
+   "end": 9.0625,
+   "duration": 2.6925
+  },
+  {
+   "start": 10.17,
+   "end": 12.7975,
+   "duration": 2.6275
+  }
+ ],
+ "music": [
+  {
+   "t": -420.091,
+   "moment": "silence",
+   "opts": {
+    "programId": "channel"
+   },
+   "why": "break: the ident jingle and the ads carry their own music"
+  },
+  {
+   "t": -415.391,
+   "moment": "ad",
+   "opts": {
+    "programId": "channel"
+   },
+   "why": "ad grand-buffer"
+  },
+  {
+   "t": -390.156,
+   "moment": "upNext",
+   "opts": {
+    "programId": "channel",
+    "next": "tech-bytes",
+    "seconds": 4.2
+   },
+   "why": "promo: the channel plays its up-next cue"
+  },
+  {
+   "t": -384.65,
+   "moment": "open",
+   "opts": {
+    "programId": "tech-bytes"
+   },
+   "why": "episode stinger: the open plays its own theme"
+  },
+  {
+   "t": -379.75,
+   "moment": "headlines",
+   "opts": {
+    "programId": "tech-bytes",
+    "line": 0,
+    "lines": 3,
+    "segment": 1
+   },
+   "why": "headline 1/3"
+  },
+  {
+   "t": -375.7702,
+   "moment": "headlines",
+   "opts": {
+    "programId": "tech-bytes",
+    "line": 1,
+    "lines": 3,
+    "segment": 1
+   },
+   "why": "headline 2/3"
+  },
+  {
+   "t": -372.5358,
+   "moment": "headlines",
+   "opts": {
+    "programId": "tech-bytes",
+    "line": 2,
+    "lines": 3,
+    "segment": 1
+   },
+   "why": "headline 3/3"
+  },
+  {
+   "t": -370.1418,
+   "moment": "greeting",
+   "opts": {
+    "programId": "tech-bytes",
+    "segment": 2
+   },
+   "why": "greeting"
+  },
+  {
+   "t": -366.015,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 3
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": -354.2385,
+   "moment": "chat",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "segment": 4
+   },
+   "why": "chat (neutral)"
+  },
+  {
+   "t": -351.4579,
+   "moment": "chat",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "segment": 5
+   },
+   "why": "chat (neutral)"
+  },
+  {
+   "t": -347.2373,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "happy",
+    "grave": false,
+    "breaking": false,
+    "segment": 6
+   },
+   "why": "story (happy)"
+  },
+  {
+   "t": -333.0773,
+   "moment": "number",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 7
+   },
+   "why": "number (neutral, number)"
+  },
+  {
+   "t": -318.0452,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 8
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": -304.8339,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 9
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": -289.52,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "happy",
+    "grave": false,
+    "breaking": false,
+    "segment": 10
+   },
+   "why": "story (happy)"
+  },
+  {
+   "t": -275.4516,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "happy",
+    "grave": false,
+    "breaking": false,
+    "segment": 11
+   },
+   "why": "story (happy)"
+  },
+  {
+   "t": -264.7005,
+   "moment": "chat",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "segment": 12
+   },
+   "why": "chat (neutral)"
+  },
+  {
+   "t": -259.7821,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 13
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": -248.11,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "happy",
+    "grave": false,
+    "breaking": false,
+    "segment": 14
+   },
+   "why": "story (happy)"
+  },
+  {
+   "t": -236.511,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "happy",
+    "grave": false,
+    "breaking": false,
+    "segment": 15
+   },
+   "why": "story (happy)"
+  },
+  {
+   "t": -226.6705,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "happy",
+    "grave": false,
+    "breaking": false,
+    "segment": 16
+   },
+   "why": "story (happy)"
+  },
+  {
+   "t": -215.6556,
+   "moment": "roundup",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 17
+   },
+   "why": "roundup (neutral, roundup)"
+  },
+  {
+   "t": -204.986,
+   "moment": "roundup",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "happy",
+    "grave": false,
+    "breaking": false,
+    "segment": 18
+   },
+   "why": "roundup (happy, roundup)"
+  },
+  {
+   "t": -196.1768,
+   "moment": "roundup",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 19
+   },
+   "why": "roundup (neutral, roundup)"
+  },
+  {
+   "t": -189.8775,
+   "moment": "finally",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "happy",
+    "grave": false,
+    "breaking": false,
+    "segment": 20
+   },
+   "why": "finally (happy, lighter)"
+  },
+  {
+   "t": -171.6434,
+   "moment": "featureEnd",
+   "opts": {
+    "programId": "tech-bytes"
+   },
+   "why": "end of the feature"
+  },
+  {
+   "t": -171.4194,
+   "moment": "chat",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "happy",
+    "grave": false,
+    "segment": 21
+   },
+   "why": "chat (happy)"
+  },
+  {
+   "t": -168.5287,
+   "moment": "outro",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "segment": 22
+   },
+   "why": "outro"
+  },
+  {
+   "t": -160.7064,
+   "moment": "signoffEnd",
+   "opts": {
+    "programId": "tech-bytes"
+   },
+   "why": "after the last word of the sign-off"
+  },
+  {
+   "t": -159.4264,
+   "moment": "endcard",
+   "opts": {
+    "programId": "tech-bytes"
+   },
+   "why": "end card"
+  },
+  {
+   "t": -155.95,
+   "moment": "silence",
+   "opts": {
+    "programId": "channel"
+   },
+   "why": "break: the ident jingle and the ads carry their own music"
+  },
+  {
+   "t": -151.25,
+   "moment": "ad",
+   "opts": {
+    "programId": "channel"
+   },
+   "why": "ad hi-res-gym"
+  },
+  {
+   "t": -126.8925,
+   "moment": "ad",
+   "opts": {
+    "programId": "channel"
+   },
+   "why": "ad bitfizz-cola"
+  },
+  {
+   "t": -101.9925,
+   "moment": "upNext",
+   "opts": {
+    "programId": "channel",
+    "next": "news-60",
+    "seconds": 4.2
+   },
+   "why": "promo: the channel plays its up-next cue"
+  },
+  {
+   "t": -96.45,
+   "moment": "open",
+   "opts": {
+    "programId": "news-60"
+   },
+   "why": "episode stinger: the open plays its own theme"
+  },
+  {
+   "t": -91.75,
+   "moment": "headlines",
+   "opts": {
+    "programId": "news-60",
+    "segment": 1
+   },
+   "why": "intro"
+  },
+  {
+   "t": -88.6991,
+   "moment": "item",
+   "opts": {
+    "programId": "news-60"
+   },
+   "why": "item cut"
+  },
+  {
+   "t": -88.6791,
+   "moment": "story",
+   "opts": {
+    "programId": "news-60",
+    "emotion": "serious",
+    "grave": true,
+    "breaking": false,
+    "segment": 2
+   },
+   "why": "story (serious)"
+  },
+  {
+   "t": -72.3502,
+   "moment": "item",
+   "opts": {
+    "programId": "news-60"
+   },
+   "why": "item cut"
+  },
+  {
+   "t": -72.3302,
+   "moment": "story",
+   "opts": {
+    "programId": "news-60",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 3
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": -60.8269,
+   "moment": "item",
+   "opts": {
+    "programId": "news-60"
+   },
+   "why": "item cut"
+  },
+  {
+   "t": -60.8069,
+   "moment": "story",
+   "opts": {
+    "programId": "news-60",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 4
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": -47.9438,
+   "moment": "item",
+   "opts": {
+    "programId": "news-60"
+   },
+   "why": "item cut"
+  },
+  {
+   "t": -47.9238,
+   "moment": "story",
+   "opts": {
+    "programId": "news-60",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 5
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": -35.6374,
+   "moment": "item",
+   "opts": {
+    "programId": "news-60"
+   },
+   "why": "item cut"
+  },
+  {
+   "t": -35.6174,
+   "moment": "story",
+   "opts": {
+    "programId": "news-60",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 6
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": -24.3697,
+   "moment": "outro",
+   "opts": {
+    "programId": "news-60",
+    "emotion": "neutral",
+    "segment": 7
+   },
+   "why": "outro"
+  },
+  {
+   "t": -20.5353,
+   "moment": "signoffEnd",
+   "opts": {
+    "programId": "news-60"
+   },
+   "why": "after the last word of the sign-off"
+  },
+  {
+   "t": -19.2553,
+   "moment": "endcard",
+   "opts": {
+    "programId": "news-60"
+   },
+   "why": "end card"
+  },
+  {
+   "t": -16.25,
+   "moment": "silence",
+   "opts": {
+    "programId": "channel"
+   },
+   "why": "break: the ident jingle and the ads carry their own music"
+  },
+  {
+   "t": -11.55,
+   "moment": "ad",
+   "opts": {
+    "programId": "channel"
+   },
+   "why": "ad cloudbrella"
+  },
+  {
+   "t": 14.25,
+   "moment": "upNext",
+   "opts": {
+    "programId": "channel",
+    "next": "cosmos",
+    "seconds": 4.2
+   },
+   "why": "promo: the channel plays its up-next cue"
+  },
+  {
+   "t": 19.767,
+   "moment": "open",
+   "opts": {
+    "programId": "cosmos"
+   },
+   "why": "episode stinger: the open plays its own theme"
+  },
+  {
+   "t": 24.867,
+   "moment": "coldOpen",
+   "opts": {
+    "programId": "cosmos",
+    "segment": 1
+   },
+   "why": "intro (cosmos cold open)"
+  },
+  {
+   "t": 42.37,
+   "moment": "story",
+   "opts": {
+    "programId": "cosmos",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 2
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": 42.37,
+   "moment": "shot",
+   "opts": {
+    "programId": "cosmos",
+    "kind": "presenter"
+   },
+   "why": "shot close"
+  },
+  {
+   "t": 50.67,
+   "moment": "shot",
+   "opts": {
+    "programId": "cosmos",
+    "kind": "map"
+   },
+   "why": "shot map"
+  },
+  {
+   "t": 58.143,
+   "moment": "chat",
+   "opts": {
+    "programId": "cosmos",
+    "emotion": "neutral",
+    "grave": false,
+    "segment": 3
+   },
+   "why": "chat (neutral)"
+  },
+  {
+   "t": 62.138,
+   "moment": "chat",
+   "opts": {
+    "programId": "cosmos",
+    "emotion": "neutral",
+    "grave": false,
+    "segment": 4
+   },
+   "why": "chat (neutral)"
+  },
+  {
+   "t": 65.337,
+   "moment": "number",
+   "opts": {
+    "programId": "cosmos",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 5
+   },
+   "why": "number (neutral, number)"
+  },
+  {
+   "t": 66.638,
+   "moment": "shot",
+   "opts": {
+    "programId": "cosmos",
+    "kind": "presenter"
+   },
+   "why": "shot fact"
+  },
+  {
+   "t": 71.138,
+   "moment": "shot",
+   "opts": {
+    "programId": "cosmos",
+    "kind": "presenter"
+   },
+   "why": "shot close"
+  },
+  {
+   "t": 80.284,
+   "moment": "story",
+   "opts": {
+    "programId": "cosmos",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 6
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": 80.284,
+   "moment": "shot",
+   "opts": {
+    "programId": "cosmos",
+    "kind": "presenter"
+   },
+   "why": "shot close"
+  },
+  {
+   "t": 86.631,
+   "moment": "shot",
+   "opts": {
+    "programId": "cosmos",
+    "kind": "picture"
+   },
+   "why": "shot full"
+  },
+  {
+   "t": 92.407,
+   "moment": "shot",
+   "opts": {
+    "programId": "cosmos",
+    "kind": "presenter"
+   },
+   "why": "shot close"
+  },
+  {
+   "t": 92.407,
+   "moment": "story",
+   "opts": {
+    "programId": "cosmos",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 7
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": 97.707,
+   "moment": "shot",
+   "opts": {
+    "programId": "cosmos",
+    "kind": "map"
+   },
+   "why": "shot map"
+  }
+ ],
+ "events": [
+  {
+   "ev": "audioContext",
+   "origin": 7,
+   "sampleRate": 48000,
+   "length": 112800000,
+   "t": -420.097
+  },
+  {
+   "ev": "instrumented",
+   "wrapped": {
+    "playEpisode": true,
+    "playAd": true,
+    "playBreak": true,
+    "say": true,
+    "breaking": true
+   },
+   "t": -420.097
+  },
+  {
+   "ev": "playBreak",
+   "phase": "start",
+   "breakId": "kmuy8chmub",
+   "ads": 1,
+   "filler": false,
+   "next": {
+    "id": "tech-bytes",
+    "title": "TECH BYTES",
+    "ready": true
+   },
+   "t": -420.091
+  },
+  {
+   "ev": "shot",
+   "shot": "start",
+   "at": -420.097,
+   "programId": null,
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "other"
+   },
+   "t": -420.089
+  },
+  {
+   "ev": "stinger",
+   "at": -420.091,
+   "t": -420.089
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -420.089
+  },
+  {
+   "ev": "strap",
+   "headline": null,
+   "kicker": null,
+   "t": -420.089
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -420.089
+  },
+  {
+   "ev": "program",
+   "programId": null,
+   "title": null,
+   "t": -420.089
+  },
+  {
+   "k": "cut",
+   "shot": "start",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -420.088
+  },
+  {
+   "k": "cut",
+   "shot": "ident",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -419.65
+  },
+  {
+   "ev": "shot",
+   "shot": "ident",
+   "at": -419.691,
+   "programId": null,
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "promo",
+    "next": null
+   },
+   "t": -419.65
+  },
+  {
+   "ev": "clip",
+   "at": -419.13,
+   "duration": 1.4725,
+   "offset": 0,
+   "t": -419.25
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -419.15
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -417.65
+  },
+  {
+   "k": "cut",
+   "shot": "ad",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -415.65
+  },
+  {
+   "ev": "shot",
+   "shot": "ad",
+   "at": -415.691,
+   "programId": null,
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "ad",
+    "ad": "black",
+    "line": -1
+   },
+   "t": -415.65
+  },
+  {
+   "ev": "playAd",
+   "phase": "start",
+   "adId": "grand-buffer",
+   "brand": "THE GRAND BUFFER",
+   "duration": 24.6,
+   "t": -415.391
+  },
+  {
+   "k": "cut",
+   "shot": "ad",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -415.35
+  },
+  {
+   "ev": "shot",
+   "shot": "ad",
+   "at": -415.391,
+   "programId": null,
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "ad",
+    "ad": "grand-buffer",
+    "line": -1
+   },
+   "t": -415.35
+  },
+  {
+   "ev": "clip",
+   "at": -414.871,
+   "duration": 3.575,
+   "offset": 0,
+   "t": -414.991
+  },
+  {
+   "ev": "adLine",
+   "ad": "grand-buffer",
+   "line": 0,
+   "t": -414.95
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -414.95
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -411.25
+  },
+  {
+   "ev": "clip",
+   "at": -410.871,
+   "duration": 3.2125,
+   "offset": 0,
+   "t": -410.991
+  },
+  {
+   "ev": "adLine",
+   "ad": "grand-buffer",
+   "line": 1,
+   "t": -410.95
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -410.95
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -407.65
+  },
+  {
+   "ev": "clip",
+   "at": -406.471,
+   "duration": 2.9025,
+   "offset": 0,
+   "t": -406.591
+  },
+  {
+   "ev": "adLine",
+   "ad": "grand-buffer",
+   "line": 2,
+   "t": -406.55
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -406.55
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -403.55
+  },
+  {
+   "ev": "clip",
+   "at": -402.771,
+   "duration": 4.2175,
+   "offset": 0,
+   "t": -402.891
+  },
+  {
+   "ev": "adLine",
+   "ad": "grand-buffer",
+   "line": 3,
+   "t": -402.85
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -402.85
+  },
+  {
+   "ev": "clip",
+   "at": -398.4335,
+   "duration": 4.0475,
+   "offset": 0,
+   "t": -398.5535
+  },
+  {
+   "ev": "adLine",
+   "ad": "grand-buffer",
+   "line": 4,
+   "t": -398.55
+  },
+  {
+   "ev": "clip",
+   "at": -394.266,
+   "duration": 3.81,
+   "offset": 0,
+   "t": -394.386
+  },
+  {
+   "ev": "adLine",
+   "ad": "grand-buffer",
+   "line": 5,
+   "t": -394.35
+  },
+  {
+   "ev": "playAd",
+   "phase": "end",
+   "ref": -415.391,
+   "t": -390.456
+  },
+  {
+   "k": "cut",
+   "shot": "ad",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -390.45
+  },
+  {
+   "ev": "shot",
+   "shot": "ad",
+   "at": -390.456,
+   "programId": null,
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "ad",
+    "ad": "black",
+    "line": -1
+   },
+   "t": -390.45
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -390.45
+  },
+  {
+   "k": "cut",
+   "shot": "promo",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -390.15
+  },
+  {
+   "ev": "shot",
+   "shot": "promo",
+   "at": -390.156,
+   "programId": null,
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "promo",
+    "next": "tech-bytes"
+   },
+   "t": -390.15
+  },
+  {
+   "ev": "playBreak",
+   "phase": "end",
+   "ref": -420.091,
+   "t": -384.656
+  },
+  {
+   "ev": "playEpisode",
+   "phase": "start",
+   "episodeId": "emuy7minr1",
+   "programId": "tech-bytes",
+   "title": "TECH BYTES",
+   "replay": false,
+   "cast": {
+    "A": "max",
+    "B": "ada"
+   },
+   "segments": [
+    {
+     "type": "intro",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 198
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "CHIPS",
+     "headline": "Chipmaker unveils a laptop processor",
+     "location": null,
+     "audio": null,
+     "chars": 173
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 37
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 57
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "happy",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "ROBOTICS",
+     "headline": "Robot vacuum learns to climb stairs",
+     "location": null,
+     "audio": null,
+     "chars": 182
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": "number",
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "NUMBER OF THE DAY",
+     "headline": "Reykjavik data centre runs on wind and geothermal power",
+     "location": "REYKJAVIK, ICELAND",
+     "audio": null,
+     "chars": 216
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "CONNECTIVITY",
+     "headline": "Startup launches satellite internet service",
+     "location": null,
+     "audio": null,
+     "chars": 179
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "TRANSPORT",
+     "headline": "Seoul tests self-driving buses",
+     "location": "SEOUL, SOUTH KOREA",
+     "audio": null,
+     "chars": 229
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "happy",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "ROBOTICS",
+     "headline": "Barcelona trials a fleet of delivery robots",
+     "location": "BARCELONA, SPAIN",
+     "audio": null,
+     "chars": 196
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "happy",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": "GADGETS",
+     "headline": "Smartphone battery promises a week of use",
+     "location": null,
+     "audio": null,
+     "chars": 147
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 61
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": "GADGETS",
+     "headline": "Translation earbuds now handle 40 languages",
+     "location": null,
+     "audio": null,
+     "chars": 163
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "happy",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": "AI",
+     "headline": "Open-source AI model runs on ordinary laptop",
+     "location": null,
+     "audio": null,
+     "chars": 168
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "happy",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": "GAMING",
+     "headline": "Handheld games console sells 2 million units",
+     "location": "TOKYO, JAPAN",
+     "audio": null,
+     "chars": 135
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "happy",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": "GADGETS",
+     "headline": "Swedish recycling plant recovers gold",
+     "location": "SWEDEN",
+     "audio": null,
+     "chars": 144
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": "roundup",
+     "breaking": false,
+     "roundup": {
+      "index": 0,
+      "count": 3
+     },
+     "hasImage": true,
+     "kicker": "QUICK BYTES",
+     "headline": "Rover finds layered rocks on Mars",
+     "location": null,
+     "audio": null,
+     "chars": 150
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "happy",
+     "anchor": "B",
+     "feature": "roundup",
+     "breaking": false,
+     "roundup": {
+      "index": 1,
+      "count": 3
+     },
+     "hasImage": true,
+     "kicker": "QUICK BYTES",
+     "headline": "Astronauts grow tomatoes on the space station",
+     "location": null,
+     "audio": null,
+     "chars": 125
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": "roundup",
+     "breaking": false,
+     "roundup": {
+      "index": 2,
+      "count": 3
+     },
+     "hasImage": true,
+     "kicker": "QUICK BYTES",
+     "headline": "Rocket launches probe to study Sun's poles",
+     "location": null,
+     "audio": null,
+     "chars": 81
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "happy",
+     "anchor": "A",
+     "feature": "lighter",
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "AND FINALLY",
+     "headline": "Medicine-carrying drones expand across Rwanda",
+     "location": "RWANDA",
+     "audio": null,
+     "chars": 266
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "happy",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 31
+    },
+    {
+     "type": "outro",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 107
+    }
+   ],
+   "t": -384.65
+  },
+  {
+   "ev": "stinger",
+   "at": -384.65,
+   "t": -384.55
+  },
+  {
+   "k": "cut",
+   "shot": "open",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -384.25
+  },
+  {
+   "ev": "shot",
+   "shot": "open",
+   "at": -384.25,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": null,
+   "t": -384.25
+  },
+  {
+   "ev": "program",
+   "programId": "tech-bytes",
+   "title": "TECH BYTES",
+   "t": -384.25
+  },
+  {
+   "k": "cut",
+   "shot": "montage",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -380.25
+  },
+  {
+   "ev": "shot",
+   "shot": "montage",
+   "at": -380.25,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "montage",
+    "index": 0
+   },
+   "t": -380.25
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "intro",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": null,
+   "text": "Chipmaker unveils a laptop processor with all-day battery life. Also ahead: robot vacuum learns to climb stairs. And later, our number of the day. This is TECH BYTES. I'm Max Circuit, with Ada Volt.",
+   "t": -379.75
+  },
+  {
+   "ev": "subtitle",
+   "text": "Chipmaker unveils a laptop processor with all-day battery life.",
+   "t": -379.65
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -379.65
+  },
+  {
+   "k": "cut",
+   "shot": "montage",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -375.45
+  },
+  {
+   "ev": "shot",
+   "shot": "montage",
+   "at": -375.5152,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "montage",
+    "index": 1
+   },
+   "t": -375.45
+  },
+  {
+   "ev": "subtitle",
+   "text": "Also ahead: robot vacuum learns to climb stairs.",
+   "t": -375.45
+  },
+  {
+   "ev": "subtitle",
+   "text": "And later, our number of the day.",
+   "t": -372.25
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Bitport Herald|Iceland volcano: lava fountains light up the Reykjanes sky#0",
+   "hold": 6.9,
+   "ev": "pace",
+   "t": -371.95
+  },
+  {
+   "k": "cut",
+   "shot": "wide",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -371.45
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": -371.525,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": null,
+   "t": -371.45
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "partner",
+   "why": "turn",
+   "ev": "pace",
+   "t": -371.15
+  },
+  {
+   "ev": "subtitle",
+   "text": "This is TECH BYTES.",
+   "t": -369.95
+  },
+  {
+   "ev": "subtitle",
+   "text": "I'm Max Circuit, with Ada Volt.",
+   "t": -368.55
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "nod",
+   "why": null,
+   "ev": "pace",
+   "t": -368.15
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "B",
+   "name": "nod",
+   "why": "nod-greeting",
+   "ev": "pace",
+   "t": -366.75
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -379.75,
+   "t": -366.582
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -366.55
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -366.55
+  },
+  {
+   "k": "strap",
+   "at": -365.015,
+   "ev": "pace",
+   "t": -366.015
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "CHIPS",
+   "headline": "Chipmaker unveils a laptop processor",
+   "location": null,
+   "audio": null,
+   "text": "A chipmaker has unveiled a new laptop processor it says can run for 20 hours on a single charge. Independent reviewers have not yet tested the claim, Circuit Weekly reports.",
+   "t": -366.015
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -365.95
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -366.015,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s6b65619146",
+   "card": null,
+   "t": -365.95
+  },
+  {
+   "ev": "subtitle",
+   "text": "A chipmaker has unveiled a new laptop processor it says can run for 20 hours on a single charge.",
+   "t": -365.95
+  },
+  {
+   "ev": "strap",
+   "headline": "Chipmaker unveils a laptop processor",
+   "kicker": "CHIPS",
+   "t": -365.95
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -365.95
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Bitport Herald|Iceland volcano: lava fountains light up the Reykjanes sky#1",
+   "hold": 7.3500000000000005,
+   "ev": "pace",
+   "t": -365.05
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "point_screen",
+   "why": null,
+   "ev": "pace",
+   "t": -360.55
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -359.45
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": -359.4604,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s6b65619146",
+   "card": null,
+   "t": -359.45
+  },
+  {
+   "ev": "subtitle",
+   "text": "Independent reviewers have not yet tested the claim, Circuit Weekly reports.",
+   "t": -359.45
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "notes",
+   "why": "prep",
+   "ev": "pace",
+   "t": -357.95
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Ledger Line|Oil prices slide as global demand cools#0",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": -357.75
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -366.015,
+   "t": -354.6505
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -354.65
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -354.65
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "chat",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": null,
+   "text": "And when does it reach actual people?",
+   "t": -354.2385
+  },
+  {
+   "k": "cut",
+   "shot": "wide",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -354.15
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": -354.2385,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s6b65619146",
+   "card": null,
+   "t": -354.15
+  },
+  {
+   "ev": "subtitle",
+   "text": "And when does it reach actual people?",
+   "t": -354.15
+  },
+  {
+   "ev": "strap",
+   "headline": null,
+   "kicker": null,
+   "t": -354.15
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -354.15
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "partner",
+   "why": "toss",
+   "ev": "pace",
+   "t": -353.15
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "partner",
+   "why": "toss-meet",
+   "ev": "pace",
+   "t": -352.75
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "B",
+   "name": "glasses",
+   "why": null,
+   "ev": "pace",
+   "t": -352.65
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -354.2385,
+   "t": -351.6799
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -351.65
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -351.65
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "chat",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": null,
+   "text": "The first laptops using it will go on sale in the spring.",
+   "t": -351.4579
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": -351.4579,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s6b65619146",
+   "card": null,
+   "t": -351.45
+  },
+  {
+   "ev": "subtitle",
+   "text": "The first laptops using it will go on sale in the spring.",
+   "t": -351.45
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -351.45
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "partner",
+   "why": "cont",
+   "ev": "pace",
+   "t": -351.35
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "partner",
+   "why": "reply-cont",
+   "ev": "pace",
+   "t": -351.15
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Circuit Weekly|Chipmaker unveils a laptop processor with all-day battery life#0",
+   "hold": 7.3500000000000005,
+   "ev": "pace",
+   "t": -349.45
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -351.4579,
+   "t": -347.7793
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -347.75
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -347.75
+  },
+  {
+   "k": "strap",
+   "at": -346.2373,
+   "ev": "pace",
+   "t": -347.2373
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "happy",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "ROBOTICS",
+   "headline": "Robot vacuum learns to climb stairs",
+   "location": null,
+   "audio": null,
+   "text": "A home robotics company has shown a robot vacuum that can climb stairs using two small legs. It will cost about 1,500 dollars when it launches next year, according to Circuit Weekly.",
+   "t": -347.2373
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -347.15
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -347.2373,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s73f99cbdf2",
+   "card": null,
+   "t": -347.15
+  },
+  {
+   "ev": "subtitle",
+   "text": "A home robotics company has shown a robot vacuum that can climb stairs using two small legs.",
+   "t": -347.15
+  },
+  {
+   "ev": "strap",
+   "headline": "Robot vacuum learns to climb stairs",
+   "kicker": "ROBOTICS",
+   "t": -347.15
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -347.15
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "B",
+   "name": "chin",
+   "why": null,
+   "ev": "pace",
+   "t": -342.35
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Circuit Weekly|Chipmaker unveils a laptop processor with all-day battery life#1",
+   "hold": 6.9,
+   "ev": "pace",
+   "t": -342.15
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -340.85
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": -340.8515,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s73f99cbdf2",
+   "card": null,
+   "t": -340.85
+  },
+  {
+   "ev": "subtitle",
+   "text": "It will cost about 1,500 dollars when it launches next year, according to Circuit Weekly.",
+   "t": -340.85
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "notes",
+   "why": "prep",
+   "ev": "pace",
+   "t": -335.75
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Starfield Journal|Rocket launches a probe to study the Sun's poles#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": -335.25
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -347.2373,
+   "t": -333.5783
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -333.55
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -333.55
+  },
+  {
+   "k": "strap",
+   "at": -332.0773,
+   "ev": "pace",
+   "t": -333.0773
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": "number",
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "NUMBER OF THE DAY",
+   "headline": "Reykjavik data centre runs on wind and geothermal power",
+   "location": "REYKJAVIK, ICELAND",
+   "audio": null,
+   "text": "Our number of the day: 30 percent. A data centre powered by wind and geothermal energy has opened near Reykjavik, Circuit Weekly reports. Its owners say it uses 30 percent less energy for cooling than a typical site.",
+   "t": -333.0773
+  },
+  {
+   "k": "cut",
+   "shot": "fact",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -333.05
+  },
+  {
+   "ev": "shot",
+   "shot": "fact",
+   "at": -333.0773,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sdc41c4532f",
+   "card": {
+    "kind": "fact",
+    "fact": "30% LESS ENERGY"
+   },
+   "t": -333.05
+  },
+  {
+   "ev": "subtitle",
+   "text": "Our number of the day: 30 percent.",
+   "t": -333.05
+  },
+  {
+   "ev": "strap",
+   "headline": "Reykjavik data centre runs on wind and geothermal power",
+   "kicker": "NUMBER OF THE DAY",
+   "t": -333.05
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -333.05
+  },
+  {
+   "ev": "subtitle",
+   "text": "A data centre powered by wind and geothermal energy has opened near Reykjavik, Circuit Weekly reports.",
+   "t": -330.35
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -328.45
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -328.5273,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sdc41c4532f",
+   "card": null,
+   "t": -328.45
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "raise_hand",
+   "why": null,
+   "ev": "pace",
+   "t": -326.35
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Pixelburg Post|Kenya switches on its largest solar farm near Nairobi#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": -326.05
+  },
+  {
+   "ev": "subtitle",
+   "text": "Its owners say it uses 30 percent less energy for cooling than a typical site.",
+   "t": -323.65
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -333.0773,
+   "t": -318.5412
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -318.45
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -318.45
+  },
+  {
+   "k": "strap",
+   "at": -317.0452,
+   "ev": "pace",
+   "t": -318.0452
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "CONNECTIVITY",
+   "headline": "Startup launches satellite internet service",
+   "location": null,
+   "audio": null,
+   "text": "A startup has launched a satellite internet service designed for farms in remote areas, according to Circuit Weekly. It says the service reaches speeds of 100 megabits per second.",
+   "t": -318.0452
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -317.95
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -318.0452,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s9c777c85c9",
+   "card": null,
+   "t": -317.95
+  },
+  {
+   "ev": "subtitle",
+   "text": "A startup has launched a satellite internet service designed for farms in remote areas, according to Circuit Weekly.",
+   "t": -317.95
+  },
+  {
+   "ev": "strap",
+   "headline": "Startup launches satellite internet service",
+   "kicker": "CONNECTIVITY",
+   "t": -317.95
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -317.95
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Bitport Herald|Thousands ride Lisbon's new tram on its first day#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": -316.85
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -310.05
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": -310.0678,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s9c777c85c9",
+   "card": null,
+   "t": -310.05
+  },
+  {
+   "ev": "subtitle",
+   "text": "It says the service reaches speeds of 100 megabits per second.",
+   "t": -310.05
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Ledger Line|Bank of Canada holds interest rates at 3.5 percent#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": -307.75
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -318.0452,
+   "t": -305.3809
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -305.35
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -305.35
+  },
+  {
+   "k": "strap",
+   "at": -303.8339,
+   "ev": "pace",
+   "t": -304.8339
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "TRANSPORT",
+   "headline": "Seoul tests self-driving buses",
+   "location": "SEOUL, SOUTH KOREA",
+   "audio": null,
+   "text": "Seoul has started testing self-driving buses on two night routes. The city says the buses will help night workers get home when other transport has stopped. A safety driver stays on board during the trial, Circuit Weekly reports.",
+   "t": -304.8339
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -304.75
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -304.8339,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sf42c951849",
+   "card": null,
+   "t": -304.75
+  },
+  {
+   "ev": "subtitle",
+   "text": "Seoul has started testing self-driving buses on two night routes.",
+   "t": -304.75
+  },
+  {
+   "ev": "strap",
+   "headline": "Seoul tests self-driving buses",
+   "kicker": "TRANSPORT",
+   "t": -304.75
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -304.75
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -300.45
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": -300.4737,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sf42c951849",
+   "card": null,
+   "t": -300.45
+  },
+  {
+   "ev": "subtitle",
+   "text": "The city says the buses will help night workers get home when other transport has stopped.",
+   "t": -300.45
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Circuit Weekly|Robot vacuum learns to climb stairs#0",
+   "hold": 7.800000000000001,
+   "ev": "pace",
+   "t": -298.55
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -294.55
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -294.6061,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sf42c951849",
+   "card": null,
+   "t": -294.55
+  },
+  {
+   "ev": "subtitle",
+   "text": "A safety driver stays on board during the trial, Circuit Weekly reports.",
+   "t": -294.55
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Starfield Journal|Telescope in Chile spots water vapour on a distant planet#0",
+   "hold": 7.800000000000001,
+   "ev": "pace",
+   "t": -290.75
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -304.8339,
+   "t": -290.047
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -289.95
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -289.95
+  },
+  {
+   "k": "strap",
+   "at": -288.52,
+   "ev": "pace",
+   "t": -289.52
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "happy",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "ROBOTICS",
+   "headline": "Barcelona trials a fleet of delivery robots",
+   "location": "BARCELONA, SPAIN",
+   "audio": null,
+   "text": "Thanks, Max. Twenty delivery robots have started carrying parcels through two districts of Barcelona. The trial will run for six months. The robots travel at walking pace and stop for pedestrians.",
+   "t": -289.52
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -289.45
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -289.52,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s77ad18849a",
+   "card": null,
+   "t": -289.45
+  },
+  {
+   "ev": "subtitle",
+   "text": "Thanks, Max.",
+   "t": -289.45
+  },
+  {
+   "ev": "strap",
+   "headline": "Barcelona trials a fleet of delivery robots",
+   "kicker": "ROBOTICS",
+   "t": -289.45
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -289.45
+  },
+  {
+   "ev": "subtitle",
+   "text": "Twenty delivery robots have started carrying parcels through two districts of Barcelona.",
+   "t": -288.35
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Starfield Journal|Telescope in Chile spots water vapour on a distant planet#1",
+   "hold": 6.9,
+   "ev": "pace",
+   "t": -282.95
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -282.35
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": -282.3787,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s77ad18849a",
+   "card": null,
+   "t": -282.35
+  },
+  {
+   "ev": "subtitle",
+   "text": "The trial will run for six months.",
+   "t": -282.35
+  },
+  {
+   "ev": "subtitle",
+   "text": "The robots travel at walking pace and stop for pedestrians.",
+   "t": -279.85
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "notes",
+   "why": "prep",
+   "ev": "pace",
+   "t": -277.75
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Pixelburg Post|Iceland volcano erupts again on the Reykjanes peninsula#0",
+   "hold": 8.700000000000001,
+   "ev": "pace",
+   "t": -276.05
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -289.52,
+   "t": -275.9416
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -275.85
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -275.85
+  },
+  {
+   "k": "strap",
+   "at": -274.4516,
+   "ev": "pace",
+   "t": -275.4516
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "happy",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": "GADGETS",
+   "headline": "Smartphone battery promises a week of use",
+   "location": null,
+   "audio": null,
+   "text": "Researchers at a battery firm say a new silicon design could let phones last a week between charges. The company hopes to start production in 2027.",
+   "t": -275.4516
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -275.45
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -275.4516,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sc6cf8e10ae",
+   "card": null,
+   "t": -275.45
+  },
+  {
+   "ev": "subtitle",
+   "text": "Researchers at a battery firm say a new silicon design could let phones last a week between charges.",
+   "t": -275.45
+  },
+  {
+   "ev": "strap",
+   "headline": "Smartphone battery promises a week of use",
+   "kicker": "GADGETS",
+   "t": -275.45
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -275.45
+  },
+  {
+   "ev": "subtitle",
+   "text": "The company hopes to start production in 2027.",
+   "t": -268.85
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Bitport Herald|Kerala floods: thousands moved to relief camps as heavy rain continues#0",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": -267.35
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -275.4516,
+   "t": -265.0275
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -264.95
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -264.95
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "chat",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": null,
+   "text": "Still to come: medicine-carrying drones expand across Rwanda.",
+   "t": -264.7005
+  },
+  {
+   "k": "cut",
+   "shot": "tease",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -264.65
+  },
+  {
+   "ev": "shot",
+   "shot": "tease",
+   "at": -264.7005,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "other"
+   },
+   "t": -264.65
+  },
+  {
+   "ev": "subtitle",
+   "text": "Still to come: medicine-carrying drones expand across Rwanda.",
+   "t": -264.65
+  },
+  {
+   "ev": "strap",
+   "headline": null,
+   "kicker": null,
+   "t": -264.65
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -264.65
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -264.7005,
+   "t": -260.7711
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -260.75
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -260.75
+  },
+  {
+   "k": "strap",
+   "at": -258.7821,
+   "ev": "pace",
+   "t": -259.7821
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": "GADGETS",
+   "headline": "Translation earbuds now handle 40 languages",
+   "location": null,
+   "audio": null,
+   "text": "A new pair of earbuds can translate conversations in 40 languages in real time, its maker says. “Travel should not stop at the language barrier,” the company said.",
+   "t": -259.7821
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -259.75
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -259.7821,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "sc98b4416b6",
+   "card": null,
+   "t": -259.75
+  },
+  {
+   "ev": "subtitle",
+   "text": "A new pair of earbuds can translate conversations in 40 languages in real time, its maker says.",
+   "t": -259.75
+  },
+  {
+   "ev": "strap",
+   "headline": "Translation earbuds now handle 40 languages",
+   "kicker": "GADGETS",
+   "t": -259.75
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -259.75
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Bitport Herald|Kerala floods: thousands moved to relief camps as heavy rain continues#1",
+   "hold": 6.9,
+   "ev": "pace",
+   "t": -259.15
+  },
+  {
+   "k": "cut",
+   "shot": "wide",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -254.15
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": -254.1821,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "sc98b4416b6",
+   "card": null,
+   "t": -254.15
+  },
+  {
+   "ev": "subtitle",
+   "text": "“Travel should not stop at the language barrier,” the company said.",
+   "t": -252.95
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Ledger Line|Airline orders 100 new fuel-efficient jets#0",
+   "hold": 7.800000000000001,
+   "ev": "pace",
+   "t": -252.25
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "B",
+   "name": "shake_head",
+   "why": null,
+   "ev": "pace",
+   "t": -250.65
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -259.7821,
+   "t": -248.643
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -248.55
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -248.55
+  },
+  {
+   "k": "strap",
+   "at": -247.11,
+   "ev": "pace",
+   "t": -248.11
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "happy",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": "AI",
+   "headline": "Open-source AI model runs on ordinary laptop",
+   "location": null,
+   "audio": null,
+   "text": "Researchers have released an AI model small enough to run on an ordinary laptop. They say it needs about 8 gigabytes of memory and works without an internet connection.",
+   "t": -248.11
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -248.05
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -248.11,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sa475fbfbcd",
+   "card": null,
+   "t": -248.05
+  },
+  {
+   "ev": "subtitle",
+   "text": "Researchers have released an AI model small enough to run on an ordinary laptop.",
+   "t": -248.05
+  },
+  {
+   "ev": "strap",
+   "headline": "Open-source AI model runs on ordinary laptop",
+   "kicker": "AI",
+   "t": -248.05
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -248.05
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Circuit Weekly|Startup launches satellite internet service for farms#0",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": -244.45
+  },
+  {
+   "k": "cut",
+   "shot": "wide",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -242.75
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": -242.8094,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sa475fbfbcd",
+   "card": null,
+   "t": -242.75
+  },
+  {
+   "ev": "subtitle",
+   "text": "They say it needs about 8 gigabytes of memory and works without an internet connection.",
+   "t": -242.75
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -248.11,
+   "t": -237.059
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -237.05
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -237.05
+  },
+  {
+   "k": "strap",
+   "at": -235.511,
+   "ev": "pace",
+   "t": -236.511
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "happy",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": "GAMING",
+   "headline": "Handheld games console sells 2 million units",
+   "location": "TOKYO, JAPAN",
+   "audio": null,
+   "text": "A new handheld games console sold 2 million units in its first week, its maker says. Shops in Tokyo reported long queues on launch day.",
+   "t": -236.511
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -236.45
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -236.511,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s29418f9aa5",
+   "card": null,
+   "t": -236.45
+  },
+  {
+   "ev": "subtitle",
+   "text": "A new handheld games console sold 2 million units in its first week, its maker says.",
+   "t": -236.45
+  },
+  {
+   "ev": "strap",
+   "headline": "Handheld games console sells 2 million units",
+   "kicker": "GAMING",
+   "t": -236.45
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -236.45
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Starfield Journal|Scientists map the ocean floor near Antarctica in new detail#0",
+   "hold": 7.3500000000000005,
+   "ev": "pace",
+   "t": -236.15
+  },
+  {
+   "ev": "subtitle",
+   "text": "Shops in Tokyo reported long queues on launch day.",
+   "t": -230.45
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "notes",
+   "why": "prep",
+   "ev": "pace",
+   "t": -229.15
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Starfield Journal|Scientists map the ocean floor near Antarctica in new detail#1",
+   "hold": 7.3500000000000005,
+   "ev": "pace",
+   "t": -228.85
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -236.511,
+   "t": -227.1625
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -227.15
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -227.15
+  },
+  {
+   "k": "strap",
+   "at": -225.6705,
+   "ev": "pace",
+   "t": -226.6705
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "happy",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": "GADGETS",
+   "headline": "Swedish recycling plant recovers gold",
+   "location": "SWEDEN",
+   "audio": null,
+   "text": "A recycling plant in Sweden says it can recover 1 kilogram of gold from 40,000 old phones. The company wants to process 2 million phones a year.",
+   "t": -226.6705
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -226.65
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -226.6705,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s81d71bbe9a",
+   "card": null,
+   "t": -226.65
+  },
+  {
+   "ev": "subtitle",
+   "text": "A recycling plant in Sweden says it can recover 1 kilogram of gold from 40,000 old phones.",
+   "t": -226.65
+  },
+  {
+   "ev": "strap",
+   "headline": "Swedish recycling plant recovers gold",
+   "kicker": "GADGETS",
+   "t": -226.65
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -226.65
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Pixelburg Post|Heavy rain floods streets in coastal towns of Kerala#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": -221.45
+  },
+  {
+   "ev": "subtitle",
+   "text": "The company wants to process 2 million phones a year.",
+   "t": -220.05
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -226.6705,
+   "t": -216.6226
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -216.55
+  },
+  {
+   "ev": "strap",
+   "headline": null,
+   "kicker": null,
+   "t": -216.55
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -216.55
+  },
+  {
+   "k": "strap",
+   "at": -214.6556,
+   "ev": "pace",
+   "t": -215.6556
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": "roundup",
+   "breaking": false,
+   "roundup": {
+    "index": 0,
+    "count": 3
+   },
+   "hasImage": true,
+   "kicker": "QUICK BYTES",
+   "headline": "Rover finds layered rocks on Mars",
+   "location": null,
+   "audio": null,
+   "text": "Now, some quick bytes. A Mars rover has photographed layered rocks in what scientists believe was an ancient lake bed, according to Starfield Journal.",
+   "t": -215.6556
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -215.65
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": -215.6556,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s6c9709e0d6",
+   "card": null,
+   "t": -215.65
+  },
+  {
+   "ev": "subtitle",
+   "text": "Now, some quick bytes.",
+   "t": -215.65
+  },
+  {
+   "ev": "strap",
+   "headline": "Rover finds layered rocks on Mars",
+   "kicker": "QUICK BYTES",
+   "t": -215.65
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -215.65
+  },
+  {
+   "ev": "subtitle",
+   "text": "A Mars rover has photographed layered rocks in what scientists believe was an ancient lake bed, according to Starfield Journal.",
+   "t": -213.85
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Bitport Herald|Venice raises its sea barriers in a test before the autumn tides#0",
+   "hold": 7.3500000000000005,
+   "ev": "pace",
+   "t": -212.35
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -215.6556,
+   "t": -205.445
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -205.35
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -205.35
+  },
+  {
+   "k": "strap",
+   "at": -203.986,
+   "ev": "pace",
+   "t": -204.986
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "happy",
+   "anchor": "B",
+   "feature": "roundup",
+   "breaking": false,
+   "roundup": {
+    "index": 1,
+    "count": 3
+   },
+   "hasImage": true,
+   "kicker": "QUICK BYTES",
+   "headline": "Astronauts grow tomatoes on the space station",
+   "location": null,
+   "audio": null,
+   "text": "Astronauts on the International Space Station have harvested tomatoes grown in a small greenhouse, Starfield Journal reports.",
+   "t": -204.986
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -204.95
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Bitport Herald|Venice raises its sea barriers in a test before the autumn tides#1",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": -204.95
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": -204.986,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s10c25a368f",
+   "card": null,
+   "t": -204.95
+  },
+  {
+   "ev": "subtitle",
+   "text": "Astronauts on the International Space Station have harvested tomatoes grown in a small greenhouse, Starfield Journal reports.",
+   "t": -204.95
+  },
+  {
+   "ev": "strap",
+   "headline": "Astronauts grow tomatoes on the space station",
+   "kicker": "QUICK BYTES",
+   "t": -204.95
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -204.95
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Ledger Line|North Sea wind farm starts supplying power to 1.2 million homes#0",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": -196.75
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -204.986,
+   "t": -196.5918
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -196.55
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -196.55
+  },
+  {
+   "k": "strap",
+   "at": -195.1768,
+   "ev": "pace",
+   "t": -196.1768
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": "roundup",
+   "breaking": false,
+   "roundup": {
+    "index": 2,
+    "count": 3
+   },
+   "hasImage": true,
+   "kicker": "QUICK BYTES",
+   "headline": "Rocket launches probe to study Sun's poles",
+   "location": null,
+   "audio": null,
+   "text": "A rocket has launched a probe that will study the Sun's poles for the first time.",
+   "t": -196.1768
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -196.15
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": -196.1768,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s759a9bc1a2",
+   "card": null,
+   "t": -196.15
+  },
+  {
+   "ev": "subtitle",
+   "text": "A rocket has launched a probe that will study the Sun's poles for the first time.",
+   "t": -196.15
+  },
+  {
+   "ev": "strap",
+   "headline": "Rocket launches probe to study Sun's poles",
+   "kicker": "QUICK BYTES",
+   "t": -196.15
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -196.15
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -196.1768,
+   "t": -190.7005
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -190.65
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -190.65
+  },
+  {
+   "k": "strap",
+   "at": -188.8775,
+   "ev": "pace",
+   "t": -189.8775
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "happy",
+   "anchor": "A",
+   "feature": "lighter",
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "AND FINALLY",
+   "headline": "Medicine-carrying drones expand across Rwanda",
+   "location": "RWANDA",
+   "audio": null,
+   "text": "And finally: drones now deliver medicine to 400 health centres across Rwanda, the operator says. The average flight takes about 30 minutes, according to Circuit Weekly. Health workers order supplies by text message. Blood and vaccines make up most of the deliveries.",
+   "t": -189.8775
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -189.85
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -189.8775,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sb04f719620",
+   "card": null,
+   "t": -189.85
+  },
+  {
+   "ev": "subtitle",
+   "text": "And finally: drones now deliver medicine to 400 health centres across Rwanda, the operator says.",
+   "t": -189.85
+  },
+  {
+   "ev": "strap",
+   "headline": "Medicine-carrying drones expand across Rwanda",
+   "kicker": "AND FINALLY",
+   "t": -189.85
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -189.85
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Ledger Line|North Sea wind farm starts supplying power to 1.2 million homes#1",
+   "hold": 6.9,
+   "ev": "pace",
+   "t": -188.45
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -182.95
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": -183.0094,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sb04f719620",
+   "card": null,
+   "t": -182.95
+  },
+  {
+   "ev": "subtitle",
+   "text": "The average flight takes about 30 minutes, according to Circuit Weekly.",
+   "t": -182.95
+  },
+  {
+   "k": "ticker",
+   "id": "NEXT||NEWS IN 60 · THE HEADLINES IN A MINUTE#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": -181.55
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -178.05
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -178.0822,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sb04f719620",
+   "card": null,
+   "t": -178.05
+  },
+  {
+   "ev": "subtitle",
+   "text": "Health workers order supplies by text message.",
+   "t": -178.05
+  },
+  {
+   "ev": "subtitle",
+   "text": "Blood and vaccines make up most of the deliveries.",
+   "t": -174.95
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "partner",
+   "why": "dry",
+   "ev": "pace",
+   "t": -174.65
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Pixelburg Post|Lisbon opens a new riverside tram line#0",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": -172.45
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -189.8775,
+   "t": -171.7934
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -171.75
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -171.75
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "chat",
+   "kind": null,
+   "emotion": "happy",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": null,
+   "text": "That is what patience buys you.",
+   "t": -171.4194
+  },
+  {
+   "k": "cut",
+   "shot": "wide",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -171.35
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": -171.4194,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "sb04f719620",
+   "card": null,
+   "t": -171.35
+  },
+  {
+   "ev": "subtitle",
+   "text": "That is what patience buys you.",
+   "t": -171.35
+  },
+  {
+   "ev": "strap",
+   "headline": null,
+   "kicker": null,
+   "t": -171.35
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -171.35
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "partner",
+   "why": "turn",
+   "ev": "pace",
+   "t": -170.95
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -171.4194,
+   "t": -169.2587
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -169.25
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -169.25
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "outro",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": null,
+   "text": "That's TECH BYTES. From Ada Volt and from me, thanks for watching. More news around the clock on GLOBIT 24.",
+   "t": -168.5287
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": -168.5287,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": null,
+   "t": -168.45
+  },
+  {
+   "ev": "subtitle",
+   "text": "That's TECH BYTES.",
+   "t": -168.45
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -168.45
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "partner",
+   "why": "turn",
+   "ev": "pace",
+   "t": -167.95
+  },
+  {
+   "ev": "subtitle",
+   "text": "From Ada Volt and from me, thanks for watching.",
+   "t": -167.05
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Bitport Herald|Iceland volcano: lava fountains light up the Reykjanes sky#0",
+   "hold": 6.9,
+   "ev": "pace",
+   "t": -164.15
+  },
+  {
+   "ev": "subtitle",
+   "text": "More news around the clock on GLOBIT 24.",
+   "t": -163.85
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "nod",
+   "why": null,
+   "ev": "pace",
+   "t": -162.25
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -168.5287,
+   "t": -160.8264
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -160.75
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -160.75
+  },
+  {
+   "ev": "stinger",
+   "at": -159.8264,
+   "t": -159.75
+  },
+  {
+   "k": "cut",
+   "shot": "endcard",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -159.35
+  },
+  {
+   "ev": "shot",
+   "shot": "endcard",
+   "at": -159.4264,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "end",
+    "line1": "STAY WITH US"
+   },
+   "t": -159.35
+  },
+  {
+   "ev": "playEpisode",
+   "phase": "end",
+   "ref": -384.65,
+   "t": -156.0264
+  },
+  {
+   "ev": "playBreak",
+   "phase": "start",
+   "breakId": "kmuy8gh6qc",
+   "ads": 2,
+   "filler": false,
+   "next": {
+    "id": "news-60",
+    "title": "NEWS IN 60",
+    "ready": true
+   },
+   "t": -155.95
+  },
+  {
+   "ev": "stinger",
+   "at": -155.95,
+   "t": -155.85
+  },
+  {
+   "k": "cut",
+   "shot": "ident",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -155.55
+  },
+  {
+   "ev": "shot",
+   "shot": "ident",
+   "at": -155.55,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "promo",
+    "next": null
+   },
+   "t": -155.55
+  },
+  {
+   "ev": "clip",
+   "at": -155.03,
+   "duration": 1.7225,
+   "offset": 0,
+   "t": -155.15
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -155.05
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -153.25
+  },
+  {
+   "k": "cut",
+   "shot": "ad",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -151.55
+  },
+  {
+   "ev": "shot",
+   "shot": "ad",
+   "at": -151.55,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "ad",
+    "ad": "black",
+    "line": -1
+   },
+   "t": -151.55
+  },
+  {
+   "ev": "playAd",
+   "phase": "start",
+   "adId": "hi-res-gym",
+   "brand": "HI-RES GYM",
+   "duration": 24,
+   "t": -151.25
+  },
+  {
+   "k": "cut",
+   "shot": "ad",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -151.25
+  },
+  {
+   "ev": "shot",
+   "shot": "ad",
+   "at": -151.25,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "ad",
+    "ad": "hi-res-gym",
+    "line": -1
+   },
+   "t": -151.25
+  },
+  {
+   "ev": "clip",
+   "at": -150.33,
+   "duration": 1.7075,
+   "offset": 0,
+   "t": -150.45
+  },
+  {
+   "ev": "adLine",
+   "ad": "hi-res-gym",
+   "line": 0,
+   "t": -150.45
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -150.45
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -148.55
+  },
+  {
+   "ev": "clip",
+   "at": -146.53,
+   "duration": 0.8275,
+   "offset": 0,
+   "t": -146.65
+  },
+  {
+   "ev": "adLine",
+   "ad": "hi-res-gym",
+   "line": 1,
+   "t": -146.65
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -146.65
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -145.65
+  },
+  {
+   "ev": "clip",
+   "at": -142.73,
+   "duration": 1.5,
+   "offset": 0,
+   "t": -142.85
+  },
+  {
+   "ev": "adLine",
+   "ad": "hi-res-gym",
+   "line": 2,
+   "t": -142.85
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -142.85
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -141.15
+  },
+  {
+   "ev": "clip",
+   "at": -140.73,
+   "duration": 1.8525,
+   "offset": 0,
+   "t": -140.85
+  },
+  {
+   "ev": "adLine",
+   "ad": "hi-res-gym",
+   "line": 3,
+   "t": -140.85
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -140.85
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -138.85
+  },
+  {
+   "ev": "clip",
+   "at": -131.13,
+   "duration": 3.9375,
+   "offset": 0,
+   "t": -131.25
+  },
+  {
+   "ev": "adLine",
+   "ad": "hi-res-gym",
+   "line": 4,
+   "t": -131.25
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -131.25
+  },
+  {
+   "ev": "playAd",
+   "phase": "end",
+   "ref": -151.25,
+   "t": -127.1925
+  },
+  {
+   "k": "cut",
+   "shot": "ad",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -127.15
+  },
+  {
+   "ev": "shot",
+   "shot": "ad",
+   "at": -127.1925,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "ad",
+    "ad": "black",
+    "line": -1
+   },
+   "t": -127.15
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -127.15
+  },
+  {
+   "ev": "playAd",
+   "phase": "start",
+   "adId": "bitfizz-cola",
+   "brand": "BITFIZZ RESERVE",
+   "duration": 24.6,
+   "t": -126.8925
+  },
+  {
+   "k": "cut",
+   "shot": "ad",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -126.85
+  },
+  {
+   "ev": "shot",
+   "shot": "ad",
+   "at": -126.8925,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "ad",
+    "ad": "bitfizz-cola",
+    "line": -1
+   },
+   "t": -126.85
+  },
+  {
+   "ev": "clip",
+   "at": -125.9725,
+   "duration": 2.215125,
+   "offset": 0,
+   "t": -126.0925
+  },
+  {
+   "ev": "adLine",
+   "ad": "bitfizz-cola",
+   "line": 0,
+   "t": -126.05
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -126.05
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -123.75
+  },
+  {
+   "ev": "clip",
+   "at": -122.2725,
+   "duration": 3.312625,
+   "offset": 0,
+   "t": -122.3925
+  },
+  {
+   "ev": "adLine",
+   "ad": "bitfizz-cola",
+   "line": 1,
+   "t": -122.35
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -122.35
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -118.95
+  },
+  {
+   "ev": "clip",
+   "at": -117.9725,
+   "duration": 3.385125,
+   "offset": 0,
+   "t": -118.0925
+  },
+  {
+   "ev": "adLine",
+   "ad": "bitfizz-cola",
+   "line": 2,
+   "t": -118.05
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -118.05
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -114.55
+  },
+  {
+   "ev": "clip",
+   "at": -112.7725,
+   "duration": 4.3875,
+   "offset": 0,
+   "t": -112.8925
+  },
+  {
+   "ev": "adLine",
+   "ad": "bitfizz-cola",
+   "line": 3,
+   "t": -112.85
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -112.85
+  },
+  {
+   "ev": "clip",
+   "at": -108.265,
+   "duration": 1.697,
+   "offset": 0,
+   "t": -108.385
+  },
+  {
+   "ev": "adLine",
+   "ad": "bitfizz-cola",
+   "line": 4,
+   "t": -108.35
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -106.55
+  },
+  {
+   "ev": "playAd",
+   "phase": "end",
+   "ref": -126.8925,
+   "t": -102.2925
+  },
+  {
+   "k": "cut",
+   "shot": "ad",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -102.25
+  },
+  {
+   "ev": "shot",
+   "shot": "ad",
+   "at": -102.2925,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "ad",
+    "ad": "black",
+    "line": -1
+   },
+   "t": -102.25
+  },
+  {
+   "k": "cut",
+   "shot": "promo",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -101.95
+  },
+  {
+   "ev": "shot",
+   "shot": "promo",
+   "at": -101.9925,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "promo",
+    "next": "news-60"
+   },
+   "t": -101.95
+  },
+  {
+   "ev": "playBreak",
+   "phase": "end",
+   "ref": -155.95,
+   "t": -96.4925
+  },
+  {
+   "ev": "playEpisode",
+   "phase": "start",
+   "episodeId": "emuy7o4or2",
+   "programId": "news-60",
+   "title": "NEWS IN 60",
+   "replay": false,
+   "cast": {
+    "A": "sam"
+   },
+   "segments": [
+    {
+     "type": "intro",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 34
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "WEATHER",
+     "headline": "Seville records 44 degrees",
+     "location": "SEVILLE, SPAIN",
+     "audio": null,
+     "chars": 232
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "ECONOMY",
+     "headline": "Oil prices slide",
+     "location": null,
+     "audio": null,
+     "chars": 156
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "ENERGY",
+     "headline": "North Sea wind farm goes live",
+     "location": null,
+     "audio": null,
+     "chars": 165
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "OCEANS",
+     "headline": "Scientists map ocean floor",
+     "location": null,
+     "audio": null,
+     "chars": 172
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "WILDLIFE",
+     "headline": "New glowing mushroom species found",
+     "location": "BRAZIL",
+     "audio": null,
+     "chars": 164
+    },
+    {
+     "type": "outro",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 45
+    }
+   ],
+   "t": -96.45
+  },
+  {
+   "ev": "stinger",
+   "at": -96.45,
+   "t": -96.35
+  },
+  {
+   "k": "cut",
+   "shot": "open",
+   "framing": "solo-wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -96.05
+  },
+  {
+   "ev": "shot",
+   "shot": "open",
+   "at": -96.05,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": null,
+   "card": null,
+   "t": -96.05
+  },
+  {
+   "ev": "program",
+   "programId": "news-60",
+   "title": "NEWS IN 60",
+   "t": -96.05
+  },
+  {
+   "k": "cut",
+   "shot": "wide",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -92.05
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": -92.05,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": null,
+   "card": null,
+   "t": -92.05
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "intro",
+   "kind": null,
+   "emotion": "serious",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": null,
+   "text": "This is NEWS IN 60. I'm Sam Night.",
+   "t": -91.75
+  },
+  {
+   "ev": "subtitle",
+   "text": "This is NEWS IN 60.",
+   "t": -91.65
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -91.65
+  },
+  {
+   "ev": "subtitle",
+   "text": "I'm Sam Night.",
+   "t": -90.05
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "nod",
+   "why": null,
+   "ev": "pace",
+   "t": -89.75
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -91.75,
+   "t": -89.1211
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -89.05
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -89.05
+  },
+  {
+   "k": "strap",
+   "at": -87.05,
+   "ev": "pace",
+   "t": -88.6791
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "serious",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "WEATHER",
+   "headline": "Seville records 44 degrees",
+   "location": "SEVILLE, SPAIN",
+   "audio": null,
+   "text": "In Seville, temperatures reached 44 degrees Celsius on Wednesday, the highest of the summer. Doctors advise drinking water often and staying in the shade. Some schools have moved lessons to the early morning, Bitport Herald reports.",
+   "t": -88.6791
+  },
+  {
+   "ev": "subtitle",
+   "text": "In Seville, temperatures reached 44 degrees Celsius on Wednesday, the highest of the summer.",
+   "t": -88.65
+  },
+  {
+   "ev": "strap",
+   "headline": "Seville records 44 degrees",
+   "kicker": "WEATHER",
+   "t": -88.65
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -88.65
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "mcu-l",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -88.05
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -88.05,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": "s47f1b33404",
+   "card": null,
+   "t": -88.05
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "solo-wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -81.95
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": -82.0085,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": "s47f1b33404",
+   "card": null,
+   "t": -81.95
+  },
+  {
+   "ev": "subtitle",
+   "text": "Doctors advise drinking water often and staying in the shade.",
+   "t": -81.95
+  },
+  {
+   "ev": "subtitle",
+   "text": "Some schools have moved lessons to the early morning, Bitport Herald reports.",
+   "t": -77.85
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "mcu-l",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -76.95
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -76.9791,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": "s47f1b33404",
+   "card": null,
+   "t": -76.95
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -88.6791,
+   "t": -72.9262
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "notes",
+   "why": "gap",
+   "ev": "pace",
+   "t": -72.85
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -72.85
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -72.85
+  },
+  {
+   "k": "strap",
+   "at": -71.3302,
+   "ev": "pace",
+   "t": -72.3302
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "ECONOMY",
+   "headline": "Oil prices slide",
+   "location": null,
+   "audio": null,
+   "text": "Oil prices fell for a third day as traders expect weaker demand this winter. Brent crude dropped 2 percent to 71 dollars a barrel, according to Ledger Line.",
+   "t": -72.3302
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -72.3302,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": "sd05fe60c95",
+   "card": null,
+   "t": -72.25
+  },
+  {
+   "ev": "subtitle",
+   "text": "Oil prices fell for a third day as traders expect weaker demand this winter.",
+   "t": -72.25
+  },
+  {
+   "ev": "strap",
+   "headline": "Oil prices slide",
+   "kicker": "ECONOMY",
+   "t": -72.25
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -72.25
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "solo-wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -67.15
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": -67.1921,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": "sd05fe60c95",
+   "card": null,
+   "t": -67.15
+  },
+  {
+   "ev": "subtitle",
+   "text": "Brent crude dropped 2 percent to 71 dollars a barrel, according to Ledger Line.",
+   "t": -67.15
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -72.3302,
+   "t": -61.3999
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "notes",
+   "why": "gap",
+   "ev": "pace",
+   "t": -61.35
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -61.35
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -61.35
+  },
+  {
+   "k": "strap",
+   "at": -59.8069,
+   "ev": "pace",
+   "t": -60.8069
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "ENERGY",
+   "headline": "North Sea wind farm goes live",
+   "location": null,
+   "audio": null,
+   "text": "An offshore wind farm in the North Sea has started supplying electricity, Ledger Line reports. The developer says its 140 turbines can power about 1.2 million homes.",
+   "t": -60.8069
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "mcu-l",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -60.75
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -60.8069,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": "sadae5c525f",
+   "card": null,
+   "t": -60.75
+  },
+  {
+   "ev": "subtitle",
+   "text": "An offshore wind farm in the North Sea has started supplying electricity, Ledger Line reports.",
+   "t": -60.75
+  },
+  {
+   "ev": "strap",
+   "headline": "North Sea wind farm goes live",
+   "kicker": "ENERGY",
+   "t": -60.75
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -60.75
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "solo-wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -54.45
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": -54.5194,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": "sadae5c525f",
+   "card": null,
+   "t": -54.45
+  },
+  {
+   "ev": "subtitle",
+   "text": "The developer says its 140 turbines can power about 1.2 million homes.",
+   "t": -54.45
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -60.8069,
+   "t": -48.4718
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -48.45
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -48.45
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "notes",
+   "why": "gap",
+   "ev": "pace",
+   "t": -48.35
+  },
+  {
+   "k": "strap",
+   "at": -46.9238,
+   "ev": "pace",
+   "t": -47.9238
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "OCEANS",
+   "headline": "Scientists map ocean floor",
+   "location": null,
+   "audio": null,
+   "text": "A research ship has mapped 50,000 square kilometres of sea floor near Antarctica. The maps reveal underwater canyons and an extinct volcano, according to Starfield Journal.",
+   "t": -47.9238
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "mcu-l",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -47.85
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -47.9238,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": "s4f4b5d33da",
+   "card": null,
+   "t": -47.85
+  },
+  {
+   "ev": "subtitle",
+   "text": "A research ship has mapped 50,000 square kilometres of sea floor near Antarctica.",
+   "t": -47.85
+  },
+  {
+   "ev": "strap",
+   "headline": "Scientists map ocean floor",
+   "kicker": "OCEANS",
+   "t": -47.85
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -47.85
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "solo-wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -41.95
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": -41.9556,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": "s4f4b5d33da",
+   "card": null,
+   "t": -41.95
+  },
+  {
+   "ev": "subtitle",
+   "text": "The maps reveal underwater canyons and an extinct volcano, according to Starfield Journal.",
+   "t": -41.95
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -47.9238,
+   "t": -36.1634
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -36.15
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -36.15
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "notes",
+   "why": "gap",
+   "ev": "pace",
+   "t": -36.05
+  },
+  {
+   "k": "strap",
+   "at": -34.6174,
+   "ev": "pace",
+   "t": -35.6174
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "WILDLIFE",
+   "headline": "New glowing mushroom species found",
+   "location": "BRAZIL",
+   "audio": null,
+   "text": "Biologists have described a new species of glowing mushroom found in the Atlantic forest of Brazil. It emits a soft green light at night, Starfield Journal reports.",
+   "t": -35.6174
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "mcu-l",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -35.55
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": -35.6174,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": "s5fc50077e6",
+   "card": null,
+   "t": -35.55
+  },
+  {
+   "ev": "subtitle",
+   "text": "Biologists have described a new species of glowing mushroom found in the Atlantic forest of Brazil.",
+   "t": -35.55
+  },
+  {
+   "ev": "strap",
+   "headline": "New glowing mushroom species found",
+   "kicker": "WILDLIFE",
+   "t": -35.55
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -35.55
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "solo-wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -28.95
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": -29.0106,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": "s5fc50077e6",
+   "card": null,
+   "t": -28.95
+  },
+  {
+   "ev": "subtitle",
+   "text": "It emits a soft green light at night, Starfield Journal reports.",
+   "t": -28.95
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -35.6174,
+   "t": -24.8787
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "notes",
+   "why": "gap",
+   "ev": "pace",
+   "t": -24.85
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -24.85
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -24.85
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "outro",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": null,
+   "text": "That's the minute. Stay with us on GLOBIT 24.",
+   "t": -24.3697
+  },
+  {
+   "k": "cut",
+   "shot": "wide",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -24.35
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": -24.3697,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": null,
+   "card": null,
+   "t": -24.35
+  },
+  {
+   "ev": "subtitle",
+   "text": "That's the minute.",
+   "t": -24.35
+  },
+  {
+   "ev": "strap",
+   "headline": null,
+   "kicker": null,
+   "t": -24.35
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -24.35
+  },
+  {
+   "ev": "subtitle",
+   "text": "Stay with us on GLOBIT 24.",
+   "t": -22.85
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": -24.3697,
+   "t": -20.6553
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -20.65
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -20.65
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "papers",
+   "why": null,
+   "ev": "pace",
+   "t": -20.45
+  },
+  {
+   "ev": "stinger",
+   "at": -19.6553,
+   "t": -19.65
+  },
+  {
+   "k": "cut",
+   "shot": "endcard",
+   "framing": "solo-wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -19.25
+  },
+  {
+   "ev": "shot",
+   "shot": "endcard",
+   "at": -19.2553,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "end",
+    "line1": "STAY WITH US"
+   },
+   "t": -19.25
+  },
+  {
+   "ev": "playEpisode",
+   "phase": "end",
+   "ref": -96.45,
+   "t": -16.2553
+  },
+  {
+   "ev": "playBreak",
+   "phase": "start",
+   "breakId": "kmuy8hyh8d",
+   "ads": 1,
+   "filler": false,
+   "next": {
+    "id": "cosmos",
+    "title": "COSMOS DESK",
+    "ready": true
+   },
+   "t": -16.25
+  },
+  {
+   "ev": "stinger",
+   "at": -16.25,
+   "t": -16.15
+  },
+  {
+   "k": "cut",
+   "shot": "ident",
+   "framing": "solo-wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -15.85
+  },
+  {
+   "ev": "shot",
+   "shot": "ident",
+   "at": -15.85,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "promo",
+    "next": null
+   },
+   "t": -15.85
+  },
+  {
+   "ev": "clip",
+   "at": -15.33,
+   "duration": 1.4725,
+   "offset": 0,
+   "t": -15.45
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -15.35
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -13.85
+  },
+  {
+   "k": "cut",
+   "shot": "ad",
+   "framing": "solo-wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -11.85
+  },
+  {
+   "ev": "shot",
+   "shot": "ad",
+   "at": -11.85,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "ad",
+    "ad": "black",
+    "line": -1
+   },
+   "t": -11.85
+  },
+  {
+   "ev": "playAd",
+   "phase": "start",
+   "adId": "cloudbrella",
+   "brand": "CLOUDBRELLA",
+   "duration": 25.5,
+   "t": -11.55
+  },
+  {
+   "k": "cut",
+   "shot": "ad",
+   "framing": "solo-wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -11.55
+  },
+  {
+   "ev": "shot",
+   "shot": "ad",
+   "at": -11.55,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "ad",
+    "ad": "cloudbrella",
+    "line": -1
+   },
+   "t": -11.55
+  },
+  {
+   "ev": "clip",
+   "at": -10.93,
+   "duration": 2.59,
+   "offset": 0,
+   "t": -11.05
+  },
+  {
+   "ev": "adLine",
+   "ad": "cloudbrella",
+   "line": 0,
+   "t": -10.95
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -10.95
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -8.25
+  },
+  {
+   "ev": "clip",
+   "at": -6.98,
+   "duration": 4.1775,
+   "offset": 0,
+   "t": -7.1
+  },
+  {
+   "ev": "adLine",
+   "ad": "cloudbrella",
+   "line": 1,
+   "t": -7.05
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": -7.05
+  },
+  {
+   "ev": "clip",
+   "at": -2.6825,
+   "duration": 1.6075,
+   "offset": 0,
+   "t": -2.8025
+  },
+  {
+   "ev": "adLine",
+   "ad": "cloudbrella",
+   "line": 2,
+   "t": -2.75
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -1.05
+  },
+  {
+   "ev": "clip",
+   "at": 0.07,
+   "duration": 1.665,
+   "offset": 0,
+   "t": -0.05
+  },
+  {
+   "ev": "adLine",
+   "ad": "cloudbrella",
+   "line": 3,
+   "t": 0
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 0
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 1.767
+  },
+  {
+   "ev": "clip",
+   "at": 3.17,
+   "duration": 2.41,
+   "offset": 0,
+   "t": 3.05
+  },
+  {
+   "ev": "adLine",
+   "ad": "cloudbrella",
+   "line": 4,
+   "t": 3.067
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 3.067
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 5.6
+  },
+  {
+   "ev": "clip",
+   "at": 6.37,
+   "duration": 2.6925,
+   "offset": 0,
+   "t": 6.25
+  },
+  {
+   "ev": "adLine",
+   "ad": "cloudbrella",
+   "line": 5,
+   "t": 6.267
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 6.267
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 9.067
+  },
+  {
+   "ev": "clip",
+   "at": 10.17,
+   "duration": 2.6275,
+   "offset": 0,
+   "t": 10.05
+  },
+  {
+   "ev": "adLine",
+   "ad": "cloudbrella",
+   "line": 6,
+   "t": 10.067
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 10.067
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 12.8
+  },
+  {
+   "ev": "playAd",
+   "phase": "end",
+   "ref": -11.55,
+   "t": 13.95
+  },
+  {
+   "k": "cut",
+   "shot": "ad",
+   "framing": "solo-wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 13.967
+  },
+  {
+   "ev": "shot",
+   "shot": "ad",
+   "at": 13.95,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "ad",
+    "ad": "black",
+    "line": -1
+   },
+   "t": 13.967
+  },
+  {
+   "k": "cut",
+   "shot": "promo",
+   "framing": "solo-wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 14.267
+  },
+  {
+   "ev": "shot",
+   "shot": "promo",
+   "at": 14.25,
+   "programId": "news-60",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "promo",
+    "next": "cosmos"
+   },
+   "t": 14.267
+  },
+  {
+   "ev": "playBreak",
+   "phase": "end",
+   "ref": -16.25,
+   "t": 19.75
+  },
+  {
+   "ev": "playEpisode",
+   "phase": "start",
+   "episodeId": "emuy7s53n3",
+   "programId": "cosmos",
+   "title": "COSMOS DESK",
+   "replay": false,
+   "cast": {
+    "A": "nova",
+    "B": "unit8"
+   },
+   "segments": [
+    {
+     "type": "intro",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 212
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "ASTRONOMY",
+     "headline": "Solar eclipse visible across northern Spain",
+     "location": "NORTHERN SPAIN",
+     "audio": null,
+     "chars": 237
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 37
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 30
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": "number",
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "NUMBER OF THE DAY",
+     "headline": "Study: city trees cut summer temperatures",
+     "location": null,
+     "audio": null,
+     "chars": 192
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "WILDLIFE",
+     "headline": "Bees use sun as compass even on cloudy days",
+     "location": null,
+     "audio": null,
+     "chars": 186
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "HISTORY",
+     "headline": "Ancient footprints found on a beach in Wales",
+     "location": "WALES",
+     "audio": null,
+     "chars": 295
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 77
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "CLIMATE",
+     "headline": "Glacier in the Alps shrinks by 3 percent",
+     "location": "ALPS",
+     "audio": null,
+     "chars": 400
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 27
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 87
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "WILDLIFE",
+     "headline": "Giant tortoises return to a Galápagos island",
+     "location": "GALÁPAGOS, ECUADOR",
+     "audio": null,
+     "chars": 373
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "ASTRONOMY",
+     "headline": "Telescope in Chile spots water vapour",
+     "location": "CHILE",
+     "audio": null,
+     "chars": 119
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 27
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 117
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "happy",
+     "anchor": "A",
+     "feature": "lighter",
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "AND FINALLY",
+     "headline": "Comet will pass close enough to see",
+     "location": null,
+     "audio": null,
+     "chars": 269
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 34
+    },
+    {
+     "type": "outro",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 95
+    }
+   ],
+   "t": 19.767
+  },
+  {
+   "ev": "stinger",
+   "at": 19.767,
+   "t": 19.8
+  },
+  {
+   "k": "cut",
+   "shot": "open",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 20.167
+  },
+  {
+   "ev": "shot",
+   "shot": "open",
+   "at": 20.167,
+   "programId": "cosmos",
+   "focus": "A",
+   "storyId": null,
+   "card": null,
+   "t": 20.167
+  },
+  {
+   "ev": "program",
+   "programId": "cosmos",
+   "title": "COSMOS DESK",
+   "t": 20.167
+  },
+  {
+   "k": "cut",
+   "shot": "montage",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 24.167
+  },
+  {
+   "ev": "shot",
+   "shot": "montage",
+   "at": 24.167,
+   "programId": "cosmos",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "montage",
+    "index": 0
+   },
+   "t": 24.167
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "intro",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": null,
+   "text": "Solar eclipse to be visible across northern Spain next August. Also coming up: our number of the day. Later: bees use the sun as a compass even on cloudy days. This is COSMOS DESK. I'm Dr Nova Reyes, with UNIT-8.",
+   "t": 24.867
+  },
+  {
+   "ev": "subtitle",
+   "text": "Solar eclipse to be visible across northern Spain next August.",
+   "t": 24.9
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 24.9
+  },
+  {
+   "k": "cut",
+   "shot": "wide",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 29.333
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": 29.314,
+   "programId": "cosmos",
+   "focus": "A",
+   "storyId": null,
+   "card": null,
+   "t": 29.333
+  },
+  {
+   "ev": "subtitle",
+   "text": "Also coming up: our number of the day.",
+   "t": 29.333
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "partner",
+   "why": "turn",
+   "ev": "pace",
+   "t": 29.6
+  },
+  {
+   "ev": "subtitle",
+   "text": "Later: bees use the sun as a compass even on cloudy days.",
+   "t": 32.167
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Bitport Herald|Iceland volcano: lava fountains light up the Reykjanes sky#0",
+   "hold": 6.9,
+   "ev": "pace",
+   "t": 32.433
+  },
+  {
+   "ev": "subtitle",
+   "text": "This is COSMOS DESK.",
+   "t": 36.5
+  },
+  {
+   "ev": "subtitle",
+   "text": "I'm Dr Nova Reyes, with UNIT-8.",
+   "t": 38.667
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Bitport Herald|Iceland volcano: lava fountains light up the Reykjanes sky#1",
+   "hold": 7.3500000000000005,
+   "ev": "pace",
+   "t": 39.333
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "nod",
+   "why": null,
+   "ev": "pace",
+   "t": 39.433
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "B",
+   "name": "nod",
+   "why": "nod-greeting",
+   "ev": "pace",
+   "t": 40.7
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 24.867,
+   "t": 41.618
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 41.633
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 41.633
+  },
+  {
+   "k": "strap",
+   "at": 43.37,
+   "ev": "pace",
+   "t": 42.37
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "ASTRONOMY",
+   "headline": "Solar eclipse visible across northern Spain",
+   "location": "NORTHERN SPAIN",
+   "audio": null,
+   "text": "A total solar eclipse will be visible across northern Spain next August, Starfield Journal reports. Astronomers say the shadow will cross Bilbao and Valencia. Hotels along the path of the shadow report that many rooms are already booked.",
+   "t": 42.37
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "mcu-l",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 42.4
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 42.37,
+   "programId": "cosmos",
+   "focus": "A",
+   "storyId": "s654d06e121",
+   "card": null,
+   "t": 42.4
+  },
+  {
+   "ev": "subtitle",
+   "text": "A total solar eclipse will be visible across northern Spain next August, Starfield Journal reports.",
+   "t": 42.4
+  },
+  {
+   "ev": "strap",
+   "headline": "Solar eclipse visible across northern Spain",
+   "kicker": "ASTRONOMY",
+   "t": 42.4
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 42.4
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Ledger Line|Oil prices slide as global demand cools#0",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 46.667
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "point_screen",
+   "why": null,
+   "ev": "pace",
+   "t": 47.833
+  },
+  {
+   "ev": "subtitle",
+   "text": "Astronomers say the shadow will cross Bilbao and Valencia.",
+   "t": 48.733
+  },
+  {
+   "k": "cut",
+   "shot": "map",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 50.7
+  },
+  {
+   "ev": "shot",
+   "shot": "map",
+   "at": 50.67,
+   "programId": "cosmos",
+   "focus": "A",
+   "storyId": "s654d06e121",
+   "card": {
+    "kind": "map",
+    "place": "NORTHERN SPAIN"
+   },
+   "t": 50.7
+  },
+  {
+   "ev": "subtitle",
+   "text": "Hotels along the path of the shadow report that many rooms are already booked.",
+   "t": 52.9
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Circuit Weekly|Chipmaker unveils a laptop processor with all-day battery life#0",
+   "hold": 7.3500000000000005,
+   "ev": "pace",
+   "t": 54.933
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 42.37,
+   "t": 57.52
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 57.533
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 57.533
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "chat",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": null,
+   "text": "Northern Spain. I will not forget it.",
+   "t": 58.143
+  },
+  {
+   "k": "cut",
+   "shot": "wide",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 58.167
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": 58.143,
+   "programId": "cosmos",
+   "focus": "B",
+   "storyId": "s654d06e121",
+   "card": null,
+   "t": 58.167
+  },
+  {
+   "ev": "subtitle",
+   "text": "Northern Spain.",
+   "t": 58.167
+  },
+  {
+   "ev": "strap",
+   "headline": null,
+   "kicker": null,
+   "t": 58.167
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 58.167
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "partner",
+   "why": "toss",
+   "ev": "pace",
+   "t": 59.467
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "partner",
+   "why": "toss-meet",
+   "ev": "pace",
+   "t": 59.6
+  },
+  {
+   "ev": "subtitle",
+   "text": "I will not forget it.",
+   "t": 59.933
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "B",
+   "name": "nod",
+   "why": null,
+   "ev": "pace",
+   "t": 60.4
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 58.143,
+   "t": 61.671
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 61.7
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 61.7
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "chat",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": null,
+   "text": "UNIT-8, our number of the day.",
+   "t": 62.138
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": 62.138,
+   "programId": "cosmos",
+   "focus": "A",
+   "storyId": "s654d06e121",
+   "card": null,
+   "t": 62.167
+  },
+  {
+   "ev": "subtitle",
+   "text": "UNIT-8, our number of the day.",
+   "t": 62.167
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 62.167
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "partner",
+   "why": "cont+toss",
+   "ev": "pace",
+   "t": 62.267
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Circuit Weekly|Chipmaker unveils a laptop processor with all-day battery life#1",
+   "hold": 6.9,
+   "ev": "pace",
+   "t": 62.3
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "partner",
+   "why": "toss",
+   "ev": "pace",
+   "t": 63.033
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 62.138,
+   "t": 64.573
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 64.6
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 64.6
+  },
+  {
+   "k": "strap",
+   "at": 67.638,
+   "ev": "pace",
+   "t": 65.337
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": "number",
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "NUMBER OF THE DAY",
+   "headline": "Study: city trees cut summer temperatures",
+   "location": null,
+   "audio": null,
+   "text": "Our number of the day: about 2. A study of 90 European cities found that streets with many trees were about 2 degrees cooler in summer. Researchers say parks also reduced heat-related illness.",
+   "t": 65.337
+  },
+  {
+   "ev": "subtitle",
+   "text": "Our number of the day: about 2.",
+   "t": 65.367
+  },
+  {
+   "ev": "strap",
+   "headline": "Study: city trees cut summer temperatures",
+   "kicker": "NUMBER OF THE DAY",
+   "t": 65.367
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 65.367
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "partner",
+   "why": "cont",
+   "ev": "pace",
+   "t": 65.467
+  },
+  {
+   "k": "cut",
+   "shot": "fact",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 66.667
+  },
+  {
+   "ev": "shot",
+   "shot": "fact",
+   "at": 66.638,
+   "programId": "cosmos",
+   "focus": "B",
+   "storyId": "s400c7dfa97",
+   "card": {
+    "kind": "fact",
+    "fact": "ABOUT 2 DEGREES COOLER"
+   },
+   "t": 66.667
+  },
+  {
+   "ev": "subtitle",
+   "text": "A study of 90 European cities found that streets with many trees were about 2 degrees cooler in summer.",
+   "t": 67.967
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Starfield Journal|Rocket launches a probe to study the Sun's poles#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": 69.167
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "mcu-r",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 71.167
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 71.138,
+   "programId": "cosmos",
+   "focus": "B",
+   "storyId": "s400c7dfa97",
+   "card": null,
+   "t": 71.167
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "B",
+   "name": "nod",
+   "why": null,
+   "ev": "pace",
+   "t": 73.1
+  },
+  {
+   "ev": "subtitle",
+   "text": "Researchers say parks also reduced heat-related illness.",
+   "t": 75.3
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "notes",
+   "why": "prep",
+   "ev": "pace",
+   "t": 77.433
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Pixelburg Post|Kenya switches on its largest solar farm near Nairobi#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": 78.333
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 65.337,
+   "t": 79.432
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 79.433
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 79.433
+  },
+  {
+   "k": "strap",
+   "at": 81.284,
+   "ev": "pace",
+   "t": 80.284
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "WILDLIFE",
+   "headline": "Bees use sun as compass even on cloudy days",
+   "location": null,
+   "audio": null,
+   "text": "A new study shows honeybees can find the position of the sun through clouds using polarised light. The finding explains how they navigate in poor weather, according to Starfield Journal.",
+   "t": 80.284
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "mcu-l",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 80.3
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 80.284,
+   "programId": "cosmos",
+   "focus": "A",
+   "storyId": "s3aa751ad7f",
+   "card": null,
+   "t": 80.3
+  },
+  {
+   "ev": "subtitle",
+   "text": "A new study shows honeybees can find the position of the sun through clouds using polarised light.",
+   "t": 80.3
+  },
+  {
+   "ev": "strap",
+   "headline": "Bees use sun as compass even on cloudy days",
+   "kicker": "WILDLIFE",
+   "t": 80.3
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 80.3
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "raise_hand",
+   "why": null,
+   "ev": "pace",
+   "t": 81
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 86.633
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": 86.631,
+   "programId": "cosmos",
+   "focus": "A",
+   "storyId": "s3aa751ad7f",
+   "card": null,
+   "t": 86.633
+  },
+  {
+   "ev": "subtitle",
+   "text": "The finding explains how they navigate in poor weather, according to Starfield Journal.",
+   "t": 86.633
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Bitport Herald|Thousands ride Lisbon's new tram on its first day#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": 87.467
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "notes",
+   "why": "prep",
+   "ev": "pace",
+   "t": 90.033
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 80.284,
+   "t": 91.618
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 91.633
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 91.633
+  },
+  {
+   "k": "strap",
+   "at": 93.407,
+   "ev": "pace",
+   "t": 92.407
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "HISTORY",
+   "headline": "Ancient footprints found on a beach in Wales",
+   "location": "WALES",
+   "audio": null,
+   "text": "Thanks, Nova. Storms have uncovered footprints left on a beach in Wales about 7,000 years ago. The team warns that the next storm could wash them away. Researchers say adults and children walked there together. The prints are preserved in a layer of hardened mud that is usually covered by sand.",
+   "t": 92.407
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "mcu-r",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 92.433
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 92.407,
+   "programId": "cosmos",
+   "focus": "B",
+   "storyId": "sce8918c6db",
+   "card": null,
+   "t": 92.433
+  },
+  {
+   "ev": "subtitle",
+   "text": "Thanks, Nova.",
+   "t": 92.433
+  },
+  {
+   "ev": "strap",
+   "headline": "Ancient footprints found on a beach in Wales",
+   "kicker": "HISTORY",
+   "t": 92.433
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 92.433
+  },
+  {
+   "ev": "subtitle",
+   "text": "Storms have uncovered footprints left on a beach in Wales about 7,000 years ago.",
+   "t": 94
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "B",
+   "name": "nod",
+   "why": null,
+   "ev": "pace",
+   "t": 95.467
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Ledger Line|Bank of Canada holds interest rates at 3.5 percent#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": 96.633
+  },
+  {
+   "k": "cut",
+   "shot": "map",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 97.733
+  },
+  {
+   "ev": "shot",
+   "shot": "map",
+   "at": 97.707,
+   "programId": "cosmos",
+   "focus": "B",
+   "storyId": "sce8918c6db",
+   "card": {
+    "kind": "map",
+    "place": "WALES"
+   },
+   "t": 97.733
+  }
+ ],
+ "reports": {
+  "mix": {
+   "seconds": 100,
+   "sampleRate": 48000,
+   "voiceClips": 18,
+   "bedRider": {
+    "voiceLUFS": -15.1,
+    "baseGainDb": 1.7,
+    "targetUnderDb": -18,
+    "window": [
+     -20,
+     -16
+    ],
+    "underSpeech": {
+     "regions": 4,
+     "median": -18,
+     "p10": -19.2,
+     "p90": -17,
+     "outsideWindow": 0
+    },
+    "pauses": {
+     "lifted": 3,
+     "medianLiftDb": 3.8,
+     "withBed": 3,
+     "median": -11.8,
+     "p90": -11.3
+    }
+   },
+   "bedLevel": {
+    "regions": 5,
+    "underVoiceDb": -17.4
+   },
+   "bedDuckDb": {
+    "regions": 5,
+    "median": -6.6,
+    "weakest": -6.5
+   },
+   "quiet": [
+    {
+     "kind": "ad",
+     "from": -10.55,
+     "to": 13.950000000000058,
+     "bedRmsDb": -240
+    }
+   ],
+   "roomTone": {
+    "db": -58,
+    "windows": [
+     [
+      24.17,
+      100
+     ]
+    ]
+   },
+   "stemsLUFS": {
+    "voice": -18.2,
+    "webaudio": -17.4,
+    "beds": -32.2
+   },
+   "raw": {
+    "I": -15.5,
+    "LRA": 3.9,
+    "TP": -3.9
+   },
+   "final": {
+    "I": -16.1,
+    "LRA": 3.9,
+    "TP": -4.4,
+    "gainDb": -0.5,
+    "ceilingDb": -2.2,
+    "limitedSamples": 0,
+    "maxGainReductionDb": 0,
+    "attempt": 1
+   },
+   "aac": "C:\\Users\\movil\\PixelNews\\LiveNews\\docs\\roadmap\\critique\\renders\\r32\\show.work\\mix.m4a",
+   "silentRuns": {
+    "floorDb": -70,
+    "minSeconds": 0.25,
+    "count": 0,
+    "runs": []
+   }
+  },
+  "sync": {
+   "stingers": [
+    {
+     "at": 19.767,
+     "soundStartMs": 159,
+     "cut": 20.167,
+     "thumpVsCutMs": 6
+    }
+   ],
+   "captions": [
+    {
+     "at": 24.9,
+     "voiceStart": 24.972,
+     "firstWord": 24.984,
+     "leadMs": 84,
+     "text": "Solar eclipse to be visible across northern Spain next Augus"
+    },
+    {
+     "at": 29.333,
+     "voiceStart": 29.359,
+     "firstWord": 29.371,
+     "leadMs": 38,
+     "text": "Also coming up: our number of the day."
+    },
+    {
+     "at": 32.167,
+     "voiceStart": 32.207,
+     "firstWord": 32.219,
+     "leadMs": 52,
+     "text": "Later: bees use the sun as a compass even on cloudy days."
+    },
+    {
+     "at": 42.4,
+     "voiceStart": 42.475,
+     "firstWord": 42.487,
+     "leadMs": 87,
+     "text": "A total solar eclipse will be visible across northern Spain "
+    },
+    {
+     "at": 58.167,
+     "voiceStart": 58.248,
+     "firstWord": 58.26,
+     "leadMs": 93,
+     "text": "Northern Spain."
+    },
+    {
+     "at": 59.933,
+     "voiceStart": 59.971,
+     "firstWord": 59.983,
+     "leadMs": 50,
+     "text": "I will not forget it."
+    },
+    {
+     "at": 62.167,
+     "voiceStart": 62.243,
+     "firstWord": 62.255,
+     "leadMs": 88,
+     "text": "UNIT-8, our number of the day."
+    },
+    {
+     "at": 65.367,
+     "voiceStart": 65.442,
+     "firstWord": 65.454,
+     "leadMs": 87,
+     "text": "Our number of the day: about 2."
+    },
+    {
+     "at": 67.967,
+     "voiceStart": 67.997,
+     "firstWord": 68.009,
+     "leadMs": 42,
+     "text": "A study of 90 European cities found that streets with many t"
+    },
+    {
+     "at": 75.3,
+     "voiceStart": 75.329,
+     "firstWord": 75.341,
+     "leadMs": 41,
+     "text": "Researchers say parks also reduced heat-related illness."
+    },
+    {
+     "at": 80.3,
+     "voiceStart": 80.389,
+     "firstWord": 80.401,
+     "leadMs": 101,
+     "text": "A new study shows honeybees can find the position of the sun"
+    },
+    {
+     "at": 86.633,
+     "voiceStart": 86.676,
+     "firstWord": 86.688,
+     "leadMs": 55,
+     "text": "The finding explains how they navigate in poor weather, acco"
+    },
+    {
+     "at": 92.433,
+     "voiceStart": 92.512,
+     "firstWord": 92.524,
+     "leadMs": 91,
+     "text": "Thanks, Nova."
+    },
+    {
+     "at": 94,
+     "voiceStart": 94.025,
+     "firstWord": 94.037,
+     "leadMs": 37,
+     "text": "Storms have uncovered footprints left on a beach in Wales ab"
+    }
+   ],
+   "recordedCaptions": [],
+   "voiceOnsets": [
+    {
+     "start": 24.972,
+     "onsetMs": 7
+    },
+    {
+     "start": 29.359,
+     "onsetMs": 9
+    },
+    {
+     "start": 32.207,
+     "onsetMs": 8
+    },
+    {
+     "start": 36.522,
+     "onsetMs": 8
+    },
+    {
+     "start": 38.685,
+     "onsetMs": 9
+    },
+    {
+     "start": 42.475,
+     "onsetMs": 7
+    },
+    {
+     "start": 48.75,
+     "onsetMs": 10
+    },
+    {
+     "start": 52.922,
+     "onsetMs": 5
+    },
+    {
+     "start": 58.248,
+     "onsetMs": 8
+    },
+    {
+     "start": 59.971,
+     "onsetMs": 8
+    },
+    {
+     "start": 62.243,
+     "onsetMs": 8
+    },
+    {
+     "start": 65.442,
+     "onsetMs": 8
+    },
+    {
+     "start": 67.997,
+     "onsetMs": 7
+    },
+    {
+     "start": 75.329,
+     "onsetMs": 8
+    },
+    {
+     "start": 80.389,
+     "onsetMs": 7
+    },
+    {
+     "start": 86.676,
+     "onsetMs": 9
+    },
+    {
+     "start": 92.512,
+     "onsetMs": 8
+    },
+    {
+     "start": 94.025,
+     "onsetMs": 7
+    }
+   ],
+   "summary": {
+    "stingerSoundStartMs": {
+     "n": 1,
+     "median": 159,
+     "min": 159,
+     "max": 159
+    },
+    "stingerThumpVsCutMs": {
+     "n": 1,
+     "median": 6,
+     "min": 6,
+     "max": 6
+    },
+    "captionLeadMs": {
+     "n": 14,
+     "median": 84,
+     "min": 37,
+     "max": 101
+    },
+    "recordedCaptionToVoiceMs": {
+     "n": 0,
+     "of": 0,
+     "median": null,
+     "min": null,
+     "max": null
+    },
+    "voiceOnsetMs": {
+     "n": 18,
+     "median": 8,
+     "min": 5,
+     "max": 10
+    }
+   }
+  },
+  "timingMs": {
+   "frame": 64131,
+   "encode": 443,
+   "speech": 984,
+   "clock": 92382,
+   "other": 15680
+  },
+  "synth": {
+   "requests": 18,
+   "cached": 18,
+   "seconds": 68.02099999999999,
+   "synthTime": 119.76,
+   "waitTime": 0,
+   "errors": 0,
+   "pool": {
+    "prefetched": 106,
+    "prefetchHits": 36,
+    "urgent": 0
+   }
+  },
+  "page": {
+   "stats": {
+    "disconnects": 2798,
+    "valueSets": 2567,
+    "utterances": 80,
+    "cancels": 0,
+    "ended": 979,
+    "bindings": 18
+   },
+   "errors": [],
+   "contexts": 1
+  },
+  "webaudio": {
+   "n": 4800000,
+   "sampleRate": 48000,
+   "contexts": [
+    {
+     "origin": 7,
+     "renderMs": 0,
+     "covered": 4800000,
+     "frames": 24967296,
+     "tapped": true,
+     "speechTap": true
+    }
+   ],
+   "peak": 0.5382920503616333,
+   "speechTapped": true,
+   "speechPeak": 0.7851395010948181,
+   "stats": {
+    "disconnects": 2798,
+    "valueSets": 2567,
+    "utterances": 80,
+    "cancels": 0,
+    "ended": 979,
+    "bindings": 18
+   }
+  },
+  "beds": {
+   "version": "lofi v2 (programme bibles)",
+   "samples": 5232000,
+   "peak": 0.0871833935379982,
+   "log": [
+    {
+     "t": 0,
+     "moment": "ad",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 22.250000000000057,
+     "moment": "upNext",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 27.767,
+     "moment": "open",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 32.867,
+     "moment": "coldOpen",
+     "action": "bed",
+     "detail": "cosmos:coldOpen"
+    },
+    {
+     "t": 50.37,
+     "moment": "shot",
+     "action": "shot",
+     "detail": ""
+    },
+    {
+     "t": 50.37,
+     "moment": "story",
+     "action": "bed",
+     "detail": "cosmos:storySoft"
+    },
+    {
+     "t": 58.67,
+     "moment": "shot",
+     "action": "shot",
+     "detail": ""
+    },
+    {
+     "t": 66.143,
+     "moment": "chat",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 70.138,
+     "moment": "chat",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 73.337,
+     "moment": "number",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 74.63800000000006,
+     "moment": "shot",
+     "action": "shot",
+     "detail": ""
+    },
+    {
+     "t": 79.13800000000006,
+     "moment": "shot",
+     "action": "shot",
+     "detail": ""
+    },
+    {
+     "t": 88.284,
+     "moment": "shot",
+     "action": "shot",
+     "detail": ""
+    },
+    {
+     "t": 88.284,
+     "moment": "story",
+     "action": "bed",
+     "detail": "cosmos:storySoft"
+    },
+    {
+     "t": 94.631,
+     "moment": "shot",
+     "action": "shot",
+     "detail": ""
+    },
+    {
+     "t": 100.40699999999994,
+     "moment": "shot",
+     "action": "shot",
+     "detail": ""
+    },
+    {
+     "t": 100.407,
+     "moment": "story",
+     "action": "bed",
+     "detail": "cosmos:storySoft"
+    },
+    {
+     "t": 105.70700000000006,
+     "moment": "shot",
+     "action": "shot",
+     "detail": ""
+    }
+   ],
+   "actions": [
+    {
+     "t": -8,
+     "moment": "ad",
+     "programId": "channel",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 14.25,
+     "moment": "upNext",
+     "programId": "channel",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 19.767,
+     "moment": "open",
+     "programId": "cosmos",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 24.867,
+     "moment": "coldOpen",
+     "programId": "cosmos",
+     "action": "bed",
+     "detail": "cosmos:coldOpen"
+    },
+    {
+     "t": 42.37,
+     "moment": "shot",
+     "programId": "cosmos",
+     "action": "shot",
+     "detail": ""
+    },
+    {
+     "t": 42.37,
+     "moment": "story",
+     "programId": "cosmos",
+     "action": "bed",
+     "detail": "cosmos:storySoft"
+    },
+    {
+     "t": 50.67,
+     "moment": "shot",
+     "programId": "cosmos",
+     "action": "shot",
+     "detail": ""
+    },
+    {
+     "t": 58.143,
+     "moment": "chat",
+     "programId": "cosmos",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 62.138,
+     "moment": "chat",
+     "programId": "cosmos",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 65.337,
+     "moment": "number",
+     "programId": "cosmos",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 66.638,
+     "moment": "shot",
+     "programId": "cosmos",
+     "action": "shot",
+     "detail": ""
+    },
+    {
+     "t": 71.138,
+     "moment": "shot",
+     "programId": "cosmos",
+     "action": "shot",
+     "detail": ""
+    },
+    {
+     "t": 80.284,
+     "moment": "shot",
+     "programId": "cosmos",
+     "action": "shot",
+     "detail": ""
+    },
+    {
+     "t": 80.284,
+     "moment": "story",
+     "programId": "cosmos",
+     "action": "bed",
+     "detail": "cosmos:storySoft"
+    },
+    {
+     "t": 86.631,
+     "moment": "shot",
+     "programId": "cosmos",
+     "action": "shot",
+     "detail": ""
+    },
+    {
+     "t": 92.407,
+     "moment": "shot",
+     "programId": "cosmos",
+     "action": "shot",
+     "detail": ""
+    },
+    {
+     "t": 92.407,
+     "moment": "story",
+     "programId": "cosmos",
+     "action": "bed",
+     "detail": "cosmos:storySoft"
+    },
+    {
+     "t": 97.707,
+     "moment": "shot",
+     "programId": "cosmos",
+     "action": "shot",
+     "detail": ""
+    }
+   ],
+   "ms": 18934,
+   "pace": {
+    "cosmos": {
+     "seconds": 80.2,
+     "changes": 3,
+     "perMin": 2.24,
+     "maxPerMin": null,
+     "arrangement": 1,
+     "beds": 2,
+     "shortestBed": 33.28,
+     "minBed": null,
+     "short": []
+    }
+   }
+  },
+  "pageErrors": [
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
+ }
+}

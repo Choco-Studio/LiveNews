@@ -125,6 +125,48 @@
       },
       "role": "Asia & Middle East correspondent",
       "desk": "asia-mideast"
+    },
+    "iris": {
+      "name": "Dr Iris Kernel",
+      "personality": "an economist the channel calls on for markets and the economy: plain words, one clear idea per sentence, never a forecast of her own",
+      "voice": { "gender": "female", "lang": "en-GB", "pitch": 1.0, "rate": 1.0 },
+      "role": "economist",
+      "expert": { "title": "economist", "from": "London", "room": "office", "categories": ["business"], "keywords": ["econom", "inflation", "interest rate", "stock market", "markets", "shares", "stocks", "central bank", "\bbanks?\b(?! of)(?<!west bank)", "tariff", "trade", "jobs", "wages", "prices", "budget", "debt", "growth", "recession", "merger", "takeover"], "programmes": ["world-now", "money-minute"] }
+    },
+    "omar": {
+      "name": "Omar Gradient",
+      "personality": "a foreign affairs analyst: measured and precise, explains who the sides are and what an agreement or a vote changes, never takes a side",
+      "voice": { "gender": "male", "lang": "en-GB", "pitch": 0.98, "rate": 1.0 },
+      "role": "foreign affairs analyst",
+      "expert": { "title": "foreign affairs analyst", "from": "Brussels", "room": "study", "categories": ["world"], "keywords": ["election", "minister", "government", "parliament", "treaty", "talks", "summit", "sanction", "diplomat", "ceasefire", "nato", "united nations", "\\beu\\b", "border", "vote"], "programmes": ["world-now"] }
+    },
+    "tess": {
+      "name": "Prof Tess Contour",
+      "personality": "a climate scientist: calm and exact, explains the mechanism behind a storm, a heatwave or a record, never alarmist",
+      "voice": { "gender": "female", "lang": "en-US", "pitch": 1.02, "rate": 0.98 },
+      "role": "climate scientist",
+      "expert": { "title": "climate scientist", "from": "Oslo", "room": "lab", "categories": ["science"], "keywords": ["climate", "hurricane", "storm", "flood", "heat", "drought", "wildfire", "glacier", "sea ice", "emission", "carbon", "weather", "rainfall", "warming"], "programmes": ["world-now", "cosmos"] }
+    },
+    "ravi": {
+      "name": "Dr Ravi Shader",
+      "personality": "a technology analyst: quick and concrete, says what a product or a breach changes for ordinary users, never hype",
+      "voice": { "gender": "male", "lang": "en-US", "pitch": 1.0, "rate": 1.02 },
+      "role": "technology analyst",
+      "expert": { "title": "technology analyst", "from": "San Francisco", "room": "home", "categories": ["tech"], "keywords": ["\\bai\\b", "artificial intelligence", "chip", "software", "hack", "breach", "cyber", "privacy", "\bapps?\b", "smartphone", "platform", "data breach", "data centre", "openai", "google", "apple", "microsoft", "meta"], "programmes": ["tech-bytes", "world-now"] }
+    },
+    "noor": {
+      "name": "Dr Noor Orbit",
+      "personality": "a planetary scientist: patient and vivid, explains what a mission or a discovery tells us, never more than the scientists claim",
+      "voice": { "gender": "female", "lang": "en-US", "pitch": 1.04, "rate": 0.98 },
+      "role": "planetary scientist",
+      "expert": { "title": "planetary scientist", "from": "Pasadena", "room": "office", "categories": ["science"], "keywords": ["nasa", "\\besa\\b", "space", "telescope", "webb", "hubble", "planet", "mars", "moon", "lunar", "asteroid", "comet", "galax", "orbit", "rocket", "astronaut", "mission"], "programmes": ["cosmos", "tech-bytes", "world-now"] }
+    },
+    "elena": {
+      "name": "Dr Elena Dither",
+      "personality": "a public health specialist: steady and clear, explains how a disease spreads and what the authorities have said, never medical advice",
+      "voice": { "gender": "female", "lang": "en-GB", "pitch": 0.98, "rate": 0.98 },
+      "role": "public health specialist",
+      "expert": { "title": "public health specialist", "from": "Geneva", "room": "study", "categories": ["science"], "keywords": ["health", "virus", "outbreak", "ebola", "plague", "disease", "vaccine", "hospital", "patients", "epidemic", "pandemic", "infection", "\\bwho\\b", "cancer", "drug trial", "new drug", "medicine"], "programmes": ["world-now", "cosmos"] }
     }
   },
   "programs": {
@@ -185,6 +227,16 @@
       "toss": "{name}.",
       "thanksMax": 1,
       "outroAnchor": "A",
+      "format": {
+        "_doc": "WAVE3.md §1: WORLD NOW in four parts (~26 min), each produced while the one before airs; the internal break after part 2. A part the desk cannot fill ends the programme early, on its sign-off.",
+        "breakAfter": [2],
+        "parts": [
+          { "label": "HEADLINES", "stories": 5, "features": [], "crosses": 1, "calls": 1, "maxChats": 2, "targetSeconds": [330, 420], "textMax": 1100, "storyLength": "the lead 6 to 9 sentences when its article supports it (what happened, the context, the figures, who is affected, what happens next), max 1100 characters; other main stories 4 to 6 sentences, max 800 characters; round-up items exactly 1 sentence of 12 to 20 words; at most 22 words per sentence; never padding: a thin source makes a short story", "focus": "The headlines and the lead story in depth: the day's biggest story first, with its context, its figures and a correspondent's report; then the other top stories." },
+          { "label": "THE BIG STORIES", "stories": 5, "features": ["number"], "crosses": 1, "calls": 1, "maxChats": 2, "targetSeconds": [330, 420], "textMax": 1100, "storyLength": "the lead 6 to 9 sentences when its article supports it (what happened, the context, the figures, who is affected, what happens next), max 1100 characters; other main stories 4 to 6 sentences, max 800 characters; round-up items exactly 1 sentence of 12 to 20 words; at most 22 words per sentence; never padding: a thin source makes a short story", "focus": "The other big stories of the day, each with its context, and the number of the day." },
+          { "label": "AROUND THE WORLD", "stories": 7, "features": ["roundup"], "crosses": 0, "calls": 0, "maxChats": 1, "targetSeconds": [270, 360], "textMax": 1100, "storyLength": "the lead 6 to 9 sentences when its article supports it (what happened, the context, the figures, who is affected, what happens next), max 1100 characters; other main stories 4 to 6 sentences, max 800 characters; round-up items exactly 1 sentence of 12 to 20 words; at most 22 words per sentence; never padding: a thin source makes a short story", "focus": "Two or three stories from regions not covered yet, then the round-up around the world." },
+          { "label": "AND FINALLY", "stories": 4, "features": ["lighter"], "crosses": 0, "calls": 0, "maxChats": 2, "targetSeconds": [210, 300], "textMax": 1100, "storyLength": "the lead 6 to 9 sentences when its article supports it (what happened, the context, the figures, who is affected, what happens next), max 1100 characters; other main stories 4 to 6 sentences, max 800 characters; round-up items exactly 1 sentence of 12 to 20 words; at most 22 words per sentence; never padding: a thin source makes a short story", "focus": "The business and science stories of the day, then a lighter story to end on (And finally)." }
+        ]
+      },
       "gestures": {
         "allow": [
           "nod",
@@ -235,6 +287,8 @@
         "science": ["SPACE", "ENERGY", "AI", "ROBOTICS", "CHIPS", "GADGETS", "SOFTWARE", "CONNECTIVITY", "HEALTH", "MOTORING", "TRANSPORT", "CLIMATE"]
       },
       "stories": 15,
+      "_callsDoc": "video calls with the channel's experts (server/experts.js): at most this many per episode, light, on a big story",
+      "calls": 1,
       "maxChats": 8,
       "targetSeconds": [360, 480],
       "features": [
@@ -334,6 +388,8 @@
         "tech": ["SPACE", "ASTRONOMY", "CLIMATE", "OCEANS", "WILDLIFE", "HEALTH", "HISTORY", "VOLCANO", "EARTHQUAKE", "WEATHER"]
       },
       "stories": 11,
+      "_callsDoc": "video calls with the channel's experts (server/experts.js): at most this many per episode, light, on a big story",
+      "calls": 1,
       "maxChats": 10,
       "targetSeconds": [360, 480],
       "features": [
@@ -418,6 +474,8 @@
         "business"
       ],
       "stories": 7,
+      "_callsDoc": "video calls with the channel's experts (server/experts.js): at most this many per episode, light, on a big story",
+      "calls": 1,
       "maxChats": 0,
       "targetSeconds": [240, 360],
       "features": [

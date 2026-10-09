@@ -10,11 +10,12 @@
 //  - the fake speechSynthesis: voices, speak() -> request, deliver() ->
 //    start / boundary / end on the fake clock, cancel() -> 'interrupted'.
 
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const HERE = path.dirname(new URL(import.meta.url).pathname);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 async function loadPlaywright() {
   try {
     return await import('playwright');

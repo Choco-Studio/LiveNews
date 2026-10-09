@@ -195,7 +195,17 @@ export function castOf(channel, programId) {
 /** Public view of the channel for the browser (no prompt-only fields). */
 export function publicChannel(channel) {
   const presenters = Object.fromEntries(
-    Object.entries(channel.presenters).map(([id, p]) => [id, { name: p.name, voice: p.voice, ...(p.role ? { role: p.role } : {}), ...(p.desk ? { desk: p.desk } : {}) }])
+    Object.entries(channel.presenters).map(([id, p]) => [
+      id,
+      {
+        name: p.name,
+        voice: p.voice,
+        ...(p.role ? { role: p.role } : {}),
+        ...(p.desk ? { desk: p.desk } : {}),
+        // an expert's call (server/experts.js): the client frames it (their room, their city's hour, the strap)
+        ...(p.expert ? { expert: { title: p.expert.title, from: p.expert.from, room: p.expert.room } } : {}),
+      },
+    ])
   );
   const programs = Object.fromEntries(
     Object.entries(channel.programs).map(([id, p]) => [

@@ -557,7 +557,10 @@ function drawTie(o, F, tier) {
         if (tier === 2 && x < -hw * 0.55 && y > 4) return 0;
         return 1;
       };
-  buf.poly(blade, m.tie, bladeTone);
+  // the wide: a 2 px blade whose own outline ate the colour (critique r34: a black tie with a red tip at 1x);
+  // flat decal colour there, so it reads as the same tie as in the close-ups
+  if (tier === 0 && L.tie.ramp) buf.poly(blade, dec(L.tie.ramp[1]), 0);
+  else buf.poly(blade, m.tie, bladeTone);
   const knot = pts(2);
   if (knit) {
     for (const [x, y] of [[-0.95, 0.0], [0.95, 0.0], [0.8, 1.3], [0.6, 2.25], [-0.6, 2.25], [-0.8, 1.3]]) pt(o, knot, x, y);
@@ -572,7 +575,8 @@ function drawTie(o, F, tier) {
       if (v.x < -0.2 && v.y < (knit ? 1.1 : 1.6)) return 0;
       return 1;
     };
-  buf.poly(knot, m.tie, knotTone);
+  if (tier === 0 && L.tie.ramp) buf.poly(knot, dec(L.tie.ramp[knit ? 1 : 0]), 0);
+  else buf.poly(knot, m.tie, knotTone);
   if (tier === 2 && !knit) {
     // the dimple: a short dark crease under the knot, a lit pixel beside it
     const d0 = o.toS(0.1, 2.75), d1 = o.toS(0.25, 2.75 + Math.max(1.1, 2.2 / s));
@@ -872,7 +876,9 @@ export function drawNecklace(buf, L, toS, s) {
   NECK.buf = buf;
   for (let i = 0; i <= n; i++) {
     const a = Math.PI * (i / n);
-    const x = -Math.cos(a) * (L.torso.neckHW + 0.25);
+    // round the neck itself, inside the garment's opening (critique r31: with the wider necks of r24 the
+    // opening's width carried the chain over the lapels)
+    const x = -Math.cos(a) * Math.min(L.torso.neckHW + 0.25, (L.neck ? L.neck.hw : L.torso.neckHW) + 0.4);
     const q = toS(x, 0.6 + Math.pow(Math.sin(a), 1.15) * drop);
     const p0 = Math.round(q[0]), p1 = Math.round(q[1]);
     NECK.mat = i < n * 0.55 ? gold : shade;

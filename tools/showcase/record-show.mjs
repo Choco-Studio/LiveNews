@@ -67,6 +67,7 @@
 //                             the sound by up to a frame); native = every fake 16 ms tick (--no-raf-throttle)
 //   --keep                    keep the raw float renders and the lossless native-size video in <out>.work/
 
+import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -77,7 +78,7 @@ import { deriveCues, speechRegions, quietIntervals, renderBedsInPage, bedChunkIn
 import { syncReport, loadMono, levels } from './lib/analysis.mjs';
 import { composeSheetInPage, composeAudioSheetInPage } from './lib/sheet.mjs';
 
-const HERE = path.dirname(new URL(import.meta.url).pathname);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function loadPlaywright() {

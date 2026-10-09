@@ -1,0 +1,14 @@
+{
+  "_doc": "The hourly clock (WAVE3.md §1; owner decision 1, 5 Oct). Minutes of the hour (mm:ss). NEWS IN 60 at :00 and :30 is FIXED: the station lands it within `tolerance` seconds (short breaks when early). Any other slot is skipped when the channel runs more than `lateSkip` seconds behind it. A `rotate` slot gives each programme of its list its turn, hour by hour. `hours` [from, to) and `days` (0 Sunday) limit a slot. Set \"clock\": false (or CLOCK=off) for the plain rotation of channel.json. Any programme of channel.json may fill a slot, news or not.",
+  "clock": true,
+  "timezone": "Europe/London",
+  "tolerance": 90,
+  "lateSkip": 180,
+  "hour": [
+    { "at": "00:00", "program": "news-60", "fixed": true },
+    { "at": "01:30", "program": "world-now" },
+    { "at": "30:00", "program": "news-60", "fixed": true },
+    { "at": "31:30", "rotate": ["tech-bytes", "cosmos", "world-weather"] },
+    { "at": "47:30", "program": "money-minute", "days": [1, 2, 3, 4, 5], "hours": [6, 22] }
+  ]
+}

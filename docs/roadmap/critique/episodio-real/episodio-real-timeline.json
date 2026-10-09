@@ -1,0 +1,5018 @@
+{
+ "meta": {
+  "url": "http://127.0.0.1:8603/?autostart=1&voice=tts&beds=0",
+  "out": "C:\\Users\\movil\\PixelNews\\LiveNews\\docs\\roadmap\\critique\\episodio-real\\episodio-real.mp4",
+  "fps": 30,
+  "seconds": 390.7,
+  "frames": 11721,
+  "sampleRate": 48000,
+  "start": "open",
+  "until": "episode-end+3",
+  "count": 1,
+  "raf": "frame",
+  "music": "lofi",
+  "stories": "soft",
+  "recordedAt": "2026-10-07T17:30:51.062Z",
+  "wallClockStart": "2026-10-07T17:19:01.452Z",
+  "voiceCache": "C:\\Users\\movil\\.cache\\globit-showcase\\voices",
+  "voicePresets": "C:\\Users\\movil\\PixelNews\\LiveNews\\server\\voice\\casting.json",
+  "realSeconds": 710.75
+ },
+ "speech": [
+  {
+   "id": 1,
+   "start": -0.405,
+   "end": -0.055,
+   "cut": null,
+   "called": -0.45,
+   "slot": null,
+   "presenter": null,
+   "ad": null,
+   "programId": null,
+   "emotion": null,
+   "voice": null,
+   "text": " ",
+   "cached": null,
+   "engine": null,
+   "volume": 0,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  }
+ ],
+ "recordedClips": [
+  {
+   "start": 4.584,
+   "end": 17.494,
+   "duration": 12.91
+  },
+  {
+   "start": 18.243,
+   "end": 42.873,
+   "duration": 24.63
+  },
+  {
+   "start": 43.369,
+   "end": 48.8965,
+   "duration": 5.5275
+  },
+  {
+   "start": 49.5885,
+   "end": 70.43100000000001,
+   "duration": 20.8425
+  },
+  {
+   "start": 71.076,
+   "end": 95.67099999999999,
+   "duration": 24.595
+  },
+  {
+   "start": 96.324,
+   "end": 114.214,
+   "duration": 17.89
+  },
+  {
+   "start": 114.887,
+   "end": 140.587,
+   "duration": 25.7
+  },
+  {
+   "start": 141.198,
+   "end": 164.4155,
+   "duration": 23.2175
+  },
+  {
+   "start": 164.9365,
+   "end": 171.3215,
+   "duration": 6.385
+  },
+  {
+   "start": 172.0405,
+   "end": 184.15800000000002,
+   "duration": 12.1175
+  },
+  {
+   "start": 184.63,
+   "end": 189.0525,
+   "duration": 4.4225
+  },
+  {
+   "start": 189.7745,
+   "end": 217.4845,
+   "duration": 27.71
+  },
+  {
+   "start": 218.1595,
+   "end": 236.64950000000002,
+   "duration": 18.49
+  },
+  {
+   "start": 237.2385,
+   "end": 267.63599999999997,
+   "duration": 30.3975
+  },
+  {
+   "start": 268.244,
+   "end": 292.7515,
+   "duration": 24.5075
+  },
+  {
+   "start": 293.3855,
+   "end": 317.3555,
+   "duration": 23.97
+  },
+  {
+   "start": 318.0465,
+   "end": 348.93399999999997,
+   "duration": 30.8875
+  },
+  {
+   "start": 349.912,
+   "end": 371.097,
+   "duration": 21.185
+  },
+  {
+   "start": 371.606,
+   "end": 376.0135,
+   "duration": 4.4075
+  },
+  {
+   "start": 376.9055,
+   "end": 382.9155,
+   "duration": 6.01
+  },
+  {
+   "start": 388.653,
+   "end": 390.37550000000005,
+   "duration": 1.7225
+  }
+ ],
+ "music": [
+  {
+   "t": -0.436,
+   "moment": "open",
+   "opts": {
+    "programId": "tech-bytes"
+   },
+   "why": "episode stinger: the open plays its own theme"
+  },
+  {
+   "t": 4.464,
+   "moment": "headlines",
+   "opts": {
+    "programId": "tech-bytes",
+    "line": 0,
+    "lines": 3,
+    "segment": 1
+   },
+   "why": "headline 1/3"
+  },
+  {
+   "t": 9.233,
+   "moment": "headlines",
+   "opts": {
+    "programId": "tech-bytes",
+    "line": 1,
+    "lines": 3,
+    "segment": 1
+   },
+   "why": "headline 2/3"
+  },
+  {
+   "t": 15.533,
+   "moment": "headlines",
+   "opts": {
+    "programId": "tech-bytes",
+    "line": 2,
+    "lines": 3,
+    "segment": 1
+   },
+   "why": "headline 3/3"
+  },
+  {
+   "t": 18.123,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 2
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": 43.249,
+   "moment": "chat",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "thinking",
+    "grave": false,
+    "segment": 3
+   },
+   "why": "chat (thinking)"
+  },
+  {
+   "t": 49.4685,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 4
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": 70.956,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "serious",
+    "grave": true,
+    "breaking": false,
+    "segment": 5
+   },
+   "why": "story (serious)"
+  },
+  {
+   "t": 96.204,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 6
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": 114.767,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 7
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": 141.078,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 8
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": 164.8165,
+   "moment": "chat",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "segment": 9
+   },
+   "why": "chat (neutral)"
+  },
+  {
+   "t": 171.9205,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 10
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": 184.51,
+   "moment": "chat",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "segment": 11
+   },
+   "why": "chat (neutral)"
+  },
+  {
+   "t": 189.6545,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 12
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": 218.0395,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 13
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": 237.1185,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 14
+   },
+   "why": "story (neutral)"
+  },
+  {
+   "t": 268.124,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "serious",
+    "grave": true,
+    "breaking": false,
+    "segment": 15
+   },
+   "why": "story (serious)"
+  },
+  {
+   "t": 293.2655,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "serious",
+    "grave": true,
+    "breaking": false,
+    "segment": 16
+   },
+   "why": "story (serious)"
+  },
+  {
+   "t": 317.9265,
+   "moment": "story",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "thinking",
+    "grave": false,
+    "breaking": false,
+    "segment": 17
+   },
+   "why": "story (thinking)"
+  },
+  {
+   "t": 349.792,
+   "moment": "finally",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 18
+   },
+   "why": "finally (neutral, lighter)"
+  },
+  {
+   "t": 371.21,
+   "moment": "featureEnd",
+   "opts": {
+    "programId": "tech-bytes"
+   },
+   "why": "end of the feature"
+  },
+  {
+   "t": 371.486,
+   "moment": "chat",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "grave": false,
+    "segment": 19
+   },
+   "why": "chat (neutral)"
+  },
+  {
+   "t": 376.7855,
+   "moment": "outro",
+   "opts": {
+    "programId": "tech-bytes",
+    "emotion": "neutral",
+    "segment": 20
+   },
+   "why": "outro"
+  },
+  {
+   "t": 382.99,
+   "moment": "signoffEnd",
+   "opts": {
+    "programId": "tech-bytes"
+   },
+   "why": "after the last word of the sign-off"
+  },
+  {
+   "t": 384.3155,
+   "moment": "endcard",
+   "opts": {
+    "programId": "tech-bytes"
+   },
+   "why": "end card"
+  },
+  {
+   "t": 387.733,
+   "moment": "silence",
+   "opts": {
+    "programId": "channel"
+   },
+   "why": "break: the ident jingle and the ads carry their own music"
+  }
+ ],
+ "events": [
+  {
+   "ev": "audioContext",
+   "origin": 2,
+   "sampleRate": 48000,
+   "length": 289440000,
+   "t": -0.45
+  },
+  {
+   "ev": "instrumented",
+   "wrapped": {
+    "playEpisode": true,
+    "playAd": true,
+    "playBreak": true,
+    "say": true,
+    "breaking": true
+   },
+   "t": -0.45
+  },
+  {
+   "k": "cut",
+   "shot": "start",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -0.436
+  },
+  {
+   "ev": "shot",
+   "shot": "start",
+   "at": -0.45,
+   "programId": null,
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "other"
+   },
+   "t": -0.436
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -0.436
+  },
+  {
+   "ev": "strap",
+   "headline": null,
+   "kicker": null,
+   "t": -0.436
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -0.436
+  },
+  {
+   "ev": "program",
+   "programId": null,
+   "title": null,
+   "t": -0.436
+  },
+  {
+   "ev": "playEpisode",
+   "phase": "start",
+   "episodeId": "emuyd7o471",
+   "programId": "tech-bytes",
+   "title": "TECH BYTES",
+   "replay": false,
+   "cast": {
+    "A": "max",
+    "B": "ada"
+   },
+   "segments": [
+    {
+     "type": "intro",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": {
+      "duration": 12.91,
+      "words": 34
+     },
+     "chars": 199
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "AI TOOLS",
+     "headline": "SynthID detector checks partner watermarks",
+     "location": null,
+     "audio": {
+      "duration": 24.63,
+      "words": 51
+     },
+     "chars": 328
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "thinking",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": {
+      "duration": 5.527,
+      "words": 17
+     },
+     "chars": 90
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "BIOTECH",
+     "headline": "Google invests millions in Mark Zuckerberg’s efforts",
+     "location": null,
+     "audio": {
+      "duration": 20.843,
+      "words": 46
+     },
+     "chars": 288
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "DATA CENTRES",
+     "headline": "Finland halts work at two Google data centres",
+     "location": "FINLAND",
+     "audio": {
+      "duration": 24.595,
+      "words": 62
+     },
+     "chars": 379
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "RAIL",
+     "headline": "SpaceX alumni nab $100M to rethink shipping",
+     "location": null,
+     "audio": {
+      "duration": 17.89,
+      "words": 45
+     },
+     "chars": 288
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "EDUCATION",
+     "headline": "ChatGPT is getting college planning tools",
+     "location": null,
+     "audio": {
+      "duration": 25.7,
+      "words": 58
+     },
+     "chars": 383
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "AI MODELS",
+     "headline": "Mistral releases open-weight AI model",
+     "location": null,
+     "audio": {
+      "duration": 23.218,
+      "words": 59
+     },
+     "chars": 373
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": {
+      "duration": 6.385,
+      "words": 18
+     },
+     "chars": 97
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "AI VOICE",
+     "headline": "Meloni files to trademark her voice",
+     "location": "ITALY",
+     "audio": {
+      "duration": 12.117,
+      "words": 29
+     },
+     "chars": 183
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": {
+      "duration": 4.423,
+      "words": 12
+     },
+     "chars": 61
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "HEALTH AI",
+     "headline": "Healthleap raises $38 million for hospital AI",
+     "location": null,
+     "audio": {
+      "duration": 27.71,
+      "words": 60
+     },
+     "chars": 412
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "SPACE",
+     "headline": "Webb studies collisions around young stars",
+     "location": null,
+     "audio": {
+      "duration": 18.49,
+      "words": 43
+     },
+     "chars": 287
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "HEALTH",
+     "headline": "Scientists find way to regrow knee cartilage",
+     "location": null,
+     "audio": {
+      "duration": 30.398,
+      "words": 65
+     },
+     "chars": 459
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "CLIMATE",
+     "headline": "Arctic sea ice reaches its 2026 minimum",
+     "location": null,
+     "audio": {
+      "duration": 24.508,
+      "words": 58
+     },
+     "chars": 333
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "ONLINE ABUSE",
+     "headline": "Online vigilantes target Cornell lawsuit plaintiff",
+     "location": null,
+     "audio": {
+      "duration": 23.97,
+      "words": 63
+     },
+     "chars": 385
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "thinking",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "HEALTH TECH",
+     "headline": "Little safety data for gray-market peptides",
+     "location": null,
+     "audio": {
+      "duration": 30.887,
+      "words": 66
+     },
+     "chars": 391
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": "lighter",
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "AND FINALLY",
+     "headline": "Curiosity rover captures Martian dawn panorama",
+     "location": null,
+     "audio": {
+      "duration": 21.185,
+      "words": 47
+     },
+     "chars": 300
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": {
+      "duration": 4.407,
+      "words": 14
+     },
+     "chars": 72
+    },
+    {
+     "type": "outro",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": {
+      "duration": 6.01,
+      "words": 18
+     },
+     "chars": 89
+    }
+   ],
+   "t": -0.436
+  },
+  {
+   "ev": "stinger",
+   "at": -0.436,
+   "t": -0.42
+  },
+  {
+   "k": "cut",
+   "shot": "open",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 0
+  },
+  {
+   "ev": "shot",
+   "shot": "open",
+   "at": -0.036,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": null,
+   "t": 0
+  },
+  {
+   "ev": "program",
+   "programId": "tech-bytes",
+   "title": "TECH BYTES",
+   "t": 0
+  },
+  {
+   "k": "cut",
+   "shot": "montage",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 3.967
+  },
+  {
+   "ev": "shot",
+   "shot": "montage",
+   "at": 3.964,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "montage",
+    "index": 0
+   },
+   "t": 3.967
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "intro",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": {
+    "duration": 12.91,
+    "words": 34
+   },
+   "text": "Online AI detection now checks watermarks from Google and its partners. Also coming up: a virtual cell project, then Finland’s halt to work on two Google data centres. I’m Max Circuit, with Ada Volt.",
+   "t": 4.464
+  },
+  {
+   "ev": "clip",
+   "at": 4.584,
+   "duration": 12.91,
+   "offset": 0,
+   "t": 4.464
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 4.467
+  },
+  {
+   "ev": "subtitle",
+   "text": "Online AI detection now checks watermarks from Google and its partners.",
+   "t": 4.6
+  },
+  {
+   "k": "cut",
+   "shot": "wide",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 9.533
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": 9.527,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": null,
+   "t": 9.533
+  },
+  {
+   "ev": "subtitle",
+   "text": "Also coming up: a virtual cell project, then Finland’s halt to work on two Google data centres.",
+   "t": 9.533
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "partner",
+   "why": "turn",
+   "ev": "pace",
+   "t": 9.8
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "lean_in",
+   "why": null,
+   "ev": "pace",
+   "t": 11.033
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|France 24|France suspends the use of stun grenades after student protester loses hand#0",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 13.6
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "nod",
+   "why": null,
+   "ev": "pace",
+   "t": 15.6
+  },
+  {
+   "ev": "subtitle",
+   "text": "I’m Max Circuit, with Ada Volt.",
+   "t": 15.833
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "B",
+   "name": "nod",
+   "why": "nod-greeting",
+   "ev": "pace",
+   "t": 16.867
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 4.464,
+   "t": 17.494
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 17.5
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 17.5
+  },
+  {
+   "k": "strap",
+   "at": 19.123,
+   "ev": "pace",
+   "t": 18.123
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "AI TOOLS",
+   "headline": "SynthID detector checks partner watermarks",
+   "location": null,
+   "audio": {
+    "duration": 24.63,
+    "words": 51
+   },
+   "text": "Google’s new SynthID website can check for invisible AI watermarks in images, video and audio. Ars Technica reports the detector supports watermarks from OpenAI, Nvidia and Kakao, with Apple support coming soon. Google says Gemini has integrated SynthID with more than 180 billion images and videos, plus 240,000 years of audio.",
+   "t": 18.123
+  },
+  {
+   "ev": "clip",
+   "at": 18.243,
+   "duration": 24.63,
+   "offset": 0,
+   "t": 18.123
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 18.133
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 18.123,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "seba1d42227",
+   "card": null,
+   "t": 18.133
+  },
+  {
+   "ev": "strap",
+   "headline": "SynthID detector checks partner watermarks",
+   "kicker": "AI TOOLS",
+   "t": 18.133
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 18.133
+  },
+  {
+   "ev": "subtitle",
+   "text": "Google’s new SynthID website can check for invisible AI watermarks in images, video and audio.",
+   "t": 18.267
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "notes",
+   "why": "between",
+   "ev": "pace",
+   "t": 18.933
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|France 24|France suspends the use of stun grenades after student protester loses hand#1",
+   "hold": 7.3500000000000005,
+   "ev": "pace",
+   "t": 21.833
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "raise_hand",
+   "why": null,
+   "ev": "pace",
+   "t": 23.633
+  },
+  {
+   "k": "cut",
+   "shot": "fact",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 25.133
+  },
+  {
+   "ev": "shot",
+   "shot": "fact",
+   "at": 25.122,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "seba1d42227",
+   "card": {
+    "kind": "other"
+   },
+   "t": 25.133
+  },
+  {
+   "ev": "subtitle",
+   "text": "Ars Technica reports the detector supports watermarks from OpenAI, Nvidia and Kakao, with Apple support coming soon.",
+   "t": 25.133
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|TechCrunch|CIA officer admits to creating fake top secret government program to steal over $190 million, including gold bars#0",
+   "hold": 6.450000000000001,
+   "ev": "pace",
+   "t": 29.2
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 33.467
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": 33.445,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "seba1d42227",
+   "card": null,
+   "t": 33.467
+  },
+  {
+   "ev": "subtitle",
+   "text": "Google says Gemini has integrated SynthID with more than 180 billion images and videos, plus 240,000 years of audio.",
+   "t": 33.467
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|TechCrunch|CIA officer admits to creating fake top secret government program to steal over $190 million, including gold bars#1",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 35.633
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 39
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 38.973,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "seba1d42227",
+   "card": null,
+   "t": 39
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 18.123,
+   "t": 42.873
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 42.9
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 42.9
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "chat",
+   "kind": null,
+   "emotion": "thinking",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": {
+    "duration": 5.527,
+    "words": 17
+   },
+   "text": "The detector checks for a signal. It does not settle every question about who made a file.",
+   "t": 43.249
+  },
+  {
+   "ev": "clip",
+   "at": 43.369,
+   "duration": 5.5275,
+   "offset": 0,
+   "t": 43.249
+  },
+  {
+   "k": "cut",
+   "shot": "wide",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 43.267
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": 43.249,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "seba1d42227",
+   "card": null,
+   "t": 43.267
+  },
+  {
+   "ev": "strap",
+   "headline": null,
+   "kicker": null,
+   "t": 43.267
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 43.267
+  },
+  {
+   "ev": "subtitle",
+   "text": "The detector checks for a signal.",
+   "t": 43.4
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "partner",
+   "why": "reply",
+   "ev": "pace",
+   "t": 43.533
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "partner",
+   "why": "turn",
+   "ev": "pace",
+   "t": 43.7
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|TechCrunch|CIA officer admits to creating fake top secret government program to steal over $190 million, including gold bars#2",
+   "hold": 8.700000000000001,
+   "ev": "pace",
+   "t": 43.867
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "B",
+   "name": "steeple",
+   "why": null,
+   "ev": "pace",
+   "t": 44.333
+  },
+  {
+   "ev": "subtitle",
+   "text": "It does not settle every question about who made a file.",
+   "t": 45.7
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 43.249,
+   "t": 48.8965
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 48.9
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 48.9
+  },
+  {
+   "k": "strap",
+   "at": 50.4685,
+   "ev": "pace",
+   "t": 49.4685
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "BIOTECH",
+   "headline": "Google invests millions in Mark Zuckerberg’s efforts",
+   "location": null,
+   "audio": {
+    "duration": 20.843,
+    "words": 46
+   },
+   "text": "Google DeepMind, Meta, and AI drug discovery startup Isomorphic Labs are jointly investing $300 million into an initiative to create a \"virtual cell\" that researchers can use to combat disease, as reported earlier by Reuters. The work is part of a $1.8 billion Virtual Biology initiative.",
+   "t": 49.4685
+  },
+  {
+   "ev": "clip",
+   "at": 49.5885,
+   "duration": 20.8425,
+   "offset": 0,
+   "t": 49.4685
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 49.5
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 49.4685,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s4c9b009d21",
+   "card": null,
+   "t": 49.5
+  },
+  {
+   "ev": "strap",
+   "headline": "Google invests millions in Mark Zuckerberg’s efforts",
+   "kicker": "BIOTECH",
+   "t": 49.5
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 49.5
+  },
+  {
+   "ev": "subtitle",
+   "text": "Google DeepMind, Meta, and AI drug discovery startup Isomorphic Labs are jointly investing $300 million into an initiative to create a \"virtual cell\" that researchers can use to",
+   "t": 49.633
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "B",
+   "name": "chin",
+   "why": null,
+   "ev": "pace",
+   "t": 50.433
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Verge|The Apple Watch Series 12 is a good deal at $50 off#0",
+   "hold": 10.5,
+   "ev": "pace",
+   "t": 52.6
+  },
+  {
+   "k": "cut",
+   "shot": "fact",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 61.733
+  },
+  {
+   "ev": "shot",
+   "shot": "fact",
+   "at": 61.7205,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s4c9b009d21",
+   "card": {
+    "kind": "other"
+   },
+   "t": 61.733
+  },
+  {
+   "ev": "subtitle",
+   "text": "combat disease, as reported earlier by Reuters.",
+   "t": 61.733
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Verge|The scariest thing about gray-market peptides is how little we know#0",
+   "hold": 6.450000000000001,
+   "ev": "pace",
+   "t": 63.1
+  },
+  {
+   "ev": "subtitle",
+   "text": "The work is part of a $1.8 billion Virtual Biology initiative.",
+   "t": 65.533
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 65.8
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 65.7935,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s4c9b009d21",
+   "card": null,
+   "t": 65.8
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Verge|The scariest thing about gray-market peptides is how little we know#1",
+   "hold": 8.700000000000001,
+   "ev": "pace",
+   "t": 69.533
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 49.4685,
+   "t": 70.431
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 70.433
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 70.433
+  },
+  {
+   "k": "strap",
+   "at": 71.956,
+   "ev": "pace",
+   "t": 70.956
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "serious",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "DATA CENTRES",
+   "headline": "Finland halts work at two Google data centres",
+   "location": "FINLAND",
+   "audio": {
+    "duration": 24.595,
+    "words": 62
+   },
+   "text": "Finnish authorities have ordered a halt to building work at two planned Google data centres in Muhos and Kajaani. The BBC reports the order follows concerns about clearing more than 300 hectares of forest. At one site, work was carried out without a mandatory environmental impact assessment. Google said it fell short of its own standards and would follow the agency’s guidance.",
+   "t": 70.956
+  },
+  {
+   "ev": "clip",
+   "at": 71.076,
+   "duration": 24.595,
+   "offset": 0,
+   "t": 70.956
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 70.967
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 70.956,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sf8d97287ac",
+   "card": null,
+   "t": 70.967
+  },
+  {
+   "ev": "strap",
+   "headline": "Finland halts work at two Google data centres",
+   "kicker": "DATA CENTRES",
+   "t": 70.967
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 70.967
+  },
+  {
+   "ev": "subtitle",
+   "text": "Finnish authorities have ordered a halt to building work at two planned Google data centres in Muhos and Kajaani.",
+   "t": 71.1
+  },
+  {
+   "k": "cut",
+   "shot": "fact",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 78.167
+  },
+  {
+   "ev": "shot",
+   "shot": "fact",
+   "at": 78.167,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sf8d97287ac",
+   "card": {
+    "kind": "other"
+   },
+   "t": 78.167
+  },
+  {
+   "ev": "subtitle",
+   "text": "The BBC reports the order follows concerns about clearing more than 300 hectares of forest.",
+   "t": 78.167
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|‘I reside in Monaco’: billionaire said to have quit UK over potential wealth tax had already left#0",
+   "hold": 9.600000000000001,
+   "ev": "pace",
+   "t": 78.233
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 85.067
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": 85.067,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sf8d97287ac",
+   "card": null,
+   "t": 85.067
+  },
+  {
+   "ev": "subtitle",
+   "text": "At one site, work was carried out without a mandatory environmental impact assessment.",
+   "t": 85.067
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|‘I reside in Monaco’: billionaire said to have quit UK over potential wealth tax had already left#1",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 87.833
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 91.033
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 91.01,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sf8d97287ac",
+   "card": null,
+   "t": 91.033
+  },
+  {
+   "ev": "subtitle",
+   "text": "Google said it fell short of its own standards and would follow the agency’s guidance.",
+   "t": 91.033
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "notes",
+   "why": "prep",
+   "ev": "pace",
+   "t": 94.233
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 70.956,
+   "t": 95.671
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 95.7
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 95.7
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|Two men jailed with indefinite sentences freed after two decades#0",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 96.067
+  },
+  {
+   "k": "strap",
+   "at": 97.204,
+   "ev": "pace",
+   "t": 96.204
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "RAIL",
+   "headline": "SpaceX alumni nab $100M to rethink shipping",
+   "location": null,
+   "audio": {
+    "duration": 17.89,
+    "words": 45
+   },
+   "text": "Parallel Systems raised $100 million to scale production of its autonomous electric rail vehicle, which can move freight up to 500 miles. TechCrunch reports the vehicle runs without an operator, does not contribute to traffic congestion and does not pollute because it is battery powered.",
+   "t": 96.204
+  },
+  {
+   "ev": "clip",
+   "at": 96.324,
+   "duration": 17.89,
+   "offset": 0,
+   "t": 96.204
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 96.233
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 96.204,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "sf8cb339f79",
+   "card": null,
+   "t": 96.233
+  },
+  {
+   "ev": "strap",
+   "headline": "SpaceX alumni nab $100M to rethink shipping",
+   "kicker": "RAIL",
+   "t": 96.233
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 96.233
+  },
+  {
+   "ev": "subtitle",
+   "text": "Parallel Systems raised $100 million to scale production of its autonomous electric rail vehicle, which can move freight up to 500 miles.",
+   "t": 96.367
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|Two men jailed with indefinite sentences freed after two decades#1",
+   "hold": 6.450000000000001,
+   "ev": "pace",
+   "t": 104.333
+  },
+  {
+   "k": "cut",
+   "shot": "fact",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 106.133
+  },
+  {
+   "ev": "shot",
+   "shot": "fact",
+   "at": 106.129,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "sf8cb339f79",
+   "card": {
+    "kind": "other"
+   },
+   "t": 106.133
+  },
+  {
+   "ev": "subtitle",
+   "text": "TechCrunch reports the vehicle runs without an operator, does not contribute to traffic congestion and does not pollute because it is battery powered.",
+   "t": 106.133
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 110.5
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 110.479,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "sf8cb339f79",
+   "card": null,
+   "t": 110.5
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|BBC News|Canada suspends plans to expand assisted dying to people with mental illness#0",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 110.8
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 96.204,
+   "t": 114.214
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 114.233
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 114.233
+  },
+  {
+   "k": "strap",
+   "at": 115.767,
+   "ev": "pace",
+   "t": 114.767
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "EDUCATION",
+   "headline": "ChatGPT is getting college planning tools",
+   "location": null,
+   "audio": {
+    "duration": 25.7,
+    "words": 58
+   },
+   "text": "OpenAI is bringing college application planning tools to ChatGPT for Teens. The Verge reports the feature will bring application requirements, deadlines, tasks and financial-aid steps into one plan. In the US, it will first focus on students in grades 10 through 12 planning for four-year colleges. The announcement followed a report calling ChatGPT for Teens an “unacceptable risk.”",
+   "t": 114.767
+  },
+  {
+   "ev": "clip",
+   "at": 114.887,
+   "duration": 25.7,
+   "offset": 0,
+   "t": 114.767
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 114.8
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 114.767,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "see6859a51c",
+   "card": null,
+   "t": 114.8
+  },
+  {
+   "ev": "strap",
+   "headline": "ChatGPT is getting college planning tools",
+   "kicker": "EDUCATION",
+   "t": 114.8
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 114.8
+  },
+  {
+   "ev": "subtitle",
+   "text": "OpenAI is bringing college application planning tools to ChatGPT for Teens.",
+   "t": 114.9
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|BBC News|Canada suspends plans to expand assisted dying to people with mental illness#1",
+   "hold": 7.3500000000000005,
+   "ev": "pace",
+   "t": 119.033
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "point_screen",
+   "why": null,
+   "ev": "pace",
+   "t": 119.133
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 120.633
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": 120.624,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "see6859a51c",
+   "card": null,
+   "t": 120.633
+  },
+  {
+   "ev": "subtitle",
+   "text": "The Verge reports the feature will bring application requirements, deadlines, tasks and financial-aid steps into one plan.",
+   "t": 120.633
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|TechCrunch|Meta rolls out new AI tools to detect ads that secretly lead to child sexual abuse material#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": 126.367
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 128.433
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 128.401,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "see6859a51c",
+   "card": null,
+   "t": 128.433
+  },
+  {
+   "ev": "subtitle",
+   "text": "In the US, it will first focus on students in grades 10 through 12 planning for four-year colleges.",
+   "t": 128.433
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "ots",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 135.133
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 135.126,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "see6859a51c",
+   "card": null,
+   "t": 135.133
+  },
+  {
+   "ev": "subtitle",
+   "text": "The announcement followed a report calling ChatGPT for Teens an “unacceptable risk.”",
+   "t": 135.133
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|TechCrunch|Meta rolls out new AI tools to detect ads that secretly lead to child sexual abuse material#1",
+   "hold": 8.700000000000001,
+   "ev": "pace",
+   "t": 135.533
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "count",
+   "why": null,
+   "ev": "pace",
+   "t": 136.833
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "notes",
+   "why": "prep",
+   "ev": "pace",
+   "t": 139.033
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 114.767,
+   "t": 140.587
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 140.6
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 140.6
+  },
+  {
+   "k": "strap",
+   "at": 142.078,
+   "ev": "pace",
+   "t": 141.078
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "AI MODELS",
+   "headline": "Mistral releases open-weight AI model",
+   "location": null,
+   "audio": {
+    "duration": 23.218,
+    "words": 59
+   },
+   "text": "French company Mistral says its new 1 trillion-parameter model can rival leading closed models while remaining open-weight. Ars Technica reports the model is available in preview and is optimized for coding, cyberdefense and specialist fields. A final version is expected by the end of the month. Businesses can run open-weight models at the cost of the computing they use.",
+   "t": 141.078
+  },
+  {
+   "ev": "clip",
+   "at": 141.198,
+   "duration": 23.2175,
+   "offset": 0,
+   "t": 141.078
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 141.1
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 141.078,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "se1ff572449",
+   "card": null,
+   "t": 141.1
+  },
+  {
+   "ev": "strap",
+   "headline": "Mistral releases open-weight AI model",
+   "kicker": "AI MODELS",
+   "t": 141.1
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 141.1
+  },
+  {
+   "ev": "subtitle",
+   "text": "French company Mistral says its new 1 trillion-parameter model can rival leading closed models while remaining open-weight.",
+   "t": 141.233
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|Christa Pike’s lawyers in court after she regains consciousness in hospital – latest updates#0",
+   "hold": 8.700000000000001,
+   "ev": "pace",
+   "t": 144.233
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 148.933
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": 148.923,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "se1ff572449",
+   "card": null,
+   "t": 148.933
+  },
+  {
+   "ev": "subtitle",
+   "text": "Ars Technica reports the model is available in preview and is optimized for coding, cyberdefense and specialist fields.",
+   "t": 148.933
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|Christa Pike’s lawyers in court after she regains consciousness in hospital – latest updates#1",
+   "hold": 7.800000000000001,
+   "ev": "pace",
+   "t": 152.933
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 156.5
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 156.479,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "se1ff572449",
+   "card": null,
+   "t": 156.5
+  },
+  {
+   "ev": "subtitle",
+   "text": "A final version is expected by the end of the month.",
+   "t": 156.5
+  },
+  {
+   "ev": "subtitle",
+   "text": "Businesses can run open-weight models at the cost of the computing they use.",
+   "t": 160.133
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Al Jazeera|UEFA football leaders meet to shape strategy to oust FIFA’s Infantino#0",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 160.733
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 141.078,
+   "t": 164.4155
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 164.433
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 164.433
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "chat",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": {
+    "duration": 6.385,
+    "words": 18
+   },
+   "text": "Translation, for the rest of us: an open-weight model is an AI model anyone can download and run.",
+   "t": 164.8165
+  },
+  {
+   "ev": "clip",
+   "at": 164.9365,
+   "duration": 6.385,
+   "offset": 0,
+   "t": 164.8165
+  },
+  {
+   "k": "cut",
+   "shot": "fact",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 164.833
+  },
+  {
+   "ev": "shot",
+   "shot": "fact",
+   "at": 164.8165,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "se1ff572449",
+   "card": {
+    "kind": "other"
+   },
+   "t": 164.833
+  },
+  {
+   "ev": "strap",
+   "headline": null,
+   "kicker": null,
+   "t": 164.833
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 164.833
+  },
+  {
+   "ev": "subtitle",
+   "text": "Translation, for the rest of us: an open-weight model is an AI model anyone can download and run.",
+   "t": 164.967
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Al Jazeera|UEFA football leaders meet to shape strategy to oust FIFA’s Infantino#1",
+   "hold": 6.9,
+   "ev": "pace",
+   "t": 168.967
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 164.8165,
+   "t": 171.3215
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 171.333
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 171.333
+  },
+  {
+   "k": "strap",
+   "at": 172.9205,
+   "ev": "pace",
+   "t": 171.9205
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "AI VOICE",
+   "headline": "Meloni files to trademark her voice",
+   "location": "ITALY",
+   "audio": {
+    "duration": 12.117,
+    "words": 29
+   },
+   "text": "Italian Prime Minister Giorgia Meloni has applied to trademark her voice to protect herself against AI deepfakes. Voice clones are created by training AI on recordings of real people.",
+   "t": 171.9205
+  },
+  {
+   "ev": "clip",
+   "at": 172.0405,
+   "duration": 12.1175,
+   "offset": 0,
+   "t": 171.9205
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 171.933
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 171.9205,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "sd2e2d5f77f",
+   "card": null,
+   "t": 171.933
+  },
+  {
+   "ev": "strap",
+   "headline": "Meloni files to trademark her voice",
+   "kicker": "AI VOICE",
+   "t": 171.933
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 171.933
+  },
+  {
+   "ev": "subtitle",
+   "text": "Italian Prime Minister Giorgia Meloni has applied to trademark her voice to protect herself against AI deepfakes.",
+   "t": 172.067
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|BBC Business|Boots sold in £7bn deal to Canadian billionaire family#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": 175.867
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "ots",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 179.767
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 179.7345,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "sd2e2d5f77f",
+   "card": null,
+   "t": 179.767
+  },
+  {
+   "ev": "subtitle",
+   "text": "Voice clones are created by training AI on recordings of real people.",
+   "t": 179.767
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "B",
+   "name": "steeple",
+   "why": null,
+   "ev": "pace",
+   "t": 183
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 171.9205,
+   "t": 184.158
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 184.167
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 184.167
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "chat",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": {
+    "duration": 4.423,
+    "words": 12
+   },
+   "text": "Deepfake, for the record: a fake video or voice made with AI.",
+   "t": 184.51
+  },
+  {
+   "ev": "clip",
+   "at": 184.63,
+   "duration": 4.4225,
+   "offset": 0,
+   "t": 184.51
+  },
+  {
+   "k": "cut",
+   "shot": "fact",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 184.533
+  },
+  {
+   "ev": "shot",
+   "shot": "fact",
+   "at": 184.51,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "sd2e2d5f77f",
+   "card": {
+    "kind": "other"
+   },
+   "t": 184.533
+  },
+  {
+   "ev": "strap",
+   "headline": null,
+   "kicker": null,
+   "t": 184.533
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 184.533
+  },
+  {
+   "ev": "subtitle",
+   "text": "Deepfake, for the record: a fake video or voice made with AI.",
+   "t": 184.667
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|BBC News|France halts use of stun grenades after boy's hand blown off in student protests#0",
+   "hold": 7.800000000000001,
+   "ev": "pace",
+   "t": 185.033
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 184.51,
+   "t": 189.0525
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 189.067
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 189.067
+  },
+  {
+   "k": "strap",
+   "at": 190.6545,
+   "ev": "pace",
+   "t": 189.6545
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "HEALTH AI",
+   "headline": "Healthleap raises $38 million for hospital AI",
+   "location": null,
+   "audio": {
+    "duration": 27.71,
+    "words": 60
+   },
+   "text": "Healthleap has raised $38 million to build an AI platform that reads patient records to identify patients at risk of undiagnosed illnesses. TechCrunch reports the platform is deployed in more than 50 hospitals, screening for conditions including malnutrition and delirium. The company has also built programs to identify aspiration pneumonia, pressure ulcers and risk of readmission for congestive heart failure.",
+   "t": 189.6545
+  },
+  {
+   "ev": "clip",
+   "at": 189.7745,
+   "duration": 27.71,
+   "offset": 0,
+   "t": 189.6545
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 189.667
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 189.6545,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s5d700d9f9a",
+   "card": null,
+   "t": 189.667
+  },
+  {
+   "ev": "strap",
+   "headline": "Healthleap raises $38 million for hospital AI",
+   "kicker": "HEALTH AI",
+   "t": 189.667
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 189.667
+  },
+  {
+   "ev": "subtitle",
+   "text": "Healthleap has raised $38 million to build an AI platform that reads patient records to identify patients at risk of undiagnosed illnesses.",
+   "t": 189.8
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|BBC News|France halts use of stun grenades after boy's hand blown off in student protests#1",
+   "hold": 8.700000000000001,
+   "ev": "pace",
+   "t": 192.833
+  },
+  {
+   "k": "cut",
+   "shot": "fact",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 200
+  },
+  {
+   "ev": "shot",
+   "shot": "fact",
+   "at": 199.9715,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s5d700d9f9a",
+   "card": {
+    "kind": "other"
+   },
+   "t": 200
+  },
+  {
+   "ev": "subtitle",
+   "text": "TechCrunch reports the platform is deployed in more than 50 hospitals, screening for conditions including malnutrition and delirium.",
+   "t": 200
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|France 24|What France's student protesters want – and what the government is offering#0",
+   "hold": 7.3500000000000005,
+   "ev": "pace",
+   "t": 201.533
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 204.533
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 204.5295,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s5d700d9f9a",
+   "card": null,
+   "t": 204.533
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 208.767
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": 208.7615,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s5d700d9f9a",
+   "card": null,
+   "t": 208.767
+  },
+  {
+   "ev": "subtitle",
+   "text": "The company has also built programs to identify aspiration pneumonia, pressure ulcers and risk of readmission for congestive heart failure.",
+   "t": 208.767
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|France 24|What France's student protesters want – and what the government is offering#1",
+   "hold": 7.800000000000001,
+   "ev": "pace",
+   "t": 208.867
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 213.567
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 213.5545,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s5d700d9f9a",
+   "card": null,
+   "t": 213.567
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|Paxton admits Trump’s Iran war and US gas prices are plaguing Republicans in leaked audio#0",
+   "hold": 8.700000000000001,
+   "ev": "pace",
+   "t": 216.667
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 189.6545,
+   "t": 217.4845
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 217.5
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 217.5
+  },
+  {
+   "k": "strap",
+   "at": 219.0395,
+   "ev": "pace",
+   "t": 218.0395
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "SPACE",
+   "headline": "Webb studies collisions around young stars",
+   "location": null,
+   "audio": {
+    "duration": 18.49,
+    "words": 43
+   },
+   "text": "NASA’s James Webb Space Telescope is giving astronomers a glimpse of violent collisions that may have shaped our solar system. ScienceDaily reports researchers studied 21 rare extreme debris disks around young stars; their dust can reveal the scale and intensity of planetary collisions.",
+   "t": 218.0395
+  },
+  {
+   "ev": "clip",
+   "at": 218.1595,
+   "duration": 18.49,
+   "offset": 0,
+   "t": 218.0395
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 218.067
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 218.0395,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s12d568f68f",
+   "card": null,
+   "t": 218.067
+  },
+  {
+   "ev": "strap",
+   "headline": "Webb studies collisions around young stars",
+   "kicker": "SPACE",
+   "t": 218.067
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 218.067
+  },
+  {
+   "ev": "subtitle",
+   "text": "NASA’s James Webb Space Telescope is giving astronomers a glimpse of violent collisions that may have shaped our solar system.",
+   "t": 218.2
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|Paxton admits Trump’s Iran war and US gas prices are plaguing Republicans in leaked audio#1",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 225.367
+  },
+  {
+   "k": "cut",
+   "shot": "fact",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 226.167
+  },
+  {
+   "ev": "shot",
+   "shot": "fact",
+   "at": 226.1615,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s12d568f68f",
+   "card": {
+    "kind": "other"
+   },
+   "t": 226.167
+  },
+  {
+   "ev": "subtitle",
+   "text": "ScienceDaily reports researchers studied 21 rare extreme debris disks around young stars; their dust can reveal the scale and intensity of planetary collisions.",
+   "t": 226.167
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 232.567
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 232.5645,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s12d568f68f",
+   "card": null,
+   "t": 232.567
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|Minister denies police brutality as student protests continue across France – Europe live#0",
+   "hold": 7.800000000000001,
+   "ev": "pace",
+   "t": 233.633
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 218.0395,
+   "t": 236.6495
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 236.667
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 236.667
+  },
+  {
+   "k": "strap",
+   "at": 238.1185,
+   "ev": "pace",
+   "t": 237.1185
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "HEALTH",
+   "headline": "Scientists find way to regrow knee cartilage",
+   "location": null,
+   "audio": {
+    "duration": 30.398,
+    "words": 65
+   },
+   "text": "A treatment that blocked the protein 15-PGDH restored naturally lost knee cartilage in old mice. ScienceDaily reports it also helped prevent osteoarthritis after knee injuries similar to ACL tears. Human cartilage samples from knee replacement patients began producing new, functional cartilage after exposure. Researchers say the approach could potentially lead to treatments that regenerate cartilage and reduce the need for knee or hip replacement surgery.",
+   "t": 237.1185
+  },
+  {
+   "ev": "clip",
+   "at": 237.2385,
+   "duration": 30.3975,
+   "offset": 0,
+   "t": 237.1185
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 237.133
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 237.1185,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sd4d79fc465",
+   "card": null,
+   "t": 237.133
+  },
+  {
+   "ev": "strap",
+   "headline": "Scientists find way to regrow knee cartilage",
+   "kicker": "HEALTH",
+   "t": 237.133
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 237.133
+  },
+  {
+   "ev": "subtitle",
+   "text": "A treatment that blocked the protein 15-PGDH restored naturally lost knee cartilage in old mice.",
+   "t": 237.267
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|Minister denies police brutality as student protests continue across France – Europe live#1",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 241.433
+  },
+  {
+   "k": "cut",
+   "shot": "fact",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 244.633
+  },
+  {
+   "ev": "shot",
+   "shot": "fact",
+   "at": 244.6255,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sd4d79fc465",
+   "card": {
+    "kind": "other"
+   },
+   "t": 244.633
+  },
+  {
+   "ev": "subtitle",
+   "text": "ScienceDaily reports it also helped prevent osteoarthritis after knee injuries similar to ACL tears.",
+   "t": 244.633
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Verge|Windows and Surface live blog: On the ground at Microsoft’s event#0",
+   "hold": 7.3500000000000005,
+   "ev": "pace",
+   "t": 249.667
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 251.8
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": 251.7925,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sd4d79fc465",
+   "card": null,
+   "t": 251.8
+  },
+  {
+   "ev": "subtitle",
+   "text": "Human cartilage samples from knee replacement patients began producing new, functional cartilage after exposure.",
+   "t": 251.8
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Verge|Windows and Surface live blog: On the ground at Microsoft’s event#1",
+   "hold": 7.800000000000001,
+   "ev": "pace",
+   "t": 257.033
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 259.067
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 259.0415,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "sd4d79fc465",
+   "card": null,
+   "t": 259.067
+  },
+  {
+   "ev": "subtitle",
+   "text": "Researchers say the approach could potentially lead to treatments that regenerate cartilage and reduce the need for knee or hip replacement surgery.",
+   "t": 259.067
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|Labour could oversee worst parliament on record for living standards, study warns#0",
+   "hold": 7.3500000000000005,
+   "ev": "pace",
+   "t": 264.833
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 237.1185,
+   "t": 267.636
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 267.667
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 267.667
+  },
+  {
+   "k": "strap",
+   "at": 269.124,
+   "ev": "pace",
+   "t": 268.124
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "serious",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "CLIMATE",
+   "headline": "Arctic sea ice reaches its 2026 minimum",
+   "location": null,
+   "audio": {
+    "duration": 24.508,
+    "words": 58
+   },
+   "text": "Arctic sea ice reached its annual minimum extent on September 12, covering an estimated 4.6 million square kilometres. NASA reports that ice covered less of the Arctic Ocean at its annual maximum and minimum than it did a few decades ago. Each of the past 20 summers ranks among the 20 lowest minimum extents in the satellite record.",
+   "t": 268.124
+  },
+  {
+   "ev": "clip",
+   "at": 268.244,
+   "duration": 24.5075,
+   "offset": 0,
+   "t": 268.124
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 268.133
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 268.124,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s2076a508c6",
+   "card": null,
+   "t": 268.133
+  },
+  {
+   "ev": "strap",
+   "headline": "Arctic sea ice reaches its 2026 minimum",
+   "kicker": "CLIMATE",
+   "t": 268.133
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 268.133
+  },
+  {
+   "ev": "subtitle",
+   "text": "Arctic sea ice reached its annual minimum extent on September 12, covering an estimated 4.6 million square kilometres.",
+   "t": 268.267
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|Labour could oversee worst parliament on record for living standards, study warns#1",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 272.167
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "ots",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 273.7
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 273.699,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s2076a508c6",
+   "card": null,
+   "t": 273.7
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 278.567
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": 278.541,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s2076a508c6",
+   "card": null,
+   "t": 278.567
+  },
+  {
+   "ev": "subtitle",
+   "text": "NASA reports that ice covered less of the Arctic Ocean at its annual maximum and minimum than it did a few decades ago.",
+   "t": 278.567
+  },
+  {
+   "k": "ticker",
+   "id": "NEXT||NEWS IN 60 · THE HEADLINES IN A MINUTE#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": 280.433
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 286.5
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 286.486,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s2076a508c6",
+   "card": null,
+   "t": 286.5
+  },
+  {
+   "ev": "subtitle",
+   "text": "Each of the past 20 summers ranks among the 20 lowest minimum extents in the satellite record.",
+   "t": 286.5
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Al Jazeera|US mortgage rates hit their highest level in three years#0",
+   "hold": 9.600000000000001,
+   "ev": "pace",
+   "t": 289.567
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 268.124,
+   "t": 292.7515
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 292.767
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 292.767
+  },
+  {
+   "k": "strap",
+   "at": 294.2655,
+   "ev": "pace",
+   "t": 293.2655
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "serious",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "ONLINE ABUSE",
+   "headline": "Online vigilantes target Cornell lawsuit plaintiff",
+   "location": null,
+   "audio": {
+    "duration": 23.97,
+    "words": 63
+   },
+   "text": "Three women have been falsely identified and harassed in connection with a Cornell student’s lawsuit, and the plaintiff has received threats too. The Verge reports her lawyers say online users are trying to expose her identity. The article says the effort is taking place on mainstream social media platforms. Her identity is known to her lawyers, the judge and the people she accuses.",
+   "t": 293.2655
+  },
+  {
+   "ev": "clip",
+   "at": 293.3855,
+   "duration": 23.97,
+   "offset": 0,
+   "t": 293.2655
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 293.267
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 293.2655,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s6a586b7752",
+   "card": null,
+   "t": 293.267
+  },
+  {
+   "ev": "strap",
+   "headline": "Online vigilantes target Cornell lawsuit plaintiff",
+   "kicker": "ONLINE ABUSE",
+   "t": 293.267
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 293.267
+  },
+  {
+   "ev": "subtitle",
+   "text": "Three women have been falsely identified and harassed in connection with a Cornell student’s lawsuit, and the plaintiff has received threats too.",
+   "t": 293.4
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|France 24|France suspends the use of stun grenades after student protester loses hand#0",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 299.167
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 302.033
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": 302.0035,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s6a586b7752",
+   "card": null,
+   "t": 302.033
+  },
+  {
+   "ev": "subtitle",
+   "text": "The Verge reports her lawyers say online users are trying to expose her identity.",
+   "t": 302.033
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 307.333
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 307.3135,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s6a586b7752",
+   "card": null,
+   "t": 307.333
+  },
+  {
+   "ev": "subtitle",
+   "text": "The article says the effort is taking place on mainstream social media platforms.",
+   "t": 307.333
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|France 24|France suspends the use of stun grenades after student protester loses hand#1",
+   "hold": 7.3500000000000005,
+   "ev": "pace",
+   "t": 307.433
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "ots",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 312.867
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 312.8455,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s6a586b7752",
+   "card": null,
+   "t": 312.867
+  },
+  {
+   "ev": "subtitle",
+   "text": "Her identity is known to her lawyers, the judge and the people she accuses.",
+   "t": 312.867
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|TechCrunch|CIA officer admits to creating fake top secret government program to steal over $190 million, including gold bars#0",
+   "hold": 6.450000000000001,
+   "ev": "pace",
+   "t": 314.8
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 293.2655,
+   "t": 317.3555
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 317.367
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 317.367
+  },
+  {
+   "k": "strap",
+   "at": 318.9265,
+   "ev": "pace",
+   "t": 317.9265
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "thinking",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "HEALTH TECH",
+   "headline": "Little safety data for gray-market peptides",
+   "location": null,
+   "audio": {
+    "duration": 30.887,
+    "words": 66
+   },
+   "text": "There is little to no safety data for many gray-market peptides, and concrete evidence is difficult to find. The Verge reports BPC-157 is not approved by any regulatory body and has limited human clinical evidence. A 2025 review found 35 preclinical studies and a single clinical study in humans. The article says BPC-157 videos drew more than 50 million views on YouTube and TikTok in 2024.",
+   "t": 317.9265
+  },
+  {
+   "ev": "clip",
+   "at": 318.0465,
+   "duration": 30.8875,
+   "offset": 0,
+   "t": 317.9265
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 317.933
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 317.9265,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "sb542ef017b",
+   "card": null,
+   "t": 317.933
+  },
+  {
+   "ev": "strap",
+   "headline": "Little safety data for gray-market peptides",
+   "kicker": "HEALTH TECH",
+   "t": 317.933
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 317.933
+  },
+  {
+   "ev": "subtitle",
+   "text": "There is little to no safety data for many gray-market peptides, and concrete evidence is difficult to find.",
+   "t": 318.067
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|TechCrunch|CIA officer admits to creating fake top secret government program to steal over $190 million, including gold bars#1",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 321.233
+  },
+  {
+   "k": "cut",
+   "shot": "fact",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 325.2
+  },
+  {
+   "ev": "shot",
+   "shot": "fact",
+   "at": 325.1905,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "sb542ef017b",
+   "card": {
+    "kind": "other"
+   },
+   "t": 325.2
+  },
+  {
+   "ev": "subtitle",
+   "text": "The Verge reports BPC-157 is not approved by any regulatory body and has limited human clinical evidence.",
+   "t": 325.2
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|TechCrunch|CIA officer admits to creating fake top secret government program to steal over $190 million, including gold bars#2",
+   "hold": 8.700000000000001,
+   "ev": "pace",
+   "t": 329.5
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 329.567
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 329.5515,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "sb542ef017b",
+   "card": null,
+   "t": 329.567
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 333.733
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": 333.7085,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "sb542ef017b",
+   "card": null,
+   "t": 333.733
+  },
+  {
+   "ev": "subtitle",
+   "text": "A 2025 review found 35 preclinical studies and a single clinical study in humans.",
+   "t": 333.733
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Verge|The Apple Watch Series 12 is a good deal at $50 off#0",
+   "hold": 10.5,
+   "ev": "pace",
+   "t": 338.167
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 340.767
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 340.7445,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "sb542ef017b",
+   "card": null,
+   "t": 340.767
+  },
+  {
+   "ev": "subtitle",
+   "text": "The article says BPC-157 videos drew more than 50 million views on YouTube and TikTok in 2024.",
+   "t": 340.767
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "notes",
+   "why": "prep",
+   "ev": "pace",
+   "t": 347.533
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|‘I reside in Monaco’: billionaire said to have quit UK over potential wealth tax had already left#0",
+   "hold": 9.600000000000001,
+   "ev": "pace",
+   "t": 348.667
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 317.9265,
+   "t": 348.934
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 348.967
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 348.967
+  },
+  {
+   "k": "strap",
+   "at": 350.792,
+   "ev": "pace",
+   "t": 349.792
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": "lighter",
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "AND FINALLY",
+   "headline": "Curiosity rover captures Martian dawn panorama",
+   "location": null,
+   "audio": {
+    "duration": 21.185,
+    "words": 47
+   },
+   "text": "And finally: NASA’s Curiosity rover captured a panorama of wind-carved Martian cliffs at 8:30 a.m. local Mars time. NASA says six images were stitched together, with blue hues preserved in the foreground. The scene features yardangs on Mount Sharp, where Curiosity has reached 0.6 miles in elevation.",
+   "t": 349.792
+  },
+  {
+   "ev": "clip",
+   "at": 349.912,
+   "duration": 21.185,
+   "offset": 0,
+   "t": 349.792
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 349.8
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 349.792,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s7d66475c1d",
+   "card": null,
+   "t": 349.8
+  },
+  {
+   "ev": "strap",
+   "headline": "Curiosity rover captures Martian dawn panorama",
+   "kicker": "AND FINALLY",
+   "t": 349.8
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 349.8
+  },
+  {
+   "ev": "subtitle",
+   "text": "And finally: NASA’s Curiosity rover captured a panorama of wind-carved Martian cliffs at 8:30 a.m. local Mars time.",
+   "t": 349.933
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|‘I reside in Monaco’: billionaire said to have quit UK over potential wealth tax had already left#1",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 358.3
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 358.9
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": 358.884,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s7d66475c1d",
+   "card": null,
+   "t": 358.9
+  },
+  {
+   "ev": "subtitle",
+   "text": "NASA says six images were stitched together, with blue hues preserved in the foreground.",
+   "t": 358.9
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "single",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 364.233
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 364.229,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": "s7d66475c1d",
+   "card": null,
+   "t": 364.233
+  },
+  {
+   "ev": "subtitle",
+   "text": "The scene features yardangs on Mount Sharp, where Curiosity has reached 0.6 miles in elevation.",
+   "t": 364.233
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|Two men jailed with indefinite sentences freed after two decades#0",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 366.533
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 349.792,
+   "t": 371.097
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 371.1
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 371.1
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "chat",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": {
+    "duration": 4.407,
+    "words": 14
+   },
+   "text": "A careful image, with the colour left in. The rover has earned the view.",
+   "t": 371.486
+  },
+  {
+   "ev": "clip",
+   "at": 371.606,
+   "duration": 4.4075,
+   "offset": 0,
+   "t": 371.486
+  },
+  {
+   "k": "cut",
+   "shot": "wide",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 371.5
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": 371.486,
+   "programId": "tech-bytes",
+   "focus": "B",
+   "storyId": "s7d66475c1d",
+   "card": null,
+   "t": 371.5
+  },
+  {
+   "ev": "strap",
+   "headline": null,
+   "kicker": null,
+   "t": 371.5
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 371.5
+  },
+  {
+   "ev": "subtitle",
+   "text": "A careful image, with the colour left in.",
+   "t": 371.633
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "partner",
+   "why": "reply",
+   "ev": "pace",
+   "t": 371.8
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "A",
+   "name": "partner",
+   "why": "turn+dry",
+   "ev": "pace",
+   "t": 372
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "nod",
+   "why": "nod",
+   "ev": "pace",
+   "t": 373.4
+  },
+  {
+   "ev": "subtitle",
+   "text": "The rover has earned the view.",
+   "t": 374.3
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|The Guardian|Two men jailed with indefinite sentences freed after two decades#1",
+   "hold": 6.450000000000001,
+   "ev": "pace",
+   "t": 374.8
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 371.486,
+   "t": 376.0135
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 376.033
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 376.033
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "outro",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": {
+    "duration": 6.01,
+    "words": 18
+   },
+   "text": "That’s TECH BYTES. I’m Max Circuit. Join us next time for the future, one byte at a time.",
+   "t": 376.7855
+  },
+  {
+   "ev": "clip",
+   "at": 376.9055,
+   "duration": 6.01,
+   "offset": 0,
+   "t": 376.7855
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": 376.7855,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": null,
+   "t": 376.8
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 376.8
+  },
+  {
+   "ev": "subtitle",
+   "text": "That’s TECH BYTES.",
+   "t": 376.933
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "partner",
+   "why": "turn",
+   "ev": "pace",
+   "t": 377.167
+  },
+  {
+   "ev": "subtitle",
+   "text": "I’m Max Circuit.",
+   "t": 378.3
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "nod",
+   "why": null,
+   "ev": "pace",
+   "t": 378.367
+  },
+  {
+   "ev": "subtitle",
+   "text": "Join us next time for the future, one byte at a time.",
+   "t": 379.7
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|BBC News|Canada suspends plans to expand assisted dying to people with mental illness#0",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 381.233
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 376.7855,
+   "t": 382.9155
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 382.933
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 382.933
+  },
+  {
+   "ev": "stinger",
+   "at": 383.9155,
+   "t": 383.933
+  },
+  {
+   "k": "cut",
+   "shot": "endcard",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 384.333
+  },
+  {
+   "ev": "shot",
+   "shot": "endcard",
+   "at": 384.3155,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "end",
+    "line1": "STAY WITH US"
+   },
+   "t": 384.333
+  },
+  {
+   "ev": "playEpisode",
+   "phase": "end",
+   "ref": -0.436,
+   "t": 387.7155
+  },
+  {
+   "ev": "playBreak",
+   "phase": "start",
+   "breakId": "kmuydjt8nv",
+   "ads": 2,
+   "filler": false,
+   "next": {
+    "id": "news-60",
+    "title": "NEWS IN 60",
+    "ready": true
+   },
+   "t": 387.733
+  },
+  {
+   "ev": "stinger",
+   "at": 387.733,
+   "t": 387.767
+  },
+  {
+   "k": "cut",
+   "shot": "ident",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 388.133
+  },
+  {
+   "ev": "shot",
+   "shot": "ident",
+   "at": 388.133,
+   "programId": "tech-bytes",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "promo",
+    "next": null
+   },
+   "t": 388.133
+  },
+  {
+   "ev": "clip",
+   "at": 388.653,
+   "duration": 1.7225,
+   "offset": 0,
+   "t": 388.533
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 388.567
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 390.4
+  }
+ ],
+ "reports": {
+  "mix": {
+   "seconds": 390.7,
+   "sampleRate": 48000,
+   "voiceClips": 0,
+   "bedRider": {
+    "voiceLUFS": -13,
+    "baseGainDb": 7,
+    "targetUnderDb": -18,
+    "window": [
+     -20,
+     -16
+    ],
+    "underSpeech": {
+     "regions": 11,
+     "median": -18,
+     "p10": -18.7,
+     "p90": -16,
+     "outsideWindow": 0
+    },
+    "pauses": {
+     "lifted": 8,
+     "medianLiftDb": 3.9,
+     "withBed": 11,
+     "median": -11.8,
+     "p90": -10.4
+    }
+   },
+   "bedLevel": {
+    "regions": 13,
+    "clearVsVoiceDb": -27.2,
+    "underVoiceDb": -17
+   },
+   "bedDuckDb": {
+    "regions": 13,
+    "median": -6.2,
+    "weakest": -6.2
+   },
+   "quiet": [
+    {
+     "kind": "grave",
+     "from": 73.956,
+     "to": 95.67100000000002,
+     "bedRmsDb": -113.6
+    },
+    {
+     "kind": "grave",
+     "from": 271.124,
+     "to": 292.7515,
+     "bedRmsDb": -137.1
+    },
+    {
+     "kind": "grave",
+     "from": 296.2655,
+     "to": 317.35550000000006,
+     "bedRmsDb": -240
+    }
+   ],
+   "roomTone": {
+    "db": -58,
+    "windows": [
+     [
+      3.96,
+      384.32
+     ]
+    ]
+   },
+   "fadeOut": 1.5,
+   "stemsLUFS": {
+    "voice": -70,
+    "webaudio": -15.5,
+    "beds": -30.3
+   },
+   "raw": {
+    "I": -15.4,
+    "LRA": 2.2,
+    "TP": -3.9
+   },
+   "final": {
+    "I": -16.1,
+    "LRA": 2.2,
+    "TP": -4.6,
+    "gainDb": -0.6,
+    "ceilingDb": -2.2,
+    "limitedSamples": 0,
+    "maxGainReductionDb": 0,
+    "attempt": 1
+   },
+   "aac": "C:\\Users\\movil\\PixelNews\\LiveNews\\docs\\roadmap\\critique\\episodio-real\\episodio-real.work\\mix.m4a",
+   "silentRuns": {
+    "floorDb": -70,
+    "minSeconds": 0.25,
+    "count": 0,
+    "runs": []
+   }
+  },
+  "sync": {
+   "stingers": [
+    {
+     "at": 383.916,
+     "soundStartMs": null,
+     "cut": 384.315,
+     "thumpVsCutMs": 59
+    },
+    {
+     "at": 387.733,
+     "soundStartMs": 79,
+     "cut": 388.133,
+     "thumpVsCutMs": 6
+    }
+   ],
+   "captions": [],
+   "recordedCaptions": [
+    {
+     "at": 4.6,
+     "onsetMs": -9,
+     "text": "Online AI detection now checks watermarks from Google and it"
+    },
+    {
+     "at": 9.533,
+     "onsetMs": -10,
+     "text": "Also coming up: a virtual cell project, then Finland’s halt "
+    },
+    {
+     "at": 15.833,
+     "onsetMs": -25,
+     "text": "I’m Max Circuit, with Ada Volt."
+    },
+    {
+     "at": 18.267,
+     "onsetMs": -15,
+     "text": "Google’s new SynthID website can check for invisible AI wate"
+    },
+    {
+     "at": 25.133,
+     "onsetMs": -17,
+     "text": "Ars Technica reports the detector supports watermarks from O"
+    },
+    {
+     "at": 33.467,
+     "onsetMs": -25,
+     "text": "Google says Gemini has integrated SynthID with more than 180"
+    },
+    {
+     "at": 43.4,
+     "onsetMs": -31,
+     "text": "The detector checks for a signal."
+    },
+    {
+     "at": 45.7,
+     "onsetMs": -8,
+     "text": "It does not settle every question about who made a file."
+    },
+    {
+     "at": 49.633,
+     "onsetMs": -37,
+     "text": "Google DeepMind, Meta, and AI drug discovery startup Isomorp"
+    },
+    {
+     "at": 61.733,
+     "onsetMs": null,
+     "text": "combat disease, as reported earlier by Reuters."
+    },
+    {
+     "at": 65.533,
+     "onsetMs": -33,
+     "text": "The work is part of a $1.8 billion Virtual Biology initiativ"
+    },
+    {
+     "at": 71.1,
+     "onsetMs": -24,
+     "text": "Finnish authorities have ordered a halt to building work at "
+    },
+    {
+     "at": 78.167,
+     "onsetMs": -6,
+     "text": "The BBC reports the order follows concerns about clearing mo"
+    },
+    {
+     "at": 85.067,
+     "onsetMs": -5,
+     "text": "At one site, work was carried out without a mandatory enviro"
+    },
+    {
+     "at": 91.033,
+     "onsetMs": -34,
+     "text": "Google said it fell short of its own standards and would fol"
+    },
+    {
+     "at": 96.367,
+     "onsetMs": -35,
+     "text": "Parallel Systems raised $100 million to scale production of "
+    },
+    {
+     "at": 106.133,
+     "onsetMs": -9,
+     "text": "TechCrunch reports the vehicle runs without an operator, doe"
+    },
+    {
+     "at": 114.9,
+     "onsetMs": -7,
+     "text": "OpenAI is bringing college application planning tools to Cha"
+    },
+    {
+     "at": 120.633,
+     "onsetMs": -21,
+     "text": "The Verge reports the feature will bring application require"
+    },
+    {
+     "at": 128.433,
+     "onsetMs": -39,
+     "text": "In the US, it will first focus on students in grades 10 thro"
+    },
+    {
+     "at": 135.133,
+     "onsetMs": -14,
+     "text": "The announcement followed a report calling ChatGPT for Teens"
+    },
+    {
+     "at": 141.233,
+     "onsetMs": -34,
+     "text": "French company Mistral says its new 1 trillion-parameter mod"
+    },
+    {
+     "at": 148.933,
+     "onsetMs": -16,
+     "text": "Ars Technica reports the model is available in preview and i"
+    },
+    {
+     "at": 156.5,
+     "onsetMs": -25,
+     "text": "A final version is expected by the end of the month."
+    },
+    {
+     "at": 160.133,
+     "onsetMs": -33,
+     "text": "Businesses can run open-weight models at the cost of the com"
+    },
+    {
+     "at": 164.967,
+     "onsetMs": -22,
+     "text": "Translation, for the rest of us: an open-weight model is an "
+    },
+    {
+     "at": 172.067,
+     "onsetMs": -19,
+     "text": "Italian Prime Minister Giorgia Meloni has applied to tradema"
+    },
+    {
+     "at": 179.767,
+     "onsetMs": -44,
+     "text": "Voice clones are created by training AI on recordings of rea"
+    },
+    {
+     "at": 184.667,
+     "onsetMs": -30,
+     "text": "Deepfake, for the record: a fake video or voice made with AI"
+    },
+    {
+     "at": 189.8,
+     "onsetMs": -26,
+     "text": "Healthleap has raised $38 million to build an AI platform th"
+    },
+    {
+     "at": 200,
+     "onsetMs": -35,
+     "text": "TechCrunch reports the platform is deployed in more than 50 "
+    },
+    {
+     "at": 208.767,
+     "onsetMs": -17,
+     "text": "The company has also built programs to identify aspiration p"
+    },
+    {
+     "at": 218.2,
+     "onsetMs": -35,
+     "text": "NASA’s James Webb Space Telescope is giving astronomers a gl"
+    },
+    {
+     "at": 226.167,
+     "onsetMs": -15,
+     "text": "ScienceDaily reports researchers studied 21 rare extreme deb"
+    },
+    {
+     "at": 237.267,
+     "onsetMs": -21,
+     "text": "A treatment that blocked the protein 15-PGDH restored natura"
+    },
+    {
+     "at": 244.633,
+     "onsetMs": -18,
+     "text": "ScienceDaily reports it also helped prevent osteoarthritis a"
+    },
+    {
+     "at": 251.8,
+     "onsetMs": -21,
+     "text": "Human cartilage samples from knee replacement patients began"
+    },
+    {
+     "at": 259.067,
+     "onsetMs": -38,
+     "text": "Researchers say the approach could potentially lead to treat"
+    },
+    {
+     "at": 268.267,
+     "onsetMs": -15,
+     "text": "Arctic sea ice reached its annual minimum extent on Septembe"
+    },
+    {
+     "at": 278.567,
+     "onsetMs": -29,
+     "text": "NASA reports that ice covered less of the Arctic Ocean at it"
+    },
+    {
+     "at": 286.5,
+     "onsetMs": -19,
+     "text": "Each of the past 20 summers ranks among the 20 lowest minimu"
+    },
+    {
+     "at": 293.4,
+     "onsetMs": -15,
+     "text": "Three women have been falsely identified and harassed in con"
+    },
+    {
+     "at": 302.033,
+     "onsetMs": -39,
+     "text": "The Verge reports her lawyers say online users are trying to"
+    },
+    {
+     "at": 307.333,
+     "onsetMs": -27,
+     "text": "The article says the effort is taking place on mainstream so"
+    },
+    {
+     "at": 312.867,
+     "onsetMs": -34,
+     "text": "Her identity is known to her lawyers, the judge and the peop"
+    },
+    {
+     "at": 318.067,
+     "onsetMs": -14,
+     "text": "There is little to no safety data for many gray-market pepti"
+    },
+    {
+     "at": 325.2,
+     "onsetMs": -18,
+     "text": "The Verge reports BPC-157 is not approved by any regulatory "
+    },
+    {
+     "at": 333.733,
+     "onsetMs": -29,
+     "text": "A 2025 review found 35 preclinical studies and a single clin"
+    },
+    {
+     "at": 340.767,
+     "onsetMs": -33,
+     "text": "The article says BPC-157 videos drew more than 50 million vi"
+    },
+    {
+     "at": 349.933,
+     "onsetMs": -13,
+     "text": "And finally: NASA’s Curiosity rover captured a panorama of w"
+    },
+    {
+     "at": 358.9,
+     "onsetMs": -21,
+     "text": "NASA says six images were stitched together, with blue hues "
+    },
+    {
+     "at": 364.233,
+     "onsetMs": -15,
+     "text": "The scene features yardangs on Mount Sharp, where Curiosity "
+    },
+    {
+     "at": 371.633,
+     "onsetMs": -17,
+     "text": "A careful image, with the colour left in."
+    },
+    {
+     "at": 374.3,
+     "onsetMs": -13,
+     "text": "The rover has earned the view."
+    },
+    {
+     "at": 376.933,
+     "onsetMs": -24,
+     "text": "That’s TECH BYTES."
+    },
+    {
+     "at": 378.3,
+     "onsetMs": -13,
+     "text": "I’m Max Circuit."
+    },
+    {
+     "at": 379.7,
+     "onsetMs": -31,
+     "text": "Join us next time for the future, one byte at a time."
+    }
+   ],
+   "voiceOnsets": [],
+   "summary": {
+    "stingerSoundStartMs": {
+     "n": 1,
+     "median": 79,
+     "min": 79,
+     "max": 79
+    },
+    "stingerThumpVsCutMs": {
+     "n": 2,
+     "median": 59,
+     "min": 6,
+     "max": 59
+    },
+    "captionLeadMs": {
+     "n": 0,
+     "median": null,
+     "min": null,
+     "max": null
+    },
+    "recordedCaptionToVoiceMs": {
+     "n": 56,
+     "of": 57,
+     "median": -21,
+     "min": -44,
+     "max": -5
+    },
+    "voiceOnsetMs": {
+     "n": 0,
+     "median": null,
+     "min": null,
+     "max": null
+    }
+   }
+  },
+  "timingMs": {
+   "frame": 88790,
+   "encode": 1467,
+   "speech": 1329,
+   "clock": 45383,
+   "other": 7942
+  },
+  "synth": {
+   "requests": 0,
+   "cached": 0,
+   "seconds": 0,
+   "synthTime": 0,
+   "waitTime": 0,
+   "errors": 0,
+   "pool": {
+    "prefetched": 0,
+    "prefetchHits": 0,
+    "urgent": 0
+   }
+  },
+  "page": {
+   "stats": {
+    "disconnects": 478,
+    "valueSets": 499,
+    "utterances": 1,
+    "cancels": 0,
+    "ended": 157,
+    "bindings": 0
+   },
+   "errors": [],
+   "contexts": 1
+  },
+  "webaudio": {
+   "n": 18753600,
+   "sampleRate": 48000,
+   "contexts": [
+    {
+     "origin": 2,
+     "renderMs": 0,
+     "covered": 18753600,
+     "frames": 18777728,
+     "tapped": true,
+     "speechTap": true
+    }
+   ],
+   "peak": 0.5438913702964783,
+   "speechTapped": true,
+   "speechPeak": 0.8131017684936523,
+   "stats": {
+    "disconnects": 478,
+    "valueSets": 499,
+    "utterances": 1,
+    "cancels": 0,
+    "ended": 157,
+    "bindings": 0
+   }
+  },
+  "beds": {
+   "version": "lofi v2 (programme bibles)",
+   "samples": 19185600,
+   "peak": 0.13838252425193787,
+   "log": [
+    {
+     "t": 7.564,
+     "moment": "open",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 12.464,
+     "moment": "headlines",
+     "action": "bed",
+     "detail": "tech-bytes:headlines"
+    },
+    {
+     "t": 17.233,
+     "moment": "headlines",
+     "action": "bed",
+     "detail": "tech-bytes:headlines"
+    },
+    {
+     "t": 23.533,
+     "moment": "headlines",
+     "action": "bed",
+     "detail": "tech-bytes:headlines"
+    },
+    {
+     "t": 26.123,
+     "moment": "story",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 51.249,
+     "moment": "chat",
+     "action": "bed",
+     "detail": "tech-bytes:chat"
+    },
+    {
+     "t": 57.46849999999999,
+     "moment": "story",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 78.956,
+     "moment": "story",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 104.20400000000001,
+     "moment": "story",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 122.76700000000001,
+     "moment": "story",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 149.078,
+     "moment": "story",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 172.8165,
+     "moment": "chat",
+     "action": "bed",
+     "detail": "tech-bytes:chat"
+    },
+    {
+     "t": 179.9205,
+     "moment": "story",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 192.51,
+     "moment": "chat",
+     "action": "bed",
+     "detail": "tech-bytes:chat"
+    },
+    {
+     "t": 197.65450000000004,
+     "moment": "story",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 226.03950000000003,
+     "moment": "story",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 245.11850000000004,
+     "moment": "story",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 276.124,
+     "moment": "story",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 301.2655,
+     "moment": "story",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 325.92650000000003,
+     "moment": "story",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 357.79200000000003,
+     "moment": "finally",
+     "action": "bed",
+     "detail": "tech-bytes:finally"
+    },
+    {
+     "t": 379.21,
+     "moment": "featureEnd",
+     "action": "sting",
+     "detail": "techButton"
+    },
+    {
+     "t": 379.48600000000005,
+     "moment": "chat",
+     "action": "bed",
+     "detail": "tech-bytes:chat"
+    },
+    {
+     "t": 384.78550000000007,
+     "moment": "outro",
+     "action": "bed",
+     "detail": "tech-bytes:signoff"
+    },
+    {
+     "t": 390.99,
+     "moment": "signoffEnd",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 392.31550000000004,
+     "moment": "endcard",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 395.733,
+     "moment": "silence",
+     "action": "silence",
+     "detail": ""
+    }
+   ],
+   "actions": [
+    {
+     "t": -0.436,
+     "moment": "open",
+     "programId": "tech-bytes",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 4.464,
+     "moment": "headlines",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:headlines"
+    },
+    {
+     "t": 9.233,
+     "moment": "headlines",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:headlines"
+    },
+    {
+     "t": 15.533,
+     "moment": "headlines",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:headlines"
+    },
+    {
+     "t": 18.123,
+     "moment": "story",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 43.249,
+     "moment": "chat",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:chat"
+    },
+    {
+     "t": 49.468,
+     "moment": "story",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 70.956,
+     "moment": "story",
+     "programId": "tech-bytes",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 96.204,
+     "moment": "story",
+     "programId": "tech-bytes",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 114.767,
+     "moment": "story",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 141.078,
+     "moment": "story",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 164.816,
+     "moment": "chat",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:chat"
+    },
+    {
+     "t": 171.921,
+     "moment": "story",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 184.51,
+     "moment": "chat",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:chat"
+    },
+    {
+     "t": 189.655,
+     "moment": "story",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 218.04,
+     "moment": "story",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 237.119,
+     "moment": "story",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:story"
+    },
+    {
+     "t": 268.124,
+     "moment": "story",
+     "programId": "tech-bytes",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 293.265,
+     "moment": "story",
+     "programId": "tech-bytes",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 317.927,
+     "moment": "story",
+     "programId": "tech-bytes",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 349.792,
+     "moment": "finally",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:finally"
+    },
+    {
+     "t": 371.21,
+     "moment": "featureEnd",
+     "programId": "tech-bytes",
+     "action": "sting",
+     "detail": "techButton"
+    },
+    {
+     "t": 371.486,
+     "moment": "chat",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:chat"
+    },
+    {
+     "t": 376.786,
+     "moment": "outro",
+     "programId": "tech-bytes",
+     "action": "bed",
+     "detail": "tech-bytes:signoff"
+    },
+    {
+     "t": 382.99,
+     "moment": "signoffEnd",
+     "programId": "tech-bytes",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 384.316,
+     "moment": "endcard",
+     "programId": "tech-bytes",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 387.733,
+     "moment": "silence",
+     "programId": "channel",
+     "action": "silence",
+     "detail": ""
+    }
+   ],
+   "ms": 314309,
+   "pace": {
+    "tech-bytes": {
+     "seconds": 383.3,
+     "changes": 6,
+     "perMin": 0.94,
+     "maxPerMin": null,
+     "arrangement": 9,
+     "beds": 3,
+     "shortestBed": 33.2,
+     "minBed": null,
+     "short": []
+    }
+   }
+  },
+  "pageErrors": []
+ }
+}

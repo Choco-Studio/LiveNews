@@ -18,8 +18,35 @@
 import { GESTURES, registerGestures } from '../../v2/canvas25d/gestures/index.js';
 import { LIBRARY } from '../../v2/canvas25d/gestures/library.js';
 
-const STANCE = 9.4; // cm from the centre line to each foot when standing (a little wider than the hips)
-const STEP = { stride: 34, half: 0.24, lift: 3.2, minSteps: 1 }; // cm per side-step, s per foot move
+// (critique r27: a stance wider than the hips, 34 cm side-steps and a 3 cm foot lift made straight legs that
+// opened and closed like a pair of compasses; hip-width feet, shorter steps, a lift that bends the knee)
+const STANCE = 8.0; // cm from the centre line to each foot when standing (the hips' width)
+const STEP = { stride: 24, half: 0.22, lift: 6, minSteps: 1 }; // cm per side-step, s per foot move
+const STAND_REST = {
+  wrist: [-2.2, 40.5, 5.5],
+  wristF: [2.4, 41, 4.8],
+  dir: [0.05, 1, 0.2],
+  dirF: [-0.05, 1, 0.18],
+  // a relaxed hanging hand: fingers only a little bent (more and they hook forward like claws, critique r27)
+  curl: [0.15, 0.18, 0.22, 0.26, 0.3],
+  curlF: [0.15, 0.18, 0.22, 0.26, 0.3],
+  spread: 0.05,
+  spreadF: 0.05,
+  // the palms turned in toward the thighs, three-quarter to the lens (square on they read as mittens with a hooked
+  // thumb, edge-on as a claw of separated fingers)
+  palm: [0.7, 0, -0.7],
+  palmF: [-0.7, 0, -0.7],
+  palmW: 1,
+  palmWF: 1,
+};
+// standing still and explaining, the hands come together loosely in front of the waist (the presenter's
+// "presenting" posture, lower than the anchors' hands on the desk); walking, they hang at the sides
+const PRESENT_REST = {
+  wrist: [-5.0, 27.5, 12.0],
+  wristF: [4.8, 28.0, 11.5],
+  dir: [-0.8, 0.3, 0.52],
+  dirF: [0.8, 0.3, 0.52],
+};
 const GESTURE_GAP = 2.3; // s between two arm gestures (the point is 2.1 s)
 
 const smooth = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
@@ -83,6 +110,12 @@ export class Presenter {
    */
   constructor(standing, { scale = 1.2, neckY = 60, seed = 1 } = {}) {
     this.st = standing;
+    // standing, the hands rest loosely together in front of the belt (the rig's REST is the seated anchors'
+    // hands on the desk: held up at the chest by a standing man they read as carrying an invisible ball,
+    // critique r27)
+    this.rest = { ...STAND_REST, wrist: STAND_REST.wrist.slice(), wristF: STAND_REST.wristF.slice(), dir: STAND_REST.dir.slice(), dirF: STAND_REST.dirF.slice() };
+    this.hang = 0;
+    standing.actor.perf.rest = this.rest;
     this.s = scale;
     this.neckY = neckY;
     this.x = 66; // body centre (screen px, the feet's midpoint plus the weight shift)
@@ -218,7 +251,7 @@ export class Presenter {
     }
     // the weight: over the foot that carries him while the other swings; otherwise slow shifts now and then
     let target;
-    if (swing >= 0) target = (swing === 1 ? -1 : 1) * 2.6;
+    if (swing >= 0) target = (swing === 1 ? -1 : 1) * 3.4;
     else {
       if (t > this.nextShift) {
         this.shiftFrom = this.weight;
@@ -229,6 +262,26 @@ export class Presenter {
       target = lerp(this.shiftFrom, this.shiftTo, smooth((t - this.shiftAt) / 0.9));
     }
     this.weight += (target - this.weight) * 0.18;
+    // the arms balance the step: the stepping side's hand lifts a little away from the hip, the other settles
+    let lw = 0, lf = 0;
+    if (this.plan) {
+      for (const st of this.plan) {
+        if (t <= st.t0 || t >= st.t1) continue;
+        const k = Math.sin(Math.PI * (t - st.t0) / (st.t1 - st.t0));
+        if (st.foot === 0) lw = k;
+        else lf = k;
+      }
+    }
+    // hanging while he walks (and a moment either side), together in front while he stands and explains
+    const moving = this.plan ? 1 : 0;
+    this.hang += ((moving ? 1 : 0) - this.hang) * (moving ? 0.16 : 0.06);
+    const h = smooth(Math.max(0, Math.min(1, this.hang)));
+    for (const k of ['wrist', 'wristF', 'dir', 'dirF']) for (let i = 0; i < 3; i++) this.rest[k][i] = lerp(PRESENT_REST[k][i], STAND_REST[k][i], h);
+    this.rest.palmW = this.rest.palmWF = h;
+    this.rest.wrist[0] += 1.6 * lw;
+    this.rest.wrist[2] += 0.8 * lw;
+    this.rest.wristF[0] -= 1.6 * lf;
+    this.rest.wristF[2] += 0.8 * lf;
     const mid = (this.feet[0].x + this.feet[1].x) / 2;
     this.x = mid + this.weight * s;
     return this;

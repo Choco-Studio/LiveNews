@@ -20,6 +20,7 @@ import { OUTFITS, registerOutfit } from './outfit.js';
 import { penny, drawSleek, drawChignon } from './penny.js';
 import { sam, drawCrop } from './sam.js';
 import { lola, drawBob, drawBobBack, drawEarrings } from './lola.js';
+import { drawWarmHead } from './nova.js';
 
 const BUD = material('remote:earpiece', { ramp: [P.slate, P.ink, P.black, P.black], line: P.black, decal: true });
 const TUBE = material('remote:tube', { ramp: [P.silver, P.fog, P.steel, P.slate], decal: true });
@@ -90,6 +91,9 @@ export const rhea = deriveLook(penny, {
   brows: { y: -2.25, len: 3.15, thick: 0.5, color: P.black, arch: 0.42 },
   mouth: { y: 5.75, w: 3.45, lip: P.brown, lipHi: P.tan, upper: P.tanShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   skin: SKIN_TAN,
+  // (critique r33: one flat tone and the far side in shade; the lit planes reach further round her face. Not
+  // Nova's hand-placed planes: under her low fringe the forehead plane was clipped to a thin bar, a plaster)
+  skinLift: 0.35,
   skinLine: P.maroon,
   hair: { style: 'chignon', ramp: [P.slate, P.ink, P.black, P.black], line: P.black, edge: P.ink, rimTop: false },
   pearls: null,
@@ -119,6 +123,9 @@ export const vic = deriveLook(sam, {
   nose: { y0: -0.3, y1: 3.35, w: 1.6, big: false },
   mouth: { y: 5.8, w: 3.7, lip: P.maroon, lipHi: P.tanShade, upper: P.brown, inner: P.black, teeth: P.silver, tongue: P.darkRed },
   skin: [P.tan, P.tanShade, P.brown, P.maroon],
+  // the deep ramp lit as Nova's (critique r28: without it his face was one brown with the far side in shade and
+  // the nose's light as the only lit pixels, a pale dot)
+  skinLift: 0.4,
   skinLine: P.maroon,
   hair: { style: 'crop', ramp: [P.slate, P.ink, P.black, P.black], line: P.black, edge: P.ink, rimTop: false },
   outfit: 'correspondent',
@@ -131,7 +138,7 @@ export const vic = deriveLook(sam, {
   cuff: P.white,
   persona: { sway: 0.75, headMotion: 0.95, blinkMin: 2.4, blinkMax: 5.6, energy: 0.95, smile: 0.16 },
   mats: { hairD: { ramp: [P.slate, P.ink, P.black, P.black], decal: true } },
-  parts: { hair: drawCrop, over: drawEarpiece },
+  parts: { head: drawWarmHead, hair: drawCrop, over: drawEarpiece },
 });
 
 export const mika = deriveLook(lola, {
@@ -140,7 +147,8 @@ export const mika = deriveLook(lola, {
   head: { top: -9.8, craniumY: -2.5, R: 7.1, cheekY: 1.7, cheekHW: 6.75, chinY: 8.7, chinHW: 2.3, jawPow: 2.0 },
   eyes: { y: -0.5, x: 2.8, w: 2.7, h: 1.3, iris: [P.maroon, P.black], lash: P.black, lashes: true },
   brows: { y: -2.1, len: 3.0, thick: 0.45, color: P.black, arch: 0.4 },
-  mouth: { y: 5.6, w: 3.3, lip: P.darkRed, lipHi: P.skinShade, upper: P.skinShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
+  // (critique r33: as Lola's and Penny's, the colour on the lips, not on the line between them)
+  mouth: { y: 5.6, w: 3.3, lip: P.brown, lipHi: P.skinShade, upper: P.darkRed, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   skin: SKIN_LIGHT,
   skinLine: P.brown,
   hair: { style: 'bob', ramp: [P.slate, P.ink, P.black, P.black], line: P.black, edge: P.ink, rimTop: false },

@@ -12,21 +12,22 @@ import { defineLook } from './base.js';
 export const lola = defineLook({
   id: 'lola',
   name: 'Lola Byte',
-  head: { top: -10.0, craniumY: -2.6, R: 7.3, cheekY: 1.8, cheekHW: 6.95, chinY: 9.0, chinHW: 2.4, jawPow: 2.05 },
+  head: { top: -10.0, craniumY: -2.6, R: 7.3, cheekY: 1.8, cheekHW: 6.95, chinY: 9.0, chinHW: 2.8, jawPow: 2.55 }, // critique r1: a jaw that keeps its width (adult, not a light bulb)
   headAt: [0, -13.0],
-  neck: { hw: 2.4 },
+  neck: { hw: 3.0 }, // critique r24: 2.4 read as a pencil neck under a broad head (a bobble-head)
   // deep green eyes (the lime P.green read glassy and uncanny at close-ups)
   eyes: { y: -0.6, x: 2.85, w: 2.75, h: 1.45, iris: [P.darkGreen, P.black], lash: P.black, lashes: true },
   brows: { y: -2.15, len: 3.15, thick: 0.45, color: P.brown, arch: 0.55 },
   nose: { y0: -0.2, y1: 3.25, w: 1.25, big: false },
-  mouth: { y: 5.8, w: 3.5, lip: P.darkRed, lipHi: P.skinShade, upper: P.tanShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
+  // (critique r29: the colour sat only on the line where the lips meet, a red slit; the lips carry it now)
+  mouth: { y: 5.8, w: 3.5, lip: P.brown, lipHi: P.skinShade, upper: P.darkRed, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   ears: { y: -0.1, h: 2.8, w: 1.0 },
   skin: [P.skin, P.tan, P.skinShade, P.tanShade], // tan skin, warm softer shadows (world-now.md §5 item 10: face L* 55-73)
   skinLine: P.brown,
   // auburn, not candy orange; a maroon (local) line at the fringe, the hair light on the upper right only
   hair: { style: 'bob', ramp: [P.rust, P.brown, P.maroon, P.black], line: P.black, edge: P.maroon, rimTop: false },
   mustache: null,
-  torso: { neckHW: 3.0, shoulderTop: 3.0, shoulderHW: 18.4, sideHW: 17.2, bottom: 46, vDepth: 16, shoulderJoint: [15.8, 7.0] },
+  torso: { neckHW: 3.6, shoulderTop: 3.0, shoulderHW: 18.4, sideHW: 17.2, bottom: 46, vDepth: 16, shoulderJoint: [15.8, 7.0] },
   outfit: 'blazer',
   jacket: { ramp: [P.steel, P.navy, P.ink, P.black], line: P.black }, // deep blue, darker than her face; cool steel sheen (no candy-bright blue)
   shirt: { ramp: [P.white, P.silver, P.fog, P.steel], line: P.steel }, // a soft white top: the face stays the brightest warm area
@@ -56,7 +57,10 @@ const LXY = new LocalXY();
 const HWL = new HeadWidthLUT();
 // the sheen window is a ring near the dome's rim (a halo of short strokes), never reaching the crown: strokes
 // converging on the crown read as a starburst
-const CO = { cw: 1.55, s: 1, seed: 11, sep: true, hiLo: 5.4, hiHi: 8.9, hiW: 0.42, gap: 4.2, keepLit: true };
+// (critique r19: the sheen took most of each clump's width, so the fanned clumps lit as a pinwheel of wedges;
+// the separations broke into black dashes, stitching. Now a narrower sheen in a narrower band, separations
+// one step darker and long, with an occasional break)
+const CO = { cw: 1.55, s: 1, seed: 11, sep: true, sepSoft: true, hiLo: 6.3, hiHi: 8.6, hiW: 0.42, litW: 0.7, gap: 0, sepPx: 1.45, keepLit: true };
 export function drawBob(buf, L, m, head, s, lag) {
   const H = L.head;
   const cyc = H.craniumY - 0.3;
@@ -179,18 +183,25 @@ export function drawBobBack(buf, L, m, head) {
 
 export function drawEarrings(buf, L, head, s, lag) {
   const H = L.head;
-  const gold = dec(L.earrings), dark = dec(P.orange), glint = dec(P.white);
+  // the drop's shaded tip is the metal's own darker step (critique r33: Mika's silver drops had an orange tip)
+  const gold = dec(L.earrings), dark = dec(L.earrings === P.silver ? P.fog : P.orange), glint = dec(P.white);
   for (let side = -1; side <= 1; side += 2) {
     const hw = headHW(H, H.chinY - 2.6, 0);
     const [ex, ey] = head.toScreen(side * (hw + 0.1) + lag * 0.6, H.chinY - 1.1);
-    // a small gold stud: 1 px in wide shots, 2x2 with a shaded corner in close-ups
+    // a small gold drop under the bob: 1 px in wide shots, a 1x2 drop (lit top, shaded tip) in close-ups
+    // (critique r6: a 2x2 block with a white glint read as an orange square floating beside the jaw)
     const cx = Math.round(ex), cy = Math.round(ey);
     buf.plot(cx, cy, gold, 1);
     if (s >= 2.2) {
-      buf.plot(cx + 1, cy, gold, 1);
-      buf.plot(cx, cy + 1, gold, 1);
-      buf.plot(cx + 1, cy + 1, dark, 1);
-      if (s >= 3) buf.plot(cx, cy, glint, 1); // the key light's specular on the stud
+      buf.plot(cx, cy + 1, dark, 1);
+      // its stem up to the hair's edge (critique r28: a gap under the bob left the drop floating)
+      const gh = head.gb + GROUPS.hair;
+      for (let k = 1; k <= 4; k++) {
+        const y = cy - k, i = y * buf.w + cx;
+        if (y < 1 || (buf.mat[i] && buf.grp[i] === gh)) break;
+        buf.plot(cx, y, gold, 1);
+      }
     }
+    void glint;
   }
 }

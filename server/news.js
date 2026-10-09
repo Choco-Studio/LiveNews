@@ -721,6 +721,31 @@ function forgetPicture(s) {
   for (const k of ['images', 'imageWidth', 'imageVia', 'imageCredit', 'imageCreditVia', 'imageCredits', 'imageLender', 'imageFrom']) delete s[k];
 }
 
+/** Did this picture come from the free-picture desk (server/freepics), checked for YouTube? */
+export const isFreePicture = (s) => !!s?.image && String(s.imageVia || '').startsWith('free:') && !!s.imageRecord;
+
+function forgetFreePicture(s) {
+  forgetPicture(s);
+  for (const k of ['imageKind', 'imageLicense', 'imagePage', 'imageFocus', 'imageRecord', 'freePicture']) delete s[k];
+}
+
+/** A free-picture desk's picture on a story: credited "FILE · author · licence", with its record for claims. */
+function applyFreePicture(s, p) {
+  forgetFreePicture(s);
+  s.image = p.url;
+  s.imageWidth = p.width;
+  s.imageVia = p.via;
+  s.imageKind = 'file';
+  s.imageCredit = p.credit;
+  s.imageCreditVia = 'free';
+  s.imageLicense = p.license;
+  if (p.page) s.imagePage = p.page;
+  if (Number.isFinite(p.focusY)) s.imageFocus = p.focusY;
+  s.imageRecord = p.record;
+  s.freePicture = p; // what a refresh may displace (findFreePictures puts it back)
+  s.imageChecked = true; // the article page's picture is never looked for in a free mode
+}
+
 export class NewsDesk {
   constructor({ fetchImpl = fetch, log = console, lookup = null } = {}) {
     this.fetch = fetchImpl;
@@ -1406,7 +1431,8 @@ export class NewsDesk {
    * keep resolving in the background and help the next stage. Returns counts
    * for the pipeline log.
    */
-  async findPictures(stories, { budgetMs = 6000, concurrency = 4 } = {}) {
+  async findPictures(stories, { budgetMs = 6000, concurrency = 4, briefs = null } = {}) {
+    if (this.freeDesk) return this.findFreePictures(stories, { budgetMs, briefs });
     const had = new Set(stories.filter((s) => s.image).map((s) => s.id));
     const needs = (s) => !s.imageChecked && (!s.image || s.imageFrom || (s.imageWidth && s.imageWidth < GOOD_WIDTH)) && !(s.local && !s.page) && (s.local || /^https?:\/\//i.test(s.link || ''));
     const todo = stories.filter(needs).sort((a, b) => Number(!!a.image && !a.imageFrom) - Number(!!b.image && !b.imageFrom));
@@ -1444,6 +1470,51 @@ export class NewsDesk {
       borrowed: withPicture.filter((s) => s.imageFrom).length,
       searched: withPicture.filter((s) => s.imageKind === 'file').length,
     };
+  }
+
+  /**
+   * The picture desk in a free mode (PICTURES=free, docs/roadmap/FOTOS_LIBRES.md): only pictures the free-picture
+   * desk found and checked may stay on a story; the outlets' own, the clusters' borrowed ones and the old search's
+   * never air. `briefs` (storyId → the writer's visual brief) makes the desk look again with the brief, which then
+   * decides (a brief that finds nothing takes a headline guess off air). Within `budgetMs`, a few stories at a
+   * time; searches still running after it finish in the background and help the next stage.
+   */
+  async findFreePictures(stories, { budgetMs = 30000, briefs = null, concurrency = 3 } = {}) {
+    // a picture that is not the free desk's goes; the story's own free picture (displaced by a refresh that lent it
+    // another outlet's) comes back without a new search
+    for (const s of stories) {
+      if (!s.image || isFreePicture(s)) continue;
+      const kept = s.freePicture;
+      forgetFreePicture(s);
+      if (kept) applyFreePicture(s, kept);
+    }
+    const brief = (s) => briefs?.get?.(s.id) || null;
+    const todo = stories.filter((s) => !s.local && (brief(s) ? !s.imageBrief : !s.imageSearched || Date.now() - s.imageSearched > 3600_000));
+    const deadline = Date.now() + budgetMs;
+    let next = 0;
+    const worker = async () => {
+      while (next < todo.length && Date.now() < deadline) {
+        const s = todo[next++];
+        const b = brief(s);
+        s.imageSearched = Date.now();
+        let p = null;
+        try {
+          // the files the programme's other stories already show (no picture twice in one programme)
+          const avoid = new Set(stories.filter((o) => o !== s && isFreePicture(o)).map((o) => o.imageRecord?.file).filter(Boolean));
+          p = await this.freeDesk.find(s, { brief: b, avoid });
+        } catch (err) {
+          this.log.warn?.(`[freepics] ${s.id}: ${err.message}`);
+          continue;
+        }
+        if (b) s.imageBrief = true;
+        if (p) applyFreePicture(s, p);
+        else if (b) forgetFreePicture(s);
+      }
+    };
+    const left = deadline - Date.now();
+    if (todo.length && left > 0) await Promise.race([Promise.all(Array.from({ length: Math.min(concurrency, todo.length) }, worker)), wait(left)]);
+    const withPicture = stories.filter((s) => s.image);
+    return { pictures: withPicture.length, of: stories.length, free: withPicture.length, portraits: withPicture.filter((s) => s.imageFocus).length };
   }
 
   /** A FILE photo of a story's place from the image search (server/imagesearch.js), credited as such. */

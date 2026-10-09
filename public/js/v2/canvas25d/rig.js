@@ -73,11 +73,19 @@ function newChannels() {
   return c;
 }
 
-function resetChannels(c) {
+function resetChannels(c, rest = null) {
   for (let i = 0; i < REST_KEYS.length; i++) {
     const k = REST_KEYS[i];
     if (REST_ARR[i]) copy(c[k], REST[k]);
     else c[k] = REST[k];
+  }
+  // perf.rest: a performer's own resting values for some channels (a presenter standing at the weather wall
+  // has no desk to rest the hands on); gestures blend their arm tracks from and back to these
+  if (rest) {
+    for (const k in rest) {
+      if (Array.isArray(rest[k])) copy(c[k], rest[k]);
+      else c[k] = rest[k];
+    }
   }
   c.wide = 0;
   c.blink = 0;
@@ -274,10 +282,11 @@ function applyGestures(c, list, t) {
  *   { side: +1 partner on screen-right | -1 | 0 solo, seed, gestures: [{ name, t0, speed?, n?, variant?, amp? }],
  *     emotions: [{ t0, name }], speech: buildSpeech(...) | liveSpeech(...) | null,
  *     look: [{ t0, t1, target? }] looks, listen: bool (no speech: small listening nods),
- *     gain: mouth openness, papers: bool (the script stack is on the desk) }
+ *     gain: mouth openness, papers: bool (the script stack is on the desk),
+ *     rest: { channel: value } resting values that replace REST's (a standing presenter's hands) }
  */
 export function evaluate(L, perf, t, c = newChannels()) {
-  resetChannels(c);
+  resetChannels(c, perf.rest || null);
   const persona = L.persona;
   const seed = perf.seed ?? (L.id.length * 31 + 7);
   applyEmotion(c, perf, t, persona); // 2

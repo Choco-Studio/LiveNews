@@ -6,3 +6,10 @@ data/
 # Python bytecode caches
 __pycache__/
 *.pyc
+
+# Rendered media (too big for git; GitHub rejects files over 100 MB)
+*.mp4
+*.wav
+*.m4a
+*.f32
+*.work/

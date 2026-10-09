@@ -7,11 +7,12 @@
 //
 //   node tools/pace/strips.mjs before.json after.json [--lab public/lab/pace.html]
 
+import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 
 const argv = process.argv.slice(2);
 const li = argv.indexOf('--lab');
-const lab = li >= 0 ? argv[li + 1] : new URL('../../public/lab/pace.html', import.meta.url).pathname;
+const lab = li >= 0 ? argv[li + 1] : fileURLToPath(new URL('../../public/lab/pace.html', import.meta.url));
 const [beforeFile, afterFile] = argv.filter((a, i) => !a.startsWith('--') && argv[i - 1] !== '--lab');
 const ID = { 'WORLD NOW': 'world-now', 'TECH BYTES': 'tech-bytes', 'NEWS IN 60': 'news-60', 'COSMOS DESK': 'cosmos', 'MONEY MINUTE': 'money-minute' };
 const pick = (file) => {

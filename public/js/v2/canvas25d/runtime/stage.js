@@ -35,7 +35,7 @@ import { P } from '../../../palette.js';
 import { THEME_ACCENT } from '../../../cast.js';
 import { CueClock, prunePerf, shiftPerf } from './cueclock.js';
 import { paceTrace } from '../../../pace.js';
-import { drawBackdrop, REMOTE, TWOWAY, cropInto, composeTwoWay } from '../studio/remote.js';
+import { drawBackdrop, REMOTE, CALL, TWOWAY, cropInto, composeTwoWay } from '../studio/remote.js';
 
 /** Legacy shot names the Stage draws (framings travel in scene.framing). */
 export const STUDIO_SHOTS = new Set(['wide', 'close']);
@@ -395,6 +395,18 @@ export class Stage {
     const deck = scene.footageDeck;
     bd.footage = !r.grave && id && deck?.ready?.(id) ? id : null;
     bd.kind = bd.footage ? 'footage' : 'desk';
+    // an expert on a video call (server/experts.js): their own room, framed as a laptop camera frames them
+    const call = !!r.room;
+    if (call) {
+      bd.kind = 'room';
+      bd.room = r.room;
+      bd.night = !!r.night;
+      bd.seed = hashSeed(String(r.id || 'x'));
+    }
+    const pos = call ? CALL : REMOTE;
+    this.remoteList[0].x = pos.x;
+    this.remoteList[0].y = pos.y;
+    this.remoteList[0].s = pos.s;
     bd.lat = Number.isFinite(r.lat) ? r.lat : 20;
     bd.lon = Number.isFinite(r.lon) ? r.lon : 0;
     bd.accent = this.accent;
@@ -423,7 +435,7 @@ export class Stage {
   drawRemote(t, scene) {
     const bd = this.backdrop;
     bd.frame = bd.kind === 'footage' ? scene.footageDeck?.frame?.(bd.footage, 'back', t) || null : null;
-    drawBackdrop(frame.px, bd.frame ? bd : { kind: 'desk', lat: bd.lat, lon: bd.lon, accent: bd.accent }, t);
+    drawBackdrop(frame.px, bd.kind === 'room' || bd.frame ? bd : { kind: 'desk', lat: bd.lat, lon: bd.lon, accent: bd.accent }, t);
     if (!this.remote) return null;
     return drawActors(t - this.epoch, this.remoteList, null)[0] || null;
   }
@@ -451,7 +463,7 @@ export class Stage {
     const dy = TWOWAY.h / 2 - TWOWAY.headY;
     cropInto(frame.px, hx + TWOWAY.w / 2 - TWOWAY.headX, hy + dy, this.studioBox, TWOWAY.w, TWOWAY.h);
     const rh = this.drawRemote(t, scene);
-    cropInto(frame.px, (rh?.cx ?? REMOTE.headX) + TWOWAY.w / 2 - TWOWAY.headX, (rh?.cy ?? 70) + dy, this.remoteBox, TWOWAY.w, TWOWAY.h);
+    cropInto(frame.px, (rh?.cx ?? (this.backdrop.kind === 'room' ? CALL : REMOTE).headX) + TWOWAY.w / 2 - TWOWAY.headX, (rh?.cy ?? 70) + dy, this.remoteBox, TWOWAY.w, TWOWAY.h);
     composeTwoWay(frame.px, this.studioBox, this.remoteBox, this.accent);
     frame.present(ctx);
   }

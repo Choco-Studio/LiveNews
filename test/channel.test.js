@@ -583,6 +583,9 @@ describe('config/channel.json', () => {
     for (const [id] of programs) assert.ok(channel.rotation.includes(id), `${id} is never scheduled`);
     // a correspondent "hosts" the links of the programmes that hand stories to them (server/correspondents.js)
     const hosts = new Set(programs.flatMap(([, p]) => [...p.presenters, ...(p.correspondents || [])]));
+    // an expert "hosts" the video calls of the programmes that have calls (server/experts.js)
+    const calls = (p) => (p.calls || 0) + (p.format?.parts || []).reduce((n, part) => n + (part.calls || 0), 0);
+    for (const [id, who] of Object.entries(channel.presenters)) if (who.expert && programs.some(([pid, p]) => calls(p) > 0 && who.expert.programmes?.includes(pid))) hosts.add(id);
     for (const id of Object.keys(channel.presenters)) assert.ok(hosts.has(id), `${id} hosts nothing`);
   });
 

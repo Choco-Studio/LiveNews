@@ -23,7 +23,10 @@
 import { P } from '../../../palette.js';
 import { material } from '../pixbuf.js';
 
-export const SKIN_LIGHT = [P.cream, P.skin, P.skinShade, P.brown];
+// light skin: lit skin, then tan as the shade and skinShade as the deep tone. The old ramp jumped
+// straight from skin to skinShade (critique r0: every light face read split in two along a hard,
+// stair-stepped terminator); brown stays the outline (skinLine).
+export const SKIN_LIGHT = [P.cream, P.skin, P.tan, P.skinShade];
 export const SKIN_TAN = [P.skin, P.tan, P.tanShade, P.brown];
 
 /** Materials of a look, registered once (cached on the look as L._mats). */

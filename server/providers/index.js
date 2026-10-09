@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { createCodexProvider } from './codexExec.js';
 import { createOpenAICompatProvider } from './openaiCompat.js';
 import { createMockProvider } from './mock.js';
@@ -19,8 +21,9 @@ export function createProviders(config) {
  * do not hammer an exhausted quota; the next one in the chain takes over.
  */
 export class ProviderChain {
-  constructor(providers, usage, { log = console, now = () => Date.now() } = {}) {
+  constructor(providers, usage, { log = console, now = () => Date.now(), failDir = path.join(process.cwd(), 'data', 'ai-failures') } = {}) {
     this.providers = providers;
+    this.failDir = failDir;
     this.usage = usage;
     this.log = log;
     this.now = now;
@@ -41,8 +44,19 @@ export class ProviderChain {
       if ((this.cooldownUntil.get(p.name) || 0) > this.now()) continue;
       const started = this.now();
       try {
-        const result = await p.generate(request);
-        const value = validate(result.text);
+        let result = await p.generate(request);
+        let value;
+        try {
+          value = validate(result.text);
+        } catch (err) {
+          // A reply that does not parse (a stray quote or comma in a long JSON) is a one-off, not an outage: keep the
+          // raw reply for diagnosis and ask the same provider once more before pausing it and falling back.
+          if (!(err instanceof SyntaxError) && !/JSON/i.test(err.message)) throw err;
+          this.keepFailure(p.name, request, result.text, err);
+          this.log.warn?.(`[ai] ${p.name} sent a reply that does not parse (${err.message}); asking again`);
+          result = await p.generate(request);
+          value = validate(result.text);
+        }
         this.usage.record(p.name, { ok: true, ms: this.now() - started, ...result.usage });
         this.failures.set(p.name, 0);
         return { provider: p.name, value };
@@ -62,6 +76,19 @@ export class ProviderChain {
       throw Object.assign(new Error('no AI editor configured (the offline mock writes but cannot review)'), { code: 'NO_REVIEWER' });
     }
     throw new Error(`no AI provider available (${errors.join(' | ') || 'all paused'})`);
+  }
+
+  /** Save a reply that failed to parse (data/ai-failures), so a bad answer can be read after the fact. */
+  keepFailure(name, request, text, err) {
+    try {
+      const dir = this.failDir;
+      if (!dir) return;
+      fs.mkdirSync(dir, { recursive: true });
+      const stamp = new Date(this.now()).toISOString().replace(/[:.]/g, '-');
+      fs.writeFileSync(path.join(dir, `${stamp}-${name}-${request.stage || 'write'}.txt`), `${err.message}\n\n${text}`);
+    } catch {
+      // diagnosis only: never let it break the chain
+    }
   }
 
   status() {

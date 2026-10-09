@@ -144,11 +144,15 @@ export function clumpTone(t, v, u, o) {
   const w = v / cw - k; // 0..1 across the clump
   const h = hash01(k * 7 + o.seed);
   if (o.sep && t <= 2) {
-    const sepW = Math.min(0.45, 1.05 / (cw * o.s));
+    // (o.sepPx: the separation's width in pixels, default 1.05; under ~1.3 px a curved diagonal separation
+    // aliases into dashes on the pixel grid, critique r20)
+    const sepW = Math.min(0.45, (o.sepPx ?? 1.05) / (cw * o.s));
     if (w > 1 - sepW) {
       const per = o.gap;
       const on = per <= 0 || ((u + h * per) % per + per) % per < per * 0.78;
-      if (on) return o.keepLit && t === 0 ? 1 : t <= 1 ? 2 : 3;
+      // (o.sepSoft: a separation is one step darker and never the deep tone, critique r19: black dashes on
+      // auburn read as stitching)
+      if (on) return o.keepLit && t === 0 ? 1 : t <= 1 ? 2 : o.sepSoft ? 2 : 3;
     }
   }
   if (o.keepLit && t === 0) {
@@ -156,7 +160,8 @@ export function clumpTone(t, v, u, o) {
     const lo = o.hiLo + h * 0.9, hi = o.hiHi - (1 - h) * 0.9;
     if (u < lo || u > hi) return 1;
     const e = (u - lo) / (hi - lo);
-    return w < 0.9 * Math.sqrt(Math.sin(Math.PI * e)) - 0.1 ? 0 : 1;
+    // (o.litW, default 0.9: how much of the clump's width the sheen takes at its widest)
+    return w < (o.litW ?? 0.9) * Math.sqrt(Math.sin(Math.PI * e)) - 0.1 ? 0 : 1;
   }
   if (o.keepLit && t === 1) return 1;
   if (t <= 1) {

@@ -25,9 +25,10 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { guardedFetch, readCapped } from './net.js';
 import { fileCredit } from './imagesearch.js';
+import { readLicence, allowedFor, PROFILES } from './freepics/licence.js';
 
 export const FOOTAGE_LIMITS = { minSeconds: 8, maxSeconds: 1200, maxBytes: 14 * 1024 * 1024, minWidth: 300, aspect: 1.3 };
-const FREE_LICENCE = /^(cc0|public domain|pd\b|pd-|cc[ -]by(-sa)?(\s|$|-)\s*\d?)/i;
+// (the free-licence test lives in freepics/licence.js: the old pattern here let CC BY-NC and CC BY-ND through)
 // what a clip of the place must not be
 const NOT_FOOTAGE =
   /\b(interview|lecture|speech|talk|talks|conference|presentation|press|trailer|teaser|game|games|match|goal|goals|highlights|song|music|musical|concert|dance|dancing|tutorial|how to|animation|animated|map|maps|webinar|podcast|ceremony|funeral|wedding|protest|protests|rally|march|parade|election|debate|campaign|commercial|advert|advertisement|documentary|film|movie|episode|news|report|tv|broadcast|cctv|dashcam|crash|accident|police|military|army|soldiers?|war|fire|fires|wildfire|flood|floods|flooding|storm|hurricane|typhoon|cyclone|earthquake|quake|tsunami|eruption|riot|attack|explosion|360|vr|3d|game ?play|minecraft|simulator|rendering|cgi|slideshow|screencast|logo|intro)\b/i;
@@ -79,7 +80,7 @@ export function parseCommonsVideos(data) {
     if (!vi) continue;
     const md = vi.extmetadata || {};
     const licence = stripHtml(md.LicenseShortName?.value);
-    if (!FREE_LICENCE.test(licence)) continue;
+    if (!allowedFor(readLicence(licence, md.LicenseUrl?.value).id, PROFILES.youtube)) continue;
     const ders = Array.isArray(vi.derivatives) ? vi.derivatives : [];
     let pick = null;
     for (const key of DERIVATIVES) {
@@ -142,7 +143,7 @@ function commonsUrl(q) {
     gsrlimit: '20',
     prop: 'videoinfo',
     viprop: 'url|size|mime|derivatives|extmetadata',
-    viextmetadatafilter: 'Artist|LicenseShortName|ImageDescription',
+    viextmetadatafilter: 'Artist|LicenseShortName|LicenseUrl|ImageDescription',
     origin: '*',
   };
   for (const [k, v] of Object.entries(p)) u.searchParams.set(k, v);

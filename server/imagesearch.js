@@ -19,12 +19,13 @@
 import { locate } from './gazetteer.js';
 import { isGrave } from './facts.js';
 import { cleanCredit } from './pictures.js';
+import { readLicence, allowedFor, PROFILES } from './freepics/licence.js';
 
 export const MIN_SEARCH_WIDTH = 640; // a file photo must survive the full-screen shot
-const ASPECT = [1.2, 2.4]; // landscape: the wall and the full shot are 16:9
-const MIMES = /^image\/(jpeg|png|webp)$/i;
+export const ASPECT = [1.2, 2.4]; // landscape: the wall and the full shot are 16:9
+export const MIMES = /^image\/(jpeg|png|webp)$/i;
 // not a photograph of the place
-const NOT_A_PHOTO = /\b(map|maps|locator|flag|flags|logo|logos|coat of arms|emblem|seal|diagram|chart|graph|icon|symbol|plan|svg|drawing|painting|engraving|illustration|poster|stamp|banknote|coin|signature|scan)\b/i;
+export const NOT_A_PHOTO = /\b(map|maps|locator|flag|flags|logo|logos|coat of arms|emblem|seal|diagram|chart|graph|icon|symbol|plan|svg|drawing|painting|engraving|illustration|poster|stamp|banknote|coin|signature|scan)\b/i;
 // structures a story can be about that a file photo may show (their own name before or after)
 const SUBJECTS = [
   'canal', 'port', 'harbour', 'harbor', 'bridge', 'station', 'airport', 'tram', 'tramway', 'metro', 'railway', 'parliament',
@@ -33,9 +34,9 @@ const SUBJECTS = [
 ];
 const SUBJECT_RE = new RegExp(`\\b(${SUBJECTS.map((s) => s.replace(/ /g, '\\s+')).join('|')})(?:e?s)?\\b`, 'i');
 // event words: never in a query (a file picture shows the place, not another event like this one)
-const EVENT_WORDS = /\b(flood|floods|flooding|fire|fires|wildfire|blaze|storm|hurricane|typhoon|cyclone|earthquake|quake|tsunami|eruption|erupts?|protest|protests|riot|attack|bomb|explosion|crash|collision|derail|war|strike|shooting|killed|dead|death|deaths|injured|evacuat\w*|landslide|drought|heatwave)\b/i;
+export const EVENT_WORDS = /\b(flood|floods|flooding|fire|fires|wildfire|blaze|storm|hurricane|typhoon|cyclone|earthquake|quake|tsunami|eruption|erupts?|protest|protests|riot|attack|bomb|explosion|crash|collision|derail|war|strike|shooting|killed|dead|death|deaths|injured|evacuat\w*|landslide|drought|heatwave)\b/i;
 // Commons licences kept (LicenseShortName)
-const FREE_LICENCE = /^(cc0|public domain|pd\b|pd-|cc[ -]by(-sa)?(\s|$|-)\s*\d?)/i;
+// (the free-licence test lives in freepics/licence.js: the old pattern here let CC BY-NC and CC BY-ND through)
 
 /** A site's name for a credit: "www.flickr.com/photos/x" -> "FLICKR" (a credit never carries a domain). */
 export const siteName = (host) => String(host ?? '').replace(/^https?:\/\//, '').split('/')[0].replace(/^www\./, '').split('.')[0].toUpperCase();
@@ -114,7 +115,7 @@ function commonsUrl(q) {
     prop: 'imageinfo',
     iiprop: 'url|size|mime|extmetadata',
     iiurlwidth: '1280',
-    iiextmetadatafilter: 'Artist|LicenseShortName|ImageDescription|DateTimeOriginal',
+    iiextmetadatafilter: 'Artist|LicenseShortName|LicenseUrl|ImageDescription|DateTimeOriginal',
     origin: '*',
   };
   for (const [k, v] of Object.entries(p)) u.searchParams.set(k, v);
@@ -130,7 +131,7 @@ export function parseCommons(data) {
     if (!ii) continue;
     const md = ii.extmetadata || {};
     const licence = stripHtml(md.LicenseShortName?.value);
-    if (!FREE_LICENCE.test(licence)) continue;
+    if (!allowedFor(readLicence(licence, md.LicenseUrl?.value).id, PROFILES.youtube)) continue;
     const url = ii.thumburl || ii.url;
     const width = ii.thumbwidth || ii.width;
     const height = ii.thumbheight || ii.height;

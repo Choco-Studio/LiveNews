@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config, configWarnings, ROOT } from './config.js';
 import { findPlaces } from './gazetteer.js';
-import { NewsDesk } from './news.js';
+import { NewsDesk, isFreePicture } from './news.js';
+import { FreePictureDesk } from './freepics/desk.js';
+import { PROFILES } from './freepics/licence.js';
+import { Pixabay, NasaImages } from './freepics/stock.js';
 import { ImageCache } from './images.js';
 import { createProviders, ProviderChain } from './providers/index.js';
 import { UsageTracker } from './usage.js';
@@ -30,6 +33,14 @@ const usage = new UsageTracker(config.dataDir);
 const newsDesk = new NewsDesk();
 // Real photos for stories still without one: a FILE photo of the story's place (Wikimedia Commons by default)
 newsDesk.imageSearch = new ImageSearch(config.imageSearch);
+// PICTURES=free / free-strict: only freely licensed, checked pictures air (docs/roadmap/FOTOS_LIBRES.md)
+if (config.pictures.mode !== 'outlet') {
+  newsDesk.freeDesk = new FreePictureDesk({
+    profile: config.pictures.mode === 'free-strict' ? PROFILES.youtubeStrict : PROFILES.youtube,
+    stock: config.pictures.pixabayKey ? new Pixabay({ key: config.pictures.pixabayKey }) : null,
+    nasa: new NasaImages(),
+  });
+}
 // Pictures of local (offline fixture) feeds are served from their own folders only.
 const images = new ImageCache({ localRoots: () => newsDesk.localImageRoots });
 const chain = new ProviderChain(createProviders(config), usage);
@@ -101,6 +112,8 @@ function serveEvents(req, res) {
 async function serveImage(res, id) {
   const story = newsDesk.get(id);
   if (!story?.image) return sendJson(res, 404, { error: 'no image' });
+  // a free mode serves only the free-picture desk's pictures, whatever a feed refresh lent the story since
+  if (newsDesk.freeDesk && !isFreePicture(story)) return sendJson(res, 404, { error: 'no image' });
   const entry = await images.get(id, story.images || [story.image]);
   // The detail (paths, upstream errors) stays in the server log; the client only learns it failed.
   if (entry.error) return sendJson(res, 502, { error: 'image unavailable' });

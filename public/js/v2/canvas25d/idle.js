@@ -184,10 +184,13 @@ function givesWay(b) {
 
 /** Eyelid closure 0..1 for a blink that started dt seconds ago: fast close, short hold, slower open. */
 export function blinkCurve(dt) {
+  // (critique r26: a 60 ms close left at most one in-between frame at 30 fps, which a 2-row eye rounds
+  // to open or shut, so the lid snapped closed in one frame while it opened over three; 90 ms, as a real
+  // blink, always lands at least one frame half-closed)
   if (dt < 0) return 0;
-  if (dt < 0.06) return smooth(dt / 0.06);
-  if (dt < 0.1) return 1;
-  if (dt < 0.22) return 1 - smooth((dt - 0.1) / 0.12);
+  if (dt < 0.09) return smooth(dt / 0.09);
+  if (dt < 0.13) return 1;
+  if (dt < 0.27) return 1 - smooth((dt - 0.13) / 0.14);
   return 0;
 }
 

@@ -64,6 +64,11 @@ describe('providers and gates', () => {
     assert.equal(parseCommons({ query: { pages: { 7: commonsPage(1, 'Lisbon Alfama') } } }).length, 1);
     assert.deepEqual(parseCommons(null), []);
   });
+  test('Commons: non-commercial and no-derivatives licences never pass (a pixelated picture is an adaptation)', () => {
+    const lic = ['CC BY-NC 2.0', 'CC BY-NC-SA 4.0', 'CC BY-ND 2.0', 'CC BY-NC-ND 3.0', 'GFDL', ''];
+    const data = { query: { pages: lic.map((l, i) => commonsPage(i + 1, `Lisbon ${i}`, { licence: l })) } };
+    assert.deepEqual(parseCommons(data), []);
+  });
   test('credits fit the credit line and never carry a domain', () => {
     assert.ok(fileCredit('Jane Quentin Photographer-Longname (talk), via Flickr', 'CC BY-SA 4.0').length <= 40);
     assert.equal(shortLicence('Public domain'), 'PD');

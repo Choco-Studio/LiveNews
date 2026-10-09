@@ -71,7 +71,7 @@ async function startApp(env = {}) {
   const output = { stdout: '', stderr: '' };
   const child = spawn(process.execPath, ['--import', pathToFileURL(path.join(dir, 'stub-fetch.mjs')).href, 'server/index.js'], {
     cwd: dir,
-    env: { ...process.env, HOST: '127.0.0.1', PORT: String(port), PROVIDERS: 'mock', QUEUE_SIZE: '2', REVIEW_PASS: '1', CANDIDATE_POOL: '12', MIN_NEW_STORIES: '3', ...env },
+    env: { ...process.env, HOST: '127.0.0.1', PORT: String(port), PROVIDERS: 'mock', PROGRAMME_PARTS: 'off', CLOCK: 'off', QUEUE_SIZE: '2', REVIEW_PASS: '1', CANDIDATE_POOL: '12', MIN_NEW_STORIES: '3', ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', (d) => (output.stdout += d));

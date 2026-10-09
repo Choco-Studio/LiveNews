@@ -5,12 +5,13 @@
 // ad's voice-over gets a neutral announcer of the ad's gender and accent, and
 // anything unknown falls back to the fake browser voice the page picked.
 
+import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 
-const HERE = path.dirname(new URL(import.meta.url).pathname);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..', '..');
 
 /** Fake browser voices the page offers (name -> Kokoro voice). Gender words make the engine's picker work. */

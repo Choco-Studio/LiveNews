@@ -69,12 +69,13 @@ function kmeans(data, k, iterations = 8) {
  * @param {number} h  output height in pixels
  * @returns {HTMLCanvasElement}
  */
-export function pixelate(img, w, h, { colors = 16, dither = 22, contrast = 1.12, saturation = 1.25 } = {}) {
+// focusY: where the crop sits on a picture taller than the frame (0 top, 1 bottom); a portrait keeps the face (0.18)
+export function pixelate(img, w, h, { colors = 16, dither = 22, contrast = 1.12, saturation = 1.25, focusY = 0.4 } = {}) {
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  coverDraw(ctx, img, w, h);
+  coverDraw(ctx, img, w, h, Number.isFinite(focusY) ? focusY : 0.4);
   const imageData = ctx.getImageData(0, 0, w, h);
   const d = imageData.data;
 

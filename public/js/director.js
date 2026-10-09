@@ -4,7 +4,7 @@
 import { pixelate, loadImage } from './pixelate.js';
 import { presenterName, setPresenters } from './cast.js';
 import { STINGER_DURATION, TEASE_TILE } from './scenes/cards.js';
-import { pickAds, BREAK_BLACK, CONTINUITY, continuityLine } from './ads/index.js';
+import { ADS, pickAds, BREAK_BLACK, CONTINUITY, continuityLine } from './ads/index.js';
 import { splitSentences } from './audio/sentences.js';
 import { ACTIONS } from './cues.js';
 import { openFor } from './scenes/opens.js';
@@ -28,6 +28,9 @@ const pace = (scene) => paceFor(scene.program?.id);
 const STUDIO = new Set(['wide', 'close']);
 const LINK_SHOTS = new Set(['location', 'twoway', 'broll']); // a correspondent link's shots (playCross)
 const NAME_STRAP = 5.5; // s the correspondent's name strap stays up on their first picture
+// the experts' cities (config/channel.json presenters.*.expert.from) and their time zones: a call's window shows
+// the hour where the expert is
+const CALL_TZ = { London: 'Europe/London', Brussels: 'Europe/Brussels', Oslo: 'Europe/Oslo', Geneva: 'Europe/Zurich', 'San Francisco': 'America/Los_Angeles', Pasadena: 'America/Los_Angeles' };
 // A segment's air before its voice runs (characters per second, sentence pauses included): the engine's
 // estimated timeline speaks ~15 chars/s; a recorded clip gives its own length.
 const CPS_EST = 14.5;
@@ -53,7 +56,7 @@ function quoteIn(line, quote) {
 const estimateSeg = (seg) => (Number.isFinite(seg?.audio?.duration) ? seg.audio.duration : String(seg?.text || '').length / CPS_EST);
 
 export class Director {
-  constructor({ audio, channel, v2 = false, music = true }) {
+  constructor({ audio, channel, v2 = false, music = true, ads = [] }) {
     this.audio = audio;
     // soft music beds under the programmes, ducked under every voice (owner 17:05); ?beds=0 turns them off
     this.music = new LiveMusic(audio, { enabled: music });
@@ -63,6 +66,7 @@ export class Director {
     setPresenters(channel.presenters);
     this.images = new Map(); // storyId -> { small, full, card }
     this.recentAds = [];
+    this.forcedAds = ads; // ?ads=id,id: the spots of the next breaks, in order (a recording that books its adverts)
     this.voices = new VoicePlayer({ audio }); // recorded neural voices from the server (voice/player.js)
     this.scene = {
       channel: { name: channel.name, slogan: channel.slogan },
@@ -240,7 +244,8 @@ export class Director {
     this.voices.refreshAds(); // advert voice-overs (fetched while the ident runs)
     s.lowerThird = null;
     s.subtitle = null;
-    const ads = pickAds(item.ads || 1, this.recentAds);
+    const booked = this.forcedAds.map((id) => ADS.find((a) => a.id === id)).filter(Boolean);
+    const ads = booked.length ? booked : pickAds(item.ads || 1, this.recentAds);
     this.prewarm(ads, 1.2); // baked while the bumper holds still, not on the spot's first frames
     // The break bumper (owner, 3 Oct: an advert must never be mistaken for a programme): the channel says it
     // is going to a break and when it is back ("BACK IN 1 MINUTE", the continuity voice), and the
@@ -381,6 +386,50 @@ export class Director {
     if (/^R\d$/.test(seg.anchor || '')) return seg.anchor;
     for (const [slot, id] of Object.entries(this.episode?.correspondents || {})) if (id === seg.reporter) return slot;
     return null;
+  }
+
+  /**
+   * An expert's video call (server/experts.js): who, from which room, and whether it is night in their city (the
+   * window shows it). The expert is in an X slot of the episode (episode.experts), voiced like a presenter.
+   */
+  callRemote(seg) {
+    const experts = this.episode?.experts || {};
+    const id = seg.expert || experts[seg.anchor];
+    const slot = Object.keys(experts).find((k) => experts[k] === id);
+    const info = this.channel?.presenters?.[id];
+    if (!slot || !info?.expert) return null;
+    const tz = CALL_TZ[info.expert.from] || 'UTC';
+    let hour = 12;
+    try {
+      hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
+    } catch {
+      /* noon */
+    }
+    return { slot, id, room: info.expert.room, night: hour < 7 || hour >= 19, name: info.name, desk: `${info.expert.title} · ${info.expert.from}`.toUpperCase(), call: true };
+  }
+
+  /**
+   * One line of a video call: the presenter's introduction and question, and the thanks, in the split screen
+   * (the presenter in the studio, the expert in their room); the expert's answer full screen in their room, as a
+   * laptop camera frames them. The expert's name and title come up with the question.
+   */
+  async playCall(seg) {
+    const s = this.scene;
+    const remote = this.callRemote(seg);
+    if (!remote) return this.say(seg); // no expert to show (an old client's channel): just the voice
+    s.remote = remote;
+    s.linkDone = false;
+    const answer = seg.type === 'call';
+    this.setShot(answer ? 'location' : 'twoway', { focus: answer ? remote.slot : seg.anchor, storyId: seg.storyId, card: null, framing: null, cameraMove: null });
+    if (seg.call === 'ask' || answer) {
+      s.nameSuper = { name: remote.name, role: remote.desk, since: now() };
+      s.lowerThird = { headline: remote.name.toUpperCase(), source: this.channel?.name || '', anchorName: remote.name, showName: false, breaking: false, kicker: remote.desk, category: seg.category, since: now() };
+    }
+    await this.say(seg);
+    if (seg.call === 'thanks') {
+      this.clearLink();
+      s.lowerThird = null;
+    }
   }
 
   /** What the Stage needs of the link on air (scene.remote). */
@@ -538,19 +587,22 @@ export class Director {
     const teased = new Set((episode.segments?.find((sg) => sg.type === 'intro')?.teases || []).filter(Boolean));
     ids.sort((a, b) => (teased.has(b) ? 1 : 0) - (teased.has(a) ? 1 : 0));
     const tiled = new Set((episode.segments || []).flatMap((sg) => (sg.stillToCome?.length > 1 ? sg.stillToCome.map((x) => x.storyId) : [])));
+    // a free portrait (server/freepics) says where the face is: the crop keeps it
+    const focus = new Map(episode.rundown.filter((r) => Number.isFinite(r.imageFocus)).map((r) => [r.storyId, r.imageFocus]));
     for (const id of ids) {
       try {
         const img = await loadImage(`/api/img/${id}`);
         await frame();
-        const small = pixelate(img, SMALL.w, SMALL.h, { colors: 16 });
+        const focusY = focus.get(id);
+        const small = pixelate(img, SMALL.w, SMALL.h, { colors: 16, focusY });
         await frame();
-        const full = pixelate(img, FULL.w, FULL.h, { colors: 24 });
+        const full = pixelate(img, FULL.w, FULL.h, { colors: 24, focusY });
         const card = document.createElement('canvas');
         card.width = 384;
         card.height = 216;
         card.getContext('2d').drawImage(full, -16, -9);
         // STILL TO COME's tile: the whole picture pixelated at the tile's own size (never a scaled-down card)
-        const tile = tiled.has(id) ? pixelate(img, TEASE_TILE.w, TEASE_TILE.h, { colors: 16 }) : null;
+        const tile = tiled.has(id) ? pixelate(img, TEASE_TILE.w, TEASE_TILE.h, { colors: 16, focusY }) : null;
         this.images.set(id, { small, full, card, tile });
       } catch (err) {
         console.warn('[director] image', id, err.message);
@@ -652,6 +704,21 @@ export class Director {
     // Each programme has its own opening titles and theme tune. The tune starts
     // on the open's own clock (the shot change, dt = 0), so its final chord
     // lands on the title lock-up and its button on the cut, `duration` later.
+    // A later part of a programme in parts (WAVE3.md §1: server/station.js airs them back to back) is the same
+    // programme going on: no titles and no theme, a cut to the studio and the part's link line.
+    if (episode.part?.n > 1) {
+      await this.stinger(() => {
+        s.program = episode.program;
+        s.replay = !!episode.replay;
+        s.rundown = episode.rundown || [];
+        s.lowerThird = null;
+        s.subtitle = null;
+        this.setCast(episode);
+        this.setShot('wide', { storyId: null, card: null, wall: { mode: 'logo' } });
+      });
+      imagesReady.catch(() => {});
+      return this.playSegments(episode);
+    }
     const open = openFor(episode.program.id);
     let tune = null;
     await this.stinger(() => {
@@ -671,7 +738,14 @@ export class Director {
     await sleep(open.duration * 1000 - STINGER_DURATION * 500);
     tune?.stop?.();
     s.programTagUntil = now() + CHANNEL.programTag.window;
+    return this.playSegments(episode);
+  }
 
+  /** The episode's segments, in order, with the paced air between them (after the open, or a part's cut back). */
+  async playSegments(episode) {
+    const s = this.scene;
+    // (a later part keeps the presenters' name straps of part 1: they are not introduced twice in one programme)
+    if (!this.introduced) this.introduced = new Set();
     for (const seg of episode.segments) {
       const index = episode.segments.indexOf(seg);
       switch (seg.type) {
@@ -698,7 +772,15 @@ export class Director {
           await sleep(pace(s).holds.endcard * 1000);
           continue;
         }
+        case 'call':
+          await this.playCall(seg);
+          break;
         case 'chat': {
+          // a video call's introduction and question, or its thanks (server/experts.js)
+          if (seg.call) {
+            await this.playCall(seg);
+            break;
+          }
           // a mid-programme signpost over its stories: STILL TO COME (else read to camera as any chat)
           if (seg.stillToCome?.length && pace(s).shots.stillToCome && (await this.playStillToCome(seg, index))) break;
           s.lowerThird = null;

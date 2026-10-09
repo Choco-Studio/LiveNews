@@ -22,13 +22,14 @@
 //   --count N, --seconds N (max), --max-wait N, --skip N, --fps 15 (clock step), --sheet-every 12,
 //   --cols 6, --out prefix (writes <prefix>-timeline.json, <prefix>-sheet.png, <prefix>-tiles/)
 
+import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import path from 'node:path';
 import { FAKE_VOICES } from '../showcase/lib/voices.mjs';
 import { deriveCues } from '../showcase/lib/music.mjs';
 import { composeSheetInPage } from '../showcase/lib/sheet.mjs';
 
-const HERE = path.dirname(new URL(import.meta.url).pathname);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const opts = { port: 8710, start: 'open', until: null, count: 1, seconds: 900, 'max-wait': 300, skip: 0, fps: 15, 'sheet-every': 12, cols: 6 };
 const argv = process.argv.slice(2);

@@ -113,6 +113,84 @@
   },
   "notes": "Asia & Middle East correspondent (WORLD NOW links, owner 4 Oct): af_aoede alone, the best-graded Kokoro voice no presenter used. Nearest on the link test copy: Nova 72.3 (+2.6 st), Lola 81.9 (-1.6 st). Every blend with af_river/af_jessica pulled it onto Lola (40-48), so it stays pure. Median F0 ~179 Hz, IQR 4.4 st. WORLD NOW pause set."
  },
+ "iris": {
+  "voice": "af_kore:0.6+bf_alice:0.4",
+  "speed": 0.96,
+  "lang": "en-gb",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "PROVISIONAL (8 Oct): not auditioned yet with tools/voice/metrics.py against the cast; economist on a video call (server/experts.js): bf_alice led (Penny holds only 15% of it), lightened with af_sky; calm explainer, slower than the anchors."
+ },
+ "omar": {
+  "voice": "am_adam:0.75+am_puck:0.25",
+  "speed": 0.95,
+  "lang": "en-gb",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "PROVISIONAL (8 Oct): not auditioned yet with tools/voice/metrics.py against the cast; foreign affairs analyst: am_adam with en-GB phonemes (no presenter uses either voice), measured pace."
+ },
+ "tess": {
+  "voice": "af_jessica:0.7+af_sky:0.3",
+  "speed": 0.95,
+  "lang": "en-us",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "PROVISIONAL (8 Oct): not auditioned yet with tools/voice/metrics.py against the cast; climate scientist: af_sky and af_nicole, two voices no presenter uses (af_river/af_jessica blends drift onto Lola, see mika)."
+ },
+ "ravi": {
+  "voice": "am_liam:0.7+am_adam:0.3",
+  "speed": 1,
+  "lang": "en-us",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "PROVISIONAL (8 Oct): not auditioned yet with tools/voice/metrics.py against the cast; technology analyst: am_liam led, the brighter of the two free US male voices; quicker than the other experts."
+ },
+ "noor": {
+  "voice": "af_alloy:0.65+af_nicole:0.35",
+  "speed": 0.95,
+  "lang": "en-us",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "PROVISIONAL (8 Oct): not auditioned yet with tools/voice/metrics.py against the cast; planetary scientist: af_nicole led, a little af_kore for warmth (Nova and Penny hold 20-25% of kore: check the distance at audition)."
+ },
+ "elena": {
+  "voice": "af_bella:0.6+bf_alice:0.4",
+  "speed": 0.95,
+  "lang": "en-gb",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "PROVISIONAL (8 Oct): not auditioned yet with tools/voice/metrics.py against the cast; public health specialist: bf_alice and af_nicole read with en-GB phonemes; steady pace."
+ },
  "continuity": {
   "voice": "bm_fable",
   "speed": 1.1,

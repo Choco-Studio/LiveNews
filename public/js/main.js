@@ -18,7 +18,7 @@ const channel = await fetch('/api/channel')
   .catch(() => ({ name: 'GLOBIT 24', slogan: '', presenters: {}, programs: {}, rotation: [] }));
 document.title = `${channel.name} · Live`;
 // ?beds=0: no live music beds (a recorder that renders its own beds passes it)
-const player = new Director({ audio, channel, v2, music: params.get('beds') !== '0' });
+const player = new Director({ audio, channel, v2, music: params.get('beds') !== '0', ads: (params.get('ads') || '').split(',').filter(Boolean) });
 const scene = player.scene;
 scene.subtitles = params.get('subs') !== '0';
 

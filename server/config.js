@@ -67,6 +67,12 @@ export const config = {
   queueSize: num('QUEUE_SIZE', 2),
   // the rotation slot the channel starts at (a programme id: demos and recordings), else the first
   rotationStart: env('ROTATION_START', '').trim(),
+  // Programmes in parts (WAVE3.md §1, channel.json format.parts): 'on' (default) airs WORLD NOW in its parts; 'off'
+  // makes every programme one episode, as before
+  programmeParts: !/^(off|0|false|no)$/i.test(env('PROGRAMME_PARTS', 'on').trim()),
+  // The hourly clock (config/schedule.json, server/clock.js): 'on' (default) airs by the minute of the hour; 'off'
+  // follows channel.json's rotation
+  clock: !/^(off|0|false|no)$/i.test(env('CLOCK', 'on').trim()),
   // Stories offered to the writer, who picks the best for each programme
   candidatePool: num('CANDIDATE_POOL', 12),
   // Second AI pass: a standards editor checks each script against its sources
@@ -131,5 +137,15 @@ export const config = {
     providers: ((v) => (v === 'off' || v === 'none' ? [] : v.split(/[\s,]+/).filter((p) => ['commons', 'google', 'bing'].includes(p))))(env('IMAGE_SEARCH', 'commons').trim().toLowerCase()),
     google: { key: env('GOOGLE_CSE_KEY', ''), cx: env('GOOGLE_CSE_CX', '') },
     bing: { key: env('BING_IMAGE_KEY', '') },
+  },
+  // Which pictures may air (docs/roadmap/FOTOS_LIBRES.md). 'outlet' (default): the outlets' own pictures, as
+  // always. 'free': only freely licensed pictures the free-picture desk finds and checks (Wikidata, Commons;
+  // publishable and monetisable on YouTube); 'free-strict': the same without CC BY-SA. In both free modes the
+  // outlets' pictures, the clusters' borrowed ones and the google/bing search never air.
+  pictures: {
+    mode: ((v) => (['outlet', 'free', 'free-strict'].includes(v) ? v : 'outlet'))(env('PICTURES', 'outlet').trim().toLowerCase()),
+    budgetMs: bounded('FREE_PICTURE_BUDGET_MS', 30000, 0, 180000),
+    // stock pictures (generic scenes, products) for what Wikidata and Commons do not cover; NASA's library needs no key
+    pixabayKey: env('PIXABAY_API_KEY', ''),
   },
 };

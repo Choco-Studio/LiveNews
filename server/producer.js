@@ -1,9 +1,10 @@
 import { buildPrompt, buildReviewPrompt, collapseCrosses, extractJson, normalizeBulletin } from './writer.js';
 import { rosterOf } from './correspondents.js';
+import { expertsOf } from './experts.js';
 import { castOf } from './channel.js';
 import { embedCues } from '../public/js/cues.js';
 import { onBeat } from './topics.js';
-import { pictureCredit } from './news.js';
+import { pictureCredit, isFreePicture } from './news.js';
 import { isGrave } from './facts.js';
 import { explainTerms } from './glossary.js';
 import { writeWeather } from './weatherwriter.js';
@@ -200,17 +201,31 @@ export class Producer {
     return this.stock(program).length >= this.floorOf(program);
   }
 
-  async produce(channel, programId, { upcoming = [] } = {}) {
-    const program = { id: programId, ...channel.programs[programId] };
+  /**
+   * One episode of a programme, or one PART of a programme in parts (WAVE3.md §1, channel.json `format.parts`;
+   * the station drives the block): `part` = { block, n, total, first, last, afterBreak, breakNext, used: Set of
+   * story ids the block already aired, aired: [their headlines] }. A part takes its own story count, features and
+   * focus from the format, never a story the block already used, and knows where it sits (greeting, hand-over).
+   */
+  async produce(channel, programId, { upcoming = [], part = null } = {}) {
+    const base = { id: programId, ...channel.programs[programId] };
+    const spec = part ? base.format?.parts?.[part.n - 1] : null;
+    const program = spec
+      ? { ...base, stories: spec.stories ?? base.stories, features: spec.features ?? base.features, maxChats: spec.maxChats ?? base.maxChats, crosses: spec.crosses ?? base.crosses, calls: spec.calls ?? base.calls, targetSeconds: spec.targetSeconds ?? base.targetSeconds, storyLength: spec.storyLength ?? base.storyLength, textMax: spec.textMax ?? base.textMax, minStories: spec.minStories ?? Math.min(spec.stories ?? 3, 3) }
+      : base;
     const cast = castOf(channel, programId);
     const presenters = Object.fromEntries(Object.entries(cast).map(([slot, id]) => [slot, { id, ...channel.presenters[id] }]));
     if (program.kind === 'weather') return this.produceWeather(channel, program, cast, presenters);
-    const candidates = this.stock(program, { upcoming: upcoming.map((id) => channel.programs[id]).filter(Boolean) });
+    const all = this.stock(program, { upcoming: upcoming.map((id) => channel.programs[id]).filter(Boolean) });
+    const candidates = part?.used?.size ? all.filter((s) => !part.used.has(s.id)) : all;
     if (candidates.length < this.floorOf(program)) return null;
 
     // the programme's correspondents (links: server/correspondents.js), voiced in the slots the writer gives them
     const correspondents = rosterOf(program, channel.presenters);
-    const ctx = { channelName: channel.name, program, presenters, cast, candidates, episode: null, provider: null, pipeline: [], correspondents, channelPresenters: channel.presenters };
+    const partInfo = spec ? { n: part.n, total: part.total, first: part.n === 1, last: !!part.last, label: spec.label || `PART ${part.n}`, focus: spec.focus || '', afterBreak: !!part.afterBreak, breakNext: !!part.breakNext, aired: part.aired || [] } : null;
+    // the programme's experts on a video call (server/experts.js), when its format has calls
+    const experts = program.calls ? expertsOf(program, channel.presenters) : [];
+    const ctx = { channelName: channel.name, program, presenters, cast, candidates, episode: null, provider: null, pipeline: [], correspondents, experts, channelPresenters: channel.presenters, part: partInfo };
     const started = Date.now();
     try {
       for (const stage of this.stages) {
@@ -229,7 +244,8 @@ export class Producer {
     this.rememberLines(ctx.episode);
     this.rememberFeatures(ctx.episode);
     this.news.markCovered(ctx.episode.storyIds);
-    this.news.markOffered(candidates.filter((s) => !used.has(s.id)).map((s) => s.id));
+    // (a part that is not the last leaves the rest of the pool to the parts after it: "offered" stories wait a while)
+    if (!partInfo || partInfo.last) this.news.markOffered(candidates.filter((s) => !used.has(s.id)).map((s) => s.id));
 
     const episode = {
       kind: 'episode',
@@ -240,12 +256,49 @@ export class Producer {
       provider: ctx.provider,
       pipeline: ctx.pipeline,
       ...ctx.episode,
+      // where this episode sits in its programme (one part of a block): the client skips the titles after part 1,
+      // the station airs the parts back to back (an internal break where the format has one)
+      ...(partInfo ? { part: { block: part.block, n: partInfo.n, total: partInfo.total, last: partInfo.last, label: partInfo.label, breakAfter: partInfo.breakNext } } : {}),
     };
     this.log.info?.(
       `[producer] ${program.title} ${episode.id} ready in ${((Date.now() - started) / 1000).toFixed(1)} s ` +
         `(${ctx.pipeline.map((p) => `${p.stage}${p.provider ? `:${p.provider}` : ''}`).join(' → ')}), ${episode.storyIds.length} stories`
     );
     return episode;
+  }
+
+  /**
+   * The sign-off of a programme in parts whose next part could not be made (the desk ran dry): the part on air
+   * ended on a hand-over, so the programme still closes, on its own sign-off, voiced like any segment. Never a
+   * story, never a fact: a fixed line of the format.
+   */
+  async closePart(channel, programId, part) {
+    const program = { id: programId, ...channel.programs[programId] };
+    const cast = castOf(channel, programId);
+    const presenters = Object.fromEntries(Object.entries(cast).map(([slot, id]) => [slot, { id, ...channel.presenters[id] }]));
+    const anchor = presenters.B ? program.outroAnchor || 'B' : 'A';
+    const body = {
+      title: program.title,
+      segments: [{ type: 'outro', anchor, emotion: 'neutral', text: `That's all from ${program.title} for now. Stay with us: ${channel.name} is live around the clock.`, cues: [] }],
+      rundown: [],
+      storyIds: [],
+    };
+    const ctx = { channelName: channel.name, program, presenters, cast, candidates: [], episode: body, provider: 'format', pipeline: [] };
+    if (this.voice?.enabled) {
+      const note = await this.voice.voiceEpisode(ctx).catch((err) => ({ voice: 'browser', error: err.message }));
+      ctx.pipeline.push({ stage: 'voice', ...(note || {}) });
+    }
+    return {
+      kind: 'episode',
+      id: `e${Date.now().toString(36)}${(this.seq++).toString(36)}`,
+      createdAt: new Date().toISOString(),
+      program: { id: program.id, title: program.title, tagline: program.tagline, theme: program.theme },
+      cast,
+      provider: 'format',
+      pipeline: ctx.pipeline,
+      ...ctx.episode,
+      part: { block: part.block, n: part.n, total: part.total, last: true, label: 'CLOSE', breakAfter: false },
+    };
   }
 
   /**
@@ -300,13 +353,16 @@ export class Producer {
         // names that may legitimately contain numbers ("NEWS IN 60", "UNIT-8")
         ownNames: [ctx.program.title, ...Object.values(ctx.presenters).map((p) => p.name)],
         correspondents: ctx.correspondents || [],
+        experts: ctx.experts || [],
+        part: ctx.part || null,
       });
   }
 
   /** The correspondents' voice slots of the episode in production (R1, R2: episode.correspondents) as presenters. */
   castCorrespondents(ctx) {
-    for (const k of Object.keys(ctx.presenters)) if (/^R\d$/.test(k)) delete ctx.presenters[k];
-    for (const [slot, id] of Object.entries(ctx.episode?.correspondents || {})) {
+    for (const k of Object.keys(ctx.presenters)) if (/^[RX]\d$/.test(k)) delete ctx.presenters[k];
+    // the correspondents' slots (R1...) and the experts' on a video call (X1...), voiced like the presenters
+    for (const [slot, id] of Object.entries({ ...(ctx.episode?.correspondents || {}), ...(ctx.episode?.experts || {}) })) {
       const p = ctx.channelPresenters?.[id];
       if (p) ctx.presenters[slot] = { id, ...p };
     }
@@ -349,7 +405,7 @@ export class Producer {
 
   async write(ctx) {
     const recent = this.recentText();
-    const prompt = buildPrompt({ channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, stories: ctx.candidates, recentLines: recent.slice(-24) });
+    const prompt = buildPrompt({ channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, stories: ctx.candidates, recentLines: recent.slice(-24), visual: !!this.news.freeDesk, part: ctx.part, experts: ctx.experts || [] });
     const { provider, value } = await this.chain.generate(
       // `recent`: lines aired lately, for writers that pick from their own repertoire (the offline mock);
       // `featured`: stories that were a feature lately (the same "And finally" does not come round every rotation).
@@ -441,7 +497,10 @@ export class Producer {
 
   async assets(ctx) {
     const stories = ctx.episode.storyIds.map((id) => this.news.get(id)).filter(Boolean);
-    if (typeof this.news.findPictures === 'function') await this.news.findPictures(stories, { budgetMs: this.config.pictureBudgetMs ?? 6000 });
+    // a free mode (PICTURES=free): the free-picture desk looks again with the writer's visual brief of each story
+    const free = !!this.news.freeDesk;
+    const briefs = free ? new Map(ctx.episode.segments.filter((sg) => sg.storyId && sg.visual).map((sg) => [sg.storyId, sg.visual])) : null;
+    if (typeof this.news.findPictures === 'function') await this.news.findPictures(stories, { budgetMs: free ? (this.config.pictures?.budgetMs ?? 30000) : (this.config.pictureBudgetMs ?? 6000), briefs });
     else await Promise.all(stories.map((s) => this.news.resolveImage(s)));
     const verified = this.images ? await this.verifyPictures(stories) : null;
     const story = (id) => this.news.get(id);
@@ -452,14 +511,18 @@ export class Producer {
     // `outlet` always keeps the outlet's own name for renderers that draw the credit themselves.
     const apply = (item) => {
       const s = story(item.storyId);
-      item.hasImage = !!s?.image;
+      const shown = !!s?.image && (!free || isFreePicture(s));
+      item.hasImage = shown;
       const outlet = item.outlet || item.source || s?.source || '';
       if (outlet) item.outlet = outlet;
       delete item.imageCredit;
       delete item.imageCreditVia;
       delete item.imageCreditLine;
+      delete item.imageFocus;
       item.source = outlet;
-      if (!s?.image) return;
+      if (!shown) return;
+      // a portrait says where the face is, so the client's crop keeps it (public/js/pixelate.js)
+      if (Number.isFinite(s.imageFocus)) item.imageFocus = s.imageFocus;
       const c = pictureCredit(s, this.images?.sources?.get?.(s.id));
       item.imageCredit = c.credit;
       item.imageCreditVia = c.via;

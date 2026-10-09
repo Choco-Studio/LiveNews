@@ -16,6 +16,11 @@ const KEYS = [
   'FEEDS_FILE',
   'PICTURE_BUDGET_MS',
   'PICTURE_VERIFY_MS',
+  'PICTURES',
+  'PROGRAMME_PARTS',
+  'CLOCK',
+  'FREE_PICTURE_BUDGET_MS',
+  'PIXABAY_API_KEY',
   'PORT',
   'RECENT_LINES_HOURS',
   'RECYCLE_AFTER_HOURS',
@@ -229,6 +234,13 @@ describe('.env.example', () => {
     const ok = await loadConfig({ RECYCLE_GAP: '8', PICTURE_BUDGET_MS: '2500' });
     assert.equal(ok.recycleGap, 8);
     assert.equal(ok.pictureBudgetMs, 2500);
+  });
+
+  test('PICTURES: the outlets\' pictures by default; free and free-strict on request; anything else is the default', async () => {
+    assert.deepEqual((await loadConfig({ PIXABAY_API_KEY: '' })).pictures, { mode: 'outlet', budgetMs: 30000, pixabayKey: '' });
+    assert.equal((await loadConfig({ PICTURES: 'FREE' })).pictures.mode, 'free');
+    assert.equal((await loadConfig({ PICTURES: 'free-strict', FREE_PICTURE_BUDGET_MS: '45000' })).pictures.budgetMs, 45000);
+    assert.equal((await loadConfig({ PICTURES: 'agency' })).pictures.mode, 'outlet');
   });
 
   test('documents every environment variable that server/config.js reads', () => {

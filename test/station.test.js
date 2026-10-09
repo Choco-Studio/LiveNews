@@ -1036,21 +1036,24 @@ describe('Station with the real Producer, NewsDesk and mock provider', () => {
     return { station, desk, channel };
   }
 
-  test('fills the queue in the order of the real rotation', async () => {
+  test('fills the queue in the order of the real rotation (a programme in parts: its parts first)', async () => {
     const { station } = makeNewsroom();
     await station.fill();
     const rotation = loadChannel().rotation;
-    assert.deepEqual(station.queue.map((e) => e.program.id), [rotation[0], rotation[1]]);
+    // WORLD NOW is made in parts (channel.json format.parts): the queue holds its first two parts, of one block
+    assert.deepEqual(station.queue.map((e) => e.program.id), [rotation[0], rotation[0]]);
+    assert.deepEqual(station.queue.map((e) => e.part?.n), [1, 2]);
+    assert.equal(station.queue[0].part.block, station.queue[1].part.block);
     assert.ok(station.queue.every((e) => e.kind === 'episode' && e.segments.length >= 3));
   });
 
-  test('plays a full day: episodes in rotation order, a break after each, no story twice', async () => {
+  test('plays a full day: programmes in rotation order, parts back to back, a break after each programme, no story twice', async () => {
     const { station, channel } = makeNewsroom({ perCategory: 20 });
     await station.fill();
 
     const items = [];
     let afterId;
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 22; i++) {
       const item = station.next(afterId);
       items.push(item);
       afterId = item.id;
@@ -1058,8 +1061,51 @@ describe('Station with the real Producer, NewsDesk and mock provider', () => {
     }
 
     const episodes = items.filter((i) => i.kind === 'episode');
-    assert.deepEqual(items.map((i) => i.kind), Array.from({ length: 14 }, (_, i) => (i % 2 ? 'break' : 'episode')));
-    assert.deepEqual(episodes.map((e) => e.program.id), channel.rotation.slice(0, 7), 'a whole turn of the rotation');
+    // what follows each episode: the next part of its programme straight away, except at the format's internal
+    // break; a break after the last part and after any one-part programme
+    items.forEach((item, i) => {
+      if (item.kind !== 'episode' || i === items.length - 1) return;
+      const after = items[i + 1];
+      const goesOn = item.part && !item.part.last && !item.part.breakAfter;
+      if (goesOn) assert.equal(after.part?.block, item.part.block, `part ${item.part.n} runs straight into part ${item.part.n + 1}`);
+      else assert.equal(after.kind, 'break', `${item.program.id}${item.part ? ` part ${item.part.n}` : ''} is followed by a break`);
+    });
+    // a block: parts 1..k in order, only the first greets (its intro), only the last signs off (its outro); a middle
+    // part opens on a link line and closes on a hand-over
+    const blocks = new Map();
+    for (const e of episodes.filter((x) => x.part)) blocks.set(e.part.block, [...(blocks.get(e.part.block) || []), e]);
+    assert.ok(blocks.size >= 1);
+    for (const parts of blocks.values()) {
+      assert.deepEqual(parts.map((p) => p.part.n), parts.map((_, k) => k + 1));
+      parts.forEach((p, k) => {
+        // the desk ran dry before a planned part: a CLOSE piece is the programme's sign-off alone
+        if (p.part.label === 'CLOSE') {
+          assert.deepEqual(p.segments.map((x) => x.type), ['outro']);
+          assert.equal(p.part.last, true);
+          return;
+        }
+        assert.equal(p.segments[0].type, k === 0 ? 'intro' : 'chat');
+        if (k) assert.equal(p.segments[0].link, 'open');
+        const end = p.segments.at(-1);
+        assert.equal(end.type, p.part.last ? 'outro' : 'chat');
+        if (!p.part.last) assert.equal(end.link, 'close');
+      });
+    }
+    const finished = [...blocks.values()].filter((parts) => parts.at(-1).part.last);
+    assert.ok(finished.length >= 1, 'at least one programme in parts aired to its end');
+    // the programmes, a part counted once per programme, follow the rotation
+    // (a slot the desk cannot fill is skipped, as always: four parts of WORLD NOW take more of the small desk's
+    // business stories, so MONEY MINUTE may miss its slot here; never out of order)
+    const programmes = episodes.filter((e) => !e.part || e.part.n === 1).map((e) => e.program.id);
+    let at = 0;
+    for (const id of programmes) {
+      let k = 0;
+      while (k < channel.rotation.length && channel.rotation[(at + k) % channel.rotation.length] !== id) k++;
+      assert.ok(k < channel.rotation.length, `${id} is in the rotation`);
+      at += k + 1;
+    }
+    assert.deepEqual(programmes.slice(0, 5), channel.rotation.slice(0, 5), 'the first turn of the rotation, programme by programme');
+    assert.ok(programmes.length >= 5, `${programmes.length} programmes in 22 items`);
     const stories = episodes.flatMap((e) => e.storyIds);
     assert.equal(new Set(stories).size, stories.length, 'no story is aired twice');
     // (editorial-2 fix r2, pace's break cadence) a full commercial break only after minProgrammeBetween seconds of

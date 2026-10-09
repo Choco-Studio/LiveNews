@@ -124,7 +124,7 @@ export function drawFace(buf, L, head, f, s) {
     const squash = clamp(1 - Math.max(0, -turn) * 0.55, 0.55, 1);
     drawEye(buf, L, mt, sk, F.x, F.y, E.w * s * squash, E.h * s, f, side, tier, open);
   }
-  if (tier === 2) browSheen(buf, L, sk, f, s); // before the brows
+  if (tier === 2 && s >= 4.5) browSheen(buf, L, sk, f, s); // before the brows (critique r0: below s 4.5 it read as a plaster)
   drawBrows(buf, L, mt, sk, f, s, tier);
   drawNose(buf, L, sk, s, tier);
   drawMouth(buf, L, mt, sk, head, f, s, tier);
@@ -369,8 +369,10 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
         else if (rim && (y === yA + 1 ? Math.abs(dx) > ir - 0.75 : heavy && dy < 0 && Math.abs(dx) > ir - 0.6)) m = mt.irisDark;
         else m = mt.iris;
       } else {
-        // sclera: lit toward the key (left of the iris), cooler on the far side, under the lid and in the corners
-        m = y === yA + 1 || ao > 0.82 || dx > 0 ? mt.fog : mt.silver;
+        // sclera: silver, with fog only as shadow: the far corner, and under the lid on the far side
+        // of a three-row eye (critique r9: fog on the whole top row, both corners and the far half
+        // left a two-row eye nearly all blue-grey: glassy goggles, not eyes)
+        m = dx > 0 && (ao > 0.82 || (y === yA + 1 && yB - yA > 3)) ? mt.fog : mt.silver;
       }
       buf.plot(x, y, m, 1);
     }
@@ -398,7 +400,8 @@ function drawEye(buf, L, mt, sk, cx, cy, w, h, f, side, tier, open) {
       if (gy < EB[k] && gx > 0 && gy > 0 && gx < buf.w - 1 && gy < buf.h - 1 && (buf.mat[i] === mt.iris || buf.mat[i] === mt.irisDark || buf.mat[i] === mt.pupil)) buf.plot(gx, gy, mt.white, 1);
     }
   }
-  if (E.bags) {
+  if (E.bags && heavy) {
+    // (critique r3: on a 6-9 px eye the fold was a 2-3 px dash a row below the lid, floating free: a scar)
     // under-eye: a short soft fold below the outer half
     const yb = Math.round(cy + restBot) + 2;
     for (let x = Math.round(mid + side * half * 0.05); side > 0 ? x <= Math.round(mid + half * 0.8) : x >= Math.round(mid - half * 0.8); x += side) deepen(buf, x, yb, sk);
@@ -468,6 +471,16 @@ function drawBrows(buf, L, mt, sk, f, s, tier) {
       BX[k] = F.x;
       BYS[k] = F.y;
     }
+    // the shape is rounded against one reference point, so a sub-pixel bob moves the whole brow by whole
+    // pixels and never changes its shape (critique r17: Paco's 0.6 px arch popped between an arch with
+    // hooked ends and a flat bar from one talk frame to the next)
+    {
+      const ry = BYS[1], rx = BX[1], ryi = Math.round(ry), rxi = Math.round(rx);
+      for (let k = 0; k < 5; k++) {
+        BYS[k] = ryi + Math.round(BYS[k] - ry);
+        BX[k] = rxi + Math.round(BX[k] - rx);
+      }
+    }
     if (tier === 1) {
       // medium: a skin row between the brow and the lid line (a brow on the lid reads as a heavy
       // frown, critic r2): the whole stroke moves up as one, keeping its arch
@@ -484,7 +497,9 @@ function drawBrows(buf, L, mt, sk, f, s, tier) {
       let err = dx + dy;
       for (let n = 0; n < 64; n++) {
         const u = BU[k] + (BU[k + 1] - BU[k]) * (dx ? Math.abs(x0 - Math.round(BX[k])) / dx : 0);
-        const th = tier === 1 ? (u < 0.7 ? Math.min(2, Math.round(thick)) : 1) : Math.max(1, Math.round(thick * (u < 0.35 ? 1 : u < 0.75 ? 0.85 : 0.5)));
+        // close-ups: a solid 2 px head and body, a 1 px tail (critique r3: a 1 px stroke with a bump at the
+        // arch read as a caterpillar, not a brow)
+        const th = tier === 1 ? (u < 0.7 ? Math.min(2, Math.round(thick)) : 1) : u < 0.78 ? Math.max(2, Math.round(thick)) : 1;
         const top = y0 - (th >> 1);
         for (let j = 0; j < th; j++) buf.plot(x0, top + j, mt.brow, 1);
         if (x0 === x1 && y0 === y1) break;
@@ -536,11 +551,19 @@ function drawNose(buf, L, sk, s, tier) {
 function ridgeLight(buf, L, sk, s) {
   const N = L.nose, E = L.eyes;
   const skin = L._mats.skin;
-  const y0 = (E.y + N.y1) * 0.5 - 0.1, y1 = N.y1 - 0.55;
-  const n = Math.max(2, Math.round((y1 - y0) * s));
+  // the lower bridge only, then the tip's own light one pixel toward the key (critique r0: a stroke
+  // from mid-bridge down read as a scratch, a stick drawn on the face, not a nose catching the light)
+  const y0 = E.y + (N.y1 - E.y) * 0.6, y1 = N.y1 - 0.75;
+  const n = Math.max(1, Math.round((y1 - y0) * s));
   mapF(-N.w * 0.17, y0, 0.8);
-  const x = Math.round(F.x), ya = Math.round(F.y);
+  const fx0 = F.x, fy0 = F.y;
+  const x = Math.round(fx0), ya = Math.round(fy0);
   for (let k = 0; k < n; k++) litPlot(buf, x, ya + k, sk, skin, 2);
+  // the tip's light continues the stroke (critique r3: a one-row gap made two broken dashes); its offset is
+  // rounded from the stroke's start, so a sub-pixel bob never changes the shape (critique r18)
+  mapF(-N.w * 0.22, N.y1 - 0.5, 1.0);
+  const tx = x + Math.round(F.x - fx0), ty = ya + Math.round(F.y - fy0);
+  for (let y = ya + n; y <= ty; y++) litPlot(buf, Math.abs(tx - x) <= 1 ? (y < ty ? x : tx) : x, y, sk, skin, 2);
 }
 
 /**

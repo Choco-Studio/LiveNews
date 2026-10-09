@@ -22,9 +22,9 @@ import { LocalXY, localBox, clumpTone, strokeTone, selOutEdge, hairLight, rimMat
 export const sam = defineLook({
   id: 'sam',
   name: 'Sam Night',
-  head: { top: -10.5, craniumY: -3.0, R: 6.85, cheekY: 2.0, cheekHW: 6.5, chinY: 9.35, chinHW: 2.95, jawPow: 2.35 },
+  head: { top: -10.5, craniumY: -3.0, R: 6.85, cheekY: 2.0, cheekHW: 6.5, chinY: 9.35, chinHW: 3.3, jawPow: 2.6 }, // critique r1: a jaw that keeps its width (adult, not a light bulb)
   headAt: [0, -14.3],
-  neck: { hw: 3.05 },
+  neck: { hw: 3.35 }, // critique r24: 3.05 read as a pencil neck under a broad head (a bobble-head)
   eyes: { y: -0.5, x: 2.7, w: 2.55, h: 1.38, iris: [P.tanShade, P.brown], lash: P.maroon, lashes: false, bags: false },
   brows: { y: -2.45, len: 3.3, thick: 0.5, color: P.brown, arch: 0.28 },
   nose: { y0: -0.3, y1: 3.3, w: 1.4, big: false },
@@ -36,7 +36,7 @@ export const sam = defineLook({
   // upper right: dark hair outlined in black and capped in silver read as a helmet at 1x
   hair: { style: 'crop', ramp: [P.tanShade, P.brown, P.maroon, P.black], line: P.black, edge: P.maroon, rimTop: false },
   mustache: null,
-  torso: { neckHW: 3.4, shoulderTop: 2.4, shoulderHW: 20.3, sideHW: 18.9, bottom: 46, vDepth: 23.5, shoulderJoint: [17.5, 6.8] },
+  torso: { neckHW: 3.7, shoulderTop: 2.4, shoulderHW: 20.3, sideHW: 18.9, bottom: 46, vDepth: 23.5, shoulderJoint: [17.5, 6.8] },
   outfit: 'suit',
   collar: 'tie',
   // mid-grey, not navy: news-60.md caps saturated colour at 6 % of the studio layer (presenter included)
@@ -61,7 +61,9 @@ export const sam = defineLook({
 // the fringe's tips breaking the hairline; the sides are darker and finer.
 const LXY = new LocalXY();
 const HWL = new HeadWidthLUT();
-const CO = { cw: 1.3, s: 1, seed: 21, sep: true, hiLo: 0.3, hiHi: 3.6, hiW: 0.46, gap: 2.5 }; // separations in short dashes, never specks
+// separations in strokes, never specks (critique r32: 2.5 u dashes under 1 px wide aliased into dark specks all
+// over the crop, dirt; now ~1.3 px wide, longer, one step darker and never the deep tone)
+const CO = { cw: 1.3, s: 1, seed: 21, sep: true, sepSoft: true, sepPx: 1.3, hiLo: 0.3, hiHi: 3.6, hiW: 0.46, gap: 4.5 };
 export function drawCrop(buf, L, m, head, s) {
   const H = L.head;
   const cyc = H.craniumY - 0.2;

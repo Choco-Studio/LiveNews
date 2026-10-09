@@ -43,6 +43,9 @@ describe('what footage may show', () => {
     assert.equal(c.credit, 'FILE · Jane Doe · CC BY-SA');
     assert.equal(c.title, 'Marseille par drone');
     assert.equal(parseCommonsVideos(reply(page('Marseille.webm', { licence: 'All rights reserved' }))).length, 0);
+    for (const licence of ['CC BY-NC 2.0', 'CC BY-NC-SA 4.0', 'CC BY-ND 2.0']) {
+      assert.equal(parseCommonsVideos(reply(page('Marseille.webm', { licence }))).length, 0, `${licence} never airs`);
+    }
     assert.equal(parseCommonsVideos(reply(page('Marseille.ogv', { mime: 'application/ogg', ders: [] }))).length, 0, 'an Ogg original with no WebM transcode is no use to Chromium');
     const small = parseCommonsVideos(reply(page('Marseille.webm', { w: 426, h: 240, size: 3_000_000, ders: [] })))[0];
     assert.match(small.src, /Marseille\.webm$/, 'a small WebM original plays as it is');

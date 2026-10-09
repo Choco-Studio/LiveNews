@@ -63,8 +63,8 @@ const throwing = (message, extra = {}) => async () => {
   throw Object.assign(new Error(message), extra);
 };
 
-function makeChain(providers, { usage = makeUsage(), clock = makeClock(), log = silentLogger } = {}) {
-  const chain = new ProviderChain(providers, usage, { log, now: clock });
+function makeChain(providers, { usage = makeUsage(), clock = makeClock(), log = silentLogger, failDir = null } = {}) {
+  const chain = new ProviderChain(providers, usage, { log, now: clock, failDir });
   return { chain, usage, clock };
 }
 
@@ -74,6 +74,31 @@ const cooldownOf = (chain, clock, i = 0) => chain.status()[i].cooldownUntil - cl
 // ---------------------------------------------------------------- ProviderChain
 
 describe('ProviderChain', () => {
+  test('a reply that does not parse is kept and asked for once more before the provider is paused', async () => {
+    const failDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chain-fail-'));
+    const codex = makeProvider('codex', { generate: (_r, n) => (n === 1 ? { text: '{"a": "x" "b": 1}', usage: {} } : goodResult('codex')) });
+    const mock = makeProvider('mock');
+    const { chain } = makeChain([codex, mock], { failDir });
+    const out = await chain.generate({ stage: 'write', prompt: 'p' }, parseJson);
+    assert.equal(out.provider, 'codex');
+    assert.equal(codex.calls, 2);
+    assert.equal(mock.calls, 0);
+    assert.equal(chain.status()[0].cooldownUntil, null);
+    const kept = fs.readdirSync(failDir);
+    assert.equal(kept.length, 1);
+    assert.match(fs.readFileSync(path.join(failDir, kept[0]), 'utf8'), /"b": 1/);
+    fs.rmSync(failDir, { recursive: true, force: true });
+  });
+
+  test('a provider whose second reply still does not parse is paused and the next one takes over', async () => {
+    const codex = makeProvider('codex', { generate: () => ({ text: '{"a": ', usage: {} }) });
+    const mock = makeProvider('mock');
+    const { chain } = makeChain([codex, mock]);
+    const out = await chain.generate({ stage: 'write', prompt: 'p' }, parseJson);
+    assert.equal(out.provider, 'mock');
+    assert.equal(codex.calls, 2);
+  });
+
   test('returns the first provider result, validated, with the provider name', async () => {
     const a = makeProvider('a');
     const b = makeProvider('b');
@@ -296,7 +321,7 @@ describe('ProviderChain', () => {
     const out = await chain.generate({}, parseJson);
 
     assert.equal(out.provider, 'b');
-    assert.equal(a.calls, 1);
+    assert.equal(a.calls, 2, 'a reply that does not parse is asked for once more first');
     assert.equal(chain.status()[0].failures, 1);
     assert.ok(cooldownOf(chain, clock, 0) > 0, 'the garbage provider is put on cooldown');
     const aRecord = usage.records.find((r) => r.name === 'a');

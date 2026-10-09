@@ -236,7 +236,7 @@ function bumpsOf(L) {
   const out = [];
   const pair = (x, y, sx, sy, a) => out.push([-x, y, sx, sy, a], [x, y, sx, sy, a]);
   pair(ex, B.y + 0.6, 1.9, 0.75, 0.42); // brow ridge over each eye
-  pair(ex - 0.2, ey - 0.1, 1.55, 1.0, -0.55); // eye socket, deepest toward the nose
+  pair(ex - 0.2, ey - 0.1, 1.55, 1.0, -0.75); // eye socket, deepest toward the nose (critique r1: -0.55 left the sockets invisible, a flat mask)
   pair(ex + 1.0, ey + 2.5, 1.8, 1.1, 0.42); // cheekbone (broad and low: never a lit island on the shade side)
   // the hollow under the cheekbone: a long, shallow plane down toward the jaw (a round dip here made
   // a lobed blob in the shade, critic r2: 'a bruise or a stubble patch')
@@ -259,12 +259,13 @@ function occlusionOf(L) {
   const pair = (x, y, sx, sy, a) => out.push([-x, y, sx, sy, a], [x, y, sx, sy, a]);
   pair(E.x - E.w * 0.6, E.y + 0.05, 0.55, 0.55, 0.22); // inner eye corner
   pair(E.x - E.w * 0.45, E.y - 0.9, 0.6, 0.42, 0.4); // the socket under the brow's head, beside the bridge
-  pair(N.w * 0.42, N.y1 + 0.15, 0.42, 0.32, 0.22); // nostril
+  out.push([N.w * 0.42, N.y1 + 0.15, 0.42, 0.32, 0.22]); // nostril, far side (critique r3: both nostrils deep
+  out.push([-N.w * 0.42, N.y1 + 0.15, 0.36, 0.28, 0.08]); // made a 7 px brown bar under the nose; the near one is soft)
   pair(M.w * 0.56, M.y + 0.05, 0.45, 0.45, 0.2); // mouth corner
-  out.push([0, N.y1 + 0.55, 0.85, 0.35, 0.1]); // under the septum
+  out.push([0, N.y1 + 0.55, 0.6, 0.3, 0.05]); // under the septum
   // the nose's cast shadow: the key is up and camera-left, so it falls down and to the right
-  out.push([N.w * 0.62, N.y1 + 0.75, 0.6, 0.34, 0.42]);
-  out.push([0, M.y + 1.3, M.w * 0.28, 0.3, 0.36]); // the shadow under the lower lip
+  out.push([N.w * 0.62, N.y1 + 0.75, 0.5, 0.3, 0.26]); // (critique r0: 0.42 merged with the nostrils into a brown bar)
+  out.push([0, M.y + 1.3, M.w * 0.28, 0.3, 0.2]); // the shadow under the lower lip (critique r0: 0.36 read as a hole in the chin)
   return out;
 }
 
@@ -414,8 +415,10 @@ function faceMap(L) {
 // made them blink on and off as the head moved with speech).
 const TONES = [
   [9, 0.3, -0.42], // wide: lit / shade, deep only under the jaw
-  [9, 0.29, -0.2], // medium
-  [9, 0.33, -0.1], // close-up
+  // (critique r2: at 0.29 / 0.33 nearly the whole face sat in the lit tone and read as a flat mask;
+  // a higher lit threshold lets the sockets, the hollow under the cheekbone and the far plane turn)
+  [9, 0.36, -0.2], // medium
+  [0.9, 0.44, -0.08], // close-up: the planes facing the key (forehead, cheekbone, chin) take the highlight tone
 ];
 // how far the shade side's sculpt (faceMap dk) pushes a shaded pixel toward deep, per tier
 const SCULPT = [0, 0.55, 1];
@@ -423,7 +426,7 @@ const HW_LUT = new Float32Array(1024);
 const TH = new Float64Array(3); // this frame's thresholds (TONES of the tier, shifted by L.skinLift)
 // Per-frame state of the head being drawn (module scratch: no closure, no allocation).
 const S = {
-  H: null, fm: null, cx: 0, cy: 0, cr: 1, sr: 0, inv: 1, yawShift: 0, yaw: 0, cyw: 1, syw: 0, cp: 1, sp: 0,
+  H: null, E: null, N: null, browTop: 0, browLo: 0, fm: null, cx: 0, cy: 0, cr: 1, sr: 0, inv: 1, yawShift: 0, yaw: 0, cyw: 1, syw: 0, cp: 1, sp: 0,
   pitchShift: 0, jaw: 0, jawY0: 0, jawK: 0, jyK: 0, top: 0, lutY0: 0, lutN: 0, th: TH, tier: 2, sculpt: 1, lx: 0, ly: 0, lz: 0,
 };
 // The pixel's head-local position. skinTone() reads it from here and takes no
@@ -472,6 +475,24 @@ function skinTone() {
     if (y > H.chinY + S.jaw - 0.75) return 2;
     return l > th[1] ? 1 : 2;
   }
+  // the highlight tone, never in the band right under the eyes (critique r6: there it read as a
+  // pale tear track; the cheekbone's light sits lower and further out)
+  // on the forehead the sheen needs more light the higher it sits, so its top is a curve, not the
+  // flat cut of browTop (critique r14: two straight edges made a trapezoid, a plaster)
+  if (l > th[0] + (fy < S.browLo ? 0.06 * (S.browLo - fy) : 0)) {
+    // nor high on the forehead, where a patch under the hairline reads as a bald spot (v2-face test)
+    const E = S.E, ex = (fx < 0 ? -fx : fx) - E.x, ey = fy - (E.y + 1.25);
+    // (critique r9: nor level with the eye itself, where it left lone pale pixels at the corners;
+    // r11: nor through the brow and under it, where the forehead's sheen ran on as an hourglass)
+    // (critique r22: nor on the bridge, where it made a pale 4x3 block with face.js' ridge light, a
+    // plaster; the ball of the tip keeps it, so the ridge never reads as a lone 1 px stick)
+    const N = S.N;
+    // (r31: the whole ball of the tip in the highlight was a 3x3 pale block on a 4-5 px nose in the MCU; only
+    // a small spot on its key side keeps it)
+    const tx = fx + N.w * 0.3, ty = fy - (N.y1 - 0.55);
+    const onNose = fy > N.y0 && fy < N.y1 + 0.6 && fx > -N.w * 0.95 && fx < N.w * 0.6 && tx * tx + ty * ty > 0.2;
+    if (fy > S.browTop && !onNose && !(fy > S.browLo && ey < 0.8 && ex > -E.w * 1.1 && ex < E.w * 0.7)) return 0;
+  }
   if (l > th[1]) return 1;
   // in shade: the sculpt carves the planes of the shadow side with the deep tone
   return l - fm.dk[c] * S.sculpt > th[2] ? 2 : 3;
@@ -480,6 +501,10 @@ function skinTone() {
 export function drawHead(buf, L, m, head, s) {
   const H = L.head;
   S.H = H;
+  S.E = L.eyes;
+  S.browTop = L.brows.y - 2.0;
+  S.browLo = L.brows.y - 0.45;
+  S.N = L.nose;
   S.fm = faceMap(L);
   S.cx = head.cx;
   S.cy = head.cy;
@@ -505,7 +530,9 @@ export function drawHead(buf, L, m, head, s) {
   // reach further round the face, so a deep skin keeps a readable lit cheek and forehead
   const lift = L.skinLift > 0 ? Math.min(1, L.skinLift) : 0;
   const T = TONES[S.tier];
-  TH[0] = T[0];
+  // L.sheenCut (0..0.05): a look whose lit skin is mostly forehead (a beard covers the rest)
+  // narrows the close-up highlight so it stays a sheen, not a plate across the brow
+  TH[0] = T[0] + (L.sheenCut > 0 ? Math.min(0.05, L.sheenCut) : 0);
   TH[1] = T[1] - 0.22 * lift;
   TH[2] = T[2] - 0.12 * lift;
   S.lx = LIGHT[0];
@@ -560,7 +587,12 @@ let STAMP = null, STACK = null, stampN = 0;
  *  2. an island of at most `maxIsland` pixels of one tone, surrounded by a single
  *     other tone of the same skin, takes that tone: a 2-3 px shade dot on a lit
  *     cheek reads as a mole or a scar, a lit dot in the shade as a stray glint.
+ *     The close-up highlight (skinTone's tone 0, the only tone 0 on the head's skin when this
+ *     runs: the ears are their own group, the face's decals come later) takes part here only,
+ *     with its own limit HI_ISLAND (critique r10: lone pale pixels at the eye corners and a hard
+ *     2-stroke 'L' on the temple; the planes it is meant for are 15 px and more).
  */
+const HI_ISLAND = 6;
 function cleanTones(buf, mat, x0, y0, x1, y1, maxIsland) {
   const w = buf.w, M = buf.mat, T = buf.tone, G = buf.grp, g = buf.g;
   const xa = Math.max(2, Math.floor(x0)), xb = Math.min(w - 2, Math.ceil(x1));
@@ -604,13 +636,31 @@ function cleanTones(buf, mat, x0, y0, x1, y1, maxIsland) {
     STAMP.fill(0);
     stampN = 1;
   }
+  // the close-up highlight is never a 1 px line: a highlight pixel that belongs to no 2x2 block of highlight
+  // returns to the lit tone (critique r31: the edge of the no-highlight window under the eye left a 1 px 'L'
+  // on the cheek that came and went as the head moved). Marked first, then cleared, so it never cascades.
+  if (maxIsland >= 4) {
+    const hi = (j) => M[j] === mat && G[j] === g && T[j] === 0;
+    let nThin = 0;
+    for (let y = ya; y < yb; y++) {
+      for (let x = xa; x < xb; x++) {
+        const i = y * w + x;
+        if (!hi(i)) continue;
+        const l = hi(i - 1), r = hi(i + 1), u = hi(i - w), d = hi(i + w);
+        const block = (l && u && hi(i - w - 1)) || (r && u && hi(i - w + 1)) || (l && d && hi(i + w - 1)) || (r && d && hi(i + w + 1));
+        if (!block) STACK[nThin++] = i;
+      }
+    }
+    for (let k = 0; k < nThin; k++) T[STACK[k]] = 1;
+  }
   const st = stampN;
   for (let y = ya; y < yb; y++) {
     for (let x = xa; x < xb; x++) {
       const i0 = y * w + x;
       if (STAMP[i0] === st || M[i0] !== mat || G[i0] !== g) continue;
       const t = T[i0];
-      if (t === 0) continue;
+      if (t === 0 && maxIsland < 4) continue;
+      const lim = t === 0 ? HI_ISLAND : maxIsland;
       // flood the whole region (each pixel is stamped once per frame, so this stays linear)
       let sp = 0, size = 0, other = -1, enclosed = true;
       STACK[sp++] = i0;
@@ -621,7 +671,7 @@ function cleanTones(buf, mat, x0, y0, x1, y1, maxIsland) {
         for (let k = 0; k < 4; k++) {
           const j = k === 0 ? i - 1 : k === 1 ? i + 1 : k === 2 ? i - w : i + w;
           const xj = j % w, yj = (j - xj) / w;
-          if (xj < xa || xj >= xb || yj < ya || yj >= yb || M[j] !== mat || G[j] !== g || T[j] === 0) {
+          if (xj < xa || xj >= xb || yj < ya || yj >= yb || M[j] !== mat || G[j] !== g || (T[j] === 0 && t !== 0)) {
             enclosed = false;
             continue;
           }
@@ -635,7 +685,7 @@ function cleanTones(buf, mat, x0, y0, x1, y1, maxIsland) {
           else if (other !== tj) enclosed = false;
         }
       }
-      if (size > maxIsland) continue;
+      if (size > lim) continue;
       if (!enclosed || other < 0) continue;
       // repaint the island (a second small fill from its seed)
       sp = 0;

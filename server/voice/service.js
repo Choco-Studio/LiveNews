@@ -10,6 +10,7 @@
 //
 // Nothing here may stop the channel: without Python, the model or the worker
 // script the service logs once and every presenter keeps the browser voice.
+import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -18,7 +19,7 @@ import { KokoroWorker } from './worker.js';
 import { VoiceCache } from './cache.js';
 import { segmentRequest, adLineRequest, clipId, clientAudio, isSpoken, estimateSeconds, ID_RE } from './plan.js';
 
-const HERE = path.dirname(new URL(import.meta.url).pathname);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const RETRY_MS = 10 * 60_000; // after the engine failed, try again this much later
 const PIN_MS = 6 * 3600_000; // clips of recent episodes are never pruned within this time
 const FINGERPRINT_FILES = ['engine.py', 'dsp.py', 'textnorm.py', 'loudness.py', 'audio_io.py', 'tone.json', 'presets.json'];

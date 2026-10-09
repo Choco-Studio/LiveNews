@@ -621,10 +621,12 @@ function knitRibs(o, mt, g, T) {
   const w = buf.w, M = buf.mat, Gr = buf.grp, Tn = buf.tone;
   for (let x = x0 + (step >> 1); x <= x1; x += step) {
     const h = hashInt(x, 31);
-    const per = 6 + Math.floor(h * 5), on = 2 + Math.floor(h * 2);
+    // long ribs with short breaks (critique r32: 2-3 px dashes every 6-10 px made a grid of dots, stitching)
+    const per = 9 + Math.floor(h * 6), on = per - 2 - Math.floor(h * 2);
     for (let y = y0; y <= y1; y++) {
       const i = y * w + x;
-      if (M[i] !== mt || Gr[i] !== g || Tn[i] > 1) continue;
+      // only where the knit catches the light (lit → base): base → shade ribs read as a barcode (critique r32)
+      if (M[i] !== mt || Gr[i] !== g || Tn[i] > 0) continue;
       if ((y + Math.floor(h * 17)) % per < on) Tn[i] += 1;
     }
   }

@@ -28,11 +28,11 @@ import { local, screen, tier, hwAt, fastAtan2, strandTone, hashInt, rimRuns } fr
 export const ada = defineLook({
   id: 'ada',
   name: 'Ada Volt',
-  head: { top: -9.9, craniumY: -2.7, R: 7.05, cheekY: 1.6, cheekHW: 6.7, chinY: 8.9, chinHW: 2.2, jawPow: 1.9 },
+  head: { top: -9.9, craniumY: -2.7, R: 7.05, cheekY: 1.6, cheekHW: 6.7, chinY: 8.9, chinHW: 2.65, jawPow: 2.45 }, // critique r1: a jaw that keeps its width (adult, not a light bulb)
   headAt: [0, -13.1],
-  neck: { hw: 2.4 },
+  neck: { hw: 2.9 }, // critique r24: 2.4 read as a pencil neck under a broad head (a bobble-head)
   eyes: { y: -0.6, x: 2.8, w: 2.65, h: 1.35, iris: [P.steel, P.ink], lash: P.black, lashes: true },
-  brows: { y: -2.35, len: 3.25, thick: 0.46, color: P.black, arch: 0.3 },
+  brows: { y: -2.7, len: 3.25, thick: 0.42, color: P.black, arch: 0.3 }, // critique r30: at -2.35 they sat on the frame's top bar, one heavy dark band
   nose: { y0: -0.3, y1: 3.3, w: 1.2, big: false },
   mouth: { y: 5.75, w: 3.3, lip: P.brown, lipHi: P.skinShade, upper: P.skinShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   ears: { y: -0.1, h: 2.7, w: 0.95 },
@@ -42,7 +42,7 @@ export const ada = defineLook({
   hair: { style: 'straight', ramp: [P.steel, P.slate, P.ink, P.black], line: P.black },
   glasses: { style: 'rect', ramp: [P.steel, P.slate, P.ink, P.black] }, // fine dark frames, a step off black so they never read as a mask
   earrings: P.silver,
-  torso: { neckHW: 2.9, shoulderTop: 3.0, shoulderHW: 17.9, sideHW: 16.7, bottom: 46, vDepth: 14, shoulderJoint: [15.5, 7.0] },
+  torso: { neckHW: 3.4, shoulderTop: 3.0, shoulderHW: 17.9, sideHW: 16.7, bottom: 46, vDepth: 14, shoulderJoint: [15.5, 7.0] },
   outfit: 'turtleneck',
   // charcoal knit: a step lighter than her hair so the long side reads against it, still darker than
   // TECH BYTES' lit cove pools; a silver rim keeps the far shoulder off the background
@@ -226,7 +226,8 @@ function drawStraight(buf, L, m, head, s, sk) {
     if (zone === 1 && fx < PART && y > fringe - 1.5 * px1 && Math.abs(x) < hw) return Math.max(form, 2);
     // sheen windows: on the crown where it turns to the key; on the long side its outer face, above the jaw
     ST.sw = zone === 2 ? swPanel : swCrown;
-    ST.skip = zone === 2 ? 0 : 0.12; // (nearly) every clump in a sheen band carries its stroke
+    // (critique r6: a stroke on nearly every crown clump read as diagonal hatching, a printed texture)
+    ST.skip = zone === 2 ? 0 : 0.5;
     // separations: long strokes broken rarely (short dashes on the crown would read as stitching)
     ST.gap = zone === 2 ? 3.2 : 7.5;
     ST.sepOn = zone === 2 ? 0.55 : 0.82;

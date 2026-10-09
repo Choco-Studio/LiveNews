@@ -33,19 +33,20 @@ export const max = defineLook({
   name: 'Max Circuit',
   head: { top: -10.0, craniumY: -2.5, R: 7.0, cheekY: 1.4, cheekHW: 6.7, chinY: 9.3, chinHW: 3.3, jawPow: 2.9 },
   headAt: [0, -12.55], // a shorter neck and a lower seat than the anchors: he leans in
-  neck: { hw: 2.85 },
-  eyes: { y: -0.6, x: 2.8, w: 2.65, h: 1.62, iris: [P.brown, P.maroon], lash: P.black, lashes: false, bags: false },
+  neck: { hw: 3.35 }, // critique r24: 2.85 read as a pencil neck under a broad head (a bobble-head)
+  eyes: { y: -0.6, x: 2.8, w: 2.65, h: 1.48, iris: [P.brown, P.maroon], lash: P.black, lashes: false, bags: false },
   brows: { y: -2.75, len: 3.35, thick: 0.56, color: P.maroon, arch: 0.18 },
   nose: { y0: -0.3, y1: 3.45, w: 1.45, big: false },
   mouth: { y: 6.0, w: 3.7, lip: P.brown, lipHi: P.tanShade, upper: P.tanShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   ears: { y: -0.1, h: 2.8, w: 1.0 },
   skin: SKIN_TAN,
+  sheenCut: 0.02, // FACES (critique r9): the beard leaves the brow as the lit skin; keep its sheen narrow
   skinLine: P.brown,
   hair: { style: 'textured', ramp: [P.brown, P.maroon, P.black, P.black], line: P.black },
   // the beard is the hair's own espresso (a step cooler and darker than the skin's shade, so face, beard and
   // blazer separate at 1x instead of reading as one brown ramp)
   beard: { ramp: [P.brown, P.maroon, P.black, P.black] },
-  torso: { neckHW: 3.3, shoulderTop: 2.6, shoulderHW: 19.8, sideHW: 18.6, bottom: 46, vDepth: 21, shoulderJoint: [17.0, 6.9] },
+  torso: { neckHW: 3.8, shoulderTop: 2.6, shoulderHW: 19.8, sideHW: 18.6, bottom: 46, vDepth: 21, shoulderJoint: [17.0, 6.9] },
   outfit: 'knitBlazer',
   // tobacco wool: brown, maroon in shade; tanShade only as the 1 px lit edge (wardrobe-b litEdgeOnly), so the
   // blazer never shares the skin's shade tone as a plane
@@ -363,17 +364,23 @@ function drawBeard(buf, L, m, head, s) {
       let t = st - 1;
       if (inChin && y > H.chinY - 0.8) t += 1; // the chin's underside
       if (inCheek && !inChin && ax > hw - 1.2 && fx > 0) t += 1; // the jaw's far side turns away from the key
-      if (inMoustache && !inCheek) t = ax > mHW * 0.6 || y > lipTop - 0.5 * px1 ? 2 : 1;
+      // the moustache: maroon, its upper edge on the key side lit brown, only the far tip in the dark
+      // (critique r13: tone 2 is black in this ramp, and two black rows over the lip read as an open mouth)
+      if (inMoustache && !inCheek) t = fx > mHW * 0.8 ? 2 : fx < 0 && y < mTop + 1.5 * px1 ? 0 : 1;
       if (tr === 2) {
         // strands: short vertical dashes a step darker (combed down), a few lit ones on the key side; a
         // different rhythm per column, never single specks
-        const len = 2 + ((ch * 3) | 0);
+        // (critique r13: darker and lighter specks in every tone read as dirt; now dashes of 3-5 px, every
+        // third column at most, only over the mid tones, so no black fleck lands in the shade)
+        const len = 3 + ((ch * 3) | 0);
         const row = Math.floor((y * s + ch * 7) / len);
         const h = hashInt(col * 131 + row, 29);
-        if (h < 0.24) t += 1;
-        else if (h > 0.9 && fx < -0.4 && st <= 1) t -= 1;
+        if (t === 0 && inCheek && !inChin && (col % 3 === 0) && h < 0.4) t += 1; // (r14: on the chin they were dots)
         // the top edge of the cheek: the last px of each column one step lighter (it thins into the skin)
         if (inCheek && !inChin && y < cheekLine + px1) t = Math.min(t, st);
+        // black (tone 2 of this ramp) only on the far edge of the jaw and the moustache's far tip: a black
+        // chin and black strand dashes read as a hole and as scratches (critique r14)
+        if (t > 1 && !(inCheek && fx > 0 && ax > hw - 1.2) && !(inMoustache && !inCheek)) t = 1;
       } else if (tr === 1 && inCheek && !inChin && y < cheekLine + px1) {
         t = Math.min(t, st); // the medium: a 1 px soft edge
       }
@@ -408,11 +415,15 @@ function drawBeard(buf, L, m, head, s) {
       else ext = y < H.chinY + vol ? H.chinHW * 0.95 * Math.sqrt(1 - (y - H.chinY) / vol) : -1;
       if (Math.abs(xs) > ext) continue;
       // (the medium: one maroon tone, a black underside read as a void over the dark knit)
-      const t = tr === 1 ? 1 : y > H.chinY - 0.3 ? 3 : xs > 0 ? 2 : 1;
+      // (critique r13: everything under the chin in the black read as a slab on the collar; the underside
+      // keeps one dark row, the far side of the jaw a step down)
+      const t = tr === 1 ? 1 : y > H.chinY + vol * 0.45 ? 2 : xs > ext - 1.2 * px1 && xs > 0 ? 2 : 1;
       buf.plot(px, py, mb, tr === 0 ? (t >= 2 ? 1 : 0) : t);
     }
   }
-  if (tr < 2) {
+  {
+    // (critique r14: in the close-up too, the strip of lit neck between the beard and the collar read as a
+    // strap; under a beard the neck is in its shadow)
     // wide and medium: no 1 px neck sliver between the beard's underside and the knit collar (it read as a
     // second mouth): the beard's shade runs down the neck pixels until the collar starts (≤ 3 px)
     const gn = head.gb + GROUPS.neck;

@@ -1,6 +1,7 @@
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { C, Frame } from '../public/js/v2/canvas25d/pixbuf.js';
 import { styleFor, setStyle, STYLE_IDS, currentStyle } from '../public/js/v2/canvas25d/studio/styles.js';
 import { drawBackground, drawDesk, setCacheEnabled, invalidateSet, wallRect, wallFromScene, setDressing } from '../public/js/v2/canvas25d/studio/set.js';
@@ -24,7 +25,7 @@ const PROGRAMS = Object.keys(channel.programs).filter((id) => channel.programs[i
 
 /** A fixture picture as the director would hold it: 416x234 RGBA (box-sampled, not pixelated). */
 function fixture(name) {
-  const img = readPNG(new URL(`../config/fixtures/img/${name}.png`, import.meta.url).pathname);
+  const img = readPNG(fileURLToPath(new URL(`../config/fixtures/img/${name}.png`, import.meta.url)));
   const w = 416, h = 234, data = new Uint8ClampedArray(w * h * 4);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {

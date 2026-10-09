@@ -20,6 +20,9 @@ const W = 384, H = 216;
 
 /** The correspondent in a location shot: neck base on screen and scale (an MCU: hands below the frame). */
 export const REMOTE = { x: 124, y: 122, s: 3.6, headX: 124 };
+/** An expert on a video call: centred and a little closer, as a laptop camera frames whoever sits at it. */
+// (first air check, 8 Oct: at y 130 the head sat mid-frame; a webcam guest's eyes sit near the upper third)
+export const CALL = { x: 196, y: 116, s: 3.8, headX: 196 };
 /** The two boxes of the two-way (16:9), and where a head sits inside one. */
 export const TWOWAY = { w: 176, h: 99, y: 44, left: 12, right: 196, headX: 88, headY: 40 };
 
@@ -32,6 +35,8 @@ export const TWOWAY = { w: 176, h: 99, y: 44, left: 12, right: 196, headX: 88, h
  */
 export function drawBackdrop(px, bd, t = 0) {
   if (bd?.kind === 'footage' && bd.frame?.px) return drawFootage(px, bd.frame);
+  // an expert's room on a video call (drawRoom)
+  if (bd?.kind === 'room') return drawRoom(px, bd);
   drawDesk(px, bd || {}, t);
 }
 
@@ -87,6 +92,111 @@ function drawDesk(px, { lat = 20, lon = 0, accent = C.red }, t) {
       const x = Math.round(cx + Math.cos((a / 48) * Math.PI * 2) * r), y = Math.round(cy + Math.sin((a / 48) * Math.PI * 2) * r);
       if (x >= 0 && x < W && y >= 0 && y < H && (a & 1) === 0) px[y * W + x] = ph < 0.4 ? accent : C.slate;
     }
+  }
+}
+
+// ------------------------------------------------------------------------------------------------ the call's room
+
+/**
+ * An expert's room on a video call (server/experts.js; owner 8 Oct: "una llamada en directo al despacho o el hogar
+ * de la persona"): drawn at half resolution and doubled, as a laptop camera's softer picture (the person, drawn at
+ * full resolution, stands out of it as a webcam's subject does). The window shows the hour of the expert's own
+ * city (bd.night). Rooms: 'study' (a bookcase), 'office' (blinds, a framed print, binders), 'lab' (shelves of
+ * glassware, a whiteboard), 'home' (a warm wall, a lamp, a plant, curtains).
+ *   bd = { kind: 'room', room, night, seed }
+ */
+const RW = W / 2, RH = H / 2;
+const room = new Uint32Array(RW * RH);
+function rect(x0, y0, w, h, c) {
+  for (let y = Math.max(0, y0); y < Math.min(RH, y0 + h); y++) for (let x = Math.max(0, x0); x < Math.min(RW, x0 + w); x++) room[y * RW + x] = c;
+}
+const rnd = (seed) => {
+  let s = seed >>> 0 || 1;
+  return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+};
+const SPINES = ['red', 'navy', 'darkGreen', 'rust', 'cream', 'maroon', 'blue', 'tan', 'steel', 'darkRed', 'green', 'fog'];
+
+function windowAt(x0, y0, w, h, night, r, blinds = false, curtains = false) {
+  rect(x0 - 1, y0 - 1, w + 2, h + 2, C.fog); // the frame
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const v = y / h;
+      room[(y0 + y) * RW + x0 + x] = night ? (v > 0.75 ? C.ink : C.navy) : v < 0.45 ? C.cyan : v < 0.8 ? C.blue : C.fog;
+    }
+  }
+  // night: lit windows of the buildings opposite; day: a cloud
+  if (night) for (let k = 0; k < 9; k++) rect(x0 + 1 + Math.floor(r() * (w - 3)), y0 + Math.floor(h * 0.45 + r() * h * 0.45), 1, 1, r() < 0.5 ? C.yellow : C.cream);
+  else rect(x0 + 3, y0 + 4, Math.min(8, w - 5), 2, C.white);
+  rect(x0 + Math.floor(w / 2), y0, 1, h, C.fog); // the mullion
+  if (blinds) for (let y = y0 + 1; y < y0 + h; y += 3) rect(x0, y, w, 1, night ? C.slate : C.silver);
+  if (curtains) {
+    rect(x0 - 4, y0 - 2, 5, h + 6, C.maroon);
+    rect(x0 + w - 1, y0 - 2, 5, h + 6, C.maroon);
+  }
+}
+
+function drawRoom(px, { room: kind = 'study', night = false, seed = 7 } = {}) {
+  const r = rnd(seed);
+  const wall = { study: C.slate, office: C.steel, lab: C.silver, home: C.tan }[kind] || C.slate;
+  const shade = { study: C.ink, office: C.slate, lab: C.fog, home: C.tanShade }[kind] || C.ink;
+  // the wall: lit from the window side, a step darker away from it (two flat bands and a dithered seam)
+  for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) room[y * RW + x] = x > 70 + bayer(x, y) * 14 ? wall : shade;
+  if (kind === 'study') {
+    // a bookcase on the left: dark wood, four shelves of spines
+    rect(2, 4, 50, RH - 4, C.maroon);
+    for (let s = 0; s < 4; s++) {
+      const y = 8 + s * 24;
+      rect(4, y + 17, 46, 2, C.brown);
+      for (let x = 5; x < 48; ) {
+        const w = 2 + Math.floor(r() * 3), h = 10 + Math.floor(r() * 6);
+        rect(x, y + 17 - h, w, h, C[SPINES[Math.floor(r() * SPINES.length)]]);
+        x += w + (r() < 0.15 ? 2 : 0);
+      }
+    }
+    windowAt(150, 12, 30, 40, night, r);
+    if (night) rect(130, 50, 8, 10, C.yellow); // a desk lamp's shade, lit
+  } else if (kind === 'office') {
+    windowAt(140, 8, 40, 46, night, r, true);
+    rect(14, 18, 30, 22, C.ink); // a framed print
+    rect(16, 20, 26, 18, C.blue);
+    rect(16, 30, 26, 8, C.darkGreen);
+    rect(6, 70, 52, 3, C.slate); // a shelf of binders
+    for (let x = 8; x < 54; x += 5) rect(x, 56, 4, 14, [C.navy, C.red, C.white, C.ink][Math.floor(r() * 4)]);
+  } else if (kind === 'lab') {
+    for (let s = 0; s < 3; s++) {
+      const y = 22 + s * 22;
+      rect(4, y, 54, 2, C.steel);
+      for (let x = 6; x < 54; x += 7) {
+        const h = 6 + Math.floor(r() * 6);
+        rect(x, y - h, 4, h, r() < 0.5 ? C.cyan : C.green);
+        rect(x + 1, y - h - 2, 2, 2, C.white);
+      }
+    }
+    rect(132, 14, 52, 34, C.white); // a whiteboard with a plotted curve and two lines of writing (no words)
+    for (let x = 0; x < 40; x++) rect(138 + x, 40 - Math.round(Math.sin(x / 7) * 6 + x / 8), 1, 1, C.blue);
+    rect(138, 20, 22, 1, C.slate);
+    rect(138, 24, 16, 1, C.slate);
+  } else {
+    windowAt(146, 10, 30, 40, night, r, false, true);
+    rect(14, 20, 24, 18, C.cream); // a framed photo
+    rect(16, 22, 20, 14, C.green);
+    rect(16, 30, 20, 6, C.darkGreen);
+    rect(26, 46, 2, 60, C.ink); // a floor lamp
+    rect(20, 40, 14, 8, night ? C.yellow : C.cream);
+    // a plant by the window
+    rect(122, 86, 10, 22, C.rust);
+    for (let k = 0; k < 14; k++) rect(118 + Math.floor(r() * 18), 62 + Math.floor(r() * 24), 3, 2, r() < 0.5 ? C.green : C.darkGreen);
+  }
+  // a laptop camera's fall-off: the corners a step darker
+  for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) {
+    const dx = (x - RW / 2) / (RW / 2), dy = (y - RH / 2) / (RH / 2);
+    if (dx * dx + dy * dy > 1.15 + bayer(x, y) * 0.25) room[y * RW + x] = C.ink;
+  }
+  // doubled into the frame
+  for (let y = 0; y < H; y++) {
+    const row = (y >> 1) * RW;
+    const o = y * W;
+    for (let x = 0; x < W; x++) px[o + x] = room[row + (x >> 1)];
   }
 }
 

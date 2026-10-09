@@ -1,0 +1,2482 @@
+{
+ "meta": {
+  "url": "http://127.0.0.1:8602/?autostart=1&voice=tts&beds=0",
+  "out": "C:\\Users\\movil\\PixelNews\\LiveNews\\docs\\roadmap\\critique\\renders\\r31\\show.mp4",
+  "fps": 30,
+  "seconds": 90,
+  "frames": 2700,
+  "sampleRate": 48000,
+  "start": "open",
+  "until": null,
+  "count": 1,
+  "raf": "frame",
+  "music": "lofi",
+  "stories": "soft",
+  "recordedAt": "2026-10-07T14:43:15.167Z",
+  "wallClockStart": "2026-10-07T14:38:29.452Z",
+  "voiceCache": "C:\\Users\\movil\\.cache\\globit-showcase\\voices",
+  "voicePresets": "C:\\Users\\movil\\PixelNews\\LiveNews\\server\\voice\\casting.json",
+  "realSeconds": 286.604
+ },
+ "speech": [
+  {
+   "id": 1,
+   "start": -0.405,
+   "end": -0.055,
+   "cut": null,
+   "called": -0.45,
+   "slot": null,
+   "presenter": null,
+   "ad": null,
+   "programId": null,
+   "emotion": null,
+   "voice": null,
+   "text": " ",
+   "cached": null,
+   "engine": null,
+   "volume": 0,
+   "firstWord": 0,
+   "estimated": true,
+   "error": null,
+   "clip": null
+  },
+  {
+   "id": 2,
+   "start": 4.572,
+   "end": 9.127,
+   "cut": null,
+   "called": 4.527,
+   "slot": "A",
+   "presenter": "paco",
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "serious",
+   "voice": "paco (casting.json)",
+   "text": "Hurricane Elena makes landfall on Mexico's Yucatán coast.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "49d2a0c625f36b4d1f10.wav"
+  },
+  {
+   "id": 3,
+   "start": 9.352,
+   "end": 12.517,
+   "cut": null,
+   "called": 9.307,
+   "slot": "A",
+   "presenter": "paco",
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "serious",
+   "voice": "paco (casting.json)",
+   "text": "Panama Canal reopens after a day-long closure.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "fc3e6ddc5ec6b360baf5.wav"
+  },
+  {
+   "id": 4,
+   "start": 12.742,
+   "end": 16.09,
+   "cut": null,
+   "called": 12.697,
+   "slot": "A",
+   "presenter": "paco",
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "serious",
+   "voice": "paco (casting.json)",
+   "text": "Wildfire near Marseille forces thousands to evacuate.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "e568d645c9d6720b76c8.wav"
+  },
+  {
+   "id": 5,
+   "start": 16.315,
+   "end": 18.78,
+   "cut": null,
+   "called": 16.27,
+   "slot": "A",
+   "presenter": "paco",
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "serious",
+   "voice": "paco (casting.json)",
+   "text": "Good afternoon, and welcome to World now.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "e894ace2c156e3871dd0.wav"
+  },
+  {
+   "id": 6,
+   "start": 19.005,
+   "end": 21.188,
+   "cut": null,
+   "called": 18.96,
+   "slot": "A",
+   "presenter": "paco",
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "serious",
+   "voice": "paco (casting.json)",
+   "text": "I'm Paco Pixel, with Lola Byte.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "801087b305f0a2ed15bb.wav"
+  },
+  {
+   "id": 7,
+   "start": 21.808,
+   "end": 30.553,
+   "cut": null,
+   "called": 21.763,
+   "slot": "A",
+   "presenter": "paco",
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "serious",
+   "voice": "paco (casting.json)",
+   "text": "Hurricane Elena has made landfall near Cancún with winds of one hundred and eighty kilometres per hour, according to Pixelburg Post.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "8737a784f967d038abc2.wav"
+  },
+  {
+   "id": 8,
+   "start": 30.778,
+   "end": 38.918,
+   "cut": null,
+   "called": 30.733,
+   "slot": "A",
+   "presenter": "paco",
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "serious",
+   "voice": "paco (casting.json)",
+   "text": "Mexico's civil protection agency says about one point two million homes are without power and forty thousand people have gone to shelters.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "27d2fe04732cfc97916e.wav"
+  },
+  {
+   "id": 9,
+   "start": 39.143,
+   "end": 42.17,
+   "cut": null,
+   "called": 39.098,
+   "slot": "A",
+   "presenter": "paco",
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "serious",
+   "voice": "paco (casting.json)",
+   "text": "Vic Vector, at our Americas desk, has the detail.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "f9e1d3ba827c90f97dab.wav"
+  },
+  {
+   "id": 10,
+   "start": 42.489,
+   "end": 45.439,
+   "cut": null,
+   "called": 42.444,
+   "slot": "R1",
+   "presenter": null,
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "serious",
+   "voice": "am_eric (browser voice Kokoro Eric (male))",
+   "text": "This is a life-threatening situation, the agency said.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "dab633095b16ed4e03f8.wav"
+  },
+  {
+   "id": 11,
+   "start": 45.664,
+   "end": 50.269,
+   "cut": null,
+   "called": 45.619,
+   "slot": "R1",
+   "presenter": null,
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "serious",
+   "voice": "am_eric (browser voice Kokoro Eric (male))",
+   "text": "The storm weakened slightly as it moved inland over the Yucatán peninsula.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "f21b9fbd56ba7c70e3bd.wav"
+  },
+  {
+   "id": 12,
+   "start": 50.494,
+   "end": 56.701,
+   "cut": null,
+   "called": 50.449,
+   "slot": "R1",
+   "presenter": null,
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "serious",
+   "voice": "am_eric (browser voice Kokoro Eric (male))",
+   "text": "Airports in Cancún and Mérida have closed, and hotels have moved guests to inner rooms.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "c1820e961889aabb76ab.wav"
+  },
+  {
+   "id": 13,
+   "start": 57.022,
+   "end": 58.429,
+   "cut": null,
+   "called": 56.977,
+   "slot": "A",
+   "presenter": "paco",
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "serious",
+   "voice": "paco (casting.json)",
+   "text": "Vic, what happens next?",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "2d131967e36e6f2b0aaa.wav"
+  },
+  {
+   "id": 14,
+   "start": 58.746,
+   "end": 63.351,
+   "cut": null,
+   "called": 58.701,
+   "slot": "R1",
+   "presenter": null,
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "serious",
+   "voice": "am_eric (browser voice Kokoro Eric (male))",
+   "text": "Forecasters expect heavy rain over the next two days, with a risk of flooding in low areas.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "c69467b9351ff292f9df.wav"
+  },
+  {
+   "id": 15,
+   "start": 63.679,
+   "end": 65.184,
+   "cut": null,
+   "called": 63.634,
+   "slot": "A",
+   "presenter": "paco",
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "serious",
+   "voice": "paco (casting.json)",
+   "text": "Vic Vector, thank you.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "1ad634f8500adde98ddf.wav"
+  },
+  {
+   "id": 16,
+   "start": 65.992,
+   "end": 71.524,
+   "cut": null,
+   "called": 65.947,
+   "slot": "B",
+   "presenter": "lola",
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "neutral",
+   "voice": "lola (casting.json)",
+   "text": "The Panama Canal has reopened to ships after fog closed it for a day, Ledger Line reports.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "0d546fe2ef1cc569d2d1.wav"
+  },
+  {
+   "id": 17,
+   "start": 71.749,
+   "end": 75.082,
+   "cut": null,
+   "called": 71.704,
+   "slot": "B",
+   "presenter": "lola",
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "neutral",
+   "voice": "lola (casting.json)",
+   "text": "The canal authority says about thirty ships are waiting to cross.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "2e915e49f92a6252d2fe.wav"
+  },
+  {
+   "id": 18,
+   "start": 75.307,
+   "end": 78.36,
+   "cut": null,
+   "called": 75.262,
+   "slot": "B",
+   "presenter": "lola",
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "neutral",
+   "voice": "lola (casting.json)",
+   "text": "Shipping companies say the delays should clear within days.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "dcd373e0902eea7774fb.wav"
+  },
+  {
+   "id": 19,
+   "start": 78.585,
+   "end": 83.798,
+   "cut": null,
+   "called": 78.54,
+   "slot": "B",
+   "presenter": "lola",
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "neutral",
+   "voice": "lola (casting.json)",
+   "text": "Thick fog had forced the canal authority to stop all crossings, a rare step for the waterway.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "845634360816eb22a66d.wav"
+  },
+  {
+   "id": 20,
+   "start": 84.023,
+   "end": 89.93,
+   "cut": null,
+   "called": 83.978,
+   "slot": "B",
+   "presenter": "lola",
+   "ad": null,
+   "programId": "world-now",
+   "emotion": "neutral",
+   "voice": "lola (casting.json)",
+   "text": "Ships began moving again at dawn, with pilots guiding the first vessels through the locks at reduced speed.",
+   "cached": false,
+   "engine": "tools/voice",
+   "volume": 0.8,
+   "firstWord": 0.012,
+   "estimated": false,
+   "error": null,
+   "clip": "25d245926ff456d0ea40.wav"
+  }
+ ],
+ "recordedClips": [],
+ "music": [
+  {
+   "t": -0.44,
+   "moment": "open",
+   "opts": {
+    "programId": "world-now"
+   },
+   "why": "episode stinger: the open plays its own theme"
+  },
+  {
+   "t": 4.46,
+   "moment": "headlines",
+   "opts": {
+    "programId": "world-now",
+    "line": 0,
+    "lines": 3,
+    "segment": 1
+   },
+   "why": "headline 1/3"
+  },
+  {
+   "t": 9.052,
+   "moment": "headlines",
+   "opts": {
+    "programId": "world-now",
+    "line": 1,
+    "lines": 3,
+    "segment": 1
+   },
+   "why": "headline 2/3"
+  },
+  {
+   "t": 9.227,
+   "moment": "pip",
+   "opts": {
+    "programId": "world-now",
+    "line": 0,
+    "lines": 3
+   },
+   "why": "pip after headline 1"
+  },
+  {
+   "t": 12.442,
+   "moment": "headlines",
+   "opts": {
+    "programId": "world-now",
+    "line": 2,
+    "lines": 3,
+    "segment": 1
+   },
+   "why": "headline 3/3"
+  },
+  {
+   "t": 12.617,
+   "moment": "pip",
+   "opts": {
+    "programId": "world-now",
+    "line": 1,
+    "lines": 3
+   },
+   "why": "pip after headline 2"
+  },
+  {
+   "t": 16.115,
+   "moment": "greeting",
+   "opts": {
+    "programId": "world-now",
+    "segment": 2
+   },
+   "why": "greeting"
+  },
+  {
+   "t": 16.19,
+   "moment": "pip",
+   "opts": {
+    "programId": "world-now",
+    "line": 2,
+    "lines": 3
+   },
+   "why": "pip after headline 3"
+  },
+  {
+   "t": 21.703,
+   "moment": "story",
+   "opts": {
+    "programId": "world-now",
+    "emotion": "serious",
+    "grave": true,
+    "breaking": false,
+    "segment": 3
+   },
+   "why": "story (serious)"
+  },
+  {
+   "t": 65.887,
+   "moment": "story",
+   "opts": {
+    "programId": "world-now",
+    "emotion": "neutral",
+    "grave": false,
+    "breaking": false,
+    "segment": 8
+   },
+   "why": "story (neutral)"
+  }
+ ],
+ "events": [
+  {
+   "ev": "audioContext",
+   "origin": 2,
+   "sampleRate": 48000,
+   "length": 77760000,
+   "t": -0.45
+  },
+  {
+   "ev": "instrumented",
+   "wrapped": {
+    "playEpisode": true,
+    "playAd": true,
+    "playBreak": true,
+    "say": true,
+    "breaking": true
+   },
+   "t": -0.45
+  },
+  {
+   "ev": "playEpisode",
+   "phase": "start",
+   "episodeId": "emuy7kktc0",
+   "programId": "world-now",
+   "title": "WORLD NOW",
+   "replay": false,
+   "cast": {
+    "A": "paco",
+    "B": "lola"
+   },
+   "segments": [
+    {
+     "type": "intro",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 232
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "WEATHER",
+     "headline": "Hurricane Elena hits Mexico’s Yucatán coast",
+     "location": "YUCATÁN PENINSULA, MEXICO",
+     "audio": null,
+     "chars": 284
+    },
+    {
+     "type": "cross",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "R1",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "WEATHER",
+     "headline": "Hurricane Elena hits Mexico’s Yucatán coast",
+     "location": "YUCATÁN PENINSULA, MEXICO",
+     "audio": null,
+     "chars": 219
+    },
+    {
+     "type": "cross",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "WEATHER",
+     "headline": "Hurricane Elena hits Mexico’s Yucatán coast",
+     "location": "YUCATÁN PENINSULA, MEXICO",
+     "audio": null,
+     "chars": 23
+    },
+    {
+     "type": "cross",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "R1",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "WEATHER",
+     "headline": "Hurricane Elena hits Mexico’s Yucatán coast",
+     "location": "YUCATÁN PENINSULA, MEXICO",
+     "audio": null,
+     "chars": 91
+    },
+    {
+     "type": "cross",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "WEATHER",
+     "headline": "Hurricane Elena hits Mexico’s Yucatán coast",
+     "location": "YUCATÁN PENINSULA, MEXICO",
+     "audio": null,
+     "chars": 22
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "TRADE",
+     "headline": "Panama Canal reopens after a day-long closure",
+     "location": "PANAMA",
+     "audio": null,
+     "chars": 414
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "WILDFIRE",
+     "headline": "Marseille wildfire forces thousands to flee",
+     "location": "MARSEILLE, FRANCE",
+     "audio": null,
+     "chars": 409
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "VOLCANO",
+     "headline": "Iceland volcano erupts again",
+     "location": "REYKJANES PENINSULA, ICELAND",
+     "audio": null,
+     "chars": 371
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "WEATHER",
+     "headline": "Heavy rain floods streets in Kerala",
+     "location": "KERALA, INDIA",
+     "audio": null,
+     "chars": 206
+    },
+    {
+     "type": "cross",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "R2",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "WEATHER",
+     "headline": "Heavy rain floods streets in Kerala",
+     "location": "KERALA, INDIA",
+     "audio": null,
+     "chars": 244
+    },
+    {
+     "type": "cross",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "WEATHER",
+     "headline": "Heavy rain floods streets in Kerala",
+     "location": "KERALA, INDIA",
+     "audio": null,
+     "chars": 22
+    },
+    {
+     "type": "cross",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "R2",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "WEATHER",
+     "headline": "Heavy rain floods streets in Kerala",
+     "location": "KERALA, INDIA",
+     "audio": null,
+     "chars": 60
+    },
+    {
+     "type": "cross",
+     "kind": null,
+     "emotion": "serious",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "WEATHER",
+     "headline": "Heavy rain floods streets in Kerala",
+     "location": "KERALA, INDIA",
+     "audio": null,
+     "chars": 16
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "ECONOMY",
+     "headline": "Norway raises interest rates",
+     "location": "NORWAY",
+     "audio": null,
+     "chars": 318
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 93
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 80
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": "number",
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "NUMBER OF THE DAY",
+     "headline": "Lisbon opens a new riverside tram line",
+     "location": "LISBON, PORTUGAL",
+     "audio": null,
+     "chars": 301
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "JOBS",
+     "headline": "Carmaker to close Turin plant",
+     "location": "TURIN, ITALY",
+     "audio": null,
+     "chars": 124
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": "roundup",
+     "breaking": false,
+     "roundup": {
+      "index": 0,
+      "count": 5
+     },
+     "hasImage": true,
+     "kicker": "AROUND THE WORLD",
+     "headline": "Kenya switches on its largest solar farm",
+     "location": "NAIROBI, KENYA",
+     "audio": null,
+     "chars": 112
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": "roundup",
+     "breaking": false,
+     "roundup": {
+      "index": 1,
+      "count": 5
+     },
+     "hasImage": true,
+     "kicker": "AROUND THE WORLD",
+     "headline": "Peru archaeologists find 3,000-year-old temple",
+     "location": "ANDES",
+     "audio": null,
+     "chars": 129
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": "roundup",
+     "breaking": false,
+     "roundup": {
+      "index": 2,
+      "count": 5
+     },
+     "hasImage": true,
+     "kicker": "AROUND THE WORLD",
+     "headline": "Japan's bullet trains mark a record year",
+     "location": "TOKYO, JAPAN",
+     "audio": null,
+     "chars": 104
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": "roundup",
+     "breaking": false,
+     "roundup": {
+      "index": 3,
+      "count": 5
+     },
+     "hasImage": true,
+     "kicker": "AROUND THE WORLD",
+     "headline": "Paris unveils plans to plant 170,000 trees",
+     "location": "PARIS, FRANCE",
+     "audio": null,
+     "chars": 96
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "B",
+     "feature": "roundup",
+     "breaking": false,
+     "roundup": {
+      "index": 4,
+      "count": 5
+     },
+     "hasImage": true,
+     "kicker": "AROUND THE WORLD",
+     "headline": "Storm forces ferry cancellations",
+     "location": "GREEK ISLANDS, GREECE",
+     "audio": null,
+     "chars": 156
+    },
+    {
+     "type": "story",
+     "kind": null,
+     "emotion": "happy",
+     "anchor": "B",
+     "feature": "lighter",
+     "breaking": false,
+     "roundup": null,
+     "hasImage": true,
+     "kicker": "AND FINALLY",
+     "headline": "Coral recovers on parts of Great Barrier Reef",
+     "location": "GREAT BARRIER REEF, AUSTRALIA",
+     "audio": null,
+     "chars": 432
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "happy",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 25
+    },
+    {
+     "type": "chat",
+     "kind": null,
+     "emotion": "happy",
+     "anchor": "B",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 28
+    },
+    {
+     "type": "outro",
+     "kind": null,
+     "emotion": "neutral",
+     "anchor": "A",
+     "feature": null,
+     "breaking": false,
+     "roundup": null,
+     "hasImage": false,
+     "kicker": null,
+     "headline": null,
+     "location": null,
+     "audio": null,
+     "chars": 96
+    }
+   ],
+   "t": -0.44
+  },
+  {
+   "ev": "shot",
+   "shot": "start",
+   "at": -0.45,
+   "programId": null,
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "other"
+   },
+   "t": -0.438
+  },
+  {
+   "ev": "stinger",
+   "at": -0.44,
+   "t": -0.438
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": -0.438
+  },
+  {
+   "ev": "strap",
+   "headline": null,
+   "kicker": null,
+   "t": -0.438
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": -0.438
+  },
+  {
+   "ev": "program",
+   "programId": null,
+   "title": null,
+   "t": -0.438
+  },
+  {
+   "k": "cut",
+   "shot": "start",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": -0.436
+  },
+  {
+   "k": "cut",
+   "shot": "open",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 0
+  },
+  {
+   "ev": "shot",
+   "shot": "open",
+   "at": -0.04,
+   "programId": "world-now",
+   "focus": "A",
+   "storyId": null,
+   "card": null,
+   "t": 0
+  },
+  {
+   "ev": "program",
+   "programId": "world-now",
+   "title": "WORLD NOW",
+   "t": 0
+  },
+  {
+   "k": "cut",
+   "shot": "montage",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 3.967
+  },
+  {
+   "ev": "shot",
+   "shot": "montage",
+   "at": 3.96,
+   "programId": "world-now",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "montage",
+    "index": 0
+   },
+   "t": 3.967
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "intro",
+   "kind": null,
+   "emotion": "serious",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": false,
+   "kicker": null,
+   "headline": null,
+   "location": null,
+   "audio": null,
+   "text": "Hurricane Elena makes landfall on Mexico’s Yucatán coast. Panama Canal reopens after a day-long closure. Wildfire near Marseille forces thousands to evacuate. Good afternoon, and welcome to WORLD NOW. I'm Paco Pixel, with Lola Byte.",
+   "t": 4.46
+  },
+  {
+   "ev": "subtitle",
+   "text": "Hurricane Elena makes landfall on Mexico’s Yucatán coast.",
+   "t": 4.5
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 4.5
+  },
+  {
+   "k": "perf",
+   "kind": "emotion",
+   "slot": "A",
+   "name": "serious",
+   "why": null,
+   "ev": "pace",
+   "t": 4.6
+  },
+  {
+   "k": "cut",
+   "shot": "montage",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 9.333
+  },
+  {
+   "ev": "shot",
+   "shot": "montage",
+   "at": 9.307,
+   "programId": "world-now",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "montage",
+    "index": 1
+   },
+   "t": 9.333
+  },
+  {
+   "ev": "subtitle",
+   "text": "Panama Canal reopens after a day-long closure.",
+   "t": 9.333
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Bitport Herald|Iceland volcano: lava fountains light up the Reykjanes sky#0",
+   "hold": 6.9,
+   "ev": "pace",
+   "t": 12.233
+  },
+  {
+   "k": "cut",
+   "shot": "montage",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 12.7
+  },
+  {
+   "ev": "shot",
+   "shot": "montage",
+   "at": 12.697,
+   "programId": "world-now",
+   "focus": "A",
+   "storyId": null,
+   "card": {
+    "kind": "montage",
+    "index": 2
+   },
+   "t": 12.7
+  },
+  {
+   "ev": "subtitle",
+   "text": "Wildfire near Marseille forces thousands to evacuate.",
+   "t": 12.7
+  },
+  {
+   "k": "cut",
+   "shot": "wide",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 16.3
+  },
+  {
+   "ev": "shot",
+   "shot": "wide",
+   "at": 16.27,
+   "programId": "world-now",
+   "focus": "A",
+   "storyId": null,
+   "card": null,
+   "t": 16.3
+  },
+  {
+   "ev": "subtitle",
+   "text": "Good afternoon, and welcome to WORLD NOW.",
+   "t": 16.3
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "partner",
+   "why": "turn",
+   "ev": "pace",
+   "t": 16.567
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "nod",
+   "why": null,
+   "ev": "pace",
+   "t": 18.367
+  },
+  {
+   "ev": "subtitle",
+   "text": "I'm Paco Pixel, with Lola Byte.",
+   "t": 18.967
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Bitport Herald|Iceland volcano: lava fountains light up the Reykjanes sky#1",
+   "hold": 7.3500000000000005,
+   "ev": "pace",
+   "t": 19.133
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 4.46,
+   "t": 21.188
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 21.2
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 21.2
+  },
+  {
+   "k": "strap",
+   "at": 22.703,
+   "ev": "pace",
+   "t": 21.703
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "serious",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "WEATHER",
+   "headline": "Hurricane Elena hits Mexico’s Yucatán coast",
+   "location": "YUCATÁN PENINSULA, MEXICO",
+   "audio": null,
+   "text": "Hurricane Elena has made landfall near Cancún with winds of 180 kilometres per hour, according to Pixelburg Post. Mexico’s civil protection agency says about 1.2 million homes are without power and 40,000 people have gone to shelters. Vic Vector, at our Americas desk, has the detail.",
+   "t": 21.703
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "mcu-l",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 21.733
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 21.703,
+   "programId": "world-now",
+   "focus": "A",
+   "storyId": "sf608e20622",
+   "card": null,
+   "t": 21.733
+  },
+  {
+   "ev": "subtitle",
+   "text": "Hurricane Elena has made landfall near Cancún with winds of 180 kilometres per hour, according to Pixelburg Post.",
+   "t": 21.733
+  },
+  {
+   "ev": "strap",
+   "headline": "Hurricane Elena hits Mexico’s Yucatán coast",
+   "kicker": "WEATHER",
+   "t": 21.733
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 21.733
+  },
+  {
+   "k": "perf",
+   "kind": "look",
+   "slot": "B",
+   "name": "wall",
+   "why": "wall",
+   "ev": "pace",
+   "t": 22.467
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Ledger Line|Oil prices slide as global demand cools#0",
+   "hold": 8.25,
+   "ev": "pace",
+   "t": 26.5
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "A",
+   "name": "nod",
+   "why": null,
+   "ev": "pace",
+   "t": 29.833
+  },
+  {
+   "k": "cut",
+   "shot": "fact",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 30.733
+  },
+  {
+   "ev": "shot",
+   "shot": "fact",
+   "at": 30.733,
+   "programId": "world-now",
+   "focus": "A",
+   "storyId": "sf608e20622",
+   "card": {
+    "kind": "other"
+   },
+   "t": 30.733
+  },
+  {
+   "ev": "subtitle",
+   "text": "Mexico’s civil protection agency says about 1.2 million homes are without power and 40,000 people have gone to shelters.",
+   "t": 30.733
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Circuit Weekly|Chipmaker unveils a laptop processor with all-day battery life#0",
+   "hold": 7.3500000000000005,
+   "ev": "pace",
+   "t": 34.733
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "mcu-l",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 34.9
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 34.878,
+   "programId": "world-now",
+   "focus": "A",
+   "storyId": "sf608e20622",
+   "card": null,
+   "t": 34.9
+  },
+  {
+   "k": "cut",
+   "shot": "twoway",
+   "framing": null,
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 39.1
+  },
+  {
+   "ev": "shot",
+   "shot": "twoway",
+   "at": 39.098,
+   "programId": "world-now",
+   "focus": "A",
+   "storyId": "sf608e20622",
+   "card": null,
+   "t": 39.1
+  },
+  {
+   "ev": "subtitle",
+   "text": "Vic Vector, at our Americas desk, has the detail.",
+   "t": 39.1
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Circuit Weekly|Chipmaker unveils a laptop processor with all-day battery life#1",
+   "hold": 6.9,
+   "ev": "pace",
+   "t": 42.1
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 21.703,
+   "t": 42.17
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 42.2
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 42.2
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "cross",
+   "kind": null,
+   "emotion": "serious",
+   "anchor": "R1",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "WEATHER",
+   "headline": "Hurricane Elena hits Mexico’s Yucatán coast",
+   "location": "YUCATÁN PENINSULA, MEXICO",
+   "audio": null,
+   "text": "“This is a life-threatening situation,” the agency said. The storm weakened slightly as it moved inland over the Yucatán peninsula. Airports in Cancún and Mérida have closed, and hotels have moved guests to inner rooms.",
+   "t": 42.384
+  },
+  {
+   "ev": "subtitle",
+   "text": "“This is a life-threatening situation,” the agency said.",
+   "t": 42.4
+  },
+  {
+   "ev": "strap",
+   "headline": "VIC VECTOR",
+   "kicker": "AMERICAS DESK",
+   "t": 42.4
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 42.4
+  },
+  {
+   "k": "cut",
+   "shot": "broll",
+   "framing": "wide",
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 45.633
+  },
+  {
+   "ev": "shot",
+   "shot": "broll",
+   "at": 45.619,
+   "programId": "world-now",
+   "focus": "R1",
+   "storyId": "sf608e20622",
+   "card": {
+    "kind": "other"
+   },
+   "t": 45.633
+  },
+  {
+   "ev": "subtitle",
+   "text": "The storm weakened slightly as it moved inland over the Yucatán peninsula.",
+   "t": 45.633
+  },
+  {
+   "ev": "strap",
+   "headline": "Hurricane Elena hits Mexico’s Yucatán coast",
+   "kicker": "WEATHER",
+   "t": 47.9
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Starfield Journal|Rocket launches a probe to study the Sun's poles#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": 49
+  },
+  {
+   "k": "cut",
+   "shot": "location",
+   "framing": null,
+   "focus": "R1",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 50.467
+  },
+  {
+   "ev": "shot",
+   "shot": "location",
+   "at": 50.449,
+   "programId": "world-now",
+   "focus": "R1",
+   "storyId": "sf608e20622",
+   "card": {
+    "kind": "other"
+   },
+   "t": 50.467
+  },
+  {
+   "ev": "subtitle",
+   "text": "Airports in Cancún and Mérida have closed, and hotels have moved guests to inner rooms.",
+   "t": 50.467
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 42.384,
+   "t": 56.701
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 56.733
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 56.733
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "cross",
+   "kind": null,
+   "emotion": "serious",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "WEATHER",
+   "headline": "Hurricane Elena hits Mexico’s Yucatán coast",
+   "location": "YUCATÁN PENINSULA, MEXICO",
+   "audio": null,
+   "text": "Vic, what happens next?",
+   "t": 56.917
+  },
+  {
+   "k": "cut",
+   "shot": "twoway",
+   "framing": null,
+   "focus": "A",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 56.933
+  },
+  {
+   "ev": "shot",
+   "shot": "twoway",
+   "at": 56.917,
+   "programId": "world-now",
+   "focus": "A",
+   "storyId": "sf608e20622",
+   "card": {
+    "kind": "other"
+   },
+   "t": 56.933
+  },
+  {
+   "ev": "subtitle",
+   "text": "Vic, what happens next?",
+   "t": 56.933
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 56.933
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Pixelburg Post|Kenya switches on its largest solar farm near Nairobi#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": 58.133
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 56.917,
+   "t": 58.429
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 58.433
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 58.433
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "cross",
+   "kind": null,
+   "emotion": "serious",
+   "anchor": "R1",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "WEATHER",
+   "headline": "Hurricane Elena hits Mexico’s Yucatán coast",
+   "location": "YUCATÁN PENINSULA, MEXICO",
+   "audio": null,
+   "text": "Forecasters expect heavy rain over the next two days, with a risk of flooding in low areas.",
+   "t": 58.641
+  },
+  {
+   "ev": "subtitle",
+   "text": "Forecasters expect heavy rain over the next two days, with a risk of flooding in low areas.",
+   "t": 58.667
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 58.667
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 58.641,
+   "t": 63.351
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 63.367
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 63.367
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "cross",
+   "kind": null,
+   "emotion": "serious",
+   "anchor": "A",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "WEATHER",
+   "headline": "Hurricane Elena hits Mexico’s Yucatán coast",
+   "location": "YUCATÁN PENINSULA, MEXICO",
+   "audio": null,
+   "text": "Vic Vector, thank you.",
+   "t": 63.574
+  },
+  {
+   "ev": "subtitle",
+   "text": "Vic Vector, thank you.",
+   "t": 63.6
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 63.6
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 63.574,
+   "t": 65.184
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 65.2
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 65.2
+  },
+  {
+   "k": "strap",
+   "at": 66.887,
+   "ev": "pace",
+   "t": 65.887
+  },
+  {
+   "ev": "say",
+   "phase": "start",
+   "type": "story",
+   "kind": null,
+   "emotion": "neutral",
+   "anchor": "B",
+   "feature": null,
+   "breaking": false,
+   "roundup": null,
+   "hasImage": true,
+   "kicker": "TRADE",
+   "headline": "Panama Canal reopens after a day-long closure",
+   "location": "PANAMA",
+   "audio": null,
+   "text": "The Panama Canal has reopened to ships after fog closed it for a day, Ledger Line reports. The canal authority says about 30 ships are waiting to cross. Shipping companies say the delays should clear within days. Thick fog had forced the canal authority to stop all crossings, a rare step for the waterway. Ships began moving again at dawn, with pilots guiding the first vessels through the locks at reduced speed.",
+   "t": 65.887
+  },
+  {
+   "k": "cut",
+   "shot": "close",
+   "framing": "mcu-r",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 65.9
+  },
+  {
+   "ev": "shot",
+   "shot": "close",
+   "at": 65.887,
+   "programId": "world-now",
+   "focus": "B",
+   "storyId": "s2802a9375b",
+   "card": null,
+   "t": 65.9
+  },
+  {
+   "ev": "subtitle",
+   "text": "The Panama Canal has reopened to ships after fog closed it for a day, Ledger Line reports.",
+   "t": 65.9
+  },
+  {
+   "ev": "strap",
+   "headline": "Panama Canal reopens after a day-long closure",
+   "kicker": "TRADE",
+   "t": 65.9
+  },
+  {
+   "ev": "voiced",
+   "on": true,
+   "t": 65.9
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Bitport Herald|Thousands ride Lisbon's new tram on its first day#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": 67.3
+  },
+  {
+   "k": "perf",
+   "kind": "gesture",
+   "slot": "B",
+   "name": "point_screen",
+   "why": null,
+   "ev": "pace",
+   "t": 69.367
+  },
+  {
+   "k": "cut",
+   "shot": "map",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 71.733
+  },
+  {
+   "ev": "shot",
+   "shot": "map",
+   "at": 71.704,
+   "programId": "world-now",
+   "focus": "B",
+   "storyId": "s2802a9375b",
+   "card": {
+    "kind": "map",
+    "place": "PANAMA"
+   },
+   "t": 71.733
+  },
+  {
+   "ev": "subtitle",
+   "text": "The canal authority says about 30 ships are waiting to cross.",
+   "t": 71.733
+  },
+  {
+   "ev": "subtitle",
+   "text": "Shipping companies say the delays should clear within days.",
+   "t": 75.267
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Ledger Line|Bank of Canada holds interest rates at 3.5 percent#0",
+   "hold": 9.15,
+   "ev": "pace",
+   "t": 76.433
+  },
+  {
+   "k": "cut",
+   "shot": "full",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 78.567
+  },
+  {
+   "ev": "shot",
+   "shot": "full",
+   "at": 78.54,
+   "programId": "world-now",
+   "focus": "B",
+   "storyId": "s2802a9375b",
+   "card": null,
+   "t": 78.567
+  },
+  {
+   "ev": "subtitle",
+   "text": "Thick fog had forced the canal authority to stop all crossings, a rare step for the waterway.",
+   "t": 78.567
+  },
+  {
+   "k": "cut",
+   "shot": "fact",
+   "framing": "wide",
+   "focus": "B",
+   "move": null,
+   "amount": null,
+   "ev": "pace",
+   "t": 84
+  },
+  {
+   "ev": "shot",
+   "shot": "fact",
+   "at": 83.978,
+   "programId": "world-now",
+   "focus": "B",
+   "storyId": "s2802a9375b",
+   "card": {
+    "kind": "fact",
+    "fact": "ABOUT 30 SHIPS"
+   },
+   "t": 84
+  },
+  {
+   "ev": "subtitle",
+   "text": "Ships began moving again at dawn, with pilots guiding the first vessels through the locks at reduced speed.",
+   "t": 84
+  },
+  {
+   "k": "ticker",
+   "id": "LATEST|Circuit Weekly|Robot vacuum learns to climb stairs#0",
+   "hold": 7.800000000000001,
+   "ev": "pace",
+   "t": 85.6
+  },
+  {
+   "ev": "say",
+   "phase": "end",
+   "ref": 65.887,
+   "t": 89.93
+  },
+  {
+   "ev": "subtitle",
+   "text": null,
+   "t": 89.933
+  },
+  {
+   "ev": "voiced",
+   "on": false,
+   "t": 89.933
+  }
+ ],
+ "reports": {
+  "mix": {
+   "seconds": 90,
+   "sampleRate": 48000,
+   "voiceClips": 19,
+   "bedRider": {
+    "voiceLUFS": -15.2,
+    "baseGainDb": 4.3,
+    "targetUnderDb": -18,
+    "window": [
+     -20,
+     -16
+    ],
+    "underSpeech": {
+     "regions": 1,
+     "median": -18,
+     "p10": -18,
+     "p90": -18,
+     "outsideWindow": 0
+    },
+    "pauses": {
+     "lifted": 0,
+     "medianLiftDb": null,
+     "withBed": 0,
+     "median": null,
+     "p90": null
+    }
+   },
+   "bedLevel": {
+    "regions": 2,
+    "underVoiceDb": -17.3
+   },
+   "bedDuckDb": {
+    "regions": 2,
+    "median": -4.2,
+    "weakest": -2.2
+   },
+   "quiet": [
+    {
+     "kind": "grave",
+     "from": 7.46,
+     "to": 21.188,
+     "bedRmsDb": -29.5
+    },
+    {
+     "kind": "grave",
+     "from": 24.703,
+     "to": 42.17,
+     "bedRmsDb": -226.1
+    },
+    {
+     "kind": "grave",
+     "from": 45.384,
+     "to": 56.701,
+     "bedRmsDb": -240
+    },
+    {
+     "kind": "grave",
+     "from": 61.641,
+     "to": 63.351,
+     "bedRmsDb": -240
+    }
+   ],
+   "roomTone": {
+    "db": -58,
+    "windows": [
+     [
+      3.96,
+      90
+     ]
+    ]
+   },
+   "stemsLUFS": {
+    "voice": -18.3,
+    "webaudio": -17.4,
+    "beds": -29.9
+   },
+   "raw": {
+    "I": -15.3,
+    "LRA": 1.6,
+    "TP": -3
+   },
+   "final": {
+    "I": -16,
+    "LRA": 1.6,
+    "TP": -3.7,
+    "gainDb": -0.7,
+    "ceilingDb": -2.2,
+    "limitedSamples": 0,
+    "maxGainReductionDb": 0,
+    "attempt": 1
+   },
+   "aac": "C:\\Users\\movil\\PixelNews\\LiveNews\\docs\\roadmap\\critique\\renders\\r31\\show.work\\mix.m4a",
+   "silentRuns": {
+    "floorDb": -70,
+    "minSeconds": 0.25,
+    "count": 0,
+    "runs": []
+   }
+  },
+  "sync": {
+   "stingers": [],
+   "captions": [
+    {
+     "at": 4.5,
+     "voiceStart": 4.572,
+     "firstWord": 4.584,
+     "leadMs": 84,
+     "text": "Hurricane Elena makes landfall on Mexico’s Yucatán coast."
+    },
+    {
+     "at": 12.7,
+     "voiceStart": 12.742,
+     "firstWord": 12.754,
+     "leadMs": 54,
+     "text": "Wildfire near Marseille forces thousands to evacuate."
+    },
+    {
+     "at": 18.967,
+     "voiceStart": 19.005,
+     "firstWord": 19.017,
+     "leadMs": 50,
+     "text": "I'm Paco Pixel, with Lola Byte."
+    },
+    {
+     "at": 21.733,
+     "voiceStart": 21.808,
+     "firstWord": 21.82,
+     "leadMs": 87,
+     "text": "Hurricane Elena has made landfall near Cancún with winds of "
+    },
+    {
+     "at": 30.733,
+     "voiceStart": 30.778,
+     "firstWord": 30.79,
+     "leadMs": 57,
+     "text": "Mexico’s civil protection agency says about 1.2 million home"
+    },
+    {
+     "at": 39.1,
+     "voiceStart": 39.143,
+     "firstWord": 39.155,
+     "leadMs": 55,
+     "text": "Vic Vector, at our Americas desk, has the detail."
+    },
+    {
+     "at": 42.4,
+     "voiceStart": 42.489,
+     "firstWord": 42.501,
+     "leadMs": 101,
+     "text": "“This is a life-threatening situation,” the agency said."
+    },
+    {
+     "at": 45.633,
+     "voiceStart": 45.664,
+     "firstWord": 45.676,
+     "leadMs": 43,
+     "text": "The storm weakened slightly as it moved inland over the Yuca"
+    },
+    {
+     "at": 50.467,
+     "voiceStart": 50.494,
+     "firstWord": 50.506,
+     "leadMs": 39,
+     "text": "Airports in Cancún and Mérida have closed, and hotels have m"
+    },
+    {
+     "at": 56.933,
+     "voiceStart": 57.022,
+     "firstWord": 57.034,
+     "leadMs": 101,
+     "text": "Vic, what happens next?"
+    },
+    {
+     "at": 58.667,
+     "voiceStart": 58.746,
+     "firstWord": 58.758,
+     "leadMs": 91,
+     "text": "Forecasters expect heavy rain over the next two days, with a"
+    },
+    {
+     "at": 63.6,
+     "voiceStart": 63.679,
+     "firstWord": 63.691,
+     "leadMs": 91,
+     "text": "Vic Vector, thank you."
+    },
+    {
+     "at": 65.9,
+     "voiceStart": 65.992,
+     "firstWord": 66.004,
+     "leadMs": 104,
+     "text": "The Panama Canal has reopened to ships after fog closed it f"
+    },
+    {
+     "at": 75.267,
+     "voiceStart": 75.307,
+     "firstWord": 75.319,
+     "leadMs": 52,
+     "text": "Shipping companies say the delays should clear within days."
+    }
+   ],
+   "recordedCaptions": [],
+   "voiceOnsets": [
+    {
+     "start": 4.572,
+     "onsetMs": 8
+    },
+    {
+     "start": 9.352,
+     "onsetMs": 9
+    },
+    {
+     "start": 12.742,
+     "onsetMs": 10
+    },
+    {
+     "start": 16.315,
+     "onsetMs": 9
+    },
+    {
+     "start": 19.005,
+     "onsetMs": 9
+    },
+    {
+     "start": 21.808,
+     "onsetMs": 6
+    },
+    {
+     "start": 30.778,
+     "onsetMs": 7
+    },
+    {
+     "start": 39.143,
+     "onsetMs": 7
+    },
+    {
+     "start": 42.489,
+     "onsetMs": 11
+    },
+    {
+     "start": 45.664,
+     "onsetMs": 9
+    },
+    {
+     "start": 50.494,
+     "onsetMs": 10
+    },
+    {
+     "start": 57.022,
+     "onsetMs": 10
+    },
+    {
+     "start": 58.746,
+     "onsetMs": 4
+    },
+    {
+     "start": 63.679,
+     "onsetMs": 8
+    },
+    {
+     "start": 65.992,
+     "onsetMs": 9
+    },
+    {
+     "start": 71.749,
+     "onsetMs": 9
+    },
+    {
+     "start": 75.307,
+     "onsetMs": 7
+    },
+    {
+     "start": 78.585,
+     "onsetMs": 8
+    },
+    {
+     "start": 84.023,
+     "onsetMs": 7
+    }
+   ],
+   "summary": {
+    "stingerSoundStartMs": {
+     "n": 0,
+     "median": null,
+     "min": null,
+     "max": null
+    },
+    "stingerThumpVsCutMs": {
+     "n": 0,
+     "median": null,
+     "min": null,
+     "max": null
+    },
+    "captionLeadMs": {
+     "n": 14,
+     "median": 84,
+     "min": 39,
+     "max": 104
+    },
+    "recordedCaptionToVoiceMs": {
+     "n": 0,
+     "of": 0,
+     "median": null,
+     "min": null,
+     "max": null
+    },
+    "voiceOnsetMs": {
+     "n": 19,
+     "median": 9,
+     "min": 4,
+     "max": 11
+    }
+   }
+  },
+  "timingMs": {
+   "frame": 54386,
+   "encode": 1776,
+   "speech": 50505,
+   "clock": 59597,
+   "other": 9963
+  },
+  "synth": {
+   "requests": 19,
+   "cached": 13,
+   "seconds": 79.94500000000001,
+   "synthTime": 136.00000000000003,
+   "waitTime": 49.821999999999996,
+   "errors": 0,
+   "pool": {
+    "prefetched": 70,
+    "prefetchHits": 30,
+    "urgent": 4
+   }
+  },
+  "page": {
+   "stats": {
+    "disconnects": 259,
+    "valueSets": 257,
+    "utterances": 20,
+    "cancels": 0,
+    "ended": 87,
+    "bindings": 19
+   },
+   "errors": [],
+   "contexts": 1
+  },
+  "webaudio": {
+   "n": 4320000,
+   "sampleRate": 48000,
+   "contexts": [
+    {
+     "origin": 2,
+     "renderMs": 0,
+     "covered": 4320000,
+     "frames": 4344192,
+     "tapped": true,
+     "speechTap": true
+    }
+   ],
+   "peak": 0.5265434384346008,
+   "speechTapped": true,
+   "speechPeak": 0,
+   "stats": {
+    "disconnects": 259,
+    "valueSets": 257,
+    "utterances": 20,
+    "cancels": 0,
+    "ended": 87,
+    "bindings": 19
+   }
+  },
+  "beds": {
+   "version": "lofi v2 (programme bibles)",
+   "samples": 4752000,
+   "peak": 0.13691769540309906,
+   "log": [
+    {
+     "t": 7.56,
+     "moment": "open",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 12.46,
+     "moment": "headlines",
+     "action": "headline",
+     "detail": ""
+    },
+    {
+     "t": 17.052,
+     "moment": "headlines",
+     "action": "headline",
+     "detail": ""
+    },
+    {
+     "t": 17.227,
+     "moment": "pip",
+     "action": "pip",
+     "detail": ""
+    },
+    {
+     "t": 20.442,
+     "moment": "headlines",
+     "action": "headline",
+     "detail": ""
+    },
+    {
+     "t": 20.617,
+     "moment": "pip",
+     "action": "pip",
+     "detail": ""
+    },
+    {
+     "t": 24.115,
+     "moment": "greeting",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 24.19,
+     "moment": "pip",
+     "action": "pip",
+     "detail": ""
+    },
+    {
+     "t": 29.703,
+     "moment": "story",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 73.887,
+     "moment": "story",
+     "action": "bed",
+     "detail": "world-now/story:story"
+    }
+   ],
+   "actions": [
+    {
+     "t": -0.44,
+     "moment": "open",
+     "programId": "world-now",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 4.46,
+     "moment": "headlines",
+     "programId": "world-now",
+     "action": "headline",
+     "detail": ""
+    },
+    {
+     "t": 9.052,
+     "moment": "headlines",
+     "programId": "world-now",
+     "action": "headline",
+     "detail": ""
+    },
+    {
+     "t": 9.227,
+     "moment": "pip",
+     "programId": "world-now",
+     "action": "pip",
+     "detail": ""
+    },
+    {
+     "t": 12.442,
+     "moment": "headlines",
+     "programId": "world-now",
+     "action": "headline",
+     "detail": ""
+    },
+    {
+     "t": 12.617,
+     "moment": "pip",
+     "programId": "world-now",
+     "action": "pip",
+     "detail": ""
+    },
+    {
+     "t": 16.115,
+     "moment": "greeting",
+     "programId": "world-now",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 16.19,
+     "moment": "pip",
+     "programId": "world-now",
+     "action": "pip",
+     "detail": ""
+    },
+    {
+     "t": 21.703,
+     "moment": "story",
+     "programId": "world-now",
+     "action": "silence",
+     "detail": ""
+    },
+    {
+     "t": 65.887,
+     "moment": "story",
+     "programId": "world-now",
+     "action": "bed",
+     "detail": "world-now/story:story"
+    }
+   ],
+   "ms": 43504,
+   "pace": {
+    "world-now": {
+     "seconds": 85.5,
+     "changes": 3,
+     "perMin": 2.1,
+     "maxPerMin": null,
+     "arrangement": 0,
+     "beds": 2,
+     "shortestBed": 11.65,
+     "minBed": null,
+     "short": []
+    }
+   }
+  },
+  "pageErrors": [
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
+ }
+}

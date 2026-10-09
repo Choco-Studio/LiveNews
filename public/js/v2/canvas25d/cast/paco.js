@@ -17,20 +17,20 @@ export const paco = defineLook({
   id: 'paco',
   name: 'Paco Pixel',
   // head profile (head-local units, y down from the head centre)
-  head: { top: -10.2, craniumY: -2.4, R: 7.6, cheekY: 1.6, cheekHW: 7.15, chinY: 9.4, chinHW: 3.0, jawPow: 2.25 },
+  head: { top: -10.2, craniumY: -2.4, R: 7.6, cheekY: 1.6, cheekHW: 7.15, chinY: 9.4, chinHW: 3.1, jawPow: 2.45 }, // critique r1: a jaw that keeps its width (adult, not a light bulb); r9: 2.45 keeps Paco's silhouette apart from Max's; r31: chinHW 3.35 read as a brick in the MCU
   headAt: [0, -13.4], // head centre relative to the neck base
-  neck: { hw: 3.0 },
+  neck: { hw: 3.6 }, // critique r24: 3.0 read as a pencil neck under a broad head (a bobble-head)
   eyes: { y: -0.7, x: 2.95, w: 2.75, h: 1.5, iris: [P.brown, P.maroon], lash: P.maroon, lashes: false, bags: true },
-  brows: { y: -2.5, len: 3.3, thick: 0.5, color: P.steel, arch: 0.35 },
+  brows: { y: -2.5, len: 3.3, thick: 0.5, color: P.steel, arch: 0.18 }, // critique r4: 0.35 peaked into a '^'
   nose: { y0: -0.4, y1: 3.5, w: 1.55, big: true },
   mouth: { y: 6.15, w: 3.8, lip: P.brown, lipHi: P.skinShade, upper: P.skinShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   ears: { y: -0.1, h: 2.8, w: 1.0 },
   skin: SKIN_LIGHT,
   skinLine: P.brown,
   hair: { style: 'paco', ramp: [P.silver, P.fog, P.steel, P.slate], line: P.slate },
-  mustache: { ramp: [P.silver, P.fog, P.steel, P.slate], y: 4.35, w: 4.7, h: 1.05 },
+  mustache: { ramp: [P.silver, P.fog, P.steel, P.slate], y: 4.25, w: 4.9, h: 1.3 }, // critique r4: a fuller, cleaner shape
   // body
-  torso: { neckHW: 3.5, shoulderTop: 2.2, shoulderHW: 21.0, sideHW: 20.0, bottom: 46, vDepth: 26, shoulderJoint: [18.0, 6.6] },
+  torso: { neckHW: 4.1, shoulderTop: 2.2, shoulderHW: 21.0, sideHW: 20.0, bottom: 46, vDepth: 26, shoulderJoint: [18.0, 6.6] },
   outfit: 'suit',
   jacket: { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black }, // charcoal: lets the red tie and silver rim read
   shirt: { ramp: [P.white, P.white, P.silver, P.fog], line: P.steel },
@@ -85,10 +85,12 @@ export function drawShortHair(buf, L, m, head, s) {
     if (y < sideTop && r2 > RV * RV) return -1;
     const fx = x - yawX; // feature-space x (moves with the face when turning)
     const ax = Math.abs(fx);
-    const temple = Math.exp(-((ax - H.R * 0.66) * (ax - H.R * 0.66)) / 2.0);
+    // (critique r19: a narrow, deep recession plus the wave cut the hairline into an 'M' with two points
+    // either side of the forelock, cat's ears; a broad, shallower recession, a gentler wave)
+    const temple = Math.exp(-((ax - H.R * 0.66) * (ax - H.R * 0.66)) / 5.0);
     // a combed-back hairline with a faint wave (strands lift off the forehead in close-ups)
-    const wave = tier === 2 ? 0.22 * Math.sin(fx * 1.9 + 0.6) : 0;
-    const hairline = H.top + 4.35 + pitchShift - temple * 1.4 + (fx < part ? -0.2 : 0) + ax * ax * 0.01 + wave;
+    const wave = tier === 2 ? 0.1 * Math.sin(fx * 1.9 + 0.6) : 0;
+    const hairline = H.top + 4.35 + pitchShift - temple * 1.15 + (fx < part ? -0.2 : 0) + ax * ax * 0.01 + wave;
     const sideburn = Math.abs(x) > hw - 0.95 && y < -0.2;
     if (y > hairline && !sideburn) {
       if (Math.abs(x) <= hw - 0.05 || y > H.craniumY - 1.5) return -1;
@@ -154,19 +156,20 @@ export function drawMustache(buf, L, m, head, s, sk) {
     if (k < 0) return -1;
     const droop = Math.max(0, ax - hwBot * 0.55) * (0.35 - smile * 0.25);
     // fine strand tips along the lower edge in close-ups
-    const tips = tier === 2 ? 0.16 * (1 - Math.abs(((fx * s * 0.5) % 2 + 2) % 2 - 1) * 2) : 0;
+    // (critique r3: a saw-tooth of strand tips along the lower edge read as a caterpillar; a clean edge)
+    const tips = 0;
     if (y > y1m + droop + tips) return -1;
     const hw = hwTop + (hwBot - hwTop) * Math.min(1, k * 1.4);
     if (ax > hw) return -1;
     const centreGap = ax < 0.25 && k < 0.35;
     if (centreGap) return -1;
+    // (critique r4: silver blobs on a steel band read as a caterpillar) a lit upper plane on the key side,
+    // the body, a shaded lower edge, the far wing and both drooping ends a step darker
     let t = 1;
-    if (k < 0.3) t = 0;
-    if (y > y1m + droop - 0.55) t = 2;
-    if (fx > hw * 0.55) t = Math.max(t, 2);
+    if (k < 0.3 && fx < 0) t = 0;
+    if (y > y1m + droop - 0.5) t = 2;
+    if (fx > hw * 0.45) t = Math.max(t, 2);
     if (yawX > 0.2 && fx < -hw * 0.6) t = 2;
-    // the strands' direction: a short down-and-out line on each side in close-ups
-    if (tier === 2 && t === 1 && ((ax * 1.6 - k * 2.2) % 1.5 + 1.5) % 1.5 < 0.32 && ax > 0.6) t = 2;
     return t;
   });
 }

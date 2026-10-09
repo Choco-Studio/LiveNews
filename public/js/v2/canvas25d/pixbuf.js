@@ -490,8 +490,17 @@ export class PartBuffer {
             break;
           }
           if (c !== line[m]) {
-            if (f & F_RIM_SIDE && !mat[i + 1]) c = rim[m];
-            else if (f & F_RIM_TOP && !mat[i - w]) c = rim[m];
+            // the side rim only where it continues to a neighbouring row (straight up / down or diagonally):
+            // on a shallow slope the empty right side comes once per step, which lit isolated dots along
+            // the edge, a row of stitches down a sleeve (critique r25)
+            if (f & F_RIM_SIDE && !mat[i + 1]) {
+              let run = false;
+              for (let k = 0; k < 6 && !run; k++) {
+                const j = k === 0 ? i - w : k === 1 ? i + w : k === 2 ? i - w - 1 : k === 3 ? i - w + 1 : k === 4 ? i + w - 1 : i + w + 1;
+                run = mat[j] === m && grp[j] === g && !mat[j + 1];
+              }
+              if (run) c = rim[m];
+            } else if (f & F_RIM_TOP && !mat[i - w]) c = rim[m];
           }
         }
         px[fi] = c;

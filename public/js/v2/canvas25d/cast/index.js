@@ -12,6 +12,7 @@ import { ada } from './ada.js';
 import { nova } from './nova.js';
 import { unit8 } from './unit8.js';
 import { rhea, vic, mika } from './correspondents.js';
+import { EXPERT_LOOKS } from './experts.js';
 
 export const LOOKS = { paco, lola, max, ada, nova, unit8, penny, sam };
 export const PRESENTER_IDS = Object.keys(LOOKS);
@@ -22,6 +23,8 @@ export const CORRESPONDENT_LOOKS = { rhea, vic, mika };
 export function lookFor(id, info = null) {
   if (LOOKS[id]) return LOOKS[id];
   if (CORRESPONDENT_LOOKS[id]) return CORRESPONDENT_LOOKS[id];
+  // the experts on a video call (server/experts.js): their own looks, never a presenter's stand-in
+  if (EXPERT_LOOKS[id]) return EXPERT_LOOKS[id];
   const g = info?.voice?.gender;
   return g === 'female' ? LOOKS.lola : g === 'robot' ? LOOKS.unit8 : LOOKS.paco;
 }

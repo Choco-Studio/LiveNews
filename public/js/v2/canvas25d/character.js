@@ -193,9 +193,12 @@ function shadeNeck(buf, L, head, g, nt, n0x, n0y, s) {
       const lx = (dx * cr + dy * sr) * k, ly = (-dx * sr + dy * cr) * k;
       const nx = clamp(lx / hw, -1.2, 1.2);
       // under the jaw: a crescent that follows the jaw line, ~1.4 u deep at the centre, deeper on the right
-      const shadowY = H.chinY + jaw + (close ? 1.1 : 0.8) - 0.22 * lx * lx / hw + Math.max(0, nx) * 0.9;
+      // (critique r1: 1.1 u was a 3 px line at s 3.4 and the head read as stuck on top of the neck;
+      // the chin now casts a real shadow with a deep core right under the jaw)
+      const shadowY = H.chinY + jaw + (close ? 2.1 : 1.0) - 0.2 * lx * lx / hw + Math.max(0, nx) * 1.0;
       let t = tone[i];
       if (ly < shadowY) t = Math.max(t, 2);
+      if (close && ly < H.chinY + jaw + 0.75 - 0.3 * lx * lx / hw && nx > -0.6) t = 3;
       if (nx > 0.55) t = Math.max(t, 2);
       if (close && nx > 0.82 && ly < shadowY + 1.2) t = 3;
       if (nx < -0.7 && ly >= shadowY) t = Math.min(t, 1);

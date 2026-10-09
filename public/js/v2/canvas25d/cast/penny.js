@@ -24,13 +24,14 @@ import { LocalXY, localBox, clumpTone, strokeTone, selOutEdge, hairLight, rimMat
 export const penny = defineLook({
   id: 'penny',
   name: 'Penny Sterling',
-  head: { top: -9.75, craniumY: -2.7, R: 6.85, cheekY: 1.3, cheekHW: 6.55, chinY: 8.85, chinHW: 2.2, jawPow: 1.95 },
+  head: { top: -9.75, craniumY: -2.7, R: 6.85, cheekY: 1.3, cheekHW: 6.55, chinY: 8.85, chinHW: 2.55, jawPow: 2.2 }, // critique r1: a jaw that keeps its width (adult, not a light bulb); r33: 2.45 / 2.65 made a heavy, square lower face
   headAt: [0, -12.9],
-  neck: { hw: 2.4 },
+  neck: { hw: 2.85 }, // critique r24: 2.4 read as a pencil neck under a broad head (a bobble-head)
   eyes: { y: -0.6, x: 2.72, w: 2.65, h: 1.4, iris: [P.steel, P.slate], lash: P.black, lashes: true },
   brows: { y: -2.2, len: 3.1, thick: 0.42, color: P.tanShade, arch: 0.5 },
   nose: { y0: -0.2, y1: 3.15, w: 1.2, big: false },
-  mouth: { y: 5.7, w: 3.3, lip: P.darkRed, lipHi: P.skinShade, upper: P.skinShade, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
+  // (critique r29: the colour sat only on the line where the lips meet, a red slit; the lips carry it now)
+  mouth: { y: 5.7, w: 3.3, lip: P.brown, lipHi: P.skinShade, upper: P.darkRed, inner: P.maroon, teeth: P.silver, tongue: P.darkRed },
   ears: { y: -0.15, h: 2.7, w: 0.95 },
   skin: SKIN_LIGHT,
   skinLine: P.brown,
@@ -40,7 +41,7 @@ export const penny = defineLook({
   glasses: null, // money-minute.md S2: no glasses
   props: ['pen'], // the resting pen (HANDS draws it); never a gesture cue
   pearls: [P.white, P.silver, P.fog],
-  torso: { neckHW: 2.9, shoulderTop: 3.0, shoulderHW: 18.1, sideHW: 16.7, bottom: 46, vDepth: 15.5, shoulderJoint: [15.5, 7.0] },
+  torso: { neckHW: 3.35, shoulderTop: 3.0, shoulderHW: 18.1, sideHW: 16.7, bottom: 46, vDepth: 15.5, shoulderJoint: [15.5, 7.0] },
   outfit: 'tailored',
   neckline: 'blouse',
   lapel: { notchY: 6.4, w: 4.0, collarW: 3.1 },

@@ -402,13 +402,14 @@ describe('the weather presenter (round 2): planted steps, aimed points', async (
     }
     assert.ok(widest < 64, `feet at most ${widest} px apart`);
     assert.ok(Math.abs((p.feet[0].x + p.feet[1].x) / 2 - 318) < 1);
-    assert.ok(Math.abs(p.feet[1].x - p.feet[0].x - 22.6) < 1, 'standing stance');
+    // hip-width stance: 2 x 8 cm at 1.2 px/cm (critique r27; was 9.4 cm, wider than the hips: an A-frame)
+    assert.ok(Math.abs(p.feet[1].x - p.feet[0].x - 19.2) < 1, 'standing stance');
     // a new walk before the last one ends still arrives closed
     p.walkTo(66, 20);
     p.update(20.7);
     const d2 = p.walkTo(200, 20.7);
     for (let t = 20.7; t <= 20.7 + d2 + 0.2; t += 1 / 60) p.update(t);
-    assert.ok(Math.abs(p.feet[1].x - p.feet[0].x - 22.6) < 1);
+    assert.ok(Math.abs(p.feet[1].x - p.feet[0].x - 19.2) < 1);
   });
 
   test('a point aims the hand at the target: right, down, left, with the nearer arm', () => {

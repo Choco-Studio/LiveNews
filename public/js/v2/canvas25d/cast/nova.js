@@ -21,10 +21,11 @@ import { blob, local, screen, tier, hwAt, fastAtan2 } from './wardrobe-b.js';
 export const nova = defineLook({
   id: 'nova',
   name: 'Dr Nova Reyes',
-  head: { top: -10.0, craniumY: -2.5, R: 7.25, cheekY: 1.9, cheekHW: 7.0, chinY: 9.0, chinHW: 2.6, jawPow: 2.1 },
+  head: { top: -10.0, craniumY: -2.5, R: 7.25, cheekY: 1.9, cheekHW: 7.0, chinY: 9.0, chinHW: 2.95, jawPow: 2.55 }, // critique r1: a jaw that keeps its width (adult, not a light bulb)
   headAt: [0, -13.0],
-  neck: { hw: 2.6 },
-  eyes: { y: -0.5, x: 2.9, w: 2.8, h: 1.5, iris: [P.brown, P.maroon], lash: P.black, lashes: true },
+  neck: { hw: 3.1 }, // critique r24: 2.6 read as a pencil neck under a broad head (a bobble-head)
+  // (critique r31: a brown iris at her skin's value hid the eye's opening: small, tired eyes)
+  eyes: { y: -0.5, x: 2.9, w: 2.8, h: 1.5, iris: [P.maroon, P.black], lash: P.black, lashes: true },
   brows: { y: -2.3, len: 3.2, thick: 0.42, color: P.black, arch: 0.45 },
   nose: { y0: -0.2, y1: 3.45, w: 1.6, big: false },
   // lips one step from the skin: a maroon line, a tanShade upper lip, the lower lip catching the key in tan
@@ -35,7 +36,7 @@ export const nova = defineLook({
   skinLine: P.maroon,
   hair: { style: 'coily', ramp: [P.brown, P.maroon, P.black, P.black], line: P.black },
   necklace: [P.silver, P.fog],
-  torso: { neckHW: 3.0, shoulderTop: 3.0, shoulderHW: 18.6, sideHW: 17.4, bottom: 46, vDepth: 12.5, shoulderJoint: [16.0, 7.0] },
+  torso: { neckHW: 3.5, shoulderTop: 3.0, shoulderHW: 18.6, sideHW: 17.4, bottom: 46, vDepth: 12.5, shoulderJoint: [16.0, 7.0] },
   outfit: 'cardigan',
   // a muted blue-grey knit: darker than her lit face, a step lighter than UNIT-8's graphite shell
   // owner 3 Oct (polish round): a plum cardigan (was grey), COSMOS's colour, deep enough that the face stays the warmest
@@ -134,7 +135,7 @@ function haloBox(head, pad, yFrom = HALO.cy - HALO.up) {
  * every shadow so the features never get a halo. In the wide (two tones) the whole face steps up
  * one tone, the chin's underside too: lit side tan, shade side tanShade.
  */
-function drawWarmHead(buf, L, m, head, s) {
+export function drawWarmHead(buf, L, m, head, s) {
   drawHead(buf, L, m, head, s);
   const H = L.head;
   const g = head.gb + GROUPS.head;
@@ -189,15 +190,20 @@ function drawWarmHead(buf, L, m, head, s) {
         fx = hw * Math.sin(clamp(Math.asin(clamp(xs / hw, -0.99, 0.99)) - yaw, -1.5707, 1.5707));
       }
       // signed distance (units, > 0 inside) to the nearest plane
-      let d = planeD(fx, ly, -1.1, by - 1.5, 2.5, 1.05);
+      // (close-up: a broader forehead plane carries the light the cheek capsule used to; a round cheek
+      // plane read as rouge, critique r16)
+      // (r24: centred and tall it read as a spotlight on the forehead; flatter, over the key-side brow ridge)
+      let d = tr === 2 ? planeD(fx, ly, -1.5, by - 1.3, 3.3, 0.95) : planeD(fx, ly, -1.1, by - 1.5, 2.5, 1.05);
       const dg = capD(fx, ly, -0.3, by + 0.1, -0.3, ey + 1.1, 0.5); // glabella → nose bridge (mid-tone only)
       if (dg > d) d = dg;
-      if (cheekK > 0) {
+      // (critique r15: at close-up the cheekbone capsule read as a straight bandage across the cheek; there
+      // the sculpted head already turns the cheek, the capsule stays for the medium only)
+      if (cheekK > 0 && tr === 1) {
         // the cheekbone: from under the outer half of the lit eye, slanting up toward the temple
         const dc = capD(fx, ly, -ex + 0.7, ey + 2.0, -ex - 1.9, ey + 1.05, 0.9 * cheekK);
         if (dc > d) d = dc;
       }
-      const dn = planeD(fx, ly, -0.45, chY, 1.0, 0.5);
+      const dn = tr === 2 ? planeD(fx, ly, -0.45, chY - 0.1, 1.45, 0.75) : planeD(fx, ly, -0.45, chY, 1.0, 0.5);
       if (dn > d) d = dn;
       if (d <= 0) continue;
       // keep a base pixel beside every shadow tone (no lit rim around the eyes, nose or mouth)
