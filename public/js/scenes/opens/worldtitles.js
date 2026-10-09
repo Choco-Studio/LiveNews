@@ -18,8 +18,8 @@
 import { P } from '../../palette.js';
 import { drawText, measureText } from '../../font.js';
 import { clamp, lerp, seg, easeOut, easeInOut, easeOutQuint, smoothstep, ring, clockIn } from '../../gfx/index.js';
-import { playOpen, TL, CENTRE, ZOOM, W } from './kit.js';
-import { WORLD, R0, LIGHT, TILT_DEG, LAM_END, LONDON, ROUTES, ROUTE_H, arcPoints, drawWorldGlobe } from './world.js';
+import { playOpen, slotFor, TL, CENTRE, SLOT, ZOOM, W } from './kit.js';
+import { WORLD, R0, LIGHT, TILT_DEG, LAM_END, LONDON, ROUTES, ROUTE_H, routePoints, drawWorldGlobe } from './world.js';
 import * as planet from './planet.js';
 import { WN_BEAT, WN_CUES, WN_HIT, WN_DURATION } from './worldcues.js';
 
@@ -54,12 +54,14 @@ function track(keys) {
   };
 }
 
-const RL = R0 * ZOOM; // the globe's size at centre stage (where the package takes over)
+const RL = Math.round(R0 * ZOOM); // the globe's size at centre stage (where the package takes over)
+planet.setRouteReference(RL); // routes show the emblem's own dots at that size
 // the camera: disc centre, radius (in log space: a zoom reads evenly), the latitude and longitude
 // facing it. From Europe at night (the disc's centre far below the frame) out to centre stage.
 const CAM_X = track([[0, 144], [3.5, 157], [5, 206], [7, 200], [9, 193], [12.2, CENTRE.x]]);
 const CAM_Y = track([[0, 452], [3.5, 423], [5, 318], [7, 172], [9, 126], [12.2, CENTRE.y]]);
 const CAM_R = track([[0, Math.log(396)], [3.5, Math.log(344)], [5, Math.log(236)], [7, Math.log(128)], [9, Math.log(82)], [12.2, Math.log(RL)]]);
+const SETTLED = 12.2; // the camera is at centre stage, exactly the package's globe
 const CAM_T = track([[0, 0], [3.5, 3], [5, 8], [7, 16], [9, 21], [12.2, TILT_DEG]]);
 // the turn runs on through the reveal and settles on the emblem's longitude
 const CAM_L = track([[0, -3], [3.5, -8], [5, -14], [7, -11], [9, -14], [11.5, -15], [13.9, LAM_END]]);
@@ -74,15 +76,19 @@ const SUN = [
 // the lights come on outwards from London: across Europe in the first bars, the world by the bloom
 const WAKE = track([[0, 2], [1, 7], [2, 15], [3, 27], [4, 42], [6, 100], [8, 180]]);
 
+/** The camera at beat b (a fresh object; for checks). */
+export const wnCamera = (b) => camera(b, newCam());
+
 /** The centre longitude at dt (seconds): the reveal's globe keeps turning on the same track. */
 export const lamAt = (dt) => CAM_L(dt / WN_BEAT);
 
-const newCam = () => ({ cx: 0, cy: 0, R: 0, tilt: 0, lam: 0, light: [0, 0, 1], atmo: 0, lights: 0, wake: 0, space: 1, grid: 1, equator: 1 });
+// the dither is fixed on the screen where the emblem stands (CENTRE), so the hand-over keeps its phase
+const newCam = () => ({ cx: 0, cy: 0, R: 0, tilt: 0, lam: 0, light: [0, 0, 1], atmo: 0, lights: 0, wake: 0, space: 1, grid: 1, equator: 1, ax: CENTRE.x, ay: CENTRE.y });
 const CAM0 = newCam();
 function camera(b, CAM = CAM0) {
   CAM.cx = CAM_X(b);
   CAM.cy = CAM_Y(b);
-  CAM.R = Math.exp(CAM_R(b));
+  CAM.R = b >= SETTLED ? RL : Math.exp(CAM_R(b));
   CAM.tilt = CAM_T(b);
   CAM.lam = CAM_L(b);
   if (b >= 11.5) {
@@ -147,14 +153,13 @@ const WAVE = [
   [CITY.singapore, CITY.sydney, WN_CUES.bloom + 1],
 ].map(([from, to, land]) => ({ from, to, land }));
 
-// arcs are sampled for the size they are drawn at (dots ~2 px apart at any size; the emblem's own
-// density at centre stage and below)
+// routes are sampled once, finely; planet.route shows the dots for the camera's size (nested, so a
+// zoom never slides them)
 const ARCS = new Map();
-function arcFor(from, to, h, R) {
-  const dense = Math.max(1, Math.min(8, Math.round((R / RL) * 2) / 2));
-  const key = `${from}|${to}|${h}|${dense}`;
+function arcFor(from, to, h) {
+  const key = `${from}|${to}|${h}`;
   let a = ARCS.get(key);
-  if (!a) ARCS.set(key, (a = arcPoints(from, to, h, dense)));
+  if (!a) ARCS.set(key, (a = routePoints(from, to, h, planet.ROUTE_FINE)));
   return a;
 }
 const heightOf = (from, to) => {
@@ -170,11 +175,11 @@ function network(cam, b) {
   for (const w of WAVE) {
     const p = flightAt(b, w.land);
     if (p <= 0 || fadeOut <= 0) continue;
-    planet.route(cam, arcFor(w.from, w.to, heightOf(w.from, w.to), cam.R), p, { dim: p >= 1, fade: fadeOut, head });
+    planet.route(cam, arcFor(w.from, w.to, heightOf(w.from, w.to)), p, { dim: p >= 1, fade: fadeOut, head });
   }
   for (const r of BRAND) {
     const p = flightAt(b, r.land);
-    if (p > 0) planet.route(cam, arcFor(LONDON, r.to, ROUTE_H, cam.R), p, { head });
+    if (p > 0) planet.route(cam, arcFor(LONDON, r.to, ROUTE_H), p, { head });
   }
   // landings: a ripple on the surface
   for (const r of BRAND) landing(cam, b, r.to, r.land, 1);
@@ -348,7 +353,7 @@ function before(ctx, dt) {
   planet.cityLightsOn(cam);
   pings(cam, b);
   network(cam, b);
-  planet.londonPin(cam, smoothstep(110, 160, cam.R));
+  planet.londonPin(cam, cam.R > 135);
   sunrise(cam, b);
   planet.end(ctx);
   placeNames(ctx, cam, b);
@@ -359,11 +364,39 @@ function before(ctx, dt) {
 // the camera's track, and one glint across the title's chrome before the still
 const REVEAL = {
   ...WORLD,
-  emblem(ctx, dtS, x, y, k) {
-    drawWorldGlobe(ctx, x, y, Math.round(R0 * k), lamAt(dtS + SHIFT));
-  },
+  emblem: revealGlobe,
   after: glint,
 };
+
+// The glide to the slot is drawn from the true circle too (the package rounds the globe's centre and
+// size apart, and its top edge stepped back and forth); once it has landed it is the emblem's own
+// cached globe, the same pixels (tested).
+const GLIDE = newCam();
+const GLIDE_END = TL.glide + TL.glideDur;
+const BRAND_PTS = () => BRAND.map((r) => arcFor(LONDON, r.to, ROUTE_H));
+function revealGlobe(ctx, dtS, x, y, k) {
+  const lam = lamAt(dtS + SHIFT);
+  if (dtS >= GLIDE_END || dtS < TL.glide) {
+    drawWorldGlobe(ctx, x, y, Math.round(R0 * k), lam);
+    return;
+  }
+  const e = easeInOut(seg(dtS, TL.glide, TL.glideDur));
+  GLIDE.cx = lerp(CENTRE.x, slotFor(REVEAL), e);
+  GLIDE.cy = lerp(CENTRE.y, SLOT.y, e) - 3 * Math.sin(Math.PI * e);
+  GLIDE.R = lerp(RL, R0, e);
+  GLIDE.tilt = TILT_DEG;
+  GLIDE.lam = lam;
+  GLIDE.light[0] = LIGHT[0];
+  GLIDE.light[1] = LIGHT[1];
+  GLIDE.light[2] = LIGHT[2];
+  GLIDE.space = 0;
+  const cam = planet.aim(GLIDE);
+  planet.begin(cam);
+  planet.disc(cam);
+  for (const pts of BRAND_PTS()) planet.route(cam, pts, 1);
+  planet.londonPin(cam);
+  planet.end(ctx);
+}
 
 const GLINT_AT = TL.title + 0.36;
 const GLINT_DUR = 0.36;

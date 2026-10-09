@@ -61,12 +61,18 @@ export function planetTexture(level) {
 // ---------------------------------------------------------------------------------------------
 // Camera
 
-/** Per-frame camera terms (integer centre and radius, rotation sines); returns cam. */
+/**
+ * Per-frame camera terms; returns cam. The centre and radius stay fractional: the disc is drawn from
+ * the true circle, so its limb only ever moves the way the camera moves (rounding the centre and the
+ * radius apart made the horizon step back and forth). The dither is fixed on the screen at (ax, ay)
+ * (default: the rounded centre), so a pixel of a moving gradient changes once as the gradient passes,
+ * never back and forth; anchored where the emblem stands, it matches the emblem's own phase there.
+ */
 export function aim(cam) {
-  cam.cx = Math.round(cam.cx);
-  cam.cy = Math.round(cam.cy);
-  cam.R = Math.max(1, Math.round(cam.R));
+  cam.R = Math.max(1, cam.R);
   cam.rr = cam.R + 0.5;
+  if (!Number.isFinite(cam.ax)) cam.ax = Math.round(cam.cx);
+  if (!Number.isFinite(cam.ay)) cam.ay = Math.round(cam.cy);
   cam.cl = Math.cos(cam.lam * DEG);
   cam.sl = Math.sin(cam.lam * DEG);
   cam.ct = Math.cos(cam.tilt * DEG);
@@ -200,26 +206,26 @@ export function disc(cam, nightRim = null) {
   const lut = GLOBE_STYLES.world.lut;
   const darkRim = nightRim == null ? null : u32(nightRim);
   const sh = (((cam.lam / 360) * TW) % TW) + TW * 16;
-  const { cx, cy, ct: CT, st: ST } = cam;
+  const { cx, cy, ax, ay, ct: CT, st: ST } = cam;
   const [L0, L1, L2] = cam.light;
-  const c = R + 2; // the emblem's table margin: its dither phase is locked to the globe
   const grid = (cam.grid ?? 1) * 16; // graticule texels shown where the Bayer threshold is under it
   const equ = (cam.equator ?? 1) * 16; // the equator in the dark (light level 0)
-  const y0 = Math.max(0, cy - R - 1);
-  const y1 = Math.min(H - 1, cy + R + 1);
+  const y0 = Math.max(0, Math.ceil(cy - RR));
+  const y1 = Math.min(H - 1, Math.floor(cy + RR));
   for (let y = y0; y <= y1; y++) {
     const dy = y - cy;
     const dy2 = dy * dy;
     if (dy2 > RR2) continue;
-    const span = Math.floor(Math.sqrt(RR2 - dy2));
-    const xa = Math.max(0, cx - span);
-    const xb = Math.min(W - 1, cx + span);
+    const span = Math.sqrt(RR2 - dy2);
+    const xa = Math.max(0, Math.ceil(cx - span));
+    const xb = Math.min(W - 1, Math.floor(cx + span));
     const ny = -dy / RR;
-    const by = ((dy + c) & 3) << 2;
+    const by = ((y - ay) & 3) << 2;
     for (let x = xa; x <= xb; x++) {
       const dx = x - cx;
       const d2 = dx * dx + dy2;
       if (d2 > RR2) continue;
+      const bth = BAYER4[by | ((x - ax) & 3)];
       const nx = dx / RR;
       const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
       const gy = ny * CT + nz * ST;
@@ -236,11 +242,11 @@ export function disc(cam, nightRim = null) {
         let v = (dif + 0.1) * 3.3;
         v = v < 0 ? 0 : v > 3.999 ? 3.999 : v;
         const f = Math.floor(v);
-        k = Math.min(4, f + (v - f > (BAYER4[by | ((dx + c) & 3)] + 0.5) / 16 ? 1 : 0));
+        k = Math.min(4, f + (v - f > (bth + 0.5) / 16 ? 1 : 0));
       }
       let tv = tex[row * TW + col];
-      if (tv & 2 && grid < 16 && BAYER4[by | ((dx + c) & 3)] >= grid) tv &= 5;
-      if (tv & 4 && k === 0 && equ < 16 && BAYER4[by | ((dx + c) & 3)] >= equ) tv &= 3;
+      if (tv & 2 && grid < 16 && bth >= grid) tv &= 5;
+      if (tv & 4 && k === 0 && equ < 16 && bth >= equ) tv &= 3;
       D[y * W + x] = k === 6 && darkRim !== null ? darkRim : lut[(tv << 3) | k];
     }
   }
@@ -255,32 +261,33 @@ const ATMO = [0, C.navy, C.blue, C.cyan];
 export function atmosphere(cam) {
   const a = cam.atmo ?? 0;
   if (a <= 0) return;
-  const { cx, cy, R } = cam;
+  const { cx, cy, ax, ay, R } = cam;
   const RR = R + 0.5;
   const AW = 6;
   const RO = RR + AW;
   const [L0, L1, L2] = cam.light;
   const back = 1 + 0.7 * Math.max(0, -L2);
-  const y0 = Math.max(0, Math.floor(cy - RO));
-  const y1 = Math.min(H - 1, Math.ceil(cy + RO));
+  const y0 = Math.max(0, Math.ceil(cy - RO));
+  const y1 = Math.min(H - 1, Math.floor(cy + RO));
   for (let y = y0; y <= y1; y++) {
     const dy = y - cy;
     const dy2 = dy * dy;
     if (dy2 > RO * RO) continue;
-    const outer = Math.floor(Math.sqrt(RO * RO - dy2));
-    const inner = dy2 < RR * RR ? Math.floor(Math.sqrt(RR * RR - dy2)) : -1;
-    for (let side = -1; side <= 1; side += 2) {
-      for (let k = inner + 1; k <= outer; k++) {
-        const x = cx + side * k;
-        if (x < 0 || x >= W) continue;
+    const outer = Math.sqrt(RO * RO - dy2);
+    const inner = dy2 < RR * RR ? Math.sqrt(RR * RR - dy2) : 0;
+    // the two runs of the ring on this row: left of the disc and right of it
+    for (let side = 0; side < 2; side++) {
+      const xa = Math.max(0, Math.ceil(side ? cx + inner : cx - outer));
+      const xb = Math.min(W - 1, Math.floor(side ? cx + outer : cx - inner));
+      for (let x = xa; x <= xb; x++) {
         const dx = x - cx;
         const r = Math.sqrt(dx * dx + dy2);
         const t = r - RR;
         if (t <= 0 || t > AW) continue;
         const face = (dx / r) * L0 + (-dy / r) * L1;
         const g = a * back * (0.16 + 0.84 * Math.max(0, face) ** 1.5) * Math.exp(-(t - 0.5) / 1.5);
-        // dithered in the globe's own phase (as the disc), so the glow never crawls as the planet moves
-        const i = Math.floor(g * 3.2 + bayer(dx + R + 2, dy + R + 2) - 0.5);
+        // dithered on the screen's fixed phase (as the disc): each pixel lights once as the limb nears
+        const i = Math.floor(g * 3.2 + bayer(x - ax, y - ay) - 0.5);
         if (i > 0) D[y * W + x] = ATMO[i > 3 ? 3 : i];
       }
     }
@@ -391,7 +398,7 @@ export function cityLightsOn(cam) {
         const r = (T.rank[q] * 13) | 0;
         plot(px + (r & 1 ? 1 : -1), py, C.orange);
         plot(px, py + (r & 2 ? 1 : -1), C.orange);
-        plotA(px + (r & 1 ? -1 : 1), py, C.rust, 0.5);
+        if (r & 4) plot(px + (r & 1 ? -1 : 1), py, C.rust);
       }
       D[py * W + px] = LCOL[kd];
     }
@@ -428,17 +435,34 @@ export function surfaceRing(cam, lat, lon, ang, color, a = 1) {
     v[0] = c[0] * ca + E1[0] * cs + E2[0] * sn;
     v[1] = c[1] * ca + E1[1] * cs + E2[1] * sn;
     v[2] = c[2] * ca + E1[2] * cs + E2[2] * sn;
+    if (a < 1 && BAYER4[((k * 16) / n) & 15] >= a * 16) continue; // thinned along the ring, not by screen position
     project(cam, v, TMP);
     if (TMP[2] <= 0.02) continue;
-    plotA(Math.round(TMP[0]), Math.round(TMP[1]), col, a);
+    plot(Math.round(TMP[0]), Math.round(TMP[1]), col);
   }
 }
 
+// Routes are sampled once at 8x the emblem's density; a camera shows every `step`-th sample (a power
+// of two from its size) and draws every other shown one (dotted). Steps are nested, so a zoom only
+// adds or removes the dots between the ones on screen: no dot ever slides along a route.
+export const ROUTE_FINE = 8;
+const routeStep = (R) => {
+  // switch half-way between the octaves (never at the reference size itself, where the camera settles)
+  const want = (1.5 * ROUTE_FINE) / Math.max(1, R / ROUTE_REF);
+  let s = ROUTE_FINE;
+  while (s > 1 && s > want) s >>= 1;
+  return s;
+};
+let ROUTE_REF = 54; // the radius at which a route shows the emblem's own dots
+export function setRouteReference(R) {
+  ROUTE_REF = R;
+}
+
 /**
- * A route drawn in the emblem's style: points pts (earth-frame, from arcPoints) up to fraction p,
- * every other point (dotted), red. A flying route (p < 1) carries a white head with a solid red
- * tail behind it; a landed one ends on a white pixel. `fade` (0..1) dissolves it; `dim` draws it
- * in dark red (a secondary route once it has landed).
+ * A route drawn in the emblem's style: fine points (earth-frame, routePoints) up to fraction p,
+ * dotted at the camera's density, red. A flying route (p < 1) carries a white head with a solid red
+ * tail behind it; a landed one ends on a white pixel. `fade` (0..1) dissolves it dot by dot (each dot
+ * its own threshold); `dim` draws it in dark red (a secondary route once it has landed).
  */
 export function route(cam, pts, p, { fade = 1, dim = false, head = 1 } = {}) {
   if (p <= 0 || fade <= 0) return;
@@ -446,25 +470,28 @@ export function route(cam, pts, p, { fade = 1, dim = false, head = 1 } = {}) {
   const upto = Math.round(last * Math.min(1, p));
   const flying = p < 1;
   const col = dim ? C.darkRed : C.red;
+  const step = routeStep(cam.R);
+  const dot = 2 * step;
   for (let i = 0; i <= upto; i++) {
+    const tail = flying && upto - i < 4 * step;
+    if (!(i % dot === 0 || i === upto || (tail && i % step === 0))) continue;
+    if (fade < 1 && BAYER4[((i / step) | 0) & 15] >= fade * 16) continue;
     project(cam, pts[i], TMP);
     if (!TMP[3]) continue;
-    const tail = flying && upto - i < 4;
-    if (!(i % 2 === 0 || i === upto || tail)) continue;
-    plotA(Math.round(TMP[0]), Math.round(TMP[1]), tail ? C.red : col, fade);
+    plot(Math.round(TMP[0]), Math.round(TMP[1]), tail ? C.red : col);
   }
   project(cam, pts[upto], TMP);
   if (!TMP[3]) return;
   const hx = Math.round(TMP[0]);
   const hy = Math.round(TMP[1]);
   if (flying) {
-    plotA(hx, hy, C.white, fade);
+    plot(hx, hy, C.white);
     if (head > 1) {
-      plotA(hx + 1, hy, C.cream, fade);
-      plotA(hx, hy + 1, C.cream, fade);
-      plotA(hx + 1, hy + 1, C.yellow, fade);
+      plot(hx + 1, hy, C.cream);
+      plot(hx, hy + 1, C.cream);
+      plot(hx + 1, hy + 1, C.yellow);
     }
-  } else if (TMP[2] > 0.08) plotA(hx, hy, C.white, fade);
+  } else if (TMP[2] > 0.08 && fade >= 1) plot(hx, hy, C.white);
 }
 
 /** A white plus on a lat/lon (a route landing), dissolved by a. */
@@ -473,20 +500,21 @@ export function flash(cam, lat, lon, a = 1) {
   if (TMP[2] <= 0.05) return;
   const x = Math.round(TMP[0]);
   const y = Math.round(TMP[1]);
-  plotA(x, y, C.white, a);
-  plotA(x - 1, y, C.white, a);
-  plotA(x + 1, y, C.white, a);
-  plotA(x, y - 1, C.white, a);
-  plotA(x, y + 1, C.white, a);
+  if (a < 0.5) return;
+  plot(x, y, C.white);
+  plot(x - 1, y, C.white);
+  plot(x + 1, y, C.white);
+  plot(x, y - 1, C.white);
+  plot(x, y + 1, C.white);
 }
 
 /** London's pin: 3x3 red with a white centre (the emblem's marker), outlined in black when big. */
-export function londonPin(cam, outline = 0) {
+export function londonPin(cam, outline = false) {
   project(cam, evec(...LONDON), TMP);
   if (TMP[2] <= 0.05) return null;
   const lx = Math.round(TMP[0]);
   const ly = Math.round(TMP[1]);
-  if (outline > 0) for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) if (Math.abs(x) === 2 || Math.abs(y) === 2) plotA(lx + x, ly + y, C.black, outline);
+  if (outline) for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) if (Math.abs(x) === 2 || Math.abs(y) === 2) plot(lx + x, ly + y, C.black);
   for (let y = -1; y <= 1; y++) for (let x = -1; x <= 1; x++) plot(lx + x, ly + y, x || y ? C.red : C.white);
   return [lx, ly];
 }
@@ -503,6 +531,10 @@ export function flare(sx, sy, I, cam = null) {
   // over the planet the streaks are a step dimmer: light across the globe, not a line cut into it
   const R2 = cam ? (cam.R + 0.5) * (cam.R + 0.5) : -1;
   const onDisc = (x, y) => R2 > 0 && (x - cam.cx) * (x - cam.cx) + (y - cam.cy) * (y - cam.cy) <= R2;
+  // dithered in the sun's own phase: the glow and the streaks travel with it and never shimmer
+  const put = (x, y, c, a) => {
+    if (a >= 1 || BAYER4[(((y - sy) & 3) << 2) | ((x - sx) & 3)] < a * 16) plot(x, y, c);
+  };
   // the glow: a dithered disc round the sun
   const gr = Math.round(4 + 10 * I);
   for (let y = -gr; y <= gr; y++) {
@@ -511,7 +543,7 @@ export function flare(sx, sy, I, cam = null) {
       if (r > 1) continue;
       const v = (1 - r) * (1 - r) * I * 3.4;
       if (v < 0.3) continue;
-      plotA(sx + x, sy + y, v > 2.4 ? C.cream : v > 1.5 ? C.cyan : v > 0.8 ? C.blue : C.navy, Math.min(1, v * 1.2));
+      put(sx + x, sy + y, v > 2.4 ? C.cream : v > 1.5 ? C.cyan : v > 0.8 ? C.blue : C.navy, Math.min(1, v * 1.2));
     }
   }
   // the streaks
@@ -520,14 +552,14 @@ export function flare(sx, sy, I, cam = null) {
     const e = 1 - Math.abs(k) / (len + 1);
     const v = e * e * I * 4 * (Math.abs(k) > 3 && onDisc(sx + k, sy) ? 0.55 : 1);
     if (v < 0.3) continue;
-    plotA(sx + k, sy, v > 2.8 ? C.white : v > 1.7 ? C.cyan : v > 0.9 ? C.blue : C.navy, Math.min(1, v * 1.3));
+    put(sx + k, sy, v > 2.8 ? C.white : v > 1.7 ? C.cyan : v > 0.9 ? C.blue : C.navy, Math.min(1, v * 1.3));
   }
   const vl = Math.round(30 * I);
   for (let k = -vl; k <= vl; k++) {
     const e = 1 - Math.abs(k) / (vl + 1);
     const v = e * e * I * 3.2 * (Math.abs(k) > 3 && onDisc(sx, sy + k) ? 0.55 : 1);
     if (v < 0.3) continue;
-    plotA(sx, sy + k, v > 2.4 ? C.white : v > 1.6 ? C.cyan : v > 0.8 ? C.blue : C.navy, Math.min(1, v * 1.3));
+    put(sx, sy + k, v > 2.4 ? C.white : v > 1.6 ? C.cyan : v > 0.8 ? C.blue : C.navy, Math.min(1, v * 1.3));
   }
   // the core: a white diamond
   const cr = Math.round(1 + 2 * I);

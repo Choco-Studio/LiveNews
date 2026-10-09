@@ -134,7 +134,9 @@ function globeTable(R) {
       if (Math.sqrt(d2) > RR - 1.1) k = dif > 0.05 ? 5 : 6;
       else {
         const v = clamp((dif + 0.1) * 3.3, 0, 3.999);
-        k = Math.min(4, Math.floor(v) + (v - Math.floor(v) > bayer(x, y) ? 1 : 0));
+        // the dither's phase is the centre's (not the table corner's), so a globe that changes size
+        // keeps its pattern instead of flipping it at every radius
+        k = Math.min(4, Math.floor(v) + (v - Math.floor(v) > bayer(x - c, y - c) ? 1 : 0));
       }
       cls.push(k);
     }
@@ -147,7 +149,7 @@ function globeTable(R) {
 function drawGlobe(ctx, x, y, R, lam0, look = GLOBE_STYLES.world) {
   const T = globeTable(R);
   const fb = frameBuffer(look.id, T.S, T.S);
-  const key = Math.round(lam0 * 8);
+  const key = Math.round(lam0 * 1e4); // (practically exact: a globe that hands over to another renderer must match it)
   if (fb.key !== key) {
     fb.key = key;
     const tex = look.tex();
@@ -234,6 +236,26 @@ export function arcPoints(a, b, h = ROUTE_H, dense = 1) {
 
 // great-circle routes out of London, lifted slightly off the surface
 const ROUTE_PTS = ROUTES.map((b) => arcPoints(LONDON, b));
+
+/**
+ * The same arc sampled `fine` times as densely as arcPoints (exactly: every fine-th point is one of
+ * arcPoints' points), for routes drawn at any size (planet.js route).
+ */
+export function routePoints(a, b, h = ROUTE_H, fine = 8) {
+  const va = evec(...a);
+  const vb = evec(...b);
+  const om = Math.acos(clamp(va[0] * vb[0] + va[1] * vb[1] + va[2] * vb[2], -1, 1));
+  const n = Math.max(12, Math.round((om / DEG) * 0.9)) * fine;
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const s = i / n;
+    const ka = Math.sin((1 - s) * om) / Math.sin(om);
+    const kb = Math.sin(s * om) / Math.sin(om);
+    const lift = 1 + h * Math.sin(Math.PI * s);
+    pts.push([(va[0] * ka + vb[0] * kb) * lift, (va[1] * ka + vb[1] * kb) * lift, (va[2] * ka + vb[2] * kb) * lift]);
+  }
+  return pts;
+}
 
 const TMP = [0, 0, 0];
 /**

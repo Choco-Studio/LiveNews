@@ -122,3 +122,52 @@ test('the place names carry real zones (their local time is on the plate)', () =
   }
   assert.deepEqual(titles.WN_PLACES.map((p) => p.name), ['LONDON', 'NEW YORK', 'NEW DELHI', 'NAIROBI']);
 });
+
+test('the horizon is the true circle on every frame, so it only moves as the camera does (owner, 9 Oct: "it vibrates")', () => {
+  // The planet was drawn with its centre and radius rounded apart: the horizon stepped 56, 57, 56, 57...
+  // Now the first row of the disc down any column is the true circle's, 60 frames a second along the
+  // camera's whole flight, and the night shot's horizon (where the camera only pulls back) never rises.
+  const D = kit.frameBuffer('planet', kit.W, kit.H).d;
+  const end = titles.WN_REVEAL * 60;
+  for (const col of [60, 120, 192, 260, 330]) {
+    let prev = -1;
+    let back = 0;
+    for (let f = 0; f < end; f++) {
+      const cam = titles.wnCamera(f / 60 / cues.WN_BEAT);
+      cam.space = 0;
+      planet.aim(cam);
+      planet.begin(cam);
+      planet.disc(cam);
+      let top = -1;
+      for (let y = 0; y < kit.H; y++) if (D[y * kit.W + col]) { top = y; break; }
+      const RR = cam.R + 0.5;
+      const dx = col - cam.cx;
+      const want = dx * dx <= RR * RR ? Math.max(0, Math.ceil(cam.cy - Math.sqrt(RR * RR - dx * dx))) : -1;
+      if (want >= kit.H) continue;
+      assert.equal(top, want, `column ${col}, frame ${f}`);
+      if (f <= 130) {
+        if (prev >= 0 && top < prev) back++;
+        prev = top;
+      }
+    }
+    assert.equal(back, 0, `column ${col}: the night shot's horizon stepped back up ${back} times`);
+  }
+});
+
+test('the glide to the slot is drawn from the true circle and lands on the emblem\'s own pixels', () => {
+  // the glide's end: the planet renderer at the slot equals the cached emblem globe at R0
+  const R = world.R0;
+  const x = 100;
+  const y = 98;
+  const cam = planet.aim({ cx: x, cy: y, R, tilt: world.TILT_DEG, lam: world.LAM_END, light: [...world.LIGHT], space: 0, ax: 192, ay: 98 });
+  planet.begin(cam);
+  planet.disc(cam);
+  const D = kit.frameBuffer('planet', kit.W, kit.H).d;
+  world.drawEarth(fakeCanvas().getContext('2d'), x, y, R, world.LAM_END);
+  const S = 2 * R + 5;
+  const c = R + 2;
+  const G = kit.frameBuffer('wn-globe', S, S).d;
+  let diff = 0;
+  for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) if (G[j * S + i] && D[(y - c + j) * kit.W + (x - c + i)] !== G[j * S + i]) diff++;
+  assert.equal(diff, 0, `${diff} pixels differ at the slot`);
+});

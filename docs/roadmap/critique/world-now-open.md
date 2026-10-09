@@ -141,3 +141,28 @@ Scores:
 | Sync of pictures and music | 9.8 |
 
 Shown to the owner for his own score.
+
+## Owner, 9 Oct: "it vibrates all the time"
+
+The owner saw what the panel missed: the image shook all the way through.
+
+The panel had judged sheets and 12 fps strips. Measuring frame by frame at 30 fps showed three causes:
+1. The horizon stepped back and forth. The camera's centre and radius were rounded to whole pixels apart, so the limb went 56, 57, 56, 57… It reversed 58 times in the 232 frames of the flight.
+2. The shading's dither flipped. Its phase came from the radius (the emblem table's corner), so each change of radius inverted every dithered pixel of the globe at once: 157 times in the flight.
+3. The glide to the slot (the package rounds the globe's centre and size apart) reversed the globe's top edge 4 times.
+
+Fixes:
+- The planet is drawn from the true circle (fractional centre and radius), so its limb is the circle's own rasterisation on every frame (tested along the whole flight). It moves only as the camera moves.
+- Dithers are fixed on the screen at the emblem's position, so each pixel of a moving gradient changes once as it passes. The emblem table's phase is now its centre's, unchanged at radius 34 and 54.
+- Routes are sampled once and shown at nested densities, so a zoom never slides their dots.
+- The glide is drawn from the true circle and lands on the emblem's own pixels (tested).
+- London's pin outline, the city cores' glow, ripples and the flare no longer dissolve through the screen's dither while moving.
+
+Measured on 30 fps renders, counting pixels that change and change back on the next frame (A→B→A):
+
+| | Before | After |
+|---|---|---|
+| Whole sequence | 414,498 | 173,118 |
+| Night shot, per second | 43,000 | 6,500 |
+
+What remains is the legitimate motion of one-pixel details (city lights, coasts) as the camera moves.
