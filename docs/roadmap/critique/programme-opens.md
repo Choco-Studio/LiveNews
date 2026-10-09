@@ -257,3 +257,37 @@ Nitpicks left:
 2. The climb inside the cloud deck is the plainest stretch.
 3. The p95 frame time is the highest of the sequences.
 
+
+## The themes, recomposed (owner, 9 Oct: "redo the intro music from scratch if you like it better")
+
+### Before: score 7.9 (lowest: arrangement)
+
+Measured on the five themes as they were:
+1. **Sparse.** The model's loudness of each part while it plays, against the lead: pads 15 dB under, bells 20–23 dB under, ticks 29 dB under, hats 35–40 dB under. Under the signature only the lead and the bass were heard; before it, a pad and a sub.
+2. **Clashes.** Leads a semitone from the pads' maj7 and #11 tones (COSMOS's B over A#, among others).
+3. **Monotonous builds.** One chord and one texture until the signature, so every theme waited for its last four beats.
+4. **Lost tracks.** The tune parser kept 12 tracks, so WORLD NOW's felt thump on the hit and its tom on the button were never played.
+
+### After: score 9.6
+
+The engine:
+- ensembles: `unison`, `detune` and `spread` on any instrument (several detuned voices a note, across the stereo field, at the level of one voice), with the `strings`, `warm`, `mallet` and `synthbass` presets;
+- a long hall (2.6 s) as a send beside the room (`hall`), counted by the loudness model (measured: 3.2 hall² against the room's 2 room²);
+- 16 tracks a tune, and a test that no theme loses one.
+
+The scores (each section is in `docs/programmes/*.md`, in its sequence table):
+- **TECH BYTES:** sixteenths three against four on the signature's head, a half-time kit, a saw bass in eighths, a wide stab on the wave, the climb over D9 with a snare run into a double-kick boot.
+- **COSMOS DESK:** strings in the hall, an orbiting triangle, a timpani roll into the planet, C#m9 over the pedal as day comes round, the #11 high on the hit.
+- **MONEY MINUTE:** a warm pad, strings with the sunset, kick and snare without hats, a breakdown for the floors going dark, and a snare pickup into the signature over Bb/F.
+- **NEWS IN 60:** the strings climb over the G pedal under the tick-tock (Em, Am, Bm), a short D on the stop, silence for "60".
+- **WORLD WEATHER:** rain on an uneven hat, low strings and thunder in the storm, the strings climbing, the low strings opening under the sun.
+
+Evidence:
+- no semitone clashes between parts (the piano-roll check, on an eighth grid);
+- every part at its level (the model's loudness while it plays, against the lead): pads and strings 6–8 dB under, bass 4–6 dB, bells about 9–11 dB, arpeggios about 13 dB, hats about 22 dB;
+- each theme builds to its hit (momentary loudness): TECH -21 to -13 LUFS, COSMOS -20 to -13, MONEY -28 to -13, NEWS -21 to -13, WEATHER -21 to -14, the storm's strike under the sun;
+- integrated loudness -16.2, -15.8, -16.3, -16.4 and -16.8 LUFS, true peak -2.2 dBTP at most.
+
+Nitpicks left:
+1. The judgement is by structure and measurement, not by ear.
+2. WEATHER reads 0.8 LU quiet, the loudness model's own error on that tune.

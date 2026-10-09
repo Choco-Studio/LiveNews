@@ -99,7 +99,7 @@ function roomImpulse(ctx, seconds = 1.1) {
 export function bank(ctx) {
   let b = banks.get(ctx);
   if (b) return b;
-  b = { waves: new Map(), noise: null, metal: null, ir: null };
+  b = { waves: new Map(), noise: null, metal: null, ir: null, hall: null };
   b.wave = (kind) => {
     let w = b.waves.get(kind);
     if (!w) {
@@ -112,6 +112,7 @@ export function bank(ctx) {
   b.noise = lfsrBuffer(ctx, false, 1);
   b.metal = lfsrBuffer(ctx, true, 0.5);
   b.ir = roomImpulse(ctx);
+  b.hall = roomImpulse(ctx, 2.6);
   banks.set(ctx, b);
   return b;
 }
@@ -198,9 +199,18 @@ export function buildBuses(ctx, { volume = 0.8, raw = false, ducker = null, beds
   dark.frequency.value = 7500;
   dark.Q.value = 0.5;
   reverb.connect(dark).connect(tunes);
+  // the hall: a long tail for the title themes that ask for it, darker still
+  const hall = ctx.createConvolver();
+  hall.normalize = false;
+  hall.buffer = b.hall;
+  const hallDark = ctx.createBiquadFilter();
+  hallDark.type = 'lowpass';
+  hallDark.frequency.value = 5200;
+  hallDark.Q.value = 0.5;
+  hall.connect(hallDark).connect(tunes);
   const speech = ctx.createGain();
   speech.connect(master);
-  const buses = { ctx, master, tunes, shelf, tunesDip, music, duck, bedsDip, reverb, speech, out, mute, comp, raw, ducker, bedTarget: null };
+  const buses = { ctx, master, tunes, shelf, tunesDip, music, duck, bedsDip, reverb, hall, speech, out, mute, comp, raw, ducker, bedTarget: null };
   if (ducker) {
     const t = ctx.currentTime;
     buses.bedTarget = ducker.add({ param: duck.gain, on: dbToGain(bedsDb), off: 1 }, t);
@@ -362,6 +372,12 @@ export class TunePlayer {
       this.duckGain.connect(send).connect(buses.reverb);
       this.nodes.push(send);
     }
+    if (!probe && song.hall > 0 && buses.hall) {
+      const send = ctx.createGain();
+      send.gain.value = song.hall;
+      this.duckGain.connect(send).connect(buses.hall);
+      this.nodes.push(send);
+    }
     this.echoIn = null;
     if (!probe && song.echo.send > 0 && song.tracks.some((t) => t.echo > 0)) {
       const input = ctx.createGain();
@@ -510,45 +526,18 @@ export class TunePlayer {
     const voices = track.arp > 0 && e.midis.length > 1 ? [e.midis] : e.midis.map((m) => [m]);
     const peak = (KIND_GAIN[track.kind] * track.gain * inst.gain * e.vel) / Math.sqrt(voices.length);
     const attack = offset > 0 ? Math.max(0.005, fadeIn) : Math.max(inst.a, fadeIn);
+    // an ensemble voice: several detuned oscillators per note, spread across the field, together
+    // at the level of one
+    const uni = !this.probe && inst.unison > 1 ? inst.unison : 1;
+    const each = 1 / Math.sqrt(uni);
     for (const notes of voices) {
       const g = ctx.createGain();
-      let src;
       const extra = [g];
       let head = g;
+      const srcs = [];
       if (this.probe) {
-        src = ctx.createConstantSource();
+        srcs.push(ctx.createConstantSource());
       } else {
-        src = ctx.createOscillator();
-        src.setPeriodicWave(this.bank.wave(inst.wave));
-        if (notes.length > 1) {
-          // Chord as one voice cycling through the notes (only when asked).
-          let k = 0;
-          for (let t = when; t < when + gate + inst.r; t += track.arp) src.frequency.setValueAtTime(hz(notes[k++ % notes.length]), t);
-        } else src.frequency.setValueAtTime(hz(notes[0]), when);
-        if (inst.scoop && offset < 0.07) {
-          src.detune.setValueAtTime(-inst.scoop, when);
-          src.detune.linearRampToValueAtTime(0, when + 0.07);
-        }
-        const vib = inst.vib;
-        const vibAt = vib ? Math.max(0, vib[2] - offset) : 0;
-        if (vib && gate > vibAt + 0.1) {
-          const lfo = ctx.createOscillator();
-          const depth = ctx.createGain();
-          lfo.frequency.value = vib[1];
-          depth.gain.value = 0;
-          depth.gain.setValueAtTime(0, when);
-          depth.gain.setValueAtTime(0, when + vibAt);
-          depth.gain.linearRampToValueAtTime(vib[0], when + vibAt + 0.25);
-          lfo.connect(depth).connect(src.detune);
-          lfo.start(when);
-          lfo.stop(when + gate + inst.r + 0.02);
-          extra.push(depth);
-          lfo.onended = () => {
-            try {
-              lfo.disconnect();
-            } catch { /* ignore */ }
-          };
-        }
         // Each note through its own low-pass; the filter envelope opens it
         // at the attack and lets it close (brass bite, pluck, bell).
         const cut = noteCutoff(inst, Math.max(...notes));
@@ -564,30 +553,76 @@ export class TunePlayer {
           head = f;
           extra.push(f);
         }
+        const vib = inst.vib;
+        const vibAt = vib ? Math.max(0, vib[2] - offset) : 0;
+        let depth = null;
+        if (vib && gate > vibAt + 0.1) {
+          const lfo = ctx.createOscillator();
+          depth = ctx.createGain();
+          lfo.frequency.value = vib[1];
+          depth.gain.value = 0;
+          depth.gain.setValueAtTime(0, when);
+          depth.gain.setValueAtTime(0, when + vibAt);
+          depth.gain.linearRampToValueAtTime(vib[0], when + vibAt + 0.25);
+          lfo.connect(depth);
+          lfo.start(when);
+          lfo.stop(when + gate + inst.r + 0.02);
+          extra.push(depth);
+          lfo.onended = () => {
+            try {
+              lfo.disconnect();
+            } catch { /* ignore */ }
+          };
+        }
+        for (let u = 0; u < uni; u++) {
+          const src = ctx.createOscillator();
+          src.setPeriodicWave(this.bank.wave(inst.wave));
+          if (notes.length > 1) {
+            // Chord as one voice cycling through the notes (only when asked).
+            let k = 0;
+            for (let t = when; t < when + gate + inst.r; t += track.arp) src.frequency.setValueAtTime(hz(notes[k++ % notes.length]), t);
+          } else src.frequency.setValueAtTime(hz(notes[0]), when);
+          const side = uni > 1 ? (u / (uni - 1)) * 2 - 1 : 0;
+          const det = side * (inst.detune ?? 0);
+          if (inst.scoop && offset < 0.07) {
+            src.detune.setValueAtTime(det - inst.scoop, when);
+            src.detune.linearRampToValueAtTime(det, when + 0.07);
+          } else if (det) src.detune.setValueAtTime(det, when);
+          if (depth) depth.connect(src.detune);
+          if (uni > 1 && inst.spread > 0) {
+            const p = ctx.createStereoPanner();
+            p.pan.value = side * inst.spread;
+            src.connect(p).connect(head);
+            extra.push(p);
+          } else src.connect(head);
+          srcs.push(src);
+        }
       }
       // ADSR, always from zero and back to zero (see envDecay about the 0).
       const p = g.gain;
       p.value = 0;
       p.setValueAtTime(0, when);
       let level;
-      const top = peak * from;
+      const top = peak * from * each;
       if (gate <= attack) {
         level = top * (gate / attack);
         p.linearRampToValueAtTime(level, when + gate);
       } else {
         p.linearRampToValueAtTime(top, when + attack);
         const tau = Math.max(0.002, inst.d / 3);
-        const sus = peak * inst.s;
+        const sus = peak * each * inst.s;
         p.setTargetAtTime(sus, when + attack, tau);
         level = sus + (top - sus) * Math.exp(-(gate - attack) / tau);
         p.setValueAtTime(level, when + gate);
       }
       p.linearRampToValueAtTime(0, when + gate + inst.r);
-      src.connect(head);
+      if (this.probe) srcs[0].connect(head);
       g.connect(dest);
-      src.start(when);
-      src.stop(when + gate + inst.r + 0.01);
-      this.track(src, ...extra);
+      for (let i = 0; i < srcs.length; i++) {
+        srcs[i].start(when);
+        srcs[i].stop(when + gate + inst.r + 0.01);
+        this.track(srcs[i], ...(i === srcs.length - 1 ? extra : []));
+      }
     }
   }
 

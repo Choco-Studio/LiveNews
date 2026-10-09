@@ -364,10 +364,10 @@ Three different things share the name "flash" or "FLASH":
 
 | Beats (s) | Pictures | Music |
 |---|---|---|
-| 0–1 (0–0.5) | Locked off close on the top of the stopwatch: the knurled pusher over the polished bezel, the twelve o'clock tick, the needle's tip. The pusher goes down on beat 1. | G add9 from silence on the pad; one soft click as the pusher goes down |
-| 1–7 (0.5–3.5) | The hand sets off and makes one turn at an even pace: a five-minute tick passes on every eighth, and each tick lights as the hand passes. The camera pulls back from the pusher to the whole dial at centre stage. The hand stops dead at twelve. | The bed's tick-tock: a staccato tri on each beat, a low-passed tick off it. Each is the passing of a five-minute tick. The last tock is the stop. |
+| 0–1 (0–0.5) | Locked off close on the top of the stopwatch: the knurled pusher over the polished bezel, the twelve o'clock tick, the needle's tip. The pusher goes down on beat 1. | G add9 from silence on a warm pad; one soft click as the pusher goes down |
+| 1–7 (0.5–3.5) | The hand sets off and makes one turn at an even pace: a five-minute tick passes on every eighth, and each tick lights as the hand passes. The camera pulls back from the pusher to the whole dial at centre stage. The hand stops dead at twelve. | The bed's tick-tock: a staccato tri on each beat, a low-passed tick off it. Each is the passing of a five-minute tick. Under it, a sine sub on G, and the strings climb in triads over the G pedal, a step every two beats (Em, Am, Bm). The last tock is the stop, with a short D chord. |
 | 7.5 (3.75) | "60" lights, as on the emblem (slate, orange, yellow) | Silence: the minute is done |
-| 8–12 (4–6) | The package's reveal (from 4.35 s) | The signature on the low-passed pulse with its octave ("the minute starts"), over the tick-tock, C/G and G sus2 |
+| 8–12 (4–6) | The package's reveal (from 4.35 s) | The signature on the low-passed pulse with its octave ("the minute starts"), over the tick-tock, C/G and G sus2, the strings above it |
 | 12–13.6 | Still for the cut | A Gadd9 bell chord and one soft kick on the hit, then the button |
 
 **The stopwatch is the emblem's own.** Every band of it (face, inner wall, bezel, ticks, hand, crown) is the emblem's pixels at centre stage and grows in proportion beyond it. Close up, it is a machined object:

@@ -207,6 +207,9 @@ export function envelopeEnergy(inst, gate) {
   return e;
 }
 
+// the hall send's share of the energy, against the room's 2 (measured with tools/render-audio.mjs)
+const HALL = 3.2;
+
 const energyCache = new Map();
 // K-weighted energy of one note of an instrument through its low-pass and
 // the tunes bus's high shelf.
@@ -233,7 +236,8 @@ export function estimateLoudness(song) {
   const spb = 60 / song.bpm;
   const bins = new Float64Array(Math.max(1, Math.ceil(secs / 0.1) + 4));
   const echoGain = (send) => (send * send * 0.7) / (1 - song.echo.feedback ** 2 * 0.7);
-  const room = 2 * song.room * song.room; // measured: the tail also fills the gaps between notes
+  // measured: the tail also fills the gaps between notes (the hall's longer tail, more so)
+  const room = 2 * song.room * song.room + HALL * (song.hall ?? 0) ** 2;
   const deposit = (t0, len, energy) => {
     // Energy spread evenly over the time the note is audible.
     const a = Math.max(0, Math.floor(t0 / 0.1));

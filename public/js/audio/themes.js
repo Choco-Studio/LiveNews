@@ -100,61 +100,118 @@ const stab = (inst, chord, C, total, vel = 0.65, gain = 0.9) => ({ kind: 'harmon
 
 // ------------------------------------------------------------------ opens
 
-// COSMOS DESK's title sequence (opens/cues.js): the voyage. E lydian, no drums but felt. The deep
-// field is Emaj7 over a sine sub, a bell on each star the camera passes (three, with the long echo:
-// never more than four a bar); the planet's arrival is a felt thump and the pad opens to F#/E (the
-// lydian II, the colour #4 in the air); the sun bursting at the limb rings G#+D# high; day coming
-// round is a slow softtri rising through Emaj9; then the signature (softtri, halo an octave up) and
-// Emaj9#11 on the hit.
+// The five title sequences' themes (opens/cues.js). Each is scored to its pictures on the cue sheet
+// and voice-led so that no two parts sound a semitone apart: ensembles (tune.js `strings`, `warm`:
+// detuned voices spread across the field) for the harmony, a long hall on the ones that travel.
+const ENS = {
+  // a wide stab: two detuned keys, for the moments that hit
+  stab: { wave: 'pulse50', preset: 'keys', a: 0.004, d: 0.3, s: 0.2, r: 0.18, cutoff: 2600, unison: 2, detune: 9, spread: 0.6 },
+  // TECH BYTES' data: a pulse12 in sixteenths, low-passed (the bible's arpeggio, written out)
+  data: { wave: 'pulse12', preset: 'pulse12', a: 0.003, d: 0.1, s: 0.3, r: 0.08, cutoff: 1800, vib: false, legato: 0.8 },
+  // COSMOS DESK's orbit: a soft triangle with a short sustain (not a bell)
+  orbit: { wave: 'triangle', preset: 'softtri', a: 0.012, d: 0.4, s: 0.32, r: 0.3, vib: false, cutoff: 3200 },
+  // the bell, twice as loud: in a hall it rings against strings, not a bare pad
+  bell: { wave: 'pulse12', preset: 'bell', gain: 1.9 },
+};
+
+// Deterministic jitter in [0, 1) (the rain).
+const hash01 = (i) => {
+  const x = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+// COSMOS DESK's title sequence (opens/cues.js): the voyage. E lydian, 82 BPM, strings in a long hall.
+// The deep field is Emaj7 on the strings over a sine sub, a soft triangle orbiting in eighths and a
+// bell on each star the camera passes (three, with the long echo: never more than four a bar). The
+// planet's arrival is a timpani roll into a stroke with a felt thump, the low strings and F#/E (the
+// lydian II, the colour #4 in the air); the sun bursting at the limb rings G#+D# high over a warm
+// chord; day coming round is C#m9 over the E pedal and a triangle rising through Emaj9; then the
+// signature (softtri, halo an octave up, the orbit above it) over E add9 and F#/E, and Emaj9#11 on
+// the hit.
 function cosmosTitles(tempo, H, C) {
   const k = 64; // E4
   const Qc = SEQ_CUES.cosmos;
   const q = H / Qc.hit;
   const at = (b) => b * q;
   const m0 = H - 4;
-  const total = C + 2.5;
+  const total = C + 3;
   const fly = at(Qc.flyby);
-  const pull = at(Qc.pull);
   const burst = at(Qc.burst);
+  const pull = at(Qc.pull);
   const glints = Qc.glints.map(at);
-  // day coming round: E, G#, B, D#, F# rising a beat apart (quiet), into the motif
-  const rise = [k - 12, k - 8, k - 5, k - 1, k + 2].map((m, i) => [pull + i * 0.5, m, 0.5, 0.32 + i * 0.04]);
+  const ch = {
+    emaj7: [k - 12, k - 5, k + 4, k + 11], // E3 B3 G#4 D#5: the deep field
+    two: [k - 10, k - 3, k + 2, k + 6], // F#3 C#4 F#4 A#4: F#/E, the planet
+    csm9: [k - 8, k - 3, k + 4, k + 7, k + 11], // G#3 C#4 G#4 B4 D#5: C#m9 over E, day comes round
+    add9: [k - 12, k - 8, k - 5, k + 2], // E3 G#3 B3 F#4: under the signature
+    hit: [k - 12, k - 5, k - 1, k + 4], // E3 B3 D#4 G#4 (+ F#5 A#5 above: Emaj9#11)
+  };
+  // the orbit: root, fifth, ninth, fifth in eighths; it rests while day comes round and returns an
+  // octave up over the signature
+  const cell = (b) => {
+    if (b < fly) return [k, k + 7, k + 14, k + 7]; // E4 B4 F#5 B4
+    if (b < pull) return [k + 2, k + 9, k + 16, k + 9]; // F#4 C#5 G#5 C#5
+    if (b < m0) return null;
+    if (b < m0 + 2.5) return [k + 12, k + 19, k + 14, k + 19]; // E5 B5 F#5 B5
+    return [k + 14, k + 21, k + 18, k + 21]; // F#5 C#6 A#5 C#6
+  };
+  const orbit = range(0, H, 0.5).flatMap((b, i) => {
+    const c = cell(b);
+    if (!c) return [];
+    const v = b < fly ? 0.18 + 0.1 * (b / fly) : b < pull ? 0.3 : 0.24;
+    return [[b, c[i % 4], 0.5, v + (i % 2 ? 0 : 0.05)]];
+  });
+  // day coming round: E, G#, B, D#, F# rising half a beat apart, into the signature
+  const rise = [k - 12, k - 8, k - 5, k - 1, k + 2].map((m, i) => [pull + i * 0.5, m, 0.5, 0.34 + i * 0.04]);
+  // the planet's approach: a timpani roll swelling into the stroke
+  const roll = range(fly - 1, fly, 0.125).map((b, i, a) => [b, k - 24, 0.125, 0.12 + (0.3 * i) / Math.max(1, a.length - 1)]);
   return {
     bpm: tempo,
-    room: 0.46,
-    echo: { amount: 1.3, beats: 0.75, feedback: 0.45 },
-    fadeOut: 1.2,
+    room: 0.3,
+    hall: 0.45,
+    echo: { amount: 1.2, beats: 0.75, feedback: 0.42 },
+    fadeOut: 1.4,
     tracks: [
-      { kind: 'lead', inst: 'softtri', notes: part([...motif(k, COLOURS.cosmos, m0, { colourBeats: 1.5 }), [H, k + 7, C - H - 0.25, 0.8]], total), gain: 0.95 },
-      { kind: 'lead', inst: LEAD.halo, notes: part(motif(k + 12, COLOURS.cosmos, m0, { vel: 0.55 }), total), gain: 0.8, echo: 0.6, pan: -0.25 },
-      { kind: 'harmony', inst: 'softtri', notes: part(rise, total), gain: 0.55, echo: 0.6, pan: 0.2 },
-      { kind: 'harmony', inst: 'bell', notes: part([
-        [glints[0], k + 19, 1, 0.38], [glints[1], k + 23, 1, 0.36], [glints[2], k + 26, 1, 0.34], // the stars: B, D#, F#
-        [burst, [k + 20, k + 27], 1.5, 0.42], // the sun at the limb: G# and D#
-        [m0 + 2, k + 14, 1, 0.34], [m0 + 3, k + 18, 1, 0.36], [H, k + 19, 2, 0.45],
-      ], total), gain: 1.2, echo: 0.65, pan: 0.35 },
-      { kind: 'harmony', inst: 'pad', notes: part([
-        [0, [k - 12, k - 5, k - 1, k + 4], fly, 0.42], // Emaj7: the deep field
-        [fly, [k - 10, k - 6, k - 3, k + 2], pull - fly, 0.5], // F#/E: the planet (the lydian II)
-        [pull, [k - 12, k - 5, k - 1, k + 2, k + 4], m0 + 2.5 - pull, 0.55], // Emaj9: day comes round
-        [m0 + 2.5, [k - 10, k - 6, k - 3, k + 2], 1.5, 0.6], // F#/E
-        [H, [k - 12, k - 5, k - 1, k + 2, k + 6], total - H, 0.75], // Emaj9#11
-      ], total), pan: 0.15 },
-      { kind: 'bass', inst: 'sine', notes: part([[0, k - 24, fly, 0.6], [fly, k - 24, H - fly, 0.75], [H, k - 24, total - H, 0.85]], total), gain: 0.65 },
-      stab('pluck', [k - 12, k - 5, k - 1], C, total, 0.8, 1.4),
-      { drums: drums([[fly, 'F', 0.5], [H, 'F', 0.55], [C, 'F', 0.45]], total) },
-      { drums: drums([[C, 'T', 0.5]], total) },
+      { kind: 'lead', inst: 'softtri', notes: part([...motif(k, COLOURS.cosmos, m0, { colourBeats: 1.5 }), [H, k + 7, C - H - 0.25, 0.8]], total), gain: 1 },
+      { kind: 'lead', inst: LEAD.halo, notes: part(motif(k + 12, COLOURS.cosmos, m0, { vel: 0.5 }), total), gain: 0.92, echo: 0.6, pan: -0.25 },
+      { kind: 'harmony', inst: ENS.orbit, notes: part(orbit, total), gain: 1.6, echo: 0.5, pan: 0.3 },
+      { kind: 'harmony', inst: 'softtri', notes: part(rise, total), gain: 1.2, echo: 0.6, pan: -0.15 },
+      { kind: 'harmony', inst: ENS.bell, notes: part([
+        [glints[0], k + 19, 1, 0.52], [glints[1], k + 23, 1, 0.5], [glints[2], k + 26, 1, 0.48], // the stars: B, D#, F#
+        [burst, [k + 20, k + 27], 1.5, 0.58], // the sun at the limb: G# and D#
+        [m0 + 3, k + 18, 1, 0.44], // the colour, high (A#)
+        [H, [k + 20, k + 27], 2, 0.55],
+      ], total), gain: 2, echo: 0.65, pan: 0.35 },
+      { kind: 'harmony', inst: 'strings', notes: part([
+        [0, ch.emaj7, fly, 0.4],
+        [fly, ch.two, pull - fly, 0.5],
+        [pull, ch.csm9, m0 - pull, 0.52],
+        [m0, ch.add9, 2.5, 0.56],
+        [m0 + 2.5, ch.two, 1.5, 0.6],
+        [H, ch.hit, total - H, 0.74],
+      ], total), gain: 1.8, pan: -0.1 },
+      // the planet's mass: low strings from the fly-by
+      { kind: 'harmony', inst: 'strings', notes: part([[fly, [k - 24, k - 17], H - fly, 0.5], [H, [k - 24, k - 17], total - H, 0.58]], total), gain: 1.45 },
+      // the sun's light: a warm chord high with the burst, and the #11 over the hit
+      { kind: 'harmony', inst: 'warm', notes: part([[burst, [k + 9, k + 14, k + 18], pull - burst, 0.4], [H, [k + 14, k + 18], total - H, 0.46]], total), gain: 1.35, pan: 0.2 },
+      { kind: 'bass', inst: 'sine', notes: part([[0, k - 24, fly, 0.6], [fly, k - 24, H - fly, 0.75], [H, k - 24, total - H, 0.85]], total), gain: 0.6 },
+      { kind: 'bass', inst: 'timpani', notes: part([...roll, [fly, k - 24, 1.5, 0.62], [H, k - 24, 2, 0.6]], total), gain: 0.95 },
+      stab('pluck', [k - 12, k - 5, k - 1], C, total, 0.9, 2),
+      { drums: drums([[fly, 'F', 0.5], [H, 'F', 0.55], [C, 'F', 0.45]], total), gain: 1.9 },
+      { drums: drums([[C, 'T', 0.5]], total), gain: 1.9 },
     ],
   };
 }
 
-// MONEY MINUTE's title sequence (opens/cues.js): after the close. F major, straight, the intro vamp
-// stretched to a bar a chord. Pad from silence, then the tri bass in half notes (root and fifth),
-// then the short e-piano chords on the "and" of 2 and 4, each the burst of windows coming on in the
-// time-lapse: Fmaj9 rising over the rooftops, Dm9 as the sun goes; the cut to the tower lands on
-// Bbmaj9 with a felt thump, and each floor going dark is an e-piano note falling (D, C, A) on the
-// beat; the last window is a high F, alone. C6sus as the ledger opens, then the signature on the
-// e-piano over Bbmaj9 and C6sus to F6/9 with the lock-up. No swing, no brass, no bells, no coins.
+// MONEY MINUTE's title sequence (opens/cues.js): after the close. F major, 114 BPM, straight, a
+// full-time feel without hats. Fmaj9 from silence on a warm pad; the short e-piano chords on the
+// "and" of 2 and 4 are the bursts of windows coming on; the tri bass enters in half notes (root and
+// fifth) with Dm9, a soft kick and snare with it, and the strings rise as the sun goes down. The
+// cut to the tower is Bbmaj9 with a felt thump: the kit stops, and each floor going dark is a
+// falling e-piano note on the beat (D, C, A) over a soft felt; the last window is a high F, alone.
+// The ledger opens on C9sus4, the kit picks up again with a snare pickup, and the signature on the
+// e-piano runs over Bbmaj9, C9sus4 and Bb/F (the colour over the F pedal), the strings holding F
+// and Bb above it, into F6/9 on the hit. No swing, brass, bells, coins or arpeggio; nothing above C6.
 function moneyTitles(tempo, H, C) {
   const k = 65; // F4
   const Qc = SEQ_CUES['money-minute'];
@@ -162,60 +219,85 @@ function moneyTitles(tempo, H, C) {
   const at = (b) => b * q;
   const m0 = H - 4;
   const total = C + 2;
+  const sun = at(Qc.sun);
   const cut = at(Qc.cut);
-  const ch = {
-    fmaj9: [k - 8, k - 5, k - 1, k + 2], // A C E G
-    dm9: [k - 12, k - 8, k - 5, k - 1], // F A C E
-    bbmaj9: [k - 8, k - 5, k - 3, k], // A C D F
-    c6sus: [k - 5, k, k + 2, k + 4], // C F G A
-    f69: [k - 8, k - 3, k + 2, k + 7], // A D G C
-  };
-  const bars = [[0, ch.fmaj9], [at(4), ch.dm9], [cut, ch.bbmaj9], [at(12), ch.c6sus], [m0, ch.bbmaj9], [m0 + 2.5, ch.c6sus]];
-  const chordAt = (b) => bars.reduce((c, [s, v]) => (b >= s ? v : c), ch.fmaj9);
-  // the keys on the "and" of 2 and 4 (with the bursts of windows), quiet first; none on the bit
-  const keys = [...Qc.lights.map(at), at(9.5), at(13.5), at(15.5)].map((b, i) => [b, chordAt(b).slice(1), 0.4, Math.min(0.5, 0.34 + i * 0.025)]);
-  const roots = [[0, k - 24], [at(4), k - 27], [cut, k - 31], [at(12), k - 29], [m0, k - 31], [m0 + 2.5, k - 29]];
-  const bass = [];
-  for (let i = 0; i < roots.length; i++) {
-    const [s, r] = roots[i];
-    const e = i + 1 < roots.length ? roots[i + 1][0] : H;
-    if (i === 0) continue; // the bass enters with the sun going down, after the pad and the keys
-    const from = s;
-    const vel = s < cut ? 0.7 : 0.85;
-    for (let b = from, n = 0; b < e - 1e-6; b += 2, n++) bass.push([b, n % 2 ? r + 7 : r, Math.min(2, e - b), n % 2 ? vel - 0.1 : vel]);
-  }
-  bass.push([H, k - 24, total - H, 0.85]);
+  const ledger = at(12);
   const [o9, o10, o11] = Qc.off.map(at);
+  const last = at(Qc.last);
+  const ch = {
+    fmaj9: [k - 8, k - 5, k - 1, k + 2], // A3 C4 E4 G4
+    dm9: [k - 12, k - 8, k - 5, k - 1], // F3 A3 C4 E4
+    bbmaj9: [k - 8, k - 5, k - 3, k], // A3 C4 D4 F4
+    c9sus: [k - 7, k - 3, k, k + 2], // Bb3 D4 F4 G4 (over C)
+    bbF: [k - 7, k - 3, k], // Bb3 D4 F4 (over the F pedal)
+    f69: [k - 8, k - 3, k + 2, k + 7], // A3 D4 G4 C5
+  };
+  // the e-piano's voicings, above the pad
+  const ep = {
+    f: [k - 1, k + 2, k + 4, k + 7], // E4 G4 A4 C5
+    dm: [k - 3, k + 4, k + 7, k + 11], // D4 A4 C5 E5 (no F against the pad's E)
+    bb: [k - 3, k, k + 4, k + 7], // D4 F4 A4 C5
+    c: [k - 3, k, k + 2, k + 5], // D4 F4 G4 Bb4
+    bbF: [k - 3, k, k + 5], // D4 F4 Bb4
+  };
+  const chordAt = (b) => (b < at(4) ? ep.f : b < cut ? ep.dm : b < ledger ? ep.bb : b < m0 + 2.5 ? ep.c : ep.bbF);
+  // the keys on the "and" of 2 and 4 (with the bursts of windows); none while the floors go dark
+  // until the beat after the bit
+  const keys = [...Qc.lights.map(at), at(13.5), m0 + 1.5, m0 + 3.5].map((b, i) => [b, chordAt(b), 0.45, Math.min(0.65, 0.42 + i * 0.03)]);
+  // the tri bass in half notes, root and fifth, from Dm9; the signature's bar follows its chords
+  const bass = [
+    [at(4), k - 27, 2, 0.72], [at(6), k - 20, 2, 0.66], // D A
+    [cut, k - 31, 2, 0.8], [at(10), k - 24, 2, 0.72], // Bb F
+    [ledger, k - 29, 1, 0.8], [at(13), k - 22, 1, 0.72], // C G
+    [m0, k - 31, 1, 0.85], [m0 + 1, k - 29, 1.5, 0.85], [m0 + 2.5, k - 24, 1.5, 0.88], // Bb C F
+    [H, k - 24, total - H, 0.88],
+  ];
   return {
     bpm: tempo,
     swing: 0,
     room: 0.2,
+    hall: 0.18,
     echo: { amount: 0.6, beats: 0.75, feedback: 0.26 },
-    fadeOut: 0.8,
+    fadeOut: 0.9,
     tracks: [
-      { kind: 'lead', inst: LEAD.epiano, notes: part([...motif(k, COLOURS.money, m0), [H, k + 12, C - H - 0.25, 0.85]], total), gain: 1.05 },
+      { kind: 'lead', inst: LEAD.epiano, notes: part([...motif(k, COLOURS.money, m0), [H, k + 12, C - H - 0.25, 0.85]], total), gain: 1.1 },
       // the floors going dark, then the last window
-      { kind: 'lead', inst: LEAD.epiano, notes: part([[o9, k + 9, 0.9, 0.5], [o10, k + 7, 0.9, 0.48], [o11, k + 4, 0.5, 0.46], [at(Qc.last), k + 12, 1.2, 0.56]], total), gain: 0.9, echo: 0.55, pan: 0.15 },
-      { kind: 'harmony', inst: 'pad', notes: part([
-        [0, ch.fmaj9, at(4), 0.28], [at(4), ch.dm9, cut - at(4), 0.4], [cut, ch.bbmaj9, at(12) - cut, 0.52],
-        [at(12), ch.c6sus, m0 - at(12), 0.5], [m0, ch.bbmaj9, 2.5, 0.55], [m0 + 2.5, ch.c6sus, 1.5, 0.56], [H, ch.f69, total - H, 0.66],
-      ], total), pan: -0.22 },
-      { kind: 'harmony', inst: 'keys', notes: part([...keys, [H, ch.f69, 1.5, 0.7]], total), pan: 0.25, echo: 0.2 },
-      { kind: 'bass', inst: 'tri', notes: part(bass, total), gain: 0.55 },
-      stab('keys', [k - 12, ...ch.f69.slice(0, 3)], C, total, 0.7, 1),
-      // a felt thump on the cut and under each floor going dark; the hit and the button
-      { drums: drums([[cut, 'F', 0.5], [o9, 'F', 0.3], [o10, 'F', 0.32], [o11, 'F', 0.34], [H, 'F', 0.75], [C, 'F', 0.55]], total) },
-      { drums: drums([[C, 'T', 0.42]], total) },
+      { kind: 'lead', inst: LEAD.epiano, notes: part([[o9, k + 9, 0.9, 0.52], [o10, k + 7, 0.9, 0.5], [o11, k + 4, 0.5, 0.48], [last, k + 12, 1.2, 0.58]], total), gain: 1.2, echo: 0.55, pan: 0.15 },
+      { kind: 'harmony', inst: 'keys', notes: part([...keys, [H, ch.f69, 1.5, 0.75]], total), gain: 2, pan: 0.25, echo: 0.2 },
+      { kind: 'harmony', inst: 'warm', notes: part([
+        [0, ch.fmaj9, at(4), 0.3], [at(4), ch.dm9, cut - at(4), 0.42], [cut, ch.bbmaj9, ledger - cut, 0.5],
+        [ledger, ch.c9sus, m0 - ledger, 0.52], [m0, ch.bbmaj9, 1, 0.55], [m0 + 1, ch.c9sus, 1.5, 0.56], [m0 + 2.5, ch.bbF, 1.5, 0.58],
+        [H, ch.f69, total - H, 0.68],
+      ], total), gain: 1.36, pan: -0.2 },
+      // the strings rise as the sun goes down; over the signature they hold F and Bb above it
+      { kind: 'harmony', inst: 'strings', notes: part([
+        [sun, [k + 4, k + 7, k + 11], cut - sun, 0.4], // A C E
+        [cut, [k + 4, k + 9, k + 12], ledger - cut, 0.46], // A D F
+        [ledger, [k + 2, k + 9, k + 12], m0 - ledger, 0.5], // G D F
+        [m0, [k + 12, k + 16], 1, 0.52], // F A
+        [m0 + 1, [k + 12, k + 17], 3, 0.56], // F Bb
+        [H, [k + 16, k + 19], total - H, 0.62], // A C
+      ], total), gain: 1.2, pan: 0.1 },
+      { kind: 'bass', inst: 'tri', notes: part(bass, total), gain: 0.54 },
+      stab('keys', [k - 12, ...ch.f69.slice(0, 3)], C, total, 0.7, 2),
+      // a soft kick and snare from the sun to the cut, and again from the ledger; felts on the cut,
+      // under each floor going dark, on the hit and the button
+      { drums: drums([[at(4), 'K', 0.42], [at(6), 'K', 0.42], [at(7.5), 'K', 0.26], [ledger, 'K', 0.4], [m0, 'K', 0.5], [m0 + 2, 'K', 0.48], [m0 + 2.5, 'K', 0.3], [H, 'K', 0.62]], total), gain: 2 },
+      { drums: drums([[at(5), 'S', 0.44], [at(7), 'S', 0.48], [at(13), 'S', 0.44], [at(13.5), 'S', 0.3], [at(13.75), 'S', 0.44], [m0 + 1, 'S', 0.53], [m0 + 3, 'S', 0.57]], total), gain: 2 },
+      { drums: drums([[cut, 'F', 0.5], [o9, 'F', 0.3], [o10, 'F', 0.32], [o11, 'F', 0.34], [H, 'F', 0.7], [C, 'F', 0.55]], total), gain: 1.43 },
+      { drums: drums([[C, 'T', 0.42]], total), gain: 1.8 },
     ],
   };
 }
 
-// NEWS IN 60's title sequence (opens/cues.js): the minute starts. G, 120 BPM. The pad (G add9) from
-// silence over the close-up; the pusher going down is one soft click; then the bed's tick-tock under
-// the hand's turn, a staccato tri on each beat and a low-passed tick off it, each the passing of a
-// five-minute tick; the hand stopping at twelve is the last tock, and "60" lights in the silence
-// after it. Then the signature on the low-passed pulse with its octave ("the minute starts") over
-// the tick-tock again, C/G and G sus2, and a Gadd9 bell chord with one soft kick on the hit.
+// NEWS IN 60's title sequence (opens/cues.js): the minute starts. G, 120 BPM, dark, a clock. A warm
+// G add9 from silence over the close-up; the pusher going down is one soft click; then the
+// tick-tock under the hand's turn (a staccato tri on each beat, a low-passed tick off it, each the
+// passing of a five-minute tick) over a sine sub on G, and the strings climb in triads over the G
+// pedal, a step every two beats (Em, Am, Bm: G6, G7sus, Gmaj7). The hand stopping at twelve is
+// the last tock with a short D chord, and "60" lights in the silence after it. Then the signature on
+// the low-passed pulse with its octave over the tick-tock again, the strings above it (G add9, C/G,
+// G sus2), and a Gadd9 bell chord with one soft kick on the hit.
 function newsTitles(tempo, H, C) {
   const k = 67; // G4
   const Qc = SEQ_CUES['news-60'];
@@ -228,132 +310,213 @@ function newsTitles(tempo, H, C) {
   // the turn: tock on the beat (the tri), tick off it; then again under the signature
   const tocks = [...range(press, turn + 0.01, 1), ...range(m0, H, 1)];
   const ticks = [...range(press + 0.5, turn, 1), ...range(m0 + 0.5, H, 1)];
+  const step = (turn - press) / 3;
+  const TICK = { ...LEAD.tick, gain: 1.6 };
   return {
     bpm: tempo,
     room: 0.14,
+    hall: 0.16,
     echo: { amount: 0.6, beats: 0.5, feedback: 0.24 },
-    fadeOut: 0.6,
+    fadeOut: 0.7,
     tracks: [
-      { kind: 'lead', inst: LEAD.darkPulse, notes: part(motif(k - 12, COLOURS.sixty, m0, { colourBeats: 1.5 }), total), gain: 0.85 },
-      { kind: 'harmony', inst: LEAD.tick, notes: part([[press - 0.02, k + 5, 0.2, 0.42], ...ticks.map((b) => [b, k + 12, 0.25, 0.32])], total), gain: 0.55, pan: 0.22, echo: 0.3 },
-      { kind: 'harmony', inst: 'pad', notes: part([
-        [0, [k - 12, k - 8, k - 5, k + 2], m0 + 1.5, 0.45], // G add9, from silence
-        [m0 + 1.5, [k - 12, k - 7, k - 3, k], 1, 0.55], // C/G
+      { kind: 'lead', inst: LEAD.darkPulse, notes: part(motif(k - 12, COLOURS.sixty, m0, { colourBeats: 1.5 }), total), gain: 0.9 },
+      { kind: 'harmony', inst: TICK, notes: part([[press - 0.02, k + 5, 0.2, 0.42], ...ticks.map((b, i) => [b, k + 12, 0.25, 0.44 + 0.015 * (i % 6)])], total), gain: 0.85, pan: 0.22, echo: 0.3 },
+      { kind: 'harmony', inst: 'warm', notes: part([
+        [0, [k - 12, k - 8, k - 5, k + 2], press, 0.4], // G add9, from silence
+        [m0, [k - 12, k - 5], 1.5, 0.5], // open fifth under the signature
+        [m0 + 1.5, [k - 12, k - 7, k - 3], 1, 0.55], // C/G
         [m0 + 2.5, [k - 12, k - 10, k - 5], 1.5, 0.55], // G sus2 under the octave
         [H, [k - 12, k - 8, k - 5, k + 2], total - H, 0.62],
-      ], total), pan: -0.18 },
-      { kind: 'lead', inst: 'bell', notes: part([[H, [k, k + 4, k + 7, k + 14], total - H, 0.75]], total), gain: 0.6, echo: 0.3, pan: 0.15 },
-      { kind: 'bass', inst: { wave: 'tri', preset: 'tri', s: 0.4, d: 0.12 }, notes: part([...tocks.map((b, i) => [b, k - 24, 0.4, b === turn ? 0.85 : 0.7 + (i % 2 ? 0 : 0.05)]), [H, k - 24, total - H, 0.85]], total), gain: 0.7 },
-      stab(LEAD.tick, [k - 12, k - 5], C, total, 0.75, 0.9),
+      ], total), gain: 0.81, pan: -0.18 },
+      // the strings climb over the pedal: Em/G, Am/G, Bm/G; D on the stop; above the signature
+      { kind: 'harmony', inst: 'strings', notes: part([
+        [press, [k - 8, k - 3, k], step, 0.4], // B3 E4 G4
+        [press + step, [k - 7, k - 3, k + 2], step, 0.46], // C4 E4 A4
+        [press + 2 * step, [k - 5, k - 1, k + 4], step, 0.52], // D4 F#4 B4
+        [m0, [k + 4, k + 7, k + 14], 1.5, 0.46], // B4 D5 A5
+        [m0 + 1.5, [k + 5, k + 9, k + 12], 1, 0.5], // C5 E5 G5
+        [m0 + 2.5, [k + 2, k + 7, k + 12], 1.5, 0.52], // A4 D5 G5
+        [H, [k + 4, k + 7, k + 12], total - H, 0.56], // B4 D5 G5
+      ], total), gain: 0.95, pan: 0.12 },
+      // the hand stops: a short D over the last tock
+      { kind: 'harmony', inst: ENS.stab, notes: part([[turn, [k - 5, k - 1, k + 2, k + 7], 0.5, 0.6]], total), gain: 1.5 },
+      { kind: 'lead', inst: 'bell', notes: part([[H, [k, k + 4, k + 7, k + 14], total - H, 0.75]], total), gain: 1.07, echo: 0.3, pan: 0.15 },
+      { kind: 'bass', inst: { wave: 'tri', preset: 'tri', s: 0.4, d: 0.12 }, notes: part([...tocks.map((b, i) => [b, k - 24, 0.4, b === turn ? 0.85 : 0.7 + (i % 2 ? 0 : 0.05)]), [H, k - 24, total - H, 0.85]], total), gain: 0.74 },
+      { kind: 'bass', inst: 'sine', notes: part([[press, k - 36, turn + 0.5 - press, 0.5], [m0, k - 36, H - m0, 0.58], [H, k - 36, total - H, 0.7]], total), gain: 0.44 },
+      stab(TICK, [k - 12, k - 5], C, total, 0.75, 1.75),
       { drums: drums([[H, 'K', 0.72], [C, 'F', 0.55]], total) },
       { drums: drums([[C, 'T', 0.4]], total) },
     ],
   };
 }
 
-// WORLD WEATHER's title sequence (opens/cues.js): up through the weather. C major, the 7th as its
-// colour (the open sky). The storm is A minor under a timpani roll, the lightning a timpani stroke
-// on a felt thump with the roll swelling after it (the distant sheet, a softer stroke); the climb lifts through F and G, a bell line
-// rising as the cloud pales; the breakout is Cmaj7 with a felt thump and bells (the sun); the last
-// cloud rises over Cmaj9; then the signature on an airy pulse, its colour (B) over the C pedal,
-// resolving to C on the hit with Cmaj9.
+// WORLD WEATHER's title sequence (opens/cues.js): up through the weather. C major, 92 BPM, the 7th as
+// its colour (the open sky), strings in a long hall. The storm is A minor: low strings and a dark pad
+// under a timpani roll, rain on a soft hat; the lightning is a timpani stroke on a felt thump with
+// the strings and the roll swelling after it (the distant sheet, a softer stroke). The rain stops
+// and the climb lifts through Fmaj7 and G, a bell line rising and an air swell cresting as the cloud
+// pales; the breakout is Cmaj7 with a felt thump, the strings high and bells (the sun); two bells as
+// the last cloud rises; then the signature on an airy pulse over Cmaj9, Fmaj7/C and C add9 (its
+// colour, B, over the C pedal), resolving to C on the hit with Cmaj9.
 function weatherTitles(tempo, H, C) {
   const k = 60; // C4
   const Qc = SEQ_CUES['world-weather'];
   const q = H / Qc.hit;
   const at = (b) => b * q;
   const m0 = H - 4;
-  const total = C + 2;
+  const total = C + 2.5;
   const flash = at(Qc.flash);
   const sheet = at(Qc.sheet);
   const climb = at(Qc.climb);
   const out = at(Qc.breakout);
+  const wisp = at(Qc.wisp);
+  const g = climb + 1.5; // the climb's second chord
   // the storm's roll: sixteenths on A, swelling into the strike and again after it
-  const roll = range(0, climb, 0.25).map((b) => [b, k - 27, 0.25, 0.2 + 0.25 * Math.exp(-Math.abs(b - flash - 0.75) / 0.9) + 0.08 * Math.min(1, b / 2)]);
+  const roll = range(0, climb, 0.25).map((b) => [b, k - 27, 0.25, 0.12 + 0.2 * Math.exp(-Math.abs(b - flash - 0.75) / 0.9) + 0.06 * Math.min(1, b / 2)]);
+  // the rain: a soft hat in sixteenths, uneven, thinning out as the camera climbs
+  const rain = range(0, climb, 0.25).flatMap((b, i) => (hash01(i) < 0.85 - 0.5 * (b / climb) ? [[b, 'H', 0.3 + 0.35 * hash01(i + 101)]] : []));
   // the climb: a bell line rising as the light comes through
-  const rise = [k + 4, k + 7, k + 9, k + 11, k + 12, k + 14].map((m, i) => [climb + i * 0.5, m, 0.5, 0.26 + i * 0.03]);
+  const rise = [k + 4, k + 7, k + 9, k + 11, k + 12, k + 14].map((m, i) => [climb + i * 0.5, m, 0.5, 0.28 + i * 0.03]);
   return {
     bpm: tempo,
-    room: 0.36,
+    room: 0.3,
+    hall: 0.4,
     echo: { amount: 1, beats: 0.75, feedback: 0.38 },
-    fadeOut: 1,
+    fadeOut: 1.2,
     tracks: [
-      { kind: 'lead', inst: LEAD.breeze, notes: part([...motif(k, COLOURS.weather, m0), [H, k + 12, C - H - 0.25, 0.85]], total), gain: 1 },
-      { kind: 'harmony', inst: 'bell', notes: part([
+      { kind: 'lead', inst: LEAD.breeze, notes: part([...motif(k, COLOURS.weather, m0), [H, k + 12, C - H - 0.25, 0.85]], total), gain: 1.05 },
+      { kind: 'harmony', inst: ENS.bell, notes: part([
         ...rise,
-        [out, [k + 11, k + 16, k + 19], 1.5, 0.42], // the sun: B, E, G
-        [at(Qc.wisp) + 1, k + 14, 1, 0.3], [at(Qc.wisp) + 2, k + 16, 1, 0.3],
+        [out, [k + 11, k + 16, k + 19], 1.5, 0.6], // the sun: B, E, G
+        [wisp + 1, k + 14, 1, 0.32], [wisp + 2, k + 16, 1, 0.32],
         [H, [k + 7, k + 14, k + 16], total - H, 0.45],
-      ], total), gain: 1, echo: 0.6, pan: 0.3 },
-      { kind: 'harmony', inst: 'pad', notes: part([
-        [0, [k - 15, k - 12, k - 8, k - 5], climb, 0.4], // Am7: the storm
+      ], total), gain: 1.5, echo: 0.6, pan: 0.3 },
+      { kind: 'harmony', inst: { wave: 'pulse50', preset: 'warm', cutoff: 1600 }, notes: part([
+        [0, [k - 15, k - 8, k - 3], climb, 0.42], // A2 E3 A3: the storm
         [climb, [k - 7, k - 3, k, k + 4], 1.5, 0.44], // Fmaj7
-        [climb + 1.5, [k - 5, k - 1, k + 2, k + 5], out - climb - 1.5, 0.48], // G: up through the cloud
-        [out, [k - 12, k - 8, k - 5, k - 1], m0 - out, 0.56], // Cmaj7: above the weather
-        [m0, [k - 12, k - 8, k - 5, k - 1, k + 2], 1.5, 0.56], // Cmaj9
+        [g, [k - 5, k - 1, k + 2, k + 4], out - g, 0.48], // G6: up through the cloud
+        [out, [k - 12, k - 5, k - 1, k + 4], m0 - out, 0.6], // Cmaj7: above the weather
+        [m0, [k - 12, k - 8, k - 5, k + 2], 1.5, 0.56], // Cmaj9 (no B under the signature's C)
         [m0 + 1.5, [k - 12, k - 7, k - 3, k + 4], 1, 0.58], // Fmaj7 over C
         [m0 + 2.5, [k - 12, k - 5, k + 2], 1.5, 0.58], // C add9 under the colour
-        [H, [k - 12, k - 8, k - 5, k - 1, k + 2], total - H, 0.72], // Cmaj9
-      ], total), pan: -0.2 },
-      { kind: 'bass', inst: 'timpani', notes: part([...roll, [flash, k - 27, 1, 0.75], [sheet, k - 27, 1, 0.45], [out, k - 24, 1.5, 0.6], [H, k - 24, C - H, 0.6]], total), gain: 0.7 },
-      { kind: 'bass', inst: 'sine', notes: part([[0, k - 27, climb, 0.6], [climb, k - 31, 1.5, 0.65], [climb + 1.5, k - 29, out - climb - 1.5, 0.7], [out, k - 24, H - out, 0.75], [H, k - 24, total - H, 0.85]], total), gain: 0.6 },
-      stab('pluck', [k - 12, k - 5, k - 1], C, total, 0.75, 1.2),
-      { drums: drums([[flash, 'F', 0.6], [out, 'F', 0.55], [H, 'F', 0.65], [C, 'F', 0.5]], total) },
-      { drums: drums([[C, 'T', 0.42]], total) },
+        [H, [k - 12, k - 8, k - 5, k - 1, k + 2], total - H, 0.7], // Cmaj9
+      ], total), gain: 0.91, pan: -0.2 },
+      { kind: 'harmony', inst: 'strings', notes: part([
+        [0, [k - 15, k - 8], flash, 0.32], // A2 E3: the storm, low
+        [flash, [k - 15, k - 8, k], climb - flash, 0.42], // A2 E3 C4: the strike
+        [climb, [k + 12, k + 16], 1.5, 0.42], // C5 E5
+        [g, [k + 14, k + 16], out - g, 0.48], // D5 E5
+        [out, [k + 16, k + 19, k + 23], m0 + 1.5 - out, 0.66], // E5 G5 B5: the sun
+        [m0 + 1.5, [k + 16, k + 21], 1, 0.64], // E5 A5
+        [m0 + 2.5, [k + 14, k + 19], 1.5, 0.66], // D5 G5
+        [H, [k + 16, k + 19, k + 23], total - H, 0.74], // E5 G5 B5
+      ], total), gain: 1, pan: 0.1 },
+      // above the weather: the low strings open under the sun
+      { kind: 'harmony', inst: 'strings', notes: part([[out, [k - 24, k - 17], H - out, 0.52], [H, [k - 24, k - 17], total - H, 0.6]], total), gain: 1.2 },
+      { kind: 'bass', inst: 'timpani', notes: part([...roll, [flash, k - 27, 1, 0.75], [sheet, k - 27, 1, 0.45], [out, k - 24, 1.5, 0.8], [H, k - 24, C - H, 0.7]], total), gain: 0.75 },
+      { kind: 'bass', inst: 'sine', notes: part([[0, k - 27, climb, 0.6], [climb, k - 31, 1.5, 0.65], [g, k - 29, out - g, 0.7], [out, k - 24, H - out, 0.75], [H, k - 24, total - H, 0.85]], total), gain: 0.39 },
+      stab('pluck', [k - 12, k - 5, k - 1], C, total, 0.93, 2),
+      { drums: drums(rain, total) },
+      { drums: `R:${fmt(at(5))} A:${fmt(out - at(5))}@0.42` }, // the air swell crests on the breakout
+      { drums: drums([[flash, 'F', 0.5], [sheet, 'F', 0.26], [out, 'F', 0.62], [H, 'F', 0.65], [C, 'F', 0.5]], total), gain: 1.1 },
+      { drums: drums([[C, 'T', 0.42]], total), gain: 1.26 },
     ],
   };
 }
 
 // TECH BYTES' title sequence (opens/cues.js): the run over the board, the crane, the boot. A dorian,
-// half-time. The pulse25 arpeggio (eighths, dotted echo, low-passed) is the data on the board, its
-// beat notes leaning on the signals leaving the camera; the wave fires on Am9's top; in the crane
-// the arpeggio climbs an octave over D9 (the dorian IV) as the camera rises; the techPluck states the
-// signature as the die boots and lands on Am6/9 with the lock-up. A soft kick and snare in half
-// time, a light hat in the run, nothing four-on-the-floor.
+// 104 BPM, half-time. The data is a pulse12 in sixteenths (low-passed, dotted echo), three notes
+// against four so the accent wanders: the signature's head (E A B) over Am9 on the run, each beat
+// leaning on a signal leaving the camera. A soft kick and snare in half time, a light hat, then a
+// saw bass (low-passed) in eighths; the wave is a wide Am stab with a kick and a clap. In the crane
+// the data climbs an octave of D9 (the dorian IV) as the camera rises, the bass pulsing on D, a high
+// warm fifth joining, a snare run into the landing; the die boots on a double kick, and the techPluck
+// states the signature (a glass octave above, the data sparkling over it) over Am9, D6/9 and G/A, the
+// colour (G) over the A pedal, and lands on Am6/9 with the lock-up. Nothing four-on-the-floor, no
+// swooshes, glitches or beeps.
 function techTitles(tempo, H, C) {
   const k = 69; // A4
   const Qc = SEQ_CUES['tech-bytes'];
   const q = H / Qc.hit;
   const at = (b) => b * q;
   const m0 = H - 4;
-  const total = C + 2;
+  const total = C + 2.5;
+  const wave = at(Qc.wave);
   const crane = at(Qc.crane);
   const land = at(Qc.land);
-  const am9 = [k - 12, k - 9, k - 5, k - 2, k + 2, k - 2, k - 5, k - 9];
-  const d9 = [k - 7, k - 3, k, k + 3, k + 7, k + 3, k, k - 3];
-  const arp = range(0, H, 0.5).map((b, i) => {
-    const climb = b >= crane && b < m0;
-    const chord = climb || (b >= m0 + 1 && b < m0 + 2.5) ? d9 : am9;
-    // the climb: the pattern rises a step a beat through the crane (an octave by the landing)
-    const lift = climb ? Math.min(12, Math.round(((b - crane) / Math.max(1, land - crane)) * 12)) : 0;
-    const vel = 0.15 + 0.17 * Math.min(1, b / crane) + (i % 2 ? 0 : 0.06);
-    return [b, chord[i % 8] + lift, 0.5, Math.min(0.4, vel)];
+  const run2 = at(4); // the bass and the kit come in
+  const ch = {
+    am9: [k - 12, k - 9, k - 5, k - 2, k + 2], // A3 C4 E4 G4 B4
+    d9: [k - 12, k - 9, k - 5, k - 3, k], // A3 C4 E4 F#4 A4
+    d69: [k - 12, k - 10, k - 5, k - 3, k + 2], // A3 B3 E4 F#4 B4
+    ga: [k - 14, k - 10, k - 7, k - 2, k + 2], // G3 B3 D4 G4 B4: G/A under the colour
+    am69: [k - 12, k - 9, k - 5, k - 3, k + 2], // A3 C4 E4 F#4 B4
+  };
+  // the data's three notes at each moment
+  const cellAt = (b) => {
+    if (b < crane) return [k - 5, k, k + 2]; // E4 A4 B4
+    if (b < land) {
+      const s = Math.min(3, Math.floor(((b - crane) / (land - crane)) * 4));
+      return [[k - 3, k, k + 3], [k, k + 3, k + 7], [k + 3, k + 7, k + 9], [k + 7, k + 9, k + 12]][s]; // up an octave of D9
+    }
+    if (b < m0 + 1) return [k + 7, k + 12, k + 14]; // E5 A5 B5
+    if (b < m0 + 2.5) return [k + 9, k + 12, k + 14]; // F#5 A5 B5
+    return [k + 14, k + 17, k + 19]; // B5 D6 E6
+  };
+  const data = range(0, H, 0.25).map((b, i) => {
+    const onBeat = Math.abs(b - Math.round(b)) < 1e-6;
+    const v = b < crane ? 0.16 + 0.14 * Math.min(1, b / wave) : b < m0 ? 0.3 + 0.06 * ((b - crane) / (m0 - crane)) : 0.24;
+    return [b, cellAt(b)[i % 3], 0.25, Math.min(0.4, v + (onBeat ? 0.06 : 0))];
   });
-  const LEAD_IN = { wave: 'pulse25', preset: 'pulse25', a: 0.004, d: 0.2, s: 0.35, r: 0.12, cutoff: 1800, vib: false };
+  // the saw bass: in eighths from the second bar, pulsing on D through the crane, the boot's pickup
+  const A2 = k - 24;
+  const D3 = k - 19;
+  const riff = [
+    [run2, A2, 0.8], [run2 + 0.5, A2, 0.45], [run2 + 1, A2 + 12, 0.6], [run2 + 1.5, A2, 0.45], [run2 + 2, A2 + 3, 0.65], [run2 + 2.5, A2 + 5, 0.55],
+    [wave, A2, 0.9],
+    ...range(crane, land - 0.25, 0.5).map((b, i, a) => [b, D3, 0.4 + (0.35 * i) / Math.max(1, a.length - 1)]),
+    [land, A2, 0.85],
+    [m0, A2, 0.85], [m0 + 0.5, A2, 0.5], [m0 + 1, D3, 0.8], [m0 + 1.5, D3, 0.5], [m0 + 2, D3 + 12, 0.6],
+    [m0 + 2.5, A2, 0.8], [m0 + 3, A2, 0.55], [m0 + 3.5, A2 + 12, 0.6],
+  ].map(([b, m, v]) => [b, m, b === land ? 0.25 : 0.5, v]);
+  // the hat: sixteenths on the run, eighths in the crane, sixteenths again for the boot
+  const hat = [
+    ...range(at(2), wave, 0.25).map((b, i) => [b, 'H', i % 4 === 0 ? 0.62 : i % 2 ? 0.32 : 0.45]),
+    ...range(crane, land, 0.5).map((b) => [b, 'H', 0.42]),
+    ...range(m0, H, 0.25).map((b, i) => [b, 'H', i % 4 === 0 ? 0.6 : i % 2 ? 0.28 : 0.42]),
+  ];
   return {
     bpm: tempo,
     room: 0.18,
+    hall: 0.14,
     echo: { amount: 1, beats: 0.75, feedback: 0.34 },
-    fadeOut: 0.8,
+    fadeOut: 0.9,
     tracks: [
-      { kind: 'lead', inst: LEAD.techPluck, notes: part([...motif(k, COLOURS.tech, m0), [H, k + 12, C - H - 0.25, 0.85]], total), gain: 1.1, echo: 0.45 },
-      { kind: 'harmony', inst: LEAD_IN, notes: part(arp, total), gain: 0.5, pan: 0.3, echo: 0.55 },
-      { kind: 'harmony', inst: 'pad', notes: part([
-        [0, [k - 12, k - 9, k - 5, k - 2, k + 2], at(4), 0.3], // Am9: the run, from quiet
-        [at(4), [k - 12, k - 9, k - 5, k - 2, k + 2], at(Qc.wave) - at(4), 0.38],
-        [at(Qc.wave), [k - 12, k - 9, k - 5, k - 2, k + 2], crane - at(Qc.wave), 0.48], // the wave
-        [crane, [k - 7, k - 5, k - 3, k + 3], m0 - crane, 0.56], // D9: the crane
-        [m0, [k - 12, k - 9, k - 5, k - 2, k + 2], 1, 0.55], // Am9: the boot
-        [m0 + 1, [k - 7, k - 5, k - 3, k + 3], 1.5, 0.6], // D9 (dorian IV)
-        [m0 + 2.5, [k - 12, k - 5], 1.5, 0.6], // open fifth under the b7
-        [H, [k - 12, k - 9, k - 3, k + 2, k - 5], total - H, 0.75], // Am6/9
-      ], total), pan: -0.2 },
-      { kind: 'bass', inst: { wave: 'tri', preset: 'tri', legato: 1 }, notes: part([[0, k - 24, 4, 0.8], [4, k - 24, 4, 0.85], [8, k - 24, crane - 8, 0.9], [crane, k - 31, m0 - crane, 0.9]], total), gain: 0.45 },
-      { kind: 'bass', inst: 'tri', notes: part([[m0, k - 24, 1], [m0 + 1, k - 31, 1.5, 0.9], [m0 + 2.5, k - 24, 1.5], [H, k - 24, total - H]], total), gain: 0.45 },
-      stab('pluck', [k - 12, k - 5, k], C, total, 0.8, 1.3),
-      { drums: drums([[0, 'K', 0.42], [2, 'S', 0.2], [4, 'K', 0.4], [6, 'S', 0.22], [at(Qc.wave), 'K', 0.5], [land, 'K', 0.45], [H, 'K', 0.65], [C, 'F', 0.55]], total) },
-      { drums: drums([[C, 'T', 0.55]], total) },
-      { drums: drums(range(at(2), crane, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.12 : 0.18]), total) },
+      { kind: 'lead', inst: LEAD.techPluck, notes: part([...motif(k, COLOURS.tech, m0), [H, k + 12, C - H - 0.25, 0.85]], total), gain: 1.15, echo: 0.45 },
+      { kind: 'lead', inst: LEAD.glass, notes: part(motif(k + 12, COLOURS.tech, m0, { vel: 0.42 }), total), gain: 0.55, pan: -0.25, echo: 0.4 },
+      { kind: 'harmony', inst: ENS.data, notes: part(data, total), gain: 1.3, pan: 0.3, echo: 0.6 },
+      { kind: 'harmony', inst: 'warm', notes: part([
+        [0, ch.am9, crane, 0.34], // Am9: the run, from quiet
+        [crane, ch.d9, m0 - crane, 0.52], // D9: the crane
+        [m0, ch.am9, 1, 0.52], // Am9: the boot
+        [m0 + 1, ch.d69, 1.5, 0.56], // D6/9
+        [m0 + 2.5, ch.ga, 1.5, 0.58], // G/A under the colour
+        [H, ch.am69, total - H, 0.72], // Am6/9
+      ], total), gain: 0.68, pan: -0.2 },
+      // the crane's high fifth, and the hit's
+      { kind: 'harmony', inst: 'warm', notes: part([[at(9), [k + 7, k + 12], m0 - at(9), 0.34], [H, [k + 7, k + 14], total - H, 0.42]], total), gain: 0.63, pan: 0.25 },
+      // the wave: a wide Am stab; the hit: a mallet chord
+      { kind: 'harmony', inst: ENS.stab, notes: part([[wave, [k - 5, k, k + 7, k + 10], 0.5, 0.62]], total), gain: 1.2 },
+      { kind: 'harmony', inst: 'mallet', notes: part([[H, [k, k + 7, k + 14], 2, 0.5]], total), gain: 1.45, echo: 0.4, pan: 0.15 },
+      { kind: 'bass', inst: 'synthbass', notes: part([...riff, [H, A2, total - H, 0.85]], total), gain: 0.65 },
+      { kind: 'bass', inst: { wave: 'tri', preset: 'tri', legato: 1 }, notes: part([[0, k - 36, crane, 0.55], [crane, k - 31, land - crane, 0.7], [land, k - 36, H - land, 0.75], [H, k - 36, total - H, 0.85]], total), gain: 0.31 },
+      stab('pluck', [k - 12, k - 5, k], C, total, 0.8, 1.55),
+      { drums: drums([[0, 'K', 0.42], [run2, 'K', 0.5], [at(5.75), 'K', 0.28], [wave, 'K', 0.62], [land, 'K', 0.55], [m0, 'K', 0.5], [m0 + 1.75, 'K', 0.3], [m0 + 2.5, 'K', 0.36], [H, 'K', 0.68]], total), gain: 0.9 },
+      { drums: drums([[at(2), 'S', 0.18], [at(6), 'S', 0.24], [at(9.5), 'S', 0.1], [at(10), 'S', 0.14], [at(10.25), 'S', 0.18], [at(10.5), 'S', 0.22], [m0 + 2, 'S', 0.3], [m0 + 3.5, 'S', 0.18], [m0 + 3.75, 'S', 0.24]], total), gain: 2 },
+      { drums: drums([[wave, 'P', 0.4], [H, 'P', 0.45]], total), gain: 2 },
+      { drums: drums(hat, total) },
+      { drums: drums([[land, 'F', 0.36], [C, 'F', 0.44]], total) },
+      { drums: drums([[C, 'T', 0.4]], total) },
     ],
   };
 }

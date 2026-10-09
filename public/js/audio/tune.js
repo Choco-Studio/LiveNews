@@ -17,13 +17,17 @@
 //       { drums: 'K:1 S:1 H:0.5 O:0.5 C:2 T:1 P:1 X:0.25 W:2 F:1 A:2' },
 //     ],
 //     duck: dB under a voice (-40..0; default -18, -14 for a looping ad bed),
+//     hall: 0..1 (a send to a long hall, 2.6 s, besides the room),
 //   }
 //   A token may end in @velocity (0..1): 'C5:1@0.6'.
 //   Instruments may set cutoff (Hz, low-pass), q (resonance in dB) and
-//   fenv: [amount, seconds] (the filter opens to cutoff x amount and closes).
+//   fenv: [amount, seconds] (the filter opens to cutoff x amount and closes),
+//   and play as an ensemble: unison (1..4 detuned voices a note), detune (cents
+//   between the outer voices and the middle) and spread (0..1 across the field).
 //   W is a noise sweep lasting its length, F a low felt thump, A a soft air swell.
 
 export const MAX_EVENTS = 1500;
+export const MAX_TRACKS = 16; // tracks past this are dropped
 const SEMITONE = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
 const NOTE_RE = /^([A-Ga-g])([#b♯♭]?)(-?\d)?$/;
 const REST_RE = /^(r|rest|-|_|\.)$/i;
@@ -66,6 +70,12 @@ export const INSTRUMENTS = {
   sawtooth: { wave: 'saw', a: 0.006, d: 0.12, s: 0.7, r: 0.06, vib: [11, 5.4, 0.25], gain: 0.62, cutoff: 5000 },
   sine: { wave: 'sine', a: 0.008, d: 0.18, s: 0.82, r: 0.09, vib: [8, 5.2, 0.22], gain: 1 },
   square: { wave: 'pulse50', a: 0.006, d: 0.12, s: 0.7, r: 0.06, vib: [12, 5.4, 0.25], gain: 0.62, cutoff: 6000 },
+  // Ensembles (the title themes): several detuned voices per note, spread across the stereo field,
+  // at the loudness of one (each voice at 1/sqrt(n)).
+  strings: { wave: 'saw', a: 0.22, d: 0.6, s: 0.86, r: 0.55, vib: [7, 5, 0.35], legato: 1, gain: 0.85, cutoff: 2600, unison: 3, detune: 13, spread: 0.7 },
+  warm: { wave: 'pulse50', a: 0.18, d: 0.5, s: 0.84, r: 0.5, vib: [6, 4.4, 0.3], legato: 1, gain: 0.55, cutoff: 2400, unison: 2, detune: 9, spread: 0.6 },
+  mallet: { wave: 'tri', a: 0.002, d: 0.42, s: 0, r: 0.14, legato: 1, gain: 1.05, cutoff: 4200, fenv: [1.6, 0.06] },
+  synthbass: { wave: 'saw', a: 0.003, d: 0.22, s: 0.55, r: 0.07, gain: 0.6, cutoff: 700, q: 2, fenv: [3.2, 0.11] },
 };
 // Bass versions: no vibrato, firmer sustain, shorter release, darker.
 const BASS = {
@@ -110,10 +120,13 @@ export function resolveInstrument(inst, kind = 'lead', fallback = 'pulse50') {
       cutoff: num(inst.cutoff, from.cutoff ?? 20000, 200, 20000),
       q: num(inst.q, from.q ?? 0, -6, 12),
       fenv: inst.fenv === false || inst.fenv === 0 ? null : fenvOf(inst.fenv) ?? from.fenv ?? null,
+      unison: Math.round(num(inst.unison, from.unison ?? 1, 1, 4)),
+      detune: num(inst.detune, from.detune ?? 0, 0, 60),
+      spread: num(inst.spread, from.spread ?? 0, 0, 1),
     };
   }
   if (!base) base = pick(fallback) ?? INSTRUMENTS.pulse50;
-  return { legato: 0.92, scoop: 0, vib: null, cutoff: 20000, q: 0, fenv: null, ...base };
+  return { legato: 0.92, scoop: 0, vib: null, cutoff: 20000, q: 0, fenv: null, unison: 1, detune: 0, spread: 0, ...base };
 }
 
 // [amount, seconds] -> a valid filter envelope, or null.
@@ -203,7 +216,7 @@ export function parseTune(tune) {
   add({ src: get('drums', 'percussion') }, 'drums');
   // Richer tracks.
   if (Array.isArray(t.tracks)) {
-    for (const tr of t.tracks.slice(0, 12)) {
+    for (const tr of t.tracks.slice(0, MAX_TRACKS)) {
       if (!tr || typeof tr !== 'object') continue;
       const isDrums = tr.drums != null || tr.kind === 'drums';
       const kind = isDrums ? 'drums' : ['lead', 'bass', 'harmony'].includes(tr.kind) ? tr.kind : 'lead';
@@ -219,6 +232,7 @@ export function parseTune(tune) {
     swing: num(t.swing, 0, 0, 0.5),
     echo: { send: num(echo.amount, 1, 0, 2), beats: num(echo.beats, 0.75, 0.125, 4), feedback: num(echo.feedback, 0.3, 0, 0.7) },
     room: num(t.room, 0.16, 0, 1),
+    hall: num(t.hall, 0, 0, 1),
     fadeOut: num(t.fadeOut, 0.08, 0.02, 3),
     trim: num(t.loudness, 0, -12, 12),
     duck: t.duck == null || t.duck === '' || !Number.isFinite(Number(t.duck)) ? null : clamp(Number(t.duck), -40, 0),

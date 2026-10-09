@@ -380,10 +380,10 @@ The card sits on `P.black`. Coordinates are cap lines at 1x.
 
 | Beats (s) | Pictures | Music |
 |---|---|---|
-| 0–3 (0–2.2) | The camera glides through a field of stars that stream past it, a magenta nebula drifting behind; three stars flare as it passes | Emaj7 over a sine sub; a bell on each flaring star (B, D#, F#, with the long echo) |
-| 3–4.5 (2.2–3.3) | The ringed planet sweeps in huge from the lower left, backlit: a dark disc with a thin crescent, its rings a band across the frame | A felt thump; the pad opens to F#/E (the lydian II) |
-| 4.5–9.5 (3.3–6.95) | The sun bursts at the limb (an eight-point star, no flare streak), then day swings round onto the planet while it is still big (its belts, a storm, ringlets) and the camera pulls back; the moon runs its orbit with its magenta trail; the nebula fades, the field comes up and the stars come to rest exactly where the backdrop has them | A bell on G# and D# at the burst; Emaj9 and a slow softtri rise as day comes round; then the signature (softtri, halo an octave up) |
-| 9.75–12 (7.1–8.8) | The package's reveal | Into Emaj9#11 on the hit |
+| 0–3 (0–2.2) | The camera glides through a field of stars that stream past it, a magenta nebula drifting behind; three stars flare as it passes | Emaj7 on the strings in a long hall, over a sine sub. A soft triangle orbits in eighths (root, fifth, ninth). A bell rings on each flaring star (B, D#, F#, with the long echo). |
+| 3–4.5 (2.2–3.3) | The ringed planet sweeps in huge from the lower left, backlit: a dark disc with a thin crescent, its rings a band across the frame | A timpani roll swells into a stroke with a felt thump. The low strings come in, and the strings open to F#/E (the lydian II). |
+| 4.5–9.5 (3.3–6.95) | The sun bursts at the limb (an eight-point star, no flare streak), then day swings round onto the planet while it is still big (its belts, a storm, ringlets) and the camera pulls back; the moon runs its orbit with its magenta trail; the nebula fades, the field comes up and the stars come to rest exactly where the backdrop has them | A bell on G# and D# at the burst, over a warm chord high. Day comes round on C#m9 over the E pedal, a softtri rising through Emaj9. Then the signature (softtri, halo an octave up, the orbit above it) over E add9 and F#/E. |
+| 9.75–12 (7.1–8.8) | The package's reveal | Into Emaj9#11 on the hit (the #11 high, clear of the lead's B) |
 | 12–13.1 | Still for the cut | The button |
 
 The planet is the emblem's own (cosmos.js geometry and shading), drawn pixel by pixel from the true circle at any size. Its fine detail (belts, a storm, ringlets) belongs to the planet and the ring: it scales with them, never slides, and fades before it is thinner than two pixels. At centre stage it is the emblem's pixels, tested, and the hand-over differs by 0 pixels in the lab. Bells stay within four a bar; no whooshes, lasers or beeps.

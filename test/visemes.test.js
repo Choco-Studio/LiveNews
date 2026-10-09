@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { VISEMES, buildTimeline, sampleTimeline, sampleCalm, calmTimeline, speechTokens, wordAtChar, wordAtSpoken, blipPlan, SpeechClock } from '../public/js/audio/visemes.js';
-import { parseTune, flatten, songSeconds, noteToMidi, resolveInstrument, noteCutoff } from '../public/js/audio/tune.js';
+import { parseTune, flatten, songSeconds, noteToMidi, resolveInstrument, noteCutoff, MAX_TRACKS } from '../public/js/audio/tune.js';
 import { themeFor, THEME_IDS, MOTIF, COLOURS, CUES, IDENT, IDENT_NIGHT, STINGER, BREAKING, OUTRO, PROMO, cueFor, CUE_PROGRAMMES } from '../public/js/audio/themes.js';
 import { measureLoudness, estimateLoudness, envelopeEnergy, lowpassPower, highshelfPower, TARGET_LUFS, VOICE_LUFS } from '../public/js/audio/loudness.js';
 import { resolveVoices, normProfile, voiceQuality } from '../public/js/audio/voices.js';
@@ -422,6 +422,31 @@ describe('instruments and wave tables', () => {
     assert.equal(resolveInstrument({ preset: 'brass', fenv: false }).fenv, null);
     assert.equal(noteCutoff(resolveInstrument('pad'), noteToMidi('C7')), 3 * 2093.004522404789, 'never below 3x the pitch');
     assert.ok(lowpassPower(100, 1000) > 0.99 && lowpassPower(8000, 1000) < 0.001);
+  });
+
+  test('ensembles: detuned voices spread across the field, at the level of one voice; the hall is a send', () => {
+    const strings = resolveInstrument('strings');
+    assert.deepEqual([strings.unison, strings.detune, strings.spread], [3, 13, 0.7]);
+    assert.deepEqual([resolveInstrument('pad').unison, resolveInstrument('pad').detune], [1, 0], 'plain voices stay single');
+    const odd = resolveInstrument({ preset: 'warm', unison: 9, detune: 500, spread: -1 });
+    assert.deepEqual([odd.unison, odd.detune, odd.spread], [4, 60, 0], 'clamped');
+    // the loudness model sees an ensemble note as one voice (each of n voices at 1/sqrt(n))
+    const one = (inst) => estimateLoudness(parseTune({ bpm: 60, tracks: [{ kind: 'harmony', inst, notes: 'C4+E4+G4:4' }] })).integrated;
+    assert.ok(Math.abs(one({ preset: 'warm' }) - one({ preset: 'warm', unison: 1 })) < 1e-9);
+    assert.equal(parseTune({ notes: 'C4:1' }).hall, 0);
+    assert.equal(parseTune({ notes: 'C4:1', hall: 3 }).hall, 1);
+    const dry = parseTune({ bpm: 60, notes: 'C4:1 R:1 E4:1 R:1' });
+    assert.ok(estimateLoudness({ ...dry, hall: 0.5 }).integrated > estimateLoudness(dry).integrated, 'the hall adds to the loudness');
+  });
+
+  test('no theme loses a track to the parser\'s limit', () => {
+    for (const id of [...THEME_IDS, 'nope']) {
+      for (const duration of [4, 12]) {
+        const tune = themeFor(id, { duration });
+        assert.ok(tune.tracks.length <= MAX_TRACKS, `${id} at ${duration} s: ${tune.tracks.length} tracks`);
+        assert.equal(parseTune(tune).tracks.length, tune.tracks.length, `${id} at ${duration} s: every track parses`);
+      }
+    }
   });
 
   test('tunes may set their duck depth; F and A are the network drums', () => {
