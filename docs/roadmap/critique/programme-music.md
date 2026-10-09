@@ -46,8 +46,7 @@ The lab: each open at its on-air length, the story beds as on air, the open's ta
 
 Evidence:
 - semitone rubs: 0 in every song and moment over 96 bars, standby included, and 0 in every sting (`test/music-beds.test.js`; the engine's own `selftest.mjs`, 13 of 13);
-- every bed in its programme's open key (tested).
-
+- every bed in its programme's open key (tested);
 - under speech, one bulletin per programme with the house voices (the lab's 3 s method, median and lowest window): WORLD NOW 21.1 and 15.4 LU, TECH BYTES 23.5 and 19.2, COSMOS 23.4 and 19.7, MONEY MINUTE 34.0 and 18.8 (its stories carry the 800 Hz drone, about 34 LU under), NEWS IN 60 24.4 and 23.2, WORLD WEATHER 20.3 and 18.9;
 - the 1-4 kHz rule (voice over bed in the speech band, 5th percentile): 26-35 dB in every bulletin;
 - the beds keep their levels: the same moments render within 0.7 LU of before.
