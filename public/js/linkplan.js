@@ -2,7 +2,8 @@
 // the part airs, so that no shot breaks the programme's floor (owner 24/7: 4 s) and none comes late:
 //   piece    the correspondent (LOCATION), then pictures of the place (BROLL), then the correspondent again for a
 //            last line when there is room. When the hand-over's two-way has only just come up, the correspondent's
-//            first words stay in it (they start talking in the box, as on air) and the pictures follow.
+//            first words stay in it (they start talking in the box, as on air) and the pictures follow. Without
+//            pictures (an expert's analysis) the speaker comes full frame by their second sentence.
 //   ask      the two-way (when the shot on air has held the floor; else the prompt is heard over the
 //            correspondent listening, and the two-way comes with the answer)
 //   answer   the two-way, the correspondent from the next sentence (already on the correspondent: stays)
@@ -34,6 +35,8 @@ export function wantedShots(part, n, { current = null, broll = true } = {}) {
   // straight to the pictures, the live into tape; a little dearer than the full frame when that could come)
   const out = [{ shot: 'location', at: 0, worth: 6, or: 'twoway', orCost: 0.5 }];
   if (broll && n >= 2) out.push({ shot: 'broll', at: 1, worth: 4 });
+  // no pictures (an expert, a place without any): the speaker full frame from the next sentence at the latest
+  if (!broll && n >= 2) out.push({ shot: 'location', at: 1, worth: 4 });
   if (broll && n >= 3) out.push({ shot: 'location', at: n - 1, worth: 2 });
   return out;
 }

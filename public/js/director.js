@@ -426,7 +426,8 @@ export class Director {
     const hasImg = !!this.images.get(seg.storyId)?.full;
     // the piece's middle goes to pictures: the place's footage, else the story's own picture, else the place on
     // the map (studio.js draws the B-roll shot from whichever there is): never a correspondent held for a minute
-    const broll = !!(footage || hasImg || Number.isFinite(remote.lat));
+    // (an expert has no place and no pictures: they explain from their studio, the story's own were just seen)
+    const broll = remote.kind !== 'expert' && !!(footage || hasImg || Number.isFinite(remote.lat));
     // the sentence times: the recorded voice's words (say() reuses this lookup), else the characters
     const job = this.voiceAhead?.seg === seg ? this.voiceAhead.job : Promise.resolve(this.voices.audioFor(seg)).catch(() => null);
     this.voiceAhead = { seg, job };
@@ -988,8 +989,10 @@ export class Director {
               : { fact: seg.fact, label: /\d/.test(seg.fact) ? 'BY THE NUMBERS' : 'KEY FACT', source: seg.source }
           : null;
     // a story handed to a correspondent (seg.link): its last sentence, the hand-over, goes to the TWO-WAY, and no
-    // planned beat cuts away from it
+    // planned beat cuts away from it. An expert's: from the introduction, the line before the question, so the
+    // question is asked in the two-way and the answer can cut to the expert full frame
     const link = seg.link ? this.episode?.segments?.[index + 1] : null;
+    const throwAt = link?.kind === 'expert' && lines.length > 2 ? lines.length - 2 : lines.length - 1;
     let thrown = false;
     const throwTo = () => {
       const remote = link?.type === 'cross' ? this.remoteOf(link) : null;
@@ -1114,7 +1117,7 @@ export class Director {
       sentence = i;
       sentAt = now();
       if (i === 0) spoke = now();
-      if (link && i > 0 && i === lines.length - 1) return throwTo();
+      if (link && i > 0 && i === throwAt) return throwTo();
       // (the quote card takes the place of a planned cut, never adds one: the programme's cut rate holds)
       if (i > 0 && i === quoteAt && !v2cues && i < beats.length && beats[i] !== s.shot && cutQuote()) return;
       if (i === 0 || v2cues || opening) return;

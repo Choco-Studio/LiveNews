@@ -118,5 +118,109 @@
   "speed": 1.1,
   "lang": "en-gb",
   "notes": "Continuity announcer for breaks, idents and the UP NEXT promo (not a presenter): bm_fable, the en-GB voice no presenter uses, as docs/programmes/channel-and-breaks.md asks; read at ~150 wpm, slower than the anchors."
+ },
+ "omar": {
+  "voice": "am_adam:0.6+am_onyx:0.4",
+  "speed": 0.96,
+  "lang": "en-gb",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Economics Editor, measured and plain: am_adam with 40% am_onyx (the low end of the cast, median F0 ~109 Hz, IQR 3.9 st), read with en-GB phonemes. Nearest Vic 66, Lola 66; Penny (MONEY MINUTE) and Paco further. WER 0.09. Blends with hm_omega or am_santa sat on Sam or Max (54-59)."
+ },
+ "clara": {
+  "voice": "ff_siwis:0.5+af_sky:0.5",
+  "speed": 0.95,
+  "lang": "en-gb",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Diplomatic Correspondent, calm and exact: ff_siwis (a French voice, read with en-GB phonemes: a cooler, more precise colour) and af_sky in equal parts (no advert's lead voice dominates: cloudbrella leads with af_sky, 37 away). Nearest Penny 64, Rhea 70, Lola further; median F0 ~178 Hz, IQR 4.4 st. WER 0.05. Every af_river blend sat on Rhea (38-44)."
+ },
+ "dev": {
+  "voice": "am_liam",
+  "speed": 1.03,
+  "lang": "en-us",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Climate Correspondent, keen and clear: am_liam alone (no presenter uses it). Nearest Paco 59, Max 81; median F0 ~126 Hz, IQR 5.0 st. WER 0.02 (the clearest of the auditions). Blends with am_puck or pm_alex drifted onto Max or Paco (44-51)."
+ },
+ "tomas": {
+  "voice": "am_santa:0.6+am_onyx:0.4",
+  "speed": 0.94,
+  "lang": "en-us",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Planetary scientist, warm and unhurried: am_santa (the oldest-sounding Kokoro voice) with 40% am_onyx to steady it; the widest melody of the experts (IQR 7.9 st, median F0 ~128 Hz), slower at speed 1 than the rest. Nearest UNIT-8 51 (heard on air through its robot effect) and Sam 53 (never on COSMOS); Nova far. WER 0.09."
+ },
+ "june": {
+  "voice": "af_jessica",
+  "speed": 1.06,
+  "lang": "en-us",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Security and hardware analyst, quick and precise: af_jessica alone, the brightest of the experts (median F0 ~205 Hz). Nearest Lola 75, Rhea 81; Ada and Max (TECH BYTES) far. WER 0.02. Kept pure: blends with af_sky or af_nicole drifted onto Lola (48-53)."
+ },
+ "amara": {
+  "voice": "hf_alpha:0.5+af_river:0.5",
+  "speed": 0.98,
+  "lang": "en-gb",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Health Correspondent, a doctor who reassures where the facts allow: hf_alpha (a Hindi voice) with 50% af_river, read with en-GB phonemes. Nearest Lola 55, Penny 57, Rhea 59 (more than any other blend tried: af_river with if_sara, pf_dora or jf_gongitsune sat on Rhea, 26-44); median F0 ~194 Hz. WER 0.12, the cast's usual range."
+ },
+ "leo": {
+  "voice": "am_liam:0.6+im_nicola:0.4",
+  "speed": 1.04,
+  "lang": "en-gb",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Culture Correspondent, lively and generous: am_liam with 40% im_nicola (an Italian voice, read with en-GB phonemes: a warmer, rounder colour than Dev's pure am_liam, 55 away). Nearest Sam 60, Paco 63; median F0 ~114 Hz. WER 0.07."
+ },
+ "ines": {
+  "voice": "ef_dora:0.55+af_sky:0.45",
+  "speed": 1.02,
+  "lang": "en-us",
+  "pauses": {
+   "comma": 0.18,
+   "sentence": 0.42,
+   "semicolon": 0.28,
+   "colon": 0.28,
+   "dash": 0.22
+  },
+  "notes": "Experts (owner 9 Oct, server/experts.js): measured on an analyst's answer (40-band mel cepstrum, coefficients 1-12; the cast's own closest pairs are 63-66), with the recogniser's word error rate on the same copy. Legal Affairs Correspondent, careful and crisp: ef_dora (a Spanish voice, read with en-US phonemes) with 45% af_sky. Nearest UNIT-8 63, Sam 65, Vic 68; every WORLD NOW voice further; median F0 ~167 Hz. WER 0.02. Led by ef_dora rather than af_sky (the cloudbrella advert's lead), which also moved her further from the cast (62 -> 63+). Clara shares af_sky (37 apart), but they differ by accent (en-US / en-GB), pace and a Spanish against a French colour, and one analysis airs per programme."
  }
 }

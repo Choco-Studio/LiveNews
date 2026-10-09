@@ -26,7 +26,13 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 ## D. Programas, contenido y ritmo
 16. 🟡 **Programas más largos.** Hecho el dossier: el servidor lee el texto completo del artículo de cada noticia principal y el guionista escribe con él (con IA real llegará a 8-10 min; la demo sin conexión llega a ~4,6 min porque el texto de prueba es corto). Falta: duraciones/parrilla por partes (decisión 1).
 17. **Más tipos de diapositivas** (15 plantillas: cronologías, comparativas, cifras, citas…).
-18. **Expertos del canal** (8 fijos, ficticios). Dan vida al programa y se ciñen a los hechos de la fuente.
+18. ✅ **Expertos del canal** (8 fijos, ficticios). Dan vida al programa y se ciñen a los hechos de la fuente. Hecho (9 oct):
+    - Omar Ledger (economía), Clara Meridian (diplomacia), Dev Isobar (clima), Dr Tomas Albedo (espacio), June Kernel (tecnología), Dra. Amara Pulse (salud), Leo Sepia (cultura) e Ines Clause (justicia);
+    - el presentador lee la noticia, presenta al experto y le pregunta; el experto la explica solo con datos de la fuente (nunca "estuve allí", nunca consejos financieros ni médicos), le hace una pregunta más y le da las gracias;
+    - cada uno con su apariencia, su voz y su propio estudio animado (mercados al anochecer, despacho con mapa antiguo, ventana con montañas y molinos, observatorio, sala de servidores, consulta con radiografía, galería y biblioteca jurídica);
+    - salen en WORLD NOW, TECH BYTES, COSMOS DESK y MONEY MINUTE.
+
+    Falta: tu visto bueno a nombres, caras y voces (WAVE3 §13). Las risas esperan a la decisión 7. Detalle en docs/programmes/guests-and-experts.md.
 19. **Entrevistas reales "IN THEIR WORDS".** La persona aparece en la pantalla o en el plató diciendo solo palabras de declaraciones públicas, con la etiqueta RECREACIÓN. Nunca víctimas, menores, particulares ni noticias graves.
 20. **Invitados.** Personalización del personaje por IA y cara esculpida preparada con antelación.
 21. ✅ **Nuevo programa WORLD WEATHER (≈5 min).** Hecho:

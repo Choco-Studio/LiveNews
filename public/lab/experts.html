@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Experts Lab</title>
+<style>
+  :root { --bg: #181425; --fg: #c0cbdc; --ui: #262b44; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 monospace; }
+  #screen { display: block; width: 1152px; max-width: 100%; aspect-ratio: 16 / 9; image-rendering: pixelated; background: #000; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--ui); align-items: center; }
+  button, select { background: #3a4466; color: #fff; border: 0; padding: 4px 8px; font: inherit; }
+</style>
+</head>
+<body>
+<!-- The channel's experts (server/experts.js) in their studios through the real v2 Stage: the location shot and
+     the two-way with their programme's presenter. The expert and the presenter take turns every 4 s (a stand-in
+     for the speech clock: mouths move, no sound). ?expert=tomas&shot=twoway picks the start; ?still=1 holds t. -->
+<canvas id="screen" width="384" height="216"></canvas>
+<div class="bar">
+  <select id="expert"></select>
+  <select id="shot"><option value="location">location</option><option value="twoway">two-way</option></select>
+  <button id="play">pause</button>
+  <span id="info"></span>
+</div>
+<script type="module">
+import { Stage } from '../js/v2/canvas25d/runtime/stage.js';
+// who each expert talks to (their programme's cast) and their studio (config/channel.json expert.backdrop)
+const EXPERTS = {
+  omar: ['money-minute', { A: 'penny' }, 'markets', 'Omar Ledger, Economics Editor'],
+  clara: ['world-now', { A: 'paco', B: 'lola' }, 'bureau', 'Clara Meridian, Diplomatic Correspondent'],
+  dev: ['cosmos', { A: 'nova', B: 'unit8' }, 'field', 'Dev Isobar, Climate Correspondent'],
+  tomas: ['cosmos', { A: 'nova', B: 'unit8' }, 'observatory', 'Dr Tomas Albedo, Planetary Scientist'],
+  june: ['tech-bytes', { A: 'max', B: 'ada' }, 'lab', 'June Kernel, Security & Hardware Analyst'],
+  amara: ['world-now', { A: 'paco', B: 'lola' }, 'clinic', 'Dr Amara Pulse, Health Correspondent'],
+  leo: ['world-now', { A: 'paco', B: 'lola' }, 'gallery', 'Leo Sepia, Culture Correspondent'],
+  ines: ['world-now', { A: 'paco', B: 'lola' }, 'chambers', 'Ines Clause, Legal Affairs Correspondent'],
+};
+const $ = (id) => document.getElementById(id);
+const q = new URLSearchParams(location.search);
+for (const id of Object.keys(EXPERTS)) $('expert').add(new Option(id, id));
+$('expert').value = EXPERTS[q.get('expert')] ? q.get('expert') : 'omar';
+$('shot').value = q.get('shot') === 'twoway' ? 'twoway' : 'location';
+const VIS = ['AA', 'EH', 'OO', 'MM', 'EE', 'rest', 'AA', 'FF'];
+const turn = { slot: 'R1' };
+const audio = {
+  speechFrame(ms, slot, o = {}) {
+    const on = slot === turn.slot;
+    const k = Math.floor(ms / 110);
+    o.slot = slot; o.speaking = on; o.level = on ? 0.55 : 0; o.viseme = on ? VIS[k % VIS.length] : 'rest';
+    o.next = on ? VIS[(k + 1) % VIS.length] : 'rest'; o.mix = on ? (ms % 110) / 110 : 0;
+    o.wordIndex = -1; o.charIndex = -1; o.sentenceIndex = on ? Math.floor(ms / 3000) : -1; o.accent = 0; o.pause = false;
+    return o;
+  },
+};
+let stage = null, scene = null;
+function build() {
+  const id = $('expert').value;
+  const [pid, cast, backdrop, label] = EXPERTS[id];
+  const ep = { id: `lab-${id}`, program: { id: pid, title: pid }, cast, correspondents: { R1: id } };
+  stage = new Stage({ audio, channel: { presenters: {} }, idle: null });
+  scene = { episode: ep, program: ep.program, cast, anchors: {}, images: new Map(), wall: { mode: 'logo' }, segPlan: null, focus: 'A',
+    shot: $('shot').value, shotSince: performance.now() / 1000, remote: { slot: 'R1', id, kind: 'expert', backdrop, lat: 0, lon: 0, grave: false, footage: null } };
+  $('info').textContent = `${label}: ${backdrop}`;
+}
+$('expert').onchange = build;
+$('shot').onchange = build;
+let playing = !q.has('still');
+$('play').onclick = () => { playing = !playing; $('play').textContent = playing ? 'pause' : 'play'; };
+const ctx = $('screen').getContext('2d');
+build();
+function loop() {
+  const t = performance.now() / 1000;
+  if (playing) {
+    turn.slot = scene.shot === 'twoway' && Math.floor(t / 4) % 2 ? 'A' : 'R1';
+    stage.frame(ctx, t, scene);
+  }
+  requestAnimationFrame(loop);
+}
+stage.frame(ctx, performance.now() / 1000, scene);
+loop();
+</script>
+</body>
+</html>

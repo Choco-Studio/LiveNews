@@ -182,7 +182,7 @@ const MARKETS = { sill: 150, towers: [[6, 34, 64], [206, 28, 74], [236, 26, 44],
 
 function markets(px, r, st) {
   // dusk through a wall of glass: deep blue overhead, the last warm band on the horizon (behind the shoulders)
-  bands(px, 0, 0, W, 134, [C.ink, C.navy, C.navy, C.purple, C.darkRed, C.rust]);
+  bands(px, 0, 0, W, MARKETS.sill, [C.ink, C.navy, C.navy, C.purple, C.darkRed, C.rust, C.rust]);
   // the far city along the horizon: low slate blocks, a few lights
   for (let x = 0; x < W; ) {
     const w = 5 + ((r() * 14) | 0), h = 6 + ((r() * 20) | 0);

@@ -96,7 +96,7 @@ function analysisRule(program, experts = []) {
   if (!n || !experts.length) return '';
   const who = experts.map((e) => `"${e.id}": ${e.name}, ${e.role} (${EXPERT_DESKS[e.desk].covers})`).join('; ');
   return `
-- The channel's experts: up to ${n} main story whose subject is one expert's field (never the number of the day, a round-up item, "And finally", a breaking or grave story, or a story given to a correspondent) is put to that expert after the presenter reads it. The experts: ${who}. For that story add "analysis": "expert": the expert's id; "question": the presenter's first question to the expert, at most 12 words, no name and no new fact (e.g. "What does this tell us about the economy?"); "answer": 2 or 3 sentences in the expert's words that explain the story (the key detail, the context, why it matters to people), each a fact from that candidate; "follow": a follow-up question, at most 10 words, no name and no new fact; "answer2": 1 or 2 more sentences of that candidate's facts (what comes next, when it says). The channel adds the introduction and the thanks with the expert's name: never write them. The expert explains, never reports: never at the scene, never "I've seen", "told me", "my sources", no opinion and no prediction the candidate does not make; they attribute ("officials say", "according to Reuters"). Same accuracy rules: nothing that is not in that candidate. Every other story: "analysis": null.`;
+- The channel's experts: up to ${n} main story whose subject is one expert's field (never the number of the day, a round-up item, "And finally", a breaking or grave story, or a story given to a correspondent) is put to that expert after the presenter reads it. The experts: ${who}. For that story add "analysis": "expert": the expert's id; "question": the presenter's first question to the expert, at most 12 words, no name and no new fact (e.g. "What does this tell us about the economy?"); "answer": 2 or 3 sentences in the expert's words that explain the story (the key detail, the context, why it matters to people), each a fact from that candidate; "follow": a follow-up question, at most 10 words, no name and no new fact; "answer2": 1 or 2 more sentences of that candidate's facts (what comes next, when it says). The channel adds the introduction and the thanks with the expert's name: never write them. The expert explains, never reports: never at the scene, never "I've seen", "told me", "my sources", no opinion and no prediction the candidate does not make, never financial or medical advice ("you should buy", "patients should stop"), never a view on a real person or on politics; they attribute ("officials say", "according to Reuters"). Same accuracy rules: nothing that is not in that candidate. Every other story: "analysis": null.`;
 }
 
 /** WHAT WE KNOW (programme "boards": ["known"]): the key points a big story's board shows. */
@@ -1763,7 +1763,7 @@ function groundCross(raw, source, grounded) {
       .map((x) => x.trim())
       .filter((x) => {
         const plain = stripTags(x);
-        return plain && !/\?/.test(plain) && !presenceClaim(plain) && !!grounded(x);
+        return plain && !/\?/.test(plain) && !presenceClaim(plain) && !ADVICE.test(plain) && !!grounded(x);
       })
       .slice(0, max);
   const piece = lines(raw.piece, CROSS_LIMIT.piece);
@@ -1884,11 +1884,14 @@ function expandCrosses(body, drafts, { program, correspondents, solo }) {
 // ---------------------------------------------------------------- the experts' analyses
 
 const ANALYSIS_LIMIT = { answer: 3, answer2: 2, questionWords: 14 };
+// advice in a correspondent's or an expert's own voice (WAVE3 §6: never financial or medical advice), even when a
+// source carries it (the presenter may still read a source's advice, attributed)
+const ADVICE = /\b(?:you|viewers|people|patients|investors|savers|everyone)\s+(?:should|must|ought to|need to)\b|\bI\s+(?:would\s+)?(?:recommend|advise|suggest)\b|\bmy advice\b|\b(?:buy|sell)\s+now\b/i;
 
 /**
  * An expert's analysis as the writer gave it, kept only where it stands: the expert one of the programme's,
  * questions short with no figure or name of their own, every answer sentence grounded in the story's source with no
- * question and no claim to have seen or spoken to anyone. Null when fewer than two answer sentences stand.
+ * question, no claim to have seen or spoken to anyone and no advice. Null when fewer than two answer sentences stand.
  */
 function groundAnalysis(raw, experts, grounded) {
   if (!raw || typeof raw !== 'object') return null;
@@ -1898,7 +1901,7 @@ function groundAnalysis(raw, experts, grounded) {
       .map((x) => x.trim())
       .filter((x) => {
         const plain = stripTags(x);
-        return plain && !/\?/.test(plain) && !presenceClaim(plain) && !!grounded(x);
+        return plain && !/\?/.test(plain) && !presenceClaim(plain) && !ADVICE.test(plain) && !!grounded(x);
       })
       .slice(0, max);
   const answer = lines(raw.answer, ANALYSIS_LIMIT.answer);
