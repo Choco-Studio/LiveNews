@@ -18,18 +18,24 @@
 // Each takes (engine, t, opts) and returns the time it has finished ringing.
 
 import { PROGRAMMES } from './palettes.js';
-import { SCALES, COLOUR, parseChord, voiceChord, degreeToMidi, motifVariant, mod } from './theory.js';
+import { SCALES, COLOUR, parseChord, voiceChord, guideTones, hasClash, degreeToMidi, motifVariant, mod } from './theory.js';
 import { targetTo } from './automation.js';
 
 const NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 const bassOf = (pc, octave = 2) => 12 * (octave + 1) + mod(pc, 12);
 
-function chord(eng, dest, t, dur, symbol, { inst = 'ep', lo = 55, vel = 0.75, roll = 0.025, p = {} } = {}) {
+// `avoid`: the notes a melody plays over the chord; the chord is voiced round them (on its guide
+// tones if its colour would still rub a semitone on one). Returns the voicing.
+function chord(eng, dest, t, dur, symbol, { inst = 'ep', lo = 55, vel = 0.75, roll = 0.025, p = {}, avoid = null } = {}) {
   const c = parseChord(symbol);
-  const v = voiceChord(c, null, lo);
+  let v = voiceChord(c, null, lo, { avoid });
+  if (avoid && hasClash(v, avoid)) v = voiceChord(guideTones(c), null, lo, { avoid });
   v.forEach((midi, i) => eng.rig[inst](t + i * roll, midi, dur, vel, dest, { pan: (i - 1.5) * 0.15, ...p }));
-  return c;
+  return v;
 }
+
+/** The notes (MIDI) of a signature variant from tonic `base`. */
+const motifMidis = (kind, base, scale = 'major', colour = COLOUR.home) => motifVariant(kind, 0, colour).map((n) => degreeToMidi(base, SCALES[scale], n.d));
 
 /** The signature (a variant) from tonic `base` (MIDI of degree 0) on instrument `inst`. */
 function motif(eng, dest, t, spb, kind, { inst, base, scale = 'major', colour = COLOUR.home, vel = 0.8, p = {} }) {
@@ -215,15 +221,16 @@ export const STINGS = {
     const spb = 60 / (day ? 100 : 88);
     const dest = bus(eng, 0.35); // >= 18 LU under the continuity voice
     const lead = bus(eng, 0.35, { echo: 0.45, time: spb * 0.75 });
-    const I = { 'tech-bytes': 'Am9', cosmos: 'Emaj9', 'money-minute': 'Fmaj9' }[programme] || 'Dmaj9';
+    const I = { 'tech-bytes': 'Am9', cosmos: 'Emaj9', 'money-minute': 'Fmaj9', 'world-weather': 'Cmaj9' }[programme] || 'Dmaj9';
     const align = t + spb * 12;
     const holdEnd = align + 5.2;
-    chord(eng, dest, t, holdEnd - t, I, { inst: 'pad', lo: 50, vel: 0.85, roll: 0, p: { attack: 2.5, lpTo: 1100, release: 0.6 } });
+    const sig = sombre ? null : motifMidis('statement', prog.tonic, prog.scale, prog.colour);
+    const padV = chord(eng, dest, t, holdEnd - t, I, { inst: 'pad', lo: 50, vel: 0.85, roll: 0, p: { attack: 2.5, lpTo: 1100, release: 0.6 }, avoid: sig });
     eng.rig.bass(t, bassOf(prog.tonic), holdEnd - t, 0.55, dest, { wave: 'triangle', lp: 420, release: 0.6 });
     if (!sombre) {
       motif(eng, lead, align - spb * 2.5, spb, 'statement', { inst: 'pulse12', base: prog.tonic, scale: prog.scale, colour: prog.colour, vel: 0.8, p: { lp: 1500 } });
       // Hold: pad + a slow pluck loop on the chord.
-      const v = voiceChord(parseChord(I), null, 62);
+      const v = voiceChord(parseChord(I), null, 62, { avoid: padV });
       for (let i = 0; align + spb + i * spb * 0.5 < holdEnd - 0.4; i++) {
         eng.rig.pluck(align + spb + i * spb * 0.5, v[[0, 2, 1, 3][i % 4] % v.length], spb * 0.45, i % 2 ? 0.4 : 0.55, dest, { wave: 'pulse25', decay: 0.18, bright: 1500 });
       }
@@ -238,7 +245,7 @@ export const STINGS = {
     const dest = bus(eng, 1.35); // no voice: about -16 LUFS like the bumper cards
     const lead = bus(eng, 1.35, { echo: 0.45, time: spb * 0.75 });
     const align = t + 2.6;
-    chord(eng, dest, t, 5.3, 'Dmaj9', { inst: 'pad', lo: 50, vel: 0.85, roll: 0, p: { attack: 1.2, lpTo: 1200, release: 0.8 } });
+    chord(eng, dest, t, 5.3, 'Dmaj9', { inst: 'pad', lo: 50, vel: 0.85, roll: 0, p: { attack: 1.2, lpTo: 1200, release: 0.8 }, avoid: motifMidis('statement', prog.tonic, 'major', prog.colour) });
     eng.rig.bass(t, 38, 5.3, 0.6, dest, { wave: 'triangle', lp: 420, release: 0.8 });
     motif(eng, lead, align - spb * 2.5, spb, 'statement', { inst: 'pulse12', base: prog.tonic, colour: prog.colour, vel: 0.85, p: { lp: 1600 } });
     return t + 6.2;
@@ -263,7 +270,7 @@ export const STINGS = {
     const dest = bus(eng, 0.8);
     const lead = bus(eng, 0.75, { echo: 0.5, time: spb * 0.75 });
     const IV = degreeToMidi(prog.tonic, SCALES[prog.scale], 3) % 12;
-    chord(eng, dest, t, 2.4, `${NAMES[IV]}add9`, { inst: 'pad', lo: 50, vel: 0.7, roll: 0, p: { attack: 0.5, lpTo: 1000, release: 0.9 } });
+    chord(eng, dest, t, 2.4, `${NAMES[IV]}add9`, { inst: 'pad', lo: 50, vel: 0.7, roll: 0, p: { attack: 0.5, lpTo: 1000, release: 0.9 }, avoid: motifMidis('retrograde', prog.tonic, prog.scale, COLOUR.next) });
     eng.rig.bass(t, bassOf(IV), 2.4, 0.45, dest, { wave: 'triangle', lp: 480, release: 0.8 });
     const notes = motifVariant('retrograde', 0, COLOUR.next);
     notes.forEach((n, i) => eng.rig.ep(t + n.at * spb * 0.8, degreeToMidi(prog.tonic, SCALES[prog.scale], n.d), n.len * spb * 0.75, 0.6 - i * 0.04, lead, { index: 0.7, attack: 0.012, release: 0.35, bend: i === notes.length - 1 ? -22 : 0 }));
@@ -278,11 +285,12 @@ export const STINGS = {
     const lead = bus(eng, 0.8, { echo: 0.4, time: spb * 0.75 });
     const IV = degreeToMidi(prog.tonic, SCALES[prog.scale], 3) % 12;
     const V = degreeToMidi(prog.tonic, SCALES[prog.scale], 4) % 12;
-    chord(eng, dest, t, spb * 1.5, `${NAMES[IV]}maj9`, { inst: 'pad', lo: 50, vel: 0.75, roll: 0, p: { attack: 0.3, lpTo: 1200, release: 0.5 } });
+    const sig = motifMidis('statement', prog.tonic, prog.scale, COLOUR.next);
+    chord(eng, dest, t, spb * 1.5, `${NAMES[IV]}maj9`, { inst: 'pad', lo: 50, vel: 0.75, roll: 0, p: { attack: 0.3, lpTo: 1200, release: 0.5 }, avoid: sig });
     eng.rig.bass(t, bassOf(IV), spb * 1.5, 0.45, dest, { wave: 'triangle', lp: 560, release: 0.15 });
     motif(eng, lead, t, spb, 'statement', { inst: 'pulse12', base: prog.tonic, scale: prog.scale, colour: COLOUR.next, vel: 0.8, p: { lp: 1500 } });
     const t2 = t + spb * 1.5;
-    chord(eng, dest, t2, spb * 2.5 + 0.8, `${NAMES[V]}9sus`, { inst: 'pad', lo: 50, vel: 0.7, roll: 0, p: { attack: 0.25, lpTo: 1300, release: 0.9 } });
+    chord(eng, dest, t2, spb * 2.5 + 0.8, `${NAMES[V]}9sus`, { inst: 'pad', lo: 50, vel: 0.7, roll: 0, p: { attack: 0.25, lpTo: 1300, release: 0.9 }, avoid: sig });
     eng.rig.bass(t2, bassOf(V), spb * 2.5 + 0.6, 0.45, dest, { wave: 'triangle', lp: 560, release: 0.5 });
     return t2 + spb * 2.5 + 2;
   },

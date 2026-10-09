@@ -25,6 +25,7 @@ export const PROGRAMMES = {
   cosmos: { title: 'COSMOS DESK', tonic: 64, scale: 'lydian', colour: COLOUR.cosmos, bpm: 72 },
   'money-minute': { title: 'MONEY MINUTE', tonic: 65, scale: 'major', colour: COLOUR.money, bpm: 114 },
   'news-60': { title: 'NEWS IN 60', tonic: 67, scale: 'major', colour: COLOUR.sixty, bpm: 120 },
+  'world-weather': { title: 'WORLD WEATHER', tonic: 60, scale: 'major', colour: COLOUR.weather, bpm: 92 },
   channel: { title: 'GLOBIT 24', tonic: 62, scale: 'major', colour: COLOUR.home, bpm: 84 },
 };
 
@@ -222,6 +223,33 @@ export const PALETTES = {
     moments: {
       bed: { energy: 0.5, gain: -12, lp: 2000, pocket: 0, bright: 0.9, layers: { pad: 0.8, bass: 0.8, perc: 0.9 }, entry: 'instant', immediate: true }, // from the downbeat; back on the cut
       grave: { energy: 0.1, gain: -12, lp: 1600, pocket: 0, bright: 0.8, layers: { pad: 0.8 }, immediate: true },
+    },
+  },
+
+  // ------------------------------------------------------- WORLD WEATHER (C major)
+  // Its own song in the open's key (C major, the 7th its colour: the open sky): a soft pluck drifting
+  // in eighths over long Rhodes chords, a warm pad and triangle roots, a few soft triangle notes
+  // between sentences. It runs under the forecast and stops for the warnings.
+  'world-weather': {
+    programme: 'world-weather', title: 'WORLD WEATHER', key: 'C major', tonic: 60, scale: 'major', bpm: 92, swing: 0.5, trim: 0,
+    mood: 'the open sky: a soft pluck drifting in eighths over long Rhodes chords and triangle roots; light, never a jingle',
+    sections: { A: ['Cmaj9', 'Fmaj9/C', 'Am9', 'G9sus'], A2: ['Fmaj9', 'Em9', 'Dm9', 'G9sus'] },
+    form: ['A', 'A2'],
+    colour: COLOUR.weather,
+    keys: { inst: 'ep', lo: 54, vel: 0.6, index: 0.7 },
+    pad: { wave: 'pulse25', lo: 50, lpTo: 1000, attack: 1.1 },
+    bass: { style: 'long', wave: 'triangle', lp: 500 },
+    drums: 'none',
+    arp: { inst: 'pluck', rate: 0.5, pattern: 'up', oct: 12, wave: 'pulse25', decay: 0.15, bright: 1500, vel: 0.6, sparse: 0.3 },
+    lead: { inst: 'softtri', oct: 12, mode: 'sparse', maxNotes: 2 },
+    perc: 'none', tex: 0,
+    fx: { reverb: 0.24, echo: 0.14, tremolo: 0.15 },
+    duckDb: -6,
+    duck: { melody: 0.28 }, // the triangle sits nearest the voice: -11 dB under speech
+    moments: {
+      forecast: { energy: 0.45, gain: -5.5, lp: 2400, pocket: 0, bright: 1, comp: 'float', layers: { pad: 0.6, keys: 0.55, arp: 0.85, lead: 0.6, bass: 0.6 }, lead: 'sparse' },
+      tomorrow: { energy: 0.5, gain: -5, lp: 2600, pocket: 0, bright: 1.05, comp: 'float', layers: { pad: 0.6, keys: 0.6, arp: 0.95, lead: 0.75, bass: 0.6 }, lead: 'sparse' },
+      signoff: { energy: 0.4, gain: -6.5, lp: 2200, pocket: 0, bright: 0.95, comp: 'long', layers: { pad: 0.7, keys: 0.6, bass: 0.6 } },
     },
   },
 

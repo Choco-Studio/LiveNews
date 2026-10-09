@@ -9,6 +9,8 @@
 
 import { LofiEngine, LOOKAHEAD } from './engine.js';
 import { rng } from './theory.js';
+import { CUES as SEQ_CUES, durationOf } from '../../../scenes/opens/cues.js';
+import { WN_DURATION } from '../../../scenes/opens/worldcues.js';
 
 // Durations of the Kokoro test clips ($SP/audio/music/lofi/voice3: house broadcast chain), for planning and the stand-in.
 export const CLIPS = {
@@ -20,6 +22,7 @@ export const CLIPS = {
   'mm-story2': 5.195, 'mm-number': 6.072, 'mm-signoff': 2.545, 'n6-intro': 1.5, 'n6-item1': 4.39, 'n6-item2': 3.132,
   'n6-item3': 6.175, 'n6-grave': 4.935, 'n6-item4': 4.01, 'n6-signoff': 1.845, 'ct-next-wn': 3.203,
   'ct-next-tb': 2.402, 'ct-sombre': 2.248, 'wn-light': 8.355,
+  'ww-intro': 4.755, 'ww-zone1': 6.53, 'ww-zone2': 5.365, 'ww-warning': 6.98, 'ww-zone3': 4.258, 'ww-tomorrow': 4.367, 'ww-outro': 3.507,
 };
 
 /** Replace planning durations with the real ones (the lab page loads the clips' manifest). */
@@ -37,6 +40,8 @@ export function setClipDurations(map) {
  * Returns { cues: [[t, moment, opts]], voice: [[t, clip]], opens: [[t, programId]], end }.
  */
 export const OPEN_SECONDS = 4;
+/** How long a programme's open runs on air (its title sequence, as the director waits it out). */
+export const openSeconds = (pid) => (pid === 'world-now' ? WN_DURATION : SEQ_CUES[pid] ? durationOf(pid) : OPEN_SECONDS);
 function script(steps) {
   let t = 0;
   let lastSay = 0;
@@ -47,7 +52,7 @@ function script(steps) {
     if (op === 'open') {
       cues.push([t, 'open', { programId: a }]);
       opens.push([t, a]);
-      t += OPEN_SECONDS;
+      t += openSeconds(a);
     } else if (op === 'cue') cues.push([t, a, b || {}]);
     else if (op === 'say') {
       voice.push([t, a]);
@@ -181,6 +186,22 @@ export const TIMELINES = {
       ['cue', 'signoffEnd', P('news-60')], ['wait', 2.5], ['cue', 'endcard', P('news-60')],
     ]),
   }),
+  // WORLD WEATHER: the open, its own bed under the zones, silence for the warning, the bed again for
+  // tomorrow, the sign-off on keys and bass.
+  'world-weather': () => ({
+    programme: 'world-weather', seconds: 60,
+    ...script([
+      ['open', 'world-weather'],
+      ['cue', 'weather', P('world-weather', { kind: 'intro', segment: 1 })], ['wait', 0.4], ['say', 'ww-intro'], ['wait', 0.7],
+      ['cue', 'weather', P('world-weather', { kind: 'zone', segment: 2 })], ['wait', 0.3], ['say', 'ww-zone1'], ['wait', 0.6],
+      ['cue', 'weather', P('world-weather', { kind: 'zone', segment: 3 })], ['wait', 0.3], ['say', 'ww-zone2'], ['wait', 0.6],
+      ['cue', 'weather', P('world-weather', { kind: 'warning', emotion: 'serious', segment: 4 })], ['wait', 0.5], ['say', 'ww-warning'], ['wait', 0.8],
+      ['cue', 'weather', P('world-weather', { kind: 'zone', segment: 5 })], ['wait', 0.3], ['say', 'ww-zone3'], ['wait', 0.6],
+      ['cue', 'weather', P('world-weather', { kind: 'tomorrow', segment: 6 })], ['wait', 0.3], ['say', 'ww-tomorrow'], ['wait', 0.6],
+      ['cue', 'weather', P('world-weather', { kind: 'outro', segment: 7 })], ['wait', 0.3], ['say', 'ww-outro'], ['wait', 1.2],
+      ['cue', 'endcard', P('world-weather')],
+    ]),
+  }),
   // A main break and the next lead-in: bumper cards, 0.3 s silences, an ad (silent stand-in),
   // a holding slide, then the WORLD NOW countdown with the continuity voice and the hard cut.
   break: () => ({
@@ -246,6 +267,9 @@ export function planFor({ programme = 'world-now', moment = 'roundup', seconds =
     case 'money-minute:sting': return { programme, seconds, cues: c([0.3, 'numberSting']), voice: [] };
     case 'news-60:grave': return { programme, seconds, cues: c([0, 'headlines', p({ segment: 1 })], [4, 'item'], [4, 'story', p({ grave: true, segment: 2 })], [12, 'item'], [12, 'story', p({ segment: 3 })]), voice: [] };
     case 'news-60:bed': return { programme, seconds, cues: c([0, 'headlines', p({ segment: 1 })], ...[4, 9, 14, 19].map((t) => [t, 'item']), [seconds - 3, 'signoffEnd']), voice: [] };
+    case 'world-weather:forecast': return { programme, seconds, cues: c([0, 'weather', p({ kind: 'zone', segment: 2 })]), voice: [] };
+    case 'world-weather:tomorrow': return { programme, seconds, cues: c([0, 'weather', p({ kind: 'tomorrow', segment: 6 })]), voice: [] };
+    case 'world-weather:signoff': return { programme, seconds, cues: c([0, 'weather', p({ kind: 'outro', segment: 7 })], [seconds - 1.2, 'endcard']), voice: [] };
     default:
       if (programme === 'money-minute' && moment.startsWith('tape-')) return { programme, seconds, cues: c([0, 'number', p({ tape: moment.slice(5), segment: 4 })]), voice: [] };
       if (programme === 'channel') {
@@ -339,11 +363,12 @@ async function loadClip(ctx, key, voiceBase) {
 }
 
 /** The audio stream's open theme for a programme, rendered offline (null if unavailable). */
-async function openTheme(programId, sampleRate) {
+async function openTheme(programId, sampleRate, duck = []) {
   try {
     const [{ renderTune }, { themeFor }] = await Promise.all([import('../../../audio/synth.js'), import('../../../audio/themes.js')]);
-    const out = await renderTune(themeFor(programId, { duration: OPEN_SECONDS }), {
-      sampleRate, volume: 0.6, startAt: 0, stopAt: OPEN_SECONDS, seconds: OPEN_SECONDS + 2.5,
+    const seconds = openSeconds(programId);
+    const out = await renderTune(themeFor(programId, { duration: seconds }), {
+      sampleRate, volume: 0.6, startAt: 0, stopAt: seconds, seconds: seconds + 2.5, duck, // ducked under the first words as on air
     });
     return out?.buffer || null;
   } catch (err) {
@@ -383,7 +408,7 @@ export async function render(opts = {}) {
   musicOut.connect(ctx.destination);
   const engine = new LofiEngine(ctx, musicOut, {
     gravePad: Boolean(opts.gravePad), sharedStings: Boolean(opts.sharedStings), seed: opts.seed || 'demo', noteLog: true,
-    bedUnderStories: opts.bedUnderStories || plan.bedUnderStories || 'off',
+    bedUnderStories: opts.bedUnderStories || plan.bedUnderStories || 'soft', // as on air (music/live.js)
   });
   if (opts.solo) engine.solo = new Set(String(opts.solo).split(','));
   if (opts.noReverb) engine.rig.reverbIn.gain.value = 0; // diagnostics
@@ -407,7 +432,9 @@ export async function render(opts = {}) {
   // stopped on the cut so its last chord rings over it), rendered with the channel's own mixer.
   if (plan.opens?.length && opts.stem !== 'voice' && opts.open !== false) {
     for (const [t, pid] of plan.opens) {
-      const buf = await openTheme(pid, sr);
+      // the voice regions on the theme's own clock: its tail ducks under the first words, as audio.js does
+      const duck = speechRegions(voice.length ? voice : plan.voice).map(([a, b]) => [a - t, b - t]).filter(([, b]) => b > 0);
+      const buf = await openTheme(pid, sr, duck);
       if (!buf) continue;
       const src = ctx.createBufferSource();
       src.buffer = buf;

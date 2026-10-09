@@ -77,7 +77,11 @@ Phrasing varies with the date and the edition, and no turn of phrase is repeated
 - **The presenter stands** (`v2/canvas25d/runtime/standing.js`).
   - The rig's upper body is drawn with the rest of the suit: the jacket's skirt in the jacket's own group, trouser legs lit from camera-left, and shoes.
   - Framed head to mid-shin.
-- **Music:** WORLD NOW's light "and finally" song in its sparse arrangement under the forecast, and silence under the warnings.
+- **Music:** its own bed in the open's key (`music/proposals/lofi/palettes.js` `'world-weather'`), so the open hands over without a key change (it was WORLD NOW's D major song after a C major open).
+  - 92 BPM, C major, the 7th as its colour: a soft pluck drifting in eighths over long Rhodes chords, a warm pad and triangle roots, a few soft triangle notes between sentences.
+  - Under the intro and the zones; a little brighter for tomorrow; keys, pad and bass for the sign-off.
+  - Silence under the warnings (a storm is not a jingle).
+  - About 20 LU under the voice (median under speech, measured with the lab's 3 s method).
 - **Open:** the title sequence below, ending on the network's open package: a sun with turning rays and a cloud that settles in front of it. The accent is blue.
 - **Open theme** (`themes.js` `'world-weather'`): C major, 88–96 BPM, its colour the major 7th (the open sky).
   - The motif is on an airy pulse12 over Cmaj7, then Fmaj7/C.

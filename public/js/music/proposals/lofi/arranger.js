@@ -5,7 +5,7 @@
 // a bed can run for many minutes without sounding like a loop.
 
 import {
-  SCALES, parseChord, voiceChord, chordPcs, degreeToMidi, motifVariant, rng, hash, mod,
+  SCALES, parseChord, voiceChord, guideTones, chordPcs, degreeToMidi, motifVariant, rng, hash, mod,
 } from './theory.js';
 
 // Colour substitutions on later passes: same function, different shade.
@@ -223,14 +223,17 @@ const LEAD_PLANS = [
 ];
 
 // Sparse lead: a few long chord tones a bar (COSMOS bells: at most 4; WORLD NOW soft triangle: 2).
-function sparseLead(pal, chord, r, n) {
+function sparseLead(pal, chord, r, n, sounding = []) {
   const max = pal.lead.maxNotes ?? 2;
   const count = Math.max(1, Math.min(max, 1 + Math.floor(r() * max)));
   const slots = [0, 1, 1.5, 2, 2.5, 3];
   const picks = [];
   while (picks.length < count && slots.length) picks.push(slots.splice(Math.floor(r() * slots.length), 1)[0]);
   picks.sort((x, y) => x - y);
-  const tones = voiceChord(chord, null, pal.tonic + pal.lead.oct - 5);
+  // chord tones that no other layer holds a semitone (or a minor ninth) away
+  const all = voiceChord(chord, null, pal.tonic + pal.lead.oct - 5);
+  const free = all.filter((m) => !sounding.some((a) => Math.abs(a - m) === 1 || Math.abs(a - m) === 13));
+  const tones = free.length ? free : all;
   const out = [];
   let prev = null;
   for (let i = 0; i < picks.length; i++) {
@@ -247,10 +250,10 @@ function sparseLead(pal, chord, r, n) {
   return n % 4 === 3 ? [] : out;
 }
 
-function leadFor(pal, id, arr, n, chord, r) {
+function leadFor(pal, id, arr, n, chord, r, sounding = []) {
   const inst = pal.lead.inst;
   const mode = arr.lead;
-  if (mode === 'sparse') return sparseLead(pal, chord, r, n);
+  if (mode === 'sparse') return sparseLead(pal, chord, r, n, sounding);
   if (mode === 'signature') {
     if (n === 0) return motifNotes(pal, chord, 'statement', 0, r, inst, 0.9);
     if (n === 2) return motifNotes(pal, chord, 'echo', 0, r, inst, 0.6);
@@ -287,14 +290,34 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
   const chord = chordAt(pal, n, id);
   const next = chordAt(pal, n + 1, id);
   const out = [];
+  const sounding = []; // the notes this bar's chord layers hold, so the next layer can step round them
   const human = () => 0.92 + r() * 0.14;
   // Timbral ducking: instruments play darker under speech, brighter when the music is alone.
   const bright = arr.bright ?? 1;
 
+  // A melody that is the signature itself (never moved to fit) is written first: the held layers
+  // voice round its notes. A sparse melody instead picks chord tones round the held layers (below).
+  const leadOn = isOn(arr, prev, 'lead') && arr.lead;
+  const fixedLead = leadOn && arr.lead !== 'sparse' ? leadFor(pal, id, arr, n, chord, r) : null;
+  const melody = fixedLead ? fixedLead.map((e) => e.midi) : null;
+  // The keys' voicing next when they play (the Rhodes is the more present of the two held layers):
+  // the pad then voices round it, doubling its notes rather than rubbing a semitone below them.
+  const keysOn = isOn(arr, prev, 'keys');
+  let keysV = null;
+  if (keysOn) {
+    const keysChord = isOn(arr, prev, 'arp') ? guideTones(chord) : chord;
+    keysV = voiceChord(keysChord, state.voicing, pal.keys.lo, { avoid: melody });
+    state.voicing = keysV;
+    sounding.push(...keysV);
+  }
+
   // Pad: the chord as a slow swell, voiced low and close.
   if (isOn(arr, prev, 'pad')) {
-    const v = voiceChord(chord, state.padVoicing, pal.pad.lo);
+    // under an arpeggio or the keys the pad leaves the colour tones to them (theory.js guideTones)
+    const padChord = isOn(arr, prev, 'arp') || keysOn ? guideTones(chord) : chord;
+    const v = voiceChord(padChord, state.padVoicing, pal.pad.lo, { avoid: keysV || melody ? [...(keysV || []), ...(melody || [])] : null });
     state.padVoicing = v;
+    sounding.push(...v);
     v.forEach((midi, i) => out.push({
       inst: 'pad', layer: 'pad', at: 0, dur: 4, midi, vel: 0.8 * human(),
       p: { wave: pal.pad.wave, lpTo: pal.pad.lpTo * bright, attack: pal.pad.attack, pan: (i - (v.length - 1) / 2) * 0.22 },
@@ -302,7 +325,7 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
   }
 
   // Keys: rootless voicings with a little strum, rhythm from the comping table.
-  if (isOn(arr, prev, 'keys')) {
+  if (keysOn) {
     const style = arr.comp || PALETTE_COMP[pal.keys.inst] || 'lofi';
     const pats = COMP[pal.keys.inst === 'pulse' && style !== 'long' ? 'stabs' : style] || COMP.lofi;
     // One groove per 4-bar phrase (repetition is what makes a loop feel good), a variation
@@ -310,8 +333,7 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
     const pr = rng(hash(id, style, 'comp', Math.floor(n / 4)));
     const phrasePat = n < 4 ? pats[0] : pr.pick(pats);
     const pat = n % 4 === 3 && pr.chance(0.5) ? pr.pick(pats) : phrasePat;
-    const v = voiceChord(chord, state.voicing, pal.keys.lo);
-    state.voicing = v;
+    const v = keysV;
     const inst = pal.keys.inst === 'pulse' ? 'stab' : pal.keys.inst;
     for (const [at, dur] of pat) {
       const roll = pal.keys.roll ?? 0.022;
@@ -325,7 +347,12 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
 
   if (isOn(arr, prev, 'bass')) {
     const style = arr.bass && !(pal.bass.style === 'pulse8' && arr.bass === 'walk') ? arr.bass : pal.bass.style;
-    for (const e of bassLine(style, r, chord, next, pal)) out.push({ ...e, vel: e.vel * human(), p: { wave: pal.bass.wave, lp: pal.bass.lp, release: style === 'staccato' ? 0.04 : undefined } });
+    // a bass note that climbs into the chord's register drops an octave rather than rub a semitone on it
+    const rubs = (m) => sounding.some((a) => Math.abs(a - m) === 1 || Math.abs(a - m) === 13);
+    for (const e of bassLine(style, r, chord, next, pal)) {
+      const midi = e.midi >= 48 && rubs(e.midi) ? e.midi - 12 : e.midi;
+      out.push({ ...e, midi, vel: e.vel * human(), p: { wave: pal.bass.wave, lp: pal.bass.lp, release: style === 'staccato' ? 0.04 : undefined } });
+    }
   }
 
   // Drums, with a fill every 8 bars and a breather bar every 16.
@@ -375,16 +402,29 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
     }
   }
 
-  // Arpeggio: the chord broken into 8ths or 16ths, an octave above the keys.
-  if (isOn(arr, prev, 'arp')) {
+  // Arpeggio: the chord broken into 8ths or 16ths, an octave above the keys. Its voicing is chosen
+  // first (a sparse lead steps round it); its notes are written after the lead's, so a step that
+  // would land a semitone from a lead note sounding then takes the arpeggio's next note instead.
+  const arpOn = isOn(arr, prev, 'arp');
+  let seq = null;
+  if (arpOn) {
+    const v = voiceChord(chord, state.arpVoicing, pal.keys.lo + 7, { avoid: sounding, octave: true });
+    state.arpVoicing = v;
+    seq = arpOrder(pal.arp.pattern, v);
+    sounding.push(...v, ...v.map((m) => m + 12));
+  }
+  const lead = fixedLead || (leadOn ? leadFor(pal, id, arr, n, chord, r, sounding) : []);
+  if (arpOn) {
     const a = pal.arp;
-    const v = voiceChord(chord, null, pal.keys.lo + 7);
-    const seq = arpOrder(a.pattern, v);
     const steps = Math.round(4 / a.rate);
+    const rub = (m, at, dur) => lead.some((e) => e.at < at + dur && e.at + e.dur > at && (Math.abs(e.midi - m) === 1 || Math.abs(e.midi - m) === 13));
     for (let i = 0; i < steps; i++) {
       if (a.sparse && r.chance(a.sparse)) continue;
       if (arr.name === 'story' && i % 2) continue;
-      const midi = seq[i % seq.length] + (a.oct - 12);
+      let k = i % seq.length;
+      for (let tries = 0; tries < seq.length && rub(seq[k] + (a.oct - 12), i * a.rate, a.rate * 0.9); tries++) k = (k + 1) % seq.length;
+      const midi = seq[k] + (a.oct - 12);
+      if (rub(midi, i * a.rate, a.rate * 0.9)) continue;
       const accent = (i * a.rate) % 1 === 0 ? 1 : 0.7;
       out.push({
         inst: a.inst, layer: 'arp', at: i * a.rate, dur: a.rate * 0.9, midi, vel: (a.vel ?? 0.8) * accent * human(),
@@ -392,8 +432,7 @@ export function barEvents(pal, id, arr, prev, n, state, opts = {}) {
       });
     }
   }
-
-  if (isOn(arr, prev, 'lead') && arr.lead) out.push(...leadFor(pal, id, arr, n, chord, r));
+  out.push(...lead);
 
   return { chord, events: out };
 }

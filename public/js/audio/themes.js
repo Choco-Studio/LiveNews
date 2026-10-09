@@ -380,9 +380,9 @@ function weatherTitles(tempo, H, C) {
   return {
     bpm: tempo,
     room: 0.3,
-    hall: 0.4,
+    hall: 0.32,
     echo: { amount: 1, beats: 0.75, feedback: 0.38 },
-    fadeOut: 1.2,
+    fadeOut: 0.7, // out of the way of the forecast's first words (it starts on the cut)
     tracks: [
       { kind: 'lead', inst: LEAD.breeze, notes: part([...motif(k, COLOURS.weather, m0), [H, k + 12, C - H - 0.25, 0.85]], total), gain: 1.05 },
       { kind: 'harmony', inst: ENS.bell, notes: part([

@@ -2,7 +2,7 @@
 // ONE signature, shared with the opens and idents of the audio stream
 // (public/js/audio/themes.js MOTIF): low 5 - 1 - 2 - high 5 ("da-da-da-DAH"),
 // no third, so it fits every mode; a fifth "colour" note gives each programme
-// its mood (home 3, tech b7, cosmos #4, money 6, news-60 octave, breaking b3,
+// its mood (home 3, tech b7, cosmos #4, money 6, news-60 octave, weather 7, breaking b3,
 // up-next 2 "left hanging"). The beds sing it in scale steps so it follows each
 // programme's mode. Everything here is pure (no WebAudio).
 
@@ -15,8 +15,8 @@ export const SIGNATURE = Object.freeze([
 ]);
 export const SIGNATURE_SEMITONES = Object.freeze([-5, 0, 2, 7]);
 
-/** Colour notes in scale steps (in each palette's own mode they give 3, b7, #4, 6, 8, b3, 2). */
-export const COLOUR = Object.freeze({ home: 2, tech: 6, cosmos: 3, money: 5, sixty: 7, breaking: 2, next: 1 });
+/** Colour notes in scale steps (in each palette's own mode they give 3, b7, #4, 6, 8, 7, b3, 2). */
+export const COLOUR = Object.freeze({ home: 2, tech: 6, cosmos: 3, money: 5, sixty: 7, weather: 6, breaking: 2, next: 1 });
 
 export const SCALES = Object.freeze({
   major: [0, 2, 4, 5, 7, 9, 11],
@@ -100,12 +100,19 @@ export function chordPcs(chord) {
 }
 
 /**
- * Voice-led rootless voicing: every inversion of the chord tones placed with its
- * lowest note in [lo, lo+12), pick the one closest to the previous voicing.
+ * Voice-led rootless voicing. Candidates: every inversion of the chord tones with its lowest note in
+ * [lo, lo+12) (close), the same with the second voice from the top dropped an octave (drop 2), and
+ * with any of its upper voices raised an octave (spread, two octaves at most). A candidate never has two voices a semitone or a minor
+ * ninth apart (unless the chord asks for its b9), and low voices keep the low interval limits (no
+ * seconds below G3, nothing closer than a fourth below C3). `avoid` lists notes another layer is
+ * sounding: a voice a semitone (or a minor ninth) from one of them costs as much as a clash; with
+ * `octave` the voicing's own octave doubling is checked too (an arpeggio climbs through both).
+ * Of the valid candidates, the one closest to the previous voicing.
  */
-export function voiceChord(chord, prev, lo = 53) {
+export function voiceChord(chord, prev, lo = 53, { avoid = null, octave = false } = {}) {
   const pcs = chord.tones.map((i) => (chord.root + i) % 12);
   const sorted = [...new Set(pcs)].sort((a, b) => a - b);
+  const b9ok = chord.tones.includes(13) || chord.tones.includes(1);
   const cands = [];
   for (let r = 0; r < sorted.length; r++) {
     const rot = sorted.slice(r).concat(sorted.slice(0, r));
@@ -118,15 +125,77 @@ export function voiceChord(chord, prev, lo = 53) {
       base = n;
     }
     cands.push(notes);
+    if (notes.length >= 3) {
+      const drop = [...notes];
+      drop[drop.length - 2] -= 12;
+      if (drop[drop.length - 2] >= lo - 5) cands.push(drop.sort((x, y) => x - y));
+      // spread: any of the upper voices raised an octave (within two octaves in all)
+      for (let mask = 1; mask < 1 << (notes.length - 1); mask++) {
+        const v = notes.map((m, i) => (i > 0 && mask & (1 << (i - 1)) ? m + 12 : m)).sort((x, y) => x - y);
+        if (v[v.length - 1] - v[0] <= 24) cands.push(v);
+      }
+    }
   }
-  if (!prev || !prev.length) return cands[0];
-  const cost = (v) => {
+  const clashes = (v) => {
     let c = 0;
-    const n = Math.min(v.length, prev.length);
-    for (let i = 0; i < n; i++) c += Math.abs(v[i] - prev[i]);
-    return c + Math.abs(v.length - prev.length) * 3;
+    for (let i = 0; i < v.length; i++) {
+      for (let j = i + 1; j < v.length; j++) {
+        const d = Math.abs(v[j] - v[i]);
+        if (d === 1 || (d === 13 && !b9ok)) c++;
+      }
+      // low interval limits: a second only above G3, a third only above C3
+      if (i > 0) {
+        const step = v[i] - v[i - 1];
+        if ((v[i - 1] < 55 && step < 3) || (v[i - 1] < 48 && step < 5)) c++;
+      }
+    }
+    if (avoid) {
+      for (const n of v) {
+        for (const a of avoid) {
+          const d = Math.abs(n - a);
+          if (d === 1 || d === 13) c++;
+          if (octave && Math.abs(n + 12 - a) === 1) c++;
+        }
+      }
+    }
+    return c;
+  };
+  const cost = (v) => {
+    let c = clashes(v) * 40;
+    if (prev && prev.length) {
+      const n = Math.min(v.length, prev.length);
+      for (let i = 0; i < n; i++) c += Math.abs(v[i] - prev[i]);
+      c += Math.abs(v.length - prev.length) * 3;
+    } else c += Math.abs(v[0] - lo) * 0.5; // first chord: near the register asked for
+    c += Math.max(0, v[v.length - 1] - v[0] - 14) * 0.6; // compact unless it has to open
+    c += Math.max(0, lo - v[0]) * 1.5; // below the register asked for only to resolve a clash
+    return c;
   };
   return cands.reduce((best, v) => (cost(v) < cost(best) ? v : best));
+}
+
+/**
+ * The chord's guide tones: without the extensions (9th, 11th, 13th) that sit a semitone from another
+ * chord tone (m9's 9th and 3rd, 13's 13th and 7th), and with the 5th if that would leave it thin. A
+ * held layer plays these when another layer (an arpeggio, the keys, a melody) carries the colour:
+ * two layers each voicing a semitone pair somewhere rub whichever way they are voiced.
+ */
+export function guideTones(chord) {
+  const pcs = chord.tones.map((t) => t % 12);
+  const near = (t) => pcs.some((q) => q !== t % 12 && (Math.abs(q - (t % 12)) === 1 || Math.abs(q - (t % 12)) === 11));
+  let tones = chord.tones.filter((t) => t < 13 || !near(t));
+  if (tones.length < 3 && !tones.includes(7)) tones = [...tones, 7].sort((x, y) => x - y);
+  return tones.join() === chord.tones.join() ? chord : { ...chord, tones };
+}
+
+/** True when two voices of v (or v against `other`) sound a semitone or a minor ninth apart. */
+export function hasClash(v, other = []) {
+  const all = [...v, ...other];
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+    const d = Math.abs(all[i] - all[j]);
+    if (d === 1) return true;
+  }
+  return false;
 }
 
 /** Deterministic PRNG so the same bar always plays the same notes (live = offline). */

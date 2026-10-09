@@ -128,11 +128,14 @@ const NEWS60 = (m, o) => {
   }
 };
 
-// WORLD WEATHER (owner 17:05: soft music for every programme): WORLD NOW's light "and finally" song in its
-// sparse chat arrangement under the forecast; silence under the warnings (a storm is not a jingle)
+// WORLD WEATHER (owner 17:05: soft music for every programme): its own song in the open's key under the
+// forecast, a little brighter for tomorrow, keys and bass for the sign-off; silence under the warnings
+// (a storm is not a jingle)
 const WEATHER = (m, o) => {
   switch (m) {
-    case 'weather': return o.kind === 'warning' ? silence(1.2) : bed('world-now/finally', 'chat');
+    case 'weather':
+      if (o.kind === 'warning') return silence(1.2);
+      return bed('world-weather', o.kind === 'tomorrow' ? 'tomorrow' : o.kind === 'outro' ? 'signoff' : 'forecast');
     case 'signoffEnd': return silence(1.5, { atBar: true });
     case 'endcard': return silence(0.6);
     default: return silence();
@@ -181,7 +184,7 @@ export function resolveCue(moment, opts = {}, ctx = {}) {
 }
 
 function gravePadSong(pid) {
-  return { 'world-now': 'world-now/finally', 'tech-bytes': 'tech-bytes', cosmos: 'cosmos', 'money-minute': 'money-minute/drone' }[pid] || 'cosmos';
+  return { 'world-now': 'world-now/finally', 'tech-bytes': 'tech-bytes', cosmos: 'cosmos', 'money-minute': 'money-minute/drone', 'world-weather': 'world-weather' }[pid] || 'cosmos';
 }
 
 export const SONGS = Object.keys(PALETTES);
@@ -212,6 +215,10 @@ export const CUE_SHEET = [
   ['NEWS IN 60', 'each item cut', 'the bed\'s own tick, once, 4 dB up: the only sound between items'],
   ['NEWS IN 60', 'grave / breaking item', 'tick, tock and bass drop out on the cut; the pad stays alone'],
   ['NEWS IN 60', 'sign-off', 'one Gadd9 bell chord on the last word, then the bed bows out'],
+  ['WORLD WEATHER', 'intro, zones', '92 BPM in C: a soft pluck drifting in eighths over long Rhodes chords, a warm pad, triangle roots, a few soft triangle notes between sentences'],
+  ['WORLD WEATHER', 'tomorrow', 'the same song a little brighter'],
+  ['WORLD WEATHER', 'warnings', 'silence (a storm is not a jingle)'],
+  ['WORLD WEATHER', 'sign-off', 'keys, pad and bass, then out on the end card'],
   ['ALL (owner switch soft)', 'light / neutral stories', 'WORLD NOW 76 BPM pad + triangle + slow Rhodes (D); TECH pad + half-time triangle on Am9/D9; COSMOS pad + sub on every shot; MONEY the 800 Hz drone; all below 1.3 kHz, >= 24 LU under the voice'],
   ['ALL', 'grave story', 'silence (opt-in: a near-inaudible low pad), and no bed in the segment after it'],
   ['CHANNEL', 'lead-in WORLD NOW / NEWS IN 60', 'countdown 10.5 s: a quiet bell tick every second, triangle eighths at 120 BPM, a pad minor -> major at 0:00 (sombre: pad only)'],
