@@ -12,16 +12,20 @@ import { ada } from './ada.js';
 import { nova } from './nova.js';
 import { unit8 } from './unit8.js';
 import { rhea, vic, mika } from './correspondents.js';
+import { EXPERTS } from './experts.js';
 
 export const LOOKS = { paco, lola, max, ada, nova, unit8, penny, sam };
 export const PRESENTER_IDS = Object.keys(LOOKS);
 // the correspondents (WORLD NOW links): looked up like presenters, never seated at a desk
 export const CORRESPONDENT_LOOKS = { rhea, vic, mika };
+// the experts (analyses, server/experts.js): seen only in the correspondents' shots, from their own studio
+export const EXPERT_LOOKS = EXPERTS;
 
 /** Look for presenter `id`; `info` is its config entry ({ voice: { gender } }) for unknown ids. */
 export function lookFor(id, info = null) {
   if (LOOKS[id]) return LOOKS[id];
   if (CORRESPONDENT_LOOKS[id]) return CORRESPONDENT_LOOKS[id];
+  if (EXPERT_LOOKS[id]) return EXPERT_LOOKS[id];
   const g = info?.voice?.gender;
   return g === 'female' ? LOOKS.lola : g === 'robot' ? LOOKS.unit8 : LOOKS.paco;
 }

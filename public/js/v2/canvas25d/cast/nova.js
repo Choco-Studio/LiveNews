@@ -57,7 +57,10 @@ export const nova = defineLook({
 
 // The rounded shape around the head (head-local units): centre, half-width,
 // height above and below the centre (the lower half narrows toward the jaw).
-const HALO = { cy: -3.6, rx: 11.0, up: 10.4, down: 8.8, taper: 0.2 };
+// A look built on these coils may state its own (L.halo, e.g. cast/experts.js); `brow` is how far below the
+// head's top the hairline sits.
+export const NOVA_HALO = { cy: -3.6, rx: 11.0, up: 10.4, down: 8.8, taper: 0.2, brow: 4.2 };
+let HALO = NOVA_HALO; // the drawing look's (set by the drawers below)
 const LC = [0, 0], SC = [0, 0];
 const hash = (a, b) => {
   const h = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
@@ -134,7 +137,7 @@ function haloBox(head, pad, yFrom = HALO.cy - HALO.up) {
  * every shadow so the features never get a halo. In the wide (two tones) the whole face steps up
  * one tone, the chin's underside too: lit side tan, shade side tanShade.
  */
-function drawWarmHead(buf, L, m, head, s) {
+export function drawWarmHead(buf, L, m, head, s) {
   drawHead(buf, L, m, head, s);
   const H = L.head;
   const g = head.gb + GROUPS.head;
@@ -227,7 +230,8 @@ function drawWarmHead(buf, L, m, head, s) {
 // Hair
 
 // The back of the hair: only where it can show (behind the neck and jaw, under the front mass).
-function drawHaloBack(buf, L, m, head, s, sk) {
+export function drawHaloBack(buf, L, m, head, s, sk) {
+  HALO = L.halo || NOVA_HALO;
   const lag = sk.hairLag || 0;
   const H = L.head;
   const [x0, y0, x1, y1] = haloBox(head, 1, H.cheekY - 0.5);
@@ -242,14 +246,15 @@ function drawHaloBack(buf, L, m, head, s, sk) {
 }
 
 // The front: the halo mass (the shadowed interior between clusters), then the clusters, then the rim.
-function drawCoils(buf, L, m, head, s, sk) {
+export function drawCoils(buf, L, m, head, s, sk) {
+  HALO = L.halo || NOVA_HALO;
   const H = L.head;
   const lag = sk.hairLag || 0;
   const tr = tier(s);
   const yawX = Math.sin(head.yaw) * H.R * 0.75;
   const pitchShift = Math.sin(head.pitch) * 2.0;
   // a rounded face window: the hair comes down at the temples (never a straight cap edge)
-  const hairline = (fx) => H.top + 4.2 + pitchShift + fx * fx * 0.055 + 0.2 * HL_WAVE[clampIdx(fx)];
+  const hairline = (fx) => H.top + (HALO.brow ?? 4.2) + pitchShift + fx * fx * 0.055 + 0.2 * HL_WAVE[clampIdx(fx)];
   // a face window: open forehead and cheeks, hair down the sides to the jaw
   const inFace = (x, y) => {
     const fx = x - yawX;

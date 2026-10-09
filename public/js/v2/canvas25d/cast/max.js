@@ -120,7 +120,7 @@ function outerR(a, RV, tr, keepLobes) {
 }
 
 // Short textured crop: close faded sides with a sideburn, the quiff's volume on top.
-function drawTextured(buf, L, m, head, s, sk) {
+export function drawTextured(buf, L, m, head, s, sk) {
   const H = L.head;
   const lag = sk.hairLag || 0;
   const tr = tier(s);
@@ -294,7 +294,7 @@ const rimDecal = () => material('cast-b:rim', { ramp: [P.silver], line: P.ink, d
 // eyes are untouched, and the open jaw is already in the skin FACES drew), lit by the skin's own tone
 // under it, so the beard turns with the head and follows every mouth shape for free.
 
-function drawBeard(buf, L, m, head, s) {
+export function drawBeard(buf, L, m, head, s) {
   if (!L.beard) return;
   const H = L.head, M = L.mouth, N = L.nose;
   const tr = tier(s);

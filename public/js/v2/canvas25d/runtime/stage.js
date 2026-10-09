@@ -36,6 +36,7 @@ import { THEME_ACCENT } from '../../../cast.js';
 import { CueClock, prunePerf, shiftPerf } from './cueclock.js';
 import { paceTrace } from '../../../pace.js';
 import { drawBackdrop, REMOTE, TWOWAY, cropInto, composeTwoWay } from '../studio/remote.js';
+import { drawExpertStudio } from '../studio/experts.js';
 
 /** Legacy shot names the Stage draws (framings travel in scene.framing). */
 export const STUDIO_SHOTS = new Set(['wide', 'close']);
@@ -251,7 +252,7 @@ export class Stage {
     // the correspondent of the link on air (scene.remote): { key, slot, id, actor, perf, emotion }
     this.remote = null;
     this.remoteList = [{ actor: null, x: REMOTE.x, y: REMOTE.y, s: REMOTE.s, clip: false }];
-    this.backdrop = { kind: 'desk', frame: null, lat: 20, lon: 0, accent: this.accent, footage: null };
+    this.backdrop = { kind: 'desk', frame: null, lat: 20, lon: 0, accent: this.accent, footage: null, studio: null };
     this.studioBox = new Uint32Array(TWOWAY.w * TWOWAY.h);
     this.remoteBox = new Uint32Array(TWOWAY.w * TWOWAY.h);
   }
@@ -385,16 +386,17 @@ export class Stage {
 
   /**
    * A cut to a correspondent's shot: the backdrop is decided now and kept for the shot (the place's footage
-   * when the deck has a frame of it and the story is not grave, else the desk); the two-way frames the link's
-   * presenter in their single, to be cropped into the left box.
+   * when the deck has a frame of it and the story is not grave, else the desk; an expert's own studio,
+   * studio/experts.js); the two-way frames the link's presenter in their single, to be cropped into the left box.
    */
   remoteCut(scene) {
     const r = scene.remote || {};
     const bd = this.backdrop;
     const id = r.footage || null;
     const deck = scene.footageDeck;
-    bd.footage = !r.grave && id && deck?.ready?.(id) ? id : null;
-    bd.kind = bd.footage ? 'footage' : 'desk';
+    bd.footage = r.kind !== 'expert' && !r.grave && id && deck?.ready?.(id) ? id : null;
+    bd.studio = r.kind === 'expert' ? r.backdrop || null : null;
+    bd.kind = bd.footage ? 'footage' : bd.studio ? 'studio' : 'desk';
     bd.lat = Number.isFinite(r.lat) ? r.lat : 20;
     bd.lon = Number.isFinite(r.lon) ? r.lon : 0;
     bd.accent = this.accent;
@@ -423,7 +425,7 @@ export class Stage {
   drawRemote(t, scene) {
     const bd = this.backdrop;
     bd.frame = bd.kind === 'footage' ? scene.footageDeck?.frame?.(bd.footage, 'back', t) || null : null;
-    drawBackdrop(frame.px, bd.frame ? bd : { kind: 'desk', lat: bd.lat, lon: bd.lon, accent: bd.accent }, t);
+    if (bd.kind !== 'studio' || !drawExpertStudio(frame.px, bd.studio, t)) drawBackdrop(frame.px, bd.frame ? bd : { kind: 'desk', lat: bd.lat, lon: bd.lon, accent: bd.accent }, t);
     if (!this.remote) return null;
     return drawActors(t - this.epoch, this.remoteList, null)[0] || null;
   }

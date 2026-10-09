@@ -68,7 +68,7 @@ const ST = { sw: 1.25, s: 1, seed: 29, lo: 0, hi: 0, stagger: 2.2, hiW: 0.5, sep
 
 // The hair behind the head and neck. Only the tucked side can show (a sliver behind the ear
 // and the neck); on the long side the front panel and the body cover it.
-function drawHairBack(buf, L, m, head, s, sk) {
+export function drawHairBack(buf, L, m, head, s, sk) {
   const H = L.head;
   const lag = sk.hairLag || 0;
   const cyc = H.craniumY - 0.3;
@@ -92,7 +92,7 @@ function drawHairBack(buf, L, m, head, s, sk) {
 }
 
 // Crown, the long side, the tucked side and the swept fringe.
-function drawStraight(buf, L, m, head, s, sk) {
+export function drawStraight(buf, L, m, head, s, sk) {
   const H = L.head, E = L.ears;
   const lag = sk.hairLag || 0;
   const tr = tier(s);
@@ -264,7 +264,8 @@ const rimDecal = () => material('cast-b:rim', { ramp: [P.silver], line: P.ink, d
 // Glasses (FACES' drawGlasses), clipped to the head and hair; in the wide the top bar of each lens;
 // then the stud on the tucked-side ear.
 const SAVE = new Uint8Array(160 * 48); // background mask of the eye band before the glasses (reused)
-function drawOver(buf, L, m, head, s, sk) {
+/** The glasses of L.glasses, clipped to the silhouette, with the wide's lens bars (any look's over hook). */
+export function drawSpecs(buf, L, m, head, s, sk) {
   const H = L.head, E = L.eyes;
   // the eye band's box (screen px), roll ignored: the far lens at a glance must not stick out past the
   // silhouette (FACES' lens foreshortening leaves a few px over the background), so lens pixels that
@@ -281,7 +282,17 @@ function drawOver(buf, L, m, head, s, sk) {
     }
   }
   if (s < 1.35) wideFrames(buf, L, m, head);
+}
+
+function drawOver(buf, L, m, head, s, sk) {
+  drawSpecs(buf, L, m, head, s, sk);
+  drawStud(buf, L, head, s);
+}
+
+/** A small stud of L.earrings on the camera-right ear (medium shots and closer). */
+export function drawStud(buf, L, head, s) {
   if (!L.earrings || s < 1.2) return;
+  const H = L.head;
   const EA = L.ears;
   const turn = Math.sin(head.yaw);
   if (turn > 0.35) return; // the ear has slipped behind the skull
