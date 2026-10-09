@@ -169,12 +169,29 @@ function frameRect(px, x0, y0, x1, y1, t, lit, base, shade) {
   }
 }
 
-// a gilt frame: yellow where the light falls, orange, rust in its shadow
-const gilt = (px, x0, y0, x1, y1, t = 4) => {
-  frameRect(px, x0, y0, x1, y1, t, C.yellow, C.orange, C.rust);
-  rect(px, x0 + t, y1, x1 + 1, y1 + 1, C.black); // its shadow on the wall
-  rect(px, x1, y0 + t, x1 + 1, y1 + 1, C.black);
-};
+/**
+ * A gilt frame `t` px thick: an outer moulding lit on the top and left, a bevel catching the light, a run of
+ * small ornaments, an inner shadow; its shadow on the wall below and to the right.
+ */
+function gilt(px, x0, y0, x1, y1, t = 4) {
+  for (let k = 0; k < t; k++) {
+    const a = x0 + k, b = y0 + k, c = x1 - 1 - k, d = y1 - 1 - k;
+    const lit = k === 0 ? C.orange : k === 1 ? C.yellow : k === t - 1 ? C.brown : C.orange;
+    const shade = k === 0 ? C.brown : k === 1 ? C.orange : k === t - 1 ? C.maroon : C.rust;
+    rect(px, a, b, c + 1, b + 1, lit);
+    rect(px, a, b, a + 1, d + 1, lit);
+    rect(px, a, d, c + 1, d + 1, shade);
+    rect(px, c, b, c + 1, d + 1, shade);
+    // the ornament: a bead every third pixel along the middle moulding
+    if (k === 2 && t >= 4) {
+      for (let x = a + 1; x < c; x += 3) put(px, x, b, C.yellow), put(px, x, d, C.orange);
+      for (let y = b + 1; y < d; y += 3) put(px, a, y, C.yellow), put(px, c, y, C.orange);
+    }
+  }
+  for (const [x, y] of [[x0, y0], [x1 - 1, y0], [x0, y1 - 1], [x1 - 1, y1 - 1]]) put(px, x, y, C.yellow); // the corners' rosettes
+  rect(px, x0 + 2, y1, x1 + 1, y1 + 1, C.black); // its shadow on the wall
+  rect(px, x1, y0 + 2, x1 + 1, y1 + 1, C.black);
+}
 
 // ------------------------------------------------------------------------------------------------ markets
 
@@ -770,7 +787,11 @@ function gallery(px, r, st) {
   // a landscape in oils: an evening sky, the sun low, hills, a river
   const [lx0, ly0, lx1, ly1] = GALLERY.land;
   const ix0 = lx0 + 4, iy0 = ly0 + 4, ix1 = lx1 - 4, iy1 = ly1 - 4;
-  bands(px, ix0, iy0, ix1, iy1 - 24, [C.navy, C.blue, C.fog, C.cream, C.yellow]);
+  bands(px, ix0, iy0, ix1, iy1 - 24, [C.navy, C.blue, C.fog, C.cream, C.yellow], false, 0.9);
+  for (const [cx, cy, w] of [[ix0 + 18, iy0 + 9, 16], [ix0 + 58, iy0 + 15, 12], [ix0 + 90, iy0 + 7, 10]]) {
+    for (let k = 0; k < w; k++) put(px, cx + k, cy + (k % 5 === 0 ? -1 : 0), k % 4 ? C.silver : C.white);
+    for (let k = 2; k < w - 3; k++) put(px, cx + k, cy + 1, C.fog);
+  }
   disc(px, ix0 + 76, iy1 - 30, 6, C.cream);
   disc(px, ix0 + 76, iy1 - 30, 4, C.white);
   for (let x = ix0; x < ix1; x++) {
@@ -796,12 +817,15 @@ function gallery(px, r, st) {
     if (d < 1) px[y * W + x] = x < pc - 1 ? C.skin : C.skinShade;
   }
   for (let y = py0 + 12; y < py0 + 20; y++) for (let x = pc - 8; x < pc + 8; x++) if (((x - pc) / 8) ** 2 + ((y - py0 - 19) / 7) ** 2 < 1 && y < py0 + 18) px[y * W + x] = C.maroon;
-  gilt(px, px0, py0, px1, py1, 3);
+  for (const ex of [pc - 3, pc + 2]) put(px, ex, py0 + 24, C.maroon);
+  put(px, pc, py0 + 27, C.tanShade);
+  rect(px, pc - 2, py0 + 30, pc + 2, py0 + 31, C.brown);
+  gilt(px, px0, py0, px1, py1, 4);
   // a colour field (left): two soft blocks on rust, a thin black frame
   const [fx0, fy0, fx1, fy1] = GALLERY.field;
   rect(px, fx0, fy0, fx1, fy1, C.black);
-  rect(px, fx0 + 2, fy0 + 2, fx1 - 2, fy1 - 2, C.rust);
-  for (const [y0, y1, c] of [[fy0 + 6, fy0 + 38, C.orange], [fy0 + 44, fy1 - 6, C.darkRed]]) {
+  rect(px, fx0 + 2, fy0 + 2, fx1 - 2, fy1 - 2, C.maroon);
+  for (const [y0, y1, c] of [[fy0 + 6, fy0 + 38, C.rust], [fy0 + 44, fy1 - 6, C.darkRed]]) {
     for (let y = y0; y < y1; y++) for (let x = fx0 + 6; x < fx1 - 6; x++) {
       const e = Math.min(x - fx0 - 6, fx1 - 7 - x, y - y0, y1 - 1 - y);
       if (e > 1 || bayer(x, y) < 0.5) px[y * W + x] = c;
