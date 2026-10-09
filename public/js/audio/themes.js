@@ -147,6 +147,68 @@ function cosmosTitles(tempo, H, C) {
   };
 }
 
+// MONEY MINUTE's title sequence (opens/cues.js): after the close. F major, straight, the intro vamp
+// stretched to a bar a chord. Pad from silence, then the tri bass in half notes (root and fifth),
+// then the short e-piano chords on the "and" of 2 and 4, each the burst of windows coming on in the
+// time-lapse: Fmaj9 rising over the rooftops, Dm9 as the sun goes; the cut to the tower lands on
+// Bbmaj9 with a felt thump, and each floor going dark is an e-piano note falling (D, C, A) on the
+// beat; the last window is a high F, alone. C6sus as the ledger opens, then the signature on the
+// e-piano over Bbmaj9 and C6sus to F6/9 with the lock-up. No swing, no brass, no bells, no coins.
+function moneyTitles(tempo, H, C) {
+  const k = 65; // F4
+  const Qc = SEQ_CUES['money-minute'];
+  const q = H / Qc.hit;
+  const at = (b) => b * q;
+  const m0 = H - 4;
+  const total = C + 2;
+  const cut = at(Qc.cut);
+  const ch = {
+    fmaj9: [k - 8, k - 5, k - 1, k + 2], // A C E G
+    dm9: [k - 12, k - 8, k - 5, k - 1], // F A C E
+    bbmaj9: [k - 8, k - 5, k - 3, k], // A C D F
+    c6sus: [k - 5, k, k + 2, k + 4], // C F G A
+    f69: [k - 8, k - 3, k + 2, k + 7], // A D G C
+  };
+  const bars = [[0, ch.fmaj9], [at(4), ch.dm9], [cut, ch.bbmaj9], [at(12), ch.c6sus], [m0, ch.bbmaj9], [m0 + 2.5, ch.c6sus]];
+  const chordAt = (b) => bars.reduce((c, [s, v]) => (b >= s ? v : c), ch.fmaj9);
+  // the keys on the "and" of 2 and 4 (with the bursts of windows), quiet first; none on the bit
+  const keys = [...Qc.lights.map(at), at(9.5), at(13.5), at(15.5)].map((b, i) => [b, chordAt(b).slice(1), 0.4, Math.min(0.5, 0.34 + i * 0.025)]);
+  const roots = [[0, k - 24], [at(4), k - 27], [cut, k - 31], [at(12), k - 29], [m0, k - 31], [m0 + 2.5, k - 29]];
+  const bass = [];
+  for (let i = 0; i < roots.length; i++) {
+    const [s, r] = roots[i];
+    const e = i + 1 < roots.length ? roots[i + 1][0] : H;
+    if (i === 0) continue; // the bass enters with the sun going down, after the pad and the keys
+    const from = s;
+    const vel = s < cut ? 0.7 : 0.85;
+    for (let b = from, n = 0; b < e - 1e-6; b += 2, n++) bass.push([b, n % 2 ? r + 7 : r, Math.min(2, e - b), n % 2 ? vel - 0.1 : vel]);
+  }
+  bass.push([H, k - 24, total - H, 0.85]);
+  const [o9, o10, o11] = Qc.off.map(at);
+  return {
+    bpm: tempo,
+    swing: 0,
+    room: 0.2,
+    echo: { amount: 0.6, beats: 0.75, feedback: 0.26 },
+    fadeOut: 0.8,
+    tracks: [
+      { kind: 'lead', inst: LEAD.epiano, notes: part([...motif(k, COLOURS.money, m0), [H, k + 12, C - H - 0.25, 0.85]], total), gain: 1.05 },
+      // the floors going dark, then the last window
+      { kind: 'lead', inst: LEAD.epiano, notes: part([[o9, k + 9, 0.9, 0.5], [o10, k + 7, 0.9, 0.48], [o11, k + 4, 0.5, 0.46], [at(Qc.last), k + 12, 1.2, 0.56]], total), gain: 0.9, echo: 0.55, pan: 0.15 },
+      { kind: 'harmony', inst: 'pad', notes: part([
+        [0, ch.fmaj9, at(4), 0.28], [at(4), ch.dm9, cut - at(4), 0.4], [cut, ch.bbmaj9, at(12) - cut, 0.52],
+        [at(12), ch.c6sus, m0 - at(12), 0.5], [m0, ch.bbmaj9, 2.5, 0.55], [m0 + 2.5, ch.c6sus, 1.5, 0.56], [H, ch.f69, total - H, 0.66],
+      ], total), pan: -0.22 },
+      { kind: 'harmony', inst: 'keys', notes: part([...keys, [H, ch.f69, 1.5, 0.7]], total), pan: 0.25, echo: 0.2 },
+      { kind: 'bass', inst: 'tri', notes: part(bass, total), gain: 0.55 },
+      stab('keys', [k - 12, ...ch.f69.slice(0, 3)], C, total, 0.7, 1),
+      // a felt thump on the cut and under each floor going dark; the hit and the button
+      { drums: drums([[cut, 'F', 0.5], [o9, 'F', 0.3], [o10, 'F', 0.32], [o11, 'F', 0.34], [H, 'F', 0.75], [C, 'F', 0.55]], total) },
+      { drums: drums([[C, 'T', 0.42]], total) },
+    ],
+  };
+}
+
 // TECH BYTES' title sequence (opens/cues.js): the run over the board, the crane, the boot. A dorian,
 // half-time. The pulse25 arpeggio (eighths, dotted echo, low-passed) is the data on the board, its
 // beat notes leaning on the signals leaving the camera; the wave fires on Am9's top; in the crane
@@ -390,7 +452,10 @@ const OPENS = {
   'money-minute': {
     bpm: 114,
     key: 65,
+    // the title sequence (opens/moneytitles.js) on its own grid
+    long: { bpm: SEQ_CUES['money-minute'].bpm, maxDuration: 11 },
     build(H, C) {
+      if (H >= SEQ_CUES['money-minute'].hit) return moneyTitles(this.tempo, H, C);
       const k = 65; // F4
       const m0 = H - 4;
       const total = C + 2;

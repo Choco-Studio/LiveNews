@@ -305,6 +305,28 @@ The shared clock comes from CONTRACTS.md (opens): build 0–1.5 s, reveal 1.5–
 - **Banned in the open:** numbers, bars, trend lines and arrows. A chart that rises every evening would contradict the tape. The current `public/js/scenes/opens/money.js` emblem (five green bars and a climbing trend line with an arrow head) is replaced (request C2).
 - After the lock-up, a hard cut on the downbeat to the WIDE.
 
+### 3.7b The title sequence (owner, 9 Oct: as crafted as WORLD NOW's)
+
+9.47 s at 114 BPM on the cue sheet in `public/js/scenes/opens/cues.js`; the pictures (`opens/moneytitles.js`) and the theme (`themes.js` `moneyTitles`) read the same beats. After the close: a time-lapse of the financial district, then its tallest tower emptying, floor by floor, until one lit office is left. That office is the bit, and the ledger opens out of it.
+
+| Beats (s) | Pictures | Music |
+|---|---|---|
+| 0–8 (0–4.2) | A time-lapse from the golden hour to the blue hour. The camera rises over the rooftops and tracks along the skyline: far haze, offices, an elevated road, the towers and the rooftops under the camera, each layer in parallax. The sun goes down behind the far towers, lenticular clouds stream, the road's traffic draws streaks, and the offices light up in bursts. The tallest tower's crown comes on at beat 5.5. | Fmaj9 from silence on the pad. Short e-piano chords on the "and" of 2 and 4: each is a burst of windows coming on (beats 1.5, 3.5, 5.5, 7.5). The tri bass enters in half notes with Dm9 as the sun goes. |
+| 8–11.5 (4.2–6.05) | Cut on the downbeat to that tower's top floors and stepped crown, every office lit, between two neighbours further off. The camera tilts down to the top floor. The floors go dark on the beat, from the foot upward (the neighbours with the first). The crown's floodlights go with the last. The top floor closes in on one office. | Bbmaj9 and a felt thump on the cut. A falling e-piano note and a soft felt on each floor going dark (D, C, A on beats 9, 10, 11). A high F, alone, for the last window. |
+| 11.5–11.9 (6.05–6.27) | The tower dissolves into the field, leaving the bit | The F rings on |
+| 11.9–18 (6.27–9.47) | The binding opens out of the bit and the package's ledger builds, then the reveal | C6sus. Then the signature on the e-piano over Bbmaj9 and C6sus, into F6/9 on the hit |
+| 18–19.5 | Still for the cut | The button |
+
+**Why a skyline is not a chart:** the towers are silhouettes against the sky, tinted by it (the far ones the most), with crowns, setbacks and plant on their roofs. No row of rising columns, no figures and no arrows (§3.7).
+
+**Craft rules, measured:**
+- Every layer moves in whole pixels and steps 15 times a second, so a layer's x and y change on the same frame and never on two frames running. A 1 px window never lights a pixel for a single frame. This is tested at 30 and 60 fps.
+- The towers' windows move under half a pixel a frame. The rooftops, the fastest layer, carry nothing thinner than 2 px.
+- Sky steps are flat, with about 5 px of dither where the value changes slowly, so no edge is a wide checkerboard.
+- A lit office in the close-up is drawn with the bit's own pixels: yellow, its shade on the right and the foot, a cream corner. The last one is the bit, tested on the binding's rows.
+
+No swing, brass, bells, coins or arpeggio.
+
 ### 3.8 Music and sound
 
 **Why story copy is silent.** The owner asked (17:05) for soft background music "for each programme and moment", without covering the presenter and only at a good moment.

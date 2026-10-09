@@ -25,6 +25,19 @@ export const CUES = Object.freeze({
     settle: 9.5, // the emblem, settled at centre stage
     hit: 12,
   }),
+  // MONEY MINUTE: after the close. A time-lapse over the financial district from the golden hour to
+  // the blue hour, the camera rising over the rooftops and tracking along the skyline as the sun
+  // sets and the offices light up; a cut to the tallest tower's face, whose lights go out floor by
+  // floor until one window is left: the bit, from which the ledger opens
+  'money-minute': Object.freeze({
+    bpm: 114,
+    lights: Object.freeze([1.5, 3.5, 5.5, 7.5]), // windows come on in bursts with the e-piano's chords
+    sun: 5, // the sun goes down behind the far skyline
+    cut: 8, // cut to the tower's face, every office lit
+    off: Object.freeze([9, 10, 11]), // the floors go dark on the beat, from the foot upward
+    last: 11.5, // one window left: the bit
+    hit: 18,
+  }),
 });
 
 /** Seconds of a beat on a programme's grid. */

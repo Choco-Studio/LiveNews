@@ -130,3 +130,45 @@ Nitpicks left:
 2. The nebula's dithered edges crawl slightly as it drifts.
 3. The kit's glide steps the planet's size, as in every open.
 4. The theme is judged on structure and measurements only.
+
+## MONEY MINUTE
+
+The first idea was a guilloché rosette and a banknote. A prototype at 384x216 showed that engraved line work falls to noise at this size, so it was dropped. The sequence became a time-lapse of the financial district instead: the evening, the tower emptying, the last window as the bit.
+
+### Round 1: score 9.2 (lowest: pixel craft)
+
+1. The towers were tinted by the full sky gradient, so every silhouette carried the same horizontal colour bands.
+2. Windows of 1 px slid at 0.7 px a frame, and diagonally in x and y on alternate frames: 204,000 A→B→A flickers.
+3. The close-up was a full-frame grid of 4 px lights, so it read as an LED panel.
+4. The middle distance dithered to a checkerboard for whole seconds as it darkened.
+5. The crown was cut off at the top of the frame at the cut, so the match on the tower was lost.
+6. The neighbours in the close-up were boxes outlined on four sides.
+7. The far skyline's lights were placed by a modulo rule and drew diagonal hatching.
+8. The clouds were 1–3 px lines that read as wires.
+9. The sky's slow gradients dithered across 30 rows.
+10. The music was level from beat 1 to beat 13: the bass entered at once.
+
+### Round 2: score 9.8 (final)
+
+Fixed from round 1:
+- each layer has its own flat tone, with haze along the horizon and the sun's glow through it;
+- the camera is slower (towers under 0.5 px a frame) and every slide steps at 15 Hz, so x and y change together and never on two frames running;
+- the close-up frames the tower's top floors and its stepped crown against the sky, between two neighbours with slanted and setback roofs and fins;
+- layers darken late and quickly;
+- the sky's dither is about 5 px wide whatever the gradient;
+- the clouds are lenses with a lit underside;
+- an elevated road carries the time-lapse's traffic streaks;
+- lit skylights sit on the rooftops;
+- the bass enters with the sun going down, and a felt sounds under each floor going dark.
+
+Evidence:
+- flicker fell from 204,000 to 16,400 over the sequence; most of what is left is the cut itself and the package's own glide;
+- the hand-over to the package differs by 0 pixels (lab);
+- frames take 4.5 ms (median) and 9 ms (p95);
+- the theme measures -16.5 LUFS.
+
+Nitpicks left:
+1. The tower dissolves into the field through the screen's matrix in a quarter of a second (dark into dark).
+2. The road's streaks are small at 1x.
+3. The theme is judged on structure and measurements only.
+
