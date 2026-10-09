@@ -447,7 +447,7 @@ function lowerFirstWord(text, info) {
   const m = String(text).match(/^([A-Z][a-z'’-]*)(\s|$)/);
   if (!m || m[1] === 'I') return text;
   const word = m[1];
-  if (lookupPlace(word) || /^[A-Z][a-z]+[A-Z]/.test(word)) return text;
+  if (lookupPlace(word) || /^[A-Z][a-z]+[A-Z]/.test(word) || DEMONYM.test(word)) return text;
   // the headline ends a sentence of its own: "...space station. Astronauts on..." is not a name mid-sentence
   const story = `${String(info.s.title).replace(/[.!?]*$/, '.')} ${info.s.summary || ''} ${info.s.body || ''}`;
   const lower = new RegExp(`(?<![\\p{L}])${word.toLowerCase()}(?![\\p{L}])`, 'u').test(story);
@@ -573,6 +573,8 @@ const openingOf = (t) => {
   const w = String(t).replace(/\[[^\]]*\]/g, ' ').replace(/^\s*(?:And finally:\s*)?/, '').trim().split(/\s+/).slice(0, 2).map((x) => x.toLowerCase().replace(/[^\p{L}]/gu, ''));
   return [SAME_SENSE.get(w[0]) || w[0], w[1]].join(' ');
 };
+// A people's name keeps its capital mid-sentence: "Coming up: German logistics group Rhenus..." (once "german", 9 Oct)
+const DEMONYM = /^(?:American|British|English|Scottish|Welsh|Irish|French|German|Dutch|Belgian|Swiss|Austrian|Italian|Spanish|Portuguese|Greek|Turkish|Russian|Ukrainian|Polish|Czech|Hungarian|Romanian|Swedish|Norwegian|Danish|Finnish|Icelandic|European|African|Asian|Arab|Chinese|Japanese|Korean|Indian|Pakistani|Bangladeshi|Indonesian|Thai|Vietnamese|Filipino|Malaysian|Australian|Canadian|Mexican|Brazilian|Argentine|Chilean|Colombian|Peruvian|Cuban|Israeli|Palestinian|Iranian|Iraqi|Syrian|Saudi|Egyptian|Nigerian|Kenyan|Ethiopian|Ghanaian|Kazakh|Uzbek|Afghan|Sudanese|Libyan|Moroccan|Algerian|Tunisian|Lebanese|Jordanian|Qatari|Emirati|Taiwanese|Mongolian|Nepalese|Sri Lankan|Venezuelan|Haitian|Jamaican|Congolese|Somali|Ugandan|Tanzanian|Zimbabwean|Zambian|Senegalese|Malian|Latin|Western|Eastern|Northern|Southern|Middle)$/;
 const PRONOUN_START = /^(?:It|Its|They|Their|This|These|Those|He|She|His|Her)\b/;
 /**
  * Can this summary sentence open a story or a round-up item? The summary's first sentence can (unless it
@@ -1681,7 +1683,9 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       anchor,
       // (a light topic is not good news in itself: "AI slop overwhelms bug bounty programmes" is said straight)
       emotion: info.sad ? 'sad' : info.grave ? 'serious' : isLighter ? (info.curious && CURIOUS.test(s.title) ? 'surprised' : 'happy') : info.light && !DOWNBEAT.test(`${s.title} ${s.summary || ''}`) ? 'happy' : 'neutral',
-      headline: shortHeadline(s.title, program?.headlineMax),
+      // (a label is no strap: "BBC on Hurricane Isaias and its expected Gulf Coast landfall" went up over its own story, 9 Oct;
+      // the story's own news does, cut like any headline)
+      headline: shortHeadline(/^(?:\p{Lu}[\p{L}’'.&-]*\s+){1,3}on\s+\p{Lu}/u.test(s.title) ? unstop(teaseSentence(info)?.short || s.title) : s.title, program?.headlineMax),
       text: parts.join(' '),
       // A place opens on the map, and the picture follows it; a picture alone is shown full screen.
       shot: info.loc ? 'map' : s.image ? 'full' : solo ? 'close' : 'wide',

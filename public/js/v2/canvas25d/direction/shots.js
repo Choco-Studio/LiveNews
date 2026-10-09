@@ -95,7 +95,14 @@ export function planShots(ctx) {
   // sentence to the two-way (director.js throwTo), so no beat, cap or split may cut away just before it
   const tl = ctx.type === 'story' && ctx.seg?.link && whole.bounds.length ? { ...whole, end: whole.bounds[whole.bounds.length - 1].t, bounds: whole.bounds.slice(0, -1) } : whole;
   let out;
-  switch (id) {
+  // IN PLAIN ENGLISH: the director holds the term's card for the whole line (director.js), so the plan says so (a
+  // studio wide here once merged, in the pace layout, with the story's own wide into an 18-second hold)
+  const termCard = ctx.type === 'chat' && ctx.seg?.term?.term && PACE[id]?.shots?.terms;
+  // STILL TO COME: the director plays its frame over the stories it names (director.js playStillToCome)
+  const teaseFrame = ctx.type === 'chat' && ctx.seg?.stillToCome?.length && PACE[id]?.shots?.stillToCome;
+  if (termCard) out = [ev(ctx, 0, 0, 'fact', null, ctx.speaker, 'term')];
+  else if (teaseFrame) out = [ev(ctx, 0, 0, 'tease', null, ctx.speaker, 'still-to-come')];
+  else switch (id) {
     case 'tech-bytes':
       out = techBytes(ctx, tl);
       break;
@@ -957,14 +964,66 @@ const insideDry = (ctx, t) => !!ctx.dryLine && t >= ctx.dryLine.t0 - 0.05 && t <
 function moneyMinute(ctx, tl) {
   const me = ctx.speaker;
   const seg = ctx.seg;
-  if (ctx.type !== 'story') return [ev(ctx, 0, 0, 'wide', 'wide', me, ctx.type === 'outro' ? 'signoff' : ctx.type === 'intro' ? 'greeting' : 'wide')];
+  if (ctx.type !== 'story') {
+    // (a long intro leaves its WIDE at run time: the hold guard cuts to the MCU-R and greets on the WIDE again)
+    return [ev(ctx, 0, 0, 'wide', 'wide', me, ctx.type === 'outro' ? 'signoff' : ctx.type === 'intro' ? 'greeting' : 'wide')];
+  }
   // IN BRIEF (the format round, config roundup.kind "pictures"): each item over its own picture
   if (ctx.seg.roundup) return quickBytes(ctx);
   const plan = moneyStoryPlan(ctx, tl);
-  return plan.map((p) => {
+  const out = plan.map((p) => {
     if (p.boundary) return ev(ctx, pauseCut(ctx, p.boundary.i), p.boundary.char, p.shot, p.framing, me, p.beat);
-    return ev(ctx, p.at ?? 0, 0, p.shot, p.framing, me, p.beat, p.extra || null);
+    return ev(ctx, p.at ?? 0, p.char ?? 0, p.shot, p.framing, me, p.beat, p.extra || null);
   });
+  capMoneyStudio(ctx, tl, out, SHOT_STYLES['money-minute'].shotMax);
+  return out;
+}
+
+/**
+ * No studio shot past the maximum (12 s): a long MCU-R gives way to the WIDE inside a sentence pause and comes back
+ * for the story's end (no story ends on the WIDE); a long WIDE gives way to the MCU-R. Two 19-second singles aired
+ * once (MONEY MINUTE, 9 Oct: a story with no picture, and the number of the day after its card).
+ */
+function capMoneyStudio(ctx, tl, out, max) {
+  const studio = (e) => e.shot === 'close' || e.shot === 'wide';
+  const near = (from, to, at) => {
+    let best = null;
+    for (const b of tl.bounds) {
+      if (b.blocked || b.i == null) continue;
+      const t = pauseCut(ctx, b.i);
+      if (t - from < MIN_SHOT || to - t < MIN_SHOT) continue;
+      if (!best || Math.abs(t - at) < Math.abs(best.t - at)) best = { ...b, t };
+    }
+    return best;
+  };
+  for (let k = 0; k < out.length; k++) {
+    const e = out[k];
+    if (!studio(e)) continue;
+    const t1 = k + 1 < out.length ? out[k + 1].at : tl.end;
+    if (t1 - e.at <= max) continue;
+    const last = k + 1 === out.length;
+    const other = e.framing === 'wide' ? MCU_R : WIDE_M;
+    if (last && e.framing !== 'wide') {
+      // MCU-R → WIDE → MCU-R: the WIDE a third of the way in, the MCU-R back for the end
+      const a = near(e.at, t1, e.at + (t1 - e.at) / 3);
+      const b = a && near(a.t, t1, e.at + (2 * (t1 - e.at)) / 3);
+      if (!a || !b) {
+        // one pause only: the WIDE may close the story when what follows does not open on it (the number of the day's
+        // card, IN PLAIN ENGLISH, STILL TO COME), so no WIDE ever cuts to the WIDE
+        const next = ctx.episode?.segments?.[ctx.index + 1];
+        const opensOnCard = next && (next.feature === 'number' || next.term || next.stillToCome?.length);
+        const m = opensOnCard ? near(e.at, t1, (e.at + t1) / 2) : null;
+        if (m) out.splice(k + 1, 0, ev(ctx, m.t, m.char, other.shot, other.framing, e.focus, 'alt'));
+        continue;
+      }
+      out.splice(k + 1, 0, ev(ctx, a.t, a.char, other.shot, other.framing, e.focus, 'alt'), ev(ctx, b.t, b.char, e.shot, e.framing, e.focus, 'alt'));
+      k += 2;
+      continue;
+    }
+    const m = near(e.at, t1, (e.at + t1) / 2);
+    if (!m) continue;
+    out.splice(k + 1, 0, ev(ctx, m.t, m.char, other.shot, other.framing, e.focus, 'alt'));
+  }
 }
 
 const MCU_R = { shot: 'close', framing: 'mcu-r', beat: 'mcu-r' };
@@ -989,11 +1048,30 @@ function moneyStoryPlan(ctx, tl) {
   if (ctx.feature === 'number' && !ctx.isLead) {
     plan.push({ shot: 'fact', framing: null, beat: 'number', at: 0, extra: { beforeSpeech: S.numberGap } });
     // back to MCU-R at a sentence start once the card has run MIN_SHOT; else the card holds (≤ 12 s)
-    const b = boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
-    if (b && b.t <= S.shotMax) plan.push({ ...MCU_R, boundary: b });
+    // (when sentence 2 comes just before 4 s and the next only after 12 s, the cut waits in a phrase's pause, a comma
+    // or the accent's end, as COSMOS's Reading does: the card once held 14 s and was cut short on air into a
+    // 19-second single, 9 Oct)
+    let b = boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
+    if (!b || b.t > S.shotMax) {
+      const w = readingSingle(ctx, tl);
+      if (w?.word && w.t - 0.12 <= S.shotMax) b = { t: Math.max(MIN_SHOT, w.t - 0.12), char: w.char, word: true };
+      else if (w && w.t <= S.shotMax) b = w;
+    }
+    if (b && b.t <= S.shotMax) {
+      plan.push(b.word ? { ...MCU_R, at: b.t, char: b.char } : { ...MCU_R, boundary: b });
+      // the story's own picture, when it has one, at the next sentence start (its photo once never aired, 9 Oct)
+      const p = ctx.hasImage ? boundaryAfter(tl, b.t + MIN_SHOT, MIN_SHOT) : null;
+      const back = p ? boundaryAfter(tl, p.t + MIN_SHOT, MIN_SHOT) : null;
+      if (p) plan.push({ shot: 'full', framing: null, beat: 'picture', boundary: p });
+      if (back) plan.push({ ...MCU_R, boundary: back });
+    }
     return plan;
   }
-  const open = ctx.isLead ? MCU_R : WIDE_M;
+  // (the shot the previous story did not end on: one too short to cut away stayed on its opening WIDE, and a
+  // WIDE after it once held 16 s across two stories, 9 Oct)
+  const prev = ctx.index > 0 ? ctx.contextAt?.(ctx.index - 1) : null;
+  const prevStayedWide = !!prev?.valid && prev.type === 'story' && prev.feature !== 'number' && !prev.seg?.roundup && !prev.isLead && prev.duration < 2 * MIN_SHOT + 0.5;
+  const open = ctx.isLead || prevStayedWide ? MCU_R : WIDE_M;
   plan.push({ ...open, at: 0 });
   let c = boundaryAfter(tl, MIN_SHOT, MIN_SHOT);
   if (!c) return plan;

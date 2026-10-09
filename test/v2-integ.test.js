@@ -1765,3 +1765,21 @@ test('direction: the max-hold guard never extends a studio shot into an identica
   const nextWide = { shot: 'wide', framing: 'wide', focus: p.ctx.speaker };
   assert.equal(holdCut(p, last, { shot: 'close', framing: 'mcu-l', focus: p.ctx.speaker, held: 14 }, { ...opts, nextOpen: nextWide }), null, 'a single → the wide the next segment opens on anyway: no cut');
 });
+
+test('MONEY MINUTE: no studio shot past 12 s where the sentences allow a cut; the number of the day shows its picture (9 Oct)', () => {
+  const ep = JSON.parse(fs.readFileSync(new URL('./fixtures/v2-episodes/money-minute-long.json', import.meta.url), 'utf8'));
+  let long = 0;
+  ep.segments.forEach((seg, i) => {
+    if (seg.type !== 'story') return;
+    const p = planSegment(ep, i, {});
+    const shots = p.events.filter((e) => e.kind === 'shot');
+    for (const e of shots) if ((e.shot === 'close' || e.shot === 'wide') && e.len > 12.5) long++;
+    // (a story opening on the WIDE that is too short to cut away stays there; one that cuts ends on the MCU-R)
+    // (unless what follows opens on a card: then a WIDE may close it, never cutting to another WIDE)
+    const next = ep.segments[i + 1];
+    const opensOnCard = next && (next.feature === 'number' || next.term || next.stillToCome?.length);
+    if (shots.length > 1 && !opensOnCard) assert.notEqual(shots[shots.length - 1].framing, 'wide', `story ${i} ends on the MCU-R, never the WIDE`);
+    if (seg.feature === 'number' && seg.hasImage) assert.ok(shots.some((e) => e.shot === 'full'), 'the number of the day’s picture');
+  });
+  assert.equal(long, 0, 'a 19-second single aired twice on 9 Oct');
+});

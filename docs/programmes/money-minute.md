@@ -411,6 +411,12 @@ The owner's brief for every programme (`tech-bytes.md` §3.10, `cosmos.md` "Form
 - **Names.** "Water companies in England..." once became "Yorkshire Water companies...": a word the article also writes in lower case is a common word, never a surname to complete.
 - **Depth.** A story whose article was read is preferred, all else equal, to a one-line summary.
 
+**The voiced episode of 9 Oct** (4 min to the end card; the paper card, STILL TO COME with two pictures and the IN PLAIN ENGLISH card all aired as planned):
+- **Two 19-second singles.** A story with no picture stayed on the MCU-R after its one cutaway, and the number of the day's card held 14 s until a later sentence, then was cut short on air into a long single. No studio shot now runs past 12 s where a sentence pause allows a cut: a long MCU-R gives way to the WIDE and comes back for the story's end. The number's card cuts in a phrase's pause when sentence 2 comes just before 4 s, and the story's own picture follows (its photo had never aired).
+- **WIDE into WIDE.** A story too short to cut away stays on its opening WIDE, so the next one opens on the MCU-R, never a second WIDE (one held 16 s across two stories).
+- **The plan matches the screen.** IN PLAIN ENGLISH and STILL TO COME are planned as their card and frame (the director plays them), not as a studio wide.
+- **The desk.** The same name and the same figure in two headlines are one story ("What happened to OpenAI’s $20bn?" and "OpenAI projected to bring in $20bn less" once aired as a story and as the number of the day). The LATEST ticker carries news only (an advice column scrolled under the programme). A people's name keeps its capital mid-sentence ("Coming up: German logistics group...").
+
 **Length.** On 9 Oct's real news (14 business stories on the desk, 11 with their article) the fallback wrote about 560 words, near 3 min 45 s at Penny's pace, under the 4–6 minutes the LLM writer is asked for: the business feeds give short summaries, and the fallback writes no more than the reporting supports.
 
 ## 4. Requests to other streams

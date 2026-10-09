@@ -994,6 +994,17 @@ describe('Station.status and publicChannel', () => {
     assert.ok(!json.includes('personality') && !json.includes('storyLength'));
   });
 
+  test('the LATEST ticker carries news only: never an advice column, a gallery or a deal (9 Oct)', () => {
+    const now = Date.now();
+    const desk = makeFakeDesk([
+      { id: 'a', title: 'My brother-in-law convinced his parents to sign over their home. Do I intervene?', source: 'MarketWatch', published: now },
+      { id: 'b', title: 'New-build homes for first-time buyers in England – in pictures', source: 'Guardian', published: now - 1 },
+      { id: 'c', title: 'Saudi Arabia reopens Riyadh airport after Houthi attack kills three', source: 'Al Jazeera', published: now - 2 },
+    ]);
+    const station = new Station({ config: CONFIG, newsDesk: desk, producer: makeFakeProducer(), chain: fakeChain, log: silentLogger });
+    assert.deepEqual(station.ticker().map((t) => t.text), ['Saudi Arabia reopens Riyadh airport after Houthi attack kills three']);
+  });
+
   test('without a `channel` option the station uses config/channel.json', () => {
     const station = new Station({ config: CONFIG, newsDesk: makeFakeDesk(), producer: makeFakeProducer(), chain: fakeChain, log: silentLogger });
     assert.equal(station.channel().name, 'GLOBIT 24');

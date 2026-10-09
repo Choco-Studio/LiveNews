@@ -1,5 +1,5 @@
 import { loadChannel, publicChannel } from './channel.js';
-import { isBreaking } from './news.js';
+import { isBreaking, notNews } from './news.js';
 import { publicError } from './usage.js';
 
 /** A feed's status as the public may see it: ok and item count, or a short reason (the detail is in the log). */
@@ -72,7 +72,10 @@ export class Station {
   }
 
   ticker() {
+    // (the LATEST ticker shows news only: an advice column, a gallery or a shopping deal never scrolls under the
+    // programme, "My brother-in-law convinced his parents to sign over their home...", 9 Oct)
     return [...this.news.stories.values()]
+      .filter((s) => !notNews(s))
       .sort((a, b) => b.published - a.published)
       .slice(0, 18)
       .map((s) => ({ source: s.source, text: s.title }));

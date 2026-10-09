@@ -280,7 +280,9 @@ test('pace: planned shots on the episode fixtures respect the minimum shot, the 
     assert.equal(r.sameFraming, 0, `${e.program.id}: identical framings in a row`);
     assert.ok(r.shots.median >= P.shots.median[0] - 0.5, `${e.program.id}: median ${r.shots.median}`);
     // studio holds stay under the bible's maximum
-    for (const s of L.shots) if (s.framing) assert.ok(s.len <= P.shots.studioMax + 2.6, `${e.program.id}: ${s.framing} ${s.len.toFixed(1)} s`);
+    // (a long MONEY MINUTE intro leaves its WIDE at run time: the hold guard, test/v2-integ.test.js)
+    const guarded = (s) => e.program.id === 'money-minute' && e.segments[s.seg]?.type === 'intro';
+    for (const s of L.shots) if (s.framing && !guarded(s)) assert.ok(s.len <= P.shots.studioMax + 2.6, `${e.program.id}: ${s.framing} ${s.len.toFixed(1)} s`);
     // camera moves: within the profile's budget (COSMOS, MONEY MINUTE, NEWS IN 60 never move)
     assert.ok(r.moves <= P.moves.max, `${e.program.id}: ${r.moves} moves`);
     // the pause after each segment is the profile's (the plans are timed for the director's real gaps)

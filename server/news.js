@@ -444,6 +444,18 @@ export const notNews = (s) => {
   return SHOPPING.test(t) || REVIEW.test(unquoted(t)) || BYLINED.test(t) || /\?\s*$/.test(unquoted(t).trim()) || CAPTION.test(String(s?.summary || '')) || NEWSCAST.test(t);
 };
 
+/** The figures of a headline by value ("$20bn" and "$20 billion" are one), years and small counts left out. */
+const FIGURE_SCALE = { k: 1e3, thousand: 1e3, m: 1e6, mn: 1e6, million: 1e6, bn: 1e9, billion: 1e9, tn: 1e12, trillion: 1e12 };
+export function headlineFigures(title) {
+  const out = [];
+  for (const m of String(title || '').matchAll(/(\d[\d,]*(?:\.\d+)?)\s*(k|thousand|m|mn|million|bn|billion|tn|trillion)?(?![\p{L}\d])/giu)) {
+    const n = Number(m[1].replace(/,/g, ''));
+    if (!Number.isFinite(n) || (!m[2] && Number.isInteger(n) && n >= 1900 && n <= 2100) || (!m[2] && n < 10)) continue;
+    out.push(n * (FIGURE_SCALE[(m[2] || '').toLowerCase()] || 1));
+  }
+  return out;
+}
+
 /** Two headlines are about the same event if they share enough keywords. */
 export function sameEvent(a, b) {
   let shared = 0;
@@ -962,6 +974,17 @@ export class NewsDesk {
   sameStory(a, b) {
     const ea = this.eventFacts(a);
     const eb = this.eventFacts(b);
+    // the same name and the same figure in both headlines is one story ("What happened to OpenAI’s $20bn? Revenue scare
+    // rattles AI trade" / "OpenAI projected to bring in $20bn less in revenue than expected", Euronews and the Guardian,
+    // 9 Oct: one aired as a story and the other as the number of the day)
+    const figures = (s) => headlineFigures(s.title);
+    // (a headline's first word counts when it is shaped like a name: "OpenAI projected to...")
+    const named = (s, set) => {
+      const first = String(s.title || '').split(/\s+/)[0]?.replace(/[^\p{L}\d]+/gu, '').replace(/s$/u, '') || '';
+      return /\p{Lu}.*\p{Lu}/u.test(first.slice(1)) ? new Set([...set, foldWord(first)]) : set;
+    };
+    const fb = figures(b);
+    if (figures(a).some((v) => fb.includes(v)) && sharedCount(named(a, ea.names), named(b, eb.names)) > 0) return true;
     // the same people ("Lula and Flávio Bolsonaro": a report, an explainer and a profile of one election, 4 Oct):
     // one story, though the rest of the headlines share nothing (unless their places disagree)
     if (sharedCount(ea.people, eb.people) >= 2 && placesAgree(this.whereOf(a), this.whereOf(b)) !== false) return true;

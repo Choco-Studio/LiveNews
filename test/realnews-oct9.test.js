@@ -124,6 +124,7 @@ describe('the fallback writer on real news (9 Oct)', () => {
     assert.match(intro, /^Hurricane Isaias is intensifying as it heads toward the northern Gulf Coast\./);
     const lead = spoken(script.segments.find((s) => s.storyId === 'hur').text);
     assert.ok(!/is intensifying/.test(lead), lead);
+    assert.match(script.segments.find((s) => s.storyId === 'hur').headline, /^Hurricane Isaias/, 'the strap says the news, not "BBC on ..."');
   });
 
   test('a Title Case headline is said in sentence case; a name keeps its capital', () => {
