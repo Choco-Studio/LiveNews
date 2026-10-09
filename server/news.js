@@ -418,15 +418,20 @@ export function keywords(title) {
 // your text messages"), a column ("...But let’s talk about the hard part.") and a newsletter ("TechCrunch Mobility:")
 // are no report either, nor is a mission's blog ("Curiosity Blog, Sols 5022-5028: ...") or a staff profile ("Mapping
 // the Gaps in NASA’s Return to the Moon, featuring Richard Spolzino", NASA 5 Oct), nor NASA's picture of the day
-// ("APOD: 2026 October 4 – Supernumerary Rainbows", a page of menus around one photo), nor a question ("Can ‘super intelligence’ and a non-binding safety pact solve AI’s image
+// ("APOD: 2026 October 4 – Supernumerary Rainbows", a page of menus around one photo), nor money advice ("Here’s
+// what investors need to watch", "These bond strategies can help you get a safe 5% return", MarketWatch 5 Oct), nor
+// a question ("Can ‘super intelligence’ and a non-binding safety pact solve AI’s image
 // problem?" was a podcast; "Is the rally over?" an analysis).
 const SHOPPING = /\b(?:prime day|black friday|cyber monday|gift guides?|promo codes?|coupons?|discount codes?|on sale|price drops?|lowest price|best price (?:ever|yet)|best buys?)\b|\b(?:best|early|top|today['’]s|weekend|holiday|labor day|memorial day)\s+(?:[\w-]+\s+){0,3}deals\b|\bdeals? of the day\b|\b(?:fantastic|great|good|solid|rare) deal (?:at|for|on|right now)\b|\$\d[\d,.]*\s+off\b|\bcheaper (?:at|on) (?:Amazon|Best Buy|Walmart|Target)\b|\bcheaper than ever\b/i;
-const REVIEW = /\b(?:I['’](?:ve|m|d|ll)|I (?:tried|tested|used|love|loved|hate|bought|stuck|wore|played|spent|can['’]t stop)|my)\b|\b(?:hands-on|is perfect for|are perfect for|you should (?:buy|get)|should you (?:buy|get)|worth (?:buying|the (?:upgrade|money|price))|how to|tips for|let['’]s (?:talk|be honest|face it))\b|\breview(?::|\s+[-–—|]|$)|^all the\b|^[\w ]{2,20}\b(?:Mobility|Daily|Weekly|Briefing|Roundup|Recap|Newsletter|Week in Review):|\bblog\b|\bsols? \d+|,\s*featuring\s+\p{Lu}|^APOD\b/iu;
+const REVIEW = /\b(?:I['’](?:ve|m|d|ll)|I (?:tried|tested|used|love|loved|hate|bought|stuck|wore|played|spent|can['’]t stop)|my)\b|\b(?:hands-on|is perfect for|are perfect for|you should (?:buy|get)|should you (?:buy|get)|worth (?:buying|the (?:upgrade|money|price))|tips for|you (?:don['’]t|do not) have to|you should(?:n['’]t)?|let['’]s (?:talk|be honest|face it))\b|\breview(?::|\s+[-–—|]|$)|^all the\b|^how to\b|^[\w ]{2,20}\b(?:Mobility|Daily|Weekly|Briefing|Roundup|Recap|Newsletter|Week in Review):|\bblog\b|\bsols? \d+|,\s*featuring\s+\p{Lu}|^APOD\b|^the guardian view\b|\bhere['’]s (?:what|how|why)\b|\bcan help you\b|\bwhat (?:investors|you|savers|buyers) (?:need|should|want) to\b|\bam I\b/iu;
+// a column, an editorial or a reader's letter, signed after a bar ("The demands of Welsh devolution are simple ... |
+// Will Hayward", "... | Letter", Guardian 5 Oct)
+const BYLINED = /\s\|\s+\p{Lu}[\p{L}’'.-]*(?:\s+(?:\p{Lu}[\p{L}’'.-]*|and|de|van|von))*\s*$/u;
 // a quotation is someone else's words: "‘I'm not resigning,’ says PM", "“My country will not surrender”"
 const unquoted = (t) => t.replace(/[“"][^”"]*[”"]/g, ' ').replace(/(^|[\s:(])['‘].+?['’](?=[\s,.:;!?)]|$)/g, '$1');
 export const notNews = (s) => {
   const t = String(s?.title || '');
-  return SHOPPING.test(t) || REVIEW.test(unquoted(t)) || /\?\s*$/.test(unquoted(t).trim());
+  return SHOPPING.test(t) || REVIEW.test(unquoted(t)) || BYLINED.test(t) || /\?\s*$/.test(unquoted(t).trim());
 };
 
 /** Two headlines are about the same event if they share enough keywords. */

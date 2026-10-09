@@ -216,7 +216,8 @@ function midStory(order, roundup, lighter, number) {
 // Each question has several phrasings: a 24/7 rotation must not hear the same one every half hour.
 const CATCH = [
   { test: /\b(?:cost|price|priced|dollars|euros|pounds|\$|£|€)/i, q: (max) => [`[glasses] ${max}, the question everyone asks. What does it cost?`, '[glasses] And the price tag?', `[chin] ${max}, what will all this cost?`] },
-  { test: /\b(?:next year|this year|later this year|next month|in the (?:spring|summer|autumn|winter)|on sale|go on sale|launch(?:es)? (?:in|next)|from next|by \d{4})\b/i, q: () => ['[chin] And when does it reach actual people?', '[chin] When can anyone actually use it?', '[glasses] And the timetable?'] },
+  // (not how long something stops: "paused its bug bounty program until next year" has no launch to wait for, 5 Oct)
+  { test: /(?<!\b(?:until|till|through|for the rest of)\s)\b(?:next year|this year|later this year|next month|in the (?:spring|summer|autumn|winter)|on sale|go on sale|launch(?:es)? (?:in|next)|from next|by \d{4})\b/i, q: () => ['[chin] And when does it reach actual people?', '[chin] When can anyone actually use it?', '[glasses] And the timetable?'] },
   // what happens now: a deadline, a plan, an appeal ("The task force will reportedly have 120 days to create a report")
   // (not any "will": "The line will carry 40,000 passengers a day" is the story's figure, not what comes next)
   { test: /\b(?:plans? to|(?:is|are) expected to|(?:is|are) set to|will (?:now|next|then|decide|vote|rule|review|report|consider|appeal)|next (?:week|step|steps)|within \d+ (?:days|weeks|months)|(?:have|has) \d+ (?:days|weeks|months) to|deadline|appeal\w*)\b/i, q: () => ['[chin] And what happens now?', '[chin] So what comes next?', '[glasses] And from here?'] },
@@ -315,7 +316,7 @@ const NOVA_THANKS = ['Thank you, UNIT-8.', 'Precise as ever, UNIT-8.', 'Noted, U
 const UNIT8_RESTATE = ['Logged.', 'Stored, Dr Reyes.', 'I have checked it twice.', 'That is now on file.', 'Confirmed.', 'Recorded, with interest.', 'I will not forget it.'];
 // Nova hands the number of the day to UNIT-8 (it is his story), not in the same words every time.
 const NOVA_TO_NUMBER = [
-  '[look_partner] Thank you, UNIT-8. Our number of the day is yours.',
+  '[look_partner] Thank you, UNIT-8. You have our number of the day.',
   '[look_partner] UNIT-8, our number of the day.',
   '[look_partner] And UNIT-8 has our number of the day.',
   '[look_partner] Over to UNIT-8 for our number of the day.',
@@ -374,7 +375,9 @@ function chooseFresh(list, key, { recent = null, text = '' } = {}) {
 /** Has any sentence of this line aired in the station's memory? */
 const airedBefore = (line, recent) => !!recent && lineSentences(line).some((x) => recent.has(x));
 
-const sentencesOf = (s) => sentencesIn(String(s || '')).filter(Boolean); // never inside a figure, a title or initials
+// (an acronym in brackets after its name is page furniture: "A team, from Queen's University Belfast (QUB), are
+// heading to Florida" is said without it, and can open its story; BBC 5 Oct)
+const sentencesOf = (s) => sentencesIn(String(s || '')).filter(Boolean).map((t) => t.replace(/\s*\((?=[A-Za-z&]*[A-Z][A-Za-z&]*[A-Z])[A-Za-z&]{2,8}\)(?=[\s,.;:!?]|$)/g, '')); // never inside a figure, a title or initials
 const unstop = (t) => String(t).trim().replace(/[\s.!?:;,]+$/, '');
 const asSentence = (t) => (/[.!?…]["”'’)]$/.test(String(t).trim()) ? String(t).trim() : `${unstop(t)}.`); // '…real-time."' is already one
 const wordCount = (t) => String(t).replace(/\[[^\]]*\]/g, ' ').split(/\s+/).filter(Boolean).length;
@@ -402,6 +405,28 @@ function lowerFirstWord(text, info) {
   const midSentence = new RegExp(`[\\p{Ll},;:]\\s+${word}(?![\\p{L}])`, 'u').test(story);
   return lower || COMMON_START.test(text) || !midSentence ? word.toLowerCase() + text.slice(word.length) : text;
 }
+// A person by surname (or first name) alone, never heard in the story: "Scully said the organisation may have to
+// accept..." after "A National Trust manager says..." (BBC 5 Oct). Said whole the first time, as the article gives
+// it ("Justin Scully said..."); a name the article never gives whole (a company: "Microsoft said") stays as it is.
+const NOT_A_NAME = new Set('It He She They We You There This That These Those Which What Who When While After Before If As At In On For With From By The A An And But So Then Yet Its Their His Her Our Each All Both Some Many Most One Officials Police Mr Mrs Ms Dr Prof Professor Sir Dame Lord Lady Chief President Minister Senator Judge Society Chairman Manager'.split(' '));
+const BARE_NAME = /(?:^|[,;:]\s+|\b(?:Mr|Mrs|Ms|Dr|Prof)\.?\s+)(\p{Lu}[\p{Ll}’'-]+)(?=\s+(?:said|says|told|added|explained|warned|believes|thinks|argued|noted|wrote|hopes|was|is|has|had)\b)/u;
+function nameWhole(t, told, info) {
+  const m = String(t).match(BARE_NAME);
+  const name = m?.[1];
+  if (!name || NOT_A_NAME.has(name) || told.includes(name) || info.s.title.includes(name)) return t;
+  const source = `${info.s.summary || ''} ${info.s.body || ''}`;
+  const real = (w) => w && !NOT_A_NAME.has(w) && !lookupPlace(w);
+  const before = source.match(new RegExp(`(?<![\\p{L}])(\\p{Lu}[\\p{Ll}’'-]+)\\s+${name}(?![\\p{L}])`, 'u'))?.[1];
+  const after = real(before) ? null : source.match(new RegExp(`(?<![\\p{L}])${name}\\s+(\\p{Lu}[\\p{Ll}’'-]+)(?![\\p{L}])`, 'u'))?.[1];
+  const whole = real(before) ? `${before} ${name}` : real(after) ? `${name} ${after}` : null;
+  if (!whole) return t;
+  const at = m.index + m[0].length - name.length;
+  const lead = m[0].slice(0, m[0].length - name.length).replace(/\b(?:Mr|Mrs|Ms|Dr|Prof)\.?\s+$/, '');
+  return `${t.slice(0, m.index)}${lead}${whole}${t.slice(at + name.length)}`;
+}
+// The first two words of a line as said (cues out): two sentences in a row never open the same way ("The findings
+// suggest... The findings offer a new look...", ScienceDaily 5 Oct).
+const openingOf = (t) => String(t).replace(/\[[^\]]*\]/g, ' ').replace(/^\s*(?:And finally:\s*)?/, '').trim().split(/\s+/).slice(0, 2).join(' ').toLowerCase().replace(/[^\p{L} ]/gu, '');
 const PRONOUN_START = /^(?:It|Its|They|Their|This|These|Those|He|She|His|Her)\b/;
 /**
  * Can this summary sentence open a story or a round-up item? The summary's first sentence can (unless it
@@ -411,21 +436,71 @@ const PRONOUN_START = /^(?:It|Its|They|Their|This|These|Those|He|She|His|Her)\b/
 // (a quotation never opens with nobody saying it: "“I want to be able to look at a rocket launch...” That’s how...")
 const SAID_BY = /\b(?:said|says|told|added|according to|warned|wrote|explained)\b/i;
 // (nor one that follows on: "So it’s only natural that Trump’s new task force is named...", TechCrunch 5 Oct)
-const selfStanding = (info, t) => !(/^["“‘]/.test(String(t).trim()) && !SAID_BY.test(t)) && !FOLLOWS_ON.test(String(t).trim()) && (info.sentences.indexOf(t) === 0 ? !PRONOUN_START.test(t) && !ALSO_LEAN.test(t) : !leansOnPrevious(t));
+// (nor a summary that goes on from its headline: "The students will head to Florida...", under "Students blast off to
+// US for Nasa robotics competition", BBC 5 Oct; the headline is on the strap, never said. One that tells the headline's
+// news itself opens as the outlet wrote it: "The central bank has kept interest rates unchanged at 3.5 percent".)
+const leansOnHeadline = (info, t) => {
+  const m = String(t).trim().match(/^The\s+([a-z][a-z-]{2,})\b/);
+  return !!m && contentWords(info.s.title).some((w) => w.slice(0, 5) === m[1].slice(0, 5)) && !restates(t, info.s.title);
+};
+const selfStanding = (info, t) => !(/^["“‘]/.test(String(t).trim()) && !SAID_BY.test(t)) && !FOLLOWS_ON.test(String(t).trim()) && (info.sentences.indexOf(t) === 0 ? !PRONOUN_START.test(t) && !ALSO_LEAN.test(t) && !leansOnHeadline(info, t) : !leansOnPrevious(t));
 /**
  * Two sentences that say the same thing in other words: most of the shorter one's content words are in the
  * other ("A UCLA study links faster brain aging to specific gut bacteria" / "A new UCLA study suggests that the
  * pace of brain aging may be connected to bacteria in the gut", ScienceDaily 5 Oct).
  */
+// (in the words outlets swap when they say it again: "a surprising second job" / "another unexpected role",
+// ScienceDaily 5 Oct, whose standfirst and first paragraph tell the same news)
+const SAME_SENSE = new Map(
+  Object.entries({
+    surpr: 'surprising surprise surprised surprisingly unexpected unexpectedly',
+    role: 'role roles job jobs function functions',
+    anoth: 'another second additional',
+    find: 'found finds discovered discovers discover revealed reveals uncovered showed shows',
+    scien: 'scientists researchers',
+    link: 'linked links connected tied associated',
+    help: 'help helps helping helped',
+  }).flatMap(([canon, words]) => words.split(' ').map((w) => [w, canon]))
+);
+// (a word and its inflections are one: "heading" / "head", "teams" / "team")
+const senseStem = (w) => (SAME_SENSE.get(w) || (w.length > 5 ? w.replace(/(?:ing|ed|es|s)$/, '') : w.replace(/s$/, ''))).slice(0, 5);
 function sameSense(a, b) {
-  const stem = (w) => w.slice(0, 5);
+  const stem = senseStem;
   const wa = new Set(contentWords(a).map(stem));
   const wb = new Set(contentWords(b).map(stem));
   const small = Math.min(wa.size, wb.size);
   if (small < 4) return false;
   let shared = 0;
   for (const w of wa) if (wb.has(w)) shared++;
-  return shared >= 4 && shared / small >= 0.6;
+  return (shared >= 4 && shared / small >= 0.6) || (shared >= 5 && shared / small >= 0.55);
+}
+/**
+ * A sentence whose main clause the story has all said already, an aside its only news: "Researchers have found that it
+ * also helps epithelial cells, which form continuous sealed layers throughout the body, engulf nearby dead cells", after
+ * "...a surprising second job: helping epithelial cells swallow nearby dead cells" and "...cells can dramatically
+ * reshape their lower surfaces to engulf cellular debris" (ScienceDaily 5 Oct). `told`: the story's lines so far.
+ */
+function toldBefore(t, told) {
+  const stem = senseStem;
+  const said = new Set(told.flatMap((x) => contentWords(x).map(stem)));
+  const words = [...new Set(contentWords(String(t).replace(/,\s+(?:which|who|whose|where)\b[^,]*,/g, ' ')).map(stem))];
+  const shared = words.filter((w) => said.has(w)).length;
+  return words.length >= 5 && shared >= 5 && shared / words.length >= 0.8;
+}
+// A definition is background, never what a story opens on ("Lunabotics is a university-level competition...", "A green
+// lung is an area of fields...", BBC 5 Oct): it follows the news it explains.
+const DEFINES = /^(?:(?:An?|The)\s+)?[\p{L}’'-]+(?:\s+[\p{L}’'-]+)?\s+(?:is|are)\s+(?:a|an)\s/u;
+// Over the length, a person's role between commas goes when the story has said it ("Justin Scully[, manager of Fountains
+// Abbey and Studley Royal,] said extreme heat...", after "A National Trust manager says...", BBC 5 Oct); a role the
+// viewer has not heard stays, and the sentence with it.
+function dropKnownRole(t, told) {
+  const m = String(t).match(/^((?:\p{Lu}[\p{L}’'-]+\s+){0,3}\p{Lu}[\p{L}’'-]+),\s+([^,]{3,70}),\s+(?=(?:said|says|told|added|explained|warned|believes|thinks)\b)/u);
+  if (!m) return t;
+  // the role's own noun, heard ("manager" of "manager of Fountains Abbey"): not any word of it ("engineering" in
+  // "who's studying for a PhD in mechanical engineering" said nothing about Jack Fitzpatrick)
+  const head = contentWords(m[2].replace(/^(?:a|an|the)\s+/i, ''))[0];
+  const heard = contentWords(told.join(' ')).map((w) => w.slice(0, 5));
+  return head && head.length >= 4 && heard.includes(head.slice(0, 5)) ? `${m[1]} ${t.slice(m[0].length)}` : t;
 }
 /** Content words of `sentence` that `title` does not have (what a restating sentence adds). */
 function newWords(sentence, title) {
@@ -1152,7 +1227,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         // director chose a team name (at first colors)" once opened an obituary)
         const names = info.keep || [];
         const score = (t) => titleShare(t) + names.filter((n) => t.includes(n)).length;
-        const tellsNews = (t) => selfStanding(info, t) && !echoes(t) && !/\(/.test(t) && wordCount(t) >= 8 && wordCount(t) <= maxWords + 2 && titleShare(t) >= 2;
+        const tellsNews = (t) => selfStanding(info, t) && !echoes(t) && !asks(t) && !DEFINES.test(t) && !/\(/.test(t) && wordCount(t) >= 8 && wordCount(t) <= maxWords + 2 && titleShare(t) >= 2;
         const best = !isNumber && !isLighter ? info.sentences.filter((t) => !used.has(t) && tellsNews(t)).sort((a, b) => score(b) - score(a) || info.sentences.indexOf(a) - info.sentences.indexOf(b))[0] : null;
         const alt = best ? pickSentence((t) => t === best) : null;
         if (alt) opener = alt;
@@ -1186,6 +1261,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       const body = [];
       if (opener && wordCount(opener) > maxWords + 1) opener = trimClause(opener, maxWords + 1, 8, { keep: info.keep }) || opener;
       let line = asSentence(isNumber || isLighter ? opener : placeFirst(opener, info));
+      line = nameWhole(line, parts.join(' ').replace(/\[[^\]]*\]/g, ' '), info);
       if (info.breaking && k === 0) line = `Breaking news. ${line}`;
       else if (info.live) line = `A developing story: ${line}`;
       if (isLighter) line = `And finally: ${lowerFirstWord(line, info)}`;
@@ -1227,13 +1303,16 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         if (FOLLOWS_ON.test(t0) && !used.has(info.prevOf.get(t0))) continue;
         // (spoken words have no brackets: "Each flight director chose a team name (at first colors)")
         if (/\([^)]*\s[^)]*\)/.test(t0)) continue;
-        // over the programme's sentence length: told as two whole sentences when it joins two clauses, else a
-        // trailing clause goes, else the sentence is left out
-        const two = wordCount(t0) > maxWords && !quick ? splitClauses(t0, maxWords) : null;
-        const t = two ? two.join(' ') : wordCount(t0) <= maxWords ? t0 : trimClause(t0, maxWords, 8, { keep: info.keep });
+        if (toldBefore(t0, body)) continue;
+        // over the programme's sentence length: a role the story has said goes ("Justin Scully, manager of..., said"),
+        // else told as two whole sentences when it joins two clauses, else a trailing clause goes, else it is left out
+        const t1 = wordCount(t0) > maxWords ? dropKnownRole(t0, toldSoFar()) : t0;
+        const two = wordCount(t1) > maxWords && !quick ? splitClauses(t1, maxWords) : null;
+        const t = two ? two.join(' ') : wordCount(t1) <= maxWords ? t1 : trimClause(t1, maxWords, 8, { keep: info.keep });
         if (!t) continue;
         if (wordCount([...parts, ...body].join(' ')) + wordCount(t) > budget) continue;
-        body.push(...(two || [t]));
+        if (body.length && openingOf(t) === openingOf(body[body.length - 1])) continue;
+        body.push(...(two || [t]).map((x) => nameWhole(x, toldSoFar().join(' '), info)));
         used.add(t0);
         details += two ? 2 : 1;
       }

@@ -23,6 +23,13 @@ const NOT_GRAVE_SENSES = [
   /\b(?:was|were|been|be|is|are|got|get|gets|getting)\s+fired\b/gi,
   /\bfire\s+(?:drills?|alarm tests?|exercises?|safety)\b/gi,
   /\b(?:government|coalition|talks|deal|negotiations|prices?|shares|stocks?|market|currency|company|firm|bank|league|plan|bid)\s+collaps\w*/gi,
+  // biology and astronomy: cells, microbes and stars die and are attacked every day ("helping epithelial cells swallow
+  // nearby dead cells" made a cell-biology discovery the sad lead, ScienceDaily 5 Oct; "immune attack")
+  /\b(?:dead|dying)\s+(?:cells?|tissues?|skin|neurons?|bacteria|microbes|stars?|galax(?:y|ies)|planets?)\b/gi,
+  /\bcell(?:ular)? death\b/gi,
+  /\b(?:kill|kills|killed|killing)\s+(?:cancer|tumou?rs?|bacteria|bacterial|viruses?|cells?|microbes|germs|pathogens|weeds|pests|parasites)\b/gi,
+  /\b(?:immune(?: system)?|antibody|T-cell)\s+attacks?\b|\battack(?:s|ed|ing)?\s+(?:cancer|tumou?rs?|cells|bacteria|viruses?|pathogens)\b/gi,
+  /\b(?:death of (?:a|the) (?:star|sun|galaxy)|stars? (?:die|dies|died|dying))\b/gi,
   // a launch ("Students blast off to US for Nasa robotics competition", BBC 5 Oct) and a good time
   /\bblast(?:s|ed|ing)?[- ]off\b/gi,
   /\b(?:had|have|has|having) a blast\b/gi,

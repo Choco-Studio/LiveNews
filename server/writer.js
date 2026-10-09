@@ -833,8 +833,22 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // "Cvijanovic, Bosniak moderate leftist Denis Becirovic[ and ...]": a cut after a list's item (its last
     // segment no verb of its own)
     if (/^(?:and|or)$/.test(conj) && (head.match(/,/g) || []).length >= 1 && !hasFiniteVerb(head.slice(head.lastIndexOf(',') + 1).trim())) continue;
-    // "...members of the country's multiethnic [presidency]": an adjective left without its noun
-    if (/(?:\b(?:a|an|the|its|their|his|her|our|this|that)|['’]s)\s+[a-z]+(?:ic|al|ous|ive|ian|ish|ese|ent|ant|ary|ful|less|ed)$/i.test(head)) continue;
+    // "...members of the country's multiethnic [presidency]": an adjective left without its noun ("one of the
+    // fast-growing [AI jobs]" too, Guardian 5 Oct)
+    if (/(?:\b(?:a|an|the|its|their|his|her|our|this|that)|['’]s)\s+[a-z]+(?:ic|al|ous|ive|ian|ish|ese|ent|ant|ary|ful|less|ed|ing)$/i.test(head) || /\b(?:a|an|the|its|their|of)\s+[\w]+-[\w-]+$/i.test(head)) continue;
+    // "...one of the fast-growing, and best-paid[, jobs in...]": a compound adjective at the end has lost its noun (not
+    // after a verb: "The film was well-received" is whole)
+    if (/\b[a-z]+-(?:[a-z]+(?:ed|ing)|paid|made|run|led|built|born|grown|known|held|owned)$/i.test(head) && !/\b(?:is|are|was|were|be|been|being|become|became|seems?|looks?|remains?)\s+(?:[a-z]+\s+)?[a-z]+-[a-z-]+$/i.test(head)) continue;
+    // "...refocus on the economy, an area[ where...]": an apposition that lost what defines it
+    if (/,\s+(?:a|an|the)\s+[\w-]+$/i.test(head)) continue;
+    // "While employers are within their rights to ask...[, recruiters have been...]": a subordinate clause alone
+    if (/^(?:While|Although|Though|Because|If|When|Whereas|Unless|Since|Whilst)\b/.test(head) && !/,\s/.test(head)) continue;
+    // "Previous research has found that when the brain appears older than expected[, that pattern can be...]": a
+    // "that" clause opened on its own subordinate one waits for its main clause after the comma (ScienceDaily 5 Oct)
+    if (comma && /\b(?:that|whether)\s+(?:when|if|while|whilst|because|although|though|once|unless|whenever|before|after|until|as soon as|even if|even though)\b[^,;:]*$/i.test(head)) continue;
+    // "Six years ago, in an attempt to push local manufacturing[, India doubled...]": no main verb once the
+    // infinitives are set aside
+    if (!hasFiniteVerb(head.replace(/\b(?:in (?:an attempt|a bid|an effort|order)|so as|aiming|trying|seeking) to\b[^,;:]*/gi, ' ').replace(/\bto\s+[a-z]+(?:\s+(?:and|or)\s+[a-z]+)?\b/gi, ' '))) continue;
     // "...but according to Kotaku[, it couldn't quite get an edge]": an attribution keeps what it attributes
     if (/\baccording to [^,;]{1,40}$|\b(?:but|and|or|so|yet|while)$/i.test(head)) continue;
     // "...the Gold Rush Trail, where miners [and prospectors flocked to...]": a clause it opened still waits for its
@@ -889,7 +903,8 @@ const CUT_ADVERB = /\b(?:just|shortly|soon|right|even|only|immediately|well|long
 const AUX_VERB = /^(?:is|are|was|were|be|been|has|have|had|will|would|can|could|may|might|must|should|shall|does|do|did|isn['’]t|aren['’]t|won['’]t|can['’]t)$/i;
 const PAST_FORM = /^(?:burst|rose|fell|grew|took|made|hit|struck|began|won|lost|left|came|went|gave|saw|found|kept|became|brought|built|sold|paid|spent|set|put|ran|drew|flew|shook|said|told|held|met|led|sent|sank|broke|wrote|fought|caught|thought|sought|swept|slid|burnt|stood|chose|froze|ate|got|knew|meant|felt|heard|lay|laid|rang|sang|swam|threw|wore|woke|cut|shut|spread|hurt|cost|let|quit|split)$/i;
 const PLURAL_VERB = /^(?:say|warn|expect|believe|think|hope|plan|want|need|fear|estimate|agree|claim|argue|report|show|suggest|account|remain|continue|make|take|help|use|work|live|run|keep|face|reach|cover|carry|serve|hold|join|lead|grow|rise|fall|stay|stand|sit|come|go|get|give|see|find|know|call|ask|try|move|pay|meet|win|lose|open|close|start|begin|end|travel|stop|walk|wait|return|remain|form|look|mean|offer|provide|include|range|vary|differ)$/i;
-const NOT_VERB_AFTER = /^(?:a|an|the|of|in|on|at|for|from|by|with|to|into|its|their|his|her|our|this|that|these|those|some|many|several|few|new|old|\d[\d,.]*)$/i;
+// (a number word before a plural is its count, not a subject before a verb: "Six years ago")
+const NOT_VERB_AFTER = /^(?:a|an|the|of|in|on|at|for|from|by|with|to|into|its|their|his|her|our|this|that|these|those|some|many|several|few|new|old|\d[\d,.]*|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|hundred|thousand|million|billion|dozens|hundreds|thousands|millions|billions)$/i;
 const PROPER_ING = /^(?:beijing|nanjing|chongqing|kunming|peking|jinping|boeing|reading|woking|ealing|epping|stirling|sterling|corning|kipling|bing|king|ming|viking)$/;
 /** Does a clause have a finite verb after its first word (an auxiliary, a past form, a present-tense verb)? */
 export function hasFiniteVerb(clause) {
@@ -1334,7 +1349,10 @@ export function normalizeBulletin(
       // grave by what the story is (its headline and summary) and what airs, never by a word deep in the article
       // ("...Undersecretary of War for Research", a body read for depth, once made a task force story grave and cost
       // THE CATCH before it, TECH BYTES 5 Oct)
-      d.heavy = emotion === 'serious' || emotion === 'sad' || isGrave(`${story.title}. ${story.summary || ''} ${stripTags(tagged)}`);
+      // (and of what airs, its opening sentence: "...could increase the risk of subsidence and wildfires", a detail
+      // three sentences in, once made a heritage story grave, moved the number of the day off its slot and silenced
+      // UNIT-8 after the lead, COSMOS 5 Oct; the writer judges by the headline and the summary too)
+      d.heavy = emotion === 'serious' || emotion === 'sad' || isGrave(`${story.title}. ${story.summary || ''} ${sentencesOf(stripTags(tagged))[0] || ''}`);
       d.breaking = seg.breaking === true && (isBreaking(story.title) || /\bbreaking news\b/i.test(story.summary || ''));
       d.location = groundedLocation(seg.location, source);
       d.numbers = normalizeNumbers(seg.numbers, source);

@@ -138,6 +138,7 @@ table('titles, abbreviations and Roman numerals', us, [
   ['Dr Smith lives on Downing St in St Albans.', 'Doctor Smith lives on Downing Street in Saint Albans.'],
   ['Mr. Jones, Mrs Brown and Ms Green agreed.', 'Mister Jones, Missus Brown and Miz Green agreed.'],
   ['Gen. Ivanov met Gen Z voters.', 'General Ivanov met Gen Z voters.'],
+  ['NJ’s former Lt Gov is using AI; the now-former Lt. governor spoke.', "N-J's former Lieutenant Governor is using AI; the now-former Lieutenant governor spoke."],
   ['King Charles III met Pope Leo XIV.', 'King Charles the third met Pope Leo the fourteenth.'],
   ['World War II veterans and Phase III trials.', 'World War two veterans and Phase three trials.'],
   ["Elizabeth II's heir and Henry VIII.", "Elizabeth the second's heir and Henry the eighth."],

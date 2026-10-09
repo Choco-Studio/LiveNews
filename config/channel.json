@@ -232,7 +232,7 @@
         "science"
       ],
       "beat": {
-        "science": ["SPACE", "ENERGY", "AI", "ROBOTICS", "CHIPS", "GADGETS", "SOFTWARE", "CONNECTIVITY", "HEALTH", "MOTORING", "TRANSPORT", "CLIMATE"]
+        "science": ["SPACE", "ENERGY", "AI", "ROBOTICS", "CHIPS", "GADGETS", "SOFTWARE", "CONNECTIVITY", "MOTORING", "TRANSPORT"]
       },
       "stories": 15,
       "maxChats": 8,

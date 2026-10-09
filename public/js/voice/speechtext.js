@@ -596,6 +596,8 @@ const ABBR_EN = [
   [/\bincl\.(?=\s)/g, 'including'], [/\bexcl\.(?=\s)/g, 'excluding'], [/\b(?:Jr\.?|Jnr)(?![\p{L}])/gu, 'Junior'],
   [/\b(?:Sr\.|Snr)(?![\p{L}])/gu, 'Senior'], [/\bInc\./g, 'Inc'], [/\bLtd\.?(?![\p{L}])/gu, 'Limited'], [/\bCorp\./g, 'Corporation'],
   [/\bCo\.(?=\s|$)/g, 'Company'], [/\bBros\.(?=\s|$)/g, 'Brothers'], [/\bDept\.?(?=\s)/g, 'Department'],
+  // "NJ’s former Lt Gov", "The now-former Lt. governor" (The Verge 5 Oct): the title said whole, its name or not
+  [/\bLt\.?\s+Gov\.?(?![\p{L}])/gu, 'Lieutenant Governor'], [/\bLt\.?(?=\s+(?:governor|general|colonel|commander)\b)/gi, 'Lieutenant'],
   [/\bUniv\.(?=\s)/g, 'University'], [/\bAve\.?(?=\s|$|[,.])/g, 'Avenue'], [/\bBlvd\.?(?=\s|$|[,.])/g, 'Boulevard'],
   [/\b(?:Mt|Mt\.)(?=\s+[A-Z])/g, 'Mount'], [/\bFt\.(?=\s+[A-Z])/g, 'Fort'], [/\bgov(?:'|’)?t\b/gi, 'government'],
   [/\bint(?:'|’)l\b/gi, 'international'], [/\bw\/o(?=\s)/g, 'without'], [/(?<=\s|^)w\/(?=\s)/g, 'with'],

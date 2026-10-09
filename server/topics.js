@@ -7,7 +7,7 @@
 export const TOPICS = [
   // armed conflict first: a "rocket" or "satellite" in a war story is not SPACE, and military "strikes" are not
   // a labour dispute (first live run, 4 Oct: "Yemen's Houthis claim attacks" went out as INDUSTRY)
-  [/\b(?:air ?strikes?|airstrikes?|missiles?|drone (?:attacks?|strikes?)|shelling|troops|soldiers|militants?|militias?|rebels?|insurgents?|fighters|fighting|clashes|offensive|ceasefire|invasion|warplanes?|bombard\w*|front ?line|war\b|military|armed forces|government forces|houthis?|(?<!heart |panic |cyber[- ]?|asthma )attacks?|(?:Russia|Russian|Ukraine|Ukrainian|Israel|Israeli|Iran|Iranian)\w* (?:hits?|strikes?|pounds?|shells?|targets?))\b/i, 'CONFLICT'],
+  [/\b(?:air ?strikes?|airstrikes?|missiles?|drone (?:attacks?|strikes?)|shelling|troops|soldiers|militants?|militias?|rebels?|insurgents?|fighters|fighting|clashes|offensive|ceasefire|invasion|warplanes?|bombard\w*|front ?line|war\b|military|armed forces|government forces|houthis?|(?<!heart |panic |cyber[- ]?|asthma |immune )attacks?|(?:Russia|Russian|Ukraine|Ukrainian|Israel|Israeli|Iran|Iranian)\w* (?:hits?|strikes?|pounds?|shells?|targets?))\b/i, 'CONFLICT'],
   [/\belections?\b|\bvot(?:e|es|ers|ing)\b|\bballots?\b|referendum|polling (?:stations?|day)/i, 'ELECTIONS'],
   [/\bprotests?\b|protesters?|demonstrat(?:ion|ions|ors)\b/i, 'PROTESTS'],
   // a strike is a labour dispute only with its workers, union or pay in the same sentence (ahead of the sector
@@ -44,7 +44,7 @@ export const TOPICS = [
   [/video games?|gaming|console/i, 'GAMING'],
   [/satellite/i, 'SPACE'],
   [/solar (?:farm|panels?|plant|power|park)|wind farm|turbines?|tidal power|power grid|energy|electricity|batter(?:y|ies)|geothermal/i, 'ENERGY'],
-  [/vaccine|hospital|health|medicine|disease|patients|nurses|doctors/i, 'HEALTH'],
+  [/vaccine|hospital|health|medicine|disease|patients|nurses|doctors|cancer|tumou?rs?|chemotherapy|clinical trial|therap(?:y|ies)\b/i, 'HEALTH'],
   [/ocean|whales?|reef|coral|dolphins?|sea turtles?/i, 'OCEANS'],
   [/\b(?:cars?|diesel|petrol|electric vehicles?|EVs?|motoring|carmakers?)\b/i, 'MOTORING'],
   [/\bcourts?\b|judges?|ruling|lawsuit|trial\b/i, 'JUSTICE'],
