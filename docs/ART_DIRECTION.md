@@ -160,13 +160,13 @@ Precedents: BBC's per-bulletin numeral, and Devlin's backlit panels that change 
   - An optional full-screen card lasts at most 3 s, with a sting.
   - The banner may pulse at most twice on entry, at least 0.36 s apart (Ofcom's 9-frame rule, which also flags saturated-red transitions; see [Ofcom](https://www.ofcom.org.uk/__data/assets/pdf_file/0021/16248/gn_flash.pdf)). Then it stays steady.
 - **Stingers (0.8 s):** only for the open and close, breaks and breaking news. Between shots and stories, cut.
-- **Programme open:** real title animations run 5–15 s, and flagships often add a 30–60 s headline sequence before them. Ours is 4 s. Keep these four things:
+- **Programme open:** real title animations run 5–15 s, and flagships often add a 30–60 s headline sequence before them. Ours last 4 s; the flagship, WORLD NOW, has a 10.2 s title sequence (owner, 9 Oct: "real newscasts have a far more crafted intro, several seconds long"; `scenes/opens/worldtitles.js`). Keep these four things:
   1. A 3–5 note sonic signature shared by all shows and re-orchestrated per programme (BBC pips, ABC's four notes, NBC's "The Mission").
-  2. One motion idea in the programme accent.
-  3. A logo and title lock-up that is still from 3.2 s to 4.0 s.
+  2. One motion idea in the programme accent. WORLD NOW's is one continuous camera move from Europe at night out to the emblem while the network connects the world in red.
+  3. A logo and title lock-up that is still for the last 0.8 s, from the theme's final chord to the cut (3.2–4.0 s; WORLD NOW 9.375–10.175 s). Every open ends on the same package lock-up.
   4. A hard cut on the downbeat to the wide shot.
 
-  Drop particles and stacked text moves.
+  Drop particles and stacked text moves. A long sequence cuts its music and pictures to one cue sheet (`opens/worldcues.js`): every landing, pip and hit is on a beat.
 - **Type hierarchy:** three levels at most, two per screen.
   - Display is 5x7 at 2x, for titles and full-screen cards.
   - Body is 5x7 at 1x, for straps and the ticker.
@@ -176,7 +176,7 @@ Precedents: BBC's per-bulletin numeral, and Devlin's backlit panels that change 
 ## 5. Camera and directing grammar
 
 1. **Cold open:** headline montage under the presenter's voice, 2.6–4 s per headline, with cuts between them.
-2. **Open:** 4 s, then a hard cut to the **wide two-shot** ("Good evening, I'm Paco / and I'm Lola"), held 4–8 s.
+2. **Open:** 4 s (WORLD NOW's title sequence 10.2 s), then a hard cut to the **wide two-shot** ("Good evening, I'm Paco / and I'm Lola"), held 4–8 s.
 3. **Story link:** a **single** of the speaker for the first one or two sentences (at least 3 s, usually 5–12 s). The lower third enters about 1 s after the cut.
 4. **Pictures:**
    - Full-screen pictures run 4–8 s each.

@@ -1,25 +1,28 @@
-// WORLD NOW open: the planet turns to London. A shaded globe built from the
-// Natural Earth land mask opens like an iris around the bit, spins down to
-// Europe, London gets a marker and one ripple, and three great-circle routes
-// draw out of it in the brand red. Accent: red.
+// WORLD NOW's globe: a shaded earth built from the Natural Earth land mask (graticule, red
+// equator), the emblem's three great-circle routes out of London in the brand red and London's
+// marker. The programme's title sequence (worldtitles.js) flies to it and ends on it in the package's
+// lock-up; the generic open and the cards draw the same earth. Accent: red.
 import { P } from '../../palette.js';
 import { landMip } from '../worldmap.js';
 import { u32, clamp, seg, easeOut, easeOutQuint, bayer, ring } from '../../gfx/index.js';
-import { lazyBackdrop, frameBuffer, clipDisc, playOpen, CENTRE } from './kit.js';
+import { lazyBackdrop, frameBuffer, clipDisc, CENTRE } from './kit.js';
 
 const DEG = Math.PI / 180;
-const R0 = 34; // globe radius in the lock-up (x ZOOM at centre stage)
-const TILT = 24 * DEG; // north pole tipped towards the camera
+export const R0 = 34; // globe radius in the lock-up (x ZOOM at centre stage)
+export const TILT_DEG = 24; // north pole tipped towards the camera
+const TILT = TILT_DEG * DEG;
 const CT = Math.cos(TILT);
 const ST = Math.sin(TILT);
-const LIGHT = (() => {
+/** The emblem's sun: a unit vector in screen space (x right, y up, z towards the viewer). */
+export const LIGHT = Object.freeze((() => {
   const v = [-0.55, 0.52, 0.66];
   const n = Math.hypot(...v);
   return v.map((a) => a / n);
-})();
+})());
 export const LAM_END = -12; // centre longitude when settled: Europe and Africa face us
-const LONDON = [51.5, -0.13];
-const ROUTES = [[40.7, -74.0], [-1.3, 36.8], [28.6, 77.2]]; // New York, Nairobi, New Delhi
+export const LONDON = Object.freeze([51.5, -0.13]);
+export const ROUTES = Object.freeze([[40.7, -74.0], [-1.3, 36.8], [28.6, 77.2]]); // New York, Nairobi, New Delhi
+export const ROUTE_H = 0.12; // a route's height above the surface at its middle (x radius)
 
 // --- texture: 512x256 equirectangular, bit0 land, bit1 graticule, bit2 equator. The land comes from
 // the world map's decoded mask (its 512x256 box-filtered level), so there is one RLE decoder.
@@ -194,7 +197,7 @@ export function drawEarth(ctx, x, y, R, lam) {
 }
 
 /** Earth-frame unit vector of a lat/lon. */
-const evec = (lat, lon) => [Math.cos(lat * DEG) * Math.sin(lon * DEG), Math.sin(lat * DEG), Math.cos(lat * DEG) * Math.cos(lon * DEG)];
+export const evec = (lat, lon) => [Math.cos(lat * DEG) * Math.sin(lon * DEG), Math.sin(lat * DEG), Math.cos(lat * DEG) * Math.cos(lon * DEG)];
 /** Screen offset of an earth-frame vector for centre longitude lam0: [x, y, depth]. */
 function project(v, lam0, R, out) {
   const cl = Math.cos(lam0 * DEG);
@@ -209,39 +212,38 @@ function project(v, lam0, R, out) {
   return out;
 }
 
-// great-circle routes out of London, lifted slightly off the surface
-const ROUTE_PTS = ROUTES.map(([la, lo]) => {
-  const a = evec(...LONDON);
-  const b = evec(la, lo);
-  const om = Math.acos(clamp(a[0] * b[0] + a[1] * b[1] + a[2] * b[2], -1, 1));
-  const n = Math.max(12, Math.round((om / DEG) * 0.9));
+/**
+ * Points of a great-circle arc from a to b ([lat, lon]) lifted `h` x radius at its middle: n + 1
+ * earth-frame vectors, n = the emblem's density (0.9 a degree, at least 12) x `dense`.
+ */
+export function arcPoints(a, b, h = ROUTE_H, dense = 1) {
+  const va = evec(...a);
+  const vb = evec(...b);
+  const om = Math.acos(clamp(va[0] * vb[0] + va[1] * vb[1] + va[2] * vb[2], -1, 1));
+  const n = Math.max(12, Math.round((om / DEG) * 0.9 * dense));
   const pts = [];
   for (let i = 0; i <= n; i++) {
     const s = i / n;
     const ka = Math.sin((1 - s) * om) / Math.sin(om);
     const kb = Math.sin(s * om) / Math.sin(om);
-    const h = 1 + 0.12 * Math.sin(Math.PI * s);
-    pts.push([(a[0] * ka + b[0] * kb) * h, (a[1] * ka + b[1] * kb) * h, (a[2] * ka + b[2] * kb) * h]);
+    const lift = 1 + h * Math.sin(Math.PI * s);
+    pts.push([(va[0] * ka + vb[0] * kb) * lift, (va[1] * ka + vb[1] * kb) * lift, (va[2] * ka + vb[2] * kb) * lift]);
   }
   return pts;
-});
-
-/** Centre longitude at dt: a fast turn that decelerates onto Europe by 2.4 s. */
-function lambda(dt) {
-  return LAM_END + 260 * (1 - easeOutQuint(seg(dt, 0.15, 2.25)));
 }
 
-const TMP = [0, 0, 0];
-function emblem(ctx, dt, x, y, k = 1) {
-  if (dt < 0.2) return;
-  const R = Math.round(R0 * k);
-  const lam = lambda(dt);
-  drawIrisGlobe(ctx, dt, x, y, R, lam, GLOBE_STYLES.world);
+// great-circle routes out of London, lifted slightly off the surface
+const ROUTE_PTS = ROUTES.map((b) => arcPoints(LONDON, b));
 
-  // routes draw out of London once the turn slows
+const TMP = [0, 0, 0];
+/**
+ * The emblem's routes out of London at radius R, centre longitude lam: route r drawn to fraction
+ * pOf(r) (dotted, every other point), with a white pixel where a whole route lands.
+ */
+export function drawRoutes(ctx, x, y, R, lam, pOf) {
   for (let r = 0; r < ROUTE_PTS.length; r++) {
     const pts = ROUTE_PTS[r];
-    const p = easeOut(seg(dt, 0.95 + r * 0.12, 0.55));
+    const p = pOf(r);
     if (p <= 0) continue;
     const upto = Math.round((pts.length - 1) * p);
     ctx.fillStyle = P.red;
@@ -258,20 +260,32 @@ function emblem(ctx, dt, x, y, k = 1) {
       }
     }
   }
-  // London: marker and a single ripple
-  if (dt > 0.85) {
-    project(evec(...LONDON), lam, R, TMP);
-    if (TMP[2] > 0.05) {
-      const lx = Math.round(x + TMP[0]);
-      const ly = Math.round(y + TMP[1]);
-      const rp = seg(dt, 0.9, 0.7);
-      if (rp > 0 && rp < 1) ring(ctx, lx, ly, 2 + Math.round(12 * easeOut(rp)), P.red, 1 - rp);
-      ctx.fillStyle = P.red;
-      ctx.fillRect(lx - 1, ly - 1, 3, 3);
-      ctx.fillStyle = P.white;
-      ctx.fillRect(lx, ly, 1, 1);
-    }
-  }
+}
+
+/** London's marker (3x3 red, white centre), with its ripple at progress rp (0..1, none outside). */
+export function drawLondon(ctx, x, y, R, lam, rp = 0) {
+  project(evec(...LONDON), lam, R, TMP);
+  if (TMP[2] <= 0.05) return;
+  const lx = Math.round(x + TMP[0]);
+  const ly = Math.round(y + TMP[1]);
+  if (rp > 0 && rp < 1) ring(ctx, lx, ly, 2 + Math.round(12 * easeOut(rp)), P.red, 1 - rp);
+  ctx.fillStyle = P.red;
+  ctx.fillRect(lx - 1, ly - 1, 3, 3);
+  ctx.fillStyle = P.white;
+  ctx.fillRect(lx, ly, 1, 1);
+}
+
+/** The settled WORLD NOW globe at (x, y), radius R, centre longitude lam: earth, routes, London. */
+export function drawWorldGlobe(ctx, x, y, R, lam) {
+  drawGlobe(ctx, x, y, R, lam, GLOBE_STYLES.world);
+  drawRoutes(ctx, x, y, R, lam, ONE);
+  drawLondon(ctx, x, y, R, lam);
+}
+const ONE = () => 1;
+
+/** The lock-up's emblem: the settled globe at its size factor k (the title sequence turns it itself). */
+function emblem(ctx, dt, x, y, k = 1) {
+  drawWorldGlobe(ctx, x, y, Math.round(R0 * k), LAM_END);
 }
 
 const background = lazyBackdrop({ key: 'world', colors: [P.black, P.ink], cx: CENTRE.x, cy: CENTRE.y, reach: 230 });
@@ -288,7 +302,3 @@ export const WORLD = {
   // one small job per background slice (the director's first open must not stutter)
   warmJobs: () => [globeTexture, ...Array.from({ length: Math.round(R0 * 0.6) + 1 }, (_, i) => () => globeTable(R0 + i))],
 };
-
-export function drawWorldNow(ctx, dt, info) {
-  playOpen(ctx, dt, info, WORLD);
-}

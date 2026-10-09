@@ -1,10 +1,12 @@
-// Programme opens: one 4 s title sequence per show, all built on the same
-// GLOBIT 24 package (opens/kit.js) so they read as one network: build, reveal,
-// and a still lock-up for the hard cut on the downbeat.
+// Programme opens: one title sequence per show, all built on the same GLOBIT 24
+// package (opens/kit.js) so they read as one network: build, reveal, and a still
+// lock-up for the hard cut on the downbeat. Most last 4 s; the flagship (WORLD
+// NOW) has a ten-second sequence of its own (opens/worldtitles.js) that ends on
+// the same lock-up.
 //
 //   drawOpen(ctx, t, dt, programId, info)  full frame; dt = seconds since the open started
 //   openFor(programId) -> { duration, tune }  (the director waits `duration`, plays `tune` once)
-//   OPENS[id] = { duration, tune, draw(ctx, t, dt, info) }
+//   OPENS[id] = { duration, still, tune, draw(ctx, t, dt, info) }  (still: the lock-up holds from here)
 //   info = { title, tagline, presenters: ['PACO PIXEL', ...], date, channel, replay?, bug? }
 //     replay: true shows REPLAY instead of LIVE in the top row; bug: false leaves the
 //     top row out (the UP NEXT promo replays an open in the middle of a break)
@@ -15,8 +17,8 @@
 import { P } from '../palette.js';
 import { drawText } from '../font.js';
 import { HAS_DOM } from '../gfx/index.js';
-import { DURATION, normInfo, lockupLayout, drawLockupStill, W, H } from './opens/kit.js';
-import { WORLD, drawWorldNow } from './opens/world.js';
+import { DURATION, TL, normInfo, lockupLayout, drawLockupStill, W, H } from './opens/kit.js';
+import { WORLD_TITLES, drawWorldNowTitles, WN_DURATION, WN_HIT } from './opens/worldtitles.js';
 import { TECH, drawTechBytes } from './opens/tech.js';
 import { COSMOS, drawCosmos } from './opens/cosmos.js';
 import { MONEY, drawMoneyMinute } from './opens/money.js';
@@ -26,10 +28,10 @@ import { WEATHER_OPEN, drawWorldWeather } from './opens/weather.js';
 import { TUNES } from './opens/tunes.js';
 
 const wrap = (fn) => (ctx, t, dt, info) => fn(ctx, dt, info);
-const open = (fn, prog, tune) => ({ duration: DURATION, tune, draw: wrap(fn), accent: prog.accent, prog });
+const open = (fn, prog, tune, duration = DURATION, still = TL.still) => ({ duration, still, tune, draw: wrap(fn), accent: prog.accent, prog });
 
 export const OPENS = {
-  'world-now': open(drawWorldNow, WORLD, TUNES['world-now']),
+  'world-now': open(drawWorldNowTitles, WORLD_TITLES, TUNES['world-now'], WN_DURATION, WN_HIT),
   'tech-bytes': open(drawTechBytes, TECH, TUNES['tech-bytes']),
   cosmos: open(drawCosmos, COSMOS, TUNES.cosmos),
   'money-minute': open(drawMoneyMinute, MONEY, TUNES['money-minute']),
@@ -123,7 +125,7 @@ export function drawProgrammeLockup(ctx, programId, info) {
 // timer slice (globe tables, sprites, backdrops), then one hidden lock-up frame of each open,
 // which also warms the top row and the text caches.
 if (HAS_DOM && typeof setTimeout === 'function') {
-  const progs = [WORLD, TECH, COSMOS, MONEY, FLASH, GENERIC];
+  const progs = [WORLD_TITLES, TECH, COSMOS, MONEY, FLASH, GENERIC];
   const jobs = [];
   for (const p of progs) jobs.push(p.background);
   for (const p of progs) if (p.warmJobs) jobs.push(...p.warmJobs());
@@ -131,7 +133,8 @@ if (HAS_DOM && typeof setTimeout === 'function') {
   for (const id of [...Object.keys(OPENS), '']) {
     jobs.push(() => {
       if (!scratch) scratch = document.createElement('canvas').getContext('2d');
-      for (const dt of [0.6, 1.2, 1.9, 2.6, 3.5]) drawOpen(scratch, 0, dt, id, { title: 'GLOBIT 24', tagline: 'WARM', presenters: ['GLOBIT'] });
+      const d = openOf(id).duration / DURATION;
+      for (const dt of [0.6, 1.2, 1.9, 2.6, 3.5]) drawOpen(scratch, 0, dt * d, id, { title: 'GLOBIT 24', tagline: 'WARM', presenters: ['GLOBIT'] });
     });
   }
   let j = 0;

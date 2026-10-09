@@ -142,7 +142,7 @@ This replaces the writer's current cold open ("gripping line, greeting, teaser" 
 
 | # | Segment | Data | Reader | Length |
 |---|---|---|---|---|
-| 1 | Open (existing template) | programme metadata | — | 4.0 s (`scenes/opens.js`) |
+| 1 | Title sequence (see "The title sequence" below) | programme metadata | — | 10.2 s (`scenes/opens/worldtitles.js`) |
 | 2 | Headlines: 3 spoken lines, each followed by a timpani hit and a pip sting in the gap | the first 3 rundown stories; new `intro.headlines[]` | Paco | 12–14 s |
 | 3 | Greeting on the wide shot | `intro.text`, plus an optional Lola line | Paco, then Lola | 4–7 s |
 | 4 | Lead (a breaking story always leads) | story 1 | Paco | 12–32 s, typically about 25 |
@@ -151,6 +151,18 @@ This replaces the writer's current cold open ("gripping line, greeting, teaser" 
 | 7 | And finally, then 0–2 chat lines | story 8 (`lighter`) | Lola; chat Paco, then Lola | 8–28 s, plus 0–10 s |
 | 8 | Sign-off on the wide, held 1.5 s after the last word | outro | Paco | 4.5–7.5 s |
 | 9 | Stinger, then the end card | template | — | 3.8 s (`director.js`) |
+
+**The title sequence** (owner, 9 Oct: "real newscasts have a far more crafted intro, several seconds long, with great effects"). Ten seconds at 96 BPM on one cue sheet (`scenes/opens/worldcues.js`) that the pictures and the theme both read, so every landing, pip and hit lands on a beat. One continuous camera move, from orbit to the lock-up:
+
+| Beats (s) | Act | Pictures | Music (`themes.js`, `worldNowTitles`) |
+|---|---|---|---|
+| 0–4 (0–2.5) | Night | Europe at night under a slanted horizon, the dawn ring on the limb; the lights come on outwards from London; London's pin pips once a beat; LONDON and its time | Four B5 pips (~1 kHz, after the BBC's), Bm7 over the D pedal, a felt timpani pulse |
+| 4–9 (2.5–5.6) | Network | The emblem's three routes leave London and land one a beat (New York, New Delhi, Nairobi), each named with its local time; the network blooms across the planet | A bell on each landing: the signature's low 5, 1 and 2, then its high 5 on the bloom; a quiet eighth-note hat |
+| 9–12.4 (5.6–7.7) | Sunrise | The camera pulls back to the whole planet; the sun clears the limb (a flare); day sweeps over Europe and Africa and brings the red equator; the field comes up behind the globe; a silver ring closes on it (the old open's iris) | An air swell crests on the sunrise with a bell on F# and B; the strings rise; the timpani rolls into the brass |
+| 12.4–15 (7.7–9.4) | Title | The package's reveal: the globe glides to its slot, the plate, the title with one glint across its chrome, tagline, credits, the bit, the top row | The brass states the signature, the colour (3) over the pedal, D add9 on the hit |
+| 15–16.3 (9.4–10.2) | Still | The lock-up holds for the cut | The chord rings; the button on the cut |
+
+The big earth is the emblem's globe drawn pixel by pixel for any camera (`opens/planet.js`); at the emblem's own camera it draws exactly the emblem's pixels (tested), so the hand-over to the lock-up never pops. The night side shows the world map's city lights with a dim scatter of towns round each city; place names follow the channel's map labels (a black plate, the red rule, the time in micro). The critique rounds are in `docs/roadmap/critique/world-now-open.md`.
 
 **Headlines in detail** *(our rules unless tagged)*
 - **Lines:** 7–10 words each, in the present tense, naming the place where there is one. No "?", no "!", and figures only if grounded (`numbersGrounded`, `server/facts.js`).

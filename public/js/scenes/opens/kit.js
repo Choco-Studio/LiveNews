@@ -429,7 +429,7 @@ export function normInfo(info) {
  * emblem(ctx, dt, x, y, k) with k the size factor (ZOOM -> 1), extent (right
  * half-width at k = 1), front (opaque: may overlap the plate), absorb (when the
  * seed bit is absorbed), shoulder (where the bit pops out, at k = 1), popAt,
- * bit (false: no hopping bit) }.
+ * bit (false: no hopping bit), after(ctx, dt, L) (drawn last, over the top row) }.
  */
 export function playOpen(ctx, dt, info, prog) {
   ctx.drawImage(prog.background(), 0, 0);
@@ -446,6 +446,7 @@ export function playOpen(ctx, dt, info, prog) {
   }
   if (prog.bit !== false) drawHopBit(ctx, dt, pos.x, pos.y, L, Math.round((prog.shoulder ?? 30) * k), prog.popAt);
   drawBug(ctx, dt, info);
+  prog.after?.(ctx, dt, L);
 }
 const POS = { x: 0, y: 0 };
 

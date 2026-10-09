@@ -1,5 +1,6 @@
 // Programme opens, cards and their layouts in Node with a recording fake canvas: every open's
-// lock-up is frame-identical from 3.2 s (the theme's final chord) to the cut and beyond, no
+// lock-up is frame-identical from its hit (3.2 s; WORLD NOW's title sequence 9.375 s: the theme's
+// final chord) to the cut and beyond, no
 // emblem crosses the title plate, every save() is restored, and the cards draw for any input.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -38,11 +39,13 @@ function fakeCanvas() {
 
 let opens;
 let cards;
+let WN_DURATION;
 before(async () => {
   globalThis.document = { createElement: () => fakeCanvas() };
   const gfx = await import('../public/js/gfx/index.js');
   gfx.setNow(Date.UTC(2026, 9, 2, 17, 42, 7));
   opens = await import('../public/js/scenes/opens.js');
+  ({ WN_DURATION } = await import('../public/js/scenes/opens/worldcues.js'));
   cards = await import('../public/js/scenes/cards.js');
 });
 
@@ -64,20 +67,24 @@ function frame(id, dt, info = INFO[id]) {
 }
 
 for (const id of Object.keys(INFO)) {
-  test(`${id}: the lock-up holds still from 3.2 s to the cut (and after)`, () => {
-    frame(id, 3.0); // let every lazy cache settle
-    const a = frame(id, 3.2);
-    assert.equal(frame(id, 3.6), a);
-    assert.equal(frame(id, 3.99), a);
-    assert.equal(frame(id, 8), a);
-    assert.notEqual(frame(id, 2.6), a, 'and it is still moving before the hit');
+  test(`${id}: the lock-up holds still from the hit to the cut (and after)`, () => {
+    const still = opens.OPENS[id]?.still ?? 3.2;
+    const end = opens.OPENS[id]?.duration ?? 4;
+    frame(id, still - 0.2); // let every lazy cache settle
+    const a = frame(id, still);
+    assert.equal(frame(id, still + 0.4), a);
+    assert.equal(frame(id, end - 0.01), a);
+    assert.equal(frame(id, end + 4), a);
+    assert.notEqual(frame(id, still - 0.6), a, 'and it is still moving before the hit');
   });
 }
 
-test('every open is 4 s and the title column is the same for every programme', () => {
+test('every open is 4 s but WORLD NOW\'s title sequence; the hit is 0.8 s before every cut; one title column', () => {
   const lay = {};
   for (const id of Object.keys(INFO)) {
-    assert.equal(opens.openFor(id).duration, 4);
+    const o = opens.OPENS[id];
+    assert.equal(opens.openFor(id).duration, id === 'world-now' ? WN_DURATION : 4, id);
+    if (o) assert.ok(Math.abs(o.duration - o.still - 0.8) < 1e-9, `${id}: the still lands 0.8 s before the cut`);
     lay[id] = opens.lockupFor(id, INFO[id]);
     const front = (opens.OPENS[id] || { prog: { front: true } }).prog.front;
     // globes overlap the plate's left end (plate at 130); every other plate has the same 12 px
@@ -100,11 +107,14 @@ test('only opaque globes may overlap the title plate: every other emblem ends 4 
 });
 
 test('a replay open shows REPLAY and a promo replay draws no top row', () => {
-  const live = frame('world-now', 3.5);
-  const replay = frame('world-now', 3.5, { ...INFO['world-now'], replay: true });
-  assert.notEqual(live, replay);
-  const promo = frame('world-now', 3.5, { ...INFO['world-now'], bug: false });
-  assert.ok(promo.length < live.length);
+  for (const id of ['world-now', 'cosmos']) {
+    const at = opens.OPENS[id].still + 0.3; // the top row is on by the lock-up
+    const live = frame(id, at);
+    const replay = frame(id, at, { ...INFO[id], replay: true });
+    assert.notEqual(live, replay, id);
+    const promo = frame(id, at, { ...INFO[id], bug: false });
+    assert.ok(promo.length < live.length, id);
+  }
 });
 
 test('long programme titles wrap to balanced lines at 2x without breaking the lock-up', () => {

@@ -19,6 +19,7 @@
 // Every cue is a plain tune object (see tune.js / CONTRACTS.md).
 
 import { midiToName } from './tune.js';
+import { WN_CUES, WN_BPM } from '../scenes/opens/worldcues.js';
 
 /** The signature as semitones from the tonic and lengths in beats. */
 export const MOTIF = Object.freeze([[-5, 0.5], [0, 0.5], [2, 0.5], [7, 1]]);
@@ -97,6 +98,67 @@ const stab = (inst, chord, C, total, vel = 0.65, gain = 0.9) => ({ kind: 'harmon
 
 // ------------------------------------------------------------------ opens
 
+// WORLD NOW's title sequence (opens/worldcues.js): the same brass statement and final chord as the
+// short open, with ten seconds of build under the pictures. Night: four pips from London (B5,
+// ~1 kHz, the BBC's pips as a nod) over Bm7 and a felt timpani pulse. Network: each route that lands
+// rings a bell, the signature's first three notes, and the bloom its high 5, over a quiet eighth-note
+// hat. Sunrise: an air swell crests on it, a bell rings the colour (F#) with B, the strings rise and
+// the timpani rolls into the brass, which states the signature (colour 3 over the D pedal) and
+// lands on D add9 with the lock-up.
+function worldNowTitles(tempo, H, C) {
+  const k = D4;
+  const q = H / WN_CUES.hit; // the cue sheet's beats on this grid (1 at the designed length)
+  const at = (b) => b * q;
+  const m0 = H - 4;
+  const total = C + 2;
+  const [l1, l2, l3] = WN_CUES.land.map(at);
+  const bloom = at(WN_CUES.bloom);
+  const sun = at(WN_CUES.sunrise);
+  const lead = [...motif(k - 12, COLOURS.home, m0), [H, k - 12, total - H, 0.9]];
+  const roll = range(sun - 0.5, m0, 0.25).map((b, i, a) => [b, k - 24, 0.25, 0.16 + (0.4 * i) / Math.max(1, a.length - 1)]);
+  const PIP = { wave: 'sine', preset: 'sine', a: 0.003, d: 0.2, s: 0.85, r: 0.03, vib: false, legato: 1 };
+  return {
+    bpm: tempo,
+    room: 0.26,
+    echo: { amount: 0.7, beats: 0.75, feedback: 0.26 },
+    fadeOut: 0.9,
+    tracks: [
+      // the brass statement first (the signature is the lead's first five notes, as in every open)
+      { kind: 'lead', inst: 'brass', notes: part(lead, total), gain: 0.85 },
+      { kind: 'lead', inst: LEAD.horn, notes: part([...motif(k, COLOURS.home, m0, { vel: 0.85 }), [H, [k - 3, k + 2, k + 4], total - H, 0.62]], total), gain: 0.85, pan: 0.18, echo: 0.3 },
+      // the pips and the bells of the network
+      { kind: 'lead', inst: PIP, notes: part(WN_CUES.pings.map((b) => [at(b), k + 21, 0.16, 0.5]), total), gain: 0.42, echo: 0.25 },
+      { kind: 'harmony', inst: 'bell', notes: part([[l1, k + 7, 1, 0.56], [l2, k + 12, 1, 0.58], [l3, k + 14, 1, 0.6], [bloom, [k + 12, k + 19], 1.5, 0.66], [sun, [k + 16, k + 21], 1.5, 0.42]], total), gain: 1.45, echo: 0.55, pan: 0.25 },
+      { kind: 'harmony', inst: LEAD.strings, notes: part([
+        [sun, [k + 7, k + 14], at(11) - sun, 0.34], // the strings rise with the sun
+        [at(11), [k + 9, k + 14], m0 + 2.5 - at(11), 0.42],
+        [m0 + 2.5, [k + 9, k + 14], 1.5, 0.46],
+        [H, [k + 12, k + 16, k + 21], total - H, 0.55],
+      ], total), gain: 0.55, pan: 0.3 },
+      { kind: 'harmony', inst: 'pad', notes: part([
+        [0, [k - 3, k, k + 4, k + 7], at(4), 0.4], // Bm7 over the D pedal: night
+        [at(4), [k - 3, k, k + 4, k + 7], at(3), 0.5],
+        [at(7), [k - 7, k - 3, k, k + 4], at(3), 0.56], // Gmaj9: the network, then the sun
+        [at(10), [k - 7, k - 3, k, k + 4], m0 + 2.5 - at(10), 0.64],
+        [m0 + 2.5, [k - 5, k, k + 7], 1.5, 0.66], // open fifth: the colour decides
+        [H, [k - 12, k - 5, k + 2, k + 4, k + 7], total - H, 0.8], // D add9
+      ], total), pan: -0.2 },
+      { kind: 'bass', inst: 'timpani', notes: part([
+        [0, k - 24, 2 * q, 0.44], [at(2), k - 24, 2 * q, 0.26], [at(4), k - 24, 2 * q, 0.4], [at(6), k - 24, 2 * q, 0.34], [bloom, k - 24, 1, 0.5],
+        ...roll, [m0, k - 24, 2.5, 0.65], [m0 + 2.5, k - 24, 1.5, 0.75], [H, k - 24, C - H], [C, k - 24, 1.5, 0.7],
+      ], total), gain: 0.75 },
+      // the D pedal: one held drone (legato, no re-attack) until the brass, then the short open's pattern
+      { kind: 'bass', inst: { wave: 'tri', preset: 'tri', legato: 1 }, notes: part([[0, k - 24, at(4), 0.42], [at(4), k - 24, at(4), 0.52], [bloom, k - 24, m0 - bloom, 0.62]], total), gain: 0.42 },
+      { kind: 'bass', inst: 'tri', notes: part([[m0, k - 24, 2.4, 0.75], [m0 + 2.5, k - 24, 1.4, 0.8], [H, k - 24, total - H, 0.85]], total), gain: 0.42 },
+      stab('brass', [k - 12, k - 5], C, total, 0.6, 0.8),
+      { drums: drums(range(at(4), sun, 0.5).map((b, i) => [b, 'H', i % 2 ? 0.1 : 0.15]), total) },
+      { drums: `R:${fmt(at(8.4))} A:${fmt(at(10.4) - at(8.4))}@0.42` }, // the air swell crests on the sunrise
+      { drums: drums([[H, 'F', 0.7], [C, 'F', 0.6]], total) },
+      { drums: drums([[C, 'T', 0.4]], total) },
+    ],
+  };
+}
+
 // Each open: preferred tempo, then a builder that receives H (the beat of the
 // final chord, landing exactly on the title lock-up) and C (the beat of the
 // cut to the studio, possibly fractional) and returns the tune. The motif
@@ -108,7 +170,10 @@ const OPENS = {
   'world-now': {
     bpm: 94,
     key: D4,
+    // the flagship's ten-second title sequence (opens/worldtitles.js) on its own beat grid
+    long: { bpm: WN_BPM, maxDuration: 11 },
     build(H, C) {
+      if (H >= WN_CUES.hit) return worldNowTitles(this.tempo, H, C);
       const k = D4;
       const m0 = H - 4;
       const total = C + 2;
@@ -324,14 +389,17 @@ const COLOUR_OF = { 'world-now': 'home', 'tech-bytes': 'tech', cosmos: 'cosmos',
 /**
  * Theme tune for a programme's open. The final chord lands on the title
  * lock-up (`duration - 0.8` s) and a soft felt/timpani button on the cut.
+ * Opens last 2.5-8 s; WORLD NOW's title sequence runs to 11 s on its own grid.
  * Returns a tune with `meta: { programId, motif, colour, key, bpm, hitAt, cutAt }`.
  */
 export function themeFor(programId, { duration = 4 } = {}) {
   const def = OPENS[programId] ?? GENERIC;
-  const dur = Math.min(8, Math.max(2.5, Number(duration) || 4));
+  // a programme with a long title sequence (WORLD NOW) has its own grid and length past 8 s
+  const long = def.long && Number(duration) > 8 ? def.long : null;
+  const dur = Math.min(long?.maxDuration ?? 8, Math.max(2.5, Number(duration) || 4));
   const lockAt = Math.max(2.2, dur - 0.8);
   // The hit on a whole or half beat, close to the programme's tempo.
-  const H = Math.max(4.5, Math.round(((lockAt * def.bpm) / 60) * 2) / 2);
+  const H = Math.max(4.5, Math.round(((lockAt * (long?.bpm ?? def.bpm)) / 60) * 2) / 2);
   const tempo = (H * 60) / lockAt;
   const C = (dur * tempo) / 60;
   const tune = def.build.call({ tempo }, H, C);

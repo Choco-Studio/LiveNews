@@ -18,7 +18,7 @@
     <div id="ui">
       <label>kind <select id="kind"></select></label>
       <label>item <select id="item"></select></label>
-      <label>t <input id="t" type="range" min="0" max="6" step="0.01" value="0" /></label>
+      <label>t <input id="t" type="range" min="0" max="12" step="0.01" value="0" /></label>
       <span id="tv">0.00 s</span>
       <label><input id="play" type="checkbox" /> play</label>
     </div>
@@ -30,6 +30,7 @@
       // Lab for public/js/scenes/{opens,cards,worldmap}.js: every frame is a pure
       // function of t (the graphics clock is frozen) so contact sheets are exact.
       import { drawOpen, openFor } from '../js/scenes/opens.js';
+      import { renderTune } from '../js/audio/synth.js';
       import * as cards from '../js/scenes/cards.js';
       import { drawWorldMap, warmMapData } from '../js/scenes/worldmap.js';
       import { pixelate } from '../js/pixelate.js';
@@ -228,14 +229,15 @@
       ];
       function cut(id, after) {
         const program = { id, title: PROGRAMS[id].title, tagline: PROGRAMS[id].tagline, theme: { 'world-now': 'world', 'tech-bytes': 'tech', cosmos: 'space', 'money-minute': 'money', 'news-60': 'flash' }[id] || 'world' };
-        const sceneAt = (t) => ({ shot: t < 4 ? 'open' : after, program, rundown: CUT_RUNDOWN, storyId: null, programTagUntil: 4 + 15, ticker: [], lowerThird: null, subtitle: null, replay: false });
+        const D = () => openFor(id).duration; // the open's own length (WORLD NOW's sequence runs ~10 s)
+        const sceneAt = (t) => ({ shot: t < D() ? 'open' : after, program, rundown: CUT_RUNDOWN, storyId: null, programTagUntil: D() + 15, ticker: [], lowerThird: null, subtitle: null, replay: false });
         return (t) => {
           const g = new Graphics({ now: () => FIXED_NOW });
           for (let k = 0; k < t; k += 1 / 30) g.update(k, sceneAt(k));
           const scene = sceneAt(t);
           g.update(t, scene);
-          if (t < 4) drawOpen(ctx, t, t, id, OPEN_INFO[id]);
-          else if (after === 'montage') cards.drawHeadlineFrame(ctx, t, t - 4, { index: 0, total: 2, ...CUT_RUNDOWN[0], programId: id });
+          if (t < D()) drawOpen(ctx, t, t, id, OPEN_INFO[id]);
+          else if (after === 'montage') cards.drawHeadlineFrame(ctx, t, t - D(), { index: 0, total: 2, ...CUT_RUNDOWN[0], programId: id });
           else {
             ctx.fillStyle = PAL.ink;
             ctx.fillRect(0, 0, 384, 216);
@@ -319,6 +321,16 @@
         return [...out.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
       }
       window.__lab = { render, set, hash, offPalette, kinds: () => Object.fromEntries(Object.entries(KINDS).map(([k, v]) => [k, Object.keys(v)])), openFor };
+      // tools/render-audio.mjs (and video checks): an open's theme as the director plays it, from the
+      // cut (t = 0) at volume 0.6, stopped (faded) at the open's end
+      window.__audio = {
+        render: async ({ id = 'world-now', seconds } = {}) => {
+          const o = openFor(id);
+          const r = await renderTune(o.tune, { seconds: seconds ?? o.duration + 1.4, volume: 0.6, startAt: 0, stopAt: o.duration });
+          const round = (c) => Array.from(c, (v) => Math.round(v * 1e5) / 1e5);
+          return { sampleRate: r.buffer.sampleRate, channels: [round(r.buffer.getChannelData(0)), round(r.buffer.getChannelData(1))], duration: o.duration };
+        },
+      };
     </script>
   </body>
 </html>
