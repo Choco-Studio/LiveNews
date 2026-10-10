@@ -70,6 +70,9 @@ const S = {
   silverC: { color: P.silver, align: 'center' },
   whiteC: { color: P.white, align: 'center' },
   fog: { color: P.fog },
+  fog2: { color: P.fog, scale: 2 },
+  fog3: { color: P.fog, scale: 3 },
+  white3: { color: P.white, scale: 3 },
   microFog: { color: P.fog, font: 'micro' },
   microSilver: { color: P.silver, font: 'micro' },
   microSlate: { color: P.slate, font: 'micro' },
@@ -691,6 +694,157 @@ function drawKnown(ctx, dt, o, acc) {
   }
 }
 
+// HOW WE GOT HERE (pace shots.timeline): a story's dated steps (the writer's seg.timeline, grounded) on the stack's
+// black panel: the kicker, a rail that draws left to right, and on it a node per step, its date above (2x) and
+// what happened below (1x, up to three lines), each landing as the rail reaches it.
+const TIMELINE_LAYOUTS = layoutCache(40);
+function timelineLayout(steps, source) {
+  return TIMELINE_LAYOUTS(steps.map((p) => `${p.when}~${p.what}`).join('|'), source, null, null, () => {
+    const PX = 32;
+    const PW = W - 2 * PX;
+    const n = steps.length;
+    const colW = Math.floor((PW - 24) / n);
+    // a date as a board writes it: the month cut to three letters ("MARCH 2023" -> "MAR 2023"); at 2x when every
+    // date fits its column, else all at 1x (never one big, one small, nor a date cut off)
+    const dates = steps.map((p) => String(p.when).toUpperCase().replace(/\b(JAN|FEB|MAR|APR|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\b/g, '$1').replace(/\s+/g, ' ').trim());
+    const ws = dates.every((d) => textW(d, 2) <= colW - 6) ? 2 : 1;
+    const cols = steps.map((p, i) => {
+      const cx = PX + 12 + Math.round(colW * (i + 0.5));
+      const when = ellipsis(dates[i], colW - 6, ws);
+      const lines = balanceLines(String(p.what), colW - 10, 1, 3);
+      return { cx, when, ww: textW(when, ws), lines };
+    });
+    const maxLines = Math.max(...cols.map((c) => c.lines.length));
+    const src = srcText(source, PW - 24);
+    const kickY = 10;
+    const whenY = 22; // the dates, 2x
+    const railY = whenY + 16 + 4;
+    const textY = railY + 8;
+    const h = textY + maxLines * 11 + (src ? 13 : 0) + 8;
+    const PY = clamp(Math.round(80 - h / 2), 28, SAFE_BOTTOM - h);
+    return { PX, PW, PH: h, PY, cols, kickY, whenY, railY, textY, src, srcY: textY + maxLines * 11 + 4, colW, ws };
+  });
+}
+
+function drawTimeline(ctx, dt, o, acc) {
+  const steps = o.timeline.slice(0, 3);
+  const L = timelineLayout(steps, o.source);
+  const vis = Math.round(L.PW * easeOutQuint(seg(dt, 0, 0.3)));
+  if (vis <= 0) return;
+  const tx = L.PX + 12;
+  ctx.save();
+  try {
+    clipRect(ctx, L.PX, L.PY, vis, L.PH);
+    ctx.fillStyle = P.black;
+    ctx.fillRect(L.PX, L.PY, L.PW, L.PH);
+    ctx.fillStyle = P.slate;
+    ctx.fillRect(L.PX, L.PY, L.PW, 1);
+    drawText(ctx, 'HOW WE GOT HERE', tx, L.PY + L.kickY, S.microFog);
+    // the rail: drawn from the first node to the last over the steps' landings
+    const first = L.cols[0].cx, last = L.cols[L.cols.length - 1].cx;
+    const ry = L.PY + L.railY;
+    const head = Math.round(first + (last - first) * easeOutQuint(seg(dt, 0.3, 0.45 * L.cols.length)));
+    ctx.fillStyle = P.slate;
+    ctx.fillRect(first, ry, Math.max(0, head - first), 1);
+    for (let i = 0; i < L.cols.length; i++) {
+      const c = L.cols[i];
+      const at = 0.3 + i * 0.45;
+      if (dt < at || head < c.cx) continue;
+      // the node (an accent square on the rail), the date rising above it, what happened rising below
+      ctx.fillStyle = acc;
+      ctx.fillRect(c.cx - 1, ry - 1, 3, 3);
+      rise(ctx, c.when, c.cx - (c.ww >> 1), L.PY + L.whenY + (L.ws === 2 ? 0 : 6), seg(dt, at + 0.05, 0.34), L.ws === 2 ? S.white2 : S.white);
+      for (let k = 0; k < c.lines.length; k++) {
+        const ln = c.lines[k];
+        rise(ctx, ln, c.cx - (textW(ln, 1) >> 1), L.PY + L.textY + k * 11, seg(dt, at + 0.12 + k * 0.07, 0.34), S.white);
+      }
+    }
+    if (L.src) drawText(ctx, L.src, tx, L.PY + L.srcY, S.microFog);
+  } finally {
+    ctx.restore();
+  }
+}
+
+// FROM → TO (pace shots.change): one figure that moved, as the story says it: its label as the kicker, the old
+// value (dim) and the new (bright) either side of an arrow that draws across as the new value lands; UP or DOWN
+// beside the arrow when the values compare (the channel's accent, never red/green: a rise is not good news by colour).
+const CHANGE_LAYOUTS = layoutCache(40);
+function changeLayout(c, source) {
+  return CHANGE_LAYOUTS(`${c.label}|${c.from}|${c.to}`, source, null, null, () => {
+    const PX = 40;
+    const PW = W - 2 * PX;
+    const kicker = ellipsis(String(c.label).toUpperCase(), PW - 24, 1);
+    const from = String(c.from).toUpperCase();
+    const to = String(c.to).toUpperCase();
+    const ARROW = 18;
+    const GAP = 8;
+    // the values as big as both fit side by side (3x, 2x, else 1x cut to their half), the group centred
+    const fits = (k) => textW(from, k) + textW(to, k) + 2 * GAP + ARROW <= PW - 24;
+    const vs = fits(3) ? 3 : fits(2) ? 2 : 1;
+    const half = Math.floor((PW - 24 - 2 * GAP - ARROW) / 2);
+    const a = vs === 1 ? ellipsis(from, half, 1) : from;
+    const b = vs === 1 ? ellipsis(to, half, 1) : to;
+    const aw = textW(a, vs);
+    const bw = textW(b, vs);
+    // values compared with their scale ("$1.2 billion" is more than "$870 million")
+    const SCALE = { thousand: 1e3, k: 1e3, million: 1e6, m: 1e6, mn: 1e6, billion: 1e9, bn: 1e9, b: 1e9, trillion: 1e12, tn: 1e12 };
+    const num = (v) => {
+      const m = String(v).replace(/,/g, '').match(/(-?\d+(?:\.\d+)?)\s*(thousand|million|billion|trillion|bn|mn|tn|k|m|b)?\b/i);
+      return m ? Number(m[1]) * (m[2] ? SCALE[m[2].toLowerCase()] : 1) : NaN;
+    };
+    const up = num(c.to) > num(c.from) ? 'UP' : num(c.to) < num(c.from) ? 'DOWN' : '';
+    const src = srcText(source, PW - 24);
+    const vh = 8 * vs;
+    const top = 10 + 5 + 9;
+    const rowY = top + 6; // the FROM / TO captions, then the values
+    const valY = rowY + 9;
+    const h = valY + vh + 8 + (src ? 13 : 0) + 8;
+    const PY = clamp(Math.round(80 - h / 2), 28, SAFE_BOTTOM - h);
+    const x0 = PX + Math.round((PW - (aw + 2 * GAP + ARROW + bw)) / 2);
+    return { PX, PW, PH: h, PY, kicker, a, b, vs, vh, up, src, srcY: valY + vh + 8, rowY, valY, ax: x0 + aw + GAP, bx: x0 + aw + 2 * GAP + ARROW, x0, ARROW };
+  });
+}
+
+function drawChange(ctx, dt, o, acc) {
+  const L = changeLayout(o.change, o.source);
+  const vis = Math.round(L.PW * easeOutQuint(seg(dt, 0, 0.3)));
+  if (vis <= 0) return;
+  const tx = L.PX + 12;
+  const style = (bright) => (L.vs === 3 ? (bright ? S.white3 : S.fog3) : L.vs === 2 ? (bright ? S.white2 : S.fog2) : bright ? S.white : S.fog);
+  ctx.save();
+  try {
+    clipRect(ctx, L.PX, L.PY, vis, L.PH);
+    ctx.fillStyle = P.black;
+    ctx.fillRect(L.PX, L.PY, L.PW, L.PH);
+    ctx.fillStyle = P.slate;
+    ctx.fillRect(L.PX, L.PY, L.PW, 1);
+    drawText(ctx, L.kicker, tx, L.PY + 10, S.microFog);
+    // the old value: dim, first
+    if (dt >= 0.3) {
+      drawText(ctx, 'FROM', L.x0, L.PY + L.rowY, S.microFog);
+      rise(ctx, L.a, L.x0, L.PY + L.valY, seg(dt, 0.35, 0.34), style(false));
+    }
+    // the arrow draws across, then the new value lands at its head
+    const ay = L.PY + L.valY + Math.round(L.vh / 2) - 1;
+    const p = easeOutQuint(seg(dt, 0.75, 0.4));
+    if (p > 0) {
+      ctx.fillStyle = acc;
+      ctx.fillRect(L.ax, ay, Math.round(L.ARROW * p), 1);
+      if (p >= 1) {
+        ctx.fillRect(L.ax + L.ARROW - 2, ay - 2, 1, 5);
+        ctx.fillRect(L.ax + L.ARROW - 1, ay - 1, 1, 3);
+      }
+    }
+    if (dt >= 1.05) {
+      drawText(ctx, L.up ? `TO · ${L.up}` : 'TO', L.bx, L.PY + L.rowY, S.microFog);
+      rise(ctx, L.b, L.bx, L.PY + L.valY, seg(dt, 1.1, 0.34), style(true));
+    }
+    if (L.src) drawText(ctx, L.src, tx, L.PY + L.srcY, S.microFog);
+  } finally {
+    ctx.restore();
+  }
+}
+
 // TECH BYTES ledger
 const LEDGER_PITCH = 24;
 const LEDGER_LAYOUTS = new WeakMap();
@@ -1015,7 +1169,7 @@ const FACT_STYLES = {
  */
 export function drawFactCard(ctx, t, dt, o = {}) {
   const opts = o || {};
-  if (!opts.fact && !(Array.isArray(opts.numbers) && opts.numbers.length) && !(Array.isArray(opts.known) && opts.known.length) && opts.quote?.text) {
+  if (!opts.fact && !(Array.isArray(opts.numbers) && opts.numbers.length) && !(Array.isArray(opts.known) && opts.known.length) && !(Array.isArray(opts.timeline) && opts.timeline.length) && !opts.change && opts.quote?.text) {
     QUOTE.text = opts.quote.text;
     QUOTE.by = opts.quote.by ?? null;
     QUOTE.image = opts.image ?? null;
@@ -1032,6 +1186,14 @@ export function drawFactCard(ctx, t, dt, o = {}) {
   if (Array.isArray(opts.known) && opts.known.length >= 2) {
     cardGround(ctx, dt, opts.image, factField);
     return drawKnown(ctx, dt, opts, acc);
+  }
+  if (opts.change?.from && opts.change?.to && opts.change?.label) {
+    cardGround(ctx, dt, opts.image, factField);
+    return drawChange(ctx, dt, opts, acc);
+  }
+  if (Array.isArray(opts.timeline) && opts.timeline.length >= 2) {
+    cardGround(ctx, dt, opts.image, factField);
+    return drawTimeline(ctx, dt, opts, acc);
   }
   const rows = rowsFor(opts.fact, opts.numbers);
   if (style.look === 'paper') {

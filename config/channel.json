@@ -220,7 +220,7 @@
       "crosses": 2,
       "experts": ["omar", "clara", "dev", "amara", "leo", "ines"],
       "analyses": 1,
-      "boards": ["known"],
+      "boards": ["known", "timeline", "change"],
       "numberSlot": "main",
       "chats": {
         "after": [
@@ -317,7 +317,9 @@
         "words": "12 to 20"
       },
       "boards": [
-        "known"
+        "known",
+        "timeline",
+        "change"
       ],
       "terms": {
         "explainer": "ada"
@@ -420,7 +422,9 @@
         "reader": "B"
       },
       "boards": [
-        "known"
+        "known",
+        "timeline",
+        "change"
       ],
       "terms": {
         "explainer": "unit8",
@@ -493,7 +497,7 @@
         "number"
       ],
       "roundup": { "kind": "pictures", "kicker": "IN BRIEF", "opener": "Now, the rest of the business news in brief.", "min": 3, "max": 4, "words": "12 to 20" },
-      "boards": ["known"],
+      "boards": ["known", "timeline", "change"],
       "terms": { "explainer": "penny", "set": "money" },
       "chats": { "after": ["story"], "max": { "story": 1 } },
       "style": "Short business and economy round-up by a single presenter. Lead with the exact figure that matters, in the first or second sentence; one figure per sentence, two per story at most. What it means for people's money only when the summary says so; never advice. Direction verbs: rose, fell, held, edged up, slipped. Crisp, calm and clear; the number of the day closes the programme.",

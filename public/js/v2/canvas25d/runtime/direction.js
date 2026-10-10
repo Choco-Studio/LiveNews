@@ -51,7 +51,7 @@ import { defaultFraming } from './stage.js';
 // the Stage's module graph loads with this one: once the director's v2 side is ready, so is the
 // Renderer's (studio.js imports host.js itself; this only removes the start-up race)
 import './host.js';
-import { paceFor, gapAfter as paceGap, CHANNEL, shotMax, knownBoard } from '../../../pace.js';
+import { paceFor, gapAfter as paceGap, CHANNEL, shotMax, storyBoard } from '../../../pace.js';
 
 const now = () => performance.now() / 1000;
 // PACE (public/js/pace.js, owner 23:10): the cut cooldown, the stinger and the pause after each
@@ -97,7 +97,7 @@ export function cuesFromPlan(plan, { hasImg = true, rundown = null } = {}) {
       standIn = true;
     }
     if (shot === 'map' && !(seg.location && Number.isFinite(seg.location.lat))) continue;
-    if (shot === 'fact' && !seg.fact && !knownBoard(seg, ctx.programId)) continue; // the director's card needs seg.fact (or WHAT WE KNOW's points)
+    if (shot === 'fact' && !seg.fact && !storyBoard(seg, ctx.programId)) continue; // the director's card needs seg.fact (or a board: WHAT WE KNOW's points, HOW WE GOT HERE's steps)
     const focus = e.focus && e.focus in ctx.cast ? e.focus : ctx.speaker;
     let framing = shot === 'montage' ? null : standIn ? 'wide' : (e.framing ?? null);
     // over-the-shoulder exists to show the wall: without a picture, a map or a figure it would frame

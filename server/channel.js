@@ -93,8 +93,9 @@ export function validateChannel(ch) {
     if (p.analyses !== undefined && !(Number.isInteger(p.analyses) && p.analyses >= 0 && p.analyses <= 2)) throw new Error(`programme "${id}" has an "analyses" outside 0..2`);
     // Optional: the programme's resident expert (part of the format: booked whenever a story fits, no rest)
     if (p.resident !== undefined && !(typeof p.resident === 'string' && (p.experts || []).includes(p.resident))) throw new Error(`programme "${id}" has a "resident" who is not one of its experts`);
-    // Optional: the boards a programme's stories may carry (WHAT WE KNOW: the writer's "known" points).
-    if (p.boards !== undefined && !(isList(p.boards) && p.boards.every((b) => b === 'known'))) throw new Error(`programme "${id}" has "boards" other than ["known"]`);
+    // Optional: the boards a programme's stories may carry (WHAT WE KNOW: the writer's "known" points; HOW WE GOT
+    // HERE: its dated "timeline" steps; FROM → TO: a figure's "change").
+    if (p.boards !== undefined && !(isList(p.boards) && p.boards.every((b) => b === 'known' || b === 'timeline' || b === 'change'))) throw new Error(`programme "${id}" has "boards" other than "known", "timeline" and "change"`);
     // Optional: IN PLAIN ENGLISH (server/glossary.js): a presenter of the programme translates a story's jargon.
     if (p.terms !== undefined && !(p.terms && typeof p.terms === 'object' && typeof p.terms.explainer === 'string' && (p.presenters || []).includes(p.terms.explainer))) throw new Error(`programme "${id}" has "terms" without one of its presenters as "explainer"`);
     if (p.terms?.set !== undefined && !['tech', 'science', 'money'].includes(p.terms.set)) throw new Error(`programme "${id}" has a "terms" set other than "tech", "science" or "money"`);

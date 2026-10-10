@@ -12,7 +12,7 @@ import { isTranscriptLine } from '../transcript.js';
 import { isBreaking, plainTitle } from '../news.js';
 import { ALSO_LEAN, LIGHT, contentWords, extractFigures, sentencesIn, harmlessIncident, isGrave, leansOnPrevious, notForFeatures, numbersIn, quotesIn, severity } from '../facts.js';
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
-import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, hasFiniteVerb, headlineNames, shortHeadline, splitClauses, trimClause } from '../writer.js';
+import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, TIMELINE_MAX, hasFiniteVerb, headlineNames, shortHeadline, splitClauses, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
 import { AHEAD, deskOf } from '../correspondents.js';
 import { expertFor, answerFrame } from '../experts.js';
@@ -224,6 +224,85 @@ export function knownPoints(sentences, max = 3) {
     }
   }
   return out;
+}
+
+/**
+ * HOW WE GOT HERE (programme "boards": ["timeline"]): dated steps from the source's own sentences. A sentence that
+ * says when something happened ("In 2019 the bridge was declared unsafe", "Repairs began in March 2023") gives a
+ * step its year (and month) and its clause, the date and the attribution taken off. A span ("since 2019", "by
+ * 2030"), a plan, a forecast, a quote or a clause that leans on another line is no step. Two or three, one a date,
+ * in date order (the latest ones when there are more); the validator grounds them again.
+ */
+const TL_MONTH = '(January|February|March|April|May|June|July|August|September|October|November|December)';
+const TL_DATE = new RegExp(`\\b(?:in|during)\\s+(?:(?:early|late|mid-?)\\s*)?(?:${TL_MONTH}\\s+)?((?:19|20)\\d\\d)\\b(?!s)`, 'i');
+const TL_DAY = new RegExp(`\\bon\\s+(?:\\d{1,2}\\s+${TL_MONTH}|${TL_MONTH}\\s+\\d{1,2}),?\\s+((?:19|20)\\d\\d)\\b`, 'i');
+const TL_NOT_A_STEP = /\b(?:will|would|could|may|might|plans?|planned|expects?|expected|aims?|until|since|before|after|by (?:19|20)\d\d)\b/i;
+const MONTH_NAMES = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+export function timelinePoints(sentences, year = new Date().getUTCFullYear(), max = 3) {
+  const steps = [];
+  for (const raw of sentences) {
+    const t = String(raw).replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (/[“”"?«»]/.test(t) || TL_NOT_A_STEP.test(t)) continue;
+    let m = TL_DATE.exec(t);
+    let month = null;
+    let yr = 0;
+    if (m) {
+      month = m[1] || null;
+      yr = Number(m[2]);
+    } else {
+      m = TL_DAY.exec(t);
+      if (!m) continue;
+      month = m[1] || m[2];
+      yr = Number(m[3]);
+    }
+    if (yr > year) continue;
+    // the clause without its date: "In 2019, the bridge was declared unsafe" -> "the bridge was declared unsafe"
+    let c = `${t.slice(0, m.index)} ${t.slice(m.index + m[0].length)}`.replace(/\s+,/g, ',').replace(/^\s*,\s*/, '').replace(/\s+/g, ' ').trim();
+    c = c.replace(/,\s*(?:according to [^,.]+|(?:the )?[\w’' -]{2,40}? (?:says|said|reports|reported))\.?$/i, '').replace(/^(?:according to [^,]+,\s*)/i, '');
+    c = c.split(/,\s*(?:and|but|which|while|when|after|as)\s+|;\s*|\s+[–—-]\s+/)[0].replace(/[.!,;:]+$/, '').trim();
+    if (!c || /^(?:that|there|which|who|but|so|also|and|then)\b/i.test(c) || /\b(?:it|its|they|their|them|this|these|those|he|she|his|her)\b/i.test(c)) continue;
+    const words = c.split(' ').length;
+    if (words < 2 || words > 7 || c.length > TIMELINE_MAX || !hasFiniteVerb(c)) continue;
+    const key = yr * 12 + (month ? MONTH_NAMES.indexOf(month.toLowerCase()) : 0);
+    if (steps.some((x) => x.key === key)) continue;
+    steps.push({ key, when: month ? `${month[0].toUpperCase()}${month.slice(1).toLowerCase()} ${yr}` : String(yr), what: c[0].toUpperCase() + c.slice(1) });
+  }
+  steps.sort((a, b) => a.key - b.key);
+  return steps.slice(-max).map(({ when, what }) => ({ when, what }));
+}
+
+/**
+ * FROM → TO (programme "boards": ["change"]): a figure the story says moved ("raised its main interest rate from
+ * 4.5% to 4.75%", "Inflation fell to 2.1% from 2.6%"): the two values as written and what moved, the object of a
+ * verb that moves it or the subject of one that moves (at most four words, no pronoun). The validator grounds it.
+ */
+const MOVE_T = /\b(raised|raises|cut|cuts|lowered|lowers|increased|reduced|lifted|hiked|trimmed|slashed|boosted|doubled|halved)\s+((?:its|their|the|a|his|her)\s+)?([\p{L}’'-]+(?:\s+[\p{L}’'-]+){0,3}?)\s*$/iu;
+const MOVE_I = /(?:^|[,;]\s*|\b(?:the|its|their)\s+)([\p{L}’'-]+(?:\s+[\p{L}’'-]+){0,3}?)\s+(?:has\s+|have\s+|had\s+)?(rose|risen|rises|fell|fallen|falls|climbed|climbs|dropped|drops|jumped|jumps|slipped|slips|surged|surges|grew|grown|grows|declined|declines|increased|increases|decreased|decreases|edged\s+(?:up|down)|went\s+(?:up|down))\s*$/iu;
+const NOT_LABEL = /^(?:it|they|this|that|these|those|he|she|which|who|there|prices?\s+have)$/i;
+export function changeFrom(sentences) {
+  for (const raw of sentences) {
+    const t = String(raw).replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (/[“”"?«»]/.test(t)) continue;
+    const ns = numbersIn(t).filter((n) => !(Number.isInteger(n.value) && n.value >= 1900 && n.value <= 2100 && !n.percent && !n.currency));
+    for (let i = 0; i < ns.length; i++) {
+      for (let j = 0; j < ns.length; j++) {
+        if (i === j || ns[i].scaled === ns[j].scaled) continue;
+        const a = ns[i], b = ns[j]; // a: from, b: to
+        const pre = (n) => t.slice(Math.max(0, n.index - 16), n.index);
+        if (!/\bfrom\s+(?:about |around |nearly |almost |roughly |some )?$/i.test(pre(a)) || !/\bto\s+(?:about |around |nearly |almost |roughly |some )?$/i.test(pre(b))) continue;
+        const first = Math.min(a.index, b.index);
+        const head = t.slice(0, first).replace(/\s*\b(?:from|to)\s+(?:about |around |nearly |almost |roughly |some )?$/i, '').trim();
+        const mt = MOVE_T.exec(head);
+        const mi = mt ? null : MOVE_I.exec(head);
+        let label = mt ? mt[3] : mi ? mi[1] : '';
+        label = label.replace(/^(?:the|its|their|a)\s+/i, '').trim();
+        if (!label || NOT_LABEL.test(label) || label.length > 24 || /\d/.test(label)) continue;
+        const said = (n) => t.slice(n.index, n.end).trim();
+        return { from: said(a), to: said(b), label: label.toUpperCase() };
+      }
+    }
+  }
+  return null;
 }
 
 // WORLD NOW (long programmes): the partner adds one detail the story kept back, soberly (no question marks).
@@ -1752,6 +1831,16 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
     if (program?.boards?.includes('known') && !inRoundup && !isNumber && !isLighter && !quick && (k === 0 || info.grave || info.breaking || (HARD_NEWS.has(info.kicker) && !info.curious && (!info.light || pid === 'tech-bytes')))) {
       const known = knownPoints(info.sentences);
       if (known.length >= 2) story.known = known;
+    }
+    // FROM → TO: a figure the story itself says moved (it airs only if the presenter says both values)
+    if (program?.boards?.includes('change') && !inRoundup && !isNumber) {
+      const change = changeFrom(info.sentences);
+      if (change) story.change = change;
+    }
+    // HOW WE GOT HERE: a main story whose source dates its earlier steps (the whole article: history sits deep in it)
+    if (program?.boards?.includes('timeline') && !story.known && !inRoundup && !isNumber && !isLighter && !quick) {
+      const steps = timelinePoints([...info.prevOf.keys()]);
+      if (steps.length >= 2) story.timeline = steps;
     }
     if (inRoundup) story.feature = 'roundup';
     else if (isNumber) story.feature = 'number';

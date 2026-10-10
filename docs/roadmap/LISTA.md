@@ -26,7 +26,7 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 
 ## D. Programas, contenido y ritmo
 16. 🟡 **Programas más largos.** Hecho el dossier: el servidor lee el texto completo del artículo de cada noticia principal y el guionista escribe con él (con IA real llegará a 8-10 min; la demo sin conexión llega a ~4,6 min porque el texto de prueba es corto). Falta: duraciones/parrilla por partes (decisión 1).
-17. **Más tipos de diapositivas** (15 plantillas: cronologías, comparativas, cifras, citas…).
+17. 🟡 **Más tipos de diapositivas** (15 plantillas: cronologías, comparativas, cifras, citas…). (10 oct: dos nuevas, **DE → A** —una cifra que cambió, "de 4,5 % a 4,75 %", con flecha y SUBE/BAJA— y **HOW WE GOT HERE** —cronología de 2-3 pasos con fecha de la fuente—, en WORLD NOW, TECH BYTES, COSMOS y MONEY MINUTE. Ya había BY THE NUMBERS, WHAT WE KNOW, IN PLAIN ENGLISH, IN BRIEF, QUICK BYTES y la cita.)
 18. ✅ **Expertos del canal** (8 fijos, ficticios). Dan vida al programa y se ciñen a los hechos de la fuente. Hecho (9 oct):
     - Omar Ledger (economía), Clara Meridian (diplomacia), Dev Isobar (clima), Dr Tomas Albedo (espacio), June Kernel (tecnología), Dra. Amara Pulse (salud), Leo Sepia (cultura) e Ines Clause (justicia);
     - el presentador lee la noticia, presenta al experto y le pregunta; el experto la explica solo con datos de la fuente (nunca "estuve allí", nunca consejos financieros ni médicos), le hace una pregunta más y le da las gracias;

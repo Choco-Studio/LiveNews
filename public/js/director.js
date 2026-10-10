@@ -10,7 +10,7 @@ import { ACTIONS } from './cues.js';
 import { openFor } from './scenes/opens.js';
 import { VoicePlayer } from './voice/player.js';
 import { LiveMusic, SHOT_KIND } from './music/live.js';
-import { paceFor, gapAfter, CHANNEL, paceTrace, cutWait, isRepeat, numbersBoard, knownBoard } from './pace.js';
+import { paceFor, gapAfter, CHANNEL, paceTrace, cutWait, isRepeat, numbersBoard, knownBoard, storyBoard, changeBoard } from './pace.js';
 import { FootageDeck } from './footage/deck.js';
 import { planLink, sentenceStarts } from './linkplan.js';
 
@@ -900,7 +900,7 @@ export class Director {
     if (number) beats.push('fact'); // the number of the day shows its card early (the v2 plans)
     if (seg.location) beats.push('map');
     if (hasImg) beats.push('full');
-    if ((seg.fact || knownBoard(seg, s.program?.id)) && !number) beats.push('fact');
+    if ((seg.fact || storyBoard(seg, s.program?.id)) && !number) beats.push('fact');
     if (seg.shot === 'full' && hasImg && beats[1] !== 'full') {
       beats.splice(beats.indexOf('full'), 1);
       beats.splice(1, 0, 'full');
@@ -976,17 +976,23 @@ export class Director {
     let watch = null; // default path: the max-hold timer of the shot on air
     // v2: shots come from the plan's cues (cue.k > 0 arrive through shotFor at their sentence or word)
     const v2cues = this.v2?.shots(seg, hasImg, (cue) => shotFor(cue.k, cue)) || null;
+    const change = changeBoard(seg, s.program?.id);
     const board = numbersBoard(seg, s.program?.id);
-    const known = board ? null : knownBoard(seg, s.program?.id);
+    const known = board || change ? null : knownBoard(seg, s.program?.id);
+    const steps = board || known || change ? null : storyBoard(seg, s.program?.id);
     const cardFor = (beat) =>
       beat === 'map'
         ? { ...seg.location }
         : beat === 'fact'
-          ? board
-            ? { numbers: board, label: 'BY THE NUMBERS', source: seg.source } // two or three spoken figures (pace shots.numbers)
-            : known
-              ? { known, source: seg.source } // WHAT WE KNOW (pace shots.known)
-              : { fact: seg.fact, label: /\d/.test(seg.fact) ? 'BY THE NUMBERS' : 'KEY FACT', source: seg.source }
+          ? change
+            ? { change, source: seg.source } // FROM → TO (pace shots.change)
+            : board
+              ? { numbers: board, label: 'BY THE NUMBERS', source: seg.source } // two or three spoken figures (pace shots.numbers)
+              : known
+                ? { known, source: seg.source } // WHAT WE KNOW (pace shots.known)
+                : steps
+                  ? { timeline: steps, source: seg.source } // HOW WE GOT HERE (pace shots.timeline)
+                  : { fact: seg.fact, label: /\d/.test(seg.fact) ? 'BY THE NUMBERS' : 'KEY FACT', source: seg.source }
           : null;
     // a story handed to a correspondent (seg.link): its last sentence, the hand-over, goes to the TWO-WAY, and no
     // planned beat cuts away from it. An expert's: from the introduction, the line before the question, so the

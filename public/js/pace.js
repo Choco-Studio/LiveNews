@@ -172,7 +172,7 @@ const PROGRAMMES = {
     open: { firstWord: 0.5 }, // world-now.md: first word 0.5 s after the cut
     gaps: { story: 1.0, handover: 0.85, beforeFinally: 1.2, roundupItem: 0.65 }, // world-now.md: 0.7 s between stories, 1.0 s before And finally
     holds: { signoff: 1.5, endcard: 3.2 },
-    shots: { median: [5, 7], studioMax: 15, singleSoft: 11, picture: [4, 8], map: [5, 10], quoteCard: true, stillToCome: true, numbers: true, known: true }, // quoteCard: IN THEIR WORDS on a story's sourced quote; stillToCome: the signpost over its stories; numbers / known: BY THE NUMBERS and WHAT WE KNOW boards
+    shots: { median: [5, 7], studioMax: 15, singleSoft: 11, picture: [4, 8], map: [5, 10], quoteCard: true, stillToCome: true, numbers: true, known: true, timeline: true, change: true }, // quoteCard: IN THEIR WORDS on a story's sourced quote; stillToCome: the signpost over its stories; numbers / known / timeline / change: BY THE NUMBERS, WHAT WE KNOW, HOW WE GOT HERE and FROM → TO boards
     moves: { max: 5, minGap: 40 },
     gestures: { perMin: 5, minGap: 5.5, beatsPerMin: 7, rest: 0.62, grave: 2 },
     listener: { reactionGap: 8 },
@@ -187,7 +187,7 @@ const PROGRAMMES = {
     holds: { signoff: 1.0, endcard: 3.0 },
     // the format round (owner 4 Oct): STILL TO COME over its stories, BY THE NUMBERS and WHAT WE KNOW boards, IN
     // THEIR WORDS on a sourced quote, and IN PLAIN ENGLISH while Ada translates a story's jargon
-    shots: { median: [4.5, 6.5], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [5, 9], cutsPerMinMax: 9, share: { map: 0.3, single: 0.55 }, quoteCard: true, stillToCome: true, numbers: true, known: true, terms: true },
+    shots: { median: [4.5, 6.5], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [5, 9], cutsPerMinMax: 9, share: { map: 0.3, single: 0.55 }, quoteCard: true, stillToCome: true, numbers: true, known: true, timeline: true, change: true, terms: true },
     moves: { max: 2, minGap: 60 }, // THE CATCH push (the bible's only move), one per exchange
     gestures: { perMin: 6, minGap: 4.5, beatsPerMin: 9, rest: 0.55, grave: 2, floor: 3 },
     listener: { reactionGap: 7, nodsPerMin: [1.5, 7] },
@@ -207,7 +207,7 @@ const PROGRAMMES = {
     // a shorter map that runs past 6 s cannot be split (the planner cuts it at 4-6 s whenever it can)
     // the format round (owner 4-5 Oct): STILL TO COME over its stories, BY THE NUMBERS and WHAT WE KNOW boards, IN
     // THEIR WORDS on a sourced quote, and UNIT-8's definition card
-    shots: { min: 4.0, cooldown: 4.5, median: [6, 9], studioMax: 15, singleSoft: 11, picture: [6, 10], map: [4, 8.5], factMax: 9, cutsPerMinMax: 7, staticMax: 14, quoteCard: true, stillToCome: true, numbers: true, known: true, terms: true },
+    shots: { min: 4.0, cooldown: 4.5, median: [6, 9], studioMax: 15, singleSoft: 11, picture: [6, 10], map: [4, 8.5], factMax: 9, cutsPerMinMax: 7, staticMax: 14, quoteCard: true, stillToCome: true, numbers: true, known: true, timeline: true, change: true, terms: true },
     moves: { max: 0, minGap: Infinity }, // cosmos.md: the set camera never moves; only pictures pan
     gestures: { perMin: 3.5, minGap: 6, beatsPerMin: 5, rest: 0.72, grave: 1.5, floor: 1.8, floorGrave: 0.6 }, // cosmos.md: <= 1 per 6 s
     listener: { reactionGap: 10, nodGap: 8, nodsPerMin: [0.6, 4] },
@@ -223,7 +223,7 @@ const PROGRAMMES = {
     holds: { signoff: 0.6, endcard: 3.0 },
     // the format round (owner 4 Oct, 9 Oct for MONEY MINUTE): STILL TO COME over its stories, BY THE NUMBERS and WHAT WE
     // KNOW boards, IN THEIR WORDS on a sourced quote, and IN PLAIN ENGLISH while Penny translates a story's jargon
-    shots: { median: [5, 7], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [4, 7], cutsPerMinMax: 8, quoteCard: true, stillToCome: true, numbers: true, known: true, terms: true },
+    shots: { median: [5, 7], studioMax: 12, singleSoft: 10, picture: [4, 8], map: [4, 7], cutsPerMinMax: 8, quoteCard: true, stillToCome: true, numbers: true, known: true, timeline: true, change: true, terms: true },
     moves: { max: 0, minGap: Infinity }, // money-minute.md: the camera never moves
     gestures: { perMin: 3, minGap: 6, beatsPerMin: 6, rest: 0.7, grave: 1.5, floor: 1.5, floorGrave: 0.5 },
     music: { minBed: 30, maxChangesPerMin: 1 },
@@ -365,9 +365,20 @@ export function tickerHold(words) {
  */
 export function numbersBoard(seg, programId) {
   if (!paceFor(programId).shots.numbers || !Array.isArray(seg?.numbers) || seg.feature === 'number') return null; // the number of the day keeps its own card
+  if (changeBoard(seg, programId)) return null; // a figure that moved says it better as FROM → TO
   const seen = new Set();
   const rows = seg.numbers.filter((n) => n?.value && n.label && !seen.has(n.value) && seen.add(n.value)).slice(0, 3);
   return rows.length >= 2 ? rows : null;
+}
+
+/**
+ * FROM → TO (pace shots.change): one figure that moved, as the story says it ("from 4.5% to 4.75%"): seg.change
+ * { from, to, label }, the writer's, grounded; null otherwise (never on the number of the day, which keeps its card).
+ */
+export function changeBoard(seg, programId) {
+  const c = seg?.change;
+  if (!paceFor(programId).shots.change || !c || seg.feature === 'number') return null;
+  return typeof c.from === 'string' && c.from.trim() && typeof c.to === 'string' && c.to.trim() && typeof c.label === 'string' && c.label.trim() ? c : null;
 }
 
 /** WHAT WE KNOW (pace shots.known): a story's key points as a board (seg.known: two or three); null otherwise. */
@@ -377,12 +388,32 @@ export function knownBoard(seg, programId) {
   return points.length >= 2 ? points : null;
 }
 
-/** What a story's card shows, for its hold: the figures board's rows, else the known points, else the fact. */
+/**
+ * HOW WE GOT HERE (pace shots.timeline): a story's dated steps as a board (seg.timeline: two or three
+ * { when, what } in order, the writer's, grounded); null otherwise, or when the story has a WHAT WE KNOW board
+ * (one card a story).
+ */
+export function timelineBoard(seg, programId) {
+  if (!paceFor(programId).shots.timeline || !Array.isArray(seg?.timeline) || knownBoard(seg, programId)) return null;
+  const steps = seg.timeline.filter((p) => p && typeof p.when === 'string' && p.when.trim() && typeof p.what === 'string' && p.what.trim()).slice(0, 3);
+  return steps.length >= 2 ? steps : null;
+}
+
+/** The board a story's card carries beside its figures board: FROM → TO, else WHAT WE KNOW's points, else HOW WE GOT HERE's steps. */
+export function storyBoard(seg, programId) {
+  return changeBoard(seg, programId) || knownBoard(seg, programId) || timelineBoard(seg, programId);
+}
+
+/** What a story's card shows, for its hold: the figures board's rows, else the known points or the steps, else the fact. */
 export function factText(seg, programId) {
+  const change = changeBoard(seg, programId);
+  if (change) return `${change.label} ${change.from} ${change.to}`;
   const board = numbersBoard(seg, programId);
   if (board) return board.map((n) => [n.qualifier, n.value, n.label].filter(Boolean).join(' ')).join(' ');
   const known = knownBoard(seg, programId);
   if (known) return known.join(' ');
+  const steps = timelineBoard(seg, programId);
+  if (steps) return steps.map((p) => `${p.when} ${p.what}`).join(' ');
   return seg?.fact || seg?.numbers?.[0]?.value || '';
 }
 

@@ -52,7 +52,7 @@
 // else a prediction from the episode summary (ctx.episode). Same answer from
 // every call: pure functions of the episode.
 import { rng } from './context.js';
-import { PACE, paceFor, factHold as paceFactHold, factText, knownBoard, numbersBoard, shotMax } from '../../../pace.js';
+import { PACE, paceFor, factHold as paceFactHold, factText, storyBoard, numbersBoard, shotMax } from '../../../pace.js';
 
 // PACE (public/js/pace.js): the channel's minimum shot and every per-programme shot window come from
 // the one pacing table; the numbers below that stay are this planner's own fallbacks for contexts
@@ -583,8 +583,8 @@ function worldNow(ctx, tl) {
     single: storySingle(ctx),
     map: !!seg.location,
     picture: ctx.hasImage,
-    fact: seg.fact || seg.numbers?.[0]?.value || knownBoard(seg, ctx.programId) ? factHold(seg, ctx.programId) : 0,
-    board: !!(numbersBoard(seg, ctx.programId) || knownBoard(seg, ctx.programId)),
+    fact: seg.fact || seg.numbers?.[0]?.value || storyBoard(seg, ctx.programId) ? factHold(seg, ctx.programId) : 0,
+    board: !!(numbersBoard(seg, ctx.programId) || storyBoard(seg, ctx.programId)),
     linked: !!seg.link,
     pictureFirst: seg.shot === 'full' && ctx.hasImage,
     pictureMax: S.pictureMax,
@@ -769,7 +769,7 @@ function techBytes(ctx, tl) {
   if (ctx.seg.roundup) return quickBytes(ctx);
   // the format round (owner 4 Oct): a story's board (BY THE NUMBERS on its stated figures, WHAT WE KNOW on hard
   // news) after its opening single; a lone figure stays in the words (no single fact card on this show)
-  const board = !!(numbersBoard(seg, ctx.programId) || knownBoard(seg, ctx.programId));
+  const board = !!(numbersBoard(seg, ctx.programId) || storyBoard(seg, ctx.programId));
   const out = storyBeats(ctx, tl, {
     single: storySingle(ctx),
     map: !!seg.location && !ctx.hasImage,
@@ -835,7 +835,7 @@ function cosmos(ctx, tl) {
   let out;
   // the format round: a story's board (BY THE NUMBERS on its stated figures, WHAT WE KNOW on hard news) after the
   // map, in the generic beat order; the Reading stays the number of the day's own card
-  const board = ctx.feature !== 'number' && !!(numbersBoard(seg, ctx.programId) || knownBoard(seg, ctx.programId));
+  const board = ctx.feature !== 'number' && !!(numbersBoard(seg, ctx.programId) || storyBoard(seg, ctx.programId));
   if (board) {
     out = storyBeats(ctx, tl, { single, map: !!seg.location, picture: ctx.hasImage, fact: factHold(seg, ctx.programId), board: true, pictureMin: S.pictureMin, pictureMax: S.pictureMax, mapMin: S.mapMin, mapMax: S.mapMax, finally: isFinally(ctx) });
   } else if (ctx.feature === 'number' && !ctx.isLead) {
@@ -1046,7 +1046,7 @@ function moneyStoryPlan(ctx, tl) {
   const S = SHOT_STYLES['money-minute'];
   const plan = [];
   // (WHAT WE KNOW is a card too: the format round's board on hard business news, pace shots.known)
-  const hasCard = !!(ctx.seg.fact || ctx.seg.numbers?.length || knownBoard(ctx.seg, ctx.programId));
+  const hasCard = !!(ctx.seg.fact || ctx.seg.numbers?.length || storyBoard(ctx.seg, ctx.programId));
   if (ctx.feature === 'number' && !ctx.isLead) {
     plan.push({ shot: 'fact', framing: null, beat: 'number', at: 0, extra: { beforeSpeech: S.numberGap } });
     // back to MCU-R at a sentence start once the card has run MIN_SHOT; else the card holds (≤ 12 s)

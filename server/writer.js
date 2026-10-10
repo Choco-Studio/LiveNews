@@ -106,6 +106,20 @@ function knownRule(program) {
 - WHAT WE KNOW: for the lead and for any main story with several facts (never a round-up item, the number of the day or "And finally"), add "known": two or three key points shown on a board while the presenter reads, each a plain statement of that candidate's facts in at most ${KNOWN_MAX} characters ("About 1.2 million homes without power", "Airports in Cancún closed"). No question, no quote, no opinion; a figure only if the story text says it. Otherwise "known": null.`;
 }
 
+/** HOW WE GOT HERE (programme "boards": ["timeline"]): the dated steps of a story with a history. */
+function timelineRule(program) {
+  if (!program?.boards?.includes('timeline')) return '';
+  return `
+- HOW WE GOT HERE: for a main story whose candidate dates the earlier steps that led to it (never a round-up item, the number of the day, "And finally", or a story that has "known"), add "timeline": two or three steps in order, each {"when": the year the candidate gives for it, with its month if the candidate names one ("2019", "March 2023"), "what": what happened then, a plain statement of that candidate's facts in at most ${TIMELINE_MAX} characters ("The bridge was declared unsafe")}. Only dates the candidate itself states for that step, never a plan or a forecast; otherwise "timeline": null.`;
+}
+
+/** FROM → TO (programme "boards": ["change"]): a figure that moved, as the story says it. */
+function changeRule(program) {
+  if (!program?.boards?.includes('change')) return '';
+  return `
+- FROM → TO: for a main story whose candidate says one figure moved from one value to another ("raised its main rate from 4.5% to 4.75%", "profit fell to $870 million from $1.2 billion"), add "change": {"from": the old value, "to": the new value, both written as the candidate writes them, "label": what moved, at most ${LIMITS.label} characters ("MAIN INTEREST RATE")}; the presenter says both values. Otherwise "change": null.`;
+}
+
 function chatRule(program, solo) {
   if (solo || !program.maxChats) return '- No "chat" segments.';
   const after = program.chats?.after;
@@ -136,7 +150,13 @@ const ANALYSIS_SCHEMA = `,
 export const KNOWN_MAX = 44;
 const KNOWN_SCHEMA = `,
      "known": ["one key point for the WHAT WE KNOW board, max ${'${KNOWN_MAX}'} characters"] | null`;
-const SEGMENT_SCHEMA = (slots, headlineMax, crosses = false, known = false, analyses = false) => `{
+/** HOW WE GOT HERE: the longest step a board shows (characters). */
+export const TIMELINE_MAX = 36;
+const TIMELINE_SCHEMA = `,
+     "timeline": [{"when": "2019", "what": "one step for the HOW WE GOT HERE board, max ${'${TIMELINE_MAX}'} characters"}] | null`;
+const CHANGE_SCHEMA = `,
+     "change": {"from": "4.5%", "to": "4.75%", "label": "WHAT MOVED"} | null`;
+const SEGMENT_SCHEMA = (slots, headlineMax, crosses = false, known = false, analyses = false, timeline = false, change = false) => `{
   "title": "short episode title",
   "segments": [
     {"type": "intro", "anchor": "A", "emotion": "neutral", "text": "the intro (see MAKE IT WORTH WATCHING)"},
@@ -149,7 +169,7 @@ const SEGMENT_SCHEMA = (slots, headlineMax, crosses = false, known = false, anal
      "numbers": [{"value": "40,000", "label": "PASSENGERS A DAY", "qualifier": "ABOUT|MORE THAN|NEARLY|UP TO|AT LEAST|LESS THAN" | null}] | null,
      "quote": {"text": "exact words quoted in the summary", "by": "speaker named in the summary" | null} | null,
      "map": [{"place": "COUNTRY", "lat": 0.0, "lon": 0.0}] | null,
-     "feature": "number|roundup|lighter" | null${known ? KNOWN_SCHEMA : ''}${crosses ? CROSS_SCHEMA : ''}${analyses ? ANALYSIS_SCHEMA : ''}},
+     "feature": "number|roundup|lighter" | null${known ? KNOWN_SCHEMA : ''}${timeline ? TIMELINE_SCHEMA : ''}${change ? CHANGE_SCHEMA : ''}${crosses ? CROSS_SCHEMA : ''}${analyses ? ANALYSIS_SCHEMA : ''}},
     {"type": "chat", "anchor": ${slots}, "emotion": "...", "text": "one or two sentence reaction or hand-over"},
     {"type": "outro", "anchor": "A", "emotion": "neutral", "text": "brief sign-off"}
   ]
@@ -230,7 +250,7 @@ TONE
 
 MAKE IT WORTH WATCHING
 ${introRule(program, solo, names)}
-- The lead story must not repeat the intro's line about it: continue from it with the next fact.${lengthRule(program, n)}${crossRule(program)}${analysisRule(program, experts)}${knownRule(program)}
+- The lead story must not repeat the intro's line about it: continue from it with the next fact.${lengthRule(program, n)}${crossRule(program)}${analysisRule(program, experts)}${knownRule(program)}${timelineRule(program)}${changeRule(program)}
 - Each story opens with its most striking fact, then attribution, then one or two details. Vary the openings and the attribution; never start two stories the same way. Never say the same sentence or the same figure twice in a row.
 - Rhythm for the voice: one idea per sentence; mix short and medium sentences, with the odd three-to-five-word sentence for punch. No parentheses, no strings of numbers, no stacked clauses. Write figures as digits with their unit ("40,000 passengers") and say "percent".${
     solo
@@ -269,7 +289,7 @@ STAGE DIRECTIONS (make the presenters move naturally)
 
 OUTPUT FORMAT
 Reply with ONLY a valid JSON object, no text before or after, shaped like this:
-${SEGMENT_SCHEMA(solo ? '"A"' : '"A" | "B"', headlineMax, !!crossRule(program), !!knownRule(program), !!analysisRule(program, experts))}
+${SEGMENT_SCHEMA(solo ? '"A"' : '"A" | "B"', headlineMax, !!crossRule(program), !!knownRule(program), !!analysisRule(program, experts), !!timelineRule(program), !!changeRule(program))}
 - Story "text": ${program.storyLength}.
 - Exactly one "story" segment per selected story, using the candidate ids exactly; do not include unselected candidates.
 ${solo ? '- There is a single presenter: always use "anchor": "A".' : '- Alternate presenters between stories (a round-up counts as one block).'}
@@ -303,7 +323,7 @@ Check every story segment against its SOURCE (matched by storyId):
 - Keep the bracketed stage directions such as [nod] or [B:nod] (they are not read aloud); remove only ones that are inappropriate for the tone.
 - A story's "cross" (a correspondent's piece, the presenter's prompt and the answer) follows the same rules: every sentence supported by that story's source, and the correspondent never claims to be at the scene ("here", "behind me", "on the ground", "I've seen"); remove a sentence that does.
 - A story's "analysis" (an expert's answers to the presenter's questions) follows the same rules: every sentence supported by that story's source, explained and attributed, never a claim to have seen or spoken to anyone, no opinion or prediction the source does not make; remove a sentence that breaks them.
-- Keep the same JSON structure (including "kicker" and "feature", and any "cross", "analysis" or "known"), segment order, presenters and storyIds. Do not add new stories.
+- Keep the same JSON structure (including "kicker" and "feature", and any "cross", "analysis", "known", "timeline" or "change"), segment order, presenters and storyIds. Do not add new stories.
 
 ${ACCURACY}
 
@@ -1026,6 +1046,66 @@ function normalizeKnown(list, source, ignore = []) {
   return out.length >= 2 ? out : null;
 }
 
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const WHEN_RE = /^(?:(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec)\.?\s+)?((?:19|20)\d\d)$/i;
+
+/**
+ * HOW WE GOT HERE: two or three dated steps the writer gave a story, each { when, what }: the when a year (with
+ * its month) that the source states, never past the current year (a step, not a plan); the what held to a WHAT
+ * WE KNOW point's standard within TIMELINE_MAX characters. Put in date order, one step a date; null when fewer
+ * than two survive.
+ */
+export function normalizeTimeline(list, source, ignore = [], year = new Date().getUTCFullYear()) {
+  if (!Array.isArray(list)) return null;
+  const src = String(source || '');
+  const out = [];
+  for (const p of list) {
+    if (!p || typeof p !== 'object' || !textLike(p.when) || !textLike(p.what)) continue;
+    const when = clean(p.when, 24).replace(/^(?:in|on|by)\s+/i, '').replace(/[.,;:]+$/, '').trim();
+    const m = WHEN_RE.exec(when);
+    if (!m || Number(m[2]) > year || !new RegExp(`\\b${m[2]}\\b`).test(src)) continue;
+    const month = m[1] ? MONTHS.indexOf(m[1].slice(0, 3).toLowerCase()) : -1;
+    if (m[1] && !new RegExp(`\\b${m[1].slice(0, 3)}`, 'i').test(src)) continue;
+    let t = clean(p.what, 80).replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').replace(/[.;:!,]+$/, '').trim();
+    if (!t || t.length > TIMELINE_MAX || /[?“”"«»]/.test(t) || /\s[–—-]\s/.test(t) || t.split(' ').length < 2 || !hasFiniteVerb(t)) continue;
+    if (!headlineGrounded(t, source, { ignore }) || !numbersGrounded(t, source) || qualifierConflict(t, source) || inventedClaim(t, source, { ignore })) continue;
+    const key = Number(m[2]) * 12 + Math.max(0, month);
+    if (out.some((x) => x.key === key)) continue;
+    const label = m[1] ? `${m[1][0].toUpperCase()}${m[1].slice(1).toLowerCase()} ${m[2]}` : m[2];
+    out.push({ key, when: label, what: t[0].toUpperCase() + t.slice(1) });
+  }
+  out.sort((a, b) => a.key - b.key);
+  const steps = out.slice(0, 3).map(({ when, what }) => ({ when, what }));
+  return steps.length >= 2 ? steps : null;
+}
+
+/**
+ * FROM → TO: { from, to, label } the writer gave a story: both values the source's, in one of its sentences that
+ * says the figure moved ("from 4.5% to 4.75%", "to $870 million from $1.2 billion"), different values, and a label
+ * the source supports; null otherwise. Both values must be said again at finalize.
+ */
+export function normalizeChange(c, source) {
+  if (!c || typeof c !== 'object' || !textLike(c.from) || !textLike(c.to) || !textLike(c.label)) return null;
+  const from = clean(c.from, LIMITS.value + 8).toUpperCase();
+  const to = clean(c.to, LIMITS.value + 8).toUpperCase();
+  if (from.length > LIMITS.value + 4 || to.length > LIMITS.value + 4 || !numbersGrounded(from, source) || !numbersGrounded(to, source)) return null;
+  const f = numbersIn(from)[0];
+  const t = numbersIn(to)[0];
+  if (!f || !t || f.scaled === t.scaled) return null;
+  const moved = sentencesIn(source).some((sent) => {
+    const ns = numbersIn(sent);
+    const iF = ns.findIndex((n) => n.scaled === f.scaled);
+    const iT = ns.findIndex((n) => n.scaled === t.scaled);
+    if (iF < 0 || iT < 0) return false;
+    const before = (n, w) => new RegExp(`\\b${w}\\s+(?:about |around |nearly |almost |roughly |some )?$`, 'i').test(sent.slice(Math.max(0, n.index - 16), n.index));
+    return before(ns[iF], 'from') && before(ns[iT], 'to');
+  });
+  if (!moved) return null;
+  const label = clipWords(c.label, LIMITS.label).toUpperCase();
+  if (!label || !claimGrounded(`${to} ${label}`, source)) return null;
+  return { from, to, label };
+}
+
 function normalizeNumbers(list, source) {
   if (!Array.isArray(list)) return null;
   const out = [];
@@ -1387,6 +1467,8 @@ export function normalizeBulletin(
       d.location = groundedLocation(seg.location, source);
       d.numbers = normalizeNumbers(seg.numbers, source);
       d.known = program?.boards?.includes('known') ? normalizeKnown(seg.known, source, names.concat(outlets || [])) : null;
+      d.timeline = program?.boards?.includes('timeline') ? normalizeTimeline(seg.timeline, source, names.concat(outlets || [])) : null;
+      d.change = program?.boards?.includes('change') ? normalizeChange(seg.change, source) : null;
       let fact = clipWords(seg.fact, LIMITS.fact) || null;
       if (fact && !claimGrounded(fact, source)) fact = null;
       d.fact = fact;
@@ -1650,6 +1732,11 @@ export function normalizeBulletin(
     // WHAT WE KNOW: only points whose every figure the presenter says (the set never shows a figure we did not report)
     const known = !inRoundup && d.feature !== 'number' && d.feature !== 'lighter' && d.known ? d.known.filter((k) => numbersIn(k).every((n) => mentionsValue(text, n.raw))) : null;
     if (known?.length >= 2) out.known = known;
+    // HOW WE GOT HERE: one board a story (WHAT WE KNOW first), and no figure in a step that the presenter does not say
+    const steps = !out.known && !inRoundup && d.feature !== 'number' && d.feature !== 'lighter' && d.timeline ? d.timeline.filter((p) => numbersIn(p.what).every((n) => mentionsValue(text, n.raw))) : null;
+    if (steps?.length >= 2) out.timeline = steps;
+    // FROM → TO: only a figure whose old and new values the presenter both says
+    if (d.change && !inRoundup && d.feature !== 'number' && mentionsValue(text, d.change.from) && mentionsValue(text, d.change.to)) out.change = d.change;
     if (d.quote && !inRoundup) out.quote = { text: clip(d.quote.text, LIMITS.quote), by: d.quote.by ? clipWords(d.quote.by, LIMITS.by) : null };
     if (d.map && !inRoundup) out.map = d.map;
     if (d.feature) out.feature = d.feature;
