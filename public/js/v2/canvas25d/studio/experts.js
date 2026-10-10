@@ -771,7 +771,8 @@ function clinicLive(px, t, st) {
 
 // ------------------------------------------------------------------------------------------------ gallery
 
-const GALLERY = { land: [206, 30, 324, 106], portrait: [336, 38, 380, 102], field: [4, 34, 58, 108], floor: 196, spots: [[34, 30], [264, 30], [358, 36]] };
+// (the landscape starts right of x 212: the two-way crops x 36..212 round the expert's head, never half a frame)
+const GALLERY = { land: [216, 30, 330, 106], portrait: [340, 38, 380, 102], field: [4, 34, 58, 108], floor: 196, spots: [[34, 30], [272, 30], [360, 36]] };
 
 function gallery(px, r, st) {
   bands(px, 0, 0, W, GALLERY.floor, [C.ink, C.slate, C.slate, C.slate, C.ink]);
