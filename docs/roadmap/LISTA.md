@@ -12,10 +12,10 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 
 ## B. Presentadores
 7. ✅ Max: los cascos están mal dibujados (eran del dibujo antiguo; ahora es el mismo muñeco en todos los planos; pelo de Lola y Penny igual de lejos y de cerca). Cada presentador debe verse igual de lejos y de cerca.
-8. UNIT-8: rediseño del "instrumento" de la cara (los críticos lo marcaron como bloqueante) y un indicador de en directo.
-9. Nova y Max: pelo, piel y acabado. Ada: comprobar.
-10. Paco, Lola, Sam y Penny: acabado final (ropa, pelo, joyas).
-11. Caras: parpadeos que saltan, tamaño de ojos, mirada, brillo de cejas y gafas.
+8. ✅ UNIT-8: rediseño del "instrumento" de la cara (los críticos lo marcaron como bloqueante) y un indicador de en directo.
+9. ✅ Nova y Max: pelo, piel y acabado (10 oct: pómulo de Nova). Ada: comprobada.
+10. ✅ Paco, Lola, Sam y Penny: acabado final (ropa, pelo, joyas).
+11. ✅ Caras: parpadeos que saltan, tamaño de ojos, mirada, brillo de cejas y gafas.
 12. ✅ Gestos en el momento justo (en la palabra que toca), sin abusar; Nova es la referencia. Averiguar por qué el primer episodio los usa peor.
 13. 🟡 Manos: detalles pendientes (golpecito al juntar dedos, deslizar gafas, nudillos, mano relajada) y rendimiento.
 
@@ -69,13 +69,13 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
     - símbolos £ y ¥;
     - gráficos propios de cada programa;
     - subtítulos que cambian demasiado.
-26. Cabeceras y cortinillas: pendientes de la segunda ronda de arreglos.
+26. ✅ Cabeceras y cortinillas: segunda ronda hecha (10 oct: nebulosa de COSMOS sin parpadeo, TECH BYTES con fondo que se despeja, MONEY MINUTE con oficinas variadas y brillo, NEWS IN 60 con pulsos en el dial, WORLD WEATHER más amplio).
 27. Cámara: gramática de planos por programa y movimientos suaves.
 
 ## F. Anuncios
 28. BitFizz: persona y vaso ya corregidos; falta que tú lo veas.
-29. Grand Buffer y HiResGym: ronda de arreglos pendiente.
-30. Corners (patatas que caen raro), SafeSector y ScreechNet: ronda de arreglos pendiente.
+29. 🟡 Grand Buffer y HiResGym (10 oct): en Grand Buffer la mesa del plato ya está puesta (pan, copa, servilleta, salero, mantel con textura, velas que parpadean). Hi-Res Gym: en curso (gimnasio de verdad detrás del atleta y del cierre).
+30. ✅ Corners (10 oct): las patatas caen como patatas (resistencia del aire, giro que se frena, aleteo, un bote pequeño y se asientan) desde el cazo que sujeta la mano de Ian, y en el plano de la sal los dedos de Ian espolvorean un chorro visible que brilla en la luz. SafeSector y ScreechNet revisados: planos llenos, sin cambios.
 31. ✅ La música de los anuncios debe bajar bajo la voz. (Medido en el vídeo de correcciones: entre frases la música va 25-38 dB por debajo de la voz y baja 14 dB más cuando la voz habla.)
 
 ## G. Música y sonido

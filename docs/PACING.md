@@ -492,6 +492,10 @@ budget must become per block: synthesise block N+1 while block N airs.
     (section 6.2).
   - The analyser keeps the rate red on air. test/pace.test.js allows +0.75 cuts per minute for episodes of 16 or more segments
     only, so a real regression still fails.
+  - 10 Oct, real news (stories now carry 4-5 sentences from the article): two WORLD NOW plans measured 7.61 and 8.18 cuts per
+    minute (tools/pace/plans.mjs). The second's only shots under the floor (1.8 and 2.2 s) are a correspondent link's
+    one-line prompt and thanks, which the plan tool lays as studio singles; on air the director plays link parts through
+    linkplan.js, which holds every shot to the floor, so the on-air rate is lower than the tool's.
 - **Length** (editorial-2 / wave 3): source depth (section 6.2); WORLD NOW ~4 min, TECH BYTES ~3 min offline today.
 - **TECH BYTES singles**: fixed in fix round 1. `splitLongSingles` now also splits on a comma, with both parts ≥ 4.5 s
   (TECH BYTES and WORLD NOW only; COSMOS keeps its still singles). The TECH BYTES median shot is 6.8 s on the v2 trace, was 7.8 s.
