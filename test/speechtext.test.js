@@ -1,8 +1,8 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  GROUP_BREAKS, LEXICON, PAUSES, PERSONAS, addPronunciations, estimateDuration, groupPhrases, normalizeForSpeech,
-  planProsody, planSpeech,
+  GROUP_BREAKS, LEXICON, PAUSES, PERSONAS, addPronunciations, estimateDuration, groupPhrases, isAttribution, normalizeForSpeech,
+  planMelody, planProsody, planSpeech,
   remapCues, speakable, spellLetters, toOriginal, toSpoken,
 } from '../public/js/voice/speechtext.js';
 import { parseCues } from '../public/js/cues.js';
@@ -562,5 +562,97 @@ describe('planProsody', () => {
 
   test('an empty text plans nothing', () => {
     assert.deepEqual(planProsody(''), []);
+  });
+});
+
+describe('planMelody (the newsreader line over the voice)', () => {
+  const STORY = "Norway's central bank has unexpectedly raised its main interest rate to 4.75 percent. Most economists had expected no change, according to Bitport Herald. The bank said inflation was still too high. Governor Ida Wolden Bache would not say what comes next.";
+  const level = (g) => (g.pitch[0] + g.pitch[1]) / 2;
+
+  test('a paragraph opens high on the news and closes low', () => {
+    for (const persona of ['paco', 'lola', 'ada', 'nova', 'penny', 'clara']) {
+      const { groups } = planSpeech(STORY, { persona });
+      assert.equal(groups.length, 4);
+      assert.ok(groups.every((g) => Array.isArray(g.pitch) && typeof g.gain === 'number' && Array.isArray(g.accents)));
+      assert.ok(level(groups[0]) > level(groups[3]) + 1, `${persona}: ${groups.map(level).join(' ')}`);
+      assert.ok(level(groups[0]) > 0 && level(groups[3]) < 0, persona);
+      assert.ok(groups[0].gain > groups[3].gain, persona);
+      // within reach: the engine adds its steering on top
+      assert.ok(groups.every((g) => g.pitch.every((v) => Math.abs(v) <= 2)), persona);
+      // a gentle fall through each group
+      assert.ok(groups.every((g) => g.pitch[0] >= g.pitch[1]), persona);
+    }
+  });
+
+  test('livelier presenters sing a wider line than measured ones; grave stories narrow it', () => {
+    const spread = (o) => {
+      const { groups } = planSpeech(STORY, o);
+      return level(groups[0]) - level(groups[groups.length - 1]);
+    };
+    assert.ok(spread({ persona: 'max' }) > spread({ persona: 'paco' }));
+    assert.ok(spread({ persona: 'lola', emotion: 'sad' }) < spread({ persona: 'lola' }) * 0.75);
+  });
+
+  test('a paragraph break starts the line high again', () => {
+    const { groups } = planSpeech('Rain is on the way. It will reach the coast tonight. Winds will rise.\n\nIn sport, the final is tonight. Tickets sold out in minutes.', { persona: 'ada' });
+    const s3 = groups.findIndex((g) => g.spoken.startsWith('In sport'));
+    assert.ok(level(groups[s3]) > level(groups[s3 - 1]) + 0.8, groups.map(level).join(' '));
+  });
+
+  test('a question lifts; the clause after a colon sits a step lower', () => {
+    // no jitter (rand 0.5), so only the question differs
+    const melody = (text) => {
+      const phrases = planProsody(text, { persona: 'ada' });
+      return planMelody(phrases, groupPhrases(phrases, text), PERSONAS.ada, 'story', () => 0.5);
+    };
+    const plain = melody('The bank held rates. It will meet again. The decision is due soon.');
+    const asked = melody('The bank held rates. Will it move again? The decision is due soon.');
+    assert.equal(asked[1].boundary, 'question');
+    assert.ok(level(asked[1]) > level(plain[1]) + 0.5, `${level(asked[1])} vs ${level(plain[1])}`);
+    const colon = planSpeech('The bank was clear: prices are still too high.', { persona: 'ada' }).groups;
+    assert.equal(colon.length, 2);
+    assert.ok(level(colon[1]) < level(colon[0]));
+  });
+
+  test('the reporting clause drops and quietens, the figures and "not" get a lift', () => {
+    const { groups } = planSpeech(STORY, { persona: 'lola' });
+    const at = (g, word) => g.accents.find((a) => STORY.slice(a.start, a.end).includes(word));
+    const dip = at(groups[1], 'according to');
+    assert.ok(dip && dip.semis < -0.5 && dip.db < 0, JSON.stringify(groups[1].accents));
+    assert.equal(STORY.slice(dip.start, dip.end), 'according to Bitport Herald.');
+    const figure = at(groups[0], '4.75');
+    assert.ok(figure && figure.semis > 0.5 && figure.db > 0);
+    assert.ok(at(groups[3], 'not')?.semis > 0);
+    // never more than two lifts in a group, and never inside a dip
+    for (const g of groups) {
+      const lifts = g.accents.filter((a) => a.semis > 0);
+      assert.ok(lifts.length <= 2);
+      for (const l of lifts) assert.ok(!g.accents.some((d) => d.semis < 0 && l.start < d.end && l.end > d.start));
+    }
+  });
+
+  test('isAttribution', () => {
+    for (const t of ['according to the ministry.', 'officials said.', 'the BBC reports.', 'said Maria Lopez, the mayor.', 'he added.', 'police told reporters.']) assert.ok(isAttribution(t), t);
+    for (const t of ['The minister said the plan would cost billions and take a decade to finish in full.', 'Prices rose sharply.', 'saying inflation is easing']) assert.ok(!isAttribution(t), t);
+  });
+
+  test('UNIT-8 reads level: no melody for an even voice', () => {
+    const { groups } = planSpeech(STORY, { persona: 'unit8' });
+    assert.ok(groups.every((g) => g.pitch === undefined && g.accents === undefined));
+    assert.ok(planSpeech(STORY, { persona: { voice: { gender: 'robot' } } }).groups.every((g) => g.pitch === undefined));
+  });
+
+  test('the same line always gets the same melody', () => {
+    assert.deepEqual(planSpeech(STORY, { persona: 'max' }).groups, planSpeech(STORY, { persona: 'max' }).groups);
+    const groups = groupPhrases(planProsody(STORY, { persona: 'ada' }), STORY);
+    assert.equal(planMelody([], groups, PERSONAS.ada), groups);
+  });
+
+  test("the story's pace arc: the lead a touch slower than the middle", () => {
+    const text = 'One thing happened today. Then another thing happened. And a third thing followed. It ended there.';
+    const p = planProsody(text, { persona: 'ada', seed: 4 });
+    const mid = (p[1].speedFactor + p[2].speedFactor) / 2;
+    assert.ok(p[0].speedFactor < mid, p.map((x) => x.speedFactor).join(' '));
+    assert.ok(p[3].speedFactor < mid, p.map((x) => x.speedFactor).join(' '));
   });
 });

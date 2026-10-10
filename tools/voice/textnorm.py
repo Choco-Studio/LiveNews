@@ -224,6 +224,11 @@ class Phrase:
     pause: float
     tokens: list = field(default_factory=list)
     speed: float = 1.0  # factor on the voice speed for this phrase
+    # the newsreader melody (public/js/voice/speechtext.js planMelody): semitones at the start and end of the
+    # phrase's speech, a gain in dB, and lifts on words [(start, end, semitones, dB)] (offsets in the text)
+    pitch: tuple = (0.0, 0.0)
+    gain: float = 0.0
+    accents: list = field(default_factory=list)
 
     @property
     def spoken(self):
@@ -564,6 +569,31 @@ def pause_table(pauses=None, pause_add=0.0):
     return {k: v + float(pause_add or 0.0) for k, v in table.items()}
 
 
+def _num(v, lo, hi):
+    return float(min(hi, max(lo, v))) if isinstance(v, (int, float)) and not isinstance(v, bool) and v == v else None
+
+
+def _melody(ph, p):
+    """The caller's melody for a phrase (pitch [start, end], gain, accents), clamped to what sounds natural."""
+    pitch = p.get('pitch')
+    if isinstance(pitch, (list, tuple)) and len(pitch) == 2:
+        a, b = _num(pitch[0], -3, 3), _num(pitch[1], -3, 3)
+        if a is not None and b is not None:
+            ph.pitch = (a, b)
+    g = _num(p.get('gain'), -3, 3)
+    if g is not None:
+        ph.gain = g
+    for acc in p.get('accents') or []:
+        if not isinstance(acc, dict):
+            continue
+        s, e = acc.get('start'), acc.get('end')
+        semis, db = _num(acc.get('semis', 0), -3, 3), _num(acc.get('db', 0), -4, 4)
+        if isinstance(s, int) and isinstance(e, int) and e > s and semis is not None and db is not None:
+            ph.accents.append((s, e, semis, db))
+        if len(ph.accents) >= 6:
+            break
+
+
 def plan_phrases(text, lang='en-us', phrases=None, speed=1.0, pauses=None, pause_add=0.0):
     """Cut text into phrases with planned pauses, each with normalised tokens.
 
@@ -606,6 +636,8 @@ def plan_phrases(text, lang='en-us', phrases=None, speed=1.0, pauses=None, pause
             factor = (p.get('speedFactor') or p.get('speed')) if isinstance(p, dict) else None
             if isinstance(factor, (int, float)) and factor > 0:
                 ph.speed = float(min(1.3, max(0.7, factor)))
+            if isinstance(p, dict):
+                _melody(ph, p)
             out.append(ph)
             cursor = at + len(ptext)
     else:

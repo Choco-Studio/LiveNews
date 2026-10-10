@@ -171,6 +171,25 @@ describe('voice plan: what the worker is asked', () => {
     assert.ok(grave.phrases.every((p) => p.speedFactor < 1), 'grave stories read slower');
   });
 
+  test('the newsreader melody rides along to the worker (never for UNIT-8)', () => {
+    const seg = { type: 'story', anchor: 'A', emotion: 'neutral', text: 'Rates rose to 4.75 percent today. Most economists had expected no change, according to analysts. The bank would not say more.' };
+    const req = segmentRequest(seg, { presenterId: 'lola', presenter: CHANNEL.presenters.lola, casting: CASTING, presets: PRESETS, speech });
+    assert.equal(req.phrases.length, 3);
+    for (const p of req.phrases) {
+      assert.equal(p.pitch.length, 2);
+      assert.equal(typeof p.gain, 'number');
+    }
+    assert.ok(req.phrases[0].pitch[0] > req.phrases[2].pitch[0], 'the lead above the close');
+    const lift = req.phrases[0].accents.find((a) => seg.text.slice(a.start, a.end) === '4.75');
+    assert.ok(lift && lift.semis > 0, JSON.stringify(req.phrases[0].accents));
+    assert.ok(req.phrases[1].accents.some((a) => a.semis < 0 && seg.text.slice(a.start, a.end).startsWith('according to')));
+    // the melody is part of the clip's identity
+    const flat = { ...req, phrases: req.phrases.map(({ pitch, gain, accents, ...p }) => p) };
+    assert.notEqual(clipId(req, 'fp'), clipId(flat, 'fp'));
+    const robot = segmentRequest(seg, { presenterId: 'unit8', presenter: CHANNEL.presenters.unit8, casting: CASTING, presets: PRESETS, speech });
+    assert.ok(robot.phrases.every((p) => p.pitch === undefined && p.accents === undefined));
+  });
+
   test('UNIT-8 keeps the robot effect, its tuned chain and never drops below speed 0.82', () => {
     const seg = { type: 'outro', anchor: 'B', emotion: 'sad', text: 'Observation complete. Signing off, with regret, at the end of this transmission.' };
     const req = segmentRequest(seg, { presenterId: 'unit8', presenter: CHANNEL.presenters.unit8, casting: CASTING, presets: PRESETS, speech });

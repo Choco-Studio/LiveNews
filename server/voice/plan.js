@@ -8,10 +8,14 @@
 import crypto from 'node:crypto';
 
 // Bump when the recipe below changes in a way that changes the audio.
-export const RECIPE = 5; // 4: soft breaths in sentence pauses (owner 3 Oct); 5: breaths off (owner 5 Oct)
+export const RECIPE = 6; // 4: soft breaths in sentence pauses (owner 3 Oct); 5: breaths off (owner 5 Oct); 6: newsreader melody
 
 // Breaths between sentences (tools/voice/dsp.py breath_into). Owner 5 Oct: no breaths (laughs stay).
 export const BREATHS = false;
+
+// The newsreader melody (speechtext planMelody, tools/voice/engine.py shape_melody): each story opens high, steps
+// down and closes low, with lifts on the figures. Owner 10 Oct: "más natural, tipo presentador real, que no aburra".
+export const MELODY = true;
 
 // Segments a presenter reads aloud.
 export const SPOKEN = new Set(['intro', 'story', 'chat', 'outro', 'weather', 'cross']); // weather: WORLD WEATHER (server/weatherwriter.js); cross: a correspondent link (server/correspondents.js)
@@ -89,12 +93,19 @@ export function planPhrases(text, { speech, persona, personaId, lang, seg, minRe
   const phrases = [];
   for (const g of plan.groups || []) {
     if (!g.text || !/[\p{L}\p{N}]/u.test(g.say || g.spoken || '')) continue;
-    phrases.push({
+    const p = {
       text: g.text,
       say: g.say,
       pauseAfter: round3(clamp(Number(g.pauseAfter) || 0, 0, 2)),
       speedFactor: round3(clamp((Number(g.speedFactor) || 1) / base, minRel, REL_MAX)),
-    });
+    };
+    // the newsreader melody (speechtext planMelody; tools/voice/engine.py bends the audio to it)
+    if (MELODY && Array.isArray(g.pitch)) {
+      p.pitch = g.pitch;
+      p.gain = g.gain || 0;
+      if (g.accents?.length) p.accents = g.accents;
+    }
+    phrases.push(p);
   }
   return phrases.length ? phrases : null;
 }

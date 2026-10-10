@@ -1186,20 +1186,32 @@ export function speakable(text, opts) {
 // Presenter pacing. `speed` multiplies the voice's natural rate, `pause` scales
 // every planned silence, `variation` scales the seeded humanising jitter.
 // `lang` mirrors voice.lang in config/channel.json (the default for planSpeech).
+// `melody` scales the newsreader melody laid over the voice (planMelody: a high
+// lead sentence stepping down to a low close, questions up, attributions low),
+// `accent` the lift on the words worth leaning on. 0 for UNIT-8: a machine.
 export const PERSONAS = {
-  paco: { id: 'paco', lang: 'en-GB', speed: 0.98, pause: 1.08, variation: 0.55, desc: 'measured veteran, weighty full stops' },
-  lola: { id: 'lola', lang: 'en-US', speed: 1.05, pause: 0.95, variation: 1.15, desc: 'energetic and warm' },
-  max: { id: 'max', lang: 'en-US', speed: 1.08, pause: 0.86, variation: 1.3, desc: 'excitable, quick on the exclamations' },
-  ada: { id: 'ada', lang: 'en-GB', speed: 1.03, pause: 1.0, variation: 0.8, desc: 'crisp and clear' },
-  nova: { id: 'nova', lang: 'en-US', speed: 1.0, pause: 1.1, variation: 0.9, wonder: true, desc: 'warm, with a breath of wonder before big reveals' },
-  unit8: { id: 'unit8', lang: 'en-US', speed: 1.0, pause: 1.0, variation: 0, even: true, quantize: 0.1, desc: 'even and precise' },
-  penny: { id: 'penny', lang: 'en-GB', speed: 1.03, pause: 1.0, variation: 0.7, numbers: 0.95, desc: 'numbers first, figures read with care' },
-  sam: { id: 'sam', lang: 'en-US', speed: 1.1, pause: 0.84, variation: 1.0, desc: 'fast and friendly rolling news' },
+  paco: { id: 'paco', lang: 'en-GB', speed: 0.98, pause: 1.08, variation: 0.55, melody: 1.0, accent: 0.95, desc: 'measured veteran, weighty full stops' },
+  lola: { id: 'lola', lang: 'en-US', speed: 1.05, pause: 0.95, variation: 1.15, melody: 1.2, accent: 1.15, desc: 'energetic and warm' },
+  max: { id: 'max', lang: 'en-US', speed: 1.08, pause: 0.86, variation: 1.3, melody: 1.3, accent: 1.25, desc: 'excitable, quick on the exclamations' },
+  ada: { id: 'ada', lang: 'en-GB', speed: 1.03, pause: 1.0, variation: 0.8, melody: 1.0, accent: 1.05, desc: 'crisp and clear' },
+  nova: { id: 'nova', lang: 'en-US', speed: 1.0, pause: 1.1, variation: 0.9, melody: 1.15, accent: 1.1, wonder: true, desc: 'warm, with a breath of wonder before big reveals' },
+  unit8: { id: 'unit8', lang: 'en-US', speed: 1.0, pause: 1.0, variation: 0, melody: 0, accent: 0, even: true, quantize: 0.1, desc: 'even and precise' },
+  penny: { id: 'penny', lang: 'en-GB', speed: 1.03, pause: 1.0, variation: 0.7, melody: 0.95, accent: 1.15, numbers: 0.95, desc: 'numbers first, figures read with care' },
+  sam: { id: 'sam', lang: 'en-US', speed: 1.1, pause: 0.84, variation: 1.0, melody: 1.1, accent: 1.1, desc: 'fast and friendly rolling news' },
   // the correspondents (WORLD NOW links, server/correspondents.js)
-  rhea: { id: 'rhea', lang: 'en-GB', speed: 1.0, pause: 1.0, variation: 0.85, desc: 'composed correspondent, clear full stops' },
-  vic: { id: 'vic', lang: 'en-US', speed: 1.04, pause: 0.92, variation: 1.0, desc: 'brisk and concrete' },
-  mika: { id: 'mika', lang: 'en-US', speed: 1.0, pause: 1.02, variation: 0.9, desc: 'calm and exact' },
-  default: { id: 'default', speed: 1, pause: 1, variation: 0.8 },
+  rhea: { id: 'rhea', lang: 'en-GB', speed: 1.0, pause: 1.0, variation: 0.85, melody: 0.95, accent: 1.0, desc: 'composed correspondent, clear full stops' },
+  vic: { id: 'vic', lang: 'en-US', speed: 1.04, pause: 0.92, variation: 1.0, melody: 1.05, accent: 1.05, desc: 'brisk and concrete' },
+  mika: { id: 'mika', lang: 'en-US', speed: 1.0, pause: 1.02, variation: 0.9, melody: 0.9, accent: 0.95, desc: 'calm and exact' },
+  // the experts (server/experts.js): casting already set their pace (speed 1 here), the planner adds the manner
+  omar: { id: 'omar', lang: 'en-GB', speed: 1, pause: 1.02, variation: 0.75, melody: 0.9, accent: 1.1, desc: 'dry and exact, leans on the figure' },
+  clara: { id: 'clara', lang: 'en-GB', speed: 1, pause: 1.05, variation: 0.7, melody: 0.95, accent: 0.95, desc: 'poised diplomat, weighed words' },
+  dev: { id: 'dev', lang: 'en-US', speed: 1, pause: 0.96, variation: 0.95, melody: 1.1, accent: 1.05, desc: 'outdoors and direct' },
+  tomas: { id: 'tomas', lang: 'en-US', speed: 1, pause: 1.06, variation: 0.85, melody: 1.1, accent: 1.0, desc: 'professorial, enjoys the big numbers' },
+  june: { id: 'june', lang: 'en-US', speed: 1, pause: 0.94, variation: 1.0, melody: 1.05, accent: 1.1, desc: 'quick and precise' },
+  amara: { id: 'amara', lang: 'en-GB', speed: 1, pause: 1.04, variation: 0.8, melody: 0.95, accent: 0.95, desc: 'calm, reassuring clinician' },
+  leo: { id: 'leo', lang: 'en-GB', speed: 1, pause: 1.0, variation: 1.05, melody: 1.2, accent: 1.0, desc: 'warm and expressive' },
+  ines: { id: 'ines', lang: 'en-US', speed: 1, pause: 1.04, variation: 0.7, melody: 0.9, accent: 1.0, desc: 'careful and level' },
+  default: { id: 'default', speed: 1, pause: 1, variation: 0.8, melody: 1, accent: 1 },
 };
 
 const EMOTION_PROSODY = {
@@ -1466,10 +1478,112 @@ export function planSpeech(text, opts = {}) {
     });
     if (/^(?:stop|exclaim|question|ellipsis|paragraph)$/.test(kind)) {
       sentence++;
-      sentenceJitter = 1 + (rand() * 2 - 1) * 0.02 * Math.max(0.5, variation);
+      sentenceJitter = 1 + (rand() * 2 - 1) * 0.025 * Math.max(0.5, variation);
     }
   }
-  return { spoken, map, phrases, groups: groupPhrases(phrases, src), duration: estimateDuration(phrases) };
+
+  // 5. The pace arc of a story: the lead sentence a touch slower (it carries the news), the middle moving
+  //    on, the last one settling.
+  const sentences = phrases.length ? phrases[phrases.length - 1].sentence + 1 : 0;
+  if (!persona.even && sentences > 1) {
+    for (const ph of phrases) {
+      const arc = ph.sentence === 0 ? 0.985 : ph.sentence === sentences - 1 ? 0.99 : 1.012;
+      ph.speedFactor = round3(clamp(ph.speedFactor * arc, 0.8, 1.2));
+    }
+  }
+  const groups = groupPhrases(phrases, src);
+  planMelody(phrases, groups, persona, opts.segmentType, rand);
+  return { spoken, map, phrases, groups, duration: estimateDuration(phrases) };
+}
+
+// ================================================================ melody
+
+// Kokoro gives each sentence a good tune of its own, but read one by one every
+// sentence starts on the same note and a story comes out as a list (measured: the
+// median pitch of a story's sentences moved 0.2-0.4 semitones; a newsreader's
+// moves a semitone or more). planMelody lays a newsreader's line over the
+// groups: a paragraph opens high on the news, steps down sentence by sentence
+// and closes low; a question lifts; the clause after a colon or dash sits a
+// step lower; the reporting clause ("..., officials said.") drops and
+// quietens; the words worth leaning on (numbers, records, "not") get a lift.
+// The voice engine bends the audio to it (tools/voice/engine.py, dsp.pitch_curve).
+const MELODY_MOOD = { neutral: 1, happy: 1.15, serious: 0.7, sad: 0.6, surprised: 1.25, thinking: 0.9 };
+const MELODY_SEGMENT = { breaking: 0.8, lighter: 1.15, chat: 1.1, ad: 0.8, headline: 1.05, roundup: 1.05 };
+const MELODY_LIMIT = 2; // semitones either way, planned: the bend plus the engine's steering stays within a natural reach
+const REPORTING_END = /\b(?:said|says|told (?:reporters|the [\p{L}]+)|added|reported|reports|warned|confirmed|announced|explained|insisted)[.,;:!?…]?$/iu;
+const REPORTING_START = /^(?:according to|as reported by|(?:said|says|added|warned|insisted)\s)/i;
+
+/** True for a reporting clause read low and quick: "according to the ministry", "officials said". */
+export function isAttribution(text) {
+  const t = String(text || '').trim();
+  return wordCount(t) <= 8 && (REPORTING_START.test(t) || REPORTING_END.test(t));
+}
+
+const r2 = (x) => Math.round(x * 100) / 100;
+
+/**
+ * Give each synthesis group its melody: `pitch` [start, end] (semitones over
+ * the voice, a straight line through the group's speech), `gain` (dB) and
+ * `accents` [{ start, end (offsets in the text), semis, db }] (lifts on words,
+ * negative for a reporting clause). Even voices (UNIT-8) get none.
+ */
+export function planMelody(phrases, groups, persona, segmentType, rand = Math.random) {
+  const melody = persona.melody ?? 1;
+  const accent = persona.accent ?? 1;
+  if (persona.even || !phrases.length || (!melody && !accent)) return groups;
+  const seg = MELODY_SEGMENT[segmentType] ?? 1;
+  const sentences = phrases[phrases.length - 1].sentence + 1;
+  // paragraphs: a 'paragraph' boundary closes one
+  const opens = [0];
+  for (const p of phrases) if (p.boundary === 'paragraph' && p.sentence + 1 < sentences) opens.push(p.sentence + 1);
+  const level = [];
+  for (let s = 0; s < sentences; s++) {
+    const from = Math.max(...opens.filter((o) => o <= s));
+    const to = opens.find((o) => o > s) ?? sentences;
+    const pos = s - from;
+    const len = to - from;
+    // the lead high, the close low: +1.4 st on a paragraph's first sentence down to -0.8 on its last
+    let l = len === 1 ? 0.4 : 1.4 - 2.2 * (pos / (len - 1));
+    l += (rand() * 2 - 1) * 0.5; // never the same step twice
+    level.push(l);
+  }
+  let prevSentence = -1;
+  let inSentence = 0;
+  for (const g of groups) {
+    const ps = phrases.slice(g.from, g.to + 1);
+    const s = ps[0].sentence;
+    inSentence = s === prevSentence ? inSentence + 1 : 0;
+    prevSentence = s;
+    const mood = MELODY_MOOD[ps[0].emotion] ?? 1;
+    const m = melody * mood * seg;
+    let l = level[s] - 0.35 * inSentence;
+    if (g.boundary === 'question') l += 0.8;
+    else if (g.boundary === 'exclaim') l += 0.4;
+    const tilt = g.boundary === 'question' ? 0 : 0.15;
+    g.pitch = [r2(clamp((l + tilt) * m, -MELODY_LIMIT, MELODY_LIMIT)), r2(clamp((l - tilt) * m, -MELODY_LIMIT, MELODY_LIMIT))];
+    g.gain = r2(clamp(0.35 * l * m, -0.8, 0.8));
+    const accents = [];
+    // the reporting clause after a comma: lower and quieter
+    const dipM = Math.max(0.6, melody * mood);
+    for (let k = 1; k < ps.length; k++) {
+      if (isAttribution(ps[k].spoken)) accents.push({ start: ps[k].start, end: ps[k].end, semis: r2(-1.1 * dipM), db: -1.8 });
+    }
+    // the words worth leaning on: the two strongest, apart from each other and outside a dip
+    const a = accent * (0.5 + 0.5 * mood) * seg;
+    const words = ps.flatMap((p) => p.emphasis || []).sort((x, y) => y.strength - x.strength || x.start - y.start);
+    const lifted = [];
+    for (const w of words) {
+      if (lifted.length >= 2 || !a) break;
+      if (accents.some((d) => w.start < d.end && w.end > d.start)) continue;
+      if (lifted.some((x) => Math.abs(x.start - w.start) < 12)) continue;
+      // a word at the very end already carries the sentence's fall: a smaller lift keeps it a statement
+      const nearEnd = w.end >= g.end - 10;
+      const k = w.strength * a * (nearEnd ? 0.6 : 1);
+      lifted.push({ start: w.start, end: w.end, semis: r2(Math.min(MELODY_LIMIT, 1.7 * k)), db: r2(Math.min(2, 1.6 * k)) });
+    }
+    g.accents = [...accents, ...lifted].sort((x, y) => x.start - y.start);
+  }
+  return groups;
 }
 
 // Boundaries where a voice may stop and restart: sentence ends, colons,

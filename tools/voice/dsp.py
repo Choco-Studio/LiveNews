@@ -423,6 +423,190 @@ def add_room(x, sr, wet_db, rt60):
     return x + wet * 10 ** (wet_db / 20)
 
 
+# ---------------------------------------------------------------- melody
+
+def _cubic_at(x, pos):
+    """x read at fractional sample positions (Catmull-Rom; positions clamped to the signal)."""
+    n = len(x)
+    pos = np.clip(pos, 0, n - 1)
+    i = np.floor(pos).astype(np.int64)
+    f = pos - i
+    xp = np.concatenate([[x[0]], x, [x[-1], x[-1]]])
+    a, b, c, d = xp[i], xp[i + 1], xp[i + 2], xp[i + 3]
+    return b + 0.5 * f * (c - a + f * (2 * a - 5 * b + 4 * c - d + f * (3 * (b - c) + d - a)))
+
+
+def pitch_curve(x, sr, times, semitones, frame=0.032, tolerance=0.010):
+    """Shift the pitch of x along a smooth curve, keeping its length and timing.
+
+    `semitones` at `times` (s; linear in between, held at the ends). The signal is
+    read faster where the pitch goes up (a variable-rate resample on a 4x oversampled copy, which
+    carries the formants a little with it: fine within a couple of semitones), then put back on
+    its own time map by WSOLA (each 32 ms frame taken where it best continues the
+    last, within 10 ms of where it belongs), so every word stays where it was.
+    """
+    x = np.asarray(x, dtype=np.float64)
+    n = len(x)
+    if n < int(frame * sr) * 2:
+        return x.copy()
+    semis = np.interp(np.arange(n) / sr, np.asarray(times, dtype=float), np.asarray(semitones, dtype=float))
+    if np.max(np.abs(semis)) < 0.02:
+        return x.copy()
+    rate = 2.0 ** (semis / 12.0)
+    # m(i): samples of the resampled signal before original sample i
+    m = np.concatenate([[0.0], np.cumsum(1.0 / rate)])
+    total = int(m[-1])
+    # read on a 4x band-limited copy (a cubic read of the signal itself dulls the top octave: -3 dB over 4 kHz
+    # on the women's voices, measured)
+    up = 4
+    z = _cubic_at(oversample(x, up), up * np.interp(np.arange(total), m, np.arange(n + 1)))
+    # WSOLA back onto the original time line
+    size = int(frame * sr) & ~1
+    hop = size // 2
+    tol = int(tolerance * sr)
+    win = np.hanning(size)
+    y = np.zeros(n + size)
+    norm = np.zeros(n + size)
+    zp = np.concatenate([z, np.zeros(size + 2 * tol + hop)])
+    prev = None
+    for o in range(0, n, hop):
+        target = int(m[min(o, n)])
+        if prev is None:
+            at = target
+        else:
+            nat = zp[prev + hop:prev + hop + size]
+            lo, hi = max(0, target - tol), max(0, min(len(zp) - size, target + tol))
+            if hi > lo:
+                seg = zp[lo:hi + size]
+                corr = np.correlate(seg, nat, 'valid')
+                at = lo + int(np.argmax(corr))
+            else:
+                at = target
+        y[o:o + size] += zp[at:at + size] * win
+        norm[o:o + size] += win
+        prev = at
+    out = y[:n] / np.maximum(norm[:n], 1e-3)
+    # the resample carried the formants with the pitch (+2 st = vowels 12% higher, a smaller, younger voice):
+    # put the dry voice's spectral envelope back, frame by frame (same time line, so the frames line up)
+    voiced = pitch_track(x, sr)[1]
+    out = keep_envelope(out, sr, rate, float(np.median(voiced) * np.median(rate)) if len(voiced) >= 5 else None)
+    # the first and last half-frame have one window only: blend them back to the dry edges
+    edge = min(hop, n // 4)
+    ramp = np.linspace(0, 1, edge)
+    out[:edge] = x[:edge] * (1 - ramp) + out[:edge] * ramp
+    out[-edge:] = out[-edge:] * (1 - ramp) + x[-edge:] * ramp
+    return out
+
+
+def _smooth_bins(m, width):
+    """Moving average along the last axis (frequency), `width` bins, edges held."""
+    h = width // 2
+    p = np.concatenate([np.repeat(m[:, :1], h + 1, axis=1), m, np.repeat(m[:, -1:], h, axis=1)], axis=1)
+    c = np.cumsum(p, axis=1)
+    return (c[:, width:] - c[:, :-width]) / width
+
+
+def keep_envelope(wet, sr, rate, f0=None, size=1024, limit_db=12.0):
+    """Formants put back after a pitch shift that carried them: `wet` read at `rate` (per sample, >1 = up).
+
+    Its formants sit `rate` times too high, so each 43 ms frame (75% overlap) is scaled
+    by its own envelope read at f x rate over its envelope at f, an envelope being
+    the power spectrum averaged twice over one harmonic spacing (`f0`, the voice's
+    pitch after the shift; 300 Hz when unknown), which cancels the harmonics and
+    follows the vowel; capped at +-12 dB and overlap-added back (Hann analysis and
+    synthesis). It never compares with the dry signal, whose frames WSOLA has nudged
+    by up to 10 ms, so a rate of 1 changes nothing.
+    """
+    n = len(wet)
+    if n < size * 2:
+        return wet
+    hop = size // 4
+    pad = size
+    w = np.concatenate([np.zeros(pad), wet, np.zeros(pad + size)])
+    idx = np.arange(0, n + pad, hop)
+    win = np.hanning(size)
+    W = np.fft.rfft(w[idx[:, None] + np.arange(size)] * win, axis=1)
+    width = max(3, int(round(float(np.clip(f0 or 300.0, 70.0, 450.0)) / (sr / size))) | 1)
+    env = _smooth_bins(_smooth_bins(np.abs(W) ** 2, width), width)
+    env += 1e-10 * max(env.max(), 1e-20)
+    centre = np.clip(idx - pad + size // 2, 0, n - 1)
+    r = np.asarray(rate, dtype=np.float64)[centre]
+    bins = env.shape[1]
+    pos = np.clip(np.arange(bins)[None, :] * r[:, None], 0, bins - 1)
+    i0 = np.floor(pos).astype(np.int64)
+    i1 = np.minimum(i0 + 1, bins - 1)
+    fr = pos - i0
+    rows = np.arange(len(idx))[:, None]
+    target = env[rows, i0] * (1 - fr) + env[rows, i1] * fr
+    lim = 10 ** (limit_db / 20)
+    gain = np.clip(np.sqrt(target / env), 1 / lim, lim)
+    frames = np.fft.irfft(W * gain, size, axis=1) * win
+    out = np.zeros(len(w))
+    norm = np.zeros(len(w))
+    for k, o in enumerate(idx):
+        out[o:o + size] += frames[k]
+        norm[o:o + size] += win ** 2
+    return (out / np.maximum(norm, 1e-3))[pad:pad + n]
+
+
+def pitch_track(x, sr, fmin=60.0, fmax=400.0, frame=0.04, hop=0.01, threshold=0.15):
+    """F0 of the voiced frames of x: (times s, f0 Hz), by YIN (40 ms frames, 10 ms hop).
+
+    Each frame's difference function, cumulative-mean normalised; the first dip under
+    `threshold` (its local minimum) is the period, which keeps a creaky low voice from
+    reading an octave up (a plain autocorrelation peak did on Tomas, measured).
+    """
+    x = np.asarray(x, dtype=np.float64)
+    fl, hp = int(frame * sr), int(hop * sr)
+    maxlag = min(int(sr / fmin) + 2, fl // 2)
+    minlag = max(2, int(sr / fmax))
+    win = fl - maxlag
+    if len(x) < fl + hp or win < minlag:
+        return np.zeros(0), np.zeros(0)
+    idx = np.arange(0, len(x) - fl, hp)
+    frames = x[idx[:, None] + np.arange(fl)]
+    nfft = 1 << int(np.ceil(np.log2(fl + win)))
+    head = np.zeros_like(frames)
+    head[:, :win] = frames[:, :win]
+    cross = np.fft.irfft(np.conj(np.fft.rfft(head, nfft)) * np.fft.rfft(frames, nfft), nfft)[:, :maxlag + 1]
+    c = np.concatenate([np.zeros((len(idx), 1)), np.cumsum(frames ** 2, axis=1)], axis=1)
+    lags = np.arange(maxlag + 1)
+    e0 = c[:, win][:, None]
+    et = c[:, lags + win] - c[:, lags]
+    d = np.maximum(e0 + et - 2 * cross, 0.0)
+    cum = np.cumsum(d[:, 1:], axis=1)
+    dn = np.ones_like(d)
+    dn[:, 1:] = d[:, 1:] * np.arange(1, maxlag + 1) / np.maximum(cum, 1e-12)
+    band = dn[:, minlag:maxlag]
+    under = band < threshold
+    first = np.where(under.any(axis=1), np.argmax(under, axis=1), np.argmin(band, axis=1))
+    # walk down to the bottom of that dip
+    j = first.copy()
+    rows = np.arange(len(idx))
+    for _ in range(maxlag):
+        nxt = np.minimum(j + 1, band.shape[1] - 1)
+        step = band[rows, nxt] < band[rows, j]
+        if not step.any():
+            break
+        j = np.where(step, nxt, j)
+    best = band[rows, j]
+    tau = j + minlag
+    a, b, cc = dn[rows, tau - 1], dn[rows, tau], dn[rows, np.minimum(tau + 1, maxlag)]
+    den = a - 2 * b + cc
+    off = np.where(np.abs(den) > 1e-12, 0.5 * (a - cc) / np.where(den == 0, 1, den), 0.0)
+    f0 = sr / (tau + np.clip(off, -1, 1))
+    rms = np.sqrt(np.mean(frames ** 2, axis=1))
+    voiced = (rms > 0.1 * rms.max()) & (best < 0.35)
+    return (idx / sr + frame / 2)[voiced], f0[voiced]
+
+
+def gain_curve(x, sr, times, db):
+    """x scaled by a gain curve (dB at `times`, linear in between)."""
+    x = np.asarray(x, dtype=np.float64)
+    g = np.interp(np.arange(len(x)) / sr, np.asarray(times, dtype=float), np.asarray(db, dtype=float))
+    return x * 10 ** (g / 20)
+
+
 # ---------------------------------------------------------------- edges
 
 def fade(x, sr, fade_in, fade_out):

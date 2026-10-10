@@ -457,6 +457,8 @@ class VoiceEngine:
         lead, tail = int(0.012 * sr), int(0.025 * sr)
         # breaths between sentences (dsp.breath_into): presenters only, unless the request turns them off
         breaths = req.get('breaths', True) is not False and not str(req.get('effect') or '').startswith('robot') and not req.get('raw')
+        # the planner's newsreader melody (speechtext planMelody), unless the request turns it off; never for a robot
+        melody = req.get('melody', True) is not False and not str(req.get('effect') or '').startswith('robot')
 
         clips = []
         for ph in phrases:
@@ -478,16 +480,24 @@ class VoiceEngine:
             env = (centres / sr - onset, level > level.max() - 32)
             starts, timeline = self.align_phrase(token_ph, dur, gaps, env)
             clips.append({'phrase': ph, 'audio': seg, 'onset': onset, 'dur': dur,
-                          'tokens': [t for t, _ in token_ph], 'starts': starts,
-                          'timeline': timeline, 'level': dsp.active_level_db(seg, sr)})
+                          'tokens': [t for t, _ in token_ph], 'starts': starts, 'timeline': timeline})
         if not clips:
             raise ValueError('nothing audible was synthesised')
+        # bend the phrases to their melody: the pitch now (the timing stays put, so the word times hold),
+        # the gain after the levelling below
+        if melody:
+            shape_melody(clips, sr)
+        for c in clips:
+            c['level'] = dsp.active_level_db(c['audio'], sr)
 
         # Level phrases toward the median: separate passes can differ by a few dB
         if len(clips) > 1:
             median = float(np.median([c['level'] for c in clips]))
             for c in clips:
                 c['audio'] = c['audio'] * 10 ** (float(np.clip((median - c['level']) * 0.75, -4, 4)) / 20)
+        for c in clips:
+            if 'gain' in c:
+                c['audio'] = dsp.gain_curve(c['audio'], sr, *c['gain'])
 
         pieces, words, phr, phones = [], [], [], []
         cursor = 0
@@ -541,6 +551,61 @@ class VoiceEngine:
         if req.get('levels'):
             reply['levels'] = envelope(audio, sr, int(req.get('levelsRate') or 50))
         return audio, sr, reply
+
+
+# How much of Kokoro's own sentence-to-sentence wander the melody replaces. Each phrase is a separate pass and
+# lands wherever the model puts it (a closing sentence often higher than the lead, measured: medians spread
+# over 2.5 semitones at random), which would blur the planned line; most of that is taken out first.
+STEER = 0.9
+
+
+def shape_melody(clips, sr):
+    """Bend each clip (in place) to its phrase's melody: its pitch steered from where Kokoro left it to the
+    planned level (dsp.pitch_curve, length kept) and the gain curve kept for after the levelling."""
+    if not any(c['phrase'].pitch != (0.0, 0.0) or c['phrase'].accents or c['phrase'].gain for c in clips):
+        return
+    tracks = [dsp.pitch_track(c['audio'], sr)[1] for c in clips]
+    voiced = [f for f in tracks if len(f)]
+    ref = float(np.median(np.concatenate(voiced))) if voiced and sum(map(len, voiced)) >= 20 else None
+    for c, f in zip(clips, tracks):
+        natural = float(np.median(12 * np.log2(f / ref))) if ref and len(f) >= 10 else 0.0
+        curve = melody_curve(c, sr, offset=-STEER * natural)
+        if curve is None:
+            continue
+        c['audio'] = dsp.pitch_curve(c['audio'], sr, curve[0], curve[1])
+        c['gain'] = (curve[0], curve[2])
+
+
+def melody_curve(clip, sr, offset=0.0, step=0.005):
+    """A phrase's melody over its audio: (times, semitones, dB) on a 5 ms grid, or None when it has none.
+
+    The phrase's pitch runs in a straight line from its first word to its last (held
+    over the edges), moved by `offset`; each accent rises into its words (from 30 ms
+    before the first to 60 ms in), holds and eases out 40 ms after the last, so the
+    lift sits on the word.
+    """
+    ph = clip['phrase']
+    a, b = ph.pitch
+    if not (a or b or ph.gain or ph.accents or offset):
+        return None
+    onset, dur = clip['onset'], clip['dur']
+    grid = np.arange(0.0, len(clip['audio']) / sr + step, step)
+    semis = np.interp(grid, [onset, onset + max(dur, step)], [a + offset, b + offset])
+    db = np.full(len(grid), float(ph.gain))
+    tokens, starts = clip['tokens'], clip['starts']
+    for s, e, up, gain in ph.accents:
+        ks = [k for k, t in enumerate(tokens) if t.start < e and t.end > s]
+        if not ks:
+            continue
+        t0 = onset + starts[ks[0]]
+        t1 = onset + (starts[ks[-1] + 1] if ks[-1] + 1 < len(starts) else dur)
+        if t1 <= t0:
+            continue
+        ramp = min(0.06, (t1 - t0) / 3)
+        bump = np.interp(grid, [t0 - 0.03, t0 + ramp, t1 - ramp, t1 + 0.04], [0.0, 1.0, 1.0, 0.0], left=0.0, right=0.0)
+        semis += up * bump
+        db += gain * bump
+    return grid, np.clip(semis, -2.5, 2.5), np.clip(db, -4, 4)
 
 
 def tighten_gaps(seg, sr, gaps, target, keep=0.03, xfade=0.006):

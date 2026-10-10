@@ -370,6 +370,23 @@ the story now cuts straight from the montage's last frame (owner 20:40, item 2).
   and the strap clearing make the boundary audible and visible.
 - Beds should change only at block boundaries (request to music / showcase: today every segment re-cues, 8-14 cue calls per
   minute).
+- **The voices' melody (10 Oct, owner: "más natural, tipo presentador real, que no aburra").** Kokoro reads each sentence
+  as a separate pass and starts every one on the same note, so a story came out as a list (median pitch of a story's
+  sentences: 0.2-0.4 semitones apart, at random: Paco's close sat 2 st above his lead). Now `planMelody`
+  (public/js/voice/speechtext.js) gives each synthesis group a newsreader line: a paragraph opens high on the news (+1.4 st),
+  steps down sentence by sentence and closes low (-0.8 st), a question lifts (+0.8), the clause after a colon or dash sits a
+  step lower, the reporting clause ("..., officials said.") drops 1.1 st and 1.8 dB, the figures, records and "not" get a
+  lift (up to 2, about 1-1.7 st and 1-1.6 dB, smaller on the last word). Persona `melody` / `accent` scale it (Max 1.3,
+  Lola 1.2, Paco 1.0, UNIT-8 0: a machine reads level), grave stories narrow it to 0.6-0.7, lighter ones widen it. The
+  story's pace has an arc too: the lead 1.5 % slower, the middle 1.2 % quicker, the close settling.
+  The worker (tools/voice/engine.py `shape_melody`) measures where Kokoro left each phrase (YIN, `dsp.pitch_track`), takes
+  90 % of that wander out (`STEER`) and bends the phrase to the plan with `dsp.pitch_curve`: a variable-rate resample read
+  on a 4x oversampled copy, put back on its own time line by WSOLA (same length, so every word time holds), its formants
+  put back with `keep_envelope` (the resample carries them; within ~1 dB above 400 Hz); the gain curve goes on after the
+  levelling. Measured on 8 presenters x 4 stories (A/B, same text): the per-sentence pitch now follows the plan
+  (correlation 0.83-1.0, was -0.9 to 0.7), sentences move 0.7-1.2 st apart (was 0.2-0.9, random), duration, word times and
+  loudness unchanged, timbre within 0.8 dB, no new clicks, ~1 s of extra work per segment. `MELODY = false` in
+  server/voice/plan.js turns it off (`melody: false` in a worker request does the same for one clip).
 
 ## 6. Programmes up to ~10 minutes
 

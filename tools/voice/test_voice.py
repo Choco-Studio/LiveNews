@@ -214,6 +214,139 @@ class ChainTest(unittest.TestCase):
         np.testing.assert_allclose(20 * np.log10(mags), [0.0, 3.0, 6.0], atol=1e-6)
 
 
+def vowel(seconds=2.0, f0=140.0, glide=0.0, vibrato=0.0):
+    """A sustained vowel: harmonics of f0 (gliding by `glide` semitones, with a 5 Hz vibrato of +-`vibrato`)
+    under fixed formants (700, 1200, 2600 Hz)."""
+    t = np.arange(int(seconds * SR)) / SR
+    f = f0 * 2 ** ((glide * t / seconds + vibrato * np.sin(2 * np.pi * 5 * t)) / 12)
+    phase = 2 * np.pi * np.cumsum(f) / SR
+    env = lambda h: sum(a / (1 + ((h - fc) / bw) ** 2) for fc, bw, a in ((700, 90, 1.0), (1200, 110, 0.6), (2600, 160, 0.3)))
+    offsets = np.random.default_rng(5).random(60) * 2 * np.pi
+    y = sum(env(k * f) * np.sin(k * phase + offsets[k]) for k in range(1, 60) if k * f0 < 0.45 * SR)
+    return 0.3 * y / np.max(np.abs(y))
+
+
+def third_octaves(x, lo=400.0, bands=13):
+    """Long-term level (dB) in third-octave bands from `lo` (the formant region, above the pitch)."""
+    P = np.abs(np.fft.rfft(x)) ** 2
+    f = np.fft.rfftfreq(len(x), 1 / SR)
+    edges = lo * 2 ** (np.arange(bands + 1) / 3)
+    return np.array([10 * np.log10(P[(f >= a) & (f < b)].sum() + 1e-12) for a, b in zip(edges[:-1], edges[1:])])
+
+
+class MelodyTest(unittest.TestCase):
+    """The newsreader melody: pitch and gain curves that keep timing and timbre (no model)."""
+
+    def median_semis(self, y, x):
+        return 12 * math.log2(np.median(dsp.pitch_track(y, SR)[1]) / np.median(dsp.pitch_track(x, SR)[1]))
+
+    def test_pitch_track_reads_the_fundamental(self):
+        t = np.arange(SR) / SR
+        for f0 in (85.0, 140.0, 210.0, 330.0):
+            # a 2nd harmonic louder than the fundamental must not read an octave up
+            y = 0.3 * np.sin(2 * np.pi * f0 * t) + 0.8 * np.sin(4 * np.pi * f0 * t) + 0.2 * np.sin(6 * np.pi * f0 * t)
+            _, f = dsp.pitch_track(y, SR)
+            self.assertGreater(len(f), 80)
+            self.assertAlmostEqual(float(np.median(f)), f0, delta=f0 * 0.01)
+        self.assertEqual(len(dsp.pitch_track(np.zeros(SR), SR)[1]), 0)
+
+    def test_pitch_curve_moves_the_pitch_and_keeps_the_length(self):
+        x = vowel(2.0, 140.0, glide=2.0)
+        for semis in (-1.5, 1.0, 2.0):
+            y = dsp.pitch_curve(x, SR, [0, 2.0], [semis, semis])
+            self.assertEqual(len(y), len(x))
+            self.assertAlmostEqual(self.median_semis(y, x), semis, delta=0.15)
+        # a curve: up at the start, down at the end
+        y = dsp.pitch_curve(x, SR, [0, 2.0], [1.5, -1.5])
+        t0, f0 = dsp.pitch_track(x, SR)
+        t1, f1 = dsp.pitch_track(y, SR)
+        early = 12 * math.log2(np.median(f1[t1 < 0.6]) / np.median(f0[t0 < 0.6]))
+        late = 12 * math.log2(np.median(f1[t1 > 1.4]) / np.median(f0[t0 > 1.4]))
+        self.assertGreater(early, 0.7)
+        self.assertLess(late, -0.7)
+        # nothing to do: an exact copy
+        np.testing.assert_array_equal(dsp.pitch_curve(x, SR, [0, 2.0], [0, 0]), x)
+
+    def test_pitch_curve_keeps_the_formants(self):
+        # the resample carries the vowel's formants with the pitch; keep_envelope puts them back: the result
+        # is measured against the same vowel sung at the new pitch
+        x = vowel(2.0, 140.0)
+        for semis in (-2.0, 2.0):
+            ref = third_octaves(vowel(2.0, 140.0 * 2 ** (semis / 12)))
+            y = dsp.pitch_curve(x, SR, [0, 2.0], [semis, semis])
+            d = third_octaves(y) - ref
+            kept = float(np.sqrt(np.mean((d - d.mean()) ** 2)))
+            original = dsp.keep_envelope
+            try:
+                dsp.keep_envelope = lambda w, sr, rate, f0=None: w
+                z = dsp.pitch_curve(x, SR, [0, 2.0], [semis, semis])
+            finally:
+                dsp.keep_envelope = original
+            d = third_octaves(z) - ref
+            carried = float(np.sqrt(np.mean((d - d.mean()) ** 2)))
+            self.assertLess(kept, 2.0, f'{semis}: {kept:.2f} dB')
+            self.assertLess(kept, carried * 0.6, f'{semis}: {kept:.2f} vs {carried:.2f} dB')
+
+    def test_keep_envelope_at_rate_one_changes_nothing(self):
+        x = speechlike(1.5)
+        np.testing.assert_allclose(dsp.keep_envelope(x, SR, np.ones(len(x))), x, atol=1e-9)
+
+    def test_gain_curve(self):
+        x = np.ones(SR)
+        y = dsp.gain_curve(x, SR, [0.0, 1.0], [0.0, -6.0])
+        self.assertAlmostEqual(y[0], 1.0)
+        self.assertAlmostEqual(y[SR // 2], 10 ** (-3 / 20), places=3)
+
+    def clip(self, audio, pitch=(0.0, 0.0), gain=0.0, accents=()):
+        from textnorm import Phrase, Token
+        toks = [Token(0, 4, 'Rain', 'Rain'), Token(5, 10, 'fell', 'fell'), Token(11, 15, '4.75', 'four'),
+                Token(11, 15, '4.75', 'point'), Token(16, 23, 'inches.', 'inches.')]
+        ph = Phrase(0, 23, 'Rain fell 4.75 inches.', 0.0, toks, pitch=pitch, gain=gain, accents=list(accents))
+        return {'phrase': ph, 'audio': audio, 'onset': 0.1, 'dur': len(audio) / SR - 0.2, 'tokens': toks,
+                'starts': [0.0, 0.3, 0.6, 0.8, 1.0]}
+
+    def test_melody_curve_puts_the_lift_on_the_word(self):
+        from engine import melody_curve
+        c = self.clip(np.zeros(int(1.6 * SR)), pitch=(1.0, -1.0), gain=0.5, accents=[(11, 15, 2.0, 1.5)])
+        grid, semis, db = melody_curve(c, SR)
+        at = lambda t: int(round(t / 0.005))
+        self.assertAlmostEqual(semis[at(0.05)], 1.0, places=2)   # held before the speech
+        self.assertAlmostEqual(semis[at(1.55)], -1.0, places=2)  # and after it
+        # the figure's words (four point: 0.7-1.1 s from the start of the audio) carry the lift
+        base = lambda t: 1.0 - 2.0 * (t - 0.1) / 1.4
+        self.assertAlmostEqual(semis[at(0.9)], base(0.9) + 2.0, places=2)
+        self.assertAlmostEqual(db[at(0.9)], 2.0, places=2)
+        self.assertAlmostEqual(semis[at(0.3)], base(0.3), places=2)  # "Rain" is left alone
+        self.assertAlmostEqual(db[at(0.3)], 0.5, places=2)
+        self.assertIsNone(melody_curve(self.clip(np.zeros(SR)), SR))
+
+    def test_shape_melody_steers_to_the_planned_line(self):
+        import engine
+        # Kokoro left the second phrase 2.4 st above the first; the plan wants it 1 st below
+        a = self.clip(vowel(1.6, 130.0), pitch=(0.5, 0.5))
+        b = self.clip(vowel(1.6, 130.0 * 2 ** (2.4 / 12)), pitch=(-0.5, -0.5))
+        dry = [a['audio'].copy(), b['audio'].copy()]
+        engine.shape_melody([a, b], SR)
+        for c, x in zip((a, b), dry):
+            self.assertEqual(len(c['audio']), len(x))
+        after = 12 * math.log2(np.median(dsp.pitch_track(b['audio'], SR)[1]) / np.median(dsp.pitch_track(a['audio'], SR)[1]))
+        self.assertAlmostEqual(after, 2.4 * (1 - engine.STEER) - 1.0, delta=0.3)
+        self.assertIn('gain', a)
+
+    def test_caller_melody_is_kept_and_clamped(self):
+        text = 'Rates rose. Will they fall?'
+        ph = plan_phrases(text, 'en-us', [
+            {'text': 'Rates rose.', 'pitch': [1.2, 0.8], 'gain': 0.4, 'accents': [{'start': 0, 'end': 5, 'semis': 1.5, 'db': 1.2}]},
+            {'text': 'Will they fall?', 'pitch': [9, 'x'], 'gain': 12, 'accents': [{'start': 'a', 'end': 3}, 7, {'start': 12, 'end': 16, 'semis': -9, 'db': 0}]},
+        ])
+        self.assertEqual(ph[0].pitch, (1.2, 0.8))
+        self.assertEqual(ph[0].gain, 0.4)
+        self.assertEqual(ph[0].accents, [(0, 5, 1.5, 1.2)])
+        self.assertEqual(ph[1].pitch, (0.0, 0.0))  # not a pair of numbers: no line
+        self.assertEqual(ph[1].gain, 3.0)
+        self.assertEqual(ph[1].accents, [(12, 16, -3.0, 0.0)])
+
+
 class TimingTest(unittest.TestCase):
     """Gap tightening and word alignment, on synthetic phrases (no model)."""
 
@@ -289,6 +422,26 @@ class EngineTest(unittest.TestCase):
         self.assertGreater(p1['t'], p0['t'] + p0['dur'] + 0.25)
         self.assertAlmostEqual(reply['lufs'], -16.0, delta=0.3)
         self.assertLessEqual(reply['truePeak'], -1.9)
+
+    def test_melody_keeps_the_timing(self):
+        # the newsreader melody bends the pitch and gain only: same length, same word times
+        text = 'Rates rose to 4.75 percent today. Most economists had expected no change.'
+        req = {'text': text, 'voice': 'bm_george:0.6+bm_lewis:0.4', 'lang': 'en-gb', 'phrases': [
+            {'text': 'Rates rose to 4.75 percent today.', 'pauseAfter': 0.4, 'pitch': [1.4, 1.1], 'gain': 0.5,
+             'accents': [{'start': 14, 'end': 18, 'semis': 1.5, 'db': 1.5}]},
+            {'text': 'Most economists had expected no change.', 'pitch': [-0.8, -1.1], 'gain': -0.3}]}
+        a, _, ra = self.engine.speak({**req, 'melody': False})
+        b, _, rb = self.engine.speak(req)
+        self.assertEqual(ra['words'], rb['words'])
+        self.assertEqual(ra['phrases'], rb['phrases'])
+        self.assertLess(abs(len(a) - len(b)) / SR, 0.05)  # only the room tail, trimmed by level, may differ
+        self.assertAlmostEqual(rb['lufs'], -16.0, delta=0.3)
+        # the lead sits above the close (whatever Kokoro did with each on its own)
+        t, f = dsp.pitch_track(b, SR)
+        p0, p1 = rb['phrases']
+        lead = np.median(f[(t >= p0['t']) & (t < p0['t'] + p0['dur'])])
+        close = np.median(f[(t >= p1['t']) & (t < p1['t'] + p1['dur'])])
+        self.assertGreater(12 * math.log2(lead / close), 1.0)
 
     def test_preset_and_robot(self):
         _, _, reply = self.engine.speak({'text': 'Affirmative.', 'voice': 'unit8'})
