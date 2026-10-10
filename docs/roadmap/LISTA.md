@@ -74,7 +74,7 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 
 ## F. Anuncios
 28. BitFizz: persona y vaso ya corregidos; falta que tú lo veas.
-29. 🟡 Grand Buffer y HiResGym (10 oct): en Grand Buffer la mesa del plato ya está puesta (pan, copa, servilleta, salero, mantel con textura, velas que parpadean). Hi-Res Gym: en curso (gimnasio de verdad detrás del atleta y del cierre).
+29. ✅ Grand Buffer y HiResGym (10 oct): en Grand Buffer la mesa del plato ya está puesta (pan, copa, servilleta, salero, mantel con textura, velas que parpadean). Hi-Res Gym: cada plano en un sitio de verdad y con luz (vestuario con ducha y vapor, ciudad con grúas y un tren, gimnasio con ventanas, polvo de magnesio y otra persona entrenando al fondo, y el cierre sobre el gimnasio desenfocado); los planos de baja resolución se siguen leyendo como tales.
 30. ✅ Corners (10 oct): las patatas caen como patatas (resistencia del aire, giro que se frena, aleteo, un bote pequeño y se asientan) desde el cazo que sujeta la mano de Ian, y en el plano de la sal los dedos de Ian espolvorean un chorro visible que brilla en la luz. SafeSector y ScreechNet revisados: planos llenos, sin cambios.
 31. ✅ La música de los anuncios debe bajar bajo la voz. (Medido en el vídeo de correcciones: entre frases la música va 25-38 dB por debajo de la voz y baja 14 dB más cuando la voz habla.)
 

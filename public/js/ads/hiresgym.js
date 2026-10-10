@@ -7,26 +7,39 @@
 //
 // Six shots, 24 s, at 60 bpm (one beat = one second, so cues land on seconds):
 //  1  0.0 LOCKER   a man on a bench under one pendant light lifts his head; the
-//                  camera creeps in, so the 8 px cells crawl.           48 x 27
+//                  camera creeps in, so the 8 px cells crawl. A lit shower doorway
+//                  breathes steam into the room, a corridor tube stutters behind
+//                  wired glass; towel, open locker, bag, shaker.         48 x 27
 //                                                  VO "Low resolution."
-//  2  3.6 RUN      dawn embankment, backlit, a slow-motion stride.      64 x 36
+//  2  3.6 RUN      dawn embankment, backlit, a slow-motion stride; cranes, chimney
+//                  steam, a train on the bridge, gulls; bench, bin, puddles; grit
+//                  kicked up at each footfall.                         64 x 36
 //                                                  VO "Blurry."
-//  3  7.8 LIFT     front on, one top light over a platform in a dark gym; a
-//                  deadlift; each lockout adds pixels; chalk off the floor.
-//                                                  96 x 54 -> 128 x 72
+//  3  7.8 LIFT     front on, one top light over a platform in a blockwork gym with
+//                  dawn in the high windows; a deadlift; each lockout adds pixels;
+//                  chalk off the floor. A heavy bag swings, a fan turns, someone
+//                  curls at the dumbbell rack.          96 x 54 -> 128 x 72
 //                                                  VO "So you trained." "Every rep, another pixel."
 //  4 11.8 FACE     profile close-up, the held breath: a drop of sweat runs, hangs
 //                  at the chin and falls, and the picture snaps to full resolution.
-//  5 15.6 REVEAL   front, against a concrete wall: a silhouette, then the key light
-//                  comes up on him. The red square on his chest.       384 x 216
-//  6 19.4 SLATE    the wordmark resolves out of fat cells; tagline; legal.
+//                  Behind him, out of focus, a window, lamps as discs, a passer-by.
+//  5 15.6 REVEAL   front, in the gym a stop out of focus (steel windows, shafts of
+//                  morning with dust, a kettlebell swing against the glass, rope,
+//                  chalk bowl, squat rack): a silhouette, then the key light comes
+//                  up on him. The red square on his chest.             384 x 216
+//  6 19.4 SLATE    the wordmark resolves out of fat cells over the empty gym, far
+//                  out of focus and darkened; tagline; legal.
 //                                                  VO "Hi-Res Gym. Train your resolution."
 //
 // Every frame is a pure function of the ad clock. The runner and the lifter are
-// procedural (adult proportions, IK, lit by stacked silhouette layers); the
-// close-up and the reveal are baked once with per-pixel light (the distance to
-// the edge that faces the light, quantised to the palette ramp) and drawn with
-// a breathing offset. The low resolution is a real downsample of the finished
+// procedural (adult proportions, IK, lit by stacked silhouette layers), and the
+// same rig, small and soft, gives each gym its other people; the close-up and the
+// reveal are baked once with per-pixel light (the distance to the edge that faces
+// the light, quantised to the palette ramp) and drawn with a breathing offset.
+// Sets are baked plates; what moves in them (steam, dust, a bag, a fan, people)
+// is drawn live. Out-of-focus plates are painted crisp, averaged down and back
+// up, then re-dithered onto the grey ramp; plates only ever seen through the
+// mosaic are smooth blends instead (a 4 px dither aliases on 3 and 6 px cells). The low resolution is a real downsample of the finished
 // frame through pooled canvases. Nothing is allocated per frame, and every bake
 // is done during the first shot.
 import { P, W, H, A, R, drawText, measureText, motes, prog, lerp } from './kit.js';
@@ -211,6 +224,30 @@ function* ditherField(c, x0, y0, w, h, ramp, f) {
   }
   c.putImageData(img, x0, y0);
 }
+/**
+ * Bake-time smooth field: f(x, y) -> 0..1 blends along a colour ramp. For plates
+ * that are only ever seen through the mosaic (a 4 px dither aliases on 3 and 6 px cells).
+ */
+function* smoothField(c, x0, y0, w, h, ramp, f) {
+  const img = c.getImageData(x0, y0, w, h);
+  const d = img.data;
+  const rgb = ramp.map(rgbOf);
+  const n = ramp.length - 1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const v = c01(f(x0 + x, y0 + y)) * n;
+      const i = min(n - 1, floor(v));
+      const k = v - i;
+      const o = (y * w + x) * 4;
+      d[o] = rgb[i][0] + (rgb[i + 1][0] - rgb[i][0]) * k;
+      d[o + 1] = rgb[i][1] + (rgb[i + 1][1] - rgb[i][1]) * k;
+      d[o + 2] = rgb[i][2] + (rgb[i + 1][2] - rgb[i][2]) * k;
+      d[o + 3] = 255;
+    }
+    if (y % SLICE === SLICE - 1) yield;
+  }
+  c.putImageData(img, x0, y0);
+}
 /** Bake-time light pool in four Bayer-dithered steps (no visible rings). */
 function* glowBake(c, cx, cy, rx, ry, hex, a) {
   const x0 = max(0, floor(cx - rx));
@@ -253,6 +290,58 @@ function* shadeBake(c, x0, y0, w, h, k, f) {
     if (y % SLICE === SLICE - 1) yield;
   }
   c.putImageData(img, x0, y0);
+}
+/**
+ * Bake-time: put what is on the canvas back on a grey ramp (dark to light) by
+ * luminance, Bayer-dithered, so a softened (averaged) plate stays pixel art.
+ */
+function* requant(c, x0, y0, w, h, ramp) {
+  const img = c.getImageData(x0, y0, w, h);
+  const d = img.data;
+  const rgb = ramp.map(rgbOf);
+  const lum = rgb.map((q) => q[0] * 0.3 + q[1] * 0.59 + q[2] * 0.11);
+  const n = ramp.length - 1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const o = (y * w + x) * 4;
+      const L = d[o] * 0.3 + d[o + 1] * 0.59 + d[o + 2] * 0.11;
+      let i = 0;
+      while (i < n - 1 && L > lum[i + 1]) i++;
+      const f = (L - lum[i]) / (lum[i + 1] - lum[i]);
+      const k = c01(f) * 16 > BAYER[((y0 + y) & 3) * 4 + ((x0 + x) & 3)] + 0.5 ? i + 1 : i;
+      d[o] = rgb[k][0];
+      d[o + 1] = rgb[k][1];
+      d[o + 2] = rgb[k][2];
+      d[o + 3] = 255;
+    }
+    if (y % SLICE === SLICE - 1) yield;
+  }
+  c.putImageData(img, x0, y0);
+}
+/** Bake-time defocus: halve the canvas `levels` times (true averages) and blow it back up smoothed. */
+function soften(c, levels) {
+  const w = c.canvas.width;
+  const h = c.canvas.height;
+  let src = c.canvas;
+  let sw = w;
+  let sh = h;
+  for (let i = 0; i < levels; i++) {
+    const s = cpuCanvas(max(1, ceil(sw / 2)), max(1, ceil(sh / 2)));
+    s.c.imageSmoothingEnabled = true;
+    s.c.drawImage(src, 0, 0, sw, sh, 0, 0, s.cv.width, s.cv.height);
+    src = s.cv;
+    sw = s.cv.width;
+    sh = s.cv.height;
+  }
+  c.imageSmoothingEnabled = true;
+  c.drawImage(src, 0, 0, sw, sh, 0, 0, w, h);
+  c.imageSmoothingEnabled = false;
+}
+/** A flat out-of-focus disc of light (bokeh), translucent so overlaps build up. */
+function bokeh(c, x, y, r, col, a) {
+  c.globalAlpha = a;
+  ellipse(c, x, y, r, r, col);
+  c.globalAlpha = 1;
 }
 // Every canvas of this spot is CPU-backed (willReadFrequently): a frame is
 // thousands of 1 px spans, cheap for the CPU rasteriser but one draw call each
@@ -603,9 +692,20 @@ function nearLimbs(ctx, rim, core, dx, dy) {
 // Close enough that at 48 x 27 the shape still reads: a man under a lamp. The
 // camera creeps sideways and in, so the coarse cells visibly crawl: live footage.
 const LOCK_W = W + 32;
+// The room is dressed in big shapes that survive 8 px cells: a lit shower doorway
+// at the left breathing steam into the room, a towel over a locker door, an open
+// locker, a bag and trainers on the tiles, a shaker on the bench, and at the right
+// a corridor door whose wired-glass pane flickers with a failing tube.
+const DOOR_X = 8; // the shower doorway (bake x)
+const DOOR_W = 38;
+const EXIT_X = 362; // the corridor door
 const LOCKER_JOB = ['hg-locker', LOCK_W, H, function* (c) {
   R(c, 0, 0, LOCK_W, H, P.black);
-  for (let k = 0; k < 13; k++) {
+  // a cable tray and a pipe under the ceiling
+  R(c, 0, 18, LOCK_W, 3, P.ink);
+  R(c, 0, 21, LOCK_W, 1, P.slate);
+  for (let x = 6; x < LOCK_W; x += 40) R(c, x, 14, 2, 5, P.ink);
+  for (let k = 1; k < 11; k++) {
     const x = 8 + k * 32;
     R(c, x, 24, 31, 150, P.steel);
     R(c, x, 24, 31, 1, P.fog);
@@ -613,17 +713,111 @@ const LOCKER_JOB = ['hg-locker', LOCK_W, H, function* (c) {
     R(c, x + 30, 24, 1, 150, P.slate);
     for (let v = 0; v < 5; v++) R(c, x + 8, 34 + v * 4, 15, 1, P.slate);
     R(c, x + 23, 100, 3, 12, P.fog);
+    // number plate, a scuffed kick plate at the foot
+    R(c, x + 12, 28, 7, 3, P.silver);
+    R(c, x + 13, 29, 5, 1, P.slate);
+    R(c, x + 1, 160, 29, 14, P.slate);
+    R(c, x + 1, 160, 29, 1, P.fog);
+    if (hash(k + 5) > 0.5) R(c, x + 4 + floor(hash(k + 6) * 18), 164 + floor(hash(k + 7) * 6), 5, 1, P.ink);
   }
+  // the open locker (k 8): dark inside, a hoodie on the hook, the door swung towards us
+  {
+    const x = 8 + 8 * 32;
+    R(c, x + 1, 25, 29, 148, P.black);
+    R(c, x + 2, 36, 27, 2, P.ink);
+    R(c, x + 2, 36, 27, 1, P.slate);
+    R(c, x + 14, 38, 3, 4, P.slate);
+    pt(x + 8, 46);
+    pt(x + 13, 41);
+    pt(x + 18, 41);
+    pt(x + 23, 46);
+    pt(x + 25, 104);
+    pt(x + 6, 104);
+    fillPts(c, P.ink);
+    ellipse(c, x + 15.5, 46, 6, 6, P.slate);
+    ellipse(c, x + 15.5, 47, 4, 4, P.black);
+    R(c, x + 8, 47, 1, 56, P.slate);
+    R(c, x + 10, 98, 12, 1, P.slate);
+    R(c, x + 4, 150, 23, 22, P.ink);
+    R(c, x + 4, 150, 23, 1, P.slate);
+    pt(x + 31, 24);
+    pt(x + 41, 18);
+    pt(x + 41, 180);
+    pt(x + 31, 174);
+    fillPts(c, P.slate);
+    R(c, x + 31, 24, 1, 150, P.silver);
+    for (let v = 0; v < 5; v++) R(c, x + 34, 36 + v * 4, 5, 1, P.ink);
+  }
+  // a towel thrown over the door of locker 4
+  {
+    const x = 8 + 4 * 32 + 9;
+    R(c, x - 1, 21, 15, 4, P.silver);
+    R(c, x, 25, 13, 50, P.fog);
+    R(c, x, 25, 2, 50, P.silver);
+    R(c, x + 9, 25, 1, 50, P.steel);
+    for (let i = 0; i < 13; i += 2) R(c, x + i, 75, 1, 2, P.fog);
+  }
+  // the corridor door at the right, its pane dark until the tube is drawn over it
+  R(c, EXIT_X - 4, 24, 2, 150, P.slate);
+  R(c, EXIT_X - 2, 26, 46, 148, P.ink);
+  R(c, EXIT_X - 2, 26, 46, 1, P.slate);
+  R(c, EXIT_X + 9, 54, 18, 32, P.black);
+  R(c, EXIT_X + 30, 104, 8, 3, P.steel);
+  R(c, EXIT_X - 2, 158, 46, 16, P.slate);
+  // tiles: grout lines running towards us from under the lockers
   R(c, 0, 174, LOCK_W, 2, P.ink);
   const cx = LOCK_W / 2;
+  for (let k = -9; k <= 9; k++) line(c, cx + k * 22, 176, cx + k * 46, 216, P.ink);
+  for (const y of [181, 189, 200]) R(c, 0, y, LOCK_W, 1, P.ink);
   yield* shadeBake(c, 0, 0, LOCK_W, H, 0.6, (x, y) => hypot((x - cx) / 130, (y - 70) / 120) - 0.25);
   yield* shadeBake(c, 0, 0, LOCK_W, H, 0.55, (x, y) => hypot((x - cx) / 170, (y - 70) / 150) - 0.4);
   yield* shadeBake(c, 0, 0, LOCK_W, H, 0.5, (x, y) => hypot((x - cx) / 220, (y - 70) / 190) - 0.55);
   yield* glowBake(c, cx, 192, 150, 22, P.slate, 0.9);
+  // the shower doorway: white tile lit from inside, brightest where the water falls
+  R(c, DOOR_X - 2, 26, DOOR_W + 4, 150, P.ink);
+  yield* ditherField(c, DOOR_X, 30, DOOR_W, 144, [P.slate, P.steel, P.fog, P.silver], (x, y) => 0.2 + (y - 30) / 230 + (1 - abs(x - DOOR_X - 24) / 26) * 0.32);
+  for (let y = 34; y < 174; y += 7) R(c, DOOR_X, y, DOOR_W, 1, A(P.slate, 0.6));
+  for (let x = DOOR_X + 4; x < DOOR_X + DOOR_W; x += 7) R(c, x, 30, 1, 144, A(P.slate, 0.5));
+  R(c, DOOR_X, 30, 8, 144, P.slate); // the partition's edge
+  R(c, DOOR_X + 7, 30, 1, 144, P.fog);
+  R(c, DOOR_X + 20, 46, 8, 3, P.ink); // the shower head
+  R(c, DOOR_X + 26, 38, 2, 9, P.ink);
+  R(c, DOOR_X - 2, 26, DOOR_W + 4, 4, P.ink);
+  R(c, DOOR_X - 2, 29, DOOR_W + 4, 1, P.slate);
+  R(c, DOOR_X + DOOR_W, 30, 2, 144, P.slate);
+  yield* glowBake(c, DOOR_X + DOOR_W / 2, 182, 70, 14, P.steel, 0.7);
+  // the bench and what is on it: a folded towel, a roll of tape, a shaker
   R(c, cx - 122, 160, 244, 2, P.steel);
   R(c, cx - 122, 162, 244, 5, P.slate);
   R(c, cx - 122, 167, 244, 1, P.black);
   for (const x of [cx - 106, cx + 102]) R(c, x, 168, 5, 30, P.ink);
+  R(c, cx - 92, 152, 30, 8, P.fog);
+  R(c, cx - 92, 152, 30, 1, P.silver);
+  R(c, cx - 92, 155, 30, 1, P.steel);
+  R(c, cx - 92, 158, 30, 1, P.steel);
+  ellipse(c, cx - 48, 157, 4, 3, P.silver);
+  ellipse(c, cx - 48, 157, 1.5, 1.2, P.slate);
+  R(c, cx + 42, 146, 9, 14, P.steel);
+  R(c, cx + 43, 146, 2, 14, P.silver);
+  R(c, cx + 49, 146, 1, 14, P.slate);
+  R(c, cx + 41, 142, 11, 4, P.slate);
+  R(c, cx + 41, 142, 11, 1, P.white);
+  R(c, cx + 44, 140, 5, 2, P.fog);
+  // under the bench, trainers; in front of it, a holdall
+  for (const x of [cx - 72, cx - 58]) {
+    R(c, x, 170, 12, 4, P.ink);
+    R(c, x + 2, 168, 7, 2, P.ink);
+    R(c, x, 173, 12, 1, P.fog);
+  }
+  ellipse(c, cx + 62, 186, 7, 9, P.ink);
+  ellipse(c, cx + 112, 186, 7, 9, P.ink);
+  R(c, cx + 62, 177, 50, 18, P.ink);
+  R(c, cx + 62, 177, 50, 1, P.steel);
+  R(c, cx + 64, 180, 46, 1, P.black);
+  ellipse(c, cx + 114, 186, 4, 7, P.slate);
+  line(c, cx + 76, 178, cx + 84, 171, P.slate);
+  line(c, cx + 84, 171, cx + 94, 171, P.slate);
+  line(c, cx + 94, 171, cx + 102, 178, P.slate);
   R(c, cx - 1, 0, 1, 10, P.ink);
   pt(cx - 10, 20);
   pt(cx + 10, 20);
@@ -695,13 +889,34 @@ function seated(c, x, seatY, u, bow, rise) {
     rimCap(c, jx, jy, ex, ey, 0.27 * u, 0.21 * u, P.black, P.fog);
     rimCap(c, ex, ey, x + sd * 0.16 * u, seatY + 0.78 * u, 0.2 * u, 0.15 * u, P.black, P.slate);
   }
-  ellipse(c, x, seatY + 0.86 * u, 0.24 * u, 0.2 * u, P.ink);
-  ellipse(c, x, seatY + 0.82 * u, 0.2 * u, 0.12 * u, P.slate);
+  // the clasped hands, already taped: the wraps catch the top light
+  ellipse(c, x, seatY + 0.86 * u, 0.24 * u, 0.2 * u, P.slate);
+  ellipse(c, x, seatY + 0.82 * u, 0.2 * u, 0.12 * u, P.silver);
 }
 function shotLocker(c, lt) {
   // a slow creep sideways and in: 3 px a second
   const drift = lt * 3.2;
-  c.drawImage(locker(), -round(4 + drift), 0);
+  const ox = -round(4 + drift);
+  c.drawImage(locker(), ox, 0);
+  // water falling in the shower beyond the doorway
+  for (let k = 0; k < 9; k++) {
+    const y = 50 + mod(lt * 150 + hash(k + 200) * 124, 124);
+    R(c, ox + DOOR_X + 18 + floor(hash(k + 210) * 14), y, 1, 6, A(P.white, 0.55));
+  }
+  // the corridor tube: steady, then a stutter now and then
+  const fl = hash(floor(lt * 14) + 31);
+  const tube = fl > 0.86 ? P.slate : fl > 0.78 ? P.steel : P.fog;
+  R(c, ox + EXIT_X + 10, 55, 16, 30, tube);
+  R(c, ox + EXIT_X + 10, 55, 16, 2, fl > 0.86 ? P.steel : P.silver);
+  for (let y = 59; y < 85; y += 6) R(c, ox + EXIT_X + 10, y, 16, 1, P.ink);
+  for (let x = 14; x < 26; x += 6) R(c, ox + EXIT_X + x, 55, 1, 30, P.ink);
+  // steam rolls out of the doorway, rising and spreading as it thins
+  for (let i = 0; i < 7; i++) {
+    const ph = mod(lt * 0.11 + i / 7, 1);
+    c.globalAlpha = 0.2 * sin(PI * ph);
+    ellipse(c, ox + DOOR_X + 26 + ph * 150 + sin(lt * 0.6 + i * 2.1) * 5, 150 - ph * 70 - hash(i + 220) * 26, 12 + ph * 30, 7 + ph * 14, P.silver);
+  }
+  c.globalAlpha = 1;
   const lift = ramp(lt, 1.0, 2.5);
   const br = (1 - cos(lt * 1.7)) / 2;
   seated(c, LOCK_W / 2 - 4 - drift * 1.15, 160 - br * 0.8, 24 + lt * 0.5, 1 - lift, lift * 0.08);
@@ -711,30 +926,71 @@ function shotLocker(c, lt) {
 const SUN_X = 92;
 const SUN_Y = 128;
 const SKY_JOB = ['hg-sky', W, H, function* (c) {
-  yield* ditherField(c, 0, 0, W, 152, [P.slate, P.steel, P.fog, P.silver], (x, y) => y / 150);
+  yield* smoothField(c, 0, 0, W, 152, [P.slate, P.steel, P.fog, P.silver], (x, y) => y / 150);
   yield* glowBake(c, SUN_X, SUN_Y, 130, 90, P.white, 0.55);
+  // long low streaks of cloud, their undersides lit by the low sun
+  for (let k = 0; k < 10; k++) {
+    const y = 26 + floor(hash(k + 50) * 78);
+    const len = 50 + floor(hash(k + 70) * 130);
+    const x0 = floor(hash(k + 60) * (W + 60)) - 30;
+    const th = 1 + floor(hash(k + 80) * 3);
+    const lit = abs(x0 + len / 2 - SUN_X) < 150 ? P.silver : P.fog;
+    for (let r = 0; r < th; r++) R(c, x0 + 6 - r * 3, y + r, len - 12 + r * 6, 1, P.steel);
+    R(c, x0 + 4 - th * 3, y + th, len - 8 + th * 6, 1, lit);
+  }
   ellipse(c, SUN_X, SUN_Y, 15, 15, P.white);
   R(c, 0, 146, W, 6, P.fog);
   R(c, 0, 146, W, 1, P.white);
 }];
 const sky = () => bakeJob(SKY_JOB);
+// The far bank, against the light: towers with a few lit windows, water tanks,
+// two tower cranes, a chimney (its steam is drawn live) and the bridge.
 const CITY_W = 512;
-const city = () => bake('hg-city', CITY_W, 60, (c) => {
+const CITY_H = 84;
+const CITY_Y = 152 - CITY_H;
+const CHIMNEYS = [86, 18, 332, 34]; // city x, top y: where the steam leaves
+const city = () => bake('hg-city', CITY_W, CITY_H, (c) => {
+  for (const [x, jl, jr] of [[150, 34, 64], [404, 52, 30]]) {
+    for (let y = 6; y < CITY_H; y += 4) {
+      R(c, x, y, 3, 1, P.steel);
+      R(c, x + (y & 4 ? 0 : 2), y + 1, 1, 3, P.steel);
+    }
+    R(c, x - 1, 0, 5, 6, P.steel);
+    R(c, x - jl, 7, jl + jr, 2, P.steel);
+    for (let i = x - jl; i < x + jr; i += 4) R(c, i, 6, 1, 1, P.steel);
+    R(c, x - jl, 9, 7, 4, P.steel);
+    R(c, x + jr - 18, 9, 1, 22, P.steel);
+    R(c, x + jr - 19, 31, 3, 2, P.steel);
+  }
+  for (let i = 0; i < CHIMNEYS.length; i += 2) R(c, CHIMNEYS[i] - 2, CHIMNEYS[i + 1], 5, CITY_H - CHIMNEYS[i + 1], P.steel);
   for (let k = 0; k < 40; k++) {
     const w = 8 + floor(hash(k + 3) * 18);
     const h = 8 + floor(hash(k + 9) * 34) + (k % 7 === 3 ? 18 : 0);
     const x = floor(hash(k + 21) * CITY_W);
-    R(c, x, 60 - h, w, h, P.steel);
-    if (x + w > CITY_W) R(c, x - CITY_W, 60 - h, w, h, P.steel);
+    for (const bx of [x, x - CITY_W]) {
+      R(c, bx, CITY_H - h, w, h, P.steel);
+      if (k % 5 === 1) {
+        R(c, bx + 2, CITY_H - h - 6, 6, 4, P.steel);
+        R(c, bx + 3, CITY_H - h - 2, 1, 2, P.steel);
+        R(c, bx + 6, CITY_H - h - 2, 1, 2, P.steel);
+      }
+      if (k % 9 === 4) R(c, bx + floor(w / 2), CITY_H - h - 14, 1, 14, P.steel);
+      // a few windows already lit at dawn
+      for (let wy = CITY_H - h + 3; wy < CITY_H - 12; wy += 4) {
+        for (let wx = bx + 2; wx < bx + w - 2; wx += 3) if (hash(wx * 3.1 + wy * 7.7 + k) > 0.9) R(c, wx, wy, 1, 1, hash(wx + wy) > 0.5 ? P.silver : P.fog);
+      }
+    }
   }
-  R(c, 0, 50, CITY_W, 3, P.steel);
+  R(c, 0, CITY_H - 10, CITY_W, 3, P.steel);
   for (let x = 20; x < CITY_W; x += 90) {
-    R(c, x, 36, 3, 24, P.steel);
-    line(c, x + 1, 36, x - 40, 50, P.steel);
-    line(c, x + 1, 36, x + 42, 50, P.steel);
+    R(c, x, CITY_H - 24, 3, 24, P.steel);
+    line(c, x + 1, CITY_H - 24, x - 40, CITY_H - 10, P.steel);
+    line(c, x + 1, CITY_H - 24, x + 42, CITY_H - 10, P.steel);
   }
 });
-const RAIL_W = 64;
+// The embankment strip scrolls with the path: railing, river wall, paving with
+// irregular joints, puddles holding the sky, and the furniture of a promenade.
+const RAIL_W = 448;
 const rail = () => bake('hg-rail', RAIL_W, 66, (c) => {
   R(c, 0, 0, RAIL_W, 2, P.black);
   for (let x = 0; x < RAIL_W; x += 8) R(c, x, 2, 2, 12, P.black);
@@ -745,8 +1001,69 @@ const rail = () => bake('hg-rail', RAIL_W, 66, (c) => {
   R(c, 0, 40, RAIL_W, 26, P.slate);
   R(c, 0, 40, RAIL_W, 1, P.fog);
   R(c, 0, 52, RAIL_W, 1, P.ink);
-  R(c, 30, 41, 1, 25, P.ink);
+  for (let x = 30, k = 0; x < RAIL_W; x += 38 + floor(hash(k + 300) * 30), k++) {
+    R(c, x, 41, 1, 11, P.ink);
+    R(c, x + floor(hash(k + 310) * 20) - 10, 53, 1, 13, P.ink);
+  }
+  // grit and cracks
+  for (let k = 0; k < 90; k++) R(c, floor(hash(k + 320) * RAIL_W), 42 + floor(hash(k + 330) * 23), 1, 1, hash(k + 340) > 0.6 ? P.ink : P.steel);
+  // puddles: the sky in the paving, a ripple across each
+  for (const [x, y, w] of [[60, 58, 30], [210, 46, 18], [330, 60, 40]]) {
+    ellipse(c, x, y, w / 2 + 1, 3, P.ink);
+    ellipse(c, x, y - 0.5, w / 2, 2.4, P.fog);
+    R(c, x - w / 4, y - 2, w / 2, 1, P.silver);
+    R(c, x - w / 3, y, w / 3, 1, P.steel);
+  }
+  // a lifebuoy in its box on the wall
+  R(c, 128, 17, 20, 21, P.black);
+  ellipse(c, 138, 27.5, 8, 8, P.fog);
+  ellipse(c, 138, 27.5, 4, 4, P.black);
+  R(c, 130, 26, 16, 3, P.steel);
+  R(c, 137, 19, 3, 17, P.steel);
+  // a bench facing the river (back view) and a litter bin
+  R(c, 262, 26, 46, 2, P.black);
+  R(c, 262, 30, 46, 2, P.black);
+  R(c, 260, 35, 50, 3, P.black);
+  for (const x of [264, 304]) R(c, x, 26, 2, 16, P.black);
+  R(c, 262, 26, 46, 1, P.steel);
+  R(c, 318, 30, 9, 12, P.black);
+  R(c, 317, 29, 11, 2, P.ink);
+  R(c, 317, 29, 11, 1, P.steel);
+  // a mooring bollard on the edge
+  R(c, 410, 32, 7, 10, P.black);
+  R(c, 409, 30, 9, 3, P.black);
+  R(c, 409, 30, 9, 1, P.steel);
 });
+// Gulls on the wind, and the train crossing the bridge (screen space).
+const GULLS = 5;
+function farLife(c, lt, cityOff) {
+  for (let i = 0; i < GULLS; i++) {
+    const x = mod(60 + i * 53 + lt * (7 + i * 2), W + 40) - 20;
+    const y = 44 + i * 9 + sin(lt * 0.8 + i) * 3;
+    const up = sin(lt * (5 + i * 0.4) + i * 1.7) > 0.2;
+    R(c, round(x), round(y), 1, 1, P.slate);
+    R(c, round(x) - 3, round(y) - (up ? 2 : 0), 3, 1, P.slate);
+    R(c, round(x) + 1, round(y) - (up ? 2 : 0), 3, 1, P.slate);
+  }
+  // steam from the chimneys drifts off downwind, lit by the sun behind it
+  for (let i = 0; i < CHIMNEYS.length; i += 2) {
+    let sx = CHIMNEYS[i] - cityOff;
+    if (sx < -60) sx += CITY_W;
+    if (sx > W + 20) continue;
+    const sy = CITY_Y + CHIMNEYS[i + 1];
+    for (let k = 0; k < 6; k++) {
+      const ph = mod(lt * 0.22 + k / 6 + i * 0.13, 1);
+      c.globalAlpha = 0.5 * (1 - ph);
+      ellipse(c, sx + 1 - ph * 30, sy - 2 - ph * 22, 2 + ph * 8, 1.5 + ph * 5, P.silver);
+    }
+  }
+  c.globalAlpha = 1;
+  // a commuter train on the bridge deck: a dark body, a string of lit windows
+  const tx = W + 100 - mod(lt * 34 + 230, W + 260);
+  const ty = CITY_Y + CITY_H - 14;
+  R(c, round(tx), ty, 96, 4, P.slate);
+  for (let k = 0; k < 15; k++) R(c, round(tx) + 3 + k * 6, ty + 1, 3, 1, P.silver);
+}
 // Run cycle on a 0..1 phase: thigh (+ forward) and knee bend, eased between keys.
 const RUN_TH = [0, -0.5, 0.15, -0.12, 0.3, 0.45, 0.45, 0.78, 0.5, 0.66, 0.75, 0.1, 1, -0.5];
 const RUN_KN = [0, 0.35, 0.15, 1.75, 0.3, 1.3, 0.45, 0.4, 0.5, 0.2, 0.75, 0.45, 1, 0.35];
@@ -757,11 +1074,29 @@ function shotRun(c, lt) {
   c.drawImage(sky(), 0, 0);
   const scroll = lt * 64;
   const cityOff = mod(lt * 5, CITY_W);
-  c.drawImage(city(), -cityOff, 92);
-  c.drawImage(city(), CITY_W - cityOff, 92);
+  c.drawImage(city(), -round(cityOff), CITY_Y);
+  c.drawImage(city(), CITY_W - round(cityOff), CITY_Y);
+  farLife(c, lt, round(cityOff));
   const r = rail();
   for (let x = -mod(scroll, RAIL_W); x < W; x += RAIL_W) c.drawImage(r, round(x), 136);
   const p = lt / STRIDE + 0.1;
+  // grit kicked up at each footfall, left behind on the path as he moves on
+  const hipX = 176 + sin(lt * 0.9) * 2;
+  for (let leg = 0; leg < 2; leg++) {
+    const age = mod(p + leg * 0.5 - 0.65, 1) * STRIDE;
+    if (age > 0.5) continue;
+    const k = age / 0.5;
+    const x = hipX + 10 - age * 50;
+    c.globalAlpha = 0.45 * (1 - k);
+    ellipse(c, x - age * 14, 189 - age * 10, 2 + k * 9, 1 + k * 3, P.silver);
+    c.globalAlpha = 1;
+    for (let g = 0; g < 4; g++) {
+      const vx = -20 - hash(g + leg * 7 + 400) * 40;
+      const vy = -26 - hash(g + leg * 7 + 410) * 22;
+      const y = 189 + vy * age + 90 * age * age;
+      if (y < 190) R(c, round(x + vx * age), round(y), 1, 1, A(P.fog, 1 - k));
+    }
+  }
   J.f = 1;
   J.u = 17;
   J.lean = 0.14;
@@ -795,18 +1130,102 @@ function shotRun(c, lt) {
 }
 
 // --- 3. the lift: front on, one top light, a deadlift -------------------------------------
-// The gym is dressed but kept in the dark: a plate tree and a bench at the edges of
-// the light, a mirror's edge, chalk marks on the platform; dust turns in the cone.
+// The platform is the only bright thing; the room around it is a real one in the
+// half-dark: a plate tree and a bench at the edges of the light, a mirror's edge,
+// chalk marks on the platform; dust turns in the cone.
 const LX = 192; // the lifter's centre line
 const LFY = 186; // the platform
 const LU = 18; // head height
+// Around him the room is a real one at the edge of the light: blockwork, two high
+// windows with the dawn in them (a heavy bag hangs against one, a fan turns under
+// the other), a dumbbell rack where someone is curling, kettlebells, a rope, a
+// chalk bowl by the mirror.
+const WIN_L = 14; // the high windows' left edges, 72 px wide
+const WIN_R = 298;
 const GYM_JOB = ['hg-gym', W, H, function* (c) {
-  R(c, 0, 0, W, H, P.black);
-  yield* glowBake(c, LX, 84, 160, 104, P.ink, 0.95);
+  // back wall: blockwork, lit from the lamp, dark at the edges
+  yield* smoothField(c, 0, 0, W, 150, [P.black, P.ink, P.slate], (x, y) => 0.66 - hypot((x - LX) / 250, (y - 80) / 170));
+  for (let y = 26; y < 150; y += 12) {
+    R(c, 0, y, W, 1, A(P.black, 0.6));
+    for (let x = (y / 12) & 1 ? 0 : 12; x < W; x += 24) R(c, x, y + 1, 1, 11, A(P.black, 0.5));
+  }
+  R(c, 0, 18, W, 6, P.black);
+  R(c, 0, 24, W, 1, P.ink);
+  // the floor plane up to the wall, seams running to the platform
+  yield* smoothField(c, 0, 150, W, 28, [P.black, P.ink], (x, y) => 0.75 - hypot((x - LX) / 210, (y - 172) / 60));
+  for (let k = -8; k <= 8; k++) line(c, LX + k * 26, 150, LX + k * 62, 178, P.black);
+  R(c, 0, 149, W, 1, P.black);
+  // the high windows: steel frames, the dawn graded in the panes
+  for (const wx of [WIN_L, WIN_R]) {
+    R(c, wx - 2, 28, 76, 42, P.black);
+    yield* smoothField(c, wx, 30, 72, 38, [P.slate, P.steel, P.fog], (x, y) => 0.85 - (y - 30) / 52 - abs(x - wx - 36) / 160);
+    for (let i = 1; i < 4; i++) R(c, wx + i * 18 - 1, 30, 2, 38, P.black);
+    R(c, wx, 48, 72, 2, P.black);
+    R(c, wx - 3, 70, 78, 2, P.slate);
+    R(c, wx - 3, 70, 78, 1, P.steel);
+  }
+  // window light falling across the left of the room, and its patch on the floor
+  c.globalAlpha = 0.035;
+  for (let k = 0; k < 3; k++) {
+    pt(WIN_L + 4 + k * 6, 68);
+    pt(WIN_L + 68 - k * 6, 68);
+    pt(WIN_L + 120 - k * 6, 152);
+    pt(WIN_L + 56 + k * 6, 152);
+    fillPts(c, P.silver);
+  }
+  c.globalAlpha = 1;
+  yield* glowBake(c, WIN_L + 88, 156, 44, 6, P.slate, 0.7);
+  // an unlit pendant over the left of the room
+  R(c, 92, 18, 1, 8, P.ink);
+  pt(86, 32);
+  pt(98, 32);
+  pt(95, 26);
+  pt(89, 26);
+  fillPts(c, P.black);
+  R(c, 86, 32, 12, 1, P.ink);
+  yield* glowBake(c, LX, 84, 160, 104, P.ink, 0.6);
+  // the dumbbell rack along the wall, heads end-on, each catching a glint on top
+  for (const [y, r0] of [[123, 3.4], [138, 4.4]]) {
+    for (let i = 0; i < 10; i++) {
+      const x = 238 + i * 9.4;
+      const r = r0 - i * 0.14;
+      ellipse(c, x, y, r, r, P.black);
+      R(c, round(x - 1), round(y - r), 2, 1, P.steel);
+      R(c, round(x), round(y), 1, 1, P.ink);
+    }
+    R(c, 232, y + 4, 94, 2, P.ink);
+    R(c, 232, y + 4, 94, 1, P.slate);
+  }
+  R(c, 232, 116, 3, 34, P.ink);
+  R(c, 323, 116, 3, 34, P.ink);
+  R(c, 232, 116, 3, 1, P.slate);
+  R(c, 323, 116, 3, 1, P.slate);
+  // kettlebells on the floor between the plate tree and the platform
+  for (const [kx, r] of [[92, 6], [106, 5], [118, 4]]) {
+    const ky = 172;
+    ellipse(c, kx, ky - r, r, r * 0.95, P.black);
+    R(c, kx - r * 0.6, ky - 1, r * 1.2, 1, P.black);
+    R(c, kx - r * 0.6, ky - 2 * r - 3, 1, 4, P.ink);
+    R(c, kx + r * 0.6 - 1, ky - 2 * r - 3, 1, 4, P.ink);
+    R(c, kx - r * 0.6, ky - 2 * r - 4, r * 1.2, 1, P.steel);
+    R(c, kx - r * 0.5, ky - 2 * r + 1, r, 1, P.steel);
+    R(c, kx - r * 0.8, ky - 2 * r + 2, r * 0.5, r, P.slate);
+  }
   // a mirror wall's edge, far right, catching a sliver of the light
   R(c, 330, 30, 1, 150, P.slate);
-  R(c, 331, 30, 40, 150, P.ink);
-  yield* shadeBake(c, 331, 30, 40, 150, 0.6, (x) => (x - 333) / 30);
+  yield* smoothField(c, 331, 30, 40, 150, [P.ink, P.black], (x) => (x - 331) / 36);
+  c.globalAlpha = 0.12;
+  for (let k = 0; k < 2; k++) line(c, 336 + k * 12, 120, 358 + k * 12, 40, P.fog);
+  c.globalAlpha = 1;
+  // the chalk bowl on its stand in front of the mirror, chalk spilled at its foot
+  R(c, 350, 150, 4, 28, P.ink);
+  R(c, 350, 150, 1, 28, P.slate);
+  R(c, 342, 176, 20, 3, P.ink);
+  ellipse(c, 352, 147, 11, 4, P.slate);
+  ellipse(c, 352, 145.5, 10, 2.5, P.silver);
+  R(c, 342, 145, 20, 1, P.fog);
+  R(c, 350, 145, 4, 1, P.white);
+  for (let k = 0; k < 9; k++) R(c, 340 + floor(hash(k + 500) * 26), 178 + floor(hash(k + 510) * 4), 1 + (k & 1), 1, A(P.silver, 0.5));
   // plate tree at the left: a post with three plates seen edge-on, top-lit
   R(c, 66, 92, 4, 86, P.ink);
   R(c, 66, 92, 4, 1, P.slate);
@@ -823,6 +1242,13 @@ const GYM_JOB = ['hg-gym', W, H, function* (c) {
   R(c, 274, 156, 4, 24, P.black);
   R(c, 310, 156, 4, 24, P.black);
   R(c, 270, 178, 46, 2, P.ink);
+  // a towel over its end, a bottle on the floor beside it
+  R(c, 264, 148, 9, 15, P.slate);
+  R(c, 264, 148, 9, 1, P.fog);
+  R(c, 264, 151, 1, 12, P.steel);
+  R(c, 324, 166, 5, 12, P.slate);
+  R(c, 324, 166, 1, 12, P.steel);
+  R(c, 325, 163, 3, 3, P.ink);
   // platform: dark boards, chalk marks, the light pool and its reflection
   R(c, 0, 178, W, 38, P.black);
   R(c, 64, LFY - 8, 256, 10, P.ink);
@@ -905,8 +1331,72 @@ function plateEdge(c, x, y, dir) {
   R(c, x + dir * 11, y - 2, 3 * dir, 1, P.fog);
 }
 const MOTES = { x: 112, y: 30, w: 160, h: 140, n: 26, seed: 7, drift: 5, fall: 1, color: P.silver, alpha: 0.45, inside: null };
+const BEAM_MOTES = { x: WIN_L, y: 72, w: 120, h: 78, n: 14, seed: 11, drift: 4, fall: 0.6, color: P.fog, alpha: 0.5, inside: null };
+const CHALK_HAZE = { x: 340, y: 118, w: 24, h: 26, n: 7, seed: 13, drift: 3, fall: -2.5, color: P.silver, alpha: 0.4, inside: null };
+/** A climbing rope from y0 down to y1, its foot swung `sw` px; the twist catches the light. */
+function rope(c, x0, y0, y1, sw, base, lit) {
+  const n = y1 - y0;
+  for (let i = 0; i < n; i++) {
+    const q = i / n;
+    const x = round(x0 + sw * q * q);
+    R(c, x, y0 + i, 3, 1, base);
+    R(c, x + ((y0 + i) % 3 === 0 ? 0 : 1), y0 + i, 1, 1, lit);
+  }
+  ellipse(c, x0 + sw + 1.5, y1 + 1, 7, 2, base);
+  R(c, round(x0 + sw - 4), y1, 9, 1, lit);
+}
+/** A standing figure (the runner's rig) curling a dumbbell with the near arm. */
+function poseCurl(ax, footY, u, f, lt) {
+  J.f = f;
+  J.u = u;
+  J.lean = 0.03;
+  J.head = 0.06;
+  solveTrunk(ax, footY - 3.2 * u);
+  solveLegFK(0, 0.07, 0.05, 0);
+  solveLegFK(2, -0.07, 0.03, 0);
+  const s = (1 - cos(lt * TAU / 2.4)) / 2; // 0 arm down, 1 curled
+  solveArm(0, 0.06 + 0.12 * s, 0.12 + 2.25 * s);
+  solveArm(2, 0.04, 0.14);
+}
+/** The room's own life around the lift: the bag, the rope, the fan, the other lifter, dust. */
+function gymLife(c, lt) {
+  // the heavy bag against the left window, still swinging from someone's last round
+  const th = 0.05 * sin(lt * 2.7 + 1.1);
+  const bx = 28 + sin(th) * 20;
+  line(c, 28, 18, bx, 38, P.black);
+  capsule(c, bx, 46, 28 + sin(th) * 96, 112, 12, 12, P.slate);
+  capsule(c, bx + 1, 46, 29 + sin(th) * 96, 112, 11, 11, P.black);
+  R(c, round(bx) - 10, 58, 20, 2, P.ink);
+  R(c, round(28 + sin(th) * 92) - 11, 102, 22, 2, P.ink);
+  // a climbing rope, barely moving
+  rope(c, 128, 25, 168, sin(lt * 1.3) * 1.5, P.ink, P.slate);
+  // the fan under the right window
+  const a0 = lt * 1.6;
+  R(c, 300, 18, 1, 7, P.black);
+  for (let b = 0; b < 5; b++) {
+    const a = a0 + (b * TAU) / 5;
+    const tx = 300 + cos(a) * 54;
+    const ty = 27 + sin(a) * 5;
+    line(c, 300, 26, tx, ty, P.black);
+    line(c, 300, 27, tx, ty + 1, P.black);
+  }
+  ellipse(c, 300, 26.5, 5, 2.5, P.black);
+  // at the rack, someone curls, slower than the man on the platform
+  poseCurl(296, 151, 7.5, 1, lt + 0.7);
+  paintSide(c, P.slate, -1, 0);
+  paintSide(c, P.black, 0, 0);
+  const hx = J.hand[0];
+  const hy = J.hand[1];
+  R(c, round(hx) - 3, round(hy), 7, 1, P.ink);
+  ellipse(c, hx - 3, hy + 0.5, 1.6, 2.2, P.black);
+  ellipse(c, hx + 3, hy + 0.5, 1.6, 2.2, P.black);
+  R(c, round(hx) - 4, round(hy) - 2, 2, 1, P.slate);
+  motes(c, lt + 5, BEAM_MOTES);
+  motes(c, lt, CHALK_HAZE);
+}
 function shotLift(c, lt) {
   c.drawImage(gym(), 0, 0);
+  gymLife(c, lt);
   motes(c, lt + 20, MOTES);
   const q = keys(lt, LIFT_Q);
   solveLifter(q);
@@ -1017,10 +1507,44 @@ function localPts(arr) {
   for (let i = 0; i < arr.length; i += 2) pt(fx(arr[i]), fy(arr[i + 1]));
 }
 const EAR = [42, 47, 46, 48, 47.5, 52, 47, 58, 45.5, 62, 44, 66, 41, 66.5, 39.5, 63, 39, 58, 38.5, 52, 40, 48];
+// Behind him, out of focus: the gym's tall window, a rack upright, the lamps as
+// discs of light. Someone walks past in the far background (drawn live).
 const FACE_BG_JOB = ['hg-face-bg', W, H, function* (c) {
   yield* ditherField(c, 0, 0, W, H, [P.black, P.ink, P.slate], (x, y) => 0.95 - hypot((x - 40) / 260, (y - 90) / 200) * 1.1);
   yield* glowBake(c, 340, 100, 90, 110, P.ink, 0.6);
+  yield* glowBake(c, 332, 92, 50, 120, P.steel, 0.7);
+  yield* glowBake(c, 332, 80, 30, 80, P.fog, 0.45);
+  yield* glowBake(c, 334, 66, 14, 40, P.silver, 0.3);
+  // the window's bars, soft
+  yield* shadeBake(c, 300, 0, 64, H, 0.8, (x) => 1 - abs(x - 320) / 6);
+  yield* shadeBake(c, 300, 0, 64, H, 0.8, (x) => 1 - abs(x - 346) / 6);
+  yield* shadeBake(c, 280, 60, 104, 50, 0.82, (x, y) => 1 - abs(y - 86) / 6);
+  // a rack upright close behind him, very soft
+  yield* shadeBake(c, 244, 0, 40, H, 0.55, (x) => 1 - abs(x - 262) / 10);
+  yield* shadeBake(c, 244, 0, 40, H, 0.7, (x) => 1 - abs(x - 262) / 5);
+  // the lamps and a glint off the plates, as discs
+  bokeh(c, 282, 34, 9, P.steel, 0.35);
+  bokeh(c, 290, 38, 6, P.fog, 0.25);
+  bokeh(c, 366, 26, 7, P.fog, 0.3);
+  bokeh(c, 244, 54, 5, P.steel, 0.3);
+  bokeh(c, 308, 156, 12, P.slate, 0.45);
+  bokeh(c, 372, 174, 8, P.steel, 0.25);
+  bokeh(c, 236, 184, 6, P.slate, 0.4);
 }];
+const FACE_MOTES = { x: 226, y: 20, w: 158, h: 170, n: 22, seed: 17, drift: 6, fall: 1.2, color: P.silver, alpha: 0.35, inside: null };
+/** A figure walks past far behind, out of focus: a soft dark shape, a slight bob. */
+function facePasser(c, lt) {
+  const x = 404 - lt * 60;
+  if (x < 150 || x > 430) return;
+  const bob = abs(sin(lt * PI * 1.8)) * 1.5;
+  c.globalAlpha = 0.6;
+  ellipse(c, x, 92 - bob, 7, 8, P.black);
+  capsule(c, x, 104 - bob, x - 1, 150 - bob, 9, 8, P.black);
+  ellipse(c, x, 112 - bob, 16, 9, P.black);
+  capsule(c, x - 3, 150 - bob, x - 6 + sin(lt * PI * 1.8) * 5, 216, 6, 5, P.black);
+  capsule(c, x + 3, 150 - bob, x + 4 - sin(lt * PI * 1.8) * 5, 216, 6, 5, P.black);
+  c.globalAlpha = 1;
+}
 const faceBg = () => bakeJob(FACE_BG_JOB);
 // The close-up is lit as a height field inside the drawn profile: the face's
 // depth grows with the distance from its outline (a rounded solid), plus sculpted
@@ -1258,6 +1782,8 @@ function drop(c, x, y, stretch) {
 }
 function shotFace(c, lt) {
   c.drawImage(faceBg(), 0, 0);
+  facePasser(c, lt);
+  motes(c, lt + 8, FACE_MOTES);
   const fo = -round(((1 - cos(lt * 1.6)) / 2) * 1.2);
   c.drawImage(faceArt(), 0, fo);
   const slideEnd = 1.95;
@@ -1549,7 +2075,7 @@ function* sculpt(prims, x0, y0, x1, y1, idx, zb, mt, dark) {
   }
 }
 
-// --- 5. the reveal: three-quarter, split-lit against concrete -----------------------------------
+// --- 5. the reveal: three-quarter, split-lit, in the gym ---------------------------------------
 // The hero frame at full resolution: a sculpted athlete turned three-quarters
 // towards the key light, looking off past the lens into the light, sweat
 // catching it. Baked twice: in the dark (only the back light's rim) and lit; the
@@ -1557,20 +2083,154 @@ function* sculpt(prims, x0, y0, x1, y1, idx, zb, mt, dark) {
 // stepped a pixel at a time.
 const RX = 214; // the figure's centre line
 const RYAW = 0.62; // body turned three-quarters to screen left
-const CONCRETE_JOB = ['hg-concrete', W, H, function* (c) {
-  yield* ditherField(c, 0, 0, W, H, [P.black, P.ink, P.slate], (x, y) => 0.92 - hypot((x - 120) / 250, (y - 70) / 180) * 1.1);
-  // formwork seams and tie holes, kept away from his head
-  for (const x of [52, 150, 352]) R(c, x, 0, 1, H, A(P.black, 0.6));
-  R(c, 0, 150, W, 1, A(P.black, 0.5));
-  for (let gx = 22; gx < W; gx += 58) {
-    for (let gy = 40; gy < 200; gy += 56) {
+// The room behind him, a stop out of focus: two tall steel windows at the left
+// (the morning comes through them in shafts, live), someone swinging a kettlebell
+// against the glass, a chalk bowl, a rope; at the right, in his shadow side, a
+// squat rack with a loaded bar, plates against it and a board of tally marks.
+// Painted crisp, then softened and put back on the grey ramp with a dither.
+const RWIN = [8, 70]; // window bays: left edges, 54 px wide, y 26..138
+const GYMBG_JOB = ['hg-gymbg', W, H, function* (c) {
+  // concrete, lighter towards the windows
+  yield* ditherField(c, 0, 0, W, 168, [P.black, P.ink, P.slate], (x, y) => 0.92 - hypot((x - 70) / 290, (y - 80) / 190) * 1.1);
+  for (const x of [146, 262]) R(c, x, 0, 1, 166, A(P.black, 0.6));
+  for (let gx = 150; gx < W; gx += 58) {
+    for (let gy = 40; gy < 160; gy += 56) {
       if (abs(gx - RX) < 60 && gy < 140) continue;
       R(c, gx, gy, 2, 2, A(P.black, 0.7));
-      R(c, gx + 1, gy + 2, 2, 1, A(P.steel, 0.35));
     }
   }
+  R(c, 0, 18, W, 5, P.black);
+  R(c, 0, 23, W, 1, P.ink);
+  // the windows: steel frames, the panes bright with morning, a block opposite
+  for (const wx of RWIN) {
+    R(c, wx - 2, 24, 58, 116, P.black);
+    yield* ditherField(c, wx, 26, 54, 112, [P.slate, P.steel, P.fog, P.silver], (x, y) => 0.88 - (y - 26) / 140 - abs(x - 66) / 220);
+    R(c, wx, 104 - (wx & 7), 54, 34 + (wx & 7), A(P.steel, 0.55));
+    for (let i = 1; i < 3; i++) R(c, wx + i * 18 - 1, 26, 2, 112, P.black);
+    for (let j = 1; j < 6; j++) R(c, wx, 26 + round(j * 18.7) - 1, 54, 2, P.black);
+    R(c, wx - 3, 138, 60, 3, P.fog);
+    R(c, wx - 3, 141, 60, 2, P.slate);
+  }
+  // rubber floor: the window light lying across it, seams running to the lens
+  yield* ditherField(c, 0, 168, W, 48, [P.black, P.ink, P.slate], (x, y) => 0.62 - hypot((x - 90) / 260, (y - 176) / 50));
+  for (let k = -9; k <= 9; k++) line(c, 200 + k * 24, 168, 200 + k * 60, 216, A(P.black, 0.7));
+  for (const y of [174, 184, 200]) R(c, 0, y, W, 1, A(P.black, 0.6));
+  yield* glowBake(c, 120, 186, 80, 12, P.steel, 0.6);
+  R(c, 0, 166, W, 2, P.ink);
+  // kettlebells along the wall under the window, top-lit
+  for (const [kx, r] of [[24, 6], [38, 5], [50, 4]]) {
+    const ky = 167;
+    ellipse(c, kx, ky - r, r, r * 0.95, P.black);
+    R(c, kx - r * 0.6, ky - 2 * r - 4, r * 1.2, 1, P.steel);
+    R(c, kx - r * 0.6, ky - 2 * r - 3, 1, 4, P.ink);
+    R(c, kx + r * 0.6 - 1, ky - 2 * r - 3, 1, 4, P.ink);
+    R(c, kx - r * 0.7, ky - 2 * r + 1, r * 0.8, 1, P.fog);
+  }
+  // a stack of bumper plates by the wall
+  for (let k = 0; k < 4; k++) {
+    R(c, 92, 160 - k * 4, 30, 4, P.black);
+    R(c, 92, 160 - k * 4, 30, 1, k === 3 ? P.fog : P.slate);
+  }
+  // the chalk bowl on its stand
+  R(c, 132, 148, 3, 20, P.ink);
+  R(c, 132, 148, 1, 20, P.steel);
+  R(c, 125, 166, 17, 2, P.ink);
+  ellipse(c, 133.5, 146, 9, 3.5, P.slate);
+  ellipse(c, 133.5, 144.5, 8, 2, P.white);
+  // the squat rack in his shadow side: uprights, a loaded bar on the hooks
+  for (const ux of [316, 368]) {
+    R(c, ux, 28, 5, 144, P.ink);
+    R(c, ux, 28, 1, 144, P.slate);
+    for (let y = 40; y < 168; y += 6) R(c, ux + 2, y, 1, 1, P.black);
+  }
+  R(c, 316, 28, 57, 4, P.ink);
+  R(c, 316, 28, 57, 1, P.slate);
+  // a board between them, chalked with tally marks
+  R(c, 326, 40, 38, 40, P.slate);
+  R(c, 327, 41, 36, 38, P.steel);
+  for (let row = 0; row < 4; row++) {
+    for (let g = 0; g < 3 - (row === 3 ? 1 : 0); g++) {
+      const x0 = 330 + g * 11;
+      const y0 = 45 + row * 9;
+      for (let i = 0; i < 4; i++) R(c, x0 + i * 2, y0, 1, 5, P.ink);
+      line(c, x0 - 1, y0 + 4, x0 + 7, y0, P.ink);
+    }
+  }
+  R(c, 312, 91, 66, 2, P.slate);
+  R(c, 286, 92, 98, 2, P.fog);
+  R(c, 286, 94, 98, 1, P.steel);
+  for (const [x, w, hh] of [[292, 4, 44], [297, 3, 36], [301, 2, 22]]) {
+    R(c, x, 93 - hh / 2, w, hh, P.black);
+    R(c, x, 93 - hh / 2, w, 1, P.slate);
+  }
+  R(c, 312, 132, 66, 3, P.ink);
+  R(c, 312, 132, 66, 1, P.slate);
+  // plates leaning against the rack, face-on
+  for (const [px, r] of [[340, 17], [356, 13]]) {
+    ellipse(c, px, 168 - r, r, r, P.black);
+    ellipse(c, px, 168 - r, r - 3, r - 3, P.ink);
+    ellipse(c, px, 168 - r, 3, 3, P.slate);
+    R(c, px - r * 0.6, 168 - 2 * r + 1, r * 0.8, 1, P.slate);
+  }
+  // out of focus: soften, then back onto the ramp
+  soften(c, 1);
+  yield;
+  yield* requant(c, 0, 0, W, H, [P.black, P.ink, P.slate, P.steel, P.fog, P.silver, P.white]);
 }];
-const concrete = () => bakeJob(CONCRETE_JOB);
+const gymBg = () => bakeJob(GYMBG_JOB);
+// The shafts from the two windows (quads, flat x, y) and the dust that turns in them.
+const SHAFTS = [
+  [12, 40, 54, 40, 236, 166, 194, 166],
+  [74, 40, 116, 40, 298, 166, 256, 166],
+];
+const inShaft = (x, y) => {
+  if (y < 40 || y > 166) return false;
+  const d = ((y - 40) / 126) * 182;
+  return (x >= 12 + d && x <= 54 + d) || (x >= 74 + d && x <= 116 + d);
+};
+const SHAFT_MOTES = { x: 10, y: 40, w: 290, h: 126, n: 60, seed: 19, drift: 5, fall: 0.8, color: P.white, alpha: 0.5, inside: inShaft };
+/** Kettlebell swing on the runner's rig: hips hinge back, the bell floats up to the chest. */
+function poseSwing(ax, footY, u, f, lt) {
+  const ph = (lt * TAU) / 1.6;
+  const s = (1 - cos(ph)) / 2; // 0 hinged at the bottom, 1 tall at the top
+  const s2 = (1 - cos(ph - 0.45)) / 2; // the arms lag the hips
+  const th = lerp(0.6, 0.03, s);
+  const sa = lerp(-0.18, -0.02, s);
+  J.f = f;
+  J.u = u;
+  J.lean = lerp(1.0, -0.04, s);
+  J.head = lerp(-0.5, 0.04, s);
+  solveTrunk(ax - f * (1.6 * u * sin(th) + 1.5 * u * sin(sa)), footY - 0.1 * u - 1.6 * u * cos(th) - 1.5 * u * cos(sa));
+  solveLegFK(0, th, th - sa, -sa);
+  solveLegFK(2, th - 0.05, th - sa - 0.05, -sa);
+  const a = lerp(-0.3, 1.45, s2);
+  solveArm(0, a, 0.06);
+  solveArm(2, a, 0.06);
+}
+/** The room's life behind the hero: the swing at the window, the shafts and dust, the ropes. */
+function revealLife(c, lt, key) {
+  poseSwing(62, 172, 10, 1, lt + 0.4);
+  paintSide(c, P.slate, -1, 0);
+  paintSide(c, P.slate, 1, 0);
+  paintSide(c, P.slate, 0, -1);
+  paintSide(c, P.ink, 0, 0);
+  const u = J.u;
+  const bx = J.hand[0] + (J.hand[0] - J.wrist[0]) * 0.9;
+  const by = J.hand[1] + (J.hand[1] - J.wrist[1]) * 0.9;
+  ellipse(c, bx, by, 0.45 * u + 1, 0.45 * u + 1, P.slate);
+  ellipse(c, bx, by, 0.45 * u, 0.45 * u, P.black);
+  c.globalAlpha = 0.05 + 0.06 * key;
+  for (let i = 0; i < SHAFTS.length; i++) {
+    const q = SHAFTS[i];
+    for (let k = 0; k < 8; k += 2) pt(q[k], q[k + 1]);
+    fillPts(c, P.white);
+  }
+  c.globalAlpha = 1;
+  SHAFT_MOTES.alpha = 0.3 + 0.35 * key;
+  motes(c, lt + 3, SHAFT_MOTES);
+  rope(c, 148, 24, 167, sin(lt * 1.1 + 0.5) * 2, P.slate, P.fog);
+  rope(c, 344, 24, 167, sin(lt * 0.9) * 1.5, P.ink, P.slate);
+}
 // The tank top: a scoop neck, straps over the trapezius, deep armholes; the red
 // square printed on the near side of the chest. Body-local x is his left.
 function topMat(x, y, z) {
@@ -1742,11 +2402,12 @@ const revealLit = (b) => bakeJob(REVEAL_JOBS[b]);
 const revealDark = () => BAKED.get('hg-reveal-dark') || (revealLit(0), BAKED.get('hg-reveal-dark'));
 const REVEAL_RAMP = [...GREYS, P.red, P.darkRed];
 function shotReveal(c, lt) {
-  c.drawImage(concrete(), 0, 0);
+  c.drawImage(gymBg(), 0, 0);
   // the breath: in and out over 3.4 s, a pixel's rise of the chest and shoulders
   const br = (1 - cos(((lt - 1.8) / 3.4) * TAU)) / 2;
   const ph = lt > 1.8 && br > 0.5 ? 1 : 0;
   const key = smooth(prog(lt, 0.5, 1.8));
+  revealLife(c, lt, key);
   if (key < 1) c.drawImage(revealDark(), 0, 0);
   if (key > 0) {
     c.globalAlpha = key;
@@ -1765,15 +2426,44 @@ function slateCell(lt) {
   for (let i = 0; i < SLATE_RES.length; i += 2) if (lt >= SLATE_RES[i]) b = SLATE_RES[i + 1];
   return b;
 }
+// The packshot sits on the same gym, now empty and far out of focus: the windows
+// and their shafts as soft light at the left, the rack a shape at the right, a
+// dark scrim where the type sits. It drifts a few pixels; dust turns in the light.
+const SLATE_W = W + 16;
+const SLATE_BG_JOB = ['hg-slate-bg', SLATE_W, H, function* (c) {
+  c.imageSmoothingEnabled = true;
+  c.drawImage(gymBg(), 0, 0, W, H, 0, 0, SLATE_W, H);
+  c.imageSmoothingEnabled = false;
+  c.globalAlpha = 0.14;
+  for (let i = 0; i < SHAFTS.length; i++) {
+    const q = SHAFTS[i];
+    for (let k = 0; k < 8; k += 2) pt(q[k] * (SLATE_W / W), q[k + 1]);
+    fillPts(c, P.white);
+  }
+  c.globalAlpha = 1;
+  soften(c, 2);
+  yield;
+  yield* shadeBake(c, 0, 0, SLATE_W, H, 0.6, (x, y) => 1.25 - abs(y - 100) / 44 - abs(x - SLATE_W / 2) / 500);
+  yield* shadeBake(c, 0, 0, SLATE_W, H, 0.6, (x, y) => 1.1 - abs(y - 98) / 30 - abs(x - SLATE_W / 2) / 260);
+  yield* shadeBake(c, 0, 0, SLATE_W, H, 0.55, (x, y) => (y - 166) / 14);
+  yield* shadeBake(c, 0, 0, SLATE_W, H, 0.72, () => 1);
+  yield* requant(c, 0, 0, SLATE_W, H, [P.black, P.ink, P.slate, P.steel, P.fog]);
+  // the panes, a long way out of focus
+  for (let k = 0; k < 7; k++) bokeh(c, 14 + hash(k + 600) * 120, 34 + hash(k + 610) * 70, 6 + hash(k + 620) * 7, P.steel, 0.16);
+  bokeh(c, 330, 104, 5, P.slate, 0.3);
+}];
+const slateBg = () => bakeJob(SLATE_BG_JOB);
+const SLATE_MOTES = { x: 0, y: 26, w: 170, h: 150, n: 26, seed: 23, drift: 6, fall: 0.7, color: P.fog, alpha: 0.4, inside: null };
 function shotSlate(ctx, lt) {
   R(ctx, 0, 0, W, H, P.black);
-  // the mark arrives in fat cells and resolves (the brand's device), then holds
+  // the picture arrives in fat cells and resolves (the brand's device), the mark
+  // on it, then holds
   const mark = gymMark(2);
   const a = ramp(lt, 0.1, 0.45);
   if (a > 0) {
     const F = buf('hg-slate');
-    F.c.fillStyle = P.black;
-    F.c.fillRect(0, 0, W, H);
+    F.c.drawImage(slateBg(), -round(min(16, lt * 3)), 0);
+    motes(F.c, lt + 2, SLATE_MOTES);
     F.c.drawImage(mark, round(192 - mark.width / 2), 72);
     present(ctx, F.cv, slateCell(lt), a);
   }
@@ -1886,7 +2576,7 @@ function run(ctx, dt) {
 // once off screen (lt 1 and 3) so the small caches (lettering, cells) exist too.
 // A shot that comes on air before its bake is done finishes it at once.
 const WARM_MS = 4;
-const WARM_JOBS = [LOCKER_JOB, SKY_JOB, GYM_JOB, FACE_BG_JOB, FACE_JOB, CONCRETE_JOB, REVEAL_JOBS[0], REVEAL_JOBS[1]];
+const WARM_JOBS = [LOCKER_JOB, SKY_JOB, GYM_JOB, FACE_BG_JOB, FACE_JOB, GYMBG_JOB, REVEAL_JOBS[0], REVEAL_JOBS[1], SLATE_BG_JOB];
 let warmed = 0;
 function warm(dt) {
   if (warmed === 0) {
