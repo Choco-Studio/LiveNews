@@ -20,6 +20,7 @@ import { paceFor } from '../public/js/pace.js';
 import { matsOf } from '../public/js/v2/canvas25d/cast/base.js';
 import { LOOKS, PRESENTER_IDS } from '../public/js/v2/canvas25d/cast/index.js';
 import { planSegment } from '../public/js/v2/canvas25d/direction/index.js';
+import { readAs } from '../public/js/v2/canvas25d/direction/gestures.js';
 import { planGestures, CONFIG_POLICY, BIBLE, countFromText, episodePlan, familyOf, gestureVisible, handBandOf, DEBUG } from '../public/js/v2/canvas25d/direction/gestures.js';
 import { framing as cameraFraming, placeActor } from '../public/js/v2/canvas25d/camera.js';
 import { SET } from '../public/js/v2/canvas25d/studio/geometry.js';
@@ -1003,8 +1004,9 @@ test('variety on air (critics r2): no marked family twice in a row or within 45 
   }
 });
 
-// critic r3 (pace.js gestures.vocabWindow 3): variety by NAME, as the viewer reads it: box, lift and a beat are all
-// "a hand rising" (raise_hand). Every fixture (world-now-long included) and 12 seeded variants per programme.
+// critic r3 (pace.js gestures.vocabWindow 3): variety as the viewer reads it (gestures.js readAs): a lift and a beat
+// are both "a hand rising"; both hands framing (box), a finger tick, the open palm and a hand settling read apart.
+// Every fixture (world-now-long included) and 12 seeded variants per programme.
 test('vocabulary (critics r3, pace.js vocabWindow): no name twice in a row per presenter, a statement never repeats a name of the last 3, wall point ≤ 2 per presenter, chin ≤ 35 % in TECH BYTES', () => {
   const dir = new URL('./fixtures/v2-episodes/', import.meta.url);
   const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
@@ -1025,9 +1027,9 @@ test('vocabulary (critics r3, pace.js vocabWindow): no name twice in a row per p
           for (let i = 0; i < list.length; i++) {
             const e = list[i];
             checked++;
-            if (i > 0) assert.notEqual(list[i - 1].name, e.name, `${f} ${ep.id} ${slot}: ${e.name} twice in a row`);
+            if (i > 0) assert.notEqual(readAs(list[i - 1]), readAs(e), `${f} ${ep.id} ${slot}: ${readAs(e)} twice in a row`);
             const statement = !e.beat && e.name !== 'papers';
-            if (statement) for (let j = Math.max(0, i - 3); j < i; j++) assert.notEqual(list[j].name, e.name, `${f} ${ep.id} ${slot}: ${e.name} again within the last 3 (${list.slice(Math.max(0, i - 3), i + 1).map((x) => x.name).join(' ')})`);
+            if (statement) for (let j = Math.max(0, i - 3); j < i; j++) assert.notEqual(readAs(list[j]), readAs(e), `${f} ${ep.id} ${slot}: ${readAs(e)} again within the last 3 (${list.slice(Math.max(0, i - 3), i + 1).map(readAs).join(' ')})`);
             if (e.name === 'point_screen' && statement) walls++;
             if (ep.program?.id === 'tech-bytes' && statement && defOf(e).arm) {
               chin.of++;

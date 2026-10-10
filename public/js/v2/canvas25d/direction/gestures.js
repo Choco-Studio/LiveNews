@@ -684,9 +684,10 @@ class SegmentPlan {
     let idx = seq.length;
     for (const p of mine) {
       if (p.at <= ev.at) idx++;
-      seq.push({ name: p.name, marked: !p.beat && p.name !== 'papers' });
+      seq.push({ name: readAs(p), marked: !p.beat && p.name !== 'papers' });
     }
-    seq.splice(idx, 0, { name: ev.name, marked: statement });
+    seq.splice(idx, 0, { name: readAs(ev), marked: statement });
+    ev = { ...ev, name: readAs(ev) };
     if (seq[idx - 1]?.name === ev.name || seq[idx + 1]?.name === ev.name) return why(ev, 'repeat-name');
     for (let j = Math.max(0, idx - W); j < idx; j++) if (statement && seq[j].name === ev.name) return why(ev, 'name-window');
     for (let j = idx + 1; j <= idx + W && j < seq.length; j++) if (seq[j].marked && seq[j].name === ev.name) return why(ev, 'name-window');
@@ -820,6 +821,19 @@ class SegmentPlan {
     if (name !== 'raise_hand' && ok('raise_hand', null)) out.push(['raise_hand', null]);
     return out;
   }
+}
+
+// What a viewer reads a gesture as (the vocabulary rule's unit). The variants of one gesture that read as one
+// thing share a reading ("a hand rising": the beats, the lift; the open palm: the offer, the turn), but a
+// gesture whose shape reads differently is its own: both hands framing (box), a finger ticking (tick), a hand
+// settling on the desk (settle). Judged by the bare name, a presenter's eight raise_hand beats were one word
+// and every beat after the first was refused as a repeat (1-2 visible arm movements a minute on air).
+const READS_AS = {
+  raise_hand: { box: 'frame', tick: 'tick', tick_far: 'tick', settle: 'settle', settle_far: 'settle', offer: 'palm', offer_far: 'palm', turn: 'palm', turn_far: 'palm' },
+};
+export function readAs(ev) {
+  const r = READS_AS[ev.name]?.[ev.variant];
+  return r ? `${ev.name}:${r}` : ev.name;
 }
 
 /** Debug hook for tools (labs, stats): rejection reasons of the last plans when DEBUG.on. */
@@ -956,7 +970,7 @@ function previousTurns(ctx) {
     if (last && fam === null) fam = familyOf(last);
     if (names.length < W) {
       const own2 = t.evs.filter((e) => e.kind === 'gesture' && e.name !== 'nod').sort((a, b) => b.at - a.at);
-      for (const e of own2) if (names.length < W) names.push({ name: e.name, marked: !e.beat && e.name !== 'papers' });
+      for (const e of own2) if (names.length < W) names.push({ name: readAs(e), marked: !e.beat && e.name !== 'papers' });
     }
   }
   // (oldest first, like the segment's own sequence)

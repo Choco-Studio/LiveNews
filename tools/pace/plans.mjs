@@ -16,6 +16,7 @@
 import fs from 'node:fs';
 import { planSegment } from '../../public/js/v2/canvas25d/direction/index.js';
 import { paceFor, gapAfter } from '../../public/js/pace.js';
+import { readAs } from '../../public/js/v2/canvas25d/direction/gestures.js';
 
 const STUDIO = new Set(['wide', 'close']);
 
@@ -54,7 +55,7 @@ export function layoutEpisode(ep, { presenters = channelPresenters(), gap = 'pac
         const same = prev && prev.shot === e.shot && prev.framing === e.framing && (e.framing === 'wide' || e.framing === 'two' || prev.focus === e.focus) && (studio || prev.seg === i) && (prev.card ?? null) === (e.card ?? null);
         if (same) continue;
         shots.push({ t: T + e.at, len: 0, shot: e.shot, framing: e.framing, focus: e.focus, seg: i, beat: e.beat, card: e.card ?? null, minLen: e.minLen ?? null, move: e.move || null, zoom: !!e.zoom });
-      } else events.push({ t: T + e.at, kind: e.kind, slot: e.slot, name: e.name || null, target: e.target || null, seg: i, speaker: ctx.speaker, grave: ctx.grave, why: e.why || null });
+      } else events.push({ t: T + e.at, kind: e.kind, slot: e.slot, name: e.name || null, variant: e.variant || null, beat: !!e.beat, target: e.target || null, seg: i, speaker: ctx.speaker, grave: ctx.grave, why: e.why || null });
     }
     // the director holds the segment's last shot for its minLen (a templated intro: at most 2 s past the voice)
     const last = shots.length > first ? shots[shots.length - 1] : null;
@@ -96,7 +97,8 @@ export function planReport(ep, layout = layoutEpisode(ep)) {
     const gaps = [];
     for (let k = 1; k < marked.length; k++) gaps.push(marked[k].t - marked[k - 1].t);
     let repeats = 0;
-    for (let k = 1; k < marked.length; k++) if (marked[k].name === marked[k - 1].name) repeats++;
+    // a repeat is the same gesture as the viewer reads it (gestures.js readAs: a box after a beat is not one)
+    for (let k = 1; k < marked.length; k++) if (readAs(marked[k]) === readAs(marked[k - 1])) repeats++;
     presenters[slot] = {
       talk: r2(talk),
       marked: marked.length,
