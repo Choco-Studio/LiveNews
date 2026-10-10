@@ -287,7 +287,7 @@ function marketsLive(px, t, st) {
 
 // ------------------------------------------------------------------------------------------------ bureau
 
-const BUREAU = { map: [204, 46, 360, 134], stiles: [0, 76, 152, 228, 304, 380], dado: 146 };
+const BUREAU = { map: [216, 46, 372, 134], stiles: [0, 76, 152, 228, 304, 380], dado: 146 };
 
 function bureau(px, r, st) {
   bands(px, 0, 0, W, H, [C.brown, C.brown, C.maroon]);

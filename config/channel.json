@@ -286,6 +286,7 @@
         "ada"
       ],
       "experts": ["june"],
+      "resident": "june",
       "analyses": 1,
       "categories": [
         "tech",
@@ -387,6 +388,7 @@
         "unit8"
       ],
       "experts": ["tomas", "dev"],
+      "resident": "tomas",
       "analyses": 1,
       "categories": [
         "science",
@@ -477,6 +479,7 @@
         "penny"
       ],
       "experts": ["omar"],
+      "resident": "omar",
       "analyses": 1,
       "categories": [
         "business"

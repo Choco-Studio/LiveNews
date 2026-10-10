@@ -17,7 +17,7 @@ The names, looks and voices are proposals until the owner approves them (WAVE3 �
 | Leo Sepia | Culture Correspondent | culture | WORLD NOW | gallery | ginger side parting, short ginger beard, charcoal blazer over a mustard knit | am_liam 60% + im_nicola 40%, en-GB, 1.04 |
 | Ines Clause | Legal Affairs Correspondent | legal | WORLD NOW | chambers | long chestnut hair, tan skin, charcoal tailored jacket, white blouse, fine gold chain | ef_dora 55% + af_sky 45%, en-US, 1.02 |
 
-- **Config:** each is a presenter in `config/channel.json` with `role`, `personality`, `voice` and `expert: { desk, backdrop }`. A programme lists its experts (`experts`, its own speciality first: ties go to that order) and how many analyses it airs (`analyses`, 0 to 2; WORLD NOW, TECH BYTES, COSMOS DESK and MONEY MINUTE air 1 each today, NEWS IN 60 and WORLD WEATHER none). `server/channel.js` refuses an unknown expert, a presenter without a known desk or a backdrop, or `analyses` out of range; the tests check that every backdrop is a drawn studio.
+- **Config:** each is a presenter in `config/channel.json` with `role`, `personality`, `voice` and `expert: { desk, backdrop }`. A programme lists its experts (`experts`, its own speciality first: ties go to that order) and how many analyses it airs (`analyses`, 0 to 2; WORLD NOW, TECH BYTES, COSMOS DESK and MONEY MINUTE air 1 each today, NEWS IN 60 and WORLD WEATHER none). A programme may name a `resident` among its experts: part of its format, booked whenever a story fits (MONEY MINUTE's Omar, TECH BYTES' June, COSMOS DESK's Tomas). `server/channel.js` refuses an unknown expert, a presenter without a known desk or a backdrop, `analyses` out of range, or a resident who is not one of the programme's experts; the tests check that every backdrop is a drawn studio.
 - **Desks:** `server/experts.js` `EXPERT_DESKS`: what each covers, the feed categories that lean its way, the words of its field, and the presenter's stock questions.
 
 ## 2. Which story, and what they may say
@@ -25,26 +25,30 @@ The names, looks and voices are proposals until the owner approves them (WAVE3 �
 - **The story:** a main story of the expert's field. Never the number of the day, a round-up item, "And finally", a breaking, grave or sad story, or a story given to a correspondent.
   - The writer names the expert (`analysis.expert`). If the story clearly belongs to another expert's field, it goes to that expert (`expertFor`: the desk with the most distinct words of its field in the headline, summary and kicker, two at least; "storm" and "Storms" count once).
   - The strongest match airs first, up to the programme's `analyses`.
+- **Rotation** (`restedExperts`, the producer's memory of the last 6 hours): an expert booked on a programme rests there for 2 hours (WAVE3: once per 2 h per programme, the speciality aside). The resident never rests. The others are offered the one seen longest ago first, on any programme, so ties spread the bookings across the roster. In six rotations of the demo news all eight are on air, and WORLD NOW never books the same expert twice in a row.
 - **The exchange** (`server/writer.js` `expandAnalyses`): the story ends on the presenter's introduction ("Our Economics Editor, Omar Ledger, is with us.") and the first question addressed by first name ("Omar, what is behind it?"). Then four `cross` segments of kind `expert`:
   1. **piece:** the expert's answer, 2 or 3 sentences;
   2. **ask:** the follow-up, fitted to the answer ("what happens next?" when it looks ahead, "what else should people know?" otherwise);
   3. **answer:** 1 or 2 more sentences;
   4. **thanks.**
   The ask and answer are left out when there is nothing more to say.
+- **Variety:** the presenter's lines round the expert come from fixed sets (10 introductions, 7 stock questions per desk, 6 follow-ups that look ahead and 6 that do not, 6 thanks). The station counts its analyses, and each kind of line walks through all its forms before one comes back, so the same introduction or thanks is never heard twice running. A follow-up the writer gave, and the question it wrote, take precedence over the sets.
 - **Grounding:** every answer sentence must be supported by the story's source, like the presenter's own (`groundAnalysis`).
   - Dropped: a question, a claim to have seen or spoken to anyone (`presenceClaim`: "I've seen", "told me", "here in…"), advice in their own voice ("savers should…", "I'd recommend"), and a line the presenter already read.
+  - The same fact twice in the answers (once with more to it) airs once, the fuller way.
   - A question with a figure or a name of its own, or over 14 words, is replaced by the desk's stock question.
   - Fewer than two answers left: the story airs as a plain story.
 - **Hard rules (WAVE3 §6, in the writer's prompt and in code):** the expert explains and never reports. No scene, no unnamed sources, no opinion and no prediction the source does not make, no financial or medical advice, no view on a real person or on politics. Always labelled as GLOBIT 24 staff (the strap's source line is the channel).
-- **The offline writer** (`server/providers/mock.js`) picks a story of four or more sentences that clearly belongs to one of the programme's experts. The expert's answers are the story's remaining source sentences, the first with a short spoken frame ("The key detail is this:").
+- **The offline writer** (`server/providers/mock.js`) picks a story of four or more sentences that clearly belongs to one of the programme's experts. The expert's answers are the story's remaining source sentences. The first sometimes gets a short spoken frame ("The key detail is this:", walked through like the presenter's lines, and on about one answer in three no frame at all), after which the sentence runs on in lower case, a name or a place keeping its capital.
 - **Review:** `collapseCrosses` folds the exchange back into the story's `analysis` for the standards editor, and a second pass rebuilds it the same.
 
 ## 3. On air
 
 - **Shots:** the correspondents' (director `playCross`, `linkplan.js`).
-  - **LOCATION:** the expert in a medium close-up on the left third, in front of their studio.
-  - **TWO-WAY:** the presenter's single and the expert side by side, for the questions.
+  - **TWO-WAY:** the presenter's single and the expert side by side, for the questions. It comes up with the introduction (the story's line before the question): the story is marked `linkKind: 'expert'`, and the v2 shot plan leaves both lines to the hand-over, so the two-way has held the floor when the expert starts.
+  - **LOCATION:** the expert in a medium close-up on the left third, in front of their studio, for each answer (from the first words; without pictures to cut to, by their second sentence at the latest).
   - Never B-roll or FILE: an expert has no place.
+  - In the two-way each box keeps 3 px above the crown of the hair (Tomas's halo, Leo's quiff, Nova's coils on the presenter's side): the box rises when the head would be cut.
 - **Graphics** (`public/js/graphics/remote.js`):
   - **ANALYSIS** where a link's place tag would be;
   - the expert's title on their box in the two-way;
@@ -114,4 +118,4 @@ The two-way crops round the head (176 x 99), so each studio also reads in that b
 - The owner's approval of the names, looks and voices (WAVE3 §13).
 - Laughter in the exchanges (LISTA decision 5: "pueden reírse en las charlas") waits for the sounds work (LISTA item 14, decision 7).
 - The guests of WAVE3 §3.6 (re-staged public figures, IN THEIR WORDS, AI-built looks) are a separate piece of work. The experts here are the roster only.
-- The sample stories come from the demo feeds. With the real writer and real news, more stories qualify, and a second analysis can be allowed per programme (`analyses: 2`).
+- The demo feeds carry a story for every desk (the Pacific tuna treaty for Clara, the Amsterdam night-flights ruling for Ines, the Cairo boats exhibition and the Seoul drone show for Leo, the probe, the telescope and the rover for Tomas). With the real writer and real news, more stories qualify, and a second analysis can be allowed per programme (`analyses: 2`).

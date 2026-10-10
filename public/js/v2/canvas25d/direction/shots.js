@@ -92,8 +92,10 @@ export function planShots(ctx) {
   const id = styleOf(ctx.programId);
   const whole = timeline(ctx);
   // a story handed to a correspondent ends, for its plan, where the hand-over starts: the director takes that last
-  // sentence to the two-way (director.js throwTo), so no beat, cap or split may cut away just before it
-  const tl = ctx.type === 'story' && ctx.seg?.link && whole.bounds.length ? { ...whole, end: whole.bounds[whole.bounds.length - 1].t, bounds: whole.bounds.slice(0, -1) } : whole;
+  // sentence to the two-way (director.js throwTo), so no beat, cap or split may cut away just before it. An
+  // expert's hand-over is two sentences, the introduction and the question (server/writer.js linkKind)
+  const hand = ctx.type === 'story' && ctx.seg?.link ? (ctx.seg.linkKind === 'expert' && whole.bounds.length >= 2 ? 2 : 1) : 0;
+  const tl = hand && whole.bounds.length ? { ...whole, end: whole.bounds[whole.bounds.length - hand].t, bounds: whole.bounds.slice(0, -hand) } : whole;
   let out;
   // IN PLAIN ENGLISH: the director holds the term's card for the whole line (director.js), so the plan says so (a
   // studio wide here once merged, in the pace layout, with the story's own wide into an 18-second hold)

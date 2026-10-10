@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EXPERT_DESKS, expertsOf, expertFor, introLine, questionLine, followLine, thanksLine, expertKicker } from '../server/experts.js';
+import { EXPERT_DESKS, REST_HOURS, expertsOf, restedExperts, expertFor, introLine, questionLine, followLine, thanksLine, answerFrame, expertKicker } from '../server/experts.js';
 import { presenceClaim, rosterOf } from '../server/correspondents.js';
 import { buildPrompt, collapseCrosses, normalizeBulletin } from '../server/writer.js';
 import { loadChannel, validateChannel } from '../server/channel.js';
@@ -80,6 +80,22 @@ describe('which expert takes a story', () => {
     assert.equal(expertFor(s('Prices rise', 'Prices and wages.'), []), null);
   });
 
+  test('an expert rests REST_HOURS before the same programme books them again; a resident never rests', () => {
+    const now = 10 * 3600_000;
+    const ago = (h) => now - h * 3600_000;
+    const recent = [{ id: 'omar', programId: 'world-now', at: ago(1) }, { id: 'dev', programId: 'cosmos', at: ago(0.5) }, { id: 'clara', programId: 'world-now', at: ago(REST_HOURS + 0.1) }];
+    const wn = restedExperts(WN, WN_EXPERTS, recent, now).map((e) => e.id);
+    assert.ok(!wn.includes('omar'), 'Omar was on WORLD NOW an hour ago');
+    assert.ok(wn.includes('clara'), 'Clara has rested');
+    assert.ok(wn.includes('dev'), 'Dev was on COSMOS, not on WORLD NOW');
+    // the ones never seen first, then the one seen longest ago (Clara), Dev last
+    assert.deepEqual(wn.slice(-2), ['clara', 'dev']);
+    const cosmos = { id: 'cosmos', ...CHANNEL.programs.cosmos };
+    const cx = restedExperts(cosmos, expertsOf(cosmos, CHANNEL.presenters), [{ id: 'tomas', programId: 'cosmos', at: ago(0.2) }, { id: 'dev', programId: 'cosmos', at: ago(0.5) }], now).map((e) => e.id);
+    assert.deepEqual(cx, ['tomas'], 'the resident (COSMOS DESK\'s scientist) is booked again; Dev rests');
+    assert.equal(restedExperts(WN, WN_EXPERTS, [], now).length, WN_EXPERTS.length);
+  });
+
   test('the presenter\'s lines: the role and full name to introduce, the first name to ask and thank', () => {
     const omar = WN_EXPERTS.find((e) => e.id === 'omar');
     for (let i = 0; i < 12; i++) {
@@ -87,11 +103,31 @@ describe('which expert takes a story', () => {
       assert.match(introLine(omar, `k${i}`), /Economics Editor/);
       assert.match(questionLine(omar, `k${i}`), /^Omar, [a-z].*\?$/);
       assert.match(thanksLine(omar, `k${i}`), /Omar/);
-      assert.match(followLine(omar, `k${i}`, 'The bank will decide again next month.'), /next|watch/i);
-      assert.doesNotMatch(followLine(omar, `k${i}`, 'Shares fell.'), /next/i);
+      assert.match(followLine(omar, `k${i}`, 'The bank will decide again next month.'), /next|watch|after|now|know more/i);
+      assert.doesNotMatch(followLine(omar, `k${i}`, 'Shares fell.'), /next|watch|after that/i);
     }
     assert.equal(questionLine(omar, 'k', 'why now?'), 'Omar, why now?');
     assert.equal(expertKicker(omar), 'ECONOMICS EDITOR');
+  });
+
+  test('with the station\'s turn, each kind of line walks through all its forms before one comes back', () => {
+    const omar = WN_EXPERTS.find((e) => e.id === 'omar');
+    const kinds = {
+      intro: (t) => introLine(omar, 'x', t),
+      ask: (t) => questionLine(omar, 'x', null, t),
+      follow: (t) => followLine(omar, 'x', 'Shares fell.', t),
+      thanks: (t) => thanksLine(omar, 'x', t),
+      frame: (t) => String(answerFrame('x', t)),
+    };
+    for (const [kind, line] of Object.entries(kinds)) {
+      // (a frame turn may be no frame at all: the frames said are what must not repeat)
+      const seen = Array.from({ length: 40 }, (_, k) => line(40 + k)).filter((x) => x !== 'null');
+      const forms = new Set(seen).size;
+      assert.ok(forms >= 6, `${kind}: ${forms} forms`);
+      for (let i = 0; i + forms <= seen.length; i++) assert.equal(new Set(seen.slice(i, i + forms)).size, forms, `${kind} repeats inside a cycle`);
+    }
+    // an answer frame is sometimes no frame at all
+    assert.ok(Array.from({ length: 9 }, (_, t) => answerFrame('x', t)).filter((f) => f === null).length >= 2);
   });
 });
 
@@ -156,6 +192,7 @@ describe("a writer's analysis becomes the expert's exchange", () => {
     assert.match(segs[at + 4].text, /Omar/);
     assert.deepEqual(b.correspondents, { R1: 'omar' });
     assert.equal(b.storyIds.length, 5, 'an analysis adds no story');
+    assert.equal(segs[at].linkKind, 'expert', 'the hand-over is two sentences: the introduction and the question');
   });
 
   test('every answer is grounded: a claim to have seen or spoken to anyone, or a fact not in the source, never airs', () => {
@@ -171,6 +208,13 @@ describe("a writer's analysis becomes the expert's exchange", () => {
     assert.match(told, /first move/);
     assert.doesNotMatch(told, /I've seen|zero|told me|should/);
     for (const x of b.segments.filter((y) => y.kind === 'expert')) assert.ok(!presenceClaim(x.text), x.text);
+  });
+
+  test('the same fact twice in the answers airs once, the fuller way', () => {
+    const analysis = { ...ratesSeg().analysis, answer: "The rise is the bank's first move in more than a year. The Norwegian krone strengthened after the announcement. The rise is the bank's first move in more than a year, according to Bitport Herald." };
+    const b = run([ratesSeg({ analysis }), ...fillerSegs(3)], [RATES, ...fillers(3)]);
+    const piece = b.segments.find((x) => x.kind === 'expert' && x.part === 'piece').text;
+    assert.equal(piece.match(/first move/g).length, 1, piece);
   });
 
   test('an analysis that cannot stand (fewer than two grounded answers), or a breaking or grave story, stays a story', () => {
@@ -199,6 +243,7 @@ describe("a writer's analysis becomes the expert's exchange", () => {
     assert.equal(st.analysis.expert, 'omar');
     assert.match(st.analysis.answer, /first move/);
     assert.doesNotMatch(st.text, /Omar/, 'the introduction and the question come off the story');
+    assert.ok(!('link' in st) && !('linkKind' in st));
     const again = normalizeBulletin({ title: 'T', segments: folded }, [RATES, ...fillers(3)], { program: WN, presenters: DUO, correspondents: rosterOf(WN, CHANNEL.presenters), experts: WN_EXPERTS, maxStories: 14, maxChats: 6 });
     assert.deepEqual(again.segments.filter((x) => x.kind === 'expert').map((x) => x.text), b.segments.filter((x) => x.kind === 'expert').map((x) => x.text));
   });
@@ -229,7 +274,9 @@ describe('the offline writer', () => {
     const chain = new ProviderChain([createMockProvider()], { record() {} }, { log });
     const producer = new Producer({ config: { candidatePool: 12, minNewStories: 3, reviewPass: true }, newsDesk: desk, chain, weather: new WeatherDesk({ source: 'fixture', log }), log });
     const seen = new Set();
-    for (let r = 0; r < 2; r++) {
+    const onWorldNow = [];
+    const lines = [];
+    for (let r = 0; r < 6; r++) {
       for (const id of CHANNEL.rotation) {
         const ep = await producer.produce(CHANNEL, id);
         if (!ep) continue;
@@ -240,6 +287,10 @@ describe('the offline writer', () => {
           const s = desk.get(sid);
           return `${s.title}. ${s.summary} ${s.body || ''}`;
         };
+        if (id === 'world-now') onWorldNow.push(ex[0].reporter);
+        // the presenter's lines round the expert: none twice in the run (the station's turn walks the forms)
+        const who = CHANNEL.presenters[ex[0].reporter];
+        lines.push(...ex.filter((x) => x.part === 'thanks').map((x) => x.text.replace(who.name, 'N').replace(who.name.replace(/^Dr\s+/, '').split(' ')[0], 'F')));
         for (const x of ex) {
           seen.add(x.reporter);
           assert.ok(program.experts.includes(x.reporter), `${id}: ${x.reporter} is one of its experts`);
@@ -263,7 +314,11 @@ describe('the offline writer', () => {
         assert.equal(ex.at(-1).part, 'thanks');
       }
     }
-    assert.ok(seen.size >= 3, `several experts on air in two rotations (${[...seen].join(', ')})`);
+    // every expert on air in six rotations of the demo news, and WORLD NOW never books the same one twice in a row
+    // (the run is minutes long: each rests the whole of it on the same programme)
+    assert.deepEqual([...seen].sort(), [...EXPERT_IDS].sort(), `on air: ${[...seen].join(', ')}`);
+    assert.equal(new Set(onWorldNow).size, onWorldNow.length, `WORLD NOW: ${onWorldNow.join(', ')}`);
+    for (let i = 1; i < lines.length; i++) assert.notEqual(lines[i], lines[i - 1], `the same thanks twice running: ${lines[i]}`);
   });
 });
 
@@ -352,6 +407,44 @@ describe('on screen and on air', () => {
     assert.equal(r.kind, 'expert');
     assert.equal(r.backdrop, 'gallery');
     assert.equal(r.slot, 'R2');
+  });
+
+  test('the shot plan leaves the introduction and the question to the hand-over (the two-way comes up with the first)', async () => {
+    const { segmentContext } = await import('../public/js/v2/canvas25d/direction/context.js');
+    const { planShots } = await import('../public/js/v2/canvas25d/direction/shots.js');
+    const story = {
+      type: 'story', anchor: 'A', emotion: 'neutral', storyId: 's1', headline: 'Glacier in the Alps shrinks by 3 percent', shot: 'map', link: 'R1', linkKind: 'expert',
+      location: { place: 'THE ALPS', lat: 46.5, lon: 10 }, fact: '3 PERCENT',
+      text: 'Measurements show a large glacier in the Alps lost 3 percent of its volume this summer, according to Starfield Journal. Scientists say the ice is now thinner than at any time since records began. Our Climate Correspondent, Dev Isobar, joins us now. Dev, what should we make of it?',
+    };
+    const piece = { type: 'cross', part: 'piece', anchor: 'R1', kind: 'expert', reporter: 'dev', text: 'A lake has formed at the foot of the ice.' };
+    const ep = { id: 'e', program: { id: 'cosmos', title: 'COSMOS DESK' }, cast: { A: 'nova', B: 'unit8' }, correspondents: { R1: 'dev' }, segments: [{ type: 'intro', anchor: 'A', text: 'Good evening.' }, story, piece] };
+    const ctx = segmentContext(ep, 1, {});
+    const intro = ctx.sentences.at(-2).t0;
+    for (const e of planShots(ctx)) assert.ok(e.at < intro - 0.05, `a planned cut at ${e.at.toFixed(2)} s, on or after the introduction (${intro.toFixed(2)} s)`);
+    // (a correspondent's hand-over is the last sentence only: that plan does cut back to the presenter on the line before)
+    const corr = segmentContext({ ...ep, segments: [ep.segments[0], { ...story, linkKind: undefined }, piece] }, 1, {});
+    assert.ok(planShots(corr).some((e) => Math.abs(e.at - intro) < 0.05));
+  });
+
+  test('the two-way box keeps the crown of a tall head of hair inside it (Tomas\'s halo, Nova\'s coils)', async () => {
+    const { Stage } = await import('../public/js/v2/canvas25d/runtime/stage.js');
+    const { frame } = await import('../public/js/v2/canvas25d/scene.js');
+    const { TWOWAY } = await import('../public/js/v2/canvas25d/studio/remote.js');
+    const { C } = await import('../public/js/v2/canvas25d/pixbuf.js');
+    const audio = { speechFrame(ms, slot, o = {}) { return Object.assign(o, { slot, speaking: false, level: 0, viseme: 'rest', next: 'rest', mix: 0, wordIndex: -1, charIndex: -1, sentenceIndex: -1, accent: 0, pause: false }); } };
+    const ep = { id: 'epT', program: { id: 'cosmos', title: 'COSMOS DESK' }, cast: { A: 'nova', B: 'unit8' }, correspondents: { R1: 'tomas' } };
+    const st = new Stage({ audio, channel: { presenters: {} }, idle: null });
+    const scene = { episode: ep, program: ep.program, cast: ep.cast, anchors: {}, images: new Map(), wall: { mode: 'logo' }, segPlan: null, focus: 'A', shot: 'twoway', shotSince: 1,
+      remote: { slot: 'R1', id: 'tomas', kind: 'expert', backdrop: 'observatory', lat: 0, lon: 0, grave: false, footage: null } };
+    for (let t = 1; t < 1.6; t += 0.1) st.frame({ putImageData() {} }, t, scene);
+    // the right box's top two rows: the dome behind him, none of his white hair
+    for (let y = TWOWAY.y; y < TWOWAY.y + 2; y++) {
+      for (let x = TWOWAY.right; x < TWOWAY.right + TWOWAY.w; x++) {
+        const c = frame.px[y * 384 + x];
+        assert.ok(c !== C.white && c !== C.silver, `hair at the box's top edge (${x}, ${y})`);
+      }
+    }
   });
 
   test('each expert speaks with a voice of their own: no presenter\'s lead voice, none of Paco\'s, no two alike', async () => {

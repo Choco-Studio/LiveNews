@@ -15,7 +15,7 @@ import { locate, lookupPlace, placesIn } from '../gazetteer.js';
 import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, hasFiniteVerb, headlineNames, shortHeadline, splitClauses, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
 import { AHEAD, deskOf } from '../correspondents.js';
-import { expertFor } from '../experts.js';
+import { expertFor, answerFrame } from '../experts.js';
 
 const DEATHS = /\b(?:dead|deaths?|die[sd]|killed|killings?|victims?|mourn\w*|funeral)\b/i;
 // Not grave, but not something to smile about either.
@@ -343,8 +343,9 @@ const NOVA_THANKS = ['Thank you, UNIT-8.', 'Precise as ever, UNIT-8.', 'Noted, U
 // The tail of UNIT-8's restatement ("40,000. Logged."): one shape per episode, rotated across episodes.
 const UNIT8_RESTATE = ['Logged.', 'Stored, Dr Reyes.', 'I have checked it twice.', 'That is now on file.', 'Confirmed.', 'Recorded, with interest.', 'I will not forget it.'];
 // Nova hands the number of the day to UNIT-8 (it is his story), not in the same words every time.
+// (no sentence shared with NOVA_THANKS: "Thank you, UNIT-8." from both pools aired twice in four rotations)
 const NOVA_TO_NUMBER = [
-  '[look_partner] Thank you, UNIT-8. You have our number of the day.',
+  '[look_partner] UNIT-8, you have our number of the day.',
   '[look_partner] UNIT-8, our number of the day.',
   '[look_partner] And UNIT-8 has our number of the day.',
   '[look_partner] Over to UNIT-8 for our number of the day.',
@@ -994,11 +995,11 @@ export function createMockProvider() {
     // It copies the feed text, so it has nothing to check: it never stands in for the editor.
     reviews: false,
     available: () => true,
-    async generate({ stage = 'write', script, stories, channelName, program, presenters = { A: { name: 'the presenter' } }, count, now, recent, featured, experts = [] }) {
+    async generate({ stage = 'write', script, stories, channelName, program, presenters = { A: { name: 'the presenter' } }, count, now, recent, featured, experts = [], analysisTurn = null }) {
       const usage = { input: 0, output: 0, cached: 0 };
       // Asked to review anyway (outside a ProviderChain): return the script untouched and say so.
       if (stage === 'review') return { text: JSON.stringify(script), usage, reviewed: false };
-      return { text: JSON.stringify(writeEpisode({ stories, channelName, program, presenters, count, now: now ?? new Date(), recent, featured, experts })), usage };
+      return { text: JSON.stringify(writeEpisode({ stories, channelName, program, presenters, count, now: now ?? new Date(), recent, featured, experts, analysisTurn })), usage };
     },
   };
 }
@@ -1016,7 +1017,7 @@ const OPENERS = [
 // Where the place must come (the longest sentence a programme allows is writer.js SENTENCE_WORDS).
 const PLACE_WITHIN = { 'world-now': 6, 'news-60': 3, 'money-minute': 4 };
 
-function writeEpisode({ stories, channelName, program, presenters, count, now, recent, featured, experts = [] }) {
+function writeEpisode({ stories, channelName, program, presenters, count, now, recent, featured, experts = [], analysisTurn = null }) {
   const title = program?.title || channelName;
   const solo = !presenters.B;
   const pid = program?.id || '';
@@ -1606,9 +1607,12 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         // two answers at least; a third, and the follow-up's, when the article has them
         const nAnswer = rest.length >= 5 ? 3 : 2;
         if (rest.length >= 2 && lead >= 0) {
-          const frame = choose(['The key detail is this:', 'What stands out is this:', 'The context matters here:', 'Here is what matters:'], `${key}~frame`);
+          // a short spoken frame on some answers, the station's turn walking through them (none on others)
+          const frame = answerFrame(key, Number.isFinite(analysisTurn) ? analysisTurn + [...analysed.keys()].indexOf(info) : undefined);
           const answer = rest.slice(0, nAnswer).map(asSentence);
-          answer[0] = `${frame} ${answer[0]}`; // (a whole sentence after the colon keeps its capital: never "iceland's")
+          // after the colon the sentence runs on in lower case ("Here is what matters: the rise..."), a name or a
+          // place keeping its capital (never "iceland's")
+          if (frame) answer[0] = `${frame} ${/^\S*['’]s\b/.test(answer[0]) ? answer[0] : lowerFirstWord(answer[0], info)}`;
           info.analysis = { expert: analysed.get(info).id, question: null, answer: answer.join(' '), follow: null, answer2: rest.slice(nAnswer, nAnswer + 2).map(asSentence).join(' ') };
         }
       } else if (linked) {

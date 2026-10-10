@@ -1337,7 +1337,7 @@ function keepOpener(tagged, written, story, check) {
 export function normalizeBulletin(
   raw,
   stories,
-  { channelName = 'LIVENEWS', maxStories = Infinity, maxChats = 3, solo = false, features = FEATURES, ownNames = [], program = null, presenters = null, recent = null, correspondents = [], experts = [] } = {}
+  { channelName = 'LIVENEWS', maxStories = Infinity, maxChats = 3, solo = false, features = FEATURES, ownNames = [], program = null, presenters = null, recent = null, correspondents = [], experts = [], analysisTurn = null } = {}
 ) {
   const names = [channelName, ...ownNames];
   const byId = new Map(stories.map((s) => [s.id, s]));
@@ -1684,7 +1684,7 @@ export function normalizeBulletin(
   // Correspondent links: the chosen stories hand over to the channel's correspondent for their region.
   const linked = correspondents.length && program?.crosses ? expandCrosses(finalBody, drafts, { program, correspondents, solo }) : {};
   // The experts' analyses: the chosen story is put to the channel's expert of its field (their slots follow the links').
-  if (experts.length && program?.analyses) Object.assign(linked, expandAnalyses(finalBody, drafts, { program, experts, stories: byId, first: Object.keys(linked).length + 1 }));
+  if (experts.length && program?.analyses) Object.assign(linked, expandAnalyses(finalBody, drafts, { program, experts, stories: byId, first: Object.keys(linked).length + 1, turn: analysisTurn }));
 
   const rundown = finalBody
     .filter((s) => s.type === 'story')
@@ -1925,7 +1925,7 @@ function groundAnalysis(raw, experts, grounded) {
  * correspondent of its own; at most `program.analyses`, the strongest match first. Their voice slots follow the
  * links' (R<first>, ...). Returns them: { R3: id }.
  */
-function expandAnalyses(body, drafts, { program, experts, stories, first = 1 }) {
+function expandAnalyses(body, drafts, { program, experts, stories, first = 1, turn = null }) {
   const byId = new Map(drafts.filter((d) => d.type === 'story').map((d) => [d.story.id, d]));
   const max = Math.min(program.analyses || 0, 2);
   const candidates = [];
@@ -1949,22 +1949,34 @@ function expandAnalyses(body, drafts, { program, experts, stories, first = 1 }) 
     const slot = `R${first + order.indexOf(x)}`;
     const { seg, d, e } = x;
     const key = `${seg.storyId}~${e.id}`;
+    // the station's count of analyses: each kind of line walks through its forms (none again until all have aired)
+    const t = Number.isFinite(turn) ? turn + order.indexOf(x) : undefined;
     // the presenter's introduction and first question end the story (no toss to the other presenter)
     const said = sentencesOf(seg.text);
     if (said.length > 1 && /^[A-Z][\w'’-]*(?: [A-Z][\w'’-]*)?[.?]$/.test(stripTags(said.at(-1)))) said.pop();
-    seg.text = `${said.join(' ')} ${expertIntro(e, key)} ${expertQuestion(e, key, d.analysis.question)}`;
+    seg.text = `${said.join(' ')} ${expertIntro(e, key, t)} ${expertQuestion(e, key, d.analysis.question, t)}`;
     seg.link = slot;
+    // (the introduction and the question are the hand-over: the director brings the two-way up with the first)
+    seg.linkKind = 'expert';
     // no line twice: not the presenter's, not another of the answers'
     const answer = [];
-    for (const t of d.analysis.answer) if (!crossRepeats(t, [...said, ...answer])) answer.push(t);
+    for (const t of d.analysis.answer) {
+      if (crossRepeats(t, said)) continue;
+      // the same fact twice, once with more to it ("The index has gained 21 percent since January" and "...since
+      // January, more than most"): the fuller one stays, in the first one's place
+      const k = answer.findIndex((o) => crossRepeats(t, [o]) || crossRepeats(o, [t]));
+      if (k < 0) answer.push(t);
+      else if (stripTags(t).length > stripTags(answer[k]).length) answer[k] = t;
+    }
     if (answer.length < 2) {
       // the presenter read what the expert would say: their answers stand on what is left, else the story is not put
       seg.text = said.join(' ');
       delete seg.link;
+      delete seg.linkKind;
       delete slots[slot];
       continue;
     }
-    const answer2 = d.analysis.answer2.filter((t) => !crossRepeats(t, [...said, ...answer]));
+    const answer2 = d.analysis.answer2.filter((t) => !crossRepeats(t, [...said, ...answer]) && !answer.some((o) => crossRepeats(o, [t])));
     const shared = {
       storyId: seg.storyId,
       headline: seg.headline,
@@ -1983,10 +1995,10 @@ function expandAnalyses(body, drafts, { program, experts, stories, first = 1 }) 
     const part = (name, anchor, text) => ({ type: 'cross', part: name, anchor, emotion, text: clip(text, LIMITS.text), cues: [], ...shared });
     const parts = [part('piece', slot, answer.map(stripTags).join(' '))];
     if (answer2.length) {
-      parts.push(part('ask', seg.anchor, d.analysis.follow ? `${e.first}, ${d.analysis.follow}` : expertFollow(e, key, answer2.map(stripTags).join(' '))));
+      parts.push(part('ask', seg.anchor, d.analysis.follow ? `${e.first}, ${d.analysis.follow}` : expertFollow(e, key, answer2.map(stripTags).join(' '), t)));
       parts.push(part('answer', slot, answer2.map(stripTags).join(' ')));
     }
-    parts.push(part('thanks', seg.anchor, expertThanks(e, key)));
+    parts.push(part('thanks', seg.anchor, expertThanks(e, key, t)));
     // an analysis chat after the story would only say again what the expert just said
     const told = [...said, ...answer, ...answer2];
     for (let j = x.i + 1; body[j]?.type === 'chat'; ) {
@@ -2019,6 +2031,7 @@ export function collapseCrosses(segments) {
         const q = said.length > 2 ? stripTags(said.at(-1)).replace(/^[A-Z][\w'’-]*,\s*/, '') : null;
         if (said.length > 2) story.text = said.slice(0, -2).join(' ');
         delete story.link;
+        delete story.linkKind;
         story.analysis = { expert: seg.reporter, question: q, answer: '', follow: '', answer2: '' };
       }
       if (seg.part === 'piece') story.analysis.answer = seg.text;

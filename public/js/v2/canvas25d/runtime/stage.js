@@ -24,7 +24,7 @@
 // The rig runs on its own clock (renderer t - epoch, reset per episode and
 // moved back under a cut after 14 min) because the idle tables cover 15 min.
 // No per-frame allocation in this file.
-import { frame, drawActors, actor as makeActor, QUALITY } from '../scene.js';
+import { frame, parts, drawActors, actor as makeActor, QUALITY } from '../scene.js';
 import * as SETM from '../studio/set.js';
 import { SET, kAt, sxOf, syOf } from '../studio/geometry.js';
 import * as CAM from '../camera.js';
@@ -195,6 +195,20 @@ function wallOf(scene, plan, out) {
     out.label = seg?.kicker || w.source;
   } else out.mode = 'idle';
   return out;
+}
+
+// px kept above the crown of the hair in a two-way box (the presenter's and the correspondent's or expert's)
+const REMOTE_HEADROOM = 3;
+
+/** The top row of the figure drawn last (drawActors' part buffer) over a head at (cx, cy); -1 when none. */
+function crownRow(cx, cy) {
+  const w = parts.w;
+  const x0 = Math.max(0, Math.round(cx) - 46), x1 = Math.min(w, Math.round(cx) + 46);
+  for (let y = Math.max(0, Math.round(cy) - 80); y < cy; y++) {
+    const o = y * w;
+    for (let x = x0; x < x1; x++) if (parts.mat[o + x]) return y;
+  }
+  return -1;
 }
 
 export class Stage {
@@ -451,9 +465,16 @@ export class Stage {
       }
     }
     const dy = TWOWAY.h / 2 - TWOWAY.headY;
-    cropInto(frame.px, hx + TWOWAY.w / 2 - TWOWAY.headX, hy + dy, this.studioBox, TWOWAY.w, TWOWAY.h);
+    // (the presenter's crown too: Nova's coils would touch the box's top)
+    const pc = crownRow(hx, hy);
+    cropInto(frame.px, hx + TWOWAY.w / 2 - TWOWAY.headX, pc >= 0 ? Math.min(hy + dy, pc - REMOTE_HEADROOM + TWOWAY.h / 2) : hy + dy, this.studioBox, TWOWAY.w, TWOWAY.h);
     const rh = this.drawRemote(t, scene);
-    cropInto(frame.px, (rh?.cx ?? REMOTE.headX) + TWOWAY.w / 2 - TWOWAY.headX, (rh?.cy ?? 70) + dy, this.remoteBox, TWOWAY.w, TWOWAY.h);
+    // the box keeps the head where the presenter's sits, unless the hair would be cut by its top (a halo, a
+    // quiff): then it rises to keep REMOTE_HEADROOM px above the crown
+    let ry = (rh?.cy ?? 70) + dy;
+    const crown = rh ? crownRow(rh.cx, rh.cy) : -1;
+    if (crown >= 0) ry = Math.min(ry, crown - REMOTE_HEADROOM + TWOWAY.h / 2);
+    cropInto(frame.px, (rh?.cx ?? REMOTE.headX) + TWOWAY.w / 2 - TWOWAY.headX, ry, this.remoteBox, TWOWAY.w, TWOWAY.h);
     composeTwoWay(frame.px, this.studioBox, this.remoteBox, this.accent);
     frame.present(ctx);
   }

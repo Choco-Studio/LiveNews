@@ -1,6 +1,6 @@
 import { buildPrompt, buildReviewPrompt, collapseCrosses, extractJson, normalizeBulletin } from './writer.js';
 import { rosterOf } from './correspondents.js';
-import { expertsOf } from './experts.js';
+import { expertsOf, restedExperts } from './experts.js';
 import { castOf } from './channel.js';
 import { embedCues } from '../public/js/cues.js';
 import { onBeat } from './topics.js';
@@ -112,6 +112,11 @@ export class Producer {
     // Stories that were the number of the day or "And finally" lately: another story takes the feature when one
     // qualifies (a re-run does not bring the same feature back every rotation).
     this.recentFeatures = []; // [{ id, at }]
+    // The experts' analyses lately: an expert waits REST_HOURS before the same programme books them again (its
+    // resident aside), and the one seen longest ago goes first (server/experts.js restedExperts).
+    this.recentExperts = []; // [{ id, programId, at }]
+    // The station's count of analyses so far: each kind of presenter line round them walks through its forms.
+    this.analysisTurn = 0;
     this.stages = [
       // The picture desk works before the writer, so the writer knows which candidates have a picture.
       { name: 'pictures', run: (ctx) => this.pictures(ctx), enabled: () => typeof this.news.findPictures === 'function' },
@@ -212,7 +217,7 @@ export class Producer {
     // the programme's correspondents (links: server/correspondents.js), voiced in the slots the writer gives them
     const correspondents = rosterOf(program, channel.presenters);
     // ...and its experts (analyses: server/experts.js), voiced in the slots that follow the links'
-    const experts = expertsOf(program, channel.presenters);
+    const experts = restedExperts(program, expertsOf(program, channel.presenters), this.recentExperts);
     const ctx = { channelName: channel.name, program, presenters, cast, candidates, episode: null, provider: null, pipeline: [], correspondents, experts, channelPresenters: channel.presenters };
     const started = Date.now();
     try {
@@ -231,6 +236,7 @@ export class Producer {
     const used = new Set(ctx.episode.storyIds);
     this.rememberLines(ctx.episode);
     this.rememberFeatures(ctx.episode);
+    this.rememberExperts(ctx.episode, program.id);
     this.news.markCovered(ctx.episode.storyIds);
     this.news.markOffered(candidates.filter((s) => !used.has(s.id)).map((s) => s.id));
 
@@ -304,6 +310,7 @@ export class Producer {
         ownNames: [ctx.program.title, ...Object.values(ctx.presenters).map((p) => p.name)],
         correspondents: ctx.correspondents || [],
         experts: ctx.experts || [],
+        analysisTurn: this.analysisTurn,
       });
   }
 
@@ -344,6 +351,15 @@ export class Producer {
     return new Set(this.recentLines.map((x) => x.line.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()));
   }
 
+  /** Remember the experts an episode put stories to (6 hours at most), and move the lines' turn on. */
+  rememberExperts(episode, programId, now = Date.now()) {
+    const pieces = (episode?.segments || []).filter((seg) => seg.type === 'cross' && seg.kind === 'expert' && seg.part === 'piece');
+    for (const seg of pieces) this.recentExperts.push({ id: seg.reporter, programId, at: now });
+    this.analysisTurn += pieces.length;
+    const window = (this.config.recentLinesHours ?? 6) * 3600_000;
+    while (this.recentExperts.length && (this.recentExperts.length > 64 || now - this.recentExperts[0].at > window)) this.recentExperts.shift();
+  }
+
   /** Remember which stories were the number of the day or "And finally" (the last 16 episodes, at most 6 hours). */
   rememberFeatures(episode, now = Date.now()) {
     for (const seg of episode?.segments || []) if (seg.type === 'story' && (seg.feature === 'number' || seg.feature === 'lighter')) this.recentFeatures.push({ id: seg.storyId, at: now });
@@ -357,7 +373,7 @@ export class Producer {
     const { provider, value } = await this.chain.generate(
       // `recent`: lines aired lately, for writers that pick from their own repertoire (the offline mock);
       // `featured`: stories that were a feature lately (the same "And finally" does not come round every rotation).
-      { stage: 'write', prompt, stories: ctx.candidates, channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, count: ctx.program.stories, recent, featured: this.recentFeatures.map((x) => x.id), experts: ctx.experts || [] },
+      { stage: 'write', prompt, stories: ctx.candidates, channelName: ctx.channelName, program: ctx.program, presenters: ctx.presenters, count: ctx.program.stories, recent, featured: this.recentFeatures.map((x) => x.id), experts: ctx.experts || [], analysisTurn: this.analysisTurn },
       this.normalizer(ctx, ctx.candidates)
     );
     ctx.episode = value;

@@ -992,7 +992,7 @@ export class Director {
     // planned beat cuts away from it. An expert's: from the introduction, the line before the question, so the
     // question is asked in the two-way and the answer can cut to the expert full frame
     const link = seg.link ? this.episode?.segments?.[index + 1] : null;
-    const throwAt = link?.kind === 'expert' && lines.length > 2 ? lines.length - 2 : lines.length - 1;
+    const throwAt = (seg.linkKind === 'expert' || link?.kind === 'expert') && lines.length > 2 ? lines.length - 2 : lines.length - 1;
     let thrown = false;
     const throwTo = () => {
       const remote = link?.type === 'cross' ? this.remoteOf(link) : null;
