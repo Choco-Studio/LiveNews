@@ -283,73 +283,111 @@ function glints(L, b) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The nebula: a soft field of purple and magenta (fractal noise, baked once at low resolution and
-// sampled smoothly), dithered on the screen's fixed matrix, drifting behind the stars
+// The nebula: an emission cloud the camera flies into. Glowing gas (maroon to pink) brightest in thin
+// filaments, cut by dark lanes of dust. Domain-warped fractal noise baked
+// once at two thirds of the screen's resolution over more than the frame, sampled smoothly and dithered
+// on the screen's fixed matrix. It grows from the vanishing point as the camera travels, the near dust
+// and filaments faster than the far glow (two depths), and drifts a little.
 
-const NW = 192;
-const NH = 108;
+const NW = 320;
+const NH = 180;
+const NSPAN = 1.25; // the bake covers 1.25 frames, so the drift never reaches its edge
 let NEB = null;
 function nebula() {
   if (NEB) return NEB;
-  const d = new Float32Array(NW * NH);
   let s = 5813;
   const rnd = () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296);
-  const G = 17;
-  const grid = Array.from({ length: 5 }, (_, o) => {
+  const G = 5;
+  const grid = Array.from({ length: 6 }, (_, o) => {
     const n = G << o;
     return { n, v: Float32Array.from({ length: (n + 1) * (n + 1) }, rnd) };
   });
   const noise = (x, y, o) => {
     const { n, v } = grid[o];
-    const fx = x * n;
-    const fy = y * n;
+    const fx = ((x % 1) + 1) % 1 * n;
+    const fy = ((y % 1) + 1) % 1 * n;
     const ix = Math.floor(fx);
     const iy = Math.floor(fy);
     const tx = fx - ix;
     const ty = fy - iy;
-    const sx = tx * tx * (3 - 2 * tx);
-    const sy = ty * ty * (3 - 2 * ty);
-    const at = (i, j) => v[(Math.min(n, j) * (n + 1)) + Math.min(n, i)];
+    const sx = tx * tx * tx * (tx * (tx * 6 - 15) + 10);
+    const sy = ty * ty * ty * (ty * (ty * 6 - 15) + 10);
+    // periodic: the warp carries coordinates past the bake's edge, which must not show a seam
+    const at = (i, j) => v[((j % n) * (n + 1)) + (i % n)];
     return lerp(lerp(at(ix, iy), at(ix + 1, iy), sx), lerp(at(ix, iy + 1), at(ix + 1, iy + 1), sx), sy);
   };
+  const fbm = (x, y, oct = 6, o0 = 0) => {
+    let f = 0;
+    let a = 0.5;
+    let t = 0;
+    for (let o = o0; o < Math.min(6, o0 + oct); o++) {
+      f += a * noise(x, y, o);
+      t += a;
+      a *= 0.5;
+    }
+    return f / t;
+  };
+  const glow = new Float32Array(NW * NH);
+  const near = new Float32Array(NW * NH); // filaments (+) and dust (-), the nearer depth
   for (let y = 0; y < NH; y++) {
     for (let x = 0; x < NW; x++) {
       const u = x / NW;
       const w = y / NH;
-      let f = 0;
-      let a = 0.5;
-      for (let o = 0; o < 5; o++) {
-        f += a * noise(u, w, o);
-        a *= 0.5;
-      }
-      // a diagonal band of cloud from the lower left to the upper right
-      const band = Math.exp(-(((w - (0.85 - u * 0.7)) / 0.28) ** 2));
-      d[y * NW + x] = clamp((f - 0.36) * 2.7 * (0.25 + 0.75 * band), 0, 1);
+      // the warp: the gas folds over itself in curls instead of sitting in blobs
+      const qx = fbm(u * 1.3 + 0.17, w * 1.3 + 0.61, 5);
+      const qy = fbm(u * 1.3 + 0.83, w * 1.3 + 0.29, 5);
+      const d = fbm(u + 0.9 * qx, w + 0.9 * qy, 5);
+      // the cloud's body: a broad diagonal mass from the lower left to the upper right, thickest right of centre
+      const along = u * 0.8 + (1 - w) * 0.6;
+      const across = (w - (0.95 - u * 0.75)) / 0.34;
+      const body = Math.exp(-across * across) * smoothstep(0.15, 0.7, along);
+      const g = clamp((d - 0.42) * 3.2, 0, 1) * body;
+      // filaments: the ridges of a second warped field, thin and bright where the gas is dense
+      const r = 1 - Math.abs(2 * fbm(u * 1.6 + 1.7 * qx, w * 1.6 + 1.7 * qy, 4, 1) - 1);
+      const fil = Math.pow(r, 5) * smoothstep(0.08, 0.5, g + 0.15 * body);
+      // dust: dark lanes across the bright part
+      const lane = 1 - Math.abs(2 * fbm(u * 2.1 + 0.6 * qy + 3.1, w * 2.1 + 0.6 * qx, 4) - 1);
+      const dust = Math.pow(lane, 4) * smoothstep(0.1, 0.45, g);
+      glow[y * NW + x] = g;
+      near[y * NW + x] = fil * 0.9 - dust * 1.1;
     }
   }
-  NEB = d;
-  return d;
+  NEB = { glow, near };
+  return NEB;
 }
-const NEB_COL = [0, C.purple, C.magenta, C.pink];
+const sample = (A, nx, ny) => {
+  const ix = Math.floor(nx);
+  const iy = Math.floor(ny);
+  if (ix < 0 || iy < 0 || ix >= NW - 1 || iy >= NH - 1) return 0;
+  const tx = nx - ix;
+  const ty = ny - iy;
+  const i = iy * NW + ix;
+  return lerp(lerp(A[i], A[i + 1], tx), lerp(A[i + NW], A[i + NW + 1], tx), ty);
+};
+const NEB_COL = [0, C.maroon, C.purple, C.magenta, C.pink];
+// the camera's push into the cloud (1 = the bake's own scale) and its slow drift, over the beats
+const NZOOM = track([[-1, 0.94], [0, 1], [Q.flyby, 1.22], [Q.pull, 1.42], [Q.settle, 1.55]]);
 function drawNebula(L, b, amount) {
   if (amount <= 0) return;
   const N = nebula();
-  const ox = 20 + b * 3.2; // a slow drift (the nebula is far behind the stars)
-  const oy = 6 + b * 1.1;
-  const scale = 0.5 * (1 - 0.04 * b / Q.settle);
+  const zg = NZOOM(b);
+  const zn = 1 + (zg - 1) * 1.35; // the nearer depth grows faster
+  const k = NW / (W * NSPAN);
+  const ox = NW / 2 + b * 1.6; // the drift, in bake pixels
+  const oy = NH / 2 + 8 + b * 0.5;
   for (let y = 0; y < H; y++) {
-    const ny = (y + oy) * scale;
-    const iy = Math.floor(ny);
-    const ty = ny - iy;
-    if (iy < 0 || iy >= NH - 1) continue;
+    const dy = y - VP.y;
+    const gy = oy + (dy * k) / zg;
+    const ny = oy + (dy * k) / zn;
     for (let x = 0; x < W; x++) {
-      const nx = (x + ox) * scale;
-      const ix = Math.floor(nx);
-      if (ix < 0 || ix >= NW - 1) continue;
-      const tx = nx - ix;
-      const v = lerp(lerp(N[iy * NW + ix], N[iy * NW + ix + 1], tx), lerp(N[(iy + 1) * NW + ix], N[(iy + 1) * NW + ix + 1], tx), ty) * amount;
-      const lvl = Math.floor(v * 3.4 + (ditherAt(x, y) + 0.5) / 16 - 0.5);
-      if (lvl > 0) L.d[y * W + x] = NEB_COL[Math.min(3, lvl)];
+      const dx = x - VP.x;
+      const g = sample(N.glow, ox + (dx * k) / zg, gy);
+      const n = sample(N.near, ox + (dx * k) / zn, ny);
+      // the glow alone reaches magenta; pink is the filaments' own
+      const e = clamp(g * 0.78 + n, 0, 1) * amount;
+      const th = (ditherAt(x, y) + 0.5) / 16;
+      const lvl = Math.floor(e * 4.3 + th - 0.5);
+      if (lvl > 0) L.d[y * W + x] = NEB_COL[Math.min(4, lvl)];
     }
   }
 }

@@ -7,7 +7,8 @@
 //                            every eighth (the bed's tock on the beat, its tick off it), lighting
 //                            each tick as it goes, while the camera pulls back from the pusher to
 //                            the whole dial at centre stage; the hand stops dead at twelve
-//   SIXTY       7.5          "60" lights, as on the emblem
+//   SIXTY       7.5          "60" lights, as on the emblem; a ring runs out from the dial as the hand
+//                            stops and another, orange, as "60" lights
 //   TITLE       8.7-12       the package's reveal; still for the last 0.8 s
 //
 // The stopwatch is the emblem's own (flash.js): its bands (face, inner wall, bezel, ticks, the hand
@@ -312,12 +313,38 @@ function stopwatch(L, dt) {
   }
 }
 
+// The dial at rest is small and the minute is over: two rings run out from it so the tail lands as a
+// hit, not a hold. A steel one as the hand stops dead at twelve, an orange one as "60" lights; each
+// runs out from the bezel and thins away through the screen's matrix in just over a second.
+const PULSES = [[Q.turn, C.steel, 0.7], [Q.sixty, C.orange, 1]];
+function pulses(ctx, b) {
+  for (const [at, col, k] of PULSES) {
+    const p = seg(b, at, 2.3);
+    if (p <= 0 || p >= 1) continue;
+    const r = RE + 5 + 74 * easeOut(p);
+    const keep = (1 - p) * (1 - p) * 16 * k;
+    const wide = p < 0.25 ? 1.1 : 0.6;
+    ctx.fillStyle = P[col === C.orange ? 'orange' : 'steel'];
+    const y0 = Math.max(0, Math.floor(CENTRE.y - r - 2));
+    const y1 = Math.min(H - 1, Math.ceil(CENTRE.y + r + 2));
+    for (let y = y0; y <= y1; y++) {
+      const dy = y + 0.5 - CENTRE.y;
+      const span = Math.sqrt(Math.max(0, (r + 2) * (r + 2) - dy * dy));
+      for (let x = Math.max(0, Math.floor(CENTRE.x - span)); x <= Math.min(W - 1, Math.ceil(CENTRE.x + span)); x++) {
+        const dd = Math.abs(Math.hypot(x + 0.5 - CENTRE.x, dy) - r);
+        if (dd < wide && ditherAt(x, y) < keep) ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+}
+
 function before(ctx, dt) {
   const b = dt / BEAT;
   ctx.drawImage(FLASH.background(), 0, 0);
   if (b >= SETTLE) {
     // the emblem itself, its hand finishing the turn, then "60"
     const a = handAt(b);
+    pulses(ctx, b);
     drawDial(ctx, CENTRE.x, CENTRE.y, ZOOM, 1, true, a >= 1 ? 60 : Math.floor(60 * a + 1e-6), a >= 1, digitsAt(b), a);
     return;
   }

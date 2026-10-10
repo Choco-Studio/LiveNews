@@ -169,7 +169,9 @@ function drawBanks(L, b) {
     if (yb - 40 * D.size > H || yb + 40 * D.size < 0) continue;
     // how far the bank came down over the last frame (the shutter is the frame)
     const mv = Math.max(0, (R - R0) * D.k);
-    const span = 1 + mv;
+    // (the shutter's spread is capped at two pixels: a fast bank's edge spread over its whole travel
+    // read as speckle in any still and as grain in motion; the bands below still widen with the motion)
+    const span = 1 + Math.min(mv, 2);
     const [vr, vl, vb, vs] = tones(B.di, b);
     // a band thinner than the motion would light a pixel for one frame: the thin ones widen with it
     const wide = 2 * mv + 0.6;

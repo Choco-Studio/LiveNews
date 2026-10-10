@@ -576,10 +576,21 @@ function offices() {
   const wave = (g, k) => g + 0.36 * k * (0.75 + 0.25 * r()); // within a beat's group, from the foot up
   const hero = [];
   for (let j = 0; j < NROW; j++) {
-    const busy = j === 0 ? 0.8 : 0.35 + 0.6 * r(); // how many of a floor's offices are still lit
+    // a floor is a row of offices: runs of lit windows (an open-plan office, one light for all of it)
+    // between dark ones, not a scatter; how much of it is still lit varies floor to floor
+    const busy = j === 0 ? 0.8 : 0.3 + 0.6 * r();
+    const runs = new Int8Array(NCOL).fill(-1);
+    for (let i = 0; i < NCOL; ) {
+      const len = 2 + ((r() * 6) | 0);
+      const tone = r() < 0.6 ? 0 : r() < 0.6 ? 1 : 2; // warm, a cooler strip light, a dim room
+      const on = r() < busy;
+      for (let k = 0; k < len && i < NCOL; k++, i++) runs[i] = on ? tone : -1;
+      i += r() < 0.5 ? 0 : 1; // a column between offices, sometimes
+    }
     for (let i = 0; i < NCOL; i++) {
       const bit = i === 14 && j === 0;
-      let lit = bit ? 0 : r() < busy ? (r() < 0.62 ? 0 : r() < 0.6 ? 1 : 2) : -1;
+      // (now and then one office in a dark run is still on, or one in a lit run is out)
+      let lit = bit ? 0 : runs[i] >= 0 ? (r() < 0.07 ? -1 : runs[i]) : r() < 0.04 ? 0 : -1;
       let off;
       if (bit) off = 99;
       else if (j >= 12) off = wave(Q.off[0], 1 - Math.min(1, (j - 12) / 16));
@@ -587,9 +598,13 @@ function offices() {
       else if (j >= 1) off = Q.off[2] + 0.12 * (3 - j) * (0.75 + 0.25 * r());
       else off = Q.off[2] + 0.12 + 0.3 * (1 - Math.abs(i - 14) / 14); // the top floor closes in on the bit
       if (!bit && lit >= 0 && r() < 0.1) off = Q.cut + 0.25 + r() * (off - Q.cut - 0.25); // some leave early
-      const dark = r() < 0.78 ? C.ink : r() < 0.45 ? C.navy : C.black; // an empty office's glass
+      // an empty office's glass: ink, black lower down where the neighbours shade it; the sky's reflection
+      // is a glint in the corner of the panes along one diagonal sheen across the face (not a scatter of
+      // blue squares)
+      const sheen = Math.abs(i * 0.9 - j * 1.3 - 6) < 3.2 && j < 16;
+      const dark = j > 18 + ((i * 7) % 5) ? C.black : C.ink;
       const busyOne = lit === 0 && r() < 0.18 ? 1 + ((r() * 2) | 0) : 0; // someone at a desk
-      hero.push({ lit, off, dark, busyOne });
+      hero.push({ lit, off, dark, busyOne, sheen });
     }
   }
   // the neighbours: 2 px windows on a 4 px grid, out with the first floors
@@ -708,7 +723,7 @@ function facade(L, b) {
       }
       const o = O.hero[j * NCOL + i];
       if (o.lit < 0 || b >= o.off) {
-        d[k] = o.dark;
+        d[k] = o.sheen && cx + cy <= 1 ? C.navy : o.dark;
         continue;
       }
       const sh = cx === 3 || cy === 3;

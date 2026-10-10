@@ -54,7 +54,8 @@ const fogged = (i, n) => {
 // over the processor before it tips fully down, so the last move is a pure push in
 const CR = Q.crane;
 const CAM_Z = track([[-2, -110], [0, 0], [CR, ZC - 330], [CR + 1.3, ZC - 175], [10.15, ZC], [Q.land, ZC]]);
-const CAM_H = track([[-2, Math.log(20)], [0, Math.log(20)], [5, Math.log(22)], [CR, Math.log(25)], [CR + 0.9, Math.log(62)], [CR + 1.8, Math.log(165)], [10.15, Math.log(300)], [Q.land, Math.log(F)]]);
+// (a swoop on the run: down to 15 units past the first package, up again before the crane)
+const CAM_H = track([[-2, Math.log(20)], [0, Math.log(20)], [3, Math.log(15.5)], [5.6, Math.log(21.5)], [CR, Math.log(25)], [CR + 0.9, Math.log(62)], [CR + 1.8, Math.log(165)], [10.15, Math.log(300)], [Q.land, Math.log(F)]]);
 const CAM_P = track([[0, -19], [CR, -21], [CR + 0.9, -40], [CR + 2.1, -80], [10.15, -90], [Q.land, -90]]);
 const CAM_Y = track([[-2, -1], [0, -3], [2.5, 3.5], [5, -2.5], [CR, 0], [Q.land, 0]]);
 const CAM_R = track([[-2, 0], [0, -2], [2.5, 3], [5, -2.5], [CR, 0], [Q.land, 0]]);
@@ -125,7 +126,9 @@ function backdropAt(col, row, fp, sx, sy) {
     if (gc >= 0 && gc < W && gr < H) {
       const ex = col - gc;
       const ey = row - gr;
-      const cov = Math.max(cover(ex, 1.5, fp) * cover(ey, 0.5, fp), cover(ex, 0.5, fp) * cover(ey, 1.5, fp));
+      // (seen from further than one unit a pixel the 3 px crosses fade instead of blurring into a carpet of
+      // dithered dots: they resolve as the camera lands)
+      const cov = Math.max(cover(ex, 1.5, fp) * cover(ey, 0.5, fp), cover(ex, 0.5, fp) * cover(ey, 1.5, fp)) * smoothstep(2.6, 1.15, fp);
       const gl = clamp((1 - Math.sqrt(((gc - CX) / WIDE) ** 2 + ((gr - CY) / REACH) ** 2)) * 2.1 - 0.55, 0, 1);
       if (gl >= 0.55 && cov * 16 > BAYER0(sx, sy)) return K.slate;
     }
@@ -355,8 +358,10 @@ function board(X, Z, fpa, fpb, ma, mb, ts, th) {
       const pxl = (((lx - 6) % 7) + 7) % 7;
       const pzl = (((lz - 6) % 7) + 7) % 7;
       if (lx > 4 && lx < 44 && lz > 4 && lz < 44) {
+        // (a field of 2-unit pads turns to dots long before it blurs: it fades out early, as the crane rises)
         const c = cover(pxl - 1, 0.9, ma) * cover(pzl - 1, 0.9, mb);
-        if (lerp(c, 0, smoothstep(2.5, 7, Math.max(ma, mb))) * 16 > th) return K.steel;
+        const fm = Math.max(ma, mb);
+        if (lerp(c, 0, smoothstep(1.1, 2.6, fm)) * 16 > th) return fm > 0.8 ? K.slate : K.steel;
       }
       return K.black;
     }
@@ -386,6 +391,16 @@ const BOXES = (() => {
       out.push({ x0: Math.min(x0, x0 + side * 2.2), x1: Math.max(x0, x0 + side * 2.2), z0, z1: z0 + 1.4, h: 1.1, smd: true });
     }
   }
+  // landmarks that pass close by on the run, so it has a shape (a big package on the left, two tall
+  // capacitors on the right, a second package on the right before the crane), not a uniform corridor
+  const marks = [
+    { x0: -64, x1: -37, z0: 142, z1: 170, h: 2.8, big: true },
+    { x0: 36, x1: 42, z0: 246, z1: 252, h: 10, tall: true },
+    { x0: 45, x1: 50, z0: 258, z1: 263, h: 8.5, tall: true },
+    { x0: 37, x1: 66, z0: 336, z1: 366, h: 3, big: true },
+  ];
+  out.push(...marks);
+  const clear = (x0, x1, z0, z1) => !marks.some((m) => x0 < m.x1 + 3 && x1 > m.x0 - 3 && z0 < m.z1 + 3 && z1 > m.z0 - 3);
   for (let i = 0; i < 30; i++) {
     const z0 = 30 + i * 21 + hash(i, 7) * 9;
     if (z0 > ZC - 175) break;
@@ -396,7 +411,7 @@ const BOXES = (() => {
       const d = tall ? w : 5 + Math.round(hash(i, side, 2) * 7);
       const ht = tall ? 5.5 + hash(i, side, 4) * 3 : 1.4 + hash(i, side, 4) * 1.4;
       const x0 = side < 0 ? -(38 + hash(i, side, 5) * 30) - w : 38 + hash(i, side, 5) * 30;
-      out.push({ x0, x1: x0 + w, z0, z1: z0 + d, h: ht, tall });
+      if (clear(x0, x0 + w, z0, z0 + d)) out.push({ x0, x1: x0 + w, z0, z1: z0 + d, h: ht, tall });
     }
   }
   return out;
@@ -480,6 +495,16 @@ function boxes(L, fogS, fogE) {
         if (q0[2] > 1 && q1[2] > 1 && q2[2] > 1 && q3[2] > 1) quad(L, q0, q1, q2, q3, f(K.silver));
       }
       continue;
+    }
+    if (b.big) {
+      // a big package's markings: its pin-1 dimple and a printed line across the top
+      const mark = (X, Z, col) => {
+        project(X, b.h, Z, LEG);
+        if (LEG[2] > 1) L.plot(Math.round(LEG[0] - 0.5), Math.round(LEG[1] - 0.5), f(col));
+      };
+      mark(b.x0 + 2.5, b.z0 + 2.5, K.steel);
+      const zl = lerp(b.z0, b.z1, 0.55);
+      for (let X = b.x0 + 5; X < b.x1 - 5; X += 0.8) mark(X, zl, K.slate);
     }
     // the top's lit front edge (a package) or its dark vent cross (a capacitor)
     const n = Math.max(2, Math.round(Math.hypot(p5[0] - p4[0], p5[1] - p4[1])));

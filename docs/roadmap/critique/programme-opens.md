@@ -295,3 +295,19 @@ Evidence:
 Nitpicks left:
 1. The judgement is by structure and measurement, not by ear.
 2. WEATHER reads 0.8 LU quiet, the loudness model's own error on that tune.
+
+## Second visual round (10 Oct)
+
+A fresh look at the five, frame by frame, found one weak stretch in each.
+
+| Open | Weak stretch | What changed | Measured |
+|---|---|---|---|
+| TECH BYTES | The run was one corridor for four seconds; the crane crossed a carpet of dithered dots (the frame's 3 px crosses and the side blocks' pad fields seen from further than a unit a pixel) | Landmarks pass close on the run (a big package on the left, two tall capacitors on the right, a second package before the crane) and the camera swoops from 20 to 15 units and back; the crosses fade out above one unit a pixel and resolve as it lands, the pad fields fade early and dim to slate | Flicker over the first 6.7 s: 386k against 399k before |
+| COSMOS DESK | The deep field was a static band of camouflage blobs | The nebula is domain-warped gas: a glow (maroon to magenta), pink only in its filaments, dark dust lanes; the camera pushes into it (×1.22 by the flyby) with the filaments and dust on a nearer depth than the glow | First second 9.9k flickers a second (3.0k before, when nothing moved); the planet's rings dominate the second second as before |
+| MONEY MINUTE | The tower's offices were confetti, its empty glass a scatter of blue squares | A floor is runs of offices (2-7 windows, one tone each: warm, strip light, dim), with the odd one out; empty glass is ink (black lower down), the sky's reflection a three-pixel glint in the panes' corners along one diagonal sheen | |
+| NEWS IN 60 | The dial sat small and still for the last second | A steel ring runs out from the bezel as the hand stops dead, an orange one as "60" lights; both thin away through the screen's matrix in just over a second | The hand-over test (the dial is the emblem's drawing at 6.47 beats) still passes |
+| WORLD WEATHER | The banks' edges were dithered across their whole travel: speckled in any still | The shutter's spread is capped at two pixels (the thin bands still widen with the motion, so none lights for one frame) | Flicker from 3 s: 171k, the same as before |
+
+Frames: 1.8-4.9 ms median, 13-28 ms at worst (COSMOS's nebula bake on its first frame). Video of the five: `cabeceras-ronda2.mp4` (sent to the owner).
+
+Left as it is: the ledger, the dial and the other emblems build on the package's plain field. That is the channel's common reveal, the same in every programme.
