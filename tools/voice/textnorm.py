@@ -229,6 +229,8 @@ class Phrase:
     pitch: tuple = (0.0, 0.0)
     gain: float = 0.0
     accents: list = field(default_factory=list)
+    # a soft chuckle before the phrase (the script's [chuckle] cue at the start of a line; engine.py)
+    chuckle: bool = False
 
     @property
     def spoken(self):
@@ -638,6 +640,7 @@ def plan_phrases(text, lang='en-us', phrases=None, speed=1.0, pauses=None, pause
                 ph.speed = float(min(1.3, max(0.7, factor)))
             if isinstance(p, dict):
                 _melody(ph, p)
+                ph.chuckle = bool(p.get('chuckle'))
             out.append(ph)
             cursor = at + len(ptext)
     else:

@@ -399,6 +399,7 @@ The fixture feeds are clean; the live feeds are not. WORLD NOW was run on the re
 | Grave segments | `nod` and `steeple` only |
 
 - **Banned in WORLD NOW:** `wave`, `thumbs_up`, `wow`, `fist_pump`, `facepalm`, `laugh`, `point_camera`, `chin`, `glasses`, `count`. `money-minute.md` and `news-60.md` already ban the first six.
+- **`chuckle` (owner decision 7, 10 Oct):** a soft, closed-mouth chuckle heard before a line (the speaker's own voice, under the line's level), once per programme at most, only in light banter (the sign-off after Lola's dry last word is the usual place). The cartoon `laugh` stays banned.
 - **Timing:** no gesture in the first 0.5 s of a shot. On the wide, the listener looks at the speaker and nods at most once.
 - **`raise_hand`** plays at its single amplitude, since ACTIONS has no size parameter.
 - **Code changes these need:**

@@ -285,7 +285,8 @@ STAGE DIRECTIONS (make the presenters move naturally)
 - An emotion name in brackets (e.g. "[surprised]") changes the speaker's expression from that point.
 - This is a professional studio: gestures are sparing and natural, at most two per segment. Prefer nod, lean_in, steeple and look_partner; point_screen only when a picture or map follows.
 - ${program.gestures?.defaults?.intro ? `Greet and sign off with a "${program.gestures.defaults.intro}", never a wave.` : 'A wave only when greeting or signing off.'} Use count when listing, lean_in for important points, shrug for uncertainty${solo ? '' : ', look_partner or point_partner on hand-overs'}.
-- Never use wave, thumbs_up, fist_pump, facepalm, laugh or wow in grave stories.
+- Never use wave, thumbs_up, fist_pump, facepalm, laugh, chuckle or wow in grave stories.${actions && !actions.includes('chuckle') ? '' : `
+- "[chuckle]" (a soft, closed-mouth chuckle, heard before the words) goes only at the very start of a line, in light banter: a presenter or the expert reacting to the other's dry remark on a light story. No more than one in the programme; never on or right after a grave story, never as a reaction to bad news.`}
 
 OUTPUT FORMAT
 Reply with ONLY a valid JSON object, no text before or after, shaped like this:
@@ -1857,9 +1858,16 @@ export function normalizeBulletin(
   const lastStory = storyList.at(-1);
   const roleOf = (d) => (d.type !== 'story' ? d.type : d.feature === 'lighter' ? 'lighter' : d === lastStory ? 'last' : d === storyList[0] ? 'lead' : 'story');
   const budget = Number.isInteger(program?.gestures?.perEpisode) ? { left: program.gestures.perEpisode } : null;
+  let chuckled = false; // one soft chuckle per programme, at the start of a line (it is heard before the words)
   const finalize = (d, prevHeavy) => {
     const grave = d.type === 'story' ? d.heavy : prevHeavy;
     const parsed = parseCues(d.tagged, { grave: grave || prevHeavy });
+    parsed.cues = parsed.cues.filter((c) => {
+      if (c.action !== 'chuckle') return true;
+      if (chuckled || c.slot) return false; // (heard only at the start of a line: server/voice/plan.js wantsChuckle)
+      chuckled = true;
+      return true;
+    });
     const text = clip(parsed.text, LIMITS.text);
     if (!text) return null;
     const speaker = d.anchor;

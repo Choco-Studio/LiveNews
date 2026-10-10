@@ -126,6 +126,12 @@ def phone_weights(ph):
     return out
 
 
+# The soft chuckle's sound (owner decision 7): Kokoro phonemes for a short, closed laugh; A is the default, B and C
+# the alternatives on the owner's A/B sample. Followed by CHUCKLE_GAP seconds before the line's first word.
+CHUCKLES = {'A': 'hˈʌhʌ', 'B': 'hˈmhm', 'C': 'hʌ hʌ'}
+CHUCKLE_GAP = 0.12
+
+
 class VoiceEngine:
     def __init__(self, model=None, voices=None):
         t0 = time.time()
@@ -282,6 +288,16 @@ class VoiceEngine:
         while len(self._cache) > 48:
             self._cache.pop(next(iter(self._cache)))
         return hit.copy()
+
+    def chuckle(self, style, speed, level_db, variant='A', seed=0):
+        """A soft chuckle in the speaker's own voice: a short voiced "huh-uh" (CHUCKLES) made mostly breath and set
+        under the line's level (dsp.soft_laugh)."""
+        ph = CHUCKLES.get(variant, CHUCKLES['A'])
+        raw = self._infer(ph, style, min(1.3, max(0.8, speed * 1.08)))
+        s, e = dsp.speech_bounds(raw, SAMPLE_RATE)
+        if e <= s:
+            return np.zeros(0)
+        return dsp.soft_laugh(raw[s:e], SAMPLE_RATE, level_db, seed=seed)
 
     def synth_phrase(self, phonemes, style, speed):
         """Synthesise one phrase; split at a word gap if it exceeds the model context."""
@@ -459,6 +475,11 @@ class VoiceEngine:
         breaths = req.get('breaths', True) is not False and not str(req.get('effect') or '').startswith('robot') and not req.get('raw')
         # the planner's newsreader melody (speechtext planMelody), unless the request turns it off; never for a robot
         melody = req.get('melody', True) is not False and not str(req.get('effect') or '').startswith('robot')
+        # a soft chuckle before a phrase that asks for one (or before the first, req.chuckle); never for a robot
+        laughs = not str(req.get('effect') or '').startswith('robot') and not req.get('raw')
+        if laughs and req.get('chuckle') and phrases:
+            phrases[0].chuckle = True
+        chuckle_style = str(req.get('chuckleStyle') or 'A')
 
         clips = []
         for ph in phrases:
@@ -502,6 +523,13 @@ class VoiceEngine:
         pieces, words, phr, phones = [], [], [], []
         cursor = 0
         for i, c in enumerate(clips):
+            if laughs and c['phrase'].chuckle:
+                # the chuckle, then a short beat before the words (the timeline after it moves on with it)
+                laugh = self.chuckle(style, speed, c['level'], chuckle_style, seed=zlib.crc32(c['phrase'].text.encode('utf-8')))
+                if len(laugh):
+                    gap = np.zeros(int(CHUCKLE_GAP * sr))
+                    pieces.extend([laugh, gap])
+                    cursor += len(laugh) + len(gap)
             base = cursor / sr + c['onset']
             phr.append({'t': round(base, 3), 'dur': round(c['dur'], 3),
                         'char': c['phrase'].start, 'len': c['phrase'].end - c['phrase'].start})

@@ -26,6 +26,25 @@ export const HEADS = {
     },
   },
 
+  // the soft chuckle before a line (owner decision 7): smaller and shorter than the laugh, eyes and mouth smiling,
+  // one small lift of the shoulders as the breath goes out; the chuckle itself is heard (tools/voice/engine.py)
+  chuckle: {
+    dur: 1.1,
+    desc: 'a soft chuckle at the very start of a line (light banter only)',
+    stroke: 0.08,
+    apex: 0.24,
+    hold: 0.7,
+    focus: 'head',
+    tracks: {
+      pitch: [[0, 0], [0.12, -0.025], [0.3, 0.01], [0.48, -0.015], [1.1, 0, 's']],
+      smile: [[0, 0], [0.18, 0.45], [0.75, 0.38], [1.1, 0]],
+      squint: [[0, 0], [0.2, 0.35], [0.7, 0.3], [1.1, 0]],
+      brow: [[0, 0], [0.2, 0.15], [0.8, 0.1], [1.1, 0]],
+      shN: [[0, 0], [0.22, -0.14], [0.5, -0.04], [1.1, 0]],
+      shF: [[0, 0], [0.24, -0.14], [0.52, -0.04], [1.1, 0]],
+    },
+  },
+
   shake_head: {
     dur: 1.25,
     desc: 'shake head, disbelief or no',

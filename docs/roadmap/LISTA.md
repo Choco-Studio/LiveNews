@@ -20,7 +20,8 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 13. 🟡 Manos: detalles pendientes (golpecito al juntar dedos, deslizar gafas, nudillos, mano relajada) y rendimiento.
 
 ## C. Voces
-14. 🟡 Siguiente nivel: risas suaves, respiraciones y pausas naturales, sin exagerar. (Respiraciones quitadas, decisión 7. Risas: pendientes.)
+14. 🟡 Siguiente nivel: risas suaves, respiraciones y pausas naturales, sin exagerar. (Respiraciones quitadas, decisión 7.)
+    - ✅ Risas (10 oct): una risita suave con la propia voz del presentador, antes de la frase y por debajo de su volumen, con sonrisa de boca cerrada y un pequeño movimiento de hombros. Una como máximo por programa, solo en charla ligera (WORLD NOW y TECH BYTES, también los expertos); nunca en COSMOS, NEWS IN 60 ni MONEY MINUTE, nunca UNIT-8 ni tras una noticia grave. Hay muestra con tres sonidos (A, B y C) para que elijas; ahora suena la A.
     - ✅ Voces más naturales, tipo presentador real (10 oct): cada noticia empieza arriba, baja frase a frase y cierra abajo; las preguntas suben; "según fuentes…" va más bajo y suave; las cifras y los "no" se marcan; el ritmo también cambia (el arranque algo más pausado). Cada presentador con su estilo (Max y Lola más vivos, Paco más sobrio, UNIT-8 plano porque es una máquina; noticias graves más contenidas). Medido: la melodía entre frases ahora sigue el plan y se mueve el doble o el triple; la voz, la duración y el volumen no cambian. Hay muestra antes/después. Se quita con una línea (`MELODY` en server/voice/plan.js).
 15. ✅ UNIT-8: voz de robot más suave (elegiste la A, ya puesta).
 

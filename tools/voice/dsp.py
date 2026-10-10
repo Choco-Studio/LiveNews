@@ -682,6 +682,39 @@ def breath_into(silence, sr, speech_db, seed=0, **params):
     return out
 
 
+# ---------------------------------------------------------------- laughs
+
+LAUGH = {
+    'below_db': 9.0,       # under the speech level of the line it opens (a quiet, private chuckle)
+    'air': 0.55,           # share of breath (noise shaped by the voice's own envelope) in the chuckle
+    'band': (300.0, 4200.0),
+    'fade_in': 0.012,
+    'fade_out': 0.05,
+}
+
+
+def soft_laugh(voiced, sr, speech_db, seed=0, **params):
+    """A soft chuckle from a short voiced "huh-uh" in the presenter's own voice (owner decision 7: laughs yes,
+    natural): mostly breath riding on the voice's envelope, about 9 dB under the line it opens, faded so it never
+    clicks. The speaker's timbre comes from Kokoro; the breath makes it a laugh rather than a word."""
+    p = {**LAUGH, **params}
+    x = np.asarray(voiced, dtype=np.float64)
+    if len(x) < int(0.05 * sr):
+        return x
+    rng = np.random.default_rng(seed)
+    lo, hi = p['band']
+    noise = fft_filter(rng.standard_normal(len(x) + int(0.1 * sr)), lambda f: biquad_response([biquad('highpass', lo, sr, q=0.7), biquad('lowpass', hi, sr, q=0.7)], f, sr), sr, pad=0.02)[:len(x)]
+    win = max(1, int(0.012 * sr))
+    env = np.sqrt(np.convolve(x ** 2, np.ones(win) / win, mode='same'))
+    breath = noise * env
+    rv = float(np.sqrt(np.mean(x ** 2))) or 1.0
+    rb = float(np.sqrt(np.mean(breath ** 2))) or 1.0
+    mixed = (1 - p['air']) * x / rv + p['air'] * breath / rb
+    level = active_level_db(mixed, sr)
+    mixed = mixed * 10 ** ((speech_db - p['below_db'] - level) / 20)
+    return fade(mixed, sr, p['fade_in'], p['fade_out'])
+
+
 # ---------------------------------------------------------------- robot
 
 def _stft(x, n_fft, hop):

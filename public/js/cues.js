@@ -19,6 +19,10 @@ export const ACTIONS = {
   fist_pump: { dur: 1.0, kind: 'arm', light: true, desc: 'celebrate good news' },
   facepalm: { dur: 1.4, kind: 'arm', light: true, desc: 'facepalm, light comedy only' },
   laugh: { dur: 1.4, kind: 'head', light: true, desc: 'laugh' },
+  // owner decision 7 (5 Oct): laughs, soft and natural; heard as a quiet chuckle before the line (server/voice,
+  // tools/voice/engine.py), seen as a closed-mouth smile. Light banter only: never on a grave story, never in COSMOS,
+  // NEWS IN 60 or from UNIT-8
+  chuckle: { dur: 1.1, kind: 'head', light: true, desc: 'a soft chuckle at the very start of a line (light banter only)' },
   nod: { dur: 1.0, kind: 'head', desc: 'nod in agreement' },
   shake_head: { dur: 1.0, kind: 'head', desc: 'shake head, disbelief or no' },
   lean_in: { dur: 1.8, kind: 'head', desc: 'lean towards the camera for emphasis' },

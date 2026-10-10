@@ -182,6 +182,15 @@ class ChainTest(unittest.TestCase):
             self.assertAlmostEqual(loudness.integrated_loudness(y, SR), -16.0, delta=0.3, msg=name)
             self.assertLessEqual(loudness.true_peak(y), -1.9, name)
 
+    def test_soft_laugh_sits_under_the_speech(self):
+        t = np.arange(int(0.4 * SR)) / SR
+        voiced = 0.3 * np.sin(2 * np.pi * 140 * t) * (np.sin(np.pi * t / 0.4) ** 2)
+        out = dsp.soft_laugh(voiced, SR, -20.0, seed=3)
+        self.assertEqual(len(out), len(voiced))
+        self.assertAlmostEqual(dsp.active_level_db(out, SR), -29.0, delta=1.5)
+        self.assertLess(abs(out[0]), 1e-3)
+        self.assertTrue(np.array_equal(out, dsp.soft_laugh(voiced, SR, -20.0, seed=3)))
+
     def test_breath_sits_inside_the_pause(self):
         # owner 3 Oct: natural voices, "sin exagerar": a soft inhale ~30 dB under the speech, inside the pause
         silence = np.zeros(int(0.31 * SR))
@@ -422,6 +431,24 @@ class EngineTest(unittest.TestCase):
         self.assertGreater(p1['t'], p0['t'] + p0['dur'] + 0.25)
         self.assertAlmostEqual(reply['lufs'], -16.0, delta=0.3)
         self.assertLessEqual(reply['truePeak'], -1.9)
+
+    def test_chuckle_opens_the_line(self):
+        # owner decision 7: a soft chuckle before the words, in the speaker's voice, under the line's level; the words
+        # move on with it; a robot never laughs
+        text = "That's WORLD NOW. Thank you for watching."
+        base = {'text': text, 'voice': 'bm_george:0.6+bm_lewis:0.4', 'lang': 'en-gb', 'breaths': False}
+        _, sr, plain = self.engine.speak(base)
+        audio, sr, laughed = self.engine.speak({**base, 'chuckle': True})
+        lead = laughed['words'][0]['t'] - plain['words'][0]['t']
+        self.assertGreater(lead, 0.3)
+        self.assertLess(lead, 1.0)
+        self.assertAlmostEqual(laughed['duration'] - plain['duration'], lead, delta=0.05)
+        # the chuckle itself is quieter than the speech after it
+        n = int((laughed['words'][0]['t'] - 0.1) * sr)
+        self.assertLess(dsp.active_level_db(audio[:n], sr), dsp.active_level_db(audio[n:], sr) - 4)
+        _, _, robot = self.engine.speak({**base, 'chuckle': True, 'effect': 'robot-soft'})
+        _, _, robot0 = self.engine.speak({**base, 'effect': 'robot-soft'})
+        self.assertAlmostEqual(robot['words'][0]['t'], robot0['words'][0]['t'], places=2)
 
     def test_melody_keeps_the_timing(self):
         # the newsreader melody bends the pitch and gain only: same length, same word times

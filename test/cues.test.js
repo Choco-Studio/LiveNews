@@ -248,7 +248,7 @@ describe('the action vocabulary', () => {
   });
 
   test('the light gestures are the cheerful ones', () => {
-    assert.deepEqual(Object.entries(ACTIONS).filter(([, a]) => a.light).map(([name]) => name).sort(), ['facepalm', 'fist_pump', 'laugh', 'thumbs_up', 'wave', 'wow']);
+    assert.deepEqual(Object.entries(ACTIONS).filter(([, a]) => a.light).map(([name]) => name).sort(), ['chuckle', 'facepalm', 'fist_pump', 'laugh', 'thumbs_up', 'wave', 'wow']);
   });
 
   test('the emotions are the same ones the writer validates', () => {

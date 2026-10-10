@@ -141,7 +141,18 @@ export function segmentRequest(seg, { presenterId, presenter, casting, presets =
   const preset = presets[presenterId];
   if (preset?.chain && preset.voice === cast.voice) req.chain = preset.chain;
   if (phrases) req.phrases = phrases;
+  // the soft chuckle (owner decision 7): the speaker's own [chuckle] at the start of the line is heard before its
+  // first phrase (tools/voice/engine.py); never from a robot
+  if (!robot && wantsChuckle(seg)) {
+    if (phrases?.length) phrases[0].chuckle = true;
+    else req.chuckle = true;
+  }
   return req;
+}
+
+/** Does the line open on its speaker's own chuckle (a [chuckle] cue within its first characters)? */
+export function wantsChuckle(seg) {
+  return Array.isArray(seg?.cues) && seg.cues.some((c) => c && c.action === 'chuckle' && !c.slot && (Number(c.char) || 0) <= 2);
 }
 
 /** Worker request for one advert voice-over line. */
@@ -168,7 +179,7 @@ export function adLineRequest(text, { cast, speech = null }) {
 
 /** Stable clip id for a request (+ the engine fingerprint, so engine changes re-render). */
 export function clipId(req, fingerprint = '') {
-  const body = JSON.stringify([RECIPE, fingerprint, req.text, req.voice, req.speed, req.lang, req.effect, req.pauses || null, req.chain || null, req.phrases || null]);
+  const body = JSON.stringify([RECIPE, fingerprint, req.text, req.voice, req.speed, req.lang, req.effect, req.pauses || null, req.chain || null, req.phrases || null, ...(req.chuckle ? ['chuckle'] : [])]);
   return `v${crypto.createHash('sha256').update(body).digest('hex').slice(0, 20)}`;
 }
 

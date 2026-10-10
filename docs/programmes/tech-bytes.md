@@ -276,6 +276,7 @@ The shots are the writer's `SHOTS` (wide, close, full, map; `server/writer.js` l
 
 - **Everything else is dropped,** including `wave`, `wow`, `fist_pump`, `thumbs_up`, `facepalm`, `point_camera`, `point_partner`, `papers` and `laugh`.
 - **`laugh` is banned:** `public/js/scenes/portraits.js` (`laugh`, line 2136) animates it as alternating open-mouth shapes with a body bounce, which the BRIEF forbids.
+- **`chuckle` is allowed (owner decision 7, 10 Oct):** a soft, closed-mouth chuckle heard before a line, once per programme, in light banter only (Max at Ada's dry last word); never on a grave story.
 - **A closed smile,** for AND FINALLY, is the emotion cue `happy` on the listener. canvas25d renders `happy` as a face preset (smile 0.62, squint 0.35, crossfaded over 0.45 s; `rig.js` emotion presets), and a silent listener's mouth stays at rest. No new gesture is needed.
 - **Timing:** start 0.2–0.3 s before the stressed word, hold the apex through it, and release over at least 0.4 s *(our rule)*.
 - **What the rig can perform:** canvas25d implements `raise_hand`, `wave`, `point_screen`, `nod`, `look_partner`, `shrug` and `count` (`gestures.js` `GESTURES`). `lean_in`, `steeple`, `chin`, `glasses` and `shake_head` come with the wave-2 gesture work. Until then those cues are dropped, never substituted.
