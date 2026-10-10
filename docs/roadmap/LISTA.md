@@ -30,7 +30,8 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
     - Omar Ledger (economía), Clara Meridian (diplomacia), Dev Isobar (clima), Dr Tomas Albedo (espacio), June Kernel (tecnología), Dra. Amara Pulse (salud), Leo Sepia (cultura) e Ines Clause (justicia);
     - el presentador lee la noticia, presenta al experto y le pregunta; el experto la explica solo con datos de la fuente (nunca "estuve allí", nunca consejos financieros ni médicos), le hace una pregunta más y le da las gracias;
     - cada uno con su apariencia, su voz y su propio estudio animado (mercados al anochecer, despacho con mapa antiguo, ventana con montañas y molinos, observatorio, sala de servidores, consulta con radiografía, galería y biblioteca jurídica);
-    - salen en WORLD NOW, TECH BYTES, COSMOS DESK y MONEY MINUTE.
+    - salen en WORLD NOW, TECH BYTES, COSMOS DESK y MONEY MINUTE;
+    - pulido (10 oct): un experto descansa 2 h antes de volver al mismo programa (salvo el fijo de MONEY MINUTE, TECH BYTES y COSMOS DESK); las frases del presentador van rotando sin repetirse; la pantalla partida entra con la presentación y la respuesta va a pantalla completa; ya no se corta el pelo en las cajas; con las noticias de prueba salen los 8.
 
     Falta: tu visto bueno a nombres, caras y voces (WAVE3 §13). Las risas esperan a la decisión 7. Detalle en docs/programmes/guests-and-experts.md.
 19. **Entrevistas reales "IN THEIR WORDS".** La persona aparece en la pantalla o en el plató diciendo solo palabras de declaraciones públicas, con la etiqueta RECREACIÓN. Nunca víctimas, menores, particulares ni noticias graves.
