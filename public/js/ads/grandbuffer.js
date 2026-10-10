@@ -2097,6 +2097,29 @@ const plateBg = () => bake('gb-plate', W, H, (c) => {
   R(c, 0, 196, W, 1, P.steel);
   R(c, 0, 197, W, 1, P.fog);
   glowBake(c, 40, 0, 220, 120, P.yellow, 0.08);
+  // the linen's weave: a faint grid of darker threads, and the fold the iron left across it
+  for (let y = 0; y < 196; y += 3) for (let x = (y / 3) % 2 ? 1 : 0; x < W; x += 4) if (hash(x * 7 + y * 13) > 0.45) R(c, x, y, 1, 1, P.fog);
+  for (let x = 0; x < W; x++) R(c, x, 58 + round(sin(x * 0.02) * 1.5), 1, 1, P.silver);
+  // a set table round the plate: the bread plate and a roll at the upper left, the wine glass's foot and its
+  // shadow at the upper right (claret catching the candles), a folded napkin at the lower left, the salt cellar
+  ellipse(c, 34, 30, 30, 13, P.fog);
+  ellipse(c, 33, 29, 28, 12, P.white, { d: P.silver, f: 0.2, m: 1, side: 1 });
+  ellipse(c, 30, 27, 13, 7, P.tanShade, { d: P.brown, f: 0.35, m: 1, l: P.tan, lf: 0.25, lm: 1, side: 1 });
+  R(c, 25, 25, 9, 1, P.tan);
+  R(c, 26, 27, 7, 1, P.cream);
+  ellipse(c, 346, 40, 17, 8, P.fog);
+  ellipse(c, 344, 38, 16, 7, P.silver);
+  ellipse(c, 344, 38, 11, 5, P.white);
+  ellipse(c, 352, 30, 14, 8, P.maroon, { d: P.black, f: 0.3, m: 1, l: P.darkRed, lf: 0.3, lm: 1, side: 1 });
+  R(c, 346, 27, 5, 1, P.red);
+  R(c, 347, 26, 2, 1, P.pink);
+  for (let i = 0; i < 18; i++) R(c, 22 + i * 2, 168 + (i % 2), 2, 18 - abs(i - 9), i % 3 ? P.white : P.silver);
+  R(c, 22, 186, 36, 1, P.fog);
+  ellipse(c, 290, 178, 7, 4, P.fog);
+  ellipse(c, 290, 177, 6, 3, P.white);
+  for (let k = 0; k < 5; k++) R(c, 287 + k, 176 + (k % 2), 1, 1, P.silver);
+  // crumbs from the roll
+  for (let k = 0; k < 7; k++) R(c, 50 + round(hash(k * 3.1) * 40), 46 + round(hash(k * 5.3) * 18), 1, 1, P.tan);
   // the plate: its shadow, the rim, a gold band, the well
   ellipse(c, PL_X + 5, PL_Y + 6, 95, 42, P.steel);
   ellipse(c, PL_X, PL_Y, 94, 41, P.fog);
@@ -2129,6 +2152,12 @@ const TRUFFLE_GOLD = { d: P.orange, f: 0.4, m: 1, dd: P.tanShade, df: 0.12, l: P
 const TRUFFLE_WARM = { d: P.brown, f: 0.4, m: 1, l: P.tanShade, lf: 0.2, lm: 1, side: 1 };
 function shotPlate(ctx, t) {
   ctx.drawImage(plateBg(), 0, 0);
+  // the candles off frame breathe on the linen (a slow, uneven flicker, never a strobe)
+  const fl = 0.5 + 0.3 * sin(t * 5.1) + 0.2 * sin(t * 8.7 + 1.3);
+  ctx.globalAlpha = 0.05 + 0.04 * fl;
+  ellipse(ctx, 48, 6, 120, 60, P.yellow);
+  ctx.globalAlpha = 1;
+  if (fl > 0.65) R(ctx, 351, 27, 1, 1, P.white); // the glint on the claret
   // eight truffles in a ring; the lit one walks round like a loading spinner
   const head = floor(mod(t * 5, 8));
   for (let k = 0; k < 8; k++) {

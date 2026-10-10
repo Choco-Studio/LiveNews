@@ -606,7 +606,14 @@ const tableClose = lazy(() =>
 
 // --- the heap: fallers, rest poses, scripted physics -------------------------------------------
 const G = 120; // slow-motion gravity (px/s^2)
-const LIP = { x: -96, y: 132, z: -14 }; // the scoop's lip
+// A crisp is light and flat: air drag holds it near a terminal speed (VT = G / KD) and damps its spin, so it
+// falls in a slow tumbling flutter, not like a stone (owner, 3 Oct: "solo se las ve caer y encima caen raro").
+const KD = 1.5; // linear drag on the fall (1/s)
+const KR = 1.1; // drag on the spin (1/s)
+const VT = G / KD;
+const LIP = { x: -30, y: 66, z: -8 }; // the scoop's lip, just above the board in Ian's hand
+const yFall = (t) => LIP.y - VT * (t - (1 - Math.exp(-KD * t)) / KD); // height after t seconds of fall
+const reach = (t) => (1 - Math.exp(-KD * t)) / KD; // horizontal travel per unit of release speed
 // rest pose: X, support Y, Z, yaw, rest tilt (axis, angle); impact tilt; tumble axis and spin; hop; skid
 const FALLERS = [
   { seed: 1, s: 19, t0: 0.55, X: -14, Y: 0, Z: 10, yaw: 0.35, ta: [1, 0, 0.2], tilt: 0.02, ia: [0.2, 0, 1], it: 0.55, sa: [0.7, 0.4, 0.6], w: 2.4, e: 0.2, skid: [3, 1] },
@@ -626,10 +633,23 @@ for (const f of FALLERS) {
   mul(f.Rimp, f.Rrest, rotAxis(RA, f.ia[0], f.ia[1], f.ia[2], f.it));
   f.liftRest = -lowest(f.S, f.Rrest, f.s);
   f.liftImp = -lowest(f.S, f.Rimp, f.s);
-  // fall from the lip to the impact point
+  // fall from the lip to the impact point, with drag: the flight time solves yFall(t) = impact height, and the
+  // release speed along the board is what carries the crisp from the lip to its impact point in that time
   const yImp = f.Y + f.liftImp;
-  f.tF = sqrt((2 * (LIP.y - yImp)) / G);
-  f.vI = G * f.tF;
+  let lo = 0;
+  let hi = 6;
+  for (let k = 0; k < 40; k++) {
+    const mid = (lo + hi) / 2;
+    if (yFall(mid) > yImp) lo = mid;
+    else hi = mid;
+  }
+  f.tF = (lo + hi) / 2;
+  f.vx = (f.X - f.skid[0] - LIP.x) / reach(f.tF);
+  f.vz = (f.Z - f.skid[1] - LIP.z) / reach(f.tF);
+  f.vI = VT * (1 - Math.exp(-KD * f.tF)); // speed at impact
+  // the spin it leaves the lip with (it tips over the edge), damped by the air; total turn by impact
+  f.w0 = f.w * 2.6;
+  f.turn = (f.w0 / KR) * (1 - Math.exp(-KR * f.tF));
   f.settleAt = f.t0 + f.tF + SETTLE;
 }
 const ORDER = FALLERS.slice().sort((a, b) => a.settleAt - b.settleAt);
@@ -641,23 +661,32 @@ function poseAt(f, lt) {
   if (tau < 0) return null;
   const P0 = POSE;
   if (tau < f.tF) {
-    // falling: gravity, a flutter that dies at impact, tumbling into the impact pose
+    // falling: drag-limited drop and drift from the lip, a spin that the air slows, and the flat crisp's
+    // side-to-side rocking (a falling leaf), both dying out as it meets the board
     const q = tau / f.tF;
-    const flutter = 6 * sin(q * PI * 2) * (1 - q);
-    P0.X = lerp(LIP.x, f.X - f.skid[0], q) + flutter;
-    P0.Z = lerp(LIP.z, f.Z - f.skid[1], q);
-    P0.Y = LIP.y - 0.5 * G * tau * tau;
-    mul(P0.R, f.Rimp, rotAxis(RA, f.sa[0], f.sa[1], f.sa[2], f.w * (tau - f.tF)));
+    const e = reach(tau);
+    const rock = 0.32 * sin(tau * 8.5 + f.seed) * Math.exp(-1.2 * tau) * (1 - q);
+    P0.X = LIP.x + f.vx * e + 2.5 * sin(tau * 6 + f.seed * 1.7) * (1 - q);
+    P0.Z = LIP.z + f.vz * e;
+    P0.Y = yFall(tau);
+    const spun = (f.w0 / KR) * (1 - Math.exp(-KR * tau)) - f.turn; // radians still to turn before impact (<= 0)
+    mul(RC, f.Rimp, rotAxis(RA, f.sa[0], f.sa[1], f.sa[2], spun));
+    mul(P0.R, RC, rotAxis(RB, f.sa[2], 0, -f.sa[0], rock));
     P0.h = P0.Y - f.Y + lowest(f.S, P0.R, f.s);
     return P0;
   }
-  // impact -> hop -> rock on the convex side -> rest
+  // impact -> a small hop (turning on toward its rest pose in the air) -> rock on the convex side -> rest
   const t2 = tau - f.tF;
   const vh = f.e * f.vI;
   const tHop = (2 * vh) / G;
   const hop = t2 < tHop ? vh * t2 - 0.5 * G * t2 * t2 : 0;
   const fade = t2 > SETTLE - 0.4 ? clamp((SETTLE - t2) / 0.4) : 1;
-  const th = f.it * Math.exp(-2.6 * t2) * cos(t2 * 6.5) * fade;
+  let th;
+  if (t2 < tHop) th = f.it * (1 - 0.6 * smooth(t2 / tHop));
+  else {
+    const t3 = t2 - tHop;
+    th = 0.4 * f.it * Math.exp(-2.6 * t3) * cos(t3 * 6.5) * fade;
+  }
   mul(P0.R, f.Rrest, rotAxis(RA, f.ia[0], f.ia[1], f.ia[2], th));
   const sk = 1 - Math.exp(-3.2 * t2);
   P0.X = f.X - f.skid[0] * (1 - sk * (t2 >= SETTLE ? 1 : 1));
@@ -790,6 +819,38 @@ function scoop(ctx, x, y, a) {
   fill(ctx, BRASS[4]);
 }
 
+/**
+ * Ian's hand on the scoop's handle (local point (-82, -28) of a scoop at (x, y) tilted by `a`): a white work
+ * sleeve from the top left, the knuckles over the handle, the thumb along it. The pour is someone's, not magic.
+ */
+const SLEEVE = mix(P.fog, P.steel, 0.45);
+const SH_SLEEVE = { d: mix(SLEEVE, P.ink, 0.45), f: 0.45, m: 1, l: mix(P.silver, P.fog, 0.5), lf: 0.15, lm: 1, side: 1 };
+const HAND = mix(P.skin, P.tan, 0.35);
+const SH_HAND = { d: mix(P.skinShade, P.tan, 0.4), f: 0.4, m: 1, l: mix(P.skin, P.cream, 0.3), lf: 0.15, lm: 1, side: 1 };
+function hand(ctx, x, y, a) {
+  const c = cos(a);
+  const s = sin(a);
+  const gx = x + -82 * c - -28 * s;
+  const gy = y + -82 * s + -28 * c;
+  // the forearm in its sleeve, from off the frame's top left down to the wrist
+  begin();
+  pt(gx - 120, gy - 70);
+  pt(gx - 92, gy - 98);
+  pt(gx - 6, gy - 14);
+  pt(gx - 14, gy + 4);
+  fill(ctx, SLEEVE, SH_SLEEVE);
+  rect(ctx, gx - 13, gy - 9, 9, 2, mix(SLEEVE, P.ink, 0.3)); // the cuff's seam
+  // the fist around the handle: back of the hand, four knuckles, the thumb laid along the handle
+  ellipse(ctx, gx + 1, gy - 2, 9, 7, HAND, SH_HAND);
+  for (let k = 0; k < 4; k++) ellipse(ctx, gx + 7 + k * 0.6 * c * 3, gy - 6 + k * 3, 3, 2, mix(HAND, P.skinShade, 0.2 + k * 0.1));
+  begin();
+  pt(gx - 2, gy - 6);
+  pt(gx + 10 * c + 2, gy + 10 * s - 7);
+  pt(gx + 10 * c + 3, gy + 10 * s - 4);
+  pt(gx - 1, gy - 3);
+  fill(ctx, mix(HAND, P.cream, 0.15));
+}
+
 function drawHops(ctx, lt, cam, camX) {
   for (const hp of HOPS) {
     const f = hp.f;
@@ -834,10 +895,13 @@ function shotTumble(ctx, lt) {
   }
   splatEnd(T, ctx, camX);
   drawHops(ctx, lt, CAM_T, camX);
-  // the scoop tips at the top left, then withdraws
+  // Ian tips the scoop just above the board, then lifts it away
   const a = track(lt, K_SCOOP);
   proj(CAM_T, LIP.x, LIP.y, LIP.z);
-  scoop(ctx, PJ[0] - camX + 2, PJ[1] - 3 - max(0, lt - 3.9) * 60, a);
+  const sx = PJ[0] - camX + 2;
+  const sy = PJ[1] - 3 - 60 * smooth(clamp((lt - 3.9) / 1.6)) * 1.6;
+  scoop(ctx, sx, sy, a);
+  hand(ctx, sx, sy, a);
   vignette(ctx, 0.55);
 }
 
@@ -1029,6 +1093,43 @@ function heapTop() {
 }
 const FLAKES = Array.from({ length: 34 }, (_, i) => ({ x: 120 + hash(i * 2.3) * 150, t0: hash(i * 5.9) * 4.2, v: 26 + hash(i * 8.1) * 16, k: i }));
 const K_SCAM = [[0, 0], [4.6, 12, 'smooth']];
+// Ian's fingers come in from above, rub a pinch of salt over the heap in the light, and leave: the flakes
+// fall from his fingertips (a stream you can follow), glint in the shaft and settle on the crisps.
+const K_PINCH_Y = [[0, -70], [0.7, 46, 'smooth'], [3.2, 50], [4.0, -70, 'smooth']];
+const K_PINCH_X = [[0, 214], [0.7, 200, 'smooth'], [3.2, 186], [4.0, 196, 'smooth']];
+const PINCH = Array.from({ length: 120 }, (_, i) => ({ tr: 0.85 + hash(i * 3.7) * 2.3, ox: (hash(i * 1.9) - 0.5) * 5, vx: (hash(i * 6.1) - 0.5) * 10, v: 34 + hash(i * 4.3) * 18, k: i + 100 }));
+for (const f of PINCH) {
+  f.x0 = track(f.tr, K_PINCH_X) + f.ox;
+  f.y0 = track(f.tr, K_PINCH_Y) + 2;
+}
+
+/** Ian's hand from above: sleeve, the back of the hand, thumb and index pinched at (x, y), rubbing while it sprinkles. */
+function pinchHand(ctx, x, y, rub) {
+  begin();
+  pt(x + 6, y - 120);
+  pt(x + 44, y - 120);
+  pt(x + 30, y - 14);
+  pt(x + 10, y - 12);
+  fill(ctx, SLEEVE, SH_SLEEVE);
+  rect(ctx, x + 11, y - 18, 20, 2, mix(SLEEVE, P.ink, 0.3));
+  ellipse(ctx, x + 18, y - 7, 11, 8, HAND, SH_HAND);
+  // index finger curled down to the pinch, thumb meeting it from the left
+  begin();
+  pt(x + 10, y - 9);
+  pt(x + 2 + rub, y - 2);
+  pt(x + 1 + rub, y + 1);
+  pt(x + 5, y + 1);
+  pt(x + 14, y - 5);
+  fill(ctx, HAND, SH_HAND);
+  begin();
+  pt(x + 8, y - 12);
+  pt(x - 3 - rub, y - 4);
+  pt(x - 2 - rub, y - 1);
+  pt(x + 2, y - 2);
+  pt(x + 12, y - 8);
+  fill(ctx, mix(HAND, P.cream, 0.12), SH_HAND);
+  rect(ctx, x + 22, y - 2, 6, 1, mix(P.skinShade, P.tan, 0.35)); // the curled fingers' crease
+}
 
 function shotSalt(ctx, lt) {
   const camX = round(track(lt, K_SCAM));
@@ -1059,7 +1160,24 @@ function shotSalt(ctx, lt) {
     ctx.globalAlpha = landed ? 0.9 : 0.45 + 0.5 * inShaft;
     rect(ctx, x - camX, y, glint ? 2 : 1, 1, glint || inShaft > 0.4 ? P.white : P.silver);
   }
+  // the pinch: flakes from the fingertips, a little drift and air on the way down, a glint in the shaft, then rest
+  for (const f of PINCH) {
+    const q = lt - f.tr;
+    if (q < 0) continue;
+    const x = f.x0 + f.vx * q + sin(q * 3 + f.k) * 0.8;
+    const xi = clamp(round(x + camX), 0, BW - 1);
+    const floorY = top[xi] < H ? top[xi] + 1 + (f.k % 4) : 200;
+    let y = f.y0 + f.v * q + 6 * q * q;
+    const landed = y >= floorY;
+    if (landed) y = floorY;
+    const inShaft = clamp(1 - abs(x + camX - 190 - (y - 108) * -0.42) / 60);
+    const glint = !landed && (floor(lt * 9 + f.k * 1.3) % 5) === 0;
+    ctx.globalAlpha = landed ? 0.85 : 0.5 + 0.5 * inShaft;
+    rect(ctx, x, y, glint ? 2 : 1, 1, glint || inShaft > 0.35 ? P.white : P.silver);
+  }
   ctx.globalAlpha = 1;
+  const py = track(lt, K_PINCH_Y);
+  if (py > -60) pinchHand(ctx, round(track(lt, K_PINCH_X) - camX * 0.2), round(py), lt > 0.8 && lt < 3.2 ? round(sin(lt * 26)) : 0);
   vignette(ctx, 0.55);
 }
 
