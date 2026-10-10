@@ -52,7 +52,9 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
     - el menú de páginas copiado en los resúmenes (la foto del día de la NASA) se descarta;
     - etiquetas nuevas (CONFLICT, ELECTIONS, PROTESTS, POLITICS) y corregidas (los ataques de Yemen ya no salen como INDUSTRY).
 
-    Falta: comprobar el arreglo de las frases rotas de NEWS IN 60, que no se repita la misma noticia, más variedad 24/7, que no se cuele una foto de otra noticia y verificación de cifras.
+    - ✅ Repaso del 10 oct (dos pasadas con todos los programas y noticias de ese día, redactor sin IA): los **titulares** ya no se cortan a media frase ni cambian el sentido (antes salía "Ex-Deutsche Bank trader jailed" cuando le anulaban la condena; "…deals may not"; comillas abiertas; nombres partidos como "Nikon Small World"; "…advocates say" quitado de una opinión); si no hay un corte limpio, el titular va entero en dos líneas. Fuera **frases sin sujeto o sin verbo principal** ("Documented how…", "But criticised…", "A man who lives in a log cabin."), frases recortadas que dejaban colgando "possibly", "let alone figuring out" o media lista; la misma cifra dicha dos veces seguidas; respuestas de corresponsal que empezaban por "Instead,"; aperturas que dependían del titular ("…said the tip was…"). **Una noticia, un hueco**: el mismo huracán contado por varios medios o actualizaciones del mismo medio, y el movimiento "Cockroach" de India (salía 3 veces en WORLD NOW), ya cuentan como una. Tablero WHAT WE KNOW sin rangos partidos ("entre 50 y 100"), sin cifras rotas ("30 -ERA MAC MINIS"), páginas de programas de la BBC (Money Box, Tech Now) y listas de productos fuera, y el resumen de la NASA que se quedaba en "11." arreglado.
+
+    Falta: más variedad 24/7, que no se cuele una foto de otra noticia y verificación de cifras.
 
 ## E. Plató, gráficos y cámara
 24. Plató:

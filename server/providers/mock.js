@@ -12,7 +12,7 @@ import { isTranscriptLine } from '../transcript.js';
 import { isBreaking, plainTitle } from '../news.js';
 import { ALSO_LEAN, LIGHT, contentWords, extractFigures, sentencesIn, harmlessIncident, isGrave, leansOnPrevious, notForFeatures, numbersIn, quotesIn, severity } from '../facts.js';
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
-import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, TIMELINE_MAX, hasFiniteVerb, headlineNames, shortHeadline, splitClauses, trimClause } from '../writer.js';
+import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, TIMELINE_MAX, hasFiniteVerb, headlineNames, isFragment, shortHeadline, splitClauses, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
 import { AHEAD, deskOf } from '../correspondents.js';
 import { expertFor, answerFrame } from '../experts.js';
@@ -61,7 +61,9 @@ export function sentenceCase(title, info) {
 // page, BBC 9 Oct), "Watch: ...". A tease says the story's own news instead.
 // (and a death notice: "RIP Margaret Hamilton, whose code saved the Apollo 11 Moon landing", Ars Technica 9 Oct)
 // (and someone's words: "'Careless use of AI is the real threat'", BBC 9 Oct, said by a presenter, would be ours)
-export const LABEL_TITLE = /^(?:["“‘']|(?:\p{Lu}[\p{L}’'.&-]*\s+){1,3}on\s+\p{Lu}|(?:Watch|Video|Listen|In pictures|Explained|Analysis|Live)\s*:|R\.?I\.?P\.?\s)/u;
+// (a quotation that is the headline's label, "‘Stain on country’: Trump criticises…", not one inside its sentence: "'Tropical
+// jungle' of wallabies, porcupines and parrots must move after neighbours complain", BBC 10 Oct)
+export const LABEL_TITLE = /^(?:["“‘'][^"“”‘’']{1,120}["”’'](?=\s*(?:[:,–—-]|says\b|said\b|$))|["“][^"“”]{1,160}["”](?=\s*(?:[:,–—-]|says\b|said\b|$))|(?:\p{Lu}[\p{L}’'.&-]*\s+){1,3}on\s+\p{Lu}|(?:Watch|Video|Listen|In pictures|Explained|Analysis|Live)\s*:|R\.?I\.?P\.?\s)/u;
 export function spokenTitle(title, info) {
   const t = sentenceCase(String(title || '').trim(), info).replace(/[.!]+$/, '');
   if (!t || /^["“‘']|:|\?$/.test(t)) return t;
@@ -204,17 +206,18 @@ export function knownPoints(sentences, max = 3) {
     const stripped = t
       .replace(/,\s*(?:according to [^,.]+|(?:the )?[\w’' -]{2,40}? (?:says|said|reports|reported))\.?$/i, '')
       .replace(/^(?:according to [^,]+,\s*)/i, '')
-      .replace(/^[^,]{0,60}?\b(?:says|said|reports|reported|confirmed)\s+(?:that\s+)?/i, '');
+      .replace(/^[^,]{0,60}?\b(?:says|said|reports|reported|confirmed)\s+(?!to\b)(?:that\s+)?/i, '');
     // attribution comes off a count ("the agency says about 1.2 million homes are without power"), never off a
     // claim: "Geffray said the closures were a security precaution" is the minister's word, so it keeps it (or,
     // too long for the board, is left out)
     const attributed = stripped !== t;
     const trailing = attributed && /,\s*(?:according to [^,.]+|(?:the )?[\w’' -]{2,40}? (?:says|said|reports|reported))\.?$/i.test(t);
-    for (const clause of stripped.split(/,\s*and\s+|;\s*|\s+and\s+(?=(?:about |more than |nearly |some |at least )?\d)/i)) {
+    // (a range is one figure: "between 50 and 100 editorial redundancies" once made two points, Guardian 10 Oct)
+    for (const clause of stripped.split(/,\s*and\s+|;\s*|(?<!\bbetween\s+[\d.,]+(?:\s*(?:%|per cent|percent|million|billion|m|bn|k))?)\s+and\s+(?=(?:about |more than |nearly |some |at least )?\d)/i)) {
       let c = clause.replace(/[.!,;:]+$/, '').trim();
       // (a fact after ", officials said" stands without it: "Nearby roads were closed")
       if (attributed && !/\d/.test(c) && !(trailing && !JUDGEMENT.test(c))) c = stripped.split(/,\s*and\s+|;\s*/).length === 1 ? t.replace(/[.!,;:]+$/, '').trim() : '';
-      if (!c || /^(?:that|there|which|who|but|so|also)\b/i.test(c) || /\b(?:it|its|they|their|them|this|these|those|he|she|his|her)\b/i.test(c)) continue; // a point stands alone
+      if (!c || /^(?:that|there|which|who|but|so|also|to|of|for|with|between)\b/i.test(c) || /\b(?:it|its|they|their|them|this|these|those|he|she|his|her)\b/i.test(c)) continue; // a point stands alone
       const words = c.split(' ').length;
       if (words < 3 || words > 9 || c.length > KNOWN_MAX) continue;
       if (/\s[–—-]\s/.test(c) || !hasFiniteVerb(c)) continue; // a statement with a verb of its own, not a noun phrase
@@ -531,9 +534,12 @@ function lowerFirstWord(text, info) {
   if (lookupPlace(word) || /^[A-Z][a-z]+[A-Z]/.test(word) || DEMONYM.test(word)) return text;
   // the headline ends a sentence of its own: "...space station. Astronauts on..." is not a name mid-sentence
   const story = `${String(info.s.title).replace(/[.!?]*$/, '.')} ${info.s.summary || ''} ${info.s.body || ''}`;
-  const lower = new RegExp(`(?<![\\p{L}])${word.toLowerCase()}(?![\\p{L}])`, 'u').test(story);
+  // (in words, not in a link: "…/hurricane-isaias-gulf-coast…" once made "Also coming up: isaias becomes…", 10 Oct)
+  const lowers = story.match(new RegExp(`(?<![\\p{L}\\-/#@.])${word.toLowerCase()}(?![\\p{L}\\-/])`, 'gu'))?.length || 0;
   // A name is written with its capital in the middle of a sentence somewhere in the story; a common word is not.
-  const midSentence = new RegExp(`[\\p{Ll},;:]\\s+${word}(?![\\p{L}])`, 'u').test(story);
+  const mids = story.match(new RegExp(`[\\p{Ll},;:]\\s+${word}(?![\\p{L}])`, 'gu'))?.length || 0;
+  const lower = lowers > mids;
+  const midSentence = mids > 0;
   // (a first and a last name: "Meredith Whittaker says...", BBC 9 Oct, once went out as "meredith Whittaker")
   const fullName = new RegExp(`^${word}\\s+\\p{Lu}\\p{Ll}+(?:\\s|,|['’]s)`, 'u').test(text) && !COMMON_START.test(text) && !lower;
   if (fullName) return text;
@@ -672,7 +678,14 @@ const leansOnHeadline = (info, t) => {
   // ("The other firms being suspended from the program include...", under "US bars Microsoft, Adobe...", TechCrunch 9 Oct)
   if (/^(?:The\s+)?[Oo]ther\s+[a-z]/.test(String(t).trim())) return true;
   const m = String(t).trim().match(/^The\s+([a-z][a-z-]{2,})\b/);
-  return !!m && contentWords(info.s.title).some((w) => w.slice(0, 5) === m[1].slice(0, 5)) && !restates(t, info.s.title);
+  if (!!m && contentWords(info.s.title).some((w) => w.slice(0, 5) === m[1].slice(0, 5)) && !restates(t, info.s.title)) return true;
+  // ("Philadelphia police said the tip was “flagged as spam”…" under "Rogue Anthropic AI agent gave police fake tip in
+  // unsolved murder case", BBC 10 Oct: "the tip" is the headline's, never introduced)
+  const early = String(t).trim().split(/\s+/).slice(1, 7).join(' ');
+  const the = early.match(/\bthe\s+([a-z][a-z-]{2,})\b/);
+  if (!the) return false;
+  const before = early.slice(0, the.index);
+  return contentWords(info.s.title).some((w) => w.slice(0, 5) === the[1].slice(0, 5)) && !contentWords(before).some((w) => w.slice(0, 5) === the[1].slice(0, 5)) && !restates(t, info.s.title);
 };
 // (nor a connective: "But Norwich Apex Data Centre has defended the scheme..." once opened a story, BBC 9 Oct; nor a time
 // that points back: "She married her first husband, James Cox Hamilton, that same year", Ars Technica 9 Oct)
@@ -814,7 +827,8 @@ function study(story) {
     .filter((f, i, all) => f.fact.length <= 40 && f.score >= 2 && all.findIndex((g) => g.value === f.value) === i);
   // (a short line without a verb is a section header or an aside, never news: "Part time, anyway.", "The A-G-I
   // Chronicles.", a Verge newsletter read on air, 10 Oct)
-  const fragment = (x) => wordCount(x) <= 6 && !hasFiniteVerb(x.replace(/[.!?…]+$/, ''));
+  // (nor a noun phrase with only a relative clause for a verb, nor a sentence that lost its subject: isFragment)
+  const fragment = (x) => (wordCount(x) <= 6 && !hasFiniteVerb(x.replace(/[.!?…]+$/, ''))) || isFragment(x);
   const fromSummary = sentencesOf(s.summary).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !ownVoice(x) && !fragment(x) && unstop(x).toLowerCase() !== unstop(title).toLowerCase());
   // the story dossier (wave 3 §3.1): the article's own sentences after the summary's, never one the summary
   // already says, at most 9 in all (depth for programmes of 8-10 minutes, never padding)
@@ -1625,6 +1639,11 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         if (/^["“‘']/.test(t0.trim()) && !/\b(?:said|says|told|added|according to|warned|wrote)\b/i.test(t0)) continue;
         // (a sentence that tells again what an aired one said: most of its words, little new)
         if (toldSoFar().some((x) => (restates(t0, x) && newWords(t0, x) < 4) || sameSense(t0, x))) continue;
+        // (nor its figure again in other words: "…and wounding at least 14. At least 14 people were wounded in the
+        // attack", ABC News 10 Oct)
+        const toldText = toldSoFar().join(' ');
+        const figs = numbersIn(t0).map((n) => n.scaled);
+        if (figs.length && figs.every((v) => numbersIn(toldText).some((n) => n.scaled === v)) && newWords(t0, toldText) < 3) continue;
         if (/^(?:It|They|This|These)\b/.test(t0) && WHY.test(t0)) continue; // "It says..." with no subject reads as a label
         // (a feature's rhetorical question, and the sentence that answers it: "What’s the best way to manage a
         // forest? Australians have argued about this for decades." ScienceDaily, 4 Oct)
@@ -1679,8 +1698,10 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         // the expert's answers: the story's remaining sentences in order (what comes next last, for the follow-up),
         // the first standing on its own and framed as analysis ("The key detail is this: ..."), within the
         // programme's sentence length
+        // (never one that answers something else: "Instead, the American leader announced…" after "what happens next?",
+        // ABC News 10 Oct)
         const rest = info.sentences
-          .filter((t) => !used.has(t) && !echoes(t))
+          .filter((t) => !used.has(t) && !echoes(t) && !CONNECTIVE_START.test(t.trim()) && !FOLLOWS_ON.test(t.trim()))
           .map((t) => (wordCount(t) <= maxWords ? t : trimClause(t, maxWords, 8, { keep: info.keep })))
           .filter(Boolean);
         rest.sort((a, b) => Number(AHEAD.test(a)) - Number(AHEAD.test(b)));
@@ -1700,8 +1721,10 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       } else if (linked) {
         // the correspondent's lines: the story's remaining sentences in order, the first standing on its own (it
         // follows the hand-over, so never "It says..."), each within the programme's sentence length
+        // (never one that answers something else: "Instead, the American leader announced…" after "what happens next?",
+        // ABC News 10 Oct)
         const rest = info.sentences
-          .filter((t) => !used.has(t) && !echoes(t))
+          .filter((t) => !used.has(t) && !echoes(t) && !CONNECTIVE_START.test(t.trim()) && !FOLLOWS_ON.test(t.trim()))
           .map((t) => (wordCount(t) <= maxWords ? t : trimClause(t, maxWords, 8, { keep: info.keep })))
           .filter(Boolean);
         // what comes next goes last (the answer to "what happens next?"), the rest in the story's order

@@ -367,6 +367,8 @@ const clean = (v, max) =>
     .replace(/[*#`]/g, '')
     .replace(/(^|\s)_+|_+(?=\s|$)/g, '$1') // markdown underscores, not snake_case words
     .replace(/\s+/g, ' ')
+    // a full stop after a quotation that already ends one ("…or their motion.”.", Ars Technica 10 Oct)
+    .replace(/([.!?…])(["”’'])\.(?=\s|$)/g, '$1$2')
     .trim()
     .slice(0, max);
 
@@ -440,6 +442,44 @@ export const danglingHeadline = (h) => {
 // ("power to 1.2 million homes") or a purpose ("switch to solar power to cut fuel costs"), see toCut().
 const TRAIL_PREP = /^(?:in|on|at|for|by|before|after|during|across|near|from|over|under|into|through|since|until|with|without|amid|despite|around|along|off|outside|inside|beyond|toward|towards|ahead)$/i;
 const TIME_START = /^(?:next|this|last|every)$/i;
+const TIME_NOUN = /^(?:week|weekend|month|year|night|day|morning|evening|season|time|summer|winter|spring|autumn|decade|century|quarter|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december)s?\b/i;
+// A head may not end on these: a possessive, a negation, a participle or adjective that needs its complement.
+const CUT_BAD_END = /(?:['’]s|s['’]|\b(?:not|never|no|trapped|stuck|caught|based|located|involved|interested|known|aimed|designed|linked|tied|related|compared|able|unable|likely|poised|ready|keen|eager|set|meant|supposed|valued|priced|worth|bound|destined|headed|subject|prone|home|more|less|most|least|than|kills|injures|wounds|hurts|picked|tipped|chosen|selected|puts|leaves|keeps|sends|sets|condemns|criticises|criticizes|slams|hails|praises|blames|describes|labels|brands|live|work|run|sit|stand|go|come|move|stay|remain|turn|look|head))$/i;
+// Prepositions that open a clause of their own: what follows may carry its own verb ("after Opec cuts output").
+const SUBORDINATOR = /^(?:after|before|since|until|as|while|when|because|if|though|although|despite|amid)$/i;
+/**
+ * Is words[i] ("in", "on", "upon") inside a name used as a modifier: capitalised words on both sides and a common
+ * noun after the name ("new Nikon Small World in Motion winner"), so a cut there would orphan what it names?
+ */
+function inName(words, i) {
+  if (!/^(?:in|on|upon)$/i.test(words[i] || '') || !/^\p{Lu}/u.test(words[i - 1] || '') || !/^\p{Lu}/u.test(words[i + 1] || '')) return false;
+  let k = i + 1;
+  while (k < words.length && /^\p{Lu}/u.test(words[k])) k++;
+  return k < words.length && /^\p{Ll}/u.test(words[k]);
+}
+
+/** Is a dropped tail a phrase whose object is a name, not a place or a date ("for Poundland", "against Adidas")? */
+function dropsName(tail) {
+  const named = String(tail).match(/^\s*(?:for|of|with|by|from|on|over|against|to)\s+(?:the\s+)?(\p{Lu}[\p{L}’'&.-]+)/u);
+  return !!named && !lookupPlace(named[1]) && !/^(?:January|February|March|April|May|June|July|August|September|October|November|December|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Christmas|Easter|New)s?$/.test(named[1]);
+}
+
+/** Does a dropped tail carry the headline's main verb (an auxiliary, "says", a past form after a name)? */
+function tailPredicate(tail) {
+  const words = String(tail).trim().split(/\s+/).map((w) => w.replace(/^[^\p{L}\d]+|[^\p{L}\d'’]+$/gu, '')).filter(Boolean);
+  for (let i = 1; i < words.length; i++) {
+    const w = words[i].toLowerCase();
+    if (AUX_VERB.test(w) || /^(?:says|said)$/.test(w)) return true;
+    if ((/^[a-z]{3,}ed$/.test(w) || PAST_FORM.test(w)) && /^\p{Lu}/u.test(words[i - 1]) && i > 1) return true;
+    // a headline verb in -s after its subject: "…without permission wins unfair dismissal case" (Guardian 10 Oct)
+    if (i > 1 && TAIL_VERB_S.test(w)) return true;
+  }
+  // a participle that ends the headline completes its "has": "…trader has conviction [for rigging interest rates
+  // quashed]" (Guardian 10 Oct)
+  const last = (words.at(-1) || '').toLowerCase();
+  return words.length > 2 && /^[a-z]{4,}(?:ed|en)$/.test(last) && !/^(?:children|women|men|garden|kitchen|sweden|eleven|seven|heaven|token|oven|citizen|chicken|warden|linen|screen|green|queen|teen|dozen|golden|wooden|hidden|sudden|broken|eastern|western)$/.test(last);
+}
+const TAIL_VERB_S = /^(?:wins|loses|says|gets|faces|takes|makes|calls|backs|hits|beats|ends|leads|plans|sees|sets|joins|quits|warns|urges|vows|seeks|rejects|denies|admits|accepts|refuses|agrees|launches|unveils|announces|reveals|confirms|signs|buys|sells|sues|wants|needs|gives|offers|returns|resigns|dies|kills|claims|insists|pledges|demands)$/;
 // Nouns that are empty without what follows them: "a sharp fall [in deforestation]", "a new wing [for boats]".
 const NEEDS_COMPLEMENT = /\b(?:fall|rise|drop|increase|decrease|decline|cut|cuts|growth|surge|jump|slump|fleet|wing|parts?|signs?|number|share|rest|half|lack|loss|end|start|return|plans?|series|range|role|wave|chain|agreement|deal|bid|warning|ban|limit|call|push|move|shift|switch|access|support)$/i;
 // A head ending on an intransitive verb whose phrase was the point ("AI model runs [on a laptop]").
@@ -501,6 +541,29 @@ export function headlineCuts(t) {
   const consider = (head, cutWord = '', clause = false, label = false) => {
     head = head.trim().replace(/[\s,;:–—-]+$/, '');
     if (!head || head === t || out.has(head)) return;
+    // never inside a quotation ("Greens must avoid ‘capture [by extremists…’]"), never on a possessive, a negation or
+    // a participle that needs what follows ("…OpenAI’s [latest drop]", "deals may not [last]", "truck trapped [in…]")
+    if (unbalanced(head) || CUT_BAD_END.test(head.replace(/[’'”"]+$/, ''))) return;
+    // a second verb cut from its complement: "Isaias pummels the Gulf Coast, and plows [through Alabama]" (NPR 10 Oct)
+    if (/,\s*and\s+[a-z]+s$/i.test(head)) return;
+    // a named object is the story: "Irish property group in talks about rescue deal [for Poundland]" (Guardian 10 Oct;
+    // a place may go, the map shows it)
+    if (dropsName(t.slice(head.length))) return;
+    // the cut must not take the main verb with it: "Ex-Deutsche Bank trader jailed [for rigging rates has conviction
+    // overturned]" (BBC 10 Oct) says the opposite; "Rights group says paramilitary drone strike [in Sudan killed 41]"
+    if (cutWord && !SUBORDINATOR.test(cutWord) && tailPredicate(t.slice(head.length))) return;
+    const tail = t.slice(head.length);
+    // a contrast or a relative clause left half-said: "…supports gunman's execution [by firing squad but questions
+    // livestream]", "…Ebola patient who travelled [across three nations undetected]" (10 Oct)
+    if (/\bbut\b/i.test(tail) || /\b(?:who|which|that)\s+\S+$/i.test(head)) return;
+    // a span of time before "after": "…valued at $7.5B just weeks [after launch]"
+    if (/^[\s,]*(?:after|before|since)\b/i.test(tail) && /\b(?:seconds|minutes|hours|days|weeks|months|years|decades|moments)$/i.test(head)) return;
+    // a verb that wants its complement too: "…plan to livestream execution puts US [in dubious company]"
+    if (/\b(?:puts|put|leaves|left|keeps|kept|sends|sent|sets|places|placed)\s+\S+$/i.test(head)) return;
+    // a headline with a verb keeps one ("Irish property group [in talks about rescue deal for Poundland]")
+    if (hasFiniteVerb(t) && !hasFiniteVerb(head)) return;
+    // an opinion keeps who holds it: "Women with PMOS should get subsidised weight-loss drugs[, Australian advocates say]"
+    if (/^[,\s]*(?:[\w’'.-]+\s+){0,5}(?:say|says|said|warn|warns|claim|claims|argue|argues|believe|believes)\s*$/i.test(tail) && /\b(?:should|must|need|needs|ought|could|would|may|might|will)\b/i.test(head)) return;
     // Without its label, a clause must still say where ("Kerala floods: thousands moved..." keeps Kerala).
     if (label && places.length && !places.some((p) => head.includes(p))) return;
     const kept = headWords(head).length;
@@ -519,6 +582,10 @@ export function headlineCuts(t) {
   for (const m of t.matchAll(CLAUSE_CUTS)) {
     const word = m[0].trim();
     const rest = t.slice(m.index + m[0].length);
+    // a contrast is the point: "LG’s RGB LED TV is good[, but it’s no OLED]" (The Verge 10 Oct) is a different verdict
+    if (/^but$/i.test(word) || /^(?:but|yet|though|although|except|not|only|unless|until)\b/i.test(rest)) continue;
+    // nor a cut that leaves the main verb behind (", sets presidential poll" keeps a clause; "…trader jailed[, has …]" not)
+    if (CLAUSE_WORD.test(word) && /^,$/.test(word) && /^(?:has|have|had|is|are|was|were|will|says|said)\b/i.test(rest)) continue;
     // "as" starts a clause ("as demand cools"), not a comparison or a role ("use the sun as a compass")
     if (/^as$/i.test(word) && !asStartsClause(rest)) continue;
     heads.push({ text: t.slice(0, m.index), clause: CLAUSE_WORD.test(word) });
@@ -535,7 +602,8 @@ export function headlineCuts(t) {
   if (colon) {
     const clause = colon[2].replace(/^\p{Ll}/u, (c) => c.toUpperCase());
     // The label carries the topic (and often the place): the clause is judged on what it keeps.
-    if (headWords(clause).length >= 4) heads.push({ text: clause, clause: false, label: true });
+    // (never one that points back at the label: "Boots has a new owner: Three ways it could affect you", BBC 10 Oct)
+    if (headWords(clause).length >= 4 && !/\b(?:it|its|they|them|their|this|these|he|she|his|her)\b/i.test(clause)) heads.push({ text: clause, clause: false, label: true });
   }
   for (const head of [{ text: t }, ...heads]) {
     if (head.text !== t) consider(head.text, '', head.clause, head.label);
@@ -544,7 +612,11 @@ export function headlineCuts(t) {
       const w = words[i];
       // a last word with nothing after it is a particle, not a preposition ("face off", "step down")
       if (i === words.length - 1 && TRAIL_PREP.test(w)) continue;
-      if (TRAIL_PREP.test(w) || (TIME_START.test(w) && words.length - i <= 3) || (/^to$/i.test(w) && toCut(words, i))) consider(words.slice(0, i).join(' '), w, false, head.label);
+      // a preposition inside a name is no boundary ("new Nikon Small World in Motion winner")
+      if (inName(words, i)) continue;
+      // "last" is a time only before one ("last week"), never "deals may not last"
+      const time = TIME_START.test(w) && words.length - i <= 3 && TIME_NOUN.test(words[i + 1] || '');
+      if (TRAIL_PREP.test(w) || time || (/^to$/i.test(w) && toCut(words, i))) consider(words.slice(0, i).join(' '), w, false, head.label);
     }
   }
   return [...out.entries()].map(([text, v]) => ({ text, ...v }));
@@ -581,7 +653,7 @@ const HEADLINESE = [
   [/\bto be (visible|seen|open|closed|ready|available)\b/gi, '$1'],
   [/\binterest rates\b/gi, 'rates'],
   [/\b(?:businesses|companies)\b/g, 'firms'],
-  [/\bcompany\b/g, 'firm'],
+  [/(?<!\bin (?:(?:good|bad|dubious|august|elite|illustrious|select|esteemed|mixed|exalted|rare|unusual) )?)\bcompany\b/g, 'firm'], // ("puts US in dubious company" is no firm)
   [/(?<=\S )(?:its|their) (?=\p{Ll})/gu, ''],
   [/(?<=\S )now (?=\p{Ll}+s\b)/gu, ''],
 ];
@@ -624,10 +696,30 @@ const QUESTION = /^(?:can|could|will|would|is|are|was|were|should|does|do|did|ha
 function hardFit(t, max = LIMITS.headline) {
   if (t.length <= max) return t;
   if (QUESTION.test(t) && t.length <= HEADLINE_TWO_LINES) return t;
-  const clean = (h) => h.split(' ').length >= 3 && !danglingHeadline(h) && !ADVERB_END.test(h) && !unbalanced(h);
-  // a clause boundary first: "What to know about Brazil's election [as Lula and Flávio Bolsonaro face off]"
-  const bounds = [...t.matchAll(/,\s+|\s+(?:as|after|amid|while|with|following|despite|over|in|at)\s+/g)].map((m) => t.slice(0, m.index).trim()).filter((h) => h.length <= max && clean(h) && !NEEDS_COMPLEMENT.test(h) && !BARE_VERB_END.test(h));
-  if (bounds.length) return bounds.sort((a, b) => b.length - a.length)[0];
+  // (nor a relative clause left at its verb, "…Ebola patient who travelled", nor a verb that wants its complement too,
+  // "…plan to livestream execution puts US [in dubious company]", nor a span before "after", "…just weeks [after launch]")
+  const clean = (h) => h.split(' ').length >= 3 && !dropsName(t.slice(h.length)) && !/,\s*and\s+[a-z]+s$/i.test(h) && !danglingHeadline(h) && !ADVERB_END.test(h) && !unbalanced(h) && !CUT_BAD_END.test(h.replace(/[’'”"]+$/, '')) && !/\b(?:who|which|that)\s+\S+$/i.test(h) && !/\b(?:puts|put|leaves|left|keeps|kept|sends|sent|sets|places|placed)\s+\S+$/i.test(h) && !(/^\s*(?:after|before|since)\b/i.test(t.slice(h.length)) && /\b(?:seconds|minutes|hours|days|weeks|months|years|decades|moments)$/i.test(h));
+  // a clause boundary first: "What to know about Brazil's election [as Lula and Flávio Bolsonaro face off]"; never
+  // before a contrast or with the main verb in what goes (see headlineCuts)
+  const bounds = [...t.matchAll(/,\s+|\s+(?:as|after|amid|while|with|following|despite|over|in|at)\s+/g)]
+    .filter((m) => {
+      const word = m[0].trim();
+      const rest = t.slice(m.index + m[0].length);
+      if (/^(?:but|yet|though|although|except|not|only|unless|until)\b/i.test(rest) || /\bbut\b/i.test(rest)) return false;
+      if (word === 'as' && /^["“‘'(]/.test(rest)) return false; // "…court condemns [as ‘assault on rule of law’]"
+      // an opinion keeps who holds it ("…should get subsidised weight-loss drugs[, Australian advocates say]")
+      if (word === ',' && /^(?:[\w’'.-]+\s+){0,5}(?:say|says|said|warn|warns|claim|claims|argue|argues|believe|believes)\s*$/i.test(rest) && /\b(?:should|must|need|needs|ought|could|would|may|might|will)\b/i.test(t.slice(0, m.index))) return false;
+      // a prepositional phrase goes only when most of the headline stays: "Irish property group [in talks about rescue
+      // deal for Poundland]", "Three Saudis killed [in Riyadh airport attack claimed by Houthis]" (10 Oct) say too little
+      if (/^(?:with|over|in|at)$/.test(word) && headWords(t.slice(0, m.index)).length < 0.5 * headWords(t).length) return false;
+      // a preposition inside a name is no boundary ("Nikon Small World in Motion winner")
+      if (word !== ',' && inName([...t.slice(0, m.index).trim().split(' '), word, ...rest.split(' ')], t.slice(0, m.index).trim().split(' ').length)) return false;
+      return SUBORDINATOR.test(word) || !tailPredicate(`X ${rest}`);
+    })
+    .map((m) => t.slice(0, m.index).trim())
+    .filter((h) => clean(h) && !NEEDS_COMPLEMENT.test(h) && !BARE_VERB_END.test(h));
+  const fit = bounds.filter((h) => h.length <= max);
+  if (fit.length) return fit.sort((a, b) => b.length - a.length)[0];
   const words = t.split(' ');
   const cap = (w) => /^\p{Lu}/u.test(w || '');
   // word by word, never through a name ("Lula and Flávio [Bolsonaro]")
@@ -640,8 +732,19 @@ function hardFit(t, max = LIMITS.headline) {
   // mass surveillance’" says something else
   // (and a headline keeps its verb: "Spotify billionaire’s body scan startup [has come to America]" is a label)
   const most = headWords(out).length >= 0.6 * headWords(t).length && (hasFiniteVerb(out) || !hasFiniteVerb(t));
-  if (out.length <= max && clean(out) && most) return out;
+  // and only where a phrase starts ("…march to Islamabad [demanding his release]", "…program [due to …]"), never
+  // through one: "Palestinian president Abbas postpones legislative [elections, …]", "…make sense of OpenAI’s
+  // [latest drop]" (real news 10 Oct) go up whole on two lines instead
+  const tail = t.slice(out.length).trim();
+  // (not a conjunct, "…murdering Australian brothers [and US friend]"; nor the infinitive a noun takes, "pressure [to curb…]")
+  const toOk = (!/^to\b/i.test(tail) || !INFINITIVE_HEAD.test(out)) && !(/^by\b/i.test(tail) && /(?:ed|en)$/i.test(out)); // ("…attack claimed [by Houthis]")
+  const phrase = (/^(?:[a-z]+ing|due|to|which|who|says|said)\b/i.test(tail) || TRAIL_PREP.test(tail.split(' ')[0] || '')) && toOk && !/\bbut\b/i.test(tail) && !inName(t.split(' '), out.split(' ').length);
+  const keepsVerb = SUBORDINATOR.test(tail.split(' ')[0] || '') || !tailPredicate(tail);
+  if (out.length <= max && clean(out) && most && phrase && keepsVerb) return out;
   if (t.length <= HEADLINE_TWO_LINES) return t;
+  // longer than two lines: its longest clean clause that two lines hold, else the cut
+  const two = bounds.filter((h) => h.length <= HEADLINE_TWO_LINES && headWords(h).length >= 4);
+  if (two.length) return two.sort((a, b) => b.length - a.length)[0];
   return out.length <= max ? out : clipWords(out, max);
 }
 
@@ -665,7 +768,10 @@ function squeeze(t, max) {
   // [fuel-efficient] jets")
   for (const drop of [...DROPPABLE, COMPOUND_MODIFIER]) {
     if (words.join(' ').length <= max) break;
-    const i = words.findIndex((w, k) => k > 0 && k < words.length - 1 && (typeof drop === 'string' ? w.toLowerCase() === drop : drop.test(w) && /^[a-z]/.test(words[k + 1] || '')));
+    // (never a word of a name, "Nikon Small World in Motion"; never one of two sizes, "a big truck trapped in a tiny
+    // truck’s body" is the story)
+    const sizes = words.filter((w) => /^(?:big|small|tiny|huge|giant|vast|large|little|mini)$/i.test(w)).length;
+    const i = words.findIndex((w, k) => k > 0 && k < words.length - 1 && !/^\p{Lu}/u.test(w) && !/[:;,]$/.test(words[k + 1] || '') && !(sizes > 1 && /^(?:big|small|huge|giant|vast)$/i.test(w)) && (typeof drop === 'string' ? w.toLowerCase() === drop : drop.test(w) && /^[a-z]/.test(words[k + 1] || '')));
     if (i < 0) continue;
     const text = [...words.slice(0, i), ...words.slice(i + 1)].join(' ');
     if (headWords(text).length < 3 || danglingHeadline(text)) continue;
@@ -815,6 +921,12 @@ export function splitClauses(sentence, max, min = 4) {
     // ("interfering with first responders" is no sentence: a clause starts with its subject)
     // (a name may end in -ing: "and Beijing responded" splits)
     if (/^[a-z]+ing\b/.test(tail) || /^(?:in|on|at|by|for|with|from|to|into|as|than|of|while|when|after|before|then|also)\b/i.test(tail)) continue;
+    // (nor a predicate without its subject: "…against him, and documented how former students…", "…was “flagged as
+    // spam”, but criticised the tech company…", BBC 10 Oct, once aired as "Documented how…", "But criticised…")
+    const [first, second] = tail.split(/\s+/).map((w) => w.toLowerCase());
+    const verbish = (w) => /^[a-z]{3,}ed$/.test(w || '') || PAST_FORM.test(w || '') || AUX_VERB.test(w || '');
+    // ("…and even submitted a false murder tip…", TechCrunch 10 Oct: an adverb before the verb)
+    if (verbish(first) || /^(?:also|then|later|still)$/.test(first || '') || (/^(?:even|just|only|reportedly|allegedly|quickly|eventually|finally|recently|never)$/.test(first || '') && verbish(second))) continue;
     // the second must stand alone: no pronoun opening it without its noun nearby ("it", "they" read fine after the first)
     if (m[1] && /^but$/i.test(m[1])) tail = `But ${tail}`;
     return [`${head}.`, `${tail[0].toUpperCase()}${tail.slice(1)}.`];
@@ -856,6 +968,27 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // "Windler, working with his wife, Betty, and other spouses[, secretly prepared a batch of flags]": a predicate
     // after the comma belongs to the subject before it (the head has no verb of its own)
     if (comma && new RegExp(`^(?:[a-z]+ly\\s+)?(?:[a-z]{3,}ed|${PAST_FORM.source.replace(/^\^|\$$/g, '')})\\b`).test(t.slice(end)) && !/^(?:[a-z]+ly\s+)?[a-z]+ed\s+(?:by|in|on|at|near|from|with)\b/.test(t.slice(end))) continue;
+    // the predicate follows the comma: "The experiment, called the Kentucky Reentry Probe Experiment (KREPE-3)[, is the
+    // third in a series…]" (NASA 10 Oct)
+    if (comma && /^(?:is|are|was|were|has|have|had|will|would|can|could|may|might|must|remains?|becomes?)\b/i.test(t.slice(end))) continue;
+    // a list in progress: "…a collaboration among the University of Kentucky, the state of Kentucky[, NASA’s EPSCoR,
+    // several NASA centers, and other partners]" says only part of who (NASA 10 Oct)
+    // (the list's first item is what follows "among", "including"... when the head has no comma yet)
+    const listItem = head.includes(',') ? head.slice(head.lastIndexOf(',') + 1) : (head.match(/\b(?:among|including|between|such as|like|from|with|for|by)\s+([^,]+)$/i) || [])[1];
+    if (comma && listItem && !hasFiniteVerb(`X ${listItem}`)) {
+      const ahead = t.slice(end).match(/^([^;:.]*?)\b(?:and|or)\b/i);
+      // (a plural noun is no verb here: "several NASA centers")
+      const verbIn = (x) => x.split(/\s+/).some((w) => AUX_VERB.test(w) || PAST_FORM.test(w) || /^[a-z]{3,}ed$/.test(w));
+      if (ahead && !verbIn(ahead[1]) && ahead[1].split(',').every((x) => x.trim().split(/\s+/).length <= 10)) continue;
+    }
+    // a clause it opened still waits for its verb: "…paid when the bond matures, while with the income version[,
+    // interest is paid monthly]" (Guardian 10 Oct)
+    const lastSeg = head.slice(head.lastIndexOf(',') + 1).trim();
+    if (/^(?:while|whilst|whereas|although|though|because|when|if|unless|since|once)\b/i.test(lastSeg) && !hasFiniteVerb(lastSeg)) continue;
+    // nor on a sentence adverb or a verb in -ing that waits for what follows: "…of editorial staff, possibly[ before
+    // Christmas]", "…could take years, let alone figuring out[ where…]" (Guardian, The Verge 10 Oct)
+    if (/\b(?:possibly|probably|perhaps|reportedly|allegedly|apparently|potentially|especially|particularly|mainly|mostly|largely|partly|presumably|eventually|initially|originally|previously|currently|recently|immediately|subsequently|likely|notably|including)$/i.test(head)) continue;
+    if (/\b[a-z]{3,}ing(?:\s+(?:out|up|off|on|in|over|down|through|back|away))?$/i.test(head) && !ING_NOUNS.test(head.replace(/\s+(?:out|up|off|on|in|over|down|through|back|away)$/i, '')) && !/\b(?:is|are|was|were|be|been|being|am|keeps?|kept|starts?|started|stops?|stopped)\s+(?:[a-z]+ly\s+|still\s+|now\s+)?[a-z]+ing$/i.test(head)) continue;
     // never a name the story is about: "...violated a woman’s Fourth Amendment rights [when using Flock to search
     // for her license plate]" under "Federal judge calls Flock ‘indiscriminate mass surveillance’" (4 Oct)
     if (keep.some((k) => t.includes(k) && !head.includes(k))) continue;
@@ -925,8 +1058,8 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // section of reef off Queensland" is no sentence)
     // (a relative clause's verb is not the main clause's: "the bridge, which opened in 1960")
     // ("With counting nearly concluded, Serb nationalist Zeljka Cvijanovic": an opening phrase is not the clause)
-    const main = head.replace(/,\s+(?:which|who|whose|where|when)\b[^,]*(?:,|$)/gi, ' ').replace(/^(?:with|after|before|despite|amid|following|once|since)\s[^,]{1,60},\s*/i, '').replace(/\s+/g, ' ').trim();
-    if (!hasFiniteVerb(main)) continue;
+    const main = head.replace(/,\s+(?:which|who|whose|where|when|called|named|known as|dubbed|titled|nicknamed)\b[^,]*(?:,|$)/gi, ' ').replace(/^(?:with|after|before|despite|amid|following|once|since)\s[^,]{1,60},\s*/i, '').replace(/\s+/g, ' ').trim();
+    if (!hasFiniteVerb(main) || isFragment(head)) continue; // ("A man who lives in a log cabin[ surrounded by…]")
     // ...and a clause it opens ("it remains unclear how a citizen of Oman[, an Arab country...]") keeps its own
     // verb: an appositive after the subject is no verb of it
     const open = head.match(/\b(?:how|why|whether|what|if|that)\s+(\S.*)$/i);
@@ -976,6 +1109,37 @@ export function hasFiniteVerb(clause) {
     if (/^[a-z]{2,}(?:[^s'’]s|ies)$/.test(w) && !/(?:ss|us|is|ous|ics|ings|ness|ies)$/.test(w.replace(/ies$/, 'y') + (w.endsWith('ies') ? '' : ''))) return true;
   }
   return false;
+}
+
+/**
+ * A sentence with no main clause of its own: a noun phrase whose only verbs are in its relative clauses or an
+ * apposition ("Nobel prizewinning biochemist who succeeded against the odds in mapping the ribosome.", "A man who lives
+ * in a log cabin.", "For anyone who might not be up on the latest from the Toy Story franchise.", Guardian, BBC, Ars
+ * 10 Oct), or one that lost its subject ("Documented how former students had gathered evidence…", BBC 10 Oct).
+ */
+export function isFragment(sentence) {
+  const t = String(sentence || '').replace(/\([^()]*\)/g, ' ').replace(/[.!?…]+["”’)\]]*\s*$/, '').trim();
+  if (/^\p{Lu}\p{Ll}+ed\s+(?:how|that|what|why|whether|when|where)\b/u.test(t)) return true;
+  const words = t.split(/\s+/).filter(Boolean);
+  const REL = /^(?:who|whom|which)$/i;
+  const APPOS = /^(?:called|named|dubbed|titled|nicknamed|known)$/i;
+  let rels = 0;
+  let groups = 0;
+  let inGroup = false;
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i].replace(/^[^\p{L}]+|[^\p{L}'’-]+$/gu, '');
+    const prev = words[i - 1] || '';
+    const appos = APPOS.test(w) && /,$/.test(prev);
+    if (REL.test(w) && i > 0) rels++;
+    if (appos) rels++;
+    // a verb: the word after "who"/"which" (its own clause's), else what hasFiniteVerb reads in context
+    const verb = appos || (i > 0 && REL.test(prev.replace(/[^\p{L}]/gu, ''))) || (i > 0 && hasFiniteVerb(`${prev} ${words[i]}`));
+    if (verb) {
+      if (!inGroup) groups++;
+      inGroup = true;
+    } else if (!/^(?:not|never|also|just|still|now|already)$/i.test(w)) inGroup = false;
+  }
+  return rels > 0 && groups <= rels;
 }
 
 // The longest sentence each programme's bible allows (config `sentenceWords` overrides).

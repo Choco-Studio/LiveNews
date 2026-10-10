@@ -12,7 +12,7 @@ const OPENERS = /^["“'‘]?(?:here(?:'|’)?s|here is|over to|back to you|let(
 // anywhere: a named person "with more", "joins us", "takes up the story", "has the details"
 // an outlet's promo for its own interview or analysis ("…commentator Douglas Herbert shares further insights",
 // "France 24's Gavin Lee speaks to Brazil analyst … about …"): it promises a guest our channel does not have
-const PROMO = /\b(?:help us win|vote (?:for us|to help us))\b|\b(?:[Ss]ee|[Cc]lick|[Ff]ollow) (?:the link|here|this link)\b|\b[Ff]or more details,? see\b|\b[Yy]ou can (?:vote|listen|watch|sign up|subscribe|get access)\b|^[A-Z][a-z]+ [A-Z][a-z]+: |\b[Ii]f you['’]re an? [\w ]{1,30}subscriber\b|\b[Ii]n this week['’]s episode\b|\b[Kk]eep reading\b|\b[Rr]ead (?:on|more) (?:for|to)\b|\b[Ll]isten (?:to (?:the )?(?:full )?(?:episode|podcast)|now)\b|\b[Ss]ubscribe (?:to|now|for)\b|\b[Oo]n (?:this week['’]s |today['’]s )?(?:episode of )?[A-Z][\w’']+(?: podcast)?, we (?:discussed|talked|spoke|dug)\b|\b(?:shares|offers|gives|brings) (?:us )?(?:further |more |his |her |their |some )?(?:insights?|analysis|perspective|thoughts)\b|\bspeaks (?:to|with) [^.]{3,80}\babout\b|\b(?:editor|analyst|correspondent|commentator)(?: in chief)? [A-Z][a-z]+ [A-Z][a-z]+ explains\b/;
+const PROMO = /\b(?:help us win|vote (?:for us|to help us))\b|\b(?:[Ss]ee|[Cc]lick|[Ff]ollow) (?:the link|here|this link)\b|\b[Ff]or more details,? see\b|\bcan be (?:found|read|seen|viewed|downloaded|accessed|watched) (?:here|online|at)\b|\bis available here\b|\b[Yy]ou can (?:vote|listen|watch|sign up|subscribe|get access)\b|^[A-Z][a-z]+ [A-Z][a-z]+: |\b[Ii]f you['’]re an? [\w ]{1,30}subscriber\b|\b[Ii]n this week['’]s episode\b|\b[Kk]eep reading\b|\b[Rr]ead (?:on|more) (?:for|to)\b|\b[Ll]isten (?:to (?:the )?(?:full )?(?:episode|podcast)|now)\b|\b[Ss]ubscribe (?:to|now|for)\b|\b[Oo]n (?:this week['’]s |today['’]s )?(?:episode of )?[A-Z][\w’']+(?: podcast)?, we (?:discussed|talked|spoke|dug)\b|\b(?:shares|offers|gives|brings) (?:us )?(?:further |more |his |her |their |some )?(?:insights?|analysis|perspective|thoughts)\b|\bspeaks (?:to|with) [^.]{3,80}\babout\b|\b(?:editor|analyst|correspondent|commentator)(?: in chief)? [A-Z][a-z]+ [A-Z][a-z]+ explains\b/;
 const HANDOFFS = /\b(?:[A-Z][a-z]+ ){1,3}(?:is here |joins us |has the details|has more|takes up the story|reports(?: now)?(?: from [A-Z]| for us|\.|$))|\bwith (?:more|the latest|the details)(?: on| from)? (?:the situation|that|this|the story|what happened|the scene)\b|\bjoins us (?:now|live)\b/;
 
 /** Is this sentence a broadcast hand-off, greeting or sign-off rather than part of the story? */
@@ -29,7 +29,12 @@ export function isTranscriptLine(sentence) {
  */
 export function sentencePieces(text) {
   const t = String(text ?? '');
-  const parts = t.replace(/(\d)\.(?=\d)/g, '$1\u2024').match(/[^.!?…]+(?:[.!?…]+["”'’)\]]*|$)\s*/g);
+  // (nor after an abbreviation that goes on: "the New York Jets vs. Cleveland Browns game … on Sunday, Oct. 11", NASA
+  // 10 Oct, once left "11." as the summary)
+  const parts = t
+    .replace(/(\d)\.(?=\d)/g, '$1\u2024')
+    .replace(/\b(vs|Oct|Sept|Sep|Nov|Dec|Jan|Feb|Mar|Apr|Aug|Mr|Mrs|Ms|Dr|St|Mt|Sen|Gov|Rep|Gen|Lt|Col|Capt|Sgt|Prof|Jr|Sr|No|Inc|Ltd|Co|Corp)\.(?=\s+(?:\p{Lu}|\d))/gu, '$1\u2024')
+    .match(/[^.!?…]+(?:[.!?…]+["”'’)\]]*|$)\s*/g);
   return parts ? parts.map((p) => p.replace(/\u2024/g, '.')) : null;
 }
 
@@ -70,7 +75,7 @@ export function dropPageFurniture(text) {
   // "Byrnes texted Ohio Sen.", so the piece before such a cut goes with it
   const TITLE_END = /(?:^|[\s(“"'‘])(?:Mr|Mrs|Ms|Dr|St|Mt|No|Gen|Sen|Rep|Gov|Lt|Col|Capt|Sgt|Cpl|Prof|Jr|Sr|Inc|Ltd|Co|Corp|vs|U\.S|U\.K)\.\s*$/;
   const kept = parts.filter((p, i) => {
-    if (parts.length > 2 && i + 1 < parts.length && TITLE_END.test(p) && CUT.test(parts.slice(i + 1).join(''))) return false;
+    if (parts.length > 2 && i + 1 < parts.length && TITLE_END.test(p) && CUT.test(parts[i + 1])) return false;
     const s = p.trim();
     if (isNavRun(s) || TAGLINES.test(s)) return false;
     // "We were talking about this last week, because this is something [Trump has] been hinting at": a host's

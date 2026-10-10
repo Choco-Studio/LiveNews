@@ -442,9 +442,14 @@ const CAPTION = /\b(?:is|are) (?:seen|pictured|shown)\b.{0,200}?\bin this\b.{0,4
 // a newsletter greets its readers ("Hi, friends! ... Thanks to everyone who sent well wishes and tips for managing three
 // kids", The Verge 10 Oct, read on air as news): its summary or its article opens on a hello
 const NEWSLETTER = /^\s*(?:(?:hi|hey|hello)(?:,|!|\s+(?:there|all|everyone|everybody|friends|folks|again)\b)|(?:welcome (?:back )?to|happy (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekend|holidays|new year))\b|good (?:morning|afternoon|evening)(?:,|!|\s+(?:everyone|all|friends|folks)\b)|thanks? (?:to )?(?:everyone|all of you|you all) who\b)/i;
+// a broadcaster's programme page, not an article: "Money Box" (bbc.co.uk/sounds), "Tech Now" (bbc.co.uk/iplayer), BBC
+// feeds 10 Oct, their listing read as a story ("We'll speak to…")
+// a list of products or services, not news: "Here are the top AI agents that can live in your text messages" (TechCrunch 10 Oct)
+const LISTICLE = /^(?:here are|these are) (?:the )?(?:best|top|\d+)\b|^the (?:best|top) \d+\b|^\d+ (?:best|top)\b/i;
+const PROGRAMME_PAGE = /^https?:\/\/(?:www\.)?bbc\.co(?:\.uk|m)\/(?:sounds|iplayer|programmes)\//i;
 export const notNews = (s) => {
   const t = String(s?.title || '');
-  return SHOPPING.test(t) || REVIEW.test(unquoted(t)) || BYLINED.test(t) || /\?\s*$/.test(unquoted(t).trim()) || CAPTION.test(String(s?.summary || '')) || NEWSCAST.test(t) || NEWSLETTER.test(String(s?.summary || '')) || NEWSLETTER.test(String(s?.body || '').slice(0, 200));
+  return PROGRAMME_PAGE.test(String(s?.link || '')) || LISTICLE.test(t) || SHOPPING.test(t) || REVIEW.test(unquoted(t)) || BYLINED.test(t) || /\?\s*$/.test(unquoted(t).trim()) || CAPTION.test(String(s?.summary || '')) || NEWSCAST.test(t) || NEWSLETTER.test(String(s?.summary || '')) || NEWSLETTER.test(String(s?.body || '').slice(0, 200));
 };
 
 /** The figures of a headline by value ("$20bn" and "$20 billion" are one), years and small counts left out. */
@@ -457,6 +462,62 @@ export function headlineFigures(title) {
     out.push(n * (FIGURE_SCALE[(m[2] || '').toLowerCase()] || 1));
   }
   return out;
+}
+
+const STORM_NAME = /\b(?:Hurricane|Typhoon|Cyclone|Super Typhoon|Tropical Storm|Tropical Depression|Storm)\s+(\p{Lu}\p{Ll}{2,})\b/gu;
+const STORM_WORD = /\b(?:hurricane|typhoon|cyclone|tropical storm|storm|landfall)\b/i;
+/**
+ * Do two stories share a quoted name (one or two capitalised words in quotation marks in either one's headline, found
+ * in the other's headline or summary): "the ‘Cockroach’ movement"? A label of the story, not someone's words.
+ */
+export function sameQuotedName(a, b) {
+  const text = (s) => `${s?.title || ''} ${s?.summary || ''}`.toLowerCase();
+  // (a quoted word in lower case counts when either story writes it with a capital: "India's 'cockroach' movement" and
+  // "the satirical Cockroach Janta Party")
+  const both = `${a?.title || ''} ${a?.summary || ''} ${b?.title || ''} ${b?.summary || ''}`;
+  const names = (s) =>
+    [...String(s?.title || '').matchAll(/["“‘'](\p{L}[\p{L}-]{3,}(?:\s\p{L}[\p{L}-]+)?)["”’'](?!\p{L})/gu)]
+      .map((m) => m[1])
+      .filter((n) => /^\p{Lu}/u.test(n) || new RegExp(`(?<![\\p{L}])${n[0].toUpperCase()}${n.slice(1)}(?![\\p{L}])`, 'u').test(both))
+      .map((n) => n.toLowerCase());
+  const has = (t, n) => new RegExp(`(?<![\\p{L}])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:es|s)?(?![\\p{L}])`, 'u').test(t);
+  return names(a).some((n) => has(text(b), n)) || names(b).some((n) => has(text(a), n));
+}
+
+/** The storm names a text gives ("Hurricane Isaias", "Storm Amy"). */
+export const stormNamesIn = (text) => [...String(text || '').matchAll(STORM_NAME)].map((m) => m[1]);
+/**
+ * Do two stories tell of one named storm? Both speak of a storm, and a name one gives with "Hurricane", "Storm"...
+ * (or that the desk has seen so: `known`) is in both ("Isaias becomes major category three storm" / "Isaias weakens
+ * after making landfall").
+ */
+export function sameStorm(a, b, known = null) {
+  const text = (s) => `${s?.title || ''} ${s?.summary || ''}`;
+  const [ta, tb] = [text(a), text(b)];
+  if (!STORM_WORD.test(ta) || !STORM_WORD.test(tb)) return false;
+  const has = (t, n) => new RegExp(`(?<![\\p{L}])${n}(?![\\p{L}])`, 'u').test(t);
+  const names = new Set([...stormNamesIn(ta), ...stormNamesIn(tb), ...(known || [])]);
+  for (const n of names) if (has(ta, n) && has(tb, n)) return true;
+  return false;
+}
+
+const SUMMARY_STOP = new Set('the a an and or but of in on at to for by with from as is are was were be been has have had it its this that these those their his her which who will would can could said says than then there into over after before about more also not no new'.split(' '));
+/**
+ * Is one an outlet's update of the other: the same outlet, two words of the headline in common, and summaries that say
+ * the same thing (two thirds of their words in common, at least eight each)?
+ */
+export function sameSummary(a, b) {
+  if (!a?.source || a.source !== b?.source) return false;
+  const ka = a.kw instanceof Set ? a.kw : new Set(a.kw || []);
+  let keys = 0;
+  for (const w of b.kw || []) if (ka.has(w)) keys++;
+  if (keys < 2) return false;
+  const words = (s) => new Set(String(s?.summary || '').toLowerCase().split(/[^\p{L}\d]+/u).filter((w) => w.length > 2 && !SUMMARY_STOP.has(w)));
+  const [wa, wb] = [words(a), words(b)];
+  if (wa.size < 8 || wb.size < 8) return false;
+  let shared = 0;
+  for (const w of wa) if (wb.has(w)) shared++;
+  return shared / Math.min(wa.size, wb.size) >= 2 / 3 && shared / (wa.size + wb.size - shared) >= 0.5;
 }
 
 /** Two headlines are about the same event if they share enough keywords. */
@@ -974,7 +1035,24 @@ export class NewsDesk {
    * besides the place, who acted and filler. Used to cluster reports, count outlets, keep one report per
    * event in a programme and cover the others with it.
    */
+  /** Storm names the desk's stories give ("Hurricane Isaias"), kept for sameStorm (rescanned when the desk changes). */
+  stormNames() {
+    if (this.stormScan?.size !== this.stories.size) {
+      const names = new Set();
+      for (const st of this.stories.values()) for (const n of stormNamesIn(`${st.title} ${st.summary || ''}`)) names.add(n);
+      this.stormScan = { size: this.stories.size, names };
+    }
+    return this.stormScan.names;
+  }
+
   sameStory(a, b) {
+    // a named storm is one story wherever it is told ("Isaias becomes major category three storm before landfall" /
+    // "Hurricane Isaias strengthens as it heads towards land", BBC 10 Oct: both aired in one COSMOS), and an update
+    // whose summary says the same as another's is the same story
+    if (sameStorm(a, b, this.stormNames()) || sameSummary(a, b)) return true;
+    // the same quoted name in both ("India’s ‘Cockroach’ leaders detained" / "Founder of India's 'Cockroach' movement among
+    // hundreds detained" / "India cracks down on youth protests", four outlets 10 Oct: three aired in one WORLD NOW)
+    if (sameQuotedName(a, b) && placesAgree(this.whereOf(a), this.whereOf(b)) !== false) return true;
     const ea = this.eventFacts(a);
     const eb = this.eventFacts(b);
     // the same name and the same figure in both headlines is one story ("What happened to OpenAI’s $20bn? Revenue scare
@@ -1196,6 +1274,10 @@ export class NewsDesk {
       .map((s) => ({ s, score: interestScore(s, now) * (s.category === primary ? PRIMARY_CATEGORY_WEIGHT : 1) * (typeof avoid === 'function' ? avoid(s) : avoid?.[s.category] ?? 1) }))
       .sort((a, b) => b.score - a.score);
     const picked = [];
+    // the other reports of the picked stories' events: a story one of them tells is the same event too ("same story" is
+    // not transitive: BBC's "'Cockroach' group leaders among hundreds detained" and NPR's "India cracks down on youth
+    // protests" share too little, the Guardian's report shares enough with both; both aired in one NEWS IN 60, 10 Oct)
+    const mates = new Set();
     const perSourceCount = new Map();
     // Variety of outlets first; then, with `fill`, when a section has only one or two outlets (a niche beat, a
     // small feed list, the offline demo), the rest of the pool from them rather than a programme starved of stories.
@@ -1204,8 +1286,9 @@ export class NewsDesk {
         if (picked.length >= count) break;
         if (picked.includes(s) || (capped && (perSourceCount.get(s.source) || 0) >= perSource)) continue;
         if (beat && !onBeat(s, beat)) continue;
-        if (picked.some((p) => this.sameStory(p, s))) continue;
+        if (mates.has(s) || picked.some((p) => this.sameStory(p, s)) || [...mates].some((m) => this.sameStory(m, s))) continue;
         picked.push(s);
+        for (const o of this.related(s)) if (this.sameStory(s, o)) mates.add(o);
         perSourceCount.set(s.source, (perSourceCount.get(s.source) || 0) + 1);
       }
     }

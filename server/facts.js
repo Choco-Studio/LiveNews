@@ -686,6 +686,8 @@ export function extractFigures(text, max = 3) {
     if (versus && (n.currency || n.value >= 1000)) label.push(versus[1].split(/\s+/)[0] === 'less' || versus[1] === 'under' || versus[1] === 'short of' ? 'below' : versus[1].split(/\s+/)[0] === 'more' || versus[1] === 'over' || versus[1] === 'ahead of' ? 'above' : versus[1], /^estimate/i.test(versus[2]) ? 'estimates' : /^expect/i.test(versus[2]) ? 'expectations' : 'forecasts');
     for (let i = label.length ? tokens.length : 0; i < tokens.length; i++) {
       const w = tokens[i];
+      // (another figure next: "30 2012-era Mac Minis" once made "30 -ERA MAC MINIS", Ars Technica 10 Oct)
+      if (/^\d/.test(w)) break;
       const word = w.replace(/[^A-Za-z'-]/g, '');
       if (!word) break;
       const lw = word.toLowerCase();
