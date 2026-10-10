@@ -182,6 +182,8 @@ export class Renderer {
         return cards.drawIdentCard(ctx, t, dt);
       case 'promo':
         return cards.drawPromoCard(ctx, t, dt, card, presenterName);
+      case 'countdown':
+        return cards.drawCountdownCard(ctx, t, dt, { left: Number.isFinite(card?.until) ? card.until - t : 0, next: card?.next, at: card?.at, accent: THEME_ACCENT[card?.next?.theme] || P.red });
       case 'montage': {
         const item = scene.rundown[card.index] || {};
         // the frame's backdrop is decided in its first 0.4 s and then kept (a picture that arrives later never

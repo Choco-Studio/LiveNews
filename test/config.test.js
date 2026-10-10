@@ -56,6 +56,7 @@ const KEYS = [
   'WEATHER_WARNINGS',
   'WEATHER_TTL_MIN',
   'ROTATION_START',
+  'STATION_CLOCK',
 ];
 
 let copies = 0;
@@ -236,6 +237,13 @@ describe('.env.example', () => {
     const used = [...source.matchAll(/\b(?:env|num|bounded)\('([A-Z0-9_]+)'/g)].map((m) => m[1]);
     assert.deepEqual([...used].sort(), [...KEYS].sort(), 'the list of variables in this test is out of date');
     for (const key of used) assert.ok(key in example, `${key} is missing from .env.example`);
+  });
+
+  test('the channel clock: on by default, off for a ROTATION_START demo unless STATION_CLOCK=1, off with STATION_CLOCK=0', async () => {
+    assert.equal((await loadConfig()).clock, true);
+    assert.equal((await loadConfig({ ROTATION_START: 'cosmos' })).clock, false);
+    assert.equal((await loadConfig({ ROTATION_START: 'cosmos', STATION_CLOCK: '1' })).clock, true);
+    assert.equal((await loadConfig({ STATION_CLOCK: 'off' })).clock, false);
   });
 
   test('the example values for the tuning knobs are the defaults', async () => {

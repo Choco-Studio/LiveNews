@@ -24,7 +24,7 @@ export { STUDIO_SHOTS, REMOTE_SHOTS };
 
 const nowMs = () => performance.now();
 // full-screen channel shots: the old renderer may take over under them (no presenter on screen)
-export const SWAP_SHOTS = new Set(['open', 'endcard', 'ident', 'ad', 'promo', 'standby', 'start', 'breakingCard']);
+export const SWAP_SHOTS = new Set(['open', 'endcard', 'ident', 'ad', 'promo', 'countdown', 'standby', 'start', 'breakingCard']);
 
 export class StageHost {
   /**

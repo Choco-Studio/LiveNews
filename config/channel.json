@@ -631,5 +631,18 @@
     "adsPerBreak": 2,
     "maxExtraAds": 6,
     "minProgrammeBetween": 420
+  },
+  "clock": {
+    "timezone": "Europe/London",
+    "pins": [
+      { "minute": 0, "program": "news-60" },
+      { "minute": 30, "program": "news-60" }
+    ],
+    "hold": 90,
+    "late": 600,
+    "dayparts": [
+      { "from": 22, "to": 6, "skip": ["money-minute"] },
+      { "from": 0, "to": 24, "days": [0, 6], "skip": ["money-minute"] }
+    ]
   }
 }

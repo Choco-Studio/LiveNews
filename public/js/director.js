@@ -132,6 +132,7 @@ export class Director {
     if (shot === 'endcard') m.cue('endcard');
     else if (shot === 'standby') m.cue('standby', { programId: 'channel' });
     else if (shot === 'promo') m.cue('upNext', { programId: 'channel', next: extra.card?.next ?? null, seconds: 4.2 });
+    else if (shot === 'countdown') m.cue('standby', { programId: 'channel' });
     else if (shot === 'ad' && extra.card?.ad && !extra.card.ad.black) m.cue('ad', { programId: 'channel' });
     else if (this.musicInStory && SHOT_KIND[shot]) m.cue('shot', { kind: SHOT_KIND[shot] });
   }
@@ -247,7 +248,8 @@ export class Director {
     // ADVERTISEMENT tag counts down to that through the spots. `total` = every spot after its black, then
     // the promo; the bumper's own hold is added at its cut.
     const B = CHANNEL.breaks;
-    const total = ads.reduce((a, ad) => a + B.blackGap + (Number(ad.duration) || 0), 0) + (item.next ? B.blackGap + B.promo : 0);
+    const hold = Math.max(0, Math.min(300, Number(item.hold) || 0)); // the countdown clock before a programme on its mark
+    const total = ads.reduce((a, ad) => a + B.blackGap + (Number(ad.duration) || 0), 0) + (item.next ? B.blackGap + B.promo : 0) + (hold >= 3 ? B.blackGap + hold : 0);
     const card = { kind: 'break', seconds: B.ident + total, next: item.next?.title || '', theme: item.next?.theme || null };
     try {
       // Cues are scheduled at the stinger's start to be heard on the shot change they belong to.
@@ -287,6 +289,12 @@ export class Director {
       };
       await this.blackCut('promo', { card }, (cut) => this.audio.sfx('promo', { programId: item.next.id, startAt: cut })); // the signature left hanging in the next programme's key
       await sleep(CHANNEL.breaks.promo * 1000);
+    }
+    // the channel's clock: a programme pinned to :00 or :30 starts on its mark, the break holds on the countdown
+    const hold = Math.max(0, Math.min(300, Number(item.hold) || 0));
+    if (hold >= 3) {
+      await this.blackCut('countdown', { card: { next: item.next || null, at: Number(item.at) || 0, until: now() + BREAK_BLACK.duration + hold } });
+      await sleep(hold * 1000);
     }
   }
 

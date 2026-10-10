@@ -336,7 +336,7 @@ function guarded(where, fn, fallback = null) {
 const NONE = {}; // replan key: no recording
 const NO_PRESENTERS = Object.freeze({}); // one object: context.js memoises neighbours per presenters object
 // break elements: v2 idle work (plans, wall warm-up) waits while one is on air (critic r2: freezes at an ad's first frame)
-const BUSY_SHOTS = new Set(['ad', 'ident', 'promo']);
+const BUSY_SHOTS = new Set(['ad', 'ident', 'promo', 'countdown']);
 const BUSY_RETRY = 750; // ms
 const AIR_EVERY = 10; // segments between two ?perf=1 'air between segments' lines
 const WARM = { id: 'warm-up', program: { id: 'world-now' }, cast: { A: 'paco', B: 'lola' }, segments: [{ type: 'story', anchor: 'A', text: 'Good evening. Floods have forced 40,000 people from their homes in southern Brazil.', cues: [] }] };

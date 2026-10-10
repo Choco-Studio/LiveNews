@@ -230,8 +230,28 @@ The BRIEF's tone list (VA-11 Hall-A, Coffee Talk, Hyper Light Drifter) comes fro
 | 4 | Black and silence | — | 0.3 s |
 | 5a | UP NEXT promo | `next.ready` | 5–6 s |
 | 5b | Holding slide, with **no programme name** (the next item is unknown) | `!next.ready` | 3 s |
+| 6 | Black, then the **countdown clock** (a ring of 60 dots going out one a second, the seconds left, "NEWS IN 60 / AT 10:00", the channel bed) | `break.hold` ≥ 3: the next programme is the clock's and the break would end before its mark | `hold` s (≤ `clock.hold`, 90) |
 
 The break then ends, and the client fetches the next item.
+
+### 4.2.1 The clock (owner decision 1, 10 Oct)
+
+`config/channel.json` `clock` (validated in `server/channel.js`, played by `server/station.js`; `STATION_CLOCK=0` turns it off,
+a `ROTATION_START` demo leaves it off unless `STATION_CLOCK=1`):
+
+- **Pins:** NEWS IN 60 at :00 and :30, London time. The rotation never makes a pinned programme; the clock places it.
+- **Planning:** whenever a mark is near, the station plans the next one to three programmes (the next five rotation
+  candidates, any order) so that the pinned one lands in the last `hold` seconds before its mark; a programme moved ahead
+  of its turn costs 45 s in the plan, and the slots it passes are owed (made next, in order), so the rotation keeps its
+  shares. Estimates: each programme's recent episodes as made, else the middle of its `targetSeconds`; breaks light or
+  full as the break rule will decide. Re-planned at every choice.
+- **The countdown:** the break before a pinned programme that would end early holds on the countdown clock up to `hold`
+  seconds (90), so it starts on the mark. Commercials are not stretched (the ad share stays under 15 %).
+- **Late:** a mark missed by more than `late` seconds (600) is let go; a round-up short of news lets the rotation carry on.
+- **Dayparts:** MONEY MINUTE 06-22 on weekdays only (`dayparts`: 22-06 every day, all day Saturday and Sunday).
+- **Measured** (24 h on a fake clock, `test/clock.test.js`): with lengths as estimated, 42 of 48 round-ups within 90 s
+  of the mark and most exactly on it; with lengths ±25 % off the estimate, 40 of 48 within 2 minutes. Shares: WORLD NOW
+  35 %, the others as the rotation says.
 
 ### 4.3 Filler break (`filler: true`)
 

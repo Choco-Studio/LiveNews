@@ -253,6 +253,38 @@ test('a break has one stinger (into the ident), then 0.3 s of black and silence 
   assert.ok(stops.length === 2 && stops[0].t <= after[3].t, 'the bed stops at the end of its ad');
 });
 
+// --- the countdown clock (the channel's clock: NEWS IN 60 on :00 and :30) -----------------------------------------
+
+test('a break before a programme on its mark holds on the countdown clock after the promo, and the bumper counts it', async () => {
+  const audio = { setVoices() {}, sfx() {}, playTune: () => ({ stop() {} }), async speak() {} };
+  const director = new Director({ audio, channel: { name: 'T', slogan: '', presenters: {} } });
+  director.voices = { refreshAds() {}, prepareAd() {}, adLine: () => null };
+  director.playAd = async () => new Promise((r) => setTimeout(r, 20));
+  const s = director.scene;
+  const shots = [];
+  const cues = [];
+  director.music = { cue: (m) => cues.push(m) };
+  const setShot = director.setShot.bind(director);
+  director.setShot = (shot, extra = {}) => {
+    setShot(shot, extra);
+    shots.push({ shot: extra.card?.ad === BREAK_BLACK ? 'black' : shot, card: extra.card, adBreak: s.adBreak && { ...s.adBreak }, t: performance.now() / 1000 });
+  };
+  const at = Date.parse('2026-10-12T10:00:00+01:00');
+  const t0 = performance.now() / 1000;
+  await director.playBreak({ kind: 'break', id: 'b2', filler: false, ads: 1, hold: 3, at, next: { id: 'news-60', title: 'NEWS IN 60', theme: 'world', ready: true } });
+  const t1 = performance.now() / 1000;
+  const seq = shots.map((e) => e.shot);
+  assert.deepEqual(seq.slice(seq.indexOf('ident') + 1), ['black', 'ad', 'black', 'promo', 'black', 'countdown']);
+  const count = shots.at(-1);
+  assert.equal(count.card.at, at, 'the card names the mark');
+  assert.ok(Math.abs(count.card.until - BREAK_BLACK.duration - count.t - 3) < 0.4, 'it counts the hold down to zero');
+  assert.ok(t1 - count.t >= 2.9, 'the break holds the whole countdown');
+  const bumper = shots.find((e) => e.shot === 'ident');
+  assert.ok(bumper.adBreak.total >= 3 + CHANNEL.breaks.promo, 'BACK IN … counts the countdown too');
+  assert.ok(t1 - t0 < bumper.adBreak.total + 2, 'and the break ends when it said');
+  assert.ok(cues.includes('standby'), 'the channel bed under the clock');
+});
+
 // --- the break bumper (owner, 3 Oct: an advert must never be mistaken for a programme) ---------
 
 test('a break opens on the bumper ("BACK IN 1 MINUTE", the continuity voice) and the ADVERTISEMENT tag counts down to its end', async () => {

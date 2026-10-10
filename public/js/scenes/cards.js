@@ -1724,6 +1724,60 @@ export function drawBreakBumper(ctx, t, dt, { left = 60, total = 60, label = '',
 }
 
 // ---------------------------------------------------------------------------
+// COUNTDOWN CLOCK (the channel's clock, server/station.js: the break before NEWS IN 60 holds here until :00 or :30,
+// at most `clock.hold` seconds): a ring of 60 dots that go out one a second, the seconds left inside it, and what
+// comes at what time. The one card that counts: it is the channel keeping time, on the hour and the half hour.
+
+const COUNT_FIELD = lazyBackdrop({ key: 'count', colors: [P.black, P.ink], cx: 110, cy: 104, reach: 260 });
+const RING = Array.from({ length: 60 }, (_, i) => {
+  const a = (i / 60) * Math.PI * 2 - Math.PI / 2;
+  return [Math.round(110 + Math.cos(a) * 52), Math.round(104 + Math.sin(a) * 52)];
+});
+const HOURS = new Set([0, 15, 30, 45]);
+
+/** The local HH:MM of `ms` on the channel's clock (London), '' when unknown. */
+export function clockMark(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return '';
+  try {
+    return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(ms));
+  } catch {
+    return '';
+  }
+}
+
+/** card = { left (seconds to the mark), next: { title }, at (the mark, ms), accent }. */
+export function drawCountdownCard(ctx, t, dt, { left = 30, next = null, at = 0, accent = P.red } = {}) {
+  ctx.drawImage(COUNT_FIELD(), 0, 0);
+  const d = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+  const lit = Math.max(0, Math.min(60, Math.ceil(Number(left) || 0)));
+  const on = ACCENTS.has(accent) ? accent : P.red;
+  const ring = easeOutQuint(seg(d, 0.05, 0.6)); // the ring draws round once, then only its dots go out
+  for (let i = 0; i < 60; i++) {
+    if (i / 60 > ring) break;
+    const [x, y] = RING[i];
+    const big = HOURS.has(i);
+    ctx.fillStyle = i < lit ? (big ? P.white : on) : P.slate;
+    ctx.fillRect(x - (big ? 1 : 0), y - (big ? 1 : 0), big ? 3 : 2, big ? 3 : 2);
+  }
+  if (d >= 0.3) {
+    const txt = clockLeft(left);
+    drawText(ctx, txt, 110 - Math.round(textW(txt, 3) / 2), 94, S.white3);
+  }
+  const X = 196;
+  const lp = seg(d, 0.2, 0.4);
+  if (lp > 0) drawLogo(ctx, X, 58 + Math.round((1 - easeOutQuint(lp)) * 6), { variant: 'full', scale: 1, align: 'left', t: null });
+  const title = ellipsis(String(next?.title || 'GLOBIT 24').toUpperCase(), W - X - 14, 2);
+  rise(ctx, title, X, 92, seg(d, 0.35, 0.3), S.white2);
+  const mark = clockMark(at);
+  rise(ctx, mark ? `AT ${mark}` : 'NEXT', X, 114, seg(d, 0.5, 0.3), S.fog2);
+  if (d >= 0.65) {
+    ctx.fillStyle = on;
+    ctx.fillRect(X, 132, Math.round(40 * easeOutQuint(seg(d, 0.65, 0.4))), 2);
+    drawText(ctx, 'THE NEWS ON THE HOUR AND THE HALF HOUR', X, 140, S.microFog);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // TITLE CARD (kept for compatibility: a plain programme title card)
 
 export function drawTitleCard(ctx, t, dt, { channel = 'GLOBIT 24', subtitle = '', date = '' } = {}) {

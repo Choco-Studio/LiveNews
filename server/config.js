@@ -35,6 +35,9 @@ const bounded = (key, fallback, min, max) => {
   return fallback;
 };
 
+// the rotation slot the channel starts at (a programme id: demos and recordings), else the first
+const rotationStart = env('ROTATION_START', '').trim();
+
 export const config = {
   host: env('HOST', '127.0.0.1'),
   port: num('PORT', 8080),
@@ -65,8 +68,10 @@ export const config = {
   },
   // Episodes produced ahead of air
   queueSize: num('QUEUE_SIZE', 2),
-  // the rotation slot the channel starts at (a programme id: demos and recordings), else the first
-  rotationStart: env('ROTATION_START', '').trim(),
+  rotationStart,
+  // The channel's clock (config/channel.json `clock`: NEWS IN 60 at :00 and :30, dayparts). STATION_CLOCK=0 turns it
+  // off; a ROTATION_START demo plays the bare rotation unless STATION_CLOCK=1 asks for the clock too
+  clock: !/^(0|false|no|off)$/i.test(env('STATION_CLOCK', rotationStart ? '0' : '1')),
   // Stories offered to the writer, who picks the best for each programme
   candidatePool: num('CANDIDATE_POOL', 12),
   // Second AI pass: a standards editor checks each script against its sources

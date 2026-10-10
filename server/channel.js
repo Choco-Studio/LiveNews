@@ -116,6 +116,30 @@ export function validateChannel(ch) {
       throw new Error('channel "breaks.minProgrammeBetween" is not 0..3600 seconds');
     }
   }
+  // the clock (server/station.js clockPin): programmes pinned to minutes of the hour, dayparts that leave some out
+  const c = ch.clock;
+  if (c !== undefined) {
+    if (!c || typeof c !== 'object' || Array.isArray(c)) throw new Error('channel "clock" is not an object');
+    if (c.timezone !== undefined) {
+      try {
+        new Intl.DateTimeFormat('en-GB', { timeZone: c.timezone });
+      } catch {
+        throw new Error(`channel "clock.timezone" is not a known time zone ("${c.timezone}")`);
+      }
+    }
+    const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+    if (c.pins !== undefined && !(Array.isArray(c.pins) && c.pins.every((p) => p && int(p.minute, 0, 59) && ch.programs[p.program]))) {
+      throw new Error('channel "clock.pins" is not a list of { minute: 0..59, program: a known programme }');
+    }
+    if (c.hold !== undefined && !int(c.hold, 0, 300)) throw new Error('channel "clock.hold" is not 0..300 seconds');
+    if (c.late !== undefined && !int(c.late, 0, 1800)) throw new Error('channel "clock.late" is not 0..1800 seconds');
+    const daypart = (d) => d && int(d.from, 0, 23) && int(d.to, 0, 24) && isList(d.skip) && d.skip.every((id) => ch.programs[id]) && (d.days === undefined || (Array.isArray(d.days) && d.days.every((x) => int(x, 0, 6))));
+    if (c.dayparts !== undefined && !(Array.isArray(c.dayparts) && c.dayparts.every(daypart))) {
+      throw new Error('channel "clock.dayparts" is not a list of { from: 0..23, to: 0..24, skip: [programme ids], days?: [0..6] }');
+    }
+    const pinned = new Set((c.pins || []).map((p) => p.program));
+    if (ch.rotation.every((id) => pinned.has(id))) throw new Error('channel "clock" pins every programme of the rotation: nothing is left between the marks');
+  }
 }
 
 const isList = (v) => Array.isArray(v) && v.every((x) => typeof x === 'string');
