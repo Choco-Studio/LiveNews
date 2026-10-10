@@ -12,7 +12,7 @@
 // that levels tunes from different authors.
 
 import { buildTimeline, sampleTimeline, sampleCalm, SpeechClock, wordAtChar } from './audio/visemes.js';
-import { splitSentences } from './audio/sentences.js';
+import { splitSentences, sentenceMelody } from './audio/sentences.js';
 import { buildBuses, Ducker, TunePlayer, asSong, scheduleMurmur, bank } from './audio/synth.js';
 import { CUES, cueFor, themeFor, THEME_IDS } from './audio/themes.js';
 import { langPlan, normProfile, resolveVoices } from './audio/voices.js';
@@ -603,6 +603,7 @@ export class AudioEngine {
     const poll = run.marks ? setInterval(() => !run.cancelled && this.#pollMarks(run), 25) : 0;
     try {
       if (recorded && this.#requested !== 'blips' && (await this.#playRecorded(run, recorded, sentences, onSentence))) return;
+      const melody = sentenceMelody(sentences); // the browser voice's newsreader arc, sentence by sentence
       for (let i = 0; i < sentences.length && !run.cancelled; i++) {
         run.sentence = i;
         try {
@@ -611,7 +612,7 @@ export class AudioEngine {
           console.warn('[audio] onSentence failed', err);
         }
         const mode = this.mode;
-        if (mode === 'tts') await this.#sayTts(run, sentences[i]);
+        if (mode === 'tts') await this.#sayTts(run, sentences[i], melody[i]);
         else if (mode === 'blips') await this.#sayBlips(run, sentences[i]);
         else await this.#saySilent(run, sentences[i]);
         run.clearTimeline();
@@ -806,7 +807,7 @@ export class AudioEngine {
     return sum / this.#speed.size;
   }
 
-  async #sayTts(run, sentence) {
+  async #sayTts(run, sentence, semis = 0) {
     const synth = this.#synth;
     const Utter = globalThis.SpeechSynthesisUtterance;
     if (!synth || !Utter || !this.ttsAvailable) return this.#saySilent(run, sentence);
@@ -838,7 +839,8 @@ export class AudioEngine {
       const u = new Utter(tl.spoken || sentence);
       u.lang = cfg.voice?.lang || cfg.lang;
       if (cfg.voice) u.voice = cfg.voice;
-      u.pitch = cfg.pitch;
+      // the sentence's step of the melody (never for UNIT-8: an even machine voice)
+      u.pitch = cfg.gender === 'robot' ? cfg.pitch : Math.max(0.1, Math.min(2, cfg.pitch * 2 ** (semis / 12)));
       u.rate = cfg.rate;
       u.volume = this.#volume;
       run.utter = u;

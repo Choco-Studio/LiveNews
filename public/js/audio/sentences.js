@@ -93,3 +93,20 @@ export function splitSentences(text) {
   }
   return merged.flatMap((p) => (p.length > MAX_CHUNK ? cutLong(p) : [p]));
 }
+
+// The newsreader melody for the browser voice (no recorded clip: speechSynthesis reads sentence by sentence and
+// can only take one pitch per utterance): the same arc the planner gives the neural voices (speechtext.js
+// planMelody), per sentence: the lead high, stepping down to the close; a question lifts; a line that ends on who
+// said it sits lower. Semitones over the voice's own pitch, deterministic.
+const REPORTED = /\b(?:said|says|told reporters|added|reported|warned|confirmed|announced)[.!?…"”’]*$/i;
+export function sentenceMelody(sentences) {
+  const n = sentences.length;
+  return sentences.map((s, i) => {
+    let semis = n === 1 ? 0.4 : 1.4 - 2.2 * (i / (n - 1));
+    const t = String(s).trim();
+    if (/\?["”’]*$/.test(t)) semis += 0.8;
+    else if (/!["”’]*$/.test(t)) semis += 0.4;
+    if (REPORTED.test(t)) semis -= 0.4;
+    return Math.round(Math.max(-2, Math.min(2, semis)) * 100) / 100;
+  });
+}

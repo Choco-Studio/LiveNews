@@ -324,6 +324,19 @@ describe('voice service', () => {
     assert.ok(ctx.episode.segments.filter(isSpoken).every((s) => s.audio), 'and gets its audio later');
   });
 
+  test('a long programme waits longer: the budget grows with the speech still to render (up to 4x)', async () => {
+    const { service } = makeService({ budgetSeconds: 0.05, factory: fakeWorkerFactory({ delayMs: 30 }) });
+    service.coldStart = false;
+    // about 2,200 words over four segments: some 13 minutes of speech, the budget's cap (0.2 s here)
+    const long = (k) => Array.from({ length: 550 }, (_, i) => `word${k}x${i}`).join(' ') + '.';
+    const segs = [0, 1, 2, 3].map((k) => ({ type: 'story', anchor: k % 2 ? 'B' : 'A', emotion: 'neutral', text: long(k), cues: [] }));
+    const note = await service.voiceEpisode(episodeCtx(segs));
+    assert.equal(note.late, undefined, JSON.stringify(note));
+    // the same rate on a short episode misses the plain budget
+    const short = await service.voiceEpisode(episodeCtx(SEGMENTS().map((x) => ({ ...x, text: `${x.text} Once more.` }))));
+    assert.ok(short.late >= 1, JSON.stringify(short));
+  });
+
   test('a cold start waits for every clip of the first episode (owner 07:45); the next episode keeps the normal budget', async () => {
     const { service } = makeService({ budgetSeconds: 0.05, firstBudgetSeconds: 5, factory: fakeWorkerFactory({ delayMs: 40 }) });
     const first = episodeCtx(SEGMENTS());

@@ -18,6 +18,10 @@ import { KokoroWorker } from './worker.js';
 import { VoiceCache } from './cache.js';
 import { segmentRequest, adLineRequest, clipId, clientAudio, isSpoken, estimateSeconds, ID_RE } from './plan.js';
 
+// the voice budget (config VOICE_BUDGET_S) covers this much new speech; a longer episode's grows with it, to a cap
+const VOICE_BUDGET_SPEECH_S = 180;
+const VOICE_BUDGET_MAX_SCALE = 4;
+
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const RETRY_MS = 10 * 60_000; // after the engine failed, try again this much later
 const PIN_MS = 6 * 3600_000; // clips of recent episodes are never pruned within this time
@@ -340,6 +344,7 @@ export class VoiceService {
     let cached = 0;
     let failed = 0;
     let speechSeconds = 0;
+    let pendingWords = 0; // words still to synthesise (the budget scales with them)
     const pending = [];
     for (const seg of segments) {
       if (!isSpoken(seg)) continue;
@@ -364,6 +369,7 @@ export class VoiceService {
         speechSeconds += meta.duration;
         continue;
       }
+      pendingWords += String(seg.text || '').split(/\s+/).filter(Boolean).length;
       pending.push(
         this.synth(id, req, 0).then(
           (m) => {
@@ -393,7 +399,11 @@ export class VoiceService {
     // waits for every clip up to firstBudgetMs, so the channel's first programme airs with all its voices
     // (owner 07:45: the first WORLD NOW aired 6 of 19 segments without them and read much worse); later
     // episodes are produced minutes ahead and keep the normal budget (their late clips attach before air).
-    const budget = this.coldStart ? Math.max(this.cfg.budgetMs, this.cfg.firstBudgetMs) : this.cfg.budgetMs;
+    // A long programme waits longer (PACING editorial-2: a voice budget scaled with the air): the budget is for about
+    // three minutes of new speech (a short programme), and grows with the speech still to render, up to four times
+    // (WORLD NOW's ~8 minutes of speech wait ~2.7x), so its first segments are ready when it reaches the queue
+    const scale = Math.min(VOICE_BUDGET_MAX_SCALE, Math.max(1, pendingWords / 2.75 / VOICE_BUDGET_SPEECH_S));
+    const budget = this.coldStart ? Math.max(this.cfg.budgetMs * scale, this.cfg.firstBudgetMs) : this.cfg.budgetMs * scale;
     this.coldStart = false;
     let late = false;
     if (pending.length) {
