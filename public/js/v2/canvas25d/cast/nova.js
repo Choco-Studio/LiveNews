@@ -197,7 +197,9 @@ export function drawWarmHead(buf, L, m, head, s) {
       if (dg > d) d = dg;
       if (cheekK > 0) {
         // the cheekbone: from under the outer half of the lit eye, slanting up toward the temple
-        const dc = capD(fx, ly, -ex + 0.7, ey + 2.0, -ex - 1.9, ey + 1.05, 0.9 * cheekK);
+        // (narrow: on her deep skin a tan core here read as a flat peach patch on one cheek, so the
+        // cheekbone is a mid-tone stroke and the light stays on the forehead, the bridge and the chin)
+        const dc = capD(fx, ly, -ex + 0.5, ey + 1.9, -ex - 1.6, ey + 1.15, 0.42 * cheekK);
         if (dc > d) d = dc;
       }
       const dn = planeD(fx, ly, -0.45, chY, 1.0, 0.5);
