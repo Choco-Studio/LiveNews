@@ -812,11 +812,14 @@ function study(story) {
   const summaryHasIt = summaryFigures.some(sameAsTitle);
   const figures = [...summaryFigures.map((f) => (!summaryHasIt || !sameAsTitle(f) ? f : { ...f, inTitle: true })), ...(summaryHasIt ? [] : fromBodyFigures.map((f) => (sameAsTitle(f) ? { ...f, inTitle: true } : f)))]
     .filter((f, i, all) => f.fact.length <= 40 && f.score >= 2 && all.findIndex((g) => g.value === f.value) === i);
-  const fromSummary = sentencesOf(s.summary).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !ownVoice(x) && unstop(x).toLowerCase() !== unstop(title).toLowerCase());
+  // (a short line without a verb is a section header or an aside, never news: "Part time, anyway.", "The A-G-I
+  // Chronicles.", a Verge newsletter read on air, 10 Oct)
+  const fragment = (x) => wordCount(x) <= 6 && !hasFiniteVerb(x.replace(/[.!?…]+$/, ''));
+  const fromSummary = sentencesOf(s.summary).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !ownVoice(x) && !fragment(x) && unstop(x).toLowerCase() !== unstop(title).toLowerCase());
   // the story dossier (wave 3 §3.1): the article's own sentences after the summary's, never one the summary
   // already says, at most 9 in all (depth for programmes of 8-10 minutes, never padding)
   const seen = new Set(fromSummary.map((x) => unstop(x).toLowerCase()));
-  const fromBody = s.body ? sentencesOf(s.body).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !ownVoice(x) && !seen.has(unstop(x).toLowerCase()) && unstop(x).toLowerCase() !== unstop(title).toLowerCase() && wordCount(x) >= 6 && wordCount(x) <= 34) : [];
+  const fromBody = s.body ? sentencesOf(s.body).filter((x) => !LIVE_BOILERPLATE.test(x) && !isTranscriptLine(x) && !ownVoice(x) && !fragment(x) && !seen.has(unstop(x).toLowerCase()) && unstop(x).toLowerCase() !== unstop(title).toLowerCase() && wordCount(x) >= 6 && wordCount(x) <= 34) : [];
   const sentences = [...fromSummary, ...fromBody].slice(0, Math.max(9, fromSummary.length));
   // each sentence's predecessor as the outlet wrote it (a sentence that follows on is told only after it)
   const raw = [...sentencesOf(s.summary), ...(s.body ? sentencesOf(s.body) : [])];

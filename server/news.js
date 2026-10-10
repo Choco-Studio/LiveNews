@@ -439,9 +439,12 @@ const unquoted = (t) => t.replace(/[“"][^”"]*[”"]/g, ' ').replace(/(^|[\s:
 // a newscast's page is several stories in one ("Trump says U.S. won't attack Iran before midterms. And, ICE agent shoots man", NPR 9 Oct)
 const NEWSCAST = /[.!?]\s+And,\s/;
 const CAPTION = /\b(?:is|are) (?:seen|pictured|shown)\b.{0,200}?\bin this\b.{0,40}?\b(?:photo(?:graph)?|image|picture)\b/i;
+// a newsletter greets its readers ("Hi, friends! ... Thanks to everyone who sent well wishes and tips for managing three
+// kids", The Verge 10 Oct, read on air as news): its summary or its article opens on a hello
+const NEWSLETTER = /^\s*(?:(?:hi|hey|hello)(?:,|!|\s+(?:there|all|everyone|everybody|friends|folks|again)\b)|(?:welcome (?:back )?to|happy (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekend|holidays|new year))\b|good (?:morning|afternoon|evening)(?:,|!|\s+(?:everyone|all|friends|folks)\b)|thanks? (?:to )?(?:everyone|all of you|you all) who\b)/i;
 export const notNews = (s) => {
   const t = String(s?.title || '');
-  return SHOPPING.test(t) || REVIEW.test(unquoted(t)) || BYLINED.test(t) || /\?\s*$/.test(unquoted(t).trim()) || CAPTION.test(String(s?.summary || '')) || NEWSCAST.test(t);
+  return SHOPPING.test(t) || REVIEW.test(unquoted(t)) || BYLINED.test(t) || /\?\s*$/.test(unquoted(t).trim()) || CAPTION.test(String(s?.summary || '')) || NEWSCAST.test(t) || NEWSLETTER.test(String(s?.summary || '')) || NEWSLETTER.test(String(s?.body || '').slice(0, 200));
 };
 
 /** The figures of a headline by value ("$20bn" and "$20 billion" are one), years and small counts left out. */

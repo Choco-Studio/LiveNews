@@ -66,7 +66,11 @@ export function dropPageFurniture(text) {
   const parts = sentencePieces(t);
   if (!parts) return t;
   const CUT = /\[\s*(?:…|\.\.\.|&#8230;)\s*\]/;
+  // a cut right after a title's full stop fell mid-sentence: "Byrnes texted Ohio Sen. […]" (The Verge 10 Oct) aired as
+  // "Byrnes texted Ohio Sen.", so the piece before such a cut goes with it
+  const TITLE_END = /(?:^|[\s(“"'‘])(?:Mr|Mrs|Ms|Dr|St|Mt|No|Gen|Sen|Rep|Gov|Lt|Col|Capt|Sgt|Cpl|Prof|Jr|Sr|Inc|Ltd|Co|Corp|vs|U\.S|U\.K)\.\s*$/;
   const kept = parts.filter((p, i) => {
+    if (parts.length > 2 && i + 1 < parts.length && TITLE_END.test(p) && CUT.test(parts.slice(i + 1).join(''))) return false;
     const s = p.trim();
     if (isNavRun(s) || TAGLINES.test(s)) return false;
     // "We were talking about this last week, because this is something [Trump has] been hinting at": a host's

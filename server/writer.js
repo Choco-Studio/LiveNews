@@ -771,7 +771,11 @@ export function shortHeadline(title, max = HEADLINE_MAX, { spoken = false } = {}
     }
     return t;
   };
-  const start = clean(plainTitle(title), 200).replace(/[\s.!?;:,]+$/, '');
+  let start = clean(plainTitle(title), 200).replace(/[\s.!?;:,]+$/, '');
+  // a title of two sentences that will not fit is its first one ("Anthropic can’t reliably control its AI agents. It’s
+  // cutting off its internal evals from the live internet instead", TechCrunch 10 Oct, aired as "...AI AGENTS. IT’S")
+  const parts = sentencesIn(start);
+  if (parts.length > 1 && start.length > limit && parts[0].split(/\s+/).length >= 3) start = parts[0].replace(/[\s.!?;:,]+$/, '');
   // a question is asked whole (the strap takes two lines), with its question mark
   const asked = `${start}?`;
   if (/\?\s*$/.test(clean(plainTitle(title), 200)) && QUESTION.test(asked) && asked.length <= HEADLINE_TWO_LINES) return asked;

@@ -18,6 +18,9 @@ export const TOPICS = [
   [/wildfire|bushfire|forest fire/i, 'WILDFIRE'],
   [/flood|monsoon|heavy rain|storm|hurricane|typhoon|cyclone|strong winds|heatwave|heat alert|degrees celsius/i, 'WEATHER'],
   [/festival|concert|exhibition|museum|gallery|opera|theatre/i, 'CULTURE'],
+  // a film is culture, whatever its plot: "Cristian Mungiu's sixth feature, Fjord, concerns a family on trial" (The Verge
+  // 10 Oct) went out as JUSTICE
+  [/\b(?:films?|movies?|cinema|(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|new|latest|debut) feature|feature films?|documentar(?:y|ies)|box office|Oscars?|screenplay|filmmakers?|actors?|actress(?:es)?|Hollywood)\b/i, 'CULTURE'],
   [/\binternet\b|broadband|\b5G\b/i, 'CONNECTIVITY'],
   [/telescope|galaxy|galaxies|planet|comet|asteroid|eclipse|\bstars?\b|\bmoon\b|nebula/i, 'ASTRONOMY'],
   [/rocket|\borbit|astronaut|space station|spacecraft|\bprobe\b|\brover\b|\bmars\b/i, 'SPACE'],
