@@ -794,3 +794,135 @@ describe('the weather centre, round 3: shots, the moving sky, the studio, the bo
     assert.ok(used.has(tempColor(hc.hot[0].value).toLowerCase()), 'a temperature on a chip of its colour');
   });
 });
+
+describe('the weather centre, round 4: cloud that keeps its shape, the storm\'s cloud, the close-up\'s gestures', async () => {
+  const sky = await import('../public/js/scenes/weather/sky.js');
+  const report = await fixtureReport();
+  const S = sky.decodeSky(report.sky);
+  const packed = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    return (0xff000000 | ((n & 255) << 16) | (n & 0xff00) | ((n >> 16) & 255)) >>> 0;
+  };
+  const PALETTE = new Set(Object.values(P).map(packed));
+  // a 70 % cover under a westerly sheared every 20 degrees of latitude (30 m/s one way, then the other)
+  const sheared = (cover = 70) => {
+    const cur = { cloud: new Float32Array(S.n).fill(cover), rain: new Float32Array(S.n), u: new Float32Array(S.n), v: new Float32Array(S.n), mslp: new Float32Array(S.n).fill(1013) };
+    for (let j = 0; j < S.h; j++) for (let i = 0; i < S.w; i++) cur.u[j * S.w + i] = 30 * Math.sin(((S.lat0 - j * S.step) * Math.PI) / 20);
+    return cur;
+  };
+
+  test('the flow map: two phases half a period apart, weights adding to one, never carried back, a jump only unseen', () => {
+    const P8 = sky.FLOW;
+    let last = null;
+    for (let tau = 0; tau <= 3 * P8; tau += 0.05) {
+      const f = sky.flowPhases(tau);
+      assert.ok(Math.abs(f.wA + f.wB - 1) < 1e-9 && f.wA >= 0 && f.wA <= 1);
+      for (const [s, wt] of [[f.sA, f.wA], [f.sB, f.wB]]) {
+        assert.ok(Math.abs(s) <= P8 / 2 + 1e-9, 'each phase is carried at most half a period either side of its start');
+        if (wt > 0) assert.ok(Math.abs(s) <= ((1 + sky.FADE) / 4) * P8 + 1e-6, `a phase is seen only near its start (${s})`);
+      }
+      if (last) {
+        for (const [s, s0, wt, k, k0] of [[f.sA, last.sA, f.wA, f.kA, last.kA], [f.sB, last.sB, f.wB, f.kB, last.kB]]) {
+          if (s >= s0) assert.equal(k, k0, 'a run carries on while its shape moves downwind');
+          else {
+            // the phase jumps back to the start of a new run: only while it has no weight, somewhere new
+            assert.equal(wt, 0, 'a phase only jumps while it is not seen');
+            assert.ok(k > k0);
+          }
+        }
+      }
+      last = f;
+    }
+    // each new run starts far across the texture from the run before it (the two live phases never coincide)
+    for (let k = -4; k < 12; k++) {
+      const [a, b] = [sky.phaseOffset(k, 256), sky.phaseOffset(k + 1, 256)];
+      const d = (x) => Math.min(Math.abs(x), 256 - Math.abs(x));
+      assert.ok(Math.hypot(d(a[0] - b[0]), d(a[1] - b[1])) > 50);
+    }
+  });
+
+  test('the texture in normal space: the same ranks, a standard normal; phi and its inverse agree', () => {
+    for (const { data, gauss } of sky.cloudTexture()) {
+      let m = 0, v = 0;
+      for (const g of gauss) m += g;
+      m /= gauss.length;
+      for (const g of gauss) v += (g - m) ** 2;
+      v /= gauss.length;
+      assert.ok(Math.abs(m) < 0.01 && Math.abs(v - 1) < 0.05, `mean ${m}, variance ${v}`);
+      for (let i = 1; i < 500; i++) if (data[i] > data[i - 1] + 1) assert.ok(gauss[i] > gauss[i - 1], 'the same order');
+    }
+    for (const p of [0.001, 0.1, 0.5, 0.77, 0.999]) assert.ok(Math.abs(sky.phi(sky.invPhi(p)) - p) < 1e-6);
+  });
+
+  test('the cover holds through the cross-fade: the same share of the area cloud, the same thick cores, at every moment', () => {
+    const w = 384, h = 216, view = { clon: 0, clat: 0, s: w / 360, kx: 1 };
+    const base = new Uint32Array(w * h).fill(packed(P.navy)), dst = new Uint32Array(w * h);
+    const cur = sheared();
+    const thin = sky.VEIL[1].get(packed(P.navy));
+    const cover = [], thick = [];
+    for (let tau = 0; tau <= 2 * sky.FLOW; tau += 0.5) {
+      sky.composeSky(dst, base, w, h, view, S, cur, { tau, rain: false });
+      let c = 0, t = 0;
+      for (const px of dst) {
+        if (px !== packed(P.navy)) c++;
+        if (px !== packed(P.navy) && px !== thin) t++; // thicker than the thinnest veil
+      }
+      cover.push(c / dst.length);
+      thick.push(t / dst.length);
+    }
+    const spread = (a) => Math.max(...a) - Math.min(...a);
+    assert.ok(spread(cover) < 0.025, `the cloud's share of the area pulses by ${(spread(cover) * 100).toFixed(1)} %`);
+    const mt = thick.reduce((a, b) => a + b, 0) / thick.length;
+    assert.ok(spread(thick) < 0.35 * mt, `the thick cores pulse (${thick.map((x) => (x * 100).toFixed(1)).join(' ')})`);
+  });
+
+  test('no streaks late in the run: the shapes under a sheared wind stay as round at 24 hours as at the start', () => {
+    const w = 192, h = 108, view = { clon: 0, clat: 0, s: w / 360, kx: 1 };
+    const base = new Uint32Array(w * h).fill(packed(P.navy)), dst = new Uint32Array(w * h);
+    const cur = sheared(75);
+    // the cloud's edges met along a row over those met down a column: about 1 for round shapes, well under 1 for
+    // shapes drawn out along the wind (the old texture, carried 24 hours, measured 0.6)
+    const ratio = (tau) => {
+      sky.composeSky(dst, base, w, h, view, S, cur, { tau, rain: false });
+      const m = (x, y) => dst[y * w + x] !== base[y * w + x];
+      let hx = 0, vy = 0;
+      for (let y = 1; y < h; y++) for (let x = 1; x < w; x++) {
+        if (m(x, y) !== m(x - 1, y)) hx++;
+        if (m(x, y) !== m(x, y - 1)) vy++;
+      }
+      return hx / vy;
+    };
+    for (const tau of [12, 18, 21, 24]) assert.ok(ratio(tau) > 0.8, `at ${tau} h the shapes are drawn out (${ratio(tau).toFixed(2)})`);
+    // and the real sky late in the run: palette colours only
+    sky.composeSky(dst, base, w, h, view, S, new sky.SkyClock(S).at(22), { tau: 22, isobars: true, isoColor: packed(P.fog) });
+    for (const px of dst) assert.ok(PALETTE.has(px));
+  });
+
+  test('downwind, never back: a feature carried by a steady wind moves with it while its phase is seen', () => {
+    const w = 192, h = 108, view = { clon: 0, clat: 0, s: (w / 360) * 4, kx: 1 };
+    const base = new Uint32Array(w * h).fill(packed(P.navy)), a = new Uint32Array(w * h), b = new Uint32Array(w * h);
+    const cur = { cloud: new Float32Array(S.n).fill(60), rain: new Float32Array(S.n), u: new Float32Array(S.n).fill(25), v: new Float32Array(S.n), mslp: new Float32Array(S.n).fill(1013) };
+    // inside one phase's solo stretch (phase A alone around the middle of its run), the picture 1.6 hours later is the
+    // picture carried east by the westerly: 45 m/s aloft is about 2.3 degrees, 5 px here
+    const tau0 = sky.FLOW / 2 - 0.8, tau1 = sky.FLOW / 2 + 0.8;
+    assert.ok(sky.flowPhases(tau0).wA === 1 && sky.flowPhases(tau1).wA === 1);
+    sky.composeSky(a, base, w, h, view, S, cur, { tau: tau0, rain: false });
+    sky.composeSky(b, base, w, h, view, S, cur, { tau: tau1, rain: false });
+    const shift = (d) => {
+      let same = 0, n = 0;
+      for (let y = 10; y < h - 10; y++) for (let x = 12; x < w - 12; x++, n++) if ((a[y * w + x] !== base[0]) === (b[y * w + x + d] !== base[0])) same++;
+      return same / n;
+    };
+    const ds = [-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8];
+    const best = ds.reduce((p, d) => (shift(d) > shift(p) ? d : p), 0);
+    assert.ok(best >= 3 && best <= 7, `the cloud moved ${best} px (east is positive)`);
+    // and across a whole run, a cross-fade included, the clock only carries the texture forward
+    let last = sky.flowPhases(0);
+    for (let tau = 0.1; tau < 3 * sky.FLOW; tau += 0.1) {
+      const f = sky.flowPhases(tau);
+      if (f.wA > 0 && last.wA > 0 && f.kA === last.kA) assert.ok(f.sA > last.sA);
+      if (f.wB > 0 && last.wB > 0 && f.kB === last.kB) assert.ok(f.sB > last.sB);
+      last = f;
+    }
+  });
+});

@@ -12,17 +12,21 @@
 //                                    the same kind), refined between cells (refineCentre), their places in between;
 //                                    matchTracks(systems, frames) the matching alone (the writer names whole tracks)
 //   isobarSegments(field, w, h, level)   marching squares: the contour of one pressure level (grid coordinates)
-//   cloudTexture()                   the cloud shape: a tileable fBm, equalised (uniform 0..1), with mips
+//   cloudTexture()                   the cloud shape: a tileable fBm, equalised (uniform 0..1, and the same ranks as a
+//                                    standard normal), with mips and the texture's correlation with itself shifted
+//   flowPhases(tau) / phaseOffset(k, size)   the flow map that carries the texture on the wind (round 4)
 //   composeSky(dst, base, w, h, view, S, cur, opts)   the sky over a map frame (Uint32 pixels, worldmap.js view)
 //   VEIL, RADAR, radarBand, hashOf / colourTable   the cloud's veils, the radar colours, the palette tables
 //
 // How the cloud looks like cloud: the cover (%) says how much of each place is cloud; the texture says where. A
 // pixel is cloud where the texture is above 1 - cover (the texture is equalised, so a 60 % cover is 60 % of the
 // area), thin at the edges and thick in the cores (up to four veils: the colour under it mixed toward white), lit
-// from the west along each row. The texture is anchored to the Earth and advected by the forecast's wind: a feature
-// sits at p + wind x time, so the time-lapse carries it downwind while the cover field builds and clears it. Rain is
-// shaped by the same texture at twice the frequency (cells inside the bands) and drawn over the cloud, in radar
-// colours by intensity.
+// from the west on its slopes. The texture is anchored to the Earth and carried by the forecast's wind, so the
+// time-lapse carries each feature downwind while the cover field builds and clears it. Round 4: carried for the
+// whole 24 hours, the shear of the westerlies drew the texture out into long streaks; now it is carried in two
+// phases half a period (FLOW) apart, each displaced by a few hours of wind at most and cross-faded, re-equalised
+// so the cover in view never swells or thins as they fade (composeSky). Rain is shaped by the same texture at twice
+// the frequency (cells inside the bands) and drawn over the cloud, in radar colours by intensity.
 //
 // The per-pixel work runs on a coarse node grid (every 4 px: cover, rain, the wind's offset, pressure) stepped
 // linearly along each row, and one texture read per pixel (two where it rains).
@@ -388,21 +392,59 @@ function vnoise(x, y, p, seed) {
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 
-/** Ranks of a field as 0..255 (a uniform histogram), so a threshold at 1 - cover leaves `cover` of the area. */
+/**
+ * Ranks of a field as 0..255 (a uniform histogram), so a threshold at 1 - cover leaves `cover` of the area; and the
+ * same ranks as a standard normal (gauss: the flow map blends two samples there, see composeSky).
+ */
 function equalise(f) {
   const n = f.length;
   const idx = new Uint32Array(n);
   for (let i = 0; i < n; i++) idx[i] = i;
   idx.sort((a, b) => f[a] - f[b]);
   const out = new Uint8Array(n);
-  for (let r = 0; r < n; r++) out[idx[r]] = Math.min(255, Math.floor((r / n) * 256));
-  return out;
+  const gauss = new Float32Array(n);
+  for (let r = 0; r < n; r++) {
+    out[idx[r]] = Math.min(255, Math.floor((r / n) * 256));
+    gauss[idx[r]] = invPhi((r + 0.5) / n);
+  }
+  return { data: out, gauss };
 }
+
+/** The standard normal's quantile (Acklam's rational approximation, |error| < 1.2e-9 in p). */
+export function invPhi(p) {
+  const a = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239];
+  const b = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155288572];
+  const c = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+  const d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+  const lo = 0.02425;
+  if (p <= 0) return -8;
+  if (p >= 1) return 8;
+  if (p < lo) {
+    const q = Math.sqrt(-2 * Math.log(p));
+    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+  if (p > 1 - lo) return -invPhi(1 - p);
+  const q = p - 0.5, r = q * q;
+  return ((((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q) / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
+/** The standard normal's distribution function (an erf of Abramowitz-Stegun 7.1.26, |error| < 1.5e-7). */
+export function phi(x) {
+  const z = Math.abs(x) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * z);
+  const e = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-z * z);
+  return x >= 0 ? 0.5 + 0.5 * e : 0.5 - 0.5 * e;
+}
+// phi as a table for the per-pixel loop: G in [-PHI_R, PHI_R] at PHI_K steps per unit (nearest: a step of N is at
+// most 0.0031, finer than the thickness dither can show)
+const PHI_K = 128, PHI_R = 4.5, PHI_N = Math.round(2 * PHI_R * PHI_K) + 1;
+const PHI_T = Float32Array.from({ length: PHI_N }, (_, i) => phi(i / PHI_K - PHI_R));
+const PHI_O = PHI_R * PHI_K + 0.5;
 
 /**
  * The cloud texture: billowy fBm (six octaves, the lattice warped by a low octave so the heads round off), tileable
  * on 256 texels, equalised, with mips down to 32 (each mip equalised again, so the cover holds at every zoom).
- * -> [{ size, data: Uint8Array }] level 0 first.
+ * -> [{ size, data: Uint8Array (uniform 0..255), gauss: Float32Array (the same ranks as a standard normal) }],
+ * level 0 first.
  */
 export function cloudTexture() {
   if (TEXTURE) return TEXTURE;
@@ -422,21 +464,58 @@ export function cloudTexture() {
       f[y * TEX + x] = s / norm;
     }
   }
-  const levels = [{ size: TEX, data: equalise(f) }];
+  const levels = [{ size: TEX, ...equalise(f) }];
   let src = f, size = TEX;
   while (size > 32) {
     const half = size >> 1;
     const g = new Float32Array(half * half);
     for (let y = 0; y < half; y++) for (let x = 0; x < half; x++) g[y * half + x] = (src[2 * y * size + 2 * x] + src[2 * y * size + 2 * x + 1] + src[(2 * y + 1) * size + 2 * x] + src[(2 * y + 1) * size + 2 * x + 1]) / 4;
-    levels.push({ size: half, data: equalise(g) });
+    levels.push({ size: half, ...equalise(g) });
     src = g;
     size = half;
   }
+  for (const l of levels) l.corr = autocorrelation(l);
   TEXTURE = levels;
   return levels;
 }
 /** Degrees per texel of mip 0 (the tile covers 38.4 degrees). */
 export const TEXEL_DEG = 0.15;
+
+/**
+ * The texture's correlation with itself shifted, in normal space, on a CORR x CORR grid of shifts (each a 32nd of
+ * the tile). Two shifted copies of a tile are never quite independent: the lowest octave, which carries most of the
+ * picture, has only 16 lattice values a tile, so the copies agree or disagree by up to a tenth depending on the
+ * shift. The flow map's blend divides by its true spread with it (composeSky), or the cover would swell or shrink
+ * half way through each cross-fade. Estimated on every texel of the small mips, every (size / 64)th of the large.
+ */
+const CORR = 32;
+function autocorrelation({ size, gauss }) {
+  const out = new Float32Array(CORR * CORR);
+  const st = Math.max(1, size >> 6), n = (size / st) ** 2;
+  for (let j = 0; j < CORR; j++) {
+    for (let i = 0; i < CORR; i++) {
+      const dx = (i * size) / CORR, dy = (j * size) / CORR;
+      let s = 0;
+      for (let y = 0; y < size; y += st) {
+        const r0 = y * size, r1 = ((y + dy) % size) * size;
+        for (let x = 0; x < size; x += st) s += gauss[r0 + x] * gauss[r1 + ((x + dx) % size)];
+      }
+      out[j * CORR + i] = s / n;
+    }
+  }
+  return out;
+}
+/** The correlation at a shift of (du, dv) texels of a mip (bilinear between the grid's shifts, wrapping). */
+export function correlationAt(level, du, dv) {
+  const k = CORR / level.size;
+  let x = du * k, y = dv * k;
+  x -= Math.floor(x / CORR) * CORR;
+  y -= Math.floor(y / CORR) * CORR;
+  const i0 = Math.floor(x), j0 = Math.floor(y), fx = x - i0, fy = y - j0;
+  const i1 = (i0 + 1) % CORR, j1 = (j0 + 1) % CORR, c = level.corr;
+  const a = c[j0 * CORR + i0], b = c[j0 * CORR + i1], d = c[j1 * CORR + i0], e = c[j1 * CORR + i1];
+  return (a + (b - a) * fx) * (1 - fy) + (d + (e - d) * fx) * fy;
+}
 
 // ------------------------------------------------------------------------------------------- radar colours
 /** Rain intensity (mm per hour, after the cells) to radar colour: light blue, blue, green, yellow, red. */
@@ -504,6 +583,117 @@ const LOW = 0.32;
 // ------------------------------------------------------------------------------------------- the compositor
 const NODE = 4;
 const STEER = 1.8;
+/**
+ * The flow map's period in sky hours (round 4: late in the world's time-lapse the texture, carried by the wind for
+ * 15-24 hours, was drawn out into long streaks wherever the wind shears: the westerlies at 45-65 degrees, the
+ * Southern Ocean, the North Pacific). The texture is now carried in two phases half a period apart: each phase is
+ * displaced by at most half a period of wind either side of its own start, fades in, travels downwind, fades out
+ * and starts again elsewhere on the texture while the other phase carries the picture. No shape is carried for
+ * longer than FLOW hours, so shear bends it a little and never draws it out, however long the run.
+ */
+export const FLOW = 8;
+// the share of each half period spent cross-fading (eased); the rest of the time one phase carries the picture alone
+// (one texture read a pixel instead of two)
+export const FADE = 0.5;
+// each new run starts this far (in tiles) across the texture from the run before it. The two phases seen together
+// are always consecutive runs, so this one step is their whole relation: the texture is uncorrelated at it on every
+// mip (|r| <= 0.004, measured; the golden-ratio steps sat at r = -0.09, which made the blend's cover swell by 1 %
+// half way through each cross-fade), and it comes back to the same place only after 50 runs (200 sky hours)
+const STEP = [0.38, 0.32];
+
+/**
+ * The two phases of the flow map at `tau` sky hours: for each, the hours of wind it is displaced by (s, from
+ * -period/2 to +period/2, rising with tau), its weight (w, the two add up to 1: a phase is at full weight through
+ * the middle of its run, where it is least displaced, and at nothing well before it jumps back to the start), and
+ * k, the index of its run (the texture's offset for that run, phaseOffset). Phase B is phase A half a period later.
+ * A phase is seen only while |s| < (1 + FADE) / 4 of the period: 3 hours either side of its start.
+ */
+export function flowPhases(tau, period = FLOW, fade = FADE) {
+  const x = tau / period;
+  const cA = Math.floor(x), cB = Math.floor(x + 0.5);
+  const fA = x - cA, fB = x + 0.5 - cB;
+  const tri = 1 - Math.abs(2 * fA - 1); // 0 at A's jump, 1 at the middle of its run (B's jump)
+  const wA = smooth((tri - 0.5) / fade + 0.5);
+  return { sA: (fA - 0.5) * period, sB: (fB - 0.5) * period, wA, wB: 1 - wA, kA: 2 * cA, kB: 2 * cB - 1 };
+}
+
+/** Where the k-th run of a phase starts on a texture of `size` texels: [u, v], 0 .. size. */
+export function phaseOffset(k, size) {
+  const f = (v) => v - Math.floor(v);
+  return [f(k * STEP[0]) * size, f(k * STEP[1]) * size];
+}
+
+/** A bilinear tap of a tileable float texture (u, v positive texel coordinates). */
+function tap(tex, mask, size, u, v) {
+  const iu = u | 0, iv = v | 0;
+  const fu = u - iu, fv = v - iv;
+  const xa = iu & mask, xb = (iu + 1) & mask, ya = (iv & mask) * size, yb = ((iv + 1) & mask) * size;
+  const a = tex[ya + xa], b = tex[ya + xb], c = tex[yb + xa], d = tex[yb + xb];
+  return (a + (b - a) * fu) * (1 - fv) + (c + (d - c) * fu) * fv;
+}
+
+// the picture's own re-equalisation: soft histograms of the node samples, HB_K bins a unit over [-PHI_R, PHI_R];
+// pictures with fewer nodes than MATCH_MIN keep phi
+const HB_K = 24, HB_N = Math.round(2 * PHI_R * HB_K) + 1, MATCH_MIN = 1500;
+
+/** A soft histogram (each value shared between its two nearest bins, so it moves smoothly as the value does). */
+function softHist(H, vals, n) {
+  H.fill(0);
+  for (let i = 0; i < n; i++) {
+    let p = (vals[i] + PHI_R) * HB_K;
+    p = p < 0 ? 0 : p > HB_N - 1.001 ? HB_N - 1.001 : p;
+    const b = p | 0, f = p - b;
+    H[b] += 1 - f;
+    H[b + 1] += f;
+  }
+  // as a distribution function at each bin (half the bin's own mass counted), 0..1
+  let s = 0;
+  for (let b = 0; b < HB_N; b++) {
+    const m = H[b];
+    H[b] = (s + 0.5 * m) / n;
+    s += m;
+  }
+  return H;
+}
+const cdfAt = (F, x) => {
+  const p = (x + PHI_R) * HB_K;
+  if (p <= 0) return F[0];
+  if (p >= HB_N - 1) return F[HB_N - 1];
+  const b = p | 0;
+  return F[b] + (F[b + 1] - F[b]) * (p - b);
+};
+
+/**
+ * The flow map's re-equalisation for one picture during a cross-fade: a table like PHI_T (blend value -> 0..1) under
+ * which the blend leaves exactly the share of the picture cloud that the two phases would, mixed by their weights:
+ * M(x) = phi(T^-1(G(x))), where G is the blend's distribution over the picture and T = wA A + wB B the phases'.
+ * Both are read from the node grid's samples with soft histograms (each sample shared between its two nearest bins),
+ * so the table changes smoothly as the texture moves and no pixel flickers on it. A whole tile of the texture would
+ * not need it, but a picture shows a window of a few tiles, and over a window two shifted copies blended are not
+ * quite the normal one copy is: under a steady wind the cover swelled by 2 % half way through each cross-fade.
+ */
+export function matchedPhi(ga, gb, gg, n, wA, wB, sc) {
+  const A = softHist(sc.HA, ga, n), B = softHist(sc.HB, gb, n), G = softHist(sc.HG, gg, n);
+  const M = sc.MT;
+  for (let b = 0; b < HB_N; b++) A[b] = wA * A[b] + wB * B[b]; // T, in place of A
+  const lo = A[0], hi = A[HB_N - 1];
+  let k = 0;
+  for (let i = 0; i < PHI_N; i++) {
+    const x = i / PHI_K - PHI_R;
+    const p = cdfAt(G, x);
+    let y = x; // beyond the samples: the texture's own
+    if (p > lo && p < hi) {
+      while (k < HB_N - 2 && A[k + 1] < p) k++;
+      while (k > 0 && A[k] > p) k--;
+      const a = A[k], b = A[k + 1];
+      y = (k + (b > a ? (p - a) / (b - a) : 0)) / HB_K - PHI_R;
+    }
+    const pi = (y * PHI_K + PHI_O) | 0;
+    M[i] = PHI_T[pi < 0 ? 0 : pi >= PHI_N ? PHI_N - 1 : pi];
+  }
+  return M;
+}
+
 const SCRATCH = new Map(); // w x h -> buffers
 
 function scratch(w, h) {
@@ -513,8 +703,12 @@ function scratch(w, h) {
     const nx = Math.ceil(w / NODE) + 2, ny = Math.ceil(h / NODE) + 2;
     s = {
       nx, ny,
-      C: new Float32Array(nx * ny), R: new Float32Array(nx * ny), DU: new Float32Array(nx * ny), DV: new Float32Array(nx * ny), PR: new Float32Array(nx * ny),
+      C: new Float32Array(nx * ny), R: new Float32Array(nx * ny), WU: new Float32Array(nx * ny), WV: new Float32Array(nx * ny), PR: new Float32Array(nx * ny),
+      NA: new Float32Array(nx * ny), NB: new Float32Array(nx * ny),
+      GA: new Float32Array(nx * ny), GB: new Float32Array(nx * ny), GG: new Float32Array(nx * ny),
+      HA: new Float32Array(HB_N), HB: new Float32Array(HB_N), HG: new Float32Array(HB_N), MT: new Float32Array(PHI_N),
       rC: new Float32Array(nx), rR: new Float32Array(nx), rU: new Float32Array(nx), rV: new Float32Array(nx), rP: new Float32Array(nx),
+      rA: new Float32Array(nx), rB: new Float32Array(nx),
       u0: new Float32Array(w), v0: new Float32Array(h), band: new Int16Array(w), bandUp: new Int16Array(w),
     };
     if (SCRATCH.size > 6) SCRATCH.delete(SCRATCH.keys().next().value);
@@ -527,27 +721,46 @@ function scratch(w, h) {
  * The sky over a map frame. `base` (the map's pixels, worldmap.js) and `dst` are w x h Uint32 (dst may be base);
  * `view` { clon, clat, s, kx } is the map's (x = w/2 + dLon * s * kx, y = h/2 + (clat - lat) * s). `cur` is the
  * layers at the moment shown (SkyClock.at). Options:
- *   tau      hours of wind carried by the cloud texture (the time-lapse's hour, plus the slow drift on air)
+ *   tau      sky hours the cloud has been carried by the wind (the time-lapse's hour, plus the slow drift on air);
+ *            it only ever goes forward, and any length of it keeps believable shapes (the flow map, FLOW)
  *   cloud, rain, isobars   which layers (isobars every 4 hPa, 1 px, in `isoColor`)
  *   opacity  how thick the densest cloud gets (1: four veils, the map's colour nearly white)
  *   rows     [y0, y1] to compose only those rows
+ *
+ * One phase alone reads the uniform texture as the compositor always has. In a cross-fade the two phases are blended
+ * in the normal space of their ranks (the texture's `gauss`): wA gA + wB gB over its true spread (the root of
+ * wA^2 + wB^2 + 2 wA wB rho, rho the texture's correlation at the two samples' shift) is a standard normal again
+ * whatever the weights, a linear mix of the uniform values would not be (its cover would swell or thin half way).
+ * What a window of a few tiles still keeps of the difference, matchedPhi takes out: the blend leaves the share of the
+ * picture cloud the two phases would, mixed by their weights, with the same contrast, at every moment: no pulse.
  */
 export function composeSky(dst, base, w, h, view, S, cur, opts = {}) {
   const { tau = 0, cloud = true, rain = true, isobars = false, isoColor = PK.silver, opacity = 0.9, rows = null } = opts;
   const T = cloudTexture();
   const sc = scratch(w, h);
-  const { nx, ny, C, R, DU, DV, PR } = sc;
+  const { nx, ny, C, R, WU, WV, PR, NA, NB } = sc;
   const sx = view.s * view.kx, sy = view.s;
   // the mip whose texel is nearest a pixel (in degrees)
   const pxDeg = 1 / Math.sqrt(sx * sy);
   const lvl = Math.max(0, Math.min(T.length - 1, Math.round(Math.log2(Math.max(1e-6, pxDeg / TEXEL_DEG)))));
-  const tex = T[lvl].data, size = T[lvl].size, mask = size - 1;
+  const gtex = T[lvl].gauss, utex = T[lvl].data, size = T[lvl].size, mask = size - 1;
   const tpd = 1 / (TEXEL_DEG * (1 << lvl)); // texels per degree at this mip
-  const rlvl = Math.max(0, lvl - 1), rtex = T[rlvl].data, rsize = T[rlvl].size, rmask = rsize - 1, rk = (1 << lvl) / (1 << rlvl) * 2;
+  const rlvl = Math.max(0, lvl - 1), rtex = T[rlvl].gauss, rsize = T[rlvl].size, rmask = rsize - 1, rk = (1 << lvl) / (1 << rlvl) * 2;
   const halfW = w / 2, halfH = h / 2;
   const cloudCells = cur.cloud, rainCells = cur.rain, uCells = cur.u, vCells = cur.v, pCells = cur.mslp;
   const gw = S.w, gh = S.h;
-  // the node grid: the layers at every 4th pixel (and one past the edge)
+  // the flow map's two phases: how far each is carried, its weight in the normal blend, where its run starts
+  const ph = flowPhases(tau);
+  const wA = ph.wA, wB = ph.wB, sA = ph.sA, sB = ph.sB;
+  const useA = wA > 0, useB = wB > 0; // a phase at nothing is not sampled
+  const [oAu, oAv] = phaseOffset(ph.kA, size), [oBu, oBv] = phaseOffset(ph.kB, size);
+  const both = useA && useB, wAB = 2 * wA * wB, w2 = wA * wA + wB * wB;
+  const s1 = useA ? sA : sB, o1u = useA ? oAu : oBu, o1v = useA ? oAv : oBv; // the first phase sampled
+  // (a picture too small to give its own distributions, the close-up's out-of-focus wall, keeps phi)
+  const match = both && cloud && nx * ny >= MATCH_MIN;
+  const { GA, GB, GG } = sc;
+  let nm = 0, rho = 0;
+  // the node grid: the layers at every 4th pixel (and one past the edge); the wind as texels an hour
   for (let j = 0; j < ny; j++) {
     const yy = j * NODE;
     let lat = view.clat - (yy + 0.5 - halfH) / sy;
@@ -568,16 +781,40 @@ export function composeSky(dst, base, w, h, view, S, cur, opts = {}) {
       R[k] = rainCells[a] * w00 + rainCells[b] * w10 + rainCells[c] * w01 + rainCells[d] * w11;
       const U = uCells[a] * w00 + uCells[b] * w10 + uCells[c] * w01 + uCells[d] * w11;
       const V = vCells[a] * w00 + vCells[b] * w10 + vCells[c] * w01 + vCells[d] * w11;
-      // the texture sampled upwind: a feature at p now was at p - wind x tau (cloud rides the flow aloft, about
+      // the texture sampled upwind: a feature at p now was at p - wind x s (cloud rides the flow aloft, about
       // twice the 10 m wind the layer gives)
-      DU[k] = -U * STEER * degPerHourX * tau * tpd;
-      DV[k] = V * STEER * degPerHourY * tau * tpd;
+      WU[k] = -U * STEER * degPerHourX * tpd;
+      WV[k] = V * STEER * degPerHourY * tpd;
       PR[k] = pCells[a] * w00 + pCells[b] * w10 + pCells[c] * w01 + pCells[d] * w11;
+      // the blend's weights over its true spread: the two samples here are (oB - oA) + wind x (sB - sA) apart on
+      // the texture, where it correlates with itself by rho (correlationAt), so wA gA + wB gB spreads by the root
+      // of wA^2 + wB^2 + 2 wA wB rho
+      if (both) {
+        // (the wind, so the shift, changes slowly: every fourth node of a row is enough)
+        if ((i & 3) === 0) rho = correlationAt(T[lvl], oBu - oAu + WU[k] * (sB - sA), oBv - oAv + WV[k] * (sB - sA));
+        const n = 1 / Math.sqrt(w2 + wAB * rho);
+        NA[k] = wA * n;
+        NB[k] = wB * n;
+      } else {
+        NA[k] = wA;
+        NB[k] = wB;
+      }
+      // the two phases and their blend here, as the pixels will read them, for the cross-fade's re-equalisation
+      if (match && i * NODE < w && yy < h) {
+        const uu = (view.clon + (i * NODE + 0.5 - halfW) / sx) * tpd + 4096 * 256, vv = -(view.clat - (yy + 0.5 - halfH) / sy) * tpd + 4096 * 256;
+        const ga = tap(gtex, mask, size, uu + WU[k] * sA + oAu, vv + WV[k] * sA + oAv), gb = tap(gtex, mask, size, uu + WU[k] * sB + oBu, vv + WV[k] * sB + oBv);
+        GA[nm] = ga;
+        GB[nm] = gb;
+        GG[nm++] = NA[k] * ga + NB[k] * gb;
+      }
     }
   }
+  // during a cross-fade the blend's values reach 0..1 through this picture's own distributions (matchedPhi), so the
+  // cover in view is the two phases' covers mixed by their weights; one phase alone (or a small picture): phi
+  const PT = match && nm > 0 ? matchedPhi(GA, GB, GG, nm, wA, wB, sc) : PHI_T;
   // the texture's coordinates of each column and row (anchored to the Earth), offset by a whole number of tiles so
   // they stay positive (an integer cut is then a floor)
-  const { u0, v0, rC, rR, rU, rV, rP, band, bandUp } = sc;
+  const { u0, v0, rC, rR, rU, rV, rP, rA, rB, band, bandUp } = sc;
   const OFF = 4096 * 256;
   for (let x = 0; x < w; x++) u0[x] = (view.clon + (x + 0.5 - halfW) / sx) * tpd + OFF;
   for (let y = 0; y < h; y++) v0[y] = -(view.clat - (y + 0.5 - halfH) / sy) * tpd + OFF;
@@ -587,15 +824,18 @@ export function composeSky(dst, base, w, h, view, S, cur, opts = {}) {
   const V1 = VEIL_T[1], V2 = VEIL_T[2], V3 = VEIL_T[3], V4 = VEIL_T[4];
   const HM = HASH_M;
   const inv = 1 / NODE;
+  const PK1 = PHI_K, PO = PHI_O, PN = PHI_N - 1;
   for (let y = y0; y < y1; y++) {
     const jn = (y * inv) | 0, fyn = (y - jn * NODE) * inv;
     const r0 = jn * nx, r1 = r0 + nx;
     for (let i = 0; i < nx; i++) {
       rC[i] = C[r0 + i] + (C[r1 + i] - C[r0 + i]) * fyn;
       rR[i] = R[r0 + i] + (R[r1 + i] - R[r0 + i]) * fyn;
-      rU[i] = DU[r0 + i] + (DU[r1 + i] - DU[r0 + i]) * fyn;
-      rV[i] = DV[r0 + i] + (DV[r1 + i] - DV[r0 + i]) * fyn;
+      rU[i] = WU[r0 + i] + (WU[r1 + i] - WU[r0 + i]) * fyn;
+      rV[i] = WV[r0 + i] + (WV[r1 + i] - WV[r0 + i]) * fyn;
       rP[i] = PR[r0 + i] + (PR[r1 + i] - PR[r0 + i]) * fyn;
+      rA[i] = NA[r0 + i] + (NA[r1 + i] - NA[r0 + i]) * fyn;
+      rB[i] = NB[r0 + i] + (NB[r1 + i] - NB[r0 + i]) * fyn;
     }
     const by = (y & 3) << 2;
     const vy = v0[y];
@@ -606,11 +846,12 @@ export function composeSky(dst, base, w, h, view, S, cur, opts = {}) {
     // node span by node span: the layers step linearly across each 4-pixel span
     for (let i = 0, xs = 0; xs < w; i++, xs += NODE) {
       const xe = xs + NODE < w ? xs + NODE : w;
-      let c = rC[i], r = rR[i], du = rU[i], dv = rV[i], p = rP[i];
-      const dc = (rC[i + 1] - c) * inv, dr = (rR[i + 1] - r) * inv, ddu = (rU[i + 1] - du) * inv, ddv = (rV[i + 1] - dv) * inv, dp = (rP[i + 1] - p) * inv;
+      let c = rC[i], r = rR[i], wu = rU[i], wv = rV[i], p = rP[i], nA = rA[i], nB = rB[i];
+      const dc = (rC[i + 1] - c) * inv, dr = (rR[i + 1] - r) * inv, dwu = (rU[i + 1] - wu) * inv, dwv = (rV[i + 1] - wv) * inv, dp = (rP[i + 1] - p) * inv;
+      const dnA = (rA[i + 1] - nA) * inv, dnB = (rB[i + 1] - nB) * inv;
       // a clear span (no cloud worth drawing, no rain): the map, and the isobars
       const clear = c <= LOW && rC[i + 1] <= LOW && (!rain || (r <= rMin && rR[i + 1] <= rMin));
-      for (let x = xs; x < xe; x++, o++, c += dc, r += dr, du += ddu, dv += ddv, p += dp) {
+      for (let x = xs; x < xe; x++, o++, c += dc, r += dr, wu += dwu, wv += dwv, p += dp, nA += dnA, nB += dnB) {
         let col = base[o];
         // the isobars are drawn on the map, under the rain and the cloud (seen through the veil)
         if (isobars) {
@@ -618,32 +859,51 @@ export function composeSky(dst, base, w, h, view, S, cur, opts = {}) {
           if (isoRow && ((x > 0 && bnd !== band[x - 1]) || (y > y0 && bnd !== bandUp[x]))) col = isoColor;
           band[x] = bnd;
         }
-        if (clear) {
+        const wet = rain && r > rMin;
+        // a clear pixel in a span that is not (no cover worth drawing here, no rain): the map
+        if (clear || (c <= LOW && !wet)) {
           nPrev = -1;
           dst[o] = col;
           continue;
         }
         const bay = B4[by | (x & 3)];
-        const u = u0[x] + du, v = vy + dv;
-        const iu = u | 0, iv = v | 0;
+        // each phase's place on the texture: upwind by its hours of wind, from its run's start (the first is A in a
+        // cross-fade, else whichever carries the picture alone)
+        const ux = u0[x];
+        const u1 = ux + wu * s1 + o1u, v1 = vy + wv * s1 + o1v;
+        let N, pi, u2 = 0, v2 = 0;
+        const iu = u1 | 0, iv = v1 | 0, fu = u1 - iu, fv = v1 - iv;
         const xa = iu & mask, xb = (iu + 1) & mask, ya = (iv & mask) * size, yb = ((iv + 1) & mask) * size;
-        const ta = tex[ya + xa], tb = tex[ya + xb], tc = tex[yb + xa], td = tex[yb + xb];
+        if (both) {
+          // a cross-fade: the two phases in normal space, blended, back to 0..1 through the picture's table
+          const ta = gtex[ya + xa], tb = gtex[ya + xb], tc = gtex[yb + xa];
+          const g1 = ta + (tb - ta) * fu + (tc - ta + (gtex[yb + xb] - tc - tb + ta) * fu) * fv;
+          u2 = ux + wu * sB + oBu;
+          v2 = vy + wv * sB + oBv;
+          const ju = u2 | 0, jv = v2 | 0, gu = u2 - ju, gv = v2 - jv;
+          const za = ju & mask, zb = (ju + 1) & mask, wa = (jv & mask) * size, wb = ((jv + 1) & mask) * size;
+          const sa = gtex[wa + za], sb = gtex[wa + zb], sc2 = gtex[wb + za];
+          const g = nA * g1 + nB * (sa + (sb - sa) * gu + (sc2 - sa + (gtex[wb + zb] - sc2 - sb + sa) * gu) * gv);
+          pi = (g * PK1 + PO) | 0;
+          N = PT[pi < 0 ? 0 : pi > PN ? PN : pi];
+        } else {
+          // one phase alone: the uniform texture as it is (0..255), as before the flow map
+          const ta = utex[ya + xa], tb = utex[ya + xb], tc = utex[yb + xa];
+          N = (ta + (tb - ta) * fu + (tc - ta + (utex[yb + xb] - tc - tb + ta) * fu) * fv) * (1 / 255);
+        }
         let cv = 0;
         if (c > LOW) {
           const cc = (c - LOW) / (1 - LOW);
           cv = cc * cc * (3 - 2 * cc); // the area covered: cloud where the texture is above 1 - cv
         }
-        const fu = u - iu, fv = v - iv;
-        const N = ((ta + (tb - ta) * fu) * (1 - fv) + (tc + (td - tc) * fu) * fv) * (1 / 255);
         let drawn = false;
-        if (rain && r > rMin) {
-          // rain cells: the texture at twice the frequency, a factor 0.35 .. 1.85 around the layer's mean
-          const ru = u * rk + 97.3, rv = v * rk + 41.7;
-          const ju = ru | 0, jv = rv | 0;
-          const gu = ru - ju, gv = rv - jv;
-          const qa = (jv & rmask) * rsize, qb = ((jv + 1) & rmask) * rsize;
-          const sa = rtex[qa + (ju & rmask)], sb = rtex[qa + ((ju + 1) & rmask)], sc2 = rtex[qb + (ju & rmask)], sd = rtex[qb + ((ju + 1) & rmask)];
-          const N2 = ((sa + (sb - sa) * gu) * (1 - gv) + (sc2 + (sd - sc2) * gu) * gv) * (1 / 255);
+        if (wet) {
+          // rain cells: the texture at twice the frequency (both phases, blended the same way), a factor
+          // 0.35 .. 1.85 around the layer's mean
+          let g2 = tap(rtex, rmask, rsize, u1 * rk + 97.3, v1 * rk + 41.7);
+          if (both) g2 = nA * g2 + nB * tap(rtex, rmask, rsize, u2 * rk + 97.3, v2 * rk + 41.7);
+          pi = (g2 * PK1 + PO) | 0;
+          const N2 = PHI_T[pi < 0 ? 0 : pi > PN ? PN : pi];
           const mm = r * (0.35 + 1.5 * N2 * N2);
           let b = -1;
           for (let q = 0; q < 5; q++) if (mm >= R_MM[q]) b = q;
@@ -660,9 +920,12 @@ export function composeSky(dst, base, w, h, view, S, cur, opts = {}) {
         if (!drawn && cloud && cv > 0) {
           const d = (N - (1 - cv)) * soft;
           if (d > 0) {
-            // how thick (0..4 veils): thin at the edges, thick in the cores of a full cover; lit from the west
+            // how thick (0..4 veils): thin at the edges, thick in the cores of a full cover; lit from the west on
+            // its slopes (the texture's rise over the last two pixels or so), the thick cores evenly (a step there
+            // on every texel's slope drew vertical strokes across an overcast)
             const dn = nPrev < 0 ? 0 : N - nPrev;
-            let L = (d > 1 ? 1 : d) * (0.8 + 3.2 * cv * cv) * opacity + (dn > 0.015 ? 0.5 : dn < -0.02 ? -0.5 : 0);
+            const lit = d < 1.4 ? 0.5 : d < 2.4 ? (2.4 - d) * 0.5 : 0;
+            let L = (d > 1 ? 1 : d) * (0.8 + 3.2 * cv * cv) * opacity + (dn > 0.02 ? lit : dn < -0.026 ? -lit : 0);
             L = L < 0 ? 0 : L > 4 ? 4 : L;
             const li = L | 0;
             const lv = li < 4 && L - li > bay ? li + 1 : li;
@@ -672,7 +935,7 @@ export function composeSky(dst, base, w, h, view, S, cur, opts = {}) {
             }
           }
         }
-        nPrev = N;
+        nPrev = nPrev < 0 ? N : nPrev + (N - nPrev) * 0.5; // smoothed over about two pixels
         dst[o] = col;
       }
     }

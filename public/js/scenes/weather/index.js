@@ -803,13 +803,8 @@ export function drawWeather(ctx, t, scene, audio) {
     ST.spoken = new Map();
     ST.pinId = null;
     ST.gateSeg = null; // the voice gate starts again (voiceGate)
-    // the cloud texture's wind clock starts again with each segment (a long run would shear it into streaks): at
-    // the cut, or halfway along the wall's flight to the next zone, where the move hides the change
-    ST.tauReset = cut ? since : since + ST.moveDur / 2;
-  }
-  if (ST.tauReset != null && t >= ST.tauReset) {
-    ST.tau = 0;
-    ST.tauReset = null;
+    // (the cloud's wind clock, ST.tau, runs on through the programme: the flow map (sky.js FLOW) never carries a
+    // shape long enough for the shear to draw it into streaks, so it no longer starts again at each segment)
   }
   // the places and the highs and lows the voice has reached
   if (W8.hot && W8.hotAt !== ST.lastHotAt) {
