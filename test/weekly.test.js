@@ -22,6 +22,8 @@ test('the aired words a few days later: today is the day they aired; furniture i
   assert.equal(cleanAired('And finally: rangers filmed a snow leopard. Thanks, Paco.'), 'Rangers filmed a snow leopard.');
   assert.equal(cleanAired('Hospitals are full. Let\'s bring in our Health Correspondent, Dr Amara Pulse. Amara, what happens now?'), 'Hospitals are full.');
   assert.equal(cleanAired('Rates rose. Lola.'), 'Rates rose.');
+  assert.equal(cleanAired('Breaking news. The canal has reopened.'), 'The canal has reopened.', 'a week later it is not breaking');
+  assert.equal(cleanAired('Breaking news: the canal has reopened.'), 'The canal has reopened.');
   assert.equal(weekdayOf(MON, 'Europe/London'), 'Monday');
 });
 

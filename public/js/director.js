@@ -3,7 +3,7 @@
 // and keeps the channel running forever.
 import { pixelate, loadImage } from './pixelate.js';
 import { presenterName, setPresenters } from './cast.js';
-import { STINGER_DURATION, TEASE_TILE } from './scenes/cards.js';
+import { STINGER_DURATION, TEASE_TILE, boardTitle } from './scenes/cards.js';
 import { pickAds, BREAK_BLACK, CONTINUITY, continuityLine } from './ads/index.js';
 import { splitSentences } from './audio/sentences.js';
 import { ACTIONS } from './cues.js';
@@ -902,6 +902,8 @@ export class Director {
     }
     // a round-up item opens on its map (the v2 planner's map to map), but after shots.mapRun maps in a row an item
     // shows its picture, else its reader in vision (never a 40 s run of one shot type)
+    // (SEVEN DAYS's week in sixty seconds asks for each day on its picture: shot 'full')
+    if ((seg.feature === 'roundup' || seg.roundup) && seg.shot === 'full' && hasImg) return ['full'];
     if ((seg.feature === 'roundup' || seg.roundup) && seg.location) return [(this.mapRun || 0) < pace(s).shots.mapRun ? 'map' : hasImg ? 'full' : anchorShot];
     const number = seg.feature === 'number' && !!seg.fact;
     const beats = [anchorShot];
@@ -995,7 +997,7 @@ export class Director {
           ? change
             ? { change, source: seg.source } // FROM → TO (pace shots.change)
             : board
-              ? { numbers: board, label: 'BY THE NUMBERS', source: seg.source } // two or three spoken figures (pace shots.numbers)
+              ? { numbers: board, label: boardTitle('numbers', seg), source: seg.source } // two or three spoken figures (pace shots.numbers); SEVEN DAYS's THE WEEK IN NUMBERS keeps its name
               : known
                 ? { known, source: seg.source } // WHAT WE KNOW (pace shots.known)
                 : steps

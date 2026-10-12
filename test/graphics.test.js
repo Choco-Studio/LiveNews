@@ -109,8 +109,9 @@ test('util: zoneTime is cached per minute and accepts Date or epoch ms', () => {
 });
 
 test('cast: programme accents follow the art direction', () => {
-  assert.deepEqual(THEME_ACCENT, { world: P.red, tech: P.cyan, space: P.magenta, money: P.green, flash: P.yellow, weather: P.blue });
+  assert.deepEqual(THEME_ACCENT, { world: P.red, tech: P.cyan, space: P.magenta, money: P.green, flash: P.yellow, weather: P.blue, week: P.pink });
   assert.equal(inkOn(P.cyan), P.black);
+  assert.equal(inkOn(P.pink), P.black, 'SEVEN DAYS: dark type on its coral tag (MONDAY, STORY OF THE WEEK...)');
   assert.equal(inkOn(P.yellow), P.black);
   assert.equal(inkOn(P.red), P.white);
 });

@@ -144,11 +144,13 @@ describe('the offline demo, end to end (fixture feeds -> desk -> mock writer -> 
     const chain = new ProviderChain([createMockProvider()], { record() {} }, { log: silentLogger });
     const producer = new Producer({ config: { candidatePool: 12, minNewStories: 3, reviewPass: true }, newsDesk: desk, chain, weather: new WeatherDesk({ source: 'fixture', log: silentLogger }), log: silentLogger });
     const all = [];
-    for (const id of channel.rotation) {
+    // (SEVEN DAYS retells a week on air: a fresh desk has none, test/weekly.test.js)
+    const rotation = channel.rotation.filter((id) => channel.programs[id].kind !== 'weekly');
+    for (const id of rotation) {
       const ep = await producer.produce(channel, id);
       if (ep) all.push(ep);
     }
-    assert.equal(all.length, channel.rotation.length, 'there is enough news (and weather) for a whole rotation');
+    assert.equal(all.length, rotation.length, 'there is enough news (and weather) for a whole rotation');
     const episodes = all.filter((e) => e.provider !== 'weather');
     const stories = episodes.flatMap((e) => e.segments.filter((s) => s.type === 'story'));
     assert.ok(stories.filter((s) => s.shot === 'map' && s.location).length >= 10, 'map shots');

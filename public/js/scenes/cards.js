@@ -154,8 +154,8 @@ function layoutCache(limit = 120) {
 }
 
 /** Programme accents (THEME_ACCENT values); anything else falls back to brand red. */
-const ACCENTS = new Set([P.red, P.cyan, P.magenta, P.green, P.yellow]);
-const PROGRAM_ACCENT = { 'world-now': P.red, 'tech-bytes': P.cyan, cosmos: P.magenta, 'money-minute': P.green, 'news-60': P.yellow };
+const ACCENTS = new Set([P.red, P.cyan, P.magenta, P.green, P.yellow, P.pink]);
+const PROGRAM_ACCENT = { 'world-now': P.red, 'tech-bytes': P.cyan, cosmos: P.magenta, 'money-minute': P.green, 'news-60': P.yellow, 'seven-days': P.pink };
 const accentFor = (programId, accent) => (ACCENTS.has(accent) ? accent : (typeof programId === 'string' && Object.hasOwn(PROGRAM_ACCENT, programId) && PROGRAM_ACCENT[programId]) || P.red);
 
 // ---------------------------------------------------------------------------
@@ -739,7 +739,7 @@ function drawTimeline(ctx, dt, o, acc) {
     ctx.fillRect(L.PX, L.PY, L.PW, L.PH);
     ctx.fillStyle = P.slate;
     ctx.fillRect(L.PX, L.PY, L.PW, 1);
-    drawText(ctx, 'HOW WE GOT HERE', tx, L.PY + L.kickY, S.microFog);
+    drawText(ctx, boardTitle('timeline', o), tx, L.PY + L.kickY, S.microFog);
     // the rail: drawn from the first node to the last over the steps' landings
     const first = L.cols[0].cx, last = L.cols[L.cols.length - 1].cx;
     const ry = L.PY + L.railY;
@@ -760,6 +760,75 @@ function drawTimeline(ctx, dt, o, acc) {
       }
     }
     if (L.src) drawText(ctx, L.src, tx, L.PY + L.srcY, S.microFog);
+  } finally {
+    ctx.restore();
+  }
+}
+
+/**
+ * A board's kicker: HOW WE GOT HERE's steps are SEVEN DAYS's HOW THE WEEK UNFOLDED; a figures board is BY THE NUMBERS
+ * unless the segment's own kicker names it (SEVEN DAYS's THE WEEK IN NUMBERS).
+ */
+export function boardTitle(kind, { programId = '', kicker = '' } = {}) {
+  if (kind === 'timeline') return programId === 'seven-days' ? 'HOW THE WEEK UNFOLDED' : 'HOW WE GOT HERE';
+  if (kind === 'numbers') return /\bNUMBERS\b/.test(String(kicker || '')) ? String(kicker) : 'BY THE NUMBERS';
+  return '';
+}
+
+// HOW THE WEEK UNFOLDED (SEVEN DAYS: pace shots.timeline, up to five days): the story of the week as a diary on the
+// stack's black panel: the kicker, then a row for each day its headline moved on, oldest first: the day at 2x on the
+// left, an accent node on a rail that draws down the days, the day's headline at 1x beside it in one line. No
+// source line (the strap carries it): five rows fit between the top row and the captions.
+const WEEK_LAYOUTS = layoutCache(40);
+function weekTimelineLayout(steps) {
+  return WEEK_LAYOUTS(steps.map((p) => `${p.when}~${p.what}`).join('|'), '', null, null, () => {
+    const PX = 32;
+    const PW = W - 2 * PX;
+    const dateW = textW('WED', 2); // the widest day, so every headline starts on one column
+    const railX = PX + 12 + dateW + 9;
+    const textX = railX + 9;
+    const tw = PX + PW - 12 - textX;
+    const rows = steps.map((p) => {
+      const when = ellipsis(String(p.when).toUpperCase().trim(), dateW, 2);
+      return { when, what: ellipsis(String(p.what).trim(), tw, 1) };
+    });
+    const top = 22, pitch = 16;
+    const h = top + (rows.length - 1) * pitch + 14 + 6;
+    const PY = clamp(Math.round(80 - h / 2), 28, SAFE_BOTTOM - h);
+    return { PX, PW, PH: h, PY, rows, top, pitch, railX, textX, dateW };
+  });
+}
+
+function drawWeekTimeline(ctx, dt, o, acc) {
+  const steps = o.timeline.slice(0, 5);
+  const L = weekTimelineLayout(steps);
+  const vis = Math.round(L.PW * easeOutQuint(seg(dt, 0, 0.3)));
+  if (vis <= 0) return;
+  const tx = L.PX + 12;
+  ctx.save();
+  try {
+    clipRect(ctx, L.PX, L.PY, vis, L.PH);
+    ctx.fillStyle = P.black;
+    ctx.fillRect(L.PX, L.PY, L.PW, L.PH);
+    ctx.fillStyle = P.slate;
+    ctx.fillRect(L.PX, L.PY, L.PW, 1);
+    drawText(ctx, boardTitle('timeline', o), tx, L.PY + 10, S.microFog);
+    // the rail: drawn down from the first day's node to the last's over the days' landings
+    const first = L.PY + L.top + 6, last = L.PY + L.top + (L.rows.length - 1) * L.pitch + 6;
+    const head = Math.round(first + (last - first) * easeOutQuint(seg(dt, 0.3, 0.42 * L.rows.length)));
+    ctx.fillStyle = P.slate;
+    ctx.fillRect(L.railX, first, 1, Math.max(0, head - first + 1));
+    for (let i = 0; i < L.rows.length; i++) {
+      const r = L.rows[i];
+      const y = L.PY + L.top + i * L.pitch;
+      const at = 0.3 + i * 0.42;
+      if (dt < at || head < y + 6) continue;
+      // the node on the rail, the day rising beside it (right-aligned on the column), what happened rising after it
+      ctx.fillStyle = acc;
+      ctx.fillRect(L.railX - 1, y + 5, 3, 3);
+      rise(ctx, r.when, tx + L.dateW - textW(r.when, 2), y, seg(dt, at + 0.04, 0.34), S.white2);
+      rise(ctx, r.what, L.textX, y + 4, seg(dt, at + 0.12, 0.34), S.white);
+    }
   } finally {
     ctx.restore();
   }
@@ -1161,6 +1230,7 @@ const FACT_STYLES = {
   'tech-bytes': { look: 'ledger' },
   cosmos: { look: 'reading' },
   'money-minute': { look: 'paper' },
+  'seven-days': { look: 'rule', wipe: 0.3, timeline: 'week' }, // HOW THE WEEK UNFOLDED: the week's diary
 };
 
 /**
@@ -1193,7 +1263,7 @@ export function drawFactCard(ctx, t, dt, o = {}) {
   }
   if (Array.isArray(opts.timeline) && opts.timeline.length >= 2) {
     cardGround(ctx, dt, opts.image, factField);
-    return drawTimeline(ctx, dt, opts, acc);
+    return style.timeline === 'week' ? drawWeekTimeline(ctx, dt, opts, acc) : drawTimeline(ctx, dt, opts, acc);
   }
   const rows = rowsFor(opts.fact, opts.numbers);
   if (style.look === 'paper') {

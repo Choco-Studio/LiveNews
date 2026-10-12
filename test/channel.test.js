@@ -539,8 +539,9 @@ describe('config/channel.json', () => {
   const channel = loadChannel();
   const feedCategories = new Set(JSON.parse(fs.readFileSync(REAL_FEEDS_FILE, 'utf8')).map((f) => f.category));
   const programs = Object.entries(channel.programs);
-  // news programmes (a weather programme is written from the weather data: test/weather.test.js)
-  const news = programs.filter(([, p]) => p.kind !== 'weather');
+  // the fresh-news programmes (a weather programme is written from the weather data: test/weather.test.js; SEVEN DAYS
+  // from the archive of what aired: test/weekly.test.js)
+  const news = programs.filter(([, p]) => p.kind !== 'weather' && p.kind !== 'weekly');
 
   test('is a valid GLOBIT 24 channel line-up', () => {
     assert.doesNotThrow(() => validateChannel(channel));
@@ -559,7 +560,7 @@ describe('config/channel.json', () => {
   });
 
   test('every programme has what the writer and the producer need', () => {
-    for (const [id, p] of programs.filter(([, q]) => q.kind === 'weather')) {
+    for (const [id, p] of programs.filter(([, q]) => q.kind === 'weather' || q.kind === 'weekly')) {
       for (const key of ['title', 'tagline', 'theme', 'style']) assert.ok(typeof p[key] === 'string' && p[key].trim(), `${id}.${key}`);
     }
     for (const [id, p] of news) {

@@ -616,8 +616,9 @@ export function drawBackground(fr, cam, t, opts = NO_OPTS) {
   let p0 = pOn ? now() : 0;
   const wall = updateWall(opts.wall, style, r.x1 - r.x0, r.y1 - r.y0, r.k, t, cam, opts, lod);
   if (pOn) p0 = lap(PROF, 'wall', p0);
-  // the hour's phase, picked once per frame: WORLD NOW's city changes with it (other sets ignore it)
-  const phase = style.id === 'world-now' ? skyPhase() : 0;
+  // the hour's phase, picked once per frame: WORLD NOW's city changes with it; SEVEN DAYS holds its own (style.sky:
+  // the golden hour); other sets ignore it
+  const phase = style.id === 'world-now' ? skyPhase() : style.sky ?? 0;
   framePhase(phase);
   fillKey(cam, sSerial, wall.version, lod, phase);
   CACHE.frame = fr;
@@ -917,7 +918,7 @@ function interpCol(xs, ys, n, x) {
 const LED_Y = 2; // the accent line, right under the silver edge
 const PLATE_Y0 = 3.2, PLATE_Y1 = 15.6, PLATE_HW = 30;
 const PANEL_SPLIT = 28; // the front panel's upper colour down to here (above y 150 in the wide), its lower colour below
-const REFLECT = { red: 'maroon', cyan: 'navy', magenta: 'purple', yellow: 'brown', darkGreen: null };
+const REFLECT = { red: 'maroon', pink: 'maroon', cyan: 'navy', magenta: 'purple', yellow: 'brown', darkGreen: null };
 
 /** Draw the desk; fills clipRows (Int16Array W) with the desk top's back edge per column. */
 export function drawDesk(fr, cam, clipRows, accent) {
@@ -1278,7 +1279,7 @@ function deskPattern(fr, cam, front, kc) {
   }
 }
 
-const LED_NAMES = new Map(['red', 'cyan', 'magenta', 'yellow', 'darkGreen', 'green'].map((n) => [C[n] >>> 0, n]));
+const LED_NAMES = new Map(['red', 'pink', 'cyan', 'magenta', 'yellow', 'darkGreen', 'green'].map((n) => [C[n] >>> 0, n]));
 const nameOfLed = (c) => LED_NAMES.get(c >>> 0) || '';
 
 // re-exported for labs and tests that want the wall state machine's version

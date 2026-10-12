@@ -25,6 +25,7 @@ const lOf = (c) => L_OF.get(c >>> 0) ?? 50;
 
 export const RAMPS = {
   red: { core: C.red, hot: C.pink, halo: C.darkRed, outer: C.maroon },
+  coral: { core: C.pink, hot: C.cream, halo: C.darkRed, outer: C.maroon }, // SEVEN DAYS: the flagship's red, softened
   blue: { core: C.blue, hot: C.cyan, halo: C.navy, outer: C.navy },
   cyan: { core: C.cyan, hot: C.white, halo: C.blue, outer: C.navy },
   magenta: { core: C.magenta, hot: C.pink, halo: C.purple, outer: C.purple },

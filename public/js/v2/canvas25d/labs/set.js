@@ -48,6 +48,7 @@ export const CASTS = {
   cosmos: { A: 'nova', B: 'unit8' },
   'money-minute': { A: 'penny' },
   'news-60': { A: 'sam' },
+  'seven-days': { A: 'paco', B: 'lola' },
   generic: { A: 'paco', B: 'lola' },
 };
 export const PROGRAMMES = [...STYLE_IDS, 'generic'];

@@ -11,7 +11,8 @@
 //                  home look, keeping their own id); pure and cached
 //   setStyle(id)   the same, and it becomes the default style for calls that
 //                  pass none (the old drawBackground(frame, cam, t) form)
-//   STYLE_IDS      the five programmes of config/channel.json
+//   STYLE_IDS      the studio programmes of config/channel.json (WORLD WEATHER
+//                  airs from its own weather centre)
 //
 // Light is described in "ramp positions" on the neutral ramp
 // black 0, ink 1, slate 2, steel 3, fog 4: the set bakes them into a texture
@@ -21,7 +22,7 @@
 // pixels drawn in the tint colours.
 import { C } from '../pixbuf.js';
 
-export const STYLE_IDS = ['world-now', 'tech-bytes', 'cosmos', 'money-minute', 'news-60'];
+export const STYLE_IDS = ['world-now', 'tech-bytes', 'cosmos', 'money-minute', 'news-60', 'seven-days'];
 
 // Seat pools: one soft pool from above behind each head (ART_DIRECTION
 // "head zones ... one soft light pool from above"). Back-wall world units:
@@ -187,6 +188,22 @@ const DEFS = {
     // wall's foot is only a place where no content goes (same ink), never a darker slab
     wallField: ['ink', 'ink'],
     values: { face: [60, 100], ringMean: 35, ringMax: 45, wall: 45, yellowMax: 0.015, saturatedMax: 0.06, tintMax: 0.04 },
+  },
+  // The weekend edition of the flagship's room (seven-days.md): the same glass over the city, held at the golden
+  // hour (the week winding down: `sky`, city.js's phase 3), so the room is lit warm from behind; coral light lines
+  // (the flagship's red, softened: the pink LED, its glow dark red), the week bar over the screen and a week of
+  // tiles on the idle wall (dressing.js, wall.js); the wall's field warms from ink to maroon at its foot.
+  'seven-days': {
+    theme: 'week',
+    accentName: 'pink',
+    deskLineName: 'pink',
+    wallIdle: 'week',
+    sky: 3,
+    wallField: ['ink', 'maroon'],
+    wallBand: [0.74, 0.94],
+    tintNames: ['maroon', 'brown', 'rust', 'darkRed'],
+    tintMax: 0.1,
+    values: { face: [55, 73], headZone: [18, 45], wall: 45, tintMax: 0.1 },
   },
 };
 

@@ -54,9 +54,9 @@ const PRESENTERS = lab.hasPresenters();
 
 describe('styles: setStyle per programme', () => {
   test('every programme in config/channel.json has its own frozen style', () => {
-    const accents = { 'world-now': 'red', 'tech-bytes': 'cyan', cosmos: 'magenta', 'money-minute': 'green', 'news-60': 'yellow' };
-    const lines = { 'world-now': 'red', 'tech-bytes': 'cyan', cosmos: 'magenta', 'money-minute': 'darkGreen', 'news-60': 'yellow' };
-    const idles = { 'world-now': 'globe', 'tech-bytes': 'chip', cosmos: 'planet', 'money-minute': 'wordmark', 'news-60': 'dial' };
+    const accents = { 'world-now': 'red', 'tech-bytes': 'cyan', cosmos: 'magenta', 'money-minute': 'green', 'news-60': 'yellow', 'seven-days': 'pink' };
+    const lines = { 'world-now': 'red', 'tech-bytes': 'cyan', cosmos: 'magenta', 'money-minute': 'darkGreen', 'news-60': 'yellow', 'seven-days': 'pink' };
+    const idles = { 'world-now': 'globe', 'tech-bytes': 'chip', cosmos: 'planet', 'money-minute': 'wordmark', 'news-60': 'dial', 'seven-days': 'week' };
     for (const id of PROGRAMS) {
       const s = styleFor(id);
       assert.equal(s.id, id);
@@ -1233,5 +1233,37 @@ describe('set dressing: each programme its own studio (owner polish round, 3 Oct
     assert.ok(at('cosmos', 'silver') > 20 && at('cosmos', 'purple') <= 2 * W); // the magenta line's halo, never a slab
     assert.ok(at('news-60', 'yellow') > 200);
     for (const programme of PROGRAMS) assert.ok(at(programme, 'red') > 100, `${programme}: the GLOBIT 24 plate`);
+  });
+  test('SEVEN DAYS: the flagship\'s room at the weekend: the golden hour behind its glass, coral lines, the week over the screen and on the wall; never WORLD NOW at its own golden hour', () => {
+    const count = (px, names, pred = () => true) => {
+      const want = new Set(names.map((n) => C[n] >>> 0));
+      let n = 0;
+      for (let i = 0; i < px.length; i++) if (want.has(px[i] >>> 0) && pred(i % W, (i / W) | 0)) n++;
+      return n;
+    };
+    const seven = wideOf('seven-days', true);
+    const r = wallRect(lab.cameraFor('wide', 'seven-days'));
+    const inWall = (x, y) => x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1;
+    // the room is warm: the golden hour's sky and city behind the glass (dark red, rust, maroon, purple)
+    assert.ok(count(seven, ['darkRed', 'rust', 'maroon', 'purple'], (x, y) => y < 112 && !inWall(x, y)) > 4000, 'the golden hour behind the glass');
+    // its own colour is coral, in light lines only (the cove, the pillars' inlays, the desk's line, slits and foot):
+    // present, under 3 % of the frame; the network's red is the desk plate alone
+    const coral = count(seven, ['pink'], (x, y) => !inWall(x, y));
+    assert.ok(coral > 300 && coral < W * H * 0.03, `coral ${coral}`);
+    assert.ok(count(seven, ['red'], (x, y) => y < 112) <= 6, 'no red line above the desk (the city\'s aviation lights only)');
+    // the week bar over the screen: the weekdays dim, the weekend in coral (rows between the soffit and the screen)
+    const bar = (x, y) => x >= r.x0 - 4 && x < r.x1 + 4 && y >= r.y0 - 14 && y < r.y0 - 3;
+    assert.ok(count(seven, ['pink'], bar) >= 15 && count(seven, ['steel'], bar) >= 50, 'MON..FRI steel, SAT SUN coral over the screen');
+    // the idle wall: a week of tiles (slate pages with steel caps, the weekend's coral)
+    assert.ok(count(seven, ['pink'], inWall) >= 20 && count(seven, ['slate'], inWall) >= 400, 'the week on the idle wall');
+    // the pendant lamps: brass and their warm openings, outside the wall
+    assert.ok(count(seven, ['tan', 'cream'], (x, y) => !inWall(x, y) && y < 60) >= 20, 'the pendants');
+    // WORLD NOW at the golden hour shares the sky, never the room
+    setMod.setSkyHour(18);
+    const world = wideOf('world-now', true);
+    setMod.setSkyHour(23);
+    let d = 0;
+    for (let i = 0; i < seven.length; i++) if (seven[i] !== world[i]) d++;
+    assert.ok(d > 3500, `SEVEN DAYS and WORLD NOW at 18:00 differ in ${d} pixels only`);
   });
 });

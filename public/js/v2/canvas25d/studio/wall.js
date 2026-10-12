@@ -8,7 +8,8 @@
 //             marker; TECH BYTES: a static two-tone chip with cyan cells; COSMOS: a baked
 //             starfield and a still ringed planet whose light swings ±35° on a 90 s sine;
 //             MONEY MINUTE: the wordmark in fog over a 16 px darkGreen rule; NEWS IN 60: the
-//             dial in one of two static states (intro / outro), never ticking.
+//             dial in one of two static states (intro / outro), never ticking; SEVEN DAYS: a
+//             week of calendar tiles (MON to SUN, the weekend's caps coral) over its name.
 //   picture   the story picture (scene.images `full`), area-averaged down to the wall's pixel
 //             size, toned (L* gain with a soft shoulder) to a mean L* ≤ 56 (≤ 50 in COSMOS) with
 //             its highlights rolled off, and quantised to its own palette with an ordered dither
@@ -33,6 +34,7 @@ import { LAND } from '../../../scenes/worlddata.js';
 import { F, SET, kAt, sxOf, syOf } from './geometry.js';
 import { LSTAR, DARKER, labRGB } from './color.js';
 import { stampText, textWidth, capHeight, textMask } from './text.js';
+import { textPixels } from '../../../font.js';
 import { resolveStyle } from './styles.js';
 
 const B16 = Uint8Array.from([0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]);
@@ -2093,6 +2095,29 @@ function drawIdle(b, L, spec, style, env, caption = '') {
       IDLE.bot = top + th + 4 * ws + 2;
       break;
     }
+    case 'week': {
+      // SEVEN DAYS: a week of calendar tiles in a row over the programme's name (its letters from the font's
+      // pixels, so they draw without a DOM too); the small tiles (micro initials) where the big row does not fit
+      const big = fitsSomewhere(L, WEEK_TILE.big.w * 7 * ts + WEEK_TILE.big.gap * 6 * ts + 4, (WEEK_TILE.big.h + 10) * ts + reserve);
+      const T = big ? WEEK_TILE.big : WEEK_TILE.small;
+      const u = ts;
+      const rowW = (T.w * 7 + T.gap * 6) * u;
+      const name = textPixels('SEVEN DAYS', 'micro');
+      const blockH = (T.h + 5 + name.cap) * u;
+      box = pickBox(L, rowW + 4, blockH + 4 + reserve, false);
+      const f = fbox(L, box), fh = f.y1 - f.y0 - reserve;
+      const cx = Math.round((f.x0 + f.x1) / 2);
+      const top = Math.round(f.y0 + Math.max(2 * u, (fh - blockH) * 0.45));
+      drawWeek(b, cx - Math.round(rowW / 2), top, T, u);
+      const ny = top + (T.h + 5) * u;
+      const nx = cx - Math.round((name.width * u) / 2);
+      for (const [gx, gy] of name.pixels) rect(b, nx + gx * u, ny + gy * u, nx + (gx + 1) * u, ny + (gy + 1) * u, C.fog);
+      IDLE.cx = cx;
+      IDLE.cy = top + Math.round(blockH / 2);
+      IDLE.hw = Math.ceil(rowW / 2);
+      IDLE.bot = ny + name.cap * u;
+      break;
+    }
     case 'dial': {
       // the free box that holds the largest dial (the wide: the third beside Sam's head, r 14, not
       // the short band above it)
@@ -2163,6 +2188,31 @@ function drawIdle(b, L, spec, style, env, caption = '') {
   return sig;
 }
 
+// SEVEN DAYS's week of tiles (wall px at scale 1): a tile, its coloured cap, the gap between two tiles, the
+// letter's font ('body' initials on the big tiles, 'micro' on the small ones)
+const WEEK_TILE = {
+  big: { w: 11, h: 14, cap: 2, gap: 2, font: 'body', ly: 4 },
+  small: { w: 7, h: 10, cap: 1, gap: 1, font: 'micro', ly: 3 },
+};
+const WEEK_DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+/**
+ * A week of calendar tiles from (x, y), wall-local px at scale u: each a slate page with an ink foot (its shadow),
+ * a cap along its top (steel on the weekdays, coral on the weekend) and its day's initial (fog; the weekend's
+ * silver).
+ */
+function drawWeek(b, x, y, T, u) {
+  for (let i = 0; i < 7; i++) {
+    const x0 = x + i * (T.w + T.gap) * u, x1 = x0 + T.w * u;
+    const weekend = i >= 5;
+    rect(b, x0, y, x1, y + T.h * u, C.slate);
+    rect(b, x0, y + (T.h - 1) * u, x1, y + T.h * u, C.ink);
+    rect(b, x0, y, x1, y + T.cap * u, weekend ? C.pink : C.steel);
+    const g = textPixels(WEEK_DAYS[i], T.font);
+    const lx = x0 + Math.floor(((T.w - g.width) * u) / 2), ly = y + T.ly * u;
+    for (const [gx, gy] of g.pixels) rect(b, lx + gx * u, ly + gy * u, lx + (gx + 1) * u, ly + (gy + 1) * u, weekend ? C.silver : C.fog);
+  }
+}
+
 /** Clock of the time-driven content: re-render only when it changes. */
 function clockOf(spec, style, env) {
   if (spec.mode === 'map') {
@@ -2185,7 +2235,7 @@ function clockOf(spec, style, env) {
     // and the background cache only invalidates when a pixel actually changed (the signature)
     return Math.round(env.t * (env.lod >= 1 ? 30 : 60));
   }
-  if (style.wallIdle === 'globe' || !['chip', 'wordmark', 'dial'].includes(style.wallIdle)) {
+  if (style.wallIdle === 'globe' || !['chip', 'wordmark', 'dial', 'week'].includes(style.wallIdle)) {
     if (env.lod >= 2) return 0;
     const R = Math.max(6, Math.round(23 * env.cs));
     // a dot moves ~1.2 px/s at the centre: step every quarter pixel of rotation (half rate at lod 1)

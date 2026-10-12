@@ -1033,7 +1033,7 @@ function plot(u32, w, h, x, y, c) {
 }
 
 /** The accent's one-step-darker palette colour (for the fading previous marker). */
-const SHADE_OF = { [P.red]: P.darkRed, [P.yellow]: P.orange, [P.cyan]: P.blue, [P.magenta]: P.purple, [P.green]: P.darkGreen };
+const SHADE_OF = { [P.red]: P.darkRed, [P.yellow]: P.orange, [P.cyan]: P.blue, [P.magenta]: P.purple, [P.green]: P.darkGreen, [P.pink]: P.darkRed };
 const PACKED = new Map();
 const packed = (hex) => {
   let v = PACKED.get(hex);
@@ -1149,7 +1149,7 @@ const SEAS = [
 // ---------------------------------------------------------------------------------------------
 // Frame
 // ---------------------------------------------------------------------------------------------
-const ACCENTS = new Set([P.red, P.cyan, P.magenta, P.green, P.yellow]);
+const ACCENTS = new Set([P.red, P.cyan, P.magenta, P.green, P.yellow, P.pink]);
 
 /**
  * Follow mode: a new target that starts right after another map frame pans from the old pin. The

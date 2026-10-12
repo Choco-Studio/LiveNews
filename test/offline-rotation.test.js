@@ -38,7 +38,10 @@ test('offline: four rotations, every slot produced with at least its floor, no r
   const { desk, channel, producer, station } = await offlineStation();
   assert.equal(desk.localOnly, true, 'the fixture desk is all local feeds');
   await station.fill();
-  const slots = channel.rotation.length * 4;
+  // every slot but SEVEN DAYS's: a fresh offline desk has no week on air to retell (no archive), so the station skips
+  // it (test/weekly.test.js: the producer airs it only with the week in hand)
+  const rotation = channel.rotation.filter((id) => channel.programs[id].kind !== 'weekly');
+  const slots = rotation.length * 4;
   const episodes = [];
   const breaks = [];
   const lastAired = new Map();
@@ -61,7 +64,7 @@ test('offline: four rotations, every slot produced with at least its floor, no r
   assert.equal(episodes.length, slots);
   assert.deepEqual(
     episodes.map((e) => e.program.id),
-    Array.from({ length: slots }, (_, i) => channel.rotation[i % channel.rotation.length]),
+    Array.from({ length: slots }, (_, i) => rotation[i % rotation.length]),
     'every slot of four rotations airs, in order'
   );
   assert.ok(episodes.every((e) => !e.replay), 'no replay');
@@ -76,7 +79,7 @@ test('offline: four rotations, every slot produced with at least its floor, no r
   }
   // the second time round, programmes are not the first rotation again in the same order
   const heads = (e) => e.rundown.map((r) => r.headline).join('|');
-  const same = channel.rotation.filter((id, i) => channel.programs[id].kind !== 'weather' && heads(episodes[i]) === heads(episodes[i + channel.rotation.length])).length;
+  const same = rotation.filter((id, i) => channel.programs[id].kind !== 'weather' && heads(episodes[i]) === heads(episodes[i + rotation.length])).length;
   assert.ok(same <= 1, `${same} programmes repeated their running order one rotation later`);
 
   // (fix r2) 24/7 variety: no presenter line (chat, button, signpost) airs twice in four rotations
@@ -143,6 +146,7 @@ test('every picture on air carries a credit; a picture that is not the outlet’
   let lent = 0;
   for (const [k, id] of channel.rotation.entries()) {
     if (channel.programs[id].kind === 'weather') continue; // no pictures: the weather centre's own map
+    if (channel.programs[id].kind === 'weekly') continue; // no week on air to retell offline (test/weekly.test.js)
     const upcoming = [1, 2, 3].map((j) => channel.rotation[(k + j) % channel.rotation.length]).filter((x) => x !== id);
     const ep = await producer.produce(channel, id, { upcoming });
     for (const item of [...ep.segments.filter((s) => s.type === 'story'), ...ep.rundown]) {
@@ -210,6 +214,7 @@ test('round-up items say the news in a summary sentence, not the headline read a
   for (let r = 0; r < 2; r++) {
     for (const [k, id] of channel.rotation.entries()) {
       const upcoming = [1, 2, 3].map((j) => channel.rotation[(k + j) % channel.rotation.length]).filter((x) => x !== id);
+      if (channel.programs[id].kind === 'weekly') continue; // no week on air to retell offline (test/weekly.test.js)
       const ep = await producer.produce(channel, id, { upcoming });
       for (const s of ep.segments.filter((x) => x.type === 'story' && x.roundup)) {
         items++;
