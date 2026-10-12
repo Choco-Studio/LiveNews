@@ -249,12 +249,15 @@ What still fell short after round 3, and what replaced it:
 - **Walking between zones he crossed the new zone's chips.** They now come in once he has arrived beside them, wiped down west to east, and they stay in place through his later steps.
 - **The wall's rim light ran down his legs** against the black plinth. It now thins out below the glass's foot (`lightFigure` `litTo`).
 
-**Cost after round 4**, in the same lab:
-- The world graphic, by the lab's `perfWeather` (its voice gate holds the clock): 3.5–3.6 ms (3.0–3.1 before), with no flips.
-- Over the whole world segment, with the marks and pins firing at 15 characters a second (the time-lapse at full speed, half its recomposes in a cross-fade): 4.2–4.6 ms (3.3–3.5).
-- The zone: 3.7 by `perfWeather` (3.4); 4.4–4.9 over the segment (3.4–4.2).
-- The warning and the close-up are unchanged within noise.
-- Each cross-fade's compose costs a second texture read per pixel, about 2 ms of a 4 ms compose.
+**Cost after round 4**, in the same lab, round 3's code alongside in the same runs (medians; the machine was shared, so runs vary by about ±0.4 ms):
+- The world graphic:
+  - by the lab's `perfWeather` (its voice gate holds the clock): 3.5–4.3 ms (2.8–3.3 before);
+  - over the whole segment, with the marks and pins firing at 15 characters a second (the time-lapse at full speed, half its recomposes in a cross-fade): 4.0–4.6 ms (3.3–3.5).
+- A zone: 3.6–4.3 (3.2–3.9); over the segment 4.0–4.6 (3.4–3.6).
+- The warning: 3.1–3.6 (2.3–2.8), since it now composes the storm.
+- The close-ups: within 0.3 of before.
+- `flickerWeather`: as before (the world 0, a zone 7, the warning 0); the opening close-up 2 (1), its arms now moving more.
+- Each cross-fade's compose costs a second texture read per pixel, about 2 ms of a 4 ms compose in node.
 
 ## 4. Configuration
 
