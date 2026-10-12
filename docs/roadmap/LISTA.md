@@ -113,7 +113,11 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
 32. ✅ Música de fondo suave por programa y momento. (Ahora suena también en el canal en directo, no solo en los vídeos grabados: cambia con cada programa y momento, baja sola bajo la voz, calla en las noticias graves y deja paso a la sintonía y a los anuncios. Se apaga con `?beds=0`.)
 
 ## H. Tiempo real y 24/7
-33. 🟡 Prueba larga: 2 h seguidas en tiempo real con voces reales (3 oct): 60 fps de mediana (mínimo 57), memoria estable (22→26 MB), 0 errores, el servidor siempre con programas preparados por delante. Las 6 h necesitan tu ordenador: aquí un proceso en segundo plano dura como mucho 2 h (`tools/soak.mjs`).
+33. ✅ Prueba larga de 6 horas (12 oct, con todo integrado: el tiempo nuevo, SEVEN DAYS, EN SUS PALABRAS, noticias reales y voces reales): **superada**.
+    - 60 fotogramas por segundo de mediana (nunca menos de 54), memoria estable (unos 40 MB, el navegador la libera), ningún bloqueo y solo 2 avisos de red en 6 horas.
+    - Encontró un fallo real: a las 2 horas el canal se quedaba sin noticias nuevas y dejaba de preparar programas (emitía anuncios y repeticiones). Arreglado: si faltan noticias nuevas, vuelve a contar las de hace 2 horas o más (nunca de los últimos 6 programas), como las cadenas de noticias. Con el arreglo, en las últimas 2 horas siempre hubo programas preparados.
+    - Ajustado también: TECH BYTES y COSMOS pueden salir con menos noticias (5 y 4) cuando hay pocas de su tema, para que de noche no se repita tanto WORLD NOW.
+    - La anterior (3 oct): 2 h, 60 fps, memoria estable, 0 errores.
 34. 🟡 Emisión a YouTube o Twitch (navegador sin pantalla y un codificador de vídeo funcionando a la vez).
     - Hecho (12 oct): `tools/stream.mjs` emite el canal sin OBS ni pantalla, en 1080p a 30 fps con su sonido (probado grabando a un archivo: imagen nítida y sonido a volumen de emisión). La clave se guarda en una variable de entorno, nunca en el repositorio. Instrucciones en el README.
     - Falta: tu clave de YouTube y un ordenador o servidor que esté encendido siempre (este entorno de trabajo se apaga solo).

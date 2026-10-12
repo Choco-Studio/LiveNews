@@ -298,6 +298,7 @@
         "science": ["SPACE", "ENERGY", "AI", "ROBOTICS", "CHIPS", "GADGETS", "SOFTWARE", "CONNECTIVITY", "MOTORING", "TRANSPORT"]
       },
       "stories": 15,
+      "minStories": 5,
       "maxChats": 8,
       "targetSeconds": [360, 480],
       "features": [
@@ -403,6 +404,7 @@
         "tech": ["SPACE", "ASTRONOMY", "CLIMATE", "OCEANS", "WILDLIFE", "HEALTH", "HISTORY", "VOLCANO", "EARTHQUAKE", "WEATHER"]
       },
       "stories": 11,
+      "minStories": 4,
       "maxChats": 10,
       "targetSeconds": [360, 480],
       "features": [
