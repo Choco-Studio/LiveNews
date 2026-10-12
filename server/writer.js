@@ -96,7 +96,7 @@ function analysisRule(program, experts = []) {
   if (!n || !experts.length) return '';
   const who = experts.map((e) => `"${e.id}": ${e.name}, ${e.role} (${EXPERT_DESKS[e.desk].covers})`).join('; ');
   return `
-- The channel's experts: up to ${n} main story whose subject is one expert's field (never the number of the day, a round-up item, "And finally", a breaking or grave story, or a story given to a correspondent) is put to that expert after the presenter reads it. The experts: ${who}. For that story add "analysis": "expert": the expert's id; "question": the presenter's first question to the expert, at most 12 words, no name and no new fact (e.g. "What does this tell us about the economy?"); "answer": 2 or 3 sentences in the expert's words that explain the story (the key detail, the context, why it matters to people), each a fact from that candidate; "follow": a follow-up question, at most 10 words, no name and no new fact; "answer2": 1 or 2 more sentences of that candidate's facts (what comes next, when it says). The channel adds the introduction and the thanks with the expert's name: never write them. The expert explains, never reports: never at the scene, never "I've seen", "told me", "my sources", no opinion and no prediction the candidate does not make, never financial or medical advice ("you should buy", "patients should stop"), never a view on a real person or on politics; they attribute ("officials say", "according to Reuters"). Same accuracy rules: nothing that is not in that candidate. Every other story: "analysis": null.`;
+- The channel's experts: up to ${n} main story whose subject is one expert's field (never the number of the day, a round-up item, "And finally", a breaking story, or a story given to a correspondent) is put to that expert after the presenter reads it. A grave story may be put to them too, soberly: the background and what happens now, never a guess at causes or blame, never a figure of the dead or hurt the candidate does not give, and a plain question ("What do we know so far?"). The experts: ${who}. For that story add "analysis": "expert": the expert's id; "question": the presenter's first question to the expert, at most 12 words, no name and no new fact (e.g. "What does this tell us about the economy?"); "answer": 2 or 3 sentences in the expert's words that explain the story (the key detail, the context, why it matters to people), each a fact from that candidate; "follow": a follow-up question, at most 10 words, no name and no new fact; "answer2": 1 or 2 more sentences of that candidate's facts (what comes next, when it says). The channel adds the introduction and the thanks with the expert's name: never write them. The expert explains, never reports: never at the scene, never "I've seen", "told me", "my sources", no opinion and no prediction the candidate does not make, never financial or medical advice ("you should buy", "patients should stop"), never a view on a real person or on politics; they attribute ("officials say", "according to Reuters"). Same accuracy rules: nothing that is not in that candidate. Every other story: "analysis": null.`;
 }
 
 /** WHAT WE KNOW (programme "boards": ["known"]): the key points a big story's board shows. */
@@ -2176,8 +2176,8 @@ function groundAnalysis(raw, experts, grounded) {
  * first question (the story's last sentences), the expert answers (piece), the presenter follows up (ask), the
  * expert answers again (answer) and is thanked: `cross` segments of kind 'expert', in place in `body`, like a
  * correspondent link. A story qualifies with an analysis that stood its check, a field one of the programme's experts
- * covers (the writer's choice, else the desk its words belong to), no feature, no breaking or grave news and no
- * correspondent of its own; at most `program.analyses`, the strongest match first. Their voice slots follow the
+ * covers (the writer's choice, else the desk its words belong to), no feature, no breaking news (a grave story with a
+ * sober question: decision 3) and no correspondent of its own; at most `program.analyses`, the strongest match first. Their voice slots follow the
  * links' (R<first>, ...). Returns them: { R3: id }.
  */
 function expandAnalyses(body, drafts, { program, experts, stories, first = 1, turn = null }) {
@@ -2187,7 +2187,7 @@ function expandAnalyses(body, drafts, { program, experts, stories, first = 1, tu
   body.forEach((seg, i) => {
     if (seg.type !== 'story' || seg.link || seg.feature || seg.breaking) return;
     const d = byId.get(seg.storyId);
-    if (!d?.analysis || d.heavy || seg.emotion === 'sad') return;
+    if (!d?.analysis) return;
     const story = stories.get(seg.storyId) || d.story;
     const match = expertFor({ ...story, kicker: seg.kicker }, experts);
     const chosen = experts.find((e) => e.id === d.analysis.expert);
@@ -2209,7 +2209,9 @@ function expandAnalyses(body, drafts, { program, experts, stories, first = 1, tu
     // the presenter's introduction and first question end the story (no toss to the other presenter)
     const said = sentencesOf(seg.text);
     if (said.length > 1 && /^[A-Z][\w'’-]*(?: [A-Z][\w'’-]*)?[.?]$/.test(stripTags(said.at(-1)))) said.pop();
-    seg.text = `${said.join(' ')} ${expertIntro(e, key, t)} ${expertQuestion(e, key, d.analysis.question, t)}`;
+    // a grave story's question is sober (decision 3): the writer's own only when it asks for the background or what
+    // happens now, else the grave list's
+    seg.text = `${said.join(' ')} ${expertIntro(e, key, t)} ${expertQuestion(e, key, d.heavy && !/\b(?:background|know so far|happens? (?:now|next)|the response|how did we get here)\b/i.test(d.analysis.question || '') ? null : d.analysis.question, t, { grave: !!d.heavy })}`;
     seg.link = slot;
     // (the introduction and the question are the hand-over: the director brings the two-way up with the first)
     seg.linkKind = 'expert';

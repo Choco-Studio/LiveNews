@@ -37,7 +37,10 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
     - pulido (10 oct): un experto descansa 2 h antes de volver al mismo programa (salvo el fijo de MONEY MINUTE, TECH BYTES y COSMOS DESK); las frases del presentador van rotando sin repetirse; la pantalla partida entra con la presentación y la respuesta va a pantalla completa; ya no se corta el pelo en las cajas; con las noticias de prueba salen los 8.
 
     Falta: tu visto bueno a nombres, caras y voces (WAVE3 §13). Sin risas por ahora (las tres probadas sonaban mal). Detalle en docs/programmes/guests-and-experts.md.
-19. **Entrevistas reales "IN THEIR WORDS".** La persona aparece en la pantalla o en el plató diciendo solo palabras de declaraciones públicas, con la etiqueta RECREACIÓN. Nunca víctimas, menores, particulares ni noticias graves.
+19. 🟡 **Entrevistas reales "IN THEIR WORDS".** La persona aparece diciendo solo palabras de declaraciones públicas, con la etiqueta RECREACIÓN. Nunca víctimas, familiares, testigos, menores, particulares ni acusados.
+    - Hecho (12 oct, parte del servidor): cuando una noticia trae una cita literal de un cargo público (político, portavoz, directivo, científico), esa persona aparece en una sala de prensa y dice exactamente esas palabras. El presentador dice antes de dónde salen ("Esto es lo que dijo la alcaldesa, según Reuters"). Lleva la etiqueta RECREACIÓN y la fuente, una voz sintética genérica (nunca imita la suya) y un aspecto respetuoso. Si hay dos partidos en la noticia y solo tenemos la cita de uno, no se recrea (regla de equilibrio). Se comprueba en Wikidata que es una persona pública, adulta y viva. Cada recreación queda apuntada en un registro.
+    - En noticias graves (decisión 3): solo cargos públicos hablando en su papel, con tono serio.
+    - Falta: la parte visual (dibujar a cada persona y la sala de prensa). Hasta entonces sigue apagado en antena.
 20. **Invitados.** Personalización del personaje por IA y cara esculpida preparada con antelación.
 21. ✅ **Nuevo programa WORLD WEATHER (≈5 min).** Hecho:
     - mapa del mundo (el mismo de las noticias) por 6 zonas, con la tierra coloreada por temperatura, iconos animados (sol, nubes, lluvia, tormenta, nieve, niebla) y la máxima de cada ciudad;

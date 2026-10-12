@@ -336,8 +336,8 @@ export class Producer {
    * its source attributes to a person in a public role, that person appears in a press room and says those words
    * (a `cross` of kind 'restage': a recreation, labelled, in a generic voice). The presenter's sentence that read the
    * quote becomes the hand-over that says where the words come from, at the story's end; at most `program.restage`
-   * an episode (two at most), the first stories first. Never a grave story, a round-up item, breaking news or a story
-   * with a link of its own.
+   * an episode (two at most), the first stories first. Never a round-up item, breaking news or a story with a link of
+   * its own; in a grave story only an official or a politician speaking in their role, staged soberly (decision 3).
    */
   async guests(ctx) {
     const max = Math.min(Number(ctx.program.restage) || 0, 2);
@@ -353,11 +353,11 @@ export class Producer {
     const declined = [];
     for (let i = 0; i < segs.length && restaged.length < max; i++) {
       const seg = segs[i];
-      if (seg.type !== 'story' || !seg.quote?.text || !seg.quote.by || seg.link || seg.roundup || seg.breaking || seg.feature || seg.emotion === 'sad') continue;
+      if (seg.type !== 'story' || !seg.quote?.text || !seg.quote.by || seg.link || seg.roundup || seg.breaking || seg.feature) continue;
       const story = this.news.get(seg.storyId);
       if (!story) continue;
       const source = story.body ? `${story.summary || ''} ${story.body}` : story.summary || '';
-      const check = restageCheck({ quote: seg.quote, source, story });
+      const check = restageCheck({ quote: seg.quote, source, story, grave: seg.emotion === 'sad' });
       if (!check.ok) {
         declined.push({ storyId: seg.storyId, reasons: check.reasons });
         continue;
@@ -382,7 +382,9 @@ export class Producer {
       seg.linkKind = 'restage';
       const words = String(seg.quote.text).trim();
       const piece = {
-        type: 'cross', part: 'piece', kind: 'restage', anchor: slot, reporter: booking.id, emotion: 'neutral', cues: [],
+        // a grave story's official is staged soberly (serious, still; the client keeps the music out)
+        type: 'cross', part: 'piece', kind: 'restage', anchor: slot, reporter: booking.id, emotion: check.grave ? 'serious' : 'neutral', cues: [],
+        ...(check.grave ? { grave: true } : {}),
         text: /[.!?…]["”’]?$/.test(words) ? words : `${words}.`,
         recreation: true,
         quoteRef: { outlet: seg.source || null, by: seg.quote.by },

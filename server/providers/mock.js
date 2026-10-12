@@ -1205,11 +1205,11 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
   }
 
   // The experts' analyses (server/experts.js): a main story of one expert's field, with sentences enough for the
-  // presenter's opener and a detail and two answers (three and a follow-up's with an article) (never a link, a feature, grave or
-  // breaking news), the strongest match first. The validator puts them to the expert.
+  // presenter's opener and a detail and two answers (three and a follow-up's with an article) (never a link, a feature or
+  // breaking news; a grave story too, soberly: decision 3), the strongest match first. The validator puts them to the expert.
   const analysed = new Map();
   if (program?.analyses && experts.length) {
-    const fits = (info) => !roundup.includes(info) && info !== number && info !== lighter && !links.has(info) && !info.grave && !info.breaking && !info.live && info.sentences.filter((t) => wordCount(t) <= maxWords + 6).length >= 4;
+    const fits = (info) => !roundup.includes(info) && info !== number && info !== lighter && !links.has(info) && !info.breaking && !info.live && info.sentences.filter((t) => wordCount(t) <= maxWords + 6).length >= 4;
     const scored = order
       .filter(fits)
       .map((info) => ({ info, m: expertFor({ title: info.s.title, summary: info.s.summary, category: info.s.category, kicker: info.kicker }, experts) }))
@@ -1711,7 +1711,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
         const nAnswer = rest.length >= 5 ? 3 : 2;
         if (rest.length >= 2 && lead >= 0) {
           // a short spoken frame on some answers, the station's turn walking through them (none on others)
-          const frame = answerFrame(key, Number.isFinite(analysisTurn) ? analysisTurn + [...analysed.keys()].indexOf(info) : undefined);
+          const frame = answerFrame(key, Number.isFinite(analysisTurn) ? analysisTurn + [...analysed.keys()].indexOf(info) : undefined, { grave: !!info.grave });
           const answer = rest.slice(0, nAnswer).map(asSentence);
           // after the colon the sentence runs on in lower case ("Here is what matters: the rise..."), a name or a
           // place keeping its capital (never "iceland's")

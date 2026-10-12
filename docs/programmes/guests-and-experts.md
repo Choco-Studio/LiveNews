@@ -119,3 +119,12 @@ The two-way crops round the head (176 x 99), so each studio also reads in that b
 - Laughter in the exchanges (LISTA decision 5: "pueden reírse en las charlas") is off: the three synthetic chuckles were rejected by the owner (12 Oct), so nobody laughs on air until a truly natural sound exists (LISTA item 14).
 - The guests of WAVE3 §3.6 (re-staged public figures, IN THEIR WORDS, AI-built looks) are a separate piece of work. The experts here are the roster only.
 - The demo feeds carry a story for every desk (the Pacific tuna treaty for Clara, the Amsterdam night-flights ruling for Ines, the Cairo boats exhibition and the Seoul drone show for Leo, the probe, the telescope and the rover for Tomas). With the real writer and real news, more stories qualify, and a second analysis can be allowed per programme (`analyses: 2`).
+
+## Grave stories (decision 3, owner 12 Oct: "se presentan con respeto pero bien")
+
+- An expert may now analyse a grave story too, soberly.
+  - The question is plain: the writer's own only when it asks for the background or what happens now, else one of `GRAVE_ASK` ("What do we know so far?", "What happens now?").
+  - The offline writer's answer frame is plain or "What we know is this:" (`answerFrame(..., { grave: true })`).
+  - Never a guess at causes or blame, and never a figure of the dead or hurt the source does not give.
+- IN THEIR WORDS re-staging (`server/guests/restage.js`): in a grave story, only an official or a politician speaking in their role. They are staged soberly (`grave: true`, a serious expression). Victims, relatives and witnesses are never re-staged.
+

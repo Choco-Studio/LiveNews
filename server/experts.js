@@ -164,9 +164,13 @@ export function introLine(e, seed, turn) {
   );
 }
 
-/** The presenter's first question, addressed by first name (one sentence, a question). */
-export function questionLine(e, seed, question = null, turn) {
-  const q = question || choose(EXPERT_DESKS[e.desk]?.ask || ['what should we make of it?'], seed, turn, 'ask');
+// A grave story's questions (decision 3, owner 12 Oct: grave news "se presenta con respeto pero bien"): the background
+// and what happens now, never "how big a deal", never a guess at causes or blame
+export const GRAVE_ASK = ['what is the background to this?', 'what do we know so far?', 'what happens now?', 'how did we get here?', 'what is the response so far?'];
+
+/** The presenter's first question, addressed by first name (one sentence, a question); a grave story's are sober. */
+export function questionLine(e, seed, question = null, turn, { grave = false } = {}) {
+  const q = question || choose(grave ? GRAVE_ASK : EXPERT_DESKS[e.desk]?.ask || ['what should we make of it?'], seed, turn, grave ? 'grave-ask' : 'ask');
   return `${e.first}, ${q}`;
 }
 
@@ -187,7 +191,9 @@ export function thanksLine(e, seed, turn) {
  * A short spoken frame before an expert's first answer, when the offline writer builds it from the source ("The key
  * detail is this:"); null for no frame at all (one turn in four or so: a frame on every answer would be a tic).
  */
-export function answerFrame(seed, turn) {
+export function answerFrame(seed, turn, { grave = false } = {}) {
+  // a grave story's answer starts plainly, or on what is known (never "what stands out")
+  if (grave) return choose(['What we know is this:', null, null, 'The background is this:', null], seed, turn, 'grave-frame');
   return choose(['The key detail is this:', 'What stands out is this:', null, 'Here is what matters:', 'The thing to note is this:', null, 'Put simply:', 'The important part is this:', null], seed, turn, 'frame');
 }
 

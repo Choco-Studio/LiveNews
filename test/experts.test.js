@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EXPERT_DESKS, REST_HOURS, expertsOf, restedExperts, expertFor, introLine, questionLine, followLine, thanksLine, answerFrame, expertKicker } from '../server/experts.js';
+import { GRAVE_ASK, EXPERT_DESKS, REST_HOURS, expertsOf, restedExperts, expertFor, introLine, questionLine, followLine, thanksLine, answerFrame, expertKicker } from '../server/experts.js';
 import { presenceClaim, rosterOf } from '../server/correspondents.js';
 import { buildPrompt, collapseCrosses, normalizeBulletin } from '../server/writer.js';
 import { loadChannel, validateChannel } from '../server/channel.js';
@@ -217,10 +217,14 @@ describe("a writer's analysis becomes the expert's exchange", () => {
     assert.equal(piece.match(/first move/g).length, 1, piece);
   });
 
-  test('an analysis that cannot stand (fewer than two grounded answers), or a breaking or grave story, stays a story', () => {
+  test('an analysis that cannot stand (fewer than two grounded answers) stays a story; a grave one is asked soberly', () => {
     const thin = { expert: 'omar', question: 'Why?', answer: 'Rates will double next year. I was at the bank today.', follow: '', answer2: '' };
     assert.ok(!run([ratesSeg({ analysis: thin }), ...fillerSegs(3)], [RATES, ...fillers(3)]).segments.some((x) => x.kind === 'expert'));
-    assert.ok(!run([ratesSeg({ emotion: 'sad' }), ...fillerSegs(3)], [RATES, ...fillers(3)]).segments.some((x) => x.kind === 'expert'));
+    // decision 3 (12 Oct): a grave story is put to the expert too, with a plain question (never "how big a deal")
+    const grave = run([ratesSeg({ emotion: 'sad', analysis: { ...ratesSeg().analysis, question: 'How big a deal is this?' } }), ...fillerSegs(3)], [RATES, ...fillers(3)]);
+    assert.ok(grave.segments.some((x) => x.kind === 'expert'));
+    const q = grave.segments.find((x) => x.storyId === 'n1' && x.type === 'story').text.split(/(?<=[.!?])\s+/).at(-1);
+    assert.ok(GRAVE_ASK.includes(q.replace(/^Omar, /, '')), q);
     // a programme without analyses ignores them
     const off = run([ratesSeg(), ...fillerSegs(3)], [RATES, ...fillers(3)], { program: { ...WN, analyses: 0 } });
     assert.ok(!off.segments.some((x) => x.kind === 'expert'));

@@ -7,7 +7,9 @@
 //     a clause, never two quotes spliced): the validator's grounded `quote` (server/facts.js groundQuote)
 //   - a person in a public role: politicians and heads of state, officials and spokespeople, executives, scientists.
 //     Never victims, relatives, witnesses, children, private people, the accused or a company speaking as a company
-//   - never in a grave story (deaths, violence, disaster, illness: the quote card stays)
+//   - a grave story (deaths, violence, disaster, illness): only officials and politicians speaking in their role (a
+//     minister on a disaster), staged soberly (owner, decision 3, 12 Oct: "se presentan con respeto pero bien");
+//     never anyone else in it
 //   - balance: a story naming two or more political sides needs re-staged words from two sides; with one quote it
 //     keeps the quote card
 //   - a person named and checked (server/guests/identity.js: an adult, alive, with a public profile) gets their own
@@ -103,9 +105,10 @@ export function restageCheck({ quote, source = '', story = null, grave = false }
   else if (speaker.kind === 'body') reasons.push('an organisation, not a person');
   else if (speaker.kind === 'unknown' || (speaker.kind === 'named' && !speaker.role)) reasons.push('no public role in the source');
   const text = `${story?.title || ''} ${source}`;
-  if (grave || isGrave(`${story?.title || ''}. ${story?.summary || ''}`)) reasons.push('a grave story: the quote card stays');
+  const sombre = grave || isGrave(`${story?.title || ''}. ${story?.summary || ''}`);
+  if (sombre && speaker && !['politician', 'official'].includes(speaker.kind)) reasons.push('a grave story: only officials speaking in their role');
   if (speaker?.kind === 'politician' && politicalSides(text) >= 2) reasons.push('two political sides and one side\'s words: the quote card stays (balance)');
-  return { ok: !reasons.length, reasons, speaker };
+  return { ok: !reasons.length, reasons, speaker, grave: sombre };
 }
 
 // ------------------------------------------------------------------------------------------------ the booking

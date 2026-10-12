@@ -42,7 +42,13 @@ test('never re-staged: private people, bodies, unknown roles, grave stories, sho
   assert.match(no(quote(Q, null)).reasons.join(), /no speaker/);
   assert.match(no(quote('We are sad', 'the mayor')).reasons.join(), /too short/);
   assert.match(no(quote(Array(70).fill('word').join(' '), 'the mayor')).reasons.join(), /longer than/);
-  assert.match(no(quote(Q, 'the mayor'), { title: 'Three people killed as tram derails in Lisbon', summary: 'Three people died.' }).reasons.join(), /grave story/);
+  // a grave story: an official speaking in their role, soberly (decision 3); never anyone else
+  const grave = { title: 'Three people killed as tram derails in Lisbon', summary: 'Three people died.' };
+  const official = no(quote(Q, 'the mayor'), grave);
+  assert.equal(official.ok, true);
+  assert.equal(official.grave, true);
+  assert.match(no(quote(Q, 'a lead researcher'), grave).reasons.join(), /grave story: only officials/);
+  assert.match(no(quote(Q, "a victim's relative"), grave).reasons.join(), /private person/);
   assert.equal(no(quote(Q, 'the mayor'), { title: 'Tram line opens', summary: '' }, 'x').ok, true);
   // a story naming two political sides needs both sides' words: one politician's quote stays a quote card
   assert.equal(politicalSides('Labour and the Conservatives clashed over the budget'), 2);
@@ -112,7 +118,7 @@ test('identity (Wikidata): a human with an article; the dead and minors refused;
 test('the producer: the person says the words after the story, the presenter hands over; the rules hold', async () => {
   const stories = new Map([
     ['s1', { id: 's1', title: 'New tram line opens in the old town', summary: `The city opened a new tram line on Monday. “${Q},” the mayor said. Trams run every ten minutes.` }],
-    ['s2', { id: 's2', title: 'Two killed as storm hits coast', summary: '“We are doing everything we can to help people,” the governor said.' }],
+    ['s2', { id: 's2', title: 'Two killed as storm hits coast', summary: '“We are doing everything we can to help people,” a resident said.' }],
     ['s3', { id: 's3', title: 'App launches translation', summary: '“Travel should not stop at the language barrier,” the company said.' }],
   ]);
   const seg = (id, text, q) => ({ type: 'story', anchor: 'A', emotion: 'neutral', storyId: id, headline: stories.get(id).title, source: 'Pixelburg Post', category: 'world', hasImage: false, text, cues: [], quote: q });
@@ -120,7 +126,7 @@ test('the producer: the person says the words after the story, the presenter han
     segments: [
       { type: 'intro', anchor: 'A', text: 'Hello.' },
       seg('s1', `The city opened a new tram line on Monday. “${Q},” the mayor said. Trams run every ten minutes.`, quote(Q, 'the mayor')),
-      seg('s2', 'A storm hit the coast. “We are doing everything we can to help people,” the governor said.', quote('We are doing everything we can to help people', 'the governor')),
+      seg('s2', 'A storm hit the coast. “We are doing everything we can to help people,” a resident said.', quote('We are doing everything we can to help people', 'a resident')),
       seg('s3', 'An app now translates. “Travel should not stop at the language barrier,” the company said.', quote('Travel should not stop at the language barrier', 'the company')),
       { type: 'outro', anchor: 'A', text: 'Goodbye.' },
     ],
@@ -151,11 +157,19 @@ test('the producer: the person says the words after the story, the presenter han
   assert.deepEqual(castFor('rp_x', ctx.presenters.R2, {}), booking.voice, 'the voice service casts the booked voice');
   assert.equal(logged.length, 1);
   assert.equal(logged[0].words, piece.text);
-  // the grave story and the company kept their quote cards
+  // the resident and the company kept their quote cards
   assert.ok(!segs.some((s) => s.type === 'cross' && (s.storyId === 's2' || s.storyId === 's3')));
   // two allowed: still only the eligible one
   const ctx2 = { program: { id: 'world-now', restage: 2 }, presenters: { A: { id: 'paco' } }, episode: episode() };
   assert.equal((await producer.guests(ctx2)).restaged, 1);
+  // a grave story's governor speaks, soberly
+  const sombre = episode();
+  sombre.segments[1] = { ...sombre.segments[2], storyId: 's4', text: 'A storm hit the coast. “We are doing everything we can to help people,” the governor said.', quote: quote('We are doing everything we can to help people', 'the governor'), emotion: 'sad' };
+  stories.set('s4', { id: 's4', title: 'Two killed as storm hits coast', summary: '“We are doing everything we can to help people,” the governor said.' });
+  const ctx3 = { program: { id: 'world-now', restage: 1 }, presenters: {}, episode: sombre };
+  assert.equal((await producer.guests(ctx3)).restaged, 1);
+  const governor = ctx3.episode.segments.find((s) => s.kind === 'restage');
+  assert.deepEqual([governor.grave, governor.emotion], [true, 'serious']);
   // an identity the check rules out (dead, a minor) keeps the quote card
   const named = { ...episode() };
   named.segments[1] = seg('s1', `The city opened a line. “${Q},” Ana Silva said.`, quote(Q, 'Ana Silva'));
