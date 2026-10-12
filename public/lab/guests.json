@@ -1,0 +1,838 @@
+{
+ "made": "tools/guests-lab.mjs",
+ "guests": [
+  {
+   "booking": {
+    "id": "rp_3fc8a7e3db",
+    "kind": "restaged",
+    "name": null,
+    "role": "spokesperson",
+    "org": null,
+    "strap": {
+     "name": "SPOKESPERSON",
+     "role": ""
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: CIRCUIT WEEKLY"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "neutral",
+     "age": "middle",
+     "build": "average",
+     "skin": "deep",
+     "hair": {
+      "style": "curly-short",
+      "colour": "dark-brown",
+      "parting": "none",
+      "receding": 0
+     },
+     "facialHair": {
+      "style": "none"
+     },
+     "glasses": "none",
+     "wear": {
+      "outfit": "suit",
+      "main": "brown",
+      "tie": "none"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "am_fenrir:0.45+bm_lewis:0.55",
+     "speed": 0.98,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "neutral"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_2a4ae59c2c",
+    "kind": "restaged",
+    "name": "Tomas Kowalski",
+    "role": "health minister",
+    "org": null,
+    "strap": {
+     "name": "TOMAS KOWALSKI",
+     "role": "HEALTH MINISTER"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: PIXELBURG POST"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "man",
+     "age": "senior",
+     "build": "average",
+     "skin": "light",
+     "hair": {
+      "style": "short-textured",
+      "colour": "salt-pepper",
+      "parting": "none",
+      "receding": 0.55
+     },
+     "facialHair": {
+      "style": "stubble"
+     },
+     "glasses": "rect",
+     "wear": {
+      "outfit": "suit",
+      "main": "plum",
+      "tie": "plain"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "am_fenrir:0.45+bm_lewis:0.55",
+     "speed": 0.98,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "man"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_02df0b4386",
+    "kind": "restaged",
+    "name": "Mara Adeyemi",
+    "role": "mayor of Lisbon",
+    "org": "Lisbon",
+    "strap": {
+     "name": "MARA ADEYEMI",
+     "role": "MAYOR OF LISBON"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: HARBOUR HERALD"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "woman",
+     "age": "adult",
+     "build": "broad",
+     "skin": "brown",
+     "hair": {
+      "style": "crop",
+      "colour": "black",
+      "parting": "none",
+      "receding": 0
+     },
+     "facialHair": {
+      "style": "none"
+     },
+     "glasses": "round",
+     "wear": {
+      "outfit": "blazer",
+      "main": "slate",
+      "tie": "none"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "af_nicole:0.55+bf_isabella:0.45",
+     "speed": 0.98,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "woman"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_df351932d5",
+    "kind": "restaged",
+    "name": "Hiro Mensah",
+    "role": "chief executive of Nimbus Rail",
+    "org": "Nimbus Rail",
+    "strap": {
+     "name": "HIRO MENSAH",
+     "role": "CHIEF EXECUTIVE OF NIMBUS RAIL"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: CIRCUIT WEEKLY"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "man",
+     "age": "senior",
+     "build": "average",
+     "skin": "medium",
+     "hair": {
+      "style": "bald",
+      "colour": "none",
+      "parting": "left",
+      "receding": 0.04
+     },
+     "facialHair": {
+      "style": "moustache"
+     },
+     "glasses": "round",
+     "wear": {
+      "outfit": "suit",
+      "main": "navy",
+      "tie": "none"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "am_santa:0.35+bm_george:0.65",
+     "speed": 0.95,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "man"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_7b83e3f5f2",
+    "kind": "restaged",
+    "name": "Ana Tanaka",
+    "role": "spokesperson for the space agency",
+    "org": null,
+    "strap": {
+     "name": "ANA TANAKA",
+     "role": "SPOKESPERSON FOR THE SPACE AGENCY"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: STARFIELD JOURNAL"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "woman",
+     "age": "adult",
+     "build": "average",
+     "skin": "tan",
+     "hair": {
+      "style": "long-wavy",
+      "colour": "brown",
+      "parting": "right",
+      "receding": 0
+     },
+     "facialHair": {
+      "style": "none"
+     },
+     "glasses": "none",
+     "wear": {
+      "outfit": "blazer",
+      "main": "charcoal",
+      "tie": "none"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "af_heart:0.45+bf_emma:0.55",
+     "speed": 0.97,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "woman"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_28cc0084b6",
+    "kind": "restaged",
+    "name": "Lars Silva",
+    "role": "chief executive of Nimbus Rail",
+    "org": "Nimbus Rail",
+    "strap": {
+     "name": "LARS SILVA",
+     "role": "CHIEF EXECUTIVE OF NIMBUS RAIL"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: CIRCUIT WEEKLY"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "man",
+     "age": "senior",
+     "build": "average",
+     "skin": "porcelain",
+     "hair": {
+      "style": "short-side",
+      "colour": "grey",
+      "parting": "left",
+      "receding": 0.4
+     },
+     "facialHair": {
+      "style": "short-beard"
+     },
+     "glasses": "rect",
+     "wear": {
+      "outfit": "suit",
+      "main": "navy",
+      "tie": "plain"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "am_fenrir:0.45+bm_lewis:0.55",
+     "speed": 0.98,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "man"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_cdab3ffb13",
+    "kind": "restaged",
+    "name": "Lena Novak",
+    "role": "foreign secretary",
+    "org": null,
+    "strap": {
+     "name": "LENA NOVAK",
+     "role": "FOREIGN SECRETARY"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: PIXELBURG POST"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "woman",
+     "age": "adult",
+     "build": "broad",
+     "skin": "tan",
+     "hair": {
+      "style": "bob",
+      "colour": "auburn",
+      "parting": "none",
+      "receding": 0
+     },
+     "facialHair": {
+      "style": "none"
+     },
+     "glasses": "none",
+     "wear": {
+      "outfit": "blazer",
+      "main": "charcoal",
+      "tie": "none"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "af_heart:0.45+bf_emma:0.55",
+     "speed": 0.97,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "woman"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_fb71f95f6e",
+    "kind": "restaged",
+    "name": "Pieter Moreau",
+    "role": "central bank governor",
+    "org": null,
+    "strap": {
+     "name": "PIETER MOREAU",
+     "role": "CENTRAL BANK GOVERNOR"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: LEDGER DAILY"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "man",
+     "age": "senior",
+     "build": "average",
+     "skin": "deep",
+     "hair": {
+      "style": "coily-short",
+      "colour": "white",
+      "parting": "none",
+      "receding": 0.57
+     },
+     "facialHair": {
+      "style": "stubble"
+     },
+     "glasses": "round",
+     "wear": {
+      "outfit": "suit",
+      "main": "plum",
+      "tie": "none"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "am_fenrir:0.45+bm_lewis:0.55",
+     "speed": 0.98,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "man"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_2237d3557f",
+    "kind": "restaged",
+    "name": "Grace Castell",
+    "role": "lead researcher",
+    "org": null,
+    "strap": {
+     "name": "GRACE CASTELL",
+     "role": "LEAD RESEARCHER"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: STARFIELD JOURNAL"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "woman",
+     "age": "adult",
+     "build": "slight",
+     "skin": "brown",
+     "hair": {
+      "style": "bun",
+      "colour": "blonde",
+      "parting": "right",
+      "receding": 0
+     },
+     "facialHair": {
+      "style": "none"
+     },
+     "glasses": "none",
+     "wear": {
+      "outfit": "suit",
+      "main": "brown",
+      "tie": "none"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "af_heart:0.45+bf_emma:0.55",
+     "speed": 0.97,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "woman"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_43a58e1277",
+    "kind": "restaged",
+    "name": "Kwame Haddad",
+    "role": "transport commissioner",
+    "org": null,
+    "strap": {
+     "name": "KWAME HADDAD",
+     "role": "TRANSPORT COMMISSIONER"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: HARBOUR HERALD"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "man",
+     "age": "middle",
+     "build": "average",
+     "skin": "tan",
+     "hair": {
+      "style": "quiff",
+      "colour": "grey",
+      "parting": "left",
+      "receding": 0
+     },
+     "facialHair": {
+      "style": "none"
+     },
+     "glasses": "round",
+     "wear": {
+      "outfit": "blazer",
+      "main": "charcoal",
+      "tie": "plain"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "am_fenrir:0.45+bm_lewis:0.55",
+     "speed": 0.98,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "man"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_b9b6f3d2cd",
+    "kind": "restaged",
+    "name": "Ines Brandt",
+    "role": "prime minister",
+    "org": null,
+    "strap": {
+     "name": "INES BRANDT",
+     "role": "PRIME MINISTER"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: PIXELBURG POST"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "woman",
+     "age": "adult",
+     "build": "broad",
+     "skin": "brown",
+     "hair": {
+      "style": "ponytail",
+      "colour": "dark-brown",
+      "parting": "none",
+      "receding": 0
+     },
+     "facialHair": {
+      "style": "none"
+     },
+     "glasses": "none",
+     "wear": {
+      "outfit": "blazer",
+      "main": "plum",
+      "tie": "none"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "af_heart:0.45+bf_emma:0.55",
+     "speed": 0.97,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "woman"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_3081ef2b27",
+    "kind": "restaged",
+    "name": "Karim Okafor",
+    "role": "regional governor",
+    "org": null,
+    "strap": {
+     "name": "KARIM OKAFOR",
+     "role": "REGIONAL GOVERNOR"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: COASTLINE NEWS"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "man",
+     "age": "middle",
+     "build": "average",
+     "skin": "tan",
+     "hair": {
+      "style": "coily-short",
+      "colour": "grey",
+      "parting": "none",
+      "receding": 0
+     },
+     "facialHair": {
+      "style": "stubble"
+     },
+     "glasses": "none",
+     "wear": {
+      "outfit": "suit",
+      "main": "plum",
+      "tie": "plain"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "bm_daniel:0.5+am_adam:0.5",
+     "speed": 0.97,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "man"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_5e0cd643a5",
+    "kind": "restaged",
+    "name": "Sofia Lindqvist",
+    "role": "mayor of Lisbon",
+    "org": "Lisbon",
+    "strap": {
+     "name": "SOFIA LINDQVIST",
+     "role": "MAYOR OF LISBON"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: HARBOUR HERALD"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "woman",
+     "age": "adult",
+     "build": "slight",
+     "skin": "medium",
+     "hair": {
+      "style": "long-straight",
+      "colour": "dark-brown",
+      "parting": "left",
+      "receding": 0
+     },
+     "facialHair": {
+      "style": "none"
+     },
+     "glasses": "none",
+     "wear": {
+      "outfit": "blazer",
+      "main": "brown",
+      "tie": "none"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "af_alloy:0.6+bf_alice:0.4",
+     "speed": 0.98,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "woman"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_e55345204e",
+    "kind": "restaged",
+    "name": "David Ruiz",
+    "role": "health minister",
+    "org": null,
+    "strap": {
+     "name": "DAVID RUIZ",
+     "role": "HEALTH MINISTER"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: PIXELBURG POST"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "man",
+     "age": "adult",
+     "build": "slight",
+     "skin": "medium",
+     "hair": {
+      "style": "short-side",
+      "colour": "blonde",
+      "parting": "right",
+      "receding": 0
+     },
+     "facialHair": {
+      "style": "moustache"
+     },
+     "glasses": "none",
+     "wear": {
+      "outfit": "blazer",
+      "main": "slate",
+      "tie": "none"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "bm_daniel:0.5+am_adam:0.5",
+     "speed": 0.97,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "man"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_14de99406e",
+    "kind": "restaged",
+    "name": "Amina Varga",
+    "role": "mayor of Lisbon",
+    "org": "Lisbon",
+    "strap": {
+     "name": "AMINA VARGA",
+     "role": "MAYOR OF LISBON"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: HARBOUR HERALD"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "woman",
+     "age": "middle",
+     "build": "average",
+     "skin": "porcelain",
+     "hair": {
+      "style": "braids",
+      "colour": "grey",
+      "parting": "none",
+      "receding": 0
+     },
+     "facialHair": {
+      "style": "none"
+     },
+     "glasses": "none",
+     "wear": {
+      "outfit": "blazer",
+      "main": "charcoal",
+      "tie": "none"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "af_alloy:0.6+bf_alice:0.4",
+     "speed": 0.98,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "woman"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_42d19d026b",
+    "kind": "restaged",
+    "name": "Marco Iyer",
+    "role": "health minister",
+    "org": null,
+    "strap": {
+     "name": "MARCO IYER",
+     "role": "HEALTH MINISTER"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: PIXELBURG POST"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "man",
+     "age": "middle",
+     "build": "broad",
+     "skin": "tan",
+     "hair": {
+      "style": "short-textured",
+      "colour": "grey",
+      "parting": "left",
+      "receding": 0
+     },
+     "facialHair": {
+      "style": "short-beard"
+     },
+     "glasses": "rect",
+     "wear": {
+      "outfit": "blazer",
+      "main": "slate",
+      "tie": "plain"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "bm_daniel:0.5+am_adam:0.5",
+     "speed": 0.97,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "man"
+   },
+   "grave": false
+  },
+  {
+   "booking": {
+    "id": "rp_639b08afda",
+    "kind": "restaged",
+    "name": "Ana Silva",
+    "role": "regional governor",
+    "org": null,
+    "strap": {
+     "name": "ANA SILVA",
+     "role": "REGIONAL GOVERNOR"
+    },
+    "label": {
+     "line": "RECREATION — WORDS FROM PUBLIC STATEMENTS",
+     "credit": "SOURCE: COASTLINE NEWS"
+    },
+    "look": {
+     "v": 1,
+     "presentation": "woman",
+     "age": "middle",
+     "build": "average",
+     "skin": "porcelain",
+     "hair": {
+      "style": "crop",
+      "colour": "brown",
+      "parting": "left",
+      "receding": 0
+     },
+     "facialHair": {
+      "style": "none"
+     },
+     "glasses": "none",
+     "wear": {
+      "outfit": "blazer",
+      "main": "navy",
+      "tie": "none"
+     },
+     "accessories": []
+    },
+    "voice": {
+     "voice": "af_alloy:0.6+bf_alice:0.4",
+     "speed": 0.98,
+     "lang": "en-gb"
+    },
+    "likeness": "none",
+    "backdrop": "press",
+    "presentation": "woman"
+   },
+   "grave": true
+  }
+ ]
+}

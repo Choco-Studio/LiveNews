@@ -37,6 +37,7 @@ import { CueClock, prunePerf, shiftPerf } from './cueclock.js';
 import { paceTrace } from '../../../pace.js';
 import { drawBackdrop, REMOTE, TWOWAY, cropInto, composeTwoWay } from '../studio/remote.js';
 import { drawExpertStudio } from '../studio/experts.js';
+import { drawPressRoom, drawPressFront, PRESS } from '../studio/press.js';
 
 /** Legacy shot names the Stage draws (framings travel in scene.framing). */
 export const STUDIO_SHOTS = new Set(['wide', 'close']);
@@ -48,6 +49,10 @@ export const STUDIO_SHOTS = new Set(['wide', 'close']);
 export const REMOTE_SHOTS = new Set(['location', 'twoway']);
 // the correspondent's gestures (Stage.remoteGesture): the sets (null = none this sentence) and the least gap
 const REMOTE_GESTURE = { gap: 6, calm: ['count', 'nod', null, 'steeple', 'lean_in', null], grave: ['nod', 'steeple', null] };
+// a re-staged guest (IN THEIR WORDS, WAVE3 §6.4): small head beats only (a soft dip, no smile, no hands), sparser
+// than a correspondent's, rarer still in a grave story; a neutral or serious face whatever the cue says
+const GUEST_BEAT = { gap: 6.5, calm: [{ name: 'nod', variant: 'crisp', amp: 0.8 }, null], grave: [{ name: 'nod', variant: 'crisp', amp: 0.6 }, null, null] };
+const GUEST_FACE = { neutral: 'neutral', serious: 'serious', sad: 'serious' };
 
 const CLOCK_REBASE = 840; // s of rig time before the rig clock moves back (at the next cut)
 const PRUNE_EVERY = 2; // s
@@ -266,7 +271,7 @@ export class Stage {
     // the correspondent of the link on air (scene.remote): { key, slot, id, actor, perf, emotion }
     this.remote = null;
     this.remoteList = [{ actor: null, x: REMOTE.x, y: REMOTE.y, s: REMOTE.s, clip: false }];
-    this.backdrop = { kind: 'desk', frame: null, lat: 20, lon: 0, accent: this.accent, footage: null, studio: null };
+    this.backdrop = { kind: 'desk', frame: null, lat: 20, lon: 0, accent: this.accent, footage: null, studio: null, press: null };
     this.studioBox = new Uint32Array(TWOWAY.w * TWOWAY.h);
     this.remoteBox = new Uint32Array(TWOWAY.w * TWOWAY.h);
   }
@@ -339,7 +344,8 @@ export class Stage {
     }
     const rm = this.remote;
     if (rm) {
-      const emo = scene.anchors?.[rm.slot]?.emotion || 'neutral';
+      const asked = scene.anchors?.[rm.slot]?.emotion || 'neutral';
+      const emo = rm.guest ? GUEST_FACE[asked] || 'neutral' : asked;
       if (emo !== rm.emotion) {
         rm.emotion = emo;
         rm.perf.emotions.push({ t0: rt, name: emo });
@@ -369,7 +375,9 @@ export class Stage {
       const epId = scene.episode?.id ?? this.key;
       const perf = { side: 0, seed: hashSeed(`${epId}${r.slot}`), gestures: [], emotions: [], look: [], speech: liveSpeech(this.proxy, r.slot), listen: false, gain: 1 };
       const presenters = scene.presenters || this.presenters || {};
-      this.remote = { key, slot: r.slot, id: r.id, actor: makeActor(r.id, perf, presenters[r.id]), perf, emotion: null, sentence: -1, lastGesture: -Infinity };
+      // a re-staged guest wears the look of the episode's booking (cast/guest.js), never a presenter's
+      const guest = r.kind === 'restage' ? scene.episode?.guests?.[r.id] || r.booking || { kind: 'restaged', id: r.id } : null;
+      this.remote = { key, slot: r.slot, id: r.id, actor: makeActor(r.id, perf, guest || presenters[r.id]), perf, emotion: null, sentence: -1, lastGesture: -Infinity, guest: !!guest };
       this.remoteList[0].actor = this.remote.actor;
       this.frames[r.slot] ||= {};
     }
@@ -390,6 +398,15 @@ export class Stage {
     if (!rm || !f?.speaking || !(f.sentenceIndex >= 0) || f.sentenceIndex === rm.sentence) return;
     rm.sentence = f.sentenceIndex;
     const rt = t - this.epoch;
+    if (rm.guest) {
+      if (f.sentenceIndex < 1 || rt - rm.lastGesture < GUEST_BEAT.gap) return;
+      const set = r.grave ? GUEST_BEAT.grave : GUEST_BEAT.calm;
+      const beat = set[hashSeed(`${rm.key}|${f.sentenceIndex}`) % set.length];
+      if (!beat) return;
+      rm.lastGesture = rt;
+      rm.perf.gestures.push({ ...beat, t0: rt });
+      return;
+    }
     if (f.sentenceIndex < 1 || rt - rm.lastGesture < REMOTE_GESTURE.gap) return;
     const set = r.grave ? REMOTE_GESTURE.grave : REMOTE_GESTURE.calm;
     const name = set[hashSeed(`${rm.key}|${r.footage || ''}|${f.sentenceIndex}`) % set.length];
@@ -401,16 +418,24 @@ export class Stage {
   /**
    * A cut to a correspondent's shot: the backdrop is decided now and kept for the shot (the place's footage
    * when the deck has a frame of it and the story is not grave, else the desk; an expert's own studio,
-   * studio/experts.js); the two-way frames the link's presenter in their single, to be cropped into the left box.
+   * studio/experts.js; a re-staged guest's press room, studio/press.js); the two-way frames the link's presenter
+   * in their single, to be cropped into the left box.
    */
   remoteCut(scene) {
     const r = scene.remote || {};
     const bd = this.backdrop;
     const id = r.footage || null;
     const deck = scene.footageDeck;
-    bd.footage = r.kind !== 'expert' && !r.grave && id && deck?.ready?.(id) ? id : null;
+    bd.footage = r.kind !== 'expert' && r.kind !== 'restage' && !r.grave && id && deck?.ready?.(id) ? id : null;
     bd.studio = r.kind === 'expert' ? r.backdrop || null : null;
-    bd.kind = bd.footage ? 'footage' : bd.studio ? 'studio' : 'desk';
+    // a re-staged guest speaks from the press room (studio/press.js), soberly on a grave story; at their lectern
+    bd.press = r.kind === 'restage' ? (r.grave ? 'grave' : 'press') : null;
+    bd.kind = bd.press ? 'press' : bd.footage ? 'footage' : bd.studio ? 'studio' : 'desk';
+    const at = bd.press ? PRESS : REMOTE;
+    const it = this.remoteList[0];
+    it.x = at.x;
+    it.y = at.y;
+    it.s = at.s;
     bd.lat = Number.isFinite(r.lat) ? r.lat : 20;
     bd.lon = Number.isFinite(r.lon) ? r.lon : 0;
     bd.accent = this.accent;
@@ -435,13 +460,24 @@ export class Stage {
     }
   }
 
-  /** The correspondent before their backdrop into the frame (the location shot, and the two-way's right box). */
+  /**
+   * The correspondent before their backdrop into the frame (the location shot, and the two-way's right box); a
+   * re-staged guest behind their lectern and its microphones.
+   */
   drawRemote(t, scene) {
     const bd = this.backdrop;
     bd.frame = bd.kind === 'footage' ? scene.footageDeck?.frame?.(bd.footage, 'back', t) || null : null;
-    if (bd.kind !== 'studio' || !drawExpertStudio(frame.px, bd.studio, t)) drawBackdrop(frame.px, bd.frame ? bd : { kind: 'desk', lat: bd.lat, lon: bd.lon, accent: bd.accent }, t);
-    if (!this.remote) return null;
-    return drawActors(t - this.epoch, this.remoteList, null)[0] || null;
+    if (bd.kind === 'press') drawPressRoom(frame.px, bd.press, t);
+    else if (bd.kind !== 'studio' || !drawExpertStudio(frame.px, bd.studio, t)) drawBackdrop(frame.px, bd.frame ? bd : { kind: 'desk', lat: bd.lat, lon: bd.lon, accent: bd.accent }, t);
+    // the lectern in wood, or brushed steel before a brown suit (the two would merge)
+    const finish = this.remote?.actor?.look?.jacket?.ramp?.[1] === P.brown ? 'steel' : 'wood';
+    if (!this.remote) {
+      if (bd.kind === 'press') drawPressFront(frame.px, bd.press, finish);
+      return null;
+    }
+    const head = drawActors(t - this.epoch, this.remoteList, null)[0] || null;
+    if (bd.kind === 'press') drawPressFront(frame.px, bd.press, finish);
+    return head;
   }
 
   renderRemote(ctx, t, scene) {

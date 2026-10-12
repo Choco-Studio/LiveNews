@@ -220,6 +220,7 @@
       "crosses": 2,
       "experts": ["omar", "clara", "dev", "amara", "leo", "ines"],
       "analyses": 1,
+      "restage": 1,
       "boards": ["known", "timeline", "change"],
       "numberSlot": "main",
       "chats": {
@@ -288,6 +289,7 @@
       "experts": ["june"],
       "resident": "june",
       "analyses": 1,
+      "restage": 1,
       "categories": [
         "tech",
         "science"
@@ -392,6 +394,7 @@
       "experts": ["tomas", "dev"],
       "resident": "tomas",
       "analyses": 1,
+      "restage": 1,
       "categories": [
         "science",
         "tech"
@@ -485,6 +488,7 @@
       "experts": ["omar"],
       "resident": "omar",
       "analyses": 1,
+      "restage": 1,
       "categories": [
         "business"
       ],

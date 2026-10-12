@@ -280,7 +280,8 @@ describe('server/index.js: HTTP API of a running channel', () => {
       assert.equal(first.program.id, real.rotation[0]);
       assert.deepEqual(first.cast, { A: real.programs[first.program.id].presenters[0], B: real.programs[first.program.id].presenters[1] });
       assert.equal(first.provider, 'mock');
-      assert.deepEqual(first.pipeline.map((p) => p.stage), ['pictures', 'write', 'review', 'assets']);
+      // (IN THEIR WORDS, re-staged, after the review on a programme that opts in: config `restage`)
+      assert.deepEqual(first.pipeline.map((p) => p.stage), ['pictures', 'write', 'review', ...(real.programs[first.program.id].restage ? ['guests'] : []), 'assets']);
       assert.equal(first.segments[0].type, 'intro');
       assert.equal(first.segments.at(-1).type, 'outro');
       assert.ok(first.storyIds.length >= 1 && first.storyIds.length <= real.programs[first.program.id].stories);

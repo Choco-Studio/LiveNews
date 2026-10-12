@@ -119,7 +119,7 @@ The two-way crops round the head (176 x 99), so each studio also reads in that b
 
 - The owner's approval of the names, looks and voices (WAVE3 §13).
 - Laughter in the exchanges (LISTA decision 5: "pueden reírse en las charlas") is off: the three synthetic chuckles were rejected by the owner (12 Oct), so nobody laughs on air until a truly natural sound exists (LISTA item 14).
-- The guests of WAVE3 §3.6 (re-staged public figures, IN THEIR WORDS, AI-built looks) are a separate piece of work. The experts here are the roster only.
+- The guests of WAVE3 §3.6: the re-staged public figures are on air (section 9, IN THEIR WORDS); AI-built likenesses (`likeness: 'caricature'`, a FaceSpec) are not.
 - The demo feeds carry a story for every desk (the Pacific tuna treaty for Clara, the Amsterdam night-flights ruling for Ines, the Cairo boats exhibition and the Seoul drone show for Leo, the probe, the telescope and the rover for Tomas). With the real writer and real news, more stories qualify, and a second analysis can be allowed per programme (`analyses: 2`).
 
 ## Grave stories (decision 3, owner 12 Oct: "se presentan con respeto pero bien")
@@ -130,3 +130,32 @@ The two-way crops round the head (176 x 99), so each studio also reads in that b
   - Never a guess at causes or blame, and never a figure of the dead or hurt the source does not give.
 - IN THEIR WORDS re-staging (`server/guests/restage.js`): in a grave story, only an official or a politician speaking in their role. They are staged soberly (`grave: true`, a serious expression). Victims, relatives and witnesses are never re-staged.
 
+
+## 9. IN THEIR WORDS: re-staged guests (owner 12 Oct: "llevarlo a un nivel superior")
+
+When a story quotes a person in a public role, that person appears in a press room and says their own exact public words, as a clearly labelled RECREATION. The server side (who may be re-staged, the booking, the hand-over, the audit) is `server/guests/restage.js` and the producer's `guests` stage; the rules are WAVE3 §6. This section is what the viewer sees.
+
+- **On air:** a programme opts in with `restage` (0 to 2) in `config/channel.json`; WORLD NOW, TECH BYTES, COSMOS DESK and MONEY MINUTE have `restage: 1`. `RESTAGE=0` turns every recreation back into the quote card.
+- **The sequence** (`public/js/director.js`):
+  1. the presenter reads the story; its last sentence is the hand-over that says where the words come from ("In the words of the spokesperson, as reported by Circuit Weekly:"). It is read to camera on the presenter's own shot (a picture or a card on air cuts back to the close); no quote card, because the person is about to say those words;
+  2. the cut to the person, full frame in the press room (the Stage's LOCATION shot), once the programme's shot floor allows; the label and the name super are on screen with the cut itself, and the first word comes 0.4 s later;
+  3. the words, in the voice the server recorded for the booking (a generic synthetic blend, never an imitation), exactly as the source has them, in the captions too;
+  4. the next segment cuts back to the studio, once the guest's shot has had the programme's floor (a one-line piece holds the person a moment after their last word). No B-roll, no two-way, no question and no thanks. No caption crosses the cut either way: the presenter's last line never sits under the guest.
+  - Without the v2 Stage (the old renderer draws no guest) the words play over their quote card, still labelled. A piece whose booking was lost is labelled from its own source. A recreation is never on screen without its label.
+- **The label** (`public/js/graphics/recreation.js`), static from the first frame of the piece to the last (no wipe that could leave a frame without it):
+  - under the clock: RECREATION on a yellow plate, "— WORDS FROM PUBLIC STATEMENTS" white on black, and "SOURCE: <OUTLET>" on its own plate below, all in body type;
+  - the name super in the strap's place: the role on the programme's accent tag (IN THEIR WORDS when the source names a role only), the name on the ink bar;
+  - the story's strap is gone on the first frame (never leaving over the guest), a breaking item waits, the captions sit above the name super, one line at a time.
+- **The look** (`public/js/v2/canvas25d/cast/guest.js`): the booking's LookSpec v1 drawn on the channel's proven parts.
+  - Hair by style: Paco's side parting, Sam's crop, Max's textured quiff, Lola's bob, Mika's fringed bob, Ada's long straight hair, Penny's sleek pull-back (bun, ponytail), Nova's coils (a short halo), and the experts' receding crop, pixie, high-top, mop, waves and braids; plus a bald crown with clipped sides of its own.
+  - Skin: the six spec tones on the palette's warm ramps (porcelain, light, medium, tan, brown, deep; deep lit like Nova's). Beards are Max's (a close one for stubble), moustaches Paco's, glasses FACES' (rect or round).
+  - Face: a generic adult face seeded from the id inside narrow ranges (never a caricature), heavier lids with age, no resting smile.
+  - Wear: a suit with a plain tie or an open collar, a blazer over a top, a tailored jacket over a blouse, in navy, charcoal, slate, brown or plum (never red, green or cyan). No earpiece and no lapel microphone: those mark the channel's own people.
+  - **Never a twin of the cast:** a guest whose hair has the same drawer (or a related one) and colour family as a presenter, correspondent or expert, and shares one more cue (the skin's group, glasses, a beard or a moustache), takes the style's next drawer, else the next colour, else the other frame, else no glasses. For the seven anchors the same hair in the same colour family is enough. Over 3,000 seeded bookings: no twin, about 6 % drawn a colour off the spec and fewer than 1 % with other glasses.
+  - Deterministic for the booking (same id and spec, same pixels), cached by id (the last 32 looks). `lookFor()` returns it for any `rp_` id or `kind: 'restaged'` booking, and a guest never falls back to Paco or Lola.
+  - Materials are shared by colour (`base.js` `matKeys`: `guest:<part>:<colour>`), so hundreds of guests add at most ~200 entries to the material table, once.
+- **The press room** (`public/js/v2/canvas25d/studio/press.js`, built with the experts' studio kit): fabric panels in a quiet blue-grey over a navy wainscot, one broad soft wash, a plain plaque on the right third (two rings round an abstract diamond: no words, no flag, nobody's real mark), and in front of the speaker a lectern (wood, or brushed steel before a brown suit) with five microphones on goosenecks below the chin (blank windshields and cubes, no broadcaster's logo). Nothing moves. The grave variant is darker and cooler, with no colour on the cubes.
+- **Performance:** a neutral face (serious in a grave story, whatever the cue says), small head dips at sentence starts at most every 6.5 s (rarer when grave), no hands (they are behind the lectern), no smile, no sounds; blinks and breath as everyone.
+- **Lab:** `public/lab/guests.html` shows the bookings in `public/lab/guests.json` (written by `node tools/guests-lab.mjs` with the server's own `bookGuest`) in the press room through the real Stage and graphics; `?guest=3`, `?grave=1`, `?graphics=0`, `?still=1`, and `window.__lab.show(i, t)` for `tools/shoot.mjs --step`.
+- **Files:** `cast/guest.js` (looks), `studio/press.js` (the room), `runtime/stage.js` (`remoteCut`, `drawRemote`, the guest's face and nods), `graphics/recreation.js` (label and name super), `graphics/index.js` (the strap's place, captions), `director.js` (`remoteOf`, `playRestage`, the hand-over), `test/guests-screen.test.js`.
+- **Open:** the owner's look at the press room and a few guests; named people with a checked identity keep a generic look (`likeness: 'none'`), never a portrait.
