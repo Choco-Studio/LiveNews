@@ -26,8 +26,8 @@
     </main>
     <script type="module">
       // The weather centre without the playout: the server's weather script (/api/tools/weather, the same desk and
-      // writer as on air), each segment on its own clock; marks fire spread over the segment as a voice would reach
-      // them. window.renderAt(index, seconds, { from, hot }) draws one deterministic frame (tools, screenshots);
+      // writer as on air), each segment on its own clock; marks, pins and the close-up's gestures fire as a voice
+      // reading at 15 characters a second would reach them. window.renderAt(index, seconds, { from, hot }) draws one deterministic frame (tools, screenshots);
       // window.perfWeather(index, seconds) the weather frame's cost, window.flickerWeather(index, seconds) its flicker.
       import { drawWeather, WALK } from '/js/scenes/weather/index.js';
       import { warmMapData } from '/js/scenes/worldmap.js';
@@ -51,7 +51,7 @@
       let clock = null; // { t0, index }
       function setSeg(index, since) {
         const seg = ep.segments[index];
-        scene.weather = { data: ep.weather, seg, index, since, dur: seg.text.length / SPEAK, hot: null, hotAt: 0, pin: null, pinAt: 0 };
+        scene.weather = { data: ep.weather, seg, index, since, dur: seg.text.length / SPEAK, hot: null, hotAt: 0, pin: null, pinAt: 0, gesture: null, gestureAt: 0 };
         document.getElementById('text').textContent = seg.text;
       }
       function frame(t) {
@@ -72,6 +72,10 @@
               scene.weather.pin = p;
               scene.weather.pinAt = clock.t0 + at;
             }
+          }
+          for (const g of seg.gestures || []) {
+            const at = g.char / SPEAK;
+            if (el >= at && scene.weather.gestureAt < clock.t0 + at) Object.assign(scene.weather, { gesture: g, gestureAt: clock.t0 + at });
           }
           scene.subtitle = seg.text.split(/(?<=[.!?])\s+/).find((s, i, all) => all.slice(0, i + 1).join(' ').length / SPEAK >= el) || null;
           if (el > len + 0.6) {
@@ -120,6 +124,7 @@
           if (hot) return;
           for (const m of seg.marks || []) if (el >= m.char / SPEAK && scene.weather.hotAt < base + m.char / SPEAK) Object.assign(scene.weather, { hot: m.city, hotAt: base + m.char / SPEAK });
           for (const p of seg.pins || []) if (el >= p.char / SPEAK && scene.weather.pinAt < base + p.char / SPEAK) Object.assign(scene.weather, { pin: p, pinAt: base + p.char / SPEAK });
+          for (const g of seg.gestures || []) if (el >= g.char / SPEAK && scene.weather.gestureAt < base + g.char / SPEAK) Object.assign(scene.weather, { gesture: g, gestureAt: base + g.char / SPEAK });
         };
         if (hot) {
           scene.weather.hot = hot;

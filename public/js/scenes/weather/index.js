@@ -25,7 +25,8 @@ import { P } from '../../palette.js';
 import { drawText, measureText } from '../../font.js';
 import { viewMapPixels } from '../worldmap.js';
 import { temperatureField, tempColor, RAMP } from './field.js';
-import { drawIcon, drawCyclone } from './icons.js';
+import { drawIcon } from './icons.js';
+import { drawStormCloud, stormRadius } from './storm.js';
 import { Standing } from '../../v2/canvas25d/runtime/standing.js';
 import { liveSpeech } from '../../v2/canvas25d/speech.js';
 import { Presenter } from './presenter.js';
@@ -61,6 +62,11 @@ const PAN = 0.1; // the camera follows a tenth of his walk (the wall slides the 
 const MCUP = { scale: 1.9, neckY: 101, left: 112, right: 272 };
 const WORLD = { lat: 14, lon: 12, zoom: 1.12 };
 const SKY_DRIFT = 0.12; // sky hours a second the cloud texture keeps drifting outside a time-lapse
+// the smallest radius (px) of a cyclone's cloud on the world graphic and the wall: a symbol stays legible however
+// far out the view (a category 2 is 6 px at the world's scale)
+const STORM_MIN = { graphic: 10, wall: 9, soft: 3.5 };
+/** A cyclone's radius in a picture's px (its symbol's, storm.js). */
+const stormPx = (s, scale, min) => Math.max(min, stormRadius(s.cat?.cat ?? s.cat) * scale);
 
 const ease = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u < 0.5 ? 2 * u * u : 1 - 2 * (1 - u) * (1 - u));
 const easeOut = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : 1 - (1 - u) ** 3);
@@ -327,7 +333,7 @@ function drawCity(ctx, t, c, x, y, day, { names, hot, hotK, phase, area }) {
  * The cities on the wall or the graphic: `proj(lat, lon)` -> screen { x, y } | null. A zone shows all its cities
  * with their names; the world shows the ones the voice has named (and, with `all`, every city that has room).
  */
-function drawCities(ctx, t, data, seg, { proj, zone, day, hotId, hotK, area, avoid = null, named = null, all = false }) {
+function drawCities(ctx, t, data, seg, { proj, zone, day, hotId, hotK, area, avoid = null, named = null, all = false, reveal = null }) {
   const where = new Map();
   const list = [];
   const zoneIds = zone ? new Set(zone.cities.map((c) => c.id)) : null;
@@ -355,7 +361,20 @@ function drawCities(ctx, t, data, seg, { proj, zone, day, hotId, hotK, area, avo
   shown.sort((a, b) => (a.c.id === hotId) - (b.c.id === hotId) || a.y - b.y);
   for (const it of shown) BOX.push([it.x - 8, it.y - 7, it.x + 8, it.y + 7]);
   // a zone names all its cities; the world names the places the voice has named (who knows where Nuuk is)
-  shown.forEach((it, i) => drawCity(ctx, t, it.c, it.x, it.y, day, { names: !!zoneIds || !!named?.has(it.c.id), hot: it.c.id === hotId, hotK, phase: i * 0.37, area }));
+  // reveal(i): how far in (0..1) the i-th city from the west is; one partly in is wiped down from the top
+  const west = reveal ? new Map([...shown].sort((a, b) => a.x - b.x).map((it, i) => [it, i])) : null;
+  shown.forEach((it, i) => {
+    const r = reveal ? reveal(west.get(it)) : 1;
+    if (r <= 0) return;
+    if (r < 1) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(it.x - 70, it.y - 32, 140, Math.round(64 * easeOut(r)));
+      ctx.clip();
+    }
+    drawCity(ctx, t, it.c, it.x, it.y, day, { names: !!zoneIds || !!named?.has(it.c.id), hot: it.c.id === hotId, hotK, phase: i * 0.37, area });
+    if (r < 1) ctx.restore();
+  });
   return where;
 }
 
@@ -662,8 +681,10 @@ function present(ctx) {
 }
 
 /**
- * The wall's picture: the map of the view with the sky over it (the moment `sky`, the texture at opts.tau). While
- * the view holds still the sky is recomposed 15 times a second (the frame between keeps the last picture).
+ * The wall's picture: the map of the view with the sky over it (the moment `sky`, the texture at opts.tau), and the
+ * tropical cyclones of the warnings over that (storm.js: a symbol in the cloud's veils, turning; opts.stormMin its
+ * smallest radius in px). While the view holds still it is recomposed 15 times a second (the frame between keeps the
+ * last picture).
  */
 const PICS = new Map(); // buffer -> { clon, clat, s, kx, step }
 function wallPicture(out, w, h, view, field, sky, opts, t = 0) {
@@ -683,9 +704,50 @@ function wallPicture(out, w, h, view, field, sky, opts, t = 0) {
   t0 = now();
   if (sky) composeSky(out, m.u32, w, h, v, ST.sky, sky, opts);
   else out.set(m.u32);
+  for (const s of cyclones(ST.key)) drawStormCloud(out, m.u32, w, h, v, s, t, { minR: opts.stormMin || 0 });
   prof('sky', t0);
   ST.picN = (ST.picN || 0) + 1; // a new picture (the set redraws the wall from it)
   return v;
+}
+
+/** The report's tropical cyclones (GDACS's, with a place), cached per report. */
+const CYCLONES = new WeakMap();
+function cyclones(data) {
+  if (!data) return [];
+  let c = CYCLONES.get(data);
+  if (!c) CYCLONES.set(data, (c = (data.warnings || []).filter((w) => w.type === 'cyclone' && Number.isFinite(w.lat) && Number.isFinite(w.lon))));
+  return c;
+}
+
+/** Each cyclone's core (screen px, rOf its radius) taken in BOX, so no high, low or chip covers it. */
+function claimStorms(proj, rOf) {
+  for (const s of cyclones(ST.key)) {
+    const p = proj(s.lat, s.lon);
+    if (!p) continue;
+    const r = rOf(s) * 0.55;
+    BOX.push([p.x - r, p.y - r, p.x + r, p.y + r]);
+  }
+}
+
+/**
+ * A storm's name under its cloud on the world and the zones (micro type on a black plate, the cards' language), where
+ * it has room; the warning shot's panel names it there.
+ */
+function drawStormTags(ctx, proj, area, rOf) {
+  for (const s of cyclones(ST.key)) {
+    if (!s.name) continue;
+    const p = proj(s.lat, s.lon);
+    if (!p) continue;
+    const label = s.name.toUpperCase();
+    const tw = measureText(label, 1, 'micro') + 4;
+    const x = Math.round(p.x - tw / 2), y = Math.round(p.y + rOf(s) * 0.85 + 1);
+    if (x < area.x0 || x + tw > area.x1 || y < area.y0 || y + 7 > area.y1) continue;
+    if (overlapArea(x, y, x + tw, y + 7) > 0) continue;
+    ctx.fillStyle = P.black;
+    ctx.fillRect(x, y, tw, 7);
+    drawText(ctx, label, x + 2, y + 1, { color: P.white, font: 'micro' });
+    BOX.push([x - 1, y - 1, x + tw + 1, y + 8]);
+  }
 }
 
 /** The layers at the segment's moment (a zone settling back mixes its last hour with now). */
@@ -803,13 +865,8 @@ export function drawWeather(ctx, t, scene, audio) {
     ST.spoken = new Map();
     ST.pinId = null;
     ST.gateSeg = null; // the voice gate starts again (voiceGate)
-    // the cloud texture's wind clock starts again with each segment (a long run would shear it into streaks): at
-    // the cut, or halfway along the wall's flight to the next zone, where the move hides the change
-    ST.tauReset = cut ? since : since + ST.moveDur / 2;
-  }
-  if (ST.tauReset != null && t >= ST.tauReset) {
-    ST.tau = 0;
-    ST.tauReset = null;
+    // (the cloud's wind clock, ST.tau, runs on through the programme: the flow map (sky.js FLOW) never carries a
+    // shape long enough for the shear to draw it into streaks, so it no longer starts again at each segment)
   }
   // the places and the highs and lows the voice has reached
   if (W8.hot && W8.hotAt !== ST.lastHotAt) {
@@ -836,7 +893,7 @@ export function drawWeather(ctx, t, scene, audio) {
 
   if (shot === 'graphic') drawGraphic(ctx, t, data, seg, tgt, mo, layers, hotId, hotK);
   else if (shot === 'board') drawBoard(ctx, t, data, seg, since, layers);
-  else if (shot === 'mcu') drawCloseup(ctx, t, rt, data, seg, tgt, layers);
+  else if (shot === 'mcu') drawCloseup(ctx, t, rt, data, seg, tgt, layers, W8);
   else drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8);
 
   // the wipe: the old shot's last frame slides off behind an accent bar
@@ -872,7 +929,7 @@ export function drawWeather(ctx, t, scene, audio) {
 // ------------------------------------------------------------------------------------------- graphic
 function drawGraphic(ctx, t, data, seg, tgt, mo, layers, hotId, hotK) {
   const field = fieldFor(data, tgt.day);
-  const v = wallPicture(GB, W, H, tgt.view, field, layers, { tau: ST.tau, isobars: true, isoColor: PK.fog, opacity: 0.9 }, t);
+  const v = wallPicture(GB, W, H, tgt.view, field, layers, { tau: ST.tau, isobars: true, isoColor: PK.fog, opacity: 0.9, stormMin: STORM_MIN.graphic }, t);
   FB.set(GB);
   ST.fbFor = 'graphic';
   let t0 = now();
@@ -895,9 +952,13 @@ function drawGraphic(ctx, t, data, seg, tgt, mo, layers, hotId, hotK) {
   }
   BOX.push(drawSource(ctx, data, W - 13, 25));
   const area = { x0: 4, x1: W - 4, y0: 24, y1: 168 };
+  // a cyclone's core is kept clear of the highs and lows and the chips; its name goes under it once they are placed
+  const rOf = (s) => stormPx(s, v.s, STORM_MIN.graphic);
+  claimStorms(proj, rOf);
   drawSystems(ctx, t, ST.sky, systemsHour(mo), proj, area);
   const named = new Set([...ST.spoken.keys()]);
   drawCities(ctx, t, data, seg, { proj, zone: null, day: tgt.day, hotId, hotK, area, named, all: !ST.sky });
+  drawStormTags(ctx, proj, area, rOf);
   prof('overlay', t0);
 }
 
@@ -914,7 +975,7 @@ function drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8
   ST.view = { lat: lerp(ST.from.lat, ST.to.lat, k), lon: ST.from.lon + wrap(ST.to.lon - ST.from.lon) * k, zoom: Math.max(1, zoom) };
   CAM.set((pr.x - W / 2) * PAN);
   const field = fieldFor(data, tgt.day);
-  const v = wallPicture(WB, CAM.wbw, CAM.wbh, ST.view, field, layers, { tau: ST.tau, isobars: false, opacity: 0.8 }, t);
+  const v = wallPicture(WB, CAM.wbw, CAM.wbh, ST.view, field, layers, { tau: ST.tau, isobars: false, opacity: 0.8, stormMin: STORM_MIN.wall }, t);
   const warning = tgt.shot === 'warning';
   let t0 = now();
   // the set and the wall again only when the picture or the camera changed (the frame keeps them otherwise)
@@ -951,8 +1012,8 @@ function drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8
     BOX.push(drawSource(ctx, data, Math.round(fx1 - pan), topY + 16));
   }
   const area = { x0: 4, x1: W - 4, y0: glassTop + 4, y1: CAM.yB - 4 };
-  // the cities (a zone once the camera is nearly there), the highs and lows in view
-  const zoneOn = tgt.zone && k > 0.55;
+  // the cities (a zone once he has arrived beside them), the highs and lows in view
+  const zoneOn = tgt.zone && (ST.chipsFor === seg || (k >= 1 && !walking)); // (once in, they stay for his steps)
   let where = new Map();
   let stormXY = null;
   const panel = warning ? ease((t - ST.moveAt - 0.3) / 0.9) : 0;
@@ -960,14 +1021,24 @@ function drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8
   if (warning && tgt.warning) panelRect = drawWarningPanel(ctx, t, panel, tgt.warning, data, Math.round(W - 18 - pan), glassTop + 8);
   if (panelRect) BOX.push(panelRect);
   const nearHim = (x, y) => Math.abs(x - pr.x) < 36 && y > WALLP.neckY - 40;
+  // a cyclone's cloud is in the wall's picture (storm.js); its core is kept clear of the highs, lows and chips
+  const rOf = (s) => stormPx(s, v.s, STORM_MIN.wall);
+  if (k >= 1 || warning) claimStorms(proj, rOf);
   // the highs and lows once the wall has arrived (in the move they would flicker past at every zoom), rising in
   if (k >= 1) drawSystems(ctx, t, ST.sky, systemsHour(mo), proj, { x0: 4, x1: panelRect ? panelRect[0] - 4 : W - 4, y0: area.y0, y1: area.y1 }, { avoid: nearHim, reveal: (t - ST.moveAt - ST.moveDur) / 0.3 });
-  if (zoneOn) where = drawCities(ctx, t, data, seg, { proj, zone: tgt.zone, day: tgt.day, hotId, hotK, area });
+  if (zoneOn) {
+    // the zone's cities come in once he has arrived beside them (walking over from the last zone he would cross
+    // their chips), wiped down one after another from west to east as the cards come in
+    if (ST.chipsFor !== seg) [ST.chipsFor, ST.chipsAt] = [seg, t];
+    const t0c = ST.chipsAt;
+    where = drawCities(ctx, t, data, seg, { proj, zone: tgt.zone, day: tgt.day, hotId, hotK, area, reveal: (i) => (t - t0c - i * 0.06) / 0.24 });
+  }
+  if (zoneOn && k >= 1) drawStormTags(ctx, proj, { ...area, x1: W - 4 }, rOf);
   if (warning && tgt.warning) {
     const w = tgt.warning;
     const p = proj(w.lat, w.lon);
-    if (w.type === 'cyclone') drawCyclone(ctx, p.x, p.y, t, Math.round(lerp(7, 14, panel)), { south: w.lat < 0 });
-    else {
+    // a cyclone is its cloud on the wall; any other hazard a square of its alert colour at its place
+    if (w.type !== 'cyclone') {
       ctx.fillStyle = LEVEL_COLOR[w.level] || P.orange;
       ctx.fillRect(Math.round(p.x) - 3, Math.round(p.y) - 3, 7, 7);
     }
@@ -1005,7 +1076,7 @@ function drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8
   pr.draw(ctx, rt, (px) => {
     prof('rig', t0);
     const t1 = now();
-    lightFigure(px, { rim, spill: 2, both: 0, from: pr.x - 80, to: pr.x + 80 });
+    lightFigure(px, { rim, spill: 2, both: 0, from: pr.x - 80, to: pr.x + 80, litTo: CAM.bot[Math.max(0, Math.min(W - 1, Math.round(pr.x)))] });
     prof('light', t1);
     t0 = now();
   });
@@ -1013,23 +1084,86 @@ function drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8
 }
 
 // ------------------------------------------------------------------------------------------- the close-up
-/** The close-up's small gestures: an open hand on a few sentences (not the first, never two in a row too close). */
-function beatsFor(seg, since, dur) {
+/**
+ * The close-up's small beats between his gestures. A script with gestures on its words (seg.gestures: presenter.js,
+ * the writer's cues) keeps a beat only at a sentence's end in a long quiet stretch (3.6 s clear of any gesture on both
+ * sides), a palm lifting beside the body, the hands taking turns; an older script without them gets an open hand on
+ * every other sentence, as before.
+ */
+export function beatsFor(seg, since, dur) {
   const text = String(seg.text || '');
   const len = Math.max(1, text.length);
   const out = [];
   const re = /[.!?]\s+/g;
   let m, n = 0;
+  const cued = Array.isArray(seg.gestures) && seg.gestures.length > 0;
+  if (cued) {
+    const at = seg.gestures.filter((g) => g.kind !== 'nod').map((g) => since + (g.char / len) * dur);
+    const names = [['raise_hand', 'lift'], ['raise_hand', 'lift_far'], ['raise_hand', 'offer']];
+    let k = 0;
+    while ((m = re.exec(text))) {
+      const t = since + ((m.index + m[0].length) / len) * dur + 0.15;
+      if (t > since + dur - 1.6 || at.some((a) => Math.abs(a - t) < 3.6)) continue;
+      const [name, variant] = names[k++ % names.length];
+      out.push({ at: t, name, variant });
+    }
+    return out;
+  }
   const names = [['raise_hand', 'offer'], ['raise_hand', 'lift'], ['point_screen', 'open'], ['raise_hand', 'box']];
   while ((m = re.exec(text))) {
     const at = since + ((m.index + m[0].length) / len) * dur + 0.15;
-    if (n % 2 === 0 && at < since + dur - 1.5) out.push({ at, name: names[(n >> 1) % names.length][0], variant: names[(n >> 1) % names.length][1] });
+    if (n % 2 === 0 && at < since + dur - 1.6) out.push({ at, name: names[(n >> 1) % names.length][0], variant: names[(n >> 1) % names.length][1] });
     n++;
   }
   return out;
 }
 
-function drawCloseup(ctx, t, rt, data, seg, tgt, layers) {
+/**
+ * Where a close-up gesture's place is on screen: on the out-of-focus wall behind him (the small picture `v` shown 6x),
+ * kept on the open side of the frame, the side he faces into (a place behind him or past the wall's far end is shown
+ * at the open side's height for it). -> { x, y }
+ */
+export function closeupTarget(v, lat, lon, px, side) {
+  let x = px + side * 150, y = 112;
+  if (v && Number.isFinite(lat) && Number.isFinite(lon)) {
+    x = (SW / 2 + wrap(lon - v.clon) * v.s * v.kx) * 6;
+    y = (SH / 2 + (v.clat - lat) * v.s) * 6;
+  }
+  const lo = side > 0 ? px + 70 : 40, hi = side > 0 ? W - 42 : px - 70;
+  if (!(x >= lo && x <= hi)) x = Math.max(lo, Math.min(hi, px + side * 150));
+  return { x, y: Math.max(64, Math.min(160, y)) };
+}
+
+/** A gesture cue (seg.gestures) as the voice reaches it: the presenter's own gesture for it (presenter.js). */
+function playCue(pm, g, rt, v) {
+  const perf = ST.standing.actor.perf;
+  const side = perf.side || 1;
+  if (g.kind === 'nod') {
+    // a small nod with his name (a head gesture: the hands are free)
+    perf.gestures = [...(perf.gestures || []).filter((e) => rt - e.t0 < 3).slice(-2), { name: 'nod', variant: 'single', t0: rt }];
+    return true;
+  }
+  if (g.kind === 'place') {
+    const p = closeupTarget(v, g.lat, g.lon, pm.x, side);
+    return pm.gesture('place', rt, { tx: p.x, ty: p.y, gap: 1.6 });
+  }
+  if (g.kind === 'world') return pm.gesture('world', rt, { variant: g.variant, gap: 1.6 });
+  if (g.kind === 'sweep') {
+    // toward the wall's open side, a little rising (the trip round the world); or from one place to the other as
+    // they lie on the wall (a contrast)
+    let dx = side, dy = -0.12;
+    if (g.from && g.to && v) {
+      const at = (p) => ({ x: (SW / 2 + wrap(p.lon - v.clon) * v.s * v.kx) * 6, y: (SH / 2 + (v.clat - p.lat) * v.s) * 6 });
+      const a = at(g.from), b = at(g.to);
+      if (Math.hypot(b.x - a.x, b.y - a.y) > 4) [dx, dy] = [b.x - a.x, b.y - a.y];
+    }
+    return pm.gesture('sweep', rt, { dx, dy, gap: 1.6 });
+  }
+  if (g.kind === 'count') return pm.gesture('count', rt, { n: g.n, gap: 1.6 });
+  return false;
+}
+
+function drawCloseup(ctx, t, rt, data, seg, tgt, layers, W8) {
   const pm = ST.closeup;
   const perf = ST.standing.actor.perf;
   // the wall behind him, out of focus: a small picture of the world (the big story's place for the opening)
@@ -1037,7 +1171,7 @@ function drawCloseup(ctx, t, rt, data, seg, tgt, layers) {
   const w0 = data.warnings?.[0];
   const right = tgt.side === 'right';
   const view = seg.kind === 'headline' && w0 ? { lat: w0.lat + 6, lon: w0.lon + (right ? 40 : -40), zoom: 2.2 } : { lat: 22, lon: right ? -20 : 40, zoom: 1.6 };
-  wallPicture(SB, SW, SH, view, field, layers, { tau: ST.tau, isobars: false, opacity: 0.4 }, t);
+  const v = wallPicture(SB, SW, SH, view, field, layers, { tau: ST.tau, isobars: false, opacity: 0.4, stormMin: STORM_MIN.soft }, t);
   let t0 = now();
   softWall(FB, SB, SW, SH, { k: 6, dim: 0 });
   ST.fbFor = 'mcu';
@@ -1055,7 +1189,11 @@ function drawCloseup(ctx, t, rt, data, seg, tgt, layers) {
       else FB[o] = i >= 19 && i <= 21 ? (i === 20 ? PK.blue : PK.navy) : i === 18 || i === 22 ? (0.5 > bay ? PK.navy : PK.ink) : PK.ink;
     }
   }
-  // small open-hand beats on his sentences
+  // his gestures on their words as the voice reaches them (seg.gestures), and the small beats between
+  if (W8?.gesture && W8.gestureAt !== ST.lastGestureAt) {
+    ST.lastGestureAt = W8.gestureAt;
+    if (seg.gestures?.includes(W8.gesture)) playCue(pm, W8.gesture, rt, v);
+  }
   for (const b of ST.beats) {
     if (!b.done && t >= b.at) {
       b.done = true;
@@ -1110,4 +1248,4 @@ function currentHot() {
   return last;
 }
 
-export const __test = { targetOf, zoneView, ST, shotOf, skyMoment, voiceGate, fitView, FREE, MARK };
+export const __test = { targetOf, zoneView, ST, shotOf, skyMoment, voiceGate, fitView, FREE, MARK, beatsFor, closeupTarget };

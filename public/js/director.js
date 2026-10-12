@@ -829,13 +829,13 @@ export class Director {
    * WORLD WEATHER: one segment in the weather centre (scenes/weather). The weather centre cuts between its own
    * shots (seg.shot: the close-up, the world graphic, the wall, the boards, the warning) inside this one director
    * shot. A city lights up (he points at it, a board lights its row) when the voice reaches its name (seg.marks);
-   * a high or low rings when it is named (seg.pins).
+   * a high or low rings when it is named (seg.pins); the close-up's gestures start on their words (seg.gestures).
    */
   async playWeather(seg, index) {
     const s = this.scene;
     s.lowerThird = null;
     if (s.shot !== 'weather') this.setShot('weather', { storyId: null, card: null, focus: seg.anchor });
-    s.weather = { data: this.episode?.weather || null, seg, index, since: now(), dur: estimateSeg(seg), hot: null, hotAt: 0, pin: null, pinAt: 0 };
+    s.weather = { data: this.episode?.weather || null, seg, index, since: now(), dur: estimateSeg(seg), hot: null, hotAt: 0, pin: null, pinAt: 0, gesture: null, gestureAt: 0 };
     // the opening close-up names the presenter (the strap enters a beat after the cut and leaves after a few
     // seconds, as a name super does)
     if (seg.kind === 'headline' && seg.shot === 'mcu') {
@@ -846,16 +846,18 @@ export class Director {
         if (s.lowerThird === strap) s.lowerThird = null;
       }, (pace(s).strap.inAfterCut + 6) * 1000);
     }
-    // the places and the highs and lows in the order the voice reaches them
+    // the places, the highs and lows and the gestures in the order the voice reaches them
     const cues = [
       ...(Array.isArray(seg.marks) ? seg.marks : []).map((m) => ({ char: m.char, city: m.city })),
       ...(Array.isArray(seg.pins) ? seg.pins : []).map((p) => ({ char: p.char, pin: p })),
+      ...(Array.isArray(seg.gestures) ? seg.gestures : []).map((g) => ({ char: g.char, gesture: g })),
     ].sort((a, b) => a.char - b.char);
     await this.say(seg, null, {
       marks: cues.map((m) => m.char),
       onMark: (i) => {
         if (s.weather?.seg !== seg || !cues[i]) return;
         if (cues[i].pin) Object.assign(s.weather, { pin: cues[i].pin, pinAt: now() });
+        else if (cues[i].gesture) Object.assign(s.weather, { gesture: cues[i].gesture, gestureAt: now() });
         else Object.assign(s.weather, { hot: cues[i].city || null, hotAt: now() });
       },
     });

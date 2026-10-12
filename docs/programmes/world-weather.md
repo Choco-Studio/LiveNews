@@ -164,6 +164,7 @@ Each segment adds:
 - `shot`: `'mcu' | 'wall' | 'graphic' | 'board' | 'warning'`
 - `marks`: `[{ char, city }]`. The city is a zone city (the map lights it) or any place on a board (the board lights its row).
 - `pins`: `[{ char, kind, lat, lon }]`. A high or low named at that character.
+- `gestures` (round 4, the close-up's): `[{ char, kind: 'place' | 'world' | 'sweep' | 'count' | 'nod', lat?, lon?, variant?, from?, to?, toward?, n? }]`. Each is placed at the start of the phrase whose stressed word its stroke lands on.
 - `timelapse`: `{ from, to }` in hours of the sky (the world: 0 to 24; a zone: 0 to 12).
 - `board`:
   - HOT & COLD: `{ kind: 'hotcold', hot, cold }`
@@ -219,6 +220,44 @@ The picture is built in the frame's own pixels (palette colours only, Bayer 4×4
   - the boards 1.1–2.7.
 
   Round 2's single shot measured 2.9–7.3 ms in the same run. The sky compositor alone costs about 4 ms for a full 384 × 216 frame in node (the recorded sky); the 15-per-second recompose halves it on average. `window.flickerWeather(index, seconds)` counts the pixels that flip and flip back within two frames: none to five per frame on every shot.
+
+### Round 4 (12 Oct): to broadcast standard
+
+What still fell short after round 3, and what replaced it:
+
+- **The cloud drew out into streaks late in the world's time-lapse.** The texture was carried by the wind for the whole run (`p − wind × 24 h`), so wherever the wind shears (the westerlies at 45–65°, the Southern Ocean, the North Pacific) it was stretched into long fibres by hour 15.
+  - Now a **flow map** (`sky.js` `flowPhases`): the texture is carried in two phases half a period (8 sky hours) apart. Each is displaced at most 3 hours of wind either side of its own start, travels downwind, fades out, and starts again elsewhere on the texture while the other carries the picture. No shape is carried long enough to be drawn out.
+  - The cross-fade (half of each half-period, eased) blends the two phases in the normal space of the texture's ranks, over their true spread (the texture's correlation with itself at the two samples' shift, tabulated per mip), then maps the blend through the picture's own distributions (`matchedPhi`, soft histograms of the node grid), so the cover in view is exactly the two phases' covers mixed by their weights. A linear mix would swell or thin the cloud halfway through every fade.
+  - Consecutive runs start 0.38 × 0.32 tiles apart, where the texture is uncorrelated on every mip. One phase alone reads the uniform texture as before.
+  - The west light acts on the slopes over about two pixels and spares the thick cores (a step on every texel's slope drew vertical strokes across an overcast).
+  - The cloud's wind clock now runs on through the programme instead of restarting at each segment.
+  - What remains: in a zone's window of two or three texture tiles, each run places different shapes over the cover field, so a crossfade can move the cloud's share of the view by 2–3 % over about a second of the zone's time-lapse (17 s once settled). That is the cloud evolving, not a pulse; over the world it is under 1 %.
+- **The storm had no cloud.** The 3-degree sky has no cyclone of its own. `storm.js` draws a **symbol in the cloud's veils**:
+  - a clear eye, the densest eyewall, a central dense overcast, and two bands on a logarithmic spiral that trail the turn, thin outward and feather out over a faint haze;
+  - sized by category (a tropical storm 3.5°, about one degree more per category; at least 10 px on the world graphic, 9 on the wall) and turning once every 22 s, anticlockwise in the north and clockwise in the south;
+  - drawn into the wall's picture after the sky, so it rides the curve, the dimming and the floor's reflection. Inside its disc the forecast's cloud gives way to the symbol; the forecast's rain stays on top.
+  - It replaces the spinning icon on the warning shot, appears on the world and the zones when in view (its core kept clear of highs, lows and chips, its name under it on a black plate), and shows out of focus on the opening close-up's wall.
+  - It is a graphic, not observed data: clean bands, GDACS's place, the category's size.
+- **The close-up reused the seated desk beats**, which read as small hand movements at the waist. The writer now cues the close-up's gestures on their words (`seg.gestures`, delivered by the director like marks and pins), and the presenter has a weather presenter's own gestures (`presenter.js`):
+  - **place:** an open hand offered toward the place on the out-of-focus wall, with the arm well out, the palm up, the eyes there first;
+  - **world:** both palms up and out at chest height for the big picture;
+  - **sweep:** the open hand drawn along a movement, the eyes with it;
+  - **count:** the rig's finger count;
+  - **nod:** a nod with his name.
+  - The big story's place gets a hand as it is named (a contrast gets a sweep from one end to the other). "Round the world" gets a sweep, both palms or a count, by edition. The sign-off's "wherever you are" gets both palms, then a hand to the sunshine's city.
+  - Arm gestures are at least 1.6 s apart, each played a touch faster or slower (0.92–1.08). Between cues there is only a rare small beat in a long quiet stretch.
+- **Walking between zones he crossed the new zone's chips.** They now come in once he has arrived beside them, wiped down west to east, and they stay in place through his later steps.
+- **The wall's rim light ran down his legs** against the black plinth. It now thins out below the glass's foot (`lightFigure` `litTo`).
+
+**Cost after round 4**, in the same lab, round 3's code alongside in the same runs (medians; the machine was shared, so runs vary by about ±0.4 ms):
+- The world graphic:
+  - by the lab's `perfWeather` (its voice gate holds the clock): 3.5–4.3 ms (2.8–3.3 before);
+  - over the whole segment, with the marks and pins firing at 15 characters a second (the time-lapse at full speed, half its recomposes in a cross-fade): 4.0–4.6 ms (3.3–3.5).
+- A zone: 3.6–4.3 (3.2–3.9); over the segment 4.0–4.6 (3.4–3.6).
+- The warning: 3.1–3.6 (2.3–2.8), since it now composes the storm.
+- The close-ups: within 0.3 of before.
+- `flickerWeather`: as before (the world 0, a zone 7, the warning 0); the opening close-up 2 (1), its arms now moving more.
+- Each cross-fade's compose costs a second texture read per pixel, about 2 ms of a 4 ms compose in node.
 
 ## 4. Configuration
 

@@ -43,12 +43,27 @@ export const aN = (n) => {
   return v === 8 || v === 11 || v === 18 || (v >= 80 && v <= 89) ? 'an' : 'a';
 };
 
-/** Text with the places it names: parts are strings, { city } (a place: its spoken name) or { pin } (a high or low). */
+/**
+ * Text with the places it names: parts are strings, { city } (a place: its spoken name) or { pin } (a high or low);
+ * and the close-up's gestures on its words (cue).
+ */
 class Line {
   constructor() {
     this.text = '';
     this.marks = [];
     this.pins = [];
+    this.gestures = [];
+  }
+
+  /**
+   * A gesture where the next words start (the close-up, scenes/weather/presenter.js): the cue goes at the start of the
+   * phrase, so the stroke lands on its stressed word half a second on. kind 'place' { lat, lon } (an open hand to it
+   * on the wall), 'world' { variant } (both palms: the big picture), 'sweep' { from, to } or { toward: 'wall' }
+   * (movement), 'count' { n }, 'nod'.
+   */
+  cue(kind, extra = {}) {
+    this.gestures.push({ char: this.text.length, kind, ...extra });
+    return this;
   }
 
   add(...parts) {
@@ -76,7 +91,7 @@ class Line {
   }
 
   done() {
-    return { text: this.text.trim(), marks: this.marks, pins: this.pins };
+    return { text: this.text.trim(), marks: this.marks, pins: this.pins, gestures: this.gestures };
   }
 }
 
@@ -462,23 +477,35 @@ function bigStory(report, places) {
 
 function headlineLine(report, places, { name, title, hasHotCold, hasOutlook }, pick) {
   const L = new Line();
-  L.add(pick(['Hello', 'Hello there', 'Good to have you with us']), `, I'm ${name}, and this is ${title}`).stop();
+  const hello = pick(['Hello', 'Hello there', 'Good to have you with us']);
+  L.add(hello, ', ').cue('nod').add(`I'm ${name}, and this is ${title}`).stop();
   const s = bigStory(report, places);
+  // the big story's place gets an open hand toward it on the wall as it is named; a contrast, a sweep from one end
+  // to the other
+  const at = (p) => ({ lat: p.lat, lon: p.lon });
   if (s?.kind === 'cyclone') {
-    L.add(pick(['The big weather story today: ', 'Top of our watch list today: ']), `Tropical Cyclone ${capName(s.w.name)}`, s.w.cat?.cat ? `, a ${s.w.cat.name} storm` : '', ` over ${s.w.country || seaOf(s.w.lat, s.w.lon)}`).stop();
+    L.add(pick(['The big weather story today: ', 'Top of our watch list today: '])).cue('place', at(s.w)).add(`Tropical Cyclone ${capName(s.w.name)}`, s.w.cat?.cat ? `, a ${s.w.cat.name} storm` : '', ` over ${s.w.country || seaOf(s.w.lat, s.w.lon)}`).stop();
   } else if (s?.kind === 'flood') {
-    L.add(pick(['The big weather story today: ', 'Top of our watch list: ']), `flooding in ${s.w.country}, on ${s.w.level} alert`).stop();
+    L.add(pick(['The big weather story today: ', 'Top of our watch list: '])).cue('place', at(s.w)).add(`flooding in ${s.w.country}, on ${s.w.level} alert`).stop();
   } else if (s?.kind === 'heat') {
-    L.add(pick(['The big story today is the heat: ', 'Extreme heat leads the way today: ']), s.c, ` reaches ${deg(s.c.today.max)} ${UNIT}`).stop();
+    L.add(pick(['The big story today is the heat: ', 'Extreme heat leads the way today: '])).cue('place', at(s.c)).add(s.c, ` reaches ${deg(s.c.today.max)} ${UNIT}`).stop();
   } else if (s?.kind === 'deluge') {
-    L.add(pick(['The big story today is the rain: ', 'A deluge leads the way today: ']), s.c, ` could see ${Math.round(s.c.today.rain)} millimetres`).stop();
+    L.add(pick(['The big story today is the rain: ', 'A deluge leads the way today: '])).cue('place', at(s.c)).add(s.c, ` could see ${Math.round(s.c.today.rain)} millimetres`).stop();
   } else if (s?.kind === 'cold') {
-    L.add(pick(['The big story today is the cold: ', 'A bitter start leads the way: ']), s.c, ` wakes up to ${deg(s.c.today.min)} ${UNIT}`).stop();
+    L.add(pick(['The big story today is the cold: ', 'A bitter start leads the way: '])).cue('place', at(s.c)).add(s.c, ` wakes up to ${deg(s.c.today.min)} ${UNIT}`).stop();
   } else if (s?.kind === 'contrast') {
-    L.add(pick(['A world of contrasts today: from ', 'Quite a range on the planet today: from ']), `${deg(s.hot.today.max)} ${UNIT} in `, s.hot, ` to ${deg(s.cold.today.min)} in `, s.cold).stop();
+    L.add(pick(['A world of contrasts today: from ', 'Quite a range on the planet today: from '])).cue('sweep', { from: at(s.hot), to: at(s.cold) }).add(`${deg(s.hot.today.max)} ${UNIT} in `, s.hot, ` to ${deg(s.cold.today.min)} in `, s.cold).stop();
   }
   const coming = [hasHotCold ? pick(['the hottest and coldest places on Earth', 'our countdown of the planet\'s extremes']) : null, hasOutlook ? 'the next three days' : null].filter(Boolean);
-  L.add(pick(["We'll go round the world", "Coming up, a trip round the world", "We'll take you round the world"]), coming.length ? `, then ${coming.join(' and ')}` : '').stop();
+  // what is coming: the hand sweeps across the wall for the trip round the world, or (an edition in two, by the words
+  // already said, and always after a sweep) both palms open for it; or the fingers count what follows it
+  const trip = pick(["We'll go round the world", "Coming up, a trip round the world", "We'll take you round the world"]);
+  const swept = s?.kind === 'contrast';
+  if (coming.length >= 2 && L.text.length % 3 === 0) L.add(trip, ', then ').cue('count', { n: coming.length }).add(coming.join(' and ')).stop();
+  else {
+    L.cue(swept || L.text.length % 2 ? 'world' : 'sweep', swept || L.text.length % 2 ? { variant: 'wide' } : { toward: 'wall' });
+    L.add(trip, coming.length ? `, then ${coming.join(' and ')}` : '').stop();
+  }
   return L.done();
 }
 
@@ -487,9 +514,15 @@ function outroLine(report, places, { name, channelName }, pick) {
   // a last thought for the viewer from the day's figures: the sunniest warm city, else the wettest, else none
   const warm = places.filter((c) => !c.extra && isSunny(c.today) && isDry(c.today) && c.today.max >= 22 && c.today.max <= 32).sort((a, b) => b.today.max - a.today.max)[0];
   const wet = places.filter((c) => !c.extra && isWet(c.today)).sort((a, b) => b.today.rain - a.today.rain)[0];
-  if (warm && wet) L.add(pick(['Wherever you are, I hope you get ', 'If you can, find yourself ']), warm, `'s sunshine, not `, wet, `'s rain`).stop();
+  if (warm && wet) {
+    // both palms to the viewers wherever they are, then an open hand to the sunshine on the wall (the rain's city
+    // gets the other only if the voice leaves room for it)
+    const wish = pick(['Wherever you are, I hope you get ', 'If you can, find yourself ']);
+    if (wish.startsWith('Wherever')) L.cue('world', { variant: 'near' });
+    L.add(wish).cue('place', { lat: warm.lat, lon: warm.lon }).add(warm, `'s sunshine, not `).cue('place', { lat: wet.lat, lon: wet.lon }).add(wet, `'s rain`).stop();
+  }
   L.add(pick(["That's the world's weather for now", "And that's your world weather", "That's the weather round the world"])).stop();
-  L.add(`I'm ${name}`).stop();
+  L.cue('nod').add(`I'm ${name}`).stop();
   L.add(pick(['Have a good day', 'Enjoy your day, whatever the sky is doing', 'Take care out there'])).stop();
   L.add(`Stay with us on ${channelName}`).stop();
   return L.done();
@@ -516,7 +549,7 @@ export function writeWeather(report, { presenter = { name: 'Sam Night' }, channe
   const places = [...report.zones.flatMap((z) => z.cities), ...(report.extra || [])];
   const hotCold = report.hotCold?.hot?.length >= 3 && report.hotCold?.cold?.length >= 3 ? report.hotCold : null;
   const outlook = outlookCities(report, rand);
-  const seg = (kind, shot, line, extra = {}) => ({ type: 'weather', kind, shot, anchor: 'A', emotion: 'neutral', text: line.text, marks: line.marks, ...(line.pins?.length ? { pins: line.pins } : {}), cues: [], ...extra });
+  const seg = (kind, shot, line, extra = {}) => ({ type: 'weather', kind, shot, anchor: 'A', emotion: 'neutral', text: line.text, marks: line.marks, ...(line.pins?.length ? { pins: line.pins } : {}), ...(line.gestures?.length ? { gestures: line.gestures } : {}), cues: [], ...extra });
   const segments = [seg('headline', 'mcu', headlineLine(report, places, { name, title, hasHotCold: !!hotCold, hasOutlook: outlook.length >= 3 }, pick), { emotion: 'happy' })];
   if (report.sky) segments.push(seg('world', 'graphic', worldLine(report, places, pick), { timelapse: { from: 0, to: report.sky.hours.at(-1) } }));
   // six zones would be a list again: the quietest zones get the short form (two groups, no comparison)

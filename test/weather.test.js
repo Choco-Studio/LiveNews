@@ -794,3 +794,285 @@ describe('the weather centre, round 3: shots, the moving sky, the studio, the bo
     assert.ok(used.has(tempColor(hc.hot[0].value).toLowerCase()), 'a temperature on a chip of its colour');
   });
 });
+
+describe('the weather centre, round 4: cloud that keeps its shape, the storm\'s cloud, the close-up\'s gestures', async () => {
+  const sky = await import('../public/js/scenes/weather/sky.js');
+  const report = await fixtureReport();
+  const S = sky.decodeSky(report.sky);
+  const packed = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    return (0xff000000 | ((n & 255) << 16) | (n & 0xff00) | ((n >> 16) & 255)) >>> 0;
+  };
+  const PALETTE = new Set(Object.values(P).map(packed));
+  // a 70 % cover under a westerly sheared every 20 degrees of latitude (30 m/s one way, then the other)
+  const sheared = (cover = 70) => {
+    const cur = { cloud: new Float32Array(S.n).fill(cover), rain: new Float32Array(S.n), u: new Float32Array(S.n), v: new Float32Array(S.n), mslp: new Float32Array(S.n).fill(1013) };
+    for (let j = 0; j < S.h; j++) for (let i = 0; i < S.w; i++) cur.u[j * S.w + i] = 30 * Math.sin(((S.lat0 - j * S.step) * Math.PI) / 20);
+    return cur;
+  };
+
+  test('the flow map: two phases half a period apart, weights adding to one, never carried back, a jump only unseen', () => {
+    const P8 = sky.FLOW;
+    let last = null;
+    for (let tau = 0; tau <= 3 * P8; tau += 0.05) {
+      const f = sky.flowPhases(tau);
+      assert.ok(Math.abs(f.wA + f.wB - 1) < 1e-9 && f.wA >= 0 && f.wA <= 1);
+      for (const [s, wt] of [[f.sA, f.wA], [f.sB, f.wB]]) {
+        assert.ok(Math.abs(s) <= P8 / 2 + 1e-9, 'each phase is carried at most half a period either side of its start');
+        if (wt > 0) assert.ok(Math.abs(s) <= ((1 + sky.FADE) / 4) * P8 + 1e-6, `a phase is seen only near its start (${s})`);
+      }
+      if (last) {
+        for (const [s, s0, wt, k, k0] of [[f.sA, last.sA, f.wA, f.kA, last.kA], [f.sB, last.sB, f.wB, f.kB, last.kB]]) {
+          if (s >= s0) assert.equal(k, k0, 'a run carries on while its shape moves downwind');
+          else {
+            // the phase jumps back to the start of a new run: only while it has no weight, somewhere new
+            assert.equal(wt, 0, 'a phase only jumps while it is not seen');
+            assert.ok(k > k0);
+          }
+        }
+      }
+      last = f;
+    }
+    // each new run starts far across the texture from the run before it (the two live phases never coincide)
+    for (let k = -4; k < 12; k++) {
+      const [a, b] = [sky.phaseOffset(k, 256), sky.phaseOffset(k + 1, 256)];
+      const d = (x) => Math.min(Math.abs(x), 256 - Math.abs(x));
+      assert.ok(Math.hypot(d(a[0] - b[0]), d(a[1] - b[1])) > 50);
+    }
+  });
+
+  test('the texture in normal space: the same ranks, a standard normal; phi and its inverse agree', () => {
+    for (const { data, gauss } of sky.cloudTexture()) {
+      let m = 0, v = 0;
+      for (const g of gauss) m += g;
+      m /= gauss.length;
+      for (const g of gauss) v += (g - m) ** 2;
+      v /= gauss.length;
+      assert.ok(Math.abs(m) < 0.01 && Math.abs(v - 1) < 0.05, `mean ${m}, variance ${v}`);
+      for (let i = 1; i < 500; i++) if (data[i] > data[i - 1] + 1) assert.ok(gauss[i] > gauss[i - 1], 'the same order');
+    }
+    for (const p of [0.001, 0.1, 0.5, 0.77, 0.999]) assert.ok(Math.abs(sky.phi(sky.invPhi(p)) - p) < 1e-6);
+  });
+
+  test('the cover holds through the cross-fade: the same share of the area cloud, the same thick cores, at every moment', () => {
+    const w = 384, h = 216, view = { clon: 0, clat: 0, s: w / 360, kx: 1 };
+    const base = new Uint32Array(w * h).fill(packed(P.navy)), dst = new Uint32Array(w * h);
+    const cur = sheared();
+    const thin = sky.VEIL[1].get(packed(P.navy));
+    const cover = [], thick = [];
+    for (let tau = 0; tau <= 2 * sky.FLOW; tau += 0.5) {
+      sky.composeSky(dst, base, w, h, view, S, cur, { tau, rain: false });
+      let c = 0, t = 0;
+      for (const px of dst) {
+        if (px !== packed(P.navy)) c++;
+        if (px !== packed(P.navy) && px !== thin) t++; // thicker than the thinnest veil
+      }
+      cover.push(c / dst.length);
+      thick.push(t / dst.length);
+    }
+    const spread = (a) => Math.max(...a) - Math.min(...a);
+    assert.ok(spread(cover) < 0.025, `the cloud's share of the area pulses by ${(spread(cover) * 100).toFixed(1)} %`);
+    const mt = thick.reduce((a, b) => a + b, 0) / thick.length;
+    assert.ok(spread(thick) < 0.35 * mt, `the thick cores pulse (${thick.map((x) => (x * 100).toFixed(1)).join(' ')})`);
+  });
+
+  test('no streaks late in the run: the shapes under a sheared wind stay as round at 24 hours as at the start', () => {
+    const w = 192, h = 108, view = { clon: 0, clat: 0, s: w / 360, kx: 1 };
+    const base = new Uint32Array(w * h).fill(packed(P.navy)), dst = new Uint32Array(w * h);
+    const cur = sheared(75);
+    // the cloud's edges met along a row over those met down a column: about 1 for round shapes, well under 1 for
+    // shapes drawn out along the wind (the old texture, carried 24 hours, measured 0.6)
+    const ratio = (tau) => {
+      sky.composeSky(dst, base, w, h, view, S, cur, { tau, rain: false });
+      const m = (x, y) => dst[y * w + x] !== base[y * w + x];
+      let hx = 0, vy = 0;
+      for (let y = 1; y < h; y++) for (let x = 1; x < w; x++) {
+        if (m(x, y) !== m(x - 1, y)) hx++;
+        if (m(x, y) !== m(x, y - 1)) vy++;
+      }
+      return hx / vy;
+    };
+    for (const tau of [12, 18, 21, 24]) assert.ok(ratio(tau) > 0.8, `at ${tau} h the shapes are drawn out (${ratio(tau).toFixed(2)})`);
+    // and the real sky late in the run: palette colours only
+    sky.composeSky(dst, base, w, h, view, S, new sky.SkyClock(S).at(22), { tau: 22, isobars: true, isoColor: packed(P.fog) });
+    for (const px of dst) assert.ok(PALETTE.has(px));
+  });
+
+  test('downwind, never back: a feature carried by a steady wind moves with it while its phase is seen', () => {
+    const w = 192, h = 108, view = { clon: 0, clat: 0, s: (w / 360) * 4, kx: 1 };
+    const base = new Uint32Array(w * h).fill(packed(P.navy)), a = new Uint32Array(w * h), b = new Uint32Array(w * h);
+    const cur = { cloud: new Float32Array(S.n).fill(60), rain: new Float32Array(S.n), u: new Float32Array(S.n).fill(25), v: new Float32Array(S.n), mslp: new Float32Array(S.n).fill(1013) };
+    // inside one phase's solo stretch (phase A alone around the middle of its run), the picture 1.6 hours later is the
+    // picture carried east by the westerly: 45 m/s aloft is about 2.3 degrees, 5 px here
+    const tau0 = sky.FLOW / 2 - 0.8, tau1 = sky.FLOW / 2 + 0.8;
+    assert.ok(sky.flowPhases(tau0).wA === 1 && sky.flowPhases(tau1).wA === 1);
+    sky.composeSky(a, base, w, h, view, S, cur, { tau: tau0, rain: false });
+    sky.composeSky(b, base, w, h, view, S, cur, { tau: tau1, rain: false });
+    const shift = (d) => {
+      let same = 0, n = 0;
+      for (let y = 10; y < h - 10; y++) for (let x = 12; x < w - 12; x++, n++) if ((a[y * w + x] !== base[0]) === (b[y * w + x + d] !== base[0])) same++;
+      return same / n;
+    };
+    const ds = [-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8]; // (px east)
+    const best = ds.reduce((p, d) => (shift(d) > shift(p) ? d : p), 0);
+    assert.ok(best >= 3 && best <= 7, `the cloud moved ${best} px (east is positive)`);
+    // and across a whole run, a cross-fade included, the clock only carries the texture forward
+    let last = sky.flowPhases(0);
+    for (let tau = 0.1; tau < 3 * sky.FLOW; tau += 0.1) {
+      const f = sky.flowPhases(tau);
+      if (f.wA > 0 && last.wA > 0 && f.kA === last.kA) assert.ok(f.sA > last.sA);
+      if (f.wB > 0 && last.wB > 0 && f.kB === last.kB) assert.ok(f.sB > last.sB);
+      last = f;
+    }
+  });
+
+  test('the storm\'s cloud: an eye, a dense core, bands that trail its turn (anticlockwise north, clockwise south)', async () => {
+    const storm = await import('../public/js/scenes/weather/storm.js');
+    assert.ok(storm.stormRadius(0) < storm.stormRadius(2) && storm.stormRadius(2) < storm.stormRadius(5), 'sized by category');
+    const d = (r, th, rot = 0, south = false) => storm.stormDensity(r, th, rot, south);
+    assert.equal(d(0.03, 0), 0, 'the eye is clear');
+    assert.equal(d(0.12, 1), 1, 'the eyewall is the densest');
+    assert.equal(d(1.2, 0), 0, 'nothing past the bands');
+    assert.ok(d(0.25, 2) > 0.75, 'the core is dense all round');
+    // the band's spine at r: the angle (north up, anticlockwise from east) where the cloud is densest
+    const spine = (r, rot, south) => {
+      let best = 0, bd = -1;
+      for (let a = -Math.PI; a < Math.PI; a += 0.005) {
+        const v = d(r, a, rot, south);
+        if (v > bd) [bd, best] = [v, a];
+      }
+      return best;
+    };
+    const turn = (a, b) => ((((b - a) % Math.PI) + 1.5 * Math.PI) % Math.PI) - Math.PI / 2; // the bands repeat every half turn
+    assert.ok(turn(spine(0.6, 0, false), spine(0.6, 0.2, false)) > 0.15, 'the north\'s storm turns anticlockwise');
+    assert.ok(turn(spine(0.6, 0, true), spine(0.6, 0.2, true)) < -0.15, 'the south\'s clockwise');
+    assert.ok(turn(spine(0.55, 0, false), spine(0.8, 0, false)) < -0.1, 'the bands trail the turn outward');
+    assert.ok(storm.stormTurn(storm.TURN * 0.25) > storm.stormTurn(0) && storm.TURN >= 15, 'a slow turn');
+  });
+
+  test('the storm\'s cloud on the wall: palette colours only, at its place, larger for a stronger storm, the rain kept', async () => {
+    const storm = await import('../public/js/scenes/weather/storm.js');
+    const w = 200, h = 120, view = { clon: -60, clat: 25, s: 3.78, kx: 0.9 };
+    const base = new Uint32Array(w * h).fill(packed(P.navy));
+    const draw = (cat, sky = null) => {
+      const dst = sky ? sky.slice() : base.slice();
+      const at = storm.drawStormCloud(dst, base, w, h, view, { lat: 24.6, lon: -62.4, cat: { cat } }, 3.3);
+      return { dst, at, n: dst.filter((c, i) => c !== base[i]).length };
+    };
+    const one = draw(1), five = draw(5);
+    assert.ok(one.at && Math.abs(one.at.x - (w / 2 - 2.4 * 3.78 * 0.9)) < 0.01 && Math.abs(one.at.y - (h / 2 + 0.4 * 3.78)) < 0.01);
+    assert.ok(five.n > one.n * 1.5, `a category 5 covers more (${five.n} vs ${one.n})`);
+    for (const c of five.dst) assert.ok(PALETTE.has(c), 'palette colours only');
+    const eye = one.dst[Math.floor(one.at.y) * w + Math.floor(one.at.x)];
+    assert.equal(eye, packed(P.navy), 'the eye shows the sea');
+    // the forecast's rain over it stays; the forecast's cloud in its disc gives way to the symbol
+    const sky = base.slice().fill(packed(P.cyan), 0, w * 60);
+    const rained = draw(2, sky).dst;
+    for (let i = 0; i < w * 60; i++) assert.equal(rained[i], packed(P.cyan));
+    assert.equal(storm.drawStormCloud(base.slice(), base, w, h, view, { lat: -30, lon: 100, cat: 3 }, 0), null, 'out of view: nothing');
+  });
+
+  test('the close-up\'s gestures are on the words: the big story\'s place, the trip round the world, the viewers', async () => {
+    const places = [...report.zones.flatMap((z) => z.cities), ...(report.extra || []), ...report.warnings];
+    const KINDS = new Set(['place', 'world', 'sweep', 'count', 'nod']);
+    for (const seed of ['a', 'b', 'c', 'd', 'e', 'f']) {
+      const ep = writeWeather(report, { seed });
+      for (const s of ep.segments) {
+        if (s.shot !== 'mcu') {
+          assert.equal(s.gestures, undefined, 'only the close-up gestures on its words');
+          continue;
+        }
+        assert.ok(s.gestures?.length >= 2, `${s.kind}: gestures`);
+        let last = -1;
+        for (const g of s.gestures) {
+          assert.ok(KINDS.has(g.kind) && g.char >= 0 && g.char < s.text.length && g.char >= last, JSON.stringify(g));
+          last = g.char;
+          if (g.kind === 'place') assert.ok(places.some((p) => p.lat === g.lat && p.lon === g.lon), 'a place the report has');
+          if (g.kind === 'sweep') assert.ok(g.toward === 'wall' || (g.from && g.to));
+          if (g.kind === 'count') assert.ok(g.n >= 2 && g.n <= 5);
+        }
+      }
+      const head = ep.segments[0], tail = ep.segments.at(-1);
+      // the storm is presented as it is named; what is coming gets its own gesture; his name a nod
+      const storm = head.gestures.find((g) => g.kind === 'place');
+      assert.ok(storm && head.text.slice(storm.char).startsWith('Tropical Cyclone'), head.text);
+      assert.ok(head.gestures.some((g) => ['world', 'sweep', 'count'].includes(g.kind)));
+      assert.ok(head.text.slice(head.gestures.find((g) => g.kind === 'nod').char).startsWith("I'm"));
+      assert.ok(tail.text.slice(tail.gestures.find((g) => g.kind === 'nod').char).startsWith("I'm"));
+      for (const g of tail.gestures.filter((x) => x.kind === 'place')) {
+        const city = places.find((p) => p.lat === g.lat && p.lon === g.lon);
+        assert.ok(tail.marks.some((m) => m.char === g.char && m.city === city.id), 'the open hand on the city\'s name');
+      }
+    }
+  });
+
+  test('the close-up\'s gestures in the rig: an open hand out toward the place, both palms out, a sweep along its way', async () => {
+    const { Standing } = await import('../public/js/v2/canvas25d/runtime/standing.js');
+    const { Presenter, aimedOpen, bothPalms, sweepAlong } = await import('../public/js/scenes/weather/presenter.js');
+    const { evaluate } = await import('../public/js/v2/canvas25d/rig.js');
+    const { lookFor } = await import('../public/js/v2/canvas25d/cast/index.js');
+    const { GESTURES } = await import('../public/js/v2/canvas25d/gestures/index.js');
+    const L = lookFor('sam');
+    const pose = (ev, t) => evaluate(L, { side: 1, gestures: [{ t0: 0, ...ev }], emotions: [], look: [] }, t);
+    // the open hand: well out from the body (not a hand at the waist), higher for a place higher on the wall, open
+    const level = pose({ name: aimedOpen(60, 0) }, 1.0), high = pose({ name: aimedOpen(60, -30) }, 1.0), low = pose({ name: aimedOpen(60, 25) }, 1.0);
+    assert.ok(level.wrist[0] > 15, `out to the side (${level.wrist[0].toFixed(1)})`);
+    assert.ok(high.wrist[1] < level.wrist[1] - 4 && low.wrist[1] > level.wrist[1] + 4, 'aimed in height');
+    assert.ok(Math.max(...level.curl) < 0.2, 'an open hand');
+    // both palms: out on both sides at chest height, open
+    const world = pose({ name: bothPalms('wide') }, 1.0);
+    assert.ok(world.wrist[0] > 8 && world.wristF[0] < -8, `both out (${world.wrist[0].toFixed(1)}, ${world.wristF[0].toFixed(1)})`);
+    assert.ok(world.wrist[1] < 8 && world.wristF[1] < 8, 'at chest height, not the waist');
+    assert.ok(GESTURES[bothPalms('near')], 'a nearer variant');
+    // the sweep: the hand travels along the movement between the set and the end (north-east: out and up)
+    const ne = sweepAlong(0.7, -0.7);
+    const a = pose({ name: ne.name }, 0.54).wrist, b = pose({ name: ne.name }, 1.24).wrist;
+    assert.ok(b[0] - a[0] > 12 && a[1] - b[1] > 12, `out and up (${(b[0] - a[0]).toFixed(1)}, ${(a[1] - b[1]).toFixed(1)})`);
+    // a movement away from the wall's side is the far hand sweeping out on its own side
+    const back = sweepAlong(-1, 0);
+    assert.ok(back.far);
+    const fa = pose({ name: back.name }, 0.54).wristF, fb = pose({ name: back.name }, 1.24).wristF;
+    assert.ok(fa[0] - fb[0] > 15, 'the far hand sweeps out');
+    // the presenter: the close-up's kinds, spaced, each a touch faster or slower than the last
+    const p = new Presenter(new Standing('sam'), { scale: 1.9, neckY: 101, seed: 3 });
+    p.place(112);
+    p.perf.side = 1;
+    assert.ok(p.gesture('place', 10, { tx: 270, ty: 122 }));
+    assert.match(p.perf.gestures.at(-1).name, /^wx_open_/);
+    assert.equal(p.gesture('world', 11, {}), false, 'not on top of the last one');
+    assert.ok(p.gesture('world', 11.8, { variant: 'near' }));
+    assert.ok(p.gesture('sweep', 14, { dx: 1, dy: 0 }));
+    assert.ok(p.gesture('count', 16, { n: 2 }));
+    assert.equal(p.perf.gestures.at(-1).n, 2);
+    const speeds = p.perf.gestures.filter((g) => g.speed).map((g) => g.speed);
+    assert.ok(speeds.every((s) => s >= 0.92 && s <= 1.08) && new Set(speeds).size === speeds.length);
+  });
+
+  test('the wall lights him only where it is behind him: below its foot his legs keep their own colours', async () => {
+    const studio = await import('../public/js/scenes/weather/studio.js');
+    const fig = new Uint32Array(384 * 216);
+    for (let y = 60; y < 216; y++) for (let x = 100; x < 120; x++) fig[y * 384 + x] = packed(P.slate);
+    studio.lightFigure(fig, { rim: 1, spill: 3, litTo: 160 });
+    assert.equal(fig[120 * 384 + 119], packed(P.steel), 'the rim where the wall is behind him');
+    for (let y = 165; y < 216; y++) for (let x = 100; x < 120; x++) assert.equal(fig[y * 384 + x], packed(P.slate), 'no rim or spill against the plinth and the floor');
+  });
+
+  test('the close-up: a place on the wall behind him is kept on the side he faces into; beats only in long quiet stretches', async () => {
+    const centre = await import('../public/js/scenes/weather/index.js');
+    const { closeupTarget, beatsFor } = centre.__test;
+    const v = { clon: -102, clat: 30.6, s: (64 / 360) * 2.2, kx: 0.86 };
+    const storm = closeupTarget(v, 24.6, -62.4, 112, 1);
+    assert.ok(storm.x > 112 + 70 && storm.x < 384 - 40 && storm.y > 100 && storm.y < 140, JSON.stringify(storm));
+    const behind = closeupTarget(v, 30, -150, 112, 1); // west of him on the wall: shown on his open side
+    assert.ok(behind.x >= 182);
+    const left = closeupTarget(v, 24.6, -62.4, 272, -1); // the sign-off: the open side is the left
+    assert.ok(left.x <= 272 - 70 && left.x >= 40);
+    const ep = writeWeather(report, { seed: 'beats' });
+    const head = ep.segments[0];
+    const dur = head.text.length / 15;
+    const beats = beatsFor(head, 0, dur);
+    const cueAt = head.gestures.filter((g) => g.kind !== 'nod').map((g) => (g.char / head.text.length) * dur);
+    for (const b of beats) assert.ok(cueAt.every((c) => Math.abs(c - b.at) >= 3.6), 'a beat never crowds a gesture');
+    assert.ok(beatsFor({ text: 'One. Two. Three. Four. Five.' }, 0, 20).length >= 2, 'an older script still gets its beats');
+  });
+});
