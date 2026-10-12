@@ -9,7 +9,8 @@
 //
 // The shots (seg.shot, writer: server/weatherwriter.js):
 //   mcu      the presenter waist-up, off-centre, talking to camera; the wall soft behind him (the map's colours in
-//            big out-of-focus shapes, the clouds still drifting), out-of-focus lamps above; small open-hand beats
+//            big out-of-focus shapes, the clouds still drifting), its far end turning away into the dark set with an
+//            LED strip out of focus; small open-hand beats
 //   graphic  the wall's picture full frame: the world with its isobars, the highs and lows, the cloud and rain
 //            playing the next 24 hours as a time-lapse with its clock; a place lights up when it is named
 //   wall     the presenter knee-up beside the wall, which fills most of the frame (studio.js: its curve, the rig
@@ -247,6 +248,7 @@ export function skyMoment(seg, t, { since = 0, dur = 0, arrive = 0 } = {}) {
 
 // ------------------------------------------------------------------------------------------- city markers
 const BOX = [];
+const SYSBOX = []; // the highs and lows drawn this frame (a city's symbol never covers one)
 /** How many pixels of the box (x0, y0)-(x1, y1) are already taken. */
 function overlapArea(x0, y0, x1, y1) {
   let a = 0;
@@ -300,7 +302,14 @@ function drawCity(ctx, t, c, x, y, day, { names, hot, hotK, phase, area }) {
     }
   }
   BOX.push([x - 8, y - 7, x + 8, y + 7], [lx, ly, lx + bw, ly + bh]);
-  drawIcon(ctx, d.kind, x, y, t, { night, phase });
+  // its symbol, unless that would cover a high or a low: then a dot marks the place (the chip says the weather)
+  if (!SYSBOX.some((b) => x - 8 < b[2] && x + 8 > b[0] && y - 7 < b[3] && y + 7 > b[1])) drawIcon(ctx, d.kind, x, y, t, { night, phase });
+  else {
+    ctx.fillStyle = P.black;
+    ctx.fillRect(x - 2, y - 2, 5, 5);
+    ctx.fillStyle = P.white;
+    ctx.fillRect(x - 1, y - 1, 3, 3);
+  }
   chip(ctx, Math.round(lx), Math.round(ly), d.max, hot);
   if (names) {
     ctx.fillStyle = P.black;
@@ -322,15 +331,15 @@ function drawCities(ctx, t, data, seg, { proj, zone, day, hotId, hotK, area, avo
   const where = new Map();
   const list = [];
   const zoneIds = zone ? new Set(zone.cities.map((c) => c.id)) : null;
-  for (const z of data.zones) {
-    for (const c of z.cities) {
-      if (zoneIds && !zoneIds.has(c.id)) continue;
-      if (!zoneIds && !all && !(named && named.has(c.id)) && c.id !== hotId) continue;
-      const p = proj(c.lat, c.lon);
-      if (!p || p.x < area.x0 + 2 || p.x > area.x1 - 2 || p.y < area.y0 + 4 || p.y > area.y1 - 4) continue;
-      where.set(c.id, p);
-      list.push({ c, x: Math.round(p.x), y: Math.round(p.y) });
-    }
+  // the zones' cities, and on the world the extra places too when the voice names one (Nuuk, Yakutsk...)
+  const places = zoneIds ? zone.cities : [...data.zones.flatMap((z) => z.cities), ...(data.extra || [])];
+  for (const c of places) {
+    if (!zoneIds && !all && !(named && named.has(c.id)) && c.id !== hotId) continue;
+    if (!c.today) continue;
+    const p = proj(c.lat, c.lon);
+    if (!p || p.x < area.x0 + 2 || p.x > area.x1 - 2 || p.y < area.y0 + 4 || p.y > area.y1 - 4) continue;
+    where.set(c.id, p);
+    list.push({ c, x: Math.round(p.x), y: Math.round(p.y) });
   }
   let shown = list;
   if (!zoneIds) {
@@ -345,7 +354,8 @@ function drawCities(ctx, t, data, seg, { proj, zone, day, hotId, hotK, area, avo
   // the named city last (on top), northern cities first; every symbol is claimed before any label is placed
   shown.sort((a, b) => (a.c.id === hotId) - (b.c.id === hotId) || a.y - b.y);
   for (const it of shown) BOX.push([it.x - 8, it.y - 7, it.x + 8, it.y + 7]);
-  shown.forEach((it, i) => drawCity(ctx, t, it.c, it.x, it.y, day, { names: !!zoneIds, hot: it.c.id === hotId, hotK, phase: i * 0.37, area }));
+  // a zone names all its cities; the world names the places the voice has named (who knows where Nuuk is)
+  shown.forEach((it, i) => drawCity(ctx, t, it.c, it.x, it.y, day, { names: !!zoneIds || !!named?.has(it.c.id), hot: it.c.id === hotId, hotK, phase: i * 0.37, area }));
   return where;
 }
 
@@ -361,6 +371,7 @@ const OUTLINE = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [
  * names (ST.pinId) rings twice and is framed while it is said.
  */
 function drawSystems(ctx, t, S, hour, proj, area, { small = false, avoid = null, reveal = 1 } = {}) {
+  SYSBOX.length = 0;
   if (reveal <= 0) return;
   if (!S?.tracks?.length) return;
   const f = frameOf(S, hour);
@@ -388,6 +399,7 @@ function drawSystems(ctx, t, S, hour, proj, area, { small = false, avoid = null,
       brackets(ctx, x - 10, y - 11, x + 10, y + 16, P.white);
     }
     BOX.push([x - 7, y - 8, x + 7, y + 13]);
+    SYSBOX.push([x - 6, y - 8, x + 6, y + 13]);
     // a reveal: the letter rises into its place inside its own box (the cards' motion)
     const rise = reveal < 1 ? Math.round((1 - easeOut(reveal)) * 10) : 0;
     if (rise) {
@@ -836,6 +848,7 @@ function drawGraphic(ctx, t, data, seg, tgt, mo, layers, hotId, hotK) {
   t0 = now();
   const proj = (lat, lon) => ({ x: W / 2 + wrap(lon - v.clon) * v.s * v.kx, y: H / 2 + (v.clat - lat) * v.s });
   BOX.length = 0;
+  SYSBOX.length = 0;
   // the graphics first (the labels avoid them): the time-lapse's clock (or the tab), the source; the map itself
   // carries the rest (the highs and lows, the rain's colours are the bulletins' own)
   if (ST.sky && seg.timelapse) {
@@ -885,6 +898,7 @@ function drawWallShot(ctx, t, rt, data, seg, tgt, k, mo, layers, hotId, hotK, W8
   const proj = (lat, lon) => CAM.toScreen(CAM.wbw / 2 + wrap(lon - v.clon) * v.s * v.kx, CAM.wbh / 2 + (v.clat - lat) * v.s);
   const glassTop = CAM.top[Math.round(CAM.xc)] ?? CAM.yT;
   BOX.length = 0;
+  SYSBOX.length = 0;
   // the wall's graphics on the free side (they ride with the wall): the tab, the clock, the scale, the source; the
   // last zone's layout holds while the wall leaves it, the new one comes with the new zone
   const lay = k < 0.5 && ST.prevTarget?.zone ? ST.prevTarget : tgt;

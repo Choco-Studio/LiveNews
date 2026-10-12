@@ -1,6 +1,6 @@
 // WORLD WEATHER (owner 3 Oct): the data desk (Open-Meteo forecast, GDACS warnings, the offline demo data), the
 // script written from the data alone, the producer's path, the director's segments, the temperature field and
-// the weather symbols.
+// the weather symbols; round 3's weather centre (the moving sky, the studio, the shots, the time-lapse, the boards).
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

@@ -211,7 +211,14 @@ The picture is built in the frame's own pixels (palette colours only, Bayer 4×4
     - The voice counts down 3, 2, 1 on each side. A row wipes in when its place is named, and it is framed (its rank in the side's accent, its plate lit) while it is said.
     - Ranks 4 and 5 are not said: they wait dimmed from the start and light up when the last place has been said, with the gap between the two ends ("53° BETWEEN THE TWO ENDS") in the title row.
   - **THE NEXT THREE DAYS:** five cities by three weekday columns. Each cell has the animated symbol, the high on its chip and the low. The city being said is lit and framed; a city already said keeps an accent edge.
-- **Cost** (the lab's `perfWeather`, headless Chromium with software GL on a loaded 4-core machine, mean over 240 frames): COST_TABLE
+- **Cost** (the lab's `window.perfWeather(index, seconds)`, headless Chromium with software GL, 4 cores, mean over 240 frames, 12 Oct):
+  - the close-up 2.8 ms, the sign-off 3.2;
+  - the world graphic 3.8 during its time-lapse;
+  - a zone 3.0 settled, 5.2 while the wall flies and he walks;
+  - the warning 4.2;
+  - the boards 1.1–2.7.
+
+  Round 2's single shot measured 2.9–7.3 ms in the same run. The sky compositor alone costs about 4 ms for a full 384 × 216 frame in node (the recorded sky); the 15-per-second recompose halves it on average. `window.flickerWeather(index, seconds)` counts the pixels that flip and flip back within two frames: none to five per frame on every shot.
 
 ## 4. Configuration
 

@@ -27,7 +27,8 @@
     <script type="module">
       // The weather centre without the playout: the server's weather script (/api/tools/weather, the same desk and
       // writer as on air), each segment on its own clock; marks fire spread over the segment as a voice would reach
-      // them. window.renderAt(index, seconds, { from, hot }) draws one deterministic frame (tools, screenshots).
+      // them. window.renderAt(index, seconds, { from, hot }) draws one deterministic frame (tools, screenshots);
+      // window.perfWeather(index, seconds) the weather frame's cost, window.flickerWeather(index, seconds) its flicker.
       import { drawWeather, WALK } from '/js/scenes/weather/index.js';
       import { warmMapData } from '/js/scenes/worldmap.js';
       import { Graphics } from '/js/graphics/index.js';

@@ -3,25 +3,28 @@
 // played over the heat map as the weather bulletins do it: cloud that drifts and builds, rain in radar colours,
 // isobars, the highs and lows travelling with the frames. Palette colours only, ordered dither, no blends.
 //
-//   decodeSky(sky)                   the episode's sky (base64 layers) as numbers, or null (cached per object)
+//   decodeSky(sky)                   the episode's sky (base64 layers) as numbers, or null (cached per object); the
+//                                    wind is smoothed for the texture it carries (smoothGrid)
 //   new SkyClock(S).at(hour)         the layers at a fractional hour: Catmull-Rom between the frames (smooth, no
 //                                    kink at each frame), clamped to each layer's range
 //   sampleLayer(S, grid, lat, lon)   one layer at a place: bilinear on the grid, longitude wrapping
-//   trackSystems(S) / systemsAt(tracks, hour)   the highs and lows matched frame to frame (the nearest of the same
-//                                    kind), their positions in between
+//   trackSystems(S) / systemsAt(tracks, frame, out, hold)   the highs and lows matched frame to frame (the nearest of
+//                                    the same kind), refined between cells (refineCentre), their places in between
 //   isobarSegments(field, w, h, level)   marching squares: the contour of one pressure level (grid coordinates)
 //   cloudTexture()                   the cloud shape: a tileable fBm, equalised (uniform 0..1), with mips
-//   composeSky(dst, base, w, h, view, clock, opts)   the sky over a map frame (Uint32 pixels, worldmap.js view)
+//   composeSky(dst, base, w, h, view, S, cur, opts)   the sky over a map frame (Uint32 pixels, worldmap.js view)
+//   VEIL, RADAR, radarBand, hashOf / colourTable   the cloud's veils, the radar colours, the palette tables
 //
 // How the cloud looks like cloud: the cover (%) says how much of each place is cloud; the texture says where. A
 // pixel is cloud where the texture is above 1 - cover (the texture is equalised, so a 60 % cover is 60 % of the
-// area), thin at the edges and thick in the cores (fog, silver, white), lit from the west along each row. The
-// texture is anchored to the Earth and advected by the forecast's wind: a feature sits at p + wind x time, so the
-// time-lapse carries it downwind while the cover field builds and clears it. Rain is shaped by the same texture at
-// twice the frequency (cells inside the bands) and drawn over the cloud, in radar colours by intensity.
+// area), thin at the edges and thick in the cores (up to four veils: the colour under it mixed toward white), lit
+// from the west along each row. The texture is anchored to the Earth and advected by the forecast's wind: a feature
+// sits at p + wind x time, so the time-lapse carries it downwind while the cover field builds and clears it. Rain is
+// shaped by the same texture at twice the frequency (cells inside the bands) and drawn over the cloud, in radar
+// colours by intensity.
 //
-// The per-pixel work runs on a coarse node grid (every 4 px: cover, rain, the wind's offset, pressure) read
-// bilinearly along each row, and one texture read per pixel (two where it rains).
+// The per-pixel work runs on a coarse node grid (every 4 px: cover, rain, the wind's offset, pressure) stepped
+// linearly along each row, and one texture read per pixel (two where it rains).
 import { P } from '../../palette.js';
 
 const DEG = Math.PI / 180;
