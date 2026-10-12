@@ -354,6 +354,26 @@ describe('on screen and on air', () => {
     for (const e of EXPERT_IDS) for (const [o, h] of sigs) if (o !== e) assert.ok(diff(sigs.get(e), h) > 0.35, `${e} vs ${o}: ${diff(sigs.get(e), h).toFixed(2)}`);
   });
 
+  test("each expert's hair is drawn by their own drawer, never a presenter's, a correspondent's or another expert's", async () => {
+    // owner 12 Oct: "el pelo de algunos es muy parecido con los de otros presentadores" (a borrowed drawer in another
+    // colour read as that presenter's twin)
+    const { LOOKS, CORRESPONDENT_LOOKS, EXPERT_LOOKS } = await import('../public/js/v2/canvas25d/cast/index.js');
+    const others = new Map();
+    for (const L of [...Object.values(LOOKS), ...Object.values(CORRESPONDENT_LOOKS)]) {
+      for (const k of ['hair', 'hairBack']) if (L.parts[k]) others.set(L.parts[k], L.id);
+    }
+    const seen = new Map();
+    for (const id of EXPERT_IDS) {
+      const { hair, hairBack } = EXPERT_LOOKS[id].parts;
+      assert.equal(typeof hair, 'function', `${id} draws hair`);
+      for (const fn of [hair, hairBack].filter(Boolean)) {
+        assert.ok(!others.has(fn), `${id}'s ${fn.name} is ${others.get(fn)}'s`);
+        assert.ok(!seen.has(fn), `${id}'s ${fn.name} is ${seen.get(fn)}'s too`);
+        seen.set(fn, id);
+      }
+    }
+  });
+
   test('each studio draws in the palette, keeps the space behind the head calm, and lives a little', async () => {
     const { drawExpertStudio, EXPERT_STUDIOS } = await import('../public/js/v2/canvas25d/studio/experts.js');
     const { C } = await import('../public/js/v2/canvas25d/pixbuf.js');

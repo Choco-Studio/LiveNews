@@ -57,7 +57,7 @@ export const nova = defineLook({
 
 // The rounded shape around the head (head-local units): centre, half-width,
 // height above and below the centre (the lower half narrows toward the jaw).
-// A look built on these coils may state its own (L.halo, e.g. cast/experts.js); `brow` is how far below the
+// A look built on these coils may state its own (L.halo); `brow` is how far below the
 // head's top the hairline sits.
 export const NOVA_HALO = { cy: -3.6, rx: 11.0, up: 10.4, down: 8.8, taper: 0.2, brow: 4.2 };
 let HALO = NOVA_HALO; // the drawing look's (set by the drawers below)
