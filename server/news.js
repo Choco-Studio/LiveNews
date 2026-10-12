@@ -450,7 +450,9 @@ const NEWSLETTER = /^\s*(?:(?:hi|hey|hello)(?:,|!|\s+(?:there|all|everyone|every
 // (and the guides: "The founder’s guide to TechCrunch Disrupt 2026: Everything you need to know", "What to know about the
 // landmark Warner Bros. Discovery sale", TechCrunch 12 Oct, both aired as TECH BYTES stories, the second as its "And finally")
 const LISTICLE = /^(?:here are|these are) (?:the )?(?:best|top|\d+)\b|^the (?:best|top) \d+\b|^\d+ (?:best|top)\b|\beverything (?:you need|to know)\b|^what to know\b|\bwhat you need to know\b|^(?:the|a|an|your) (?:[\w’'-]+\s+){0,2}guide to\b/i;
-const PROGRAMME_PAGE = /^https?:\/\/(?:www\.)?bbc\.co(?:\.uk|m)\/(?:sounds|iplayer|programmes)\//i;
+// (a broadcaster's programme or show page is not a report: "Gaza: Still Reporting", an Al Jazeera documentary, aired on
+// NEWS IN 60 on 12 Oct)
+const PROGRAMME_PAGE = /^https?:\/\/(?:www\.)?bbc\.co(?:\.uk|m)\/(?:sounds|iplayer|programmes)\/|^https?:\/\/[^/]+\/(?:[a-z]{2}\/)?(?:programs?|programmes|tv-shows|shows|podcasts?|documentaries)\//i;
 export const notNews = (s) => {
   const t = String(s?.title || '');
   return PROGRAMME_PAGE.test(String(s?.link || '')) || LISTICLE.test(t) || SHOPPING.test(t) || REVIEW.test(unquoted(t)) || BYLINED.test(t) || /\?\s*$/.test(unquoted(t).trim()) || CAPTION.test(String(s?.summary || '')) || NEWSCAST.test(t) || NEWSLETTER.test(String(s?.summary || '')) || NEWSLETTER.test(String(s?.body || '').slice(0, 200));

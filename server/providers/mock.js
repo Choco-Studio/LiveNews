@@ -39,6 +39,11 @@ const HEADLINE_PERFECT = {
   builds: 'built', breaks: 'broken', shuts: 'shut', pulls: 'pulled', removes: 'removed', releases: 'released',
   signs: 'signed', expands: 'expanded', acquires: 'acquired', invests: 'invested', joins: 'joined', leaves: 'left',
   quits: 'quit', hires: 'hired', fires: 'fired', settles: 'settled',
+  // (12 Oct: "President Zardari suspends provincial government..." read as a headline; verbs a headline rarely uses as a noun)
+  suspends: 'suspended', urges: 'urged', vows: 'vowed', threatens: 'threatened', admits: 'admitted', denies: 'denied',
+  accuses: 'accused', detains: 'detained', seeks: 'sought', scraps: 'scrapped', postpones: 'postponed', cancels: 'cancelled',
+  extends: 'extended', imposes: 'imposed', overturns: 'overturned', upholds: 'upheld', condemns: 'condemned', welcomes: 'welcomed',
+  elects: 'elected', appoints: 'appointed', declares: 'declared', orders: 'ordered',
 };
 // The same verbs after a plural subject ("Americans Hall and Woodford win Nobel Prize in economics", Euronews 12 Oct ->
 // "... have won ..."): only after "X and Y" or a plural noun ("Tokyo stocks close..."), and never a verb that is as often
@@ -1564,7 +1569,12 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       // whenever that stands on its own ("Researchers at a battery firm say..."), not with headline-ese
       // ("Smartphone battery breakthrough promises a week of use."). The headline opens only when the summary
       // cannot ("It says the service...").
-      const skipHeadline = first && (leadAfterIntro || restates(first, s.title) || (selfStanding(info, first) && wordCount(first) >= 6));
+      // (but a summary that never names who the headline is about is background: "The economics prize is the only Nobel
+      // not among the original five...", under "Americans Hall and Woodford win Nobel Prize in economics", Euronews 12 Oct,
+      // aired without the winners: the headline, said as a sentence, opens)
+      const unsaid = (info.keep || []).filter((n) => !info.sentences.some((t) => t.includes(n)));
+      const namesUnsaid = !isNumber && unsaid.length >= 2 && unsaid.length * 2 >= (info.keep || []).length;
+      const skipHeadline = first && !namesUnsaid && (leadAfterIntro || restates(first, s.title) || (selfStanding(info, first) && wordCount(first) >= 6));
       let opener = spokenTitle(s.title, info);
       // the summary's first sentence cannot open ("It is hoped the prospective sale..."): a later one that tells the
       // news and stands on its own opens instead of the headline ("Conservationists have said they are planning to
@@ -1575,7 +1585,7 @@ function writeEpisode({ stories, channelName, program, presenters, count, now, r
       let chosen = false;
       const titleShare = (t) => contentWords(t).filter((w) => contentWords(s.title).some((x) => x.slice(0, 5) === w.slice(0, 5))).length;
       const detailFirst = !isNumber && !isLighter && first && titleShare(first) <= 1 && info.sentences.slice(1, 3).some((t) => titleShare(t) >= 3 && selfStanding(info, t));
-      if ((!skipHeadline && first && !selfStanding(info, first)) || detailFirst) {
+      if (!namesUnsaid && ((!skipHeadline && first && !selfStanding(info, first)) || detailFirst)) {
         // the sentence that tells most of the headline's news (its names first), never a bracketed aside ("Each flight
         // director chose a team name (at first colors)" once opened an obituary)
         const names = info.keep || [];

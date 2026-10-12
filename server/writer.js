@@ -992,6 +992,9 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // Christmas]", "…could take years, let alone figuring out[ where…]" (Guardian, The Verge 10 Oct)
     if (/\b(?:possibly|probably|perhaps|reportedly|allegedly|apparently|potentially|especially|particularly|mainly|mostly|largely|partly|presumably|eventually|initially|originally|previously|currently|recently|immediately|subsequently|likely|notably|including)$/i.test(head)) continue;
     if (/\b[a-z]{3,}ing(?:\s+(?:out|up|off|on|in|over|down|through|back|away))?$/i.test(head) && !ING_NOUNS.test(head.replace(/\s+(?:out|up|off|on|in|over|down|through|back|away)$/i, '')) && !/\b(?:is|are|was|were|be|been|being|am|keeps?|kept|starts?|started|stops?|stopped)\s+(?:[a-z]+ly\s+|still\s+|now\s+)?[a-z]+ing$/i.test(head)) continue;
+    // nor a noun that waits for its "when" or "where": "…cost his department £20m a year at a time[ when budgets are
+    // stretched]" (BBC 12 Oct, aired as "…at a time.")
+    if (/\b(?:at a time|at the time|at a moment|at the moment|a time|a period|a point|the point|the stage|the place|the day|the year|the moment)$/i.test(head) && /^\s*(?:when|where|while)\b/i.test(t.slice(at))) continue;
     // never a name the story is about: "...violated a woman’s Fourth Amendment rights [when using Flock to search
     // for her license plate]" under "Federal judge calls Flock ‘indiscriminate mass surveillance’" (4 Oct)
     if (keep.some((k) => t.includes(k) && !head.includes(k))) continue;
