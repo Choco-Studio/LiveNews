@@ -9,7 +9,8 @@
 //                                    kink at each frame), clamped to each layer's range
 //   sampleLayer(S, grid, lat, lon)   one layer at a place: bilinear on the grid, longitude wrapping
 //   trackSystems(S) / systemsAt(tracks, frame, out, hold)   the highs and lows matched frame to frame (the nearest of
-//                                    the same kind), refined between cells (refineCentre), their places in between
+//                                    the same kind), refined between cells (refineCentre), their places in between;
+//                                    matchTracks(systems, frames) the matching alone (the writer names whole tracks)
 //   isobarSegments(field, w, h, level)   marching squares: the contour of one pressure level (grid coordinates)
 //   cloudTexture()                   the cloud shape: a tileable fBm, equalised (uniform 0..1), with mips
 //   composeSky(dst, base, w, h, view, S, cur, opts)   the sky over a map frame (Uint32 pixels, worldmap.js view)
@@ -245,15 +246,33 @@ export function refineCentre(S, s) {
  * -> [{ id, kind, pts: [{ frame, lat, lon, hPa }] }]
  */
 export function trackSystems(S) {
-  const by = Array.from({ length: S.frames }, () => []);
-  for (const s of S.systems || []) by[s.frame]?.push(s);
+  const tracks = matchTracks(S.systems, S.frames);
+  for (const t of tracks) {
+    const raw = t.pts.map((p) => ({ ...p, ...refineCentre(S, p) }));
+    t.pts = raw.map((p, i) => {
+      if (i === 0 || i === raw.length - 1) return p;
+      const a = raw[i - 1], b = raw[i + 1];
+      return { ...p, lat: (a.lat + 2 * p.lat + b.lat) / 4, lon: p.lon + (wrapD(a.lon - p.lon) + wrapD(b.lon - p.lon)) / 4 };
+    });
+  }
+  return tracks;
+}
+
+/**
+ * The frame-to-frame matching alone, on the grid's centres (no refining, no smoothing): the writer uses it to name
+ * only the highs and lows the time-lapse keeps on screen for the whole run (server/weatherwriter.js).
+ * -> [{ id, kind, pts: [{ frame, lat, lon, hPa }] }]
+ */
+export function matchTracks(systems, frames) {
+  const by = Array.from({ length: frames }, () => []);
+  for (const s of systems || []) by[s.frame]?.push(s);
   const tracks = [];
   let open = by[0].map((s) => {
     const t = { id: tracks.length, kind: s.kind, pts: [{ frame: 0, lat: s.lat, lon: s.lon, hPa: s.hPa }] };
     tracks.push(t);
     return t;
   });
-  for (let f = 1; f < S.frames; f++) {
+  for (let f = 1; f < frames; f++) {
     const next = by[f];
     const pairs = [];
     open.forEach((t, i) => {
@@ -282,14 +301,6 @@ export function trackSystems(S) {
       still.push(t);
     });
     open = still;
-  }
-  for (const t of tracks) {
-    const raw = t.pts.map((p) => ({ ...p, ...refineCentre(S, p) }));
-    t.pts = raw.map((p, i) => {
-      if (i === 0 || i === raw.length - 1) return p;
-      const a = raw[i - 1], b = raw[i + 1];
-      return { ...p, lat: (a.lat + 2 * p.lat + b.lat) / 4, lon: p.lon + (wrapD(a.lon - p.lon) + wrapD(b.lon - p.lon)) / 4 };
-    });
   }
   return tracks;
 }

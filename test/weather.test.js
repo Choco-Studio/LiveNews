@@ -240,6 +240,24 @@ describe('the script', () => {
     assert.equal(seaOf(15, 130), 'the western Pacific');
     assert.equal(writeWeather(null), null);
   });
+
+  test('the highs and lows named are ones the time-lapse keeps on screen all day, where it can', async () => {
+    const { namedSystems } = await import('../server/weatherwriter.js');
+    // a stronger high that fades after 12 hours (frame 4) and a weaker one that lasts the day, both near places
+    const systems = [];
+    for (let f = 0; f <= 8; f++) {
+      if (f <= 4) systems.push({ frame: f, kind: 'H', lat: 52.5 - f, lon: 106.5, hPa: 1032 });
+      systems.push({ frame: f, kind: 'H', lat: 50.5, lon: 30.5 + f, hPa: 1027 });
+      systems.push({ frame: f, kind: 'L', lat: 61.5, lon: -46.5 + f, hPa: 975 });
+    }
+    const named = namedSystems({ systems }, PLACES);
+    const high = named.find((s) => s.kind === 'H');
+    assert.deepEqual([high.lat, high.lon], [50.5, 30.5], 'the high that lasts the day');
+    assert.deepEqual([high.to.lat, high.to.lon], [50.5, 38.5], 'where its track ends');
+    // with no whole track of its kind, the strongest still gets named
+    const short = namedSystems({ systems: systems.filter((s) => !(s.kind === 'H' && s.hPa === 1027)) }, PLACES);
+    assert.equal(short.find((s) => s.kind === 'H').hPa, 1032);
+  });
 });
 
 describe('the programme on the channel', () => {
@@ -718,6 +736,30 @@ describe('the weather centre, round 3: shots, the moving sky, the studio, the bo
     assert.equal(z(12).clock, false);
     assert.equal(centre.skyMoment({ kind: 'headline', shot: 'mcu' }, 5).hour, 0, 'no time-lapse: now');
     assert.match(centre.clockLabel(Date.parse('2026-10-13T13:00:00Z')), /^TUE 14:00$/, 'the studio clock (London)');
+  });
+
+  test('the world time-lapse waits for the voice: never past a high still to be named, nor away from it while named', () => {
+    const { voiceGate, ST } = centre.__test;
+    const saved = { sky: ST.sky, gateSeg: ST.gateSeg };
+    // a high on screen for the first four frames (hours 0-12), named 14 s into a 25 s segment
+    const pin = { char: 80, kind: 'H', lat: 52.5, lon: 106.5 };
+    ST.sky = { hours: [0, 3, 6, 9, 12, 15, 18, 21, 24], tracks: [{ id: 0, kind: 'H', pts: [0, 1, 2, 3, 4].map((frame) => ({ frame, lat: 52.5 - frame, lon: 106.5, hPa: 1030 })) }] };
+    const world = { kind: 'world', shot: 'graphic', timelapse: { from: 0, to: 24 }, pins: [pin] };
+    const W8 = { pin: null, pinAt: 0 };
+    const hours = [];
+    for (let i = 0; i <= 300; i++) {
+      const t = i / 10;
+      if (i === 140) Object.assign(W8, { pin, pinAt: t });
+      const mo = centre.skyMoment(world, t, { since: 0, dur: 25 });
+      voiceGate(mo, world, t, 0.1, 25, W8);
+      hours.push([t, mo.hour]);
+    }
+    const at = (t) => hours[Math.round(t * 10)][1];
+    assert.ok(at(13.9) <= 12 + 0.4 * 3 + 1e-9, `held at the high's last hour until it is named (${at(13.9).toFixed(1)})`);
+    assert.ok(at(16.7) <= 13.2 + 1e-9, 'still there while it is named');
+    assert.ok(at(30) > 23.9, 'then the clock catches up and plays the day to its end');
+    for (let i = 1; i < hours.length; i++) assert.ok(hours[i][1] >= hours[i - 1][1], 'the clock never runs back');
+    Object.assign(ST, saved);
   });
 
   test('the boards: palette colours only; HOT & COLD counts down 3, 2, 1, the places not said wait dimmed', () => {

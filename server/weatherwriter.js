@@ -19,6 +19,7 @@
 //   board?, pins?, timelapse? } - marks are where a place's name starts in the text (the map lights the city, the
 //   board lights its row, the presenter points); pins are where a high or low is named ({ char, kind, lat, lon }).
 import { decodeLayer } from './weathersky.js';
+import { matchTracks } from '../public/js/scenes/weather/sky.js';
 
 const UNIT = 'degrees';
 
@@ -279,19 +280,28 @@ function zoneLine(zone, pick, { short = false } = {}) {
 
 // ---------------------------------------------------------------------------------------------- the world
 
-/** The highs and lows worth naming: the deepest low and the strongest high of the first frame, with where they go. */
+/**
+ * The highs and lows worth naming: the deepest low and the strongest high of the first frame, with where they go.
+ * Only systems the time-lapse keeps on screen for the whole run (a track from the first frame to the last, matched
+ * as the picture matches them: sky.js matchTracks), so the one named is there, where the voice says, whenever the
+ * voice reaches it; one that fades mid-run is named only when no whole track of its kind qualifies.
+ */
 export function namedSystems(sky, places) {
   if (!sky?.systems?.length) return [];
   const last = Math.max(...sky.systems.map((s) => s.frame));
+  const tracks = matchTracks(sky.systems, last + 1);
+  const trackOf = (s) => tracks.find((t) => t.pts[0].frame === 0 && t.pts[0].lat === s.lat && t.pts[0].lon === s.lon && t.kind === s.kind);
+  const whole = (s) => trackOf(s)?.pts.at(-1).frame === last;
   // the systems that matter to people: within 1,500 km of a place we have data for (a deep low by Antarctica is
   // not the day's weather for anyone watching), poleward of 62 degrees only when nothing nearer qualifies
   const at0 = sky.systems.filter((s) => s.frame === 0 && Math.abs(s.lat) <= 62 && nearestPlace(places, s, 1500));
   const pickOne = (kind) => {
     const list = at0.filter((s) => s.kind === kind).sort((a, b) => (kind === 'L' ? a.hPa - b.hPa : b.hPa - a.hPa));
-    const s = list[0];
+    const s = list.find(whole) || list[0];
     if (!s) return null;
-    // where it is a day later: the same kind within 15 degrees in the last frame
-    const later = sky.systems.filter((x) => x.frame === last && x.kind === kind).sort((a, b) => km(a, s) - km(b, s))[0];
+    // where it is a day later: the end of its track (else the same kind within 1,700 km in the last frame)
+    const end = trackOf(s)?.pts.at(-1);
+    const later = end?.frame === last ? end : sky.systems.filter((x) => x.frame === last && x.kind === kind).sort((a, b) => km(a, s) - km(b, s))[0];
     const moved = later && km(later, s) < 1700 ? later : null;
     const near = nearestPlace(places, s, 900);
     return { ...s, area: areaOf(s.lat, s.lon), near, to: moved && km(moved, s) > 450 ? moved : null };

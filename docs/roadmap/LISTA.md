@@ -52,6 +52,16 @@ Estado (4 oct): trabajando punto por punto. ✅ = hecho y subido; 🟡 = hecho a
     - cabecera propia (sol y nube) y música suave.
 
     Probado con datos reales (4 oct): 44 ciudades, avisos de GDACS y mapa de calor de 841 puntos. Arreglado con los datos reales: tormentas ya terminadas que seguían saliendo, listas de países cortadas, etiquetas pisadas y el límite de peticiones de Open-Meteo. Falta: las decisiones 8 y 12 (presentador del tiempo). Detalle en docs/programmes/world-weather.md.
+
+    - ✅ **Ronda 3 (12 oct, tú: "el programa del tiempo necesita mejoras enormes"):**
+      - un centro del tiempo de verdad: primer plano de Sam, el mundo a pantalla completa y la pared con las zonas;
+      - el cielo se mueve: nubes, lluvia, isobaras y las borrascas y anticiclones de las próximas 24 horas con su reloj ("TUE 14:00");
+      - el reloj espera a la voz: cuando Sam nombra un anticiclón, se ve donde dice y se marca;
+      - 70 ciudades (antes 44);
+      - tableros nuevos: HOT & COLD (cuenta atrás de los lugares más calurosos y más fríos del planeta) y THE NEXT THREE DAYS (tres días de cinco ciudades);
+      - el panel de avisos con el mapa al lado.
+
+      Falta pulir: las nubes se estiran en franjas al final del día en algunas zonas, la tormenta de demostración (ORLA) no tiene nubes alrededor y los gestos de Sam en primer plano son pequeños.
 22. **Ritmo.** Transiciones, pausas entre bloques y tiempos de espera (el equipo de ritmo estaba a mitad).
 23. 🟡 **Textos.** Hecho (4 oct, con noticias reales):
     - las frases de transcripción de los vídeos de los medios ("Here's Jennie Shin with more…", saludos, despedidas) ya no llegan al guion;

@@ -432,6 +432,38 @@ function ring(ctx, cx, cy, r, color) {
   }
 }
 
+/**
+ * The world time-lapse waits for the voice: the clock never runs past the last hour a high or low still to be named
+ * is on screen (its track's last frame and a little), nor away from one while it is being named (PIN_HOLD seconds);
+ * once named, the clock catches up with the plan at up to twice the plan's mean speed. Always forward. So "high
+ * pressure over Siberia keeps things settled" rings the high where it is, never after it has faded.
+ */
+const PIN_HOLD = 2.8;
+function voiceGate(mo, seg, t, dt, dur, W8) {
+  const S = ST.sky;
+  if (ST.gateSeg !== seg) {
+    ST.gateSeg = seg;
+    ST.gateHour = mo.from;
+    const step = S.hours.length > 1 ? S.hours[1] - S.hours[0] : 3;
+    ST.gates = (Array.isArray(seg.pins) ? seg.pins : []).map((pin) => {
+      const tr = S.tracks[trackOfPin(S, pin)];
+      return { pin, at: null, last: tr ? S.hours[tr.pts[tr.pts.length - 1].frame] + 0.4 * step : Infinity };
+    });
+  }
+  let cap = Infinity;
+  for (const g of ST.gates) {
+    if (g.at == null && W8.pin === g.pin) g.at = W8.pinAt;
+    if (g.at == null || t - g.at < PIN_HOLD) cap = Math.min(cap, g.last);
+  }
+  const mean = (mo.to - mo.from) / Math.max(6, dur * 0.84 - 0.8);
+  const was = ST.gateHour;
+  const want = Math.max(was, Math.min(mo.hour, cap));
+  ST.gateHour = Math.min(want, was + 2 * mean * dt);
+  mo.hour = ST.gateHour;
+  mo.prog = mo.to > mo.from ? (mo.hour - mo.from) / (mo.to - mo.from) : 0;
+  mo.rate = dt > 0 ? Math.max(SKY_DRIFT, (mo.hour - was) / dt) : mo.rate;
+}
+
 /** The track of the high or low a pin names: the one of its kind nearest the pin at the sky's first frame. */
 function trackOfPin(S, pin) {
   if (!S?.tracks || !pin) return null;
@@ -770,6 +802,7 @@ export function drawWeather(ctx, t, scene, audio) {
     ST.presented = false;
     ST.spoken = new Map();
     ST.pinId = null;
+    ST.gateSeg = null; // the voice gate starts again (voiceGate)
     // the cloud texture's wind clock starts again with each segment (a long run would shear it into streaks): at
     // the cut, or halfway along the wall's flight to the next zone, where the move hides the change
     ST.tauReset = cut ? since : since + ST.moveDur / 2;
@@ -794,6 +827,7 @@ export function drawWeather(ctx, t, scene, audio) {
   const arrive = ST.moveAt + ST.moveDur;
   // the sky's moment; the cloud texture travels with the clock in a time-lapse, drifts slowly otherwise
   const mo = skyMoment(seg, t, { since, dur: segDur, arrive });
+  if (shot === 'graphic' && ST.sky?.tracks && seg.timelapse) voiceGate(mo, seg, t, dtF, segDur, W8);
   ST.tau += dtF * mo.rate;
   const layers = ST.sky ? skyLayers(mo) : null;
   const hotSince = t - (W8.hotAt || 0);
@@ -1076,4 +1110,4 @@ function currentHot() {
   return last;
 }
 
-export const __test = { targetOf, zoneView, ST, shotOf, skyMoment, fitView, FREE, MARK };
+export const __test = { targetOf, zoneView, ST, shotOf, skyMoment, voiceGate, fitView, FREE, MARK };
