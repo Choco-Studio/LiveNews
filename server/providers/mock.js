@@ -678,7 +678,9 @@ const openingOf = (t) => {
 };
 // A people's name keeps its capital mid-sentence: "Coming up: German logistics group Rhenus..." (once "german", 9 Oct)
 const DEMONYM = /^(?:American|British|English|Scottish|Welsh|Irish|French|German|Dutch|Belgian|Swiss|Austrian|Italian|Spanish|Portuguese|Greek|Turkish|Russian|Ukrainian|Polish|Czech|Hungarian|Romanian|Swedish|Norwegian|Danish|Finnish|Icelandic|European|African|Asian|Arab|Chinese|Japanese|Korean|Indian|Pakistani|Bangladeshi|Indonesian|Thai|Vietnamese|Filipino|Malaysian|Australian|Canadian|Mexican|Brazilian|Argentine|Chilean|Colombian|Peruvian|Cuban|Israeli|Palestinian|Iranian|Iraqi|Syrian|Saudi|Egyptian|Nigerian|Kenyan|Ethiopian|Ghanaian|Kazakh|Uzbek|Afghan|Sudanese|Libyan|Moroccan|Algerian|Tunisian|Lebanese|Jordanian|Qatari|Emirati|Taiwanese|Mongolian|Nepalese|Sri Lankan|Venezuelan|Haitian|Jamaican|Congolese|Somali|Ugandan|Tanzanian|Zimbabwean|Zambian|Senegalese|Malian|Latin|Western|Eastern|Northern|Southern|Middle)$/;
-const PRONOUN_START = /^(?:It|Its|They|Their|This|These|Those|He|She|His|Her)\b/;
+// (a pronoun after an opening phrase too: "Once completed, it will house GM’s new Battery Cell Development Center", "Together,
+// they offer an unprecedented view...", The Verge 12 Oct, both aired as their stories' first words)
+const PRONOUN_START = /^(?:It|Its|They|Their|This|These|Those|He|She|His|Her)\b|^[^,;:]{2,40},\s+(?:it|its|they|their|he|she|his|her)\b/;
 /**
  * Can this summary sentence open a story or a round-up item? The summary's first sentence can (unless it
  * opens on a pronoun: "The central bank has kept rates..." is how the outlet itself starts); a later one
