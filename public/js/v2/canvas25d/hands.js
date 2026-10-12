@@ -49,6 +49,7 @@
 import { P } from '../../palette.js';
 import { TILT, clamp } from './space.js';
 import { material, toneN, MAT, LIGHT } from './pixbuf.js';
+import { matKey } from './cast/base.js';
 import { GROUPS, GROUPS_PER_ACTOR } from './character.js'; // read at draw time only (character.js imports this module)
 import { camRef, rollAxis, pronationOf, palmNormal } from './gestures/orient.js';
 
@@ -282,7 +283,7 @@ const py = (B, x, y, z) => B[1] + x * B[3] + y * B[5] + z * B[7];
 // ---------------------------------------------------------------------------
 // Materials owned here (registered once per look)
 
-const MATS = new Map();
+const MATS = new WeakMap(); // look → materials (a guest's look is dropped from its cache: so is this)
 function handMats(L, m) {
   let h = MATS.get(L);
   if (h) return h;
@@ -295,13 +296,13 @@ function handMats(L, m) {
     robot,
     skin: robot ? casing : m.hand,
     // exact colours for painted details (no clean-up pass, no inner lines)
-    detail: robot ? material(`${L.id}:handD`, { ramp: casingRamp, decal: true }) : material(`${L.id}:handD`, { ramp: L.skin, decal: true }),
-    line: robot ? material(`${L.id}:handLine`, { ramp: [jointColour], decal: true }) : material(`${L.id}:handLine`, { ramp: [L.skinLine], decal: true }),
-    sleeveD: material(`${L.id}:sleeveD`, { ramp: L.jacket.ramp, decal: true }),
+    detail: robot ? material(matKey(L, 'handD'), { ramp: casingRamp, decal: true }) : material(matKey(L, 'handD'), { ramp: L.skin, decal: true }),
+    line: robot ? material(matKey(L, 'handLine'), { ramp: [jointColour], decal: true }) : material(matKey(L, 'handLine'), { ramp: [L.skinLine], decal: true }),
+    sleeveD: material(matKey(L, 'sleeveD'), { ramp: L.jacket.ramp, decal: true }),
     rim: material('hands:rim', { ramp: [P.silver], decal: true }),
     // the sleeve without the side rim, for silhouette pixels that face down (the underside of a forearm
     // is away from the key light: the generic right-edge rim would dot it, one lit pixel per step)
-    sleeveNoRim: material(`${L.id}:sleeveNoRim`, { ramp: L.jacket.ramp, line: L.jacket.line, th: [0.94, 0.12, -0.4] }),
+    sleeveNoRim: material(matKey(L, 'sleeveNoRim'), { ramp: L.jacket.ramp, line: L.jacket.line, th: [0.94, 0.12, -0.4] }),
   };
   MATS.set(L, h);
   return h;

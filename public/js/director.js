@@ -13,6 +13,7 @@ import { LiveMusic, SHOT_KIND } from './music/live.js';
 import { paceFor, gapAfter, CHANNEL, paceTrace, cutWait, isRepeat, numbersBoard, knownBoard, storyBoard, changeBoard } from './pace.js';
 import { FootageDeck } from './footage/deck.js';
 import { planLink, sentenceStarts } from './linkplan.js';
+import { recreationOf } from './graphics/recreation.js';
 
 // a headline frame is never shorter than this, so a short teaser line still cuts with its voice
 const MONTAGE_FLASH = 1.2;
@@ -28,6 +29,9 @@ const pace = (scene) => paceFor(scene.program?.id);
 const STUDIO = new Set(['wide', 'close']);
 const LINK_SHOTS = new Set(['location', 'twoway', 'broll']); // a correspondent link's shots (playCross)
 const NAME_STRAP = 5.5; // s the correspondent's name strap stays up on their first picture
+// IN THEIR WORDS, re-staged: the person on screen, labelled, this long before their first word (who speaks, and that
+// it is a recreation, are read before the words begin)
+const RESTAGE_BEAT = 0.4;
 // A segment's air before its voice runs (characters per second, sentence pauses included): the engine's
 // estimated timeline speaks ~15 chars/s; a recorded clip gives its own length.
 const CPS_EST = 14.5;
@@ -92,6 +96,9 @@ export class Director {
       footageDeck: null,
       nameSuper: null,
       fileCredit: null,
+      // a re-staged guest on screen (playRestage): the RECREATION label and their name super, from the first frame of
+      // the piece to the last ({ name, role, line, credit }: graphics/recreation.js)
+      recreation: null,
     };
     try {
       this.footage = typeof document !== 'undefined' ? new FootageDeck() : null;
@@ -115,6 +122,7 @@ export class Director {
     Object.assign(s, extra);
     // a cut away from a correspondent link's shots (back to the studio, a card, a stinger) ends the link on screen
     if (changed && s.remote && !LINK_SHOTS.has(shot) && s.linkDone) this.clearLink();
+    else if (changed && s.recreation && s.linkDone) this.clearLink(); // a recreation over its quote card (old renderer)
     if (changed) {
       this.mapRun = shot === 'map' ? (this.mapRun || 0) + 1 : 0; // PACE: map cuts in a row (shots.mapRun)
       if (!(shot === 'wide' && s.shot === 'wide')) this.seenSince = now(); // PACE: a focus re-set of the wide is no visible cut
@@ -395,7 +403,10 @@ export class Director {
   remoteOf(seg) {
     const slot = this.linkSlot(seg);
     if (!slot) return null;
-    const footage = !seg.grave && seg.footage?.id && this.footage ? seg.footage : null;
+    // a re-staged guest (server/guests/restage.js): their booking gives the look, the name and the label
+    const restage = seg.kind === 'restage';
+    const booking = restage ? this.episode?.guests?.[seg.reporter] || null : null;
+    const footage = !restage && !seg.grave && seg.footage?.id && this.footage ? seg.footage : null;
     return {
       slot,
       id: seg.reporter,
@@ -407,9 +418,11 @@ export class Director {
       credit: footage?.credit || null,
       place: seg.place || '',
       desk: seg.desk || '',
-      name: presenterName(seg.reporter),
+      name: restage ? recreationOf(booking, seg).name : presenterName(seg.reporter),
       // an expert's analysis (server/experts.js): they join from their own studio, never from a place
       ...(seg.kind === 'expert' ? { kind: 'expert', backdrop: seg.backdrop || 'neutral' } : {}),
+      // a re-staged guest speaks from the press room (studio/press.js), labelled as a recreation
+      ...(restage ? { kind: 'restage', backdrop: 'press', booking, recreation: recreationOf(booking, seg) } : {}),
     };
   }
 
@@ -424,10 +437,12 @@ export class Director {
   async playCross(seg, rest = []) {
     const s = this.scene;
     const P = pace(s);
+    if (seg.kind === 'restage' || seg.recreation) return this.playRestage(seg);
     const remote = this.remoteOf(seg);
     if (!remote) return this.say(seg); // a link without its correspondent (an old client's episode): just the voice
     s.remote = remote;
     s.linkDone = false;
+    s.recreation = null;
     const lines = splitSentences(seg.text);
     const deck = this.footage;
     const footage = remote.footage && deck?.ready(remote.footage);
@@ -497,6 +512,42 @@ export class Director {
   }
 
   /**
+   * IN THEIR WORDS, re-staged (server/guests/restage.js; WAVE3 §6): the person the story quoted says their own
+   * sourced words, full frame in the press room (the Stage's LOCATION shot: studio/press.js), in the voice the server
+   * recorded for them. The cut waits the programme's floor (the presenter's hand-over was the story's last sentence),
+   * then the label and the name super are on screen a beat before the first word, and stay until the next segment
+   * cuts back to the studio (endLink, clearLink), the shot held at least the programme's floor. No B-roll, no two-way, no questions, no thanks. Without the v2
+   * Stage (the old renderer draws no guest) the words play over their quote card, still labelled; a piece without
+   * its booking is labelled from its own source. Never a recreation without its label.
+   */
+  async playRestage(seg) {
+    const s = this.scene;
+    const remote = this.remoteOf(seg);
+    const booking = remote?.booking || this.episode?.guests?.[seg.reporter] || null;
+    const recreation = remote?.recreation || recreationOf(booking, seg);
+    s.remote = remote;
+    s.linkDone = false;
+    s.nameSuper = null;
+    s.fileCredit = null;
+    clearTimeout(this.linkStrap);
+    const wait = cutWait(s.program?.id, s.shotSince, now());
+    if (wait > 0.05) await sleep(wait * 1000);
+    s.lowerThird = null;
+    s.recreation = recreation;
+    if (remote && this.v2) this.setShot('location', { focus: remote.slot, storyId: seg.storyId, card: { footage: null }, framing: null, cameraMove: null });
+    else this.setShot('fact', { focus: seg.anchor, storyId: seg.storyId, wall: { mode: 'logo' }, card: { quote: { text: seg.text, by: seg.quoteRef?.by || recreation.name }, source: seg.source, headline: seg.headline }, framing: null, cameraMove: null });
+    await sleep(RESTAGE_BEAT * 1000);
+    await this.say(seg);
+    // a short line: the person stays on screen, after their last word, until the shot has held the programme's floor
+    // (the pause the episode loop holds before the next segment counts, as it holds it: less the voice's start-up)
+    const index = this.episode?.segments?.indexOf(seg) ?? -1;
+    const gap = index >= 0 ? gapAfter(this.episode, index).gap : pace(s).gaps.story;
+    const pause = Math.max(0.06, gap - (this.audio?.mode === 'tts' ? CHANNEL.voiceLatency : 0));
+    const short = pace(s).shots.min + 0.1 - (now() - s.shotSince) - pause;
+    if (short > 0.05) await sleep(short * 1000);
+  }
+
+  /**
    * A mid-programme signpost over STILL TO COME (pace shots.stillToCome; seg.stillToCome from the writer: the later
    * stories it names, each with where its words start). One story: its headline frame; two: a panel of tiles, the
    * second coming in as the voice names it. Only when the shot on air has held the floor (no wait on the cut)
@@ -540,6 +591,7 @@ export class Director {
     s.remote = null;
     s.nameSuper = null;
     s.fileCredit = null;
+    s.recreation = null;
     s.linkDone = false;
   }
 
@@ -577,9 +629,11 @@ export class Director {
     s.anchors = Object.fromEntries(Object.keys(episode.cast).map((slot) => [slot, { emotion: 'neutral' }]));
     const voices = {};
     for (const [slot, id] of Object.entries(episode.cast)) voices[slot] = this.channel.presenters[id]?.voice;
-    // the correspondents of the episode's links speak in their own slots (R1, R2): the browser voice's profile
+    // the correspondents of the episode's links speak in their own slots (R1, R2): the browser voice's profile; a
+    // re-staged guest a generic one by their booking's presentation (the server records their own blend)
     for (const [slot, id] of Object.entries(episode.correspondents || {})) {
-      voices[slot] = this.channel.presenters[id]?.voice;
+      const guest = episode.guests?.[id];
+      voices[slot] = this.channel.presenters[id]?.voice || (guest ? { gender: guest.presentation === 'woman' ? 'female' : 'male', lang: guest.voice?.lang || 'en-GB' } : undefined);
       s.anchors[slot] = { emotion: 'neutral' };
     }
     this.audio.setVoices?.(voices);
@@ -1007,6 +1061,9 @@ export class Director {
     // question is asked in the two-way and the answer can cut to the expert full frame
     const link = seg.link ? this.episode?.segments?.[index + 1] : null;
     const throwAt = (seg.linkKind === 'expert' || link?.kind === 'expert') && lines.length > 2 ? lines.length - 2 : lines.length - 1;
+    // IN THEIR WORDS, re-staged: the hand-over (the story's last sentence, where the words come from) is the
+    // presenter's own, read to camera; the person comes up full frame with the piece (playRestage), never in a two-way
+    const restage = seg.linkKind === 'restage' || link?.kind === 'restage';
     let thrown = false;
     const throwTo = () => {
       const remote = link?.type === 'cross' ? this.remoteOf(link) : null;
@@ -1016,6 +1073,14 @@ export class Director {
       clearTimeout(watch);
       s.remote = remote;
       s.linkDone = false;
+      if (restage) {
+        if (STUDIO.has(s.shot) && (s.shot === 'wide' || s.focus === seg.anchor)) return; // already on the presenter
+        const back = () => this.setShot('close', { focus: seg.anchor, storyId: seg.storyId, wall, card: null, framing: null, cameraMove: null });
+        const wait = cutWait(s.program?.id, s.shotSince, now());
+        if (wait > 0.05) pending = setTimeout(back, wait * 1000);
+        else back();
+        return;
+      }
       const go = () => this.setShot('twoway', { focus: seg.anchor, storyId: seg.storyId, card: null, framing: null, cameraMove: null });
       const wait = cutWait(s.program?.id, s.shotSince, now());
       if (wait > 0.05) pending = setTimeout(go, wait * 1000);
@@ -1023,7 +1088,8 @@ export class Director {
     };
     // IN THEIR WORDS (pace profile shots.quoteCard): the sentence that reads a quote the story's source carries
     // (seg.quote, grounded by the validator) goes to the quote card, held the minimum like any beat
-    const quoteAt = P.shots.quoteCard && seg.quote?.text && !seg.roundup ? lines.findIndex((l, k) => k > 0 && quoteIn(l, seg.quote.text)) : -1;
+    // (never before a re-staging: the person says those words themselves next)
+    const quoteAt = P.shots.quoteCard && seg.quote?.text && !seg.roundup && !restage ? lines.findIndex((l, k) => k > 0 && quoteIn(l, seg.quote.text)) : -1;
     const cutQuote = () => {
       const wait = cutWait(s.program?.id, s.shotSince, now());
       // only with room for the card to air the minimum before the next segment's cut (as any later beat)

@@ -5,6 +5,8 @@
 //            (two lines when needed); turns red for breaking news; never scrolls
 //   captions white-on-black subtitles, never dropping lines, clear of strap and ticker
 //   ticker   one headline (or headline page) at a time
+//   recreation  a re-staged guest's RECREATION label and name super (graphics/recreation.js), in the strap's
+//            place for the whole piece (scene.recreation, set by the director)
 // Programmes differ where their style bibles say so (PROGRAM_GRAPHICS): NEWS IN 60
 // keeps its programme tag up, turns the strap's top line into a progress rule and
 // holds one static UP NEXT plate; MONEY MINUTE's ticker flips the figures of the
@@ -22,6 +24,7 @@ import { CaptionState, drawCaptions } from './captions.js';
 import { TickerState, makeEntries, makeFigureEntry, makeNextEntry, drawTicker } from './ticker.js';
 import { CHANNEL } from '../pace.js';
 import { drawLinkGraphics, drawFileCredit } from './remote.js';
+import { drawRecreation } from './recreation.js';
 
 const foldWords = (x) => String(x || '').toLowerCase().replace(/[“”"‘’']/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 /** Does a caption read the quote on screen (its first five words)? */
@@ -154,6 +157,7 @@ export class Graphics {
     this.dupRef = null;
     this.dupTag = '';
     this.dupSkip = false;
+    this.recOn = false; // a re-staged guest's label on screen (scene.recreation)
     this.errors = new Set();
   }
 
@@ -200,9 +204,24 @@ export class Graphics {
 
     const top = this.captionsOnTop(scene);
     const capsBelow = this.captions.active && !top;
-    this.strap.update(t, mode === 'news' ? this.wantStrap(t, scene) : null, capsBelow ? LIFT : 0);
+    // a re-staged guest: their label and name super own the strap's place for the whole piece (no strap leaving
+    // over them, none coming in), and the captions sit above it from the first frame
+    const rec = mode === 'news' && !!scene.recreation;
+    // (no caption carried across the cut in or out: the presenter's last words never sit under the guest, nor the
+    // guest's under the presenter)
+    if (rec !== this.recOn) {
+      this.recOn = rec;
+      this.captions.reset();
+    }
+    if (rec) {
+      this.strap.reset();
+      this.lift.from = this.lift.to = 1;
+      this.lift.at = t;
+    } else {
+      this.strap.update(t, mode === 'news' ? this.wantStrap(t, scene) : null, capsBelow ? LIFT : 0);
+      this.updateLift(t);
+    }
     this.strap.progress = this.progressOf(scene);
-    this.updateLift(t);
 
     let text = mode === 'news' && scene.subtitles !== false && typeof scene.subtitle === 'string' ? scene.subtitle : null;
     if (text && this.repeatsOnAir(text, scene)) text = null;
@@ -212,7 +231,7 @@ export class Graphics {
     if (text && scene.shot === 'fact' && scene.card?.term?.term) text = null;
     const frame = text && this.audio?.speechFrame ? this.safeFrame() : null;
     // while a strap is up the caption shows one line at a time: the bottom third stays light
-    const perPage = !top && this.strapUp() ? 1 : 2;
+    const perPage = !top && (this.strapUp() || rec) ? 1 : 2;
     this.captions.update(t, text, scene.subtitleSince ?? null, frame?.speaking ? frame.charIndex : null, perPage);
 
     this.updateTickerList(t, scene);
@@ -259,7 +278,7 @@ export class Graphics {
     }
     if (!b || !b.text || !Number.isFinite(b.since) || t < b.since) return;
     if (!this.brContent) this.brContent = strapContent({ headline: b.text, source: b.source, breaking: true, since: b.since });
-    if (this.brAir === null && mode === 'news' && !this.captionsOnTop(scene) && t - b.since <= BREAKING_MAX_AGE) {
+    if (this.brAir === null && mode === 'news' && !this.captionsOnTop(scene) && !scene.recreation && t - b.since <= BREAKING_MAX_AGE) {
       this.brAir = t;
       this.brUntil = t + this.breakingHold(this.brContent);
     }
@@ -428,7 +447,7 @@ export class Graphics {
   /** Bottom edge (or { top }) of the caption block: 6 px above the strap's top, wherever it is. */
   captionPlace(t, scene) {
     if (this.captionsOnTop(scene)) return TOP_PLACE;
-    const above = (this.strap.cur ? this.strap.top(t) : STRAP.tagY) - CAPTION.gap;
+    const above = (this.strap.cur && !scene.recreation ? this.strap.top(t) : STRAP.tagY) - CAPTION.gap;
     BOTTOM_PLACE.bottom = Math.round(lerp(CAPTION.bottomFree, above, this.liftAt(t)));
     return BOTTOM_PLACE;
   }
@@ -475,7 +494,8 @@ export class Graphics {
       if (credit) drawFileCredit(ctx, credit);
     }
     if (mode === 'news') {
-      drawStrap(ctx, t, this.strap);
+      if (scene.recreation) drawRecreation(ctx, scene.recreation, this.accentOf(scene));
+      else drawStrap(ctx, t, this.strap);
       drawCaptions(ctx, t, this.captions, this.captionPlace(t, scene));
     }
     if (this.band.on || this.band.outAt !== null) drawTicker(ctx, t, this.ticker, this.band.inAt, this.band.outAt);

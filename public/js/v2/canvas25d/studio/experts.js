@@ -17,6 +17,7 @@
 //
 //   drawExpertStudio(px, name, t)   the studio `name` into a 384x216 u32 frame at time t (s); false if unknown
 //   EXPERT_STUDIOS                  the names
+//   STUDIO_KIT                      the toolkit below, for other virtual sets in the same style (studio/press.js)
 import { C, bayer } from '../pixbuf.js';
 import { isLand } from './wall.js';
 
@@ -956,6 +957,9 @@ const STUDIOS = {
   chambers: [chambers, chambersLive, 89],
 };
 export const EXPERT_STUDIOS = Object.keys(STUDIOS);
+
+/** The set-building toolkit (bands, relight, falloff, lines, discs, frames; one palette step DOWN / UP). */
+export const STUDIO_KIT = { rng, put, rect, bands, relight, falloff, seg, disc, frameRect, DOWN, UP, FALL };
 
 const BUILT = new Map(); // name -> { px, st }
 

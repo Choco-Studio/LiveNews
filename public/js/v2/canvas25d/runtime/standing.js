@@ -13,7 +13,7 @@ import { Frame, PartBuffer, material } from '../pixbuf.js';
 import { drawCharacter, GROUPS } from '../character.js';
 import { poseAt } from '../rig.js';
 import { actor as makeActor } from '../scene.js';
-import { matsOf } from '../cast/base.js';
+import { matsOf, matKey } from '../cast/base.js';
 import { P } from '../../../palette.js';
 
 const LEG = {
@@ -52,8 +52,8 @@ export class Standing {
     this.mats = {
       jacket: m.jacket,
       // the trousers: the suit's cloth one step darker, so the jacket's hem reads over them
-      trousers: material(`${L.id}:trousers`, { ramp: [ramp[1], ramp[2], ramp[3], ramp[3]], line: L.jacket.line, th: [0.85, 0.1, -0.45] }),
-      gap: material(`${L.id}:trouserGap`, { ramp: [ramp[3], ramp[3], ramp[3], ramp[3]], line: L.jacket.line, decal: true }),
+      trousers: material(matKey(L, 'trousers'), { ramp: [ramp[1], ramp[2], ramp[3], ramp[3]], line: L.jacket.line, th: [0.85, 0.1, -0.45] }),
+      gap: material(matKey(L, 'trouserGap'), { ramp: [ramp[3], ramp[3], ramp[3], ramp[3]], line: L.jacket.line, decal: true }),
       shoe: material('standing:shoe', { ramp: [P.steel, P.slate, P.ink, P.black], line: P.black, th: [0.7, 0.2, -0.3] }),
     };
     return this.mats;

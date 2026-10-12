@@ -45,7 +45,8 @@ export function drawFileCredit(ctx, credit, y = TOP.y + TOP.h + 3) {
  */
 export function drawLinkGraphics(ctx, t, scene, accent = P.red) {
   const r = scene.remote;
-  if (!r || !LINK_SHOTS.has(scene.shot)) return;
+  // (a re-staged guest's own label sits there: graphics/recreation.js)
+  if (!r || !LINK_SHOTS.has(scene.shot) || r.kind === 'restage') return;
   const right = W - TOP.x;
   let y = TOP.y + TOP.h + 3;
   const expert = r.kind === 'expert';
