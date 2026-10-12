@@ -19,7 +19,7 @@
 //   board?, pins?, timelapse? } - marks are where a place's name starts in the text (the map lights the city, the
 //   board lights its row, the presenter points); pins are where a high or low is named ({ char, kind, lat, lon }).
 import { decodeLayer } from './weathersky.js';
-import { matchTracks } from '../public/js/scenes/weather/sky.js';
+import { matchTracks } from '../public/js/scenes/weather/tracks.js';
 
 const UNIT = 'degrees';
 

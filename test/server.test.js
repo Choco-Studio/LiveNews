@@ -60,6 +60,9 @@ async function startApp(env = {}) {
   for (const item of ['server', 'config', 'package.json']) fs.cpSync(path.join(REPO, item), path.join(dir, item), { recursive: true });
   fs.mkdirSync(path.join(dir, 'public', 'js'), { recursive: true });
   fs.copyFileSync(path.join(REPO, 'public', 'js', 'cues.js'), path.join(dir, 'public', 'js', 'cues.js'));
+  // the client modules the server imports (no imports of their own)
+  fs.mkdirSync(path.join(dir, 'public', 'js', 'scenes', 'weather'), { recursive: true });
+  fs.copyFileSync(path.join(REPO, 'public', 'js', 'scenes', 'weather', 'tracks.js'), path.join(dir, 'public', 'js', 'scenes', 'weather', 'tracks.js'));
   fs.writeFileSync(path.join(dir, 'public', 'index.html'), '<!doctype html><title>test page</title>');
   fs.writeFileSync(path.join(dir, 'public', 'js', 'app.js'), 'export const ok = true;');
   fs.mkdirSync(path.join(dir, 'public-evil'));

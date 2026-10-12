@@ -27,6 +27,9 @@
 // The per-pixel work runs on a coarse node grid (every 4 px: cover, rain, the wind's offset, pressure) stepped
 // linearly along each row, and one texture read per pixel (two where it rains).
 import { P } from '../../palette.js';
+import { matchTracks } from './tracks.js';
+
+export { matchTracks };
 
 const DEG = Math.PI / 180;
 const pack = (hex) => {
@@ -215,10 +218,6 @@ export function sampleLayer(S, grid, lat, lon) {
 
 // ------------------------------------------------------------------------------------------- highs and lows
 const wrapD = (d) => d - Math.round(d / 360) * 360;
-/** Degrees between two places on a flat-ish map (longitude shrunk by latitude): enough to match systems. */
-function apart(a, b) {
-  return Math.hypot(wrapD(b.lon - a.lon) * Math.cos(((a.lat + b.lat) / 2) * DEG), b.lat - a.lat);
-}
 
 /**
  * A system's centre to a fraction of a cell: a parabola through the pressure of the cell and its neighbours along
@@ -254,53 +253,6 @@ export function trackSystems(S) {
       const a = raw[i - 1], b = raw[i + 1];
       return { ...p, lat: (a.lat + 2 * p.lat + b.lat) / 4, lon: p.lon + (wrapD(a.lon - p.lon) + wrapD(b.lon - p.lon)) / 4 };
     });
-  }
-  return tracks;
-}
-
-/**
- * The frame-to-frame matching alone, on the grid's centres (no refining, no smoothing): the writer uses it to name
- * only the highs and lows the time-lapse keeps on screen for the whole run (server/weatherwriter.js).
- * -> [{ id, kind, pts: [{ frame, lat, lon, hPa }] }]
- */
-export function matchTracks(systems, frames) {
-  const by = Array.from({ length: frames }, () => []);
-  for (const s of systems || []) by[s.frame]?.push(s);
-  const tracks = [];
-  let open = by[0].map((s) => {
-    const t = { id: tracks.length, kind: s.kind, pts: [{ frame: 0, lat: s.lat, lon: s.lon, hPa: s.hPa }] };
-    tracks.push(t);
-    return t;
-  });
-  for (let f = 1; f < frames; f++) {
-    const next = by[f];
-    const pairs = [];
-    open.forEach((t, i) => {
-      const p = t.pts[t.pts.length - 1];
-      next.forEach((s, j) => {
-        if (s.kind !== t.kind) return;
-        const d = apart(p, s);
-        if (d <= 12) pairs.push([d, i, j]);
-      });
-    });
-    pairs.sort((a, b) => a[0] - b[0]);
-    const usedT = new Set(), usedS = new Set();
-    const still = [];
-    for (const [, i, j] of pairs) {
-      if (usedT.has(i) || usedS.has(j)) continue;
-      usedT.add(i);
-      usedS.add(j);
-      const s = next[j];
-      open[i].pts.push({ frame: f, lat: s.lat, lon: s.lon, hPa: s.hPa });
-      still.push(open[i]);
-    }
-    next.forEach((s, j) => {
-      if (usedS.has(j)) return;
-      const t = { id: tracks.length, kind: s.kind, pts: [{ frame: f, lat: s.lat, lon: s.lon, hPa: s.hPa }] };
-      tracks.push(t);
-      still.push(t);
-    });
-    open = still;
   }
   return tracks;
 }
