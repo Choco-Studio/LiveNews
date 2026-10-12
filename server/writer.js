@@ -970,7 +970,9 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     if (unbalanced(head)) continue;
     // "Windler, working with his wife, Betty, and other spouses[, secretly prepared a batch of flags]": a predicate
     // after the comma belongs to the subject before it (the head has no verb of its own)
-    if (comma && new RegExp(`^(?:[a-z]+ly\\s+)?(?:[a-z]{3,}ed|${PAST_FORM.source.replace(/^\^|\$$/g, '')})\\b`).test(t.slice(end)) && !/^(?:[a-z]+ly\s+)?[a-z]+ed\s+(?:by|in|on|at|near|from|with)\b/.test(t.slice(end))) continue;
+    // ("Ticket sales for the satirical black comedy, which stars Cruise…[, dropped by around 60%…]", BBC 12 Oct: an amount
+    // after "by" is how much, not who, so the verb is the subject's)
+    if (comma && new RegExp(`^(?:[a-z]+ly\\s+)?(?:[a-z]{3,}ed|${PAST_FORM.source.replace(/^\^|\$$/g, '')})\\b`).test(t.slice(end)) && !/^(?:[a-z]+ly\s+)?[a-z]+ed\s+(?:by(?!\s+(?:around|about|nearly|almost|roughly|some|more|less|over|under|up|just|only|as much|a (?:third|quarter|half|fifth|tenth)|half|\d))|in|on|at|near|from|with)\b/.test(t.slice(end))) continue;
     // the predicate follows the comma: "The experiment, called the Kentucky Reentry Probe Experiment (KREPE-3)[, is the
     // third in a series…]" (NASA 10 Oct)
     if (comma && /^(?:is|are|was|were|has|have|had|will|would|can|could|may|might|must|remains?|becomes?)\b/i.test(t.slice(end))) continue;
@@ -1036,7 +1038,9 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     if (/^(?:In|At|On|For|By|With|From|Under|During|After|Before|Amid|Despite|As)\s+what\b/.test(head) && !/,\s/.test(head)) continue;
     // "Previous research has found that when the brain appears older than expected[, that pattern can be...]": a
     // "that" clause opened on its own subordinate one waits for its main clause after the comma (ScienceDaily 5 Oct)
-    if (comma && /\b(?:that|whether)\s+(?:when|if|while|whilst|because|although|though|once|unless|whenever|before|after|until|as soon as|even if|even though)\b[^,;:]*$/i.test(head)) continue;
+    // (at any cut: "Zelenskyy said that while his country "welcomed" the announcement by Trump[ as "good news…," Russia was
+    // still hitting…]", NPR 12 Oct, aired cut at "as")
+    if (/\b(?:that|whether)\s+(?:when|if|while|whilst|because|although|though|once|unless|whenever|before|after|until|as soon as|even if|even though)\b[^,;:]*$/i.test(head)) continue;
     // "Six years ago, in an attempt to push local manufacturing[, India doubled...]": no main verb once the
     // infinitives are set aside
     if (!hasFiniteVerb(head.replace(/\b(?:in (?:an attempt|a bid|an effort|order)|so as|aiming|trying|seeking) to\b[^,;:]*/gi, ' ').replace(/\bto\s+[a-z]+(?:\s+(?:and|or)\s+[a-z]+)?\b/gi, ' '))) continue;
@@ -1045,7 +1049,8 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // "...the Gold Rush Trail, where miners [and prospectors flocked to...]": a clause it opened still waits for its
     // verb (a plural noun after "where" is its subject, not a verb)
     if (/^\s*and\b/i.test(t.slice(at))) {
-      const open = head.match(/\b(?:where|when|while|as|because|although|though|if|which|who|that|whose)\s+((?:[\w’'-]+\s+){0,3}[\w’'-]+)$/i);
+      // ("a model showing how common metals like copper[ and zinc may influence…]", ScienceDaily 12 Oct)
+      const open = head.match(/\b(?:where|when|while|as|because|although|though|if|which|who|that|whose|how|why|whether|what)\s+((?:[\w’'-]+\s+){0,3}[\w’'-]+)$/i);
       if (open && !open[1].split(/\s+/).some((w) => AUX_VERB.test(w) || PAST_FORM.test(w) || /^[a-z]{3,}ed$/i.test(w))) continue;
     }
     // "its decision to relocate was made [because of...]": a bare passive of a light verb says nothing alone
@@ -1056,6 +1061,13 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     if (/\b(?:a|an|the|of|to|in|on|at|for|from|by|with|and|or|than|its|their|his|her|this|that|says|said|after|before|since|until|while|because|although|though|when|where|which|who|whose|whom|as|if|about|into|onto|over|under|between|among|through|during|without|within|against|toward|towards|upon|via|per|like|including|despite|amid|such)$/i.test(head)) continue;
     // "...from processing industrial[ and commercial wastewater...]": an adjective pair is one phrase (Guardian 9 Oct)
     if (/^\s*(?:and|or)\b/i.test(t.slice(at)) && /\b[a-z]{3,}(?:al|ic|ous|ive|ary|ent|ant|ful|less|ern|ese)$/i.test(head) && /^\s*(?:and|or)\s+[a-z]{3,}(?:al|ic|ous|ive|ary|ent|ant|ful|less|ern|ese)\b/i.test(t.slice(at))) continue;
+    // "an increased likelihood of wetter[, windier weather than usual]": two adjectives in a row are one phrase, the noun
+    // after the second (BBC 12 Oct, aired as "…likelihood of wetter.")
+    const ADJ_END = /(?:ier|er|est|al|ic|ous|ive|ful|less|ish|ese|ern|ant|ent|ary|y)$/i;
+    if (comma && /\b(?:of|a|an|the|more|less|even|much|far|its|their|and)\s+[a-z]+$/i.test(head) && ADJ_END.test(head.split(/\s+/).pop()) && /^[a-z]+(?:ier|er|est|al|ic|ous|ive|ful|less|ish|ese|ern|ant|ent|ary|y)\s+[a-z]+/i.test(t.slice(end)) && /^(?:[a-z]+(?:ier|er|est))\b/i.test(t.slice(end)) === /(?:ier|er|est)$/i.test(head)) continue;
+    // "forward guidance, where central bankers communicate[ where they expect interest rates to be…]": a verb that takes a
+    // question for its object waits for it (Guardian 12 Oct)
+    if (/^(?:where|when|which|how|why|what|whether|who)$/i.test(t.slice(at, end).trim()) && /\b(?:communicat|explain|show|reveal|know|knew|decid|ask|understand|understood|determin|predict|see|saw|seen|learn|wonder|tell|told|describ|discuss|consider|examin|investigat|assess|indicat|signal|judg|choos|chose|remember|forget|forgot|imagin|realis|realiz|notic|discover|outlin|set(?:s|ting)? out|work(?:s|ed|ing)? out|figur(?:e|es|ed|ing) out|find(?:s|ing)? out|found out)[a-z]*$/i.test(head)) continue;
     // an attribution must keep what it attributes ("Rail operators in Japan say [...]" is never cut after "say")
     if (/\b(?:say|says|said|warn|warns|believe|believes|expect|expects)$/i.test(head)) continue;
     // "...visible with binoculars just [after sunset]": an adverb belongs to the phrase that follows it
@@ -1068,6 +1080,10 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // ("With counting nearly concluded, Serb nationalist Zeljka Cvijanovic": an opening phrase is not the clause)
     const main = head.replace(/,\s+(?:which|who|whose|where|when|called|named|known as|dubbed|titled|nicknamed)\b[^,]*(?:,|$)/gi, ' ').replace(/^(?:with|after|before|despite|amid|following|once|since)\s[^,]{1,60},\s*/i, '').replace(/\s+/g, ' ').trim();
     if (!hasFiniteVerb(main) || isFragment(head)) continue; // ("A man who lives in a log cabin[ surrounded by…]")
+    // (a plural noun before its preposition is the subject, not a verb: "Ticket sales for the satirical black comedy[,
+    // which stars Cruise…]", BBC 12 Oct; the verb, if any, comes after the phrase)
+    const np = main.match(/^\S+\s+[a-z]{3,}s\s+(?:for|of|in|at|on|across|from|among|between|over|under)\s+(.*)$/);
+    if (np && !hasFiniteVerb(`X ${np[1]}`)) continue;
     // ...and a clause it opens ("it remains unclear how a citizen of Oman[, an Arab country...]") keeps its own
     // verb: an appositive after the subject is no verb of it
     const open = head.match(/\b(?:how|why|whether|what|if|that)\s+(\S.*)$/i);

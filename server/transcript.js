@@ -15,11 +15,18 @@ const OPENERS = /^["“'‘]?(?:here(?:'|’)?s|here is|over to|back to you|let(
 const PROMO = /\b(?:help us win|vote (?:for us|to help us))\b|\b(?:[Ss]ee|[Cc]lick|[Ff]ollow) (?:the link|here|this link)\b|\b[Ff]or more details,? see\b|\bcan be (?:found|read|seen|viewed|downloaded|accessed|watched) (?:here|online|at)\b|\bis available here\b|\b[Yy]ou can (?:vote|listen|watch|sign up|subscribe|get access)\b|^[A-Z][a-z]+ [A-Z][a-z]+: |\b[Ii]f you['’]re an? [\w ]{1,30}subscriber\b|\b[Ii]n this week['’]s episode\b|\b[Kk]eep reading\b|\b[Rr]ead (?:on|more) (?:for|to)\b|\b[Ll]isten (?:to (?:the )?(?:full )?(?:episode|podcast)|now)\b|\b[Ss]ubscribe (?:to|now|for)\b|\b[Oo]n (?:this week['’]s |today['’]s )?(?:episode of )?[A-Z][\w’']+(?: podcast)?, we (?:discussed|talked|spoke|dug)\b|\b(?:shares|offers|gives|brings) (?:us )?(?:further |more |his |her |their |some )?(?:insights?|analysis|perspective|thoughts)\b|\bspeaks (?:to|with) [^.]{3,80}\babout\b|\b(?:editor|analyst|correspondent|commentator)(?: in chief)? [A-Z][a-z]+ [A-Z][a-z]+ explains\b/;
 const HANDOFFS = /\b(?:[A-Z][a-z]+ ){1,3}(?:is here |joins us |has the details|has more|takes up the story|reports(?: now)?(?: from [A-Z]| for us|\.|$))|\bwith (?:more|the latest|the details)(?: on| from)? (?:the situation|that|this|the story|what happened|the scene)\b|\bjoins us (?:now|live)\b/;
 
+// the outlet's own reporter introduced to its viewers ("Elitsa Gadeva explains what this would mean for both sides",
+// France 24 12 Oct, aired on WORLD NOW), and its credit lines ("Details by FRANCE 24 correspondent in Kyiv, …")
+const PRESENTS = /^(?:\p{Lu}[\p{L}’'-]+ ){1,3}(?:explains|looks at|takes a look at|breaks down|unpacks|examines|reports on) (?:what|why|how|whether|where|who|the)\b|^(?:Details|Analysis|Story|Report|Reporting|Video|Words|Pictures|Images)(?: and (?:words|pictures|analysis|video))? by\b/u;
+// the outlet on its own reporting ("The BBC has not seen the letter", BBC 12 Oct, aired as a correspondent's line about
+// a letter nobody had mentioned): how it reported, never what happened
+const OUTLET_SELF = /^(?:The )?(?:BBC|Guardian|Observer|Telegraph|Times|Reuters|AP|Associated Press|AFP|Al Jazeera|France 24|FRANCE 24|CNN|NPR|DW|Euronews|Sky News|ABC News|NBC News|CBS News|The Verge|Ars Technica|TechCrunch)(?: News)?(?:['’]s? (?:team|reporters?|correspondents?))? (?:has|have|had|is|was|did|does|could|can|cannot|can['’]t|could not|couldn['’]t|was not|wasn['’]t|has not|hasn['’]t|did not|didn['’]t)(?: not)?(?: (?:yet|independently|been able to|able to))* (?:seen|see|contacted|approached|asked|verified|verify|reached|confirmed|confirm|requested|sought|obtained|seen a copy)\b/u;
+
 /** Is this sentence a broadcast hand-off, greeting or sign-off rather than part of the story? */
 export function isTranscriptLine(sentence) {
   const s = String(sentence ?? '').trim();
   if (!s) return false;
-  return OPENERS.test(s) || HANDOFFS.test(s) || PROMO.test(s);
+  return OPENERS.test(s) || HANDOFFS.test(s) || PROMO.test(s) || PRESENTS.test(s) || OUTLET_SELF.test(s);
 }
 
 /**

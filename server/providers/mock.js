@@ -10,7 +10,7 @@
 
 import { isTranscriptLine } from '../transcript.js';
 import { isBreaking, plainTitle } from '../news.js';
-import { ALSO_LEAN, LIGHT, contentWords, extractFigures, sentencesIn, harmlessIncident, isGrave, leansOnPrevious, notForFeatures, numbersIn, quotesIn, severity } from '../facts.js';
+import { ALSO_LEAN, LIGHT, contentWords, extractFigures, fixNameTypos, sentencesIn, harmlessIncident, isGrave, leansOnPrevious, notForFeatures, numbersIn, quotesIn, severity } from '../facts.js';
 import { locate, lookupPlace, placesIn } from '../gazetteer.js';
 import { KNOWN_MAX, LINK_GAP, SENTENCE_WORDS, TIMELINE_MAX, hasFiniteVerb, headlineNames, isFragment, shortHeadline, splitClauses, trimClause } from '../writer.js';
 import { topicOf } from '../topics.js';
@@ -536,7 +536,9 @@ const sentencesOf = (s) =>
     .map((t) => t.replace(/^(?:Exclusive|Revealed|Analysis|Opinion|Explainer|Watch|Live|Update|Breaking)\s*:\s*(?=\p{Lu})/u, '').replace(/\s*\((?:€|£|\$|US\$|A\$|C\$|¥)\s?[\d.,]+\s*(?:bn|m|k|billion|million|trillion|tn)?\)/g, ''))
     // (a quotation cut in two is no sentence: 'Way too close to comfort." Radars and telescopes...', Ars Technica 9 Oct)
     .filter((t) => !FRAGMENT.test(t.trim()) && !brokenQuote(t) && !VERBLESS(t.trim())); // never inside a figure, a title or initials
-const unstop = (t) => String(t).trim().replace(/[\s.!?:;,]+$/, '');
+// (a clause cut after a quote's own comma or at a dash ends clean: 'a factor called "local pH,".' and 'a blow to AISI -.'
+// aired, ScienceDaily and the BBC 12 Oct)
+const unstop = (t) => String(t).trim().replace(/[,;:]+(["”’)]+)$/, '$1').replace(/[\s.!?:;,–—-]+$/, '');
 const asSentence = (t) => (/[.!?…]["”'’)]$/.test(String(t).trim()) ? String(t).trim() : `${unstop(t)}.`); // '…real-time."' is already one
 const wordCount = (t) => String(t).replace(/\[[^\]]*\]/g, ' ').split(/\s+/).filter(Boolean).length;
 const firstName = (p) => String(p?.name || 'my colleague').replace(/^(?:Dr|Mr|Ms|Mrs|Prof)\.?\s+/i, '').split(/\s+/)[0];
@@ -833,6 +835,10 @@ function spokenValue(f) {
 function study(story) {
   const title = plainTitle(story.title) || story.title;
   const s = { ...story, title };
+  // (an outlet's typo in a headline name is said right: "Woodfood" for Woodford, Guardian 12 Oct)
+  const whole = `${story.summary || ''} ${story.body || ''}`;
+  if (s.summary) s.summary = fixNameTypos(s.summary, title, whole);
+  if (s.body) s.body = fixNameTypos(s.body, title, whole);
   const text = `${title} ${s.summary || ''}`;
   // Grave by severity, not by a keyword: "fires its CEO" is not, "an earthquake, no damage reported" is sober news.
   const grave = isGrave(text);

@@ -274,3 +274,27 @@ test('COSMOS on real news (5 Oct): a launch, deep time, a mission blog, a profil
   assert.equal(trimClause('It also lies at the southern end of the 1860s Gold Rush Trail, where miners and prospectors flocked to this part of British Columbia in search of riches.', 16), 'It also lies at the southern end of the 1860s Gold Rush Trail.', 'never "where miners" cut from its verb');
   assert.ok(isTranscriptLine('See the link here for more details on naming conventions on Mars.'));
 });
+
+test('real news of 12 Oct, all five programmes: one story per coined phrase, names spelt right, clean cuts, no furniture', async () => {
+  const { sameCoinedPhrase } = await import('../server/news.js');
+  const { fixNameTypos } = await import('../server/facts.js');
+  // two headlines quoting one coined phrase, with a name in common, are one story, whatever places they name first
+  assert.ok(sameCoinedPhrase({ title: "Trump says Russia and Ukraine agree to an 'energy ceasefire'" }, { title: "Ukraine: Zelensky says learned of Trump's 'energy ceasefire' through media" }));
+  assert.ok(!sameCoinedPhrase({ title: "Minister defends 'national security' law" }, { title: "Court hears 'national security' case in Hong Kong" }), 'a stock phrase alone joins nothing');
+  // an outlet's typo in a headline name, said right; a different person with a near name stays
+  const body = 'Michael Woodford of Columbia. Hall and Woodford demonstrated it. Woodfood built on this work.';
+  assert.equal(fixNameTypos(body, 'Nobel Prize for economics awarded to Hall and Woodford', body), body.replace('Woodfood', 'Woodford'));
+  assert.equal(fixNameTypos('Gordon Browne said. Browne added.', 'Brown wins vote', 'Brown and Brown. Gordon Browne said. Browne added.'), 'Gordon Browne said. Browne added.');
+  // another outlet's reporter introduced, credit lines, the outlet on its own reporting: never read
+  for (const t of ['Elitsa Gadeva explains what this would mean for both sides.', 'Details by FRANCE 24 correspondent in Kyiv, Gulliver Cragg.', 'The BBC has not seen the letter.', 'Reuters could not independently verify the report.']) assert.ok(isTranscriptLine(t), t);
+  for (const t of ['The Bank of England explains why rates must rise.', 'The BBC has learned that the minister will resign.']) assert.ok(!isTranscriptLine(t), t);
+  // cuts that kept a clause waiting for its verb, its object or its noun
+  assert.equal(trimClause('Hall and Woodford’s work also led to the development of forward guidance, where central bankers communicate where they expect interest rates to be in the future.', 16), 'Hall and Woodford’s work also led to the development of forward guidance.');
+  assert.equal(trimClause('Natural Resources Wales said it was concerned by long-range forecasts which indicated an increased likelihood of wetter, windier weather than usual over the coming months.', 18), 'Natural Resources Wales said it was concerned by long-range forecasts.');
+  for (const [t, max] of [
+    ['Ticket sales for the satirical black comedy, which stars Cruise as oil magnate Digger Rockwell, dropped by around 60% in the movie’s second weekend in cinemas.', 14],
+    ['Ukrainian President Volodymyr Zelenskyy said that while his country "welcomed" the announcement by Trump as "good news for everyone," Russia was still hitting energy infrastructure in Kyiv.', 20],
+    ['Scientists have developed a model showing how common metals like copper and zinc may influence the buildup of proteins associated with the disease, while also exploring ways to stop it.', 22],
+  ]) assert.equal(trimClause(t, max), null, t);
+  assert.equal(trimClause('Oil prices in Asia rose sharply on Monday, after the announcement of a ceasefire.', 12), 'Oil prices in Asia rose sharply on Monday.');
+});

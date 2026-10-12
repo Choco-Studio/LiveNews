@@ -873,3 +873,36 @@ export function inventedClaim(sentence, source, { ignore = [] } = {}) {
   }
   return null;
 }
+
+/** One edit apart (a letter changed, added or dropped)? */
+function oneEdit(a, b) {
+  if (a === b || Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  if (a.length === b.length) return a.slice(i + 1) === b.slice(i + 1);
+  return a.length > b.length ? a.slice(i + 1) === b.slice(i) : a.slice(i) === b.slice(i + 1);
+}
+
+/**
+ * An outlet's typo in a name the headline gives, corrected ("Woodfood built on this work…" under "Nobel Prize for
+ * economics awarded to Hall and Woodford", Guardian 12 Oct): a capitalised word one letter off a headline name of five
+ * letters or more, said once, while the article spells the name right at least twice. A different person with a
+ * near name ("Browne" beside "Brown") is said more than once, or the headline name is not, so it stays.
+ */
+export function fixNameTypos(text, title, whole = text) {
+  const t = String(text ?? '');
+  if (!t) return t;
+  const names = [...new Set([...String(title ?? '').matchAll(/\p{Lu}\p{Ll}{4,}/gu)].map((m) => m[0]))];
+  if (!names.length) return t;
+  const count = (w) => (String(whole).match(new RegExp(`(?<![\\p{L}])${w}(?![\\p{L}])`, 'gu')) || []).length;
+  const fixes = new Map();
+  for (const m of t.matchAll(/(?<![\p{L}])\p{Lu}\p{Ll}{3,}(?![\p{L}])/gu)) {
+    const w = m[0];
+    if (fixes.has(w) || names.includes(w)) continue;
+    const n = names.find((x) => x[0] === w[0] && oneEdit(w, x));
+    if (n && count(w) === 1 && count(n) >= 2) fixes.set(w, n);
+  }
+  let out = t;
+  for (const [w, n] of fixes) out = out.replace(new RegExp(`(?<![\\p{L}])${w}(?![\\p{L}])`, 'u'), n);
+  return out;
+}

@@ -490,6 +490,20 @@ export function sameQuotedName(a, b) {
   return names(a).some((n) => has(text(b), n)) || names(b).some((n) => has(text(a), n));
 }
 
+/**
+ * A coined phrase both headlines put in quotes, in any case, and a name in both: one story ("Trump touts surprise
+ * 'energy ceasefire'" / "Zelensky says learned of Trump's 'energy ceasefire' through media" / "Trump says Russia and
+ * Ukraine agree to an 'energy ceasefire'", France 24 and NPR 12 Oct, two aired in one WORLD NOW). The name keeps a stock
+ * phrase in quotes ("national security") from joining two events; the places may differ (Russia, Ukraine: one event).
+ */
+export function sameCoinedPhrase(a, b) {
+  const coined = (s) => new Set([...String(s?.title || '').matchAll(/["“‘'](\p{L}[\p{L}-]{3,}(?:\s\p{L}[\p{L}-]{2,}){1,2})["”’'](?!\p{L})/gu)].map((m) => m[1].toLowerCase()));
+  const caps = (s) => new Set([...String(s?.title || '').matchAll(/(?<![\p{L}'’])(\p{Lu}[\p{Ll}’'-]{2,})/gu)].map((m) => m[1].replace(/['’]s$/u, '')).filter((w) => !/^(?:The|And|For|With|After|Over|From|How|Why|What|Who|When|Watch|Live|Video)$/.test(w)));
+  const ca = coined(a);
+  const na = caps(a);
+  return [...coined(b)].some((n) => ca.has(n)) && [...caps(b)].some((n) => na.has(n));
+}
+
 /** The storm names a text gives ("Hurricane Isaias", "Storm Amy"). */
 export const stormNamesIn = (text) => [...String(text || '').matchAll(STORM_NAME)].map((m) => m[1]);
 /**
@@ -1059,6 +1073,7 @@ export class NewsDesk {
     // the same quoted name in both ("India’s ‘Cockroach’ leaders detained" / "Founder of India's 'Cockroach' movement among
     // hundreds detained" / "India cracks down on youth protests", four outlets 10 Oct: three aired in one WORLD NOW)
     if (sameQuotedName(a, b) && placesAgree(this.whereOf(a), this.whereOf(b)) !== false) return true;
+    if (sameCoinedPhrase(a, b)) return true;
     const ea = this.eventFacts(a);
     const eb = this.eventFacts(b);
     // the same name and the same figure in both headlines is one story ("What happened to OpenAI’s $20bn? Revenue scare
