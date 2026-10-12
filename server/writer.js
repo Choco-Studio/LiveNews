@@ -987,7 +987,9 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // a clause it opened still waits for its verb: "…paid when the bond matures, while with the income version[,
     // interest is paid monthly]" (Guardian 10 Oct)
     const lastSeg = head.slice(head.lastIndexOf(',') + 1).trim();
-    if (/^(?:while|whilst|whereas|although|though|because|when|if|unless|since|once)\b/i.test(lastSeg) && !hasFiniteVerb(lastSeg)) continue;
+    // (and one a conjunction opened: "…stained Misty for weeks, but the four-year-old dog[, who had always been…, soon
+    // became sick]", BBC 12 Oct, aired cut there)
+    if (/^(?:while|whilst|whereas|although|though|because|when|if|unless|since|once|but|and|yet|so|or)\b/i.test(lastSeg) && !hasFiniteVerb(lastSeg.replace(/^(?:but|and|yet|so|or)\s+/i, ''))) continue;
     // nor on a sentence adverb or a verb in -ing that waits for what follows: "…of editorial staff, possibly[ before
     // Christmas]", "…could take years, let alone figuring out[ where…]" (Guardian, The Verge 10 Oct)
     if (/\b(?:possibly|probably|perhaps|reportedly|allegedly|apparently|potentially|especially|particularly|mainly|mostly|largely|partly|presumably|eventually|initially|originally|previously|currently|recently|immediately|subsequently|likely|notably|including)$/i.test(head)) continue;

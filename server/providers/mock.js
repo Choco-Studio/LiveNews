@@ -36,6 +36,9 @@ const HEADLINE_PERFECT = {
   opens: 'opened', closes: 'closed', bans: 'banned', sues: 'sued', finds: 'found', reveals: 'revealed', announces: 'announced',
   confirms: 'confirmed', approves: 'approved', rejects: 'rejected', blocks: 'blocked', fines: 'fined', delays: 'delayed',
   pauses: 'paused', freezes: 'frozen', ends: 'ended', drops: 'dropped', adds: 'added', hits: 'hit', loses: 'lost',
+  // ("Antarctic Sea Ice Grows to Its 2026 Maximum", NASA 12 Oct)
+  grows: 'grown', rises: 'risen', jumps: 'jumped', soars: 'soared', slumps: 'slumped', reaches: 'reached', tops: 'topped',
+  surges: 'surged', dips: 'dipped', climbs: 'climbed', shrinks: 'shrunk', doubles: 'doubled', halves: 'halved',
   builds: 'built', breaks: 'broken', shuts: 'shut', pulls: 'pulled', removes: 'removed', releases: 'released',
   signs: 'signed', expands: 'expanded', acquires: 'acquired', invests: 'invested', joins: 'joined', leaves: 'left',
   quits: 'quit', hires: 'hired', fires: 'fired', settles: 'settled',
@@ -660,7 +663,8 @@ function unheardPronoun(t, told) {
 function echoFigure(text, title) {
   const list = numbersIn(text)
     .map((n) => ({ n, word: text.slice(n.end).match(/^\s*((?:million|billion|bn)\s+)?([a-z]{3,})/)?.[0] }))
-    .filter(({ n, word }) => word && !(Number.isInteger(n.value) && n.value >= 1900 && n.value <= 2100 && !n.unit) && !/^\s*(?:st|nd|rd|th)\b/.test(word) && !/\p{L}[-‐‑]$/u.test(text.slice(0, n.index)));
+    // (a number in a name is no figure: "the Apollo 17 launch" once gave UNIT-8 "17 launch. Logged.", COSMOS 12 Oct)
+    .filter(({ n, word }) => word && !(Number.isInteger(n.value) && n.value >= 1900 && n.value <= 2100 && !n.unit) && !/^\s*(?:st|nd|rd|th)\b/.test(word) && !/\p{L}[-‐‑]$/u.test(text.slice(0, n.index)) && !(!n.percent && !n.currency && /\p{Lu}[\p{L}’'-]*\s$/u.test(text.slice(0, n.index))));
   const inTitle = list.find(({ n }) => String(title).includes(n.raw));
   const pick = inTitle || list.sort((a, b) => b.n.scaled - a.n.scaled)[0];
   return pick ? `${pick.n.raw}${pick.word.replace(/^\s*/, ' ')}` : null;
