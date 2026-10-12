@@ -157,7 +157,9 @@ function sortSmall(a, n) {
 // Materials: a 4-step ramp (highlight, base, shade, deep), a line colour and
 // optional rim light. Thresholds map a Lambert term to the ramp.
 
-const MAX_MATS = 256;
+// The whole cast (presenters, correspondents, experts) registers ~350 materials before the sets and props add theirs;
+// the per-pixel material ids are 16-bit (PartBuffer.mat), so a 24/7 run that has aired every face keeps every colour.
+export const MAX_MATS = 4096;
 export const MAT = {
   ramp: new Uint32Array(MAX_MATS * 4),
   line: new Uint32Array(MAX_MATS),
@@ -180,6 +182,13 @@ export const F_NO_OUTLINE = 16; // no outer outline (soft edges such as cast sha
  */
 export function material(key, spec) {
   if (MAT.byKey.has(key)) return MAT.byKey.get(key);
+  // never past the table: a material beyond it would take another's colours (keys must be fixed, never per frame).
+  // Full, the picture goes on with the first material rather than stopping the channel (and says so once).
+  if (MAT.count >= MAX_MATS) {
+    if (!MAT.full) console.warn(`[v2] material table full (${MAX_MATS}); "${key}" and later ones reuse material 1`);
+    MAT.full = true;
+    return 1;
+  }
   const id = MAT.count++;
   const r = spec.ramp;
   for (let i = 0; i < 4; i++) MAT.ramp[id * 4 + i] = u32(r[Math.min(i, r.length - 1)]);
@@ -223,7 +232,7 @@ export class PartBuffer {
     this.w = w;
     this.h = h;
     const n = w * h;
-    this.mat = new Uint8Array(n);
+    this.mat = new Uint16Array(n); // material id (MAT), 0 = empty
     this.tone = new Uint8Array(n);
     this.grp = new Uint8Array(n);
     this.z = new Uint8Array(n);

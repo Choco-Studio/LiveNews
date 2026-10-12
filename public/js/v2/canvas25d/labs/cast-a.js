@@ -9,7 +9,8 @@
 //   lab.profile(n)    ms per frame by section: total, face (FACES), hair, body (neck, outfit, ears),
 //                     look (over hooks), arms (HANDS), resolve, and `rest` = total − face
 //   modes
-//     'lineup'      the four in columns at `scale` (each rendered alone, 96 px wide), seat +1 | -1
+//     'lineup'      the four in columns at `scale` (each rendered alone, 96 px wide), seat +1 | -1;
+//                   `cast` (up to four ids: any presenter, correspondent or expert) lines up others
 //     'closeup'     one presenter at `scale` on ink, idle at t, optional yaw / pitch offsets
 //     'turnaround'  closeup; t 0..4 sweeps yaw −0.5 → 0.5, t 4..8 pitch −0.15 → 0.15
 //     'idle'        closeup with the idle layer only (breathing, blinks, sway)
@@ -42,7 +43,7 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
 let SETMOD = null;
 import('../studio/set.js').then((m) => { SETMOD = m; }).catch(() => { SETMOD = null; });
 
-const state = { mode: 'lineup', presenter: 'paco', seat: 1, scale: 2.15, emotion: null, gesture: 'raise_hand', yaw: 0, pitch: 0, bg: 'ink', k: 4, zoom: 1, programme: null, framing: 'mcu' };
+const state = { mode: 'lineup', presenter: 'paco', seat: 1, scale: 2.15, emotion: null, gesture: 'raise_hand', yaw: 0, pitch: 0, bg: 'ink', k: 4, zoom: 1, programme: null, framing: 'mcu', cast: null };
 export const HOME = { paco: 'world-now', lola: 'world-now', sam: 'news-60', penny: 'money-minute' };
 const actors = new Map();
 function actorFor(id, kind, side = state.seat) {
@@ -101,9 +102,11 @@ function zoomFrame(cx, cy, z) {
 function lineup(t) {
   const s = state.scale;
   const y = neckRow(s);
-  for (let i = 0; i < 4; i++) {
+  const cast = Array.isArray(state.cast) && state.cast.length ? state.cast.slice(0, 4) : CAST_A;
+  comp.fill(C.ink);
+  for (let i = 0; i < cast.length; i++) {
     frame.clear(C.ink);
-    drawOne(actorFor(CAST_A[i], 'idle'), t, 192, y, s);
+    drawOne(actorFor(cast[i], 'idle'), t, 192, y, s);
     for (let r = 0; r < H; r++) comp.set(frame.px.subarray(r * W + 144, r * W + 240), r * W + i * 96);
   }
   frame.px.set(comp);
