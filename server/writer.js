@@ -1096,7 +1096,8 @@ export function trimClause(sentence, max, min = 6, { keep = [] } = {}) {
     // (a verb in -ed before "to" or "by" is the noun's: "needed to contain", "caused by"; "the river rose" has its own)
     const clauseVerb = (x) => /\b(?:is|are|was|were|will|would|could|can|may|might|should|must|has|have|had|did|does|do)\b/i.test(x) || x.split(/\s+/).some((w, k, ws) => PAST_FORM.test(w.toLowerCase()) || (/^[a-z]{3,}ed$/.test(w) && !/^(?:to|by)$/i.test(ws[k + 1] || '')));
     if (reported && /^(?:the|a|an|its|their|his|her|this|these|those)\s/i.test(reported[1]) && !clauseVerb(reported[1])) continue;
-    return `${head}.`;
+    // (a quotation's own comma goes when the cut ends it: 'a factor called "local pH,"' -> '…"local pH".', ScienceDaily 12 Oct)
+    return `${head.replace(/[,;:]+(["”’)]+)$/, '$1')}.`;
   }
   return null;
 }

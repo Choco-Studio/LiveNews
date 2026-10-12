@@ -589,7 +589,7 @@ const sentencesOf = (s) =>
     .filter((t) => !FRAGMENT.test(t.trim()) && !brokenQuote(t) && !VERBLESS(t.trim())); // never inside a figure, a title or initials
 // (a clause cut after a quote's own comma or at a dash ends clean: 'a factor called "local pH,".' and 'a blow to AISI -.'
 // aired, ScienceDaily and the BBC 12 Oct)
-const unstop = (t) => String(t).trim().replace(/[,;:]+(["”’)]+)$/, '$1').replace(/[\s.!?:;,–—-]+$/, '');
+const unstop = (t) => String(t).trim().replace(/[,;:]+(["”’)]+)[.!?]?$/, '$1').replace(/[\s.!?:;,–—-]+$/, '');
 const asSentence = (t) => (/[.!?…]["”'’)]$/.test(String(t).trim()) ? String(t).trim() : `${unstop(t)}.`); // '…real-time."' is already one
 const wordCount = (t) => String(t).replace(/\[[^\]]*\]/g, ' ').split(/\s+/).filter(Boolean).length;
 const firstName = (p) => String(p?.name || 'my colleague').replace(/^(?:Dr|Mr|Ms|Mrs|Prof)\.?\s+/i, '').split(/\s+/)[0];
@@ -764,6 +764,10 @@ const leansOnHeadline = (info, t) => {
   // "Both Republican and Democratic lawmakers have criticised the deal…" under "Trump faces growing backlash…", 12 Oct)
   const subject = String(info.s.title || '').replace(/^[\p{L}\s]{1,20}:\s+/u, '').split(/\s+/)[0]?.replace(/[^\p{L}\d-]/gu, '') || '';
   if (/^(?:The|Both)\s+\S/.test(String(t).trim()) && subject.length >= 3 && !new RegExp(`(?<![\\p{L}])${subject.slice(0, Math.max(3, subject.length - 2))}`, 'iu').test(t)) return true;
+  // (or whose own noun the headline never says, an adjective they share notwithstanding: "The critically endangered apes
+  // were rescued…" under "Endangered orangutans released…", BBC 12 Oct)
+  const head = String(t).trim().match(/^(?:The|Both)\s+((?:[\p{L}’'-]+\s+){0,4}?)([a-z][a-z-]{2,})\s+(?:was|were|is|are|has|have|had|will|would|could|can|may|might|must|should|[a-z]{3,}ed|[a-z]{3,}s)\b/u);
+  if (head && !contentWords(info.s.title).some((w) => w.slice(0, 4) === head[2].slice(0, 4))) return true;
   const m = String(t).trim().match(/^The\s+([a-z][a-z-]{2,})\b/);
   if (!!m && contentWords(info.s.title).some((w) => w.slice(0, 5) === m[1].slice(0, 5)) && !restates(t, info.s.title)) return true;
   // ("Philadelphia police said the tip was “flagged as spam”…" under "Rogue Anthropic AI agent gave police fake tip in

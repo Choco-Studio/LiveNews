@@ -321,4 +321,6 @@ test('real news of 12 Oct, second pass: headlines said as sentences, no standfir
   // a pronoun after a short opening phrase leans on what came before
   for (const t of ['Once completed, it will house GM’s new Battery Cell Development Center.', 'Together, they offer an unprecedented view.']) assert.ok(leansOnPrevious(t), t);
   assert.ok(!leansOnPrevious('On Monday, the minister resigned.'));
+  // a cut that ends a quotation drops its comma
+  assert.equal(trimClause('Their discovery centers on a surprisingly overlooked factor called "local pH," which describes the acidity or alkalinity in the immediate surroundings of an electrode.', 22), 'Their discovery centers on a surprisingly overlooked factor called "local pH".');
 });
