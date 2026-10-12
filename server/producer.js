@@ -9,6 +9,7 @@ import { isGrave } from './facts.js';
 import { explainTerms } from './glossary.js';
 import { writeWeather } from './weatherwriter.js';
 import { restageCheck, bookGuest, provenanceLine } from './guests/restage.js';
+import { writeWeekly } from './weeklywriter.js';
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 /** Is the credit just the outlet itself ("Pixelburg Post" on Pixelburg Post's own picture)? */
@@ -93,8 +94,12 @@ export function planVisuals(seg, { roundupPictures = false } = {}) {
  * (extra fact checks, better images, server-side voices...) slot in here.
  */
 export class Producer {
-  constructor({ config, newsDesk, chain, voice = null, images = null, weather = null, footage = null, identity = null, audit = null, log = console }) {
+  constructor({ config, newsDesk, chain, voice = null, images = null, weather = null, footage = null, identity = null, audit = null, archive = null, log = console }) {
     this.config = config;
+    // the channel's memory of what it aired (server/archive.js): every news episode is recorded, SEVEN DAYS is
+    // written from it
+    this.archive = archive;
+    this.lastWeeklyAt = 0;
     // IN THEIR WORDS, re-staged (server/guests/restage.js): who a named speaker is (server/guests/identity.js) and
     // where every re-staged line is logged (data/guests/audit.jsonl), both optional
     this.identity = identity;
@@ -211,6 +216,7 @@ export class Producer {
   canProduce(channel, programId) {
     const program = { id: programId, ...channel.programs[programId] };
     if (program.kind === 'weather') return !!this.weather?.enabled && this.weather.usable?.() !== false && this.newsSinceWeather >= (program.minBetween ?? 3);
+    if (program.kind === 'weekly') return this.weeklyReady(program);
     return this.stock(program).length >= this.floorOf(program);
   }
 
@@ -219,6 +225,7 @@ export class Producer {
     const cast = castOf(channel, programId);
     const presenters = Object.fromEntries(Object.entries(cast).map(([slot, id]) => [slot, { id, ...channel.presenters[id] }]));
     if (program.kind === 'weather') return this.produceWeather(channel, program, cast, presenters);
+    if (program.kind === 'weekly') return this.produceWeekly(channel, program, cast, presenters);
     const candidates = this.stock(program, { upcoming: upcoming.map((id) => channel.programs[id]).filter(Boolean) });
     if (candidates.length < this.floorOf(program)) return null;
 
@@ -241,6 +248,11 @@ export class Producer {
     }
 
     this.newsSinceWeather++;
+    try {
+      this.archive?.record({ ...ctx.episode, program: { id: program.id } }, { get: (id) => this.news.get(id) });
+    } catch (err) {
+      this.log.warn?.(`[archive] ${err.message}`);
+    }
     const used = new Set(ctx.episode.storyIds);
     this.rememberLines(ctx.episode);
     this.rememberFeatures(ctx.episode);
@@ -262,6 +274,61 @@ export class Producer {
       `[producer] ${program.title} ${episode.id} ready in ${((Date.now() - started) / 1000).toFixed(1)} s ` +
         `(${ctx.pipeline.map((p) => `${p.stage}${p.provider ? `:${p.provider}` : ''}`).join(' → ')}), ${episode.storyIds.length} stories`
     );
+    return episode;
+  }
+
+  /** The week as the archive groups it (the news desk's sameStory joins a story's tellings across days). */
+  weekStories() {
+    if (!this.archive) return [];
+    const same = typeof this.news.sameStory === 'function' ? (a, b) => {
+      try {
+        return this.news.sameStory(a, b);
+      } catch {
+        return false;
+      }
+    } : null;
+    return this.archive.week({ same });
+  }
+
+  /** SEVEN DAYS can air: a week told on three days or more, six stories at least, and not again within `minGapHours`. */
+  weeklyReady(program) {
+    if (!this.archive) return false;
+    if (Date.now() - this.lastWeeklyAt < (program.minGapHours ?? 3) * 3600_000) return false;
+    const week = this.weekStories();
+    return week.length >= 6 && new Set(week.flatMap((c) => c.days)).size >= 3;
+  }
+
+  /**
+   * SEVEN DAYS (server/weeklywriter.js): the week retold from the archive, the presenters' own aired words; then the
+   * stages any episode has after its writer (IN THEIR WORDS re-staging, pictures, voices). Null when the week is thin.
+   */
+  async produceWeekly(channel, program, cast, presenters) {
+    const t0 = Date.now();
+    const body = writeWeekly(this.weekStories(), { presenters, people: channel.presenters, channelName: channel.name, title: program.title, seed: `${this.seq}`, timeZone: channel.clock?.timezone || 'UTC' });
+    if (!body) return null;
+    const candidates = body.storyIds.map((id) => this.news.get(id)).filter(Boolean);
+    const ctx = { channelName: channel.name, program, presenters, cast, candidates, episode: body, provider: 'weekly', pipeline: [{ stage: 'weekly', ms: Date.now() - t0, stories: body.weekly.stories, days: body.weekly.days }], correspondents: [], experts: [], channelPresenters: channel.presenters };
+    // the expert who explained the story of the week speaks in their own voice slot
+    this.castCorrespondents(ctx);
+    for (const stage of this.stages) {
+      if (!['guests', 'assets', 'voice'].includes(stage.name)) continue;
+      if (stage.enabled && !stage.enabled(ctx)) continue;
+      const s0 = Date.now();
+      const note = await stage.run(ctx);
+      ctx.pipeline.push({ stage: stage.name, ms: Date.now() - s0, ...(note || {}) });
+    }
+    this.lastWeeklyAt = Date.now();
+    const episode = {
+      kind: 'episode',
+      id: `e${Date.now().toString(36)}${(this.seq++).toString(36)}`,
+      createdAt: new Date().toISOString(),
+      program: { id: program.id, title: program.title, tagline: program.tagline, theme: program.theme },
+      cast,
+      provider: 'weekly',
+      pipeline: ctx.pipeline,
+      ...ctx.episode,
+    };
+    this.log.info?.(`[producer] ${program.title} ${episode.id} ready in ${((Date.now() - t0) / 1000).toFixed(1)} s, ${body.weekly.stories} stories of the week`);
     return episode;
   }
 

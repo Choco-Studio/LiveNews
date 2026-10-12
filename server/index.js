@@ -15,6 +15,7 @@ import { WeatherDesk } from './weather.js';
 import { writeWeather } from './weatherwriter.js';
 import { FootageDesk } from './footage.js';
 import { IdentityDesk } from './guests/identity.js';
+import { Archive } from './archive.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const MIME = {
@@ -63,7 +64,11 @@ const audit = (entry) => {
     fs.appendFileSync(path.join(config.dataDir, 'guests', 'audit.jsonl'), `${JSON.stringify(entry)}\n`);
   } catch { /* the audit never stops the show */ }
 };
-const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage, identity, audit });
+// the channel's memory of what it aired (14 days, data/archive): SEVEN DAYS is written from it, and a story the
+// desk has let go keeps its picture for the weekly
+const archive = new Archive({ dir: path.join(config.dataDir, 'archive') });
+newsDesk.archive = archive;
+const producer = new Producer({ config, newsDesk, chain, voice, images, weather, footage, identity, audit, archive });
 const station = new Station({ config, newsDesk, producer, chain });
 
 function sendJson(res, status, body) {

@@ -1382,7 +1382,8 @@ export class NewsDesk {
   }
 
   get(id) {
-    return this.stories.get(id);
+    // a story the desk has let go may still be in the channel's archive (server/archive.js: SEVEN DAYS retells it)
+    return this.stories.get(id) || this.archive?.story(id) || undefined;
   }
 
   /** A compact view of the desk for dev tools: the most interesting stories first. */

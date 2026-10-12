@@ -44,10 +44,11 @@ export function validateChannel(ch) {
     if (!ch.programs[id]) throw new Error(`rotation references unknown programme "${id}"`);
   }
   for (const [id, p] of Object.entries(ch.programs)) {
-    if (p.kind !== undefined && p.kind !== 'weather') throw new Error(`programme "${id}" has an unknown "kind" (only "weather")`);
-    // a weather programme is written from the weather data (server/weatherwriter.js): no stories, no sections
+    if (p.kind !== undefined && p.kind !== 'weather' && p.kind !== 'weekly') throw new Error(`programme "${id}" has an unknown "kind" (only "weather" or "weekly")`);
+    // a weather programme is written from the weather data (server/weatherwriter.js): no stories, no sections;
+    // the weekly (server/weeklywriter.js) from the archive: its sections, no story length (the aired words set it)
     const news = p.kind !== 'weather';
-    for (const key of news ? ['title', 'tagline', 'style', 'storyLength'] : ['title', 'tagline']) {
+    for (const key of p.kind === 'weekly' ? ['title', 'tagline', 'style'] : news ? ['title', 'tagline', 'style', 'storyLength'] : ['title', 'tagline']) {
       if (typeof p[key] !== 'string' || !p[key].trim()) throw new Error(`programme "${id}" needs a "${key}" text`);
     }
     if (news && (!Number.isInteger(p.stories) || p.stories < 1)) throw new Error(`programme "${id}" needs "stories" (a whole number ≥ 1)`);
