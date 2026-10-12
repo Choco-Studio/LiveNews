@@ -31,7 +31,7 @@ cp .env.example .env
 npm run demo
 ```
 
-`npm run demo` arranca con el proveedor `mock`: **no usa IA** ni necesita cuentas ni claves. Se limita a leer en voz alta el texto de los feeds: «Según *fuente*: *titular*» más las dos primeras frases del resumen, alternando presentadores. No hay redacción propia, así que suena más robótico; sirve para comprobar que todo funciona.
+`npm run demo` arranca con el proveedor `mock`, el redactor de respaldo: **no usa IA** ni necesita cuentas ni claves. Escribe cada programa con las frases de las propias noticias (comprobadas contra la fuente y citándola): titulares, conexiones con corresponsales y expertos, la cifra del día, el resumen por el mundo y el AND FINALLY. Con una IA configurada los textos son más variados; sin ella, el canal funciona igual las 24 horas.
 
 Para usar la cadena de proveedores configurada en `.env`:
 
